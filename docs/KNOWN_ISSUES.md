@@ -182,9 +182,11 @@ The complete per-item catalog (verdict / urgency / fix proposal / effort, with f
 evidence) lives in **`docs/AUDIT_FM_TRIJAZA.md`** — that file is the canonical detail
 source; this register carries only the deduplicated actionable set.
 
-Triage outcome: 515 Tačno (77.4%) · 78 Delimično · 63 design-accepted · 6 refuted ·
-3 not statically verifiable. Urgency: 1×P0, ~52 unique P1 defects, ~200 P2.
-Severity calibrated for the single-writer desktop model (multi-user/CAS claims → P2).
+Triage outcome (v35 base): 515 Tačno (77.4%) · 78 Delimično · 63 design-accepted · 6 refuted ·
+3 not statically verifiable. Urgency incl. v85 (§8.4) + v142 (§8.6) deltas: 2×P0 (AUD-001,
+AUD-030), ~75 unique P1 defects, ~230 P2. Severity calibrated for the single-writer desktop
+model (multi-user/CAS claims → P2). Delta coverage: v85 = FM-0035..0084 (§8.4), v142 =
+FM-0085..0140 (§8.6); full per-item detail in `docs/AUDIT_FM_TRIJAZA.md` DEO II/DEO III.
 
 Remediation plan: `ROADMAP.md` §10. AUD items reference FM entries for detail.
 
@@ -273,3 +275,40 @@ that work; RF-03/RF-04 must be re-verified against `origin/main` before implemen
 - Refuted side-details: FM-0083 #91.23 ("banka error-code constants unused" — they are used); the
   pre-registration note that `modBusinessFlowProTests` runs inside a rollback TX (it does not — that applies
   to `RunMasterSyncSmokeSuite`).
+
+### 8.6 Delta v142 — new findings (FM-0085..FM-0140, 2026-07-20)
+
+Full per-item detail in `docs/AUDIT_FM_TRIJAZA.md` DEO III. Anchor: `origin/main` v2.24.0
+(`9fd7087`) — the v142 header claims `a0bc9e2` but lists v2.24.0-only files, so the whole delta
+was verified against `origin/main`. 38 files triaged (blocks K1..K8); entries already covered in
+v35/v85 were skipped. No new clean P0 — the strongest chain (FM-0093 E2E false-green) is latent
+(gate not wired into `PublishReleaseToDrive`) and rolls up to AUD-039. Rows mapping to
+AUD-002/003/007/016/017/018/034/037/039 are not re-listed.
+
+| ID | Sev | Finding | Location |
+|---|---|---|---|
+| AUD-040 | P1 | Agrohemija price not booked as entered: `frmAgrohemija` snapshots the basket price but `btnZavrsiIzlaz` calls `SaveMagacin` **without** `overrideCena`, so the ledger re-reads the master price (input path passes it correctly — asymmetry proves the oversight). `modAgrohemija` also writes `Cena=0/Vrednost=0` silently when the price is non-numeric → understated dug. Fix: pass `m_KorpaIzlaz(i).cena` as `overrideCena`; require price>0 for real articles (except `ART_POCETNI_DUG`). | `frmAgrohemija.frm:623-630` vs `:843`, `modAgrohemija.bas:109-130` |
+| AUD-041 | P1 | Duplicate document-number generation: `GenerateBrojPrijemnice` error handler returns a valid-looking `1/ddmmyy` instead of hard-failing; `modMasterSync.GenerateBrojZbirne` is a parallel **row-count** generator (`seq=count+1`) that produces a duplicate on gaps (`1/ddmmyy` + `…-3` → `-3` again) instead of the canonical `SuggestNextBroj`/`MaxSeqFromTable`. Fix: EH → `""`; delegate ZBR generation to `SuggestNextBroj(KIND_ZBR,…)`. | `modBrojevi.bas:203`, `modMasterSync.bas:2887-2928` |
+| AUD-042 | P1 | MasterSync wrong-write cluster: `TryUpdateVozacID` returns True even when `UpdateCell` fails → GS marked `Synced>Master` with empty `VozacID`; an invalid date silently becomes **today** on both paths (OTK/VOZ); a failed header write leaves a poison spreadsheet that the next run treats as existing. Fix: check the Boolean write result; strict date parse → `SyncError`; trash/temp-name the sheet until the header write succeeds. | `modMasterSync.bas:1773-1798`, `:1547-1550`, `:2598-2600`, `:476-494` |
+| AUD-043 | P1 | MasterSync document-integrity cluster: auto-otpremnica groups by `Stanica\|Datum\|Vozac\|Klasa`, mixing vrste/cene/ambalaza into one otpremnica; VOZ `LinkZbirnaToOtkupAndOtpremnica` links by CRID without membership check (same vozač/datum/not-already-linked) and overwrites existing links with no "empty-or-identical" conflict guard. Fix: add `VrstaVoca\|SortaVoca\|Cena\|TipAmbalaze` to the key; validate membership; guard link writes. | `modMasterSync.bas:668-672`, `:2701-2771`, `:2759`, `:1894` |
+| AUD-044 | P1 | `modIntegritet` false-green: `WriteErr` does not raise `m_totalIssues`, while the overlay title and MsgBox read only that counter → a run can report "0 neusklađenih" alongside GRESKA blocks; an in-memory read failure returns `Empty`, which is indistinguishable from PASS. Fix: `WriteErr` increments an `ErrorCount`; MsgBox shows INCOMPLETE when errors>0; typed `IntegrityRunResult` so `Empty` ≠ PASS. | `modIntegritet.bas:1304-1310`, `:84-85`, `:59`, `:90` |
+| AUD-045 | P1 | Sledljivost incomplete trace shown as complete: `TraceByZbirna` filters by the helper `OtpremnicaID` instead of canonical `tblOtkup.BrojZbirne`, and normalizes the number inconsistently (auto-link `UCase$+Trim$` vs raw trace compare) → an otkup with `BrojZbirne` but empty `OtpremnicaID` drops out; `frmSledljivost`/printed PDF present the partial trace as complete (no incompleteness marker). No corruption (manual write goes through `ReassignOtkupToOtpremnica_TX`). Fix: direct `BrojZbirne` pass with `vbTextCompare`; typed trace result with `IsComplete`. | `modSledljivost.bas:540-544`, `:282` vs `:464`, `frmSledljivost.frm:462/499/543` |
+| AUD-046 | P1 | Station-mirror missing-shadow: `modMalina.EnsureVozacMirrorForStanica` doesn't confirm the station exists, its `AppendRow=0`/EH swallow failures, and `modMasterSync.StampVozacFromStanicaForMalina` + `modAutoHladnjaca` unconditionally set `vozacID=stanicaID` → a document gets an FK with no `tblVozaci` row. Fix: one canonical `IsManagedStationMirror(id)` checking the `tblStanice`+`tblVozaci` pair; re-raise in Ensure EH; verify the mirror before stamping. | `modMalina.bas:61/68`, `modMasterSync.bas:836-838`, `modAutoHladnjaca.bas:114-118` |
+| AUD-047 | P2 | `modProductionHealthCheck` SEF drift + false-green: the SEF status list uses a nonexistent `SEF_CANCELLED` and misses `SEF_REJECTED/SYNC_ERROR/TECH_FAILED` (drift vs `modConfig.bas:659-663`); parent check reports OK after a child FAIL in two spots (Google `:951`, soft-delete helper `:928`). Fix: use `WF_SEF_*` constants + a state matrix; gate the parent on child delta-counters. | `modProductionHealthCheck.bas:871`, `:951`, `:928` |
+| AUD-048 | P2 | `modStornoWarm` false lifecycle flags: `ScheduleStornoWarm` sets `m_warmScheduled=True` unconditionally under `On Error Resume Next` (believes it's scheduled after an `OnTime` failure); `CancelStornoWarm` sets it False unconditionally. Fix: set the flag only on `Err.Number=0`; `LogErr` on cancel failure. (Late fire is already harmless via the `StornoWarmTick` re-guard.) | `modStornoWarm.bas:51-54`, `:118-124` |
+
+### 8.7 Delta v142 — recalibrated / refuted highlights
+
+- The whole `modTheme` layer (FM-0134, all 7 rows tagged P1) touches **only colors** — `DisableField`/
+  `DisableCombo` clearing the value is the intended mode-switch behavior at every call site (no
+  value-preserving lock exists), so there is no live data-loss → P3. Cheapest real win: unify the
+  storno/danger color standard (#6) after confirming the cream "soft storno" is intentional (v2.24
+  "Vrati storno" undo treats storno as recoverable).
+- `modMouseWheel` (FM-0140) P0/P1 tags are inflated for a cosmetic off-by-default scrollbar hook; the
+  only real hardening is checking `UnhookWindowsHookEx` and not leaking the handle (P2, S).
+- Banka parsers (FM-0128..0132) are recalibrated P2/P3: the shared 4-level import integrity turns any
+  offset/shape drift into an import abort, not silent corruption. Residual the gate can't see: 0/0
+  account-only rows (money-zero). Shared date/account/poziv fixes belong to RF-16.
+- `frmMarza` (FM-0106) is legacy/unused → all rows Accepted/P3; no business risk unless revived.
+- Refuted side-detail: FM-0137 #10 (`modStornoWarm` shutdown) — `Workbook_BeforeClose` already calls
+  `ShutdownApp`→`StopStornoWarm`, so the "add to BeforeClose" recommendation is redundant.

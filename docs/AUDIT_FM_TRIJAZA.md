@@ -2558,3 +2558,1311 @@ Napomena kalibracije: pre-registrovani opis „runs inside always-rollback TX" *
 
 ---
 
+
+---
+---
+
+# DEO III — Delta trijaža Functional Map v142 (FM-0085…FM-0140)
+
+**Datum:** 2026-07-20
+**Izvor:** `AgriX_Functional_Map` v142 — novi/nepokriveni unosi u opsegu FM-0085…FM-0140.
+**Metod:** identičan DEO I/II (svaka stavka pojedinačno protiv koda; Kritičan/Visok/„P0" uz citat fajl:linija; 8 paralelnih prolaza, blokovi K1…K8).
+**Sidro koda:** `origin/main` **v2.24.0** (`9fd7087`), provereno u zasebnoj worktree kopiji. Header v142 tvrdi sidro `a0bc9e2`, ali fajlovi koje popisuje (`modStornoWarm`, `modTestStornoCentar`, prošireni `modStornoFlow`) postoje tek od v2.24.0 — zato je cela delta verifikovana protiv `origin/main`, ne protiv navedenog sidra.
+
+**Obuhvat delte:** 38 FM unosa (novi fajlovi ili fajlovi neanalizirani u v35/v85). **Preskočeno kao već-analizirano ili duplo:** FM-0085, FM-0086 (frmOtkup/frmDokumenta — DEO II 89.x), FM-0094, FM-0095 (dupli test opisi), FM-0109 frmLogin, FM-0110 modAuth, FM-0115 frmSplash, FM-0117…FM-0120 clsStmBtn/clsConfigBtn/clsAdminBtn/clsLookupMenuBtn, FM-0122 clsBlokIsplata, FM-0124…FM-0126 SEF DTO klase, FM-0135 modKvalitet (stub), FM-0138 modML (stub), FM-0139 modFakturaTests — svi pokriveni ranije ili bez novog sadržaja.
+
+## ⚠️ Napomena o E2E gate-u (usklađivanje sa DEO II / AUD-039)
+
+Više test-modula u ovoj delti (FM-0093/0097/0098/0099/0100/0136) FM markira „P0 E2E false-green" jer suite završava normalno i kad interno padne. Verifikovano: `modE2EReleaseGate.bas:23-49` **zaista poziva** `RunGoogleSyncSmokeSuite`/`RunMasterSyncSmokeSuite`/`RunNovacSmokeSuite`/`RunFakturaSmokeSuite`/`RunBusinessFlowProSuite`/`RunProductionHealthCheck` — pa je lažni-zeleni lanac **realan po mehanizmu**. **ALI:** `modE2EReleaseGate`/`E2E_RunVbaSuite` **nije pozvan nigde** u aktivnoj release proceduri (grep prazan; `PublishReleaseToDrive` ne zove gate). Zato je ceo lanac **latentan = AUD-039**, kalibrisan na **P1**, ne P0 (isto kao DEO II FM-0084/93.13). Minimalni popravak ostaje isti: suite-ovi dobijaju Boolean `Core`/`Err.Raise`, gate čita rezultat umesto completion-a.
+
+## Zbirni bilans delte (38 fajlova, 8 blokova)
+
+Dominantno **Tačno** (v142 je i dalje činjenično vrlo precizan). Glavna korekcija je, kao i ranije, kalibracija težine: sistematski „P0/P1" oznake padaju na **P2/P3** zbog (a) single-writer desktop modela (read-only dijagnostike, fail-open readovi, whole-table test rollback = Prihvaćeno/P2), (b) 4-nivo integriteta banka-parsera (drift = prekid uvoza, ne tiha korupcija), (c) kozmetičkih slojeva (theme, mouse-wheel) bez data-rizika, (d) test-modula koji nisu u aktivnom E2E gate-u. Veliki deo delte mapira na **već registrovane** nalaze (AUD-002, AUD-003, AUD-007, AUD-016, AUD-017, AUD-018, AUD-034, AUD-037, AUD-039).
+
+**Novi čist P0 (aktivan gubitak/korupcija):** **0.** Najozbiljniji potvrđeni lanac (FM-0093 E2E false-green) je latentan (AUD-039); ostali „P0" su ili već registrovani (AUD-002) ili single-writer-Prihvaćeno.
+
+**Novi P1 klasteri (verifikovani, minimal-delta popravke):**
+- **Agrohemija — cena (najvredniji nalaz delte):** `frmAgrohemija` izlaz snapshot-uje cenu u korpi ali je NE prosleđuje `SaveMagacin` kao `overrideCena` (`frmAgrohemija.frm:623-630`) → `SaveMagacin` ponovo čita master cenu; **ulaz ISPRAVNO prosleđuje** (`:843`) — asimetrija dokazuje oversight. Fix S (jedan argument). `modAgrohemija` uz to tiho upisuje `Cena=0/Vrednost=0` kad je cena nenumerička (`:109-130`) → potcenjen dug. Fix S.
+- **Brojevi/sync — duplikati:** `modBrojevi.GenerateBrojPrijemnice` EH vraća validan-looking `1/ddmmyy` duplikat (`:203`) umesto hard-fail-a (fix S); `modMasterSync.GenerateBrojZbirne` (`:2887-2928`) je paralelni **row-count** generator (`seq=count+1`) koji na rupama pravi duplikat (`1/ddmmyy` + `…-3` → ponovo `-3`) umesto canonical `SuggestNextBroj`/`MaxSeqFromTable` (fix M delegiranjem).
+- **MasterSync — pogrešan upis/writeback:** `TryUpdateVozacID` vraća True i na neuspeh write-a (`:1773-1798`) → GS `Synced>Master`, `VozacID` prazan (fix S); nevalidan datum → **današnji datum** na oba puta (OTK `:1547-1550`, VOZ `:2598-2600`, fix S); auto-otpremnica grupiše po `Stanica|Datum|Vozac|Klasa` pa meša vrste/cene/ambalažu u 1 otpremnicu (`:668-672`, fix M); VOZ link (`LinkZbirnaToOtkupAndOtpremnica :2701-2771`) ne proverava membership i prepisuje postojeće veze bez konflikt-politike (fix M); poison spreadsheet na neuspeh header write-a (`:476-494`, fix M).
+- **Integritet — lažni zeleni:** `modIntegritet.WriteErr` (`:1304-1310`) ne diže `m_totalIssues`, a overlay/MsgBox (`:59,:90`) čitaju samo taj brojač → moguće „0 neusklađenih" uz GRESKA blokove; `Empty` = i PASS i ERROR (`:84-85`). Fix M (uvesti ErrorCount + typed rezultat).
+- **Sledljivost — nepotpun trag:** `TraceByZbirna` filtrira po pomoćnom `OtpremnicaID` umesto canonical `tblOtkup.BrojZbirne` (`modSledljivost.bas:540-544`), a normalizacija broja nekonzistentna (`:282` vs `:464`) → moguć nepotpun trag; `frmSledljivost`/PDF prikazuju nepotpun trace kao kompletan (P1-a/f). Upis ipak ide kroz proveren TX (nema korupcije). Fix S–M.
+- **Stanica-mirror:** missing-shadow (stanica bez `tblVozaci` para) → `modMasterSync.StampVozacFromStanicaForMalina` i `modAutoHladnjaca` bezuslovno `vozacID=stanicaID` → dokument dobija FK bez `tblVozaci` reda (`modMalina` 116.6/116.20/116.21). Fix: jedan canonical `IsManagedStationMirror` + re-raise u Ensure EH (M).
+
+**Novi P2 paketi (mali delta, veliki efekat):** `modProductionHealthCheck` SEF lista koristi nepostojeći `SEF_CANCELLED` i propušta `SEF_REJECTED/SYNC_ERROR/TECH_FAILED` (`:871`, drift vs `modConfig.bas:659-663`) + ponovljeni „parent OK posle child FAIL" (`:951`, `:928`); `modParse` single-separator factor-1000 rizik (121.6, = AUD-007 familija); shipped destruktivni test runneri bez environment guard-a (`modTestStornoCentar` 120.9 — nula potvrde nad 23 `Public` makroa; AUD-039 familija); `modStornoWarm` lažni scheduled/cancelled state (`:51-54`, `:118-124`).
+
+**Sistematski precenjeno (FM „P0/P1" → realno P2/P3):** `modMouseWheel` lifecycle (kozmetička off-by-default funkcija), `modTheme` ceo sloj (samo boje, nema data-loss — DisableField/DisableCombo clear je namerni mode-switch), `frmMarza` (legacy/nekorišćena forma), permission-bypass u UI adapterima (AUTH opt-in/OFF + soft model + nezaštićen `.xlsm`), banka-parseri (4-nivo integritet hvata drift).
+
+**Format napomena:** blokovi K1…K8 slede; svaka FM stavka je zaseban red (narativ → numerisane podsekcije NN.x; risk-tabele → red po redu), sa kolonama Opravdanost / Hitnost / Predlog / Napor identičnim DEO I/II.
+
+---
+
+## v142 blok K1 — modProductionHealthCheck, modSchemaGuard, modIntegritet (FM-0087/0089/0090) [sidro origin/main v2.24.0]
+
+I have completed verification against the code. All three FM entries (FM-0087, FM-0089, FM-0090) are narrative (numbered subsections, no risk tables). Below is the full per-item audit.
+
+Key code confirmations: SEF constants in `modConfig.bas:653-663` (there is **no** `SEF_CANCELLED`; `SEF_REJECTED`/`SEF_SYNC_ERROR`/`SEF_TECH_FAILED`/`SEF_READY`/`SEF_SENDING`/`SEF_UNKNOWN` all exist and are uncovered); `GetSpreadsheetID` returns `""` on HTTP≠200/no-token/exception (`modGoogleSheets.bas:1382,1406,EH`); `GetTable` compares names case-sensitively (`modDataAccess.bas:79`); error codes 7300/7400 are unique to modSchemaGuard; no `modIntegritetTests`/`modSchemaGuardTests` exist.
+
+---
+
+### FM-0087 — `modProductionHealthCheck.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 99.1 | Osnovni podaci (13 check grupa, entry point) | Osn. podaci | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 99.2 | Redosled 13 provera | narativ | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 99.3 | Glavni zaključak (nije release gate) | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 99.4 | Šta je dobro rešeno | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 99.5 | „read-only" nije potpuno tačno | narativ | **Tačno** (header:12 vs write :1202,:1247) | P3 | Precizirati header; side-efekti = AUD-006/AUD-018 | S |
+| 99.6 | Rezultat nije machine-readable ni blocking | narativ | **Tačno** (:28 Sub, nema Bool/Err na m_Fail) | P2 | Dodati `...Core() As Result`; UI wrapper prikazuje | L |
+| 99.7 | Kontradiktoran Google parent OK posle child FAIL | **Kritičan** | **Tačno** (:951 bezuslovni `HealthOk` posle :945-949) | P2 | :951 uslovi parent OK na child delta-brojače | S |
+| 99.8 | Folder probe false-green na HTTP/auth grešku | narativ | **Tačno** (:1024-1031; `GetSpreadsheetID` ""→OK, modGoogleSheets.bas:1406) | P2 | Vratiti typed DriveLookupResult; OK samo na NOT_FOUND | M |
+| 99.9 | Google se proverava i kad je sync OFF | narativ | **Tačno** (config/auth pre flag :945-949) | P2 | Prvo proveriti flag; N/A kad sync off | M |
+| 99.10 | APP_SETUP_COMPLETED = presence-only | narativ | **Tačno** (:1096 Len=0 else OK) | P2 | :1096 typed Boolean policy umesto neprazno | S |
+| 99.11 | Auth check nije pasivan (GetAccessToken refresh) | narativ | **Tačno** (:992) | P3 | Odvojiti stored-token od active-probe; = AUD-006/018 | M |
+| 99.12 | LAST_HEALTHCHECK_AT piše i za FAIL run | narativ | **Tačno** (:1202 bezuslovno) | P2 | Dodati STATUS/PASS_AT ključeve pored AT | S |
+| 99.13 | Config write kreira red + journal | narativ | **Tačno** (:1202→AppendRow) | P3 | Već pokriveno AUD-003/AUD-006/AUD-018 | S |
+| 99.14 | Schema check javlja samo prvi nedostatak | narativ | **Tačno** (:62-108 raise na prvom) | P2 | CollectMissing prolaz za grupni FAIL | M |
+| 99.15 | Core inventory nepotpun za ostatak modula | narativ | **Tačno** (:65-72 8 tabela; kasnije BankaImport/Parcele) | P3 | Deklarativni schema manifest po domenu | M |
+| 99.16 | Duplicate coverage bez StavkaID/business brojeva | narativ | **Tačno** (:116-123) | P2 | Dodati StavkaID, BrojFakture/Prijemnice dup | M |
+| 99.17 | Prazni PK preskočeni bez zasebnog checka | narativ | **Tačno** (:1509 GoTo NextRow; nema blank-PK) | P2 | Dodati `Check_RequiredPrimaryKeysNotBlank` | M |
+| 99.18 | Duplicate dict bez CompareMode | narativ | **Tačno** (:1498 binary) | P3 | vbTextCompare uz log originalnih varijanti | S |
+| 99.19 | ActiveRowExists/IsStorniranoRow first-match | narativ | **Tačno** (:1379-1391) | P2 | Vratiti typed multi-status pod duplikatima | M |
+| 99.20 | HealthNumeric tiho pretvara u nulu | narativ | **Tačno** (:1346-1352) | P2 | Vratiti (IsValid,Value) ili odmah FAIL na non-num | M |
+| 99.21 | Novac integrity preuzak | narativ | **Tačno** (:177-198 samo 4 pravila) | P2 | Dodati domain/FK/dup NovacID provere | M |
+| 99.22 | Payment sum helperi gutaju greške→0 | narativ | **Tačno** (:1595,:1628 EH→0) | P2 | Razlikovati infrastrukturnu grešku od 0 uplata | M |
+| 99.23 | FakturaStavke ref = samo existence | narativ | **Tačno** (:247-257) | P2 | Dodati dup StavkaID, zbir-vs-Iznos, backlink | M |
+| 99.24 | Prijemnica/Faktura flags jednosmerni | narativ | **Tačno** (:309-319) | P2 | Bidirekcioni graph audit | M |
+| 99.25 | Faktura payment provera samo jedne strane | narativ | **Tačno** (:380-394 samo Placeno grana) | P2 | Simetrična expected-status rekonstrukcija | M |
+| 99.26 | Otkup payment isti jednosmerni problem | narativ | **Tačno** (:457-471) | P2 | Isto: expected status/date iz uplata | M |
+| 99.27 | Kooperant reconciliation vredna | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 99.28 | Reconciliation koristi iznos kao uslov (offset) | narativ | **Tačno** (:589 `unattributed<=0.005`) | P2 | :589 uslov na count, iznos = impact metrika | S |
+| 99.29 | Reconciliation bez konkretnih redova | narativ | **Tačno** (:590-599 agregati) | P3 | Logovati prvih 25 OtkupID kao duplicate check | S |
+| 99.30 | Iznos recon koristi live Prijemnicu, ne frozen Stavke | narativ | **Tačno** (:641-666 live sum) | P2 | 3-nivo audit uklj. tblFakturaStavke snapshot | M |
+| 99.31 | Financial drift samo WARN | narativ | **Tačno** (:701,:713 HealthWarn) | P2 | Severity po stanju (finalized/SEF→FAIL) | S |
+| 99.32 | Cross-zbirna preskače blank-vs-populated | narativ | **Tačno** (:785 oba Len>0) | P2 | Blank na jednoj strani = mismatch | S |
+| 99.33 | GetValueByKeySafe skriva grešku kao blank | narativ | **Tačno** (:1452-1453 EH→Empty) | P3 | Vratiti status uz vrednost | S |
+| 99.34 | Cross-zbirna ne pokriva ceo invariant | narativ | **Tačno** (:769-799 samo BrojZbirne) | P3 | Dodati reverse/klasa/stanica konzistentnost | M |
+| 99.35 | SEF lista hardkodovana, driftovala | narativ | **Tačno** (:871 `SEF_CANCELLED` nepostojeći; modConfig.bas:659-663 REJECTED/SYNC_ERROR nepokriveni) | P2 | :871 koristiti WF_SEF_* konstante + state matrica | M |
+| 99.36 | SEF optional kolone nestaju, audit prođe | narativ | **Tačno** (:838-849 GetColumnIndex skip) | P2 | Required kolone za canonical outbound schema | S |
+| 99.37 | SEF samo presence, ne konzistentnost | narativ | **Tačno** (:870-889) | P3 | Dodati dup docID/format/status matcheve | M |
+| 99.38 | Stornirane Fakture potpuno preskočene u SEF | narativ | **Tačno** (:861 GoTo NextRow) | P2 | Poseban invariant za stornirane sa remote docID | M |
+| 99.39 | Soft-delete coverage parcijalan (3 veze) | narativ | **Tačno** (:913-926) | P2 | Deklarativna matrica veza (+Novac,FakturaStavke) | M |
+| 99.40 | CountActiveRef ne propagira failure→parent OK | narativ | **Tačno** (:928 OK iako helper :1161 loguje FAIL) | P2 | Helper vraća status; parent gate na njega | S |
+| 99.41 | „MasterSchema" = lokalne tabele, ne remote | narativ | **Tačno** (:1039-1072 lokalno) | P3 | Preimenovati + dodati remote schema probe | M |
+| 99.42 | Google config vremenski kontradiktoran | narativ | **Tačno** (:970-971 pre refresh :992) | P3 | Proveriti metadata posle refresh-a | S |
+| 99.43 | Health log van blank-build guard-a | narativ | **Delimično** (log = range :1247-1252 potvrđeno; AssertBlankBuild zavisnost) | P2 | Uključiti log-sheetove u build guard ili čistiti | S |
+| 99.44 | Log write failure nevidljiv | narativ | **Tačno** (:1242,:1259 On Error Resume Next) | P2 | Uvesti LogStatus u rezultat | S |
+| 99.45 | RunID nije vezan za artefakt | narativ | **Tačno** (:1169) | P3 | Dodati BUILD_SHA, APP_VERSION, workbook hash | S |
+| 99.46 | Rnd bez Randomize | narativ | **Tačno** (:1169) | P3 | Centralni GUID/ID helper | S |
+| 99.47 | Summary Total = findings, ne checkovi | narativ | **Tačno** (:1218,:1226,:1234) | P3 | Razdvojiti CheckCount/FindingCount | S |
+| 99.48 | Prazne tabele → mnogo WARN | narativ | **Tačno** (višestruki IsEmpty→WARN) | P3 | Uvesti profile (BLANK/NEW_CLIENT/ACTIVE) | M |
+| 99.49 | Performance O(N×M) | narativ | **Tačno** (ActiveRowExists re-čita target; nema BeginTableCache) | P2 | Jednom izgraditi ID/ref/payment indekse | M |
+| 99.50 | Audit nije platform-neutralan (WinHttp) | narativ | **Delimično** (zavisnost modGoogleSheets; nije u ovom fajlu) | P3 | Platform profile + NOT_APPLICABLE status | M |
+| 99.51 | Ne pokriva domene iz RELEASE_GATES | narativ | **Tačno** (BankaImport samo dup :122) | P3 | Domain provideri; agregator objedinjuje | L |
+| 99.52 | Dodatni nepokriveni domeni | narativ | **Tačno** (coverage gap) | P3 | Postepeno dodavati provider-e | L |
+| 99.53 | Severity model nedovoljno definisan | narativ | **Tačno** (samo OK/WARN/FAIL) | P2 | Uvesti BLOCKER/FAIL/WARN/INFO/N-A/SKIPPED | M |
+| 99.54 | Šta ne treba raditi | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 99.55 | Preporučena ciljna arhitektura | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 99.56 | Prioriteti hardeninga | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 99.57 | Minimalni regression scenariji | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 99.58 | Konačna procena | narativ | Kontekst | — | Kontekst — nije rizik | — |
+
+Bilans: 46 Tačno / 2 Delimično / 10 Kontekst(-Pozitivno); hitnost: 0 P0, 0 P1, 30 P2, 18 P3. (Modul je read-only dijagnostika → nema P0/P1; sve su false-green/coverage/perf = P2 ili scope/kozmetika = P3.)
+
+---
+
+### FM-0089 — `modSchemaGuard.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 102.1 | Osnovni podaci (43 linije, 3 API) | Osn. podaci | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 102.2 | Stvarni scope = required-column+write wrapper | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.3 | Glavni zaključak (čuva kolonu, ne identitet) | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.4 | Šta je dobro (error kodovi 7300/7400 jedinstveni) | Pozitivno | Kontekst-Pozitivno (potvrđeno unique) | — | Kontekst — nije rizik | — |
+| 102.5 | RequireColumnIndex dobra fail-fast osnova | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 102.6 | Missing table → poruka „missing column" | narativ | **Tačno** (:10-15 GetColumnIndex=0 za obe) | P2 | Dodati RequireTable sa TABLE_MISSING kodom | S |
+| 102.7 | Table case-sensitivity iz DataAccess | narativ | **Tačno** (modDataAccess.bas:79 bez vbTextCompare) | P3 | vbTextCompare u GetTable; kanon konstante mitiguju | S |
+| 102.8 | RequireColumns staje na prvoj grešci | narativ | **Tačno** (:25-29 raise) | P3 | Dodati CollectMissingColumns za health/setup | S |
+| 102.9 | Nemoguća/mrtva If grana | narativ | **Tačno** (:25-29 dead branch) | P3 | Zameniti sa `Call RequireColumnIndex(...)` | S |
+| 102.10 | Empty ParamArray bez ugovora | narativ | **Delimično** (:25 `For 0 To -1` = tihi no-op, NIJE runtime error kako FM tvrdi) | P3 | Dokumentovati no-op ili eksplicitni guard | S |
+| 102.11 | Nevalidni ParamArray elementi (CStr Null) | narativ | **Delimično** (:26 teorijski; svi calleri literali) | P3 | Nizak prioritet; validacija tipa opciono | S |
+| 102.12 | RequireUpdateCell ne validira red | narativ | **Tačno** (:32-41 bez provera) | P2 | Dodati RequireValidRowIndex | S |
+| 102.13 | Pozicioni rowIndex nije poslovni identitet | narativ | **Delimično** (:37 pozicioni write; AUD-003 familija, single-writer) | P2 | RequireUpdateCellByKey; = AUD-003, ne eskalirati | M |
+| 102.14 | Potreban exact-row write API | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.15 | RequireUpdateCell gubi uzrok greške | narativ | **Tačno** (:37-40 generički 7400) | P2 | Sačuvati originalni Err ili DataAccess result | M |
+| 102.16 | Poruka jezički nedosledna (SR/DE) | narativ | **Tačno** (:39 „fehlgeschlagen") | P3 | Ujednačiti poruku (ASCII), dodati kontekst | S |
+| 102.17 | Nema read-back verifikacije | narativ | **Tačno** (:37 samo True) | P3 | Opc. expected-value check za ID/novac/datum | M |
+| 102.18 | Ne čini niz write-ova atomskim | narativ | **Tačno** (nema transakcije) | P3 | Dokumentovati oslonac na clsTransaction | S |
+| 102.19 | Audit stamp best-effort iz UpdateCell | narativ | **Delimično / Nije proverivo** (StampRowAudit zavisnost) | P3 | Dokumentovati best-effort audit | S |
+| 102.20 | Column cache ne invalidiran pri schema promeni | narativ | **Delimično / Nije proverivo** (mColCache zavisnost) | P3 | InvalidateSchemaCache posle Ensure*Schema | M |
+| 102.21 | Ne proverava više dimenzija šeme | narativ | Kontekst (naming/scope) | — | Kontekst — nije rizik | — |
+| 102.22 | Nema RequireTable | narativ | Kontekst (predlog; = 102.6) | — | Kontekst — nije rizik | — |
+| 102.23 | Nema RequireAppendRow | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 102.24 | Nema structured result | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 102.25 | sourceName zavisi od discipline caller-a | narativ | **Tačno** (:20-22 bez validacije) | P3 | Standardizovati Module.Procedure format | S |
+| 102.26 | Coverage širok (shared standard) | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 102.27 | Nema dedicated regression suite | narativ | **Tačno** (fajl ne postoji) | P3 | Dodati modSchemaGuardTests | M |
+| 102.28 | Šta ne treba menjati | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.29 | Preporučeni ciljni API | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.30 | Prioriteti | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.31 | Regression scenariji | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 102.32 | Konačna procena | narativ | Kontekst | — | Kontekst — nije rizik | — |
+
+Bilans: 11 Tačno / 5 Delimično / 16 Kontekst(-Pozitivno); hitnost: 0 P0, 0 P1, 4 P2, 12 P3. (102.13 pozicioni write = AUD-003 familija, ne eskalira se; 102.10 delimično netačan — empty ParamArray je no-op, ne error.)
+
+---
+
+### FM-0090 — `modIntegritet.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 104.1 | Osnovni podaci (19 checkova, read-only) | Osn. podaci | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.2 | Stvarna odgovornost (cross-table revizija) | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 104.3 | Dva režima, isti engine | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.4 | Javni API | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 104.5 | Check inventory A/B/C/D | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 104.6 | C4 dobra remediation dijagnostika | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.7 | Reuse opravdan (nasleđuje failure contract) | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.8 | WriteErr ne diže totalIssues → 0 nalaza + GRESKA + info MsgBox | **Najkritičniji** | **Tačno** (:1304-1310 ne dira m_totalIssues; :59 MsgBox gleda samo total) | P1 | WriteErr uvodi ErrorCount; MsgBox INCOMPLETE kad E>0 | M |
+| 104.9 | In-memory failure prikazan kao OK (Empty) | **P0** | **Tačno** (:84-85 EH→Empty; isti Empty = PASS i ERROR) | P1 | Vratiti typed IntegrityRunResult; Empty ne sme = PASS | L |
+| 104.10 | Naslov overlay-a lažno zelen | narativ | **Tačno** (:90 IntegritetUkupno = m_totalIssues) | P1 | Trodelni zbir Nalazi/Greške/Status | M |
+| 104.11 | Predloženi run-level rezultat | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 104.12 | Predloženi check-level rezultat | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 104.13 | „Ukupno" nije broj jedinstvenih problema | narativ | **Tačno** (:1276 sabira finding redove) | P3 | Dedup ključ CheckCode\|Entity\|Violation | M |
+| 104.14 | C5 broji redove, ne duplicate grupe | narativ | **Tačno** (:551-559 svaki red) | P3 | Razdvojiti DuplicateGroups/RowsInGroups | S |
+| 104.15 | Read-only tačno samo za poslovne tabele | narativ | **Tačno** (:1191-1213 piše sheet) | P3 | Precizirati opis (write diagnostic sheet/UI) | S |
+| 104.16 | InitIntegritetSheet tiho ostavlja nevalidan target | narativ | **Tačno** (:1192-1200 On Error Resume Next) | P2 | Proveriti m_ws Is Nothing / Clear uspeh | S |
+| 104.17 | Output write failure ne utiče na status | narativ | **Tačno** (:1217 WriteLine On Error Resume Next) | P2 | OutputSheetWritten flag; staging+atomic replace | M |
+| 104.18 | ScreenUpdating se ne čuva | narativ | **Tačno** (:39,:52,:64 bezuslovno True) | P2 | Sačuvati/vratiti old vrednost (uklj. EH) | S |
+| 104.19 | Aktivni sheet/selection se ne vraćaju | narativ | **Tačno** (:1211 m_ws.Activate) | P3 | activateOutput argument ili restore | S |
+| 104.20 | Module-level state nereentrantan | narativ | **Delimično** (:25-30; single-thread VBA rizik nizak) | P2 | Zatvoriti u clsIntegrityRunner sa RunID | M |
+| 104.21 | Nema point-in-time snapshot | narativ | **Delimično** (single-writer desktop; race nizak) | P2 | IntegritySnapshot ili cache scope | M |
+| 104.22 | Ne koristi BeginTableCache | narativ | **Tačno** (:47,:93 bez scope-a) | P2 | Obmotati RunAllChecks Begin/EndTableCache | S |
+| 104.23 | Soft-fail read = lažni „nema nalaza" | narativ | **Tačno** (:807 IsArray→Exit; Empty=missing i prazno) | P2 | Preflight: razlikovati praznu od nečitljive tabele | M |
+| 104.24 | RequireColumnIndex tek posle uspešnog reada | narativ | **Tačno** (:807 pre :811) | P2 | Preflight schema pre svih checkova | S |
+| 104.25 | Nedostaje Otkup↔Otpremnica cross-zbirna | narativ | **Tačno** (:93-113 RunAllChecks je ne zove) | P2 | Reuse canonical cross-zbirna ili dokumentovati gap | M |
+| 104.26 | Header komentar zastareo („Etapa 1") | narativ | **Tačno** (:13-18) | P3 | Osvežiti header na stvarni A/B/C/D scope | S |
+| 104.27 | „sve isključuju stornirane" nije doslovno | narativ | **Delimično** (kod tačan; samo doc formulacija) | P3 | Precizirati opis (context mape uključuju storno) | S |
+| 104.28 | Case semantika delom dobra (vbTextCompare) | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.29 | CollectBrojZbirne bez CompareMode | narativ | **Tačno** (:124 bez vbTextCompare) | P3 | Postaviti vbTextCompare kao AggByBroj | S |
+| 104.30 | B6 canonical map „prvi viđeni" | narativ | **Tačno** (:888-906) | P3 | Dodati dup-normalization check za tblZbirna | S |
+| 104.31 | First-seen mape kriju duplicate PK | narativ | **Tačno** (:1006,:1031,:1054 If Not Exists) | P2 | Eksplicitni duplicate-PK checkovi po tabeli | M |
+| 104.32 | A1 zavisi od magic-index array | narativ | **Tačno** (:133-135 v(3)/v(0)..v(6)) | P3 | Typed rezultat ili enum indeksa iz ValidateZbirna | M |
+| 104.33 | A1 tiho preskače ne-array rezultat | narativ | **Tačno** (:132-137 If IsArray bez else) | P2 | Svaki key = PASS/FINDING/ERROR, bez nestajanja | S |
+| 104.34 | A2 meša integritet i business toleranciju | narativ | **Tačno / Dizajnersko** (:176-182 5%/10%) | P3 | Razdvojiti STRICT/BUSINESS_ANOMALY profil | M |
+| 104.35 | Boundary strogo `>` (5%/10% granice) | narativ | **Tačno** (:176,:180 strogo >) | P3 | Dokumentovati/testirati namerni boundary | S |
+| 104.36 | B7 naziv ne opisuje negativne zbirne | narativ | **Tačno** (:325 `<=0.005` uključuje negativne) | P3 | Razdvojiti EMPTY_OR_ZERO/NEGATIVE/INVALID | S |
+| 104.37 | Nonnumeric → nula | narativ | **Tačno** (:841 i drugde) | P2 | Zasebna data-quality kategorija za non-num | M |
+| 104.38 | A5 prijavljuje samo prvi razlog | narativ | **Tačno** (:777-782 If/ElseIf) | P3 | Dva finding-a ili lista razloga | S |
+| 104.39 | C3 postojanje stavke, ne kvalitet | narativ | **Tačno** (:507 refPal.Exists) | P3 | Dokumentovati; kvalitet hvataju drugi checkovi | S |
+| 104.40 | Nema severity modela | narativ | **Tačno** (svi u istom zbiru) | P2 | INFO/WARN/ERROR/CRITICAL po checku | M |
+| 104.41 | Nema profila obaveznosti checkova | narativ | **Tačno** (:93-113 uvek svi) | P3 | IntegrityProfile (Core/Palletization/Processing) | M |
+| 104.42 | Pokrivenost staje na preradi | narativ | Kontekst (scope; ne finance/SEF/novac) | — | Kontekst — nije rizik | — |
+| 104.43 | Public bez permission guard | narativ | **Delimično** (:36 Public; read-only → nizak rizik) | P3 | Odlučiti ulogu (IZVESTAJI/Admin) | S |
+| 104.44 | Environ$ Username, ne app korisnik | narativ | **Tačno** (:1204) | P3 | Čuvati AppUser (modAuth) + WindowsUser | S |
+| 104.45 | Nema strukturirani run receipt | narativ | **Tačno** (nema receipt log) | P2 | Upisati INTEGRITY_RUN događaj | M |
+| 104.46 | Sheet EH ne koristi centralni logging | narativ | **Tačno** (:63-66 samo MsgBox vs :84 LogErr) | P2 | Dodati LogErr u RunIntegritetProvere EH | S |
+| 104.47 | Cell-by-cell output ne skalira | narativ | **Tačno** (:1293-1298 po ćeliji) | P2 | 2D niz + jedan Range.Value2 write | M |
+| 104.48 | In-memory overlay bez paginga/limita | narativ | **Tačno** (:70-86, forma dodaje red-po-red) | P3 | Top-N + broj sakrivenih + filter | M |
+| 104.49 | Izlaz nije deterministički sortiran | narativ | **Tačno** (dict iteracija) | P3 | Stabilan sort ključ (severity/code/entity) | S |
+| 104.50 | Fiksni AutoFit A:I | narativ | **Tačno** (:1210) | P3 | Računati stvarni max broj kolona | S |
+| 104.51 | Nema navigacije ka izvoru | narativ | **Tačno** (samo ID-jevi) | P3 | Hyperlink/„Otvori zapis" po finding-u | M |
+| 104.52 | Nema dedicated regression suite | narativ | **Tačno** (fajl ne postoji) | P3 | Dodati modIntegritetTests | L |
+| 104.53 | Minimalni P0 hardening | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 104.54 | P1 hardening | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 104.55 | P2 poboljšanja | narativ | Kontekst (predlog) | — | Kontekst — nije rizik | — |
+| 104.56 | Predloženi regression scenariji | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 104.57 | Šta je dobro rešeno | Pozitivno | Kontekst-Pozitivno | — | Kontekst — nije rizik | — |
+| 104.58 | Najvažniji rizici (summary) | narativ | Kontekst | — | Kontekst — nije rizik | — |
+| 104.59 | Konačna procena | narativ | Kontekst | — | Kontekst — nije rizik | — |
+
+Bilans: 37 Tačno / 4 Delimično / 18 Kontekst(-Pozitivno); hitnost: 0 P0, 3 P1, 16 P2, 22 P3. (104.8/104.9/104.10 = jedan koren: false-green kad checkovi puknu — verifikovan kao najozbiljniji nalaz modula; svrstan P1 jer je dijagnostika koja laže, ne direktan gubitak podataka.)
+
+---
+
+Napomene za pozivaoca:
+- Sva tri modula su suštinski read-only dijagnostika/write-wrapper; nijedan nalaz nije čist P0 (gubitak/korupcija). Najozbiljniji je FM-0090 104.8-104.10 (P1): `WriteErr` (`modIntegritet.bas:1304-1310`) ne inkrementira `m_totalIssues`, a `IntegritetUkupno`/MsgBox (`:59,:90`) gledaju samo taj brojač → moguće „0 neuskladjenih" uz GRESKA blokove.
+- Najkorisniji verifikovani sadržajni nalaz: FM-0087 99.35 — SEF lista (`modProductionHealthCheck.bas:871`) koristi nepostojeći `SEF_CANCELLED` i propušta `SEF_REJECTED/SEF_SYNC_ERROR/SEF_TECH_FAILED` iz `modConfig.bas:659-663`.
+- Ponavljajući false-green obrazac (parent OK posle child FAIL) potvrđen na dva mesta: `:951` (Google) i `:928` (soft-delete helper).
+- Tri „Delimično"/korekcije FM-a: 102.10 (empty ParamArray je tihi no-op `For 0 To -1`, ne runtime error), 99.43/99.50 (zavise od modBuildGuard/modGoogleSheets, nedokazivo iz ciljnog fajla), 104.20/104.21 (reentrancy/snapshot rizik nizak na single-writer desktopu).
+- Referencirani, ne-eskalirani: AUD-003 (pozicioni write — 102.12/102.13, 99.13), AUD-006 (journal — 99.5/99.11/99.13), AUD-018 (config drift — 99.5/99.12/99.13).
+
+---
+
+## v142 blok K2 — modRelease, modBrojevi, modParse, modHttpUtils, doccls sweep, ThisWorkbook (FM-0088/0091/0102/0104/0107/0108) [sidro origin/main v2.24.0]
+
+Verifikacija kompletna. Svi ključni nalazi provereni protiv koda. Sastavljam audit.
+
+---
+
+# Audit rizik-nalaza — A2/K2 (FM-0088, 0091, 0102, 0104, 0107, 0108)
+
+**Kod-sidro:** `origin/main` v2.24.0. **AUD mapiranja** (iz zadatka, registar je eksterni): AUD-007=DateSerial rollover, AUD-017=startup EH briše Err, AUD-034=AccessWasDenied se ne poziva / lažni STARTUP_SUCCESS posle deny-ja, AUD-037=publish guard. AUD-003 je naveden kao registrovan ali bez mapiranja u dostavljenim materijalima (`delta_intro.md:31` ga navodi bez definicije) — referenciram ga samo uz hedge gde se očigledno uklapa. **Kalibracija:** single-writer desktop; fleet-release nalazi se NE ublažavaju single-writer modelom (parcijalni release truje celu flotu), ali build je single-machine (jedan operater).
+
+---
+
+### FM-0088 — `modRelease.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 100.2 | Serija nezavisnih in-place upisa, ne atomski publisher | opis | **Kontekst-Pozitivno** — tačan opis (`:37-54`) | — | — | — |
+| 100.3 | Nema release atomarnost | zaključak | **Tačno** — nema staging/promote | P2 | staging+`latest.json` pointer | L |
+| 100.4 | Dobre osnove (Option Explicit, ext filter, binary upload) | pozitivno | **Kontekst-Pozitivno** — potvrđeno | — | — | — |
+| 100.5 | **P0**: manifest se objavljuje i kad code upload padne | Kritično | **Tačno — već registrovano kao AUD-037.** `:37-47` puni `failed` ali nastavlja; `:53-54` upload `version.json` bez `If Len(failed)=0` guarda | P1 | guard pre manifest upload | S |
+| 100.6 | Obrnuto: nov kod iza starog manifesta | Visok | **Tačno** — porodica AUD-037 (manifest≠fileset) | P2 | isto (atomic promote) | — |
+| 100.7 | Prekid/konkurentni publish = mešavina | Visok | **Delimično** — prekid tačan; konkurentni publish je **Dizajnersko ograničenje** (single build-machine, moguće AUD-003) | P3 | remote lock (opciono) | M |
+| 100.8 | Manifest nema file-listu/hash/delete | Visok | **Tačno** — `BuildManifestJson` `:69-75` ima 4 polja | P2 | dodati `files[]`+sha256 | M |
+| 100.9 | Klijent koristi samo `app_version` | Visok | **Tačno** — manifest 4 polja; klijent SemVer compare | P2 | uključiti `build_sha` u odluku | S |
+| 100.10 | Dva izvora identiteta (disk vs runtime konstante) | Visok | **Tačno** — `:41` disk bytes, `:69-74` runtime konst | P2 | assert source==runtime | M |
+| 100.11 | `APP_VERSION` mismatch → update loop | Visok | **Tačno** — plauzibilno; nema provere | P2 | preflight source-vs-runtime | S |
+| 100.12 | `BUILD_SHA` mismatch posle restore | Visok | **Tačno** — `modBuildInfo.bas:5-7` placeholder potvrđen; workflow `git checkout` | P2 | isti preflight | S |
+| 100.13 | Nema placeholder/dirty zabrane | Visok | **Tačno** — `modBuildInfo` = `"0000000"`/`"0.0.0-dev"`; `PublishReleaseToDrive` ne odbija | P2 | odbij placeholder/`+dirty` | S |
+| 100.14 | Nema compile gate | srednji | **Tačno** — **Dizajnersko** (ručna procedura, header `:9`) | P3 | compile receipt | M |
+| 100.15 | `AssertBlankBuild` nije preduslov | srednji | **Tačno** — nema poziva | P3 | vezati receipt | S |
+| 100.16 | Health/E2E nisu povezani | srednji | **Tačno** — nema poziva | P3 | gate rezultat | M |
+| 100.17 | Nula fajlova = „Sve OK" | Visok | **Tačno** — `uploaded=0, failed="", okMan=True` → `:59` „Sve OK." (porodica AUD-037) | P2 | odbij `uploaded=0`+mandatory inv. | S |
+| 100.18 | Broj uploadovanih ≠ kompletnost | srednji | **Tačno** — nema očekivanog inventara | P2 | canonical inventory | M |
+| 100.19 | Objavljuju se svi test/dev moduli | Visok | **Tačno** — filter samo po ext `:39-40`; klijent skip samo 2 | P2 | prod exclusion/allowlist | M |
+| 100.20 | Release nema profile (prod/dev) | srednji | **Tačno** | P3 | dva profila | M |
+| 100.21 | `PublishReleaseToDrive` javni macro | Visok | **Tačno** — `Public Sub` bez `Option Private Module`; ali klijent nema `SRC_FOLDER` → **Dizajnersko** (single build-machine) | P3 | build-machine gate | S |
+| 100.22 | Hardkodovana šifra nije zaštita | Visok | **Tačno** — `modConfig.bas:21` `RELEASE_PUBLISH_SIFRA="agrix-release"` javni const; provera samo `modAdmin.bas:284` | P3 | ukloniti/build-gate | S |
+| 100.23 | Release folder = unsigned RCE trust boundary | Kritično | **Tačno** — ali granica = Drive ACL; realno P2 (single build-machine, mala flota) | P2 | potpis/hash allowlist | L |
+| 100.24 | Extra remote `.bas` auto postaje update | Visok | **Tačno** — `modSelfUpdate.bas:265-276` iterira `DriveListFolder`, bez manifest allowlist | P2 | klijent čita samo manifest listu | M |
+| 100.25 | Remote fajlovi se nikad ne brišu | Visok | **Tačno** — samo create-or-update | P2 | tombstone lista | M |
+| 100.26 | Rename ostavlja stari+novi | Visok | **Tačno** — nema delete | P2 | signed delete | M |
+| 100.27 | Lokalni self-update ne uklanja odsutne | Visok | **Tačno** — `ImportFromFolder` iterira samo skinuti folder `:301` | P2 | manifest-driven delete | M |
+| 100.28 | Duplicate Drive ime nedeterministično | srednji | **Tačno** — `modDrive.bas:66` `pageSize=1`, prvi `id` `:71` | P3 | dedup provera | S |
+| 100.29 | Neuspešan create+PATCH ostavlja prazan fajl | Visok | **Tačno** — `modDrive.bas:91-95` create empty, `:100-108` PATCH; PATCH fail → vrne `""` ali prazan fajl ostaje | P2 | delete-on-fail / read-after-write | M |
+| 100.30 | Nema retry/backoff/content verify | Visok | **Tačno** — jedan PATCH `:100-103` | P2 | retry 429/5xx + verify | M |
+| 100.31 | Hardkodovan source path (single-machine coupling) | Visok | **Tačno** — `:18` `SRC_FOLDER` const; `modVbaTools` zaseban (moguće AUD-003) | P2 | jedan build-root resolver | S |
+| 100.32 | Ne proverava da je folder AgriX repo | srednji | **Tačno** — samo `FolderExists` `:30` | P3 | `.git`/marker provera | S |
+| 100.33 | Enumeriše samo root fajlove | srednji | **Tačno** — `.Files` bez rekurzije `:37`; danas flat | P3 | rekurzija/expected paths | S |
+| 100.34 | `.frx` se uploaduje ali ne primenjuje | Visok | **Tačno** — publisher broji `.frx` `:40`; `ImportFromFolder` ext-lista `:303` isključuje `frx`; komentar `:286` | P2 | razdvoji applied vs payload count | S |
+| 100.35 | Nove forme/sheet nisu code-only | Visok | **Tačno** — `modSelfUpdate.bas:323` `st="skip"` reinstall | P2 | `requires_reinstall` | M |
+| 100.36 | `modSelfUpdate` promene ne stižu floti | Visok | **Tačno** — `SKIP_MODULES` `:38` | P2 | `minimum_updater_version` | M |
+| 100.37 | `modVbaTools` nije runtime update | srednji | **Tačno** — `SKIP_MODULES` `:38`; **Prihvaćeno** (dev tool) | P3 | payload klasifikacija | S |
+| 100.38 | Nema updater protocol verzije | Visok | **Tačno** | P2 | `manifest_schema_version` | S |
+| 100.39 | Nema `requires_reinstall` | Visok | **Tačno** | P2 | detekcija+polje | M |
+| 100.40 | Nema compile provere posle klijent merge-a | srednji | **Tačno** | P2 | post-merge compile check | M |
+| 100.41 | Jedan globalni kanal, nema canary | srednji | **Tačno** — `REL_FOLDER_ID` jedan | P3 | stable/canary | L |
+| 100.42 | Nema immutable prethodni release/rollback | Visok | **Tačno** | P2 | versioned folderi | L |
+| 100.43 | Pre-update backup ne rešava fleet integritet | kontekst | **Kontekst-Pozitivno** — tačna nijansa | P3 | — | — |
+| 100.44 | Rezultat nije strukturiran/trajan | srednji | **Tačno** — `Sub`+MsgBox `:56-61` | P3 | `PublishReleaseResult`+receipt | M |
+| 100.45 | Ne loguju se file ID-jevi | srednji | **Tačno** — `Len(...)>0` bul. signal `:41` | P3 | mapa ime→id | S |
+| 100.46 | Temp manifest se ne briše; `WriteReleaseTextFile` nema EH close | nizak | **Tačno** — nema `Kill`; `:77-82` Open/Print/Close bez EH | P3 | `Kill`+EH close | S |
+| 100.47 | Manifest nema JSON/schema validaciju | nizak | **Tačno** — ručni concat `:69-75` | P3 | parse-back+required | S |
+| 100.48 | Release datum ≠ publish datum | nizak | **Tačno** — `BUILD_DATE` iz commita | P3 | `published_at` | S |
+| 100.49 | Nema tenant/workbook compat metapodataka | srednji | **Tačno** | P3 | schema-level polja | M |
+| 100.50 | Nema dependency/mandatory-module provere | Visok | **Tačno** | P2 | mandatory inventory gate | M |
+| 100.51–100.57 | Predloženi protokol/folderi/manifest/preflight/result/prioriteti/regresija | predlog | **Predlog (ne nalaz)** — razuman ciljni ugovor; van minimal-delta scope-a | — | usvojiti inkrementalno | L |
+| 100.58 | Konačna procena | sažetak | **Kontekst** — saglasan | — | — | — |
+
+**Bilans FM-0088:** Sve činjenične stavke **Tačno** (nula opovrgnutih); 2 kalibrisane na **Dizajnersko ograničenje** (100.7 konkurentni publish, 100.14 compile gate) i 1 na **Delimično** (100.7). Jedini pravi **P1** je publish-guard 100.5/100.6/100.17 = **AUD-037** (minimal fix S: `If Len(failed)=0 And uploaded>0` pre `version.json` upload-a + odbij `uploaded=0`). Ostalo P2/P3 — realan arhitektonski dug (immutable versioned package + hash manifest), ali single build-machine/mala flota spuštaju hitnost ispod fleet-P0 tona FM-a. `.frx` broj (100.34) i `SKIP_MODULES` posledice (100.36) su tačni „applied≠uploaded" nalazi.
+
+---
+
+### FM-0091 — `modBrojevi.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 106.2–106.5 | Kontekst, format, API semantika | opis | **Kontekst-Pozitivno** — tačno; „Generate*" ime sugeriše jaču garanciju (106.5 tačno) | P3 | rename → `Suggest*`/typed | S |
+| 106.6 | Dobro rešeno (max iz brojeva, storno rezervisan) | pozitivno | **Kontekst-Pozitivno** — potvrđeno | — | — | — |
+| 106.7 | Generator predloga, ne atomski allocator | zaključak | **Tačno** — read-then-return `:93-99` | P2 | save-time guard | M |
+| 106.8 | **P0**: nema atomsku rezervaciju | Kritično | **Tačno kao arhitektonska granica** — **Dizajnersko/Prihvaćeno** za single-writer (verovatno pokriveno AUD-003); **P1 tek u SWMR** | P2 | backend seq+CAS (SWMR) | L |
+| 106.9 | Otvorena forma → predlog zastari | Visok | **Tačno** — single-writer smanjuje verovatnoću | P2 | re-check pre save | S |
+| 106.10 | **P0**: `MaxSeqFromTable` na grešku → 0 | Kritično | **Tačno** — `:389-391` EH→0; `RequireColumnIndex` (`modSchemaGuard.bas:13`) baca, ali EH guta → fail-open | P2 | typed `ALLOCATION_UNAVAILABLE` | M |
+| 106.11 | **P0**: `GenerateBrojPrijemnice` EH vraća `1/ddmmyy` | Kritično | **Tačno** — `:203` EH vraća validan-looking duplikat | **P1** | EH → `""` (hard fail), ne fallback broj | S |
+| 106.12 | Caller prijemnice nastavlja bez statusa | Visok | **Tačno** — `modAutoHladnjaca.bas:150` → `SavePrijemnica_TX :161`, bez provere/unique | P2 | proveri `Len=0` pre write | S |
+| 106.13 | **P0**: `BrojZbirneExists` na grešku → False | Kritično | **Tačno** — `:419-421` EH→default False (UNKNOWN→FREE) | P2 | tri-state / retry | S |
+| 106.14 | **P0**: mirror detekcija fail-open | Kritično | **Tačno** — `IsStanicaMirrorVozac :287` `On Error Resume Next`→False | P2 | tri-state UNKNOWN | S |
+| 106.15 | Mirror uslov proverava samo postojanje stanice | Visok | **Delimično/Dizajnersko** — `:289-290` samo `LookupValue tblStanice`; ali komentar `:285` to i definiše kao contract | P3 | dokumentuj+strict | S |
+| 106.16 | **P0**: remote failure = max 0 | Kritično | **Tačno** — `MaxSeqFromGoogleSheet` vraća 0 na SVIM putanjama (`:429-481`); ali samo suggestion put (`checkRemote`) | P2 | strict mode / typed remote status | M |
+| 106.17 | Potrebna dva režima (best-effort/strict) | predlog | **Predlog (ne nalaz)** | — | — | — |
+| 106.18 | **P0**: paralelni generator `modMasterSync` | Kritično | **Tačno** — `modMasterSync.bas:2887-2928` row-count (`seq=seq+1`), ne max-seq | **P1** | delegirati `modBrojevi.MaxSeqFromTable` | M |
+| 106.19 | Direktan duplicate scenario (rupe) | Kritično | **Tačno** — potvrđeno: `1/190726`+`1/190726-3` → 2 reda → `seq=1+2=3` → `1/190726-3` duplikat | **P1** | isto (ukloniti row-count) | M |
+| 106.20 | `modMasterSync` nema globalni ZBR bump | Visok | **Tačno** — `:2927` samo `ApplyMirrorPrefix`, bez `BrojZbirneExists` petlje (koju `SuggestNextBroj :106-109` ima) | P1 | delegirati canonical | M |
+| 106.21 | Dokumentacija precenjuje centralizaciju | Visok | **Tačno** — dva generatora + derivacije | P3 | canonical matrica | S |
+| 106.22 | Toggle gasi samo UI suggestion | srednji | **Tačno** — `IsAutoBrojDokumenta` (`modConfig.bas:962`) proveravan samo u `SuggestNextBroj :46` | P3 | razdvoji policy imena | S |
+| 106.23 | `SuggestNextBroj` validira samo neprazan ID | srednji | **Tačno** — `:51` samo `Len(Trim)=0` | P3 | validiraj numeric>0 | S |
+| 106.24 | `FormatBroj` prihvata nulti namespace | srednji | **Tačno** — `0/ddmmyy` prolazi regex `^\d+/...` | P3 | odbij entity=0 | S |
+| 106.25 | `ExtractNumericFromEntityID` konkatenira sve cifre | srednji | **Tačno** — `:214-217` petlja svih cifara | P3 | strict suffix parser | M |
+| 106.26 | Nema overflow guard | Visok | **Tačno** — `:222` `CLng(digits)`, public, bez lokalnog EH → overflow ruši caller-a | P2 | `TryExtract` sa bounds | S |
+| 106.27 | `ExtractSeqFromBroj` previše tolerantan | srednji | **Tačno** — `abc/xyz→1`, `x/y-999→999` (`:227-253`) | P3 | strict varijanta za allocator | S |
+| 106.28 | Regex proverava sintaksu, ne semantiku | srednji | **Tačno** — `:260` bez datum/suffix validacije | P3 | kalendarska provera | S |
+| 106.29 | Generički validator ne podržava `S` | Visok | **Tačno** — `IsValidBrojFormat :260` `^\d+...` bez S; `modMasterSync.bas:2797-2804` zaseban `IsValidBrojZbirneFormat` `^S?\d+...` = format drift | P2 | `ValidateBroj(kind,val)` | M |
+| 106.30 | `ApplyMirrorPrefix` slab contract | srednji | **Tačno** — `:296-301` samo `Left$="S"`, bez trim/format (`s1..→Ss1..`) | P3 | parse-normalize | S |
+| 106.31 | `MaxSeqFromTable` case-sensitive entity | Visok | **Tačno** — `:371` `CStr(...)=entityID` exact → trailing space/case preskočen | P2 | canonical normalizacija | S |
+| 106.32 | Nevalidan datum reda tiho ignorisan | Visok | **Tačno** — `:374-376` `CDate` pod `On Error Resume Next` → red ne ulazi u max | P2 | strict blok na corrupt | S |
+| 106.33 | Datum kolona i datum-u-broju mogu protivrečiti | srednji | **Tačno** — nema invariant provere | P3 | invariant check | M |
+| 106.34 | Lokalni OTK fallback ne proverava remote | Visok | **Tačno** — `GenerateBrojDokumenta :137` skenira samo `tblOtkup` | P2 | dok. import-order contract | S |
+| 106.35 | OTP VBA-only ≠ single-instance | srednji | **Tačno** — **Prihvaćeno** (single-writer) | P3 | SWMR backend | — |
+| 106.36 | PRJ prefiks `1` hardkodovan | srednji | **Tačno/Dizajnersko** — `:198` `FormatBroj("1",...)`; komentar `:180-185` definiše pravilo | P3 | formalizuj policy | S |
+| 106.37 | Remote header lookup strog fail-soft | srednji | **Tačno** — `FindHeaderIndexInData :518` exact compare→0 | P3 | `REMOTE_SCHEMA_INVALID` | S |
+| 106.38 | Hardkodovan `Sheet1` | srednji | **Tačno** — `:442` | P3 | schema contract | S |
+| 106.39 | Cache čuva prazan spreadsheet ID | Visok | **Tačno** — `:503` upisuje i `""` → session-long negative cache | P2 | ne keširati prazno | S |
+| 106.40 | Cache nema TTL/generation | srednji | **Tačno** — key samo `sheetName :503` | P3 | key=folder+tenant+gen | S |
+| 106.41 | `ClearSpreadsheetIDCache` nema caller-e | srednji | **Tačno** — grep: samo deklaracija `:305`, nula poziva | P3 | zvati na config-change | S |
+| 106.42 | Remote suggestion čita ceo sheet | srednji | **Tačno** — `ReadSheetData(...,"Sheet1") :442` | P3 | server-side seq | L |
+| 106.43 | Revers ceo `tblAmbalaza`; missing kol→0 | srednji | **Tačno** — `MaxSeqReversAmbalaza :324` `GetColumnIndex`; `iBroj=0→Exit` (default 0); pozitivno: uključuje storno | P3 | typed unavailable | S |
+| 106.44 | Dvocifrena godina = business format | kontekst | **Kontekst-Pozitivno** — tačno (interni ID postoji) | P3 | — | — |
+| 106.45 | Business date contract mora biti eksplicitan | srednji | **Tačno** — funkcije primaju `Date`, bez policy | P3 | dokumentuj | S |
+| 106.46–106.48 | Nema `AllocationResult`; ciljni API; SWMR model | predlog | **Predlog (ne nalaz)** — razuman pravac | P3 | typed rezultat | L |
+| 106.49 | Manual unos takođe zahteva unique guard | Visok | **Tačno** — nema save-time unique provere | P2 | finalni exact-unique guard | M |
+| 106.50–106.52 | Jedna canonical impl.; logging≠receipt; nema test suite | predlog/nalaz | **Tačno** (106.51 logging, 106.52 nema `modBrojeviTests` — potvrđeno) | P2 | dedic. regresija | M |
+| 106.53–106.56 | Šta ne menjati / prioriteti / regresija / procena | meta | **Kontekst** — saglasan | — | — | — |
+
+**Bilans FM-0091:** Sve činjenične stavke **Tačno** (nula opovrgnutih). Ključna kalibracija: FM markira 8 nalaza kao „P0", ali single-writer desktop spušta većinu fail-open readova (106.10/13/14/16) na **P2** i atomsku rezervaciju (106.8) na **Dizajnersko/AUD-003** (P1 tek u SWMR). Dva prava **P1** danas: **106.11** (`GenerateBrojPrijemnice` EH → validan-looking `1/ddmmyy` duplikat — fix S) i **106.18–106.20** (`modMasterSync.GenerateBrojZbirne` row-count generator pravi duplikat na rupama — realan bug i single-writer, fix M delegiranjem). Format drift 106.29 i overflow 106.26 potvrđeni. Pozitivno: max-iz-brojeva algoritam i storno-rezervacija su solidni.
+
+---
+
+### FM-0102 — `modParse.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 121.1 | Uloga (4 javne funkcije, cross-cutting) | opis | **Kontekst-Pozitivno** — tačno | — | — | — |
+| 121.2 | Pozitivna arhitektura (TryParse, NBSP/RSD/kg) | pozitivno | **Kontekst-Pozitivno** — potvrđeno | — | — | — |
+| 121.3 | **P0/P1**: `DateSerial` prihvata nepostojeće datume | Kritično | **Tačno — već registrovano kao AUD-007.** `:71-72` bez re-check-a; `31.02` normalizuje | (AUD-007) | `Day/Month/Year=input` provera | S |
+| 121.4 | Locale-zavisnost / `IsDate` dvosmislenost | Visok | **Tačno** — `:50-52` `IsDate/CDate` pre fallback-a; `03/04/2026` per-mašina | P2 | canonical `dd.mm.yyyy` | M |
+| 121.5 | Dvocifrena godina asimetrična | srednji | **Tačno** — `:69` `Y<100→2000+Y` bez dok. contract-a | P3 | dokumentovan pivot / odbij | S |
+| 121.6 | Jedan separator semantički dvosmislen | Visok | **Tačno** — `:114-119` uvek decimalni; `1.234→1,234` na SR (factor-1000) | P2 | contract: zabrani grouping / strict | M |
+| 121.7 | Preširoko uklanjanje jedinica | Visok | **Tačno** — `:90-91` `Replace RSD/kg` svuda; `1kg2→12`, `RSD100RSD→100` | P2 | samo leading/trailing token | S |
+| 121.8 | `ByRef result` ostaje star na neuspehu | srednji | **Tačno** — `:11,29` Exit bez reset-a | P2 | `result=0` na početku | S |
+| 121.9 | `TryParseLong` granice/naziv | srednji | **Tačno** — `:29-33` Double-first, neg odbijen, tol `0.000001` | P3 | rename `TryParseNonNegativeLong` | S |
+| 121.10 | Fail-closed bez observability-ja | srednji | **Tačno** — sve greške → False bez razloga | P3 | typed parse reason | M |
+| 121.11 | Caller površina (široka) | kontekst | **Tačno** — potvrđeno 11 caller-fajlova (frmOtkup, frmStammdaten, frmDokumenta, frmBankaExportPregled, modOtkupBlok, modSEFMapper/Validator, modDokumenta, modBankaImportParserPdfToText…) | — | regresija pre promene contract-a | — |
+| 121.12 | Test pokrivenost nedostaje | srednji | **Tačno** — nema dedic. matrice | P2 | offline test matrica | M |
+| 121.13–121.14 | Prioriteti / ocena | meta | **Kontekst** — saglasan | — | — | — |
+
+**Bilans FM-0102:** Sve **Tačno**. 121.3 = **AUD-007** (referencirano, ne re-analizirano). Ostalo: 121.6 (single-separator factor-1000) i 121.7 (unit-strip u sredini) su najkonkretniji finansijski rizici — obe **P2** sa jeftinim fix-om (S). 121.4 locale nedeterminizam P2. Nijedan nalaz nije opovrgnut; FM ovde precizan i pošten (i sam kod komentariše neka ograničenja).
+
+---
+
+### FM-0104 — `modHttpUtils.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 124.1 | Uloga (UrlEncode/JsonEscape, dedup) | opis | **Kontekst-Pozitivno** — tačno (`:15-25` uklanja 4 duplikata, UTF-8 bug fix) | — | — | — |
+| 124.2 | `UrlEncode` tehnički dobro izveden | pozitivno | **Kontekst-Pozitivno** — potvrđeno (`:52` UTF-8 bytes, BOM strip, RFC3986 unreserved) | — | — | — |
+| 124.3 | Windows/ADODB dep; `Utf8Bytes` bez cleanup | srednji | **Tačno** — `:103-142` nema `On Error`/`stream.Close` na grešci | P2 | EH+close+re-raise | S |
+| 124.4 | `JsonEscape` nije kompletan JSON encoder | Visok | **Tačno** — `:91-96` samo `\ " CRLF/CR/LF`; nema `\t \b \f \u00XX`; kod to i priznaje `:84-87` | P2 | escape svih U+0000–001F | S |
+| 124.5 | Novi redovi se normalizuju na `\n` | kontekst | **Kontekst-Pozitivno** — tačno i poželjno | — | — | — |
+| 124.6 | Caller odgovoran za navodnike | kontekst | **Kontekst-Pozitivno** — `:82` komentar tačan | — | dok. primer | S |
+| 124.7 | Nema builder-a (O(n²)) | nizak | **Tačno** — `:69-73` `result=result&`; trenutni calleri kratki | P3 | ne za bulk | — |
+| 124.8 | Test pokrivenost | srednji | **Tačno** — grep: nema `Test_UrlEncode`/`Test_JsonEscape` | P2 | offline matrica | M |
+| 124.9–124.10 | Prioriteti / ocena | meta | **Kontekst** — saglasan | — | — | — |
+
+**Bilans FM-0104:** Sve **Tačno**. FM markira 124.4 kao P1; kalibrišem na **P2** — kanonski helper treba da bude ispravan, ali trenutni SEF/Google payload-i nemaju sirove control-znakove (kod svesno dokumentuje granicu), pa nije produkcioni blocker. Jedini realni budući rizik: control-znak iz copy/paste/banke → nevalidan JSON. Fix jeftin (S). `UrlEncode` je stvarno poboljšanje (UTF-8 bug fix za srpska slova).
+
+---
+
+### FM-0107 — Empty worksheet-class sweep (`*.doccls`)
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| — | Svih 12 `.doccls` = samo standardni metadata blok, bez event/procedure logike | nalaz | **Tačno** — potvrđeno: svaki fajl tačno 9 linija (`VERSION/BEGIN/MultiUse/END/Attribute×5`), nula procedura; nema `Worksheet_*` | P2 | — | — |
+| — | Arhitektonsko značenje (nema skrivenog sheet-event sloja) | zaključak | **Kontekst-Pozitivno** — tačno | — | — | — |
+| — | Rizik: repo noise + nejasna `CodeName↔sheet` mapa (`Sheet14/15/16/20/23`) | P2 | **Tačno** | P3 | manifest CodeName↔ime↔tabela | S |
+| — | Preporuke (ne brisati, CI import-gate, tanki eventi ako dođu) | predlog | **Predlog (ne nalaz)** — razumno | — | — | — |
+
+**Bilans FM-0107:** Potvrđeno trivijalno tačno — metadata-only workbook-object exporti, nema P0/P1. Jedini realni nalaz je P3 higijena (CodeName mapa). Klasifikacija „KEEP, DOCUMENT, DO NOT TREAT AS FUNCTIONAL" je ispravna.
+
+---
+
+### FM-0108 — `ThisWorkbook.doccls`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 108.1 | Tanak lifecycle adapter (2 handlera, delegira) | opis | **Kontekst-Pozitivno** — tačno (`:10-56` Open, `:58-84` BeforeClose) | — | — | — |
+| 108.2 | **P1**: lažni `VBA_STARTUP_SUCCESS` | Visok | **Tačno** — `:24-34` emit bezuslovan; `StartApp` normalno izlazi na 4 mesta: `modMain.bas:38` (AccessGate=deny, **= AUD-034**), `:44` (UpdateGate), `:50-53` (self-update scheduled), `:59-64` (login failed) — sva 4 `Exit Sub` | P2 | `StartAppResult`; success samo za `Started` | M |
+| 108.3 | **P1**: `InitApp` može pasti, `StartApp` nastavlja | Visok | **Tačno** — `InitApp` `:220-222` `Resume CleanUp` (ne re-raise); `ValidateAllTables` je `Private Sub` (`:287-309`) — samo MsgBox, ne vraća False/ne baca; `:211-212` `m_Initialized=True` bezuslovno; `StartApp :32` ne proverava rezultat | P2 | `InitApp` fail-closed; ne `m_Initialized=True` uz missing tabele | M |
+| 108.4 | Monitoring identitet hardkodiran (`"Operator"`) | srednji | **Tačno** — `:12,29` `userId:="Operator"`, `correlationId:="VBA-STARTUP"` konstanta | P3 | device/session pre login; RunID | S |
+| 108.5 | Cleanup orphan lockova nevidljiv caller-u | srednji | **Tačno** — `:20-21` `CleanupOrphanedLocks` pod `On Error Resume Next`, bez `Err` provere (vezano za **AUD-017** — startup EH briše Err) | P3 | `STARTUP_DEGRADED_LOCK_CLEANUP` warn | S |
+| 108.6 | `BeforeClose` nema strukturiran rezultat release-a | srednji | **Tačno** — `:65-76` best-effort, nema monitoringa nereleased lock-a | P3 | warn StationID+razlog | S |
+| 108.7 | Shutdown state ne garantovano restauriran (`mIsShuttingDown`) | srednji | **Tačno** — `modMain.bas:257-260` EH ne vraća `mIsShuttingDown=False` | P3 | reset u EH; dok. best-effort | S |
+| 108.8 | Pozitivni nalazi (kratak, hvata fatal, oslobađa lock) | pozitivno | **Kontekst-Pozitivno** — potvrđeno | — | — | — |
+| 108.9–108.10 | Prioriteti / ocena (typed startup rezultat) | meta | **Kontekst** — saglasan | — | — | — |
+
+**Bilans FM-0108:** Sve **Tačno**. Registrovano (referencirano, ne re-analizirano): **AUD-017** (startup EH briše Err — dodiruje 108.5), **AUD-034** (`AccessWasDenied` se ne poziva / lažni STARTUP_SUCCESS posle deny-ja — poklapa se sa slučajem (1) u 108.2). **Novo/šire od AUD-034**: 108.2 pokriva i slučajeve (2) UpdateGate, (3) self-update scheduled, (4) login failed — telemetrijski „success" iako UI nije pokrenut → **P2** (kvari operacionu telemetriju, ne funkciju). 108.3 je stvaran fail-open: `ValidateAllTables` kao `Private Sub` + bezuslovni `m_Initialized=True` znači da app može biti „inicijalizovan" uz nedostajuće tabele → **P2**. Ostalo P3 (observability). Najbolji minimal-delta: typed `StartAppResult` između `ThisWorkbook` i `modMain` (rešava 108.2+108.3 zajedno).
+
+---
+
+## Zbirni bilans (A2/K2)
+
+- **Ukupno verifikovano:** 6 FM unosa, ~150 stavki/podsekcija. **Nula činjenično opovrgnutih** — FM je i u ovom bloku faktografski precizan; sve „Netačno" = 0.
+- **Već registrovano (referencirano):** AUD-007 (FM-0102 121.3), AUD-017 + AUD-034 (FM-0108), AUD-037 (FM-0088 100.5/100.6/100.17 publish-guard). AUD-003 referenciran uz hedge na koncept-atomarnost (106.8 / 100.7/100.31) — tačan opseg nije u dostavljenim materijalima.
+- **Pravi P1 (fix S–M), nezavisni od SWMR:**
+  1. **FM-0091 106.11** — `GenerateBrojPrijemnice` EH (`modBrojevi.bas:203`) vraća validan-looking `1/ddmmyy` duplikat → EH treba `""`. (S)
+  2. **FM-0091 106.18–106.20** — `modMasterSync.GenerateBrojZbirne` (`:2887-2928`) row-count generator pravi duplikat na rupama; delegirati canonical `MaxSeqFromTable`. (M)
+  3. **FM-0088 100.5** = **AUD-037** — guard pre `version.json` upload-a (`modRelease.bas:53`). (S)
+- **Kalibracija naniže:** većina FM „P0/Kritično" tona spušta se na **P2/P3** zbog (a) single-writer desktop-a (modBrojevi fail-open readovi 106.10/13/14/16, atomarnost 106.8), (b) single build-machine / male flote (modRelease security/canary 100.21–100.23, 100.41), (c) dokumentovanih dizajn-granica (106.15, 106.36, 124.4 kontrolisani payload). Fleet-integritet nalazi (100.24–100.35) ostaju legitimni P2 arhitektonski dug jer se NE ublažavaju single-writer modelom.
+- **Format napomena:** FM-0102/0104/0107 su čisti (nula opovrgnutih, uglavnom P2/P3 hardening); FM-0088/0091 nose najveći realan dug ali sa jasnim minimal-delta ulaznim tačkama.
+
+Relevantni fajlovi: `modRelease.bas`, `modBrojevi.bas`, `modParse.bas`, `modHttpUtils.bas`, `ThisWorkbook.doccls` (svi u `src-vba/`, verifikovano protiv `origin/main` v2.24.0); cross-ref dokazi: `modMasterSync.bas:2887-2928`, `modSchemaGuard.bas:5-18`, `modMain.bas:16-309`, `modDrive.bas:54-113`, `modSelfUpdate.bas:38,262-336`, `modConfig.bas:21`, `modAdmin.bas:284`, `modBuildInfo.bas:5-7`, `modAutoHladnjaca.bas:150-161`.
+
+---
+
+## v142 blok K3 — modMasterSync, modGoogleSyncSmokeTests (FM-0092/0093) [sidro origin/main v2.24.0]
+
+Verifikacija kompletna. Sve ključne tvrdnje proverene protiv koda. Sledi audit.
+
+---
+
+## AUDIT — FM-0092 & FM-0093 vs modMasterSync.bas / modGoogleSyncSmokeTests.bas (origin/main v2.24.0)
+
+Napomena o kontekstu: single-writer desktop; jedina multi-writer površina je Google Sheet (GAS/PWA). Zato su „race" tvrdnje realnije na GS strani (writeback), a slabije na lokalnom append-u (tblOtkup/tblZbirna). Već registrovano (referencira se, ne eskalira): AUD-002 = 108.7, AUD-018 = 108.40, AUD-001 = zaseban parser u modGoogleSheets (≠ 108.46).
+
+### FM-0092 — `modMasterSync.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 108.1–108.6 | Osnovni podaci / uloga / tokovi / „šta je dobro" | narativ/poz. | **Kontekst-Pozitivno** | Prihvaćeno | Bez izmene; opis tačan (`Option Explicit`, strict headeri, `ClientRecordID`, row-TX potvrđeni) | — |
+| 108.7 | OTK batch TX može ostaviti `Synced>Master` bez master reda | P0 | **Tačno** — `287-312`: outer snapshot→`Core(False)`→`RollbackTx`; `Core` vraća False na `totalErrors>0` (`213-235`), writeback već upisan u `ImportOneOTKSheet` (`1356-1362`) | **= AUD-002 (već registrovano)** | — | — |
+| 108.8 | OTK dva consistency modela po entry-pointu | P0 (drift) | **Tačno** — `Core` direktno (`163-182`) ostavlja uspešne redove; `_TX` (`298-301`) rollback-uje sve. Ista jezgra, druga semantika | P1 | Ukloniti outer-TX (isto kao AUD-002 fix); `_TX` = tanak wrapper nad `Core` bez table-snapshot rollbacka | M |
+| 108.9 | VOZ put pravilnije modelovan (no-outer-TX) | pozitivno | **Kontekst-Pozitivno** — `2167-2179` eksplicitni komentar + `ImportZbirneFromPWA_TX` (`2160`) ne pravi snapshot | Prihvaćeno | Zadržati; primeniti isti model na OTK | — |
+| 108.10 | Treba inbox/outbox umesto pseudo-distributed TX | P0 (arh.) | **Dizajnersko ograničenje** — validan pravac, nije defekt po sebi | P2 | `tblSyncInbox` receipt (Domain+CRID unique) tek posle stabilizacije 108.7/108.8 | L |
+| 108.11 | Writeback vezan za fizički `rowNum` (F/B/T) | P0 | **Tačno** — `1729`,`1737` (OTK), `2839`,`2845`,`2853` (VOZ); `rowNum` iz read-a, bez CRID precondition/read-back | P1 (GS je multi-writer) | Pre upisa read-back ćelije A i assert `A==očekivani CRID`; bolje GAS `ack` po CRID-u | M–L |
+| 108.12 | PWA lock ne rešava identity-safe writeback | P0 (analiza) | **Tačno** — potpora 108.11; lock ne pokriva ručni GS edit/sort ni javne entry-pointe | P1 | Vidi 108.11 | — |
+| 108.13 | dedupe check i append nisu atomski | P0 | **Delimično** — `IsDuplicateInMaster`(`1451`)→`AppendRow`(`1623`) jeste neatomski, ali lokalni append je single-writer desktop; trigger je 2 Excel instance | P2 (P0 tek za SWMR) | CRID unique-guard pri append-u; za sada dokumentovati single-instance pretpostavku | M |
+| 108.14 | Duplicate check ne prijavljuje postojeći `count>1` | visok | **Tačno** — `1470-1473` / `2560-2563` vraćaju True na prvom match-u | P2 | Kada `count>1` → hard integrity error (kao `RequireSingleMasterSyncRow`), ne „Duplicate" | S |
+| 108.15 | `TryUpdateVozacID` zaobilazi hardening; True i na neuspeh | visok | **Tačno** (realan bug) — `1773-1798`: `GetColumnIndex`/`UpdateCell` (ne Require*), rezultat `UpdateCell` se ne proverava, `=True`+log „Updated" bezuslovno (`1790-1793`) → GS dobija `Synced>Master`, `VozacID` prazan | P1 | Proveriti Boolean `UpdateCell`; `=True` samo ako write uspeo; koristiti `RequireUpdateCell` | S |
+| 108.16 | Duplicate status ne vraća postojeći master ID | visok | **Tačno** — OTK `1319/1322` i VOZ `2360` upisuju `Duplicate` bez `OtkupID/ZbirnaID/BrojZbirne` | P2 | Na duplicate vratiti postojeći ID u ServerRecordID (idempotent replay) | M |
+| 108.17 | Invalidan datum → današnji datum | P0 | **Tačno** (OBA puta) — OTK `1547-1550`, VOZ `2598-2600`: `On Error Resume Next / CDate / If Err Then Date` | P1 | Strict parse; neuspeh → row `SyncError:Invalid Datum`, ne `Date` | S |
+| 108.18 | OTK validacija suviše uska | visok | **Delimično / Dizajnersko** — `1381-1449` proverava koop/vrsta/kol/cena/amb; nema ownership/klasa/datum/parcela. Defense-in-depth iza GAS auth-a | P2 | Dodati proveru `Klasa` enum, stanica-aktivna, koop∈stanica (min. skup) | M |
+| 108.19 | Sheet ownership (`OTK-ST-x` ⇒ `OtkupacID=ST-x`) se ne proverava | visok | **Tačno** — `ImportOneOTKSheet` prima `sheetName` ali row-import ga ne poredi (`1253+`); isto VOZ | P2 | Assert `OtkupacID`/`VozacID` == entitet iz imena sheet-a | S |
+| 108.20 | Poslovni broj samo regex | visok | **Tačno** — `IsValidBrojFormat`(OTK `1597`) / `IsValidBrojZbirneFormat`(`2639`) — sintaksa, ne semantika (prefiks/datum/zauzetost) | P2 | Semantička provera prefiksa vs entitet + `ddmmyy` vs datum | M |
+| 108.21 | PWA `BrojZbirne` bez uniqueness pre append-a | P0 | **Tačno** — `2626-2644`: regex pa direktan `AppendRow`; ne zove `BrojZbirneExists`/`SuggestNextBroj`. Dovoljan 1 batch sa 2 ista broja | P1 | Pre append-a `BrojZbirneExists(broj)` → konflikt = `SyncError` | M |
+| 108.22 | Fallback ZBR generator paralelni i pogrešan | P0 | **Tačno** — `GenerateBrojZbirne`(`2887-2924`) BROJI redove (`seq=count+1`) → za `1/ddmmyy`+`1/ddmmyy-3` daje postojeći `-3`; kanonski `SuggestNextBroj(KIND_ZBR)` radi max-suffix + `BrojZbirneExists` bump-loop (modBrojevi `93-110`). Latentno (samo prazan-broj fallback) | P1 | Zameniti telo sa `SuggestNextBroj(KIND_ZBR, vozac, datum)` | M |
+| 108.23 | Duplirani formatter/validator već driftovali | visok | **Tačno** — `IsValidBrojZbirneFormat` regex `^S?\d+/...` vs modBrojevi `IsValidBrojFormat` `^\d+/...` (razlika: `S` prefiks, `257-263`); `ExtractNumericVozacBroj`(`3007`) duplira `ExtractNumericFromEntityID` | P2 | Prošriti kanonske u modBrojevi (opc. `S`), obrisati lokalne kopije | M |
+| 108.24 | `KulturaID` fallback pravi orphan | visok | **Tačno** — `1583-1584`: `KulturaID = VrstaVoca & "-" & SortaVoca` ako lookup padne; vrednost ne mora postojati u `tblKulture` | P2 | Nepoznata kultura → `SyncError:Unknown culture` umesto sintetičkog ID-a | S |
+| 108.25 | Positional `AppendRow` = schema-order rizik | visok | **Tačno / Dizajnersko** — `1615-1623` (OTK), `2674-2677` (ZBR) veliki positional nizovi; poznat rizik iz CLAUDE.md | P3 | Prelazak na upis po imenu (`UpdateCell`/`GetColumnIndex`) za osetljiva polja | L |
+| 108.26 | Ambalažni dvojni ledger zavisi od slabo validirane stanice | srednji | **Tačno** — `1629-1630` Izlaz/Ulaz; `stanicaID` iz koop-mappinga ili fallback `otkupacID` (`1575-1580`) | P2 | Vezati za 108.19 ownership-guard | S |
+| 108.27 | Auto-otpremnica grupiše po nedovoljnom ključu | P0 | **Tačno** — `668-672` ključ `Stanica\|Datum\|Vozac\|Klasa`; metadata sa prvog reda (`739-744`), kol/amb sabrani (`717-718`) → mešane vrste/cene/ambalaže u 1 otpremnicu | P1 | U ključ dodati `VrstaVoca\|SortaVoca\|Cena\|TipAmbalaze`; različita metadata = odvojene otpremnice | M |
+| 108.28 | Auto-otpremnica nema granicu ture | visok | **Tačno / Dizajnersko** — model nema `TuraID`; isti ključ spaja dve vožnje | P2 | Zahteva `TuraID`/shipment grain u domenu | L |
+| 108.29 | `otpAll` preload je mrtav kod | srednji | **Tačno** — `692-697` učitava `otpAll`+`colOtpSt/colOtpDat`, nigde se ne koriste (broj ide preko `GenerateBrojOtpremnice` `724`) | P3 | Obrisati `otpAll`/`colOtpSt`/`colOtpDat` | S |
+| 108.30 | Malina stamping menja SVE aktivne prazne `VozacID` | visok | **Delimično** — `816-844` prolazi ceo aktivni `tblOtkup`; nije skopiran na run/PWA/sezonu. U malina modu je `VozacID:=StanicaID` namerni semantik | P2 | Ograničiti na tekući import (npr. `SyncSource=PWA` + prazan Otpremnica), ne ceo history | M |
+| 108.31 | Malina stamping ne garantuje mirror vozača | srednji | **Delimično** — helper (`816`) ne zove `EnsureVozacMirrorForStanica`; mirror obezbeđuje `modAutoHladnjaca`/`modMalina` na drugom mestu (mitigacija zavisi od orchestrator redosleda) | P2 | Ili pozvati `EnsureVozacMirrorForStanica` u stamping-u, ili dokumentovati garanciju u orchestratoru | S |
+| 108.32 | Auto-zbirna iz otpremnice nema conflict guard | visok | **Tačno** — `895-986`: `brZbirne=ApplyMirrorPrefix(...)`→`SaveZbirna_TX` bez provere globalne zauzetosti/konflikta | P2 | `BrojZbirneExists` pre `SaveZbirna_TX` | M |
+| 108.33 | Backfill ćutke zadržava konfliktni `BrojZbirne` | visok | **Tačno** — `BackfillOtkupBrojZbirneByOtpremnica` `1006`: update samo ako `cur=""`; različit postojeći ostaje bez prijave | P2 | `cur<>""` i `cur<>novi` → log/`SyncError` konflikt | S |
+| 108.34 | VOZ payload može linkovati proizvoljne OTK CRID-eve | P0 | **Tačno** — `LinkZbirnaToOtkupAndOtpremnica` `2701-2771`: po CRID-u samo `RequireSingleMasterSyncRow`; nema provere vozač/datum/stanica/već-u-drugoj-zbirnoj | P1 | Validirati membership (isti vozač/datum, nije u drugoj zbirnoj) pre linkovanja | M |
+| 108.35 | Postojeće veze se prepisuju bez conflict politike | P0 | **Tačno** — `RequireUpdateCell ... COL_OTK_BROJ_ZBIRNE`(`2759`) i `LinkOtpremnicaToBrojZbirneStrict`(`1894`) upisuju bez „prazno ILI isto" guarda | P1 | Guard: dozvoli upis samo ako prazno ili identično; inače konflikt | M |
+| 108.36 | Prazan `OtkupRecordIDs` ipak commit-uje zbirnu | visok | **Tačno** — `2712-2715` log+Exit, pa `tx.CommitTx`(`2463`) upisuje standalone zbirnu | P2 (zavisi od ugovora) | Ako je zbirna = skup otkupa → prazna lista = `SyncError` | S |
+| 108.37 | Nema quantity reconciliation zbirne vs otkupi | srednji | **Tačno** — nigde `Σ Otkup.kol vs KolI+KolII` pre commit-a | P2 | Reconcile pre commit-a ili eksplicitno prepustiti `modIntegritet` | M |
+| 108.38 | PWA zbirna grain (combined I/II) ≠ lokalni per-class | srednji | **Delimično** — kod potvrđen (`2664-2677` jedan red, `Klasa="I/II"`); „downstream mora podržati oba" je inferencija | P2 | Dokumentovati oba grain-a; verifikovati downstream po-klasi izveštaje | L |
+| 108.39 | VOZ row failure gubi precizan razlog | srednji | **Tačno** — `2387` piše generički `SyncError:Import/link failed`; tačan `Err` samo `Debug.Print`(`2487-2491`) | P2 | Typed reason code iz `ImportVOZRow_RowTX` u status | S |
+| 108.40 | VOZ Drive listing nema paginaciju | P1 | **Tačno** — `FindVOZSheets` `2243-2246` samo `pageSize=100`, bez `nextPageToken` | **= AUD-018 (već registrovano)** | — | — |
+| 108.41 | OTK/VOZ implementacije driftovale | strukturno | **Tačno** — potvrđeni parovi (listing paginacija Da/Ne, 2 writeback helpera, dupli JSON parser) | P2 | Zajednički sync engine tek posle contract hardeninga | L |
+| 108.42 | Provisioning proverava postojanje, ne ispravnost | srednji | **Tačno** — `469-474`: `existingID` po imenu → skip; bez header/tab/kolone/schema-version provere | P2 | Za existing sheet validirati header schema | M |
+| 108.43 | Neuspešan header write ostavlja poison spreadsheet | P0/P1 | **Tačno** — `476-494`: `CreateSpreadsheet` pa `WriteSheetData`; na fail header-a `newID` se NE trash-uje → sledeći run ga vidi kao existing | P1 | Trash na fail header-a, ili temp-ime pa rename posle uspešnog write-a | M |
+| 108.44 | Postojeći 22-kol sheet nema migracioni put | visok | **Tačno** — `BuildOTKOperationalHeaders_` 23 kol (`544-568`), provisioning skip existing, validator traži kol 23 | P2 | Repair/dopuna postojećih sheetova na 23-kol schemu | M |
+| 108.45 | Header count guard pogrešan | srednji | **Tačno** — `1177` `< 22` (poruka „Expected=22"), a `GS_BROJ_DOKUMENTA=23` traži kol 23 (`1207`); 22-kol prolazi count, pada na pristupu kol 23 (fail-safe ali poruka pogrešna) | P3 | Promeniti guard na `< 23` i poruku „Expected=23" | S |
+| 108.46 | Ručni JSON parser krhak (Drive lista) | srednji | **Tačno** — `ExtractJsonValueAt` `1133-1147` InStr/prvi navodnici; bez escaped/unicode. Za `id,name` rizik mali. Različit parser od AUD-001 | P3 | Ne širiti; dugoročno pravi JSON parser | M |
+| 108.47 | Nema retry/backoff | srednji | **Tačno** — svi `WinHttp` pozivi direktni bez retry (429/5xx/401-refresh/timeout) | P2 | Centralni retry wrapper (429/5xx/timeout, 1× refresh na 401) | M–L |
+| 108.48 | Writeback bez chunking-a | srednji | **Tačno** — `1704-1743` / `2827-2859` jedan JSON body za sve update-e | P3 | Deterministički chunk-ovi + per-chunk receipt | M |
+| 108.49 | Full-sheet scan degradira | srednji | **Tačno** — `ImportOneOTKSheet` čita ceo sheet; `IsDuplicateInMaster` re-čita celu tabelu po redu | P3 (scale) | CRID set učitati jednom po batch-u; server-side status filter | M |
+| 108.50 | `skipped` metrika neupotrebljiva | nizak | **Tačno** — `1349`/`2398` broji svaki non-`Synced` red (stari `Synced>Master`, `Duplicate`...) | P3 | Odvojeni brojači po statusu | S |
+| 108.51 | Monitoring meša VOZ kao `PWA-OTKUP` | srednji | **Tačno** — `Monitor_MasterSync*` hardkoduje `entityID="PWA-OTKUP"`, `correlationId="MASTERDATA-SYNC-PWA"` (`3047-3048`,`3064-3065`,`3081-3082`), zove ga i VOZ core | P3 | Parametrizovati domain (OTK/VOZ) u monitor helperima | S |
+| 108.52 | Nema `SyncRunID` | srednji | **Tačno** — statičan correlationId, bez per-run identiteta | P3 | Uvesti `SyncRunID` (GUID) kroz ceo ciklus | M |
+| 108.53 | `mLastPWAFatalSyncError` shared mutable | nizak | **Tačno / Prihvaćeno** — modul-level Boolean, resetuje se na startu core-a; OK za single-thread | P3 | Strukturiran result dugoročno | M |
+| 108.54 | Remote status state machine neformalizovan | srednji | **Tačno** — stringovi bez dozvoljenih tranzicija | P3 | Definisati enum + dozvoljene tranzicije | L |
+| 108.55 | `ServerRecordID` preopterećen semantički | srednji | **Tačno** — writeback upisuje `OtkupID/ZbirnaID` u kol B (`ServerRecordID`) | P2 | Odvojiti `GasRecordID` / `MasterRecordID` | M |
+| 108.56 | Geo pull dobra identity/rollback zaštita | pozitivno | **Kontekst-Pozitivno** — `3245-3275` dup source/local = hard fail; 1 TX; identity-based update; prazno ne briše | Prihvaćeno | Zadržati | — |
+| 108.57 | Geo source nije domenski validiran | srednji | **Tačno** — `GeoUpdateFieldIfNeeded` `3408-3438` samo non-empty+different; bez lat/lng range/polygon/enum | P2 | Type-aware validacija po koloni pre upisa | M |
+| 108.58 | Geo merge ne podržava namerno brisanje | srednji | **Tačno / Dizajnersko** — `3425` prazno ne briše (štiti od gubitka) | P3 | Eksplicitni delete-marker kad zatreba | M |
+| 108.59 | Geo string-compare pravi write churn | nizak | **Tačno** — `3429` `StrComp` binarno nad `CStr` (44.123 vs 44,123 vs 44.1230) | P3 | Type-aware normalizacija po koloni | M |
+| 108.60 | Missing Google parcele van Boolean rezultata | srednji | **Tačno** — `3260-3268` broji/loguje, funkcija i dalje `True`(`3311`) | P3 | Vratiti structured counts (updated/skipped/missing) | S |
+| 108.61 | Cohesion hotspot 3.446 linija | strukturno | **Tačno** (činjenično) | P2 (advisory) | Split po failure granicama tek posle contract hardeninga | L |
+| 108.62 | Dokumentacija (runbook) delimično zastarela | nizak | **Nije proverivo statički** (kod ≠ docs) — kod jeste „prihvati broj iz reda, generiši lokalno samo ako prazan" (`2626-2636`) | P3 | Uskladiti runbook (ko alocira/validira/authority) | S |
+| 108.63 | Smoke fixture 22-kol schema drift | P0 | **Tačno** — ukršteno sa FM-0093/110.6 | P1 | Vidi FM-0093 | S |
+| 108.64 | Smoke fixture header `Količina` ≠ validator | — | **Tačno** — ukršteno sa 110.6 | P1 | Vidi FM-0093 | S |
+| 108.65 | Test coverage uži od rizika modula | visok | **Tačno** — nema VOZ/writeback-failure/reorder/concurrency scenarija | P2 | Dodati VOZ + failure/recovery suite (vidi FM-0093) | L |
+| 108.66 | Procena stila (novi strict + stari soft) | narativ | **Kontekst-Pozitivno** — tačan rezime | Prihvaćeno | — | — |
+| 108.67–108.70 | Predlozi: structured result / receipt / writeback zaštita / otpremnica politika | predlog | **Dizajnersko ograničenje** — validni pravci | P1–P2 | Prioritet: writeback CRID-precondition (108.11) + otpremnica group-key (108.27) | L |
+| 108.71–108.74 | P0/P1/P2 lista + regression scenariji | rezime | **Tačno** (mapira potvrđene nalaze) | — | Koristiti kao backlog; ispravne stavke 1,3,4,5,7,8,9,10 | — |
+| 108.75 | Konačna procena | zaključak | **Kontekst-Pozitivno** — verno | Prihvaćeno | — | — |
+
+Bilans FM-0092: Od ~55 sadržajnih nalaza — **Tačno** ~40, **Delimično** 5 (108.13/108.18/108.30/108.31/108.38), **Kontekst-Pozitivno** 5 (108.5/108.9/108.56/108.66/108.75), **Dizajnersko** 4 (108.10/108.25/108.28/108.58 + predloзi), **Nije proverivo** 1 (108.62). Nijedan **Netačan**. Već registrovano: 108.7=AUD-002, 108.40=AUD-018. Realni implementacioni bug-ovi (ne samo arh.): **108.15** (`TryUpdateVozacID` True na neuspeh), **108.17** (datum→danas, oba puta), **108.22** (row-count ZBR generator pravi duplikat), **108.29** (mrtav `otpAll`), **108.43** (poison sheet), **108.45** (guard `<22`/kol 23). Najveća poslovna korupcija van AUD-002: **108.27** (mešane vrste/cene u 1 otpremnicu) i **108.35** (prepis postojećih veza). P1 fokus: 108.11/108.15/108.17/108.21/108.22/108.27/108.34/108.35/108.43.
+
+---
+
+### FM-0093 — `modGoogleSyncSmokeTests.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 110.1–110.4 | Osnovni podaci / podela suite / inventory | narativ | **Kontekst-Pozitivno** — opis tačan (2 javna entry-pointa, 2 suite) | Prihvaćeno | — | — |
+| 110.5 | Šta je dobro (real roundtrip, token se ne štampa) | pozitivno | **Kontekst-Pozitivno** — `Option Explicit`(`3`), komentar „Never print token"(`101`), realni create/write/read/find | Prihvaćeno | Zadržati real-Google roundtrip | — |
+| 110.6 | OTK fixture ne odgovara 23-kol schema ugovoru | P0 | **Tačno** — `BuildOTKFixtureData` `541` `1 To 22` (nema `BrojDokumenta`); `571` `"Koli"&ChrW(269)&"ina"`=`Količina`, validator traži `Kolicina` (`1199`, binarni `StrComp`) → happy-path pada pre importa | P1 | Fixture na 23 kol + header `Kolicina`; graditi iz kanonskog header providera | S |
+| 110.7 | Root uzrok: header definisan na više mesta | P0 (arh.) | **Tačno** — header u `BuildOTKOperationalHeaders_`(modMasterSync `543`), `ValidateOTKSheetHeader`(`1159`), GAS, i `BuildOTKFixtureData`(`539`) | P1 | `modPWASyncSchema` provider koji koriste provisioning+validator+fixture | M |
+| 110.8 | Suite failures se ne propagiraju caller-u | P0 | **Tačno** — `RunGoogleSyncSmokeSuite` je `Sub` bez povratne vrednosti; svaki test EH→`LogGoogleSmokeFail`→End Sub; fatal EH (`47-52`) log+cleanup+završi | P0 | `..._Core() As Boolean = (m_Failed=0)`; javni Sub `Err.Raise` ako False | M |
+| 110.9 | Konkretan E2E false-green | P0 | **Tačno** — `modE2EReleaseGate.E2E_RunVbaSuite` `71-82`: `Application.Run procName`(`75`)→`E2E_Pass`(`77`) osim ako digne grešku; suite hvata sve → PASS i kad interno FAIL (poruka `77` doslovno: „Verify suite summary ... for PASS counters") | **P0** | Zavisi od 110.8: gate mora čitati Boolean/structured result, ne completion | M |
+| 110.10 | Potreban izvršni test contract | P0 (predlog) | **Dizajnersko ograničenje** — validan predlog (`_Core As Boolean` / `TestSuiteResult`) | P0 (uz 110.8/110.9) | Min. varijanta: Boolean + `Err.Raise`; gate proverava `Succeeded` | M |
+| 110.11 | Rollback celih produkcionih tabela (SWMR) | P0 (SWMR) | **Delimično** — `RunMasterSyncSmokeSuite` `371-380` snapshot+`RollbackTx` cele `tblOtkup`/`tblAmbalaza`; na single-writer desktopu bezbedno, opasno pri paralelnom writeru/SWMR | P2 (P0 za SWMR) | Cleanup samo po test-ownanim ID-jevima pod lock-om; izolovan test workbook | M–L |
+| 110.12 | Bezbedniji cleanup model (owned IDs) | P0 (predlog) | **Dizajnersko ograničenje** — validan pravac | P2 | `TestRunID` + brisati samo svoje `OtkupID/AmbID` | M |
+| 110.13 | Rollback ne vraća sve side-effekte | visok | **Tačno** — `AppendRow` (modDataAccess `209-215`) radi `StampRowAudit`+`WriteJournalRow`+`InvalidateTableCache`+`gKpiDirty=True`; `RollbackTx` vraća samo ListObject snapshot → orphan journal red ostaje | P2 (recovery noise, ne korupcija) | Izolovati destruktivni test od produkcionih tabela; ili purge journal po test-CRID-u | M |
+| 110.14 | Nested transaction semantika | visok | **Tačno** (strukturno) — outer test TX + inner `ImportRowToTblOtkup_RowTX` commit (`1489-1501`) + writeback + outer rollback = split-brain obrazac | P2 | Vezano za 110.11/110.12 izolaciju | M |
+| 110.15 | Fixture nije determinističan + pogrešan config ključ | visok | **Tačno** — „prvi red" iz koop/kultura/stanica (`548-554`, `640`); `GetConfigValue("DefaultSorta")`(`551`) — kanonski je `CFG_DEFAULT_SORTA="DEFAULT_SORTA_VOCA"` (modConfig `575`, editor modPodesavanja `75`) → uvek prazno→`"Default"` | P1 | Fiksan deterministički tuple; ključ `CFG_DEFAULT_SORTA` | M |
+| 110.16 | Fixture može sakriti ownership grešku | visok | **Tačno** — koop (`548`) i stanica/`OtkupacID` (`554`) biraju se nezavisno; import izvodi StanicaID iz koopa pa `OtkupacID` fallback (modMasterSync `1575-1580`) → mismatch prolazi | P2 | Izabrati koop koji pripada izabranoj stanici | M |
+| 110.17 | Assertions preslabe za business import | visok | **Tačno** — `413-455`: proverava `imported=1`, `errors=0`, `Synced>Master`, ServerRecordID≠"" ; ne proverava `ServerRecordID==OtkupID`, tačan `count=1`, polja, 2 amb reda, netaknutost drugih | P2 | Exact-receipt assertions (ID jednakost, polja, 2 amb reda) | M |
+| 110.18 | Duplicate test ne dokazuje idempotency | visok | **Tačno** — `462-494`: `imported=0`, `skipped>=1`, `Duplicate`; bez count pre/posle, bez existing-ID, bez amb-side-effect | P2 | Dodati count-invariant + existing-ID + „nema novog amb reda" | S |
+| 110.19 | Missing-CRID test ne potvrđuje „no side effects" | srednji | **Tačno** — `501-526`: `imported=0`, `errors>=1`, `SyncError*`; bez row-count invariant / prazan ServerRecordID / tačan razlog | P2 | Assert `tblOtkup`/`tblAmbalaza` count nepromenjen + tačan reason | S |
+| 110.20 | VOZ/Zbirna potpuno nepokrivena | visok | **Tačno** — `TestHook_ImportOneVOZSheet` i `BuildVOZFixtureData` ne postoje nigde (grep prazan); modul ima samo `BuildOTKFixtureData` | P1 | Dodati VOZ hook (modMasterSync) + `BuildVOZFixtureData` + happy/dup/link testove | L |
+| 110.21 | Glavni failure prozor (writeback fail posle commit-a) netestiran | visok | **Tačno** — nema fault injection (401/403/429/timeout/partial/disconnect); sve happy real-API | P1 | Fault-injection sloj oko writeback-a (mock HTTP status) | L |
+| 110.22 | Write-back identity (row moved) netestiran | visok | **Tačno** — nijedan test ne pomera red pre writeback-a niti proverava CRID na target redu | P2 | Test: pomeri red/promeni CRID pre writeback-a → mora biti odbijen (vezano uz 108.11 fix) | M |
+| 110.23 | Google smoke = environment test, ne unit | srednji | **Tačno** — zavisi od realnog tokena/foldera/mreže/kvote | P3 | Preimenovati/razdvojiti Offline/Online/Destructive suite | S |
+| 110.24 | Cleanup nije potvrđen read-back-om | srednji | **Tačno** — `TrashGoogleDriveFile` `218-253` True na bilo koji 2xx (`248`); jedan `m_TestSpreadsheetID` | P2 | Read-back `trashed=true` + exact-name search prazan; resource registry | S |
+| 110.25 | `RunID` nije concurrency-safe | srednji | **Tačno** — `263`/`399` `Format$(Now,"yyyymmddhhnnss")` (1s rezolucija) | P3 | GUID / machine+session+nonce | S |
+| 110.26 | Nema reentrancy guard | srednji | **Tačno** — modul-level `m_Total/m_Passed/m_Failed/m_RunID/m_TestSpreadsheet*` (`21-27`) pretpostavljaju 1 aktivnu suite | P3 | `m_RunInProgress` guard; dugoročno `clsTestRunContext` | S |
+| 110.27 | Counter model nije broj testova | srednji | **Tačno** — `AssertTrue/Equals`→`LogGoogleSmokePass`(`307/317`) + test-end pass (`66/83/102/157/189`) + cleanup(`206`) svi u `m_Total` | P3 | Odvojiti TestCases vs Assertions vs CleanupFailures metrike | M |
+| 110.28 | Pogrešan naziv završnog summary-ja | srednji | **Tačno** — `RunMasterSyncSmokeSuite`→`EndGoogleSmokeRun`(`383`) prikazuje „Google Sync Smoke Suite PASS/FAIL"(`277/281`) | P3 | Per-suite `SuiteName` u summary-ju | S |
+| 110.29 | EH može sakriti neuspešan rollback | srednji | **Tačno** — `386-392` `On Error Resume Next` pa `RollbackTx`/cleanup/`EndGoogleSmokeRun`; neuspeh rollbacka nije zaseban rezultat | P2 | Razdvojiti `LocalCleanupSucceeded`/`RemoteCleanupSucceeded`; FAIL ako bilo koji cleanup nepotvrđen | S |
+| 110.30 | Test komentari zastareli | srednji | **Tačno** — `14-15` „Does NOT write to tblOtkup", a `RunMasterSyncSmokeSuite` piše u `tblOtkup`/`tblAmbalaza` (preko `TestHook`→`AppendRow`) | P2 | Zameniti header komentarom „DESTRUCTIVE INTEGRATION TEST — writes to production tables" | S |
+| 110.31 | Predlog nove organizacije modula | predlog | **Dizajnersko ograničenje** — validno (pure/online/destructive split) | P2 | Posle P0 popravki | L |
+| 110.32 | Predlog canonical OTK fixture-a | predlog | **Dizajnersko ograničenje** — dobar (named setter iz header array-a) | P1 (uz 110.6/110.7) | Fixture iz `GetOTKOperationalHeaders()` | M |
+| 110.33–110.35 | P0 test matrice (OTK/VOZ/Google negative) | predlog | **Tačno** (mapira realne rupe) | P1–P2 | Backlog za novu suite; prioritet: OTK 23-kol happy, VOZ happy, writeback-fail | L |
+| 110.36 | Prioriteti hardening-a (P0/P1/P2) | rezime | **Tačno** | — | P0: 110.6/110.8/110.9/110.11 | — |
+| 110.37 | Šta NE raditi (ne brisati real roundtrip) | savet | **Kontekst-Pozitivno** — ispravno | Prihvaćeno | Zadržati real-Google, samo izolovati/označiti | — |
+| 110.38 | Ocena trenutnog stanja (tabela) | rezime | **Tačno** — „P0 false green", „VOZ ne postoji", „SWMR neprihvatljiva" potvrđeni | — | — | — |
+| 110.39 | Konačni zaključak (3 razloga) | zaključak | **Tačno** — fixture drift + FAIL ne propagira + whole-table rollback svi potvrđeni | Prihvaćeno | — | — |
+
+Bilans FM-0093: Od ~30 sadržajnih nalaza — **Tačno** ~24, **Delimično** 1 (110.11 — SWMR-uslovljeno), **Dizajnersko** 4 (110.10/110.12/110.31/110.32), **Kontekst-Pozitivno** 4 (110.1–110.5/110.37). Nijedan **Netačan**. Najkritičnije i najčvršće potvrđeno: **110.9 (P0 E2E false-green)** — `E2E_RunVbaSuite` marker PASS na `Application.Run` bez izuzetka, a suite guta sve greške; sama poruka priznaje da ne čita brojače. To je jače od fixture drifta (110.6): čak i kad fixture eksplicitno padne, gate prijavljuje PASS. Realni bug-ovi: **110.6** (22-kol + `Količina`), **110.8** (Sub bez rezultata), **110.15** (ključ `DefaultSorta` umesto `DEFAULT_SORTA_VOCA`), **110.20** (VOZ hook ne postoji), **110.30** (lažni „ne piše u tblOtkup" komentar). P0 lanac za popravku: 110.8 (izvršni rezultat) → 110.9 (gate ga čita) → 110.6/110.7 (canonical fixture) → 110.11 (izolacija pre SWMR).
+
+Napomena o preseku: 108.63/108.64 (FM-0092) = 110.6/110.7 (FM-0093) — isti schema-drift, jedan fix. Ni jedan nalaz nije zahtevao izmenu koda (READ-ONLY audit). Sve `fajl:linija` citate možeš direktno otvoriti u `src-vba/` (verifikovano protiv `origin/main` v2.24.0).
+
+---
+
+## v142 blok K4 — modMalina, modSledljivost, frmSledljivost, frmAgrohemija, modAgrohemija (FM-0096/0105/0111/0112/0113) [sidro origin/main v2.24.0]
+
+I now have enough verification across all five files plus the cross-module dependencies. Let me compile the audit.
+
+Verification complete. Below is the audit of every FM finding against the actual v2.24.0 code.
+
+---
+
+### FM-0096 — `modMalina.bas`
+
+Kontekst: single-writer desktop; mirror se kreira i kroz backfill (`modMalina`), i kroz `frmStammdaten` hook, i kroz `modAutoHladnjaca`. Verifikovao sam sve cross-module tvrdnje (`modBrojevi` L286-290, `modAutoHladnjaca` L112-119, `modMasterSync` L816-843, `frmStammdaten` L2354-2355, `modBusinessFlowProTests` L1532-1544).
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 116.5/116.9 | „Ensure" je create-only shadow bootstrap, ne pravi mirror (postojeći red se nikad ne usklađuje; L39-41 Exit odmah) | Zaključak | **Tačno** | P2 | Preimenovati u `Reconcile*` i dodati update grane; kratkoročno bar dokumentovati semantiku | M |
+| 116.6 | Dve komponente različito definišu mirror identitet: `modMalina` ne proverava stanicu, `modBrojevi.IsStanicaMirrorVozac` (L289-290) proverava samo `tblStanice` → orphan-shadow (A) i missing-shadow (B) stanja | **P0** | **Tačno** | **P1** | Jedan canonical helper `IsManagedStationMirror(id)` koji traži par `tblStanice`+`tblVozaci`; koristiti ga u oba modula | M |
+| 116.7 | `EnsureVozacMirrorForStanica` ne čita `tblStanice` (ne potvrđuje da stanica postoji/aktivna/jedinstvena) | (P0 grupa) | **Tačno** | P1 | Reconcile varijanta sama čita canonical red stanice po `stanicaID` | S |
+| 116.8 | Idempotency check nije exact-one guard (L39 `LookupValue` vraća prvi; ne broji redove) | — | **Tačno** | P2 | `FindRows(...).Count`: 0→create, 1→ok, >1→integrity error | S |
+| 116.10 | Nova stanica: mirror dobija `telefon=""` (`frmStammdaten` L2354-2355 šalje `""`; kasniji Ensure preskoči) | Konkretan bug | **Tačno** | P2 | Proslediti `Trim$(txtField3.value)` (Kontakt) umesto `""`; reconcile bi ionako popravio | S |
+| 116.11 | Izmena stanice (`btnIzmeni_Click`) ne poziva Ensure/reconcile → trajni drift | — | **Tačno** | P2 | Dodati reconcile hook posle commit-a izmene stanice | S |
+| 116.12 | Nema deaktivacije/reaktivacije mirror-a; status stanice se ne propagira | — | **Tačno** | P2 | Reconcile sinhronizuje `Aktivan` iz stanice | M |
+| 116.13 | `BackfillVozacMirrorsForMalina` ne filtrira neaktivne stanice (L93-101, nema `Aktivan` provere) | — | **Tačno** | P2 | Politika aktivna→aktivan / neaktivna→neaktivan, ista u create/backfill | S |
+| 116.14 | Boolean `False` meša 5 stanja (mode off/prazan id/postoji/AppendRow=0/greška) | — | **Tačno** | P2 | Enum/typed rezultat ili bar razdvojiti „error" od „no-op" | M |
+| 116.15 | `AppendRow=0` je silent failure (L61 samo `>0`→True, inače tih False) | — | **Tačno** | P1 | `If AppendRow<=0 Then Err.Raise` sa kontekstom | S |
+| 116.16 | Ensure `EH` guta grešku (L68 samo `LogErr`, bez re-raise); caller sa `On Error` ne dobija signal | — | **Tačno** | P1 | Re-raise u EH (kao što backfill radi na L111) | S |
+| 116.17 | Backfill može prijaviti `created=0` kad su svi redovi pali (Ensure guta per-row grešku pa ne stiže do backfill EH) | — | **Tačno** | P1 | Structured backfill rezultat (Scanned/Created/Failed…) | M |
+| 116.18 | Backfill parcijalno commituje bez RunID/failure liste/residue audita | — | **Tačno** (Dizajnersko za idemp. model) | P3 | Vratiti brojila i listu failures | M |
+| 116.19 | Check-then-append nije SWMR bezbedan (dve instance mogu dodati isti `VozacID`) | — | **Dizajnersko ograničenje** (kontekst = single-writer; FM sam kvalifikuje „u SWMR arhitekturi") | Prihvaćeno/P3 | Ako multi-writer postane realnost: post-append exact-one provera; inače prihvatiti | S→L |
+| 116.20 | `modAutoHladnjaca` ignoriše rezultat Ensure-a i bezuslovno `vozacID=stanicaID` (L114-118) → dokument može dobiti FK bez `tblVozaci` reda | — | **Tačno** | P1 | Proveriti rezultat / reconcile pre `vozacID=stanicaID`; blokirati lanac ako mirror nije obezbeđen | M |
+| 116.21 | `modMasterSync.StampVozacFromStanicaForMalina` (L836-838) upisuje `StanicaID` u prazan `VozacID` bez Ensure/exact-one provere | — | **Tačno** | P1 | Pozvati reconcile pre stamping-a ili posle-batch health provera | M |
+| 116.22 | Malina toggle nema atomsku migraciju (ključ se menja, backfill ručno) | — | **Tačno** (Dizajnersko) | P2 | Vezati aktivaciju za preflight+backfill | M |
+| 116.23 | Nema markera da je vozač shadow (`SourceStanicaID`/`MirrorManaged`); tip se zaključuje iz ID-a | — | **Tačno** | P2 | Dodati marker kolone pri reconcile | M |
+| 116.24 | `Naziv→Ime`, `Mesto→Prezime` semantička zloupotreba (backfill L88-101; Ensure L52-53) | P2 | **Tačno** | P2 | `DisplayName` polje ili read-model union; ne dupliranje u person kolone | L |
+| 116.25 | `Aktivan` opciono (L58-59): ako kolona fali, red se svejedno kreira bez statusa | — | **Tačno** | P3 | Za canonical šemu tretirati `Aktivan` kao obavezan (warning ako fali) | S |
+| 116.26 | Dupli komentarisani `Attribute VB_Name` (L1-2) | Nefunkcionalno | **Tačno** | P3 | Ukloniti komentarisanu liniju (export normalizacija) | S |
+| 116.27 | Test proverava samo postojanje reda + drugi poziv False (L1538-1544) | — | **Tačno** | P2 | Proširiti na exact-one/polja/mode-off/missing-col | M |
+| 116.28 | Test dozvoljava orphan mirror — `MIR_ST` (L1532) se ne kreira u `tblStanice` pre Ensure → validira vozača bez stanice | — | **Tačno** | P2 | Seed-ovati `tblStanice` red pre Ensure; proveriti `IsStanicaMirrorVozac` | S |
+| 116.29 | Fiksni `ST-MIRTEST-90001` ostaje trajno u `tblVozaci` (nema cleanup) | — | **Tačno** | P2 | Disposable fixture ili cleanup na kraju testa | S |
+| 116.30-116.34 | Regression matrica, `ReconcileVozacMirrorForStanica` API, `TransportActor` model, health invariant | P1/P2 predlozi | **Dizajnersko ograničenje** (predlozi, ne bug-ovi) | P2/P3 | Prihvatljiv ciljni hardening; nije P0 preduslov | L |
+| 116.2/116.4/116.36 | Pozitivno: `Option Explicit`, self-gated `IsMalinaMode` (L33), prazan `sid` odbačen (L36), `ReDim` na `ListColumns.Count`+`RequireColumnIndex` (L50-53), reuse `AppendRow` | Pozitivno | **Kontekst-Pozitivno** | — | Zadržati | — |
+
+Bilans FM-0096: Sve konkretne stavke su činjenično tačne protiv koda (verifikovano i 5 cross-module tvrdnji). Ključna zamerka na FM-ovu kalibraciju: **P0 je precenjeno za single-writer desktop**. 116.19 (SWMR race) je van modela (jedan pisac); orphan-iz-izmišljenog-ID-a (116.7/116.28) nema production caller-a koji fabrikuje ID (svi prosleđuju realan `StanicaID` iz `tblStanice`/`frmStammdaten`). Realno štetni lanac je **116.6 + 116.20 + 116.21** (missing-shadow → `S`-broj + orphan FK na dokumentu) → moja preporuka P1. Najjeftiniji visoko-vredni potez: jedan canonical `IsManagedStationMirror` + re-raise u Ensure EH (116.6/116.16, napor S-M).
+
+---
+
+### FM-0105 — `modSledljivost.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 122.3 | `TraceByZbirna` filtrira po `OtpremnicaID` (L540-544), ne po canonical `tblOtkup.BrojZbirne` → otkup sa `BrojZbirne` ali praznim `OtpremnicaID` se izostavlja | **P1** | **Tačno** | **P1** | Dodati direktan `BrojZbirne` prolaz kroz `tblOtkup`, obeležiti `OtpremnicaID` status | M |
+| 122.4 | Trace nema `isComplete`/broj očekivanih vs pronađenih/warning | P1 | **Tačno** | P1 | Typed rezultat (`Succeeded/IsComplete/Rows/Warnings`) | M |
+| 122.5 | `Empty` maskira greške — `GetUnlinkedOtkupi`/`TraceByZbirna` na EH vraćaju `Empty` (L403, L603), isto kao „nema podataka" | P1 | **Tačno** | P2 | Razdvojiti `NoData` od `Failed` (typed rezultat / out-param) | M |
+| 122.6 | Auto-link `0` ne kaže razlog (nema kandidata/ambiguous/već povezano/nevalidan datum/greška) | — | **Tačno** | P2 | Vratiti brojila umesto golog `Long` | M |
+| 122.7 | Nevalidan datum → prazan ključ (`BuildAutoLinkKey` L272) → red tiho ispada, batch prijavi `Linked` bez `InvalidKeyCount` | — | **Tačno** | P2 | `InvalidKeyCount` brojač + evidencija | S |
+| 122.8 | Prazni `StanicaID/VozacID/Klasa` su validni segmenti ključa (nema non-empty zahteva) → link po nepotpunom identitetu | — | **Tačno** | P2 | Odbiti auto-link kad strict segment fali (osim legacy politike) | S |
+| 122.9 | `BrojZbirne` poređenje nenormalizovano u trace-u: auto-link `UCase$+Trim$` (L282) vs trace `CStr(...)=brojZbirne` sirovo (L464) | — | **Tačno** | P1 | `UCase$(Trim$())` + `vbTextCompare` u trace-u, isto kao auto-link | S |
+| 122.10 | Lookup referencijalne greške → prazna polja bez orphan indikatora (L566-585) | — | **Tačno** | P2 | Orphan marker kad `LookupValue` prazan a ID postoji | S |
+| 122.11 | N+1 lookup (per-otkup `LookupValue` × 7 na `tblKooperanti`/`tblParcele`) | P2 | **Tačno** | P2 | `BuildLookupDict` jednom pre petlje | M |
+| 122.12 | Krhak positional 14-kolonski `Variant` bez named contract-a (L419-426: 8=BPG,10=GGAP,12=ParcelaID,14=Površina) | — | **Tačno** | P3 | Typed UDT/klasa za trace red | M |
+| 122.13 | Zbirna/otpremnica nisu zasebni trace čvorovi (samo otkup redovi) → naziv širi od contract-a | — | **Tačno** (Dizajnersko) | P3 | Preimenovati ili proširiti u pravi graf-trace | L |
+| 122.14 | `AutoLinkOtkupOtpremnica_TX` vraća `0` i na failure (L82) = isto kao uspešan no-op | — | **Tačno** | P2 | Typed rezultat sa `Succeeded`+brojila | M |
+| 122.15 | Monitoring `userId:="Operator"` hardkodovan (L34, L72) | P2 | **Tačno** | P3 | Stvarni auth/session ID | S |
+| 122.16 | Postojeći link se nikad ne revalidira (L190 preskače otkup sa `OtpremnicaID`) | — | **Tačno** | P2 | Odvojen `ValidateExistingTraceLinks` health-check | M |
+| 122.17 | Nema zaštite od reused `BrojZbirne` kroz generacije (grupiše sav tekst) | — | **Tačno** (Dizajnersko) | P2 | Dugoročno `ZbirnaID` kao canonical ključ | L |
+| 122.18 | `GetUnlinkedOtkupi` ne vraća razlog (7 polja, bez `BrojZbirne`/klase/candidate count) | — | **Tačno** | P2 | Proširiti izlaz razlogom + brojem kandidata | S |
+| 122.2 | Pozitivno: `ExcludeStornirano`, `RequireColumnIndex`, `GetUniqueAutoLinkTarget` exact-one (L308), OtkupID exact-one pre upisa (L243-247), TX wrapper+rollback | Pozitivno | **Kontekst-Pozitivno** | — | Zadržati | — |
+
+Bilans FM-0105: Svi nalazi tačni. Dva su suštinska (sledljivost/compliance): **122.3** (trace zavisi od pomoćnog linka, ne od canonical `BrojZbirne` — realno moguć nepotpun trag) i **122.9** (nekonzistentna normalizacija broja u istom modulu — realan mismatch na trailing-space/case). Ostatak je observability/typed-result higijena (tačno, ali P2/P3 na single-user desktopu). 122.9 je najjeftiniji fix (S) sa direktnim efektom na korektnost.
+
+---
+
+### FM-0111 — `frmSledljivost.frm`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| GZ | Forma ne razlikuje nema-podataka / greška / nepotpun-trace (sva tri → prazna lista/„Nema podataka") | Zaključak | **Tačno** | P1 | Typed trace rezultat + eksplicitni statusi | M |
+| P1-a | Nepotpun trace prikazan kao kompletan — `cmbZbirna_Change` (L462) puni listu bez upozorenja | **P1** | **Tačno** | P1 | Prikazati „NEPOTPUN TRACE" kad servis vrati `IsComplete=False` | M |
+| P1-b | `Empty` = i no-data i error — `cmbZbirna_Change` tiho izlazi (L463), `PrintTracePDF` kaže „Nema podataka" (L499-500) i za grešku | P1 | **Tačno** | P1 | Razlikovati po typed rezultatu servisa | S |
+| P1-c | Status „Povezano X od Y" (L289 = total − unlinked) tretira svaki neprazan `OtpremnicaID` kao validan link | P1 | **Tačno** | P2 | Računati po validnim linkovima (postoji/nije storniran/ista zbirna) | M |
+| P1-d | Ručni kandidati preširoki — filtrira samo stanica+datum (L380-408), ne vozač/klasa/vrsta/zbirna/preostala kol. | P1 | **Tačno** (upis ipak ide kroz `ReassignOtkupToOtpremnica_TX`, L439 — bez korupcije) | P2 | Suziti kandidate canonical match pravilima | S |
+| P1-e | `GetColumnIndex` u kritičnim tokovima (`LoadZbirne` L258, candidate L370-376, PDF L510-514/540-541) | P1 | **Tačno** | P2 | `RequireColumnIndex` za obavezne kolone | S |
+| P1-f | PDF nepotpun bez oznake; prijem kg po direktnom `BrojZbirne` (L543-544) vs trace po `OtpremnicaID` lancu → različita semantika u istom dokumentu | P1 | **Tačno** | P1 | Ista veza za summary i detalje; blok/oznaka kad je trace nepotpun | M |
+| P2-a | Zbirna po poslovnom broju bez stabilnog ID-a (`cmbZbirna` samo `BrojZbirne`, dedup L264-271) | P2 | **Tačno** | P2 | Hidden `ZbirnaID` + prikazni broj | M |
+| P2-b | Normalizacija broja neujednačena (direktna string poređenja L518, L544) | P2 | **Tačno** | P2 | Ista normalizacija kao auto-link | S |
+| P2-c | Lookup praznine nevidljive (stanica/vozač/kooperant/kupac → prazan naziv, L468/L524-528) | P2 | **Tačno** | P3 | Orphan oznaka | S |
+| P2-d | `UserForm_Initialize` (L92-97) bez lokalnog `On Error GoTo EH` | P2 | **Tačno** (`Activate` ima EH L27, `Initialize` nema) | P2 | Dodati kontrolisani init EH | S |
+| P2-e | Designer caption `UserForm1` (L3) + zastareli header `frmOtkupniBlokovi` (L18) | P2 | **Tačno** | P3 | Ispraviti caption/komentar; lokalizovati hardcode | S |
+| Poz | Ručno povezivanje kroz TX servis (L439), hidden ID kolone (L230/237/244), `ExcludeStornirano`, odmah prikaz nepovezanih (L95), mouse-wheel detach (L584-603), refresh posle akcija | Pozitivno | **Kontekst-Pozitivno** | — | Zadržati | — |
+
+Bilans FM-0111: Svi nalazi tačni. Najveći realni rizik = **lažni utisak kompletnog traga** (P1-a/P1-f): štampani PDF meša dve semantike povezivanja i ne obeležava nepotpunost. Nema direktne korupcije (ručni upis ide kroz proveren TX). P1-d je precenjeno kao P1 — TX validacija štiti bazu, ostaje samo UX rizik pogrešnog izbora → P2. Većina fixeva zavisi od typed trace rezultata iz FM-0105/122.3-4 (zajednički koren).
+
+---
+
+### FM-0112 — `frmAgrohemija.frm`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 3 | Izlazna cena u korpi ≠ knjižena cena — korpa snapshot-uje `cena/vrednost` (L493-494, L551-552), a `btnZavrsiIzlaz` zove `SaveMagacin` BEZ `overrideCena` (L623-630) → `SaveMagacin` ponovo čita cenu; **ulaz ISPRAVNO prosleđuje cenu (L843)** | **P1** | **Tačno** (asimetrija ulaz/izlaz je dokaz da je oversight) | **P1** | Proslediti `m_KorpaIzlaz(i).cena` kao `overrideCena`: `SaveMagacin(Date, art, MAG_IZLAZ, kol, koopID, parcID, brDok, "", "", m_KorpaIzlaz(i).cena)` | S |
+| 4 | Svi dokumenti sa `Date` — izlaz (L624), ulaz (L834), početni dug (L180) bezuslovno `Date`; nema polja za datum | P1 | **Tačno** | P2 | Polje datuma (default `Date`) uz validaciju/permisiju za backdating | M |
+| 5 | Legacy display-string identiteti („Ime Prezime (ID)" L227-228; „Naziv [JM] (ID)" L247; `ExtractIDFromDisplay`) | P1 | **Tačno** | P2 | Dvokolonski combo sa hidden stabilnim ID-em (`modComboBinding`) | M |
+| 6 | Loaderi ne filtriraju aktivne + `If CStr(data(i,1))<>""` (L226/246/697) gejtuje po fizičkoj koloni 1 iako su named indeksi izračunati | P1 | **Delimično** (col1-gejt fragilnost=Tačno; „aktivni filter" zavisi da `Aktivan` postoji u šemi — **Nije proverivo statički** za sve master tabele) | P2 | Gejtovati po `colID`; aktivni filter samo gde kolona postoji | S |
+| 7 | `GetColumnIndex` za obavezne UI kolone (L220-222, L240-242, L689-693) | P1 | **Tačno** (domain read-modeli ipak koriste `RequireColumnIndex`) | P2 | `RequireColumnIndex` u loaderima | S |
+| 8 | Početni dug: `InputBox`+`IsNumeric`+`CDbl` (L156-167), locale-zavisno | P1 | **Tačno** | P2 | Centralni strogi parser + prikaz parsirane vrednosti pre potvrde | S |
+| 9 | Semantika količine: izlaz=broj pakovanja→kg (L510-512), ulaz=ukupna kol.×cena (L741, L769) | P1 | **Tačno** | P1 | Eksplicitno označiti oba modela u UI + konverzija; sprečiti da operater unese pakovanja pri prijemu | M |
+| 10 | Stock check po trenutku, korpa nema reserve model (add L515-533, finish `ValidateKorpaIzlazStanje` L612/933) | P1 | **Tačno** (re-check pri završetku postoji) | P2 | Pri rollback-u prikazati problematičan artikal, zadržati korpu | M |
+| 11 | `SaveMagacin` guta typed grešku, forma diže generičku 4301 (L632-637) | P1 | **Tačno** (vidi FM-0113) | P1 | Propustiti typed razlog iz `SaveMagacin` | M |
+| 12 | Korpa bez uređivanja/brisanja pojedinačne stavke (samo `ClearKorpaIzlaz`/`Ulaz` L673-677/885-889) | P2 | **Tačno** | P2 | „Ukloni stavku" dugme (indeks u UDT nizu) | M |
+| 13 | Forma meša oblasti (ulaz/izlaz/preporuka/dug/početni dug/KPI) | P2 | **Dizajnersko ograničenje** | P3 | Zadržati orchestration, write ostaje u servisima (već jeste) | L |
+| 14 | Designer caption `UserForm1` (L3) + delom hardcoded tekstovi | P2 | **Delimično** (caption=Tačno; mnogi tekstovi VEĆ idu kroz `Poruka()` — hardcode je manjinski, npr. „+ Dodaj u korpu", „Izaberite artikal!") | P3 | Ispraviti caption; lokalizovati preostale literale | S |
+| 2 | Pozitivno: typed UDT korpe, outer TX nad `tblMagacin`, agregatna provera pre izlaza, pozitivan ceo broj pakovanja, `Pakovanje>0` invariant, override cena za ulaz, guard za dupli „Početni dug" (L116), mouse-wheel detach | Pozitivno | **Kontekst-Pozitivno** | — | Zadržati | — |
+
+Bilans FM-0112: Nalaz #3 (price snapshot vs reprice) je **najvredniji nalaz u celom setu** — realna finansijska/audit nekonzistentnost, potvrđena asimetrijom sa ulaznim tokom (ulaz prosleđuje cenu, izlaz ne), sa jasnim minimal-delta fixom (jedan poziv, napor S). #9 (dve semantike količine) je drugi realni rizik (pogrešan prijem umanji stanje za faktor pakovanja). #6 i #14 su **Delimično** (aktivni-filter zavisi od šeme; većina tekstova je već lokalizovana). Ostalo tačno ali P2/P3.
+
+---
+
+### FM-0113 — `modAgrohemija.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | `ValidateMagacinInput` (L593-616) proverava samo sintaksu (artikalID/tip/kolicina/koop-za-izlaz); bez postoji/aktivan artikal, koop, dobavljač, parcela↔koop, datum, cena, dupli dok | **P1** | **Tačno** | P2 | Referencijalne provere pre upisa (postojanje+aktivnost preko `FindRows`/`LookupValue`) | M |
+| 2 | Ulaz ne zahteva dobavljača — `dobavljacID` u signaturi ali neproveren; prazan → `(Nepoznat)` u izveštaju (L536) | P1 | **Tačno** | P2 | Odlučiti: obavezan dobavljač za realni ulaz, ili tipovi ulaza bez dobavljača sa reason code-om | S |
+| 3 | Cena 0 tiho — `overrideCena`/master nenumerički → `cena=0`, red upisan `Cena=0,Vrednost=0` (L109-120, L130) | P1 | **Tačno** | **P1** | Za realne artikle zahtevati validnu cenu > 0 (osim rezervisanog `ART_POCETNI_DUG`) | S |
+| 4 | `SaveMagacin` guta originalnu grešku (L145-149 log+`Debug.Print`+`""`); `_TX` diže generičku `4210` (L179) → `4205 Nedovoljno stanje` → „SaveMagacin nije uspeo" | P1 | **Tačno** | P1 | Core re-raise typed greške; prevod u poruku samo na UI boundary; `_TX` očuva broj/source | M |
+| 5 | Početni dug parcijalni side-effect — `EnsureArtikalPocetniDug` PRE TX (L277), snapshot samo `tblMagacin` (L282) → fail knjiženja ostavlja virtuelni artikal | P1 | **Tačno** (FM sam priznaje „nije nužno korupcija"; `Ensure` idempotentan L325, artikal se reuse-uje) | P3 | Setup migracija unapred kreira artikal, ili snapshot i `tblArtikli` | S |
+| 6 | Ensure guta grešku (L345-346) a `BookPocetniDug` nastavlja; `Validate` ne proverava artikal → moguć `MAG` red bez master artikla | P1 | **Tačno** | P2 | Exact-one post-condition provera rezervisanog artikla u `BookPocetniDug` | S |
+| 7 | Nema idempotency/duplicate zaštite — uvek nov `MAG-*` (L100) | P1 | **Delimično** (Tačno za servis; **korpa flow je delom mitigovan** — posle uspeha `ClearKorpaIzlaz` L646, pa dupli klik nailazi na praznu korpu; ostaje retry/programski poziv) | P2 | `DocumentID/OperationID` za multi-row korpu | M |
+| 8 | Stock validation ne razlikuje data-quality od nule — `GetArtikalStanje` (L618-633) vraća 0 za više uzroka | P1 | **Tačno** | P3 | Typed „nepoznat artikal" vs „stanje 0" | S |
+| 9 | `GetParceleByKooperant` ne filtrira aktivne parcele (L4-65); invalid površina→0 tiho (L46-50) | P1 | **Delimično** (nema active-filter=Tačno; da li `Parcele` ima „aktivan" status — **Nije proverivo statički**) | P2 | Aktivni filter ako kolona postoji; površina→warning umesto tihe 0 | S |
+| 10 | `CalculatePreporuka` vraća 0 za više grešaka (L67-78: ne postoji/doza fali/nenumerička/lookup fail/stvarna 0) | P1 | **Tačno** | P3 | Bool+output+reason ili typed rezultat | S |
+| 11 | `GetMagacinStanje` sabira samo `MAG_ULAZ/IZLAZ` (L392-396); nepoznat tip nevidljiv bez warninga | P2 | **Tačno** | P3 | Health-check za invalid tipove | S |
+| 12 | Lookup master → prazni nazivi bez markera (L414-416, L488-489) | P2 | **Tačno** | P3 | Orphan marker | S |
+| 13 | Typo alias — `ReportStanjePoDobavljacu` (L504) prosleđuje `ReportStanjePoDoabvljacu` (L508); **canonical je pogrešno napisan, tačan je forwarder** | P2 | **Tačno** | P3 | Preimenovati canonical u ispravan naziv, typo označiti deprecated | S |
+| 14 | `SaveMagacin_TX` `userId="Operator"` (L193, L236) | P2 | **Tačno** | P3 | Stvarni auth user | S |
+| Poz | `RequireColumnIndex` u read-modelima, `ExcludeStornirano` (L363/433/515/572), izuzimanje `ART_POCETNI_DUG` iz stanja (L387), `_TX` rollback+monitoring, reverzibilan početni dug, stock u domain sloju (L122-127), override cena za ulaz | Pozitivno | **Kontekst-Pozitivno** | — | Zadržati | — |
+
+Bilans FM-0113: Nalazi većinom tačni. Dva su suštinska: **#3** (tiha cena 0 potcenjuje dug/vrednost — finansijski, fix S) i **#4** (gubitak typed greške — direktno objašnjava slabu dijagnostiku iz FM-0112 #11). #7 i #9 su **Delimično** (korpa dupli-klik je mitigovan clear-om; parcela active-status nije statički proveriv). #5 (parcijalni bootstrap) je realno bezopasan jer je `Ensure` idempotentan → P3. Napomena o KI-006: `GetMagacinStanje` KOREKTNO izuzima `ART_POCETNI_DUG` (L387) — registrovani KI-006 se odnosi na drugi export (`ExportMagacinKoop` u PWA sync sloju), koji NIJE u ovom modulu; ovde nema regresije tog tipa.
+
+---
+
+## Sažetak (cross-FM)
+
+Sve FM stavke su verifikovane protiv koda; nijedan nalaz nije **Netačno**. Distribucija: pretežno **Tačno**, sa nekoliko **Delimično** (FM-0112 #6/#14, FM-0113 #7/#9 — zbog schema-drift neproverivosti aktivnog statusa i already-mitigovanih tokova) i **Dizajnersko ograničenje** (FM-0096 116.19 SWMR race — van single-writer modela; 116.30-34 predlozi).
+
+Rangiranje po stvarnoj hitnosti (P1), sa minimal-delta fiksom:
+1. **FM-0112 #3** — izlazna cena: proslediti `m_KorpaIzlaz(i).cena` kao `overrideCena` (napor **S**). Najjači nalaz — finansijska nekonzistentnost, potvrđena asimetrijom sa ulazom.
+2. **FM-0113 #3** — tiha cena 0: zahtevati validnu cenu za realne artikle (**S**).
+3. **FM-0113 #4 / FM-0112 #11** — očuvati typed grešku iz `SaveMagacin` (**M**).
+4. **FM-0105 122.3 / FM-0111 P1-a,f** — nepotpun trace prikazan/štampan kao kompletan; direktan `BrojZbirne` prolaz + `IsComplete` (**M**).
+5. **FM-0105 122.9** — normalizacija broja zbirne u trace-u (**S**).
+6. **FM-0096 116.6+116.20+116.21** — canonical mirror identitet + provera rezultata pre `VozacID=StanicaID` (**M**).
+
+Glavna korekcija FM kalibracije: **P0 oznake u FM-0096 su precenjene za single-writer desktop** sa postojećim mitigacijama (backfill/hook/auto-hladnjaca kreiraju mirror); realno P1. Većina „P1 typed-result/observability" nalaza su engineering-quality (P2/P3), ne aktivni bug-ovi.
+
+---
+
+## v142 blok K5 — test moduli: modTestStorno, modTestStornoCentar, modTestPalete, modIzvestajTests, stub sweep, modSEFTests (FM-0097/0098/0099/0100/0101/0136) [sidro origin/main v2.24.0]
+
+Sve infrastrukturne tvrdnje verifikovane. Sažetak potvrda pre tabela:
+
+- **`clsTransaction`** (`clsTransaction.cls:41,51,108-147`): `AddTableSnapshot` snima celu `DataBodyRange.Value2`; `RestoreTable` briše `DataBodyRange` i prepisuje celu matricu — whole-table restore, NIJE selektivan po `SVT-`/`TST-` vlasništvu. Mehanizam SWMR data-loss-a je realan, ali app je single-writer desktop.
+- **`StornoSelectedBlocks_TX`** (`modStornoFlow.bas:1395,1406,1428`): interni `_TX` snima i commit-uje `TBL_STORNO_ZURNAL` + `BeginStornoOp` journalizuje. Potvrđuje da outer test koji NE snima zurnal ostavlja žurnal-residue.
+- **`modE2EReleaseGate.bas:23-49`**: gate zove SAMO `RunGoogleSyncSmokeSuite/RunMasterSyncSmokeSuite/RunNovacSmokeSuite/RunFakturaSmokeSuite/RunBusinessFlowProSuite/RunProductionHealthCheck` (+ manual GAS). NIJEDAN od auditovanih 5 modula nije u gate-u → „E2E false-green" nalazi su LATENTNI/uslovni (AUD-039).
+- **`modRelease.bas:5,18`**: „objavi src-vba kod" iz `SRC_FOLDER=...\src-vba\` → svi `.bas` (uklj. test module) idu klijentima kroz self-update. Potvrđuje shipped-destructive-macros rizik (AUD-039).
+
+---
+
+### FM-0097 — `modTestStorno.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Stale doc „8 scenarija" a runner ima 22 (118.3/118.26) | — | **Tačno** — header komentar `:16` kaže 8; `:76-97` poziva T01–T22 | P3 | Osveži header/komentar na 22 + scenario manifest | S |
+| 2 | `TBL_STORNO_ZURNAL` van outer snapshot-a (118.6/118.7) | P0 | **Tačno** — snapshot lista `:58-68` bez zurnala; `_TX` sloj demonstrira journal (`modStornoFlow.bas:1406`). Tačan broj revers-žurnal redova po T06/T07/T12/T13 = **Nije proverivo statički** bez čitanja revers grana | P2 | Dodaj `tx.AddTableSnapshot TBL_STORNO_ZURNAL` (1 linija) | S |
+| 3 | Whole-table rollback nije SWMR-safe (118.8) | P0 | **Tačno (mehanizam)** — `clsTransaction.cls:108-147`; ali **Dizajnersko ograničenje** za single-writer desktop | Prihvaćeno | Dokumentuj single-writer pretpostavku u headeru; ne refaktoriši u disposable-copy | S |
+| 4 | Outer rollback + inner commit nije prava nested TX (118.9) | — | **Tačno** — `_TX` prave sopstvene `clsTransaction`+`CommitTx`; opis je tačan, posledica = red 2 | P3 | Bez izmene koda; napomena u dokumentaciji | S |
+| 5 | Deferred AutoSave ostaje zakazan (118.10) | — | **Nije proverivo statički** — zavisi od `MarkDirtyAndSchedule` u inner `CommitTx` (nije čitano); plauzibilno tačno | P3 | Suspend/restore AutoSave oko run-a ako se potvrdi | M |
+| 6 | CSV crash journal kontaminiran (118.11) | — | **Delimično** — fixture `SvAppend` (`:752-763`) koristi direktan `ListRows.Add`, NE `AppendRow` → fixture ne piše CSV; residue moguć samo iz inner `_TX` (nije proverivo statički) | P3 | Test journal sink ili offset restore — samo ako se potvrdi | M |
+| 7 | Schema ensure pre korisničke potvrde (118.12) | — | **Tačno** — `EnsureStornoVezeSchemaCore` `:42` pre MsgBox `:49` | P3 | Pomeri ensure posle potvrde | S |
+| 8 | Nema `tblStornoZurnal` precondition (118.13) | — | **Tačno** — samo `EnsureStornoVezeSchemaCore`; revers testovi zavise od zurnal šeme | P3 | Dodaj `EnsureStornoZurnalSchemaCore` u preflight | S |
+| 9 | Interruption ostavlja fiksne `SVT-*`, nema residue preflight (118.14) | — | **Tačno** — fiksni ID-jevi; NEMA residue provere (za razliku od `modTestPalete:67-73`). Elevirano jer je modul shipped (AUD-039) | P1 | Preslikaj residue-preflight iz `modTestPalete` (abort ako `SVT-*` postoji) | S/M |
+| 10 | `SvAppend` tiho preskače missing kolone (118.15) | — | **Tačno** — `:761 If ci > 0 Then` (fail-soft, klasa false-green) | P2 | `RequireColumnIndex` za obavezna fixture polja | S/M |
+| 11 | Fixture bypassuje canonical save (118.16) | — | **Dizajnersko ograničenje** — namerno za izolovan engine test; **Kontekst-Pozitivno** | P3 | Reklasifikuj kao „engine integration", ne E2E | S |
+| 12 | Nema exact-one identity zaštite (118.17) | — | **Tačno** — nema `CountRowsByKey` pre/posle seed-a; preklapa se s #9 | P3 | Objedini sa residue-preflight iz #9 | S |
+| 13 | T14 osetljiv na concurrent pending (118.18) | — | **Delimično** — `:446-456` koristi relativni `before+2` (robusno za single-writer); concurrent-writer je teorijski | P3 | Bez izmene (relativni count je dovoljan single-writer) | S |
+| 14 | Fatal error provenance nije sačuvan (118.19) | — | **Tačno** — EH `:104-109` radi `On Error Resume Next`→rollback→koristi `Err.description` (nije capture-ovan pre rollback-a; `modTestPalete:112` to radi bolje) | P2 | Sačuvaj `Err.*` u lokale pre rollback-a | S |
+| 15 | Rollback uspeh se ne verifikuje (118.20) | — | **Tačno** — nema post-cleanup hash/row-count provere | P3 | Pre/post fingerprint (nice-to-have) | M |
+| 16 | PASS/FAIL nije machine-readable / rizik u E2E (118.21) | — | **Tačno** — `Public Sub`, MsgBox/Debug.Print, bez Boolean-a; **potvrđeno NIJE u E2E gate-u** → false-green je uslovan (AUD-039) | P3 | `...Core() As Result` + `...Interactive()` split | M |
+| 17 | Interaktivni modal sprečava automatizaciju (118.22) | — | **Tačno** — Yes/No `:49` + modalni summary `:885` | P3 | Isto kao #16 (Core/Interactive) | M |
+| 18 | Monitoring/log residue nije u rezultatu (118.23) | — | **Nije proverivo statički** — zavisi od inner monitoring emitovanja; plauzibilno | P3 | TEST marker/sink ako se potvrdi | M |
+| 19 | Brojači mere assertions, ne scenarije (118.24) | — | **Tačno** — `Chk/ChkEq/ChkEqD` inkrementiraju `mPass/mFail` po assertion-u | P3 | Dodaj case-level `Started/Passed/Failed` | M |
+| 20 | Nema timing/build/env identiteta (118.25) | — | **Tačno** — report `:870-886` bez RunID/SHA/timestamp | P3 | Dodaj metapodatke u report | S |
+| 21 | Hardening/arhitektura/ocena (118.27–118.32) | — | **Predlozi (ne-nalazi)** — validne smernice; scenario-spec kvalitet visok (sačuvati svih 22) | P3 | Prihvatiti selektivno; ne prepisivati scenario logiku | L |
+
+**Bilans FM-0097:** Skoro sve tvrdnje **tačne** protiv koda. Dva FM „P0" (SWMR whole-table, 118.8) su realni po mehanizmu ali **Prihvaćeno** za single-writer. Najmaterijalnije i najjeftinije: **zurnal-snapshot gap (#2, 1 linija)** i **residue-preflight (#9)** — potonji je instanca AUD-039 (shipped destruktivni makro bez čvrstog guard-a, ublažen samo Yes/No potvrdom). Duplira se sa AUD-016 (modul je jedan od test dubleta). Fail-soft `SvAppend` (#10) je klasičan false-green izvor.
+
+---
+
+### FM-0098 — `modTestStornoCentar.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | „22 pozvane test procedure" (120.1) | — | **Netačno (korekcija FM)** — `Test_StornoCentar_All :21-43` poziva **23** procedure (dodat `Test_ImpactHeaderSum_Auto :43`). FM podbrojao za 1 | P3 | Ispravi FM broj na 23; header uskladi | S |
+| 2 | `Test_StornoSelectedBlocks_Auto` ostavlja žurnal (120.5) | P0 | **Tačno** — `:640-642` snima Otkup/Ambalaza/Novac BEZ `TBL_STORNO_ZURNAL`; `StornoSelectedBlocks_TX` interno journalizuje i commit-uje (`modStornoFlow.bas:1406`). Kontrast: `Test_StornoJournalPartialClass_Auto :190` snima zurnal | P2 | Dodaj `tx.AddTableSnapshot TBL_STORNO_ZURNAL` u taj test (1 linija) | S |
+| 3 | Posledice mrtvih journal ops (120.6) | — | **Tačno** — residue vidljiv u Storno centru/undo/recovery; opovrgava header „fixture NE ostaje" `:9-10` | P2 | Reši kroz #2 | S |
+| 4 | Whole-table rollback nije SWMR-safe (120.7) | P0 | **Tačno (mehanizam)**, **Dizajnersko ograničenje** za single-writer (kraći exposure — 1 snapshot po testu) | Prihvaćeno | Dokumentuj; bez refaktora | S |
+| 5 | Nema environment safety gate-a (120.9) | P0 | **Tačno** — `:19-45` pokreće svih 23 odmah; NEMA potvrde/TEST_MODE/workbook-provere (gore od `modTestStorno` koji bar ima MsgBox). Shipped modul (AUD-039) | **P1** | Dodaj guard: `TEST_MODE`/workbook-name/sandbox check + potvrda pre run-a | M |
+| 6 | Public macro surface preširok (120.10) | — | **Tačno** — svih 23 su `Public Sub` (Alt+F8 izlaže najdestruktivniji test direktno) | P1 | `Option Private Module` + jedan kontrolisani entry; ali guard (#5) je primaran | S |
+| 7 | Runner false-green + nije u E2E (120.11) | — | **Tačno** — `:44` Debug.Print, bez Boolean/raise; **potvrđeno NIJE u E2E** → uslovno (AUD-039) | P3 | Structured result pre bilo kakve E2E integracije | M |
+| 8 | Assertions se broje, ne case-ovi (120.12) | — | **Tačno** — `TcChk :773` inkrementira `mPass/mFail` | P3 | Case-level metrika | M |
+| 9 | Fatal error handling gubi original (120.13) | — | **Tačno** — svaki EH (npr. `:65-67`) rollback pa `Err.description`, bez capture pre; runner nema sopstveni EH | P2 | Capture `Err.*` pre rollback-a; odvoji `cleanupFailed` | S |
+| 10 | Fiksni fixture + interruption residue, nema preflight (120.14) | — | **Tačno** — fiksni `SVT-*/SOP-MIX/ZUR-*`; nema residue provere | P2 | Residue-preflight po namespace-u | S/M |
+| 11 | `TcSeedRow` nije fail-fast (120.15) | — | **Tačno** — `:762-771 If lo Is Nothing Then Exit Sub` + `If ci>0` (silent skip, fail-soft) | P2 | Fail-fast na missing tabelu/kolonu | S/M |
+| 12 | Negativni testovi mogu proći iz pogrešnog razloga (120.16) | — | **Tačno** — testovi proveravaju samo `= False` (npr. `:344,:480`); ne razlikuju business-guard od missing table/exception | P2 | Proveri tačan reason/error-code | M |
+| 13 | Direktan `ListRows.Add` zaobilazi DataAccess (120.17) | — | **Tačno** (`:765`); **Dizajnersko** za fixture, ali nema cache-invalidate | P3 | Invalidiraj cache + readback potvrda | S |
+| 14 | Conditional stale-cache rizik (120.18) | — | **Nije proverivo statički** — zavisi od `BeginTableCache` stanja u run-time; teorijski tačno | P3 | Zahtevaj cache depth 0 / reset pre scenarija | S |
+| 15 | Hidden schema prerequisite `EnsureRuntimeSchema` (120.19) | — | **Tačno** — header `:12-13` traži ručno; runner ne proverava; journal testovi sami zovu `EnsureStornoZurnalSchemaCore :75` → nedosledno | P3 | Jedinstven preflight svih šema | S |
+| 16 | CSV crash journal nije rollbackovan (120.20) | — | **Delimično / Nije proverivo statički** — `TcSeedRow` direktan (bez CSV); inner `_TX` može pisati. Isto kao FM-0097 #6 | P3 | Test sink ako se potvrdi | M |
+| 17 | Deferred AutoSave nije izolovan (120.21) | — | **Nije proverivo statički** — zavisi od inner `CommitTx→MarkDirtyAndSchedule` | P3 | Suspend/restore ako se potvrdi | M |
+| 18 | Monitoring side-effecti trajni (120.22) | — | **Nije proverivo statički** — `Test_ZbirnaRecalcInPlace_Auto :446` proverava audit ali rollbackuje samo `tblZbirna`; monitoring nije snapshot-ovan (plauzibilno tačno) | P3 | Injectabilni test sink | M |
+| 19 | Spec kvalitet: reused-broj/dual-class/drift/partial/dead-parent (120.23–120.31) | — | **Kontekst-Pozitivno** — potvrđeno u kodu (`:72-127,:301-326`), visoka regres-vrednost; sačuvati | — | Zadrži scenario logiku 1:1 | — |
+| 20 | Test order/izolacija (120.32/120.33) | — | **Tačno** — per-test outer TX (dobro), ali dele counters/workbook/namespace; nema ambient/reentrancy preflight (`StornoOpActive`) | P3 | Ambient-state preflight | M |
+| 21 | Harness contract/arhitektura (120.34–120.42) | — | **Predlozi (ne-nalazi)** | P3 | Selektivno | L |
+
+**Bilans FM-0098:** Tvrdnje uglavnom **tačne**; jedina činjenična greška je u samom FM-u (23, ne 22 procedure — #1). Najveći realni rizik je **#5 (nula env guard-a nad shipped destruktivnim runnerom)** → **P1**, direktna instanca AUD-039 i najoštriji od svih 5 modula (nema ni MsgBox). **#2 (zurnal-snapshot gap)** je jednolinijski correctness fix koji preživljava i single-writer. SWMR P0 = **Prihvaćeno**. Preklapanje: AUD-016 (dubl sa `modTestStorno`).
+
+---
+
+### FM-0099 — `modTestPalete.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Header „T01–T10" a runner zove i T11 (122.1/122.12) | — | **Tačno** — header `:29-40` broji 10; `:104` poziva `T11_RelabelBlokNaDeljenojPaleti` | P3 | Uskladi header + manifest | S |
+| 2 | Whole-table rollback nije SWMR-safe (122.5) | P0 | **Tačno (mehanizam)**; komentar `:12-16` eksplicitno tvrdi „sme na živoj svesci" — **Dizajnersko ograničenje** za single-writer, ali komentar je precenjeno obećanje | Prihvaćeno (rizik) / P3 (komentar) | Ukloni „sme na živoj shared svesci" tvrdnju iz komentara | S |
+| 3 | „Ne ostavlja podatke" netačno — `_TestPalete` sheet (122.6) | P0 | **Tačno** — `ReportResults :648-667` posle rollback-a kreira/`Cells.Clear`/upisuje sheet; nije u snapshot-u | P2 | Nazovi ga eksplicitnim durable artifact-om; uskladi MsgBox „sve vraćeno" `:671-678` | S |
+| 4 | Spoljne side-effecte TX ne vraća (122.7) | P0/P1 | **Delimično / Nije proverivo statički** — CSV/monitoring/autosave zavise od inner `_TX`; `TstAppend :490` koristi `AppendRow` (za razliku od `SvAppend`), pa fixture jeste u CSV kanalu | P3 | TEST marker/sink; potvrdi inner ponašanje | M |
+| 5 | AutoSave pretpostavka nepotpuna (122.8) | — | **Nije proverivo statički** — `CancelAutoSaveTimer` se ne zove (grep-potvrdivo da nema poziva); efekat zavisi od timer stanja | P3 | Suspend/restore AutoSave | M |
+| 6 | Residue preflight parcijalan (122.9) | — | **Tačno** — `:67-68` proverava samo `TST-VOCE` i `TST-P1`, ne sve `TST-*` identitete | P2 | Proširi preflight na sve fixture prefikse | S |
+| 7 | Fixture identiteti nisu run-scoped (122.10) | — | **Tačno** — fiksni `TSTPRJ-*/TST-P*/TST-Z*` | P3 | `TST-<RunID>-...` + PK registry | M |
+| 8 | Scenario pokrivenost T01–T11 (122.11) | — | **Kontekst-Pozitivno** — potvrđeno (`:127-460`), jaka engine matrica; sačuvati | — | Zadrži | — |
+| 9 | Assertion model (case vs assertion) (122.13) | — | **Tačno** — `mPass/mFail` broje provere; `ReportResults(clean)` razlikuje samo normal/prekid | P3 | Per-case status | M |
+| 10 | Fatal error obrada (122.14) | — | **Tačno (delimično dobra)** — `:112` čuva `eDesc` pre `On Error Resume Next` (bolje od FM-0097), ali ne `Err.Number/Source`; rollback failure progutan; MsgBox tvrdi „vraćeno" i kad možda nije | P2 | Razdvoji `TEST_FAILED` vs `CLEANUP_FAILED` | S/M |
+| 11 | Report artifact rizici — `Cells.Clear` bez test-owned provere (122.15) | — | **Tačno** — `:656 ws.Cells.Clear` na sheet-u imena `_TestPalete` bez provere vlasništva; ceo report pod `On Error Resume Next :643` | P3 | Proveri da je sheet test-owned pre Clear | S |
+| 12 | Test sloj zaobilazi save API (122.16) | — | **Dizajnersko ograničenje / Kontekst-Pozitivno** — namerno; header priznaje `:29` | P3 | Reklasifikuj kao paleta-engine integration | S |
+| 13 | Master-data rollback SWMR (122.17) | — | **Tačno (mehanizam)** — `SeedMasterData :466` menja globalne `tblKulture/tblTipAmbalaze`; **Dizajnersko** za single-writer | Prihvaćeno | Rezervisan test-master ili disposable | M |
+| 14 | Module-level state `mSkipPaletize` ne vraća (122.18) | — | **Tačno** — `:64 SetPaletizeSkip False` na startu, nema restore prethodne vrednosti; nema javnog getter-a | P2 | Očitaj/vrati prethodno stanje u cleanup-u (treba getter) | S/M |
+| 15 | Runtime model/hardening (122.19–122.23) | — | **Predlozi (ne-nalazi)** | P3 | Selektivno | L |
+
+**Bilans FM-0099:** Modul je najbolje-ograđen mutacioni suite od tri storno/paleta (paletiranje-enabled + delimičan residue-check + Yes/No potvrda). Tvrdnje **tačne**; SWMR P0 = **Prihvaćeno/Dizajnersko** (single-writer), ali **komentar `:12-16` je objektivno precenjeno obećanje** i vredi ga omekšati. Konkretni jeftini fixevi: `_TestPalete` „nije-promena" laž (#3), parcijalan preflight (#6), `mSkipPaletize` restore (#14). Nije destruktivan nad poslovnim podacima kao storno moduli (rollback + engine-only).
+
+---
+
+### FM-0100 — `modIzvestajTests.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Naziv modula: komentar `modSmokeTestIzvestaj` vs `VB_Name modIzvestajTests` (123.1) | — | **Tačno** — `:1` vs `:5` | P3 | Uskladi komentar sa `VB_Name` | S |
+| 2 | `EMPTY`/`NOT ARRAY`/`INVALID ARRAY` nisu failure (123.4) | P0 | **Tačno** — `Smoke_ArrayShape :200-217` vraća tekst; `Smoke_RunReport :185` samo ispisuje; runner bezuslovno `"...OK" :172`. Read-only modul → nema data rizika, ali čist false-green | P2 | Tretiraj te statuse kao FAIL osim gde je EMPTY eksplicitno očekivan; brojač FAIL | M |
+| 3 | Per-report EH ne hvata greške producer-a — arg eval order (123.5) | P0 | **Tačno** — `Smoke_RunReport "ReportSaldoOM", ReportSaldoOM(...)` `:50`: VBA evaluira argument PRE ulaska, pa exception ide u suite-level EH `:176`, ne u `Smoke_RunReport.EH :191`. Realna harness greška (prvi izuzetak prekida ceo suite) | P2 | Pozovi svaki report u zasebnom case-wrapper-u koji stvarno hvata producer exception | M |
+| 4 | Fatalna greška se guta (123.6) | P0 | **Tačno** — suite EH `:176-183` ispisuje `Err.*` ali bez `Err.Raise`/Boolean/artifact; **NIJE u E2E** → uslovni false-green (AUD-039) | P2 | Vrati `Succeeded` Boolean/result | S/M |
+| 5 | Sample selection nedeterministički (123.7) | — | **Tačno** — `Smoke_FirstValue :219` uzima fizički prvi red bez provere aktivnosti/perioda | P3 | Biraj aktivan entitet sa podacima u periodu | M |
+| 6 | Period zavisi od dana pokretanja (123.8) | — | **Tačno** — `:21-22` `DateSerial(Year(Date),1,1)`..`Date` | P3 | Fiksni/data-driven stabilan period | S |
+| 7 | Nema contract provere po reportu (123.9) | — | **Tačno** — proverava se samo oblik `rows x cols`, ne broj kolona/total/tipovi | P3 | Očekivani br. kolona + min redova po reportu | M |
+| 8 | SKIP nema suite-level posledicu (123.10) | — | **Tačno** — `Smoke_Skip :196` samo ispisuje; nema coverage threshold | P3 | Brojač SKIP + prag obaveznih | S |
+| 9 | Helperi gutaju schema/data greške (123.11) | — | **Tačno** — `Smoke_FirstValue` EH `:241-242` vraća `""` → schema regres izgleda kao „Nema ID" (fail-soft, false-green klasa) | P2 | Razlikuj `NoData` od schema/data-access FAIL | S/M |
+| 10 | Ne validira poslovnu matematiku (123.12) | — | **Tačno** — nema poznatih numeričkih scenarija (saldo/ponder/manjak) | P3 | Deterministički fixture regres u izolaciji | L |
+| 11 | Read-only, širok API, brz compat smoke (123.13) | — | **Kontekst-Pozitivno** — potvrđeno read-only (nema mutacije poslovnih tabela); najbezopasniji od 5 | — | Sačuvati kao smoke, ne kao dokaz tačnosti | — |
+| 12 | Podela testova/result contract/matrix (123.14–123.18) | — | **Predlozi (ne-nalazi)** | P3 | Selektivno | M/L |
+
+**Bilans FM-0100:** Sve **tačno**. Za razliku od storno/paleta modula, ovaj je **read-only** (nema fixture/rollback/data rizika), pa tri FM „P0" nisu data-loss već isključivo **false-green harness** greške — realne, ali niske štete jer modul nije u E2E gate-u i ne mutira podatke. Najzanimljiviji je **#3 (arg-eval-order)** — istinska VBA zamka koja obara pouzdanost celog runnera. Fail-soft `Smoke_FirstValue` (#9) je ista klasa kao `CountRows→0` iz konteksta.
+
+---
+
+### FM-0101 — Stub sweep: `modML` / `modKvalitet` / `modMeteo` / `modHladnjaca`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Četiri prazna placeholder modula, bez procedura (116.1–116.5) | — | **Tačno** — svaki 7 linija (`Attribute`+`Option Explicit`+roadmap komentar+`TODO: Implementierung`); FM kaže „8 linija" (minorna netačnost) | P2 | — | — |
+| 2 | Nema production callere; runtime rizik ~0 (116.6) | — | **Tačno** — bez javnih članova; ne mogu proizvesti false-green/side-effect/compile grešku | Prihvaćeno | — | — |
+| 3 | Lažna arhitektonska signalizacija (naziv sugeriše da sloj postoji) (116.2–116.5) | — | **Tačno** — posebno `modHladnjaca` (postoje realni prerada/paleta/monitoring moduli) | P3 | Roadmap/ADR umesto praznih modula | S |
+| 4 | Ukloniti sva četiri iz `src-vba` import scope-a (116.7/116.8) | P2 | **Tačno / opravdano** — smanjuje broj modula bez vrednosti; ali su ipak shipped kroz `modRelease` | P2 | Ukloni iz `src-vba`; ideje u backlog | S |
+
+**Bilans FM-0101:** Potpuno **tačno** (uz sitnu FM grešku 8 vs 7 linija). Nula funkcionalnog rizika — čist repo/workbook cleanup, **P2**. Jedina veza sa ostatkom audita: i ovi prazni moduli idu klijentima kroz `modRelease` (isti pipeline kao shipped test moduli), pa uklanjanje ima i higijensku vrednost.
+
+---
+
+### FM-0136 — `modSEFTests.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Suite failure ne propagira caller-u | P0 | **Tačno** — svi `Run*Suite` EH→`LogFatal`→`FinishSuite`→normal return (`:66-69`); `FinishSuite :765-786` samo MsgBox, bez Boolean/raise; **NIJE u E2E** → uslovno (AUD-039) | P2 | `SEFTestSuiteResult` sa `Succeeded`; raise/return na FAIL/FATAL | M |
+| 2 | „Offline suite" ipak menja workbook | P1 | **Tačno** — `RunSEFOfflineSuite :41` zove `InitSEFTestLog :825` koji dodaje `SEF_TEST_LOG` sheet + redove | P3 | Preimenuj u „no business-table mutation" ili log u eksterni fajl | S |
+| 3 | Live testovi menjaju fakture/SEF bez cleanup-a | P1 | **Tačno** — `SendInvoiceToSEF_TX/RefreshSEFStatus_TX/Cancel/Storno` nepovratni; nema test-owned registra ni cleanup-a | P2 | Dedikovane test fakture u test env; nikad proizvoljna poslovna | M |
+| 4 | Public live/destructive bez auth/role guard | P1 | **Delimično** — jesu `Public Sub`, ALI postoje guardovi: `RequireLiveSEFTestsAllowed :654` (config flag) + `RequireCancelStornoTestsAllowed :1164` + `ConfirmDangerousSEFMutation :1175` (kucana potvrda). Nedostaje samo AgriX user/role provera. Najbolje ograđen modul od 5 | P2 | Dodaj admin/dev role check uz postojeće flag-ove | S |
+| 5 | Production detection = string heuristika | P1 | **Delimično** — `IsLikelyProductionSEF :687` PRVO proverava `SEF_ENV=PROD/PRODUCTION` (već je enum koji FM predlaže!), tek onda substring `DEMO/TEST/SANDBOX`. Rizik realan samo ako `SEF_ENV` prazan I prod-URL sadrži „TEST" | P2 | Učini `SEF_ENV` obaveznim (fail-closed) + host allowlist; substring kao fallback | S |
+| 6 | `FindFirstFakturaID` bira proizvoljnu fakturu | P1 | **Tačno** — `:626` prvi nestorniran red, bez provere statusa/kompletnosti/test-owned | P2 | Zahtevaj eksplicitan test-owned FakturaID | S |
+| 7 | SKIP može sakriti regression | P1 | **Tačno** — `Test_ValidateFakturaForSEF_DoesNotCrash :332` bilo koja greška→SKIP; DTO datum→SKIP `:269`; live SKIP-ovi | P2 | SKIP samo za eksplicitno van-scope precondition; inače INCONCLUSIVE/FAIL | M |
+| 8 | Negativni testovi prihvataju bilo koju grešku | P1 | **Tačno** — `Test_PayloadValidationRejectsEmpty :287` bilo koja greška=pass; `AssertTransitionBlocked :410`; `Test_GetJsonNumericIdLiteralRaises :1440` samo `Err.Number<>0` iako komentar traži `ERR_SEF_VALIDATION` | P2 | Proveri `Err.Number/Source` (tačan kod) | S/M |
+| 9 | Ne pokriva false-success response parser | P1 | **Tačno (coverage-gap)** — u modulu nema testa za HTTP200 prazan body/malformed JSON/unknown status/202-bez-docID; tvrdnja o `clsSEFResponse` ponašanju = **Nije proverivo statički** ovde (drugi fajl) | P2 | Dodaj response-parser false-success matricu | M |
+| 10 | Mutable snapshot/line regression nije testiran | P1 | **Tačno (coverage-gap)** — testira se samo initial build + XML substring-ovi | P3 | Dodaj mutation/final-revalidation testove | M |
+| 11 | UBL validacija površna | P1 | **Tačno** — `Test_BuildDtoAndUBL :259-263` samo `InStr` substring-ovi (`<Invoice`,`<cbc:ID>`...), bez XML/schema/totals/PDV | P3 | Well-formed XML + schema + financijski invarianti | M |
+| 12 | Live send prihvata REJECTED kao pass | P1 | **Tačno** — `:468-473 Case WF_SEF_REJECTED → LogPass` | P3 | Razdvoji connectivity/submission/business-accepted smoke | S |
+| 13 | Refresh error posle cancel/storno se guta | P1 | **Tačno** — `:1006-1009` i `:1114-1117` `On Error Resume Next`+`Err.Clear` oko `RefreshSEFStatus_TX` | P2 | Evidentiraj refresh failure kao FAIL/typed warning | S |
+| 14 | Cancel status očekivanje preširoko | P1 | **Tačno** — `:1025-1030` prihvata i `DRAFT`/`NEW` kao post-cancel | P2 | Traži jasan eksternI cancel status; inače INCONCLUSIVE | S |
+| 15 | Event-log count failure izgleda kao nula | P1 | **Tačno** — `CountSEFEventsForFaktura :1216-1217` EH→0 (fail-soft, ista klasa kao kontekstni `CountRows→0`) | P2 | Razdvoji schema/missing-table grešku od „nema događaja" | S |
+| 16 | Test log nema RunID/build correlation | P2 | **Tačno** — `AppendTestLog :839-858` piše Timestamp/Kind/Name/Status/Details/Operator | P3 | Dodaj SuiteRunID/build/env/FakturaID | S |
+| 17 | Windows username umesto auth korisnika | P2 | **Tačno** — `:857 Environ$("Username")` | P3 | Beleži i AgriX user | S |
+| 18 | `Total` = assertion/log outcome, ne test case | P2 | **Tačno** — `LogPass/LogFail/LogSkip :788-810` svako inkrementira `m_Total` | P3 | Odvoji Cases od Assertions | S |
+| 19 | PATCH 5/PATCH 10 stale migracioni komentari | P2 | **Tačno** — `:1244-1256`, `:1338-1352` sadrže „dodaj na kraj modula" instrukcije | P3 | Obriši migracione komentare, zadrži svrhu/contract | S |
+| 20 | Pozitivni: live/offline razdvojeni, config flag + kucana potvrda, transition matrica, idempotency, doc-ID shape | — | **Kontekst-Pozitivno** — potvrđeno (`:335-412,:1257-1420`); najsigurniji guard-model od svih 5 | — | Zadrži | — |
+| 21 | Preporuke P0/P1/P2 + regres matrica | — | **Predlozi (ne-nalazi)** | P2/P3 | Selektivno | L |
+
+**Bilans FM-0136:** Tvrdnje pretežno **tačne**; dve „P1" su **Delimično** jer FM potcenjuje postojeće guardove — modul JESTE najbolje ograđen (config flag + kucana potvrda + `SEF_ENV` enum već postoji, #4/#5), pa je najmanje pogođen AUD-039 za live/destructive grane (rezidual: offline suite bez guard-a + user-role provera). Dominira klasa **fail-soft/SKIP/any-error-pass false-green** (#7,#8,#13,#14,#15) i **coverage-gap** (#9,#10,#11). Jedini strukturni P0 (nepropagacija) je uslovan jer modul nije u E2E gate-u.
+
+---
+
+## Zbirni bilans (svih 6 FM unosa)
+
+1. **Verifikacija:** ~95% FM tvrdnji **Tačno** protiv koda. Otkrivene **dve FM sopstvene netačnosti**: FM-0098 kaže 22 pozvane procedure — realno **23** (`Test_StornoCentar_All:21-43`); FM-0101 kaže 8 linija — realno **7**. Nekoliko „P0/P1" je **Delimično** (SEF guardovi postoje) ili **Nije proverivo statički** (AutoSave/CSV/monitoring — zavise od inner `_TX` grana koje nisam čitao).
+
+2. **SWMR whole-table data-loss** (FM P0 u 0097/0098/0099): mehanizam **potvrđen** (`clsTransaction.cls:108-147`), ali **Prihvaćeno/Dizajnersko** za single-writer desktop. Preporuka: NE ulagati u disposable-copy refaktor; samo omekšati precenjeni komentar u `modTestPalete:12-16`.
+
+3. **Najmaterijalniji, deployment-relevantan rizik = AUD-039** (shipped destruktivni test makroi, potvrđeno `modRelease.bas:5,18`): najoštriji je **`Test_StornoCentar_All` bez ijednog env guard-a (P1)** — 23 storno testa nad živim podacima na jedan Alt+F8, bez potvrde. Sekundarno: `RunStornoTestSuite`/`modTestPalete` imaju bar MsgBox; `modSEFTests` ima config-flag+kucanu potvrdu (najbolji).
+
+4. **Jeftini konkretni correctness fixevi (S):** (a) `TBL_STORNO_ZURNAL` snapshot u `modTestStorno:58-68` i `Test_StornoSelectedBlocks_Auto:640` — jednolinijski, preživljava single-writer; (b) capture `Err.*` pre rollback-a; (c) residue-preflight za `modTestStorno`/`modTestStornoCentar` (preslikati iz `modTestPalete`).
+
+5. **Sistemska klasa false-green** (potvrđuje kontekstni AUD): fail-soft helperi (`SvAppend`/`TcSeedRow` silent skip, `Smoke_FirstValue`→"", `CountSEFEventsForFaktura`→0) + assertion-brojači bez case-metrike + „...OK"/MsgBox bez Boolean-a. **Nijedan od 5 modula nije u `modE2EReleaseGate`**, pa je „E2E false-green" trenutno **latentan** (uslovan na buduću integraciju), ne aktivan.
+
+6. **Preklapanja:** AUD-016 (duplirani/parni test moduli), AUD-039 (shipped bez guard-a + E2E false-green) pokrivaju većinu „P0" tema na nivou obrasca; per-fajl ostaju specifični jednolinijski fixevi (zurnal-snapshot) i `modTestStornoCentar` env-guard kao najprioritetnija pojedinačna stavka. FM-0101 je čist P2 repo-cleanup bez funkcionalnog rizika.
+
+---
+
+## v142 blok K6 — modComboBinding, frmMarza, frmExcelMini, modPaletniListUI, clsBlokUI, clsSEFValidationResult, clsWheelList, modMouseWheel (FM-0103/0106/0114/0116/0121/0123/0127/0140) [sidro origin/main v2.24.0]
+
+Verifikacija kompletna. Sve tvrdnje su proverene protiv koda. Ključni kontekst koji oblikuje ocene:
+
+- **Permission model** (`modAuth.bas`): opt-in preko `AuthEnabled()` (**OFF po defaultu**, red 17), a jedini enforcement je na navigaciji forme — `OpenContentForm` (`frmOtkupAPP.frm:1072-1076`) preko `OblastZaFormu`. Soft workflow-segregacija, ne hard security (xlsm nezaštićen).
+- `EnsureUserFormChromeRemoved` postoji (`modWindow.bas:119`), `ExtractIDFromDisplay` postoji i **razlikuje se** od `ExtractIDFromDisplaySafe` (`modHelpers.bas:13`), `RequireColumnIndex` **baca grešku** (`modSchemaGuard.bas:13`), `frmPalete.frm` **postoji**, `clsSEFValidationResult` **nema nijednog VBA callera**.
+
+---
+
+### FM-0103 — modComboBinding.bas
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|123.3|`.Value` vraća display, ne ID (`:29-30` BoundColumn=1/TextColumn=1)|P1|**Tačno** (mehanizam), ali namerno i **već dokumentovano** (`:10-13`); BoundColumn=2 bi slomio display contract|P3|Pojačati komentar/naming; NE dirati BoundColumn|S|
+|123.4|Destruktivni `Clear` (`:26`) pre validacije kolona (`:40-41` RequireColumnIndex baca)|P1|**Tačno** — combo ostane prazan, greška se guta|P2|Validiraj izvor pre `Clear` ILI vrati broj/Boolean|S|
+|123.5|Prazna tabela i schema-drift izgledaju isto (`:35` tihi Exit)|P1|**Tačno** (isti koren kao 123.4)|P3|Fill vrati status/broj dodatih|S|
+|123.6|Filter aktivnog uzak (`:56-57` samo ==STATUS_NEAKTIVAN)|—|**Dizajnersko ograničenje** — default-active je bezbedniji za soft-delete (ne krij aktivne zbog typo)|P3|Dokumentovati; opc. `IsMasterRowActive`|S|
+|123.7|Prazan display dozvoljen (`:60` samo `idValue<>""`)|—|**Tačno**|P3|Fallback display `[ID]` ili zahtevaj neprazan|S|
+|123.8|Dupli ID nisu detektovani; SetComboByID uzima prvi (`:115-120`)|—|**Tačno**, ali ID je master PK → defanzivno|P3|Opc. duplicate-guard (dev/release)|S|
+|123.9|Case-sensitive `=` (`:116`, `:145`)|—|**Delimično/Kontekst** — za numeričke ID-jeve (KupacID/KulturaID) irelevantno|P3|`vbTextCompare` radi konzistentnosti|S|
+|123.10|Legacy fallback greši ID (`:163-167` InStrRev)|—|**Tačno** za edge-case; samo legacy fallback|P3|Ostaviti kao migraciju; novi combo 2-kol|S|
+|123.11|Nekonzistentan parser: GetComboID→`...Safe` (`:84`) vs SelectComboByDisplayID→`ExtractIDFromDisplay` (`modHelpers.bas:13`, drugačija logika+fallback)|P1|**Tačno** — stvarna nekonzistentnost potvrđena|P2|Ujednačiti na `...Safe` ili dokumentovati razliku|S|
+|123.12|Fill nema rezultat; Set/Select vraćaju False|—|**Tačno** (spoj sa 123.4)|P2|Fill vrati broj/Boolean|S|
+|123.13|Nedostaje test matrica|—|**Nije proverivo statički**|P3|Opc. regresioni harness|M|
+
+**Bilans:** Modul tehnički tačan i dobro ograničen; većina nalaza je Tačno-ali-nisko (P2/P3) jer je single-writer + `.Value/GetComboID` contract već dokumentovan. Najvredniji: **123.11** (ujednači parser) i **123.4/123.12** (Fill vrati status pre destruktivnog `Clear`). BoundColumn NE dirati.
+
+---
+
+### FM-0106 — frmMarza.frm  (LEGACY — korisnik potvrdio da se ne koristi)
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|126.4|Naziv kao identitet (`:83`/`:117` Naziv→LookupValue→KupacID)|P1|**Tačno**|Prihvaćeno/P3 (legacy)|Ako se oživi: `FillComboDisplayID`/`GetComboID`|M|
+|126.5|Pogrešan ID nije fail-fast (`:117-118`, nema `ID<>""` pre report)|P1|**Tačno**|P3 (legacy)|Validiraj `ID<>""` pre poziva|S|
+|126.6|Datum locale-zavisan (`:108-109` CDate; nema `Od<=Do`)|P1|**Tačno**|P3 (legacy)|`TryParseDateValue` (FM-0102) + provera opsega|S|
+|126.7|„Po OM" je procena pod generičkim „Marža"|P1|**Delimično / Nije proverivo** — metodologija u `modMarza` (nije čitan), headeri u `.frx`|P3 (legacy)|Label „Procena po OM" + metodologija|M|
+|126.8|Različita semantika tri režima|P1|**Nije proverivo statički** (modMarza)|P3|Dokumentovati metodologiju|M|
+|126.9|Ukupno bez inventory matching|P1|**Nije proverivo statički** (modMarza)|P3|Imenovati „period contribution"|M|
+|126.10|Invalid datumi mogu u agregat|P1|**Nije proverivo statički** (modMarza helperi)|P3|Isključi+prijavi invalid|M|
+|126.11|Schema guard regresija; forma daje generičku grešku (`:136`)|P1|**Delimično / Nije proverivo** (modMarza)|P3|`RequireColumnIndex` u modMarza|S/M|
+|126.12|Nema pravi caption (`:3` „UserForm1"→`:46` „")|P2|**Tačno** — FindWindow (`:34`) sa praznim caption|P3|Postaviti caption pre FindWindow ILI central helper|S|
+|126.13|Windows-only API (`:30-42`)|P2|**Dizajnersko** (Windows-only app)|Prihvaćeno|Opc. central helper|S|
+|126.14|One-shot setup pri Hide (`:26`/`:51-52`; `:156` Me.Hide→stale)|P2|**Tačno**|P3 (legacy)|Razdvoji one-time i per-show|S|
+|126.15|Lista može zadržati stare vrednosti (`:144`)|P2|**Tačno**|P3|Eksplicitno prazni ne-numeric ćelije|S|
+|126.16|Zaglavlja/metodologija nisu u kodu (u `.frx`)|P2|**Nije proverivo statički**|P3|— (dizajner)|—|
+|126.17|Hardcoded tekstovi van `Poruka()` (`:59-61`,`:128`)|P2|**Tačno** — odstupa od lokalizacione arhitekture|P3 (legacy)|Kroz `Poruka()` ako se oživi|M|
+
+**Bilans:** Forma je legacy/nekorišćena → svi nalazi Prihvaćeno/P3. Tehnički tačni ili plauzibilni; najveći (procena vs ostvarena marža) leži u `modMarza` (nije čitan) i `.frx` headerima, pa nije statički potvrdiv iz forme. Bez oživljavanja nema poslovnog rizika; ako se oživljava: prvo stable-ID binding + validacija ID/perioda.
+
+---
+
+### FM-0114 — frmExcelMini.frm  (live: `frmOtkupAPP.frm:833` Show modeless)
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Moguće stanje bez UI: `:102` Visible=False PRE `:105` Show; EH (`:114-117`) ponavlja|P1|**Tačno** mehanizam; ali frmOtkupAPP je uvek-učitan shell (retko pada)|P2|Show→potvrdi→pa Visible=False; na grešku ostavi Visible=True|S|
+|—|Greška pri `Show` se guta (`:104-106` On Error Resume Next)|P1|**Tačno** (isti koren)|P2|Proveri load/loguj source pre fallback|S|
+|—|Ne vraća prethodni Excel state|P2|**Dizajnersko** (namenski kiosk return)|P3|Dokumentovati kiosk contract|S|
+|—|Permission nije lokalni (OBL_OTVORI_EXCEL)|P2|**Delimično** — ulaz `btnOpenExcel_Click` GA proverava (`frmOtkupAPP.frm:821-825`) pre Show; lokalna provera u return-helperu promašena|P3|— (guard je na ulazu); opc. potvrditi sve Excel-visible puteve|S|
+|—|Duplirana WinAPI chrome (`:30-42` vs `EnsureUserFormChromeRemoved`, modWindow:119)|P2|**Tačno** — anti-duplikacija (poklapa CLAUDE.md doktrinu)|P2|Koristi `EnsureUserFormChromeRemoved`|S|
+|—|Pogrešna log oznaka (`:65`/`:82`/`:112` „frmCloseExcel.*" a VB_Name=frmExcelMini `:11`)|P2|**Tačno** — telemetrijski mismatch|P2|Ispravi labele na `frmExcelMini`|S|
+|—|Designer caption „UserForm1" (`:3`)|P2|**Tačno**|P3|— ili central helper|S|
+
+**Bilans:** Mali live helper (ulaz zaštićen OBL_OTVORI_EXCEL). Najvredniji jeftini: preurediti Show→hide redosled (P2), ispraviti log oznaku frmCloseExcel→frmExcelMini (P2), koristiti central chrome helper (P2, anti-dup). Ostalo P3.
+
+---
+
+### FM-0116 — modPaletniListUI.bas
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Alt+F8 destruktivni zaobilaze permission (nema `KorisnikImaPravo(OBL_PALETE)`; guard samo u `OpenContentForm`, frmOtkupAPP:1072)|P1|**Delimično** — mehanizam tačan KAD je AUTH ON; ali AUTH opt-in/OFF (modAuth:17), soft model, xlsm nezaštićen (Alt+F8/VBA ionako sve može)|P2 (defense-in-depth)|`If AuthEnabled() And Not KorisnikImaPravo(OBL_PALETE) Then...Exit` na svaki destruktivni entry (obrazac postoji u frmOtkupAPP)|M|
+|—|`Val` prihvata delimično nevalidno (`:97-98`)|P1|**Delimično** — jednokratni prompt-ovi SU IsNumeric-guarded (`:19,44,129,154,184`) → „12abc" odbačen; nezaštićen `Val` samo u SavePrerada|P2|Strogi parser (modParse) u SavePrerada|S|
+|—|Lista prerade prazna/duplikati (`:76-86`→`:97`)|P1|**Tačno** (UI-nivo): tokeni `pbr<=0` tiho preskočeni → prazan `ids` ide u TX; nema dedupe|P2|Zahtevaj ≥1 jedinstvenu paletu pre poziva|S|
+|—|Samo tekuća godina (svi `Year(Date)`)|P1|**Tačno**; **Dizajnersko** — Alt+F8 stub, frmPalete postoji za pun tok|P2/P3|Birati PaletaID/PreradaID ili tražiti godinu|M|
+|—|Success bez provere rezultata — Close (`:140-141`)|P1|**Tačno** — `ClosePaletaManual_TX` vraća String (modPaletniList:595) ali se ignoriše; nekonzistentno (Storno* proveravaju `:167,197`)|P2|Uhvati povratni String, potvrdi post-condition|S|
+|—|Export rezultat se ne proverava (`:31,56,99`)|P1|**Tačno** (nema post-provere), ali export ima svoj EH|P3|Opc. potvrda generisanja|S|
+|—|`PaletaAdjustPrompt` vraća tekst (`:232-248`)|P1|**Delimično** — koristi se za MsgBox prikaz (`:260`); nema automatizovanih callera → struct je over-engineering|P3|— (ostaviti); struct tek uz automatizovan caller|M|
+|—|Težina lookup vraća 0 za missing/error (`:288-303`)|P2|**Tačno** (0 dvosmisleno)|P3|Typed/Boolean lookup|S/M|
+|—|Legacy Alt+F8 sloj posle frmPalete (komentar `:8-9`)|P2|**Tačno** — frmPalete.frm postoji|P2 (anti-dup)|Zadrži legit admin/recovery; ostale private/ukloni|M|
+
+**Bilans:** Tanak adapter, business delegiran. Nalazi stoje ali ublaženi: permission-bypass je P2 defense-in-depth (ne P1) zbog AUTH opt-in/OFF + soft modela, a `Val` nalaz je preširok (prompt-ovi IsNumeric-guarded). Najvredniji jeftini: ClosePaleta uhvati rezultat, ≥1 jedinstvena paleta, guard-obrazac na destruktivne Alt+F8 kad je AUTH ON. frmPalete postoji → očistiti legacy stubove.
+
+---
+
+### FM-0121 — clsBlokUI.cls
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Destruktivni router bez permission: `OtkupBlok_OnButton` „STORNO" (modOtkupBlok:134,138)|P1|**Delimično** — router zavisi od ŽIVE frmOtkup+selektovanog bloka (mForm); naked Alt+F8 no-op/greška. Živ blok znači frmOtkup već otvoren (prošao OBL_OTKUP) → inkrementalni bypass ~nula; + AUTH opt-in|P3|Opc. domain-guard u `StornoSelectedBlok`/Storno_TX|S/M|
+|—|String-based routeri fail-silent (nema Case Else)|P2|**Tačno** (klasa prosleđuje `action`; Select Case u modOtkupBlok)|P3|`Case Else`→LogErr; centralne konstante|S/M|
+|—|`action` nije tipiziran po kontroli|P2|**Dizajnersko** — mala runtime klasa; FM sam kaže refactoring nije obavezan|P3|Validirati kombinaciju pri wiring-u|S|
+|—|Javna polja → polu-inicijalizovan wrapper (nema Init)|P2|**Tačno**|P3|Init: tačno jedna kontrola + neprazan action|S|
+|—|Slab error context|P2|**Tačno**|P3|Logovati action+control name|S|
+|—|`txt_Change` učestali side-effect (`:33`)|P2|**Kontekst-Pozitivno** — CENA grana samo osvežava state; persistence je u AfterUpdate|P3|Zadržati Change bez skupih upisa|—|
+|—|Globalno module-state vezivanje (jedan mForm)|P2|**Dizajnersko ograničenje** — single frmOtkup instanca|P3|Dokumentovati single-instance contract|S|
+
+**Bilans:** Dobar mali WithEvents adapter bez business logike. STORNO-bypass ublažen (router zavisi od žive forme koja je već prošla OBL_OTKUP; AUTH opt-in) → P3, ne P1. Ostalo P3 dijagnostika/robustnost. Rebuild-stale-sink nije problem jer `mWrappers` drži instance žive. Minimalno vredno: `Case Else` fail-fast + log action/control.
+
+---
+
+### FM-0123 — clsSEFValidationResult.cls
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Prazna metadata-only klasa, bez callera|P2|**Tačno** — 9 linija, bez članova; grep: samo `.cls` + docs/changelog/backlog, nijedan VBA caller|P2 cleanup|Opcija A: obrisati `.cls`|S|
+|—|Lažna arhitektonska slika (naziv sugeriše typed-result)|—|**Tačno**|P2|Ukloniti changelog/backlog reference koje tvrde typed-result|S|
+|—|Import/build šum (prazna klasa se uvozi)|—|**Tačno**|P3|Brisanje uklanja VBComponent|S|
+|—|Opcija B — implementirati typed result|—|**Prihvaćeno** — samo uz migracioni plan; FM se slaže da se NE radi unapred|—|— (ostaviti za backlog)|—|
+
+**Bilans:** Potpuno tačno — mrtva prazna klasa bez callera; jedini „rizik" je misleading arhitektura + import šum. Brisanje (Opcija A) je ispravan minimal-delta; NE praviti placeholder „za kasnije". Uz brisanje očistiti changelog/backlog tvrdnje o typed-result. P2, S.
+
+---
+
+### FM-0127 — clsWheelList.cls
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Jedini handler guta greške (`:30-32` On Error Resume Next)|P2|**Kontekst-Pozitivno / Dizajnersko** — fail-soft na hover je namerno ispravan (ne sme oboriti formu)|P3|Dev-režim: log prvog failure-a po wrapperu|S|
+|—|Javna kontrolna referenca promenljiva (`lst` Public)|P2|**Tačno**; modMouseWheel to ne zloupotrebljava|P3|Opc. `Attach(lb)`+private ref (nije nužno)|S|
+|—|Nema eksplicitni Detach|P2|**Dizajnersko** — globalni `MouseWheel_Detach` dovoljan za all-or-nothing|P3|Detach tek ako se pojedinačne liste uklanjaju|S|
+|—|Komentar „bez stanja" nepr.  (drži COM ref)|P2|**Tačno** — samo dokumentaciona preciznost, nije problem|P3|Preformulisati komentar|S|
+|—|Owner/form identitet nije sačuvan|P2|**Dizajnersko** — dobro za minimalizam|P3|Opc. dev-metadata FormName/ControlName|S|
+
+**Bilans:** Kvalitetan minimalan adapter; FM sam potvrđuje da su glavni rizici u modMouseWheel, ne ovde. Svi nalazi P3 dijagnostika/preciznost; fail-soft na hover je namerno i ispravno. Ne širiti klasu. Jedino opciono: dev-log prvog SetHot failure-a.
+
+---
+
+### FM-0140 — modMouseWheel.bas  (off-by-default, opciona kozmetička UI funkcija)
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+|—|Windows timeout → lažno aktivan `mHook` (`:169` `If mHook<>0 Then Exit`)|P0/P1|**Delimično** — komentar-mismatch stvaran (`:16-17`), ALI modul ima sopstveni keep-alive koji sam unhook-uje (`:282-287`), a Detach na Deactivate/QueryClose resetuje mHook → self-recovery na re-fokus („trajno mrtav" preterano)|P3 (kozmetička/off-default)|Uskladiti komentar (S) ILI `mLastCallbackAt` heartbeat (M)|S/M|
+|—|`UnhookWindowsHookEx` rezultat ignorisan (`:114-115`, `:284-285`)|P0/P1|**Tačno** — kod ignoriše povratnu vrednost, briše handle bezuslovno. Isti-thread unhook praktično ne pada, ali dangling AddressOf→crash je dovoljno ozbiljan (jedini realan crash-vektor)|**P2** (najlegitimniji nalaz grupe)|`If UnhookWindowsHookEx(h)<>0 Then mHook=0 Else zadrži+loguj`|S|
+|—|Globalni detach nije owner-aware (`:138-140` vs `:111-119`)|P1|**Dizajnersko ograničenje** — single-form modalni UX (FM priznaje); self-heal na sledeći Activate|P3|Dokumentovati single-form contract (S); owner-registry je over-engineering (L)|S|
+|—|`mHot` vezan za uklonjenu listu|P1|**Delimično** — COM ref drži živo (nije use-after-free); ScrollHot guardovan (`:295-298`)|P3|Opc. unregister po kontroli|M|
+|—|On Error Resume Next skriva install-fail (`:167,178`)|P1|**Tačno**; ali fail-soft ispravan za opcionu funkciju (FM priznaje)|P3|Log jednom po sesiji na install-fail|S|
+|—|VBE guard može trajno onemogućiti (`:184-190`→True)|P1|**Kontekst/Dizajnersko** — fail-closed nameran+bezbedan; app ionako traži „Trust access VBA object model" za self-update → scenario nizak|P3|Dijagnostički razlog (VBE-open vs unavailable)|S/M|
+|—|Komentar „gasi se čim VBE otvoren" jači od impl (`:176` samo u EnsureHook)|P1|**Delimično** — normalno otvaranje VBE→forma gubi fokus→Deactivate→Detach; ostaje egzotičan multi-monitor edge|P3|Uskladiti komentar|S|
+|—|Auto-unhook broji sve mouse događaje (`:282`)|P1|**Kontekst-Pozitivno** — dizajn ok (SetHot vraća mAlive na pun `:160`); samo komentar „24 pokreta" nepr.|P3|Preformulisati komentar|S|
+|—|Delta kao znak (`:273-274` samo `md>0`)|P2|**Dizajnersko** — za standardni miš prihvatljivo|P3|Opc. signed high-word akumulacija do 120|M|
+|—|Clamp `n-1` (`:307`)|P2|**Tačno**; nije kritično|P3|Opc. procena vidljivih redova|M|
+|—|Javni Alt+F8 On/Off/Reset (`:132,143,149`)|P2|**Prihvaćeno** — namerni dijagnostički entry (`:45,129`)|Prihvaćeno|Opc. `Option Private Module` (gubi dijagnostiku)|S|
+|—|Nema health/debug API|P2|**Tačno** (samo Reset)|P3|Opc. status funkcija|M|
+|—|32/64-bit + Mac|—|**Kontekst-Pozitivno** (PtrSafe/LongPtr ok, MD_OFFSET=8 obrazložen); Mac: `#If VBA7` aktivan i na Mac-u → Win Declare pao, ali app Windows-only|Prihvaćeno|Formalni Windows-only build guard ili `#If Mac`|S|
+
+**Bilans:** Iznadprosečno pažljiv off-by-default hook; većina „P0/P1" oznaka je **napumpana** za kozmetičku opcionu funkciju bez data/crash rizika (scrollbar radi i bez nje). Jedini stvarno vredan jeftini hardening: **proveriti `UnhookWindowsHookEx` rezultat i ne gubiti handle (P2, S)** — pokriva jedini realni crash-vektor (dangling AddressOf). Stale-hook heartbeat i owner-registry su korisni ali za single-form/off-default scope P3/over-engineering. Komentar-vs-impl neusklađenosti (timeout re-hook, „gasi se čim VBE", „24 pokreta") su stvarne ali kozmetičke — uskladiti tekst.
+
+---
+
+## Zbirni zaključak audita
+
+**Najviše precenjeno (FM P0/P1 → realno P2/P3):** modMouseWheel timeout/lifecycle (kozmetička off-by-default funkcija), permission-bypass nalazi (modPaletniListUI/clsBlokUI — AUTH je opt-in/OFF + soft model + nezaštićen xlsm), sve frmMarza P1 (forma legacy/nekorišćena).
+
+**Najvredniji stvarni, jeftini nalazi (minimal-delta, potvrđeni protiv koda):**
+1. **modComboBinding 123.11** — dva različita ID-parsera (`ExtractIDFromDisplay` vs `...Safe`); ujednačiti. S.
+2. **modMouseWheel** — proveriti `UnhookWindowsHookEx` rezultat, ne gubiti handle (jedini realan crash-vektor). S.
+3. **frmExcelMini** — log oznaka `frmCloseExcel`→`frmExcelMini` + central `EnsureUserFormChromeRemoved` (anti-dup po CLAUDE.md). S.
+4. **modPaletniListUI** — `ClosePaleta_Prompt` uhvati povratni String (nekonzistentno sa Storno*). S.
+5. **clsSEFValidationResult** — obrisati mrtvu klasu + changelog/backlog reference. S.
+
+**Netačnih/preširоких tvrdnji:** modPaletniListUI „Val" nalaz je preširok (jednokratni prompt-ovi su IsNumeric-guarded); modMouseWheel „trajno mrtav hook" i „gasi se čim VBE otvoren" su preterani (self-recovery preko Deactivate/Detach). Nijedan nalaz nije potpuno **Netačan** — svi imaju tačno mehaničko jezgro, ali kontekst (single-writer desktop, opt-in AUTH, off-by-default hook, legacy forma) sistematski spušta hitnost.
+
+---
+
+## v142 blok K7 — banka parseri: modBankaProCredit, modBankaAlta, modBankaHalk, clipboard(mrtav), modBankaImportParserPdfToText (FM-0128..0132) [sidro origin/main v2.24.0]
+
+Verifikacija kompletna. Imam sve module (5 parsera + orkestrator `modBankaImport.bas`) i potvrđen ključni kontekst koji FM skoro potpuno ignoriše.
+
+---
+
+## Auditski nalaz — FM-0128…FM-0132 (banka PDF parseri)
+
+**Zajednički kontekst koji presuđuje većinu nalaza (FM ga ne pominje):** `modBankaImport.ParseBankaIzvodForImport` (`modBankaImport.bas:485-546`) primenjuje **4-nivo fail-closed integritet PRE staging-a**, za SVE banke posle dispatch-a: Lvl1 `Pocetno+Uplate-Isplate==Novo`, Lvl2 `sumUplata==Potrazuje`, Lvl3 `sumIsplata==Duguje`, Lvl4 `countUplata==nOdobrenje` i `countIsplata==nZaduzenje`; svaki promašaj `Err.Raise` → **ceo izvod se odbija** (nema tihe korupcije). Uz to `saldo.parsed` je obavezan (`:473`). **Posledica:** promašen/izmišljen iznos, procureli neizvršeni nalog, oba-smera red, layout-drift — sve to razbija sume/brojeve i puca fail-closed. **Jedina rupa koju gate DOKAZIVO ne vidi:** red sa `zad=0 And odo=0` (ne menja ni sume ni count-ove) — ali je novčano nulti. Ovo je osa po kojoj obaram FM ocene sa „tiha korupcija" na „prekid uvoza / novčano-nulti phantom". Verifikovano i: clipboard parser ima **0 produkcionih callera** (grep — samo sopstveni `TestParser`); PdfText je **živ** (Komercijalna = `Case Else`, `:452-457`).
+
+Pravilo ocene: **Tačno** = mehanizam i rezidualni rizik oba stoje (gate ne pokriva); **Delimično** = mehanizam tačan ali FM precenjuje rizik jer gate hvata na nivou izvoda.
+
+---
+
+### FM-0128 — `modBankaProCredit.bas`
+
+| # | Nalaz (FM) | FM tež. | Opravdanost | Hitnost | Predlog (min-delta) | Napor |
+|---|---|---|---|---|---|---|
+| — | Pozitivni nalazi (izolovan, blok-bound do sledećeg RB, phantom filter, full-match račun/iznos) | — | **Kontekst-Pozitivno** (`:203-221,239-253`) | — | — | — |
+| 1 | Fin. polja na fiksnim offsetima pivot+1/+3/+5 | P1 | **Delimično** — mehanizam tačan (`:300-308`), ali „opasno/red validan" precenjeno: gate hvata i promašen (Lvl2/3/4) i izmišljen iznos | P2 | Skenirati `IsAmount` u prozoru [pivot+1..sifra] umesto fiksnih indeksa | M |
+| 2 | `IsRealTxnPC` prima account-only 0/0 | P1 | **Tačno** (`:241-253`) — gate 0/0-slep (Lvl4 count-blind na nule) | P2 | Pooštriti: zahtevati `zad>0 Xor odo>0` (deljeno s Alta #1) | S |
+| 3 | Moguća oba iznosa pozitivna | P1 | **Delimično** — nema lokalne invarijante, ali Lvl2/3/4 hvataju | P3 | Opc. `Not(zad>0 And odo>0)` radi preciznije poruke | S |
+| 4 | Date validator shape-only | P1 | **Tačno** (`:391-394`) — gate ne validira datum; `31.02` ulazi kao string | P2 | Kalendarska validacija u zajedničkom `modBankaParseUtils` (RF-16, ×5) | S |
+| 5 | Svaki standalone datum = pivot (bez sekcijskog bound-a) | P1 | **Tačno** (`:178-183`) — ProCredit JEDINI nije sekcijski bound (Alta/Halk jesu) | P2 | Bound pivote na „STANJE I PROMENE"/PROMENE kao Alta | M |
+| 6 | `FindRbAbovePC` pada do `LBound` | P1 | **Tačno** (`:345-354`) — posledica: prenapuhan partner blok | P3 | Ako nema RB u prozoru (~8 lin.) → kandidat nevalidan | S |
+| 7 | Račun bez checksum/normalizacije | P1 | **Tačno** (`:438-444`) — ali partner-konto je metapodatak, van gate-a | P3 | Centralna normalizacija/opc. mod-97 (deljeno ×5) | M |
+| 8 | Poziv na broj parser preuzak | P1 | **Tačno** (`:467-477`) — poziv je jak ključ za auto-map | P2 | Proširiti obrazac (model `(NN)`, crtice, duži) — deljeno s Alta/Halk | M |
+| 9 | Referenca = prvi ≥6 cifara (heuristika) | P1 | **Tačno** (`:311-318`) — ref ulazi u dedup (`IsDuplicateBankaImport` jak ključ) | P2 | Kontekstualnija potvrda; sačuvati raw svrhu | M |
+| 10 | Saldo rigidno 6 tokena, samo Boolean | P2 | **Tačno** (`:356-386`) — fail-closed; orch. daje jasnu 1003 | P3 | Reason-code opcionalno | S |
+| 11 | Error contract `Empty`/`parsed=False` | P2 | **Delimično** — orkestrator diže bogate typed greške 1000-1008 (samo per-red razlog fali) | P3 | Per-kandidat reason ako se uvodi typed rezultat | M |
+| 12 | Regex u hot path-u | P2 | **Tačno** (`:396-402` i sl.) — perf, ne rizik | P3 | Keširati module-level `RegExp` (deljeno ×5) | S |
+
+**Bilans FM-0128:** Strukturni opis tačan i koristan; FM ozbiljno precenjuje rizik jer ignoriše 4-nivo integritet — nema tihe korupcije, drift = prekid uvoza. Stvarni rezidual koji gate ne vidi: 0/0-sa-računom (#2, novčano nulti). ProCredit je zapravo slabiji od Alta/Halk po jednoj tački (#5 — bez sekcijskog bound-a), što FM ispravno hvata. Realni prioriteti: **P2** #2/#4/#5/#8/#9; ostalo P3. #4/#7/#12 su deljeni → RF-16.
+
+---
+
+### FM-0129 — `modBankaAlta.bas`
+
+| # | Nalaz (FM) | FM tež. | Opravdanost | Hitnost | Predlog (min-delta) | Napor |
+|---|---|---|---|---|---|---|
+| — | Pozitivni (sekcijski bound PROMENE..Ukupno, fee anchor semantički, zasebni uplata/isplata regex) | — | **Kontekst-Pozitivno** (`:198-215,407-448`) | — | — | — |
+| 1 | Account-only 0/0 prolazi | P1 | **Tačno** (`:273-281`) — identično PC #2; gate slep | P2 | Zahtevati `zad>0 Xor odo>0` (isti fix kao PC) | S |
+| 2 | Moguća oba smera pozitivna | P1 | **Delimično** — Lvl2/3/4 hvataju | P3 | Opc. lokalni guard | S |
+| 3 | Svaki kratki broj = R.B. | P1 | **Delimično** (`:485-490`) — bound na PROMENE (bolje od PC); unutar sekcije rizik blok-splita, ali kvar iznosa → gate | P2 | Potvrditi kontekst (sledeće lin. partner/račun) / rastuću sekvencu | M |
+| 4 | Datum shape-only | P1 | **Tačno** (`:492-495`) — deljeno | P2 | RF-16 kalendarska validacija | S |
+| 5 | Txn bez datuma knjiženja prolazi | P1 | **Tačno** (`:336-344,273-281`) — `IsRealTxnAlta` ne gleda datum | P2 | Dodati validan datum u `IsRealTxnAlta` | S |
+| 6 | Šifra-linija nije obavezna | P1 | **Delimično** (`:368-377`) — ako je uplata, propušten odobrenje → Lvl2/4 puca | P2 | Missing šifra-linija = strukturirani warning | S |
+| 7 | Fee anchor izostanak ne obara red | P1 | **Delimično** (`:346-363`) — menja skenove; promašaj iznosa → gate | P3 | Razlikovati layout-varijantu od kvara | M |
+| 8 | Uzima prvi račun u bloku | P1 | **Tačno** (`:297-303`) — metapodatak, nizak uticaj | P3 | Kontekstualna pozicija + normalizacija (deljeno) | M |
+| 9 | Poziv pogrešno izvučen iz svrhe | P1 | **Delimično** (`:570-591`) — auto-map je predlog koji operater potvrđuje | P2 | Sačuvati raw svrhu/blok | M |
+| 10 | Referenca = poslednji 15-cifreni token | P1 | **Tačno** (`:551-560`) — ulazi u dedup | P2 | Field-level potvrda; raw tail | M |
+| 11 | Saldo tačno 6 tokena | P2 | **Tačno** (`:453-483`) — fail-closed | P3 | Reason-code | S |
+| 12 | `Empty` ne razlikuje scenarije | P2 | **Delimično** — orch. typed greške | P3 | — | M |
+| 13 | PROMENE/Ukupno fallback fail-OPEN | P2 | **Tačno** (`:200-215`) — `txStart=LBound`/`txEnd=UBound` ako anchor fali | P2 | Missing anchor → parse failure (fail-closed), ne ceo dokument | S |
+
+**Bilans FM-0129:** Alta strukturno najotporniji (sekcijski bound + fee anchor) — FM to priznaje. Isti gate mitigira oba-smera/promašaj/procurivanje. Realni rezidual: 0/0-sa-računom (#1), prazan datum knjiženja (#5), fail-open sekcijski anchor (#13, jedina stvarna P2 lokalna zaštita). RF-16 deli #4/#8/#11.
+
+---
+
+### FM-0130 — `modBankaHalk.bas`
+
+| # | Nalaz (FM) | FM tež. | Opravdanost | Hitnost | Predlog (min-delta) | Napor |
+|---|---|---|---|---|---|---|
+| — | Pozitivni (NEIZVRŠENI isključenje, `N.` specifičan, `Poreklo naloga` start, context-bound saldo) | — | **Kontekst-Pozitivno** (`:191-224,161-178`) — saldo bolji od PC/Alta (3 anchora, ne globalni) | — | — | — |
+| 1 | Svaki R.B. bezuslovno ulazi (nema `IsRealTxnHalk`) | **P0/P1** | **Tačno** (`:231-249`) — Halk JEDINI bez `IsRealTxn`; ali phantom je novčano nulti (gate 0/0-slep) → **P0 precenjeno** | **P1** | Dodati `IsRealTxnHalk` pre copy (poravnati s PC/Alta) | S |
+| 2 | Sekcijski anchori fail-OPEN | P1 | **Tačno** (`:193-213`) — `executedEnd=UBound`/`executedStart=LBound` | P2 | Obavezni `Poreklo naloga` + `Ukupno` | S |
+| 3 | Izvršeni/neizvršeni se mešaju ako `Ukupno` izostane | P1 | **Delimično** (`:195-201`) — procureli nalozi razbijaju Lvl2/3/4 → import blokiran (fail-closed) | P2 | Tvrdi stop i na `NEIZVRSENI NALOZI` | S |
+| 4 | Zaduženje fiksni `afterDates+1` | P1 | **Tačno** (`:314-317`) — krući od Alte; promašaj → gate | P2 | Prozor do anchora kao Alta | M |
+| 5 | Txn bez datuma prolazi | P1 | **Tačno** (`:305-312`) — + nema `IsRealTxn`; obično 0/0 red | P2 | Datum obavezan u `IsRealTxnHalk` | S |
+| 6 | Datum shape-only | P1 | **Tačno** (`:370-373`) — deljeno | P2 | RF-16 | S |
+| 7 | Nema invariant smera | P1 | **Delimično** — gate | P3 | — | S |
+| 8 | `ParseOdoSifHalk` prima bilo koju `<iznos> <3cifre>` | P1 | **Delimično** (`:383-396`) — prvi match posle datuma; pogrešan iznos → gate | P2 | Vezati za fee/poziciju | M |
+| 9 | Račun nije obavezan, bez checksum | P1 | **Tačno** (`:266-287,419-425`) — metapodatak | P3 | Deljena normalizacija | M |
+| 10 | Referenca prekida svrhu na 1. 13-cifrenom | P1 | **Tačno** (`:334-349`) — gubi trailing svrhu + moguća pogrešna ref (dedup) | P2 | Sačuvati raw tail; kontekstualna ref | M |
+| 11 | Saldo fail-closed bez razloga | P2 | **Tačno** (`:438-466`) — ali context-bound (bolji) | P3 | Reason-code | S |
+| 12 | Matrica bez confidence/source-range | P2 | **Delimično** — orch. typed greške | P3 | — | M |
+
+**Bilans FM-0130:** Halk ima najslabiji završni contract — JEDINI bez `IsRealTxn`, fiksni `afterDates+1`, fail-open sekcija; FM to tačno hvata. Ali **P0 je precenjeno**: gate + obavezni saldo + single-writer = fail-closed za sve novčano; rezidual = novčano-nulti phantom red. Realni: **P1** dodati `IsRealTxnHalk` (jeftino, poravnava sa siblinzima) + tvrdi NEIZVRŠENI/sekcijski stop; P2 prozor za zaduženje (#4) i raw tail (#10).
+
+---
+
+### FM-0131 — `modBankaImportParserClipboard.bas` (MRTAV — RF-01, 0 callera potvrđeno)
+
+| # | Nalaz (FM) | FM tež. | Opravdanost | Hitnost | Napomena |
+|---|---|---|---|---|---|
+| 1 | Svaki blok bezuslovno ulazi | P1 | **Tačno** (`:88-105`) | Prihvaćeno (RF-01) | Bespredmetno; ISTI obrazac živi u PdfText (FM-0132 #8) |
+| 2 | `IsTxnStart` preširok `^\d{1,3}(\s+.*)?$` | P1 | **Tačno** (`:108-124`) | Prihvaćeno | Bespredmetno; PdfText `IsPdfTextTxnStart` je uža varijanta istog |
+| 3 | Bez start-anchora + **duplirani OR** uslov | P1 | **Tačno** (`:62-63` — identičan `InStr…"Ukupno za ra"&ChrW(269)&"un"` ×2) | Prihvaćeno | **Zajednički uvid:** isti copy-paste dupli-OR ŽIVI u PdfText (`:364-365,484-485,503-504,676-677`) |
+| 4 | Oba iznosa = 2 fizičke linije | P1 | **Tačno** (`:200-220`) | Prihvaćeno | = PdfText fiksne pozicije |
+| 5 | Oba smera 0 / oba poz | P1 | **Tačno** | Prihvaćeno | = shared |
+| 6 | Datum shape-only | P1 | **Tačno** (`:255-260`) | Prihvaćeno | = shared RF-16 |
+| 7 | Partner heuristika | P1 | **Tačno** (`:163-192`) | Prihvaćeno | Bespredmetno |
+| 8 | Ref/poziv menjaju svrhu, bez raw | P1 | **Tačno** (`:320-345`) | Prihvaćeno | = shared |
+| 9 | `IsReference` ≥12 numeric | P1 | **Tačno** (`:425-432`) | Prihvaćeno | = PdfText `IsReferencePdf` identičan (`:711-714`) |
+| 10 | `izvodBroj` parsira se, ne vraća | P2 | **Tačno** (`:28-37,93`) | Prihvaćeno | Zastareo contract |
+| 11 | Nema error contract | P2 | **Delimično** | Prihvaćeno | Orch. bi ionako pokrivao |
+| 12 | `TestParser` javni | P2 | **Tačno** (`:524`) | Prihvaćeno | Ceo modul se briše |
+
+**Bilans FM-0131:** Svi nalazi tačni ali **bespredmetni posle RF-01** (mrtav, 0 callera — grep potvrdio). Jedina prenosiva vrednost: potvrđuje da „unconditional copy + preširok `IsTxnStart` + shape-only date + `IsReference≥12` + **dupli-OR `Ukupno` uslov**" NISU clipboard-specifični — identično žive u `modBankaImportParserPdfToText` (aktivan, Komercijalna). **Hardening usmeriti na PdfText, ne na clipboard.** Preporuka brisanja se slaže s RF-01; pre brisanja sačuvati fixture uzorke.
+
+---
+
+### FM-0132 — `modBankaImportParserPdfToText.bas` (AKTIVAN — Komercijalna `Case Else`)
+
+Dve odgovornosti: **extraction transport** (cross-bank; `ExtractTextFromPdf`/`PickPdf`/`WriteAllTextUtf8`/`BankIzvodSaldo` — koriste ih SVI parseri) + **Komercijalna parser**. Extraction nalazi NISU integritet-zaštićeni (pre-parse shell/temp).
+
+| # | Nalaz (FM) | FM tež. | Opravdanost | Hitnost | Predlog (min-delta) | Napor |
+|---|---|---|---|---|---|---|
+| — | Pozitivni extraction (path-check, wait+exitcode, non-zero≠prazan, stale-temp brisan, output-must-exist, UTF-8 stream, re-raise) | — | **Kontekst-Pozitivno** (`:42-100`) | — | — | — |
+| 1 | Plain exe ime preko PATH-a | P1 | **Dizajnersko ograničenje** (`:131-140`) — kod to NAMERNO dozvoljava (PATH deploy); DEFAULT je apsolutna workbook-rel. putanja; single-writer | P3 | Setup health-check da preferira apsolutnu + test-command | S |
+| 2 | Postojanje ≠ integritet (hash/sig/verzija) | P1 | **Dizajnersko ograničenje** (`:133-140`) — van threat-modela (operater sam instalira Poppler) | Prihvaćeno | Opc. verzija/test-command u `CheckPdfToTextExists` | M |
+| 3 | Exit=0 + fajl može biti prazan/no-text-layer | P1 | **Delimično** (`:76`) — ishod fail-closed: prazan→parser Empty→orch. 1000; `Diag_DumpFullPdfText` već upozorava (`:1212`) | P2 | `If Len(Trim$(txt))=0 → Err.Raise` jasna „no text layer/OCR" | S |
+| 4 | Temp sa bank-podacima može ostati (`On Error Resume Next`) | P1 | **Tačno** (`:211-219`) — podatkovna higijena; default lokalni TEMP | P2 | Best-effort log-warning na cleanup fail (ne obarati uvoz) | S |
+| 5 | `APP_TEMP_PATH` može biti shared/network | P1 | **Delimično** (`:226-246`) — default `Environ$("TEMP")` lokalni; samo misconfig | P3 | Health-check/dok. da bude user-local | S |
+| 6 | Temp folder `MkDir` samo 1 nivo | P1 | **Tačno** (`:241-243`) — operativno, ne security (FM se slaže) | P3 | Recursive create / setup pre-kreira | S |
+| 7 | Cmd/putanje u error opisu | P1 | **Tačno** (`:64-69`+`LogErr`) — nisko lokalno; rizik samo remote monitoring | P3 | Redigovati u remote monitoringu | S |
+| 8 | Bezuslovno kopira svaki blok (nema `IsRealTxn`) | P1 | **Tačno** (`:304-322`) — = Halk klasa; 0/0 phantom slip | P2 | `IsRealTxn` pre copy (deljeno) | S |
+| 9 | `IsPdfTextTxnStart` svaki numerički ≤3 | P1 | **Delimično** (`:389-395`) — stop-anchori + gate | P2 | Kontekst/sekcija | M |
+| 10 | Fiksne pozicije `secondDate+1/+2/+3` | P1 | **Tačno** (`:457-459`) — = PC klasa; drift→gate | P2 | Skenirati prozor umesto fiksnih | M |
+| 11 | Nedostajući datumi → pogrešni indeksi (0-based) | P1 | **Tačno** (`:416-459`) — bez datuma `idxZad=1/idxNak=2/idxOdoSif=3` čitaju prve linije; obično 0/0 phantom | P2 | Missing date → blok nevalidan | S |
+| 12 | Datum izvoda bez validacije | P1 | **Tačno** (`:325-342`) — jedan po izvodu, string; nizak uticaj | P3 | Kalendarska provera (RF-16) | S |
+| 13 | Unique temp `Randomize/Rnd` + otkriva PDF base-name | P2 | **Tačno** (`:158-166`) — kozmetički/minor | P3 | GUID bez base-name | S |
+| 14 | Modul prevelik, meša transport+parser (>1200 lin.) | P2 | **Tačno** (1263 lin.) — ali transport je VEĆ deljena infra (ripple pri splitu); + mrtvi helperi (`Find*`, `IsPdfAmountSifraLine`, `ParsePdfAmountSifraLine`, `NormalizePdfTextTxnStart` — neupotrebljeni) | P3 | Split transport uz RF-16 kad se modul sledeći put dira; obrisati mrtve helpere | L |
+
+**Bilans FM-0132:** Extraction sloj je stvarno solidan (FM tačno hvali) — glavni „security" nalazi (#1/#2) su na single-writer desktopu **dizajnerska ograničenja**, ne aktivne pretnje; #3/#4 su realni ali fail-closed/higijenski (P2, jeftino). Parser sloj deli tačno iste rupe kao clipboard/PC/Halk (#8/#10/#11) — gate ih pokriva za novac, rezidual = 0/0 phantom. **Bonus (van FM):** živi copy-paste dupli-OR uslovi (`:364-365,484-485,503-504,676-677`) i grupa mrtvih helpera — čiste uz #14.
+
+---
+
+## Zajednička konsolidacija (poveži — „isti nalaz u više banaka")
+
+- **Shape-only datum** (`IsDateLine*` × PC/Alta/Halk/Pdf/Clip = 5) → jedan kalendarski validator u **`modBankaParseUtils` (RF-16)**.
+- **`RegExp` u hot-path-u** (`IsAmount*`/`IsAccountLine*`/`ParseSifra*` ×5) → module-level keš → RF-16.
+- **Račun bez checksum/normalizacije** (`^\d{3}-\d{5,20}-\d{2}$` ×5) → deljena normalizacija.
+- **Saldo „tačno 6 tokena, samo Boolean"** (PC/Alta/Halk = 3) — **NAPOMENA:** Komercijalna/`TryParseSaldoDataLine` (`:996-1089`) je robusniji (4-6 tokena, collapsed-zero logika), pa se P2 saldo-nalaz NE odnosi na PdfText.
+- **`IsRealTxn` nedostaje/preslab:** Halk (nema uopšte), PdfText/Clipboard (nema), PC/Alta (imaju ali 0/0-sa-računom prolazi) → jedan deljeni „pravi red" validator (`zad>0 Xor odo>0` + validan datum) je najveći ROI, poravnava sva 4 živa parsera.
+- **Dupli-OR `Ukupno` copy-paste bug:** živ u PdfText (4 mesta) + clipboard — kozmetički, čisti se uz RF-16.
+
+**Ključna korekcija FM-a:** FM kroz svih 5 unosa piše kao da parsed redovi teku pravo u staging bez validacije. Netačno — 4-nivo fail-closed integritet (`modBankaImport.bas:485-546`) obara svaki novčano-relevantan kvar na nivou izvoda. Zato nijedan nalaz nije stvarni P0, a većina P1 je P2/P3. Jedini dokazani rezidual koji gate ne vidi je **0/0 red** (novčano nulti) — otud je najracionalniji jedini P1 posao dodati/pooštriti deljeni `IsRealTxn`.
+
+---
+
+## v142 blok K8 — modPoruke, modTheme, modStornoWarm (FM-0133/0134/0137) [sidro origin/main v2.24.0]
+
+Verifikacija kompletna. Sav relevantni kod i unakrsne reference su pregledani. Sledi audit.
+
+---
+
+## Ključne unakrsne provere (osnov za ocene)
+
+- **modPoruke**: `tblPoruke` je app-vlasništvo, kreiran sa **imenovanim** kolonama (`EnsureDataTable ... Array(COL_POR_KLJUC, COL_POR_TEKST)`, `modSetup.bas:1108`) i **very-hidden** (`ws.Visible = xlSheetVeryHidden`, `modSetup.bas:1116`) → operater ga ne edituje ručno. `LogErr → LogError` piše u dnevni fajl i **ne poziva `Poruka`** (`modLogError.bas:97-105,32`) → logovanje iz `Poruka.EH` je bez rekurzije (FM-ova bojazan neosnovana).
+- **modStornoWarm**: jedini potrošač `GetWarmStornoDocs` je `frmDokumenta.PopulateFindResults` (`frm:5111`) koji kolekciju **samo čita** (gradi zaseban `hits`, `5121-5131`), resetuje `m_fnAllDocs=Nothing` pri otvaranju (`4998`), a elementi su **Variant nizovi** (value-copy). Invalidaciju zove **samo** `clsTransaction.CommitTx` (`cls:79`). `ThisWorkbook.Workbook_BeforeClose` → `modMain.ShutdownApp` (`doccls:78`) → `StopStornoWarm` (`modMain.bas:239`). Nekvalifikovani OnTime string je **konvencija celog projekta** (`modStanicaLock:238/248`, `modJournaling:532/540`, `modLicense:636`).
+
+---
+
+### FM-0133 — `modPoruke.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Missing tabela/BuildCache fail = placeholder `[KEY]`; ne razlikuje missing-key od store-unavailable | P1 | **Tačno** — `BuildCache` `Exit Sub` na nenađenu tabelu (`:34`), pa i `Exists`-grana (`:9`) i `EH` (`:17`) vraćaju `[KLJUC]` | P2 | Modul-flag `m_storeAvailable=False` u `BuildCache`; u `Poruka` logovati unavailable jednom/sesiji | S |
+| 2 | Lookup case-sensitive (`CompareMode=0`) | P1 | **Tačno** ali ključevi su compile-time literali (`Poruka("...")` ↔ `UpsertRow "..."`), nema korisničkog case-a → typo se hvata u testu | P3 | `CompareMode=1` (vbTextCompare) u `BuildCache` i `existing` — usput hvata case-duplikate | S |
+| 3 | Duplicate ključevi tiho prepisani (poslednji red pobeđuje) | P1 | **Tačno** (`mCache(k)=` `:40`; `existing(k)=` `:52`) ali dup nastaje samo ručnim kvarenjem skrivene tabele | P3 | Uz vbTextCompare dodati dev-scan u `EnsurePoruke` (log ako se ključ javi >1×) | S |
+| 4 | `UpsertPoruke` prepisuje administratorske izmene | P1 | **Dizajnersko ograničenje** — katalog-u-kodu je izvor istine (CLAUDE.md), `UpsertRow :287-290` namerno vraća canonical; tabela je very-hidden, nije override-sloj | Prihvaćeno | Dokumentovati „generated registry, edit kroz `UpsertPoruke`" (1 komentar) | S |
+| 5 | Schema positional (`Range(1)/Range(2)`), ne named | P1 | **Tačno** po doktrini (`:39-40,51-52,288-296` čita pozicijski iako imenovane kolone postoje) — realni drift nizak (app drži fiksne 2 kol) | P3 | `GetColumnIndex(lo, COL_POR_KLJUC/TEKST)` jednom u `BuildCache`/`UpsertRow` | S/M |
+| 6 | `Poruka` guta grešku bez loga | P1 | **Tačno** za `EH` (`:16-17` nema loga; missing-key ima samo `Debug.Print :12`). FM-ova rekurzija-bojazan **neosnovana** → `LogErr` bezbedan | P2 | `LogErr "modPoruke.Poruka", kljuc` u `EH` (once-per-session guard) | S |
+| 7 | Cache bez auto-detekcije izmene tabele | P1 | **Dizajnersko ograničenje** — invalidacija samo eksplicitna (`:282`); tabela very-hidden, single-writer desktop | Prihvaćeno | Bez izmene; budući editor poruka MORA zvati `InvalidateCache` (dokument.) | S |
+| 8 | Modul nije višejezičan | P2 | **Kontekst-Pozitivno** — i18n nije zahtev; naziv „modPoruke" ne obećava lokalizaciju | Prihvaćeno | 1 red doc: „single-locale registry, ne i18n" | S |
+| 9 | Nema placeholder/format contract-a (fragment-konkatenacija) | P2 | **Tačno** kao observacija; radi ispravno, token-format je veći refaktor bez bug-a danas | P3 | `{0}`-tokeni samo oportuno kad se poruka ionako dira; bez bulk-a | S (inkr.)/L |
+| 10 | Ključevi `_2/_3/_4/_5` nesemantični | P2 | **Tačno** (`:87,89,92,94` `DOK_MSG_GRESKA_PRI_CUVANJU_2..5`) — održivost smell | P3 | Preimenovati oportuno + sinhrono ažurirati `Poruka()` pozive | M |
+| 11 | Veliki generated registry u jednom modulu | P2 | **Kontekst-Pozitivno** — FM sam priznaje ok; poklapa se s CLAUDE.md (katalog živi u `UpsertPoruke`) | Prihvaćeno | CSV/JSON generator tek ako build-tooling to podrži | L |
+
+**Bilans FM-0133:** Svi nalazi su činjenično tačni protiv koda, ali su **precenjeni** (svih 7 tagovano P1). U kontekstu — app-vlasnička very-hidden 2-kol tabela, ključevi kao compile-time literali, single-writer, „katalog-kao-kod" po doktrini — realna hitnost je P2/P3. „Glavni zaključak" (5 tačaka) je sažetak redova 1-6. Dve jeftine i stvarno vredne popravke: **#6** (log store-failure u `EH`, dokazano bez rekurzije) i **#1** (razlikuj unavailable). #4/#7/#8/#11 su rad-po-dizajnu (Prihvaćeno). Ostalo P3 oportuno.
+
+---
+
+### FM-0134 — `modTheme.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | `DisableField` briše korisničku vrednost | P1 | **Delimično / Kontekst-Pozitivno** — `txt.value=""` (`:406`) tačno, ali SVI pozivi su mode-switch gde stale vrednost NE SME ostati (`frmOtkup:101,310,493`, `frmDokumenta:240-437`, `frmAgrohemija:1113`, `frmBankaExportPregled:730`); nijedan ne koristi kao value-preserving lock → nema živog data-loss-a | P3 | Ne dirati postojeći; dodati `DisableFieldKeepValue` tek kad zatreba preserve-lock | S |
+| 2 | `DisableCombo` briše izbor/stabilni ID | P1 | **Delimično / Kontekst-Pozitivno** — `cmb.value=""` (`:420`); pozivi `cmbParcela` (`frmOtkup:488`), `cmbOtkupBlok` (`frmDokumenta:354`) čiste namerno pri mode-switch; nijedan hidden-ID reuse | P3 | Isto — bez izmene ponašanja | S |
+| 3 | `ApplyTheme` potpuno guta greške | P1 | **Delimično** — `On Error Resume Next` (`:56-67`) skpouiran na telo; fail-soft tema je razumna (FM priznaje), sloj je čisto kozmetički, nikad ne kvari podatke | P3 | Dev-only log iza debug-flag; nije nužno u prod | S/M |
+| 4 | `StyleControls` guta grešku po kontroli | P1 | **Delimično** — per-ctrl `OER` (`:82-122`); izolacija je zapravo razuman dizajn (jedna loša kontrola ne ruši temu), fali samo dev-log | P3 | Dev-log `FormName/ControlName/TypeName` u debug buildu | S/M |
+| 5 | Klasifikacija dugmadi po imenu/caption heuristici | P1 | **Tačno** — „prikaži"→primary pa „Prikaži stornirane" postaje primary; „Storno"/„Deaktiviraj" van danger-seta→secondary (`:253-273`). Ali utiče SAMO na boju, ne ponašanje; mnoga dugmad ionako idu eksplicitnim `SetButton*` | P3 | Gde boja bitna, zvati eksplicitni `SetButton*` (već postoji) ili Tag-role | S/M |
+| 6 | Danger/storno stil nedosledan | P1 | **Tačno** — `StyleStornoButton` krem+tamni (`:322-335`) vs `SetButtonDanger` crveni (`:359-363`); ista akcija dve boje | P3 | Uskladiti na jedan standard; ALI v2.24 „Vrati storno" undo → krem (soft/recoverable) može biti namerno — proveriti intent pre recolora | S |
+| 7 | `IsDirectChild` fail-open heuristika | P2 | **Delimično** — fallback `True` (`:469,475,481`); najgore dupli styling (idempotentan, iste boje) — bezopasno | P3 | Nije nužno; dupli styling je idempotentan | S |
+| 8 | Font fallback nije eksplicitan | P2 | **Dizajnersko ograničenje** — `SetFont` pod `OER` (`:457-461`); Windows-only desktop, Segoe UI dolazi s Windows-om | Prihvaćeno | Doc Windows-contract ili health-check probe fonta | S |
+| 9 | Mnogi javni helperi koriste `Object` | P2 | **Delimično** — `SetButton* As Object` (`:347-365`) namerno radi i na runtime-dodatim kontrolama (`Controls.Add` obrazac); konkretan tip bi to slomio | P3 | Zadržati `Object` gde idu runtime kontrole | S |
+| 10 | Modul meša styling i layout | P2 | **Tačno** ali minor (`LayoutTopKpiInternals :706`); FM priznaje da nije hitno | P3 | Ostaviti do sledeće funkc. izmene modula | M |
+| 11 | Unknown `kind` tiho pada na default | P2 | **Delimično** — `Case Else` (`:608,636,702`); `kind` su literali iz koda, ne korisnički unos; typo→neutralni stil (kozmetika) | P3 | Opc. `Debug.Assert` u dev-u | S |
+| 12 | Theme prepisuje namerno lokalno stilizovanje | P2 | **Delimično** — rekurzivni restyle; realno samo ako forma re-zove `ApplyTheme` posle lokalnog; standard je tema-pa-override (forme to rade); nema opt-out Tag-a | P3 | Doc „ApplyTheme prvo, pa semantic override"; opt-out Tag tek uz konkretan konflikt | S/M |
+
+**Bilans FM-0134:** Svi nalazi kod-tačni, ali SVAKI je u **kozmetičkom theme sloju** — nijedan ne dira podatke ni poslovnu logiku. Dva „P1 data-loss" (DisableField/DisableCombo) su realni API-smell ali **ne manifestuju bug** jer svi pozivi žele clear-on-mode-switch. Error-swallowing P1-ovi su prihvatljiv fail-soft za temu (jedini jaz = dev-log). Heuristika/nedoslednost P1-ovi su isključivo vizuelni. Neto: **ništa nije stvarno P1**, realna hitnost P3. Najjeftiniji dobitak: uskladiti storno/danger standard (#6, uz proveru namere) i opc. `DisableFieldKeepValue` za budućnost.
+
+---
+
+### FM-0137 — `modStornoWarm.bas`
+
+| # | Nalaz (FM) | FM težina | Opravdanost | Hitnost | Predlog | Napor |
+|---|---|---|---|---|---|---|
+| 1 | Caller dobija direktnu internu cache referencu | P1 | **Delimično / Kontekst-Pozitivno** — `Set ...= g_stornoDocs` (`:81,85`) tačno, ali jedini potrošač (`frmDokumenta:5111`) je **read-only** (zaseban `hits`, `5121-5131`), resetuje ref (`4998`), a elementi su **Variant nizovi** (value-copy) → nema puta ka koruptciji | P3 | Komentar „read-only" na `GetWarmStornoDocs`; plitka kopija jeftina ako se želi, nije nužna | S |
+| 2 | `ScheduleStornoWarm` lažan scheduled state | P1 | **Tačno** — `OnTime` pa **bezuslovno** `m_warmScheduled=True` pod `OER` (`:51-54`); fail→veruje da je zakazano | P2 | `If Err.Number=0 Then m_warmScheduled=True` (flag tek po uspehu) | S |
+| 3 | `CancelStornoWarm` lažan cancelled state | P1 | **Tačno** — bezuslovno `m_warmScheduled=False` (`:118-124`); ublaženo: `StornoWarmTick` re-gard (`:67-69`) čini pozni fire bezopasnim, cancel koristi tačan `m_nextWarmTime`+`WARM_PROC` | P2 | `If Err.Number<>0 Then LogErr` + poštene flag-semantike | S |
+| 4 | Procedure string nije workbook-qualified | P1 | **Dizajnersko ograničenje** — `WARM_PROC` nekvalifikovan (`:28,53,121`), ali to je **konvencija celog projekta** (StanicaLock/Journaling/License); single-workbook desktop → ambiguity ne-scenario | Prihvaćeno/P3 | Ništa samo za ovaj modul; ako se hardeniše, onda SVI OnTime zajedno | S/M |
+| 5 | Freshness zavisi od savršene invalidacije svih write puteva | P1 | **Delimično** — invalidacija samo iz `CommitTx` (jedini caller, `cls:79`); ali to je standardni write-wrapper, a kes hrani samo storno-picker listu (perf, ne integritet); worst-case stale red do sledeće TX | P2 | Auditovati da storno/recovery/import writes idu kroz `CommitTx`; gde ne — dodati `InvalidateStornoWarm` | M |
+| 6 | Sinhroni `GetWarmStornoDocs` bez re-entry guarda | P1 | **Delimično** — `m_warming` se čita samo u `StornoWarmTick` (`:68`); `BuildWarm` ga POSTAVLJA (`:102`) ali ne PROVERAVA; re-entry samo kroz `DoEvents` (malo verovatno) | P3 | `If m_warming Then Exit Sub` na vrhu `BuildWarm` (owner guarda) | S |
+| 7 | Ultimativni fallback vraća `Nothing` bez statusa | P1 | **Delimično/Tačno** — fallback pod `OER` (`:90-91`); prvi fail logovan (`:88`), drugi ne; caller (`frmDokumenta:5121`) tretira `Nothing` kao „Nema dokumenata" → empty≠failure na UI-ju (ali traži dvostruki fail, retko) | P3 | `LogErr` i u fallback grani (ili sentinel) | S |
+| 8 | Nema metadata o cache-u | P2 | **Tačno** — dijagnostički jaz, nije defekt | P3 | Opc. `BuiltAt`/`Count` debug-accessor | S |
+| 9 | 60 s hardcoded | P2 | **Dizajnersko ograničenje** — FM sam kaže ok, bez potrebe za config | Prihvaćeno | Izložiti samo u debug-statusu | S |
+| 10 | Shutdown contract zavisi od spoljnog caller-a | P2 | **Netačno za konkretnu preporuku** — `Workbook_BeforeClose` (`doccls:78`) VEĆ zove `ShutdownApp`→`StopStornoWarm` (`:239`), `mIsShuttingDown` sprečava dupli. Rezidual (fatal-startup/self-update/kill) je uži realni edge | Prihvaćeno (std. put pokriven) | Ništa za BeforeClose; opc. osigurati da self-update putanja zove `StopStornoWarm` | S |
+| 11 | `InvalidateStornoWarm` guta scheduling failure | P2 | **Delimično** — `OER` bez loga (`:43`), ali dirty=True garantuje ispravnost (sledeći `GetWarmStornoDocs` gradi sinhrono); swallow je namerno iz commit-putanje | P3 | Opc. debug-log schedule-fail; swallow ostaje | S |
+
+**Bilans FM-0137:** Modul je zdrav; nalazi su lifecycle/ownership hardening, ne bugovi. Dve stvarno vredne jeftine popravke: **#2** (flag tek po uspehu) i **#6** (guard u `BuildWarm`) — obe S. #3/#7 jeftin log. **#1** je nemanifestovan princip (sole caller read-only + value-type elementi). **#4** je dosledna projektna konvencija (nije modul-specifičan defekt). **#10 je faktički netačan** — `BeforeClose→ShutdownApp→StopStornoWarm` već postoji, „dodaj u BeforeClose" je redundantno. **#5** je legitiman arhitektonski audit-item (P2). Ukupna hitnost P2/P3, nijedan stvarni P1.
+
+---
+
+## Zbirni zaključak audita
+
+Sva tri modula: FM činjenice o kodu su uglavnom **tačne**, ali je **težina sistematski precenjena** (skoro sve P1). Nula nalaza dodiruje integritet podataka — `modPoruke` je centralizacija UI teksta, `modTheme` čist kozmetički sloj, `modStornoWarm` perf-kes browse liste sa sinhronim fallback-om.
+
+**Stvarno vredne minimal-delta popravke (S, niska regresija):**
+1. `modPoruke.Poruka.EH` → `LogErr` (FM-0133 #6; dokazano bez rekurzije).
+2. `modStornoWarm.ScheduleStornoWarm` → `m_warmScheduled` tek po uspehu (FM-0137 #2).
+3. `modStornoWarm.BuildWarm` → `If m_warming Then Exit Sub` na vrhu (FM-0137 #6).
+
+**Rad-po-dizajnu / Prihvaćeno (ne dirati):** FM-0133 #4/#7/#8/#11, FM-0134 svi (kozmetika), FM-0137 #4/#9.
+
+**Faktički netačan nalaz:** FM-0137 #10 (BeforeClose već pokriva StopStornoWarm kroz ShutdownApp).
+
+**Napomena za FM-0134 #6 (storno boja):** pre bilo kakvog recolora proveriti da li je krem „soft" storno namerno — v2.24 uvodi „Vrati storno" undo, pa je storno tretiran kao oporavljiv, a ne terminalno-destruktivan.
+
+---
+
+## Ukupni zaključak DEO III (v142 delta, 38 fajlova / 8 blokova verifikovano protiv `origin/main` v2.24.0)
+
+- **Tačnost dokumenta ostaje vrlo visoka:** dominantno **Tačno**, nula sistemskih opovrgnutih nalaza; korekcije su gotovo isključivo kalibracija težine (single-writer model, read-only dijagnostika, kozmetički slojevi, test-moduli van aktivnog E2E gate-a, 4-nivo banka integritet).
+- **Novi čist P0 (aktivan gubitak): 0.** Najozbiljniji potvrđeni lanac (FM-0093 E2E false-green) je **latentan** jer gate nije pozvan u release proceduri → AUD-039, P1.
+- **Novi P1 (verifikovani, minimal-delta):** (1) `frmAgrohemija` izlaz cena ≠ knjižena — `SaveMagacin` bez `overrideCena` (najvredniji nalaz delte, fix S); (2) `modAgrohemija` cena 0 tiho (fix S); (3) `modBrojevi.GenerateBrojPrijemnice` EH → `1/ddmmyy` duplikat (fix S); (4) `modMasterSync.GenerateBrojZbirne` row-count duplikat (fix M); (5) `modMasterSync.TryUpdateVozacID` True-na-neuspeh (fix S); (6) nevalidan datum → današnji (OTK+VOZ, fix S); (7) auto-otpremnica group-key meša vrste/cene (fix M); (8) VOZ link membership + prepis veza bez konflikt-politike (fix M); (9) poison spreadsheet na header-write fail (fix M); (10) `modIntegritet.WriteErr` false-count / `Empty`=PASS (fix M); (11) `modSledljivost`/`frmSledljivost` nepotpun trag prikazan kao kompletan (fix S–M); (12) stanica-mirror missing-shadow → orphan FK (fix M).
+- **Novi P2:** `modProductionHealthCheck` SEF lista drift (`SEF_CANCELLED` nepostojeći) + parent-OK-posle-child-FAIL; shipped destruktivni test runneri bez env guard-a (AUD-039 familija); `modStornoWarm` lažni scheduled/cancelled flag; `modParse` single-separator (= AUD-007).
+- **Već registrovano (referencirano, ne eskalirano):** AUD-002 (108.7), AUD-003 (pozicioni write), AUD-007 (121.3), AUD-016 (test dubleti), AUD-017/034 (startup), AUD-018 (108.40), AUD-037 (100.5 publish-guard), AUD-039 (E2E false-green — cela test-suite grupa).
+- **Sistematski precenjeno:** `modMouseWheel`, `modTheme`, `frmMarza`, UI permission-bypass adapteri, banka-parseri (svi FM „P0/P1" → realno P2/P3).

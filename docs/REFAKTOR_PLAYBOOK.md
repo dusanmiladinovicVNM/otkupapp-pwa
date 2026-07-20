@@ -245,6 +245,54 @@ lokalom (ne sme obrisati cloud), paralelni station lock očuvan.
 shipped test suite-ovima (AUD-039). **Regression:** unos otkupa za dva proizvoda uzastopno
 (cena se ne prenosi); E2E gate mora prijaviti FAIL kad suite padne.
 
+---
+
+## 3c. Paketi iz delte v142 (agrohemija, sync-integritet, dijagnostika, sledljivost)
+
+> Detalji: `docs/AUDIT_FM_TRIJAZA.md` DEO III + `KNOWN_ISSUES.md` §8.6 (AUD-040…048).
+> Sidro je `origin/main` v2.24.0 (`9fd7087`) — pre rada re-bazirati na svež `main`.
+
+### RF-27 — Agrohemija cena + validacija [P1 · S/M]
+**Fajlovi:** `frmAgrohemija.frm`, `modAgrohemija.bas`.
+**Obim:** izlaz prosleđuje `m_KorpaIzlaz(i).cena` kao `overrideCena` u `SaveMagacin` (simetrično
+sa ulazom `:843`) → knjižena cena = snapshot korpe (AUD-040); `modAgrohemija` zahteva validnu
+cenu > 0 za realne artikle (osim `ART_POCETNI_DUG`) umesto tihog `Cena=0/Vrednost=0`; referencijalne
+provere u `ValidateMagacinInput` (postoji/aktivan artikal/koop/parcela↔koop). **Regression:** izlaz
+artikla čija master cena ≠ cena u korpi → `tblMagacin` red mora nositi cenu iz korpe; izlaz sa
+nenumeričkom cenom mora pasti, ne upisati 0.
+
+### RF-28 — MasterSync integritet delte [P1 · M] (koordinisati sa RF-14)
+**Fajlovi:** `modMasterSync.bas`, `modBrojevi.bas`, `modMalina.bas`, `modAutoHladnjaca.bas`.
+**Obim:** `GenerateBrojPrijemnice` EH → `""` (ne `1/ddmmyy`) (AUD-041); `GenerateBrojZbirne`
+delegira `SuggestNextBroj(KIND_ZBR,…)` umesto row-count (AUD-041); `TryUpdateVozacID` vraća True
+samo ako write uspe (`RequireUpdateCell`) (AUD-042); strict datum parse → `SyncError` (ne današnji)
+na oba puta (AUD-042); poison spreadsheet — temp-ime/rename ili trash na fail header-a (AUD-042);
+auto-otpremnica ključ + `VrstaVoca|SortaVoca|Cena|TipAmbalaze`; VOZ link membership + „prazno ILI
+isto" guard (AUD-043); canonical `IsManagedStationMirror` + re-raise u Ensure EH (AUD-046).
+**Napomena:** deli `modMasterSync` sa RF-14 (JSON/paginacija) — raditi u istoj sesiji ili strogo
+serijski uz re-bazu. **Regression:** sync batch sa 2 ista `BrojZbirne`, nevalidnim datumom, i
+stanicom bez `tblVozaci` para — svaki mora dati `SyncError`, ne tihi upis.
+
+### RF-29 — Integritet/health dijagnostika [P1/P2 · M]
+**Fajlovi:** `modIntegritet.bas`, `modProductionHealthCheck.bas`.
+**Obim:** `WriteErr` uvodi `ErrorCount`; overlay/MsgBox prikazuje INCOMPLETE kad errors>0; typed
+`IntegrityRunResult` (Empty ≠ PASS) (AUD-044); health SEF lista koristi `WF_SEF_*` konstante +
+state matrica (ukloniti nepostojeći `SEF_CANCELLED`); parent OK uslovljen child delta-brojačima
+(`:951`, `:928`) (AUD-047). **Regression:** namerno pokvaren red (schema drift) → integritet mora
+prijaviti GRESKA + broj, ne „0 neusklađenih"; health sa child FAIL ne sme dati parent OK.
+
+### RF-30 — Sledljivost trace + sitni lifecycle [P1/P2 · S/M]
+**Fajlovi:** `modSledljivost.bas`, `frmSledljivost.frm`, `modStornoWarm.bas`.
+**Obim:** `TraceByZbirna` direktan `BrojZbirne` prolaz kroz `tblOtkup` + `UCase$(Trim$())`+
+`vbTextCompare` (isto kao auto-link); typed trace rezultat (`IsComplete`); forma/PDF oznaka
+„NEPOTPUN TRACE" (AUD-045); `modStornoWarm` flag tek po uspehu `OnTime` (`m_warmScheduled`),
+`LogErr` na cancel fail (AUD-048). **Regression:** otkup sa `BrojZbirne` a praznim `OtpremnicaID`
+mora ući u trag; PDF nepotpunog traga mora biti obeležen.
+
+> **Banka (RF-16):** v142 FM-0128..0132 potvrđuju deljene rupe parsera (datum shape-only,
+> račun bez normalizacije, poziv preuzak, 0/0-sa-računom) → hrane `modBankaParseUtils` (RF-16):
+> kalendarska validacija datuma, opc. mod-97 računa, prošireni poziv obrazac, `zad>0 Xor odo>0`.
+
 ## 4. Status
 
 | Paket | Naziv | Status | Grana | Napomena |
@@ -262,8 +310,8 @@ shipped test suite-ovima (AUD-039). **Regression:** unos otkupa za dva proizvoda
 | RF-11 | Otkup UI | ⬜ | — | |
 | RF-12 | Palete | ⬜ | — | |
 | RF-13 | Infra lifecycle | ⬜ | — | |
-| RF-14 | MasterSync/JSON | ⬜ | — | |
-| RF-15–19 | Konsolidacije | ⬜ | — | posle RF-14 |
+| RF-14 | MasterSync/JSON | ⬜ | — | **koordinisati sa RF-28 (isti fajl)** |
+| RF-15–19 | Konsolidacije | ⬜ | — | posle RF-14; RF-16 hrani v142 banka delta |
 | RF-20 | Bezbednost/proces | ⬜ | — | planirati posebno |
 | RF-21 | SEF correctness | ⬜ | — | **sadrži jedini nov P0 (409)** |
 | RF-22 | SEF UX/lifecycle | ⬜ | — | posle RF-21 |
@@ -271,10 +319,18 @@ shipped test suite-ovima (AUD-039). **Regression:** unos otkupa za dva proizvoda
 | RF-24 | Self-update hardening | ⬜ | — | |
 | RF-25 | Sync/IO hardening | ⬜ | — | |
 | RF-26 | Cenovnik + E2E gate | ⬜ | — | |
+| RF-27 | Agrohemija cena + validacija | ⬜ | — | **jeftin high-value (cena≠knjižena)** |
+| RF-28 | MasterSync integritet delte | ⬜ | — | spojiti sa RF-14 (isti fajl) |
+| RF-29 | Integritet/health dijagnostika | ⬜ | — | |
+| RF-30 | Sledljivost trace + lifecycle | ⬜ | — | |
 
-**Redosled:** RF-01 → RF-02 → RF-23 → RF-21 → RF-03* → RF-04* → RF-05 → RF-14 →
-RF-06 → RF-07 → RF-08 → RF-22 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 → RF-26 →
-RF-24 → RF-25 → RF-15+ → RF-20.
+**Redosled:** RF-01 → RF-02 → RF-23 → RF-21 → RF-27 → RF-03* → RF-04* → RF-05 →
+RF-14+RF-28 → RF-06 → RF-07 → RF-08 → RF-22 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 →
+RF-26 → RF-29 → RF-30 → RF-24 → RF-25 → RF-15+ → RF-20.
+- **RF-27 podignut napred:** agrohemija cena≠knjižena je P1 finansijski/audit nalaz sa jeftinim
+  (S) fixom — najbolji odnos vrednost/rizik u v142 delti.
+- **RF-14 + RF-28 zajedno:** oba diraju `modMasterSync` (JSON/paginacija vs generatori/writeback);
+  raditi u jednoj sesiji da se izbegne dupla re-baza istog fajla.
 - **RF-23 i RF-21 podignuti napred:** RF-23 nosi P0-klasu bezbednosti (auth lanac do Admin
   panela) i P1 `AccessWasDenied`; RF-21 nosi jedini nov P0 (SEF 409). Oba pre storna.
 - **RF-03*/RF-04* (storno):** OBAVEZNO re-verifikovati protiv `origin/main` (v2.24.0, storno

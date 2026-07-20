@@ -416,9 +416,23 @@ dead `GroupBySum`/`SumColumn`/`IzvestajTip` enum. [AUD-016; katalog FM-0027]
 - `modVbaTools`/`modRelease` folders from `tblLocalConfig` (`VBA_SRC_PATH`).
 
 ### 10.5 FM continuation
-- Triage delta for FM versions beyond v35 (same method: per-row verdict/urgency/fix,
-  anchored to the FM version and code commit; diff-check that already-triaged entries
-  did not change).
+- ✅ Delta triage executed for **v85** (FM-0035..0084, `AUDIT_FM_TRIJAZA.md` DEO II,
+  `KNOWN_ISSUES.md` §8.4) and **v142** (FM-0085..0140, DEO III, §8.6) — same method
+  (per-row verdict/urgency/fix, anchored to code commit; already-triaged entries skipped).
 - Commit the FM into the repo split per file (`docs/functional-map/`); add a drift-check
   script (`git hash-object` vs per-entry Referentni SHA); resolve `modMarza` status (FM
   skipped as unused, but `frmMarza` is reachable from `frmOtkupAPP`).
+
+### 10.6 Wave 5 — delta remediation (v85 + v142)
+Detail in `REFAKTOR_PLAYBOOK.md` §3b (RF-21..26) + §3c (RF-27..30); items in
+`KNOWN_ISSUES.md` §8.4/§8.6. Anchors are older than current `main` (v2.24.0) — re-base each
+package before work. Highlights:
+- **P0:** SEF client 409 → REJECTED (AUD-030 / RF-21) — the only new active P0.
+- **v85 P1:** SEF correctness/UX (RF-21/22), authorization chain to Admin panel + missing
+  `AccessWasDenied` (RF-23), self-update component-loss (RF-24), cenovnik stale price (RF-26).
+- **v142 P1:** agrohemija price-not-booked (RF-27, cheapest high-value), MasterSync
+  duplicate-number/wrong-write/otpremnica-mixing/station-mirror (RF-28, share `modMasterSync`
+  with RF-14), integritet/health false-green (RF-29), sledljivost incomplete-trace (RF-30).
+- **Latent (not wired):** E2E release gate false-green (AUD-039 / RF-26) — real defect, but
+  `modE2EReleaseGate` is not called by `PublishReleaseToDrive`; fix the result contract before
+  ever wiring it in.
