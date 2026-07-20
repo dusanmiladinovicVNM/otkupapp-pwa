@@ -761,7 +761,15 @@ End Function
 ' Da li su dva tela koda identicna. Ignorise SAMO zavrsne CR/LF; ostalo mora biti
 ' bajt-za-bajt isto (izvori su ASCII, exporti iz istog VBE).
 Private Function SameCode(ByVal a As String, ByVal b As String) As Boolean
-    SameCode = (StrComp(CanonCode(a), CanonCode(b), vbBinaryCompare) = 0)
+    ' vbTextCompare = case-INSENSITIVE. Razlog: VBE unifikuje casing SVIH istoimenih
+    ' identifikatora projekt-wide (npr. parametar "X" -> "x" jer negde postoji
+    ' lowercase "x"), pa se CodeModule.Lines i fajl razlikuju SAMO u case-u
+    ' identifikatora - funkcionalno isto (VBA je case-insensitive; potvrdjeno:
+    ' AscW proj=120 'x' vs file=88 'X'). Stringove/komentare (gde case JESTE bitan)
+    ' VBE NE dira, pa realna izmena stringa/komentara i dalje menja sadrzaj i
+    ' detektuje se (jedini slepi ugao: izmena SAMO case-a unutar stringa -
+    ' zanemarljivo retko, kozmeticki; bolje nego nepotreban re-import -> crash).
+    SameCode = (StrComp(CanonCode(a), CanonCode(b), vbTextCompare) = 0)
 End Function
 
 ' Kanonizuj kod za poredjenje: SVE vrste prekida reda (CRLF/CR/LF) -> LF, pa skini
