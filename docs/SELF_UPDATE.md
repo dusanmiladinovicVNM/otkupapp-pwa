@@ -32,6 +32,39 @@ celog `.xlsm` (vidi `RELEASE_PROCEDURE.md` R3) — za izmene **koda**, bez migra
 | Poređenje verzija | `modUpdateGate.VersionCompare` (reuse) |
 | OAuth / HTTP | `modGoogleAuth.GetAccessToken`, WinHttp (reuse) |
 
+### F2 — versioned folderi + `current.json` (lanac poverenja)
+
+Povrh flat kanala postoji **immutable snapshot po verziji** + kriptografski lanac.
+Detaljan plan/status: `docs/SELF_UPDATE_SNAPSHOT_PLAN.md`.
+
+```
+AgriX_Release/                 (REL_FOLDER_ID)
+  current.json                 <- pokazivač: app_version + release_folder_id + manifest_sha256
+  version.json                 <- LEGACY (dual-write, za stare klijente)
+  <flat .bas/.cls/...>         <- LEGACY (dual-write)
+  releases/
+    2.21.0/  manifest.json + svi src-vba fajlovi   (write-once snapshot)
+    2.22.0/  ...                                    (retention: poslednjih 10)
+```
+
+Lanac: `current.json.manifest_sha256` → verifikuje bajtove `manifest.json` →
+`manifest.files[].sha256` → verifikuje svaki skinuti fajl. **Bilo koji nesklad =
+fail-closed** (prekid pre importa; ništa se ne snima).
+
+- **Klijent** (`modSelfUpdate`): `GetRemoteAppVersion` prvo čita `current.json`
+  (pa `version.json`); `ResolveReleaseSource` bira versioned folder i proverava
+  `manifest_sha256` PRE ijednog download-a koda, inače **flat fallback** (nema
+  `current.json`/`release_folder_id` → stari put). Novi klijent radi i sa starim
+  publisher-om i obrnuto (dual-write) — nema „big bang" cutover-a.
+- **Build** (`modRelease`): `PublishReleaseToDrive` upload-uje u OBA kanala, piše
+  `manifest.json` (versioned) + `version.json` (flat), pa **na kraju** `current.json`
+  (atomski „go live"; piše se samo ako je versioned manifest uspeo). `PruneOldReleases`
+  drži 10 najnovijih. `RollbackReleaseTo` (Alt+F8) prepiše `current.json` na stariji
+  `releases/<v>` (recompute `manifest_sha256`); `ListReleases` (Alt+F8) = pregled.
+- **`manifest_sha256` je heš bajtova UPLOADOVANOG `manifest.json`** (posle
+  `WriteReleaseTextFile`), koje klijent skida `alt=media` (sirovo) i hešuje —
+  bajt-tačan round-trip (ista zamka kao per-file heš, #16).
+
 ---
 
 ## Build strana

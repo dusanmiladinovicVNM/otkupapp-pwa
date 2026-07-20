@@ -110,6 +110,7 @@ Public Sub RunSelfUpdate()
     Dim n As Long: n = DownloadReleaseFiles(tempDir, expected, note)
     If expected = 0 Then
         MsgBox Poruka("SU_PREUZIMANJE_OTKAZANO") & vbCrLf & _
+               IIf(Len(note) > 0, note & vbCrLf, "") & _
                Poruka("SU_POKUSAJTE"), vbCritical, APP_NAME
         Exit Sub
     End If
@@ -437,18 +438,18 @@ End Function
 
 ' ---------------- private ----------------
 
-' Procitaj app_version iz AgriX_Release/version.json (ili "" ako nedostupno).
+' Procitaj app_version. F2: prvo current.json (versioned pokazivac); fallback
+' version.json (flat/legacy). "" ako nedostupno (offline -> fail-soft).
 Private Function GetRemoteAppVersion() As String
     Const SRC As String = "modSelfUpdate.GetRemoteAppVersion"
     On Error GoTo EH
 
-    Dim id As String: id = DriveFindInFolder(REL_FOLDER_ID, MANIFEST_NAME)
-    If Len(id) = 0 Then Exit Function
-
-    Dim tmp As String: tmp = Environ$("TEMP") & "\AgriX_version.json"
-    If Not DriveDownloadToFile(id, tmp) Then Exit Function
-
-    GetRemoteAppVersion = Trim$(ExtractJsonStringGoogle(ReadAllText(tmp), "app_version"))
+    Dim cur As String: cur = DownloadNamedText(REL_FOLDER_ID, "current.json")
+    If Len(cur) > 0 Then
+        GetRemoteAppVersion = Trim$(ExtractJsonStringGoogle(cur, "app_version"))
+        If Len(GetRemoteAppVersion) > 0 Then Exit Function
+    End If
+    GetRemoteAppVersion = Trim$(ExtractJsonStringGoogle(DownloadNamedText(REL_FOLDER_ID, MANIFEST_NAME), "app_version"))
     Exit Function
 EH:
     LogErr SRC, Err.description
@@ -500,16 +501,22 @@ Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut
     expectedOut = 0
     note = ""
 
-    Dim dict As Object: Set dict = DriveListFolder(REL_FOLDER_ID)
+    ' F2: odredi IZVOR (versioned preko current.json + provera manifest_sha256,
+    ' inace flat/legacy fallback). manifest_sha256 nesklad = fail-closed -> False
+    ' -> expected ostaje 0 -> pozivalac javi prekid (nista se ne skida).
+    Dim srcFolder As String, manifestText As String
+    If Not ResolveReleaseSource(tempDir, srcFolder, manifestText, note) Then Exit Function
+
+    Dim dict As Object: Set dict = DriveListFolder(srcFolder)
     If dict Is Nothing Then Exit Function
 
     Dim fso As Object: Set fso = CreateObject("Scripting.FileSystemObject")
-    Dim files As Object: Set files = ParseManifestFiles(DownloadManifestText())
+    Dim files As Object: Set files = ParseManifestFiles(manifestText)
     Dim n As Long, expected As Long
 
     If files.count = 0 Then
         ' LEGACY (stari publisher bez files[]) -> listing-driven, bez hash provere.
-        note = "legacy manifest (bez files[]) - bez SHA verifikacije"
+        AppendNote note, "legacy manifest (bez files[]) - bez SHA verifikacije"
         Dim k As Variant, ext As String
         For Each k In dict.Keys
             ext = LCase$(fso.GetExtensionName(CStr(k)))
@@ -523,7 +530,7 @@ Private Function DownloadReleaseFiles(ByVal tempDir As String, ByRef expectedOut
         ' MANIFEST-DRIVEN + SHA-256 verifikacija (F1). Manifest je merodavan izvor
         ' liste; stale fajlovi iz foldera se ignorisu.
         Dim shaOk As Boolean: shaOk = Sha256Available(tempDir)
-        If Not shaOk Then note = "SHA-256 nedostupan na ovoj masini - fallback na prisustvo/broj (bez hesa)"
+        If Not shaOk Then AppendNote note, "SHA-256 nedostupan na ovoj masini - fallback na prisustvo/broj (bez hesa)"
         Dim nm As Variant, dest As String, wantSha As String
         For Each nm In files.Keys
             expected = expected + 1
@@ -552,14 +559,84 @@ EH:
     LogErr SRC, Err.description
 End Function
 
-' Skini version.json (manifest) sa Drive-a i vrati sadrzaj (ili "" ako nedostupno).
-Private Function DownloadManifestText() As String
+' Skini imenovani tekstualni fajl iz datog Drive foldera -> sadrzaj (ili "").
+' Generalizacija (F2): current.json / version.json (poznata tacka = REL_FOLDER_ID);
+' manifest.json iz versioned foldera ide preko ResolveReleaseSource. Razdvojen
+' temp po imenu da current.json i version.json ne gaze isti fajl.
+Private Function DownloadNamedText(ByVal folderID As String, ByVal fileName As String) As String
     On Error Resume Next
-    Dim id As String: id = DriveFindInFolder(REL_FOLDER_ID, MANIFEST_NAME)
+    Dim id As String: id = DriveFindInFolder(folderID, fileName)
     If Len(id) = 0 Then Exit Function
-    Dim tmp As String: tmp = Environ$("TEMP") & "\AgriX_manifest.json"
-    If DriveDownloadToFile(id, tmp) Then DownloadManifestText = ReadAllText(tmp)
+    Dim tmp As String: tmp = Environ$("TEMP") & "\AgriX_dl_" & fileName
+    If DriveDownloadToFile(id, tmp) Then DownloadNamedText = ReadAllText(tmp)
 End Function
+
+' F2: odredi IZVOR release-a (folder + tekst manifesta). Lanac poverenja:
+'   current.json (u REL_FOLDER_ID - poznata, stabilna tacka) -> release_folder_id
+'   + manifest_sha256. manifest.json iz versioned foldera se skine i NJEGOV
+'   SHA-256 proveri protiv manifest_sha256 iz current.json PRE ijednog download-a
+'   koda. Nesklad = fail-closed (False, prekid - moguca korupcija/podvala).
+' Fallback (nema current.json / nema release_folder_id) = FLAT/legacy:
+'   folder = REL_FOLDER_ID, manifest = version.json (kao pre F2).
+' True + folderOut + manifestOut (+ note). False = fatalno; note = razlog.
+Private Function ResolveReleaseSource(ByVal tempDir As String, ByRef folderOut As String, _
+                                      ByRef manifestOut As String, ByRef note As String) As Boolean
+    Const SRC As String = "modSelfUpdate.ResolveReleaseSource"
+    On Error GoTo EH
+
+    Dim cur As String: cur = DownloadNamedText(REL_FOLDER_ID, "current.json")
+    Dim vfid As String
+    If Len(cur) > 0 Then vfid = Trim$(ExtractJsonStringGoogle(cur, "release_folder_id"))
+
+    If Len(vfid) = 0 Then
+        ' FLAT/legacy fallback - nema versioned layout-a.
+        folderOut = REL_FOLDER_ID
+        manifestOut = DownloadNamedText(REL_FOLDER_ID, MANIFEST_NAME)
+        ResolveReleaseSource = True
+        Exit Function
+    End If
+
+    ' VERSIONED (F2). Skini manifest.json iz versioned foldera pa proveri njegov
+    ' SHA-256 protiv manifest_sha256 iz current.json (koren poverenja) PRE koda.
+    Dim mId As String: mId = DriveFindInFolder(vfid, "manifest.json")
+    If Len(mId) = 0 Then
+        note = "F2: manifest.json nije nadjen u versioned folderu (prekid)"
+        Exit Function
+    End If
+    Dim mPath As String: mPath = tempDir & "\_manifest.json"
+    If Not DriveDownloadToFile(mId, mPath) Then
+        note = "F2: manifest.json se ne moze skinuti (prekid)"
+        Exit Function
+    End If
+
+    Dim wantSha As String: wantSha = Trim$(ExtractJsonStringGoogle(cur, "manifest_sha256"))
+    If Len(wantSha) > 0 Then
+        If Sha256Available(tempDir) Then
+            If LCase$(Sha256File(mPath)) <> LCase$(wantSha) Then
+                note = "F2: manifest_sha256 NESKLAD - moguca korupcija/podvala (fail-closed)"
+                Exit Function
+            End If
+        Else
+            AppendNote note, "F2: SHA-256 nedostupan - manifest_sha256 nije proveren"
+        End If
+    Else
+        AppendNote note, "F2: current.json bez manifest_sha256 (manifest kriptografski nevezan)"
+    End If
+
+    folderOut = vfid
+    manifestOut = ReadAllText(mPath)
+    ResolveReleaseSource = True
+    Exit Function
+EH:
+    note = "ResolveReleaseSource greska: " & Err.description
+    LogErr SRC, Err.description
+End Function
+
+' Dodaj liniju napomene (visestruke se gomilaju, ne gaze prethodne).
+Private Sub AppendNote(ByRef note As String, ByVal s As String)
+    If Len(s) = 0 Then Exit Sub
+    If Len(note) > 0 Then note = note & vbCrLf & s Else note = s
+End Sub
 
 ' Parsiraj files[] iz manifesta -> Dictionary(ime -> sha256hex). Prazno ako nema
 ' files[] (stari publisher). size se ne parsira (broj; sha256 subsumira duzinu).

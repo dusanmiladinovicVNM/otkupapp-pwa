@@ -171,7 +171,13 @@ Bez strukturne promene Drive-a; „laka proverljivost" odmah.
 - Rezultat: tiha korupcija sadržaja se hvata; layout ostaje flat pa **stari
   klijenti i dalje rade** (čitaju `version.json` + listing).
 
-### Faza 2 — Versioned folderi + `current.json` pokazivač · ~1.5 dana
+### Faza 2 — Versioned folderi + `current.json` pokazivač · ~1.5 dana · ✅ IMPLEMENTIRANO
+> `modDrive.DriveEnsureFolder` (find-or-create). `modRelease`: dual-write u
+> `releases/<APP_VERSION>/` (manifest.json) + flat (`version.json`), pa **na kraju**
+> `current.json` (app_version + release_folder_id + `manifest_sha256`) — atomski flip.
+> `modSelfUpdate`: `GetRemoteAppVersion` prvo `current.json`; `ResolveReleaseSource`
+> (versioned + `manifest_sha256` provera PRE koda, inače flat fallback);
+> `DownloadReleaseFiles` koristi razrešeni folder. `manifest_sha256` nesklad = prekid.
 - **Drive (`modDrive`)**: `DriveEnsureFolder(parentID, name)` (find-or-create).
 - **Build (`modRelease`)**:
   1. Izračunaj manifest (Faza 1) + `manifest_sha256`.
@@ -187,14 +193,18 @@ Bez strukturne promene Drive-a; „laka proverljivost" odmah.
   `current.json` ne postoji (stariji publisher) → stari put (`version.json` +
   flat). Tako novi klijent radi i pre i posle cutover-a.
 
-### Faza 3 — Cutover + rollback/retention alati · ~0.5 dana
-- Kad je cela flota na novom updateru (proveri Fleet/Monitoring): publisher
-  prestaje da dual-write-uje flat/`version.json` (opciono ih prune-uje).
-- **Admin alati** (`modAdmin`, reuse obrasca): `RollbackReleaseTo(verzija)` =
-  prepiši `current.json` na stariji `releases/<verzija>` (bez re-build/upload);
-  `ListReleases` = `DriveListFolder(releases)` (sledljivost).
-- **Retention** (opciono): `PublishReleaseToDrive` posle objave Trash-uje
-  `releases/<verzija>` starije od poslednjih N.
+### Faza 3 — Cutover + rollback/retention alati · ~0.5 dana · 🟡 DELIMIČNO
+> Rollback/retention/list alati **IMPLEMENTIRANI** (v Faza 2 granu). **Cutover
+> (gašenje dual-write-a) NIJE** — čeka da cela flota bude na novom updateru.
+- ⏳ Kad je cela flota na novom updateru (proveri Fleet/Monitoring): publisher
+  prestaje da dual-write-uje flat/`version.json` (opciono ih prune-uje). **NIJE još.**
+- ✅ **Alati** (u `modRelease`, uz `PublishReleaseToDrive` — ne `modAdmin`, jer su
+  build/publish-side i dele njegove helpere): `RollbackReleaseTo` = prepiši
+  `current.json` na stariji `releases/<verzija>` (recompute `manifest_sha256` iz
+  stvarnih bajtova; bez re-build/upload); `ListReleases` = versioned verzije +
+  na koju pokazuje `current.json` (sledljivost).
+- ✅ **Retention**: `PublishReleaseToDrive` posle objave Trash-uje `releases/<v>`
+  preko poslednjih **10** (`PruneOldReleases`, SemVer sort).
 
 ---
 
@@ -255,18 +265,23 @@ Na TEST folderu (`AgriX_Release_TEST`), preko DEV harnessa gde može:
 
 ## Sažetak izmena po fajlu
 
-| Fajl | Faza | Izmena |
-|---|---|---|
-| `modDrive` | 1/2 | `Sha256File` (nov); `DriveEnsureFolder` (nov) |
-| `modRelease` | 1/2/3 | `sha256` u manifestu; versioned upload; `current.json` flip; dual-write; retention |
-| `modSelfUpdate` | 1/2 | `GetRemoteAppVersion`→`current.json`; `DownloadReleaseFiles`→manifest-driven + hash verify; `ParseManifestFiles` (nov); SHA fallback |
-| `modAdmin` | 3 | `RollbackReleaseTo`, `ListReleases` (reuse obrasca) |
-| `docs/SELF_UPDATE.md` | sve | trust chain, layout, fallback, migracija |
+| Fajl | Faza | Izmena | Status |
+|---|---|---|---|
+| `modDrive` | 1/2 | `Sha256File` (nov); `DriveTrashFile` (nov); `DriveEnsureFolder` (nov) | ✅ |
+| `modRelease` | 1/2/3 | `sha256` u manifestu; versioned dual-write; `current.json` flip; `PruneOldReleases` (retention 10); `RollbackReleaseTo`, `ListReleases` (Alt+F8) | ✅ (cutover ⏳) |
+| `modSelfUpdate` | 1/2 | `GetRemoteAppVersion`→`current.json`; `ResolveReleaseSource` (versioned + `manifest_sha256`); `DownloadReleaseFiles`→manifest-driven + hash verify; `ParseManifestFiles`; `DownloadNamedText`; SHA fallback | ✅ |
+| `docs/SELF_UPDATE.md` | sve | trust chain, layout, fallback, migracija | ⏳ |
 
 **Procena:** ~3.5–4 dana rada + smoke/fault-injection. Faze 1 i 2 su nezavisno
 mergeable (Faza 1 daje verifikaciju odmah bez rizika layout-a).
 
-## Otvorene odluke (za operatera)
-- Retention: koliko starih `releases/<v>` čuvati (npr. 10)?
-- `manifest_sha256` u `current.json` sada, ili tek uz SHA-256 celog snapshot-a?
-- Da li Faza 1 ide u ISTU granu (uz tekući hardening) ili zasebnu?
+> **Napomena o smeštaju alata:** plan je predviđao `RollbackReleaseTo`/`ListReleases`
+> u `modAdmin` (klijent-side admin). Implementirani su u `modRelease` jer su
+> **build/publish-side** (dele `WriteReleaseTextFile`, `DriveEnsureFolder`,
+> `DriveUploadFile` sa `PublishReleaseToDrive`); klijent ih nikad ne poziva, kao ni
+> `PublishReleaseToDrive`. Kohezivnije uz release tooling.
+
+## Otvorene odluke (za operatera) — REŠENO
+- ✅ Retention: **10** poslednjih `releases/<v>` (`PruneOldReleases`).
+- ✅ `manifest_sha256` u `current.json` **sada** (heš bajtova uploadovanog `manifest.json`).
+- ✅ Faza 1+2 idu u **ISTU granu** (`claude/selfupdate-excel-crash-edxnmk`, uz hardening).

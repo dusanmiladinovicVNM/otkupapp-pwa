@@ -188,6 +188,48 @@ Public Sub Test_Sha256File()
     End If
 End Sub
 
+' Nadji podfolder po imenu u parent-u; ako ne postoji, kreiraj ga. Vrati folderID
+' (ili "" na gresku). Za versioned release layout (AgriX_Release/releases/<verzija>/).
+Public Function DriveEnsureFolder(ByVal parentID As String, ByVal name As String) As String
+    Const SRC As String = "modDrive.DriveEnsureFolder"
+    On Error GoTo EH
+
+    Dim token As String: token = GetAccessToken()
+    If Len(token) = 0 Then Exit Function
+
+    ' 1) find (mimeType = folder)
+    Dim q As String
+    q = "name='" & DriveEscapeQ(name) & "' and '" & parentID & "' in parents and " & _
+        "mimeType='application/vnd.google-apps.folder' and trashed=false"
+    Dim http As Object: Set http = DriveNewHttp()
+    http.Open "GET", DRIVE_FILES & "?q=" & UrlEncode(q) & _
+              "&fields=files(id,name)&pageSize=1&supportsAllDrives=true&includeItemsFromAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.Send
+    If http.status = 200 Then
+        Dim fid As String: fid = ExtractJsonStringGoogle(http.responseText, "id")
+        If Len(fid) > 0 Then DriveEnsureFolder = fid: Exit Function
+    End If
+
+    ' 2) create
+    Dim body As String
+    body = "{""name"":""" & DriveJsonEsc(name) & """,""mimeType"":""application/vnd.google-apps.folder""," & _
+           """parents"":[""" & parentID & """]}"
+    Set http = DriveNewHttp()
+    http.Open "POST", DRIVE_FILES & "?supportsAllDrives=true", False
+    http.SetRequestHeader "Authorization", "Bearer " & token
+    http.SetRequestHeader "Content-Type", "application/json; charset=UTF-8"
+    http.Send body
+    If http.status = 200 Then
+        DriveEnsureFolder = ExtractJsonStringGoogle(http.responseText, "id")
+    Else
+        LogErr SRC, "HTTP " & http.status & ": " & Left$(http.responseText, 300)
+    End If
+    Exit Function
+EH:
+    LogErr SRC, Err.description
+End Function
+
 ' Vrati Dictionary (ime fajla -> fileID) svih fajlova u folderu.
 ' Jedna strana (pageSize=1000); AgriX_Release ima ~100 src-vba fajlova.
 Public Function DriveListFolder(ByVal folderID As String) As Object
