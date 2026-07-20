@@ -775,6 +775,10 @@ Private Function CanonCode(ByVal s As String) As String
     ' 1) sve vrste prekida reda -> LF
     s = Replace$(s, vbCrLf, vbLf)
     s = Replace$(s, vbCr, vbLf)
+    ' 1b) VBE CodeModule.Lines ume da vrati NON-BREAKING SPACE (ChrW 160) tamo gde
+    '     fajl ima obican space (0x20) -> ista duzina, nevidljiva razlika (uzrok
+    '     preostalih ~64 laznih "razlicito" posle vodeci-blank fixa). Normalizuj.
+    s = Replace$(s, ChrW$(160), " ")
     ' 2) RTrim svaki red - trailing whitespace nebitan (hvata "ista duzina ali
     '    razlicit" slucaj: red sa/bez zavrsnog space-a, npr. clsWheelList)
     Dim arr() As String, i As Long
@@ -1060,17 +1064,27 @@ End Sub
 ' Prva pozicija razlike dve kanonizovane verzije + isecak (prekidi reda vidljivi
 ' kao \n). Za dijagnostiku zasto SameCode ne prijavi "isto".
 Private Function DiffSnippet(ByVal name As String, ByVal a As String, ByVal b As String) As String
-    Dim i As Long, n As Long, s As String
+    Dim i As Long, n As Long, ascInfo As String
     n = IIf(Len(a) < Len(b), Len(a), Len(b))
     For i = 1 To n
         If Mid$(a, i, 1) <> Mid$(b, i, 1) Then Exit For
     Next i
-    s = "Prva razlika (" & name & ") @ poz " & i & " od " & n & ":" & vbCrLf & _
-        "  proj: [" & Mid$(a, IIf(i > 15, i - 15, 1), 40) & "]" & vbCrLf & _
-        "  file: [" & Mid$(b, IIf(i > 15, i - 15, 1), 40) & "]"
+    If i <= Len(a) And i <= Len(b) Then
+        ascInfo = vbCrLf & "  AscW: proj=" & AscW(Mid$(a, i, 1)) & " file=" & AscW(Mid$(b, i, 1))
+    End If
+    DiffSnippet = "Prva razlika (" & name & ") @ poz " & i & " od " & n & ":" & vbCrLf & _
+                  "  proj: [" & Vis(Mid$(a, IIf(i > 15, i - 15, 1), 40)) & "]" & vbCrLf & _
+                  "  file: [" & Vis(Mid$(b, IIf(i > 15, i - 15, 1), 40)) & "]" & ascInfo
+End Function
+
+' Ucini nevidljive znake vidljivim za MsgBox (prekidi reda / tab). Ne dira
+' strukturne vbCrLf u samoj poruci (primenjuje se samo na isecak koda).
+Private Function Vis(ByVal s As String) As String
+    s = Replace$(s, vbCr, "")
     s = Replace$(s, vbLf, "\n")
     s = Replace$(s, vbTab, "\t")
-    DiffSnippet = s
+    s = Replace$(s, ChrW$(160), "<NBSP>")
+    Vis = s
 End Function
 
 ' Kopiraj SAMO kod fajlove (isti filter kao DownloadReleaseFiles) iz lokalnog
