@@ -584,3 +584,14 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Nedirano (namerno):** ekranska lista Kartice, Google izvoz (`ExportKarticeToGoogle_Core`) i PWA kartica ostaju nepromenjeni — UKUPNO red glavne kartice i dalje nosi tačan string „UKUPNO", pa PWA filter radi. PWA prikaz rekapitulacije odložen u backlog (`P3-PWA-1`).
 - **Rizik za podatke:** nema — samo novi read-only prikaz u PDF izveštaju; poslovne tabele/šema i `.frx` se ne diraju; ASCII-only izvor; bez novih `Poruka()` ključeva.
 - **Dodirnuti moduli:** `modIzvestaj` (nova `ReportKarticaRobaRekap` + `PrintKarticaPDF` prosleđuje rekap u šablon), `modPrint` (`FillKarticaSablon` dobio Optional `rekapData` + nova `FillKarticaRobaRekap` renderuje blok). Docs/backlog: `backlog/backlokg.md` (`P3-PWA-1`).
+
+---
+
+## vba-v2.28.1 — 2026-07-21
+> Verzija/datum se **finalizuju pri `tools/release.sh`** (uz `APP_VERSION` u `modConfig`). Patch: **KPI „kg danas" više ne puca** na pokvarenom/čudnom zapisu u `tblOtkup`.
+
+- **Ispravka — KPI „Otvoreno kg" / „Današnji otkup kg" (`SumOtkupKgToday`):** ulazak u `frmDokumenta` je znao da izbaci `SumOtkupKgToday | 13 | Type mismatch` **čak i kada za taj dan nema otkupa** — jer se skenira **svaki istorijski red** `tblOtkup`, a ne samo današnji. Datum se poredio inline (`IsError`/`IsDate`/`CDate`); `IsError` hvata `#N/A`/`#REF!` ćelije, ali je ostajao uzak prolaz (zapis gde `IsDate=True` a `CDate` ipak pukne, ili tip van očekivanja) koji je probijao do `EH` → **ceo dnevni zbir je padao na 0** uz log greške.
+- **Rešenje:** svaki red se sada čita **isključivo kroz deljene bezbedne parsere** — `NzToText` (Variant/Error → `""`), `TryParseDateValue` i `TryParseDouble` (oba sa sopstvenim `On Error`, nikad ne bacaju). **Nijedan pojedinačan zapis** (Excel greška, prazno, tekst, neočekivan tip) ne može više da obori KPI. Isti obrazac koji `frmOtkupAPP.SumOtkupKgForDate` već koristi (`SafeDateKey`/`SafeKpiDouble`) — dve KPI funkcije su usklađene. Dodat i `IsArray(data)` guard (skalar/degenerisan `DataBodyRange` → čist 0 umesto `UBound` greške) u `SumOtkupKgToday`, `SumOtkupKgForDate` i `CountDocsForDate`.
+- **Napomena o podacima:** loš zapis ostaje u `tblOtkup` — sada se samo **preskače** (ne ulazi u zbir); ako treba da se uračuna, ispraviti tu ćeliju (Excel: `Go To Special → Formulas → Errors`).
+- **Rizik za podatke:** nema — samo robusnije čitanje u KPI izračunu; poslovne tabele/šema i `.frx` se ne diraju; ASCII-only izvor; bez novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
+- **Dodirnuti moduli:** `frmDokumenta` (`SumOtkupKgToday` → bezbedni parseri + `IsArray` guard), `frmOtkupAPP` (`SumOtkupKgForDate` + `CountDocsForDate` → `IsArray` guard).

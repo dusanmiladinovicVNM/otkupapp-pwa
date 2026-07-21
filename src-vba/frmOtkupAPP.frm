@@ -1379,6 +1379,9 @@ Private Function SumOtkupKgForDate(ByVal targetDate As Date) As Double
 
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
+    ' Ako GetTableData vrati skalar (ne-niz), LBound/UBound bacaju Type mismatch
+    ' (13) -> EH -> KPI padne na 0. Preskoci cisto.
+    If Not IsArray(data) Then Exit Function
 
     colDate = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
     colKg = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
@@ -1415,6 +1418,9 @@ Private Function CountDocsForDate(ByVal tableName As String, _
 
     data = GetTableData(tableName)
     If IsEmpty(data) Then Exit Function
+    ' Ako GetTableData vrati skalar (ne-niz), LBound/UBound bacaju Type mismatch
+    ' (13) -> EH -> brojac padne na 0. Preskoci cisto.
+    If Not IsArray(data) Then Exit Function
 
     colDate = GetColumnIndex(tableName, dateColName)
     If colDate <= 0 Then Exit Function
