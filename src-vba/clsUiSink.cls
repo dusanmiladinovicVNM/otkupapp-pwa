@@ -59,6 +59,7 @@ Public Sub Bind(ByVal hostForm As Object, ByVal ctl As Object, ByVal tagName As 
         Case "TextBox":       Set txt = ctl
         Case "ComboBox":      Set cmb = ctl
         Case "ToggleButton":  Set tgl = ctl
+        Case Else: Err.Raise vbObjectError + 2901, "clsUiSink.Bind", "Nepodrzan tip kontrole: " & TypeName(ctl)
     End Select
 End Sub
 

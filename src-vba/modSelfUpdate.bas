@@ -799,8 +799,12 @@ Private Function ImportFromFolder(ByVal folder As String, ByVal skipCsv As Strin
                     body = ExtractModuleCode(fil.path)
                     extractOk = (Err.Number = 0 And (Len(body) > 0 Or ext = "doccls"))
                     If Not extractOk Then
-                        ' ekstrakcija pala / prazno telo za ne-sheet -> ne diraj komponentu
-                        If Err.Number = 0 Then Err.Raise vbObjectError + 2801, , "prazno telo (" & fil.name & ")"
+                        ' Err<>0 = ekstrakcija genuino pala -> padne u er() (dole) -> faza 2/reinstall.
+                        ' Err=0 a prazno telo (ne-sheet) = LEGITIMNO prazan modul (prazan stub .bas/.cls;
+                        ' npr. feature-placeholder): NE dizi gresku i NE forsiraj fazu 2 -> "same" (no-op).
+                        ' Prazan izvor NIKAD ne brise zatecen kod (fail-safe i protiv lose ekstrakcije
+                        ' nad ne-praznim fajlom; SameCode bi ionako dao "same").
+                        If Err.Number = 0 Then st(fkey) = "same"
                     Else
                         Set vbc = Nothing
                         Set vbc = proj.VBComponents(baseName)

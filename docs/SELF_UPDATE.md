@@ -273,12 +273,32 @@ se desio i fix koji radi:
     **zatečenu** tvrdu formu (`IsHardModuleBody(body) Or IsHardModuleBody(cur)`; radi i
     nad `CodeModule.Lines` koji koristi lone `vbCr`). **Posledica:** dok god forma ima
     ijedan module-level `WithEvents`, svaka njena izmena traži reinstall (ne self-update).
-    Zatečene zamrznute forme (`frmDokumenta` 14×, `frmOtkupAPP` 2×, `frmPalete`,
-    `frmIzvestaj`, `frmAgrohemija`, `frmBankaExportPregled`) su zato **reinstall-only**.
-    **Follow-up (zasebna grana, Excel-smoke):** izmestiti te `WithEvents` u `clsUiSink`
-    (kao već urađenih 24 u `frmDokumenta`/`frmOtkupAPP`) da forme postanu self-updatable;
-    tada guard ostaje samo kao zaštita od regresije. Odloženo svesno — flota se za ovaj
-    release ionako bootstrap-uje (#zamka 19 / rollout), pa reinstall-only ne smeta odmah.
+    **URAĐENO:** sve zatečene zamrznute `WithEvents` (`frmDokumenta`, `frmOtkupAPP`,
+    `frmPalete`, `frmIzvestaj`, `frmAgrohemija`, `frmBankaExportPregled`) izmeštene su u
+    `clsUiSink` → **nijedna forma više nema module-level `WithEvents`**, čime je
+    **uklonjena klasa hard-crash-a** (crash 2.16.1→2.21.0 kad `AddFromString` naiđe na
+    `WithEvents` u formi). **ALI forme i dalje NISU self-updatable — ostaju reinstall-only:**
+    posle migracije zadržavaju module-level `As MSForms.*` reference (runtime kontrole —
+    npr. `frmAgrohemija`: `Private m_btnPocetniDug As MSForms.CommandButton`), a
+    `IsHardModuleBody` (pa i form-guard) **namerno** hvata i običnu `As MSForms.`
+    deklaraciju → forma i dalje ide na **reinstall**. Empirijski potvrđeno:
+    `RunSelfUpdateDev` nad izmenjenom `frmAgrohemija` = „Preskočeno (reinstall)". Guard
+    **nije** „samo zaštita od regresije" — i dalje (ispravno) rutira svaku formu na
+    reinstall; forme se distribuiraju **bootstrap-om** (`ImportAllVBA`/nov `.xlsm`), ne
+    self-update-om. (Da postanu self-updatable trebao bi **procedure-level** merge; svesno
+    se NE radi — whole-module `AddFromString` nad telom sa `As MSForms.` nije potvrđen kao
+    bezbedan u formi.) `clsUiSink` proširen (`tgl.Change`/`lst.Click`/`btn.MouseMove`;
+    `Bind` diže `Err.Raise` na nepodržan tip kontrole). **Pravilo dalje:** nikad ne vraćaj
+    `WithEvents` u formu.
+21. **Prazan modul (prazan stub `.bas/.cls`) → „same"/skip, NE fatalna greška.**
+    `ExtractModuleCode` nad modulom bez tela (samo header) vrati prazno telo uz `Err=0`.
+    Ranije je faza 1 tada dizala `vbObjectError+2801` („prazno telo") → modul je padao u
+    `failed` → **forsirao fazu 2** (Remove+Import) na SVAKOM self-update-u i prikazivao
+    „GRESKE: [-2147218703] prazno telo" (krivac: prazan orphan stub
+    `clsSEFValidationResult.cls`). **Fix:** prazno telo uz `Err=0` = `„same"` (no-op) —
+    prazan izvor NIKAD ne briše zatečen kod (fail-safe i protiv loše ekstrakcije nad
+    ne-praznim fajlom); genuina greška ekstrakcije (`Err<>0`) i dalje → `failed` → faza
+    2/reinstall. Mrtva `clsSEFValidationResult.cls` (0 referenci) **obrisana**.
 ---
 
 ## Preduslovi i ograničenja
