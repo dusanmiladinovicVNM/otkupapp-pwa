@@ -6490,26 +6490,26 @@ Private Function SumOtkupKgToday() As Double
     colStorno = RequireColumnIndex(TBL_OTKUP, "Stornirano", "SumOtkupKgToday")
     On Error GoTo EH
 
-    Dim i As Long, total As Double, rowKg As Double
+    Dim i As Long, total As Double, rowKg As Double, rowDate As Date
 
+    ' Svaki red se cita ISKLJUCIVO preko bezbednih parsera:
+    '   NzToText          -> Variant/Error (#N/A, #REF!, #VALUE! ...) postaje "" (guard iznutra)
+    '   TryParseDateValue -> ima sopstveni On Error (nikad ne baca)
+    '   TryParseDouble    -> ima sopstveni On Error (nikad ne baca)
+    ' Zato NIJEDAN pojedinacan zapis (Excel greska, prazno, tekst, cudan tip) ne moze
+    ' da baci Type mismatch (13) i obori CEO dnevni zbir na 0. Ranije je inline
+    ' IsDate/CDate nad problematicnom celijom mogao da probije do EH -> greska je
+    ' izlazila CAK i kad danas NEMA otkupa (skenira se svaki istorijski red).
+    ' Isti obrazac koji frmOtkupAPP.SumOtkupKgForDate vec koristi (SafeDateKey/SafeKpiDouble).
     For i = 1 To UBound(data, 1)
-        ' Excel error vrednost (npr. #N/A / #VALUE!) u celiji je ranije obarala CEO
-        ' zbir: NzToText/CStr nad Variant/Error baca Type mismatch (13) -> EH -> 0,
-        ' pa je "kg danas" KPI bio nepouzdan. Preskoci takve celije po redu.
         If colStorno > 0 Then
-            If Not IsError(data(i, colStorno)) Then
-                If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
-            End If
+            If LCase$(NzToText(data(i, colStorno))) = "da" Then GoTo NextRow
         End If
 
-        If Not IsError(data(i, colDatum)) Then
-            If IsDate(data(i, colDatum)) Then
-                If DateValue(CDate(data(i, colDatum))) = DateValue(Date) Then
-                    If Not IsError(data(i, colKg)) Then
-                        If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
-                            total = total + rowKg
-                        End If
-                    End If
+        If TryParseDateValue(NzToText(data(i, colDatum)), rowDate) Then
+            If DateValue(rowDate) = DateValue(Date) Then
+                If TryParseDouble(NzToText(data(i, colKg)), rowKg) Then
+                    total = total + rowKg
                 End If
             End If
         End If
