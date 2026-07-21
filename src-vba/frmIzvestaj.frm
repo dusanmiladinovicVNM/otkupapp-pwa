@@ -752,18 +752,6 @@ Private Sub mpReports_Change()
     If m_inUpdateMode Then Exit Sub
     GenerateActivePage
 End Sub
-Private Sub UpdateUnosButtonState()
-
-    ' If Zbirni ? no entitet required
-    If tglZbirni.value Then
-        btnUnos.enabled = True
-        Exit Sub
-    End If
-
-    ' If Pojedinacni ? entitet must be selected
-    btnUnos.enabled = (cmbEntitet.ListIndex >= 0 And cmbEntitet.value <> "")
-
-End Sub
 
 ' ============================================================
 ' ListBox brzo punjenje: gradi 2D array u memoriji pa JEDAN ".List = arr"
@@ -2210,30 +2198,6 @@ EH:
     LogErr "frmIzvestaj.StampajReversAmbDok"
     MsgBox "Gre" & ChrW(353) & "ka pri stampi reversa: " & Err.description, vbCritical, APP_NAME
 End Sub
-
-' Prijemnice (" + "-spojeni ID-jevi) za zbirnu kojoj pripada otpremnica.
-Private Function PrijemniceZaOtpremnicu(ByVal otpID As String) As String
-    On Error Resume Next
-    Dim brZbirne As String
-    brZbirne = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
-    If Len(Trim$(brZbirne)) = 0 Then Exit Function
-    Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
-    If Not IsArray(d) Then Exit Function
-    d = ExcludeStornirano(d, TBL_PRIJEMNICA)
-    If Not IsArray(d) Then Exit Function
-    Dim cId As Long, cZb As Long
-    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
-    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
-    If cId = 0 Or cZb = 0 Then Exit Function
-    Dim res As String, i As Long
-    For i = 1 To UBound(d, 1)
-        If CStr(d(i, cZb)) = brZbirne Then
-            If Len(res) > 0 Then res = res & " + "
-            res = res & CStr(d(i, cId))
-        End If
-    Next i
-    PrijemniceZaOtpremnicu = res
-End Function
 
 Private Sub ForceDarkAllPages()
     On Error Resume Next

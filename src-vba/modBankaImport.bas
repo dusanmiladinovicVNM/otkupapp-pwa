@@ -819,17 +819,6 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-' helper jer je GetFileNameFromPath u modBankaImport private -- kopija
-Private Function GetFileNameFromPath2(ByVal filePath As String) As String
-    Dim p As Long
-    p = InStrRev(filePath, "\")
-    If p > 0 Then
-        GetFileNameFromPath2 = Mid$(filePath, p + 1)
-    Else
-        GetFileNameFromPath2 = filePath
-    End If
-End Function
-
 'HELPERS
 
 Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
@@ -1160,7 +1149,7 @@ Public Sub Test_SaldoIntegrityOnSamplePDF()
     Debug.Print ""
     Debug.Print "--- Full Parse Test ---"
     On Error Resume Next
-    parsed = ParseBankaIzvodForImport(txt, GetFileNameFromPath2(pdfPath))
+    parsed = ParseBankaIzvodForImport(txt, GetFileNameFromPath(pdfPath))
     If Err.Number <> 0 Then
         Debug.Print "FAIL: " & Err.Number & " - " & Err.description
         On Error GoTo 0
