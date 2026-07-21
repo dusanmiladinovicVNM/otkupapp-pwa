@@ -48,10 +48,10 @@ Private m_activeCorrectionDoc As String
 Private m_activeCorrectionDokTip As String
 
 ' Runtime toggle (fraOMUlaz): smer ambalaze -- Prijem na OM / Izdavanje kooperantu.
-Private WithEvents m_tglIzdKoop As MSForms.ToggleButton
-Private WithEvents m_tglPrijemKoop As MSForms.ToggleButton
-Private WithEvents m_tglIzdatoOM As MSForms.ToggleButton
-Private WithEvents m_tglPrijemOdOM As MSForms.ToggleButton
+Private m_tglIzdKoop As MSForms.ToggleButton
+Private m_tglPrijemKoop As MSForms.ToggleButton
+Private m_tglIzdatoOM As MSForms.ToggleButton
+Private m_tglPrijemOdOM As MSForms.ToggleButton
 
 Private m_FocusableInputs As Collection
 
@@ -68,8 +68,8 @@ Private m_ambIPrijFullW As Single
 
 ' Storno pregled (runtime kontrole; .frx se ne dira). Dugme u storno sekciji
 ' otvara overlay panel sa listom svih storniranih dokumenata, grupisano po tipu.
-Private WithEvents m_btnStornoPregled As MSForms.CommandButton
-Private WithEvents m_btnStornoClose As MSForms.CommandButton
+Private m_btnStornoPregled As MSForms.CommandButton
+Private m_btnStornoClose As MSForms.CommandButton
 Private m_btnStornoVrati As MSForms.CommandButton   ' "Vrati storno" -> operacije
 ' UNDO (Vrati storno): OPERATION-CENTRIC. Dugme otvara listu undoable operacija
 ' (modStornoZurnal.GetUndoableStornoOperations) i undo ide po KONKRETNOM OperationID
@@ -95,9 +95,9 @@ Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je
 
 ' Recovery panel (runtime kontrole; .frx se ne dira). Dugme otvara overlay sa
 ' dve liste: osirocene prijemnice (levo) + aktivne zbirne (desno) + "Prevezi".
-Private WithEvents m_btnRecovery As MSForms.CommandButton
-Private WithEvents m_btnRecClose As MSForms.CommandButton
-Private WithEvents m_btnRecPrevezi As MSForms.CommandButton
+Private m_btnRecovery As MSForms.CommandButton
+Private m_btnRecClose As MSForms.CommandButton
+Private m_btnRecPrevezi As MSForms.CommandButton
 Private m_recBack As MSForms.Label
 Private m_recTitle As MSForms.Label
 Private m_recLblPrij As MSForms.Label
@@ -107,7 +107,7 @@ Private m_lstOsirPrij As MSForms.ListBox
 Private m_lstAktZbr As MSForms.ListBox
 Private m_recBuilt As Boolean
 Private m_recHidden As Collection
-Private WithEvents m_btnRecMode As MSForms.CommandButton
+Private m_btnRecMode As MSForms.CommandButton
 Private m_recMode As String      ' "PRIJ" (default) ili "PAL"
 Private m_recPopulating As Boolean   ' guard: suppress _Change dok programski punimo levu listu
 Private m_btnRecSkini As MSForms.CommandButton    ' detach osirocenih stavki (PAL mod)
@@ -1471,6 +1471,13 @@ Private Sub SetupOMIzdavanjeToggle()
     End If
     On Error GoTo done
     If m_tglPrijemKoop Is Nothing Then GoTo done
+
+    ' WithEvents seljen u clsUiSink (self-update: forma bez event-sink deklaracija).
+    ' Change eventi -> UiSinkEvent dispatcher -> m_tgl*_Change (tela netaknuta).
+    WireSink m_tglIzdKoop, "m_tglIzdKoop"
+    WireSink m_tglPrijemKoop, "m_tglPrijemKoop"
+    WireSink m_tglIzdatoOM, "m_tglIzdatoOM"
+    WireSink m_tglPrijemOdOM, "m_tglPrijemOdOM"
 
     RelayoutOMUlaz asChild
     Exit Sub
@@ -4029,6 +4036,7 @@ Private Sub SetupStornoPregledButton()
     ' Isti container kao btnStorno -> iste (frame/forma) koordinate.
     Set m_btnStornoPregled = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnStornoPregledRT", True)
     If m_btnStornoPregled Is Nothing Then GoTo done
+    WireSink m_btnStornoPregled, "m_btnStornoPregled"
 
     With m_btnStornoPregled
         .width = btnStorno.width
@@ -4303,6 +4311,7 @@ Private Sub EnsureStorniraniPanel()
 
     ' Dugme Zatvori (gore desno).
     Set m_btnStornoClose = Me.Controls.Add("Forms.CommandButton.1", "btnStornoCloseRT", True)
+    WireSink m_btnStornoClose, "m_btnStornoClose"
     StyleExitButton m_btnStornoClose, "Zatvori"
 
     ' Lista. Kolone: osnovne + lanac zavisnih dokumenata (Zbirna/Otpremnica/Faktura).
@@ -5536,6 +5545,7 @@ Private Sub SetupRecoveryButton()
 
     Set m_btnRecovery = btnStorno.Parent.Controls.Add("Forms.CommandButton.1", "btnRecoveryRT", True)
     If m_btnRecovery Is Nothing Then GoTo done
+    WireSink m_btnRecovery, "m_btnRecovery"
     With m_btnRecovery
         .width = btnStorno.width
         .Height = btnStorno.Height
@@ -5818,12 +5828,15 @@ Private Sub EnsureRecoveryPanel()
     End With
 
     Set m_btnRecClose = Me.Controls.Add("Forms.CommandButton.1", "btnRecCloseRT", True)
+    WireSink m_btnRecClose, "m_btnRecClose"
     StyleExitButton m_btnRecClose, "Zatvori"
 
     Set m_btnRecMode = Me.Controls.Add("Forms.CommandButton.1", "btnRecModeRT", True)
+    WireSink m_btnRecMode, "m_btnRecMode"
     StyleExitButton m_btnRecMode, "Mod: Prijemnice"
 
     Set m_btnRecPrevezi = Me.Controls.Add("Forms.CommandButton.1", "btnRecPreveziRT", True)
+    WireSink m_btnRecPrevezi, "m_btnRecPrevezi"
     StylePrimaryButton m_btnRecPrevezi, "Prevezi >>"
 
     Set m_btnRecSkini = Me.Controls.Add("Forms.CommandButton.1", "btnRecSkiniRT", True)
@@ -6573,5 +6586,15 @@ Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As
         Case "m_txtFnSearch.Change":      m_txtFnSearch_Change
         Case "m_cmbFnTip.Change":         m_cmbFnTip_Change
         Case "m_lstOsirPrij.Change":      m_lstOsirPrij_Change
+        Case "m_tglIzdKoop.Change":       m_tglIzdKoop_Change
+        Case "m_tglPrijemKoop.Change":    m_tglPrijemKoop_Change
+        Case "m_tglIzdatoOM.Change":      m_tglIzdatoOM_Change
+        Case "m_tglPrijemOdOM.Change":    m_tglPrijemOdOM_Change
+        Case "m_btnStornoPregled.Click":  m_btnStornoPregled_Click
+        Case "m_btnStornoClose.Click":    m_btnStornoClose_Click
+        Case "m_btnRecovery.Click":       m_btnRecovery_Click
+        Case "m_btnRecClose.Click":       m_btnRecClose_Click
+        Case "m_btnRecPrevezi.Click":     m_btnRecPrevezi_Click
+        Case "m_btnRecMode.Click":        m_btnRecMode_Click
     End Select
 End Sub

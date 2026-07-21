@@ -23,7 +23,8 @@ Private m_SetupDone As Boolean
 Private mChromeRemoved As Boolean
 
 ' Runtime kontrole (.frx se ne dira): filter po kooperantu + izbor racuna firme
-Private WithEvents mCmbKooperant As MSForms.ComboBox
+Private mCmbKooperant As MSForms.ComboBox
+Private m_uiSinks As Object          ' tag -> clsUiSink (self-update: WithEvents van formi)
 Private mLblKooperant As MSForms.label
 Private mCmbRacun As MSForms.ComboBox
 Private mLblRacun As MSForms.label
@@ -34,8 +35,8 @@ Private mRacuniCount As Long
 ' Runtime dugmad: vezivanje virman avansa (NOV_VIRMAN_AVANS_KOOP) na blokove.
 ' Motor je ApplyAvansToOtkup_TX (postojeci, transakciono bezbedan); dugmad
 ' ga samo pozivaju za izabran blok / cekirane blokove.
-Private WithEvents mBtnAvansBlok As MSForms.CommandButton    ' fokusiran blok (detail panel)
-Private WithEvents mBtnAvansSel As MSForms.CommandButton     ' cekirani blokovi (akcije)
+Private mBtnAvansBlok As MSForms.CommandButton    ' fokusiran blok (detail panel)
+Private mBtnAvansSel As MSForms.CommandButton     ' cekirani blokovi (akcije)
 Private Const AVANS_BLOK_CAPTION As String = "Primeni avans na blok"
 Private Const AVANS_SEL_CAPTION As String = "Primeni avans (sel.)"
 
@@ -137,6 +138,7 @@ Private Sub EnsureAvansButtons()
         Dim dp As Object
         Set dp = btnPostaviFull.Parent
         Set mBtnAvansBlok = dp.Controls.Add("Forms.CommandButton.1", "btnAvansBlok", True)
+        WireSink mBtnAvansBlok, "mBtnAvansBlok"
         With mBtnAvansBlok
             .Left = btnPostaviFull.Left
             .width = dp.InsideWidth - btnPostaviFull.Left - 10
@@ -153,6 +155,7 @@ Private Sub EnsureAvansButtons()
         Dim ah As Object
         Set ah = btnGenerisiCSV.Parent
         Set mBtnAvansSel = ah.Controls.Add("Forms.CommandButton.1", "btnAvansSel", True)
+        WireSink mBtnAvansSel, "mBtnAvansSel"
         With mBtnAvansSel
             .width = 130
             .Height = btnGenerisiCSV.Height
@@ -219,6 +222,7 @@ Private Sub EnsureKooperantFilter()
     StyleLabel mLblKooperant, TXT_MUTED(), True
 
     Set mCmbKooperant = host.Controls.Add("Forms.ComboBox.1", "cmbKooperantFilter", True)
+    WireSink mCmbKooperant, "mCmbKooperant"
     With mCmbKooperant
         .Left = mLblKooperant.Left + mLblKooperant.width + 4
         .top = cmbStanica.top
@@ -999,16 +1003,58 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
     If CloseMode = vbFormControlMenu Then
         frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
     End If
     On Error GoTo 0
+End Sub
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamke #11/#20)
+' ------------------------------------------------------------
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmBankaExportPregled.WireSink(" & tagName & ")", Err.description
+End Function
+
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "mCmbKooperant.Change":      mCmbKooperant_Change
+        Case "mBtnAvansBlok.Click":       mBtnAvansBlok_Click
+        Case "mBtnAvansBlok.MouseMove":   mBtnAvansBlok_MouseMove 0, 0, 0, 0
+        Case "mBtnAvansSel.Click":        mBtnAvansSel_Click
+        Case "mBtnAvansSel.MouseMove":    mBtnAvansSel_MouseMove 0, 0, 0, 0
+    End Select
 End Sub
 
 ' Mouse hover pattern

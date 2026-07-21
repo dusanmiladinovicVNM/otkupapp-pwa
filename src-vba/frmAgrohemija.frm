@@ -37,7 +37,8 @@ Private mChromeRemoved As Boolean
 
 ' Dinamicko dugme "Pocetni dug" (migracija). Kontrola se pravi u runtime-u
 ' (Controls.Add) jer se .frx ne dira; klik se hvata preko WithEvents.
-Private WithEvents m_btnPocetniDug As MSForms.CommandButton
+Private m_btnPocetniDug As MSForms.CommandButton
+Private m_uiSinks As Object          ' tag -> clsUiSink (self-update: WithEvents van formi)
 
 Private Sub UserForm_Initialize()
     ApplyTheme Me, BG_MAIN()
@@ -117,6 +118,7 @@ Private Sub SetupPocetniDugButton()
 
     Set m_btnPocetniDug = btnZavrsiIzlaz.parent.Controls.Add("Forms.CommandButton.1", "btnPocetniDugRT", True)
     If m_btnPocetniDug Is Nothing Then GoTo done
+    WireSink m_btnPocetniDug, "m_btnPocetniDug"
 
     With m_btnPocetniDug
         .width = btnZavrsiIzlaz.width
@@ -908,11 +910,13 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
 
     If CloseMode = vbFormControlMenu Then
@@ -920,6 +924,42 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     End If
 
     On Error GoTo 0
+End Sub
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamke #11/#20)
+' ------------------------------------------------------------
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmAgrohemija.WireSink(" & tagName & ")", Err.description
+End Function
+
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "m_btnPocetniDug.Click":     m_btnPocetniDug_Click
+    End Select
 End Sub
 
 Private Function FormatKol(ByVal val As Double) As String

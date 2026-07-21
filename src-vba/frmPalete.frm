@@ -19,20 +19,21 @@ Option Explicit
 Private mChromeRemoved As Boolean
 
 ' --- Prerada panel: dinamicke kontrole (Controls.Add; .frx se ne dira) ---
-Private WithEvents mTxtTezinaPalete As MSForms.TextBox
-Private WithEvents mTxtBruto As MSForms.TextBox
-Private WithEvents mDdTipKutije As MSForms.ComboBox
-Private WithEvents mCmbTipKese As MSForms.ComboBox
+Private mTxtTezinaPalete As MSForms.TextBox
+Private mTxtBruto As MSForms.TextBox
+Private mDdTipKutije As MSForms.ComboBox
+Private mCmbTipKese As MSForms.ComboBox
 Private mCmbFilterSorta As MSForms.ComboBox
 Private mCmbFilterTipGP As MSForms.ComboBox
 Private mLblTezinaPalete As MSForms.label
 Private mLblBruto As MSForms.label
 Private mLblFilterSorta As MSForms.label
 Private mLblFilterTipGP As MSForms.label
-Private WithEvents mLstPrerade As MSForms.ListBox
+Private mLstPrerade As MSForms.ListBox
 Private mLblPrerade As MSForms.label
-Private WithEvents mBtnStornoPrerada As MSForms.CommandButton
+Private mBtnStornoPrerada As MSForms.CommandButton
 Private mBuilt As Boolean
+Private m_uiSinks As Object          ' tag -> clsUiSink (self-update: WithEvents van formi)
 
 Private Sub UserForm_Initialize()
     On Error GoTo EH
@@ -116,12 +117,55 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
+End Sub
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamke #11/#20)
+' ------------------------------------------------------------
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmPalete.WireSink(" & tagName & ")", Err.description
+End Function
+
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "mTxtTezinaPalete.Change":   mTxtTezinaPalete_Change
+        Case "mTxtBruto.Change":          mTxtBruto_Change
+        Case "mDdTipKutije.Change":       mDdTipKutije_Change
+        Case "mCmbTipKese.Change":        mCmbTipKese_Change
+        Case "mLstPrerade.DblClick":      mLstPrerade_DblClick arg
+        Case "mBtnStornoPrerada.Click":   mBtnStornoPrerada_Click
+    End Select
 End Sub
 
 Private Sub RefreshGrid()
@@ -343,9 +387,13 @@ Private Sub BuildPreradaControls()
     If mBuilt Then Exit Sub
 
     Set mTxtTezinaPalete = Me.Controls.Add("Forms.TextBox.1", "txtTezinaPalete", True)
+    WireSink mTxtTezinaPalete, "mTxtTezinaPalete"
     Set mTxtBruto = Me.Controls.Add("Forms.TextBox.1", "txtBruto", True)
+    WireSink mTxtBruto, "mTxtBruto"
     Set mDdTipKutije = Me.Controls.Add("Forms.ComboBox.1", "ddTipKutije", True)
+    WireSink mDdTipKutije, "mDdTipKutije"
     Set mCmbTipKese = Me.Controls.Add("Forms.ComboBox.1", "cmbTipKese", True)
+    WireSink mCmbTipKese, "mCmbTipKese"
     Set mCmbFilterSorta = Me.Controls.Add("Forms.ComboBox.1", "cmbFilterSorta", True)
     Set mCmbFilterTipGP = Me.Controls.Add("Forms.ComboBox.1", "cmbFilterTipGP", True)
     Set mLblTezinaPalete = Me.Controls.Add("Forms.Label.1", "lblTezPal", True)
@@ -380,6 +428,7 @@ Private Sub BuildPreradaControls()
 
     ' Pregled preradjenih paleta (desno od stavki); dvoklik = PDF.
     Set mLstPrerade = Me.Controls.Add("Forms.ListBox.1", "lstPrerade", True)
+    WireSink mLstPrerade, "mLstPrerade"
     Set mLblPrerade = Me.Controls.Add("Forms.Label.1", "lblPrerade", True)
     mLblPrerade.caption = "Preradjene palete (dvoklik = PDF)"
     mLstPrerade.ColumnCount = 7
@@ -400,6 +449,7 @@ Private Sub BuildPreradaControls()
     ' Dugme za storno prerade (vraca palete gotovih proizvoda u lager).
     ' Dinamicko (Controls.Add + WithEvents) -> .frx se ne dira; reuse StornoPrerada_TX.
     Set mBtnStornoPrerada = Me.Controls.Add("Forms.CommandButton.1", "btnStornoPrerada", True)
+    WireSink mBtnStornoPrerada, "mBtnStornoPrerada"
     StyleStornoButton mBtnStornoPrerada, "Storniraj preradu"
 
     RefreshPrerade
