@@ -8,16 +8,6 @@ Option Explicit
 ' Form ist nur noch fuer UI-Darstellung zustaendig
 ' ============================================================
 
-Public Enum IzvestajTip
-    izvSaldo = 1
-    izvOtkupljenaRoba = 2
-    izvPrimljenaAmbalaza = 3
-    izvIsplata = 4
-    izvZbirniPoOM = 5
-    izvManjak = 6
-    izvProsecnaCena = 7
-End Enum
-
 Public Function ReportSaldoOM(ByVal stanicaID As String, _
                               ByVal datumOd As Date, _
                               ByVal datumDo As Date) As Variant
