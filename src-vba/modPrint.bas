@@ -2048,7 +2048,8 @@ End Sub
 ' Popuni KarticaSablon. data = Report 2D niz (1..N, 1..>=8); poslednji red = UKUPNO.
 ' Kolone niza: 1=Datum 2=BrojDok 3=Parcela 4=Opis 5=Zaduzenje 6=Razduzenje 7=Saldo 8=SaldoAmb.
 Public Function FillKarticaSablon(ByVal koopNaziv As String, ByVal bpg As String, _
-        ByVal period As String, ByVal data As Variant) As Worksheet
+        ByVal period As String, ByVal data As Variant, _
+        Optional ByVal rekapData As Variant) As Worksheet
     On Error GoTo EH
     EnsureKarticaSablon
     Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_KARTICA_SABLON)
@@ -2111,7 +2112,11 @@ Public Function FillKarticaSablon(ByVal koopNaziv As String, ByVal bpg As String
         .Font.Color = RGB(255, 255, 255)
     End With
 
-    Dim footRow As Long: footRow = ukRow + 2
+    ' Poseban blok "REKAPITULACIJA ROBE (kg)" ispod kartice (po vrsti/sorti/klasi).
+    Dim blockEnd As Long: blockEnd = ukRow
+    If IsArray(rekapData) Then blockEnd = FillKarticaRobaRekap(ws, ukRow + 2, rekapData)
+
+    Dim footRow As Long: footRow = blockEnd + 2
     ws.cells(footRow, 1).value = "Datum stampe: " & Format$(Date, "DD.MM.YYYY")
     ws.cells(footRow + 1, 1).value = "Potpis kooperanta: ___________"
     ws.cells(footRow + 1, 4).value = "Potpis firme: ___________"
@@ -2140,6 +2145,67 @@ Public Function FillKarticaSablon(ByVal koopNaziv As String, ByVal bpg As String
 EH:
     Application.ScreenUpdating = True
     LogErr "modPrint.FillKarticaSablon"
+End Function
+
+' Renderuj blok "REKAPITULACIJA ROBE (kg)" na sheetu, pocev od reda atRow.
+' rekap = 2D niz iz modIzvestaj.ReportKarticaRobaRekap (1..N, 1..4):
+' 1=Vrsta 2=Sorta 3=Klasa 4=Kg (poslednji red = UKUPNO). Kolone se mapiraju na
+' sirine sablona (A=12 Vrsta, B=14 Klasa, C=38 Sorta /najsira/, D=13 Kg).
+' Vraca indeks poslednjeg zauzetog reda (za pozicioniranje footera).
+Private Function FillKarticaRobaRekap(ByVal ws As Worksheet, ByVal atRow As Long, _
+        ByVal rekap As Variant) As Long
+    On Error GoTo EH
+    If Not IsArray(rekap) Then
+        FillKarticaRobaRekap = atRow
+        Exit Function
+    End If
+
+    Dim titleRow As Long: titleRow = atRow
+    ws.cells(titleRow, 1).value = "REKAPITULACIJA ROBE (kg)"
+    ws.cells(titleRow, 1).Font.Bold = True
+
+    Dim hdr As Long: hdr = titleRow + 1
+    ws.cells(hdr, 1).value = "Vrsta"
+    ws.cells(hdr, 2).value = "Klasa"
+    ws.cells(hdr, 3).value = "Sorta"
+    ws.cells(hdr, 4).value = "Kg"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 4))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    Dim n As Long: n = UBound(rekap, 1)
+    Dim i As Long, outRow As Long
+    For i = 1 To n
+        outRow = hdr + i
+        ws.cells(outRow, 1).value = CStr(rekap(i, 1))   ' Vrsta
+        ws.cells(outRow, 2).value = CStr(rekap(i, 3))   ' Klasa (uza kolona)
+        ws.cells(outRow, 3).value = CStr(rekap(i, 2))   ' Sorta (najsira kolona C)
+        If IsNumeric(rekap(i, 4)) Then ws.cells(outRow, 4).value = CDbl(rekap(i, 4))
+    Next i
+
+    Dim lastRow As Long: lastRow = hdr + n
+    With ws.Range(ws.cells(hdr, 1), ws.cells(lastRow, 4)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(lastRow, 4)).NumberFormat = "#,##0.00"
+
+    ' Poslednji red rekapa = UKUPNO -> istaknut kao i UKUPNO u glavnoj kartici.
+    With ws.Range(ws.cells(lastRow, 1), ws.cells(lastRow, 4))
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 225, 242)
+    End With
+
+    FillKarticaRobaRekap = lastRow
+    Exit Function
+EH:
+    LogErr "modPrint.FillKarticaRobaRekap"
+    FillKarticaRobaRekap = atRow
 End Function
 
 

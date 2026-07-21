@@ -672,6 +672,114 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' ============================================================
+' REKAPITULACIJA ROBE ZA KARTICU KOOPERANTA
+' Zbir kilaze otkupljene robe grupisano po (Vrsta, Sorta, Klasa) za
+' kooperanta u periodu. Koristi se kao poseban blok "REKAPITULACIJA ROBE (kg)"
+' ispod finansijske kartice u PDF-u (modPrint.FillKarticaSablon). Isti obuhvat
+' kao ReportKarticaKooperanta: storno iskljucen, isti datumski opseg, isti
+' KooperantID (samo otkup redovi -- oni jedini nose robu).
+' Returns: 2D Array (1..N+1, 1..4): 1=Vrsta 2=Sorta 3=Klasa 4=Kg; poslednji
+' red = UKUPNO (kol.1="UKUPNO", kol.4 = zbir kg). Empty ako nema robe.
+' ============================================================
+Public Function ReportKarticaRobaRekap(ByVal kooperantID As String, _
+                                       ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+
+    Const SRC As String = "modIzvestaj.ReportKarticaRobaRekap"
+    On Error GoTo EH
+
+    Dim otkData As Variant
+    otkData = GetTableData(TBL_OTKUP)
+    If Not IsArray(otkData) Then Exit Function
+    otkData = ExcludeStornirano(otkData, TBL_OTKUP)
+    If Not IsArray(otkData) Then Exit Function
+
+    Dim cDat As Long, cKoop As Long, cKol As Long
+    Dim cVrsta As Long, cKlasa As Long, cSorta As Long
+    cDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    cVrsta = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cKlasa = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
+    cSorta = GetColumnIndex(TBL_OTKUP, COL_OTK_SORTA)   ' opciono (schema drift -> 0)
+
+    Dim agg As Object
+    Set agg = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    For i = 1 To UBound(otkData, 1)
+        If CStr(otkData(i, cKoop)) = kooperantID Then
+            If IsDate(otkData(i, cDat)) Then
+                Dim d As Date: d = CDate(otkData(i, cDat))
+                If d >= datumOd And d <= datumDo Then
+                    Dim vrsta As String, sorta As String, klasa As String
+                    vrsta = Trim$(CStr(otkData(i, cVrsta)))
+                    klasa = Trim$(CStr(otkData(i, cKlasa)))
+                    sorta = ""
+                    If cSorta > 0 Then sorta = Trim$(CStr(otkData(i, cSorta)))
+
+                    Dim kg As Double: kg = 0
+                    If IsNumeric(otkData(i, cKol)) Then kg = CDbl(otkData(i, cKol))
+
+                    Dim key As String: key = vrsta & "|" & sorta & "|" & klasa
+                    Dim rec As Variant
+                    If agg.Exists(key) Then
+                        rec = agg(key)
+                        rec(3) = CDbl(rec(3)) + kg
+                    Else
+                        rec = Array(vrsta, sorta, klasa, kg)
+                    End If
+                    agg(key) = rec
+                End If
+            End If
+        End If
+    Next i
+
+    If agg.count = 0 Then Exit Function
+
+    ' Sortiraj kljuceve (vrsta|sorta|klasa) rastuce -> stabilan, predvidiv prikaz.
+    Dim keys() As String
+    ReDim keys(0 To agg.count - 1)
+    Dim kk As Variant, n As Long
+    n = 0
+    For Each kk In agg.keys
+        keys(n) = CStr(kk): n = n + 1
+    Next kk
+    Dim a As Long, b As Long, tmp As String
+    For a = 0 To UBound(keys) - 1
+        For b = a + 1 To UBound(keys)
+            If keys(b) < keys(a) Then
+                tmp = keys(a): keys(a) = keys(b): keys(b) = tmp
+            End If
+        Next b
+    Next a
+
+    Dim result() As Variant
+    ReDim result(1 To agg.count + 1, 1 To 4)
+    Dim totKg As Double
+    For a = 0 To UBound(keys)
+        Dim rr As Variant: rr = agg(keys(a))
+        result(a + 1, 1) = CStr(rr(0))
+        result(a + 1, 2) = CStr(rr(1))
+        result(a + 1, 3) = CStr(rr(2))
+        result(a + 1, 4) = CDbl(rr(3))
+        totKg = totKg + CDbl(rr(3))
+    Next a
+
+    Dim uk As Long: uk = agg.count + 1
+    result(uk, 1) = "UKUPNO"
+    result(uk, 2) = ""
+    result(uk, 3) = ""
+    result(uk, 4) = totKg
+
+    ReportKarticaRobaRekap = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
                                       ByVal datumOd As Date, _
                                       ByVal datumDo As Date) As Variant
@@ -1013,8 +1121,12 @@ Public Sub PrintKarticaPDF(ByVal kooperantID As String, _
     Dim period As String
     period = Format$(datumOd, "DD.MM.YYYY") & " - " & Format$(datumDo, "DD.MM.YYYY")
 
+    ' Rekapitulacija robe (kg) po vrsti/sorti/klasi -- poseban blok ispod kartice.
+    Dim rekap As Variant
+    rekap = ReportKarticaRobaRekap(kooperantID, datumOd, datumDo)
+
     Dim ws As Worksheet
-    Set ws = FillKarticaSablon(koopNaziv, bpg, period, data)
+    Set ws = FillKarticaSablon(koopNaziv, bpg, period, data, rekap)
     If ws Is Nothing Then Exit Sub
 
     Dim pdfPath As String

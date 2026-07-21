@@ -342,3 +342,16 @@ Kontekst: podaci pokvareni RANIJIM ručnim stornom / bagovitim run-om pre ovog f
 1) `FixNuliraneZbirne` — prođi `tblZbirna`; svaku AKTIVNU zbirnu bez ijedne aktivne otpremnice (0/0) → `StornoZbirna_TX`. Referenca iz produkcije: ZBR-00643/644/645 (aktivne 0,00 dok prijemnica pokazuje na njih).
 2) `FixStalePaletaHeaders` — prođi `tblPaleta`; preračunaj header (gajbe/neto/amb + Bruto, Status) iz AKTIVNIH `tblPaletaStavka`; paleta bez ijedne aktivne stavke → storno; ispod kapaciteta → reopen. Referenca: run pre palete-fixa `67a4381` (PAL-00150 header 240 a stvarno 206 aktivnih + Zatvorena; PAL-00151 prazna a Otvorena). Reuse paletni motor gde može (`DetachOsirocenePaletaStavke_TX` je per-prijemnica; ovde treba PER-PALETA self-heal — proveriti postoji li već helper `RecomputePaleta*` pre pisanja novog).
 Zajednički zahtevi: idempotentno + transakciono + izveštaj (koliko dirano) + pokreće se svesno (Alt+F8), best-effort (ne rušiti na jednom lošem redu). Ako operater potvrdi da treba — dodati u ovoj ili sledećoj grani.
+
+---
+
+## PWA
+
+P3-PWA-1 — Rekapitulacija robe (kg) po vrsti/sorti/klasi na PWA kartici
+Status: 🔴 otvoreno (svesno odloženo).
+Kontekst: u Excel/VBA kartici je dodat blok „REKAPITULACIJA ROBE (kg)" ispod finansijske kartice u PDF-u — zbir kilaže otkupljene robe grupisano po (Vrsta, Sorta, Klasa) za kooperanta u periodu (grana `claude/kooperant-karta-kilaza-ukupno-6d1y1u`; `modIzvestaj.ReportKarticaRobaRekap` + `modPrint.FillKarticaRobaRekap`). PWA kartica (`src/js/features/kooperant/kartica.js`) trenutno NEMA taj prikaz.
+Zadatak (kad bude vremena): istu rekapitulaciju izložiti i na PWA kartici.
+- Izvoz: `modStammdatenSync.ExportKarticeToGoogle_Core` sada izvozi samo finansijske kolone 1–7; dodati zaseban izvoz rekapitulacije (nova kartica/tab u „Kartice" sheet-u ili zaseban sheet) ILI proširiti postojeći.
+- GAS: novi/prošireni endpoint (uz `getKarticaForKooperant`).
+- PWA: `kartica.js` — poseban blok/tabela ispod postojeće liste. Pažnja na postojeći filter `r.Opis !== 'UKUPNO'` (ne sme se slučajno pokvariti UKUPNO red glavne kartice).
+Napomena: odluka na dan uvođenja bloka — „trenutno samo Excel, PWA u backlog".
