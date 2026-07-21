@@ -45,16 +45,13 @@ Private m_lblAmbTitle As MSForms.label
 ' Runtime tab "Otkupni listovi" (Otkupna mesta)
 Private m_otkBuilt As Boolean
 Private m_otkPageIdx As Long
-Private WithEvents m_lstOtk As MSForms.ListBox
-Attribute m_lstOtk.VB_VarHelpID = -1
+Private m_lstOtk As MSForms.ListBox
+Private m_uiSinks As Object          ' tag -> clsUiSink (self-update: WithEvents van formi)
 Private m_lblOtkTitle As MSForms.label
-Private WithEvents m_btnStampajOtk As MSForms.CommandButton
-Attribute m_btnStampajOtk.VB_VarHelpID = -1
+Private m_btnStampajOtk As MSForms.CommandButton
 ' Dugmad za stampu uz deljeni "Detalji" panel: Otkupljena roba / Ambalaza.
-Private WithEvents m_btnStampajOtkRoba As MSForms.CommandButton
-Attribute m_btnStampajOtkRoba.VB_VarHelpID = -1
-Private WithEvents m_btnStampajAmb As MSForms.CommandButton
-Attribute m_btnStampajAmb.VB_VarHelpID = -1
+Private m_btnStampajOtkRoba As MSForms.CommandButton
+Private m_btnStampajAmb As MSForms.CommandButton
 ' OtpremnicaID po redu lstOtkupRoba (ListBox podrzava max 10 kolona -> bez
 ' skrivene ref-kljuc kolone; kljuc = CStr(ListIndex)).
 Private m_otkOtpID As Object
@@ -1469,16 +1466,58 @@ End Sub
 
 Private Sub UserForm_Terminate()
     On Error Resume Next
+    ReleaseUiSinks
     MouseWheel_Detach
 End Sub
 
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    ReleaseUiSinks
     MouseWheel_Detach
     If CloseMode = vbFormControlMenu Then
         Cancel = True
         Unload Me
         frmOtkupAPP.Show
     End If
+End Sub
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamke #11/#20)
+' ------------------------------------------------------------
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmIzvestaj.WireSink(" & tagName & ")", Err.description
+End Function
+
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "m_lstOtk.Click":            m_lstOtk_Click
+        Case "m_lstOtk.Change":           m_lstOtk_Change
+        Case "m_btnStampajOtk.Click":     m_btnStampajOtk_Click
+        Case "m_btnStampajOtkRoba.Click": m_btnStampajOtkRoba_Click
+        Case "m_btnStampajAmb.Click":     m_btnStampajAmb_Click
+    End Select
 End Sub
 
 
@@ -1814,6 +1853,7 @@ Private Sub EnsureOtkupListePage()
     m_lblOtkTitle.caption = "OTKUPNI LISTOVI"
 
     Set m_lstOtk = pg.Controls.Add("Forms.ListBox.1", "lstOtkupListe", True)
+    WireSink m_lstOtk, "m_lstOtk"
     With m_lstOtk
         .Left = lstKartica.Left
         .top = lstKartica.top
@@ -1831,6 +1871,7 @@ Private Sub EnsureOtkupListePage()
     KarticaDetalji_PanelRect pl, pt, pw, ph
     If pw > 0 Then
         Set m_btnStampajOtk = Me.Controls.Add("Forms.CommandButton.1", "btnStampajOtkList", True)
+        WireSink m_btnStampajOtk, "m_btnStampajOtk"
         With m_btnStampajOtk
             .Left = pl
             .top = pt + ph + 6
@@ -2008,6 +2049,7 @@ Private Sub EnsureDetaljiButtons()
     If pw <= 0 Then Exit Sub
     If m_btnStampajOtkRoba Is Nothing Then
         Set m_btnStampajOtkRoba = Me.Controls.Add("Forms.CommandButton.1", "btnStampajOtkRoba", True)
+        WireSink m_btnStampajOtkRoba, "m_btnStampajOtkRoba"
         With m_btnStampajOtkRoba
             .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
         End With
@@ -2020,6 +2062,7 @@ Private Sub EnsureDetaljiButtons()
     End If
     If m_btnStampajAmb Is Nothing Then
         Set m_btnStampajAmb = Me.Controls.Add("Forms.CommandButton.1", "btnStampajAmbDok", True)
+        WireSink m_btnStampajAmb, "m_btnStampajAmb"
         With m_btnStampajAmb
             .Left = pl: .top = pt + ph + 6: .width = pw: .Height = 26
         End With
