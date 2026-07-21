@@ -595,3 +595,20 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Napomena o podacima:** loš zapis ostaje u `tblOtkup` — sada se samo **preskače** (ne ulazi u zbir); ako treba da se uračuna, ispraviti tu ćeliju (Excel: `Go To Special → Formulas → Errors`).
 - **Rizik za podatke:** nema — samo robusnije čitanje u KPI izračunu; poslovne tabele/šema i `.frx` se ne diraju; ASCII-only izvor; bez novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**.
 - **Dodirnuti moduli:** `frmDokumenta` (`SumOtkupKgToday` → bezbedni parseri + `IsArray` guard), `frmOtkupAPP` (`SumOtkupKgForDate` + `CountDocsForDate` → `IsArray` guard).
+
+---
+
+## vba-v2.28.2 — 2026-07-21
+> Verzija/datum se **finalizuju pri `tools/release.sh`** (uz `APP_VERSION` u `modConfig`). **RF-01 (M0) — „brisanje balasta" (Wave 0 iz plana sanacije):** čisto uklanjanje mrtvog koda, bez ijedne promene ponašanja. Svaki cilj re-verifikovan protiv aktuelnog `main`-a (v2.28.1) pre brisanja.
+
+- **Obrisani mrtvi moduli (0 živih poziva):**
+  - `modBankaImportParserClipboard` — legacy parser za ručno kopiran tekst izvoda; javni `ParseBankaIzvod`/`TestParser` bez ijednog produkcionog caller-a (glavni import ide preko `ParseBankaIzvodForImport` + bank-specific parsera).
+  - `modLicenceTests` — **nekanonski spelling-duplikat** (britansko „Licence") kanonskog `modLicenseTests` (američko „License", **zadržan**). Time je **uklonjena realna „Ambiguous name" pretnja**: oba modula su izlagala identične `Public TestLicense_All/_SplitParts/_PartsMatch/_NonEmptyParts/_DeviceFingerprint`. Impl `modLicense` i svi runbook-ovi ionako pokazuju na `modLicenseTests`.
+- **Obrisani mrtvi članovi (0 upotrebe):**
+  - `modBankaImport.GetFileNameFromPath2` — bajt-identična kopija postojećeg `GetFileNameFromPath`; jedini poziv (u dev testu `Test_SaldoIntegrityOnSamplePDF`) preusmeren na `GetFileNameFromPath`.
+  - `modArrayUtils.GroupBySum` / `SumColumn` — generički array helperi bez ijednog poziva (aspiraciona „zamena za Zbirni-Reports" koja se nikad nije zakačila).
+  - `modIzvestaj` enum `IzvestajTip` — tip + svih 7 članova bez upotrebe (dispatch izveštaja ide preko tabova forme, ne preko enum-a).
+  - `frmIzvestaj` — mrtve `UpdateUnosButtonState` i `PrijemniceZaOtpremnicu` (nijedan `clsUiSink`/`UiSinkEvent` dispatcher ih ne zove; veza prijemnica↔otpremnica preko `BrojZbirne` je živa u `modAutoHladnjaca`/`modBrojevi`).
+- **VAŽNO — operativno (build):** `ImportAllVBA` **ne briše komponente**. Pre importa u master `.xlsm` **ručno ukloniti u VBE** dve komponente: `modBankaImportParserClipboard` i `modLicenceTests` (britansko „Licence" — ostaviti `modLicenseTests`). Zatim `ImportAllVBA → Debug→Compile` (mora bez „Ambiguous name") → `AssertBlankBuild` → snimi. Flota izmenu dobija kroz redovan bootstrap/self-update snapshot.
+- **Rizik za podatke:** nema — isključivo uklanjanje mrtvog koda; poslovne tabele/šema i `.frx` se ne diraju; ASCII-only izvor; bez novih `Poruka()` ključeva → posle importa **ne treba `EnsurePoruke`**. Statičke provere: 0 referenci na sva obrisana imena; `modE2EReleaseGate` `Application.Run` i dalje jednoznačan; Sub/Function/End balans; jedina preostala dupla `Public` linija je pre-postojeći `#If VBA7` `MouseWheel_*` par (benigna conditional-compilation, van obima).
+- **Dodirnuti moduli:** obrisani `modBankaImportParserClipboard`, `modLicenceTests`; izmenjeni `modBankaImport` (uklonjen `GetFileNameFromPath2` + preusmeren jedini poziv), `modArrayUtils` (uklonjeni `GroupBySum`/`SumColumn`), `modIzvestaj` (uklonjen enum `IzvestajTip`), `frmIzvestaj.frm` (uklonjene 2 mrtve procedure; `.frx` netaknut). Prateći plan/status: `docs/REFAKTOR_PLAYBOOK.md` (RF-01) — ažurirati po merge-u #141.
