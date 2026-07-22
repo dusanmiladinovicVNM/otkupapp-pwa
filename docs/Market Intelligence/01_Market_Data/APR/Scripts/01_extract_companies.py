@@ -23,10 +23,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Izvlači APR firme po šiframa delatnosti.")
     parser.add_argument("--codes", nargs="+", default=list(DEFAULT_ACTIVITY_CODES))
     parser.add_argument("--timeout", type=int, default=120)
-    parser.add_argument(
+    tls_group = parser.add_mutually_exclusive_group()
+    tls_group.add_argument(
         "--insecure",
         action="store_true",
-        help="Isključuje TLS proveru samo ako APR endpoint ne radi sa validacijom sertifikata.",
+        help="Odmah isključuje TLS proveru. Koristiti samo za dijagnostiku.",
+    )
+    tls_group.add_argument(
+        "--strict-tls",
+        action="store_true",
+        help="Zabranjuje automatski APR-only fallback ako sertifikat ne može da se validira.",
     )
     return parser.parse_args()
 
@@ -40,10 +46,11 @@ def main() -> None:
         raise ValueError("Mora postojati najmanje jedna validna šifra delatnosti.")
 
     print("Preuzimanje APR registra firmi...")
-    payload = request_json(
+    payload, request_meta = request_json(
         COMPANIES_URL,
         timeout=args.timeout,
-        verify_tls=not args.insecure,
+        force_insecure=args.insecure,
+        strict_tls=args.strict_tls,
     )
     source_data = payload["Podaci"]
 
@@ -94,7 +101,7 @@ def main() -> None:
         "api_total_records": len(source_data),
         "selected_records": len(df),
         "invalid_company_ids": invalid_company_ids,
-        "tls_verification": not args.insecure,
+        "request": request_meta,
         "output_file": output_path.name,
         "output_sha256": sha256_file(output_path),
     }
@@ -103,6 +110,8 @@ def main() -> None:
     print(f"Sačuvano: {output_path}")
     print(f"Pronađeno firmi: {len(df)}")
     print(f"Nevalidni matični brojevi: {invalid_company_ids}")
+    if request_meta["tls_fallback_used"]:
+        print("NAPOMENA: TLS fallback je korišćen i zabeležen u metadata JSON-u.")
 
 
 if __name__ == "__main__":
