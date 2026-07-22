@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import unicodedata
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pandas as pd
 
 from apr_pipeline_common import (
     CLEAN_DIR,
+    FINANCIALS_URL,
     PROCESSED_DIR,
     ensure_directories,
     latest_file,
@@ -19,16 +21,16 @@ from apr_pipeline_common import (
     write_json,
 )
 
-NUMERIC_COLUMNS = (
-    "godina",
+MONETARY_COLUMNS = (
     "poslovna_imovina",
     "kapital",
     "gubitak",
     "ukupni_prihodi",
     "neto_dobitak",
     "neto_gubitak",
-    "prosecan_broj_zaposlenih",
 )
+NUMERIC_COLUMNS = ("godina",) + MONETARY_COLUMNS + ("prosecan_broj_zaposlenih",)
+APR_MONETARY_MULTIPLIER = 1_000
 
 # APR trenutno vraća statuse na srpskoj ćirilici. Za pouzdano poređenje
 # svodimo srpsku ćirilicu i latinicu sa dijakriticima na isti ASCII oblik.
@@ -105,6 +107,15 @@ STATUS_CLASSIFICATION_CASES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Čisti i validira APR tržišni dataset.")
     parser.add_argument("--input", type=Path, help="Obogaćeni Excel iz Clean Data foldera.")
+    parser.add_argument(
+        "--financial-unit",
+        choices=("auto", "rsd", "thousand-rsd"),
+        default="auto",
+        help=(
+            "Jedinica novčanih kolona u ulazu. 'auto' koristi metadata; "
+            "za legacy APR fajlove prepoznaje hiljade RSD."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -159,6 +170,69 @@ def format_top_statuses(status_profile: pd.DataFrame, limit: int = 10) -> str:
     )
 
 
+def read_input_metadata(input_path: Path) -> tuple[dict[str, object], Path]:
+    metadata_path = input_path.with_suffix(".metadata.json")
+    if not metadata_path.exists():
+        return {}, metadata_path
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Ne mogu da pročitam metadata fajl {metadata_path}: {exc}") from exc
+    return payload if isinstance(payload, dict) else {}, metadata_path
+
+
+def determine_financial_multiplier(
+    df: pd.DataFrame,
+    input_path: Path,
+    requested_unit: str,
+) -> tuple[int, str, dict[str, object], Path]:
+    input_metadata, input_metadata_path = read_input_metadata(input_path)
+
+    if requested_unit == "rsd":
+        return 1, "explicit --financial-unit rsd", input_metadata, input_metadata_path
+    if requested_unit == "thousand-rsd":
+        return APR_MONETARY_MULTIPLIER, "explicit --financial-unit thousand-rsd", input_metadata, input_metadata_path
+
+    normalized_unit = normalize_text(input_metadata.get("normalized_financial_unit")).casefold()
+    source_unit = normalize_text(input_metadata.get("source_financial_unit")).casefold()
+    source_url = normalize_text(input_metadata.get("source_url"))
+
+    if normalized_unit == "rsd":
+        return 1, "metadata normalized_financial_unit=RSD", input_metadata, input_metadata_path
+    if "thousand" in source_unit or "hiljad" in source_unit:
+        return APR_MONETARY_MULTIPLIER, "metadata source_financial_unit=thousand RSD", input_metadata, input_metadata_path
+    if source_url == FINANCIALS_URL:
+        return (
+            APR_MONETARY_MULTIPLIER,
+            "legacy APR financial endpoint metadata without explicit unit",
+            input_metadata,
+            input_metadata_path,
+        )
+
+    # Novi obogaćeni fajl čuva izvorne *_apr_000_rsd kolone. Ako su glavne
+    # vrednosti već 1.000 puta veće, ne primenjujemo multiplier ponovo.
+    for column in MONETARY_COLUMNS:
+        raw_column = f"{column}_apr_000_rsd"
+        if column not in df.columns or raw_column not in df.columns:
+            continue
+        sample = df[[column, raw_column]].dropna()
+        sample = sample[sample[raw_column] != 0].head(50)
+        if sample.empty:
+            continue
+        ratio = (sample[column] / sample[raw_column]).median()
+        if 999 <= ratio <= 1001:
+            return 1, f"detected normalized RSD from {raw_column}", input_metadata, input_metadata_path
+        if 0.999 <= ratio <= 1.001:
+            return (
+                APR_MONETARY_MULTIPLIER,
+                f"detected unscaled thousand-RSD values from {raw_column}",
+                input_metadata,
+                input_metadata_path,
+            )
+
+    return 1, "unit metadata unavailable; conservatively assumed RSD", input_metadata, input_metadata_path
+
+
 def main() -> None:
     args = parse_args()
     ensure_directories()
@@ -185,6 +259,27 @@ def main() -> None:
     for column in NUMERIC_COLUMNS:
         if column in df.columns:
             df[column] = numeric_series(df[column])
+    for column in MONETARY_COLUMNS:
+        raw_column = f"{column}_apr_000_rsd"
+        if raw_column in df.columns:
+            df[raw_column] = numeric_series(df[raw_column])
+
+    multiplier, unit_reason, input_metadata, input_metadata_path = determine_financial_multiplier(
+        df,
+        input_path,
+        args.financial_unit,
+    )
+    if multiplier == APR_MONETARY_MULTIPLIER:
+        for column in MONETARY_COLUMNS:
+            if column not in df.columns:
+                continue
+            raw_column = f"{column}_apr_000_rsd"
+            if raw_column not in df.columns:
+                df[raw_column] = df[column]
+            df[column] = df[column] * multiplier
+
+    df["financial_values_unit"] = "RSD"
+    df["financial_multiplier_applied_in_validation"] = multiplier
 
     df["status_category"] = df["status"].map(status_category)
     df["is_active_market_candidate"] = df["status_category"].eq("active")
@@ -239,6 +334,7 @@ def main() -> None:
         ("rows_with_valid_revenue", int(df["valid_revenue"].sum())),
         ("rows_with_valid_employees", int(df["valid_employees"].sum())),
         ("rows_with_quality_issue", int(df["data_quality_issue"].sum())),
+        ("financial_multiplier_applied", multiplier),
     ]
     quality_df = pd.DataFrame(quality_rows, columns=["metric", "value"])
 
@@ -261,8 +357,14 @@ def main() -> None:
             "generated_at_utc": utc_timestamp(),
             "input_file": input_path.name,
             "input_sha256": sha256_file(input_path),
+            "input_metadata_file": input_metadata_path.name if input_metadata_path.exists() else None,
+            "input_metadata": input_metadata,
             "output_file": output_path.name,
             "output_sha256": sha256_file(output_path),
+            "source_financial_unit": "thousand RSD" if multiplier == APR_MONETARY_MULTIPLIER else input_metadata.get("source_financial_unit"),
+            "normalized_financial_unit": "RSD",
+            "financial_multiplier_applied_in_validation": multiplier,
+            "financial_unit_resolution": unit_reason,
             "quality_metrics": dict(quality_rows),
             "status_matching_normalization": (
                 "Unicode NFKC + casefold + Serbian Cyrillic-to-Latin transliteration + diacritic removal"
@@ -282,6 +384,7 @@ def main() -> None:
     print(f"Sačuvano: {output_path}")
     print(f"Aktivni kandidati: {active_count}")
     print(f"Redovi sa problemom kvaliteta: {int(df['data_quality_issue'].sum())}")
+    print(f"Finansijska jedinica: RSD; multiplier u validaciji: {multiplier} ({unit_reason})")
     print("Status kategorije:")
     for row in category_profile.itertuples(index=False):
         print(f"  - {row.status_category}: {int(row.companies)}")
