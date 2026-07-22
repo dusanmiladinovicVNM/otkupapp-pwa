@@ -194,6 +194,28 @@ Public Function SaveNovac(ByVal brojDok As String, ByVal datum As Date, _
                   "; OtkupID=" & otkupID
     End If
 
+    ' AUD-003 / FM-0019 #1: schema-presence guard pre pozicionog AppendRow-a.
+    ' Ako je sema tblNovac driftovala (nedostaje/preimenovana kolona), fail-fast
+    ' umesto tihe korupcije ledger reda. Redosled prati Array(...) ispod.
+    RequireColumns TBL_NOVAC, SRC, _
+                   COL_NOV_ID, _
+                   COL_NOV_BROJ_DOK, _
+                   COL_NOV_DATUM, _
+                   COL_NOV_PARTNER, _
+                   COL_NOV_PARTNER_ID, _
+                   COL_NOV_ENTITET_TIP, _
+                   COL_NOV_OM_ID, _
+                   COL_NOV_KOOP_ID, _
+                   COL_NOV_FAKTURA_ID, _
+                   COL_NOV_VRSTA, _
+                   COL_NOV_TIP, _
+                   COL_NOV_UPLATA, _
+                   COL_NOV_ISPLATA, _
+                   COL_NOV_NAPOMENA, _
+                   COL_STORNIRANO, _
+                   COL_NOV_OTKUP_ID, _
+                   COL_OSIROCENO_OD
+
     Dim rowData As Variant
     rowData = Array(newID, brojDok, datum, partner, partnerId, _
                     entitetTip, omID, kooperantID, fakturaID, _
@@ -479,7 +501,10 @@ Public Function GetUplataForFaktura(ByVal fakturaID As String) As Double
 End Function
 
 Public Function ApplyAvansToFaktura_TX(ByVal kupacID As String, _
-                                        ByVal fakturaID As String) As Boolean
+                                        ByVal fakturaID As String, _
+                                        Optional ByRef appliedAmount As Double) As Boolean
+    appliedAmount = 0
+
     Dim tx As New clsTransaction
 
     On Error GoTo EH
@@ -493,7 +518,8 @@ Public Function ApplyAvansToFaktura_TX(ByVal kupacID As String, _
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
 
-    ApplyAvansToFaktura kupacID, fakturaID
+    ' AUD-010 / FM-0019 #11: vrati stvarno primenjeni iznos (ByRef) uz Boolean.
+    ApplyAvansToFaktura kupacID, fakturaID, appliedAmount
 
     tx.CommitTx
    
@@ -516,20 +542,24 @@ EH:
     On Error GoTo 0
 
     ApplyAvansToFaktura_TX = False
+    appliedAmount = 0
 
     Debug.Print "ApplyAvansToFaktura_TX failed. Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _
                 " Desc=" & errDesc
 End Function
 
-Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String)
+Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As String, _
+                               Optional ByRef appliedAmount As Double)
+    appliedAmount = 0
+
     ' Suche alle unverbrauchten Avans-Zahlungen fuer diesen Kupac
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
     data = ExcludeStornirano(data, TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
-    
+
     Const SRC As String = "ApplyAvansToFaktura"
 
     Dim colID As Long, colPID As Long, colTip As Long, colUplata As Long, colFakID As Long
@@ -545,6 +575,23 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
     
+    ' AUD-010 / FM-0019 #4,#6: target-owner + target-active guard.
+    ' Ne primeni avans na fakturu drugog kupca (ili nepostojecu) niti na storniranu.
+    Dim fakKupac As String
+    fakKupac = Trim$(CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_KUPAC)))
+    If StrComp(fakKupac, Trim$(kupacID), vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1020, SRC, _
+                  "Avans se ne moze primeniti na fakturu drugog kupca ili nepostojecu fakturu. " & _
+                  "FakturaID=" & fakturaID & "; FakturaKupac=" & fakKupac & "; TrazeniKupac=" & kupacID
+    End If
+
+    Dim fakStorno As String
+    fakStorno = Trim$(CStr(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_STORNIRANO)))
+    If UCase$(fakStorno) = "DA" Then
+        Err.Raise vbObjectError + 1021, SRC, _
+                  "Avans se ne moze primeniti na storniranu fakturu. FakturaID=" & fakturaID
+    End If
+
     ' Faktura-Iznos und bereits bezahlt
     Dim fakIznos As Double
     fakIznos = CDbl(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS))
@@ -626,10 +673,11 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
             End If
         End If
         
+        appliedAmount = appliedAmount + apply
         preostalo = preostalo - apply
 NextAvans:
     Next i
-    
+
     ' Faktura-Status pruefen
     If preostalo <= 0 Then
         UpdateFakturaStatus fakturaID
@@ -1064,7 +1112,10 @@ NextRow:
     GetOMAvansSaldo = avansTotal - isplataTotal
 End Function
 
-Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As String)
+Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As String, _
+                             Optional ByRef appliedAmount As Double)
+    appliedAmount = 0
+
     Dim data As Variant
     data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Sub
@@ -1098,6 +1149,27 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     If otkRows.count = 0 Then Exit Sub
 
     Dim r As Long: r = otkRows(1)
+
+    ' AUD-010 / FM-0019 #5,#6: target-owner + target-active guard.
+    ' Ne primeni avans na otkup drugog kooperanta niti na stornirani otkup.
+    Dim colOtkKoop As Long
+    colOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    If StrComp(Trim$(CStr(otkData(r, colOtkKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 1018, SRC, _
+                  "Avans se ne moze primeniti na otkup drugog kooperanta. OtkupID=" & otkupID & _
+                  "; OtkupKooperant=" & CStr(otkData(r, colOtkKoop)) & _
+                  "; TrazeniKooperant=" & kooperantID
+    End If
+
+    Dim colOtkStorno As Long
+    colOtkStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    If colOtkStorno > 0 Then
+        If UCase$(Trim$(CStr(otkData(r, colOtkStorno)))) = "DA" Then
+            Err.Raise vbObjectError + 1019, SRC, _
+                      "Avans se ne moze primeniti na stornirani otkup. OtkupID=" & otkupID
+        End If
+    End If
+
     Dim colKol As Long, colCena As Long
     colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
@@ -1173,6 +1245,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
             End If
         End If
 
+        appliedAmount = appliedAmount + applyAmt
         preostalo = preostalo - applyAmt
 NextAvans:
     Next i
@@ -1180,7 +1253,10 @@ NextAvans:
     If preostalo <= 0 Then UpdateOtkupStatus otkupID
 End Sub
 Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
-                                      ByVal otkupID As String) As Boolean
+                                      ByVal otkupID As String, _
+                                      Optional ByRef appliedAmount As Double) As Boolean
+    appliedAmount = 0
+
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -1195,7 +1271,8 @@ Public Function ApplyAvansToOtkup_TX(ByVal kooperantID As String, _
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_OTKUP
 
-    ApplyAvansToOtkup kooperantID, otkupID
+    ' AUD-010 / FM-0019 #11: vrati stvarno primenjeni iznos (ByRef) uz Boolean.
+    ApplyAvansToOtkup kooperantID, otkupID, appliedAmount
 
     tx.CommitTx
  
@@ -1220,6 +1297,7 @@ EH:
     On Error GoTo 0
 
     ApplyAvansToOtkup_TX = False
+    appliedAmount = 0
 
     Debug.Print "ApplyAvansToOtkup_TX failed. Source=" & errSrc & _
                 " Err=" & CStr(errNum) & _

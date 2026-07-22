@@ -110,6 +110,17 @@ Public Function AddCena(ByVal datum As Date, _
         Err.Raise vbObjectError + 7704, "modCenovnik.AddCena", "GetNextID nije vratio CenaID."
     End If
 
+    ' AUD-003: schema-presence guard pre pozicionog AppendRow-a (isti obrazac kao SaveNovac).
+    RequireColumns TBL_CENOVNIK, "modCenovnik.AddCena", _
+                   COL_CEN_ID, _
+                   COL_CEN_DATUM, _
+                   COL_CEN_VRSTA, _
+                   COL_CEN_SORTA, _
+                   COL_CEN_KLASA, _
+                   COL_CEN_CENA, _
+                   COL_CEN_CREATED, _
+                   COL_STORNIRANO
+
     ' Redosled mora pratiti tblCenovnik:
     ' CenaID, Datum, VrstaVoca, SortaVoca, Klasa, Cena, CreatedAt, Stornirano
     Dim rowData As Variant
