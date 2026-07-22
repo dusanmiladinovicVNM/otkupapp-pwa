@@ -1,0 +1,91 @@
+{
+  "dataset": "Validated APR market dataset",
+  "generated_at_utc": "2026-07-22T21:52:16+00:00",
+  "input_file": "apr_companies_financials_1039_4631_2026-07-22.xlsx",
+  "input_sha256": "bb4fb75b2dce777b62381c09c580f4fb43dc4026326a12db4a3c0d6fa9027899",
+  "output_file": "apr_market_validated_1039_4631_2026-07-22.xlsx",
+  "output_sha256": "3a5504710a55688ced91012a7ecabbfce7a2d4c14fd509e16e2f6565c6ef11c5",
+  "quality_metrics": {
+    "rows_total": 1644,
+    "valid_company_id": 1644,
+    "invalid_company_id": 0,
+    "duplicate_company_rows": 0,
+    "active_market_candidates": 1516,
+    "unknown_status": 0,
+    "other_status": 0,
+    "rows_with_financials": 1286,
+    "rows_with_valid_revenue": 1286,
+    "rows_with_valid_employees": 1286,
+    "rows_with_quality_issue": 0
+  },
+  "status_matching_normalization": "Unicode NFKC + casefold + Serbian Cyrillic-to-Latin transliteration + diacritic removal",
+  "status_rules": {
+    "active_tokens": [
+      "aktivan",
+      "aktivno",
+      "registrovan",
+      "registrovano",
+      "registrovana"
+    ],
+    "inactive_tokens": [
+      "neaktivan",
+      "neaktivno",
+      "brisan",
+      "obrisan",
+      "ugasen",
+      "prestao",
+      "prestanak"
+    ],
+    "liquidation_tokens": [
+      "likvid"
+    ],
+    "bankruptcy_tokens": [
+      "stecaj"
+    ],
+    "evaluation_order": [
+      "bankruptcy",
+      "liquidation",
+      "inactive",
+      "active",
+      "other"
+    ]
+  },
+  "status_classifier_regression_cases": {
+    "Активан": "active",
+    "У ликвидацији": "liquidation",
+    "У принудној ликвидацији": "liquidation",
+    "У стечају": "bankruptcy",
+    "Неактиван": "inactive",
+    "Брисан": "inactive",
+    "Aktivan": "active",
+    "U likvidaciji": "liquidation",
+    "U stečaju": "bankruptcy",
+    "Registrovan": "active"
+  },
+  "top_status_values": [
+    {
+      "status": "Активан",
+      "status_normalized": "aktivan",
+      "status_category": "active",
+      "companies": 1516
+    },
+    {
+      "status": "У ликвидацији",
+      "status_normalized": "u likvidaciji",
+      "status_category": "liquidation",
+      "companies": 70
+    },
+    {
+      "status": "У стечају",
+      "status_normalized": "u stecaju",
+      "status_category": "bankruptcy",
+      "companies": 36
+    },
+    {
+      "status": "У принудној ликвидацији",
+      "status_normalized": "u prinudnoj likvidaciji",
+      "status_category": "liquidation",
+      "companies": 22
+    }
+  ]
+}

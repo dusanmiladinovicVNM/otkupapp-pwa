@@ -1,0 +1,42 @@
+{
+  "dataset": "APR market analysis",
+  "generated_at_utc": "2026-07-22T21:52:18+00:00",
+  "input_file": "apr_market_validated_1039_4631_2026-07-22.xlsx",
+  "input_sha256": "3a5504710a55688ced91012a7ecabbfce7a2d4c14fd509e16e2f6565c6ef11c5",
+  "output_workbook": "apr_market_analysis_1039_4631_2026-07-22.xlsx",
+  "output_workbook_sha256": "e665de3ac9283525016ff519d7887debb998dabdcba47ea77627429a8b049bb5",
+  "output_markdown": "apr_market_summary_1039_4631_2026-07-22.md",
+  "include_inactive": false,
+  "market_rows": 1516,
+  "rows_with_revenue": 1217,
+  "revenue_bands_rsd": [
+    "0–10m RSD",
+    "10–50m RSD",
+    "50–100m RSD",
+    "100–500m RSD",
+    "500m–1bn RSD",
+    "1bn+ RSD"
+  ],
+  "status_distribution": [
+    {
+      "status": "Активан",
+      "status_category": "active",
+      "companies": 1516
+    },
+    {
+      "status": "У ликвидацији",
+      "status_category": "liquidation",
+      "companies": 70
+    },
+    {
+      "status": "У стечају",
+      "status_category": "bankruptcy",
+      "companies": 36
+    },
+    {
+      "status": "У принудној ликвидацији",
+      "status_category": "liquidation",
+      "companies": 22
+    }
+  ]
+}
