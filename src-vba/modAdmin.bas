@@ -40,6 +40,13 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
     Const SRC As String = "modAdmin.BuildAdminPanel"
     On Error GoTo EH
 
+    ' AUD-033: tvrda brana -- Admin panel gradi samo admin (ili dok je AUTH iskljucen;
+    ' MozeAdministraciju je anti-lockout). Defense-in-depth uz meni gate (modMaticniLookups).
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Set mFrm = frm
     Set mWrappers = New Collection
 
@@ -199,6 +206,13 @@ End Function
 ' ============================================================
 Public Sub AdminPanel_OnClick(ByVal action As String)
     On Error GoTo EH
+
+    ' AUD-033: tvrda brana i na akcijama (ne samo na izgradnji panela).
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Select Case LCase$(action)
         Case "checkupdate":  AdminCheckUpdate
         Case "ensure":       AdminEnsureEverything

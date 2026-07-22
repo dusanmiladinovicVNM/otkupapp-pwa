@@ -250,10 +250,14 @@ End Sub
 Public Sub MaticniMenu_OnClick(ByVal sekTag As String, ByVal sekCaption As String)
     On Error GoTo EH
 
-    ' "Korisnici" (administracija pristupa) -- samo za admina (ili dok je AUTH iskljucen).
-    If StrComp(sekTag, "Korisnici", vbTextCompare) = 0 Then
+    ' AUD-033: administrativne sekcije (Korisnici / Admin / Podesavanja) -- samo za
+    ' admina (ili dok je AUTH iskljucen; MozeAdministraciju je anti-lockout). Ovo je
+    ' primarna (UI) brana; tvrde brane su u modAdmin/modPodesavanja ulaznim tackama.
+    If StrComp(sekTag, "Korisnici", vbTextCompare) = 0 _
+       Or StrComp(sekTag, "Admin", vbTextCompare) = 0 _
+       Or StrComp(sekTag, "Pode" & ChrW(353) & "avanja", vbTextCompare) = 0 Then
         If Not modAuth.MozeAdministraciju() Then
-            MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_KORISNICI"), vbExclamation, APP_NAME
+            MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
             Exit Sub
         End If
     End If

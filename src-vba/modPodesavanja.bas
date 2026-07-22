@@ -235,6 +235,13 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     Const SRC As String = "modPodesavanja.BuildConfigEditor"
     On Error GoTo EH
 
+    ' AUD-033: tvrda brana -- Podesavanja (config editor) gradi samo admin (ili dok je
+    ' AUTH iskljucen; MozeAdministraciju je anti-lockout). Uz meni gate (modMaticniLookups).
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     MigrateBankaRacuniLegacy
 
     Set mFrm = frm
@@ -379,6 +386,10 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
                 tb.WordWrap = True
                 tb.ScrollBars = fmScrollBarsVertical
             End If
+            ' Item 4 (RF-23): maskiraj "secret" polja (API kljuc / secret / token) da se
+            ' na ekranu ne vide u plain textu. Ne utice na cuvanu vrednost (SaveConfigEditor
+            ' cita .value normalno).
+            If typ = "secret" Then tb.PasswordChar = "*"
             tb.value = cur
             StyleTextBox tb
             mInputs.Add tb, key
@@ -724,6 +735,12 @@ End Sub
 
 Public Sub ShowConfigSheet()
     On Error GoTo EH
+    ' AUD-033: rucni prikaz tblSEFConfig-a (Alt+F8 izlaz u nuzdi / toggle) sme samo admin
+    ' (ili dok je AUTH iskljucen). Sprecava zaobilazak editora da se vide sirovi kljucevi.
+    If Not modAuth.MozeAdministraciju() Then
+        MsgBox Poruka("AUTH_MSG_SAMO_ADMIN_SEKCIJA"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
     ConfigSheet().Visible = xlSheetVisible
     Exit Sub
 EH:

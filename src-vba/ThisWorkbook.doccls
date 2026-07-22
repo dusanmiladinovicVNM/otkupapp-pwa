@@ -13,7 +13,12 @@ Private Sub Workbook_Open()
     On Error GoTo EH
     
     StartApp
-    
+
+    ' AUD-034a: licencni/trial gate je mozda odbio pristup -- prekini startup ODMAH,
+    ' pre CleanupOrphanedLocks (Google) i pre laznog VBA_STARTUP_SUCCESS. Zatvaranje
+    ' sveske je vec zakazano (DenyAccessAndScheduleClose -> OnTime ForceCloseDeniedWorkbook).
+    If modLicense.AccessWasDenied() Then Exit Sub
+
     ' Stale lock cleanup (prethodna sesija crash-ovala ? lock ostao u SyncControl).
     ' Brisanje VBA-owned stanica lockova starijih od TTL (10 min).
     ' Fail-soft: ako Google nije dostupan, samo se loguje i ide dalje.
