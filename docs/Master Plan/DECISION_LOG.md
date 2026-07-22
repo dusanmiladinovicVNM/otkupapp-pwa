@@ -6,75 +6,96 @@
 
 Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se ne brišu; kada prestanu da važe, označavaju se kao `Superseded` i povezuju sa novom odlukom.
 
-## Format odluke
-
-Svaka odluka treba da sadrži:
-
-- ID;
-- datum;
-- status;
-- kontekst;
-- odluku;
-- razlog;
-- posledice;
-- kriterijum za ponovno otvaranje.
-
 ---
 
-## GOV-001 — Jezik Master Plana
+## Governance odluke
 
+### GOV-001 — Jezik Master Plana
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Kontekst:** Dokument treba da bude svakodnevno upotrebljiv osnivaču i budućem domaćem timu.
 - **Odluka:** Master Plan se vodi na srpskom jeziku.
-- **Razlog:** Smanjuje trenje pri radu i omogućava precizno zapisivanje domaćih tržišnih i operativnih specifičnosti.
-- **Posledice:** Eksterni engleski sažetak pravi se samo kada postoji konkretna potreba.
-- **Ponovno otvaranje:** Kada većina rukovodećeg tima više ne koristi srpski kao radni jezik.
 
-## GOV-002 — Planska valuta
-
+### GOV-002 — Planska valuta
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Osnovna planska valuta je EUR; RSD se koristi za lokalne poreske, platne i gotovinske tokove.
-- **Razlog:** Cene softvera, hardvera i buduća regionalna poređenja lakše su uporedivi u EUR, dok se stvarni domaći rashodi i obaveze često realizuju u RSD.
-- **Posledice:** Svaki finansijski model mora navesti kursnu pretpostavku kada kombinuje EUR i RSD.
-- **Ponovno otvaranje:** Ako se promeni dominantna ugovorna ili računovodstvena valuta poslovanja.
 
-## GOV-003 — Način razvoja poglavlja
-
+### GOV-003 — Način razvoja poglavlja
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Svako veliko poglavlje razvija se kroz zaseban PR ili jasno izdvojen commit.
-- **Razlog:** Omogućava fokusiranu reviziju, istoriju promena i vraćanje odluka bez mešanja tema.
-- **Posledice:** Velika kombinovana ažuriranja bez jasne granice izbegavaju se.
-- **Ponovno otvaranje:** Ako obim dokumentacije postane toliko mali da odvojeni PR-ovi stvaraju više troška nego koristi.
 
-## GOV-004 — Anonimizacija klijenata
-
+### GOV-004 — Anonimizacija klijenata
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Klijenti se u strateškim dokumentima anonimizuju.
-- **Razlog:** Smanjuje reputacioni i poverljivi rizik i omogućava iskrenu analizu problema.
-- **Posledice:** Koriste se oznake poput `Klijent A`, `Klijent B`, kultura i segment, bez direktnih naziva firmi.
-- **Ponovno otvaranje:** Samo uz eksplicitnu dozvolu klijenta za javnu studiju slučaja.
 
-## GOV-005 — Osetljivi podaci
-
+### GOV-005 — Osetljivi podaci
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Osetljivi finansijski, ugovorni i identifikacioni podaci izdvajaju se iz javnog tehničkog repozitorijuma.
-- **Razlog:** Master Plan treba da bude iskren i numerički precizan bez izlaganja poverljivih informacija.
-- **Posledice:** Javni repo sadrži metodologiju i anonimizovane vrednosti; detaljni modeli idu u privatni repo ili privatni dodatak.
-- **Ponovno otvaranje:** Kada se promeni status repozitorijuma ili se uvede formalna kontrola pristupa.
 
 ---
 
-## STR-001 — Kontrolisan rast pre agresivnog skaliranja
+## Strateške odluke
 
+### STR-001 — Readiness-based rast
 - **Datum:** 2026-07-22
-- **Status:** Draft for strategy approval
-- **Kontekst:** Postoje tri aktivna klijenta; cilj za narednu sezonu je približno pet novih, ukupno oko osam, uz svesnu granicu od najviše deset.
-- **Predložena odluka:** Naredna sezona se tretira kao sezona dokazivanja operativne skale, ne kao sezona maksimalne prodaje.
-- **Razlog:** PWA Otkupac, kiosk terminali i termalna štampa uvode novi operativni rizik koji mora biti potvrđen na ograničenom broju firmi.
-- **Posledice:** Prodaja preko deset firmi odlaže se čak i ako postoji interesovanje, osim ako kapacitet i readiness budu ponovo potvrđeni.
-- **Ponovno otvaranje:** Nakon završene pune sezone sa izmerenim onboardingom, supportom, incidentima i korišćenjem terminala.
+- **Status:** Approved
+- **Kontekst:** Fiksni hard cap od 10 firmi može nepotrebno ograničiti rast kada su proizvod, onboarding i organizacija spremni za više.
+- **Odluka:** Maksimalan broj novih firmi po sezoni određuje formalni readiness score, ne unapred definisan broj.
+- **Posledice:** Cap može biti 8, 10, 15, 20 ili više, ali samo kada najslabija kritična komponenta zadovolji prag.
+- **Ponovno otvaranje:** Nakon definisanja i prve praktične primene readiness modela.
+
+### STR-002 — Primarni tržišni fokus
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Trenutni geografski fokus je Srbija. Primarni kupci su hladnjače i druge firme sa razgranatom mrežom otkupnih stanica i kooperanata.
+- **Posledice:** Promet nije jedini kriterijum; broj stanica, složenost toka i potreba za centralnom kontrolom imaju veću težinu.
+
+### STR-003 — Jedan proizvod, jedan kod
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Sve klijentske razlike rešavaju se zajedničkim kodom i konfiguracijom. Trajni klijentski fork nije dozvoljen.
+- **Ponovno otvaranje:** Nije planirano; izuzetak bi zahtevao novu formalnu stratešku odluku.
+
+### STR-004 — Dinamična uloga Gazdinstva
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Licence firmi trenutno finansiraju osnovni biznis. Gazdinstvo se kratkoročno ne tretira kao ključni prihod, ali može postati glavni proizvod ili izvor prihoda ako podaci potvrde konverziju i ekonomiku.
+- **Posledice:** Konzervativni finansijski plan Gazdinstvo računa minimalno ili kao nulu; strateški roadmap ostaje otvoren za veći rast.
+
+### STR-005 — Hardver kao sporedni profitni centar
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Hardver nije glavni profitni centar, ali mora biti profitabilan sporedni centar. AgriX može postati dobavljač šireg IT sistema ciljnih klijenata.
+- **Posledice:** Svaka kategorija opreme mora imati izmerenu stvarnu maržu nakon konfiguracije, transporta, garancije i zamena.
+- **Ponovno otvaranje:** Kada se potvrdi ili opovrgne ekonomika šireg IT portfolija.
+
+### STR-006 — Bez partnera samo zbog novca
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Partner ili investitor razmatra se samo kada rešava dokazano usko grlo i donosi merljivu sposobnost pored kapitala.
+- **Posledice:** Kapital bez distribucije, operativne sposobnosti ili validiranog plana nije dovoljan razlog za dilution.
+
+### STR-007 — Prvo operativno zaposlenje
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Prva operativna uloga je customer support / implementation.
+- **Odgovornost:** Rešavanje baznih pitanja, onboarding prema manualima, trijaža, monitoring i delegiranje složenih problema.
+- **Posledice:** Manuali i checkliste za onboarding postaju obavezni operativni artefakti.
+
+### STR-008 — Regionalna platforma
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Odluka:** Dugoročni cilj AgriX-a je regionalna vertikalna platforma, ne trajno ograničen lokalni specijalista.
+- **Posledice:** Tehnologija, pricing, dokumentacija i organizacija moraju biti projektovani za prenos na druga tržišta.
+
+### STR-009 — Strateški cilj tržišnog udela
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Kontekst:** Radna procena je da u Srbiji postoji 500–1.000 relevantnih firmi i da postoji ograničen tržišni prozor.
+- **Odluka:** AgriX cilja najmanje 200 firmi u naredne 3–4 godine.
+- **Napomena:** Ovo je strateški cilj, ne garantovana prognoza.
+- **Posledice:** Potreban je godišnji plan akvizicije, zapošljavanja, onboardinga, hardvera i kapitala.
+- **Ponovno otvaranje:** Nakon tržišnog istraživanja i prvog readiness-based plana rasta.
