@@ -568,10 +568,15 @@ Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
         Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
 
-    ' AUD-031d: this duplicate guard must be fail-CLOSED. Read the submission
-    ' table directly instead of via the fail-soft GetSEFSubmissionsForFaktura
-    ' (whose EH returns Empty), so a genuine read error propagates to EH and
-    ' re-raises, blocking the send. IsEmpty here means the table has no rows.
+    ' AUD-031d: this duplicate guard must be fail-CLOSED. Require the submission
+    ' schema FIRST so a missing/absent tblSEFSubmission raises here instead of
+    ' GetTableData returning Empty and the guard silently reporting "no prior
+    ' submission" (-> double send). Read the table directly (not via the
+    ' fail-soft GetSEFSubmissionsForFaktura, whose EH returns Empty) so a
+    ' genuine read error also propagates. After the schema check, IsEmpty means
+    ' the table legitimately has zero rows.
+    RequireSEFSubmissionSchema SRC
+
     Dim data As Variant
     data = GetTableData(TBL_SEF_SUBMISSION)
 

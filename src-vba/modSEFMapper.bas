@@ -1,6 +1,12 @@
 Attribute VB_Name = "modSEFMapper"
 Option Explicit
 
+' AUD-031b: money amounts stay at 2 decimals (XmlAmount), but quantity and
+' unit price keep higher precision so the emitted qty * price reproduces the
+' 2-decimal line net. EN16931 does not cap quantity/unit-price decimals.
+Private Const SEF_QTY_DECIMALS As Long = 3
+Private Const SEF_PRICE_DECIMALS As Long = 4
+
 Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSnapshot
     On Error GoTo EH
 
@@ -130,6 +136,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim colCena As Long
     Dim colKlasa As Long
     Dim colBrojPrijemnice As Long
+    Dim colStStornirano As Long
     Dim colStOsiroceno As Long
 
     colStFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", SRC)
@@ -138,9 +145,11 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     colCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Cena", SRC)
     colKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Klasa", SRC)
     colBrojPrijemnice = RequireColumnIndex(TBL_FAKTURA_STAVKE, "BrojPrijemnice", SRC)
-    ' AUD-031: orphan marker (set when the invoiced prijemnica is storno-ed).
-    ' GetColumnIndex keeps this fail-open on installs without the column.
-    colStOsiroceno = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+    ' AUD-031: active-line markers. Both exist on tblFakturaStavke (full storno
+    ' sets Stornirano="Da" on every line; a storno-ed invoiced prijemnica sets
+    ' OsirocenoOd). RequireColumnIndex keeps the tax send path fail-closed.
+    colStStornirano = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
+    colStOsiroceno = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
 
     Dim line As clsSEFLine
     Dim prijemnicaID As String
@@ -163,11 +172,13 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
         If CStr(stavke(i, colStFakturaID)) = fakturaID Then
 
-            ' AUD-031: skip orphaned lines (invoiced prijemnica was storno-ed).
-            ' Build UBL only from active stavke so line totals stay consistent.
-            If colStOsiroceno > 0 Then
-                If Len(Trim$(CStr(stavke(i, colStOsiroceno)))) > 0 Then GoTo NextStavka
-            End If
+            ' AUD-031: build UBL only from ACTIVE stavke. Skip a line that is
+            ' stornirana (Stornirano="DA") or orphaned (OsirocenoOd set, i.e.
+            ' its invoiced prijemnica was storno-ed) so line totals stay
+            ' consistent. In the normal flow ValidateFakturaForSEF has already
+            ' blocked such invoices; this is defense-in-depth.
+            If UCase$(Trim$(CStr(stavke(i, colStStornirano)))) = "DA" Then GoTo NextStavka
+            If Len(Trim$(CStr(stavke(i, colStOsiroceno)))) > 0 Then GoTo NextStavka
 
             prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
             brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
@@ -196,6 +207,14 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
             If Len(Trim$(opis)) = 0 Then
                 opis = "Roba po prijemnici " & brojPrijemnice
             End If
+
+            ' AUD-031b: quantity and unit price carry more precision than money.
+            ' Round them to the precision that will actually be emitted in the
+            ' UBL (see XmlQuantity/XmlUnitPrice), then derive the line net from
+            ' those emitted values so the receiver's Round(qty * price, 2)
+            ' reproduces LineExtensionAmount exactly.
+            qty = Round(qty, SEF_QTY_DECIMALS)
+            price = Round(price, SEF_PRICE_DECIMALS)
 
             lineNet = Round(qty * price, 2)
             lineVat = Round(lineNet * taxPercent / 100, 2)
@@ -379,9 +398,7 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     If Len(Trim$(noteText)) = 0 Then noteText = "Otkupljena roba prema prijemnici"
     
     paymentDueDays = GetSEFPaymentDueDays()
-    
-    dueDate = DateAdd("d", paymentDueDays, dto.InvoiceDate)
-    
+
     buyerMaticni = NzStr(LookupValue("tblKupci", "KupacID", dto.BuyerID, "MaticniBroj"))
     buyerStreet = NzStr(LookupValue("tblKupci", "KupacID", dto.BuyerID, "Ulica"))
     buyerCity = NzStr(LookupValue("tblKupci", "KupacID", dto.BuyerID, "Mesto"))
@@ -426,10 +443,11 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         effectiveIssueDate = dto.InvoiceDate
     End If
 
-    ' AUD-031c: DueDate = InvoiceDate + paymentDueDays. When IssueDate is forced
-    ' to today on a backdated invoice, DueDate can fall before IssueDate, which
-    ' SEF rejects. Clamp DueDate up to the effective IssueDate.
-    If dueDate < effectiveIssueDate Then dueDate = effectiveIssueDate
+    ' AUD-031c: derive DueDate FROM the effective IssueDate, so the agreed
+    ' payment term is preserved and DueDate can never precede IssueDate. When
+    ' force-today moves IssueDate to today on a backdated invoice, the payment
+    ' window runs paymentDueDays from today (it does not collapse to 0 days).
+    dueDate = DateAdd("d", paymentDueDays, effectiveIssueDate)
 
     xml = xml & "  <cbc:IssueDate>" & Format$(effectiveIssueDate, "yyyy-mm-dd") & "</cbc:IssueDate>" & vbCrLf
     xml = xml & "  <cbc:DueDate>" & Format$(dueDate, "yyyy-mm-dd") & "</cbc:DueDate>" & vbCrLf
@@ -576,7 +594,7 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         
         xml = xml & "  <cac:InvoiceLine>" & vbCrLf
         xml = xml & "    <cbc:ID>" & CStr(i) & "</cbc:ID>" & vbCrLf
-        xml = xml & "    <cbc:InvoicedQuantity unitCode=""KGM"">" & XmlAmount(ln.kolicina) & "</cbc:InvoicedQuantity>" & vbCrLf
+        xml = xml & "    <cbc:InvoicedQuantity unitCode=""KGM"">" & XmlQuantity(ln.kolicina) & "</cbc:InvoicedQuantity>" & vbCrLf
         xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.neto) & "</cbc:LineExtensionAmount>" & vbCrLf
         
         xml = xml & "    <cac:Item>" & vbCrLf
@@ -592,7 +610,7 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         xml = xml & "    </cac:Item>" & vbCrLf
         
         xml = xml & "    <cac:Price>" & vbCrLf
-        xml = xml & "      <cbc:PriceAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.cena) & "</cbc:PriceAmount>" & vbCrLf
+        xml = xml & "      <cbc:PriceAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlUnitPrice(ln.cena) & "</cbc:PriceAmount>" & vbCrLf
         xml = xml & "    </cac:Price>" & vbCrLf
         
         xml = xml & "  </cac:InvoiceLine>" & vbCrLf
@@ -643,13 +661,40 @@ Private Function XmlEscape(ByVal s As String) As String
 End Function
 
 Private Function XmlAmount(ByVal n As Double) As String
-    
+
     Dim s As String
-    
+
     s = Format$(Round(n, 2), "0.00")
     s = Replace(s, ",", ".")
-    
+
     XmlAmount = s
+
+End Function
+
+' AUD-031b: quantity formatter (higher precision than money). The rounding
+' precision here MUST match SEF_QTY_DECIMALS used in BuildSEFInvoiceDto, so
+' the emitted quantity is exactly the value the line net was derived from.
+Private Function XmlQuantity(ByVal n As Double) As String
+
+    Dim s As String
+
+    s = Format$(Round(n, SEF_QTY_DECIMALS), "0." & String$(SEF_QTY_DECIMALS, "0"))
+    s = Replace(s, ",", ".")
+
+    XmlQuantity = s
+
+End Function
+
+' AUD-031b: unit-price formatter (higher precision than money). Rounding
+' precision MUST match SEF_PRICE_DECIMALS used in BuildSEFInvoiceDto.
+Private Function XmlUnitPrice(ByVal n As Double) As String
+
+    Dim s As String
+
+    s = Format$(Round(n, SEF_PRICE_DECIMALS), "0." & String$(SEF_PRICE_DECIMALS, "0"))
+    s = Replace(s, ",", ".")
+
+    XmlUnitPrice = s
 
 End Function
 

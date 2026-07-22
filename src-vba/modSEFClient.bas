@@ -1012,3 +1012,20 @@ Public Function TestProxyForGetJsonNumericIdLiteral(ByVal rawID As String) As St
         GetJsonNumericIdLiteral(rawID, "TestProxyForGetJsonNumericIdLiteral")
 End Function
 
+Public Function TestProxyForParseSubmitResponse(ByVal httpStatus As Long, _
+                                                ByVal rawBody As String) As clsSEFResponse
+    ' Test-only proxy. Forwards to the private ParseSubmitResponse so
+    ' RunSEFOfflineSuite can verify HTTP status -> apiStatus classification
+    ' (notably 409 -> CONFLICT, not REJECTED). Not used by production code.
+
+    Dim resp As clsSEFResponse
+    Set resp = New clsSEFResponse
+
+    resp.httpStatus = httpStatus
+    resp.rawBody = rawBody
+
+    ParseSubmitResponse resp
+
+    Set TestProxyForParseSubmitResponse = resp
+End Function
+

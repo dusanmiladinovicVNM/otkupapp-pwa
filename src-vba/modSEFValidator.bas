@@ -96,11 +96,11 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     colBrojFakture = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", SRC)
     colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", SRC)
 
-    ' AUD-031a: read cancellation / orphan markers to block sending a
-    ' storno-ed or orphaned invoice. GetColumnIndex (0 = absent) keeps this
-    ' fail-open on installs where the columns are not present.
-    colStornirano = GetColumnIndex(TBL_FAKTURE, COL_STORNIRANO)
-    colOsiroceno = GetColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD)
+    ' AUD-031a: cancellation / orphan markers gate the tax send path, so they
+    ' are REQUIRED (fail-closed). A missing column must raise here rather than
+    ' silently letting a stornirana/orphaned faktura become sendable again.
+    colStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
+    colOsiroceno = RequireColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD, SRC)
 
     For i = 1 To UBound(fakture, 1)
         If CStr(fakture(i, colFakturaID)) = fakturaID Then
@@ -109,8 +109,8 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
             workflowState = Trim$(CStr(fakture(i, colWorkflow)))
             brojFakture = Trim$(CStr(fakture(i, colBrojFakture)))
             iznosRaw = Trim$(CStr(fakture(i, colIznos)))
-            If colStornirano > 0 Then storniranoRaw = Trim$(CStr(fakture(i, colStornirano)))
-            If colOsiroceno > 0 Then osirocenoRaw = Trim$(CStr(fakture(i, colOsiroceno)))
+            storniranoRaw = Trim$(CStr(fakture(i, colStornirano)))
+            osirocenoRaw = Trim$(CStr(fakture(i, colOsiroceno)))
             Exit For
         End If
     Next i
