@@ -34,7 +34,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Dodaje APR finansijske podatke firmama.")
     parser.add_argument("--input", type=Path, help="Ulazni Excel iz Raw Data foldera.")
     parser.add_argument("--timeout", type=int, default=120)
-    parser.add_argument("--insecure", action="store_true")
+    tls_group = parser.add_mutually_exclusive_group()
+    tls_group.add_argument("--insecure", action="store_true", help="Odmah isključuje TLS proveru.")
+    tls_group.add_argument(
+        "--strict-tls",
+        action="store_true",
+        help="Zabranjuje automatski APR-only fallback.",
+    )
     return parser.parse_args()
 
 
@@ -59,10 +65,11 @@ def main() -> None:
     unique_ids = df_input["maticni_broj"].dropna().drop_duplicates().tolist()
 
     print("Preuzimanje APR finansijskih podataka...")
-    payload = request_json(
+    payload, request_meta = request_json(
         FINANCIALS_URL,
         timeout=args.timeout,
-        verify_tls=not args.insecure,
+        force_insecure=args.insecure,
+        strict_tls=args.strict_tls,
     )
     financial_data = payload["Podaci"]
 
@@ -139,7 +146,7 @@ def main() -> None:
         "duplicate_company_ids_in_input": duplicate_count,
         "found_in_financial_api": int(df_final["found_in_financial_api"].fillna(False).sum()),
         "rows_with_usable_financials": int(df_final["has_financials"].sum()),
-        "tls_verification": not args.insecure,
+        "request": request_meta,
         "important_limitation": (
             "Endpoint se trenutno tretira kao jedan finansijski zapis po firmi. "
             "Ovaj korak ne dokazuje višegodišnju istoriju dok se API struktura posebno ne potvrdi."
@@ -150,6 +157,8 @@ def main() -> None:
     print(f"Sačuvano: {output_path}")
     print(f"Ukupno redova: {len(df_final)}")
     print(f"Upotrebljive finansije: {int(df_final['has_financials'].sum())}")
+    if request_meta["tls_fallback_used"]:
+        print("NAPOMENA: TLS fallback je korišćen i zabeležen u metadata JSON-u.")
 
 
 if __name__ == "__main__":
