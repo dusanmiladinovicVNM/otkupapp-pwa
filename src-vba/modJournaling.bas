@@ -37,6 +37,20 @@ Private Const AUTOSAVE_MAX_AGE_SECONDS As Long = 600   ' kapica za neprekidan un
 Private m_NextSaveTime  As Date
 Private m_SaveScheduled As Boolean
 
+' Test-mode: dok je TRUE, WriteJournalRow i MarkDirtyAndSchedule su no-op --
+' da dev smoke-suite (npr. modAgrohemijaTests), koji mutira tabele pa radi
+' rollback, ne ostavi CSV journal redove niti zakaze AutoSave posle rollback-a.
+' Postavlja se ISKLJUCIVO iz test modula; produkcioni tok ga nikad ne dira.
+Private m_TestModeQuiet As Boolean
+
+Public Sub SetTestModeQuiet(ByVal onOff As Boolean)
+    m_TestModeQuiet = onOff
+End Sub
+
+Public Function IsTestModeQuiet() As Boolean
+    IsTestModeQuiet = m_TestModeQuiet
+End Function
+
 ' ============================================================
 ' PUBLIC - Aufgerufen aus modDataAccess.AppendRow
 ' ============================================================
@@ -44,7 +58,9 @@ Private m_SaveScheduled As Boolean
 Public Sub WriteJournalRow(ByVal tblName As String, ByVal rowData As Variant)
     ' Schreibt eine komplette rowData-Zeile als CSV-Append
     ' Fehlschlag ist still - Journal darf nie die App blockieren
-    
+
+    If m_TestModeQuiet Then Exit Sub            ' test-mode: bez journal traga
+
     Dim journalPath As String
     Dim fileName As String
     Dim filePath As String
@@ -490,6 +506,8 @@ End Sub
 
 Public Sub MarkDirtyAndSchedule(ByVal sourceName As String)
     On Error Resume Next
+
+    If m_TestModeQuiet Then Exit Sub            ' test-mode: ne zakazuj AutoSave
 
     Dim delaySec As Long
     delaySec = AUTOSAVE_IDLE_SECONDS               ' uvek 60s posle poslednje aktivnosti

@@ -3,30 +3,22 @@ Option Explicit
 
 ' ============================================================
 ' modAgrohemijaTests
-' Dev/test-only smoke suite for modAgrohemija (RF-27 / AUD-040).
+' Dev-only smoke suite za modAgrohemija (RF-27 / AUD-040).
 '
-' Izolacija: ceo suite radi unutar JEDNE clsTransaction koja snima
-' tblMagacin/tblArtikli/tblKooperanti na pocetku i RADI ROLLBACK na kraju,
-' pa testovi NE ostavljaju trag u ledgeru. Fixture: ART-TEST (cena 100) +
-' KOOP-TEST + pocetno stanje (ULAZ 1000) za pokrice izlaza.
+' IZOLACIJA (bez ijednog traga posle pokretanja):
+'   * dev-guard: potvrda pre bilo kakve mutacije (default dugme = Ne);
+'   * test-mode `modJournaling.SetTestModeQuiet True` -> WriteJournalRow i
+'     MarkDirtyAndSchedule su no-op (nema CSV journal redova, nema zakazanog
+'     AutoSave posle rollback-a); vraca se + StopAutoSaveTimer na kraju;
+'   * ceo suite unutar JEDNE clsTransaction -> RollbackTx vraca
+'     tblMagacin/tblArtikli/tblKooperanti/tblParcele;
+'   * NE zove se BookPocetniDug (koji radi svoj CommitTx) -> ART_POCETNI_DUG se
+'     testira direktno preko SaveMagacinCore(allowNoStock:=True);
+'   * log ide SAMO u Immediate (Debug.Print) + zavrsni MsgBox -- ne pravi se
+'     nikakav worksheet.
 '
-' Pokriva nalaze iz review-a RF-27:
-'   1  izlaz knjizi snapshot cenu (ne master)      -> Test_IzlazBooksSnapshotPrice
-'   2  master se promeni posle korpe -> snapshot    -> isti (overrideCena pobedjuje master)
-'   3  overrideCena = 0 -> nema reda (izlaz)        -> Test_IzlazZeroPriceBlocked
-'   4  overrideCena nije broj -> nema reda          -> Test_IzlazNonNumericPriceBlocked
-'   5  negativna cena -> blokirano                  -> Test_IzlazNegativePriceBlocked
-'   6  nepostojeci artikal -> blokirano             -> Test_NonexistentArtikalBlocked
-'   7  nepostojeci kooperant -> blokirano           -> Test_NonexistentKooperantBlocked
-'   8  pad druge stavke -> rollback prve            -> Test_MultiItemRollback
-'   9  ART_POCETNI_DUG i dalje radi                 -> Test_PocetniDugStillWorks
-'   10 legitiman ulaz sa cenom > 0 radi             -> Test_UlazPositivePriceWorks
-'   11 deaktiviran artikal/koop = N/A: tblArtikli/tblKooperanti NEMAJU
-'      "aktivan" kolonu u semi (samo tblParcele/tblKorisnici je imaju), pa
-'      "postoji" je jedini lifecycle koji model danas ima.
-'   12 parcela drugog kooperanta = dokumentovan gap (AUD-049): parcela<->koop
-'      veza jos nije proverena; ostaje otvoreno dok se AUD-049 ne uradi.
-' + nova zero-value ULAZ staza (allowZeroValue): dozvoljen uz flag, izlaz strog.
+' Fixture: ART-TEST (cena 100) + stanje (ULAZ 1000), ART_POCETNI_DUG, KOOP-TEST,
+' i parcele: PAR-OK (KOOP-TEST, aktivna), PAR-OTHER (drugi koop), PAR-INACTIVE.
 ' ============================================================
 
 Private m_Total As Long
@@ -34,20 +26,34 @@ Private m_Passed As Long
 Private m_Failed As Long
 Private m_Skipped As Long
 
-Private Const AGRO_TEST_LOG_SHEET As String = "AGRO_TEST_LOG"
 Private Const ART_TEST As String = "ART-TEST-AGRO"
 Private Const KOOP_TEST As String = "KOOP-TEST-AGRO"
+Private Const KOOP_OTHER As String = "KOOP-OTHER-AGRO"
+Private Const PAR_OK As String = "PAR-TEST-OK"
+Private Const PAR_OTHER As String = "PAR-TEST-OTHER"
+Private Const PAR_INACTIVE As String = "PAR-TEST-INACTIVE"
 Private Const ART_TEST_CENA As Double = 100#
 
 Public Sub RunAgrohemijaSmokeSuite()
     Dim tx As clsTransaction
     Dim txStarted As Boolean
+    Dim quietSet As Boolean
+
+    ' Dev-guard: sprecava slucajno pokretanje na klijentu (default = Ne).
+    If MsgBox("DEV smoke test za Agrohemiju (RF-27)." & vbCrLf & _
+              "Privremeno menja tblMagacin/Artikli/Kooperanti/Parcele i vraca ih " & _
+              "rollback-om; journaling i AutoSave su ugaseni za vreme testa." & vbCrLf & vbCrLf & _
+              "Pokrenuti?", vbYesNo + vbQuestion + vbDefaultButton2, APP_NAME) <> vbYes Then
+        Exit Sub
+    End If
 
     On Error GoTo EH
 
     ResetAgroTestCounters
-    InitAgroTestLog
     StartAgroSuite "AGROHEMIJA SMOKE SUITE"
+
+    modJournaling.SetTestModeQuiet True
+    quietSet = True
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -55,6 +61,7 @@ Public Sub RunAgrohemijaSmokeSuite()
     tx.AddTableSnapshot TBL_MAGACIN
     tx.AddTableSnapshot TBL_ARTIKLI
     tx.AddTableSnapshot TBL_KOOPERANTI
+    tx.AddTableSnapshot TBL_PARCELE
 
     SeedAgroFixtures
 
@@ -64,17 +71,26 @@ Public Sub RunAgrohemijaSmokeSuite()
     Test_IzlazNegativePriceBlocked
     Test_NonexistentArtikalBlocked
     Test_NonexistentKooperantBlocked
+    Test_IzlazParcelaOK
+    Test_IzlazParcelaNonexistent
+    Test_IzlazParcelaOtherKoop
+    Test_IzlazParcelaInactive
+    Test_IzlazParcelaMultiList
+    Test_IzlazEmptyParcelaFollowsFlag
     Test_MultiItemRollback
-    Test_PocetniDugStillWorks
+    Test_PocetniDugArtikalExempt
     Test_UlazPositivePriceWorks
     Test_UlazZeroBlockedWithoutFlag
     Test_UlazZeroAllowedWithFlag
     Test_IzlazZeroBlockedEvenWithFlag
+    Test_FormExitWiresBasketPrice
 
-    ' Vrati sve -- testovi ne ostavljaju trag u ledgeru.
     tx.RollbackTx
     txStarted = False
     Set tx = Nothing
+
+    CleanupAgroTestMode quietSet
+    quietSet = False
 
     FinishAgroSuite
     Exit Sub
@@ -83,37 +99,62 @@ EH:
     LogAgroFatal "RunAgrohemijaSmokeSuite", Err.Number, Err.description
     On Error Resume Next
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
+    If quietSet Then CleanupAgroTestMode True
     On Error GoTo 0
     FinishAgroSuite
+End Sub
+
+Private Sub CleanupAgroTestMode(ByVal wasSet As Boolean)
+    On Error Resume Next
+    If wasSet Then modJournaling.SetTestModeQuiet False
+    modJournaling.StopAutoSaveTimer          ' otkazi eventualno zakazan tick
+    On Error GoTo 0
 End Sub
 
 ' ---------- Fixtures ----------
 
 Private Sub SeedAgroFixtures()
-    ' Artikal ART-TEST (cena 100) -- upis po imenu kolone (redosled nije siguran).
-    If FindRows(TBL_ARTIKLI, COL_ART_ID, ART_TEST).count = 0 Then
-        Dim aLo As ListObject: Set aLo = GetTable(TBL_ARTIKLI)
-        Dim aRow() As Variant: ReDim aRow(1 To aLo.ListColumns.count)
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_ID, ART_TEST
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_NAZIV, "TEST artikal (agro)"
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_TIP, "Test"
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_JM, "kg"
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_CENA, ART_TEST_CENA
-        SeedCell aRow, TBL_ARTIKLI, COL_ART_PAKOVANJE, 1
-        AppendRow TBL_ARTIKLI, aRow
-    End If
-
-    ' Kooperant KOOP-TEST -- za referencijalnu proveru dovoljan je ID.
-    If FindRows(TBL_KOOPERANTI, COL_KOOP_ID, KOOP_TEST).count = 0 Then
-        Dim kLo As ListObject: Set kLo = GetTable(TBL_KOOPERANTI)
-        Dim kRow() As Variant: ReDim kRow(1 To kLo.ListColumns.count)
-        SeedCell kRow, TBL_KOOPERANTI, COL_KOOP_ID, KOOP_TEST
-        AppendRow TBL_KOOPERANTI, kRow
-    End If
+    SeedArtikal ART_TEST, "TEST artikal (agro)", ART_TEST_CENA
+    SeedArtikal ART_POCETNI_DUG, "Pocetni dug (test)", 1#
+    SeedKooperant KOOP_TEST
+    SeedParcela PAR_OK, KOOP_TEST, "Da"
+    SeedParcela PAR_OTHER, KOOP_OTHER, "Da"
+    SeedParcela PAR_INACTIVE, KOOP_TEST, "Ne"
 
     ' Pocetno stanje: ULAZ 1000 @ 100 da izlazni testovi imaju pokrice.
     SaveMagacinCore Date, ART_TEST, MAG_ULAZ, 1000#, "", "", "T-SEED-ULAZ", _
                     "", "", ART_TEST_CENA
+End Sub
+
+Private Sub SeedArtikal(ByVal artID As String, ByVal naziv As String, ByVal cena As Double)
+    If FindRows(TBL_ARTIKLI, COL_ART_ID, artID).count > 0 Then Exit Sub
+    Dim lo As ListObject: Set lo = GetTable(TBL_ARTIKLI)
+    Dim r() As Variant: ReDim r(1 To lo.ListColumns.count)
+    SeedCell r, TBL_ARTIKLI, COL_ART_ID, artID
+    SeedCell r, TBL_ARTIKLI, COL_ART_NAZIV, naziv
+    SeedCell r, TBL_ARTIKLI, COL_ART_TIP, "Test"
+    SeedCell r, TBL_ARTIKLI, COL_ART_JM, "kg"
+    SeedCell r, TBL_ARTIKLI, COL_ART_CENA, cena
+    SeedCell r, TBL_ARTIKLI, COL_ART_PAKOVANJE, 1
+    AppendRow TBL_ARTIKLI, r
+End Sub
+
+Private Sub SeedKooperant(ByVal koopID As String)
+    If FindRows(TBL_KOOPERANTI, COL_KOOP_ID, koopID).count > 0 Then Exit Sub
+    Dim lo As ListObject: Set lo = GetTable(TBL_KOOPERANTI)
+    Dim r() As Variant: ReDim r(1 To lo.ListColumns.count)
+    SeedCell r, TBL_KOOPERANTI, COL_KOOP_ID, koopID
+    AppendRow TBL_KOOPERANTI, r
+End Sub
+
+Private Sub SeedParcela(ByVal parID As String, ByVal koopID As String, ByVal aktivna As String)
+    If FindRows(TBL_PARCELE, COL_PAR_ID, parID).count > 0 Then Exit Sub
+    Dim lo As ListObject: Set lo = GetTable(TBL_PARCELE)
+    Dim r() As Variant: ReDim r(1 To lo.ListColumns.count)
+    SeedCell r, TBL_PARCELE, COL_PAR_ID, parID
+    SeedCell r, TBL_PARCELE, COL_PAR_KOOP, koopID
+    SeedCell r, TBL_PARCELE, COL_PAR_AKTIVNA, aktivna
+    AppendRow TBL_PARCELE, r
 End Sub
 
 Private Sub SeedCell(ByRef rowData As Variant, ByVal tbl As String, _
@@ -129,13 +170,18 @@ Private Function CountMagRows() As Long
     If IsEmpty(d) Then CountMagRows = 0 Else CountMagRows = UBound(d, 1)
 End Function
 
-' ---------- Testovi ----------
+' Vraca Err.Number posle poziva koji treba da padne (koristi se sa On Error Resume Next).
+Private Function ErrCodeEquals(ByVal errNum As Long, ByVal code As Long) As Boolean
+    ErrCodeEquals = (errNum = (vbObjectError + code))
+End Function
+
+' ---------- Testovi: cena ----------
 
 Private Sub Test_IzlazBooksSnapshotPrice()
     ' #1 + #2: master cena = 100, snapshot korpe = 80 -> knjizi se 80.
     On Error GoTo EH
     Dim id As String
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 2#, KOOP_TEST, "", "T-SNAP", _
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 2#, KOOP_TEST, PAR_OK, "T-SNAP", _
                          overrideCena:=80#)
     If Len(Trim$(id)) = 0 Then
         LogAgroFail "Izlaz knjizi snapshot cenu", "Nema ID-a (upis nije uspeo)"
@@ -153,64 +199,150 @@ EH:
 End Sub
 
 Private Sub Test_IzlazZeroPriceBlocked()
-    ' #3: overrideCena = 0 -> fail-closed, nema reda.
-    Dim id As String, raised As Boolean
+    ' #3: overrideCena = 0 -> fail-closed (Err 4206), bez upisa.
+    Dim id As String, en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-IZ0", _
+    Err.Clear
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-IZ0", _
                          overrideCena:=0#)
-    raised = (Err.Number <> 0)
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Izlaz cena=0 -> blokirano (Err.Raise, bez upisa)"
+    AssertAgroTrue ErrCodeEquals(en, 4206) And Len(Trim$(id)) = 0, _
+        "Izlaz cena=0 -> blokirano (Err 4206, bez upisa)"
 End Sub
 
 Private Sub Test_IzlazNonNumericPriceBlocked()
-    ' #4: nenumericka cena -> resolves 0 -> blokirano.
-    Dim id As String, raised As Boolean
+    ' #4: nenumericka cena -> resolves 0 -> Err 4206.
+    Dim id As String, en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-IZNAN", _
+    Err.Clear
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-IZNAN", _
                          overrideCena:="nije broj")
-    raised = (Err.Number <> 0)
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Izlaz nenumericka cena -> blokirano (bez upisa)"
+    AssertAgroTrue ErrCodeEquals(en, 4206) And Len(Trim$(id)) = 0, _
+        "Izlaz nenumericka cena -> blokirano (Err 4206)"
 End Sub
 
 Private Sub Test_IzlazNegativePriceBlocked()
-    ' #5: negativna cena -> blokirano.
-    Dim id As String, raised As Boolean
+    ' #5: negativna cena -> Err 4206.
+    Dim id As String, en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-IZNEG", _
+    Err.Clear
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-IZNEG", _
                          overrideCena:=-5#)
-    raised = (Err.Number <> 0)
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Izlaz negativna cena -> blokirano"
+    AssertAgroTrue ErrCodeEquals(en, 4206) And Len(Trim$(id)) = 0, _
+        "Izlaz negativna cena -> blokirano (Err 4206)"
 End Sub
 
+' ---------- Testovi: referencijalni integritet ----------
+
 Private Sub Test_NonexistentArtikalBlocked()
-    ' #6: nepostojeci artikal -> blokirano (4207).
-    Dim id As String, raised As Boolean
+    ' #6: nepostojeci artikal -> Err 4207.
+    Dim en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, "ART-NE-POSTOJI", MAG_IZLAZ, 1#, KOOP_TEST, "", "T-NOART", _
-                         overrideCena:=50#)
-    raised = (Err.Number <> 0)
+    Err.Clear
+    SaveMagacinCore Date, "ART-NE-POSTOJI", MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-NOART", _
+                    overrideCena:=50#
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Nepostojeci artikal -> blokirano (4207)"
+    AssertAgroTrue ErrCodeEquals(en, 4207), "Nepostojeci artikal -> blokirano (Err 4207)"
 End Sub
 
 Private Sub Test_NonexistentKooperantBlocked()
-    ' #7: nepostojeci kooperant (izlaz) -> blokirano (4208).
-    Dim id As String, raised As Boolean
+    ' #7: nepostojeci kooperant (izlaz) -> Err 4208.
+    Dim en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, "KOOP-NE-POSTOJI", "", "T-NOKOOP", _
-                         overrideCena:=50#)
-    raised = (Err.Number <> 0)
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, "KOOP-NE-POSTOJI", "", "T-NOKOOP", _
+                    overrideCena:=50#
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Nepostojeci kooperant (izlaz) -> blokirano (4208)"
+    AssertAgroTrue ErrCodeEquals(en, 4208), "Nepostojeci kooperant (izlaz) -> blokirano (Err 4208)"
 End Sub
+
+Private Sub Test_IzlazParcelaOK()
+    ' Parcela pripada kooperantu i aktivna -> prolazi.
+    On Error GoTo EH
+    Dim id As String
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-PAROK", _
+                         overrideCena:=100#)
+    AssertAgroTrue Len(Trim$(id)) > 0, "Izlaz sa validnom parcelom (koop+aktivna) -> prolazi"
+    Exit Sub
+EH:
+    LogAgroFail "Izlaz sa validnom parcelom", Err.description
+End Sub
+
+Private Sub Test_IzlazParcelaNonexistent()
+    Dim en As Long
+    On Error Resume Next
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "PAR-NE-POSTOJI", "T-PARNE", _
+                    overrideCena:=100#
+    en = Err.Number
+    On Error GoTo 0
+    AssertAgroTrue ErrCodeEquals(en, 4212), "Nepostojeca parcela -> blokirano (Err 4212)"
+End Sub
+
+Private Sub Test_IzlazParcelaOtherKoop()
+    ' Parcela drugog kooperanta -> blokirano (jezgro nalaza).
+    Dim en As Long
+    On Error Resume Next
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OTHER, "T-PAROTH", _
+                    overrideCena:=100#
+    en = Err.Number
+    On Error GoTo 0
+    AssertAgroTrue ErrCodeEquals(en, 4213), _
+        "Parcela drugog kooperanta -> blokirano (Err 4213)"
+End Sub
+
+Private Sub Test_IzlazParcelaInactive()
+    ' Neaktivna parcela -> blokirano.
+    Dim en As Long
+    On Error Resume Next
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_INACTIVE, "T-PARIN", _
+                    overrideCena:=100#
+    en = Err.Number
+    On Error GoTo 0
+    AssertAgroTrue ErrCodeEquals(en, 4214), "Neaktivna parcela -> blokirano (Err 4214)"
+End Sub
+
+Private Sub Test_IzlazParcelaMultiList()
+    ' ;-lista: prva OK, druga drugog koop -> blokirano na drugoj (Err 4213).
+    Dim en As Long
+    On Error Resume Next
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK & ";" & PAR_OTHER, _
+                    "T-PARML", overrideCena:=100#
+    en = Err.Number
+    On Error GoTo 0
+    AssertAgroTrue ErrCodeEquals(en, 4213), _
+        "Parcela ;-lista sa jednom tudjom -> blokirano (Err 4213)"
+End Sub
+
+Private Sub Test_IzlazEmptyParcelaFollowsFlag()
+    ' Prazna parcela: PRACENJE ON -> blokirano (Err 4215); OFF -> dozvoljeno.
+    Dim id As String, en As Long
+    On Error Resume Next
+    Err.Clear
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-IZEMPTY", _
+                         overrideCena:=100#)
+    en = Err.Number
+    On Error GoTo 0
+    If IsPracenjeParcela() Then
+        AssertAgroTrue ErrCodeEquals(en, 4215) And Len(Trim$(id)) = 0, _
+            "Izlaz bez parcele + PRACENJE ON -> blokirano (Err 4215)"
+    Else
+        AssertAgroTrue (en = 0) And Len(Trim$(id)) > 0, _
+            "Izlaz bez parcele + PRACENJE OFF -> dozvoljeno"
+    End If
+End Sub
+
+' ---------- Testovi: transakcija / migracija / ulaz ----------
 
 Private Sub Test_MultiItemRollback()
     ' #8: emulira formu -- outer TX oko vise stavki; pad druge vraca prvu.
@@ -223,20 +355,21 @@ Private Sub Test_MultiItemRollback()
     Dim before As Long: before = CountMagRows()
 
     Dim id1 As String
-    id1 = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-RB1", _
-                          overrideCena:=100#)               ' stavka 1 OK
+    id1 = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-RB1", _
+                          overrideCena:=100#)          ' stavka 1 OK
 
-    Dim raised As Boolean
+    Dim en As Long
     On Error Resume Next
-    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-RB2", _
-                    overrideCena:=0#                        ' stavka 2 pada (cena 0)
-    raised = (Err.Number <> 0)
+    Err.Clear
+    SaveMagacinCore Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-RB2", _
+                    overrideCena:=0#                   ' stavka 2 pada (cena 0)
+    en = Err.Number
     On Error GoTo 0
 
-    If raised Then tx.RollbackTx                            ' forma bi ovde rollback-ovala
+    If en <> 0 Then tx.RollbackTx                      ' forma bi ovde rollback-ovala
 
     Dim afterCnt As Long: afterCnt = CountMagRows()
-    AssertAgroTrue raised And (Len(Trim$(id1)) > 0) And (afterCnt = before), _
+    AssertAgroTrue (en <> 0) And (Len(Trim$(id1)) > 0) And (afterCnt = before), _
         "Multi-stavka rollback: pad druge stavke vraca i prvu (nema delimicnog upisa)"
     Set tx = Nothing
     Exit Sub
@@ -247,12 +380,15 @@ EH:
     LogAgroFail "Multi-stavka rollback", Err.description
 End Sub
 
-Private Sub Test_PocetniDugStillWorks()
-    ' #9: ART_POCETNI_DUG migracija -- nije blokiran ni cenom ni referencijalno.
+Private Sub Test_PocetniDugArtikalExempt()
+    ' #9: ART_POCETNI_DUG izuzet iz cena/parcela/ref provera. Testira se DIREKTNO
+    ' preko SaveMagacinCore (BEZ BookPocetniDug -> bez unutrasnjeg CommitTx/autosave).
     On Error GoTo EH
     Dim id As String
-    id = BookPocetniDug(KOOP_TEST, 500#, "T-POCDUG", Date)
-    AssertAgroTrue Len(Trim$(id)) > 0, "Pocetni dug (ART_POCETNI_DUG) i dalje radi"
+    id = SaveMagacinCore(Date, ART_POCETNI_DUG, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-POCDUG", _
+                         "Pocetni dug (test)", "", 500#, allowNoStock:=True)
+    AssertAgroTrue Len(Trim$(id)) > 0, _
+        "ART_POCETNI_DUG se knjizi (izuzet iz fail-closed/parcela/ref provera)"
     If Len(Trim$(id)) > 0 Then
         AssertAgroDoubleEquals 500#, _
             CDbl(LookupValue(TBL_MAGACIN, COL_MAG_ID, id, COL_MAG_VREDNOST)), _
@@ -260,7 +396,7 @@ Private Sub Test_PocetniDugStillWorks()
     End If
     Exit Sub
 EH:
-    LogAgroFail "Pocetni dug radi", Err.description
+    LogAgroFail "Pocetni dug artikal izuzet", Err.description
 End Sub
 
 Private Sub Test_UlazPositivePriceWorks()
@@ -281,15 +417,16 @@ EH:
 End Sub
 
 Private Sub Test_UlazZeroBlockedWithoutFlag()
-    ' Zero-value ULAZ bez flag-a ostaje blokiran (default fail-closed).
-    Dim id As String, raised As Boolean
+    ' Zero-value ULAZ bez flag-a ostaje blokiran (Err 4206).
+    Dim id As String, en As Long
     On Error Resume Next
+    Err.Clear
     id = SaveMagacinCore(Date, ART_TEST, MAG_ULAZ, 1#, "", "", "T-UL0NF", _
                          "", "", 0#)
-    raised = (Err.Number <> 0)
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Ulaz cena=0 bez allowZeroValue -> blokirano"
+    AssertAgroTrue ErrCodeEquals(en, 4206) And Len(Trim$(id)) = 0, _
+        "Ulaz cena=0 bez allowZeroValue -> blokirano (Err 4206)"
 End Sub
 
 Private Sub Test_UlazZeroAllowedWithFlag()
@@ -311,25 +448,45 @@ EH:
 End Sub
 
 Private Sub Test_IzlazZeroBlockedEvenWithFlag()
-    ' allowZeroValue NE vazi za izlaz -- izlaz sa cenom 0 ostaje blokiran.
-    Dim id As String, raised As Boolean
+    ' allowZeroValue NE vazi za izlaz -- izlaz sa cenom 0 ostaje blokiran (Err 4206).
+    Dim id As String, en As Long
     On Error Resume Next
-    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, "", "T-IZ0F", _
+    Err.Clear
+    id = SaveMagacinCore(Date, ART_TEST, MAG_IZLAZ, 1#, KOOP_TEST, PAR_OK, "T-IZ0F", _
                          "", "", 0#, allowZeroValue:=True)
-    raised = (Err.Number <> 0)
+    en = Err.Number
     On Error GoTo 0
-    AssertAgroTrue raised And Len(Trim$(id)) = 0, _
-        "Izlaz cena=0 ostaje blokiran i uz allowZeroValue (izlaz strog)"
+    AssertAgroTrue ErrCodeEquals(en, 4206) And Len(Trim$(id)) = 0, _
+        "Izlaz cena=0 ostaje blokiran i uz allowZeroValue (Err 4206)"
 End Sub
 
-' ---------- Assert / log infrastruktura ----------
+Private Sub Test_FormExitWiresBasketPrice()
+    ' Cuva AUD-040 na UI granici: forma MORA proslediti korpa cenu kao overrideCena.
+    ' SaveMagacinCore-unit test to NE hvata (bug je bio u formi, ne u jezgru). Cita
+    ' izvor frmAgrohemija preko VBProject-a (treba "Trust access to VBA project object
+    ' model"); ako pristup nije dozvoljen -> SKIP (ne FAIL).
+    Dim src As String
+    On Error GoTo NoAccess
+    Dim cm As Object
+    Set cm = ThisWorkbook.VBProject.VBComponents("frmAgrohemija").CodeModule
+    src = cm.Lines(1, cm.CountOfLines)
+    On Error GoTo 0
+
+    AssertAgroTrue InStr(src, "overrideCena:=m_KorpaIzlaz(i).cena") > 0, _
+        "Forma izlaz prosledjuje korpa cenu kao overrideCena (AUD-040 wiring)"
+    AssertAgroTrue InStr(src, "allowZeroValue:=m_KorpaUlaz(i).allowZeroValue") > 0, _
+        "Forma ulaz prosledjuje allowZeroValue korpe"
+    AssertAgroTrue InStr(src, "SaveMagacinCore(") > 0, _
+        "Forma zove SaveMagacinCore (typed greske stizu do UI)"
+    Exit Sub
+NoAccess:
+    LogAgroSkip "Form wiring provera (nema 'Trust access to VBA project object model')"
+End Sub
+
+' ---------- Assert / log infrastruktura (bez worksheet-a) ----------
 
 Private Sub AssertAgroTrue(ByVal condition As Boolean, ByVal testName As String)
-    If condition Then
-        LogAgroPass testName
-    Else
-        LogAgroFail testName, "Assertion failed."
-    End If
+    If condition Then LogAgroPass testName Else LogAgroFail testName, "Assertion failed."
 End Sub
 
 Private Sub AssertAgroDoubleEquals(ByVal expected As Double, ByVal actual As Double, _
@@ -352,7 +509,6 @@ Private Sub StartAgroSuite(ByVal suiteName As String)
     Debug.Print String$(70, "=")
     Debug.Print suiteName & " started at " & Format$(Now, "yyyy-mm-dd hh:nn:ss")
     Debug.Print String$(70, "=")
-    AppendAgroTestLog "SUITE", suiteName, "START", ""
 End Sub
 
 Private Sub FinishAgroSuite()
@@ -365,8 +521,6 @@ Private Sub FinishAgroSuite()
     Debug.Print String$(70, "-")
     Debug.Print "AGRO TEST SUMMARY: " & summary
     Debug.Print String$(70, "-")
-
-    AppendAgroTestLog "SUITE", "SUMMARY", "INFO", summary
 
     If m_Failed > 0 Then
         MsgBox "Agrohemija tests finished with failures." & vbCrLf & summary, _
@@ -381,14 +535,18 @@ Private Sub LogAgroPass(ByVal testName As String)
     m_Total = m_Total + 1
     m_Passed = m_Passed + 1
     Debug.Print "[PASS] " & testName
-    AppendAgroTestLog "TEST", testName, "PASS", ""
 End Sub
 
 Private Sub LogAgroFail(ByVal testName As String, ByVal details As String)
     m_Total = m_Total + 1
     m_Failed = m_Failed + 1
     Debug.Print "[FAIL] " & testName & " :: " & details
-    AppendAgroTestLog "TEST", testName, "FAIL", details
+End Sub
+
+Private Sub LogAgroSkip(ByVal testName As String)
+    m_Total = m_Total + 1
+    m_Skipped = m_Skipped + 1
+    Debug.Print "[SKIP] " & testName
 End Sub
 
 Private Sub LogAgroFatal(ByVal sourceName As String, _
@@ -397,36 +555,4 @@ Private Sub LogAgroFatal(ByVal sourceName As String, _
     m_Total = m_Total + 1
     m_Failed = m_Failed + 1
     Debug.Print "[FATAL] " & sourceName & " :: " & CStr(errNum) & " - " & errDesc
-    AppendAgroTestLog "FATAL", sourceName, "FAIL", CStr(errNum) & " - " & errDesc
-End Sub
-
-Private Sub InitAgroTestLog()
-    On Error Resume Next
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(AGRO_TEST_LOG_SHEET)
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(after:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
-        ws.name = AGRO_TEST_LOG_SHEET
-        ws.Range("A1:F1").value = Array("Timestamp", "Kind", "Name", "Status", "Details", "Operator")
-        ws.rows(1).Font.Bold = True
-    End If
-End Sub
-
-Private Sub AppendAgroTestLog(ByVal kindText As String, _
-                              ByVal nameText As String, _
-                              ByVal statusText As String, _
-                              ByVal detailsText As String)
-    On Error Resume Next
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(AGRO_TEST_LOG_SHEET)
-    If ws Is Nothing Then Exit Sub
-
-    Dim r As Long
-    r = ws.cells(ws.rows.count, 1).End(xlUp).row + 1
-    ws.cells(r, 1).value = Now
-    ws.cells(r, 2).value = kindText
-    ws.cells(r, 3).value = nameText
-    ws.cells(r, 4).value = statusText
-    ws.cells(r, 5).value = Left$(detailsText, 2000)
-    ws.cells(r, 6).value = Environ$("Username")
 End Sub

@@ -98,7 +98,8 @@ Public Function SaveMagacinCore(ByVal datum As Date, ByVal artikalID As String, 
         tip:=tip, _
         kolicina:=kolicina, _
         kooperantID:=kooperantID, _
-        dobavljacID:=dobavljacID)
+        dobavljacID:=dobavljacID, _
+        parcelaID:=parcelaID)
 
     Dim newID As String
     newID = GetNextID(TBL_MAGACIN, COL_MAG_ID, "MAG-")
@@ -642,7 +643,8 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
                                  ByVal tip As String, _
                                  ByVal kolicina As Double, _
                                  Optional ByVal kooperantID As String = "", _
-                                 Optional ByVal dobavljacID As String = "")
+                                 Optional ByVal dobavljacID As String = "", _
+                                 Optional ByVal parcelaID As String = "")
     Const SRC As String = "ValidateMagacinInput"
 
     If Len(Trim$(artikalID)) = 0 Then
@@ -663,9 +665,7 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
 
     ' Referencijalni integritet (FM-0113 #1): artikal mora postojati, a za
     ' izlaz i kooperant. Isti FindRows obrazac koji modul vec koristi (npr.
-    ' EnsureArtikalPocetniDug). Provera parcela<->kooperant veze je odlozena
-    ' (AUD-049, KNOWN_ISSUES sek. 8) jer trazi prosirenje potpisa + ;-listu
-    ' parcela + PRACENJE_PARCELA OFF slucaj (van minimal-delta).
+    ' EnsureArtikalPocetniDug).
     If FindRows(TBL_ARTIKLI, COL_ART_ID, artikalID).count = 0 Then
         Err.Raise vbObjectError + 4207, SRC, "Artikal ne postoji: " & artikalID
     End If
@@ -675,7 +675,56 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
             Err.Raise vbObjectError + 4208, SRC, "Kooperant ne postoji: " & kooperantID
         End If
     End If
+
+    ' Parcela<->kooperant (FM-0113 #1). Vazi za realan IZLAZ; ULAZ nema parcelu,
+    ' a ART_POCETNI_DUG (migracija) je izuzet. Kad je PRACENJE_PARCELA ON parcela
+    ' je obavezna (isto kao u formi); prazna je dozvoljena samo kad je OFF.
+    ' Neprazna moze biti ;-lista -> svaka parcela mora postojati, pripadati
+    ' prosledjenom kooperantu i biti aktivna.
+    If tip = MAG_IZLAZ And artikalID <> ART_POCETNI_DUG Then
+        Dim parcelaClean As String
+        parcelaClean = Trim$(parcelaID)
+
+        If Len(parcelaClean) = 0 Then
+            If IsPracenjeParcela() Then
+                Err.Raise vbObjectError + 4215, SRC, _
+                    "Parcela je obavezna za izlaz (pracenje parcela je ukljuceno)."
+            End If
+        Else
+            Dim parts() As String, pi As Long, pid As String
+            parts = Split(parcelaClean, ";")
+            For pi = LBound(parts) To UBound(parts)
+                pid = Trim$(parts(pi))
+                If Len(pid) > 0 Then
+                    If FindRows(TBL_PARCELE, COL_PAR_ID, pid).count = 0 Then
+                        Err.Raise vbObjectError + 4212, SRC, "Parcela ne postoji: " & pid
+                    End If
+                    If Trim$(NzToText(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KOOP))) <> Trim$(kooperantID) Then
+                        Err.Raise vbObjectError + 4213, SRC, _
+                            "Parcela " & pid & " ne pripada kooperantu " & kooperantID
+                    End If
+                    If Not IsAktivnaVrednost(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_AKTIVNA)) Then
+                        Err.Raise vbObjectError + 4214, SRC, "Parcela nije aktivna: " & pid
+                    End If
+                End If
+            Next pi
+        End If
+    End If
 End Sub
+
+' Interpretacija "Aktivna" vrednosti parcele -- isti semantic kao
+' modStammdatenSync.IsPWAActive (koji je Private): samo eksplicitno
+' NE/NO/FALSE/0/NEAKTIVAN/INACTIVE = neaktivno; prazno/nepoznato/greska = aktivno
+' (bez laznih blokova na instalacijama bez popunjene "Aktivna" kolone).
+Private Function IsAktivnaVrednost(ByVal value As Variant) As Boolean
+    IsAktivnaVrednost = True
+    If IsError(value) Then Exit Function
+    If IsNull(value) Then Exit Function
+    Select Case UCase$(Trim$(CStr(value)))
+        Case "NE", "NO", "FALSE", "0", "NEAKTIVAN", "INACTIVE"
+            IsAktivnaVrednost = False
+    End Select
+End Function
 
 Private Function GetArtikalStanje(ByVal artikalID As String) As Double
     Dim stanje As Variant
