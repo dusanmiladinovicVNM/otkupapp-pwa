@@ -3,12 +3,16 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
+from requests.exceptions import SSLError
+from urllib3.exceptions import InsecureRequestWarning
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 APR_DIR = SCRIPTS_DIR.parent
@@ -21,6 +25,7 @@ COMPANIES_URL = "https://openapi.apr.gov.rs/api/opendata/companies"
 FINANCIALS_URL = "https://openapi.apr.gov.rs/api/opendata/companies/financial-statements"
 DEFAULT_ACTIVITY_CODES = ("1039", "4631")
 MB_PATTERN = re.compile(r"^\d{8}$")
+APR_HOST = "openapi.apr.gov.rs"
 
 
 def ensure_directories() -> None:
@@ -58,8 +63,7 @@ def normalize_company_id(value: Any) -> str | None:
     return text if MB_PATTERN.fullmatch(text) else None
 
 
-def request_json(url: str, timeout: int = 120, verify_tls: bool = True) -> dict[str, Any]:
-    response = requests.get(url, timeout=timeout, verify=verify_tls)
+def _validate_payload(url: str, response: requests.Response) -> dict[str, Any]:
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
@@ -68,6 +72,67 @@ def request_json(url: str, timeout: int = 120, verify_tls: bool = True) -> dict[
     if not isinstance(podaci, dict):
         raise ValueError(f"APR odgovor sa {url} nema očekivani objekat 'Podaci'.")
     return payload
+
+
+def request_json(
+    url: str,
+    timeout: int = 120,
+    *,
+    force_insecure: bool = False,
+    strict_tls: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Preuzima APR JSON uz kontrolisanu TLS politiku.
+
+    Podrazumevani režim prvo proverava TLS. Ako APR host vrati poznatu grešku
+    validacije sertifikata, zahtev se ponavlja bez verifikacije, uz vidljivo
+    upozorenje i metadata zapis. Fallback nikada nije dozvoljen za drugi host.
+    `strict_tls=True` zabranjuje fallback. `force_insecure=True` ga preskače.
+    """
+    host = (urlparse(url).hostname or "").lower()
+    if host != APR_HOST:
+        raise ValueError(f"Nedozvoljen host za APR pipeline: {host or url}")
+    if force_insecure and strict_tls:
+        raise ValueError("Ne mogu zajedno --insecure i --strict-tls.")
+
+    request_meta: dict[str, Any] = {
+        "url": url,
+        "host": host,
+        "tls_mode": "strict" if strict_tls else "secure-first-with-apr-fallback",
+        "tls_verified": not force_insecure,
+        "tls_fallback_used": False,
+    }
+
+    if force_insecure:
+        print("UPOZORENJE: APR zahtev se izvršava bez TLS verifikacije (--insecure).")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", InsecureRequestWarning)
+            response = requests.get(url, timeout=timeout, verify=False)
+        request_meta["tls_mode"] = "forced-insecure"
+        request_meta["tls_verified"] = False
+        return _validate_payload(url, response), request_meta
+
+    try:
+        response = requests.get(url, timeout=timeout, verify=True)
+        return _validate_payload(url, response), request_meta
+    except SSLError as exc:
+        if strict_tls:
+            raise RuntimeError(
+                "APR TLS sertifikat nije mogao da se validira. "
+                "Strict TLS režim zabranjuje fallback."
+            ) from exc
+
+        print(
+            "UPOZORENJE: APR TLS sertifikat nije validiran. "
+            "Ponavljam zahtev bez verifikacije samo za openapi.apr.gov.rs."
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", InsecureRequestWarning)
+            response = requests.get(url, timeout=timeout, verify=False)
+
+        request_meta["tls_verified"] = False
+        request_meta["tls_fallback_used"] = True
+        request_meta["tls_error"] = str(exc)
+        return _validate_payload(url, response), request_meta
 
 
 def sha256_file(path: Path) -> str:
