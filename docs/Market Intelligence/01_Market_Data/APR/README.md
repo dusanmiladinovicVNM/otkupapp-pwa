@@ -21,7 +21,7 @@ Pipeline ima četiri koraka:
 3. `03_clean_validate.py` — normalizuje podatke i pravi data-quality izveštaj.
 4. `04_analyze_market.py` — pravi tržišni Excel i Markdown sažetak.
 
-Za kompletno pokretanje koristi se `run_pipeline.py`.
+Za orkestraciju se koristi `run_pipeline.py`.
 
 ## Instalacija
 
@@ -31,11 +31,21 @@ Iz `Scripts` foldera:
 python -m pip install -r requirements.txt
 ```
 
-## Kompletno pokretanje
+## Režimi rada
+
+### 1. Full — godišnje online osvežavanje
 
 ```bash
 python run_pipeline.py
 ```
+
+Isto kao:
+
+```bash
+python run_pipeline.py --mode full
+```
+
+Radi sva četiri koraka: APR registar, finansije, validaciju i analizu.
 
 Podrazumevane šifre su:
 
@@ -45,16 +55,59 @@ Podrazumevane šifre su:
 Druge šifre se mogu proslediti:
 
 ```bash
-python run_pipeline.py --codes 1039 4631 4621
+python run_pipeline.py --mode full --codes 1039 4631 4621
 ```
 
-Ako APR endpoint lokalno ne prolazi TLS proveru, privremeni workaround je:
+### 2. Offline — postojeći Excel bez APR API-ja
+
+Za postojeći 2024 fajl:
+
+```bash
+python run_pipeline.py --mode offline --input "../Clean Data/apr_veleprodaja_voca_povrca_prerada_konzervisanje_2024.xlsx"
+```
+
+Offline režim radi samo:
+
+1. čišćenje i validaciju;
+2. tržišnu analizu;
+3. generisanje `Processed` i `Reports` izlaza.
+
+Ne zahteva internet i ne poziva APR API.
+
+### 3. Report — ponovna analiza validiranog skupa
+
+```bash
+python run_pipeline.py --mode report
+```
+
+Koristi najnoviji `apr_market_validated_*.xlsx` iz `Processed/` i ponovo generiše tržišne izveštaje.
+
+## TLS politika
+
+APR endpoint na pojedinim Windows/Python instalacijama vraća nepotpun sertifikacioni lanac i izaziva `CERTIFICATE_VERIFY_FAILED`.
+
+Podrazumevana politika pipeline-a je:
+
+1. prvo pokušaj sa punom TLS verifikacijom;
+2. ako samo `openapi.apr.gov.rs` vrati SSL validation grešku, automatski ponovi zahtev bez verifikacije;
+3. ispiši jasno upozorenje;
+4. zapiši `tls_fallback_used`, originalnu grešku i stvarni TLS režim u metadata JSON.
+
+Fallback nije dozvoljen za druge hostove.
+
+Za strogi režim koji mora pasti ako sertifikat nije validan:
+
+```bash
+python run_pipeline.py --strict-tls
+```
+
+Za dijagnostiku i eksplicitno pokretanje bez prvog secure pokušaja:
 
 ```bash
 python run_pipeline.py --insecure
 ```
 
-`--insecure` ne treba koristiti kao podrazumevanu opciju jer isključuje proveru HTTPS sertifikata.
+`--insecure` i `--strict-tls` se međusobno isključuju.
 
 ## Pojedinačni koraci
 
@@ -65,7 +118,7 @@ python 03_clean_validate.py
 python 04_analyze_market.py
 ```
 
-Svaki korak automatski bira najnoviji očekivani ulaz. Eksplicitni input može se zadati sa `--input`.
+Svaki korak automatski bira najnoviji očekivani ulaz. Eksplicitni input može se zadati sa `--input` tamo gde je podržan.
 
 ## Izlazi
 
@@ -101,6 +154,14 @@ Analitički workbook sadrži:
 - koncentraciju prihoda;
 - kompletan analizirani skup.
 
+## Preporučeni operativni ritam
+
+- `full` režim: kada se pravi novi godišnji APR snapshot;
+- `offline` režim: za rad na postojećem Excelu i iteracije analitičkih pravila;
+- `report` režim: kada se menjaju samo agregacije ili format izveštaja.
+
+Time se APR API ne poziva pri svakoj analizi.
+
 ## Važna ograničenja
 
 - Šifre `1039` i `4631` ne obuhvataju nužno sve organizovane otkupljivače.
@@ -108,6 +169,7 @@ Analitički workbook sadrži:
 - Financial-statements endpoint se trenutno tretira kao jedan zapis po firmi. Višegodišnja istorija nije potvrđena ovim pipeline-om.
 - Pravilo za aktivan status mora se proveriti prema stvarnim vrednostima u APR datasetu.
 - Rezultati su ulaz za TAM/SAM/SOM model, ali nisu sami po sebi konačan TAM, SAM ili SOM.
+- TLS fallback omogućava dostupnost APR podataka, ali metadata mora ostati sačuvana kao dokaz stvarnog režima preuzimanja.
 
 ## Legacy skripte
 
@@ -121,6 +183,7 @@ Uz svaki generisani dataset čuvaju se:
 - izvorni URL;
 - obuhvaćene šifre;
 - broj redova;
+- TLS režim i eventualni fallback;
 - poznata ograničenja;
 - SHA-256 ulaznog i/ili izlaznog fajla.
 
