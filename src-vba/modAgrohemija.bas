@@ -119,6 +119,16 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
         End If
     End If
     
+    ' Fail-closed: realan artikal ne sme da se proknjizi sa nultom/nevalidnom
+    ' cenom -- tiho Cena=0/Vrednost=0 potcenjuje dug (AUD-040 / FM-0113 #3).
+    ' Pocetni dug (virtuelni artikal) je izuzet: ide kroz BookPocetniDug sa
+    ' allowNoStock i uvek nosi iznos > 0.
+    If artikalID <> ART_POCETNI_DUG And cena <= 0 Then
+        Err.Raise vbObjectError + 4206, "SaveMagacin", _
+                "Cena za artikal " & artikalID & _
+                " mora biti veca od 0 (nulta/nevalidna cena se ne knjizi)."
+    End If
+
     If tip = MAG_IZLAZ And Not allowNoStock Then
         If GetArtikalStanje(artikalID) < kolicina Then
             Err.Raise vbObjectError + 4205, "SaveMagacin", _
@@ -612,6 +622,21 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
 
     If tip = MAG_IZLAZ And Len(Trim$(kooperantID)) = 0 Then
         Err.Raise vbObjectError + 4204, SRC, "KooperantID je obavezan za izlaz."
+    End If
+
+    ' Referencijalni integritet (FM-0113 #1): artikal mora postojati, a za
+    ' izlaz i kooperant. Isti FindRows obrazac koji modul vec koristi (npr.
+    ' EnsureArtikalPocetniDug). Provera parcela<->kooperant veze je odlozena
+    ' (AUD-049, KNOWN_ISSUES sek. 8) jer trazi prosirenje potpisa + ;-listu
+    ' parcela + PRACENJE_PARCELA OFF slucaj (van minimal-delta).
+    If FindRows(TBL_ARTIKLI, COL_ART_ID, artikalID).count = 0 Then
+        Err.Raise vbObjectError + 4207, SRC, "Artikal ne postoji: " & artikalID
+    End If
+
+    If tip = MAG_IZLAZ Then
+        If FindRows(TBL_KOOPERANTI, COL_KOOP_ID, kooperantID).count = 0 Then
+            Err.Raise vbObjectError + 4208, SRC, "Kooperant ne postoji: " & kooperantID
+        End If
     End If
 End Sub
 

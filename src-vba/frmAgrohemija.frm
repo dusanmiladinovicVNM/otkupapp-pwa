@@ -629,7 +629,8 @@ Private Sub btnZavrsiIzlaz_Click()
             m_KorpaIzlaz(i).kolicina, _
             koopID, _
             m_KorpaIzlaz(i).parcelaID, _
-            brojDok)
+            brojDok, _
+            overrideCena:=m_KorpaIzlaz(i).cena)
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4301, SRC, _
