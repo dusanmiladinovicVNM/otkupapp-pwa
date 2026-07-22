@@ -30,16 +30,52 @@ NUMERIC_COLUMNS = (
     "prosecan_broj_zaposlenih",
 )
 
+# APR trenutno vraća statuse na srpskoj ćirilici. Za pouzdano poređenje
+# svodimo srpsku ćirilicu i latinicu sa dijakriticima na isti ASCII oblik.
+SERBIAN_CYRILLIC_TO_LATIN = str.maketrans(
+    {
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "ђ": "dj",
+        "е": "e",
+        "ж": "z",
+        "з": "z",
+        "и": "i",
+        "ј": "j",
+        "к": "k",
+        "л": "l",
+        "љ": "lj",
+        "м": "m",
+        "н": "n",
+        "њ": "nj",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "ћ": "c",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "c",
+        "ч": "c",
+        "џ": "dz",
+        "ш": "s",
+    }
+)
+
 # Negativna stanja se proveravaju pre pozitivnih da, na primer,
 # "neaktivan" ne bi bio pogrešno prepoznat kao "aktivan".
-BANKRUPTCY_TOKENS = ("stečaj", "stecaj")
+BANKRUPTCY_TOKENS = ("stecaj",)
 LIQUIDATION_TOKENS = ("likvid",)
 INACTIVE_TOKENS = (
     "neaktivan",
     "neaktivno",
     "brisan",
     "obrisan",
-    "ugašen",
     "ugasen",
     "prestao",
     "prestanak",
@@ -51,6 +87,19 @@ ACTIVE_TOKENS = (
     "registrovano",
     "registrovana",
 )
+
+STATUS_CLASSIFICATION_CASES = {
+    "Активан": "active",
+    "У ликвидацији": "liquidation",
+    "У принудној ликвидацији": "liquidation",
+    "У стечају": "bankruptcy",
+    "Неактиван": "inactive",
+    "Брисан": "inactive",
+    "Aktivan": "active",
+    "U likvidaciji": "liquidation",
+    "U stečaju": "bankruptcy",
+    "Registrovan": "active",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -66,12 +115,19 @@ def normalize_text(value: object) -> str:
     return " ".join(text.split())
 
 
+def fold_for_matching(value: object) -> str:
+    """Normalizuje srpsku latinicu/ćirilicu u stabilan ASCII oblik za pravila."""
+    text = normalize_text(value).casefold().translate(SERBIAN_CYRILLIC_TO_LATIN)
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
 def contains_any(text: str, tokens: tuple[str, ...]) -> bool:
     return any(token in text for token in tokens)
 
 
 def status_category(value: object) -> str:
-    text = normalize_text(value).casefold()
+    text = fold_for_matching(value)
     if not text:
         return "unknown"
     if contains_any(text, BANKRUPTCY_TOKENS):
@@ -85,6 +141,16 @@ def status_category(value: object) -> str:
     return "other"
 
 
+def validate_status_classifier() -> None:
+    failures = []
+    for value, expected in STATUS_CLASSIFICATION_CASES.items():
+        actual = status_category(value)
+        if actual != expected:
+            failures.append(f"{value!r}: očekivano {expected}, dobijeno {actual}")
+    if failures:
+        raise RuntimeError("Status classifier regresija: " + "; ".join(failures))
+
+
 def format_top_statuses(status_profile: pd.DataFrame, limit: int = 10) -> str:
     rows = status_profile.head(limit)
     return "; ".join(
@@ -96,6 +162,7 @@ def format_top_statuses(status_profile: pd.DataFrame, limit: int = 10) -> str:
 def main() -> None:
     args = parse_args()
     ensure_directories()
+    validate_status_classifier()
 
     input_path = args.input or latest_file(CLEAN_DIR, "apr_companies_financials_*.xlsx")
     if not input_path.is_absolute():
@@ -112,6 +179,7 @@ def main() -> None:
     df["opstina"] = df.get("opstina", pd.Series(index=df.index, dtype="object")).map(normalize_text)
     df["opstina_apr"] = df.get("opstina_apr", pd.Series(index=df.index, dtype="object")).map(normalize_text)
     df["status"] = df["status"].map(normalize_text)
+    df["status_normalized"] = df["status"].map(fold_for_matching)
     df["sifra_delatnosti"] = df["sifra_delatnosti"].map(normalize_activity_code)
 
     for column in NUMERIC_COLUMNS:
@@ -145,7 +213,7 @@ def main() -> None:
     )
 
     status_profile = (
-        df.groupby(["status", "status_category"], dropna=False)
+        df.groupby(["status", "status_normalized", "status_category"], dropna=False)
         .agg(companies=("maticni_broj", "size"))
         .reset_index()
         .sort_values(["companies", "status"], ascending=[False, True])
@@ -196,6 +264,9 @@ def main() -> None:
             "output_file": output_path.name,
             "output_sha256": sha256_file(output_path),
             "quality_metrics": dict(quality_rows),
+            "status_matching_normalization": (
+                "Unicode NFKC + casefold + Serbian Cyrillic-to-Latin transliteration + diacritic removal"
+            ),
             "status_rules": {
                 "active_tokens": list(ACTIVE_TOKENS),
                 "inactive_tokens": list(INACTIVE_TOKENS),
@@ -203,6 +274,7 @@ def main() -> None:
                 "bankruptcy_tokens": list(BANKRUPTCY_TOKENS),
                 "evaluation_order": ["bankruptcy", "liquidation", "inactive", "active", "other"],
             },
+            "status_classifier_regression_cases": STATUS_CLASSIFICATION_CASES,
             "top_status_values": status_profile.head(20).to_dict(orient="records"),
         },
     )
