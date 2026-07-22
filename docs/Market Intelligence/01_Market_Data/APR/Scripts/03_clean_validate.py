@@ -48,14 +48,14 @@ def status_category(value: object) -> str:
     text = normalize_text(value).casefold()
     if not text:
         return "unknown"
-    if "aktivan" in text:
-        return "active"
     if "stečaj" in text or "stecaj" in text:
         return "bankruptcy"
     if "likvid" in text:
         return "liquidation"
-    if "brisan" in text or "ugašen" in text or "ugasen" in text:
+    if "neaktivan" in text or "brisan" in text or "ugašen" in text or "ugasen" in text:
         return "inactive"
+    if "aktivan" in text:
+        return "active"
     return "other"
 
 
@@ -102,6 +102,12 @@ def main() -> None:
         | df["naziv"].eq("")
     )
 
+    has_financials = (
+        df["has_financials"].fillna(False).astype(bool)
+        if "has_financials" in df.columns
+        else df.get("ukupni_prihodi", pd.Series(index=df.index, dtype="float64")).notna()
+    )
+
     quality_rows = [
         ("rows_total", len(df)),
         ("valid_company_id", int(df["valid_company_id"].sum())),
@@ -109,7 +115,8 @@ def main() -> None:
         ("duplicate_company_rows", int(df["duplicate_company_id"].sum())),
         ("active_market_candidates", int(df["is_active_market_candidate"].sum())),
         ("unknown_status", int(df["status_category"].eq("unknown").sum())),
-        ("rows_with_financials", int(df.get("has_financials", False).fillna(False).sum())),
+        ("other_status", int(df["status_category"].eq("other").sum())),
+        ("rows_with_financials", int(has_financials.sum())),
         ("rows_with_valid_revenue", int(df["valid_revenue"].sum())),
         ("rows_with_valid_employees", int(df["valid_employees"].sum())),
         ("rows_with_quality_issue", int(df["data_quality_issue"].sum())),
@@ -137,7 +144,8 @@ def main() -> None:
             "output_sha256": sha256_file(output_path),
             "quality_metrics": dict(quality_rows),
             "status_rule": (
-                "Aktivna tržišna firma se trenutno prepoznaje tekstualnim statusom koji sadrži 'aktivan'. "
+                "Aktivna tržišna firma se trenutno prepoznaje tekstualnim statusom koji sadrži 'aktivan', "
+                "nakon prethodne provere stečaja, likvidacije, neaktivnog i brisanog statusa. "
                 "Pravilo treba proveriti prema svim statusima prisutnim u datasetu."
             ),
         },
