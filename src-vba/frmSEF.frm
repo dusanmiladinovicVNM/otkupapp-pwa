@@ -263,7 +263,11 @@ Private Sub LoadFaktureIntoCombo()
     
     data = GetTableData(TBL_FAKTURE)
     If IsEmpty(data) Then Exit Sub
-    
+
+    ' AUD-031a: stornirane fakture must not enter the SEF send combo.
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+    If IsEmpty(data) Then Exit Sub
+
     colFakturaID = GetColumnIndex(TBL_FAKTURE, "FakturaID")
     colBroj = GetColumnIndex(TBL_FAKTURE, "BrojFakture")
     

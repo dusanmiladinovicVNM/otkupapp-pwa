@@ -564,25 +564,37 @@ Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
 
     Const SRC As String = "modSEFPersistance.HasSuccessfulSEFSubmission"
 
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    ' AUD-031d: this duplicate guard must be fail-CLOSED. Read the submission
+    ' table directly instead of via the fail-soft GetSEFSubmissionsForFaktura
+    ' (whose EH returns Empty), so a genuine read error propagates to EH and
+    ' re-raises, blocking the send. IsEmpty here means the table has no rows.
     Dim data As Variant
-    data = GetSEFSubmissionsForFaktura(fakturaID)
+    data = GetTableData(TBL_SEF_SUBMISSION)
 
     If IsEmpty(data) Then
         HasSuccessfulSEFSubmission = False
         Exit Function
     End If
 
+    Dim colFakturaID As Long
     Dim colStatus As Long
+    colFakturaID = RequireColumnIndex(TBL_SEF_SUBMISSION, "FakturaID", SRC)
     colStatus = RequireColumnIndex(TBL_SEF_SUBMISSION, "SubmissionStatus", SRC)
 
     Dim i As Long
 
     For i = 1 To UBound(data, 1)
-        Select Case Trim$(CStr(data(i, colStatus)))
-            Case SEF_SUB_SENT, SEF_SUB_ACCEPTED
-                HasSuccessfulSEFSubmission = True
-                Exit Function
-        End Select
+        If Trim$(CStr(data(i, colFakturaID))) = Trim$(fakturaID) Then
+            Select Case Trim$(CStr(data(i, colStatus)))
+                Case SEF_SUB_SENT, SEF_SUB_ACCEPTED
+                    HasSuccessfulSEFSubmission = True
+                    Exit Function
+            End Select
+        End If
     Next i
 
     HasSuccessfulSEFSubmission = False
@@ -685,11 +697,18 @@ Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
 
     RequireColumnIndex TBL_FAKTURE, "FakturaID", SRC
     RequireColumnIndex TBL_FAKTURE, "SEFSubmissionIDLast", SRC
+    RequireColumnIndex TBL_FAKTURE, "SEFDocumentId", SRC
 
     Dim rowIndex As Long
     rowIndex = GetSingleRowIndexByKey(TBL_FAKTURE, "FakturaID", fakturaID, True)
 
     RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFSubmissionIDLast", "", SRC
+
+    ' AUD-031: a corrected resubmit must not carry the previous attempt's
+    ' SEFDocumentId. Clear it so a stale docId can never drive a later status
+    ' refresh / cancel / storno against the wrong SEF document; the next
+    ' successful submission writes the fresh docId.
+    RequireUpdateCell TBL_FAKTURE, rowIndex, "SEFDocumentId", "", SRC
 
     Exit Sub
 

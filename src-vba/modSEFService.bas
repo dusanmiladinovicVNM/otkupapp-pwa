@@ -360,6 +360,26 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
             nextAction:="MANUAL_REVIEW", _
             needsManualReview:=True
 
+    ElseIf UCase$(Trim$(response.apiStatus)) = "CONFLICT" Then
+
+        ' AUD-030: 409 CONFLICT is NOT a rejection. The invoice may already
+        ' exist on SEF; a human must reconcile by requestId/docId before any
+        ' retry. Flag manual review instead of the default RETRY signal.
+        Monitor_SEF _
+            eventType:="SEF_SEND_CONFLICT", _
+            severity:="WARN", _
+            invoiceLocalId:=fakturaID, _
+            businessInvoiceNo:=fakturaID, _
+            sefStatus:=response.apiStatus, _
+            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+            sefRequestId:=submissionID, _
+            sefInvoiceId:=response.sefDocumentId, _
+            attemptCount:=0, _
+            lastHttpCode:=CStr(response.httpStatus), _
+            lastError:=response.errorCode & " | " & response.errorMessage, _
+            nextAction:="MANUAL_REVIEW", _
+            needsManualReview:=True
+
     Else
 
         Monitor_SEF _

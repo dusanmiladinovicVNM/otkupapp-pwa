@@ -130,6 +130,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim colCena As Long
     Dim colKlasa As Long
     Dim colBrojPrijemnice As Long
+    Dim colStOsiroceno As Long
 
     colStFakturaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "FakturaID", SRC)
     colPrijemnicaID = RequireColumnIndex(TBL_FAKTURA_STAVKE, "PrijemnicaID", SRC)
@@ -137,6 +138,9 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     colCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Cena", SRC)
     colKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Klasa", SRC)
     colBrojPrijemnice = RequireColumnIndex(TBL_FAKTURA_STAVKE, "BrojPrijemnice", SRC)
+    ' AUD-031: orphan marker (set when the invoiced prijemnica is storno-ed).
+    ' GetColumnIndex keeps this fail-open on installs without the column.
+    colStOsiroceno = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
 
     Dim line As clsSEFLine
     Dim prijemnicaID As String
@@ -158,6 +162,12 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     For i = 1 To UBound(stavke, 1)
 
         If CStr(stavke(i, colStFakturaID)) = fakturaID Then
+
+            ' AUD-031: skip orphaned lines (invoiced prijemnica was storno-ed).
+            ' Build UBL only from active stavke so line totals stay consistent.
+            If colStOsiroceno > 0 Then
+                If Len(Trim$(CStr(stavke(i, colStOsiroceno)))) > 0 Then GoTo NextStavka
+            End If
 
             prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
             brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
@@ -211,6 +221,7 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
         End If
 
+NextStavka:
     Next i
 
     If dto.lines.count = 0 Then
@@ -406,14 +417,21 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
     xml = xml & "  <cbc:ID>" & XmlEscape(dto.InvoiceNumber) & "</cbc:ID>" & vbCrLf
 
     Dim forceTodayIssueDate As String
+    Dim effectiveIssueDate As Date
     forceTodayIssueDate = UCase$(GetConfigValue("SEF_FORCE_TODAY_ISSUE_DATE"))
 
     If forceTodayIssueDate = "DA" Then
-        xml = xml & "  <cbc:IssueDate>" & Format$(Date, "yyyy-mm-dd") & "</cbc:IssueDate>" & vbCrLf
+        effectiveIssueDate = Date
     Else
-        xml = xml & "  <cbc:IssueDate>" & Format$(dto.InvoiceDate, "yyyy-mm-dd") & "</cbc:IssueDate>" & vbCrLf
+        effectiveIssueDate = dto.InvoiceDate
     End If
 
+    ' AUD-031c: DueDate = InvoiceDate + paymentDueDays. When IssueDate is forced
+    ' to today on a backdated invoice, DueDate can fall before IssueDate, which
+    ' SEF rejects. Clamp DueDate up to the effective IssueDate.
+    If dueDate < effectiveIssueDate Then dueDate = effectiveIssueDate
+
+    xml = xml & "  <cbc:IssueDate>" & Format$(effectiveIssueDate, "yyyy-mm-dd") & "</cbc:IssueDate>" & vbCrLf
     xml = xml & "  <cbc:DueDate>" & Format$(dueDate, "yyyy-mm-dd") & "</cbc:DueDate>" & vbCrLf
     xml = xml & "  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>" & vbCrLf
     xml = xml & "  <cbc:Note>" & XmlEscape(noteText) & "</cbc:Note>" & vbCrLf
