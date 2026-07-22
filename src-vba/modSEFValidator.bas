@@ -68,6 +68,8 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Dim colWorkflow As Long
     Dim colBrojFakture As Long
     Dim colIznos As Long
+    Dim colStornirano As Long
+    Dim colOsiroceno As Long
 
     Dim found As Boolean
     Dim kupacID As String
@@ -75,6 +77,8 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Dim brojFakture As String
     Dim iznosRaw As String
     Dim iznosValue As Double
+    Dim storniranoRaw As String
+    Dim osirocenoRaw As String
 
     If Len(Trim$(fakturaID)) = 0 Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "FakturaID is required."
@@ -92,6 +96,12 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     colBrojFakture = RequireColumnIndex(TBL_FAKTURE, "BrojFakture", SRC)
     colIznos = RequireColumnIndex(TBL_FAKTURE, "Iznos", SRC)
 
+    ' AUD-031a: cancellation / orphan markers gate the tax send path, so they
+    ' are REQUIRED (fail-closed). A missing column must raise here rather than
+    ' silently letting a stornirana/orphaned faktura become sendable again.
+    colStornirano = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
+    colOsiroceno = RequireColumnIndex(TBL_FAKTURE, COL_OSIROCENO_OD, SRC)
+
     For i = 1 To UBound(fakture, 1)
         If CStr(fakture(i, colFakturaID)) = fakturaID Then
             found = True
@@ -99,12 +109,29 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
             workflowState = Trim$(CStr(fakture(i, colWorkflow)))
             brojFakture = Trim$(CStr(fakture(i, colBrojFakture)))
             iznosRaw = Trim$(CStr(fakture(i, colIznos)))
+            storniranoRaw = Trim$(CStr(fakture(i, colStornirano)))
+            osirocenoRaw = Trim$(CStr(fakture(i, colOsiroceno)))
             Exit For
         End If
     Next i
 
     If Not found Then
         Err.Raise ERR_SEF_VALIDATION, SRC, "Faktura not found: " & fakturaID
+    End If
+
+    ' AUD-031a: a stornirana faktura must never be sent to SEF.
+    If UCase$(storniranoRaw) = "DA" Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Faktura is stornirana (cancelled) and cannot be sent to SEF: " & fakturaID
+    End If
+
+    ' AUD-031: an orphaned faktura (its invoiced prijemnica was storno-ed, so
+    ' some/all lines carry OsirocenoOd) is arithmetically inconsistent and must
+    ' not go to the tax authority. Block here so the operator gets a clear
+    ' message instead of a downstream total-mismatch during UBL build.
+    If Len(osirocenoRaw) > 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Faktura has orphaned (osiroceno) items and cannot be sent to SEF: " & fakturaID
     End If
 
     If Len(kupacID) = 0 Then

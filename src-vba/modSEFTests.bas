@@ -55,6 +55,8 @@ Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")
     LogInfo "Using FakturaID=" & fakturaID
 
     Test_SEFConfigLooksUsable
+    Test_SubmitResponseClassification
+    Test_LinePrecisionConsistency
     Test_BuildDtoAndUBL fakturaID
     Test_PayloadValidationRejectsEmpty
     Test_PersistenceReadHelpers fakturaID
@@ -253,6 +255,16 @@ Private Sub Test_BuildDtoAndUBL(ByVal fakturaID As String)
     AssertTrue Not dto.lines Is Nothing, "DTO lines collection exists"
     AssertTrue dto.lines.count > 0, "DTO has invoice lines"
 
+    ' AUD-031b: emitted quantity * unit price must reproduce the line net, so
+    ' the UBL is arithmetically consistent for the receiver (tax authority).
+    Dim li As Long
+    Dim lnItem As clsSEFLine
+    For li = 1 To dto.lines.count
+        Set lnItem = dto.lines.item(li)
+        AssertTrue Abs(Round(lnItem.kolicina * lnItem.cena, 2) - lnItem.neto) < 0.005, _
+                   "Line " & li & " net == round(qty*price,2)"
+    Next li
+
     xml = SerializeUBLInvoice(dto)
     ValidateSEFPayload xml
 
@@ -286,6 +298,67 @@ Private Sub Test_PayloadValidationRejectsEmpty()
 
 ExpectedError:
     LogPass "ValidateSEFPayload rejects empty payload"
+End Sub
+
+Private Sub Test_SubmitResponseClassification()
+    On Error GoTo EH
+
+    Dim r As clsSEFResponse
+
+    ' AUD-030 core: HTTP 409 must be CONFLICT, NOT REJECTED (a REJECTED 409
+    ' would enable a corrective resubmit with a fresh requestId).
+    Set r = TestProxyForParseSubmitResponse(409, "{""message"":""already exists""}")
+    AssertEquals "CONFLICT", r.apiStatus, "HTTP 409 -> apiStatus CONFLICT"
+    AssertTrue r.Rejected = False, "HTTP 409 not flagged Rejected"
+    AssertTrue r.Success = False, "HTTP 409 not flagged Success"
+
+    ' 400 / 422 stay REJECTED (business rejection by SEF validation).
+    Set r = TestProxyForParseSubmitResponse(400, "{""message"":""bad request""}")
+    AssertEquals "REJECTED", r.apiStatus, "HTTP 400 -> apiStatus REJECTED"
+    AssertTrue r.Rejected, "HTTP 400 flagged Rejected"
+
+    Set r = TestProxyForParseSubmitResponse(422, "{""message"":""invalid""}")
+    AssertEquals "REJECTED", r.apiStatus, "HTTP 422 -> apiStatus REJECTED"
+    AssertTrue r.Rejected, "HTTP 422 flagged Rejected"
+
+    ' 2xx success.
+    Set r = TestProxyForParseSubmitResponse(200, "{""SalesInvoiceId"":123}")
+    AssertTrue r.Success, "HTTP 200 flagged Success"
+    AssertTrue r.Rejected = False, "HTTP 200 not flagged Rejected"
+
+    ' Other 4xx/5xx -> technical FAILED (retryable), NOT REJECTED.
+    Set r = TestProxyForParseSubmitResponse(500, "{""message"":""server error""}")
+    AssertEquals "FAILED", r.apiStatus, "HTTP 500 -> apiStatus FAILED"
+    AssertTrue r.Rejected = False, "HTTP 500 not flagged Rejected"
+
+    Exit Sub
+
+EH:
+    LogFail "Submit response classification", Err.description
+End Sub
+
+Private Sub Test_LinePrecisionConsistency()
+    On Error GoTo EH
+
+    ' AUD-031b: quantity/price keep more precision than 2-decimal money, so the
+    ' receiver's Round(qty*price,2) reproduces the line net. Self-contained --
+    ' needs no invoice data. Reviewer example: qty=1.234, price=1.234 -> net
+    ' Round(1.234*1.234,2)=1.52; old 2dp emit (1.23*1.23=1.5129->1.51) is wrong.
+    AssertEquals "1.234", TestProxyXmlQuantity(1.234), "XmlQuantity keeps 3 decimals"
+    AssertEquals "1.2340", TestProxyXmlUnitPrice(1.234), "XmlUnitPrice keeps 4 decimals"
+    AssertEquals "85.5000", TestProxyXmlUnitPrice(85.5), "XmlUnitPrice pads to 4 decimals"
+
+    ' Numeric invariant (locale-safe): emission precision reproduces the net...
+    AssertTrue Round(Round(1.234, 3) * Round(1.234, 4), 2) = 1.52, _
+               "Round(qty*price,2) reproduces net with precision fix"
+    ' ...while 2-decimal truncation would NOT (guards against regressing it).
+    AssertTrue Round(Round(1.234, 2) * Round(1.234, 2), 2) <> 1.52, _
+               "2dp truncation is inconsistent (regression guard)"
+
+    Exit Sub
+
+EH:
+    LogFail "Line precision consistency", Err.description
 End Sub
 
 Private Sub Test_PersistenceReadHelpers(ByVal fakturaID As String)

@@ -470,7 +470,7 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
                 resp.apiStatus = "ACCEPTED"
             End If
         
-        Case 400, 409, 422
+        Case 400, 422
             resp.Success = False
             resp.Rejected = True
             resp.apiStatus = "REJECTED"
@@ -479,7 +479,27 @@ Private Sub ParseSubmitResponse(ByRef resp As clsSEFResponse)
                 ExtractJsonString(body, "message"), _
                 ExtractJsonString(body, "error"), _
                 "SEF rejected request.")
-        
+
+        ' AUD-030: HTTP 409 = the invoice already exists / conflicts on SEF.
+        ' It must NOT be marked REJECTED. REJECTED would enable a corrective
+        ' resubmit with a fresh requestId (PrepareRejectedInvoiceForResubmit),
+        ' risking a duplicate/incorrect invoice toward the tax authority while
+        ' the original document still exists on SEF. Treat 409 as a non-final
+        ' CONFLICT: Success=False and Rejected=False, so the send pipeline
+        ' routes it to SEF_TECH_FAILED / manual review, where a retry reuses
+        ' the SAME requestId (idempotent) instead of auto-rejecting.
+        Case 409
+            resp.Success = False
+            resp.Rejected = False
+            resp.apiStatus = "CONFLICT"
+            resp.errorCode = FirstNonEmpty( _
+                ExtractJsonString(body, "errorCode"), _
+                "409")
+            resp.errorMessage = FirstNonEmpty( _
+                ExtractJsonString(body, "message"), _
+                ExtractJsonString(body, "error"), _
+                "SEF conflict (409): invoice may already exist. Manual reconciliation required.")
+
         ' In ParseStatusResponse / ParseSubmitResponse:
         ' Fallback only. Normal 429 handling is done before parser.
         Case 429
@@ -990,5 +1010,22 @@ Public Function TestProxyForGetJsonNumericIdLiteral(ByVal rawID As String) As St
     
     TestProxyForGetJsonNumericIdLiteral = _
         GetJsonNumericIdLiteral(rawID, "TestProxyForGetJsonNumericIdLiteral")
+End Function
+
+Public Function TestProxyForParseSubmitResponse(ByVal httpStatus As Long, _
+                                                ByVal rawBody As String) As clsSEFResponse
+    ' Test-only proxy. Forwards to the private ParseSubmitResponse so
+    ' RunSEFOfflineSuite can verify HTTP status -> apiStatus classification
+    ' (notably 409 -> CONFLICT, not REJECTED). Not used by production code.
+
+    Dim resp As clsSEFResponse
+    Set resp = New clsSEFResponse
+
+    resp.httpStatus = httpStatus
+    resp.rawBody = rawBody
+
+    ParseSubmitResponse resp
+
+    Set TestProxyForParseSubmitResponse = resp
 End Function
 
