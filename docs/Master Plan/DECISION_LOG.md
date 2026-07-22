@@ -42,60 +42,53 @@ Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se 
 ### STR-001 — Readiness-based rast
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Kontekst:** Fiksni hard cap od 10 firmi može nepotrebno ograničiti rast kada su proizvod, onboarding i organizacija spremni za više.
 - **Odluka:** Maksimalan broj novih firmi po sezoni određuje formalni readiness score, ne unapred definisan broj.
-- **Posledice:** Cap može biti 8, 10, 15, 20 ili više, ali samo kada najslabija kritična komponenta zadovolji prag.
-- **Ponovno otvaranje:** Nakon definisanja i prve praktične primene readiness modela.
 
 ### STR-002 — Primarni tržišni fokus
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Trenutni geografski fokus je Srbija. Primarni kupci su hladnjače i druge firme sa razgranatom mrežom otkupnih stanica i kooperanata.
-- **Posledice:** Promet nije jedini kriterijum; broj stanica, složenost toka i potreba za centralnom kontrolom imaju veću težinu.
 
 ### STR-003 — Jedan proizvod, jedan kod
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Sve klijentske razlike rešavaju se zajedničkim kodom i konfiguracijom. Trajni klijentski fork nije dozvoljen.
-- **Ponovno otvaranje:** Nije planirano; izuzetak bi zahtevao novu formalnu stratešku odluku.
 
 ### STR-004 — Dinamična uloga Gazdinstva
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Odluka:** Licence firmi trenutno finansiraju osnovni biznis. Gazdinstvo se kratkoročno ne tretira kao ključni prihod, ali može postati glavni proizvod ili izvor prihoda ako podaci potvrde konverziju i ekonomiku.
-- **Posledice:** Konzervativni finansijski plan Gazdinstvo računa minimalno ili kao nulu; strateški roadmap ostaje otvoren za veći rast.
+- **Odluka:** Licence firmi trenutno finansiraju osnovni biznis. Gazdinstvo se kratkoročno ne tretira kao ključni prihod, ali može postati glavni proizvod ili izvor prihoda ako podaci potvrde ekonomiku.
 
 ### STR-005 — Hardver kao sporedni profitni centar
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Hardver nije glavni profitni centar, ali mora biti profitabilan sporedni centar. AgriX može postati dobavljač šireg IT sistema ciljnih klijenata.
-- **Posledice:** Svaka kategorija opreme mora imati izmerenu stvarnu maržu nakon konfiguracije, transporta, garancije i zamena.
-- **Ponovno otvaranje:** Kada se potvrdi ili opovrgne ekonomika šireg IT portfolija.
 
 ### STR-006 — Bez partnera samo zbog novca
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Partner ili investitor razmatra se samo kada rešava dokazano usko grlo i donosi merljivu sposobnost pored kapitala.
-- **Posledice:** Kapital bez distribucije, operativne sposobnosti ili validiranog plana nije dovoljan razlog za dilution.
 
 ### STR-007 — Prvo operativno zaposlenje
 - **Datum:** 2026-07-22
 - **Status:** Approved
 - **Odluka:** Prva operativna uloga je customer support / implementation.
-- **Odgovornost:** Rešavanje baznih pitanja, onboarding prema manualima, trijaža, monitoring i delegiranje složenih problema.
-- **Posledice:** Manuali i checkliste za onboarding postaju obavezni operativni artefakti.
 
 ### STR-008 — Regionalna platforma
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Odluka:** Dugoročni cilj AgriX-a je regionalna vertikalna platforma, ne trajno ograničen lokalni specijalista.
-- **Posledice:** Tehnologija, pricing, dokumentacija i organizacija moraju biti projektovani za prenos na druga tržišta.
+- **Odluka:** Dugoročni cilj AgriX-a je regionalna vertikalna platforma.
 
 ### STR-009 — Strateški cilj tržišnog udela
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Kontekst:** Radna procena je da u Srbiji postoji 500–1.000 relevantnih firmi i da postoji ograničen tržišni prozor.
 - **Odluka:** AgriX cilja najmanje 200 firmi u naredne 3–4 godine.
-- **Napomena:** Ovo je strateški cilj, ne garantovana prognoza.
-- **Posledice:** Potreban je godišnji plan akvizicije, zapošljavanja, onboardinga, hardvera i kapitala.
-- **Ponovno otvaranje:** Nakon tržišnog istraživanja i prvog readiness-based plana rasta.
+
+### STR-010 — End-to-end poslovni operativni sistem
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Kontekst:** AgriX već obuhvata terenski otkup, management, Dispečer, vozače, SEF, bankarske izvode, rasknjižavanje i pripremu naloga za plaćanje. Tretiranje tih funkcija kao sporednih modula potcenjuje stvarni obim proizvoda.
+- **Odluka:** AgriX se razvija i pozicionira kao end-to-end vertikalni poslovni operativni sistem koji pokriva sve glavne i ključne sporedne tokove ciljnog klijenta.
+- **Obuhvat:** Kooperanti, otkup, stanice, dokumentacija, ambalaža, logistika, Dispečer, vozači, lager, sledljivost, kupci, fakture, SEF, banka, naplate, isplate, nalozi za plaćanje, management i monitoring.
+- **Posledice:** Desktop, PWA, Gazdinstvo, Dispečer, Vozači, SEF, banke i hardver tretiraju se kao povezani delovi jednog sistema. Product roadmap i pricing moraju polaziti od poslovnih tokova, ne od liste ekrana ili tehničkih aplikacija.
+- **Ponovno otvaranje:** Ako tržište pokaže da kupci ne žele integrisan sistem ili da pojedini domeni proizvode više troška nego strateške vrednosti.
