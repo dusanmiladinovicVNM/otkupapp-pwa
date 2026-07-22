@@ -54,19 +54,29 @@ Public Sub MigrirajPodatkeIzStarog()
     prevSec = Application.AutomationSecurity
     prevSU = Application.ScreenUpdating
 
-    ' Pre-migracija backup (rollback ako nesto podje po zlu; best-effort, kao pre-update).
-    Dim bkPath As String
+    ' Pre-migracija backup je OBAVEZAN: ovo je destruktivan alat, bez potvrdjenog
+    ' backup-a nema sigurnog povratka -> radije PREKINI (fail-closed) nego na slepo.
     If Len(ThisWorkbook.path) = 0 Then
-        summary = summary & "  (backup preskocen: fajl nije snimljen na disk)" & vbCrLf
-    Else
-        bkPath = BackupPreMigracije()
-        If Len(bkPath) > 0 Then
-            summary = summary & "  (backup: " & bkPath & ")" & vbCrLf
-        Else
-            problems = problems + 1
-            summary = summary & "  !! backup NIJE uspeo (disk/zakljucan?) - rollback nece biti trivijalan" & vbCrLf
-        End If
+        MsgBox "Fajl nije snimljen na disk pa ne mogu da napravim backup." & vbCrLf & _
+               "Prvo snimi novi fajl (Save As) pa ponovo pokreni migraciju.", _
+               vbExclamation, "Migracija - prekinuto (nema backup-a)"
+        Exit Sub
     End If
+    Dim bkPath As String: bkPath = BackupPreMigracije()
+    If Len(bkPath) = 0 Then
+        MsgBox "Backup NIJE uspeo (disk pun / zakljucan / nema prava upisa)." & vbCrLf & _
+               "Migracija je PREKINUTA - bez backup-a nema sigurnog povratka.", _
+               vbCritical, "Migracija - prekinuto (backup neuspeo)"
+        Exit Sub
+    End If
+    summary = summary & "  (backup: " & bkPath & ")" & vbCrLf
+
+    ' Otkazi eventualni ZAKAZAN AutoSave (modJournaling OnTime) da posle migracije
+    ' NE upise automatski (mozda problematican) rezultat. Migracija ne ide kroz TX
+    ' sloj pa ga sama ne zakazuje; ostaje samo da otkazemo zatecen tajmer. Best-effort.
+    On Error Resume Next
+    StopAutoSaveTimer
+    On Error GoTo 0
 
     ' Foolproof: novi fajl MORA imati tblKorisnici (+ audit kolone) PRE kopiranja,
     ' jer migracija prolazi kroz tabele NOVOG fajla pa povlaci istoimene iz starog.
@@ -169,21 +179,21 @@ CLEAN:
     Application.ScreenUpdating = prevSU
     On Error GoTo 0
 
-    ' Ne dozvoli da tih AutoSave / refleksni Ctrl+S upise POLU-migriran ili proble-
-    ' matican fajl. Na problem/gresku oznaci "snimljeno" -> operater mora SVESNO da
-    ' snimi posle citanja upozorenja (ista logika kao self-update, ne apel u MsgBox).
-    If problems > 0 Or Len(em) > 0 Then ThisWorkbook.Saved = True
-
+    ' NE diramo ThisWorkbook.Saved. (Saved=True bi Excelu reklo "nema izmena" pa bi
+    ' zatvaranje PROSLO bez pitanja i TIHO izgubilo migraciju - suprotno od namere.)
+    ' Radni fajl ostaje "prljav" -> Excel pri zatvaranju NORMALNO pita "Snimi?", sto
+    ' je svesna kapija; AutoSave je otkazan na pocetku, a backup je napravljen pre
+    ' izmena, pa je i tih upis oporaviv.
     Dim hdr As String
     If problems > 0 Then hdr = "!! PROBLEMI: " & problems & " -> vidi '!!' i '~' redove dole !!" & vbCrLf & vbCrLf
-    ' Footer objasnjava sta Saved=True znaci (inace operater zatvori bez prompta i
-    ' izgubi ceo posao - podatak nije unisten, ali sat vremena rada jeste).
     Dim foot As String
     If problems > 0 Or Len(em) > 0 Then
-        foot = "PAZI: fajl NIJE snimljen i Excel NECE pitati pri zatvaranju." & vbCrLf & _
-               "Ako nastavljas, snimi SVESNO (Ctrl+S). Stari fajl je netaknut."
+        foot = "Rezultat NIJE snimljen. PRE snimanja proveri gornje probleme." & vbCrLf & _
+               "Ako nesto nije u redu: zatvori BEZ snimanja (stari fajl je netaknut)." & vbCrLf & _
+               "Backup pre migracije: " & bkPath
     Else
-        foot = "Sada SNIMI novi fajl (Ctrl+S) i proveri par tabela."
+        foot = "Sada SNIMI novi fajl (Ctrl+S) i proveri par tabela." & vbCrLf & _
+               "Backup pre migracije: " & bkPath
     End If
     MsgBox em & hdr & "Tabela preneto: " & tbls & "   |   redova ukupno: " & total & _
            vbCrLf & vbCrLf & summary & vbCrLf & foot, _
@@ -223,38 +233,19 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     End If
     Dim nRows As Long: nRows = UBound(SRC, 1)
 
-    ' osiguraj TACNO nRows redova u novoj tabeli.
-    ' Smanjivanje (redak rerun nad manjim) -> robustno Delete red po red.
+    ' osiguraj TACNO nRows redova u novoj tabeli - robustno preko ListRows.Add/Delete.
+    ' NAMERNO NE koristimo ListObject.Resize: on ume TIHO da prosiri tabelu preko
+    ' obicnog sadrzaja ispod nje (napomene/rucni unos/formule/merged/shapes) koji
+    ' CountA ne pokriva u potpunosti; nemapirane kolone bi zadrzale tudji sadrzaj a
+    ' provera C bi ga smatrala "ocekivano praznim". Za destruktivan alat robusnost >
+    ' brzina (isti razlog kao u originalu). Ako Add postane usko grlo na ogromnoj
+    ' bazi, resenje je mereno + posebno guardovano, ne slepi Resize.
     Do While loNovi.ListRows.count > nRows
         loNovi.ListRows(loNovi.ListRows.count).Delete
     Loop
-    ' Povecavanje -> prvo BRZI bulk-resize (jedan poziv). Add-po-red je bio usko
-    ' grlo na velikim bazama (tblOtkup, desetine hiljada = po jedan COM poziv/red).
-    ' Resize ume da padne na Error 91 / koliziju (deljen sheet) -> tad fallback na
-    ' robustnu Add petlju (isto ponasanje kao ranije).
-    If loNovi.ListRows.count < nRows Then
-        Dim okBrzo As Boolean: okBrzo = False
-        On Error Resume Next
-        Dim hRng As Range: Set hRng = loNovi.HeaderRowRange
-        ' Resize BEZBEDNO samo ako je ciljna zona ispod header-a PRAZNA. Inace bi
-        ' Resize upio zaostale celije (napomena/rucni unos/ostatak testa) kao redove
-        ' tabele; nemapirane kolone bi zadrzale tudji sadrzaj, a provera C bi ga
-        ' smatrala "ocekivano praznim" -> strani podatak, a izvestaj kaze OK.
-        ' Ako nije prazno -> fallback na (sporu ali bezbednu) Add petlju.
-        If Not hRng Is Nothing Then
-            If Application.CountA(hRng.Offset(1).Resize(nRows, hRng.columns.count)) = 0 Then
-                loNovi.Resize hRng.Resize(nRows + 1, hRng.columns.count)
-                okBrzo = (Err.Number = 0 And loNovi.ListRows.count = nRows)
-            End If
-        End If
-        Err.Clear
-        On Error GoTo 0
-        If Not okBrzo Then
-            Do While loNovi.ListRows.count < nRows
-                loNovi.ListRows.Add
-            Loop
-        End If
-    End If
+    Do While loNovi.ListRows.count < nRows
+        loNovi.ListRows.Add
+    Loop
 
     ' upisi SAMO mapirane kolone (nove/kalkulisane kolone ostaju netaknute)
     Dim colArr() As Variant, r As Long
@@ -292,23 +283,16 @@ Private Sub PreuzmiFormatKolone(ByVal loStari As ListObject, ByVal sCol As Long,
     Set novaBody = loNovi.ListColumns(nCol).DataBodyRange
     Set staraBody = loStari.ListColumns(sCol).DataBodyRange
     If Not (novaBody Is Nothing Or staraBody Is Nothing) Then
-        ' format iz PRVE NEPRAZNE celije starog (prazna/General prva celija ne sme
-        ' da sakrije datumsku/iznosnu kolonu sa vodecim praznim redovima)
-        Dim srcCell As Range, dstFmt As String, srcFmt As String
-        If staraBody.cells.count = 1 Then
-            ' JEDNA celija -> SpecialCells bi radio nad CELIM sheet-om (Excel zamka);
-            ' uzmi bas tu celiju, ne tudji format sa lista.
-            srcFmt = staraBody.cells(1).NumberFormat
-        Else
-            Set srcCell = Nothing
-            Set srcCell = staraBody.SpecialCells(xlCellTypeConstants)
-            If srcCell Is Nothing Then
-                srcFmt = staraBody.cells(1).NumberFormat
-            Else
-                srcFmt = srcCell.Areas(1).cells(1).NumberFormat
-            End If
-        End If
-        dstFmt = novaBody.cells(1).NumberFormat
+        ' Format CELE stare kolone (ne pojedinacne celije). Range.NumberFormat vrati
+        ' zajednicki format ako je uniforman (obicno jeste za datum/iznos kolonu),
+        ' ili Null ako je mesan. Ovako se hvata i format-samo-formula kolona i kolona
+        ' sa vodecim praznim redovima -- sto SpecialCells(xlCellTypeConstants) NE bi
+        ' (promasi formule i, nad jednoceliskim opsegom, radi nad celim sheet-om).
+        Dim rawSrc As Variant, rawDst As Variant, srcFmt As String, dstFmt As String
+        rawSrc = staraBody.NumberFormat
+        If IsNull(rawSrc) Then srcFmt = staraBody.cells(1).NumberFormat Else srcFmt = CStr(rawSrc)
+        rawDst = novaBody.NumberFormat
+        If IsNull(rawDst) Then dstFmt = "" Else dstFmt = CStr(rawDst)   ' mesan novi -> ne diraj
         If dstFmt = "General" And srcFmt <> "General" And Len(srcFmt) > 0 Then
             novaBody.NumberFormat = srcFmt
         End If
@@ -415,8 +399,9 @@ End Function
 ' SVE ostalo se prenosi, ukljucujuci config tabele (tblConfig, tblSEFConfig,
 ' tblLocalConfig) jer cuvaju aktuelna podesavanja (OAuth / SEF / bank putanje).
 ' Config tabele su key/value; novi prazan fajl ih ima prazne do SetupNewPC, pa pun
-' copy starih redova donosi podesavanja bez gubitka -- OSIM AKTIVACIJE: LICENSE_* i
-' TRIAL_* kljucevi se NE migriraju (vezani za masinu; nova masina re-aktivira).
+' copy starih redova donosi podesavanja bez gubitka -- OSIM AKTIVACIJE: samo
+' machine-bound aktivacioni kljucevi licence/trial-a se NE migriraju (vidi
+' JeLicencaKljuc); config licence (ENABLED/ENDPOINT/DANI) SE prenosi.
 Private Function SkipTabela(ByVal naziv As String) As Boolean
     SkipTabela = (LCase$(Left$(naziv, 6)) = "tblrpt")
 End Function
@@ -593,10 +578,21 @@ Private Function JeAuditKolona(ByVal kolona As String) As Boolean
     End Select
 End Function
 
-' Aktivacija/trial: vezano za masinu, ne migrira se (nova masina re-aktivira).
+' AKTIVACIJA/binding/stanje licence se NE migrira (vezano za masinu; nova masina
+' re-aktivira). EKSPLICITNA lista (ne prefiks) -- da NE pokupi legitiman config
+' koji se sme preneti (LICENSE_ENABLED/ENDPOINT, TRIAL_ENABLED/DAYS): time se na
+' istoj masini izbegava nepotreban re-setup, a aktivacija i dalje ne putuje.
+' Kljucevi potvrdjeni u modLicense/modTrial (CFG_LIC_*, TRIAL_*).
+' NAPOMENA (ostaje otvoreno): ovo ne CISTI eventualno zatecenu aktivaciju u NOVOM
+' sablonu (target-clean) niti razlikuje same-machine vs new-machine transfer -- to
+' je poslovna odluka (migration mode), izvan dometa ove izmene.
 Private Function JeLicencaKljuc(ByVal kljuc As String) As Boolean
-    Dim s As String: s = UCase$(Trim$(kljuc))
-    JeLicencaKljuc = (Left$(s, 8) = "LICENSE_" Or Left$(s, 6) = "TRIAL_")
+    Select Case UCase$(Trim$(kljuc))
+        Case "LICENSE_KEY", "LICENSE_TOKEN", "LICENSE_BOUND_PARTS", _
+             "LICENSE_HWM", "LICENSE_STATUS", "LICENSE_NEXT_CHECK", _
+             "TRIAL_START", "TRIAL_HWM"
+            JeLicencaKljuc = True
+    End Select
 End Function
 
 ' Snimi kopiju NOVOG fajla pre migracije u <putanja>\Backup\ (rollback). "" na neuspeh.
