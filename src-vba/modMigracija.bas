@@ -88,6 +88,14 @@ Public Sub MigrirajPodatkeIzStarog()
 
     Set stari = Workbooks.Open(fileName:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
+    ' Sanity: da li je izabran BAS OtkupApp fajl? Inace svaka tabela vrati -1,
+    ' problems ostane 0, i "0 redova" izgleda kao uspeh. tblOtkup = potpis baze.
+    If NadjiListObject(stari, "tblOtkup") Is Nothing Then
+        problems = problems + 1
+        summary = summary & "  !! izabrani fajl NEMA tblOtkup -> nije OtkupApp baza? (nista nije preneto)" & vbCrLf
+        GoTo CLEAN
+    End If
+
     Dim ws As Worksheet, loNovi As ListObject, n As Long
     Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, errNum As Long
     Dim warn As String
@@ -168,9 +176,17 @@ CLEAN:
 
     Dim hdr As String
     If problems > 0 Then hdr = "!! PROBLEMI: " & problems & " -> vidi '!!' i '~' redove dole !!" & vbCrLf & vbCrLf
+    ' Footer objasnjava sta Saved=True znaci (inace operater zatvori bez prompta i
+    ' izgubi ceo posao - podatak nije unisten, ali sat vremena rada jeste).
+    Dim foot As String
+    If problems > 0 Or Len(em) > 0 Then
+        foot = "PAZI: fajl NIJE snimljen i Excel NECE pitati pri zatvaranju." & vbCrLf & _
+               "Ako nastavljas, snimi SVESNO (Ctrl+S). Stari fajl je netaknut."
+    Else
+        foot = "Sada SNIMI novi fajl (Ctrl+S) i proveri par tabela."
+    End If
     MsgBox em & hdr & "Tabela preneto: " & tbls & "   |   redova ukupno: " & total & _
-           vbCrLf & vbCrLf & summary & vbCrLf & _
-           "Sada SNIMI novi fajl (Ctrl+S) i proveri par tabela.", _
+           vbCrLf & vbCrLf & summary & vbCrLf & foot, _
            IIf(Len(em) > 0 Or problems > 0, vbExclamation, vbInformation), "Migracija podataka"
 End Sub
 
@@ -220,9 +236,16 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
         Dim okBrzo As Boolean: okBrzo = False
         On Error Resume Next
         Dim hRng As Range: Set hRng = loNovi.HeaderRowRange
+        ' Resize BEZBEDNO samo ako je ciljna zona ispod header-a PRAZNA. Inace bi
+        ' Resize upio zaostale celije (napomena/rucni unos/ostatak testa) kao redove
+        ' tabele; nemapirane kolone bi zadrzale tudji sadrzaj, a provera C bi ga
+        ' smatrala "ocekivano praznim" -> strani podatak, a izvestaj kaze OK.
+        ' Ako nije prazno -> fallback na (sporu ali bezbednu) Add petlju.
         If Not hRng Is Nothing Then
-            loNovi.Resize hRng.Resize(nRows + 1, hRng.columns.count)
-            okBrzo = (Err.Number = 0 And loNovi.ListRows.count = nRows)
+            If Application.CountA(hRng.Offset(1).Resize(nRows, hRng.columns.count)) = 0 Then
+                loNovi.Resize hRng.Resize(nRows + 1, hRng.columns.count)
+                okBrzo = (Err.Number = 0 And loNovi.ListRows.count = nRows)
+            End If
         End If
         Err.Clear
         On Error GoTo 0
@@ -271,13 +294,19 @@ Private Sub PreuzmiFormatKolone(ByVal loStari As ListObject, ByVal sCol As Long,
     If Not (novaBody Is Nothing Or staraBody Is Nothing) Then
         ' format iz PRVE NEPRAZNE celije starog (prazna/General prva celija ne sme
         ' da sakrije datumsku/iznosnu kolonu sa vodecim praznim redovima)
-        Dim srcCell As Range: Set srcCell = Nothing
-        Set srcCell = staraBody.SpecialCells(xlCellTypeConstants)
-        Dim dstFmt As String, srcFmt As String
-        If srcCell Is Nothing Then
+        Dim srcCell As Range, dstFmt As String, srcFmt As String
+        If staraBody.cells.count = 1 Then
+            ' JEDNA celija -> SpecialCells bi radio nad CELIM sheet-om (Excel zamka);
+            ' uzmi bas tu celiju, ne tudji format sa lista.
             srcFmt = staraBody.cells(1).NumberFormat
         Else
-            srcFmt = srcCell.Areas(1).cells(1).NumberFormat
+            Set srcCell = Nothing
+            Set srcCell = staraBody.SpecialCells(xlCellTypeConstants)
+            If srcCell Is Nothing Then
+                srcFmt = staraBody.cells(1).NumberFormat
+            Else
+                srcFmt = srcCell.Areas(1).cells(1).NumberFormat
+            End If
         End If
         dstFmt = novaBody.cells(1).NumberFormat
         If dstFmt = "General" And srcFmt <> "General" And Len(srcFmt) > 0 Then
@@ -546,10 +575,11 @@ Private Function JeKriticnaKolona(ByVal tabela As String, ByVal kolona As String
     If Len(s) >= 2 Then
         If Right$(s, 2) = "id" Then JeKriticnaKolona = True: Exit Function
     End If
-    ' poslovni vezni kljucevi bez "id" sufiksa (dokumentni lanac)
+    ' poslovni vezni kljucevi bez "id" sufiksa (dokumentni lanac + kompozitni ID-jevi:
+    ' tblOtkup identitet = BrojDokumenta + Klasa; tblAmbalaza = DokumentID + DokumentTip)
     Select Case s
         Case "brojzbirne", "brojotpremnice", "brojprijemnice", "brojfakture", _
-             "brojdokumenta", "brojbloka"
+             "brojdokumenta", "brojbloka", "klasa", "dokumenttip", "doktip"
             JeKriticnaKolona = True
     End Select
 End Function
