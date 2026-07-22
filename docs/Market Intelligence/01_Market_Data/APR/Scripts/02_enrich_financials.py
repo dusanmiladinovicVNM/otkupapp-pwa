@@ -19,15 +19,18 @@ from apr_pipeline_common import (
     write_json,
 )
 
-FINANCIAL_COLUMNS = (
+# APR finansijski izveštaji iskazuju novčane vrednosti u hiljadama dinara.
+# U Clean Data čuvamo i izvorne vrednosti (*_apr_000_rsd) i normalizovane RSD vrednosti.
+MONETARY_COLUMNS = (
     "poslovna_imovina",
     "kapital",
     "gubitak",
     "ukupni_prihodi",
     "neto_dobitak",
     "neto_gubitak",
-    "prosecan_broj_zaposlenih",
 )
+FINANCIAL_COLUMNS = MONETARY_COLUMNS + ("prosecan_broj_zaposlenih",)
+APR_MONETARY_MULTIPLIER = 1_000
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,6 +125,15 @@ def main() -> None:
     for column in ("godina",) + FINANCIAL_COLUMNS:
         df_final[column] = numeric_series(df_final[column])
 
+    for column in MONETARY_COLUMNS:
+        source_column = f"{column}_apr_000_rsd"
+        df_final[source_column] = df_final[column]
+        df_final[column] = df_final[column] * APR_MONETARY_MULTIPLIER
+
+    df_final["financial_values_unit"] = "RSD"
+    df_final["financial_source_unit"] = "thousand RSD"
+    df_final["financial_multiplier_applied"] = APR_MONETARY_MULTIPLIER
+
     df_final["has_financials"] = (
         df_final["found_in_financial_api"].fillna(False)
         & df_final["ukupni_prihodi"].notna()
@@ -146,6 +158,11 @@ def main() -> None:
         "duplicate_company_ids_in_input": duplicate_count,
         "found_in_financial_api": int(df_final["found_in_financial_api"].fillna(False).sum()),
         "rows_with_usable_financials": int(df_final["has_financials"].sum()),
+        "source_financial_unit": "thousand RSD",
+        "normalized_financial_unit": "RSD",
+        "monetary_multiplier": APR_MONETARY_MULTIPLIER,
+        "raw_monetary_columns": [f"{column}_apr_000_rsd" for column in MONETARY_COLUMNS],
+        "normalized_monetary_columns": list(MONETARY_COLUMNS),
         "request": request_meta,
         "important_limitation": (
             "Endpoint se trenutno tretira kao jedan finansijski zapis po firmi. "
@@ -157,6 +174,7 @@ def main() -> None:
     print(f"Sačuvano: {output_path}")
     print(f"Ukupno redova: {len(df_final)}")
     print(f"Upotrebljive finansije: {int(df_final['has_financials'].sum())}")
+    print("Novčane APR vrednosti normalizovane su iz hiljada RSD u pune RSD vrednosti.")
     if request_meta["tls_fallback_used"]:
         print("NAPOMENA: TLS fallback je korišćen i zabeležen u metadata JSON-u.")
 
