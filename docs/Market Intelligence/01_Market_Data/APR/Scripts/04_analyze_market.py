@@ -43,7 +43,9 @@ def concentration_table(df: pd.DataFrame) -> pd.DataFrame:
     revenue_df = revenue_df.sort_values("ukupni_prihodi", ascending=False).reset_index(drop=True)
     total = revenue_df["ukupni_prihodi"].sum()
     if total <= 0:
-        return pd.DataFrame(columns=["rank", "maticni_broj", "naziv", "ukupni_prihodi", "revenue_share", "cumulative_share"])
+        return pd.DataFrame(
+            columns=["rank", "maticni_broj", "naziv", "ukupni_prihodi", "revenue_share", "cumulative_share"]
+        )
     revenue_df["rank"] = revenue_df.index + 1
     revenue_df["revenue_share"] = revenue_df["ukupni_prihodi"] / total
     revenue_df["cumulative_share"] = revenue_df["revenue_share"].cumsum()
@@ -71,11 +73,31 @@ def main() -> None:
     if "prosecan_broj_zaposlenih" in df.columns:
         df["prosecan_broj_zaposlenih"] = numeric_series(df["prosecan_broj_zaposlenih"])
 
+    status_distribution = (
+        df.groupby(["status", "status_category"], dropna=False)
+        .agg(companies=("maticni_broj", "size"))
+        .reset_index()
+        .sort_values(["companies", "status"], ascending=[False, True])
+        if {"status", "status_category"}.issubset(df.columns)
+        else pd.DataFrame(columns=["status", "status_category", "companies"])
+    )
+
     market_df = df.copy()
     if not args.include_inactive:
         if "is_active_market_candidate" not in market_df.columns:
             raise ValueError("Dataset nema kolonu 'is_active_market_candidate'. Pokreni 03_clean_validate.py.")
         market_df = market_df[market_df["is_active_market_candidate"].fillna(False)].copy()
+
+    if market_df.empty:
+        status_preview = "; ".join(
+            f"{row.status!r}={int(row.companies)} ({row.status_category})"
+            for row in status_distribution.head(10).itertuples(index=False)
+        )
+        raise RuntimeError(
+            "Tržišni scope je prazan. Izveštaj nije generisan jer bi dao lažne nulte pokazatelje. "
+            "Proveri status klasifikaciju u 03_clean_validate.py ili koristi --include-inactive samo za dijagnostiku. "
+            f"Najčešći statusi: {status_preview or 'nema dostupnih statusa'}"
+        )
 
     market_df["revenue_band"] = pd.cut(
         market_df["ukupni_prihodi"],
@@ -91,7 +113,7 @@ def main() -> None:
     summary_rows = [
         ("market_rows", len(market_df)),
         ("rows_with_revenue", len(revenue_valid)),
-        ("revenue_coverage_pct", len(revenue_valid) / len(market_df) if len(market_df) else 0),
+        ("revenue_coverage_pct", len(revenue_valid) / len(market_df)),
         ("total_revenue_rsd", float(revenue_valid["ukupni_prihodi"].sum())),
         ("mean_revenue_rsd", float(revenue_valid["ukupni_prihodi"].mean()) if len(revenue_valid) else None),
         ("median_revenue_rsd", float(revenue_valid["ukupni_prihodi"].median()) if len(revenue_valid) else None),
@@ -117,7 +139,7 @@ def main() -> None:
         )
         .reset_index()
     )
-    revenue_bands["company_share"] = revenue_bands["companies"] / len(market_df) if len(market_df) else 0
+    revenue_bands["company_share"] = revenue_bands["companies"] / len(market_df)
 
     municipality_column = "opstina_apr" if "opstina_apr" in market_df.columns else "opstina"
     regions = (
@@ -154,6 +176,7 @@ def main() -> None:
             "opstina",
             "opstina_apr",
             "status",
+            "status_category",
             "godina",
             "ukupni_prihodi",
             "prosecan_broj_zaposlenih",
@@ -172,6 +195,7 @@ def main() -> None:
 
     with pd.ExcelWriter(workbook_path, engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
+        status_distribution.to_excel(writer, sheet_name="Status Distribution", index=False)
         revenue_bands.to_excel(writer, sheet_name="Revenue Bands", index=False)
         regions.to_excel(writer, sheet_name="Regions", index=False)
         activities.to_excel(writer, sheet_name="Activities", index=False)
@@ -209,7 +233,7 @@ def main() -> None:
 - APR šifre `1039` i `4631` ne obuhvataju nužno sve organizovane otkupljivače.
 - Prihod nije direktna mera broja stanica, kooperanata, logističke složenosti ili GGAP potrebe.
 - Finansijski endpoint se u trenutnom pipeline-u tretira kao jedan zapis po firmi; višegodišnji trend nije potvrđen ovim izveštajem.
-- `is_active_market_candidate` zavisi od tekstualnog statusa i mora se proveriti prema stvarnim APR statusima u datasetu.
+- Status klasifikacija se čuva u posebnim sheet-ovima i mora se proveriti kada APR uvede novu status vrednost.
 - Ovaj rezultat je tržišni dokaz i input za `04_MARKET.md`, ali nije automatski TAM/SAM/SOM bez dodatnih pravila segmentacije.
 """
     markdown_path.write_text(markdown, encoding="utf-8")
@@ -228,6 +252,7 @@ def main() -> None:
             "market_rows": len(market_df),
             "rows_with_revenue": len(revenue_valid),
             "revenue_bands_rsd": REVENUE_LABELS,
+            "status_distribution": status_distribution.to_dict(orient="records"),
         },
     )
 
