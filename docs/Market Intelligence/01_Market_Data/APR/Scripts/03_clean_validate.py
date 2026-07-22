@@ -30,6 +30,28 @@ NUMERIC_COLUMNS = (
     "prosecan_broj_zaposlenih",
 )
 
+# Negativna stanja se proveravaju pre pozitivnih da, na primer,
+# "neaktivan" ne bi bio pogrešno prepoznat kao "aktivan".
+BANKRUPTCY_TOKENS = ("stečaj", "stecaj")
+LIQUIDATION_TOKENS = ("likvid",)
+INACTIVE_TOKENS = (
+    "neaktivan",
+    "neaktivno",
+    "brisan",
+    "obrisan",
+    "ugašen",
+    "ugasen",
+    "prestao",
+    "prestanak",
+)
+ACTIVE_TOKENS = (
+    "aktivan",
+    "aktivno",
+    "registrovan",
+    "registrovano",
+    "registrovana",
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Čisti i validira APR tržišni dataset.")
@@ -44,19 +66,31 @@ def normalize_text(value: object) -> str:
     return " ".join(text.split())
 
 
+def contains_any(text: str, tokens: tuple[str, ...]) -> bool:
+    return any(token in text for token in tokens)
+
+
 def status_category(value: object) -> str:
     text = normalize_text(value).casefold()
     if not text:
         return "unknown"
-    if "stečaj" in text or "stecaj" in text:
+    if contains_any(text, BANKRUPTCY_TOKENS):
         return "bankruptcy"
-    if "likvid" in text:
+    if contains_any(text, LIQUIDATION_TOKENS):
         return "liquidation"
-    if "neaktivan" in text or "brisan" in text or "ugašen" in text or "ugasen" in text:
+    if contains_any(text, INACTIVE_TOKENS):
         return "inactive"
-    if "aktivan" in text:
+    if contains_any(text, ACTIVE_TOKENS):
         return "active"
     return "other"
+
+
+def format_top_statuses(status_profile: pd.DataFrame, limit: int = 10) -> str:
+    rows = status_profile.head(limit)
+    return "; ".join(
+        f"{row.status!r}={int(row.companies)} ({row.status_category})"
+        for row in rows.itertuples(index=False)
+    )
 
 
 def main() -> None:
@@ -95,11 +129,13 @@ def main() -> None:
 
     duplicate_mask = df["maticni_broj"].notna() & df["maticni_broj"].duplicated(keep=False)
     df["duplicate_company_id"] = duplicate_mask
+    df["unclassified_status"] = df["status_category"].isin(["unknown", "other"])
     df["data_quality_issue"] = (
         ~df["valid_company_id"]
         | ~df["valid_activity_code"]
         | df["duplicate_company_id"]
         | df["naziv"].eq("")
+        | df["unclassified_status"]
     )
 
     has_financials = (
@@ -108,12 +144,27 @@ def main() -> None:
         else df.get("ukupni_prihodi", pd.Series(index=df.index, dtype="float64")).notna()
     )
 
+    status_profile = (
+        df.groupby(["status", "status_category"], dropna=False)
+        .agg(companies=("maticni_broj", "size"))
+        .reset_index()
+        .sort_values(["companies", "status"], ascending=[False, True])
+    )
+
+    category_profile = (
+        df.groupby("status_category", dropna=False)
+        .agg(companies=("maticni_broj", "size"))
+        .reset_index()
+        .sort_values("companies", ascending=False)
+    )
+
+    active_count = int(df["is_active_market_candidate"].sum())
     quality_rows = [
         ("rows_total", len(df)),
         ("valid_company_id", int(df["valid_company_id"].sum())),
         ("invalid_company_id", int((~df["valid_company_id"]).sum())),
         ("duplicate_company_rows", int(df["duplicate_company_id"].sum())),
-        ("active_market_candidates", int(df["is_active_market_candidate"].sum())),
+        ("active_market_candidates", active_count),
         ("unknown_status", int(df["status_category"].eq("unknown").sum())),
         ("other_status", int(df["status_category"].eq("other").sum())),
         ("rows_with_financials", int(has_financials.sum())),
@@ -131,6 +182,8 @@ def main() -> None:
         df.to_excel(writer, sheet_name="Validated Data", index=False)
         df[df["data_quality_issue"]].to_excel(writer, sheet_name="Quality Issues", index=False)
         quality_df.to_excel(writer, sheet_name="Quality Summary", index=False)
+        status_profile.to_excel(writer, sheet_name="Status Values", index=False)
+        category_profile.to_excel(writer, sheet_name="Status Categories", index=False)
 
     quality_df.to_excel(quality_path, index=False)
     write_json(
@@ -143,17 +196,30 @@ def main() -> None:
             "output_file": output_path.name,
             "output_sha256": sha256_file(output_path),
             "quality_metrics": dict(quality_rows),
-            "status_rule": (
-                "Aktivna tržišna firma se trenutno prepoznaje tekstualnim statusom koji sadrži 'aktivan', "
-                "nakon prethodne provere stečaja, likvidacije, neaktivnog i brisanog statusa. "
-                "Pravilo treba proveriti prema svim statusima prisutnim u datasetu."
-            ),
+            "status_rules": {
+                "active_tokens": list(ACTIVE_TOKENS),
+                "inactive_tokens": list(INACTIVE_TOKENS),
+                "liquidation_tokens": list(LIQUIDATION_TOKENS),
+                "bankruptcy_tokens": list(BANKRUPTCY_TOKENS),
+                "evaluation_order": ["bankruptcy", "liquidation", "inactive", "active", "other"],
+            },
+            "top_status_values": status_profile.head(20).to_dict(orient="records"),
         },
     )
 
     print(f"Sačuvano: {output_path}")
-    print(f"Aktivni kandidati: {int(df['is_active_market_candidate'].sum())}")
+    print(f"Aktivni kandidati: {active_count}")
     print(f"Redovi sa problemom kvaliteta: {int(df['data_quality_issue'].sum())}")
+    print("Status kategorije:")
+    for row in category_profile.itertuples(index=False):
+        print(f"  - {row.status_category}: {int(row.companies)}")
+
+    if active_count == 0 and len(df) > 0:
+        raise RuntimeError(
+            "Status klasifikacija je vratila 0 aktivnih firmi, pa analiza nije bezbedna. "
+            f"Najčešće vrednosti: {format_top_statuses(status_profile)}. "
+            f"Detalji su sačuvani u sheet-u 'Status Values' fajla {output_path.name}."
+        )
 
 
 if __name__ == "__main__":
