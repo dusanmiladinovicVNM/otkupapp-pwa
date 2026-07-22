@@ -327,3 +327,112 @@ Confirm whether `modGoogleSheets` still uses `sheetId = 0` as a sentinel and rep
 ### 8.4 Lazy-Load Regression Suite
 
 Add smoke/regression checks for lazy-loaded jsPDF, Leaflet, Chart.js, Firebase intercom paths and service-worker runtime cache behavior.
+
+
+---
+
+## 10. Remediation Plan — Code Review + Functional Map Triage (2026-07-18)
+
+**Register:** `KNOWN_ISSUES.md` §8 (AUD-001..029, TL-006..008). **Per-item detail:**
+`docs/AUDIT_FM_TRIJAZA.md` (full triage of all 665 FM v35 risk rows — verdict/urgency/
+fix/effort with file:line evidence). Waves are independently shippable; verify each with
+the existing suites (`RunBusinessFlowProSuite`, storno/palete suites, `Test_BankParse`,
+`RunProductionHealthCheck`) per `RELEASE_GATES.md`.
+
+### 10.0 Wave 0 — dead weight (S)
+Delete duplicate test modules `modNovacTest.bas`, `modFakturaTest.bas`,
+`modLicenceTests.bas` (keep `*Tests`; one-time manual VBE removal — `ImportAllVBA` does
+not prune) and dead `modBankaImportParserClipboard.bas` + `GetFileNameFromPath2` +
+dead `GroupBySum`/`SumColumn`/`IzvestajTip` enum. [AUD-016; katalog FM-0027]
+
+### 10.1 Wave 1 — P0 / data safety
+1. Sheets JSON read: quote-aware strip, `\"` handling, `\uXXXX` decode + regression
+   values (commas, quotes, diacritics). [AUD-001]
+2. `ImportOtkupFromPWA_TX` → thin alias of `_Core(False)`, VOZ-style messaging. [AUD-002]
+3. `RequireColumns` guard on positional financial inserts — `SaveNovac` first, then
+   `AddCena`/`SaveZbirna`/`CreateFaktura` (first concrete targets of §2.1). [AUD-003]
+4. `RollbackTx`: per-table trap, always `CleanUp`, then `LogErr`; add `Class_Terminate`
+   safety. [AUD-004]
+5. Hladnjača chain set: check `otpID`/`SaveZbirna_TX` results; set `outBrPrij` only after
+   successful create; seed backfill numbers from existing prijemnice of the zbirna;
+   propagate link failure into the chain warning. [AUD-005]
+6. Storno "false success" chain (6 small fixes): context-guard the 5 unchecked branches;
+   verify each paletni detach result; verify zbirna relink count; invariant existence
+   check (`0=0` must not pass for nonexistent zbirna); sum-scan error flag; multi-match
+   detection in `LookupActiveID`. [AUD-020]
+7. Journal: today-vs-today comparison (`CreatedAt`); journal UPDATE lines from
+   `UpdateCell`; storno-marker on rollback. [AUD-006]
+8. `TryParseDateValue`: month bounds + round-trip validation. [AUD-007]
+
+### 10.2 Wave 2 — P1 / functional fixes
+- Finance: novac storno broj→`NovacID` resolution [AUD-008]; stornirane fakture out of
+  `FillOpenFakture` [AUD-009]; avans target-active/target-owner/no-op guards [AUD-010];
+  `CreateFaktura` kupac + `Count=1` [AUD-011]; `StornoNovac` → `UpdateOtkupStatus`
+  (storno of payment must not hide debt) [AUD-021].
+- frmDokumenta unos set: Kl.II checkbox hard block; mandatory ambalaza smer; visible
+  malina auto-zbirna failure; latest-generation prefill. [AUD-022]
+- Reports: revers print stornirano filter + tip separation [AUD-012]; station-attributed
+  kooperant payouts; kartice "Početno stanje" row; consistent "nema prijema" state;
+  per-vrsta payment allocation; explicit `Select Case` in Report* type dispatch
+  [AUD-023]; frmIzvestaj freshness (`m_cur*` in status/print), loud lazy-report errors,
+  valid zbirni tab matrix [AUD-024]; `MatchesFilter` unknown operator → `Err.Raise`
+  [AUD-013].
+- Banka: dedupe key + account number; 3+ candidate `Err.Raise` instead of subscript
+  crash; direction guard in manual Map*; auto-map behind explicit action or surfaced
+  result; preview/command source alignment; stale override clamp + final saldo
+  revalidation before CSV. [AUD-014/025/026]
+- Print: block reprint of stornirani otkup; `.UnMerge` in `FillFakturaSablon` cleanup;
+  `KarticaDetalji_Clear` on tab switch. [AUD-027]
+- Otkup UI: parcela culture comparison fix; blocking date re-lock failure; loud block
+  linking (+ "Izgubljeni" includes unlinked); storno filter in panel price helpers;
+  kooperant free-text resolver disambiguation. [AUD-028]
+- Palete: either-kutije-or-kese UI validation; sledljivost "mogući izvori" labeling;
+  `Preradjeno` guard on Reassign/Detach. [AUD-029]
+- Dashboard KPI stornirano filter [AUD-015]; startup/lifecycle trio [AUD-017]; infra
+  drift set [AUD-018].
+
+### 10.3 Wave 3 — consolidation (P2; extends §2.15/§3.5)
+- Promote `modGoogleSheets` retry/throttle helpers to `modHttpUtils`; switch
+  `modMasterSync`'s 4 raw call sites.
+- `modBankaParseUtils`: one canonical copy of the ~10 per-bank format helpers; keep
+  per-bank block logic and `Select Case` dispatch untouched.
+- Shared `BrutoUNeto(...)` for the 6 cloned conversions; move `SaveOMUlaz_TX` from
+  `frmDokumenta` into `modDokumenta`.
+- `NzBlank` in `modHelpers` + opportunistic clone retirement; case-insensitive stornirano
+  compare (`ExcludeStornirano`/`CheckDuplicate`).
+- Document-snapshot initiative for reprint drift (PDV rate, seller/legal, revers saldo)
+  [TL-006]; positional-insert conversion to name-based writes across remaining sites
+  [AUD-003 tail].
+- `modTestHarness` for new suites + `LastRunFailedCount()` for the E2E gate; self-update
+  manifest `files_count`.
+
+### 10.4 Wave 4 — security/process (coordinated)
+- Hash PWA PINs in `ExportUsers` (dual-column one-release migration); review JMBG export
+  need. [AUD-019]
+- Close `saveParcelPolygon` (KI-001) per §2.10/§2.18.
+- Docs: fix AR/CL version metadata; mark `instructions/` drafts historical; update
+  CLAUDE.md reference list (add FM + this register with defined roles; AR stays canonical
+  contracts).
+- `modVbaTools`/`modRelease` folders from `tblLocalConfig` (`VBA_SRC_PATH`).
+
+### 10.5 FM continuation
+- ✅ Delta triage executed for **v85** (FM-0035..0084, `AUDIT_FM_TRIJAZA.md` DEO II,
+  `KNOWN_ISSUES.md` §8.4) and **v142** (FM-0085..0140, DEO III, §8.6) — same method
+  (per-row verdict/urgency/fix, anchored to code commit; already-triaged entries skipped).
+- Commit the FM into the repo split per file (`docs/functional-map/`); add a drift-check
+  script (`git hash-object` vs per-entry Referentni SHA); resolve `modMarza` status (FM
+  skipped as unused, but `frmMarza` is reachable from `frmOtkupAPP`).
+
+### 10.6 Wave 5 — delta remediation (v85 + v142)
+Detail in `REFAKTOR_PLAYBOOK.md` §3b (RF-21..26) + §3c (RF-27..30); items in
+`KNOWN_ISSUES.md` §8.4/§8.6. Anchors are older than current `main` (v2.24.0) — re-base each
+package before work. Highlights:
+- **P0:** SEF client 409 → REJECTED (AUD-030 / RF-21) — the only new active P0.
+- **v85 P1:** SEF correctness/UX (RF-21/22), authorization chain to Admin panel + missing
+  `AccessWasDenied` (RF-23), self-update component-loss (RF-24), cenovnik stale price (RF-26).
+- **v142 P1:** agrohemija price-not-booked (RF-27, cheapest high-value), MasterSync
+  duplicate-number/wrong-write/otpremnica-mixing/station-mirror (RF-28, share `modMasterSync`
+  with RF-14), integritet/health false-green (RF-29), sledljivost incomplete-trace (RF-30).
+- **Latent (not wired):** E2E release gate false-green (AUD-039 / RF-26) — real defect, but
+  `modE2EReleaseGate` is not called by `PublishReleaseToDrive`; fix the result contract before
+  ever wiring it in.
