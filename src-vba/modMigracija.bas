@@ -3,7 +3,7 @@ Attribute VB_Name = "modMigracija"
 ' ============================================================
 ' modMigracija - jednokratna migracija CISTIH PODATAKA iz starog
 ' OtkupApp fajla u novi (prazan). Mapiranje PO IMENU kolone,
-' samo vrednosti (bez formula i koda). Ne treba "Trust access to
+' vrednosti + format kolone (bez formula i koda). Ne treba "Trust access to
 ' VBA project object model" (koristi obican Excel objektni model).
 '
 ' Upotreba: u NOVOM fajlu  ->  Alt+F8  ->  MigrirajPodatkeIzStarog
@@ -13,6 +13,10 @@ Attribute VB_Name = "modMigracija"
 '   - stare kolone sa podatkom bez cilja u novom (rename)  -> prijavljeno
 '   - zbir CISTO numerickih kolona (kolicine/vrednosti): staro vs novo
 '   Bilo koji problem: naslov "PROBLEMI: N" + upozoravajuca ikonica.
+'
+' Format: ako je kolona u NOVOM "General", preuzme se NumberFormat iz starog
+' (datumi/iznosi inace posle array-upisa ostaju goli brojevi). Namerni format
+' novog sablona (ne-General) se NE dira.
 ' ============================================================
 Option Explicit
 
@@ -194,6 +198,7 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
                 colArr(r, 1) = SRC(r, mapCol(j))
             Next r
             loNovi.ListColumns(j).DataBodyRange.value = colArr
+            PreuzmiFormatKolone loStari, mapCol(j), loNovi, j   ' datumi/iznosi: format iz starog ako je novi General
         End If
     Next j
     KopirajTabelu = nRows
@@ -204,6 +209,26 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     Err.Clear
     On Error GoTo 0
 End Function
+
+' Preuzmi NumberFormat iz starog u novi za jednu kolonu, ali SAMO ako je novi
+' "General" (da se ne pregazi namerni format novog sablona). Datumi/iznosi bi
+' inace posle array-upisa (.Value = niz) ostali goli brojevi. Best-effort.
+Private Sub PreuzmiFormatKolone(ByVal loStari As ListObject, ByVal sCol As Long, _
+                                ByVal loNovi As ListObject, ByVal nCol As Long)
+    On Error Resume Next
+    Dim novaBody As Range, staraBody As Range
+    Set novaBody = loNovi.ListColumns(nCol).DataBodyRange
+    Set staraBody = loStari.ListColumns(sCol).DataBodyRange
+    If Not (novaBody Is Nothing Or staraBody Is Nothing) Then
+        Dim dstFmt As String, srcFmt As String
+        dstFmt = novaBody.cells(1).NumberFormat
+        srcFmt = staraBody.cells(1).NumberFormat
+        If dstFmt = "General" And srcFmt <> "General" And Len(srcFmt) > 0 Then
+            novaBody.NumberFormat = srcFmt
+        End If
+    End If
+    Err.Clear
+End Sub
 
 ' True ako je tabela key/value config; vrati imena key/value kolona.
 Private Function ConfigKolone(ByVal naziv As String, ByRef keyCol As String, _
