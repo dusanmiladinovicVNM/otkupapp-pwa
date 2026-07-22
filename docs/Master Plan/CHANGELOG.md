@@ -8,7 +8,8 @@
 - governance pravila i klasifikacija tvrdnji u `00_GOVERNANCE.md`;
 - formalni `DECISION_LOG.md`;
 - prva puna verzija `02_STRATEGY.md`;
-- `02A_GGAP_STRATEGY.md` kao posebna strategija trećeg proizvodnog stuba.
+- `02A_GGAP_STRATEGY.md` kao posebna strategija trećeg proizvodnog stuba;
+- `03_CUSTOMERS_AND_JOBS.md` sa ulogama, jobs-to-be-done, buying committee modelom, segmentacijom i ICP scoringom.
 
 ### Approved
 
@@ -37,11 +38,17 @@
 - ciljna grupa je proširena sa hladnjača na sve organizovane otkupljivače sa mrežom stanica i kooperanata;
 - hardver je redefinisan iz enablementa u profitabilni sporedni centar uz mogući širi IT sistem;
 - tržišni cilj od 200 firmi uveden je kao ambicija, ne prognoza;
-- proizvodna arhitektura je definisana kroz tri povezana stuba: Enterprise, Gazdinstvo i GGAP.
+- proizvodna arhitektura je definisana kroz tri povezana stuba: Enterprise, Gazdinstvo i GGAP;
+- kupac se više ne modeluje samo kao vlasnik, operater i kooperant, već kao višeuloga buying committee i operativni lanac.
+
+### Review
+
+- predložene odluke CUS-001 do CUS-005 čekaju potvrdu nakon pregleda `03_CUSTOMERS_AND_JOBS.md`;
+- hipoteze o najboljem segmentu, activation funnel-u Gazdinstva i willingness-to-pay za GGAP zahtevaju intervjue i merenje.
 
 ### Next
 
-- razviti `03_CUSTOMERS_AND_JOBS.md`;
+- pregledati i zaključati `03_CUSTOMERS_AND_JOBS.md`;
 - razviti `04_MARKET.md` i potvrditi procenu 500–1.000 relevantnih firmi;
 - sprovesti GGAP discovery: standard, verzija, liste, uloge, dokazi i audit tok;
 - definisati formalni readiness score;
