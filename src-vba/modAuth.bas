@@ -299,6 +299,12 @@ Public Function VerifyPin(ByVal stored As String, ByVal inputPin As String) As B
         h = HashPin(inputPin, parts(1))
         VerifyPin = (Len(h) > 0 And StrComp(h, parts(2), vbTextCompare) = 0)
     Else
+        ' RF-23 (item 5): provera se oslanja na plaintext PIN fallback -- PIN nije
+        ' hash-ovan (legacy zapis ili SHA nedostupan pa PreparePin nije mogao da hash-uje).
+        ' Signaliziramo (fail-soft log), BEZ menjanja logike provere. Vidi FM-0053 #55.9.
+        On Error Resume Next
+        LogWarn "modAuth.VerifyPin", "Plaintext PIN fallback u upotrebi (PIN nije hash-ovan)."
+        On Error GoTo 0
         VerifyPin = (StrComp(s, Trim$(inputPin), vbBinaryCompare) = 0)
     End If
 End Function

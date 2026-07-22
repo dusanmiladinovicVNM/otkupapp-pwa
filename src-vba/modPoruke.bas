@@ -261,6 +261,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "AUTH_MSG_SAMO_ADMIN_KREIRA", "Samo administrator mo" & ChrW(382) & "e da kreira korisnike."
     UpsertRow lo, existing, "AUTH_MSG_SAMO_ADMIN_PINHASH", "Samo administrator mo" & ChrW(382) & "e da menja PIN hash."
     UpsertRow lo, existing, "AUTH_MSG_SAMO_ADMIN_KORISNICI", "Samo administrator mo" & ChrW(382) & "e da upravlja korisnicima."
+    UpsertRow lo, existing, "AUTH_MSG_SAMO_ADMIN_SEKCIJA", "Ovoj sekciji pristupa samo administrator."
     UpsertRow lo, existing, "AUTH_MSG_NEMA_ADMINA", "Ne mogu da uklju" & ChrW(269) & "im prijavu: ne postoji nijedan aktivan Admin." & vbCrLf & "Prvo pokreni: Alt+F8 -> KreirajPrvogAdmina."
     UpsertRow lo, existing, "AUTH_ERR_NE_MOGU_UKLJUCITI", "Ne mogu da uklju" & ChrW(269) & "im prijavu: "
     UpsertRow lo, existing, "AUTH_MSG_PRIJAVA_UKLJUCENA", "Prijava korisnika je UKLJU" & ChrW(268) & "ENA." & vbCrLf & "Pri slede" & ChrW(263) & "em otvaranju aplikacije tra" & ChrW(382) & "i se prijava."

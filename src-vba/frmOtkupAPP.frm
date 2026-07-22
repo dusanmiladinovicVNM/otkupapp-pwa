@@ -724,6 +724,15 @@ End Sub
 Private Sub btnBanka_Click()
     On Error GoTo EH
 
+    ' AUD-034b: kontrola pristupa (opt-in AUTH) PRE uvoza. ImportBankaInbox_WithDrivePull
+    ' KNJIZI novac / auto-map, pa provera mora biti pre njega (obrazac iz btnSyncPWA_Click).
+    If modAuth.AuthEnabled() Then
+        If Not modAuth.KorisnikImaPravo(OBL_BANKA) Then
+            MsgBox "Nemate dozvolu za pristup oblasti: Banka", vbExclamation, APP_NAME
+            Exit Sub
+        End If
+    End If
+
     Dim oldPointer As Integer
     oldPointer = Me.MousePointer
 
