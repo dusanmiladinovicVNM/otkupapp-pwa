@@ -18,7 +18,7 @@ Pipeline ima četiri koraka:
 
 1. `01_extract_companies.py` — preuzima APR registar i filtrira šifre delatnosti.
 2. `02_enrich_financials.py` — dodaje finansijske podatke iz APR financial-statements endpointa.
-3. `03_clean_validate.py` — normalizuje podatke i pravi data-quality izveštaj.
+3. `03_clean_validate.py` — normalizuje podatke, klasifikuje statuse i pravi data-quality izveštaj.
 4. `04_analyze_market.py` — pravi tržišni Excel i Markdown sažetak.
 
 Za orkestraciju se koristi `run_pipeline.py`.
@@ -84,7 +84,7 @@ Koristi najnoviji `apr_market_validated_*.xlsx` iz `Processed/` i ponovo generi�
 
 ## TLS politika
 
-APR endpoint na pojedinim Windows/Python instalacijama vraća nepotpun sertifikacioni lanac i izaziva `CERTIFICATE_VERIFY_FAILED`.
+APR endpoint na pojedinim Windows/Python instalacijama može izazvati `CERTIFICATE_VERIFY_FAILED`.
 
 Podrazumevana politika pipeline-a je:
 
@@ -108,6 +108,24 @@ python run_pipeline.py --insecure
 ```
 
 `--insecure` i `--strict-tls` se međusobno isključuju.
+
+## Status klasifikacija i zaštita od lažnog izveštaja
+
+`03_clean_validate.py` prvo proverava negativna stanja, a zatim aktivna:
+
+1. stečaj;
+2. likvidacija;
+3. neaktivan, brisan, ugašen ili prestao;
+4. aktivan ili registrovan;
+5. ostalo / nepoznato.
+
+Validirani workbook sadrži posebne sheet-ove:
+
+- `Status Values` — svaka originalna APR status vrednost i broj firmi;
+- `Status Categories` — zbir po normalizovanoj kategoriji;
+- `Quality Issues` — uključuje i neklasifikovane statuse.
+
+Ako dataset ima redove, a klasifikacija vrati nula aktivnih firmi, validacija se prekida nakon što sačuva dijagnostičke sheet-ove. `04_analyze_market.py` takođe odbija da generiše izveštaj iz praznog scope-a. Time pipeline više ne može tiho da proizvede validno izgledajući izveštaj sa svim pokazateljima jednakim nuli.
 
 ## Pojedinačni koraci
 
@@ -147,6 +165,7 @@ Svaki korak automatski bira najnoviji očekivani ulaz. Eksplicitni input može s
 Analitički workbook sadrži:
 
 - osnovni summary;
+- statusnu raspodelu;
 - prometne razrede;
 - geografsku raspodelu;
 - raspodelu po delatnosti;
@@ -167,7 +186,7 @@ Time se APR API ne poziva pri svakoj analizi.
 - Šifre `1039` i `4631` ne obuhvataju nužno sve organizovane otkupljivače.
 - Prihod nije direktna mera broja stanica, kooperanata, logistike ili GGAP potrebe.
 - Financial-statements endpoint se trenutno tretira kao jedan zapis po firmi. Višegodišnja istorija nije potvrđena ovim pipeline-om.
-- Pravilo za aktivan status mora se proveriti prema stvarnim vrednostima u APR datasetu.
+- Svaka nova ili promenjena APR status vrednost mora biti pregledana u sheet-u `Status Values`.
 - Rezultati su ulaz za TAM/SAM/SOM model, ali nisu sami po sebi konačan TAM, SAM ili SOM.
 - TLS fallback omogućava dostupnost APR podataka, ali metadata mora ostati sačuvana kao dokaz stvarnog režima preuzimanja.
 
@@ -184,6 +203,7 @@ Uz svaki generisani dataset čuvaju se:
 - obuhvaćene šifre;
 - broj redova;
 - TLS režim i eventualni fallback;
+- statusna pravila i najčešće stvarne status vrednosti;
 - poznata ograničenja;
 - SHA-256 ulaznog i/ili izlaznog fajla.
 
