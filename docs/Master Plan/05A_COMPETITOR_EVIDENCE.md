@@ -10,16 +10,18 @@
 
 ## 1. Svrha
 
-Ovaj dodatak beleži dva konkurentska signala koji bitno menjaju prioritete istraživanja:
+Ovaj dodatak beleži konkurentske signale koji menjaju prioritete istraživanja:
 
-1. Infosys kao potvrđen izvor dve AgriX migracije i dobavljač sa širokim agro/prehrambenim reference universe-om;
-2. Yuteam kao dobavljač sa 12 navedenih referenci u agraru, zadrugama, kooperaciji i mlinarstvu.
+1. Infosys kao potvrđen izvor dve AgriX migracije;
+2. 114 agro i prehrambenih stavki izdvojenih ili naknadno potvrđenih u Infosys referentnom universe-u;
+3. 49 visokopotencijalnih Infosys replacement računa;
+4. Yuteam kao dobavljač sa 12 navedenih referenci u agraru, zadrugama, kooperaciji i mlinarstvu.
 
 Dokument ne tvrdi tržišni udeo, aktuelnost svih instalacija niti funkcionalnu superiornost bilo kog sistema bez dodatne provere.
 
 ---
 
-## 2. Infosys — najjači replacement signal
+## 2. Infosys — najjači trenutni replacement signal
 
 `FACT — founder-confirmed business event`: dva postojeća AgriX klijenta prethodno su koristila Infosys sistem.
 
@@ -34,74 +36,46 @@ Ovaj dokaz je vredniji od obične javne reference jer potvrđuje:
 - da korisnici imaju iskustvo dovoljno za direktno poređenje;
 - da postoji replacement market, a ne samo greenfield tržište.
 
-### 2.1 Infosys agro/prehrambeni reference universe
+### 2.1 Reference universe
 
-Iz dostavljenog Excel-a izdvojeno je 113 agro/prehrambenih stavki iz šire Infosys referentne liste.
+Osnovni klasifikovani Excel sadrži 113 agro i prehrambenih stavki. Osnivač je dodatno potvrdio da se u originalnoj Infosys listi nalazi i `DOO BUDIM GRAD BUDILOVINA`, koji je izostao iz filtriranog Excela.
+
+Ažurirani universe:
 
 | Pokazatelj | Broj |
 |---|---:|
-| Ukupno izdvojenih stavki | 113 |
-| Jasno iz naziva | 89 |
-| Potrebna dodatna provera | 24 |
-| Visok AgriX potencijal | 48 |
+| Ukupno Infosys agro/prehrambenih referenci | 114 |
+| Visok AgriX potencijal | 49 |
 | Srednji potencijal | 49 |
 | Nizak potencijal | 16 |
-| Različite navedene lokacije | 47 |
+| Prioritet A: voće, kooperative i duvan | 40 |
+| Prioritet B: mlekare | 9 |
 
-Raspodela svih 113 stavki:
+`INFERENCE`: Infosys replacement pool je dovoljno veliki da bude zaseban GTM kanal, a ne samo ad hoc odgovor kada se javi nezadovoljan korisnik.
 
-| Kategorija | Broj |
-|---|---:|
-| Voće, povrće i hladnjače | 25 |
-| Žitarice, pekarstvo i konditorska industrija | 24 |
-| Poljoprivreda i kooperative | 13 |
-| Opšta prehrambena industrija | 11 |
-| Mlekarstvo | 9 |
-| Vino, pivo i ostala pića | 9 |
-| Agro-inputi i mehanizacija | 7 |
-| Stočarstvo, ribarstvo i veterina | 7 |
-| Meso i prerada mesa | 5 |
-| Instituti i strukovne organizacije | 2 |
-| Duvan | 1 |
+### 2.2 BUDIM GRAD
 
-Svih 48 visokopotencijalnih referenci pripadaju grupama:
+`FACT — founder-confirmed`: BUDIM GRAD se nalazi u Infosys referentnoj listi i jeste hladnjača.
 
-- 25 voće, povrće i hladnjače;
-- 13 poljoprivreda i kooperative;
-- 9 mlekara;
-- 1 duvan.
+Javno potvrđeni podaci:
 
-`LIMITATION`: klasifikacija je zasnovana na nazivu, lokaciji i sektorskom signalu. Lista ne potvrđuje pravni identitet, šifru delatnosti, aktuelan Infosys modul, datum implementacije ili trenutno korišćenje.
+- pravni naziv: `DOO BUDIM GRAD BUDILOVINA`;
+- MB: `06994857`;
+- PIB: `101140298`;
+- lokacija: Budilovina, Brus;
+- šifra delatnosti: `1039`;
+- status: aktivan;
+- prihod 2025: približno `1.399.742.000 RSD`;
+- broj zaposlenih 2025: `59`;
+- poslovni tok: otkup svežeg voća, prerada i zamrzavanje.
 
-### 2.2 Geografski signal
+`INFERENCE`: Infosys baza uključuje i značajne Tier A račune. BUDIM GRAD je višestruko veći od dosadašnjeg preliminarnog ICP revenue signala od oko 150–400 miliona RSD i potvrđuje da prihod ne treba koristiti kao gornju granicu ICP-a.
 
-Najveća ukupna koncentracija stavki:
+`DECISION`: BUDIM GRAD ulazi u prioritet A replacement listu.
 
-- Čačak — 19;
-- Požega — 12;
-- Zlatibor — 7;
-- Arilje — 6;
-- Beograd — 6;
-- Užice — 5;
-- Kragujevac — 4.
+### 2.3 Obavezni win interview
 
-Visokopotencijalni klaster posebno se vidi u Požegi, Arilju, Čačku, Zlatiboru, Bajinoj Bašti, Kosjeriću, Kotraži i Užicu.
-
-Dataset sadrži i reference iz Pljevalja, Srebrenice i Zvornika.
-
-`INFERENCE`: Infosys ima jaku istorijsku ili aktuelnu referentnu gustinu u Zapadnoj i Centralnoj Srbiji, uz prvi vidljiv signal regionalnog prisustva.
-
-### 2.3 Šta ovaj dokaz menja
-
-1. Infosys nije samo competitor-by-name, već dobavljač sa širokim agro/prehrambenim footprint-om.
-2. Dva stvarna prelaska potvrđuju da je deo te baze osvojiv.
-3. Replacement pool je veći od dva poznata računa.
-4. APR šifre `1039/4631` ne obuhvataju dovoljno mlekare, duvan, kooperative i druge Infosys sektore.
-5. AgriX treba da razvije standardan migracioni playbook sa Infosys-a.
-
-### 2.4 Obavezni win interview
-
-Za oba migrirana klijenta treba dokumentovati:
+Za oba migrirana klijenta treba strukturisano dokumentovati:
 
 1. koliko dugo su koristili Infosys;
 2. koje procese su vodili u njemu;
@@ -109,18 +83,38 @@ Za oba migrirana klijenta treba dokumentovati:
 4. koje funkcionalne ili operativne praznine su osećali;
 5. koliki je bio switching cost;
 6. šta je presudilo u korist AgriX-a;
-7. koje su prednosti AgriX-a potvrdili tek nakon korišćenja;
+7. koje su prednosti AgriX-a potvrdili nakon korišćenja;
 8. šta je u migraciji bilo teško;
 9. u čemu je prethodni sistem bio bolji;
 10. šta bi moglo izazvati povratak ili churn.
 
-`DECISION`: Infosys dobija prioritet 1 u product teardown-u, win/loss analizi, migracionom playbook-u i pozicioniranju.
-
-`DECISION`: javno pozicioniranje prema Infosys-u ne sme koristiti neproverene tvrdnje. Najjači dokaz treba da budu anonimni ili odobreni case studies migracije.
+`DECISION`: Infosys dobija prioritet 1 u product teardown-u, win/loss analizi i pozicioniranju.
 
 ---
 
-## 3. Yuteam — ratarstvo, zadruge i kooperacija
+## 3. Reproduktivni Infosys replacement pipeline
+
+Kreirani su:
+
+- `infosys_agro_references.csv` — osnovnih 113 klasifikovanih stavki;
+- `infosys_manual_reference_additions.csv` — founder-confirmed dodaci, trenutno BUDIM GRAD;
+- `Scripts/build_infosys_replacement_targets.py` — spajanje sa APR podacima i generisanje replacement liste.
+
+Pipeline:
+
+1. spaja osnovne i ručno potvrđene reference;
+2. podrazumevano bira visokopotencijalne račune;
+3. koristi matični broj kada je poznat;
+4. ostale firme poredi po normalizovanom nazivu i lokaciji;
+5. odvaja `matched`, `manual_review` i `unmatched`;
+6. pravi CSV i Excel izlaz;
+7. ne prihvata slab fuzzy match kao činjenicu.
+
+`DECISION`: target-account dataset mora čuvati match score, metod povezivanja i potrebu za ručnom proverom.
+
+---
+
+## 4. Yuteam — ratarstvo, zadruge i kooperacija
 
 Dostavljena referentna lista pod naslovom `RUGE I KOOPERACIJE` sadrži:
 
@@ -137,29 +131,26 @@ Dostavljena referentna lista pod naslovom `RUGE I KOOPERACIJE` sadrži:
 11. ZZ Žitarice — Kać;
 12. Mlin Banatski klas — Bavanište.
 
-### Strukturni signali
+Strukturni signali:
 
 - 12 referenci u poljoprivrednom i kooperantskom prostoru;
 - najmanje pet zemljoradničkih zadruga;
 - više agrarnih privrednih društava;
 - jedan mlin;
 - dominantan geografski klaster Vojvodine;
-- ponovljeno prisustvo u Zrenjaninu i Kikindi;
-- signal da relevantno tržište nije ograničeno na voće, hladnjače i APR šifre `1039/4631`.
+- signal da relevantno tržište nije ograničeno na voće, hladnjače i APR šifre `1039`/`4631`.
 
 `INFERENCE`: Yuteam je ozbiljan adjacent konkurent za buduće širenje AgriX-a prema ratarstvu, žitaricama, zadrugama i organizovanoj kooperaciji.
 
-`LIMITATION`: iz referentne liste nisu potvrđeni moduli, aktuelnost instalacija, cene, deployment model, mobilne funkcije, integracije niti support.
-
 ---
 
-## 4. Ažurirana konkurentska hijerarhija
+## 5. Ažurirana konkurentska hijerarhija
 
-### Prioritet 1 — potvrđen replacement konkurent i širok footprint
+### Prioritet 1 — potvrđen replacement konkurent
 
 **Infosys**
 
-Razlog: dve stvarne migracije ka AgriX-u i 113 klasifikovanih agro/prehrambenih referentnih stavki, od kojih je 48 visokopotencijalno.
+Razlog: dve stvarne migracije ka AgriX-u, 114 izdvojenih agro/prehrambenih referenci i 49 visokopotencijalnih replacement računa.
 
 ### Prioritet 2 — direktni specijalizovani konkurenti u voću i otkupu
 
@@ -182,55 +173,43 @@ Razlog: 12 referenci u Vojvodini, agraru, zadrugama i mlinarstvu.
 
 ---
 
-## 5. Tržišne implikacije
+## 6. Tržišne implikacije
 
-1. `FACT`: AgriX već ima najmanje dve replacement pobede protiv specijalizovanog incumbent sistema.
+1. `FACT`: AgriX već ima najmanje dve replacement pobede protiv Infosys-a.
 2. `INFERENCE`: prelazak sa konkurenta može biti važniji kanal od prodaje firmama bez softvera.
-3. `INFERENCE`: Infosys reference pokazuju da replacement universe obuhvata voće, kooperative, mlekare i duvan.
-4. `INFERENCE`: trenutni APR scan ne obuhvata dovoljno ratarstvo, zadruge, mlekare, duvan i žitarice.
-5. `INFERENCE`: Zapadna i Centralna Srbija zahtevaju poseban Infosys replacement plan; Vojvodina zahteva poseban Yuteam/ratarstvo discovery.
-6. `DECISION`: ICP ne sme eliminisati firmu zbog šifre delatnosti kada procesni signali potvrđuju otkup ili kooperaciju.
-7. `DECISION`: prethodni sistem postaje obavezno CRM polje za svaki lead.
-8. `DECISION`: svaki novi klijent mora imati dokumentovan switching trigger i razlog pobede.
-9. `DECISION`: 48 visokopotencijalnih Infosys stavki postaju prioritetni research backlog, ne automatska outbound lista.
+3. `INFERENCE`: BUDIM GRAD potvrđuje da replacement tržište uključuje i firme sa prihodima većim od milijardu dinara.
+4. `INFERENCE`: trenutni APR scan ne obuhvata dovoljno ratarstvo, zadruge, mlekare i duvan.
+5. `DECISION`: ICP ne sme eliminisati firmu zbog šifre delatnosti kada procesni signali potvrđuju otkup ili kooperaciju.
+6. `DECISION`: prethodni sistem postaje obavezno CRM polje za svaki lead.
+7. `DECISION`: svaki novi klijent mora imati dokumentovan switching trigger i razlog pobede.
+8. `DECISION`: migracija sa Infosys-a postaje poseban sales i onboarding playbook.
 
 ---
 
-## 6. Sledeći istraživački koraci
+## 7. Sledeći istraživački koraci
 
 ### Infosys
 
+- pokrenuti APR matching pipeline;
+- ručno proveriti fuzzy i unmatched rezultate;
 - sprovesti dva win interview-a;
 - popisati funkcije koje su klijenti koristili;
 - utvrditi migracioni proces i format podataka;
-- spojiti 48 visokopotencijalnih referenci sa APR i drugim registrima;
-- potvrditi aktivnost, prihod, broj zaposlenih, šifre i pravni identitet;
-- utvrditi da li se Infosys i dalje koristi i koji modul;
 - proveriti pricing, održavanje, support i deployment;
-- napraviti evidence-based battlecard;
-- napraviti standardan migration readiness checklist.
+- napraviti battlecard zasnovan samo na dokazima.
 
 ### Yuteam
 
-- potvrditi naziv i funkcionalni obim rešenja sa izvornim naslovom `RUGE I KOOPERACIJE`;
 - spojiti 12 referenci sa APR podacima;
-- proveriti aktivnost, prihod, broj zaposlenih i šifre delatnosti;
 - izdvojiti zadruge, mlinove i agrarne DOO kao zasebne subsegmente;
 - istražiti specifične tokove žitarica, skladištenja i kooperacije;
 - proceniti koliko AgriX može ući u ovaj segment bez stvaranja forka proizvoda.
 
-### Dataset
-
-- `competitor_references.csv` — 40 javno navedenih SOFTEK, KRUNET i Yuteam projekata/reference;
-- `infosys_agro_references.csv` — 113 klasifikovanih Infosys agro/prehrambenih referentnih stavki;
-- `infosys_agro_references_summary.md` — agregati i prioritetni replacement pool;
-- `competitive_events.csv` — potvrđena dva prelaska sa Infosys-a na AgriX.
-
 ---
 
-## 7. Zaključak
+## 8. Zaključak
 
-Infosys je trenutno najvažniji konkurent za razumevanje zato što AgriX protiv njega već ima dve stvarne pobede i zato što njegova referentna lista pokazuje širok agro/prehrambeni footprint. SOFTEK i KRUNET potvrđuju zrelo tržište specijalizovanih voćarskih i otkupnih rešenja. Yuteam potvrđuje da se relevantan konkurentski prostor širi na Vojvodinu, zadruge, žitarice, mlinove i organizovanu kooperaciju.
+Infosys je trenutno najvažniji konkurent za razumevanje zato što AgriX protiv njega već ima dve stvarne pobede, a referentni universe pokazuje široku prisutnost u ciljnom i susednim sektorima. BUDIM GRAD potvrđuje da Infosys pokriva i značajne hladnjače, ne samo male ili srednje firme.
 
 Sledeća konkurentska prednost neće nastati iz duže liste funkcija, već iz preciznog odgovora na tri pitanja:
 
