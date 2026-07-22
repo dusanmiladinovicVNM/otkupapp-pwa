@@ -87,7 +87,7 @@ Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se 
 ### STR-010 — End-to-end poslovni operativni sistem
 - **Datum:** 2026-07-22
 - **Status:** Approved
-- **Kontekst:** AgriX već obuhvata terenski otkup, management, Dispečer, vozače, repromaterijal, otpremu, SEF, bankarske izvode, rasknjižavanje i pripremu naloga za plaćanje. Tretiranje tih funkcija kao sporednih modula potcenjuje stvarni obim proizvoda.
+- **Kontekst:** AgriX već obuhvata terenski otkup, management, Dispečer, vozače, repromaterijal, otpremu, SEF, bankarske izvode, rasknjižavanje i pripremu naloga za plaćanje.
 - **Odluka:** AgriX se razvija i pozicionira kao end-to-end vertikalni poslovni operativni sistem koji pokriva sve glavne i ključne sporedne tokove ciljnog klijenta.
 - **Obuhvat:** Kooperanti, parcele, repromaterijal, otkup, stanice, dokumentacija, ambalaža, logistika, Dispečer, vozači, lager, sledljivost, kupci, otprema, fakture, SEF, banka, naplate, isplate, nalozi za plaćanje, management i monitoring.
 - **Posledice:** Product roadmap i pricing polaze od poslovnih tokova, ne od liste ekrana ili tehničkih aplikacija.
@@ -97,6 +97,13 @@ Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se 
 - **Status:** Approved
 - **Kontekst:** Kooperant rola već sadrži karticu prema hladnjači, GIS i parcele, parcelnu prognozu i upozorenja, digitalnog agronoma, pametno doziranje, tretmane, opremu, troškove, proizvodnju i sezonski bilans.
 - **Odluka:** AgriX Gazdinstvo se tretira kao zaseban pun farm-management proizvod, a ne kao portal ili mali dodatak Enterprise sistemu.
-- **Obuhvat:** Kartica sa zaduženjima, razduženjima i saldom; GIS i parcele; meteo i rizici po parceli; pametno doziranje; tretmani; oprema; knjiga polja; troškovi po kategorijama i parcelama; proizvodnja; bilans ukupno i po parceli; offline-first rad.
-- **Posledice:** Gazdinstvo dobija sopstveni product strategy, activation funnel, packaging, KPI-jeve, support model i unit economics. Njegov prihod se kratkoročno ne precenjuje, ali se njegov dugoročni potencijal ne ograničava B2B licencom hladnjače.
-- **Ponovno otvaranje:** Nakon merenja aktivacije, retencije, willingness-to-pay i stvarnog support cost-a.
+- **Posledice:** Gazdinstvo dobija sopstveni product strategy, activation funnel, packaging, KPI-jeve, support model i unit economics.
+
+### STR-012 — GGAP kao treći proizvodni stub
+- **Datum:** 2026-07-22
+- **Status:** Approved
+- **Kontekst:** Enterprise i Gazdinstvo već stvaraju veliki deo operativnih, parcelnih, agronomskih, robnih i dokumentacionih podataka potrebnih za GGAP evidencije.
+- **Odluka:** AgriX GGAP je treći puni proizvod, pored Enterprise i Gazdinstvo. Pokriva GGAP liste, evidencije, dokaze, zadatke, neusaglašenosti, korektivne mere i kompletan dokumentacioni tok.
+- **Osnovni princip:** Podatak se unosi jednom na mestu nastanka, a GGAP evidencija i dokaz se iz njega automatski izvode.
+- **Posledice:** GGAP dobija zaseban discovery, product strategy, domain ownership, packaging, KPI-jeve, unit economics i pilot. Softver ne garantuje sertifikaciju i ne zamenjuje sertifikaciono telo, auditora ili stručnog konsultanta.
+- **Ponovno otvaranje:** Nakon mapiranja standarda i verzije, stručne validacije, pilota i potvrde ekonomike održavanja compliance sadržaja.
