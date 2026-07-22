@@ -68,6 +68,19 @@ def main() -> None:
     df = pd.read_excel(input_path, sheet_name="Validated Data", dtype={"maticni_broj": "string"})
     if "ukupni_prihodi" not in df.columns:
         raise ValueError("Dataset nema kolonu 'ukupni_prihodi'.")
+    if "financial_values_unit" not in df.columns:
+        raise ValueError(
+            "Dataset nema potvrđenu finansijsku jedinicu. Ponovo pokreni 03_clean_validate.py; "
+            "APR novčane vrednosti moraju biti normalizovane iz hiljada RSD u RSD."
+        )
+
+    unit_values = {
+        str(value).strip().upper()
+        for value in df["financial_values_unit"].dropna().unique().tolist()
+        if str(value).strip()
+    }
+    if unit_values != {"RSD"}:
+        raise ValueError(f"Nepodržana ili mešovita finansijska jedinica: {sorted(unit_values)}. Očekivano: RSD.")
 
     df["ukupni_prihodi"] = numeric_series(df["ukupni_prihodi"])
     if "prosecan_broj_zaposlenih" in df.columns:
@@ -182,6 +195,7 @@ def main() -> None:
             "prosecan_broj_zaposlenih",
             "neto_dobitak",
             "neto_gubitak",
+            "financial_values_unit",
             "revenue_band",
         )
         if column in top_companies.columns
@@ -208,7 +222,8 @@ def main() -> None:
 
 **Generisano:** {utc_timestamp()}  
 **Ulaz:** `{input_path.name}`  
-**Scope:** {'sve firme' if args.include_inactive else 'aktivni tržišni kandidati'}
+**Scope:** {'sve firme' if args.include_inactive else 'aktivni tržišni kandidati'}  
+**Finansijska jedinica:** RSD (APR izvorne vrednosti normalizovane iz hiljada RSD)
 
 ## Osnovni pokazatelji
 
@@ -233,6 +248,7 @@ def main() -> None:
 - APR šifre `1039` i `4631` ne obuhvataju nužno sve organizovane otkupljivače.
 - Prihod nije direktna mera broja stanica, kooperanata, logističke složenosti ili GGAP potrebe.
 - Finansijski endpoint se u trenutnom pipeline-u tretira kao jedan zapis po firmi; višegodišnji trend nije potvrđen ovim izveštajem.
+- APR novčane vrednosti u izvoru iskazane su u hiljadama dinara; ovaj izveštaj ih prikazuje u punim RSD vrednostima.
 - Status klasifikacija se čuva u posebnim sheet-ovima i mora se proveriti kada APR uvede novu status vrednost.
 - Ovaj rezultat je tržišni dokaz i input za `04_MARKET.md`, ali nije automatski TAM/SAM/SOM bez dodatnih pravila segmentacije.
 """
@@ -249,6 +265,8 @@ def main() -> None:
             "output_workbook_sha256": sha256_file(workbook_path),
             "output_markdown": markdown_path.name,
             "include_inactive": args.include_inactive,
+            "normalized_financial_unit": "RSD",
+            "apr_source_financial_unit": "thousand RSD",
             "market_rows": len(market_df),
             "rows_with_revenue": len(revenue_valid),
             "revenue_bands_rsd": REVENUE_LABELS,
@@ -259,6 +277,7 @@ def main() -> None:
     print(f"Analiza: {workbook_path}")
     print(f"Sažetak: {markdown_path}")
     print(f"Broj firmi u scope-u: {len(market_df)}")
+    print("Finansijska jedinica analize: RSD.")
 
 
 if __name__ == "__main__":
