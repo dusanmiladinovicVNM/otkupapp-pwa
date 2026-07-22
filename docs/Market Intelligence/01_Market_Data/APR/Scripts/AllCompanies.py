@@ -1,35 +1,16 @@
-import requests
-import pandas as pd
-import urllib3
+"""Legacy compatibility entry point.
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+Use `01_extract_companies.py` directly for new automation.
+"""
 
-url = "https://openapi.apr.gov.rs/api/opendata/companies"
-output_file = "Financial dataset - Elderly care.xlsx"
-target_codes = {"1039", "4631"}
+from __future__ import annotations
 
-print("Downloading APR dataset...")
-response = requests.get(url, timeout=120, verify=False)
-response.raise_for_status()
-data = response.json()
+import runpy
+from pathlib import Path
 
-companies = []
 
-for maticni_broj, company in data["Podaci"].items():
-    sifra = company.get("SifraDelatnosti")
-
-    if sifra in target_codes:
-        companies.append({
-            "maticni_broj": maticni_broj,
-            "naziv": company.get("PoslovnoIme"),
-            "sifra_delatnosti": sifra,
-            "opstina": company.get("NazivOpstine"),
-            "status": company.get("NazivStatus"),
-            "datum_osnivanja": company.get("DatumOsnivanja"),
-        })
-
-df = pd.DataFrame(companies)
-df.to_excel(output_file, index=False)
-
-print(f"Saved: {output_file}")
-print(f"Companies found: {len(df)}")
+if __name__ == "__main__":
+    runpy.run_path(
+        str(Path(__file__).resolve().parent / "01_extract_companies.py"),
+        run_name="__main__",
+    )
