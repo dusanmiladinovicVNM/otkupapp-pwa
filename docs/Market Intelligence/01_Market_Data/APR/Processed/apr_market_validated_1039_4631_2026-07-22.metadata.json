@@ -1,10 +1,39 @@
 {
   "dataset": "Validated APR market dataset",
-  "generated_at_utc": "2026-07-22T21:52:16+00:00",
+  "generated_at_utc": "2026-07-22T22:21:53+00:00",
   "input_file": "apr_companies_financials_1039_4631_2026-07-22.xlsx",
   "input_sha256": "bb4fb75b2dce777b62381c09c580f4fb43dc4026326a12db4a3c0d6fa9027899",
+  "input_metadata_file": "apr_companies_financials_1039_4631_2026-07-22.metadata.json",
+  "input_metadata": {
+    "dataset": "APR companies enriched with latest financial statement exposed by endpoint",
+    "source_url": "https://openapi.apr.gov.rs/api/opendata/companies/financial-statements",
+    "generated_at_utc": "2026-07-22T21:45:16+00:00",
+    "input_file": "apr_companies_1039_4631_2026-07-22.xlsx",
+    "input_sha256": "39bdfad16187a257a8b14148a1fda681d735a0c8612e79cd6f4511f9f94f5f31",
+    "output_file": "apr_companies_financials_1039_4631_2026-07-22.xlsx",
+    "output_sha256": "bb4fb75b2dce777b62381c09c580f4fb43dc4026326a12db4a3c0d6fa9027899",
+    "input_rows": 1644,
+    "unique_company_ids": 1644,
+    "invalid_company_ids": 0,
+    "duplicate_company_ids_in_input": 0,
+    "found_in_financial_api": 1286,
+    "rows_with_usable_financials": 1286,
+    "request": {
+      "url": "https://openapi.apr.gov.rs/api/opendata/companies/financial-statements",
+      "host": "openapi.apr.gov.rs",
+      "tls_mode": "secure-first-with-apr-fallback",
+      "tls_verified": false,
+      "tls_fallback_used": true,
+      "tls_error": "HTTPSConnectionPool(host='openapi.apr.gov.rs', port=443): Max retries exceeded with url: /api/opendata/companies/financial-statements (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1077)')))"
+    },
+    "important_limitation": "Endpoint se trenutno tretira kao jedan finansijski zapis po firmi. Ovaj korak ne dokazuje višegodišnju istoriju dok se API struktura posebno ne potvrdi."
+  },
   "output_file": "apr_market_validated_1039_4631_2026-07-22.xlsx",
-  "output_sha256": "3a5504710a55688ced91012a7ecabbfce7a2d4c14fd509e16e2f6565c6ef11c5",
+  "output_sha256": "30926bbf8aa04b3ceb7963bee540ea8e263b7a0b84928f363958f8445c972f67",
+  "source_financial_unit": "thousand RSD",
+  "normalized_financial_unit": "RSD",
+  "financial_multiplier_applied_in_validation": 1000,
+  "financial_unit_resolution": "legacy APR financial endpoint metadata without explicit unit",
   "quality_metrics": {
     "rows_total": 1644,
     "valid_company_id": 1644,
@@ -16,7 +45,8 @@
     "rows_with_financials": 1286,
     "rows_with_valid_revenue": 1286,
     "rows_with_valid_employees": 1286,
-    "rows_with_quality_issue": 0
+    "rows_with_quality_issue": 0,
+    "financial_multiplier_applied": 1000
   },
   "status_matching_normalization": "Unicode NFKC + casefold + Serbian Cyrillic-to-Latin transliteration + diacritic removal",
   "status_rules": {

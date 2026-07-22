@@ -1,12 +1,14 @@
 {
   "dataset": "APR market analysis",
-  "generated_at_utc": "2026-07-22T21:52:18+00:00",
+  "generated_at_utc": "2026-07-22T22:21:55+00:00",
   "input_file": "apr_market_validated_1039_4631_2026-07-22.xlsx",
-  "input_sha256": "3a5504710a55688ced91012a7ecabbfce7a2d4c14fd509e16e2f6565c6ef11c5",
+  "input_sha256": "30926bbf8aa04b3ceb7963bee540ea8e263b7a0b84928f363958f8445c972f67",
   "output_workbook": "apr_market_analysis_1039_4631_2026-07-22.xlsx",
-  "output_workbook_sha256": "e665de3ac9283525016ff519d7887debb998dabdcba47ea77627429a8b049bb5",
+  "output_workbook_sha256": "e1d782a3f9d9b91f580a9721270995a3f72b68cbc8767bf66b451f0588d55c14",
   "output_markdown": "apr_market_summary_1039_4631_2026-07-22.md",
   "include_inactive": false,
+  "normalized_financial_unit": "RSD",
+  "apr_source_financial_unit": "thousand RSD",
   "market_rows": 1516,
   "rows_with_revenue": 1217,
   "revenue_bands_rsd": [
