@@ -3,637 +3,597 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Horizont:** 2026–2030  
-**Poslednje ažuriranje:** 2026-07-22
+**Poslednje ažuriranje:** 2026-07-22  
+**Povezani dokumenti:** `02A_GGAP_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `DECISION_LOG.md`
 
 ---
 
-## 1. Polazna tačka
+## 1. Strateška polazna tačka
 
-AgriX je vertikalni poslovni operativni sistem za organizovani otkup poljoprivrednih proizvoda i povezano upravljanje gazdinstvom. Proizvod ne pokriva samo evidenciju otkupa, već povezuje kooperante, parcele, repromaterijal, terenski rad, prijem robe, logistiku, transport, lager, prodaju, dokumentaciju, finansije, regulatorne obaveze, management kontrolu i farm-management funkcije.
+AgriX je vertikalni poslovni operativni sistem za organizovani otkup poljoprivrednih proizvoda, upravljanje gazdinstvom i kompletan dokumentacioni tok. Ne pokriva samo unos otkupa, već povezuje kooperante, parcele, repromaterijal, terenski rad, prijem robe, logistiku, transport, lager, prodaju, dokumentaciju, finansije, regulatorne obaveze, management kontrolu i farm-management funkcije.
 
-Potvrđene činjenice i radne pretpostavke:
+Potvrđene činjenice, ciljevi i hipoteze:
 
 - `FACT`: postoje tri aktivna klijenta;
-- `TARGET`: u startu je realan cilj približno pet novih klijenata;
-- `FACT`: prosečna firma ima približno deset otkupnih stanica;
-- `FACT`: prosečno postoji jedan desktop korisnik po firmi, uz management PWA;
-- `FACT`: prosečno postoji oko 100 kooperanata po firmi;
-- `MEASURED`: support je približno jedan poziv nedeljno u dosadašnjem periodu;
-- `FACT`: self-update i granularni monitoring postoje;
-- `FACT`: onboarding je do sada rađen remote;
-- `ASSUMPTION`: onboarding se može standardizovati sa jednog na približno pola dana;
-- `FACT`: sve klijentske varijacije ostaju u zajedničkom kodu i rešavaju se konfiguracijom;
-- `FACT`: management rola ima Dispečer modul za real-time planiranje i praćenje otkupa i transporta;
-- `FACT`: postoji posebna operativna rola za vozače;
-- `FACT`: AgriX podržava SEF tok;
-- `FACT`: AgriX automatski preuzima i obrađuje bankarske izvode, rasknjižava stavke na kooperante i kupce i priprema naloge za plaćanje;
-- `FACT`: management modul omogućava QR identifikaciju kooperanta, izbor parcela, preporuku količine agrohemije, skeniranje barkoda artikala, formiranje korpe i izdavanje otpremnice;
-- `FACT`: Kooperant rola ima karticu prema hladnjači sa zaduženjima, razduženjima i saldom;
-- `FACT`: Kooperant rola ima GIS prikaz parcela, parcelnu meteo prognozu, rizike, upozorenja i termine pogodne za tretmane;
-- `FACT`: Kooperant rola ima pametno doziranje, evidenciju tretmana i opreme;
-- `FACT`: Kooperant rola ima unos i kategorizaciju troškova, raspodelu po parcelama i sezonski bilans ukupno i po parceli;
-- `HYPOTHESIS`: u Srbiji postoji približno 500–1.000 relevantnih firmi; procena mora biti potvrđena tržišnim istraživanjem;
-- `TARGET`: AgriX treba da osvoji najmanje 200 firmi u naredne 3–4 godine, ako readiness i tržišna validacija to podrže.
+- `FACT`: tipična firma ima približno deset otkupnih stanica, jednog centralnog desktop operatera, management PWA korisnike i oko 100 kooperanata;
+- `FACT`: onboarding je do sada rađen remote i trenutno realno traje približno jedan dan;
+- `TARGET`: standardizovati onboarding na približno pola dana za standardnog klijenta;
+- `MEASURED`: dosadašnji support je približno jedan poziv nedeljno, od kratkih pitanja do višesatnih bug eskalacija;
+- `FACT`: self-update, monitoring i zajednički codebase sa konfiguracijom već postoje;
+- `FACT`: trajni klijentski forkovi nisu dozvoljeni;
+- `FACT`: AgriX pokriva Dispečer i Vozač tok, SEF, bankarske izvode, rasknjižavanje, salda i pripremu naloga za plaćanje;
+- `FACT`: management rola omogućava QR identifikaciju kooperanta, izbor parcela, preporuku količine agrohemije, barkod skeniranje, korpu i otpremnicu;
+- `FACT`: Gazdinstvo pokriva karticu prema hladnjači, GIS, prognozu i upozorenja po parceli, pametno doziranje, tretmane, opremu, troškove i sezonski bilans;
+- `TARGET`: AgriX GGAP treba da pokrije GGAP liste i kompletan dokumentacioni tok;
+- `HYPOTHESIS`: u Srbiji postoji približno 500–1.000 relevantnih firmi; procena mora biti potvrđena u `04_MARKET.md`;
+- `TARGET`: osvojiti najmanje 200 firmi u naredne 3–4 godine;
+- `DECISION`: sezonski broj novih klijenata ne ograničava se unapred fiksiranim brojem, već readiness score-om proizvoda i organizacije.
 
-AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeće faze moraju dokazati da ceo sistem, onboarding, support, hardver i organizacija mogu da rastu bez pada pouzdanosti.
+AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeća faza mora dokazati da se širina sistema može pretvoriti u ponovljiv onboarding, pouzdanu podršku, održiv pricing i brz tržišni rast.
 
 ---
 
-## 2. Strateška definicija
+## 2. Identitet kompanije i tri proizvoda
 
-AgriX nije samo program za otkup i nije skup nepovezanih modula. AgriX je **end-to-end vertikalni poslovni operativni sistem** sa dva povezana jezgra:
+AgriX je jedna platforma sa tri povezana proizvodna stuba:
 
-1. **AgriX Enterprise** — kompletan operativni sistem za hladnjače i druge firme koje organizuju otkup;
-2. **AgriX Gazdinstvo** — farm-management i relationship sistem za kooperante.
+### 2.1 AgriX Enterprise
 
-Ta dva jezgra dele podatke i poslovni kontekst, ali mogu imati različitu ekonomiku, pakete i dugoročne puteve rasta.
+Kompletan operativni sistem za hladnjače i druge firme koje organizuju otkup kroz mrežu stanica, kooperanata, vozila i kupaca.
 
-Strateški cilj je da AgriX pokrije sve glavne i ključne sporedne tokove ciljnog klijenta: od parcele i izdavanja repromaterijala, preko otkupa i transporta, do otpreme, fakture, SEF-a, banke, isplate kooperanta, naplate kupca i konačne management kontrole.
+Glavni domeni:
 
-### 2.1 AgriX Enterprise — poslovni domeni
+1. kooperanti, parcele, stanice, korisnici i priprema sezone;
+2. repromaterijal, agrohemija, ambalaža i zaduženja;
+3. terenski otkup, dokumenti, kiosk i termalna štampa;
+4. Dispečer, vozači, kamioni, rute i statusi transporta;
+5. prijem, lager, palete, prerada i sledljivost;
+6. kupci, korpe, otpremnice, prodaja i fakture;
+7. SEF i regulatorni tok;
+8. banka, avansi, salda, rasknjižavanje i nalozi za plaćanje;
+9. management, izveštaji, audit, storno i monitoring.
 
-#### 1. Kooperanti, parcele i priprema sezone
+Enterprise treba da bude primarni operativni sistem firme čak i kada knjigovodstvo ostaje u BizniSoftu, PANTHEON-u ili drugom ERP-u.
 
-- matični podaci kooperanata;
-- parcele, kulture, površine i proizvodni kontekst;
-- otkupne stanice, otkupljivači, vozači, kupci, artikli i cenovnici;
-- pravila, dozvole, role i konfiguracija;
-- digitalna veza firme sa kooperantom.
+### 2.2 AgriX Gazdinstvo
 
-#### 2. Repromaterijal i podrška proizvodnji
+Pun farm-management proizvod za kooperanta, a ne portal sa nekoliko read-only pregleda.
 
-- agrohemija i drugi artikli;
-- QR identifikacija kooperanta;
-- izbor parcele ili parcela;
-- preporučena količina prema površini, dozi i pakovanju;
-- skeniranje EAN, Code i QR barkodova kamerom;
-- formiranje korpe, količina, cena i ukupne vrednosti;
-- izdavanje otpremnice i potpisi;
-- evidencija izdate robe po kooperantu, parceli i artiklu;
-- povezivanje sa lagerom, karticom i zaduženjem kada poslovni model to zahteva.
+Glavni domeni:
 
-#### 3. Terenski otkup i prijem robe
+1. kartica prema hladnjači: zaduženje, razduženje i saldo;
+2. parcele, kulture, površine, GIS poligoni i satelitska mapa;
+3. realna prognoza, rizici i upozorenja po konkretnoj parceli;
+4. Digitalni agronom i pametno doziranje;
+5. tretmani, karenca, oprema, vreme rada, lokacija i meteo snapshot;
+6. knjiga polja i proizvodnja;
+7. lager agrohemije;
+8. troškovi po kategorijama i parcelama;
+9. sezonski bilans ukupno i po parceli;
+10. offline-first rad i sinhronizacija.
 
-- PWA Otkupac;
-- unos na otkupnoj stanici;
-- kiosk tablet i termalna štampa na licu mesta;
-- otkupni listovi, otpremnice, zbirne, prijemnice i prateća dokumentacija;
-- kvalitet, klase, bruto/neto, ambalaža i povezani podaci;
-- offline-first rad i naknadna sinhronizacija.
+Gazdinstvo trenutno nije osnovni izvor prihoda, ali može postati glavni proizvod ili glavni prihod ako se potvrde aktivacija, retencija, willingness-to-pay i održiv support cost.
 
-#### 4. Logistika, Dispečer i vozači
+### 2.3 AgriX GGAP
 
-- real-time pregled otkupljene i neraspoređene robe;
-- planiranje preuzimanja po stanicama;
-- raspodela kamiona i vozača;
-- kapaciteti, rute i statusi transporta;
-- PWA tok za vozača;
-- praćenje izvršenja i zatvaranje transporta;
-- organizacija isporuke kupcima kada je primenljivo.
+Treći puni proizvod i dokumentaciona kruna sistema.
 
-#### 5. Lager, ambalaža, palete, prerada i sledljivost
+Njegov cilj nije da bude statičan generator obrazaca. GGAP treba da koristi stvarne podatke iz Enterprise i Gazdinstvo tokova za:
 
-- ulaz, izlaz i stanje robe i repromaterijala;
-- ambalaža, reversi i zaduženja;
-- paletni i proizvodni tokovi;
-- prerada i povezivanje izvora i izlaza;
-- sledljivost od kooperanta i stanice do kupca;
-- operativni dokumenti, kontrole i storno tokovi.
+- GGAP liste, registre i procedure;
+- primenljivost po firmi, kooperantu, parceli, kulturi i sezoni;
+- automatsko popunjavanje iz tretmana, repromaterijala, proizvodnje, otkupa i sledljivosti;
+- fotografije, analize, ugovore, sertifikate, izjave i druge dokaze;
+- odgovorne osobe, rokove, podsetnike i odobravanja;
+- neusaglašenosti i korektivne mere;
+- verzije dokumenata i audit trag;
+- dashboard spremnosti;
+- kompletan audit paket za gazdinstvo, firmu ili grupu proizvođača.
 
-#### 6. Kupci, prodaja i otprema
+Osnovni princip je:
 
-- kupci i komercijalni uslovi;
-- izdavanje robe iz lagera;
-- korpe, otpremnice i isporuke;
-- fakture i potraživanja;
-- veza prodaje sa robom, sledljivošću i finansijama.
+> Podatak se unosi jednom na mestu nastanka, a GGAP evidencija i dokaz se iz njega automatski izvode.
 
-#### 7. SEF i regulatorni tok
+AgriX podržava usklađenost i pripremu dokumentacije, ali ne garantuje sertifikaciju i ne zamenjuje stručnog konsultanta, auditora ili sertifikaciono telo.
 
-- priprema elektronske fakture;
-- validacija i mapiranje;
-- slanje na SEF;
-- praćenje workflow i remote statusa;
-- audit trag, recovery i kontrola neusaglašenosti.
+### 2.4 Zajednički data flywheel
 
-#### 8. Finansije i trezor
+Tri proizvoda ne smeju postati tri silosa:
 
-- obaveze prema kooperantima;
-- zaduženja za repromaterijal i druge stavke;
-- potraživanja od kupaca;
-- avansi, uplate, isplate i salda;
-- automatsko preuzimanje bankarskih izvoda;
-- automatsko ili kontrolisano rasknjižavanje na kooperante i kupce;
-- priprema naloga za plaćanje;
-- kontrola preplata, duplikata i neusaglašenih transakcija.
+- Enterprise proizvodi transakcije, dokumente, finansijske podatke i sledljivost;
+- Gazdinstvo proizvodi parcelne, agronomske, troškovne i proizvodne podatke;
+- GGAP te podatke pretvara u evidencije, dokaze, zadatke i kontrolu;
+- GGAP zahtevi podižu disciplinu podataka u Enterprise i Gazdinstvo sistemu.
 
-#### 9. Management, kontrola i monitoring
-
-- real-time pregled poslovanja;
-- Dispečer i operativna kontrola mreže;
-- KPI, izveštaji i analitika;
-- management operacije putem PWA;
-- granularni tehnički monitoring;
-- audit trag, storno, korekcije i odgovornost;
-- korisnici, role i pristup.
-
-### 2.2 AgriX Gazdinstvo — farm-management domeni
-
-Gazdinstvo nije samo portal za pregled odnosa sa hladnjačom. To je zaseban operativni proizvod za planiranje, izvršenje i ekonomsku kontrolu proizvodnje.
-
-#### 1. Kartica prema hladnjači
-
-- dokumenti i stavke kartice;
-- zaduženja;
-- razduženja;
-- tekući saldo;
-- pregled finansijskog odnosa sa hladnjačom.
-
-#### 2. Parcele i GIS
-
-- spisak svih parcela;
-- kultura, površina, katastarski i GGAP podaci;
-- poligoni i lokacije na satelitskoj mapi;
-- pregled i fokus pojedinačne parcele;
-- osnova za parcelno vezivanje tretmana, troškova i rezultata.
-
-#### 3. Realna parcelna prognoza i upozorenja
-
-- prognoza vezana za konkretnu parcelu;
-- temperatura, vlaga, vetar, padavine i drugi relevantni parametri;
-- rizici i aktivna upozorenja;
-- povoljni i nepovoljni termini za prskanje;
-- upozorenja po kulturi i parceli;
-- management odluke zasnovane na lokaciji, ne na opštoj prognozi grada.
-
-#### 4. Digitalni agronom i pametno doziranje
-
-- izbor parcele, kulture, mere i artikla;
-- preporučena doza prema površini i karakteristikama artikla;
-- stanje sopstvenog lagera agrohemije;
-- karenca i relevantna upozorenja;
-- oprema: traktor, prskalica i druga sredstva;
-- vreme rada, lokacija i meteo snapshot;
-- evidencija izvršenih tretmana;
-- offline-first rad i sinhronizacija.
-
-#### 5. Knjiga polja i proizvodnja
-
-- istorija radova i tretmana;
-- proizvodnja i otkup povezani sa parcelom;
-- utrošena agrohemija;
-- radni sati i korišćena oprema;
-- pregled po parceli, kulturi i sezoni.
-
-#### 6. Troškovi
-
-- ručni unos troškova;
-- kategorije: gorivo, popravke, osiguranje, sertifikacija, analize, navodnjavanje, ambalaža, radna snaga, zakup, transport i ostalo;
-- opšti troškovi ili vezivanje za konkretnu parcelu;
-- automatski obračun pojedinih troškova, uključujući radnu snagu kada je konfigurisan;
-- pregled ukupno i po kategoriji.
-
-#### 7. Sezonski bilans
-
-- vrednost proizvodnje;
-- trošak agrohemije;
-- ostali troškovi;
-- radni sati;
-- rezultat sezone;
-- bilans celog gazdinstva;
-- bilans pojedinačne parcele;
-- osnova za poređenje kultura, parcela i sezona.
-
-#### 8. Dodatni farm-management tokovi
-
-- evidencija opreme;
-- fiskalni računi i privatne evidencije;
-- preporuke i dnevni pregled;
-- sync status i rad bez stabilne veze;
-- buduće funkcije koje povećavaju ekonomsku i agronomsku vrednost po gazdinstvu.
-
-### 2.3 Kanali pristupa
-
-Aplikacije i uređaji su kanali pristupa jedinstvenom sistemu:
-
-- **Excel/VBA Desktop** — centralni master, dokumentacija, finansije, SEF i složeni back-office tokovi;
-- **Management PWA** — pregled, Dispečer, kontrola, repromaterijal i operativno odlučivanje;
-- **PWA Otkupac** — rad na otkupnoj stanici;
-- **PWA Vozač** — transportni zadaci i statusi;
-- **Gazdinstvo PWA** — farm-management i odnos kooperanta sa hladnjačom;
-- **kamera mobilnog uređaja** — QR i barkod skeniranje;
-- **kiosk tableti i termalni štampači** — standardizovan terenski rad;
-- **integracije** — SEF, banke i budući eksterni sistemi.
-
-AgriX se prodaje kao jedan povezan poslovni sistem, a ne kao kolekcija aplikacija.
+Ova povezanost je važnija konkurentska prednost od bilo kog pojedinačnog ekrana.
 
 ---
 
 ## 3. Vizija
 
-Do 2030. AgriX treba da bude vodeći regionalni poslovni operativni sistem za organizovani otkup i povezano upravljanje gazdinstvima, sa snažnom bazom u Srbiji i prenosivim modelom za tržišta regiona.
+Do 2030. AgriX treba da bude vodeća regionalna platforma za:
 
-`TARGET`: u naredne 3–4 godine izgraditi bazu od najmanje 200 firmi, uz rast koji je dozvoljen readiness-om, a ne proizvoljnim godišnjim plafonom.
+- kompletno upravljanje organizovanim otkupom;
+- digitalno upravljanje gazdinstvima;
+- automatizovan GGAP dokumentacioni tok.
 
-Vizija podrazumeva da AgriX:
+AgriX treba da povezuje centralu, stanice, management, administraciju, finansije, Dispečera, vozače, magacin, kupce, agronome, GGAP koordinatore i kooperante u jednom sistemu.
 
-- pokriva ciklus saradnje sa kooperantom od parcele i repromaterijala do otkupa i isplate;
-- pokriva poslovni ciklus firme od otkupa do transporta, otpreme, fakture i naplate;
-- povezuje centralu, stanice, management, dispečere, vozače, kupce i kooperante;
-- daje kooperantu ozbiljan farm-management alat, a ne samo portal;
-- zatvara regulatorne i finansijske tokove kroz SEF i bankarske integracije;
-- smanjuje ručni rad, dupli unos i kašnjenje informacija;
-- koristi kameru, barkodove, QR, GIS, meteo i offline rad kao prirodne operativne alate;
-- ostaje standardizovan proizvod sa jednim kodom;
-- može da opslužuje stotine firmi i veliki broj gazdinstava kroz automatizaciju i delegiranje;
-- stvara dovoljno recurring prihoda za stalni razvoj, podršku i regionalno širenje;
-- postane prirodni tehnološki dobavljač ciljnom segmentu.
-
-Cilj od 200 firmi je strateški cilj, ne finansijska prognoza. Mora se razložiti na godišnje akvizicione, operativne, kadrovske i finansijske kapacitete.
+Strateški cilj je najmanje 200 firmi u naredne 3–4 godine. To je ambicija koju treba operacionalizovati kroz tržište, prodajni kapacitet, onboarding, podršku, razvoj i kapital; nije garantovana prognoza.
 
 ---
 
 ## 4. Misija
 
-AgriX omogućava hladnjačama i drugim organizovanim otkupljivačima da vode celokupan operativni posao kao jedan povezan sistem: kooperante, parcele, repromaterijal, otkup, stanice, dokumentaciju, ambalažu, transport, vozače, dispečersko planiranje, lager, kupce, otpremu, fakture, SEF, banku, isplate, naplate i management kontrolu.
+AgriX omogućava firmi da vodi ceo poslovni ciklus u jednom povezanom sistemu: od parcele, kooperanta i izdavanja repromaterijala, preko otkupa, dokumentacije, transporta, prijema i lagera, do otpreme, fakture, SEF-a, banke, naplate, isplate i management kontrole.
 
-Istovremeno, AgriX Gazdinstvo omogućava kooperantu da vodi parcele, tretmane, pametno doziranje, opremu, troškove, proizvodnju, prognozu, upozorenja, sezonski bilans i karticu prema hladnjači u jednom sistemu.
+AgriX Gazdinstvo omogućava proizvođaču da vodi proizvodnju, parcele, tretmane, troškove, opremu, prognozu, bilans i odnos sa hladnjačom.
+
+AgriX GGAP pretvara već nastale operativne podatke u kontrolisan dokumentacioni i dokazni tok bez nepotrebnog ponovnog unosa.
 
 ---
 
-## 5. Šta AgriX jeste, a šta nije
+## 5. Strateška teza
 
-AgriX jeste:
+AgriX može osvojiti značajan deo tržišta samo ako istovremeno ispuni četiri uslova:
+
+1. **Širina:** pokriva ceo posao, a ne samo otkupni list.
+2. **Pouzdanost:** kritični tokovi rade u realnim sezonskim uslovima.
+3. **Ponovljivost:** onboarding, konfiguracija i podrška ne zavise trajno od osnivača.
+4. **Brzina:** readiness se brzo pretvara u prodaju i tržišni udeo.
+
+Previše oprezan rast povećava rizik da konkurent zauzme tržište. Prebrz rast bez readiness-a povećava rizik da AgriX izgubi reputaciju. Strategija zato nije „ostani mali“, već:
+
+> Što brže povećavati readiness i zatim readiness pretvarati u tržišni udeo.
+
+---
+
+## 6. Šta AgriX jeste, a šta nije
+
+### AgriX jeste
 
 - vertikalni poslovni operativni sistem;
-- end-to-end platforma za glavne i ključne sporedne tokove otkupnog biznisa;
-- farm-management platforma za kooperante;
-- B2B2C ekosistem koji povezuje firmu i gazdinstvo;
-- zajednički proizvod za veliki broj firmi bez forkova;
-- sistem koji se prilagođava konfiguracijom;
-- integracioni sloj prema SEF-u, bankama i drugim relevantnim sistemima;
-- potencijalni dobavljač šireg IT sistema za ciljne klijente.
+- end-to-end sistem za glavne i ključne sporedne tokove otkupnog biznisa;
+- farm-management proizvod;
+- GGAP documentation and compliance workflow platforma;
+- B2B2C ekosistem koji povezuje firmu i kooperanta;
+- zajednički proizvod bez trajnih klijentskih forkova;
+- integracioni sloj prema SEF-u, bankama i drugim sistemima;
+- potencijalni dobavljač šireg IT sistema ciljnom segmentu.
 
-AgriX namerno nije:
+### AgriX nije
 
 - generički ERP za sve industrije;
 - univerzalni knjigovodstveni program;
-- custom software studio sa posebnom verzijom za svakog klijenta;
-- jeftin program samo za štampanje otkupnih listova;
-- jednostavan portal za kooperante bez stvarne operativne vrednosti;
+- custom software studio koji pravi posebnu verziju za svakog klijenta;
+- jeftin alat samo za štampanje otkupnih listova;
+- read-only portal za kooperante;
+- statična arhiva GGAP PDF obrazaca;
+- garancija sertifikacije ili zamena za stručnog konsultanta;
 - klasičan hardverski distributer bez sopstvene tehnološke vrednosti;
-- proizvod koji obećava funkcionalnosti koje nisu production-ready;
-- projekat koji menja tehnologiju bez merljivog razloga.
-
-AgriX ne mora da zameni svaki računovodstveni program, ali treba da bude primarni operativni sistem klijenta i da zatvori tokove specifične za otkupni biznis.
+- proizvod koji se prodaje kao production pre prolaska release kriterijuma;
+- projekat koji radi rewrite samo zato što je nova tehnologija privlačnija.
 
 ---
 
-## 6. Ciljno tržište i idealni kupac
+## 7. Ciljno tržište i model kupca
 
-Trenutni geografski fokus je Srbija.
+### 7.1 Geografski fokus
 
-Primarni B2B kupci su:
+Trenutni fokus je Srbija. Dugoročni cilj je regionalna platforma, uz redosled koji će biti potvrđen tržišnim i regulatornim istraživanjem: BiH, Crna Gora, Severna Makedonija, Hrvatska i druga relevantna tržišta.
 
-- hladnjače sa sopstvenom mrežom otkupnih stanica;
-- firme koje se bave organizovanim otkupom i imaju razgranatu mrežu stanica i kooperanata;
-- firme koje kooperantima izdaju agrohemiju, ambalažu ili drugi repromaterijal;
-- firme sa sopstvenom logistikom, vozačima ili dispečerskom potrebom;
-- firme kojima generički ERP ne rešava ulaz robe, sledljivost, logistiku i finansijsko zatvaranje otkupa;
-- firme koje žele centralnu kontrolu terena, lagera, kupaca, naplate i isplate.
+### 7.2 Primarni B2B ICP
 
-Tipičan idealni kupac ima više stanica, veliki broj kooperanata, značajan obim dokumenata i finansijskih transakcija, odgovornu osobu za implementaciju i spremnost da standardizuje proces bez forka.
+Najbolji trenutni kupac je firma koja:
 
-Promet od 1–2 miliona EUR jeste čest profil sadašnjih klijenata, ali broj stanica, logistička složenost, broj kooperanata, repromaterijal, obim dokumenata i potreba za kontrolom važniji su od samog prometa.
+- ima razgranatu mrežu otkupnih stanica i kooperanata;
+- ima sopstvenu ili organizovanu logistiku;
+- izdaje repromaterijal ili ambalažu;
+- ima veliki obim dokumenata i finansijskih transakcija;
+- želi centralnu management kontrolu;
+- koristi postojeći knjigovodstveni program, ali nema dobar operativni sistem;
+- ima internog championa i vlasnika implementacije;
+- prihvata standardan proizvod i konfiguraciju bez forka;
+- ima GGAP ili sličan dokumentacioni pritisak, ili očekuje da će ga imati.
 
-Primarni B2C/B2B2C korisnici su kooperanti koji imaju više parcela, koriste agrohemiju, žele ekonomsku kontrolu proizvodnje ili žele transparentan odnos sa hladnjačom.
+Broj stanica je važan, ali nije dovoljan kriterijum. Širina procesa, broj kooperanata, logistika, repromaterijal, finansije i GGAP mogu učiniti firmu sa manjim brojem stanica vrednijim klijentom.
 
-### Anti-ICP
+### 7.3 Buying committee
 
-AgriX ne treba aktivno da prihvata klijente koji:
+Prodaja mora obuhvatiti najmanje:
 
-- zahtevaju sopstvenu verziju koda ili poseban release;
-- očekuju neograničen custom development uključen u licencu;
-- nemaju odgovornu osobu za podatke, obuku i komunikaciju;
-- traže rollout neposredno pred sezonu bez vremena za test;
-- odbijaju standardne procese backupa, update-a i monitoringa;
-- kupuju isključivo po najnižoj ceni;
-- očekuju da AgriX preuzme fizičke kvarove i zloupotrebu hardvera bez ugovorne granice.
+- ekonomskog kupca: vlasnik ili direktor;
+- championa: administrator, manager ili mlađi vlasnik;
+- ključnog operativnog korisnika: otkupljivač, Dispečer, finansije ili magacioner;
+- mogućeg blockera;
+- tehničkog i compliance influensera kada su relevantni.
+
+Ponuda ne treba da se zasniva samo na razgovoru sa vlasnikom. Pre pune implementacije mora biti potvrđena operativna realnost najmanje tri ključne uloge.
+
+### 7.4 Gazdinstvo ICP
+
+Najbolji korisnik ima više parcela ili intenzivnu proizvodnju, koristi agrohemiju, želi kontrolu troškova i rezultata, sarađuje sa AgriX hladnjačom i ima motivaciju da vodi evidenciju.
+
+### 7.5 GGAP ICP
+
+Najbolji kupac je firma ili grupa proizvođača koja upravlja dokumentacijom većeg broja gazdinstava, ima imenovanog quality/GGAP ownera i želi kontinuiranu spremnost, a ne jednokratno sređivanje fascikli pred kontrolu.
+
+### 7.6 Anti-ICP
+
+AgriX ne treba aktivno da prihvata klijenta koji:
+
+- zahteva trajni fork ili poseban release;
+- očekuje neograničen custom development uključen u licencu;
+- nema odgovornu osobu za podatke i implementaciju;
+- traži rollout neposredno pred sezonu bez pilota i testa;
+- odbija backup, monitoring, update ili bezbednosna pravila;
+- odbija obuku korisnika;
+- kupuje isključivo po najnižoj ceni;
+- očekuje garanciju poslovnog rezultata ili GGAP sertifikacije;
+- ne prihvata podelu odgovornosti za hardver, internet i kvalitet podataka;
+- pokazuje visok rizik neplaćanja ili zloupotrebe supporta.
+
+Detaljan ICP scoring i jobs-to-be-done nalaze se u `03_CUSTOMERS_AND_JOBS.md`.
 
 ---
 
-## 7. Strateški principi razvoja
+## 8. Strateški principi proizvoda
 
-### 7.1 Jedan kod, bez forkova
+### 8.1 Jedan kod, bez forkova
 
-Sve funkcionalnosti ostaju u zajedničkom kodu. Razlike među firmama rešavaju se kroz podešavanja, module, dozvole, workflow konfiguraciju i feature flags. Trajni klijentski fork nije dozvoljen.
+Razlike među firmama rešavaju se konfiguracijom, modulima, rolama, dozvolama, workflow pravilima i feature flags. Trajni klijentski fork nije dozvoljen.
 
-### 7.2 Pokriti posao, ne samo funkcije
+### 8.2 Pokriti posao, ne samo funkcije
 
-Nova funkcionalnost se vrednuje prema tome da li zatvara važan poslovni tok, uklanja ručni prelaz između sistema ili povećava kontrolu nad procesom. Lista funkcija bez zatvorenog procesa nije dovoljna.
+Funkcionalnost ima stratešku vrednost kada zatvara poslovni tok, uklanja ručni prelaz ili povećava kontrolu. Duga lista nepovezanih funkcija nije dovoljna.
 
-### 7.3 Glavni i sporedni tokovi
+### 8.3 Jedinstven podatak kroz ceo tok
 
-AgriX mora pokriti i sporedne tokove bez kojih glavni proces ostaje nedovršen. Otkup nije zatvoren bez transporta, prijema, otpreme, fakture, SEF-a, banke i isplate. Odnos sa kooperantom nije zatvoren bez parcela, repromaterijala, troškova, tretmana, kartice i bilansa.
+Podatak nastao na parceli, u magacinu, na stanici ili u banci koristi se dalje bez ponovnog ručnog unosa. Dupli unos je signal da tok nije potpuno zatvoren.
 
-### 7.4 Jedinstven podatak kroz ceo tok
+### 8.4 Dokument nastaje iz operacije
 
-Podatak nastao na parceli, pri izdavanju repromaterijala ili na stanici treba da se koristi dalje u lageru, logistici, finansijama, izveštajima, SEF-u i banci bez ponovnog ručnog unosa. Dupli unos je signal da proces nije potpuno zatvoren.
+GGAP, finansijski i operativni dokumenti treba da koriste izvorne događaje i da zadrže provenance: ko, kada, gde, iz kog zapisa i uz koje kasnije korekcije.
 
-### 7.5 Mobilni uređaj je operativni terminal
+### 8.5 Mobilni uređaj je operativni terminal
 
-Kamera, QR, barkod, digitalni potpis, GIS, geolokacija i PWA nisu pomoćni UX detalji. Oni omogućavaju da se transakcija evidentira na mestu nastanka.
+Kamera, QR, barkod, digitalni potpis, GIS, fotografija, geolokacija i PWA služe da transakcija i dokaz nastanu na mestu događaja.
 
-### 7.6 Podatak po parceli je strateška imovina
+### 8.6 Podatak po parceli je strateška imovina
 
-Parcelno povezivanje prognoze, tretmana, troškova, proizvodnje i rezultata stvara vrednost koju generički evidencioni sistemi teško kopiraju.
+Povezivanje parcele sa prognozom, tretmanima, troškovima, proizvodnjom, otkupom, rezultatom i GGAP dokazima stvara odbranjivu vrednost.
 
-### 7.7 Pouzdanost i brzina rasta nisu suprotnosti
+### 8.7 Compliance sadržaj mora biti verzionisan
 
-AgriX automatizacijom, monitoringom, self-update-om, standardizovanim onboardingom i delegiranjem povećava brzinu rasta bez pada pouzdanosti.
+GGAP liste, pravila i validacije moraju imati verziju, period važenja i jasno vlasništvo. Nova verzija ne sme nevidljivo menjati istorijske dokumente.
 
-### 7.8 Sezonski cap određuje readiness
+### 8.8 Softver podržava, ali ne garantuje usklađenost
 
-Ne postoji unapred fiksiran hard cap. Maksimalan broj novih firmi određuje formalni readiness score.
+AgriX vodi workflow, proverava podatke, upozorava i priprema dokaze. Sertifikacija i stručna odluka ostaju van domena softverske garancije.
 
-Readiness mora obuhvatiti:
+### 8.9 Operativna jednostavnost je funkcionalnost
+
+Onboarding, monitoring, self-update, backup, recovery, kiosk konfiguracija, manuali i runbook-ovi imaju isti strateški značaj kao korisničke funkcije.
+
+### 8.10 Bez rewrite-a bez merljivog razloga
+
+Promena platforme razmatra se tek kada postojeća tehnologija stvara merljiv limit u pouzdanosti, brzini razvoja, zapošljavanju, integracijama ili trošku održavanja.
+
+### 8.11 Staged rollout
+
+Velike promene prolaze kroz interni test, pilot, ograničenu grupu i tek zatim pun rollout.
+
+### 8.12 Ne prodavati planirano kao postojeće
+
+Svaki domen mora imati status `Production`, `Pilot`, `Planned`, `Gap` ili `Out of scope`. Komercijalna tvrdnja mora odgovarati stvarnom statusu.
+
+---
+
+## 9. Readiness-based rast
+
+Ne postoji unapred fiksiran hard cap od 10, 15 ili 20 novih firmi po sezoni. Cap određuje najslabija kritična komponenta.
+
+Readiness score mora najmanje obuhvatiti:
 
 - stabilnost kritičnog codebase-a;
-- readiness svih obaveznih poslovnih tokova;
-- PWA Otkupac, Vozač, Dispečer, repromaterijal i Gazdinstvo;
-- barkod/QR, GIS, meteo i offline sync;
-- termalnu štampu, SEF i bankarske integracije;
-- automatizaciju i trajanje onboardinga;
-- kapacitet supporta i eskalacije;
-- monitoring, recovery i release procese;
-- logistiku hardvera;
+- production readiness ugovorenih poslovnih tokova;
+- Field, Vozač, Dispečer, repromaterijal i Gazdinstvo;
+- QR/barkod, GIS, meteo, offline sync i štampu;
+- SEF, banku i finansijski reconciliation;
+- GGAP sadržaj, validacije, dokazni tok i export kada se prodaje GGAP;
+- trajanje i automatizaciju onboardinga;
+- kvalitet manuala, checklista i runbook-ova;
+- support kapacitet i eskalacije;
+- monitoring, backup, recovery i release proces;
+- logistiku hardvera i rezervnu opremu;
 - finansijsku rezervu i obrtni kapital;
-- broj osoba koje mogu sprovesti standardan onboarding bez osnivača.
+- broj osoba koje mogu sprovesti onboarding bez osnivača.
 
-Cap određuje najslabija kritična komponenta, ne prosečna ocena.
-
-### 7.9 Kontrolisan staged rollout
-
-Velike promene prolaze kroz interni test, pilot firmu, ograničenu grupu i tek zatim pun rollout.
-
-### 7.10 Bez rewrite-a bez merljivog razloga
-
-Promena platforme razmatra se kada postojeća tehnologija stvara merljiv limit u pouzdanosti, brzini razvoja, zapošljavanju, integracijama ili trošku održavanja.
-
-### 7.11 Operativna jednostavnost je funkcionalnost
-
-Remote onboarding, monitoring, self-update, backup, kiosk konfiguracija, manuali i runbook-ovi imaju isti strateški značaj kao korisničke funkcije.
-
-### 7.12 Nema prikrivenog custom developmenta
-
-Zahtev jednog klijenta ulazi u proizvod samo kada predstavlja opšti problem segmenta i može se rešiti kroz zajednički model.
-
-### 7.13 Ne obećavati budući proizvod kao postojeći
-
-Modul se prodaje kao production tek kada zadovolji release kriterijume.
+Visok prosečan score ne može sakriti kritičnu slabost. Jedan crveni P0 domen može smanjiti sezonski cap bez obzira na ostale rezultate.
 
 ---
 
-## 8. Strategija rasta 2026–2030
+## 10. Strategija rasta 2026–2030
 
-### Faza 1 — Dokaz readiness modela
-
-Polazni komercijalni cilj je približno pet novih firmi, ali stvarni broj može biti 10, 15 ili 20 ako readiness pokaže da sistem i organizacija mogu bezbedno da iznesu obim.
+### Faza 1 — Dokaz ponovljivosti i readiness modela
 
 Ciljevi:
 
-- standardizovati remote onboarding kroz manuale i checkliste;
-- omogućiti da onboarding vodi customer support / implementation osoba;
-- potvrditi PWA Otkupac, Vozač, Dispečer, repromaterijal, kiosk i termalnu štampu;
-- potvrditi SEF i bankarske tokove u realnoj upotrebi;
-- definisati status i production readiness Gazdinstvo funkcija;
-- meriti vreme po onboardingu i support case-u;
-- potvrditi rast bez forkova i bez rasta incidenta po firmi;
-- napraviti formalni readiness score pre aktivne prodaje.
+- standardizovati remote onboarding;
+- pripremiti manuale i checkliste koje koristi support/implementation osoba;
+- potvrditi kritične Enterprise tokove u realnoj sezoni;
+- definisati production status svih Gazdinstvo funkcija;
+- sprovesti GGAP discovery pre pune implementacije;
+- meriti onboarding, support i incidente po firmi i domenu;
+- potvrditi da rast ne zahteva forkove i ne povećava incident rate po firmi;
+- izračunati sezonski cap na osnovu readiness-a.
+
+Broj novih firmi može biti 5, 10, 15, 20 ili više samo ako readiness to podrži.
 
 ### Faza 2 — Ubrzana nacionalna penetracija
 
 **Okvir:** približno 10–50 firmi.
 
-- support / implementation osoba preuzima standardna pitanja i onboarding;
-- osnivač ostaje eskalacija za bugove i poslovnu logiku;
-- osnivač se prebacuje na marketing, prodaju i partnerstva;
-- developer se dodaje kada razvoj postane usko grlo;
-- razvijaju se case studies, preporuke i direktna prodaja;
-- potvrđuju se pricing i unit economics Enterprise i Gazdinstvo proizvoda.
+- customer support / implementation preuzima standardan onboarding i bazne slučajeve;
+- osnivač ostaje eskalacija, product owner i ključni prodavac;
+- osnivač se postepeno prebacuje sa operacije na tržište;
+- developer se dodaje kada razvoj postane dokazano usko grlo;
+- grade se case studies, reference, direktna prodaja i partnerstva;
+- potvrđuju se pricing i unit economics Enterprise i Gazdinstvo proizvoda;
+- GGAP prolazi kroz ograničeni pilot.
 
 ### Faza 3 — Liderstvo u Srbiji
 
 **Okvir:** približno 50–200 firmi.
 
-- izgraditi najprepoznatljiviji specijalizovani brend za ceo otkupni biznis;
-- organizovati support, implementaciju i razvoj tako da dnevni rad ne zavisi od osnivača;
-- standardizovati hardver i širi IT katalog;
-- razviti partnerstva sa knjigovođama, bankama, agronomima, dobavljačima opreme i relevantnim organizacijama;
-- dokazati ili odbaciti ekonomiku Gazdinstva;
-- pripremiti sistem za regionalnu ekspanziju.
+- izgraditi najprepoznatljiviji specijalizovani brend za kompletan otkupni biznis;
+- organizovati support, implementaciju i razvoj bez dnevne zavisnosti od osnivača;
+- standardizovati hardverski i širi IT katalog;
+- razviti partnerstva sa bankama, knjigovođama, agronomima, GGAP konsultantima i dobavljačima opreme;
+- potvrditi ili odbaciti Gazdinstvo i GGAP ekonomiku;
+- pripremiti lokalizaciju i operativni model za region.
 
 ### Faza 4 — Regionalna platforma
 
-Regionalna platforma je cilj. Početna tržišta za procenu su Srbija, BiH, Crna Gora, Severna Makedonija i zatim Hrvatska i druga tržišta nakon pravne, jezičke, poreske i prodajne procene.
+Regionalno širenje zahteva:
+
+- tržišno i regulatorno mapiranje po zemlji;
+- lokalizaciju jezika, dokumenata, poreza, banke i e-faktura;
+- lokalni prodajni i implementation kanal;
+- definisan support model;
+- jasno vlasništvo nad lokalnim GGAP/compliance sadržajem.
 
 ---
 
-## 9. Strategija prihoda
+## 11. Strategija prihoda
 
-Kratkoročni izvori prihoda:
+Potencijalni izvori prihoda:
 
-1. godišnje licence firmi za AgriX Enterprise;
-2. paketi i moduli: Field, Logistika/Dispečer, Repromaterijal, Finansije/Banke, SEF i drugi;
-3. implementacija i obuka;
-4. multi-company licence i premium support;
-5. marža na terminalima i drugoj IT opremi;
-6. Gazdinstvo Basic i Pro;
-7. buduće integracije i SLA.
+1. godišnje licence za AgriX Enterprise;
+2. paketi prema širini procesa i operativnom obimu;
+3. implementacija, migracija i obuka;
+4. multi-company licence, premium support i SLA;
+5. hardver i širi IT sistem sa stvarnom pozitivnom maržom;
+6. Gazdinstvo Partner, Basic i Pro;
+7. AgriX GGAP licence i dokumentacioni paketi;
+8. buduće integracije i premium usluge.
 
-Pricing ne treba da rascepa sistem na deset sitnih doplata. Packaging mora sačuvati vrednost celog sistema, uz skuplje pakete za firme koje koriste veći operativni obim.
+Pricing ne treba da pretvori AgriX u konfuznu listu desetina mikro-doplata. Packaging mora da sačuva vrednost povezanog sistema, uz jasne pakete prema broju stanica, kooperanata, korisnika i širini procesa.
 
-### 9.1 Gazdinstvo ekonomika
+### 11.1 Enterprise
 
-Gazdinstvo trenutno ne finansira osnovni biznis, ali funkcionalna širina opravdava da se tretira kao ozbiljan zaseban proizvod.
+Enterprise trenutno finansira osnovni biznis. Cena mora odražavati poslovnu kritičnost, širinu toka, broj stanica, implementaciju, support i pun trošak održavanja — ne samo broj desktop korisnika.
 
-Može postati glavni proizvod ili prihod ako se potvrde:
+### 11.2 Gazdinstvo
 
-- aktivacija kooperanata;
-- učestalo korišćenje tokom sezone i van sezone;
-- retencija;
-- willingness-to-pay za Basic i Pro;
-- niska cena podrške;
-- dodatni prihod od premium agronomskih, finansijskih ili tržišnih funkcija;
-- mrežni efekat kroz hladnjače i njihove kooperante.
+Konzervativni finansijski model ne sme pretpostaviti značajan prihod dok aktivacija i konverzija nisu potvrđene. Dugoročni potencijal ostaje otvoren.
 
-### 9.2 Hardver i širi IT sistem
+### 11.3 GGAP
 
-Hardver nije glavni profitni centar, ali treba da bude profitabilan sporedni centar. AgriX može postati dobavljač kiosk tableta, termalnih štampača, uređaja sa pouzdanom kamerom, mrežne i rezervne opreme, računara, remote managementa i integracije perifernih sistema.
+Mogući modeli su licenca po firmi ili grupi, osnovna cena plus aktivna gazdinstva, samostalni paket za proizvođača i odvojena migracija/onboarding usluga. Trošak stručnog održavanja sadržaja mora ući u unit economics.
 
----
+GGAP se ne ceni kao generator PDF-a, već prema vrednosti kontinuirane spremnosti, smanjenju ručnog rada i ranom otkrivanju propusta.
 
-## 10. Strategija organizacije
+### 11.4 Hardver i širi IT sistem
 
-### Osnivač
+Hardver nije glavni profitni centar, ali mora biti profitabilan sporedni centar. AgriX može postati dobavljač kiosk tableta, termalnih štampača, uređaja sa pouzdanom kamerom, računara, mrežne i rezervne opreme, remote managementa i integracije periferija.
 
-Osnivač zadržava product ownership, arhitekturu, ključni razvoj, finalnu eskalaciju, prodaju važnim klijentima, marketing strategiju i partnerstva.
-
-### Prvo zaposlenje
-
-Prva operativna osoba je customer support / implementation. Ona:
-
-- rešava standardna i bazna pitanja;
-- sprovodi onboarding prema manualima i checklistama;
-- pomaže oko tableta, kamera, skeniranja, štampača i konfiguracije;
-- prati monitoring;
-- trijažira problem po poslovnom domenu i roli;
-- rešava poznate slučajeve prema runbook-u;
-- eskalira složene slučajeve;
-- vodi evidenciju vremena, uzroka i rešenja.
-
-Osnivač pruža podršku van smene te osobe tokom sezone i rešava složene eskalacije.
-
-### Dodatni developer
-
-Developer se dodaje kada razvoj postane dokazano usko grlo, roadmap kasni, osnivač treba da se prebaci na marketing ili je trošak propuštenog rasta veći od punog troška developera.
+Svaka kategorija mora imati prikaz prodajne cene, nabavne cene, rada, transporta, garancije, zamene, zalihe i obrtnog kapitala.
 
 ---
 
-## 11. Partner i kapital
+## 12. Strategija organizacije
 
-AgriX ne treba partnera samo zbog kapitala. Partner ima smisla kada donosi distribuciju, pristup kupcima, operativno vođenje prodaje i implementacije, iskustvo skaliranja B2B/B2B2C softvera, regionalnu mrežu ili kapital vezan za validiran plan ubrzanja.
+### 12.1 Osnivač
 
-Partner ili investicija mogu postati racionalni kada potražnja premaši kapacitet i kada kapital direktno uklanja dokazano usko grlo.
+U narednoj fazi osnivač zadržava:
+
+- product ownership;
+- arhitekturu i ključni razvoj;
+- finalnu eskalaciju;
+- prodaju važnim klijentima;
+- marketing strategiju;
+- ključna partnerstva.
+
+Cilj je da osnivač prestane da bude usko grlo za standardni onboarding i support.
+
+### 12.2 Prvo zaposlenje
+
+Prva operativna osoba je customer support / implementation.
+
+Odgovornosti:
+
+- rešavanje baznih pitanja;
+- onboarding prema manualima i checklistama;
+- pomoć oko konfiguracije, tableta, kamera, barkoda i štampača;
+- praćenje monitoringa;
+- trijaža po domenu i roli;
+- rešavanje poznatih slučajeva prema runbook-u;
+- eskalacija složenih problema;
+- evidencija vremena, uzroka i rešenja.
+
+### 12.3 Developer
+
+Developer se dodaje kada razvoj postane dokazano usko grlo, roadmap kasni ili osnivač mora značajno da se prebaci na prodaju i tržište.
+
+### 12.4 GGAP domain owner
+
+Pre production lansiranja GGAP-a mora biti jasno ko poseduje:
+
+- mapiranje standarda i verzija;
+- sadržaj listi i procedura;
+- validaciona pravila;
+- stručnu reviziju promena;
+- odobravanje compliance release-a;
+- pitanja klijenata koja nisu tehnički support.
+
+Ova odgovornost ne sme neformalno pasti na customer support osobu.
 
 ---
 
-## 12. Strateška hitnost i tržišni prozor
+## 13. Partner i kapital
 
-`HYPOTHESIS`: tržište ima ograničen prozor u kojem AgriX može izgraditi dominantnu poziciju pre nego što postojeći ERP dobavljači ili novi vertikalni konkurent razviju sličan sistem.
+AgriX ne treba partnera samo zbog novca.
 
-AgriX ima jaču odbranu kada pokriva ceo posao firme i daje kooperantu pun farm-management proizvod. Što je više ključnih tokova zatvoreno u jednom sistemu, veća je korisnička vrednost, veći switching cost i teže je konkurentu da kopira ponudu.
+Partner ima smisla kada donosi najmanje jednu teško zamenljivu sposobnost:
 
-`TARGET`: najmanje 200 firmi u periodu od 3–4 godine.
+- direktan pristup velikom broju kvalitetnih kupaca;
+- dokazanu distribuciju u agraru;
+- vođenje prodaje i implementacije;
+- iskustvo skaliranja B2B/B2B2C softvera;
+- regionalnu mrežu;
+- stručnu GGAP/compliance sposobnost;
+- kapital vezan za precizan plan uklanjanja dokazanog uskog grla.
+
+Pre prodaje udela moraju biti poznati upotreba kapitala, očekivani dodatni ARR, rok, odgovornost partnera, upravljačka prava, dilution i scenario neuspeha.
 
 ---
 
-## 13. Strateški rizici
+## 14. Strateška hitnost i moat
+
+`HYPOTHESIS`: tržište ima ograničen prozor u kojem AgriX može izgraditi dominantnu poziciju pre nego što generički ERP dobavljač ili novi vertikalni konkurent razvije dovoljno sličan sistem.
+
+AgriX-ov moat ne treba zasnivati samo na broju funkcija. Najjače odbrane su:
+
+1. end-to-end tok kroz ceo posao;
+2. jedan povezani podatak kroz Enterprise, Gazdinstvo i GGAP;
+3. parcelni, agronomski, finansijski i dokumentacioni kontekst;
+4. production iskustvo i poslovna pravila specifična za otkup;
+5. monitoring, self-update, onboarding i operativni runbook-ovi;
+6. mreža firmi, kooperanata i uređaja;
+7. switching cost koji nastaje kada AgriX postane primarni operativni sistem.
+
+Širina bez pouzdanosti nije moat. Pouzdanost bez tržišne penetracije takođe nije dovoljna.
+
+---
+
+## 15. Strateški rizici
 
 | Rizik | Verovatnoća | Uticaj | Primarna zaštita |
 |---|---|---|---|
-| Osnivač ostaje jedina osoba koja razume ceo sistem | Visoka | Visok | dokumentacija, support osoba, developer, ownership |
-| Širina proizvoda postane prevelika za mali tim | Visoka | Visok | domeni, statusi, prioriteti i release gate |
-| Funkcije postoje, ali nisu povezane u zatvoren tok | Srednja | Visok | end-to-end process mapping |
-| Dispečer, vozači ili transport nisu dovoljno stabilni | Srednja | Kritičan | pilot i staged rollout |
-| SEF ili banka proizvedu finansijski pogrešan rezultat | Srednja | Kritičan | validacija, audit, fail-closed i reconciliation |
-| GIS/meteo preporuka bude protumačena kao stručna garancija | Srednja | Visok | jasna ograničenja, izvori i upozorenja |
-| Gazdinstvo ima mnogo funkcija, ali nisku aktivaciju | Visoka | Visok | product analytics, onboarding i test monetizacije |
+| Osnivač ostaje jedina osoba koja razume ceo sistem | Visoka | Kritičan | dokumentacija, support, developer, ownership |
+| Širina tri proizvoda prevaziđe kapacitet malog tima | Visoka | Kritičan | jasne faze, statusi, scope i release gate |
+| Funkcije postoje, ali nisu spojene u zatvoren tok | Srednja | Visok | end-to-end process mapping |
+| Dispečer, Vozač, Field ili štampa nisu dovoljno stabilni | Srednja | Kritičan | pilot, staged rollout i fallback |
+| SEF ili banka proizvedu finansijski pogrešan rezultat | Srednja | Kritičan | validation, fail-closed, audit i reconciliation |
+| Gazdinstvo ima veliku širinu, ali nisku aktivaciju | Visoka | Visok | analytics, onboarding i test monetizacije |
+| GIS/meteo preporuka bude shvaćena kao stručna garancija | Srednja | Visok | izvori, ograničenja i upozorenja |
+| GGAP sadržaj ne prati važeću verziju standarda | Srednja | Kritičan | domain owner, verzionisanje i stručna revizija |
+| Klijent shvati softver kao garanciju sertifikacije | Srednja | Kritičan | UX, ugovor, edukacija i audit trag |
+| Automatski dokaz koristi pogrešan izvorni podatak | Srednja | Kritičan | provenance, approval i validacija |
 | Readiness score preceni kapacitet | Srednja | Kritičan | weakest-link model i rezerva |
-| Cena je niža od punog troška celog sistema | Srednja | Visok | unit economics i value-based packaging |
+| Cena bude niža od punog troška sistema | Srednja | Visok | unit economics i value-based pricing |
 | Hardver veže previše kapitala | Srednja | Visok | predujam, standardni modeli i ograničena zaliha |
 | Rast bude prespor i konkurent zauzme tržište | Srednja/visoka | Kritičan | ambiciozan GTM i rast readiness-a |
 | Agresivan rast pogorša kvalitet | Srednja | Kritičan | readiness-based cap i staged onboarding |
 
 ---
 
-## 14. Ključni strateški KPI-jevi
+## 16. Ključni strateški KPI-jevi
 
 ### Enterprise
 
-- broj aktivnih firmi i novih firmi po sezoni;
-- readiness score ukupno i po poslovnom domenu;
-- procenat ključnih procesa potpuno zatvorenih u AgriX-u;
+- aktivne firme i nove firme po sezoni;
+- readiness score ukupno i po domenu;
+- onboarding sati i procenat onboardinga bez osnivača;
+- support sati i incidenti po firmi i domenu;
+- procenat potpuno zatvorenih poslovnih tokova;
 - broj ručnih prelaza i duplih unosa;
-- onboarding sati po firmi;
-- procenat onboardinga bez osnivača;
-- support vreme po firmi i domenu;
-- kritični incidenti i recovery vreme;
 - aktivni Field i Driver terminali;
 - Dispečer korišćenje i uspešnost planova;
-- stopa neuspešne štampe;
+- uspešnost sync-a i štampe;
 - SEF uspešnost i neusaglašeni statusi;
 - procenat automatski rasknjiženih bankarskih stavki;
-- broj ručnih korekcija mapiranja;
-- broj i vrednost pripremljenih naloga za plaćanje;
-- ARR po firmi, modulu i ukupno;
-- hardverska marža;
-- renewal i churn.
+- pripremljeni nalozi za plaćanje;
+- ARR, gross margin, renewal i churn;
+- stvarna hardverska marža.
 
 ### Gazdinstvo
 
-- broj Partner, Basic i Pro naloga;
+- Partner, Basic i Pro nalozi;
 - aktivacija po hladnjači;
-- mesečno i nedeljno aktivni korisnici;
-- broj aktivnih parcela;
-- broj otvorenih GIS/meteo pregleda;
-- broj evidentiranih tretmana;
-- korišćenje pametnog doziranja;
-- broj unetih troškova i procenat vezan za parcelu;
-- broj korisnika koji pregledaju sezonski bilans;
-- broj pregleda kartice prema hladnjači;
-- konverzija Partner → Basic/Pro;
-- ARPU, retencija i support cost.
+- WAU/MAU i retencija;
+- aktivne parcele;
+- GIS/meteo korišćenje;
+- evidentirani tretmani i korišćenje pametnog doziranja;
+- uneti troškovi i procenat vezan za parcelu;
+- pregledi bilansa i kartice prema hladnjači;
+- Partner → Basic/Pro konverzija;
+- ARPU i support cost.
+
+### GGAP
+
+- aktivne firme, grupe i gazdinstva;
+- procenat automatski popunjenih polja i listi;
+- procenat kompletiranosti dokumentacije;
+- nedostajući i istekli dokazi;
+- vreme pripreme dokumentacije po gazdinstvu;
+- otvorene i zatvorene neusaglašenosti;
+- vreme zatvaranja korektivne mere;
+- broj audit paketa;
+- propusti pronađeni pre kontrole;
+- ARR, gross margin, renewal i support/content cost.
 
 ---
 
-## 15. Odobrene strateške odluke
+## 17. Odobrene strateške odluke
 
-### STR-001 — Readiness-based rast
-Ne postoji unapred fiksiran sezonski hard cap. Maksimalan broj novih firmi određuje readiness score organizacije i celog proizvoda.
+- **STR-001:** sezonski rast određuje readiness score, ne unapred fiksiran broj firmi;
+- **STR-002:** trenutni fokus je Srbija i firme sa razgranatom mrežom stanica i kooperanata;
+- **STR-003:** jedan proizvodni codebase, bez trajnih klijentskih forkova;
+- **STR-004:** Gazdinstvo trenutno nije osnovni prihod, ali može postati glavni proizvod ili prihod;
+- **STR-005:** hardver je profitabilan sporedni centar i mogući ulaz u širi IT portfolio;
+- **STR-006:** partner se ne uzima samo zbog kapitala;
+- **STR-007:** prvo operativno zaposlenje je customer support / implementation;
+- **STR-008:** dugoročni cilj je regionalna platforma;
+- **STR-009:** cilj je najmanje 200 firmi u naredne 3–4 godine;
+- **STR-010:** AgriX pokriva ceo poslovni sistem firme;
+- **STR-011:** Gazdinstvo je pun farm-management proizvod;
+- **STR-012:** GGAP je treći puni proizvodni stub.
 
-### STR-002 — Primarni tržišni fokus
-Trenutni fokus je Srbija. Ciljni kupci su hladnjače i druge firme sa razgranatom mrežom stanica, vozača, kupaca i kooperanata.
-
-### STR-003 — Jedan proizvod, jedan kod
-Klijentske razlike rešavaju se zajedničkim kodom i konfiguracijom. Trajni klijentski fork nije dozvoljen.
-
-### STR-004 — Dinamična uloga Gazdinstva
-Licence firmi trenutno finansiraju osnovni biznis. Gazdinstvo može postati glavni proizvod ili prihod ako podaci to potvrde.
-
-### STR-005 — Hardver kao sporedni profitni centar
-Hardver mora imati pozitivnu stvarnu maržu. AgriX može postati dobavljač šireg IT sistema ciljnih klijenata.
-
-### STR-006 — Bez partnera samo zbog novca
-Partner ili investitor razmatra se kada rešava dokazano usko grlo i donosi merljivu sposobnost pored kapitala.
-
-### STR-007 — Prvo operativno zaposlenje
-Prva operativna uloga je customer support / implementation. Ta osoba rešava bazne slučajeve, sprovodi onboarding i delegira složene probleme.
-
-### STR-008 — Regionalna platforma
-Dugoročni cilj AgriX-a je regionalna vertikalna platforma.
-
-### STR-009 — Strateški cilj tržišnog udela
-AgriX cilja najmanje 200 firmi u naredne 3–4 godine.
-
-### STR-010 — AgriX pokriva ceo poslovni sistem
-AgriX se razvija i pozicionira kao end-to-end poslovni operativni sistem koji pokriva sve glavne i ključne sporedne tokove ciljne firme. Desktop, PWA, Dispečer, Vozači, repromaterijal, lager, prodaja, SEF, banka, monitoring i hardver predstavljaju povezane delove jednog sistema.
-
-### STR-011 — Gazdinstvo je pun farm-management proizvod
-AgriX Gazdinstvo se ne tretira samo kao portal ili dodatak hladnjači. To je zaseban farm-management proizvod koji pokriva karticu prema hladnjači, parcele i GIS, prognozu i upozorenja, pametno doziranje, tretmane, troškove, proizvodnju i sezonski bilans ukupno i po parceli.
+Detaljni razlozi i posledice odluka vode se u `DECISION_LOG.md`.
 
 ---
 
-## 16. Otvorene teme za naredna poglavlja
+## 18. Otvorene teme
 
-1. Potvrditi procenu da u Srbiji postoji 500–1.000 relevantnih firmi.
-2. Napraviti mapu svih glavnih i sporednih poslovnih tokova.
-3. Za svaki tok označiti `Production`, `Pilot`, `Planned`, `Gap` ili `Out of scope`.
-4. Definisati readiness score po poslovnim domenima.
-5. Razložiti cilj od 200 firmi na godišnji prodajni i kadrovski plan.
-6. Definisati Gazdinstvo Partner, Basic i Pro granice prema stvarnim funkcijama.
-7. Definisati koje agronomske preporuke su informativne, a koje zahtevaju stručnu validaciju.
-8. Odrediti packaging Enterprise sistema i premium modula.
-9. Definisati koje IT kategorije AgriX prodaje, a koje ne.
-10. Odrediti ARR i operativne pragove za partnera ili investitora.
+1. potvrditi veličinu tržišta i segmentaciju u `04_MARKET.md`;
+2. izraditi `07_PRODUCT_PORTFOLIO.md` sa statusom svakog toka;
+3. definisati formalni readiness score i sezonske pragove;
+4. razložiti cilj od 200 firmi na godišnji prodajni, kadrovski i finansijski plan;
+5. završiti GGAP discovery: standard, verzija, liste, role, dokazi i audit izlazi;
+6. definisati Gazdinstvo Partner, Basic i Pro granice;
+7. definisati packaging sva tri proizvoda;
+8. izračunati unit economics po proizvodu, paketu i segmentu;
+9. odrediti IT kategorije koje AgriX prodaje i podržava;
+10. definisati pragove za partnera ili investitora.
 
 ---
 
-## 17. Naredni koraci
+## 19. Naredni koraci
 
-1. upisati STR-010 i STR-011 u `DECISION_LOG.md`;
-2. razviti `03_CUSTOMERS_AND_JOBS.md` po svim ulogama: vlasnik, administracija, otkupljivač, dispečer, vozač, magacioner, kupac i kooperant;
-3. razviti `07_PRODUCT_PORTFOLIO.md` kao mapu poslovnih domena i tokova;
-4. razviti `04_MARKET.md` i potvrditi adresabilno tržište;
-5. napraviti readiness model po domenima;
-6. zatim finalizovati pricing, unit economics i plan rasta do 200 firmi.
+1. razviti `04_MARKET.md` i potvrditi adresabilno tržište;
+2. razviti `07_PRODUCT_PORTFOLIO.md` kao jedinstvenu mapu tri proizvoda i svih poslovnih tokova;
+3. napraviti formalni readiness model;
+4. sprovesti intervjue i validaciju iz `03_CUSTOMERS_AND_JOBS.md`;
+5. zatim razviti pricing, unit economics, finansijski model i plan rasta do 200 firmi.
