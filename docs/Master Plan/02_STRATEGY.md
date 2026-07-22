@@ -11,62 +11,78 @@
 
 AgriX je specijalizovan poslovni sistem za organizaciju otkupa poljoprivrednih proizvoda. Trenutni proizvod povezuje desktop administraciju, management PWA, monitoring, self-update i niz poslovnih modula. Za narednu sezonu planirani su usklađeni PWA Otkupac, kiosk tableti i termalna štampa otkupnih listova na mestu otkupa.
 
-Potvrđene polazne činjenice:
+Potvrđene polazne činjenice i radne pretpostavke:
 
 - `FACT`: postoje tri aktivna klijenta;
-- `TARGET`: približno pet novih klijenata naredne sezone, ukupno oko osam;
-- `TARGET`: preko deset firmi nije cilj naredne sezone;
+- `TARGET`: u startu je realan cilj približno pet novih klijenata;
 - `FACT`: prosečna firma ima približno deset otkupnih stanica;
 - `FACT`: prosečno postoji jedan desktop korisnik po firmi, uz management PWA;
 - `FACT`: prosečno postoji oko 100 kooperanata po firmi;
 - `MEASURED`: support je približno jedan poziv nedeljno u dosadašnjem periodu;
 - `FACT`: self-update i granularni monitoring postoje;
 - `FACT`: onboarding je do sada rađen remote;
-- `FACT`: sve klijentske varijacije ostaju u zajedničkom kodu i rešavaju se konfiguracijom.
+- `ASSUMPTION`: onboarding se može standardizovati sa jednog na približno pola dana;
+- `FACT`: sve klijentske varijacije ostaju u zajedničkom kodu i rešavaju se konfiguracijom;
+- `HYPOTHESIS`: u Srbiji postoji približno 500–1.000 relevantnih firmi; procena mora biti potvrđena tržišnim istraživanjem;
+- `TARGET`: AgriX treba da osvoji najmanje 200 firmi u naredne 3–4 godine, ako readiness i tržišna validacija to podrže.
 
-Ove činjenice pokazuju da AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeća sezona mora potvrditi da novi terenski sloj radi pouzdano na većem broju stanica i firmi.
+AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeće faze moraju dokazati da proizvod, onboarding, support, hardver i organizacija mogu da rastu bez pada pouzdanosti.
 
 ---
 
 ## 2. Strateška definicija
 
-AgriX nije generički ERP i nije zbir nepovezanih modula. AgriX je vertikalna operativna platforma za firme koje organizuju otkup i za ljude koji učestvuju u tom toku.
+AgriX nije generički ERP i nije zbir nepovezanih modula. AgriX je vertikalna operativna platforma za firme koje organizuju otkup poljoprivrednih proizvoda, njihove terenske mreže i kooperante.
 
 Platforma ima tri osnovna sloja:
 
 1. **AgriX Otkup / Desktop** — centralna administracija, dokumentacija, finansijski i operativni tokovi;
 2. **AgriX Field / PWA Otkupac** — rad na otkupnim stanicama, kiosk terminali i štampa na licu mesta;
-3. **AgriX Gazdinstvo** — digitalna veza kooperanta sa hladnjačom i samostalna evidencija gazdinstva.
+3. **AgriX Gazdinstvo** — digitalna veza kooperanta sa otkupljivačem i samostalna evidencija gazdinstva.
 
-Hladnjača je primarni kupac i glavni izvor prihoda u kratkom i srednjem roku. Gazdinstvo je u početku dodatak ekosistemu i kanal za vezivanje kooperanata, a ne glavni finansijski oslonac.
+Hladnjače i druge firme sa razgranatom mrežom otkupnih stanica primarni su kupci i glavni izvor prihoda u kratkom roku. Gazdinstvo trenutno nije finansijski oslonac, ali može postati glavni proizvod ili glavni izvor prihoda ako tržište potvrdi konverziju i dugoročnu vrednost.
 
 ---
 
 ## 3. Vizija
 
-Do 2030. AgriX treba da bude najrelevantnija specijalizovana platforma za digitalizaciju otkupa kod malih i srednjih otkupljivača i hladnjača u Srbiji, sa dokazanim modelom koji se može preneti na odabrana tržišta regiona.
+Do 2030. AgriX treba da bude vodeća regionalna platforma za digitalizaciju otkupa poljoprivrednih proizvoda, sa snažnom bazom u Srbiji i prenosivim operativnim modelom za tržišta regiona.
 
-Vizija ne znači najveći broj funkcija niti najveći broj instalacija. Znači da AgriX postane proizvod koji:
+`TARGET`: u naredne 3–4 godine izgraditi bazu od najmanje 200 firmi, uz rast koji je dozvoljen readiness-om, a ne proizvoljnim godišnjim plafonom.
+
+Vizija podrazumeva da AgriX:
 
 - pouzdano vodi kritični tok otkupa tokom sezone;
 - povezuje centralnu administraciju sa terenskim stanicama;
+- digitalizuje odnos firme i kooperanta;
 - smanjuje ručni rad, prepisivanje i kašnjenje informacija;
 - daje managementu trenutni uvid i kontrolu;
 - ostaje standardizovan proizvod sa jednim kodom;
-- može da se održava sa malim, kvalitetnim timom;
-- stvara dovoljno recurring prihoda da razvoj i podrška ne zavise isključivo od osnivača.
+- može da opslužuje stotine firmi kroz procese, automatizaciju i delegiranje;
+- stvara dovoljno recurring prihoda za stalni razvoj, podršku i regionalno širenje;
+- postane prirodni tehnološki dobavljač ciljnom segmentu, a ne samo dobavljač jedne aplikacije.
+
+Cilj od 200 firmi je strateški cilj, ne finansijska prognoza. Mora se razložiti na godišnje akvizicione, operativne i kadrovske kapacitete.
 
 ---
 
 ## 4. Misija
 
-AgriX omogućava domaćim otkupljivačima da vode otkup, dokumentaciju, ambalažu, finansijske tokove i terenske stanice kao jedan povezan sistem, bez troška i složenosti velikog ERP projekta.
+AgriX omogućava hladnjačama i drugim organizovanim otkupljivačima da vode otkup, dokumentaciju, ambalažu, finansijske tokove, terenske stanice i kontrolu poslovanja kao jedan povezan sistem, bez troška i složenosti velikog ERP projekta.
 
-Za kooperante AgriX treba da obezbedi jasan digitalni pregled saradnje sa hladnjačom i jednostavan alat za sopstvenu evidenciju gazdinstva.
+Za kooperante AgriX treba da obezbedi jasan digitalni pregled saradnje sa otkupljivačem i jednostavan alat za sopstvenu evidenciju gazdinstva.
 
 ---
 
-## 5. Šta AgriX namerno nije
+## 5. Šta AgriX jeste, a šta nije
+
+AgriX jeste:
+
+- vertikalna platforma za otkup;
+- zajednički proizvod za veliki broj firmi;
+- sistem koji se prilagođava konfiguracijom;
+- softverski i operativni paket za centralu i terenska otkupna mesta;
+- potencijalni dobavljač šireg IT sistema za ciljne klijente.
 
 AgriX namerno nije:
 
@@ -74,153 +90,209 @@ AgriX namerno nije:
 - potpuna zamena za BizniSoft, PANTHEON ili drugi računovodstveni ERP;
 - custom software studio koji pravi poseban proizvod za svakog klijenta;
 - jeftin program samo za štampanje otkupnih listova;
-- hardverski distributer kome je prodaja tableta osnovni biznis;
-- platforma koja agresivno prihvata klijente pre nego što može bezbedno da ih podrži;
-- projekat koji menja tehnologiju samo zato što je nova tehnologija atraktivnija;
-- proizvod koji obećava funkcionalnosti koje nisu production-ready.
+- klasičan hardverski distributer bez sopstvene tehnološke vrednosti;
+- proizvod koji obećava funkcionalnosti koje nisu production-ready;
+- projekat koji menja tehnologiju samo zato što je nova tehnologija atraktivnija.
 
-Ova ograničenja su strateška zaštita fokusa.
+AgriX može prodavati hardver i širu IT opremu, ali samo kada time povećava pouzdanost, standardizaciju, prihod i kontrolu ukupnog rešenja.
 
 ---
 
-## 6. Idealni kupac u prvoj fazi
+## 6. Ciljno tržište i idealni kupac
 
-Primarni idealni kupac je mala ili srednja hladnjača ili otkupljivač u Srbiji sa sledećim karakteristikama:
+### Primarni fokus
 
-- godišnji promet približno 1–2 miliona EUR;
-- više otkupnih stanica, tipično oko deset;
-- jedan centralni administrativni korisnik;
-- vlasnik ili management koji želi pregled i kontrolu preko PWA;
-- postojeći računovodstveni sistem koji ne rešava dobro ulazni tok robe;
+Trenutni geografski fokus je Srbija.
+
+Primarni ciljni kupci su:
+
+- hladnjače sa sopstvenom mrežom otkupnih stanica;
+- firme koje se bave organizovanim otkupom i imaju razgranatu mrežu stanica i kooperanata;
+- firme kojima generički ERP ne rešava dovoljno dobro ulazni tok robe;
+- firme koje žele centralnu kontrolu terenskog otkupa.
+
+Tipičan idealni kupac ima:
+
+- više otkupnih stanica, često oko deset;
+- jednog centralnog administrativnog korisnika;
+- management koji želi pregled i kontrolu kroz PWA;
+- postojeći knjigovodstveni sistem;
+- odgovornu osobu za implementaciju i podatke;
 - spremnost da standardizuje proces umesto da zahteva poseban fork;
-- dovoljno veliki operativni problem da godišnja licenca ima jasnu vrednost;
-- dovoljno mala organizacija da odluku može doneti vlasnik ili direktor bez višemesečne nabavke.
+- dovoljno veliki operativni problem da godišnja licenca ima jasnu vrednost.
 
----
+Promet od 1–2 miliona EUR jeste čest profil sadašnjih ciljnih klijenata, ali nije jedini kriterijum. Broj stanica, složenost toka, obim dokumenata, potreba za kontrolom i spremnost na standardizaciju važniji su od samog prometa.
 
-## 7. Anti-ICP
+### Anti-ICP
 
 AgriX ne treba aktivno da prihvata klijente koji:
 
 - zahtevaju sopstvenu verziju koda ili poseban release;
 - očekuju neograničen custom development uključen u licencu;
 - nemaju odgovornu osobu za podatke, obuku i komunikaciju;
-- traže produkcijski rollout neposredno pred sezonu bez vremena za test;
+- traže rollout neposredno pred sezonu bez vremena za test;
 - odbijaju standardne procese backupa, update-a i monitoringa;
 - kupuju isključivo po najnižoj ceni;
-- imaju toliko kompleksan enterprise proces da zahtevaju poseban implementacioni tim i SLA koji AgriX još nema;
-- očekuju da AgriX preuzme fizičke kvarove, lom i zloupotrebu hardvera bez ugovorne granice.
-
-Odbijanje lošeg klijenta može biti profitabilnija odluka od prodaje.
+- očekuju da AgriX preuzme fizičke kvarove i zloupotrebu hardvera bez ugovorne granice.
 
 ---
 
-## 8. Strateški principi razvoja
+## 7. Strateški principi razvoja
 
-### 8.1 Jedan kod, mnogo konfiguracije
+### 7.1 Jedan kod, bez forkova
 
 Sve funkcionalnosti ostaju u zajedničkom kodu. Razlike među firmama rešavaju se kroz podešavanja, module, dozvole, workflow konfiguraciju i feature flags.
 
-Zabranjeni obrazac je trajna logika vezana za ime ili identitet pojedinačnog klijenta.
+Trajni klijentski fork nije dozvoljen.
 
-### 8.2 Pouzdanost pre širine
+### 7.2 Pouzdanost i brzina rasta nisu suprotnosti
 
-Funkcionalnost koja vodi kritičnu transakciju mora biti stabilna, merljiva i recoverable pre nego što se doda nova širina proizvoda.
+AgriX ne bira između sigurnosti i rasta. Cilj je da automatizacijom, monitoringom, self-update-om, standardizovanim onboardingom i delegiranjem poveća brzinu rasta bez pada pouzdanosti.
 
-### 8.3 Kontrolisan rollout
+### 7.3 Sezonski cap određuje readiness
+
+Ne postoji unapred fiksiran hard cap od 10, 15 ili 20 firmi. Maksimalan broj novih firmi za sezonu određuje se isključivo kroz readiness score pre prodajnog i implementacionog ciklusa.
+
+Readiness mora najmanje da obuhvati:
+
+- stabilnost kritičnog codebase-a;
+- production readiness PWA Otkupac toka;
+- pouzdanost sync-a i termalne štampe;
+- automatizaciju i trajanje onboardinga;
+- kapacitet customer supporta i eskalacije;
+- monitoring, recovery i release procese;
+- dostupnost i logistiku hardvera;
+- finansijsku rezervu i obrtni kapital;
+- broj osoba koje mogu sprovesti standardan onboarding bez osnivača.
+
+Cap određuje najslabija kritična komponenta, ne prosečna ocena. Detaljna metodologija biće definisana u posebnom operations/readiness poglavlju.
+
+### 7.4 Kontrolisan staged rollout
 
 Velike promene prolaze kroz interni test, pilot firmu, ograničenu grupu i tek zatim pun rollout. Self-update omogućava distribuciju, ali ne uklanja potrebu za staged rolloutom.
 
-### 8.4 Bez rewrite-a bez merljivog razloga
+### 7.5 Bez rewrite-a bez merljivog razloga
 
-Promena tehnološke platforme razmatra se kada postojeća platforma stvara merljiv limit u pouzdanosti, brzini razvoja, zapošljavanju, integracijama ili ukupnom trošku održavanja. Rewrite nije strateški cilj sam po sebi.
+Promena tehnološke platforme razmatra se kada postojeća platforma stvara merljiv limit u pouzdanosti, brzini razvoja, zapošljavanju, integracijama ili ukupnom trošku održavanja.
 
-### 8.5 Operativna jednostavnost je funkcionalnost
+### 7.6 Operativna jednostavnost je funkcionalnost
 
-Remote onboarding, monitoring, self-update, backup, kiosk konfiguracija i jasni runbook-ovi imaju isti strateški značaj kao korisničke funkcije.
+Remote onboarding, monitoring, self-update, backup, kiosk konfiguracija, manuali i runbook-ovi imaju isti strateški značaj kao korisničke funkcije.
 
-### 8.6 Nema prikrivenog custom developmenta
+### 7.7 Nema prikrivenog custom developmenta
 
 Zahtev jednog klijenta ulazi u proizvod samo kada predstavlja opšti problem segmenta i može se rešiti kroz zajednički model. Poseban razvoj se posebno ugovara ili odbija.
 
-### 8.7 Ne obećavati budući proizvod kao postojeći
+### 7.8 Ne obećavati budući proizvod kao postojeći
 
 PWA Otkupac, termalna štampa, kiosk terminali i budući moduli prodaju se kao production tek kada zadovolje release kriterijume.
 
 ---
 
-## 9. Strategija rasta 2026–2030
+## 8. Strategija rasta 2026–2030
 
-### Faza 1 — Dokaz operativne skale
+### Faza 1 — Dokaz readiness modela
 
-**Period:** naredna sezona  
-**Cilj:** ukupno približno 8 firmi, maksimalno 10.
+**Period:** naredna sezona.
 
-Primarni cilj nije maksimalan prihod, već dokaz da:
-
-- novi klijent može biti onboardovan remote za pola dana;
-- PWA Otkupac ostaje usklađen sa desktop tokom;
-- kiosk terminali i termalna štampa rade pouzdano;
-- support ostaje merljiv i podnošljiv;
-- update i monitoring rade na svim firmama;
-- nema potrebe za klijentskim fork-ovima;
-- pricing može da se proda bez velikog popusta.
-
-### Faza 2 — Standardizacija i delegiranje
-
-**Okvir:** približno 10–20 firmi.
+Polazni komercijalni cilj je približno pet novih firmi, ali stvarni broj može biti 10, 15 ili 20 ako readiness score pokaže da onboarding, podrška, proizvod i hardver mogu bezbedno da iznesu taj obim.
 
 Ciljevi:
 
-- customer support / implementation osoba preuzima većinu standardnih pitanja i onboardinga;
+- standardizovati remote onboarding kroz manuale i checklistu;
+- omogućiti da standardan onboarding vodi customer support / implementation osoba;
+- potvrditi PWA Otkupac, kiosk i termalnu štampu;
+- meriti vreme po onboardingu i support case-u;
+- potvrditi da broj novih firmi može rasti bez forkova i bez rasta incidenta po firmi;
+- napraviti formalni readiness score pre početka aktivne prodaje.
+
+### Faza 2 — Ubrzana nacionalna penetracija
+
+**Okvir:** od približno 10 do 50 firmi.
+
+Ciljevi:
+
+- customer support / implementation osoba preuzima standardna pitanja i onboarding;
 - osnivač ostaje eskalacija za bugove i poslovnu logiku;
-- svi standardni procesi imaju checklistu i runbook;
-- stvarni support cost i onboarding cost ulaze u unit economics;
-- dodatni developer se angažuje samo kada je razvoj dokazano usko grlo;
-- marketing postaje sistematska funkcija, a ne povremena aktivnost.
+- osnivač se postepeno prebacuje na marketing, prodaju i partnerstva;
+- developer se dodaje kada razvoj postane usko grlo ili kada je potreban da oslobodi osnivača za tržište;
+- razviti sistem preporuka, case studies i direktnog pristupa ciljnom segmentu;
+- potvrditi pricing i unit economics na različitim segmentima.
 
-### Faza 3 — Održiv rast
+### Faza 3 — Liderstvo u Srbiji
 
-**Okvir:** približno 20–50 firmi.
+**Okvir:** približno 50–200 firmi.
 
 Ciljevi:
 
-- recurring prihod finansira minimalni stalni tim;
-- podrška i implementacija ne zavise svakodnevno od osnivača;
-- postoji pouzdan release i incident proces;
-- Gazdinstvo ima dokazanu, ne pretpostavljenu konverziju;
-- regionalno širenje počinje tek kada je domaći model standardizovan;
-- cena raste sa dokazima, referencama i višim nivoom usluge.
+- izgraditi najprepoznatljiviji specijalizovani brend za otkup u Srbiji;
+- organizovati support, implementaciju i razvoj tako da dnevni rad ne zavisi od osnivača;
+- imati standardizovan hardverski katalog i logistiku;
+- razviti partnerstva sa knjigovođama, dobavljačima opreme i relevantnim organizacijama;
+- pretvoriti Gazdinstvo iz hipoteze u dokazani kanal ili dokazano odbaciti njegovu ekonomiku;
+- pripremiti proizvod i organizaciju za regionalnu ekspanziju.
 
-### Faza 4 — Platforma ili profitabilni specijalista
+### Faza 4 — Regionalna platforma
 
-Do 2030. AgriX može izabrati jedan od dva zdrava ishoda:
+Regionalna platforma je cilj, ne samo jedna od opcija.
 
-1. profitabilna specijalizovana firma sa ograničenim timom i visokim kvalitetom usluge;
-2. regionalna vertikalna platforma sa većim timom, dodatnim kapitalom i širim proizvodnim portfoliom.
+Početna tržišta za procenu su:
 
-Odluka se ne donosi ideološki. Donosi se na osnovu ARR-a, tržišne tražnje, kapaciteta tima, churn-a i stvarne ekonomike Gazdinstva.
+1. Srbija kao baza;
+2. BiH;
+3. Crna Gora i Severna Makedonija;
+4. Hrvatska i druga tržišta nakon pravne, jezičke, poreske i prodajne procene.
+
+Regionalno širenje mora imati lokalni prodajni kanal, regulatorno mapiranje, support model i jasnu odgovornost za implementaciju.
 
 ---
 
-## 10. Strategija prihoda
+## 9. Strategija prihoda
 
-Redosled važnosti izvora prihoda u narednim godinama:
+Redosled važnosti u kratkom roku:
 
-1. godišnje licence hladnjača;
-2. implementacija i obuka kao odvojena usluga;
+1. godišnje licence firmi;
+2. implementacija i obuka kao odvojene usluge;
 3. dodatni moduli i multi-company licence;
-4. realna marža na konfiguraciji i isporuci terminala;
+4. marža na terminalima i drugoj IT opremi;
 5. Gazdinstvo Basic i Pro;
-6. buduće integracije i premium SLA.
+6. buduće integracije, premium support i SLA.
 
-Hardver nije centralni profitni motor. Njegova uloga je da omogući pouzdan terenski rad i poveća vrednost softverske platforme.
+### Gazdinstvo
 
-Gazdinstvo je u prvoj fazi strateški proizvod, ali finansijski trivijalan. Sa približno 100 kooperanata po firmi i radnom hipotezom konverzije od 5%, njegov prihod ne sme da finansira osnovni tim dok tržište to ne potvrdi.
+Gazdinstvo trenutno ne finansira osnovni biznis. Sa približno 100 kooperanata po firmi i radnom hipotezom konverzije od 5%, početni prihod je trivijalan.
+
+To ne ograničava njegov dugoročni potencijal. Gazdinstvo može postati glavni proizvod ili glavni izvor prihoda ako se potvrde:
+
+- dovoljno velika baza aktivnih kooperanata;
+- održiva konverzija na Basic i Pro;
+- niska cena podrške i akvizicije;
+- jaka retencija i svakodnevna korisnost;
+- dodatni proizvodi koji povećavaju ARPU.
+
+### Hardver i širi IT sistem
+
+Hardver nije glavni profitni centar, ali treba da bude profitabilan sporedni centar.
+
+AgriX treba da razmotri pozicioniranje kao dobavljač kompletnog IT sistema za ciljne klijente, uključujući:
+
+- kiosk tablete;
+- termalne štampače;
+- mrežnu i rezervnu opremu;
+- desktop računare i osnovnu konfiguraciju kada je komercijalno opravdano;
+- standardizaciju uređaja, remote management i zamenske jedinice;
+- koordinaciju sa vagama, štampačima i drugim perifernim sistemima.
+
+Ovaj pravac je prihvatljiv samo kada:
+
+- svaka kategorija ima pozitivnu stvarnu maržu nakon rada i garancije;
+- ne odvlači organizaciju od razvoja softvera;
+- povećava pouzdanost i vezanost klijenta;
+- postoji standardizovan katalog, nabavka i support granica.
 
 ---
 
-## 11. Strategija organizacije
+## 10. Strategija organizacije
 
 ### Osnivač
 
@@ -233,28 +305,39 @@ U narednoj fazi osnivač zadržava:
 - marketing strategiju;
 - ključna partnerstva.
 
-Ovo je privremeno održivo do planirane granice sledeće sezone, ali nije ciljna organizacija za 20–50 firmi.
+Cilj nije da osnivač trajno ostane operativno usko grlo, već da se standardni rad postepeno delegira.
 
 ### Prvo zaposlenje
 
-Planirana prva operativna osoba je customer support / implementation. Njena uloga uključuje:
+Prva operativna osoba je customer support / implementation.
 
-- standardna korisnička pitanja;
-- remote onboarding;
+Njena uloga uključuje:
+
+- rešavanje standardnih i baznih korisničkih pitanja;
+- remote onboarding prema manualima i checklistama;
 - pomoć oko tableta, štampača i konfiguracije;
 - praćenje monitoringa;
 - evidenciju i trijažu problema;
-- eskalaciju bugova osnivaču.
+- rešavanje poznatih problema prema runbook-u;
+- delegiranje i eskalaciju ostatka osnivaču ili developeru;
+- vođenje evidencije o vremenu, uzroku i rešenju support slučajeva.
+
+Osnivač pruža podršku van smene te osobe tokom sezone i rešava složene eskalacije.
 
 ### Dodatni developer
 
-Developer se dodaje kada razvoj i održavanje postanu dokazano usko grlo ili kada osnivač prelazi značajnije na marketing i prodaju. Developer ne sme biti zaposlen samo zato što rast izgleda poželjno.
+Developer se dodaje kada:
+
+- razvoj postane dokazano usko grlo;
+- roadmap ne može biti isporučen uz postojeći kapacitet;
+- osnivač treba značajno da se prebaci na marketing i prodaju;
+- trošak propuštenog rasta postane veći od punog troška developera.
 
 ---
 
-## 12. Partner i kapital
+## 11. Partner i kapital
 
-AgriX trenutno ne treba partnera samo zbog kapitala. Kapital bez jasnog uskog grla može povećati troškove i pritisak bez proporcionalnog rasta.
+AgriX ne treba partnera samo zbog kapitala.
 
 Partner ima smisla kada donosi najmanje jednu teško zamenljivu sposobnost:
 
@@ -263,119 +346,133 @@ Partner ima smisla kada donosi najmanje jednu teško zamenljivu sposobnost:
 - operativno vođenje prodaje i implementacije;
 - relevantno iskustvo skaliranja B2B softvera;
 - regionalnu mrežu koju AgriX ne može brzo sam da izgradi;
-- kapital vezan za precizan plan koji je već validiran.
+- kapital vezan za precizan, validiran plan ubrzanja.
 
-Pre prodaje udela moraju biti poznati:
+Pre prodaje udela moraju biti poznati upotreba kapitala, očekivani dodatni ARR, rok, odgovornost partnera, upravljačka prava, dilution i scenario neuspeha.
 
-- tačna upotreba kapitala;
-- očekivani dodatni ARR;
-- rok do rezultata;
-- odgovornost partnera;
-- upravljačka prava;
-- dilution i izlazni scenariji;
-- šta se dešava ako plan ne uspe.
-
-`HYPOTHESIS`: racionalniji trenutak za ozbiljno razmatranje partnera je nakon pune sezone sa 8–10 firmi i dokazanim Field sistemom.
+Partner ili investicija mogu postati racionalni ranije nego što je prvobitno planirano ako readiness pokaže da je potražnja veća od kapaciteta i da kapital direktno uklanja dokazano usko grlo.
 
 ---
 
-## 13. Geografska strategija
+## 12. Strateška hitnost i tržišni prozor
 
-Redosled:
+`HYPOTHESIS`: tržište specijalizovanog softvera za otkup u Srbiji ima ograničen prozor u kojem AgriX može izgraditi dominantnu poziciju pre nego što postojeći ERP dobavljači ili novi vertikalni konkurent razviju sličan proizvod.
 
-1. Srbija;
-2. BiH;
-3. Crna Gora i Severna Makedonija;
-4. Hrvatska ili druga tržišta tek nakon pravne, jezičke i računovodstvene procene.
+Zbog toga strategija ne sme biti pasivna. Pouzdanost ostaje uslov, ali cilj nije beskonačno dokazivanje na malom broju firmi. Cilj je što brže povećavati readiness i zatim pretvarati readiness u tržišni udeo.
 
-Regionalno širenje ne počinje samo zato što je proizvod tehnički dostupan. Potrebni su lokalni partner, prodajni kanal, regulatorno mapiranje i jasan support model.
+`TARGET`: najmanje 200 firmi u periodu od 3–4 godine.
+
+Ovaj cilj zahteva poseban plan:
+
+- broj novih firmi po sezoni;
+- broj osoba za onboarding i support;
+- potrebni razvojni kapacitet;
+- marketing i prodajni kanali;
+- hardverski obrtni kapital;
+- regionalni roadmap;
+- minimalni ARR i cash reserve po fazi.
 
 ---
 
-## 14. Strateški rizici
+## 13. Strateški rizici
 
 | Rizik | Verovatnoća | Uticaj | Primarna zaštita |
 |---|---|---|---|
-| Osnivač ostaje jedina osoba koja razume ceo sistem | Visoka | Visok | dokumentacija, support osoba, code ownership |
+| Osnivač ostaje jedina osoba koja razume ceo sistem | Visoka | Visok | dokumentacija, support osoba, developer, ownership |
 | Previše razvoja pred sezonu | Visoka | Visok | scope freeze i release gate |
 | Field štampa ili sync nisu dovoljno pouzdani | Srednja | Kritičan | pilot, staged rollout, rezervni proces |
+| Readiness score preceni kapacitet | Srednja | Kritičan | weakest-link model i konzervativna rezerva |
 | Cena je niža od punog troška usluge | Srednja | Visok | unit economics po firmi |
-| Hardver veže previše kapitala | Srednja | Srednji/visok | predujam, standardni modeli, mala zaliha |
+| Hardver veže previše kapitala | Srednja | Visok | predujam, standardni modeli, ograničena zaliha |
+| Širi IT portfolio odvlači fokus | Srednja | Srednji/visok | profitabilnost po kategoriji i jasne granice |
 | Klijenti traže prikriven custom razvoj | Visoka | Srednji | ugovorne granice i product pravila |
 | Gazdinstvo nema dovoljnu konverziju | Visoka | Srednji | tretirati prihod kao nulu u konzervativnom planu |
-| Agresivan rast pogorša kvalitet | Srednja | Kritičan | limit broja novih firmi |
-| Tehnološki dug uspori razvoj | Srednja | Visok | merljivi pragovi i kontrolisan refactoring |
-| Partnerstvo prerano smanji kontrolu i buduću vrednost | Srednja | Visok | jasni kriterijumi pre prodaje udela |
+| Rast bude prespor i konkurent zauzme tržište | Srednja/visoka | Kritičan | ambiciozan GTM i rast readiness-a |
+| Agresivan rast pogorša kvalitet | Srednja | Kritičan | readiness-based cap i staged onboarding |
+| Partnerstvo prerano smanji kontrolu | Srednja | Visok | jasni kriterijumi pre prodaje udela |
 
 ---
 
-## 15. Ključni strateški KPI-jevi
+## 14. Ključni strateški KPI-jevi
 
-Za narednu sezonu:
-
-- broj aktivnih hladnjača: cilj 8, hard cap 10;
-- onboarding: cilj najviše 4 sata standardnog rada po firmi;
-- kritični incidenti: cilj 0 nerecoverable događaja;
+- broj aktivnih firmi;
+- broj novih firmi po sezoni;
+- readiness score pre sezone i po kritičnoj komponenti;
+- onboarding sati po firmi;
+- procenat onboardinga koji support osoba vodi bez osnivača;
 - prosečno support vreme po firmi mesečno;
 - procenat problema rešenih bez osnivača;
-- broj uspešnih self-update rollouta;
+- kritični incidenti i recovery vreme;
+- uspešnost self-update rollouta;
 - broj aktivnih Field terminala;
 - stopa neuspešne ili ponovljene štampe;
-- broj klijentskih zahteva rešenih konfiguracijom naspram novog koda;
-- renewal namera i ostvareni renewal;
+- zahtevi rešeni konfiguracijom naspram novog koda;
+- ARR po firmi i ukupni ARR;
 - ostvarena cena naspram cenovnika;
-- onboarding i support cost po firmi;
-- stvarna konverzija Gazdinstva, odvojeno od partner naloga.
+- stvarna hardverska marža;
+- renewal i churn;
+- Gazdinstvo aktivacija, konverzija, ARPU i support cost;
+- tržišni udeo u procenjenom adresabilnom segmentu.
 
 ---
 
-## 16. Preporučene odluke za odobravanje
+## 15. Odobrene strateške odluke
 
-### STR-001 — Kontrolisan rast
+### STR-001 — Readiness-based rast
 
-Naredna sezona je sezona dokazivanja operativne skale. Cilj je približno osam firmi, uz maksimalno deset.
+Ne postoji unapred fiksiran sezonski hard cap. Maksimalan broj novih firmi određuje readiness score organizacije i proizvoda u trenutku prodaje i implementacije.
 
 ### STR-002 — Primarni tržišni fokus
 
-Primarni fokus ostaje Srbija i firme sa više otkupnih stanica kojima generički ERP ne rešava ulazni tok robe.
+Trenutni fokus je Srbija. Ciljni kupci su hladnjače i druge firme koje imaju razgranatu mrežu otkupnih stanica i kooperanata.
 
 ### STR-003 — Jedan proizvod, jedan kod
 
 Klijentske razlike rešavaju se zajedničkim kodom i konfiguracijom. Trajni klijentski fork nije dozvoljen.
 
-### STR-004 — Hladnjače finansiraju osnovni biznis
+### STR-004 — Dinamična uloga Gazdinstva
 
-Godišnje licence hladnjača moraju finansirati osnovnu organizaciju. Gazdinstvo se u kratkoročnom planu ne tretira kao ključni prihod.
+Licence firmi trenutno finansiraju osnovni biznis. Gazdinstvo se kratkoročno ne tretira kao ključni prihod, ali nema strateško ograničenje koje bi sprečilo da postane glavni proizvod ili izvor prihoda ako podaci to potvrde.
 
-### STR-005 — Hardver je enablement, ne centralni profitni centar
+### STR-005 — Hardver kao sporedni profitni centar
 
-Terminali se nude da bi Field proizvod radio pouzdano. Finansijski se meri stvarna marža nakon svih troškova i rizika.
+Hardver nije glavni profitni centar, ali mora imati pozitivnu stvarnu maržu. AgriX može postati dobavljač šireg IT sistema ciljnih klijenata kada to povećava pouzdanost, prihod i stratešku poziciju.
 
 ### STR-006 — Bez partnera samo zbog novca
 
-Partner ili investitor se razmatra tek kada rešava dokazano usko grlo i donosi merljivu sposobnost pored kapitala.
+Partner ili investitor razmatra se kada rešava dokazano usko grlo i donosi merljivu sposobnost pored kapitala.
 
 ### STR-007 — Prvo operativno zaposlenje
 
-Prva planirana operativna uloga je customer support / implementation. Dodatni developer se angažuje prema razvojnom uskom grlu i prelasku osnivača ka marketingu.
+Prva operativna uloga je customer support / implementation. Ta osoba rešava bazne slučajeve, sprovodi onboarding prema manualima i delegira složene probleme.
+
+### STR-008 — Regionalna platforma
+
+Dugoročni cilj AgriX-a je regionalna vertikalna platforma, ne trajno ograničen lokalni specijalista.
+
+### STR-009 — Strateški cilj tržišnog udela
+
+AgriX cilja najmanje 200 firmi u naredne 3–4 godine. Cilj se tretira kao ambicija koju treba operacionalizovati, ne kao garantovana prognoza.
 
 ---
 
-## 17. Otvorena pitanja za review
+## 16. Otvorene teme za naredna poglavlja
 
-1. Da li je formulacija vizije do 2030. dovoljno ambiciozna ili preširoka?
-2. Da li hard cap od deset firmi treba da bude apsolutan ili uslovljen readiness score-om?
-3. Da li customer support / implementation osoba treba da bude angažovana pre početka sezone ili tek nakon prelaska određenog broja firmi?
-4. Da li AgriX želi da dugoročno ostane profitabilni specijalista ili aktivno cilja regionalnu platformu?
-5. Koji konkretan ARR i operativni KPI moraju biti ispunjeni pre razgovora sa partnerom ili investitorom?
+1. Potvrditi procenu da u Srbiji postoji 500–1.000 relevantnih firmi.
+2. Definisati matematički readiness score i pragove po sezonskom kapacitetu.
+3. Razložiti cilj od 200 firmi na godišnji prodajni i kadrovski plan.
+4. Odrediti trenutak zapošljavanja prve support / implementation osobe.
+5. Izračunati finansiranje hardverske nabavke i minimalnu zalihu.
+6. Definisati koje IT kategorije AgriX prodaje, a koje ne.
+7. Odrediti ARR i operativne pragove za partnera ili investitora.
 
 ---
 
-## 18. Naredni koraci
+## 17. Naredni koraci
 
-1. pregledati i odobriti ili izmeniti STR-001 do STR-007;
-2. odobrene odluke upisati u `DECISION_LOG.md`;
-3. zaključati osnovnu viziju i granicu rasta;
-4. razviti `03_CUSTOMERS_AND_JOBS.md`;
-5. razviti `07_PRODUCT_PORTFOLIO.md`;
-6. tek zatim finalizovati pricing i finansijski model.
+1. upisati STR-001 do STR-009 u `DECISION_LOG.md`;
+2. razviti `03_CUSTOMERS_AND_JOBS.md`;
+3. razviti `04_MARKET.md` i potvrditi adresabilno tržište;
+4. razviti `07_PRODUCT_PORTFOLIO.md`;
+5. napraviti readiness model pre finalnog finansijskog plana;
+6. zatim finalizovati pricing, unit economics i plan rasta do 200 firmi.
