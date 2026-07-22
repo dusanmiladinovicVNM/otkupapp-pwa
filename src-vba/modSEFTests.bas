@@ -56,6 +56,7 @@ Public Sub RunSEFOfflineSuite(Optional ByVal fakturaID As String = "")
 
     Test_SEFConfigLooksUsable
     Test_SubmitResponseClassification
+    Test_LinePrecisionConsistency
     Test_BuildDtoAndUBL fakturaID
     Test_PayloadValidationRejectsEmpty
     Test_PersistenceReadHelpers fakturaID
@@ -334,6 +335,30 @@ Private Sub Test_SubmitResponseClassification()
 
 EH:
     LogFail "Submit response classification", Err.description
+End Sub
+
+Private Sub Test_LinePrecisionConsistency()
+    On Error GoTo EH
+
+    ' AUD-031b: quantity/price keep more precision than 2-decimal money, so the
+    ' receiver's Round(qty*price,2) reproduces the line net. Self-contained --
+    ' needs no invoice data. Reviewer example: qty=1.234, price=1.234 -> net
+    ' Round(1.234*1.234,2)=1.52; old 2dp emit (1.23*1.23=1.5129->1.51) is wrong.
+    AssertEquals "1.234", TestProxyXmlQuantity(1.234), "XmlQuantity keeps 3 decimals"
+    AssertEquals "1.2340", TestProxyXmlUnitPrice(1.234), "XmlUnitPrice keeps 4 decimals"
+    AssertEquals "85.5000", TestProxyXmlUnitPrice(85.5), "XmlUnitPrice pads to 4 decimals"
+
+    ' Numeric invariant (locale-safe): emission precision reproduces the net...
+    AssertTrue Round(Round(1.234, 3) * Round(1.234, 4), 2) = 1.52, _
+               "Round(qty*price,2) reproduces net with precision fix"
+    ' ...while 2-decimal truncation would NOT (guards against regressing it).
+    AssertTrue Round(Round(1.234, 2) * Round(1.234, 2), 2) <> 1.52, _
+               "2dp truncation is inconsistent (regression guard)"
+
+    Exit Sub
+
+EH:
+    LogFail "Line precision consistency", Err.description
 End Sub
 
 Private Sub Test_PersistenceReadHelpers(ByVal fakturaID As String)

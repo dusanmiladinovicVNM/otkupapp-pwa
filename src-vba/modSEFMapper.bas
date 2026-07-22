@@ -698,6 +698,17 @@ Private Function XmlUnitPrice(ByVal n As Double) As String
 
 End Function
 
+Public Function TestProxyXmlQuantity(ByVal n As Double) As String
+    ' Test-only proxy for the private XmlQuantity formatter (AUD-031b), so
+    ' RunSEFOfflineSuite can verify emitted precision without invoice data.
+    TestProxyXmlQuantity = XmlQuantity(n)
+End Function
+
+Public Function TestProxyXmlUnitPrice(ByVal n As Double) As String
+    ' Test-only proxy for the private XmlUnitPrice formatter (AUD-031b).
+    TestProxyXmlUnitPrice = XmlUnitPrice(n)
+End Function
+
 Private Function NzStr(ByVal v As Variant) As String
     If IsEmpty(v) Or IsNull(v) Then
         NzStr = ""
