@@ -7,6 +7,12 @@ Attribute VB_Name = "modMigracija"
 ' VBA project object model" (koristi obican Excel objektni model).
 '
 ' Upotreba: u NOVOM fajlu  ->  Alt+F8  ->  MigrirajPodatkeIzStarog
+'
+' Provere integriteta (da "success" ne sakrije izgubljene podatke):
+'   - tabele koje su SAMO u starom (nema ih u novom)      -> glasno prijavljeno
+'   - stare kolone sa podatkom bez cilja u novom (rename)  -> prijavljeno
+'   - zbir CISTO numerickih kolona (kolicine/vrednosti): staro vs novo
+'   Bilo koji problem: naslov "PROBLEMI: N" + upozoravajuca ikonica.
 ' ============================================================
 Option Explicit
 
@@ -32,7 +38,7 @@ Public Sub MigrirajPodatkeIzStarog()
     Dim novi As Workbook: Set novi = ThisWorkbook
     Dim stari As Workbook
     Dim prevEvents As Boolean, prevCalc As XlCalculation, prevSec As Long, prevSU As Boolean
-    Dim summary As String, total As Long, tbls As Long
+    Dim summary As String, total As Long, tbls As Long, problems As Long
 
     prevEvents = Application.EnableEvents
     prevCalc = Application.Calculation
@@ -58,26 +64,30 @@ Public Sub MigrirajPodatkeIzStarog()
 
     Dim ws As Worksheet, loNovi As ListObject, n As Long
     Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, errNum As Long
+    Dim warn As String
     For Each ws In novi.Worksheets
         For Each loNovi In ws.ListObjects
             If Not SkipTabela(loNovi.name) Then
                 isCfg = ConfigKolone(loNovi.name, ckey, cval)
+                warn = ""
 
                 On Error Resume Next                       ' jedna losa tabela ne prekida ceo prolaz
                 Err.Clear
                 If isCfg Then
                     n = MergeConfigTabelu(stari, loNovi, ckey, cval)
                 Else
-                    n = KopirajTabelu(stari, loNovi)
+                    n = KopirajTabelu(stari, loNovi, warn, problems)
                 End If
                 errNum = Err.Number: eDesc = Err.description
                 On Error GoTo CLEAN
 
                 If errNum <> 0 Then
+                    problems = problems + 1
                     summary = summary & "  " & loNovi.name & " - GRE" & ChrW(352) & "KA: " & eDesc & vbCrLf
                 ElseIf n = -1 Then
                     summary = summary & "  " & loNovi.name & " - (nema u starom)" & vbCrLf
                 ElseIf n = -2 Then
+                    problems = problems + 1
                     summary = summary & "  " & loNovi.name & " - (config kolone nenadjene!)" & vbCrLf
                 ElseIf isCfg Then
                     tbls = tbls + 1
@@ -85,10 +95,31 @@ Public Sub MigrirajPodatkeIzStarog()
                 Else
                     total = total + n: tbls = tbls + 1
                     summary = summary & "  " & loNovi.name & " - " & n & " red." & vbCrLf
+                    If Len(warn) > 0 Then summary = summary & warn
                 End If
             End If
         Next loNovi
     Next ws
+
+    ' --- A) Obrnuti prolaz kroz STARI: tabele koje NISU u novom (redovi bi tiho ostali) ---
+    Dim wsS As Worksheet, loS As ListObject, cntOld As Long
+    For Each wsS In stari.Worksheets
+        For Each loS In wsS.ListObjects
+            If Not SkipTabela(loS.name) Then
+                If NadjiListObject(novi, loS.name) Is Nothing Then
+                    cntOld = 0
+                    On Error Resume Next
+                    If Not loS.DataBodyRange Is Nothing Then cntOld = loS.ListRows.count
+                    On Error GoTo CLEAN
+                    If cntOld > 0 Then
+                        problems = problems + 1
+                        summary = summary & "  !! " & loS.name & " - U STAROM " & cntOld & _
+                                  " red., a tabele NEMA u novom -> NIJE preneto!" & vbCrLf
+                    End If
+                End If
+            End If
+        Next loS
+    Next wsS
 
     stari.Close SaveChanges:=False: Set stari = Nothing
 
@@ -103,14 +134,17 @@ CLEAN:
     Application.ScreenUpdating = prevSU
     On Error GoTo 0
 
-    MsgBox em & "Tabela preneto: " & tbls & "   |   redova ukupno: " & total & _
+    Dim hdr As String
+    If problems > 0 Then hdr = "!! PROBLEMI: " & problems & " -> vidi '!!' i '~' redove dole !!" & vbCrLf & vbCrLf
+    MsgBox em & hdr & "Tabela preneto: " & tbls & "   |   redova ukupno: " & total & _
            vbCrLf & vbCrLf & summary & vbCrLf & _
            "Sada SNIMI novi fajl (Ctrl+S) i proveri par tabela.", _
-           IIf(Len(em) > 0, vbExclamation, vbInformation), "Migracija podataka"
+           IIf(Len(em) > 0 Or problems > 0, vbExclamation, vbInformation), "Migracija podataka"
 End Sub
 
 ' Vrati broj prenetih redova; -1 ako tabele nema u starom fajlu.
-Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObject) As Long
+Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObject, _
+                               ByRef warn As String, ByRef prob As Long) As Long
     Dim loStari As ListObject
     Set loStari = NadjiListObject(stari, loNovi.name)
     If loStari Is Nothing Then KopirajTabelu = -1: Exit Function
@@ -163,6 +197,12 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
         End If
     Next j
     KopirajTabelu = nRows
+
+    ' --- Provere integriteta posle kopiranja (best-effort; ne obaraju uspeh) ---
+    On Error Resume Next
+    ProveriKoloneIZbir loStari, loNovi, SRC, mapCol, nNew, warn, prob
+    Err.Clear
+    On Error GoTo 0
 End Function
 
 ' True ako je tabela key/value config; vrati imena key/value kolona.
@@ -273,5 +313,91 @@ End Function
 '   If tabela = "tblStanice" And novoIme = "Kontakt" Then StaroImeKolone = "Telefon": Exit Function
 Private Function StaroImeKolone(ByVal tabela As String, ByVal novoIme As String) As String
     StaroImeKolone = novoIme
+End Function
+
+' Provere posle kopiranja jedne tabele (best-effort; NIKAD ne baca gresku dalje):
+'   B) stare kolone SA PODATKOM koje nemaju cilj u novom (preimenovane/izbacene)
+'   D) zbir CISTO numerickih kolona: staro (izvor SRC) vs novo (citano nazad DST)
+' Nadje li problem: doda '!!'/'~' red u warn i uveca prob.
+Private Sub ProveriKoloneIZbir(ByVal loStari As ListObject, ByVal loNovi As ListObject, _
+                               ByRef SRC As Variant, ByRef mapCol() As Long, ByVal nNew As Long, _
+                               ByRef warn As String, ByRef prob As Long)
+    On Error Resume Next
+    Dim nRows As Long: nRows = UBound(SRC, 1)
+    Dim j As Long, k As Long, rr As Long, hasData As Boolean
+    Dim oc As Long, ob As Long, nc As Long, nb As Long
+    Dim oldSum As Double, newSum As Double
+
+    ' B) koje su stare kolone iskoriscene (imaju cilj u novom)?
+    Dim usedOld() As Boolean
+    ReDim usedOld(1 To loStari.ListColumns.count)
+    For j = 1 To nNew
+        If mapCol(j) > 0 Then usedOld(mapCol(j)) = True
+    Next j
+    For k = 1 To loStari.ListColumns.count
+        If Not usedOld(k) Then
+            hasData = False
+            For rr = 1 To nRows
+                Select Case VarType(SRC(rr, k))
+                    Case vbEmpty, vbNull, vbError
+                        ' nema podatka
+                    Case vbString
+                        If Len(Trim$(CStr(SRC(rr, k)))) > 0 Then hasData = True: Exit For
+                    Case Else
+                        hasData = True: Exit For
+                End Select
+            Next rr
+            If hasData Then
+                prob = prob + 1
+                warn = warn & "     !! kolona '" & loStari.ListColumns(k).name & _
+                       "' ima podatke u starom a NEMA cilj u novom -> ta kolona NIJE preneta" & vbCrLf
+            End If
+        End If
+    Next k
+
+    ' D) zbir CISTO numerickih kolona: staro (SRC) vs novo (citano nazad)
+    Dim DST As Variant
+    DST = loNovi.DataBodyRange.value
+    If Not IsArray(DST) Then
+        Dim one(1 To 1, 1 To 1) As Variant: one(1, 1) = DST: DST = one
+    End If
+    For j = 1 To nNew
+        If mapCol(j) > 0 Then
+            oc = 0: ob = 0
+            oldSum = SumNumeric(SRC, mapCol(j), oc, ob)
+            ' cisto numericka kolona = bar 1 broj i 0 ne-praznih ne-brojeva na strani starog
+            If oc > 0 And ob = 0 Then
+                nc = 0: nb = 0
+                newSum = SumNumeric(DST, j, nc, nb)
+                If Round(oldSum, 2) <> Round(newSum, 2) Then
+                    prob = prob + 1
+                    warn = warn & "     ~ kolona '" & loNovi.ListColumns(j).name & _
+                           "': zbir staro=" & Format$(oldSum, "0.00") & _
+                           " novo=" & Format$(newSum, "0.00") & " -> RAZLIKA, proveri!" & vbCrLf
+                End If
+            End If
+        End If
+    Next j
+End Sub
+
+' Zbir SAMO stvarno numerickih celija (broj/datum); text-brojevi se NE sabiraju.
+'   cnt = koliko numerickih;  bad = koliko NE-praznih NE-numerickih (tekst/greska/bool).
+Private Function SumNumeric(ByRef arr As Variant, ByVal col As Long, _
+                            ByRef cnt As Long, ByRef bad As Long) As Double
+    Dim r As Long, s As Double
+    cnt = 0: bad = 0: s = 0#
+    For r = 1 To UBound(arr, 1)
+        Select Case VarType(arr(r, col))
+            Case vbDouble, vbSingle, vbInteger, vbLong, vbCurrency, vbDate, vbDecimal
+                s = s + CDbl(arr(r, col)): cnt = cnt + 1
+            Case vbEmpty, vbNull
+                ' prazno - ignorisi
+            Case vbString
+                If Len(Trim$(CStr(arr(r, col)))) > 0 Then bad = bad + 1
+            Case Else
+                bad = bad + 1
+        End Select
+    Next r
+    SumNumeric = s
 End Function
 
