@@ -27,6 +27,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Excel za offline režim. Može biti apsolutna ili relativna putanja.",
     )
+    parser.add_argument(
+        "--financial-unit",
+        choices=("auto", "rsd", "thousand-rsd"),
+        default="auto",
+        help=(
+            "Jedinica novčanih kolona ulaznog Excela za validaciju. "
+            "'auto' koristi metadata; APR endpoint vrednosti su u hiljadama RSD."
+        ),
+    )
     tls_group = parser.add_mutually_exclusive_group()
     tls_group.add_argument("--insecure", action="store_true", help="Odmah gasi TLS proveru.")
     tls_group.add_argument(
@@ -70,11 +79,12 @@ def main() -> None:
         tls_args = ["--strict-tls"]
 
     analysis_args = ["--include-inactive"] if args.include_inactive else []
+    validation_args = ["--financial-unit", args.financial_unit]
 
     if args.mode == "full":
         run("01_extract_companies.py", "--codes", *args.codes, *tls_args)
         run("02_enrich_financials.py", *tls_args)
-        run("03_clean_validate.py")
+        run("03_clean_validate.py", *validation_args)
         run("04_analyze_market.py", *analysis_args)
 
     elif args.mode == "offline":
@@ -83,7 +93,7 @@ def main() -> None:
         input_path = resolve_input(args.input)
         if not input_path.exists():
             raise FileNotFoundError(f"Offline ulazni fajl ne postoji: {input_path}")
-        run("03_clean_validate.py", "--input", str(input_path))
+        run("03_clean_validate.py", "--input", str(input_path), *validation_args)
         run("04_analyze_market.py", *analysis_args)
 
     else:  # report
