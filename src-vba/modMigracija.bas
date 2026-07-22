@@ -78,6 +78,19 @@ Public Sub MigrirajPodatkeIzStarog()
     StopAutoSaveTimer
     On Error GoTo 0
 
+    ' Excelov (OneDrive/SharePoint) AutoSave je ZASEBAN mehanizam od modJournaling
+    ' tajmera i pise NEZAVISNO od VBA -> ugasi ga za ovu sesiju, inace "fajl ostaje
+    ' prljav = svesna kapija" NE vazi za cloud klijente (Excel sam upise rezultat pre
+    ' nego operater procita PROBLEMI). Vraca se SAMO na cistom uspehu (vidi CLEAN);
+    ' na problem/gresku ostaje ugasen da auto-save ne persistuje pre svesne odluke.
+    Dim prevAutoSave As Boolean, hadAutoSave As Boolean
+    On Error Resume Next
+    prevAutoSave = ThisWorkbook.AutoSaveOn        ' greska = stari Excel / fajl nije u oblaku
+    hadAutoSave = (Err.Number = 0)
+    If hadAutoSave And prevAutoSave Then ThisWorkbook.AutoSaveOn = False
+    Err.Clear
+    On Error GoTo 0
+
     ' Foolproof: novi fajl MORA imati tblKorisnici (+ audit kolone) PRE kopiranja,
     ' jer migracija prolazi kroz tabele NOVOG fajla pa povlaci istoimene iz starog.
     ' Bez ovoga, ako Ensure nije rucno pokrenut, korisnici se ne bi preneli.
@@ -95,6 +108,7 @@ Public Sub MigrirajPodatkeIzStarog()
     Application.AutomationSecurity = 3                  ' msoAutomationSecurityForceDisable (bez makroa)
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
+    Application.Cursor = xlWait                          ' vidljiv signal da radi (ScreenUpdating je off)
 
     Set stari = Workbooks.Open(fileName:=CStr(putanja), ReadOnly:=True, UpdateLinks:=0)
 
@@ -114,11 +128,12 @@ Public Sub MigrirajPodatkeIzStarog()
             If Not SkipTabela(loNovi.name) Then
                 isCfg = ConfigKolone(loNovi.name, ckey, cval)
                 warn = ""
+                Application.StatusBar = "Migracija: " & loNovi.name & " (" & (tbls + 1) & ") ..."
 
                 On Error Resume Next                       ' jedna losa tabela ne prekida ceo prolaz
                 Err.Clear
                 If isCfg Then
-                    n = MergeConfigTabelu(stari, loNovi, ckey, cval)
+                    n = MergeConfigTabelu(stari, loNovi, ckey, cval, warn, problems)
                 Else
                     n = KopirajTabelu(stari, loNovi, warn, problems)
                 End If
@@ -136,6 +151,7 @@ Public Sub MigrirajPodatkeIzStarog()
                 ElseIf isCfg Then
                     tbls = tbls + 1
                     summary = summary & "  " & loNovi.name & " - merge, " & n & " kljuceva" & vbCrLf
+                    If Len(warn) > 0 Then summary = summary & warn
                 Else
                     total = total + n: tbls = tbls + 1
                     summary = summary & "  " & loNovi.name & " - " & n & " red." & vbCrLf
@@ -177,6 +193,12 @@ CLEAN:
     Application.AutomationSecurity = prevSec
     Application.EnableEvents = prevEvents
     Application.ScreenUpdating = prevSU
+    Application.StatusBar = False
+    Application.Cursor = xlDefault
+    ' cloud AutoSave: vrati SAMO na cistom uspehu; na problem/gresku ostaje UGASEN da
+    ' auto-save ne persistuje pre nego operater svesno odluci (snimi ili odbaci).
+    ' Sledeci put kad se fajl otvori AutoSave se sam vrati (per-sesija property).
+    If hadAutoSave And prevAutoSave And problems = 0 And Len(em) = 0 Then ThisWorkbook.AutoSaveOn = True
     On Error GoTo 0
 
     ' NE diramo ThisWorkbook.Saved. (Saved=True bi Excelu reklo "nema izmena" pa bi
@@ -243,8 +265,12 @@ Private Function KopirajTabelu(ByVal stari As Workbook, ByVal loNovi As ListObje
     Do While loNovi.ListRows.count > nRows
         loNovi.ListRows(loNovi.ListRows.count).Delete
     Loop
+    Dim addedCnt As Long
     Do While loNovi.ListRows.count < nRows
         loNovi.ListRows.Add
+        addedCnt = addedCnt + 1
+        If addedCnt Mod 1000 = 0 Then _
+            Application.StatusBar = "Migracija: " & loNovi.name & " - red " & addedCnt & "/" & nRows
     Loop
 
     ' upisi SAMO mapirane kolone (nove/kalkulisane kolone ostaju netaknute)
@@ -316,7 +342,8 @@ End Function
 ' se dodaju iz starog (sve kolone po imenu). Vrati broj kljuceva u novom.
 '   -1 = tabele nema u starom;  -2 = key/value kolone nisu nadjene.
 Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As ListObject, _
-                                   ByVal keyCol As String, ByVal valCol As String) As Long
+                                   ByVal keyCol As String, ByVal valCol As String, _
+                                   ByRef warn As String, ByRef prob As Long) As Long
     Dim loStari As ListObject
     Set loStari = NadjiListObject(stari, loNovi.name)
     If loStari Is Nothing Then MergeConfigTabelu = -1: Exit Function
@@ -336,6 +363,13 @@ Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As List
         If Len(kkey) > 0 And Not JeLicencaKljuc(kkey) And Not dVal.Exists(kkey) Then
             dVal(kkey) = loStari.DataBodyRange.cells(i, sVal).value
             dRow(kkey) = i
+            ' kljuc lici na licencni (LICENSE_*/TRIAL_*) a NIJE u aktivacionoj listi
+            ' niti poznat config -> PRENET (eksplicitna lista, bez laznih blokada) ALI
+            ' PRIJAVLJEN: nov aktivacioni kljuc bi inace tiho otputovao na novu masinu.
+            If JeLicencaPrefiks(kkey) And Not JeLicencaConfigPoznat(kkey) Then
+                prob = prob + 1
+                warn = warn & "     ~ config kljuc '" & kkey & "' lici na licencni a nije u listi -> PRENET, proveri (mozda dodati u JeLicencaKljuc)" & vbCrLf
+            End If
         End If
     Next i
 
@@ -583,6 +617,8 @@ End Function
 ' koji se sme preneti (LICENSE_ENABLED/ENDPOINT, TRIAL_ENABLED/DAYS): time se na
 ' istoj masini izbegava nepotreban re-setup, a aktivacija i dalje ne putuje.
 ' Kljucevi potvrdjeni u modLicense/modTrial (CFG_LIC_*, TRIAL_*).
+' Nov, JOS NEPOZNAT LICENSE_*/TRIAL_* kljuc se prenese ali PRIJAVI (JeLicencaPrefiks
+' + JeLicencaConfigPoznat) -- da tiho ne otputuje na novu masinu.
 ' NAPOMENA (ostaje otvoreno): ovo ne CISTI eventualno zatecenu aktivaciju u NOVOM
 ' sablonu (target-clean) niti razlikuje same-machine vs new-machine transfer -- to
 ' je poslovna odluka (migration mode), izvan dometa ove izmene.
@@ -592,6 +628,22 @@ Private Function JeLicencaKljuc(ByVal kljuc As String) As Boolean
              "LICENSE_HWM", "LICENSE_STATUS", "LICENSE_NEXT_CHECK", _
              "TRIAL_START", "TRIAL_HWM"
             JeLicencaKljuc = True
+    End Select
+End Function
+
+' Lici na licencni/trial kljuc (prefiks). Koristi se da nov, jos nepoznat
+' LICENSE_*/TRIAL_* kljuc (npr. buduci LICENSE_DEVICE_ID) ne otputuje TIHO:
+' prenese se (bez lazne blokade) ali se PRIJAVI da se doda u odgovarajucu listu.
+Private Function JeLicencaPrefiks(ByVal kljuc As String) As Boolean
+    Dim s As String: s = UCase$(Trim$(kljuc))
+    JeLicencaPrefiks = (Left$(s, 8) = "LICENSE_" Or Left$(s, 6) = "TRIAL_")
+End Function
+
+' POZNAT config licence/trial-a koji se SME preneti (nije aktivacija/binding).
+Private Function JeLicencaConfigPoznat(ByVal kljuc As String) As Boolean
+    Select Case UCase$(Trim$(kljuc))
+        Case "LICENSE_ENABLED", "LICENSE_ENDPOINT", "TRIAL_ENABLED", "TRIAL_DAYS"
+            JeLicencaConfigPoznat = True
     End Select
 End Function
 
