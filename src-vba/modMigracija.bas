@@ -83,11 +83,16 @@ Public Sub MigrirajPodatkeIzStarog()
     ' prljav = svesna kapija" NE vazi za cloud klijente (Excel sam upise rezultat pre
     ' nego operater procita PROBLEMI). Vraca se SAMO na cistom uspehu (vidi CLEAN);
     ' na problem/gresku ostaje ugasen da auto-save ne persistuje pre svesne odluke.
+    ' LATE-BIND (Object): AutoSaveOn postoji tek u Excel 2016+/365. Na starijem Excel-u
+    ' early-bound "ThisWorkbook.AutoSaveOn" je COMPILE greska ("member not found") koju
+    ' On Error NE hvata i koja obori CEO projekat; late-bound baca runtime 438 koji se
+    ' ovde uhvati i preskoci -> kompajlira se svuda, gasi cloud AutoSave gde postoji.
+    Dim wbLate As Object: Set wbLate = ThisWorkbook
     Dim prevAutoSave As Boolean, hadAutoSave As Boolean
     On Error Resume Next
-    prevAutoSave = ThisWorkbook.AutoSaveOn        ' greska = stari Excel / fajl nije u oblaku
+    prevAutoSave = wbLate.AutoSaveOn              ' 438 na starom Excel-u / greska = nije cloud
     hadAutoSave = (Err.Number = 0)
-    If hadAutoSave And prevAutoSave Then ThisWorkbook.AutoSaveOn = False
+    If hadAutoSave And prevAutoSave Then wbLate.AutoSaveOn = False
     Err.Clear
     On Error GoTo 0
 
@@ -198,7 +203,7 @@ CLEAN:
     ' cloud AutoSave: vrati SAMO na cistom uspehu; na problem/gresku ostaje UGASEN da
     ' auto-save ne persistuje pre nego operater svesno odluci (snimi ili odbaci).
     ' Sledeci put kad se fajl otvori AutoSave se sam vrati (per-sesija property).
-    If hadAutoSave And prevAutoSave And problems = 0 And Len(em) = 0 Then ThisWorkbook.AutoSaveOn = True
+    If hadAutoSave And prevAutoSave And problems = 0 And Len(em) = 0 Then wbLate.AutoSaveOn = True
     On Error GoTo 0
 
     ' NE diramo ThisWorkbook.Saved. (Saved=True bi Excelu reklo "nema izmena" pa bi
