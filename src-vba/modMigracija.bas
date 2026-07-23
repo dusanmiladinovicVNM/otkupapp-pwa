@@ -83,11 +83,16 @@ Public Sub MigrirajPodatkeIzStarog()
     ' prljav = svesna kapija" NE vazi za cloud klijente (Excel sam upise rezultat pre
     ' nego operater procita PROBLEMI). Vraca se SAMO na cistom uspehu (vidi CLEAN);
     ' na problem/gresku ostaje ugasen da auto-save ne persistuje pre svesne odluke.
+    ' LATE-BIND (Object): AutoSaveOn postoji tek u Excel 2016+/365. Na starijem Excel-u
+    ' early-bound "ThisWorkbook.AutoSaveOn" je COMPILE greska ("member not found") koju
+    ' On Error NE hvata i koja obori CEO projekat; late-bound baca runtime 438 koji se
+    ' ovde uhvati i preskoci -> kompajlira se svuda, gasi cloud AutoSave gde postoji.
+    Dim wbLate As Object: Set wbLate = ThisWorkbook
     Dim prevAutoSave As Boolean, hadAutoSave As Boolean
     On Error Resume Next
-    prevAutoSave = ThisWorkbook.AutoSaveOn        ' greska = stari Excel / fajl nije u oblaku
+    prevAutoSave = wbLate.AutoSaveOn              ' 438 na starom Excel-u / greska = nije cloud
     hadAutoSave = (Err.Number = 0)
-    If hadAutoSave And prevAutoSave Then ThisWorkbook.AutoSaveOn = False
+    If hadAutoSave And prevAutoSave Then wbLate.AutoSaveOn = False
     Err.Clear
     On Error GoTo 0
 
@@ -120,6 +125,24 @@ Public Sub MigrirajPodatkeIzStarog()
         GoTo CLEAN
     End If
 
+    ' --- Licenca: SAME-MACHINE gate ---
+    ' Aktivacija (LICENSE_KEY/BOUND_PARTS/...) prelazi SAMO ako je stara licenca
+    ' vezana za OVU masinu (isti prag kao modLicense: LicPartsMatch >= LIC_MIN_MATCH=2).
+    ' Na drugoj/neutvrdjenoj masini se preskace (BOUND_PARTS nosi otisak STARE masine
+    ' -> nova bi se zakljucala). Config licence (ENABLED/ENDPOINT) prelazi uvek.
+    Application.StatusBar = "Migracija: provera licence (masina) ..."
+    Dim oldBound As String
+    oldBound = StaroConfigVrednost(stari, "tblSEFConfig", "ConfigKey", "ConfigValue", "LICENSE_BOUND_PARTS")
+    Dim sameMachine As Boolean
+    If Len(oldBound) > 0 Then
+        sameMachine = JeIstaMasina(oldBound)
+        If sameMachine Then
+            summary = summary & "  (licenca: ISTA masina -> aktivacija se prenosi)" & vbCrLf
+        Else
+            summary = summary & "  (licenca: druga/neutvrdjena masina -> aktivacija NE prelazi; re-aktivacija)" & vbCrLf
+        End If
+    End If
+
     Dim ws As Worksheet, loNovi As ListObject, n As Long
     Dim ckey As String, cval As String, isCfg As Boolean, eDesc As String, errNum As Long
     Dim warn As String
@@ -133,7 +156,7 @@ Public Sub MigrirajPodatkeIzStarog()
                 On Error Resume Next                       ' jedna losa tabela ne prekida ceo prolaz
                 Err.Clear
                 If isCfg Then
-                    n = MergeConfigTabelu(stari, loNovi, ckey, cval, warn, problems)
+                    n = MergeConfigTabelu(stari, loNovi, ckey, cval, warn, problems, sameMachine)
                 Else
                     n = KopirajTabelu(stari, loNovi, warn, problems)
                 End If
@@ -198,7 +221,7 @@ CLEAN:
     ' cloud AutoSave: vrati SAMO na cistom uspehu; na problem/gresku ostaje UGASEN da
     ' auto-save ne persistuje pre nego operater svesno odluci (snimi ili odbaci).
     ' Sledeci put kad se fajl otvori AutoSave se sam vrati (per-sesija property).
-    If hadAutoSave And prevAutoSave And problems = 0 And Len(em) = 0 Then ThisWorkbook.AutoSaveOn = True
+    If hadAutoSave And prevAutoSave And problems = 0 And Len(em) = 0 Then wbLate.AutoSaveOn = True
     On Error GoTo 0
 
     ' NE diramo ThisWorkbook.Saved. (Saved=True bi Excelu reklo "nema izmena" pa bi
@@ -343,7 +366,8 @@ End Function
 '   -1 = tabele nema u starom;  -2 = key/value kolone nisu nadjene.
 Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As ListObject, _
                                    ByVal keyCol As String, ByVal valCol As String, _
-                                   ByRef warn As String, ByRef prob As Long) As Long
+                                   ByRef warn As String, ByRef prob As Long, _
+                                   ByVal sameMachine As Boolean) As Long
     Dim loStari As ListObject
     Set loStari = NadjiListObject(stari, loNovi.name)
     If loStari Is Nothing Then MergeConfigTabelu = -1: Exit Function
@@ -359,14 +383,15 @@ Private Function MergeConfigTabelu(ByVal stari As Workbook, ByVal loNovi As List
     Dim i As Long, kkey As String
     For i = 1 To loStari.ListRows.count
         kkey = Trim$(CStr(loStari.DataBodyRange.cells(i, sKey).value))
-        ' aktivacija/trial se NE migrira (vezana za masinu) -> ni ne udje u merge
-        If Len(kkey) > 0 And Not JeLicencaKljuc(kkey) And Not dVal.Exists(kkey) Then
+        ' aktivacija/trial: na ISTOJ masini prelazi; na drugoj se NE migrira (vezana
+        ' za masinu). sameMachine=True zaobilazi JeLicencaKljuc filter.
+        If Len(kkey) > 0 And (sameMachine Or Not JeLicencaKljuc(kkey)) And Not dVal.Exists(kkey) Then
             dVal(kkey) = loStari.DataBodyRange.cells(i, sVal).value
             dRow(kkey) = i
-            ' kljuc lici na licencni (LICENSE_*/TRIAL_*) a NIJE u aktivacionoj listi
-            ' niti poznat config -> PRENET (eksplicitna lista, bez laznih blokada) ALI
-            ' PRIJAVLJEN: nov aktivacioni kljuc bi inace tiho otputovao na novu masinu.
-            If JeLicencaPrefiks(kkey) And Not JeLicencaConfigPoznat(kkey) Then
+            ' (samo DRUGA masina) nov license-slican kljuc koji NIJE u aktivacionoj
+            ' listi ni poznat config -> PRENET, ali PRIJAVLJEN (da nov aktivacioni
+            ' kljuc ne otputuje tiho na novu masinu). Na istoj masini sve i onako prelazi.
+            If (Not sameMachine) And JeLicencaPrefiks(kkey) And Not JeLicencaConfigPoznat(kkey) Then
                 prob = prob + 1
                 warn = warn & "     ~ config kljuc '" & kkey & "' lici na licencni a nije u listi -> PRENET, proveri (mozda dodati u JeLicencaKljuc)" & vbCrLf
             End If
@@ -433,9 +458,9 @@ End Function
 ' SVE ostalo se prenosi, ukljucujuci config tabele (tblConfig, tblSEFConfig,
 ' tblLocalConfig) jer cuvaju aktuelna podesavanja (OAuth / SEF / bank putanje).
 ' Config tabele su key/value; novi prazan fajl ih ima prazne do SetupNewPC, pa pun
-' copy starih redova donosi podesavanja bez gubitka -- OSIM AKTIVACIJE: samo
-' machine-bound aktivacioni kljucevi licence/trial-a se NE migriraju (vidi
-' JeLicencaKljuc); config licence (ENABLED/ENDPOINT/DANI) SE prenosi.
+' copy starih redova donosi podesavanja bez gubitka. AKTIVACIJA licence/trial-a
+' (machine-bound kljucevi, vidi JeLicencaKljuc) prelazi SAMO na ISTOJ masini
+' (sameMachine gate); config licence (ENABLED/ENDPOINT/DANI) prelazi uvek.
 Private Function SkipTabela(ByVal naziv As String) As Boolean
     SkipTabela = (LCase$(Left$(naziv, 6)) = "tblrpt")
 End Function
@@ -612,16 +637,16 @@ Private Function JeAuditKolona(ByVal kolona As String) As Boolean
     End Select
 End Function
 
-' AKTIVACIJA/binding/stanje licence se NE migrira (vezano za masinu; nova masina
-' re-aktivira). EKSPLICITNA lista (ne prefiks) -- da NE pokupi legitiman config
-' koji se sme preneti (LICENSE_ENABLED/ENDPOINT, TRIAL_ENABLED/DAYS): time se na
-' istoj masini izbegava nepotreban re-setup, a aktivacija i dalje ne putuje.
-' Kljucevi potvrdjeni u modLicense/modTrial (CFG_LIC_*, TRIAL_*).
-' Nov, JOS NEPOZNAT LICENSE_*/TRIAL_* kljuc se prenese ali PRIJAVI (JeLicencaPrefiks
-' + JeLicencaConfigPoznat) -- da tiho ne otputuje na novu masinu.
+' AKTIVACIJA/binding/stanje licence: migrira se SAMO na ISTOJ masini (sameMachine
+' gate u MergeConfigTabelu preko JeIstaMasina). Na drugoj/neutvrdjenoj masini se
+' preskace (nova bi se zakljucala -- BOUND_PARTS nosi otisak stare masine).
+' EKSPLICITNA lista (ne prefiks) -- da NE pokupi legitiman config koji se sme uvek
+' preneti (LICENSE_ENABLED/ENDPOINT, TRIAL_ENABLED/DAYS). Kljucevi potvrdjeni u
+' modLicense/modTrial (CFG_LIC_*, TRIAL_*). Nov, JOS NEPOZNAT LICENSE_*/TRIAL_*
+' kljuc se (na drugoj masini) prenese ali PRIJAVI (JeLicencaPrefiks +
+' JeLicencaConfigPoznat) -- da tiho ne otputuje na novu masinu.
 ' NAPOMENA (ostaje otvoreno): ovo ne CISTI eventualno zatecenu aktivaciju u NOVOM
-' sablonu (target-clean) niti razlikuje same-machine vs new-machine transfer -- to
-' je poslovna odluka (migration mode), izvan dometa ove izmene.
+' sablonu (target-clean).
 Private Function JeLicencaKljuc(ByVal kljuc As String) As Boolean
     Select Case UCase$(Trim$(kljuc))
         Case "LICENSE_KEY", "LICENSE_TOKEN", "LICENSE_BOUND_PARTS", _
@@ -645,6 +670,38 @@ Private Function JeLicencaConfigPoznat(ByVal kljuc As String) As Boolean
         Case "LICENSE_ENABLED", "LICENSE_ENDPOINT", "TRIAL_ENABLED", "TRIAL_DAYS"
             JeLicencaConfigPoznat = True
     End Select
+End Function
+
+' True ako je STARA vezana licenca vezana za OVU masinu -> aktivacija se sme preneti.
+' Reuse modLicense: isti otisak (GetDeviceParts) i isti prag (LicPartsMatch >= 2 =
+' LIC_MIN_MATCH) kao sto sama provera licence koristi. Greska / ne moze da utvrdi ->
+' False (bezbedan default: ne prenosi aktivaciju kad nismo sigurni).
+Private Function JeIstaMasina(ByVal oldBound As String) As Boolean
+    On Error GoTo done
+    If Len(Trim$(oldBound)) = 0 Then Exit Function
+    JeIstaMasina = (LicPartsMatch(GetDeviceParts(), oldBound) >= 2)   ' 2 = modLicense.LIC_MIN_MATCH
+done:
+End Function
+
+' Vrednost kljuca iz key/value config tabele STAROG fajla ("" ako nema/greska).
+Private Function StaroConfigVrednost(ByVal stari As Workbook, ByVal tabela As String, _
+                                     ByVal keyCol As String, ByVal valCol As String, _
+                                     ByVal kljuc As String) As String
+    On Error GoTo done
+    Dim lo As ListObject: Set lo = NadjiListObject(stari, tabela)
+    If lo Is Nothing Then Exit Function
+    If lo.DataBodyRange Is Nothing Then Exit Function
+    Dim kc As Long: kc = ColIndexByName(lo, keyCol)
+    Dim vc As Long: vc = ColIndexByName(lo, valCol)
+    If kc = 0 Or vc = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To lo.ListRows.count
+        If StrComp(Trim$(CStr(lo.DataBodyRange.cells(i, kc).value)), kljuc, vbTextCompare) = 0 Then
+            StaroConfigVrednost = Trim$(CStr(lo.DataBodyRange.cells(i, vc).value))
+            Exit Function
+        End If
+    Next i
+done:
 End Function
 
 ' Snimi kopiju NOVOG fajla pre migracije u <putanja>\Backup\ (rollback). "" na neuspeh.
