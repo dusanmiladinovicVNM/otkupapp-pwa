@@ -1,5 +1,45 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-23
+
+### Added
+
+- `04_MARKET.md` sa APR zasnovanim tržišnim universe-om, segmentacijom, koncentracijom prihoda i ograničenjima šifara delatnosti;
+- `05_COMPETITION.md` i konkurentski evidence skup za SOFTEK, KRUNET, Yuteam i Infosys;
+- `05A_COMPETITOR_EVIDENCE.md` i `05B_INFOSYS_REPLACEMENT_GTM.md` sa Infosys replacement analizom;
+- reproduktivni Infosys APR matching, wide enrichment i sales-readiness pipeline;
+- account-research skup, win-interview obrazac i migration-discovery checklist;
+- `06_POSITIONING.md` sa odlukom o tržišnoj kategoriji i dozvoljenim/zabranjenim tvrdnjama;
+- `07_PRODUCT_PORTFOLIO.md` sa proizvodnim stubovima, komercijalnim statusima, modulima, uslugama, hardverom i readiness gate-ovima;
+- `07A_PRODUCT_STATUS_MATRIX.csv` kao strukturisani izvor za roadmap i pricing.
+
+### Approved / Proposed decisions
+
+- AgriX se pozicionira kao vertikalni poslovni operativni sistem za organizovani otkup poljoprivrednih proizvoda;
+- Enterprise je primarno komercijalno jezgro;
+- Management PWA je deo Enterprise proizvoda, ne zaseban BI proizvod;
+- PWA Otkupac, kiosk i termalna štampa ostaju `Pilot only` do sezonske validacije;
+- Gazdinstvo Partner/Basic/Pro ostaje kontrolisana rana ponuda dok se ne potvrde activation, retention, willingness-to-pay i support cost;
+- GGAP ostaje discovery/pilot proizvod i ne prodaje se kao završena produkciona ili sertifikaciona garancija;
+- postojanje funkcije u kodu nije dovoljno za status `Standard offer`;
+- hardver, migracija, onboarding i posebne integracije imaju odvojenu ekonomiku;
+- trajni klijentski forkovi ostaju zabranjeni.
+
+### Evidence and qualification
+
+- Infosys je potvrđen kao prioritetni replacement konkurent kroz dve postojeće migracije ka AgriX-u;
+- 114 agro/prehrambenih Infosys referenci čini početni universe, sa 49 visokopotencijalnih redova;
+- wide APR enrichment je identifikovao 30 jedinstvenih pravnih lica, ali je identity match odvojen od stvarnog AgriX process fit-a;
+- masovni outbound ka celoj referentnoj bazi je odbijen; prioritet je mali, spoljno validiran account-research talas;
+- prihod je pomoćni signal, dok su broj stanica, kooperanata, dokumenata, logistika i procesna složenost važniji ICP kriterijumi.
+
+### Next
+
+- razviti `08_PRODUCT_ROADMAP.md` iz statusne matrice i sezonskih readiness gate-ova;
+- nakon roadmap-a razviti `10_PRICING_AND_PACKAGING.md`;
+- sprovesti dva Infosys win interview-a kada termini budu dostupni;
+- rezultate intervjua pretvoriti u battlecard, migration package i dokazne prodajne poruke.
+
 ## 2026-07-22
 
 ### Added
