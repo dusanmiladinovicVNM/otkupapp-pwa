@@ -3,57 +3,59 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Poslednje ažuriranje:** 2026-07-23  
-**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `04_MARKET.md`, `05_COMPETITION.md`, `05A_COMPETITOR_EVIDENCE.md`, `05B_INFOSYS_REPLACEMENT_GTM.md`, `07_PRODUCT_PORTFOLIO.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `15_SALES_PLAYBOOK.md`
+**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `04_MARKET.md`, `05_COMPETITION.md`, `07_PRODUCT_PORTFOLIO.md`, `08_PRODUCT_ROADMAP.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `15_SALES_PLAYBOOK.md`
 
 ---
 
-## 1. Svrha
+## 1. Centralna proizvodna teza
 
-Ovo poglavlje definiše:
+AgriX nije desktop program kojem se podaci naknadno dostavljaju sa terena.
 
-- u kojoj tržišnoj kategoriji AgriX želi da bude prepoznat;
-- kome se primarno obraća;
-- koji poslovni problem rešava;
-- koju merljivu vrednost obećava bez neproverenih ROI tvrdnji;
-- kako se razlikuje od ERP-a, uskog programa za otkup, lokalnog custom rešenja i ručnih procesa;
-- kako se razlikuju trenutna produkciona ponuda, pilot funkcionalnosti i buduća vizija;
-- koje marketinške tvrdnje su dozvoljene, a koje nisu;
-- koji dokazi nedostaju pre agresivnijeg go-to-market nastupa.
+AgriX je distribuirani operativni sistem u kojem:
 
-Pozicioniranje nije slogan. Ono je skup odluka koje određuju proizvod, demo, prodaju, pricing, sadržaj sajta i klijente koje AgriX prihvata ili odbija.
+1. **otkupljivač/vagač na terenu** unosi otkup i izrađuje osnovna dokumenta na mestu nastanka događaja;
+2. **vozač** evidentira zbirni transport, preuzimanje i status kretanja robe;
+3. **PWA, GAS i sinhronizacioni sloj** prenose podatke u centralni poslovni sistem bez ponovnog prekucavanja;
+4. **centralni desktop/backoffice** postaje kontrolni, dokumentni, finansijski i izveštajni centar;
+5. **centralni operater** se primarno bavi kontrolom, prijemom, fakturama, SEF-om, bankom, saldima i izveštajima — ne ručnim prepisivanjem osnovnih događaja sa stanica.
+
+> **Podatak se unosi jednom, na mestu nastanka, a zatim automatski puni centralnu bazu i ceo naredni dokumentacioni tok.**
+
+Ovo je glavna vrednost AgriX-a i osnovna razlika u odnosu na sistem u kojem stanice rade na papiru, šalju Excel fajlove ili diktiraju podatke centrali.
 
 ---
 
-## 2. Centralna odluka o kategoriji
+## 2. Tržišna kategorija
 
 ### 2.1 Primarna kategorija
 
-AgriX se pozicionira kao:
+> **AgriX je terenski i centralni operativni sistem za organizovani otkup poljoprivrednih proizvoda.**
 
-> **Vertikalni poslovni operativni sistem za organizovani otkup poljoprivrednih proizvoda.**
+AgriX povezuje:
 
-AgriX nije samo program za unos otkupnih listova. Njegova uloga je da poveže centralu, otkupne stanice, kooperante, robu, logistiku, dokumente, lager, finansijske tokove i management kontrolu.
+- otkupne stanice;
+- otkupljivače/vagače;
+- vozače i transport;
+- kooperante;
+- robu, klase, cene i ambalažu;
+- osnovne dokumente nastale na terenu;
+- prijem i centralnu bazu;
+- fakture, SEF, banku i finansijsku kontrolu;
+- management pregled i izveštavanje.
 
 ### 2.2 Proširena kategorija
 
-Kada je potrebno objasniti pun pravac razvoja:
-
 > **AgriX je povezana platforma za organizovani otkup, upravljanje gazdinstvima i GGAP dokumentacioni tok.**
 
-Ova proširena formulacija koristi se u strateškim, partnerskim i enterprise razgovorima. Za prvi kontakt sa hladnjačom centralna poruka ostaje organizovani otkup i kontrola operacija.
+Za prvi kontakt sa hladnjačom ili organizovanim otkupljivačem primarna poruka ostaje: terenski unos, automatsko punjenje centrale i centralna kontrola.
 
 ### 2.3 Zašto ne „ERP za poljoprivredu“
 
-Termin ERP može pomoći u objašnjenju širine, ali nije primarna kategorija zato što:
-
-- AgriX nije univerzalno knjigovodstvo;
-- kupac često zadržava BizniSoft, PANTHEON ili drugi računovodstveni sistem;
-- glavna vrednost AgriX-a nastaje u operativnom toku koji generički ERP obično ne pokriva dovoljno duboko;
-- „ERP“ stvara očekivanje da AgriX odmah zameni sve finansijske i računovodstvene funkcije.
+AgriX nije univerzalno knjigovodstvo. Kupac može zadržati BizniSoft, PANTHEON ili drugi ERP, dok AgriX vodi duboki operativni tok od stanice do centrale.
 
 Dozvoljena formulacija:
 
-> AgriX može biti primarni operativni sistem firme, dok računovodstvo ostaje u postojećem ERP-u.
+> AgriX je primarni operativni sistem otkupa, dok računovodstveni ERP može ostati knjigovodstveni sistem firme.
 
 ---
 
@@ -61,651 +63,250 @@ Dozvoljena formulacija:
 
 ### 3.1 Jedna rečenica
 
-> **AgriX povezuje otkupne stanice, kooperante, robu, dokumente, logistiku i management u jedan kontrolisan operativni tok.**
+> **Otkupci i vozači unose podatke i dokumente tamo gde posao nastaje, a AgriX automatski puni centralnu bazu za kontrolu, fakture i izveštaje.**
 
 ### 3.2 Kratka prodajna verzija
 
-> AgriX je sistem za firme koje organizuju otkup preko više stanica i kooperanata. Umesto da se podaci prenose telefonom, Viberom, papirom i nepovezanim Excel fajlovima, AgriX povezuje otkup, dokumentaciju, transport, prijem, lager, obračune i management pregled.
+> AgriX omogućava da stanice, otkupljivači i vozači sami evidentiraju otkup i transport kroz PWA. Podaci automatski ulaze u centralni sistem, pa operater više ne prepisuje osnovna dokumenta, već kontroliše tok, radi prijem, fakture, finansije i izveštaje.
 
 ### 3.3 Verzija za vlasnika ili direktora
 
-> AgriX daje centralnu kontrolu nad otkupom bez potrebe da direktor proverava svaku stanicu telefonom. Podaci o robi, dokumentima, obavezama, transportu i odstupanjima dolaze u povezanom i proverljivom toku.
+> Umesto da centrala čeka papire, telefonske izveštaje ili Excel fajlove sa stanica, AgriX daje managementu jedinstvenu sliku dok posao nastaje. Svaki otkup, dokument i transport ulazi u kontrolisani centralni tok.
 
 ### 3.4 Interna strateška formulacija
 
-> AgriX pretvara razgranatu otkupnu mrežu iz skupa ljudi, tabela, poziva i pojedinačnih programa u standardizovan operativni sistem sa zajedničkim podacima, kontrolama i audit tragom.
+> AgriX pomera unos podataka iz centrale na mesto nastanka poslovnog događaja i pretvara centralnog operatera iz prepisivača u kontrolora poslovnog toka.
 
 ---
 
-## 4. Primarni kupac i problem
+## 4. Osnovni poslovni model rada
 
-### 4.1 Primarni ICP
+### 4.1 Terenski otkupljivač/vagač
 
-Primarni kupac je firma koja:
+Otkupljivač:
 
-- organizuje otkup kroz više stanica, lokacija ili terenskih tačaka;
-- radi sa većim brojem kooperanata ili dobavljača;
-- ima značajan sezonski dokumentacioni i finansijski obim;
-- ima logistiku, ambalažu, repromaterijal, prijem, lager ili sledljivost;
-- želi centralnu management kontrolu;
-- koristi računovodstveni program, ali nema dovoljno dobar operativni sistem;
-- prihvata standardan proizvod sa konfiguracijom, bez trajnog klijentskog forka;
-- ima osobu koja će biti vlasnik implementacije.
+- bira ili identifikuje kooperanta;
+- bira stanicu, kulturu, klasu, cenu i ambalažu;
+- evidentira bruto/neto i druge podatke otkupa;
+- kreira osnovni otkupni dokument;
+- štampa ili prosleđuje dokument prema podržanom toku;
+- sinhronizuje podatak bez naknadnog unosa u centrali.
 
-Prihod je signal sposobnosti plaćanja i moguće složenosti, ali nije osnovni kriterijum. Broj stanica, kooperanata, dokumenata, logističkih tokova i kontrolnih potreba važniji su od samog prometa.
+### 4.2 Vozač
 
-### 4.2 Problem koji kupac prepoznaje
+Vozač:
 
-Kupac obično ne kaže da mu treba „vertikalni operativni sistem“. On prepoznaje konkretne simptome:
+- preuzima robu sa jedne ili više stanica;
+- kreira i dopunjava zbirni transportni dokument;
+- evidentira poslednju stanicu, količine i status;
+- omogućava centrali da vidi šta je preuzeto, šta je u transportu i šta stiže na prijem.
 
-- podaci sa stanica kasne ili se ponovo prekucavaju;
-- management nema pouzdanu sliku dok sezona traje;
-- dokumenti, roba i novac nisu u istom toku;
-- važni procesi zavise od jedne osobe;
-- broj stanica povećava administrativni haos;
-- korekcije nemaju dovoljno jasan trag;
-- logistika se vodi telefonom ili porukama;
-- postojeći program pokriva samo deo procesa;
-- računovodstveni sistem ne rešava operativni tok otkupa;
-- migracija iz starog sistema deluje rizično.
+### 4.3 Centralni operater
 
-### 4.3 Problem koji AgriX ne treba da prodaje
+Centralni operater:
 
-AgriX ne treba da gradi prodaju oko apstraktnih poruka poput:
+- kontroliše sinhronizovane podatke i izuzetke;
+- završava prijem i dokumentne veze koje pripadaju centrali;
+- radi fakture i SEF;
+- obrađuje banku, avanse, salda i naloge za plaćanje;
+- radi izveštaje i kontrole;
+- rešava korekcije kroz kontrolisan storno/audit tok.
 
-- digitalna transformacija;
-- inovativno poslovanje;
-- moderna cloud rešenja;
-- veštačka inteligencija bez konkretnog procesa;
-- sve-u-jednom softver za svaku firmu.
+Centralni operater **ne treba rutinski da prepisuje otkupne podatke koje su otkupljivači već uneli na terenu**.
 
-Poruka mora ostati vezana za stvarni otkupni i operativni tok.
+### 4.4 Management
 
----
+Management dobija:
 
-## 5. Ponuda vrednosti po ulozi
-
-## 5.1 Vlasnik i management
-
-### Poslovni problem
-
-Management nema jedinstvenu i pravovremenu sliku stanica, robe, transporta, obaveza, potraživanja i odstupanja.
-
-### Vrednost
-
-AgriX omogućava:
-
-- centralni pregled poslovanja;
-- ranije uočavanje odstupanja;
-- proverljive podatke umesto telefonskih izveštaja;
-- kontrolu mreže bez mikromenadžmenta;
-- audit trag korekcija i kritičnih događaja;
-- rast broja stanica bez proporcionalnog rasta administrativnog haosa.
-
-### Dokaz koji treba razviti
-
-- vreme potrebno da management dobije pregled pre i posle AgriX-a;
-- broj ručnih izveštaja koji su ukinuti;
-- primer problema otkrivenog pre finansijske štete;
-- stvarna upotreba Management PWA tokom sezone.
-
-## 5.2 Centralna administracija i finansije
-
-### Poslovni problem
-
-Podaci se prepisuju, dokumenti se ručno povezuju, greške se kasno otkrivaju, a korekcije mogu ugroziti više tokova.
-
-### Vrednost
-
-AgriX omogućava:
-
-- ponovnu upotrebu već unetih podataka;
-- povezan dokumentni lanac;
-- kontrolisani storno i audit;
-- integritet između otkupa, prijema, kupaca i finansijskih tokova;
-- pripremu SEF, bankarskih, saldo i platnih procesa;
-- jasniji prenos posla na obučenu zamenu.
-
-### Dokaz koji treba razviti
-
-- broj duplih unosa pre i posle;
-- vreme pripreme obračuna ili isplate;
-- broj tipičnih grešaka koje sistem blokira;
-- broj procesa koje više ne vodi samo jedna osoba.
-
-## 5.3 Terenski otkupljivač ili vagač
-
-### Poslovni problem
-
-Radi pod vremenskim pritiskom, često sa nestabilnom vezom, redom kooperanata i potrebom za trenutnim dokumentom.
-
-### Vrednost buduće terenske ponude
-
-PWA Otkupac, kiosk režim i termalna štampa treba da omoguće:
-
-- brz unos na mestu nastanka;
-- rad u nestabilnim mrežnim uslovima;
-- manje pogrešnih kombinacija podataka;
-- trenutnu štampu dokumenta;
-- vidljiv status sinhronizacije;
-- manje naknadnog prekucavanja.
-
-### Ograničenje tvrdnje
-
-Dok PWA Otkupac, kiosk i termalna štampa ne prođu release kriterijume i realnu sezonu, ne predstavljaju se kao potpuno dokazana produkciona prednost.
-
-## 5.4 Dispečer i logistika
-
-### Poslovni problem
-
-Količine, vozila i preuzimanja koordiniraju se telefonom, porukama i ručnim planom.
-
-### Vrednost
-
-AgriX povezuje:
-
-- količine koje nastaju na stanicama;
-- neraspoređenu robu;
-- vozila, vozače, rute i kapacitete;
-- statuse preuzimanja i isporuke;
-- management pregled izvršenja.
-
-### Dokaz koji treba razviti
-
-- broj telefonskih koordinacija;
-- vreme potrebno za izradu plana;
-- iskorišćenost vozila;
-- broj promena plana koje ostaju dokumentovane.
-
-## 5.5 Kooperant i gazdinstvo
-
-### Poslovni problem
-
-Kooperant nema jedinstvenu sliku zaduženja, parcela, tretmana, troškova, proizvodnje i odnosa sa hladnjačom.
-
-### Vrednost
-
-AgriX Gazdinstvo treba da poveže:
-
-- karticu prema hladnjači;
-- parcele i GIS;
-- tretmane, karencu i doziranje;
-- opremu i rad;
-- troškove i sezonski bilans;
-- prognozu i upozorenja;
-- dokumentaciju potrebnu za proizvodnju i GGAP.
-
-### Ograničenje tvrdnje
-
-Gazdinstvo se ne predstavlja kao dokazano masovno monetizovan proizvod dok se ne potvrde aktivacija, retencija, willingness-to-pay i support cost.
-
-## 5.6 GGAP koordinator, agronom i quality funkcija
-
-### Poslovni problem
-
-Podaci i dokazi se ponovo prikupljaju iz više izvora pred kontrolu, rokovi se prate ručno, a status spremnosti nije jasan.
-
-### Vrednost buduće ponude
-
-AgriX GGAP treba da koristi podatke koji već nastaju u Enterprise i Gazdinstvo tokovima radi:
-
-- automatskog popunjavanja evidencija;
-- kontrole obaveznih dokaza;
-- praćenja rokova i odgovornosti;
-- neusaglašenosti i korektivnih mera;
-- pripreme audit paketa.
-
-### Obavezna ograda
-
-AgriX podržava dokumentacioni i compliance tok, ali ne garantuje sertifikaciju i ne zamenjuje konsultanta, auditora ili sertifikaciono telo.
+- pregled stanica i količina;
+- status robe i transporta;
+- dokumentacionu i finansijsku sliku;
+- odstupanja i neusaglašenosti;
+- pregled bez oslanjanja na telefonske pozive i ručne konsolidacije.
 
 ---
 
-## 6. Pozicioniranje po segmentima
+## 5. Primarni ICP
 
-### 6.1 Hladnjače, voće i povrće — primarni segment
+Najbolji kupac je firma koja:
 
-Glavna poruka:
+- ima više stanica, lokacija ili terenskih tačaka;
+- ima više otkupljivača/vagača i vozača;
+- želi da osnovni dokumenti nastaju na terenu;
+- danas prepisuje podatke u centrali ili spaja više fajlova i izvora;
+- ima veći broj kooperanata i sezonski obim;
+- ima prijem, ambalažu, logistiku, lager ili sledljivost;
+- želi da centralni operater radi kontrolu, fakture i izveštaje umesto osnovnog unosa;
+- prihvata standardan proizvod i konfiguraciju bez trajnog forka.
 
-> Vodite otkup, stanice, kooperante, dokumente, transport, prijem, lager i management kontrolu u jednom povezanom toku.
+Prihod je pomoćni signal. Broj stanica, terenskih korisnika, dokumenata i ručnih prenosa podataka važniji su za procenu AgriX vrednosti.
 
-Najjači signali:
+---
 
-- više otkupnih stanica;
-- veliki broj proizvođača;
-- ambalaža i repromaterijal;
-- transport i prijem;
-- sledljivost;
-- sezonski dokumentacioni pritisak;
-- postojeći specijalizovani sistem koji više ne zadovoljava potrebe.
+## 6. Ponuda vrednosti po ulozi
 
-### 6.2 Duvan — direktan, ali specifičan segment
+### 6.1 Otkupljivač/vagač
 
-Glavna poruka:
+- podatak se unosi jednom;
+- dokument nastaje odmah na stanici;
+- nema naknadnog diktiranja ili slanja papira centrali;
+- sistem vodi obavezna polja i poslovna pravila;
+- offline/sync tok čuva rad u realnim terenskim uslovima.
 
-> Standardizujte prijem robe, dokumentaciju, tok stanica i kontrolu kooperanata u procesu sa visokim zahtevima sledljivosti i kontrole.
+### 6.2 Vozač
 
-Pre šireg nastupa potrebno je dokumentovati procese duvanskog klijenta i izdvojiti šta je proizvodni standard, a šta specifična konfiguracija.
+- transport nastaje iz stvarnih terenskih podataka;
+- zbirni dokument se vodi u toku preuzimanja;
+- centrala vidi robu koja dolazi;
+- smanjuje se telefonsko koordinisanje i naknadno rekonstruisanje rute.
 
-### 6.3 Ratarstvo, žitarice i kooperacija — adjacent segment za discovery
+### 6.3 Centralna administracija i finansije
 
-Glavna poruka:
+- nema rutinskog ponovnog unosa osnovnih otkupa;
+- koristi već nastale podatke za prijem, fakture i finansije;
+- kontroliše izuzetke umesto da ručno gradi celu bazu;
+- dobija povezan dokumentni lanac, storno i audit;
+- lakše prenosi posao na obučenu zamenu.
 
-> Povežite otkup, vagu, kvalitet, skladištenje, obračun kooperanata i pregled lokacija bez paralelnih tabela i ručnih prenosa.
+### 6.4 Vlasnik i management
 
-Ovaj segment je potvrđen kao relevantan kroz Infosys i Yuteam reference, ali nije dozvoljeno pretpostaviti da postojeći AgriX tok već bez izmena pokriva silose, laboratoriju, vlagu, primese i obračunske modele.
-
-Pravilo:
-
-- prvo product discovery;
-- zatim procena da li konfiguracija pokriva proces;
-- bez stvaranja trajnog forka proizvoda.
-
-### 6.4 Mlekarstvo — istraživački segment
-
-Mlekarstvo ostaje `adjacent_discovery_only` dok se ne potvrdi:
-
-- dovoljno velik zajednički procesni model;
-- fit sa trenutnom arhitekturom;
-- spremnost tržišta da plati;
-- da razvoj ne odvlači proizvod od primarnog ICP-a.
+- vidi podatke dok posao nastaje;
+- dobija kontrolu mreže bez mikromenadžmenta;
+- ranije otkriva odstupanja;
+- može da poveća broj stanica bez proporcionalnog rasta centralnog administrativnog rada.
 
 ---
 
 ## 7. Pozicioniranje prema alternativama
 
-## 7.1 Naspram generičkog ERP-a
+### 7.1 Papir, telefon i Excel fajlovi
 
-AgriX ne treba da tvrdi da je bolji računovodstveni sistem.
+> AgriX uklanja ručni prenos podataka između terena i centrale. Osnovni događaj nastaje digitalno na stanici i automatski ulazi u centralni sistem.
 
-Pozicija:
+### 7.2 Desktop-only program
 
-> ERP vodi knjigovodstvo i opšte poslovne funkcije; AgriX vodi duboki operativni tok organizovanog otkupa i povezuje ga sa računovodstvom, SEF-om i bankom.
+> Desktop-only sistem centralizuje unos, ali ne rešava mesto nastanka podatka. AgriX omogućava da otkupljivači i vozači sami formiraju operativne podatke i dokumente, dok centrala zadržava kontrolu.
 
-Prednost AgriX-a:
+### 7.3 Generički ERP
 
-- dubina domena;
-- stanice i kooperanti;
-- dokumentni lanac;
-- logistika i prijem;
-- management kontrola;
-- sledljivost i budući GGAP tok.
+> ERP vodi knjigovodstvo i opšte poslovne funkcije; AgriX vodi terenski i centralni tok organizovanog otkupa i prosleđuje pripremljene podatke prema računovodstvu.
 
-## 7.2 Naspram uskog programa za otkup
+### 7.4 Uski program za otkup
 
-Pozicija:
+> Otkupni list nije izolovan dokument. U AgriX-u je početak lanca koji nastavljaju transport, prijem, fakture, finansije, lager i management kontrola.
 
-> Otkupni list je samo jedan događaj u mnogo dužem poslovnom lancu.
+### 7.5 Infosys i drugi incumbent sistemi
 
-Prednost AgriX-a nije broj ekrana, već povezanost:
-
-- pripreme sezone;
-- kooperanata i repromaterijala;
-- terenskog otkupa;
-- transporta i prijema;
-- lagera, prodaje i finansija;
-- managementa i audita.
-
-## 7.3 Naspram custom programa lokalnog developera
-
-Pozicija:
-
-> AgriX prihvata konfiguraciju i razvoj opšte korisnih funkcija, ali ne pravi trajnu posebnu verziju za svakog klijenta.
-
-Prednost:
-
-- zajednički codebase;
-- self-update;
-- monitoring;
-- ponovljiv onboarding;
-- funkcije koje nastavljaju da se razvijaju za celu bazu korisnika;
-- manji rizik zavisnosti od jedne neodržavane kopije.
-
-## 7.4 Naspram Excela, papira i poruka
-
-Pozicija:
-
-> AgriX ne zamenjuje Excel zato što je moderniji, već zato što ključni proces zahteva zajedničke podatke, kontrolisana pravila, audit i rad više uloga.
-
-Prednost:
-
-- manje duplog unosa;
-- manje nepovezanih verzija podataka;
-- kontrolisane korekcije;
-- management vidljivost;
-- mogućnost standardizacije rada između stanica.
-
-## 7.5 Naspram Infosys-a i drugih incumbent sistema
-
-Trenutno su potvrđene dve migracije sa Infosys-a na AgriX. To je jak dokaz da replacement market postoji, ali nije dozvoljeno tvrditi opštu superiornost bez strukturisanih intervjua i funkcionalnog poređenja.
-
-Do završetka win intervjua dozvoljena poruka je:
-
-> AgriX ima praktično iskustvo sa preuzimanjem klijenata koji su prethodno koristili specijalizovani sistem i razvija standardizovan migration discovery i onboarding proces.
-
-Nisu dozvoljene tvrdnje:
-
-- „AgriX je bolji od Infosys-a“;
-- „Infosys nema podršku“;
-- „migracija je laka“;
-- „svi podaci mogu sigurno da se prenesu“;
-- poređenje cena ili funkcija bez dokumentovanih izvora.
+Dve postojeće migracije potvrđuju replacement market, ali ne dokazuju opštu superiornost. Do završetka win intervjua dozvoljeno je tvrditi samo da AgriX ima praktično iskustvo sa migracijom iz specijalizovanog sistema.
 
 ---
 
-## 8. Trenutna ponuda naspram buduće vizije
+## 8. Trenutna proizvodna ponuda
 
-### 8.1 Produkciono i dokazano kod postojećih klijenata
+### 8.1 Centralna produkciona celina
 
-Trenutno se mogu isticati, uz preciznu formulaciju:
-
-- tri aktivna klijenta;
-- desktop operativni sistem;
-- Management PWA;
-- remote onboarding koji je do sada realno trajao približno jedan dan;
-- zajednički codebase i konfiguracija;
-- self-update i granularni monitoring;
-- tokovi otkupa, dokumenata, stanica, kooperanata i management kontrole;
-- postojeći domeni poput logistike, SEF-a, bankarskih tokova, salda i naloga za plaćanje kada su relevantni za konkretnu implementaciju.
-
-### 8.2 Pilot ili predsezonska ponuda
-
-Ne predstavljati kao potpuno dokazano dok ne prođe realne release kriterijume:
+AgriX Enterprise obuhvata povezani sistem:
 
 - PWA Otkupac;
-- kiosk tableti;
-- termalna štampa na mestu otkupa;
-- skalirani terenski rollout;
-- standardizovana migracija svih konkurenata.
+- PWA Vozač;
+- sinhronizacioni i transportni sloj;
+- desktop centralni backoffice;
+- Management PWA;
+- dokumentni, finansijski i izveštajni tok.
 
-### 8.3 Strateška buduća ponuda
+PWA Otkupac i PWA Vozač nisu periferni dodaci. Oni su glavni izvori terenskih poslovnih događaja.
 
-Ne mešati sa sadašnjim prodajnim obećanjem:
+### 8.2 Odvojeno procenjivati
 
-- masovno monetizovano Gazdinstvo;
-- kompletan AgriX GGAP proizvod;
-- automatski regionalni compliance;
-- dokazano skaliranje na stotine firmi;
-- široko mlekarstvo ili generičko ratarstvo bez discovery-ja.
+Od same PWA aplikacije odvojeno se procenjuju:
 
----
+- standardizovan kiosk režim;
+- konkretan tablet paket;
+- termalna štampa i printer bridge;
+- remote device management;
+- hardverska garancija i zamena.
 
-## 9. Dokazna hijerarhija
+Nedovoljno zreo hardverski paket ne sme automatski da spusti status dobro funkcionalne PWA aplikacije.
 
-Svaka važna tvrdnja mora imati oznaku kvaliteta dokaza.
+### 8.3 Budući proizvodi
 
-### Nivo A — potvrđen poslovni rezultat
-
-- stvarno korišćenje kod klijenta;
-- dokumentovan pre/posle rezultat;
-- merena vrednost;
-- odobrena izjava ili case study.
-
-### Nivo B — potvrđen događaj ili implementacija
-
-- klijent koristi funkciju;
-- migracija je obavljena;
-- onboarding je završen;
-- postoje logovi, konfiguracija ili ugovorna činjenica.
-
-### Nivo C — javni tržišni dokaz
-
-- APR;
-- javna referentna lista;
-- zvanični sajt firme;
-- javno opisan poslovni proces.
-
-### Nivo D — radna hipoteza
-
-- očekivana ušteda;
-- očekivana konverzija;
-- pretpostavljeni broj stanica;
-- pretpostavljeni willingness-to-pay;
-- pretpostavljeni switching trigger.
-
-Marketinška poruka ne sme predstavljati nivo D kao nivo A ili B.
+- Gazdinstvo zahteva activation, retention i willingness-to-pay dokaz;
+- GGAP ostaje discovery/pilot dok ne postoji stručni domain owner i validiran sadržaj.
 
 ---
 
-## 10. Dozvoljene marketinške tvrdnje
+## 9. Dozvoljene marketinške tvrdnje
 
-Dozvoljeno, kada je kontekst tačan:
+Dozvoljeno, kada je scope tačan:
 
-- „AgriX je vertikalni operativni sistem za organizovani otkup.“
-- „Povezuje stanice, kooperante, robu, dokumente, logistiku i management.“
-- „Može da radi uz postojeći računovodstveni program.“
-- „Sistem koristi zajednički codebase i konfiguraciju umesto trajnih klijentskih forkova.“
-- „Self-update i monitoring već postoje.“
-- „Tri firme trenutno koriste AgriX.“
-- „Dva klijenta su prešla sa Infosys sistema.“
-- „Dosadašnji standardni onboarding obavljan je remote i realno je trajao približno jedan dan.“
-- „AgriX podržava dokumentacioni i operativni tok; ne garantuje poslovni rezultat ili sertifikaciju.“
+- „Osnovni otkupni podaci i dokumenti nastaju na terenu.“
+- „Otkupci i vozači sami unose događaje koji automatski pune centralnu bazu.“
+- „Centralni operater se fokusira na kontrolu, fakture, finansije i izveštaje.“
+- „AgriX povezuje PWA terenski rad sa centralnim desktop backoffice-om.“
+- „Podatak se ne prepisuje ponovo ako je već pravilno unet na mestu nastanka.“
+- „AgriX može raditi uz postojeći računovodstveni ERP.“
+- „Tri firme koriste AgriX, a dva klijenta su prešla sa Infosys sistema.“
 
-Sve brojčane tvrdnje moraju imati datum i scope.
+Brojčane tvrdnje moraju imati datum, izvor i scope.
 
 ---
 
-## 11. Zabranjene ili privremeno nedozvoljene tvrdnje
+## 10. Privremeno nedozvoljene tvrdnje
 
 Bez dodatnog dokaza ne koristiti:
 
-- „najbolji program za otkup“;
-- „vodeći sistem u Srbiji“;
-- „štedi X% vremena ili novca“;
 - „eliminiše sve greške“;
-- „radi bez interneta“ kao univerzalnu tvrdnju za sve module;
-- „implementacija traje pola dana“ dok cilj nije ponovljivo potvrđen;
-- „bezbolna migracija“;
+- „nikada ne gubi podatke“;
+- „radi bez interneta u svakoj funkciji“;
+- „podržava svaki printer i svaki uređaj“;
+- „svaka migracija je laka“;
 - „potpuna zamena ERP-a“;
-- „potpun GGAP compliance“;
-- „garantovana sertifikacija“;
-- „podržava sve kulture i sve modele otkupa“;
-- „spreman za 200 firmi“;
-- poređenje konkurentskih cena, podrške ili kvaliteta bez dokaza;
-- navođenje konkurentske referentne liste kao dokaz da je instalacija i dalje aktivna.
+- „spreman za neograničen broj stanica“;
+- „potpun GGAP compliance“ ili garantovana sertifikacija.
 
 ---
 
-## 12. Poruka po fazi kupovine
+## 11. Demo struktura
 
-### 12.1 Awareness
+Demo mora pratiti stvarni tok, ne spisak ekrana:
 
-Kupac još ne traži konkretan softver.
+1. otkupljivač na stanici kreira otkup;
+2. dokument i podatak ulaze u sinhronizacioni tok;
+3. vozač preuzima robu i kreira zbirni transport;
+4. centrala dobija podatke bez ponovnog unosa;
+5. operater završava prijem, fakturu i finansijski tok;
+6. management vidi rezultat i odstupanja.
 
-Poruka:
+Glavna demo poruka:
 
-> Problem nije samo izrada otkupnog lista, već to što stanice, dokumenti, roba, logistika i finansije nisu u jednom kontrolisanom toku.
-
-### 12.2 Problem recognition
-
-Kupac već oseća operativni haos.
-
-Poruka:
-
-> AgriX standardizuje proces između centrale i stanica i daje managementu proverljivu sliku dok sezona traje.
-
-### 12.3 Vendor evaluation
-
-Kupac poredi sisteme.
-
-Poruka:
-
-> Poređenje treba voditi prema celom poslovnom toku, ne prema broju ekrana: priprema sezone, otkup, korekcije, logistika, prijem, finansije, audit, podrška i migracija.
-
-### 12.4 Replacement decision
-
-Kupac već koristi specijalizovan sistem.
-
-Poruka:
-
-> Prvo mapiramo postojeće module, podatke, kritične procese i sezonske rizike. Tek zatim se definiše obim migracije i plan prve sezone.
-
-### 12.5 Expansion
-
-Postojeći klijent razmatra nove module.
-
-Poruka:
-
-> Nova vrednost nastaje kada se već postojeći podaci povežu sa dodatnom ulogom ili tokom, bez ponovnog unosa i bez odvojenog sistema.
+> **Od prvog unosa na stanici do fakture i izveštaja u centrali — bez ponovnog prekucavanja istog poslovnog događaja.**
 
 ---
 
-## 13. Predložena struktura sajta i demo poruke
+## 12. Dokazi koje treba meriti
 
-### 13.1 Hero
-
-Naslov:
-
-> **Jedan operativni sistem za ceo tok organizovanog otkupa.**
-
-Podnaslov:
-
-> Povežite otkupne stanice, kooperante, robu, dokumente, transport, prijem, finansijske tokove i management kontrolu.
-
-Primarni CTA:
-
-> Zakažite razgovor o vašem procesu
-
-Sekundarni CTA:
-
-> Pogledajte kako izgleda tok od stanice do centrale
-
-### 13.2 Problem sekcija
-
-Ne prikazivati generičnu listu funkcija. Prikazati konkretne probleme:
-
-- podaci kasne sa stanica;
-- isti podatak se unosi više puta;
-- management proverava stanje telefonom;
-- korekcije nemaju jasan trag;
-- logistika i dokumenti nisu povezani;
-- postojeći ERP ne pokriva operativni tok.
-
-### 13.3 Rešenje
-
-Prikazati lanac:
-
-1. kooperant i priprema sezone;
-2. stanica i otkup;
-3. transport i prijem;
-4. lager, prodaja i dokumenti;
-5. finansijski tok;
-6. management i audit.
-
-### 13.4 Dokaz
-
-Trenutno isticati:
-
-- tri aktivna klijenta;
-- dve migracije sa specijalizovanog Infosys sistema;
-- remote implementaciju;
-- stvarne ekrane i tokove;
-- konkretne reference samo uz odobrenje klijenta.
-
-Nakon intervjua dodati:
-
-- switching trigger;
-- citat klijenta;
-- merljivi rezultat;
-- migracioni obim;
-- dokaz prve uspešne sezone.
+- procenat otkupa unetih direktno na terenu;
+- broj osnovnih dokumenata nastalih bez centralnog ručnog unosa;
+- broj ponovnih unosa eliminisanih po otkupu;
+- vreme od terenskog događaja do vidljivosti u centrali;
+- sync success rate;
+- broj duplikata i ručnih korekcija;
+- vreme centralnog operatera po 100 otkupa;
+- odnos vremena utrošenog na osnovni unos naspram kontrole/faktura/izveštaja;
+- broj stanica koje jedan centralni operater može da podrži;
+- support minuti po stanici.
 
 ---
 
-## 14. Pozicioniranje cene
+## 13. Odluke
 
-AgriX ne treba predstavljati kao najjeftiniji program niti cenu vezati samo za prihod firme.
-
-Cena treba da odražava:
-
-- broj i tip lokacija ili stanica;
-- broj korisničkih uloga;
-- operativnu složenost;
-- aktivne module;
-- implementaciju i migraciju;
-- support obim;
-- hardver kao odvojenu stavku;
-- dodatnu vrednost Gazdinstva i GGAP-a.
-
-Poziciona poruka:
-
-> AgriX se ne naplaćuje kao dokument ili Excel fajl, već kao operativna infrastruktura firme. Paket ipak mora ostati razumljiv, predvidiv i prilagođen realnosti ciljnog tržišta.
-
-Konačne cene i paketi definišu se u `10_PRICING_AND_PACKAGING.md` nakon jasnog `07_PRODUCT_PORTFOLIO.md`.
-
----
-
-## 15. Otvorena dokazna pitanja
-
-### Obavezno nakon win intervjua sa dva Infosys migrirana klijenta
-
-- šta je pokrenulo traženje novog sistema;
-- koje procese su prethodno vodili u Infosys-u;
-- šta je presudilo u korist AgriX-a;
-- koje su razlike stvarno osetili u radu;
-- šta je u Infosys-u bilo bolje;
-- koliko je trajala i koštala migracija;
-- koji podaci nisu mogli lako da se prenesu;
-- šta bi ih navelo da napuste AgriX;
-- koji rezultat sme javno da se koristi;
-- da li dozvoljavaju referencu, citat ili anonimnu studiju slučaja.
-
-### Obavezno kod novih account research kandidata
-
-- da li i dalje koriste Infosys;
-- broj stanica, lokacija, silosa ili hladnjača;
-- broj kooperanata/proizvođača;
-- sezonski obim dokumenata;
-- računovodstveni sistem;
-- operativni champion i ekonomski kupac;
-- postojeći switching trigger;
-- zahtev za migraciju i rok do sezone.
-
----
-
-## 16. Odluke
-
-1. AgriX se primarno pozicionira kao vertikalni poslovni operativni sistem za organizovani otkup.
-2. „Program za otkup“ koristi se samo kao pretraživačka i uvodna kategorija, ne kao konačan identitet proizvoda.
-3. Enterprise je primarna komercijalna ponuda; Gazdinstvo i GGAP su povezani proizvodi sa odvojenim dokaznim i monetizacionim pragovima.
-4. Generički ERP nije primarni neprijatelj; AgriX može raditi uz računovodstveni ERP.
-5. Replacement tržište, posebno Infosys korisnici, postaje zaseban GTM motion.
-6. Dve Infosys migracije smeju se navesti kao činjenica, ali ne kao dokaz opšte superiornosti.
-7. Process fit ima veću težinu od prihoda i APR šifre.
-8. Ratarstvo i žitarice idu kroz discovery pre šire ponude.
-9. Mlekarstvo ostaje adjacent segment.
-10. PWA Otkupac, kiosk, termalna štampa i GGAP ne predstavljaju se kao potpuno dokazane produkcione prednosti pre release kriterijuma.
-11. Svaka javna brojčana tvrdnja mora imati izvor, datum i scope.
-12. Pozicioniranje se ažurira nakon dva win intervjua, prvih novih prodajnih razgovora i prve pune sezone terenske PWA ponude.
-
----
-
-## 17. KPI pozicioniranja
-
-Pozicioniranje se ne meri dopadljivošću slogana, već ponašanjem tržišta.
-
-Pratiti:
-
-- procenat kvalifikovanih leadova koji razumeju da AgriX nije samo program za dokumente;
-- procenat leadova sa najmanje dva jaka process-fit signala;
-- broj inbound upita koji eksplicitno navode stanice, kooperante, logistiku ili management kontrolu;
-- demo-to-proposal stopu po segmentu;
-- proposal-to-win stopu za greenfield i replacement kupce;
-- dominantan razlog pobede i gubitka;
-- broj puta kada kupac očekuje generičko knjigovodstvo ili custom fork;
-- broj odobrenih referenci, citata i merljivih case-study dokaza;
-- vreme od prvog razgovora do jasnog potvrđivanja ili odbacivanja process fit-a.
-
----
-
-## 18. Sledeći dokumenti
-
-Nakon ovog poglavlja redosled je:
-
-1. `07_PRODUCT_PORTFOLIO.md` — jasne granice Enterprise, Gazdinstvo i GGAP ponude, status svake funkcionalnosti i komercijalne zavisnosti;
-2. `08_PRODUCT_ROADMAP.md` — šta mora biti spremno za narednu sezonu;
-3. `10_PRICING_AND_PACKAGING.md` — paketi, implementacija, migracija, stanice, korisnici i hardver;
-4. `14_GO_TO_MARKET.md` — kanali, budžet, segmenti i cilj novih klijenata;
-5. `15_SALES_PLAYBOOK.md` — discovery, demo, migracija, ponuda, prigovori i CRM minimum.
-
-Win intervjui će naknadno dopuniti ovo poglavlje dokazima i precizirati Infosys replacement poruku, ali ne blokiraju razvoj portfolija, roadmap-a i pricing modela.
+1. PWA Otkupac i PWA Vozač su centralni operativni kanali AgriX Enterprise-a.
+2. Desktop je centralni backoffice i canonical sloj nakon sinhronizacije, ali nije zamišljen kao mesto rutinskog prepisivanja terenskih događaja.
+3. Osnovna vrednost proizvoda je automatsko punjenje centralne baze iz dokumenata nastalih na terenu.
+4. Centralni operater treba da se bavi kontrolom, prijemom, fakturama, finansijama i izveštajima.
+5. Kiosk, tablet i termalna štampa imaju odvojene readiness statuse od same PWA aplikacije.
+6. Enterprise ponuda mora biti demonstrirana kao jedan end-to-end tok: teren → sinhronizacija → centrala → faktura/izveštaj.
+7. Pricing mora vrednovati broj stanica i terenskih tokova, ne samo desktop licencu.
+8. Roadmap mora davati PWA terenskom toku najmanje isti strateški značaj kao centralnom backoffice-u.
+9. Gazdinstvo i GGAP ostaju zasebni proizvodi sa posebnim dokaznim pragovima.
+10. Pozicioniranje se dopunjava merljivim rezultatima i win intervjuima, ali centralna PWA teza nije hipoteza već namera proizvoda i postojeći operativni model.
