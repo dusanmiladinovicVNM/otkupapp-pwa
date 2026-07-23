@@ -3,7 +3,7 @@
 **Status:** Evidence-based qualification layer  
 **Vlasnik:** osnivač AgriX-a  
 **Poslednje ažuriranje:** 2026-07-23  
-**Primarni izvori:** `infosys_wide_enrichment.csv`, `infosys_wide_enrichment.metadata.json`
+**Primarni izvori:** `infosys_wide_enrichment.csv`, `infosys_wide_enrichment.metadata.json`, `infosys_account_research.csv`
 
 ---
 
@@ -53,9 +53,10 @@ Ovaj rezultat je identity evidence, ne automatska prodajna lista.
 - šifra `4621`;
 - prihod 2025 približno `3.528.730.000 RSD`;
 - 18 zaposlenih;
-- referentna kategorija: poljoprivreda i kooperative.
+- referentna kategorija: poljoprivreda i kooperative;
+- javno je eksplicitno navedeno da se bavi otkupom, skladištenjem i prodajom žitarica i uljarica.
 
-`INFERENCE`: AS-AGRO 99 je snažan Tier A research kandidat za ratarstvo/kooperaciju. Veliki prihod ne dokazuje broj stanica ili kooperanata, ali opravdava ozbiljan account research.
+`INFERENCE`: AS-AGRO 99 je snažan Tier A research kandidat za ratarstvo/kooperaciju. Veliki prihod nije dovoljan sam po sebi, ali javni procesni dokaz opravdava ozbiljan discovery.
 
 ### BUDIM GRAD
 
@@ -63,11 +64,16 @@ Ovaj rezultat je identity evidence, ne automatska prodajna lista.
 - šifra `1039`;
 - prihod 2025 približno `1.398.804.000 RSD`;
 - 59 zaposlenih;
-- founder-confirmed hladnjača i Infosys referenca.
+- founder-confirmed hladnjača i Infosys referenca;
+- javni izvori potvrđuju otkup, preradu i zamrzavanje voća.
 
-### FRIGO-PAUN, AGRO-SUNCOKRET i FRUCOM FOOD
+### FRIGO-PAUN
 
-Ostaju potvrđeni veliki domaći replacement računi sa direktnim ili vrlo jakim procesnim signalom.
+Zvanični sajt potvrđuje otkup, preradu, pakovanje i izvoz voća, kao i ugovore sa više od 1.000 proizvođača. To je trenutno najjači javni signal velike mreže kooperanata u potvrđenom Infosys replacement skupu.
+
+### FRUCOM FOOD
+
+Javni izvori potvrđuju više lokacija, veliki skladišni i dnevni zamrzivački kapacitet i formalno praćenje proizvođača radi sledljivosti. Račun zahteva Enterprise account mapu, uključujući lokalni operativni tim i vlasničku grupu.
 
 ### SIROGOJNO COMPANY
 
@@ -95,11 +101,28 @@ Wide rezultat sadrži tačne ili veoma verovatne identitete čija APR delatnost 
 
 Ove stavke moraju ostati u evidence datasetu, ali ne smeju automatski ući u outbound ili top target listu.
 
+### AGRONOM FIT — korekcija algoritamskog statusa
+
+Pipeline ga je označio kao `ready_for_account_research` zbog kategorije i šifre `4621`. Spoljna provera njegovog sopstvenog sajta, međutim, potvrđuje pre svega:
+
+- poljoprivredne apoteke;
+- pesticide;
+- seme i sadni materijal;
+- mineralna i organska đubriva;
+- navodnjavanje;
+- maloprodaju i veleprodaju inputa.
+
+Nije pronađen javni dokaz otkupa, kooperantske mreže ili prijema poljoprivrednih proizvoda.
+
+`DECISION`: AGRONOM FIT se operativno vodi kao `process_validation_first`, bez outbound-a dok se ne potvrdi stvarni otkupni ili kooperantski use case.
+
+`RULE`: šifra `4621` sama nije dovoljan dokaz otkupa. Može opisivati trgovinu semenom, hranom za životinje ili drugim agro inputima bez mreže proizvođača.
+
 ---
 
 ## 5. Sales-readiness klasifikacija
 
-Novi pipeline `Scripts/build_infosys_sales_ready_targets.py` deduplikuje matched redove po matičnom broju i koristi sledeće statuse:
+Pipeline `Scripts/build_infosys_sales_ready_targets.py` deduplikuje matched redove po matičnom broju i koristi sledeće statuse:
 
 ### `ready_for_account_research`
 
@@ -120,6 +143,8 @@ Identitet je potvrđen, ali delatnost ili klasifikacija trenutno konfliktuju sa 
 ### `exclude`
 
 Neaktivan subjekt, likvidacija, stečaj ili drugo negativno stanje.
+
+`OVERRIDE RULE`: spoljno potvrđen procesni dokaz ima prednost nad algoritamskim statusom, ali se izvorni pipeline rezultat ne briše. Korekcije se vode u `infosys_account_research.csv`.
 
 ---
 
@@ -153,29 +178,52 @@ Generiše:
 - `infosys_sales_ready_targets.xlsx`;
 - `infosys_sales_ready_summary.md`.
 
+Dodatni spoljno validirani sloj:
+
+- `infosys_account_research.csv`;
+- `infosys_account_research_summary.md`.
+
 Excel sadrži:
 
 - summary;
-- deduplikovani Top 20;
+- kvalifikovani research queue do 20 računa — trenutno 11, bez veštačkog popunjavanja adjacent/hold firmama;
 - sve matched račune;
 - identity manual-review queue;
 - unmatched queue.
 
 ---
 
-## 8. Sledeći poslovni korak
+## 8. Preporučeni account-research talasi
 
-Nakon generisanja sales-ready izlaza, za prvih 10–20 računa treba prikupiti:
+### Talas 1 — dubinski research
 
-- potvrdu da li još koriste Infosys;
-- broj otkupnih mesta ili lokacija;
-- broj kooperanata;
-- kulture/proizvode;
+1. FRIGO-PAUN;
+2. BUDIM GRAD;
+3. FRUCOM FOOD;
+4. AS-AGRO 99;
+5. FRIGO BRAĆA MITROVIĆ.
+
+### Talas 2 — verifikacija i verovatno kraći ciklus
+
+6. MAGIC BERRY FRUITS;
+7. FRIGOMIL;
+8. MALINA PROIZVOD.
+
+### Procesna provera pre outreach-a
+
+9. AGRONOM FIT.
+
+Za svaki račun prikupiti:
+
+- potvrdu da li još koristi Infosys;
+- broj otkupnih mesta, silosa ili hladnjača;
+- broj kooperanata/proizvođača;
+- kulture i trajanje sezone;
 - tipove dokumenata i sezonski volumen;
 - postojeći ERP/knjigovodstvo;
-- odgovornu osobu i decision-maker-a;
+- operativnog sponsora i decision-maker mapu;
 - switching trigger;
-- mogući izvor preporuke;
+- format i rizike migracije;
 - dozvoljeni sledeći kontakt.
 
 Tek nakon toga account prelazi iz `research` u stvarni CRM prospect.
@@ -192,4 +240,4 @@ Infosys replacement tržište je potvrđeno kao poseban GTM kanal. Wide APR enri
 4. aktuelnog Infosys odnosa;
 5. realnog switching trigger-a.
 
-AgriX ne treba da kontaktira svih 30 firmi. Treba prvo detaljno istražiti mali broj računa kod kojih su sva četiri signala najjača: process fit, veličina, geografska blizina i replacement verovatnoća.
+AgriX ne treba da kontaktira svih 30 firmi. Prvi operativni fokus je osam spolja validiranih account-research kandidata, uz jednu dodatnu procesnu proveru. Nakon toga sledi Infosys migration discovery i battlecard zasnovan na dva postojeća AgriX klijenta koji su već prešli sa Infosys-a.
