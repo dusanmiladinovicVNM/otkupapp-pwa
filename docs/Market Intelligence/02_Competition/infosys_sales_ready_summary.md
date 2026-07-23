@@ -17,7 +17,9 @@
 | Identiteti za ručnu proveru | 10 |
 | Bez bezbednog identiteta | 8 |
 
-## Top 20 za istraživanje
+## Kvalifikovani research queue
+
+Ova tabela trenutno sadrži 11 računa: devet algoritamski spremnih za account research i dva kojima prvo treba potvrditi proces. Broj nije veštački popunjen do 20 firmama iz `adjacent` ili `hold` grupa.
 
 | # | Firma | MB | Prihod RSD | Zaposleni | Status prioriteta | Score |
 |---:|---|---|---:|---:|---|---:|
@@ -40,3 +42,4 @@
 3. `adjacent_discovery_only` ne ulazi u Enterprise outbound bez posebnog product discovery-ja.
 4. `hold_until_process_proven` čuva konkurentski dokaz, ali ga ne pretvara u prodajni target.
 5. Reference ne dokazuju da firma i dalje koristi Infosys.
+6. Spoljni account research može promeniti algoritamski status; takve korekcije vode se u `infosys_account_research.csv` i ne brišu izvorni pipeline rezultat.
