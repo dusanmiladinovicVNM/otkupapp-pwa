@@ -77,7 +77,11 @@ Public Function CalculatePreporuka(ByVal artikalID As String, _
     CalculatePreporuka = CDbl(raw) * povrsinaHa
 End Function
 
-Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
+' Jezgro knjizenja magacin stavke. DIZE typed greske (fail-closed) umesto da
+' ih guta -- pozivalac na UI granici (forme) hvata i prevodi u poruku, tako da
+' operater vidi tacan razlog (cena/artikal/kooperant), a ne generiku
+' (FM-0113 #4 / FM-0112 #11). Vraca newID iskljucivo na uspeh.
+Public Function SaveMagacinCore(ByVal datum As Date, ByVal artikalID As String, _
                              ByVal tip As String, ByVal kolicina As Double, _
                              Optional ByVal kooperantID As String = "", _
                              Optional ByVal parcelaID As String = "", _
@@ -85,8 +89,8 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
                              Optional ByVal napomena As String = "", _
                              Optional ByVal dobavljacID As String = "", _
                              Optional ByVal overrideCena As Variant, _
-                             Optional ByVal allowNoStock As Boolean = False) As String
-    On Error GoTo EH
+                             Optional ByVal allowNoStock As Boolean = False, _
+                             Optional ByVal allowZeroValue As Boolean = False) As String
 
     Call ValidateMagacinInput( _
         datum:=datum, _
@@ -94,14 +98,15 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
         tip:=tip, _
         kolicina:=kolicina, _
         kooperantID:=kooperantID, _
-        dobavljacID:=dobavljacID)
+        dobavljacID:=dobavljacID, _
+        parcelaID:=parcelaID)
 
     Dim newID As String
     newID = GetNextID(TBL_MAGACIN, COL_MAG_ID, "MAG-")
 
-    If newID = "" Then
-        SaveMagacin = ""
-        Exit Function
+    If Len(Trim$(newID)) = 0 Then
+        Err.Raise vbObjectError + 4209, "SaveMagacinCore", _
+                "Generisanje MAG-ID nije uspelo."
     End If
 
     Dim cena As Double
@@ -118,10 +123,23 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
             cena = CDbl(cenaStr)
         End If
     End If
-    
+
+    ' Fail-closed: realan artikal se ne knjizi sa nevalidnom cenom (tiho
+    ' Cena=0/Vrednost=0 potcenjuje dug -- AUD-040 / FM-0113 #3). Cena = 0 je
+    ' dozvoljena SAMO za ULAZ uz eksplicitan allowZeroValue (dokumentovan
+    ' besplatan/korektivni prijem); IZLAZ i negativna cena ostaju strogi.
+    ' Pocetni dug (virtuelni artikal) je izuzet -- ide kroz BookPocetniDug.
+    If artikalID <> ART_POCETNI_DUG Then
+        If cena < 0 Or (cena = 0 And Not (tip = MAG_ULAZ And allowZeroValue)) Then
+            Err.Raise vbObjectError + 4206, "SaveMagacinCore", _
+                    "Cena za artikal " & artikalID & _
+                    " mora biti veca od 0 (nulta/nevalidna cena se ne knjizi)."
+        End If
+    End If
+
     If tip = MAG_IZLAZ And Not allowNoStock Then
         If GetArtikalStanje(artikalID) < kolicina Then
-            Err.Raise vbObjectError + 4205, "SaveMagacin", _
+            Err.Raise vbObjectError + 4205, "SaveMagacinCore", _
                     "Nedovoljno stanje za artikal " & artikalID
         End If
     End If
@@ -135,9 +153,39 @@ Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
                     napomena, "", dobavljacID)
 
     If AppendRow(TBL_MAGACIN, rowData) > 0 Then
-        SaveMagacin = newID
+        SaveMagacinCore = newID
     Else
-        SaveMagacin = ""
+        Err.Raise vbObjectError + 4211, "SaveMagacinCore", _
+                "Upis magacin reda nije uspeo (AppendRow)."
+    End If
+End Function
+
+' Back-compat omotac: hvata sve greske, loguje i vraca "" (stari kontrakt).
+' Zadrzan za pozivaoce koji rade na ""-kontraktu (npr. SaveMagacin_TX,
+' BookPocetniDug). NOVI UI pozivi treba da idu na SaveMagacinCore da bi
+' operater video tacan razlog greske.
+Public Function SaveMagacin(ByVal datum As Date, ByVal artikalID As String, _
+                             ByVal tip As String, ByVal kolicina As Double, _
+                             Optional ByVal kooperantID As String = "", _
+                             Optional ByVal parcelaID As String = "", _
+                             Optional ByVal brojDok As String = "", _
+                             Optional ByVal napomena As String = "", _
+                             Optional ByVal dobavljacID As String = "", _
+                             Optional ByVal overrideCena As Variant, _
+                             Optional ByVal allowNoStock As Boolean = False, _
+                             Optional ByVal allowZeroValue As Boolean = False) As String
+    On Error GoTo EH
+
+    If IsMissing(overrideCena) Then
+        SaveMagacin = SaveMagacinCore(datum, artikalID, tip, kolicina, _
+                                      kooperantID, parcelaID, brojDok, _
+                                      napomena, dobavljacID, , _
+                                      allowNoStock, allowZeroValue)
+    Else
+        SaveMagacin = SaveMagacinCore(datum, artikalID, tip, kolicina, _
+                                      kooperantID, parcelaID, brojDok, _
+                                      napomena, dobavljacID, overrideCena, _
+                                      allowNoStock, allowZeroValue)
     End If
 
     Exit Function
@@ -595,7 +643,8 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
                                  ByVal tip As String, _
                                  ByVal kolicina As Double, _
                                  Optional ByVal kooperantID As String = "", _
-                                 Optional ByVal dobavljacID As String = "")
+                                 Optional ByVal dobavljacID As String = "", _
+                                 Optional ByVal parcelaID As String = "")
     Const SRC As String = "ValidateMagacinInput"
 
     If Len(Trim$(artikalID)) = 0 Then
@@ -613,7 +662,69 @@ Private Sub ValidateMagacinInput(ByVal datum As Date, _
     If tip = MAG_IZLAZ And Len(Trim$(kooperantID)) = 0 Then
         Err.Raise vbObjectError + 4204, SRC, "KooperantID je obavezan za izlaz."
     End If
+
+    ' Referencijalni integritet (FM-0113 #1): artikal mora postojati, a za
+    ' izlaz i kooperant. Isti FindRows obrazac koji modul vec koristi (npr.
+    ' EnsureArtikalPocetniDug).
+    If FindRows(TBL_ARTIKLI, COL_ART_ID, artikalID).count = 0 Then
+        Err.Raise vbObjectError + 4207, SRC, "Artikal ne postoji: " & artikalID
+    End If
+
+    If tip = MAG_IZLAZ Then
+        If FindRows(TBL_KOOPERANTI, COL_KOOP_ID, kooperantID).count = 0 Then
+            Err.Raise vbObjectError + 4208, SRC, "Kooperant ne postoji: " & kooperantID
+        End If
+    End If
+
+    ' Parcela<->kooperant (FM-0113 #1). Vazi za realan IZLAZ; ULAZ nema parcelu,
+    ' a ART_POCETNI_DUG (migracija) je izuzet. Kad je PRACENJE_PARCELA ON parcela
+    ' je obavezna (isto kao u formi); prazna je dozvoljena samo kad je OFF.
+    ' Neprazna moze biti ;-lista -> svaka parcela mora postojati, pripadati
+    ' prosledjenom kooperantu i biti aktivna.
+    If tip = MAG_IZLAZ And artikalID <> ART_POCETNI_DUG Then
+        Dim parcelaClean As String
+        parcelaClean = Trim$(parcelaID)
+
+        If Len(parcelaClean) = 0 Then
+            If IsPracenjeParcela() Then
+                Err.Raise vbObjectError + 4215, SRC, _
+                    "Parcela je obavezna za izlaz (pracenje parcela je ukljuceno)."
+            End If
+        Else
+            Dim parts() As String, pi As Long, pid As String
+            parts = Split(parcelaClean, ";")
+            For pi = LBound(parts) To UBound(parts)
+                pid = Trim$(parts(pi))
+                If Len(pid) > 0 Then
+                    If FindRows(TBL_PARCELE, COL_PAR_ID, pid).count = 0 Then
+                        Err.Raise vbObjectError + 4212, SRC, "Parcela ne postoji: " & pid
+                    End If
+                    If Trim$(NzToText(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_KOOP))) <> Trim$(kooperantID) Then
+                        Err.Raise vbObjectError + 4213, SRC, _
+                            "Parcela " & pid & " ne pripada kooperantu " & kooperantID
+                    End If
+                    If Not IsAktivnaVrednost(LookupValue(TBL_PARCELE, COL_PAR_ID, pid, COL_PAR_AKTIVNA)) Then
+                        Err.Raise vbObjectError + 4214, SRC, "Parcela nije aktivna: " & pid
+                    End If
+                End If
+            Next pi
+        End If
+    End If
 End Sub
+
+' Interpretacija "Aktivna" vrednosti parcele -- isti semantic kao
+' modStammdatenSync.IsPWAActive (koji je Private): samo eksplicitno
+' NE/NO/FALSE/0/NEAKTIVAN/INACTIVE = neaktivno; prazno/nepoznato/greska = aktivno
+' (bez laznih blokova na instalacijama bez popunjene "Aktivna" kolone).
+Private Function IsAktivnaVrednost(ByVal value As Variant) As Boolean
+    IsAktivnaVrednost = True
+    If IsError(value) Then Exit Function
+    If IsNull(value) Then Exit Function
+    Select Case UCase$(Trim$(CStr(value)))
+        Case "NE", "NO", "FALSE", "0", "NEAKTIVAN", "INACTIVE"
+            IsAktivnaVrednost = False
+    End Select
+End Function
 
 Private Function GetArtikalStanje(ByVal artikalID As String) As Double
     Dim stanje As Variant

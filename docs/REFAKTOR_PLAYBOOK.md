@@ -253,13 +253,22 @@ shipped test suite-ovima (AUD-039). **Regression:** unos otkupa za dva proizvoda
 > Sidro je `origin/main` v2.24.0 (`9fd7087`) — pre rada re-bazirati na svež `main`.
 
 ### RF-27 — Agrohemija cena + validacija [P1 · S/M]
-**Fajlovi:** `frmAgrohemija.frm`, `modAgrohemija.bas`.
+**Fajlovi:** `frmAgrohemija.frm`, `modAgrohemija.bas` (+ `modAgrohemijaTests.bas`, `modPoruke.bas`, `modJournaling.bas` test-mode).
 **Obim:** izlaz prosleđuje `m_KorpaIzlaz(i).cena` kao `overrideCena` u `SaveMagacin` (simetrično
 sa ulazom `:843`) → knjižena cena = snapshot korpe (AUD-040); `modAgrohemija` zahteva validnu
 cenu > 0 za realne artikle (osim `ART_POCETNI_DUG`) umesto tihog `Cena=0/Vrednost=0`; referencijalne
 provere u `ValidateMagacinInput` (postoji/aktivan artikal/koop/parcela↔koop). **Regression:** izlaz
 artikla čija master cena ≠ cena u korpi → `tblMagacin` red mora nositi cenu iz korpe; izlaz sa
 nenumeričkom cenom mora pasti, ne upisati 0.
+**Status (grana `claude/rf-27-agrohemija-cena`, pre-merge):** ✅ izlaz `overrideCena`; ✅ fail-closed
+cena ≤ 0 (`SaveMagacinCore` diže typed grešku, `SaveMagacin` ostaje back-compat omotač → operater
+vidi tačan razlog, ne generički 4301); ✅ referencijalno: artikal/koop postoje, **parcela↔koop
+implementirana** (`;`-lista, svaka parcela postoji + pripada koopu + aktivna via `COL_PAR_AKTIVNA`;
+`PRACENJE_PARCELA` ON → parcela obavezna, OFF → prazna dozvoljena; `ART_POCETNI_DUG` izuzet);
+✅ nova zero-value ULAZ staza uz `allowZeroValue` (izlaz strog). „Aktivan" za `tblArtikli`/`tblKooperanti`
+= N/A (nema kolone u šemi). Testovi: `modAgrohemijaTests.RunAgrohemijaSmokeSuite` (izolovano:
+dev-guard + `modJournaling` test-mode + TX rollback, bez traga). AUD-040 zatvoren; AUD-049 povučen
+(parcela više nije odložena).
 
 ### RF-28 — MasterSync integritet delte [P1 · M] (koordinisati sa RF-14)
 **Fajlovi:** `modMasterSync.bas`, `modBrojevi.bas`, `modMalina.bas`, `modAutoHladnjaca.bas`.
@@ -319,7 +328,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-24 | Self-update hardening | ⬜ | — | |
 | RF-25 | Sync/IO hardening | ⬜ | — | |
 | RF-26 | Cenovnik + E2E gate | ⬜ | — | |
-| RF-27 | Agrohemija cena + validacija | ⬜ | — | **jeftin high-value (cena≠knjižena)** |
+| RF-27 | Agrohemija cena + validacija | ✅ grana | 2026-07-22 | implementirano na `claude/rf-27-agrohemija-cena` (pre-merge): AUD-040 + parcela↔koop + typed greške (`SaveMagacinCore`) + zero-ULAZ + smoke suite |
 | RF-28 | MasterSync integritet delte | ⬜ | — | spojiti sa RF-14 (isti fajl) |
 | RF-29 | Integritet/health dijagnostika | ⬜ | — | |
 | RF-30 | Sledljivost trace + lifecycle | ⬜ | — | |

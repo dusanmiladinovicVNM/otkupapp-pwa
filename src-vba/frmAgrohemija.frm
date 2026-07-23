@@ -23,6 +23,7 @@ Private Type tKorpaItem
     vrednost As Double
     parcelaID As String
     jm As String
+    allowZeroValue As Boolean    ' dokumentovan besplatan/korektivni ULAZ (cena 0)
 End Type
 
 Private m_KorpaIzlaz() As tKorpaItem
@@ -622,14 +623,17 @@ Private Sub btnZavrsiIzlaz_Click()
     For i = 1 To m_KorpaIzlazCount
         Dim result As String
 
-        result = SaveMagacin( _
+        ' SaveMagacinCore (ne omotac) -> typed greska stize do EH ove forme,
+        ' pa operater vidi tacan razlog (cena/artikal/kooperant) umesto 4301.
+        result = SaveMagacinCore( _
             Date, _
             m_KorpaIzlaz(i).artikalID, _
             MAG_IZLAZ, _
             m_KorpaIzlaz(i).kolicina, _
             koopID, _
             m_KorpaIzlaz(i).parcelaID, _
-            brojDok)
+            brojDok, _
+            overrideCena:=m_KorpaIzlaz(i).cena)
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4301, SRC, _
@@ -755,9 +759,21 @@ Private Sub btnDodajUlaz_Click()
         MsgBox "Unesite validnu koli" & ChrW(269) & "inu!", vbExclamation, APP_NAME
         Exit Sub
     End If
-    If Not IsNumeric(txtCenaUlaz.value) Or CDbl(txtCenaUlaz.value) <= 0 Then
+    Dim allowZeroUlaz As Boolean
+    If Not IsNumeric(txtCenaUlaz.value) Then
         MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
         Exit Sub
+    ElseIf CDbl(txtCenaUlaz.value) < 0 Then
+        MsgBox "Unesite validnu cenu!", vbExclamation, APP_NAME
+        Exit Sub
+    ElseIf CDbl(txtCenaUlaz.value) = 0 Then
+        ' Cena 0 je dozvoljena samo za dokumentovan besplatan/korektivni ULAZ
+        ' i tek uz izricitu potvrdu; inace bi vrednost 0 tiho potcenila magacin.
+        If MsgBox(Poruka("AGRO_MSG_POTVRDI_BESPLATAN_ULAZ"), _
+                  vbYesNo + vbQuestion, APP_NAME) <> vbYes Then
+            Exit Sub
+        End If
+        allowZeroUlaz = True
     End If
     
     Dim artikalID As String
@@ -781,6 +797,7 @@ Private Sub btnDodajUlaz_Click()
         .vrednost = kol * cena
         .parcelaID = ""
         .jm = jm
+        .allowZeroValue = allowZeroUlaz
     End With
     
     lstKorpaUlaz.AddItem artNaziv & " - " & Format$(kol, "0.00") & " " & jm & _
@@ -832,7 +849,10 @@ Private Sub btnZavrsiUlaz_Click()
     For i = 1 To m_KorpaUlazCount
         Dim result As String
 
-        result = SaveMagacin( _
+        ' SaveMagacinCore (ne omotac) -> typed greska stize do EH ove forme.
+        ' allowZeroValue prosledjuje dokumentovan besplatan/korektivni prijem
+        ' (cena 0); bez njega ULAZ sa cenom 0 pada isto kao IZLAZ.
+        result = SaveMagacinCore( _
             Date, _
             m_KorpaUlaz(i).artikalID, _
             MAG_ULAZ, _
@@ -842,7 +862,8 @@ Private Sub btnZavrsiUlaz_Click()
             brojDok, _
             "", _
             dobavljacID, _
-            m_KorpaUlaz(i).cena)
+            m_KorpaUlaz(i).cena, _
+            allowZeroValue:=m_KorpaUlaz(i).allowZeroValue)
 
         If Len(Trim$(result)) = 0 Then
             Err.Raise vbObjectError + 4311, SRC, _
