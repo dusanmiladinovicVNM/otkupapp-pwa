@@ -5,6 +5,7 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Iterable
 
 import pandas as pd
 
@@ -36,27 +37,71 @@ LEGAL_TOKENS = {
     "drustvo",
     "ogranicenom",
     "odgovornoscu",
+}
+
+GENERIC_NAME_TOKENS = LEGAL_TOKENS | {
+    "privredno",
+    "trgovinsko",
+    "preduzece",
+    "preduezce",
+    "firma",
+    "kompanija",
+    "company",
+    "proizvodnja",
+    "proizvodnje",
     "proizvodnju",
+    "prerada",
+    "prerade",
+    "preradu",
+    "skladistenje",
+    "skladistenja",
     "promet",
+    "prometa",
+    "trgovina",
+    "trgovine",
+    "trgovinu",
     "usluge",
+    "usluga",
+    "poljoprivreda",
+    "poljoprivredi",
+    "poljoprivredne",
+    "poljoprivrednih",
+    "radnja",
+    "za",
+    "i",
+    "u",
+    "na",
+    "sa",
 }
 
 CITY_TOKENS = {
     "arilje",
     "beograd",
     "cacak",
-    "caјetina",
     "cajetina",
     "kosjeric",
     "kragujevac",
     "novi",
     "sad",
-    "požega",
     "pozega",
     "sjenica",
     "smederevo",
     "uzice",
     "zlatibor",
+}
+
+# Reči koje same po sebi nisu dovoljne da potvrde identitet firme.
+AMBIGUOUS_CORE_TOKENS = {
+    "agro",
+    "eko",
+    "food",
+    "fruit",
+    "fruits",
+    "frigo",
+    "trade",
+    "mlekara",
+    "malina",
+    "kooperativa",
 }
 
 APR_EXPORT_FIELDS = (
@@ -98,17 +143,24 @@ def normalize_text(value: object) -> str:
     return " ".join(text.split())
 
 
-def name_tokens(value: object) -> list[str]:
-    tokens = normalize_text(value).split()
+def tokens_from_values(values: Iterable[object]) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        tokens.update(normalize_text(value).split())
+    return tokens
+
+
+def company_core_tokens(value: object, extra_stop_values: Iterable[object] = ()) -> list[str]:
+    stop_tokens = GENERIC_NAME_TOKENS | CITY_TOKENS | tokens_from_values(extra_stop_values)
     return [
         token
-        for token in tokens
-        if token not in LEGAL_TOKENS and token not in CITY_TOKENS and len(token) > 1
+        for token in normalize_text(value).split()
+        if token not in stop_tokens and len(token) > 1
     ]
 
 
-def normalized_company_name(value: object) -> str:
-    return " ".join(name_tokens(value))
+def normalized_company_name(value: object, extra_stop_values: Iterable[object] = ()) -> str:
+    return " ".join(company_core_tokens(value, extra_stop_values))
 
 
 def jaccard(left: set[str], right: set[str]) -> float:
@@ -121,50 +173,133 @@ def location_similarity(reference_location: object, apr_row: pd.Series) -> float
     ref = normalize_text(reference_location)
     if not ref:
         return 0.0
+
     candidates = {
         normalize_text(apr_row.get("opstina")),
         normalize_text(apr_row.get("opstina_apr")),
     }
+    candidates.discard("")
+
     if ref in candidates:
         return 1.0
-    if any(ref and candidate and (ref in candidate or candidate in ref) for candidate in candidates):
+    if any(ref in candidate or candidate in ref for candidate in candidates):
+        return 0.8
+
+    # APR naziv često sadrži naselje, dok dataset čuva samo opštinu.
+    apr_name = normalize_text(apr_row.get("naziv"))
+    if ref and apr_name and ref in apr_name:
+        return 0.7
+
+    ref_tokens = set(ref.split())
+    if any(ref_tokens and ref_tokens <= set(candidate.split()) for candidate in candidates):
         return 0.7
     return 0.0
 
 
-def name_similarity(reference_name: object, apr_name: object) -> float:
-    ref_norm = normalized_company_name(reference_name)
-    apr_norm = normalized_company_name(apr_name)
-    if not ref_norm or not apr_norm:
-        return 0.0
-    sequence = SequenceMatcher(None, ref_norm, apr_norm).ratio()
-    token_score = jaccard(set(ref_norm.split()), set(apr_norm.split()))
-    containment = 1.0 if ref_norm in apr_norm or apr_norm in ref_norm else 0.0
-    return 0.55 * sequence + 0.35 * token_score + 0.10 * containment
+def name_match_features(reference: pd.Series, apr_row: pd.Series) -> dict[str, object]:
+    reference_locations = [reference.get("location")]
+    apr_locations = [apr_row.get("opstina"), apr_row.get("opstina_apr")]
+    combined_stop_values = [*reference_locations, *apr_locations]
+
+    ref_core_tokens = company_core_tokens(
+        reference.get("reference_name"), combined_stop_values
+    )
+    apr_core_tokens = company_core_tokens(apr_row.get("naziv"), combined_stop_values)
+    ref_core = " ".join(ref_core_tokens)
+    apr_core = " ".join(apr_core_tokens)
+
+    if not ref_core or not apr_core:
+        return {
+            "score": 0.0,
+            "exact_core": False,
+            "subset_core": False,
+            "distinctive_shared": 0,
+            "location_score": 0.0,
+            "reference_core": ref_core,
+            "apr_core": apr_core,
+        }
+
+    ref_set = set(ref_core_tokens)
+    apr_set = set(apr_core_tokens)
+    shared = ref_set & apr_set
+    exact_core = ref_set == apr_set
+    subset_core = ref_set <= apr_set or apr_set <= ref_set
+    distinctive_shared = sum(
+        1
+        for token in shared
+        if token not in AMBIGUOUS_CORE_TOKENS and len(token) >= 4
+    )
+
+    sequence = SequenceMatcher(None, ref_core, apr_core).ratio()
+    token_score = jaccard(ref_set, apr_set)
+    containment = 1.0 if ref_core in apr_core or apr_core in ref_core else 0.0
+    location_score = location_similarity(reference.get("location"), apr_row)
+
+    score = 0.50 * sequence + 0.30 * token_score + 0.08 * containment
+    if exact_core:
+        score += 0.28
+    elif subset_core and distinctive_shared:
+        score += 0.16
+    score += 0.12 * location_score
+
+    return {
+        "score": min(score, 1.0),
+        "exact_core": exact_core,
+        "subset_core": subset_core,
+        "distinctive_shared": distinctive_shared,
+        "location_score": location_score,
+        "reference_core": ref_core,
+        "apr_core": apr_core,
+    }
 
 
-def best_match(reference: pd.Series, apr: pd.DataFrame) -> tuple[pd.Series | None, float, float]:
-    scores: list[tuple[float, int]] = []
+def best_match(
+    reference: pd.Series, apr: pd.DataFrame
+) -> tuple[pd.Series | None, float, float, dict[str, object]]:
+    scores: list[tuple[float, int, dict[str, object]]] = []
     for index, apr_row in apr.iterrows():
-        score = name_similarity(reference.get("reference_name"), apr_row.get("naziv"))
-        score += 0.08 * location_similarity(reference.get("location"), apr_row)
-        scores.append((min(score, 1.0), index))
+        features = name_match_features(reference, apr_row)
+        scores.append((float(features["score"]), index, features))
 
     if not scores:
-        return None, 0.0, 0.0
+        return None, 0.0, 0.0, {}
 
-    scores.sort(reverse=True)
-    best_score, best_index = scores[0]
+    scores.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_index, best_features = scores[0]
     second_score = scores[1][0] if len(scores) > 1 else 0.0
-    return apr.loc[best_index], best_score, best_score - second_score
+    return apr.loc[best_index], best_score, best_score - second_score, best_features
 
 
-def match_method(score: float, margin: float, exact_id: bool) -> tuple[str, str]:
+def match_method(
+    score: float,
+    margin: float,
+    exact_id: bool,
+    features: dict[str, object],
+    reference_location: object,
+) -> tuple[str, str]:
     if exact_id:
         return "matched", "known_company_id"
-    if score >= 0.94 and margin >= 0.08:
+
+    exact_core = bool(features.get("exact_core"))
+    subset_core = bool(features.get("subset_core"))
+    distinctive_shared = int(features.get("distinctive_shared", 0))
+    location_score = float(features.get("location_score", 0.0))
+    has_reference_location = bool(normalize_text(reference_location))
+
+    if exact_core and (location_score >= 0.7 or not has_reference_location):
+        return "matched", "exact_core_name_location"
+    if subset_core and distinctive_shared >= 1 and location_score >= 0.7 and margin >= 0.04:
+        return "matched", "core_name_subset_location"
+
+    # Tačno jezgro sa konfliktnom ili nedovoljno preciznom lokacijom ide na ručnu proveru.
+    if exact_core and margin >= 0.15:
+        return "manual_review", "exact_core_name_location_conflict"
+    if subset_core and distinctive_shared >= 1 and margin >= 0.16:
+        return "manual_review", "core_name_subset_unique_candidate"
+
+    if score >= 0.90 and margin >= 0.08:
         return "matched", "high_confidence_name_location"
-    if score >= 0.84 and margin >= 0.04:
+    if score >= 0.76 and margin >= 0.05:
         return "manual_review", "fuzzy_name_location"
     return "unmatched", "no_safe_match_in_narrow_apr_scope"
 
@@ -232,10 +367,24 @@ def main() -> None:
                 apr_row = apr_row.iloc[0]
             score = 1.0
             margin = 1.0
+            features: dict[str, object] = {
+                "exact_core": True,
+                "subset_core": True,
+                "distinctive_shared": 1,
+                "location_score": 1.0,
+                "reference_core": normalized_company_name(reference.get("reference_name")),
+                "apr_core": normalized_company_name(apr_row.get("naziv")),
+            }
         else:
-            apr_row, score, margin = best_match(reference, apr)
+            apr_row, score, margin, features = best_match(reference, apr)
 
-        status, method = match_method(score, margin, exact_id)
+        status, method = match_method(
+            score,
+            margin,
+            exact_id,
+            features,
+            reference.get("location"),
+        )
         row = reference.to_dict()
         row.update(
             {
@@ -252,6 +401,12 @@ def main() -> None:
                 "match_method": method,
                 "match_score": round(score, 4),
                 "match_margin": round(margin, 4),
+                "core_name_exact": bool(features.get("exact_core")),
+                "core_name_subset": bool(features.get("subset_core")),
+                "distinctive_shared_tokens": int(features.get("distinctive_shared", 0)),
+                "location_match_score": round(float(features.get("location_score", 0.0)), 3),
+                "reference_core_name": features.get("reference_core", ""),
+                "candidate_core_name": features.get("apr_core", ""),
                 "unmatched_reason": (
                     "No safe identity match in the current APR dataset limited to activity codes 1039/4631."
                     if status == "unmatched"
@@ -289,6 +444,7 @@ def main() -> None:
             ("manual_review", manual_count),
             ("unmatched", unmatched_count),
             ("safe_match_rate_pct", round(100 * matched_count / reference_count, 1) if reference_count else 0.0),
+            ("review_or_match_rate_pct", round(100 * (matched_count + manual_count) / reference_count, 1) if reference_count else 0.0),
             ("tier_a", int(output["priority_tier"].eq("A").sum())),
             ("tier_b", int(output["priority_tier"].eq("B").sum())),
             ("tier_c", int(output["priority_tier"].eq("C").sum())),
@@ -313,8 +469,7 @@ def main() -> None:
     print(f"Excel: {args.output_xlsx.resolve()}")
     print(f"APR match scope: {APR_MATCH_SCOPE}")
     for summary_row in summary.itertuples(index=False):
-        value = summary_row.value
-        print(f"  - {summary_row.metric}: {value}")
+        print(f"  - {summary_row.metric}: {summary_row.value}")
 
 
 if __name__ == "__main__":
