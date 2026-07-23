@@ -1,0 +1,43 @@
+{
+  "dataset": "Infosys references enriched against complete APR company registry",
+  "generated_at_utc": "2026-07-23T09:49:13+00:00",
+  "input_file": "infosys_replacement_targets.csv",
+  "input_sha256": "bca521a7f1ffcb5f5b010b21a41b87b9ce61dacb7388686715efa5f5ed1a0ec1",
+  "output_csv": "infosys_wide_enrichment.csv",
+  "output_csv_sha256": "46c5e56b60f034c198a350616bed7a93d477f9fd9f3d4a803da92bb688f37869",
+  "output_xlsx": "infosys_wide_enrichment.xlsx",
+  "output_xlsx_sha256": "24c726b4469a0e1e5410a4e1d4663d418c03f3d1b1258eda9fecf7162bda4ff4",
+  "match_scope": "APR all registered activity codes",
+  "text_matching": "Serbian Cyrillic and Latin folded to ASCII",
+  "reference_rows": 49,
+  "registry_records": 133802,
+  "matched_rows": 31,
+  "manual_review_rows": 10,
+  "unmatched_rows": 8,
+  "unique_matched_company_ids": 30,
+  "financial_source_unit": "thousand RSD",
+  "financial_normalized_unit": "RSD",
+  "financial_multiplier": 1000,
+  "companies_request": {
+    "url": "https://openapi.apr.gov.rs/api/opendata/companies",
+    "host": "openapi.apr.gov.rs",
+    "tls_mode": "secure-first-with-apr-fallback",
+    "tls_verified": false,
+    "tls_fallback_used": true,
+    "tls_error": "HTTPSConnectionPool(host='openapi.apr.gov.rs', port=443): Max retries exceeded with url: /api/opendata/companies (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1077)')))"
+  },
+  "financials_request": {
+    "url": "https://openapi.apr.gov.rs/api/opendata/companies/financial-statements",
+    "host": "openapi.apr.gov.rs",
+    "tls_mode": "secure-first-with-apr-fallback",
+    "tls_verified": false,
+    "tls_fallback_used": true,
+    "tls_error": "HTTPSConnectionPool(host='openapi.apr.gov.rs', port=443): Max retries exceeded with url: /api/opendata/companies/financial-statements (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1077)')))"
+  },
+  "limitations": [
+    "Public competitor reference does not prove an active current installation.",
+    "Name matching never replaces company-ID confirmation for external claims.",
+    "Manual-review rows require human verification before CRM activation.",
+    "The financial endpoint is treated as one exposed financial record per company."
+  ]
+}
