@@ -75,6 +75,17 @@ Zvanični sajt potvrđuje otkup, preradu, pakovanje i izvoz voća, kao i ugovore
 
 Javni izvori potvrđuju više lokacija, veliki skladišni i dnevni zamrzivački kapacitet i formalno praćenje proizvođača radi sledljivosti. Račun zahteva Enterprise account mapu, uključujući lokalni operativni tim i vlasničku grupu.
 
+### AGRO-SUNCOKRET
+
+- MB `20724064`;
+- prihod 2025 približno `813.105.000 RSD`;
+- 18 zaposlenih;
+- aktuelni APR-derived i poslovni izvori vode firmu pod šifrom `1039`;
+- javno je navedeno deset poslovnih jedinica;
+- stariji javni profil navodi šifru `4621`, pa postoji konflikt istorijskih podataka.
+
+`DECISION`: AGRO-SUNCOKRET ulazi u prvi research talas zbog veličine, aktuelnog procesnog signala i broja poslovnih jedinica, ali pre outreach-a mora se potvrditi stvarni otkupni tok, namena lokacija i aktuelna Infosys instalacija.
+
 ### SIROGOJNO COMPANY
 
 - potencijalni APR kandidat ima prihod približno `7.725.769.000 RSD` i 202 zaposlena;
@@ -181,7 +192,9 @@ Generiše:
 Dodatni spoljno validirani sloj:
 
 - `infosys_account_research.csv`;
-- `infosys_account_research_summary.md`.
+- `infosys_account_research_summary.md`;
+- `infosys_win_interview_template.md`;
+- `infosys_migration_discovery_checklist.md`.
 
 Excel sadrži:
 
@@ -201,17 +214,18 @@ Excel sadrži:
 2. BUDIM GRAD;
 3. FRUCOM FOOD;
 4. AS-AGRO 99;
-5. FRIGO BRAĆA MITROVIĆ.
+5. AGRO-SUNCOKRET;
+6. FRIGO BRAĆA MITROVIĆ.
 
 ### Talas 2 — verifikacija i verovatno kraći ciklus
 
-6. MAGIC BERRY FRUITS;
-7. FRIGOMIL;
-8. MALINA PROIZVOD.
+7. MAGIC BERRY FRUITS;
+8. FRIGOMIL;
+9. MALINA PROIZVOD.
 
 ### Procesna provera pre outreach-a
 
-9. AGRONOM FIT.
+10. AGRONOM FIT.
 
 Za svaki račun prikupiti:
 
@@ -240,4 +254,4 @@ Infosys replacement tržište je potvrđeno kao poseban GTM kanal. Wide APR enri
 4. aktuelnog Infosys odnosa;
 5. realnog switching trigger-a.
 
-AgriX ne treba da kontaktira svih 30 firmi. Prvi operativni fokus je osam spolja validiranih account-research kandidata, uz jednu dodatnu procesnu proveru. Nakon toga sledi Infosys migration discovery i battlecard zasnovan na dva postojeća AgriX klijenta koji su već prešli sa Infosys-a.
+AgriX ne treba da kontaktira svih 30 firmi. Prvi operativni fokus je devet spolja validiranih account-research kandidata, uz AGRONOM FIT kao dodatnu procesnu proveru. Nakon toga sledi Infosys migration discovery i battlecard zasnovan na dva postojeća AgriX klijenta koji su već prešli sa Infosys-a.
