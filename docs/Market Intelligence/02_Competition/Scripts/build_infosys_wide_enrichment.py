@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -28,12 +29,7 @@ from apr_pipeline_common import (  # noqa: E402
     utc_timestamp,
     write_json,
 )
-from build_infosys_replacement_targets import (  # noqa: E402
-    AMBIGUOUS_CORE_TOKENS,
-    company_core_tokens,
-    name_match_features,
-    normalize_text,
-)
+import build_infosys_replacement_targets as matcher  # noqa: E402
 
 DEFAULT_INPUT = COMPETITION_DIR / "infosys_replacement_targets.csv"
 DEFAULT_OUTPUT_CSV = COMPETITION_DIR / "infosys_wide_enrichment.csv"
@@ -41,6 +37,41 @@ DEFAULT_OUTPUT_XLSX = COMPETITION_DIR / "infosys_wide_enrichment.xlsx"
 DEFAULT_METADATA = COMPETITION_DIR / "infosys_wide_enrichment.metadata.json"
 WIDE_MATCH_SCOPE = "APR all registered activity codes"
 APR_MONETARY_MULTIPLIER = 1_000
+
+SERBIAN_CYRILLIC_TO_LATIN = str.maketrans(
+    {
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "ђ": "dj",
+        "е": "e",
+        "ж": "z",
+        "з": "z",
+        "и": "i",
+        "ј": "j",
+        "к": "k",
+        "л": "l",
+        "љ": "lj",
+        "м": "m",
+        "н": "n",
+        "њ": "nj",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "ћ": "c",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "c",
+        "ч": "c",
+        "џ": "dz",
+        "ш": "s",
+    }
+)
 
 MONETARY_FINANCIAL_FIELDS = {
     "PoslovnaImovina": "wide_poslovna_imovina_rsd",
@@ -50,6 +81,46 @@ MONETARY_FINANCIAL_FIELDS = {
     "NetoDobitak": "wide_neto_dobitak_rsd",
     "NetoGubitak": "wide_neto_gubitak_rsd",
 }
+
+
+def fold_serbian_text(value: object) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    text = text.translate(SERBIAN_CYRILLIC_TO_LATIN)
+    decomposed = unicodedata.normalize("NFKD", text)
+    ascii_text = "".join(
+        char for char in decomposed if not unicodedata.combining(char)
+    )
+    ascii_text = ascii_text.replace("đ", "dj")
+    ascii_text = re.sub(r"[^a-z0-9]+", " ", ascii_text)
+    return " ".join(ascii_text.split())
+
+
+# Matcher funkcije rezolvuju normalize_text iz svog modula u runtime-u.
+# Patch zato omogućava identično poređenje latinice i srpske ćirilice,
+# dok se originalni APR pravni naziv i dalje čuva u output kolonama.
+matcher.normalize_text = fold_serbian_text
+normalize_text = fold_serbian_text
+company_core_tokens = matcher.company_core_tokens
+name_match_features = matcher.name_match_features
+AMBIGUOUS_CORE_TOKENS = matcher.AMBIGUOUS_CORE_TOKENS
+
+
+def validate_text_normalization() -> None:
+    cases = {
+        "Активан": "aktivan",
+        "ПРИВРЕДНО ДРУШТВО ФРИГОМИЛ": "privredno drustvo frigomil",
+        "Čačak": "cacak",
+        "Đorđe": "djordje",
+    }
+    failures = [
+        f"{source!r}: {fold_serbian_text(source)!r} != {expected!r}"
+        for source, expected in cases.items()
+        if fold_serbian_text(source) != expected
+    ]
+    if failures:
+        raise RuntimeError("Serbian text normalization regression: " + "; ".join(failures))
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,7 +179,9 @@ def core_tokens_for_registry_row(row: pd.Series) -> list[str]:
     return company_core_tokens(row.get("naziv"), [row.get("opstina")])
 
 
-def build_token_index(registry: pd.DataFrame) -> tuple[dict[str, set[int]], dict[str, set[int]]]:
+def build_token_index(
+    registry: pd.DataFrame,
+) -> tuple[dict[str, set[int]], dict[str, set[int]]]:
     token_index: dict[str, set[int]] = defaultdict(set)
     location_index: dict[str, set[int]] = defaultdict(set)
 
@@ -150,24 +223,26 @@ def candidate_indices(
     location = normalize_text(reference.get("location"))
     location_candidates = location_index.get(location, set()) if location else set()
 
-    # Lokacija proširuje kandidatni skup, ali ga ne zamenjuje kada postoje jaki name tokeni.
     if indices and location_candidates:
         indices.update(location_candidates)
     elif not indices and location_candidates:
         indices = set(location_candidates)
 
-    prior_candidate_id = normalize_company_id(reference.get("candidate_apr_maticni_broj"))
+    prior_candidate_id = normalize_company_id(
+        reference.get("candidate_apr_maticni_broj")
+    )
     if prior_candidate_id:
-        prior_matches = registry.index[registry["maticni_broj"].eq(prior_candidate_id)]
+        prior_matches = registry.index[
+            registry["maticni_broj"].eq(prior_candidate_id)
+        ]
         indices.update(int(index) for index in prior_matches)
 
-    if not indices:
-        # Retki kratki ili generički nazivi: ograničena fallback pretraga umesto tihog odustajanja.
-        if fallback_tokens:
-            mask = registry["naziv"].astype("string").map(normalize_text).map(
-                lambda value: any(token in value.split() for token in fallback_tokens)
-            )
-            indices.update(int(index) for index in registry.index[mask])
+    if not indices and fallback_tokens:
+        normalized_names = registry["naziv"].astype("string").map(normalize_text)
+        mask = normalized_names.map(
+            lambda value: any(token in value.split() for token in fallback_tokens)
+        )
+        indices.update(int(index) for index in registry.index[mask])
 
     return indices
 
@@ -215,9 +290,18 @@ def wide_match_method(
 
     if exact_core and (location_score >= 0.7 or not has_reference_location):
         return "matched", "wide_exact_core_name_location"
-    if subset_core and distinctive_shared >= 1 and location_score >= 0.7 and margin >= 0.04:
+    if (
+        subset_core
+        and distinctive_shared >= 1
+        and location_score >= 0.7
+        and margin >= 0.04
+    ):
         return "matched", "wide_core_subset_location"
-    if score >= 0.92 and margin >= 0.08 and (location_score >= 0.7 or not has_reference_location):
+    if (
+        score >= 0.92
+        and margin >= 0.08
+        and (location_score >= 0.7 or not has_reference_location)
+    ):
         return "matched", "wide_high_confidence_name_location"
 
     if exact_core and margin >= 0.15:
@@ -244,12 +328,16 @@ def financial_fields(item: object) -> dict[str, object]:
         "wide_found_financials": True,
     }
     for source, target in MONETARY_FINANCIAL_FIELDS.items():
-        value = pd.to_numeric(pd.Series([item.get(source)]), errors="coerce").iloc[0]
-        result[target] = value * APR_MONETARY_MULTIPLIER if pd.notna(value) else pd.NA
+        value = numeric_series(pd.Series([item.get(source)])).iloc[0]
+        result[target] = (
+            value * APR_MONETARY_MULTIPLIER if pd.notna(value) else pd.NA
+        )
     return result
 
 
-def copy_registry_fields(row: dict[str, object], registry_row: pd.Series | None) -> None:
+def copy_registry_fields(
+    row: dict[str, object], registry_row: pd.Series | None
+) -> None:
     if registry_row is None:
         return
     row.update(
@@ -275,6 +363,7 @@ def preserved_match_registry_row(
 
 
 def main() -> None:
+    validate_text_normalization()
     args = parse_args()
     input_path = args.input.resolve()
     if not input_path.exists():
@@ -303,7 +392,10 @@ def main() -> None:
         row["wide_match_scope"] = WIDE_MATCH_SCOPE
 
         registry_row = preserved_match_registry_row(reference, registry_by_id)
-        if registry_row is not None and reference.get("apr_match_status") == "matched":
+        if (
+            registry_row is not None
+            and reference.get("apr_match_status") == "matched"
+        ):
             status = "matched"
             method = "preserved_confirmed_narrow_match"
             score = 1.0
@@ -318,9 +410,13 @@ def main() -> None:
             }
             candidate_count = 1
         else:
-            registry_row, score, margin, features, candidate_count = best_wide_match(
-                reference, registry, token_index, location_index
-            )
+            (
+                registry_row,
+                score,
+                margin,
+                features,
+                candidate_count,
+            ) = best_wide_match(reference, registry, token_index, location_index)
             status, method = wide_match_method(
                 score, margin, features, reference.get("location")
             )
@@ -367,7 +463,9 @@ def main() -> None:
 
     for index, output_row in output.iterrows():
         company_id = normalize_company_id(output_row.get("wide_maticni_broj"))
-        fields = financial_fields(financial_data.get(company_id) if company_id else None)
+        fields = financial_fields(
+            financial_data.get(company_id) if company_id else None
+        )
         for field, value in fields.items():
             output.at[index, field] = value
 
@@ -384,16 +482,25 @@ def main() -> None:
     )
     output["_status_order"] = output["wide_match_status"].astype(status_order)
     output = output.sort_values(
-        ["priority_tier", "_status_order", "wide_prihod_rsd", "reference_name"],
+        [
+            "priority_tier",
+            "_status_order",
+            "wide_prihod_rsd",
+            "reference_name",
+        ],
         ascending=[True, True, False, True],
         na_position="last",
     ).drop(columns=["_status_order"])
 
     matched_count = int(output["wide_match_status"].eq("matched").sum())
-    manual_count = int(output["wide_match_status"].eq("manual_review").sum())
+    manual_count = int(
+        output["wide_match_status"].eq("manual_review").sum()
+    )
     unmatched_count = int(output["wide_match_status"].eq("unmatched").sum())
     unique_matched_ids = int(
-        output.loc[output["wide_match_status"].eq("matched"), "wide_maticni_broj"]
+        output.loc[
+            output["wide_match_status"].eq("matched"), "wide_maticni_broj"
+        ]
         .dropna()
         .nunique()
     )
@@ -415,7 +522,9 @@ def main() -> None:
             ),
             (
                 "coverage_with_manual_pct",
-                round(100 * (matched_count + manual_count) / reference_count, 1)
+                round(
+                    100 * (matched_count + manual_count) / reference_count, 1
+                )
                 if reference_count
                 else 0.0,
             ),
@@ -439,7 +548,9 @@ def main() -> None:
         )
 
     metadata = {
-        "dataset": "Infosys references enriched against complete APR company registry",
+        "dataset": (
+            "Infosys references enriched against complete APR company registry"
+        ),
         "generated_at_utc": utc_timestamp(),
         "input_file": input_path.name,
         "input_sha256": sha256_file(input_path),
@@ -448,6 +559,7 @@ def main() -> None:
         "output_xlsx": args.output_xlsx.name,
         "output_xlsx_sha256": sha256_file(args.output_xlsx),
         "match_scope": WIDE_MATCH_SCOPE,
+        "text_matching": "Serbian Cyrillic and Latin folded to ASCII",
         "reference_rows": reference_count,
         "registry_records": len(registry),
         "matched_rows": matched_count,
