@@ -12,26 +12,38 @@
 - `06_POSITIONING.md` sa odlukom o tržišnoj kategoriji i dozvoljenim/zabranjenim tvrdnjama;
 - `07_PRODUCT_PORTFOLIO.md` sa proizvodnim stubovima, komercijalnim statusima, modulima, uslugama, hardverom i readiness gate-ovima;
 - `07A_PRODUCT_STATUS_MATRIX.csv` kao strukturisani izvor za roadmap i pricing;
-- `08_PRODUCT_ROADMAP.md` kao gate-based roadmap od core safety-ja do Field Operations, Gazdinstvo i GGAP validacije;
-- `08A_ROADMAP_MILESTONES.csv` kao operativna matrica faza, ciljnih prozora, zavisnosti i exit gate-ova.
+- `08_PRODUCT_ROADMAP.md` kao gate-based roadmap;
+- `08A_ROADMAP_MILESTONES.csv` kao operativna matrica milestone-a.
+
+### Critical correction — PWA-led operating model
+
+- PWA Otkupac i PWA Vozač nisu sporedni Field Operations dodatak desktop proizvodu;
+- AgriX Enterprise Core je end-to-end sistem `teren → sync → centralna baza → prijem/faktura/izveštaj`;
+- otkupljivači i vozači sami stvaraju osnovne poslovne događaje i dokumente na mestu nastanka;
+- centralni operater se primarno bavi kontrolom, prijemom, fakturama, finansijama i izveštajima, a ne ponovnim unosom terenskih podataka;
+- PWA, GAS, Sheets/MasterSync i desktop backoffice predstavljaju jedan proizvodni tok;
+- kiosk, tablet i termalna štampa dobijaju zasebne readiness statuse i ne smeju da obore status funkcionalne PWA aplikacije;
+- roadmap je promenjen tako da PWA-led productization i core correctness imaju jednak strateški prioritet;
+- glavni product KPI postaje procenat poslovnih događaja koji od terena do centrale prolaze bez ponovnog unosa.
 
 ### Approved / Proposed decisions
 
-- AgriX se pozicionira kao vertikalni poslovni operativni sistem za organizovani otkup poljoprivrednih proizvoda;
+- AgriX se pozicionira kao terenski i centralni operativni sistem za organizovani otkup;
 - Enterprise je primarno komercijalno jezgro;
+- PWA Otkupac i PWA Vozač su centralne komponente Enterprise Core-a;
 - Management PWA je deo Enterprise proizvoda, ne zaseban BI proizvod;
-- PWA Otkupac, kiosk i termalna štampa ostaju `Pilot only` do sezonske validacije;
+- centralni desktop je canonical backoffice posle sinhronizacije, ali nije zamišljen kao mesto rutinskog prepisivanja terenskih događaja;
+- PWA status se određuje prema konkretnom aktivnom scope-u i release evidence-u: `Standard offer` ili `Controlled rollout`;
+- kiosk standardizacija i termalna štampa ostaju odvojeni `Controlled rollout` tokovi;
 - Gazdinstvo Partner/Basic/Pro ostaje kontrolisana rana ponuda dok se ne potvrde activation, retention, willingness-to-pay i support cost;
 - GGAP ostaje discovery/pilot proizvod i ne prodaje se kao završena produkciona ili sertifikaciona garancija;
-- postojanje funkcije u kodu nije dovoljno za status `Standard offer`;
+- postojanje funkcije u kodu nije dovoljno za status `Standard offer`, ali nepostojanje standardnog hardware paketa nije dokaz da sama PWA nije spremna;
 - hardver, migracija, onboarding i posebne integracije imaju odvojenu ekonomiku;
 - trajni klijentski forkovi ostaju zabranjeni;
-- otvoreni P0 data-safety, statusni i authorization rizici imaju prednost nad novim funkcijama;
-- Field Operations prelazi u standardnu prodaju tek posle kontrolisanog realnog sezonskog pilota;
-- uvodi se sezonski feature freeze najmanje 30 dana pre kritične sezone pilot-klijenta;
-- Gazdinstvo se prioritetno validira kroz activation/retention/WTP, a ne kroz širenje premium scope-a;
-- pun GGAP razvoj ne počinje bez stručnog domain owner-a, standarda/verzije, pilot-klijenta, data mapiranja i ekonomske hipoteze;
-- `HOLD`, `REDUCE SCOPE` i `STOP` su legitimne roadmap odluke kada inicijativa ne prolazi dokazni ili ekonomski gate.
+- potvrđeni P0 data-safety, statusni i authorization rizici imaju prednost nad novim nepovezanim funkcijama;
+- uvodi se sezonski feature freeze najmanje 30 dana pre kritične sezone;
+- Gazdinstvo se validira kroz activation/retention/WTP, a ne kroz širenje premium scope-a;
+- pun GGAP razvoj ne počinje bez stručnog domain owner-a, standarda/verzije, pilot-klijenta, data mapiranja i ekonomske hipoteze.
 
 ### Evidence and qualification
 
@@ -39,15 +51,16 @@
 - 114 agro/prehrambenih Infosys referenci čini početni universe, sa 49 visokopotencijalnih redova;
 - wide APR enrichment je identifikovao 30 jedinstvenih pravnih lica, ali je identity match odvojen od stvarnog AgriX process fit-a;
 - masovni outbound ka celoj referentnoj bazi je odbijen; prioritet je mali, spoljno validiran account-research talas;
-- prihod je pomoćni signal, dok su broj stanica, kooperanata, dokumenata, logistika i procesna složenost važniji ICP kriterijumi;
+- prihod je pomoćni signal, dok su broj stanica, terenskih korisnika, dokumenata, logistika i procesna složenost važniji ICP kriterijumi;
 - poslovni roadmap je povezan sa aktivnim tehničkim auditom i ne može proglasiti proizvod spremnijim od runtime/release evidence-a.
 
 ### Next
 
-- završiti Fazu 0: rebase i verifikacija aktivnih P0 nalaza, target-workbook health i runtime release evidence;
-- zaključati standardni Enterprise Core onboarding i migracioni scope;
-- izabrati jednog Field Operations pilot-klijenta, 1–3 početne stanice i podržani tablet/printer paket;
-- razviti `10_PRICING_AND_PACKAGING.md` na osnovu portfolija, roadmap gate-ova i stvarnog support/onboarding troška;
+- izmeriti postojeći PWA-led tok: procenat terenskih unosa, sync uspeh, ručne centralne korekcije i vreme operatera;
+- završiti P0 closeout i sačuvati end-to-end release evidence;
+- zaključati standardni field-to-office onboarding i migracioni scope;
+- odvojeno standardizovati tablet/kiosk i termalni print paket;
+- razviti `10_PRICING_AND_PACKAGING.md` tako da vrednuje broj stanica, terenskih korisnika i obim dokumenata, a ne samo desktop licencu;
 - sprovesti dva Infosys win interview-a kada termini budu dostupni;
 - rezultate intervjua pretvoriti u battlecard, migration package i dokazne prodajne poruke.
 
