@@ -16,6 +16,7 @@ DEFAULT_ADDITIONS = COMPETITION_DIR / "infosys_manual_reference_additions.csv"
 DEFAULT_APR = APR_DIR / "Processed" / "apr_market_validated_1039_4631_2026-07-22.xlsx"
 DEFAULT_OUTPUT_CSV = COMPETITION_DIR / "infosys_replacement_targets.csv"
 DEFAULT_OUTPUT_XLSX = COMPETITION_DIR / "infosys_replacement_targets.xlsx"
+APR_MATCH_SCOPE = "APR activity codes 1039/4631 only"
 
 LEGAL_TOKENS = {
     "ad",
@@ -57,6 +58,17 @@ CITY_TOKENS = {
     "uzice",
     "zlatibor",
 }
+
+APR_EXPORT_FIELDS = (
+    ("maticni_broj", "apr_maticni_broj"),
+    ("naziv", "apr_naziv"),
+    ("sifra_delatnosti", "apr_sifra_delatnosti"),
+    ("status", "apr_status"),
+    ("godina", "apr_financial_year"),
+    ("ukupni_prihodi", "apr_prihod_rsd"),
+    ("prosecan_broj_zaposlenih", "apr_zaposleni"),
+    ("opstina_apr", "apr_opstina"),
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -154,7 +166,7 @@ def match_method(score: float, margin: float, exact_id: bool) -> tuple[str, str]
         return "matched", "high_confidence_name_location"
     if score >= 0.84 and margin >= 0.04:
         return "manual_review", "fuzzy_name_location"
-    return "unmatched", "no_safe_match"
+    return "unmatched", "no_safe_match_in_narrow_apr_scope"
 
 
 def load_reference_universe(references_path: Path, additions_path: Path) -> pd.DataFrame:
@@ -168,18 +180,26 @@ def load_reference_universe(references_path: Path, additions_path: Path) -> pd.D
 
     if additions_path.exists():
         additions = pd.read_csv(additions_path, dtype="string")
-        missing_columns = set(references.columns) - set(additions.columns)
-        for column in missing_columns:
-            additions[column] = pd.NA
-        missing_columns = set(additions.columns) - set(references.columns)
-        for column in missing_columns:
-            references[column] = pd.NA
-        references = pd.concat(
-            [references[additions.columns], additions],
-            ignore_index=True,
-        )
+        all_columns = list(dict.fromkeys([*references.columns, *additions.columns]))
+        references = references.reindex(columns=all_columns).astype("object")
+        additions = additions.reindex(columns=all_columns).astype("object")
+        references = pd.concat([references, additions], ignore_index=True).convert_dtypes()
 
     return references
+
+
+def add_candidate_fields(row: dict[str, object], apr_row: pd.Series | None) -> None:
+    if apr_row is None:
+        return
+    for source, target in APR_EXPORT_FIELDS:
+        row[f"candidate_{target}"] = apr_row.get(source)
+
+
+def add_confirmed_match_fields(row: dict[str, object], apr_row: pd.Series | None) -> None:
+    if apr_row is None:
+        return
+    for source, target in APR_EXPORT_FIELDS:
+        row[target] = apr_row.get(source)
 
 
 def main() -> None:
@@ -227,25 +247,23 @@ def main() -> None:
                     if reference.get("category") == "Mlekarstvo"
                     else "C"
                 ),
+                "apr_match_scope": APR_MATCH_SCOPE,
                 "apr_match_status": status,
                 "match_method": method,
                 "match_score": round(score, 4),
                 "match_margin": round(margin, 4),
+                "unmatched_reason": (
+                    "No safe identity match in the current APR dataset limited to activity codes 1039/4631."
+                    if status == "unmatched"
+                    else pd.NA
+                ),
             }
         )
 
-        if apr_row is not None:
-            for source, target in (
-                ("maticni_broj", "apr_maticni_broj"),
-                ("naziv", "apr_naziv"),
-                ("sifra_delatnosti", "apr_sifra_delatnosti"),
-                ("status", "apr_status"),
-                ("godina", "apr_financial_year"),
-                ("ukupni_prihodi", "apr_prihod_rsd"),
-                ("prosecan_broj_zaposlenih", "apr_zaposleni"),
-                ("opstina_apr", "apr_opstina"),
-            ):
-                row[target] = apr_row.get(source)
+        # Best candidate is kept only as an explicit diagnostic. It is not a confirmed identity.
+        add_candidate_fields(row, apr_row)
+        if status in {"matched", "manual_review"}:
+            add_confirmed_match_fields(row, apr_row)
 
         output_rows.append(row)
 
@@ -259,12 +277,18 @@ def main() -> None:
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
     output.to_csv(args.output_csv, index=False, encoding="utf-8-sig")
 
+    matched_count = int(output["apr_match_status"].eq("matched").sum())
+    manual_count = int(output["apr_match_status"].eq("manual_review").sum())
+    unmatched_count = int(output["apr_match_status"].eq("unmatched").sum())
+    reference_count = len(output)
+
     summary = pd.DataFrame(
         [
-            ("reference_rows", len(output)),
-            ("matched", int(output["apr_match_status"].eq("matched").sum())),
-            ("manual_review", int(output["apr_match_status"].eq("manual_review").sum())),
-            ("unmatched", int(output["apr_match_status"].eq("unmatched").sum())),
+            ("reference_rows", reference_count),
+            ("matched", matched_count),
+            ("manual_review", manual_count),
+            ("unmatched", unmatched_count),
+            ("safe_match_rate_pct", round(100 * matched_count / reference_count, 1) if reference_count else 0.0),
             ("tier_a", int(output["priority_tier"].eq("A").sum())),
             ("tier_b", int(output["priority_tier"].eq("B").sum())),
             ("tier_c", int(output["priority_tier"].eq("C").sum())),
@@ -275,6 +299,9 @@ def main() -> None:
     with pd.ExcelWriter(args.output_xlsx, engine="openpyxl") as writer:
         summary.to_excel(writer, sheet_name="Summary", index=False)
         output.to_excel(writer, sheet_name="Replacement Targets", index=False)
+        output[output["apr_match_status"].eq("matched")].to_excel(
+            writer, sheet_name="Matched", index=False
+        )
         output[output["apr_match_status"].eq("manual_review")].to_excel(
             writer, sheet_name="Manual Review", index=False
         )
@@ -284,8 +311,10 @@ def main() -> None:
 
     print(f"CSV: {args.output_csv.resolve()}")
     print(f"Excel: {args.output_xlsx.resolve()}")
-    for row in summary.itertuples(index=False):
-        print(f"  - {row.metric}: {int(row.value)}")
+    print(f"APR match scope: {APR_MATCH_SCOPE}")
+    for summary_row in summary.itertuples(index=False):
+        value = summary_row.value
+        print(f"  - {summary_row.metric}: {value}")
 
 
 if __name__ == "__main__":
