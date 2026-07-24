@@ -294,6 +294,65 @@
   .disc{background:var(--gold-soft);border:1px solid var(--gold);color:var(--gold-ink);
     border-radius:var(--r-sm);padding:4px 11px;font-size:11.5px;font-weight:600}
 
+  /* ---- Prosirene funkcionalnosti (F1–F4) ---- */
+  .check{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+  .check:first-child{border-top:0}
+  .check .ci{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center}
+  .check .ci svg{width:13px;height:13px}
+  .check .ci.ok{background:var(--ok-soft);color:var(--ok)}
+  .check .ci.warn{background:var(--warn-soft);color:var(--warn)}
+  .check .ci.crit{background:var(--crit-soft);color:var(--crit)}
+  .check .ct{font-size:12px;color:var(--ink-soft);line-height:1.35;min-width:0}
+  .check .ct b{color:var(--ink);font-weight:600}
+  .check .cx{margin-left:auto;font-size:10.5px;font-weight:700;white-space:nowrap;align-self:center}
+  .check .cx.ok{color:var(--ok)} .check .cx.warn{color:var(--warn)} .check .cx.crit{color:var(--crit)}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+  .cal-head b{color:var(--ink);font-family:var(--serif);font-size:15px}
+  .cal-head .nav{display:flex;gap:8px;color:var(--muted);font-size:15px}
+  .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .cal-w{font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint);text-align:center;font-weight:600;padding-bottom:1px}
+  .cal-d{border:1px solid var(--line);border-radius:7px;min-height:34px;padding:3px 0 2px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--ink-soft);background:var(--panel)}
+  .cal-d.out{opacity:.32}
+  .cal-d.today{border-color:var(--green);background:var(--green-soft);color:var(--green);font-weight:700}
+  .cal-dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
+  .cal-dt{width:5px;height:5px;border-radius:50%}
+  .cal-dt.plan{background:var(--green)} .cal-dt.warn{background:var(--warn)} .cal-dt.crit{background:var(--crit)} .cal-dt.ok{background:var(--ok)} .cal-dt.gold{background:var(--gold)}
+  .sortbar{display:flex;gap:7px;align-items:center;font-size:11.5px;color:var(--muted)}
+  .sortbar .sel{margin-left:auto;border:1px solid var(--line-2);border-radius:8px;padding:5px 9px;background:var(--panel);color:var(--ink);font-size:11.5px;display:inline-flex;gap:6px;align-items:center}
+  .orow{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;position:relative}
+  .orow::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:transparent}
+  .orow.warn::before{background:var(--warn)} .orow.crit::before{background:var(--crit)} .orow.ok::before{background:var(--ok)}
+  .omera{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:0 0 auto;font-size:8.5px;font-weight:700;color:#fff;background:var(--forest-2);text-align:center;line-height:1.05}
+  .o2{min-width:0} .o2 .ot{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .o2 .os{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .o3{font-size:10px;color:var(--faint);text-align:right;white-space:nowrap;flex:0 0 auto}
+  .o3 .ost{display:block;font-weight:700;margin-bottom:1px}
+  .o3 .ost.warn{color:var(--warn)} .o3 .ost.crit{color:var(--crit)} .o3 .ost.ok{color:var(--ok)} .o3 .ost.plan{color:var(--green)}
+  .pstep{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+  .pstep:first-child{border-top:0}
+  .pstep .pn{width:24px;height:24px;border-radius:7px;background:var(--green);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;font-family:var(--serif)}
+  .pstep .pt{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .pstep .ps{font-size:11px;color:var(--muted);margin-top:1px}
+  .pstep .pf{font-size:10px;color:var(--green);font-weight:600;margin-top:3px}
+  .fsel{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);cursor:pointer}
+  .fsel .cb{width:19px;height:19px;border-radius:6px;border:2px solid var(--line-2);flex:0 0 auto;display:grid;place-items:center;color:transparent}
+  .fsel .cb svg{width:12px;height:12px}
+  .fsel.on{border-color:var(--green);background:var(--green-soft)}
+  .fsel.on .cb{background:var(--green);border-color:var(--green);color:#fff}
+  .fsel .fn{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .fsel .fs{font-size:11px;color:var(--muted)}
+  .fsel .fd{margin-left:auto;font-size:11px;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+  .bar{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:9px;align-items:center;padding:5px 0;font-size:12px}
+  .bar .bl{color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bar .bt{height:9px;border-radius:5px;background:var(--panel-2);overflow:hidden;border:1px solid var(--line)}
+  .bar .bt i{display:block;height:100%;border-radius:5px 0 0 5px;background:var(--green)}
+  .bar .bt i.warn{background:var(--warn)} .bar .bt i.gold{background:var(--gold)} .bar .bt i.crit{background:var(--crit)}
+  .bar .bv{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;font-size:11.5px;text-align:right}
+  .donut{display:flex;align-items:center;gap:16px}
+  .donut svg{width:78px;height:78px;flex:0 0 auto;transform:rotate(-90deg)}
+  .donut .dn{font-family:var(--serif);font-size:23px;font-weight:600;color:var(--ink)}
+  .donut .dl{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+  .rep-line{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--line);color:var(--ink-soft)}
+  .rep-line:first-child{border-top:0} .rep-line b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 
@@ -655,6 +714,234 @@
     </div>
   </div>
 
+  <!-- ============ F1 — DIGITALNI AGRONOM ============ -->
+  <div class="sec">
+    <div class="sec-k">Funkcija 1 · odlučivanje</div>
+    <h2 class="sec-h">Digitalni agronom — provere pre slanja</h2>
+    <p class="sec-d">Pre nego što nalog ode na gazdinstvo, sistem automatski proverava dozu, karencu, stanje artikla
+      na lageru tog gazdinstva, meteo prozor i rizik po parceli. Savetnik šalje informisano; upozorenja putuju uz nalog.</p>
+  </div>
+
+  <div class="hero">
+    <div class="phone lg">
+      <div class="app-head">
+        <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div><div class="app-title" style="font-size:15px">Provere pre slanja</div><div class="app-sub">Zaštita · PAR-0142 · Jovanović M.</div></div>
+      </div>
+      <div class="app-body">
+        <div class="stub">
+          <div class="stub-h"><span>Digitalni agronom</span><span style="color:var(--warn)">3 OK · 2 pažnje</span></div>
+          <div class="check"><div class="ci ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ct"><b>Doza</b> 1,5 kg — zaokruženo na pakovanje (1 × 1,5 kg)</div><div class="cx ok">OK</div></div>
+          <div class="check"><div class="ci ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ct"><b>Karenca</b> 14 dana — berba dozvoljena od 02.08.</div><div class="cx ok">OK</div></div>
+          <div class="check"><div class="ci warn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5m0 3h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></div><div class="ct"><b>Lager gazdinstva</b> 1,0 kg dostupno — nedostaje 0,5 kg</div><div class="cx warn">NABAVKA</div></div>
+          <div class="check"><div class="ci ok"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ct"><b>Meteo prozor</b> povoljno danas–sreda (vetar &lt; 10 km/h, bez padavina)</div><div class="cx ok">OK</div></div>
+          <div class="check"><div class="ci crit"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ct"><b>Rizik: čađava krastavost</b> — visok (vlaga &gt; 90% tri dana)</div><div class="cx crit">VISOK</div></div>
+        </div>
+        <div class="stub">
+          <div class="stub-h"><span>Prozor za tretman (meteo)</span><span>PAR-0142</span></div>
+          <div style="display:flex;gap:5px;margin-top:2px">
+            <div style="flex:1;text-align:center"><div style="font-size:10px;color:var(--muted)">Uto</div><div style="height:26px;border-radius:6px;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;font-size:10px;font-weight:600;margin-top:3px">✓</div></div>
+            <div style="flex:1;text-align:center"><div style="font-size:10px;color:var(--muted)">Sre</div><div style="height:26px;border-radius:6px;background:var(--ok-soft);color:var(--ok);display:grid;place-items:center;font-size:10px;font-weight:600;margin-top:3px">✓</div></div>
+            <div style="flex:1;text-align:center"><div style="font-size:10px;color:var(--muted)">Čet</div><div style="height:26px;border-radius:6px;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center;font-size:10px;font-weight:600;margin-top:3px">vetar</div></div>
+            <div style="flex:1;text-align:center"><div style="font-size:10px;color:var(--muted)">Pet</div><div style="height:26px;border-radius:6px;background:var(--crit-soft);color:var(--crit);display:grid;place-items:center;font-size:10px;font-weight:600;margin-top:3px">kiša</div></div>
+          </div>
+        </div>
+        <div class="cta">Pošalji nalog (uz upozorenja) →</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center">Proizvođač vidi ista upozorenja pri prihvatanju.</div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note">
+        <h4><span class="num">✓</span> Reuse postojeće logike</h4>
+        <p>Doza (<code>agroCalcPreporuka</code>), karenca (<code>checkAgroKarenca</code>), lager (<code>magacinkoop</code> stanje), meteo prozor (<code>agroCheckMeteo</code> + <code>meteoLatest.sprayWindow</code>) već postoje na strani gazdinstva — Savetnik ih samo prikazuje pri kreiranju.</p>
+        <span class="ref">QA §4.9 · §211 · spec §4.4</span>
+      </div>
+      <div class="note gold">
+        <h4><span class="num">⚑</span> Rizik po parceli</h4>
+        <p>Rizik-upozorenja (bolest/mraz/vetar) izvode se iz meteo <code>risk</code> polja + karence + kulture. Nisu blokada — savetnik odlučuje; upozorenje se pamti uz nalog.</p>
+        <span class="ref">derivirani read-model, ne nov unos</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ F2 — CROSS-GAZDINSTVO PREGLEDI ============ -->
+  <div class="sec">
+    <div class="sec-k">Funkcija 2 · portfolio operativa</div>
+    <h2 class="sec-h">Kalendar rokova i lista svih naloga</h2>
+    <p class="sec-d">Dva pogleda preko celog portfolija: kalendar svih tretmana i rokova (ceo mesec na dlanu) i jedinstvena
+      lista SVIH naloga kroz sva gazdinstva, sa sortiranjem i filterima.</p>
+  </div>
+
+  <div class="grid">
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 6</div><div class="ct">Kalendar portfolija</div><div class="cd">Svi tretmani i rokovi kroz sva gazdinstva, po danu.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3v3M17 3v3M4 8h16M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.5"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Kalendar</div><div class="app-sub">Jul 2027 · 23 gazdinstva</div></div>
+        </div>
+        <div class="app-body">
+          <div class="cal-head"><span class="nav">‹</span><b>Jul 2027</b><span class="nav">›</span></div>
+          <div class="cal">
+            <div class="cal-w">Po</div><div class="cal-w">Ut</div><div class="cal-w">Sr</div><div class="cal-w">Če</div><div class="cal-w">Pe</div><div class="cal-w">Su</div><div class="cal-w">Ne</div>
+            <div class="cal-d out">29</div><div class="cal-d out">30</div><div class="cal-d">1</div><div class="cal-d">2<div class="cal-dots"><span class="cal-dt ok"></span></div></div><div class="cal-d">3</div><div class="cal-d">4</div><div class="cal-d">5</div>
+            <div class="cal-d">6</div><div class="cal-d">7<div class="cal-dots"><span class="cal-dt plan"></span></div></div><div class="cal-d">8</div><div class="cal-d">9</div><div class="cal-d">10<div class="cal-dots"><span class="cal-dt plan"></span></div></div><div class="cal-d">11</div><div class="cal-d">12</div>
+            <div class="cal-d">13</div><div class="cal-d">14</div><div class="cal-d">15<div class="cal-dots"><span class="cal-dt plan"></span><span class="cal-dt ok"></span></div></div><div class="cal-d">16</div><div class="cal-d">17</div><div class="cal-d">18<div class="cal-dots"><span class="cal-dt crit"></span></div></div><div class="cal-d">19</div>
+            <div class="cal-d">20</div><div class="cal-d">21<div class="cal-dots"><span class="cal-dt warn"></span></div></div><div class="cal-d">22</div><div class="cal-d">23</div><div class="cal-d today">24<div class="cal-dots"><span class="cal-dt plan"></span><span class="cal-dt warn"></span></div></div><div class="cal-d">25</div><div class="cal-d">26<div class="cal-dots"><span class="cal-dt plan"></span></div></div>
+            <div class="cal-d">27</div><div class="cal-d">28<div class="cal-dots"><span class="cal-dt gold"></span></div></div><div class="cal-d">29</div><div class="cal-d">30<div class="cal-dots"><span class="cal-dt plan"></span></div></div><div class="cal-d">31</div><div class="cal-d out">1</div><div class="cal-d out">2</div>
+          </div>
+          <div class="stub" style="margin-top:2px">
+            <div class="stub-h"><span>28. jul — 4 stavke</span><span>›</span></div>
+            <div class="rowline"><span class="omera" style="width:24px;height:24px">Zaš</span><div><b>Marković K.</b> · PAR-0210<div style="font-size:10.5px;color:var(--muted)">obavezujući · rok</div></div><span class="rt" style="color:var(--gold-ink)">nalog</span></div>
+            <div class="rowline"><span class="omera" style="width:24px;height:24px">Pri</span><div><b>Đurić N.</b> · PAR-0143</div><span class="rt">preporuka</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 7</div><div class="ct">Svi nalozi</div><div class="cd">Ravna lista kroz sva gazdinstva; sort i filter.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Svi nalozi</div><div class="app-sub">41 kroz sva gazdinstva</div></div>
+        </div>
+        <div class="app-body scroll">
+          <div class="sortbar"><span>Filter: <b style="color:var(--ink)">Kašnjenja</b></span><span class="sel">Rok ↑ <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span></div>
+          <div class="rows">
+            <div class="orow crit"><span class="omera">Zaš</span><div class="o2"><div class="ot">Jovanović Milan</div><div class="os">PAR-0142 · Jabuka · Signum 1,5 kg</div></div><div class="o3"><span class="ost crit">odstup.</span>20.07.</div></div>
+            <div class="orow warn"><span class="omera">Pri</span><div class="o2"><div class="ot">Petrović Stevan</div><div class="os">PAR-0088 · Kruška · KAN 40 kg/ha</div></div><div class="o3"><span class="ost warn">kasni 3d</span>21.07.</div></div>
+            <div class="orow warn"><span class="omera">Zaš</span><div class="o2"><div class="ot">Ilić Ljubica</div><div class="os">PAR-0301 · Kupina · Switch 0,8 kg</div></div><div class="o3"><span class="ost warn">kasni 1d</span>23.07.</div></div>
+            <div class="orow"><span class="omera">Pri</span><div class="o2"><div class="ot">Marković Kosta</div><div class="os">PAR-0210 · Jabuka · Ureu 30 kg/ha</div></div><div class="o3"><span class="ost plan">poslato</span>28.07.</div></div>
+            <div class="orow ok"><span class="omera">Zaš</span><div class="o2"><div class="ot">Đurić Nada</div><div class="os">PAR-0143 · Malina · Teldor 1,0 kg</div></div><div class="o3"><span class="ost ok">izvrš.</span>15.07.</div></div>
+            <div class="orow"><span class="omera">Rez</span><div class="o2"><div class="ot">Vasić Petar</div><div class="os">PAR-0402 · Jagoda</div></div><div class="o3"><span class="ost plan">prihvać.</span>26.07.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ F3 — PROTOKOLI I MASOVNO SLANJE ============ -->
+  <div class="sec">
+    <div class="sec-k">Funkcija 3 · efikasnost</div>
+    <h2 class="sec-h">Protokoli (programi) i masovno slanje</h2>
+    <p class="sec-d">Program tretmana za kulturu/sezonu (sekvenca radova) definiše se jednom, pa se šalje na više gazdinstava
+      odjednom — doza se automatski prilagođava po parceli. Glavni množilac efikasnosti kod velikog broja farmi.</p>
+  </div>
+
+  <div class="grid">
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 8</div><div class="ct">Protokol (program)</div><div class="cd">Sekvenca tretmana po kulturi; šablon savetnika.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Program zaštite</div><div class="app-sub">Jabuka · sezona 2027 · 6 koraka</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="pstep"><div class="pn">1</div><div><div class="pt">Zaštita — Signum</div><div class="ps">1,5 kg · fungicid</div><div class="pf">faza: precvetavanje (BBCH 69)</div></div></div>
+            <div class="pstep"><div class="pn">2</div><div><div class="pt">Prihrana — KAN 27%</div><div class="ps">40 kg/ha</div><div class="pf">faza: zametanje ploda</div></div></div>
+            <div class="pstep"><div class="pn">3</div><div><div class="pt">Zaštita — Switch</div><div class="ps">0,8 kg · protiv čađave krastavosti</div><div class="pf">+14 dana od koraka 1</div></div></div>
+            <div class="pstep"><div class="pn">4</div><div><div class="pt">Prihrana — Ca folijarno</div><div class="ps">3 l/ha</div><div class="pf">porast ploda</div></div></div>
+          </div>
+          <div class="cta">Primeni program na gazdinstva →</div>
+          <div class="cta ghost">Sačuvaj kao šablon</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 9</div><div class="ct">Masovno slanje</div><div class="cd">Izbor gazdinstava (filtrirano po kulturi) → jedan potez.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Masovno slanje</div><div class="app-sub">Program: Jabuka zaštita</div></div>
+        </div>
+        <div class="app-body">
+          <div class="sortbar" style="margin-bottom:2px"><span>Gazdinstva sa kulturom <b style="color:var(--ink)">Jabuka</b> (4)</span></div>
+          <div class="rows" id="fsel-list">
+            <div class="fsel on" data-ha="6,2"><div class="cb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="fn">Jovanović Milan</div><div class="fs">4 parcele · Ajdared, Zl. delišes</div></div><div class="fd">6,2 ha</div></div>
+            <div class="fsel on" data-ha="9,1"><div class="cb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="fn">Marković Kosta</div><div class="fs">5 parcela · Ajdared</div></div><div class="fd">9,1 ha</div></div>
+            <div class="fsel on" data-ha="3,4"><div class="cb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="fn">Ristić Toma</div><div class="fs">2 parcele · Greni Smit</div></div><div class="fd">3,4 ha</div></div>
+            <div class="fsel" data-ha="1,8"><div class="cb"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><div class="fn">Simić Ana</div><div class="fs">1 parcela · Ajdared</div></div><div class="fd">1,8 ha</div></div>
+          </div>
+          <div class="cta" id="bulk-cta">Pošalji program na 3 gazdinstva →</div>
+          <div style="font-size:11px;color:var(--muted);text-align:center">Doza se računa po ha svakog gazdinstva; nastaje po 1 nalog / gazdinstvo.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ F4 — ANALITIKA I IZVESTAJI ============ -->
+  <div class="sec">
+    <div class="sec-k">Funkcija 4 · analiza sezone</div>
+    <h2 class="sec-h">Analitika i izveštaji</h2>
+    <p class="sec-d">Poređenje tretmana, troška i rezultata po parceli i po gazdinstvu; sezonski izveštaj i export.
+      Agrosavetodavno (uz GGAP granicu §216) — nije zamena za GGAP evidenciju.</p>
+  </div>
+
+  <div class="grid">
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 10</div><div class="ct">Analitika portfolija</div><div class="cd">Izvršenje, trošak i tretmani kroz sva gazdinstva.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V6M10 20V10M16 20V4M22 20H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Analitika</div><div class="app-sub">portfolio · sezona 2027</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="donut">
+              <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--panel-2)" stroke-width="4"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--green)" stroke-width="4" stroke-linecap="round" stroke-dasharray="82 100"/></svg>
+              <div><div class="dn">82%</div><div class="dl">naloga izvršeno<br>na vreme · 5 kasni · 2 odstup.</div></div>
+            </div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>Trošak agrohemije / ha</span><span>RSD</span></div>
+            <div class="bar"><span class="bl">Marković K.</span><span class="bt"><i style="width:86%"></i></span><span class="bv">41.200</span></div>
+            <div class="bar"><span class="bl">Jovanović M.</span><span class="bt"><i style="width:70%"></i></span><span class="bv">33.800</span></div>
+            <div class="bar"><span class="bl">Đurić N.</span><span class="bt"><i class="warn" style="width:58%"></i></span><span class="bv">27.900</span></div>
+            <div class="bar"><span class="bl">Ilić Lj.</span><span class="bt"><i style="width:44%"></i></span><span class="bv">21.100</span></div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>Tretmani po meri</span><span>sezona</span></div>
+            <div class="bar"><span class="bl">Zaštita</span><span class="bt"><i style="width:92%"></i></span><span class="bv">148</span></div>
+            <div class="bar"><span class="bl">Prihrana</span><span class="bt"><i class="gold" style="width:55%"></i></span><span class="bv">89</span></div>
+            <div class="bar"><span class="bl">Rezidba</span><span class="bt"><i class="gold" style="width:22%"></i></span><span class="bv">35</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 11</div><div class="ct">Sezonski izveštaj</div><div class="cd">Po gazdinstvu; export PDF/CSV; GGAP granica.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Sezonski izveštaj</div><div class="app-sub">Jovanović M. · 2027</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="stub-h"><span>Bilans parcele PAR-0142</span><span>Jabuka</span></div>
+            <div class="rep-line"><span>Proizvodnja (otkup)</span><b>612.400</b></div>
+            <div class="rep-line"><span>Agrohemija</span><b>−84.900</b></div>
+            <div class="rep-line"><span>Ostali troškovi</span><b>−121.300</b></div>
+            <div class="rep-line" style="border-top:2px solid var(--line-2);margin-top:2px;padding-top:8px"><span style="font-weight:700;color:var(--ink)">Bruto bilans</span><b style="color:var(--green);font-size:14px">+406.200</b></div>
+          </div>
+          <div class="stub">
+            <div class="rep-line"><span>Tretmana ukupno</span><b>11</b></div>
+            <div class="rep-line"><span>Naloga izvršeno</span><b>9 / 11</b></div>
+            <div class="rep-line"><span>Odstupanja</span><b style="color:var(--crit)">1</b></div>
+          </div>
+          <div class="in-actions" style="margin-top:0">
+            <div class="btn pri">Export PDF</div>
+            <div class="btn sec">Export CSV</div>
+          </div>
+          <div style="font-size:11px;color:var(--gold-ink);background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--r-sm);padding:8px 11px;line-height:1.4">Agrosavetodavni izveštaj. Za GGAP sertifikaciju važi zvanična GGAP evidencija (poseban modul, §216).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">
     <div>AgriX Savetnik · UI wireframe za <code>SAVETNIK_MODUL_SKICA.md</code> + <code>SAVETNIK_MODUL_SPEC_V1.md</code></div>
     <div class="disc">Skica · ne finalni UI · cross-silo van opsega v1</div>
@@ -693,5 +980,22 @@
         setFilter(c.getAttribute('data-filter'));
       });
     });
+
+    // Masovno slanje: toggle gazdinstava + brojač u CTA
+    var fsel=document.querySelectorAll('#fsel-list .fsel');
+    var cta=document.getElementById('bulk-cta');
+    function refreshBulk(){
+      var n=document.querySelectorAll('#fsel-list .fsel.on').length;
+      if(cta) cta.textContent = n>0 ? ('Pošalji program na '+n+' gazdinstv'+(n===1?'o':(n<5?'a':'a'))+' →') : 'Izaberi gazdinstva';
+    }
+    fsel.forEach(function(f){
+      f.setAttribute('role','checkbox');
+      f.setAttribute('tabindex','0');
+      f.setAttribute('aria-checked', f.classList.contains('on')?'true':'false');
+      function toggle(){ f.classList.toggle('on'); f.setAttribute('aria-checked', f.classList.contains('on')?'true':'false'); refreshBulk(); }
+      f.addEventListener('click',toggle);
+      f.addEventListener('keydown',function(e){ if(e.key===' '||e.key==='Enter'){e.preventDefault();toggle();} });
+    });
+    refreshBulk();
   })();
 </script>

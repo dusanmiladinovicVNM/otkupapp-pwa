@@ -447,6 +447,103 @@ smoke-test u realnom tenantu (`RELEASE_GATES.md`).
 
 ---
 
+## 12. Prošireni funkcionalni scope (F1–F4)
+
+Četiri funkcionalna klastera preko v1 jezgra. Vodeće načelo isto: **reuse > new**,
+derivirani read-modeli umesto novih zapisa gde god je moguće. Wireframe ekrani 6–11
+(`docs/Product/savetnik-wireframe.html`) prikazuju ove funkcije.
+
+### 12.1 F1 — Digitalni agronom (provere pri kreiranju naloga)
+
+Pri sastavljanju `savet`-a savetnik vidi automatske provere. **Sve postoje na strani
+gazdinstva — samo se prikazuju u authoring toku (nula nove logike):**
+
+| Provera | Reuse izvor |
+|---|---|
+| Doza (zaokruženo na pakovanje) | `agroCalcPreporuka()` `agromere.js:609-676` |
+| Karenca (blokira Berbu) | `checkAgroKarenca()` `agromere.js:454-490` + `datumBerbeDozvoljeno` |
+| Lager gazdinstva (stanje artikla) | `stammdaten.magacinkoop` (filter `KooperantID`, `agromere.js:135-152`) |
+| Meteo prozor / spray window | `agroCheckMeteo()` `agromere.js:735-777` + `meteoLatest.sprayWindow` |
+| **Rizik po parceli** (bolest/mraz/vetar) | **derivirani** iz `meteoLatest.risk` (`parcele.js:80-121`) + karenca + kultura |
+
+- **Podaci:** savetnik čita meteo javnom granom `getParcelMeteoLatest` (`Code.gs:599-608`,
+  public) i lager/parcele kroz portfolio pull. Rizik je **read-model**, ne nov entitet.
+- **Jedino proširenje `savet`-a:** kolona/polje `Upozorenja` (kompaktan skup flag-ova:
+  npr. `lager_manjak;rizik_visok`) da proizvođač vidi **ista** upozorenja pri prihvatanju.
+  Aditivno na NOV `SAVETI` sheet (bez schema drift-a).
+
+### 12.2 F2 — Cross-gazdinstvo pregledi (kalendar + svi nalozi)
+
+Oba pogleda su **derivirana** iz `saveti` (+ `tretmani` za izvršeno) preko svih
+dodeljenih gazdinstava. Bez novog entiteta.
+
+- **Nova agregaciona read grana `getSavetnikSaveti`** (opciono `odDatum/doDatum`): vraća
+  flat listu `savet`-a kroz sva `assigned` gazdinstva jednog savetnika. Guard:
+  `role===Savetnik` → po `AdvisorAssignments`; Management bypass. Efikasnije od klijentske
+  petlje `getSaveti` po gazdinstvu (mada je i to moguće — read grane nisu pod `withLock`).
+- **Kalendar** = `saveti`/`tretmani` grupisani po `rok`/`datum`. **Svi nalozi** = ista lista,
+  ravno, sa klijentskim sort/filter (status, mera, kultura, `rok`).
+- **Kašnjenje** = `rok < danas && statusIzvrsenja ∉ {izvrseno, odbijeno}` (klijentski, kao
+  `pregled.js:165-169`).
+
+### 12.3 F3 — Protokoli (programi) i masovno slanje
+
+**Nov entitet `protokol`** = savetnikov šablon (sekvenca planiranih tretmana za kulturu).
+
+```
+// PWA store: 'protokoli' (keyPath: clientRecordID) · sheet: PROTOKOLI-<SavetnikID>
+{
+  clientRecordID, serverRecordID, createdAtClient, updatedAtClient, updatedAtServer, syncedAt,
+  savetnikId, naziv, kultura,
+  koraci: [ { redosled, mera, artikalID, artikalNaziv, dozaRule, timing, napomena } ],
+  // dozaRule: npr. 'poHa' | 'fiksno'; timing: 'faza:BBCH69' | 'offset:+14d'
+  syncStatus, syncAttempts, lastSyncError, deleted, entityType:'protokol', schemaVersion:1
+}
+```
+
+- **Sheet `PROTOKOLI-<SavetnikID>`** (savetnik-scoped, NE per-kooperant — obrazac kao
+  `TRETMAN-*` ali sufiks je `SAV-…`), action **`syncProtokol`** (guard `role===Savetnik`
+  own / Management). `DB_VERSION 7→8` + `protokoli` store (aditivna migracija).
+- **Masovno slanje = klijentski fan-out, BEZ nove write mehanike:** za svako izabrano
+  gazdinstvo (+ parcele izabrane kulture) instanciraj svaki korak protokola u **`savet`**
+  zapis; doza po ha te parcele preko `agroCalcPreporuka()`; svaki `savet` idempotentan
+  (`clientRecordID`), pa **`syncSavet` po gazdinstvu** (reuse §3.3). Rezultat: `N×koraci`
+  `savet` zapisa, po jedan po (gazdinstvo × korak).
+- **`BatchId`** (opciono polje na `savet`) grupiše jedno masovno slanje → prati/povuci grupno.
+
+### 12.4 F4 — Analitika i izveštaji
+
+**Derivirani read-modeli** nad podacima koje savetnik već sme da čita.
+
+- **Nove scoped read grane** (ogledalo postojećih, rešavaju istu read-asimetriju iz §4.2.1,
+  ne diraju kooperantov put): `getSavetnikTroskovi`, `getSavetnikProizvodnja` (uz
+  `getSavetnikTretmani`/`getSaveti` iz §3.5). Guard: `isAssignedEntity`.
+- **Agregacija na klijentu:** trošak/tretmani/izvršenje po gazdinstvu i po parceli;
+  planirano-vs-urađeno rate; trend odstupanja. Reuse bilans logike `knjiga-polja.js:250-313`.
+- **Export:** CSV (klijentski) i PDF (**reuse `src/js/services/pdf.js`**).
+- **GGAP granica (§216):** agrosavetodavni izveštaj; **nije** GGAP evidencija (ostaje u GGAP
+  modulu). Eksplicitno u UI (wireframe ekran 11).
+
+### 12.5 Sažetak dodataka na model (F1–F4)
+
+| Sloj | Dodatak | Nap. |
+|---|---|---|
+| `SAVETI_COLUMNS` | `Upozorenja` (F1), `BatchId` (F3) | aditivno na NOV sheet (nema drift-a) |
+| Nov entitet | `protokol` → store `protokoli`, `PROTOKOLI-<SavetnikID>`, `syncProtokol` | `DB_VERSION 7→8` |
+| GAS read | `getSavetnikSaveti` (agregat, F2), `getSavetnikTroskovi`/`getSavetnikProizvodnja` (F4) | scoped `isAssignedEntity` |
+| Bez novog | F1 provere, kalendar/svi-nalozi, masovno slanje (fan-out), analitika/export | reuse/derivirano |
+
+### 12.6 Uticaj na fazni plan
+
+- **F1 (Digitalni agronom)** i **F2 (pregledi)** su mali/srednji i prirodno idu uz **v1**
+  (F1 = čist reuse; F2 = jedna agregaciona grana).
+- **F4 (analitika/izveštaj)** = derivirano + export; **v1.1**.
+- **F3 (protokoli + masovno slanje)** = nov entitet + fan-out; najveći, ali najviši ROI za
+  „mnogo farmi" → **v1.1**, odmah posle jezgra. `withLock` per-tenant (§11/3) je relevantan
+  kod masovnog slanja — batch po gazdinstvu + throttle.
+
+---
+
 _Sve `file:line` reference verifikovane pri pisanju. Pre kodiranja: `DebugKoloneTabele`
 analog na serveru (proveri stvarne nazive kolona `Users`/`Stammdaten`), i potvrdi da
 `ensureSheetColumns` ne dira popunjene `TRETMAN-*` sheet-ove (ne menjamo ih ni ovde)._
