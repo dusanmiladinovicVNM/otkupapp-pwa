@@ -1,0 +1,694 @@
+<style>
+  /* ===================================================================
+     AgriX Savetnik — UI wireframe (v1, Opcija A)
+     Vizuelni jezik preuzet iz stvarne AgriX PWA (src/styles/*):
+     forest #1E2D14 · brand-green #5EA135 · cream #F7F4EE · gold #C8A84B
+     Prati docs/Product/SAVETNIK_MODUL_SKICA.md + _SPEC_V1.md
+     =================================================================== */
+
+  :root {
+    --paper:#F7F4EE; --paper-2:#EFE9DE;
+    --panel:#FFFFFF; --panel-2:#FAF8F2;
+    --ink:#1E2D14; --ink-soft:#3a4a2c; --muted:#7A856E; --faint:#9FA894;
+    --line:rgba(30,45,20,.10); --line-2:rgba(30,45,20,.17);
+    --green:#5EA135; --green-2:#7dbf55; --green-soft:rgba(94,161,53,.12);
+    --forest:#1E2D14; --forest-2:#354a28;
+    --gold:#C8A84B; --gold-soft:rgba(200,168,75,.18); --gold-ink:#7a6420;
+    --ok:#2e7d32; --ok-soft:rgba(46,125,50,.12);
+    --warn:#c8893a; --warn-soft:rgba(200,137,58,.15);
+    --crit:#b34747; --crit-soft:rgba(179,71,71,.12);
+    --chrome-1:#25381a; --chrome-2:#3c5a28; --on-chrome:#f3f7ec;
+    --shadow:0 1px 3px rgba(30,45,20,.06), 0 10px 30px rgba(30,45,20,.06);
+    --shadow-lg:0 20px 60px rgba(30,45,20,.13);
+    --r-sm:10px; --r-md:14px; --r-lg:18px; --r-xl:26px;
+    --serif:Georgia,"Times New Roman",serif;
+    --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#111a0b; --paper-2:#0c1307;
+      --panel:#1b2713; --panel-2:#202f16;
+      --ink:#eef3e7; --ink-soft:#cfd8c4; --muted:#98a688; --faint:#6f7d62;
+      --line:rgba(205,225,185,.12); --line-2:rgba(205,225,185,.22);
+      --green:#8ecb63; --green-2:#a7d97f; --green-soft:rgba(142,203,99,.15);
+      --forest:#0c1307; --forest-2:#26381b;
+      --gold:#d8bd66; --gold-soft:rgba(216,189,102,.16); --gold-ink:#e6cf86;
+      --ok:#6dc072; --ok-soft:rgba(109,192,114,.15);
+      --warn:#e0a24e; --warn-soft:rgba(224,162,78,.16);
+      --crit:#e58080; --crit-soft:rgba(229,128,128,.16);
+      --chrome-1:#16220d; --chrome-2:#26381b; --on-chrome:#eef3e7;
+      --shadow:0 1px 3px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.4);
+      --shadow-lg:0 22px 64px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#F7F4EE; --paper-2:#EFE9DE; --panel:#FFFFFF; --panel-2:#FAF8F2;
+    --ink:#1E2D14; --ink-soft:#3a4a2c; --muted:#7A856E; --faint:#9FA894;
+    --line:rgba(30,45,20,.10); --line-2:rgba(30,45,20,.17);
+    --green:#5EA135; --green-2:#7dbf55; --green-soft:rgba(94,161,53,.12);
+    --forest:#1E2D14; --forest-2:#354a28; --gold:#C8A84B; --gold-soft:rgba(200,168,75,.18); --gold-ink:#7a6420;
+    --ok:#2e7d32; --ok-soft:rgba(46,125,50,.12); --warn:#c8893a; --warn-soft:rgba(200,137,58,.15);
+    --crit:#b34747; --crit-soft:rgba(179,71,71,.12);
+    --chrome-1:#25381a; --chrome-2:#3c5a28; --on-chrome:#f3f7ec;
+    --shadow:0 1px 3px rgba(30,45,20,.06), 0 10px 30px rgba(30,45,20,.06); --shadow-lg:0 20px 60px rgba(30,45,20,.13);
+  }
+  :root[data-theme="dark"]{
+    --paper:#111a0b; --paper-2:#0c1307; --panel:#1b2713; --panel-2:#202f16;
+    --ink:#eef3e7; --ink-soft:#cfd8c4; --muted:#98a688; --faint:#6f7d62;
+    --line:rgba(205,225,185,.12); --line-2:rgba(205,225,185,.22);
+    --green:#8ecb63; --green-2:#a7d97f; --green-soft:rgba(142,203,99,.15);
+    --forest:#0c1307; --forest-2:#26381b; --gold:#d8bd66; --gold-soft:rgba(216,189,102,.16); --gold-ink:#e6cf86;
+    --ok:#6dc072; --ok-soft:rgba(109,192,114,.15); --warn:#e0a24e; --warn-soft:rgba(224,162,78,.16);
+    --crit:#e58080; --crit-soft:rgba(229,128,128,.16);
+    --chrome-1:#16220d; --chrome-2:#26381b; --on-chrome:#eef3e7;
+    --shadow:0 1px 3px rgba(0,0,0,.5), 0 12px 34px rgba(0,0,0,.4); --shadow-lg:0 22px 64px rgba(0,0,0,.55);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 600px at 12% -8%, var(--green-soft), transparent 60%),
+      var(--paper);
+    color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  .wrap{max-width:1200px;margin:0 auto;padding:clamp(20px,4vw,44px) clamp(16px,4vw,40px) 80px;}
+
+  /* ---- Board header ---- */
+  .board-head{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:32px;}
+  .brand{display:flex;align-items:center;gap:13px;}
+  .brand-mark{width:44px;height:44px;border-radius:13px;flex:0 0 auto;
+    background:linear-gradient(150deg,var(--green),var(--forest-2));
+    display:grid;place-items:center;color:#fff;box-shadow:var(--shadow);}
+  .brand-mark svg{width:25px;height:25px}
+  .brand-name{font-family:var(--serif);font-size:26px;font-weight:600;letter-spacing:.2px;line-height:1.05;color:var(--ink)}
+  .brand-name b{color:var(--green);font-weight:600}
+  .brand-sub{font-size:12.5px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
+  .head-meta{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+  .pill-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .meta-tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--line-2);border-radius:999px;padding:5px 11px;background:var(--panel)}
+  .theme-btn{font-family:var(--sans);font-size:12.5px;cursor:pointer;color:var(--ink);
+    border:1px solid var(--line-2);border-radius:999px;padding:6px 13px;background:var(--panel);
+    display:inline-flex;gap:7px;align-items:center;transition:.15s}
+  .theme-btn:hover{border-color:var(--green);color:var(--green)}
+  .theme-btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  /* ---- Legend ---- */
+  .legend{display:flex;flex-wrap:wrap;gap:16px 22px;align-items:center;margin:-8px 0 34px;
+    padding:13px 18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow)}
+  .legend-t{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);font-weight:600}
+  .lg{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-soft)}
+  .dot{width:11px;height:11px;border-radius:4px;flex:0 0 auto}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.crit{background:var(--crit)}
+  .dot.plan{background:var(--green)} .dot.gold{background:var(--gold)}
+
+  /* ---- Section headers ---- */
+  .sec{margin:46px 0 22px}
+  .sec-k{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--green);
+    letter-spacing:.14em;text-transform:uppercase}
+  .sec-h{font-family:var(--serif);font-size:clamp(21px,2.6vw,27px);font-weight:600;margin:3px 0 4px;color:var(--ink);text-wrap:balance}
+  .sec-d{font-size:14px;color:var(--muted);max-width:64ch}
+
+  /* ---- Hero layout ---- */
+  .hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:34px;align-items:start}
+  @media(max-width:860px){.hero{grid-template-columns:1fr}}
+
+  /* ---- Phone frame ---- */
+  .phone{width:100%;max-width:390px;margin-inline:auto;background:var(--panel);
+    border-radius:var(--r-xl);border:1px solid var(--line-2);
+    box-shadow:var(--shadow-lg);overflow:hidden;position:relative;
+    display:flex;flex-direction:column;}
+  .phone.lg{max-width:412px}
+  .phone-status{height:26px;background:var(--chrome-1);display:flex;align-items:center;justify-content:space-between;
+    padding:0 16px;color:var(--on-chrome);font-size:10.5px;font-variant-numeric:tabular-nums;opacity:.95}
+  .app-head{background:linear-gradient(160deg,var(--chrome-2),var(--chrome-1));color:var(--on-chrome);
+    padding:12px 16px 14px;display:flex;align-items:center;gap:11px}
+  .app-head .ah-logo{width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.14);display:grid;place-items:center}
+  .app-head .ah-logo svg{width:16px;height:16px}
+  .app-title{font-family:var(--serif);font-size:16.5px;font-weight:600;letter-spacing:.2px}
+  .app-title span{opacity:.7;font-weight:400}
+  .app-sub{font-size:11px;opacity:.72;margin-top:1px}
+  .app-head .ah-right{margin-left:auto;display:flex;gap:9px;align-items:center}
+  .ah-ic{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.12);display:grid;place-items:center}
+  .ah-ic svg{width:16px;height:16px;color:var(--on-chrome)}
+  .ah-badge{position:absolute;font-size:9px;background:var(--gold);color:#2a2205;font-weight:700;
+    border-radius:999px;padding:1px 5px;transform:translate(9px,-9px)}
+
+  .app-body{background:var(--panel-2);padding:14px 13px;display:flex;flex-direction:column;gap:12px;
+    min-height:420px;max-height:640px;overflow:hidden;position:relative}
+  .app-body.scroll{overflow-y:auto}
+  .app-body::-webkit-scrollbar{width:6px}
+  .app-body::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+
+  /* ---- KPI summary tiles ---- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 8px 10px;text-align:left;position:relative;overflow:hidden}
+  .kpi .n{font-family:var(--serif);font-size:23px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .kpi .l{font-size:10px;color:var(--muted);margin-top:4px;letter-spacing:.02em;line-height:1.2}
+  .kpi.warn .n{color:var(--warn)} .kpi.crit .n{color:var(--crit)}
+  .kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--green);opacity:.55}
+  .kpi.warn::after{background:var(--warn)} .kpi.crit::after{background:var(--crit)}
+
+  /* ---- Filter chips ---- */
+  .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;font-family:var(--sans);font-size:12px;cursor:pointer;white-space:nowrap;
+    border:1px solid var(--line-2);background:var(--panel);color:var(--ink-soft);
+    border-radius:999px;padding:6px 12px;transition:.15s;display:inline-flex;gap:6px;align-items:center}
+  .chip .c{font-variant-numeric:tabular-nums;font-weight:600;font-size:11px;color:var(--muted)}
+  .chip:hover{border-color:var(--green)}
+  .chip[aria-pressed="true"]{background:var(--forest-2);border-color:var(--forest-2);color:#fff}
+  .chip[aria-pressed="true"] .c{color:rgba(255,255,255,.75)}
+  .chip:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  .list-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;margin-top:2px;display:flex;justify-content:space-between}
+
+  /* ---- Producer rows (the centerpiece) ---- */
+  .rows{display:flex;flex-direction:column;gap:8px}
+  .prow{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
+    padding:11px 12px 11px 13px;position:relative;cursor:pointer;transition:.14s}
+  .prow:hover{border-color:var(--green);transform:translateY(-1px);box-shadow:var(--shadow)}
+  .prow::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:transparent}
+  .prow.attn-warn::before{background:var(--warn)}
+  .prow.attn-crit::before{background:var(--crit)}
+  .avatar{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;
+    font-family:var(--serif);background:linear-gradient(150deg,var(--green),var(--forest-2))}
+  .pmeta{min-width:0}
+  .pname{font-weight:600;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:7px}
+  .pid{font-family:var(--mono);font-size:10.5px;color:var(--faint);font-weight:400}
+  .psub{font-size:11.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ptags{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .tag{font-size:10px;font-weight:600;border-radius:999px;padding:2px 8px;letter-spacing:.01em;white-space:nowrap}
+  .tag.plan{background:var(--green-soft);color:var(--green)}
+  .tag.ok{background:var(--ok-soft);color:var(--ok)}
+  .tag.warn{background:var(--warn-soft);color:var(--warn)}
+  .tag.crit{background:var(--crit-soft);color:var(--crit)}
+  .tag.idle{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+  .pright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
+  .ptime{font-size:10px;color:var(--faint);white-space:nowrap}
+  .chev{color:var(--faint)}
+  .prow[hidden]{display:none}
+
+  /* ---- Alert feed ---- */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 12px}
+  .panel-t{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:7px;margin-bottom:9px}
+  .alert{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+  .alert:first-of-type{border-top:0}
+  .a-ic{width:24px;height:24px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center}
+  .a-ic svg{width:14px;height:14px}
+  .a-ic.warn{background:var(--warn-soft);color:var(--warn)}
+  .a-ic.crit{background:var(--crit-soft);color:var(--crit)}
+  .a-txt{font-size:12px;color:var(--ink-soft);line-height:1.4}
+  .a-txt b{color:var(--ink);font-weight:600}
+  .a-time{font-size:10px;color:var(--faint);margin-top:1px}
+
+  /* ---- Bottom nav ---- */
+  .bnav{display:grid;grid-template-columns:repeat(5,1fr);background:var(--panel);
+    border-top:1px solid var(--line-2);padding:6px 4px 8px}
+  .bn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;color:var(--muted);font-size:9.5px;position:relative}
+  .bn svg{width:21px;height:21px}
+  .bn.active{color:var(--green)}
+  .bn.active::before{content:"";position:absolute;top:-6px;width:22px;height:3px;border-radius:3px;background:var(--green)}
+
+  /* ---- Callout / annotation panel ---- */
+  .notes{display:flex;flex-direction:column;gap:14px;position:sticky;top:24px}
+  .note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--green);
+    border-radius:var(--r-md);padding:14px 16px;box-shadow:var(--shadow)}
+  .note.gold{border-left-color:var(--gold)}
+  .note h4{margin:0 0 6px;font-size:13.5px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+  .note h4 .num{font-family:var(--serif);font-size:12px;width:20px;height:20px;border-radius:6px;
+    background:var(--green-soft);color:var(--green);display:grid;place-items:center;flex:0 0 auto}
+  .note p{margin:0;font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+  .note code{font-family:var(--mono);font-size:11px;background:var(--panel-2);padding:1px 5px;border-radius:5px;color:var(--ink-soft)}
+  .note .ref{display:block;margin-top:7px;font-size:11px;color:var(--muted)}
+
+  /* ---- Screen grid ---- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px 26px;align-items:start}
+  .screen{display:flex;flex-direction:column;gap:12px}
+  .screen-cap{text-align:center}
+  .screen-cap .cn{font-family:var(--serif);font-size:12px;color:var(--green);font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .screen-cap .ct{font-weight:600;font-size:15px;color:var(--ink);margin-top:1px}
+  .screen-cap .cd{font-size:12px;color:var(--muted);margin-top:3px;max-width:34ch;margin-inline:auto}
+
+  /* generic mini components used in secondary screens */
+  .stub{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 12px}
+  .stub-h{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between}
+  .rowline{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+  .rowline:first-child{border-top:0}
+  .rowline .lead{width:26px;height:26px;border-radius:8px;background:var(--green-soft);color:var(--green);display:grid;place-items:center;flex:0 0 auto}
+  .rowline .lead svg{width:14px;height:14px}
+  .rowline b{color:var(--ink);font-weight:600}
+  .rowline .rt{margin-left:auto;font-size:11px;color:var(--faint);white-space:nowrap}
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:999px;padding:3px;gap:3px}
+  .seg .s{flex:1;text-align:center;font-size:12px;font-weight:600;padding:7px 6px;border-radius:999px;color:var(--muted)}
+  .seg .s.on{background:var(--gold);color:#2a2205}
+  .seg .s.on.plan{background:var(--forest-2);color:#fff}
+  .field{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px}
+  .field .fl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:600}
+  .field .fv{font-size:13.5px;color:var(--ink);margin-top:3px;font-weight:500;display:flex;align-items:center;gap:7px}
+  .field .fv .mut{color:var(--muted);font-weight:400}
+  .mera-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .mera{font-size:12px;border-radius:999px;padding:6px 11px;border:1px solid var(--line-2);color:var(--muted);background:var(--panel)}
+  .mera.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .cta{background:linear-gradient(160deg,var(--green),var(--forest-2));color:#fff;text-align:center;
+    font-weight:600;font-size:14px;border-radius:var(--r-md);padding:13px;box-shadow:var(--shadow);letter-spacing:.02em}
+  .cta.ghost{background:var(--panel);color:var(--ink);border:1px solid var(--line-2)}
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cbox{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 11px}
+  .cbox .ct2{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600}
+  .cbox .cv{font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;margin-top:3px}
+  .cbox.plan{border-color:var(--green);background:var(--green-soft)}
+  .cbox.plan .cv{color:var(--green)}
+  .cbox.dev .cv{color:var(--crit)}
+  .timeline{display:flex;flex-direction:column;gap:0}
+  .tl{display:flex;gap:10px;padding:5px 0;font-size:12px;color:var(--ink-soft)}
+  .tl .tld{width:11px;height:11px;border-radius:50%;background:var(--green);flex:0 0 auto;margin-top:3px;position:relative}
+  .tl .tld.done{background:var(--ok)} .tl .tld.wait{background:var(--panel);border:2px solid var(--line-2)}
+  .tl .tld.dev{background:var(--crit)}
+  .tl .tll{position:relative}
+  .tl:not(:last-child) .tld::after{content:"";position:absolute;left:50%;top:11px;transform:translateX(-50%);width:2px;height:20px;background:var(--line-2)}
+  .tl b{color:var(--ink)} .tl .tt{color:var(--faint);font-size:10.5px}
+  .incoming{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;border-top:3px solid var(--gold)}
+  .incoming.rec{border-top-color:var(--green)}
+  .in-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .in-kind{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--gold-soft);color:var(--gold-ink)}
+  .in-kind.rec{background:var(--green-soft);color:var(--green)}
+  .in-from{font-size:11px;color:var(--muted);margin-left:auto}
+  .in-title{font-weight:600;font-size:14px;color:var(--ink)}
+  .in-body{font-size:12px;color:var(--ink-soft);margin-top:4px;line-height:1.45}
+  .in-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}
+  .btn{font-size:12.5px;font-weight:600;text-align:center;padding:9px;border-radius:var(--r-sm)}
+  .btn.pri{background:var(--green);color:#fff}
+  .btn.sec{background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2)}
+  .btn.wide{grid-column:1/-1}
+
+  .footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+    display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--muted)}
+  .footer a{color:var(--green);text-decoration:none;font-weight:600}
+  .footer code{font-family:var(--mono);font-size:11.5px;background:var(--panel);border:1px solid var(--line);padding:2px 7px;border-radius:6px;color:var(--ink-soft)}
+  .disc{background:var(--gold-soft);border:1px solid var(--gold);color:var(--gold-ink);
+    border-radius:var(--r-sm);padding:4px 11px;font-size:11.5px;font-weight:600}
+
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+
+  <!-- ============ BOARD HEADER ============ -->
+  <header class="board-head">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 21c0-5 0-7-3-10M12 11c4 0 7-2 8-7-5 0-9 1-10 5m2 12c0-4 2-7 6-8-1 5-3 8-6 8Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">AgriX <b>Savetnik</b></div>
+        <div class="brand-sub">UI wireframe · v1 (Opcija A — isti tenant) · role „Savetnik"</div>
+      </div>
+    </div>
+    <div class="head-meta">
+      <button class="theme-btn" id="themeBtn" type="button" aria-label="Promeni temu">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v2m0 14v2M5.6 5.6l1.4 1.4m10 10 1.4 1.4M3 12h2m14 0h2M5.6 18.4 7 17m10-10 1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span id="themeLbl">Tema</span>
+      </button>
+      <div class="pill-row">
+        <span class="meta-tag">skica → spec → wireframe</span>
+        <span class="meta-tag">PWA · offline-first</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ LEGEND ============ -->
+  <div class="legend" role="note">
+    <span class="legend-t">Legenda statusa</span>
+    <span class="lg"><span class="dot plan"></span> Nalog / preporuka</span>
+    <span class="lg"><span class="dot ok"></span> Izvršeno</span>
+    <span class="lg"><span class="dot warn"></span> Kašnjenje (rok prošao)</span>
+    <span class="lg"><span class="dot crit"></span> Odstupanje prijavljeno</span>
+    <span class="lg"><span class="dot gold"></span> Obavezujući radni nalog</span>
+  </div>
+
+  <!-- ============ SECTION 1 — CENTERPIECE ============ -->
+  <div class="sec">
+    <div class="sec-k">Centralni ekran</div>
+    <h2 class="sec-h">Pregled — svi proizvođači istovremeno</h2>
+    <p class="sec-d">Jedan ekran iz kojeg savetnik prati ceo svoj portfolio gazdinstava: zbirni brojevi na vrhu,
+      red „zahtevaju pažnju", pa skenabilna lista svih proizvođača sa statusom naloga, kašnjenjima i odstupanjima.
+      Filter-čipovi su živi — probaj ih.</p>
+  </div>
+
+  <div class="hero">
+    <!-- HERO PHONE: overview -->
+    <div class="phone lg" role="img" aria-label="Ekran: Pregled svih proizvođača">
+      <div class="phone-status"><span>9:41</span><span>Savetnik · Voćar Konsalting</span><span>▮▮▮ 84%</span></div>
+      <div class="app-head">
+        <div class="ah-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21c0-5 0-7-3-10M12 11c4 0 7-2 8-7-5 0-9 1-10 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <div>
+          <div class="app-title">Pregled <span>· portfolio</span></div>
+          <div class="app-sub">23 gazdinstva · sezona 2027</div>
+        </div>
+        <div class="ah-right">
+          <div class="ah-ic" style="position:relative"><svg viewBox="0 0 24 24" fill="none"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 21a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="ah-badge">7</span></div>
+        </div>
+      </div>
+      <div class="app-body scroll">
+
+        <!-- KPI summary -->
+        <div class="kpis">
+          <div class="kpi"><div class="n">23</div><div class="l">Gazdinstva</div></div>
+          <div class="kpi"><div class="n">41</div><div class="l">Aktivni nalozi</div></div>
+          <div class="kpi warn"><div class="n">5</div><div class="l">Kašnjenja</div></div>
+          <div class="kpi crit"><div class="n">2</div><div class="l">Odstupanja</div></div>
+        </div>
+
+        <!-- Attention feed -->
+        <div class="panel">
+          <div class="panel-t"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="var(--warn)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Zahtevaju pažnju</div>
+          <div class="alert">
+            <div class="a-ic crit"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div><div class="a-txt"><b>Jovanović M.</b> — odstupanje doze na nalogu „Zaštita, parcela PAR-0142": primenjeno −30% od preporuke.</div><div class="a-time">pre 40 min · razlog: „nedovoljno sredstva na lageru"</div></div>
+          </div>
+          <div class="alert">
+            <div class="a-ic warn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+            <div><div class="a-txt"><b>Petrović S.</b> — radni nalog „Prihrana" kasni 3 dana (rok 21.07).</div><div class="a-time">obavezujući · nije prihvaćen</div></div>
+          </div>
+        </div>
+
+        <!-- Filter chips (interactive) -->
+        <div class="chips" role="tablist" aria-label="Filter gazdinstava">
+          <button class="chip" data-filter="all" aria-pressed="true">Svi <span class="c">23</span></button>
+          <button class="chip" data-filter="attn" aria-pressed="false">Zahtevaju pažnju <span class="c">7</span></button>
+          <button class="chip" data-filter="warn" aria-pressed="false">Kašnjenja <span class="c">5</span></button>
+          <button class="chip" data-filter="crit" aria-pressed="false">Odstupanja <span class="c">2</span></button>
+          <button class="chip" data-filter="active" aria-pressed="false">U toku <span class="c">14</span></button>
+        </div>
+
+        <div class="list-lbl"><span>Gazdinstva</span><span id="rowCount">23 prikazano</span></div>
+
+        <!-- Producer rows -->
+        <div class="rows" id="rows">
+          <div class="prow attn-crit" data-flags="crit active">
+            <div class="avatar">JM</div>
+            <div class="pmeta">
+              <div class="pname">Jovanović Milan <span class="pid">KOOP-90112</span></div>
+              <div class="psub">Jabuka · 4 parcele · 6,2 ha</div>
+              <div class="ptags"><span class="tag crit">odstupanje</span><span class="tag plan">3 naloga</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 40 min</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow attn-warn" data-flags="warn active">
+            <div class="avatar">PS</div>
+            <div class="pmeta">
+              <div class="pname">Petrović Stevan <span class="pid">KOOP-90087</span></div>
+              <div class="psub">Kruška, Šljiva · 3 parcele · 4,0 ha</div>
+              <div class="ptags"><span class="tag warn">1 kašnjenje</span><span class="tag plan">2 naloga</span><span class="tag gold" style="background:var(--gold-soft);color:var(--gold-ink)">obavezujući</span></div>
+            </div>
+            <div class="pright"><span class="ptime">juče</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow" data-flags="active">
+            <div class="avatar">ĐN</div>
+            <div class="pmeta">
+              <div class="pname">Đurić Nada <span class="pid">KOOP-90103</span></div>
+              <div class="psub">Malina · 2 parcele · 1,8 ha</div>
+              <div class="ptags"><span class="tag ok">2 izvršena</span><span class="tag plan">1 nalog</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 2 h</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow" data-flags="active">
+            <div class="avatar">MK</div>
+            <div class="pmeta">
+              <div class="pname">Marković Kosta <span class="pid">KOOP-90054</span></div>
+              <div class="psub">Jabuka, Višnja · 5 parcela · 9,1 ha</div>
+              <div class="ptags"><span class="tag plan">4 naloga</span><span class="tag ok">u toku</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 5 h</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow attn-warn" data-flags="warn">
+            <div class="avatar">IL</div>
+            <div class="pmeta">
+              <div class="pname">Ilić Ljubica <span class="pid">KOOP-90066</span></div>
+              <div class="psub">Kupina · 2 parcele · 2,4 ha</div>
+              <div class="ptags"><span class="tag warn">2 kašnjenja</span><span class="tag idle">preporuka</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 1 dan</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow" data-flags="idle">
+            <div class="avatar">RT</div>
+            <div class="pmeta">
+              <div class="pname">Ristić Toma <span class="pid">KOOP-90071</span></div>
+              <div class="psub">Breskva · 3 parcele · 5,0 ha</div>
+              <div class="ptags"><span class="tag idle">nema aktivnih</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 3 dana</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="prow" data-flags="active">
+            <div class="avatar">VP</div>
+            <div class="pmeta">
+              <div class="pname">Vasić Petar <span class="pid">KOOP-90099</span></div>
+              <div class="psub">Jagoda · 1 parcela · 0,9 ha</div>
+              <div class="ptags"><span class="tag plan">1 nalog</span><span class="tag ok">prihvaćeno</span></div>
+            </div>
+            <div class="pright"><span class="ptime">pre 6 h</span><span class="chev">›</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- bottom nav -->
+      <nav class="bnav" aria-label="Savetnik navigacija">
+        <div class="bn active"><svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-4H4v4ZM14 9h6V4h-6v5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Pregled</div>
+        <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7H3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Gazdinstva</div>
+        <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>Nov nalog</div>
+        <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3 8-8M4 12l3 3M20 6 12 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Izvršenje</div>
+        <div class="bn"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Više</div>
+      </nav>
+    </div>
+
+    <!-- ANNOTATIONS -->
+    <div class="notes">
+      <div class="note">
+        <h4><span class="num">1</span> Zbirni brojevi (summary-first)</h4>
+        <p>Portfolio-nivo KPI iz <code>getSavetnikPortfolio</code>: broj gazdinstava, aktivnih naloga, kašnjenja i odstupanja. Kašnjenje/odstupanje su semantički obojeni (žuto/crveno), odvojeni od brand-zelene.</p>
+        <span class="ref">spec §3.5 · §4.4</span>
+      </div>
+      <div class="note">
+        <h4><span class="num">2</span> „Zahtevaju pažnju" feed</h4>
+        <p>Odstupanja (§214) i kašnjenja rokova (§213) izbijaju na vrh — savetnik prvo vidi šta gori, pre nego što skenira celu listu.</p>
+        <span class="ref">QA §213–214</span>
+      </div>
+      <div class="note">
+        <h4><span class="num">3</span> Živi filter-čipovi</h4>
+        <p>Svi · Zahtevaju pažnju · Kašnjenja · Odstupanja · U toku. Filtrira listu na klijentu (index <code>kooperantID</code>/<code>statusIzvrsenja</code> u <code>saveti</code> store-u).</p>
+        <span class="ref">spec §2.4</span>
+      </div>
+      <div class="note gold">
+        <h4><span class="num">4</span> Red proizvođača = jedan pogled</h4>
+        <p>Leva <b>severity traka</b> (žuta/crvena) čini „pažnju" skenabilnom. Chip-ovi nose broj naloga, kašnjenja, izvršenja; <code>KOOP-id</code> mono. Tap → detalj gazdinstva.</p>
+        <span class="ref">reuse <code>management/kooperanti.js</code> obrazac</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 2 — SAVETNIK SCREENS ============ -->
+  <div class="sec">
+    <div class="sec-k">Savetnik — radni tok</div>
+    <h2 class="sec-h">Od gazdinstva do naloga do izvršenja</h2>
+    <p class="sec-d">Kad savetnik uđe u jedno gazdinstvo: vidi njegove parcele i istoriju, pošalje nalog ili preporuku,
+      i prati planirano-vs-urađeno kada proizvođač evidentira tretman.</p>
+  </div>
+
+  <div class="grid">
+    <!-- SCREEN: Detalj gazdinstva -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 2</div><div class="ct">Detalj gazdinstva</div><div class="cd">Parcele, istorija tretmana, aktivni nalozi — reuse prikaza po parceli.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Jovanović Milan</div><div class="app-sub">KOOP-90112 · Jabuka · 6,2 ha</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="stub-h"><span>Parcele</span><span>4</span></div>
+            <div class="rowline"><span class="lead"><svg viewBox="0 0 24 24" fill="none"><path d="M3 20h18M5 20V9l7-5 7 5v11" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><div><b>PAR-0142</b> · Jabuka, Ajdared<div style="font-size:11px;color:var(--muted)">2,1 ha · karenca do 02.08.</div></div><span class="rt">3 tretmana</span></div>
+            <div class="rowline"><span class="lead"><svg viewBox="0 0 24 24" fill="none"><path d="M3 20h18M5 20V9l7-5 7 5v11" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span><div><b>PAR-0143</b> · Jabuka, Zlatni delišes<div style="font-size:11px;color:var(--muted)">1,7 ha</div></div><span class="rt">1 tretman</span></div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>Aktivni nalozi</span><span>3</span></div>
+            <div class="rowline"><span class="tag crit" style="align-self:flex-start">odstupanje</span><div><b>Zaštita</b> — PAR-0142<div style="font-size:11px;color:var(--muted)">primenjeno −30%</div></div><span class="rt">danas</span></div>
+            <div class="rowline"><span class="tag plan" style="align-self:flex-start">poslato</span><div><b>Prihrana</b> — PAR-0143<div style="font-size:11px;color:var(--muted)">rok 28.07.</div></div><span class="rt">preporuka</span></div>
+          </div>
+          <div class="cta">+ Novi nalog / preporuka</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN: Novi nalog -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 3</div><div class="ct">Novi nalog / preporuka</div><div class="cd">Wizard iz <code>agromere</code> forme, bez tajmera/GPS-a (plan, ne izvršenje).</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Novi nalog</div><div class="app-sub">Jovanović Milan · PAR-0142</div></div>
+        </div>
+        <div class="app-body">
+          <div class="seg" role="tablist" aria-label="Tip sadržaja">
+            <div class="s on plan">Radni nalog</div>
+            <div class="s">Preporuka</div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:-4px">Obavezujući — proizvođač prihvata i izvršava (§212).</div>
+          <div>
+            <div class="field" style="margin-bottom:8px"><div class="fl">Mera</div>
+              <div class="mera-chips" style="margin-top:7px"><span class="mera on">Zaštita</span><span class="mera">Prihrana</span><span class="mera">Rezidba</span><span class="mera">Zalivanje</span></div>
+            </div>
+            <div class="field" style="margin-bottom:8px"><div class="fl">Artikal</div><div class="fv">Signum <span class="mut">· fungicid</span></div></div>
+            <div class="compare" style="margin-bottom:8px">
+              <div class="cbox plan"><div class="ct2">Preporučena doza</div><div class="cv">1,5 kg</div></div>
+              <div class="field"><div class="fl">Rok</div><div class="fv">28.07.2027.</div></div>
+            </div>
+            <div class="field"><div class="fl">Napomena savetnika</div><div class="fv" style="font-size:12px;font-weight:400;color:var(--ink-soft)">Tretirati po suvom vremenu, vetar &lt; 15 km/h.</div></div>
+          </div>
+          <div class="cta">Pošalji na gazdinstvo →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN: Izvršenje -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 4</div><div class="ct">Pregled izvršenja</div><div class="cd">Planirano vs urađeno preko <code>izvrsenjeTretmanID</code>; odstupanje i status.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Izvršenje naloga</div><div class="app-sub">Zaštita · PAR-0142</div></div>
+        </div>
+        <div class="app-body">
+          <div class="compare">
+            <div class="cbox plan"><div class="ct2">Preporučeno</div><div class="cv">1,5 kg</div></div>
+            <div class="cbox dev"><div class="ct2">Primenjeno</div><div class="cv">1,05 kg</div></div>
+          </div>
+          <div class="stub" style="border-color:var(--crit);background:var(--crit-soft)">
+            <div style="font-size:12px;color:var(--crit);font-weight:600;display:flex;align-items:center;gap:7px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> Odstupanje −30%</div>
+            <div style="font-size:12px;color:var(--ink-soft);margin-top:5px">Razlog proizvođača: „nedovoljno sredstva na lageru".</div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>Tok statusa</span></div>
+            <div class="timeline">
+              <div class="tl"><span class="tld done"></span><div class="tll"><b>Poslato</b> <span class="tt">· 18.07. 09:12 · savetnik</span></div></div>
+              <div class="tl"><span class="tld done"></span><div class="tll"><b>Prihvaćeno</b> <span class="tt">· 18.07. 14:40</span></div></div>
+              <div class="tl"><span class="tld dev"></span><div class="tll"><b>Izvršeno uz odstupanje</b> <span class="tt">· 20.07. 07:30 · TRT-…8841</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 3 — PRODUCER SIDE ============ -->
+  <div class="sec">
+    <div class="sec-k">Druga strana petlje</div>
+    <h2 class="sec-h">Proizvođač (Gazdinstvo Pro) — „Nalozi i preporuke"</h2>
+    <p class="sec-d">Nalog savetnika stiže u postojeći Pro nalog proizvođača kao nova prijemna površina. Ostatak Pro aplikacije se ne menja;
+      izvršenje ide postojećom <code>agromere</code> formom (<code>syncTretman</code>).</p>
+  </div>
+
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:760px">
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Ekran 5</div><div class="ct">Prijem kod proizvođača</div><div class="cd">Prihvati · Evidentiraj izvršenje · Prijavi odstupanje.</div></div>
+      <div class="phone">
+        <div class="phone-status" style="background:var(--chrome-1)"><span>9:41</span><span>Gazdinstvo Pro · Jovanović M.</span><span>▮▮▮ 84%</span></div>
+        <div class="app-head">
+          <div class="ah-logo"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21c0-5 0-7-3-10M12 11c4 0 7-2 8-7-5 0-9 1-10 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Nalozi i preporuke</div><div class="app-sub">od: Voćar Konsalting</div></div>
+          <div class="ah-right"><div class="ah-ic" style="position:relative"><svg viewBox="0 0 24 24" fill="none"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg><span class="ah-badge">2</span></div></div>
+        </div>
+        <div class="app-body">
+          <div class="incoming">
+            <div class="in-top"><span class="in-kind">Radni nalog</span><span class="in-from">pre 1 h · rok 28.07.</span></div>
+            <div class="in-title">Zaštita — PAR-0142</div>
+            <div class="in-body">Signum (fungicid) · <b>1,5 kg</b>. „Tretirati po suvom vremenu, vetar &lt; 15 km/h."</div>
+            <div class="in-actions">
+              <div class="btn pri">Prihvati</div>
+              <div class="btn sec">Odbij</div>
+              <div class="btn sec wide">Evidentiraj izvršenje →</div>
+            </div>
+          </div>
+          <div class="incoming rec">
+            <div class="in-top"><span class="in-kind rec">Preporuka</span><span class="in-from">juče</span></div>
+            <div class="in-title">Prihrana — PAR-0143</div>
+            <div class="in-body">KAN 27% · 40 kg/ha. Neobavezno — po proceni.</div>
+            <div class="in-actions"><div class="btn sec wide">Prijavi odstupanje / napomenu</div></div>
+          </div>
+        </div>
+        <nav class="bnav" aria-label="Proizvođač navigacija">
+          <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M3 21V9l9-6 9 6v12h-6v-7H9v7H3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Početna</div>
+          <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M3 20h18M5 20V9l7-5 7 5v11" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Parcele</div>
+          <div class="bn active"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Nalozi</div>
+          <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 8l9-5 9 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Knjiga polja</div>
+          <div class="bn"><svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16v12H4z" stroke="currentColor" stroke-width="1.6"/></svg>Više</div>
+        </nav>
+      </div>
+    </div>
+
+    <div class="notes" style="position:static">
+      <div class="note">
+        <h4><span class="num">✓</span> Petlja plan → izvršenje</h4>
+        <p>„Evidentiraj izvršenje" otvara postojeću <code>agromere</code> formu preselektovanu iz naloga. Snimanjem tretmana klijent veže <code>savet.izvrsenjeTretmanID</code> i status prelazi u „izvršeno".</p>
+        <span class="ref">spec §4.5 · §5-B</span>
+      </div>
+      <div class="note gold">
+        <h4><span class="num">§</span> Vlasništvo i opoziv</h4>
+        <p>Podaci su proizvođačevi; savetnik je autor sa pristupom preko veze. Prekid saradnje → savetnik odmah gubi pristup, zapisi ostaju.</p>
+        <span class="ref">QA §201 · §228 · spec §5-D</span>
+      </div>
+      <div class="note">
+        <h4><span class="num">⚑</span> Wireframe, ne finalni UI</h4>
+        <p>Boje, ikone i raspored iz stvarne AgriX PWA; sadržaj je ilustrativan. Detalji polja se finaliziraju u implementaciji (PR3–PR4).</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div>AgriX Savetnik · UI wireframe za <code>SAVETNIK_MODUL_SKICA.md</code> + <code>SAVETNIK_MODUL_SPEC_V1.md</code></div>
+    <div class="disc">Skica · ne finalni UI · cross-silo van opsega v1</div>
+  </footer>
+</div>
+
+<script>
+  (function(){
+    // Theme toggle (light/dark), overrides OS preference both directions
+    var root=document.documentElement, btn=document.getElementById('themeBtn'), lbl=document.getElementById('themeLbl');
+    function sysDark(){return window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;}
+    function cur(){return root.getAttribute('data-theme')|| (sysDark()?'dark':'light');}
+    function apply(t){root.setAttribute('data-theme',t); lbl.textContent = t==='dark'?'Tamna':'Svetla';}
+    apply(cur());
+    btn.addEventListener('click',function(){apply(cur()==='dark'?'light':'dark');});
+
+    // Live filter on the centerpiece overview
+    var chips=document.querySelectorAll('.chip[data-filter]');
+    var rows=Array.prototype.slice.call(document.querySelectorAll('#rows .prow'));
+    var counter=document.getElementById('rowCount');
+    function setFilter(f){
+      var shown=0;
+      rows.forEach(function(r){
+        var flags=(r.getAttribute('data-flags')||'').split(' ');
+        var vis = f==='all' ? true
+                : f==='attn' ? (flags.indexOf('warn')>-1||flags.indexOf('crit')>-1)
+                : flags.indexOf(f)>-1;
+        r.hidden=!vis; if(vis)shown++;
+      });
+      counter.textContent=shown+' prikazano';
+    }
+    chips.forEach(function(c){
+      c.addEventListener('click',function(){
+        chips.forEach(function(x){x.setAttribute('aria-pressed','false');});
+        c.setAttribute('aria-pressed','true');
+        setFilter(c.getAttribute('data-filter'));
+      });
+    });
+  })();
+</script>
