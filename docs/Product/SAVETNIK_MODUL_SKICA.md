@@ -393,6 +393,10 @@ Reuse Management shell obrasca (`mgmt-shell-v2.js`, `kooperanti.js`):
 
 ## 11. Fazni plan
 
+> **Detaljna tehnička razrada v1 (Opcija A):** `docs/Product/SAVETNIK_MODUL_SPEC_V1.md` —
+> tačne kolone `SAVETI-*`, `db.js` schema bump, `syncSavet`/`processSavetRecord` grane,
+> autorizaciona matrica, acceptance i test checklist, redosled PR-ova.
+
 **v1 — do sezone 2027 (Opcija A, isti tenant), reuse-first:**
 
 1. Nova role `Savetnik` + `AdvisorAssignments` tab + `requireAssignedEntity`.
