@@ -2,32 +2,39 @@
 
 **Status:** Review
 **Vlasnik:** osnivač AgriX-a
-**Poslednje ažuriranje:** 2026-07-24
+**Poslednje ažuriranje:** 2026-07-24 (v2 — produbljena analiza: code-verifikacija + tržište/konkurencija)
 **Sidro koda:** `origin/main` v2.24.0 (`9fd7087`)
-**Povezani dokumenti:** `09_QA_DECISION_LOG.md` (izvor odluka), `07_PRODUCT_PORTFOLIO.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `07B_ENTERPRISE_OPERATING_MODES.md`, `08_PRODUCT_ROADMAP.md`, `08A_ROADMAP_MILESTONES.csv`, `../PLAN_SANACIJE.md`, `../REFAKTOR_PLAYBOOK.md`, `../KNOWN_ISSUES.md` §8, `../RELEASE_GATES.md`
+**Povezani dokumenti:** `09_QA_DECISION_LOG.md`, `07_PRODUCT_PORTFOLIO.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `07B_ENTERPRISE_OPERATING_MODES.md`, `08_PRODUCT_ROADMAP.md`, `03_CUSTOMERS_AND_JOBS.md`, `04_MARKET.md`, `05_COMPETITION.md`, `05A_COMPETITOR_EVIDENCE.md`, `05B_INFOSYS_REPLACEMENT_GTM.md`, `06_POSITIONING.md`, `../PLAN_SANACIJE.md`, `../REFAKTOR_PLAYBOOK.md`, `../KNOWN_ISSUES.md` §8, `../RELEASE_GATES.md`
 
-> **Cilj poglavlja.** Razraditi `09_QA_DECISION_LOG.md` (260 komercijalnih odluka) u **prodajni portfolio** i, za svaku prodajnu celinu, dati **launch-readiness presudu** — gde je najviše posla da _sve_ bude spremno za lansiranje.
+> **Cilj poglavlja.** Razraditi `09_QA_DECISION_LOG.md` (260 komercijalnih odluka) u **prodajni portfolio** i dati **launch-readiness presudu** — gde je najviše posla da _sve_ bude spremno za lansiranje.
 >
-> **Ovaj dokument NE duplira izvore.** Inženjerski registar defekata živi u `KNOWN_ISSUES.md` §8 (AUD-001…048), izvršni program u `PLAN_SANACIJE.md`, paketi u `REFAKTOR_PLAYBOOK.md` (RF-01…RF-30), komercijalne odluke u `09_QA_DECISION_LOG.md`. Ovde se ta dva sveta **spajaju** u jednu tabelu: _šta prodajemo_ × _šta blokira prodaju_.
+> **v2 dodaje dubinu:** (1) **code-verifikaciju** top blokera protiv stvarnog `src-vba` koda — registar defekata je delom **zastareo u odnosu na deploy v2.24.0**; (2) per-defekt razradu svih 9 P0 + P1 klastera sa scenarijem otkaza i procenom napora; (3) tržište/konkurenciju/pozicioniranje sa realnim brojevima.
+>
+> **Ovaj dokument NE duplira izvore** — spaja komercijalni portfolio (`09`, `07`, `03–06`) i inženjerski backlog (`KNOWN_ISSUES §8`, `PLAN_SANACIJE`, `REFAKTOR_PLAYBOOK`) u jednu presudu.
 
 ---
 
 ## 1. Potvrđene polazne činjenice
 
-- Tri klijenta koriste Desktop u produkciji; management koristi PWA za pregled i kontrolu. (`Master Plan/README.md`)
-- Plan naredne sezone: ~5 novih firmi, ~8 ukupno; preko 10 nije cilj. Cilj 2027: 10–20 aktivnih pravnih lica (QA #249).
-- Prosečna firma: ~10 stanica, 1 desktop korisnik, ~100 kooperanata.
-- Gazdinstvo cene: **Basic 19 EUR / Pro 39 EUR**; prvih 50 Partner naloga uz paket hladnjače (QA #159/#161, README).
-- Očekivanje: proizvodni modul koristi >80% Enterprise klijenata (QA #250).
-- Inženjerski triaž (FM v35→v85→v142 + nezavisni review): **48 dedupliranih AUD stavki → 30 RF paketa**; kalibrisano za single-writer desktop → **9 stvarnih P0, ~34 P1 klastera, 5 P2**. Jedini _nov aktivan_ P0 je AUD-030 (SEF 409). (`PLAN_SANACIJE.md` §1)
-- **Status sanacije: samo RF-27 (agrohemija cena) je urađen** (grana, pre-merge). RF-01…RF-30 (osim 27) su ⬜ otvoreni. (`REFAKTOR_PLAYBOOK.md` §4)
-- **Runtime gate-ovi nisu izvršeni** u ciljnom workbook/GAS/PWA okruženju (KI-002, KI-003) — dokumentacija može biti čista dok runtime nije proveren (rizik false-green).
+**Proizvod / klijenti (FACT):**
+- **3 klijenta** u produkciji na Desktop-u (silosi u repou: `venivo/`, `bucaijoca/`, `bukovik/`); management koristi PWA.
+- Prosečna firma: **~10 stanica**, 1 desktop korisnik (single-active-user, QA #137), **~100 kooperanata**.
+- Kod: `origin/main` **v2.24.0**; funkcionalno bogat (storno kaskade, recovery paneli, palete, izveštaji, self-update, ASCII lokalizacija, fleet monitoring).
+- PWA zrelost (broj linija koda): **Management ~5.100** · **Kooperant/Gazdinstvo ~4.850** · **Otkupac ~3.710** · **Vozač ~735** (najtanji — poklapa se sa „osnovni Vozač je Core, napredni Dispatch opcion").
+
+**Tržište (MEASURED, APR 22.07.2026, delatnosti 1039+4631):**
+- **1.516 aktivnih firmi**; medijana prihoda **23,0M RSD**, 90. percentil **398,3M RSD**.
+- Koncentracija: **Top 100 firmi = 66,8% prihoda** (Top 50 = 52,7%). → account-based prodaja na Top 100–300, ne masovni marketing.
+
+**Inženjering (triaž FM v35→v85→v142 + review):** 48 AUD stavki → **30 RF paketa**; nominalno **9 P0, ~34 P1, 5 P2**. **Urađen 1 (RF-27).** Runtime gate-ovi **nisu izvršeni** na ciljnom workbook-u (KI-002/003).
+
+**Cene (jedini konkretni brojevi):** Gazdinstvo **Basic 19€ / Pro 39€**; prvih 50 Partner uz paket hladnjače. Sve ostalo su _pravila_, ne iznosi (`10_PRICING` nije napisan).
 
 ---
 
 ## 2. Razrada QA log-a → komercijalna arhitektura
 
-QA log definiše **jedan proizvod** (QA #59: nema small/mid/large izdanja), a razlike se rešavaju **paketima + modulima + brojem stanica + konfiguracijom**. Ekosistem ima pet stubova:
+Jedan proizvod (QA #59: nema small/mid/large izdanja); razlike kroz **pakete + module + broj stanica + konfiguraciju**. Pet stubova nad **Platform Services**:
 
 ```
                     ┌─────────────────────────────────────────────┐
@@ -38,187 +45,267 @@ QA log definiše **jedan proizvod** (QA #59: nema small/mid/large izdanja), a ra
                     └─────────────────────────────────────────────┘
    ┌───────────────────────┐   ┌──────────────────┐   ┌──────────────────┐
    │   AgriX ENTERPRISE     │   │  AgriX GAZDINSTVO │   │   AgriX SAVETNIK  │
-   │  (glavni B2B proizvod) │   │  (proizvođač/     │   │  (agronom vodi    │
-   │                        │   │   kooperant)      │   │   više gazdinstava)│
-   │  Paketi:               │   │  Partner /        │   │  po aktivnom      │
-   │   • AgriX Desktop      │   │  Basic 19€ /      │   │  gazdinstvu       │
-   │   • AgriX Mobile       │   │  Pro 39€          │   └──────────────────┘
-   │  Moduli (odvojeno):    │   └──────────────────┘
-   │   • SEF · Banka        │            ▲
-   │   • Dispatch (napredni)│            │ compliance sloj
-   │   • Hladnjača/Proizv.  │   ┌──────────────────┐
-   └───────────────────────┘   │    AgriX GGAP    │  (Enterprise dodatak; kupuje hladnjača za mrežu)
+   │  (glavni B2B proizvod) │   │  Partner /        │   │  1 agronom →      │
+   │  Paketi: Desktop /     │   │  Basic 19€ /      │   │  više gazdinstava │
+   │  Mobile                │   │  Pro 39€          │   │  (po gazdinstvu)  │
+   │  Moduli: SEF · Banka · │   └──────────────────┘   └──────────────────┘
+   │  Dispatch · Hladnjača  │            ▲
+   └───────────────────────┘            │ compliance add-on
+                               ┌──────────────────┐
+                               │    AgriX GGAP    │  (Enterprise dodatak; kupuje hladnjača za mrežu kooperanata)
                                └──────────────────┘
 ```
+
+> **Napomena o imenovanju (reconciliacija):** stariji `02/02A/07` treći stub zovu **GGAP**; najnoviji `09`/`09A` (24.07) tri _prodajna_ stuba definišu kao **Enterprise / Gazdinstvo / Savetnik**, a **GGAP je demotovan na Enterprise compliance add-on** (QA #75, §8). Važi novija formulacija.
 
 ### 2.1 Cenovni model (izvučen iz QA log-a)
 
 | Pravilo | Odluka | QA ref |
 |---|---|---|
-| Osnovna jedinica | Godišnja pretplata **po pravnom licu** (nema mesečno, nema per-user/uređaj) | #25/#26/#29/#31 |
-| Stanice | Osnovni paket do **5 stanica**; svaka preko 5 = ista fiksna godišnja cena (nema tier-ova) | #121/#122 |
+| Osnovna jedinica | Godišnja pretplata **po pravnom licu** (nema mesečno / per-user / per-uređaj) | #25/26/29/31 |
+| Stanice | Osnovni paket do **5 stanica**; svaka >5 = ista fiksna godišnja (nema tier-ova) | #121/122 |
 | Cena stanice | Ista u Desktop i Mobile; razlika je u ceni osnovnog paketa | #123 |
-| Mobile multiplikator | Desktop Otkup + Mobile ≥ **2× Desktop Otkup** | #126/#127 |
-| Moduli | SEF/Banka/Dispatch = fiksna godišnja **po pravnom licu**, ista bez obzira na paket, plaća se jednom i važi kroz sve instance | #124/#125/#135 |
-| Proizvodni dodatak | Fiksna godišnja **tek posle standardizacije**; jedan pogon = jedan dodatak; dodatni pogon = dodatna Desktop instanca | #130/#131/#132/#243/#244 |
-| Gazdinstvo | Samo godišnja; Basic 19€, Pro 39€; prvih 50 Partner uz paket hladnjače | #159/#161/#172 |
-| Savetnik | Po aktivnom gazdinstvu; javna cena se **ne objavljuje** (individualna ponuda) | #198/#225 |
-| GGAP | Fiksna godišnja po pravnom licu, pokriva sve kooperante; nema per-user | §8 |
-| Održavanje | Bug-fix u scope-u + bezbednost + ažuriranja = u pretplati; novi zahtevi odvojeno (T&M) | #23/#24/#107 |
+| Mobile multiplikator | Desktop Otkup + Mobile ≥ **2× Desktop Otkup** | #126/127 |
+| Moduli (SEF/Banka/Dispatch) | Fiksno **po pravnom licu**, isto bez obzira na paket, plaća se jednom za sve instance | #124/125/135 |
+| Proizvodni dodatak | Fiksno **tek posle standardizacije**; 1 pogon = 1 dodatak; dodatni pogon = dodatna Desktop instanca | #130/131/132/243/244 |
+| Gazdinstvo | Samo godišnja; Basic 19€ / Pro 39€; prvih 50 Partner uz paket hladnjače | #159/161/172 |
+| Savetnik | Po aktivnom gazdinstvu; **javna cena se ne objavljuje** | #198/225 |
+| GGAP | Fiksno po pravnom licu, pokriva sve kooperante; nema per-user | §8 |
+| Custom rad | **Time-and-materials**, jedna satnica, procena + max budžet, prekoračenje uz pisano odobrenje | #107–110 |
+| Javne cene | Desktop/Mobile **rasponi**, proizvodnja **raspon**, stanica >5 **tačan iznos**, Gazdinstvo **tačno**; Savetnik ne | #156–159/225 |
 
-### 2.2 Šta je Core, a šta poseban modul
+### 2.2 Core vs modul
 
-- **Core (uključeno u Desktop):** otkup + osnovna dokumenta, prijemnice, fakture (kreiranje/evidencija), ambalaža + repromaterijal, agrohemija (kompletan tok zaliha/dugovanja/doziranja), skladište/WMS/palete/sledljivost, standardni izveštaji, **ručni unos novca**, kartice i salda, Management PWA (QA #3/#12/#14/#16/#17/#18/#30/#31).
-- **Odvojeno plaćeni moduli:** SEF, Banka (automatizacija), Dispatch (napredni), Hladnjača/Proizvodnja dodatak (QA #4/#128).
-- **Granica ka ERP-u:** AgriX **nije** računovodstveni ERP; ne pokriva glavnu knjigu, PDV, završni račun, zarade (QA #72/#73/#74).
-
----
-
-## 3. Portfolio proizvoda — prodajna tabela
-
-Kolone: **Impl** (implementacioni status, 07A) · **Dokaz** (evidence, 07A) · **Komerc.** (dozvoljena ponuda, 07/09) · **Launch gate** (šta blokira „Standard offer").
-
-| # | Prodajna celina | Sadržaj | Cena (model) | Impl | Dokaz | Komerc. | Launch gate (gde je posao) |
-|---|---|---|---|---|---|---|---|
-| 1 | **Platform Services** | auth, sync/MasterSync, storno/audit, monitoring, self-update, backup, release gates | ugrađeno | Implemented | Production-proven (malo klijenata) | u svakom paketu | Runtime gate-ovi neizvršeni (KI-002/003); release-truth (RF-26 E2E, RF-24 self-update) |
-| 2 | **AgriX Desktop (Enterprise Core)** | otkup→dokument→prijem→faktura→izveštaj + Management PWA | godišnja / pravno lice + stanice >5 | Implemented | Production-proven (3 klijenta) | Standard / Controlled | **Najveća koncentracija posla:** P0/P1 correctness (9 P0, ~34 P1) + health-check green |
-| 3 | **AgriX Mobile** | Desktop + PWA Otkupac + PWA Vozač (osnovni) | ≥ 2× Desktop Otkup | Implemented | Limited production | Standard / Controlled | **Strateški najvredniji posao:** end-to-end teren→centrala sync gate (Track B) + sync hardening |
-| 4 | **SEF modul** | slanje/status/storno izlaznih, preuzimanje ulaznih, povezivanje | godišnja / pravno lice | Implemented | Limited evidence | Optional extension | **NIJE spremno:** jedini nov P0 (AUD-030 409→REJECTED) + P1 klaster (RF-21/22) |
-| 5 | **Banka modul** | uvoz izvoda, povezivanje uplata, rasknjižavanje, avansi, nalozi | godišnja / pravno lice | Implemented | Limited evidence | Optional extension | **NIJE spremno:** knjiži novac na otvaranje forme + dedupe/crash (RF-09/10; AUD-014/025/026/034) |
-| 6 | **Dispatch (napredni)** | raspoređivanje vozila/vozača, rute, kapaciteti, dispečerski pregled | godišnja / pravno lice | Implemented | Limited evidence | Optional extension | Osnovni Vozač je Mobile-Core; napredni dispatch = malo dokaza, discovery-scoped |
-| 7 | **Hladnjača/Proizvodnja dodatak** | prerada, palete sveže/prerađene, lager, sledljivost; (2027: radni nalozi, norme, linije) | godišnja **posle standardizacije** | Implemented/Partial (palete u prod.) | Limited evidence | Controlled rollout | Palete correctness (RF-12/AUD-029); **pun proizvodni sistem = najveći NOV build (2027), nije launch-blocker sad** |
-| 8 | **AgriX Gazdinstvo** (Partner/Basic/Pro) | kartica prema hladnjači, parcele/GIS, tretmani/karenca, troškovi, agrohemija, prognoza | Basic 19€ / Pro 39€ (godišnje) | Implemented/Partial | **Pilot evidence** | **Pilot only** | **Nije primarno kod — validacija:** activation, 30/90/180 retention, WTP (Track G) pre skaliranja |
-| 9 | **AgriX Savetnik** | 1 agronom → više gazdinstava; planovi/nalozi u Pro naloge | po aktivnom gazdinstvu | Planned (osnovna v. cilj 2027) | — | još nije u prodaji | Izgraditi osnovnu verziju; nije launch-kritično za sezonu 2026 |
-| 10 | **AgriX GGAP** | evidencije/dokazi/rokovi/audit-readiness/export | godišnja / pravno lice | Planned/Discovery | Unvalidated | **Not for sale** | Domain owner + standard + pilot; post-2027 (Track H) |
-
-**Delivery komponente sa zasebnim readiness statusom** (07 §6, QA #48-alt): Kiosk režim (`Controlled rollout`), Tablet paket (`Optional hardware`), Termalna štampa (`Controlled rollout`). Njihova nezrelost **ne obara** status PWA aplikacije (07B §6, ROADMAP §3.3).
+- **Core (u Desktop-u):** otkup + dokumenta, prijemnice, fakture (kreiranje/evidencija), ambalaža + repromaterijal, **agrohemija (kompletan tok)**, skladište/WMS/palete/sledljivost, standardni izveštaji, **ručni unos novca**, kartice/salda, Management PWA (QA #3/12/14/16/17).
+- **Odvojeni moduli:** SEF, Banka (automatizacija), Dispatch (napredni), Hladnjača/Proizvodnja.
+- **Granica ka ERP-u:** AgriX **nije** računovodstveni ERP — bez glavne knjige, PDV-a, završnog računa, zarada; **koegzistira** sa BizniSoft/Pantheon (QA #72–74).
 
 ---
 
-## 4. Gde ima NAJVIŠE posla — dve ose spremnosti
+## 3. ⚠️ Code-verifikacija: registar je delom ZASTAREO
 
-„Launch ready" ima dve nezavisne ose. Obe moraju proći; trenutno je **inženjerska osa uska grla za postojeće proizvode**, a **komercijalna osa je uska grla za _standardizovanu_ ponudu**.
+**Ključni nalaz v2.** Registar (`KNOWN_ISSUES §8` / `PLAN_SANACIJE`) sidren je na FM v35 (`a0bc9e2`), a `main` je odmakao na **v2.24.0**. Provera **stvarnog `src-vba` koda** pokazuje da su neki „otvoreni P0/P1" **već ispravljeni**:
 
-### 4.1 Osa A — Inženjerska spremnost (correctness / release truth)
+| Stavka | Registar kaže | Kod (v2.24.0) kaže | Presuda |
+|---|---|---|---|
+| **AUD-030** SEF 409→REJECTED | „jedini nov aktivan **P0**" | `modSEFClient.bas:491-501` ima `Case 409 → CONFLICT` **sa eksplicitnim AUD-030 fix komentarom**; retry reuse-uje isti requestId (idempotentno) | ❌ **već ispravljeno** — SEF nema više P0 |
+| **AUD-033** auth lanac do Admin panela | P1/„P0-klasa bezbednosti" | `MozeAdministraciju()` čuva `BuildAdminPanel`, **svaku** admin akciju, `ShowConfigSheet` (`modAdmin.bas:45-48,211-214`, `modPodesavanja.bas:740-743`) | ❌ **već implementirano** |
+| **AUD-034** btnBanka pre auth | P1 | auth provera **prethodi** booking importu (`frmOtkupAPP.frm:729-734` pre `:751`) | ❌ **već ispravljeno** |
+| **AUD-014** Banka knjiži na otvaranje forme | P1 | `frmBankaImport.frm:72` `UserForm_Activate` → `AutoMapStrongKeysBankaImport_TX` pod `On Error Resume Next`, tiho commit-uje | ✅ **potvrđeno — živ, opasan** |
+| **AUD-001** Sheets JSON read | P0 | `modGoogleSheets.bas:1757-1830` global `Replace(", ",",")` unutar navodnika, bez `\"`/`\uXXXX`; **živ OTK/VOZ import** | ✅ **potvrđeno — živ P0** |
+| **AUD-041/042** MasterSync wrong-write/dup# | P1 | `TryUpdateVozacID` vraća True na tihi `UpdateCell` fail; `GenerateBrojZbirne`=rowcount+1 (dup posle gap/storno); loš datum→danas | ✅ **potvrđeno — sva 3 živa** |
+| **KI-006** ART_POCETNI_DUG PWA fantom | OPEN | `GetMagacinStanje` ga izuzima (`modAgrohemija.bas:435`), `ExportMagacinKoop` **ne** (`modStammdatenSync.bas:1966-1982`) → curi kao `MAG_IZLAZ Kolicina=1` | ✅ **potvrđeno** |
 
-Rangirano po koncentraciji posla × prioritetu. Detalji: `PLAN_SANACIJE.md`, `REFAKTOR_PLAYBOOK.md`, `KNOWN_ISSUES.md` §8.
+**Dve reinterpretacije koje menjaju plan:**
+1. **AUD-033/034 nisu „nedostajući guard" nego config-default.** `MozeAdministraciju()` je namerno **anti-lockout** — vraća `True` kad je `AUTH_ENABLED` isključen. Prava izloženost je **„AUTH se isporučuje ugašen"** (na instalaciji bez uključenog auth-a, svako je admin). Vrednost RF-23 se pomera sa „dodaj guard" na **„odluči default uključenog auth-a + signaliziraj plaintext-PIN fallback"**.
+2. **AUD-030 (SEF P0) je zatvoren u kodu** → SEF modul je **bliži prodaji** nego što registar tvrdi; ostaje P1 SEF korektnost/UX klaster (AUD-031/032, nije nezavisno re-verifikovan u kodu).
 
-| Rang | Blok posla | Zašto blokira lansiranje | Paketi (status) |
-|---:|---|---|---|
-| **1** | **Enterprise Core data-safety (P0)** | Sheets JSON read korupcija (AUD-001), import rollback gubi potvrđene redove (AUD-002), pozicijski upisi u finansijske/dokumentne redove (AUD-003), storno „lažni uspeh" lanac (AUD-020), RollbackTx bez CleanUp (AUD-004), hladnjača-lanac tihi otkaz (AUD-005), journal recovery (AUD-006), datum rollover (AUD-007). **Sve ispod Core-a i svakog paketa.** | RF-01→02→03→04→14 (⬜) |
-| **2** | **PWA-led sync (Mobile, strateški core)** | MasterSync klaster: duplikat brojeva, wrong-write „Synced" sa praznim VozacID, mešanje otpremnica, station-mirror bez `tblVozaci` reda (AUD-041…046); JSON (AUD-001). Ovo je **glavna diferencijacija** koja se prodaje. | RF-14 + RF-28 (⬜, isti fajl — zajedno) |
-| **3** | **SEF modul** | Jedini nov **aktivan P0** (AUD-030: 409→REJECTED → trajno pogrešna/duplirana faktura ka poreskoj); + P1 klaster (stornirana faktura sendable, truncation, double-submit, „Faktura poslata" za grešku) (AUD-031/032). Modul se **ne sme prodavati** dok ovo ne prođe. | RF-21 (P0) → RF-22 (⬜) |
-| **4** | **Startup + autorizacija** | Korisnik sa „Matični podaci" dolazi do Admin panela (brisanje tabela, migracija, fleet publish); `Workbook_Open` ne zove `AccessWasDenied` (AUD-033/034); `saveParcelPolygon` auth nepotvrđen (KI-001). Bezbednosna P0-klasa. | RF-23 (⬜) |
-| **5** | **Finansije (Banka + avans/storno/novac)** | Banka knjiži novac na otvaranje forme (AUD-014/034), dedupe ispušta multi-account + crash na 3+ kandidata (AUD-025), export može naručiti više od otvorenog (AUD-026); storno plaćanja skriva dug (AUD-021); avans no-op naduvava brojače (AUD-010). | RF-09/10 + RF-02 (⬜) |
-| **6** | **Izveštaji + faktura + palete** | Ekrani se ne slažu posle storna (dashboard vs frmDokumenta, AUD-015); kartice kreću od nule (AUD-023); freshness (stari podaci pod novim periodom, AUD-024); reprint storniranog (AUD-027); palete blokiraju legitimnu preradu (AUD-029). | RF-06/07/08/11/12 (⬜) |
-| **7** | **Release truth / dijagnostika** | E2E gate false-green (AUD-039), integritet/health false-green (AUD-044/047), self-update gubitak komponente (AUD-035), cenovnik stale cena (AUD-036). Bez ovoga „zeleno" ne znači spremno. | RF-24/26/29/30 (⬜) |
-| **8** | **Konsolidacije (tehnički dug)** | Deljeni helperi (HTTP, banka parser, BrutoUNeto), pozicijski→imenski upisi. Smanjuje budući rizik, nije blocker. | RF-15…19, RF-20 (⬜) |
-
-> **Presuda ose A:** najviše posla je u **Enterprise Core correctness + PWA sync** (rang 1–2) — to je launch gate za oba fleg-proizvoda (Desktop + Mobile). Redosled izvršenja (playbook §4): `RF-01 → RF-02 → RF-23 → RF-21 → RF-27✅ → RF-03 → RF-04 → RF-14+RF-28 → RF-06 → RF-07 → RF-08 → RF-22 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 → RF-26 → RF-29 → RF-30 → RF-24 → RF-25 → RF-15+ → RF-20`. Od 30 paketa **urađen je 1**. Uz to, **runtime gate-ovi + `RunProductionHealthCheck` na ciljnom workbook-u** (KI-002/003) su obavezni pre bilo kog „Standard offer".
-
-### 4.2 Osa B — Komercijalna spremnost (packaging / GTM / isporuka)
-
-Master Plan status tabela: gotovo sva poglavlja su **„nije započeto"**. Za _standardizovanu, ponovljivu_ ponudu (ne ad-hoc prodaju postojećim klijentima) najviše posla je ovde:
-
-| Rang | Blok | Stanje | QA otvoreno pitanje |
-|---:|---|---|---|
-| **1** | **Cene — apsolutni iznosi** | `10_PRICING` nije započeto. QA log daje _pravila_ (odnose), ali ne i brojeve za Enterprise/Mobile/stanice/module. Bez ovoga nema prave ponude. | §9.3 |
-| **2** | **Unit economics + finansijski model** | `11`/`12` nije započeto. ARR/stanici, support cost, gross margin, hardver marža. | — |
-| **3** | **Standardizovan onboarding** | Track C (ROADMAP): danas founder-only, ~1 dan; cilj pola dana. Bez checkliste bez skrivenih koraka → ne skalira na 8 firmi. Kada se naplaćuje početni onboarding (free→paid cutover). | §9.4 |
-| **4** | **Ugovori / pravni okvir** | `20_LEGAL` nije započeto. SLA (RTO 24h, kritičan odziv 1h), vlasništvo podataka, silo, izvoz pri prestanku, povlačenje saglasnosti za deljenje. | §9.1 |
-| **5** | **Sales playbook + GTM + partneri** | `14`/`15` nije započeto; demo model (dummy, bez pilota — QA #255), reference. Formalni uslovi partnerske provizije/atribucije. | §9.5 |
-
-> **Presuda ose B:** za sezonu 2026 sa postojećim + ~5 novih klijenata, najkritičnije je **(1) fiksirati cenovnik** i **(3) standardizovati onboarding** — to su preduslovi za _ponovljivu_ prodaju. Ostalo (finansijski model, legal, sales playbook) je nužno za skaliranje ka 10–20, ali ne blokira prve ugovore.
+> **Posledica:** stvarno-otvoreni P0-klasa blokeri su **manje brojni i koncentrisani na PWA→centrala sync kičmu** (JSON + MasterSync) **+ Banka forma-na-otvaranju + storno/finansije lanci + AUTH-default**, a **ne** na SEF/auth kako registar sugeriše. Uz to, **RF-03/RF-04 (storno) se MORAJU re-verifikovati protiv v2.24.0** — storno PR-ovi #134-137 su prepisali `modStornoFlow` (+746 linija), pa su delovi AUD-020/AUD-005 možda već rešeni. Neto: realan open-P0 broj je verovatno **niži od 9**.
 
 ---
 
-## 5. Launch-readiness po proizvodu (sažeta presuda)
+## 4. Portfolio proizvoda — prodajna tabela
+
+| # | Prodajna celina | Sadržaj | Cena (model) | Impl | Dokaz | Launch gate (gde je posao) |
+|---|---|---|---|---|---|---|
+| 1 | **Platform Services** | auth, sync/MasterSync, storno/audit, monitoring, self-update, backup, gates | ugrađeno | Implemented | Production-proven (malo klijenata) | Runtime gate-ovi neizvršeni (KI-002/003); self-update component-loss (RF-24); TX rollback (RF-13) |
+| 2 | **AgriX Desktop (Core)** | otkup→dokument→prijem→faktura→izveštaj + Mgmt PWA | godišnja / pravno lice + stanice >5 | Implemented | Production-proven (3 klijenta) | **Najveća koncentracija:** P0 data-safety + finansije/storno/izveštaji P1 + health-check green |
+| 3 | **AgriX Mobile** | Desktop + PWA Otkupac + Vozač (osnovni) | ≥ 2× Desktop Otkup | Implemented | Limited production | **Strateški najvredniji:** JSON (RF-14) + MasterSync (RF-28) — glavna diferencijacija |
+| 4 | **SEF modul** | slanje/status/storno izlaznih, preuzimanje ulaznih, povezivanje | godišnja / pravno lice | Implemented | Limited evidence | **P0 zatvoren (kod).** Ostaje P1 korektnost/UX (RF-21/22): stornirana faktura sendable, truncation, „poslata" za grešku |
+| 5 | **Banka modul** | uvoz izvoda, povezivanje, rasknjižavanje, avansi, nalozi | godišnja / pravno lice | Implemented | Limited evidence | **Knjiži novac na otvaranje forme** (AUD-014, potvrđeno) + dedupe/crash (AUD-025) + over-order (AUD-026) → RF-09/10 |
+| 6 | **Dispatch (napredni)** | raspoređivanje vozila/vozača, rute, kapaciteti, dispečer | godišnja / pravno lice | Implemented | Limited evidence | Osnovni Vozač = Mobile-Core; napredni dispatch = malo dokaza, discovery |
+| 7 | **Hladnjača/Proizvodnja** | prerada, palete sveže/prerađene, lager, sledljivost; (2027: nalozi, norme, linije) | godišnja **posle standardizacije** | Impl/Partial (palete u prod.) | Limited evidence | Palete correctness (RF-12); pun proizvodni sistem = **najveći NOV build 2027**, nije launch-blocker sad |
+| 8 | **AgriX Gazdinstvo** | kartica, parcele/GIS, tretmani/karenca, troškovi, agrohemija, prognoza | Basic 19€ / Pro 39€ | Impl/Partial (~4.850 l koda) | **Pilot** | **Nije kod — validacija:** activation, 30/90/180 retention, WTP (Track G) |
+| 9 | **AgriX Savetnik** | 1 agronom → više gazdinstava | po aktivnom gazdinstvu | Planned (cilj 2027) | — | Izgraditi osnovnu verziju; nije launch-kritično 2026 |
+| 10 | **AgriX GGAP** | evidencije/dokazi/rokovi/audit-readiness | godišnja / pravno lice | Planned/Discovery | Unvalidated | **Not for sale**; domain owner + pilot; post-2027 |
+
+**Hardver (zaseban readiness):** Kiosk (`Controlled rollout`), Tablet (`Optional hardware`), Termalna štampa (`Controlled rollout`). Nezrelost **ne obara** status PWA aplikacije.
+
+---
+
+## 5. Osa A — Inženjerska spremnost (correctness / release truth)
+
+### 5.1 P0 tabela — 9 nominalnih (kalibrisano za single-writer desktop)
+
+| ID | Defekt | Scenario otkaza (podatak → pogrešan ishod) | Blokira | Napor | RF |
+|---|---|---|---|---|---|
+| **AUD-001** | Sheets JSON read kvari vrednosti sa `", "`/`\"`; `\uXXXX` nedekodiran | PWA otkup gde polje sadrži `"Petrović, Mile"` → `SplitCsvJson` deli usred vrednosti → kolone se pomere → pogrešan kooperant/iznos u `tblOtkup` na živom OTK/VOZ putu | PWA-sync Mobile | **S** (RF-14 M ukupno) | RF-14 |
+| **AUD-002** | Ceo import batch u jednoj Excel TX, ali per-sheet Google writeback `Synced>Master` nije rollback-abilan | Red 5 padne → Excel TX vrati sve, ali redovi 1–4 već označeni `Synced>Master` na Google strani (nepovratno) → potvrđeni redovi **trajno izgubljeni** | PWA-sync Mobile | **M** | RF-14 |
+| **AUD-003** | Pozicijski `Array(...)`+`AppendRow` na 17-kol `tblNovac` bez order-guard (`SaveNovac`=P0) | Instalacija sa schema drift (umetnuta/pomerena kolona) → `SaveNovac` upiše `Iznos` u pogrešnu kolonu → **tiho korumpiran novčani ledger**; svi saldi/izveštaji čitaju korupt | Desktop Core / Finance | **S** | RF-02 |
+| **AUD-004** | `RollbackTx` bez EH i bez garantovanog `CleanUp`; nema `Class_Terminate` | Bilo koja `_TX` op vrati; `RestoreTable` pukne usred petlje → `CleanUp` preskočen → `EnableEvents`/manual-calc ostaju off, tabele **polu-vraćene, Excel zamrznut** | Platform (323 BeginTx sajta) | **S** | RF-13 |
+| **AUD-005** | AutoChainHladnjača: `otpID`/`SaveZbirna_TX` rezultati odbačeni; `outBrPrij` pre uspešnog kreiranja | `SavePrijemnica_TX` padne ali `outBrPrij` već setovan → recovery relink na **nepostojeći broj**; lanac javi „COMPLETED" a slomljen | Palete-Hladnjača | **S** | RF-04 (re-verify) |
+| **AUD-006** | Journal recovery: današnje linije poređene sa **all-time** brojem redova; `UpdateCell` mutacije nikad ne journal-uju | Na zreloj svesci (hiljade redova) recovery **ne može da se okine**; crash usred `UpdateCell` je nepovratan | Platform | **M** | RF-13 |
+| **AUD-007** | `TryParseDateValue` prima nemoguće datume kroz `DateSerial` rollover | Izvod sa `45.13.2025` → rollover u validan datum → bankarska transakcija knjižena sa **pogrešnim datumom** → pogrešan period u saldu | Banka | **S** | RF-13 |
+| **AUD-020** | Storno „lažni uspeh" lanac (5 grana; paletni detach false-success; invariant `0=0` za nepostojeću zbirnu) | Storno korekcije: `Detach` vrati 0 na grešci ali `ok=True` → korekcija „COMPLETED" a palete i dalje vezane za otkazani dok | Desktop Core / Storno | **M** | RF-03 (re-verify) |
+| **AUD-030** | ~~SEF 409→REJECTED~~ | **VEĆ ISPRAVLJENO u kodu** (§3) — `Case 409→CONFLICT` | ~~SEF~~ | — | RF-21 (samo P1 ostaje) |
+
+> Realno-otvoreni P0: **AUD-001/002/003/004/006/007** čvrsto; **AUD-005/020** uz re-verifikaciju protiv v2.24.0 (možda delom rešeni); **AUD-030 zatvoren**. Koncentracija: **PWA-sync (RF-14) + Platform TX/journal (RF-13) + Finance-pozicijski (RF-02)**.
+
+### 5.2 P1 klasteri po oblasti (sažeto; puni detalj gore/u `KNOWN_ISSUES §8`)
+
+- **Finance/Novac (RF-02/05/08):** uplata na storniranu fakturu (AUD-009); avans na tuđi/stornirani cilj + no-op `True` naduvava brojače (AUD-010); novac storno prima broj umesto `NovacID` (AUD-008); `CreateFaktura` bez kupac-ownership + `Count=1` (AUD-011); **storno plaćanja skriva dug** iz payout liste (AUD-021).
+- **MasterSync (RF-28, deli fajl sa RF-14):** dup `BrojZbirne` (AUD-041); `Synced>Master` sa praznim VozacID + loš datum→danas (AUD-042); otpremnica meša vrste/cene (AUD-043); station-mirror FK bez `tblVozaci` reda (AUD-046).
+- **SEF (RF-21/22):** stornirana faktura potpuno sendable; qty/price truncation → nekonzistentan UBL; double-submit; „Faktura poslata" za REJECTED/TECH_FAILED (AUD-031/032). *(nije nezavisno code-verifikovano — po registru)*
+- **Banka (RF-09/10):** **AUD-014 knjiži na otvaranje** (potvrđeno); dedupe bez broja računa + crash na 3+ kandidata (AUD-025); CSV over-order (AUD-026).
+- **Izveštaji (RF-06/07/08):** kartice kreću od nule (AUD-023); freshness — stari podaci pod novim periodom + tihe lazy greške (AUD-024); revers bez storno filtera + meša ambalaže (AUD-012); reprint storniranog + `.UnMerge` (AUD-027); sledljivost parcijalni trace kao kompletan (AUD-045).
+- **Otkup UI (RF-11/26):** parcela false-alarm; nevezan blok nevidljiv iz „Izgubljeni"; stornirani blok daje default cenu (AUD-028); **cenovnik stale cena** — miss ostavlja cenu prethodnog artikla (AUD-036).
+- **Palete (RF-12):** UI traži i kutije i kese dok core dozvoljava jedno; sledljivost štampa količine cele zbirne; Reassign/Detach diraju prerađene palete (AUD-029).
+- **Agrohemija (RF-27 ✅):** cena≠knjižena — **rešeno** (grana `claude/rf-27-agrohemija-cena`).
+- **Auth/Startup (RF-23):** AUD-033/034 — **već implementirano**; ostaje **AUTH-default + plaintext-PIN signal** (§3).
+- **Self-update/Infra (RF-24/25/29/30):** component-loss pri prekidu (AUD-035); integritet/health false-green (AUD-044/047); plaintext PWA PIN + JMBG u Sheets (AUD-019, RF-20); empty-source → cloud wipe (AUD-038).
+
+**Dve nepakovane P1** (nemaju RF): **AUD-013** (`MatchesFilter` nepoznat operator → tiho ukloni kriterijum, `modArrayUtils.bas:94-95`) i **AUD-015** (dashboard broji stornirane, neslaganje sa frmDokumenta). Treba im dom ili eksplicitno odlaganje.
+
+### 5.3 Napor i sekvenca
+
+**Tally (30 paketa):** ~10× S/S–M, ~13× M, 2× M/L–L (RF-06, RF-20), 5× P2 konsolidacije. **Ukupno ≈ 28 dev-sesija / 13 release milestone-a ≈ 10–14 nedelja** pri 2–3 paketa/nedelji. **Kritičan put M0–M4 ≈ 4–5 nedelja** nosi svih 9 P0 + top P1 lance (auth, SEF, finansije, storno, sync) — ~40% napora, gotovo sva bezbednosna vrednost. **Usko grlo je operater smoke-turnaround, ne kod.**
+
+**Redosled (playbook §4):** `RF-01 → RF-02 → RF-23 → RF-21 → RF-27✅ → RF-03* → RF-04* → RF-05 → RF-14+RF-28 → RF-06 → RF-07 → RF-08 → RF-22 → RF-09 → RF-10 → RF-11 → RF-12 → RF-13 → RF-26 → RF-29 → RF-30 → RF-24 → RF-25 → RF-15+ → RF-20`
+
+**Zašto front-load:** RF-27 (najjeftiniji high-value, urađen); RF-23+RF-21 pre storna (bezbednost + jedini nominalni P0 — iako §3 pokazuje da su delom zatvoreni, paket i dalje nosi AUTH-default + SEF P1); RF-02 prvi jer RF-10 zavisi od njegovog „applied amount".
+
+**Deljeni fajlovi (moraju se serijalizovati):** `modMasterSync.bas` = **RF-14 + RF-28** (raditi zajedno, M4); `modNovac.bas` = RF-02/03/05/06; `frmOtkup.frm` = RF-11 + RF-26; `frmDokumenta.frm` = RF-05 + RF-26; `modStorno.bas` = RF-03 + RF-05. **Nezavisno isporučivi:** RF-01, RF-12, RF-29, RF-30, RF-24, RF-25, RF-15…19.
+
+**Re-verifikacija (kritično):** RF-03/RF-04 protiv v2.24.0 — storno PR-ovi #134-137 (+746 l) su možda već zatvorili delove AUD-020/005. Zadrži potvrđene, izbaci rešene, pre pisanja koda.
+
+### 5.4 Release-truth gate-ovi (KI-002/003 — OPEN, obavezni pre „Standard offer")
+
+1. **Compile gate** (RELEASE_GATES §2.1) — svi dirani moduli kompajliraju; `RequireColumns/RequireUpdateCell` vidljivi; nema stale form-handler referenci.
+2. **Smoke — BusinessFlowPro** (§2.2) — E2E `Otkup→Otpremnica→Zbirna→Prijemnica→Faktura→SEF`; dvoklasni dokumenti atomski; duplikat-faktura prevencija; stornirano izuzeto.
+3. **Route health** (§3.1) — `runGasRouteHealthCheck()`; svaka aktivna akcija ima handler; disabled → `FEATURE_DISABLED`.
+4. **PWA role smoke** (§4.2–4.5) — Otkupac (offline→pending→synced, badge, double-tap lock), Kooperant (dedupe, stale syncing→pending), Vozač (`brojZbirne` pre sync, storno ne reciklira sekvencu), Management (no-sync-for-role).
+5. **Monitoring** (§7), **SEF gate** (§6 — hvata AUD-030/031/032 regresije), **`RunProductionHealthCheck`** (§2.10 — 0 failure-a; fixtures rollback-ovani).
+
+**Upozorenje:** release gating **ne sme** da se oslanja na `modE2EReleaseGate` dok RF-26 ne popravi result-contract (AUD-039 false-green); dotad manualni smoke suite-ovi + `RunProductionHealthCheck`. Otvoreno van RF: **KI-001** (`saveParcelPolygon` auth — proveriti deploy `Code.gs`), **KI-006** (fantom u `ExportMagacinKoop` — potvrđeno).
+
+---
+
+## 6. Osa B — Komercijalna spremnost
+
+### 6.1 Tržište (`04_MARKET`)
+- **Registry TAM = 1.516 aktivnih firmi** (ne tvrditi javno „1.516 kupaca"). **SAM ≈ 150–300** (hipoteza, low-med). **SOM:** 12–18 mes. bazno **8–12**; 3–4 god. bazno **40–60** (200 je stretch — **finansijski model ne sme koristiti 200 kao bazu**).
+- **Kiosk sizing:** ~10 stanica/firmi → 10 firmi = **100 terminala**, 50 = 500, 100 = 1.000 (nabavka samo protiv potpisanih firmi).
+- **Gazdinstvo B2B2C:** ~100 kooperanata/firmi, **5% konverzija (hipoteza)** → 10 firmi ≈ 50 plaćenih.
+- **Sezonalnost (FACT):** otkup je sezonski intenzivan; **bez onboardinga u špicu**; in-season veliki release = nesrazmeran reputacioni rizik. Svaki deal nosi kulturu + početak sezone + **poslednji bezbedan datum onboardinga**.
+
+### 6.2 ICP / Anti-ICP (`03`)
+- **Sweet spot: 6–15 stanica** (hipoteza CUS-H01). ICP scoring 100 poena — **process breadth koji AgriX zatvara = najveći ponder (20)**. Tiers: A 75–100 (pun demo), B 60–74 (prvo blokeri), C 45–59 (samo uz referencu), D <45 (ne prodavati aktivno).
+- **Process fit > prihod.** Anti-ICP: traži trajni fork; neograničen custom u licenci; nema data/impl ownera; pun rollout pred sezonu bez pilota; odbija backup/monitoring/kontrole; traži garanciju rezultata/GGAP sertifikata; kupuje isključivo po najnižoj ceni. **Jedan diskvalifikator obara skor.**
+
+### 6.3 Konkurencija + Infosys wedge (`05/05A/05B`)
+- Hijerarhija: **Infosys #1 → SOFTEK+KRUNET (24 relevantne reference) → Yuteam (Vojvodina) → generički ERP / Excel / status quo**. Tržište **nije greenfield**.
+- **Najjači dokaz u celom planu (FACT): 2 postojeća klijenta prešla sa Infosys-a** (oba ~150M RSD). → „praktično iskustvo sa migracijom" je dozvoljena tvrdnja; opšta superiornost tek posle win-intervjua.
+- **Kvalifikovana lista od 9 Infosys-replacement naloga** (`05B`): Talas 1 — **FRIGO-PAUN** (>1.000 proizvođača), **BUDIM GRAD** (1,4 mlrd), **FRUCOM FOOD**, **AS-AGRO 99** (3,5 mlrd), **AGRO-SUNCOKRET**, **FRIGO BRAĆA MITROVIĆ**; Talas 2 — MAGIC BERRY, FRIGOMIL, MALINA PROIZVOD. **Ne masovni outreach na svih 30.**
+- Generički ERP (BizniSoft/Pantheon/Minimax): **koegzistirati, ne napadati** — AgriX pokriva ulazni tok robe koji oni ne. Izgubljen lead (~400M) otišao lokalnom programeru **zbog vremena odziva** → speed-to-contact je konkurentska funkcija.
+- **Teško kopirati:** povezan Enterprise–Gazdinstvo–GGAP data flywheel, real-season know-how, deljeni proizvod bez forkova, mrežni efekat. **Lako kopirati:** jedan ekran/izveštaj/PWA forma → **ne pozicionirati se na jednu funkciju.**
+
+### 6.4 Pozicioniranje (`06`)
+- Centralna poruka: *„Otkupci i vozači unose podatke tamo gde posao nastaje, a AgriX automatski puni centralnu bazu za kontrolu, fakture i izveštaje."* Operater: od **prepisivača ka kontroloru**. **Nije „ERP za poljoprivredu"** — koegzistira.
+- **Dozvoljeno** (uz tačan scope): „podatak se ne prepisuje ako je već unet na terenu"; „radi uz postojeći ERP"; **„tri firme koriste AgriX, dva klijenta prešla sa Infosys-a"**. **Zabranjeno** (bez dokaza): „eliminiše sve greške", „nikad ne gubi podatke", „radi bez interneta u svakoj funkciji", „podržava svaki printer", „potpuna zamena ERP-a", „potpun GGAP compliance".
+- **Demo mora pratiti realan tok** stanica→sync→centrala→faktura→izveštaj (ne spisak ekrana). **Enterprise nema pilot** — samo dummy demo (QA #255–257).
+
+### 6.5 Cene — što nedostaje
+- **Konkretni brojevi postoje samo za Gazdinstvo** (19€/39€). Sve ostalo su _pravila_ (§2.1); `10_PRICING` (apsolutni iznosi) **nije napisan** → **#1 komercijalni blocker**.
+- WTP nepotvrđen: dispečer+finansijske automatizacije podižu WTP više od izveštaja (CUS-H02); 15–20 struktuiranih WTP intervjua po segmentu (`04` §21).
+
+### 6.6 Unit-economics inputi (FACT, ali model nenapisan)
+3 klijenta · ~10 stanica · ~100 kooperanata · 1 desktop korisnik · 5% konverzija (hipoteza) · 19/39€ · onboarding ~1 dan → cilj 0,5 · **~1 support poziv/nedeljno** (~15 min trivijalno / sati kad je bug) · SLA: RTO 24h, kritičan odziv 1h · tim: osnivač (+možda 1 dev) + 1 support/impl. **`11_UNIT_ECONOMICS` i `12_FINANCIAL_MODEL` nisu napisani** → ARR/stanici, gross margin, CAC, LTV nedefinisani.
+
+### 6.7 Komercijalni gapovi (rang)
+1. **Apsolutni cenovnik** (`10`) — bez ovoga nema prave ponude. *Genuinely missing.*
+2. **Unit economics + finansijski model** (`11`/`12`). *Missing.*
+3. **Standardizovan onboarding checklist** (Track C) — danas founder-only ~1 dan; + free→paid cutover neodlučen. *Namera postoji, artefakt (checklista) ne.*
+4. **Ugovori/legal/SLA** (`20`) — pravila razbacana u QA #40–57/181–189; formalni okvir ne.
+5. **Sales playbook + GTM + partneri** (`14/15`) — sirovi inputi (ICP scoring, Infosys lista) postoje; proces ne.
+
+> **Reconciliacija:** README status-tabela („sve nije započeto") je **zastarela** — 02–08 su napisani (CHANGELOG). Rast: **40–60 realno (3–4 god.)**, ne 200.
+
+---
+
+## 7. Launch-readiness po proizvodu (presuda)
 
 | Proizvod | Presuda | Najveći posao |
 |---|---|---|
-| **AgriX Desktop (Core)** | Prodaje se postojećim klijentima; **nije još „Standard offer"** dok P0/P1 + health gate ne prođu | Osa A rang 1, 4, 5, 6 |
-| **AgriX Mobile** | Strateški core; productizacija u toku (Track B) | Osa A rang 2 (sync) |
-| **SEF modul** | ⛔ **Ne prodavati** dok RF-21 (P0) ne prođe | Osa A rang 3 |
-| **Banka modul** | ⛔ Ne kao „Standard"; knjiži novac na otvaranje forme | Osa A rang 5 |
-| **Dispatch (napredni)** | Optional; osnovni Vozač ide u Mobile; napredni čeka dokaz | — |
+| **AgriX Desktop (Core)** | Prodaje se postojećima; **ne još „Standard offer"** dok P0 + finansije/storno/izveštaji P1 + health-gate ne prođu | Osa A 5.1 + 5.2 (finance/storno/izveštaji) |
+| **AgriX Mobile** | Strateški core; **najvredniji inženjerski posao** = JSON+MasterSync (RF-14+RF-28) | Osa A: PWA-sync kičma |
+| **SEF modul** | **P0 zatvoren u kodu** → bliži prodaji nego što registar tvrdi; ostaje P1 (RF-21/22) pre „Standard" | RF-21/22 (korektnost/UX) |
+| **Banka modul** | ⛔ Ne „Standard" — **knjiži novac na otvaranje forme** (potvrđeno) | RF-09/10 |
+| **Dispatch (napredni)** | Optional; osnovni Vozač ide u Mobile | — |
 | **Hladnjača/Proizvodnja** | Palete se prodaju (Controlled); pun sistem = 2027 build | RF-12 + 2027 roadmap |
-| **Gazdinstvo** | Pilot only; **validacija pre skaliranja** (ne kod) | Osa A: platforma stabilna; onda Track G metrike |
-| **Savetnik** | Osnovna verzija cilj 2027; nije launch-kritično | — |
+| **Gazdinstvo** | Pilot only; **validacija pre skaliranja** (retention/WTP), ne kod | Track G metrike |
+| **Savetnik** | Osnovna verzija cilj 2027 | — |
 | **GGAP** | Not for sale; discovery; domain owner | Post-2027 |
 
 ---
 
-## 6. Odluke
+## 8. Odluke
 
-1. **Portfolio je jedan proizvod + paketi + moduli** (QA #59). Ovaj dokument je kanonski _spoj_ komercijalnog portfolija i inženjerskog backlog-a; detalji ostaju u izvornim dokumentima.
-2. **Nijedna celina ne prelazi u „Standard offer" pre nego što prođe readiness gate iz 07 §12** (end-to-end tok + compile/smoke/regression + realni produkcioni dokaz + monitoring/recovery + onboarding + support boundary + cena).
-3. **P0 data-safety (Osa A rang 1) ima apsolutni prioritet** — blokira Core i sve module (ROADMAP §5 stop-pravilo).
-4. **SEF i Banka se ne smeju prodavati kao „Standard"** dok RF-21 (P0) i RF-09/10 ne prođu; do tada `Optional extension` uz jasnu ogradu.
-5. **PWA-led sync (RF-14+RF-28) je strateški najvredniji inženjerski posao** jer nosi glavnu diferencijaciju (teren→centrala bez ponovnog unosa).
-6. **Runtime gate-ovi + `RunProductionHealthCheck` na ciljnom workbook-u su obavezan izlazni uslov** (KI-002/003) — „čista dokumentacija" nije dokaz.
-7. **Cenovnik (apsolutni iznosi) i standardizovan onboarding su komercijalni preduslovi** za ponovljivu prodaju naredne sezone.
-
----
-
-## 7. KPI i pragovi
-
-**Inženjerski (po ROADMAP §9 / 07 §12):**
-- 0 izgubljenih potvrđenih zapisa; 0 nekontrolisanih canonical duplikata.
-- ≥ 99% sync uspeha bez developerske intervencije.
-- Svi P0 zatvoreni root-cause analizom; broj otvorenih RF paketa (trenutno 29/30).
-- Ciljni workbook: 0 health failure-a.
-- Ručne centralne korekcije na 100 otkupa ispod dogovorenog praga.
-
-**Komercijalni:**
-- Fiksiran javni cenovni raspon (Desktop/Mobile) + tačan iznos stanice >5.
-- ≥ 1 onboarding izveden po checklisti, izmereno vreme/firmi.
-- Support cost održiv za planiranih ~8 firmi.
+1. **Ground-truth (kod) ima prednost nad registrom** kad se razilaze — registar je delom zastareo vs v2.24.0. AUD-030/033/034 su **zatvoreni**; ne prikazivati ih kao otvorene blokere.
+2. **P0 data-safety (Osa A 5.1) ima apsolutni prioritet** — blokira Core i module.
+3. **PWA-sync (RF-14+RF-28) je strateški najvredniji posao** — nosi glavnu diferencijaciju; raditi kao jednu sesiju (isti fajl).
+4. **Banka se ne sme prodavati kao „Standard"** dok AUD-014 (knjiži na otvaranje) ne padne. **SEF** je bliži — ostaje P1 klaster (RF-21/22).
+5. **RF-03/RF-04 re-verifikovati protiv v2.24.0** pre koda (storno rewrite #134-137).
+6. **Runtime gate-ovi + `RunProductionHealthCheck` = obavezan exit-uslov** (KI-002/003).
+7. **#1 komercijalni preduslov = apsolutni cenovnik** (`10`); **#2 = standardizovan onboarding**.
+8. **Infosys-replacement (9 naloga) je primarni GTM wedge**; obaviti 2 win-intervjua sa migriranim klijentima → battlecard + migration playbook.
+9. **Finansijski model koristi 40–60 (3–4 god.) kao bazu**, ne 200.
 
 ---
 
-## 8. Rizici
+## 9. KPI i pragovi
+
+**Inženjering:** 0 izgubljenih potvrđenih zapisa; 0 nekontrolisanih canonical duplikata; ≥99% sync uspeha bez dev intervencije; otvoreni RF paketi (29/30); ciljni workbook 0 health failure-a; kritičan put M0–M4 zatvoren.
+**Komercijala:** fiksiran javni raspon Desktop/Mobile + tačan iznos stanice >5; ≥1 onboarding po checklisti (izmereno vreme/firmi); 2 Infosys win-intervjua; support cost održiv za ~8 firmi.
+
+---
+
+## 10. Rizici
 
 | Rizik | Uticaj | Mitigacija |
 |---|---|---|
-| „Zeleno" bez izvršenih runtime gate-ova | Lansiranje sa latentnim P0 | KI-002/003 kao hard exit-gate; health-check na ciljnom workbook-u |
-| SEF poslat pogrešno/duplirano ka poreskoj (AUD-030) | Pravni/finansijski | RF-21 pre svake SEF prodaje; do tada modul van „Standard" |
-| Sanacija sporija od sezone | Feature freeze blokira ispravke | 30-dnevni sezonski freeze (ROADMAP §3.6); RF paketi nezavisno isporučivi |
-| Prespora prodaja/standardizacija (QA #93/#94/#98) | Uska grla na 30–50 klijenata | Osa B rang 1/3 pre skaliranja |
-| Custom zahtevi razvlače roadmap (QA #98/#103) | Odlaganje Core-a | Pisana namera + eksplicitno šta se odlaže (QA #104/#106) |
+| „Zeleno" bez izvršenih runtime gate-ova | Latentan P0 u produkciji | KI-002/003 hard exit-gate; health-check na ciljnom workbook-u |
+| Banka knjiži na otvaranje forme (AUD-014) | Pogrešno/tiho knjiženje novca | RF-09 pre Banka prodaje; dotad modul van „Standard" |
+| AUTH se isporučuje ugašen (§3) | Svako je admin na instalaciji bez auth-a | RF-23: odluka o default-u + signal plaintext-PIN fallback-a |
+| Registar zastareo → duplo raditi već-rešeno | Straćen kapacitet | Re-verifikacija RF-03/04 (i drugih) protiv v2.24.0 pre koda |
+| Prespora prodaja/standardizacija (QA #93/94/98) | Uska grla 30–50 klijenata | Osa B #1 (cenovnik) + #3 (onboarding) pre skaliranja |
+| Sporost odziva na lead (izgubljen ~400M lead) | Gubitak posla ka lokalnom programeru | SLA za inbound: instant ack + ljudski kontakt |
 
 ---
 
-## 9. Otvorena pitanja (nasleđena iz QA §9)
+## 11. Otvorena pitanja (QA §9)
 
-1. Apsolutni cenovnici (Enterprise, Mobile, stanice, moduli, Gazdinstvo, Savetnik).
-2. Tačan trenutak prelaska free → paid onboarding za nove Enterprise klijente.
-3. Pravna pravila za povlačenje saglasnosti proizvođača za dodatno deljenje podataka.
+1. Apsolutni cenovnici (Enterprise, Mobile, stanice, moduli).
+2. Trenutak free → paid onboarding za nove Enterprise klijente.
+3. Pravna pravila za povlačenje saglasnosti proizvođača za deljenje podataka.
 4. Formalni uslovi partnerske provizije i atribucije lead-a.
-5. Redosled post-2027 inicijativa: GGAP, Savetnik marketplace, multi-Enterprise.
+5. Redosled post-2027: GGAP, Savetnik marketplace, multi-Enterprise.
 
 ---
 
-## 10. Akcije
+## 12. Akcije
 
 | # | Akcija | Vlasnik | Rok / gate |
 |---|---|---|---|
-| 1 | Izvršiti RF sekvencu po playbook §4, počev od RF-01/02/23/21 | osnivač (+dev) | Track A closeout 31.08.2026 |
-| 2 | Pokrenuti runtime gate-ove + `RunProductionHealthCheck` na ciljnom workbook-u | osnivač | pre svakog „Standard offer" |
-| 3 | Track B end-to-end sync gate + RF-14+RF-28 | dev | 31.10.2026 |
-| 4 | `10_PRICING_AND_PACKAGING.md` — apsolutni iznosi | osnivač | pre naredne sezone |
-| 5 | Standardizovan onboarding checklist (Track C) | osnivač | 30.11.2026 |
-| 6 | SEF/Banka označiti `Optional extension` sa ogradom dok RF-21/09/10 ne prođu | osnivač | odmah |
+| 1 | **Re-verifikovati registar protiv v2.24.0** (RF-03/04 + potvrditi §3 zatvorene stavke) pre koda | osnivač | pre M2 |
+| 2 | RF sekvenca M0–M4 (kritičan put: RF-01/02/23/21 → RF-14+28) | osnivač (+dev) | ~4–5 nedelja |
+| 3 | Runtime gate-ovi + `RunProductionHealthCheck` na ciljnom workbook-u | osnivač | pre svakog „Standard offer" |
+| 4 | **Banka van „Standard"** dok AUD-014 ne padne; **SEF** označiti „P0 zatvoren, P1 u toku" | osnivač | odmah |
+| 5 | `10_PRICING_AND_PACKAGING.md` — apsolutni iznosi | osnivač | pre sezone |
+| 6 | Standardizovan onboarding checklist (Track C) | osnivač | 30.11.2026 |
+| 7 | 2 Infosys win-intervjua → battlecard + migration playbook; Talas 1 outreach (9 naloga) | osnivač | Q3 2026 |
+| 8 | Dodeliti dom nepakovanim AUD-013/AUD-015 ili ih eksplicitno odložiti | osnivač | pre M3 |
 
 ---
 
-## 11. Izvori i datum provere
+## 13. Izvori i datum provere
 
-- `09_QA_DECISION_LOG.md` (260 odluka), `07_PRODUCT_PORTFOLIO.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `07B_ENTERPRISE_OPERATING_MODES.md`, `08_PRODUCT_ROADMAP.md`, `08A_ROADMAP_MILESTONES.csv` — verifikovano 2026-07-24.
-- `../PLAN_SANACIJE.md`, `../REFAKTOR_PLAYBOOK.md` (RF-01…30 status), `../KNOWN_ISSUES.md` §8 (AUD-001…048), `../ROADMAP.md` §10, `../RELEASE_GATES.md` — verifikovano 2026-07-24.
-- Sidro koda: `origin/main` v2.24.0 (`9fd7087`).
+- Komercijala: `09_QA_DECISION_LOG`, `07/07A/07B`, `03`, `04`, `05/05A/05B`, `06`, `README`, `CHANGELOG` — 2026-07-24.
+- Inženjering: `../PLAN_SANACIJE`, `../REFAKTOR_PLAYBOOK` (RF status), `../KNOWN_ISSUES §8`, `../ROADMAP §10`, `../RELEASE_GATES` — 2026-07-24.
+- **Code-verifikacija (v2):** `modSEFClient.bas:491-501`, `frmBankaImport.frm:72`, `modGoogleSheets.bas:1757-1830`, `modMasterSync.bas:1773-1798/2887-2928`, `modMaticniLookups.bas:256-263`, `modAdmin.bas:45-48/211-214`, `modAgrohemija.bas:435`, `modStammdatenSync.bas:1966-1982` — verifikovano protiv `origin/main` v2.24.0.
 
-## 12. Change log
+## 14. Change log
 
 | Datum | Izmena |
 |---|---|
-| 2026-07-24 | Inicijalna verzija: razrada QA log-a u portfolio + launch-readiness (dve ose), presuda po proizvodu. Spaja komercijalni portfolio i inženjerski AUD/RF backlog bez dupliranja izvora. |
+| 2026-07-24 | Inicijalna verzija: razrada QA log-a u portfolio + launch-readiness (dve ose). |
+| 2026-07-24 (v2) | Produbljeno: (1) code-verifikacija — registar delom zastareo (AUD-030/033/034 zatvoreni u v2.24.0); (2) per-defekt P0/P1 sa scenarijima i naporom (~28 dev-sesija, kritičan put 4–5 ned.); (3) tržište/ICP/konkurencija/Infosys wedge sa realnim brojevima; (4) release-truth gate-ovi; (5) reconciliacije (README stale, rast 40–60, Savetnik vs GGAP). |
