@@ -353,6 +353,45 @@
   .donut .dl{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
   .rep-line{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--line);color:var(--ink-soft)}
   .rep-line:first-child{border-top:0} .rep-line b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  /* ---- Elite sloj (E1–E5) ---- */
+  .riskstrip{display:flex;gap:3px;margin-top:5px}
+  .riskstrip .rc{flex:1;text-align:center;min-width:0}
+  .riskstrip .rc .rd{font-size:9px;color:var(--muted)}
+  .riskstrip .rc .rb{height:28px;border-radius:5px;margin-top:3px;display:grid;place-items:center;font-size:8.5px;font-weight:700}
+  .riskstrip .rc .rb.lo{background:var(--ok-soft);color:var(--ok)}
+  .riskstrip .rc .rb.md{background:var(--warn-soft);color:var(--warn)}
+  .riskstrip .rc .rb.hi{background:var(--crit-soft);color:var(--crit)}
+  .infwin{margin-top:9px;border:1px dashed var(--crit);background:var(--crit-soft);border-radius:var(--r-sm);padding:8px 10px;font-size:11.5px;color:var(--crit);font-weight:600;display:flex;gap:8px;align-items:flex-start;line-height:1.35}
+  .infwin svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px}
+  .frac{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;align-items:center}
+  .frac .fl{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-right:2px}
+  .frac .fg{font-size:10px;font-weight:700;border-radius:6px;padding:3px 8px;background:var(--panel-2);border:1px solid var(--line-2);color:var(--ink-soft)}
+  .frac .fg.used{background:var(--gold-soft);color:var(--gold-ink);border-color:var(--gold)}
+  .frac .fg.next{background:var(--green-soft);color:var(--green);border-color:var(--green)}
+  .incoming.sys{border-top-color:var(--green)}
+  .in-kind.sys{background:var(--green-soft);color:var(--green);display:inline-flex;gap:5px;align-items:center}
+  .in-kind.sys svg{width:11px;height:11px}
+  .sig{margin-top:9px;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:9px 11px;display:flex;align-items:center;gap:11px;background:var(--panel-2)}
+  .sig .sg{font-style:italic;font-family:var(--serif);font-size:19px;color:var(--ink);flex:1;min-width:0;border-bottom:1px solid var(--line-2);padding-bottom:2px}
+  .sig .st{font-size:9.5px;color:var(--muted);text-align:right;white-space:nowrap;flex:0 0 auto}
+  .chat{display:flex;flex-direction:column;gap:9px}
+  .bubble{max-width:88%;padding:9px 12px;border-radius:14px;font-size:12.5px;line-height:1.45}
+  .bubble.me{align-self:flex-end;background:var(--forest-2);color:#fff;border-bottom-right-radius:5px}
+  .bubble.ai{align-self:flex-start;background:var(--panel);border:1px solid var(--line);color:var(--ink-soft);border-bottom-left-radius:5px}
+  .bubble.ai b{color:var(--ink);font-weight:600}
+  .bubble .act{display:inline-block;margin-top:7px;font-size:11.5px;font-weight:600;color:var(--green);border:1px solid var(--green);border-radius:8px;padding:4px 10px}
+  .src{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+  .src .sc{font-size:9.5px;border-radius:6px;padding:2px 7px;background:var(--green-soft);color:var(--green);font-weight:600}
+  .chatbar{display:flex;gap:7px;align-items:center;margin-top:auto;border:1px solid var(--line-2);border-radius:999px;padding:6px 6px 6px 14px;background:var(--panel);color:var(--faint);font-size:12px}
+  .chatbar .snd{margin-left:auto;width:29px;height:29px;border-radius:50%;background:var(--green);display:grid;place-items:center;flex:0 0 auto}
+  .chatbar .snd svg{width:15px;height:15px;color:#fff}
+  .oflow{display:flex;align-items:stretch;gap:5px}
+  .oflow .os2{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 5px;text-align:center;min-width:0}
+  .oflow .os2.hl{border-color:var(--green);background:var(--green-soft)}
+  .oflow .os2 .ol{font-size:8.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint);font-weight:600}
+  .oflow .os2 .ov{font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);margin-top:2px;line-height:1}
+  .oflow .os2.hl .ov{color:var(--green)}
+  .oflow .oa{align-self:center;color:var(--faint);font-size:13px;flex:0 0 auto}
   @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 
@@ -938,6 +977,174 @@
           </div>
           <div style="font-size:11px;color:var(--gold-ink);background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--r-sm);padding:8px 11px;line-height:1.4">Agrosavetodavni izveštaj. Za GGAP sertifikaciju važi zvanična GGAP evidencija (poseban modul, §216).</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ELITE SLOJ ============ -->
+  <div class="sec" style="margin-top:60px;border-top:1px solid var(--line);padding-top:34px">
+    <div class="sec-k" style="color:var(--gold)">Elite sloj · napredno</div>
+    <h2 class="sec-h">Od alata za savete ka agronomskom mozgu</h2>
+    <p class="sec-d">Sloj koji pravi „elite" razliku: autoritativni podaci (registar SZB), predikcija umesto reakcije
+      (modeli bolesti), automatizacija (auto-nacrt), poverenje (dnevnik + e-potpis), zatvorena petlja preporuka→ishod
+      (moat) i AI copilot. Iza stručne validacije (QA §297), ne usporava Enterprise (§203).</p>
+  </div>
+
+  <div class="grid">
+    <!-- E1 — Model bolesti / infekcioni period + registar SZB -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Elite 1</div><div class="ct">Model bolesti · infekcioni period</div><div class="cd">Predikcija po parceli iz meteo + rotacija FRAC grupa.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 0 0-4 12.7V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.3A7 7 0 0 0 12 2ZM9 22h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Čađava krastavost</div><div class="app-sub">model · PAR-0142 · Jabuka</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="stub-h"><span>Rizik infekcije — 7 dana</span><span style="color:var(--crit)">visok</span></div>
+            <div class="riskstrip">
+              <div class="rc"><div class="rd">Po</div><div class="rb lo">nizak</div></div>
+              <div class="rc"><div class="rd">Ut</div><div class="rb md">sred</div></div>
+              <div class="rc"><div class="rd">Sr</div><div class="rb hi">visok</div></div>
+              <div class="rc"><div class="rd">Če</div><div class="rb hi">visok</div></div>
+              <div class="rc"><div class="rd">Pe</div><div class="rb md">sred</div></div>
+              <div class="rc"><div class="rd">Su</div><div class="rb lo">nizak</div></div>
+              <div class="rc"><div class="rd">Ne</div><div class="rb lo">nizak</div></div>
+            </div>
+            <div class="infwin"><svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Infekcioni period: sre–čet (vlaženje lista 14 h, 16 °C — Mills). Tretirati preventivno pre kiše u petak.</span></div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>Preporuka iz registra SZB</span><span>Switch 62,5 WG</span></div>
+            <div class="rowline"><span class="lead"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div><b>Registrovano</b> za jabuku / čađavu krastavost<div style="font-size:11px;color:var(--muted)">doza 0,8 kg/ha · karenca 7 d · MRL OK</div></div></div>
+            <div class="frac"><span class="fl">Rotacija FRAC</span><span class="fg used">7 (T1)</span><span class="fg used">11 (T2)</span><span class="fg next">9 + 12 (sada)</span></div>
+          </div>
+          <div class="cta">Kreiraj nalog iz modela →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E2 — Auto-nacrt naloga (rules engine) -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Elite 2</div><div class="ct">Auto-nacrt naloga (pravila)</div><div class="cd">Sistem predlaže, savetnik potvrđuje. Weather/model okidači.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Predlozi sistema</div><div class="app-sub">auto-nacrt · 3 nova</div></div>
+        </div>
+        <div class="app-body">
+          <div class="incoming sys">
+            <div class="in-top"><span class="in-kind sys"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6v3h4v4h-4v11H9V10H5V6h4V3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Auto-nacrt · model</span><span class="in-from">okidač: rizik visok</span></div>
+            <div class="in-title">Zaštita — čađava krastavost</div>
+            <div class="in-body">Pogađa <b>4 gazdinstva</b> (Jabuka): Jovanović, Marković, Ristić, Simić. Predlog pre kiše (pet).</div>
+            <div class="in-actions"><div class="btn pri">Potvrdi sve</div><div class="btn sec">Pregledaj</div><div class="btn sec wide">Odbaci</div></div>
+          </div>
+          <div class="incoming sys">
+            <div class="in-top"><span class="in-kind sys"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>Eskalacija · kašnjenje</span><span class="in-from">Petrović · 3 dana</span></div>
+            <div class="in-body">Obavezujući nalog „Prihrana" nije prihvaćen. Predlog: podsetnik + poziv.</div>
+            <div class="in-actions"><div class="btn pri">Podseti</div><div class="btn sec">Pozovi</div></div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.4">Okidači: model bolesti · meteo prag · karenca · kašnjenje. Savetnik uvek potvrđuje — ništa ne ide automatski.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- E3 — Dnevnik prskanja + e-potpis -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Elite 3</div><div class="ct">Dnevnik prskanja + e-potpis</div><div class="cd">Audit-ready e-evidencija upotrebe SZB; osnov za GGAP.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Dnevnik prskanja</div><div class="app-sub">PAR-0142 · 20.07.2027 · 07:30</div></div>
+        </div>
+        <div class="app-body">
+          <div class="stub">
+            <div class="rep-line"><span>Sredstvo (SZB)</span><b>Signum</b></div>
+            <div class="rep-line"><span>Aktivna materija</span><b>piraklostrobin+boskalid</b></div>
+            <div class="rep-line"><span>Doza / površina</span><b>1,05 kg / 2,1 ha</b></div>
+            <div class="rep-line"><span>Karenca</span><b>14 d · do 03.08.</b></div>
+            <div class="rep-line"><span>Vetar / temp.</span><b>8 km/h · 17 °C</b></div>
+            <div class="rep-line"><span>Operater</span><b>M. Jovanović</b></div>
+          </div>
+          <div class="sig"><div class="sg">Milan Jovanović</div><div class="st">e-potpis<br>20.07. 07:32</div></div>
+          <div class="in-actions" style="margin-top:0"><div class="btn pri">Export PDF</div><div class="btn sec">Deli sa hladnjačom</div></div>
+          <div style="font-size:11px;color:var(--gold-ink);background:var(--gold-soft);border:1px solid var(--gold);border-radius:var(--r-sm);padding:8px 11px;line-height:1.4">Zvanična e-evidencija upotrebe SZB. Dokazni sloj; za sertifikaciju važi GGAP modul (§216).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- E4 — Petlja ishoda (outcome-loop / moat) -->
+    <div class="screen">
+      <div class="screen-cap"><div class="cn">Elite 4</div><div class="ct">Petlja ishoda (preporuka → prinos)</div><div class="cd">Data-moat: šta je preporuka stvarno donela.</div></div>
+      <div class="phone">
+        <div class="app-head">
+          <div class="ah-ic" style="background:rgba(255,255,255,.12)"><svg viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18M7 15l4-5 3 3 5-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div><div class="app-title" style="font-size:15px">Ishod preporuke</div><div class="app-sub">PAR-0142 · sezona 2027</div></div>
+        </div>
+        <div class="app-body">
+          <div class="oflow">
+            <div class="os2"><div class="ol">Preporuka</div><div class="ov">11</div></div>
+            <div class="oa">→</div>
+            <div class="os2"><div class="ol">Primenjeno</div><div class="ov">9</div></div>
+            <div class="oa">→</div>
+            <div class="os2 hl"><div class="ol">Prinos t/ha</div><div class="ov">42</div></div>
+          </div>
+          <div class="stub">
+            <div class="stub-h"><span>vs prosek portfolija</span><span>Jabuka</span></div>
+            <div class="bar"><span class="bl">Prinos</span><span class="bt"><i style="width:88%"></i></span><span class="bv">+17%</span></div>
+            <div class="bar"><span class="bl">Klasa I udeo</span><span class="bt"><i style="width:82%"></i></span><span class="bv">88%</span></div>
+            <div class="bar"><span class="bl">Poštovanje protokola</span><span class="bt"><i class="gold" style="width:82%"></i></span><span class="bv">82%</span></div>
+          </div>
+          <div class="rep-line" style="border:0;padding-top:2px"><span>Veza</span><b style="font-weight:500;color:var(--muted);font-size:11px">preporuka → tretman → otkup/kvalitet (kartica)</b></div>
+          <div style="font-size:11px;color:var(--muted);text-align:center">Zatvorena petlja = dokaz vrednosti + mrežni efekat (QA §97).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- E5 — AI copilot -->
+  <div class="sec" style="margin-top:36px">
+    <div class="sec-k" style="color:var(--gold)">Elite 5 · AI</div>
+    <h2 class="sec-h">Agronomski copilot — grounded na podacima gazdinstva</h2>
+    <p class="sec-d">Prirodan jezik nad strukturisanim podacima: pita se o parceli, a odgovor je iz istorije farme + meteo +
+      registra SZB + protokola, sa izvorima i akcijom „napravi nalog". Savetnik uvek potvrđuje.</p>
+  </div>
+
+  <div class="hero">
+    <div class="phone lg">
+      <div class="app-head">
+        <div class="ah-logo" style="background:linear-gradient(150deg,var(--gold),#a07f28)"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+        <div><div class="app-title" style="font-size:15px">AgriX copilot</div><div class="app-sub">agronomski asistent</div></div>
+      </div>
+      <div class="app-body scroll">
+        <div class="chat">
+          <div class="bubble me">Šta na PAR-0142 ove nedelje?</div>
+          <div class="bubble ai"><b>Rizik čađave krastavosti je visok</b> — infekcioni period sreda–četvrtak. Preporuka: preventivna zaštita pre kiše u petak. <b>Switch 0,8 kg/ha</b> (FRAC 9+12, rotacija nakon FRAC 7 i 11). Karenca 7 dana — berba (od 20.08.) nije ugrožena. Lager: nedostaje 1,6 kg za 4 parcele.
+            <div class="src"><span class="sc">istorija PAR-0142</span><span class="sc">meteo</span><span class="sc">registar SZB</span><span class="sc">protokol Jabuka</span></div>
+          </div>
+          <div class="bubble me">Napravi nalog za sva 4 gazdinstva.</div>
+          <div class="bubble ai">Nacrt spreman: <b>Zaštita · Switch</b>, doza po ha svake parcele, rok petak. Ide u Auto-nacrt na tvoju potvrdu.
+            <span class="act">Otvori nacrt (4) →</span>
+          </div>
+        </div>
+        <div class="chatbar">Pitaj o parceli, tretmanu, riziku…<span class="snd"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12l16-8-6 8 6 8-16-8Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></span></div>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="note gold">
+        <h4><span class="num">★</span> Moat: temelj pre AI-a</h4>
+        <p>Copilot je „wow" tek kad stoji na registru SZB (autoritet), modelima (predikcija) i petlji ishoda (dokaz). Grounded odgovor sa izvorima — ne halucinacija; savetnik potvrđuje.</p>
+        <span class="ref">QA §75 platforma · §97 mrežni efekat</span>
+      </div>
+      <div class="note">
+        <h4><span class="num">⚙</span> Kako radi (skica)</h4>
+        <p>Najnoviji Claude preko server-proxy-ja (ključevi ne idu na klijent), context = strukturisani podaci gazdinstva; alat „kreiraj nacrt naloga" vraća <code>savet</code> u Auto-nacrt.</p>
+        <span class="ref">spec §13.5</span>
+      </div>
+      <div class="note">
+        <h4><span class="num">⚑</span> Granica (doktrina)</h4>
+        <p>Iza stručne validacije (QA §297); ne usporava Enterprise (§203). Foto-dijagnostika, NDVI, timovi i marketplace su dalje faze.</p>
       </div>
     </div>
   </div>

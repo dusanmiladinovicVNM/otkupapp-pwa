@@ -544,6 +544,97 @@ dodeljenih gazdinstava. Bez novog entiteta.
 
 ---
 
+## 13. Elite scope (E1–E5) — od alata ka agronomskom mozgu
+
+Napredni sloj koji diferencira proizvod. **Sve iza stručne validacije (QA §297) i bez
+usporavanja Enterprise-a (§203)** — dakle post-jezgro, fazno. Wireframe ekrani „Elite 1–5".
+
+**Teza (moat):** _registar SZB (autoritet) + modeli (predikcija) + petlja ishoda (dokaz)_
+zajedno daju mrežni efekat i teško-kopirljivu vrednost (QA §75 platforma, §97 podaci). AI
+copilot je „wow" sloj **na tom temelju**, ne sam za sebe.
+
+### 13.1 Registar SZB (temelj) — E1
+
+Referentni skup: registrovana sredstva za zaštitu bilja (naziv, aktivna materija, **FRAC/IRAC
+grupa**, dozvoljene kulture, doza, karenca/MRL).
+
+- **Skladištenje:** deljeni referentni sheet `RegistarSZB` (AgriX-održavan, verzionisан),
+  isporučen u `Stammdaten` po tenantu (kao ostali šifarnici) → read-model `getStammdaten`
+  ili zasebna grana `getRegistarSZB`. Nije per-kooperant.
+- **Efekat:** provere iz **F1 postaju autoritativne** (doza/karenca iz registra, ne ručno) +
+  **upravljanje rezistencijom** (rotacija FRAC/IRAC grupa kroz protokol/istoriju).
+- **Izvodljivost:** srednje (unos/održavanje registra); najveći ROI po utrošku. Kandidat da
+  dođe **rano** jer podupire F1 i GGAP.
+
+### 13.2 Prediktivni modeli bolesti/štetočina — E1
+
+Po parceli, iz meteo istorije: infekcioni periodi (npr. Mills za čađavu krastavost),
+degree-day za štetočine, prognoza mraza.
+
+- **Podaci:** traži **satnu meteo istoriju** po parceli (postoji `meteoLatest`; model traži
+  više). Nov servis: **GAS time-driven** (kao scheduled meteo fetch) računa po-parceli
+  `infekcija/rizik` i piše u sheet → read-model `getParcelModelBolesti` (ili prošireni meteo).
+- **Reuse:** postojeći meteo bridge (`getParcelMeteoLatest`, `Code.gs:599-608`) + spray-window.
+- **Izvodljivost:** srednje-teško; **obavezna stručna validacija** modela pre produkcije
+  (§297). Najjači agronomski diferencijator.
+
+### 13.3 Rules engine / auto-nacrt — E2
+
+Na prag (model/meteo/karenca/kašnjenje) sistem generiše **nacrt** `savet`-a za potvrdu.
+
+- **Reuse `savet`:** nov `statusIzvrsenja = 'nacrt'` (pre `poslato`); `autorTip='sistem'`.
+  Savetnik potvrđuje → prelazi u `poslato` (postojeći tok). **Ništa ne ide automatski.**
+- **Pravila:** konfiguracija po savetniku/kulturi (pragovi, okidači) — mali nov config
+  (`SavetnikPravila` sheet ili polje). Eskalacija kašnjenja reuse-uje kalkulaciju iz F2.
+- **Izvodljivost:** srednje; ogroman leverage pri 50+ farmi.
+
+### 13.4 Dnevnik prskanja + e-potpis — E3
+
+Audit-ready evidencija upotrebe SZB.
+
+- **Reuse:** izvršeni **`tretman` JESTE zapis prskanja**; „dnevnik" = audit-formatiran
+  prikaz/export `tretmani` + podaci iz registra SZB (13.1) + **e-potpis** (reuse postojeći
+  signature pad, `ui/signatures.js`; potpis kao polje na `tretman`/`savet`). Export reuse
+  `services/pdf.js`.
+- **GGAP granica (§216):** dokazni sloj; **nije** GGAP sertifikaciona evidencija.
+- **Izvodljivost:** lako-srednje (pretežno reuse + format).
+
+### 13.5 Petlja ishoda (outcome-loop) — E4 · AI copilot — E5
+
+**Outcome-loop (moat):** poveži preporuku (`savet`) → primenu (`tretman`) → **prinos/kvalitet
+iz otkup podataka** (`kartice`/proizvodnja po parceli/sezoni). Derivirano; nov read/join
+`getSavetnikIshodi` (agregacija nad podacima koje savetnik već sme da čita). Daje „šta je dalo
+rezultat" + benchmark (privatnost-svesno, §188–189).
+
+**AI copilot:** prirodan jezik nad **strukturisanim** podacima gazdinstva (parcele, tretmani,
+saveti, meteo, registar, protokol).
+
+- **Arhitektura:** najnoviji **Claude** preko **server-proxy-ja** (ključevi NE idu na klijent
+  — nov mali endpoint/servis; GAS ili zaseban proxy). Context = strukturisani podaci (ne
+  slobodan tekst); **tool „kreiraj nacrt naloga"** vraća `savet` (`status='nacrt'`) u E2.
+- **Poverenje:** grounded odgovor **sa izvorima**, human-in-the-loop (savetnik potvrđuje),
+  bez auto-izvršenja. (Pri implementaciji AI dela: učitati `claude-api` skill.)
+- **Izvodljivost:** copilot srednje (proxy + prompt/tooling); outcome-loop srednje (join
+  postojećih podataka).
+
+### 13.6 Dodaci na model (E1–E5) i faze
+
+| Sloj | Dodatak | Faza |
+|---|---|---|
+| Referenca | `RegistarSZB` sheet (13.1) | **rano** (podupire F1/GGAP) |
+| GAS servis | `getParcelModelBolesti` + scheduled model (13.2) | v2 (iza validacije) |
+| `savet` | `statusIzvrsenja='nacrt'`, `autorTip='sistem'` (13.3) | v2 |
+| Config | `SavetnikPravila` (okidači) | v2 |
+| `tretman`/`savet` | `Potpis` polje (13.4) | v1.1 (reuse) |
+| GAS read | `getSavetnikIshodi` (13.5) | v2 |
+| Servis | AI proxy + tool `kreirajNacrt` (13.5) | v2 |
+
+**Ne u ovom scope-u (dalje faze / strateško):** foto-dijagnostika, satelitski NDVI, IoT
+senzori, **timovi i raspodela** (§204), **anonimizovani benchmarking**, **marketplace**
+(§229–230). Poravnato sa post-2027 prioritetima (QA §231).
+
+---
+
 _Sve `file:line` reference verifikovane pri pisanju. Pre kodiranja: `DebugKoloneTabele`
 analog na serveru (proveri stvarne nazive kolona `Users`/`Stammdaten`), i potvrdi da
 `ensureSheetColumns` ne dira popunjene `TRETMAN-*` sheet-ove (ne menjamo ih ni ovde)._
