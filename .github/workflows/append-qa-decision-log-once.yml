@@ -1,22 +1,22 @@
 name: One-time append QA Decision Log
 
-# Second push intentionally triggers this already-present one-time workflow.
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths:
-      - '.github/workflows/append-qa-decision-log-once.yml'
+      - '.github/trigger-append-qa'
 
 permissions:
   contents: write
 
 jobs:
   append:
-    if: github.event.head_commit.message == 'chore: add one-time QA decision log append workflow'
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.head_ref }}
 
       - name: Append confirmed decisions
         shell: bash
@@ -37,7 +37,7 @@ jobs:
               print('Decision Log appendix added.')
           PY
 
-      - name: Commit appended Decision Log
+      - name: Commit appended Decision Log to PR branch
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
@@ -47,5 +47,5 @@ jobs:
             echo 'No changes to commit.'
           else
             git commit -m 'docs: append Q&A and audit decisions'
-            git push origin main
+            git push origin HEAD:${{ github.head_ref }}
           fi
