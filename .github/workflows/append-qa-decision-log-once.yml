@@ -1,0 +1,50 @@
+name: One-time append QA Decision Log
+
+on:
+  push:
+    paths:
+      - '.github/workflows/append-qa-decision-log-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    if: github.event.head_commit.message == 'chore: add one-time QA decision log append workflow'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Append confirmed decisions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('docs/Master Plan/09_QA_DECISION_LOG.md')
+          payload = Path('.github/decision-log-append.md')
+          marker = '## 11. Dopuna Q&A sesije — odluke 261–321'
+
+          current = target.read_text(encoding='utf-8')
+          if marker in current:
+              print('Decision Log already contains the appendix; no change.')
+          else:
+              appendix = payload.read_text(encoding='utf-8')
+              target.write_text(current.rstrip() + '\n\n' + appendix.rstrip() + '\n', encoding='utf-8')
+              print('Decision Log appendix added.')
+          PY
+
+      - name: Commit appended Decision Log
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'docs/Master Plan/09_QA_DECISION_LOG.md'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'docs: append Q&A and audit decisions'
+            git push origin main
+          fi
