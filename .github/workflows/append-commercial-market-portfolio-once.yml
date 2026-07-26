@@ -1,0 +1,48 @@
+name: One-time append commercial market portfolio decisions
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/trigger-commercial-market-portfolio'
+
+permissions:
+  contents: write
+
+jobs:
+  append:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Append confirmed decisions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('docs/Master Plan/09_QA_DECISION_LOG.md')
+          payload = Path('.github/decision-log-commercial-market-portfolio.md')
+          marker = '## 23. Komercijalni model, tržište i portfolio — dodatne odluke'
+
+          current = target.read_text(encoding='utf-8')
+          if marker not in current:
+              appendix = payload.read_text(encoding='utf-8')
+              target.write_text(current.rstrip() + '\n' + appendix.rstrip() + '\n', encoding='utf-8')
+          PY
+
+      - name: Commit Decision Log update
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'docs/Master Plan/09_QA_DECISION_LOG.md'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'docs: record commercial market and portfolio decisions'
+            git push origin HEAD:${{ github.head_ref }}
+          fi
