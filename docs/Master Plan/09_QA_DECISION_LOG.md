@@ -548,9 +548,4 @@ Q4. **Hotfix bez preskakanja.** I hitna ispravka prolazi iste release gate-ove, 
 ON1. **Početni podaci.** Klijent priprema i potvrđuje poslovnu tačnost šifarnika, proizvođača, stanica, artikala, cena i početnih stanja. AgriX daje obrasce, uvoz, tehničku validaciju i prijavljuje nelogičnosti.
 ON2. **Obuka.** Početna implementaciona obuka deo je onboardinga. Kasnije obuke novih zaposlenih i dodatne radionice posebno se ugovaraju i naplaćuju.
 ON3. **Zajednički produkcijski sign-off.** AgriX potvrđuje tehničku spremnost, uspešnost uvoza i ključne tokove. Odgovorna osoba klijenta potvrđuje poslovnu tačnost podataka, podešavanja i spremnost zaposlenih. Produkcijski rad počinje tek nakon obe potvrde.
-
----
-
-## 23. Otvoreno posle ove dopune
-
-- Precizan standardni period pojačane podrške neposredno posle produkcijskog početka (ON4) nije još odlučen.
+ON4. **Period pojačane podrške nakon puštanja.** Pojačana podrška neposredno nakon produkcijskog početka nije automatski deo standardnog onboardinga; obezbeđuje se samo kada je posebno ugovorena.
