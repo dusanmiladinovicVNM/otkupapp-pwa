@@ -3,19 +3,24 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Horizont:** 2026–2030  
-**Poslednje ažuriranje:** 2026-07-22
+**Poslednje ažuriranje:** 2026-07-27  
+**Nivo:** strategija **modula**, ne stuba (odluka 402)
 
 ---
 
 ## 1. Strateška uloga
 
-AgriX GGAP je treći puni proizvodni stub AgriX platforme, pored:
+`DECISION` (odluka 402): GGAP je **modul u okviru AgriX Enterprise-a**, ne treći proizvodni stub. Kupci su isključivo hladnjače koje su već Enterprise klijenti; aktivacija modula otključava dodatne GGAP funkcije u Gazdinstvu njihovih kooperanata (PRT4). Treći stub je AgriX Savetnik (odluka 401).
 
-1. `AgriX Enterprise` — operativni sistem firme;
-2. `AgriX Gazdinstvo` — farm-management sistem kooperanta;
-3. `AgriX GGAP` — sistem za GGAP liste, evidencije, dokaze i kompletan dokumentacioni tok.
+Ceo ovaj dokument zato važi kao strategija modula: funkcionalni obuhvat, izvori podataka, granice odgovornosti i KPI-jevi ostaju na snazi, a delovi koji podrazumevaju zaseban proizvod — sopstveni ICP, packaging i unit economics — otpadaju i vode se u Enterprise ekonomici.
 
-GGAP treba da bude kruna sistema zato što koristi podatke koje Enterprise i Gazdinstvo već stvaraju tokom realnog rada.
+Pozicija modula u platformi:
+
+1. `AgriX Enterprise` — operativni sistem firme, nosilac GGAP modula;
+2. `AgriX Gazdinstvo` — farm-management sistem kooperanta, u kome se GGAP funkcije otključavaju;
+3. `AgriX Savetnik` — upravljački sloj nad većim brojem gazdinstava.
+
+GGAP je dokumentaciona kruna sistema zato što koristi podatke koje Enterprise i Gazdinstvo već stvaraju tokom realnog rada.
 
 Osnovni princip:
 
@@ -181,13 +186,16 @@ Standard, verzija, lokalni zahtevi i pravila moraju biti stručno validirani i v
 
 ## 7. Ekonomika
 
-Mogući modeli koje treba testirati:
+Od odluke 402 GGAP nema sopstvenu ekonomiku — cena i marža se vode kao stavka Enterprise ponude. Cenovna referenca za pilot je „od 1.000 €“ uz potvrdu obima (odluka 352).
 
-- godišnja licenca po firmi ili grupi proizvođača;
-- osnovna cena plus broj aktivnih kooperanata ili sertifikovanih gazdinstava;
-- zaseban paket za pojedinačno Gazdinstvo;
+Modeli koji se i dalje mogu testirati u okviru Enterprise cenovnika:
+
+- godišnja naknada za modul po firmi;
+- osnovna cena modula plus broj aktivnih kooperanata ili sertifikovanih gazdinstava;
 - onboarding i migracija postojeće dokumentacije;
-- premium paket za napredni workflow, audit pripremu i integracije.
+- napredni workflow, audit priprema i integracije kao posebno procenjen rad.
+
+Modeli koji otpadaju: zaseban paket za pojedinačno Gazdinstvo i licenca za grupu proizvođača bez Enterprise ugovora — GGAP se ne prodaje van postojeće Enterprise baze.
 
 GGAP se ne sme ceniti kao generator obrazaca. Cena treba da odražava:
 
@@ -247,8 +255,18 @@ Pre razvoja produkcionog proizvoda potrebno je uraditi poseban discovery:
 
 ---
 
-## 11. Predložena odluka
+## 11. Odluka
 
-### STR-012 — GGAP kao treći proizvodni stub
+### STR-012 — GGAP kao treći proizvodni stub — `Superseded` 2026-07-27
 
-AgriX GGAP je treći puni proizvod, pored Enterprise i Gazdinstvo. Njegov cilj je da pokrije GGAP liste i kompletan dokumentacioni tok koristeći podatke iz operativnog i farm-management sistema bez ponovnog ručnog unosa.
+Predlog je bio: AgriX GGAP je treći puni proizvod, pored Enterprise i Gazdinstvo.
+
+**Zamenjen odlukama 401 i 402** (vidi STR-013 u `DECISION_LOG.md`): treći stub je AgriX Savetnik, a GGAP je modul Enterprise-a.
+
+### Važeći status modula
+
+- **Obuhvat:** pokriti GGAP liste i kompletan dokumentacioni tok koristeći podatke iz operativnog i farm-management sistema bez ponovnog ručnog unosa — ostaje nepromenjen.
+- **Kupac:** isključivo postojeći Enterprise klijent; GGAP se ne prodaje samostalno.
+- **Komercijalno:** van komercijalne ponude do validacije (odluka 405); samo kontrolisan pilot uz potvrdu obima. Referentna cena „od 1.000 €“ (odluka 352) važi za pilot.
+- **Ekonomika:** nema zasebnog packaging-a ni unit economics-a; vodi se u Enterprise ekonomici.
+- **Granica odgovornosti:** nepromenjena — AgriX ne garantuje sertifikaciju i ne zamenjuje sertifikaciono telo, auditora ni stručnog konsultanta.

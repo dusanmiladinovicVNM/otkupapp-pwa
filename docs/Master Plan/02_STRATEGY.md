@@ -3,8 +3,8 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Horizont:** 2026–2030  
-**Poslednje ažuriranje:** 2026-07-22  
-**Povezani dokumenti:** `02A_GGAP_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `DECISION_LOG.md`
+**Poslednje ažuriranje:** 2026-07-27  
+**Povezani dokumenti:** `02A_GGAP_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `07_PRODUCT_PORTFOLIO.md`, `09_QA_DECISION_LOG.md`, `DECISION_LOG.md`
 
 ---
 
@@ -24,10 +24,10 @@ Potvrđene činjenice, ciljevi i hipoteze:
 - `FACT`: AgriX pokriva Dispečer i Vozač tok, SEF, bankarske izvode, rasknjižavanje, salda i pripremu naloga za plaćanje;
 - `FACT`: management rola omogućava QR identifikaciju kooperanta, izbor parcela, preporuku količine agrohemije, barkod skeniranje, korpu i otpremnicu;
 - `FACT`: Gazdinstvo pokriva karticu prema hladnjači, GIS, prognozu i upozorenja po parceli, pametno doziranje, tretmane, opremu, troškove i sezonski bilans;
-- `TARGET`: AgriX GGAP treba da pokrije GGAP liste i kompletan dokumentacioni tok;
+- `TARGET`: GGAP modul treba da pokrije GGAP liste i kompletan dokumentacioni tok;
 - `HYPOTHESIS`: u Srbiji postoji približno 500–1.000 relevantnih firmi; procena mora biti potvrđena u `04_MARKET.md`;
 - `TARGET`: osvojiti najmanje 200 firmi u naredne 3–4 godine;
-- `DECISION`: sezonski broj novih klijenata ne ograničava se unapred fiksiranim brojem, već readiness score-om proizvoda i organizacije.
+- `DECISION`: rast se planira prema fiksnom ciljnom broju klijenata, ne prema readiness cap-u (odluka 403; povlači STR-001).
 
 AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeća faza mora dokazati da se širina sistema može pretvoriti u ponovljiv onboarding, pouzdanu podršku, održiv pricing i brz tržišni rast.
 
@@ -35,7 +35,9 @@ AgriX više nije prototip, ali još nije dokazano skaliran proizvod. Sledeća fa
 
 ## 2. Identitet kompanije i tri proizvoda
 
-AgriX je jedna platforma sa tri povezana proizvodna stuba:
+AgriX je jedna platforma sa tri povezana proizvodna stuba — **Enterprise**, **Gazdinstvo** i **Savetnik** (odluke 269 i 401).
+
+GGAP **nije** stub. GGAP je modul u okviru Enterprise-a i koriste ga isključivo hladnjače koje su već Enterprise klijenti; aktivacija modula otključava dodatne funkcije u Gazdinstvu (odluka 402, PRT4). Ranija odluka STR-012, koja je GGAP tretirala kao treći proizvodni stub, time je ukinuta.
 
 ### 2.1 AgriX Enterprise
 
@@ -54,6 +56,19 @@ Glavni domeni:
 9. management, izveštaji, audit, storno i monitoring.
 
 Enterprise treba da bude primarni operativni sistem firme čak i kada knjigovodstvo ostaje u BizniSoftu, PANTHEON-u ili drugom ERP-u.
+
+#### Moduli uz Enterprise
+
+Enterprise se prodaje kroz pakete Desktop i Mobile, uz posebno naplative module: Hladnjača/Proizvodnja, SEF, Banka, Dispatch (samo uz Mobile) i **GGAP**.
+
+GGAP kao modul znači:
+
+- kupac GGAP-a je uvek postojeći Enterprise klijent — GGAP se ne prodaje samostalno i nema sopstveni ICP;
+- GGAP nema sopstveni stub-level product strategy, packaging ni unit economics; vodi se kao modul u Enterprise ekonomici;
+- aktivacija modula otvara dodatne GGAP funkcije u Gazdinstvu kooperanata te hladnjače;
+- do validacije GGAP ostaje **van komercijalne ponude** i nudi se samo kroz kontrolisan pilot (odluka 405).
+
+Detaljan funkcionalni obuhvat GGAP-a ostaje u `02A_GGAP_STRATEGY.md`, koji se od odluke 402 čita kao strategija modula, ne stuba.
 
 ### 2.2 AgriX Gazdinstvo
 
@@ -74,36 +89,30 @@ Glavni domeni:
 
 Gazdinstvo trenutno nije osnovni izvor prihoda, ali može postati glavni proizvod ili glavni prihod ako se potvrde aktivacija, retencija, willingness-to-pay i održiv support cost.
 
-### 2.3 AgriX GGAP
+### 2.3 AgriX Savetnik
 
-Treći puni proizvod i dokumentaciona kruna sistema.
+Treći ravnopravan stub (odluke 269, 401, PRT3). Proizvod za agronome i savetodavne službe — upravljački sloj nad većim brojem gazdinstava.
 
-Njegov cilj nije da bude statičan generator obrazaca. GGAP treba da koristi stvarne podatke iz Enterprise i Gazdinstvo tokova za:
+Glavni domeni:
 
-- GGAP liste, registre i procedure;
-- primenljivost po firmi, kooperantu, parceli, kulturi i sezoni;
-- automatsko popunjavanje iz tretmana, repromaterijala, proizvodnje, otkupa i sledljivosti;
-- fotografije, analize, ugovore, sertifikate, izjave i druge dokaze;
-- odgovorne osobe, rokove, podsetnike i odobravanja;
-- neusaglašenosti i korektivne mere;
-- verzije dokumenata i audit trag;
-- dashboard spremnosti;
-- kompletan audit paket za gazdinstvo, firmu ili grupu proizvođača.
+1. istovremeni pregled portfelja gazdinstava;
+2. radni nalozi i preporuke ka gazdinstvima;
+3. praćenje izvršenja naloga i kontrola rada;
+4. agronomska istorija po gazdinstvu, parceli i kulturi;
+5. veza ka Gazdinstvo podacima uz saglasnost nosioca.
 
-Osnovni princip je:
+Komercijalni model je dvostruk: savetnik plaća alat, a gazdinstva u njegovom portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni. Savetnik ne dobija proviziju za naloge u portfelju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše.
 
-> Podatak se unosi jednom na mestu nastanka, a GGAP evidencija i dokaz se iz njega automatski izvode.
-
-AgriX podržava usklađenost i pripremu dokumentacije, ali ne garantuje sertifikaciju i ne zamenjuje stručnog konsultanta, auditora ili sertifikaciono telo.
+Savetnik ima samostalnu registraciju i ne može javno na tržište bez sopstvene politike privatnosti; uloga rukovaoca za tok T13 ostaje otvorena do razrešenja LEG1 (`docs/Legal/AgriX_Mapa_tokova_podataka.pdf`).
 
 ### 2.4 Zajednički data flywheel
 
-Tri proizvoda ne smeju postati tri silosa:
+Tri stuba ne smeju postati tri silosa:
 
 - Enterprise proizvodi transakcije, dokumente, finansijske podatke i sledljivost;
 - Gazdinstvo proizvodi parcelne, agronomske, troškovne i proizvodne podatke;
-- GGAP te podatke pretvara u evidencije, dokaze, zadatke i kontrolu;
-- GGAP zahtevi podižu disciplinu podataka u Enterprise i Gazdinstvo sistemu.
+- Savetnik pretvara te podatke u naloge, preporuke i praćenje izvršenja, i vraća agronomski kvalitet nazad u Gazdinstvo;
+- GGAP modul iste podatke pretvara u evidencije, dokaze, zadatke i kontrolu, a njegovi zahtevi podižu disciplinu podataka u Enterprise i Gazdinstvo sistemu.
 
 Ova povezanost je važnija konkurentska prednost od bilo kog pojedinačnog ekrana.
 
@@ -155,7 +164,8 @@ Previše oprezan rast povećava rizik da konkurent zauzme tržište. Prebrz rast
 - vertikalni poslovni operativni sistem;
 - end-to-end sistem za glavne i ključne sporedne tokove otkupnog biznisa;
 - farm-management proizvod;
-- GGAP documentation and compliance workflow platforma;
+- GGAP documentation i compliance workflow (kao modul Enterprise-a);
+- upravljački sloj za agronome i savetodavne službe;
 - B2B2C ekosistem koji povezuje firmu i kooperanta;
 - zajednički proizvod bez trajnih klijentskih forkova;
 - integracioni sloj prema SEF-u, bankama i drugim sistemima;
@@ -289,18 +299,25 @@ Svaki domen mora imati status `Production`, `Pilot`, `Planned`, `Gap` ili `Out o
 
 ---
 
-## 9. Readiness-based rast
+## 9. Fiksan ciljni broj klijenata
 
-Ne postoji unapred fiksiran hard cap od 10, 15 ili 20 novih firmi po sezoni. Cap određuje najslabija kritična komponenta.
+`DECISION` (odluka 403): rast se planira prema **fiksnom ciljnom broju klijenata**, ne prema readiness cap-u. Ovim se povlači STR-001.
 
-Readiness score mora najmanje obuhvatiti:
+Aktuelan cilj je scenario C iz odluke 375: **17–18 aktivnih Enterprise firmi do sezone 2027** — 14–15 novih uz postojeće 3. Isti broj koriste `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`; ako se cilj promeni, menjaju se sva tri mesta.
+
+Šta se ovom odlukom menja, a šta ne:
+
+- **menja se:** ciljni broj klijenata se određuje unapred i ne pomera ga readiness score;
+- **ne menja se:** readiness ostaje obavezan preduslov kvaliteta isporuke. Crven P0 domen i dalje može zaustaviti ili odložiti **pojedinačan** onboarding, ali više ne obara ciljni broj — odgovor na crven domen je otklanjanje uzroka ili dodavanje kapaciteta, ne spuštanje cilja.
+
+Zbog toga readiness lista prelazi iz uloge cap mehanizma u operativnu kontrolnu listu pred svaki onboarding. Mora najmanje obuhvatiti:
 
 - stabilnost kritičnog codebase-a;
 - production readiness ugovorenih poslovnih tokova;
 - Field, Vozač, Dispečer, repromaterijal i Gazdinstvo;
 - QR/barkod, GIS, meteo, offline sync i štampu;
 - SEF, banku i finansijski reconciliation;
-- GGAP sadržaj, validacije, dokazni tok i export kada se prodaje GGAP;
+- GGAP sadržaj, validacije, dokazni tok i export kada je GGAP modul aktiviran;
 - trajanje i automatizaciju onboardinga;
 - kvalitet manuala, checklista i runbook-ova;
 - support kapacitet i eskalacije;
@@ -309,7 +326,7 @@ Readiness score mora najmanje obuhvatiti:
 - finansijsku rezervu i obrtni kapital;
 - broj osoba koje mogu sprovesti onboarding bez osnivača.
 
-Visok prosečan score ne može sakriti kritičnu slabost. Jedan crveni P0 domen može smanjiti sezonski cap bez obzira na ostale rezultate.
+Visok prosečan score ne može sakriti kritičnu slabost. Jedan crveni P0 domen blokira onboarding klijenata koje taj domen dodiruje, bez obzira na ostale rezultate — ali je odgovor otklanjanje uzroka, a ne smanjenje ciljnog broja iz odluke 403.
 
 ---
 
@@ -326,9 +343,9 @@ Ciljevi:
 - sprovesti GGAP discovery pre pune implementacije;
 - meriti onboarding, support i incidente po firmi i domenu;
 - potvrditi da rast ne zahteva forkove i ne povećava incident rate po firmi;
-- izračunati sezonski cap na osnovu readiness-a.
+- dovesti readiness na nivo koji podržava fiksni cilj, umesto da cilj prilagođava readiness-u.
 
-Broj novih firmi može biti 5, 10, 15, 20 ili više samo ako readiness to podrži.
+Ciljni broj firmi je fiksiran odlukom 403 — scenario C iz odluke 375, odnosno 17–18 aktivnih Enterprise firmi do sezone 2027. Readiness više ne određuje taj broj; on određuje da li je konkretan onboarding bezbedan i koliko kapaciteta treba dodati da bi cilj bio dostižan.
 
 ### Faza 2 — Ubrzana nacionalna penetracija
 
@@ -501,11 +518,11 @@ AgriX-ov moat ne treba zasnivati samo na broju funkcija. Najjače odbrane su:
 | GGAP sadržaj ne prati važeću verziju standarda | Srednja | Kritičan | domain owner, verzionisanje i stručna revizija |
 | Klijent shvati softver kao garanciju sertifikacije | Srednja | Kritičan | UX, ugovor, edukacija i audit trag |
 | Automatski dokaz koristi pogrešan izvorni podatak | Srednja | Kritičan | provenance, approval i validacija |
-| Readiness score preceni kapacitet | Srednja | Kritičan | weakest-link model i rezerva |
+| Readiness preceni kapacitet | Srednja | Kritičan | weakest-link kontrolna lista pred onboarding i rezerva |
 | Cena bude niža od punog troška sistema | Srednja | Visok | unit economics i value-based pricing |
 | Hardver veže previše kapitala | Srednja | Visok | predujam, standardni modeli i ograničena zaliha |
 | Rast bude prespor i konkurent zauzme tržište | Srednja/visoka | Kritičan | ambiciozan GTM i rast readiness-a |
-| Agresivan rast pogorša kvalitet | Srednja | Kritičan | readiness-based cap i staged onboarding |
+| Agresivan rast pogorša kvalitet | Srednja | Kritičan | fiksni cilj uz readiness kontrolnu listu i staged onboarding |
 
 ---
 
@@ -558,7 +575,6 @@ AgriX-ov moat ne treba zasnivati samo na broju funkcija. Najjače odbrane su:
 
 ## 17. Odobrene strateške odluke
 
-- **STR-001:** sezonski rast određuje readiness score, ne unapred fiksiran broj firmi;
 - **STR-002:** trenutni fokus je Srbija i firme sa razgranatom mrežom stanica i kooperanata;
 - **STR-003:** jedan proizvodni codebase, bez trajnih klijentskih forkova;
 - **STR-004:** Gazdinstvo trenutno nije osnovni prihod, ali može postati glavni proizvod ili prihod;
@@ -569,9 +585,17 @@ AgriX-ov moat ne treba zasnivati samo na broju funkcija. Najjače odbrane su:
 - **STR-009:** cilj je najmanje 200 firmi u naredne 3–4 godine;
 - **STR-010:** AgriX pokriva ceo poslovni sistem firme;
 - **STR-011:** Gazdinstvo je pun farm-management proizvod;
-- **STR-012:** GGAP je treći puni proizvodni stub.
+- **STR-013:** treći proizvodni stub je AgriX Savetnik (odluka 401);
+- **STR-014:** rast se planira prema fiksnom ciljnom broju klijenata (odluka 403).
 
-Detaljni razlozi i posledice odluka vode se u `DECISION_LOG.md`.
+### Povučene odluke
+
+| Odluka | Status | Zamenjena sa |
+|---|---|---|
+| STR-001 — readiness-based rast | `Superseded` 2026-07-27 | odluka 403 → STR-014 |
+| STR-012 — GGAP kao treći proizvodni stub | `Superseded` 2026-07-27 | odluke 401 i 402 → STR-013; GGAP je modul Enterprise-a |
+
+Detaljni razlozi i posledice odluka vode se u `DECISION_LOG.md`, a numerisane odluke u `09_QA_DECISION_LOG.md`.
 
 ---
 
@@ -579,12 +603,12 @@ Detaljni razlozi i posledice odluka vode se u `DECISION_LOG.md`.
 
 1. potvrditi veličinu tržišta i segmentaciju u `04_MARKET.md`;
 2. izraditi `07_PRODUCT_PORTFOLIO.md` sa statusom svakog toka;
-3. definisati formalni readiness score i sezonske pragove;
+3. definisati readiness kontrolnu listu pred onboarding (više nije cap mehanizam — odluka 403);
 4. razložiti cilj od 200 firmi na godišnji prodajni, kadrovski i finansijski plan;
-5. završiti GGAP discovery: standard, verzija, liste, role, dokazi i audit izlazi;
+5. završiti GGAP discovery kao preduslov za izlazak modula iz pilota (odluka 405);
 6. definisati Gazdinstvo Partner, Basic i Pro granice;
-7. definisati packaging sva tri proizvoda;
-8. izračunati unit economics po proizvodu, paketu i segmentu;
+7. definisati packaging Enterprise-a, Gazdinstva i Savetnika, uključujući module Enterprise-a;
+8. fino podesiti unit economics po proizvodu, paketu i segmentu — posle određenih cena, ne kao preduslov (odluka 408);
 9. odrediti IT kategorije koje AgriX prodaje i podržava;
 10. definisati pragove za partnera ili investitora.
 
@@ -593,7 +617,9 @@ Detaljni razlozi i posledice odluka vode se u `DECISION_LOG.md`.
 ## 19. Naredni koraci
 
 1. razviti `04_MARKET.md` i potvrditi adresabilno tržište;
-2. razviti `07_PRODUCT_PORTFOLIO.md` kao jedinstvenu mapu tri proizvoda i svih poslovnih tokova;
-3. napraviti formalni readiness model;
+2. razviti `07_PRODUCT_PORTFOLIO.md` kao jedinstvenu mapu tri stuba, modula Enterprise-a i svih poslovnih tokova;
+3. napraviti readiness kontrolnu listu pred onboarding;
 4. sprovesti intervjue i validaciju iz `03_CUSTOMERS_AND_JOBS.md`;
-5. zatim razviti pricing, unit economics, finansijski model i plan rasta do 200 firmi.
+5. razviti Savetnik product strategy kao trećeg stuba (odluka 401);
+6. uneti odluke 322–400 u `09_QA_DECISION_LOG.md`, jer se na njih poziva više dokumenata;
+7. zatim razviti pricing dokumentaciju, finansijski model i plan rasta do 200 firmi.

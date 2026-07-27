@@ -2,9 +2,11 @@
 
 **Status:** Active  
 **Vlasnik:** osnivač AgriX-a  
-**Poslednje ažuriranje:** 2026-07-22
+**Poslednje ažuriranje:** 2026-07-27
 
 Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se ne brišu; kada prestanu da važe, označavaju se kao `Superseded` i povezuju sa novom odlukom.
+
+Numerisane odluke iz Q&A sesija vode se u `09_QA_DECISION_LOG.md`; ovde se upisuju samo one koje menjaju STR/GOV odluke.
 
 ---
 
@@ -41,8 +43,9 @@ Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se 
 
 ### STR-001 — Readiness-based rast
 - **Datum:** 2026-07-22
-- **Status:** Approved
-- **Odluka:** Maksimalan broj novih firmi po sezoni određuje formalni readiness score, ne unapred definisan broj.
+- **Status:** `Superseded` 2026-07-27 — zamenjena odlukom 403 (vidi STR-014)
+- **Odluka (više ne važi):** Maksimalan broj novih firmi po sezoni određuje formalni readiness score, ne unapred definisan broj.
+- **Razlog povlačenja:** Rast se planira prema fiksnom ciljnom broju klijenata. Readiness ostaje preduslov kvaliteta isporuke i može zaustaviti pojedinačan onboarding, ali više ne određuje ciljni broj.
 
 ### STR-002 — Primarni tržišni fokus
 - **Datum:** 2026-07-22
@@ -101,9 +104,27 @@ Ovaj dokument čuva formalno odobrene strateške i governance odluke. Odluke se 
 
 ### STR-012 — GGAP kao treći proizvodni stub
 - **Datum:** 2026-07-22
-- **Status:** Approved
+- **Status:** `Superseded` 2026-07-27 — zamenjena odlukama 401 i 402 (vidi STR-013)
 - **Kontekst:** Enterprise i Gazdinstvo već stvaraju veliki deo operativnih, parcelnih, agronomskih, robnih i dokumentacionih podataka potrebnih za GGAP evidencije.
-- **Odluka:** AgriX GGAP je treći puni proizvod, pored Enterprise i Gazdinstvo. Pokriva GGAP liste, evidencije, dokaze, zadatke, neusaglašenosti, korektivne mere i kompletan dokumentacioni tok.
-- **Osnovni princip:** Podatak se unosi jednom na mestu nastanka, a GGAP evidencija i dokaz se iz njega automatski izvode.
-- **Posledice:** GGAP dobija zaseban discovery, product strategy, domain ownership, packaging, KPI-jeve, unit economics i pilot. Softver ne garantuje sertifikaciju i ne zamenjuje sertifikaciono telo, auditora ili stručnog konsultanta.
-- **Ponovno otvaranje:** Nakon mapiranja standarda i verzije, stručne validacije, pilota i potvrde ekonomike održavanja compliance sadržaja.
+- **Odluka (više ne važi):** AgriX GGAP je treći puni proizvod, pored Enterprise i Gazdinstvo. Pokriva GGAP liste, evidencije, dokaze, zadatke, neusaglašenosti, korektivne mere i kompletan dokumentacioni tok.
+- **Razlog povlačenja:** GGAP nema sopstveni ICP — koriste ga isključivo hladnjače koje su već Enterprise klijenti. Zato je modul u okviru Enterprise-a, a treći stub je AgriX Savetnik.
+- **Šta ostaje:** Funkcionalni obuhvat i osnovni princip (podatak se unosi jednom na mestu nastanka, evidencija i dokaz se izvode automatski) ostaju na snazi kao obuhvat modula. Softver ne garantuje sertifikaciju i ne zamenjuje sertifikaciono telo, auditora ili stručnog konsultanta.
+- **Šta otpada:** Zaseban stub-level product strategy, packaging i unit economics. GGAP se vodi u Enterprise ekonomici.
+
+### STR-013 — AgriX Savetnik kao treći proizvodni stub
+- **Datum:** 2026-07-27
+- **Status:** Approved
+- **Izvor:** odluke 401 i 402; potvrđuje odluku 269
+- **Kontekst:** Krovni brend AgriX već je definisan kroz tri proizvoda — Enterprise, Gazdinstvo i Savetnik. Poglavlja 02 i 07 su na mestu trećeg stuba i dalje vodila GGAP.
+- **Odluka:** Treći ravnopravan proizvodni stub je AgriX Savetnik — upravljački sloj nad većim brojem gazdinstava, za agronome i savetodavne službe. GGAP je modul u okviru Enterprise-a.
+- **Posledice:** Savetnik dobija sopstveni product strategy, packaging, KPI-jeve i unit economics; GGAP ih gubi kao zaseban proizvod. Savetnik ne može javno na tržište bez samostalne registracije i politike privatnosti, a uloga za tok T13 ostaje otvorena do razrešenja LEG1.
+- **Ponovno otvaranje:** Ako se pokaže da GGAP ima kupce van postojeće Enterprise baze.
+
+### STR-014 — Fiksan ciljni broj klijenata
+- **Datum:** 2026-07-27
+- **Status:** Approved
+- **Izvor:** odluka 403; ciljni broj iz odluke 375 (scenario C)
+- **Kontekst:** Readiness-based cap (STR-001) nije davao broj oko kojeg se planiraju prodaja, kapacitet i finansije.
+- **Odluka:** Rast se planira prema fiksnom ciljnom broju klijenata. Aktuelan cilj je 17–18 aktivnih Enterprise firmi do sezone 2027 (14–15 novih uz postojeće 3).
+- **Posledice:** Readiness prelazi iz cap mehanizma u kontrolnu listu pred svaki onboarding. Crven P0 domen zaustavlja pojedinačan onboarding, a odgovor je otklanjanje uzroka ili dodavanje kapaciteta, ne spuštanje cilja. Isti broj mora ostati usklađen u `02_STRATEGY.md` §9, `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`.
+- **Rizik i trigger:** Ako se posle sezone 2027 pokaže da fiksni cilj obara kvalitet isporuke ili stopu obnove, odluka se preispituje.

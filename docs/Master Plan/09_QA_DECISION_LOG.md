@@ -2,7 +2,7 @@
 
 **Datum sesije:** 24.07.2026.  
 **Status:** radni strateški zapis  
-**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesije 1–260.
+**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesije — numerisane odluke 1–321 i 401–408, uz serije A, BC, C, D, I, L, LEG, MKT, ML, ON, P, PRT, Q, S. Odluke 322–400 nisu unete; videti odeljak 26.
 
 > Ovaj dokument čuva kompletan suštinski sadržaj sesije. Pomoćne formulacije asistenta koje nisu menjale odluke nisu prenete. Kada je kasnija odluka ispravila raniju, važi kasnija formulacija i to je izričito označeno.
 
@@ -601,3 +601,27 @@ LEG3. **Korišćenje anonimizovanih podataka za agregate i ML.** Anonimizovani p
 LEG4. **Ograničenje odgovornosti.** Ukupna ugovorna odgovornost AgriX-a prema konkretnom klijentu ograničava se na iznos koji je taj klijent platio AgriX-u tokom prethodnih 12 meseci, uz izuzetke i ograničenja koja se po zakonu ne mogu ugovorom isključiti.
 
 LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez nepotrebnog odlaganja, u zavisnosti od ozbiljnosti incidenta i potvrđenog uticaja na njihove podatke ili poslovanje. Ne propisuje se jedinstven fiksni rok za sve vrste incidenata.
+
+---
+
+## 25. Odluke 401–408 — portfolio, rast i cene
+
+**Datum dopune:** 27.07.2026.  
+**Obuhvat:** treći proizvodni stub, status GGAP-a, model rasta, komercijalna spremnost Gazdinstva, cena po stanici, hardverska marža i redosled cena i unit economics-a.
+
+401. **Savetnik je treći stub.** AgriX Savetnik je treći ravnopravan proizvodni stub uz Enterprise i Gazdinstvo. Potvrđuje odluku 269 (krovni brend sa tri proizvoda) i koriguje ranije formulacije u `02_STRATEGY.md` i `07_PRODUCT_PORTFOLIO.md`, gde je treći stub bio GGAP.
+402. **GGAP je modul, ne stub.** GGAP je modul u okviru AgriX Enterprise-a i koriste ga isključivo hladnjače koje su već Enterprise klijenti. Aktivacija modula otključava dodatne funkcije u Gazdinstvu (PRT4). Ovom odlukom se **ukida STR-012** (GGAP kao treći proizvodni stub).
+403. **Fiksan ciljni broj klijenata.** Rast se planira prema fiksnom ciljnom broju klijenata, ne prema readiness cap-u. Ovom odlukom se **povlači STR-001** (sezonski cap određuje readiness score). Readiness ostaje operativni preduslov kvaliteta isporuke i može zaustaviti pojedinačan onboarding, ali više ne određuje ciljni broj. Aktuelan cilj je scenario C iz odluke 375.
+404. **Gazdinstvo je launch ready.** Gazdinstvo prelazi iz statusa `Pilot only` u `Standard offer`. Menja status iz `07_PRODUCT_PORTFOLIO.md` §8 i §11.
+405. **GGAP van komercijalne ponude.** GGAP ostaje van komercijalne ponude do validacije. Ne prodaje se kao redovna stavka; nudi se samo kroz kontrolisan pilot uz potvrdu obima.
+406. **Jedinstvena cena stanice.** Cena po otkupnoj stanici je ista bez obzira na režim rada (Desktop-only ili PWA-led). Razliku u vrednosti pokriva cena Mobile paketa. Ovom odlukom se **zatvara odluka 9 iz `07B_ENTERPRISE_OPERATING_MODES.md`** (predlog da pricing razlikuje desktop-only od PWA-led vrednosti po stanici).
+407. **Hardverska marža.** Hardver ostaje na planiranoj marži do izbora dobavljača. Marža se ne prepravlja pre nego što postoje stvarne nabavne cene.
+408. **Redosled cena i unit economics-a.** Cene su određene. Unit economics je kasnije fino podešavanje, ne preduslov za izlazak sa ponudom.
+
+---
+
+## 26. Napomena o kontinuitetu numeracije
+
+`UNKNOWN`: odluke **322–400** nisu zapisane u ovom repozitorijumu. Na njih se pozivaju dokumenti iz `docs/Product/`, `docs/Sales/` i `docs/Finance/` (npr. 323, 325, 326, 329, 331, 334, 336, 339, 341, 342, 349–358, 364, 371, 374, 375, 378).
+
+Posledica: tekst odluka 322–400 u repou nije proverljiv i tvrdnje izvedene iz njih ne smeju se tretirati kao potvrđene dok se ne unesu. Prioritet je odluka **375** (scenario rasta), jer je već korišćena u `04_MARKET.md` §9.1 i u finansijskom modelu, i cenovne odluke **339, 349–358**, jer se na njih poziva šablon ponude.

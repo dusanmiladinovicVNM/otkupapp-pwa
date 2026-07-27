@@ -1,5 +1,41 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-27
+
+### Added
+
+- odluke **401–408** u `09_QA_DECISION_LOG.md` (odeljak 25);
+- napomena o nedostajućim odlukama **322–400** (odeljak 26) — na njih se pozivaju dokumenti u `docs/Product/`, `docs/Sales/` i `docs/Finance/`, ali tekst nije u repou;
+- `STR-013` (Savetnik kao treći stub) i `STR-014` (fiksan ciljni broj klijenata) u `DECISION_LOG.md`;
+- odeljak `02_STRATEGY.md` §2.3 „AgriX Savetnik“ i pododeljak „Moduli uz Enterprise“;
+- odeljak `07_PRODUCT_PORTFOLIO.md` §9 „AgriX Savetnik“ i §9A „GGAP — modul Enterprise-a“;
+- red za Savetnik u `07A_PRODUCT_STATUS_MATRIX.csv`;
+- poslovni dokumenti van Master Plana: `docs/Product/AgriX_Definicija_proizvoda.pdf`, `docs/Legal/AgriX_Mapa_tokova_podataka.pdf`, `docs/Sales/AgriX_Materijal_za_prvi_kontakt.pdf`, `docs/Sales/AgriX_Sablon_ponude.xlsx`, `docs/Finance/AgriX_Finansijski_model.xlsx`, uz indeks u README-ju svakog direktorijuma.
+
+### Changed
+
+- **Savetnik je treći stub** (odluka 401, potvrđuje 269): `02_STRATEGY.md` §2 i `07_PRODUCT_PORTFOLIO.md` §3;
+- **GGAP je modul Enterprise-a, ne stub** (odluka 402): `02_STRATEGY.md` §2, `02A_GGAP_STRATEGY.md` §1, §7 i §11, `07_PRODUCT_PORTFOLIO.md` §3 i §9A, `07A_PRODUCT_STATUS_MATRIX.csv`;
+- **readiness cap zamenjen fiksnim ciljem** (odluka 403): `02_STRATEGY.md` §9, §10 Faza 1, §15 i §17; readiness prelazi u kontrolnu listu pred onboarding;
+- **cilj rasta usklađen sa odlukom 375**: `04_MARKET.md` §9.1 — ubrzani raspon 12–15 zamenjen izabranim scenarijem C, 17–18 aktivnih firmi do sezone 2027 (14–15 novih uz postojeće 3);
+- **Gazdinstvo iz `Pilot only` u `Standard offer`** (odluka 404): `07_PRODUCT_PORTFOLIO.md` §8 i §11, `07A_PRODUCT_STATUS_MATRIX.csv`;
+- **GGAP ostaje van komercijalne ponude do validacije** (odluka 405): `07_PRODUCT_PORTFOLIO.md` §9A i §11;
+- **jedinstvena cena po stanici** (odluka 406): `07B_ENTERPRISE_OPERATING_MODES.md` odluka 9 zatvorena — razliku pokriva cena Mobile paketa; posledica upisana u `07_PRODUCT_PORTFOLIO.md` §13.
+
+### Superseded
+
+- `STR-001` — readiness-based rast → odluka 403 / STR-014;
+- `STR-012` — GGAP kao treći proizvodni stub → odluke 401 i 402 / STR-013;
+- `07B` odluka 9 — pricing koji razlikuje desktop-only od PWA-led cene po stanici → odluka 406.
+
+### Open
+
+- odluke 322–400 nisu unete; do tada tvrdnje izvedene iz njih nisu proverljive u repou;
+- Savetnik nema product strategy, packaging ni cenu — nema komercijalni status;
+- hardverska marža ostaje planska do izbora dobavljača (odluka 407), a cena hardverske podrške (357) je i dalje predlog;
+- troškovi u finansijskom modelu nisu popunjeni, pa neto rezultat i cash-flow još nemaju smisla;
+- LEG1 nije razrešen — bez njega nema Priloga 3 ugovora ni politika privatnosti za Gazdinstvo i Savetnik.
+
 ## 2026-07-23
 
 ### Added
