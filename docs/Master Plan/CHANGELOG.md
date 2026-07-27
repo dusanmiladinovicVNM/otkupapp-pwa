@@ -1,5 +1,20 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-27 (4) — cenovnik dobio izvor, PDF regenerisan
+
+### Added
+
+- `docs/Sales/AgriX_Cenovnik_2027.html` — izvor istine za cenovnik;
+- `tools/cenovnik.sh` — `build` renderuje PDF preko headless Chromium-a, `check` programski poredi cene na sva četiri mesta.
+
+### Changed
+
+- **`AgriX_Cenovnik_2027.pdf` regenerisan** sa svih jedanaest izmena iz cenovne revizije: all-in 1.200 i 2.200 €, izričit sastav all-in paketa uz naglašeno da Desktop all-in ne sadrži Dispatch, Hladnjača po proizvodnom pogonu i dodatni pogon 200 €, dve satnice, vreme puta po implementacionoj satnici, Enterprise tarifa Savetnika, GGAP sa oznakom „na upit“, preračunati primeri (500 / 1.450 / 3.450 €) i datum 27.07.2026.
+
+### Napomena
+
+- Vizuelni raspored PDF-a je nov, jer je original bio dizajniran van repoa i nije imao izvorni fajl. Sadržaj i struktura odeljaka su zadržani; stranica je i dalje devet.
+
 ## 2026-07-27 (3) — cenovna revizija, odluke 409–422
 
 ### Added
@@ -35,7 +50,6 @@
 
 - ugovor je nacrt bez pravnog pregleda (376); Prilog 3 nije dovršen (LEG1);
 - spisak podobrađivača i lokacija obrade (373);
-- **`AgriX_Cenovnik_2027.pdf` nije izmenjen** — nema izvornog fajla u repou iz koga se generiše;
 - dve pretpostavke u finansijskom modelu namerno ostavljene na 0 (broj Savetnik licenci i dodatnih pogona po klijentu), pa ARR ostaje nepromenjen dok se ne popune;
 - Desktop all-in štedi klijentu samo 100 € — slaba bundle poruka, komercijalno pitanje.
 
