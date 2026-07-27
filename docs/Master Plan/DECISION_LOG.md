@@ -125,6 +125,6 @@ Numerisane odluke iz Q&A sesija vode se u `09_QA_DECISION_LOG.md`; ovde se upisu
 - **Status:** Approved
 - **Izvor:** odluka 403; ciljni broj iz odluke 375 (scenario C)
 - **Kontekst:** Readiness-based cap (STR-001) nije davao broj oko kojeg se planiraju prodaja, kapacitet i finansije.
-- **Odluka:** Rast se planira prema fiksnom ciljnom broju klijenata. Aktuelan cilj je 17–18 aktivnih Enterprise firmi do sezone 2027 (14–15 novih uz postojeće 3).
+- **Odluka:** Rast se planira prema fiksnom ciljnom broju klijenata. Aktuelan cilj je scenario C iz odluke 375 — 12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18 aktivnih firmi.
 - **Posledice:** Readiness prelazi iz cap mehanizma u kontrolnu listu pred svaki onboarding. Crven P0 domen zaustavlja pojedinačan onboarding, a odgovor je otklanjanje uzroka ili dodavanje kapaciteta, ne spuštanje cilja. Isti broj mora ostati usklađen u `02_STRATEGY.md` §9, `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`.
 - **Rizik i trigger:** Ako se posle sezone 2027 pokaže da fiksni cilj obara kvalitet isporuke ili stopu obnove, odluka se preispituje.

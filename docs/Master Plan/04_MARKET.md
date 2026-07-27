@@ -297,13 +297,13 @@ Postojeća baza: 3 firme.
 |---|---:|---:|---|
 | A — konzervativni | 5 | 8 | `HYPOTHESIS` |
 | B — balansirani | 8 | 11 | `HYPOTHESIS` |
-| **C — agresivni (izabran)** | **14–15** | **17–18** | `DECISION` — odluka 375 |
+| **C — agresivni (izabran)** | **12–15** | **15–18** | `DECISION` — odluka 375 |
 
-`DECISION` (odluke 375 i 403): izabran je scenario C. Ciljni broj je fiksan i iznosi **17–18 aktivnih Enterprise firmi do sezone 2027**. Raniji „ubrzani“ raspon 12–15 ne pokriva izabrani cilj i time je zamenjen.
+`DECISION` (odluke 375 i 403): izabran je scenario C — **12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18 aktivnih firmi**. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027). Raniji „ubrzani uz potvrđen readiness“ raspon 12–15 **ukupnih** firmi bio je pogrešno postavljen — 12–15 je broj **novih**, ne ukupnih klijenata.
 
 Readiness više nije mehanizam koji određuje ovaj broj (STR-001 je povučen odlukom 403). Readiness ostaje preduslov kvaliteta isporuke: može zaustaviti ili odložiti pojedinačan onboarding, ali odgovor na slab domen je otklanjanje uzroka i dodavanje kapaciteta, a ne spuštanje cilja.
 
-Isti brojevi moraju ostati usklađeni na tri mesta — ovde, u `02_STRATEGY.md` §9 i u `docs/Finance/AgriX_Finansijski_model.xlsx` (list `Pretpostavke`, odeljak D). Finansijski model koristi 14 novih klijenata, a list `Kapacitet` proverava scenario sa 18 klijenata; raspon 17–18 pokriva obe kolone.
+> `CONFLICT` — jedan broj, tri različite vrednosti. Odluka 375 daje **raspon 15–18 ukupno**. `docs/Finance/AgriX_Finansijski_model.xlsx` (list `Pretpostavke`, red 42) koristi **tačku: 14 novih → 17 ukupno**, a list `Kapacitet` proverava kolonu od **18** klijenata. Sve je unutar raspona, ali raspon i planska tačka nisu isti podatak. Pre sledeće revizije treba odlučiti šta je merodavno i uskladiti ovo mesto, `02_STRATEGY.md` §9 i finansijski model. Vidi i `09_QA_DECISION_LOG.md` §25.11, stavka 11.
 
 `ASSUMPTION`: kapacitetna posledica scenarija C je da okidač za drugu tehnički ovlašćenu osobu (BC3, odluka 336 — najkasnije pri 15–20 firmi) pada pre 1. juna 2027.
 
@@ -717,7 +717,7 @@ Spojiti APR, poljoprivrednu proizvodnju, postojeće reference i prodajni pipelin
 8. `DECISION`: GGAP TAM se ne izmišlja bez posebnog dokaznog skupa.
 9. `DECISION`: regionalni TAM se ne dodaje Srbiji bez zemlje-po-zemlje istraživanja.
 10. `DECISION`: svaka tržišna procena se ažurira iz reproduktivnog pipeline-a i strukturisanog CRM istraživanja.
-11. `DECISION`: SOM do sezone 2027 je fiksan cilj od 17–18 aktivnih Enterprise firmi — scenario C, odluke 375 i 403; readiness više ne određuje taj broj.
+11. `DECISION`: SOM do sezone 2027 je fiksan cilj iz scenarija C — 12–15 novih, ukupno 15–18 aktivnih Enterprise firmi (odluke 375 i 403); readiness više ne određuje taj broj.
 
 ---
 

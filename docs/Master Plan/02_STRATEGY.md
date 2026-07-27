@@ -101,7 +101,7 @@ Glavni domeni:
 4. agronomska istorija po gazdinstvu, parceli i kulturi;
 5. veza ka Gazdinstvo podacima uz saglasnost nosioca.
 
-Komercijalni model je dvostruk: savetnik plaća alat, a gazdinstva u njegovom portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni. Savetnik ne dobija proviziju za naloge u portfelju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše.
+Komercijalni model je dvostruk: savetnik plaća alat — osnovica 150 € za do 10 gazdinstava, svako preko toga 15 € (odluka 341) — a gazdinstva u njegovom portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni (odluka 340). Savetnik ne dobija proviziju za naloge u portfelju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Cena se objavljuje (odluka 347) i nalazi se u `docs/Sales/AgriX_Cenovnik_2027.pdf`.
 
 Savetnik ima samostalnu registraciju i ne može javno na tržište bez sopstvene politike privatnosti; uloga rukovaoca za tok T13 ostaje otvorena do razrešenja LEG1 (`docs/Legal/AgriX_Mapa_tokova_podataka.pdf`).
 
@@ -303,7 +303,9 @@ Svaki domen mora imati status `Production`, `Pilot`, `Planned`, `Gap` ili `Out o
 
 `DECISION` (odluka 403): rast se planira prema **fiksnom ciljnom broju klijenata**, ne prema readiness cap-u. Ovim se povlači STR-001.
 
-Aktuelan cilj je scenario C iz odluke 375: **17–18 aktivnih Enterprise firmi do sezone 2027** — 14–15 novih uz postojeće 3. Isti broj koriste `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`; ako se cilj promeni, menjaju se sva tri mesta.
+Aktuelan cilj je scenario C iz odluke 375: **12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18 aktivnih firmi**. Odluka 375 zamenjuje odluku 249. Isti broj koriste `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`; ako se cilj promeni, menjaju se sva tri mesta.
+
+`CONFLICT`: finansijski model koristi plansku tačku 14 novih → 17 ukupno, a kapacitetni list proverava 18. Sve je unutar raspona 15–18, ali raspon i planska tačka nisu isti podatak — vidi `09_QA_DECISION_LOG.md` §25.11, stavka 11.
 
 Šta se ovom odlukom menja, a šta ne:
 
@@ -345,7 +347,7 @@ Ciljevi:
 - potvrditi da rast ne zahteva forkove i ne povećava incident rate po firmi;
 - dovesti readiness na nivo koji podržava fiksni cilj, umesto da cilj prilagođava readiness-u.
 
-Ciljni broj firmi je fiksiran odlukom 403 — scenario C iz odluke 375, odnosno 17–18 aktivnih Enterprise firmi do sezone 2027. Readiness više ne određuje taj broj; on određuje da li je konkretan onboarding bezbedan i koliko kapaciteta treba dodati da bi cilj bio dostižan.
+Ciljni broj firmi je fiksiran odlukom 403 — scenario C iz odluke 375, odnosno 12–15 novih klijenata i ukupno 15–18 aktivnih Enterprise firmi do sezone 2027. Readiness više ne određuje taj broj; on određuje da li je konkretan onboarding bezbedan i koliko kapaciteta treba dodati da bi cilj bio dostižan.
 
 ### Faza 2 — Ubrzana nacionalna penetracija
 

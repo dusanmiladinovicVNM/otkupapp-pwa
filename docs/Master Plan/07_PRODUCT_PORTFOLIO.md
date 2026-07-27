@@ -259,7 +259,9 @@ Radni paketi: Partner, Basic i Pro.
 | Dokaz | `Pilot evidence` |
 | Komercijalno | `Standard offer` — odluka 404 |
 
-`DECISION` (odluka 404): Gazdinstvo je launch ready i prelazi iz `Pilot only` u `Standard offer`. Prodaje se po kanalskoj ceni preko hladnjače ili savetnika, odnosno direktno proizvođaču (PRT2, odluka 339).
+`DECISION` (odluka 404): Gazdinstvo je launch ready i prelazi iz `Pilot only` u `Standard offer`.
+
+Cene (odluka 339): maloprodajna **19 € Basic / 39 € Pro**; kanalska, za naloge posredovane preko hladnjače ili savetnika, **10 € Basic / 20 € Pro**. Prvih 50 Basic naloga partner dobija bez naknade (odluka 161). Proizvođač ima jedan Pro nalog — ko ga prvi aktivira, taj ga plaća (odluka 343). Pro se plaća direktno ili preko hladnjače (PRT2).
 
 Gazdinstvo mora biti kompletan i vredan proizvod i bez ijedne povezane AgriX hladnjače (odluka 321); Enterprise povezivanje prvenstveno donosi korist hladnjači.
 
@@ -278,15 +280,17 @@ Treći stub (odluke 269, 401, PRT3). Upravljački sloj nad većim brojem gazdins
 
 | Dimenzija | Status |
 |---|---|
-| Implementacija | `Planned` |
+| Implementacija | `Planned` — osnovna verzija do 2027 (odluka 203) |
 | Dokaz | `Unvalidated` |
-| Komercijalno | još nije definisano — pre ponude treba zaključati packaging |
+| Komercijalno | cena objavljena u `Cenovnik 2027` (odluke 341, 347); javna ponuda kreće kada proizvod bude stabilan (odluka 217) |
 
-Komercijalni model je dvostruk: savetnik plaća alat (osnovica plus naknada po gazdinstvu preko praga), a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni. Savetnik ne dobija proviziju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše.
+Komercijalni model je dvostruk: savetnik plaća alat — osnovica **150 €** godišnje za do 10 gazdinstava, svako preko toga **15 €** — a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni od 20 € (odluke 340, 341, 339). Savetnik ne dobija proviziju za gazdinstva u portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Provizija po odluci 221 ostaje samo za preporuke van portfelja.
 
-Zavisnosti pre izlaska na tržište: samostalna registracija i politika privatnosti, i pravna ocena toka T13 (LEG1).
+Aktivno gazdinstvo je ono kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku (odluka 342). Proba obuhvata i Pro za do 10 gazdinstava (odluka 346). Interne agronomske službe plaćaju samo alat kada su njihovi kooperanti već pokriveni partnerskim paketom (odluka 348).
 
-`UNKNOWN`: Savetnik nema razrađen odeljak u ovom poglavlju jer product strategy trećeg stuba još nije napisana. Do tada se ovaj odeljak čita kao okvir, ne kao definisan obim.
+Zavisnosti pre izlaska na tržište: samostalna registracija i politika privatnosti, i pravna ocena toka T13 (LEG1). `OPEN`: cena po gazdinstvu (15 €) čeka potvrdu.
+
+`UNKNOWN`: packaging i cena su zaključani, ali product strategy trećeg stuba još nije napisana — funkcionalni obim ovog odeljka je okvir, ne specifikacija.
 
 ---
 
@@ -372,9 +376,9 @@ Tačan status `Standard offer` ili `Controlled rollout` određuje se prema verzi
 - nove integracije bez produkcionog dokaza;
 - GGAP modul — van komercijalne ponude do validacije (odluka 405).
 
-### Još nije u ponudi
+### Cena objavljena, isporuka tek predstoji
 
-- AgriX Savetnik — packaging i cena nisu zaključani.
+- AgriX Savetnik — cena je u `Cenovnik 2027` (odluke 341, 347), ali se javno nudi tek kada proizvod bude stabilan (odluka 217). Do tada se ne ugovara.
 
 ---
 
@@ -414,4 +418,4 @@ Za PWA terenski tok posebno meriti:
 7. Svaki demo mora prikazati teren → sync → centrala → faktura/izveštaj.
 8. Tri stuba su Enterprise, Gazdinstvo i Savetnik (odluka 401); GGAP je modul Enterprise-a (odluka 402).
 9. Gazdinstvo je `Standard offer` (odluka 404); GGAP ostaje van komercijalne ponude do validacije (odluka 405).
-10. Savetnik nema komercijalni status dok se ne zaključa packaging.
+10. Savetnik ima objavljenu cenu (odluke 341, 347), ali se ne ugovara dok proizvod ne bude stabilan (odluka 217).

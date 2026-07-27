@@ -1,5 +1,30 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-27 — dopuna: odluke 323–378, cenovnik i ugovor
+
+### Added
+
+- **odluke 323–378** u `09_QA_DECISION_LOG.md` §25, grupisane po oblastima (cene, ugovor, podrška, onboarding, prodaja, tržišni cilj, Gazdinstvo, Savetnik, podaci i bezbednost, razvoj i organizacija), uz tabelu otvorenih stavki §25.11;
+- `09B_ODLUKE_PO_OBLASTIMA.md` — tematski indeks svih odluka, i `09B_ODLUKE_PO_OBLASTIMA_2026-07-26.pdf` kao renderovani snimak;
+- `docs/Sales/AgriX_Cenovnik_2027.pdf` — zvanični cenovnik od sezone 2027;
+- `docs/Legal/AgriX_Ugovor_o_licenciranju.docx` — nacrt ugovora o licenciranju sa Prilozima 1–3.
+
+### Changed
+
+- `09_QA_DECISION_LOG.md`: odluke 401–408 pomerene u §26, napomena o numeraciji u §27 i ispravljena — brojevi **322 i 379–400 se ne koriste**, opseg 323–378 je popunjen;
+- **odluka 375 ispravljena**: nije „17–18 ukupno“ nego **12–15 novih / 15–18 ukupno**; ispravljeno u `02_STRATEGY.md` §9 i §10, `04_MARKET.md` §9.1 i §22 i `DECISION_LOG.md` STR-014;
+- **Savetnik ima objavljenu cenu** (150 € do 10 gazdinstava + 15 € po gazdinstvu, odluke 341 i 347): `02_STRATEGY.md` §2.3, `07_PRODUCT_PORTFOLIO.md` §9, §11 i §13, `07A_PRODUCT_STATUS_MATRIX.csv`. Raniji zapis „packaging i cena nisu zaključani“ bio je netačan;
+- README-ji u `docs/Sales/`, `docs/Legal/` i `docs/Finance/` dopunjeni novim dokumentima i pravilom da cenovnik, šablon ponude, Prilog 1 ugovora i finansijski model moraju imati iste iznose.
+
+### Open
+
+- `CONFLICT` cilj rasta: odluka 375 daje raspon 15–18 ukupno, finansijski model plansku tačku 17, kapacitetni list kolonu 18 — treba izabrati merodavan podatak;
+- ugovor je nacrt bez pravnog pregleda; Prilog 3 nije dovršen i ne potpisuje se u ovom obliku;
+- nepopunjeno u ugovoru: prozor za rok od jednog sata (359), mesto nadležnog suda, spisak podobrađivača i lokacija obrade (373);
+- `PROPOSAL` cene koje čekaju potvrdu: hardverska podrška 40 €/stanici (357) i cena po gazdinstvu 15 € (341);
+- odluka 362 ne precizira broj uključenih sati obuke, dok 354 i 365 koriste pet;
+- `09B_ODLUKE_PO_OBLASTIMA.md` još ne obuhvata odluke 401–408.
+
 ## 2026-07-27
 
 ### Added
