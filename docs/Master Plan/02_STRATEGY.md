@@ -303,9 +303,9 @@ Svaki domen mora imati status `Production`, `Pilot`, `Planned`, `Gap` ili `Out o
 
 `DECISION` (odluka 403): rast se planira prema **fiksnom ciljnom broju klijenata**, ne prema readiness cap-u. Ovim se povlači STR-001.
 
-Aktuelan cilj je scenario C iz odluke 375: **12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18 aktivnih firmi**. Odluka 375 zamenjuje odluku 249. Isti broj koriste `04_MARKET.md` §9.1 i `docs/Finance/AgriX_Finansijski_model.xlsx`; ako se cilj promeni, menjaju se sva tri mesta.
+Aktuelan cilj je scenario C iz odluke 375: **14 novih Enterprise klijenata do sezone 2027, ukupno 17 aktivnih firmi**. To je jedna planska vrednost, ne raspon. Odluka 375 zamenjuje odluku 249. Isti broj stoji u `04_MARKET.md` §9.1 i u `docs/Finance/AgriX_Finansijski_model.xlsx` (list `Pretpostavke`, red 42); ako se cilj promeni, menjaju se sva tri mesta.
 
-`CONFLICT`: finansijski model koristi plansku tačku 14 novih → 17 ukupno, a kapacitetni list proverava 18. Sve je unutar raspona 15–18, ali raspon i planska tačka nisu isti podatak — vidi `09_QA_DECISION_LOG.md` §25.11, stavka 11.
+Kolona od 18 klijenata na listu `Kapacitet` je stress-test koji pokazuje kada osnivač postaje usko grlo — nije cilj i ne koristi se u planiranju prihoda.
 
 Šta se ovom odlukom menja, a šta ne:
 
@@ -347,7 +347,7 @@ Ciljevi:
 - potvrditi da rast ne zahteva forkove i ne povećava incident rate po firmi;
 - dovesti readiness na nivo koji podržava fiksni cilj, umesto da cilj prilagođava readiness-u.
 
-Ciljni broj firmi je fiksiran odlukom 403 — scenario C iz odluke 375, odnosno 12–15 novih klijenata i ukupno 15–18 aktivnih Enterprise firmi do sezone 2027. Readiness više ne određuje taj broj; on određuje da li je konkretan onboarding bezbedan i koliko kapaciteta treba dodati da bi cilj bio dostižan.
+Ciljni broj firmi je fiksiran odlukom 403 — scenario C iz odluke 375, odnosno 14 novih klijenata i ukupno 17 aktivnih Enterprise firmi do sezone 2027. Readiness više ne određuje taj broj; on određuje da li je konkretan onboarding bezbedan i koliko kapaciteta treba dodati da bi cilj bio dostižan.
 
 ### Faza 2 — Ubrzana nacionalna penetracija
 

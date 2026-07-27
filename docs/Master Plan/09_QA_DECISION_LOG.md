@@ -630,7 +630,7 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 354. **Obuka.** Pet sati implementacione obuke uključeno u onboarding; preko toga 30 € po satu.
 355. **Izlazak na teren.** 50 € po izlasku, uvećano za gorivo, vreme puta i vreme rada na lokaciji.
 356. **Marža na hardver.** Hardver se prodaje sa oko 100 € marže po stanici.
-357. **Hardverska podrška.** 40 € po stanici godišnje, minimum 200 € po pravnom licu. `PROPOSAL` — cena čeka potvrdu; do tada se ne tretira kao zaključana odluka.
+357. **Hardverska podrška.** 40 € po stanici godišnje, minimum 200 € po pravnom licu. `DECISION` — potvrđeno 27.07.2026. Ne pokriva fizička oštećenja, potrošni materijal ni opremu nabavljenu van AgriX-a.
 358. **Dodatna instanca.** Druga instanca dobija −50 % na sve što ta instanca dodatno koristi. Moduli koji se po odluci 135 plaćaju jednom po pravnom licu ne dupliraju se.
 367. **Jedno gratis pravilo.** Postoji samo jedan gratis period: prva godina od produkcijskog puštanja funkcionalnosti. Zamenjuje odluke 144 i 149; usklađuje IP4. Razrešava konflikt K-05.
 368. **Granica besplatnog uvođenja modula.** Softverski modul i njegova konfiguracija su besplatni; fizički rad na lokaciji i puštanje opreme u rad se naplaćuju. Razrešava konflikt K-04 (odluka 68 protiv odluke 245).
@@ -646,12 +646,14 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 327. **Kontrola dokumenata.** Klijent je dužan da kontroliše sadržaj dokumenata koje izdaje; AgriX ispravlja potvrđen bug u najkraćem roku i ne odgovara za posledice izostale kontrole.
 331. **Definicija sezone.** Sezona se definiše jedinstveno na nivou AgriX-a, ne po klijentu. Zamenjuje odluku 56.
 332. **Vikend podrška u sezoni.** Tokom sezone vikend podrška postoji **samo za kritične incidente**. Zamenjuje odluke 54 i 57.
-359. **Rok reakcije od jednog sata.** Rok od jednog sata za kritične incidente važi unutar definisanog proširenog vremenskog prozora; van njega je best effort. Menja odluku 50 i razrešava konflikt K-01. `OPEN`: konkretan prozor još nije određen — polje u Prilogu 2 ugovora je prazno.
+359. **Rok reakcije od jednog sata.** Rok od jednog sata za kritične incidente važi unutar definisanog proširenog vremenskog prozora; van njega je best effort. Menja odluku 50 i razrešava konflikt K-01.
+
+> **Prozor utvrđen 27.07.2026.:** tokom sezone (1. jun — 30. novembar) **svakog dana od 08.00 do 20.00** časova, uključujući vikend; van sezone **radnim danima od 08.00 do 16.00** časova. Upisano u Prilog 2 ugovora. Usklađeno sa odlukama 332 (vikend podrška u sezoni samo za kritične incidente) i 378 (trajanje sezone). Van prozora važi best effort, bez ugovorenog roka.
 378. **Trajanje sezone.** Sezona traje od 1. juna do 30. novembra. Precizira odluku 331.
 
 ### 25.4 Onboarding i implementacija
 
-362. **Modul i obuka.** Uvođenje modula postojećem klijentu je besplatno uz uključenih X sati obuke; preko toga se naplaćuje. Razrešava konflikt K-12 (odluka 245 protiv ON2). `OPEN`: broj uključenih sati nije određen u indeksu; ugovor i cenovnik koriste pet sati kao ukupno uključen obim (odluke 354, 365).
+362. **Modul i obuka.** Uvođenje modula postojećem klijentu je besplatno uz uključenu obuku; preko toga se naplaćuje. Razrešava konflikt K-12 (odluka 245 protiv ON2). **Precizirano 27.07.2026.:** uključeno je **pet sati ukupno**, i za početni onboarding i za uvođenje modula; preko toga 30 € po satu. Time je odluka 362 usklađena sa odlukama 354 i 365 i nema odvojene kvote sati po modulu.
 363. **Skraćeni sign-off.** Za predsezonski start potvrda iz ON3 može se dati u skraćenom obliku, uz izričito prihvatanje rizika od strane klijenta; tada se pre produkcijskog starta ne izvodi razvoj po zahtevu. Razrešava konflikt K-13.
 365. **Fiksni uključeni obim.** U cenu je uključeno: instalacija, povezivanje svih komponenti i pet sati obuke. Sve preko toga se naplaćuje. Razrešava konflikt K-11 (C2 protiv odluke 35).
 
@@ -664,9 +666,9 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 
 ### 25.6 Tržišni cilj
 
-375. **Scenario rasta C.** Izabran je scenario C: **12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18** aktivnih firmi. Zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027).
+375. **Scenario rasta C.** Izabran je scenario C. **Precizirano 27.07.2026.: planska vrednost je 14 novih Enterprise klijenata do sezone 2027, ukupno 17 aktivnih firmi.** Raniji zapis kao raspona (12–15 novih, 15–18 ukupno) zamenjen je jednom vrednošću, saglasno finansijskom modelu. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027).
 
-> `CONFLICT`: `docs/Finance/AgriX_Finansijski_model.xlsx` (list `Pretpostavke`, red 42) koristi **14 novih → 17 ukupno** kao tačku scenarija C, a list `Kapacitet` proverava kolonu od **18** klijenata. To je unutar raspona 15–18, ali raspon i tačka nisu isti podatak. Pre sledeće revizije treba odlučiti da li je merodavan raspon 15–18 ili tačka 17, i uskladiti `02_STRATEGY.md` §9, `04_MARKET.md` §9.1 i finansijski model.
+> Merodavan izvor je `docs/Finance/AgriX_Finansijski_model.xlsx`, list `Pretpostavke`, red 42. Isti broj mora stajati u `02_STRATEGY.md` §9 i `04_MARKET.md` §9.1. Kolona od 18 klijenata na listu `Kapacitet` je **stress-test scenario**, ne cilj — služi da pokaže kada osnivač postaje usko grlo, i zadržava se kao takva.
 
 ### 25.7 AgriX Gazdinstvo
 
@@ -703,19 +705,22 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 
 ### 25.11 Otvorene stavke iz ove dopune
 
-| # | Stavka | Vezano za |
-|---|---|---|
-| 1 | Pravni pregled ugovora nije obavljen | 376 |
-| 2 | Prilog 3 ugovora nije dovršen — čeka mapu tokova i LEG1 | LEG1 |
-| 3 | Vremenski prozor za rok od jednog sata nije određen | 359 |
-| 4 | Mesto nadležnog suda u ugovoru nije popunjeno | — |
-| 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 |
-| 6 | Hardverska podrška 40 €/stanici je predlog | 357 |
-| 7 | Lokacija podataka u Google Workspace konzoli nije verifikovana | 373 |
-| 8 | Redosled post-2027 inicijativa svesno otvoren | 231 |
-| 9 | Vertikalni paketi protiv odluke 59 — odloženo do prve vertikale | K-06 |
-| 10 | Broj uključenih sati obuke u 362 nije usaglašen sa 354/365 | 362 |
-| 11 | Raspon 15–18 protiv tačke 17 u finansijskom modelu | 375 |
+Stanje na dan 27.07.2026.
+
+| # | Stavka | Vezano za | Status |
+|---|---|---|---|
+| 1 | Pravni pregled ugovora nije obavljen | 376 | otvoreno |
+| 2 | Prilog 3 ugovora nije dovršen — čeka mapu tokova i LEG1 | LEG1 | otvoreno |
+| 3 | Vremenski prozor za rok od jednog sata | 359 | **zatvoreno 27.07.** — sezona 08–20 svakog dana, van sezone 08–16 radnim danima; upisano u Prilog 2 |
+| 4 | Mesto nadležnog suda u ugovoru nije popunjeno | član 15 | otvoreno |
+| 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 | otvoreno |
+| 6 | Hardverska podrška 40 €/stanici | 357 | **zatvoreno 27.07.** — potvrđeno kako stoji u cenovniku i Prilogu 1 |
+| 7 | Lokacija podataka u Google Workspace konzoli nije verifikovana | 373 | otvoreno |
+| 8 | Redosled post-2027 inicijativa svesno otvoren | 231 | otvoreno svesno |
+| 9 | Vertikalni paketi protiv odluke 59 — odloženo do prve vertikale | K-06 | odloženo |
+| 10 | Broj uključenih sati obuke u 362 | 362 | **zatvoreno 27.07.** — pet sati ukupno, isto kao 354 i 365 |
+| 11 | Raspon protiv tačke u cilju rasta | 375 | **zatvoreno 27.07.** — merodavno je 14 novih / 17 ukupno |
+| 12 | `09B_ODLUKE_PO_OBLASTIMA.md` ne obuhvata odluke 401–408 | — | otvoreno |
 
 ---
 

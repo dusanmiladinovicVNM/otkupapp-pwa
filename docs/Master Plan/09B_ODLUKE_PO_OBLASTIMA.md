@@ -8,6 +8,17 @@
 > **Mesto u repou.** Merodavan Decision Log je `09_QA_DECISION_LOG.md`; ovaj fajl je tematski indeks nad njim. Odluke 323–378 unete su u `09_QA_DECISION_LOG.md` §25 na osnovu ovog indeksa i pratećih dokumenata (`docs/Sales/AgriX_Cenovnik_2027.pdf`, `docs/Legal/AgriX_Ugovor_o_licenciranju.docx`, `docs/Product/AgriX_Definicija_proizvoda.pdf`, `docs/Finance/AgriX_Finansijski_model.xlsx`). Odluke 401–408 su u §26 i u ovom indeksu **još nisu obrađene**.
 >
 > `09B_ODLUKE_PO_OBLASTIMA_2026-07-26.pdf` je renderovani snimak ovog fajla na dan 26.07.2026. Kad se indeks menja, menja se `.md`; PDF je snimak i ne mora se osvežavati uz svaku izmenu.
+>
+> **Zastarelo od 27.07.2026.** — tabele niže još nisu prepravljene, ali sledeće više ne važi kako je ovde zapisano:
+>
+> | Stavka u indeksu | Važeće stanje od 27.07. |
+> |---|---|
+> | 357 „predlog, čeka potvrdu“ | **potvrđeno** — 40 € po stanici, minimum 200 € |
+> | 375 „12–15 novih, ukupno 15–18“ | **precizirano** — 14 novih, ukupno 17 |
+> | 362 „uz uključenih X sati obuke“ | **precizirano** — pet sati ukupno, isto kao 354 i 365 |
+> | Otvorena stavka 3 (prozor za rok od 1h) | **zatvorena** — sezona 08–20 svakog dana, van sezone 08–16 radnim danima |
+>
+> Merodavan tekst je u `09_QA_DECISION_LOG.md` §25.
 
 Oznake: `⚠` stavka učestvuje u nerazrešenom konfliktu · `→ X` izmenjena odlukom X · `(nova)` doneta 26.07.2026.
 

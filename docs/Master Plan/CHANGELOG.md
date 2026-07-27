@@ -1,6 +1,8 @@
 # AgriX Master Plan — Change Log
 
-## 2026-07-27 — dopuna: odluke 323–378, cenovnik i ugovor
+## 2026-07-27 (2) — odluke 323–378, cenovnik, ugovor i razrešenja
+
+> Ovaj unos ispravlja i dopunjuje unos `2026-07-27 (1)` niže. Gde se razlikuju, važi ovaj.
 
 ### Added
 
@@ -16,20 +18,25 @@
 - **Savetnik ima objavljenu cenu** (150 € do 10 gazdinstava + 15 € po gazdinstvu, odluke 341 i 347): `02_STRATEGY.md` §2.3, `07_PRODUCT_PORTFOLIO.md` §9, §11 i §13, `07A_PRODUCT_STATUS_MATRIX.csv`. Raniji zapis „packaging i cena nisu zaključani“ bio je netačan;
 - README-ji u `docs/Sales/`, `docs/Legal/` i `docs/Finance/` dopunjeni novim dokumentima i pravilom da cenovnik, šablon ponude, Prilog 1 ugovora i finansijski model moraju imati iste iznose.
 
+### Resolved — odluke osnivača 27.07.2026.
+
+- **cilj rasta:** merodavna je planska vrednost iz finansijskog modela — **14 novih / 17 ukupno** do sezone 2027. Odluka 375 preformulisana sa raspona na jednu vrednost; usklađeni `02_STRATEGY.md` §9 i §10, `04_MARKET.md` §9.1 i §22, `DECISION_LOG.md` STR-014 i `docs/Finance/README.md`. Kolona od 18 na listu `Kapacitet` označena je kao stress-test, ne cilj;
+- **prozor za rok od jednog sata (359):** tokom sezone svakog dana 08.00–20.00 uključujući vikend, van sezone radnim danima 08.00–16.00. Upisano u Prilog 2 ugovora i u odluku 359;
+- **hardverska podrška (357):** potvrđena kako stoji — 40 € po stanici godišnje, minimum 200 € po pravnom licu. Oznaka `PROPOSAL` uklonjena;
+- **sati obuke (362):** pet sati ukupno, i za onboarding i za uvođenje modula; odluka 362 usklađena sa 354 i 365, bez odvojene kvote po modulu.
+
 ### Open
 
-- `CONFLICT` cilj rasta: odluka 375 daje raspon 15–18 ukupno, finansijski model plansku tačku 17, kapacitetni list kolonu 18 — treba izabrati merodavan podatak;
-- ugovor je nacrt bez pravnog pregleda; Prilog 3 nije dovršen i ne potpisuje se u ovom obliku;
-- nepopunjeno u ugovoru: prozor za rok od jednog sata (359), mesto nadležnog suda, spisak podobrađivača i lokacija obrade (373);
-- `PROPOSAL` cene koje čekaju potvrdu: hardverska podrška 40 €/stanici (357) i cena po gazdinstvu 15 € (341);
-- odluka 362 ne precizira broj uključenih sati obuke, dok 354 i 365 koriste pet;
+- ugovor je nacrt bez pravnog pregleda (376); Prilog 3 nije dovršen i ne potpisuje se u ovom obliku (LEG1);
+- nepopunjeno u ugovoru: mesto nadležnog suda (član 15), spisak podobrađivača i lokacija obrade (373);
+- cena po gazdinstvu kod Savetnika 15 € (341) čeka potvrdu;
 - `09B_ODLUKE_PO_OBLASTIMA.md` još ne obuhvata odluke 401–408.
 
-## 2026-07-27
+## 2026-07-27 (1) — odluke 401–408 i poslovni dokumenti
 
 ### Added
 
-- odluke **401–408** u `09_QA_DECISION_LOG.md` (odeljak 25);
+- odluke **401–408** u `09_QA_DECISION_LOG.md` (odeljak 25; kasnije premešten u odeljak 26);
 - napomena o nedostajućim odlukama **322–400** (odeljak 26) — na njih se pozivaju dokumenti u `docs/Product/`, `docs/Sales/` i `docs/Finance/`, ali tekst nije u repou;
 - `STR-013` (Savetnik kao treći stub) i `STR-014` (fiksan ciljni broj klijenata) u `DECISION_LOG.md`;
 - odeljak `02_STRATEGY.md` §2.3 „AgriX Savetnik“ i pododeljak „Moduli uz Enterprise“;

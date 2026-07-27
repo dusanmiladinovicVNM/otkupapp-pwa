@@ -297,15 +297,17 @@ Postojeća baza: 3 firme.
 |---|---:|---:|---|
 | A — konzervativni | 5 | 8 | `HYPOTHESIS` |
 | B — balansirani | 8 | 11 | `HYPOTHESIS` |
-| **C — agresivni (izabran)** | **12–15** | **15–18** | `DECISION` — odluka 375 |
+| **C — agresivni (izabran)** | **14** | **17** | `DECISION` — odluka 375 |
 
-`DECISION` (odluke 375 i 403): izabran je scenario C — **12–15 novih Enterprise klijenata do sezone 2027, ukupno 15–18 aktivnih firmi**. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027). Raniji „ubrzani uz potvrđen readiness“ raspon 12–15 **ukupnih** firmi bio je pogrešno postavljen — 12–15 je broj **novih**, ne ukupnih klijenata.
+`DECISION` (odluke 375 i 403): izabran je scenario C — **14 novih Enterprise klijenata do sezone 2027, ukupno 17 aktivnih firmi**. Broj je planska vrednost, ne raspon; merodavan izvor je `docs/Finance/AgriX_Finansijski_model.xlsx`, list `Pretpostavke`, red 42. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027).
+
+Raniji „ubrzani uz potvrđen readiness“ raspon 12–15 **ukupnih** firmi bio je pogrešno postavljen — 12–15 je bio radni raspon **novih** klijenata, a sada je zamenjen jednom vrednošću.
 
 Readiness više nije mehanizam koji određuje ovaj broj (STR-001 je povučen odlukom 403). Readiness ostaje preduslov kvaliteta isporuke: može zaustaviti ili odložiti pojedinačan onboarding, ali odgovor na slab domen je otklanjanje uzroka i dodavanje kapaciteta, a ne spuštanje cilja.
 
-> `CONFLICT` — jedan broj, tri različite vrednosti. Odluka 375 daje **raspon 15–18 ukupno**. `docs/Finance/AgriX_Finansijski_model.xlsx` (list `Pretpostavke`, red 42) koristi **tačku: 14 novih → 17 ukupno**, a list `Kapacitet` proverava kolonu od **18** klijenata. Sve je unutar raspona, ali raspon i planska tačka nisu isti podatak. Pre sledeće revizije treba odlučiti šta je merodavno i uskladiti ovo mesto, `02_STRATEGY.md` §9 i finansijski model. Vidi i `09_QA_DECISION_LOG.md` §25.11, stavka 11.
+Kolona od 18 klijenata na listu `Kapacitet` u finansijskom modelu je **stress-test**, ne cilj: pokazuje na kojoj se tački osnivač pretvara u usko grlo. Ne koristi se kao prodajni ni planski broj.
 
-`ASSUMPTION`: kapacitetna posledica scenarija C je da okidač za drugu tehnički ovlašćenu osobu (BC3, odluka 336 — najkasnije pri 15–20 firmi) pada pre 1. juna 2027.
+`ASSUMPTION`: pri 17 firmi okidač za drugu tehnički ovlašćenu osobu (BC3, odluka 336 — najkasnije pri 15–20 firmi) pada pre 1. juna 2027.
 
 ### 9.2 Horizont 3–4 godine u Srbiji
 
@@ -717,7 +719,7 @@ Spojiti APR, poljoprivrednu proizvodnju, postojeće reference i prodajni pipelin
 8. `DECISION`: GGAP TAM se ne izmišlja bez posebnog dokaznog skupa.
 9. `DECISION`: regionalni TAM se ne dodaje Srbiji bez zemlje-po-zemlje istraživanja.
 10. `DECISION`: svaka tržišna procena se ažurira iz reproduktivnog pipeline-a i strukturisanog CRM istraživanja.
-11. `DECISION`: SOM do sezone 2027 je fiksan cilj iz scenarija C — 12–15 novih, ukupno 15–18 aktivnih Enterprise firmi (odluke 375 i 403); readiness više ne određuje taj broj.
+11. `DECISION`: SOM do sezone 2027 je fiksan cilj iz scenarija C — 14 novih, ukupno 17 aktivnih Enterprise firmi (odluke 375 i 403); readiness više ne određuje taj broj.
 
 ---
 

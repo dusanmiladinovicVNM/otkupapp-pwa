@@ -16,6 +16,6 @@ Pravila korišćenja modela:
 - model ne prognozira — pokazuje posledice datih pretpostavki po prihod i po vreme osnivača;
 - **troškovi (odeljak F) su prazni**; dok se ne popune, redovi neto rezultata i cash-flow-a nemaju smisla;
 - izvor cena su odluke 339, 341, 349–358; iznosi moraju biti identični sa `docs/Sales/AgriX_Cenovnik_2027.pdf`;
-- scenariji rasta: odluka 375, izabran scenario C. **Neusklađenost:** odluka 375 daje raspon 12–15 novih / 15–18 ukupno, a model koristi tačku 14 novih / 17 ukupno uz kapacitetnu kolonu od 18. Treba odlučiti šta je merodavno i uskladiti sa `02_STRATEGY.md` §9 i `04_MARKET.md` §9.1;
+- scenariji rasta: odluka 375, izabran scenario C — **14 novih / 17 ukupno**. Ovaj model (list `Pretpostavke`, red 42) je merodavan izvor tog broja; `02_STRATEGY.md` §9 i `04_MARKET.md` §9.1 ga preuzimaju. Kolona od 18 klijenata na listu `Kapacitet` je stress-test, ne cilj;
 - okidač za zapošljavanje druge tehnički ovlašćene osobe: BC3 i 336 (najkasnije pri 15–20 firmi), a red `Status` na listu `Kapacitet` može ga pomeriti ranije;
 - unit economics je fino podešavanje posle određenih cena, ne preduslov za ponudu (odluka 408).

@@ -17,6 +17,6 @@ Napomene:
 - **`AgriX_Cenovnik_2027.pdf` je referentni cenovnik.** List `Cenovnik` u šablonu ponude, Prilog 1 ugovora (`docs/Legal/AgriX_Ugovor_o_licenciranju.docx`) i finansijski model moraju imati iste iznose; kada se cena menja, menjaju se sva četiri mesta;
 - cene se menjaju samo kada se promeni odluka o ceni (izvor: odluke 339, 341, 349–358);
 - šablon ponude je prazan obrazac — popunjene ponude sa podacima klijenta se ne commit-uju;
-- hardverska podrška (odluka 357) je i dalje **predlog cene** i nije potvrđena odlukom; isto važi za cenu po gazdinstvu kod Savetnika (odluka 341);
+- hardverska podrška (odluka 357) potvrđena je 27.07.2026. — 40 € po stanici godišnje, minimum 200 € po pravnom licu; **cena po gazdinstvu kod Savetnika (odluka 341, 15 €) i dalje čeka potvrdu**;
 - Dispatch se nudi samo uz Mobile paket (odluka 293), GGAP je „od 1.000 €“ uz potvrdu obima (odluka 352) i ostaje van redovne komercijalne ponude do validacije (odluka 405);
 - Savetnik ima objavljenu cenu (odluke 341, 347), ali se ne ugovara dok proizvod ne bude stabilan (odluka 217).
