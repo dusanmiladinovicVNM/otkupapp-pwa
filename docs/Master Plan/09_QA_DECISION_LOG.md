@@ -712,7 +712,7 @@ Stanje na dan 27.07.2026.
 | 1 | Pravni pregled ugovora nije obavljen | 376 | otvoreno |
 | 2 | Prilog 3 ugovora nije dovršen — čeka mapu tokova i LEG1 | LEG1 | otvoreno |
 | 3 | Vremenski prozor za rok od jednog sata | 359 | **zatvoreno 27.07.** — sezona 08–20 svakog dana, van sezone 08–16 radnim danima; upisano u Prilog 2 |
-| 4 | Mesto nadležnog suda u ugovoru nije popunjeno | član 15 | otvoreno |
+| 4 | Mesto nadležnog suda u ugovoru | član 15 | **zatvoreno 27.07.** — Niš; sedište AgriX-a je Merošina |
 | 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 | otvoreno |
 | 6 | Hardverska podrška 40 €/stanici | 357 | **zatvoreno 27.07.** — potvrđeno kako stoji u cenovniku i Prilogu 1 |
 | 7 | Lokacija podataka u Google Workspace konzoli nije verifikovana | 373 | otvoreno |

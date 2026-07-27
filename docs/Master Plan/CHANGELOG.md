@@ -25,10 +25,17 @@
 - **hardverska podrška (357):** potvrđena kako stoji — 40 € po stanici godišnje, minimum 200 € po pravnom licu. Oznaka `PROPOSAL` uklonjena;
 - **sati obuke (362):** pet sati ukupno, i za onboarding i za uvođenje modula; odluka 362 usklađena sa 354 i 365, bez odvojene kvote po modulu.
 
+### Tooling
+
+- `.claude/skills/poslovni-dokumenti/SKILL.md` — pravila za rad sa `docs/`: gde je istina, numeracija odluka, sinhronizacija cena na četiri mesta, klase dokumenata, gde ide koji upload, provere pre commit-a i spisak naučenih grešaka;
+- `docs/Legal/AgriX_Ugovor_o_licenciranju.md` — tekst ugovora kao izvor istine, sa mapom svih članova na ID-jeve odluka;
+- `tools/ugovor.sh` — `build` generiše `.docx` iz `.md`, `check` prijavljuje razlike između njih. Zavisnost: `pandoc`.
+- **mesto nadležnog suda:** Niš (član 15), jer je sedište AgriX-a Merošina.
+
 ### Open
 
 - ugovor je nacrt bez pravnog pregleda (376); Prilog 3 nije dovršen i ne potpisuje se u ovom obliku (LEG1);
-- nepopunjeno u ugovoru: mesto nadležnog suda (član 15), spisak podobrađivača i lokacija obrade (373);
+- nepopunjeno u ugovoru: spisak podobrađivača i lokacija obrade (373);
 - cena po gazdinstvu kod Savetnika 15 € (341) čeka potvrdu;
 - `09B_ODLUKE_PO_OBLASTIMA.md` još ne obuhvata odluke 401–408.
 
