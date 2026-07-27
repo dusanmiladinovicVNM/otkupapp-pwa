@@ -2,7 +2,7 @@
 
 **Datum sesije:** 24.07.2026.  
 **Status:** radni strateški zapis  
-**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesija — numerisane odluke 1–321, 323–378 i 401–408, uz serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q, S. Brojevi 322 i 379–400 se ne koriste; videti odeljak 27.  
+**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesija — numerisane odluke 1–321, 323–378 i 401–422, uz serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q, S. Brojevi 322 i 379–400 se ne koriste; videti odeljak 27.  
 **Tematski indeks:** `09B_ODLUKE_PO_OBLASTIMA.md`
 
 > Ovaj dokument čuva kompletan suštinski sadržaj sesije. Pomoćne formulacije asistenta koje nisu menjale odluke nisu prenete. Kada je kasnija odluka ispravila raniju, važi kasnija formulacija i to je izričito označeno.
@@ -135,9 +135,9 @@
 107. **Custom naplata.** Time-and-materials, ne fiksna cena.
 108. **Kontrola budžeta.** Klijent dobija procenu sati i maksimalni budžet; prekoračenje zahteva novo pisano odobrenje.
 109. **Fakturisanje custom rada.** Mesečno ili po završetku, prema dokumentovanim satima i unutar odobrenog limita.
-110. **Satnica.** Jedna standardna satnica, uz mogući individualni popust većim ili dugoročnim klijentima.
-111. **Osnova popusta na custom rad.** Veći unapred dogovoreni obim i dugoročna ukupna vrednost odnosa.
-112. **Maksimalni custom popust.** Ne postoji fiksni maksimum; odlučuje se pojedinačno.
+110. **Satnica.** Jedna standardna satnica, uz mogući individualni popust većim ili dugoročnim klijentima. *`Superseded` 27.07.2026. odlukom 409 — dve satnice, bez individualnog popusta.*
+111. **Osnova popusta na custom rad.** Veći unapred dogovoreni obim i dugoročna ukupna vrednost odnosa. *`Deleted` 27.07.2026. odlukom 418 — pregovaračkih popusta nema.*
+112. **Maksimalni custom popust.** Ne postoji fiksni maksimum; odlučuje se pojedinačno. *`Deleted` 27.07.2026. odlukom 418 — pregovaračkih popusta nema.*
 113. **Pretplata bez popusta.** Isti paket i broj stanica znače istu godišnju cenu.
 114. **Godišnji obračun.** Pretplata traje 12 meseci od datuma aktivacije svakog klijenta.
 115. **Obnova.** Nije automatska; zahteva potvrdu i plaćanje.
@@ -151,14 +151,14 @@
 123. **Ista cena stanice.** Dodatna stanica košta isto u Desktop i Mobile paketu; razlika je u osnovnoj ceni paketa.
 124. **Moduli po pravnom licu.** SEF, Banka i Dispatch imaju fiksnu godišnju cenu po pravnom licu.
 125. **Ista cena modula.** Cena modula ne zavisi od Desktop/Mobile paketa.
-126. **Mobile multiplikator.** Cena Mobile-a definiše se kao unapred utvrđen odnos prema Desktop-u.
-127. **Minimalni odnos.** Desktop Otkup + Mobile treba da bude najmanje dva puta cena Desktop Otkup-a.
+126. **Mobile multiplikator.** Cena Mobile-a definiše se kao unapred utvrđen odnos prema Desktop-u. *`Superseded` 27.07.2026. odlukom 414 — aditivni Mobile dodatak od 1.000 €, ne multiplikator.*
+127. **Minimalni odnos.** Desktop Otkup + Mobile treba da bude najmanje dva puta cena Desktop Otkup-a. *`Superseded` 27.07.2026. odlukom 414.*
 128. **Struktura ponude.** Desktop Otkup je baza; Mobile je dodatak; Hladnjača/Proizvodnja je nezavisan Desktop dodatak; SEF, Banka i Dispatch su odvojeni.
 129. **Mobile i proizvodnja.** Mobile pokriva teren/transport; proizvodnja ostaje Desktop funkcionalnost.
-130. **Proizvodni dodatak — početno.** Nakon standardizacije ima fiksnu godišnju naknadu.
+130. **Proizvodni dodatak — početno.** Nakon standardizacije ima fiksnu godišnju naknadu. *`Closed` 27.07.2026. odlukom 421 — 400 € po proizvodnom pogonu, uslov standardizacije ispunjen.*
 131. **Jedan pogon.** Proizvodni dodatak pokriva jedan proizvodni pogon.
 132. **Više pogona.** Dodatni pogon istog pravnog lica zahteva dodatnu Desktop instancu i dodatni proizvodni dodatak.
-133. **Dodatna Desktop instanca.** Cena se određuje individualno prema razlogu, scope-u i složenosti.
+133. **Dodatna Desktop instanca.** Cena se određuje individualno prema razlogu, scope-u i složenosti. *`Superseded` 27.07.2026. odlukom 413 — fiksnih −50 %, bez individualnog određivanja.*
 134. **Jedan ugovor.** Sve instance istog pravnog lica imaju isti ugovor i datum obnove.
 135. **Moduli kroz instance.** SEF, Banka i Dispatch plaćaju se jednom po pravnom licu i koriste kroz sve njegove instance.
 136. **Desktop korisnici.** Nema limita/licence po korisniku.
@@ -181,8 +181,8 @@
 153. **Plaćanje novih klijenata.** Godišnja pretplata se plaća pre aktivacije.
 154. **Obnova postojećih.** Faktura sa rokom plaćanja 30 dana.
 155. **Kašnjenje pri obnovi.** Rešava se individualno prema istoriji i razlogu, bez automatskog trenutnog blokiranja.
-156. **Javne cene Enterprise-a.** Objavljuju se rasponi za Desktop i Mobile.
-157. **Javna cena proizvodnje.** Objavljuje se cenovni raspon za Hladnjača/Proizvodnja.
+156. **Javne cene Enterprise-a.** Objavljuju se rasponi za Desktop i Mobile. *`Superseded` 27.07.2026. odlukom 416.*
+157. **Javna cena proizvodnje.** Objavljuje se cenovni raspon za Hladnjača/Proizvodnja. *`Superseded` 27.07.2026. odlukom 416.*
 158. **Javna cena dodatne stanice.** Objavljuje se tačan godišnji iznos za svaku stanicu preko pet.
 159. **Gazdinstvo cene.** Objavljuju se tačne godišnje cene Basic i Pro.
 160. **Basic samostalno.** Može se kupiti bez Enterprise-a.
@@ -228,7 +228,7 @@
 
 196. **Ciljni direktni korisnici.** Komercijalni proizvođači i poljoprivredni savetnici/konsultanti; veoma mala gazdinstva nisu primarni platioci.
 197. **Model Savetnika.** Savetnik kupuje poseban profesionalni nalog i iz jednog interfejsa upravlja većim brojem gazdinstava.
-198. **Naplata.** Prema broju aktivnih gazdinstava.
+198. **Naplata.** Prema broju aktivnih gazdinstava. *`Superseded` 27.07.2026. odlukom 420 — osnovica plus iznos po gazdinstvu preko 10.*
 199. **Naziv proizvoda.** Poseban proizvod: **AgriX Savetnik**.
 200. **Licence gazdinstava.** Cena Savetnika pokriva aktivna gazdinstva; ona ne plaćaju zaseban Pro.
 201. **Pristup proizvođača.** Proizvođač zadržava sopstveni nalog i pristup podacima.
@@ -237,7 +237,7 @@
 204. **Prva verzija.** Jedan savetnik vodi više gazdinstava; timovi i raspodela dolaze kasnije.
 205. **Veza sa Enterprise-om.** Isto gazdinstvo može biti povezano i sa Savetnikom i sa jednom ili više hladnjača.
 206. **Interne agronomske službe.** Veće poljoprivredne firme sa sopstvenim agronomima su ravnopravna ciljna grupa.
-207. **Ista tarifa.** Isti model cene po aktivnom gazdinstvu za nezavisne savetnike i interne agronomske službe.
+207. **Ista tarifa.** Isti model cene po aktivnom gazdinstvu za nezavisne savetnike i interne agronomske službe. *`Superseded` 27.07.2026. odlukom 419 — dve tarife, standalone i Enterprise.*
 208. **Period naplate.** Samo godišnja pretplata.
 209. **Probni period.** Besplatnih 30 dana, uz ograničen broj gazdinstava.
 210. **Limit probe.** Do 10 aktivnih gazdinstava.
@@ -520,7 +520,7 @@ P5. **Postepena migracija klijenata.** Klijenti prelaze pojedinačno ili u grupa
 IP1. **Vlasništvo AgriX-a.** Kod, arhitektura i poslovno rešenje ostaju AgriX-u i kada klijent finansira razvoj; klijent dobija pravo korišćenja.
 IP2. **Poverljivo znanje klijenta.** Ugovorom se određuje šta AgriX sme da generalizuje i ponovo koristi, a šta ostaje poverljiva procedura ili poslovna tajna klijenta.
 IP3. **Bez izvornog koda.** Klijent ne dobija izvorni kod, posebnu source licencu niti source-code escrow.
-IP4. **Pogodnost finansijeru razvoja.** Klijent dobija prioritetnu izradu/prilagođavanje i besplatno korišćenje funkcionalnosti tokom prve godine od produkcijskog puštanja. Posle toga važe standardni uslovi.
+IP4. **Pogodnost finansijeru razvoja.** Klijent dobija prioritetnu izradu/prilagođavanje i besplatno korišćenje funkcionalnosti tokom prve godine od produkcijskog puštanja. Posle toga važe standardni uslovi. *`Rewritten` 27.07.2026. odlukom 422 — ista prva besplatna godina kao 367, ne dodatna.*
 IP5. **Ekskluzivnost.** Moguća je samo uz poseban, vremenski i funkcionalno ograničen ugovor i znatno višu cenu.
 
 ---
@@ -559,7 +559,7 @@ C1. **Trial režim.** AgriX ima trial režim koji omogućava punu funkcionalnost
 
 C2. **Naplata onboardinga i instalacija.** Instalacija AgriX-a uvek je uključena u cenu. Onboarding se posebno naplaćuje kada zahteva više od najosnovnijeg prikaza toka kroz program.
 
-C3. **Dozvoljeni popusti.** Popusti se mogu odobriti za više pravnih lica, veliki broj otkupnih stanica i druge opravdane specifične situacije. Ne postoji automatsko pravo na popust van tih poslovno obrazloženih slučajeva.
+C3. **Dozvoljeni popusti.** Popusti se mogu odobriti za više pravnih lica, veliki broj otkupnih stanica i druge opravdane specifične situacije. Ne postoji automatsko pravo na popust van tih poslovno obrazloženih slučajeva. *`Deleted` 27.07.2026. odlukom 418 — pregovaračkih i individualnih popusta nema.*
 
 C4. **Promena cena.** Cene pri obnovi i buduće promene cenovnika određuju se diskreciono, u skladu sa poslovnom procenom AgriX-a.
 
@@ -622,7 +622,7 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 329. **Valuta i kurs.** Cene su u EUR; plaćanje je u dinarima po srednjem kursu Narodne banke Srbije na dan uplate. Cene ne sadrže PDV.
 334. **Zaštita cene postojećih klijenata.** Postojeći klijenti zadržavaju svoje cene za ovu sezonu.
 337. **Smanjenje broja stanica.** Smanjenje broja stanica u toku ugovorne godine ne menja cenu ako je stanica u toj godini bila aktivna.
-349. **Cene paketa.** AgriX Desktop 500 €, Desktop all-in 1.100 €, AgriX Mobile 1.500 €, Mobile all-in 2.100 € — godišnje, po pravnom licu, do pet aktivnih stanica.
+349. **Cene paketa.** AgriX Desktop 500 €, Desktop all-in 1.200 €, AgriX Mobile 1.500 €, Mobile all-in 2.200 € — godišnje, po pravnom licu, do pet aktivnih stanica. Struktura cena definisana je odlukama 414 i 415; sastav all-in paketa odlukom 415.
 350. **Cene modula.** SEF, Banka i Dispatch po 200 €; Hladnjača/Proizvodnja 400 € — godišnje, po pravnom licu.
 351. **Cena dodatne stanice.** Svaka aktivna stanica preko pet — 50 € godišnje. Ista cena u oba paketa (potvrđuje odluku 123).
 352. **Cena GGAP modula.** Od 1.000 € godišnje po pravnom licu; jedna cena pokriva sve GGAP kooperante tog lica.
@@ -679,7 +679,7 @@ LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez
 ### 25.8 AgriX Savetnik
 
 340. **Gazdinstva nisu uključena u cenu.** Gazdinstva u portfelju savetnika nisu uključena u cenu Savetnika; svako drži sopstvenu Pro pretplatu po kanalskoj ceni. Zamenjuje odluku 200.
-341. **Cena Savetnika.** Osnovica 150 € godišnje, uključeno do 10 gazdinstava; svako gazdinstvo preko 10 — 15 €. `OPEN`: cena po gazdinstvu čeka potvrdu.
+341. **Cena Savetnika.** Osnovica 150 € godišnje, uključeno do 10 gazdinstava; svako gazdinstvo preko 10 — 15 €. Potvrđeno 27.07.2026. Odluka 419 uvodi drugu, Enterprise tarifu (100 € / 10 €), a odluka 420 definiše model naplate.
 342. **Aktivno gazdinstvo.** Aktivnim se smatra gazdinstvo kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku.
 344. **Savetnik kao platilac.** Savetnik može platiti Pro u ime proizvođača i ugraditi to u svoju naknadu — posrednička uloga u skladu sa MKT3.
 345. **Bez cashbacka u portfelju.** Nema provizije ni cashbacka za gazdinstva u sopstvenom portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše. Odluka 221 ostaje samo za preporuke van portfelja.
@@ -713,14 +713,15 @@ Stanje na dan 27.07.2026.
 | 2 | Prilog 3 ugovora nije dovršen — čeka mapu tokova i LEG1 | LEG1 | otvoreno |
 | 3 | Vremenski prozor za rok od jednog sata | 359 | **zatvoreno 27.07.** — sezona 08–20 svakog dana, van sezone 08–16 radnim danima; upisano u Prilog 2 |
 | 4 | Mesto nadležnog suda u ugovoru | član 15 | **zatvoreno 27.07.** — Niš; sedište AgriX-a je Merošina |
-| 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 | otvoreno |
+| 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 | **zatvoreno 27.07.** — potvrđeno 150 € osnovica / 15 € po gazdinstvu; uvedena Enterprise tarifa 100 € / 10 € (419) |
 | 6 | Hardverska podrška 40 €/stanici | 357 | **zatvoreno 27.07.** — potvrđeno kako stoji u cenovniku i Prilogu 1 |
 | 7 | Lokacija podataka u Google Workspace konzoli nije verifikovana | 373 | otvoreno |
 | 8 | Redosled post-2027 inicijativa svesno otvoren | 231 | otvoreno svesno |
 | 9 | Vertikalni paketi protiv odluke 59 — odloženo do prve vertikale | K-06 | odloženo |
 | 10 | Broj uključenih sati obuke u 362 | 362 | **zatvoreno 27.07.** — pet sati ukupno, isto kao 354 i 365 |
 | 11 | Raspon protiv tačke u cilju rasta | 375 | **zatvoreno 27.07.** — merodavno je 14 novih / 17 ukupno |
-| 12 | `09B_ODLUKE_PO_OBLASTIMA.md` ne obuhvata odluke 401–408 | — | otvoreno |
+| 12 | `09B_ODLUKE_PO_OBLASTIMA.md` nije obuhvatao 401–408 ni 409–422 | — | **zatvoreno 27.07.** — indeks regenerisan na verziju 3 |
+| 13 | Desktop all-in štedi klijentu samo 100 € — slaba bundle poruka | 415 | komercijalno, nije konflikt |
 
 ---
 
@@ -740,6 +741,87 @@ Stanje na dan 27.07.2026.
 
 ---
 
+### 26.1 Dopuna 27.07.2026. — odluke 409–422
+
+**Datum dopune:** 27.07.2026.  
+**Obuhvat:** satnice, obračunska jedinica modula, dodatna instanca, formiranje i prikaz cena, politika popusta, tarife Savetnika, i razrešenje pet preostalih konflikata iz cenovnog i komercijalnog dela.
+
+> Numeracija nastavlja niz posle 408. Brojevi 322 i 379–400 se ne koriste.
+
+#### Satnice i usluge
+
+409. **Dve standardne satnice.** Postoje tačno dve standardne satnice:
+
+- **razvojna, 50 €/h** — razvoj po zahtevu, složena migracija podataka, novi adapteri, posebni izveštaji, masovne korekcije podataka;
+- **implementaciona, 30 €/h** — obuka preko uključenih pet sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji.
+
+Satnica se određuje prema **prirodi posla, ne prema mestu izvođenja**. Satnice su fiksne i nepregovaračke (vidi 418). *Menja odluku 110. Potvrđuje 353 i 354.*
+
+410. **Obračun izlaska na teren.** 50 € po izlasku, uvećano za gorivo, vreme puta i vreme rada. Vreme puta obračunava se **uvek po implementacionoj satnici (30 €/h)**, bez obzira na vrstu posla. Vreme rada obračunava se po satnici koja odgovara prirodi posla iz odluke 409. *Precizira odluku 355.*
+
+411. **Raspoređivanje usluga iz C7 po satnicama.** Čišćenje podataka, IT setup i procesni konsalting obračunavaju se po implementacionoj satnici. Masovne korekcije podataka i posebni izveštaji obračunavaju se po razvojnoj satnici, jer zahtevaju programsku intervenciju. *Precizira C7 u skladu sa 409.*
+
+#### Moduli i instance
+
+412. **Obračunska jedinica modula.** SEF, Banka i Dispatch plaćaju se **jednom po pravnom licu** i važe kroz sve njegove instance. Hladnjača/Proizvodnja plaća se **po proizvodnom pogonu** — svaki pogon koji koristi modul plaća ga. *Precizira 350. Potvrđuje 124, 131, 132 i 135.*
+
+> `REVIEW 27.07.2026.` — poziv na odluku 135 traži proveru. Odluka 135 glasi „moduli se plaćaju jednom po pravnom licu, važe kroz sve instance“, a 412 izuzima Hladnjača/Proizvodnja i naplaćuje ga po pogonu. Odluka 412 time **ograničava** 135, ne potvrđuje je. Napomena: odluka 132 („dodatni pogon: dodatna instanca i dodatni proizvodni dodatak“) već je implicirala isto, pa 412 zapravo razrešava zatečeni sudar 135 protiv 132. Operativni tekst odluke 412 je nedvosmislen i primenjen je kako je napisan; koriguje se samo pozivanje.
+
+413. **Dodatna instanca.** Druga i svaka naredna instanca istog pravnog lica dobija **−50 %** na sve što ta instanca dodatno koristi, uključujući modul Hladnjača/Proizvodnja (**200 € po dodatnom pogonu**). Moduli koji se po odluci 412 plaćaju po pravnom licu ne dupliraju se.
+
+**Osnovica za obračun −50 % je lista cena pojedinačnih stavki koje instanca koristi, nikada bundle cena all-in paketa.**
+
+Broj uključenih aktivnih stanica ostaje pet po pravnom licu i ne uvećava se otvaranjem dodatne instance. *Zamenjuje odluku 133. Precizira 358 i 132.*
+
+#### Formiranje i prikaz cena
+
+414. **Formiranje cene Mobile paketa.** Cena Mobile paketa jednaka je ceni odgovarajućeg Desktop paketa uvećanoj za **fiksni Mobile dodatak od 1.000 €**. Dodatak je isti na baznom i na all-in nivou i ne može biti niži od bazne cene Desktop paketa. *Zamenjuje odluke 126 i 127.*
+
+415. **Formiranje all-in cene.** All-in varijanta paketa jednaka je baznoj ceni uvećanoj za **fiksnu all-in doplatu od 700 €**, istu u oba paketa. Doplata mora ostati niža od zbira liste cena uključenih modula i različita od zbira svakog mogućeg podskupa modula, kako nijedna kombinacija à la carte ne bi koštala isto kao all-in.
+
+**Sastav all-in paketa:** Desktop all-in obuhvata SEF, Banku i Hladnjača/Proizvodnja. Mobile all-in dodatno obuhvata i Dispatch, koji je po odluci 293 dostupan isključivo uz Mobile. Ovaj sastav mora biti izričito naveden u cenovniku i u Prilogu 1 ugovora. *Dopunjuje odluku 349.*
+
+416. **Politika prikaza cena.** Bazne cene paketa objavljuju se kao „od X € godišnje“, gde X obuhvata jedno pravno lice i do pet aktivnih stanica. Cene modula, dodatne stanice, Gazdinstva i Savetnika objavljuju se kao tačni fiksni iznosi. *Zamenjuje odluke 156 i 157. Potvrđuje 158, 159, 297 i 298.*
+
+417. **Prikaz GGAP-a u cenovniku.** GGAP ostaje u cenovniku sa cenom „od 1.000 € godišnje po pravnom licu“, uz **obaveznu vidljivu oznaku „na upit, uz potvrdu obima — nije deo standardne ponude“**. Bez te oznake stavka se ne sme prikazati, jer bi je prodaja mogla kotirati kao redovnu. *Precizira 352 u skladu sa 405.*
+
+#### Popusti
+
+418. **Politika popusta.** Ne postoje pregovarački ni individualni popusti. Cena zavisi isključivo od paketa, broja aktivnih stanica, izabranih modula i broja instanci. Satnice iz odluke 409 su fiksne bez obzira na obim ili trajanje odnosa.
+
+Jedina dozvoljena cenovna razlika unutar istog obima je **−50 % na drugu i svaku narednu instancu istog pravnog lica** (odluka 413).
+
+Cenovne razlike koje su **objavljene u cenovniku** nisu popusti u smislu ove odluke i ostaju na snazi: kanalska cena Gazdinstva (339), all-in bundle doplata (415), Enterprise tarifa Savetnika (419), prvih 50 Basic naloga za partnera (161) i prva godina od produkcijskog puštanja (367, 422).
+
+Prelazne odredbe 151 i 334 nisu popusti nego zaštita zatečene cene i ostaju na snazi.
+
+*Briše C3, 111 i 112. Uklanja oznaku ⚠ sa odluka 30 i 113, koje od sada važe bez izuzetka.*
+
+#### Savetnik
+
+419. **Dve tarife Savetnika.** AgriX Savetnik ima dve objavljene tarife:
+
+| Tarifa | Osnovica (do 10 aktivnih gazdinstava) | Svako gazdinstvo preko 10 |
+|---|---|---|
+| **Standalone** — savetnik bez drugog ugovornog odnosa sa AgriX-om | 150 € | 15 € |
+| **Enterprise** — savetnik ili interna agronomska služba pravnog lica sa aktivnim Enterprise ugovorom | **100 €** | **10 €** |
+
+Enterprise tarifa je uslovljena aktivnim Enterprise ugovorom. Prestankom tog ugovora korisnik prelazi na standalone tarifu pri prvoj narednoj obnovi, bez retroaktivnog obračuna.
+
+Kada su gazdinstva u portfelju već pokrivena partnerskim paketom hladnjače, savetnik plaća samo alat po Enterprise tarifi; Pro pretplate tih gazdinstava se ne plaćaju ponovo.
+
+*Zamenjuje odluku 207. Precizira 215 i 348. Ne dira 340 — gazdinstva koja nisu pokrivena partnerskim paketom i dalje drže sopstveni Pro po kanalskoj ceni.*
+
+420. **Model naplate Savetnika.** Savetnik se naplaćuje kao **osnovica koja uključuje do 10 aktivnih gazdinstava, uvećana za fiksni iznos po svakom aktivnom gazdinstvu preko 10**, prema tarifi iz odluke 419. Aktivno gazdinstvo definisano je odlukom 342. *Zamenjuje odluku 198, koja je opisivala čist obračun po broju gazdinstava bez osnovice.*
+
+#### Zatvaranje preostalih stavki
+
+421. **Cena modula Hladnjača/Proizvodnja.** Fiksna godišnja naknada iznosi **400 € po proizvodnom pogonu**. Uslov standardizacije iz odluke 130 smatra se ispunjenim; cena više nije uslovljena. *Zatvara odluku 130. Potvrđuje 350 i 412.*
+
+422. **Jedno gratis pravilo.** Prva godina besplatnog korišćenja od produkcijskog puštanja (odluka 367) je **jedino** gratis pravilo u modelu. Pogodnost finansijera razvoja iz IP4 je ta ista pogodnost, ne dodatna. Finansijer zadržava prioritet u redosledu razvoja, ali ne dobija drugu besplatnu godinu. *Prepisuje IP4 i uklanja njegovu oznaku ⚠. Potvrđuje 367.*
+
+---
+
 ## 27. Napomena o kontinuitetu numeracije
 
 Stanje numerisanih odluka u repou:
@@ -751,9 +833,12 @@ Stanje numerisanih odluka u repou:
 | 323–378 | uneto (odeljak 25); izvor `09B_ODLUKE_PO_OBLASTIMA.md` |
 | 379–400 | **ne koriste se** — nisu dodeljene |
 | 401–408 | uneto (odeljak 26) |
+| 409–422 | uneto (odeljak 26.1) — cenovna revizija 27.07.2026. |
 
 Uz numerisane odluke važe i serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q i S.
 
 Napomene o izvoru: odluke 323–378 unete su iz tematskog indeksa, koji je sam po sebi sažetak („jedna linija po odluci“). Gde je bio dostupan detaljniji izvor — cenovnik, ugovor, definicija proizvoda ili finansijski model — formulacija je dopunjena i izvor je naveden. Odluka **370** ne postoji u tematskim tabelama indeksa; rekonstruisana je iz tabele razrešenih konflikata (K-14) i člana 8. stav 7. ugovora.
 
-Tematski indeks `09B_ODLUKE_PO_OBLASTIMA.md` još ne obuhvata odluke 401–408.
+Odluke koje su **obrisane** cenovnom revizijom 27.07.2026. (odluka 418) i više se ne vode: **C3**, **111**, **112**. Ne zamenjuju se novim brojem — politika popusta je od tada u odluci 418.
+
+Tematski indeks `09B_ODLUKE_PO_OBLASTIMA.md` verzije 3 obuhvata ceo opseg, zaključno sa 422.

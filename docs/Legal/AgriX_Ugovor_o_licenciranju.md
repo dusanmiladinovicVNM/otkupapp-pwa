@@ -9,7 +9,7 @@ Kad pravnik vrati .docx sa izmenama: prvo `check`, pa izmene preneti ovde.
 # Ugovor o licenciranju softvera — AgriX Enterprise
 
 **Status:** `Draft` — nacrt bez pravnog pregleda (odluka 376)  
-**Poslednja izmena:** 2026-07-27  
+**Poslednja izmena:** 2026-07-27 (cenovna revizija, odluke 409–422)  
 **Deliverable:** `AgriX_Ugovor_o_licenciranju.docx` — radna verzija za pravnika i klijenta  
 **Vezani dokumenti:** `AgriX_Mapa_tokova_podataka.pdf`, `../Sales/AgriX_Cenovnik_2027.pdf`, `../Master Plan/09_QA_DECISION_LOG.md`
 
@@ -241,20 +241,9 @@ Ugovorne strane saglasno konstatuju da je Davalac nosilac svih prava na softvers
 
 (6) Ugovor je sačinjen u dva istovetna primerka, po jedan za svaku ugovornu stranu, i stupa na snagu danom potpisivanja.
 
-<table>
-<colgroup>
-<col style="width: 48%" />
-<col style="width: 51%" />
-</colgroup>
-<tbody>
-<tr class="odd">
-<td><p>__________</p>
-<p>za Davaoca</p></td>
-<td><p>__________</p>
-<p>za Korisnika</p></td>
-</tr>
-</tbody>
-</table>
+| __________ | __________ |
+|------------|------------|
+| za Davaoca | za Korisnika |
 
 ## PRILOG 1 — Specifikacija ugovorenog obima i cena
 
@@ -262,33 +251,52 @@ Ugovorne strane saglasno konstatuju da je Davalac nosilac svih prava na softvers
 
 Cene su iskazane u evrima, na godišnjem nivou, bez poreza na dodatu vrednost.
 
-| **Stavka**                        | **Cena (EUR)** | **Osnov obračuna**              |
-|-----------------------------------|----------------|---------------------------------|
-| AgriX Desktop                     | 500            | godišnje, po pravnom licu       |
-| AgriX Desktop all-in              | 1.100          | godišnje, sa sva tri modula     |
-| AgriX Mobile                      | 1.500          | godišnje, po pravnom licu       |
-| AgriX Mobile all-in               | 2.100          | godišnje, sa sva četiri modula  |
-| Aktivna otkupna stanica preko pet | 50             | godišnje, po stanici            |
-| Modul Hladnjača / Proizvodnja     | 400            | godišnje, po pravnom licu       |
-| Modul SEF                         | 200            | godišnje, po pravnom licu       |
-| Modul Banka                       | 200            | godišnje, po pravnom licu       |
-| Modul Dispatch (samo uz Mobile)   | 200            | godišnje, po pravnom licu       |
-| Modul GGAP                        | od 1.000       | godišnje, po pravnom licu       |
-| Dodatna instanca                  | −50 %          | na stavke koje instanca koristi |
+| **Stavka**                                 | **Cena (EUR)** | **Osnov obračuna**                             |
+|--------------------------------------------|----------------|------------------------------------------------|
+| AgriX Desktop                              | 500            | godišnje, po pravnom licu, do pet stanica      |
+| AgriX Desktop all-in                       | 1.200          | godišnje, sa modulima SEF, Banka i Hladnjača   |
+| AgriX Mobile                               | 1.500          | godišnje, po pravnom licu, do pet stanica      |
+| AgriX Mobile all-in                        | 2.200          | godišnje, sa modulima SEF, Banka, Hladnjača i Dispatch |
+| Aktivna otkupna stanica preko pet          | 50             | godišnje, po stanici                           |
+| Modul Hladnjača / Proizvodnja              | 400            | godišnje, po proizvodnom pogonu                |
+| Modul Hladnjača / Proizvodnja, dodatni pogon | 200          | godišnje, po dodatnom pogonu                   |
+| Modul SEF                                  | 200            | godišnje, po pravnom licu                      |
+| Modul Banka                                | 200            | godišnje, po pravnom licu                      |
+| Modul Dispatch (samo uz Mobile)            | 200            | godišnje, po pravnom licu                      |
+| Modul GGAP                                 | od 1.000       | godišnje, po pravnom licu; na upit, uz potvrdu obima |
+| Dodatna instanca                           | −50 %          | na listu cena stavki koje ta instanca dodatno koristi |
+
+**Sastav all-in paketa.** Desktop all-in obuhvata module SEF, Banka i Hladnjača/Proizvodnja. Mobile all-in dodatno obuhvata i Dispatch. **Desktop all-in ne sadrži Dispatch**, koji je dostupan isključivo uz Mobile paket.
+
+**Obračunska jedinica modula.** SEF, Banka i Dispatch plaćaju se jednom po pravnom licu i važe kroz sve njegove instance. Hladnjača/Proizvodnja plaća se po proizvodnom pogonu.
+
+**Popusti.** Ne postoje pregovarački ni individualni popusti. Cena zavisi isključivo od paketa, broja aktivnih stanica, izabranih modula i broja instanci. Jedina cenovna razlika unutar istog obima je umanjenje od 50 % na drugu i svaku narednu instancu istog pravnog lica.
 
 **2. Usluge koje se naplaćuju posebno**
+
+Postoje dve standardne satnice. Satnica se određuje prema prirodi posla, ne prema mestu izvođenja.
 
 | **Usluga**                        | **Cena (EUR)**   | **Osnov obračuna**                       |
 |-----------------------------------|------------------|------------------------------------------|
 | Instalacija i povezivanje sistema | uključeno        | jednokratno                              |
 | Implementaciona obuka             | 5 sati uključeno | jednokratno                              |
-| Dodatna obuka                     | 30               | po satu                                  |
-| Razvoj po zahtevu Korisnika       | 50               | po satu                                  |
-| Složena migracija podataka        | 50               | po satu                                  |
-| Izlazak na lokaciju               | 50 + troškovi    | po izlasku, uvećano za vreme puta i rada |
-| Hardverska podrška                | 40               | godišnje po stanici, min. 200            |
+| Razvojna satnica                  | 50               | po satu — razvoj po zahtevu, složena migracija, novi adapteri, posebni izveštaji, masovne korekcije podataka |
+| Implementaciona satnica           | 30               | po satu — obuka preko pet uključenih sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji |
+| Izlazak na lokaciju               | 50 + troškovi    | po izlasku, uvećano za gorivo, vreme puta i vreme rada |
+| Hardverska podrška                | 40               | godišnje po stanici, min. 200 po pravnom licu |
 
-**3. Ugovoreni obim za Korisnika**
+**Obračun izlaska na lokaciju.** Vreme puta obračunava se uvek po implementacionoj satnici. Vreme rada obračunava se po satnici koja odgovara prirodi posla.
+
+**3. Tarife za AgriX Savetnik**
+
+| **Tarifa**                                                | **Osnovica (do 10 aktivnih gazdinstava)** | **Svako gazdinstvo preko 10** |
+|-----------------------------------------------------------|-------------------------------------------|-------------------------------|
+| Standalone — bez drugog ugovornog odnosa sa Davaocem      | 150                                       | 15                            |
+| Enterprise — uz aktivan ugovor za AgriX Enterprise        | 100                                       | 10                            |
+
+Enterprise tarifa uslovljena je aktivnim ugovorom za AgriX Enterprise. Prestankom tog ugovora Korisnik prelazi na standalone tarifu pri prvoj narednoj obnovi, bez retroaktivnog obračuna.
+
+**4. Ugovoreni obim za Korisnika**
 
 Paket: __________
 
@@ -428,8 +436,13 @@ Ova tabela **nije deo ugovora** i ne prenosi se u `.docx`. Služi da se svaka ug
 | 13(2) | Klijent kontroliše dokumenta koja izdaje | 327 |
 | 13(3)–13(5) | Odgovornost ograničena na 12 meseci plaćanja | LEG4 |
 | 15(4) | Nadležnost suda u Nišu — sedište AgriX-a je Merošina | — |
-| Prilog 1 | Cene paketa, modula, stanica, instance i usluga | 339, 349–355, 357, 358 |
-| Prilog 2 | Kanali, radno vreme, prozor za rok od jednog sata | 53, 332, 359, 378, C7 |
+| Prilog 1 — sastav all-in | Desktop all-in bez Dispatch-a; Mobile all-in sa Dispatch-om | 293, 415 |
+| Prilog 1 — obračunska jedinica | SEF/Banka/Dispatch po pravnom licu, Hladnjača po pogonu | 412, 421 |
+| Prilog 1 — popusti | nema pregovaračkih popusta; samo −50 % na dodatnu instancu | 413, 418 |
+| Prilog 1 — satnice | razvojna 50 €/h, implementaciona 30 €/h, vreme puta po 30 €/h | 409, 410, 411 |
+| Prilog 1 — Savetnik | standalone 150/15, Enterprise 100/10 | 419, 420 |
+| Prilog 1 | Cene paketa, modula, stanica, instance i usluga | 339, 349–355, 357, 358, 409–422 |
+| Prilog 2 | Kanali, radno vreme, prozor za rok od jednog sata | 53, 332, 359, 378, 411, C7 |
 | Prilog 3 | Obrada podataka o ličnosti — **nedovršen** | 364, 373, S1–S5, LEG1, LEG2 |
 
 ### Sinhronizacija cena

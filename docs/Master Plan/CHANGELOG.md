@@ -1,5 +1,44 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-27 (3) — cenovna revizija, odluke 409–422
+
+### Added
+
+- **odluke 409–422** u `09_QA_DECISION_LOG.md` §26.1: dve satnice, obračunska jedinica modula, dodatna instanca, formiranje i prikaz cena, politika popusta, tarife Savetnika;
+- odeljak „Satnice“ u `07_PRODUCT_PORTFOLIO.md` §10;
+- Prilog 1 ugovora: sastav all-in paketa, obračunska jedinica modula, dve satnice, tarife Savetnika, klauzula o popustima;
+- u `AgriX_Sablon_ponude.xlsx` list `Cenovnik`: dodatni pogon, Gazdinstvo Basic kanalska, četiri reda tarifa Savetnika;
+- u `AgriX_Finansijski_model.xlsx`: sekcija G i dva prihodna reda na listu `Prihod`.
+
+### Changed
+
+- **cene all-in paketa:** Desktop all-in 1.100 → **1.200 €**, Mobile all-in 2.100 → **2.200 €**. Struktura je sada aditivna: Mobile dodatak +1.000 €, all-in doplata +700 €, oba fiksna na oba nivoa;
+- odluka 349 prepravljena na mestu, bez novog broja;
+- satnice preimenovane u **razvojnu (50 €/h)** i **implementacionu (30 €/h)**; biraju se po prirodi posla, ne po mestu izvođenja;
+- **Hladnjača/Proizvodnja se plaća po proizvodnom pogonu**, ne po pravnom licu; dodatni pogon 200 €;
+- GGAP se u cenovniku sme prikazati samo uz oznaku „na upit, uz potvrdu obima — nije deo standardne ponude“;
+- Savetnik dobija drugu, Enterprise tarifu 100 € / 10 €;
+- `09B_ODLUKE_PO_OBLASTIMA.md` regenerisan na **verziju 3** — obuhvata 1–321, 323–378 i 401–422, uklonjena oznaka „zastarelo“, dopunjena odluka 370 koje ranije nije bilo u indeksu.
+
+### Superseded / Deleted
+
+- `Deleted` odlukom 418: **C3**, **111**, **112** — pregovaračkih i individualnih popusta nema;
+- `Superseded`: 110 → 409 · 126 i 127 → 414 · 133 → 413 · 156 i 157 → 416 · 198 → 420 · 207 → 419;
+- `Closed`: 130 → 421 · `Rewritten`: IP4 → 422.
+
+### Resolved
+
+- cena po gazdinstvu kod Savetnika (341) — potvrđena, 150 € / 15 €;
+- neusaglašenost indeksa 09B sa logom.
+
+### Open
+
+- ugovor je nacrt bez pravnog pregleda (376); Prilog 3 nije dovršen (LEG1);
+- spisak podobrađivača i lokacija obrade (373);
+- **`AgriX_Cenovnik_2027.pdf` nije izmenjen** — nema izvornog fajla u repou iz koga se generiše;
+- dve pretpostavke u finansijskom modelu namerno ostavljene na 0 (broj Savetnik licenci i dodatnih pogona po klijentu), pa ARR ostaje nepromenjen dok se ne popune;
+- Desktop all-in štedi klijentu samo 100 € — slaba bundle poruka, komercijalno pitanje.
+
 ## 2026-07-27 (2) — odluke 323–378, cenovnik, ugovor i razrešenja
 
 > Ovaj unos ispravlja i dopunjuje unos `2026-07-27 (1)` niže. Gde se razlikuju, važi ovaj.

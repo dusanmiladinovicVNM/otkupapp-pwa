@@ -27,7 +27,7 @@ Menjaš uslove → menjaš `.md`, pa `build`. Pravnik vrati izmenjen `.docx` →
 - **Prilog 3 nije dovršen** — uloge rukovaoca i obrađivača utvrđuju se tek posle mape tokova i pravne analize (LEG1). U dokumentu stoji izričita napomena da se u ovom obliku ne potpisuje;
 - **popunjeno 27.07.2026.:** vremenski prozor za rok reakcije od jednog sata (odluka 359, Prilog 2) — tokom sezone svakog dana 08.00–20.00, van sezone radnim danima 08.00–16.00; mesto nadležnog suda (član 15) — **Niš**, jer je sedište AgriX-a Merošina;
 - **i dalje nepopunjeno:** spisak drugih obrađivača i lokacija obrade (Prilog 3, odluka 373);
-- cene u Prilogu 1 preuzete su iz odluka 349–357 i moraju ostati identične sa `docs/Sales/AgriX_Cenovnik_2027.pdf`; hardverska podrška (odluka 357) potvrđena je 27.07.2026.
+- cene u Prilogu 1 preuzete su iz odluka 349–357 i **409–422** i moraju ostati identične sa `docs/Sales/AgriX_Cenovnik_2027.pdf`; hardverska podrška (odluka 357) potvrđena je 27.07.2026.
 
 Popunjeni i potpisani ugovori sa podacima klijenta ne commit-uju se u repozitorijum — ovde ostaje samo prazan nacrt.
 

@@ -59,7 +59,7 @@ AgriX ima tri proizvodna stuba (odluke 269 i 401):
 
 **GGAP nije stub.** GGAP je modul u okviru Enterprise-a; kupuju ga isključivo hladnjače koje su već Enterprise klijenti, a aktivacija otključava dodatne GGAP funkcije u Gazdinstvu njihovih kooperanata (odluka 402, PRT4). Ranija odluka STR-012 time je ukinuta.
 
-Moduli uz Enterprise: Hladnjača/Proizvodnja, SEF, Banka, Dispatch (samo uz Mobile) i GGAP.
+Moduli uz Enterprise: Hladnjača/Proizvodnja, SEF, Banka, Dispatch (samo uz Mobile) i GGAP. Obračunska jedinica nije ista za sve — SEF, Banka i Dispatch plaćaju se jednom po pravnom licu i važe kroz sve instance, dok se **Hladnjača/Proizvodnja plaća po proizvodnom pogonu** (odluke 412, 421).
 
 Zajednički tehnički sloj je **AgriX Platform Services**.
 
@@ -284,11 +284,20 @@ Treći stub (odluke 269, 401, PRT3). Upravljački sloj nad većim brojem gazdins
 | Dokaz | `Unvalidated` |
 | Komercijalno | cena objavljena u `Cenovnik 2027` (odluke 341, 347); javna ponuda kreće kada proizvod bude stabilan (odluka 217) |
 
-Komercijalni model je dvostruk: savetnik plaća alat — osnovica **150 €** godišnje za do 10 gazdinstava, svako preko toga **15 €** — a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni od 20 € (odluke 340, 341, 339). Savetnik ne dobija proviziju za gazdinstva u portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Provizija po odluci 221 ostaje samo za preporuke van portfelja.
+Komercijalni model je dvostruk: savetnik plaća alat, a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni od 20 € (odluke 340, 339). Postoje **dve objavljene tarife** (odluka 419):
 
-Aktivno gazdinstvo je ono kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku (odluka 342). Proba obuhvata i Pro za do 10 gazdinstava (odluka 346). Interne agronomske službe plaćaju samo alat kada su njihovi kooperanti već pokriveni partnerskim paketom (odluka 348).
+| Tarifa | Osnovica (do 10 aktivnih gazdinstava) | Svako preko 10 |
+|---|---:|---:|
+| Standalone — bez drugog ugovornog odnosa sa AgriX-om | 150 € | 15 € |
+| Enterprise — uz aktivan Enterprise ugovor pravnog lica | 100 € | 10 € |
 
-Zavisnosti pre izlaska na tržište: samostalna registracija i politika privatnosti, i pravna ocena toka T13 (LEG1). `OPEN`: cena po gazdinstvu (15 €) čeka potvrdu.
+Enterprise tarifa traje dok traje Enterprise ugovor; prestankom se prelazi na standalone pri prvoj narednoj obnovi, bez retroaktivnog obračuna. Model naplate je osnovica plus fiksni iznos po aktivnom gazdinstvu preko deset (odluka 420).
+
+Savetnik ne dobija proviziju za gazdinstva u portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Provizija po odluci 221 ostaje samo za preporuke van portfelja.
+
+Aktivno gazdinstvo je ono kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku (odluka 342). Proba obuhvata i Pro za do 10 gazdinstava (odluka 346). Kada su gazdinstva u portfelju već pokrivena partnerskim paketom hladnjače, savetnik plaća samo alat po Enterprise tarifi i Pro pretplate se ne plaćaju ponovo (odluke 348, 419).
+
+Zavisnosti pre izlaska na tržište: samostalna registracija i politika privatnosti, i pravna ocena toka T13 (LEG1).
 
 `UNKNOWN`: packaging i cena su zaključani, ali product strategy trećeg stuba još nije napisana — funkcionalni obim ovog odeljka je okvir, ne specifikacija.
 
@@ -312,7 +321,9 @@ GGAP koristi Enterprise i Gazdinstvo podatke za:
 | Dokaz | `Unvalidated` |
 | Komercijalno | `Not for sale` — van komercijalne ponude do validacije (odluka 405); samo kontrolisan discovery/pilot |
 
-Posledice statusa modula: GGAP nema sopstveni ICP, packaging ni unit economics — vodi se unutar Enterprise ekonomike. Cena „od 1.000 €“ (odluka 352) ostaje referentna za pilot uz potvrdu obima, ne za redovnu ponudu.
+Posledice statusa modula: GGAP nema sopstveni ICP, packaging ni unit economics — vodi se unutar Enterprise ekonomike. Cena „od 1.000 € godišnje po pravnom licu“ (odluka 352) ostaje referentna za pilot uz potvrdu obima, ne za redovnu ponudu.
+
+`DECISION` (odluka 417): kad god se GGAP prikaže u cenovniku, uz njega **mora** stajati vidljiva oznaka **„na upit, uz potvrdu obima — nije deo standardne ponude“**. Bez te oznake stavka se ne sme prikazati, jer bi je prodaja mogla kotirati kao redovnu.
 
 AgriX ne garantuje sertifikaciju i ne zamenjuje auditora ili konsultanta.
 
@@ -337,6 +348,19 @@ AgriX ne garantuje sertifikaciju i ne zamenjuje auditora ili konsultanta.
 - posebni reusable izveštaji;
 - nova vaga/printer integracija;
 - hardverska instalacija i remote management.
+
+### Satnice
+
+Postoje tačno **dve** standardne satnice, i biraju se prema **prirodi posla, ne prema mestu izvođenja** (odluka 409):
+
+| Satnica | Iznos | Obuhvata |
+|---|---:|---|
+| Razvojna | 50 €/h | razvoj po zahtevu, složena migracija, novi adapteri, posebni izveštaji, masovne korekcije podataka |
+| Implementaciona | 30 €/h | obuka preko uključenih pet sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji |
+
+Izlazak na teren je 50 € po izlasku, uvećano za gorivo, vreme puta i vreme rada; **vreme puta se uvek obračunava po implementacionoj satnici**, a vreme rada po prirodi posla (odluka 410). Usluge iz C7 raspoređene su po satnicama odlukom 411.
+
+Satnice su fiksne i nepregovaračke. Pregovaračkih i individualnih popusta nema (odluka 418) — jedina cenovna razlika unutar istog obima je −50 % na drugu i svaku narednu instancu (odluka 413).
 
 Trajni klijentski fork nije dozvoljen.
 
