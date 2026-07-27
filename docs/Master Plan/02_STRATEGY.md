@@ -66,7 +66,7 @@ GGAP kao modul znači:
 - kupac GGAP-a je uvek postojeći Enterprise klijent — GGAP se ne prodaje samostalno i nema sopstveni ICP;
 - GGAP nema sopstveni stub-level product strategy, packaging ni unit economics; vodi se kao modul u Enterprise ekonomici;
 - aktivacija modula otvara dodatne GGAP funkcije u Gazdinstvu kooperanata te hladnjače;
-- do validacije GGAP ostaje **van komercijalne ponude** i nudi se samo kroz kontrolisan pilot (odluka 405).
+- do validacije GGAP ostaje **van komercijalne ponude** i nudi se samo kroz kontrolisan pilot (odluka 405). Kad god se prikaže u cenovniku, uz cenu „od 1.000 €“ mora stajati vidljiva oznaka „na upit, uz potvrdu obima — nije deo standardne ponude“ (odluka 417).
 
 Detaljan funkcionalni obuhvat GGAP-a ostaje u `02A_GGAP_STRATEGY.md`, koji se od odluke 402 čita kao strategija modula, ne stuba.
 
@@ -101,7 +101,7 @@ Glavni domeni:
 4. agronomska istorija po gazdinstvu, parceli i kulturi;
 5. veza ka Gazdinstvo podacima uz saglasnost nosioca.
 
-Komercijalni model je dvostruk: savetnik plaća alat — osnovica 150 € za do 10 gazdinstava, svako preko toga 15 € (odluka 341) — a gazdinstva u njegovom portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni (odluka 340). Savetnik ne dobija proviziju za naloge u portfelju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Cena se objavljuje (odluka 347) i nalazi se u `docs/Sales/AgriX_Cenovnik_2027.pdf`.
+Komercijalni model je dvostruk: savetnik plaća alat, a gazdinstva u njegovom portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni (odluka 340). Postoje dve objavljene tarife (odluka 419): **standalone** 150 € osnovice za do 10 gazdinstava i 15 € po svakom preko toga, i **Enterprise** 100 € odnosno 10 € za savetnike i interne agronomske službe pravnog lica sa aktivnim Enterprise ugovorom. Savetnik ne dobija proviziju za naloge u portfelju — podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Cena se objavljuje (odluka 347) i nalazi se u `docs/Sales/AgriX_Cenovnik_2027.pdf`.
 
 Savetnik ima samostalnu registraciju i ne može javno na tržište bez sopstvene politike privatnosti; uloga rukovaoca za tok T13 ostaje otvorena do razrešenja LEG1 (`docs/Legal/AgriX_Mapa_tokova_podataka.pdf`).
 

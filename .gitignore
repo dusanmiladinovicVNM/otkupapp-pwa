@@ -4,3 +4,6 @@
 
 # Local VBA export/debug artifacts
 src-vba/*.log
+
+# Generisani izlaz iz tools/ugovor.sh build
+docs/Legal/build/
