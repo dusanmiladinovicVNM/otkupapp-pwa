@@ -2,7 +2,8 @@
 
 **Datum sesije:** 24.07.2026.  
 **Status:** radni strateški zapis  
-**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesije 1–260.
+**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesija — numerisane odluke 1–321, 323–378 i 401–408, uz serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q, S. Brojevi 322 i 379–400 se ne koriste; videti odeljak 27.  
+**Tematski indeks:** `09B_ODLUKE_PO_OBLASTIMA.md`
 
 > Ovaj dokument čuva kompletan suštinski sadržaj sesije. Pomoćne formulacije asistenta koje nisu menjale odluke nisu prenete. Kada je kasnija odluka ispravila raniju, važi kasnija formulacija i to je izričito označeno.
 
@@ -601,3 +602,158 @@ LEG3. **Korišćenje anonimizovanih podataka za agregate i ML.** Anonimizovani p
 LEG4. **Ograničenje odgovornosti.** Ukupna ugovorna odgovornost AgriX-a prema konkretnom klijentu ograničava se na iznos koji je taj klijent platio AgriX-u tokom prethodnih 12 meseci, uz izuzetke i ograničenja koja se po zakonu ne mogu ugovorom isključiti.
 
 LEG5. **Obaveštavanje o bezbednosnom incidentu.** Klijenti se obaveštavaju bez nepotrebnog odlaganja, u zavisnosti od ozbiljnosti incidenta i potvrđenog uticaja na njihove podatke ili poslovanje. Ne propisuje se jedinstven fiksni rok za sve vrste incidenata.
+
+---
+
+## 25. Dopuna sesije 26.07.2026. — odluke 323–378
+
+**Datum dopune:** 26.07.2026.  
+**Obuhvat:** cene i obračun, ugovor i obnova, podrška, onboarding, Gazdinstvo, Savetnik, tržišni cilj, bezbednost i razrešenje četrnaest konflikata iz arhitektonskog audita.  
+**Izvor:** `09B_ODLUKE_PO_OBLASTIMA.md` (tematski indeks, verzija 2), uz detalje iz `docs/Sales/AgriX_Cenovnik_2027.pdf`, `docs/Legal/AgriX_Ugovor_o_licenciranju.docx`, `docs/Product/AgriX_Definicija_proizvoda.pdf` i `docs/Finance/AgriX_Finansijski_model.xlsx`.
+
+> Numeracija 323–378 nastavlja niz posle 321; broj **322 se ne koristi**. Gde odluka menja raniju, to je izričito označeno.
+
+### 25.1 Cene i obračun
+
+323. **Aktivna otkupna stanica.** Aktivnom stanicom smatra se svaka stanica na kojoj je u toku ugovorne godine evidentiran najmanje jedan otkupni blok.
+324. **Prijava i usklađenje broja stanica.** Stanice se prijavljuju unapred; stvarni broj se utvrđuje po završetku sezone i usklađuje prilikom obnove, bez povraćaja. Menja odluku 120.
+325. **Bez plaćanja usred sezone.** Ugovori se sklapaju i naknada plaća pre početka sezone, nikada tokom nje.
+326. **Jedinstveni predsezonski datum obnove.** Datum obnove se usklađuje tako da uvek pada pre početka sezone; prvi ugovorni period je srazmeran. Zamenjuje odluku 114.
+329. **Valuta i kurs.** Cene su u EUR; plaćanje je u dinarima po srednjem kursu Narodne banke Srbije na dan uplate. Cene ne sadrže PDV.
+334. **Zaštita cene postojećih klijenata.** Postojeći klijenti zadržavaju svoje cene za ovu sezonu.
+337. **Smanjenje broja stanica.** Smanjenje broja stanica u toku ugovorne godine ne menja cenu ako je stanica u toj godini bila aktivna.
+349. **Cene paketa.** AgriX Desktop 500 €, Desktop all-in 1.100 €, AgriX Mobile 1.500 €, Mobile all-in 2.100 € — godišnje, po pravnom licu, do pet aktivnih stanica.
+350. **Cene modula.** SEF, Banka i Dispatch po 200 €; Hladnjača/Proizvodnja 400 € — godišnje, po pravnom licu.
+351. **Cena dodatne stanice.** Svaka aktivna stanica preko pet — 50 € godišnje. Ista cena u oba paketa (potvrđuje odluku 123).
+352. **Cena GGAP modula.** Od 1.000 € godišnje po pravnom licu; jedna cena pokriva sve GGAP kooperante tog lica.
+353. **Satnica za razvoj i migraciju.** 50 € po satu za razvoj po zahtevu i složenu migraciju podataka.
+354. **Obuka.** Pet sati implementacione obuke uključeno u onboarding; preko toga 30 € po satu.
+355. **Izlazak na teren.** 50 € po izlasku, uvećano za gorivo, vreme puta i vreme rada na lokaciji.
+356. **Marža na hardver.** Hardver se prodaje sa oko 100 € marže po stanici.
+357. **Hardverska podrška.** 40 € po stanici godišnje, minimum 200 € po pravnom licu. `DECISION` — potvrđeno 27.07.2026. Ne pokriva fizička oštećenja, potrošni materijal ni opremu nabavljenu van AgriX-a.
+358. **Dodatna instanca.** Druga instanca dobija −50 % na sve što ta instanca dodatno koristi. Moduli koji se po odluci 135 plaćaju jednom po pravnom licu ne dupliraju se.
+367. **Jedno gratis pravilo.** Postoji samo jedan gratis period: prva godina od produkcijskog puštanja funkcionalnosti. Zamenjuje odluke 144 i 149; usklađuje IP4. Razrešava konflikt K-05.
+368. **Granica besplatnog uvođenja modula.** Softverski modul i njegova konfiguracija su besplatni; fizički rad na lokaciji i puštanje opreme u rad se naplaćuju. Razrešava konflikt K-04 (odluka 68 protiv odluke 245).
+
+### 25.2 Ugovor, obnova i raskid
+
+338. **Kašnjenje krivicom klijenta.** Kada uvođenje kasni iz razloga na strani klijenta, neiskorišćeni deo perioda prenosi se **jednokratno** u narednu ugovornu godinu. Dopunjuje C6.
+361. **Read-only režim posle isteka.** Režim pregleda i izvoza bez unosa je razvojni prioritet sa rokom pre 1. juna 2027. Do isporuke se u ugovoru tretira kao postojeći. Razrešava konflikt K-03 (odluka 117 protiv stvarnog `LicenseBlock` ponašanja).
+376. **Izrada ugovora.** Nacrt ugovora piše osnivač; pravnik radi pregled gotovog nacrta, ne izradu od nule.
+
+### 25.3 Podrška i SLA
+
+327. **Kontrola dokumenata.** Klijent je dužan da kontroliše sadržaj dokumenata koje izdaje; AgriX ispravlja potvrđen bug u najkraćem roku i ne odgovara za posledice izostale kontrole.
+331. **Definicija sezone.** Sezona se definiše jedinstveno na nivou AgriX-a, ne po klijentu. Zamenjuje odluku 56.
+332. **Vikend podrška u sezoni.** Tokom sezone vikend podrška postoji **samo za kritične incidente**. Zamenjuje odluke 54 i 57.
+359. **Rok reakcije od jednog sata.** Rok od jednog sata za kritične incidente važi unutar definisanog proširenog vremenskog prozora; van njega je best effort. Menja odluku 50 i razrešava konflikt K-01.
+
+> **Prozor utvrđen 27.07.2026.:** tokom sezone (1. jun — 30. novembar) **svakog dana od 08.00 do 20.00** časova, uključujući vikend; van sezone **radnim danima od 08.00 do 16.00** časova. Upisano u Prilog 2 ugovora. Usklađeno sa odlukama 332 (vikend podrška u sezoni samo za kritične incidente) i 378 (trajanje sezone). Van prozora važi best effort, bez ugovorenog roka.
+378. **Trajanje sezone.** Sezona traje od 1. juna do 30. novembra. Precizira odluku 331.
+
+### 25.4 Onboarding i implementacija
+
+362. **Modul i obuka.** Uvođenje modula postojećem klijentu je besplatno uz uključenu obuku; preko toga se naplaćuje. Razrešava konflikt K-12 (odluka 245 protiv ON2). **Precizirano 27.07.2026.:** uključeno je **pet sati ukupno**, i za početni onboarding i za uvođenje modula; preko toga 30 € po satu. Time je odluka 362 usklađena sa odlukama 354 i 365 i nema odvojene kvote sati po modulu.
+363. **Skraćeni sign-off.** Za predsezonski start potvrda iz ON3 može se dati u skraćenom obliku, uz izričito prihvatanje rizika od strane klijenta; tada se pre produkcijskog starta ne izvodi razvoj po zahtevu. Razrešava konflikt K-13.
+365. **Fiksni uključeni obim.** U cenu je uključeno: instalacija, povezivanje svih komponenti i pet sati obuke. Sve preko toga se naplaćuje. Razrešava konflikt K-11 (C2 protiv odluke 35).
+
+### 25.5 Prodaja i marketing
+
+371. **Trial.** Trial režim postoji i dolazi **posle** vođene demonstracije i kvalifikacije, ne umesto njih. Razrešava konflikt K-09 (C1 protiv odluke 255).
+374. **Gate za marketing budžet.** Uvode se tri nivoa potrošnje; svaki ima dvostruki uslov — kanal dokazano konvertuje **i** postoji kapacitet za isporuku — uz pravilo povratka na niži nivo kada uslov prestane da važi. Operacionalizuje MKT4.
+377. **Referral provizije.** Nema referral provizija, osim u slučaju Savetnika.
+333. **Bez ekskluzivnosti.** Ne ugovara se teritorijalna ni segmentna ekskluzivnost; direktni konkurenti mogu istovremeno biti klijenti.
+
+### 25.6 Tržišni cilj
+
+375. **Scenario rasta C.** Izabran je scenario C. **Precizirano 27.07.2026.: planska vrednost je 14 novih Enterprise klijenata do sezone 2027, ukupno 17 aktivnih firmi.** Raniji zapis kao raspona (12–15 novih, 15–18 ukupno) zamenjen je jednom vrednošću, saglasno finansijskom modelu. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027).
+
+> Merodavan izvor je `docs/Finance/AgriX_Finansijski_model.xlsx`, list `Pretpostavke`, red 42. Isti broj mora stajati u `02_STRATEGY.md` §9 i `04_MARKET.md` §9.1. Kolona od 18 klijenata na listu `Kapacitet` je **stress-test scenario**, ne cilj — služi da pokaže kada osnivač postaje usko grlo, i zadržava se kao takva.
+
+### 25.7 AgriX Gazdinstvo
+
+339. **Kanalska cena.** Jedinstvena kanalska cena za sve partnerski posredovane naloge: **10 € Basic, 20 € Pro**. Maloprodajna cena ostaje 19 € Basic i 39 € Pro. Prvih 50 Basic naloga partner dobija bez naknade (odluka 161).
+343. **Jedan Pro po proizvođaču.** Proizvođač ima jedan Pro nalog — ko ga prvi aktivira, taj ga plaća; druga strana ne plaća ponovo.
+369. **Povlačenje saglasnosti.** Povlačenje saglasnosti proizvođača deluje samo ubuduće; već izdati dokumenti ostaju nepromenjeni. Dopunjuje odluku 189.
+
+### 25.8 AgriX Savetnik
+
+340. **Gazdinstva nisu uključena u cenu.** Gazdinstva u portfelju savetnika nisu uključena u cenu Savetnika; svako drži sopstvenu Pro pretplatu po kanalskoj ceni. Zamenjuje odluku 200.
+341. **Cena Savetnika.** Osnovica 150 € godišnje, uključeno do 10 gazdinstava; svako gazdinstvo preko 10 — 15 €. `OPEN`: cena po gazdinstvu čeka potvrdu.
+342. **Aktivno gazdinstvo.** Aktivnim se smatra gazdinstvo kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku.
+344. **Savetnik kao platilac.** Savetnik može platiti Pro u ime proizvođača i ugraditi to u svoju naknadu — posrednička uloga u skladu sa MKT3.
+345. **Bez cashbacka u portfelju.** Nema provizije ni cashbacka za gazdinstva u sopstvenom portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše. Odluka 221 ostaje samo za preporuke van portfelja.
+346. **Proba Savetnika.** Probni period obuhvata i Pro za do 10 gazdinstava. Dopunjuje odluku 209.
+347. **Objavljivanje cene.** Cena Savetnika se objavljuje — osnovica i cena po gazdinstvu. Zamenjuje odluku 225.
+348. **Interne agronomske službe.** Interne agronomske službe plaćaju samo alat kada su njihovi kooperanti već pokriveni partnerskim paketom.
+
+### 25.9 Podaci, bezbednost i platforma
+
+330. **Hosting.** Hosting van Google infrastrukture nije u ponudi do 2028.
+364. **Anonimizovani podaci.** Nepovratno anonimizovani podaci ne traže posebnu saglasnost; upotreba se transparentno navodi u ugovoru. Revidira LEG3 i razrešava konflikt K-10.
+370. **Restore i brisanje.** Ako se rezervna kopija privremeno vrati u upotrebu, izvršena brisanja se ponovo primenjuju i o tome se sačinjava zabeleška. Razrešava konflikt K-14 uz LEG2.
+372. **Numeracija dokumenata.** Prelazak privremenog broja u konačan rešen je u kodu; pravilo treba zapisati u dokumentaciju. Dopunjuje odluku 88, razrešava konflikt K-02.
+373. **Podobrađivači.** Jedini podobrađivač je Google. `OPEN`: lokaciju obrade podataka treba verifikovati u Workspace konzoli i zapisati.
+366. **Sheets kao backend.** Google Sheets ostaje PWA backend dok se ne dostignu pragovi iz P1. Preformuliše odluku 90 i razrešava konflikt K-07.
+
+### 25.10 Razvoj, release i organizacija
+
+328. **Zakonske izmene.** Prilagođavanje izmenama propisa AgriX radi o svom trošku, nezavisno od broja pogođenih klijenata. Ograničava odluku 24.
+360. **Emergency release gate.** Tokom incidenta važi smanjen obavezan skup provera; puna validacija i dokumentacija obavljaju se u roku od 24 sata po stabilizaciji. Menja Q4 i razrešava konflikt K-08.
+335. **Odgovor na pitanje kontinuiteta.** Usvojen je standardni odgovor na prodajno pitanje „šta ako vas sutra nema“: podaci su klijentovi i izvoze se u standardnom formatu; Desktop radi lokalno do isteka licence; uvođenje druge tehnički ovlašćene osobe je ugovorna obaveza.
+336. **BC3 kao ugovorna obaveza.** Uvođenje druge tehnički ovlašćene osobe najkasnije pri 15–20 aktivnih firmi postaje ugovorna obaveza, ne interni cilj.
+
+### 25.11 Otvorene stavke iz ove dopune
+
+Stanje na dan 27.07.2026.
+
+| # | Stavka | Vezano za | Status |
+|---|---|---|---|
+| 1 | Pravni pregled ugovora nije obavljen | 376 | otvoreno |
+| 2 | Prilog 3 ugovora nije dovršen — čeka mapu tokova i LEG1 | LEG1 | otvoreno |
+| 3 | Vremenski prozor za rok od jednog sata | 359 | **zatvoreno 27.07.** — sezona 08–20 svakog dana, van sezone 08–16 radnim danima; upisano u Prilog 2 |
+| 4 | Mesto nadležnog suda u ugovoru nije popunjeno | član 15 | otvoreno |
+| 5 | Cena po gazdinstvu kod Savetnika čeka potvrdu | 341 | otvoreno |
+| 6 | Hardverska podrška 40 €/stanici | 357 | **zatvoreno 27.07.** — potvrđeno kako stoji u cenovniku i Prilogu 1 |
+| 7 | Lokacija podataka u Google Workspace konzoli nije verifikovana | 373 | otvoreno |
+| 8 | Redosled post-2027 inicijativa svesno otvoren | 231 | otvoreno svesno |
+| 9 | Vertikalni paketi protiv odluke 59 — odloženo do prve vertikale | K-06 | odloženo |
+| 10 | Broj uključenih sati obuke u 362 | 362 | **zatvoreno 27.07.** — pet sati ukupno, isto kao 354 i 365 |
+| 11 | Raspon protiv tačke u cilju rasta | 375 | **zatvoreno 27.07.** — merodavno je 14 novih / 17 ukupno |
+| 12 | `09B_ODLUKE_PO_OBLASTIMA.md` ne obuhvata odluke 401–408 | — | otvoreno |
+
+---
+
+## 26. Odluke 401–408 — portfolio, rast i cene
+
+**Datum dopune:** 27.07.2026.  
+**Obuhvat:** treći proizvodni stub, status GGAP-a, model rasta, komercijalna spremnost Gazdinstva, cena po stanici, hardverska marža i redosled cena i unit economics-a.
+
+401. **Savetnik je treći stub.** AgriX Savetnik je treći ravnopravan proizvodni stub uz Enterprise i Gazdinstvo. Potvrđuje odluku 269 (krovni brend sa tri proizvoda) i koriguje ranije formulacije u `02_STRATEGY.md` i `07_PRODUCT_PORTFOLIO.md`, gde je treći stub bio GGAP.
+402. **GGAP je modul, ne stub.** GGAP je modul u okviru AgriX Enterprise-a i koriste ga isključivo hladnjače koje su već Enterprise klijenti. Aktivacija modula otključava dodatne funkcije u Gazdinstvu (PRT4). Ovom odlukom se **ukida STR-012** (GGAP kao treći proizvodni stub).
+403. **Fiksan ciljni broj klijenata.** Rast se planira prema fiksnom ciljnom broju klijenata, ne prema readiness cap-u. Ovom odlukom se **povlači STR-001** (sezonski cap određuje readiness score). Readiness ostaje operativni preduslov kvaliteta isporuke i može zaustaviti pojedinačan onboarding, ali više ne određuje ciljni broj. Aktuelan cilj je scenario C iz odluke 375.
+404. **Gazdinstvo je launch ready.** Gazdinstvo prelazi iz statusa `Pilot only` u `Standard offer`. Menja status iz `07_PRODUCT_PORTFOLIO.md` §8 i §11.
+405. **GGAP van komercijalne ponude.** GGAP ostaje van komercijalne ponude do validacije. Ne prodaje se kao redovna stavka; nudi se samo kroz kontrolisan pilot uz potvrdu obima.
+406. **Jedinstvena cena stanice.** Cena po otkupnoj stanici je ista bez obzira na režim rada (Desktop-only ili PWA-led). Razliku u vrednosti pokriva cena Mobile paketa. Ovom odlukom se **zatvara odluka 9 iz `07B_ENTERPRISE_OPERATING_MODES.md`** (predlog da pricing razlikuje desktop-only od PWA-led vrednosti po stanici).
+407. **Hardverska marža.** Hardver ostaje na planiranoj marži do izbora dobavljača. Marža se ne prepravlja pre nego što postoje stvarne nabavne cene.
+408. **Redosled cena i unit economics-a.** Cene su određene. Unit economics je kasnije fino podešavanje, ne preduslov za izlazak sa ponudom.
+
+---
+
+## 27. Napomena o kontinuitetu numeracije
+
+Stanje numerisanih odluka u repou:
+
+| Opseg | Status |
+|---|---|
+| 1–321 | uneto (odeljci 1–11) |
+| 322 | **ne koristi se** — niz se nastavlja od 323 |
+| 323–378 | uneto (odeljak 25); izvor `09B_ODLUKE_PO_OBLASTIMA.md` |
+| 379–400 | **ne koriste se** — nisu dodeljene |
+| 401–408 | uneto (odeljak 26) |
+
+Uz numerisane odluke važe i serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q i S.
+
+Napomene o izvoru: odluke 323–378 unete su iz tematskog indeksa, koji je sam po sebi sažetak („jedna linija po odluci“). Gde je bio dostupan detaljniji izvor — cenovnik, ugovor, definicija proizvoda ili finansijski model — formulacija je dopunjena i izvor je naveden. Odluka **370** ne postoji u tematskim tabelama indeksa; rekonstruisana je iz tabele razrešenih konflikata (K-14) i člana 8. stav 7. ugovora.
+
+Tematski indeks `09B_ODLUKE_PO_OBLASTIMA.md` još ne obuhvata odluke 401–408.

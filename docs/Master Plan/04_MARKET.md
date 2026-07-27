@@ -3,8 +3,8 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Horizont:** 2026–2030  
-**Poslednje ažuriranje:** 2026-07-23  
-**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `05_COMPETITION.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`  
+**Poslednje ažuriranje:** 2026-07-27  
+**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `05_COMPETITION.md`, `09_QA_DECISION_LOG.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `docs/Finance/AgriX_Finansijski_model.xlsx`  
 **Primarni dokazni skup:** `docs/Market Intelligence/01_Market_Data/APR/`
 
 ---
@@ -289,17 +289,25 @@ Firma mora ispuniti većinu sledećih kriterijuma:
 
 SOM mora da odražava prodajni kapacitet, onboarding, support i reputacioni rizik, ne samo veličinu tržišta.
 
-### 9.1 Narednih 12–18 meseci
+### 9.1 Do sezone 2027
 
 Postojeća baza: 3 firme.
 
-| Scenario | Ukupno aktivnih Enterprise firmi | Status |
-|---|---:|---|
-| Konzervativni | 6–8 | `HYPOTHESIS` |
-| Bazni | 8–12 | `HYPOTHESIS` |
-| Ubrzani uz potvrđen readiness | 12–15 | `HYPOTHESIS` |
+| Scenario | Novih klijenata | Ukupno aktivnih Enterprise firmi | Status |
+|---|---:|---:|---|
+| A — konzervativni | 5 | 8 | `HYPOTHESIS` |
+| B — balansirani | 8 | 11 | `HYPOTHESIS` |
+| **C — agresivni (izabran)** | **14** | **17** | `DECISION` — odluka 375 |
 
-Ovo nije unapred postavljen limit prodaje. Broj novih klijenata treba da raste sa readiness score-om, standardizacijom onboardinga i support kapacitetom.
+`DECISION` (odluke 375 i 403): izabran je scenario C — **14 novih Enterprise klijenata do sezone 2027, ukupno 17 aktivnih firmi**. Broj je planska vrednost, ne raspon; merodavan izvor je `docs/Finance/AgriX_Finansijski_model.xlsx`, list `Pretpostavke`, red 42. Odluka 375 zamenjuje odluku 249 (cilj 10–20 aktivnih pravnih lica do 2027).
+
+Raniji „ubrzani uz potvrđen readiness“ raspon 12–15 **ukupnih** firmi bio je pogrešno postavljen — 12–15 je bio radni raspon **novih** klijenata, a sada je zamenjen jednom vrednošću.
+
+Readiness više nije mehanizam koji određuje ovaj broj (STR-001 je povučen odlukom 403). Readiness ostaje preduslov kvaliteta isporuke: može zaustaviti ili odložiti pojedinačan onboarding, ali odgovor na slab domen je otklanjanje uzroka i dodavanje kapaciteta, a ne spuštanje cilja.
+
+Kolona od 18 klijenata na listu `Kapacitet` u finansijskom modelu je **stress-test**, ne cilj: pokazuje na kojoj se tački osnivač pretvara u usko grlo. Ne koristi se kao prodajni ni planski broj.
+
+`ASSUMPTION`: pri 17 firmi okidač za drugu tehnički ovlašćenu osobu (BC3, odluka 336 — najkasnije pri 15–20 firmi) pada pre 1. juna 2027.
 
 ### 9.2 Horizont 3–4 godine u Srbiji
 
@@ -711,6 +719,7 @@ Spojiti APR, poljoprivrednu proizvodnju, postojeće reference i prodajni pipelin
 8. `DECISION`: GGAP TAM se ne izmišlja bez posebnog dokaznog skupa.
 9. `DECISION`: regionalni TAM se ne dodaje Srbiji bez zemlje-po-zemlje istraživanja.
 10. `DECISION`: svaka tržišna procena se ažurira iz reproduktivnog pipeline-a i strukturisanog CRM istraživanja.
+11. `DECISION`: SOM do sezone 2027 je fiksan cilj iz scenarija C — 14 novih, ukupno 17 aktivnih Enterprise firmi (odluke 375 i 403); readiness više ne određuje taj broj.
 
 ---
 

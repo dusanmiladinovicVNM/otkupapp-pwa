@@ -2,8 +2,8 @@
 
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
-**Poslednje ažuriranje:** 2026-07-23  
-**Povezani dokumenti:** `06_POSITIONING.md`, `07_PRODUCT_PORTFOLIO.md`, `08_PRODUCT_ROADMAP.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`
+**Poslednje ažuriranje:** 2026-07-27  
+**Povezani dokumenti:** `06_POSITIONING.md`, `07_PRODUCT_PORTFOLIO.md`, `08_PRODUCT_ROADMAP.md`, `09_QA_DECISION_LOG.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`
 
 ---
 
@@ -181,5 +181,5 @@ Dozvoljena formulacija:
 6. Štampa i sync polaze iz istog sačuvanog poslovnog događaja, ali imaju odvojene success/failure statuse.
 7. Operater ne mora da prepisuje dokument koji je uspešno nastao i sinhronizovan kroz PWA.
 8. Kada PWA nije korišćena, operater može kompletno da unese papirni dokument kroz VBA Desktop.
-9. Pricing treba da razlikuje desktop-only korišćenje od PWA-led vrednosti po stanici i terenskom toku.
+9. **Zatvorena odlukom 406.** Cena po otkupnoj stanici je **jedinstvena**, bez obzira na režim rada. Razliku u vrednosti između desktop-only i PWA-led korišćenja pokriva cena Mobile paketa, ne različita cena stanice. Raniji tekst ove odluke — „pricing treba da razlikuje desktop-only korišćenje od PWA-led vrednosti po stanici“ — više ne važi.
 10. Roadmap treba da meri smanjenje fallback korišćenja zbog tehničkih razloga, ali nikada ne sme ukloniti desktop fallback sposobnost.

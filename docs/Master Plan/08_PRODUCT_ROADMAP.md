@@ -3,8 +3,8 @@
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
 **Horizont:** 23.07.2026–31.12.2027  
-**Poslednje ažuriranje:** 2026-07-23  
-**Povezani dokumenti:** `06_POSITIONING.md`, `07_PRODUCT_PORTFOLIO.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `09_TECHNOLOGY_STRATEGY.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`, `../ROADMAP.md`, `../KNOWN_ISSUES.md`, `../RELEASE_GATES.md`
+**Poslednje ažuriranje:** 2026-07-27  
+**Povezani dokumenti:** `06_POSITIONING.md`, `07_PRODUCT_PORTFOLIO.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `09_QA_DECISION_LOG.md`, `09_TECHNOLOGY_STRATEGY.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`, `../ROADMAP.md`, `../KNOWN_ISSUES.md`, `../RELEASE_GATES.md`
 
 ---
 
@@ -91,8 +91,9 @@ Najmanje 30 dana pre kritične sezone uvodi se freeze za pogođeni tok. Dozvolje
 | Management PWA | production kanal u okviru Enterprise-a |
 | Kiosk/tablet standardizacija | `Controlled rollout` |
 | Termalna štampa | zaseban readiness tok po podržanom hardveru |
-| Gazdinstvo | kontrolisani pilot |
-| GGAP | discovery / `Not for sale` kao završen proizvod |
+| Gazdinstvo | `Standard offer` (odluka 404); razvojni tempo i dalje ograničen dok PWA-led Enterprise nema stabilan rollout |
+| GGAP modul | discovery / `Not for sale`; van komercijalne ponude do validacije (odluke 402, 405) |
+| Savetnik | treći stub (odluka 401); product strategy i packaging još nisu napisani |
 
 ---
 

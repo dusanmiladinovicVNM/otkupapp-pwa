@@ -2,8 +2,8 @@
 
 **Status:** Review  
 **Vlasnik:** osnivač AgriX-a  
-**Poslednje ažuriranje:** 2026-07-23  
-**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `06_POSITIONING.md`, `08_PRODUCT_ROADMAP.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `15_SALES_PLAYBOOK.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`
+**Poslednje ažuriranje:** 2026-07-27  
+**Povezani dokumenti:** `02_STRATEGY.md`, `03_CUSTOMERS_AND_JOBS.md`, `06_POSITIONING.md`, `07A_PRODUCT_STATUS_MATRIX.csv`, `07B_ENTERPRISE_OPERATING_MODES.md`, `08_PRODUCT_ROADMAP.md`, `09_QA_DECISION_LOG.md`, `10_PRICING_AND_PACKAGING.md`, `14_GO_TO_MARKET.md`, `15_SALES_PLAYBOOK.md`, `16_ONBOARDING_AND_IMPLEMENTATION.md`, `docs/Product/AgriX_Definicija_proizvoda.pdf`
 
 ---
 
@@ -51,11 +51,15 @@ Postojanje koda nije jedini kriterijum, ali ni nedovoljno standardizovan hardver
 
 ## 3. Arhitektura portfolija
 
-AgriX ima tri proizvodna stuba:
+AgriX ima tri proizvodna stuba (odluke 269 i 401):
 
 1. **AgriX Enterprise** — povezani terenski i centralni operativni sistem firme;
 2. **AgriX Gazdinstvo** — farm-management sistem kooperanta/proizvođača;
-3. **AgriX GGAP** — dokumentacioni i compliance workflow.
+3. **AgriX Savetnik** — upravljački sloj nad većim brojem gazdinstava, za agronome i savetodavne službe.
+
+**GGAP nije stub.** GGAP je modul u okviru Enterprise-a; kupuju ga isključivo hladnjače koje su već Enterprise klijenti, a aktivacija otključava dodatne GGAP funkcije u Gazdinstvu njihovih kooperanata (odluka 402, PRT4). Ranija odluka STR-012 time je ukinuta.
+
+Moduli uz Enterprise: Hladnjača/Proizvodnja, SEF, Banka, Dispatch (samo uz Mobile) i GGAP.
 
 Zajednički tehnički sloj je **AgriX Platform Services**.
 
@@ -253,13 +257,46 @@ Radni paketi: Partner, Basic i Pro.
 |---|---|
 | Implementacija | `Implemented/Partial` |
 | Dokaz | `Pilot evidence` |
-| Komercijalno | `Pilot only` / kontrolisana rana ponuda |
+| Komercijalno | `Standard offer` — odluka 404 |
 
-Pre skaliranja: activation, 30/90/180-day retention, WTP i support cost.
+`DECISION` (odluka 404): Gazdinstvo je launch ready i prelazi iz `Pilot only` u `Standard offer`.
+
+Cene (odluka 339): maloprodajna **19 € Basic / 39 € Pro**; kanalska, za naloge posredovane preko hladnjače ili savetnika, **10 € Basic / 20 € Pro**. Prvih 50 Basic naloga partner dobija bez naknade (odluka 161). Proizvođač ima jedan Pro nalog — ko ga prvi aktivira, taj ga plaća (odluka 343). Pro se plaća direktno ili preko hladnjače (PRT2).
+
+Gazdinstvo mora biti kompletan i vredan proizvod i bez ijedne povezane AgriX hladnjače (odluka 321); Enterprise povezivanje prvenstveno donosi korist hladnjači.
+
+Ono što se odlukom 404 **ne** menja: activation, 30/90/180-day retention, WTP i support cost i dalje se mere. Oni sada služe za korekciju paketa, cene i support modela, a ne kao kapija pred prodaju. Gazdinstvo takođe ne može javno na tržište bez sopstvene politike privatnosti — zavisnost od LEG1 (`docs/Legal/AgriX_Mapa_tokova_podataka.pdf`).
 
 ---
 
-## 9. AgriX GGAP
+## 9. AgriX Savetnik
+
+Treći stub (odluke 269, 401, PRT3). Upravljački sloj nad većim brojem gazdinstava, za agronome i savetodavne službe:
+
+- pregled portfelja gazdinstava;
+- radni nalozi i preporuke;
+- praćenje izvršenja i kontrola rada;
+- agronomska istorija po gazdinstvu, parceli i kulturi.
+
+| Dimenzija | Status |
+|---|---|
+| Implementacija | `Planned` — osnovna verzija do 2027 (odluka 203) |
+| Dokaz | `Unvalidated` |
+| Komercijalno | cena objavljena u `Cenovnik 2027` (odluke 341, 347); javna ponuda kreće kada proizvod bude stabilan (odluka 217) |
+
+Komercijalni model je dvostruk: savetnik plaća alat — osnovica **150 €** godišnje za do 10 gazdinstava, svako preko toga **15 €** — a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni od 20 € (odluke 340, 341, 339). Savetnik ne dobija proviziju za gazdinstva u portfelju; podsticaj je sam alat, koji bez Pro naloga ne funkcioniše (odluka 345). Provizija po odluci 221 ostaje samo za preporuke van portfelja.
+
+Aktivno gazdinstvo je ono kojem je savetnik u toku godine poslao makar jedan nalog ili preporuku (odluka 342). Proba obuhvata i Pro za do 10 gazdinstava (odluka 346). Interne agronomske službe plaćaju samo alat kada su njihovi kooperanti već pokriveni partnerskim paketom (odluka 348).
+
+Zavisnosti pre izlaska na tržište: samostalna registracija i politika privatnosti, i pravna ocena toka T13 (LEG1). `OPEN`: cena po gazdinstvu (15 €) čeka potvrdu.
+
+`UNKNOWN`: packaging i cena su zaključani, ali product strategy trećeg stuba još nije napisana — funkcionalni obim ovog odeljka je okvir, ne specifikacija.
+
+---
+
+## 9A. GGAP — modul Enterprise-a
+
+`DECISION` (odluka 402): GGAP nije stub nego **modul u okviru Enterprise-a**. Kupac je uvek postojeća hladnjača sa Enterprise ugovorom; aktivacija modula otključava dodatne GGAP funkcije u Gazdinstvu njenih kooperanata (PRT4).
 
 GGAP koristi Enterprise i Gazdinstvo podatke za:
 
@@ -273,7 +310,9 @@ GGAP koristi Enterprise i Gazdinstvo podatke za:
 |---|---|
 | Implementacija | `Planned/Discovery` |
 | Dokaz | `Unvalidated` |
-| Komercijalno | `Not for sale`, osim kontrolisanog discovery-ja/pilota |
+| Komercijalno | `Not for sale` — van komercijalne ponude do validacije (odluka 405); samo kontrolisan discovery/pilot |
+
+Posledice statusa modula: GGAP nema sopstveni ICP, packaging ni unit economics — vodi se unutar Enterprise ekonomike. Cena „od 1.000 €“ (odluka 352) ostaje referentna za pilot uz potvrdu obima, ne za redovnu ponudu.
 
 AgriX ne garantuje sertifikaciju i ne zamenjuje auditora ili konsultanta.
 
@@ -320,6 +359,8 @@ Trajni klijentski fork nije dozvoljen.
 
 Tačan status `Standard offer` ili `Controlled rollout` određuje se prema verziji, klijentskom procesu i sačuvanom release evidence-u.
 
+**AgriX Gazdinstvo** — Basic i Pro, `Standard offer` od odluke 404; prodaje se preko hladnjače, savetnika ili direktno proizvođaču.
+
 ### Opciono
 
 - Finance & Regulatory;
@@ -333,8 +374,11 @@ Tačan status `Standard offer` ili `Controlled rollout` određuje se prema verzi
 
 - novi ili nepotvrđeni printer/hardware modeli;
 - nove integracije bez produkcionog dokaza;
-- Gazdinstvo u skaliranom komercijalnom modelu;
-- GGAP prototip/pilot.
+- GGAP modul — van komercijalne ponude do validacije (odluka 405).
+
+### Cena objavljena, isporuka tek predstoji
+
+- AgriX Savetnik — cena je u `Cenovnik 2027` (odluke 341, 347), ali se javno nudi tek kada proizvod bude stabilan (odluka 217). Do tada se ne ugovara.
 
 ---
 
@@ -370,6 +414,8 @@ Za PWA terenski tok posebno meriti:
 3. Desktop je centralni backoffice i canonical sloj nakon sinhronizacije.
 4. Operater se fokusira na kontrolu, prijem, fakture, finansije i izveštaje.
 5. Kiosk, tablet i termalna štampa imaju odvojene readiness statuse.
-6. Pricing mora vrednovati broj stanica, terenskih korisnika i obim dokumenata.
+6. Pricing vrednuje broj stanica, terenskih korisnika i obim dokumenata, ali je **cena po stanici jedinstvena** bez obzira na režim rada; razliku pokriva cena Mobile paketa (odluka 406).
 7. Svaki demo mora prikazati teren → sync → centrala → faktura/izveštaj.
-8. Gazdinstvo i GGAP ostaju zasebni proizvodi sa sopstvenim dokaznim pragovima.
+8. Tri stuba su Enterprise, Gazdinstvo i Savetnik (odluka 401); GGAP je modul Enterprise-a (odluka 402).
+9. Gazdinstvo je `Standard offer` (odluka 404); GGAP ostaje van komercijalne ponude do validacije (odluka 405).
+10. Savetnik ima objavljenu cenu (odluke 341, 347), ali se ne ugovara dok proizvod ne bude stabilan (odluka 217).
