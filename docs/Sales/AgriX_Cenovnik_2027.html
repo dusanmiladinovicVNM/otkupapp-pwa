@@ -7,157 +7,224 @@
   docs/Legal/AgriX_Ugovor_o_licenciranju.md (Prilog 1) i
   docs/Finance/AgriX_Finansijski_model.xlsx (list Pretpostavke, odeljak A).
   Izvor cena: odluke 339, 341, 349-358, 409-422.
+
+  VIZUELNI IDENTITET: brand tokeni su preuzeti iz src/styles/base.css
+  (forest/accent/gold/cream, Cormorant Garamond + DM Sans, radius skala).
+  Fontovi se ucitavaju iz vendor/fonts/, logo iz img/ — relativnim putanjama,
+  pa fajl mora ostati u docs/Sales/ da bi render radio.
 -->
 <html lang="sr">
 <head>
 <meta charset="utf-8">
 <title>AgriX — Cenovnik 2027</title>
 <style>
-  @page { size: A4; margin: 0; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ---------- AgriX self-hosted fontovi (isti skup kao src/styles/fonts.css) ---------- */
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
+  src:url('../../vendor/fonts/dm-sans-400.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
+  src:url('../../vendor/fonts/dm-sans-400-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
+  src:url('../../vendor/fonts/dm-sans-500.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
+  src:url('../../vendor/fonts/dm-sans-500-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/dm-sans-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/dm-sans-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
+  src:url('../../vendor/fonts/cormorant-600.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
+  src:url('../../vendor/fonts/cormorant-600-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/cormorant-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/cormorant-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
 
-  :root {
-    --ink:      #1c1b18;
-    --muted:    #6b6659;
-    --line:     #e3dfd4;
-    --gold:     #c8a84b;
-    --paper:    #ffffff;
-    --wash:     #faf8f4;
-  }
+/* ---------- Brand tokeni — izvor: src/styles/base.css ---------- */
+:root {
+  --forest:#1E2D14; --forest-90:#2a3d1e; --forest-80:#354a28;
+  --accent:#5EA135; --accent-light:#7dbf55; --accent-pale:#c4e4a8;
+  --gold:#C8A84B; --gold-light:#d4b962; --gold-pale:#f0e2b8;
+  --cream:#F7F4EE; --cream-warm:#F2EDE4; --cream-deep:#EBE5D8; --sand:#E8E0D0;
+  --white:#FFFFFF; --surface-2:#FAF8F2;
+  --text-primary:#1E2D14; --text-secondary:#4A5A3C; --text-muted:#7A856E; --text-light:#9FA894;
+  --border:rgba(30,45,20,0.08); --border-strong:rgba(30,45,20,0.15);
+  --radius-sm:10px; --radius-md:14px; --radius-lg:18px; --radius-xl:22px;
+  --font-display:'Cormorant Garamond', Georgia, serif;
+  --font-body:'DM Sans', 'Segoe UI', system-ui, sans-serif;
+}
 
-  body {
-    font-family: "Liberation Sans", "DejaVu Sans", Arial, sans-serif;
-    color: var(--ink);
-    font-size: 10pt;
-    line-height: 1.45;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
+@page { size:A4; margin:0; }
+* { margin:0; padding:0; box-sizing:border-box; }
 
-  .page {
-    width: 210mm; height: 297mm;
-    padding: 18mm 18mm 14mm;
-    position: relative;
-    page-break-after: always;
-    background: var(--paper);
-    display: flex; flex-direction: column;
-  }
-  .page:last-child { page-break-after: auto; }
+body {
+  font-family:var(--font-body); color:var(--text-primary);
+  font-size:10.4pt; line-height:1.55;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
+}
 
-  .eyebrow {
-    font-size: 7.5pt; letter-spacing: .18em; text-transform: uppercase;
-    color: var(--gold); font-weight: 700; margin-bottom: 7mm;
-  }
-  h1 { font-size: 26pt; font-weight: 700; letter-spacing: -.01em; }
-  h2 { font-size: 17pt; font-weight: 700; margin-bottom: 2mm; }
-  .lead { color: var(--muted); font-size: 10.5pt; margin-bottom: 8mm; max-width: 150mm; }
+.page {
+  width:210mm; height:297mm; padding:17mm 17mm 13mm;
+  position:relative; page-break-after:always;
+  background:var(--cream); display:flex; flex-direction:column;
+}
+.page:last-child { page-break-after:auto; }
 
-  .rule { height: 2px; background: var(--gold); width: 22mm; margin: 4mm 0 7mm; }
+/* ---------- zaglavlje strane ---------- */
+.eyebrow {
+  font-size:7pt; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--gold); font-weight:700; margin-bottom:5mm;
+}
+h2 { font-family:var(--font-display); font-size:31pt; font-weight:600; color:var(--forest); line-height:1.1; }
+.rule { height:2.5px; width:20mm; background:var(--gold); border-radius:2px; margin:4mm 0 6mm; }
+.lead { color:var(--text-secondary); font-size:10.8pt; margin-bottom:8mm; max-width:148mm; }
 
-  footer {
-    position: absolute; left: 18mm; right: 18mm; bottom: 9mm;
-    display: flex; justify-content: space-between; align-items: baseline;
-    font-size: 7.5pt; color: var(--muted);
-    border-top: 1px solid var(--line); padding-top: 2.5mm;
-  }
-  footer .pg { font-weight: 700; color: var(--ink); }
+footer {
+  position:absolute; left:17mm; right:17mm; bottom:8mm;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:7pt; color:var(--text-muted);
+  border-top:1px solid var(--border); padding-top:2.5mm;
+}
+.wordmark { font-family:var(--font-display); font-weight:700; font-size:10pt; letter-spacing:.01em; }
+.wordmark .a { color:var(--gold); } .wordmark .x { color:var(--accent); }
+footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; color:var(--forest); }
 
-  /* ---------- naslovna ---------- */
-  .cover { justify-content: center; }
-  .cover h1 { font-size: 40pt; line-height: 1.05; }
-  .cover .sub { font-size: 13pt; color: var(--muted); margin-top: 3mm; }
-  .cover .prods { display: flex; gap: 6mm; margin-top: 16mm; }
-  .cover .prod { flex: 1; border-top: 2px solid var(--gold); padding-top: 3mm; }
-  .cover .prod b { display: block; font-size: 11pt; }
-  .cover .prod span { font-size: 8.5pt; color: var(--muted); }
-  .cover .note { margin-top: 16mm; font-size: 8.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 3mm; }
+/* ---------- naslovna ---------- */
+.cover { background:var(--forest); justify-content:space-between; padding:20mm 17mm 15mm; }
+.cover .logo { width:62mm; }
+.cover h1 {
+  font-family:var(--font-display); font-weight:700; font-size:58pt;
+  color:var(--cream); line-height:.98; letter-spacing:-.01em;
+}
+.cover h1 em { font-style:normal; color:var(--gold); }
+.cover .sub { font-size:12pt; color:var(--accent-pale); margin-top:4mm; font-weight:500; }
+.cover .goldline { height:3px; width:26mm; background:var(--gold); border-radius:2px; margin:9mm 0 0; }
+.cover .prods { display:flex; gap:5mm; margin-top:12mm; }
+.cover .prod {
+  flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(200,168,75,.35);
+  border-radius:var(--radius-md); padding:5mm 4.5mm;
+}
+.cover .prod b { display:block; font-family:var(--font-display); font-size:14pt; font-weight:600; color:var(--gold-light); }
+.cover .prod span { display:block; font-size:8pt; color:var(--accent-pale); margin-top:1.5mm; line-height:1.4; }
+.cover .note { font-size:8pt; color:var(--text-light); border-top:1px solid rgba(255,255,255,.14); padding-top:3.5mm; }
 
-  /* ---------- blokovi ---------- */
-  .cols { display: flex; gap: 6mm; }
-  .col { flex: 1; }
+/* ---------- kartice ---------- */
+.cols { display:flex; gap:5mm; }
+.col { flex:1; }
 
-  .step { border-top: 1px solid var(--line); padding-top: 3mm; }
-  .step .num { font-size: 8pt; font-weight: 700; color: var(--gold); letter-spacing: .1em; }
-  .step b { display: block; font-size: 11.5pt; margin: 1.5mm 0 1.5mm; }
-  .step p { font-size: 9pt; color: var(--muted); }
+.card {
+  background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md);
+  padding:7mm 6mm; box-shadow:0 1px 3px rgba(30,45,20,.05);
+}
+.card.hi { border:1.5px solid var(--gold); background:linear-gradient(180deg,#fffdf7 0%,var(--white) 40%); }
 
-  .callout {
-    background: var(--wash); border-left: 3px solid var(--gold);
-    padding: 4mm 5mm; margin-top: 8mm;
-  }
-  .callout .lbl { font-size: 7.5pt; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
-  .callout p { margin-top: 1.5mm; font-size: 9.5pt; }
+.step .num {
+  font-family:var(--font-display); font-size:20pt; font-weight:700; color:var(--gold); line-height:1;
+}
+.step b { display:block; font-family:var(--font-display); font-size:16pt; font-weight:600; color:var(--forest); margin:2mm 0 1.5mm; }
+.step p { font-size:9.2pt; color:var(--text-secondary); }
 
-  /* ---------- paketi ---------- */
-  .pkg { flex: 1; border: 1px solid var(--line); padding: 6mm 5mm; display: flex; flex-direction: column; }
-  .pkg.hi { border-color: var(--gold); border-width: 1.5px; }
-  .pkg h3 { font-size: 13pt; font-weight: 700; }
-  .pkg .price { font-size: 25pt; font-weight: 700; margin-top: 3mm; letter-spacing: -.02em; }
-  .pkg .per { font-size: 8pt; color: var(--muted); margin-top: .5mm; }
-  .pkg ul { list-style: none; margin-top: 5mm; flex: 1; }
-  .pkg li { font-size: 9pt; padding: 1.4mm 0 1.4mm 5mm; position: relative; border-bottom: 1px solid var(--wash); }
-  .pkg li::before { content: "—"; position: absolute; left: 0; color: var(--gold); }
-  .pkg .allin {
-    margin-top: 4mm; border-top: 1px solid var(--line); padding-top: 3mm;
-    display: flex; justify-content: space-between; align-items: baseline; gap: 3mm;
-  }
-  .pkg .allin span { font-size: 8.5pt; }
-  .pkg .allin b { font-size: 14pt; white-space: nowrap; }
+.callout {
+  background:var(--white); border:1px solid var(--border); border-left:3.5px solid var(--gold);
+  border-radius:var(--radius-sm); padding:5mm 6mm; margin-top:7mm;
+}
+.callout.green { border-left-color:var(--accent); }
+.callout .lbl { font-size:7pt; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); font-weight:700; }
+.callout.green .lbl { color:var(--accent); }
+.callout p { margin-top:2mm; font-size:9.6pt; color:var(--text-secondary); }
+.callout p b { color:var(--forest); }
 
-  /* ---------- tabele ---------- */
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 7.5pt; letter-spacing: .12em; text-transform: uppercase;
-       color: var(--muted); font-weight: 700; padding: 0 0 2mm; border-bottom: 1px solid var(--line); }
-  td { padding: 2.6mm 0; border-bottom: 1px solid var(--wash); font-size: 9.5pt; vertical-align: top; }
-  td.num, th.num { text-align: right; white-space: nowrap; font-weight: 700; }
-  td.desc { color: var(--muted); font-size: 8.5pt; }
-  tr.total td { border-top: 1.5px solid var(--ink); border-bottom: none; font-weight: 700; font-size: 11pt; padding-top: 3mm; }
+/* ---------- paketi ---------- */
+.pkg { flex:1; display:flex; flex-direction:column; }
+.pkg h3 { font-family:var(--font-display); font-size:19pt; font-weight:600; color:var(--forest); }
+.pkg .price { font-family:var(--font-display); font-size:40pt; font-weight:700; color:var(--forest); line-height:1; margin-top:2.5mm; }
+.pkg .price small { font-size:22pt; }
+.pkg .per { font-size:7.6pt; color:var(--text-muted); margin-top:1.5mm; }
+.pkg ul { list-style:none; margin-top:5mm; flex:1; }
+.pkg li { font-size:9.4pt; color:var(--text-secondary); padding:2.3mm 0 2.3mm 5.5mm; position:relative; border-bottom:1px solid var(--cream-warm); }
+.pkg li:last-child { border-bottom:none; }
+.pkg li::before { content:""; position:absolute; left:0; top:3.2mm; width:2.2mm; height:2.2mm; border-radius:50%; background:var(--accent); }
+.pkg .allin {
+  margin-top:4mm; background:var(--cream); border-radius:var(--radius-sm); padding:3.5mm 4mm;
+  display:flex; justify-content:space-between; align-items:center; gap:3mm;
+}
+.pkg .allin span { font-size:8pt; color:var(--text-secondary); }
+.pkg .allin span b { display:block; font-size:9.5pt; color:var(--forest); }
+.pkg .allin .p { font-family:var(--font-display); font-size:22pt; font-weight:700; color:var(--forest); white-space:nowrap; }
 
-  .tag {
-    display: inline-block; font-size: 7pt; letter-spacing: .06em; text-transform: uppercase;
-    background: var(--gold); color: #fff; padding: .6mm 1.6mm; border-radius: 1mm;
-    font-weight: 700; vertical-align: middle;
-  }
-  .tag.q { background: #8a7a4f; }
+/* ---------- tabele ---------- */
+table { width:100%; border-collapse:collapse; }
+th {
+  text-align:left; font-size:7pt; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--text-muted); font-weight:700; padding:0 0 2mm; border-bottom:1px solid var(--border-strong);
+}
+td { padding:3.4mm 0; border-bottom:1px solid var(--cream-warm); font-size:9.8pt; vertical-align:top; color:var(--text-secondary); }
+td b { color:var(--forest); }
+td.num, th.num { text-align:right; white-space:nowrap; }
+td.num { font-family:var(--font-display); font-weight:700; font-size:13.5pt; color:var(--forest); }
+td.desc { color:var(--text-muted); font-size:8.8pt; }
+tr:last-child td { border-bottom:none; }
 
-  .modgrid { display: flex; gap: 4mm; margin-top: 2mm; }
-  .mod { flex: 1; border-top: 2px solid var(--gold); padding-top: 3mm; }
-  .mod b { display: block; font-size: 10.5pt; }
-  .mod .p { font-size: 17pt; font-weight: 700; margin: 1.5mm 0; }
-  .mod .u { font-size: 7.5pt; color: var(--gold); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-  .mod p { font-size: 8.5pt; color: var(--muted); margin-top: 1.5mm; }
+.tag {
+  display:inline-block; font-size:6.5pt; letter-spacing:.08em; text-transform:uppercase;
+  background:var(--gold-pale); color:#6d5a1e; padding:.7mm 1.8mm; border-radius:99px;
+  font-weight:700; vertical-align:middle; margin-left:1.5mm;
+}
 
-  .example { flex: 1; border: 1px solid var(--line); padding: 5mm; display: flex; flex-direction: column; }
-  .example h4 { font-size: 11pt; }
-  .example .who { font-size: 8.5pt; color: var(--muted); margin-top: 1mm; margin-bottom: 4mm; }
-  .example table { flex: 1; }
-  .example .sum { border-top: 1.5px solid var(--ink); margin-top: 3mm; padding-top: 2.5mm; }
-  .example .sum .lbl { font-size: 7.5pt; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
-  .example .sum .val { font-size: 20pt; font-weight: 700; margin-top: 1mm; }
+/* ---------- moduli ---------- */
+.modgrid { display:flex; gap:4mm; }
+.mod { flex:1; background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:6mm 5mm; }
+.mod b { display:block; font-family:var(--font-display); font-size:15pt; font-weight:600; color:var(--forest); line-height:1.15; min-height:13mm; }
+.mod .p { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--forest); line-height:1; }
+.mod .u {
+  display:inline-block; font-size:6.5pt; color:var(--accent); font-weight:700;
+  text-transform:uppercase; letter-spacing:.08em; margin:2mm 0 2.5mm;
+  background:rgba(94,161,53,.10); padding:.9mm 2mm; border-radius:99px;
+}
+.mod .u.gold { color:#6d5a1e; background:var(--gold-pale); }
+.mod p { font-size:8.6pt; color:var(--text-muted); }
 
-  .check li, .cross li { font-size: 9pt; padding: 2mm 0 2mm 6mm; position: relative; border-bottom: 1px solid var(--wash); list-style: none; }
-  .check li::before { content: "✓"; position: absolute; left: 0; color: var(--gold); font-weight: 700; }
-  .cross li::before { content: "·"; position: absolute; left: 1mm; color: var(--muted); font-weight: 700; }
-  .sechead { font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; margin-bottom: 3mm; }
+/* ---------- primeri ---------- */
+.example { flex:1; display:flex; flex-direction:column; }
+.example h4 { font-family:var(--font-display); font-size:16pt; font-weight:600; color:var(--forest); min-height:14mm; line-height:1.15; }
+.example .who { font-size:8pt; color:var(--text-muted); margin-bottom:4mm; }
+.example table { flex:1; }
+.example td { font-size:9.4pt; padding:2.8mm 0; }
+.example td.num { font-size:11.5pt; }
+.example .sum { background:var(--forest); border-radius:var(--radius-sm); margin-top:4mm; padding:3.5mm 4mm; }
+.example .sum .lbl { font-size:6.5pt; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-pale); font-weight:700; }
+.example .sum .val { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--white); line-height:1.1; margin-top:.5mm; }
 
-  .fine { font-size: 8pt; color: var(--muted); margin-top: 6mm; border-top: 1px solid var(--line); padding-top: 3mm; }
+/* ---------- liste uslova ---------- */
+.check li, .cross li { font-size:9.4pt; color:var(--text-secondary); padding:3mm 0 3mm 6.5mm; position:relative; border-bottom:1px solid var(--cream-warm); list-style:none; }
+.check li:last-child, .cross li:last-child { border-bottom:none; }
+.check li::before { content:"✓"; position:absolute; left:0; color:var(--accent); font-weight:700; }
+.cross li::before { content:"—"; position:absolute; left:0; color:var(--text-light); font-weight:700; }
+.sechead { font-size:7.6pt; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--forest); margin-bottom:3mm; }
+
+.fine { font-size:8.4pt; color:var(--text-muted); margin-top:5mm; border-top:1px solid var(--border); padding-top:3mm; }
 </style>
 </head>
 <body>
 
 <!-- 01 — naslovna -->
 <section class="page cover">
-  <div class="eyebrow">AgriX</div>
-  <h1>Cenovnik<br>2027</h1>
-  <div class="sub">Softver za otkup i hladnjače</div>
-  <div class="prods">
-    <div class="prod"><b>AgriX Enterprise</b><span>Otkup, prerada, skladište, sledljivost</span></div>
-    <div class="prod"><b>AgriX Gazdinstvo</b><span>Za proizvođače i kooperante</span></div>
-    <div class="prod"><b>AgriX Savetnik</b><span>Za agronome i savetodavne službe</span></div>
+  <div>
+    <img class="logo" src="../../img/AgriX-Logo-Final_Novi.png" alt="AgriX">
+  </div>
+  <div>
+    <h1>Cenovnik<br><em>2027</em></h1>
+    <div class="sub">Softver za otkup i hladnjače</div>
+    <div class="goldline"></div>
+    <div class="prods">
+      <div class="prod"><b>Enterprise</b><span>Otkup, prerada, skladište i sledljivost</span></div>
+      <div class="prod"><b>Gazdinstvo</b><span>Za proizvođače i kooperante</span></div>
+      <div class="prod"><b>Savetnik</b><span>Za agronome i savetodavne službe</span></div>
+    </div>
   </div>
   <div class="note">
     Cene u EUR, plative u dinarskoj protivvrednosti po srednjem kursu NBS na dan uplate.
-    Bez PDV-a, na godišnjem nivou. Važi od sezone 2027. · Verzija 27.07.2026.
+    Bez PDV-a, na godišnjem nivou. Važi od sezone 2027. &nbsp;·&nbsp; Verzija 27.07.2026.
   </div>
 </section>
 
@@ -169,21 +236,21 @@
   <p class="lead">Tri stavke i jedno pravilo plaćanja. Bez naplate po korisniku i bez skrivenih troškova.</p>
 
   <div class="cols">
-    <div class="col step">
+    <div class="col card step">
       <div class="num">01</div><b>Paket</b>
       <p>Desktop ili Mobile. Jedno pravno lice, do pet aktivnih stanica.</p>
     </div>
-    <div class="col step">
+    <div class="col card step">
       <div class="num">02</div><b>Stanice</b>
       <p>Svaka aktivna stanica preko pet — 50 € godišnje. Ista cena u oba paketa.</p>
     </div>
-    <div class="col step">
+    <div class="col card step">
       <div class="num">03</div><b>Moduli</b>
       <p>Hladnjača/Proizvodnja, SEF, Banka, Dispatch i GGAP.</p>
     </div>
   </div>
 
-  <div class="callout">
+  <div class="callout green">
     <div class="lbl">Pravilo plaćanja</div>
     <p>Godišnja pretplata, plaćanje pre početka sezone. Ugovori se sklapaju pre sezone, nikada tokom nje.</p>
   </div>
@@ -191,11 +258,11 @@
   <div class="callout">
     <div class="lbl">Bez pregovaranja o ceni</div>
     <p>Cena zavisi isključivo od paketa, broja aktivnih stanica, izabranih modula i broja instanci.
-       Individualnih popusta nema. Jedina cenovna razlika unutar istog obima je umanjenje od 50 %
+       <b>Individualnih popusta nema.</b> Jedina cenovna razlika unutar istog obima je umanjenje od 50 %
        na drugu i svaku narednu instancu istog pravnog lica.</p>
   </div>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">02</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">02</span></footer>
 </section>
 
 <!-- 03 — paketi -->
@@ -205,10 +272,10 @@
   <div class="rule"></div>
   <p class="lead">Desktop je kompletno rešenje. Mobile uključuje ceo Desktop i dodaje terenski rad.</p>
 
-  <div class="cols" style="align-items:stretch">
-    <div class="pkg">
+  <div class="cols">
+    <div class="pkg card">
       <h3>AgriX Desktop</h3>
-      <div class="price">500 €</div>
+      <div class="price" data-cena="Desktop" data-eur="500">500 <small>€</small></div>
       <div class="per">godišnje · jedno pravno lice, do 5 stanica</div>
       <ul>
         <li>Otkup, dokumenta, prijemnice, fakture</li>
@@ -218,14 +285,14 @@
         <li>Mobile MGMT — upravljački pregled</li>
       </ul>
       <div class="allin">
-        <span><b>All-in</b><br>sa modulima SEF, Banka i Hladnjača</span>
-        <b>1.200 €</b>
+        <span><b>All-in</b>sa modulima SEF, Banka i Hladnjača</span>
+        <span class="p" data-cena="Desktop all-in" data-eur="1200">1.200 €</span>
       </div>
     </div>
 
-    <div class="pkg hi">
+    <div class="pkg card hi">
       <h3>AgriX Mobile</h3>
-      <div class="price">1.500 €</div>
+      <div class="price" data-cena="Mobile" data-eur="1500">1.500 <small>€</small></div>
       <div class="per">godišnje · jedno pravno lice, do 5 stanica</div>
       <ul>
         <li>Sve iz Desktop paketa</li>
@@ -235,8 +302,8 @@
         <li>Otkup uživo</li>
       </ul>
       <div class="allin">
-        <span><b>All-in</b><br>sa modulima SEF, Banka, Hladnjača i Dispatch</span>
-        <b>2.200 €</b>
+        <span><b>All-in</b>sa modulima SEF, Banka, Hladnjača i Dispatch</span>
+        <span class="p" data-cena="Mobile all-in" data-eur="2200">2.200 €</span>
       </div>
     </div>
   </div>
@@ -248,7 +315,7 @@
        oba iznosa su ista na baznom i na all-in nivou.</p>
   </div>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">03</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">03</span></footer>
 </section>
 
 <!-- 04 — moduli -->
@@ -256,13 +323,13 @@
   <div class="eyebrow">Enterprise</div>
   <h2>Dodatni moduli</h2>
   <div class="rule"></div>
-  <p class="lead">Obračunska jedinica nije ista za sve module. Pažljivo pročitajte kolonu ispod cene.</p>
+  <p class="lead">Obračunska jedinica nije ista za sve module — pogledajte oznaku ispod cene.</p>
 
   <div class="modgrid">
     <div class="mod">
       <b>Hladnjača<br>Proizvodnja</b>
       <div class="p">400 €</div>
-      <div class="u">po proizvodnom pogonu</div>
+      <div class="u gold">po pogonu</div>
       <p>Prijem sirovine, klasiranje, prerada, utrošak, otpad, prinos i gotovi proizvodi.</p>
     </div>
     <div class="mod">
@@ -280,36 +347,38 @@
     <div class="mod">
       <b>Dispatch</b>
       <div class="p">200 €</div>
-      <div class="u">po pravnom licu · samo uz Mobile</div>
+      <div class="u">samo uz Mobile</div>
       <p>Raspoređivanje vozila i vozača, rute, kapaciteti, dispečerski pregled.</p>
     </div>
   </div>
 
-  <div class="callout">
+  <div class="callout green">
     <div class="lbl">Obračunska jedinica</div>
     <p>SEF, Banka i Dispatch plaćaju se <b>jednom po pravnom licu</b> i važe kroz sve njegove instance.
        Hladnjača/Proizvodnja plaća se <b>po proizvodnom pogonu</b> — svaki pogon koji koristi modul plaća ga.
        Dodatni pogon: <b>200 €</b>.</p>
   </div>
 
-  <div style="margin-top:8mm">
+  <div style="margin-top:7mm">
     <div class="sechead">Compliance</div>
-    <table>
-      <tr>
-        <td style="width:70%">
-          <b style="font-size:11pt">GGAP</b> <span class="tag q">na upit</span><br>
-          <span class="desc">Jedna cena po pravnom licu, pokriva sve njegove GGAP kooperante. Bez naplate po korisniku.</span>
-        </td>
-        <td class="num" style="font-size:15pt">od 1.000 €</td>
-      </tr>
-    </table>
-    <p class="fine" style="margin-top:3mm">
-      GGAP se kotira <b>samo na upit i uz potvrdu obima</b>. Nije deo standardne ponude i ne ugovara se
-      bez prethodne potvrde obima.
-    </p>
+    <div class="card">
+      <table>
+        <tr>
+          <td style="width:72%; border:none">
+            <b style="font-family:var(--font-display); font-size:15pt">GGAP</b><span class="tag">na upit</span><br>
+            <span class="desc">Jedna cena po pravnom licu, pokriva sve njegove GGAP kooperante. Bez naplate po korisniku.</span>
+          </td>
+          <td class="num" style="font-size:18pt; border:none">od 1.000 €</td>
+        </tr>
+      </table>
+      <p class="fine" style="margin-top:3mm">
+        GGAP se kotira <b>samo na upit i uz potvrdu obima</b>. Nije deo standardne ponude i ne ugovara se
+        bez prethodne potvrde obima.
+      </p>
+    </div>
   </div>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">04</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">04</span></footer>
 </section>
 
 <!-- 05 — stanice i instance -->
@@ -319,10 +388,10 @@
   <div class="rule"></div>
   <p class="lead">Osnovna cena pokriva jedno pravno lice i do pet aktivnih otkupnih stanica.</p>
 
-  <div class="cols">
-    <div class="col pkg">
+  <div class="cols" style="align-items:flex-start">
+    <div class="col card pkg">
       <h3>Otkupne stanice</h3>
-      <div class="price">50 €</div>
+      <div class="price">50 <small>€</small></div>
       <div class="per">godišnje po svakoj stanici preko pet</div>
       <ul>
         <li>Aktivna stanica je stanica na kojoj je evidentiran makar jedan otkupni blok</li>
@@ -330,9 +399,9 @@
         <li>Smanjenje broja stanica ne menja cenu ako je stanica bila aktivna</li>
       </ul>
     </div>
-    <div class="col pkg">
+    <div class="col card pkg">
       <h3>Dodatna instanca</h3>
-      <div class="price">−50 %</div>
+      <div class="price">−50 <small>%</small></div>
       <div class="per">na sve što ta instanca dodatno koristi</div>
       <ul>
         <li>Drugi proizvodni pogon istog pravnog lica zahteva dodatnu Desktop instancu</li>
@@ -349,7 +418,7 @@
        250 € + 200 € = <b>450 € godišnje</b>.</p>
   </div>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">05</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">05</span></footer>
 </section>
 
 <!-- 06 — Gazdinstvo i Savetnik -->
@@ -360,13 +429,13 @@
   <p class="lead">Proizvodi za kooperante i za agronomske službe.</p>
 
   <div class="cols" style="align-items:flex-start">
-    <div class="pkg">
-      <h3>AgriX Gazdinstvo</h3>
-      <div class="per" style="margin-bottom:4mm">Za proizvođače i kooperante</div>
+    <div class="col card">
+      <h3 style="font-family:var(--font-display); font-size:17pt; font-weight:600; color:var(--forest)">AgriX Gazdinstvo</h3>
+      <div class="per" style="font-size:7.6pt; color:var(--text-muted); margin:1mm 0 4mm">Za proizvođače i kooperante</div>
       <table>
         <tr><th>Paket</th><th class="num">Maloprodaja</th><th class="num">Kanalska</th></tr>
-        <tr><td>Basic</td><td class="num">19 €</td><td class="num">10 €</td></tr>
-        <tr><td>Pro</td><td class="num">39 €</td><td class="num">20 €</td></tr>
+        <tr><td><b>Basic</b></td><td class="num">19 €</td><td class="num">10 €</td></tr>
+        <tr><td><b>Pro</b></td><td class="num">39 €</td><td class="num">20 €</td></tr>
       </table>
       <p class="fine">
         Kanalska cena važi za naloge posredovane preko hladnjače ili savetnika.
@@ -375,13 +444,13 @@
       </p>
     </div>
 
-    <div class="pkg hi">
-      <h3>AgriX Savetnik</h3>
-      <div class="per" style="margin-bottom:4mm">Za agronome i savetodavne službe</div>
+    <div class="col card hi">
+      <h3 style="font-family:var(--font-display); font-size:17pt; font-weight:600; color:var(--forest)">AgriX Savetnik</h3>
+      <div class="per" style="font-size:7.6pt; color:var(--text-muted); margin:1mm 0 4mm">Za agronome i savetodavne službe</div>
       <table>
         <tr><th>Tarifa</th><th class="num">Osnovica</th><th class="num">Preko 10</th></tr>
-        <tr><td>Standalone</td><td class="num">150 €</td><td class="num">15 €</td></tr>
-        <tr><td>Enterprise</td><td class="num">100 €</td><td class="num">10 €</td></tr>
+        <tr><td><b>Standalone</b></td><td class="num">150 €</td><td class="num">15 €</td></tr>
+        <tr><td><b>Enterprise</b></td><td class="num">100 €</td><td class="num">10 €</td></tr>
       </table>
       <p class="fine">
         Osnovica uključuje do 10 aktivnih gazdinstava; svako preko toga se doplaćuje.
@@ -389,14 +458,16 @@
         aktivnim Enterprise ugovorom. Prestankom tog ugovora prelazi se na standalone tarifu
         pri prvoj narednoj obnovi, bez retroaktivnog obračuna.
       </p>
-      <p class="fine" style="border:none;padding-top:0">
-        Jedan interfejs za ceo portfelj: radni nalozi, preporuke i praćenje izvršenja.
-        Gazdinstva zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni.
-      </p>
     </div>
   </div>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">06</span></footer>
+  <div class="callout green">
+    <div class="lbl">Savetnik u praksi</div>
+    <p>Jedan interfejs za ceo portfelj: radni nalozi, preporuke i praćenje izvršenja.
+       Gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni.</p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">06</span></footer>
 </section>
 
 <!-- 07 — usluge -->
@@ -406,44 +477,46 @@
   <div class="rule"></div>
   <p class="lead">Sve što nije deo godišnje pretplate. Postoje tačno dve satnice, i biraju se prema prirodi posla, ne prema mestu izvođenja.</p>
 
-  <table>
-    <tr><th>Stavka</th><th>Obuhvata</th><th class="num">Cena</th></tr>
-    <tr>
-      <td><b>Razvojna satnica</b></td>
-      <td class="desc">Razvoj po zahtevu, složena migracija podataka, novi adapteri, posebni izveštaji, masovne korekcije podataka</td>
-      <td class="num">50 € / sat</td>
-    </tr>
-    <tr>
-      <td><b>Implementaciona satnica</b></td>
-      <td class="desc">Obuka preko uključenih pet sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji</td>
-      <td class="num">30 € / sat</td>
-    </tr>
-    <tr>
-      <td><b>Instalacija i povezivanje</b></td>
-      <td class="desc">Instalacija sistema i povezivanje svih komponenti</td>
-      <td class="num">uključeno</td>
-    </tr>
-    <tr>
-      <td><b>Onboarding obuka</b></td>
-      <td class="desc">Početna implementaciona obuka je deo onboardinga</td>
-      <td class="num">5 sati uključeno</td>
-    </tr>
-    <tr>
-      <td><b>Izlazak na teren</b></td>
-      <td class="desc">Uvećano za gorivo, vreme puta i vreme rada na lokaciji</td>
-      <td class="num">50 € + troškovi</td>
-    </tr>
-    <tr>
-      <td><b>Hardver</b></td>
-      <td class="desc">Terminali, štampači i oprema za otkupne stanice</td>
-      <td class="num">prema specifikaciji</td>
-    </tr>
-    <tr>
-      <td><b>Hardverska podrška</b></td>
-      <td class="desc">Prioritetna intervencija, daljinska dijagnostika i zamenski uređaj</td>
-      <td class="num">40 € / stanici</td>
-    </tr>
-  </table>
+  <div class="card">
+    <table>
+      <tr><th>Stavka</th><th>Obuhvata</th><th class="num">Cena</th></tr>
+      <tr>
+        <td style="width:26%"><b>Razvojna satnica</b></td>
+        <td class="desc">Razvoj po zahtevu, složena migracija podataka, novi adapteri, posebni izveštaji, masovne korekcije podataka</td>
+        <td class="num">50 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
+      </tr>
+      <tr>
+        <td><b>Implementaciona satnica</b></td>
+        <td class="desc">Obuka preko uključenih pet sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji</td>
+        <td class="num">30 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
+      </tr>
+      <tr>
+        <td><b>Instalacija i povezivanje</b></td>
+        <td class="desc">Instalacija sistema i povezivanje svih komponenti</td>
+        <td class="num" style="font-size:10pt; color:var(--accent)">uključeno</td>
+      </tr>
+      <tr>
+        <td><b>Onboarding obuka</b></td>
+        <td class="desc">Početna implementaciona obuka je deo onboardinga</td>
+        <td class="num" style="font-size:10pt; color:var(--accent)">5 sati uključeno</td>
+      </tr>
+      <tr>
+        <td><b>Izlazak na teren</b></td>
+        <td class="desc">Uvećano za gorivo, vreme puta i vreme rada na lokaciji</td>
+        <td class="num">50 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> + troškovi</span></td>
+      </tr>
+      <tr>
+        <td><b>Hardver</b></td>
+        <td class="desc">Terminali, štampači i oprema za otkupne stanice</td>
+        <td class="num" style="font-size:10pt">prema specifikaciji</td>
+      </tr>
+      <tr>
+        <td><b>Hardverska podrška</b></td>
+        <td class="desc">Prioritetna intervencija, daljinska dijagnostika i zamenski uređaj</td>
+        <td class="num">40 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / stanici</span></td>
+      </tr>
+    </table>
+  </div>
 
   <div class="callout">
     <div class="lbl">Obračun izlaska na teren</div>
@@ -456,7 +529,7 @@
     potrošni materijal i opremu nabavljenu van AgriX-a.
   </p>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">07</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">07</span></footer>
 </section>
 
 <!-- 08 — primeri -->
@@ -467,7 +540,7 @@
   <p class="lead">Ukupan godišnji trošak, bez jednokratnih usluga.</p>
 
   <div class="cols" style="align-items:stretch">
-    <div class="example">
+    <div class="example card">
       <h4>Manji otkupljivač</h4>
       <div class="who">3 stanice · bez modula</div>
       <table>
@@ -476,7 +549,7 @@
       <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">500 €</div></div>
     </div>
 
-    <div class="example">
+    <div class="example card">
       <h4>Otkupljivač u razvoju</h4>
       <div class="who">10 stanica · Desktop all-in</div>
       <table>
@@ -486,13 +559,13 @@
       <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">1.450 €</div></div>
     </div>
 
-    <div class="example">
+    <div class="example card">
       <h4>Hladnjača</h4>
       <div class="who">10 stanica · Mobile all-in · GGAP</div>
       <table>
         <tr><td>Mobile all-in</td><td class="num">2.200 €</td></tr>
         <tr><td>5 dodatnih stanica</td><td class="num">250 €</td></tr>
-        <tr><td>GGAP <span class="tag q">na upit</span></td><td class="num">1.000 €</td></tr>
+        <tr><td>GGAP <span class="tag">na upit</span></td><td class="num">1.000 €</td></tr>
       </table>
       <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">3.450 €</div></div>
     </div>
@@ -503,7 +576,7 @@
     i uz potvrdu obima, pa iznos od 1.000 € treba čitati kao donju granicu, ne kao fiksnu cenu.
   </p>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">08</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">08</span></footer>
 </section>
 
 <!-- 09 — uslovi -->
@@ -513,8 +586,8 @@
   <div class="rule"></div>
   <p class="lead">Godišnja pretplata pokriva korišćenje, ažuriranja i podršku.</p>
 
-  <div class="cols" style="flex:1">
-    <div class="col">
+  <div class="cols" style="align-items:flex-start">
+    <div class="col card">
       <div class="sechead">Uključeno u pretplatu</div>
       <ul class="check">
         <li>Korišćenje bez ograničenja broja korisnika i uređaja</li>
@@ -525,7 +598,7 @@
         <li>Vikend podrška za kritične incidente u sezoni</li>
       </ul>
     </div>
-    <div class="col">
+    <div class="col card">
       <div class="sechead">Naplaćuje se posebno</div>
       <ul class="cross">
         <li>Čišćenje podataka nastalih greškom korisnika</li>
@@ -538,11 +611,11 @@
     </div>
   </div>
 
-  <div class="callout">
+  <div class="callout green">
     <div class="lbl">Podrška</div>
     <p>Radnim danima 08.00–16.00. Tokom sezone, od 1. juna do 30. novembra, podrška za kritične incidente
        pruža se i vikendom. Za kritične incidente prijem se potvrđuje i dijagnostika započinje u roku od
-       jednog sata, u sezoni svakog dana od 08.00 do 20.00, a van sezone radnim danima od 08.00 do 16.00.</p>
+       jednog sata — u sezoni svakog dana od 08.00 do 20.00, a van sezone radnim danima od 08.00 do 16.00.</p>
   </div>
 
   <p class="fine">
@@ -550,7 +623,7 @@
     AgriX vodi operativni tok firme i povezuje se sa knjigovodstvom, ali ne zamenjuje računovodstveni ERP.
   </p>
 
-  <footer><span>AgriX · Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">09</span></footer>
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">09</span></footer>
 </section>
 
 </body>

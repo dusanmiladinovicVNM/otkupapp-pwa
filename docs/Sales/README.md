@@ -8,7 +8,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 
 | Dokument | Verzija / datum | Sadržaj |
 |---|---|---|
-| `AgriX_Cenovnik_2027.html` | 27.07.2026. | **Izvor istine za cenovnik.** Cene se menjaju isključivo ovde. |
+| `AgriX_Cenovnik_2027.html` | 27.07.2026. | **Izvor istine za cenovnik.** Cene se menjaju isključivo ovde, u `data-eur` atributima. Koristi AgriX brand tokene iz `src/styles/base.css`, fontove iz `vendor/fonts/` i logo iz `img/` — relativnim putanjama, pa fajl mora ostati u `docs/Sales/`. |
 | `AgriX_Cenovnik_2027.pdf` | važi od sezone 2027 · 27.07.2026. | Generisani cenovnik za klijenta, 9 strana: paketi Desktop/Mobile i all-in varijante sa izričitim sastavom, moduli sa obračunskom jedinicom, stanice i dodatna instanca, Gazdinstvo, **dve tarife Savetnika** (standalone i Enterprise), **dve satnice** (razvojna 50 €/h i implementaciona 30 €/h), primeri obračuna, šta je uključeno u pretplatu. |
 | `AgriX_Materijal_za_prvi_kontakt.pdf` | v1 · 26.07.2026. | Prodajni prozori po kulturama, tri tira i tri poruke, skripta telefonskog razgovora, email šabloni, prigovori i odgovori, šta se nikada ne obećava, evidencija posle poziva, model talasa. |
 | `AgriX_Sablon_ponude.xlsx` | v1 · 26.07.2026. | Radni šablon ponude sa listom `Cenovnik` kao jedinim mestom za cene. Ponuda povlači vrednosti iz cenovnika; cene se ne kucaju u ponudu. |
@@ -22,7 +22,7 @@ Napomene:
   tools/cenovnik.sh check    # poredi cene u .html sa ostala tri mesta
   ```
 
-  Zavisnost je Chromium/Chrome (headless print-to-pdf); `CHROME_BIN` može da nadjača automatsko pronalaženje.
+  Zavisnost je Chromium/Chrome (headless print-to-pdf); `CHROME_BIN` može da nadjača automatsko pronalaženje. `check` čita cene iz `data-cena`/`data-eur` atributa, pa ne puca kad se menja dizajn, i proverava da se atribut poklapa sa prikazanim tekstom.
 
 - **Cene moraju biti identične na četiri mesta:** `AgriX_Cenovnik_2027.html`, list `Cenovnik` u šablonu ponude, Prilog 1 ugovora (`docs/Legal/AgriX_Ugovor_o_licenciranju.md`) i finansijski model. `tools/cenovnik.sh check` to proverava programski;
 - cene se menjaju samo kada se promeni odluka o ceni (izvor: odluke 339, 341, 349–358, 409–422);

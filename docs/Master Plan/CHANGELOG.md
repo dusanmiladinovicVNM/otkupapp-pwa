@@ -11,9 +11,11 @@
 
 - **`AgriX_Cenovnik_2027.pdf` regenerisan** sa svih jedanaest izmena iz cenovne revizije: all-in 1.200 i 2.200 €, izričit sastav all-in paketa uz naglašeno da Desktop all-in ne sadrži Dispatch, Hladnjača po proizvodnom pogonu i dodatni pogon 200 €, dve satnice, vreme puta po implementacionoj satnici, Enterprise tarifa Savetnika, GGAP sa oznakom „na upit“, preračunati primeri (500 / 1.450 / 3.450 €) i datum 27.07.2026.
 
-### Napomena
+### Vizuelni identitet
 
-- Vizuelni raspored PDF-a je nov, jer je original bio dizajniran van repoa i nije imao izvorni fajl. Sadržaj i struktura odeljaka su zadržani; stranica je i dalje devet.
+- Cenovnik je usklađen sa **AgriX vizuelnim identitetom**: brand tokeni iz `src/styles/base.css` (forest `#1E2D14`, accent `#5EA135`, gold `#C8A84B`, cream skala, radius skala), tipografija Cormorant Garamond + DM Sans iz `vendor/fonts/`, logo `img/AgriX-Logo-Final_Novi.png` na naslovnoj i wordmark u podnožju;
+- forest naslovna strana, kartice sa brand radius-om, zelene oznake za uključeno i zlatne za „na upit“;
+- `check` više ne zavisi od izgleda — cene se čitaju iz `data-cena`/`data-eur` atributa i porede sa prikazanim tekstom.
 
 ## 2026-07-27 (3) — cenovna revizija, odluke 409–422
 
