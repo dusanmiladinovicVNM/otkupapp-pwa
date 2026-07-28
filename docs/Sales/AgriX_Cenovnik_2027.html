@@ -87,7 +87,8 @@ footer {
 }
 .wordmark { font-family:var(--font-display); font-weight:700; font-size:10pt; letter-spacing:.01em; }
 .wordmark .a { color:var(--gold); } .wordmark .x { color:var(--accent); }
-footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; color:var(--forest); }
+footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; color:var(--forest);
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 
 /* ---------- naslovna ---------- */
 .cover { background:var(--forest); justify-content:space-between; padding:20mm 17mm 15mm; }
@@ -95,6 +96,7 @@ footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; c
 .cover h1 {
   font-family:var(--font-display); font-weight:700; font-size:58pt;
   color:var(--cream); line-height:.98; letter-spacing:-.01em;
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1;
 }
 .cover h1 em { font-style:normal; color:var(--gold); }
 .cover .sub { font-size:12pt; color:var(--accent-pale); margin-top:4mm; font-weight:500; }
@@ -137,7 +139,8 @@ footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; c
 /* ---------- paketi ---------- */
 .pkg { flex:1; display:flex; flex-direction:column; }
 .pkg h3 { font-family:var(--font-display); font-size:19pt; font-weight:600; color:var(--forest); }
-.pkg .price { font-family:var(--font-display); font-size:40pt; font-weight:700; color:var(--forest); line-height:1; margin-top:2.5mm; }
+.pkg .price { font-family:var(--font-display); font-size:40pt; font-weight:700; color:var(--forest); line-height:1; margin-top:2.5mm;
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 .pkg .price small { font-size:22pt; }
 .pkg .per { font-size:7.6pt; color:var(--text-muted); margin-top:1.5mm; }
 .pkg ul { list-style:none; margin-top:5mm; flex:1; }
@@ -150,7 +153,8 @@ footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; c
 }
 .pkg .allin span { font-size:8pt; color:var(--text-secondary); }
 .pkg .allin span b { display:block; font-size:9.5pt; color:var(--forest); }
-.pkg .allin .p { font-family:var(--font-display); font-size:22pt; font-weight:700; color:var(--forest); white-space:nowrap; }
+.pkg .allin .p { font-family:var(--font-display); font-size:40pt; font-weight:700; color:var(--forest); white-space:nowrap; line-height:1;
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 
 /* ---------- tabele ---------- */
 table { width:100%; border-collapse:collapse; }
@@ -161,7 +165,8 @@ th {
 td { padding:3.4mm 0; border-bottom:1px solid var(--cream-warm); font-size:9.8pt; vertical-align:top; color:var(--text-secondary); }
 td b { color:var(--forest); }
 td.num, th.num { text-align:right; white-space:nowrap; }
-td.num { font-family:var(--font-display); font-weight:700; font-size:13.5pt; color:var(--forest); }
+td.num { font-family:var(--font-display); font-weight:700; font-size:13.5pt; color:var(--forest);
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 td.desc { color:var(--text-muted); font-size:8.8pt; }
 tr:last-child td { border-bottom:none; }
 
@@ -175,14 +180,16 @@ tr:last-child td { border-bottom:none; }
 .modgrid { display:flex; gap:4mm; }
 .mod { flex:1; background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:6mm 5mm; }
 .mod b { display:block; font-family:var(--font-display); font-size:15pt; font-weight:600; color:var(--forest); line-height:1.15; min-height:13mm; }
-.mod .p { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--forest); line-height:1; }
+.mod .p { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--forest); line-height:1;
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 .mod .u {
   display:inline-block; font-size:6.5pt; color:var(--accent); font-weight:700;
-  text-transform:uppercase; letter-spacing:.08em; margin:2mm 0 2.5mm;
-  background:rgba(94,161,53,.10); padding:.9mm 2mm; border-radius:99px;
+  text-transform:uppercase; letter-spacing:.08em; margin:2mm 0 1mm;
+  background:rgba(94,161,53,.10); padding:.9mm 2mm; border-radius:99px; line-height:1.35;
 }
 .mod .u.gold { color:#6d5a1e; background:var(--gold-pale); }
-.mod p { font-size:8.6pt; color:var(--text-muted); }
+.mod .u.nb { color:var(--text-muted); background:rgba(30,45,20,.06); margin-top:0; }
+.mod p { font-size:8.6pt; color:var(--text-muted); margin-top:2mm; }
 
 /* ---------- primeri ---------- */
 .example { flex:1; display:flex; flex-direction:column; }
@@ -192,13 +199,22 @@ tr:last-child td { border-bottom:none; }
 .example td { font-size:9.4pt; padding:2.8mm 0; }
 .example td.num { font-size:11.5pt; }
 .example .sum { background:var(--forest); border-radius:var(--radius-sm); margin-top:4mm; padding:3.5mm 4mm; }
+.example .addon { display:flex; justify-content:space-between; align-items:center; gap:2mm;
+  margin-top:2.5mm; padding:0 1mm; font-size:8.4pt; color:var(--text-muted); }
+.example .addon .p { font-family:var(--font-display); font-weight:700; font-size:11pt; color:var(--text-secondary);
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; white-space:nowrap; }
 .example .sum .lbl { font-size:6.5pt; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-pale); font-weight:700; }
-.example .sum .val { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--white); line-height:1.1; margin-top:.5mm; }
+.example .sum .val { font-family:var(--font-display); font-size:28pt; font-weight:700; color:var(--white); line-height:1.1; margin-top:.5mm;
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
 
 /* ---------- liste uslova ---------- */
 .check li, .cross li { font-size:9.4pt; color:var(--text-secondary); padding:3mm 0 3mm 6.5mm; position:relative; border-bottom:1px solid var(--cream-warm); list-style:none; }
 .check li:last-child, .cross li:last-child { border-bottom:none; }
-.check li::before { content:"✓"; position:absolute; left:0; color:var(--accent); font-weight:700; }
+.check li::before {
+  content:""; position:absolute; left:.6mm; top:3.4mm;
+  width:1.5mm; height:2.8mm; border:solid var(--accent); border-width:0 1.6px 1.6px 0;
+  transform:rotate(45deg);
+}
 .cross li::before { content:"—"; position:absolute; left:0; color:var(--text-light); font-weight:700; }
 .sechead { font-size:7.6pt; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--forest); margin-bottom:3mm; }
 
@@ -224,7 +240,7 @@ tr:last-child td { border-bottom:none; }
   </div>
   <div class="note">
     Cene u EUR, plative u dinarskoj protivvrednosti po srednjem kursu NBS na dan uplate.
-    Bez PDV-a, na godišnjem nivou. Važi od sezone 2027. &nbsp;·&nbsp; Verzija 27.07.2026.
+    Bez PDV-a, na godišnjem nivou. Važi od sezone 2027. &nbsp;·&nbsp; Verzija 3 · 27.07.2026.
   </div>
 </section>
 
@@ -329,7 +345,7 @@ tr:last-child td { border-bottom:none; }
     <div class="mod">
       <b>Hladnjača<br>Proizvodnja</b>
       <div class="p">400 €</div>
-      <div class="u gold">po pogonu</div>
+      <div class="u gold">po proizvodnom pogonu</div>
       <p>Prijem sirovine, klasiranje, prerada, utrošak, otpad, prinos i gotovi proizvodi.</p>
     </div>
     <div class="mod">
@@ -347,7 +363,8 @@ tr:last-child td { border-bottom:none; }
     <div class="mod">
       <b>Dispatch</b>
       <div class="p">200 €</div>
-      <div class="u">samo uz Mobile</div>
+      <div class="u">po pravnom licu</div>
+      <div class="u nb">samo uz Mobile</div>
       <p>Raspoređivanje vozila i vozača, rute, kapaciteti, dispečerski pregled.</p>
     </div>
   </div>
@@ -444,8 +461,8 @@ tr:last-child td { border-bottom:none; }
       </p>
     </div>
 
-    <div class="col card hi">
-      <h3 style="font-family:var(--font-display); font-size:17pt; font-weight:600; color:var(--forest)">AgriX Savetnik</h3>
+    <div class="col card">
+      <h3 style="font-family:var(--font-display); font-size:17pt; font-weight:600; color:var(--forest)">AgriX Savetnik<span class="tag">u pripremi</span></h3>
       <div class="per" style="font-size:7.6pt; color:var(--text-muted); margin:1mm 0 4mm">Za agronome i savetodavne službe</div>
       <table>
         <tr><th>Tarifa</th><th class="num">Osnovica</th><th class="num">Preko 10</th></tr>
@@ -458,13 +475,19 @@ tr:last-child td { border-bottom:none; }
         aktivnim Enterprise ugovorom. Prestankom tog ugovora prelazi se na standalone tarifu
         pri prvoj narednoj obnovi, bez retroaktivnog obračuna.
       </p>
+      <p class="fine" style="border-top:none; padding-top:0; margin-top:3mm">
+        <b>AgriX Savetnik je u pripremi.</b> Tarife su objavljene da bi planiranje bilo moguće,
+        ali se proizvod ne ugovara dok ne bude stabilan. Termin uvođenja potvrđuje se posebno.
+      </p>
     </div>
   </div>
 
   <div class="callout green">
     <div class="lbl">Savetnik u praksi</div>
     <p>Jedan interfejs za ceo portfelj: radni nalozi, preporuke i praćenje izvršenja.
-       Gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni.</p>
+       Gazdinstva u portfelju drže sopstvenu Pro pretplatu po kanalskoj ceni od 20 €.
+       <b>Izuzetak:</b> kada su gazdinstva već pokrivena partnerskim paketom hladnjače, njihov Pro je
+       time plaćen i ne naplaćuje se ponovo — savetnik u tom slučaju plaća samo alat.</p>
   </div>
 
   <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">06</span></footer>
@@ -475,7 +498,7 @@ tr:last-child td { border-bottom:none; }
   <div class="eyebrow">Usluge</div>
   <h2>Rad, obuka i oprema</h2>
   <div class="rule"></div>
-  <p class="lead">Sve što nije deo godišnje pretplate. Postoje tačno dve satnice, i biraju se prema prirodi posla, ne prema mestu izvođenja.</p>
+  <p class="lead">Šta se naplaćuje pored godišnje pretplate, i šta je u nju već uključeno. Postoje tačno dve satnice, i biraju se prema prirodi posla, ne prema mestu izvođenja.</p>
 
   <div class="card">
     <table>
@@ -565,15 +588,18 @@ tr:last-child td { border-bottom:none; }
       <table>
         <tr><td>Mobile all-in</td><td class="num">2.200 €</td></tr>
         <tr><td>5 dodatnih stanica</td><td class="num">250 €</td></tr>
-        <tr><td>GGAP <span class="tag">na upit</span></td><td class="num">1.000 €</td></tr>
       </table>
-      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">3.450 €</div></div>
+      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">2.450 €</div></div>
+      <div class="addon">
+        <span>+ GGAP <span class="tag">na upit</span></span>
+        <span class="p">od 1.000 €</span>
+      </div>
     </div>
   </div>
 
   <p class="fine">
-    Treći primer uključuje GGAP radi ilustracije. GGAP nije deo standardne ponude — kotira se samo na upit
-    i uz potvrdu obima, pa iznos od 1.000 € treba čitati kao donju granicu, ne kao fiksnu cenu.
+    Treći primer prikazuje GGAP odvojeno od ukupnog iznosa, jer se kotira samo na upit i uz potvrdu obima.
+    Iznos od 1.000 € je donja granica, ne fiksna cena.
   </p>
 
   <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">08</span></footer>
@@ -616,6 +642,14 @@ tr:last-child td { border-bottom:none; }
     <p>Radnim danima 08.00–16.00. Tokom sezone, od 1. juna do 30. novembra, podrška za kritične incidente
        pruža se i vikendom. Za kritične incidente prijem se potvrđuje i dijagnostika započinje u roku od
        jednog sata — u sezoni svakog dana od 08.00 do 20.00, a van sezone radnim danima od 08.00 do 16.00.</p>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Prestanak i obnova</div>
+    <p>Ako se ugovor ne obnovi, pristup prelazi u režim samo za čitanje u trajanju od 30 dana. U tom roku
+       podaci se mogu izvesti u standardnim formatima. Po isteku tog roka pristup se gasi.</p>
+    <p style="margin-top:2.5mm">Pretplata je godišnja bez obzira na dužinu sezone. Sezonski rad ne umanjuje
+       cenu — sistem, ažuriranja i podrška stoje na raspolaganju tokom cele godine.</p>
   </div>
 
   <p class="fine">

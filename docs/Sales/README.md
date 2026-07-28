@@ -29,6 +29,6 @@ Napomene:
 - šablon ponude je prazan obrazac — popunjene ponude sa podacima klijenta se ne commit-uju;
 - hardverska podrška (odluka 357) i cena po gazdinstvu kod Savetnika (odluka 341) potvrđene su 27.07.2026.;
 - Dispatch se nudi samo uz Mobile paket (odluka 293). **GGAP se sme prikazati samo uz vidljivu oznaku „na upit, uz potvrdu obima — nije deo standardne ponude“** (odluka 417); ostaje van redovne komercijalne ponude do validacije (odluka 405);
-- Savetnik ima dve objavljene tarife — standalone 150 €/15 € i Enterprise 100 €/10 € (odluke 419, 420) — ali se ne ugovara dok proizvod ne bude stabilan (odluka 217);
+- **Savetnik nosi oznaku „u pripremi“ i ne kotira se kao redovna stavka** (odluka 423). Ima dve objavljene tarife — standalone 150 €/15 € i Enterprise 100 €/10 € (odluke 419, 420) — ali se ne ugovara dok proizvod ne bude stabilan (odluka 217). U cenovniku ne sme nositi zlatni okvir ni drugu vizuelnu oznaku preporuke, i ne uvrštava se automatski u ponudu;
 - **nema pregovaračkih ni individualnih popusta** (odluka 418). Jedina cenovna razlika unutar istog obima je −50 % na drugu i svaku narednu instancu (odluka 413); objavljene razlike iz cenovnika nisu popusti;
 - marža na hardver (~100 €/stanici, odluke 356 i 407) je **interni podatak i ne prikazuje se klijentu**.
