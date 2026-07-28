@@ -282,7 +282,9 @@ Treći stub (odluke 269, 401, PRT3). Upravljački sloj nad većim brojem gazdins
 |---|---|
 | Implementacija | `Planned` — osnovna verzija do 2027 (odluka 203) |
 | Dokaz | `Unvalidated` |
-| Komercijalno | cena objavljena u `Cenovnik 2027` (odluke 341, 347); javna ponuda kreće kada proizvod bude stabilan (odluka 217) |
+| Komercijalno | **`U pripremi`** — cena objavljena u `Cenovnik 2027` (odluke 341, 347), ali se ne ugovara dok proizvod ne bude stabilan (odluke 217, 423) |
+
+`DECISION` (odluka 423): kad god se Savetnik prikaže u cenovniku, mora nositi **vidljivu oznaku „u pripremi“** i napomenu da se ne ugovara dok ne bude stabilan. Zlatni okvir ili druga vizuelna oznaka preporuke ne sme se koristiti na Savetniku dok traje taj status. Analogno odluci 417 za GGAP.
 
 Komercijalni model je dvostruk: savetnik plaća alat, a gazdinstva u portfelju zadržavaju sopstvenu Pro pretplatu po kanalskoj ceni od 20 € (odluke 340, 339). Postoje **dve objavljene tarife** (odluka 419):
 
@@ -400,9 +402,9 @@ Tačan status `Standard offer` ili `Controlled rollout` određuje se prema verzi
 - nove integracije bez produkcionog dokaza;
 - GGAP modul — van komercijalne ponude do validacije (odluka 405).
 
-### Cena objavljena, isporuka tek predstoji
+### U pripremi — cena objavljena, isporuka tek predstoji
 
-- AgriX Savetnik — cena je u `Cenovnik 2027` (odluke 341, 347), ali se javno nudi tek kada proizvod bude stabilan (odluka 217). Do tada se ne ugovara.
+- AgriX Savetnik — cena je u `Cenovnik 2027` (odluke 341, 347), prikazuje se uz obaveznu oznaku „u pripremi“ (odluka 423) i ne ugovara se dok proizvod ne bude stabilan (odluka 217).
 
 ---
 

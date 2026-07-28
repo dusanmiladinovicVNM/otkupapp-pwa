@@ -1,5 +1,27 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-27 (5) — cenovnik verzija 3, odluke 416 i 423
+
+### Added
+
+- **odluka 423** u `09_QA_DECISION_LOG.md` §26.1 — Savetnik se u cenovniku prikazuje samo uz vidljivu oznaku „u pripremi“, bez vizuelne oznake preporuke. Analogno odluci 417 za GGAP;
+- strana 9 cenovnika dobila blok **„Prestanak i obnova“** — read-only 30 dana i godišnja pretplata bez obzira na dužinu sezone. Oba podatka provereni: 30 dana u odluci 117 i članu 7(4) ugovora, sezonska pretplata u odluci 28.
+
+### Changed
+
+- **odluka 416 preformulisana:** bazne cene paketa objavljuju se kao **tačan iznos uz kvalifikator obima**, a „od X €“ samo tamo gde je iznos stvarno donja granica — trenutno samo GGAP. Time 416 **zamenjuje i odluku 297**, koja je ranije bila potvrđena; 297 je označena `Superseded`, a u `09B` je dobila `→ 416`;
+- **strana 4:** Dispatch je vraćena obračunska jedinica („po pravnom licu“) uz zasebnu neutralnu oznaku dostupnosti („samo uz Mobile“); Hladnjača ima punu formulaciju „po proizvodnom pogonu“ umesto skraćene;
+- **strana 6:** Savetnik nosi oznaku „u pripremi“, zlatni okvir uklonjen, dodata napomena da se ne ugovara; blok „Savetnik u praksi“ dopunjen izuzetkom da se Pro ne plaća dvaput kada su gazdinstva pokrivena partnerskim paketom;
+- **strana 7:** naslovna rečenica više ne protivreči redovima „uključeno“;
+- **strana 8:** treći primer prikazuje 2.450 € kao ukupan iznos, a GGAP stoji ispod tamnog bloka sa oznakom „na upit“ i „od 1.000 €“ — veliki broj sada sadrži samo fiksno kotirano;
+- **tipografija:** linijske cifre na svim cenama, all-in cena izjednačena sa baznom po veličini, kvačice na strani 9 crtaju se CSS-om umesto znakom U+2713 — `DejaVuSans-Bold` više nije u PDF-u;
+- `07_PRODUCT_PORTFOLIO.md` i `docs/Sales/README.md` dopunjeni statusom „u pripremi“;
+- u `AgriX_Sablon_ponude.xlsx` Savetnik redovi označeni `[u pripremi]` sa napomenom da se ne uvrštavaju u ponudu.
+
+### Napomena
+
+- Cene nisu dirane. Iznos od 2.450 € u trećem primeru je **prikaz**, ne promena cene — Prilog 1 ugovora i finansijski model ostaju nepromenjeni.
+
 ## 2026-07-27 (4) — cenovnik dobio izvor, PDF regenerisan
 
 ### Added
@@ -11,9 +33,11 @@
 
 - **`AgriX_Cenovnik_2027.pdf` regenerisan** sa svih jedanaest izmena iz cenovne revizije: all-in 1.200 i 2.200 €, izričit sastav all-in paketa uz naglašeno da Desktop all-in ne sadrži Dispatch, Hladnjača po proizvodnom pogonu i dodatni pogon 200 €, dve satnice, vreme puta po implementacionoj satnici, Enterprise tarifa Savetnika, GGAP sa oznakom „na upit“, preračunati primeri (500 / 1.450 / 3.450 €) i datum 27.07.2026.
 
-### Napomena
+### Vizuelni identitet
 
-- Vizuelni raspored PDF-a je nov, jer je original bio dizajniran van repoa i nije imao izvorni fajl. Sadržaj i struktura odeljaka su zadržani; stranica je i dalje devet.
+- Cenovnik je usklađen sa **AgriX vizuelnim identitetom**: brand tokeni iz `src/styles/base.css` (forest `#1E2D14`, accent `#5EA135`, gold `#C8A84B`, cream skala, radius skala), tipografija Cormorant Garamond + DM Sans iz `vendor/fonts/`, logo `img/AgriX-Logo-Final_Novi.png` na naslovnoj i wordmark u podnožju;
+- forest naslovna strana, kartice sa brand radius-om, zelene oznake za uključeno i zlatne za „na upit“;
+- `check` više ne zavisi od izgleda — cene se čitaju iz `data-cena`/`data-eur` atributa i porede sa prikazanim tekstom.
 
 ## 2026-07-27 (3) — cenovna revizija, odluke 409–422
 

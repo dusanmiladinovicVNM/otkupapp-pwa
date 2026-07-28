@@ -1,11 +1,11 @@
 # 09B — AgriX, sve odluke grupisane po oblastima
 
 **Datum:** 27.07.2026.  **Verzija:** 3
-**Izvor:** Q&A Decision Log 1–321, blokovi A/M/S/ML/I/D/P/IP/BC/L/Q/ON/C/MKT/PRT/LEG, plus odluke 323–378 iz sesije 26.07, 401–408 i 409–422 (cenovna revizija 27.07).
+**Izvor:** Q&A Decision Log 1–321, blokovi A/M/S/ML/I/D/P/IP/BC/L/Q/ON/C/MKT/PRT/LEG, plus odluke 323–378 iz sesije 26.07, 401–408 i 409–423 (cenovna revizija 27.07).
 **Namena:** indeks, ne zamena za 09a. Tekst je sažet na jednu liniju po odluci; merodavna formulacija ostaje u Decision Logu.
-**Numeracija:** 323–378 nastavlja niz posle 321; 401–422 posle toga. Brojevi 322 i 379–400 se ne koriste.
+**Numeracija:** 323–378 nastavlja niz posle 321; 401–423 posle toga. Brojevi 322 i 379–400 se ne koriste.
 
-> **Mesto u repou.** Merodavan Decision Log je `09_QA_DECISION_LOG.md`; ovaj fajl je tematski indeks nad njim. Odluke 323–378 unete su u `09_QA_DECISION_LOG.md` §25 na osnovu ovog indeksa i pratećih dokumenata (`docs/Sales/AgriX_Cenovnik_2027.pdf`, `docs/Legal/AgriX_Ugovor_o_licenciranju.docx`, `docs/Product/AgriX_Definicija_proizvoda.pdf`, `docs/Finance/AgriX_Finansijski_model.xlsx`). Odluke 401–408 su u §26, a 409–422 u §26.1; ovaj indeks ih obuhvata.
+> **Mesto u repou.** Merodavan Decision Log je `09_QA_DECISION_LOG.md`; ovaj fajl je tematski indeks nad njim. Odluke 323–378 unete su u `09_QA_DECISION_LOG.md` §25 na osnovu ovog indeksa i pratećih dokumenata (`docs/Sales/AgriX_Cenovnik_2027.pdf`, `docs/Legal/AgriX_Ugovor_o_licenciranju.docx`, `docs/Product/AgriX_Definicija_proizvoda.pdf`, `docs/Finance/AgriX_Finansijski_model.xlsx`). Odluke 401–408 su u §26, a 409–423 u §26.1; ovaj indeks ih obuhvata.
 >
 > `09B_ODLUKE_PO_OBLASTIMA_2026-07-26.pdf` je renderovani snimak verzije 2 na dan 26.07.2026. i zadržava se kao istorijski snimak. Kad se indeks menja, menja se `.md`; PDF je snimak i ne mora se osvežavati uz svaku izmenu.
 
@@ -99,7 +99,7 @@ Oznake: `⚠` stavka učestvuje u nerazrešenom konfliktu · `→ X` izmenjena o
 | 157 | Objavljuje se raspon za Hladnjača/Proizvodnja → 416|
 | 158 | Objavljuje se tačan iznos po dodatnoj stanici |
 | 159 | Objavljuju se tačne cene Gazdinstvo Basic i Pro |
-| 297 | U kolonama „od … godišnje", detalji niže |
+| 297 | U kolonama „od … godišnje", detalji niže → 416 |
 | 298 | Početna cena: jedno pravno lice + do pet stanica |
 | C4 | Promene cena pri obnovi su diskrecione |
 | **323** | **(nova)** Aktivna stanica = stanica sa makar jednim otkupnim blokom |
@@ -129,7 +129,7 @@ Oznake: `⚠` stavka učestvuje u nerazrešenom konfliktu · `→ X` izmenjena o
 | **413** | **(27.07)** Dodatna instanca −50 % na listu cena stavki koje koristi; dodatni pogon 200 € *(zamenjuje 133)* |
 | **414** | **(27.07)** Mobile = Desktop + fiksni dodatak 1.000 €, isti na oba nivoa *(zamenjuje 126 i 127)* |
 | **415** | **(27.07)** All-in = bazna + fiksna doplata 700 €; Desktop all-in bez Dispatch-a, Mobile all-in sa njim |
-| **416** | **(27.07)** Bazne cene paketa „od X €"; moduli, stanica, Gazdinstvo i Savetnik tačni iznosi *(zamenjuje 156 i 157)* |
+| **416** | **(27.07)** Tačan iznos uz kvalifikator obima; „od X €" samo gde je stvarno donja granica *(zamenjuje 156, 157 i 297)* |
 | **417** | **(27.07)** GGAP u cenovniku samo uz oznaku „na upit, uz potvrdu obima — nije deo standardne ponude" |
 | **418** | **(27.07)** Nema pregovaračkih ni individualnih popusta *(briše C3, 111, 112)* |
 | **421** | **(27.07)** Hladnjača/Proizvodnja 400 € po proizvodnom pogonu; uslov iz 130 ispunjen |
@@ -428,6 +428,7 @@ Oznake: `⚠` stavka učestvuje u nerazrešenom konfliktu · `→ X` izmenjena o
 | **401** | **(27.07)** Savetnik je treći ravnopravan stub uz Enterprise i Gazdinstvo *(potvrđuje 269)* |
 | **419** | **(27.07)** Dve tarife: standalone 150 €/15 €, Enterprise 100 €/10 € *(zamenjuje 207)* |
 | **420** | **(27.07)** Osnovica do 10 gazdinstava + fiksni iznos po gazdinstvu preko 10 *(zamenjuje 198)* |
+| **423** | **(27.07)** Savetnik u cenovniku samo uz oznaku „u pripremi"; bez vizuelne oznake preporuke |
 
 ---
 
@@ -782,3 +783,4 @@ Svih četrnaest konflikata iz audita zatvoreno je u sesiji 26.07.2026. Cenovna r
 | C3, #111, #112 | 418 — obrisane; nema pregovaračkih popusta |
 | IP4 | 422 — ista prva besplatna godina, ne dodatna |
 | #130 | 421 — cena Hladnjače više nije uslovljena |
+| #297 | 416 — tačan iznos umesto „od … godišnje" |

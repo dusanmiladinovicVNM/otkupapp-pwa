@@ -2,7 +2,7 @@
 
 **Datum sesije:** 24.07.2026.  
 **Status:** radni strateški zapis  
-**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesija — numerisane odluke 1–321, 323–378 i 401–422, uz serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q, S. Brojevi 322 i 379–400 se ne koriste; videti odeljak 27.  
+**Obuhvat:** odluke, korekcije, pretpostavke i otvorena pitanja iz Q&A sesija — numerisane odluke 1–321, 323–378 i 401–423, uz serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q, S. Brojevi 322 i 379–400 se ne koriste; videti odeljak 27.  
 **Tematski indeks:** `09B_ODLUKE_PO_OBLASTIMA.md`
 
 > Ovaj dokument čuva kompletan suštinski sadržaj sesije. Pomoćne formulacije asistenta koje nisu menjale odluke nisu prenete. Kada je kasnija odluka ispravila raniju, važi kasnija formulacija i to je izričito označeno.
@@ -380,7 +380,7 @@
 294. **Sekcija dodatnih modula.** Posle poređenja paketa prikazuje se posebna sekcija: Hladnjača/Proizvodnja, SEF, Banka i Dispatch. Prva tri mogu uz Desktop i Mobile; Dispatch se jasno označava kao Mobile-only.
 295. **Redosled dodatnih modula.** Redosled se prilagođava stranici i ciljnoj grupi. Na glavnoj Enterprise stranici Hladnjača/Proizvodnja ima prednost.
 296. **Bez posebnih stranica modula za sada.** Dodatni moduli ostaju sekcije unutar Enterprise sajta, različite dužine prema značaju.
-297. **Prikaz cena.** U kolonama paketa prikazuje se početna cena „od … godišnje“, a detaljni raspon i logika obračuna niže u posebnoj sekciji.
+297. **Prikaz cena.** U kolonama paketa prikazuje se početna cena „od … godišnje“, a detaljni raspon i logika obračuna niže u posebnoj sekciji. *`Superseded` 27.07.2026. odlukom 416 — prikazuje se tačan iznos uz kvalifikator obima, a „od“ se koristi samo gde je iznos stvarno donja granica.*
 298. **Obuhvat početne cene.** Početna cena obuhvata jedno pravno lice i do pet aktivnih otkupnih stanica. Dodatne stanice imaju javno navedenu godišnju cenu.
 299. **Odnos prema računovodstvenom ERP-u.** Ne ističe se rano na prodajnoj stranici. Objašnjava se u FAQ-u i tokom demonstracije: AgriX vodi operativni tok, ali ne zamenjuje računovodstveni ERP.
 300. **Prvo FAQ pitanje.** Najistaknutije pitanje je „Da li AgriX radi bez Mobile paketa?“ Odgovor mora potvrditi da je Desktop samostalno i kompletno rešenje.
@@ -741,12 +741,12 @@ Stanje na dan 27.07.2026.
 
 ---
 
-### 26.1 Dopuna 27.07.2026. — odluke 409–422
+### 26.1 Dopuna 27.07.2026. — odluke 409–423
 
 **Datum dopune:** 27.07.2026.  
-**Obuhvat:** satnice, obračunska jedinica modula, dodatna instanca, formiranje i prikaz cena, politika popusta, tarife Savetnika, i razrešenje pet preostalih konflikata iz cenovnog i komercijalnog dela.
+**Obuhvat:** satnice, obračunska jedinica modula, dodatna instanca, formiranje i prikaz cena, politika popusta, tarife Savetnika, prikaz proizvoda koji se još ne ugovara, i razrešenje pet preostalih konflikata iz cenovnog i komercijalnog dela.
 
-> Numeracija nastavlja niz posle 408. Brojevi 322 i 379–400 se ne koriste.
+> Numeracija nastavlja niz posle 408. Brojevi 322 i 379–400 se ne koriste. Odluka 423 dodata je 27.07. posle pregleda renderovanog cenovnika, zajedno sa preformulisanom 416.
 
 #### Satnice i usluge
 
@@ -781,7 +781,9 @@ Broj uključenih aktivnih stanica ostaje pet po pravnom licu i ne uvećava se ot
 
 **Sastav all-in paketa:** Desktop all-in obuhvata SEF, Banku i Hladnjača/Proizvodnja. Mobile all-in dodatno obuhvata i Dispatch, koji je po odluci 293 dostupan isključivo uz Mobile. Ovaj sastav mora biti izričito naveden u cenovniku i u Prilogu 1 ugovora. *Dopunjuje odluku 349.*
 
-416. **Politika prikaza cena.** Bazne cene paketa objavljuju se kao „od X € godišnje“, gde X obuhvata jedno pravno lice i do pet aktivnih stanica. Cene modula, dodatne stanice, Gazdinstva i Savetnika objavljuju se kao tačni fiksni iznosi. *Zamenjuje odluke 156 i 157. Potvrđuje 158, 159, 297 i 298.*
+416. **Politika prikaza cena.** Bazne cene paketa objavljuju se kao **tačan iznos**, uz obavezan kvalifikator obima u istom bloku: „godišnje · jedno pravno lice, do 5 stanica“. Formulacija **„od X €“ koristi se isključivo tamo gde iznos stvarno predstavlja donju granicu**, a ne fiksnu cenu — trenutno samo kod GGAP-a. Cene modula, dodatne stanice, Gazdinstva i Savetnika objavljuju se kao tačni fiksni iznosi. *Zamenjuje odluke 156, 157 i 297. Potvrđuje 158, 159 i 298.*
+
+> `REVIZIJA 27.07.2026.` — prvobitni tekst odluke 416 tražio je prikaz „od X € godišnje“ za bazne pakete i potvrđivao odluku 297. Pregled renderovanog cenovnika pokazao je da je tačan iznos uz kvalifikator obima precizniji, pa je 416 preformulisana i sada **zamenjuje** 297 umesto da je potvrđuje.
 
 417. **Prikaz GGAP-a u cenovniku.** GGAP ostaje u cenovniku sa cenom „od 1.000 € godišnje po pravnom licu“, uz **obaveznu vidljivu oznaku „na upit, uz potvrdu obima — nije deo standardne ponude“**. Bez te oznake stavka se ne sme prikazati, jer bi je prodaja mogla kotirati kao redovnu. *Precizira 352 u skladu sa 405.*
 
@@ -820,6 +822,10 @@ Kada su gazdinstva u portfelju već pokrivena partnerskim paketom hladnjače, sa
 
 422. **Jedno gratis pravilo.** Prva godina besplatnog korišćenja od produkcijskog puštanja (odluka 367) je **jedino** gratis pravilo u modelu. Pogodnost finansijera razvoja iz IP4 je ta ista pogodnost, ne dodatna. Finansijer zadržava prioritet u redosledu razvoja, ali ne dobija drugu besplatnu godinu. *Prepisuje IP4 i uklanja njegovu oznaku ⚠. Potvrđuje 367.*
 
+#### Prikaz proizvoda koji se još ne ugovara
+
+423. **Prikaz Savetnika u cenovniku.** AgriX Savetnik prikazuje se sa objavljenim tarifama iz odluke 419, uz **obaveznu vidljivu oznaku „u pripremi“** i napomenu da se proizvod ne ugovara dok ne bude stabilan. Bez te oznake stavka se ne sme prikazati. Zlatni okvir ili druga vizuelna oznaka preporuke ne sme se koristiti na Savetniku dok traje ovaj status. *Precizira 347 u skladu sa 217. Analogno odluci 417 za GGAP.*
+
 ---
 
 ## 27. Napomena o kontinuitetu numeracije
@@ -833,7 +839,7 @@ Stanje numerisanih odluka u repou:
 | 323–378 | uneto (odeljak 25); izvor `09B_ODLUKE_PO_OBLASTIMA.md` |
 | 379–400 | **ne koriste se** — nisu dodeljene |
 | 401–408 | uneto (odeljak 26) |
-| 409–422 | uneto (odeljak 26.1) — cenovna revizija 27.07.2026. |
+| 409–423 | uneto (odeljak 26.1) — cenovna revizija 27.07.2026. |
 
 Uz numerisane odluke važe i serije A, BC, C, D, I, IP, L, LEG, M, MKT, ML, ON, P, PRT, Q i S.
 

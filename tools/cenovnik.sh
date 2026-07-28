@@ -42,19 +42,20 @@ import sys, re, os
 root = sys.argv[1]
 html = open(os.path.join(root, 'docs/Sales/AgriX_Cenovnik_2027.html'), encoding='utf-8').read()
 
-def iz_htmla(labela):
-    m = re.search(labela, html, re.S)
-    return m.group(1).replace('.', '') if m else None
+# Cene se citaju iz data-cena/data-eur atributa, ne iz vidljivog teksta,
+# da provera ne pukne kad se promeni dizajn.
+ocek = {m.group(1): int(m.group(2))
+        for m in re.finditer(r'data-cena="([^"]+)"\s+data-eur="(\d+)"', html)}
+trazeno = {'Desktop', 'Desktop all-in', 'Mobile', 'Mobile all-in'}
+if set(ocek) != trazeno:
+    print('GRESKA: .html izvor ne nosi data-cena atribute za sve pakete.')
+    print('  nadjeno:', sorted(ocek), '| ocekivano:', sorted(trazeno)); sys.exit(1)
 
-ocek = {
-    'Desktop':        iz_htmla(r'AgriX Desktop</h3>\s*<div class="price">([\d.]+)\s*€'),
-    'Desktop all-in': iz_htmla(r'SEF, Banka i Hladnjača</span>\s*<b>([\d.]+)\s*€'),
-    'Mobile':         iz_htmla(r'AgriX Mobile</h3>\s*<div class="price">([\d.]+)\s*€'),
-    'Mobile all-in':  iz_htmla(r'SEF, Banka, Hladnjača i Dispatch</span>\s*<b>([\d.]+)\s*€'),
-}
-if None in ocek.values():
-    print('GRESKA: ne mogu da procitam sve cene iz .html izvora:', ocek); sys.exit(1)
-ocek = {k: int(v) for k, v in ocek.items()}
+# vidljivi tekst mora da se poklapa sa atributom
+for naziv, eur in ocek.items():
+    vid = re.search(r'data-cena="%s"\s+data-eur="%d"[^>]*>([\d.]+)' % (re.escape(naziv), eur), html)
+    if not vid or int(vid.group(1).replace('.', '')) != eur:
+        print(f'GRESKA: {naziv} — atribut {eur} se ne poklapa sa prikazanim tekstom'); sys.exit(1)
 
 greske = []
 try:
