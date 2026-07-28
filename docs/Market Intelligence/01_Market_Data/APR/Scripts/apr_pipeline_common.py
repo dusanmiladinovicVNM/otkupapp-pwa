@@ -25,6 +25,7 @@ COMPANIES_URL = "https://openapi.apr.gov.rs/api/opendata/companies"
 FINANCIALS_URL = "https://openapi.apr.gov.rs/api/opendata/companies/financial-statements"
 DEFAULT_ACTIVITY_CODES = ("1039", "4631")
 MB_PATTERN = re.compile(r"^\d{8}$")
+PIB_PATTERN = re.compile(r"^\d{9}$")
 APR_HOST = "openapi.apr.gov.rs"
 
 
@@ -61,6 +62,24 @@ def normalize_company_id(value: Any) -> str | None:
         return None
     text = text.zfill(8)
     return text if MB_PATTERN.fullmatch(text) else None
+
+
+def normalize_pib(value: Any) -> str | None:
+    """Normalizuje srpski PIB kao tekst od tačno devet cifara.
+
+    PIB se namerno čuva kao string da Excel/pandas ne bi promenili format,
+    odbacili vodeću nulu ili ga zapisali u naučnoj notaciji.
+    """
+    if value is None or pd.isna(value):
+        return None
+    text = str(value).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+    text = re.sub(r"\D", "", text)
+    if not text:
+        return None
+    text = text.zfill(9)
+    return text if PIB_PATTERN.fullmatch(text) else None
 
 
 def _validate_payload(url: str, response: requests.Response) -> dict[str, Any]:
