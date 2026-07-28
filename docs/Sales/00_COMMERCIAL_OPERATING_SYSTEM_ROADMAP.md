@@ -45,9 +45,9 @@ Po završetku, obučena osoba treba da može da:
 | ID | Oblast | Ključni deliverables | Status |
 |---|---|---|---|
 | COS-00 | Commercial Operating System | roadmap, pravila izvora istine, statusni pregled | DONE v1 |
-| COS-01 | Market positioning | kategorija, problem narrative, value pillars, proof hierarchy, anti-positioning | NOT STARTED |
-| COS-02 | Psychological profiles | buying committee, motivi, strahovi, rizik, jezik, dokazi, validaciona pitanja | IN PROGRESS |
-| COS-03 | Buying process | okidači, faze odluke, skriveni veto, sezonski prozori, decision map | NOT STARTED |
+| COS-01 | Market positioning | kategorija, problem narrative, value pillars, proof hierarchy, anti-positioning | DRAFT v1 — VALIDATION |
+| COS-02 | Psychological profiles | buying committee, motivi, strahovi, rizik, jezik, dokazi, validaciona pitanja | DRAFT v1 — VALIDATION |
+| COS-03 | Buying process | okidači, faze odluke, skriveni veto, sezonski prozori, decision map | DRAFT v1 — VALIDATION |
 | COS-04 | Sales process | faze, entry/exit kriterijumi, SLA, next-step discipline, no-deal pravila | NOT STARTED |
 | COS-05 | Discovery playbook | pre-call research, pitanja, implication map, success criteria, recap | NOT STARTED |
 | COS-06 | Email sequences | 6-mesečni cadence, grane, persona poruke, post-call i post-demo tekstovi | NOT STARTED |
@@ -129,9 +129,9 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | Oblast | Status |
 |---|---|
 | Commercial Operating System | DONE v1 |
-| Market Positioning | NOT STARTED |
-| Psychological Profiles | IN PROGRESS |
-| Buying Process | NOT STARTED |
+| Market Positioning | DRAFT v1 — VALIDATION |
+| Psychological Profiles | DRAFT v1 — VALIDATION |
+| Buying Process | DRAFT v1 — VALIDATION |
 | Sales Process | NOT STARTED |
 | Discovery Playbook | NOT STARTED |
 | Email Sequences | NOT STARTED |
