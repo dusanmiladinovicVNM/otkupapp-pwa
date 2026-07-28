@@ -48,7 +48,7 @@ Po završetku, obučena osoba treba da može da:
 | COS-01 | Market positioning | kategorija, problem narrative, value pillars, proof hierarchy, anti-positioning | DRAFT v1 — VALIDATION |
 | COS-02 | Psychological profiles | buying committee, motivi, strahovi, rizik, jezik, dokazi, validaciona pitanja | DRAFT v1 — VALIDATION |
 | COS-03 | Buying process | okidači, faze odluke, skriveni veto, sezonski prozori, decision map | DRAFT v1 — VALIDATION |
-| COS-04 | Sales process | faze, entry/exit kriterijumi, SLA, next-step discipline, no-deal pravila | NOT STARTED |
+| COS-04 | Sales process | faze, entry/exit kriterijumi, SLA, next-step discipline, no-deal pravila | DRAFT v1 — VALIDATION |
 | COS-05 | Discovery playbook | pre-call research, pitanja, implication map, success criteria, recap | NOT STARTED |
 | COS-06 | Email sequences | 6-mesečni cadence, grane, persona poruke, post-call i post-demo tekstovi | NOT STARTED |
 | COS-07 | Call playbooks | prvi poziv, drugi poziv, discovery, post-demo, proposal, reactivation | NOT STARTED |
@@ -132,7 +132,7 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | Market Positioning | DRAFT v1 — VALIDATION |
 | Psychological Profiles | DRAFT v1 — VALIDATION |
 | Buying Process | DRAFT v1 — VALIDATION |
-| Sales Process | NOT STARTED |
+| Sales Process | DRAFT v1 — VALIDATION |
 | Discovery Playbook | NOT STARTED |
 | Email Sequences | NOT STARTED |
 | Call Playbooks | NOT STARTED |
