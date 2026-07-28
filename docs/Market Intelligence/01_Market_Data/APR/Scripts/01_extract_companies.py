@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import re
+from typing import Any
 
 import pandas as pd
 
@@ -12,10 +14,23 @@ from apr_pipeline_common import (
     ensure_directories,
     normalize_activity_code,
     normalize_company_id,
+    normalize_pib,
     request_json,
     sha256_file,
     utc_timestamp,
     write_json,
+)
+
+# APR Open Data šema se može menjati bez promene URL-a. Kandidati pokrivaju
+# dosad korišćene i očekivane nazive polja, a normalizovani fallback pronalazi
+# i ekvivalentno polje koje u nazivu sadrži PIB ili poreski identifikacioni broj.
+PIB_FIELD_CANDIDATES = (
+    "PIB",
+    "Pib",
+    "pib",
+    "PoreskiIdentifikacioniBroj",
+    "PoreskiBroj",
+    "TaxIdentificationNumber",
 )
 
 
@@ -37,6 +52,29 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _normalized_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value).lower())
+
+
+def extract_pib(company: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Vraća normalizovan PIB i naziv izvornog APR polja.
+
+    Prvo proverava eksplicitne kandidate, zatim radi oprezan fallback po nazivu
+    ključa. Ne pokušava da izvede PIB iz MB-a jer između ta dva identifikatora
+    ne postoji računska konverzija.
+    """
+    for field_name in PIB_FIELD_CANDIDATES:
+        if field_name in company:
+            return normalize_pib(company.get(field_name)), field_name
+
+    for field_name, value in company.items():
+        normalized = _normalized_key(field_name)
+        if normalized == "pib" or "poreskiidentifikacionibroj" in normalized:
+            return normalize_pib(value), str(field_name)
+
+    return None, None
+
+
 def main() -> None:
     args = parse_args()
     ensure_directories()
@@ -56,6 +94,9 @@ def main() -> None:
 
     rows: list[dict[str, object]] = []
     invalid_company_ids = 0
+    valid_pibs = 0
+    invalid_or_missing_pibs = 0
+    pib_source_fields: dict[str, int] = {}
 
     for raw_company_id, company in source_data.items():
         if not isinstance(company, dict):
@@ -69,9 +110,18 @@ def main() -> None:
         if company_id is None:
             invalid_company_ids += 1
 
+        pib, pib_source_field = extract_pib(company)
+        if pib is None:
+            invalid_or_missing_pibs += 1
+        else:
+            valid_pibs += 1
+        if pib_source_field:
+            pib_source_fields[pib_source_field] = pib_source_fields.get(pib_source_field, 0) + 1
+
         rows.append(
             {
                 "maticni_broj": company_id,
+                "pib": pib,
                 "naziv": company.get("PoslovnoIme"),
                 "sifra_delatnosti": activity_code,
                 "opstina": company.get("NazivOpstine"),
@@ -84,6 +134,9 @@ def main() -> None:
         raise RuntimeError("APR nije vratio nijednu firmu za izabrane šifre delatnosti.")
 
     df = pd.DataFrame(rows)
+    # Identifikatori moraju ostati tekst i u Excel izlazu.
+    df["maticni_broj"] = df["maticni_broj"].astype("string")
+    df["pib"] = df["pib"].astype("string")
     df = df.sort_values(["sifra_delatnosti", "naziv"], na_position="last").reset_index(drop=True)
 
     stamp = date_stamp()
@@ -101,6 +154,10 @@ def main() -> None:
         "api_total_records": len(source_data),
         "selected_records": len(df),
         "invalid_company_ids": invalid_company_ids,
+        "valid_pibs": valid_pibs,
+        "invalid_or_missing_pibs": invalid_or_missing_pibs,
+        "pib_coverage_ratio": round(valid_pibs / len(df), 6),
+        "pib_source_fields": pib_source_fields,
         "request": request_meta,
         "output_file": output_path.name,
         "output_sha256": sha256_file(output_path),
@@ -110,6 +167,14 @@ def main() -> None:
     print(f"Sačuvano: {output_path}")
     print(f"Pronađeno firmi: {len(df)}")
     print(f"Nevalidni matični brojevi: {invalid_company_ids}")
+    print(f"Validni PIB-ovi: {valid_pibs}")
+    print(f"Nedostajući ili nevalidni PIB-ovi: {invalid_or_missing_pibs}")
+    if valid_pibs == 0:
+        print(
+            "NAPOMENA: APR companies endpoint u ovom izvršavanju nije izložio PIB. "
+            "Kolona je ipak kreirana radi stabilne izlazne šeme; potreban je dodatni "
+            "autorizovani APR izvor ili drugi dozvoljeni registar za MB→PIB mapiranje."
+        )
     if request_meta["tls_fallback_used"]:
         print("NAPOMENA: TLS fallback je korišćen i zabeležen u metadata JSON-u.")
 
