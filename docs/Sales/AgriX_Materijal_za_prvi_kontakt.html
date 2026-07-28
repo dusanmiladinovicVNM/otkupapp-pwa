@@ -1,0 +1,386 @@
+<!doctype html>
+<!--
+  IZVOR ISTINE ZA MATERIJAL ZA PRVI KONTAKT. PDF se generise iz ovog fajla:
+      tools/materijal.sh build
+  Interni prodajni dokument — ne salje se klijentu.
+
+  Svaka tvrdnja o ceni, popustu, probi ili roku mora imati oslonac u
+  docs/Master Plan/09_QA_DECISION_LOG.md. Kad se odluka promeni, menja se
+  ovaj fajl pa se PDF regenerise.
+
+  Brand tokeni i fontovi: _brand.css (isti kao cenovnik).
+-->
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<title>AgriX — Materijal za prvi kontakt</title>
+<link rel="stylesheet" href="_brand.css">
+<style>
+@page { size:A4; margin:0; }
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family:var(--font-body); color:var(--text-primary);
+  font-size:9.6pt; line-height:1.5;
+  -webkit-print-color-adjust:exact; print-color-adjust:exact;
+}
+.page {
+  width:210mm; height:297mm; padding:16mm 16mm 13mm;
+  position:relative; page-break-after:always;
+  background:var(--cream); display:flex; flex-direction:column;
+}
+.page:last-child { page-break-after:auto; }
+
+.eyebrow { font-size:7pt; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); font-weight:700; margin-bottom:4mm; }
+h2 { font-family:var(--font-display); font-size:27pt; font-weight:600; color:var(--forest); line-height:1.1; }
+h3 { font-family:var(--font-display); font-size:15pt; font-weight:600; color:var(--forest); margin-bottom:1.5mm; }
+.rule { height:2.5px; width:18mm; background:var(--gold); border-radius:2px; margin:3.5mm 0 5mm; }
+.lead { color:var(--text-secondary); font-size:10pt; margin-bottom:6mm; max-width:150mm; }
+
+footer {
+  position:absolute; left:16mm; right:16mm; bottom:8mm;
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:7pt; color:var(--text-muted);
+  border-top:1px solid var(--border); padding-top:2.5mm;
+}
+.wordmark { font-family:var(--font-display); font-weight:700; font-size:10pt; }
+.wordmark .a { color:var(--gold); } .wordmark .x { color:var(--accent); }
+footer .pg { font-family:var(--font-display); font-weight:700; font-size:11pt; color:var(--forest);
+  font-variant-numeric:lining-nums; font-feature-settings:"lnum" 1; }
+
+.card { background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md);
+  padding:5.5mm 5mm; box-shadow:0 1px 3px rgba(30,45,20,.05); }
+.cols { display:flex; gap:4.5mm; }
+.col { flex:1; }
+
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; font-size:6.8pt; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--text-muted); font-weight:700; padding:0 3mm 2mm 0; border-bottom:1px solid var(--border-strong); }
+td { padding:2.6mm 3mm 2.6mm 0; border-bottom:1px solid var(--cream-warm); font-size:9pt;
+  vertical-align:top; color:var(--text-secondary); }
+td b, td strong { color:var(--forest); }
+tr:last-child td { border-bottom:none; }
+
+.tier { border-left:3px solid var(--gold); padding-left:4mm; margin-bottom:5mm; }
+.tier.t2 { border-left-color:var(--accent); }
+.tier.t3 { border-left-color:var(--text-light); }
+.tier .lbl { font-size:7pt; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:var(--gold); }
+.tier.t2 .lbl { color:var(--accent); } .tier.t3 .lbl { color:var(--text-muted); }
+.tier p { font-size:9pt; color:var(--text-secondary); margin-top:1.5mm; }
+.tier .q { display:block; margin-top:2mm; font-style:italic; color:var(--forest); }
+
+.script { background:var(--forest); color:var(--cream); border-radius:var(--radius-sm);
+  padding:4.5mm 5mm; margin:3mm 0; font-size:9.2pt; line-height:1.55; }
+.script .lbl { display:block; font-size:6.8pt; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--gold-light); font-weight:700; margin-bottom:2mm; font-family:var(--font-body); }
+
+.mail { background:var(--white); border:1px solid var(--border); border-left:3px solid var(--accent);
+  border-radius:var(--radius-sm); padding:4.5mm 5mm; margin-bottom:4mm; }
+.mail .subj { font-size:7pt; letter-spacing:.1em; text-transform:uppercase; color:var(--text-muted); font-weight:700; }
+.mail .subj b { color:var(--forest); letter-spacing:0; text-transform:none; font-size:9pt; }
+.mail p { font-size:8.8pt; color:var(--text-secondary); margin-top:2.5mm; }
+
+.never li { font-size:9pt; color:var(--text-secondary); padding:2.6mm 0 2.6mm 6.5mm;
+  position:relative; border-bottom:1px solid var(--cream-warm); list-style:none; }
+.never li:last-child { border-bottom:none; }
+.never li::before { content:""; position:absolute; left:.8mm; top:4mm; width:2.6mm; height:1.6px;
+  background:#b34747; border-radius:1px; }
+.never li b { color:var(--forest); }
+
+.callout { background:var(--white); border:1px solid var(--border); border-left:3.5px solid var(--gold);
+  border-radius:var(--radius-sm); padding:4.5mm 5mm; margin-top:5mm; }
+.callout .lbl { font-size:7pt; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); font-weight:700; }
+.callout p { margin-top:2mm; font-size:9.2pt; color:var(--text-secondary); }
+.callout p b { color:var(--forest); }
+
+.num-list { counter-reset:n; list-style:none; }
+.num-list li { counter-increment:n; position:relative; padding:2.4mm 0 2.4mm 8mm;
+  font-size:9pt; color:var(--text-secondary); border-bottom:1px solid var(--cream-warm); }
+.num-list li:last-child { border-bottom:none; }
+.num-list li::before { content:counter(n); position:absolute; left:0; top:2.2mm;
+  font-family:var(--font-display); font-weight:700; font-size:12pt; color:var(--gold); line-height:1; }
+
+.fine { font-size:7.8pt; color:var(--text-muted); margin-top:5mm; border-top:1px solid var(--border); padding-top:3mm; }
+.odl { font-size:7pt; color:var(--text-light); }
+</style>
+</head>
+<body>
+
+<!-- 01 naslovna -->
+<section class="page" style="background:var(--forest); justify-content:space-between; padding:20mm 16mm 15mm">
+  <img src="../../img/AgriX-Logo-Final_Novi.png" alt="AgriX" style="width:58mm">
+  <div>
+    <h2 style="color:var(--cream); font-size:44pt">Materijal za<br><em style="font-style:normal; color:var(--gold)">prvi kontakt</em></h2>
+    <div style="font-size:11.5pt; color:var(--accent-pale); margin-top:4mm; font-weight:500">
+      Outreach prema identifikovanim prospektima do sezone 2027
+    </div>
+    <div style="height:3px; width:24mm; background:var(--gold); border-radius:2px; margin-top:8mm"></div>
+    <div class="script" style="margin-top:10mm; background:rgba(255,255,255,.07); border:1px solid rgba(200,168,75,.35)">
+      <span class="lbl">Pravilo iznad svih</span>
+      Na svaki dolazni upit odgovara se <b>istog dana</b>. Jedan lead od 400 miliona već je izgubljen na vremenu odziva.
+    </div>
+  </div>
+  <div style="font-size:8pt; color:var(--text-light); border-top:1px solid rgba(255,255,255,.14); padding-top:3.5mm">
+    Interni prodajni dokument — ne šalje se klijentu. Verzija 2 · 28.07.2026.
+  </div>
+</section>
+
+<!-- 02 kada koga zvati -->
+<section class="page">
+  <div class="eyebrow">Tajming</div>
+  <h2>Kada koga zvati</h2>
+  <div class="rule"></div>
+  <p class="lead">Prodajni prozor nije jedan. Otvara se po kulturama, kako koja firma izlazi iz sezone.</p>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:24%">Period</th><th style="width:34%">Segment</th><th>Zašto tada</th></tr>
+      <tr><td><b>avgust — septembar</b></td><td>malinari, kupinari, borovnica</td><td>sezona tek završena, bol je svež, novac je ušao</td></tr>
+      <tr><td><b>oktobar — novembar</b></td><td>šljiva, višnja, mešovite hladnjače</td><td>isto, samo pomereno</td></tr>
+      <tr><td><b>novembar — decembar</b></td><td>jabuka, kruška, skladišta</td><td>poslednji koji izlaze iz sezone</td></tr>
+      <tr><td><b>decembar — januar</b></td><td>svi segmenti</td><td>presek godine, priprema budžeta, vreme za odluku</td></tr>
+      <tr><td><b>februar</b></td><td>—</td><td>poslednji rok za potpis ako se ulazi u sezonu 2027</td></tr>
+      <tr><td><b>mart — maj</b></td><td>—</td><td>uvođenje, bez novih ugovora</td></tr>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Kada se ne javlja</div>
+    <p>Ne šalji ništa u julu i prvoj polovini avgusta osim malinarima. Ostali su u punom radu i poruka propada.</p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">02</span></footer>
+</section>
+
+<!-- 03 tri tira -->
+<section class="page">
+  <div class="eyebrow">Segmentacija</div>
+  <h2>Tri tira, tri poruke</h2>
+  <div class="rule"></div>
+  <p class="lead">Redosled: T1 prvi, jer nosi dokazanu zamenu i najkraći ciklus. T2 posle prvog talasa. T3 tek kada poruka bude proverena.</p>
+
+  <div class="card">
+    <div class="tier">
+      <div class="lbl">T1 · hladnjače koje već koriste konkurentski sistem</div>
+      <p>Najjači segment, jer imaš dokazanu zamenu kod dve firme sličnog obima.
+         <b>Ugao:</b> ne prodaješ softver, nego prelazak. Oni već znaju da im treba sistem — pitanje je samo šta im trenutni ne radi.
+         <span class="q">„Dve firme vaše veličine prešle su ove godine sa istog sistema na naš. Zanima me da li imate iste probleme koje su oni imali.“</span></p>
+    </div>
+    <div class="tier t2">
+      <div class="lbl">T2 · hladnjače sa nepoznatim ili delimičnim rešenjem</div>
+      <p>Rade u nečemu, ali ne u sistemu koji pokriva ceo tok. Obično Excel plus nešto.
+         <b>Ugao:</b> rascepkanost. Podatak se unosi više puta, ništa se ne poklapa, kraj sezone je haos.
+         <span class="q">„Koliko puta se kod vas isti podatak o otkupu unese pre nego što dođe do fakture?“</span></p>
+    </div>
+    <div class="tier t3" style="margin-bottom:0">
+      <div class="lbl">T3 · papir i Excel</div>
+      <p>Najveći broj, najduži ciklus, najmanja hitnost. Ne troši Sloj 3 personalizacije na njih.
+         <b>Ugao:</b> vreme. Otkupni list na terenu za nekoliko sekundi umesto ručnog pisanja.
+         <span class="q">„Koliko vam vremena dnevno u sezoni ode na papire oko otkupa?“</span></p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Talasi</div>
+    <p>Dvadeset firmi na svake dve do tri nedelje, ne svih sto odjednom. Posle svakog talasa se poruka koriguje prema onome što si čuo. <b>Ako se ispali cela lista sa pogrešnom porukom, lista je potrošena.</b></p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">03</span></footer>
+</section>
+
+<!-- 04 telefonski razgovor -->
+<section class="page">
+  <div class="eyebrow">Poziv</div>
+  <h2>Telefonski razgovor</h2>
+  <div class="rule"></div>
+  <p class="lead">Cilj poziva nije prodaja. Cilj je zakazana demonstracija.</p>
+
+  <div class="script">
+    <span class="lbl">Prvih dvadeset sekundi</span>
+    „Dobar dan, zovem se [ime], iz AgriX-a. Pravimo softver za otkup i hladnjače, radimo sa firmama u [region].
+    Zovem zato što ste [konkretan razlog iz istraživanja]. Imate dva minuta?“
+  </div>
+  <p style="font-size:8.8pt; color:var(--text-muted)">
+    Konkretan razlog mora da bude stvaran — broj stanica, sertifikat, kultura, prethodni sistem.
+    Bez toga je ovo hladan poziv kao svaki drugi.
+  </p>
+
+  <h3 style="margin-top:6mm">Tri kvalifikaciona pitanja</h3>
+  <p style="font-size:8.8pt; color:var(--text-muted); margin-bottom:2mm">Ista ona iz forme na sajtu.</p>
+  <div class="card" style="padding:4mm 5mm">
+    <ol class="num-list">
+      <li>Koliko otkupnih stanica imate i da li rade istovremeno?</li>
+      <li>U čemu danas vodite otkup i dokumenta?</li>
+      <li>Šta vas je prošle sezone najviše koštalo vremena ili živaca?</li>
+    </ol>
+  </div>
+  <p style="font-size:8.8pt; color:var(--text-muted); margin-top:2.5mm">
+    Treće pitanje nosi razgovor. Slušaj, ne prekidaj, i zapiši doslovno — to je rečenica koju kasnije koristiš na demonstraciji.
+  </p>
+
+  <div class="script" style="margin-top:6mm">
+    <span class="lbl">Zatvaranje</span>
+    „Ono što ste opisali je tačno ono što sistem rešava. Predlažem da vam za pola sata pokažem kako to izgleda
+    na vašem procesu — ne prezentaciju, nego stvarni tok. Kada vam odgovara, ove ili sledeće nedelje?“
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Ako kaže „pošaljite ponudu“</div>
+    <p>To je odbijanje u pristojnom obliku. Ponuda bez demonstracije ne prolazi.<br>
+    <b>„Poslaću, ali ponuda bez konteksta ne znači ništa — cena zavisi od broja stanica i od toga šta vam treba.
+    Dajte mi dvadeset minuta da vidim proces, pa ću vam poslati tačan iznos.“</b></p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">04</span></footer>
+</section>
+
+<!-- 05 email sabloni -->
+<section class="page">
+  <div class="eyebrow">Email</div>
+  <h2>Šabloni</h2>
+  <div class="rule"></div>
+  <p class="lead">Kratko. Bez priloga u prvom kontaktu. Jedno pitanje na kraju.</p>
+
+  <div class="mail">
+    <div class="subj">T1 · prelazak sa konkurentskog sistema<br><b>Prelazak sa [sistem] — dve hladnjače ove godine</b></div>
+    <p>Poštovani [ime],</p>
+    <p>Ove godine su dve hladnjače sličnog obima prešle sa [sistem] na AgriX. Kod obe je isti razlog bio presudan:
+       podatak se unosi jednom, na stanici, i dalje ide sam kroz dokumenta, zalihe i sledljivost.</p>
+    <p>Ne znam da li kod vas postoji isti problem. Ako postoji, pokazao bih vam za dvadeset minuta kako to izgleda u radu.</p>
+    <p>Da li vam odgovara neki termin ove nedelje?</p>
+  </div>
+
+  <div class="mail">
+    <div class="subj">T2 · rascepkan sistem<br><b>Otkup, prijem i fakture u jednom toku</b></div>
+    <p>Poštovani [ime],</p>
+    <p>Kod većine hladnjača se isti podatak o otkupu unese dva do tri puta pre nego što dođe do fakture.
+       Na kraju sezone to se vidi kroz neslaganja i vreme utrošeno na usaglašavanje.</p>
+    <p>AgriX vodi ceo tok od otkupa na stanici do fakture i sledljivosti, sa jednim unosom. Radimo sa hladnjačama u [region].</p>
+    <p>Koliko puta se kod vas taj podatak prekucava?</p>
+  </div>
+
+  <div class="mail">
+    <div class="subj">T3 · papir i Excel<br><b>Otkupni list na stanici, bez prekucavanja</b></div>
+    <p>Poštovani [ime],</p>
+    <p>Otkupljivač na stanici skenira QR kod proizvođača, unese količinu i odmah odštampa otkupni list.
+       Podatak istog trenutka stiže u centralu — bez večernjeg prekucavanja i bez papira koji se gube.</p>
+    <p>Ako vam je sezona prošla u papirologiji, pokazao bih vam kako to izgleda.</p>
+  </div>
+
+  <div class="mail" style="border-left-color:var(--text-light); margin-bottom:0">
+    <div class="subj">Podsećanje · sedam dana kasnije</div>
+    <p>Javljam se kratko na prethodnu poruku. Ako sada nije pravi trenutak, recite mi kada jeste —
+       zovem ponovo tada i ne opterećujem vas u međuvremenu.</p>
+    <p style="color:var(--text-muted)"><b>Posle drugog podsećanja se ne javljaj do sledeće sezone.</b></p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">05</span></footer>
+</section>
+
+<!-- 06 prigovori -->
+<section class="page">
+  <div class="eyebrow">Prigovori</div>
+  <h2>Šta ćeš čuti</h2>
+  <div class="rule"></div>
+  <p class="lead">Odgovori su usklađeni sa važećim odlukama. Ako ti se čini da neki odgovor više ne stoji, proveri odluku pre nego što improvizuješ.</p>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:27%">Prigovor</th><th>Odgovor</th></tr>
+      <tr><td><b>„Imamo već softver.“</b></td><td>„Znam, zato i zovem. Pitanje nije da li imate sistem, nego šta vam trenutni ne radi. Šta ste prošle sezone morali da radite ručno?“</td></tr>
+      <tr><td><b>„Ne treba nam mobilna aplikacija.“</b></td><td>„Ni ne mora. Desktop je kompletan i samostalan paket, i jeftiniji je. Mobile je nadgradnja za terenski rad, ne uslov.“ <span class="odl">(286)</span></td></tr>
+      <tr><td><b>„Da li zamenjuje knjigovodstvo?“</b></td><td>„Ne. AgriX vodi operativni tok — otkup, preradu, skladište, sledljivost — i povezuje se sa knjigovodstvom. Glavna knjiga i PDV ostaju gde jesu.“ <span class="odl">(72, 73)</span></td></tr>
+      <tr><td><b>„Koliko traje uvođenje?“</b></td><td>„Standardno uvođenje je pola dana. Posle analize vaših podataka dobijate poseban plan i dogovoren datum početka rada.“ <span class="odl">(305)</span></td></tr>
+      <tr><td><b>„Skupo je.“</b></td><td>„Uporedite sa onim što vam trenutno odlazi na administraciju. Kod klijenata koji su prešli, ušteda vremena se meri satima nedeljno po stanici.“ <b>Cena se ne spušta — ni na prvom pozivu, ni kasnije.</b> <span class="odl">(418)</span></td></tr>
+      <tr><td><b>„Dajte nam popust.“</b></td><td>„Nemam ga da dam, i to nije pregovaračka pozicija nego pravilo. Cena zavisi samo od paketa, broja aktivnih stanica, modula i broja instanci — ista je za sve pri istom obimu. Jedino umanjenje koje postoji je 50 % na drugu instancu istog pravnog lica.“ <span class="odl">(418, 413, 30, 113)</span></td></tr>
+      <tr><td><b>„Nemamo sada vremena, sezona je.“</b></td><td>„Zato i zovem sada, a ne u maju. Odluka se donosi sada, uvođenje ide na proleće, i sistem je spreman pre nego što vam zatreba.“</td></tr>
+      <tr><td><b>„Šta ako vas sutra nema?“</b></td><td>Tri rečenice, doslovno: podaci su vaši i izvoze se u standardnom formatu u svakom trenutku; Desktop radi lokalno i nastavlja da radi bez ikakve veze sa nama do isteka licence; ugovorom je predviđeno uvođenje druge tehnički ovlašćene osobe. <span class="odl">(336)</span></td></tr>
+      <tr><td><b>„Možemo li da probamo?“</b></td><td>„Možete, ali posle demonstracije. Prvo da vidim vaš proces, pa vam dam pristup koji ima smisla.“ <span class="odl">(371)</span></td></tr>
+      <tr><td><b>„Hoćete li nam napraviti [funkcija]?“</b></td><td>„Možda, ali vam to sada ne obećavam. Kupujete ono što sistem danas radi. Ako je funkcija široko primenjiva, ulazi u razvoj; ako je specifična, procenjujemo je posebno.“ <span class="odl">(235, 21)</span></td></tr>
+      <tr><td><b>„Pošaljite materijal pa ćemo videti.“</b></td><td>„Poslaću, ali materijal ne pokazuje ono što je važno. Dvadeset minuta uživo vredi više od deset strana.“</td></tr>
+    </table>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">06</span></footer>
+</section>
+
+<!-- 07 sta se nikada ne obecava -->
+<section class="page">
+  <div class="eyebrow">Granice</div>
+  <h2>Šta se nikada ne obećava</h2>
+  <div class="rule"></div>
+  <p class="lead">Ovo nisu preporuke nego pravila. Svako od njih ima odluku iza sebe.</p>
+
+  <div class="card">
+    <ul class="never">
+      <li><b>Rok za funkciju koja ne postoji.</b> Roadmap se ne objavljuje i nije prodajno obećanje. <span class="odl">(315, 235)</span></li>
+      <li><b>Popust.</b> Pregovaračkih i individualnih popusta nema. Cena zavisi isključivo od paketa, broja aktivnih stanica, izabranih modula i broja instanci. Jedino umanjenje je 50 % na drugu i svaku narednu instancu istog pravnog lica. <span class="odl">(418, 413)</span></li>
+      <li><b>Ekskluzivnost u regionu.</b> Ne postoji, ni za koga. Direktni konkurenti mogu istovremeno biti klijenti. <span class="odl">(333)</span></li>
+      <li><b>Procenat dostupnosti.</b> Ne ugovara se. <span class="odl">(M13)</span></li>
+      <li><b>Da sistem garantuje sertifikat.</b> GGAP modul vodi proces, sertifikat daje sertifikaciona kuća. Modul se kotira samo na upit i uz potvrdu obima. <span class="odl">(417, 405)</span></li>
+      <li><b>AgriX Savetnik kao gotov proizvod.</b> U pripremi je. Tarife su objavljene radi planiranja, ali se ne ugovara dok ne bude stabilan. <span class="odl">(423, 217)</span></li>
+      <li><b>Prototip kao gotova funkcija.</b> Ako se prikazuje, mora biti označen kao razvojni i nedostupan za ugovaranje. <span class="odl">(259)</span></li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Zašto je popust pravilo, a ne stav</div>
+    <p>Ista cena pri istom obimu je odluka <b>418</b>, koja je ukinula ranije izuzetke za više pravnih lica i veliki broj stanica.
+       Popust datom jednom klijentu ruši cenu svima ostalima i pravi obavezu pri svakoj obnovi.
+       Objavljene razlike iz cenovnika — kanalska cena Gazdinstva, all-in doplata, Enterprise tarifa Savetnika,
+       prvih 50 Basic naloga — <b>nisu popusti</b> i o njima se ne pregovara.</p>
+  </div>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">07</span></footer>
+</section>
+
+<!-- 08 posle poziva -->
+<section class="page">
+  <div class="eyebrow">Evidencija</div>
+  <h2>Posle poziva</h2>
+  <div class="rule"></div>
+  <p class="lead">Svaki kontakt, bez izuzetka.</p>
+
+  <div class="cols">
+    <div class="col card">
+      <h3>Šta se beleži</h3>
+      <ul class="never" style="margin-top:2mm">
+        <li>datum i ishod</li>
+        <li>broj stanica i kulture</li>
+        <li><b>prethodni sistem</b> — najvrednije polje u celoj bazi</li>
+        <li>doslovna rečenica o najvećem problemu</li>
+        <li>sledeći korak i datum</li>
+      </ul>
+    </div>
+    <div class="col card">
+      <h3>Sedam brojeva</h3>
+      <p style="font-size:8.6pt; color:var(--text-muted); margin-bottom:1mm">Prate se od prvog talasa.</p>
+      <ul class="never" style="margin-top:2mm">
+        <li>kvalifikovani kontakti</li>
+        <li>demo iz kontakata</li>
+        <li>ugovor iz demoa</li>
+        <li>vreme do potpisa</li>
+        <li>vreme odziva na dolazni upit</li>
+        <li>sati po zatvorenom klijentu</li>
+        <li>stopa obnove</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">Zašto baš ovih sedam</div>
+    <p>Bez njih se ne može odlučiti o marketinškom budžetu. Prag za prelazak na viši nivo potrošnje
+       traži da <b>kanal dokazano konvertuje i da postoji kapacitet za isporuku</b> — oba uslova istovremeno,
+       uz pravilo povratka na niži nivo kada uslov prestane da važi. <span class="odl">(374)</span></p>
+  </div>
+
+  <p class="fine">
+    Ovaj dokument je interni. Ne šalje se prospektu ni klijentu. Kad se promeni neka od navedenih odluka,
+    menja se <code>AgriX_Materijal_za_prvi_kontakt.html</code> pa se PDF regeneriše sa <code>tools/materijal.sh build</code>.
+  </p>
+
+  <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Materijal za prvi kontakt · interni dokument</span><span class="pg">08</span></footer>
+</section>
+
+</body>
+</html>

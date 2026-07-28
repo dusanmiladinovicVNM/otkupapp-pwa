@@ -1,5 +1,23 @@
 # AgriX Master Plan — Change Log
 
+## 2026-07-28 — popravke posle pregleda foldera `docs/Sales/`
+
+Pregled sopstvenog rada u `docs/Sales/` našao je četiri nedostatka. Svi su otklonjeni.
+
+### Fixed
+
+- **materijal za prvi kontakt protivrečio odluci 418.** Tvrdio je „popust postoji samo za više pravnih lica i veliki broj stanica“ — gotovo doslovno tekst odluke C3, koju je 418 obrisala. Dokument je dobio izvor (`AgriX_Materijal_za_prvi_kontakt.html`), politika popusta je ispravljena, dodat je prigovor „Dajte nam popust“, i svaka tvrdnja sada nosi ID odluke;
+- **šablon ponude pogrešno računao više proizvodnih pogona.** Napomena je pratila odluku 412, formula nije: za dva pogona davao je 800 € umesto 600 €. Dodati redovi za dodatne pogone, Gazdinstvo Basic i dodatnu instancu;
+- **`cenovnik.sh check` pokrivao 4 od 22 iznosa**, a README je tvrdio da proverava usklađenost cena. Sada pokriva sve iznose, strukturu iz odluka 414 i 415, odsustvo mrtve tačke i izvedene zbirove u primerima;
+- **build nije bio determinističan** — svaki rebuild pravio je diff na binarnom PDF-u. `tools/render-pdf.sh` normalizuje vremenske pečate; dva build-a sada daju identičan fajl.
+
+### Added
+
+- `tools/render-pdf.sh` — zajednički deterministički HTML→PDF renderer;
+- `tools/materijal.sh` — build i check za materijal za prvi kontakt;
+- `docs/Sales/_brand.css` — zajednički brand tokeni, izdvojeni iz cenovnika da se ne dupliraju.
+
+
 ## 2026-07-27 (5) — cenovnik verzija 3, odluke 416 i 423
 
 ### Added

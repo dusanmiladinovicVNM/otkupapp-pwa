@@ -10,7 +10,9 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 |---|---|---|
 | `AgriX_Cenovnik_2027.html` | 27.07.2026. | **Izvor istine za cenovnik.** Cene se menjaju isključivo ovde, u `data-eur` atributima. Koristi AgriX brand tokene iz `src/styles/base.css`, fontove iz `vendor/fonts/` i logo iz `img/` — relativnim putanjama, pa fajl mora ostati u `docs/Sales/`. |
 | `AgriX_Cenovnik_2027.pdf` | važi od sezone 2027 · 27.07.2026. | Generisani cenovnik za klijenta, 9 strana: paketi Desktop/Mobile i all-in varijante sa izričitim sastavom, moduli sa obračunskom jedinicom, stanice i dodatna instanca, Gazdinstvo, **dve tarife Savetnika** (standalone i Enterprise), **dve satnice** (razvojna 50 €/h i implementaciona 30 €/h), primeri obračuna, šta je uključeno u pretplatu. |
-| `AgriX_Materijal_za_prvi_kontakt.pdf` | v1 · 26.07.2026. | Prodajni prozori po kulturama, tri tira i tri poruke, skripta telefonskog razgovora, email šabloni, prigovori i odgovori, šta se nikada ne obećava, evidencija posle poziva, model talasa. |
+| `AgriX_Materijal_za_prvi_kontakt.html` | v2 · 28.07.2026. | **Izvor istine za materijal.** Svaka tvrdnja o ceni, popustu, probi ili roku nosi ID odluke iza sebe. |
+| `AgriX_Materijal_za_prvi_kontakt.pdf` | v2 · 28.07.2026. | Generisani interni prodajni dokument, 8 strana: prodajni prozori po kulturama, tri tira i tri poruke, skripta poziva, email šabloni, prigovori i odgovori, šta se nikada ne obećava, evidencija posle poziva. **Ne šalje se klijentu.** |
+| `_brand.css` | — | Zajednički brand tokeni i fontovi za oba dokumenta. Izvor: `src/styles/base.css`. |
 | `AgriX_Sablon_ponude.xlsx` | v1 · 26.07.2026. | Radni šablon ponude sa listom `Cenovnik` kao jedinim mestom za cene. Ponuda povlači vrednosti iz cenovnika; cene se ne kucaju u ponudu. |
 
 Napomene:
@@ -18,11 +20,15 @@ Napomene:
 - **Cenovnik se ne menja u PDF-u** — menja se `AgriX_Cenovnik_2027.html` pa se PDF regeneriše:
 
   ```bash
-  tools/cenovnik.sh build    # .html -> AgriX_Cenovnik_2027.pdf
-  tools/cenovnik.sh check    # poredi cene u .html sa ostala tri mesta
+  tools/cenovnik.sh build|check     # cenovnik
+  tools/materijal.sh build|check    # materijal za prvi kontakt
   ```
 
-  Zavisnost je Chromium/Chrome (headless print-to-pdf); `CHROME_BIN` može da nadjača automatsko pronalaženje. `check` čita cene iz `data-cena`/`data-eur` atributa, pa ne puca kad se menja dizajn, i proverava da se atribut poklapa sa prikazanim tekstom.
+  Oba koriste `tools/render-pdf.sh`, koji normalizuje vremenske pečate u PDF-u — dva build-a istog izvora daju **identičan** fajl, pa nema lažnih git diff-ova. Zavisnost je Chromium/Chrome; `CHROME_BIN` nadjačava automatsko pronalaženje.
+
+  **Šta `cenovnik.sh check` stvarno proverava:** sve iznose iz `data-cena` atributa (ne samo pakete), poklapanje atributa sa prikazanim tekstom, strukturu cena iz odluka 414 i 415 (Mobile dodatak 1.000 €, all-in doplata 700 €), odsustvo mrtve tačke u kojoj à la carte košta koliko all-in, izvedene zbirove u primerima protiv njihovih komponenti, i poklapanje sa šablonom ponude, Prilogom 1 ugovora i finansijskim modelom.
+
+  **Šta `materijal.sh check` proverava:** da nijedna formulacija ne obećava popust (odluka 418), da svaki navedeni ID odluke postoji u decision logu i nije obrisan, i da dokument nosi oznaku da je interni.
 
 - **Cene moraju biti identične na četiri mesta:** `AgriX_Cenovnik_2027.html`, list `Cenovnik` u šablonu ponude, Prilog 1 ugovora (`docs/Legal/AgriX_Ugovor_o_licenciranju.md`) i finansijski model. `tools/cenovnik.sh check` to proverava programski;
 - cene se menjaju samo kada se promeni odluka o ceni (izvor: odluke 339, 341, 349–358, 409–422);

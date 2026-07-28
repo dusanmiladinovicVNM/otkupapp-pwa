@@ -1,0 +1,40 @@
+/* AgriX brand osnova za prodajne dokumente u ovom folderu.
+   Izvor tokena: src/styles/base.css. Fontovi: vendor/fonts/.
+   Putanje su relativne u odnosu na docs/Sales/ — fajl mora ostati ovde.
+   Koriste ga AgriX_Cenovnik_2027.html i AgriX_Materijal_za_prvi_kontakt.html. */
+
+/* ---------- AgriX self-hosted fontovi (isti skup kao src/styles/fonts.css) ---------- */
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
+  src:url('../../vendor/fonts/dm-sans-400.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
+  src:url('../../vendor/fonts/dm-sans-400-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
+  src:url('../../vendor/fonts/dm-sans-500.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
+  src:url('../../vendor/fonts/dm-sans-500-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/dm-sans-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/dm-sans-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
+  src:url('../../vendor/fonts/cormorant-600.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
+  src:url('../../vendor/fonts/cormorant-600-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/cormorant-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
+  src:url('../../vendor/fonts/cormorant-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+/* ---------- Brand tokeni — izvor: src/styles/base.css ---------- */
+:root {
+  --forest:#1E2D14; --forest-90:#2a3d1e; --forest-80:#354a28;
+  --accent:#5EA135; --accent-light:#7dbf55; --accent-pale:#c4e4a8;
+  --gold:#C8A84B; --gold-light:#d4b962; --gold-pale:#f0e2b8;
+  --cream:#F7F4EE; --cream-warm:#F2EDE4; --cream-deep:#EBE5D8; --sand:#E8E0D0;
+  --white:#FFFFFF; --surface-2:#FAF8F2;
+  --text-primary:#1E2D14; --text-secondary:#4A5A3C; --text-muted:#7A856E; --text-light:#9FA894;
+  --border:rgba(30,45,20,0.08); --border-strong:rgba(30,45,20,0.15);
+  --radius-sm:10px; --radius-md:14px; --radius-lg:18px; --radius-xl:22px;
+  --font-display:'Cormorant Garamond', Georgia, serif;
+  --font-body:'DM Sans', 'Segoe UI', system-ui, sans-serif;
+}

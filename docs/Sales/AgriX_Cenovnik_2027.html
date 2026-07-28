@@ -17,42 +17,9 @@
 <head>
 <meta charset="utf-8">
 <title>AgriX — Cenovnik 2027</title>
+<link rel="stylesheet" href="_brand.css">
 <style>
-/* ---------- AgriX self-hosted fontovi (isti skup kao src/styles/fonts.css) ---------- */
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
-  src:url('../../vendor/fonts/dm-sans-400.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:400;
-  src:url('../../vendor/fonts/dm-sans-400-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
-  src:url('../../vendor/fonts/dm-sans-500.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:500;
-  src:url('../../vendor/fonts/dm-sans-500-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
-  src:url('../../vendor/fonts/dm-sans-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family:'DM Sans'; font-style:normal; font-weight:700;
-  src:url('../../vendor/fonts/dm-sans-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
-  src:url('../../vendor/fonts/cormorant-600.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:600;
-  src:url('../../vendor/fonts/cormorant-600-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
-  src:url('../../vendor/fonts/cormorant-700.woff2') format('woff2'); unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family:'Cormorant Garamond'; font-style:normal; font-weight:700;
-  src:url('../../vendor/fonts/cormorant-700-ext.woff2') format('woff2'); unicode-range:U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
-
-/* ---------- Brand tokeni — izvor: src/styles/base.css ---------- */
-:root {
-  --forest:#1E2D14; --forest-90:#2a3d1e; --forest-80:#354a28;
-  --accent:#5EA135; --accent-light:#7dbf55; --accent-pale:#c4e4a8;
-  --gold:#C8A84B; --gold-light:#d4b962; --gold-pale:#f0e2b8;
-  --cream:#F7F4EE; --cream-warm:#F2EDE4; --cream-deep:#EBE5D8; --sand:#E8E0D0;
-  --white:#FFFFFF; --surface-2:#FAF8F2;
-  --text-primary:#1E2D14; --text-secondary:#4A5A3C; --text-muted:#7A856E; --text-light:#9FA894;
-  --border:rgba(30,45,20,0.08); --border-strong:rgba(30,45,20,0.15);
-  --radius-sm:10px; --radius-md:14px; --radius-lg:18px; --radius-xl:22px;
-  --font-display:'Cormorant Garamond', Georgia, serif;
-  --font-body:'DM Sans', 'Segoe UI', system-ui, sans-serif;
-}
+/* brand tokeni i fontovi: _brand.css */
 
 @page { size:A4; margin:0; }
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -344,25 +311,25 @@ tr:last-child td { border-bottom:none; }
   <div class="modgrid">
     <div class="mod">
       <b>Hladnjača<br>Proizvodnja</b>
-      <div class="p">400 €</div>
+      <div class="p" data-cena="Modul Hladnjača / Proizvodnja" data-eur="400">400 €</div>
       <div class="u gold">po proizvodnom pogonu</div>
       <p>Prijem sirovine, klasiranje, prerada, utrošak, otpad, prinos i gotovi proizvodi.</p>
     </div>
     <div class="mod">
       <b>SEF</b>
-      <div class="p">200 €</div>
+      <div class="p" data-cena="Modul SEF" data-eur="200">200 €</div>
       <div class="u">po pravnom licu</div>
       <p>Slanje izlaznih faktura, statusi, storniranje i preuzimanje ulaznih.</p>
     </div>
     <div class="mod">
       <b>Banka</b>
-      <div class="p">200 €</div>
+      <div class="p" data-cena="Modul Banka" data-eur="200">200 €</div>
       <div class="u">po pravnom licu</div>
       <p>Uvoz izvoda, povezivanje uplata, rasknjižavanje, avansi i platni nalozi.</p>
     </div>
     <div class="mod">
       <b>Dispatch</b>
-      <div class="p">200 €</div>
+      <div class="p" data-cena="Modul Dispatch" data-eur="200">200 €</div>
       <div class="u">po pravnom licu</div>
       <div class="u nb">samo uz Mobile</div>
       <p>Raspoređivanje vozila i vozača, rute, kapaciteti, dispečerski pregled.</p>
@@ -373,7 +340,7 @@ tr:last-child td { border-bottom:none; }
     <div class="lbl">Obračunska jedinica</div>
     <p>SEF, Banka i Dispatch plaćaju se <b>jednom po pravnom licu</b> i važe kroz sve njegove instance.
        Hladnjača/Proizvodnja plaća se <b>po proizvodnom pogonu</b> — svaki pogon koji koristi modul plaća ga.
-       Dodatni pogon: <b>200 €</b>.</p>
+       Dodatni pogon: <b data-cena="Modul Hladnjača / Proizvodnja — dodatni pogon" data-eur="200">200 €</b>.</p>
   </div>
 
   <div style="margin-top:7mm">
@@ -385,7 +352,7 @@ tr:last-child td { border-bottom:none; }
             <b style="font-family:var(--font-display); font-size:15pt">GGAP</b><span class="tag">na upit</span><br>
             <span class="desc">Jedna cena po pravnom licu, pokriva sve njegove GGAP kooperante. Bez naplate po korisniku.</span>
           </td>
-          <td class="num" style="font-size:18pt; border:none">od 1.000 €</td>
+          <td class="num" style="font-size:18pt; border:none" data-cena="Modul GGAP" data-eur="1000">od 1.000 €</td>
         </tr>
       </table>
       <p class="fine" style="margin-top:3mm">
@@ -408,7 +375,7 @@ tr:last-child td { border-bottom:none; }
   <div class="cols" style="align-items:flex-start">
     <div class="col card pkg">
       <h3>Otkupne stanice</h3>
-      <div class="price">50 <small>€</small></div>
+      <div class="price" data-cena="Stanica preko pet" data-eur="50">50 <small>€</small></div>
       <div class="per">godišnje po svakoj stanici preko pet</div>
       <ul>
         <li>Aktivna stanica je stanica na kojoj je evidentiran makar jedan otkupni blok</li>
@@ -432,7 +399,7 @@ tr:last-child td { border-bottom:none; }
   <div class="callout">
     <div class="lbl">Primer</div>
     <p>Druga instanca sa Desktop paketom i modulom Hladnjača/Proizvodnja:
-       250 € + 200 € = <b>450 € godišnje</b>.</p>
+       250 € + 200 € = <b data-izvedeno="Desktop/2+Modul Hladnjača / Proizvodnja/2" data-eur="450">450 € godišnje</b>.</p>
   </div>
 
   <footer><span class="wordmark"><span class="a">Agri</span><span class="x">X</span></span><span>Cenovnik 2027 · cene u EUR bez PDV-a, na godišnjem nivou</span><span class="pg">05</span></footer>
@@ -451,8 +418,8 @@ tr:last-child td { border-bottom:none; }
       <div class="per" style="font-size:7.6pt; color:var(--text-muted); margin:1mm 0 4mm">Za proizvođače i kooperante</div>
       <table>
         <tr><th>Paket</th><th class="num">Maloprodaja</th><th class="num">Kanalska</th></tr>
-        <tr><td><b>Basic</b></td><td class="num">19 €</td><td class="num">10 €</td></tr>
-        <tr><td><b>Pro</b></td><td class="num">39 €</td><td class="num">20 €</td></tr>
+        <tr><td><b>Basic</b></td><td class="num" data-cena="Gazdinstvo Basic — maloprodaja" data-eur="19">19 €</td><td class="num" data-cena="Gazdinstvo Basic — kanalska cena" data-eur="10">10 €</td></tr>
+        <tr><td><b>Pro</b></td><td class="num" data-cena="Gazdinstvo Pro — maloprodaja" data-eur="39">39 €</td><td class="num" data-cena="Gazdinstvo Pro — kanalska cena" data-eur="20">20 €</td></tr>
       </table>
       <p class="fine">
         Kanalska cena važi za naloge posredovane preko hladnjače ili savetnika.
@@ -466,8 +433,8 @@ tr:last-child td { border-bottom:none; }
       <div class="per" style="font-size:7.6pt; color:var(--text-muted); margin:1mm 0 4mm">Za agronome i savetodavne službe</div>
       <table>
         <tr><th>Tarifa</th><th class="num">Osnovica</th><th class="num">Preko 10</th></tr>
-        <tr><td><b>Standalone</b></td><td class="num">150 €</td><td class="num">15 €</td></tr>
-        <tr><td><b>Enterprise</b></td><td class="num">100 €</td><td class="num">10 €</td></tr>
+        <tr><td><b>Standalone</b></td><td class="num" data-cena="Savetnik — standalone osnovica" data-eur="150">150 €</td><td class="num" data-cena="Savetnik — standalone po gazdinstvu" data-eur="15">15 €</td></tr>
+        <tr><td><b>Enterprise</b></td><td class="num" data-cena="Savetnik — Enterprise osnovica" data-eur="100">100 €</td><td class="num" data-cena="Savetnik — Enterprise po gazdinstvu" data-eur="10">10 €</td></tr>
       </table>
       <p class="fine">
         Osnovica uključuje do 10 aktivnih gazdinstava; svako preko toga se doplaćuje.
@@ -506,12 +473,12 @@ tr:last-child td { border-bottom:none; }
       <tr>
         <td style="width:26%"><b>Razvojna satnica</b></td>
         <td class="desc">Razvoj po zahtevu, složena migracija podataka, novi adapteri, posebni izveštaji, masovne korekcije podataka</td>
-        <td class="num">50 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
+        <td class="num" data-cena="Satnica — razvojna" data-eur="50">50 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
       </tr>
       <tr>
         <td><b>Implementaciona satnica</b></td>
         <td class="desc">Obuka preko uključenih pet sati, konfiguracija, čišćenje podataka, IT setup, procesni konsalting, rad na lokaciji</td>
-        <td class="num">30 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
+        <td class="num" data-cena="Satnica — implementaciona" data-eur="30">30 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / sat</span></td>
       </tr>
       <tr>
         <td><b>Instalacija i povezivanje</b></td>
@@ -536,7 +503,7 @@ tr:last-child td { border-bottom:none; }
       <tr>
         <td><b>Hardverska podrška</b></td>
         <td class="desc">Prioritetna intervencija, daljinska dijagnostika i zamenski uređaj</td>
-        <td class="num">40 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / stanici</span></td>
+        <td class="num" data-cena="Hardverska podrška — po stanici" data-eur="40">40 €<span style="font-size:8pt; font-family:var(--font-body); font-weight:400; color:var(--text-muted)"> / stanici</span></td>
       </tr>
     </table>
   </div>
@@ -548,7 +515,7 @@ tr:last-child td { border-bottom:none; }
   </div>
 
   <p class="fine">
-    Hardverska podrška ugovara se godišnje, minimum 200 € po pravnom licu. Ne pokriva fizička oštećenja,
+    Hardverska podrška ugovara se godišnje, minimum <span data-cena="Hardverska podrška — minimum" data-eur="200">200 €</span> po pravnom licu. Ne pokriva fizička oštećenja,
     potrošni materijal i opremu nabavljenu van AgriX-a.
   </p>
 
@@ -567,7 +534,7 @@ tr:last-child td { border-bottom:none; }
       <h4>Manji otkupljivač</h4>
       <div class="who">3 stanice · bez modula</div>
       <table>
-        <tr><td>AgriX Desktop</td><td class="num">500 €</td></tr>
+        <tr><td>AgriX Desktop</td><td class="num" data-izvedeno="Desktop" data-eur="500">500 €</td></tr>
       </table>
       <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">500 €</div></div>
     </div>
@@ -577,9 +544,9 @@ tr:last-child td { border-bottom:none; }
       <div class="who">10 stanica · Desktop all-in</div>
       <table>
         <tr><td>Desktop all-in</td><td class="num">1.200 €</td></tr>
-        <tr><td>5 dodatnih stanica</td><td class="num">250 €</td></tr>
+        <tr><td>5 dodatnih stanica</td><td class="num" data-izvedeno="5*Stanica preko pet" data-eur="250">250 €</td></tr>
       </table>
-      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">1.450 €</div></div>
+      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val" data-izvedeno="Desktop all-in+5*Stanica preko pet" data-eur="1450">1.450 €</div></div>
     </div>
 
     <div class="example card">
@@ -587,9 +554,9 @@ tr:last-child td { border-bottom:none; }
       <div class="who">10 stanica · Mobile all-in · GGAP</div>
       <table>
         <tr><td>Mobile all-in</td><td class="num">2.200 €</td></tr>
-        <tr><td>5 dodatnih stanica</td><td class="num">250 €</td></tr>
+        <tr><td>5 dodatnih stanica</td><td class="num" data-izvedeno="5*Stanica preko pet" data-eur="250">250 €</td></tr>
       </table>
-      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val">2.450 €</div></div>
+      <div class="sum"><div class="lbl">Ukupno godišnje</div><div class="val" data-izvedeno="Mobile all-in+5*Stanica preko pet" data-eur="2450">2.450 €</div></div>
       <div class="addon">
         <span>+ GGAP <span class="tag">na upit</span></span>
         <span class="p">od 1.000 €</span>
