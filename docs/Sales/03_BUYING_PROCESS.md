@@ -36,6 +36,16 @@ Kupovina AgriX-a nije obična kupovina softvera. Ona istovremeno menja:
 
 Zato čak i kada je cena prihvatljiva, kupac može odlagati odluku zbog operativnog, reputacionog ili političkog rizika unutar firme.
 
+Klijent kupuje tek kada istovremeno zaključi:
+
+- da status quo proizvodi dovoljno važan problem ili rizik;
+- da odlaganje ima veću cenu od promene;
+- da AgriX odgovara stvarnom toku, a ne samo idealnom scenariju;
+- da je implementacioni rizik kontrolisan;
+- da ključne osobe mogu da prihvate novi način rada;
+- da postoji jasan vlasnik odluke, budžeta i sprovođenja;
+- da je vreme za promenu povezano sa konkretnim poslovnim rokom.
+
 ---
 
 ## 3. Tipični buying triggers
@@ -118,6 +128,17 @@ Osoba se ne smatra champion-om samo zato što je ljubazna ili oduševljena proiz
 
 Ako nema najmanje četiri od šest elemenata, tretira se kao kontakt, ne champion.
 
+### 4.3 Skriveni veto
+
+Skriveni veto može doći od osobe koja formalno ne vodi kupovinu, ali može zaustaviti projekat zbog straha od promene, gubitka kontrole, tehničkog rizika ili nepovrenja prema dobavljaču.
+
+Obavezna pitanja:
+
+- Čije mišljenje će biti presudno pre finalne odluke?
+- Ko može opravdano da zaustavi projekat?
+- Ko će prvi trpeti posledice ako novi proces ne radi?
+- Ko danas poseduje znanje ili kontrolu koju bi novi sistem promenio?
+
 ---
 
 ## 5. Faze buying procesa
@@ -127,11 +148,13 @@ Ako nema najmanje četiri od šest elemenata, tretira se kao kontakt, ne champio
 Kupac ne vodi aktivan projekat. Problemi postoje, ali su normalizovani.
 
 **Kupac mora da shvati:**
+
 - da trošak statusa quo nije samo vreme unosa;
 - da fragmentisani podaci stvaraju zakašnjenje, rizik i zavisnost od ljudi;
 - da rast povećava problem brže nego što ga dodatna administracija rešava.
 
 **Dokazi napretka:**
+
 - kupac priznaje konkretan problem;
 - navodi posledicu;
 - prihvata razgovor o trenutnom procesu.
@@ -143,6 +166,7 @@ Kupac ne vodi aktivan projekat. Problemi postoje, ali su normalizovani.
 Postoji jasno definisana poslovna teškoća, ali još nema odluke da se menja sistem.
 
 **Kupac mora da utvrdi:**
+
 - gde problem nastaje;
 - ko ga oseća;
 - kakve posledice proizvodi;
@@ -150,6 +174,7 @@ Postoji jasno definisana poslovna teškoća, ali još nema odluke da se menja si
 - da li je lokalni izuzetak ili sistemski problem.
 
 **Exit kriterijumi:**
+
 - imenovan problem owner;
 - potvrđen poslovni uticaj;
 - poznat rok ili sezonski događaj;
@@ -160,6 +185,7 @@ Postoji jasno definisana poslovna teškoća, ali još nema odluke da se menja si
 Kupac prihvata da status quo više nije poželjan i razmatra promenu procesa.
 
 **Kupac mora da odluči:**
+
 - šta tačno mora biti drugačije;
 - koji ishodi definišu uspeh;
 - koje procese ne sme ugroziti;
@@ -167,6 +193,7 @@ Kupac prihvata da status quo više nije poželjan i razmatra promenu procesa.
 - koliko promene organizacija može da apsorbuje pre sezone.
 
 **Exit kriterijumi:**
+
 - definisana 3–5 success criteria;
 - poznat decision date;
 - mapiran početni buying committee;
@@ -177,6 +204,7 @@ Kupac prihvata da status quo više nije poželjan i razmatra promenu procesa.
 Kupac poredi AgriX sa statusom quo, internim razvojem, Excelom, postojećim ERP-om i drugim ponuđačima.
 
 **Kupac mora da proveri:**
+
 - funkcionalni fit za kritične tokove;
 - rad u realnim uslovima stanice i centrale;
 - onboarding i migraciju;
@@ -186,6 +214,7 @@ Kupac poredi AgriX sa statusom quo, internim razvojem, Excelom, postojećim ERP-
 - dokaz da dobavljač razume njihov posao.
 
 **Exit kriterijumi:**
+
 - održan discovery sa relevantnim ulogama;
 - demo zasnovan na njihovim procesima;
 - dokumentovane funkcionalne praznine i otvorena pitanja;
@@ -197,6 +226,7 @@ Kupac poredi AgriX sa statusom quo, internim razvojem, Excelom, postojećim ERP-
 Ovo je često stvarna odlučujuća faza. Kupac može verovati u vrednost, ali još ne veruje da će implementacija proći bez problema.
 
 **Kupac mora da dobije sigurnost o:**
+
 - tačnom scope-u;
 - redosledu uvođenja;
 - potrebnim ljudima i vremenu;
@@ -208,6 +238,7 @@ Ovo je često stvarna odlučujuća faza. Kupac može verovati u vrednost, ali jo
 - granicama standardnog proizvoda i posebnog razvoja.
 
 **Exit kriterijumi:**
+
 - usaglašen implementation outline;
 - poznati vlasnici zadataka sa obe strane;
 - potvrđena spremnost ključnih korisnika;
@@ -220,6 +251,7 @@ Ovo je često stvarna odlučujuća faza. Kupac može verovati u vrednost, ali jo
 Kupac usaglašava cenu, scope, ugovorne uslove i internu odgovornost.
 
 **Kupac mora da zaključi:**
+
 - šta tačno kupuje;
 - šta nije uključeno;
 - ko odobrava budžet;
@@ -229,6 +261,7 @@ Kupac usaglašava cenu, scope, ugovorne uslove i internu odgovornost.
 - ko je odgovoran za internu pripremu.
 
 **Exit kriterijumi:**
+
 - potvrđen konačni scope;
 - ponuda je predstavljena, ne samo poslata;
 - poznat approval path;
@@ -241,6 +274,7 @@ Kupac usaglašava cenu, scope, ugovorne uslove i internu odgovornost.
 Odluka nije završena usmenim „dogovoreno“.
 
 **Potvrda odluke:**
+
 - prihvaćena ponuda ili ugovor;
 - definisan datum početka;
 - imenovani projektni vlasnici;
@@ -252,286 +286,256 @@ Odluka nije završena usmenim „dogovoreno“.
 Kupac posle potpisa i dalje procenjuje da li je doneo dobru odluku. Rani neuspeh može uništiti referencu i renewal.
 
 **Kupac mora rano da vidi:**
+
 - profesionalno vođen kickoff;
 - jasan plan;
 - brzu prvu vrednost;
 - kontrolisano rešavanje otvorenih pitanja;
 - da prodajna obećanja odgovaraju stvarnoj implementaciji.
 
-Ova faza prelazi u onboarding i customer success, ali njeni signali moraju da se vrate u sales playbook.
+Commercial handoff mora preneti problem, desired outcome, buying committee, scope, excluded scope, success criteria, rizike, rokove i otvorene pretpostavke.
 
 ---
 
 ## 6. Decision criteria
 
-Za svaku aktivnu priliku kriterijumi se razvrstavaju u šest grupa.
+Kupac obično procenjuje više dimenzija istovremeno.
 
-### 6.1 Poslovni kriterijumi
+### 6.1 Poslovni fit
 
-- pregled i kontrola;
-- smanjenje ručnog rada;
-- manje grešaka i duplikata;
-- sledljivost;
-- brzina dokumentnog toka;
-- skaliranje broja stanica i kooperanata;
-- smanjenje zavisnosti od ključne osobe.
+- rešava li važan problem;
+- daje li pregled i kontrolu koja nedostaje;
+- smanjuje li zavisnost od improvizacije i pojedinaca;
+- podržava li planirani rast.
 
-### 6.2 Operativni kriterijumi
+### 6.2 Operativni fit
 
-- broj koraka na stanici;
-- offline/loša veza;
-- štampa;
-- korekcije i storno;
-- rad pod pritiskom;
-- jednostavnost obuke;
-- sezonska pouzdanost.
+- podržava li stvarne tokove i izuzetke;
+- može li teren da radi brzo i u slaboj mreži;
+- može li administracija da kontroliše korekcije;
+- da li finansijski i dokumentni tok ostaje proverljiv.
 
-### 6.3 Tehnički kriterijumi
+### 6.3 Implementation fit
 
-- arhitektura;
-- bezbednost i pristupi;
-- backup i monitoring;
-- ažuriranje;
-- uređaji i kompatibilnost;
-- integracije;
-- ownership i dostupnost podataka.
+- postoji li realan plan;
+- ima li kupac internog owner-a;
+- koliko je migracije potrebno;
+- može li obuka biti završena pre kritičnog roka;
+- postoji li siguran način faznog uvođenja.
 
-### 6.4 Komercijalni kriterijumi
+### 6.4 Vendor fit
 
-- ukupan trošak;
-- transparentnost paketa;
-- trošak dodatnih stanica/instanci;
-- implementacija;
-- podrška;
-- posebni razvoj;
-- ugovorne obaveze.
+- razume li AgriX sektor;
+- da li postoji podrška i monitoring;
+- da li su granice proizvoda transparentne;
+- postoji li standardizovan proizvod umesto trajnih forkova;
+- može li se dobiti relevantan dokaz ili referenca.
 
-### 6.5 Dobavljački kriterijumi
+### 6.5 Ekonomski fit
 
-- razumevanje sektora;
-- dostupnost podrške;
-- reference;
-- pouzdanost osnivača/tima;
-- kontinuitet proizvoda;
-- brzina reakcije;
-- disciplina u obećanjima.
+- ukupna investicija;
+- interni trošak uvođenja;
+- trošak statusa quo;
+- očekivana vrednost kontrole, uštede vremena i smanjenja rizika;
+- odnos standardnog obima i dodatnog razvoja.
 
-### 6.6 Politički kriterijumi
-
-- ko dobija, a ko gubi kontrolu;
-- čiji rad postaje vidljiviji;
-- ko mora da menja navike;
-- ko snosi krivicu ako implementacija ne uspe;
-- da li projekat ugrožava autoritet ključne osobe;
-- da li neko preferira postojećeg dobavljača iz neformalnih razloga.
-
-Politički kriterijumi se ne ignorišu samo zato što nisu izgovoreni na sastanku.
+Nice-to-have funkcije ne smeju potisnuti odluku o osnovnom poslovnom i implementacionom fit-u.
 
 ---
 
-## 7. Skriveni veto
+## 7. Sezonski timing
 
-Najčešći skriveni veto izvori:
+Tačni meseci zavise od kulture i regije. Annual Sales Calendar će ih definisati zasebno. Buying logika je:
 
-- vlasnik koji nije bio na demo sastanku;
-- ključni Excel operator koji se plaši gubitka kontrole ili statusa;
-- knjigovođa koji očekuje poremećaj dokumentnog toka;
-- eksterni IT koji ne želi dodatnu odgovornost;
-- član porodice ili dugogodišnji savetnik kome vlasnik veruje;
-- rukovodilac stanica koji smatra da ljudi neće prihvatiti novi način rada;
-- postojeći softverski dobavljač koji promenu predstavlja kao visok rizik.
+### 7.1 Postsezona
 
-### 7.1 Pitanja za otkrivanje veta
+Najbolji trenutak za:
 
-- Ko bi mogao da zaustavi projekat iako formalno ne donosi odluku?
-- Ko će prvi čuti kritiku ako sistem ne proradi kako treba?
-- Čiji se svakodnevni rad najviše menja?
-- Ko ima najviše znanja zaključanog u sadašnjem procesu?
-- Ko još mora da kaže „ovo je bezbedno“ pre potpisa?
-- Da li je ranije neki sličan projekat propao i ko to pamti?
-
-### 7.2 Pravilo
-
-Ne pokušavati da se veto „zaobiđe“. Veto se otkriva, legitimno razume i rešava odgovarajućim dokazom ili promenom plana.
-
----
-
-## 8. Sezonski timing
-
-### 8.1 Predsezona
-
-Najbolji period za ozbiljnu evaluaciju i implementaciju je dovoljno pre početka operativnog pritiska da ostane vreme za:
-
+- retrospektivu problema;
+- kvantifikaciju posledica;
 - mapiranje procesa;
-- setup;
-- unos ili migraciju početnih podataka;
-- konfiguraciju uređaja;
-- obuku;
-- testiranje;
-- korekciju slabih tačaka.
+- razmatranje promene bez dnevnog sezonskog pritiska.
 
-Tačan prozor zavisi od kulture, regiona i poslovnog modela i vodiće se u `15_ANNUAL_SALES_CALENDAR.md`.
+### 7.2 Rana predsezona
 
-### 8.2 Neposredno pred sezonu
+Najbolji trenutak za:
 
-Kupovna namera može biti visoka, ali kapacitet promene nizak. Dozvoljene opcije su:
+- ozbiljnu evaluaciju;
+- odluku;
+- migraciju i konfiguraciju;
+- obuku i testiranje.
 
-- ograničen i jasno definisan scope;
-- fazno uvođenje;
-- priprema za sledeću sezonu;
-- pilot samo kada je operativno bezbedan.
+### 7.3 Kasna predsezona
 
-Zabranjeno je obećati punu transformaciju u roku koji ugrožava pouzdanost.
+Moguća kupovina, ali sa većim implementacionim rizikom.
 
-### 8.3 Tokom sezone
+Pravila:
 
-Tokom vrhunca sezone prioritet kupca je kontinuitet, ne transformacija. Aktivnosti su:
+- ne obećavati pun obim bez readiness procene;
+- po potrebi smanjiti scope na kritični tok;
+- zahtevati internog vlasnika projekta;
+- dokumentovati šta ulazi u sezonu, a šta ostaje za kasnije;
+- odbiti projekat ako nema vremena za minimalnu validaciju i obuku.
 
-- dijagnostički razgovori;
-- dokumentovanje problema;
-- ciljane demonstracije samo kada postoji hitan i bezbedno rešiv problem;
-- planiranje postsezonske evaluacije.
+### 7.4 Aktivna sezona
 
-### 8.4 Posle sezone
+Problem je najočigledniji, ali kapacitet za promenu najmanji.
 
-Najbolji period za:
+Dozvoljeni ishodi:
 
-- retrospektivu;
-- kvantifikovanje posledica;
-- win/loss intervjue;
-- mapiranje procesa;
-- budžetiranje i pripremu sledeće sezone.
+- dijagnostički razgovor;
+- kontrolisan, ograničen pilot samo kada je bezbedan;
+- zakazana postsezonska analiza;
+- prikupljanje podataka za business case.
+
+Nije dozvoljeno koristiti krizni trenutak za agresivan pritisak ili rizično obećanje implementacije.
 
 ---
 
-## 9. Decision map — obavezna polja
+## 8. Mutual Action Plan
 
-Za svaku kvalifikovanu priliku CRM mora sadržati:
+Za ozbiljne prilike koristi se zajednički plan, ne jednostrana interna lista zadataka.
 
-- primarni trigger;
-- business problem;
-- posledice statusa quo;
-- desired outcomes;
-- decision date;
-- go-live target;
-- ekonomski kupac;
-- sponsor/champion;
-- operativni vlasnik;
-- tehnički evaluator;
-- finansijski evaluator;
-- skriveni influencer ili mogući veto;
-- kriterijumi odluke;
-- konkurentske alternative;
-- dokaz koji nedostaje;
-- najveći rizik promene;
-- interni approval path;
-- sledeći kupčev commitment, vlasnik i datum.
-
-Prazno polje nije administrativni nedostatak nego znak da deo kupovnog procesa nije poznat.
-
----
-
-## 10. Pravila napredovanja i diskvalifikacije
-
-### 10.1 Napredovanje
-
-Opportunity stage se menja samo kada postoji kupčev dokaz aktivnosti, na primer:
-
-- uključio je novu relevantnu ulogu;
-- dostavio proces ili podatke;
-- potvrdio success criteria;
-- dogovorio decision date;
-- odobrio tehničku proveru;
-- usaglasio scope;
-- definisao implementation owner-a;
-- zakazao formalni approval korak.
-
-### 10.2 Stagnacija
-
-Prilika se označava kao stagnirajuća kada:
-
-- nema kupčevog sledećeg koraka;
-- termini se ponavljano odlažu bez novog datuma;
-- kontakt odbija pristup donosiocu odluke;
-- ne postoji rok;
-- jedina aktivnost je slanje dodatnih materijala;
-- kupac želi ponudu bez discovery-ja i bez potvrđenog scope-a.
-
-### 10.3 No-deal / nurture
-
-Prilika se prebacuje u no-deal ili nurture kada:
-
-- nema poslovnog problema ili trigger-a;
-- traženi scope nije strateški ili ekonomski opravdan;
-- očekivanja zahtevaju nepouzdan ili nestandardan proizvod;
-- kupac zahteva obećanja koja AgriX ne može odgovorno dati;
-- kupac insistira na individualnom cenkanju suprotnom cenovnoj politici;
-- nema spremnost da obezbedi interne ljude i podatke;
-- decision date je fiktivan;
-- postoji ozbiljan reputacioni ili naplatni rizik.
-
-Diskvalifikacija nije neuspeh. Ona štiti kapacitet za kvalitetne prilike.
-
----
-
-## 11. Mutual Action Plan
-
-Za ozbiljne prilike kreira se jednostavan zajednički plan:
-
-| Korak | Kupčev cilj | Vlasnik | Datum | Dokaz završetka |
+| Korak | Vlasnik | Rok | Potreban input | Dokaz završetka |
 |---|---|---|---|---|
-| Discovery | potvrditi procese i rizike | obe strane | datum | usaglašen recap |
-| Tehnička provera | potvrditi preduslove | evaluator + AgriX | datum | lista bez otvorenog kritičnog pitanja |
-| Demo | proveriti critical workflows | sponsor + korisnici | datum | potvrđen fit/gap zapisnik |
-| Scope | definisati šta ulazi i ne ulazi | ekonomski kupac + AgriX | datum | scope potvrđen |
-| Implementacioni plan | smanjiti rizik uvođenja | operativni vlasnici | datum | plan i odgovornosti |
-| Komercijalno odobrenje | odobriti investiciju | ekonomski kupac | datum | usmeno ili interno odobrenje |
-| Ugovor | formalizovati odluku | potpisnici | datum | potpis |
-| Kickoff | pokrenuti realizaciju | projektni vlasnici | datum | održan kickoff |
+| Potvrda poslovnog problema | kupac + AgriX |  | proces i posledice | usaglašen problem statement |
+| Buying committee mapa | kupac + AgriX |  | učesnici | potvrđene uloge |
+| Success criteria | kupac |  | ciljni ishodi | pisana lista |
+| Discovery | obe strane |  | procesi i podaci | discovery recap |
+| Personalizovani demo | AgriX |  | scenario kupca | feedback stakeholdera |
+| Gap/risk review | obe strane |  | otvorena pitanja | risk register |
+| Implementation outline | AgriX + owner kupca |  | scope i rokovi | usaglašen plan |
+| Scope i ponuda | AgriX |  | konačan obim | predstavljena ponuda |
+| Interno odobrenje | kupac |  | budžet i uslovi | odluka |
+| Ugovor i kickoff | obe strane |  | potpis i resursi | zakazan kickoff |
 
-Plan nije alat za pritisak. Njegova svrha je da obe strane vide zavisnosti i spreče da projekat propadne zbog nejasnog vlasništva.
+Pravilo: svaki korak mora imati vlasnika, datum i proverljiv završetak.
 
 ---
 
-## 12. Zabranjeni obrasci
+## 9. Stage advancement pravila
 
-- Guranje demoa pre nego što se razume problem.
-- Slanje ponude kao zamene za discovery.
-- Tumačenje ljubaznosti kao kupovne namere.
-- Veštačka hitnost i izmišljeni rokovi.
-- Zaobilaženje ključnih korisnika ili veto učesnika.
-- Napad na postojeći ERP bez razumevanja njegove uloge.
-- Obećavanje implementacije pre provere kapaciteta i preduslova.
-- Skriveni posebni razvoj predstavljen kao standardna funkcionalnost.
-- Korišćenje popusta za rešavanje nejasne vrednosti ili nepoverenja.
-- Zadržavanje mrtvih prilika u aktivnom forecast-u.
+Prilika ne napreduje na osnovu aktivnosti prodavca, već na osnovu kupčeve potvrđene promene.
+
+### Validni dokazi napretka
+
+- kupac uvodi novu relevantnu osobu;
+- deli konkretne podatke ili proces;
+- potvrđuje posledicu i rok;
+- prihvata definisanje success criteria;
+- izvršava dogovoreni interni zadatak;
+- zakazuje sledeći sastanak sa jasnom svrhom;
+- dostavlja podatke potrebne za scope ili business case;
+- ekonomski kupac potvrđuje evaluaciju;
+- dogovara implementacioni pristup.
+
+### Nevalidni dokazi
+
+- otvoren mejl;
+- preuzet PDF;
+- pohvala proizvoda;
+- zahtev za još funkcija;
+- „javićemo se“;
+- prisustvo na demo sastanku bez akcije;
+- traženje ponude bez definisanog procesa odluke.
+
+Opportunity bez sledećeg customer commitment-a i datuma nije aktivna prilika.
+
+---
+
+## 10. No-deal i nurture pravila
+
+Prilika se diskvalifikuje ili vraća u nurture kada važi jedno ili više:
+
+- nema konkretnog problema ni posledice;
+- nema poslovnog okidača ili roka;
+- nema pristupa problem owner-u ili ekonomskom kupcu;
+- kupac želi samo razvoj specifičnog fork-a;
+- očekuje nestandardna obećanja bez budžeta i procesa;
+- ne prihvata standardizaciju kritičnog toka;
+- nema internog vlasnika implementacije;
+- rok zahteva nebezbednu implementaciju;
+- insistira na funkcijama koje nisu dostupne kao da su standard;
+- očekuje individualni popust suprotan komercijalnoj politici;
+- rizik podrške ili prilagođavanja je veći od strateške vrednosti klijenta;
+- organizacija ne može ili ne želi da obezbedi minimalne podatke i učešće.
+
+Diskvalifikacija nije neuspeh. Ona štiti proizvod, reputaciju i implementacioni kapacitet.
+
+---
+
+## 11. No-decision analiza
+
+„Nisu odlučili“ nije dovoljan razlog. Evidentira se dominantni uzrok:
+
+- problem nije dovoljno važan;
+- posledica nije kvantifikovana;
+- status quo je prihvatljiv;
+- nema internog champion-a;
+- ekonomski kupac nije uključen;
+- skriveni veto;
+- rizik promene je veći od percipirane koristi;
+- pogrešan tajming;
+- budžet nije prioritet;
+- decision process nije postojao;
+- AgriX nije dokazao fit;
+- scope je bio preširok;
+- kupac nije imao implementacioni kapacitet.
+
+Svaki no-decision mora imati sledeći validni datum za reaktivaciju ili eksplicitno zatvaranje.
+
+---
+
+## 12. CRM obavezna polja
+
+- Current buying stage: B0–B7;
+- Trigger event;
+- Compelling event / rok;
+- Problem owner;
+- Economic buyer;
+- Champion status: none / possible / confirmed;
+- Current solution;
+- Status quo benefit;
+- Primary consequence;
+- Desired measurable outcome;
+- Decision criteria;
+- Decision process;
+- Buying committee map completeness;
+- Hidden veto risk;
+- Implementation owner;
+- Proof still required;
+- Next customer commitment;
+- Next step date;
+- Disqualification/no-decision reason.
 
 ---
 
 ## 13. Validacione hipoteze
 
-Sledeće hipoteze moraju se proveriti kroz stvarne prilike:
+Sledeće hipoteze proveriti kroz najmanje 20 relevantnih prilika:
 
-1. **HYPOTHESIS:** prethodna loša sezona je jači trigger od opšte želje za digitalizacijom.
-2. **HYPOTHESIS:** vlasnik najčešće odlučuje na osnovu kontrole i pouzdanosti, dok operativa odlučuje na osnovu kontinuiteta i jednostavnosti.
-3. **HYPOTHESIS:** centralni administrator je najčešći mogući champion i istovremeno najčešći skriveni blocker.
-4. **HYPOTHESIS:** najveći strah nije cena nego rizik da promena poremeti sezonu.
-5. **HYPOTHESIS:** pristup ekonomskom kupcu pre personalizovanog demoa značajno povećava conversion.
-6. **HYPOTHESIS:** postsezonska retrospektiva daje kvalitetnije prilike od generičkog cold outreach-a.
-7. **HYPOTHESIS:** firme sa više stanica i visokim oslanjanjem na telefon/Excel imaju kraći put od problema do odluke.
-8. **HYPOTHESIS:** mogućnost koegzistencije sa postojećim knjigovodstvenim ERP-om smanjuje status quo otpor.
+1. Postsezona i rana predsezona daju najbolji odnos pristupa, ozbiljnosti i implementacione izvodljivosti.
+2. Najčešći pravi trigger nije „nov softver“, već rast, incident ili zavisnost od ključne osobe.
+3. Centralni administrator je češći skriveni veto nego formalni IT evaluator.
+4. Kupci koji rano uključe vlasnika i operativu imaju veću verovatnoću napretka.
+5. Zahtev za cenom pre discovery-ja češće označava slab intent nego ubrzan proces.
+6. Prikaz realnog izuzetka u demo-u više utiče na odluku od širine funkcija.
+7. Glavni uzrok no-decision-a biće percipirani implementacioni rizik i status quo, a ne sama cena.
+8. Klijenti sa jasno imenovanim internim implementation owner-om imaju bolji onboarding ishod.
 
-Za svaku dobijenu i izgubljenu priliku beleži se koje hipoteze su potvrđene ili opovrgnute.
+Na svakih 10 kvalifikovanih prilika ažurirati učestalost triggera, veto tačaka, trajanje faza i no-decision razloge.
 
 ---
 
 ## 14. Definition of Done
 
-Buying Process prelazi iz `DRAFT v1 — VALIDATION` u `DONE v1` kada:
+Segment prelazi u `DONE v1` kada:
 
-- postoji najmanje 10 dokumentovanih relevantnih prodajnih razgovora;
-- najmanje 5 prilika ima potpun decision map;
-- najmanje 3 prilike prođu kroz evaluaciju i risk-reduction fazu;
-- postoje najmanje 2 win/loss zapisa;
-- trigger-i, veto obrasci i kriterijumi odluke budu korigovani prema realnim dokazima;
-- CRM pipeline i sales process koriste iste entry/exit kriterijume.
+- najmanje 20 prilika bude mapirano kroz B0–B7;
+- validiraju se glavni sezonski prozori po kulturama;
+- utvrde se tri najčešća triggera;
+- utvrde se tri najčešća skrivena veta;
+- izmere prosečna trajanja faza;
+- CRM pipeline podrži obavezna polja;
+- sales process preuzme entry/exit kriterijume;
+- no-decision razlozi budu standardizovani i korišćeni.
