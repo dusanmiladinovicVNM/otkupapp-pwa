@@ -11,6 +11,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `00_COMMERCIAL_OPERATING_SYSTEM_ROADMAP.md` | DONE v1 · 28.07.2026. | Redosled izrade, standard dokaza, Definition of Done, Customer Intelligence Loop i status svih oblasti. |
 | `01_MARKET_POSITIONING.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Tržišna kategorija, centralni problem narrative, poziciona teza, value pillars, competitive frame, ICP/anti-positioning, message house, proof hierarchy, website implications i plan validacije. |
 | `02_PSYCHOLOGICAL_PROFILES.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Evidence-based buying committee: vlasnik, operativa, administrator, finansije, teren, IT i skriveni influencer; motivi, rizici, dokazni prag, buying signals i validacione hipoteze. |
+| `03_BUYING_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Buying triggers, committee i champion test, faze B0–B7, decision criteria, skriveni veto, sezonski timing, decision map, Mutual Action Plan, stage exit i no-deal pravila. |
 
 ## Postojeći prodajni dokumenti
 
