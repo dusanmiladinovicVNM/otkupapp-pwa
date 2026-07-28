@@ -4,7 +4,14 @@ Prodajni playbook, discovery, demo, kvalifikacija, ponude, prigovori, pipeline p
 
 Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repozitorijumu.
 
-## Dokumenti
+## Commercial Operating System
+
+| Dokument | Status | Sadržaj |
+|---|---|---|
+| `00_COMMERCIAL_OPERATING_SYSTEM_ROADMAP.md` | DONE v1 · 28.07.2026. | Redosled izrade, standard dokaza, Definition of Done, Customer Intelligence Loop i status svih oblasti. |
+| `02_PSYCHOLOGICAL_PROFILES.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Evidence-based buying committee: vlasnik, operativa, administrator, finansije, teren, IT i skriveni influencer; motivi, rizici, dokazni prag, buying signals i validacione hipoteze. |
+
+## Postojeći prodajni dokumenti
 
 | Dokument | Verzija / datum | Sadržaj |
 |---|---|---|
