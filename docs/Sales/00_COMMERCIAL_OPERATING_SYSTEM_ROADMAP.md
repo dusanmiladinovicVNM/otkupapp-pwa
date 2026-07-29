@@ -54,7 +54,7 @@ Po završetku, obučena osoba treba da može da:
 | COS-07 | Call playbooks | prvi poziv, drugi poziv, discovery, post-demo, proposal, reactivation | DRAFT v1 — VALIDATION |
 | COS-08 | Demo playbook | demo arhitektura po personi i problemu, storyline, proof, next step | DRAFT v1 — VALIDATION |
 | COS-09 | Objection handling | klasifikacija prigovora, dijagnostika, odgovori, dokazi, red flags | DRAFT v1 — VALIDATION |
-| COS-10 | Negotiation | cenovna disciplina, scope, uslovi, trade matrix, approval rules | NOT STARTED |
+| COS-10 | Negotiation | cenovna disciplina, scope, uslovi, trade matrix, approval rules | DRAFT v1 — VALIDATION |
 | COS-11 | Case studies | intake, dozvole, metrike, narrative, kratka i puna forma | NOT STARTED |
 | COS-12 | ROI calculator | model uštede vremena, grešaka, kontrole, rizika i rasta | NOT STARTED |
 | COS-13 | CRM pipeline | objekti, statusi, obavezna polja, aktivnosti, hygiene i forecasting | NOT STARTED |
@@ -138,7 +138,7 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | Call Playbooks | DRAFT v1 — VALIDATION |
 | Demo Playbook | DRAFT v1 — VALIDATION |
 | Objection Handling | DRAFT v1 — VALIDATION |
-| Negotiation | NOT STARTED |
+| Negotiation | DRAFT v1 — VALIDATION |
 | Case Studies | NOT STARTED |
 | ROI Calculator | NOT STARTED |
 | CRM Pipeline | NOT STARTED |
