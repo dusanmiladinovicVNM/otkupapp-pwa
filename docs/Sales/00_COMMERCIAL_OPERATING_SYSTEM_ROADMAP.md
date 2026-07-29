@@ -51,7 +51,7 @@ Po završetku, obučena osoba treba da može da:
 | COS-04 | Sales process | faze, entry/exit kriterijumi, SLA, next-step discipline, no-deal pravila | DRAFT v1 — VALIDATION |
 | COS-05 | Discovery playbook | pre-call research, pitanja, implication map, success criteria, recap | DRAFT v1 — VALIDATION |
 | COS-06 | Email sequences | 6-mesečni cadence, grane, persona poruke, post-call i post-demo tekstovi | DRAFT v1 — VALIDATION |
-| COS-07 | Call playbooks | prvi poziv, drugi poziv, discovery, post-demo, proposal, reactivation | NOT STARTED |
+| COS-07 | Call playbooks | prvi poziv, drugi poziv, discovery, post-demo, proposal, reactivation | DRAFT v1 — VALIDATION |
 | COS-08 | Demo playbook | demo arhitektura po personi i problemu, storyline, proof, next step | NOT STARTED |
 | COS-09 | Objection handling | klasifikacija prigovora, dijagnostika, odgovori, dokazi, red flags | NOT STARTED |
 | COS-10 | Negotiation | cenovna disciplina, scope, uslovi, trade matrix, approval rules | NOT STARTED |
@@ -135,7 +135,7 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | Sales Process | DRAFT v1 — VALIDATION |
 | Discovery Playbook | DRAFT v1 — VALIDATION |
 | Email Sequences | DRAFT v1 — VALIDATION |
-| Call Playbooks | NOT STARTED |
+| Call Playbooks | DRAFT v1 — VALIDATION |
 | Demo Playbook | NOT STARTED |
 | Objection Handling | NOT STARTED |
 | Negotiation | NOT STARTED |
