@@ -18,6 +18,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `07_CALL_PLAYBOOKS.md` | DRAFT v1 — VALIDATION · 29.07.2026. | O-R-E-D-A struktura, cold i inbound pozivi, kvalifikacija, discovery, demo confirmation, post-demo, scope, proposal review, stalled deal, reaktivacija, reakcije, CRM i coaching standard. |
 | `08_DEMO_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | R-E-L-A-Y struktura, demo brief, executive/operational/technical tokovi, storyline po problemu i personi, gap management, fit review, exit kriterijumi, CRM i quality score. |
 | `09_OBJECTION_HANDLING.md` | DRAFT v1 — VALIDATION · 29.07.2026. | A-C-T-I-O-N dijagnostika, cena/vrednost, status quo, ERP, implementacija, vendor rizik, gap-ovi, konkurencija, no-deal, CRM i quality score. |
+| `10_NEGOTIATION_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | P-A-C-T-S okvir, cenovna disciplina, give/get, scope trade-offs, plaćanje, rokovi, SLA, pilot, custom razvoj, approval matrix, concession log, walk-away i CRM. |
 
 ## Postojeći prodajni dokumenti
 
