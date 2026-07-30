@@ -20,6 +20,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `09_OBJECTION_HANDLING.md` | DRAFT v1 — VALIDATION · 29.07.2026. | A-C-T-I-O-N dijagnostika, cena/vrednost, status quo, ERP, implementacija, vendor rizik, gap-ovi, konkurencija, no-deal, CRM i quality score. |
 | `10_NEGOTIATION_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | P-A-C-T-S okvir, cenovna disciplina, give/get, scope trade-offs, plaćanje, rokovi, SLA, pilot, custom razvoj, approval matrix, concession log, walk-away i CRM. |
 | `11_CASE_STUDIES_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Izbor kandidata, L0–L3 dozvole, Evidence Pack, baseline, metrike, intervju, proof card/kratka/puna/anonimna forma, approval workflow, CRM i quality score. |
+| `12_ROI_CALCULATOR_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Konzervativni/base/upside scenariji, TCO, direktne koristi, faktor realizacije, ramp-up, payback, break-even, sensitivity, assumption register, CRM i quality score. |
 
 ## Postojeći prodajni dokumenti
 
