@@ -22,6 +22,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `11_CASE_STUDIES_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Izbor kandidata, L0–L3 dozvole, Evidence Pack, baseline, metrike, intervju, proof card/kratka/puna/anonimna forma, approval workflow, CRM i quality score. |
 | `12_ROI_CALCULATOR_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Konzervativni/base/upside scenariji, TCO, direktne koristi, faktor realizacije, ramp-up, payback, break-even, sensitivity, assumption register, CRM i quality score. |
 | `13_CRM_PIPELINE_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Account/contact/lead/opportunity model, S0–S9/SN stages, next-step i aging disciplina, forecast, confidence/champion test, hygiene, no-deal, nurture, handoff i CRM quality score. |
+| `14_KPI_DASHBOARD_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Activity, funnel, conversion, coverage, velocity, forecast accuracy, source quality, CRM hygiene, win/loss, handoff, customer health, alerts i KPI governance. |
 
 ## Postojeći prodajni dokumenti
 
