@@ -58,7 +58,7 @@ Po završetku, obučena osoba treba da može da:
 | COS-11 | Case studies | intake, dozvole, metrike, narrative, kratka i puna forma | DRAFT v1 — VALIDATION |
 | COS-12 | ROI calculator | model uštede vremena, grešaka, kontrole, rizika i rasta | DRAFT v1 — VALIDATION |
 | COS-13 | CRM pipeline | objekti, statusi, obavezna polja, aktivnosti, hygiene i forecasting | DRAFT v1 — VALIDATION |
-| COS-14 | KPI dashboard | activity, conversion, velocity, coverage, quality i retention signals | NOT STARTED |
+| COS-14 | KPI dashboard | activity, conversion, velocity, coverage, quality i retention signals | DRAFT v1 — VALIDATION |
 | COS-15 | Annual sales calendar | kalendar po kulturama, predsezona, sezona, postsezona i reactivation | NOT STARTED |
 
 ---
@@ -142,7 +142,7 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | Case Studies | DRAFT v1 — VALIDATION |
 | ROI Calculator | DRAFT v1 — VALIDATION |
 | CRM Pipeline | DRAFT v1 — VALIDATION |
-| KPI Dashboard | NOT STARTED |
+| KPI Dashboard | DRAFT v1 — VALIDATION |
 | Annual Sales Calendar | NOT STARTED |
 
 Dozvoljeni statusi: `NOT STARTED`, `IN PROGRESS`, `DRAFT vN`, `VALIDATION`, `DONE vN`, `BLOCKED`.
