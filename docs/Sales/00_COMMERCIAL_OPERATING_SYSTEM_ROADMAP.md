@@ -1,8 +1,9 @@
 # AgriX Commercial Operating System — roadmap
 
-**Status:** Active  
+**Status:** Initial build complete — validation  
 **Vlasnik:** osnivač AgriX-a  
 **Početak:** 2026-07-28  
+**Početna mapa završena:** 2026-07-31  
 **Svrha:** Jedinstven, ponovljiv i merljiv standard za marketing, prodaju, kvalifikaciju, demonstraciju, ponudu, pregovore, onboarding handoff i win/loss učenje.
 
 ---
@@ -23,7 +24,7 @@ Commercial Operating System nije zbir generičkih prodajnih skripti. Svaki segme
 
 ## 2. Ciljni rezultat
 
-Po završetku, obučena osoba treba da može da:
+Po završetku početne izrade, obučena osoba treba da može da:
 
 - identifikuje pravi ICP i prioritet naloga;
 - pronađe relevantne uloge u firmi;
@@ -36,7 +37,8 @@ Po završetku, obučena osoba treba da može da:
 - pripremi i predstavi ponudu u skladu sa cenovnikom;
 - upravlja sledećim koracima i pipeline-om;
 - preda dobijen posao implementaciji bez gubitka konteksta;
-- evidentira razloge dobitka/gubitka i unapredi playbook.
+- evidentira razloge dobitka/gubitka i unapredi playbook;
+- planira komercijalne aktivnosti prema sezoni i implementacionom kapacitetu.
 
 ---
 
@@ -59,13 +61,13 @@ Po završetku, obučena osoba treba da može da:
 | COS-12 | ROI calculator | model uštede vremena, grešaka, kontrole, rizika i rasta | DRAFT v1 — VALIDATION |
 | COS-13 | CRM pipeline | objekti, statusi, obavezna polja, aktivnosti, hygiene i forecasting | DRAFT v1 — VALIDATION |
 | COS-14 | KPI dashboard | activity, conversion, velocity, coverage, quality i retention signals | DRAFT v1 — VALIDATION |
-| COS-15 | Annual sales calendar | kalendar po kulturama, predsezona, sezona, postsezona i reactivation | NOT STARTED |
+| COS-15 | Annual sales calendar | kalendar po kulturama, predsezona, sezona, postsezona i reactivation | DRAFT v1 — VALIDATION |
 
 ---
 
 ## 4. Redosled izrade
 
-Redosled je obavezan jer svaki sledeći segment zavisi od prethodnog:
+Početna izrada je završena sledećim redosledom:
 
 1. psihološki profili i buying committee;
 2. market positioning;
@@ -83,7 +85,7 @@ Redosled je obavezan jer svaki sledeći segment zavisi od prethodnog:
 14. KPI dashboard;
 15. annual sales calendar.
 
-Market positioning se finalizuje tek nakon početne verzije psiholoških profila, jer poruka mora biti prilagođena načinu na koji kupac procenjuje rizik i vrednost, a ne samo funkcionalnom obuhvatu proizvoda.
+Sledeća faza nije dodavanje generičkog sadržaja, već validacija kroz stvarne kontakte, prodajne prilike, implementacije i rezultate klijenata.
 
 ---
 
@@ -122,9 +124,7 @@ Na svakih 10 kvalitetnih razgovora radi se mini-revizija profila i skripti. Na s
 
 ---
 
-## 7. Statusni format posle svakog segmenta
-
-Na kraju svakog završenog segmenta prikazuje se ista tabela:
+## 7. Statusni format
 
 | Oblast | Status |
 |---|---|
@@ -143,7 +143,7 @@ Na kraju svakog završenog segmenta prikazuje se ista tabela:
 | ROI Calculator | DRAFT v1 — VALIDATION |
 | CRM Pipeline | DRAFT v1 — VALIDATION |
 | KPI Dashboard | DRAFT v1 — VALIDATION |
-| Annual Sales Calendar | NOT STARTED |
+| Annual Sales Calendar | DRAFT v1 — VALIDATION |
 
 Dozvoljeni statusi: `NOT STARTED`, `IN PROGRESS`, `DRAFT vN`, `VALIDATION`, `DONE vN`, `BLOCKED`.
 
@@ -161,13 +161,32 @@ Segment se ne označava kao `DONE` dok ne sadrži:
 - zabranjene obrasce i red flags;
 - vezu sa drugim dokumentima;
 - listu hipoteza za validaciju;
-- datum i verziju.
+- datum i verziju;
+- dovoljno stvarnih podataka da validacioni status može biti zatvoren.
 
 ---
 
-## 9. Upravljanje promenama
+## 9. Validaciona faza
+
+Prioritetni redosled validacije:
+
+1. prvih 50 ciljnih outbound kontakata;
+2. prvih 20 kvalifikacionih/discovery razgovora;
+3. prvih 10 personalizovanih demoa;
+4. prvih 10 formalnih ponuda i proposal review razgovora;
+5. svi značajni prigovori i pregovori;
+6. prvih pet odobrenih studija slučaja;
+7. prvih 30 zatvorenih prilika za pipeline/KPI kalibraciju;
+8. jedna puna sezona za Annual Sales Calendar v2.
+
+Validacija mora proizvesti konkretnu promenu dokumenta, potvrdu hipoteze ili eksplicitnu odluku da se pravilo zadrži.
+
+---
+
+## 10. Upravljanje promenama
 
 - Cenovne tvrdnje moraju ostati usklađene sa `AgriX_Cenovnik_2027.html`.
 - Komercijalni tekst ne sme obećati funkcionalnost ili readiness koji nisu potvrđeni u proizvodnoj dokumentaciji.
 - Poverljivi podaci klijenata, popunjene ponude i kontakt podaci ne čuvaju se u repozitorijumu.
 - Sve promene playbook-a moraju imati objašnjenje zasnovano na novom dokazu, odluci ili rezultatu.
+- Početna izrada sistema je završena; dalji rast dokumentacije mora biti vođen dokazom, ne potrebom da dokument bude duži.
