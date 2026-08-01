@@ -12,7 +12,8 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `01_MARKET_POSITIONING.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Tržišna kategorija, centralni problem narrative, poziciona teza, value pillars, competitive frame, ICP/anti-positioning, message house, proof hierarchy, website implications i plan validacije. |
 | `02_PSYCHOLOGICAL_PROFILES.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Evidence-based buying committee: vlasnik, operativa, administrator, finansije, teren, IT i skriveni influencer; motivi, rizici, dokazni prag, buying signals i validacione hipoteze. |
 | `03_BUYING_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Buying triggers, committee i champion test, faze B0–B7, decision criteria, skriveni veto, sezonski timing, Mutual Action Plan, stage advancement, CRM polja i no-deal pravila. |
-| `04_SALES_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Faze S0–S9/SN, PACT kvalifikacija, entry/exit kriterijumi, SLA, stage aging, next-step disciplina, forecast, no-deal, pipeline hygiene i implementation handoff. |
+| `04_SALES_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | **Kanonski stage model** S0–S9/SN, PACT kvalifikacija, entry/exit kriterijumi, SLA, stage aging, next-step disciplina, forecast, no-deal, pipeline hygiene i implementation handoff. |
+| `04A_FAST_TRACK_SALES_MOTION.md` | DRAFT v1 — VALIDATION · 02.08.2026. | Dodatni motion za standardne manje prilike; isti kanonski stage model, eligibility, automatska eskalacija, kombinovani discovery/demo, progressive CRM, capacity gate i quality check. |
 | `05_DISCOVERY_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Pre-call intelligence, C-P-I-O-R-D tok razgovora, process mapping, pitanja po personama, consequence chain, success criteria, risk/decision discovery, scoring, recap i CRM zapis. |
 | `06_EMAIL_SEQUENCES.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Šestomesečni cadence i gotovi tekstovi za cold outbound, inbound, post-call, discovery, demo, proposal, nurture, reaktivaciju i referral; grananje, SLA, CRM i A/B test pravila. |
 | `07_CALL_PLAYBOOKS.md` | DRAFT v1 — VALIDATION · 29.07.2026. | O-R-E-D-A struktura, cold i inbound pozivi, kvalifikacija, discovery, demo confirmation, post-demo, scope, proposal review, stalled deal, reaktivacija, reakcije, CRM i coaching standard. |
@@ -21,9 +22,15 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `10_NEGOTIATION_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | P-A-C-T-S okvir, cenovna disciplina, give/get, scope trade-offs, plaćanje, rokovi, SLA, pilot, custom razvoj, approval matrix, concession log, walk-away i CRM. |
 | `11_CASE_STUDIES_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Izbor kandidata, L0–L3 dozvole, Evidence Pack, baseline, metrike, intervju, proof card/kratka/puna/anonimna forma, approval workflow, CRM i quality score. |
 | `12_ROI_CALCULATOR_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Konzervativni/base/upside scenariji, TCO, direktne koristi, faktor realizacije, ramp-up, payback, break-even, sensitivity, assumption register, CRM i quality score. |
-| `13_CRM_PIPELINE_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Account/contact/lead/opportunity model, S0–S9/SN stages, next-step i aging disciplina, forecast, confidence/champion test, hygiene, no-deal, nurture, handoff i CRM quality score. |
+| `13_CRM_PIPELINE_PLAYBOOK.md` | DRAFT v1 — VALIDATION · rev. 02.08.2026. | CRM je usklađen sa kanonskim S0–S9/SN modelom iz Sales Process-a; sales motion Fast Track/Standard/Complex, progressive fields, migration mapa starih oznaka, next-step, aging, forecast, hygiene, no-deal, nurture, handoff i quality score. |
 | `14_KPI_DASHBOARD_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Activity, funnel, conversion, coverage, velocity, forecast accuracy, source quality, CRM hygiene, win/loss, handoff, customer health, alerts i KPI governance. |
 | `15_ANNUAL_SALES_CALENDAR.md` | DRAFT v1 — VALIDATION · 31.07.2026. | Godišnji ritam, sezonski account plan, campaign waves, kanali, Google Ads/SEO, partneri, capacity gate, nurture, customer calendar i review cadence. |
+
+## Revizije i alignment
+
+| Dokument | Status | Sadržaj |
+|---|---|---|
+| `16_WEBSITE_SALES_ALIGNMENT_REVIEW.md` | ACTION REQUIRED · 02.08.2026. | Poređenje `agrix.rs`, `otkup-dd.html` i `gazdinstvo-dd.html` sa cenovnikom i Sales source-of-truth dokumentima; P0 cenovne/claim kontradikcije, GGAP/Gazdinstvo scope, PLG gap, Claim Register i website release gate. |
 
 ## Postojeći prodajni dokumenti
 
@@ -36,6 +43,7 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 
 Napomene:
 
+- **Jedini kanonski opportunity stage model** je model iz `04_SALES_PROCESS.md`: S0 Target Account, S1 Connected, S2 Qualified Problem, S3 Discovery, S4 Solution Evaluation, S5 Risk Alignment, S6 Proposal Review, S7 Decision / Approval, S8 Closed Won, S9 Closed Lost i SN Nurture. CRM, KPI, automatizacije i izveštaji moraju koristiti ista značenja;
 - **Cenovnik se ne menja u PDF-u** — menja se `AgriX_Cenovnik_2027.html` pa se PDF regeneriše:
 
   ```bash
@@ -46,6 +54,7 @@ Napomene:
   Zavisnost je Chromium/Chrome (headless print-to-pdf); `CHROME_BIN` može da nadjača automatsko pronalaženje.
 
 - **Cene moraju biti identične na četiri mesta:** `AgriX_Cenovnik_2027.html`, list `Cenovnik` u šablonu ponude, Prilog 1 ugovora (`docs/Legal/AgriX_Ugovor_o_licenciranju.md`) i finansijski model. `tools/cenovnik.sh check` to proverava programski;
+- website copy je downstream materijal i ne sme menjati cenovni, ugovorni, readiness ili claim standard; pre deploy-a koristiti gate iz `16_WEBSITE_SALES_ALIGNMENT_REVIEW.md`;
 - cene se menjaju samo kada se promeni odluka o ceni (izvor: odluke 339, 341, 349–358, 409–422);
 - šablon ponude je prazan obrazac — popunjene ponude sa podacima klijenta se ne commit-uju;
 - hardverska podrška (odluka 357) i cena po gazdinstvu kod Savetnika (odluka 341) potvrđene su 27.07.2026.;
