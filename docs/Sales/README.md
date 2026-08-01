@@ -13,6 +13,17 @@ Poverljive ponude, kontakt podaci i ugovorni detalji ne čuvaju se u javnom repo
 | `02_PSYCHOLOGICAL_PROFILES.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Evidence-based buying committee: vlasnik, operativa, administrator, finansije, teren, IT i skriveni influencer; motivi, rizici, dokazni prag, buying signals i validacione hipoteze. |
 | `03_BUYING_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Buying triggers, committee i champion test, faze B0–B7, decision criteria, skriveni veto, sezonski timing, Mutual Action Plan, stage advancement, CRM polja i no-deal pravila. |
 | `04_SALES_PROCESS.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Faze S0–S9/SN, PACT kvalifikacija, entry/exit kriterijumi, SLA, stage aging, next-step disciplina, forecast, no-deal, pipeline hygiene i implementation handoff. |
+| `05_DISCOVERY_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 28.07.2026. | Pre-call intelligence, C-P-I-O-R-D tok razgovora, process mapping, pitanja po personama, consequence chain, success criteria, risk/decision discovery, scoring, recap i CRM zapis. |
+| `06_EMAIL_SEQUENCES.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Šestomesečni cadence i gotovi tekstovi za cold outbound, inbound, post-call, discovery, demo, proposal, nurture, reaktivaciju i referral; grananje, SLA, CRM i A/B test pravila. |
+| `07_CALL_PLAYBOOKS.md` | DRAFT v1 — VALIDATION · 29.07.2026. | O-R-E-D-A struktura, cold i inbound pozivi, kvalifikacija, discovery, demo confirmation, post-demo, scope, proposal review, stalled deal, reaktivacija, reakcije, CRM i coaching standard. |
+| `08_DEMO_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | R-E-L-A-Y struktura, demo brief, executive/operational/technical tokovi, storyline po problemu i personi, gap management, fit review, exit kriterijumi, CRM i quality score. |
+| `09_OBJECTION_HANDLING.md` | DRAFT v1 — VALIDATION · 29.07.2026. | A-C-T-I-O-N dijagnostika, cena/vrednost, status quo, ERP, implementacija, vendor rizik, gap-ovi, konkurencija, no-deal, CRM i quality score. |
+| `10_NEGOTIATION_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | P-A-C-T-S okvir, cenovna disciplina, give/get, scope trade-offs, plaćanje, rokovi, SLA, pilot, custom razvoj, approval matrix, concession log, walk-away i CRM. |
+| `11_CASE_STUDIES_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 29.07.2026. | Izbor kandidata, L0–L3 dozvole, Evidence Pack, baseline, metrike, intervju, proof card/kratka/puna/anonimna forma, approval workflow, CRM i quality score. |
+| `12_ROI_CALCULATOR_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Konzervativni/base/upside scenariji, TCO, direktne koristi, faktor realizacije, ramp-up, payback, break-even, sensitivity, assumption register, CRM i quality score. |
+| `13_CRM_PIPELINE_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Account/contact/lead/opportunity model, S0–S9/SN stages, next-step i aging disciplina, forecast, confidence/champion test, hygiene, no-deal, nurture, handoff i CRM quality score. |
+| `14_KPI_DASHBOARD_PLAYBOOK.md` | DRAFT v1 — VALIDATION · 30.07.2026. | Activity, funnel, conversion, coverage, velocity, forecast accuracy, source quality, CRM hygiene, win/loss, handoff, customer health, alerts i KPI governance. |
+| `15_ANNUAL_SALES_CALENDAR.md` | DRAFT v1 — VALIDATION · 31.07.2026. | Godišnji ritam, sezonski account plan, campaign waves, kanali, Google Ads/SEO, partneri, capacity gate, nurture, customer calendar i review cadence. |
 
 ## Postojeći prodajni dokumenti
 
