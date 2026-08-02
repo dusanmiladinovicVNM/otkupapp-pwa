@@ -104,6 +104,11 @@ Public Sub RunStornoTestSuite()
     T27_StornoIzvodaOsvezavaOtkup
     T28_OMAvansBrojiObaKanala
     T29_OMAvansUIzvestajimaObaKanala
+    T30_StagingBezPKOdbijaStorno
+    T31_IzvodBezRacunaOdbijen
+    T32_SplitSaNasledjenimMarkerom
+    T33_ObradjenaStavkaBezNovcaBlokira
+    T34_BrojIzvodaSaKosomCrtom
 
     tx.RollbackTx
     Set tx = Nothing
@@ -682,6 +687,95 @@ End Sub
 
 ' Zbirna: jedan red po klasi. BrojZbirne + Klasa + KG + AMB (+ ZbirnaID, Datum).
 ' kupac (opciono) = KupacID; = HLAD_KUP -> interni hladnjaca-tok, inace eksterni.
+' ============================================================
+' T30 - staging red BEZ BankaImportID mora da odbije ceo storno.
+'
+' Bez PK-a bi prazan kljuc usao u skup izvoda, a BimIdFromNapomena za svaki RUCNO
+' unet red vraca "" -> storno bi zahvatio tudj novac. Ovo je regresioni cuvar za
+' taj scenario: proverava se i da rucni novac DRUGOG dokumenta ostane netaknut.
+' ============================================================
+Private Sub T30_StagingBezPKOdbijaStorno()
+    Const S As String = "T30 staging bez PK: "
+
+    SeedBimStavka "SVT-BIM-6A", "SVT-IZV-6", "SVT-RAC-6", "SVT-PARTNER-6", 900, 0
+    SeedBimStavka "", "SVT-IZV-6", "SVT-RAC-6", "SVT-PARTNER-6", 100, 0      ' pokvaren red
+    SeedNovacBim "SVT-NOV-6A", "SVT-IZV-6", "SVT-BIM-6A", "SVT-P6", 900, 0
+    SeedNovacSplit "SVT-NOV-RUC", "SVT-RUCNI-BROJ", "SVT-P9", 1234, 0        ' tudj rucni novac
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-6", "SVT-RAC-6", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq NovStornirano("SVT-NOV-6A"), "", S & "novac izvoda netaknut (nema delimicnog storna)"
+    ChkEq NovStornirano("SVT-NOV-RUC"), "", S & "TUDJ rucni novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-6A"), "Da", S & "staging netaknut"
+End Sub
+
+' ============================================================
+' T31 - prazan racun je dvosmislen identitet: javna TX funkcija ga mora odbiti
+' sama, ne oslanjajuci se na to da je forma prvo pozvala resolver.
+' ============================================================
+Private Sub T31_IzvodBezRacunaOdbijen()
+    Const S As String = "T31 izvod bez racuna: "
+
+    SeedBimStavka "SVT-BIM-7A", "SVT-IZV-7", "SVT-RAC-7", "SVT-PARTNER-7", 500, 0
+    SeedNovacBim "SVT-NOV-7A", "SVT-IZV-7", "SVT-BIM-7A", "SVT-P7", 500, 0
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-7", "", IZVOD_STORNO_REMAP, info), S & "prazan racun -> odbijeno"
+    ChkEq NovStornirano("SVT-NOV-7A"), "", S & "novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-7A"), "Da", S & "staging netaknut"
+End Sub
+
+' ============================================================
+' T32 - avans split NASLEDJUJE BIM marker (BuildAvansSplitNapomena) pa se hvata
+' direktno, i kad ima drugi BrojDokumenta. Markerless red BEZ partnera se NE
+' pogadja - to je bila preteska heuristika.
+' ============================================================
+Private Sub T32_SplitSaNasledjenimMarkerom()
+    Const S As String = "T32 split sa nasledjenim markerom: "
+
+    SeedBimStavka "SVT-BIM-8A", "SVT-IZV-8", "SVT-RAC-8", "SVT-PARTNER-8", 0, 3000
+    SeedNovacBim "SVT-NOV-8A", "SVT-IZV-8", "SVT-BIM-8A", "SVT-P8", 0, 1800
+    SeedNovacBim "SVT-NOV-8B", "SVT-DRUGI-BROJ-8", "SVT-BIM-8A", "SVT-P8", 0, 1200
+    SeedNovacSplit "SVT-NOV-8C", "SVT-IZV-8", "", 0, 500
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-8", "SVT-RAC-8", IZVOD_STORNO_REMAP, info), S & "storno uspeo"
+    ChkEq NovStornirano("SVT-NOV-8A"), "Da", S & "originalni red storniran"
+    ChkEq NovStornirano("SVT-NOV-8B"), "Da", S & "split sa markerom storniran (i uz drugi broj)"
+    ChkEq NovStornirano("SVT-NOV-8C"), "", S & "markerless bez partnera NIJE pokupljen"
+End Sub
+
+' ============================================================
+' T33 - stavka oznacena kao obradjena, a nema nijedan novac red: vracanje u
+' "za obradu" bi dozvolilo ponovno mapiranje i dvostruko knjizenje -> blokada.
+' ============================================================
+Private Sub T33_ObradjenaStavkaBezNovcaBlokira()
+    Const S As String = "T33 obradjena stavka bez novca: "
+
+    SeedBimStavka "SVT-BIM-9A", "SVT-IZV-9", "SVT-RAC-9", "SVT-PARTNER-9", 700, 0
+
+    Chk Len(GetIzvodStornoBlokade("SVT-IZV-9", "SVT-RAC-9")) > 0, S & "preflight objasnjava blokadu"
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-9", "SVT-RAC-9", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq BimObradjeno("SVT-BIM-9A"), "Da", S & "staging NIJE tiho vracen u 'za obradu'"
+End Sub
+
+' ============================================================
+' T34 - broj izvoda sme da sadrzi kosu crtu (npr. "42/2026"); ne sme se raseci
+' kao "broj/racun".
+' ============================================================
+Private Sub T34_BrojIzvodaSaKosomCrtom()
+    Const S As String = "T34 broj izvoda sa kosom crtom: "
+
+    SeedBimStavka "SVT-BIM-10A", "SVT-IZV/2026", "SVT-RAC-10", "SVT-PARTNER-10", 100, 0
+
+    Dim br As String, rac As String, razlog As String
+    Chk ResolveIzvodZaStorno("SVT-IZV/2026", br, rac, razlog), S & "ceo unos prihvacen kao broj"
+    ChkEq br, "SVT-IZV/2026", S & "broj nije rasecen na kosoj crti"
+    ChkEq rac, "SVT-RAC-10", S & "racun izveden iz staginga"
+End Sub
+
 ' ============================================================
 ' T28 - OM avans broji OBA kanala placanja.
 '

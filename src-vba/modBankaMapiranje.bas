@@ -1800,6 +1800,33 @@ Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
     BuildBIMNapomena = s
 End Function
 
+' Citac markera koji pise BuildBIMNapomena: vraca BankaImportID iz Napomene
+' ("BIM:<id>; Ref:...") ili "" ako red nije nastao iz izvoda. Zivi uz pisca da
+' format ima JEDNO mesto istine (citaju ga modStorno i modNovac).
+Public Function BimIdFromNapomena(ByVal napomena As String) As String
+    Dim s As String: s = LTrim$(CStr(napomena))
+    Dim pfx As String: pfx = NOV_NAPOMENA_BIM_PREFIX
+    If Len(s) < Len(pfx) Then Exit Function
+    If UCase$(Left$(s, Len(pfx))) <> UCase$(pfx) Then Exit Function
+    s = Mid$(s, Len(pfx) + 1)
+    Dim p As Long: p = InStr(s, ";")
+    If p > 0 Then s = Left$(s, p - 1)
+    BimIdFromNapomena = Trim$(s)
+End Function
+
+' Napomena za avans-split red: nasledi BIM marker roditelja da split ostane
+' pripadan SVOM izvodu (bez toga se poreklo gubi i storno izvoda mora da ga
+' pogadja po broju+partneru -> vidi TL-007). Rucni avans nema marker -> samo opis.
+Public Function BuildAvansSplitNapomena(ByVal parentNapomena As String, _
+                                        ByVal opis As String) As String
+    Dim bimID As String: bimID = BimIdFromNapomena(parentNapomena)
+    If Len(bimID) = 0 Then
+        BuildAvansSplitNapomena = opis
+    Else
+        BuildAvansSplitNapomena = NOV_NAPOMENA_BIM_PREFIX & bimID & "; " & opis
+    End If
+End Function
+
 Public Function NormalizeLooseBIM(ByVal s As String) As String
     s = UCase$(Trim$(s))
     s = Replace(s, vbTab, " ")

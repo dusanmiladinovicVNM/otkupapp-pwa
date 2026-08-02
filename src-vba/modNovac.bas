@@ -574,7 +574,10 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     colBrojDok = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
     colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
-    
+    ' Napomena roditelja -> split nasledjuje BIM marker (poreklo se ne gubi).
+    Dim colNapomena As Long
+    colNapomena = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+
     ' AUD-010 / FM-0019 #4,#6: target-owner + target-active guard.
     ' Ne primeni avans na fakturu drugog kupca (ili nepostojecu) niti na storniranu.
     Dim fakKupac As String
@@ -665,7 +668,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
                 NOV_KUPCI_AVANS, _
                 apply, _
                 0, _
-                "Avans raspodela")
+                BuildAvansSplitNapomena(CStr(data(i, colNapomena)), "Avans raspodela"))
 
             If Len(Trim$(splitNovacID)) = 0 Then
                 Err.Raise vbObjectError + 1026, "ApplyAvansToFaktura", _
@@ -1162,6 +1165,9 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
     colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
     colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+    ' Napomena roditelja -> split nasledjuje BIM marker (poreklo se ne gubi).
+    Dim colNapomenaO As Long
+    colNapomenaO = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
 
     ' Otkup-Vrednost
     Dim otkData As Variant
@@ -1258,7 +1264,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
                 NOV_VIRMAN_AVANS_KOOP, _
                 0, _
                 applyAmt, _
-                "Avans raspodela", _
+                BuildAvansSplitNapomena(CStr(data(i, colNapomenaO)), "Avans raspodela"), _
                 otkupID)
 
             If Len(Trim$(splitNovacID)) = 0 Then

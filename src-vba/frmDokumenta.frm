@@ -3520,6 +3520,15 @@ Private Sub btnStorno_Click()
                 MsgBox izvRazlog, vbExclamation, APP_NAME
                 Exit Sub
             End If
+            ' Preflight pre pregleda: ako nesto blokira, operater vidi RAZLOG,
+            ' a ne tihi neuspeh posle potvrde.
+            Dim izvBlokada As String
+            izvBlokada = GetIzvodStornoBlokade(izvBroj, izvRacun)
+            If Len(izvBlokada) > 0 Then
+                MsgBox "Storno izvoda je odbijen." & vbCrLf & vbCrLf & izvBlokada, _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
             If MsgBox(GetIzvodPregled(izvBroj, izvRacun) & vbCrLf & vbCrLf & _
                       "Stornirati CEO izvod?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
             Dim izvOdg As VbMsgBoxResult
