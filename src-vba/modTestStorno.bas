@@ -102,6 +102,8 @@ Public Sub RunStornoTestSuite()
     T25_StornoIzvodaHvataAvansSplit
     T26_IzvodNaViseRacunaTraziRacun
     T27_StornoIzvodaOsvezavaOtkup
+    T28_OMAvansBrojiObaKanala
+    T29_OMAvansUIzvestajimaObaKanala
 
     tx.RollbackTx
     Set tx = Nothing
@@ -681,6 +683,71 @@ End Sub
 ' Zbirna: jedan red po klasi. BrojZbirne + Klasa + KG + AMB (+ ZbirnaID, Datum).
 ' kupac (opciono) = KupacID; = HLAD_KUP -> interni hladnjaca-tok, inace eksterni.
 ' ============================================================
+' T28 - OM avans broji OBA kanala placanja.
+'
+' Posle razdvajanja kanala (Tip nosi kes vs virman) redovi uvezeni iz izvoda nose
+' VIRMAN tip, a redovi uvezeni PRE toga i dalje nose KES tip. Svaki citalac OM
+' avansa mora racunati oba - inace iznosi tiho padnu (bankovni novac ispadne iz
+' salda, ili legacy zapisi ispadnu posle migracije). Ovo je regresioni cuvar koji
+' zamenjuje rucno "uporedi saldo pre i posle importa grane".
+'
+' Citaoci: modNovac.GetOMAvansSaldo (ovde), modIzvestaj x2 (T29),
+' modStammdatenSync.ExportSaldoOM - Private, pa se pokriva ugovorom klasifikatora.
+' ============================================================
+Private Sub T28_OMAvansBrojiObaKanala()
+    Const S As String = "T28 OM avans oba kanala: "
+
+    ' Ugovor klasifikatora - od njega zavise SVI citaoci.
+    Chk IsFirmaOtkupacAvansTip(NOV_KES_FIRMA_OTKUPAC), S & "KES Firma-Otkupac je OM avans (legacy zapis)"
+    Chk IsFirmaOtkupacAvansTip(NOV_VIRMAN_FIRMA_OTKUPAC), S & "VIRMAN Firma-Otkupac je OM avans (iz izvoda)"
+    Chk Not IsFirmaOtkupacAvansTip(NOV_KES_OTKUPAC_KOOP), S & "isplata kooperantu NIJE OM avans"
+    Chk Not IsFirmaOtkupacAvansTip(NOV_VIRMAN_FIRMA_KOOP), S & "virman kooperantu NIJE OM avans"
+    Chk IsKesNovacTip(NOV_KES_OTKUPAC_KOOP), S & "KesOtkupacKoop je kes"
+    Chk Not IsKesNovacTip(NOV_VIRMAN_FIRMA_OTKUPAC), S & "VirmanFirmaOtkupac NIJE kes"
+
+    ' Saldo = 1000 (kes, legacy) + 500 (virman, iz izvoda) - 300 (podeljeno kooperantu)
+    SeedNovacOM "SVT-NOV-OM1", "SVT-OM-1", "", NOV_KES_FIRMA_OTKUPAC, 1000
+    SeedNovacOM "SVT-NOV-OM2", "SVT-OM-1", "", NOV_VIRMAN_FIRMA_OTKUPAC, 500
+    SeedNovacOM "SVT-NOV-OM3", "SVT-OM-1", "SVT-KOOP-OM", NOV_KES_OTKUPAC_KOOP, 300
+
+    ChkEqD GetOMAvansSaldo("SVT-OM-1"), 1200, S & "saldo = 1000 kes + 500 virman - 300 podeljeno"
+    ' Da pad bude citljiv: 700 = virman kanal ispao, 900 = kes (legacy) kanal ispao.
+    Chk GetOMAvansSaldo("SVT-OM-1") <> 700, S & "virman kanal NIJE ispao iz salda"
+    Chk GetOMAvansSaldo("SVT-OM-1") <> 200, S & "kes (legacy) kanal NIJE ispao iz salda"
+End Sub
+
+' ============================================================
+' T29 - isti kanal-invariant kroz IZVESTAJE (ReportSaldoOM + ReportIsplata).
+' Lokalni EH: neocekivana greska u report sloju daje FAIL, ne obara ceo suite.
+' ============================================================
+Private Sub T29_OMAvansUIzvestajimaObaKanala()
+    Const S As String = "T29 OM avans u izvestajima: "
+    On Error GoTo EH
+
+    SeedNovacOM "SVT-NOV-OM4", "SVT-OM-2", "", NOV_KES_FIRMA_OTKUPAC, 800
+    SeedNovacOM "SVT-NOV-OM5", "SVT-OM-2", "", NOV_VIRMAN_FIRMA_OTKUPAC, 200
+    SeedNovacOM "SVT-NOV-OM6", "SVT-OM-2", "SVT-KOOP-OM", NOV_KES_OTKUPAC_KOOP, 250
+
+    Dim od As Date: od = Date - 1
+    Dim doD As Date: doD = Date + 1
+
+    ' ReportSaldoOM: red "OM AVANS (nerasporedjen)", kolona 4 = primljeno - podeljeno.
+    Dim rs As Variant: rs = ReportSaldoOM("SVT-OM-2", od, doD)
+    ChkEqD ReportCellByLabel(rs, "OM AVANS (nerasporedjen)", 4), 750, _
+        S & "ReportSaldoOM = 800 kes + 200 virman - 250 podeljeno"
+
+    ' ReportIsplata: kontrolni redovi (primljeno = oba kanala; podeljeno = kes koop).
+    Dim ri As Variant: ri = ReportIsplata("OM", "SVT-OM-2", od, doD)
+    ChkEqD ReportCellByLabel(ri, "OM Avans (primljeno)", 5), 1000, _
+        S & "ReportIsplata primljeno = 800 kes + 200 virman"
+    ChkEqD ReportCellByLabel(ri, "OM Avans (podeljeno)", 5), 250, _
+        S & "ReportIsplata podeljeno = 250"
+    Exit Sub
+EH:
+    Chk False, S & "neocekivana greska u report sloju: " & Err.description
+End Sub
+
+' ============================================================
 ' T23 - storno izvoda, ishod REMAP (PDF ispravan, mapiranje pogresno):
 ' novac pada, staging stavke se vracaju u "za obradu" i NISU ugasene.
 ' ============================================================
@@ -894,6 +961,16 @@ Private Sub SeedNovacSplit(ByVal novID As String, ByVal brojIzvoda As String, _
               "Avans raspodela")
 End Sub
 
+' Novac vezan za otkupno mesto: OM avans (koopID prazan) ili isplata kooperantu iz
+' tog avansa (koopID popunjen). Datum = danas -> ulazi u report period T29.
+Private Sub SeedNovacOM(ByVal novID As String, ByVal omID As String, ByVal koopID As String, _
+                        ByVal tip As String, ByVal isplata As Double)
+    SvAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_OM_ID, COL_NOV_KOOP_ID, _
+              COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_UPLATA, COL_NOV_ISPLATA), _
+        Array(novID, novID, Date, omID, koopID, "OM", tip, 0, isplata)
+End Sub
+
 ' Otkup blok sa kolicinom/cenom, unapred oznacen kao isplacen (T27 proverava da
 ' storno izvoda to ponisti).
 Private Sub SeedOtkupPlacen(ByVal otkID As String, ByVal kolicina As Double, ByVal cena As Double)
@@ -949,6 +1026,24 @@ End Function
 Private Function PalBrGajbica(ByVal palID As String) As Long
     Dim v As Variant: v = LookupValue(TBL_PALETA, COL_PAL_ID, palID, COL_PAL_BR_GAJBICA)
     If IsNumeric(v) Then PalBrGajbica = CLng(v)
+End Function
+
+' Vrednost iz kolone `col` u redu ciji je prvi stubac = label. Sentinel -99999 kad
+' red ne postoji -> test vidljivo pada umesto da tiho poredi nulu.
+Private Function ReportCellByLabel(ByVal arr As Variant, ByVal label As String, _
+                                   ByVal col As Long) As Double
+    If Not IsArray(arr) Then
+        ReportCellByLabel = -99999
+        Exit Function
+    End If
+    Dim i As Long
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        If StrComp(Trim$(CStr(arr(i, 1))), label, vbTextCompare) = 0 Then
+            If IsNumeric(arr(i, col)) Then ReportCellByLabel = CDbl(arr(i, col))
+            Exit Function
+        End If
+    Next i
+    ReportCellByLabel = -99999
 End Function
 
 Private Function NovStornirano(ByVal novID As String) As String
