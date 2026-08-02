@@ -488,6 +488,12 @@ Public Const NOV_KES_OTKUPAC_KOOP As String = "KesOtkupacKoop"
 Public Const NOV_VIRMAN_FIRMA_KOOP As String = "VirmanFirmaKoop"
 Public Const NOV_VIRMAN_AVANS_KOOP As String = "VirmanAvansKoop"
 
+' Marker porekla u tblNovac.Napomena: red je nastao mapiranjem bankovnog izvoda
+' (modBankaMapiranje.BuildBIMNapomena upisuje "BIM:<BankaImportID>; ..."). Jedini
+' trag veze novac -> izvod (tblNovac nema BankaImportID kolonu). Cita ga storno
+' sloj: izvod se ne stornira parcijalno.
+Public Const NOV_NAPOMENA_BIM_PREFIX As String = "BIM:"
+
 ' --- Banka Import ---
 Public Const PREFIX_BANKA_IMPORT As String = "BIM-"
 Public Const COL_BIM_ID As String = "BankaImportID"

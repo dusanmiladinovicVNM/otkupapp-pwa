@@ -3497,24 +3497,15 @@ Private Sub btnStorno_Click()
             If ConfirmStorno("fakturu", brDok) Then Success = StornoFaktura_TX(fakID)
             
         Case "Novac"
-            ' StornoNovac_TX ocekuje NovacID, a operater kuca BROJ dokumenta ->
-            ' razresi broj u ID pre poziva (isti obrazac kao Otpremnica/Faktura).
-            ' BrojDokumenta NIJE jedinstven (uvoz izvoda: sve stavke izvoda dele
-            ' broj; avans split nasledjuje broj) -> vise aktivnih redova NE sme da
-            ' se tiho svede na storno poslednjeg. Fallback: ukucan sam NovacID.
+            ' StornoNovac_TX ocekuje NovacID, a operater kuca BROJ dokumenta.
+            ' Razresavanje + poslovna pravila (izvod se ne stornira parcijalno;
+            ' broj sa vise aktivnih redova trazi NovacID) su u modStorno -> ovde
+            ' samo prikaz razloga. Tanki UI.
             Dim novID As String
-            If CountActiveNovacByBroj(brDok) > 1 Then
-                MsgBox "Broj '" & brDok & "' ima vi" & ChrW(353) & "e aktivnih novac stavki " & _
-                       "(uvoz izvoda / avans raspodela dele isti broj)." & vbCrLf & vbCrLf & _
-                       "Storno po broju bi stornirao samo jednu. Unesite NovacID (NOV-...) " & _
-                       "tacne stavke.", vbExclamation, APP_NAME
-                Exit Sub
-            End If
-            novID = LookupActiveID(TBL_NOVAC, COL_NOV_BROJ_DOK, brDok, COL_NOV_ID)
-            If novID = "" Then novID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, brDok, COL_NOV_ID)
-            If novID = "" Then
-                MsgBox "Novac stavka '" & brDok & "' nije pronadjena (ili je ve" & ChrW(263) & " stornirana)!", _
-                       vbExclamation, APP_NAME
+            Dim novRazlog As String
+            novID = ResolveNovacForStorno(brDok, novRazlog)
+            If Len(novRazlog) > 0 Then
+                MsgBox novRazlog, vbExclamation, APP_NAME
                 Exit Sub
             End If
             If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(novID)

@@ -753,6 +753,17 @@ Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
 
     On Error GoTo EH
 
+    ' Poslovno pravilo (i kad pozivalac nije forma): pojedinacni storno je samo za
+    ' rucno unet novac. Novac iz bankovnog izvoda se stornira SAMO u celosti (ceo
+    ' izvod), nikad red po red -> odbij pre BeginTx (RollbackTx je no-op van TX).
+    Dim brDokNov As String
+    brDokNov = NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novacID, COL_NOV_BROJ_DOK))
+    If IsNovacBrojFromBankaImport(brDokNov) Then
+        Err.Raise ERR_STORNO_BASE + 41, SRC, _
+                  "Novac iz bankovnog izvoda se ne stornira pojedinacno (samo ceo izvod). " & _
+                  "NovacID=" & novacID & "; Broj=" & brDokNov
+    End If
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
@@ -822,6 +833,86 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
 
 EH:
     LogAndReraise SRC
+End Function
+
+' True ako BrojDokumenta pripada bankovnom izvodu. Provera je po BROJU, ne po
+' redu: avans-split (ApplyAvansToFaktura/ApplyAvansToOtkup) nasledjuje broj ali
+' NE i BIM napomenu, pa bi provera po redu propustila izvodni novac kao "rucni".
+' Stornirani redovi se takodje racunaju - broj ostaje izvodni i posle storna.
+' Poslovno pravilo: izvod se NE stornira parcijalno, samo u celosti.
+Public Function IsNovacBrojFromBankaImport(ByVal brDok As String) As Boolean
+    Const SRC As String = "IsNovacBrojFromBankaImport"
+    On Error GoTo EH
+    If Trim$(brDok) = "" Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    Dim colBroj As Long, colNap As Long
+    colBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    Dim pfx As String: pfx = UCase$(NOV_NAPOMENA_BIM_PREFIX)
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brDok) Then
+            If UCase$(Left$(LTrim$(CStr(data(i, colNap))), Len(pfx))) = pfx Then
+                IsNovacBrojFromBankaImport = True
+                Exit Function
+            End If
+        End If
+    Next i
+    Exit Function
+EH:
+    LogErr "modStorno.IsNovacBrojFromBankaImport"
+End Function
+
+' Razresi ono sto je operater ukucao (BrojDokumenta ili NovacID) u NovacID za
+' POJEDINACNI storno i primeni poslovna pravila. Vraca "" i popunjen reason kad
+' storno nije dozvoljen (UI samo prikaze reason - bez MsgBox-a u business sloju).
+' Pravila:
+'   1) izvod (BIM) -> odbij: izvod se stornira samo u celosti, ne parcijalno
+'   2) broj sa vise aktivnih redova (avans-split) -> trazi NovacID (bez tihog
+'      storna samo poslednjeg reda; ukucan NovacID je jednoznacan pa prolazi)
+Public Function ResolveNovacForStorno(ByVal ulaz As String, _
+                                      ByRef reason As String) As String
+    Const SRC As String = "ResolveNovacForStorno"
+    On Error GoTo EH
+    reason = ""
+    ulaz = Trim$(ulaz)
+
+    Dim novID As String, poBroju As Boolean
+    novID = LookupActiveID(TBL_NOVAC, COL_NOV_BROJ_DOK, ulaz, COL_NOV_ID)
+    poBroju = (Len(novID) > 0)
+    If Not poBroju Then novID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, ulaz, COL_NOV_ID)
+
+    If Len(novID) = 0 Then
+        reason = "Novac stavka '" & ulaz & "' nije pronadjena (ili je ve" & ChrW(263) & " stornirana)."
+        Exit Function
+    End If
+
+    Dim brNov As String
+    brNov = NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_NOV_BROJ_DOK))
+
+    If IsNovacBrojFromBankaImport(brNov) Then
+        reason = "Novac '" & ulaz & "' potice iz bankovnog izvoda " & brNov & "." & vbCrLf & vbCrLf & _
+                 "Izvod se ne stornira parcijalno - samo u celosti (Banka / uvoz izvoda)." & vbCrLf & _
+                 "Ovde se stornira samo rucno unet novac (ke" & ChrW(353) & " / virman)."
+        Exit Function
+    End If
+
+    If poBroju Then
+        Dim n As Long: n = CountActiveNovacByBroj(brNov)
+        If n > 1 Then
+            reason = "Broj '" & brNov & "' ima " & n & " aktivnih novac stavki " & _
+                     "(avans raspodela deli isti broj)." & vbCrLf & vbCrLf & _
+                     "Storno po broju bi stornirao samo jednu. Unesite NovacID (NOV-...) tacne stavke."
+            Exit Function
+        End If
+    End If
+
+    ResolveNovacForStorno = novID
+    Exit Function
+EH:
+    LogErr "modStorno.ResolveNovacForStorno"
+    reason = "Greska pri razresavanju novac stavke: " & Err.description
 End Function
 
 ' Broj AKTIVNIH tblNovac redova za dati BrojDokumenta. BrojDokumenta NIJE

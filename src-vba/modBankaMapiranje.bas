@@ -1771,7 +1771,9 @@ Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
                                   ByVal reason As String) As String
     Dim s As String
     
-    s = "BIM:" & bankaImportID
+    ' Prefiks je Public Const (modConfig): storno sloj po njemu prepoznaje da je
+    ' novac red nastao iz izvoda -> ne sme se dirati bez tog citaoca.
+    s = NOV_NAPOMENA_BIM_PREFIX & bankaImportID
     If Trim$(bankaRef) <> "" Then s = s & "; Ref:" & bankaRef
     If Trim$(partnerKonto) <> "" Then s = s & "; Konto:" & partnerKonto
     If Trim$(opis) <> "" Then s = s & "; Opis:" & Left$(opis, 80)
