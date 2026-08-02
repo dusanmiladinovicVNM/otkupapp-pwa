@@ -1026,7 +1026,8 @@ Private Function ExportSaldoOM(ByVal sheetID As String) As Boolean
             Dim vals As Variant
             vals = dict(omID)
             
-            If tip = NOV_KES_FIRMA_OTKUPAC Then
+            ' Avans Firma->Otkupac: oba kanala (kes + virman iz izvoda).
+            If IsFirmaOtkupacAvansTip(tip) Then
                 vals(0) = vals(0) + CDbl(data(i, colIsplata))
             ElseIf tip = NOV_KES_OTKUPAC_KOOP Then
                 vals(1) = vals(1) + CDbl(data(i, colIsplata))

@@ -867,6 +867,9 @@ End Function
 ' Razresi ono sto je operater ukucao (BrojDokumenta ili NovacID) u NovacID za
 ' POJEDINACNI storno i primeni poslovna pravila. Vraca "" i popunjen reason kad
 ' storno nije dozvoljen (UI samo prikaze reason - bez MsgBox-a u business sloju).
+' Kriterijum je POREKLO, ne Tip: rucno unet virman nije deo nijednog izvoda pa
+' mora ostati ispravljiv; iz izvoda ne sme nista pojedinacno (vidi modConfig,
+' sekcija Novac Tipovi - kanal placanja).
 ' Pravila:
 '   1) izvod (BIM) -> odbij: izvod se stornira samo u celosti, ne parcijalno
 '   2) broj sa vise aktivnih redova (avans-split) -> trazi NovacID (bez tihog
@@ -895,6 +898,12 @@ Public Function ResolveNovacForStorno(ByVal ulaz As String, _
         reason = "Novac '" & ulaz & "' potice iz bankovnog izvoda " & brNov & "." & vbCrLf & vbCrLf & _
                  "Izvod se ne stornira parcijalno - samo u celosti (Banka / uvoz izvoda)." & vbCrLf & _
                  "Ovde se stornira samo rucno unet novac (ke" & ChrW(353) & " / virman)."
+        ' Redovi uvezeni PRE razdvajanja kanala nose KES tip iako su bankovni ->
+        ' operateru objasni zasto "ke" & ChrW(353) & " red" ipak nije za pojedinacni storno.
+        If IsKesNovacTip(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_NOV_TIP))) Then
+            reason = reason & vbCrLf & vbCrLf & _
+                     "(Red ima KES tip, ali je uvezen iz izvoda - stari zapis, pre razdvajanja kanala.)"
+        End If
         Exit Function
     End If
 

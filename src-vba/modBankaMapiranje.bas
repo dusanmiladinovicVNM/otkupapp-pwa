@@ -27,7 +27,8 @@ Option Explicit
 '    - PartnerID = StanicaID
 '    - EntitetTip = "OM"
 '    - OMID = StanicaID
-'    - Tip = NOV_KES_FIRMA_OTKUPAC
+'    - Tip = NOV_VIRMAN_FIRMA_OTKUPAC (izvod je bezgotovinski; KES tip se ovde
+'      NE upisuje - vidi modConfig, sekcija Novac Tipovi)
 '
 ' Obradjeno u tblBankaImport:
 '   ""      = nije obradjeno
@@ -535,7 +536,7 @@ Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
         "", _
         "", _
         vrstaVoca, _
-        NOV_KES_FIRMA_OTKUPAC, _
+        NOV_VIRMAN_FIRMA_OTKUPAC, _
         CDbl(NzBIM(bim(1, 5), 0#)), _
         CDbl(NzBIM(bim(1, 6), 0#)), _
         BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "OM") _

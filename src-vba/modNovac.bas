@@ -1069,6 +1069,29 @@ NextRow:
     
     GetOpenOtkupi = result
 End Function
+' ============================================================
+' KLASIFIKACIJA TIPA (kanal placanja). Jedna definicija za sve citaoce - da se
+' konstante ne nabrajaju po modulima (modIzvestaj/modStammdatenSync/modStorno).
+' ============================================================
+
+' Gotovina (blagajna). Sve ostalo je bezgotovinsko (virman/banka).
+Public Function IsKesNovacTip(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case NOV_KES_FIRMA_OTKUPAC, NOV_KES_OTKUPAC_KOOP
+            IsKesNovacTip = True
+    End Select
+End Function
+
+' Avans Firma -> Otkupac (OM), nezavisno od kanala. Racuna OBA tipa jer redovi
+' uvezeni iz izvoda PRE razdvajanja kanala nose KES tip - bez toga bi OM avans
+' saldo, izvestaji i PWA export izgubili te iznose.
+Public Function IsFirmaOtkupacAvansTip(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case NOV_KES_FIRMA_OTKUPAC, NOV_VIRMAN_FIRMA_OTKUPAC
+            IsFirmaOtkupacAvansTip = True
+    End Select
+End Function
+
 Public Function GetOMAvansSaldo(ByVal omID As String) As Double
     Const SRC As String = "GetOMAvansSaldo"
 
@@ -1098,13 +1121,12 @@ Public Function GetOMAvansSaldo(ByVal omID As String) As Double
         If Trim$(CStr(data(i, colOMID))) <> Trim$(omID) Then GoTo NextRow
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextRow
 
-        Select Case CStr(data(i, colTip))
-            Case NOV_KES_FIRMA_OTKUPAC
-                avansTotal = avansTotal + CDbl(data(i, colIsplata))
-
-            Case NOV_KES_OTKUPAC_KOOP
-                isplataTotal = isplataTotal + CDbl(data(i, colIsplata))
-        End Select
+        ' Avans Firma->Otkupac ulazi oba kanala (kes + virman iz izvoda).
+        If IsFirmaOtkupacAvansTip(CStr(data(i, colTip))) Then
+            avansTotal = avansTotal + CDbl(data(i, colIsplata))
+        ElseIf CStr(data(i, colTip)) = NOV_KES_OTKUPAC_KOOP Then
+            isplataTotal = isplataTotal + CDbl(data(i, colIsplata))
+        End If
 
 NextRow:
     Next i
