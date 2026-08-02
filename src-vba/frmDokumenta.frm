@@ -278,6 +278,7 @@ Private Sub UserForm_Activate()
         .AddItem "Prijemnica"
         .AddItem "Faktura"
         .AddItem "Novac"
+        .AddItem "Izvod (ceo)"
         .AddItem "Revers izdavanje koop."
         .AddItem "Revers povrat koop."
         .AddItem "Revers izdato OM (firma)."
@@ -3461,6 +3462,7 @@ Private Sub btnStorno_Click()
     If TryRunCorrectionFramework(tipDok, brDok) Then Exit Sub
 
     Dim Success As Boolean
+    Dim izvInfo As String
 
     Select Case tipDok
         Case "Otkup"
@@ -3509,6 +3511,26 @@ Private Sub btnStorno_Click()
                 Exit Sub
             End If
             If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(novID)
+
+        Case "Izvod (ceo)"
+            ' Izvod se stornira SAMO u celosti. Unos: "broj" ili "broj/racun"
+            ' (isti broj moze postojati na vise racuna/banaka).
+            Dim izvBroj As String, izvRacun As String, izvRazlog As String
+            If Not ResolveIzvodZaStorno(brDok, izvBroj, izvRacun, izvRazlog) Then
+                MsgBox izvRazlog, vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If MsgBox(GetIzvodPregled(izvBroj, izvRacun) & vbCrLf & vbCrLf & _
+                      "Stornirati CEO izvod?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+            Dim izvOdg As VbMsgBoxResult
+            izvOdg = MsgBox("Da li je PDF izvoda bio ISPRAVAN?" & vbCrLf & vbCrLf & _
+                     "DA = samo je mapiranje pogre" & ChrW(353) & "no -> stavke se vracaju u 'za obradu', " & _
+                     "PDF se NE uvozi ponovo." & vbCrLf & vbCrLf & _
+                     "NE = PDF je bio los/korumpiran -> izvod se gasi, uvezi ga PONOVO iz ispravnog PDF-a." & vbCrLf & vbCrLf & _
+                     "OTKAZI = odustani.", vbQuestion + vbYesNoCancel, APP_NAME)
+            If izvOdg = vbCancel Then Exit Sub
+            Success = StornoIzvod_TX(izvBroj, izvRacun, _
+                          IIf(izvOdg = vbYes, IZVOD_STORNO_REMAP, IZVOD_STORNO_REIMPORT), izvInfo)
 
         Case "Revers izdavanje koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_KOOP) Then
@@ -3564,6 +3586,8 @@ Private Sub btnStorno_Click()
             Else
                 MsgBox "Stornirano!", vbInformation, APP_NAME
             End If
+        ElseIf tipDok = "Izvod (ceo)" Then
+            MsgBox izvInfo, vbInformation, APP_NAME
         Else
             MsgBox "Stornirano!", vbInformation, APP_NAME
         End If

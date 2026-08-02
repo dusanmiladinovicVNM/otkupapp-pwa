@@ -519,6 +519,15 @@ Public Const NOV_BANKA_ISPLATA As String = "BankaIsplata"
 ' sloj: izvod se ne stornira parcijalno.
 Public Const NOV_NAPOMENA_BIM_PREFIX As String = "BIM:"
 
+' Ishodi storna CELOG izvoda (izvod se ne stornira parcijalno). Operater bira:
+'   REMAP    - mapiranje je bilo pogresno, PDF je ispravan -> staging stavke se
+'              vracaju u "za obradu" (Obradjeno -> prazno), izvod ostaje uvezen.
+'   REIMPORT - PDF je bio los/korumpiran -> staging stavke se gase
+'              (Stornirano = "Da") pa se izvod uvozi PONOVO iz ispravnog PDF-a
+'              (dedupe i lista "za obradu" postuju Stornirano).
+Public Const IZVOD_STORNO_REMAP As String = "REMAP"
+Public Const IZVOD_STORNO_REIMPORT As String = "REIMPORT"
+
 ' --- Banka Import ---
 Public Const PREFIX_BANKA_IMPORT As String = "BIM-"
 Public Const COL_BIM_ID As String = "BankaImportID"
