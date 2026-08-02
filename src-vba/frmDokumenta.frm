@@ -3499,8 +3499,17 @@ Private Sub btnStorno_Click()
         Case "Novac"
             ' StornoNovac_TX ocekuje NovacID, a operater kuca BROJ dokumenta ->
             ' razresi broj u ID pre poziva (isti obrazac kao Otpremnica/Faktura).
-            ' Fallback: ako je ukucan sam NovacID, prihvati i njega.
+            ' BrojDokumenta NIJE jedinstven (uvoz izvoda: sve stavke izvoda dele
+            ' broj; avans split nasledjuje broj) -> vise aktivnih redova NE sme da
+            ' se tiho svede na storno poslednjeg. Fallback: ukucan sam NovacID.
             Dim novID As String
+            If CountActiveNovacByBroj(brDok) > 1 Then
+                MsgBox "Broj '" & brDok & "' ima vi" & ChrW(353) & "e aktivnih novac stavki " & _
+                       "(uvoz izvoda / avans raspodela dele isti broj)." & vbCrLf & vbCrLf & _
+                       "Storno po broju bi stornirao samo jednu. Unesite NovacID (NOV-...) " & _
+                       "tacne stavke.", vbExclamation, APP_NAME
+                Exit Sub
+            End If
             novID = LookupActiveID(TBL_NOVAC, COL_NOV_BROJ_DOK, brDok, COL_NOV_ID)
             If novID = "" Then novID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, brDok, COL_NOV_ID)
             If novID = "" Then

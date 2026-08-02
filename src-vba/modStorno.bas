@@ -824,6 +824,32 @@ EH:
     LogAndReraise SRC
 End Function
 
+' Broj AKTIVNIH tblNovac redova za dati BrojDokumenta. BrojDokumenta NIJE
+' jedinstven kljuc: uvoz izvoda upisuje sve stavke jednog izvoda pod istim brojem
+' (i literal "IZVOD" kad broj nedostaje), a ApplyAvansToFaktura/ApplyAvansToOtkup
+' split nasledjuje broj originalne stavke. Forma to koristi da NE stornira tiho
+' samo jedan od vise redova sa istim brojem (jedini jedinstven kljuc je NovacID).
+Public Function CountActiveNovacByBroj(ByVal brDok As String) As Long
+    Const SRC As String = "CountActiveNovacByBroj"
+    On Error GoTo EH
+    If Trim$(brDok) = "" Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    Dim colBroj As Long, colStorno As Long
+    colBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colStorno = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, SRC)
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brDok) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then n = n + 1
+        End If
+    Next i
+    CountActiveNovacByBroj = n
+    Exit Function
+EH:
+    LogErr "modStorno.CountActiveNovacByBroj"
+End Function
+
 ' ============================================================
 ' PALETA
 ' ============================================================

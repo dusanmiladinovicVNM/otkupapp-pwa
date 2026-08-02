@@ -764,7 +764,9 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
         ' nove zbirne bi dao 0/0 i invarijanta bi "prosla" -> lazni COMPLETED. Zato MANUAL.
         Dim otpRelinked As Long
         otpRelinked = RelinkOtpremniceToZbirna_TX(oldBroj, newBroj)
-        If otpRelinked = 0 Then
+        ' Len(oldBroj) > 0: prazan oldBroj bi u CountActive znacio "otpremnice BEZ
+        ' zbirne" (ceka zbirnu) -> lazni MANUAL. Prazan context se ovde ne tumaci.
+        If otpRelinked = 0 And Len(oldBroj) > 0 Then
             If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldBroj) > 0 Then
                 MarkCorrectionManual correctionID, "Prevezi otpremnice na novu zbirnu rucno (Osiroceni dokumenti).", _
                     "Relink otpremnica sa " & oldBroj & " na " & newBroj & " nije uspeo (prevezano 0)."
