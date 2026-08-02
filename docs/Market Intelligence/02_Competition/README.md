@@ -31,7 +31,7 @@ Podaci o konkurenciji moraju imati datum, izvor i jasno odvojene činjenice od p
 | `agrosoft_feature_teardown.md` | feature-level poređenje AGROSOFT ↔ AgriX po deset oblasti, sa dokazima iz `src-vba/`, `src/` i `gas/` |
 | `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` | korisničko uputstvo za SOFTEK modul „Otkup poljoprivrednih proizvoda", 34 strane; PDF kreiran 2017-06-06 |
 | `Softek-otkup.pdf` | **uputstvo na koje sam program linkuje** (Pomoć), „Verzija 2.1", 16 strana; PDF kreiran 2014-05-28. Tanje od verzije iz 2017 i ne pominje funkcije viđene u aplikaciji v20.2.4 — in-app pomoć kasni za proizvodom |
-| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%) |
+| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%). §8 opisuje **živu aplikaciju `Ver.20.2.4`** iz ~20 screenshot-ova: kontna arhitektura, IOS i otvorene stavke, KEP, Access/Jet backend, šest uočenih defekata |
 
 ## 3. Sažetak javnih i klasifikovanih referenci
 
@@ -104,7 +104,9 @@ Signali:
 
 `PRODUCT DOCUMENTATION EVIDENCE`: uputstvo za modul „Otkup poljoprivrednih proizvoda" (34 strane, PDF iz 2017) je u ovom folderu. Radni primer kroz ceo dokument je `MALINA VILAMET I KLASA` sa ambalažom `GAJBICA MALINE`, neto se računa kao bruto minus gajbice, ambalaža ide kroz revers sa `ZADUŽENO/RAZDUŽENO/STANJE`, a uvod objašnjava PDV nadoknadu od 8%.
 
-`INFERENCE`: SOFTEK je **prvi dokumentovani direktan konkurent** — isti proizvod, isti kupac, ista regulativa i isti geografski klaster kao AgriX. Modul stoji na knjigovodstvenoj platformi (KEP knjiga, kontni nalog za knjiženje), što je njegov glavni ugao. Cene i aktuelni status instalacija i dalje nisu potvrđeni.
+`PRODUCT DOCUMENTATION EVIDENCE` (screenshot): oko 20 snimaka žive aplikacije `Ver.20.2.4` (poslovna godina 2021, demo firma podešena na Arilje). Oni pokazuju da otkup nije samostalan proizvod nego **vrsta dokumenta `381` u glavnoj knjizi** — dobavljač je analitika konta `4358`, magacin je konto `1311`, otkupno mesto je „mesto troška", a svaki dokument se zatvara `Knjiženjem`. Backend je Microsoft Access (Jet), ne server baza.
+
+`INFERENCE`: SOFTEK je **prvi dokumentovani direktan konkurent** — isti proizvod, isti kupac, ista regulativa i isti geografski klaster kao AgriX. Njegov ugao je knjigovodstvo (KEP, IOS, otvorene stavke, bruto bilans); AgriX-ov je teren i lanac posle otkupa. Prava linija razdvajanja je **ko sme da radi u programu**, ne spisak funkcija. Cene i aktuelni status instalacija i dalje nisu potvrđeni.
 
 Puna analiza: `softek_feature_teardown.md`.
 

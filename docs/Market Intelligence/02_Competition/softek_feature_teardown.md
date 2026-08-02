@@ -2,7 +2,11 @@
 
 **Status:** Drugi feature-level teardown konkurenta u repou
 **Datum analize:** 2026-08-02
-**Izvor:** `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` (34 strane), korisničko uputstvo za modul „Otkup poljoprivrednih proizvoda"
+**Izvori:**
+- `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` (34 strane, 2017) — korisničko uputstvo za modul „Otkup poljoprivrednih proizvoda"
+- `Softek-otkup.pdf` (16 strana, „Verzija 2.1", 2014) — uputstvo na koje sam program linkuje iz menija Pomoć
+- **~20 screenshot-ova žive aplikacije `Ver.20.2.4`, poslovna godina 2021** (vidi §8)
+
 **Analiza AgriX strane:** čitanje koda u `src-vba/`, `src/`
 
 ---
@@ -19,8 +23,12 @@
   proizvoda", ali ovo uputstvo ne opisuje ceo proizvod;
 - iz sadržaja se vidi da modul stoji **na knjigovodstvenoj platformi** (KEP knjiga,
   kontni nalog za knjiženje, poslovne knjige) — ta platforma nije dokumentovana ovde;
-- dokument je iz 2017; aktuelna verzija može biti šira. Sve „nema" tvrdnje znače
-  **„nije opisano u ovom uputstvu"**.
+- dokument je iz 2017; aktuelna verzija je šira. Sve „nema" tvrdnje u §§2–7 znače
+  **„nije opisano u uputstvu"**, ne „proizvod to nema".
+
+> **Ova ograničenja su delimično prevaziđena.** §8 opisuje živu aplikaciju `Ver.20.2.4`
+> na osnovu screenshot-ova i sadrži dve izričite ispravke zaključaka iz §§4 i 6.
+> Kada se §§2–7 i §8 razlikuju, **važi §8**.
 
 ---
 
@@ -162,14 +170,147 @@ fakturisanje i SEF u drugim modulima. Ne tvrditi suprotno bez dokaza.
    ne vodi ih).
 3. **Preklapanje geografije je potpuno** (Zapadna i Centralna Srbija), pa je verovatnoća
    susreta u istom poslu visoka — viša nego sa AGROSOFT-om.
+4. **Prava linija razdvajanja nije funkcija nego to ko sme da radi u programu** (dokaz
+   u §8.2). Kod SOFTEK-a otkup se unosi kroz kontni UI — šifra dokumenta, konto
+   dobavljača, konto magacina, mesto troška. Kod AgriX-a operater ne mora da zna
+   nijedan konto, a kooperant i vozač uopšte ne ulaze u desktop aplikaciju.
+   Ovo je jači i pošteniji argument od nabrajanja modula.
 
-## 8. Šta ostaje da se proveri
+## 8. Verzija 20.2.4 uživo — šta screenshot-ovi pokazuju preko uputstava
+
+`PRODUCT DOCUMENTATION EVIDENCE` (screenshot): oko 20 snimaka žive aplikacije,
+naslovna traka `OTKUP POLJOPRIVREDNIH PROIZVODA - Zemljoradnicka Zadruga
+Ver.20.2.4 - poslovna godina 2021`. Demo firma je podešena na
+`Zemljoradnicka Zadruga, Svetog Ahilija bb, 31000 Arilje`.
+
+`LIMITATION`: jedna mašina, demo baza sa dva artikla i jednim otkupnim mestom,
+**nemački Windows locale** (statusna traka: `DEU`, datum `2.8.2026.`). Sve što
+sledi treba potvrditi na srpskoj produkcionoj instalaciji pre upotrebe u prodaji.
+
+### 8.1. Tehnička arhitektura
+
+| Nalaz | Dokaz |
+|---|---|
+| **Backend je Microsoft Access (Jet)**, ne server baza | `Datoteka → Compact baze` (Jet „Compact and Repair"); runtime greška `-2147217913 (80040e07)` = Jet OLEDB `Data type mismatch in criteria expression` |
+| Klijent je **VB6-era desktop** | format dijaloga `Run-time error '...'` |
+| Baza je **po poslovnoj godini** | `Datoteka → Izbor poslovne godine`; godina u naslovnoj traci |
+| Održavanje baze je ručno | `Datoteka`: `Izbor poslovne godine · Arhiviranje baze · Compact baze · Kraj rada` — to je ceo meni |
+| **Aplikacija nije Unicode** | mojibake kroz ceo meni na nemačkom locale-u: `Pomoæne knjige`, `skraæeni unos`, `proizvoðaèi`, `Vraæeno`, `pojedinaèno` (CP1250 prikazan kao CP1252) |
+| **Nema prijave ni prava pristupa** | nijedan od ~20 snimaka ne pokazuje login; nigde nema menija za korisnike/uloge. `LIMITATION`: moguć zaseban administratorski alat koji nije otvaran |
+
+`INFERENCE`: na osi baze podataka poredak je **AGROSOFT (MySQL, klijent-server) >
+SOFTEK (Access/Jet) ≈ AgriX (Excel workbook + Google Sheets)**. AgriX ovde nema
+prednost i ne treba je tvrditi.
+
+### 8.2. Kontna arhitektura — otkup je vrsta dokumenta u glavnoj knjizi
+
+Ovo je najvažniji strukturni nalaz i ne vidi se ni u jednom uputstvu.
+
+- **Šifarnik dokumenata** je pun kontni katalog: `0` Osnovna dokumenta · `02` Početno
+  stanje · `03` Zatvaranje klasa prihoda i rashoda · `04` Predzaključna knjiženja ·
+  `05` Dinarski izvod (`051`–`054`, **četiri banke**) · `06` Devizni izvodi (`061`, `062`) ·
+  `07` Blagajna (`071`) · `08` Kompenzacije i cesije (`081`, `082`)
+- **Otkup na otkupnom mestu = šifra dokumenta `381`**, revers ambalaže = `385`
+- dobavljač je vezan za sintetički konto **`4358 – Dobavljaci u zemlji poljoprivrednici`**,
+  a „Šif. poljop." u gridu je **`4358100`** — šifra poljoprivrednika **jeste analitički konto**
+- kolona **Magacin = `1311`** (isti konto iz naloga za knjiženje u uputstvu, str. 15)
+- **otkupno mesto = „mesto troška"** (polja u šifarniku doslovno nose taj naziv)
+- svaki dokument se zatvara dugmetom **`Knjiženje`**; dok nije proknjižen, stoji u
+  `Pomoćne knjige → Dokumenta koja nisu knjižena`
+
+`INFERENCE`: operater na otkupnom mestu radi u knjigovodstvenom UI-ju — da unese
+otkup maline kreće se kroz šifru dokumenta, konto dobavljača, konto magacina i mesto
+troška. To je ekran za knjigovođu, ne za sezonskog radnika. **To je najoštrija linija
+razdvajanja prema AgriX-u** — jasnija od bilo koje pojedinačne funkcije.
+`LIMITATION`: moguće je da su u realnoj instalaciji konta predpodešena pa operater ne
+bira ništa; proveriti pre upotrebe kao argument.
+
+### 8.3. Funkcije kojih nema ni u jednom uputstvu
+
+| Funkcija | Gde |
+|---|---|
+| **Otkup – skraćeni unos** | meni Otkup (ekran nije viđen) |
+| **Otkup na ostalim otkupnim mestima** — multi-site | meni Otkup |
+| **Otpremnica** | meni Ostala dokumenta — **ali puca pri otvaranju**, vidi §8.5 |
+| **Revers za ambalažu na ostalim mestima** | meni Ostala dokumenta |
+| **Vrste dokumenata** kao šifarnik | meni Šifarnici |
+| Izveštaji **Po otkupnim mestima ▸**, `Lager robe`, `Lager ambalaže` | meni Izveštaji |
+| **Štampa IOS-a** (izvod otvorenih stavki), `Štampa svih kartica`, `Saldo veći od` + Dugovni/Potražni, ABC sortiranje | Promet dobavljača — finansijski |
+| **Otvorene/zatvorene stavke** (`Prikaz: Sve / Otvr. / Zatv.`), duguje/potražuje/saldo, sortiranje po nalogu, `Virman`, `Grafik` | Stanje finansijske kartice |
+| **Specifikacija – promet poljoprivrednih proizvođača** | meni Finansije |
+| **BAR kod** kao kriterijum pretrage artikala | Kartica robe |
+| Tabovi **`Zalihe`** i **`Oznake`** na artiklu; kolone `Fab.oznaka`, `Proizvodjac` | šifarnik „Materijal" |
+| **`Broj palete`** direktno na otkupnom listu (kolona `Paleta`) | Otkup 381 |
+| Kolone **`PDV poljop.`** i **`PDV nep.`** — razdvojena nadoknada poljoprivredniku od običnog PDV-a | Otkup 381 |
+| Podešavanje firme: **5 tekućih računa**, PDV period (mesečni/kvartalni), vlasništvo (privredno društvo/preduzetnik/budžet), veličina pravnog lica (mikro/malo/nedobitno), `Sistem PDV: U sistemu / Van sistema`, **„Osoba za kontakt na IOS-u"** | Podešavanje radnog okruženja → Firma |
+| Per-radna-stanica podešavanja: tabovi **Monitor / Printer / Boja** | isto |
+| Uniforman CRUD kostur na svakoj formi: grid + tabovi + `Upiši/Izmeni/Briši/Isprazni polja/Opcije >>` + panel **Pretraži/Sortiraj** (`Pretraži po` · `Deo izraza` · `Sortiraj po`) + `Od–Do datum` + `Izdvoj po datumu` | sve forme |
+
+`INFERENCE` — dve ispravke ranijih zaključaka u ovom dokumentu:
+
+1. **§4.2 i §6:** otpremnica **postoji** u proizvodu (meni Ostala dokumenta), pa tvrdnja
+   „nema je" važi samo za uputstva. Ostaje da nije upotrebljiva u ovom snimku.
+2. **§4.4:** ocena „AgriX ima jače" za isplate treba razdvojiti. Za **masovnu isplatu**
+   AgriX i dalje vodi (`GenerisiNalogeCSV`, poziv na broj = broj bloka, auto-mapiranje
+   izvoda kroz `modBankaImport`). Za **knjigovodstveno usaglašavanje** — otvorene stavke,
+   IOS, bruto bilans po partnerima — SOFTEK je jasno ispred i AgriX tu nema ekvivalent.
+
+### 8.4. KEP knjiga
+
+Prozor: `OBJEKAT-PRODAJNO MESTO: 1311 Magacin robe po nabavnim vrednostima ZA PERIOD
+OD 1.1.2021. DO 31.12.2021.` Kolone: `Datum · Dok. · Broj · Opis promene · Zaduženje
+sa PDV-om · Razduženje sa PDV-om`. Polja za unos postoje i za iznose **bez** PDV-a i za
+**Uplatu**. Dugme `Štampa KEP`.
+
+Dve napomene:
+
+- knjiga se može **ručno unositi i menjati** (`Upiši / Izmeni / Briši`), iako uputstvo
+  kaže da se vodi automatski proknjižavanjem;
+- prikazani sadržaj ne odgovara periodu iz naslova — vidi §8.5.
+
+### 8.5. Uočeni defekti
+
+`LIMITATION`: sve viđeno na jednoj mašini sa demo bazom i stranim locale-om. Ovo su
+zapažanja za proveru, ne dokazana ponašanja u produkciji.
+
+| # | Defekt | Dokaz |
+|---:|---|---|
+| 1 | **Otpremnica se ne otvara** — neuhvaćena `Run-time error '-2147217913 (80040e07)' Data type mismatch in criteria expression` stiže do korisnika | snimak greške; korisnik potvrdio da je za otpremnicu |
+| 2 | **Zbir meša jedinice mere** — `MALINA I KLASA 104,00` (kg) + `ZELENA SALATA 120,00` (kom.) = ukupno `224,00`, na dva izveštaja | Ukupne otkupljene količine; Otkupljeni proizvodi od poljoprivrednika |
+| 3 | **KEP: period u naslovu ≠ sadržaj** — naslov kaže 1.1.2021–31.12.2021, a prikazana su i dva reda iz 2020 (`330,00` i `29.400,00`) i ulaze u zbir `51.330,00` | KEP knjiga |
+| 4 | **Prozor kartice robe se zove `Form1`** — zaostalo podrazumevano ime forme | kartica robe |
+| 5 | **Mojibake na stranom locale-u** — aplikacija nije Unicode | glavni meni |
+| 6 | **In-app pomoć kasni ~11 godina** — program linkuje uputstvo „Verzija 2.1" iz 2014, dok je aplikacija na 20.2.4 | `Softek-otkup.pdf`, metapodaci `D:20140528` |
+
+`INFERENCE`: prva četiri su vidljiva svakom korisniku i ne traže tehničko znanje da se
+prepoznaju. Za razliku od arhitektonskih argumenata, ovo su stvari koje kupac sam vidi.
+Ne koristiti ih napadački — koristiti ih kao pitanja u kvalifikaciji („da li vam se
+dešava da…"), u skladu sa pravilom iz `README.md` §9 da se konkurentske reference ne
+kontaktiraju agresivno.
+
+`INFERENCE` (kontrast, ne tvrdnja o kvalitetu): AgriX ima zaseban odbrambeni sloj koji
+u ovim snimcima nema pandana — `modLogError`, `modIntegritet`, `modDokumentInvariant`,
+`modSchemaGuard`, `modJournaling`, `modStornoRecovery`, `RunProductionHealthCheck`.
+To ne dokazuje da je AgriX stabilniji u produkciji; dokazuje samo da postoji sloj koji
+greške hvata pre korisnika.
+
+## 9. Šta ostaje da se proveri
 
 1. Puni obim SOFTEK proizvoda — da li postoje moduli za prodaju, fakturisanje i SEF.
+   Kontni katalog (`05`–`08`) potvrđuje glavnu knjigu, blagajnu i kompenzacije, ali
+   fakturisanje i SEF i dalje nisu viđeni.
 2. Cena i model održavanja.
-3. Da li postoji mobilna ili web komponenta (uputstvo iz 2017. je ne pominje).
+3. Da li postoji mobilna ili web komponenta (ni jedno uputstvo ni jedan snimak je ne pominju).
 4. Status 13 referenci iz `competitor_references.csv` — koliko ih danas radi.
 5. Da li se SOFTEK pojavio u nekom AgriX poslu → ako jeste, red u `competitive_events.csv`.
+6. **Ekran `Otkup – skraćeni unos`** — jedina neviđena otkupna forma; verovatno je
+   odgovor na zamerku iz §8.2 (knjigovodstveni UI u sezonskom špicu).
+7. Da li se runtime greška na otpremnici (§8.5 #1) reprodukuje na **srpskom locale-u**.
+   Ako se ne reprodukuje, uzrok je locale i tvrdnja se svodi na „ne radi van srpskog
+   Windows-a" — što i dalje stoji, ali je drugačija tvrdnja.
+8. Postoje li korisnici i prava pristupa u zasebnom administratorskom alatu (§8.1).
+9. Gde se BAR kod unosi i da li se štampa — to bi promenilo raniju procenu da nalepnice
+   iz uputstva (str. 13–14) nemaju barkod.
 
 `DECISION` (predlog, bez ID-ja): SOFTEK se vodi kao **direktan konkurent** — za razliku
 od AGROSOFT-a koji je adjacent. Ako se usvoji, treba mu dodeliti ID u
