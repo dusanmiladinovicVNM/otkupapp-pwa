@@ -62,42 +62,63 @@ Public gBankaSilentBatch As Boolean
 ' PUBLIC
 ' ============================================================
 
+' Filter stavki izvoda za prikaz u frmBankaImport (vrednosti combo-a).
+Public Const BIM_F_OTVORENE As String = "Otvorene"
+Public Const BIM_F_OBRADJENE As String = "Obradjene"
+Public Const BIM_F_PRESKOCENE As String = "Preskocene"
+Public Const BIM_F_SVE As String = "Sve"
+
+' Otvorene (nemapirane) stavke izvoda -- tanak omotac nad GetBankaImportRows.
 Public Function GetBankaImportOpen() As Variant
+    GetBankaImportOpen = GetBankaImportRows(BIM_F_OTVORENE, 0, 0)
+End Function
+
+' Stavke izvoda po filteru i opsegu datuma transakcije (0 = bez te granice).
+' Stornirane stavke se uvek izostavljaju (ExcludeStornirano), kao i do sada.
+'   Otvorene   -> Obradjeno nije "Da" ni "Skip"  (radna lista za mapiranje)
+'   Obradjene  -> Obradjeno = "Da"               (vec proknjizene u tblNovac)
+'   Preskocene -> Obradjeno = "Skip"
+'   Sve        -> bez filtera po Obradjeno
+Public Function GetBankaImportRows(ByVal filterMode As String, _
+                                   Optional ByVal dOd As Date, _
+                                   Optional ByVal dDo As Date) As Variant
     Dim data As Variant
     Dim result() As Variant
-    Dim colObr As Long
+    Dim colObr As Long, colDat As Long
     Dim i As Long, j As Long
     Dim outRow As Long
-    
+
     data = GetTableData(TBL_BANKA_IMPORT)
     If IsEmpty(data) Then
-        GetBankaImportOpen = Empty
+        GetBankaImportRows = Empty
         Exit Function
     End If
-    
+
     data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
     If IsEmpty(data) Then
-        GetBankaImportOpen = Empty
+        GetBankaImportRows = Empty
         Exit Function
     End If
-    
+
     colObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, _
-                               "GetBankaImportOpen")
-    
+                               "GetBankaImportRows")
+    colDat = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE)
+
     ReDim result(1 To UBound(data, 1), 1 To UBound(data, 2))
-    
+
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(NzBIM(data(i, colObr), ""))) <> "Da" _
-           And Trim$(CStr(NzBIM(data(i, colObr), ""))) <> "Skip" Then
-            outRow = outRow + 1
-            For j = 1 To UBound(data, 2)
-                result(outRow, j) = data(i, j)
-            Next j
+        If BimObradjenoMatch(Trim$(CStr(NzBIM(data(i, colObr), ""))), filterMode) Then
+            If BimDatumUOpsegu(data, i, colDat, dOd, dDo) Then
+                outRow = outRow + 1
+                For j = 1 To UBound(data, 2)
+                    result(outRow, j) = data(i, j)
+                Next j
+            End If
         End If
     Next i
-    
+
     If outRow = 0 Then
-        GetBankaImportOpen = Empty
+        GetBankaImportRows = Empty
         Exit Function
     End If
 
@@ -112,7 +133,41 @@ Public Function GetBankaImportOpen() As Variant
         Next c
     Next r
 
-    GetBankaImportOpen = finalResult
+    GetBankaImportRows = finalResult
+End Function
+
+' Da li vrednost kolone Obradjeno odgovara izabranom filteru?
+Private Function BimObradjenoMatch(ByVal obr As String, ByVal filterMode As String) As Boolean
+    Select Case filterMode
+        Case BIM_F_OBRADJENE
+            BimObradjenoMatch = (obr = "Da")
+        Case BIM_F_PRESKOCENE
+            BimObradjenoMatch = (obr = "Skip")
+        Case BIM_F_SVE
+            BimObradjenoMatch = True
+        Case Else                       ' BIM_F_OTVORENE (default)
+            BimObradjenoMatch = (obr <> "Da" And obr <> "Skip")
+    End Select
+End Function
+
+' Datum transakcije u [dOd, dDo]? Granica 0 = otvorena; red bez validnog datuma
+' se ZADRZAVA (bolje prikazati sumnjiv red nego ga tiho sakriti).
+Private Function BimDatumUOpsegu(ByVal data As Variant, ByVal i As Long, _
+                                 ByVal colDat As Long, _
+                                 ByVal dOd As Date, ByVal dDo As Date) As Boolean
+    BimDatumUOpsegu = True
+    If dOd = 0 And dDo = 0 Then Exit Function
+    If colDat = 0 Then Exit Function
+
+    Dim d As Date
+    If Not TryParseDateValue(Trim$(CStr(NzBIM(data(i, colDat), ""))), d) Then Exit Function
+
+    If dOd > 0 Then
+        If DateValue(d) < DateValue(dOd) Then BimDatumUOpsegu = False: Exit Function
+    End If
+    If dDo > 0 Then
+        If DateValue(d) > DateValue(dDo) Then BimDatumUOpsegu = False
+    End If
 End Function
 
 Public Function AutoMapBankaImportRow(ByVal bankaImportID As String, _

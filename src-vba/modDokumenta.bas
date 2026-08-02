@@ -2330,16 +2330,20 @@ Private Function FindPrijemnicaRowByIDAndKlasa(ByVal prijemnicaID As String, _
 End Function
 
 ' ============================================================
-' STORNO PREGLED (read-only) -- agregira stornirane dokumente po tipu za
-' prikaz u panelu unutar frmDokumenta (dugme "Pregled storniranih").
-' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno).
+' PREGLED DOKUMENATA (read-only) -- agregira dokumente po tipu za prikaz u
+' panelu unutar frmDokumenta. Dva pogleda dele ISTI motor:
+'   - "Pregled storniranih" (dugme u storno sekciji)  -> samo Stornirano = "Da"
+'   - "Pregled dokumenata"  (dugme u storno sekciji)  -> samo AKTIVNI redovi
+' Soft-delete: red je storniran kad je COL_STORNIRANO = "Da" (modStorno);
+' aktivan je svaki red koji to nije (ukljucujuci tabele bez storno kolone).
 ' Jedinstven (unifikovan) skup korisnih kolona za sve tipove:
-'   Broj | Datum | Partner | Vrsta | Sorta | Klasa | Kolicina | Cena | Iznos
+'   Broj | Datum | Partner | Vrsta | Sorta | Klasa/Tip | Kolicina | Cena | Iznos
 '   | Zbirna | Otpremnica | Faktura  (poslednje 3 = lanac zavisnih dokumenata)
 ' Partner se razresava na naziv/ime (best-effort; fallback = ID).
 ' ============================================================
 
-' Tipovi storno dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
+' Tipovi dokumenata u redosledu prikaza (isti nazivi kao cmbStornoDokument).
+' Koristi ih i storno pregled i pregled aktivnih dokumenata.
 Public Function StorniraniTipovi() As Variant
     StorniraniTipovi = Array("Otkup", "Otpremnica", "Zbirna", "Prijemnica", "Faktura", "Novac", _
                          "Revers izdavanje koop.", "Revers povrat koop.", _
@@ -2347,16 +2351,80 @@ Public Function StorniraniTipovi() As Variant
 End Function
 
 ' Zaglavlja unifikovanih kolona (0-bazni niz, 12 kolona).
+' "Klasa / Tip": za robne dokumente = Klasa, za Novac = Tip (Kes/Banka/Virman...).
 Public Function StorniraniHeaders() As Variant
     StorniraniHeaders = Array("Broj", "Datum", "Partner", "Vrsta", "Sorta", _
-                              "Klasa", "Koli" & ChrW(269) & "ina", "Cena", "Iznos (RSD)", _
+                              "Klasa / Tip", "Koli" & ChrW(269) & "ina", "Cena", "Iznos (RSD)", _
                               "Zbirna", "Otpremnica", "Faktura")
+End Function
+
+' --- Pregled AKTIVNIH dokumenata (isti motor, obrnut storno filter) ---------
+
+' Aktivni (nestornirani) redovi jednog tipa, opciono u opsegu datuma.
+' dOd/dDo = 0 -> bez te granice. Isti raspored 12 kolona kao storno pregled.
+Public Function GetAktivniByTip(ByVal tip As String, _
+                                Optional ByVal dOd As Date, _
+                                Optional ByVal dDo As Date, _
+                                Optional ByVal chainIdx As Object = Nothing) As Variant
+    GetAktivniByTip = GetDokumentiByTip(tip, False, dOd, dDo, chainIdx)
+End Function
+
+' Svi aktivni grupisano: Collection of Array(tipNaziv, rows2D(1..n,1..12)).
+' Indeks lanca se gradi JEDNOM i deli svim tipovima (kao GetStorniraniGrupisano).
+Public Function GetAktivniGrupisano(Optional ByVal dOd As Date, _
+                                    Optional ByVal dDo As Date) As Collection
+    On Error GoTo EH
+    Dim res As Collection
+    Set res = New Collection
+    Set GetAktivniGrupisano = res
+
+    Dim idx As Object: Set idx = BuildChainIndex()
+    Dim tipovi As Variant: tipovi = StorniraniTipovi()
+    Dim k As Long
+    For k = LBound(tipovi) To UBound(tipovi)
+        Dim tip As String: tip = CStr(tipovi(k))
+        Dim rowsv As Variant: rowsv = GetDokumentiByTip(tip, False, dOd, dDo, idx)
+        If Not IsEmpty(rowsv) Then res.Add Array(tip, rowsv)
+    Next k
+    Exit Function
+EH:
+    LogErr "modDokumenta.GetAktivniGrupisano"
+End Function
+
+' Da li datum reda upada u [dOd, dDo]? Granica 0 = otvorena. Red bez validnog
+' datuma se ZADRZAVA (bolje prikazati sumnjiv red nego ga tiho sakriti).
+Private Function DokDatumUOpsegu(ByVal v As Variant, _
+                                 ByVal dOd As Date, _
+                                 ByVal dDo As Date) As Boolean
+    DokDatumUOpsegu = True
+    If dOd = 0 And dDo = 0 Then Exit Function
+
+    Dim d As Date
+    If Not TryParseDateValue(NzToText(v), d) Then Exit Function
+
+    If dOd > 0 Then
+        If DateValue(d) < DateValue(dOd) Then DokDatumUOpsegu = False: Exit Function
+    End If
+    If dDo > 0 Then
+        If DateValue(d) > DateValue(dDo) Then DokDatumUOpsegu = False
+    End If
 End Function
 
 ' Vrati 2D niz (1..n, 1..12) storniranih redova za dati tip u unifikovanom
 ' rasporedu kolona (osnovne + lanac: Zbirna/Otpremnica/Faktura). Empty ako nema.
 ' chainIdx: pre-izgradjen indeks lanca (BuildChainIndex); ako fali, gradi se sam.
+' Tanak omotac nad GetDokumentiByTip (isti motor, storno filter ukljucen).
 Public Function GetStorniraniByTip(ByVal tip As String, _
+                                   Optional ByVal chainIdx As Object = Nothing) As Variant
+    GetStorniraniByTip = GetDokumentiByTip(tip, True, 0, 0, chainIdx)
+End Function
+
+' Motor oba pregleda. samoStornirani=True -> Stornirano="Da"; False -> aktivni.
+' dOd/dDo = 0 -> bez te granice (filter po datumu dokumenta).
+Private Function GetDokumentiByTip(ByVal tip As String, _
+                                   ByVal samoStornirani As Boolean, _
+                                   ByVal dOd As Date, _
+                                   ByVal dDo As Date, _
                                    Optional ByVal chainIdx As Object = Nothing) As Variant
     On Error GoTo EH
     If chainIdx Is Nothing Then Set chainIdx = BuildChainIndex()
@@ -2365,16 +2433,16 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
     ' poseban scan tblAmbalaze.
     Select Case tip
         Case "Revers izdavanje koop."
-            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_IZLAZ_KOOP)
+            GetDokumentiByTip = GetReversRedovi(DOK_TIP_OM_IZLAZ_KOOP, "Kooperant", samoStornirani, dOd, dDo)
             Exit Function
         Case "Revers povrat koop."
-            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_ULAZ_KOOP)
+            GetDokumentiByTip = GetReversRedovi(DOK_TIP_OM_ULAZ_KOOP, "Kooperant", samoStornirani, dOd, dDo)
             Exit Function
         Case "Revers izdato OM (firma)."
-            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_ULAZ_FIRMA, "Stanica")
+            GetDokumentiByTip = GetReversRedovi(DOK_TIP_OM_ULAZ_FIRMA, "Stanica", samoStornirani, dOd, dDo)
             Exit Function
         Case "Revers prijem od OM (firma)."
-            GetStorniraniByTip = GetStorniraniRevers(DOK_TIP_OM_IZLAZ_FIRMA, "Stanica")
+            GetDokumentiByTip = GetReversRedovi(DOK_TIP_OM_IZLAZ_FIRMA, "Stanica", samoStornirani, dOd, dDo)
             Exit Function
     End Select
 
@@ -2455,6 +2523,7 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
             iDat = GetColumnIndex(tbl, COL_NOV_DATUM)
             iPart = GetColumnIndex(tbl, COL_NOV_PARTNER)
             iVrsta = GetColumnIndex(tbl, COL_NOV_VRSTA)
+            iKlasa = GetColumnIndex(tbl, COL_NOV_TIP)      ' Kes/Banka/Virman... u koloni "Klasa / Tip"
             iIzn = GetColumnIndex(tbl, COL_NOV_UPLATA)
             iIzn2 = GetColumnIndex(tbl, COL_NOV_ISPLATA)    ' Iznos = Uplata - Isplata
             iFak = GetColumnIndex(tbl, COL_NOV_FAKTURA_ID)
@@ -2467,9 +2536,11 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
     data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Function
 
+    ' Tabela bez storno markera: za storno pregled nema sta da se pokaze; za
+    ' pregled aktivnih su SVI redovi aktivni (colStorno = 0 -> filter se preskace).
     Dim colStorno As Long
     colStorno = GetColumnIndex(tbl, COL_STORNIRANO)
-    If colStorno = 0 Then Exit Function        ' tabela bez storno markera -> nista
+    If colStorno = 0 And samoStornirani Then Exit Function
 
     Dim otpByZbr As Object: Set otpByZbr = chainIdx("otpByZbr")
     Dim fakByZbr As Object: Set fakByZbr = chainIdx("fakByZbr")
@@ -2480,8 +2551,14 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
     Set rows = New Collection
 
     Dim i As Long
+    Dim jeStorno As Boolean
     For i = 1 To UBound(data, 1)
-        If UCase$(Trim$(NzToText(data(i, colStorno)))) = "DA" Then
+        jeStorno = False
+        If colStorno > 0 Then _
+            jeStorno = (UCase$(Trim$(NzToText(data(i, colStorno)))) = "DA")
+
+        If jeStorno = samoStornirani _
+           And DokDatumUOpsegu(StornoCellRaw(data, i, iDat), dOd, dDo) Then
             Dim part As String
             If partnerIsName Then
                 part = StornoCellText(data, i, iPart)
@@ -2518,21 +2595,25 @@ Public Function GetStorniraniByTip(ByVal tip As String, _
         End If
     Next i
 
-    GetStorniraniByTip = StornoRowsTo2D(rows, 12)
+    GetDokumentiByTip = StornoRowsTo2D(rows, 12)
     Exit Function
 
 EH:
-    LogErr "modDokumenta.GetStorniraniByTip(" & tip & ")"
-    GetStorniraniByTip = Empty
+    LogErr "modDokumenta.GetDokumentiByTip(" & tip & ")"
+    GetDokumentiByTip = Empty
 End Function
 
-' Stornirani OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
+' OM<->koop revers (dokTip) iz tblAmbalaza -> unifikovane 12 kolona.
+' samoStornirani=True -> stornirani; False -> aktivni. dOd/dDo = 0 -> bez granice.
 ' Jedan red po dokumentu: Kooperant noga (nosi partnera); Stanica noga se preskace.
 ' Mapiranje: Vrsta=TipAmbalaze, Kolicina=broj gajbica; ostalo prazno.
 ' Preskace OM-Izlaz-Koop noge knjizene UZ otkup (DokumentID = otkupID "OTK-...";
 ' vec se vide pod grupom 'Otkup') -> ostaju samo standalone reversi (broj x/ddmmyy).
-Private Function GetStorniraniRevers(ByVal dokTip As String, _
-                                     Optional ByVal entType As String = "Kooperant") As Variant
+Private Function GetReversRedovi(ByVal dokTip As String, _
+                                 ByVal entType As String, _
+                                 ByVal samoStornirani As Boolean, _
+                                 ByVal dOd As Date, _
+                                 ByVal dDo As Date) As Variant
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(TBL_AMBALAZA)
     If IsEmpty(data) Then Exit Function
@@ -2547,7 +2628,8 @@ Private Function GetStorniraniRevers(ByVal dokTip As String, _
     iTipAmb = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
     iKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
     iStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
-    If iBroj = 0 Or iDokTip = 0 Or iStorno = 0 Then Exit Function
+    If iBroj = 0 Or iDokTip = 0 Then Exit Function
+    If iStorno = 0 And samoStornirani Then Exit Function
 
     Dim pdict As Object
     If entType = "Stanica" Then
@@ -2557,8 +2639,14 @@ Private Function GetStorniraniRevers(ByVal dokTip As String, _
     End If
     Dim rows As Collection: Set rows = New Collection
     Dim i As Long
+    Dim jeStorno As Boolean
     For i = 1 To UBound(data, 1)
-        If UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA" Then
+        jeStorno = False
+        If iStorno > 0 Then _
+            jeStorno = (UCase$(Trim$(NzToText(data(i, iStorno)))) = "DA")
+
+        If jeStorno = samoStornirani _
+           And DokDatumUOpsegu(StornoCellRaw(data, i, iDat), dOd, dDo) Then
             If Trim$(CStr(data(i, iDokTip))) = dokTip And _
                Trim$(CStr(data(i, iEntTip))) = entType And _
                UCase$(Left$(Trim$(CStr(data(i, iBroj))), 3)) <> "OTK" Then
@@ -2573,11 +2661,11 @@ Private Function GetStorniraniRevers(ByVal dokTip As String, _
             End If
         End If
     Next i
-    GetStorniraniRevers = StornoRowsTo2D(rows, 12)
+    GetReversRedovi = StornoRowsTo2D(rows, 12)
     Exit Function
 EH:
-    LogErr "modDokumenta.GetStorniraniRevers(" & dokTip & ")"
-    GetStorniraniRevers = Empty
+    LogErr "modDokumenta.GetReversRedovi(" & dokTip & ")"
+    GetReversRedovi = Empty
 End Function
 
 ' Svi stornirani grupisano: Collection of Array(tipNaziv, rows2D(1..n,1..12)).

@@ -93,6 +93,42 @@ Private m_stornoRowTip As Collection      ' paralelno redovima liste: tip po red
 Private m_stornoBuilt As Boolean
 Private m_stornoHidden As Collection      ' kontrole privremeno sakrivene dok je panel otvoren
 
+' "Pregled dokumenata" (runtime kontrole; .frx se ne dira). Dugme u frame-u
+' "Lista zbirnih" otvara overlay sa tabelom AKTIVNIH dokumenata: otpremnice,
+' prijemnice, zbirne, otkupni listovi, reversi, kes uplate/isplate, fakture.
+' Podaci: modDokumenta.GetAktivniByTip / GetAktivniGrupisano (isti motor kao
+' "Pregled storniranih", samo obrnut storno filter + opseg datuma).
+Private m_btnDokPregled As MSForms.CommandButton
+Private m_dpBack As MSForms.label
+Private m_dpTitle As MSForms.label
+Private m_btnDpClose As MSForms.CommandButton
+Private m_btnDpPrikazi As MSForms.CommandButton
+Private m_btnDpSve As MSForms.CommandButton
+Private m_cmbDpTip As MSForms.ComboBox
+Private m_lblDpTip As MSForms.label
+Private m_lblDpOd As MSForms.label
+Private m_lblDpDo As MSForms.label
+Private m_txtDpOd As MSForms.TextBox
+Private m_txtDpDo As MSForms.TextBox
+Private m_lstDpHdr As MSForms.ListBox
+Private m_lstDp As MSForms.ListBox
+Private m_lblDpStatus As MSForms.label
+Private m_dpBuilt As Boolean
+Private m_dpHidden As Collection
+
+' Dugme "Pregled dokumenata" sedi u dnu frame-a "Lista zbirnih"; lstZbirne se
+' skracuje za ove mere (LoadZbirneListbox) da nema preklapanja.
+Private Const DP_BTN_H As Single = 22
+Private Const DP_BTN_GAP As Single = 6
+Private Const DP_BTN_W As Single = 150
+
+' Sirine 12 unifikovanih kolona (modDokumenta.StorniraniHeaders); zaglavlje i
+' lista dele JEDAN izvor istine da se kolone poklope.
+Private Const DP_COLW As String = "78;56;130;54;70;84;60;50;70;84;90;80"
+
+' Stavka combo-a za grupisani prikaz svih tipova odjednom.
+Private Const DP_SVI_TIPOVI As String = "Svi tipovi"
+
 ' Recovery panel (runtime kontrole; .frx se ne dira). Dugme otvara overlay sa
 ' dve liste: osirocene prijemnice (levo) + aktivne zbirne (desno) + "Prevezi".
 Private m_btnRecovery As MSForms.CommandButton
@@ -1195,8 +1231,12 @@ Private Sub LoadZbirneListbox()
     Dim hTop As Single
     hTop = lblTitleZbirne.top + lblTitleZbirne.Height + GAP_TITLE
 
+    ' Dno frame-a drzi dugme "Pregled dokumenata" (runtime) -> lista se skrati
+    ' za njegovu visinu + razmak, da se ne preklapaju.
     lstZbirne.top = hTop + lblZbirneBrojZbirne.Height + GAP_HEADER
-    lstZbirne.Height = fraListaZbirnih.InsideHeight - lstZbirne.top - PAD_BOTTOM
+    lstZbirne.Height = fraListaZbirnih.InsideHeight - lstZbirne.top _
+                       - PAD_BOTTOM - DP_BTN_H - DP_BTN_GAP
+    If lstZbirne.Height < 40 Then lstZbirne.Height = 40
 
     ' --- Horizontalno: header poravnat po kolonama listboxa ---
     Dim hx As Single
@@ -1210,6 +1250,9 @@ Private Sub LoadZbirneListbox()
     PlaceZbirneHeader lblZbirneSorta, hx, wSorta, hTop
     hx = hx + wSorta
     If Not lblKg Is Nothing Then PlaceZbirneHeader lblKg, hx, wKg, hTop
+
+    ' Dugme "Pregled dokumenata" u dnu frame-a (runtime; .frx se ne dira).
+    SetupDokPregledButton
 
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
@@ -4415,16 +4458,23 @@ EH:
     LogErr "frmDokumenta.PopulateStorniraniPanel"
 End Sub
 
-' Dodaj jedan red (0-bazni Variant niz celija) u listu, kolona po kolona.
+' Dodaj jedan red (0-bazni Variant niz celija) u storno listu.
 Private Sub AddStornoListRow(ByVal cells As Variant)
+    AddListRow m_lstStorno, cells
+End Sub
+
+' Dodaj jedan red (0-bazni Variant niz celija) u datu listu, kolona po kolona.
+' Visak celija preko ColumnCount se odbacuje (lista definise sirinu).
+Private Sub AddListRow(ByVal lst As MSForms.ListBox, ByVal cells As Variant)
     On Error Resume Next
+    If lst Is Nothing Then Exit Sub
     Dim lb As Long: lb = LBound(cells)
-    m_lstStorno.AddItem CStr(cells(lb))
-    Dim idx As Long: idx = m_lstStorno.ListCount - 1
+    lst.AddItem CStr(cells(lb))
+    Dim idx As Long: idx = lst.ListCount - 1
     Dim c As Long
     For c = lb + 1 To UBound(cells)
-        If (c - lb) <= m_lstStorno.ColumnCount - 1 Then
-            m_lstStorno.List(idx, c - lb) = CStr(cells(c))
+        If (c - lb) <= lst.ColumnCount - 1 Then
+            lst.List(idx, c - lb) = CStr(cells(c))
         End If
     Next c
 End Sub
@@ -4483,6 +4533,402 @@ Private Sub RestoreBehindPanel()
         Me.Controls(m_stornoHidden(i)).visible = True
     Next i
     Set m_stornoHidden = Nothing
+End Sub
+
+' ============================================================
+' PREGLED DOKUMENATA -- read-only overlay sa tabelom AKTIVNIH dokumenata.
+' Pokriva: otkupne listove, otpremnice, zbirne, prijemnice, fakture,
+' kes/banka uplate i isplate (Novac) i sva 4 tipa reversa. Palete imaju svoj
+' ekran (frmPalete), izvodi svoj (frmBankaImport).
+' Motor je ISTI kao "Pregled storniranih" (modDokumenta.GetAktivniByTip /
+' GetAktivniGrupisano) -- razlikuje se samo storno filter i opseg datuma.
+' Kontrole su runtime (Controls.Add + WireSink); .frx se ne dira, nove
+' WithEvents deklaracije u formi su zabranjene (docs/SELF_UPDATE.md zamka #11).
+' ============================================================
+
+' Dugme u dnu frame-a "Lista zbirnih" (isti container kao lstZbirne). Kontrola se
+' pravi jednom, a POZICIJA se osvezava na svaki poziv (LoadZbirneListbox se zove
+' vise puta i svaki put iznova racuna geometriju liste).
+Private Sub SetupDokPregledButton()
+    On Error GoTo done
+
+    If m_btnDokPregled Is Nothing Then
+        Set m_btnDokPregled = lstZbirne.parent.Controls.Add("Forms.CommandButton.1", "btnDokPregledRT", True)
+        If m_btnDokPregled Is Nothing Then GoTo done
+        WireSink m_btnDokPregled, "m_btnDokPregled"
+        StylePrimaryButton m_btnDokPregled, "Pregled dokumenata"
+    End If
+
+    With m_btnDokPregled
+        .Left = lstZbirne.Left
+        .width = DP_BTN_W
+        .Height = DP_BTN_H
+        .top = lstZbirne.top + lstZbirne.Height + DP_BTN_GAP
+        .visible = True
+    End With
+
+    On Error Resume Next
+    m_btnDokPregled.ZOrder 0
+    Exit Sub
+done:
+    LogErr "frmDokumenta.SetupDokPregledButton"
+    Set m_btnDokPregled = Nothing
+End Sub
+
+Private Sub m_btnDokPregled_Click()
+    On Error GoTo EH
+    ShowDokPregledPanel
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.m_btnDokPregled_Click"
+    MsgBox Poruka("DOK_ERR_GRESKA_PRI_PRIKAZU") & Err.description, vbExclamation, APP_NAME
+End Sub
+
+Private Sub ShowDokPregledPanel()
+    EnsureDokPregledPanel
+    If Not m_dpBuilt Then Exit Sub
+    PopulateDokPregled
+    SetDokPregledPanelVisible True
+End Sub
+
+' Runtime izgradnja (samo kreiranje kontrola; geometrija ide u LayoutDokPregledPanel,
+' koji se zove na svako otvaranje -> robusno na promenu velicine forme).
+Private Sub EnsureDokPregledPanel()
+    On Error GoTo done
+    If m_dpBuilt Then Exit Sub
+
+    Set m_dpBack = Me.Controls.Add("Forms.Label.1", "lblDpBackRT", True)
+    With m_dpBack
+        .caption = "": .BackStyle = fmBackStyleOpaque
+        .BackColor = BG_PANEL(): .BorderStyle = fmBorderStyleNone
+    End With
+
+    Set m_dpTitle = Me.Controls.Add("Forms.Label.1", "lblDpTitleRT", True)
+    With m_dpTitle
+        .BackStyle = fmBackStyleTransparent
+        .Font.name = APP_FONT_BOLD: .Font.Size = FONT_SIZE_TITLE
+        .ForeColor = TXT_LIGHT(): .caption = "Pregled dokumenata"
+    End With
+
+    Set m_btnDpClose = Me.Controls.Add("Forms.CommandButton.1", "btnDpCloseRT", True)
+    WireSink m_btnDpClose, "m_btnDpClose"
+    StyleExitButton m_btnDpClose, "Zatvori"
+
+    ' --- Filter traka: tip dokumenta + opseg datuma ---
+    Set m_lblDpTip = NewDpLabel("lblDpTipRT", "Tip dokumenta")
+    Set m_cmbDpTip = Me.Controls.Add("Forms.ComboBox.1", "cmbDpTipRT", True)
+    With m_cmbDpTip
+        .Style = fmStyleDropDownList
+        .AddItem DP_SVI_TIPOVI
+        Dim tipovi As Variant: tipovi = StorniraniTipovi()
+        Dim k As Long
+        For k = LBound(tipovi) To UBound(tipovi)
+            .AddItem CStr(tipovi(k))
+        Next k
+        .value = DP_SVI_TIPOVI
+    End With
+    ' Sink TEK posle postavljanja default vrednosti -- inace bi _Change okinuo
+    ' PopulateDokPregled pre nego sto lista uopste postoji.
+    WireSink m_cmbDpTip, "m_cmbDpTip"
+    StyleComboBox m_cmbDpTip
+
+    Set m_lblDpOd = NewDpLabel("lblDpOdRT", "Od")
+    Set m_txtDpOd = Me.Controls.Add("Forms.TextBox.1", "txtDpOdRT", True)
+    StyleTextBox m_txtDpOd
+
+    Set m_lblDpDo = NewDpLabel("lblDpDoRT", "Do")
+    Set m_txtDpDo = Me.Controls.Add("Forms.TextBox.1", "txtDpDoRT", True)
+    StyleTextBox m_txtDpDo
+
+    ' Default = tekuca sezona (od 1.1. tekuce godine do danas).
+    m_txtDpOd.value = Format$(DateSerial(Year(Date), 1, 1), "d.m.yyyy")
+    m_txtDpDo.value = ""
+
+    Set m_btnDpPrikazi = Me.Controls.Add("Forms.CommandButton.1", "btnDpPrikaziRT", True)
+    WireSink m_btnDpPrikazi, "m_btnDpPrikazi"
+    StylePrimaryButton m_btnDpPrikazi, "Prika" & ChrW(382) & "i"
+
+    Set m_btnDpSve = Me.Controls.Add("Forms.CommandButton.1", "btnDpSveRT", True)
+    WireSink m_btnDpSve, "m_btnDpSve"
+    StylePrimaryButton m_btnDpSve, "Sve (bez datuma)"
+
+    ' --- Zaglavlje + lista (dele DP_COLW da se kolone poklope) ---
+    Set m_lstDpHdr = Me.Controls.Add("Forms.ListBox.1", "lstDpHdrRT", True)
+    With m_lstDpHdr
+        .ColumnCount = 12: .ColumnWidths = DP_COLW: .locked = True
+    End With
+    StyleListBox m_lstDpHdr
+    m_lstDpHdr.Font.Bold = True
+    AddListRow m_lstDpHdr, StorniraniHeaders()
+
+    Set m_lstDp = Me.Controls.Add("Forms.ListBox.1", "lstDpRT", True)
+    With m_lstDp
+        .ColumnCount = 12: .ColumnWidths = DP_COLW
+    End With
+    MouseWheel_Register m_lstDp
+    StyleListBox m_lstDp
+
+    Set m_lblDpStatus = NewDpLabel("lblDpStatusRT", "")
+
+    m_dpBuilt = True
+    Exit Sub
+done:
+    LogErr "frmDokumenta.EnsureDokPregledPanel"
+    m_dpBuilt = False
+End Sub
+
+' Mala prigusena labela filter trake (isti stil na svim mestima panela).
+Private Function NewDpLabel(ByVal ctlName As String, ByVal cap As String) As MSForms.label
+    Dim lbl As MSForms.label
+    Set lbl = Me.Controls.Add("Forms.Label.1", ctlName, True)
+    With lbl
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = TXT_MUTED()
+        .Font.name = APP_FONT: .Font.Size = FONT_SIZE_SMALL
+        .caption = cap
+    End With
+    Set NewDpLabel = lbl
+End Function
+
+' Full-bleed raspored preko celog klijentskog prostora forme.
+Private Sub LayoutDokPregledPanel()
+    On Error Resume Next
+    If Not m_dpBuilt Then Exit Sub
+
+    Const PAD As Single = 8
+    Const HDR As Single = 30           ' naslovna zona
+    Const ROWH As Single = 20          ' visina polja filter trake
+    Const LBLH As Single = 12
+    Const BTNH As Single = 24
+
+    Dim w As Single, h As Single
+    w = Me.InsideWidth: h = Me.InsideHeight
+
+    m_dpBack.Move 0, 0, w, h
+    m_dpTitle.Move PAD, PAD, w - 2 * PAD - 104, 24
+    m_btnDpClose.Move w - PAD - 92, PAD, 92, 24
+
+    ' Filter traka: labela iznad polja (kao ostatak forme).
+    Dim fy As Single: fy = PAD + HDR
+    Dim x As Single: x = PAD
+
+    m_lblDpTip.Move x, fy, 180, LBLH
+    m_cmbDpTip.Move x, fy + LBLH, 180, ROWH
+    x = x + 180 + PAD
+
+    m_lblDpOd.Move x, fy, 80, LBLH
+    m_txtDpOd.Move x, fy + LBLH, 80, ROWH
+    x = x + 80 + PAD
+
+    m_lblDpDo.Move x, fy, 80, LBLH
+    m_txtDpDo.Move x, fy + LBLH, 80, ROWH
+    x = x + 80 + PAD
+
+    m_btnDpPrikazi.Move x, fy + LBLH - 2, 90, BTNH
+    x = x + 90 + PAD
+    m_btnDpSve.Move x, fy + LBLH - 2, 120, BTNH
+
+    ' Zaglavlje + lista + status.
+    Dim listTop As Single: listTop = fy + LBLH + ROWH + PAD
+    m_lstDpHdr.Move PAD, listTop, w - 2 * PAD, 18
+
+    Dim statusH As Single: statusH = 14
+    Dim listH As Single
+    listH = h - (listTop + 18) - PAD - statusH - PAD
+    If listH < 60 Then listH = 60
+    m_lstDp.Move PAD, listTop + 18, w - 2 * PAD, listH
+    m_lblDpStatus.Move PAD, listTop + 18 + listH + 4, w - 2 * PAD, statusH
+End Sub
+
+' Napuni listu prema izabranom tipu i opsegu datuma.
+' "Svi tipovi" -> grupisano (grupni naslov + redovi), kao pregled storniranih.
+Private Sub PopulateDokPregled()
+    On Error GoTo EH
+    If m_lstDp Is Nothing Then Exit Sub
+
+    m_lstDp.Clear
+
+    Dim dOd As Date, dDo As Date
+    dOd = DpDatum(m_txtDpOd)
+    dDo = DpDatum(m_txtDpDo)
+
+    Dim tip As String
+    tip = Trim$(CStr(nz(m_cmbDpTip.value, "")))
+    If Len(tip) = 0 Then tip = DP_SVI_TIPOVI
+
+    Dim total As Long: total = 0
+
+    If tip = DP_SVI_TIPOVI Then
+        Dim grupe As Collection
+        Set grupe = GetAktivniGrupisano(dOd, dDo)
+        If Not grupe Is Nothing Then
+            Dim g As Long
+            For g = 1 To grupe.count
+                Dim gTip As String: gTip = CStr(grupe(g)(0))
+                Dim rowsv As Variant: rowsv = grupe(g)(1)
+                Dim cnt As Long: cnt = UBound(rowsv, 1)
+
+                Dim hdr(0 To 11) As Variant
+                Dim z As Long
+                For z = 0 To 11: hdr(z) = "": Next z
+                hdr(0) = ChrW$(187) & " " & UCase$(gTip) & " (" & cnt & ")"
+                AddListRow m_lstDp, hdr
+
+                AddDpRows rowsv, cnt
+                total = total + cnt
+            Next g
+        End If
+    Else
+        Dim one As Variant
+        one = GetAktivniByTip(tip, dOd, dDo)
+        If Not IsEmpty(one) Then
+            total = UBound(one, 1)
+            AddDpRows one, total
+        End If
+    End If
+
+    If total = 0 Then
+        m_lstDp.Clear
+        m_lstDp.AddItem "Nema dokumenata za izabrani tip i period."
+    End If
+
+    m_dpTitle.caption = "Pregled dokumenata  (" & total & ")"
+    m_lblDpStatus.caption = "Redova: " & total & "   |   Period: " & DpPeriodText(dOd, dDo) & _
+                            "   |   Prikazani su samo aktivni (nestornirani) dokumenti."
+    Exit Sub
+EH:
+    LogErr "frmDokumenta.PopulateDokPregled"
+End Sub
+
+' Prepisi 2D blok (1..n, 1..12) u listu, red po red.
+Private Sub AddDpRows(ByVal rowsv As Variant, ByVal cnt As Long)
+    On Error Resume Next
+    Dim r As Long, c As Long
+    For r = 1 To cnt
+        Dim one(0 To 11) As Variant
+        For c = 0 To 11: one(c) = rowsv(r, c + 1): Next c
+        AddListRow m_lstDp, one
+    Next r
+End Sub
+
+' Tekst polja -> Date; prazno / neparsivo = 0 (bez te granice).
+Private Function DpDatum(ByVal t As MSForms.TextBox) As Date
+    On Error Resume Next
+    Dim s As String: s = Trim$(CStr(t.value))
+    If Len(s) = 0 Then Exit Function
+    Dim d As Date
+    If TryParseDateValue(s, d) Then DpDatum = d
+End Function
+
+Private Function DpPeriodText(ByVal dOd As Date, ByVal dDo As Date) As String
+    Dim a As String, b As String
+    If dOd > 0 Then a = Format$(dOd, "d.m.yyyy") Else a = "pocetak"
+    If dDo > 0 Then b = Format$(dDo, "d.m.yyyy") Else b = "danas"
+    If dOd = 0 And dDo = 0 Then
+        DpPeriodText = "sve"
+    Else
+        DpPeriodText = a & " - " & b
+    End If
+End Function
+
+Private Sub m_btnDpPrikazi_Click()
+    PopulateDokPregled
+End Sub
+
+' "Sve (bez datuma)" -> ocisti oba polja i prikazi ceo period.
+Private Sub m_btnDpSve_Click()
+    On Error Resume Next
+    m_txtDpOd.value = ""
+    m_txtDpDo.value = ""
+    PopulateDokPregled
+End Sub
+
+Private Sub m_cmbDpTip_Change()
+    PopulateDokPregled
+End Sub
+
+Private Sub m_btnDpClose_Click()
+    SetDokPregledPanelVisible False
+End Sub
+
+Private Sub SetDokPregledPanelVisible(ByVal bShow As Boolean)
+    On Error Resume Next
+    If Not m_dpBuilt Then Exit Sub
+
+    Dim keep As Collection: Set keep = DpPanelControls()
+    Dim i As Long
+
+    If bShow Then
+        LayoutDokPregledPanel
+        HideBehindOverlay keep, m_dpHidden
+        For i = 1 To keep.count
+            keep(i).visible = True
+            keep(i).ZOrder 0
+        Next i
+    Else
+        For i = 1 To keep.count
+            keep(i).visible = False
+        Next i
+        RestoreBehindOverlay m_dpHidden
+    End If
+End Sub
+
+' Kontrole ovog panela (redosled = ZOrder pri prikazu: podloga prva).
+Private Function DpPanelControls() As Collection
+    Dim c As Collection: Set c = New Collection
+    Set DpPanelControls = c
+    On Error Resume Next
+    c.Add m_dpBack
+    c.Add m_lstDp
+    c.Add m_lstDpHdr
+    c.Add m_dpTitle
+    c.Add m_lblDpTip
+    c.Add m_cmbDpTip
+    c.Add m_lblDpOd
+    c.Add m_txtDpOd
+    c.Add m_lblDpDo
+    c.Add m_txtDpDo
+    c.Add m_btnDpPrikazi
+    c.Add m_btnDpSve
+    c.Add m_lblDpStatus
+    c.Add m_btnDpClose
+End Function
+
+' --- Genericki hide/restore za runtime overlay panele -----------------------
+' Sakrij sve kontrole forme osim panelovih (keep), pamteci sta je bilo vidljivo.
+' (Stariji paneli -- storno / undo / recovery / find -- imaju svoje zatecene
+' varijante; novi paneli koriste ovaj helper.)
+Private Sub HideBehindOverlay(ByVal keep As Collection, ByRef hidden As Collection)
+    On Error Resume Next
+    Set hidden = New Collection
+
+    Dim ctl As MSForms.Control, k As Variant, jePanel As Boolean
+    For Each ctl In Me.Controls
+        jePanel = False
+        For Each k In keep
+            If ctl Is k Then
+                jePanel = True
+                Exit For
+            End If
+        Next k
+
+        If Not jePanel Then
+            If ctl.visible Then
+                hidden.Add ctl.name
+                ctl.visible = False
+            End If
+        End If
+    Next ctl
+End Sub
+
+Private Sub RestoreBehindOverlay(ByRef hidden As Collection)
+    On Error Resume Next
+    If hidden Is Nothing Then Exit Sub
+    Dim i As Long
+    For i = 1 To hidden.count
+        Me.Controls(hidden(i)).visible = True
+    Next i
+    Set hidden = Nothing
 End Sub
 
 ' ============================================================
@@ -6601,5 +7047,10 @@ Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As
         Case "m_btnRecClose.Click":       m_btnRecClose_Click
         Case "m_btnRecPrevezi.Click":     m_btnRecPrevezi_Click
         Case "m_btnRecMode.Click":        m_btnRecMode_Click
+        Case "m_btnDokPregled.Click":     m_btnDokPregled_Click
+        Case "m_btnDpClose.Click":        m_btnDpClose_Click
+        Case "m_btnDpPrikazi.Click":      m_btnDpPrikazi_Click
+        Case "m_btnDpSve.Click":          m_btnDpSve_Click
+        Case "m_cmbDpTip.Change":         m_cmbDpTip_Change
     End Select
 End Sub

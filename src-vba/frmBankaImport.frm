@@ -20,6 +20,33 @@ Private m_Data As Variant
 Private m_BimIDs() As String
 Private mChromeRemoved As Boolean
 
+' Self-update bezbedno hvatanje evenata RUNTIME kontrola: nove WithEvents
+' deklaracije NE smeju u formu (lome code-merge te forme pri update-u --
+' docs/SELF_UPDATE.md zamka #11), pa event sink zivi u clsUiSink instancama.
+' Isti obrazac kao frmDokumenta (WireSink + UiSinkEvent na dnu modula).
+Private m_uiSinks As Object          ' tag -> clsUiSink
+
+' Filter stavki izvoda (runtime kontrole; .frx se ne dira). Do sada je lstBanka
+' prikazivala ISKLJUCIVO otvorene (nemapirane) stavke, pa uvezeni izvod nije
+' imao gde da se vidi u celini. Combo + opseg datuma to otvaraju:
+' Otvorene / Obradjene / Preskocene / Sve.
+'
+' TIP JE NAMERNO "As Object", NE "As MSForms.*": modSelfUpdate.IsHardModuleBody
+' tretira module-level " AS MSFORMS." kao TVRDO telo i rutira celu formu na
+' reinstall (SELF_UPDATE.md zamka #20). frmBankaImport je do sada bila "meka"
+' (self-updatable) forma i mora to da ostane -- zato late-bound reference.
+' NE menjati u MSForms.* tipove.
+Private m_cmbBimFilter As Object          ' MSForms.ComboBox (late-bound)
+Private m_txtBimOd As Object              ' MSForms.TextBox
+Private m_txtBimDo As Object              ' MSForms.TextBox
+Private m_lblBimFilter As Object          ' MSForms.Label
+Private m_lblBimOd As Object              ' MSForms.Label
+Private m_lblBimDo As Object              ' MSForms.Label
+Private m_filterBuilt As Boolean
+
+' Za koliko se lstBanka spusta da bi filter traka stala iznad nje.
+Private Const BIM_FILTER_SHIFT As Single = 36
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
@@ -65,6 +92,7 @@ Private Sub UserForm_Activate()
     End If
     
     SetupList
+    SetupBankaFilter            ' pomera lstBanka nadole -> mora PRE BuildListHeaders
     BuildListHeaders
 
     ' Auto-map sve sto se moze preko jakih kljuceva (poziv->otkup/faktura, tekuci racun)
@@ -129,17 +157,119 @@ Private Sub BuildListHeaders()
     Next i
 End Sub
 
+' ============================================================
+' FILTER STAVKI IZVODA -- runtime traka iznad lstBanka (Controls.Add + WireSink;
+' .frx se ne dira). Prostor se uzima od same liste (spusti se za BIM_FILTER_SHIFT),
+' pa ne moze da preklopi nijednu zatecenu kontrolu. Idempotentno (Activate moze
+' vise puta). Podaci: modBankaMapiranje.GetBankaImportRows.
+' ============================================================
+Private Sub SetupBankaFilter()
+    On Error GoTo done
+    If m_filterBuilt Then Exit Sub
+
+    Dim oldTop As Single
+    oldTop = lstBanka.Top
+
+    ' Oslobodi prostor iznad liste (lista se skrati odozgo). Guard se podize ODMAH
+    ' po pomeranju: ako izgradnja kontrola posle toga padne, lista se ne sme pomeriti
+    ' jos jednom pri sledecem Activate (BimFilterMode tada vraca default "Otvorene").
+    lstBanka.Top = oldTop + BIM_FILTER_SHIFT
+    lstBanka.Height = lstBanka.Height - BIM_FILTER_SHIFT
+    If lstBanka.Height < 60 Then lstBanka.Height = 60
+    m_filterBuilt = True
+
+    Const LBLH As Single = 12
+    Const ROWH As Single = 20
+    Const GAP As Single = 8
+    Dim lblY As Single: lblY = oldTop - 13      ' red gde su ranije stajali headeri
+    Dim ctlY As Single: ctlY = oldTop + 1
+    Dim x As Single: x = lstBanka.Left
+
+    Set m_lblBimFilter = NewBimLabel("lblBimFilterRT", "Prikaz", x, lblY, 120, LBLH)
+    Set m_cmbBimFilter = Me.Controls.Add("Forms.ComboBox.1", "cmbBimFilterRT", True)
+    With m_cmbBimFilter
+        .Style = fmStyleDropDownList
+        .AddItem BIM_F_OTVORENE
+        .AddItem BIM_F_OBRADJENE
+        .AddItem BIM_F_PRESKOCENE
+        .AddItem BIM_F_SVE
+        .Move x, ctlY, 120, ROWH
+        .value = BIM_F_OTVORENE          ' default = dosadasnje ponasanje
+    End With
+    ' Sink TEK posle postavljanja default vrednosti -- inace bi _Change okinuo
+    ' LoadBankaRows jos pre nego sto je forma zavrsila Activate.
+    WireSink m_cmbBimFilter, "m_cmbBimFilter"
+    StyleComboBox m_cmbBimFilter
+    x = x + 120 + GAP
+
+    Set m_lblBimOd = NewBimLabel("lblBimOdRT", "Od", x, lblY, 80, LBLH)
+    Set m_txtBimOd = Me.Controls.Add("Forms.TextBox.1", "txtBimOdRT", True)
+    m_txtBimOd.Move x, ctlY, 80, ROWH
+    StyleTextBox m_txtBimOd
+    x = x + 80 + GAP
+
+    Set m_lblBimDo = NewBimLabel("lblBimDoRT", "Do", x, lblY, 80, LBLH)
+    Set m_txtBimDo = Me.Controls.Add("Forms.TextBox.1", "txtBimDoRT", True)
+    m_txtBimDo.Move x, ctlY, 80, ROWH
+    StyleTextBox m_txtBimDo
+
+    Exit Sub
+done:
+    LogErr "frmBankaImport.SetupBankaFilter"
+End Sub
+
+Private Function NewBimLabel(ByVal ctlName As String, ByVal cap As String, _
+                             ByVal l As Single, ByVal t As Single, _
+                             ByVal w As Single, ByVal h As Single) As Object
+    Dim lbl As Object
+    Set lbl = Me.Controls.Add("Forms.Label.1", ctlName, True)
+    With lbl
+        .BackStyle = fmBackStyleTransparent
+        .ForeColor = TXT_MUTED()
+        .Font.name = APP_FONT: .Font.Size = 8
+        .caption = cap
+        .Move l, t, w, h
+    End With
+    Set NewBimLabel = lbl
+End Function
+
+' Izabrani filter (default = Otvorene, dok traka jos nije izgradjena).
+Private Function BimFilterMode() As String
+    On Error Resume Next
+    BimFilterMode = BIM_F_OTVORENE
+    If m_cmbBimFilter Is Nothing Then Exit Function
+    Dim s As String: s = Trim$(CStr(m_cmbBimFilter.value))
+    If Len(s) > 0 Then BimFilterMode = s
+End Function
+
+' Tekst polja -> Date; prazno / neparsivo = 0 (bez te granice).
+Private Function BimDatum(ByVal t As Object) As Date
+    On Error Resume Next
+    If t Is Nothing Then Exit Function
+    Dim s As String: s = Trim$(CStr(t.value))
+    If Len(s) = 0 Then Exit Function
+    Dim d As Date
+    If TryParseDateValue(s, d) Then BimDatum = d
+End Function
+
+Private Sub m_cmbBimFilter_Change()
+    LoadBankaRows
+End Sub
+
 Private Sub LoadBankaRows()
     Dim i As Long
     Dim colID As Long, colDatum As Long, colPartner As Long
     Dim colPoziv As Long, colUplata As Long, colIsplata As Long, colObr As Long
-    
+
+    Dim fMode As String
+    fMode = BimFilterMode()
+
     lstBanka.Clear
     Erase m_BimIDs
-    
-    m_Data = GetBankaImportOpen()
+
+    m_Data = GetBankaImportRows(fMode, BimDatum(m_txtBimOd), BimDatum(m_txtBimDo))
     If IsEmpty(m_Data) Then
-        lblStatus.caption = "Nema otvorenih stavki."
+        lblStatus.caption = "Nema stavki za izbor: " & fMode & "."
         UpdateIzvodSummaryLabel
         Exit Sub
     End If
@@ -166,12 +296,26 @@ Private Sub LoadBankaRows()
         m_BimIDs(i - 1) = CStr(m_Data(i, colID))
     Next i
     
-    lblStatus.caption = lstBanka.ListCount & " otvorenih stavki"
-    
+    lblStatus.caption = lstBanka.ListCount & " stavki  (" & fMode & _
+                        BimPeriodSuffix() & ")"
+
     UpdateIzvodSummaryLabel
     RefreshTopKpis
-    
+
 End Sub
+
+' ", period 1.1.2026 - 30.6.2026" ili "" kad opseg nije zadat.
+Private Function BimPeriodSuffix() As String
+    Dim dOd As Date, dDo As Date
+    dOd = BimDatum(m_txtBimOd)
+    dDo = BimDatum(m_txtBimDo)
+    If dOd = 0 And dDo = 0 Then Exit Function
+
+    Dim a As String, b As String
+    If dOd > 0 Then a = Format$(dOd, "d.m.yyyy") Else a = "pocetak"
+    If dDo > 0 Then b = Format$(dDo, "d.m.yyyy") Else b = "danas"
+    BimPeriodSuffix = ", period " & a & " - " & b
+End Function
 
 Private Sub lstBanka_Click()
     If lstBanka.ListIndex < 0 Then Exit Sub
@@ -387,6 +531,8 @@ EH:
 End Sub
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     On Error Resume Next
+
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink pre gasenja
 
     If CloseMode = vbFormControlMenu Then
         frmOtkupAPP.ReturnToDashboard "Sekcija zatvorena."
@@ -1011,4 +1157,53 @@ End Sub
 
 Private Sub UserForm_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
     ResetActionButtons
+End Sub
+
+' ------------------------------------------------------------
+' UI sink (clsUiSink) - eventi runtime kontrola bez WithEvents u formi
+' (self-update bezbedno; docs/SELF_UPDATE.md zamka #11). Isti obrazac kao
+' frmDokumenta: Bind -> UiSinkEvent dispatcher -> postojeci handleri.
+' ------------------------------------------------------------
+
+' Vrati True ako je sink stvarno vezan. Fail-visible (log) - tiho neuspesno
+' vezivanje bi dalo vidljivu kontrolu koja ne reaguje.
+Private Function WireSink(ByVal ctl As Object, ByVal tagName As String) As Boolean
+    On Error GoTo Fail
+    If ctl Is Nothing Then Err.Raise 91, , "kontrola je Nothing"
+    If m_uiSinks Is Nothing Then Set m_uiSinks = CreateObject("Scripting.Dictionary")
+    Dim s As clsUiSink
+    Set s = New clsUiSink
+    s.Bind Me, ctl, tagName
+    Set m_uiSinks(tagName) = s
+    WireSink = True
+    Exit Function
+Fail:
+    LogErr "frmBankaImport.WireSink(" & tagName & ")", Err.description
+End Function
+
+' Otpusti sve clsUiSink omotace (raskini krug forma<->sink i reference kontrola).
+' Idempotentno; pozvati iz QueryClose i Terminate.
+Private Sub ReleaseUiSinks()
+    On Error Resume Next
+    Dim k As Variant
+    If Not m_uiSinks Is Nothing Then
+        For Each k In m_uiSinks.Keys
+            m_uiSinks(k).ReleaseSink
+        Next k
+        m_uiSinks.RemoveAll
+    End If
+    Set m_uiSinks = Nothing
+End Sub
+
+' Dispatcher za clsUiSink (Public po nuznosti - klasa dobacuje event formi;
+' ne zvati direktno).
+Public Sub UiSinkEvent(ByVal tagName As String, ByVal ev As String, ByVal arg As Object)
+    Select Case tagName & "." & ev
+        Case "m_cmbBimFilter.Change":   m_cmbBimFilter_Change
+    End Select
+End Sub
+
+Private Sub UserForm_Terminate()
+    On Error Resume Next
+    ReleaseUiSinks                    ' raskini krug forma<->clsUiSink
 End Sub
