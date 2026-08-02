@@ -29,6 +29,8 @@ Podaci o konkurenciji moraju imati datum, izvor i jasno odvojene činjenice od p
 | `infosys_agro_references_summary.md` | agregati, kategorije, geografija i prioriteti za Infosys replacement pool |
 | `AgroSoft-Korisnicko-Uputsvo.pdf` | korisničko uputstvo za AGROSOFT („DATA SOFT" Vrbas), 161 strana — jedina konkurentska **produkt-dokumentacija** u repou; sadržaj datiran ~2012–2013 (Windows 7/XP, sezone „rod 2011/2012") |
 | `agrosoft_feature_teardown.md` | feature-level poređenje AGROSOFT ↔ AgriX po deset oblasti, sa dokazima iz `src-vba/`, `src/` i `gas/` |
+| `SOFTEK_uputstvp_otkup_poljoproizvoda.pdf` | korisničko uputstvo za SOFTEK modul „Otkup poljoprivrednih proizvoda", 34 strane; PDF kreiran 2017-06-06 |
+| `softek_feature_teardown.md` | feature-level poređenje SOFTEK ↔ AgriX; prvi dokumentovani **direktan** konkurent (malina, gajbice, PDV nadoknada 8%) |
 
 ## 3. Sažetak javnih i klasifikovanih referenci
 
@@ -99,7 +101,11 @@ Signali:
 - vidljiv klaster Zapadne i Centralne Srbije;
 - lista uključuje privredna društva i trgovinske radnje.
 
-`INFERENCE`: SOFTEK verovatno pokriva širok raspon veličina kupaca, ali funkcije, cene i aktuelni status instalacija nisu potvrđeni.
+`PRODUCT DOCUMENTATION EVIDENCE`: uputstvo za modul „Otkup poljoprivrednih proizvoda" (34 strane, PDF iz 2017) je u ovom folderu. Radni primer kroz ceo dokument je `MALINA VILAMET I KLASA` sa ambalažom `GAJBICA MALINE`, neto se računa kao bruto minus gajbice, ambalaža ide kroz revers sa `ZADUŽENO/RAZDUŽENO/STANJE`, a uvod objašnjava PDV nadoknadu od 8%.
+
+`INFERENCE`: SOFTEK je **prvi dokumentovani direktan konkurent** — isti proizvod, isti kupac, ista regulativa i isti geografski klaster kao AgriX. Modul stoji na knjigovodstvenoj platformi (KEP knjiga, kontni nalog za knjiženje), što je njegov glavni ugao. Cene i aktuelni status instalacija i dalje nisu potvrđeni.
+
+Puna analiza: `softek_feature_teardown.md`.
 
 ## 6. KRUNET
 
