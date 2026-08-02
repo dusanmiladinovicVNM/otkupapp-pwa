@@ -756,6 +756,7 @@ Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_OTKUP        ' StornoNovac osvezava Isplaceno/DatumIsplate vezanog otkupa
 
     If Not StornoNovac(novacID) Then
         Err.Raise ERR_STORNO_BASE + 6, SRC, _
@@ -784,6 +785,7 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
     rowNov = RequireStornoAllowed(TBL_NOVAC, novacID, COL_NOV_ID, SRC)
 
     RequireColumnIndex TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC
+    RequireColumnIndex TBL_NOVAC, COL_NOV_OTKUP_ID, SRC
 
     Dim novData As Variant
     novData = GetTableData(TBL_NOVAC)
@@ -797,10 +799,22 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
     fakturaID = Trim$(CStr(novData(rowNov, _
                     RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC))))
 
+    ' Uplata/isplata moze biti vezana i za otkup (blok) - ne samo za fakturu.
+    ' Bez ovoga bi storno isplate ostavio otkup "Isplaceno" + DatumIsplate ustajao.
+    Dim otkupID As String
+    otkupID = Trim$(CStr(novData(rowNov, _
+                    RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC))))
+
     MarkRowStornirano TBL_NOVAC, rowNov, SRC
 
     If Len(fakturaID) > 0 Then
         UpdateFakturaStatus fakturaID
+    End If
+
+    ' Obrazac modNovac.ResetNovacOtkupLink_TX: posle promene novca -> rekalk statusa
+    ' otkupa (GetIsplataForOtkup vec iskljucuje stornirane redove).
+    If Len(otkupID) > 0 Then
+        UpdateOtkupStatus otkupID
     End If
 
     StornoNovac = True

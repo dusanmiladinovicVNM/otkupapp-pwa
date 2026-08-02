@@ -3497,7 +3497,18 @@ Private Sub btnStorno_Click()
             If ConfirmStorno("fakturu", brDok) Then Success = StornoFaktura_TX(fakID)
             
         Case "Novac"
-            If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(brDok)
+            ' StornoNovac_TX ocekuje NovacID, a operater kuca BROJ dokumenta ->
+            ' razresi broj u ID pre poziva (isti obrazac kao Otpremnica/Faktura).
+            ' Fallback: ako je ukucan sam NovacID, prihvati i njega.
+            Dim novID As String
+            novID = LookupActiveID(TBL_NOVAC, COL_NOV_BROJ_DOK, brDok, COL_NOV_ID)
+            If novID = "" Then novID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, brDok, COL_NOV_ID)
+            If novID = "" Then
+                MsgBox "Novac stavka '" & brDok & "' nije pronadjena (ili je ve" & ChrW(263) & " stornirana)!", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+            If ConfirmStorno("novac stavku", brDok) Then Success = StornoNovac_TX(novID)
 
         Case "Revers izdavanje koop."
             If Not ActiveAmbalazaDokExists(brDok, DOK_TIP_OM_IZLAZ_KOOP) Then
