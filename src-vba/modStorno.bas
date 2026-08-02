@@ -926,7 +926,8 @@ End Function
 
 ' Broj AKTIVNIH tblNovac redova za dati BrojDokumenta. BrojDokumenta NIJE
 ' jedinstven kljuc: uvoz izvoda upisuje sve stavke jednog izvoda pod istim brojem
-' (i literal "IZVOD" kad broj nedostaje), a ApplyAvansToFaktura/ApplyAvansToOtkup
+' (stari redovi mogu nositi i literal "IZVOD" - taj fallback je uklonjen, vidi
+' modBankaMapiranje.RequireIzvodBroj), a ApplyAvansToFaktura/ApplyAvansToOtkup
 ' split nasledjuje broj originalne stavke. Forma to koristi da NE stornira tiho
 ' samo jedan od vise redova sa istim brojem (jedini jedinstven kljuc je NovacID).
 Public Function CountActiveNovacByBroj(ByVal brDok As String) As Long

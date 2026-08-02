@@ -260,7 +260,7 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
     End If
     
     MapBankaImportAsKupac = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
         CDate(bim(1, 2)), _
         kupacNaziv, _
         kupacID, _
@@ -404,7 +404,7 @@ Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
     End If
     
     MapBankaImportAsKooperant = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsKooperant"), _
         CDate(bim(1, 2)), _
         omNaziv, _
         omID, _
@@ -527,7 +527,7 @@ Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
     If omNaziv = "" Then omNaziv = omID
     
     MapBankaImportAsOM = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsOM"), _
         CDate(bim(1, 2)), _
         omNaziv, _
         omID, _
@@ -793,7 +793,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     
     If IsEmpty(kandidati) Then
         If SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -842,7 +842,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         End If
         
         novID = SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -873,7 +873,7 @@ NextCandidate:
     
     If preostaloZaRaspodelu > 0 Then
         If SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -1763,6 +1763,22 @@ End Function
 ' ============================================================
 ' PRIVATE/PUBLIC - HELPERS
 ' ============================================================
+
+' Broj izvoda je OBAVEZAN identitet novca nastalog iz izvoda: po njemu se grupise
+' storno celog izvoda (izvod se ne stornira parcijalno). Banka uvek daje broj, pa
+' je prazan broj greska uvoza/parsera - ne slucaj za fallback. Raniji fallback je
+' sve stavke bez broja slivao u literal "IZVOD" i time spajao nepovezane izvode u
+' jednu storno grupu (tiha korupcija identiteta).
+Private Function RequireIzvodBroj(ByVal bim As Variant, ByVal sourceName As String) As String
+    Dim broj As String
+    broj = Trim$(CStr(NzBIM(bim(1, 1), "")))
+    If Len(broj) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 45, sourceName, _
+                  "Izvod nema broj dokumenta - mapiranje je odbijeno. " & _
+                  "Proveri uvoz/parser izvoda (BankaImportID bez BrojDokumenta)."
+    End If
+    RequireIzvodBroj = broj
+End Function
 
 Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
                                   ByVal bankaRef As String, _
