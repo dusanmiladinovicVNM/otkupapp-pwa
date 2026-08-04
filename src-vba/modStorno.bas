@@ -756,12 +756,12 @@ Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
     ' Poslovno pravilo (i kad pozivalac nije forma): pojedinacni storno je samo za
     ' rucno unet novac. Novac iz bankovnog izvoda se stornira SAMO u celosti (ceo
     ' izvod), nikad red po red -> odbij pre BeginTx (RollbackTx je no-op van TX).
-    Dim brDokNov As String
-    brDokNov = NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novacID, COL_NOV_BROJ_DOK))
-    If IsNovacBrojFromBankaImport(brDokNov) Then
+    ' Provera je po REDU (marker), ne po broju - rucni red koji deli broj sa izvodom
+    ' mora ostati stornirljiv.
+    If IsNovacFromBankaImport(novacID) Then
         Err.Raise ERR_STORNO_BASE + 41, SRC, _
                   "Novac iz bankovnog izvoda se ne stornira pojedinacno (samo ceo izvod). " & _
-                  "NovacID=" & novacID & "; Broj=" & brDokNov
+                  "NovacID=" & novacID
     End If
 
     tx.BeginTx
@@ -836,29 +836,39 @@ EH:
 End Function
 
 ' Marker porekla cita modBankaMapiranje.BimIdFromNapomena (zivi uz pisca).
-' True ako BrojDokumenta pripada bankovnom izvodu. Provera je po BROJU, ne po
-' redu: avans-split (ApplyAvansToFaktura/ApplyAvansToOtkup) nasledjuje broj ali
-' NE i BIM napomenu, pa bi provera po redu propustila izvodni novac kao "rucni".
-' Stornirani redovi se takodje racunaju - broj ostaje izvodni i posle storna.
-' Poslovno pravilo: izvod se NE stornira parcijalno, samo u celosti.
-Public Function IsNovacBrojFromBankaImport(ByVal brDok As String) As Boolean
-    Const SRC As String = "IsNovacBrojFromBankaImport"
+' True ako je KONKRETAN novac red nastao iz izvoda (nosi BIM marker u Napomeni).
+'
+' Provera je po REDU, ne po BrojDokumenta: svaki izvodni red nosi marker (direktan
+' upis od BuildBIMNapomena, split ga nasledjuje od roditelja), pa je red-provera
+' potpuna. Provera po broju bi uz to zarobila i RUCNI red koji slucajno deli broj
+' sa izvodom - ostao bi netaknut pri stornu izvoda, ali i nestornirljiv pojedinacno
+' (vidi T36). Poslovno pravilo ostaje: izvod se ne stornira parcijalno.
+Public Function IsNovacFromBankaImport(ByVal novacID As String) As Boolean
+    Const SRC As String = "IsNovacFromBankaImport"
     On Error GoTo EH
-    If Trim$(brDok) = "" Then Exit Function
+
+    RequireNonBlank novacID, "NovacID", SRC
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_NOVAC, COL_NOV_ID, novacID)
+    If rows Is Nothing Then
+        Err.Raise ERR_STORNO_BASE + 51, SRC, "FindRows je vratio Nothing. NovacID=" & novacID
+    End If
+    If rows.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 52, SRC, "Novac red nije pronadjen. NovacID=" & novacID
+    End If
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 53, SRC, _
+                  "NovacID nije jedinstven: " & novacID & " (Count=" & rows.count & ")"
+    End If
+
     Dim data As Variant: data = GetTableData(TBL_NOVAC)
-    If IsEmpty(data) Then Exit Function
-    Dim colBroj As Long, colNap As Long
-    colBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
-    colNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
-    Dim i As Long
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBroj))) = Trim$(brDok) Then
-            If Len(BimIdFromNapomena(CStr(data(i, colNap)))) > 0 Then
-                IsNovacBrojFromBankaImport = True
-                Exit Function
-            End If
-        End If
-    Next i
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 54, SRC, "Tabela novac je prazna posle pronalaska reda."
+    End If
+
+    Dim colNap As Long: colNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    IsNovacFromBankaImport = (Len(BimIdFromNapomena(CStr(data(CLng(rows(1)), colNap)))) > 0)
     Exit Function
 EH:
     ' Guard koji odlucuje da li je destruktivna operacija dozvoljena NE sme da
@@ -897,7 +907,7 @@ Public Function ResolveNovacForStorno(ByVal ulaz As String, _
     Dim brNov As String
     brNov = NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_NOV_BROJ_DOK))
 
-    If IsNovacBrojFromBankaImport(brNov) Then
+    If IsNovacFromBankaImport(novID) Then
         reason = "Novac '" & ulaz & "' potice iz bankovnog izvoda " & brNov & "." & vbCrLf & vbCrLf & _
                  "Izvod se ne stornira parcijalno - samo u celosti (Banka / uvoz izvoda)." & vbCrLf & _
                  "Ovde se stornira samo rucno unet novac (ke" & ChrW(353) & " / virman)."
@@ -951,7 +961,7 @@ Public Function CountActiveNovacByBroj(ByVal brDok As String) As Long
     CountActiveNovacByBroj = n
     Exit Function
 EH:
-    ' Fail-closed (isti razlog kao IsNovacBrojFromBankaImport): tiha nula bi
+    ' Fail-closed (isti razlog kao IsNovacFromBankaImport): tiha nula bi
     ' preskocila proveru vise aktivnih redova i pustila tih parcijalan storno.
     LogAndReraise SRC
 End Function
@@ -1166,8 +1176,10 @@ Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
                 "dvostruko knjizenje. Proveri stavku rucno pa ponovi."
             Exit Function
         End If
-        If Abs(CDbl(stvarUpl(CStr(k))) - CDbl(ocekUpl(CStr(k)))) > 0.01 Or _
-           Abs(CDbl(stvarIsp(CStr(k))) - CDbl(ocekIsp(CStr(k)))) > 0.01 Then
+        ' Iznosi su na dve decimale -> poredi zaokruzene, sa epsilon samo za
+        ' Double sabiranje. Tolerancija 0.01 bi propustila razliku od tacno 1 pare.
+        If Abs(Round(CDbl(stvarUpl(CStr(k))), 2) - Round(CDbl(ocekUpl(CStr(k))), 2)) > 0.001 Or _
+           Abs(Round(CDbl(stvarIsp(CStr(k))), 2) - Round(CDbl(ocekIsp(CStr(k))), 2)) > 0.001 Then
             GetIzvodStornoBlokade = "Iznosi se ne sla" & ChrW(382) & "u za stavku " & CStr(k) & ": izvod " & _
                 Format$(CDbl(ocekUpl(CStr(k))), "#,##0.00") & " / " & Format$(CDbl(ocekIsp(CStr(k))), "#,##0.00") & _
                 ", knjizeno " & Format$(CDbl(stvarUpl(CStr(k))), "#,##0.00") & " / " & _

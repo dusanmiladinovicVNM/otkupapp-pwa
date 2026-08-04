@@ -110,6 +110,7 @@ Public Sub RunStornoTestSuite()
     T33_ObradjenaStavkaBezNovcaBlokira
     T34_BrojIzvodaSaKosomCrtom
     T35_NeslaganjeIznosaBlokira
+    T36_RucniRedSaIstimBrojemOstajeStornirljiv
 
     tx.RollbackTx
     Set tx = Nothing
@@ -747,6 +748,34 @@ Private Sub T32_SamoMarkerOdredjujePripadnost()
     ChkEq NovStornirano("SVT-NOV-8A"), "Da", S & "red sa markerom storniran"
     ChkEq NovStornirano("SVT-NOV-8B"), "Da", S & "marker vazi i uz drugi BrojDokumenta"
     ChkEq NovStornirano("SVT-NOV-8C"), "", S & "rucni red (isti broj I partner, bez markera) NETAKNUT"
+End Sub
+
+' ============================================================
+' T36 - rucni red koji DELI BROJ sa izvodom mora ostati stornirljiv pojedinacno.
+'
+' Zastita "ne stornira se izvod parcijalno" mora da gleda MARKER konkretnog reda,
+' ne BrojDokumenta. Provera po broju bi ovaj rucni red ostavila netaknutim pri
+' stornu izvoda (dobro), ali i trajno nestornirljivim normalnom putanjom (lose).
+' ============================================================
+Private Sub T36_RucniRedSaIstimBrojemOstajeStornirljiv()
+    Const S As String = "T36 rucni red deli broj sa izvodom: "
+
+    SeedBimStavka "SVT-BIM-12A", "SVT-IZV-12", "SVT-RAC-12", "SVT-PARTNER-12", 2000, 0
+    SeedNovacBim "SVT-NOV-12A", "SVT-IZV-12", "SVT-BIM-12A", "SVT-P12", 2000, 0
+    SeedNovacSplit "SVT-NOV-12R", "SVT-IZV-12", "SVT-P12", 700, 0        ' rucni, isti broj i partner
+
+    ' Izvodni red se NE sme stornirati pojedinacno.
+    Dim razlogBim As String
+    Chk Len(ResolveNovacForStorno("SVT-NOV-12A", razlogBim)) = 0, S & "izvodni red odbijen pojedinacno"
+    Chk Len(razlogBim) > 0, S & "razlog odbijanja objasnjen"
+
+    ' Rucni red MORA proci - i kroz razresavanje i kroz stvarni storno.
+    Dim razlogRuc As String
+    ChkEq ResolveNovacForStorno("SVT-NOV-12R", razlogRuc), "SVT-NOV-12R", S & "rucni red prihvacen"
+    ChkEq razlogRuc, "", S & "nema razloga za odbijanje rucnog reda"
+    Chk StornoNovac_TX("SVT-NOV-12R"), S & "StornoNovac_TX stornirao rucni red"
+    ChkEq NovStornirano("SVT-NOV-12R"), "Da", S & "rucni red stvarno storniran"
+    ChkEq NovStornirano("SVT-NOV-12A"), "", S & "izvodni red i dalje netaknut"
 End Sub
 
 ' ============================================================
