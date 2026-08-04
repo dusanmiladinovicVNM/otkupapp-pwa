@@ -1,10 +1,10 @@
-# Izvoz voća — kontakti i izvori za Švajcarsku
+# Izvoz voća — kontakti i izvori za DACH i globalna tržišta
 
-Ovaj dokument služi kao početni spisak izvora za izgradnju adresara potencijalnih kupaca, uvoznika, veletrgovaca, distributera i prerađivača voća u Švajcarskoj, prvenstveno u regiji Ciriha.
+Ovaj dokument služi kao početni spisak izvora za izgradnju adresara potencijalnih kupaca, uvoznika, veletrgovaca, distributera i prerađivača voća, prvenstveno u Švajcarskoj i Nemačkoj, uz globalne baze podataka za pronalaženje kupaca i analizu trgovinskih tokova.
 
 Poslednje ažuriranje: 4. avgust 2026.
 
-## Prioritetni izvori
+## Švajcarska — kontakti i imenici
 
 ### 1. Karl Haegeli Erben AG / FreshPlaza
 
@@ -35,13 +35,76 @@ Poslednje ažuriranje: 4. avgust 2026.
 - Namena: pronalaženje prerađivača, proizvođača džemova, marmelada i voćnih namaza koji mogu biti potencijalni kupci svežeg, zamrznutog ili industrijskog voća.
 - Napomena: rezultate treba ručno proveriti i razvrstati na proizvođače, distributere, trgovce i firme koje samo preprodaju gotove proizvode.
 
+## Nemačka i EU — potencijalni kupci i distributeri
+
+### 5. FRoSTA AG
+
+- Link: [FRoSTA AG](https://www.frosta-ag.com/)
+- Profil: veliki evropski proizvođač zamrznutih prehrambenih proizvoda.
+- Značaj: potencijalni industrijski kupac zamrznutog voća ili sastojaka, kao i referenca za razumevanje zahteva velikih proizvođača.
+- Sledeći korak: proveriti program „Lieferant werden“, kategorije sirovina, sertifikate i kontakt odeljenja nabavke.
+
+### 6. BETAFRUIT Handelsgesellschaft mbH
+
+- Link: [About us — BETAFRUIT](https://betafruit.eu/about-us/)
+- Profil: trgovac i distributer svežeg voća i povrća koji radi sa maloprodajnim kupcima.
+- Značaj: potencijalni uvoznik ili distributer za sveže voće, naročito bobičasto, citrusno, egzotično i koštičavo voće.
+- Sledeći korak: proveriti aktuelni asortiman, zemlje porekla, nabavku i osobe zadužene za dobavljače.
+
+### 7. Fritz Wudy GmbH & Co. KG
+
+- Link: [Wudy Frucht](https://www.wudy-frucht.de/)
+- Profil: porodični uvoznik i distributer voća, povrća i južnog voća iz Gundelfingena.
+- Adresa: Industriestraße 19, 89423 Gundelfingen, Deutschland
+- Telefon: +49 (0) 9073 7011
+- Profil kvaliteta: HACCP, bio sertifikovan pogon i kontrolisani hladni lanac.
+- Značaj: potencijalni regionalni kupac ili distributer za sveže voće i specijalne sezonske proizvode.
+
+## Globalne baze za trgovinske podatke i pronalaženje kupaca
+
+> Napomena: u repozitorijumu se čuvaju samo stabilni javni linkovi. URL-ovi sa privremenim login, access ili plan tokenima nisu sačuvani.
+
+### 8. ITC Trade Map
+
+- Stabilni link: [Trade Map](https://www.trademap.org/)
+- Namena: analiza uvoza i izvoza po HS kodu, zemlji, vrednosti, količini, rastu, tržišnom udelu i trgovinskim partnerima.
+- Poseban značaj: izbor prioritetnih zemalja i proizvoda pre ručnog traženja konkretnih kupaca.
+- Dodatno: sadrži i imenik uvoznih i izvoznih kompanija za deo tržišta.
+
+### 9. TradeData.Pro
+
+- Link: [Pricing — TradeData.Pro](https://tradedata.pro/pricing/)
+- Namena: globalni podaci o pošiljkama, kupcima, dobavljačima, poslovnim kontaktima i vezama između kompanija.
+- Model naplate: godišnje pretplate sa različitim obimom zemalja, preuzimanja i kontakt kredita.
+- Napomena: proceniti pokrivenost evropskih zemalja i kvalitet podataka pre kupovine.
+
+### 10. ABRAMS.wiki
+
+- Link: [Pricing — ABRAMS.wiki](https://en.abrams.wiki/pricing)
+- Namena: analiza međunarodnih Bills of Lading, pronalaženje kupaca i dobavljača, analiza tržišta, konkurencije i lanaca snabdevanja.
+- Model naplate: cena na upit, paketi za male firme, premium i enterprise korisnike.
+- Napomena: potencijalno koristan za identifikaciju aktivnih kupaca na osnovu stvarnih pošiljki.
+
+### 11. Volza
+
+- Stabilni link: [Global Trade Data — Volza](https://www.volza.com/global-trade-data/)
+- Namena: baza uvozno-izvoznih pošiljki, kupaca i dobavljača, analiza količina, cena, proizvoda i trgovinskih veza.
+- Napomena: originalni personalizovani plan URL nije sačuvan zbog ugrađenog tokena. Koristiti javnu stranicu planova i proveriti konkretno pokriće Srbije, Švajcarske, Nemačke i ciljnih HS kodova.
+
+### 12. NBD Trade Data
+
+- Link: [Service and pricing — NBD](https://en.nbd.ltd/service)
+- Namena: globalni carinski i transportni podaci, pretraga kupaca i dobavljača, detalji transakcija i analiza trgovinskih partnera.
+- Model naplate: više nivoa pretplate; napredne funkcije, izvoz rezultata i kontakt podaci zavise od paketa.
+- Napomena: proveriti poreklo podataka, učestalost ažuriranja i realnu pokrivenost evropskih uvoznika pre pretplate.
+
 ## Predložena struktura budućeg adresara
 
 Za svaki kontakt evidentirati:
 
 - naziv firme
 - tip firme: uvoznik / veletrgovac / distributer / prerađivač / maloprodaja
-- grad i kanton
+- država, grad i region/kanton
 - web-sajt
 - ime kontakt osobe
 - funkcija kontakt osobe
@@ -49,8 +112,11 @@ Za svaki kontakt evidentirati:
 - e-mail
 - LinkedIn
 - proizvodi od interesa
-- poreklo robe sa kojim već rade
+- oblik robe: sveže / zamrznuto / industrijsko / prerađeno
+- postojeće zemlje porekla
 - sertifikati i zahtevi
+- procenjeni godišnji obim
+- izvor podatka
 - status kontakta
 - datum poslednjeg kontakta
 - sledeći korak
@@ -60,6 +126,9 @@ Za svaki kontakt evidentirati:
 
 1. Izvući sve relevantne firme sa Zürcher Engrosmarkta.
 2. Posebno obraditi Karl Haegeli Erben AG i povezane firme.
-3. Iz WLW rezultata izdvojiti stvarne proizvođače i prerađivače.
-4. Proveriti kontakt osobe preko zvaničnih sajtova i LinkedIna.
-5. Razvrstati kontakte prema vrsti voća i obliku isporuke: sveže, zamrznuto, industrijsko i prerađeno.
+3. Proveriti FRoSTA, BETAFRUIT i Wudy kao konkretne potencijalne kupce ili distributere.
+4. Iz WLW rezultata izdvojiti stvarne proizvođače i prerađivače.
+5. U Trade Map-u definisati prioritetne HS kodove, zemlje i tržišne tokove.
+6. Napraviti probne pretrage u TradeData.Pro, ABRAMS, Volza i NBD pre bilo kakve pretplate.
+7. Proveriti kontakt osobe preko zvaničnih sajtova i LinkedIna.
+8. Razvrstati kontakte prema vrsti voća i obliku isporuke.
