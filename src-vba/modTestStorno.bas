@@ -99,16 +99,17 @@ Public Sub RunStornoTestSuite()
     T22_SimpleStornoOtpremniceNeOstavljaZbirnu00
     T23_StornoIzvodaRemapVracaStavkeUObradu
     T24_StornoIzvodaReimportOslobadjaPonovniUvoz
-    T25_StornoIzvodaHvataAvansSplit
+    T25_AvansSplitNasledjujeMarkerIPada
     T26_IzvodNaViseRacunaTraziRacun
     T27_StornoIzvodaOsvezavaOtkup
     T28_OMAvansBrojiObaKanala
     T29_OMAvansUIzvestajimaObaKanala
     T30_StagingBezPKOdbijaStorno
     T31_IzvodBezRacunaOdbijen
-    T32_SplitSaNasledjenimMarkerom
+    T32_SamoMarkerOdredjujePripadnost
     T33_ObradjenaStavkaBezNovcaBlokira
     T34_BrojIzvodaSaKosomCrtom
+    T35_NeslaganjeIznosaBlokira
 
     tx.RollbackTx
     Set tx = Nothing
@@ -730,19 +731,40 @@ End Sub
 ' direktno, i kad ima drugi BrojDokumenta. Markerless red BEZ partnera se NE
 ' pogadja - to je bila preteska heuristika.
 ' ============================================================
-Private Sub T32_SplitSaNasledjenimMarkerom()
-    Const S As String = "T32 split sa nasledjenim markerom: "
+Private Sub T32_SamoMarkerOdredjujePripadnost()
+    Const S As String = "T32 pripadnost samo po markeru: "
 
     SeedBimStavka "SVT-BIM-8A", "SVT-IZV-8", "SVT-RAC-8", "SVT-PARTNER-8", 0, 3000
     SeedNovacBim "SVT-NOV-8A", "SVT-IZV-8", "SVT-BIM-8A", "SVT-P8", 0, 1800
+    ' Red sa markerom pripada izvodu i kad ima DRUGI BrojDokumenta.
     SeedNovacBim "SVT-NOV-8B", "SVT-DRUGI-BROJ-8", "SVT-BIM-8A", "SVT-P8", 0, 1200
-    SeedNovacSplit "SVT-NOV-8C", "SVT-IZV-8", "", 0, 500
+    ' Rucni red sa ISTIM brojem I ISTIM partnerom, ali BEZ markera -> ne sme se
+    ' pokupiti (nema heuristike po broju/partneru).
+    SeedNovacSplit "SVT-NOV-8C", "SVT-IZV-8", "SVT-P8", 0, 500
 
     Dim info As String
     Chk StornoIzvod_TX("SVT-IZV-8", "SVT-RAC-8", IZVOD_STORNO_REMAP, info), S & "storno uspeo"
-    ChkEq NovStornirano("SVT-NOV-8A"), "Da", S & "originalni red storniran"
-    ChkEq NovStornirano("SVT-NOV-8B"), "Da", S & "split sa markerom storniran (i uz drugi broj)"
-    ChkEq NovStornirano("SVT-NOV-8C"), "", S & "markerless bez partnera NIJE pokupljen"
+    ChkEq NovStornirano("SVT-NOV-8A"), "Da", S & "red sa markerom storniran"
+    ChkEq NovStornirano("SVT-NOV-8B"), "Da", S & "marker vazi i uz drugi BrojDokumenta"
+    ChkEq NovStornirano("SVT-NOV-8C"), "", S & "rucni red (isti broj I partner, bez markera) NETAKNUT"
+End Sub
+
+' ============================================================
+' T35 - rekonsilijacija iznosa: zbir aktivnog novca po stavci mora biti jednak
+' iznosu stavke izvoda. Nesklad znaci da je nesto vec dirnuto -> odbij ceo storno.
+' ============================================================
+Private Sub T35_NeslaganjeIznosaBlokira()
+    Const S As String = "T35 neslaganje iznosa: "
+
+    SeedBimStavka "SVT-BIM-11A", "SVT-IZV-11", "SVT-RAC-11", "SVT-PARTNER-11", 1000, 0
+    SeedNovacBim "SVT-NOV-11A", "SVT-IZV-11", "SVT-BIM-11A", "SVT-P11", 600, 0   ' fali 400
+
+    Chk Len(GetIzvodStornoBlokade("SVT-IZV-11", "SVT-RAC-11")) > 0, S & "preflight prijavljuje razliku"
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-11", "SVT-RAC-11", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq NovStornirano("SVT-NOV-11A"), "", S & "novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-11A"), "Da", S & "staging netaknut"
 End Sub
 
 ' ============================================================
@@ -887,23 +909,32 @@ Private Sub T24_StornoIzvodaReimportOslobadjaPonovniUvoz()
 End Sub
 
 ' ============================================================
-' T25 - avans split naslednik: ApplyAvans* umanji original i napravi novi red sa
-' ISTIM brojem i partnerom ali BEZ BIM markera. Storno izvoda mora oboriti i njega,
-' inace deo novca izvoda ostaje aktivan.
+' T25 - KANONSKI lineage test kroz STVARNI tok, ne kroz seed ocekivanog rezultata.
+'
+' Pusta pravi ApplyAvansToOtkup_TX da napravi split (umanji original, napravi novi
+' red), pa proverava da je split NASLEDIO BIM marker i da ga storno izvoda obara
+' zajedno sa originalom. Usput dokazuje i rekonsilijaciju: original + split moraju
+' i dalje davati tacan iznos stavke izvoda (2500 + 1500 = 4000), inace bi preflight
+' odbio storno.
 ' ============================================================
-Private Sub T25_StornoIzvodaHvataAvansSplit()
-    Const S As String = "T25 storno izvoda hvata avans split: "
+Private Sub T25_AvansSplitNasledjujeMarkerIPada()
+    Const S As String = "T25 avans split (stvarni tok): "
 
     SeedBimStavka "SVT-BIM-3A", "SVT-IZV-3", "SVT-RAC-3", "SVT-PARTNER-3", 0, 4000
-    ' Original umanjen na 2500 (ApplyAvansToOtkup je 1500 prebacio u split red).
-    SeedNovacBim "SVT-NOV-3A", "SVT-IZV-3", "SVT-BIM-3A", "SVT-P3", 0, 2500
-    SeedNovacSplit "SVT-NOV-3B", "SVT-IZV-3", "SVT-P3", 0, 1500
+    SeedNovacBim "SVT-NOV-3A", "SVT-IZV-3", "SVT-BIM-3A", "SVT-P3", 0, 4000, "", "SVT-K3"
+    SeedOtkupZaAvans "SVT-OTK-3", "SVT-K3", 100, 15      ' vrednost 1500 -> split
+
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 1, S & "pre raspodele jedan red izvoda"
+
+    Dim applied As Double
+    Chk ApplyAvansToOtkup_TX("SVT-K3", "SVT-OTK-3", applied), S & "ApplyAvansToOtkup_TX uspeo"
+    ChkEqD applied, 1500, S & "primenjeno tacno 1500 (vrednost bloka)"
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 2, S & "split NASLEDIO marker (2 reda pod istim BIM-om)"
 
     Dim info As String
     Chk StornoIzvod_TX("SVT-IZV-3", "SVT-RAC-3", IZVOD_STORNO_REMAP, info), S & "StornoIzvod_TX uspeo"
-
-    ChkEq NovStornirano("SVT-NOV-3A"), "Da", S & "originalni (BIM) red storniran"
-    ChkEq NovStornirano("SVT-NOV-3B"), "Da", S & "avans split naslednik storniran"
+    ChkEq NovStornirano("SVT-NOV-3A"), "Da", S & "originalni red storniran"
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 0, S & "nijedan red izvoda nije ostao aktivan (ni split)"
 End Sub
 
 ' ============================================================
@@ -1036,12 +1067,20 @@ End Sub
 ' novac -> izvod), BrojDokumenta = broj izvoda.
 Private Sub SeedNovacBim(ByVal novID As String, ByVal brojIzvoda As String, ByVal bimID As String, _
                          ByVal partnerID As String, ByVal uplata As Double, ByVal isplata As Double, _
-                         Optional ByVal otkupID As String = "")
+                         Optional ByVal otkupID As String = "", Optional ByVal koopID As String = "")
     SvAppend TBL_NOVAC, _
-        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER_ID, COL_NOV_TIP, _
-              COL_NOV_UPLATA, COL_NOV_ISPLATA, COL_NOV_NAPOMENA, COL_NOV_OTKUP_ID), _
-        Array(novID, brojIzvoda, Date, partnerID, NOV_VIRMAN_AVANS_KOOP, uplata, isplata, _
+        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER_ID, COL_NOV_KOOP_ID, _
+              COL_NOV_TIP, COL_NOV_UPLATA, COL_NOV_ISPLATA, COL_NOV_NAPOMENA, COL_NOV_OTKUP_ID), _
+        Array(novID, brojIzvoda, Date, partnerID, koopID, NOV_VIRMAN_AVANS_KOOP, uplata, isplata, _
               NOV_NAPOMENA_BIM_PREFIX & bimID & "; Ref:SVT", otkupID)
+End Sub
+
+' Otkup blok spreman za raspodelu avansa (kooperant + vrednost, NIJE isplacen).
+Private Sub SeedOtkupZaAvans(ByVal otkID As String, ByVal koopID As String, _
+                             ByVal kolicina As Double, ByVal cena As Double)
+    SvAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, COL_OTK_CENA), _
+        Array(otkID, otkID, koopID, kolicina, cena)
 End Sub
 
 ' Avans split naslednik: isti broj i partner kao original, ali BEZ BIM markera
@@ -1138,6 +1177,24 @@ Private Function ReportCellByLabel(ByVal arr As Variant, ByVal label As String, 
         End If
     Next i
     ReportCellByLabel = -99999
+End Function
+
+' Broj AKTIVNIH tblNovac redova koji nose dati BIM marker. Meri pripadnost izvodu
+' onako kako je meri i produkcijski kod (samo marker, bez pogadjanja).
+Private Function AktivnihSaMarkerom(ByVal bimID As String) As Long
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    Dim cNap As Long, cSt As Long
+    cNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+    cSt = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+    If cNap = 0 Then Exit Function
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
+            If BimIdFromNapomena(CStr(data(i, cNap))) = Trim$(bimID) Then n = n + 1
+        End If
+    Next i
+    AktivnihSaMarkerom = n
 End Function
 
 Private Function NovStornirano(ByVal novID As String) As String

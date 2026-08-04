@@ -1028,6 +1028,16 @@ EH:
     reason = "Greska pri razresavanju izvoda: " & Err.description
 End Function
 
+' Numericka vrednost celije ili 0 (iznosi u staging/novac tabelama mogu biti prazni).
+Private Function NumOrZero(ByVal v As Variant) As Double
+    If IsNumeric(v) Then NumOrZero = CDbl(v)
+End Function
+
+' Tekuca suma iz akumulator-dictionary-ja (0 ako kljuc jos ne postoji).
+Private Function NzNum(ByVal d As Object, ByVal key As String) As Double
+    If d.Exists(key) Then NzNum = CDbl(d(key))
+End Function
+
 ' Distinktni racuni koji imaju AKTIVAN staging red sa datim brojem izvoda
 ' (opciono suzeno na jedan racun). Prazan skup = takav izvod ne postoji.
 Private Function IzvodRacuniZaBroj(ByVal brojIzvoda As String, ByVal brojRacuna As String, _
@@ -1061,9 +1071,11 @@ End Function
 ' u UI-ju. Pravila:
 '   1) racun je obavezan (isti broj postoji na vise banaka)
 '   2) staging red bez BankaImportID -> odbij (bez PK nema pouzdanog lineage-a)
-'   3) svaka OBRADJENA stavka mora imati novac red (aktivan ILI vec storniran);
-'      inace bi vracanje u "za obradu" omogucilo dvostruko knjizenje
-'   4) legacy markerless kandidat + isti broj na drugom racunu -> ne pogadja se
+'   3) REKONSILIJACIJA po stavci: za svaku OBRADJENU stavku zbir AKTIVNOG novca sa
+'      njenim markerom mora biti jednak iznosu stavke (uplata i isplata zasebno).
+'      Split umanji original i nosi ostatak pod istim markerom, pa zbir mora da se
+'      poklopi. Nesklad = nesto je vec dirnuto -> odbij ceo posao (vracanje u
+'      "za obradu" uz aktivan novac bi omogucilo dvostruko knjizenje).
 Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
                                       ByVal brojRacuna As String) As String
     Const SRC As String = "GetIzvodStornoBlokade"
@@ -1088,9 +1100,13 @@ Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
     cSt = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, SRC)
     cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
 
-    Dim ids As Object: Set ids = CreateObject("Scripting.Dictionary")
-    Dim obradjeni As Object: Set obradjeni = CreateObject("Scripting.Dictionary")
-    Dim drugiRacun As Boolean
+    Dim cUpl As Long, cIsp As Long
+    cUpl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    cIsp = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+
+    ' Ocekivani iznosi po OBRADJENOJ stavci (uplata i isplata zasebno).
+    Dim ocekUpl As Object: Set ocekUpl = CreateObject("Scripting.Dictionary")
+    Dim ocekIsp As Object: Set ocekIsp = CreateObject("Scripting.Dictionary")
     Dim i As Long, n As Long, bid As String
 
     For i = 1 To UBound(bim, 1)
@@ -1102,11 +1118,11 @@ Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
                         "bez njega storno ne moze pouzdano da odredi svoj novac. Popravi red pa ponovi."
                     Exit Function
                 End If
-                ids(bid) = True
                 n = n + 1
-                If UCase$(Trim$(CStr(bim(i, cObr)))) = "DA" Then obradjeni(bid) = True
-            Else
-                drugiRacun = True
+                If UCase$(Trim$(CStr(bim(i, cObr)))) = "DA" Then
+                    ocekUpl(bid) = NzNum(ocekUpl, bid) + NumOrZero(bim(i, cUpl))
+                    ocekIsp(bid) = NzNum(ocekIsp, bid) + NumOrZero(bim(i, cIsp))
+                End If
             End If
         End If
     Next i
@@ -1115,46 +1131,51 @@ Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
         GetIzvodStornoBlokade = "Aktivan izvod nije prona" & ChrW(273) & "en: " & brojIzvoda & "/" & brojRacuna
         Exit Function
     End If
+    If ocekUpl.count = 0 Then Exit Function     ' nista nije mapirano -> nema sta da se sravnjuje
 
-    ' Lineage skan: koje stavke imaju svoj novac red (aktivan ILI vec storniran -
-    ' ponovljeni storno je legitiman), i ima li legacy markerless kandidata.
-    Dim lineage As Object: Set lineage = CreateObject("Scripting.Dictionary")
-    Dim markerless As Boolean
+    ' Stvarni zbir AKTIVNOG novca po markeru. Split umanji original i nosi ostatak
+    ' pod ISTIM markerom, pa zbir mora da se poklopi sa iznosom stavke.
+    Dim stvarUpl As Object: Set stvarUpl = CreateObject("Scripting.Dictionary")
+    Dim stvarIsp As Object: Set stvarIsp = CreateObject("Scripting.Dictionary")
     Dim nov As Variant: nov = GetTableData(TBL_NOVAC)
     If Not IsEmpty(nov) Then
-        Dim nBroj As Long, nNap As Long, nSt As Long, nPid As Long
-        nBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+        Dim nNap As Long, nSt As Long, nUpl As Long, nIsp As Long
         nNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
         nSt = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, SRC)
-        nPid = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
+        nUpl = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+        nIsp = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
         Dim rb As String
         For i = 1 To UBound(nov, 1)
-            rb = BimIdFromNapomena(CStr(nov(i, nNap)))
-            If Len(rb) > 0 Then
-                If ids.Exists(rb) Then lineage(rb) = True
-            ElseIf Not IsStorniranoValue(nov(i, nSt)) Then
-                If Trim$(CStr(nov(i, nBroj))) = Trim$(brojIzvoda) Then
-                    If Len(Trim$(CStr(nov(i, nPid)))) > 0 Then markerless = True
+            If Not IsStorniranoValue(nov(i, nSt)) Then
+                rb = BimIdFromNapomena(CStr(nov(i, nNap)))
+                If Len(rb) > 0 Then
+                    If ocekUpl.Exists(rb) Then
+                        stvarUpl(rb) = NzNum(stvarUpl, rb) + NumOrZero(nov(i, nUpl))
+                        stvarIsp(rb) = NzNum(stvarIsp, rb) + NumOrZero(nov(i, nIsp))
+                    End If
                 End If
             End If
         Next i
     End If
 
     Dim k As Variant
-    For Each k In obradjeni.Keys
-        If Not lineage.Exists(CStr(k)) Then
+    For Each k In ocekUpl.Keys
+        If Not stvarUpl.Exists(CStr(k)) Then
             GetIzvodStornoBlokade = "Stavka " & CStr(k) & " je ozna" & ChrW(269) & "ena kao obra" & ChrW(273) & "ena, " & _
-                "ali nema nijedan novac red. Vracanje u 'za obradu' bi omogucilo dvostruko " & _
-                "knjizenje. Proveri stavku rucno pa ponovi."
+                "ali nema nijedan aktivan novac red. Vracanje u 'za obradu' bi omogucilo " & _
+                "dvostruko knjizenje. Proveri stavku rucno pa ponovi."
+            Exit Function
+        End If
+        If Abs(CDbl(stvarUpl(CStr(k))) - CDbl(ocekUpl(CStr(k)))) > 0.01 Or _
+           Abs(CDbl(stvarIsp(CStr(k))) - CDbl(ocekIsp(CStr(k)))) > 0.01 Then
+            GetIzvodStornoBlokade = "Iznosi se ne sla" & ChrW(382) & "u za stavku " & CStr(k) & ": izvod " & _
+                Format$(CDbl(ocekUpl(CStr(k))), "#,##0.00") & " / " & Format$(CDbl(ocekIsp(CStr(k))), "#,##0.00") & _
+                ", knjizeno " & Format$(CDbl(stvarUpl(CStr(k))), "#,##0.00") & " / " & _
+                Format$(CDbl(stvarIsp(CStr(k))), "#,##0.00") & " (uplata/isplata). " & _
+                "Storno je odbijen dok se razlika ne razjasni."
             Exit Function
         End If
     Next k
-
-    If markerless And drugiRacun Then
-        GetIzvodStornoBlokade = "Postoje novac redovi bez markera porekla, a broj " & brojIzvoda & _
-            " postoji i na drugom racunu -> pripadnost se ne moze pouzdano utvrditi. Odbijeno."
-        Exit Function
-    End If
     Exit Function
 EH:
     ' Fail-closed: neuspela provera znaci "ne znam", ne "sme".
@@ -1171,7 +1192,7 @@ Public Function GetIzvodPregled(ByVal brojIzvoda As String, ByVal brojRacuna As 
     Dim bimIDs As Object: Set bimIDs = CreateObject("Scripting.Dictionary")
     CollectIzvodStaging brojIzvoda, brojRacuna, stRows, bimIDs, SRC
 
-    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, brojIzvoda, SRC)
+    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, SRC)
 
     Dim upl As Double, isp As Double, k As Long
     Dim v As Variant
@@ -1235,7 +1256,7 @@ Public Function StornoIzvod_TX(ByVal brojIzvoda As String, ByVal brojRacuna As S
     ' Novac: direktni redovi izvoda + avans-split naslednici (nose novac istog
     ' izvoda, a izgubili su BIM marker). Reuse StornoNovac po redu - markira red i
     ' osvezava status vezane fakture/otkupa.
-    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, brojIzvoda, SRC)
+    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, SRC)
     Dim k As Long
     For k = 1 To novIDs.count
         If Not StornoNovac(CStr(novIDs(k))) Then
@@ -1315,12 +1336,15 @@ Private Sub CollectIzvodStaging(ByVal brojIzvoda As String, ByVal brojRacuna As 
     Next i
 End Sub
 
-' AKTIVNI novac redovi jednog izvoda:
-'   1) direktni - Napomena nosi BIM marker sa BankaImportID-em iz ovog izvoda
-'   2) avans-split naslednici - ApplyAvansToFaktura/ApplyAvansToOtkup umanje
-'      original i naprave novi red sa ISTIM BrojDokumenta i partnerom, ali BEZ
-'      BIM markera. Bez njih bi deo novca izvoda ostao aktivan posle storna.
-Private Function CollectIzvodNovacIDs(ByVal bimIDs As Object, ByVal brojIzvoda As String, _
+' AKTIVNI novac redovi jednog izvoda - ISKLJUCIVO po BIM markeru.
+'
+' Svaki red koji pripada izvodu nosi marker: direktni upis ga dobija od
+' BuildBIMNapomena, a avans-split ga NASLEDJUJE (BuildAvansSplitNapomena), pa je
+' pripadnost eksplicitna i ne pogadja se. Marker mora biti NEPRAZAN pre poredjenja
+' sa skupom - prazan marker ima svaki rucno unet red, pa bi ga poredjenje "usvojilo"
+' u izvod. Nema fallback-a po broju/partneru: taj put bi mogao da obori tudj rucni
+' red, a ne resava nijedan stvaran slucaj (splitovi nose marker).
+Private Function CollectIzvodNovacIDs(ByVal bimIDs As Object, _
                                       ByVal sourceName As String) As Collection
     Dim result As Collection: Set result = New Collection
     Set CollectIzvodNovacIDs = result
@@ -1328,60 +1352,23 @@ Private Function CollectIzvodNovacIDs(ByVal bimIDs As Object, ByVal brojIzvoda A
     Dim data As Variant: data = GetTableData(TBL_NOVAC)
     If IsEmpty(data) Then Exit Function
 
-    Dim cId As Long, cBroj As Long, cNap As Long, cSt As Long, cPid As Long
+    Dim cId As Long, cNap As Long, cSt As Long
     cId = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, sourceName)
-    cBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, sourceName)
     cNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, sourceName)
     cSt = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, sourceName)
-    cPid = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, sourceName)
 
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    Dim partneri As Object: Set partneri = CreateObject("Scripting.Dictionary")
-    Dim i As Long, nid As String
+    Dim i As Long, nid As String, rowBimID As String
 
-    ' 1) Direktni: marker mora biti NEPRAZAN i pripadati ovom izvodu. Prazan marker
-    ' se nikad ne poredi sa skupom (inace bi svaki markerless red "pripao" izvodu).
-    ' Partneri se skupljaju i sa VEC storniranih BIM redova: ako je original ranije
-    ' oboren (legacy parcijalni storno), njegov avans-split je jos aktivan i mora
-    ' ostati prepoznatljiv - inace bi ostao jedini aktivan novac tog izvoda.
-    Dim rowBimID As String
     For i = 1 To UBound(data, 1)
-        rowBimID = BimIdFromNapomena(CStr(data(i, cNap)))
-        If Len(rowBimID) > 0 Then
-            If bimIDs.Exists(rowBimID) Then
-                partneri(Trim$(CStr(data(i, cPid)))) = True
-                If Not IsStorniranoValue(data(i, cSt)) Then
+        If Not IsStorniranoValue(data(i, cSt)) Then
+            rowBimID = BimIdFromNapomena(CStr(data(i, cNap)))
+            If Len(rowBimID) > 0 Then
+                If bimIDs.Exists(rowBimID) Then
                     nid = Trim$(CStr(data(i, cId)))
                     If Not seen.Exists(nid) Then
                         result.Add nid
                         seen(nid) = True
-                    End If
-                End If
-            End If
-        End If
-    Next i
-
-    ' 2) LEGACY avans-split naslednici (bez markera). Novi splitovi marker
-    ' NASLEDJUJU (modBankaMapiranje.BuildAvansSplitNapomena) pa se hvataju gore;
-    ' ovo je samo za redove nastale pre toga. Namerno usko: partner mora biti
-    ' poznat, jer bi prazan PartnerID pokupio svaki markerless red istog broja.
-    ' Kad je broj dvosmislen (isti broj na vise racuna), preflight ovu putanju
-    ' unapred blokira - ovde se ne pogadja.
-    If partneri.count = 0 Then Exit Function
-
-    For i = 1 To UBound(data, 1)
-        If Not IsStorniranoValue(data(i, cSt)) Then
-            If Trim$(CStr(data(i, cBroj))) = Trim$(brojIzvoda) Then
-                If Len(BimIdFromNapomena(CStr(data(i, cNap)))) = 0 Then
-                    Dim pid As String: pid = Trim$(CStr(data(i, cPid)))
-                    If Len(pid) > 0 Then
-                        If partneri.Exists(pid) Then
-                            nid = Trim$(CStr(data(i, cId)))
-                            If Not seen.Exists(nid) Then
-                                result.Add nid
-                                seen(nid) = True
-                            End If
-                        End If
                     End If
                 End If
             End If
