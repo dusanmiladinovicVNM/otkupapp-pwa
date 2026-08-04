@@ -479,14 +479,54 @@ Public Const COL_NOV_OTKUP_ID As String = "OtkupID"
 
 
 ' --- Novac Tipovi ---
-Public Const NOV_BANKA_UPLATA As String = "BankaUplata"
-Public Const NOV_BANKA_ISPLATA As String = "BankaIsplata"
-Public Const NOV_KUPCI_UPLATA As String = "KupciUplata"
-Public Const NOV_KUPCI_AVANS As String = "KupciAvans"
+' Tip nosi KANAL placanja. Dve grupe, jer se poslovno razlicito ponasaju:
+'
+'   KES (blagajna)   - rucni gotovinski unos. Jedan red = jedan gotovinski
+'                      dogadjaj -> stornira se POJEDINACNO.
+'   VIRMAN / BANKA   - bezgotovinski. Kad je nastao mapiranjem izvoda, red je deo
+'                      izvoda sa svojim 4-nivo integritetom -> stornira se SAMO
+'                      ceo izvod, nikad red po red. Poreklo se prepoznaje po
+'                      NOV_NAPOMENA_BIM_PREFIX u Napomeni.
+'
+' Pravilo: nijedan upisivac iz izvoda ne sme da koristi KES tip. (Bio je bug:
+' MapBankaImportAsOM je upisivao KesFirmaOtkupac, pa je bankovni novac ulazio u
+' gotovinski OM avans saldo, izvestaje i PWA export.) Par Firma<->Otkupac zato
+' ima OBA kanala. Citaoci koji ne zavise od kanala koriste modNovac klasifikatore
+' (IsKesNovacTip / IsFirmaOtkupacAvansTip), ne nabrajanje konstanti.
+
+' KES - rucni unos na blagajni
 Public Const NOV_KES_FIRMA_OTKUPAC As String = "KesFirmaOtkupac"
 Public Const NOV_KES_OTKUPAC_KOOP As String = "KesOtkupacKoop"
+
+' VIRMAN / BANKA - izvod ili rucni virman
+Public Const NOV_VIRMAN_FIRMA_OTKUPAC As String = "VirmanFirmaOtkupac"
 Public Const NOV_VIRMAN_FIRMA_KOOP As String = "VirmanFirmaKoop"
 Public Const NOV_VIRMAN_AVANS_KOOP As String = "VirmanAvansKoop"
+
+' Kupci strana - kanal jos NIJE razdvojen: isti tip nastaje i rucnim unosom
+' (frmDokumenta) i mapiranjem izvoda. Do razdvajanja (zaseban paket) poreklo se
+' cita iskljucivo iz Napomene (NOV_NAPOMENA_BIM_PREFIX).
+Public Const NOV_KUPCI_UPLATA As String = "KupciUplata"
+Public Const NOV_KUPCI_AVANS As String = "KupciAvans"
+
+' Legacy - bez upisivaca; zadrzano zbog starih redova
+Public Const NOV_BANKA_UPLATA As String = "BankaUplata"
+Public Const NOV_BANKA_ISPLATA As String = "BankaIsplata"
+
+' Marker porekla u tblNovac.Napomena: red je nastao mapiranjem bankovnog izvoda
+' (modBankaMapiranje.BuildBIMNapomena upisuje "BIM:<BankaImportID>; ..."). Jedini
+' trag veze novac -> izvod (tblNovac nema BankaImportID kolonu). Cita ga storno
+' sloj: izvod se ne stornira parcijalno.
+Public Const NOV_NAPOMENA_BIM_PREFIX As String = "BIM:"
+
+' Ishodi storna CELOG izvoda (izvod se ne stornira parcijalno). Operater bira:
+'   REMAP    - mapiranje je bilo pogresno, PDF je ispravan -> staging stavke se
+'              vracaju u "za obradu" (Obradjeno -> prazno), izvod ostaje uvezen.
+'   REIMPORT - PDF je bio los/korumpiran -> staging stavke se gase
+'              (Stornirano = "Da") pa se izvod uvozi PONOVO iz ispravnog PDF-a
+'              (dedupe i lista "za obradu" postuju Stornirano).
+Public Const IZVOD_STORNO_REMAP As String = "REMAP"
+Public Const IZVOD_STORNO_REIMPORT As String = "REIMPORT"
 
 ' --- Banka Import ---
 Public Const PREFIX_BANKA_IMPORT As String = "BIM-"

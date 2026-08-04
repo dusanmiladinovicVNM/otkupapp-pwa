@@ -574,7 +574,10 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
     colBrojDok = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
     colDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, SRC)
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
-    
+    ' Napomena roditelja -> split nasledjuje BIM marker (poreklo se ne gubi).
+    Dim colNapomena As Long
+    colNapomena = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+
     ' AUD-010 / FM-0019 #4,#6: target-owner + target-active guard.
     ' Ne primeni avans na fakturu drugog kupca (ili nepostojecu) niti na storniranu.
     Dim fakKupac As String
@@ -665,7 +668,7 @@ Public Sub ApplyAvansToFaktura(ByVal kupacID As String, ByVal fakturaID As Strin
                 NOV_KUPCI_AVANS, _
                 apply, _
                 0, _
-                "Avans raspodela")
+                BuildAvansSplitNapomena(CStr(data(i, colNapomena)), "Avans raspodela"))
 
             If Len(Trim$(splitNovacID)) = 0 Then
                 Err.Raise vbObjectError + 1026, "ApplyAvansToFaktura", _
@@ -1069,6 +1072,29 @@ NextRow:
     
     GetOpenOtkupi = result
 End Function
+' ============================================================
+' KLASIFIKACIJA TIPA (kanal placanja). Jedna definicija za sve citaoce - da se
+' konstante ne nabrajaju po modulima (modIzvestaj/modStammdatenSync/modStorno).
+' ============================================================
+
+' Gotovina (blagajna). Sve ostalo je bezgotovinsko (virman/banka).
+Public Function IsKesNovacTip(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case NOV_KES_FIRMA_OTKUPAC, NOV_KES_OTKUPAC_KOOP
+            IsKesNovacTip = True
+    End Select
+End Function
+
+' Avans Firma -> Otkupac (OM), nezavisno od kanala. Racuna OBA tipa jer redovi
+' uvezeni iz izvoda PRE razdvajanja kanala nose KES tip - bez toga bi OM avans
+' saldo, izvestaji i PWA export izgubili te iznose.
+Public Function IsFirmaOtkupacAvansTip(ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case NOV_KES_FIRMA_OTKUPAC, NOV_VIRMAN_FIRMA_OTKUPAC
+            IsFirmaOtkupacAvansTip = True
+    End Select
+End Function
+
 Public Function GetOMAvansSaldo(ByVal omID As String) As Double
     Const SRC As String = "GetOMAvansSaldo"
 
@@ -1098,13 +1124,12 @@ Public Function GetOMAvansSaldo(ByVal omID As String) As Double
         If Trim$(CStr(data(i, colOMID))) <> Trim$(omID) Then GoTo NextRow
         If Not IsNumeric(data(i, colIsplata)) Then GoTo NextRow
 
-        Select Case CStr(data(i, colTip))
-            Case NOV_KES_FIRMA_OTKUPAC
-                avansTotal = avansTotal + CDbl(data(i, colIsplata))
-
-            Case NOV_KES_OTKUPAC_KOOP
-                isplataTotal = isplataTotal + CDbl(data(i, colIsplata))
-        End Select
+        ' Avans Firma->Otkupac ulazi oba kanala (kes + virman iz izvoda).
+        If IsFirmaOtkupacAvansTip(CStr(data(i, colTip))) Then
+            avansTotal = avansTotal + CDbl(data(i, colIsplata))
+        ElseIf CStr(data(i, colTip)) = NOV_KES_OTKUPAC_KOOP Then
+            isplataTotal = isplataTotal + CDbl(data(i, colIsplata))
+        End If
 
 NextRow:
     Next i
@@ -1140,6 +1165,9 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     colPartner = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER, SRC)
     colPartnerID = RequireColumnIndex(TBL_NOVAC, COL_NOV_PARTNER_ID, SRC)
     colOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, SRC)
+    ' Napomena roditelja -> split nasledjuje BIM marker (poreklo se ne gubi).
+    Dim colNapomenaO As Long
+    colNapomenaO = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
 
     ' Otkup-Vrednost
     Dim otkData As Variant
@@ -1236,7 +1264,7 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
                 NOV_VIRMAN_AVANS_KOOP, _
                 0, _
                 applyAmt, _
-                "Avans raspodela", _
+                BuildAvansSplitNapomena(CStr(data(i, colNapomenaO)), "Avans raspodela"), _
                 otkupID)
 
             If Len(Trim$(splitNovacID)) = 0 Then

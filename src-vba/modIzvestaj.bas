@@ -131,12 +131,12 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                     If CDate(novacData(n, colNovDatum)) >= datumOd And _
                        CDate(novacData(n, colNovDatum)) <= datumDo Then
                         If IsNumeric(novacData(n, colNovIsplata)) Then
-                            Select Case CStr(novacData(n, colNovTip))
-                                Case NOV_KES_FIRMA_OTKUPAC
-                                    omAvans = omAvans + CDbl(novacData(n, colNovIsplata))
-                                Case NOV_KES_OTKUPAC_KOOP
-                                    omAvans = omAvans - CDbl(novacData(n, colNovIsplata))
-                            End Select
+                            ' Avans Firma->Otkupac: oba kanala (kes + virman iz izvoda).
+                            If IsFirmaOtkupacAvansTip(CStr(novacData(n, colNovTip))) Then
+                                omAvans = omAvans + CDbl(novacData(n, colNovIsplata))
+                            ElseIf CStr(novacData(n, colNovTip)) = NOV_KES_OTKUPAC_KOOP Then
+                                omAvans = omAvans - CDbl(novacData(n, colNovIsplata))
+                            End If
                         End If
                     End If
                 End If
@@ -1446,8 +1446,8 @@ Public Function ReportIsplata(ByVal entitetTip As String, _
         Dim koopID As String
         koopID = CStr(data(i, colKoopID))
         
-        ' OM Avans (Firma ? Otkupac) -- kein Kooperant
-        If tipNovca = NOV_KES_FIRMA_OTKUPAC Then
+        ' OM Avans (Firma ? Otkupac) -- kein Kooperant; oba kanala (kes + virman).
+        If IsFirmaOtkupacAvansTip(tipNovca) Then
             totalOMAvans = totalOMAvans + iznos
             GoTo NextRow
         End If

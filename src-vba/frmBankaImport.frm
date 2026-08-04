@@ -566,7 +566,7 @@ Private Function BuildIncomingPreview(ByVal bankaImportID As String, ByVal partn
         s = s & "Auto match: OM" & vbCrLf
         s = s & "OMID: " & CStr(mapped(0)) & vbCrLf
         s = s & "OM: " & CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(mapped(0)), "Naziv")) & vbCrLf
-        s = s & "Tip knjizenja: " & NOV_KES_FIRMA_OTKUPAC
+        s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_OTKUPAC
         BuildIncomingPreview = s
         Exit Function
     End If
@@ -686,7 +686,7 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
                 s = s & "Auto match: OM" & vbCrLf
                 s = s & "OMID: " & CStr(mapped(0)) & vbCrLf
                 s = s & "OM: " & CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(mapped(0)), "Naziv")) & vbCrLf
-                s = s & "Tip knjizenja: " & NOV_KES_FIRMA_OTKUPAC
+                s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_OTKUPAC
                 BuildOutgoingPreview = s
                 Exit Function
         End Select
@@ -730,7 +730,7 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
         s = s & "Auto match: OM" & vbCrLf
         s = s & "OMID: " & CStr(mapped(0)) & vbCrLf
         s = s & "OM: " & CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(mapped(0)), "Naziv")) & vbCrLf
-        s = s & "Tip knjizenja: " & NOV_KES_FIRMA_OTKUPAC
+        s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_OTKUPAC
         BuildOutgoingPreview = s
         Exit Function
     End If

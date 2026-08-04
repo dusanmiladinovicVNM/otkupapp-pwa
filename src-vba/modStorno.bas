@@ -753,9 +753,21 @@ Public Function StornoNovac_TX(ByVal novacID As String) As Boolean
 
     On Error GoTo EH
 
+    ' Poslovno pravilo (i kad pozivalac nije forma): pojedinacni storno je samo za
+    ' rucno unet novac. Novac iz bankovnog izvoda se stornira SAMO u celosti (ceo
+    ' izvod), nikad red po red -> odbij pre BeginTx (RollbackTx je no-op van TX).
+    ' Provera je po REDU (marker), ne po broju - rucni red koji deli broj sa izvodom
+    ' mora ostati stornirljiv.
+    If IsNovacFromBankaImport(novacID) Then
+        Err.Raise ERR_STORNO_BASE + 41, SRC, _
+                  "Novac iz bankovnog izvoda se ne stornira pojedinacno (samo ceo izvod). " & _
+                  "NovacID=" & novacID
+    End If
+
     tx.BeginTx
     tx.AddTableSnapshot TBL_NOVAC
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_OTKUP        ' StornoNovac osvezava Isplaceno/DatumIsplate vezanog otkupa
 
     If Not StornoNovac(novacID) Then
         Err.Raise ERR_STORNO_BASE + 6, SRC, _
@@ -784,6 +796,7 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
     rowNov = RequireStornoAllowed(TBL_NOVAC, novacID, COL_NOV_ID, SRC)
 
     RequireColumnIndex TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC
+    RequireColumnIndex TBL_NOVAC, COL_NOV_OTKUP_ID, SRC
 
     Dim novData As Variant
     novData = GetTableData(TBL_NOVAC)
@@ -797,10 +810,22 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
     fakturaID = Trim$(CStr(novData(rowNov, _
                     RequireColumnIndex(TBL_NOVAC, COL_NOV_FAKTURA_ID, SRC))))
 
+    ' Uplata/isplata moze biti vezana i za otkup (blok) - ne samo za fakturu.
+    ' Bez ovoga bi storno isplate ostavio otkup "Isplaceno" + DatumIsplate ustajao.
+    Dim otkupID As String
+    otkupID = Trim$(CStr(novData(rowNov, _
+                    RequireColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID, SRC))))
+
     MarkRowStornirano TBL_NOVAC, rowNov, SRC
 
     If Len(fakturaID) > 0 Then
         UpdateFakturaStatus fakturaID
+    End If
+
+    ' Obrazac modNovac.ResetNovacOtkupLink_TX: posle promene novca -> rekalk statusa
+    ' otkupa (GetIsplataForOtkup vec iskljucuje stornirane redove).
+    If Len(otkupID) > 0 Then
+        UpdateOtkupStatus otkupID
     End If
 
     StornoNovac = True
@@ -808,6 +833,559 @@ Public Function StornoNovac(ByVal novacID As String) As Boolean
 
 EH:
     LogAndReraise SRC
+End Function
+
+' Marker porekla cita modBankaMapiranje.BimIdFromNapomena (zivi uz pisca).
+' True ako je KONKRETAN novac red nastao iz izvoda (nosi BIM marker u Napomeni).
+'
+' Provera je po REDU, ne po BrojDokumenta: svaki izvodni red nosi marker (direktan
+' upis od BuildBIMNapomena, split ga nasledjuje od roditelja), pa je red-provera
+' potpuna. Provera po broju bi uz to zarobila i RUCNI red koji slucajno deli broj
+' sa izvodom - ostao bi netaknut pri stornu izvoda, ali i nestornirljiv pojedinacno
+' (vidi T36). Poslovno pravilo ostaje: izvod se ne stornira parcijalno.
+Public Function IsNovacFromBankaImport(ByVal novacID As String) As Boolean
+    Const SRC As String = "IsNovacFromBankaImport"
+    On Error GoTo EH
+
+    RequireNonBlank novacID, "NovacID", SRC
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_NOVAC, COL_NOV_ID, novacID)
+    If rows Is Nothing Then
+        Err.Raise ERR_STORNO_BASE + 51, SRC, "FindRows je vratio Nothing. NovacID=" & novacID
+    End If
+    If rows.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 52, SRC, "Novac red nije pronadjen. NovacID=" & novacID
+    End If
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 53, SRC, _
+                  "NovacID nije jedinstven: " & novacID & " (Count=" & rows.count & ")"
+    End If
+
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then
+        Err.Raise ERR_STORNO_BASE + 54, SRC, "Tabela novac je prazna posle pronalaska reda."
+    End If
+
+    Dim colNap As Long: colNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+    IsNovacFromBankaImport = (Len(BimIdFromNapomena(CStr(data(CLng(rows(1)), colNap)))) > 0)
+    Exit Function
+EH:
+    ' Guard koji odlucuje da li je destruktivna operacija dozvoljena NE sme da
+    ' padne "otvoreno": greska u citanju bi inace znacila "nije iz izvoda" i
+    ' propustila pojedinacni storno izvodnog reda. Fail-closed.
+    LogAndReraise SRC
+End Function
+
+' Razresi ono sto je operater ukucao (BrojDokumenta ili NovacID) u NovacID za
+' POJEDINACNI storno i primeni poslovna pravila. Vraca "" i popunjen reason kad
+' storno nije dozvoljen (UI samo prikaze reason - bez MsgBox-a u business sloju).
+' Kriterijum je POREKLO, ne Tip: rucno unet virman nije deo nijednog izvoda pa
+' mora ostati ispravljiv; iz izvoda ne sme nista pojedinacno (vidi modConfig,
+' sekcija Novac Tipovi - kanal placanja).
+' Pravila:
+'   1) izvod (BIM) -> odbij: izvod se stornira samo u celosti, ne parcijalno
+'   2) broj sa vise aktivnih redova (avans-split) -> trazi NovacID (bez tihog
+'      storna samo poslednjeg reda; ukucan NovacID je jednoznacan pa prolazi)
+Public Function ResolveNovacForStorno(ByVal ulaz As String, _
+                                      ByRef reason As String) As String
+    Const SRC As String = "ResolveNovacForStorno"
+    On Error GoTo EH
+    reason = ""
+    ulaz = Trim$(ulaz)
+
+    Dim novID As String, poBroju As Boolean
+    novID = LookupActiveID(TBL_NOVAC, COL_NOV_BROJ_DOK, ulaz, COL_NOV_ID)
+    poBroju = (Len(novID) > 0)
+    If Not poBroju Then novID = LookupActiveID(TBL_NOVAC, COL_NOV_ID, ulaz, COL_NOV_ID)
+
+    If Len(novID) = 0 Then
+        reason = "Novac stavka '" & ulaz & "' nije pronadjena (ili je ve" & ChrW(263) & " stornirana)."
+        Exit Function
+    End If
+
+    Dim brNov As String
+    brNov = NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_NOV_BROJ_DOK))
+
+    If IsNovacFromBankaImport(novID) Then
+        reason = "Novac '" & ulaz & "' potice iz bankovnog izvoda " & brNov & "." & vbCrLf & vbCrLf & _
+                 "Izvod se ne stornira parcijalno - samo u celosti (Banka / uvoz izvoda)." & vbCrLf & _
+                 "Ovde se stornira samo rucno unet novac (ke" & ChrW(353) & " / virman)."
+        ' Redovi uvezeni PRE razdvajanja kanala nose KES tip iako su bankovni ->
+        ' operateru objasni zasto "ke" & ChrW(353) & " red" ipak nije za pojedinacni storno.
+        If IsKesNovacTip(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_NOV_TIP))) Then
+            reason = reason & vbCrLf & vbCrLf & _
+                     "(Red ima KES tip, ali je uvezen iz izvoda - stari zapis, pre razdvajanja kanala.)"
+        End If
+        Exit Function
+    End If
+
+    If poBroju Then
+        Dim n As Long: n = CountActiveNovacByBroj(brNov)
+        If n > 1 Then
+            reason = "Broj '" & brNov & "' ima " & n & " aktivnih novac stavki " & _
+                     "(avans raspodela deli isti broj)." & vbCrLf & vbCrLf & _
+                     "Storno po broju bi stornirao samo jednu. Unesite NovacID (NOV-...) tacne stavke."
+            Exit Function
+        End If
+    End If
+
+    ResolveNovacForStorno = novID
+    Exit Function
+EH:
+    LogErr "modStorno.ResolveNovacForStorno"
+    reason = "Greska pri razresavanju novac stavke: " & Err.description
+End Function
+
+' Broj AKTIVNIH tblNovac redova za dati BrojDokumenta. BrojDokumenta NIJE
+' jedinstven kljuc: uvoz izvoda upisuje sve stavke jednog izvoda pod istim brojem
+' (stari redovi mogu nositi i literal "IZVOD" - taj fallback je uklonjen, vidi
+' modBankaMapiranje.RequireIzvodBroj), a ApplyAvansToFaktura/ApplyAvansToOtkup
+' split nasledjuje broj originalne stavke. Forma to koristi da NE stornira tiho
+' samo jedan od vise redova sa istim brojem (jedini jedinstven kljuc je NovacID).
+Public Function CountActiveNovacByBroj(ByVal brDok As String) As Long
+    Const SRC As String = "CountActiveNovacByBroj"
+    On Error GoTo EH
+    If Trim$(brDok) = "" Then Exit Function
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    Dim colBroj As Long, colStorno As Long
+    colBroj = RequireColumnIndex(TBL_NOVAC, COL_NOV_BROJ_DOK, SRC)
+    colStorno = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, SRC)
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colBroj))) = Trim$(brDok) Then
+            If Not IsStorniranoValue(data(i, colStorno)) Then n = n + 1
+        End If
+    Next i
+    CountActiveNovacByBroj = n
+    Exit Function
+EH:
+    ' Fail-closed (isti razlog kao IsNovacFromBankaImport): tiha nula bi
+    ' preskocila proveru vise aktivnih redova i pustila tih parcijalan storno.
+    LogAndReraise SRC
+End Function
+
+' ============================================================
+' IZVOD (bankovni) - storno u CELOSTI
+'
+' Izvod se nikad ne stornira parcijalno (4-nivo integritet uvoza). Storno obara
+' SVE novac redove tog izvoda u jednoj transakciji, pa staging redove obradjuje
+' po ishodu koji bira operater:
+'   IZVOD_STORNO_REMAP    - PDF ispravan, mapiranje pogresno -> Obradjeno = ""
+'                           (stavke nazad u "za obradu"; izvod ostaje uvezen)
+'   IZVOD_STORNO_REIMPORT - PDF los/korumpiran -> Stornirano = "Da"
+'                           (izvod se uvozi ponovo; IsDuplicateBankaImport i
+'                            GetBankaImportOpen rade nad ExcludeStornirano)
+'
+' Novac i staging MORAJU pasti u istoj TX: ako se staging ugasi a novac ostane
+' aktivan, ponovni uvoz + mapiranje daju dvostruko knjizenje.
+' ============================================================
+
+' Razresi ono sto je operater ukucao ("broj" ili "broj/racun") u jedan izvod.
+' Vise banaka moze imati isti broj izvoda -> tada trazi "broj/racun" umesto da
+' tiho uzme jedan. False + reason = ne diraj nista.
+Public Function ResolveIzvodZaStorno(ByVal ulaz As String, ByRef brojIzvoda As String, _
+                                     ByRef brojRacuna As String, ByRef reason As String) As Boolean
+    Const SRC As String = "ResolveIzvodZaStorno"
+    On Error GoTo EH
+    reason = "": brojIzvoda = "": brojRacuna = ""
+
+    Dim s As String: s = Trim$(ulaz)
+    If Len(s) = 0 Then
+        reason = "Unesite broj izvoda (ili 'broj/racun' ako isti broj postoji na vi" & ChrW(353) & "e racuna)."
+        Exit Function
+    End If
+
+    ' Broj izvoda SME da sadrzi kosu crtu (npr. "42/2026") -> prvo probaj ceo unos
+    ' kao broj; tek ako takvog izvoda nema, tumaci poslednju crtu kao broj/racun.
+    Dim racuni As Object
+    brojIzvoda = s: brojRacuna = ""
+    Set racuni = IzvodRacuniZaBroj(brojIzvoda, "", SRC)
+
+    If racuni.count = 0 Then
+        Dim p As Long: p = InStrRev(s, "/")
+        If p > 1 Then
+            brojIzvoda = Trim$(Left$(s, p - 1))
+            brojRacuna = Trim$(Mid$(s, p + 1))
+            Set racuni = IzvodRacuniZaBroj(brojIzvoda, brojRacuna, SRC)
+        End If
+    End If
+
+    If racuni.count = 0 Then
+        reason = "Aktivan izvod nije prona" & ChrW(273) & "en: " & ulaz
+        Exit Function
+    End If
+
+    If racuni.count > 1 Then
+        Dim lst As String, k As Variant
+        For Each k In racuni.Keys
+            lst = lst & vbCrLf & "  - " & brojIzvoda & "/" & CStr(k)
+        Next k
+        reason = "Broj izvoda '" & brojIzvoda & "' postoji na vi" & ChrW(353) & "e racuna:" & lst & vbCrLf & vbCrLf & _
+                 "Unesite 'broj/racun' da se zna koji se izvod stornira."
+        Exit Function
+    End If
+
+    If Len(brojRacuna) = 0 Then
+        Dim kk As Variant: kk = racuni.Keys
+        brojRacuna = CStr(kk(0))
+    End If
+    ResolveIzvodZaStorno = True
+    Exit Function
+EH:
+    LogErr "modStorno.ResolveIzvodZaStorno"
+    reason = "Greska pri razresavanju izvoda: " & Err.description
+End Function
+
+' Numericka vrednost celije ili 0 (iznosi u staging/novac tabelama mogu biti prazni).
+Private Function NumOrZero(ByVal v As Variant) As Double
+    If IsNumeric(v) Then NumOrZero = CDbl(v)
+End Function
+
+' Tekuca suma iz akumulator-dictionary-ja (0 ako kljuc jos ne postoji).
+Private Function NzNum(ByVal d As Object, ByVal key As String) As Double
+    If d.Exists(key) Then NzNum = CDbl(d(key))
+End Function
+
+' Distinktni racuni koji imaju AKTIVAN staging red sa datim brojem izvoda
+' (opciono suzeno na jedan racun). Prazan skup = takav izvod ne postoji.
+Private Function IzvodRacuniZaBroj(ByVal brojIzvoda As String, ByVal brojRacuna As String, _
+                                   ByVal sourceName As String) As Object
+    Dim racuni As Object: Set racuni = CreateObject("Scripting.Dictionary")
+    Set IzvodRacuniZaBroj = racuni
+    If Len(Trim$(brojIzvoda)) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cBroj As Long, cRac As Long, cSt As Long
+    cBroj = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, sourceName)
+    cRac = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, sourceName)
+    cSt = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, sourceName)
+
+    Dim i As Long, rac As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBroj))) = Trim$(brojIzvoda) Then
+            If Not IsStorniranoValue(data(i, cSt)) Then
+                rac = Trim$(CStr(data(i, cRac)))
+                If Len(Trim$(brojRacuna)) = 0 Or rac = Trim$(brojRacuna) Then racuni(rac) = True
+            End If
+        End If
+    Next i
+End Function
+
+' PREFLIGHT: sve sto mora da vazi PRE nego sto se dirne ijedan red. Vraca ""
+' kad je storno bezbedan, inace razlog (UI ga prikaze; TX ga podize kao gresku).
+' Obrazac je isti kao ResolveNovacForStorno - poslovna pravila u modulu, poruka
+' u UI-ju. Pravila:
+'   1) racun je obavezan (isti broj postoji na vise banaka)
+'   2) staging red bez BankaImportID -> odbij (bez PK nema pouzdanog lineage-a)
+'   3) REKONSILIJACIJA po stavci: za svaku OBRADJENU stavku zbir AKTIVNOG novca sa
+'      njenim markerom mora biti jednak iznosu stavke (uplata i isplata zasebno).
+'      Split umanji original i nosi ostatak pod istim markerom, pa zbir mora da se
+'      poklopi. Nesklad = nesto je vec dirnuto -> odbij ceo posao (vracanje u
+'      "za obradu" uz aktivan novac bi omogucilo dvostruko knjizenje).
+Public Function GetIzvodStornoBlokade(ByVal brojIzvoda As String, _
+                                      ByVal brojRacuna As String) As String
+    Const SRC As String = "GetIzvodStornoBlokade"
+    On Error GoTo EH
+
+    If Len(Trim$(brojRacuna)) = 0 Then
+        GetIzvodStornoBlokade = "Nije odre" & ChrW(273) & "en racun izvoda - identitet je dvosmislen " & _
+            "(isti broj moze postojati na vise racuna/banaka)."
+        Exit Function
+    End If
+
+    Dim bim As Variant: bim = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(bim) Then
+        GetIzvodStornoBlokade = "Tabela uvoza izvoda je prazna."
+        Exit Function
+    End If
+
+    Dim cId As Long, cBroj As Long, cRac As Long, cSt As Long, cObr As Long
+    cId = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    cRac = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
+    cSt = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, SRC)
+    cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+
+    Dim cUpl As Long, cIsp As Long
+    cUpl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    cIsp = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+
+    ' Ocekivani iznosi po OBRADJENOJ stavci (uplata i isplata zasebno).
+    Dim ocekUpl As Object: Set ocekUpl = CreateObject("Scripting.Dictionary")
+    Dim ocekIsp As Object: Set ocekIsp = CreateObject("Scripting.Dictionary")
+    Dim i As Long, n As Long, bid As String
+
+    For i = 1 To UBound(bim, 1)
+        If Trim$(CStr(bim(i, cBroj))) = Trim$(brojIzvoda) And Not IsStorniranoValue(bim(i, cSt)) Then
+            If Trim$(CStr(bim(i, cRac))) = Trim$(brojRacuna) Then
+                bid = Trim$(CStr(bim(i, cId)))
+                If Len(bid) = 0 Then
+                    GetIzvodStornoBlokade = "Staging red bez BankaImportID (red " & i & ") - " & _
+                        "bez njega storno ne moze pouzdano da odredi svoj novac. Popravi red pa ponovi."
+                    Exit Function
+                End If
+                n = n + 1
+                If UCase$(Trim$(CStr(bim(i, cObr)))) = "DA" Then
+                    ocekUpl(bid) = NzNum(ocekUpl, bid) + NumOrZero(bim(i, cUpl))
+                    ocekIsp(bid) = NzNum(ocekIsp, bid) + NumOrZero(bim(i, cIsp))
+                End If
+            End If
+        End If
+    Next i
+
+    If n = 0 Then
+        GetIzvodStornoBlokade = "Aktivan izvod nije prona" & ChrW(273) & "en: " & brojIzvoda & "/" & brojRacuna
+        Exit Function
+    End If
+    If ocekUpl.count = 0 Then Exit Function     ' nista nije mapirano -> nema sta da se sravnjuje
+
+    ' Stvarni zbir AKTIVNOG novca po markeru. Split umanji original i nosi ostatak
+    ' pod ISTIM markerom, pa zbir mora da se poklopi sa iznosom stavke.
+    Dim stvarUpl As Object: Set stvarUpl = CreateObject("Scripting.Dictionary")
+    Dim stvarIsp As Object: Set stvarIsp = CreateObject("Scripting.Dictionary")
+    Dim nov As Variant: nov = GetTableData(TBL_NOVAC)
+    If Not IsEmpty(nov) Then
+        Dim nNap As Long, nSt As Long, nUpl As Long, nIsp As Long
+        nNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, SRC)
+        nSt = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, SRC)
+        nUpl = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+        nIsp = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, SRC)
+        Dim rb As String
+        For i = 1 To UBound(nov, 1)
+            If Not IsStorniranoValue(nov(i, nSt)) Then
+                rb = BimIdFromNapomena(CStr(nov(i, nNap)))
+                If Len(rb) > 0 Then
+                    If ocekUpl.Exists(rb) Then
+                        stvarUpl(rb) = NzNum(stvarUpl, rb) + NumOrZero(nov(i, nUpl))
+                        stvarIsp(rb) = NzNum(stvarIsp, rb) + NumOrZero(nov(i, nIsp))
+                    End If
+                End If
+            End If
+        Next i
+    End If
+
+    Dim k As Variant
+    For Each k In ocekUpl.Keys
+        If Not stvarUpl.Exists(CStr(k)) Then
+            GetIzvodStornoBlokade = "Stavka " & CStr(k) & " je ozna" & ChrW(269) & "ena kao obra" & ChrW(273) & "ena, " & _
+                "ali nema nijedan aktivan novac red. Vracanje u 'za obradu' bi omogucilo " & _
+                "dvostruko knjizenje. Proveri stavku rucno pa ponovi."
+            Exit Function
+        End If
+        ' Iznosi su na dve decimale -> poredi zaokruzene, sa epsilon samo za
+        ' Double sabiranje. Tolerancija 0.01 bi propustila razliku od tacno 1 pare.
+        If Abs(Round(CDbl(stvarUpl(CStr(k))), 2) - Round(CDbl(ocekUpl(CStr(k))), 2)) > 0.001 Or _
+           Abs(Round(CDbl(stvarIsp(CStr(k))), 2) - Round(CDbl(ocekIsp(CStr(k))), 2)) > 0.001 Then
+            GetIzvodStornoBlokade = "Iznosi se ne sla" & ChrW(382) & "u za stavku " & CStr(k) & ": izvod " & _
+                Format$(CDbl(ocekUpl(CStr(k))), "#,##0.00") & " / " & Format$(CDbl(ocekIsp(CStr(k))), "#,##0.00") & _
+                ", knjizeno " & Format$(CDbl(stvarUpl(CStr(k))), "#,##0.00") & " / " & _
+                Format$(CDbl(stvarIsp(CStr(k))), "#,##0.00") & " (uplata/isplata). " & _
+                "Storno je odbijen dok se razlika ne razjasni."
+            Exit Function
+        End If
+    Next k
+    Exit Function
+EH:
+    ' Fail-closed: neuspela provera znaci "ne znam", ne "sme".
+    LogErr "modStorno.GetIzvodStornoBlokade"
+    GetIzvodStornoBlokade = "Provera izvoda nije uspela: " & Err.description
+End Function
+
+' Pregled pre potvrde: sta ce tacno pasti (stavke uvoza + novac redovi + iznosi).
+Public Function GetIzvodPregled(ByVal brojIzvoda As String, ByVal brojRacuna As String) As String
+    Const SRC As String = "GetIzvodPregled"
+    On Error GoTo EH
+
+    Dim stRows As Collection: Set stRows = New Collection
+    Dim bimIDs As Object: Set bimIDs = CreateObject("Scripting.Dictionary")
+    CollectIzvodStaging brojIzvoda, brojRacuna, stRows, bimIDs, SRC
+
+    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, SRC)
+
+    Dim upl As Double, isp As Double, k As Long
+    Dim v As Variant
+    For k = 1 To novIDs.count
+        v = LookupValue(TBL_NOVAC, COL_NOV_ID, CStr(novIDs(k)), COL_NOV_UPLATA)
+        If IsNumeric(v) Then upl = upl + CDbl(v)
+        v = LookupValue(TBL_NOVAC, COL_NOV_ID, CStr(novIDs(k)), COL_NOV_ISPLATA)
+        If IsNumeric(v) Then isp = isp + CDbl(v)
+    Next k
+
+    GetIzvodPregled = "IZVOD " & brojIzvoda & IIf(Len(brojRacuna) > 0, " / " & brojRacuna, "") & vbCrLf & _
+        "Stavke uvoza: " & stRows.count & vbCrLf & _
+        "Novac redovi (sa avans raspodelom): " & novIDs.count & vbCrLf & _
+        "Uplate: " & Format$(upl, "#,##0.00") & "   Isplate: " & Format$(isp, "#,##0.00")
+    Exit Function
+EH:
+    LogErr "modStorno.GetIzvodPregled"
+    GetIzvodPregled = "IZVOD " & brojIzvoda & " (pregled nije dostupan - vidi Monitor)"
+End Function
+
+Public Function StornoIzvod_TX(ByVal brojIzvoda As String, ByVal brojRacuna As String, _
+                               ByVal ishod As String, Optional ByRef info As String) As Boolean
+    Const SRC As String = "StornoIzvod_TX"
+
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    RequireNonBlank brojIzvoda, "BrojIzvoda", SRC
+    ' Racun je deo identiteta izvoda, ne UI detalj: invariant mora da vazi i kad
+    ' pozivalac nije forma (test, servisni makro, migracija).
+    RequireNonBlank brojRacuna, "BrojRacuna", SRC
+    If ishod <> IZVOD_STORNO_REMAP And ishod <> IZVOD_STORNO_REIMPORT Then
+        Err.Raise ERR_STORNO_BASE + 46, SRC, "Nepoznat ishod storna izvoda: " & ishod
+    End If
+
+    ' Preflight PRE bilo kakve mutacije: prazan PK, nerazresen lineage, dvosmislena
+    ' pripadnost -> odbij ceo posao (bez delimicnog storna).
+    Dim blokada As String
+    blokada = GetIzvodStornoBlokade(brojIzvoda, brojRacuna)
+    If Len(blokada) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 50, SRC, blokada
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+
+    Dim stRows As Collection: Set stRows = New Collection
+    Dim bimIDs As Object: Set bimIDs = CreateObject("Scripting.Dictionary")
+    CollectIzvodStaging brojIzvoda, brojRacuna, stRows, bimIDs, SRC
+
+    If stRows.count = 0 Then
+        Err.Raise ERR_STORNO_BASE + 47, SRC, _
+                  "Aktivan izvod nije pronadjen. Broj=" & brojIzvoda & " Racun=" & brojRacuna
+    End If
+
+    ' Novac: direktni redovi izvoda + avans-split naslednici (nose novac istog
+    ' izvoda, a izgubili su BIM marker). Reuse StornoNovac po redu - markira red i
+    ' osvezava status vezane fakture/otkupa.
+    Dim novIDs As Collection: Set novIDs = CollectIzvodNovacIDs(bimIDs, SRC)
+    Dim k As Long
+    For k = 1 To novIDs.count
+        If Not StornoNovac(CStr(novIDs(k))) Then
+            Err.Raise ERR_STORNO_BASE + 48, SRC, _
+                      "Storno novac reda nije uspeo. NovacID=" & CStr(novIDs(k))
+        End If
+    Next k
+
+    ' Staging po ishodu. Indeksi redova su i dalje vazeci (novac storno ne dira
+    ' tblBankaImport).
+    Dim i As Long
+    For i = 1 To stRows.count
+        If ishod = IZVOD_STORNO_REMAP Then
+            RequireUpdateCell TBL_BANKA_IMPORT, CLng(stRows(i)), COL_BIM_OBRADJENO, "", SRC
+        Else
+            RequireUpdateCell TBL_BANKA_IMPORT, CLng(stRows(i)), COL_BIM_STORNIRANO, STORNO_DA, SRC
+        End If
+    Next i
+
+    tx.CommitTx
+
+    If ishod = IZVOD_STORNO_REMAP Then
+        info = "Izvod " & brojIzvoda & " storniran." & vbCrLf & _
+               "Novac redova oboreno: " & novIDs.count & vbCrLf & _
+               "Stavki vraceno u 'za obradu': " & stRows.count & vbCrLf & _
+               "Izvod ostaje uvezen - mapiraj stavke ponovo (Banka / uvoz izvoda)."
+    Else
+        info = "Izvod " & brojIzvoda & " storniran i uga" & ChrW(353) & "en." & vbCrLf & _
+               "Novac redova oboreno: " & novIDs.count & vbCrLf & _
+               "Stavki uvoza ugaseno: " & stRows.count & vbCrLf & _
+               "Uvezi izvod PONOVO iz ispravnog PDF-a."
+    End If
+
+    StornoIzvod_TX = True
+    MonitorStornoSuccess SRC, "Izvod", brojIzvoda & "/" & brojRacuna & " [" & ishod & "]"
+
+    Set tx = Nothing
+    Exit Function
+
+EH:
+    HandleStornoTxError SRC, "Izvod", brojIzvoda, tx
+    StornoIzvod_TX = False
+End Function
+
+' AKTIVNI staging redovi jednog izvoda: indeksi redova + skup BankaImportID-jeva.
+Private Sub CollectIzvodStaging(ByVal brojIzvoda As String, ByVal brojRacuna As String, _
+                                ByRef rowsOut As Collection, ByRef idsOut As Object, _
+                                ByVal sourceName As String)
+    Dim data As Variant: data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Sub
+
+    Dim cId As Long, cBroj As Long, cRac As Long, cSt As Long
+    cId = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, sourceName)
+    cBroj = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, sourceName)
+    cRac = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, sourceName)
+    cSt = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_STORNIRANO, sourceName)
+
+    Dim i As Long, bimID As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBroj))) = Trim$(brojIzvoda) Then
+            If Trim$(CStr(data(i, cRac))) = Trim$(brojRacuna) Then
+                If Not IsStorniranoValue(data(i, cSt)) Then
+                    ' PK je OBAVEZAN: prazan BankaImportID bi u skup ubacio kljuc ""
+                    ' i time (preko BimIdFromNapomena = "" za svaki rucni red)
+                    ' prosirio storno na sav markerless novac. Fail-fast.
+                    bimID = Trim$(CStr(data(i, cId)))
+                    If Len(bimID) = 0 Then
+                        Err.Raise ERR_STORNO_BASE + 49, sourceName, _
+                                  "BankaImport red bez BankaImportID (red " & i & ") -> " & _
+                                  "storno izvoda je odbijen. Popravi staging red pa ponovi."
+                    End If
+                    rowsOut.Add i
+                    idsOut(bimID) = True
+                End If
+            End If
+        End If
+    Next i
+End Sub
+
+' AKTIVNI novac redovi jednog izvoda - ISKLJUCIVO po BIM markeru.
+'
+' Svaki red koji pripada izvodu nosi marker: direktni upis ga dobija od
+' BuildBIMNapomena, a avans-split ga NASLEDJUJE (BuildAvansSplitNapomena), pa je
+' pripadnost eksplicitna i ne pogadja se. Marker mora biti NEPRAZAN pre poredjenja
+' sa skupom - prazan marker ima svaki rucno unet red, pa bi ga poredjenje "usvojilo"
+' u izvod. Nema fallback-a po broju/partneru: taj put bi mogao da obori tudj rucni
+' red, a ne resava nijedan stvaran slucaj (splitovi nose marker).
+Private Function CollectIzvodNovacIDs(ByVal bimIDs As Object, _
+                                      ByVal sourceName As String) As Collection
+    Dim result As Collection: Set result = New Collection
+    Set CollectIzvodNovacIDs = result
+
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cId As Long, cNap As Long, cSt As Long
+    cId = RequireColumnIndex(TBL_NOVAC, COL_NOV_ID, sourceName)
+    cNap = RequireColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA, sourceName)
+    cSt = RequireColumnIndex(TBL_NOVAC, COL_STORNIRANO, sourceName)
+
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    Dim i As Long, nid As String, rowBimID As String
+
+    For i = 1 To UBound(data, 1)
+        If Not IsStorniranoValue(data(i, cSt)) Then
+            rowBimID = BimIdFromNapomena(CStr(data(i, cNap)))
+            If Len(rowBimID) > 0 Then
+                If bimIDs.Exists(rowBimID) Then
+                    nid = Trim$(CStr(data(i, cId)))
+                    If Not seen.Exists(nid) Then
+                        result.Add nid
+                        seen(nid) = True
+                    End If
+                End If
+            End If
+        End If
+    Next i
 End Function
 
 ' ============================================================

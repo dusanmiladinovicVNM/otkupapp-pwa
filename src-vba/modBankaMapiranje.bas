@@ -27,7 +27,8 @@ Option Explicit
 '    - PartnerID = StanicaID
 '    - EntitetTip = "OM"
 '    - OMID = StanicaID
-'    - Tip = NOV_KES_FIRMA_OTKUPAC
+'    - Tip = NOV_VIRMAN_FIRMA_OTKUPAC (izvod je bezgotovinski; KES tip se ovde
+'      NE upisuje - vidi modConfig, sekcija Novac Tipovi)
 '
 ' Obradjeno u tblBankaImport:
 '   ""      = nije obradjeno
@@ -259,7 +260,7 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
     End If
     
     MapBankaImportAsKupac = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
         CDate(bim(1, 2)), _
         kupacNaziv, _
         kupacID, _
@@ -403,7 +404,7 @@ Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
     End If
     
     MapBankaImportAsKooperant = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsKooperant"), _
         CDate(bim(1, 2)), _
         omNaziv, _
         omID, _
@@ -526,7 +527,7 @@ Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
     If omNaziv = "" Then omNaziv = omID
     
     MapBankaImportAsOM = SaveNovac( _
-        CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+        RequireIzvodBroj(bim, "MapBankaImportAsOM"), _
         CDate(bim(1, 2)), _
         omNaziv, _
         omID, _
@@ -535,7 +536,7 @@ Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
         "", _
         "", _
         vrstaVoca, _
-        NOV_KES_FIRMA_OTKUPAC, _
+        NOV_VIRMAN_FIRMA_OTKUPAC, _
         CDbl(NzBIM(bim(1, 5), 0#)), _
         CDbl(NzBIM(bim(1, 6), 0#)), _
         BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "OM") _
@@ -792,7 +793,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     
     If IsEmpty(kandidati) Then
         If SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -841,7 +842,7 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         End If
         
         novID = SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -872,7 +873,7 @@ NextCandidate:
     
     If preostaloZaRaspodelu > 0 Then
         If SaveNovac( _
-            CStr(IIf(Trim$(CStr(bim(1, 1))) = "", "IZVOD", CStr(bim(1, 1)))), _
+            RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
             omNaziv, _
             omID, _
@@ -1763,6 +1764,22 @@ End Function
 ' PRIVATE/PUBLIC - HELPERS
 ' ============================================================
 
+' Broj izvoda je OBAVEZAN identitet novca nastalog iz izvoda: po njemu se grupise
+' storno celog izvoda (izvod se ne stornira parcijalno). Banka uvek daje broj, pa
+' je prazan broj greska uvoza/parsera - ne slucaj za fallback. Raniji fallback je
+' sve stavke bez broja slivao u literal "IZVOD" i time spajao nepovezane izvode u
+' jednu storno grupu (tiha korupcija identiteta).
+Private Function RequireIzvodBroj(ByVal bim As Variant, ByVal sourceName As String) As String
+    Dim broj As String
+    broj = Trim$(CStr(NzBIM(bim(1, 1), "")))
+    If Len(broj) = 0 Then
+        Err.Raise ERR_BMAP_BASE + 45, sourceName, _
+                  "Izvod nema broj dokumenta - mapiranje je odbijeno. " & _
+                  "Proveri uvoz/parser izvoda (BankaImportID bez BrojDokumenta)."
+    End If
+    RequireIzvodBroj = broj
+End Function
+
 Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
                                   ByVal bankaRef As String, _
                                   ByVal partnerKonto As String, _
@@ -1771,7 +1788,9 @@ Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
                                   ByVal reason As String) As String
     Dim s As String
     
-    s = "BIM:" & bankaImportID
+    ' Prefiks je Public Const (modConfig): storno sloj po njemu prepoznaje da je
+    ' novac red nastao iz izvoda -> ne sme se dirati bez tog citaoca.
+    s = NOV_NAPOMENA_BIM_PREFIX & bankaImportID
     If Trim$(bankaRef) <> "" Then s = s & "; Ref:" & bankaRef
     If Trim$(partnerKonto) <> "" Then s = s & "; Konto:" & partnerKonto
     If Trim$(opis) <> "" Then s = s & "; Opis:" & Left$(opis, 80)
@@ -1779,6 +1798,33 @@ Private Function BuildBIMNapomena(ByVal bankaImportID As String, _
     If Trim$(reason) <> "" Then s = s & "; Match:" & Left$(reason, 50)
     
     BuildBIMNapomena = s
+End Function
+
+' Citac markera koji pise BuildBIMNapomena: vraca BankaImportID iz Napomene
+' ("BIM:<id>; Ref:...") ili "" ako red nije nastao iz izvoda. Zivi uz pisca da
+' format ima JEDNO mesto istine (citaju ga modStorno i modNovac).
+Public Function BimIdFromNapomena(ByVal napomena As String) As String
+    Dim s As String: s = LTrim$(CStr(napomena))
+    Dim pfx As String: pfx = NOV_NAPOMENA_BIM_PREFIX
+    If Len(s) < Len(pfx) Then Exit Function
+    If UCase$(Left$(s, Len(pfx))) <> UCase$(pfx) Then Exit Function
+    s = Mid$(s, Len(pfx) + 1)
+    Dim p As Long: p = InStr(s, ";")
+    If p > 0 Then s = Left$(s, p - 1)
+    BimIdFromNapomena = Trim$(s)
+End Function
+
+' Napomena za avans-split red: nasledi BIM marker roditelja da split ostane
+' pripadan SVOM izvodu (bez toga se poreklo gubi i storno izvoda mora da ga
+' pogadja po broju+partneru -> vidi TL-007). Rucni avans nema marker -> samo opis.
+Public Function BuildAvansSplitNapomena(ByVal parentNapomena As String, _
+                                        ByVal opis As String) As String
+    Dim bimID As String: bimID = BimIdFromNapomena(parentNapomena)
+    If Len(bimID) = 0 Then
+        BuildAvansSplitNapomena = opis
+    Else
+        BuildAvansSplitNapomena = NOV_NAPOMENA_BIM_PREFIX & bimID & "; " & opis
+    End If
 End Function
 
 Public Function NormalizeLooseBIM(ByVal s As String) As String

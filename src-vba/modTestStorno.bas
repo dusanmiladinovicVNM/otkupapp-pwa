@@ -66,6 +66,8 @@ Public Sub RunStornoTestSuite()
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_SEF_CONFIG
     tx.AddTableSnapshot TBL_STORNO_VEZE
+    tx.AddTableSnapshot TBL_NOVAC              ' T23-T27 (storno izvoda)
+    tx.AddTableSnapshot TBL_BANKA_IMPORT       ' T23-T27 (storno izvoda)
 
     ' Deterministicki config (rollback vraca original): hladnjaca-kupac za gate,
     ' i MALINA_MODE=NO da simple storno otpremnice NE kaskadira zbirnu preko malina
@@ -95,6 +97,20 @@ Public Sub RunStornoTestSuite()
     T20_PonistenjeOtpremniceDeljenaNeObaraZbirnu
     T21_PonistenjeOtpremniceJedinaKaskadaCeoTok
     T22_SimpleStornoOtpremniceNeOstavljaZbirnu00
+    T23_StornoIzvodaRemapVracaStavkeUObradu
+    T24_StornoIzvodaReimportOslobadjaPonovniUvoz
+    T25_AvansSplitNasledjujeMarkerIPada
+    T26_IzvodNaViseRacunaTraziRacun
+    T27_StornoIzvodaOsvezavaOtkup
+    T28_OMAvansBrojiObaKanala
+    T29_OMAvansUIzvestajimaObaKanala
+    T30_StagingBezPKOdbijaStorno
+    T31_IzvodBezRacunaOdbijen
+    T32_SamoMarkerOdredjujePripadnost
+    T33_ObradjenaStavkaBezNovcaBlokira
+    T34_BrojIzvodaSaKosomCrtom
+    T35_NeslaganjeIznosaBlokira
+    T36_RucniRedSaIstimBrojemOstajeStornirljiv
 
     tx.RollbackTx
     Set tx = Nothing
@@ -673,6 +689,322 @@ End Sub
 
 ' Zbirna: jedan red po klasi. BrojZbirne + Klasa + KG + AMB (+ ZbirnaID, Datum).
 ' kupac (opciono) = KupacID; = HLAD_KUP -> interni hladnjaca-tok, inace eksterni.
+' ============================================================
+' T30 - staging red BEZ BankaImportID mora da odbije ceo storno.
+'
+' Bez PK-a bi prazan kljuc usao u skup izvoda, a BimIdFromNapomena za svaki RUCNO
+' unet red vraca "" -> storno bi zahvatio tudj novac. Ovo je regresioni cuvar za
+' taj scenario: proverava se i da rucni novac DRUGOG dokumenta ostane netaknut.
+' ============================================================
+Private Sub T30_StagingBezPKOdbijaStorno()
+    Const S As String = "T30 staging bez PK: "
+
+    SeedBimStavka "SVT-BIM-6A", "SVT-IZV-6", "SVT-RAC-6", "SVT-PARTNER-6", 900, 0
+    SeedBimStavka "", "SVT-IZV-6", "SVT-RAC-6", "SVT-PARTNER-6", 100, 0      ' pokvaren red
+    SeedNovacBim "SVT-NOV-6A", "SVT-IZV-6", "SVT-BIM-6A", "SVT-P6", 900, 0
+    SeedNovacSplit "SVT-NOV-RUC", "SVT-RUCNI-BROJ", "SVT-P9", 1234, 0        ' tudj rucni novac
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-6", "SVT-RAC-6", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq NovStornirano("SVT-NOV-6A"), "", S & "novac izvoda netaknut (nema delimicnog storna)"
+    ChkEq NovStornirano("SVT-NOV-RUC"), "", S & "TUDJ rucni novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-6A"), "Da", S & "staging netaknut"
+End Sub
+
+' ============================================================
+' T31 - prazan racun je dvosmislen identitet: javna TX funkcija ga mora odbiti
+' sama, ne oslanjajuci se na to da je forma prvo pozvala resolver.
+' ============================================================
+Private Sub T31_IzvodBezRacunaOdbijen()
+    Const S As String = "T31 izvod bez racuna: "
+
+    SeedBimStavka "SVT-BIM-7A", "SVT-IZV-7", "SVT-RAC-7", "SVT-PARTNER-7", 500, 0
+    SeedNovacBim "SVT-NOV-7A", "SVT-IZV-7", "SVT-BIM-7A", "SVT-P7", 500, 0
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-7", "", IZVOD_STORNO_REMAP, info), S & "prazan racun -> odbijeno"
+    ChkEq NovStornirano("SVT-NOV-7A"), "", S & "novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-7A"), "Da", S & "staging netaknut"
+End Sub
+
+' ============================================================
+' T32 - avans split NASLEDJUJE BIM marker (BuildAvansSplitNapomena) pa se hvata
+' direktno, i kad ima drugi BrojDokumenta. Markerless red BEZ partnera se NE
+' pogadja - to je bila preteska heuristika.
+' ============================================================
+Private Sub T32_SamoMarkerOdredjujePripadnost()
+    Const S As String = "T32 pripadnost samo po markeru: "
+
+    SeedBimStavka "SVT-BIM-8A", "SVT-IZV-8", "SVT-RAC-8", "SVT-PARTNER-8", 0, 3000
+    SeedNovacBim "SVT-NOV-8A", "SVT-IZV-8", "SVT-BIM-8A", "SVT-P8", 0, 1800
+    ' Red sa markerom pripada izvodu i kad ima DRUGI BrojDokumenta.
+    SeedNovacBim "SVT-NOV-8B", "SVT-DRUGI-BROJ-8", "SVT-BIM-8A", "SVT-P8", 0, 1200
+    ' Rucni red sa ISTIM brojem I ISTIM partnerom, ali BEZ markera -> ne sme se
+    ' pokupiti (nema heuristike po broju/partneru).
+    SeedNovacSplit "SVT-NOV-8C", "SVT-IZV-8", "SVT-P8", 0, 500
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-8", "SVT-RAC-8", IZVOD_STORNO_REMAP, info), S & "storno uspeo"
+    ChkEq NovStornirano("SVT-NOV-8A"), "Da", S & "red sa markerom storniran"
+    ChkEq NovStornirano("SVT-NOV-8B"), "Da", S & "marker vazi i uz drugi BrojDokumenta"
+    ChkEq NovStornirano("SVT-NOV-8C"), "", S & "rucni red (isti broj I partner, bez markera) NETAKNUT"
+End Sub
+
+' ============================================================
+' T36 - rucni red koji DELI BROJ sa izvodom mora ostati stornirljiv pojedinacno.
+'
+' Zastita "ne stornira se izvod parcijalno" mora da gleda MARKER konkretnog reda,
+' ne BrojDokumenta. Provera po broju bi ovaj rucni red ostavila netaknutim pri
+' stornu izvoda (dobro), ali i trajno nestornirljivim normalnom putanjom (lose).
+' ============================================================
+Private Sub T36_RucniRedSaIstimBrojemOstajeStornirljiv()
+    Const S As String = "T36 rucni red deli broj sa izvodom: "
+
+    SeedBimStavka "SVT-BIM-12A", "SVT-IZV-12", "SVT-RAC-12", "SVT-PARTNER-12", 2000, 0
+    SeedNovacBim "SVT-NOV-12A", "SVT-IZV-12", "SVT-BIM-12A", "SVT-P12", 2000, 0
+    SeedNovacSplit "SVT-NOV-12R", "SVT-IZV-12", "SVT-P12", 700, 0        ' rucni, isti broj i partner
+
+    ' Izvodni red se NE sme stornirati pojedinacno.
+    Dim razlogBim As String
+    Chk Len(ResolveNovacForStorno("SVT-NOV-12A", razlogBim)) = 0, S & "izvodni red odbijen pojedinacno"
+    Chk Len(razlogBim) > 0, S & "razlog odbijanja objasnjen"
+
+    ' Rucni red MORA proci - i kroz razresavanje i kroz stvarni storno.
+    Dim razlogRuc As String
+    ChkEq ResolveNovacForStorno("SVT-NOV-12R", razlogRuc), "SVT-NOV-12R", S & "rucni red prihvacen"
+    ChkEq razlogRuc, "", S & "nema razloga za odbijanje rucnog reda"
+    Chk StornoNovac_TX("SVT-NOV-12R"), S & "StornoNovac_TX stornirao rucni red"
+    ChkEq NovStornirano("SVT-NOV-12R"), "Da", S & "rucni red stvarno storniran"
+    ChkEq NovStornirano("SVT-NOV-12A"), "", S & "izvodni red i dalje netaknut"
+End Sub
+
+' ============================================================
+' T35 - rekonsilijacija iznosa: zbir aktivnog novca po stavci mora biti jednak
+' iznosu stavke izvoda. Nesklad znaci da je nesto vec dirnuto -> odbij ceo storno.
+' ============================================================
+Private Sub T35_NeslaganjeIznosaBlokira()
+    Const S As String = "T35 neslaganje iznosa: "
+
+    SeedBimStavka "SVT-BIM-11A", "SVT-IZV-11", "SVT-RAC-11", "SVT-PARTNER-11", 1000, 0
+    SeedNovacBim "SVT-NOV-11A", "SVT-IZV-11", "SVT-BIM-11A", "SVT-P11", 600, 0   ' fali 400
+
+    Chk Len(GetIzvodStornoBlokade("SVT-IZV-11", "SVT-RAC-11")) > 0, S & "preflight prijavljuje razliku"
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-11", "SVT-RAC-11", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq NovStornirano("SVT-NOV-11A"), "", S & "novac netaknut"
+    ChkEq BimObradjeno("SVT-BIM-11A"), "Da", S & "staging netaknut"
+End Sub
+
+' ============================================================
+' T33 - stavka oznacena kao obradjena, a nema nijedan novac red: vracanje u
+' "za obradu" bi dozvolilo ponovno mapiranje i dvostruko knjizenje -> blokada.
+' ============================================================
+Private Sub T33_ObradjenaStavkaBezNovcaBlokira()
+    Const S As String = "T33 obradjena stavka bez novca: "
+
+    SeedBimStavka "SVT-BIM-9A", "SVT-IZV-9", "SVT-RAC-9", "SVT-PARTNER-9", 700, 0
+
+    Chk Len(GetIzvodStornoBlokade("SVT-IZV-9", "SVT-RAC-9")) > 0, S & "preflight objasnjava blokadu"
+
+    Dim info As String
+    Chk Not StornoIzvod_TX("SVT-IZV-9", "SVT-RAC-9", IZVOD_STORNO_REMAP, info), S & "storno odbijen"
+    ChkEq BimObradjeno("SVT-BIM-9A"), "Da", S & "staging NIJE tiho vracen u 'za obradu'"
+End Sub
+
+' ============================================================
+' T34 - broj izvoda sme da sadrzi kosu crtu (npr. "42/2026"); ne sme se raseci
+' kao "broj/racun".
+' ============================================================
+Private Sub T34_BrojIzvodaSaKosomCrtom()
+    Const S As String = "T34 broj izvoda sa kosom crtom: "
+
+    SeedBimStavka "SVT-BIM-10A", "SVT-IZV/2026", "SVT-RAC-10", "SVT-PARTNER-10", 100, 0
+
+    Dim br As String, rac As String, razlog As String
+    Chk ResolveIzvodZaStorno("SVT-IZV/2026", br, rac, razlog), S & "ceo unos prihvacen kao broj"
+    ChkEq br, "SVT-IZV/2026", S & "broj nije rasecen na kosoj crti"
+    ChkEq rac, "SVT-RAC-10", S & "racun izveden iz staginga"
+End Sub
+
+' ============================================================
+' T28 - OM avans broji OBA kanala placanja.
+'
+' Posle razdvajanja kanala (Tip nosi kes vs virman) redovi uvezeni iz izvoda nose
+' VIRMAN tip, a redovi uvezeni PRE toga i dalje nose KES tip. Svaki citalac OM
+' avansa mora racunati oba - inace iznosi tiho padnu (bankovni novac ispadne iz
+' salda, ili legacy zapisi ispadnu posle migracije). Ovo je regresioni cuvar koji
+' zamenjuje rucno "uporedi saldo pre i posle importa grane".
+'
+' Citaoci: modNovac.GetOMAvansSaldo (ovde), modIzvestaj x2 (T29),
+' modStammdatenSync.ExportSaldoOM - Private, pa se pokriva ugovorom klasifikatora.
+' ============================================================
+Private Sub T28_OMAvansBrojiObaKanala()
+    Const S As String = "T28 OM avans oba kanala: "
+
+    ' Ugovor klasifikatora - od njega zavise SVI citaoci.
+    Chk IsFirmaOtkupacAvansTip(NOV_KES_FIRMA_OTKUPAC), S & "KES Firma-Otkupac je OM avans (legacy zapis)"
+    Chk IsFirmaOtkupacAvansTip(NOV_VIRMAN_FIRMA_OTKUPAC), S & "VIRMAN Firma-Otkupac je OM avans (iz izvoda)"
+    Chk Not IsFirmaOtkupacAvansTip(NOV_KES_OTKUPAC_KOOP), S & "isplata kooperantu NIJE OM avans"
+    Chk Not IsFirmaOtkupacAvansTip(NOV_VIRMAN_FIRMA_KOOP), S & "virman kooperantu NIJE OM avans"
+    Chk IsKesNovacTip(NOV_KES_OTKUPAC_KOOP), S & "KesOtkupacKoop je kes"
+    Chk Not IsKesNovacTip(NOV_VIRMAN_FIRMA_OTKUPAC), S & "VirmanFirmaOtkupac NIJE kes"
+
+    ' Saldo = 1000 (kes, legacy) + 500 (virman, iz izvoda) - 300 (podeljeno kooperantu)
+    SeedNovacOM "SVT-NOV-OM1", "SVT-OM-1", "", NOV_KES_FIRMA_OTKUPAC, 1000
+    SeedNovacOM "SVT-NOV-OM2", "SVT-OM-1", "", NOV_VIRMAN_FIRMA_OTKUPAC, 500
+    SeedNovacOM "SVT-NOV-OM3", "SVT-OM-1", "SVT-KOOP-OM", NOV_KES_OTKUPAC_KOOP, 300
+
+    ChkEqD GetOMAvansSaldo("SVT-OM-1"), 1200, S & "saldo = 1000 kes + 500 virman - 300 podeljeno"
+    ' Da pad bude citljiv: 700 = virman kanal ispao, 900 = kes (legacy) kanal ispao.
+    Chk GetOMAvansSaldo("SVT-OM-1") <> 700, S & "virman kanal NIJE ispao iz salda"
+    Chk GetOMAvansSaldo("SVT-OM-1") <> 200, S & "kes (legacy) kanal NIJE ispao iz salda"
+End Sub
+
+' ============================================================
+' T29 - isti kanal-invariant kroz IZVESTAJE (ReportSaldoOM + ReportIsplata).
+' Lokalni EH: neocekivana greska u report sloju daje FAIL, ne obara ceo suite.
+' ============================================================
+Private Sub T29_OMAvansUIzvestajimaObaKanala()
+    Const S As String = "T29 OM avans u izvestajima: "
+    On Error GoTo EH
+
+    SeedNovacOM "SVT-NOV-OM4", "SVT-OM-2", "", NOV_KES_FIRMA_OTKUPAC, 800
+    SeedNovacOM "SVT-NOV-OM5", "SVT-OM-2", "", NOV_VIRMAN_FIRMA_OTKUPAC, 200
+    SeedNovacOM "SVT-NOV-OM6", "SVT-OM-2", "SVT-KOOP-OM", NOV_KES_OTKUPAC_KOOP, 250
+
+    Dim od As Date: od = Date - 1
+    Dim doD As Date: doD = Date + 1
+
+    ' ReportSaldoOM: red "OM AVANS (nerasporedjen)", kolona 4 = primljeno - podeljeno.
+    Dim rs As Variant: rs = ReportSaldoOM("SVT-OM-2", od, doD)
+    ChkEqD ReportCellByLabel(rs, "OM AVANS (nerasporedjen)", 4), 750, _
+        S & "ReportSaldoOM = 800 kes + 200 virman - 250 podeljeno"
+
+    ' ReportIsplata: kontrolni redovi (primljeno = oba kanala; podeljeno = kes koop).
+    Dim ri As Variant: ri = ReportIsplata("OM", "SVT-OM-2", od, doD)
+    ChkEqD ReportCellByLabel(ri, "OM Avans (primljeno)", 5), 1000, _
+        S & "ReportIsplata primljeno = 800 kes + 200 virman"
+    ChkEqD ReportCellByLabel(ri, "OM Avans (podeljeno)", 5), 250, _
+        S & "ReportIsplata podeljeno = 250"
+    Exit Sub
+EH:
+    Chk False, S & "neocekivana greska u report sloju: " & Err.description
+End Sub
+
+' ============================================================
+' T23 - storno izvoda, ishod REMAP (PDF ispravan, mapiranje pogresno):
+' novac pada, staging stavke se vracaju u "za obradu" i NISU ugasene.
+' ============================================================
+Private Sub T23_StornoIzvodaRemapVracaStavkeUObradu()
+    Const S As String = "T23 storno izvoda REMAP: "
+
+    SeedBimStavka "SVT-BIM-1A", "SVT-IZV-1", "SVT-RAC-1", "SVT-PARTNER", 5000, 0
+    SeedBimStavka "SVT-BIM-1B", "SVT-IZV-1", "SVT-RAC-1", "SVT-PARTNER", 3000, 0
+    SeedNovacBim "SVT-NOV-1A", "SVT-IZV-1", "SVT-BIM-1A", "SVT-P1", 5000, 0
+    SeedNovacBim "SVT-NOV-1B", "SVT-IZV-1", "SVT-BIM-1B", "SVT-P1", 3000, 0
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-1", "SVT-RAC-1", IZVOD_STORNO_REMAP, info), S & "StornoIzvod_TX uspeo"
+
+    ChkEq NovStornirano("SVT-NOV-1A"), "Da", S & "novac 1A storniran"
+    ChkEq NovStornirano("SVT-NOV-1B"), "Da", S & "novac 1B storniran"
+    ChkEq BimObradjeno("SVT-BIM-1A"), "", S & "staging 1A vracen u 'za obradu'"
+    ChkEq BimObradjeno("SVT-BIM-1B"), "", S & "staging 1B vracen u 'za obradu'"
+    ChkEq BimStornirano("SVT-BIM-1A"), "", S & "staging 1A NIJE ugasen (PDF ispravan)"
+End Sub
+
+' ============================================================
+' T24 - storno izvoda, ishod REIMPORT (PDF los): staging se gasi, a dedupe ga vise
+' ne vidi -> isti PDF se moze uvesti PONOVO (to je cela poenta ishoda).
+' ============================================================
+Private Sub T24_StornoIzvodaReimportOslobadjaPonovniUvoz()
+    Const S As String = "T24 storno izvoda REIMPORT: "
+
+    SeedBimStavka "SVT-BIM-2A", "SVT-IZV-2", "SVT-RAC-2", "SVT-PARTNER-2", 7000, 0
+    SeedNovacBim "SVT-NOV-2A", "SVT-IZV-2", "SVT-BIM-2A", "SVT-P2", 7000, 0
+
+    ' Pre storna: ponovni uvoz iste stavke bi bio odbijen kao duplikat.
+    Chk IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", ""), _
+        S & "pre storna dedupe prepoznaje duplikat"
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-2", "SVT-RAC-2", IZVOD_STORNO_REIMPORT, info), S & "StornoIzvod_TX uspeo"
+
+    ChkEq NovStornirano("SVT-NOV-2A"), "Da", S & "novac storniran"
+    ChkEq BimStornirano("SVT-BIM-2A"), "Da", S & "staging ugasen"
+    Chk Not IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", ""), _
+        S & "posle storna ponovni uvoz istog PDF-a NIJE duplikat"
+End Sub
+
+' ============================================================
+' T25 - KANONSKI lineage test kroz STVARNI tok, ne kroz seed ocekivanog rezultata.
+'
+' Pusta pravi ApplyAvansToOtkup_TX da napravi split (umanji original, napravi novi
+' red), pa proverava da je split NASLEDIO BIM marker i da ga storno izvoda obara
+' zajedno sa originalom. Usput dokazuje i rekonsilijaciju: original + split moraju
+' i dalje davati tacan iznos stavke izvoda (2500 + 1500 = 4000), inace bi preflight
+' odbio storno.
+' ============================================================
+Private Sub T25_AvansSplitNasledjujeMarkerIPada()
+    Const S As String = "T25 avans split (stvarni tok): "
+
+    SeedBimStavka "SVT-BIM-3A", "SVT-IZV-3", "SVT-RAC-3", "SVT-PARTNER-3", 0, 4000
+    SeedNovacBim "SVT-NOV-3A", "SVT-IZV-3", "SVT-BIM-3A", "SVT-P3", 0, 4000, "", "SVT-K3"
+    SeedOtkupZaAvans "SVT-OTK-3", "SVT-K3", 100, 15      ' vrednost 1500 -> split
+
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 1, S & "pre raspodele jedan red izvoda"
+
+    Dim applied As Double
+    Chk ApplyAvansToOtkup_TX("SVT-K3", "SVT-OTK-3", applied), S & "ApplyAvansToOtkup_TX uspeo"
+    ChkEqD applied, 1500, S & "primenjeno tacno 1500 (vrednost bloka)"
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 2, S & "split NASLEDIO marker (2 reda pod istim BIM-om)"
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-3", "SVT-RAC-3", IZVOD_STORNO_REMAP, info), S & "StornoIzvod_TX uspeo"
+    ChkEq NovStornirano("SVT-NOV-3A"), "Da", S & "originalni red storniran"
+    ChkEq AktivnihSaMarkerom("SVT-BIM-3A"), 0, S & "nijedan red izvoda nije ostao aktivan (ni split)"
+End Sub
+
+' ============================================================
+' T26 - isti broj izvoda na dva racuna (dve banke): razresavanje mora TRAZITI
+' racun, a ne tiho uzeti jedan.
+' ============================================================
+Private Sub T26_IzvodNaViseRacunaTraziRacun()
+    Const S As String = "T26 izvod na vise racuna: "
+
+    SeedBimStavka "SVT-BIM-4A", "SVT-IZV-4", "SVT-RAC-A", "SVT-PARTNER-4", 1000, 0
+    SeedBimStavka "SVT-BIM-4B", "SVT-IZV-4", "SVT-RAC-B", "SVT-PARTNER-4", 2000, 0
+
+    Dim br As String, rac As String, razlog As String
+    Chk Not ResolveIzvodZaStorno("SVT-IZV-4", br, rac, razlog), S & "sam broj je odbijen (dvosmislen)"
+    Chk Len(razlog) > 0, S & "razlog objasnjen operateru"
+
+    Chk ResolveIzvodZaStorno("SVT-IZV-4/SVT-RAC-B", br, rac, razlog), S & "broj/racun je prihvacen"
+    ChkEq rac, "SVT-RAC-B", S & "izabran tacan racun"
+End Sub
+
+' ============================================================
+' T27 - storno izvoda osvezava otkup: isplata iz izvoda je pokrivala blok; posle
+' storna blok vise NIJE isplacen (inace ostaje nevidljiv u listi za isplatu).
+' ============================================================
+Private Sub T27_StornoIzvodaOsvezavaOtkup()
+    Const S As String = "T27 storno izvoda osvezava otkup: "
+
+    SeedOtkupPlacen "SVT-OTK-5", 100, 10          ' vrednost 1000, oznacen kao isplacen
+    SeedBimStavka "SVT-BIM-5A", "SVT-IZV-5", "SVT-RAC-5", "SVT-PARTNER-5", 0, 1000
+    SeedNovacBim "SVT-NOV-5A", "SVT-IZV-5", "SVT-BIM-5A", "SVT-P5", 0, 1000, "SVT-OTK-5"
+
+    ChkEq OtkIsplaceno("SVT-OTK-5"), STATUS_ISPLACENO, S & "pre storna blok je isplacen"
+
+    Dim info As String
+    Chk StornoIzvod_TX("SVT-IZV-5", "SVT-RAC-5", IZVOD_STORNO_REMAP, info), S & "StornoIzvod_TX uspeo"
+
+    ChkEq NovStornirano("SVT-NOV-5A"), "Da", S & "isplata stornirana"
+    ChkEq OtkIsplaceno("SVT-OTK-5"), "", S & "blok vise nije isplacen"
+    ChkEq OtkDatumIsplate("SVT-OTK-5"), "", S & "datum isplate ocisceni"
+End Sub
+
 Private Sub SeedZbirna(ByVal broj As String, ByVal klasa As String, _
                        ByVal kg As Double, ByVal amb As Long, _
                        Optional ByVal kupac As String = "")
@@ -747,6 +1079,69 @@ Private Sub SeedAmb(ByVal id As String, ByVal tip As String, ByVal kol As Long, 
         Array(id, Date, tip, kol, smer, entID, entTip, dokID, dokTip)
 End Sub
 
+' --- Banka izvod (staging + novac) ---
+
+' Stavka uvezenog izvoda; Obradjeno="Da" = vec mapirana (to je stanje iz kog se
+' storno izvoda i poziva).
+Private Sub SeedBimStavka(ByVal bimID As String, ByVal brojIzvoda As String, _
+                          ByVal racun As String, ByVal partner As String, _
+                          ByVal uplata As Double, ByVal isplata As Double)
+    SvAppend TBL_BANKA_IMPORT, _
+        Array(COL_BIM_ID, COL_BIM_BROJ_DOKUMENTA, COL_BIM_BROJ_RACUNA, COL_BIM_DATUM_TRANSAKCIJE, _
+              COL_BIM_PARTNER, COL_BIM_UPLATA, COL_BIM_ISPLATA, COL_BIM_OBRADJENO), _
+        Array(bimID, brojIzvoda, racun, Date, partner, uplata, isplata, "Da")
+End Sub
+
+' Novac red nastao mapiranjem izvoda: Napomena nosi BIM marker (jedina veza
+' novac -> izvod), BrojDokumenta = broj izvoda.
+Private Sub SeedNovacBim(ByVal novID As String, ByVal brojIzvoda As String, ByVal bimID As String, _
+                         ByVal partnerID As String, ByVal uplata As Double, ByVal isplata As Double, _
+                         Optional ByVal otkupID As String = "", Optional ByVal koopID As String = "")
+    SvAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER_ID, COL_NOV_KOOP_ID, _
+              COL_NOV_TIP, COL_NOV_UPLATA, COL_NOV_ISPLATA, COL_NOV_NAPOMENA, COL_NOV_OTKUP_ID), _
+        Array(novID, brojIzvoda, Date, partnerID, koopID, NOV_VIRMAN_AVANS_KOOP, uplata, isplata, _
+              NOV_NAPOMENA_BIM_PREFIX & bimID & "; Ref:SVT", otkupID)
+End Sub
+
+' Otkup blok spreman za raspodelu avansa (kooperant + vrednost, NIJE isplacen).
+Private Sub SeedOtkupZaAvans(ByVal otkID As String, ByVal koopID As String, _
+                             ByVal kolicina As Double, ByVal cena As Double)
+    SvAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, COL_OTK_CENA), _
+        Array(otkID, otkID, koopID, kolicina, cena)
+End Sub
+
+' Avans split naslednik: isti broj i partner kao original, ali BEZ BIM markera
+' (tako ga ApplyAvansToFaktura/ApplyAvansToOtkup stvarno prave).
+Private Sub SeedNovacSplit(ByVal novID As String, ByVal brojIzvoda As String, _
+                           ByVal partnerID As String, ByVal uplata As Double, ByVal isplata As Double)
+    SvAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER_ID, COL_NOV_TIP, _
+              COL_NOV_UPLATA, COL_NOV_ISPLATA, COL_NOV_NAPOMENA), _
+        Array(novID, brojIzvoda, Date, partnerID, NOV_VIRMAN_AVANS_KOOP, uplata, isplata, _
+              "Avans raspodela")
+End Sub
+
+' Novac vezan za otkupno mesto: OM avans (koopID prazan) ili isplata kooperantu iz
+' tog avansa (koopID popunjen). Datum = danas -> ulazi u report period T29.
+Private Sub SeedNovacOM(ByVal novID As String, ByVal omID As String, ByVal koopID As String, _
+                        ByVal tip As String, ByVal isplata As Double)
+    SvAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_OM_ID, COL_NOV_KOOP_ID, _
+              COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_UPLATA, COL_NOV_ISPLATA), _
+        Array(novID, novID, Date, omID, koopID, "OM", tip, 0, isplata)
+End Sub
+
+' Otkup blok sa kolicinom/cenom, unapred oznacen kao isplacen (T27 proverava da
+' storno izvoda to ponisti).
+Private Sub SeedOtkupPlacen(ByVal otkID As String, ByVal kolicina As Double, ByVal cena As Double)
+    SvAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOLICINA, COL_OTK_CENA, _
+              COL_OTK_ISPLACENO, COL_OTK_DATUM_ISPLATE), _
+        Array(otkID, otkID, kolicina, cena, STATUS_ISPLACENO, Date)
+End Sub
+
 ' Append red po IMENU kolone (preskace kolone kojih nema). Vraca nista; raise
 ' ako tabela ne postoji.
 Private Sub SvAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals As Variant)
@@ -793,6 +1188,62 @@ End Function
 Private Function PalBrGajbica(ByVal palID As String) As Long
     Dim v As Variant: v = LookupValue(TBL_PALETA, COL_PAL_ID, palID, COL_PAL_BR_GAJBICA)
     If IsNumeric(v) Then PalBrGajbica = CLng(v)
+End Function
+
+' Vrednost iz kolone `col` u redu ciji je prvi stubac = label. Sentinel -99999 kad
+' red ne postoji -> test vidljivo pada umesto da tiho poredi nulu.
+Private Function ReportCellByLabel(ByVal arr As Variant, ByVal label As String, _
+                                   ByVal col As Long) As Double
+    If Not IsArray(arr) Then
+        ReportCellByLabel = -99999
+        Exit Function
+    End If
+    Dim i As Long
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        If StrComp(Trim$(CStr(arr(i, 1))), label, vbTextCompare) = 0 Then
+            If IsNumeric(arr(i, col)) Then ReportCellByLabel = CDbl(arr(i, col))
+            Exit Function
+        End If
+    Next i
+    ReportCellByLabel = -99999
+End Function
+
+' Broj AKTIVNIH tblNovac redova koji nose dati BIM marker. Meri pripadnost izvodu
+' onako kako je meri i produkcijski kod (samo marker, bez pogadjanja).
+Private Function AktivnihSaMarkerom(ByVal bimID As String) As Long
+    Dim data As Variant: data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+    Dim cNap As Long, cSt As Long
+    cNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+    cSt = GetColumnIndex(TBL_NOVAC, COL_STORNIRANO)
+    If cNap = 0 Then Exit Function
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If cSt = 0 Or UCase$(Trim$(CStr(data(i, cSt)))) <> "DA" Then
+            If BimIdFromNapomena(CStr(data(i, cNap))) = Trim$(bimID) Then n = n + 1
+        End If
+    Next i
+    AktivnihSaMarkerom = n
+End Function
+
+Private Function NovStornirano(ByVal novID As String) As String
+    NovStornirano = NzTx(LookupValue(TBL_NOVAC, COL_NOV_ID, novID, COL_STORNIRANO))
+End Function
+
+Private Function BimObradjeno(ByVal bimID As String) As String
+    BimObradjeno = NzTx(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_OBRADJENO))
+End Function
+
+Private Function BimStornirano(ByVal bimID As String) As String
+    BimStornirano = NzTx(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_STORNIRANO))
+End Function
+
+Private Function OtkIsplaceno(ByVal otkID As String) As String
+    OtkIsplaceno = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_ISPLACENO))
+End Function
+
+Private Function OtkDatumIsplate(ByVal otkID As String) As String
+    OtkDatumIsplate = NzTx(LookupValue(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_DATUM_ISPLATE))
 End Function
 
 Private Function OtkOtpremnicaID(ByVal blkID As String) As String

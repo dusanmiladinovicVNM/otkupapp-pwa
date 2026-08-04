@@ -461,6 +461,8 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
             cidP = CreateCorrectionContext(mode, FLOW_DOC_OTPREMNICA, CStr(s("otpID")), oldBroj, _
                 , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Ponistenje otpremnice bez zamene.")
             r("correctionID") = cidP
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) And OtpremnicaIsSoleOwner(parentZbirna, oldBroj) Then
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
                 Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP)
@@ -670,6 +672,8 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             Dim cidD As String
             cidD = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, , , , , , , "Dupli/fantom zbirna.")
             r("correctionID") = cidD
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cidD) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             Dim expOtpD As Long: expOtpD = CLng(s("otpCount"))
             Dim detD As Long
             If Not StornoZbirnaIDetach_TX(broj, detD) Then
@@ -709,6 +713,8 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             Dim cidP As String
             cidP = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, , , , , , , "Ponistenje zbirne bez zamene.")
             r("correctionID") = cidP
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             Dim ownsZ As Boolean: ownsZ = ZbirnaOwnsExternalChain(broj)
             Dim cascZ As Object: Set cascZ = PonistiZbirnaChain_TX(broj, ownsZ)
             If Not CBool(cascZ("ok")) Then
@@ -753,7 +759,21 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
 
     ' Ako je broj promenjen -> prevezi otpremnice(+otkup) i prijemnice(+palete).
     If StrComp(oldBroj, newBroj, vbTextCompare) <> 0 Then
-        RelinkOtpremniceToZbirna_TX oldBroj, newBroj
+        ' Relink otpremnica vraca broj prevezanih redova. 0 je legitimno SAMO ako stara
+        ' zbirna nema aktivnih otpremnica; ako ih ima, relink je pao (rollback) -> rekalk
+        ' nove zbirne bi dao 0/0 i invarijanta bi "prosla" -> lazni COMPLETED. Zato MANUAL.
+        Dim otpRelinked As Long
+        otpRelinked = RelinkOtpremniceToZbirna_TX(oldBroj, newBroj)
+        ' Len(oldBroj) > 0: prazan oldBroj bi u CountActive znacio "otpremnice BEZ
+        ' zbirne" (ceka zbirnu) -> lazni MANUAL. Prazan context se ovde ne tumaci.
+        If otpRelinked = 0 And Len(oldBroj) > 0 Then
+            If CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, oldBroj) > 0 Then
+                MarkCorrectionManual correctionID, "Prevezi otpremnice na novu zbirnu rucno (Osiroceni dokumenti).", _
+                    "Relink otpremnica sa " & oldBroj & " na " & newBroj & " nije uspeo (prevezano 0)."
+                r("message") = "Relink otpremnica na novu zbirnu nije uspeo (" & oldBroj & " -> " & newBroj & ")."
+                Exit Function
+            End If
+        End If
         Dim prijBrojevi As Collection
         Set prijBrojevi = DistinctActiveValues(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_BROJ_ZBIRNE, oldBroj)
         Dim k As Long
@@ -824,6 +844,8 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
             cid = CreateCorrectionContext(mode, FLOW_DOC_REVERS, brDok, brDok, FLOW_DOC_REVERS, , , _
                 dokumentTip, , , "Ispravka reversa: storno stari, ceka novi.")
             r("correctionID") = cid
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             If Not StornoOMKoopByBrDok_TX(brDok, dokumentTip) Then
                 FailCorrectionContext cid, "Storno starog reversa nije uspeo."
                 r("message") = "Storno reversa nije uspeo.": Exit Function
@@ -838,6 +860,8 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
             cidX = CreateCorrectionContext(mode, FLOW_DOC_REVERS, brDok, brDok, , , , _
                 dokumentTip, , , IIf(mode = SV_MODE_DUPLI, "Dupli/fantom revers.", "Ponistenje reversa."))
             r("correctionID") = cidX
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cidX) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
             If Not StornoOMKoopByBrDok_TX(brDok, dokumentTip) Then
                 FailCorrectionContext cidX, "Storno reversa nije uspeo."
                 r("message") = "Storno reversa nije uspeo.": Exit Function
@@ -996,6 +1020,8 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
             cidP = CreateCorrectionContext(mode, FLOW_DOC_PRIJEMNICA, prijID, broj, _
                 , , , FLOW_DOC_ZBIRNA, , parentZbirna, "Ponistenje prijemnice bez zamene.")
             r("correctionID") = cidP
+            ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
+            If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
 
             If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) Then
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
