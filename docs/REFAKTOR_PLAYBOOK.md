@@ -306,9 +306,9 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 
 | Paket | Naziv | Status | Grana | Napomena |
 |---|---|---|---|---|
-| RF-01 | Brisanje balasta | ⬜ | — | |
-| RF-02 | modNovac guardovi | ⬜ | — | |
-| RF-03 | Storno lanac | ⬜ | — | |
+| RF-01 | Brisanje balasta | ✅ merged | PR #147 | M0 · AUD-016 (deo) |
+| RF-02 | modNovac guardovi | ✅ merged | PR #148 | M1 · AUD-003 (SaveNovac+AddCena) + AUD-010 |
+| RF-03 | Storno lanac | ✅ merged | PR #167 | M3 · AUD-020/021 + AUD-049 (storno izvoda) + keš/virman; review OK, follow-up AUD-050/051 |
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | ⬜ | — | |
 | RF-06 | modIzvestaj brojke | ⬜ | — | |
@@ -322,13 +322,13 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-14 | MasterSync/JSON | ⬜ | — | **koordinisati sa RF-28 (isti fajl)** |
 | RF-15–19 | Konsolidacije | ⬜ | — | posle RF-14; RF-16 hrani v142 banka delta |
 | RF-20 | Bezbednost/proces | ⬜ | — | planirati posebno |
-| RF-21 | SEF correctness | ⬜ | — | **sadrži jedini nov P0 (409)** |
+| RF-21 | SEF correctness | ✅ merged | PR #152 | M2 · AUD-030 (P0 409) + AUD-031 |
 | RF-22 | SEF UX/lifecycle | ⬜ | — | posle RF-21 |
-| RF-23 | Startup + authorization | ⬜ | — | **P1 auth lanac + AccessWasDenied** |
+| RF-23 | Startup + authorization | ✅ merged | PR #149 | M1 · AUD-033/034 (auth lanac + AccessWasDenied) |
 | RF-24 | Self-update hardening | ⬜ | — | |
 | RF-25 | Sync/IO hardening | ⬜ | — | |
 | RF-26 | Cenovnik + E2E gate | ⬜ | — | |
-| RF-27 | Agrohemija cena + validacija | ✅ grana | 2026-07-22 | implementirano na `claude/rf-27-agrohemija-cena` (pre-merge): AUD-040 + parcela↔koop + typed greške (`SaveMagacinCore`) + zero-ULAZ + smoke suite |
+| RF-27 | Agrohemija cena + validacija | ✅ merged | PR #154 | M2 · AUD-040 + parcela↔koop + typed greške (`SaveMagacinCore`) + zero-ULAZ + smoke suite |
 | RF-28 | MasterSync integritet delte | ⬜ | — | spojiti sa RF-14 (isti fajl) |
 | RF-29 | Integritet/health dijagnostika | ⬜ | — | |
 | RF-30 | Sledljivost trace + lifecycle | ⬜ | — | |

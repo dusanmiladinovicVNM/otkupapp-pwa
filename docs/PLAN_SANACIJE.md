@@ -171,10 +171,10 @@ Paket je „gotov" tek kad je **sve** ispunjeno:
 
 | Milestone | Status | Release verzija | Datum | Napomena |
 |---|---|---|---|---|
-| M0 Higijena | ⬜ | — | — | |
-| M1 Pristup i startup | ⬜ | — | — | P0-klasa bezbednosti |
-| M2 SEF + agrohemija cena | ⬜ | — | — | jedini nov P0 (409) |
-| M3 Storno | ⬜ | — | — | re-verify vs v2.24.0 |
+| M0 Higijena | ✅ gotov | v2.28.2 | 2026-07 | RF-01 (PR #147) |
+| M1 Pristup i startup | ✅ gotov | — | 2026-07 | RF-02 (#148) + RF-23 (#149); P0-klasa bezbednosti |
+| M2 SEF + agrohemija cena | ✅ gotov | — | 2026-07/08 | RF-21 (#152, P0 409) + RF-27 (#154) |
+| M3 Storno | 🟡 1/3 | — | 2026-08 | RF-03 ✅ (#167, +AUD-049 storno izvoda); ostaju RF-04, RF-05. re-verify vs aktuelni main |
 | M4 Sync jezgro | ⬜ | — | — | RF-14+RF-28 zajedno |
 | M5 Izveštaji i faktura | ⬜ | — | — | |
 | M6 SEF UX + banka | ⬜ | — | — | |
