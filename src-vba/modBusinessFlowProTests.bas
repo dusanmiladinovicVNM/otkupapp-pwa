@@ -2156,33 +2156,45 @@ Private Sub Test_StornoKaskadaScopePoLancu()
     AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, tudjaPrij), _
                "Kaskada scope: prijemnica DRUGOG kupca pod istim BrojZbirne NETAKNUTA"
 
-    ' --- Deo 2: nema aktivne zbirne, a postoji aktivan child -> fail-closed ---
+    ' --- Deo 2: zbirna stornirana, njena prijemnica JOS AKTIVNA -> fail-closed ---
+    ' (Prijemnica se ne moze kreirati bez zbirne -- PRIJEMNICA_ZBIRNA_PROVERA -- pa
+    '  se osiroceno stanje pravi legitimno: zbirna, pa prijemnica, pa storno zbirne.)
     Dim brDok2 As String
     brDok2 = TEST_PREFIX & "-KSC2-" & scenario
 
     Dim testDate2 As Date
     testDate2 = NextTestDate()
 
-    ' Otkup blok na hladnjaca stanici sa BrojZbirne = brDok2 (zbirna se NE pravi).
-    Dim otkIDs As String
-    otkIDs = SaveOtkupMulti_TX(testDate2, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
-                               100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok2, _
-                               0#, "TEST OPERATOR", GetTestParcelaID(), brDok2)
-    AssertTrue Len(otkIDs) > 0, "Kaskada scope: otkup blok bez zbirne kreiran"
+    Dim zbrB As String
+    zbrB = SaveZbirna_TX(testDate2, TEST_VOZ_ID, brDok2, TEST_KUP2_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         50#, TEST_TIP_AMB, 0, KLASA_I)
+    AssertTrue Len(zbrB) > 0, "Kaskada scope: zbirna drugog kupca kreirana"
 
-    ' Aktivna prijemnica drugog kupca na taj BrojZbirne -- pripadnost nije dokaziva.
     Dim orphanPrij As String
     orphanPrij = SavePrijemnica_TX(testDate2, TEST_KUP2_ID, TEST_VOZ_ID, _
                                    TEST_PREFIX & "-KSC2-PRJ-" & scenario, brDok2, _
                                    TEST_VRSTA, TEST_SORTA, 50#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
-    AssertTrue Len(orphanPrij) > 0, "Kaskada scope: osirocena prijemnica kreirana"
+    AssertTrue Len(orphanPrij) > 0, "Kaskada scope: prijemnica drugog kupca kreirana"
+
+    ' Zbirna se stornira, prijemnica ostaje aktivna -> osiroceni nizvodni dokument.
+    MarkTestRowStornirano TBL_ZBIRNA, "ZbirnaID", zbrB
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "Kaskada scope: zbirna stornirana, prijemnica ostala aktivna"
+
+    ' Otkup blok na hladnjaca stanici sa istim BrojZbirne (nema aktivne zbirne).
+    Dim otkIDs As String
+    otkIDs = SaveOtkupMulti_TX(testDate2, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                               100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok2, _
+                               0#, "TEST OPERATOR", GetTestParcelaID(), brDok2)
+    AssertTrue Len(otkIDs) > 0, "Kaskada scope: otkup blok bez aktivne zbirne kreiran"
 
     Dim otkID As String
     otkID = FindOtkupIDByBrojAndKlasa(brDok2, KLASA_I)
 
     AssertFalse StornoOtkupByBrDok_TX(brDok2), _
                 "Kaskada scope: bez aktivne zbirne uz aktivan child -> storno je ODBIJEN"
-    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, orphanPrij), _
+    AssertTrue Len(orphanPrij) > 0 And Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, orphanPrij), _
                "Kaskada scope: osirocena prijemnica ostaje netaknuta"
     If Len(otkID) > 0 Then
         AssertTrue Not RowIsStornirano(TBL_OTKUP, "OtkupID", otkID), _
