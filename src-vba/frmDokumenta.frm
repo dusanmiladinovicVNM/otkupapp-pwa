@@ -2716,7 +2716,7 @@ Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
     If IsEmpty(d) Then Exit Sub
     Dim cBr As Long, cKl As Long, cSta As Long, cVoz As Long, cZbr As Long
     Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
-    Dim cAmb As Long, cBruto As Long, cDat As Long, cId As Long
+    Dim cAmb As Long, cBruto As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
     cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
     cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
@@ -2731,12 +2731,13 @@ Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
     cBruto = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BRUTO)
     cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
     ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
     ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, brStorn, rI, rII
+    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
     Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
@@ -2781,7 +2782,7 @@ Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
     Dim d As Variant: d = GetTableData(TBL_ZBIRNA)
     If IsEmpty(d) Then Exit Sub
     Dim cBr As Long, cKl As Long, cVoz As Long, cKup As Long, cHl As Long, cPo As Long
-    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long, cId As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
     cKl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
     cVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
@@ -2795,12 +2796,13 @@ Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
     cAmb = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB)
     cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
     cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
     ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
     ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, brStorn, rI, rII
+    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 
@@ -2840,7 +2842,7 @@ Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
 
     Dim cBr As Long, cKl As Long, cKup As Long, cVoz As Long, cZbr As Long
     Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
-    Dim cAmb As Long, cAmbV As Long, cBruto As Long, cDat As Long, cId As Long
+    Dim cAmb As Long, cAmbV As Long, cBruto As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
     cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
@@ -2856,12 +2858,13 @@ Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     cBruto = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BRUTO)
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
     ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
     ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, brStorn, rI, rII
+    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 

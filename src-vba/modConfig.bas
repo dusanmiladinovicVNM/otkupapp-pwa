@@ -830,6 +830,13 @@ Public Const COL_TRACE_ZAMENJEN_SA As String = "ZamenjenSa"       ' broj NOVOG d
 Public Const COL_TRACE_CORRECTION_ID As String = "CorrectionID"   ' veza na tblStornoVeze (CorrectionID)
 Public Const COL_TRACE_IZDATO_STATUS As String = "IzdatoStatus"   ' DRAFT / IZDATO / PROSLEDJENO (ADR-0001 granica)
 
+' Generacija dokumenta: svi redovi JEDNOG upisa (Klasa I + Klasa II iz istog
+' Multi_TX poziva) dele isti "GEN-xxxxx". Isti broj dokumenta kroz storno ->
+' ispravku dobija NOVU generaciju. Prefill iz stornirane bira najnoviju
+' generaciju eksplicitno -- bez toga se granica generacije ne moze pouzdano
+' odrediti (uzastopni ID-evi ne znace istu generaciju).
+Public Const COL_GENERACIJA_ID As String = "GeneracijaID"
+
 ' Vrednosti IzdatoStatus (izdato = kod kupca -> nepromenljivo; koriguje se storno+reizdaj).
 Public Const IZDATO_DRAFT As String = "DRAFT"
 Public Const IZDATO_IZDATO As String = "IZDATO"

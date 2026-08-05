@@ -1188,6 +1188,9 @@ Public Sub EnsureSledljivostSchema()
         EnsureColumnOnTable t, COL_TRACE_ZAMENJEN_SA
         EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
         EnsureColumnOnTable t, COL_TRACE_IZDATO_STATUS
+        ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
+        ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
+        EnsureColumnOnTable t, COL_GENERACIJA_ID
     Next i
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE

@@ -90,6 +90,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_OpenFaktureExcludeStornirano
     Test_ZbirnaKlasaIIGuard
     Test_PrefillBiraPoslednjuGeneraciju
+    Test_GeneracijaIDNaSavePutanji
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1627,7 +1628,7 @@ End Sub
 '   R01 prosek gajbe ne racuna stornirane redove (SumByBroj)
 '   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
 '   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
-'   R04 prefill bira POSLEDNJU GENERACIJU (PickLatestGenerationRows)
+'   R04 prefill bira POSLEDNJU GENERACIJU (GeneracijaID, ne datum/ID kontinuitet)
 '   R05 malina auto-zbirna signalizira pad (Err / created=0), scoped na svoj broj
 '   R06 katalog poruka sadrzi kljuceve koje frmDokumenta koristi (EnsurePoruke)
 '   R07 SaveZbirna upisuje po IMENU kolone (BuildZbirnaRowData)
@@ -1801,49 +1802,63 @@ End Sub
 Private Sub Test_PrefillBiraPoslednjuGeneraciju()
     On Error GoTo EH
 
-    ' Sinteticka 2D tabela (1-based): 1=Broj 2=Klasa 3=ID 4=Datum.
-    ' Scenario iz review-a: kasnije upisana ISPRAVKA nosi RANIJI poslovni datum.
+    ' Sinteticka 2D tabela (1-based): 1=Broj 2=Klasa 3=ID 4=GeneracijaID.
+    ' REGRESIJA: uzastopni ID-evi preko granice generacije (30=I i 31=II stare,
+    ' 32=I nove). Bez eksplicitne generacije heuristika kontinuiteta bi spojila
+    ' novu Kl.I sa starom Kl.II.
     Dim d As Variant
-    ReDim d(1 To 2, 1 To 4)
-    d(1, 1) = "DOK-1": d(1, 2) = "I": d(1, 3) = "OTP-00001": d(1, 4) = DateSerial(2090, 8, 5)
-    d(2, 1) = "DOK-1": d(2, 2) = "I": d(2, 3) = "OTP-00002": d(2, 4) = DateSerial(2090, 8, 4)
+    ReDim d(1 To 3, 1 To 4)
+    d(1, 1) = "DOK-1": d(1, 2) = "I":  d(1, 3) = "OTP-00030": d(1, 4) = "GEN-00001"
+    d(2, 1) = "DOK-1": d(2, 2) = "II": d(2, 3) = "OTP-00031": d(2, 4) = "GEN-00001"
+    d(3, 1) = "DOK-1": d(3, 2) = "I":  d(3, 3) = "OTP-00032": d(3, 4) = "GEN-00002"
 
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, 1, 2, 3, "DOK-1", rI, rII
-    AssertEquals "2", CStr(rI), _
-                 "Prefill: kasnija generacija pobedjuje i kad ima RANIJI datum"
-    AssertEquals "0", CStr(rII), "Prefill: nema Kl.II u toj generaciji"
+    PickLatestGenerationRows d, 1, 2, 3, 4, "DOK-1", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz poslednje generacije (uzastopni ID-evi)"
+    AssertEquals "0", CStr(rII), _
+                 "Prefill: stara Kl.II (ID 31) se NE spaja sa novom Kl.I (ID 32)"
 
-    ' Dve generacije, obe dvoklasne -> I i II moraju biti iz ISTE (novije).
+    ' Obe generacije dvoklasne -> I i II iz ISTE (novije).
     Dim g As Variant
     ReDim g(1 To 4, 1 To 4)
-    g(1, 1) = "DOK-2": g(1, 2) = "I":  g(1, 3) = "OTP-00010": g(1, 4) = DateSerial(2090, 9, 9)
-    g(2, 1) = "DOK-2": g(2, 2) = "II": g(2, 3) = "OTP-00011": g(2, 4) = DateSerial(2090, 9, 9)
-    g(3, 1) = "DOK-2": g(3, 2) = "I":  g(3, 3) = "OTP-00020": g(3, 4) = DateSerial(2090, 9, 1)
-    g(4, 1) = "DOK-2": g(4, 2) = "II": g(4, 3) = "OTP-00021": g(4, 4) = DateSerial(2090, 9, 1)
+    g(1, 1) = "DOK-2": g(1, 2) = "I":  g(1, 3) = "OTP-00040": g(1, 4) = "GEN-00010"
+    g(2, 1) = "DOK-2": g(2, 2) = "II": g(2, 3) = "OTP-00041": g(2, 4) = "GEN-00010"
+    g(3, 1) = "DOK-2": g(3, 2) = "I":  g(3, 3) = "OTP-00042": g(3, 4) = "GEN-00011"
+    g(4, 1) = "DOK-2": g(4, 2) = "II": g(4, 3) = "OTP-00043": g(4, 4) = "GEN-00011"
 
-    PickLatestGenerationRows g, 1, 2, 3, "DOK-2", rI, rII
+    PickLatestGenerationRows g, 1, 2, 3, 4, "DOK-2", rI, rII
     AssertEquals "3", CStr(rI), "Prefill: Kl.I iz novije generacije"
     AssertEquals "4", CStr(rII), "Prefill: Kl.II iz ISTE (novije) generacije"
 
-    ' Novija generacija ima samo Kl.I -> Kl.II se NE preuzima iz stare generacije.
+    ' Poslovni datum ne ucestvuje: novija generacija sa RANIJIM datumom pobedjuje.
+    ' (Kolona 4 je generacija; datum bi bio zaseban, ovde je namerno van izbora.)
     Dim h As Variant
-    ReDim h(1 To 3, 1 To 4)
-    h(1, 1) = "DOK-3": h(1, 2) = "I":  h(1, 3) = "OTP-00030": h(1, 4) = DateSerial(2090, 9, 1)
-    h(2, 1) = "DOK-3": h(2, 2) = "II": h(2, 3) = "OTP-00031": h(2, 4) = DateSerial(2090, 9, 1)
-    h(3, 1) = "DOK-3": h(3, 2) = "I":  h(3, 3) = "OTP-00040": h(3, 4) = DateSerial(2090, 9, 5)
+    ReDim h(1 To 2, 1 To 4)
+    h(1, 1) = "DOK-3": h(1, 2) = "I": h(1, 3) = "OTP-00050": h(1, 4) = "GEN-00020"
+    h(2, 1) = "DOK-3": h(2, 2) = "I": h(2, 3) = "OTP-00051": h(2, 4) = "GEN-00021"
 
-    PickLatestGenerationRows h, 1, 2, 3, "DOK-3", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz poslednje generacije"
+    PickLatestGenerationRows h, 1, 2, 3, 4, "DOK-3", rI, rII
+    AssertEquals "2", CStr(rI), "Prefill: kasnija generacija pobedjuje (nezavisno od datuma)"
+
+    ' Fallback bez generacije: samo poslednji red, druga klasa se NE pogadja.
+    Dim f As Variant
+    ReDim f(1 To 3, 1 To 4)
+    f(1, 1) = "DOK-4": f(1, 2) = "I":  f(1, 3) = "OTP-00060": f(1, 4) = ""
+    f(2, 1) = "DOK-4": f(2, 2) = "II": f(2, 3) = "OTP-00061": f(2, 4) = ""
+    f(3, 1) = "DOK-4": f(3, 2) = "I":  f(3, 3) = "OTP-00062": f(3, 4) = ""
+
+    PickLatestGenerationRows f, 1, 2, 3, 4, "DOK-4", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill fallback: poslednji upisan red"
     AssertEquals "0", CStr(rII), _
-                 "Prefill: stara Kl.II se NE spaja sa novom Kl.I"
+                 "Prefill fallback: bez generacije druga klasa ostaje prazna"
 
-    ' Bez upotrebljive ID kolone -> fallback na fizicki redosled (poslednji red).
-    PickLatestGenerationRows h, 1, 2, 0, "DOK-3", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill: bez ID kolone bira poslednji red"
+    ' Isti fallback i kad kolone uopste nema (cGen = 0).
+    PickLatestGenerationRows f, 1, 2, 3, 0, "DOK-4", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill fallback: bez GeneracijaID kolone"
+    AssertEquals "0", CStr(rII), "Prefill fallback: bez kolone nema druge klase"
 
     ' Nepostojeci broj -> nista.
-    PickLatestGenerationRows h, 1, 2, 3, "DOK-NEMA", rI, rII
+    PickLatestGenerationRows g, 1, 2, 3, 4, "DOK-NEMA", rI, rII
     AssertEquals "00", CStr(rI) & CStr(rII), "Prefill: nepoznat broj ne vraca red"
 
     Exit Sub
@@ -1851,6 +1866,90 @@ Private Sub Test_PrefillBiraPoslednjuGeneraciju()
 EH:
     LogFatal "Test_PrefillBiraPoslednjuGeneraciju", Err.Number, Err.description
 End Sub
+
+' End-to-end: save putanja stvarno pise GeneracijaID, i to ISTU za obe klase
+' jednog Multi_TX upisa, a NOVU za ispravku istog broja.
+Private Sub Test_GeneracijaIDNaSavePutanji()
+    On Error GoTo EH
+
+    If GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID) = 0 Then
+        LogSkip "GeneracijaID na save putanji", _
+               "Kolona GeneracijaID ne postoji (pokreni EnsureSledljivostSchema)"
+        Exit Sub
+    End If
+
+    Dim scenario As String
+    scenario = NewScenarioCode("GENID")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojOtp As String, brojZbirne As String
+    brojOtp = TEST_PREFIX & "-OTP-GEN-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-GEN-" & scenario
+
+    ' Generacija 1: dvoklasna otpremnica (jedan Multi_TX poziv).
+    Dim res1 As String
+    res1 = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, _
+                                  True, 50#, 8#)
+    AssertTrue Len(res1) > 0, "GeneracijaID: dvoklasna otpremnica snimljena"
+
+    Dim genI As String, genII As String
+    genI = OtpGeneracija(brojOtp, KLASA_I)
+    genII = OtpGeneracija(brojOtp, KLASA_II)
+
+    AssertTrue Len(genI) > 0, "GeneracijaID: Klasa I ima generaciju"
+    AssertEquals genI, genII, "GeneracijaID: obe klase jednog upisa dele generaciju"
+
+    ' Generacija 2: ispravka istog broja, samo Klasa I.
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_I)
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_II)
+
+    Dim res2 As String
+    res2 = SaveOtpremnicaMulti_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                                  TEST_VRSTA, TEST_SORTA, 120#, 10#, TEST_TIP_AMB, 12)
+    AssertTrue Len(res2) > 0, "GeneracijaID: ispravka (samo Kl.I) snimljena"
+
+    ' Prefill nad REALNOM tabelom mora dati novi Kl.I red i praznu Kl.II.
+    Dim d As Variant
+    d = GetTableData(TBL_OTPREMNICA)
+
+    Dim cBr As Long, cKl As Long, cId As Long, cGen As Long, cKol As Long
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+
+    Dim rI As Long, rII As Long
+    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brojOtp, rI, rII
+
+    AssertTrue rI > 0, "GeneracijaID: prefill nasao Kl.I poslednje generacije"
+    AssertEquals "0", CStr(rII), _
+                 "GeneracijaID: stara Kl.II se NE prefiluje uz novu Kl.I"
+
+    If rI > 0 And cKol > 0 Then
+        Dim kolI As Double
+        kolI = CDbl(nz(d(rI, cKol), 0))
+        AssertTrue Abs(kolI - 120#) < 0.001, _
+                   "GeneracijaID: prefill uzima kolicinu IZ ISPRAVKE (120), ne original"
+    End If
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_GeneracijaIDNaSavePutanji", Err.Number, Err.description
+End Sub
+
+Private Function OtpGeneracija(ByVal brojOtp As String, ByVal klasa As String) As String
+    Dim otpID As String
+    otpID = FindOtpremnicaIDByBrojAndKlasa(brojOtp, klasa)
+    If Len(otpID) = 0 Then Exit Function
+
+    OtpGeneracija = Trim$(CStr(nz(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+                                                COL_GENERACIJA_ID), "")))
+End Function
 
 Private Sub Test_MalinaAutoZbirnaFailSignal()
     Dim prevMode As String, prevKupac As String
