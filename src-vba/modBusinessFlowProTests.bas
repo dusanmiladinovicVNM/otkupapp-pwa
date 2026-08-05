@@ -92,6 +92,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_PrefillBiraPoslednjuGeneraciju
     Test_GeneracijaIDNaSavePutanji
     Test_GeneracijaNePrelaziVlasnika
+    Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1642,6 +1643,7 @@ End Sub
 '   R06 katalog poruka sadrzi kljuceve koje frmDokumenta koristi (EnsurePoruke)
 '   R07 SaveZbirna upisuje po IMENU kolone (BuildZbirnaRowData)
 '   R08 OM ulaz: smer ambalaze je obavezan (core guard u SaveOMUlaz_TX)
+'   R09 storno po broju sa dva vlasnika je odbijen (ne stornira tudji dokument)
 ' ============================================================
 
 Private Sub Test_ProsekGajbeExcludesStornirano()
@@ -1870,6 +1872,76 @@ Private Sub Test_PrefillBiraPoslednjuGeneraciju()
 EH:
     LogFatal "Test_PrefillBiraPoslednjuGeneraciju", Err.Number, Err.description
 End Sub
+
+' Storno po BROJU zahvata sve aktivne redove tog broja. Kad broj nije jedinstven
+' (dva kupca), to bi tiho storniralo i tudji dokument -> mora biti ODBIJENO.
+Private Sub Test_StornoPoBrojuOdbijaDvaVlasnika()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("STOVLAS")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String, brojPrij As String
+    brojZbirne = TEST_PREFIX & "-ZBR-SV-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-SV-" & scenario     ' ISTI broj za oba kupca
+
+    AssertTrue Len(SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                                 "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                                 100#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
+               "Storno guard: fixture zbirna kreirana"
+
+    Dim prjA As String, prjB As String
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "Storno guard: obe prijemnice (isti broj, dva kupca) kreirane"
+
+    ' Dvosmislen number-only storno mora pasti...
+    AssertFalse StornoPrijemnicaByBroj_TX(brojPrij), _
+                "Storno guard: storno po broju sa dva vlasnika je ODBIJEN"
+
+    ' ...i ne sme ostaviti nijedan storniran red (rollback / nista nije dirano).
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+               "Storno guard: dokument kupca A ostaje aktivan"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+               "Storno guard: dokument kupca B ostaje aktivan"
+
+    ' Kontrola: jedinstven broj (jedan vlasnik, obe klase) i dalje prolazi.
+    Dim brojPrijOK As String
+    brojPrijOK = TEST_PREFIX & "-PRJ-SV1-" & scenario
+
+    Dim okI As String, okII As String
+    okI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijOK, brojZbirne, _
+                            TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    okII = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrijOK, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 40#, 90#, TEST_TIP_AMB, 0, 0, KLASA_II)
+    AssertTrue Len(okI) > 0 And Len(okII) > 0, "Storno guard: fixture jednog vlasnika kreiran"
+
+    AssertTrue StornoPrijemnicaByBroj_TX(brojPrijOK), _
+               "Storno guard: jedinstven broj (jedan vlasnik) i dalje prolazi"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okI), _
+               "Storno guard: Kl.I stornirana"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, okII), _
+               "Storno guard: Kl.II stornirana (obe klase istog broja)"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_StornoPoBrojuOdbijaDvaVlasnika", Err.Number, Err.description
+End Sub
+
+Private Function RowIsStornirano(ByVal tableName As String, ByVal idColumn As String, _
+                                 ByVal idValue As String) As Boolean
+    If Len(Trim$(idValue)) = 0 Then Exit Function
+
+    RowIsStornirano = (UCase$(Trim$(CStr(nz(GetValueByKey(tableName, idColumn, idValue, _
+                                                          COL_STORNIRANO), "")))) = "DA")
+End Function
 
 ' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
 ' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.
