@@ -1822,6 +1822,17 @@ Private Sub btnUnosOMUlaz_Click()
                vbExclamation, APP_NAME
         Exit Sub
     End If
+
+    ' Smer je OBAVEZAN uz kolicinu ambalaze: bez njega je SaveOMUlaz_TX isao u
+    ' Case Else i tiho knjizio legacy "OM prima od vozaca" (Stanica ULAZ). Sada
+    ' operater bira smer eksplicitno (za "vozac predaje na OM" -> Izdato OM).
+    If kolAmb > 0 And smerCount = 0 Then
+        MsgBox "Kad unosite koli" & ChrW(269) & "inu ambala" & ChrW(382) & "e, izaberite smer: " & _
+               "izdavanje/prijem kooperantu ILI firma<->OM (preko voza" & ChrW(269) & "a).", _
+               vbExclamation, APP_NAME
+        txtKolAmbOMUlaz.SetFocus
+        Exit Sub
+    End If
     If izdavanje Or prijemKoop Then
         Dim smerTxt As String
         If prijemKoop Then smerTxt = "prijem" Else smerTxt = "izdavanje"
