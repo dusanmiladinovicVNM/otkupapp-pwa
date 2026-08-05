@@ -44,11 +44,6 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
-    ' Jedna generacija za OBE klase ovog upisa (prefill iz stornirane bira
-    ' generaciju, pa Kl.I i Kl.II ne mogu doci iz razlicitih upisa).
-    Dim genID As String
-    genID = NewGeneracijaID(TBL_OTPREMNICA)
-
     Dim resultI As String
     If hasKlasaI Then
         resultI = SaveOtpremnica( _
@@ -64,8 +59,7 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
             tipAmb, _
             kolAmb, _
             KLASA_I, _
-            brutoKgI, _
-            genID)
+            brutoKgI)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1101, "SaveOtpremnicaMulti_TX", _
@@ -88,8 +82,7 @@ Public Function SaveOtpremnicaMulti_TX(ByVal datum As Date, _
             tipAmb, _
             kolAmbII, _
             KLASA_II, _
-            brutoKgII, _
-            genID)
+            brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1102, "SaveOtpremnicaMulti_TX", _
@@ -237,8 +230,7 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, _
                                Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0, _
-                               Optional ByVal generacijaID As String = "") As String
+                               Optional ByVal brutoKg As Double = 0) As String
 
     On Error GoTo EH
 
@@ -260,12 +252,9 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
     Dim newRow As Long
     newRow = AppendRow(TBL_OTPREMNICA, rowData)
     If newRow > 0 Then
-        ' Generacija: prosledjena iz Multi_TX (deli je Klasa I i II) ili sopstvena
-        ' za samostalan upis.
-        Dim genOtp As String
-        genOtp = Trim$(generacijaID)
-        If Len(genOtp) = 0 Then genOtp = NewGeneracijaID(TBL_OTPREMNICA)
-        SetGeneracijaID TBL_OTPREMNICA, newRow, genOtp
+        ' Generacija: nasledjuje se od aktivnih redova istog broja (Klasa I <-> II),
+        ' inace nova. Vazi za sve pozivaoce -- Multi_TX i pojedinacne _TX putanje.
+        ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp
 
         If kolAmb > 0 Then
             TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", stanicaID, "Stanica", vozacID, newID, DOK_TIP_OTPREMNICA
@@ -435,10 +424,6 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
-    ' Jedna generacija za OBE klase ovog upisa (vidi SaveOtpremnicaMulti_TX).
-    Dim genID As String
-    genID = NewGeneracijaID(TBL_ZBIRNA)
-
     Dim resultI As String
     If hasKlasaI Then
         resultI = SaveZbirna( _
@@ -453,8 +438,7 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
             ukupnoKolI, _
             tipAmb, _
             ukupnoAmb, _
-            KLASA_I, _
-            genID)
+            KLASA_I)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1201, "SaveZbirnaMulti_TX", _
@@ -476,8 +460,7 @@ Public Function SaveZbirnaMulti_TX(ByVal datum As Date, _
             ukupnoKolII, _
             tipAmb, _
             ukupnoAmbII, _
-            KLASA_II, _
-            genID)
+            KLASA_II)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1202, "SaveZbirnaMulti_TX", _
@@ -618,8 +601,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
                            ByVal vrstaVoca As String, ByVal sortaVoca As String, _
                            ByVal ukupnoKol As Double, ByVal tipAmb As String, _
                            ByVal ukupnoAmb As Long, _
-                           Optional ByVal klasa As String = "I", _
-                           Optional ByVal generacijaID As String = "") As String
+                           Optional ByVal klasa As String = "I") As String
     On Error GoTo EH
 
     Call ValidateZbirnaInput(vozacID, brojZbirne, kupacID, ukupnoKol, _
@@ -646,10 +628,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
     newRowZbr = AppendRow(TBL_ZBIRNA, rowData)
 
     If newRowZbr > 0 Then
-        Dim genZbr As String
-        genZbr = Trim$(generacijaID)
-        If Len(genZbr) = 0 Then genZbr = NewGeneracijaID(TBL_ZBIRNA)
-        SetGeneracijaID TBL_ZBIRNA, newRowZbr, genZbr
+        ApplyGeneracijaID TBL_ZBIRNA, newRowZbr, COL_ZBR_BROJ, brojZbirne
 
         SaveZbirna = newID
     Else
@@ -874,28 +853,100 @@ EH:
     ZbirnaIzvorImaKlasuII = False
 End Function
 
-' Nova generacija upisa za dokument-tabelu ("GEN-00042"). Svi redovi JEDNOG
-' Multi_TX poziva (Klasa I + Klasa II) dele ovu vrednost; storno -> ispravka istog
-' broja dobija novu. Prazan povrat kad kolona jos ne postoji (stara sema) --
-' upis je tada no-op, a prefill pada na konzervativni fallback.
-Public Function NewGeneracijaID(ByVal tableName As String) As String
-    On Error GoTo EH
-    If GetColumnIndex(tableName, COL_GENERACIJA_ID) = 0 Then Exit Function
-    NewGeneracijaID = GetNextID(tableName, COL_GENERACIJA_ID, "GEN-")
-    Exit Function
-EH:
-    LogErr "modDokumenta.NewGeneracijaID"
-    NewGeneracijaID = ""
+' ============================================================
+' Generacija dokumenta (COL_GENERACIJA_ID)
+'
+' PRAVILO (jedno mesto, svi writer-i): red nasledjuje generaciju od AKTIVNIH
+' (nestorniranih) redova ISTOG broja dokumenta; ako takvih nema -> nova generacija.
+'
+' Time bez ijednog dodatnog parametra vazi:
+'   - Klasa I i Klasa II istog upisa dele generaciju (druga nasledjuje od prve),
+'     bez obzira da li ih pise Multi_TX, AutoChainHladnjaca (dva zasebna _TX
+'     poziva), malina auto-zbirna (red po red) ili backfill prijemnice;
+'   - ISPRAVKA posle storna dobija NOVU generaciju -- svi stariji redovi tog broja
+'     su tada stornirani, pa se nema sta naslediti;
+'   - dopuna aktivnog dokumenta ostaje u njegovoj generaciji.
+'
+' Kolona je obavezna (RequireColumnIndex): stvara je modSetup.EnsureSledljivostSchema
+' na svakom startu. Bez nje upis pada umesto da tiho nastane red bez generacije.
+' ============================================================
+
+' Generacija za red koji se upisuje pod datim brojem dokumenta.
+Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
+                                   ByVal brojCol As String, _
+                                   ByVal broj As String) As String
+    Const SRC As String = "modDokumenta.GeneracijaIDZaBroj"
+
+    Dim cGen As Long
+    cGen = RequireColumnIndex(tableName, COL_GENERACIJA_ID, SRC)
+
+    Dim target As String
+    target = Trim$(broj)
+
+    If Len(target) > 0 Then
+        Dim data As Variant
+        data = GetTableData(tableName)
+
+        If IsArray(data) Then data = ExcludeStornirano(data, tableName)
+
+        If IsArray(data) Then
+            Dim cBr As Long
+            cBr = RequireColumnIndex(tableName, brojCol, SRC)
+
+            Dim best As Double, bestGen As String
+            Dim r As Long, g As String, rank As Double
+            best = -1
+
+            For r = 1 To UBound(data, 1)
+                If Trim$(NzToText(data(r, cBr))) = target Then
+                    g = Trim$(NzToText(data(r, cGen)))
+                    If Len(g) > 0 Then
+                        rank = IdRank(g)
+                        If rank > best Then
+                            best = rank
+                            bestGen = g
+                        End If
+                    End If
+                End If
+            Next r
+
+            If Len(bestGen) > 0 Then
+                GeneracijaIDZaBroj = bestGen
+                Exit Function
+            End If
+        End If
+    End If
+
+    GeneracijaIDZaBroj = NewGeneracijaID(tableName)
 End Function
 
-' Upis generacije na upravo dodat red (po imenu kolone; no-op bez kolone/vrednosti).
-Private Sub SetGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, _
-                            ByVal generacijaID As String)
-    If rowIndex <= 0 Then Exit Sub
-    If Len(Trim$(generacijaID)) = 0 Then Exit Sub
-    If GetColumnIndex(tableName, COL_GENERACIJA_ID) = 0 Then Exit Sub
+' Nova generacija za dokument-tabelu ("GEN-00042").
+Public Function NewGeneracijaID(ByVal tableName As String) As String
+    Const SRC As String = "modDokumenta.NewGeneracijaID"
 
-    UpdateCell tableName, rowIndex, COL_GENERACIJA_ID, generacijaID
+    RequireColumnIndex tableName, COL_GENERACIJA_ID, SRC
+
+    NewGeneracijaID = GetNextID(tableName, COL_GENERACIJA_ID, "GEN-")
+
+    If Len(Trim$(NewGeneracijaID)) = 0 Then
+        Err.Raise vbObjectError + 1015, SRC, _
+                  "GetNextID nije vratio GeneracijaID za " & tableName & "."
+    End If
+End Function
+
+' Izracunaj i upisi generaciju na upravo dodat red. Koriste je i writer-i koji
+' ne idu kroz Save* (PWA import, invariant rekalkulacija).
+Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, _
+                             ByVal brojCol As String, ByVal broj As String)
+    Const SRC As String = "modDokumenta.ApplyGeneracijaID"
+
+    If rowIndex <= 0 Then
+        Err.Raise vbObjectError + 1016, SRC, _
+                  "Neispravan red za upis generacije (" & tableName & ")."
+    End If
+
+    RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
+                      GeneracijaIDZaBroj(tableName, brojCol, broj), SRC
 End Sub
 
 ' Bira redove POSLEDNJE GENERACIJE dokumenta za prefill (frmDokumenta.Prefill*
@@ -1076,10 +1127,6 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
                   "Mora postojati bar jedna klasa (I ili II)."
     End If
 
-    ' Jedna generacija za OBE klase ovog upisa (vidi SaveOtpremnicaMulti_TX).
-    Dim genID As String
-    genID = NewGeneracijaID(TBL_PRIJEMNICA)
-
     Dim resultI As String
     If hasKlasaI Then
         resultI = SavePrijemnica( _
@@ -1096,8 +1143,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             kolAmb, _
             kolAmbVracena, _
             KLASA_I, _
-            brutoKgI, _
-            genID)
+            brutoKgI)
 
         If resultI = "" Then
             Err.Raise vbObjectError + 1301, "SavePrijemnicaMulti_TX", _
@@ -1121,8 +1167,7 @@ Public Function SavePrijemnicaMulti_TX(ByVal datum As Date, _
             kolAmbII, _
             0, _
             KLASA_II, _
-            brutoKgII, _
-            genID)
+            brutoKgII)
 
         If resultII = "" Then
             Err.Raise vbObjectError + 1302, "SavePrijemnicaMulti_TX", _
@@ -1307,8 +1352,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                                ByVal cena As Double, ByVal tipAmb As String, _
                                ByVal kolAmb As Long, ByVal kolAmbVracena As Long, _
                                Optional ByVal klasa As String = "I", _
-                               Optional ByVal brutoKg As Double = 0, _
-                               Optional ByVal generacijaID As String = "") As String
+                               Optional ByVal brutoKg As Double = 0) As String
     On Error GoTo EH
 
     Call ValidatePrijemnicaInput(kupacID, vozacID, brojPrij, brojZbirne, _
@@ -1338,10 +1382,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
-    Dim genPrj As String
-    genPrj = Trim$(generacijaID)
-    If Len(genPrj) = 0 Then genPrj = NewGeneracijaID(TBL_PRIJEMNICA)
-    SetGeneracijaID TBL_PRIJEMNICA, appendedRow, genPrj
+    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
     ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).

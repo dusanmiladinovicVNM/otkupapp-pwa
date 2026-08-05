@@ -392,10 +392,17 @@ Private Sub ApplyKlasaRecalc(ByVal SRC As String, ByVal brojZbirne As String, _
     rowData(11) = amb
     rowData(12) = klasa
 
-    If AppendRow(TBL_ZBIRNA, rowData) = 0 Then
+    Dim newRow As Long
+    newRow = AppendRow(TBL_ZBIRNA, rowData)
+
+    If newRow = 0 Then
         Err.Raise ERR_STORNO_FW_BASE + 2, SRC, _
                   "AppendRow zbirna (klasa " & klasa & ") nije uspeo."
     End If
+
+    ' Generacija: nasledjuje se od aktivnih redova istog broja (druga klasa iste
+    ' rekalkulacije), inace nova. Bez ovoga bi sistemski upis ostao bez generacije.
+    ApplyGeneracijaID TBL_ZBIRNA, newRow, COL_ZBR_BROJ, brojZbirne
 End Sub
 
 ' Audit izmene IZDATE zbirne bez re-verzije (in-place recalc). Durabilan trag u

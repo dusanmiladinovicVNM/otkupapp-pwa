@@ -1562,6 +1562,14 @@ Private Sub Test_MalinaAutoZbirnaFromOtpremnice()
     AssertTrue Len(zbrI) > 0, "Malina: zbirna Klasa I (BrojZbirne==BrojOtpremnice) postoji"
     AssertTrue Len(zbrII) > 0, "Malina: zbirna Klasa II postoji (hasKlasaII)"
 
+    ' Auto-zbirna pise red po red (dva zasebna SaveZbirna_TX poziva), ali obe klase
+    ' dele BrojZbirne -> moraju deliti i generaciju.
+    AssertTrue Len(DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, zbrI)) > 0, _
+        "Malina: auto-zbirna ima generaciju"
+    AssertEquals DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, zbrI), _
+                 DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, zbrII), _
+        "Malina: obe klase auto-zbirne dele generaciju"
+
     ' kg zbirne == kg otpremnice (1:1)
     AssertEquals "1000", _
         CStr(GetValueByKey(TBL_ZBIRNA, "ZbirnaID", zbrI, "UkupnoKolicina")), _
@@ -1872,11 +1880,14 @@ End Sub
 Private Sub Test_GeneracijaIDNaSavePutanji()
     On Error GoTo EH
 
-    If GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID) = 0 Then
-        LogSkip "GeneracijaID na save putanji", _
-               "Kolona GeneracijaID ne postoji (pokreni EnsureSledljivostSchema)"
-        Exit Sub
-    End If
+    ' Kolona je obavezan invariant (EnsureSledljivostSchema je pravi na svakom
+    ' startu) -> nedostatak je FAIL, ne SKIP; inace suite ostaje zelen bez pokrica.
+    AssertTrue GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID) > 0, _
+               "GeneracijaID: kolona postoji na tblOtpremnica"
+    AssertTrue GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID) > 0, _
+               "GeneracijaID: kolona postoji na tblZbirna"
+    AssertTrue GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID) > 0, _
+               "GeneracijaID: kolona postoji na tblPrijemnica"
 
     Dim scenario As String
     scenario = NewScenarioCode("GENID")
@@ -1911,6 +1922,11 @@ Private Sub Test_GeneracijaIDNaSavePutanji()
                                   TEST_VRSTA, TEST_SORTA, 120#, 10#, TEST_TIP_AMB, 12)
     AssertTrue Len(res2) > 0, "GeneracijaID: ispravka (samo Kl.I) snimljena"
 
+    ' Nasledjivanje ide samo od AKTIVNIH redova -> posle storna nema sta da se
+    ' nasledi i ispravka dobija NOVU generaciju.
+    AssertTrue OtpGeneracija(brojOtp, KLASA_I) <> genI, _
+               "GeneracijaID: ispravka posle storna dobija NOVU generaciju"
+
     ' Prefill nad REALNOM tabelom mora dati novi Kl.I red i praznu Kl.II.
     Dim d As Variant
     d = GetTableData(TBL_OTPREMNICA)
@@ -1942,13 +1958,19 @@ EH:
     LogFatal "Test_GeneracijaIDNaSavePutanji", Err.Number, Err.description
 End Sub
 
-Private Function OtpGeneracija(ByVal brojOtp As String, ByVal klasa As String) As String
-    Dim otpID As String
-    otpID = FindOtpremnicaIDByBrojAndKlasa(brojOtp, klasa)
-    If Len(otpID) = 0 Then Exit Function
+' Generacija reda po ID-u. Prazan ID daje "" -> AssertEquals nad dva prazna bi
+' lazno prosao, pa pozivaoci uz poredjenje tvrde i da generacija NIJE prazna.
+Private Function DokGeneracija(ByVal tableName As String, ByVal idColumn As String, _
+                               ByVal idValue As String) As String
+    If Len(Trim$(idValue)) = 0 Then Exit Function
 
-    OtpGeneracija = Trim$(CStr(nz(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpID, _
+    DokGeneracija = Trim$(CStr(nz(GetValueByKey(tableName, idColumn, idValue, _
                                                 COL_GENERACIJA_ID), "")))
+End Function
+
+Private Function OtpGeneracija(ByVal brojOtp As String, ByVal klasa As String) As String
+    OtpGeneracija = DokGeneracija(TBL_OTPREMNICA, COL_OTP_ID, _
+                                  FindOtpremnicaIDByBrojAndKlasa(brojOtp, klasa))
 End Function
 
 Private Sub Test_MalinaAutoZbirnaFailSignal()
@@ -2624,6 +2646,20 @@ Private Sub Test_HladnjacaChainHappyPath()
         "Hladnjaca lanac: prijemnica Klasa I nosi izlozeni broj"
     AssertEquals brPrij, FindPrijBrojByZbirnaKlasaKupac(brDok, KLASA_II, TEST_KUP_ID), _
         "Hladnjaca lanac: prijemnica Klasa II nosi ISTI broj"
+
+    ' Generacija: lanac pise Klasu I i II ZASEBNIM _TX pozivima, ali obe klase
+    ' istog dokumenta moraju deliti generaciju (inace prefill vidi samo jednu).
+    AssertEquals DokGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)), _
+                 DokGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_II)), _
+        "Hladnjaca lanac: otpremnica Kl.I i Kl.II dele generaciju"
+    AssertTrue Len(DokGeneracija(TBL_OTPREMNICA, COL_OTP_ID, FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I))) > 0, _
+        "Hladnjaca lanac: otpremnica ima generaciju"
+    AssertEquals DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I)), _
+                 DokGeneracija(TBL_ZBIRNA, COL_ZBR_ID, FindZbirnaIDByBrojAndKlasa(brDok, KLASA_II)), _
+        "Hladnjaca lanac: zbirna Kl.I i Kl.II dele generaciju"
+    AssertEquals DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, FindPrijemnicaIDByBrojAndKlasa(brPrij, KLASA_I)), _
+                 DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, FindPrijemnicaIDByBrojAndKlasa(brPrij, KLASA_II)), _
+        "Hladnjaca lanac: prijemnica Kl.I i Kl.II dele generaciju"
 
     ' Back-link u otkup red.
     Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)
