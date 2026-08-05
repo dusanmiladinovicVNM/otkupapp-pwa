@@ -1968,13 +1968,19 @@ Private Sub Test_ZbirnaRowDataColumnMapped()
                "Zbirna mapiranje: UkupnoKolicina je broj"
     AssertTrue Abs(kol - 123.45) < 0.001, "Zbirna mapiranje: UkupnoKolicina vrednost"
 
-    Dim datumTxt As String
-    datumTxt = ZbrPolje(zbrID, COL_ZBR_DATUM)
-    AssertTrue IsDate(datumTxt), "Zbirna mapiranje: Datum je datum"
-    If IsDate(datumTxt) Then
-        AssertEquals Format$(testDate, "yyyy-mm-dd"), Format$(CDate(datumTxt), "yyyy-mm-dd"), _
-                     "Zbirna mapiranje: Datum vrednost"
+    ' Datum se cita kao sirova vrednost: Excel ga vraca kao Date ILI kao serijski
+    ' broj (zavisi od formata kolone), pa poredjenje ne sme da ide preko CStr.
+    Dim vDat As Variant
+    vDat = GetValueByKey(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_DATUM)
+
+    Dim datOk As Boolean
+    If IsDate(vDat) Then
+        datOk = (Int(CDbl(CDate(vDat))) = Int(CDbl(testDate)))
+    ElseIf IsNumeric(vDat) Then
+        datOk = (Int(CDbl(vDat)) = Int(CDbl(testDate)))
     End If
+
+    AssertTrue datOk, "Zbirna mapiranje: Datum vrednost u Datum koloni"
 
     If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
         AssertEquals "", ZbrPolje(zbrID, COL_STORNIRANO), _
