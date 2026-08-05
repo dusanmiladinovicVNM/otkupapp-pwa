@@ -95,6 +95,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_StornoGuardNaSvimPutanjama
     Test_StornoGuardUKaskadi
+    Test_StornoKaskadaScopePoLancu
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1648,6 +1649,7 @@ End Sub
 '   R09 storno po broju sa dva vlasnika je odbijen (ne stornira tudji dokument)
 '   R10 isti guard vazi i na ISPRAVKA/DUPLI/SIMPLE correction putanjama
 '   R11 guard vazi i u malina/autohladnjaca kaskadama (ulaz je BrojZbirne)
+'   R12 kaskade mutiraju samo redove razresenog lanca (scope), fail-closed bez parenta
 ' ============================================================
 
 Private Sub Test_ProsekGajbeExcludesStornirano()
@@ -2106,6 +2108,93 @@ EH:
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     On Error GoTo 0
     LogFatal "Test_StornoGuardUKaskadi", Err.Number, Err.description
+End Sub
+
+' Kaskade mutiraju tblOtpremnica/tblPrijemnica po BrojZbirne, a vlasnik se cita iz
+' zbirne -- zato se scope lanca razresava JEDNOM pre prve mutacije i child redovi se
+' filtriraju po njemu. Pokriva javni ulaz (StornoOtkupByBrDok_TX), sve tri kaskade,
+' single-owner happy path i fail-closed granu bez aktivnog parenta.
+Private Sub Test_StornoKaskadaScopePoLancu()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim scenario As String
+    scenario = NewScenarioCode("KASKSCOPE")
+
+    ' --- Deo 1: happy path + TUDJI aktivan child pod istim BrojZbirne ---
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-KSC-" & scenario
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "", brPrij)
+    AssertEquals "", w, "Kaskada scope: hladnjaca lanac kreiran bez upozorenja"
+
+    Dim otpI As String, zbrI As String, prjI As String
+    otpI = FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)
+    zbrI = FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I)
+    prjI = FindPrijemnicaIDByBrojAndKlasa(brPrij, KLASA_I)
+    AssertTrue Len(otpI) > 0 And Len(zbrI) > 0 And Len(prjI) > 0, _
+               "Kaskada scope: otpremnica/zbirna/prijemnica lanca postoje"
+
+    ' Tudja prijemnica DRUGOG kupca vezana na ISTI BrojZbirne (co-tenant / osirocena).
+    Dim tudjaPrij As String
+    tudjaPrij = SavePrijemnica_TX(NextTestDate(), TEST_KUP2_ID, TEST_VOZ_ID, _
+                                  TEST_PREFIX & "-KSC-TUDJA-" & scenario, brDok, _
+                                  TEST_VRSTA, TEST_SORTA, 60#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    AssertTrue Len(tudjaPrij) > 0, "Kaskada scope: tudja prijemnica na isti BrojZbirne kreirana"
+
+    AssertTrue StornoOtkupByBrDok_TX(brDok), _
+               "Kaskada scope: storno otkup bloka (single owner) prolazi"
+
+    AssertTrue RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpI), _
+               "Kaskada scope: otpremnica lanca stornirana"
+    AssertTrue RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrI), _
+               "Kaskada scope: zbirna lanca stornirana"
+    AssertTrue RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjI), _
+               "Kaskada scope: prijemnica lanca stornirana (kaskada radi)"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, tudjaPrij), _
+               "Kaskada scope: prijemnica DRUGOG kupca pod istim BrojZbirne NETAKNUTA"
+
+    ' --- Deo 2: nema aktivne zbirne, a postoji aktivan child -> fail-closed ---
+    Dim brDok2 As String
+    brDok2 = TEST_PREFIX & "-KSC2-" & scenario
+
+    Dim testDate2 As Date
+    testDate2 = NextTestDate()
+
+    ' Otkup blok na hladnjaca stanici sa BrojZbirne = brDok2 (zbirna se NE pravi).
+    Dim otkIDs As String
+    otkIDs = SaveOtkupMulti_TX(testDate2, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                               100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok2, _
+                               0#, "TEST OPERATOR", GetTestParcelaID(), brDok2)
+    AssertTrue Len(otkIDs) > 0, "Kaskada scope: otkup blok bez zbirne kreiran"
+
+    ' Aktivna prijemnica drugog kupca na taj BrojZbirne -- pripadnost nije dokaziva.
+    Dim orphanPrij As String
+    orphanPrij = SavePrijemnica_TX(testDate2, TEST_KUP2_ID, TEST_VOZ_ID, _
+                                   TEST_PREFIX & "-KSC2-PRJ-" & scenario, brDok2, _
+                                   TEST_VRSTA, TEST_SORTA, 50#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    AssertTrue Len(orphanPrij) > 0, "Kaskada scope: osirocena prijemnica kreirana"
+
+    Dim otkID As String
+    otkID = FindOtkupIDByBrojAndKlasa(brDok2, KLASA_I)
+
+    AssertFalse StornoOtkupByBrDok_TX(brDok2), _
+                "Kaskada scope: bez aktivne zbirne uz aktivan child -> storno je ODBIJEN"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, orphanPrij), _
+               "Kaskada scope: osirocena prijemnica ostaje netaknuta"
+    If Len(otkID) > 0 Then
+        AssertTrue Not RowIsStornirano(TBL_OTKUP, "OtkupID", otkID), _
+                   "Kaskada scope: otkup red ostaje aktivan (TX rollback)"
+    End If
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFatal "Test_StornoKaskadaScopePoLancu", Err.Number, Err.description
 End Sub
 
 ' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
