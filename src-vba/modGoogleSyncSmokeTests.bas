@@ -48,6 +48,9 @@ Public Sub RunGoogleSyncSmokeSuite()
     EndGoogleSmokeRun
 
     ' HARD GATE -- vidi RaiseIfSuiteFailed.
+    ' On Error GoTo 0 je obavezan: inace bi raise usao u EH ispod, dodao jos
+    ' jedan "fatal" FAIL i ponovio cleanup/summary pre nego sto propagira.
+    On Error GoTo 0
     RaiseIfSuiteFailed "RunGoogleSyncSmokeSuite"
     Exit Sub
 
@@ -399,6 +402,7 @@ Public Sub RunMasterSyncSmokeSuite()
     Test_MasterSyncMissingClientRecordID
     Test_MasterSyncReadFailureIsFatalAndSkipsImport
     Test_MasterSyncEmptySheetIsNotAnError
+    Test_BrojeviRemoteScanFailsClosed
 
     tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
@@ -406,6 +410,8 @@ Public Sub RunMasterSyncSmokeSuite()
     EndGoogleSmokeRun
 
     ' HARD GATE -- rollback i cleanup su vec odradeni iznad.
+    ' On Error GoTo 0: raise ne sme da udje u EH ispod (dupli FAIL + dupli cleanup).
+    On Error GoTo 0
     RaiseIfSuiteFailed "RunMasterSyncSmokeSuite"
     Exit Sub
 
@@ -660,6 +666,81 @@ EH:
 
     On Error Resume Next
     If Len(Trim$(emptySpreadsheetID)) > 0 Then Call TrashGoogleDriveFile(emptySpreadsheetID)
+End Sub
+
+Private Sub Test_BrojeviRemoteScanFailsClosed()
+    ' AUD-001 regresija za remote scan brojeva (modBrojevi):
+    '   (a) sheet koji stvarno ne postoji -> 0 i BEZ negativnog kesiranja
+    '   (b) sheet koji postoji ali nema ocekivane headere -> greska propagira
+    '       (nikad tihi 0, jer bi to moglo ponuditi vec zauzet broj)
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim missingName As String
+    Dim noHeaderName As String
+    Dim noHeaderID As String
+    Dim resolvedID As String
+    Dim fixture(1 To 2, 1 To 2) As Variant
+    Dim seq As Long
+    Dim raisedNumber As Long
+
+    If Not IsCloudSyncEnabled() Then
+        LogGoogleSmokePass "BROJEVI: cloud sync iskljucen -- remote scan test preskocen"
+        Exit Sub
+    End If
+
+    folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+    AssertTrue Len(folderID) > 0, "BROJEVI: GOOGLE_PWA_FOLDER_ID present"
+
+    ' --- (a) sheet koji ne postoji: lookup uspeva, rezultat je prazan ID
+    missingName = "OTK-TST-NEMA-" & m_RunID
+
+    AssertTrue TryGetSpreadsheetID(missingName, folderID, resolvedID), _
+               "BROJEVI: lookup nepostojeceg sheeta USPEVA (nije greska)"
+    AssertEquals "", resolvedID, "BROJEVI: nepostojeci sheet daje prazan ID"
+
+    seq = TestHook_MaxSeqFromGoogleSheet(missingName, "BrojDokumenta", Date)
+    AssertEquals "0", CStr(seq), _
+                 "BROJEVI: nepostojeci remote sheet legitimno daje 0"
+
+    AssertTrue Not TestHook_SpreadsheetIDCacheContains(missingName), _
+               "BROJEVI: prazan rezultat se NE kesira (PWA moze kreirati sheet kasnije)"
+
+    ' --- (b) sheet postoji, ali bez BrojDokumenta/Datum kolona
+    noHeaderName = "OTK-TST-NOHDR-" & m_RunID
+    noHeaderID = CreateSpreadsheet(noHeaderName, folderID)
+    AssertTrue Len(Trim$(noHeaderID)) > 0, "BROJEVI: fixture bez headera kreiran"
+
+    fixture(1, 1) = "NekaKolona"
+    fixture(1, 2) = "DrugaKolona"
+    fixture(2, 1) = "x"
+    fixture(2, 2) = "y"
+
+    AssertTrue WriteSheetData(noHeaderID, "Sheet1", fixture), _
+               "BROJEVI: fixture bez headera upisan"
+
+    raisedNumber = 0
+    On Error Resume Next
+    seq = TestHook_MaxSeqFromGoogleSheet(noHeaderName, "BrojDokumenta", Date)
+    raisedNumber = Err.Number
+    On Error GoTo EH
+
+    AssertTrue raisedNumber <> 0, _
+               "BROJEVI: sheet bez ocekivanih headera podize gresku umesto tihe 0"
+
+    Call TrashGoogleDriveFile(noHeaderID)
+
+    ' Fixture je trashovan -- ne ostavljaj njegov ID u session kesu.
+    ClearSpreadsheetIDCache
+
+    LogGoogleSmokePass "BROJEVI: remote scan je fail-closed (nema lazne nule)"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "BROJEVI: remote scan fail-closed", Err.description
+
+    On Error Resume Next
+    If Len(Trim$(noHeaderID)) > 0 Then Call TrashGoogleDriveFile(noHeaderID)
 End Sub
 
 Private Function CountTblOtkupRows() As Long
