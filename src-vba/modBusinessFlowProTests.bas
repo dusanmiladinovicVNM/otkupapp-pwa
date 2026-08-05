@@ -53,6 +53,12 @@ Private Const TEST_TIP_AMB As String = "Test Gajba"
 
 Private Const TEST_PREFIX As String = "TST-PRO"
 
+' Hladnjaca lanac (modAutoHladnjaca): zasebna stanica sa JeHladnjaca="Da" (TEST_ST_ID
+' to NIJE, da ostali testovi ne okinu auto-lanac) i drugi kupac za proveru izolacije
+' backfill mapa po kupcu.
+Private Const TEST_HLAD_ST_ID As String = "ST-HLADTEST-90001"
+Private Const TEST_KUP2_ID As String = "KUP-90002"
+
 ' ============================================================
 ' PUBLIC ENTRY POINTS
 ' ============================================================
@@ -78,6 +84,14 @@ Public Sub RunBusinessFlowProSuite()
     Test_DualClassDocumentWrappers
     Test_MalinaAutoZbirnaFromOtpremnice
     Test_MalinaVozacMirror
+
+    Test_HladnjacaChainHappyPath
+    Test_HladnjacaChainFailFastOtpremnica
+    Test_HladnjacaChainFailFastZbirna
+    Test_HladnjacaChainPrijemnicaFailNoBroj
+    Test_HladnjacaChainLinkFailureIsReported
+    Test_BackfillHladnjacaDeliBrojPoZbirnoj
+    Test_BackfillHladnjacaIgnorisePrijemniceDrugogKupca
 
     Test_AutoLinkPositiveUniqueMatch
     Test_AutoLinkMustNotCrossBrojZbirne
@@ -1401,8 +1415,10 @@ Private Sub SeedBusinessFlowProMasterData()
     On Error GoTo EH
 
     SeedStanica
+    SeedHladnjacaStanica
     SeedVozac
     SeedKupac
+    SeedKupac2
     SeedKultura
     SeedKooperant
     SeedParcelaIfAvailable
@@ -1431,6 +1447,49 @@ Private Sub SeedStanica()
     SetOptionalField rowData, TBL_STANICE, "PIN", "9001"
 
     RequireAppend TBL_STANICE, rowData, "SeedStanica"
+End Sub
+
+' Stanica oznacena kao hladnjaca -> IsHladnjacaStanica = True (auto-lanac).
+Private Sub SeedHladnjacaStanica()
+    If RowExists(TBL_STANICE, "StanicaID", TEST_HLAD_ST_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_STANICE)
+
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", TEST_HLAD_ST_ID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", "TEST HLADNJACA STANICA"
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Kontakt", "Test Kontakt"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_STANICE, "Ime", "Test"
+    SetOptionalField rowData, TBL_STANICE, "Prezime", "Hladnjaca"
+    SetOptionalField rowData, TBL_STANICE, "PIN", "9011"
+    SetOptionalField rowData, TBL_STANICE, COL_STA_JE_HLADNJACA, "Da"
+
+    RequireAppend TBL_STANICE, rowData, "SeedHladnjacaStanica"
+End Sub
+
+' Drugi kupac -- koristi se samo da dokaze da backfill mape ignorisu prijemnice
+' koje ne pripadaju hladnjaca-kupcu.
+Private Sub SeedKupac2()
+    If RowExists(TBL_KUPCI, "KupacID", TEST_KUP2_ID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_KUPCI)
+
+    SetRequiredField rowData, TBL_KUPCI, "KupacID", TEST_KUP2_ID
+    SetRequiredField rowData, TBL_KUPCI, "Naziv", "TEST KUPAC DVA DOO"
+    SetOptionalField rowData, TBL_KUPCI, "Mesto", "Test Grad"
+    SetRequiredField rowData, TBL_KUPCI, "PIB", "109000002"
+    SetOptionalField rowData, TBL_KUPCI, "MaticniBroj", "20900002"
+    SetOptionalField rowData, TBL_KUPCI, "Ulica", "Test ulica 2"
+    SetOptionalField rowData, TBL_KUPCI, "PostanskiBroj", "11000"
+    SetOptionalField rowData, TBL_KUPCI, "Drzava", "RS"
+    SetOptionalField rowData, TBL_KUPCI, "Hladnjaca", "Test Hladnjaca 2"
+    SetOptionalField rowData, TBL_KUPCI, "Aktivan", "Aktivan"
+    SetOptionalField rowData, TBL_KUPCI, "TekuciRacun", "160-0000000000002-00"
+
+    RequireAppend TBL_KUPCI, rowData, "SeedKupac2"
 End Sub
 
 Private Sub SeedVozac()
@@ -1881,6 +1940,326 @@ Private Function FindIDByTwoColumns(ByVal tableName As String, _
         End If
     Next i
 End Function
+
+' ============================================================
+' HLADNJACA AUTO-LANAC (modAutoHladnjaca) -- RF-04
+'
+' Pokriva: fail-fast nizvodno (pad koraka NE sme da ostavi nizvodne dokumente),
+' outBrPrij tek posle STVARNO kreirane prijemnice, propagaciju pada back-linka,
+' i backfill (deljen broj po BrojZbirne + izolacija mapa po kupcu).
+'
+' Pad pojedinacnog koraka se izaziva test seam-om ArmHladnjacaTestFail
+' (modAutoHladnjaca). Seam je jednokratan -- AutoChainHladnjaca ga trosi na ulazu.
+' ============================================================
+Private Sub ArrangeHladnjacaConfig(ByRef prevAuto As String, ByRef prevKupac As String)
+    prevAuto = GetConfigValue(CFG_AUTO_PRIJEMNICA_HLADNJACA)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+End Sub
+
+Private Sub RestoreHladnjacaConfig(ByVal prevAuto As String, ByVal prevKupac As String)
+    On Error Resume Next
+    SetConfigValue CFG_AUTO_PRIJEMNICA_HLADNJACA, prevAuto
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    ArmHladnjacaTestFail ""      ' seam ne sme da ostane armiran ni posle pada testa
+    On Error GoTo 0
+End Sub
+
+' Otkup (Klasa I + II) na hladnjaca stanici -> pa auto-lanac. Vraca upozorenje
+' lanca; outBrPrij nosi broj prijemnice (prazan ako nijedna nije kreirana).
+Private Function RunHladnjacaChain(ByVal brDok As String, ByVal testDate As Date, _
+                                   ByVal failStep As String, _
+                                   ByRef outBrPrij As String) As String
+    Dim otkupIDs As String
+    otkupIDs = SaveOtkupMulti_TX(testDate, TEST_KOOP_ID, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                                 100#, 100#, TEST_TIP_AMB, 10, TEST_VOZ_ID, brDok, _
+                                 0#, "TEST OPERATOR", GetTestParcelaID(), brDok, _
+                                 True, 50#, 80#, 0, 0#, 5, 0#)
+
+    If Len(failStep) > 0 Then ArmHladnjacaTestFail failStep
+
+    RunHladnjacaChain = AutoChainHladnjaca(testDate, TEST_HLAD_ST_ID, TEST_VRSTA, TEST_SORTA, _
+                                           TEST_VOZ_ID, TEST_TIP_AMB, 10, 100#, 100#, _
+                                           True, 50#, 80#, brDok, otkupIDs, _
+                                           0#, 5, 0#, outBrPrij)
+End Function
+
+' BrojPrijemnice za (BrojZbirne | Klasa | KupacID). FindPrijemnicaIDByBrojAndKlasa
+' ne moze ovde: trazi po BROJU prijemnice, a kod izolacije po kupcu dve prijemnice
+' dele isti BrojZbirne pa je kupac deo kljuca.
+Private Function FindPrijBrojByZbirnaKlasaKupac(ByVal brZbr As String, ByVal klasa As String, _
+                                                ByVal kupacID As String) As String
+    Const SRC As String = "FindPrijBrojByZbirnaKlasaKupac"
+    Dim data As Variant
+    data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cZbr As Long, cKla As Long, cKup As Long, cBroj As Long
+    cZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    cKla = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+    cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cZbr))) = Trim$(brZbr) And _
+           Trim$(CStr(data(i, cKla))) = Trim$(klasa) And _
+           StrComp(Trim$(CStr(data(i, cKup))), Trim$(kupacID), vbTextCompare) = 0 Then
+            FindPrijBrojByZbirnaKlasaKupac = Trim$(CStr(data(i, cBroj)))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Kontrolna grupa: bez simulacije pada ceo lanac mora da prodje.
+Private Sub Test_HladnjacaChainHappyPath()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-HLOK-" & NewScenarioCode("HLADOK")
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "", brPrij)
+
+    AssertEquals "", w, "Hladnjaca lanac: kompletan lanac ne vraca upozorenje"
+    AssertTrue Len(brPrij) > 0, "Hladnjaca lanac: outBrPrij izlozen posle kreirane prijemnice"
+
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Hladnjaca lanac: otpremnica Klasa I kreirana"
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_II)) > 0, _
+        "Hladnjaca lanac: otpremnica Klasa II kreirana"
+    AssertTrue Len(FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Hladnjaca lanac: zbirna Klasa I kreirana"
+    AssertTrue Len(FindZbirnaIDByBrojAndKlasa(brDok, KLASA_II)) > 0, _
+        "Hladnjaca lanac: zbirna Klasa II kreirana"
+
+    ' Jedna prijemnica = jedan broj: obe klase nose isti BrojPrijemnice.
+    AssertEquals brPrij, FindPrijBrojByZbirnaKlasaKupac(brDok, KLASA_I, TEST_KUP_ID), _
+        "Hladnjaca lanac: prijemnica Klasa I nosi izlozeni broj"
+    AssertEquals brPrij, FindPrijBrojByZbirnaKlasaKupac(brDok, KLASA_II, TEST_KUP_ID), _
+        "Hladnjaca lanac: prijemnica Klasa II nosi ISTI broj"
+
+    ' Back-link u otkup red.
+    Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)
+    AssertTrue Len(CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID"))) > 0, _
+        "Hladnjaca lanac: otkup red povezan sa otpremnicom"
+    AssertEquals brDok, CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "BrojZbirne")), _
+        "Hladnjaca lanac: otkup red nosi BrojZbirne"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Hladnjaca chain happy path", Err.description
+End Sub
+
+' P1: pad OTPREMNICE mora da zaustavi lanac -- bez zbirne i bez prijemnice.
+Private Sub Test_HladnjacaChainFailFastOtpremnica()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-HLFO-" & NewScenarioCode("HLADFO")
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "OTP", brPrij)
+
+    AssertTrue InStr(w, "OTPREMNICA nije kreirana") > 0, _
+        "Fail-fast OTP: upozorenje prijavljuje pad otpremnice"
+    AssertEquals "", FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I), _
+        "Fail-fast OTP: otpremnica nije kreirana"
+    AssertEquals "", FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I), _
+        "Fail-fast OTP: ZBIRNA nije kreirana (lanac zaustavljen)"
+    AssertEquals "", FindPrijBrojByZbirnaKlasaKupac(brDok, KLASA_I, TEST_KUP_ID), _
+        "Fail-fast OTP: PRIJEMNICA nije kreirana (lanac zaustavljen)"
+    AssertEquals "", brPrij, _
+        "Fail-fast OTP: outBrPrij ostaje prazan"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Hladnjaca fail-fast otpremnica", Err.description
+End Sub
+
+' P1: pad ZBIRNE mora da zaustavi lanac -- otpremnica ostaje, prijemnice nema.
+Private Sub Test_HladnjacaChainFailFastZbirna()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-HLFZ-" & NewScenarioCode("HLADFZ")
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "ZBR", brPrij)
+
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Fail-fast ZBR: otpremnica (uzvodni korak) jeste kreirana"
+    AssertTrue InStr(w, "ZBIRNA nije kreirana") > 0, _
+        "Fail-fast ZBR: upozorenje prijavljuje pad zbirne"
+    AssertEquals "", FindPrijBrojByZbirnaKlasaKupac(brDok, KLASA_I, TEST_KUP_ID), _
+        "Fail-fast ZBR: PRIJEMNICA nije kreirana (lanac zaustavljen)"
+    ' Prijemnica nije ni pokusana -> ne sme se pojaviti u upozorenju.
+    AssertTrue InStr(w, "PRIJEMNICA nije kreirana") = 0, _
+        "Fail-fast ZBR: upozorenje ne prijavljuje korak koji nije ni pokusan"
+    AssertEquals "", brPrij, "Fail-fast ZBR: outBrPrij ostaje prazan"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Hladnjaca fail-fast zbirna", Err.description
+End Sub
+
+' Fix #2: outBrPrij se NE sme izloziti ako prijemnica nije kreirana (caller bi
+' relinkovao osirocene palete na nepostojecu prijemnicu).
+Private Sub Test_HladnjacaChainPrijemnicaFailNoBroj()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-HLFP-" & NewScenarioCode("HLADFP")
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "PRJ", brPrij)
+
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Pad prijemnice: otpremnica jeste kreirana"
+    AssertTrue Len(FindZbirnaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Pad prijemnice: zbirna jeste kreirana"
+    AssertTrue InStr(w, "PRIJEMNICA nije kreirana") > 0, _
+        "Pad prijemnice: upozorenje prijavljuje pad prijemnice"
+    AssertEquals "", brPrij, _
+        "Pad prijemnice: outBrPrij ostaje prazan (nema relinka na nepostojecu)"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Hladnjaca prijemnica fail", Err.description
+End Sub
+
+' Fix #5: pad back-linka se prijavljuje (ranije je lanac javljao uspeh).
+Private Sub Test_HladnjacaChainLinkFailureIsReported()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim brDok As String
+    brDok = TEST_PREFIX & "-HLFL-" & NewScenarioCode("HLADFL")
+
+    Dim brPrij As String, w As String
+    w = RunHladnjacaChain(brDok, NextTestDate(), "LINK", brPrij)
+
+    AssertTrue Len(FindOtpremnicaIDByBrojAndKlasa(brDok, KLASA_I)) > 0, _
+        "Pad linka: dokumenti su kreirani (link je poslednji korak)"
+    AssertTrue Len(brPrij) > 0, _
+        "Pad linka: prijemnica jeste kreirana pa je outBrPrij izlozen"
+    AssertTrue InStr(w, "nije povezan sa dokumentom") > 0, _
+        "Pad linka: upozorenje prijavljuje nepovezan otkup red"
+
+    Dim otkID As String: otkID = FindOtkupIDByBrojAndKlasa(brDok, KLASA_I)
+    AssertEquals "", CStr(GetValueByKey(TBL_OTKUP, "OtkupID", otkID, "OtpremnicaID")), _
+        "Pad linka: otkup red stvarno NIJE povezan"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Hladnjaca link failure reported", Err.description
+End Sub
+
+' Fix #4: obe klase istog dokumenta dele broj i kad je sestrinska klasa vec
+' backfill-ovana u ranijem prolazu.
+Private Sub Test_BackfillHladnjacaDeliBrojPoZbirnoj()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim testDate As Date: testDate = NextTestDate()
+    Dim brZbr As String
+    brZbr = TEST_PREFIX & "-HLBF-" & NewScenarioCode("HLADBF")
+
+    ' Otpremnice obe klase na hladnjaca stanici + zbirne (prijemnica ih zahteva).
+    AssertTrue Len(SaveOtpremnica_TX(testDate, TEST_HLAD_ST_ID, TEST_VOZ_ID, brZbr, brZbr, _
+        TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, KLASA_I)) > 0, _
+        "Backfill fixture: otpremnica Klasa I"
+    AssertTrue Len(SaveOtpremnica_TX(testDate, TEST_HLAD_ST_ID, TEST_VOZ_ID, brZbr, brZbr, _
+        TEST_VRSTA, TEST_SORTA, 50#, 80#, TEST_TIP_AMB, 5, KLASA_II)) > 0, _
+        "Backfill fixture: otpremnica Klasa II"
+    SaveZbirna_TX testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, "Test Hladnjaca", "", _
+        TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10, KLASA_I
+    SaveZbirna_TX testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, "Test Hladnjaca", "", _
+        TEST_VRSTA, TEST_SORTA, 50#, TEST_TIP_AMB, 5, KLASA_II
+
+    ' Klasa I VEC ima prijemnicu; Klasa II je nema.
+    Dim brPostojeci As String
+    brPostojeci = GenerateBrojPrijemnice(TEST_KUP_ID, testDate)
+    AssertTrue Len(SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brPostojeci, brZbr, _
+        TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, 0, KLASA_I)) > 0, _
+        "Backfill fixture: prijemnica Klasa I postoji"
+
+    Dim ok As Long, fail As Long
+    BackfillPrijemniceHladnjacaCore True, ok, fail
+
+    AssertEquals brPostojeci, FindPrijBrojByZbirnaKlasaKupac(brZbr, KLASA_II, TEST_KUP_ID), _
+        "Backfill: Klasa II nasledjuje broj prijemnice Klase I (isti dokument)"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Backfill hladnjaca deli broj po zbirnoj", Err.description
+End Sub
+
+' P2b: prijemnica DRUGOG kupca sa istim BrojZbirne ne sme ni da preskoci kandidata
+' (idempotentnost) ni da mu pozajmi broj (numeracija je per-kupac).
+Private Sub Test_BackfillHladnjacaIgnorisePrijemniceDrugogKupca()
+    Dim prevAuto As String, prevKupac As String
+    On Error GoTo EH
+    ArrangeHladnjacaConfig prevAuto, prevKupac
+
+    Dim testDate As Date: testDate = NextTestDate()
+    Dim brZbr As String
+    brZbr = TEST_PREFIX & "-HLBF2-" & NewScenarioCode("HLADBF2")
+
+    AssertTrue Len(SaveOtpremnica_TX(testDate, TEST_HLAD_ST_ID, TEST_VOZ_ID, brZbr, brZbr, _
+        TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, KLASA_I)) > 0, _
+        "Backfill izolacija: otpremnica Klasa I"
+    SaveZbirna_TX testDate, TEST_VOZ_ID, brZbr, TEST_KUP_ID, "Test Hladnjaca", "", _
+        TEST_VRSTA, TEST_SORTA, 100#, TEST_TIP_AMB, 10, KLASA_I
+
+    ' Prijemnica DRUGOG kupca na ISTOM BrojZbirne i istoj klasi.
+    Dim brTudji As String
+    brTudji = TEST_PREFIX & "-TUDJI-" & NewScenarioCode("HLADTUD")
+    AssertTrue Len(SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brTudji, brZbr, _
+        TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 10, 0, KLASA_I)) > 0, _
+        "Backfill izolacija: prijemnica drugog kupca kreirana"
+
+    Dim ok As Long, fail As Long
+    BackfillPrijemniceHladnjacaCore True, ok, fail
+
+    Dim brNas As String
+    brNas = FindPrijBrojByZbirnaKlasaKupac(brZbr, KLASA_I, TEST_KUP_ID)
+    AssertTrue Len(brNas) > 0, _
+        "Backfill izolacija: kandidat NIJE preskocen zbog prijemnice drugog kupca"
+    AssertTrue brNas <> brTudji, _
+        "Backfill izolacija: broj NIJE pozajmljen iz prijemnice drugog kupca"
+
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    Exit Sub
+EH:
+    RestoreHladnjacaConfig prevAuto, prevKupac
+    LogFail "Backfill hladnjaca izolacija po kupcu", Err.description
+End Sub
 
 ' ============================================================
 ' RUN / SCENARIO HELPERS
