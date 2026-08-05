@@ -380,7 +380,15 @@ End Sub
 ' brojace kroz outOk/outFail, pa je makro pozivljiv iz modBusinessFlowProTests
 ' bez interaktivnih prompta. Javni ulaz iznad je namerno BEZ argumenata --
 ' Sub sa parametrima se ne pojavljuje u Alt+F8 listi makroa.
+'
+' onlyBrojZbirne ogranicava obradu na JEDAN dokument. Bez toga backfill skenira
+' SVE hladnjaca-otpremnice u svesci, pa bi pokretanje test suite-a nad realnim
+' klijentskim fajlom tiho kreiralo prijemnice za prave dokumente (a posto testovi
+' privremeno preusmere MALINA_DEFAULT_KUPAC na test-kupca, jos gore: pod pogresnim
+' kupcem i mimo `have` provere). Testovi zato UVEK salju svoj BrojZbirne.
+' Operativni poziv (wrapper) ga ostavlja prazan = ponasanje kao do sada.
 Public Sub BackfillPrijemniceHladnjacaCore(ByVal silent As Boolean, _
+                                           Optional ByVal onlyBrojZbirne As String = "", _
                                            Optional ByRef outOk As Long, _
                                            Optional ByRef outFail As Long)
     Const SRC As String = "modAutoHladnjaca.BackfillPrijemniceHladnjaca"
@@ -465,7 +473,13 @@ Public Sub BackfillPrijemniceHladnjacaCore(ByVal silent As Boolean, _
             Dim zbr As String: zbr = Trim$(CStr(otp(r, cZbr)))
             Dim kla As String: kla = Trim$(CStr(otp(r, cKla)))
             If Len(zbr) > 0 And IsHladnjacaStanica(sid) Then
-                If Not have.Exists(KeyZbrKlasa(zbr, kla)) Then cand.Add r
+                Dim uOpsegu As Boolean
+                uOpsegu = (Len(onlyBrojZbirne) = 0)
+                If Not uOpsegu Then _
+                    uOpsegu = (StrComp(zbr, Trim$(onlyBrojZbirne), vbTextCompare) = 0)
+                If uOpsegu Then
+                    If Not have.Exists(KeyZbrKlasa(zbr, kla)) Then cand.Add r
+                End If
             End If
         End If
     Next r

@@ -2208,7 +2208,9 @@ Private Sub Test_BackfillHladnjacaDeliBrojPoZbirnoj()
         "Backfill fixture: prijemnica Klasa I postoji"
 
     Dim ok As Long, fail As Long
-    BackfillPrijemniceHladnjacaCore True, ok, fail
+    ' Opseg = SAMO ovaj dokument: bez toga backfill skenira sve hladnjaca-otpremnice
+    ' u svesci, pa bi suite nad realnim fajlom dirao prave dokumente.
+    BackfillPrijemniceHladnjacaCore True, brZbr, ok, fail
 
     AssertEquals brPostojeci, FindPrijBrojByZbirnaKlasaKupac(brZbr, KLASA_II, TEST_KUP_ID), _
         "Backfill: Klasa II nasledjuje broj prijemnice Klase I (isti dokument)"
@@ -2245,7 +2247,9 @@ Private Sub Test_BackfillHladnjacaIgnorisePrijemniceDrugogKupca()
         "Backfill izolacija: prijemnica drugog kupca kreirana"
 
     Dim ok As Long, fail As Long
-    BackfillPrijemniceHladnjacaCore True, ok, fail
+    ' Opseg = SAMO ovaj dokument: bez toga backfill skenira sve hladnjaca-otpremnice
+    ' u svesci, pa bi suite nad realnim fajlom dirao prave dokumente.
+    BackfillPrijemniceHladnjacaCore True, brZbr, ok, fail
 
     Dim brNas As String
     brNas = FindPrijBrojByZbirnaKlasaKupac(brZbr, KLASA_I, TEST_KUP_ID)
@@ -2278,7 +2282,19 @@ Private Sub BeginRun(ByVal suiteName As String)
     Debug.Print "RunID=" & m_RunID
     Debug.Print String$(70, "=")
 
+    ' Disclaimer -- NAMERNO ne-modalni (Debug.Print, ne MsgBox): suite se pokrece i
+    ' automatizovano iz modE2EReleaseGate (Application.Run), gde bi modal blokirao
+    ' ceo release gate. Suite PISE u radnu svesku (otkup/dokumenti/fakture/palete,
+    ' i privremeno menja config), pa se pokrece nad TEST kopijom, ne nad klijentskim
+    ' fajlom. Test podaci nose prefiks TST-PRO / ID-eve *-9000x i ne ciste se.
+    Debug.Print "UPOZORENJE: suite UPISUJE podatke u ovu svesku (i privremeno menja"
+    Debug.Print "            config). Pokretati SAMO nad test kopijom, ne nad"
+    Debug.Print "            klijentskim fajlom. Test redovi (TST-PRO / *-9000x) ostaju."
+    Debug.Print String$(70, "-")
+
     AppendTestLog "SUITE", suiteName, "START", "RunID=" & m_RunID
+    AppendTestLog "SUITE", suiteName, "WARN", _
+                  "Suite upisuje u svesku -- pokretati samo nad test kopijom."
 End Sub
 
 Private Sub EndRun()
