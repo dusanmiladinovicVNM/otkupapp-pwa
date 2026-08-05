@@ -85,6 +85,14 @@ Public Sub RunBusinessFlowProSuite()
     Test_MalinaAutoZbirnaFromOtpremnice
     Test_MalinaVozacMirror
 
+    ' RF-05 (frmDokumenta unos + storno set)
+    Test_ProsekGajbeExcludesStornirano
+    Test_OpenFaktureExcludeStornirano
+    Test_ZbirnaKlasaIIGuard
+    Test_PrefillRowIsNewerBiraNajnoviju
+    Test_MalinaAutoZbirnaFailSignal
+    Test_PorukeKatalogPokrivaDokumenta
+
     Test_HladnjacaChainHappyPath
     Test_HladnjacaChainFailFastOtpremnica
     Test_HladnjacaChainFailFastZbirna
@@ -1611,6 +1619,304 @@ EH:
     On Error GoTo 0
     LogFatal "Test_MalinaVozacMirror", Err.Number, Err.description
 End Sub
+
+' ============================================================
+' RF-05 -- frmDokumenta unos + storno set (regresija za 6 fiksa)
+'   R01 prosek gajbe ne racuna stornirane redove (SumByBroj)
+'   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
+'   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
+'   R04 prefill bira NAJNOVIJU generaciju (PrefillRowIsNewer)
+'   R05 malina auto-zbirna signalizira pad (Err / created=0)
+'   R06 katalog poruka sadrzi kljuceve koje frmDokumenta koristi (EnsurePoruke)
+' ============================================================
+
+Private Sub Test_ProsekGajbeExcludesStornirano()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("PROSGAJ")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojOtp As String, brojZbirne As String
+    brojOtp = TEST_PREFIX & "-OTP-PG-" & scenario
+    brojZbirne = TEST_PREFIX & "-ZBR-PG-" & scenario
+
+    ' Dvoklasna otpremnica: (100+200) kg / (10+10) gajbi = 15 kg po gajbi.
+    Dim otpI As String, otpII As String
+    otpI = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    otpII = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbirne, _
+                              TEST_VRSTA, TEST_SORTA, 200#, 10#, TEST_TIP_AMB, 10, KLASA_II)
+
+    AssertTrue Len(otpI) > 0 And Len(otpII) > 0, "Prosek gajbe: fixture otpremnica I+II kreirana"
+    AssertTrue Abs(CalculateProsekGajbe(brojOtp) - 15#) < 0.001, _
+               "Prosek gajbe (otpremnica) pre storna = 15"
+
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", otpII
+
+    ' Posle storna Kl.II ostaje samo 100 kg / 10 gajbi = 10.
+    AssertTrue Abs(CalculateProsekGajbe(brojOtp) - 10#) < 0.001, _
+               "Prosek gajbe (otpremnica) ne racuna stornirani red"
+
+    ' Isto na zbirnoj (CalculateProsekGajbeByZbirna -> isti SumByBroj).
+    Dim zbrI As String, zbrII As String
+    zbrI = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrII = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          200#, TEST_TIP_AMB, 10, KLASA_II)
+
+    AssertTrue Len(zbrI) > 0 And Len(zbrII) > 0, "Prosek gajbe: fixture zbirna I+II kreirana"
+    AssertTrue Abs(CalculateProsekGajbeByZbirna(brojZbirne) - 15#) < 0.001, _
+               "Prosek gajbe (zbirna) pre storna = 15"
+
+    MarkTestRowStornirano TBL_ZBIRNA, "ZbirnaID", zbrII
+
+    AssertTrue Abs(CalculateProsekGajbeByZbirna(brojZbirne) - 10#) < 0.001, _
+               "Prosek gajbe (zbirna) ne racuna stornirani red"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ProsekGajbeExcludesStornirano", Err.Number, Err.description
+End Sub
+
+Private Sub Test_OpenFaktureExcludeStornirano()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("FAKSTO")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String, brojPrij As String
+    brojZbirne = TEST_PREFIX & "-ZBR-FS-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-FS-" & scenario
+
+    Dim zbrFix As String
+    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                           100#, TEST_TIP_AMB, 0, KLASA_I)
+    AssertTrue Len(zbrFix) > 0, "Storno faktura: fixture zbirna kreirana"
+
+    Dim prjI As String
+    prjI = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    AssertTrue Len(prjI) > 0, "Storno faktura: fixture prijemnica kreirana"
+
+    Dim stavke As Collection
+    Set stavke = New Collection
+    stavke.Add Array(prjI, 100#, 100#, KLASA_I, brojPrij)
+
+    Dim fakID As String
+    fakID = CreateFaktura_TX(TEST_KUP_ID, stavke)
+    AssertTrue Len(fakID) > 0, "Storno faktura: fixture faktura kreirana"
+
+    MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fakID
+
+    ' Bez ovoga fix nema smisla: stornirana faktura NIJE "Placeno", pa je stari
+    ' filter (Status <> STATUS_PLACENO) u FillOpenFakture pustao u listu.
+    AssertTrue CStr(nz(GetValueByKey(TBL_FAKTURE, COL_FAK_ID, fakID, COL_FAK_STATUS), "")) <> STATUS_PLACENO, _
+               "Storno faktura: status i dalje nije 'Placeno' (stari filter bi je pustio)"
+
+    ' FillOpenFakture sada filtrira ExcludeStornirano nad tblFakture.
+    Dim openData As Variant
+    openData = ExcludeStornirano(GetTableData(TBL_FAKTURE), TBL_FAKTURE)
+
+    AssertFalse ArrayContainsKeyValue(openData, TBL_FAKTURE, COL_FAK_ID, fakID), _
+                "Stornirana faktura ne ulazi u listu za placanje/avans"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OpenFaktureExcludeStornirano", Err.Number, Err.description
+End Sub
+
+Private Sub Test_ZbirnaKlasaIIGuard()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("KLIIGUARD")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-K2-" & scenario
+
+    AssertFalse ZbirnaIzvorImaKlasuII(""), "Kl.II guard: prazan broj zbirne ne blokira"
+
+    Dim otpI As String
+    otpI = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                             TEST_PREFIX & "-OTP-K2A-" & scenario, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(otpI) > 0, "Kl.II guard: fixture otpremnica Kl.I kreirana"
+    AssertFalse ZbirnaIzvorImaKlasuII(brojZbirne), "Kl.II guard: izvor samo sa Kl.I ne blokira"
+
+    Dim otpII As String
+    otpII = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, _
+                              TEST_PREFIX & "-OTP-K2B-" & scenario, brojZbirne, _
+                              TEST_VRSTA, TEST_SORTA, 50#, 8#, TEST_TIP_AMB, 5, KLASA_II)
+    AssertTrue Len(otpII) > 0, "Kl.II guard: fixture otpremnica Kl.II kreirana"
+    AssertTrue ZbirnaIzvorImaKlasuII(brojZbirne), _
+               "Kl.II guard: izvor sa Kl.II blokira unos bez 'Dve klase'"
+
+    MarkTestRowStornirano TBL_OTPREMNICA, "OtpremnicaID", otpII
+    AssertFalse ZbirnaIzvorImaKlasuII(brojZbirne), _
+                "Kl.II guard: stornirana Kl.II otpremnica ne blokira"
+
+    ' Posledica koju blokada sprecava: hasKlasaII:=False tiho odbacuje Kl.II izvor.
+    Dim brojZbirne2 As String
+    brojZbirne2 = TEST_PREFIX & "-ZBR-K2X-" & scenario
+
+    Dim zbrRes As String
+    zbrRes = SaveZbirnaMulti_TX(datum:=testDate, vozacID:=TEST_VOZ_ID, _
+                                brojZbirne:=brojZbirne2, kupacID:=TEST_KUP_ID, _
+                                hladnjaca:="Test Hladnjaca", pogon:="Test Pogon", _
+                                vrstaVoca:=TEST_VRSTA, sortaVoca:=TEST_SORTA, _
+                                ukupnoKolI:=100#, tipAmb:=TEST_TIP_AMB, ukupnoAmb:=10, _
+                                hasKlasaII:=False, ukupnoKolII:=50#, ukupnoAmbII:=5)
+
+    AssertTrue Len(zbrRes) > 0, "Kl.II guard: kontrolna zbirna (hasKlasaII=False) snimljena"
+    AssertEquals "", FindZbirnaIDByBrojAndKlasa(brojZbirne2, KLASA_II), _
+                 "Kl.II guard: bez 'Dve klase' Kl.II se NE upisuje (zato blokada)"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZbirnaKlasaIIGuard", Err.Number, Err.description
+End Sub
+
+Private Sub Test_PrefillRowIsNewerBiraNajnoviju()
+    On Error GoTo EH
+
+    ' Sinteticka 2D tabela (1-based): kolona 1 = broj, kolona 2 = Datum.
+    Dim d As Variant
+    ReDim d(1 To 3, 1 To 2)
+
+    d(1, 1) = "DOK-1": d(1, 2) = DateSerial(2090, 1, 1)
+    d(2, 1) = "DOK-1": d(2, 2) = DateSerial(2090, 3, 1)
+    d(3, 1) = "DOK-1": d(3, 2) = DateSerial(2090, 2, 1)
+
+    Dim best As Long, r As Long
+    best = 0
+    For r = 1 To 3
+        If PrefillRowIsNewer(d, r, best, 2) Then best = r
+    Next r
+    AssertEquals "2", CStr(best), "Prefill: bira red sa najnovijim datumom (ne prvi)"
+
+    ' cDat = 0 (nema Datum kolone) -> poslednji red pobedjuje.
+    best = 0
+    For r = 1 To 3
+        If PrefillRowIsNewer(d, r, best, 0) Then best = r
+    Next r
+    AssertEquals "3", CStr(best), "Prefill: bez Datum kolone bira poslednji red"
+
+    ' Isti datum -> poslednji red (poslednja upisana generacija).
+    Dim t As Variant
+    ReDim t(1 To 2, 1 To 2)
+    t(1, 1) = "DOK-2": t(1, 2) = DateSerial(2090, 5, 1)
+    t(2, 1) = "DOK-2": t(2, 2) = DateSerial(2090, 5, 1)
+
+    best = 0
+    For r = 1 To 2
+        If PrefillRowIsNewer(t, r, best, 2) Then best = r
+    Next r
+    AssertEquals "2", CStr(best), "Prefill: na istom datumu bira poslednji red"
+
+    ' Prazan/neispravan datum ne sme da pregazi red sa datumom.
+    Dim e As Variant
+    ReDim e(1 To 2, 1 To 2)
+    e(1, 1) = "DOK-3": e(1, 2) = DateSerial(2090, 6, 1)
+    e(2, 1) = "DOK-3": e(2, 2) = ""
+
+    AssertFalse PrefillRowIsNewer(e, 2, 1, 2), "Prefill: red bez datuma ne pregazi red sa datumom"
+    AssertTrue PrefillRowIsNewer(e, 1, 2, 2), "Prefill: red sa datumom pregazi red bez datuma"
+    AssertTrue PrefillRowIsNewer(e, 2, 0, 2), "Prefill: prvi pronadjen red je uvek pocetni izbor"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PrefillRowIsNewerBiraNajnoviju", Err.Number, Err.description
+End Sub
+
+Private Sub Test_MalinaAutoZbirnaFailSignal()
+    Dim prevMode As String, prevKupac As String
+
+    On Error GoTo EH
+
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    prevKupac = GetConfigValue(CFG_MALINA_DEFAULT_KUPAC)
+
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, ""
+
+    ' Uslov 1 koji frmDokumenta prijavljuje: poziv baca gresku (nedostaje config).
+    Dim raised As Boolean
+    On Error Resume Next
+    Call AutoCreateZbirnaFromOtpremnice_TX
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+               "Malina: bez MALINA_DEFAULT_KUPAC auto-zbirna baca gresku (forma prikazuje poruku)"
+
+    ' Uslov 2: nema otvorene otpremnice -> povrat 0 (forma to tretira kao pad).
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
+    Call AutoCreateZbirnaFromOtpremnice_TX          ' pokupi sve otvorene otpremnice
+
+    Dim created As Long
+    created = AutoCreateZbirnaFromOtpremnice_TX()
+    AssertEquals "0", CStr(created), _
+                 "Malina: bez otvorene otpremnice povrat je 0 (forma javlja da zbirna NIJE kreirana)"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
+    On Error GoTo 0
+    LogFatal "Test_MalinaAutoZbirnaFailSignal", Err.Number, Err.description
+End Sub
+
+Private Sub Test_PorukeKatalogPokrivaDokumenta()
+    On Error GoTo EH
+
+    ' EnsurePoruke je MsgBox-free i idempotentan -> bezbedan u suite-u.
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    AssertTrue PorukaPostoji("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), _
+               "Poruke: DOK_MSG_VALIDACIJA_NIJE_PROSLA postoji u katalogu"
+    AssertTrue PorukaPostoji("DOK_MSG_GRESKA_PRI_CUVANJU"), _
+               "Poruke: DOK_MSG_GRESKA_PRI_CUVANJU postoji u katalogu"
+    AssertTrue PorukaPostoji("DOK_MSG_GRESKA_PRI_CUVANJU_3"), _
+               "Poruke: DOK_MSG_GRESKA_PRI_CUVANJU_3 postoji u katalogu"
+    AssertTrue PorukaPostoji("DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE"), _
+               "Poruke: DOK_LBL_NEISPRAVNA_KOLICINA_AMBALAZE postoji u katalogu"
+    AssertTrue PorukaPostoji("DOK_ERR_GRESKA"), _
+               "Poruke: DOK_ERR_GRESKA postoji u katalogu"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_PorukeKatalogPokrivaDokumenta", Err.Number, Err.description
+End Sub
+
+' Poruka() za nepoznat kljuc vraca "[KLJUC]" -> to je "nedostaje u katalogu".
+Private Function PorukaPostoji(ByVal kljuc As String) As Boolean
+    Dim t As String
+    t = Poruka(kljuc)
+    PorukaPostoji = (Len(t) > 0) And (t <> "[" & kljuc & "]")
+End Function
 
 Private Sub SeedKupac()
     If RowExists(TBL_KUPCI, "KupacID", TEST_KUP_ID) Then Exit Sub

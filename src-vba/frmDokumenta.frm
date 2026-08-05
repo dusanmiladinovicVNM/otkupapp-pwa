@@ -2258,29 +2258,6 @@ Private Sub txtBrojZbirne_AfterUpdate()
     UpdateValidacija
 End Sub
 
-' Da li izvorne (nestornirane) otpremnice date zbirne imaju Klasu II.
-' Cita isti izvor kao UpdateValidacija: ValidateZbirnaPreUnosa -> val(4) = sumaKgKlII.
-Private Function ZbirnaIzvorImaKlasuII(ByVal brojZbirne As String) As Boolean
-    On Error GoTo EH
-
-    If Trim$(brojZbirne) = "" Then Exit Function
-
-    Dim v As Variant
-    v = ValidateZbirnaPreUnosa(brojZbirne, 0, 0, 0)
-
-    If IsArray(v) Then
-        If UBound(v) >= 4 Then
-            If IsNumeric(v(4)) Then ZbirnaIzvorImaKlasuII = (CDbl(v(4)) > 0)
-        End If
-    End If
-
-    Exit Function
-
-EH:
-    LogErr "frmDokumenta.ZbirnaIzvorImaKlasuII"
-    ZbirnaIzvorImaKlasuII = False
-End Function
-
 Private Function UpdateValidacija() As Boolean
     UpdateValidacija = False
     
@@ -2859,40 +2836,6 @@ Private Function PrefillNumStr(ByVal v As Double) As String
     Else
         PrefillNumStr = CStr(v)
     End If
-End Function
-
-' Da li red rNew treba da zameni dosadasnji izbor rBest za prefill (po klasi).
-' Isti broj dokumenta moze imati vise generacija (storno -> ispravka -> storno);
-' prvi pronadjen red je NAJSTARIJA generacija. Bira se najnoviji Datum, a na
-' istom/nepoznatom datumu poslednji red u tabeli (poslednja upisana generacija).
-Private Function PrefillRowIsNewer(ByVal d As Variant, ByVal rNew As Long, _
-                                   ByVal rBest As Long, ByVal cDat As Long) As Boolean
-    If rBest = 0 Then
-        PrefillRowIsNewer = True
-        Exit Function
-    End If
-
-    If cDat > 0 Then
-        Dim vNew As Variant, vBest As Variant
-        vNew = d(rNew, cDat)
-        vBest = d(rBest, cDat)
-
-        If IsDate(vNew) And IsDate(vBest) Then
-            If CDate(vNew) < CDate(vBest) Then Exit Function
-            If CDate(vNew) > CDate(vBest) Then
-                PrefillRowIsNewer = True
-                Exit Function
-            End If
-        ElseIf IsDate(vNew) Then
-            PrefillRowIsNewer = True
-            Exit Function
-        ElseIf IsDate(vBest) Then
-            Exit Function
-        End If
-    End If
-
-    ' Isti (ili nepoznat) datum -> kasniji red pobedjuje.
-    PrefillRowIsNewer = True
 End Function
 
 ' Ispravka: popuni polja unosa prijemnice iz (upravo stornirane) prijemnice, da
