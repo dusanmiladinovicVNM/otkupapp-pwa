@@ -657,6 +657,21 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 
 ---
 
+## vba-v2.29.2 — 2026-08-04
+> Verzija/datum se **finalizuju pri `tools/release.sh`** (uz `APP_VERSION` u `modConfig`). **RF-03 (M3) — Storno correctness (AUD-020, AUD-021, AUD-049).** Jezgro storno sloja + storno celog bankovnog izvoda. Poslovna šema se ne dira.
+
+- **Storno novca iz Dokumenata je uopšte proradio:** grana „Novac" je prosleđivala ukucani **broj** dokumenta tamo gde se očekuje `NovacID`, pa je storno novca iz UI-ja **uvek** padao greškom iz dubine. Sada se broj prvo razreši u `NovacID`, a nepostojeći/već storniran red daje jasnu poruku pre potvrde — isti obrazac kao grane Otpremnica i Faktura.
+- **Storno uplate vezane za otkup više ne ostavlja blok kao „Isplaćeno" (AUD-021):** čitao se samo `FakturaID` i osvežavao status fakture, pa je otkupni blok ostajao plaćen sa ustajalim `DatumIsplate`. Sada se čita i `OtkupID` i status otkupa se osvežava; rollback pokriva i tu izmenu.
+- **Lažno „završena" ispravka zbirne (AUD-020):** povratna vrednost relinka otpremnica se odbacivala, pa je pad relinka davao rekalkulaciju 0/0, invarijanta je prolazila (0=0) i kontekst se zatvarao kao uspešan. Sada se broj prevezanih otpremnica proverava; 0 uz aktivne otpremnice na staroj zbirni → ispravka se označava za ručnu obradu.
+- **Prazan correction context više ne guta recovery red:** 6 grana je menjalo podatke i kad kontekst nije napravljen, pa se gubio red u `tblStornoVeze` i MANUAL flag. Dodat hard-stop na svih 6 mesta.
+- **Storno celog bankovnog izvoda (AUD-049, novo):** pojedinačni storno izvodnog reda je zabranjen, pa pogrešno mapiran izvod dosad nije imao putanju ispravke. Sada `StornoIzvod_TX` u **jednoj** transakciji obara sav novac izvoda i vraća staging, sa dva ishoda — **remap** (stavke nazad „za obradu", izvod ostaje uvezen, PDF se ne uvozi ponovo) i **ponovni uvoz** (izvod se gasi, isti PDF se može uvesti opet). Novac i staging padaju zajedno; inače bi ponovni uvoz + mapiranje dali dvostruko knjiženje.
+- **Pripadnost izvodu se više ne pogađa:** uklonjena heuristika „isti `BrojDokumenta` + `PartnerID`" (mogla je da obori tuđi ručni red) i broj-bazirana zaštita porekla. Red pripada izvodu isključivo po **markeru** koji direktan upis dobija pri knjiženju a split nasleđuje od roditelja. Dodata rekonsilijacija iznosa po stavci — zbir aktivnog novca pod markerom mora odgovarati iznosu stavke (uplate i isplate zasebno), inače se ceo storno odbija sa iznosima u poruci.
+- **Kanal plaćanja je sada eksplicitan:** `Tip` nosi keš odvojeno od virmana, pa avans po otkupnom mestu broji **oba** kanala. Izvod bez broja se odbija pri uvozu (ukinut „IZVOD" fallback).
+- **Rizik za podatke:** nema promene šeme; `.frx` netaknut; VBA izvor ASCII-only.
+- **Dodirnuti moduli:** `modStorno` (nova sekcija IZVOD), `modStornoFlow`, `modNovac`, `modBankaMapiranje`, `modConfig`, `modIzvestaj`, `frmDokumenta`, `frmBankaImport`, `modTestStorno` (T25/T28/T29/T32/T35/T36). Prateći: `docs/KNOWN_ISSUES.md` (AUD-049 zatvoren).
+
+---
+
 ## vba-v2.30.0 — 2026-08-05
 > Verzija/datum se **finalizuju pri `tools/release.sh`** (uz `APP_VERSION` u `modConfig`). **RF-04 (M3) — Hladnjača auto-lanac: propagacija neuspeha (AUD-005 / FM-0010 #1, #2, #4, #5).** Poslovna šema se ne dira; promene su u orkestraciji lanca otpremnica→zbirna→prijemnica i u backfill makrou.
 
