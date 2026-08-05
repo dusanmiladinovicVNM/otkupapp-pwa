@@ -611,6 +611,24 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
                   "GetNextID nije vratio ZbirnaID."
     End If
 
+    ' AUD-003: schema-presence guard pre pozicionog AppendRow-a. ValidateZbirnaInput
+    ' proverava samo VREDNOSTI; ako je sema tblZbirna driftovala, pozicijski upis bi
+    ' tiho iskrivio red. Redosled prati Array(...) ispod.
+    RequireColumns TBL_ZBIRNA, "modDokumenta.SaveZbirna", _
+                   COL_ZBR_ID, _
+                   COL_ZBR_DATUM, _
+                   COL_ZBR_VOZAC, _
+                   COL_ZBR_BROJ, _
+                   COL_ZBR_KUPAC, _
+                   COL_ZBR_HLADNJACA, _
+                   COL_ZBR_POGON, _
+                   COL_ZBR_VRSTA, _
+                   COL_ZBR_SORTA, _
+                   COL_ZBR_KOLICINA, _
+                   COL_ZBR_TIP_AMB, _
+                   COL_ZBR_KOL_AMB, _
+                   COL_ZBR_KLASA
+
     Dim rowData As Variant
     rowData = Array(newID, datum, vozacID, brojZbirne, kupacID, _
                     hladnjaca, pogon, vrstaVoca, sortaVoca, _
@@ -1624,6 +1642,9 @@ Private Function SumByBroj(ByVal tbl As String, ByVal brojCol As String, _
                            ByVal broj As String, ByVal valCol As String) As Double
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Function
+    ' Stornirani redovi ne ulaze u sumu (prosek gajbe je racunao i njih).
+    If IsArray(data) Then data = ExcludeStornirano(data, tbl)
+    If Not IsArray(data) Then Exit Function
     Dim cB As Long, cV As Long
     cB = GetColumnIndex(tbl, brojCol)
     cV = GetColumnIndex(tbl, valCol)

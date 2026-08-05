@@ -993,10 +993,29 @@ Private Sub btnUnosOtp_Click()
     ' MALINA: otpremnica == zbirna -> auto-zbirna iz upravo snimljene otpremnice.
     ' "Toggle" je config (IsMalinaMode); idempotentno (prazan-BrojZbirne filter).
     If IsMalinaMode() Then
+        ' Upravo snimljena otpremnica je otvorena (brZbrSave=""), pa auto-zbirna mora
+        ' da kreira bar jednu. Greska (callee re-raise) ili 0 kreiranih = tih pad ->
+        ' operater mora da vidi da zbirna nije nastala.
+        Dim createdZbr As Long
+        Dim autoZbrErr As String
+
+        createdZbr = 0
         On Error Resume Next
-        Call AutoCreateZbirnaFromOtpremnice_TX
-        If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+        createdZbr = AutoCreateZbirnaFromOtpremnice_TX()
+        If Err.Number <> 0 Then
+            autoZbrErr = Err.description
+            LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+            Err.Clear
+        End If
         On Error GoTo EH
+
+        If autoZbrErr <> "" Or createdZbr < 1 Then
+            Dim autoZbrMsg As String
+            autoZbrMsg = "Zbirna NIJE kreirana automatski -- unesite je ru" & _
+                         ChrW(269) & "no (kartica Zbirna)."
+            If autoZbrErr <> "" Then autoZbrMsg = autoZbrMsg & vbCrLf & autoZbrErr
+            MsgBox autoZbrMsg, vbExclamation, APP_NAME
+        End If
     End If
 
     ' ISPRAVKA_ODMAH (druga faza): ako je otpremnica-ispravka na cekanju, sada je
@@ -2150,6 +2169,19 @@ Private Sub btnUnosZbr_Click()
         Exit Sub
     End If
 
+    ' Hard-blokada: izvorne otpremnice imaju Klasu II a checkbox je iskljucen ->
+    ' SaveZbirnaMulti_TX dobija hasKlasaII:=False i Kl.II bi se tiho izgubila.
+    If Not chkDveKlaseZbr.value Then
+        If ZbirnaIzvorImaKlasuII(txtBrojZbirne.value) Then
+            MsgBox "Izvor (otpremnice) ima Klasu II -- uklju" & ChrW(269) & _
+                   "ite 'Dve klase' i unesite Kl.II." & vbCrLf & _
+                   "Bez toga bi Klasa II bila izgubljena u zbirnoj.", _
+                   vbExclamation, APP_NAME
+            chkDveKlaseZbr.SetFocus
+            Exit Sub
+        End If
+    End If
+
     If Not UpdateValidacija() Then
         MsgBox Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), vbExclamation, APP_NAME
         Exit Sub
@@ -2225,6 +2257,29 @@ Private Sub txtBrojZbirne_AfterUpdate()
     If Not IsMalinaMode() Then txtBrojZbirneOtp.value = txtBrojZbirne.value
     UpdateValidacija
 End Sub
+
+' Da li izvorne (nestornirane) otpremnice date zbirne imaju Klasu II.
+' Cita isti izvor kao UpdateValidacija: ValidateZbirnaPreUnosa -> val(4) = sumaKgKlII.
+Private Function ZbirnaIzvorImaKlasuII(ByVal brojZbirne As String) As Boolean
+    On Error GoTo EH
+
+    If Trim$(brojZbirne) = "" Then Exit Function
+
+    Dim v As Variant
+    v = ValidateZbirnaPreUnosa(brojZbirne, 0, 0, 0)
+
+    If IsArray(v) Then
+        If UBound(v) >= 4 Then
+            If IsNumeric(v(4)) Then ZbirnaIzvorImaKlasuII = (CDbl(v(4)) > 0)
+        End If
+    End If
+
+    Exit Function
+
+EH:
+    LogErr "frmDokumenta.ZbirnaIzvorImaKlasuII"
+    ZbirnaIzvorImaKlasuII = False
+End Function
 
 Private Function UpdateValidacija() As Boolean
     UpdateValidacija = False
@@ -2307,17 +2362,29 @@ Private Function UpdateValidacija() As Boolean
     
     lblValidacijaKG.caption = kgCaption
     
+    ' Izvor (otpremnice) ima Klasu II a checkbox je iskljucen: save salje
+    ' hasKlasaII:=chkDveKlaseZbr, pa bi se Kl.II tiho ODBACILA. Hard-blokada.
+    Dim klasaIIOdbacena As Boolean
+    klasaIIOdbacena = (Not chkDveKlaseZbr.value) And (sumaKgII > 0)
+    If klasaIIOdbacena Then
+        kgCaption = kgCaption & "  ||  Izvor ima Kl.II: " & _
+                    Format$(sumaKgII, "#,##0.00") & " kg -- uklju" & ChrW(269) & "ite Kl.II"
+        lblValidacijaKG.caption = kgCaption
+    End If
+
     ' Farbe: beide Klassen muessen stimmen
     Dim kgValid As Boolean
-    If chkDveKlaseZbr.value Then
+    If klasaIIOdbacena Then
+        kgValid = False
+    ElseIf chkDveKlaseZbr.value Then
         kgValid = validKgI And validKgII
     Else
         kgValid = validKgI
     End If
-    
+
     If kgValid Then
         lblValidacijaKG.ForeColor = CLR_SUCCESS()
-    ElseIf zbrKgI = 0 Then
+    ElseIf zbrKgI = 0 And Not klasaIIOdbacena Then
         lblValidacijaKG.ForeColor = TXT_MUTED()
     Else
         lblValidacijaKG.ForeColor = CLR_ERROR()
@@ -2794,6 +2861,40 @@ Private Function PrefillNumStr(ByVal v As Double) As String
     End If
 End Function
 
+' Da li red rNew treba da zameni dosadasnji izbor rBest za prefill (po klasi).
+' Isti broj dokumenta moze imati vise generacija (storno -> ispravka -> storno);
+' prvi pronadjen red je NAJSTARIJA generacija. Bira se najnoviji Datum, a na
+' istom/nepoznatom datumu poslednji red u tabeli (poslednja upisana generacija).
+Private Function PrefillRowIsNewer(ByVal d As Variant, ByVal rNew As Long, _
+                                   ByVal rBest As Long, ByVal cDat As Long) As Boolean
+    If rBest = 0 Then
+        PrefillRowIsNewer = True
+        Exit Function
+    End If
+
+    If cDat > 0 Then
+        Dim vNew As Variant, vBest As Variant
+        vNew = d(rNew, cDat)
+        vBest = d(rBest, cDat)
+
+        If IsDate(vNew) And IsDate(vBest) Then
+            If CDate(vNew) < CDate(vBest) Then Exit Function
+            If CDate(vNew) > CDate(vBest) Then
+                PrefillRowIsNewer = True
+                Exit Function
+            End If
+        ElseIf IsDate(vNew) Then
+            PrefillRowIsNewer = True
+            Exit Function
+        ElseIf IsDate(vBest) Then
+            Exit Function
+        End If
+    End If
+
+    ' Isti (ili nepoznat) datum -> kasniji red pobedjuje.
+    PrefillRowIsNewer = True
+End Function
+
 ' Ispravka: popuni polja unosa prijemnice iz (upravo stornirane) prijemnice, da
 ' operater menja samo gresku. Klasa I -> osnovna polja; ako postoji red Klase II ->
 ' ukljuci chkDveKlasePrij i popuni II. Broj prijemnice se NE preuzima (predlaze se
@@ -2832,9 +2933,9 @@ Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
         If Trim$(CStr(d(r, cBr))) = brStorn Then
             Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
             If kl = "II" Then
-                If rII = 0 Then rII = r
+                If PrefillRowIsNewer(d, r, rII, cDat) Then rII = r
             Else
-                If rI = 0 Then rI = r
+                If PrefillRowIsNewer(d, r, rI, cDat) Then rI = r
             End If
         End If
     Next r
@@ -2903,9 +3004,9 @@ Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
         If Trim$(CStr(d(r, cBr))) = brStorn Then
             Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
             If kl = "II" Then
-                If rII = 0 Then rII = r
+                If PrefillRowIsNewer(d, r, rII, cDat) Then rII = r
             Else
-                If rI = 0 Then rI = r
+                If PrefillRowIsNewer(d, r, rI, cDat) Then rI = r
             End If
         End If
     Next r
@@ -2965,16 +3066,16 @@ Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     If cBr = 0 Then Exit Sub
 
-    ' Prvi red Klase I (ili prazna klasa) i prvi red Klase II za dati broj.
+    ' Najnoviji red Klase I (ili prazna klasa) i Klase II za dati broj (PrefillRowIsNewer).
     Dim rI As Long, rII As Long: rI = 0: rII = 0
     Dim r As Long
     For r = 1 To UBound(d, 1)
         If Trim$(CStr(d(r, cBr))) = brStorn Then
             Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
             If kl = "II" Then
-                If rII = 0 Then rII = r
+                If PrefillRowIsNewer(d, r, rII, cDat) Then rII = r
             Else
-                If rI = 0 Then rI = r
+                If PrefillRowIsNewer(d, r, rI, cDat) Then rI = r
             End If
         End If
     Next r
@@ -3357,6 +3458,11 @@ Private Sub FillOpenFakture()
     data = GetTableData(TBL_FAKTURE)
 
     If IsEmpty(data) Then Exit Sub
+
+    ' Stornirana faktura ima Status="Stornirano" (<> STATUS_PLACENO) pa bi inace
+    ' usla u listu za placanje/avans. Filtriraj po Stornirano koloni.
+    If IsArray(data) Then data = ExcludeStornirano(data, TBL_FAKTURE)
+    If Not IsArray(data) Then Exit Sub
 
     Dim colID As Long
     Dim colBroj As Long
