@@ -46,6 +46,9 @@ Public Sub RunGoogleSyncSmokeSuite()
     CleanupGoogleSmokeSpreadsheet
 
     EndGoogleSmokeRun
+
+    ' HARD GATE -- vidi RaiseIfSuiteFailed.
+    RaiseIfSuiteFailed "RunGoogleSyncSmokeSuite"
     Exit Sub
 
 EH:
@@ -53,6 +56,20 @@ EH:
     On Error Resume Next
     CleanupGoogleSmokeSpreadsheet
     EndGoogleSmokeRun
+
+    On Error GoTo 0
+    RaiseIfSuiteFailed "RunGoogleSyncSmokeSuite"
+End Sub
+
+Private Sub RaiseIfSuiteFailed(ByVal suiteName As String)
+    ' modE2EReleaseGate.E2E_RunVbaSuite meri samo da li je Application.Run
+    ' zavrsio bez neuhvacene greske. Bez ovog raise-a gate prijavljuje PASS
+    ' i kad suite interno ima FAIL (lazno-zeleni release gate).
+    If m_Failed <= 0 Then Exit Sub
+
+    Err.Raise vbObjectError + 7812, suiteName, _
+              suiteName & " FAIL: " & CStr(m_Failed) & " od " & CStr(m_Total) & _
+              " provera. Vidi Immediate Window / log."
 End Sub
 
 ' ============================================================
@@ -387,6 +404,9 @@ Public Sub RunMasterSyncSmokeSuite()
     CleanupGoogleSmokeSpreadsheet
 
     EndGoogleSmokeRun
+
+    ' HARD GATE -- rollback i cleanup su vec odradeni iznad.
+    RaiseIfSuiteFailed "RunMasterSyncSmokeSuite"
     Exit Sub
 
 EH:
@@ -396,6 +416,9 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
     EndGoogleSmokeRun
+
+    On Error GoTo 0
+    RaiseIfSuiteFailed "RunMasterSyncSmokeSuite"
 End Sub
 
 Private Sub BeginMasterSyncSmokeRun()
@@ -806,24 +829,17 @@ Public Sub RunSheetsJsonParserTests()
 
     EndSheetsJsonParserRun
 
-    ' HARD GATE: modE2EReleaseGate.E2E_RunVbaSuite meri samo da li je
-    ' Application.Run zavrsio bez neuhvacene greske. Bez ovog raise-a bi
-    ' gate prijavio PASS i kad parser testovi padnu.
-    If m_Failed > 0 Then
-        On Error GoTo 0
-        Err.Raise vbObjectError + 7810, "RunSheetsJsonParserTests", _
-                  "Sheets JSON parser suite FAIL: " & CStr(m_Failed) & _
-                  " od " & CStr(m_Total) & " provera. Vidi Immediate Window / log."
-    End If
-
+    ' HARD GATE -- vidi RaiseIfSuiteFailed.
+    On Error GoTo 0
+    RaiseIfSuiteFailed "RunSheetsJsonParserTests"
     Exit Sub
 
 EH:
     LogGoogleSmokeFail "RunSheetsJsonParserTests fatal", Err.description
     EndSheetsJsonParserRun
 
-    Err.Raise vbObjectError + 7811, "RunSheetsJsonParserTests", _
-              "Sheets JSON parser suite je pukao. Vidi Immediate Window / log."
+    On Error GoTo 0
+    RaiseIfSuiteFailed "RunSheetsJsonParserTests"
 End Sub
 
 Private Sub SheetsJsonParserTests_Core()
@@ -847,6 +863,7 @@ Private Sub SheetsJsonParserTests_Core()
     Test_ParseValuesJson_NonJsonBody
     Test_ParseValuesJson_TruncatedObjectWithoutValues
     Test_ParseValuesJson_UnbalancedDocument
+    Test_ParseValuesJson_WrongValuesType
     Test_ParseValuesJson_ValidDocumentShapes
 End Sub
 
@@ -1180,6 +1197,31 @@ Private Sub Test_ParseValuesJson_UnbalancedDocument()
 
 EH:
     LogGoogleSmokeFail "PARSER DOC: unbalanced document", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_WrongValuesType()
+    ' Ako top-level kljuc "values" postoji, vrednost MORA biti niz.
+    ' Svaki drugi tip je defektan odgovor, a ne "prazan sheet".
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{""values"":null}", data), _
+               "PARSER TYPE: values=null -> False"
+    AssertTrue Not TryParseValuesJson("{""values"":""x""}", data), _
+               "PARSER TYPE: values=string -> False"
+    AssertTrue Not TryParseValuesJson("{""values"":{}}", data), _
+               "PARSER TYPE: values=objekat -> False"
+    AssertTrue Not TryParseValuesJson("{""values"":123}", data), _
+               "PARSER TYPE: values=broj -> False"
+    AssertTrue Not TryParseValuesJson("{""range"":""A1"",""values"":true}", data), _
+               "PARSER TYPE: values=bool -> False"
+
+    AssertTrue IsEmpty(data), "PARSER TYPE: pogresan tip -> nema podataka"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER TYPE: wrong values type", Err.description
 End Sub
 
 Private Sub Test_ParseValuesJson_ValidDocumentShapes()

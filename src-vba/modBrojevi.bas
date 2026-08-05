@@ -431,13 +431,21 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
         Exit Function
     End If
     
+    ' AUD-001: "sheet ne postoji" i "lookup nije uspeo" moraju biti razdvojeni.
+    ' Neuspeo Drive lookup ne sme da izgleda kao "remote nema brojeve".
     Dim spreadsheetID As String
-    spreadsheetID = ResolveSpreadsheetIDByName(sheetName)
+    If Not TryResolveSpreadsheetIDByName(sheetName, spreadsheetID) Then
+        On Error GoTo 0
+        Err.Raise vbObjectError + 8403, "MaxSeqFromGoogleSheet", _
+                  "Drive lookup nije uspeo. Broj se ne predlaze da se ne bi dodelio duplikat. Sheet=" & sheetName
+    End If
+
     If Len(spreadsheetID) = 0 Then
+        ' Lookup je prosao -- remote sheet stvarno ne postoji, nema brojeva.
         MaxSeqFromGoogleSheet = 0
         Exit Function
     End If
-    
+
     ' AUD-001: read/parse greska NE SME da izgleda kao "na Google-u nema redova".
     ' Remote scan postoji upravo da bi uhvatio jos neuvezene PWA dokumente;
     ' ako padne, tihi 0 bi mogao da ponudi vec zauzet broj (duplikat).
@@ -458,12 +466,15 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
     Dim iBroj As Long, iDatum As Long
     iBroj = FindHeaderIndexInData(data, brojColHeader)
     iDatum = FindHeaderIndexInData(data, "Datum")
-    
+
+    ' AUD-001: sheet je procitan, ali nema ocekivane kolone -> remote scan
+    ' nije obavljen. Tih 0 bi ovde takode mogao dati vec zauzet broj.
     If iBroj = 0 Or iDatum = 0 Then
-        MaxSeqFromGoogleSheet = 0
-        Exit Function
+        On Error GoTo 0
+        Err.Raise vbObjectError + 8404, "MaxSeqFromGoogleSheet", _
+                  "Remote sheet nema ocekivane headere (" & brojColHeader & "/Datum). Sheet=" & sheetName
     End If
-    
+
     Dim datumStr As String: datumStr = Format$(datum, "ddmmyy")
     Dim maxSeq As Long: maxSeq = 0
     
@@ -490,28 +501,46 @@ EH:
     MaxSeqFromGoogleSheet = 0
 End Function
 
-Private Function ResolveSpreadsheetIDByName(ByVal sheetName As String) As String
+' AUD-001 FAIL-CLOSED lookup.
+'
+'   True  + outID = ID -> sheet pronaden
+'   True  + outID = "" -> lookup je prosao, sheet stvarno ne postoji
+'   False              -> lookup NIJE uspeo (nema foldera/tokena, HTTP greska,
+'                         necitljiv Drive JSON, exception)
+'
+' Kesira se SAMO uspesan lookup. Ranije se prazan rezultat neuspelog lookup-a
+' kesirao za celu sesiju, pa je prolazni Drive problem trajno izgledao kao
+' "remote sheet nema brojeve".
+Private Function TryResolveSpreadsheetIDByName(ByVal sheetName As String, _
+                                               ByRef outID As String) As Boolean
+    Dim folderID As String
+    Dim spreadsheetID As String
+
+    outID = ""
+
     If gSheetIDCache Is Nothing Then
         Set gSheetIDCache = CreateObject("Scripting.Dictionary")
     End If
-    
+
     If gSheetIDCache.Exists(sheetName) Then
-        ResolveSpreadsheetIDByName = CStr(gSheetIDCache(sheetName))
+        outID = CStr(gSheetIDCache(sheetName))
+        TryResolveSpreadsheetIDByName = True
         Exit Function
     End If
-    
-    Dim folderID As String
+
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(folderID) = 0 Then
-        ResolveSpreadsheetIDByName = ""
+        LogError "TryResolveSpreadsheetIDByName", _
+                 "GOOGLE_PWA_FOLDER_ID nije postavljen, a cloud sync je ukljucen -- remote scan nije moguc."
         Exit Function
     End If
-    
-    Dim spreadsheetID As String
-    spreadsheetID = GetSpreadsheetID(sheetName, folderID)
-    
+
+    If Not TryGetSpreadsheetID(sheetName, folderID, spreadsheetID) Then Exit Function
+
     gSheetIDCache(sheetName) = spreadsheetID
-    ResolveSpreadsheetIDByName = spreadsheetID
+
+    outID = spreadsheetID
+    TryResolveSpreadsheetIDByName = True
 End Function
 
 Private Function FindHeaderIndexInData(ByVal data As Variant, _

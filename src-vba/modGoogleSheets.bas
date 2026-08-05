@@ -1388,24 +1388,45 @@ End Function
 
 Public Function GetSpreadsheetID(ByVal title As String, _
                                  Optional ByVal folderID As String = "") As String
+    ' Kompatibilitaets-Wrapper: "nicht gefunden" und "Lookup fehlgeschlagen"
+    ' sind hier NICHT unterscheidbar (beides ""). Wer daraus eine Entscheidung
+    ' ableitet (z.B. Nummernvergabe), MUSS TryGetSpreadsheetID nutzen.
+    Dim foundID As String
+
+    If TryGetSpreadsheetID(title, folderID, foundID) Then
+        GetSpreadsheetID = foundID
+    Else
+        GetSpreadsheetID = ""
+    End If
+End Function
+
+Public Function TryGetSpreadsheetID(ByVal title As String, _
+                                    ByVal folderID As String, _
+                                    ByRef outID As String) As Boolean
+    ' FAIL-CLOSED Drive Lookup.
+    '
+    '   True  + outID = ID  -> Spreadsheet gefunden
+    '   True  + outID = ""  -> Lookup ok, Spreadsheet existiert wirklich nicht
+    '   False               -> Argument-/Token-/HTTP-/Parse-Fehler oder Exception.
+    '                          Aufrufer darf daraus NICHT "existiert nicht"
+    '                          schliessen (AUD-001: sonst wird ein bereits
+    '                          vergebener Beleg-Nummernbereich uebersehen).
     Dim accessToken As String
     Dim url As String
     Dim http As Object
     Dim query As String
     Dim responseText As String
-    Dim foundID As String
+
+    outID = ""
+    TryGetSpreadsheetID = False
 
     On Error GoTo EH
 
-    If Not RequireGoogleTextArg(title, "title", "GetSpreadsheetID") Then
-        GetSpreadsheetID = ""
-        Exit Function
-    End If
+    If Not RequireGoogleTextArg(title, "title", "TryGetSpreadsheetID") Then Exit Function
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
-        LogError "GetSpreadsheetID", "Kein Access Token"
-        GetSpreadsheetID = ""
+        LogError "TryGetSpreadsheetID", "Kein Access Token"
         Exit Function
     End If
 
@@ -1419,7 +1440,7 @@ Public Function GetSpreadsheetID(ByVal title As String, _
     url = DRIVE_API_BASE & "/files?q=" & UrlEncode(query) & _
           "&fields=files(id,name)&pageSize=10"
 
-    Set http = CreateGoogleHttpRequest("GetSpreadsheetID")
+    Set http = CreateGoogleHttpRequest("TryGetSpreadsheetID")
 
     http.Open "GET", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
@@ -1428,27 +1449,46 @@ Public Function GetSpreadsheetID(ByVal title As String, _
     responseText = CStr(http.responseText)
 
     If http.status <> 200 Then
-        LogError "GetSpreadsheetID", _
+        LogError "TryGetSpreadsheetID", _
                  "HTTP " & http.status & ": " & GoogleHttpBodyForLog(responseText), _
                  http.status
-        GetSpreadsheetID = ""
         Exit Function
     End If
 
-    foundID = ExtractSpreadsheetIDByExactName(responseText, title)
-
-    If Len(Trim$(foundID)) = 0 Then
-        LogInfo "GetSpreadsheetID", "Spreadsheet not found by exact name: " & title
-        GetSpreadsheetID = ""
+    ' Unlesbare/abgeschnittene Drive-Antwort darf nicht als
+    ' "nicht gefunden" durchgehen.
+    If Not IsWellFormedJsonDocument(responseText) Then
+        LogError "TryGetSpreadsheetID", _
+                 "Defektes/abgeschnittenes JSON von Drive API. Title=" & title & _
+                 "; Bytes=" & CStr(Len(responseText))
         Exit Function
     End If
 
-    GetSpreadsheetID = foundID
+    outID = ExtractSpreadsheetIDByExactName(responseText, title)
+
+    If Len(Trim$(outID)) = 0 Then
+        outID = ""
+        LogInfo "TryGetSpreadsheetID", "Spreadsheet not found by exact name: " & title
+    End If
+
+    TryGetSpreadsheetID = True
     Exit Function
 
 EH:
-    LogErr "GetSpreadsheetID"
-    GetSpreadsheetID = ""
+    outID = ""
+    LogErr "TryGetSpreadsheetID"
+    TryGetSpreadsheetID = False
+End Function
+
+Public Function IsWellFormedJsonDocument(ByVal json As String) As Boolean
+    ' Strukturpruefung (Klammern/Strings/Escapes) fuer beliebige
+    ' Google-API-Antworten -- erkennt abgeschnittene und beschaedigte Bodies.
+    Dim rowsColl As Collection
+    Dim foundValues As Boolean
+
+    If FirstNonWhitespaceChar(json) <> "{" Then Exit Function
+
+    IsWellFormedJsonDocument = TryScanJsonDocument(json, rowsColl, foundValues)
 End Function
 
 Private Function EscapeDriveQueryValue(ByVal value As String) As String
@@ -1946,6 +1986,15 @@ Private Function TryScanJsonDocument(ByRef json As String, _
             ' Nach dem Root-Objekt darf nur noch Whitespace kommen.
             If rootClosed Then
                 If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then Exit Function
+            End If
+
+            ' Wenn "values" als Top-Level-Key da ist, MUSS ein Array folgen.
+            ' {"values":null} / {"values":"x"} / {"values":{}} sind defekt,
+            ' nicht "leerer Sheet".
+            If expectValues Then
+                If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf And ch <> "[" Then
+                    Exit Function
+                End If
             End If
 
             Select Case ch
