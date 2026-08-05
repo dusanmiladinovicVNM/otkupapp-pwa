@@ -688,9 +688,16 @@ NextAvans:
 End Sub
 
 Public Function GetOpenFakture(ByVal kupacID As String) As Variant
-    ' Returns: 2D Array (BrojFakture, FakturaID, Iznos, Uplaceno, Preostalo)
+    ' Returns: 2D Array (BrojFakture, FakturaID, Iznos, Uplaceno, Preostalo, Datum)
     ' oder Empty wenn nichts offen
-    
+    '
+    ' Jedini read-model otvorenih faktura kupca (docs/AgriX_Functional_Map_v142.md
+    ' 20.12): izbacuje stornirane, trazi status Neplaceno, racuna stvarno uplaceno i
+    ' vraca samo preostalo > 0. frmDokumenta.FillOpenFakture zove OVO -- ne sme se
+    ' duplirati filter u formi (stara forma je imala slabiji: Status <> Placeno).
+    ' Datum je 6. kolona (dodata za prikaz u formi), pa stari 5-kolonski pozivaoci
+    ' ostaju nepromenjeni.
+
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
     If IsEmpty(data) Then
@@ -711,11 +718,13 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
     Const SRC As String = "GetOpenFakture"
 
     Dim colID As Long, colBroj As Long, colKupac As Long, colIznos As Long, colStatus As Long
+    Dim colDatum As Long
     colID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
     colBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, SRC)
     colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
     colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
     colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
+    colDatum = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM, SRC)
     
     ' Erst zaehlen
     Dim count As Long
@@ -735,7 +744,7 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
     End If
     
     Dim result() As Variant
-    ReDim result(1 To count, 1 To 5)
+    ReDim result(1 To count, 1 To 6)
     Dim idx As Long
     
     For i = 1 To UBound(data, 1)
@@ -751,6 +760,7 @@ Public Function GetOpenFakture(ByVal kupacID As String) As Variant
                 result(idx, 3) = iznos
                 result(idx, 4) = uplaceno
                 result(idx, 5) = preostalo
+                result(idx, 6) = data(i, colDatum)
             End If
         End If
     Next i

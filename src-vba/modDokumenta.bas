@@ -611,28 +611,14 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
                   "GetNextID nije vratio ZbirnaID."
     End If
 
-    ' AUD-003: schema-presence guard pre pozicionog AppendRow-a. ValidateZbirnaInput
-    ' proverava samo VREDNOSTI; ako je sema tblZbirna driftovala, pozicijski upis bi
-    ' tiho iskrivio red. Redosled prati Array(...) ispod.
-    RequireColumns TBL_ZBIRNA, "modDokumenta.SaveZbirna", _
-                   COL_ZBR_ID, _
-                   COL_ZBR_DATUM, _
-                   COL_ZBR_VOZAC, _
-                   COL_ZBR_BROJ, _
-                   COL_ZBR_KUPAC, _
-                   COL_ZBR_HLADNJACA, _
-                   COL_ZBR_POGON, _
-                   COL_ZBR_VRSTA, _
-                   COL_ZBR_SORTA, _
-                   COL_ZBR_KOLICINA, _
-                   COL_ZBR_TIP_AMB, _
-                   COL_ZBR_KOL_AMB, _
-                   COL_ZBR_KLASA
-
+    ' AUD-003: upis PO IMENU kolone (BuildZbirnaRowData), ne pozicijski Array(...).
+    ' Presence guard (RequireColumns) dokazuje samo da kolone postoje; promenjen
+    ' redosled ili kolona umetnuta u sredinu bi kroz pozicijski upis tiho iskrivili
+    ' red. Isti obrazac kao BuildPrijemnicaRowData.
     Dim rowData As Variant
-    rowData = Array(newID, datum, vozacID, brojZbirne, kupacID, _
-                    hladnjaca, pogon, vrstaVoca, sortaVoca, _
-                    ukupnoKol, tipAmb, ukupnoAmb, klasa)
+    rowData = BuildZbirnaRowData(newID, datum, vozacID, brojZbirne, kupacID, _
+                                 hladnjaca, pogon, vrstaVoca, sortaVoca, _
+                                 ukupnoKol, tipAmb, ukupnoAmb, klasa)
 
     If AppendRow(TBL_ZBIRNA, rowData) > 0 Then
         SaveZbirna = newID
@@ -858,40 +844,139 @@ EH:
     ZbirnaIzvorImaKlasuII = False
 End Function
 
-' Da li red rNew treba da zameni dosadasnji izbor rBest za prefill (po klasi).
-' Koristi frmDokumenta.Prefill{Otpremnica,Zbirna,Prijemnica}FromStornirana: isti broj
-' dokumenta moze imati vise generacija (storno -> ispravka -> storno), a prvi pronadjen
-' red je NAJSTARIJA generacija. Bira se najnoviji Datum, a na istom/nepoznatom datumu
-' poslednji red u tabeli (poslednja upisana generacija).
-' data = 2D tabela (1-based), cDat = indeks Datum kolone (0 = nema kolone).
-Public Function PrefillRowIsNewer(ByVal data As Variant, ByVal rNew As Long, _
-                                  ByVal rBest As Long, ByVal cDat As Long) As Boolean
-    If rBest = 0 Then
-        PrefillRowIsNewer = True
-        Exit Function
-    End If
+' Bira redove POSLEDNJE GENERACIJE dokumenta za prefill (frmDokumenta.Prefill*
+' FromStornirana). Isti broj dokumenta moze imati vise generacija (storno ->
+' ispravka -> storno), a prvi pronadjen red je NAJSTARIJA generacija.
+'
+' Generacija se odredjuje po TEHNICKOM redosledu upisa (numericki deo ID-a iz
+' GetNextID, npr. "OTP-00042"), NE po poslovnom Datum-u: ispravka moze nositi
+' raniji datum od originala (npr. ispravka sutradan zadrzava datum otpreme).
+' Generacija = neprekinut niz ID rank-ova koji se zavrsava na najveci rank --
+' Multi_TX upisuje Klasu I i II uzastopno u istoj transakciji, pa dele blok, dok
+' starija generacija ima rupu u nizu. Time Kl.I i Kl.II ne mogu doci iz razlicitih
+' generacija (ranije su birane nezavisno).
+'
+' Bez upotrebljive ID kolone (cId = 0 ili neparsiv ID) fallback je fizicki redosled
+' redova. Ako nova generacija nema Klasu II, outRowII ostaje 0 -- ispravno, jer
+' checkbox "Dve klase" prati bas tu generaciju.
+Public Sub PickLatestGenerationRows(ByVal data As Variant, _
+                                    ByVal cBroj As Long, ByVal cKlasa As Long, _
+                                    ByVal cId As Long, ByVal broj As String, _
+                                    ByRef outRowI As Long, ByRef outRowII As Long)
+    outRowI = 0
+    outRowII = 0
 
-    If cDat > 0 Then
-        Dim vNew As Variant, vBest As Variant
-        vNew = data(rNew, cDat)
-        vBest = data(rBest, cDat)
+    If Not IsArray(data) Then Exit Sub
+    If cBroj <= 0 Then Exit Sub
 
-        If IsDate(vNew) And IsDate(vBest) Then
-            If CDate(vNew) < CDate(vBest) Then Exit Function
-            If CDate(vNew) > CDate(vBest) Then
-                PrefillRowIsNewer = True
-                Exit Function
+    Dim target As String
+    target = Trim$(broj)
+    If target = "" Then Exit Sub
+
+    Dim n As Long, r As Long
+    For r = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(r, cBroj))) = target Then n = n + 1
+    Next r
+    If n = 0 Then Exit Sub
+
+    Dim rowIdx() As Long, ranks() As Double
+    ReDim rowIdx(1 To n)
+    ReDim ranks(1 To n)
+
+    Dim k As Long
+    Dim useRowIndex As Boolean
+    useRowIndex = (cId <= 0)
+
+    k = 0
+    For r = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(r, cBroj))) = target Then
+            k = k + 1
+            rowIdx(k) = r
+            If Not useRowIndex Then
+                ranks(k) = IdRank(NzToText(data(r, cId)))
+                If ranks(k) < 0 Then useRowIndex = True
             End If
-        ElseIf IsDate(vNew) Then
-            PrefillRowIsNewer = True
-            Exit Function
-        ElseIf IsDate(vBest) Then
-            Exit Function
         End If
+    Next r
+
+    If useRowIndex Then
+        For k = 1 To n
+            ranks(k) = CDbl(rowIdx(k))
+        Next k
     End If
 
-    ' Isti (ili nepoznat) datum -> kasniji red pobedjuje.
-    PrefillRowIsNewer = True
+    ' Poslednje upisan red (tie -> kasniji red u tabeli).
+    Dim topIdx As Long
+    topIdx = 1
+    For k = 2 To n
+        If ranks(k) > ranks(topIdx) Then
+            topIdx = k
+        ElseIf ranks(k) = ranks(topIdx) And rowIdx(k) > rowIdx(topIdx) Then
+            topIdx = k
+        End If
+    Next k
+
+    ' Prosiri blok unazad dokle god su rank-ovi uzastopni (I + II iz istog save-a).
+    Dim minRank As Double
+    Dim found As Boolean
+    minRank = ranks(topIdx)
+    Do
+        found = False
+        For k = 1 To n
+            If ranks(k) = minRank - 1 Then
+                minRank = ranks(k)
+                found = True
+                Exit For
+            End If
+        Next k
+    Loop While found
+
+    Dim bestI As Double, bestII As Double
+    Dim klasa As String
+    bestI = -1
+    bestII = -1
+
+    For k = 1 To n
+        If ranks(k) >= minRank And ranks(k) <= ranks(topIdx) Then
+            klasa = ""
+            If cKlasa > 0 Then klasa = UCase$(Trim$(NzToText(data(rowIdx(k), cKlasa))))
+
+            If klasa = "II" Then
+                If ranks(k) > bestII Then
+                    bestII = ranks(k)
+                    outRowII = rowIdx(k)
+                End If
+            Else
+                If ranks(k) > bestI Then
+                    bestI = ranks(k)
+                    outRowI = rowIdx(k)
+                End If
+            End If
+        End If
+    Next k
+End Sub
+
+' Numericki sufiks ID-a ("OTP-00042" -> 42); -1 ako ga nema. GetNextID je monoton
+' po tabeli, pa je veci sufiks = kasnije upisan red.
+Private Function IdRank(ByVal idText As String) As Double
+    Dim s As String
+    s = Trim$(idText)
+
+    Dim i As Long, ch As String, digits As String
+    For i = Len(s) To 1 Step -1
+        ch = Mid$(s, i, 1)
+        If ch >= "0" And ch <= "9" Then
+            digits = ch & digits
+        Else
+            Exit For
+        End If
+    Next i
+
+    If Len(digits) = 0 Then
+        IdRank = -1
+    Else
+        IdRank = Val(digits)
+    End If
 End Function
 
 ' ============================================================
@@ -1228,6 +1313,55 @@ EH:
 
     Err.Raise errNum, "SavePrijemnica", _
               "Source=" & errSrc & " | " & errDesc
+End Function
+
+' Gradi red tblZbirna PO IMENU kolone (AUD-003). Otporno na promenu redosleda
+' kolona i na kolonu umetnutu u sredinu -- za razliku od pozicijskog Array(...).
+Private Function BuildZbirnaRowData(ByVal zbirnaID As String, _
+                                    ByVal datum As Date, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojZbirne As String, _
+                                    ByVal kupacID As String, _
+                                    ByVal hladnjaca As String, _
+                                    ByVal pogon As String, _
+                                    ByVal vrstaVoca As String, _
+                                    ByVal sortaVoca As String, _
+                                    ByVal ukupnoKol As Double, _
+                                    ByVal tipAmb As String, _
+                                    ByVal ukupnoAmb As Long, _
+                                    ByVal klasa As String) As Variant
+    Const SRC As String = "BuildZbirnaRowData"
+
+    Dim colCount As Long
+    colCount = GetDokumentaTableColumnCount(TBL_ZBIRNA)
+
+    If colCount <= 0 Then
+        Err.Raise vbObjectError + 1011, SRC, _
+                  "Could not resolve tblZbirna column count."
+    End If
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To colCount - 1)
+
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, kupacID, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_HLADNJACA, hladnjaca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_POGON, pogon, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, vrstaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_SORTA, sortaVoca, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KOLICINA, ukupnoKol, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, tipAmb, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KOL_AMB, ukupnoAmb, SRC
+    SetRowValueByColumn rowData, TBL_ZBIRNA, COL_ZBR_KLASA, klasa, SRC
+
+    If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
+        SetRowValueByColumn rowData, TBL_ZBIRNA, COL_STORNIRANO, "", SRC
+    End If
+
+    BuildZbirnaRowData = rowData
 End Function
 
 Private Function BuildPrijemnicaRowData(ByVal prijemnicaID As String, _
@@ -3360,3 +3494,162 @@ EH:
     LogErr SRC
     ReassignPrijemnicaToZbirna_TX = False
 End Function
+
+' ============================================================
+' OM ULAZ (ambalaza + kes) -- servis bez UI-ja
+' Premesteno iz frmDokumenta (RF-05): nema referenci na kontrole, a smesteno u
+' modul moze da se testira bez instanciranja forme (core guard za smer ambalaze).
+' ============================================================
+
+Public Function SaveOMUlaz_TX(ByVal datum As Date, _
+                              ByVal brojDok As String, _
+                              ByVal stanicaNaziv As String, _
+                              ByVal stanicaID As String, _
+                              ByVal vozacID As String, _
+                              ByVal tipAmb As String, _
+                              ByVal kolAmb As Long, _
+                              ByVal vrstaVoca As String, _
+                              ByVal novac As Double, _
+                              ByVal kooperantID As String, _
+                              ByVal primalacDisplay As String, _
+                              ByVal otkupID As String, _
+                              ByVal tipNovca As String, _
+                              ByVal koopSmer As String) As Boolean
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+
+    On Error GoTo EH
+
+    If kolAmb <= 0 And novac <= 0 Then
+        Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
+                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
+    End If
+
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_AMBALAZA
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_OTKUP
+
+    If kolAmb > 0 Then
+        Select Case koopSmer
+        Case "IZDAVANJE"
+            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
+            '   1) Kooperant ULAZ (dobija prazne), 2) OM/Stanica IZLAZ (razduzenje OM).
+            If Trim$(kooperantID) = "" Then
+                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
+                          "Izdavanje kooperantu: kooperant je obavezan."
+            End If
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
+                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", kooperantID, "Kooperant", _
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", stanicaID, "Stanica", _
+                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
+        Case "PRIJEM"
+            ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
+            '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
+            If Trim$(kooperantID) = "" Then
+                Err.Raise vbObjectError + 1505, "SaveOMUlaz_TX", _
+                          "Prijem od kooperanta: kooperant je obavezan."
+            End If
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
+                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", kooperantID, "Kooperant", _
+                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", stanicaID, "Stanica", _
+                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
+        Case "IZDATO_OM"
+            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
+            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
+            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
+                          "Izdato OM: OM (otkupno mesto) je obavezan."
+            End If
+            If Trim$(vozacID) = "" Then
+                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
+                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Ulaz", stanicaID, "Stanica", _
+                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA
+        Case "PRIJEM_OD_OM"
+            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
+            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
+            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
+            If Trim$(stanicaID) = "" Then
+                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
+                          "Prijem od OM: OM (otkupno mesto) je obavezan."
+            End If
+            If Trim$(vozacID) = "" Then
+                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
+                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
+            End If
+            TrackAmbalaza datum, tipAmb, kolAmb, _
+                          "Izlaz", stanicaID, "Stanica", _
+                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA
+        Case Else
+            ' Smer je OBAVEZAN uz kolicinu ambalaze. Ranije je ovde tiho knjizen
+            ' legacy "OM prima od vozaca" (Stanica ULAZ, DOK_TIP_OM_ULAZ), pa je
+            ' prazan/nepoznat smer davao pogresan ledger red bez ijedne poruke.
+            ' UI blokira prazan smer, ovo je core guard za sve ostale pozivaoce.
+            Err.Raise vbObjectError + 1511, "SaveOMUlaz_TX", _
+                      "Nepoznat smer ambalaze '" & koopSmer & "'. Dozvoljeni: " & _
+                      "IZDAVANJE, PRIJEM, IZDATO_OM, PRIJEM_OD_OM."
+        End Select
+    End If
+
+    If novac > 0 Then
+        Dim novacID As String
+
+        novacID = SaveNovac( _
+            brojDok:=brojDok, _
+            datum:=datum, _
+            partner:=stanicaNaziv, _
+            partnerId:=stanicaID, _
+            entitetTip:="OM", _
+            omID:=stanicaID, _
+            kooperantID:=kooperantID, _
+            fakturaID:="", _
+            vrstaVoca:=vrstaVoca, _
+            tip:=tipNovca, _
+            uplata:=0, _
+            isplata:=novac, _
+            napomena:=primalacDisplay, _
+            otkupID:=otkupID)
+
+        If novacID = "" Then
+            Err.Raise vbObjectError + 1502, "SaveOMUlaz_TX", _
+                      "SaveNovac fehlgeschlagen"
+        End If
+
+        If otkupID <> "" Then
+            UpdateOtkupStatus otkupID
+        End If
+    End If
+
+    tx.CommitTx
+
+    Set tx = Nothing
+
+    SaveOMUlaz_TX = True
+    Exit Function
+
+EH:
+    LogErr "SaveOMUlaz_TX"
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    SaveOMUlaz_TX = False
+End Function
+

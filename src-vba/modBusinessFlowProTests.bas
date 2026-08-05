@@ -89,8 +89,10 @@ Public Sub RunBusinessFlowProSuite()
     Test_ProsekGajbeExcludesStornirano
     Test_OpenFaktureExcludeStornirano
     Test_ZbirnaKlasaIIGuard
-    Test_PrefillRowIsNewerBiraNajnoviju
+    Test_PrefillBiraPoslednjuGeneraciju
     Test_MalinaAutoZbirnaFailSignal
+    Test_ZbirnaRowDataColumnMapped
+    Test_OMUlazSmerObavezan
     Test_PorukeKatalogPokrivaDokumenta
 
     Test_HladnjacaChainHappyPath
@@ -1549,7 +1551,7 @@ Private Sub Test_MalinaAutoZbirnaFromOtpremnice()
 
     ' Act
     Dim created As Long
-    created = AutoCreateZbirnaFromOtpremnice()
+    created = AutoCreateZbirnaFromOtpremnice(brojOtp)   ' scoped na sopstvenu otpremnicu
     AssertTrue created >= 1, "Malina: AutoCreateZbirnaFromOtpremnice kreirao zbirnu"
 
     ' BrojZbirne == BrojOtpremnice; zbirna I i II postoje
@@ -1571,7 +1573,7 @@ Private Sub Test_MalinaAutoZbirnaFromOtpremnice()
     ' Idempotencija: ponovni poziv ne pravi novu zbirnu
     Dim zbrBefore As Long
     zbrBefore = CountRows(TBL_ZBIRNA)
-    Call AutoCreateZbirnaFromOtpremnice
+    Call AutoCreateZbirnaFromOtpremnice(brojOtp)
     AssertEquals CStr(zbrBefore), CStr(CountRows(TBL_ZBIRNA)), _
         "Malina: ponovni poziv ne duplira zbirnu (idempotentno)"
 
@@ -1621,13 +1623,15 @@ EH:
 End Sub
 
 ' ============================================================
-' RF-05 -- frmDokumenta unos + storno set (regresija za 6 fiksa)
+' RF-05 -- frmDokumenta unos + storno set (regresija)
 '   R01 prosek gajbe ne racuna stornirane redove (SumByBroj)
 '   R02 stornirana faktura ne ulazi u listu za placanje/avans (FillOpenFakture)
 '   R03 izvor sa Klasom II blokira zbirnu bez "Dve klase" (ZbirnaIzvorImaKlasuII)
-'   R04 prefill bira NAJNOVIJU generaciju (PrefillRowIsNewer)
-'   R05 malina auto-zbirna signalizira pad (Err / created=0)
+'   R04 prefill bira POSLEDNJU GENERACIJU (PickLatestGenerationRows)
+'   R05 malina auto-zbirna signalizira pad (Err / created=0), scoped na svoj broj
 '   R06 katalog poruka sadrzi kljuceve koje frmDokumenta koristi (EnsurePoruke)
+'   R07 SaveZbirna upisuje po IMENU kolone (BuildZbirnaRowData)
+'   R08 OM ulaz: smer ambalaze je obavezan (core guard u SaveOMUlaz_TX)
 ' ============================================================
 
 Private Sub Test_ProsekGajbeExcludesStornirano()
@@ -1716,18 +1720,21 @@ Private Sub Test_OpenFaktureExcludeStornirano()
     fakID = CreateFaktura_TX(TEST_KUP_ID, stavke)
     AssertTrue Len(fakID) > 0, "Storno faktura: fixture faktura kreirana"
 
+    ' Pre storna: faktura JESTE u produkcionom read-modelu koji forma zove
+    ' (modNovac.GetOpenFakture -- FillOpenFakture vise nema sopstveni filter).
+    AssertTrue OpenFaktureSadrzi(TEST_KUP_ID, fakID), _
+               "Otvorena faktura je u GetOpenFakture (read-model koji forma zove)"
+    AssertTrue OpenFaktureImaDatum(TEST_KUP_ID, fakID), _
+               "GetOpenFakture vraca i Datum (6. kolona za prikaz u formi)"
+
     MarkTestRowStornirano TBL_FAKTURE, COL_FAK_ID, fakID
 
-    ' Bez ovoga fix nema smisla: stornirana faktura NIJE "Placeno", pa je stari
-    ' filter (Status <> STATUS_PLACENO) u FillOpenFakture pustao u listu.
+    ' Stornirana faktura NIJE "Placeno" -- stari filter forme (Status <> Placeno)
+    ' bi je pustio nazad u listu.
     AssertTrue CStr(nz(GetValueByKey(TBL_FAKTURE, COL_FAK_ID, fakID, COL_FAK_STATUS), "")) <> STATUS_PLACENO, _
                "Storno faktura: status i dalje nije 'Placeno' (stari filter bi je pustio)"
 
-    ' FillOpenFakture sada filtrira ExcludeStornirano nad tblFakture.
-    Dim openData As Variant
-    openData = ExcludeStornirano(GetTableData(TBL_FAKTURE), TBL_FAKTURE)
-
-    AssertFalse ArrayContainsKeyValue(openData, TBL_FAKTURE, COL_FAK_ID, fakID), _
+    AssertFalse OpenFaktureSadrzi(TEST_KUP_ID, fakID), _
                 "Stornirana faktura ne ulazi u listu za placanje/avans"
 
     Exit Sub
@@ -1791,57 +1798,58 @@ EH:
     LogFatal "Test_ZbirnaKlasaIIGuard", Err.Number, Err.description
 End Sub
 
-Private Sub Test_PrefillRowIsNewerBiraNajnoviju()
+Private Sub Test_PrefillBiraPoslednjuGeneraciju()
     On Error GoTo EH
 
-    ' Sinteticka 2D tabela (1-based): kolona 1 = broj, kolona 2 = Datum.
+    ' Sinteticka 2D tabela (1-based): 1=Broj 2=Klasa 3=ID 4=Datum.
+    ' Scenario iz review-a: kasnije upisana ISPRAVKA nosi RANIJI poslovni datum.
     Dim d As Variant
-    ReDim d(1 To 3, 1 To 2)
+    ReDim d(1 To 2, 1 To 4)
+    d(1, 1) = "DOK-1": d(1, 2) = "I": d(1, 3) = "OTP-00001": d(1, 4) = DateSerial(2090, 8, 5)
+    d(2, 1) = "DOK-1": d(2, 2) = "I": d(2, 3) = "OTP-00002": d(2, 4) = DateSerial(2090, 8, 4)
 
-    d(1, 1) = "DOK-1": d(1, 2) = DateSerial(2090, 1, 1)
-    d(2, 1) = "DOK-1": d(2, 2) = DateSerial(2090, 3, 1)
-    d(3, 1) = "DOK-1": d(3, 2) = DateSerial(2090, 2, 1)
+    Dim rI As Long, rII As Long
+    PickLatestGenerationRows d, 1, 2, 3, "DOK-1", rI, rII
+    AssertEquals "2", CStr(rI), _
+                 "Prefill: kasnija generacija pobedjuje i kad ima RANIJI datum"
+    AssertEquals "0", CStr(rII), "Prefill: nema Kl.II u toj generaciji"
 
-    Dim best As Long, r As Long
-    best = 0
-    For r = 1 To 3
-        If PrefillRowIsNewer(d, r, best, 2) Then best = r
-    Next r
-    AssertEquals "2", CStr(best), "Prefill: bira red sa najnovijim datumom (ne prvi)"
+    ' Dve generacije, obe dvoklasne -> I i II moraju biti iz ISTE (novije).
+    Dim g As Variant
+    ReDim g(1 To 4, 1 To 4)
+    g(1, 1) = "DOK-2": g(1, 2) = "I":  g(1, 3) = "OTP-00010": g(1, 4) = DateSerial(2090, 9, 9)
+    g(2, 1) = "DOK-2": g(2, 2) = "II": g(2, 3) = "OTP-00011": g(2, 4) = DateSerial(2090, 9, 9)
+    g(3, 1) = "DOK-2": g(3, 2) = "I":  g(3, 3) = "OTP-00020": g(3, 4) = DateSerial(2090, 9, 1)
+    g(4, 1) = "DOK-2": g(4, 2) = "II": g(4, 3) = "OTP-00021": g(4, 4) = DateSerial(2090, 9, 1)
 
-    ' cDat = 0 (nema Datum kolone) -> poslednji red pobedjuje.
-    best = 0
-    For r = 1 To 3
-        If PrefillRowIsNewer(d, r, best, 0) Then best = r
-    Next r
-    AssertEquals "3", CStr(best), "Prefill: bez Datum kolone bira poslednji red"
+    PickLatestGenerationRows g, 1, 2, 3, "DOK-2", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz novije generacije"
+    AssertEquals "4", CStr(rII), "Prefill: Kl.II iz ISTE (novije) generacije"
 
-    ' Isti datum -> poslednji red (poslednja upisana generacija).
-    Dim t As Variant
-    ReDim t(1 To 2, 1 To 2)
-    t(1, 1) = "DOK-2": t(1, 2) = DateSerial(2090, 5, 1)
-    t(2, 1) = "DOK-2": t(2, 2) = DateSerial(2090, 5, 1)
+    ' Novija generacija ima samo Kl.I -> Kl.II se NE preuzima iz stare generacije.
+    Dim h As Variant
+    ReDim h(1 To 3, 1 To 4)
+    h(1, 1) = "DOK-3": h(1, 2) = "I":  h(1, 3) = "OTP-00030": h(1, 4) = DateSerial(2090, 9, 1)
+    h(2, 1) = "DOK-3": h(2, 2) = "II": h(2, 3) = "OTP-00031": h(2, 4) = DateSerial(2090, 9, 1)
+    h(3, 1) = "DOK-3": h(3, 2) = "I":  h(3, 3) = "OTP-00040": h(3, 4) = DateSerial(2090, 9, 5)
 
-    best = 0
-    For r = 1 To 2
-        If PrefillRowIsNewer(t, r, best, 2) Then best = r
-    Next r
-    AssertEquals "2", CStr(best), "Prefill: na istom datumu bira poslednji red"
+    PickLatestGenerationRows h, 1, 2, 3, "DOK-3", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz poslednje generacije"
+    AssertEquals "0", CStr(rII), _
+                 "Prefill: stara Kl.II se NE spaja sa novom Kl.I"
 
-    ' Prazan/neispravan datum ne sme da pregazi red sa datumom.
-    Dim e As Variant
-    ReDim e(1 To 2, 1 To 2)
-    e(1, 1) = "DOK-3": e(1, 2) = DateSerial(2090, 6, 1)
-    e(2, 1) = "DOK-3": e(2, 2) = ""
+    ' Bez upotrebljive ID kolone -> fallback na fizicki redosled (poslednji red).
+    PickLatestGenerationRows h, 1, 2, 0, "DOK-3", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill: bez ID kolone bira poslednji red"
 
-    AssertFalse PrefillRowIsNewer(e, 2, 1, 2), "Prefill: red bez datuma ne pregazi red sa datumom"
-    AssertTrue PrefillRowIsNewer(e, 1, 2, 2), "Prefill: red sa datumom pregazi red bez datuma"
-    AssertTrue PrefillRowIsNewer(e, 2, 0, 2), "Prefill: prvi pronadjen red je uvek pocetni izbor"
+    ' Nepostojeci broj -> nista.
+    PickLatestGenerationRows h, 1, 2, 3, "DOK-NEMA", rI, rII
+    AssertEquals "00", CStr(rI) & CStr(rII), "Prefill: nepoznat broj ne vraca red"
 
     Exit Sub
 
 EH:
-    LogFatal "Test_PrefillRowIsNewerBiraNajnoviju", Err.Number, Err.description
+    LogFatal "Test_PrefillBiraPoslednjuGeneraciju", Err.Number, Err.description
 End Sub
 
 Private Sub Test_MalinaAutoZbirnaFailSignal()
@@ -1856,9 +1864,16 @@ Private Sub Test_MalinaAutoZbirnaFailSignal()
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, ""
 
     ' Uslov 1 koji frmDokumenta prijavljuje: poziv baca gresku (nedostaje config).
+    ' Scope na sopstveni (nepostojeci) broj -> test ne dira tudje otpremnice.
+    Dim scenario As String
+    scenario = NewScenarioCode("MALFAIL")
+
+    Dim brojOtpNema As String
+    brojOtpNema = TEST_PREFIX & "-OTP-NEMA-" & scenario
+
     Dim raised As Boolean
     On Error Resume Next
-    Call AutoCreateZbirnaFromOtpremnice_TX
+    Call AutoCreateZbirnaFromOtpremnice_TX(brojOtpNema)
     raised = (Err.Number <> 0)
     Err.Clear
     On Error GoTo EH
@@ -1866,14 +1881,18 @@ Private Sub Test_MalinaAutoZbirnaFailSignal()
     AssertTrue raised, _
                "Malina: bez MALINA_DEFAULT_KUPAC auto-zbirna baca gresku (forma prikazuje poruku)"
 
-    ' Uslov 2: nema otvorene otpremnice -> povrat 0 (forma to tretira kao pad).
+    ' Uslov 2: nema otvorene otpremnice u scope-u -> povrat 0 (forma to tretira kao pad).
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, TEST_KUP_ID
-    Call AutoCreateZbirnaFromOtpremnice_TX          ' pokupi sve otvorene otpremnice
+
+    Dim zbrBefore As Long
+    zbrBefore = CountRows(TBL_ZBIRNA)
 
     Dim created As Long
-    created = AutoCreateZbirnaFromOtpremnice_TX()
+    created = AutoCreateZbirnaFromOtpremnice_TX(brojOtpNema)
     AssertEquals "0", CStr(created), _
                  "Malina: bez otvorene otpremnice povrat je 0 (forma javlja da zbirna NIJE kreirana)"
+    AssertEquals CStr(zbrBefore), CStr(CountRows(TBL_ZBIRNA)), _
+                 "Malina: neuspeo run ne dira nepovezane otpremnice (scoped)"
 
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     SetConfigValue CFG_MALINA_DEFAULT_KUPAC, prevKupac
@@ -1910,6 +1929,157 @@ Private Sub Test_PorukeKatalogPokrivaDokumenta()
 EH:
     LogFatal "Test_PorukeKatalogPokrivaDokumenta", Err.Number, Err.description
 End Sub
+
+Private Sub Test_ZbirnaRowDataColumnMapped()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("ZBRMAP")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String
+    brojZbirne = TEST_PREFIX & "-ZBR-MAP-" & scenario
+
+    ' SaveZbirna gradi red PO IMENU kolone (BuildZbirnaRowData), pa svaka vrednost
+    ' mora zavrsiti u SVOJOJ koloni -- pozicijski Array(...) je to garantovao samo
+    ' dok je redosled kolona tacno onakav kakav je kod pretpostavljao.
+    Dim zbrID As String
+    zbrID = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                          "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                          123.45, TEST_TIP_AMB, 7, KLASA_II)
+
+    AssertTrue Len(zbrID) > 0, "Zbirna mapiranje: red snimljen"
+
+    AssertEquals TEST_VOZ_ID, ZbrPolje(zbrID, COL_ZBR_VOZAC), "Zbirna mapiranje: VozacID"
+    AssertEquals brojZbirne, ZbrPolje(zbrID, COL_ZBR_BROJ), "Zbirna mapiranje: BrojZbirne"
+    AssertEquals TEST_KUP_ID, ZbrPolje(zbrID, COL_ZBR_KUPAC), "Zbirna mapiranje: KupacID"
+    AssertEquals "Test Hladnjaca", ZbrPolje(zbrID, COL_ZBR_HLADNJACA), "Zbirna mapiranje: Hladnjaca"
+    AssertEquals "Test Pogon", ZbrPolje(zbrID, COL_ZBR_POGON), "Zbirna mapiranje: Pogon"
+    AssertEquals TEST_VRSTA, ZbrPolje(zbrID, COL_ZBR_VRSTA), "Zbirna mapiranje: VrstaVoca"
+    AssertEquals TEST_SORTA, ZbrPolje(zbrID, COL_ZBR_SORTA), "Zbirna mapiranje: SortaVoca"
+    AssertEquals TEST_TIP_AMB, ZbrPolje(zbrID, COL_ZBR_TIP_AMB), "Zbirna mapiranje: TipAmbalaze"
+    AssertEquals KLASA_II, ZbrPolje(zbrID, COL_ZBR_KLASA), "Zbirna mapiranje: Klasa"
+    AssertEquals "7", ZbrPolje(zbrID, COL_ZBR_KOL_AMB), "Zbirna mapiranje: UkupnoAmbalaze"
+
+    Dim kol As Double
+    AssertTrue TryParseDouble(ZbrPolje(zbrID, COL_ZBR_KOLICINA), kol), _
+               "Zbirna mapiranje: UkupnoKolicina je broj"
+    AssertTrue Abs(kol - 123.45) < 0.001, "Zbirna mapiranje: UkupnoKolicina vrednost"
+
+    Dim datumTxt As String
+    datumTxt = ZbrPolje(zbrID, COL_ZBR_DATUM)
+    AssertTrue IsDate(datumTxt), "Zbirna mapiranje: Datum je datum"
+    If IsDate(datumTxt) Then
+        AssertEquals Format$(testDate, "yyyy-mm-dd"), Format$(CDate(datumTxt), "yyyy-mm-dd"), _
+                     "Zbirna mapiranje: Datum vrednost"
+    End If
+
+    If GetColumnIndex(TBL_ZBIRNA, COL_STORNIRANO) > 0 Then
+        AssertEquals "", ZbrPolje(zbrID, COL_STORNIRANO), _
+                     "Zbirna mapiranje: Stornirano ostaje prazno"
+    End If
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_ZbirnaRowDataColumnMapped", Err.Number, Err.description
+End Sub
+
+Private Sub Test_OMUlazSmerObavezan()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("OMSMER")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojDok As String
+    brojDok = TEST_PREFIX & "-OMU-" & scenario
+
+    Dim ambBefore As Long
+    ambBefore = CountRows(TBL_AMBALAZA)
+
+    ' Prazan smer uz kolicinu ambalaze: ranije je tiho knjizen legacy Stanica ULAZ.
+    ' Sada core guard odbija upis (UI dodatno blokira pre poziva).
+    Dim ok As Boolean
+    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok, _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="")
+
+    AssertFalse ok, "OM ulaz: prazan smer uz kolicinu ambalaze je odbijen"
+    AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
+                 "OM ulaz: odbijen upis nije ostavio ambalaza red"
+
+    ' Nepoznat smer takodje pada (nije jedan od cetiri dozvoljena).
+    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-X", _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="NEPOSTOJECI")
+
+    AssertFalse ok, "OM ulaz: nepoznat smer je odbijen"
+    AssertEquals CStr(ambBefore), CStr(CountRows(TBL_AMBALAZA)), _
+                 "OM ulaz: nepoznat smer nije ostavio ambalaza red"
+
+    ' Kontrola: eksplicitan smer prolazi (IZDATO_OM = vozac predaje na OM).
+    ok = SaveOMUlaz_TX(datum:=testDate, brojDok:=brojDok & "-OK", _
+                       stanicaNaziv:="Test OM", stanicaID:=TEST_ST_ID, _
+                       vozacID:=TEST_VOZ_ID, tipAmb:=TEST_TIP_AMB, kolAmb:=10, _
+                       vrstaVoca:=TEST_VRSTA, novac:=0, kooperantID:="", _
+                       primalacDisplay:="", otkupID:="", tipNovca:="", _
+                       koopSmer:="IZDATO_OM")
+
+    AssertTrue ok, "OM ulaz: eksplicitan smer IZDATO_OM prolazi"
+    AssertEquals CStr(ambBefore + 1), CStr(CountRows(TBL_AMBALAZA)), _
+                 "OM ulaz: eksplicitan smer upisao tacno jedan ambalaza red"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_OMUlazSmerObavezan", Err.Number, Err.description
+End Sub
+
+Private Function ZbrPolje(ByVal zbirnaID As String, ByVal columnName As String) As String
+    ZbrPolje = Trim$(CStr(nz(GetValueByKey(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, columnName), "")))
+End Function
+
+' GetOpenFakture: 1=BrojFakture 2=FakturaID 3=Iznos 4=Uplaceno 5=Preostalo 6=Datum
+Private Function OpenFaktureRed(ByVal kupacID As String, ByVal fakturaID As String) As Long
+    Dim d As Variant
+    d = GetOpenFakture(kupacID)
+    If Not IsArray(d) Then Exit Function
+
+    Dim i As Long
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, 2))) = Trim$(fakturaID) Then
+            OpenFaktureRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function OpenFaktureSadrzi(ByVal kupacID As String, ByVal fakturaID As String) As Boolean
+    OpenFaktureSadrzi = (OpenFaktureRed(kupacID, fakturaID) > 0)
+End Function
+
+Private Function OpenFaktureImaDatum(ByVal kupacID As String, ByVal fakturaID As String) As Boolean
+    Dim r As Long
+    r = OpenFaktureRed(kupacID, fakturaID)
+    If r = 0 Then Exit Function
+
+    Dim d As Variant
+    d = GetOpenFakture(kupacID)
+    If Not IsArray(d) Then Exit Function
+
+    OpenFaktureImaDatum = IsDate(d(r, 6))
+End Function
 
 ' Poruka() za nepoznat kljuc vraca "[KLJUC]" -> to je "nedostaje u katalogu".
 Private Function PorukaPostoji(ByVal kljuc As String) As Boolean
