@@ -14,7 +14,6 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 
 
-
 Option Explicit
 
 ' Self-update bezbedno hvatanje evenata RUNTIME kontrola: nove WithEvents
@@ -993,10 +992,29 @@ Private Sub btnUnosOtp_Click()
     ' MALINA: otpremnica == zbirna -> auto-zbirna iz upravo snimljene otpremnice.
     ' "Toggle" je config (IsMalinaMode); idempotentno (prazan-BrojZbirne filter).
     If IsMalinaMode() Then
+        ' Upravo snimljena otpremnica je otvorena (brZbrSave=""), pa auto-zbirna mora
+        ' da kreira bar jednu. Greska (callee re-raise) ili 0 kreiranih = tih pad ->
+        ' operater mora da vidi da zbirna nije nastala.
+        Dim createdZbr As Long
+        Dim autoZbrErr As String
+
+        createdZbr = 0
         On Error Resume Next
-        Call AutoCreateZbirnaFromOtpremnice_TX
-        If Err.Number <> 0 Then LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+        createdZbr = AutoCreateZbirnaFromOtpremnice_TX()
+        If Err.Number <> 0 Then
+            autoZbrErr = Err.description
+            LogErr "frmDokumenta.btnUnosOtp.AutoZbirna"
+            Err.Clear
+        End If
         On Error GoTo EH
+
+        If autoZbrErr <> "" Or createdZbr < 1 Then
+            Dim autoZbrMsg As String
+            autoZbrMsg = "Zbirna NIJE kreirana automatski -- unesite je ru" & _
+                         ChrW(269) & "no (kartica Zbirna)."
+            If autoZbrErr <> "" Then autoZbrMsg = autoZbrMsg & vbCrLf & autoZbrErr
+            MsgBox autoZbrMsg, vbExclamation, APP_NAME
+        End If
     End If
 
     ' ISPRAVKA_ODMAH (druga faza): ako je otpremnica-ispravka na cekanju, sada je
@@ -1293,154 +1311,6 @@ Private Sub lstZbirne_Click()
     If txtBrojZbirnePrij.value <> "" Then UpdateManjak txtBrojZbirnePrij.value
 End Sub
 
-Public Function SaveOMUlaz_TX(ByVal datum As Date, _
-                              ByVal brojDok As String, _
-                              ByVal stanicaNaziv As String, _
-                              ByVal stanicaID As String, _
-                              ByVal vozacID As String, _
-                              ByVal tipAmb As String, _
-                              ByVal kolAmb As Long, _
-                              ByVal vrstaVoca As String, _
-                              ByVal novac As Double, _
-                              ByVal kooperantID As String, _
-                              ByVal primalacDisplay As String, _
-                              ByVal otkupID As String, _
-                              ByVal tipNovca As String, _
-                              ByVal koopSmer As String) As Boolean
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-
-    On Error GoTo EH
-
-    If kolAmb <= 0 And novac <= 0 Then
-        Err.Raise vbObjectError + 1501, "SaveOMUlaz_TX", _
-                  Poruka("DOK_ERR_NEMA_AMBALAZE_NOVCA")
-    End If
-
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_AMBALAZA
-    tx.AddTableSnapshot TBL_NOVAC
-    tx.AddTableSnapshot TBL_OTKUP
-
-    If kolAmb > 0 Then
-        Select Case koopSmer
-        Case "IZDAVANJE"
-            ' OM IZDAJE prazne kooperantu -> DVOJNI upis (bez vozaca):
-            '   1) Kooperant ULAZ (dobija prazne), 2) OM/Stanica IZLAZ (razduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1503, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1504, "SaveOMUlaz_TX", _
-                          "Izdavanje kooperantu: OM (otkupno mesto) je obavezan za razdu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_IZLAZ_KOOP
-        Case "PRIJEM"
-            ' KOOPERANT VRACA prazne na OM (povrat) -> DVOJNI upis, mirror izdavanja:
-            '   1) Kooperant IZLAZ (predaje prazne), 2) OM/Stanica ULAZ (zaduzenje OM).
-            If Trim$(kooperantID) = "" Then
-                Err.Raise vbObjectError + 1505, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: kooperant je obavezan."
-            End If
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1506, "SaveOMUlaz_TX", _
-                          "Prijem od kooperanta: OM (otkupno mesto) je obavezan za zadu" & ChrW(382) & "enje."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", kooperantID, "Kooperant", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          "", brojDok, DOK_TIP_OM_ULAZ_KOOP
-        Case "IZDATO_OM"
-            ' Vozac raspodeljuje prazne na OM (revers ide na OM): OM (Stanica) ULAZ +
-            ' vozac (inverzno Izlaz = vozac se razduzuje). Vozac je prethodno zaduzen
-            ' kod kupca (prijemnica-povrat / kupci-izlaz) -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1507, "SaveOMUlaz_TX", _
-                          "Izdato OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1509, "SaveOMUlaz_TX", _
-                          "Izdato OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ_FIRMA
-        Case "PRIJEM_OD_OM"
-            ' OM vraca prazne vozacu (revers ide na OM): OM (Stanica) IZLAZ + vozac
-            ' (inverzno Ulaz = vozac se zaduzuje). Vozac kasnije razduzuje firmi
-            ' (hladnjaci) kroz postojece kupac tokove -> hladnjaca se NE knjizi ovde.
-            If Trim$(stanicaID) = "" Then
-                Err.Raise vbObjectError + 1508, "SaveOMUlaz_TX", _
-                          "Prijem od OM: OM (otkupno mesto) je obavezan."
-            End If
-            If Trim$(vozacID) = "" Then
-                Err.Raise vbObjectError + 1510, "SaveOMUlaz_TX", _
-                          "Prijem od OM: vozac je obavezan (firma<->OM ide preko vozaca)."
-            End If
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Izlaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_IZLAZ_FIRMA
-        Case Else
-            ' OM PRIMA ambalazu od vozaca -> Stanica ULAZ (postojece ponasanje).
-            TrackAmbalaza datum, tipAmb, kolAmb, _
-                          "Ulaz", stanicaID, "Stanica", _
-                          vozacID, brojDok, DOK_TIP_OM_ULAZ
-        End Select
-    End If
-
-    If novac > 0 Then
-        Dim novacID As String
-
-        novacID = SaveNovac( _
-            brojDok:=brojDok, _
-            datum:=datum, _
-            partner:=stanicaNaziv, _
-            partnerId:=stanicaID, _
-            entitetTip:="OM", _
-            omID:=stanicaID, _
-            kooperantID:=kooperantID, _
-            fakturaID:="", _
-            vrstaVoca:=vrstaVoca, _
-            tip:=tipNovca, _
-            uplata:=0, _
-            isplata:=novac, _
-            napomena:=primalacDisplay, _
-            otkupID:=otkupID)
-
-        If novacID = "" Then
-            Err.Raise vbObjectError + 1502, "SaveOMUlaz_TX", _
-                      "SaveNovac fehlgeschlagen"
-        End If
-
-        If otkupID <> "" Then
-            UpdateOtkupStatus otkupID
-        End If
-    End If
-
-    tx.CommitTx
-
-    Set tx = Nothing
-
-    SaveOMUlaz_TX = True
-    Exit Function
-
-EH:
-    LogErr "SaveOMUlaz_TX"
-
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
-
-    SaveOMUlaz_TX = False
-End Function
 
 ' Runtime toggle-i u fraOMUlaz (CLAUDE.md: nove kontrole se ne dodaju u .frx):
 ' 4 revers smera ("Izdato koop."/"Prijem koop."/"Izdato OM"/"Prijem od OM"),
@@ -1803,6 +1673,17 @@ Private Sub btnUnosOMUlaz_Click()
                vbExclamation, APP_NAME
         Exit Sub
     End If
+
+    ' Smer je OBAVEZAN uz kolicinu ambalaze: bez njega je SaveOMUlaz_TX isao u
+    ' Case Else i tiho knjizio legacy "OM prima od vozaca" (Stanica ULAZ). Sada
+    ' operater bira smer eksplicitno (za "vozac predaje na OM" -> Izdato OM).
+    If kolAmb > 0 And smerCount = 0 Then
+        MsgBox "Kad unosite koli" & ChrW(269) & "inu ambala" & ChrW(382) & "e, izaberite smer: " & _
+               "izdavanje/prijem kooperantu ILI firma<->OM (preko voza" & ChrW(269) & "a).", _
+               vbExclamation, APP_NAME
+        txtKolAmbOMUlaz.SetFocus
+        Exit Sub
+    End If
     If izdavanje Or prijemKoop Then
         Dim smerTxt As String
         If prijemKoop Then smerTxt = "prijem" Else smerTxt = "izdavanje"
@@ -2150,6 +2031,19 @@ Private Sub btnUnosZbr_Click()
         Exit Sub
     End If
 
+    ' Hard-blokada: izvorne otpremnice imaju Klasu II a checkbox je iskljucen ->
+    ' SaveZbirnaMulti_TX dobija hasKlasaII:=False i Kl.II bi se tiho izgubila.
+    If Not chkDveKlaseZbr.value Then
+        If ZbirnaIzvorImaKlasuII(txtBrojZbirne.value) Then
+            MsgBox "Izvor (otpremnice) ima Klasu II -- uklju" & ChrW(269) & _
+                   "ite 'Dve klase' i unesite Kl.II." & vbCrLf & _
+                   "Bez toga bi Klasa II bila izgubljena u zbirnoj.", _
+                   vbExclamation, APP_NAME
+            chkDveKlaseZbr.SetFocus
+            Exit Sub
+        End If
+    End If
+
     If Not UpdateValidacija() Then
         MsgBox Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), vbExclamation, APP_NAME
         Exit Sub
@@ -2307,17 +2201,29 @@ Private Function UpdateValidacija() As Boolean
     
     lblValidacijaKG.caption = kgCaption
     
+    ' Izvor (otpremnice) ima Klasu II a checkbox je iskljucen: save salje
+    ' hasKlasaII:=chkDveKlaseZbr, pa bi se Kl.II tiho ODBACILA. Hard-blokada.
+    Dim klasaIIOdbacena As Boolean
+    klasaIIOdbacena = (Not chkDveKlaseZbr.value) And (sumaKgII > 0)
+    If klasaIIOdbacena Then
+        kgCaption = kgCaption & "  ||  Izvor ima Kl.II: " & _
+                    Format$(sumaKgII, "#,##0.00") & " kg -- uklju" & ChrW(269) & "ite Kl.II"
+        lblValidacijaKG.caption = kgCaption
+    End If
+
     ' Farbe: beide Klassen muessen stimmen
     Dim kgValid As Boolean
-    If chkDveKlaseZbr.value Then
+    If klasaIIOdbacena Then
+        kgValid = False
+    ElseIf chkDveKlaseZbr.value Then
         kgValid = validKgI And validKgII
     Else
         kgValid = validKgI
     End If
-    
+
     If kgValid Then
         lblValidacijaKG.ForeColor = CLR_SUCCESS()
-    ElseIf zbrKgI = 0 Then
+    ElseIf zbrKgI = 0 And Not klasaIIOdbacena Then
         lblValidacijaKG.ForeColor = TXT_MUTED()
     Else
         lblValidacijaKG.ForeColor = CLR_ERROR()
@@ -2804,13 +2710,13 @@ End Function
 ' Prefill OTPREMNICA forme iz stornirane (ISPRAVKA) -- operater ne mora napamet.
 ' Ogledalo save-handlera: stanica=cmbOtkupnoMesto, vozac=cmbVozac; bruto-svesno; Klasa I/II.
 ' Broj se NE postavlja (ostaje svez predlog; ISPRAVKA = nov broj + trace na stari).
-Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(d) Then Exit Sub
     Dim cBr As Long, cKl As Long, cSta As Long, cVoz As Long, cZbr As Long
     Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
-    Dim cAmb As Long, cBruto As Long, cDat As Long
+    Dim cAmb As Long, cBruto As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
     cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
     cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
@@ -2824,20 +2730,14 @@ Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
     cAmb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOL_AMB)
     cBruto = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BRUTO)
     cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    Dim rI As Long, rII As Long: rI = 0: rII = 0
-    Dim r As Long
-    For r = 1 To UBound(d, 1)
-        If Trim$(CStr(d(r, cBr))) = brStorn Then
-            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
-            If kl = "II" Then
-                If rII = 0 Then rII = r
-            Else
-                If rI = 0 Then rI = r
-            End If
-        End If
-    Next r
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
+    Dim rI As Long, rII As Long
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
     Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
@@ -2877,12 +2777,12 @@ EH:
 End Sub
 
 ' Prefill ZBIRNA forme iz stornirane (ISPRAVKA). Zbirna nema bruto. Kupac/hladnjaca/pogon.
-Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_ZBIRNA)
     If IsEmpty(d) Then Exit Sub
     Dim cBr As Long, cKl As Long, cVoz As Long, cKup As Long, cHl As Long, cPo As Long
-    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long
+    Dim cVr As Long, cSo As Long, cKol As Long, cTip As Long, cAmb As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
     cKl = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
     cVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
@@ -2895,20 +2795,14 @@ Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
     cTip = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_TIP_AMB)
     cAmb = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB)
     cDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
+    cId = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_ID)
+    cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    Dim rI As Long, rII As Long: rI = 0: rII = 0
-    Dim r As Long
-    For r = 1 To UBound(d, 1)
-        If Trim$(CStr(d(r, cBr))) = brStorn Then
-            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
-            If kl = "II" Then
-                If rII = 0 Then rII = r
-            Else
-                If rI = 0 Then rI = r
-            End If
-        End If
-    Next r
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
+    Dim rI As Long, rII As Long
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 
@@ -2941,14 +2835,14 @@ EH:
     LogErr "frmDokumenta.PrefillZbirnaFromStornirana"
 End Sub
 
-Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(d) Then Exit Sub
 
     Dim cBr As Long, cKl As Long, cKup As Long, cVoz As Long, cZbr As Long
     Dim cVr As Long, cSo As Long, cKol As Long, cCena As Long, cTip As Long
-    Dim cAmb As Long, cAmbV As Long, cBruto As Long, cDat As Long
+    Dim cAmb As Long, cAmbV As Long, cBruto As Long, cDat As Long, cId As Long, cGen As Long
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
     cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
@@ -2963,21 +2857,14 @@ Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     cAmbV = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
     cBruto = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BRUTO)
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    ' Prvi red Klase I (ili prazna klasa) i prvi red Klase II za dati broj.
-    Dim rI As Long, rII As Long: rI = 0: rII = 0
-    Dim r As Long
-    For r = 1 To UBound(d, 1)
-        If Trim$(CStr(d(r, cBr))) = brStorn Then
-            Dim kl As String: kl = UCase$(Trim$(CStr(d(r, cKl))))
-            If kl = "II" Then
-                If rII = 0 Then rII = r
-            Else
-                If rI = 0 Then rI = r
-            End If
-        End If
-    Next r
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
+    Dim rI As Long, rII As Long
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 
@@ -3353,71 +3240,31 @@ Private Sub FillOpenFakture()
 
     If kupacID = "" Then Exit Sub
 
-    Dim data As Variant
-    data = GetTableData(TBL_FAKTURE)
+    ' Otvorene fakture citaju se ISKLJUCIVO kroz centralni read-model
+    ' modNovac.GetOpenFakture (izbacuje stornirane, status Neplaceno, preostalo > 0).
+    ' Forma vise ne duplira filter -- ranija lokalna petlja je propustala stornirane.
+    ' Kolone: 1=BrojFakture 2=FakturaID 3=Iznos 4=Uplaceno 5=Preostalo 6=Datum.
+    Dim fakture As Variant
+    fakture = GetOpenFakture(kupacID)
 
-    If IsEmpty(data) Then Exit Sub
-
-    Dim colID As Long
-    Dim colBroj As Long
-    Dim colDatum As Long
-    Dim colKupac As Long
-    Dim colIznos As Long
-    Dim colStatus As Long
-
-    colID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, "frmDokumenta.FillOpenFakture")
-    colBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, "frmDokumenta.FillOpenFakture")
-    colDatum = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM, "frmDokumenta.FillOpenFakture")
-    colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, "frmDokumenta.FillOpenFakture")
-    colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, "frmDokumenta.FillOpenFakture")
-    colStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, "frmDokumenta.FillOpenFakture")
+    If Not IsArray(fakture) Then Exit Sub
 
     Dim i As Long
-    Dim fakturaID As String
-    Dim brojFakture As String
-    Dim status As String
-    Dim iznos As Double
-    Dim uplaceno As Double
-    Dim preostalo As Double
     Dim datumTxt As String
     Dim displayText As String
 
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, colKupac))) = kupacID Then
+    For i = 1 To UBound(fakture, 1)
+        displayText = NzToText(fakture(i, 1))
 
-            status = Trim$(NzToText(data(i, colStatus)))
+        datumTxt = ""
+        If IsDate(fakture(i, 6)) Then datumTxt = Format$(CDate(fakture(i, 6)), "dd.mm.yyyy")
+        If datumTxt <> "" Then displayText = displayText & " | " & datumTxt
 
-            If status <> STATUS_PLACENO Then
-                fakturaID = Trim$(NzToText(data(i, colID)))
-                brojFakture = Trim$(NzToText(data(i, colBroj)))
+        displayText = displayText & " | iznos " & Format$(CDbl(fakture(i, 3)), "#,##0.00") & _
+                      " | preostalo " & Format$(CDbl(fakture(i, 5)), "#,##0.00")
 
-                iznos = 0
-                If TryParseDouble(NzToText(data(i, colIznos)), iznos) Then
-                    uplaceno = GetUplataForFaktura(fakturaID)
-                    preostalo = iznos - uplaceno
-                Else
-                    uplaceno = 0
-                    preostalo = 0
-                End If
-
-                datumTxt = ""
-                If IsDate(data(i, colDatum)) Then
-                    datumTxt = Format$(CDate(data(i, colDatum)), "dd.mm.yyyy")
-                End If
-
-                displayText = brojFakture
-
-                If datumTxt <> "" Then
-                    displayText = displayText & " | " & datumTxt
-                End If
-
-                displayText = displayText & " | iznos " & Format$(iznos, "#,##0.00") & _
-                              " | preostalo " & Format$(preostalo, "#,##0.00")
-
-                cmbFakturaIzlaz.AddItem displayText
-                cmbFakturaIzlaz.List(cmbFakturaIzlaz.ListCount - 1, 1) = fakturaID
-            End If
-        End If
+        cmbFakturaIzlaz.AddItem displayText
+        cmbFakturaIzlaz.List(cmbFakturaIzlaz.ListCount - 1, 1) = NzToText(fakture(i, 2))
     Next i
 
     Exit Sub
@@ -3802,14 +3649,19 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         m_activeCorrectionDokTip = dokTip
         ' Prijemnica: prefill forme iz stornirane + oznaci pending relink paleta
         ' (save-putanja radi ReassignPaleteToPrijemnica_TX -> ista roba, ista paleta).
+        ' PK stornirane iz context-a -> prefill ne pogadja dokument po broju (broj
+        ' nije globalno jedinstven: dva kupca mogu imati istu "1/ddmmyy" prijemnicu).
+        Dim oldDocID As String
+        oldDocID = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_OLD_DOCID)
+
         If docType = FLOW_DOC_PRIJEMNICA Then
-            PrefillPrijemnicaFromStornirana brDok
+            PrefillPrijemnicaFromStornirana brDok, oldDocID
             m_pendingRelinkOldPrij = brDok
             m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_PARENT_BROJ)
         ElseIf docType = FLOW_DOC_OTPREMNICA Then
-            PrefillOtpremnicaFromStornirana brDok
+            PrefillOtpremnicaFromStornirana brDok, oldDocID
         ElseIf docType = FLOW_DOC_ZBIRNA Then
-            PrefillZbirnaFromStornirana brDok
+            PrefillZbirnaFromStornirana brDok, oldDocID
         End If
         ' ISPRAVKA: cekirani blokovi se NE storniraju (storno+reunos dokumenta je
         ' celina; blok-storno je moguc iskljucivo uz Duplikat/Ponistenje).
@@ -6567,7 +6419,6 @@ EH:
     LogErr "SumOtkupKgToday"
     SumOtkupKgToday = 0
 End Function
-
 
 
 ' ------------------------------------------------------------

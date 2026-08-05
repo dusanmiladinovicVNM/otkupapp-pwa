@@ -856,7 +856,10 @@ End Function
 ' Idempotentno: prazan-BrojZbirne filter sprecava duplo kreiranje.
 ' Self-gated: u visnji ne radi nista.
 ' ============================================================
-Public Function AutoCreateZbirnaFromOtpremnice_TX() As Long
+' samoBrojOtp: opcioni scope -- obradi SAMO otpremnice tog broja. Prazno = sve
+' otvorene (produkcioni poziv iz frmDokumenta). Scope koriste testovi, da run ne
+' zahvati nepovezane otvorene otpremnice u svesci.
+Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice_TX"
 
     Dim tx As clsTransaction
@@ -874,7 +877,7 @@ Public Function AutoCreateZbirnaFromOtpremnice_TX() As Long
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_OTKUP
 
-    AutoCreateZbirnaFromOtpremnice_TX = AutoCreateZbirnaFromOtpremnice()
+    AutoCreateZbirnaFromOtpremnice_TX = AutoCreateZbirnaFromOtpremnice(samoBrojOtp)
 
     tx.CommitTx
     Set tx = Nothing
@@ -892,7 +895,7 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Public Function AutoCreateZbirnaFromOtpremnice() As Long
+Public Function AutoCreateZbirnaFromOtpremnice(Optional ByVal samoBrojOtp As String = "") As Long
     Const SRC As String = "AutoCreateZbirnaFromOtpremnice"
 
     If Not IsMalinaMode() Then Exit Function
@@ -945,7 +948,10 @@ Public Function AutoCreateZbirnaFromOtpremnice() As Long
         isStorno = (cStorno > 0) And _
                    (UCase$(Trim$(CStr(nz(data(r, cStorno), "")))) = "DA")
 
-        If brz = "" And brO <> "" And Not isStorno Then
+        Dim inScope As Boolean
+        inScope = (Len(Trim$(samoBrojOtp)) = 0) Or (brO = Trim$(samoBrojOtp))
+
+        If brz = "" And brO <> "" And Not isStorno And inScope Then
             Dim datum As Date: datum = CDate(data(r, cDat))
             Dim vozacID As String: vozacID = Trim$(CStr(nz(data(r, cVoz), "")))
             Dim vrsta As String: vrsta = CStr(nz(data(r, cVrsta), ""))
@@ -2680,6 +2686,11 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     result = AppendRow(TBL_ZBIRNA, rowData)
     
     If result > 0 Then
+        ' Generacija (nasledjuje se od aktivnih redova istog BrojZbirne, inace nova)
+        ' -- PWA import ne sme da ostavi red bez generacije, prefill je cita.
+        ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _
+                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
+
         LogInfo "ImportRowToTblZbirna", "Importiert: " & newID & " BrojZbirne=" & brojZbirne & _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"
         ImportRowToTblZbirna = newID

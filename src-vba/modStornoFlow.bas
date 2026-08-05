@@ -641,16 +641,21 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     End If
     Dim s As Object: Set s = ScanZbirna(broj)
 
+    ' PK aktivne zbirne PRE storna -> OldDocID u context-u. Prefill ispravke polazi
+    ' od njega (broj dokumenta nije globalno jedinstven identitet).
+    Dim zbrOldID As String
+    zbrOldID = LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_ID)
+
     Select Case mode
         Case SV_MODE_RESI_KASNIJE
-            r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, _
+            r("correctionID") = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, _
                 , , , , , , "Zbirna parkirana za kasnije.")
             r("success") = (Len(CStr(r("correctionID"))) > 0)
             r("message") = "Kreiran recovery zapis (RESI_KASNIJE)."
 
         Case SV_MODE_ISPRAVKA
             Dim cid As String
-            cid = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, FLOW_DOC_ZBIRNA, , , , , , _
+            cid = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, FLOW_DOC_ZBIRNA, , , , , , _
                 "Ispravka zbirne: storno stare, ceka snimanje nove.")
             If Len(cid) = 0 Then r("message") = "Ne mogu da kreiram context.": Exit Function
             If Not StornoZbirna_TX(broj) Then
@@ -670,7 +675,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             ' (+blokovi) PREZIVLJAVAJU nevezane. Prijemnica/palete se NE storniraju
             ' (to je PONISTENJE) -> ostaju osirocene za reveze (recovery zabeleska).
             Dim cidD As String
-            cidD = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, , , , , , , "Dupli/fantom zbirna.")
+            cidD = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, , , , , , , "Dupli/fantom zbirna.")
             r("correctionID") = cidD
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
             If Len(cidD) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
@@ -711,7 +716,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
                 Exit Function
             End If
             Dim cidP As String
-            cidP = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, "", broj, , , , , , , "Ponistenje zbirne bez zamene.")
+            cidP = CreateCorrectionContext(mode, FLOW_DOC_ZBIRNA, zbrOldID, broj, , , , , , , "Ponistenje zbirne bez zamene.")
             r("correctionID") = cidP
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
             If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
@@ -1596,6 +1601,10 @@ Private Function StornoOtpremnicaBrojAtomic_TX(ByVal broj As String) As Boolean
     Dim ids As Collection: Set ids = New Collection
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
+    ' ISPRAVKA/DUPLI otpremnice idu OVUDA (ne kroz StornoOtpremnicaByBroj_TX), pa
+    ' i ova putanja mora imati guard protiv storna tudjeg dokumenta pod istim brojem.
+    RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, broj, SRC, COL_OTP_STANICA
+
     Dim cBr As Long, cId As Long, cSt As Long
     cBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
