@@ -35,6 +35,21 @@ Option Explicit
 ' Cross-form stanje (modOtkupBlok -> frmOtkup); cisti se na Terminate forme.
 Private mPendingRelinkOldPrij As String
 
+' ============================================================
+' TEST SEAM -- simulacija pada pojedinacnog koraka lanca.
+' Isti obrazac kao modPaletniList.SetPaletizeSkip: Public toggle nad Private
+' modul-stanjem. Koristi ga modBusinessFlowProTests; produkcija ga NE poziva.
+'
+' Leak-proof po konstrukciji: AutoChainHladnjaca kopira vrednost u lokalnu i
+' ODMAH je brise, pa vazi samo za JEDAN poziv -- ne moze da procuri u operativni
+' rad ni ako test padne pre ciscenja, ni ako se izadje ranim Exit Function.
+' Kodovi: "OTP" | "ZBR" | "PRJ" | "LINK" | "" (bez simulacije).
+Private mTestFailStep As String
+
+Public Sub ArmHladnjacaTestFail(ByVal stepKod As String)
+    mTestFailStep = UCase$(Trim$(stepKod))
+End Sub
+
 Public Sub SetHladnjacaRelinkPending(ByVal oldPrijBroj As String)
     mPendingRelinkOldPrij = Trim$(oldPrijBroj)
 End Sub
@@ -85,9 +100,17 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     On Error GoTo EH
     outBrPrij = ""       ' broj tek generisane prijemnice (za relink osirocenih paleta)
 
-    ' Vraca "" kad je lanac kompletan; inace tekst upozorenja za frmOtkup
-    ' (npr. prijemnica nije kreirana -> lanac nepotpun).
-    Dim failKlase As String
+    ' Test seam: procitaj armirani korak i ODMAH ga potrosi -> vazi samo za ovaj
+    ' poziv, bez obzira kojim izlazom se izadje. U produkciji je uvek "".
+    Dim failStep As String
+    failStep = mTestFailStep
+    mTestFailStep = ""
+
+    ' Vraca "" kad je lanac kompletan; inace tekst upozorenja za frmOtkup.
+    ' Prati se SVAKI korak lanca po klasi (ne samo prijemnica): otpremnica, zbirna,
+    ' prijemnica i veza nazad u otkup red. Svaki neuspeh ulazi u upozorenje --
+    ' lanac se NE sme prijaviti kao uspesan ako je bilo koji korak pao.
+    Dim failOtp As String, failZbr As String, failPrij As String, failLink As String
 
     If Not IsAutoPrijemnicaHladnjaca() Then Exit Function
     If Not IsHladnjacaStanica(stanicaID) Then Exit Function
@@ -148,49 +171,110 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     ' (GenerateBrojPrijemnice, modBrojevi). Generise se i kad se unosi samo Klasa II.
     Dim brPrij As String
     brPrij = GenerateBrojPrijemnice(kupacID, datum)
-    outBrPrij = brPrij       ' izlozi caller-u za relink osirocenih paleta
+    ' outBrPrij se NE izlaze ovde: caller ga koristi za relink osirocenih paleta, pa
+    ' sme da pokazuje samo na STVARNO kreiranu prijemnicu. Izlaze se tek posle
+    ' uspesnog SavePrijemnica_TX (dovoljna je jedna klasa -- Klasa I i II dele broj).
+
+    ' Lanac je po klasi FAIL-FAST nizvodno: cim jedan korak padne, ostatak te klase
+    ' se PRESKACE. Razlog nije cistoca -- SavePrijemnica_TX pise i u tblPaleta/
+    ' tblPaletaStavka/tblFakturaStavke, pa bi prijemnica u vec palom lancu
+    ' paletizovala broj i time zablokirala ponovni unos ("broj prijemnice je vec
+    ' paletizovan"). Uz to, jedini recovery alat (BackfillPrijemniceHladnjaca) je
+    ' usidren na OTPREMNICU -- za "zbirna/prijemnica bez otpremnice" nema backfilla.
+    ' Neiskorisceni brPrij ne pravi rupu u nizu: GenerateBrojPrijemnice je racunat
+    ' (MaxSeqFromTable + 1), ne rezervise broj.
+    ' Klase su i dalje NEZAVISNE (saga): pad Klase I ne obara Klasu II.
 
     ' Klasa I (svoja kolicina ambalaze = kolAmb). Preskace se ako se unosi samo II.
     If hasKlasaI Then
         Dim otpID As String
-        otpID = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                                  kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I, brutoKgI)
-        SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
-                      kolicinaI, tipAmb, kolAmb, KLASA_I
+        If failStep <> "OTP" Then _
+            otpID = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
+                                      kolicinaI, cenaI, tipAmb, kolAmb, KLASA_I, brutoKgI)
+        If Len(otpID) = 0 Then
+            failOtp = AddKlasa(failOtp, "I")
+            GoTo KlasaIDone
+        End If
+        Dim zbrIDI As String
+        If failStep <> "ZBR" Then _
+            zbrIDI = SaveZbirna_TX(datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
+                                   kolicinaI, tipAmb, kolAmb, KLASA_I)
+        If Len(zbrIDI) = 0 Then
+            failZbr = AddKlasa(failZbr, "I")
+            GoTo KlasaIDone
+        End If
         Dim prjI As String
-        prjI = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
-                          kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I, brutoKgI)
-        If Len(prjI) = 0 Then failKlase = "I"
+        If failStep <> "PRJ" Then _
+            prjI = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
+                                     kolicinaI, cenaI, tipAmb, kolAmb, 0, KLASA_I, brutoKgI)
+        If Len(prjI) = 0 Then
+            failPrij = AddKlasa(failPrij, "I")
+        Else
+            outBrPrij = brPrij       ' prijemnica postoji -> relink paleta je bezbedan
+        End If
         ' Veza nazad u otkup red: OtpremnicaID + BrojZbirne + VozacID.
-        LinkOtkupRedNaDokument idI, otpID, brZbr, vozacID
+        Dim linkOkI As Boolean
+        If failStep <> "LINK" Then _
+            linkOkI = LinkOtkupRedNaDokument(idI, otpID, brZbr, vozacID)
+        If Not linkOkI Then failLink = AddKlasa(failLink, "I")
     End If
+KlasaIDone:
 
     ' Klasa II: zasebne gajbe (kolAmbII) -> ceo lanac kao Klasa I; ISTI broj
     ' prijemnice (brPrij) kao Klasa I (jedna prijemnica = jedan broj).
     If hasKlasaII And kolicinaII > 0 Then
         Dim otpID2 As String
-        otpID2 = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
-                                   kolicinaII, cenaII, tipAmb, kolAmbII, KLASA_II, brutoKgII)
-        SaveZbirna_TX datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
-                      kolicinaII, tipAmb, kolAmbII, KLASA_II
-        Dim prjII As String
-        prjII = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
-                          kolicinaII, cenaII, tipAmb, kolAmbII, 0, KLASA_II, brutoKgII)
-        If Len(prjII) = 0 Then
-            If Len(failKlase) > 0 Then failKlase = failKlase & " i II" Else failKlase = "II"
+        If failStep <> "OTP" Then _
+            otpID2 = SaveOtpremnica_TX(datum, stanicaID, vozacID, brOtp, brZbr, vrsta, sorta, _
+                                       kolicinaII, cenaII, tipAmb, kolAmbII, KLASA_II, brutoKgII)
+        If Len(otpID2) = 0 Then
+            failOtp = AddKlasa(failOtp, "II")
+            GoTo KlasaIIDone
         End If
-        LinkOtkupRedNaDokument idII, otpID2, brZbr, vozacID
+        Dim zbrIDII As String
+        If failStep <> "ZBR" Then _
+            zbrIDII = SaveZbirna_TX(datum, vozacID, brZbr, kupacID, hladnjaca, "", vrsta, sorta, _
+                                    kolicinaII, tipAmb, kolAmbII, KLASA_II)
+        If Len(zbrIDII) = 0 Then
+            failZbr = AddKlasa(failZbr, "II")
+            GoTo KlasaIIDone
+        End If
+        Dim prjII As String
+        If failStep <> "PRJ" Then _
+            prjII = SavePrijemnica_TX(datum, kupacID, vozacID, brPrij, brZbr, vrsta, sorta, _
+                                      kolicinaII, cenaII, tipAmb, kolAmbII, 0, KLASA_II, brutoKgII)
+        If Len(prjII) = 0 Then
+            failPrij = AddKlasa(failPrij, "II")
+        Else
+            outBrPrij = brPrij
+        End If
+        Dim linkOkII As Boolean
+        If failStep <> "LINK" Then _
+            linkOkII = LinkOtkupRedNaDokument(idII, otpID2, brZbr, vozacID)
+        If Not linkOkII Then failLink = AddKlasa(failLink, "II")
     End If
+KlasaIIDone:
 
-    ' Vidljivo upozorenje za frmOtkup: otpremnica/zbirna su kreirane, ali prijemnica
-    ' nije. Najcesci uzrok: broj prijemnice je vec paletizovan (zaostala stavka u
+    ' Vidljivo upozorenje za frmOtkup: nabraja SAMO korake koji su stvarno pali
+    ' (otpremnica / zbirna / prijemnica / veza sa otkupom), po klasi. Najcesci uzrok
+    ' pada prijemnice: broj prijemnice je vec paletizovan (zaostala stavka u
     ' tblPaletaStavka posle ciscenja tblPrijemnica). Tehnicki razlog je u logu
-    ' (Monitor_Event DOKUMENT_SAVE_FAIL / SavePrijemnica_TX).
-    If Len(failKlase) > 0 Then
-        AutoChainHladnjaca = "Otkup je sa" & ChrW(269) & "uvan, ali AUTO-LANAC hladnjace je NEPOTPUN: " & _
-            "otpremnica i zbirna su kreirane, a PRIJEMNICA nije (Klasa " & failKlase & "). " & _
-            "Najcesci uzrok: broj prijemnice je ve" & ChrW(263) & " paletizovan (zaostala stavka u " & _
-            "tblPaletaStavka). Detalji su u logu."
+    ' (Monitor_Event DOKUMENT_SAVE_FAIL / Save*_TX).
+    Dim stavke As String
+    If Len(failOtp) > 0 Then stavke = stavke & vbCrLf & _
+        "- OTPREMNICA nije kreirana (Klasa " & failOtp & ")."
+    If Len(failZbr) > 0 Then stavke = stavke & vbCrLf & _
+        "- ZBIRNA nije kreirana (Klasa " & failZbr & ")."
+    If Len(failPrij) > 0 Then stavke = stavke & vbCrLf & _
+        "- PRIJEMNICA nije kreirana (Klasa " & failPrij & ")."
+    If Len(failLink) > 0 Then stavke = stavke & vbCrLf & _
+        "- OTKUP red nije povezan sa dokumentom (Klasa " & failLink & ")."
+
+    If Len(stavke) > 0 Then
+        AutoChainHladnjaca = "Otkup je sa" & ChrW(269) & "uvan, ali AUTO-LANAC hladnjace je NEPOTPUN:" & _
+            stavke & vbCrLf & _
+            "Najcesci uzrok pada prijemnice: broj prijemnice je ve" & ChrW(263) & " paletizovan " & _
+            "(zaostala stavka u tblPaletaStavka). Detalji su u logu."
     End If
     Exit Function
 
@@ -204,19 +288,35 @@ End Function
 '   OtpremnicaID + BrojZbirne (tek kreirani -> upisuju se),
 '   VozacID samo ako je prazan (da se ne pregazi operaterov izbor).
 ' Reuse postojecih primitiva: FindRows / RequireUpdateCell / clsTransaction.
-Private Sub LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As String, _
-                                   ByVal brZbr As String, ByVal vozacID As String)
+'
+' Vraca True SAMO kad je veza stvarno i potpuno upisana; False kad red nije nadjen,
+' kad je upis pao (EH radi RollbackTx + LogErr, bez re-raise -- lanac je
+' best-effort) ili kad ulaz ne moze dati potpunu vezu. Pozivalac
+' (AutoChainHladnjaca) neuspeh ukljucuje u upozorenje, da se otkup bez
+' OtpremnicaID/BrojZbirne ne prijavi kao uspesan lanac.
+'
+' Prazan OtkupID NIJE legitimno "nema sta da se veze": SaveOtkupMulti_TX radi
+' Err.Raise ako bilo koja aktivna klasa vrati "" i sastavlja "ID1 + ID2", pa se
+' dovde stize sa ID-jem za svaku aktivnu klasu. Prazno => prekrsen ugovor ili
+' pogresno parsiran rezultat -> prijavi se kao neuspeh veze.
+Private Function LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As String, _
+                                        ByVal brZbr As String, ByVal vozacID As String) As Boolean
     Const SRC As String = "modAutoHladnjaca.LinkOtkupRedNaDokument"
     Dim tx As clsTransaction
     On Error GoTo EH
 
     otkupID = Trim$(otkupID)
-    If Len(otkupID) = 0 Then Exit Sub
+    If Len(otkupID) = 0 Then Exit Function     ' prekrsen ugovor (vidi zaglavlje)
+    ' Parcijalna veza nije uspeh: bez OtpremnicaID ili bez BrojZbirne otkup red
+    ' ostaje polu-povezan. Sa fail-fast lancem se dovde ne stize sa praznim otpID
+    ' (otpremnica je preduslov za nizvodne korake) -- guard je zastita ako se
+    ' redosled koraka ikad promeni.
+    If Len(otpID) = 0 Or Len(brZbr) = 0 Then Exit Function
 
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
-    If rows Is Nothing Then Exit Sub
-    If rows.count = 0 Then Exit Sub
+    If rows Is Nothing Then Exit Function  ' red nije nadjen -> veza NIJE upisana
+    If rows.count = 0 Then Exit Function
 
     Dim curVoz As String
     curVoz = Trim$(nz(LookupValue(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_VOZAC), ""))
@@ -237,11 +337,21 @@ Private Sub LinkOtkupRedNaDokument(ByVal otkupID As String, ByVal otpID As Strin
 
     tx.CommitTx
     Set tx = Nothing
-    Exit Sub
+    LinkOtkupRedNaDokument = True
+    Exit Function
 EH:
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr SRC
-End Sub
+End Function
+
+' Nabrajanje klasa u poruci o neuspehu: "I", "II" ili "I i II".
+Private Function AddKlasa(ByVal acc As String, ByVal klasa As String) As String
+    If Len(acc) = 0 Then
+        AddKlasa = klasa
+    Else
+        AddKlasa = acc & " i " & klasa
+    End If
+End Function
 
 ' ============================================================
 ' Jednokratni backfill: kreira prijemnice za vec postojece otpremnice
@@ -263,20 +373,41 @@ End Sub
 '        GetTableData / RequireColumnIndex / GetColumnIndex.
 ' ============================================================
 Public Sub BackfillPrijemniceHladnjaca()
+    BackfillPrijemniceHladnjacaCore False
+End Sub
+
+' Jezgro backfill-a. TEST SEAM: silent:=True preskace sve MsgBox-ove i vraca
+' brojace kroz outOk/outFail, pa je makro pozivljiv iz modBusinessFlowProTests
+' bez interaktivnih prompta. Javni ulaz iznad je namerno BEZ argumenata --
+' Sub sa parametrima se ne pojavljuje u Alt+F8 listi makroa.
+'
+' onlyBrojZbirne ogranicava obradu na JEDAN dokument. Bez toga backfill skenira
+' SVE hladnjaca-otpremnice u svesci, pa bi pokretanje test suite-a nad realnim
+' klijentskim fajlom tiho kreiralo prijemnice za prave dokumente (a posto testovi
+' privremeno preusmere MALINA_DEFAULT_KUPAC na test-kupca, jos gore: pod pogresnim
+' kupcem i mimo `have` provere). Testovi zato UVEK salju svoj BrojZbirne.
+' Operativni poziv (wrapper) ga ostavlja prazan = ponasanje kao do sada.
+Public Sub BackfillPrijemniceHladnjacaCore(ByVal silent As Boolean, _
+                                           Optional ByVal onlyBrojZbirne As String = "", _
+                                           Optional ByRef outOk As Long, _
+                                           Optional ByRef outFail As Long)
     Const SRC As String = "modAutoHladnjaca.BackfillPrijemniceHladnjaca"
     On Error GoTo EH
+    outOk = 0
+    outFail = 0
 
     Dim kupacID As String
     kupacID = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
     If Len(kupacID) = 0 Then
-        MsgBox "MALINA_DEFAULT_KUPAC (kupac-hladnjaca) nije pode" & ChrW(353) & "en. " & _
-               "Podesi ga u Podesavanjima pa pokreni ponovo.", vbExclamation, APP_NAME
+        If Not silent Then _
+            MsgBox "MALINA_DEFAULT_KUPAC (kupac-hladnjaca) nije pode" & ChrW(353) & "en. " & _
+                   "Podesi ga u Podesavanjima pa pokreni ponovo.", vbExclamation, APP_NAME
         Exit Sub
     End If
 
     Dim otp As Variant: otp = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(otp) Then
-        MsgBox "Nema otpremnica za backfill.", vbInformation, APP_NAME
+        If Not silent Then MsgBox "Nema otpremnica za backfill.", vbInformation, APP_NAME
         Exit Sub
     End If
 
@@ -299,17 +430,36 @@ Public Sub BackfillPrijemniceHladnjaca()
     cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)    ' opciono
 
     ' Postojece (ne-stornirane) prijemnice -> set kljuceva (BrojZbirne|Klasa).
+    ' Uz to, mapa BrojZbirne -> vec dodeljeni BrojPrijemnice: ako jedna klasa
+    ' dokumenta vec ima prijemnicu, druga klasa mora dobiti ISTI broj (jedna
+    ' prijemnica = jedan broj, kao i u zivom auto-lancu), a ne novi.
+    '
+    ' OBE mape su ogranicene na hladnjaca-kupca (kupacID). Broj prijemnice je
+    ' PER-KUPAC (GenerateBrojPrijemnice -> MaxSeqFromTable filtriran po
+    ' COL_PRJ_KUPAC), pa bi nasledjivanje broja iz prijemnice drugog kupca ubacilo
+    ' broj iz tudjeg niza u hladnjaca niz. Isto vazi i za idempotentnost: prijemnica
+    ' drugog kupca sa istim BrojZbirne ne sme da preskoci legitimnog kandidata.
     Dim have As Object: Set have = CreateObject("Scripting.Dictionary")
+    Dim brByZbr As Object: Set brByZbr = CreateObject("Scripting.Dictionary")
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If Not IsEmpty(prj) Then
-        Dim pZbr As Long, pKla As Long, pStorno As Long
+        Dim pZbr As Long, pKla As Long, pStorno As Long, pBroj As Long, pKup As Long
         pZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
         pKla = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+        pBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+        pKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
         pStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
         Dim pr As Long
         For pr = 1 To UBound(prj, 1)
             If pStorno = 0 Or UCase$(Trim$(CStr(prj(pr, pStorno)))) <> "DA" Then
-                have(KeyZbrKlasa(CStr(prj(pr, pZbr)), CStr(prj(pr, pKla)))) = True
+                If StrComp(Trim$(CStr(prj(pr, pKup))), kupacID, vbTextCompare) = 0 Then
+                    have(KeyZbrKlasa(CStr(prj(pr, pZbr)), CStr(prj(pr, pKla)))) = True
+                    Dim pzb As String: pzb = Trim$(CStr(prj(pr, pZbr)))
+                    Dim pbr As String: pbr = Trim$(CStr(prj(pr, pBroj)))
+                    If Len(pzb) > 0 And Len(pbr) > 0 Then
+                        If Not brByZbr.Exists(pzb) Then brByZbr(pzb) = pbr
+                    End If
+                End If
             End If
         Next pr
     End If
@@ -323,25 +473,35 @@ Public Sub BackfillPrijemniceHladnjaca()
             Dim zbr As String: zbr = Trim$(CStr(otp(r, cZbr)))
             Dim kla As String: kla = Trim$(CStr(otp(r, cKla)))
             If Len(zbr) > 0 And IsHladnjacaStanica(sid) Then
-                If Not have.Exists(KeyZbrKlasa(zbr, kla)) Then cand.Add r
+                Dim uOpsegu As Boolean
+                uOpsegu = (Len(onlyBrojZbirne) = 0)
+                If Not uOpsegu Then _
+                    uOpsegu = (StrComp(zbr, Trim$(onlyBrojZbirne), vbTextCompare) = 0)
+                If uOpsegu Then
+                    If Not have.Exists(KeyZbrKlasa(zbr, kla)) Then cand.Add r
+                End If
             End If
         End If
     Next r
 
     If cand.count = 0 Then
-        MsgBox "Nema hladnjaca-otpremnica bez prijemnice. Nista za backfill.", _
-               vbInformation, APP_NAME
+        If Not silent Then _
+            MsgBox "Nema hladnjaca-otpremnica bez prijemnice. Nista za backfill.", _
+                   vbInformation, APP_NAME
         Exit Sub
     End If
 
-    If MsgBox("Pronadjeno " & cand.count & " otpremnica (hladnjaca) bez prijemnice." & _
-              vbCrLf & "Kreirati prijemnice za njih sada?" & vbCrLf & vbCrLf & _
-              "NAPOMENA: ako je tblPrijemnica ranije praznjena, prvo ocisti orphan " & _
-              "redove u tblPaleta i tblPaletaStavka (inace paletizacija puca).", _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    If Not silent Then
+        If MsgBox("Pronadjeno " & cand.count & " otpremnica (hladnjaca) bez prijemnice." & _
+                  vbCrLf & "Kreirati prijemnice za njih sada?" & vbCrLf & vbCrLf & _
+                  "NAPOMENA: ako je tblPrijemnica ranije praznjena, prvo ocisti orphan " & _
+                  "redove u tblPaleta i tblPaletaStavka (inace paletizacija puca).", _
+                  vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    End If
 
     ' Jedan broj prijemnice po dokumentu (BrojZbirne) -> Klasa I i II dele broj.
-    Dim brByZbr As Object: Set brByZbr = CreateObject("Scripting.Dictionary")
+    ' brByZbr je vec pre-punjen brojevima postojecih prijemnica (gore), pa se broj
+    ' preuzima i kad je sestrinska klasa backfill-ovana u ranijem prolazu.
     Dim ok As Long, fail As Long, i As Long
     For i = 1 To cand.count
         r = cand(i)
@@ -373,16 +533,20 @@ ContinueLoop:
     Next i
 
     LogInfo SRC, "Backfill prijemnice: ok=" & ok & " fail=" & fail
-    MsgBox "Backfill zavr" & ChrW(353) & "en." & vbCrLf & _
-           "Kreirano prijemnica: " & ok & vbCrLf & _
-           "Neuspesno: " & fail & _
-           IIf(fail > 0, vbCrLf & "(vidi log; najcesce orphan paleta -> ocisti " & _
-                              "tblPaleta/tblPaletaStavka pa pokreni ponovo)", ""), _
-           IIf(fail > 0, vbExclamation, vbInformation), APP_NAME
+    outOk = ok
+    outFail = fail
+    If Not silent Then _
+        MsgBox "Backfill zavr" & ChrW(353) & "en." & vbCrLf & _
+               "Kreirano prijemnica: " & ok & vbCrLf & _
+               "Neuspesno: " & fail & _
+               IIf(fail > 0, vbCrLf & "(vidi log; najcesce orphan paleta -> ocisti " & _
+                                  "tblPaleta/tblPaletaStavka pa pokreni ponovo)", ""), _
+               IIf(fail > 0, vbExclamation, vbInformation), APP_NAME
     Exit Sub
 EH:
     LogErr SRC
-    MsgBox "Gre" & ChrW(353) & "ka u backfill-u: " & Err.description, vbCritical, APP_NAME
+    If Not silent Then _
+        MsgBox "Gre" & ChrW(353) & "ka u backfill-u: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 Private Function KeyZbrKlasa(ByVal zbr As String, ByVal klasa As String) As String
