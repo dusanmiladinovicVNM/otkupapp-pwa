@@ -174,7 +174,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_OTK_ZAVRSEN", "Uvoz OTK zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kama."
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_OTK_ZAVRSEN_2", "Uvoz OTK zavr" & ChrW(353) & "en!"
     UpsertRow lo, existing, "SYNC_MSG_GRESKA_PRI_UVOZU", "Gre" & ChrW(353) & "ka pri uvozu OTK:"
-    UpsertRow lo, existing, "SYNC_MSG_PWA_UVOZ_NIJE", "PWA uvoz nije potvr" & ChrW(273) & "en. Promene su vra" & ChrW(263) & "ene zbog fatal sync gre" & ChrW(353) & "ke. Proveri log."
+    UpsertRow lo, existing, "SYNC_MSG_PWA_UVOZ_NIJE", "PWA uvoz OTK nije potvr" & ChrW(273) & "en. Uspe" & ChrW(353) & "ni redovi potvr" & ChrW(273) & "eni kroz row-level TX ostaju upisani, neuspe" & ChrW(353) & "ni su ozna" & ChrW(269) & "eni kao gre" & ChrW(353) & "ka. Proveri log."
     UpsertRow lo, existing, "SYNC_MSG_PWA_UVOZ_ZAVRSEN", "PWA uvoz zavr" & ChrW(353) & "en i potvr" & ChrW(273) & "en."
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_ZBIRNIH_NIJE", "Uvoz zbirnih nije potvr" & ChrW(273) & "en zbog fatal sync gre" & ChrW(353) & "ke."
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_ZBIRNIH_ZAVRSEN", "Uvoz zbirnih zavr" & ChrW(353) & "en sa gre" & ChrW(353) & "kama."

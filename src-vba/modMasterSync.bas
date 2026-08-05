@@ -285,33 +285,40 @@ End Function
 
 
 Public Sub ImportOtkupFromPWA_TX()
-    Dim tx As clsTransaction
     Dim ok As Boolean
 
     On Error GoTo EH
 
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-
+    ' IMPORTANT (AUD-002):
+    ' Do NOT wrap the whole OTK batch in one outer clsTransaction.
+    '
+    ' Reason:
+    ' - ImportOneOTKSheet writes Google status updates (WriteBackSyncStatus)
+    '   after local row processing, per sheet.
+    ' - Google writeback cannot be rolled back by clsTransaction.
+    ' - An outer rollback triggered by a LATER sheet would delete locally
+    '   imported rows of EARLIER sheets, while those Google rows stay
+    '   Synced>Master -> next cycle skips them -> permanent data loss.
+    ' - Row-level atomicity is already handled by ImportRowToTblOtkup_RowTX.
+    '
+    ' Safe model (same as ImportZbirneFromPWA_TX):
+    ' - each OTK row commits/rolls back through ImportRowToTblOtkup_RowTX
+    ' - successful rows may be written back as Synced>Master
+    ' - failed rows are written back as SyncError
+    ' - the full import can still return False / partial if any errors occurred
     ok = ImportOtkupFromPWA_Core(False)
 
     If Not ok Then
-        tx.RollbackTx
-
         Monitor_MasterSyncFail _
             procedureName:="ImportOtkupFromPWA_TX", _
             errNum:=0, _
-            errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
+            errDesc:="PWA import was not confirmed. Partial import kept; failed rows marked SyncError.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
 
         MsgBox Poruka("SYNC_MSG_PWA_UVOZ_NIJE"), _
             vbCritical, APP_NAME
         Exit Sub
     End If
-
-    tx.CommitTx
 
     MsgBox Poruka("SYNC_MSG_PWA_UVOZ_ZAVRSEN"), vbInformation, APP_NAME
     Exit Sub
@@ -335,9 +342,7 @@ EH:
         errDesc:=errDesc, _
         errSrc:=errSrc
 
-    If Not tx Is Nothing Then tx.RollbackTx
-
-    MsgBox "Greska pri uvozu, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU") & errDesc, vbCritical, APP_NAME
 End Sub
 
 '======================================================================
@@ -2227,6 +2232,8 @@ Private Function FindVOZSheets(ByVal folderID As String, _
     Dim http As Object
     Dim query As String
     Dim responseText As String
+    Dim nextPageToken As String
+    Dim tokenPos As Long
 
     On Error GoTo EH
 
@@ -2246,29 +2253,45 @@ Private Function FindVOZSheets(ByVal folderID As String, _
     query = "name contains 'VOZ-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
             " and '" & EscapeDriveQueryValueMasterSync(folderID) & "' in parents and trashed=false"
 
-    url = "https://www.googleapis.com/drive/v3/files" & _
-          "?q=" & UrlEncode(query) & _
-          "&fields=files(id,name)" & _
-          "&pageSize=100"
+    nextPageToken = ""
 
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    http.SetTimeouts 10000, 10000, 30000, 30000
+    ' AUD-018: bez paginacije se tiho gubi sve preko prvih 100 VOZ sheetova.
+    Do
+        url = "https://www.googleapis.com/drive/v3/files" & _
+              "?q=" & UrlEncode(query) & _
+              "&fields=nextPageToken,files(id,name)" & _
+              "&pageSize=100"
 
-    http.Open "GET", url, False
-    http.SetRequestHeader "Authorization", "Bearer " & accessToken
-    http.Send
+        If Len(nextPageToken) > 0 Then
+            url = url & "&pageToken=" & UrlEncode(nextPageToken)
+        End If
 
-    responseText = CStr(http.responseText)
+        Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+        http.SetTimeouts 10000, 10000, 30000, 30000
 
-    If http.status <> 200 Then
-        LogError SOURCE, _
-                 "HTTP " & http.status & ": " & Left$(responseText, 1000), _
-                 http.status
-        FindVOZSheets = False
-        Exit Function
-    End If
+        http.Open "GET", url, False
+        http.SetRequestHeader "Authorization", "Bearer " & accessToken
+        http.Send
 
-    Call ParseFileListVOZ(responseText, outIDs, outNames)
+        responseText = CStr(http.responseText)
+
+        If http.status <> 200 Then
+            LogError SOURCE, _
+                     "HTTP " & http.status & ": " & Left$(responseText, 1000), _
+                     http.status
+            FindVOZSheets = False
+            Exit Function
+        End If
+
+        Call ParseFileListVOZ(responseText, outIDs, outNames)
+
+        tokenPos = InStr(1, responseText, """nextPageToken""", vbTextCompare)
+        If tokenPos > 0 Then
+            nextPageToken = ExtractJsonValueAt(responseText, tokenPos)
+        Else
+            nextPageToken = ""
+        End If
+    Loop While Len(nextPageToken) > 0
 
     LogInfo SOURCE, "Gefunden: " & outIDs.count & " VOZ-Sheets"
     FindVOZSheets = True

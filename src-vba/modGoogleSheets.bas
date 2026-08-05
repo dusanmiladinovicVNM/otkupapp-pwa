@@ -1732,111 +1732,207 @@ Private Function BuildValuesJson(ByVal data As Variant) As String
 End Function
 
 Public Function ParseValuesJson(ByVal json As String) As Variant
+    ' Parst {"range":...,"values":[[...],[...]]} in ein 1-basiertes 2D Array.
+    '
+    ' AUD-001: Frueher wurde der JSON-Text vor dem Parsen global normalisiert
+    ' (Replace ", " -> ",", "[ " -> "[", " ]" -> "]") und danach an "],["
+    ' bzw. an Kommas gesplittet. Das war NICHT quote-aware und hat jede
+    ' Textzelle beschaedigt, die ", " enthielt (Adressen, Namen, Napomena),
+    ' escaped Quotes falsch behandelt und \uXXXX nie dekodiert.
+    '
+    ' Jetzt: EIN stateful Scanner (ScanJsonValuesArray) fuer Zeilen UND Zellen,
+    ' der Quotes/Backslash-Escapes korrekt verfolgt und alle JSON-Escapes
+    ' in einem Durchgang dekodiert.
     Dim p As Long
-    Dim valuesStart As Long
-    Dim valuesEnd As Long
-    Dim block As String
-    Dim rowList() As String
+    Dim arrayStart As Long
+    Dim rowsColl As Collection
+    Dim cellsColl As Collection
     Dim rowCount As Long
     Dim colCount As Long
     Dim result() As Variant
     Dim i As Long, j As Long
-    Dim cells() As String
-    
-    json = Replace(json, vbCrLf, "")
-    json = Replace(json, vbLf, "")
-    json = Replace(json, vbCr, "")
-    
-    ' Spaces zwischen Klammern entfernen
-    Do While InStr(json, "[ ") > 0
-        json = Replace(json, "[ ", "[")
-    Loop
-    Do While InStr(json, " ]") > 0
-        json = Replace(json, " ]", "]")
-    Loop
-    Do While InStr(json, ", ") > 0
-        json = Replace(json, ", ", ",")
-    Loop
-    
+
     p = InStr(json, """values""")
     If p = 0 Then
         ParseValuesJson = Empty
         Exit Function
     End If
-    
-    valuesStart = InStr(p, json, "[[")
-    If valuesStart = 0 Then
+
+    arrayStart = InStr(p + Len("""values"""), json, "[")
+    If arrayStart = 0 Then
         ParseValuesJson = Empty
         Exit Function
     End If
-    
-    valuesEnd = InStrRev(json, "]]")
-    If valuesEnd = 0 Or valuesEnd <= valuesStart Then
+
+    Set rowsColl = ScanJsonValuesArray(json, arrayStart)
+
+    rowCount = rowsColl.count
+    If rowCount = 0 Then
         ParseValuesJson = Empty
         Exit Function
     End If
-    
-    block = Mid$(json, valuesStart + 1, valuesEnd - valuesStart)
-    
-    rowList = Split(block, "],[")
-    rowCount = UBound(rowList) + 1
-    
-    rowList(0) = Mid$(rowList(0), 2)
-    rowList(UBound(rowList)) = Left$(rowList(UBound(rowList)), Len(rowList(UBound(rowList))) - 1)
-    
-    cells = SplitCsvJson(rowList(0))
-    colCount = UBound(cells) + 1
-    
+
+    ' Breite wie bisher aus der ersten Zeile (Header) -- unveraendertes Verhalten.
+    colCount = rowsColl(1).count
+    If colCount < 1 Then colCount = 1
+
     ReDim result(1 To rowCount, 1 To colCount)
-    
-    For i = 0 To rowCount - 1
-        cells = SplitCsvJson(rowList(i))
-        For j = 0 To UBound(cells)
-            If j < colCount Then
-                result(i + 1, j + 1) = CleanJsonValue(cells(j))
+
+    For i = 1 To rowCount
+        Set cellsColl = rowsColl(i)
+        For j = 1 To cellsColl.count
+            If j <= colCount Then
+                result(i, j) = cellsColl(j)
             End If
         Next j
     Next i
-    
+
     ParseValuesJson = result
 End Function
-Private Function SplitCsvJson(ByVal s As String) As String()
-    ' Split auf Komma, aber nicht innerhalb von Anfuehrungszeichen
-    Dim result() As String
-    Dim count As Long, i As Long
+
+Private Function ScanJsonValuesArray(ByRef json As String, _
+                                     ByVal arrayStart As Long) As Collection
+    ' Stateful Scanner ueber das values-Array ab arrayStart (Position von "[").
+    ' Liefert Collection von Collections (Zeilen -> Zellen als String).
+    '
+    ' Regeln:
+    '   - "\" escaped das naechste Zeichen, "\""" toggelt inQuote also NICHT
+    '   - Whitespace ausserhalb von Strings wird ignoriert (prettyPrint JSON)
+    '   - "," / "]" trennen nur ausserhalb von Strings
+    Dim rowsColl As Collection
+    Dim cellsColl As Collection
+    Dim i As Long
+    Dim n As Long
+    Dim depth As Long
     Dim inQuote As Boolean
-    Dim current As String
-    
-    ReDim result(0 To 0)
-    
-    For i = 1 To Len(s)
-        Dim ch As String
-        ch = Mid$(s, i, 1)
-        
-        If ch = """" Then
-            inQuote = Not inQuote
-        ElseIf ch = "," And Not inQuote Then
-            result(count) = current
-            count = count + 1
-            ReDim Preserve result(0 To count)
-            current = ""
+    Dim cellStarted As Boolean
+    Dim ch As String
+    Dim esc As String
+    Dim hex4 As String
+    Dim buf As String
+
+    Set rowsColl = New Collection
+
+    n = Len(json)
+    depth = 1
+    i = arrayStart + 1
+
+    Do While i <= n
+        ch = Mid$(json, i, 1)
+
+        If inQuote Then
+            If ch = "\" Then
+                i = i + 1
+                esc = Mid$(json, i, 1)
+
+                Select Case esc
+                    Case """"
+                        buf = buf & """"
+                    Case "\"
+                        buf = buf & "\"
+                    Case "/"
+                        buf = buf & "/"
+                    Case "b"
+                        buf = buf & Chr$(8)
+                    Case "f"
+                        buf = buf & Chr$(12)
+                    Case "n"
+                        buf = buf & vbLf
+                    Case "r"
+                        buf = buf & vbCr
+                    Case "t"
+                        buf = buf & vbTab
+                    Case "u"
+                        hex4 = Mid$(json, i + 1, 4)
+                        If IsHex4Digits(hex4) Then
+                            buf = buf & JsonUnicodeChar(hex4)
+                            i = i + 4
+                        Else
+                            ' Defekte Sequenz: literal durchreichen
+                            buf = buf & "\" & esc
+                        End If
+                    Case Else
+                        ' Unbekannter Escape: beide Zeichen behalten
+                        buf = buf & "\" & esc
+                End Select
+            ElseIf ch = """" Then
+                inQuote = False
+            Else
+                buf = buf & ch
+            End If
         Else
-            current = current & ch
+            Select Case ch
+                Case """"
+                    inQuote = True
+                    cellStarted = True
+                Case "["
+                    depth = depth + 1
+                    If depth = 2 Then
+                        Set cellsColl = New Collection
+                        buf = ""
+                        cellStarted = False
+                    End If
+                Case "]"
+                    If depth = 2 Then
+                        If cellStarted Then cellsColl.Add buf
+                        rowsColl.Add cellsColl
+                        Set cellsColl = Nothing
+                        buf = ""
+                        cellStarted = False
+                    End If
+
+                    depth = depth - 1
+                    If depth <= 0 Then Exit Do
+                Case ","
+                    If depth = 2 Then
+                        cellsColl.Add buf
+                        buf = ""
+                        cellStarted = False
+                    End If
+                Case Else
+                    If depth = 2 Then
+                        If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then
+                            buf = buf & ch
+                            cellStarted = True
+                        End If
+                    End If
+            End Select
         End If
-    Next i
-    
-    result(count) = current
-    SplitCsvJson = result
+
+        i = i + 1
+    Loop
+
+    ' Abgeschnittener JSON: offene Zeile trotzdem uebernehmen
+    If Not cellsColl Is Nothing Then
+        If cellStarted Then cellsColl.Add buf
+        rowsColl.Add cellsColl
+    End If
+
+    Set ScanJsonValuesArray = rowsColl
 End Function
 
-Private Function CleanJsonValue(ByVal s As String) As String
-    s = Trim$(s)
-    If Left$(s, 1) = """" And Right$(s, 1) = """" Then
-        s = Mid$(s, 2, Len(s) - 2)
-    End If
-    s = Replace(s, "\""", """")
-    s = Replace(s, "\\", "\")
-    s = Replace(s, "\n", vbLf)
-    CleanJsonValue = s
+Private Function IsHex4Digits(ByVal s As String) As Boolean
+    Dim i As Long
+    Dim c As String
+
+    If Len(s) <> 4 Then Exit Function
+
+    For i = 1 To 4
+        c = UCase$(Mid$(s, i, 1))
+        If Not ((c >= "0" And c <= "9") Or (c >= "A" And c <= "F")) Then Exit Function
+    Next i
+
+    IsHex4Digits = True
+End Function
+
+Private Function JsonUnicodeChar(ByVal hex4 As String) As String
+    ' \uXXXX -> Zeichen. Aufbau zur Laufzeit (ChrW), Quelltext bleibt ASCII.
+    ' Werte > &H7FFF muessen fuer ChrW negativ uebergeben werden.
+    Dim code As Long
+
+    code = CLng("&H" & hex4)
+    If code > 32767 Then code = code - 65536
+
+    JsonUnicodeChar = ChrW$(code)
 End Function
 

@@ -668,3 +668,204 @@ UseFallback:
     GetFirstOptionalTableValue = fallbackValue
 End Function
 
+' ============================================================
+' SHEETS JSON PARSER SUITE (AUD-001)
+'
+' Offline unit tests za modGoogleSheets.ParseValuesJson.
+' Ne zovu Google, ne pisu u tabele -- mogu se pustiti bilo kada.
+'
+' Entry:
+'   RunSheetsJsonParserTests
+' ============================================================
+
+Public Sub RunSheetsJsonParserTests()
+    On Error GoTo EH
+
+    m_Total = 0
+    m_Passed = 0
+    m_Failed = 0
+    m_RunID = Format$(Now, "yyyymmddhhnnss")
+
+    Debug.Print String$(60, "-")
+    Debug.Print "SHEETS JSON PARSER SUITE START " & m_RunID
+    Debug.Print String$(60, "-")
+
+    Test_ParseValuesJson_SpaceAfterCommaPreserved
+    Test_ParseValuesJson_EscapedQuote
+    Test_ParseValuesJson_UnicodeEscape
+    Test_ParseValuesJson_EmbeddedRowSeparator
+    Test_ParseValuesJson_WhitespaceAndEscapes
+    Test_ParseValuesJson_NoValues
+
+    EndSheetsJsonParserRun
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "RunSheetsJsonParserTests fatal", Err.description
+    EndSheetsJsonParserRun
+End Sub
+
+Private Sub EndSheetsJsonParserRun()
+    Debug.Print String$(60, "-")
+    Debug.Print "SHEETS JSON PARSER SUITE END"
+    Debug.Print "TOTAL=" & m_Total & " PASS=" & m_Passed & " FAIL=" & m_Failed
+    Debug.Print String$(60, "-")
+
+    If m_Failed = 0 Then
+        MsgBox "Sheets JSON Parser Suite PASS" & vbCrLf & _
+               "Total: " & m_Total & vbCrLf & _
+               "Pass: " & m_Passed, vbInformation, APP_NAME
+    Else
+        MsgBox "Sheets JSON Parser Suite FAIL" & vbCrLf & _
+               "Total: " & m_Total & vbCrLf & _
+               "Pass: " & m_Passed & vbCrLf & _
+               "Fail: " & m_Failed & vbCrLf & _
+               "Pogledaj Immediate Window / log.", vbCritical, APP_NAME
+    End If
+End Sub
+
+Private Sub Test_ParseValuesJson_SpaceAfterCommaPreserved()
+    ' AUD-001 (a): globalni Replace(", " -> ",") je brisao razmak u SVAKOJ
+    ' tekst-celiji (adrese, imena, napomene).
+    On Error GoTo EH
+
+    Dim json As String
+    Dim data As Variant
+
+    json = "{""range"":""Sheet1!A1:B2"",""majorDimension"":""ROWS""," & _
+           """values"":[[""Adresa"",""Napomena""]," & _
+           "[""Ulica 5, Beograd"",""prvo, drugo, trece""]]}"
+
+    data = ParseValuesJson(json)
+
+    AssertTrue Not IsEmpty(data), "PARSER: space-after-comma sheet parsed"
+    AssertEquals "2", CStr(UBound(data, 1)), "PARSER: 2 rows"
+    AssertEquals "2", CStr(UBound(data, 2)), "PARSER: 2 cols"
+    AssertEquals "Ulica 5, Beograd", CStr(data(2, 1)), _
+                 "PARSER: razmak posle zapete ocuvan"
+    AssertEquals "prvo, drugo, trece", CStr(data(2, 2)), _
+                 "PARSER: vise zapeta u celiji ocuvano"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: space after comma", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_EscapedQuote()
+    ' AUD-001 (b): \" je lomio quote tracking -> mis-split reda.
+    On Error GoTo EH
+
+    Dim json As String
+    Dim data As Variant
+
+    json = "{""values"":[[""On je rekao \""zdravo\"" tiho"",""druga"",""treca""]]}"
+
+    data = ParseValuesJson(json)
+
+    AssertTrue Not IsEmpty(data), "PARSER: escaped-quote sheet parsed"
+    AssertEquals "3", CStr(UBound(data, 2)), "PARSER: escaped quote ne lomi split (3 celije)"
+    AssertEquals "On je rekao ""zdravo"" tiho", CStr(data(1, 1)), _
+                 "PARSER: navodnik dekodovan i ocuvan"
+    AssertEquals "druga", CStr(data(1, 2)), "PARSER: druga celija netaknuta"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: escaped quote", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_UnicodeEscape()
+    ' AUD-001 (c): \uXXXX je prolazio doslovno (s/c/c/z/dj, & < > ' ").
+    On Error GoTo EH
+
+    Dim json As String
+    Dim data As Variant
+    Dim expectedText As String
+
+    ' \u0161 = s-caron, \u010d = c-caron, \u0111 = d-stroke
+    json = "{""values"":[[""\u0161e\u010de\u0111a"",""A\u0026B"",""Synced\u003eMaster""]]}"
+
+    data = ParseValuesJson(json)
+
+    ' Ocekivana vrednost se gradi u runtime-u (ChrW) -- izvor ostaje ASCII.
+    expectedText = ChrW$(353) & "e" & ChrW$(269) & "e" & ChrW$(273) & "a"
+
+    AssertTrue Not IsEmpty(data), "PARSER: unicode-escape sheet parsed"
+    AssertEquals expectedText, CStr(data(1, 1)), _
+                 "PARSER: \uXXXX dekodovan u srpska slova"
+    AssertEquals "A&B", CStr(data(1, 2)), "PARSER: \u0026 dekodovan u &"
+    AssertEquals "Synced>Master", CStr(data(1, 3)), "PARSER: \u003e dekodovan u >"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: unicode escape", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_EmbeddedRowSeparator()
+    ' AUD-001 (d): Split(block, "],[") je lomio red na tekstu koji sadrzi "],[".
+    On Error GoTo EH
+
+    Dim json As String
+    Dim data As Variant
+
+    json = "{""values"":[[""niz ],[ u tekstu"",""druga""],[""r2c1"",""r2c2""]]}"
+
+    data = ParseValuesJson(json)
+
+    AssertTrue Not IsEmpty(data), "PARSER: embedded ],[ sheet parsed"
+    AssertEquals "2", CStr(UBound(data, 1)), "PARSER: embedded ],[ ne pravi lazni red"
+    AssertEquals "niz ],[ u tekstu", CStr(data(1, 1)), _
+                 "PARSER: embedded ],[ ocuvan u celiji"
+    AssertEquals "r2c2", CStr(data(2, 2)), "PARSER: drugi red netaknut"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: embedded row separator", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_WhitespaceAndEscapes()
+    ' prettyPrint JSON (razmaci/novi redovi izmedju tokena) + \\ \/ \t \n
+    ' + necitirane brojcane vrednosti.
+    On Error GoTo EH
+
+    Dim json As String
+    Dim data As Variant
+
+    json = "{" & vbCrLf & _
+           "  ""majorDimension"": ""ROWS""," & vbCrLf & _
+           "  ""values"": [" & vbCrLf & _
+           "    [ ""C:\\putanja\\fajl"", ""a\tb"", ""red1\nred2"", ""1/2"" ]," & vbCrLf & _
+           "    [ 12345, 2.5, """", ""x"" ]" & vbCrLf & _
+           "  ]" & vbCrLf & _
+           "}"
+
+    data = ParseValuesJson(json)
+
+    AssertTrue Not IsEmpty(data), "PARSER: prettyPrint JSON parsed"
+    AssertEquals "2", CStr(UBound(data, 1)), "PARSER: prettyPrint 2 rows"
+    AssertEquals "4", CStr(UBound(data, 2)), "PARSER: prettyPrint 4 cols"
+    AssertEquals "C:\putanja\fajl", CStr(data(1, 1)), "PARSER: \\ dekodovan"
+    AssertEquals "a" & vbTab & "b", CStr(data(1, 2)), "PARSER: \t dekodovan"
+    AssertEquals "red1" & vbLf & "red2", CStr(data(1, 3)), "PARSER: \n dekodovan"
+    AssertEquals "12345", CStr(data(2, 1)), "PARSER: broj bez navodnika"
+    AssertEquals "2.5", CStr(data(2, 2)), "PARSER: decimalni broj bez navodnika"
+    AssertEquals "", CStr(data(2, 3)), "PARSER: prazna celija ostaje prazna"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: whitespace and escapes", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_NoValues()
+    ' Prazan/nevalidan odgovor -> Empty (nepromenjeno ponasanje).
+    On Error GoTo EH
+
+    AssertTrue IsEmpty(ParseValuesJson("{""range"":""Sheet1!A1:Z1000""}")), _
+               "PARSER: bez values -> Empty"
+    AssertTrue IsEmpty(ParseValuesJson("{""values"":[]}")), _
+               "PARSER: prazan values niz -> Empty"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER: no values", Err.description
+End Sub
+
