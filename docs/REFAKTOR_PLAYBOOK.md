@@ -96,6 +96,17 @@ poslednja generacija; `SumByBroj` storno filter; `SaveZbirna` presence guard
 (AUD-008/009/022 + delovi AUD-003; FM-0018 #1-#5/#8/#20, FM-0011 #3).
 **Regression:** `RunStornoTestSuite` + ručni unos otpremnica/zbirna/prijemnica.
 
+**Urađeno (grana `claude/rf-05-frmdokumenta-fixes-63yqjp`):** svih 6 planiranih fiksa
+(novac storno broj→`NovacID` je već rešen u RF-03, pa preskočen) + obavezan smer ambalaže
+(UI + core guard u `SaveOMUlaz_TX`). Tokom review-a dodato: `FillOpenFakture` prebačen na
+centralni `modNovac.GetOpenFakture`; `SaveZbirna` na column-mapped `BuildZbirnaRowData`;
+prefill generacije rešen **eksplicitnom `GeneracijaID` kolonom** (schema — `EnsureSledljivostSchema`)
+umesto heuristike po datumu/ID-u, sa anchor-om na `OldDocID` iz correction context-a;
+`RequireJedanVlasnikPoBroju` guard protiv storna po nejedinstvenom broju (AUD-052).
+Test seam: `ZbirnaIzvorImaKlasuII`, `PickPrefillRows`, `SaveOMUlaz_TX` → `modDokumenta`.
+**Ostaje za RF-06+:** pun identitetski storno (`OldDocID → GeneracijaID → redovi generacije`
+kroz `Scan*`/`Run*Correction`) — vidi AUD-052 u `KNOWN_ISSUES.md`.
+
 ### RF-06 — modIzvestaj ispravnost brojki [Wave 2 · M/L]
 **Fajlovi:** `modIzvestaj.bas` (+ `modNovac.bas` per-vrsta cache).
 **Obim:** isplate kooperanta vezati za stanicu (`COL_NOV_OM_ID`); kartice red
@@ -310,7 +321,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-02 | modNovac guardovi | ✅ merged | PR #148 | M1 · AUD-003 (SaveNovac+AddCena) + AUD-010 |
 | RF-03 | Storno lanac | ✅ merged | PR #167 | M3 · AUD-020/021 + AUD-049 (storno izvoda) + keš/virman; review OK, follow-up AUD-050/051 |
 | RF-04 | AutoHladnjaca | ⬜ | — | |
-| RF-05 | frmDokumenta set | ⬜ | — | |
+| RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
 | RF-06 | modIzvestaj brojke | ⬜ | — | |
 | RF-07 | frmIzvestaj + revers | ⬜ | — | |
 | RF-08 | Faktura + štampa | ⬜ | — | |
