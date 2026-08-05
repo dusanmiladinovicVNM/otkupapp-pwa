@@ -94,6 +94,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
     Test_StornoGuardNaSvimPutanjama
+    Test_StornoGuardUKaskadi
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1646,6 +1647,7 @@ End Sub
 '   R08 OM ulaz: smer ambalaze je obavezan (core guard u SaveOMUlaz_TX)
 '   R09 storno po broju sa dva vlasnika je odbijen (ne stornira tudji dokument)
 '   R10 isti guard vazi i na ISPRAVKA/DUPLI/SIMPLE correction putanjama
+'   R11 guard vazi i u malina/autohladnjaca kaskadama (ulaz je BrojZbirne)
 ' ============================================================
 
 Private Sub Test_ProsekGajbeExcludesStornirano()
@@ -2042,6 +2044,68 @@ Private Sub Test_StornoGuardNaSvimPutanjama()
 
 EH:
     LogFatal "Test_StornoGuardNaSvimPutanjama", Err.Number, Err.description
+End Sub
+
+' Kaskade (malina / autohladnjaca) mutiraju lanac po BrojZbirne. Ako taj broj nije
+' jedinstven, kaskada bi oborila TUDJI lanac -- guard mora vaziti i tu, ne samo na
+' direktnim storno putanjama.
+Private Sub Test_StornoGuardUKaskadi()
+    Dim prevMode As String
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("STOKASK")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    ' Dve zbirne ISTOG broja kod dva kupca (isti vozac) -> broj je dvosmislen.
+    Dim brojZbr As String
+    brojZbr = TEST_PREFIX & "-ZBR-KASK-" & scenario
+
+    Dim zbrA As String, zbrB As String
+    zbrA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbr, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrB = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbr, TEST_KUP2_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         80#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
+               "Kaskada guard: dve zbirne istog broja kod dva kupca kreirane"
+
+    ' Otpremnica vezana na taj (dvosmislen) BrojZbirne.
+    Dim brojOtp As String
+    brojOtp = TEST_PREFIX & "-OTP-KASK-" & scenario
+
+    Dim otpID As String
+    otpID = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, brojZbr, _
+                              TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    AssertTrue Len(otpID) > 0, "Kaskada guard: otpremnica na dvosmislenu zbirnu kreirana"
+
+    ' Malina mod: storno otpremnice kaskadira na njenu zbirnu (StornoZbirnaCascade).
+    prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
+    SetConfigValue CFG_KEY_MALINA_MODE, "YES"
+
+    AssertFalse StornoOtpremnicaByBroj_TX(brojOtp), _
+                "Kaskada guard: storno otpremnice sa dvosmislenom zbirnom je odbijen"
+
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+
+    ' Rollback: ni otpremnica ni ijedna zbirna nisu dirane.
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpID), _
+               "Kaskada guard: otpremnica ostaje aktivna (TX rollback)"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "Kaskada guard: zbirna kupca A ostaje aktivna"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "Kaskada guard: zbirna kupca B (tudji lanac) ostaje aktivna"
+
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    SetConfigValue CFG_KEY_MALINA_MODE, prevMode
+    On Error GoTo 0
+    LogFatal "Test_StornoGuardUKaskadi", Err.Number, Err.description
 End Sub
 
 ' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice

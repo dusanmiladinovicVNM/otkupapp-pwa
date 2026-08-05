@@ -350,6 +350,12 @@ End Function
 Private Function StornoZbirnaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
     If Trim$(brojZbirne) = "" Then Exit Function
 
+    ' Ulaz kaskade je BrojZbirne -- ako taj broj nije jedinstven (dve zbirne, dva
+    ' vlasnika), kaskada bi oborila TUDJI lanac. Isti guard kao direktne storno
+    ' putanje; idempotentnost ostaje (nema aktivnih redova -> nema ni vlasnika).
+    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, callerSrc, _
+                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
+
     Dim data As Variant
     data = GetTableData(TBL_ZBIRNA)
     If IsEmpty(data) Then Exit Function
@@ -376,6 +382,12 @@ End Function
 ' Reuse StornoOtpremnica (ambalaza se stornira unutra). Vraca broj oborenih.
 Private Function StornoOtpremnicaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
     If Trim$(brojZbirne) = "" Then Exit Function
+
+    ' Ulaz kaskade je BrojZbirne -- ako taj broj nije jedinstven (dve zbirne, dva
+    ' vlasnika), kaskada bi oborila TUDJI lanac. Isti guard kao direktne storno
+    ' putanje; idempotentnost ostaje (nema aktivnih redova -> nema ni vlasnika).
+    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, callerSrc, _
+                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
 
     Dim data As Variant
     data = GetTableData(TBL_OTPREMNICA)
@@ -411,6 +423,12 @@ End Function
 ' unutra, ambalaza se stornira). NE dira tblPaletaStavka (re-point je zaseban).
 Private Function StornoPrijemnicaCascade(ByVal brojZbirne As String, ByVal callerSrc As String) As Long
     If Trim$(brojZbirne) = "" Then Exit Function
+
+    ' Ulaz kaskade je BrojZbirne -- ako taj broj nije jedinstven (dve zbirne, dva
+    ' vlasnika), kaskada bi oborila TUDJI lanac. Isti guard kao direktne storno
+    ' putanje; idempotentnost ostaje (nema aktivnih redova -> nema ni vlasnika).
+    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, callerSrc, _
+                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
 
     Dim data As Variant
     data = GetTableData(TBL_PRIJEMNICA)
