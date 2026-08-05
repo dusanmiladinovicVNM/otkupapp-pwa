@@ -438,13 +438,23 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
         Exit Function
     End If
     
+    ' AUD-001: read/parse greska NE SME da izgleda kao "na Google-u nema redova".
+    ' Remote scan postoji upravo da bi uhvatio jos neuvezene PWA dokumente;
+    ' ako padne, tihi 0 bi mogao da ponudi vec zauzet broj (duplikat).
+    ' Zato podizemo gresku van lokalnog handlera -- SuggestNextBroj je hvata
+    ' i bezbedno vraca "" (operater unosi broj rucno).
     Dim data As Variant
-    data = ReadSheetData(spreadsheetID, "Sheet1")
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        On Error GoTo 0
+        Err.Raise vbObjectError + 8402, "MaxSeqFromGoogleSheet", _
+                  "Remote scan brojeva nije uspeo (HTTP/JSON). Sheet=" & sheetName
+    End If
+
     If IsEmpty(data) Then
         MaxSeqFromGoogleSheet = 0
         Exit Function
     End If
-    
+
     Dim iBroj As Long, iDatum As Long
     iBroj = FindHeaderIndexInData(data, brojColHeader)
     iDatum = FindHeaderIndexInData(data, "Datum")

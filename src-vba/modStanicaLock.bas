@@ -294,8 +294,11 @@ Public Sub CleanupOrphanedLocks()
     If Len(sheetID) = 0 Then Exit Sub
     
     Dim kv As Object
-    Set kv = ReadSyncControlAsDict(sheetID)
-    
+    If Not TryReadSyncControlAsDict(sheetID, kv) Then
+        LogWarn SRC, "SyncControl nije procitan -- ciscenje orphan lockova se preskace."
+        Exit Sub
+    End If
+
     Dim updates As Object
     Set updates = CreateObject("Scripting.Dictionary")
     
@@ -529,29 +532,49 @@ End Function
 ' ============================================================
 
 ' Cita ceo SyncControl tab kao Scripting.Dictionary key -> value.
-Private Function ReadSyncControlAsDict(ByVal sheetID As String) As Object
+'
+' AUD-001: FAIL-CLOSED. Vraca False na svaku gresku citanja/parsiranja.
+' Prazan dictionary na neuspelo citanje je ranije vodio u
+' ApplySyncControlUpdates -> WriteSheetData sa NEPOTPUNIM skupom, sto brise
+' lockove drugih stanica i ostale SyncControl parametre. Prolazna mrezna ili
+' JSON greska ne sme da prepise ceo tab.
+'
+'   True  + outDict -> tab procitan (moze biti i prazan)
+'   False           -> citanje/parsiranje nije uspelo, NE upisivati nista
+Private Function TryReadSyncControlAsDict(ByVal sheetID As String, _
+                                          ByRef outDict As Object) As Boolean
     Dim result As Object
-    Set result = CreateObject("Scripting.Dictionary")
-    
     Dim data As Variant
-    data = ReadSheetData(sheetID, SYNC_CONTROL_TAB)
-    If IsEmpty(data) Then
-        Set ReadSyncControlAsDict = result
+    Dim r As Long
+    Dim k As String, v As String
+
+    Set outDict = Nothing
+    Set result = CreateObject("Scripting.Dictionary")
+
+    If Not TryReadSheetData(sheetID, SYNC_CONTROL_TAB, data) Then
+        LogError "TryReadSyncControlAsDict", _
+                 "SyncControl citanje nije uspelo (HTTP/JSON). Upis se preskace da se tab ne prepise nepotpuno."
         Exit Function
     End If
-    
+
+    If IsEmpty(data) Then
+        ' Validan, ali prazan tab.
+        Set outDict = result
+        TryReadSyncControlAsDict = True
+        Exit Function
+    End If
+
     ' Header je red 1, podaci od reda 2
-    Dim r As Long
     For r = LBound(data, 1) + 1 To UBound(data, 1)
-        Dim k As String, v As String
         k = Trim$(CStr(nz(data(r, 1), "")))
         v = Trim$(CStr(nz(data(r, 2), "")))
         If Len(k) > 0 Then
             result(k) = v
         End If
     Next r
-    
-    Set ReadSyncControlAsDict = result
+
+    Set outDict = result
+    TryReadSyncControlAsDict = True
 End Function
 
 ' Read-modify-write SyncControl tab sa specific updates. Cuva sve ostale kljuceve.
@@ -567,10 +590,16 @@ Private Function ApplySyncControlUpdates(ByVal updates As Object) As Boolean
         Exit Function
     End If
     
-    ' Read existing
+    ' Read existing.
+    ' AUD-001: read-modify-write -- ako citanje padne, NE SME se upisivati,
+    ' inace bi WriteSheetData prepisao ceo tab sa samo trenutnim kljucevima.
     Dim existing As Object
-    Set existing = ReadSyncControlAsDict(sheetID)
-    
+    If Not TryReadSyncControlAsDict(sheetID, existing) Then
+        LogError SRC, "SyncControl nije procitan -- update je prekinut bez upisa."
+        ApplySyncControlUpdates = False
+        Exit Function
+    End If
+
     ' Merge updates
     Dim k As Variant
     For Each k In updates.keys

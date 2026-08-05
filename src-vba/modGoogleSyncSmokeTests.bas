@@ -805,11 +805,25 @@ Public Sub RunSheetsJsonParserTests()
     SheetsJsonParserTests_Core
 
     EndSheetsJsonParserRun
+
+    ' HARD GATE: modE2EReleaseGate.E2E_RunVbaSuite meri samo da li je
+    ' Application.Run zavrsio bez neuhvacene greske. Bez ovog raise-a bi
+    ' gate prijavio PASS i kad parser testovi padnu.
+    If m_Failed > 0 Then
+        On Error GoTo 0
+        Err.Raise vbObjectError + 7810, "RunSheetsJsonParserTests", _
+                  "Sheets JSON parser suite FAIL: " & CStr(m_Failed) & _
+                  " od " & CStr(m_Total) & " provera. Vidi Immediate Window / log."
+    End If
+
     Exit Sub
 
 EH:
     LogGoogleSmokeFail "RunSheetsJsonParserTests fatal", Err.description
     EndSheetsJsonParserRun
+
+    Err.Raise vbObjectError + 7811, "RunSheetsJsonParserTests", _
+              "Sheets JSON parser suite je pukao. Vidi Immediate Window / log."
 End Sub
 
 Private Sub SheetsJsonParserTests_Core()
@@ -831,6 +845,9 @@ Private Sub SheetsJsonParserTests_Core()
     Test_ParseValuesJson_InvalidUnicodeEscape
     Test_ParseValuesJson_UnknownEscape
     Test_ParseValuesJson_NonJsonBody
+    Test_ParseValuesJson_TruncatedObjectWithoutValues
+    Test_ParseValuesJson_UnbalancedDocument
+    Test_ParseValuesJson_ValidDocumentShapes
 End Sub
 
 Private Sub EndSheetsJsonParserRun()
@@ -1112,6 +1129,83 @@ Private Sub Test_ParseValuesJson_UnknownEscape()
 
 EH:
     LogGoogleSmokeFail "PARSER NEG: unknown escape", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_TruncatedObjectWithoutValues()
+    ' Skracen odgovor koji jos nije stigao do "values" ne sme da prodje
+    ' kao "validan prazan sheet" -- to bi tiho preskocilo ceo sheet.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{", data), _
+               "PARSER DOC: samo { -> False"
+
+    AssertTrue Not TryParseValuesJson("{""range"":""Sheet1", data), _
+               "PARSER DOC: prekid u range stringu (bez values) -> False"
+
+    AssertTrue Not TryParseValuesJson("{""range"":""Sheet1!A1:Z1000"",""majorDimension"":", data), _
+               "PARSER DOC: prekid posle kljuca (bez values) -> False"
+
+    AssertTrue IsEmpty(data), "PARSER DOC: skracen objekat -> nema podataka"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER DOC: truncated object without values", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_UnbalancedDocument()
+    ' Ceo dokument mora biti uravnotezen, ne samo values niz.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a"",""b""]]", data), _
+               "PARSER DOC: nedostaje zavrsna } -> False"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a"",""b""]}]}", data), _
+               "PARSER DOC: pogresno uparena zagrada -> False"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a""]]} xyz", data), _
+               "PARSER DOC: smece posle root objekta -> False"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a""]]}{""values"":[[""b""]]}", data), _
+               "PARSER DOC: dva root objekta -> False"
+
+    AssertTrue Not TryParseValuesJson("{""meta"":{""a"":1,""values"":[[""x""]]}", data), _
+               "PARSER DOC: nezatvoren ugnjezden objekat -> False"
+
+    AssertTrue IsEmpty(data), "PARSER DOC: neuravnotezen dokument -> nema podataka"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER DOC: unbalanced document", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_ValidDocumentShapes()
+    ' Kontrola u drugom smeru: stroza provera ne sme da obori validne oblike.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue TryParseValuesJson("{""values"":[[""a""]]}  " & vbCrLf, data), _
+               "PARSER DOC: whitespace posle root objekta -> True"
+    AssertEquals "a", CStr(data(1, 1)), "PARSER DOC: whitespace posle root -> podaci ok"
+
+    ' "values" kao sadrzaj celije ne sme da se pomesa sa kljucem.
+    AssertTrue TryParseValuesJson("{""foo"":""values"",""values"":[[""values"",""b""]]}", data), _
+               "PARSER DOC: 'values' kao vrednost/celija -> True"
+    AssertEquals "values", CStr(data(1, 1)), "PARSER DOC: celija 'values' procitana"
+    AssertEquals "b", CStr(data(1, 2)), "PARSER DOC: druga celija netaknuta"
+
+    ' Ugnjezden objekat pre values niza.
+    AssertTrue TryParseValuesJson("{""meta"":{""a"":[1,2]},""values"":[[""x""]]}", data), _
+               "PARSER DOC: ugnjezden objekat pre values -> True"
+    AssertEquals "x", CStr(data(1, 1)), "PARSER DOC: ugnjezden objekat ne kvari celije"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER DOC: valid document shapes", Err.description
 End Sub
 
 Private Sub Test_ParseValuesJson_NonJsonBody()

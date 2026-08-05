@@ -1791,10 +1791,9 @@ Public Function TryParseValuesJson(ByVal json As String, _
     ' gueltige Daten zurueckgegeben. Ein Import haette Zeilen mit
     ' fehlenden Endfeldern lokal committen und die Google-Zeile als
     ' Synced>Master markieren koennen -> Felder dauerhaft verloren.
-    Dim p As Long
-    Dim arrayStart As Long
     Dim rowsColl As Collection
     Dim cellsColl As Collection
+    Dim foundValues As Boolean
     Dim rowCount As Long
     Dim colCount As Long
     Dim result() As Variant
@@ -1807,18 +1806,16 @@ Public Function TryParseValuesJson(ByVal json As String, _
     ' (HTML/Proxy-Fehlerseite mit HTTP 200 darf nicht als "leer" durchgehen.)
     If FirstNonWhitespaceChar(json) <> "{" Then Exit Function
 
-    p = InStr(json, """values""")
-    If p = 0 Then
-        ' Leerer Range -> Google laesst "values" komplett weg.
-        ' Das ist eine gueltige, leere Antwort.
+    ' Das GANZE Dokument muss balanciert sein -- nicht nur das values-Array.
+    ' Sonst gilt z.B. ein abgeschnittenes {"range":"Sheet1 als "leerer Sheet".
+    If Not TryScanJsonDocument(json, rowsColl, foundValues) Then Exit Function
+
+    If Not foundValues Then
+        ' Gueltiges Objekt ohne "values" -> leerer Range (Google laesst den
+        ' Key bei leerem Bereich komplett weg).
         TryParseValuesJson = True
         Exit Function
     End If
-
-    arrayStart = InStr(p + Len("""values"""), json, "[")
-    If arrayStart = 0 Then Exit Function
-
-    If Not TryScanJsonValuesArray(json, arrayStart, rowsColl) Then Exit Function
 
     rowCount = rowsColl.count
     If rowCount = 0 Then
@@ -1846,39 +1843,59 @@ Public Function TryParseValuesJson(ByVal json As String, _
     TryParseValuesJson = True
 End Function
 
-Private Function TryScanJsonValuesArray(ByRef json As String, _
-                                        ByVal arrayStart As Long, _
-                                        ByRef outRows As Collection) As Boolean
-    ' Stateful Scanner ueber das values-Array ab arrayStart (Position von "[").
-    ' Liefert Collection von Collections (Zeilen -> Zellen als String).
+Private Function TryScanJsonDocument(ByRef json As String, _
+                                     ByRef outRows As Collection, _
+                                     ByRef outFoundValues As Boolean) As Boolean
+    ' Stateful Scanner ueber das GANZE JSON-Dokument.
+    ' Liefert nebenbei die Zeilen des "values"-Arrays
+    ' (Collection von Collections, Zellen als String).
     '
     ' Regeln:
     '   - "\" escaped das naechste Zeichen, "\""" toggelt inQuote also NICHT
     '   - Whitespace ausserhalb von Strings wird ignoriert (prettyPrint JSON)
     '   - "," / "]" trennen nur ausserhalb von Strings
+    '   - "values" wird nur als TOP-LEVEL KEY erkannt (Stack = "{" und
+    '     direkt gefolgt von ":"), nie als Zellinhalt
     '
-    ' FAIL-CLOSED: True nur wenn das Array sauber geschlossen wurde
-    ' (depth zurueck auf 0, kein offener String, keine offene Zeile) UND
-    ' jeder Escape gueltig war. Eine angefangene Zeile wird NIE uebernommen.
+    ' FAIL-CLOSED: True nur wenn
+    '   - der Klammer-Stack sauber leer ist (jede "]" schliesst ein "[",
+    '     jede "}" ein "{"),
+    '   - das Root-Objekt geschlossen wurde und danach nur Whitespace folgt,
+    '   - kein String offen ist,
+    '   - keine Zeile offen ist,
+    '   - ein gefundenes values-Array auch geschlossen wurde,
+    '   - jeder Escape gueltig ist (\uXXXX mit genau 4 Hex-Ziffern).
+    ' Eine angefangene Zeile wird NIE uebernommen.
+    '
+    ' Das ist bewusst KEIN vollstaendiger JSON-Validator (Kommas/Typen werden
+    ' nicht geprueft) -- Ziel ist das Erkennen von abgeschnittenen und
+    ' beschaedigten Antworten.
     Dim rowsColl As Collection
     Dim cellsColl As Collection
     Dim i As Long
     Dim n As Long
-    Dim depth As Long
+    Dim stack As String
     Dim inQuote As Boolean
+    Dim inRow As Boolean
     Dim cellStarted As Boolean
-    Dim closedOk As Boolean
+    Dim rootClosed As Boolean
+    Dim inValues As Boolean
+    Dim valuesClosed As Boolean
+    Dim expectValues As Boolean
+    Dim valuesRoot As Long
+    Dim lastString As String
     Dim ch As String
     Dim esc As String
     Dim hex4 As String
     Dim buf As String
 
     Set outRows = Nothing
+    outFoundValues = False
+
     Set rowsColl = New Collection
 
     n = Len(json)
-    depth = 1
-    i = arrayStart + 1
+    i = 1
 
     Do While i <= n
         ch = Mid$(json, i, 1)
@@ -1918,43 +1935,87 @@ Private Function TryScanJsonValuesArray(ByRef json As String, _
                 End Select
             ElseIf ch = """" Then
                 inQuote = False
+                If Not inRow Then
+                    lastString = buf
+                    buf = ""
+                End If
             Else
                 buf = buf & ch
             End If
         Else
+            ' Nach dem Root-Objekt darf nur noch Whitespace kommen.
+            If rootClosed Then
+                If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then Exit Function
+            End If
+
             Select Case ch
                 Case """"
                     inQuote = True
-                    cellStarted = True
-                Case "["
-                    depth = depth + 1
-                    If depth = 2 Then
-                        Set cellsColl = New Collection
+                    If inRow Then
+                        cellStarted = True
+                    Else
                         buf = ""
-                        cellStarted = False
                     End If
-                Case "]"
-                    If depth = 2 Then
-                        If cellStarted Then cellsColl.Add buf
-                        rowsColl.Add cellsColl
-                        Set cellsColl = Nothing
+                Case "{"
+                    stack = stack & "{"
+                    expectValues = False
+                Case "["
+                    If Len(stack) = 0 Then Exit Function    ' Root muss ein Objekt sein
+                    stack = stack & "["
+
+                    If expectValues And Not outFoundValues Then
+                        valuesRoot = Len(stack)
+                        outFoundValues = True
+                        inValues = True
+                    ElseIf inValues And Len(stack) = valuesRoot + 1 Then
+                        Set cellsColl = New Collection
+                        inRow = True
                         buf = ""
                         cellStarted = False
                     End If
 
-                    depth = depth - 1
-                    If depth <= 0 Then
-                        closedOk = True
-                        Exit Do
-                    End If
-                Case ","
-                    If depth = 2 Then
-                        cellsColl.Add buf
+                    expectValues = False
+                Case "}"
+                    If Right$(stack, 1) <> "{" Then Exit Function
+                    stack = Left$(stack, Len(stack) - 1)
+                    If Len(stack) = 0 Then rootClosed = True
+                    lastString = ""
+                Case "]"
+                    If Right$(stack, 1) <> "[" Then Exit Function
+
+                    If inValues And inRow And Len(stack) = valuesRoot + 1 Then
+                        If cellStarted Then cellsColl.Add buf
+                        rowsColl.Add cellsColl
+                        Set cellsColl = Nothing
+                        inRow = False
                         buf = ""
                         cellStarted = False
                     End If
+
+                    stack = Left$(stack, Len(stack) - 1)
+
+                    If inValues And Len(stack) = valuesRoot - 1 Then
+                        inValues = False
+                        valuesClosed = True
+                    End If
+
+                    lastString = ""
+                Case ":"
+                    If Not inRow Then
+                        If lastString = "values" And stack = "{" Then expectValues = True
+                        lastString = ""
+                    End If
+                Case ","
+                    If inRow Then
+                        cellsColl.Add buf
+                        buf = ""
+                        cellStarted = False
+                    Else
+                        lastString = ""
+                        expectValues = False
+                    End If
                 Case Else
-                    If depth = 2 Then
+                    If inRow Then
                         If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then
                             buf = buf & ch
                             cellStarted = True
@@ -1966,14 +2027,17 @@ Private Function TryScanJsonValuesArray(ByRef json As String, _
         i = i + 1
     Loop
 
-    ' Abgeschnittenes JSON: offener String, offene Zeile oder fehlendes "]]"
-    ' -> KEINE Teildaten zurueckgeben.
-    If Not closedOk Then Exit Function
+    ' Abgeschnittenes JSON: offener String, offene Zeile, offene Klammer
+    ' oder nicht geschlossenes values-Array -> KEINE Teildaten zurueckgeben.
     If inQuote Then Exit Function
+    If Len(stack) <> 0 Then Exit Function
+    If Not rootClosed Then Exit Function
+    If inRow Then Exit Function
     If Not cellsColl Is Nothing Then Exit Function
+    If outFoundValues And Not valuesClosed Then Exit Function
 
     Set outRows = rowsColl
-    TryScanJsonValuesArray = True
+    TryScanJsonDocument = True
 End Function
 
 Private Function FirstNonWhitespaceChar(ByRef s As String) As String
