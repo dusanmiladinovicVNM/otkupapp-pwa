@@ -280,7 +280,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTPREMNICA
     End If
 
-    RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, brBroj, COL_OTP_STANICA, SRC
+    RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, brBroj, SRC, COL_OTP_STANICA
 
     Dim colBr As Long, colID As Long, colStorno As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
@@ -452,8 +452,6 @@ Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 
-    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_KUPAC, SRC
-
     If Not StornoZbirna(brojZbirne) Then
         Err.Raise ERR_STORNO_BASE + 3, SRC, _
                   "StornoZbirna nije uspeo. BrojZbirne=" & brojZbirne
@@ -492,6 +490,12 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
 
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
     colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, SRC)
+
+    ' Guard je u CORE-u (ne u _TX wrapperu): StornoZbirna zovu i SIMPLE/DUPLI
+    ' putanje i kaskade preko StornoZbirnaIDetach_TX, pa sve moraju biti pokrivene.
+    ' Vlasnik zbirne = vozac (broj se generise po vozacu) + kupac (kome pripada).
+    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
+                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
 
     Dim foundAny As Boolean
     Dim changedCount As Long
@@ -639,7 +643,7 @@ Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String) As Boolean
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_PRIJEMNICA
     End If
 
-    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, COL_PRJ_KUPAC, SRC
+    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC
 
     Dim colBr As Long, colID As Long, colStorno As Long
     colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
@@ -2008,23 +2012,29 @@ End Sub
 
 ' Storno po BROJU dokumenta zahvata SVE aktivne redove tog broja (Klasa I + II
 ' dele broj). Broj medjutim nije globalno jedinstven: GenerateBrojPrijemnice
-' racuna sekvencu po kupcu, pa dva kupca istog dana mogu imati "1/ddmmyy".
-' Bez ove provere storno jednog dokumenta tiho stornira i tudji.
+' racuna sekvencu po kupcu a x-deo je fiksno "1", pa dva kupca istog dana mogu
+' imati "1/ddmmyy". Bez ove provere storno jednog dokumenta tiho stornira i tudji.
 '
 ' Guard: ako aktivni redovi broja pripadaju vise od jednog vlasnika -> greska
 ' unutar transakcije (rollback, nijedan red nije promenjen). Za normalan slucaj
 ' (jedan vlasnik, obe klase) ponasanje je nepromenjeno.
 '
-' Puni identitetski storno (po PK/GeneracijaID) je zaseban paket -- ovo je zastita
-' od tihe destrukcije do tada.
-Private Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
-                                       ByVal brojCol As String, _
-                                       ByVal broj As String, _
-                                       ByVal vlasnikCol As String, _
-                                       ByVal sourceName As String)
-    Dim cVl As Long
-    cVl = GetColumnIndex(tblName, vlasnikCol)
-    If cVl = 0 Then Exit Sub                      ' sema bez vlasnik kolone -> no-op
+' vlasnikCols: jedna ili vise kolona koje cine vlasnika (zbirna = VozacID+KupacID,
+' jer se broj generise po vozacu a dokument pripada kupcu). Sve moraju postojati --
+' RequireColumnIndex, NE fail-open: schema drift ne sme da ugasi safety guard.
+'
+' Poziva se iz SVAKE putanje koja mutira po broju (wrapperi u modStorno + core
+' StornoZbirna + atomic varijante u modStornoFlow). Puni identitetski storno
+' (po PK/GeneracijaID) je zaseban paket -- ovo je zastita od tihe destrukcije.
+Public Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
+                                      ByVal brojCol As String, _
+                                      ByVal broj As String, _
+                                      ByVal sourceName As String, _
+                                      ParamArray vlasnikCols() As Variant)
+    If UBound(vlasnikCols) < LBound(vlasnikCols) Then
+        Err.Raise ERR_STORNO_BASE + 12, sourceName, _
+                  "RequireJedanVlasnikPoBroju: nije zadata nijedna vlasnik kolona."
+    End If
 
     Dim data As Variant
     data = GetTableData(tblName)
@@ -2032,20 +2042,28 @@ Private Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
 
     Dim cBr As Long, cSt As Long
     cBr = RequireColumnIndex(tblName, brojCol, sourceName)
-    cSt = GetColumnIndex(tblName, COL_STORNIRANO)
+    cSt = RequireColumnIndex(tblName, COL_STORNIRANO, sourceName)
+
+    Dim cVl() As Long
+    ReDim cVl(LBound(vlasnikCols) To UBound(vlasnikCols))
+
+    Dim j As Long
+    For j = LBound(vlasnikCols) To UBound(vlasnikCols)
+        cVl(j) = RequireColumnIndex(tblName, CStr(vlasnikCols(j)), sourceName)
+    Next j
 
     Dim vlasnici As Object
     Set vlasnici = CreateObject("Scripting.Dictionary")
 
-    Dim i As Long, v As String
+    Dim i As Long, k As String
     For i = 1 To UBound(data, 1)
         If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then
-            If cSt = 0 Then
-                v = Trim$(NzToText(data(i, cVl)))
-                If Not vlasnici.Exists(v) Then vlasnici.Add v, 1
-            ElseIf Not IsStorniranoValue(data(i, cSt)) Then
-                v = Trim$(NzToText(data(i, cVl)))
-                If Not vlasnici.Exists(v) Then vlasnici.Add v, 1
+            If Not IsStorniranoValue(data(i, cSt)) Then
+                k = ""
+                For j = LBound(cVl) To UBound(cVl)
+                    k = k & "|" & Trim$(NzToText(data(i, cVl(j))))
+                Next j
+                If Not vlasnici.Exists(k) Then vlasnici.Add k, 1
             End If
         End If
     Next i
@@ -2053,9 +2071,9 @@ Private Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
     If vlasnici.count > 1 Then
         Err.Raise ERR_STORNO_BASE + 11, sourceName, _
                   "Broj '" & broj & "' nije jedinstven: aktivni dokumenti pripadaju " & _
-                  CStr(vlasnici.count) & " razlicita vlasnika (" & vlasnikCol & "). " & _
-                  "Storno po broju bi zahvatio i tudji dokument. Storniraj pojedinacno " & _
-                  "(po ID-u dokumenta) ili razdvoj brojeve."
+                  CStr(vlasnici.count) & " razlicita vlasnika. Storno po broju bi " & _
+                  "zahvatio i tudji dokument. Storniraj pojedinacno (po ID-u dokumenta) " & _
+                  "ili razdvoj brojeve."
     End If
 End Sub
 

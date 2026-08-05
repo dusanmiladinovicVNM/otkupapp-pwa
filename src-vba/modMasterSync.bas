@@ -2689,7 +2689,7 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
         ' Generacija (nasledjuje se od aktivnih redova istog BrojZbirne, inace nova)
         ' -- PWA import ne sme da ostavi red bez generacije, prefill je cita.
         ApplyGeneracijaID TBL_ZBIRNA, result, COL_ZBR_BROJ, brojZbirne, _
-                          COL_ZBR_KUPAC, kupacID
+                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
 
         LogInfo "ImportRowToTblZbirna", "Importiert: " & newID & " BrojZbirne=" & brojZbirne & _
                 " | " & vozacID & " | " & kupacID & " | " & ukupnoKol & "kg"

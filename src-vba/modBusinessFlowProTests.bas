@@ -93,6 +93,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_GeneracijaIDNaSavePutanji
     Test_GeneracijaNePrelaziVlasnika
     Test_StornoPoBrojuOdbijaDvaVlasnika
+    Test_StornoGuardNaSvimPutanjama
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1644,6 +1645,7 @@ End Sub
 '   R07 SaveZbirna upisuje po IMENU kolone (BuildZbirnaRowData)
 '   R08 OM ulaz: smer ambalaze je obavezan (core guard u SaveOMUlaz_TX)
 '   R09 storno po broju sa dva vlasnika je odbijen (ne stornira tudji dokument)
+'   R10 isti guard vazi i na ISPRAVKA/DUPLI/SIMPLE correction putanjama
 ' ============================================================
 
 Private Sub Test_ProsekGajbeExcludesStornirano()
@@ -1942,6 +1944,105 @@ Private Function RowIsStornirano(ByVal tableName As String, ByVal idColumn As St
     RowIsStornirano = (UCase$(Trim$(CStr(nz(GetValueByKey(tableName, idColumn, idValue, _
                                                           COL_STORNIRANO), "")))) = "DA")
 End Function
+
+' Guard mora da vazi na SVIM number-only putanjama, ne samo na direktnom
+' StornoPrijemnicaByBroj_TX: ISPRAVKA/DUPLI otpremnice idu kroz atomic helper,
+' a SIMPLE/DUPLI zbirna kroz core StornoZbirna.
+Private Sub Test_StornoGuardNaSvimPutanjama()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("STOPUT")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    ' --- OTPREMNICA: isti broj na DVE stanice -> ISPRAVKA i DUPLI moraju pasti ---
+    Dim brojOtp As String
+    brojOtp = TEST_PREFIX & "-OTP-2ST-" & scenario
+
+    Dim otpA As String, otpB As String
+    otpA = SaveOtpremnica_TX(testDate, TEST_ST_ID, TEST_VOZ_ID, brojOtp, "", _
+                             TEST_VRSTA, TEST_SORTA, 100#, 10#, TEST_TIP_AMB, 10, KLASA_I)
+    otpB = SaveOtpremnica_TX(testDate, TEST_HLAD_ST_ID, TEST_VOZ_ID, brojOtp, "", _
+                             TEST_VRSTA, TEST_SORTA, 80#, 10#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertTrue Len(otpA) > 0 And Len(otpB) > 0, _
+               "Guard putanje: otpremnice istog broja na dve stanice kreirane"
+
+    Dim rOtp As Object
+    Set rOtp = RunOtpremnicaCorrection(brojOtp, SV_MODE_DUPLI, True)
+    AssertFalse CBool(rOtp("success")), _
+                "Guard putanje: DUPLI otpremnice sa dva vlasnika je odbijen"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+               "Guard putanje: otpremnica stanice A ostaje aktivna"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+               "Guard putanje: otpremnica stanice B ostaje aktivna"
+
+    Set rOtp = RunOtpremnicaCorrection(brojOtp, SV_MODE_ISPRAVKA, True)
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpA), _
+               "Guard putanje: ISPRAVKA ne stornira otpremnicu stanice A"
+    AssertTrue Not RowIsStornirano(TBL_OTPREMNICA, COL_OTP_ID, otpB), _
+               "Guard putanje: ISPRAVKA ne stornira otpremnicu stanice B"
+
+    ' --- ZBIRNA: isti broj kod dva kupca -> SIMPLE i DUPLI moraju pasti ---
+    Dim brojZbr As String
+    brojZbr = TEST_PREFIX & "-ZBR-2KUP-" & scenario
+
+    Dim zbrA As String, zbrB As String
+    zbrA = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbr, TEST_KUP_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         100#, TEST_TIP_AMB, 10, KLASA_I)
+    zbrB = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbr, TEST_KUP2_ID, _
+                         "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                         80#, TEST_TIP_AMB, 8, KLASA_I)
+    AssertTrue Len(zbrA) > 0 And Len(zbrB) > 0, _
+               "Guard putanje: zbirne istog broja kod dva kupca kreirane"
+
+    Dim rZbr As Object
+    Set rZbr = RunSimpleStornoZbirna(brojZbr)
+    AssertFalse CBool(rZbr("success")), _
+                "Guard putanje: SIMPLE storno zbirne sa dva vlasnika je odbijen"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "Guard putanje: zbirna kupca A ostaje aktivna"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "Guard putanje: zbirna kupca B ostaje aktivna"
+
+    Set rZbr = RunZbirnaCorrection(brojZbr, SV_MODE_DUPLI, True)
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrA), _
+               "Guard putanje: DUPLI zbirne ne stornira kupca A"
+    AssertTrue Not RowIsStornirano(TBL_ZBIRNA, COL_ZBR_ID, zbrB), _
+               "Guard putanje: DUPLI zbirne ne stornira kupca B"
+
+    ' --- PRIJEMNICA kroz correction dispatch (ne samo direktan helper) ---
+    Dim brojZbrOK As String, brojPrij As String
+    brojZbrOK = TEST_PREFIX & "-ZBR-PC-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-2KUP-" & scenario
+
+    AssertTrue Len(SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbrOK, TEST_KUP_ID, _
+                                 "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                                 100#, TEST_TIP_AMB, 0, KLASA_I)) > 0, _
+               "Guard putanje: fixture zbirna za prijemnice kreirana"
+
+    Dim prjA As String, prjB As String
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbrOK, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brojPrij, brojZbrOK, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "Guard putanje: prijemnice istog broja kod dva kupca kreirane"
+
+    Dim rPrj As Object
+    Set rPrj = RunPrijemnicaCorrection(brojPrij, SV_MODE_DUPLI, True)
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjA), _
+               "Guard putanje: correction prijemnice ne stornira kupca A"
+    AssertTrue Not RowIsStornirano(TBL_PRIJEMNICA, COL_PRJ_ID, prjB), _
+               "Guard putanje: correction prijemnice ne stornira kupca B"
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_StornoGuardNaSvimPutanjama", Err.Number, Err.description
+End Sub
 
 ' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
 ' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.

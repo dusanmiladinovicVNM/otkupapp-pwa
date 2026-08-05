@@ -1601,6 +1601,10 @@ Private Function StornoOtpremnicaBrojAtomic_TX(ByVal broj As String) As Boolean
     Dim ids As Collection: Set ids = New Collection
     Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(data) Then Exit Function
+    ' ISPRAVKA/DUPLI otpremnice idu OVUDA (ne kroz StornoOtpremnicaByBroj_TX), pa
+    ' i ova putanja mora imati guard protiv storna tudjeg dokumenta pod istim brojem.
+    RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, broj, SRC, COL_OTP_STANICA
+
     Dim cBr As Long, cId As Long, cSt As Long
     cBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
     cId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)

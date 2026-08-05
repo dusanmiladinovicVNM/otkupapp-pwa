@@ -630,7 +630,7 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
 
     If newRowZbr > 0 Then
         ApplyGeneracijaID TBL_ZBIRNA, newRowZbr, COL_ZBR_BROJ, brojZbirne, _
-                          COL_ZBR_KUPAC, kupacID
+                          COL_ZBR_VOZAC, vozacID, COL_ZBR_KUPAC, kupacID
 
         SaveZbirna = newID
     Else
@@ -881,6 +881,15 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
                                    ByVal brojCol As String, _
                                    ByVal broj As String, _
                                    ParamArray scopePairs() As Variant) As String
+    GeneracijaIDZaBroj = GeneracijaIDZaBrojArr(tableName, brojCol, broj, _
+                                               ScopePairsToArray(scopePairs, "modDokumenta.GeneracijaIDZaBroj"))
+End Function
+
+' Radna varijanta (scope kao obican niz) -- ParamArray se ne prosledjuje dalje.
+Private Function GeneracijaIDZaBrojArr(ByVal tableName As String, _
+                                       ByVal brojCol As String, _
+                                       ByVal broj As String, _
+                                       ByVal sc As Variant) As String
     Const SRC As String = "modDokumenta.GeneracijaIDZaBroj"
 
     Dim cGen As Long
@@ -888,10 +897,6 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
 
     Dim target As String
     target = Trim$(broj)
-
-    ' Parove kopiram u lokalni niz -- ParamArray se ne prosledjuje dalje.
-    Dim sc As Variant
-    sc = ScopePairsToArray(scopePairs, SRC)
 
     If Len(target) > 0 Then
         Dim data As Variant
@@ -943,13 +948,13 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
             Next r
 
             If Len(bestGen) > 0 Then
-                GeneracijaIDZaBroj = bestGen
+                GeneracijaIDZaBrojArr = bestGen
                 Exit Function
             End If
         End If
     End If
 
-    GeneracijaIDZaBroj = NewGeneracijaID(tableName)
+    GeneracijaIDZaBrojArr = NewGeneracijaID(tableName)
 End Function
 
 ' ParamArray -> obican niz (parni: kolona, neparni: vrednost). Prazan -> Empty.
@@ -995,7 +1000,7 @@ End Function
 ' ne idu kroz Save* (PWA import, invariant rekalkulacija).
 Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, _
                              ByVal brojCol As String, ByVal broj As String, _
-                             ByVal vlasnikCol As String, ByVal vlasnikID As String)
+                             ParamArray vlasnikPairs() As Variant)
     Const SRC As String = "modDokumenta.ApplyGeneracijaID"
 
     If rowIndex <= 0 Then
@@ -1003,9 +1008,12 @@ Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, 
                   "Neispravan red za upis generacije (" & tableName & ")."
     End If
 
-    ' Identitet dokumenta = broj + vlasnik (stanica/kupac): broj sam nije jedinstven.
+    ' Identitet dokumenta = broj + vlasnik: broj sam nije jedinstven. Vlasnik je
+    ' otpremnica -> StanicaID, prijemnica -> KupacID, zbirna -> VozacID + KupacID
+    ' (broj zbirne se generise po vozacu, a dokument pripada kupcu).
     RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
-                      GeneracijaIDZaBroj(tableName, brojCol, broj, vlasnikCol, vlasnikID), SRC
+                      GeneracijaIDZaBrojArr(tableName, brojCol, broj, _
+                                            ScopePairsToArray(vlasnikPairs, SRC)), SRC
 End Sub
 
 ' Bira redove dokumenta za prefill ispravke (frmDokumenta.Prefill*FromStornirana).

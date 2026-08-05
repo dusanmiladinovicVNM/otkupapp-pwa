@@ -403,7 +403,7 @@ Private Sub ApplyKlasaRecalc(ByVal SRC As String, ByVal brojZbirne As String, _
     ' Generacija: nasledjuje se od aktivnih redova istog broja (druga klasa iste
     ' rekalkulacije), inace nova. Bez ovoga bi sistemski upis ostao bez generacije.
     ApplyGeneracijaID TBL_ZBIRNA, newRow, COL_ZBR_BROJ, brojZbirne, _
-                      COL_ZBR_KUPAC, kupac
+                      COL_ZBR_VOZAC, vozac, COL_ZBR_KUPAC, kupac
 End Sub
 
 ' Audit izmene IZDATE zbirne bez re-verzije (in-place recalc). Durabilan trag u
