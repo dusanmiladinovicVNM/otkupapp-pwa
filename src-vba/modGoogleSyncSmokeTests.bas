@@ -33,6 +33,10 @@ Public Sub RunGoogleSyncSmokeSuite()
 
     BeginGoogleSmokeRun
 
+    ' Offline parser testovi (AUD-001) idu prvi -- ne traze mrezu,
+    ' a registrovani su ovde da ih release gate uvek pokrene.
+    SheetsJsonParserTests_Core
+
     Test_GoogleConfigTableSchema
     Test_GoogleConfigRequiredKeys
     Test_GoogleAuthAccessToken
@@ -376,6 +380,8 @@ Public Sub RunMasterSyncSmokeSuite()
     Test_MasterSyncFixtureImportAndWriteBack
     Test_MasterSyncDuplicateClientRecordID
     Test_MasterSyncMissingClientRecordID
+    Test_MasterSyncReadFailureIsFatalAndSkipsImport
+    Test_MasterSyncEmptySheetIsNotAnError
 
     tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
@@ -536,6 +542,112 @@ End Sub
 ' MASTER SYNC TEST HELPERS
 ' ============================================================
 
+Private Sub Test_MasterSyncReadFailureIsFatalAndSkipsImport()
+    ' AUD-001 integracija: kad citanje/parsiranje sheeta padne, import
+    ' mora da stane PRE bilo kakvog reda i PRE writeback-a, i da se
+    ' oznaci kao fatal sync greska (da ceo ciklus ne prijavi uspeh).
+    On Error GoTo EH
+
+    Dim badSpreadsheetID As String
+    Dim data As Variant
+    Dim imported As Long
+    Dim skipped As Long
+    Dim errors As Long
+    Dim rowsBefore As Long
+    Dim rowsAfter As Long
+
+    badSpreadsheetID = "AUD001-INVALID-SPREADSHEET-" & m_RunID
+
+    ' Ocisti zaostalo stanje flag-a iz prethodnih testova.
+    Call TestHook_ConsumePWAFatalSyncError
+
+    AssertTrue Not TryReadSheetData(badSpreadsheetID, "Sheet1", data), _
+               "READ FAIL: TryReadSheetData vraca False na neuspelo citanje"
+    AssertTrue IsEmpty(data), "READ FAIL: nema podataka posle neuspelog citanja"
+
+    rowsBefore = CountTblOtkupRows()
+
+    imported = 0
+    skipped = 0
+    errors = 0
+    Call TestHook_ImportOneOTKSheet(badSpreadsheetID, "OTK-AUD001-INVALID", _
+                                    imported, skipped, errors)
+
+    rowsAfter = CountTblOtkupRows()
+
+    AssertEquals "0", CStr(imported), "READ FAIL: nijedan red nije uvezen"
+    AssertEquals "0", CStr(skipped), "READ FAIL: nijedan red nije ni obradjen"
+    AssertTrue errors >= 1, "READ FAIL: greska je prebrojana"
+    AssertEquals CStr(rowsBefore), CStr(rowsAfter), _
+                 "READ FAIL: tblOtkup nepromenjen"
+    AssertTrue TestHook_ConsumePWAFatalSyncError(), _
+               "READ FAIL: oznaceno kao fatal sync greska (nema tihog preskakanja)"
+
+    LogGoogleSmokePass "MASTER SYNC: read/parse failure je fatal, bez importa i writeback-a"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "MASTER SYNC: read failure fatal", Err.description
+End Sub
+
+Private Sub Test_MasterSyncEmptySheetIsNotAnError()
+    ' Druga strana istog pravila: VALIDAN ali prazan sheet
+    ' (Google izostavlja "values") NIJE greska -- True + Empty.
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim emptySpreadsheetID As String
+    Dim emptyName As String
+    Dim data As Variant
+    Dim imported As Long
+    Dim skipped As Long
+    Dim errors As Long
+
+    folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+    AssertTrue Len(folderID) > 0, "EMPTY SHEET: GOOGLE_PWA_FOLDER_ID present"
+
+    emptyName = "OTK-TST-EMPTY-" & m_RunID
+    emptySpreadsheetID = CreateSpreadsheet(emptyName, folderID)
+    AssertTrue Len(Trim$(emptySpreadsheetID)) > 0, "EMPTY SHEET: fixture kreiran"
+
+    Call TestHook_ConsumePWAFatalSyncError
+
+    AssertTrue TryReadSheetData(emptySpreadsheetID, "Sheet1", data), _
+               "EMPTY SHEET: TryReadSheetData vraca True za prazan sheet"
+    AssertTrue IsEmpty(data), "EMPTY SHEET: prazan sheet daje Empty"
+
+    imported = 0
+    skipped = 0
+    errors = 0
+    Call TestHook_ImportOneOTKSheet(emptySpreadsheetID, emptyName, _
+                                    imported, skipped, errors)
+
+    AssertEquals "0", CStr(imported), "EMPTY SHEET: nista nije uvezeno"
+    AssertEquals "0", CStr(errors), "EMPTY SHEET: prazan sheet NIJE greska"
+    AssertTrue Not TestHook_ConsumePWAFatalSyncError(), _
+               "EMPTY SHEET: prazan sheet ne podize fatal sync flag"
+
+    Call TrashGoogleDriveFile(emptySpreadsheetID)
+
+    LogGoogleSmokePass "MASTER SYNC: prazan sheet je validan (True + Empty)"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "MASTER SYNC: empty sheet not an error", Err.description
+
+    On Error Resume Next
+    If Len(Trim$(emptySpreadsheetID)) > 0 Then Call TrashGoogleDriveFile(emptySpreadsheetID)
+End Sub
+
+Private Function CountTblOtkupRows() As Long
+    Dim data As Variant
+
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    CountTblOtkupRows = UBound(data, 1)
+End Function
+
 Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
                                      ByVal syncStatus As String) As Variant
     Dim data(1 To 2, 1 To 22) As Variant
@@ -690,12 +802,7 @@ Public Sub RunSheetsJsonParserTests()
     Debug.Print "SHEETS JSON PARSER SUITE START " & m_RunID
     Debug.Print String$(60, "-")
 
-    Test_ParseValuesJson_SpaceAfterCommaPreserved
-    Test_ParseValuesJson_EscapedQuote
-    Test_ParseValuesJson_UnicodeEscape
-    Test_ParseValuesJson_EmbeddedRowSeparator
-    Test_ParseValuesJson_WhitespaceAndEscapes
-    Test_ParseValuesJson_NoValues
+    SheetsJsonParserTests_Core
 
     EndSheetsJsonParserRun
     Exit Sub
@@ -703,6 +810,27 @@ Public Sub RunSheetsJsonParserTests()
 EH:
     LogGoogleSmokeFail "RunSheetsJsonParserTests fatal", Err.description
     EndSheetsJsonParserRun
+End Sub
+
+Private Sub SheetsJsonParserTests_Core()
+    ' Offline testovi -- pozivaju se i samostalno (RunSheetsJsonParserTests)
+    ' i iz RunGoogleSyncSmokeSuite, da ne mogu ostati nepokrenuti u gate-u.
+
+    ' --- pozitivni (validan odgovor)
+    Test_ParseValuesJson_SpaceAfterCommaPreserved
+    Test_ParseValuesJson_EscapedQuote
+    Test_ParseValuesJson_UnicodeEscape
+    Test_ParseValuesJson_EmbeddedRowSeparator
+    Test_ParseValuesJson_WhitespaceAndEscapes
+    Test_ParseValuesJson_NoValues
+
+    ' --- negativni (fail-closed)
+    Test_ParseValuesJson_TruncatedInsideString
+    Test_ParseValuesJson_TruncatedAfterCells
+    Test_ParseValuesJson_MissingClosingBrackets
+    Test_ParseValuesJson_InvalidUnicodeEscape
+    Test_ParseValuesJson_UnknownEscape
+    Test_ParseValuesJson_NonJsonBody
 End Sub
 
 Private Sub EndSheetsJsonParserRun()
@@ -856,16 +984,151 @@ EH:
 End Sub
 
 Private Sub Test_ParseValuesJson_NoValues()
-    ' Prazan/nevalidan odgovor -> Empty (nepromenjeno ponasanje).
+    ' Prazan ali VALIDAN odgovor: True + Empty (ne sme da bude greska --
+    ' Google izostavlja "values" kad je range prazan).
     On Error GoTo EH
 
+    Dim data As Variant
+
+    AssertTrue TryParseValuesJson("{""range"":""Sheet1!A1:Z1000""}", data), _
+               "PARSER: bez values kljuca -> validan odgovor (True)"
+    AssertTrue IsEmpty(data), "PARSER: bez values kljuca -> Empty"
+
+    AssertTrue TryParseValuesJson("{""values"":[]}", data), _
+               "PARSER: prazan values niz -> validan odgovor (True)"
+    AssertTrue IsEmpty(data), "PARSER: prazan values niz -> Empty"
+
     AssertTrue IsEmpty(ParseValuesJson("{""range"":""Sheet1!A1:Z1000""}")), _
-               "PARSER: bez values -> Empty"
-    AssertTrue IsEmpty(ParseValuesJson("{""values"":[]}")), _
-               "PARSER: prazan values niz -> Empty"
+               "PARSER: wrapper bez values -> Empty"
     Exit Sub
 
 EH:
     LogGoogleSmokeFail "PARSER: no values", Err.description
+End Sub
+
+' ============================================================
+' NEGATIVNI PARSER TESTOVI (fail-closed)
+'
+' Kljucno pravilo: defektan ili skracen JSON NE SME da vrati
+' parcijalne podatke. Parcijalan red bi mogao proci validaciju,
+' biti lokalno commit-ovan i ack-ovan na Google-u kao Synced>Master
+' -> polja sa kraja reda trajno izgubljena.
+' ============================================================
+
+Private Sub Test_ParseValuesJson_TruncatedInsideString()
+    ' Odgovor prekinut usred string-celije.
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim json As String
+
+    json = "{""values"":[[""KooperantID"",""Napomena""],[""K-001"",""nedovrsen tek"
+
+    AssertTrue Not TryParseValuesJson(json, data), _
+               "PARSER NEG: prekid usred stringa -> False"
+    AssertTrue IsEmpty(data), "PARSER NEG: prekid usred stringa -> nema parcijalnih podataka"
+    AssertTrue IsEmpty(ParseValuesJson(json)), _
+               "PARSER NEG: wrapper na prekid usred stringa -> Empty"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: truncated inside string", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_TruncatedAfterCells()
+    ' Odgovor prekinut posle nekoliko ZAVRSENIH celija poslednjeg reda.
+    ' Ovo je najopasniji slucaj: prvi red je kompletan, drugi red ima
+    ' validna obavezna polja, ali mu nedostaje rep.
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim json As String
+
+    json = "{""values"":[[""ClientRecordID"",""Kolicina"",""Napomena""]," & _
+           "[""CR-001"",""125.5"","
+
+    AssertTrue Not TryParseValuesJson(json, data), _
+               "PARSER NEG: prekid posle nekoliko celija -> False"
+    AssertTrue IsEmpty(data), _
+               "PARSER NEG: nedovrsen red se NE vraca kao validan"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: truncated after cells", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_MissingClosingBrackets()
+    ' Nedostaje zatvaranje reda i/ili values niza.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a"",""b""]", data), _
+               "PARSER NEG: nedostaje zavrsna ] niza -> False"
+    AssertTrue IsEmpty(data), "PARSER NEG: nedostaje ] -> nema podataka"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a"",""b""", data), _
+               "PARSER NEG: nedostaju obe zavrsne zagrade -> False"
+
+    AssertTrue Not TryParseValuesJson("{""values"":", data), _
+               "PARSER NEG: values bez niza -> False"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: missing closing brackets", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_InvalidUnicodeEscape()
+    ' \u12G4 nije validan -- ne sme proci doslovno.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""\u12G4"",""b""]]}", data), _
+               "PARSER NEG: \u12G4 -> False"
+    AssertTrue IsEmpty(data), "PARSER NEG: \u12G4 -> nema podataka"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""\u12""]]}", data), _
+               "PARSER NEG: \u sa manje od 4 cifre -> False"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: invalid unicode escape", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_UnknownEscape()
+    ' Nepoznat escape (\x) i escape presecen na kraju odgovora.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a\xb"",""c""]]}", data), _
+               "PARSER NEG: nepoznat escape \x -> False"
+    AssertTrue IsEmpty(data), "PARSER NEG: nepoznat escape -> nema podataka"
+
+    AssertTrue Not TryParseValuesJson("{""values"":[[""a\", data), _
+               "PARSER NEG: escape presecen na kraju -> False"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: unknown escape", Err.description
+End Sub
+
+Private Sub Test_ParseValuesJson_NonJsonBody()
+    ' HTTP 200 sa HTML/proxy stranicom ne sme da se protumaci kao prazan sheet.
+    On Error GoTo EH
+
+    Dim data As Variant
+
+    AssertTrue Not TryParseValuesJson("<html><body>Proxy error</body></html>", data), _
+               "PARSER NEG: HTML telo -> False"
+    AssertTrue IsEmpty(data), "PARSER NEG: HTML telo -> nema podataka"
+
+    AssertTrue Not TryParseValuesJson("", data), _
+               "PARSER NEG: prazno telo -> False"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "PARSER NEG: non-json body", Err.description
 End Sub
 

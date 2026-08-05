@@ -1261,6 +1261,16 @@ Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Call ImportOneOTKSheet(spreadsheetID, sheetName, outImported, outSkipped, outErrors)
 End Sub
 
+Public Function TestHook_ConsumePWAFatalSyncError() As Boolean
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Liest das Fatal-Sync-Flag und setzt es zurueck, damit Tests
+    ' "read/parse failure ist fatal" vs "leeres Sheet ist ok"
+    ' unterscheiden koennen.
+
+    TestHook_ConsumePWAFatalSyncError = mLastPWAFatalSyncError
+    mLastPWAFatalSyncError = False
+End Function
+
 Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                               ByVal sheetName As String, _
                               ByRef outImported As Long, _
@@ -1274,12 +1284,21 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     On Error GoTo EH
     
     ' Daten lesen (erster Tab)
-    data = ReadSheetData(spreadsheetID, "Sheet1")
+    ' AUD-001: Lese-/Parse-Fehler MUSS fatal sein. Bei defektem oder
+    ' abgeschnittenem JSON darf kein einziger Row-Import und kein
+    ' WriteBackSyncStatus laufen -- sonst wird die Google-Zeile als
+    ' Synced>Master quittiert und nie wieder geliefert.
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneOTKSheet", _
+            "Sheet read/parse failed (HTTP or malformed JSON). Import aborted before any row import or writeback. Sheet=" & sheetName
+        Exit Sub
+    End If
 
     If Not IsEmpty(data) Then
         Debug.Print "Rows: " & UBound(data, 1) & " Cols: " & UBound(data, 2)
     End If
-    
+
     If IsEmpty(data) Then
         LogWarn "ImportOneOTKSheet", "Leeres Sheet: " & sheetName
         Exit Sub
@@ -2349,8 +2368,16 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
     
     On Error GoTo EH
     
-    data = ReadSheetData(spreadsheetID, "Sheet1")
-    
+    ' AUD-001: isti fail-closed model kao ImportOneOTKSheet --
+    ' defektan/skracen JSON ne sme da proizvede ni jedan uvezen red
+    ' ni jedan writeback.
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneVOZSheet", _
+            "Sheet read/parse failed (HTTP or malformed JSON). Import aborted before any row import or writeback. Sheet=" & sheetName
+        Exit Sub
+    End If
+
     If IsEmpty(data) Then
         LogWarn "ImportOneVOZSheet", "Leeres Sheet: " & sheetName
         Exit Sub

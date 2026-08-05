@@ -1175,55 +1175,79 @@ End Function
 
 Public Function ReadSheetData(ByVal spreadsheetID As String, _
                               ByVal tabName As String) As Variant
+    ' Kompatibilitaets-Wrapper: Fehler und "leer" sind hier NICHT
+    ' unterscheidbar (beides Empty). Fuer Sync-Importe MUSS
+    ' TryReadSheetData verwendet werden.
+    Dim data As Variant
+
+    If TryReadSheetData(spreadsheetID, tabName, data) Then
+        ReadSheetData = data
+    Else
+        ReadSheetData = Empty
+    End If
+End Function
+
+Public Function TryReadSheetData(ByVal spreadsheetID As String, _
+                                 ByVal tabName As String, _
+                                 ByRef outData As Variant) As Boolean
+    ' FAIL-CLOSED Read.
+    '
+    '   True  + outData = Array  -> Tab gelesen, Zeilen vorhanden
+    '   True  + outData = Empty  -> Tab gelesen, aber leer
+    '   False                    -> Argument-/Token-/HTTP-/Parse-Fehler.
+    '                               Aufrufer MUSS abbrechen: kein lokaler
+    '                               Import und kein Google Writeback,
+    '                               sonst gehen Zeilen dauerhaft verloren.
     Dim accessToken As String
     Dim url As String
     Dim http As Object
 
+    outData = Empty
+    TryReadSheetData = False
+
     On Error GoTo EH
 
-    If Not RequireGoogleTextArg(spreadsheetID, "spreadsheetID", "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
-
-    If Not RequireGoogleTextArg(tabName, "tabName", "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
+    If Not RequireGoogleTextArg(spreadsheetID, "spreadsheetID", "TryReadSheetData") Then Exit Function
+    If Not RequireGoogleTextArg(tabName, "tabName", "TryReadSheetData") Then Exit Function
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
-        LogError "ReadSheetData", "Kein Access Token"
-        ReadSheetData = Empty
+        LogError "TryReadSheetData", "Kein Access Token"
         Exit Function
     End If
 
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
           "/values/" & UrlEncode(tabName)
 
-    Set http = CreateGoogleHttpRequest("ReadSheetData")
+    Set http = CreateGoogleHttpRequest("TryReadSheetData")
 
     http.Open "GET", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
-    If Not SendGoogleHttpWithRetry(http, "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
+    If Not SendGoogleHttpWithRetry(http, "TryReadSheetData") Then Exit Function
 
     If http.status <> 200 Then
-        LogError "ReadSheetData", _
+        LogError "TryReadSheetData", _
                  "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
                  http.status
-        ReadSheetData = Empty
         Exit Function
     End If
 
-    ReadSheetData = ParseValuesJson(http.responseText)
+    If Not TryParseValuesJson(http.responseText, outData) Then
+        outData = Empty
+        LogError "TryReadSheetData", _
+                 "Defektes/abgeschnittenes JSON von Sheets API. Tab=" & tabName & _
+                 "; Bytes=" & CStr(Len(http.responseText)) & _
+                 "; Body=" & GoogleHttpBodyForLog(http.responseText)
+        Exit Function
+    End If
+
+    TryReadSheetData = True
     Exit Function
 
 EH:
-    LogErr "ReadSheetData"
-    ReadSheetData = Empty
+    outData = Empty
+    LogErr "TryReadSheetData"
+    TryReadSheetData = False
 End Function
 
 ' ============================================================
@@ -1743,6 +1767,30 @@ Public Function ParseValuesJson(ByVal json As String) As Variant
     ' Jetzt: EIN stateful Scanner (ScanJsonValuesArray) fuer Zeilen UND Zellen,
     ' der Quotes/Backslash-Escapes korrekt verfolgt und alle JSON-Escapes
     ' in einem Durchgang dekodiert.
+    Dim data As Variant
+
+    If TryParseValuesJson(json, data) Then
+        ParseValuesJson = data
+    Else
+        ParseValuesJson = Empty
+    End If
+End Function
+
+Public Function TryParseValuesJson(ByVal json As String, _
+                                   ByRef outData As Variant) As Boolean
+    ' FAIL-CLOSED Variante von ParseValuesJson.
+    '
+    '   True  + outData = Array  -> gueltige Antwort mit Zeilen
+    '   True  + outData = Empty  -> gueltige, aber leere Antwort
+    '                               (kein "values" Key = leerer Range)
+    '   False                    -> defektes / abgeschnittenes JSON.
+    '                               Aufrufer MUSS das als Fehler behandeln
+    '                               (kein Import, kein Google Writeback).
+    '
+    ' AUD-001: Frueher wurden Teilzeilen aus abgeschnittenem JSON als
+    ' gueltige Daten zurueckgegeben. Ein Import haette Zeilen mit
+    ' fehlenden Endfeldern lokal committen und die Google-Zeile als
+    ' Synced>Master markieren koennen -> Felder dauerhaft verloren.
     Dim p As Long
     Dim arrayStart As Long
     Dim rowsColl As Collection
@@ -1752,23 +1800,30 @@ Public Function ParseValuesJson(ByVal json As String) As Variant
     Dim result() As Variant
     Dim i As Long, j As Long
 
+    outData = Empty
+    TryParseValuesJson = False
+
+    ' Sanity: Sheets values.get liefert immer ein JSON-Objekt.
+    ' (HTML/Proxy-Fehlerseite mit HTTP 200 darf nicht als "leer" durchgehen.)
+    If FirstNonWhitespaceChar(json) <> "{" Then Exit Function
+
     p = InStr(json, """values""")
     If p = 0 Then
-        ParseValuesJson = Empty
+        ' Leerer Range -> Google laesst "values" komplett weg.
+        ' Das ist eine gueltige, leere Antwort.
+        TryParseValuesJson = True
         Exit Function
     End If
 
     arrayStart = InStr(p + Len("""values"""), json, "[")
-    If arrayStart = 0 Then
-        ParseValuesJson = Empty
-        Exit Function
-    End If
+    If arrayStart = 0 Then Exit Function
 
-    Set rowsColl = ScanJsonValuesArray(json, arrayStart)
+    If Not TryScanJsonValuesArray(json, arrayStart, rowsColl) Then Exit Function
 
     rowCount = rowsColl.count
     If rowCount = 0 Then
-        ParseValuesJson = Empty
+        ' "values":[] -> gueltig und leer
+        TryParseValuesJson = True
         Exit Function
     End If
 
@@ -1787,11 +1842,13 @@ Public Function ParseValuesJson(ByVal json As String) As Variant
         Next j
     Next i
 
-    ParseValuesJson = result
+    outData = result
+    TryParseValuesJson = True
 End Function
 
-Private Function ScanJsonValuesArray(ByRef json As String, _
-                                     ByVal arrayStart As Long) As Collection
+Private Function TryScanJsonValuesArray(ByRef json As String, _
+                                        ByVal arrayStart As Long, _
+                                        ByRef outRows As Collection) As Boolean
     ' Stateful Scanner ueber das values-Array ab arrayStart (Position von "[").
     ' Liefert Collection von Collections (Zeilen -> Zellen als String).
     '
@@ -1799,6 +1856,10 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
     '   - "\" escaped das naechste Zeichen, "\""" toggelt inQuote also NICHT
     '   - Whitespace ausserhalb von Strings wird ignoriert (prettyPrint JSON)
     '   - "," / "]" trennen nur ausserhalb von Strings
+    '
+    ' FAIL-CLOSED: True nur wenn das Array sauber geschlossen wurde
+    ' (depth zurueck auf 0, kein offener String, keine offene Zeile) UND
+    ' jeder Escape gueltig war. Eine angefangene Zeile wird NIE uebernommen.
     Dim rowsColl As Collection
     Dim cellsColl As Collection
     Dim i As Long
@@ -1806,11 +1867,13 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
     Dim depth As Long
     Dim inQuote As Boolean
     Dim cellStarted As Boolean
+    Dim closedOk As Boolean
     Dim ch As String
     Dim esc As String
     Dim hex4 As String
     Dim buf As String
 
+    Set outRows = Nothing
     Set rowsColl = New Collection
 
     n = Len(json)
@@ -1822,6 +1885,8 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
 
         If inQuote Then
             If ch = "\" Then
+                If i + 1 > n Then Exit Function     ' Escape am Ende abgeschnitten
+
                 i = i + 1
                 esc = Mid$(json, i, 1)
 
@@ -1844,16 +1909,12 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
                         buf = buf & vbTab
                     Case "u"
                         hex4 = Mid$(json, i + 1, 4)
-                        If IsHex4Digits(hex4) Then
-                            buf = buf & JsonUnicodeChar(hex4)
-                            i = i + 4
-                        Else
-                            ' Defekte Sequenz: literal durchreichen
-                            buf = buf & "\" & esc
-                        End If
+                        If Not IsHex4Digits(hex4) Then Exit Function
+                        buf = buf & JsonUnicodeChar(hex4)
+                        i = i + 4
                     Case Else
-                        ' Unbekannter Escape: beide Zeichen behalten
-                        buf = buf & "\" & esc
+                        ' Unbekannter Escape (z.B. \x) -> defektes JSON
+                        Exit Function
                 End Select
             ElseIf ch = """" Then
                 inQuote = False
@@ -1882,7 +1943,10 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
                     End If
 
                     depth = depth - 1
-                    If depth <= 0 Then Exit Do
+                    If depth <= 0 Then
+                        closedOk = True
+                        Exit Do
+                    End If
                 Case ","
                     If depth = 2 Then
                         cellsColl.Add buf
@@ -1902,13 +1966,27 @@ Private Function ScanJsonValuesArray(ByRef json As String, _
         i = i + 1
     Loop
 
-    ' Abgeschnittener JSON: offene Zeile trotzdem uebernehmen
-    If Not cellsColl Is Nothing Then
-        If cellStarted Then cellsColl.Add buf
-        rowsColl.Add cellsColl
-    End If
+    ' Abgeschnittenes JSON: offener String, offene Zeile oder fehlendes "]]"
+    ' -> KEINE Teildaten zurueckgeben.
+    If Not closedOk Then Exit Function
+    If inQuote Then Exit Function
+    If Not cellsColl Is Nothing Then Exit Function
 
-    Set ScanJsonValuesArray = rowsColl
+    Set outRows = rowsColl
+    TryScanJsonValuesArray = True
+End Function
+
+Private Function FirstNonWhitespaceChar(ByRef s As String) As String
+    Dim i As Long
+    Dim ch As String
+
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then
+            FirstNonWhitespaceChar = ch
+            Exit Function
+        End If
+    Next i
 End Function
 
 Private Function IsHex4Digits(ByVal s As String) As Boolean
