@@ -91,6 +91,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_ZbirnaKlasaIIGuard
     Test_PrefillBiraPoslednjuGeneraciju
     Test_GeneracijaIDNaSavePutanji
+    Test_GeneracijaNePrelaziVlasnika
     Test_MalinaAutoZbirnaFailSignal
     Test_ZbirnaRowDataColumnMapped
     Test_OMUlazSmerObavezan
@@ -1812,8 +1813,7 @@ Private Sub Test_PrefillBiraPoslednjuGeneraciju()
 
     ' Sinteticka 2D tabela (1-based): 1=Broj 2=Klasa 3=ID 4=GeneracijaID.
     ' REGRESIJA: uzastopni ID-evi preko granice generacije (30=I i 31=II stare,
-    ' 32=I nove). Bez eksplicitne generacije heuristika kontinuiteta bi spojila
-    ' novu Kl.I sa starom Kl.II.
+    ' 32=I nove) -- heuristika ID kontinuiteta bi spojila novu Kl.I sa starom Kl.II.
     Dim d As Variant
     ReDim d(1 To 3, 1 To 4)
     d(1, 1) = "DOK-1": d(1, 2) = "I":  d(1, 3) = "OTP-00030": d(1, 4) = "GEN-00001"
@@ -1821,58 +1821,130 @@ Private Sub Test_PrefillBiraPoslednjuGeneraciju()
     d(3, 1) = "DOK-1": d(3, 2) = "I":  d(3, 3) = "OTP-00032": d(3, 4) = "GEN-00002"
 
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, 1, 2, 3, 4, "DOK-1", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz poslednje generacije (uzastopni ID-evi)"
+
+    ' Anchor = PK stornirane (novi Kl.I red).
+    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "OTP-00032", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz generacije anchor reda"
     AssertEquals "0", CStr(rII), _
                  "Prefill: stara Kl.II (ID 31) se NE spaja sa novom Kl.I (ID 32)"
 
-    ' Obe generacije dvoklasne -> I i II iz ISTE (novije).
-    Dim g As Variant
-    ReDim g(1 To 4, 1 To 4)
-    g(1, 1) = "DOK-2": g(1, 2) = "I":  g(1, 3) = "OTP-00040": g(1, 4) = "GEN-00010"
-    g(2, 1) = "DOK-2": g(2, 2) = "II": g(2, 3) = "OTP-00041": g(2, 4) = "GEN-00010"
-    g(3, 1) = "DOK-2": g(3, 2) = "I":  g(3, 3) = "OTP-00042": g(3, 4) = "GEN-00011"
-    g(4, 1) = "DOK-2": g(4, 2) = "II": g(4, 3) = "OTP-00043": g(4, 4) = "GEN-00011"
+    ' Anchor na STAROJ generaciji -> prefiluje se ona, ne najnovija.
+    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "OTP-00030", rI, rII
+    AssertEquals "1", CStr(rI), "Prefill: anchor odredjuje generaciju (Kl.I stare)"
+    AssertEquals "2", CStr(rII), "Prefill: Kl.II iste (stare) generacije"
 
-    PickLatestGenerationRows g, 1, 2, 3, 4, "DOK-2", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill: Kl.I iz novije generacije"
-    AssertEquals "4", CStr(rII), "Prefill: Kl.II iz ISTE (novije) generacije"
+    ' Bez anchor PK-a -> poslednje upisan red datog broja + njegova generacija.
+    PickPrefillRows d, 1, 2, 3, 4, "DOK-1", "", rI, rII
+    AssertEquals "3", CStr(rI), "Prefill fallback: poslednje upisan red broja"
+    AssertEquals "0", CStr(rII), "Prefill fallback: ostaje u generaciji tog reda"
 
-    ' Poslovni datum ne ucestvuje: novija generacija sa RANIJIM datumom pobedjuje.
-    ' (Kolona 4 je generacija; datum bi bio zaseban, ovde je namerno van izbora.)
-    Dim h As Variant
-    ReDim h(1 To 2, 1 To 4)
-    h(1, 1) = "DOK-3": h(1, 2) = "I": h(1, 3) = "OTP-00050": h(1, 4) = "GEN-00020"
-    h(2, 1) = "DOK-3": h(2, 2) = "I": h(2, 3) = "OTP-00051": h(2, 4) = "GEN-00021"
+    ' KLJUCNO: dva vlasnika dele isti BROJ (razlicite generacije) -- prefill po PK
+    ' ostaje kod svog dokumenta i ne prelazi na tudji.
+    Dim x As Variant
+    ReDim x(1 To 4, 1 To 4)
+    x(1, 1) = "1/050826": x(1, 2) = "I":  x(1, 3) = "PRJ-00010": x(1, 4) = "GEN-00100"
+    x(2, 1) = "1/050826": x(2, 2) = "II": x(2, 3) = "PRJ-00011": x(2, 4) = "GEN-00100"
+    x(3, 1) = "1/050826": x(3, 2) = "I":  x(3, 3) = "PRJ-00012": x(3, 4) = "GEN-00101"
+    x(4, 1) = "1/050826": x(4, 2) = "II": x(4, 3) = "PRJ-00013": x(4, 4) = "GEN-00101"
 
-    PickLatestGenerationRows h, 1, 2, 3, 4, "DOK-3", rI, rII
-    AssertEquals "2", CStr(rI), "Prefill: kasnija generacija pobedjuje (nezavisno od datuma)"
+    PickPrefillRows x, 1, 2, 3, 4, "1/050826", "PRJ-00010", rI, rII
+    AssertEquals "1", CStr(rI), "Prefill: Kl.I ostaje kod svog vlasnika (isti broj, drugi kupac)"
+    AssertEquals "2", CStr(rII), "Prefill: Kl.II ostaje kod svog vlasnika"
 
-    ' Fallback bez generacije: samo poslednji red, druga klasa se NE pogadja.
+    ' Bez generacije (red stariji od kolone) -> samo anchor.
     Dim f As Variant
-    ReDim f(1 To 3, 1 To 4)
+    ReDim f(1 To 2, 1 To 4)
     f(1, 1) = "DOK-4": f(1, 2) = "I":  f(1, 3) = "OTP-00060": f(1, 4) = ""
     f(2, 1) = "DOK-4": f(2, 2) = "II": f(2, 3) = "OTP-00061": f(2, 4) = ""
-    f(3, 1) = "DOK-4": f(3, 2) = "I":  f(3, 3) = "OTP-00062": f(3, 4) = ""
 
-    PickLatestGenerationRows f, 1, 2, 3, 4, "DOK-4", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill fallback: poslednji upisan red"
-    AssertEquals "0", CStr(rII), _
-                 "Prefill fallback: bez generacije druga klasa ostaje prazna"
+    PickPrefillRows f, 1, 2, 3, 4, "DOK-4", "OTP-00060", rI, rII
+    AssertEquals "1", CStr(rI), "Prefill bez generacije: samo anchor red"
+    AssertEquals "0", CStr(rII), "Prefill bez generacije: druga klasa ostaje prazna"
 
-    ' Isti fallback i kad kolone uopste nema (cGen = 0).
-    PickLatestGenerationRows f, 1, 2, 3, 0, "DOK-4", rI, rII
-    AssertEquals "3", CStr(rI), "Prefill fallback: bez GeneracijaID kolone"
-    AssertEquals "0", CStr(rII), "Prefill fallback: bez kolone nema druge klase"
-
-    ' Nepostojeci broj -> nista.
-    PickLatestGenerationRows g, 1, 2, 3, 4, "DOK-NEMA", rI, rII
+    ' Nepoznat broj / nepoznat PK -> nista.
+    PickPrefillRows d, 1, 2, 3, 4, "DOK-NEMA", "", rI, rII
     AssertEquals "00", CStr(rI) & CStr(rII), "Prefill: nepoznat broj ne vraca red"
 
     Exit Sub
 
 EH:
     LogFatal "Test_PrefillBiraPoslednjuGeneraciju", Err.Number, Err.description
+End Sub
+
+' Dva kupca mogu istog dana dobiti ISTI BrojPrijemnice (GenerateBrojPrijemnice
+' racuna sekvencu po kupcu). Generacije im moraju biti razlicite.
+Private Sub Test_GeneracijaNePrelaziVlasnika()
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("GENVLAS")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojZbirne As String, brojPrij As String
+    brojZbirne = TEST_PREFIX & "-ZBR-VL-" & scenario
+    brojPrij = TEST_PREFIX & "-PRJ-VL-" & scenario     ' ISTI broj za oba kupca
+
+    Dim zbrFix As String
+    zbrFix = SaveZbirna_TX(testDate, TEST_VOZ_ID, brojZbirne, TEST_KUP_ID, _
+                           "Test Hladnjaca", "Test Pogon", TEST_VRSTA, TEST_SORTA, _
+                           100#, TEST_TIP_AMB, 0, KLASA_I)
+    AssertTrue Len(zbrFix) > 0, "Vlasnik scope: fixture zbirna kreirana"
+
+    Dim prjA As String, prjB As String
+    prjA = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 100#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+    prjB = SavePrijemnica_TX(testDate, TEST_KUP2_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                             TEST_VRSTA, TEST_SORTA, 80#, 100#, TEST_TIP_AMB, 0, 0, KLASA_I)
+
+    AssertTrue Len(prjA) > 0 And Len(prjB) > 0, _
+               "Vlasnik scope: obe prijemnice (isti broj, razliciti kupci) kreirane"
+
+    Dim genA As String, genB As String
+    genA = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjA)
+    genB = DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjB)
+
+    AssertTrue Len(genA) > 0 And Len(genB) > 0, "Vlasnik scope: obe prijemnice imaju generaciju"
+    AssertTrue genA <> genB, _
+               "Vlasnik scope: isti broj kod DVA kupca ne deli generaciju"
+
+    ' Klasa II kupca A mora naslediti generaciju kupca A (ne kupca B).
+    Dim prjAII As String
+    prjAII = SavePrijemnica_TX(testDate, TEST_KUP_ID, TEST_VOZ_ID, brojPrij, brojZbirne, _
+                               TEST_VRSTA, TEST_SORTA, 40#, 90#, TEST_TIP_AMB, 0, 0, KLASA_II)
+    AssertTrue Len(prjAII) > 0, "Vlasnik scope: Kl.II kupca A kreirana"
+    AssertEquals genA, DokGeneracija(TBL_PRIJEMNICA, COL_PRJ_ID, prjAII), _
+                 "Vlasnik scope: Kl.II nasledjuje generaciju SVOG kupca"
+
+    ' Prefill po PK-u kupca A vraca redove kupca A.
+    Dim d As Variant
+    d = GetTableData(TBL_PRIJEMNICA)
+
+    Dim rI As Long, rII As Long
+    PickPrefillRows d, GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ), _
+                    GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA), _
+                    GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID), _
+                    GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID), _
+                    brojPrij, prjA, rI, rII
+
+    AssertTrue rI > 0 And rII > 0, "Vlasnik scope: prefill nasao obe klase kupca A"
+
+    Dim cKup As Long
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    If rI > 0 Then
+        AssertEquals TEST_KUP_ID, Trim$(CStr(nz(d(rI, cKup), ""))), _
+                     "Vlasnik scope: prefill Kl.I je kupca A (ne prelazi na kupca B)"
+    End If
+    If rII > 0 Then
+        AssertEquals TEST_KUP_ID, Trim$(CStr(nz(d(rII, cKup), ""))), _
+                     "Vlasnik scope: prefill Kl.II je kupca A"
+    End If
+
+    Exit Sub
+
+EH:
+    LogFatal "Test_GeneracijaNePrelaziVlasnika", Err.Number, Err.description
 End Sub
 
 ' End-to-end: save putanja stvarno pise GeneracijaID, i to ISTU za obe klase
@@ -1939,7 +2011,8 @@ Private Sub Test_GeneracijaIDNaSavePutanji()
     cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
 
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brojOtp, rI, rII
+    PickPrefillRows d, cBr, cKl, cId, cGen, brojOtp, _
+                    FindOtpremnicaIDByBrojAndKlasa(brojOtp, KLASA_I), rI, rII
 
     AssertTrue rI > 0, "GeneracijaID: prefill nasao Kl.I poslednje generacije"
     AssertEquals "0", CStr(rII), _

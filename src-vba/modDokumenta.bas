@@ -254,7 +254,8 @@ Public Function SaveOtpremnica(ByVal datum As Date, ByVal stanicaID As String, _
     If newRow > 0 Then
         ' Generacija: nasledjuje se od aktivnih redova istog broja (Klasa I <-> II),
         ' inace nova. Vazi za sve pozivaoce -- Multi_TX i pojedinacne _TX putanje.
-        ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp
+        ApplyGeneracijaID TBL_OTPREMNICA, newRow, COL_OTP_BROJ, brojOtp, _
+                          COL_OTP_STANICA, stanicaID
 
         If kolAmb > 0 Then
             TrackAmbalaza datum, tipAmb, kolAmb, "Izlaz", stanicaID, "Stanica", vozacID, newID, DOK_TIP_OTPREMNICA
@@ -628,7 +629,8 @@ Public Function SaveZbirna(ByVal datum As Date, ByVal vozacID As String, _
     newRowZbr = AppendRow(TBL_ZBIRNA, rowData)
 
     If newRowZbr > 0 Then
-        ApplyGeneracijaID TBL_ZBIRNA, newRowZbr, COL_ZBR_BROJ, brojZbirne
+        ApplyGeneracijaID TBL_ZBIRNA, newRowZbr, COL_ZBR_BROJ, brojZbirne, _
+                          COL_ZBR_KUPAC, kupacID
 
         SaveZbirna = newID
     Else
@@ -872,9 +874,13 @@ End Function
 ' ============================================================
 
 ' Generacija za red koji se upisuje pod datim brojem dokumenta.
+' scopePairs: parovi (kolona, vrednost) koji uz broj cine IDENTITET dokumenta --
+' broj sam po sebi NIJE globalno jedinstven (npr. GenerateBrojPrijemnice racuna
+' sekvencu po kupcu, pa dva kupca istog dana oba dobiju "1/050826").
 Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
                                    ByVal brojCol As String, _
-                                   ByVal broj As String) As String
+                                   ByVal broj As String, _
+                                   ParamArray scopePairs() As Variant) As String
     Const SRC As String = "modDokumenta.GeneracijaIDZaBroj"
 
     Dim cGen As Long
@@ -882,6 +888,10 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
 
     Dim target As String
     target = Trim$(broj)
+
+    ' Parove kopiram u lokalni niz -- ParamArray se ne prosledjuje dalje.
+    Dim sc As Variant
+    sc = ScopePairsToArray(scopePairs, SRC)
 
     If Len(target) > 0 Then
         Dim data As Variant
@@ -893,18 +903,40 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
             Dim cBr As Long
             cBr = RequireColumnIndex(tableName, brojCol, SRC)
 
+            Dim scCols() As Long
+            Dim i As Long
+            If IsArray(sc) Then
+                ReDim scCols(0 To UBound(sc))
+                For i = 0 To UBound(sc) Step 2
+                    scCols(i) = RequireColumnIndex(tableName, CStr(sc(i)), SRC)
+                Next i
+            End If
+
             Dim best As Double, bestGen As String
             Dim r As Long, g As String, rank As Double
+            Dim inScope As Boolean
             best = -1
 
             For r = 1 To UBound(data, 1)
                 If Trim$(NzToText(data(r, cBr))) = target Then
-                    g = Trim$(NzToText(data(r, cGen)))
-                    If Len(g) > 0 Then
-                        rank = IdRank(g)
-                        If rank > best Then
-                            best = rank
-                            bestGen = g
+                    inScope = True
+                    If IsArray(sc) Then
+                        For i = 0 To UBound(sc) Step 2
+                            If Trim$(NzToText(data(r, scCols(i)))) <> Trim$(NzToText(sc(i + 1))) Then
+                                inScope = False
+                                Exit For
+                            End If
+                        Next i
+                    End If
+
+                    If inScope Then
+                        g = Trim$(NzToText(data(r, cGen)))
+                        If Len(g) > 0 Then
+                            rank = IdRank(g)
+                            If rank > best Then
+                                best = rank
+                                bestGen = g
+                            End If
                         End If
                     End If
                 End If
@@ -918,6 +950,31 @@ Public Function GeneracijaIDZaBroj(ByVal tableName As String, _
     End If
 
     GeneracijaIDZaBroj = NewGeneracijaID(tableName)
+End Function
+
+' ParamArray -> obican niz (parni: kolona, neparni: vrednost). Prazan -> Empty.
+Private Function ScopePairsToArray(ByVal scopePairs As Variant, _
+                                   ByVal sourceName As String) As Variant
+    If Not IsArray(scopePairs) Then Exit Function
+    If UBound(scopePairs) < LBound(scopePairs) Then Exit Function
+
+    Dim n As Long
+    n = UBound(scopePairs) - LBound(scopePairs) + 1
+
+    If (n Mod 2) <> 0 Then
+        Err.Raise vbObjectError + 1017, sourceName, _
+                  "scopePairs mora imati parove (kolona, vrednost)."
+    End If
+
+    Dim out() As Variant
+    ReDim out(0 To n - 1)
+
+    Dim i As Long
+    For i = 0 To n - 1
+        out(i) = scopePairs(LBound(scopePairs) + i)
+    Next i
+
+    ScopePairsToArray = out
 End Function
 
 ' Nova generacija za dokument-tabelu ("GEN-00042").
@@ -937,7 +994,8 @@ End Function
 ' Izracunaj i upisi generaciju na upravo dodat red. Koriste je i writer-i koji
 ' ne idu kroz Save* (PWA import, invariant rekalkulacija).
 Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, _
-                             ByVal brojCol As String, ByVal broj As String)
+                             ByVal brojCol As String, ByVal broj As String, _
+                             ByVal vlasnikCol As String, ByVal vlasnikID As String)
     Const SRC As String = "modDokumenta.ApplyGeneracijaID"
 
     If rowIndex <= 0 Then
@@ -945,115 +1003,118 @@ Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, 
                   "Neispravan red za upis generacije (" & tableName & ")."
     End If
 
+    ' Identitet dokumenta = broj + vlasnik (stanica/kupac): broj sam nije jedinstven.
     RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
-                      GeneracijaIDZaBroj(tableName, brojCol, broj), SRC
+                      GeneracijaIDZaBroj(tableName, brojCol, broj, vlasnikCol, vlasnikID), SRC
 End Sub
 
-' Bira redove POSLEDNJE GENERACIJE dokumenta za prefill (frmDokumenta.Prefill*
-' FromStornirana). Isti broj dokumenta moze imati vise generacija (storno ->
-' ispravka -> storno), a prvi pronadjen red je NAJSTARIJA generacija.
+' Bira redove dokumenta za prefill ispravke (frmDokumenta.Prefill*FromStornirana).
 '
-' Generacija se cita EKSPLICITNO iz COL_GENERACIJA_ID (cGen): svi redovi jednog
-' Multi_TX upisa dele vrednost, pa Kl.I i Kl.II ne mogu doci iz razlicitih upisa.
-' Poslovni Datum se NE koristi (ispravka moze nositi raniji datum od originala),
-' a ne koristi se ni kontinuitet ID-a: uzastopni ID-evi ne znace istu generaciju
-' (30=I, 31=II stare, 32=I nove je potpuno regularan raspored).
+' Polazi od ANCHOR reda -- konkretnog PK-a stornirane (OldDocID iz correction
+' context-a). Broj dokumenta se NE koristi kao identitet: nije globalno jedinstven
+' (GenerateBrojPrijemnice racuna sekvencu po kupcu, pa dva kupca istog dana dobiju
+' isti broj), pa bi pretraga po broju mogla da prefiluje tudji dokument.
 '
-' Fallback kad kolone nema ili je prazna (red nije nastao kroz Save* putanju):
-' prefiluje se SAMO poslednje upisan red (najveci ID rank, pa fizicki redosled);
-' druga klasa ostaje 0 -- konzervativno, jer bez generacije njena pripadnost nije
-' dokaziva. Bolje prazno polje nego tiho spojene dve generacije.
-Public Sub PickLatestGenerationRows(ByVal data As Variant, _
-                                    ByVal cBroj As Long, ByVal cKlasa As Long, _
-                                    ByVal cId As Long, ByVal cGen As Long, _
-                                    ByVal broj As String, _
-                                    ByRef outRowI As Long, ByRef outRowII As Long)
+' Kad anchor PK nije poznat (stariji context bez OldDocID), fallback je poslednje
+' upisan red datog broja -- i tada se ostaje unutar generacije tog reda, pa se
+' redovi dva vlasnika ne mesaju.
+'
+' Iz anchor-a se cita generacija (COL_GENERACIJA_ID) i uzimaju Kl.I i Kl.II SAMO
+' iz nje. Bez generacije (red stariji od uvodjenja kolone) prefiluje se samo sam
+' anchor -- konzervativno, jer pripadnost druge klase nije dokaziva.
+Public Sub PickPrefillRows(ByVal data As Variant, _
+                           ByVal cBroj As Long, ByVal cKlasa As Long, _
+                           ByVal cId As Long, ByVal cGen As Long, _
+                           ByVal broj As String, ByVal oldDocID As String, _
+                           ByRef outRowI As Long, ByRef outRowII As Long)
     outRowI = 0
     outRowII = 0
 
     If Not IsArray(data) Then Exit Sub
-    If cBroj <= 0 Then Exit Sub
 
-    Dim target As String
-    target = Trim$(broj)
-    If target = "" Then Exit Sub
-
-    Dim n As Long, r As Long
-    For r = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(r, cBroj))) = target Then n = n + 1
-    Next r
-    If n = 0 Then Exit Sub
-
-    Dim rowIdx() As Long, ranks() As Double
-    ReDim rowIdx(1 To n)
-    ReDim ranks(1 To n)
-
-    Dim k As Long
-    Dim useRowIndex As Boolean
-    useRowIndex = (cId <= 0)
-
-    k = 0
-    For r = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(r, cBroj))) = target Then
-            k = k + 1
-            rowIdx(k) = r
-            If Not useRowIndex Then
-                ranks(k) = IdRank(NzToText(data(r, cId)))
-                If ranks(k) < 0 Then useRowIndex = True
-            End If
-        End If
-    Next r
-
-    If useRowIndex Then
-        For k = 1 To n
-            ranks(k) = CDbl(rowIdx(k))
-        Next k
-    End If
-
-    ' Poslednje upisan red (tie -> kasniji red u tabeli) odredjuje generaciju.
-    Dim topIdx As Long
-    topIdx = 1
-    For k = 2 To n
-        If ranks(k) > ranks(topIdx) Then
-            topIdx = k
-        ElseIf ranks(k) = ranks(topIdx) And rowIdx(k) > rowIdx(topIdx) Then
-            topIdx = k
-        End If
-    Next k
+    Dim anchor As Long
+    anchor = FindAnchorRow(data, cBroj, cId, broj, oldDocID)
+    If anchor = 0 Then Exit Sub
 
     Dim genTop As String
-    If cGen > 0 Then genTop = Trim$(NzToText(data(rowIdx(topIdx), cGen)))
+    If cGen > 0 Then genTop = Trim$(NzToText(data(anchor, cGen)))
 
-    ' Bez generacije: samo poslednji red, druga klasa se NE pogadja.
     If Len(genTop) = 0 Then
-        If RowKlasaII(data, rowIdx(topIdx), cKlasa) Then
-            outRowII = rowIdx(topIdx)
+        If RowKlasaII(data, anchor, cKlasa) Then
+            outRowII = anchor
         Else
-            outRowI = rowIdx(topIdx)
+            outRowI = anchor
         End If
         Exit Sub
     End If
 
     Dim bestI As Double, bestII As Double
+    Dim r As Long, rank As Double
     bestI = -1
     bestII = -1
 
-    For k = 1 To n
-        If Trim$(NzToText(data(rowIdx(k), cGen))) = genTop Then
-            If RowKlasaII(data, rowIdx(k), cKlasa) Then
-                If ranks(k) > bestII Then
-                    bestII = ranks(k)
-                    outRowII = rowIdx(k)
+    For r = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(r, cGen))) = genTop Then
+            rank = RowRank(data, r, cId)
+
+            If RowKlasaII(data, r, cKlasa) Then
+                If rank > bestII Then
+                    bestII = rank
+                    outRowII = r
                 End If
             Else
-                If ranks(k) > bestI Then
-                    bestI = ranks(k)
-                    outRowI = rowIdx(k)
+                If rank > bestI Then
+                    bestI = rank
+                    outRowI = r
                 End If
             End If
         End If
-    Next k
+    Next r
 End Sub
+
+' Anchor: red sa datim PK-om; ako PK nije poznat -> poslednje upisan red datog broja.
+Private Function FindAnchorRow(ByVal data As Variant, ByVal cBroj As Long, _
+                               ByVal cId As Long, ByVal broj As String, _
+                               ByVal oldDocID As String) As Long
+    Dim r As Long
+
+    If Len(Trim$(oldDocID)) > 0 And cId > 0 Then
+        For r = 1 To UBound(data, 1)
+            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then
+                FindAnchorRow = r
+                Exit Function
+            End If
+        Next r
+    End If
+
+    If cBroj <= 0 Then Exit Function
+
+    Dim target As String
+    target = Trim$(broj)
+    If Len(target) = 0 Then Exit Function
+
+    Dim best As Double, rank As Double
+    best = -1
+
+    For r = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(r, cBroj))) = target Then
+            rank = RowRank(data, r, cId)
+            If rank >= best Then
+                best = rank
+                FindAnchorRow = r
+            End If
+        End If
+    Next r
+End Function
+
+' Rang reda: numericki sufiks ID-a (GetNextID je monoton), inace indeks reda.
+Private Function RowRank(ByVal data As Variant, ByVal rowIndex As Long, _
+                         ByVal cId As Long) As Double
+    RowRank = -1
+
+    If cId > 0 Then RowRank = IdRank(NzToText(data(rowIndex, cId)))
+    If RowRank < 0 Then RowRank = CDbl(rowIndex)
+End Function
 
 ' Klasa reda je II (prazna/nepoznata klasa se tretira kao I, kao u ostatku koda).
 Private Function RowKlasaII(ByVal data As Variant, ByVal rowIndex As Long, _
@@ -1382,7 +1443,8 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                 "AppendRow fehlgeschlagen fuer tblPrijemnica."
     End If
 
-    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij
+    ApplyGeneracijaID TBL_PRIJEMNICA, appendedRow, COL_PRJ_BROJ, brojPrij, _
+                      COL_PRJ_KUPAC, kupacID
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
     ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).

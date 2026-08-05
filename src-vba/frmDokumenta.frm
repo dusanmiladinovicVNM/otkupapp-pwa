@@ -2710,7 +2710,7 @@ End Function
 ' Prefill OTPREMNICA forme iz stornirane (ISPRAVKA) -- operater ne mora napamet.
 ' Ogledalo save-handlera: stanica=cmbOtkupnoMesto, vozac=cmbVozac; bruto-svesno; Klasa I/II.
 ' Broj se NE postavlja (ostaje svez predlog; ISPRAVKA = nov broj + trace na stari).
-Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_OTPREMNICA)
     If IsEmpty(d) Then Exit Sub
@@ -2734,10 +2734,10 @@ Private Sub PrefillOtpremnicaFromStornirana(ByVal brStorn As String)
     cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
-    ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
     Dim brutoMode As Boolean: brutoMode = OtkupBrutoUnos()
@@ -2777,7 +2777,7 @@ EH:
 End Sub
 
 ' Prefill ZBIRNA forme iz stornirane (ISPRAVKA). Zbirna nema bruto. Kupac/hladnjaca/pogon.
-Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_ZBIRNA)
     If IsEmpty(d) Then Exit Sub
@@ -2799,10 +2799,10 @@ Private Sub PrefillZbirnaFromStornirana(ByVal brStorn As String)
     cGen = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
-    ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 
@@ -2835,7 +2835,7 @@ EH:
     LogErr "frmDokumenta.PrefillZbirnaFromStornirana"
 End Sub
 
-Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
+Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String, ByVal oldDocID As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(d) Then Exit Sub
@@ -2861,10 +2861,10 @@ Private Sub PrefillPrijemnicaFromStornirana(ByVal brStorn As String)
     cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     If cBr = 0 Then Exit Sub
 
-    ' Poslednja GENERACIJA (tehnicki redosled upisa), ne najveci Datum -- ispravka
-    ' moze nositi raniji datum od originala. Kl.I i Kl.II dolaze iz iste generacije.
+    ' Polazi od PK-a stornirane (OldDocID); broj dokumenta nije globalno jedinstven.
+    ' Kl.I i Kl.II se uzimaju iz generacije tog reda.
     Dim rI As Long, rII As Long
-    PickLatestGenerationRows d, cBr, cKl, cId, cGen, brStorn, rI, rII
+    PickPrefillRows d, cBr, cKl, cId, cGen, brStorn, oldDocID, rI, rII
     If rI = 0 And rII = 0 Then Exit Sub
     Dim base As Long: base = rI: If base = 0 Then base = rII
 
@@ -3649,14 +3649,19 @@ Private Sub ApplyCorrectionFromPanel(ByVal mode As String)
         m_activeCorrectionDokTip = dokTip
         ' Prijemnica: prefill forme iz stornirane + oznaci pending relink paleta
         ' (save-putanja radi ReassignPaleteToPrijemnica_TX -> ista roba, ista paleta).
+        ' PK stornirane iz context-a -> prefill ne pogadja dokument po broju (broj
+        ' nije globalno jedinstven: dva kupca mogu imati istu "1/ddmmyy" prijemnicu).
+        Dim oldDocID As String
+        oldDocID = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_OLD_DOCID)
+
         If docType = FLOW_DOC_PRIJEMNICA Then
-            PrefillPrijemnicaFromStornirana brDok
+            PrefillPrijemnicaFromStornirana brDok, oldDocID
             m_pendingRelinkOldPrij = brDok
             m_pendingRelinkZbirne = modStornoContext.GetCorrectionField(CStr(res("correctionID")), COL_SV_PARENT_BROJ)
         ElseIf docType = FLOW_DOC_OTPREMNICA Then
-            PrefillOtpremnicaFromStornirana brDok
+            PrefillOtpremnicaFromStornirana brDok, oldDocID
         ElseIf docType = FLOW_DOC_ZBIRNA Then
-            PrefillZbirnaFromStornirana brDok
+            PrefillZbirnaFromStornirana brDok, oldDocID
         End If
         ' ISPRAVKA: cekirani blokovi se NE storniraju (storno+reunos dokumenta je
         ' celina; blok-storno je moguc iskljucivo uz Duplikat/Ponistenje).
