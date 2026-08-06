@@ -335,3 +335,22 @@ Nits (no AUD): new user-facing storno strings use inline `ChrW(...)` rather than
 catalog (matches existing `modStorno` convention; sources stay ASCII) · `CountActiveNovacByBroj`
 early-returns `0` on blank input (harmless given callers; worth a clarifying comment) · two new
 private numeric helpers (`NumOrZero`/`NzNum`) alongside the existing `Nz` family.
+
+### 8.9 RF-28 post-fix review — systemic finding (2026-08)
+
+The RF-28 MasterSync review surfaced BUG-1 (MED): an EH block that calls `LogErr` **before**
+`Err.Raise Err.Number, …`. `LogErr` calls `LogError`, whose first executable line is
+`On Error Resume Next` (`modLogError.bas:50`, plus `On Error GoTo 0` at `:90`) — every `On Error`
+statement clears the global `Err` object — so the trailing `Err.Raise Err.Number` runs as
+`Err.Raise 0`: the original error number/description are gone and, in an `On Error Resume Next`
+caller, no non-zero error is seen. RF-28 fixed its own sites (capture `Err.Number`/`Err.Description`
+into locals **before** `LogErr`, then re-raise). A codebase-wide scan confirms the same fragile
+idiom is not local to MasterSync — it recurs across the SEF, banka and document layers.
+
+| ID | Sev | Finding | Location |
+|---|---|---|---|
+| AUD-054 | P1 | Systemic defeated re-raise (same class as BUG-1 / AUD-046): **46** EH blocks on `main` run `LogErr`/`LogError` immediately followed by `Err.Raise Err.Number, …`. Because `LogError` (`modLogError.bas:50/90`) executes `On Error Resume Next` / `On Error GoTo 0`, each of which clears the global `Err`, the trailing `Err.Raise Err.Number` executes as `Err.Raise 0` — the error is swallowed and does not propagate (proven by RF-28 `Test_MalinaVozacMirror`, which asserted the re-raise and measured `Err.Number = 0` before the fix). Any caller relying on the re-raise to roll back a TX, mark a sync fatal, abort a batch, or show the failure to the operator instead proceeds as if the operation succeeded. RF-28 (in flight) removes 2 of the 46 (`modMalina.BackfillVozacMirrorsForMalina`, `modMasterSync.LinkZbirnaToOtkupAndOtpremnica`) and adds a correct re-raise to `modMalina.EnsureVozacMirrorForStanica`; **44 remain**, ~80% in the SEF (e-invoice / fiscal) layer. **Fix — mechanical, identical to BUG-1:** capture `errNum = Err.Number` / `errDesc = Err.Description` into locals before `LogErr`, then `Err.Raise errNum, SRC, errDesc` (with a fallback code when `errNum = 0`). **Severity is per-site:** P1 core is SEF + banka (a swallowed submit/validate/persist error can mark a fiscal or bank document processed when it actually failed); pure top-of-stack log-and-show sites (e.g. `PrintFaktura`, `modSledljivost`) are P2/P3; test-only (`modSEFTests`) is lowest. Phase 1 = triage each caller for propagation dependence; Phase 2 = apply the mechanical fix. Sites (post-RF-28, 44): `modSEFPersistance.bas` ×14 (52/77/170/214/294/354/401/486/610/639/665/691/722/810); `modSEFValidator.bas` ×8 (196/223/245/280/313/340/373/406); `modSEFMapper.bas` ×7 (259/328/790/818/875/902/1034); `modSEFClient.bas` ×4 (307/326/356/862); `modBankaImport.bas` ×2 (134/1260); `modPaletniList.bas` ×2 (873/2808); `modSEFStatusSync.bas` (438); `modSEFTests.bas` (757, test-only); `modConfig.bas` (918); `modDokumenta.bas` (2378); `modFaktura.bas` (508); `modGoogleSheets.bas` (72); `modSledljivost.bas` (263). Line numbers are the `Err.Raise Err.Number` line on `main`@9a21a69; re-scan with the grep in the fix PR before editing. | Root cause `modLogError.bas:50/90` (`On Error` resets `Err`); 44 EH blocks listed at left |
+
+Doctrine note: the fix is source-safe (adds only ASCII locals, no `.frx`, no form `WithEvents`), and
+each site keeps its existing log line — only the re-raise argument changes from `Err.Number` to the
+captured local. No behavior change on the success path.
