@@ -882,11 +882,17 @@ Private Sub GenerateOtkupRobaReport(ByVal entitetTip As String, ByVal entitetID 
             If IsNumeric(data(i, 6)) Then arr(r, 5) = FmtKolicina(CDbl(data(i, 6)))
             If IsNumeric(data(i, 7)) Then arr(r, 6) = FmtKolicina(CDbl(data(i, 7)))
             If IsNumeric(data(i, 8)) Then arr(r, 7) = FmtKolicina(CDbl(data(i, 8)))
-            If IsNumeric(data(i, 9)) Then arr(r, 8) = FmtKolicina(CDbl(data(i, 9)))
+            ' Prijemnica kg je Empty kad nema prijema (RF-06) -> ostaje prazno, ne 0
+            If IsNumeric(data(i, 9)) And Not IsEmpty(data(i, 9)) Then arr(r, 8) = FmtKolicina(CDbl(data(i, 9)))
+            ' Manjak: "kg / %" ili tekstualna oznaka iz core-a ("nema prijema",
+            ' RF-06) -- ne pretvarati je u 0, to je bio ceo bug.
             Dim mStr As String: mStr = ""
             If IsNumeric(data(i, 10)) And Not IsEmpty(data(i, 10)) Then mStr = FmtKolicina(CDbl(data(i, 10)))
-            If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then _
+            If IsNumeric(data(i, 11)) And Not IsEmpty(data(i, 11)) Then
                 mStr = Trim$(mStr & " / " & Format$(CDbl(data(i, 11)), "0.00") & "%")
+            ElseIf Not IsEmpty(data(i, 11)) Then
+                mStr = Trim$(mStr & " " & CStr(data(i, 11)))
+            End If
             arr(r, 9) = mStr
             Dim rk As String: rk = CStr(IIf(IsEmpty(data(i, 12)), "", data(i, 12)))
             If Left$(rk, 4) = "OTP|" Then m_otkOtpID(CStr(r)) = Mid$(rk, 5)
@@ -1077,9 +1083,15 @@ Private Sub GenerateManjakReport(ByVal entitetTip As String, ByVal entitetID As 
     For i = 1 To nR
         src(i, 1) = CStr(data(i, 1))
         If IsNumeric(data(i, 2)) Then src(i, 2) = Format$(CDbl(data(i, 2)), "#,##0.00")
-        If IsNumeric(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.00")
-        If IsNumeric(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00")
-        If IsNumeric(data(i, 5)) Then src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
+        ' Prijemnica/Manjak kolone su PRAZNE kad zbirna nema prijem (RF-06);
+        ' oznaka "nema prijema" stize kao tekst u koloni 5.
+        If IsNumeric(data(i, 3)) And Not IsEmpty(data(i, 3)) Then src(i, 3) = Format$(CDbl(data(i, 3)), "#,##0.00")
+        If IsNumeric(data(i, 4)) And Not IsEmpty(data(i, 4)) Then src(i, 4) = Format$(CDbl(data(i, 4)), "#,##0.00")
+        If IsNumeric(data(i, 5)) And Not IsEmpty(data(i, 5)) Then
+            src(i, 5) = Format$(CDbl(data(i, 5)), "#,##0.00") & "%"
+        ElseIf Not IsEmpty(data(i, 5)) Then
+            src(i, 5) = CStr(data(i, 5))
+        End If
         If IsNumeric(data(i, 6)) Then
             If CDbl(data(i, 6)) > 0 Then src(i, 6) = Format$(CDbl(data(i, 6)), "#,##0.00")
         End If

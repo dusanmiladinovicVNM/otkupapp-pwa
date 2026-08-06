@@ -417,10 +417,11 @@ Public Function GetUplataByVrsta(ByVal kupacID As String, _
         Exit Function
     End If
     
-    ' Cache: FakturaID ? VrstaVoca
+    ' Cache: FakturaID -> Dictionary(VrstaVoca -> vrednost stavki) za srazmernu
+    ' raspodelu uplate (RF-06 / FM-0028 #6).
     Dim vrstaFakCache As Object
-    Set vrstaFakCache = BuildVrstaFakturaCache()
-    
+    Set vrstaFakCache = BuildFakturaVrstaUdeoCache()
+
     Const SRC As String = "GetUplataByVrsta"
 
     Dim colPID As Long, colUplata As Long, colDatum As Long, colFakID As Long, colVrsta As Long
@@ -440,24 +441,34 @@ Public Function GetUplataByVrsta(ByVal kupacID As String, _
         
         Dim uplata As Double
         uplata = CDbl(novacData(n, colUplata))
-        
+
         Dim vrsta As String
         Dim fakturaID As String
-        fakturaID = CStr(novacData(n, colFakID))
-        
+        fakturaID = Trim$(CStr(novacData(n, colFakID)))
+
         If fakturaID <> "" Then
-            If vrstaFakCache.Exists(fakturaID) Then
-                vrsta = vrstaFakCache(fakturaID)
-            Else
-                vrsta = "(Nepoznato)"
-            End If
+            ' Uplata po fakturi se deli po vrstama SRAZMERNO stavkama fakture.
+            ' Pre RF-06 je cela uplata isla na vrstu PRVE stavke, pa je izvestaj
+            ' salda kupca pokazivao dug na jednoj vrsti i visak na drugoj.
+            Dim udeli As Object
+            Set udeli = Nothing
+            If vrstaFakCache.Exists(fakturaID) Then Set udeli = vrstaFakCache(fakturaID)
+
+            Dim podela As Object
+            Set podela = RaspodeliPoUdelima(uplata, udeli)
+
+            Dim pk As Variant
+            For Each pk In podela.keys
+                If Not dict.Exists(CStr(pk)) Then dict.Add CStr(pk), 0#
+                dict(CStr(pk)) = dict(CStr(pk)) + CDbl(podela(pk))
+            Next pk
         Else
             vrsta = CStr(novacData(n, colVrsta))
             If vrsta = "" Then vrsta = "(Nerasporedeno)"
+
+            If Not dict.Exists(vrsta) Then dict.Add vrsta, 0#
+            dict(vrsta) = dict(vrsta) + uplata
         End If
-        
-        If Not dict.Exists(vrsta) Then dict.Add vrsta, 0#
-        dict(vrsta) = dict(vrsta) + uplata
 NextRow:
     Next n
     
@@ -812,45 +823,121 @@ Public Function BuildUplataDictByFaktura() As Object
     Set BuildUplataDictByFaktura = dict
 End Function
 
-Private Function BuildVrstaFakturaCache() As Object
+' RF-06 (AUD-023 / FM-0028 #6): FakturaID -> Dictionary(VrstaVoca -> vrednost stavki).
+' Ranije je ovaj kes cuvao SAMO vrstu PRVE stavke fakture, pa je cela uplata po
+' fakturi sa vise vrsta voca zavrsavala na jednoj vrsti. Sada nosi tezine svih
+' stavki (Kolicina * Cena), pa se uplata deli srazmerno (RaspodeliPoUdelima).
+Private Function BuildFakturaVrstaUdeoCache() As Object
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+
     Dim stavkeData As Variant
     stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
     If IsEmpty(stavkeData) Then
-        Set BuildVrstaFakturaCache = dict
+        Set BuildFakturaVrstaUdeoCache = dict
         Exit Function
     End If
     stavkeData = ExcludeStornirano(stavkeData, TBL_FAKTURA_STAVKE)
 
     If IsEmpty(stavkeData) Then
-        Set BuildVrstaFakturaCache = dict
+        Set BuildFakturaVrstaUdeoCache = dict
         Exit Function
     End If
-    
-    Const SRC As String = "BuildVrstaFakturaCache"
+
+    Const SRC As String = "BuildFakturaVrstaUdeoCache"
 
     Dim colFID As Long
     Dim colPrijID As Long
+    Dim colKol As Long
+    Dim colCena As Long
 
     colFID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
     colPrijID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRIJEMNICA_ID, SRC)
-    
+    ' Kolicina/Cena su nosioci tezine; kod stare seme bez njih sve stavke dobijaju
+    ' istu tezinu (1) -> raspodela postaje ravnomerna umesto "sve na prvu".
+    colKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
+    colCena = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA)
+
+    ' PrijemnicaID -> VrstaVoca, jednim prolazom (umesto LookupValue po stavci).
+    Dim prijVrstaDict As Object
+    Set prijVrstaDict = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_VRSTA)
+
     Dim i As Long
     For i = 1 To UBound(stavkeData, 1)
         Dim fID As String
-        fID = CStr(stavkeData(i, colFID))
-        If Not dict.Exists(fID) Then
+        fID = Trim$(CStr(stavkeData(i, colFID)))
+        If Len(fID) > 0 Then
+            Dim prijID As String
+            prijID = Trim$(CStr(stavkeData(i, colPrijID)))
+
             Dim vrsta As String
-            vrsta = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
-                         CStr(stavkeData(i, colPrijID)), COL_PRJ_VRSTA))
-            If vrsta = "" Then vrsta = "(Nepoznato)"
-            dict.Add fID, vrsta
+            If prijVrstaDict.Exists(prijID) Then vrsta = CStr(prijVrstaDict(prijID)) Else vrsta = ""
+            If Trim$(vrsta) = "" Then vrsta = "(Nepoznato)"
+
+            Dim tezina As Double
+            tezina = 1
+            If colKol > 0 And colCena > 0 Then
+                If IsNumeric(stavkeData(i, colKol)) And IsNumeric(stavkeData(i, colCena)) Then
+                    tezina = CDbl(stavkeData(i, colKol)) * CDbl(stavkeData(i, colCena))
+                End If
+            End If
+            If tezina < 0 Then tezina = 0
+
+            If Not dict.Exists(fID) Then dict.Add fID, CreateObject("Scripting.Dictionary")
+            Dim udeli As Object
+            Set udeli = dict(fID)
+            If Not udeli.Exists(vrsta) Then udeli.Add vrsta, 0#
+            udeli(vrsta) = udeli(vrsta) + tezina
         End If
     Next i
-    
-    Set BuildVrstaFakturaCache = dict
+
+    Set BuildFakturaVrstaUdeoCache = dict
+End Function
+
+' Podeli iznos po tezinama iz `udeli` (kljuc -> tezina). Cist racun, bez tabela:
+' testira ga modIzvestajTests.RunIzvestajTests.
+'   - zbir tezina <= 0 (ili prazan dict) -> ceo iznos na "(Nepoznato)"
+'   - poslednji kljuc nosi ostatak zaokruzivanja, pa je zbir podele TACNO iznos
+' Returns: Dictionary(kljuc -> deo iznosa)
+Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object) As Object
+    Dim outDict As Object
+    Set outDict = CreateObject("Scripting.Dictionary")
+
+    Dim ukupno As Double
+    ukupno = 0
+
+    Dim k As Variant
+    If Not udeli Is Nothing Then
+        For Each k In udeli.keys
+            If IsNumeric(udeli(k)) Then ukupno = ukupno + CDbl(udeli(k))
+        Next k
+    End If
+
+    If ukupno <= 0 Then
+        outDict.Add "(Nepoznato)", iznos
+        Set RaspodeliPoUdelima = outDict
+        Exit Function
+    End If
+
+    Dim keys As Variant
+    keys = udeli.keys
+
+    Dim dodeljeno As Double
+    dodeljeno = 0
+
+    Dim i As Long
+    For i = 0 To UBound(keys)
+        Dim deo As Double
+        If i = UBound(keys) Then
+            deo = iznos - dodeljeno          ' ostatak -> nema centa razlike
+        Else
+            deo = iznos * (CDbl(udeli(keys(i))) / ukupno)
+        End If
+        outDict.Add CStr(keys(i)), deo
+        dodeljeno = dodeljeno + deo
+    Next i
+
+    Set RaspodeliPoUdelima = outDict
 End Function
 
 
