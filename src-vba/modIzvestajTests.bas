@@ -17,11 +17,30 @@ Option Explicit
 Private m_izvFail As Long
 Private m_izvPass As Long
 
+' Deterministicki podaci za end-to-end testove. Datum je namerno van svakog
+' realnog opsega, pa seed redovi ne mogu da se pomesaju sa produkcijskim.
+Private Const IZVT_BROJ As String = "IZVT-1/150199"
+Private Const IZVT_STANICA As String = "IZVT-OM"
+Private Const IZVT_VOZAC_A As String = "IZVT-VZ-A"
+Private Const IZVT_VOZAC_B As String = "IZVT-VZ-B"
+Private Const IZVT_KUPAC_A As String = "IZVT-KP-A"
+Private Const IZVT_KUPAC_B As String = "IZVT-KP-B"
+
+Private Function IZVT_DATUM() As Date
+    IZVT_DATUM = DateSerial(1999, 1, 15)
+End Function
+
 ' ============================================================
 ' RF-06 ASSERT SUITE
 ' Svaki blok odgovara jednoj stavki iz AUD-023 / FM-0028.
+'
+' TVRD GATE: suite PODIZE gresku kad ijedan assert padne ili kad interno pukne
+' (ista konvencija kao RunSheetsJsonParserTests / RunMasterSyncSmokeSuite posle
+' RF-14 -- inace automatizovani pozivalac vidi "makro zavrsen" i prijavi PASS
+' iako su assertioni pali).
 ' ============================================================
 Public Sub RunIzvestajTests()
+    Dim tx As clsTransaction
     On Error GoTo EH
 
     m_izvFail = 0
@@ -31,27 +50,64 @@ Public Sub RunIzvestajTests()
     Debug.Print "RunIzvestajTests START (RF-06 / AUD-023)"
     Debug.Print String(70, "-")
 
+    ' --- Cisti racunski seam-ovi (bez tabela) ---
     T_IzplateStanicaAtribucija
     T_KarticaPocetnoStanje
     T_KarticaAmbPocetnoStanje
     T_NemaPrijemaOznaka
+    T_PrijemVlasnikRazresenje
     T_UplataSrazmernoPoVrsti
     T_DispatchNepodrzanTip
+
+    ' --- End-to-end nad tabelama (u transakciji, UVEK rollback) ---
+    ' Seam testovi ne mogu da uhvate gresku u samom table-join-u, a upravo je
+    ' join po `BrojZbirne` bio nosilac pogresnih brojki.
+    If GetTable(TBL_ZBIRNA) Is Nothing Or GetTable(TBL_PRIJEMNICA) Is Nothing _
+       Or GetTable(TBL_OTPREMNICA) Is Nothing Then
+        Debug.Print "  SKIP | end-to-end: nema tabela zbirna/prijemnica/otpremnica"
+    Else
+        Set tx = New clsTransaction
+        tx.BeginTx
+        tx.AddTableSnapshot TBL_ZBIRNA
+        tx.AddTableSnapshot TBL_PRIJEMNICA
+        tx.AddTableSnapshot TBL_OTPREMNICA
+        tx.AddTableSnapshot TBL_OTKUP
+
+        T_E2E_ManjakDvaVlasnikaIstiBroj
+        T_E2E_RobaOMDvaVlasnikaIstiBroj
+
+        tx.RollbackTx
+        Set tx = Nothing
+    End If
 
     Debug.Print String(70, "-")
     If m_izvFail = 0 Then
         Debug.Print "RunIzvestajTests OK  | " & m_izvPass & " provera proslo"
-    Else
-        Debug.Print "RunIzvestajTests FAIL | " & m_izvFail & " od " & _
-                    (m_izvFail + m_izvPass) & " provera palo"
+        Debug.Print String(70, "=")
+        Exit Sub
     End If
+
+    Debug.Print "RunIzvestajTests FAIL | " & m_izvFail & " od " & _
+                (m_izvFail + m_izvPass) & " provera palo"
     Debug.Print String(70, "=")
+    On Error GoTo 0
+    Err.Raise vbObjectError + 7610, "modIzvestajTests.RunIzvestajTests", _
+              "RunIzvestajTests: " & m_izvFail & " od " & (m_izvFail + m_izvPass) & _
+              " provera palo (detalji u Immediate Window)."
     Exit Sub
 
 EH:
+    Dim eNum As Long, eDesc As String, eSrc As String
+    eNum = Err.Number: eDesc = Err.description: eSrc = Err.SOURCE
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
     Debug.Print String(70, "!")
-    Debug.Print "RunIzvestajTests ERROR | " & Err.Number & " | " & Err.SOURCE & " | " & Err.description
+    Debug.Print "RunIzvestajTests ERROR | " & eNum & " | " & eSrc & " | " & eDesc
     Debug.Print String(70, "!")
+    Err.Raise eNum, eSrc, eDesc
 End Sub
 
 ' --- (a) FM-0028 #3/#9: isplata pripada stanici po OMID-u REDA ---
@@ -178,6 +234,50 @@ Private Sub T_NemaPrijemaOznaka()
     IzvChkEqD CDbl(m(2)), 0#, S & "osnovica 0 -> procenat 0, bez greske"
 End Sub
 
+' --- (c2) AUD-052 posledica: BrojZbirne NIJE identitet ---
+Private Sub T_PrijemVlasnikRazresenje()
+    Const S As String = "Prijem/vlasnik: "
+
+    ' Broj ima JEDNOG vlasnika -> join po broju je siguran (stara, brza putanja).
+    Dim r As Variant
+    r = PrijemZaZbirnu(1, True, 0, 2, 900#)
+    IzvChk CBool(r(0)) = True, S & "jedan vlasnik -> prijem vazi"
+    IzvChkEqD CDbl(r(1)), 900#, S & "jedan vlasnik -> kg po broju"
+    IzvChkEqText CStr(r(2)), "", S & "jedan vlasnik -> bez oznake"
+
+    ' Nema nijedne zbirne / nema prijemnice -> nema prijema (ne 100% manjka).
+    r = PrijemZaZbirnu(1, True, 0, 0, 0#)
+    IzvChk CBool(r(0)) = False, S & "bez prijemnice -> nema prijema"
+    IzvChkEqText CStr(r(2)), IZV_NEMA_PRIJEMA, S & "oznaka 'nema prijema'"
+
+    ' Broj dele DVA vlasnika, ali je vlasnik reda razresen i sve prijemnice
+    ' nose kompletnog vlasnika -> racuna se owner-scoped prijem.
+    r = PrijemZaZbirnu(2, True, 0, 1, 1500#)
+    IzvChk CBool(r(0)) = True, S & "dva vlasnika + razresen -> prijem vazi"
+    IzvChkEqD CDbl(r(1)), 1500#, S & "koristi se owner-scoped kg, ne zbir broja"
+
+    ' Fail-closed 1: vlasnik reda se ne moze razresiti.
+    r = PrijemZaZbirnu(2, False, 0, 1, 1500#)
+    IzvChk CBool(r(0)) = False, S & "dva vlasnika + nerazresen -> bez brojke"
+    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "oznaka 'nejasan vlasnik'"
+
+    ' Fail-closed 2: postoji prijemnica koja se ne moze pripisati nijednoj zbirnoj.
+    r = PrijemZaZbirnu(2, True, 1, 1, 1500#)
+    IzvChk CBool(r(0)) = False, S & "nepripisiva prijemnica -> bez brojke"
+    IzvChkEqText CStr(r(2)), IZV_VLASNIK_NEJASAN, S & "nepripisiva -> 'nejasan vlasnik'"
+
+    ' Nepripisiva prijemnica NE blokira kad broj ima jednog vlasnika
+    ' (tada je pripadnost dokazana samim brojem -- starije instalacije).
+    r = PrijemZaZbirnu(1, True, 3, 3, 900#)
+    IzvChk CBool(r(0)) = True, S & "jedan vlasnik: prazan vlasnik na prijemnici ne smeta"
+
+    ' Vlasnik kljuc: ista definicija kao modStorno.RequireJedanVlasnikPoBroju.
+    IzvChkEqText ZbirnaVlasnikKljuc("1/010126", "VZ-1", "KP-1"), "1/010126|VZ-1|KP-1", _
+                 S & "vlasnik kljuc = broj|vozac|kupac"
+    IzvChkEqText ZbirnaVlasnikKljuc(" 1/010126 ", " VZ-1", "KP-1 "), "1/010126|VZ-1|KP-1", _
+                 S & "vlasnik kljuc trimuje delove"
+End Sub
+
 ' --- (d) FM-0028 #6: uplata po fakturi se deli SRAZMERNO stavkama ---
 Private Sub T_UplataSrazmernoPoVrsti()
     Const S As String = "Uplata po vrsti: "
@@ -212,14 +312,207 @@ Private Sub T_UplataSrazmernoPoVrsti()
     Set p = RaspodeliPoUdelima(500#, Nothing)
     IzvChkEqD CDbl(p("(Nepoznato)")), 500#, S & "nepoznata faktura -> (Nepoznato)"
 
-    ' Zaokruzivanje: 100 / 3 jednake stavke -> zbir mora ostati tacno 100.
+    ' Zaokruzivanje: 100 / 3 jednake stavke. Delovi moraju biti VEC zaokruzeni na
+    ' 2 decimale (33,33 / 33,33 / 33,34), inace forma prikaze 3 x 33,33 = 99,99
+    ' uz UKUPNO 100,00 -- vidljiva razlika od jednog centa.
     Dim tri As Object
     Set tri = CreateObject("Scripting.Dictionary")
     tri.Add "A", 1#: tri.Add "B", 1#: tri.Add "C", 1#
+    ' NAPOMENA: ovde se poredi na NIVOU CENTA (IzvChkEqC), ne sa tolerancijom
+    ' 0,01 -- nezaokruzeno 33,3333 bi proslo tolerantnu proveru i propustilo
+    ' bas onu gresku koju test treba da fiksira.
     Set p = RaspodeliPoUdelima(100#, tri)
-    IzvChkEqD CDbl(p("A")) + CDbl(p("B")) + CDbl(p("C")), 100#, _
-              S & "ostatak zaokruzivanja ne curi"
+    IzvChkEqC CDbl(p("A")), 33.33, S & "prvi deo zaokruzen na 33,33"
+    IzvChkEqC CDbl(p("B")), 33.33, S & "drugi deo zaokruzen na 33,33"
+    IzvChkEqC CDbl(p("C")), 33.34, S & "poslednji deo nosi zaokruzeni ostatak 33,34"
+    IzvChkEqC CDbl(p("A")) + CDbl(p("B")) + CDbl(p("C")), 100#, _
+              S & "zbir ZAOKRUZENIH delova = 100,00 (ne 99,99)"
+    IzvChk IsRoundedTo2(CDbl(p("A"))) And IsRoundedTo2(CDbl(p("B"))) And IsRoundedTo2(CDbl(p("C"))), _
+           S & "nijedan deo nema vise od 2 decimale"
+
+    ' Isto na iznosu koji se ne deli lepo na dve vrste.
+    Dim dve As Object
+    Set dve = CreateObject("Scripting.Dictionary")
+    dve.Add "A", 1#: dve.Add "B", 2#
+    Set p = RaspodeliPoUdelima(10#, dve)
+    IzvChkEqC CDbl(p("A")), 3.33, S & "1/3 od 10 = 3,33"
+    IzvChkEqC CDbl(p("B")), 6.67, S & "ostatak = 6,67"
+    IzvChkEqC CDbl(p("A")) + CDbl(p("B")), 10#, S & "zbir = 10,00"
+
+    ' Zaokruzivanje navise na .xx5 se NE testira na knife-edge vrednosti
+    ' (2,345 u Double-u nije tacno 2,345, pa bi test bio nedeterministican).
+    IzvChkEqC ZaokruziNovac(2.344), 2.34, S & "2,344 -> 2,34"
+    IzvChkEqC ZaokruziNovac(2.346), 2.35, S & "2,346 -> 2,35"
+    IzvChkEqC ZaokruziNovac(-2.346), -2.35, S & "negativan iznos je simetrican"
+    IzvChkEqC ZaokruziNovac(0#), 0#, S & "nula ostaje nula"
 End Sub
+
+' Da li vrednost stane u 2 decimale (bez repa tipa 33,3333).
+Private Function IsRoundedTo2(ByVal v As Double) As Boolean
+    IsRoundedTo2 = (Abs(v * 100 - Int(v * 100 + 0.5)) < 0.000001)
+End Function
+
+' ============================================================
+' END-TO-END (nad tabelama, u transakciji pozivaoca -- uvek rollback)
+' Seam testovi ne mogu da uhvate gresku u samom join-u zbirna<->prijemnica,
+' a upravo je join po `BrojZbirne` (koji NIJE identitet -- RF-05/AUD-052)
+' pravio pogresnu prijemnu kolicinu, manjak i procenat.
+' ============================================================
+
+' Dve AKTIVNE zbirne istog broja, dva kupca, razlicite prijemne kolicine.
+Private Sub T_E2E_ManjakDvaVlasnikaIstiBroj()
+    Const S As String = "E2E Manjak (dva vlasnika, isti broj): "
+    On Error GoTo EH
+
+    SeedDveZbirneIstogBroja
+
+    Dim d As Date: d = IZVT_DATUM
+    Dim r As Variant
+    r = ReportManjak("", "", d, d)
+
+    IzvChk IsArray(r), S & "izvestaj vraca redove"
+    If Not IsArray(r) Then Exit Sub
+
+    ' Redovi se razlikuju po zbirnoj kilazi (broj im je isti -- to je i poenta).
+    Dim rowA As Long: rowA = IzvFindRowByNum(r, 2, 1000#)
+    Dim rowB As Long: rowB = IzvFindRowByNum(r, 2, 2000#)
+
+    IzvChk rowA > 0, S & "zbirna A (1000 kg) je zaseban red"
+    IzvChk rowB > 0, S & "zbirna B (2000 kg) je zaseban red"
+    If rowA = 0 Or rowB = 0 Then Exit Sub
+
+    ' Pre RF-06 bi OBA reda videla 900 + 1500 = 2400 primljenih kg.
+    IzvChkEqD CDbl(r(rowA, 3)), 900#, S & "A prima SVOJIH 900 kg (ne 2400)"
+    IzvChkEqD CDbl(r(rowB, 3)), 1500#, S & "B prima SVOJIH 1500 kg (ne 2400)"
+    IzvChkEqD CDbl(r(rowA, 4)), 100#, S & "A manjak = 1000 - 900"
+    IzvChkEqD CDbl(r(rowB, 4)), 500#, S & "B manjak = 2000 - 1500"
+    IzvChkEqD CDbl(r(rowA, 5)), 10#, S & "A manjak % = 10"
+    IzvChkEqD CDbl(r(rowB, 5)), 25#, S & "B manjak % = 25"
+
+    ' Filter po kupcu mora da izoluje samo svoju zbirnu.
+    r = ReportManjak("Kupac", IZVT_KUPAC_A, d, d)
+    IzvChk IsArray(r), S & "filter po kupcu vraca redove"
+    If IsArray(r) Then
+        IzvChkEq UBound(r, 1), 2, S & "kupac A: 1 red + UKUPNO"
+        IzvChkEqD CDbl(r(1, 2)), 1000#, S & "kupac A vidi samo svoju zbirnu"
+        IzvChkEqD CDbl(r(1, 3)), 900#, S & "kupac A vidi samo svoj prijem"
+    End If
+    Exit Sub
+EH:
+    IzvChk False, S & "neocekivana greska: " & Err.description
+End Sub
+
+' Ista postavka iz ugla "Otkupljena roba (OM)" -- razresenje ide preko vozaca
+' otpremnice (otpremnica nema KupacID).
+Private Sub T_E2E_RobaOMDvaVlasnikaIstiBroj()
+    Const S As String = "E2E RobaOM (dva vlasnika, isti broj): "
+    On Error GoTo EH
+
+    ' Zbirne/prijemnice je vec zasejao prethodni test (ista transakcija).
+    IzvSeed TBL_OTPREMNICA, _
+        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
+        Array("IZVT-OTP-A", "IZVT-OTP-A", IZVT_DATUM, IZVT_STANICA, IZVT_VOZAC_A, _
+              IZVT_BROJ, "Malina", "I", 1000#)
+
+    IzvSeed TBL_OTPREMNICA, _
+        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
+        Array("IZVT-OTP-B", "IZVT-OTP-B", IZVT_DATUM, IZVT_STANICA, IZVT_VOZAC_B, _
+              IZVT_BROJ, "Malina", "I", 2000#)
+
+    Dim d As Date: d = IZVT_DATUM
+    Dim r As Variant
+    r = ReportOtkupRoba("OM", IZVT_STANICA, d, d)
+
+    IzvChk IsArray(r), S & "izvestaj vraca redove"
+    If Not IsArray(r) Then Exit Sub
+
+    Dim rowA As Long: rowA = IzvFindRowByText(r, 2, "IZVT-OTP-A")
+    Dim rowB As Long: rowB = IzvFindRowByText(r, 2, "IZVT-OTP-B")
+    IzvChk rowA > 0 And rowB > 0, S & "obe otpremnice su u izvestaju"
+    If rowA = 0 Or rowB = 0 Then Exit Sub
+
+    ' Otpremnica kg = zbirna kg te iste zbirne, pa je rezultat isti i u malina
+    ' i u standardnom modu (srazmera = 1). Pre RF-06: osnovica 3000 i prijem
+    ' 2400 (obe zbirne skupa) -> A bi dobila 800 kg i manjak 200.
+    IzvChkEqD CDbl(r(rowA, 9)), 900#, S & "A prijemnica kg = 900 (ne 800)"
+    IzvChkEqD CDbl(r(rowB, 9)), 1500#, S & "B prijemnica kg = 1500"
+    IzvChkEqD CDbl(r(rowA, 10)), 100#, S & "A manjak = 100 (ne 200)"
+    IzvChkEqD CDbl(r(rowB, 10)), 500#, S & "B manjak = 500"
+    Exit Sub
+EH:
+    IzvChk False, S & "neocekivana greska: " & Err.description
+End Sub
+
+' Dve aktivne zbirne sa ISTIM BrojZbirne, razliciti vozac+kupac, svaka sa
+' svojom prijemnicom. Poziva se unutar transakcije pozivaoca.
+Private Sub SeedDveZbirneIstogBroja()
+    IzvSeed TBL_ZBIRNA, _
+        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
+              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+        Array("IZVT-ZBR-A", IZVT_BROJ, IZVT_DATUM, IZVT_VOZAC_A, IZVT_KUPAC_A, 1000#, 100)
+
+    IzvSeed TBL_ZBIRNA, _
+        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
+              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB), _
+        Array("IZVT-ZBR-B", IZVT_BROJ, IZVT_DATUM, IZVT_VOZAC_B, IZVT_KUPAC_B, 2000#, 200)
+
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
+        Array("IZVT-PRJ-A", "IZVT-PRJ-A", IZVT_DATUM, IZVT_BROJ, _
+              IZVT_VOZAC_A, IZVT_KUPAC_A, 900#)
+
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA), _
+        Array("IZVT-PRJ-B", "IZVT-PRJ-B", IZVT_DATUM, IZVT_BROJ, _
+              IZVT_VOZAC_B, IZVT_KUPAC_B, 1500#)
+End Sub
+
+' Append reda PO IMENU kolone (preskace kolone kojih nema u semi).
+Private Sub IzvSeed(ByVal tblName As String, ByVal cols As Variant, ByVal vals As Variant)
+    Dim lo As ListObject
+    Set lo = GetTable(tblName)
+    If lo Is Nothing Then
+        Err.Raise vbObjectError + 7611, "modIzvestajTests.IzvSeed", "Nema tabele: " & tblName
+    End If
+
+    Dim nr As ListRow
+    Set nr = lo.ListRows.Add
+
+    Dim i As Long, ci As Long
+    For i = LBound(cols) To UBound(cols)
+        ci = GetColumnIndex(tblName, CStr(cols(i)))
+        If ci > 0 Then nr.Range.cells(1, ci).value = vals(i)
+    Next i
+End Sub
+
+' Indeks reda ciji je `col` brojcano jednak `value` (0 = nije nadjen).
+Private Function IzvFindRowByNum(ByVal arr As Variant, ByVal col As Long, _
+                                 ByVal value As Double) As Long
+    Dim i As Long
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        If IsNumeric(arr(i, col)) And Not IsEmpty(arr(i, col)) Then
+            If Abs(CDbl(arr(i, col)) - value) < 0.01 Then
+                IzvFindRowByNum = i
+                Exit Function
+            End If
+        End If
+    Next i
+End Function
+
+Private Function IzvFindRowByText(ByVal arr As Variant, ByVal col As Long, _
+                                  ByVal value As String) As Long
+    Dim i As Long
+    For i = LBound(arr, 1) To UBound(arr, 1)
+        If Trim$(NzToText(arr(i, col))) = value Then
+            IzvFindRowByText = i
+            Exit Function
+        End If
+    Next i
+End Function
 
 ' --- (e) FM-0028 #12/#13/#14: nepodrzana kombinacija ne daje tudji izvestaj ---
 Private Sub T_DispatchNepodrzanTip()
@@ -263,6 +556,17 @@ End Sub
 
 Private Sub IzvChkEq(ByVal actual As Long, ByVal expected As Long, ByVal testName As String)
     If actual = expected Then
+        m_izvPass = m_izvPass + 1
+    Else
+        m_izvFail = m_izvFail + 1
+        Debug.Print "  FAIL | " & testName & " | ocekivano " & expected & ", dobijeno " & actual
+    End If
+End Sub
+
+' Poredjenje na nivou CENTA (za novcane iznose gde tolerancija 0,01 propusta
+' bas gresku koju test fiksira -- npr. nezaokruzeno 33,3333 vs 33,33).
+Private Sub IzvChkEqC(ByVal actual As Double, ByVal expected As Double, ByVal testName As String)
+    If Abs(actual - expected) < 0.000001 Then
         m_izvPass = m_izvPass + 1
     Else
         m_izvFail = m_izvFail + 1

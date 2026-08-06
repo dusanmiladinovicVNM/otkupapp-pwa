@@ -21,6 +21,13 @@ Option Explicit
 ' za isti podatak (FM-0028 #5).
 Public Const IZV_NEMA_PRIJEMA As String = "nema prijema"
 
+' Oznaka reda kod kog se prijem NE moze pouzdano pripisati zbirnoj: isti
+' `BrojZbirne` nose dve aktivne zbirne razlicitih vlasnika (RF-05/AUD-052 je
+' dokazao da poslovni broj nije identitet), a red/prijemnica nema podatak koji
+' bi jednoznacno razresio vlasnika. Fail-closed: bolje vidljivo "ne znam" nego
+' tudja kilaza upisana kao manjak.
+Public Const IZV_VLASNIK_NEJASAN As String = "nejasan vlasnik"
+
 ' Labela reda pocetnog stanja u karticama (FM-0028 #1).
 Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 
@@ -40,15 +47,49 @@ Public Function NovacRedPripadaStanici(ByVal rowOMID As String, _
     End If
 End Function
 
+' Odluka o pouzdanosti prijema za jednu zbirnu -- deljena izmedju ReportManjak
+' i ReportOtkupRobaOM. Cist racun, bez tabela (testira RunIzvestajTests).
+'
+'   brojVlasnika     koliko RAZLICITIH aktivnih vlasnika (vozac+kupac) nosi taj
+'                    BrojZbirne; 1 = broj je pouzdan identitet
+'   vlasnikRazresen  da li je pozivalac uspeo da odredi TACNOG vlasnika reda
+'   cntNejasan       prijemnice tog broja bez kompletnog vlasnika
+'   cntPrijem/kgPrijem  prijem u opsegu koji je pozivalac razresio
+'
+' Returns: Array(imaPrijem As Boolean, prijemKg As Double, oznaka As String)
+Public Function PrijemZaZbirnu(ByVal brojVlasnika As Long, _
+                               ByVal vlasnikRazresen As Boolean, _
+                               ByVal cntNejasan As Long, _
+                               ByVal cntPrijem As Long, _
+                               ByVal kgPrijem As Double) As Variant
+    If brojVlasnika > 1 Then
+        ' Broj dele dve zbirne. Ako vlasnik reda nije razresen, ili postoji
+        ' prijemnica koja se ne moze pripisati nijednoj -- ne racunamo manjak.
+        If (Not vlasnikRazresen) Or cntNejasan > 0 Then
+            PrijemZaZbirnu = Array(False, 0#, IZV_VLASNIK_NEJASAN)
+            Exit Function
+        End If
+    End If
+
+    If cntPrijem <= 0 Then
+        PrijemZaZbirnu = Array(False, 0#, IZV_NEMA_PRIJEMA)
+        Exit Function
+    End If
+
+    PrijemZaZbirnu = Array(True, kgPrijem, "")
+End Function
+
 ' Jedan racun manjka za obe putanje: ReportOtkupRobaOM (po otpremnici) i
 ' ReportManjak (po zbirnoj). Bez prijema brojke ostaju PRAZNE (ne 0, ne 100%)
-' i nose oznaku IZV_NEMA_PRIJEMA; pozivalac ih tada ne sme uracunati u UKUPNO.
+' i nose oznaku (IZV_NEMA_PRIJEMA ili IZV_VLASNIK_NEJASAN); pozivalac ih tada
+' ne sme uracunati u UKUPNO.
 ' Returns: Array(prijemKg, manjakKg, manjakPct, oznaka)
 Public Function ManjakStavka(ByVal osnovicaKg As Double, _
                              ByVal prijemKg As Double, _
-                             ByVal imaPrijem As Boolean) As Variant
+                             ByVal imaPrijem As Boolean, _
+                             Optional ByVal oznakaBezPrijema As String = IZV_NEMA_PRIJEMA) As Variant
     If Not imaPrijem Then
-        ManjakStavka = Array(Empty, Empty, Empty, IZV_NEMA_PRIJEMA)
+        ManjakStavka = Array(Empty, Empty, Empty, oznakaBezPrijema)
         Exit Function
     End If
 
@@ -1840,42 +1881,97 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         
         Dim razlika As Double
         razlika = kgBlokovi - kgOtp
-        
+
         ' Manjak proportional berechnen
         Dim thisBrZbirne As String
-        thisBrZbirne = CStr(otpData(i, colBrZbirne))
-        
-        ' Prijem po otpremnici. Bez prijemnice (ili bez upotrebljive osnovice za
-        ' srazmeru) red NEMA brojku manjka nego oznaku IZV_NEMA_PRIJEMA -- pre
-        ' RF-06 se isti slucaj prikazivao kao 0 kg / 0,00% manjka, dok ga je
-        ' izvestaj Manjak istovremeno prikazivao kao 100% (FM-0028 #5).
+        thisBrZbirne = Trim$(CStr(otpData(i, colBrZbirne)))
+
+        ' Vozac otpremnice -- treba i za razresenje vlasnika zbirne (dole) i za
+        ' prikaz imena, pa se cita pre oba.
+        Dim vozID As String
+        vozID = Trim$(CStr(otpData(i, colVozac)))
+
+        ' Prijem po otpremnici -- OWNER-SCOPED (RF-06 / AUD-023 + AUD-052).
+        ' Otpremnica nosi BrojZbirne i VozacID, ali ne i KupacID, pa se vlasnik
+        ' zbirne razresava ovako:
+        '   #V = 1  -> broj ima jednog vlasnika: join po broju je dokazano siguran
+        '              (i hvata starije prijemnice bez popunjenog vlasnika),
+        '   #V > 1  -> broj dele dve zbirne: pokusaj razresenja po vozacu (#O);
+        '              ako ne uspe ili postoji nepripisiva prijemnica -> fail-closed
+        '              oznaka IZV_VLASNIK_NEJASAN, bez izmisljene brojke.
+        ' Bez prijema red NEMA brojku manjka nego oznaku -- pre RF-06 se isti
+        ' slucaj prikazivao kao 0 kg / 0,00% (FM-0028 #5).
         Dim prijemnicaKg As Double: prijemnicaKg = 0
         Dim imaPrijem As Boolean: imaPrijem = False
-        Dim mVals As Variant
-        If manjakDict.Exists(thisBrZbirne) Then
-            mVals = manjakDict(thisBrZbirne)
-            Dim zbirnaTotal As Double: zbirnaTotal = mVals(0)
-            Dim prijTotal As Double: prijTotal = mVals(1)
+        Dim oznakaBez As String: oznakaBez = IZV_NEMA_PRIJEMA
+        Dim zbirnaTotal As Double: zbirnaTotal = 0
+        Dim prijTotal As Double: prijTotal = 0
 
-            If prijTotal > 0 Then
-                If malinaMode Then
-                    ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica -> direktno.
-                    prijemnicaKg = prijTotal
-                    imaPrijem = True
-                ElseIf zbirnaTotal > 0 Then
-                    ' Prijemnica kg srazmerno udelu otpremnice u zbirnoj otpremnici.
-                    prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
-                    imaPrijem = True
+        Dim nVlasnika As Long: nVlasnika = 0
+        If manjakDict.Exists("#V|" & thisBrZbirne) Then nVlasnika = CLng(manjakDict("#V|" & thisBrZbirne))
+
+        Dim cntNejasan As Long: cntNejasan = 0
+        If manjakDict.Exists("#N|" & thisBrZbirne) Then cntNejasan = CLng(manjakDict("#N|" & thisBrZbirne))
+
+        Dim vlasnikKey As String: vlasnikKey = ""
+        Dim razresen As Boolean: razresen = False
+        Dim cntPrijem As Long: cntPrijem = 0
+
+        If nVlasnika = 1 Then
+            razresen = True
+            vlasnikKey = CStr(manjakDict("#1|" & thisBrZbirne))
+            ' Prijem se cita po SAMOM broju: dokazano jedan vlasnik.
+            If manjakDict.Exists("#C|" & thisBrZbirne) Then cntPrijem = CLng(manjakDict("#C|" & thisBrZbirne))
+            If manjakDict.Exists("#K|" & thisBrZbirne) Then prijTotal = CDbl(manjakDict("#K|" & thisBrZbirne))
+        ElseIf nVlasnika > 1 Then
+            Dim vozKey As String
+            vozKey = "#O|" & thisBrZbirne & "|" & Trim$(vozID)
+            If manjakDict.Exists(vozKey) Then
+                razresen = True
+                vlasnikKey = CStr(manjakDict(vozKey))
+            End If
+            If razresen Then
+                If manjakDict.Exists(vlasnikKey) Then
+                    Dim ownVals As Variant
+                    ownVals = manjakDict(vlasnikKey)
+                    prijTotal = CDbl(ownVals(1))
+                    cntPrijem = CLng(ownVals(2))
                 End If
             End If
         End If
 
+        If Len(vlasnikKey) > 0 Then
+            If manjakDict.Exists(vlasnikKey) Then
+                Dim zbVals As Variant
+                zbVals = manjakDict(vlasnikKey)
+                zbirnaTotal = CDbl(zbVals(0))
+            End If
+        End If
+
+        Dim pz As Variant
+        pz = PrijemZaZbirnu(nVlasnika, razresen, cntNejasan, cntPrijem, prijTotal)
+        imaPrijem = CBool(pz(0))
+        oznakaBez = CStr(pz(2))
+
+        If imaPrijem Then
+            prijTotal = CDbl(pz(1))
+            If malinaMode Then
+                ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica -> direktno.
+                prijemnicaKg = prijTotal
+            ElseIf zbirnaTotal > 0 Then
+                ' Prijemnica kg srazmerno udelu otpremnice u zbirnoj otpremnici.
+                prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
+            Else
+                ' Nema upotrebljive osnovice za srazmeru -> ne izmisljaj manjak.
+                imaPrijem = False
+                oznakaBez = IZV_NEMA_PRIJEMA
+            End If
+        End If
+
         Dim mStavka As Variant
-        mStavka = ManjakStavka(kgOtp, prijemnicaKg, imaPrijem)
+        mStavka = ManjakStavka(kgOtp, prijemnicaKg, imaPrijem, oznakaBez)
 
         ' Vozac Name
-        Dim vozID As String
-        vozID = CStr(otpData(i, colVozac))
         Dim vozNaziv As String
         If vozID <> "" Then
             If vozacDict.Exists(vozID) Then vozNaziv = vozacDict(vozID) Else vozNaziv = ""
@@ -2525,59 +2621,48 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         Exit Function
     End If
     
-    ' Prijemnica EINMAL laden fuer Performance
-    Dim prijData As Variant
-    prijData = GetTableData(TBL_PRIJEMNICA)
-    
-    If IsArray(prijData) Then
-        prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
-    End If
-    
-    Dim colPBrZbr As Long, colPKol As Long
-    If IsArray(prijData) And Not IsEmpty(prijData) Then
-        colPBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportManjak")
-        colPKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportManjak")
-    End If
-    
+    ' Prijem + indeks vlasnika: deljeni owner-scoped agregat (modHelpers).
+    ' Raniji oblik je ovde rucno sabirao prijemnice po SAMOM BrojZbirne -- isti
+    ' propust koji je RF-05/AUD-052 vec dokazao na storno putanji.
+    Dim manjakDict As Object
+    Set manjakDict = BuildManjakDict()
+
     ' Zbirna-Daten
     Dim colBroj As Long, colZbrKol As Long, colZbrAmb As Long
+    Dim colZbrVoz As Long, colZbrKup As Long
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIzvestaj.ReportManjak")
     colZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, "modIzvestaj.ReportManjak")
     colZbrAmb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB, "modIzvestaj.ReportManjak")
-    
-    ' Zbirne aggregieren (mehrere Zeilen pro BrojZbirne bei Klasa I + II)
+    colZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportManjak")
+    colZbrKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modIzvestaj.ReportManjak")
+
+    ' Zbirne aggregieren po VLASNIKU (broj|vozac|kupac), ne po broju: dve aktivne
+    ' zbirne mogu deliti isti poslovni broj (Klasa I+II istog dokumenta i dalje
+    ' padaju u isti kljuc, jer dele i vozaca i kupca).
     Dim zbrDict As Object
     Set zbrDict = CreateObject("Scripting.Dictionary")
-    
+
     Dim i As Long
     For i = 1 To UBound(filtered, 1)
         Dim brZbr As String
-        brZbr = CStr(filtered(i, colBroj))
-        If Not zbrDict.Exists(brZbr) Then zbrDict.Add brZbr, Array(0#, 0#)
+        brZbr = Trim$(CStr(filtered(i, colBroj)))
+        Dim vlKey As String
+        vlKey = ZbirnaVlasnikKljuc(brZbr, _
+                                   Trim$(NzToText(filtered(i, colZbrVoz))), _
+                                   Trim$(NzToText(filtered(i, colZbrKup))))
+
+        ' vals: 0 = zbirna kg, 1 = ambalaza, 2 = BrojZbirne (za prikaz),
+        '       3 = VozacID (za razresenje vlasnika)
+        If Not zbrDict.Exists(vlKey) Then
+            zbrDict.Add vlKey, Array(0#, 0#, brZbr, Trim$(NzToText(filtered(i, colZbrVoz))))
+        End If
         Dim zv As Variant
-        zv = zbrDict(brZbr)
+        zv = zbrDict(vlKey)
         If IsNumeric(filtered(i, colZbrKol)) Then zv(0) = zv(0) + CDbl(filtered(i, colZbrKol))
         If IsNumeric(filtered(i, colZbrAmb)) Then zv(1) = zv(1) + CLng(filtered(i, colZbrAmb))
-        zbrDict(brZbr) = zv
+        zbrDict(vlKey) = zv
     Next i
-    
-    ' Prijemnica pro BrojZbirne aggregieren
-    Dim prijDict As Object
-    Set prijDict = CreateObject("Scripting.Dictionary")
-    
-    If IsArray(prijData) Then
-        For i = 1 To UBound(prijData, 1)
-            Dim pBrZbr As String
-            pBrZbr = CStr(prijData(i, colPBrZbr))
-            If zbrDict.Exists(pBrZbr) Then
-                If Not prijDict.Exists(pBrZbr) Then prijDict.Add pBrZbr, 0#
-                If IsNumeric(prijData(i, colPKol)) Then
-                    prijDict(pBrZbr) = prijDict(pBrZbr) + CDbl(prijData(i, colPKol))
-                End If
-            End If
-        Next i
-    End If
-    
+
     ' Ergebnis
     Dim rowCount As Long
     rowCount = zbrDict.count
@@ -2585,10 +2670,10 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         ReportManjak = Empty
         Exit Function
     End If
-    
+
     Dim result() As Variant
     ReDim result(1 To rowCount + 1, 1 To 6)  ' +1 UKUPNO
-    
+
     Dim keys As Variant
     keys = zbrDict.keys
     Dim totalZbrKg As Double, totalPrijKg As Double
@@ -2597,27 +2682,49 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         zv = zbrDict(keys(i))
         Dim zbrKg As Double: zbrKg = zv(0)
         Dim zbrAmb As Long: zbrAmb = CLng(zv(1))
+        Dim rowBroj As String: rowBroj = CStr(zv(2))
 
-        ' Prijem postoji samo ako uopste ima prijemnice vezane za ovu zbirnu.
-        ' Ako je nema, 100% "manjka" nije manjak nego jos-nepreuzeta posiljka.
-        Dim imaPrijem As Boolean: imaPrijem = prijDict.Exists(keys(i))
+        ' Vlasnik reda je ovde POZNAT (zbirna nosi i vozaca i kupca), pa se
+        ' prijem cita owner-scoped. Kad broj ima jednog vlasnika koristi se
+        ' agregat po broju -- hvata i starije prijemnice bez vlasnika.
+        Dim nVlasnika As Long: nVlasnika = 0
+        If manjakDict.Exists("#V|" & rowBroj) Then nVlasnika = CLng(manjakDict("#V|" & rowBroj))
+
+        Dim cntNejasan As Long: cntNejasan = 0
+        If manjakDict.Exists("#N|" & rowBroj) Then cntNejasan = CLng(manjakDict("#N|" & rowBroj))
+
+        Dim cntPrijem As Long: cntPrijem = 0
         Dim prijKg As Double: prijKg = 0
-        If imaPrijem Then prijKg = prijDict(keys(i))
+
+        If nVlasnika <= 1 Then
+            If manjakDict.Exists("#C|" & rowBroj) Then cntPrijem = CLng(manjakDict("#C|" & rowBroj))
+            If manjakDict.Exists("#K|" & rowBroj) Then prijKg = CDbl(manjakDict("#K|" & rowBroj))
+        ElseIf manjakDict.Exists(CStr(keys(i))) Then
+            Dim ownVals As Variant
+            ownVals = manjakDict(CStr(keys(i)))
+            prijKg = CDbl(ownVals(1))
+            cntPrijem = CLng(ownVals(2))
+        End If
+
+        Dim pz As Variant
+        pz = PrijemZaZbirnu(nVlasnika, True, cntNejasan, cntPrijem, prijKg)
+        Dim imaPrijem As Boolean: imaPrijem = CBool(pz(0))
+        prijKg = CDbl(pz(1))
 
         Dim mStavka As Variant
-        mStavka = ManjakStavka(zbrKg, prijKg, imaPrijem)
+        mStavka = ManjakStavka(zbrKg, prijKg, imaPrijem, CStr(pz(2)))
 
         Dim prosek As Double: prosek = 0
         If zbrAmb > 0 Then prosek = zbrKg / zbrAmb
 
-        result(i + 1, 1) = keys(i)
+        result(i + 1, 1) = rowBroj
         result(i + 1, 2) = zbrKg
         result(i + 1, 3) = mStavka(0)
         result(i + 1, 4) = mStavka(1)
         If imaPrijem Then
             result(i + 1, 5) = mStavka(2)
         Else
-            result(i + 1, 5) = mStavka(3)      ' oznaka "nema prijema"
+            result(i + 1, 5) = mStavka(3)      ' "nema prijema" / "nejasan vlasnik"
         End If
         result(i + 1, 6) = prosek
 

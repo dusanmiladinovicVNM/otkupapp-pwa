@@ -897,8 +897,11 @@ End Function
 ' Podeli iznos po tezinama iz `udeli` (kljuc -> tezina). Cist racun, bez tabela:
 ' testira ga modIzvestajTests.RunIzvestajTests.
 '   - zbir tezina <= 0 (ili prazan dict) -> ceo iznos na "(Nepoznato)"
-'   - poslednji kljuc nosi ostatak zaokruzivanja, pa je zbir podele TACNO iznos
-' Returns: Dictionary(kljuc -> deo iznosa)
+'   - svaki deo se FINANSIJSKI zaokruzuje na 2 decimale, a poslednji kljuc nosi
+'     zaokruzeni ostatak. Bez toga bi 100 / 3 dalo 3 x 33,3333 -- prikaz bi
+'     pokazao 33,33 + 33,33 + 33,33 = 99,99 uz UKUPNO 100,00 (vidljiva razlika
+'     od jednog centa u izvestaju salda kupca).
+' Returns: Dictionary(kljuc -> deo iznosa, zaokruzen na 2 decimale)
 Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object) As Object
     Dim outDict As Object
     Set outDict = CreateObject("Scripting.Dictionary")
@@ -914,13 +917,16 @@ Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object)
     End If
 
     If ukupno <= 0 Then
-        outDict.Add "(Nepoznato)", iznos
+        outDict.Add "(Nepoznato)", ZaokruziNovac(iznos)
         Set RaspodeliPoUdelima = outDict
         Exit Function
     End If
 
     Dim keys As Variant
     keys = udeli.keys
+
+    Dim ciljUkupno As Double
+    ciljUkupno = ZaokruziNovac(iznos)
 
     Dim dodeljeno As Double
     dodeljeno = 0
@@ -929,15 +935,25 @@ Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object)
     For i = 0 To UBound(keys)
         Dim deo As Double
         If i = UBound(keys) Then
-            deo = iznos - dodeljeno          ' ostatak -> nema centa razlike
+            ' Ostatak POSLE zaokruzivanja -> zbir prikazanih delova = ceo iznos.
+            deo = ZaokruziNovac(ciljUkupno - dodeljeno)
         Else
-            deo = iznos * (CDbl(udeli(keys(i))) / ukupno)
+            deo = ZaokruziNovac(iznos * (CDbl(udeli(keys(i))) / ukupno))
         End If
         outDict.Add CStr(keys(i)), deo
         dodeljeno = dodeljeno + deo
     Next i
 
     Set RaspodeliPoUdelima = outDict
+End Function
+
+' Finansijsko zaokruzivanje na 2 decimale (half-up). VBA `Round` je banker's
+' rounding (2,345 -> 2,34), sto na novcu daje sistematsko odstupanje.
+Public Function ZaokruziNovac(ByVal value As Double) As Double
+    Dim znak As Double
+    znak = 1
+    If value < 0 Then znak = -1
+    ZaokruziNovac = znak * Int(Abs(value) * 100 + 0.5) / 100
 End Function
 
 
