@@ -199,8 +199,13 @@ Public Function GenerateBrojPrijemnice(ByVal kupacID As String, _
     Exit Function
 
 EH:
+    ' AUD-041(a): EH NE SME da vrati validan-looking broj. "1/ddmmyy" je izgledao
+    ' kao regularan prvi broj dana, pa je posle greske u skenu (schema drift,
+    ' nedostupna tabela) prijemnica dobijala broj koji vec postoji. Prazan string
+    ' je jedini bezbedan izlaz -- isto kao GenerateBrojDokumenta /
+    ' GenerateBrojOtpremnice; caller (AutoChainHladnjaca) ga vidi kao pad koraka.
     LogErr SRC, "kupac=" & kupacID
-    GenerateBrojPrijemnice = "1/" & Format$(datum, "ddmmyy")
+    GenerateBrojPrijemnice = ""
 End Function
 
 ' ============================================================

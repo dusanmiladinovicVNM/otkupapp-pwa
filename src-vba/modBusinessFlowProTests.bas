@@ -1465,6 +1465,23 @@ Private Sub SeedStanica()
     RequireAppend TBL_STANICE, rowData, "SeedStanica"
 End Sub
 
+' Idempotentan seed stanice po zadatom ID-u. AUD-046: mirror/stamp testovi vise ne
+' smeju da rade sa StanicaID-em koji ne postoji u tblStanice.
+Private Sub SeedStanicaByID(ByVal stanicaID As String, ByVal naziv As String)
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_STANICE)
+
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", naziv
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Kontakt", "Test Kontakt"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+
+    RequireAppend TBL_STANICE, rowData, "SeedStanicaByID"
+End Sub
+
 ' Stanica oznacena kao hladnjaca -> IsHladnjacaStanica = True (auto-lanac).
 Private Sub SeedHladnjacaStanica()
     If RowExists(TBL_STANICE, "StanicaID", TEST_HLAD_ST_ID) Then Exit Sub
@@ -1614,6 +1631,10 @@ Private Sub Test_MalinaVozacMirror()
     ' Fiksni test ID -> idempotentno; ne gomila redove kroz vise run-ova suite-a.
     Const MIR_ST As String = "ST-MIRTEST-90001"
 
+    ' AUD-046: stanica MORA da postoji da bi mirror smeo da se napravi, pa je
+    ' test-stanica sada deo pripreme (ranije se Ensure zvao za nepostojeci ID).
+    SeedStanicaByID MIR_ST, "TEST MIRROR STANICA"
+
     prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
     SetConfigValue CFG_KEY_MALINA_MODE, "YES"
 
@@ -1625,6 +1646,29 @@ Private Sub Test_MalinaVozacMirror()
     ' Idempotencija: ponovni poziv NE sme da kreira nov red.
     AssertFalse EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", ""), _
         "Malina mirror: ponovni poziv ne kreira duplikat (idempotentno)"
+
+    ' AUD-046: canonical par-provera vidi kompletan mirror.
+    AssertTrue IsManagedStationMirror(MIR_ST), _
+        "Malina mirror: IsManagedStationMirror True za kompletan par (tblStanice+tblVozaci)"
+
+    ' AUD-046: stanica koja NE postoji nije mirror i Ensure za nju MORA da padne
+    ' (ne sme da napravi vozaca bez stanice, ni da tiho vrati False).
+    Const MIR_NEPOSTOJI As String = "ST-MIRTEST-NEMA-90002"
+
+    AssertFalse IsManagedStationMirror(MIR_NEPOSTOJI), _
+        "Malina mirror: IsManagedStationMirror False za nepostojecu stanicu"
+
+    Dim raised As Boolean
+    On Error Resume Next
+    Call EnsureVozacMirrorForStanica(MIR_NEPOSTOJI, "X", "Y", "")
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "Malina mirror: Ensure re-raise-uje za nepostojecu stanicu (ne guta gresku)"
+    AssertFalse RowExists(TBL_VOZACI, "VozacID", MIR_NEPOSTOJI), _
+        "Malina mirror: nema vozaca bez stanice (nije kreiran shadow)"
 
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     Exit Sub

@@ -532,6 +532,22 @@ Public Function CreateOTKSheetsForAllStanice_Core( _
                 "WriteSheetData header failed. Sheet=" & sheetName & _
                 "; SpreadsheetID=" & newID & _
                 "; StanicaID=" & stanicaID
+
+            ' AUD-042(c): sheet je kreiran, header nije upisan -> "poison"
+            ' spreadsheet. Bez ovoga ga sledeci run vidi kao existing
+            ' (TryGetSpreadsheetID ga nalazi po imenu), preskoci ga i header
+            ' NIKAD ne bude upisan -- PWA pise u sheet bez sheme.
+            ' Zato ga saljemo u Drive trash; sledeci run pravi cist novi.
+            If DriveTrashFile(newID) Then
+                LogWarn SRC, _
+                    "Poison OTK sheet poslat u Drive trash (header nije upisan). Sheet=" & sheetName & _
+                    "; SpreadsheetID=" & newID
+            Else
+                LogError SRC, _
+                    "Poison OTK sheet NIJE obrisan -- obrisi ga rucno na Drive-u pre sledeceg run-a. Sheet=" & sheetName & _
+                    "; SpreadsheetID=" & newID
+            End If
+
             GoTo NextStanica
         End If
 
@@ -696,7 +712,16 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
     colKolAmb = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOL_AMB, "AutoCreateOtpremniceFromPWA")
     
     ' Sammle unverknuepfte Otkupi MIT VozacID ? gruppiere nach Key
-    ' Key = StanicaID|Datum|VozacID|Klasa
+    '
+    ' AUD-043(a): kljuc MORA da nosi i artikal-atribute.
+    ' Key = StanicaID|Datum|VozacID|Klasa|VrstaVoca|SortaVoca|Cena|TipAmbalaze
+    '
+    ' Stari kljuc (Stanica|Datum|Vozac|Klasa) je spajao SVE otkupe istog vozaca
+    ' i dana u jednu otpremnicu, a Vrsta/Sorta/Cena/TipAmbalaze su se citali sa
+    ' PRVOG reda grupe dok su se kolicine sabirale -> jabuke + kruske istog
+    ' vozaca su isle kao "sve jabuke", po ceni jabuka i u ambalazi prvog reda.
+    ' Novi segmenti se DODAJU NA KRAJ kljuca, pa parts(0..3) i dalje znace
+    ' Stanica|Datum|Vozac|Klasa (Split pozicije ostaju iste).
     Dim groups As Object
     Set groups = CreateObject("Scripting.Dictionary")
     
@@ -711,7 +736,11 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
             gKey = CStr(data(i, colSt)) & "|" & _
                    Format$(CDate(data(i, colDat)), "YYYY-MM-DD") & "|" & _
                    vozID & "|" & _
-                   CStr(nz(data(i, colKlasa), ""))
+                   CStr(nz(data(i, colKlasa), "")) & "|" & _
+                   CStr(nz(data(i, colVrsta), "")) & "|" & _
+                   CStr(nz(data(i, colSorta), "")) & "|" & _
+                   Format$(CDbl(nz(data(i, colCena), 0)), "0.000000") & "|" & _
+                   CStr(nz(data(i, colTipAmb), ""))
             
             If Not groups.Exists(gKey) Then
                 groups.Add gKey, New Collection
@@ -744,7 +773,9 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         
         Dim grpRows As Collection: Set grpRows = groups(keys(k))
         
-        ' Aggregiere Kolicina, Ambalaza, nehme Vrsta/Sorta/Cena vom ersten
+        ' Aggregiere Kolicina, Ambalaza, nehme Vrsta/Sorta/Cena vom ersten.
+        ' AUD-043(a): "vom ersten" je sada bezbedno -- Vrsta/Sorta/Cena/TipAmb su
+        ' deo grupnog kljuca, pa su SVI redovi grupe identicni po tim poljima.
         Dim totalKol As Double: totalKol = 0
         Dim totalAmb As Long: totalAmb = 0
         Dim firstRow As Long: firstRow = grpRows(1)
@@ -876,8 +907,29 @@ Public Function StampVozacFromStanicaForMalina() As Long
             Dim voz As String: voz = Trim$(CStr(nz(data(r, colVoz), "")))
             Dim st As String: st = Trim$(CStr(nz(data(r, colSt), "")))
             If voz = "" And st <> "" Then
-                RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, st, SRC
-                cnt = cnt + 1
+                ' AUD-046: NE stampaj VozacID koji ne postoji u tblVozaci -- otkup
+                ' bi dobio FK bez pokrica (svaki join na tblVozaci prazan).
+                ' Prvo pokusaj da napravis mirror par; Ensure sada re-raise-uje,
+                ' pa se greska ovde lokalno hvata da JEDNA losa stanica ne obori
+                ' ceo stamp run (rollback celog _TX). Odluku donosi re-provera.
+                If Not IsManagedStationMirror(st) Then
+                    On Error Resume Next
+                    EnsureVozacMirrorForStanica st, _
+                        Trim$(CStr(nz(LookupValue(TBL_STANICE, "StanicaID", st, "Naziv"), ""))), _
+                        "(malina)", ""
+                    On Error GoTo 0
+                End If
+
+                If IsManagedStationMirror(st) Then
+                    RequireUpdateCell TBL_OTKUP, r, COL_OTK_VOZAC, st, SRC
+                    cnt = cnt + 1
+                Else
+                    ' Preskoceno, ali NE u tisini -- operater vidi u logu koja
+                    ' stanica nema par-vozaca.
+                    LogWarn SRC, "Stamp preskocen: nema vozac-mirror para (" & _
+                                 TBL_STANICE & "+" & TBL_VOZACI & ") za StanicaID=" & st & _
+                                 "; Row=" & CStr(r)
+                End If
             End If
         End If
     Next r
@@ -1486,7 +1538,16 @@ Private Function ValidatePWAOtkup(ByVal data As Variant, ByVal row As Long) As S
         ValidatePWAOtkup = "VrstaVoca missing"
         Exit Function
     End If
-    
+
+    ' AUD-042(b): datum se MORA validirati pre importa. Import putanja je do sada
+    ' na neparsiran datum tiho stavljala Date() (danas) -- dokument je dobijao
+    ' pogresan poslovni dan I pogresan ddmmyy u broju, a red je izgledao uspesno
+    ' uvezen. Sada red ide u SyncError i operater ga vidi.
+    If Not IsParsableMasterSyncDate(data(row, GS_DATUM)) Then
+        ValidatePWAOtkup = "Datum invalid: " & Trim$(CStr(nz(data(row, GS_DATUM), "(prazno)")))
+        Exit Function
+    End If
+
     ' KooperantID existiert?
     Dim koopName As Variant
     koopName = LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime")
@@ -1630,12 +1691,15 @@ Private Function ImportRowToTblOtkup(ByVal data As Variant, _
     
     If Len(klasa) = 0 Then klasa = "I"
     
-    ' Datum parsen
-    On Error Resume Next
+    ' Datum -- AUD-042(b) STRIKT (nema tihog fallbacka na Date()).
+    ' ValidatePWAOtkup ovo hvata jos pre importa (red -> SyncError); ovo je druga
+    ' linija za direktne/test pozive, da nijedan ulaz ne prodje kao "danas".
+    If Not IsParsableMasterSyncDate(data(row, GS_DATUM)) Then
+        Err.Raise vbObjectError + 8105, "ImportRowToTblOtkup", _
+              "Datum nije validan u PWA redu (nema fallbacka na danasnji datum). ClientRecordID=" & clientRecordID
+    End If
     datum = CDate(data(row, GS_DATUM))
-    If Err.Number <> 0 Then datum = Date
-    On Error GoTo EH
-    
+
     ' Numerische Werte
     kolicina = CDbl(data(row, GS_KOLICINA))
     cena = CDbl(data(row, GS_CENA))
@@ -1874,10 +1938,24 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
             Dim currentVoz As String
             currentVoz = Trim$(CStr(nz(data(i, colVoz), "")))
             If currentVoz = "" And newVozacID <> "" Then
-                UpdateCell TBL_OTKUP, i, COL_OTK_VOZAC, newVozacID
-                LogInfo "TryUpdateVozacID", "Updated VozacID=" & newVozacID & _
-                        " for ClientRecordID=" & clientRecordID
-                TryUpdateVozacID = True
+                ' AUD-042(a): povrat UpdateCell-a se MORA proveriti.
+                ' Bezuslovni True + "Updated" log je Google red kvitirao kao
+                ' Synced>Master i kada upis nije prosao -- VozacID ostaje prazan,
+                ' a red se posle toga NIKAD vise ne dostavlja (nije Pending).
+                ' False -> caller upisuje SYNC_STATUS_DUPLICATE, pa red ostaje
+                ' vidljiv kao neobraden VozacID update.
+                If UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, newVozacID) Then
+                    LogInfo "TryUpdateVozacID", "Updated VozacID=" & newVozacID & _
+                            " for ClientRecordID=" & clientRecordID
+                    TryUpdateVozacID = True
+                Else
+                    LogError "TryUpdateVozacID", _
+                             "UpdateCell nije uspeo: " & TBL_OTKUP & "." & COL_OTK_VOZAC & _
+                             "; VozacID=" & newVozacID & _
+                             "; ClientRecordID=" & clientRecordID & _
+                             "; Row=" & CStr(i)
+                    TryUpdateVozacID = False
+                End If
             End If
             Exit Function
         End If
@@ -1901,6 +1979,71 @@ Private Function nz(ByVal v As Variant, Optional ByVal Fallback As Variant = "")
         nz = v
     End If
 End Function
+
+' AUD-042(b): jedini test "da li je ovo poslovni datum" za PWA redove.
+' Prazno, tekst, samo-vreme ili 1899-baseline vrednost NISU datum. Bez ovoga je
+' CDate greska tiho postajala Date() (danas), pa se los red nije mogao ni naci.
+Private Function IsParsableMasterSyncDate(ByVal value As Variant) As Boolean
+    Dim d As Date
+
+    On Error GoTo EH
+
+    If Len(Trim$(CStr(nz(value, "")))) = 0 Then Exit Function
+
+    d = CDate(value)
+
+    ' Samo-vreme ("12:30") i prazan baseline daju 1899-12-30 -> nije poslovni dan.
+    IsParsableMasterSyncDate = (d >= DateSerial(2000, 1, 1))
+    Exit Function
+
+EH:
+    IsParsableMasterSyncDate = False
+End Function
+
+' Poslovni dan kao uporediv kljuc ("yyyy-mm-dd"); "" ako vrednost nije datum.
+Private Function MasterSyncDayKey(ByVal value As Variant) As String
+    On Error GoTo EH
+
+    MasterSyncDayKey = Format$(CDate(value), "yyyy-mm-dd")
+    Exit Function
+
+EH:
+    MasterSyncDayKey = ""
+End Function
+
+' AUD-043(b): BrojZbirne se sme upisati SAMO ako je polje prazno ili vec nosi
+' isti broj. Bezuslovni RequireUpdateCell je tiho prepisivao postojecu vezu, pa
+' je jedna zbirna mogla "preuzeti" otkupe/otpremnice iz druge (dvostruko
+' obracunata roba, a prva zbirna ostaje bez stavki). Konflikt = greska.
+Private Sub RequireBrojZbirneNotConflicting(ByVal tblName As String, _
+                                            ByVal rowIndex As Long, _
+                                            ByVal columnName As String, _
+                                            ByVal brojZbirne As String, _
+                                            ByVal contextInfo As String, _
+                                            ByVal sourceName As String)
+    Dim data As Variant
+    data = GetTableData(tblName)
+
+    If IsEmpty(data) Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 32, sourceName, _
+                  "Tabela je prazna: " & tblName
+    End If
+
+    Dim colIdx As Long
+    colIdx = RequireColumnIndex(tblName, columnName, sourceName)
+
+    Dim current As String
+    current = Trim$(CStr(nz(data(rowIndex, colIdx), "")))
+
+    If Len(current) = 0 Then Exit Sub
+    If StrComp(current, Trim$(brojZbirne), vbTextCompare) = 0 Then Exit Sub
+
+    Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 33, sourceName, _
+              "Konflikt BrojZbirne -- red je vec vezan na drugu zbirnu. Table=" & tblName & _
+              "; " & contextInfo & _
+              "; Postojeci=" & current & _
+              "; Novi=" & Trim$(brojZbirne)
+End Sub
 
 Private Function RequireSingleMasterSyncRow(ByVal tblName As String, _
                                             ByVal idColumn As String, _
@@ -1977,6 +2120,10 @@ Private Sub LinkOtpremnicaToBrojZbirneStrict(ByVal otpremnicaID As String, _
 
     Dim rowOtpremnica As Long
     rowOtpremnica = RequireSingleMasterSyncRow(TBL_OTPREMNICA, COL_OTP_ID, otpremnicaID, sourceName)
+
+    ' AUD-043(b): isti guard kao na otkupu -- ne prepisuj tudju vezu u tisini.
+    RequireBrojZbirneNotConflicting TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
+                                    brojZbirne, "OtpremnicaID=" & otpremnicaID, sourceName
 
     RequireUpdateCell TBL_OTPREMNICA, rowOtpremnica, COL_OTP_BROJ_ZBIRNE, _
                       brojZbirne, sourceName
@@ -2631,7 +2778,15 @@ Private Function ValidatePWAZbirna(ByVal data As Variant, ByVal row As Long) As 
         ValidatePWAZbirna = "KupacID not found: " & kupacID
         Exit Function
     End If
-    
+
+    ' AUD-042(b): isti strikt datum kao na OTK putanji. Kod zbirne je tihi
+    ' fallback na danas bio jos gori -- ddmmyy ulazi u BrojZbirne, pa je red
+    ' dobijao broj iz pogresnog dana.
+    If Not IsParsableMasterSyncDate(data(row, VS_DATUM)) Then
+        ValidatePWAZbirna = "Datum invalid: " & Trim$(CStr(nz(data(row, VS_DATUM), "(prazno)")))
+        Exit Function
+    End If
+
     ' Mindestens eine Klasa muss Kolicina > 0 haben
     On Error Resume Next
     kolKlI = CDbl(data(row, VS_KOLICINA_KL_I))
@@ -2701,12 +2856,17 @@ Private Function ImportRowToTblZbirna(ByVal data As Variant, _
     sortaVoca = Trim$(CStr(data(row, VS_SORTA)))
     tipAmb = Trim$(CStr(nz(data(row, VS_TIP_AMB), "")))
     
-    ' Datum
-    On Error Resume Next
+    ' Datum -- AUD-042(b) STRIKT (nema tihog fallbacka na Date()).
+    ' ValidatePWAZbirna ovo hvata pre importa; ovde je hard linija za direktne
+    ' pozive. Red pada kao i ostale validacione greske (return "").
+    If Not IsParsableMasterSyncDate(data(row, VS_DATUM)) Then
+        LogError "ImportRowToTblZbirna", _
+             "Datum nije validan u PWA redu (nema fallbacka na danas). CRID=" & clientRecordID
+        ImportRowToTblZbirna = ""
+        Exit Function
+    End If
     datum = CDate(data(row, VS_DATUM))
-    If Err.Number <> 0 Then datum = Date
-    On Error GoTo EH
-    
+
     ' Kolicine po klasi
     On Error Resume Next
     kolKlI = CDbl(data(row, VS_KOLICINA_KL_I))
@@ -2829,14 +2989,34 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     Dim colCRID As Long
     Dim colOtkID As Long
     Dim colOtkOtpID As Long
+    Dim colOtkVoz As Long
+    Dim colOtkDat As Long
 
     colCRID = RequireColumnIndex(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, SRC)
     colOtkID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colOtkOtpID = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+    colOtkVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
+    colOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
 
     RequireColumnIndex TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_ID, SRC
     RequireColumnIndex TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC
+
+    ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
+    ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID
+    ' bio prihvatan bez provere da otkup uopste pripada tom vozacu/danu.
+    Dim zbrVozac As String
+    Dim zbrDatumVal As Variant
+    Dim zbrDan As String
+
+    zbrVozac = Trim$(CStr(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_VOZAC), "")))
+    zbrDatumVal = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_DATUM)
+    zbrDan = MasterSyncDayKey(zbrDatumVal)
+
+    If Len(zbrVozac) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 34, SRC, _
+                  "Zbirna nije nadena po BrojZbirne (VozacID nepoznat) -- membership provera nije moguca. BrojZbirne=" & brojZbirne
+    End If
 
     Dim crIDs() As String
     crIDs = Split(otkupRecordIDs, ",")
@@ -2867,6 +3047,40 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
             rowOtkup = RequireSingleMasterSyncRow(TBL_OTKUP, COL_OTK_ID, otkupID, SRC)
 
             otkData = GetTableData(TBL_OTKUP)
+
+            ' AUD-043(b) membership 1/2: vozac. Prazan VozacID na otkupu je
+            ' dozvoljen (Otprema tab ga jos nije sinhronizovao) -- ovaj link ga
+            ' i popunjava kroz zbirnu. Ali RAZLICIT vozac znaci da CRID pokazuje
+            ' na tudji otkup -> ne diramo ga.
+            Dim otkVozac As String
+            otkVozac = Trim$(CStr(nz(otkData(rowOtkup, colOtkVoz), "")))
+
+            If Len(otkVozac) > 0 Then
+                If StrComp(otkVozac, zbrVozac, vbTextCompare) <> 0 Then
+                    Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 35, SRC, _
+                              "Membership: otkup ne pripada vozacu zbirne. OtkupID=" & otkupID & _
+                              "; OtkupVozac=" & otkVozac & _
+                              "; ZbirnaVozac=" & zbrVozac & _
+                              "; BrojZbirne=" & brojZbirne
+                End If
+            End If
+
+            ' AUD-043(b) membership 2/2: poslovni dan. Razlika je SUMNJIVA ali ne
+            ' fatalna -- utovar posle ponoci je legitiman, a hard greska bi red
+            ' trajno zaglavila u SyncError-u (writeback ga vise ne salje).
+            Dim otkDan As String
+            otkDan = MasterSyncDayKey(otkData(rowOtkup, colOtkDat))
+
+            If Len(zbrDan) > 0 And otkDan <> zbrDan Then
+                LogWarn SRC, "Membership upozorenje: otkup nije iz dana zbirne. OtkupID=" & otkupID & _
+                             "; OtkupDatum=" & otkDan & _
+                             "; ZbirnaDatum=" & zbrDan & _
+                             "; BrojZbirne=" & brojZbirne
+            End If
+
+            ' AUD-043(b): otkup koji je vec u DRUGOJ zbirnoj se NE prepisuje.
+            RequireBrojZbirneNotConflicting TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, _
+                                            brojZbirne, "OtkupID=" & otkupID, SRC
 
             RequireUpdateCell TBL_OTKUP, rowOtkup, COL_OTK_BROJ_ZBIRNE, brojZbirne, SRC
 
@@ -2996,47 +3210,32 @@ EH:
     WriteBackVOZSyncStatus = False
 End Function
 
+' AUD-041(b): NE brojati redove.
+'
+' Stari generator je bio ROW-COUNT (seq = 1, pa seq = seq + 1 za svaki red istog
+' vozaca i dana). Na svaku rupu u nizu daje duplikat: ako u tblZbirna postoje
+' "1/ddmmyy" i "1/ddmmyy-3" (rucni unos, storno, brisanje), count = 2 -> predlog
+' je opet "1/ddmmyy-2"... a kad ih je 3 -> "-3", broj koji vec postoji.
+'
+' Kanonska alokacija zivi u modBrojevi.SuggestNextBroj(KIND_ZBR):
+'   MaxSeqFromTable (MAX sekvence, ne count) + ApplyMirrorPrefix ("S" za
+'   mirror-stanicu) + BrojZbirneExists bump-loop dok broj ne bude slobodan.
+'
+' checkRemote:=False -- ovo je fallback UNUTAR importa remote reda (row-TX);
+' remote skan istog VOZ sheeta bi ovde bio suvisan HTTP poziv.
+'
+' Prazan rezultat ostaje fatalan za red: SuggestNextBroj vraca "" na gresku i
+' kada je auto-broj toggle (IsAutoBrojDokumenta) iskljucen, a
+' ImportRowToTblZbirna prazan broj tretira kao SyncError.
 Private Function GenerateBrojZbirne(ByVal vozacID As String, ByVal datum As Date) As String
-    Dim vozacBroj As String
-    vozacBroj = ExtractNumericVozacBroj(vozacID)
-    
-    If Len(vozacBroj) = 0 Then
+    ' Zadrzan guard iz starog generatora: vozacID bez cifara ne daje broj
+    ' (SuggestNextBroj bi kroz FormatBroj vratio "0/ddmmyy").
+    If Len(ExtractNumericVozacBroj(vozacID)) = 0 Then
         GenerateBrojZbirne = ""
         Exit Function
     End If
-    
-    Dim baza As String
-    baza = vozacBroj & "/" & Format$(datum, "ddmmyy")
-    
-    Dim data As Variant
-    data = GetTableData(TBL_ZBIRNA)
-    
-    Dim seq As Long
-    seq = 1
-    
-    If Not IsEmpty(data) Then
-        Dim colDat As Long, colVoz As Long
-        colDat = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM)
-        colVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
-        
-        Dim i As Long
-        For i = 1 To UBound(data, 1)
-            If CStr(data(i, colVoz)) = vozacID Then
-                If Format$(CDate(data(i, colDat)), "ddmmyy") = Format$(datum, "ddmmyy") Then
-                    seq = seq + 1
-                End If
-            End If
-        Next i
-    End If
-    
-    If seq = 1 Then
-        GenerateBrojZbirne = baza
-    Else
-        GenerateBrojZbirne = baza & "-" & seq
-    End If
 
-    ' Mirror-stanica (VozacID==StanicaID) -> "S" prefiks (razdvaja od realnih vozaca).
-    GenerateBrojZbirne = ApplyMirrorPrefix(vozacID, GenerateBrojZbirne)
+    GenerateBrojZbirne = SuggestNextBroj(KIND_ZBR, vozacID, datum, checkRemote:=False)
 End Function
 
 Private Function ValidateVOZSheetHeader(ByVal data As Variant, _

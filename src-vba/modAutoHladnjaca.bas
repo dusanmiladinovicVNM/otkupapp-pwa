@@ -138,6 +138,20 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
             Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
             "(hladnjaca)", ""
         On Error GoTo EH
+
+        ' AUD-046: stampaj vozacID := stanicaID SAMO ako mirror par stvarno
+        ' postoji (red u tblStanice I red u tblVozaci). Do sada je stampanje bilo
+        ' bezuslovno, pa su otpremnica/zbirna/prijemnica dobijale VozacID bez reda
+        ' u tblVozaci -- lanac "uspe", a dokumenti ostanu bez imena vozaca.
+        If Not IsManagedStationMirror(stanicaID) Then
+            LogError "modAutoHladnjaca.AutoChainHladnjaca", _
+                     "Nema vozac-mirror para za StanicaID=" & stanicaID & _
+                     " -- auto-lanac se ne pokrece (izbegnut FK bez pokrica u " & TBL_VOZACI & ")."
+            AutoChainHladnjaca = "Auto-lanac hladnjace nije pokrenut: za stanicu " & stanicaID & _
+                " ne postoji par-voza" & ChrW(269) & " u " & TBL_VOZACI & "."
+            Exit Function
+        End If
+
         vozacID = stanicaID
     End If
 
