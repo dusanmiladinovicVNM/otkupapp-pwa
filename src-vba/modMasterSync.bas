@@ -29,6 +29,21 @@ Private Const SYNC_STATUS_DUPLICATE As String = "Duplicate"
 Private Const ERR_MASTER_SYNC_GUARD_BASE As Long = vbObjectError + 3900
 Private Const MASTER_SYNC_CLIENT_RECORD_ID_COL As String = "ClientRecordID"
 
+' AUD-042(a): ishodi VozacID update-a nad postojecim (duplikat) redom.
+' Pozivalac MORA da razlikuje "nema sta da se menja" (bezopasno -> Duplicate) od
+' "upis pao" / "red ima DRUGOG vozaca" / "reda nema" -- ta tri su greske i ne
+' smeju da dobiju terminalni Duplicate status uz zelen sync.
+Private Const MSVOZ_UPDATED As String = "UPDATED"
+Private Const MSVOZ_NOCHANGE As String = "NOCHANGE"
+Private Const MSVOZ_CONFLICT As String = "CONFLICT"
+Private Const MSVOZ_FAILED As String = "FAILED"
+Private Const MSVOZ_NOTFOUND As String = "NOTFOUND"
+
+' AUD-043(b): dozvoljena razlika u danima izmedju otkupa i zbirne. 0 bi odbilo
+' legitiman utovar posle ponoci; neogranicena tolerancija bi dozvolila da otkup
+' od pre vise meseci ude u novu zbirnu. 1 dan = post-midnight pravilo.
+Private Const MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE As Long = 1
+
 
 ' Google Sheet Spaltenindizes (0-based, Header in Row 1)
 Private Const GS_CLIENT_RECORD_ID As Long = 1    ' A
@@ -642,7 +657,11 @@ Private Function IsStanicaActiveForOTK_(ByVal activeValue As Variant) As Boolean
     IsStanicaActiveForOTK_ = Not (s = "NE")
 End Function
 
-Public Function AutoCreateOtpremniceFromPWA_TX() As Long
+' samoDatum: opcioni scope -- obradi SAMO otkupe tog poslovnog dana. 0 = svi
+' nepovezani (produkcioni poziv iz modGoogleSyncOrchestrator). Scope koriste
+' testovi, isto kao samoBrojOtp u AutoCreateZbirnaFromOtpremnice, da run ne
+' zahvati nepovezane otkupe u svesci.
+Public Function AutoCreateOtpremniceFromPWA_TX(Optional ByVal samoDatum As Date = 0) As Long
     Const SRC As String = "AutoCreateOtpremniceFromPWA_TX"
 
     Dim tx As clsTransaction
@@ -656,7 +675,7 @@ Public Function AutoCreateOtpremniceFromPWA_TX() As Long
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    createdCount = AutoCreateOtpremniceFromPWA()
+    createdCount = AutoCreateOtpremniceFromPWA(samoDatum)
 
     tx.CommitTx
     Set tx = Nothing
@@ -683,10 +702,11 @@ EH:
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
-Public Function AutoCreateOtpremniceFromPWA() As Long
+Public Function AutoCreateOtpremniceFromPWA(Optional ByVal samoDatum As Date = 0) As Long
     ' Nach ImportOtkupFromPWA: erstellt Otpremnice fuer PWA-Otkupi mit VozacID
     ' Gruppierung: StanicaID + Datum + VozacID + Klasa (= AutoLink Key)
     ' Returns: Anzahl erstellter Otpremnice
+    ' samoDatum: 0 = svi nepovezani; inace scope na taj poslovni dan (vidi _TX).
     
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
@@ -731,7 +751,13 @@ Public Function AutoCreateOtpremniceFromPWA() As Long
         Dim otpID As String: otpID = Trim$(CStr(nz(data(i, colOtpID), "")))
         
         ' Nur Otkupi ohne Otpremnica UND mit VozacID
-        If otpID = "" And vozID <> "" Then
+        Dim inScope As Boolean
+        inScope = True
+        If samoDatum > 0 Then
+            inScope = (Int(CDate(data(i, colDat))) = Int(samoDatum))
+        End If
+
+        If otpID = "" And vozID <> "" And inScope Then
             Dim gKey As String
             gKey = CStr(data(i, colSt)) & "|" & _
                    Format$(CDate(data(i, colDat)), "YYYY-MM-DD") & "|" & _
@@ -1356,6 +1382,69 @@ Private Function RequireOTKHeaderValue(ByVal data As Variant, _
 End Function
 
 ' ============================================================
+' DEV/SMOKE TEST HOOKS -- RF-28 (AUD-041/042/043)
+'
+' Drze produkcione rutine Private, ali daju lokalnim regresionim testovima
+' (modBusinessFlowProTests) pristup bez Google/HTTP zavisnosti.
+' ============================================================
+
+' AUD-042(b): verdikt ValidatePWAOtkup za zadatu Datum vrednost. Ostala polja se
+' popunjavaju tako da PROLAZE validaciju, pa je datum jedina promenljiva.
+Public Function TestHook_ValidatePWAOtkupDatum(ByVal kooperantID As String, _
+                                              ByVal datumValue As Variant) As String
+    Dim data As Variant
+    ReDim data(1 To 1, 1 To GS_BROJ_DOKUMENTA)
+
+    data(1, GS_KOOPERANT_ID) = kooperantID
+    data(1, GS_VRSTA) = "Malina"
+    data(1, GS_KOLICINA) = 100
+    data(1, GS_CENA) = 200
+    data(1, GS_TIP_AMB) = ""
+    data(1, GS_KOL_AMB) = 0
+    data(1, GS_DATUM) = datumValue
+
+    TestHook_ValidatePWAOtkupDatum = ValidatePWAOtkup(data, 1)
+End Function
+
+' AUD-042(b): isto za VOZ putanju (ValidatePWAZbirna).
+Public Function TestHook_ValidatePWAZbirnaDatum(ByVal vozacID As String, _
+                                               ByVal kupacID As String, _
+                                               ByVal datumValue As Variant) As String
+    Dim data As Variant
+    ReDim data(1 To 1, 1 To VS_BROJ_ZBIRNE)
+
+    data(1, VS_VOZAC_ID) = vozacID
+    data(1, VS_KUPAC_ID) = kupacID
+    data(1, VS_KOLICINA_KL_I) = 100
+    data(1, VS_KOLICINA_KL_II) = 0
+    data(1, VS_KOL_AMB) = 0
+    data(1, VS_TIP_AMB) = ""
+    data(1, VS_DATUM) = datumValue
+
+    TestHook_ValidatePWAZbirnaDatum = ValidatePWAZbirna(data, 1)
+End Function
+
+' AUD-041(b): kanonski ZBR fallback generator (MAX sekvence, ne row-count).
+Public Function TestHook_GenerateBrojZbirne(ByVal vozacID As String, _
+                                           ByVal datum As Date) As String
+    TestHook_GenerateBrojZbirne = GenerateBrojZbirne(vozacID, datum)
+End Function
+
+' AUD-042(a): MSVOZ_* ishod update-a VozacID-a na postojecem redu.
+Public Function TestHook_TryUpdateVozacID(ByVal clientRecordID As String, _
+                                         ByVal newVozacID As String, _
+                                         ByRef outDetail As String) As String
+    TestHook_TryUpdateVozacID = TryUpdateVozacID(clientRecordID, newVozacID, outDetail)
+End Function
+
+' AUD-043(b): kaskadni link (membership + konflikt guard). Raise-uje kao u produkciji.
+Public Sub TestHook_LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
+                                                  ByVal brojZbirne As String, _
+                                                  ByVal otkupRecordIDs As String)
+    LinkZbirnaToOtkupAndOtpremnica zbirnaID, brojZbirne, otkupRecordIDs
+End Sub
+
+' ============================================================
 ' PRIVATE -- Import eines einzelnen OTK-Sheets
 ' ============================================================
 Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
@@ -1452,15 +1541,40 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                 Dim sheetVozac As String
                 sheetVozac = Trim$(CStr(nz(data(i, GS_VOZAC_ID), "")))
                 If Len(sheetVozac) > 0 Then
-                    If TryUpdateVozacID(clientRecordID, sheetVozac) Then
-                        statusUpdates.Add Array(i, SYNC_STATUS_MASTER)
-                    Else
-                        statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
-                    End If
+                    Dim vozResult As String
+                    Dim vozDetail As String
+                    vozResult = TryUpdateVozacID(clientRecordID, sheetVozac, vozDetail)
+
+                    Select Case vozResult
+                        Case MSVOZ_UPDATED
+                            statusUpdates.Add Array(i, SYNC_STATUS_MASTER)
+                            outSkipped = outSkipped + 1
+
+                        Case MSVOZ_NOCHANGE
+                            statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
+                            outSkipped = outSkipped + 1
+
+                        Case Else
+                            ' AUD-042(a): FAILED / CONFLICT / NOTFOUND NE SMEJU da
+                            ' prodju kao Duplicate. Duplicate je terminalan (import
+                            ' uzima samo Pending), pa bi prazan/pogresan VozacID
+                            ' ostao zauvek, a sync bio zelen. Red ide u SyncError,
+                            ' broji se u outErrors I pali fatal flag -> top-level
+                            ' zavrsava sa Monitor_MasterSyncFail.
+                            statusUpdates.Add Array(i, _
+                                SYNC_STATUS_ERROR & ":VozacID update " & vozResult, "")
+                            outErrors = outErrors + 1
+
+                            MarkPWAFatalSyncError "ImportOneOTKSheet", _
+                                "VozacID update nije uspeo (" & vozResult & "). Sheet=" & sheetName & _
+                                "; Row=" & CStr(i) & _
+                                "; ClientRecordID=" & clientRecordID & _
+                                "; Detail=" & vozDetail
+                    End Select
                 Else
                     statusUpdates.Add Array(i, SYNC_STATUS_DUPLICATE)
+                    outSkipped = outSkipped + 1
                 End If
-                outSkipped = outSkipped + 1
             Else
                 ' Validierung
                 Dim validationError As String
@@ -1921,45 +2035,84 @@ EH:
     WriteBackSyncStatus = False
 End Function
 
+' AUD-042(a): Ako Otkup u masteru nema VozacID a sheet ga ima -- updateuj.
+'
+' Vraca MSVOZ_* ishod (NE Boolean). Stari Boolean je spajao tri razlicite stvari
+' u jedno False ("red vec ima vozaca", "upis pao", "reda nema"), pa je pozivalac
+' sva tri kvitirao terminalnim Duplicate statusom -- Google red je time zauvek
+' prestao da bude Pending, VozacID je ostao prazan, a sync je bio zelen.
+' outDetail nosi tekst za SyncError/log.
 Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
-                                   ByVal newVozacID As String) As Boolean
-    ' Ako Otkup u masteru nema VozacID a sheet ga ima -- updateuj
+                                   ByVal newVozacID As String, _
+                                   ByRef outDetail As String) As String
+    Const SRC As String = "TryUpdateVozacID"
+
+    outDetail = ""
+    TryUpdateVozacID = MSVOZ_NOTFOUND
+
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
-    
+    If IsEmpty(data) Then
+        outDetail = "Tabela je prazna: " & TBL_OTKUP
+        Exit Function
+    End If
+
     Dim colCRID As Long, colVoz As Long
-    colCRID = GetColumnIndex(TBL_OTKUP, "ClientRecordID")
-    colVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
-    
+    colCRID = RequireColumnIndex(TBL_OTKUP, MASTER_SYNC_CLIENT_RECORD_ID_COL, SRC)
+    colVoz = RequireColumnIndex(TBL_OTKUP, COL_OTK_VOZAC, SRC)
+
+    Dim wanted As String
+    wanted = Trim$(newVozacID)
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If CStr(nz(data(i, colCRID), "")) = clientRecordID Then
             Dim currentVoz As String
             currentVoz = Trim$(CStr(nz(data(i, colVoz), "")))
-            If currentVoz = "" And newVozacID <> "" Then
-                ' AUD-042(a): povrat UpdateCell-a se MORA proveriti.
-                ' Bezuslovni True + "Updated" log je Google red kvitirao kao
-                ' Synced>Master i kada upis nije prosao -- VozacID ostaje prazan,
-                ' a red se posle toga NIKAD vise ne dostavlja (nije Pending).
-                ' False -> caller upisuje SYNC_STATUS_DUPLICATE, pa red ostaje
-                ' vidljiv kao neobraden VozacID update.
-                If UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, newVozacID) Then
-                    LogInfo "TryUpdateVozacID", "Updated VozacID=" & newVozacID & _
-                            " for ClientRecordID=" & clientRecordID
-                    TryUpdateVozacID = True
+
+            If Len(currentVoz) > 0 Then
+                If StrComp(currentVoz, wanted, vbTextCompare) = 0 Then
+                    ' Master i sheet se poklapaju -- nema sta da se menja.
+                    TryUpdateVozacID = MSVOZ_NOCHANGE
                 Else
-                    LogError "TryUpdateVozacID", _
-                             "UpdateCell nije uspeo: " & TBL_OTKUP & "." & COL_OTK_VOZAC & _
-                             "; VozacID=" & newVozacID & _
-                             "; ClientRecordID=" & clientRecordID & _
-                             "; Row=" & CStr(i)
-                    TryUpdateVozacID = False
+                    ' AUD-042(a): sheet nosi DRUGOG vozaca. To nije "duplikat",
+                    ' to je konflikt podataka -- neko od dva izvora je pogresan.
+                    TryUpdateVozacID = MSVOZ_CONFLICT
+                    outDetail = "Master ima VozacID=" & currentVoz & _
+                                ", sheet nosi " & wanted & _
+                                " (ClientRecordID=" & clientRecordID & ")"
+                    LogError SRC, "Konflikt VozacID -- upis se NE radi. " & outDetail
                 End If
+                Exit Function
             End If
+
+            If Len(wanted) = 0 Then
+                TryUpdateVozacID = MSVOZ_NOCHANGE
+                Exit Function
+            End If
+
+            ' Povrat UpdateCell-a se MORA proveriti (modDataAccess vraca False na neuspeh).
+            If UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, wanted) Then
+                TryUpdateVozacID = MSVOZ_UPDATED
+                LogInfo SRC, "Updated VozacID=" & wanted & _
+                        " for ClientRecordID=" & clientRecordID
+            Else
+                TryUpdateVozacID = MSVOZ_FAILED
+                outDetail = "UpdateCell nije uspeo: " & TBL_OTKUP & "." & COL_OTK_VOZAC & _
+                            "; VozacID=" & wanted & _
+                            "; ClientRecordID=" & clientRecordID & _
+                            "; Row=" & CStr(i)
+                LogError SRC, outDetail
+            End If
+
             Exit Function
         End If
     Next i
+
+    ' Pozivalac je ovde samo ako je IsDuplicateInMaster rekao "postoji" -- pa je
+    ' "nema reda" nekonzistentno stanje, ne bezopasan preskok.
+    outDetail = "Nema reda u " & TBL_OTKUP & " za ClientRecordID=" & clientRecordID
+    LogError SRC, outDetail
 End Function
 
 ' ============================================================
@@ -2000,15 +2153,17 @@ EH:
     IsParsableMasterSyncDate = False
 End Function
 
-' Poslovni dan kao uporediv kljuc ("yyyy-mm-dd"); "" ako vrednost nije datum.
-Private Function MasterSyncDayKey(ByVal value As Variant) As String
+' Poslovni dan (bez vremena) za poredjenje. False ako vrednost nije datum --
+' pozivalac tada NE SME da nastavi kao da su dani jednaki.
+Private Function TryMasterSyncDay(ByVal value As Variant, ByRef outDay As Date) As Boolean
     On Error GoTo EH
 
-    MasterSyncDayKey = Format$(CDate(value), "yyyy-mm-dd")
+    outDay = Int(CDate(value))
+    TryMasterSyncDay = True
     Exit Function
 
 EH:
-    MasterSyncDayKey = ""
+    TryMasterSyncDay = False
 End Function
 
 ' AUD-043(b): BrojZbirne se sme upisati SAMO ako je polje prazno ili vec nosi
@@ -2712,7 +2867,10 @@ Private Function ImportVOZRow_RowTX(ByRef data As Variant, _
 
     otkupRecordIDs = Trim$(CStr(nz(data(rowIndex, VS_OTKUP_RECORD_IDS), "")))
 
-    LinkZbirnaToOtkupAndOtpremnica outBrojZbirne, otkupRecordIDs
+    ' AUD-043(b): prosledi i ZbirnaID -- membership se razresava preko PK, ne
+    ' preko poslovnog broja (BrojZbirne nije jedinstven; LookupValue bi na
+    ' multi-device koliziji vratio STARU zbirnu, a nov red je na kraju tabele).
+    LinkZbirnaToOtkupAndOtpremnica outZbirnaID, outBrojZbirne, otkupRecordIDs
 
     tx.CommitTx
     Set tx = Nothing
@@ -2970,7 +3128,8 @@ End Function
 ' PRIVATE -- Kaskadno povezivanje Zbirna -> Otpremnice -> Otkupi
 ' ============================================================
 
-Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
+Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
+                                           ByVal brojZbirne As String, _
                                            ByVal otkupRecordIDs As String)
     Const SRC As String = "LinkZbirnaToOtkupAndOtpremnica"
 
@@ -2979,6 +3138,11 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     If Len(Trim$(brojZbirne)) = 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 30, SRC, _
                   "BrojZbirne je obavezan za kaskadno povezivanje."
+    End If
+
+    If Len(Trim$(zbirnaID)) = 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 38, SRC, _
+                  "ZbirnaID je obavezan -- membership se razresava preko PK. BrojZbirne=" & brojZbirne
     End If
 
     If Len(Trim$(otkupRecordIDs)) = 0 Then
@@ -3005,17 +3169,48 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
     ' AUD-043(b) membership referenca: vozac + poslovni dan SAME zbirne.
     ' otkupRecordIDs dolazi iz PWA reda (spoljni ulaz) -- do sada je svaki CRID
     ' bio prihvatan bez provere da otkup uopste pripada tom vozacu/danu.
-    Dim zbrVozac As String
-    Dim zbrDatumVal As Variant
-    Dim zbrDan As String
+    '
+    ' Zbirna se razresava preko PRIMARNOG KLJUCA (ZbirnaID), NE preko BrojZbirne:
+    ' poslovni broj nije jedinstven (multi-device kolizija je dokumentovan rizik),
+    ' a LookupValue vraca PRVI match -- tj. tudju/stariju zbirnu, jer je nov red
+    ' upravo dodat na kraj tabele.
+    Dim rowZbirna As Long
+    rowZbirna = RequireSingleMasterSyncRow(TBL_ZBIRNA, COL_ZBR_ID, zbirnaID, SRC)
 
-    zbrVozac = Trim$(CStr(nz(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_VOZAC), "")))
-    zbrDatumVal = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, COL_ZBR_DATUM)
-    zbrDan = MasterSyncDayKey(zbrDatumVal)
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+
+    If IsEmpty(zbrData) Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 39, SRC, _
+                  "Tabela je prazna: " & TBL_ZBIRNA
+    End If
+
+    Dim colZbrVoz As Long, colZbrDat As Long, colZbrBroj As Long
+    colZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+    colZbrDat = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+    colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+
+    ' Sanity: red na koji PK pokazuje mora nositi broj koji linkujemo.
+    If StrComp(Trim$(CStr(nz(zbrData(rowZbirna, colZbrBroj), ""))), Trim$(brojZbirne), vbTextCompare) <> 0 Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 42, SRC, _
+                  "ZbirnaID i BrojZbirne se ne poklapaju. ZbirnaID=" & zbirnaID & _
+                  "; RedBroj=" & Trim$(CStr(nz(zbrData(rowZbirna, colZbrBroj), ""))) & _
+                  "; TrazenBroj=" & Trim$(brojZbirne)
+    End If
+
+    Dim zbrVozac As String
+    Dim zbrDay As Date
+
+    zbrVozac = Trim$(CStr(nz(zbrData(rowZbirna, colZbrVoz), "")))
 
     If Len(zbrVozac) = 0 Then
         Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 34, SRC, _
-                  "Zbirna nije nadena po BrojZbirne (VozacID nepoznat) -- membership provera nije moguca. BrojZbirne=" & brojZbirne
+                  "Zbirna nema VozacID -- membership provera nije moguca. ZbirnaID=" & zbirnaID
+    End If
+
+    If Not TryMasterSyncDay(zbrData(rowZbirna, colZbrDat), zbrDay) Then
+        Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 43, SRC, _
+                  "Zbirna nema citljiv Datum -- membership provera nije moguca. ZbirnaID=" & zbirnaID
     End If
 
     Dim crIDs() As String
@@ -3065,16 +3260,32 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal brojZbirne As String, _
                 End If
             End If
 
-            ' AUD-043(b) membership 2/2: poslovni dan. Razlika je SUMNJIVA ali ne
-            ' fatalna -- utovar posle ponoci je legitiman, a hard greska bi red
-            ' trajno zaglavila u SyncError-u (writeback ga vise ne salje).
-            Dim otkDan As String
-            otkDan = MasterSyncDayKey(otkData(rowOtkup, colOtkDat))
+            ' AUD-043(b) membership 2/2: poslovni dan, sa OGRANICENIM prozorom.
+            ' Isti dan = ok. Susedni dan = utovar posle ponoci (legitimno, uz
+            ' upozorenje). Vise od toga NIJE membership -- otkup od pre nedelju
+            ' dana ne pripada danasnjoj zbirnoj, pa red pada (rollback row-TX).
+            Dim otkDay As Date
 
-            If Len(zbrDan) > 0 And otkDan <> zbrDan Then
-                LogWarn SRC, "Membership upozorenje: otkup nije iz dana zbirne. OtkupID=" & otkupID & _
-                             "; OtkupDatum=" & otkDan & _
-                             "; ZbirnaDatum=" & zbrDan & _
+            If Not TryMasterSyncDay(otkData(rowOtkup, colOtkDat), otkDay) Then
+                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 36, SRC, _
+                          "Membership: otkup nema citljiv Datum. OtkupID=" & otkupID & _
+                          "; BrojZbirne=" & brojZbirne
+            End If
+
+            Dim dayDelta As Long
+            dayDelta = Abs(DateDiff("d", zbrDay, otkDay))
+
+            If dayDelta > MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE Then
+                Err.Raise ERR_MASTER_SYNC_GUARD_BASE + 37, SRC, _
+                          "Membership: otkup nije iz dana zbirne (razlika " & CStr(dayDelta) & _
+                          " dana, dozvoljeno " & CStr(MASTER_SYNC_MEMBERSHIP_DAY_TOLERANCE) & "). OtkupID=" & otkupID & _
+                          "; OtkupDatum=" & Format$(otkDay, "yyyy-mm-dd") & _
+                          "; ZbirnaDatum=" & Format$(zbrDay, "yyyy-mm-dd") & _
+                          "; BrojZbirne=" & brojZbirne
+            ElseIf dayDelta > 0 Then
+                LogWarn SRC, "Membership: otkup je iz susednog dana (post-midnight utovar). OtkupID=" & otkupID & _
+                             "; OtkupDatum=" & Format$(otkDay, "yyyy-mm-dd") & _
+                             "; ZbirnaDatum=" & Format$(zbrDay, "yyyy-mm-dd") & _
                              "; BrojZbirne=" & brojZbirne
             End If
 
