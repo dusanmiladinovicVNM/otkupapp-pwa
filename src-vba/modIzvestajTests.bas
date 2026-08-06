@@ -21,6 +21,7 @@ Private m_izvPass As Long
 ' realnog opsega, pa seed redovi ne mogu da se pomesaju sa produkcijskim.
 Private Const IZVT_BROJ As String = "IZVT-1/150199"
 Private Const IZVT_STANICA As String = "IZVT-OM"
+Private Const IZVT_STANICA2 As String = "IZVT-OM2"   ' izolovana za Klasa I+II test
 Private Const IZVT_VOZAC_A As String = "IZVT-VZ-A"
 Private Const IZVT_VOZAC_B As String = "IZVT-VZ-B"
 Private Const IZVT_KUPAC_A As String = "IZVT-KP-A"
@@ -75,6 +76,7 @@ Public Sub RunIzvestajTests()
 
         T_E2E_ManjakDvaVlasnikaIstiBroj
         T_E2E_RobaOMDvaVlasnikaIstiBroj
+        T_E2E_KlasaIiIINeMesajuPrijem
 
         tx.RollbackTx
         Set tx = Nothing
@@ -440,6 +442,88 @@ Private Sub T_E2E_RobaOMDvaVlasnikaIstiBroj()
     IzvChkEqD CDbl(r(rowB, 9)), 1500#, S & "B prijemnica kg = 1500"
     IzvChkEqD CDbl(r(rowA, 10)), 100#, S & "A manjak = 100 (ne 200)"
     IzvChkEqD CDbl(r(rowB, 10)), 500#, S & "B manjak = 500"
+    Exit Sub
+EH:
+    IzvChk False, S & "neocekivana greska: " & Err.description
+End Sub
+
+' Klasa I i II ISTOG dokumenta: isti broj, isti vozac, isti kupac, ali zasebna
+' otpremnica/zbirna/prijemnica po klasi (tako ih pravi auto-lanac hladnjace).
+' Bez Klase u kljucu prijem obe klase se sabere pa dodeli SVAKOJ klasi -- u
+' malina modu UKUPNO prijem postaje dvostruk.
+Private Sub T_E2E_KlasaIiIINeMesajuPrijem()
+    Const S As String = "E2E Klasa I+II (isti dokument): "
+    On Error GoTo EH
+
+    Dim brDok As String: brDok = "IZVT-2/150199"
+    Dim voz As String: voz = "IZVT-VZ-K"
+    Dim kup As String: kup = "IZVT-KP-K"
+
+    ' Klasa I: zbirna/otpremnica 1000 kg, prijem 900. Klasa II: 200 kg, prijem 150.
+    IzvSeed TBL_ZBIRNA, _
+        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
+              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
+        Array("IZVT-ZBR-K1", brDok, IZVT_DATUM, voz, kup, 1000#, 100, KLASA_I)
+    IzvSeed TBL_ZBIRNA, _
+        Array(COL_ZBR_ID, COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_VOZAC, COL_ZBR_KUPAC, _
+              COL_ZBR_KOLICINA, COL_ZBR_KOL_AMB, COL_ZBR_KLASA), _
+        Array("IZVT-ZBR-K2", brDok, IZVT_DATUM, voz, kup, 200#, 20, KLASA_II)
+
+    ' Klasa I i II dele BROJ prijemnice (kao u produkciji), ali su zasebni redovi.
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
+        Array("IZVT-PRJ-K1", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 900#, KLASA_I)
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_VOZAC, COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_KLASA), _
+        Array("IZVT-PRJ-K2", "IZVT-PRJ-K", IZVT_DATUM, brDok, voz, kup, 150#, KLASA_II)
+
+    IzvSeed TBL_OTPREMNICA, _
+        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
+        Array("IZVT-OTP-K1", "IZVT-OTP-K1", IZVT_DATUM, IZVT_STANICA2, voz, _
+              brDok, "Malina", KLASA_I, 1000#)
+    IzvSeed TBL_OTPREMNICA, _
+        Array(COL_OTP_ID, COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, COL_OTP_VOZAC, _
+              COL_OTP_BROJ_ZBIRNE, COL_OTP_VRSTA, COL_OTP_KLASA, COL_OTP_KOLICINA), _
+        Array("IZVT-OTP-K2", "IZVT-OTP-K2", IZVT_DATUM, IZVT_STANICA2, voz, _
+              brDok, "Malina", KLASA_II, 200#)
+
+    Dim d As Date: d = IZVT_DATUM
+
+    ' --- Otkupljena roba (OM): po klasi, bez mesanja ---
+    Dim r As Variant
+    r = ReportOtkupRoba("OM", IZVT_STANICA2, d, d)
+    IzvChk IsArray(r), S & "RobaOM vraca redove"
+    If Not IsArray(r) Then Exit Sub
+
+    Dim r1 As Long: r1 = IzvFindRowByText(r, 2, "IZVT-OTP-K1")
+    Dim r2 As Long: r2 = IzvFindRowByText(r, 2, "IZVT-OTP-K2")
+    IzvChk r1 > 0 And r2 > 0, S & "obe klase su zasebni redovi"
+    If r1 = 0 Or r2 = 0 Then Exit Sub
+
+    ' Pre fix-a (malina mod): obe klase bi dobile 1050 kg prijema.
+    IzvChkEqD CDbl(r(r1, 9)), 900#, S & "Klasa I prima 900 (ne 1050)"
+    IzvChkEqD CDbl(r(r2, 9)), 150#, S & "Klasa II prima 150 (ne 1050)"
+    IzvChkEqD CDbl(r(r1, 10)), 100#, S & "Klasa I manjak = 1000 - 900"
+    IzvChkEqD CDbl(r(r2, 10)), 50#, S & "Klasa II manjak = 200 - 150"
+
+    ' UKUPNO prijem mora biti 1050, ne 2100.
+    Dim uk As Long: uk = UBound(r, 1)
+    IzvChkEqD CDbl(r(uk, 9)), 1050#, S & "UKUPNO prijem = 1050 (ne 2x1050)"
+    IzvChkEqD CDbl(r(uk, 10)), 150#, S & "UKUPNO manjak = 100 + 50"
+
+    ' --- Manjak: ceo dokument u JEDNOM redu, prijem sabran po klasama ---
+    Dim m As Variant
+    m = ReportManjak("Kupac", kup, d, d)
+    IzvChk IsArray(m), S & "Manjak vraca redove"
+    If Not IsArray(m) Then Exit Sub
+
+    IzvChkEq UBound(m, 1), 2, S & "dokument je JEDAN red + UKUPNO"
+    IzvChkEqD CDbl(m(1, 2)), 1200#, S & "zbirna kg = 1000 + 200 (ceo dokument)"
+    IzvChkEqD CDbl(m(1, 3)), 1050#, S & "prijem = 900 + 150 (ne 2x1050)"
+    IzvChkEqD CDbl(m(1, 4)), 150#, S & "manjak = 1200 - 1050"
     Exit Sub
 EH:
     IzvChk False, S & "neocekivana greska: " & Err.description
