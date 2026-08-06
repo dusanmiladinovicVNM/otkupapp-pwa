@@ -90,7 +90,6 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
-    Dim i As Long
     Dim totalImported As Long
     Dim totalSkipped As Long
     Dim totalErrors As Long
@@ -160,26 +159,8 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
 
     filesCount = sheetIDs.count
 
-    For i = 1 To sheetIDs.count
-        Dim imported As Long
-        Dim skipped As Long
-        Dim errors As Long
-
-        imported = 0
-        skipped = 0
-        errors = 0
-
-        Call ImportOneOTKSheet( _
-            CStr(sheetIDs(i)), _
-            CStr(sheetNames(i)), _
-            imported, _
-            skipped, _
-            errors)
-
-        totalImported = totalImported + imported
-        totalSkipped = totalSkipped + skipped
-        totalErrors = totalErrors + errors
-    Next i
+    Call ImportOtkupSheetLoop(sheetIDs, sheetNames, _
+                              totalImported, totalSkipped, totalErrors)
 
     LogInfo "ImportOtkupFromPWA_Core", _
         "Import completed. Files=" & CStr(filesCount) & _
@@ -284,34 +265,87 @@ EH:
 End Function
 
 
+Private Sub ImportOtkupSheetLoop(ByVal sheetIDs As Collection, _
+                                 ByVal sheetNames As Collection, _
+                                 ByRef totalImported As Long, _
+                                 ByRef totalSkipped As Long, _
+                                 ByRef totalErrors As Long)
+    ' AUD-002: sheetovi se obraduju NEZAVISNO.
+    ' Nema batch transakcije oko petlje -- pad kasnijeg sheeta ne sme da
+    ' ponisti vec uvezene redove ranijih sheetova, jer njihov Google
+    ' writeback (Synced>Master) ne moze da se rollback-uje.
+    Dim i As Long
+    Dim imported As Long
+    Dim skipped As Long
+    Dim errors As Long
+
+    For i = 1 To sheetIDs.count
+        imported = 0
+        skipped = 0
+        errors = 0
+
+        Call ImportOneOTKSheet( _
+            CStr(sheetIDs(i)), _
+            CStr(sheetNames(i)), _
+            imported, _
+            skipped, _
+            errors)
+
+        totalImported = totalImported + imported
+        totalSkipped = totalSkipped + skipped
+        totalErrors = totalErrors + errors
+    Next i
+End Sub
+
+Public Sub TestHook_ImportOtkupSheetLoop(ByVal sheetIDs As Collection, _
+                                         ByVal sheetNames As Collection, _
+                                         ByRef totalImported As Long, _
+                                         ByRef totalSkipped As Long, _
+                                         ByRef totalErrors As Long)
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Isti kod koji vrti ImportOtkupFromPWA_Core, samo nad zadatom listom
+    ' fixture sheetova -- da se cross-sheet ponasanje (AUD-002) moze
+    ' proveriti bez skeniranja celog PWA foldera.
+
+    Call ImportOtkupSheetLoop(sheetIDs, sheetNames, _
+                              totalImported, totalSkipped, totalErrors)
+End Sub
+
 Public Sub ImportOtkupFromPWA_TX()
-    Dim tx As clsTransaction
     Dim ok As Boolean
 
     On Error GoTo EH
 
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot TBL_OTKUP
-    tx.AddTableSnapshot TBL_AMBALAZA
-
+    ' IMPORTANT (AUD-002):
+    ' Do NOT wrap the whole OTK batch in one outer clsTransaction.
+    '
+    ' Reason:
+    ' - ImportOneOTKSheet writes Google status updates (WriteBackSyncStatus)
+    '   after local row processing, per sheet.
+    ' - Google writeback cannot be rolled back by clsTransaction.
+    ' - An outer rollback triggered by a LATER sheet would delete locally
+    '   imported rows of EARLIER sheets, while those Google rows stay
+    '   Synced>Master -> next cycle skips them -> permanent data loss.
+    ' - Row-level atomicity is already handled by ImportRowToTblOtkup_RowTX.
+    '
+    ' Safe model (same as ImportZbirneFromPWA_TX):
+    ' - each OTK row commits/rolls back through ImportRowToTblOtkup_RowTX
+    ' - successful rows may be written back as Synced>Master
+    ' - failed rows are written back as SyncError
+    ' - the full import can still return False / partial if any errors occurred
     ok = ImportOtkupFromPWA_Core(False)
 
     If Not ok Then
-        tx.RollbackTx
-
         Monitor_MasterSyncFail _
             procedureName:="ImportOtkupFromPWA_TX", _
             errNum:=0, _
-            errDesc:="PWA import was not confirmed. Transaction rolled back because of fatal sync error.", _
+            errDesc:="PWA import was not confirmed. Partial import kept; failed rows marked SyncError.", _
             errSrc:="modMasterSync.ImportOtkupFromPWA_TX"
 
         MsgBox Poruka("SYNC_MSG_PWA_UVOZ_NIJE"), _
             vbCritical, APP_NAME
         Exit Sub
     End If
-
-    tx.CommitTx
 
     MsgBox Poruka("SYNC_MSG_PWA_UVOZ_ZAVRSEN"), vbInformation, APP_NAME
     Exit Sub
@@ -335,9 +369,7 @@ EH:
         errDesc:=errDesc, _
         errSrc:=errSrc
 
-    If Not tx Is Nothing Then tx.RollbackTx
-
-    MsgBox "Greska pri uvozu, promene vracene: " & errDesc, vbCritical, APP_NAME
+    MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU") & errDesc, vbCritical, APP_NAME
 End Sub
 
 '======================================================================
@@ -466,7 +498,17 @@ Public Function CreateOTKSheetsForAllStanice_Core( _
         End If
 
         sheetName = "OTK-" & stanicaID
-        existingID = GetSpreadsheetID(sheetName, folderID)
+
+        ' AUD-001: neuspeo Drive lookup NE SME da se procita kao "ne postoji" --
+        ' inace bi ova masovna putanja napravila duplikat OTK sheeta za svaku
+        ' stanicu u ciklusu.
+        If Not TryGetSpreadsheetID(sheetName, folderID, existingID) Then
+            failedCount = failedCount + 1
+            LogError SRC, _
+                "Drive lookup nije uspeo -- OTK sheet se NE kreira (rizik od duplikata). Sheet=" & sheetName & _
+                "; StanicaID=" & stanicaID
+            GoTo NextStanica
+        End If
 
         If Len(Trim$(existingID)) > 0 Then
             existingCount = existingCount + 1
@@ -1033,7 +1075,6 @@ Private Function FindOTKSheets(ByVal folderID As String, _
     Dim query As String
     Dim responseText As String
     Dim nextPageToken As String
-    Dim tokenPos As Long
 
     On Error GoTo EH
 
@@ -1084,12 +1125,7 @@ Private Function FindOTKSheets(ByVal folderID As String, _
 
         Call ParseFileList(responseText, outIDs, outNames)
 
-        tokenPos = InStr(1, responseText, """nextPageToken""", vbTextCompare)
-        If tokenPos > 0 Then
-            nextPageToken = ExtractJsonValueAt(responseText, tokenPos)
-        Else
-            nextPageToken = ""
-        End If
+        nextPageToken = ExtractNextPageToken(responseText)
     Loop While Len(nextPageToken) > 0
 
     LogInfo SOURCE, "Gefunden: " & outIDs.count & " OTK-Sheets"
@@ -1134,6 +1170,32 @@ Private Sub ParseFileList(ByVal json As String, _
         
         pos = namePos + 1
     Loop
+End Sub
+
+Private Function ExtractNextPageToken(ByVal json As String) As String
+    ' AUD-018: zajednicko citanje Drive nextPageToken-a za FindOTKSheets i
+    ' FindVOZSheets. Prazan rezultat = poslednja strana (petlja staje).
+    Dim tokenPos As Long
+
+    tokenPos = InStr(1, json, """nextPageToken""", vbTextCompare)
+    If tokenPos = 0 Then Exit Function
+
+    ExtractNextPageToken = ExtractJsonValueAt(json, tokenPos)
+End Function
+
+Public Function TestHook_ExtractNextPageToken(ByVal json As String) As String
+    ' DEV/SMOKE TEST HOOK ONLY.
+
+    TestHook_ExtractNextPageToken = ExtractNextPageToken(json)
+End Function
+
+Public Sub TestHook_ParseFileListVOZ(ByVal json As String, _
+                                     ByRef outIDs As Collection, _
+                                     ByRef outNames As Collection)
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Dozvoljava mock paginacije (vise strana u istu kolekciju) bez mreze.
+
+    Call ParseFileListVOZ(json, outIDs, outNames)
 End Sub
 
 Private Function ExtractJsonValueAt(ByVal json As String, ByVal startPos As Long) As String
@@ -1256,6 +1318,16 @@ Public Sub TestHook_ImportOneOTKSheet(ByVal spreadsheetID As String, _
     Call ImportOneOTKSheet(spreadsheetID, sheetName, outImported, outSkipped, outErrors)
 End Sub
 
+Public Function TestHook_ConsumePWAFatalSyncError() As Boolean
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Liest das Fatal-Sync-Flag und setzt es zurueck, damit Tests
+    ' "read/parse failure ist fatal" vs "leeres Sheet ist ok"
+    ' unterscheiden koennen.
+
+    TestHook_ConsumePWAFatalSyncError = mLastPWAFatalSyncError
+    mLastPWAFatalSyncError = False
+End Function
+
 Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
                               ByVal sheetName As String, _
                               ByRef outImported As Long, _
@@ -1269,12 +1341,21 @@ Private Sub ImportOneOTKSheet(ByVal spreadsheetID As String, _
     On Error GoTo EH
     
     ' Daten lesen (erster Tab)
-    data = ReadSheetData(spreadsheetID, "Sheet1")
+    ' AUD-001: Lese-/Parse-Fehler MUSS fatal sein. Bei defektem oder
+    ' abgeschnittenem JSON darf kein einziger Row-Import und kein
+    ' WriteBackSyncStatus laufen -- sonst wird die Google-Zeile als
+    ' Synced>Master quittiert und nie wieder geliefert.
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneOTKSheet", _
+            "Sheet read/parse failed (HTTP or malformed JSON). Import aborted before any row import or writeback. Sheet=" & sheetName
+        Exit Sub
+    End If
 
     If Not IsEmpty(data) Then
         Debug.Print "Rows: " & UBound(data, 1) & " Cols: " & UBound(data, 2)
     End If
-    
+
     If IsEmpty(data) Then
         LogWarn "ImportOneOTKSheet", "Leeres Sheet: " & sheetName
         Exit Sub
@@ -2227,6 +2308,7 @@ Private Function FindVOZSheets(ByVal folderID As String, _
     Dim http As Object
     Dim query As String
     Dim responseText As String
+    Dim nextPageToken As String
 
     On Error GoTo EH
 
@@ -2246,29 +2328,40 @@ Private Function FindVOZSheets(ByVal folderID As String, _
     query = "name contains 'VOZ-' and mimeType='application/vnd.google-apps.spreadsheet'" & _
             " and '" & EscapeDriveQueryValueMasterSync(folderID) & "' in parents and trashed=false"
 
-    url = "https://www.googleapis.com/drive/v3/files" & _
-          "?q=" & UrlEncode(query) & _
-          "&fields=files(id,name)" & _
-          "&pageSize=100"
+    nextPageToken = ""
 
-    Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
-    http.SetTimeouts 10000, 10000, 30000, 30000
+    ' AUD-018: bez paginacije se tiho gubi sve preko prvih 100 VOZ sheetova.
+    Do
+        url = "https://www.googleapis.com/drive/v3/files" & _
+              "?q=" & UrlEncode(query) & _
+              "&fields=nextPageToken,files(id,name)" & _
+              "&pageSize=100"
 
-    http.Open "GET", url, False
-    http.SetRequestHeader "Authorization", "Bearer " & accessToken
-    http.Send
+        If Len(nextPageToken) > 0 Then
+            url = url & "&pageToken=" & UrlEncode(nextPageToken)
+        End If
 
-    responseText = CStr(http.responseText)
+        Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+        http.SetTimeouts 10000, 10000, 30000, 30000
 
-    If http.status <> 200 Then
-        LogError SOURCE, _
-                 "HTTP " & http.status & ": " & Left$(responseText, 1000), _
-                 http.status
-        FindVOZSheets = False
-        Exit Function
-    End If
+        http.Open "GET", url, False
+        http.SetRequestHeader "Authorization", "Bearer " & accessToken
+        http.Send
 
-    Call ParseFileListVOZ(responseText, outIDs, outNames)
+        responseText = CStr(http.responseText)
+
+        If http.status <> 200 Then
+            LogError SOURCE, _
+                     "HTTP " & http.status & ": " & Left$(responseText, 1000), _
+                     http.status
+            FindVOZSheets = False
+            Exit Function
+        End If
+
+        Call ParseFileListVOZ(responseText, outIDs, outNames)
+
+        nextPageToken = ExtractNextPageToken(responseText)
+    Loop While Len(nextPageToken) > 0
 
     LogInfo SOURCE, "Gefunden: " & outIDs.count & " VOZ-Sheets"
     FindVOZSheets = True
@@ -2326,8 +2419,16 @@ Private Sub ImportOneVOZSheet(ByVal spreadsheetID As String, _
     
     On Error GoTo EH
     
-    data = ReadSheetData(spreadsheetID, "Sheet1")
-    
+    ' AUD-001: isti fail-closed model kao ImportOneOTKSheet --
+    ' defektan/skracen JSON ne sme da proizvede ni jedan uvezen red
+    ' ni jedan writeback.
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        outErrors = outErrors + 1
+        MarkPWAFatalSyncError "ImportOneVOZSheet", _
+            "Sheet read/parse failed (HTTP or malformed JSON). Import aborted before any row import or writeback. Sheet=" & sheetName
+        Exit Sub
+    End If
+
     If IsEmpty(data) Then
         LogWarn "ImportOneVOZSheet", "Leeres Sheet: " & sheetName
         Exit Sub

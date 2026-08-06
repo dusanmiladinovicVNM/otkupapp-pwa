@@ -431,29 +431,47 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
         Exit Function
     End If
     
+    ' AUD-001: "sheet ne postoji" i "lookup nije uspeo" moraju biti razdvojeni.
+    ' Neuspeo Drive lookup ne sme da izgleda kao "remote nema brojeve".
     Dim spreadsheetID As String
-    spreadsheetID = ResolveSpreadsheetIDByName(sheetName)
+    If Not TryResolveSpreadsheetIDByName(sheetName, spreadsheetID) Then
+        Err.Raise vbObjectError + 8403, "MaxSeqFromGoogleSheet", _
+                  "Drive lookup nije uspeo. Broj se ne predlaze da se ne bi dodelio duplikat. Sheet=" & sheetName
+    End If
+
     If Len(spreadsheetID) = 0 Then
+        ' Lookup je prosao -- remote sheet stvarno ne postoji, nema brojeva.
         MaxSeqFromGoogleSheet = 0
         Exit Function
     End If
-    
+
+    ' AUD-001: read/parse greska NE SME da izgleda kao "na Google-u nema redova".
+    ' Remote scan postoji upravo da bi uhvatio jos neuvezene PWA dokumente;
+    ' ako padne, tihi 0 bi mogao da ponudi vec zauzet broj (duplikat).
+    ' Zato podizemo gresku van lokalnog handlera -- SuggestNextBroj je hvata
+    ' i bezbedno vraca "" (operater unosi broj rucno).
     Dim data As Variant
-    data = ReadSheetData(spreadsheetID, "Sheet1")
+    If Not TryReadSheetData(spreadsheetID, "Sheet1", data) Then
+        Err.Raise vbObjectError + 8402, "MaxSeqFromGoogleSheet", _
+                  "Remote scan brojeva nije uspeo (HTTP/JSON). Sheet=" & sheetName
+    End If
+
     If IsEmpty(data) Then
         MaxSeqFromGoogleSheet = 0
         Exit Function
     End If
-    
+
     Dim iBroj As Long, iDatum As Long
     iBroj = FindHeaderIndexInData(data, brojColHeader)
     iDatum = FindHeaderIndexInData(data, "Datum")
-    
+
+    ' AUD-001: sheet je procitan, ali nema ocekivane kolone -> remote scan
+    ' nije obavljen. Tih 0 bi ovde takode mogao dati vec zauzet broj.
     If iBroj = 0 Or iDatum = 0 Then
-        MaxSeqFromGoogleSheet = 0
-        Exit Function
+        Err.Raise vbObjectError + 8404, "MaxSeqFromGoogleSheet", _
+                  "Remote sheet nema ocekivane headere (" & brojColHeader & "/Datum). Sheet=" & sheetName
     End If
-    
+
     Dim datumStr As String: datumStr = Format$(datum, "ddmmyy")
     Dim maxSeq As Long: maxSeq = 0
     
@@ -476,32 +494,95 @@ Private Function MaxSeqFromGoogleSheet(ByVal sheetName As String, _
     Exit Function
 
 EH:
-    LogErr "MaxSeqFromGoogleSheet", "sheet=" & sheetName
-    MaxSeqFromGoogleSheet = 0
+    ' AUD-001: NIJEDNA greska ne sme da se pretvori u 0.
+    ' 0 znaci "remote nema brojeve", pa bi svaka progutana greska (config,
+    ' cache, neocekivani podaci, buduce izmene) mogla da ponudi vec zauzet
+    ' broj. Greska se loguje i propagira -- SuggestNextBroj je hvata i vraca "".
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    If errNum = 0 Then errNum = vbObjectError + 8405
+    If Len(errSrc) = 0 Then errSrc = "MaxSeqFromGoogleSheet"
+
+    ' On Error GoTo 0 brise Err, zato su vrednosti vec sacuvane iznad.
+    On Error GoTo 0
+
+    LogError "MaxSeqFromGoogleSheet", _
+             "Remote scan prekinut. Broj se ne predlaze. Sheet=" & sheetName & _
+             "; Err=" & CStr(errNum) & "; Desc=" & errDesc & "; Src=" & errSrc, _
+             errNum
+
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
-Private Function ResolveSpreadsheetIDByName(ByVal sheetName As String) As String
+' AUD-001 FAIL-CLOSED lookup.
+'
+'   True  + outID = ID -> sheet pronaden
+'   True  + outID = "" -> lookup je prosao, sheet stvarno ne postoji
+'   False              -> lookup NIJE uspeo (nema foldera/tokena, HTTP greska,
+'                         necitljiv Drive JSON, exception)
+'
+' Kesira se SAMO neprazan ID. Prazan rezultat se NE kesira -- ni posle neuspelog
+' lookup-a (prolazni Drive problem bi trajno izgledao kao "nema brojeva"), ni
+' posle uspesnog "ne postoji" (PWA moze kreirati sheet dok je Excel otvoren, pa
+' bi kesirano "" sakrilo nove remote brojeve do restarta).
+Private Function TryResolveSpreadsheetIDByName(ByVal sheetName As String, _
+                                               ByRef outID As String) As Boolean
+    Dim folderID As String
+    Dim spreadsheetID As String
+
+    outID = ""
+
     If gSheetIDCache Is Nothing Then
         Set gSheetIDCache = CreateObject("Scripting.Dictionary")
     End If
-    
+
     If gSheetIDCache.Exists(sheetName) Then
-        ResolveSpreadsheetIDByName = CStr(gSheetIDCache(sheetName))
+        outID = CStr(gSheetIDCache(sheetName))
+        TryResolveSpreadsheetIDByName = True
         Exit Function
     End If
-    
-    Dim folderID As String
+
     folderID = GetConfigValue("GOOGLE_PWA_FOLDER_ID")
     If Len(folderID) = 0 Then
-        ResolveSpreadsheetIDByName = ""
+        LogError "TryResolveSpreadsheetIDByName", _
+                 "GOOGLE_PWA_FOLDER_ID nije postavljen, a cloud sync je ukljucen -- remote scan nije moguc."
         Exit Function
     End If
-    
-    Dim spreadsheetID As String
-    spreadsheetID = GetSpreadsheetID(sheetName, folderID)
-    
-    gSheetIDCache(sheetName) = spreadsheetID
-    ResolveSpreadsheetIDByName = spreadsheetID
+
+    If Not TryGetSpreadsheetID(sheetName, folderID, spreadsheetID) Then Exit Function
+
+    If Len(spreadsheetID) > 0 Then gSheetIDCache(sheetName) = spreadsheetID
+
+    outID = spreadsheetID
+    TryResolveSpreadsheetIDByName = True
+End Function
+
+' ============================================================
+' DEV/SMOKE TEST HOOKS
+' ============================================================
+
+Public Function TestHook_MaxSeqFromGoogleSheet(ByVal sheetName As String, _
+                                               ByVal brojColHeader As String, _
+                                               ByVal datum As Date) As Long
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Drzi MaxSeqFromGoogleSheet privatnim za produkciju, ali dozvoljava
+    ' regresioni test da greska propagira umesto da postane 0.
+
+    TestHook_MaxSeqFromGoogleSheet = MaxSeqFromGoogleSheet(sheetName, brojColHeader, datum)
+End Function
+
+Public Function TestHook_SpreadsheetIDCacheContains(ByVal sheetName As String) As Boolean
+    ' DEV/SMOKE TEST HOOK ONLY -- provera da nema negativnog kesiranja.
+
+    If gSheetIDCache Is Nothing Then Exit Function
+
+    TestHook_SpreadsheetIDCacheContains = gSheetIDCache.Exists(sheetName)
 End Function
 
 Private Function FindHeaderIndexInData(ByVal data As Variant, _

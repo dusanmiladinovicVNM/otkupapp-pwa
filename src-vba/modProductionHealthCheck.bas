@@ -1018,10 +1018,18 @@ Private Sub Check_GoogleSyncFolderReachable()
         Exit Sub
     End If
 
-    ' Read-only probe. Expected result is empty string.
-    ' If auth/folder/API is broken, GetSpreadsheetID logs internally and should fail safely.
+    ' Read-only probe. Expected result is a SUCCESSFUL lookup with empty ID.
+    '
+    ' AUD-001: raniji GetSpreadsheetID je vracao "" i kad lookup padne
+    ' (token/HTTP/JSON), pa je health check javljao "Drive dostupan" upravo
+    ' kada nije. Sada se lookup uspeh i rezultat proveravaju odvojeno.
     probeName = "__SYNC_HEALTH_PROBE_DOES_NOT_EXIST__" & Format$(Now, "yyyymmddhhnnss")
-    foundID = GetSpreadsheetID(probeName, folderID)
+
+    If Not TryGetSpreadsheetID(probeName, folderID, foundID) Then
+        HealthFail "Google PWA folder read path is reachable", _
+                   "Drive lookup failed (auth/HTTP/JSON). See log."
+        Exit Sub
+    End If
 
     If Len(Trim$(foundID)) > 0 Then
         HealthWarn "Google PWA folder read probe", _

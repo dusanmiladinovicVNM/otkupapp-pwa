@@ -25,6 +25,9 @@ Public Sub RunE2EReleaseGate_v610()
 
     BeginE2EGate
 
+    E2E_RunVbaSuite "RunSheetsJsonParserTests", _
+                    "Sheets values JSON parser (AUD-001 fail-closed, offline)"
+
     E2E_RunVbaSuite "RunGoogleSyncSmokeSuite", _
                     "Google transport/auth/sheets smoke"
 

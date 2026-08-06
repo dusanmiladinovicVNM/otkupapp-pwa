@@ -1175,55 +1175,79 @@ End Function
 
 Public Function ReadSheetData(ByVal spreadsheetID As String, _
                               ByVal tabName As String) As Variant
+    ' Kompatibilitaets-Wrapper: Fehler und "leer" sind hier NICHT
+    ' unterscheidbar (beides Empty). Fuer Sync-Importe MUSS
+    ' TryReadSheetData verwendet werden.
+    Dim data As Variant
+
+    If TryReadSheetData(spreadsheetID, tabName, data) Then
+        ReadSheetData = data
+    Else
+        ReadSheetData = Empty
+    End If
+End Function
+
+Public Function TryReadSheetData(ByVal spreadsheetID As String, _
+                                 ByVal tabName As String, _
+                                 ByRef outData As Variant) As Boolean
+    ' FAIL-CLOSED Read.
+    '
+    '   True  + outData = Array  -> Tab gelesen, Zeilen vorhanden
+    '   True  + outData = Empty  -> Tab gelesen, aber leer
+    '   False                    -> Argument-/Token-/HTTP-/Parse-Fehler.
+    '                               Aufrufer MUSS abbrechen: kein lokaler
+    '                               Import und kein Google Writeback,
+    '                               sonst gehen Zeilen dauerhaft verloren.
     Dim accessToken As String
     Dim url As String
     Dim http As Object
 
+    outData = Empty
+    TryReadSheetData = False
+
     On Error GoTo EH
 
-    If Not RequireGoogleTextArg(spreadsheetID, "spreadsheetID", "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
-
-    If Not RequireGoogleTextArg(tabName, "tabName", "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
+    If Not RequireGoogleTextArg(spreadsheetID, "spreadsheetID", "TryReadSheetData") Then Exit Function
+    If Not RequireGoogleTextArg(tabName, "tabName", "TryReadSheetData") Then Exit Function
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
-        LogError "ReadSheetData", "Kein Access Token"
-        ReadSheetData = Empty
+        LogError "TryReadSheetData", "Kein Access Token"
         Exit Function
     End If
 
     url = SHEETS_API_BASE & "/" & spreadsheetID & _
           "/values/" & UrlEncode(tabName)
 
-    Set http = CreateGoogleHttpRequest("ReadSheetData")
+    Set http = CreateGoogleHttpRequest("TryReadSheetData")
 
     http.Open "GET", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
-    If Not SendGoogleHttpWithRetry(http, "ReadSheetData") Then
-        ReadSheetData = Empty
-        Exit Function
-    End If
+    If Not SendGoogleHttpWithRetry(http, "TryReadSheetData") Then Exit Function
 
     If http.status <> 200 Then
-        LogError "ReadSheetData", _
+        LogError "TryReadSheetData", _
                  "HTTP " & http.status & ": " & GoogleHttpBodyForLog(http.responseText), _
                  http.status
-        ReadSheetData = Empty
         Exit Function
     End If
 
-    ReadSheetData = ParseValuesJson(http.responseText)
+    If Not TryParseValuesJson(http.responseText, outData) Then
+        outData = Empty
+        LogError "TryReadSheetData", _
+                 "Defektes/abgeschnittenes JSON von Sheets API. Tab=" & tabName & _
+                 "; Bytes=" & CStr(Len(http.responseText)) & _
+                 "; Body=" & GoogleHttpBodyForLog(http.responseText)
+        Exit Function
+    End If
+
+    TryReadSheetData = True
     Exit Function
 
 EH:
-    LogErr "ReadSheetData"
-    ReadSheetData = Empty
+    outData = Empty
+    LogErr "TryReadSheetData"
+    TryReadSheetData = False
 End Function
 
 ' ============================================================
@@ -1364,24 +1388,45 @@ End Function
 
 Public Function GetSpreadsheetID(ByVal title As String, _
                                  Optional ByVal folderID As String = "") As String
+    ' Kompatibilitaets-Wrapper: "nicht gefunden" und "Lookup fehlgeschlagen"
+    ' sind hier NICHT unterscheidbar (beides ""). Wer daraus eine Entscheidung
+    ' ableitet (z.B. Nummernvergabe), MUSS TryGetSpreadsheetID nutzen.
+    Dim foundID As String
+
+    If TryGetSpreadsheetID(title, folderID, foundID) Then
+        GetSpreadsheetID = foundID
+    Else
+        GetSpreadsheetID = ""
+    End If
+End Function
+
+Public Function TryGetSpreadsheetID(ByVal title As String, _
+                                    ByVal folderID As String, _
+                                    ByRef outID As String) As Boolean
+    ' FAIL-CLOSED Drive Lookup.
+    '
+    '   True  + outID = ID  -> Spreadsheet gefunden
+    '   True  + outID = ""  -> Lookup ok, Spreadsheet existiert wirklich nicht
+    '   False               -> Argument-/Token-/HTTP-/Parse-Fehler oder Exception.
+    '                          Aufrufer darf daraus NICHT "existiert nicht"
+    '                          schliessen (AUD-001: sonst wird ein bereits
+    '                          vergebener Beleg-Nummernbereich uebersehen).
     Dim accessToken As String
     Dim url As String
     Dim http As Object
     Dim query As String
     Dim responseText As String
-    Dim foundID As String
+
+    outID = ""
+    TryGetSpreadsheetID = False
 
     On Error GoTo EH
 
-    If Not RequireGoogleTextArg(title, "title", "GetSpreadsheetID") Then
-        GetSpreadsheetID = ""
-        Exit Function
-    End If
+    If Not RequireGoogleTextArg(title, "title", "TryGetSpreadsheetID") Then Exit Function
 
     accessToken = GetAccessToken()
     If Len(accessToken) = 0 Then
-        LogError "GetSpreadsheetID", "Kein Access Token"
-        GetSpreadsheetID = ""
+        LogError "TryGetSpreadsheetID", "Kein Access Token"
         Exit Function
     End If
 
@@ -1395,7 +1440,7 @@ Public Function GetSpreadsheetID(ByVal title As String, _
     url = DRIVE_API_BASE & "/files?q=" & UrlEncode(query) & _
           "&fields=files(id,name)&pageSize=10"
 
-    Set http = CreateGoogleHttpRequest("GetSpreadsheetID")
+    Set http = CreateGoogleHttpRequest("TryGetSpreadsheetID")
 
     http.Open "GET", url, False
     http.SetRequestHeader "Authorization", "Bearer " & accessToken
@@ -1404,27 +1449,86 @@ Public Function GetSpreadsheetID(ByVal title As String, _
     responseText = CStr(http.responseText)
 
     If http.status <> 200 Then
-        LogError "GetSpreadsheetID", _
+        LogError "TryGetSpreadsheetID", _
                  "HTTP " & http.status & ": " & GoogleHttpBodyForLog(responseText), _
                  http.status
-        GetSpreadsheetID = ""
         Exit Function
     End If
 
-    foundID = ExtractSpreadsheetIDByExactName(responseText, title)
-
-    If Len(Trim$(foundID)) = 0 Then
-        LogInfo "GetSpreadsheetID", "Spreadsheet not found by exact name: " & title
-        GetSpreadsheetID = ""
+    ' Unlesbare/abgeschnittene Drive-Antwort darf nicht als
+    ' "nicht gefunden" durchgehen.
+    If Not IsWellFormedJsonDocument(responseText) Then
+        LogError "TryGetSpreadsheetID", _
+                 "Defektes/abgeschnittenes JSON von Drive API. Title=" & title & _
+                 "; Bytes=" & CStr(Len(responseText))
         Exit Function
     End If
 
-    GetSpreadsheetID = foundID
+    outID = ExtractSpreadsheetIDByExactName(responseText, title)
+
+    If Len(Trim$(outID)) = 0 Then
+        outID = ""
+        LogInfo "TryGetSpreadsheetID", "Spreadsheet not found by exact name: " & title
+    End If
+
+    TryGetSpreadsheetID = True
     Exit Function
 
 EH:
-    LogErr "GetSpreadsheetID"
-    GetSpreadsheetID = ""
+    outID = ""
+    LogErr "TryGetSpreadsheetID"
+    TryGetSpreadsheetID = False
+End Function
+
+Public Function TryGetOrCreateSpreadsheetID(ByVal title As String, _
+                                            ByVal folderID As String, _
+                                            ByRef outID As String) As Boolean
+    ' FAIL-CLOSED get-or-create.
+    '
+    '   True  + outID -> Spreadsheet gefunden oder neu erstellt
+    '   False         -> Lookup fehlgeschlagen (dann wird NICHTS erstellt)
+    '                    oder Erstellen fehlgeschlagen
+    '
+    ' AUD-001: Der alte Ablauf war
+    '     id = GetSpreadsheetID(...) : If id = "" Then id = CreateSpreadsheet(...)
+    ' und hat einen HTTP-/JSON-Fehler beim Lookup als "existiert nicht"
+    ' gelesen -> zweites Spreadsheet mit gleichem Namen (Duplikat), im
+    ' schlimmsten Fall fuer viele Stanice gleichzeitig.
+    Dim foundID As String
+
+    outID = ""
+    TryGetOrCreateSpreadsheetID = False
+
+    If Not TryGetSpreadsheetID(title, folderID, foundID) Then
+        LogError "TryGetOrCreateSpreadsheetID", _
+                 "Drive lookup nije uspeo -- sheet se NE kreira (rizik od duplikata). Title=" & title
+        Exit Function
+    End If
+
+    If Len(Trim$(foundID)) > 0 Then
+        outID = foundID
+        TryGetOrCreateSpreadsheetID = True
+        Exit Function
+    End If
+
+    ' Lookup je prosao i sheet stvarno ne postoji -> bezbedno je kreirati.
+    foundID = CreateSpreadsheet(title, folderID)
+
+    If Len(Trim$(foundID)) = 0 Then Exit Function   ' CreateSpreadsheet loguje interno
+
+    outID = foundID
+    TryGetOrCreateSpreadsheetID = True
+End Function
+
+Public Function IsWellFormedJsonDocument(ByVal json As String) As Boolean
+    ' Strukturpruefung (Klammern/Strings/Escapes) fuer beliebige
+    ' Google-API-Antworten -- erkennt abgeschnittene und beschaedigte Bodies.
+    Dim rowsColl As Collection
+    Dim foundValues As Boolean
+
+    If FirstNonWhitespaceChar(json) <> "{" Then Exit Function
+
+    IsWellFormedJsonDocument = TryScanJsonDocument(json, rowsColl, foundValues)
 End Function
 
 Private Function EscapeDriveQueryValue(ByVal value As String) As String
@@ -1732,111 +1836,334 @@ Private Function BuildValuesJson(ByVal data As Variant) As String
 End Function
 
 Public Function ParseValuesJson(ByVal json As String) As Variant
-    Dim p As Long
-    Dim valuesStart As Long
-    Dim valuesEnd As Long
-    Dim block As String
-    Dim rowList() As String
+    ' Parst {"range":...,"values":[[...],[...]]} in ein 1-basiertes 2D Array.
+    '
+    ' AUD-001: Frueher wurde der JSON-Text vor dem Parsen global normalisiert
+    ' (Replace ", " -> ",", "[ " -> "[", " ]" -> "]") und danach an "],["
+    ' bzw. an Kommas gesplittet. Das war NICHT quote-aware und hat jede
+    ' Textzelle beschaedigt, die ", " enthielt (Adressen, Namen, Napomena),
+    ' escaped Quotes falsch behandelt und \uXXXX nie dekodiert.
+    '
+    ' Jetzt: EIN stateful Scanner (ScanJsonValuesArray) fuer Zeilen UND Zellen,
+    ' der Quotes/Backslash-Escapes korrekt verfolgt und alle JSON-Escapes
+    ' in einem Durchgang dekodiert.
+    Dim data As Variant
+
+    If TryParseValuesJson(json, data) Then
+        ParseValuesJson = data
+    Else
+        ParseValuesJson = Empty
+    End If
+End Function
+
+Public Function TryParseValuesJson(ByVal json As String, _
+                                   ByRef outData As Variant) As Boolean
+    ' FAIL-CLOSED Variante von ParseValuesJson.
+    '
+    '   True  + outData = Array  -> gueltige Antwort mit Zeilen
+    '   True  + outData = Empty  -> gueltige, aber leere Antwort
+    '                               (kein "values" Key = leerer Range)
+    '   False                    -> defektes / abgeschnittenes JSON.
+    '                               Aufrufer MUSS das als Fehler behandeln
+    '                               (kein Import, kein Google Writeback).
+    '
+    ' AUD-001: Frueher wurden Teilzeilen aus abgeschnittenem JSON als
+    ' gueltige Daten zurueckgegeben. Ein Import haette Zeilen mit
+    ' fehlenden Endfeldern lokal committen und die Google-Zeile als
+    ' Synced>Master markieren koennen -> Felder dauerhaft verloren.
+    Dim rowsColl As Collection
+    Dim cellsColl As Collection
+    Dim foundValues As Boolean
     Dim rowCount As Long
     Dim colCount As Long
     Dim result() As Variant
     Dim i As Long, j As Long
-    Dim cells() As String
-    
-    json = Replace(json, vbCrLf, "")
-    json = Replace(json, vbLf, "")
-    json = Replace(json, vbCr, "")
-    
-    ' Spaces zwischen Klammern entfernen
-    Do While InStr(json, "[ ") > 0
-        json = Replace(json, "[ ", "[")
-    Loop
-    Do While InStr(json, " ]") > 0
-        json = Replace(json, " ]", "]")
-    Loop
-    Do While InStr(json, ", ") > 0
-        json = Replace(json, ", ", ",")
-    Loop
-    
-    p = InStr(json, """values""")
-    If p = 0 Then
-        ParseValuesJson = Empty
+
+    outData = Empty
+    TryParseValuesJson = False
+
+    ' Sanity: Sheets values.get liefert immer ein JSON-Objekt.
+    ' (HTML/Proxy-Fehlerseite mit HTTP 200 darf nicht als "leer" durchgehen.)
+    If FirstNonWhitespaceChar(json) <> "{" Then Exit Function
+
+    ' Das GANZE Dokument muss balanciert sein -- nicht nur das values-Array.
+    ' Sonst gilt z.B. ein abgeschnittenes {"range":"Sheet1 als "leerer Sheet".
+    If Not TryScanJsonDocument(json, rowsColl, foundValues) Then Exit Function
+
+    If Not foundValues Then
+        ' Gueltiges Objekt ohne "values" -> leerer Range (Google laesst den
+        ' Key bei leerem Bereich komplett weg).
+        TryParseValuesJson = True
         Exit Function
     End If
-    
-    valuesStart = InStr(p, json, "[[")
-    If valuesStart = 0 Then
-        ParseValuesJson = Empty
+
+    rowCount = rowsColl.count
+    If rowCount = 0 Then
+        ' "values":[] -> gueltig und leer
+        TryParseValuesJson = True
         Exit Function
     End If
-    
-    valuesEnd = InStrRev(json, "]]")
-    If valuesEnd = 0 Or valuesEnd <= valuesStart Then
-        ParseValuesJson = Empty
-        Exit Function
-    End If
-    
-    block = Mid$(json, valuesStart + 1, valuesEnd - valuesStart)
-    
-    rowList = Split(block, "],[")
-    rowCount = UBound(rowList) + 1
-    
-    rowList(0) = Mid$(rowList(0), 2)
-    rowList(UBound(rowList)) = Left$(rowList(UBound(rowList)), Len(rowList(UBound(rowList))) - 1)
-    
-    cells = SplitCsvJson(rowList(0))
-    colCount = UBound(cells) + 1
-    
+
+    ' Breite wie bisher aus der ersten Zeile (Header) -- unveraendertes Verhalten.
+    colCount = rowsColl(1).count
+    If colCount < 1 Then colCount = 1
+
     ReDim result(1 To rowCount, 1 To colCount)
-    
-    For i = 0 To rowCount - 1
-        cells = SplitCsvJson(rowList(i))
-        For j = 0 To UBound(cells)
-            If j < colCount Then
-                result(i + 1, j + 1) = CleanJsonValue(cells(j))
+
+    For i = 1 To rowCount
+        Set cellsColl = rowsColl(i)
+        For j = 1 To cellsColl.count
+            If j <= colCount Then
+                result(i, j) = cellsColl(j)
             End If
         Next j
     Next i
-    
-    ParseValuesJson = result
-End Function
-Private Function SplitCsvJson(ByVal s As String) As String()
-    ' Split auf Komma, aber nicht innerhalb von Anfuehrungszeichen
-    Dim result() As String
-    Dim count As Long, i As Long
-    Dim inQuote As Boolean
-    Dim current As String
-    
-    ReDim result(0 To 0)
-    
-    For i = 1 To Len(s)
-        Dim ch As String
-        ch = Mid$(s, i, 1)
-        
-        If ch = """" Then
-            inQuote = Not inQuote
-        ElseIf ch = "," And Not inQuote Then
-            result(count) = current
-            count = count + 1
-            ReDim Preserve result(0 To count)
-            current = ""
-        Else
-            current = current & ch
-        End If
-    Next i
-    
-    result(count) = current
-    SplitCsvJson = result
+
+    outData = result
+    TryParseValuesJson = True
 End Function
 
-Private Function CleanJsonValue(ByVal s As String) As String
-    s = Trim$(s)
-    If Left$(s, 1) = """" And Right$(s, 1) = """" Then
-        s = Mid$(s, 2, Len(s) - 2)
-    End If
-    s = Replace(s, "\""", """")
-    s = Replace(s, "\\", "\")
-    s = Replace(s, "\n", vbLf)
-    CleanJsonValue = s
+Private Function TryScanJsonDocument(ByRef json As String, _
+                                     ByRef outRows As Collection, _
+                                     ByRef outFoundValues As Boolean) As Boolean
+    ' Stateful Scanner ueber das GANZE JSON-Dokument.
+    ' Liefert nebenbei die Zeilen des "values"-Arrays
+    ' (Collection von Collections, Zellen als String).
+    '
+    ' Regeln:
+    '   - "\" escaped das naechste Zeichen, "\""" toggelt inQuote also NICHT
+    '   - Whitespace ausserhalb von Strings wird ignoriert (prettyPrint JSON)
+    '   - "," / "]" trennen nur ausserhalb von Strings
+    '   - "values" wird nur als TOP-LEVEL KEY erkannt (Stack = "{" und
+    '     direkt gefolgt von ":"), nie als Zellinhalt
+    '
+    ' FAIL-CLOSED: True nur wenn
+    '   - der Klammer-Stack sauber leer ist (jede "]" schliesst ein "[",
+    '     jede "}" ein "{"),
+    '   - das Root-Objekt geschlossen wurde und danach nur Whitespace folgt,
+    '   - kein String offen ist,
+    '   - keine Zeile offen ist,
+    '   - ein gefundenes values-Array auch geschlossen wurde,
+    '   - jeder Escape gueltig ist (\uXXXX mit genau 4 Hex-Ziffern).
+    ' Eine angefangene Zeile wird NIE uebernommen.
+    '
+    ' Das ist bewusst KEIN vollstaendiger JSON-Validator (Kommas/Typen werden
+    ' nicht geprueft) -- Ziel ist das Erkennen von abgeschnittenen und
+    ' beschaedigten Antworten.
+    Dim rowsColl As Collection
+    Dim cellsColl As Collection
+    Dim i As Long
+    Dim n As Long
+    Dim stack As String
+    Dim inQuote As Boolean
+    Dim inRow As Boolean
+    Dim cellStarted As Boolean
+    Dim rootClosed As Boolean
+    Dim inValues As Boolean
+    Dim valuesClosed As Boolean
+    Dim expectValues As Boolean
+    Dim valuesRoot As Long
+    Dim lastString As String
+    Dim ch As String
+    Dim esc As String
+    Dim hex4 As String
+    Dim buf As String
+
+    Set outRows = Nothing
+    outFoundValues = False
+
+    Set rowsColl = New Collection
+
+    n = Len(json)
+    i = 1
+
+    Do While i <= n
+        ch = Mid$(json, i, 1)
+
+        If inQuote Then
+            If ch = "\" Then
+                If i + 1 > n Then Exit Function     ' Escape am Ende abgeschnitten
+
+                i = i + 1
+                esc = Mid$(json, i, 1)
+
+                Select Case esc
+                    Case """"
+                        buf = buf & """"
+                    Case "\"
+                        buf = buf & "\"
+                    Case "/"
+                        buf = buf & "/"
+                    Case "b"
+                        buf = buf & Chr$(8)
+                    Case "f"
+                        buf = buf & Chr$(12)
+                    Case "n"
+                        buf = buf & vbLf
+                    Case "r"
+                        buf = buf & vbCr
+                    Case "t"
+                        buf = buf & vbTab
+                    Case "u"
+                        hex4 = Mid$(json, i + 1, 4)
+                        If Not IsHex4Digits(hex4) Then Exit Function
+                        buf = buf & JsonUnicodeChar(hex4)
+                        i = i + 4
+                    Case Else
+                        ' Unbekannter Escape (z.B. \x) -> defektes JSON
+                        Exit Function
+                End Select
+            ElseIf ch = """" Then
+                inQuote = False
+                If Not inRow Then
+                    lastString = buf
+                    buf = ""
+                End If
+            Else
+                buf = buf & ch
+            End If
+        Else
+            ' Nach dem Root-Objekt darf nur noch Whitespace kommen.
+            If rootClosed Then
+                If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then Exit Function
+            End If
+
+            ' Wenn "values" als Top-Level-Key da ist, MUSS ein Array folgen.
+            ' {"values":null} / {"values":"x"} / {"values":{}} sind defekt,
+            ' nicht "leerer Sheet".
+            If expectValues Then
+                If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf And ch <> "[" Then
+                    Exit Function
+                End If
+            End If
+
+            Select Case ch
+                Case """"
+                    inQuote = True
+                    If inRow Then
+                        cellStarted = True
+                    Else
+                        buf = ""
+                    End If
+                Case "{"
+                    stack = stack & "{"
+                    expectValues = False
+                Case "["
+                    If Len(stack) = 0 Then Exit Function    ' Root muss ein Objekt sein
+                    stack = stack & "["
+
+                    If expectValues And Not outFoundValues Then
+                        valuesRoot = Len(stack)
+                        outFoundValues = True
+                        inValues = True
+                    ElseIf inValues And Len(stack) = valuesRoot + 1 Then
+                        Set cellsColl = New Collection
+                        inRow = True
+                        buf = ""
+                        cellStarted = False
+                    End If
+
+                    expectValues = False
+                Case "}"
+                    If Right$(stack, 1) <> "{" Then Exit Function
+                    stack = Left$(stack, Len(stack) - 1)
+                    If Len(stack) = 0 Then rootClosed = True
+                    lastString = ""
+                Case "]"
+                    If Right$(stack, 1) <> "[" Then Exit Function
+
+                    If inValues And inRow And Len(stack) = valuesRoot + 1 Then
+                        If cellStarted Then cellsColl.Add buf
+                        rowsColl.Add cellsColl
+                        Set cellsColl = Nothing
+                        inRow = False
+                        buf = ""
+                        cellStarted = False
+                    End If
+
+                    stack = Left$(stack, Len(stack) - 1)
+
+                    If inValues And Len(stack) = valuesRoot - 1 Then
+                        inValues = False
+                        valuesClosed = True
+                    End If
+
+                    lastString = ""
+                Case ":"
+                    If Not inRow Then
+                        If lastString = "values" And stack = "{" Then expectValues = True
+                        lastString = ""
+                    End If
+                Case ","
+                    If inRow Then
+                        cellsColl.Add buf
+                        buf = ""
+                        cellStarted = False
+                    Else
+                        lastString = ""
+                        expectValues = False
+                    End If
+                Case Else
+                    If inRow Then
+                        If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then
+                            buf = buf & ch
+                            cellStarted = True
+                        End If
+                    End If
+            End Select
+        End If
+
+        i = i + 1
+    Loop
+
+    ' Abgeschnittenes JSON: offener String, offene Zeile, offene Klammer
+    ' oder nicht geschlossenes values-Array -> KEINE Teildaten zurueckgeben.
+    If inQuote Then Exit Function
+    If Len(stack) <> 0 Then Exit Function
+    If Not rootClosed Then Exit Function
+    If inRow Then Exit Function
+    If Not cellsColl Is Nothing Then Exit Function
+    If outFoundValues And Not valuesClosed Then Exit Function
+
+    Set outRows = rowsColl
+    TryScanJsonDocument = True
+End Function
+
+Private Function FirstNonWhitespaceChar(ByRef s As String) As String
+    Dim i As Long
+    Dim ch As String
+
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch <> " " And ch <> vbTab And ch <> vbCr And ch <> vbLf Then
+            FirstNonWhitespaceChar = ch
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function IsHex4Digits(ByVal s As String) As Boolean
+    Dim i As Long
+    Dim c As String
+
+    If Len(s) <> 4 Then Exit Function
+
+    For i = 1 To 4
+        c = UCase$(Mid$(s, i, 1))
+        If Not ((c >= "0" And c <= "9") Or (c >= "A" And c <= "F")) Then Exit Function
+    Next i
+
+    IsHex4Digits = True
+End Function
+
+Private Function JsonUnicodeChar(ByVal hex4 As String) As String
+    ' \uXXXX -> Zeichen. Aufbau zur Laufzeit (ChrW), Quelltext bleibt ASCII.
+    ' Werte > &H7FFF muessen fuer ChrW negativ uebergeben werden.
+    Dim code As Long
+
+    code = CLng("&H" & hex4)
+    If code > 32767 Then code = code - 65536
+
+    JsonUnicodeChar = ChrW$(code)
 End Function
 
