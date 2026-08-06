@@ -90,7 +90,6 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
     Dim folderID As String
     Dim sheetIDs As Collection
     Dim sheetNames As Collection
-    Dim i As Long
     Dim totalImported As Long
     Dim totalSkipped As Long
     Dim totalErrors As Long
@@ -160,26 +159,8 @@ Public Function ImportOtkupFromPWA_Core(ByVal showMessages As Boolean) As Boolea
 
     filesCount = sheetIDs.count
 
-    For i = 1 To sheetIDs.count
-        Dim imported As Long
-        Dim skipped As Long
-        Dim errors As Long
-
-        imported = 0
-        skipped = 0
-        errors = 0
-
-        Call ImportOneOTKSheet( _
-            CStr(sheetIDs(i)), _
-            CStr(sheetNames(i)), _
-            imported, _
-            skipped, _
-            errors)
-
-        totalImported = totalImported + imported
-        totalSkipped = totalSkipped + skipped
-        totalErrors = totalErrors + errors
-    Next i
+    Call ImportOtkupSheetLoop(sheetIDs, sheetNames, _
+                              totalImported, totalSkipped, totalErrors)
 
     LogInfo "ImportOtkupFromPWA_Core", _
         "Import completed. Files=" & CStr(filesCount) & _
@@ -283,6 +264,52 @@ EH:
     ImportOtkupFromPWA_Core = False
 End Function
 
+
+Private Sub ImportOtkupSheetLoop(ByVal sheetIDs As Collection, _
+                                 ByVal sheetNames As Collection, _
+                                 ByRef totalImported As Long, _
+                                 ByRef totalSkipped As Long, _
+                                 ByRef totalErrors As Long)
+    ' AUD-002: sheetovi se obraduju NEZAVISNO.
+    ' Nema batch transakcije oko petlje -- pad kasnijeg sheeta ne sme da
+    ' ponisti vec uvezene redove ranijih sheetova, jer njihov Google
+    ' writeback (Synced>Master) ne moze da se rollback-uje.
+    Dim i As Long
+    Dim imported As Long
+    Dim skipped As Long
+    Dim errors As Long
+
+    For i = 1 To sheetIDs.count
+        imported = 0
+        skipped = 0
+        errors = 0
+
+        Call ImportOneOTKSheet( _
+            CStr(sheetIDs(i)), _
+            CStr(sheetNames(i)), _
+            imported, _
+            skipped, _
+            errors)
+
+        totalImported = totalImported + imported
+        totalSkipped = totalSkipped + skipped
+        totalErrors = totalErrors + errors
+    Next i
+End Sub
+
+Public Sub TestHook_ImportOtkupSheetLoop(ByVal sheetIDs As Collection, _
+                                         ByVal sheetNames As Collection, _
+                                         ByRef totalImported As Long, _
+                                         ByRef totalSkipped As Long, _
+                                         ByRef totalErrors As Long)
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Isti kod koji vrti ImportOtkupFromPWA_Core, samo nad zadatom listom
+    ' fixture sheetova -- da se cross-sheet ponasanje (AUD-002) moze
+    ' proveriti bez skeniranja celog PWA foldera.
+
+    Call ImportOtkupSheetLoop(sheetIDs, sheetNames, _
+                              totalImported, totalSkipped, totalErrors)
+End Sub
 
 Public Sub ImportOtkupFromPWA_TX()
     Dim ok As Boolean
@@ -1048,7 +1075,6 @@ Private Function FindOTKSheets(ByVal folderID As String, _
     Dim query As String
     Dim responseText As String
     Dim nextPageToken As String
-    Dim tokenPos As Long
 
     On Error GoTo EH
 
@@ -1099,12 +1125,7 @@ Private Function FindOTKSheets(ByVal folderID As String, _
 
         Call ParseFileList(responseText, outIDs, outNames)
 
-        tokenPos = InStr(1, responseText, """nextPageToken""", vbTextCompare)
-        If tokenPos > 0 Then
-            nextPageToken = ExtractJsonValueAt(responseText, tokenPos)
-        Else
-            nextPageToken = ""
-        End If
+        nextPageToken = ExtractNextPageToken(responseText)
     Loop While Len(nextPageToken) > 0
 
     LogInfo SOURCE, "Gefunden: " & outIDs.count & " OTK-Sheets"
@@ -1149,6 +1170,32 @@ Private Sub ParseFileList(ByVal json As String, _
         
         pos = namePos + 1
     Loop
+End Sub
+
+Private Function ExtractNextPageToken(ByVal json As String) As String
+    ' AUD-018: zajednicko citanje Drive nextPageToken-a za FindOTKSheets i
+    ' FindVOZSheets. Prazan rezultat = poslednja strana (petlja staje).
+    Dim tokenPos As Long
+
+    tokenPos = InStr(1, json, """nextPageToken""", vbTextCompare)
+    If tokenPos = 0 Then Exit Function
+
+    ExtractNextPageToken = ExtractJsonValueAt(json, tokenPos)
+End Function
+
+Public Function TestHook_ExtractNextPageToken(ByVal json As String) As String
+    ' DEV/SMOKE TEST HOOK ONLY.
+
+    TestHook_ExtractNextPageToken = ExtractNextPageToken(json)
+End Function
+
+Public Sub TestHook_ParseFileListVOZ(ByVal json As String, _
+                                     ByRef outIDs As Collection, _
+                                     ByRef outNames As Collection)
+    ' DEV/SMOKE TEST HOOK ONLY.
+    ' Dozvoljava mock paginacije (vise strana u istu kolekciju) bez mreze.
+
+    Call ParseFileListVOZ(json, outIDs, outNames)
 End Sub
 
 Private Function ExtractJsonValueAt(ByVal json As String, ByVal startPos As Long) As String
@@ -2262,7 +2309,6 @@ Private Function FindVOZSheets(ByVal folderID As String, _
     Dim query As String
     Dim responseText As String
     Dim nextPageToken As String
-    Dim tokenPos As Long
 
     On Error GoTo EH
 
@@ -2314,12 +2360,7 @@ Private Function FindVOZSheets(ByVal folderID As String, _
 
         Call ParseFileListVOZ(responseText, outIDs, outNames)
 
-        tokenPos = InStr(1, responseText, """nextPageToken""", vbTextCompare)
-        If tokenPos > 0 Then
-            nextPageToken = ExtractJsonValueAt(responseText, tokenPos)
-        Else
-            nextPageToken = ""
-        End If
+        nextPageToken = ExtractNextPageToken(responseText)
     Loop While Len(nextPageToken) > 0
 
     LogInfo SOURCE, "Gefunden: " & outIDs.count & " VOZ-Sheets"

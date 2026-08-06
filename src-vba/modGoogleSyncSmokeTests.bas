@@ -404,6 +404,8 @@ Public Sub RunMasterSyncSmokeSuite()
     Test_MasterSyncEmptySheetIsNotAnError
     Test_BrojeviRemoteScanFailsClosed
     Test_GetOrCreateSpreadsheetIDNoDuplicate
+    Test_MasterSyncCrossSheetFailureKeepsEarlierRows
+    Test_VOZSheetListingPagination
 
     tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
@@ -787,6 +789,157 @@ EH:
 
     On Error Resume Next
     If Len(Trim$(firstID)) > 0 Then Call TrashGoogleDriveFile(firstID)
+End Sub
+
+Private Sub Test_MasterSyncCrossSheetFailureKeepsEarlierRows()
+    ' AUD-002 direktan assert:
+    ' batch od dva sheeta -- prvi se uveze i dobije Google writeback
+    ' (Synced>Master), drugi pukne na header validaciji.
+    ' Redovi PRVOG sheeta moraju OSTATI, jer njihov Google ack ne moze da se
+    ' rollback-uje; batch rollback bi ih trajno izgubio (nikad vise ne bi
+    ' bili isporuceni jer im status vise nije Synced).
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim okName As String, badName As String
+    Dim okID As String, badID As String
+    Dim okCRID As String
+    Dim okFixture As Variant
+    Dim badFixture(1 To 2, 1 To 2) As Variant
+    Dim sheetIDs As Collection
+    Dim sheetNames As Collection
+    Dim imported As Long, skipped As Long, errors As Long
+    Dim readBack As Variant
+    Dim otkupID As String
+
+    folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+    AssertTrue Len(folderID) > 0, "CROSS-SHEET: GOOGLE_PWA_FOLDER_ID present"
+
+    okCRID = "TST-MSYNC-" & m_RunID & "-CROSS-OK"
+
+    ' Sheet A: validan, jedan Synced red
+    okName = "OTK-TST-CROSS-OK-" & m_RunID
+    okID = CreateSpreadsheet(okName, folderID)
+    AssertTrue Len(Trim$(okID)) > 0, "CROSS-SHEET: sheet A kreiran"
+
+    okFixture = BuildOTKFixtureData(okCRID, "Synced")
+    AssertTrue WriteSheetData(okID, "Sheet1", okFixture), "CROSS-SHEET: sheet A fixture upisan"
+
+    ' Sheet B: pokvaren header -> ImportOneOTKSheet ga odbija kao fatal
+    badName = "OTK-TST-CROSS-BAD-" & m_RunID
+    badID = CreateSpreadsheet(badName, folderID)
+    AssertTrue Len(Trim$(badID)) > 0, "CROSS-SHEET: sheet B kreiran"
+
+    badFixture(1, 1) = "PogresanHeader"
+    badFixture(1, 2) = "JosPogresniji"
+    badFixture(2, 1) = "x"
+    badFixture(2, 2) = "y"
+    AssertTrue WriteSheetData(badID, "Sheet1", badFixture), "CROSS-SHEET: sheet B fixture upisan"
+
+    ' Batch redosled je bitan: A prvi (uspeh + writeback), B drugi (pad).
+    Set sheetIDs = New Collection
+    Set sheetNames = New Collection
+    sheetIDs.Add okID
+    sheetNames.Add okName
+    sheetIDs.Add badID
+    sheetNames.Add badName
+
+    Call TestHook_ConsumePWAFatalSyncError
+
+    imported = 0
+    skipped = 0
+    errors = 0
+    Call TestHook_ImportOtkupSheetLoop(sheetIDs, sheetNames, imported, skipped, errors)
+
+    AssertEquals "1", CStr(imported), "CROSS-SHEET: tacno jedan red uvezen (iz sheeta A)"
+    AssertTrue errors >= 1, "CROSS-SHEET: sheet B je prijavio gresku"
+    AssertTrue TestHook_ConsumePWAFatalSyncError(), _
+               "CROSS-SHEET: pad sheeta B je oznacen kao fatal"
+
+    ' Kljucni assert: red sheeta A je PREZIVEO pad sheeta B.
+    otkupID = FindOtkupIDByClientRecordID(okCRID)
+    AssertTrue Len(otkupID) > 0, _
+               "CROSS-SHEET: red sheeta A OSTAJE u tblOtkup posle pada sheeta B"
+
+    ' I njegov Google ack je i dalje Synced>Master (nije vracen).
+    readBack = ReadSheetData(okID, "Sheet1")
+    AssertTrue Not IsEmpty(readBack), "CROSS-SHEET: sheet A ponovo procitan"
+    AssertEquals "Synced>Master", NormalizeGoogleCellText(readBack(2, 6)), _
+                 "CROSS-SHEET: Google ack sheeta A ostaje Synced>Master"
+
+    Call TrashGoogleDriveFile(okID)
+    Call TrashGoogleDriveFile(badID)
+
+    LogGoogleSmokePass "MASTER SYNC: pad drugog sheeta ne ponistava prvi (AUD-002)"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "MASTER SYNC: cross-sheet failure", Err.description
+
+    On Error Resume Next
+    If Len(Trim$(okID)) > 0 Then Call TrashGoogleDriveFile(okID)
+    If Len(Trim$(badID)) > 0 Then Call TrashGoogleDriveFile(badID)
+End Sub
+
+Private Sub Test_VOZSheetListingPagination()
+    ' AUD-018 direktan assert (offline mock Drive odgovora):
+    ' listanje preko 100 VOZ sheetova mora da prikupi SVE strane.
+    ' FindVOZSheets je ranije radio jedan GET bez pageToken petlje, pa se
+    ' sve preko prvih 100 tiho gubilo.
+    On Error GoTo EH
+
+    Dim page1 As String
+    Dim page2 As String
+    Dim outIDs As Collection
+    Dim outNames As Collection
+    Dim token As String
+    Dim i As Long
+
+    ' Strana 1: 100 fajlova + nextPageToken
+    page1 = "{""nextPageToken"":""TOKEN-PAGE-2"",""files"":["
+    For i = 1 To 100
+        If i > 1 Then page1 = page1 & ","
+        page1 = page1 & "{""id"":""ID-" & CStr(i) & """,""name"":""VOZ-" & CStr(i) & """}"
+    Next i
+    page1 = page1 & "]}"
+
+    ' Strana 2: jos 5 fajlova, BEZ nextPageToken -> petlja staje
+    page2 = "{""files"":["
+    For i = 101 To 105
+        If i > 101 Then page2 = page2 & ","
+        page2 = page2 & "{""id"":""ID-" & CStr(i) & """,""name"":""VOZ-" & CStr(i) & """}"
+    Next i
+    page2 = page2 & "]}"
+
+    ' Token petlje
+    token = TestHook_ExtractNextPageToken(page1)
+    AssertEquals "TOKEN-PAGE-2", token, "VOZ PAGINACIJA: token prve strane procitan"
+
+    AssertEquals "", TestHook_ExtractNextPageToken(page2), _
+                 "VOZ PAGINACIJA: poslednja strana nema token (petlja staje)"
+
+    ' Akumulacija preko strana u ISTE kolekcije
+    Set outIDs = New Collection
+    Set outNames = New Collection
+
+    Call TestHook_ParseFileListVOZ(page1, outIDs, outNames)
+    AssertEquals "100", CStr(outIDs.count), "VOZ PAGINACIJA: prva strana daje 100"
+
+    Call TestHook_ParseFileListVOZ(page2, outIDs, outNames)
+    AssertEquals "105", CStr(outIDs.count), _
+                 "VOZ PAGINACIJA: posle druge strane vidljivo svih 105 sheetova"
+    AssertEquals "105", CStr(outNames.count), "VOZ PAGINACIJA: imena prate ID-jeve"
+
+    AssertEquals "VOZ-1", CStr(outNames(1)), "VOZ PAGINACIJA: prvi sa strane 1"
+    AssertEquals "VOZ-105", CStr(outNames(105)), _
+                 "VOZ PAGINACIJA: poslednji sa strane 2 (ranije bi se izgubio)"
+    AssertEquals "ID-105", CStr(outIDs(105)), "VOZ PAGINACIJA: ID poslednjeg tacan"
+
+    LogGoogleSmokePass "MASTER SYNC: VOZ listing preko 100 sheetova (AUD-018)"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "MASTER SYNC: VOZ pagination", Err.description
 End Sub
 
 Private Function CountTblOtkupRows() As Long
