@@ -120,11 +120,34 @@ pregled izveštaja pre/posle na istim podacima (checklista mora dati očekivane 
 + P2 #9 (dolazi „besplatno" uz #3 — atribucija ide po `COL_NOV_OM_ID` reda) i #10
 (neraspoređena agrohemija van UKUPNO stanice). Uvedeni deljeni računski seam-ovi u
 `modIzvestaj`: `NovacRedPripadaStanici`, `ManjakStavka` (deljen između `ReportOtkupRobaOM`
-i `ReportManjak` — „rule of two", ista brojka na dva mesta), `KarticaRezultatSaPocetnim`,
-`KarticaAmbRezultatSaPocetnim`; u `modNovac` `BuildVrstaFakturaCache` →
-`BuildFakturaVrstaUdeoCache` + čista `RaspodeliPoUdelima`. Nov `RunIzvestajTests`
-(assert suite nad seam-ovima, deterministična bez tabela — ranije je postojao samo
-shape-smoke `SmokeTest_modIzvestaj` bez ijednog assert-a).
+i `ReportManjak` — „rule of two", ista brojka na dva mesta), `PrijemZaZbirnu`,
+`KarticaRezultatSaPocetnim`, `KarticaAmbRezultatSaPocetnim`; u `modNovac`
+`BuildVrstaFakturaCache` → `BuildFakturaVrstaUdeoCache` + čiste `RaspodeliPoUdelima`
+i `ZaokruziNovac`. Nov `RunIzvestajTests` (tvrd gate — `Err.Raise` na pali assert).
+
+**Dopuna posle review-a (isti paket, 2. commit):**
+- **`BrojZbirne` nije identitet ni u report sloju** (posledica AUD-052 koju je RF-05
+  već dokazao na storno putanji). `modHelpers.BuildManjakDict` je spajao zbirne i
+  prijemnice **isključivo po poslovnom broju**, a `ReportManjak` je istu grešku
+  imao i u sopstvenoj, dupliranoj agregaciji → dve aktivne zbirne istog broja su
+  sabirale tuđu prijemnu količinu (pogrešan prijem, manjak, %). Sada je
+  `BuildManjakDict` owner-scoped (`ZbirnaVlasnikKljuc` = `broj|vozac|kupac` —
+  **ista definicija vlasnika koju koristi `modStorno.RequireJedanVlasnikPoBroju`**,
+  bez druge paralelne definicije), `ReportManjak` više ne duplira agregaciju, a
+  `ReportOtkupRobaOM` razrešava vlasnika preko vozača otpremnice (otpremnica nema
+  `KupacID`). Nedokaziv vlasnik → **fail-closed** oznaka `nejasan vlasnik`, van UKUPNO.
+  Broj sa jednim vlasnikom koristi agregat po broju → nema regresije na starijim
+  prijemnicama bez popunjenog vlasnika.
+- **Finansijsko zaokruživanje raspodele:** `RaspodeliPoUdelima` je zaokruživala samo
+  ukupan zbir, pa je 100/3 davalo interne delove 33,3333 → prikaz `33,33 × 3 = 99,99`
+  uz UKUPNO `100,00`. Sada svaki deo ide kroz `ZaokruziNovac` (half-up; VBA `Round`
+  je banker's), a poslednji ključ nosi ostatak **posle** zaokruživanja.
+- **Test gate:** `RunIzvestajTests` sada podiže grešku na pali assert (konvencija iz
+  RF-14) i dobio je **dva end-to-end testa nad tabelama** (dve zbirne istog broja,
+  dva kupca, 900 vs 1500 kg — iz ugla `ReportManjak` i `ReportOtkupRobaOM`), jer
+  seam testovi po definiciji ne mogu da uhvate grešku u samom table-join-u. E2E rade
+  u `clsTransaction` sa snapshot-om i uvek se rollback-uju. Novčane provere idu na
+  nivou centa (`IzvChkEqC`) — tolerancija 0,01 bi propustila nezaokruženo 33,3333.
 **Svesno NIJE uzeto (ostaje RF-07 / UI paket):** #2 header „Amb. (trenutno stanje)"
 i #11 labela „OM AVANS (promet perioda)" — čist UI tekst; #11 dodatno lomi
 `modTestStorno` T29 koji taj red traži po literalu, pa ide zajedno sa header izmenama.
