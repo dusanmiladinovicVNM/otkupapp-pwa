@@ -116,6 +116,25 @@ dispatch-u (Else → Empty/greška) (AUD-023; FM-0028 #1/#3/#5/#6/#13/#14 + P2 s
 #2/#9/#10/#11 po proceni sesije). **Regression:** `RunIzvestajTests` + uporedni
 pregled izveštaja pre/posle na istim podacima (checklista mora dati očekivane razlike).
 
+**Urađeno (grana `claude/rf-06-izvestaj-brojke-wquclc`):** svih 5 planiranih fiksa
++ P2 #9 (dolazi „besplatno" uz #3 — atribucija ide po `COL_NOV_OM_ID` reda) i #10
+(neraspoređena agrohemija van UKUPNO stanice). Uvedeni deljeni računski seam-ovi u
+`modIzvestaj`: `NovacRedPripadaStanici`, `ManjakStavka` (deljen između `ReportOtkupRobaOM`
+i `ReportManjak` — „rule of two", ista brojka na dva mesta), `KarticaRezultatSaPocetnim`,
+`KarticaAmbRezultatSaPocetnim`; u `modNovac` `BuildVrstaFakturaCache` →
+`BuildFakturaVrstaUdeoCache` + čista `RaspodeliPoUdelima`. Nov `RunIzvestajTests`
+(assert suite nad seam-ovima, deterministična bez tabela — ranije je postojao samo
+shape-smoke `SmokeTest_modIzvestaj` bez ijednog assert-a).
+**Svesno NIJE uzeto (ostaje RF-07 / UI paket):** #2 header „Amb. (trenutno stanje)"
+i #11 labela „OM AVANS (promet perioda)" — čist UI tekst; #11 dodatno lomi
+`modTestStorno` T29 koji taj red traži po literalu, pa ide zajedno sa header izmenama.
+Vidljiva poruka za nevalidnu kombinaciju (core sad vraća `Empty`) traži `CleanFail`
+fix iz RF-07 — do tada je ishod čista prazna lista, ne pogrešne brojke.
+**AUD-013 (`MatchesFilter`):** prebrojani SVI `clsFilterParam.Init` pozivi u `src-vba/` —
+operatori su literali iz podržanog skupa, nijedna report putanja ne zavisi od
+`Case Else`; grana je nedostižna u produkciji → flagovano u `KNOWN_ISSUES`, scope
+se ne širi (fix dira ceo `ExcludeStornirano` sloj).
+
 ### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M]
 **Fajlovi:** `frmIzvestaj.frm`, `modKarticaDetalji.bas`.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
@@ -322,7 +341,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-03 | Storno lanac | ✅ merged | PR #167 | M3 · AUD-020/021 + AUD-049 (storno izvoda) + keš/virman; review OK, follow-up AUD-050/051 |
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
-| RF-06 | modIzvestaj brojke | ⬜ | — | |
+| RF-06 | modIzvestaj brojke | 🟢 grana | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14). Nov `RunIzvestajTests`. Čeka operater smoke (brojke se namerno menjaju) |
 | RF-07 | frmIzvestaj + revers | ⬜ | — | |
 | RF-08 | Faktura + štampa | ⬜ | — | |
 | RF-09 | Banka import/map | ⬜ | — | |
