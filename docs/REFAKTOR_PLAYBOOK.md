@@ -131,20 +131,32 @@ i `ZaokruziNovac`. Nov `RunIzvestajTests` (tvrd gate — `Err.Raise` na pali ass
   prijemnice **isključivo po poslovnom broju**, a `ReportManjak` je istu grešku
   imao i u sopstvenoj, dupliranoj agregaciji → dve aktivne zbirne istog broja su
   sabirale tuđu prijemnu količinu (pogrešan prijem, manjak, %). Sada je
-  `BuildManjakDict` owner-scoped (`ZbirnaVlasnikKljuc` = `broj|vozac|kupac` —
+  `BuildManjakDict` scoped na vlasnika (`ZbirnaVlasnikKljuc` = `broj|vozac|kupac` —
   **ista definicija vlasnika koju koristi `modStorno.RequireJedanVlasnikPoBroju`**,
-  bez druge paralelne definicije), `ReportManjak` više ne duplira agregaciju, a
+  bez druge paralelne definicije; klasa se dodaje u sledećoj stavci),
+  `ReportManjak` više ne duplira agregaciju, a
   `ReportOtkupRobaOM` razrešava vlasnika preko vozača otpremnice (otpremnica nema
   `KupacID`). Nedokaziv vlasnik → **fail-closed** oznaka `nejasan vlasnik`, van UKUPNO.
   Broj sa jednim vlasnikom koristi agregat po broju → nema regresije na starijim
   prijemnicama bez popunjenog vlasnika.
+- **`Klasa` mora biti u ključu manjka.** Owner-ključ `broj|vozač|kupac` je i dalje
+  spajao **Klasu I i Klasu II istog dokumenta** — auto-lanac hladnjače ih vodi kroz
+  ceo lanac odvojeno (zasebna otpremnica/zbirna/prijemnica) ali sa istim brojem,
+  vozačem i kupcem. Posledica u malina modu: zbirni prijem obe klase (npr. 900+150)
+  dodeljivao se **svakoj** otpremnici → UKUPNO prijem 2× stvarni. Ključ je sada
+  `broj|vozač|kupac|Klasa` (`ZbirnaStavkaKljuc`) — ista granularnost koju
+  `modAutoHladnjaca.KeyZbrKlasa` već koristi, pa nije uveden nov pojam.
+  `#V|` i dalje broji **vlasnike** bez klase (dve klase ≠ dva vlasnika).
+  `ReportManjak` zadržava jedan red po dokumentu ali prijem sabira po klasama;
+  `ReportOtkupRobaOM` radi srazmeru unutar klase.
 - **Finansijsko zaokruživanje raspodele:** `RaspodeliPoUdelima` je zaokruživala samo
   ukupan zbir, pa je 100/3 davalo interne delove 33,3333 → prikaz `33,33 × 3 = 99,99`
   uz UKUPNO `100,00`. Sada svaki deo ide kroz `ZaokruziNovac` (half-up; VBA `Round`
   je banker's), a poslednji ključ nosi ostatak **posle** zaokruživanja.
 - **Test gate:** `RunIzvestajTests` sada podiže grešku na pali assert (konvencija iz
-  RF-14) i dobio je **dva end-to-end testa nad tabelama** (dve zbirne istog broja,
-  dva kupca, 900 vs 1500 kg — iz ugla `ReportManjak` i `ReportOtkupRobaOM`), jer
+  RF-14) i dobio je **tri end-to-end testa nad tabelama** (dve zbirne istog broja,
+  dva kupca, 900 vs 1500 kg — iz ugla `ReportManjak` i `ReportOtkupRobaOM`; plus Klasa I+II
+  istog dokumenta 1000/900 i 200/150), jer
   seam testovi po definiciji ne mogu da uhvate grešku u samom table-join-u. E2E rade
   u `clsTransaction` sa snapshot-om i uvek se rollback-uju. Novčane provere idu na
   nivou centa (`IzvChkEqC`) — tolerancija 0,01 bi propustila nezaokruženo 33,3333.
