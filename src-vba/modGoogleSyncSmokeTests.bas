@@ -399,6 +399,8 @@ Public Sub RunMasterSyncSmokeSuite()
 
     Test_MasterSyncFixtureImportAndWriteBack
     Test_MasterSyncDuplicateClientRecordID
+    Test_MasterSyncVozacUpdateFailureIsFatal
+    Test_MasterSyncPoisonSheetIsTrashed
     Test_MasterSyncMissingClientRecordID
     Test_MasterSyncReadFailureIsFatalAndSkipsImport
     Test_MasterSyncEmptySheetIsNotAnError
@@ -534,6 +536,111 @@ Private Sub Test_MasterSyncDuplicateClientRecordID()
 
 EH:
     LogGoogleSmokeFail "MASTER SYNC: duplicate ClientRecordID", Err.description
+End Sub
+
+' RF-28 AUD-042(a) END-TO-END: neuspeo VozacID upis na duplikat-putanji mora da
+' zavrsi kao SyncError + errors + fatal flag, NE kao terminalni "Duplicate" uz
+' zelen sync. Pad upisa se armira seam-om (UpdateCell se ne moze naterati da
+' padne prirodno), sve ostalo je prava putanja: pravi Google sheet, pravi
+' ImportOneOTKSheet, pravi WriteBackSyncStatus.
+Private Sub Test_MasterSyncVozacUpdateFailureIsFatal()
+    On Error GoTo EH
+
+    Dim fixtureData As Variant
+    Dim readBack As Variant
+    Dim imported As Long
+    Dim skipped As Long
+    Dim errors As Long
+    Dim clientRecordID As String
+    Dim vozacID As String
+    Dim statusCell As String
+
+    AssertTrue Len(Trim$(m_TestSpreadsheetID)) > 0, _
+               "MASTER SYNC VOZ-FAIL: fixture spreadsheet exists"
+
+    ' Isti CRID kao uvezeni red -> duplikat putanja (TryUpdateVozacID).
+    clientRecordID = "TST-MSYNC-" & m_RunID & "-IMPORT"
+    vozacID = GetFirstOptionalTableValue(TBL_VOZACI, "VozacID", "VOZ-00001")
+
+    ' Ocisti eventualni zaostali fatal flag, da provera ispod meri OVAJ run.
+    Call TestHook_ConsumePWAFatalSyncError
+
+    fixtureData = BuildOTKFixtureData(clientRecordID, "Synced", vozacID)
+    AssertTrue WriteSheetData(m_TestSpreadsheetID, "Sheet1", fixtureData), _
+               "MASTER SYNC VOZ-FAIL: fixture with VozacID written"
+
+    TestHook_ArmFailSeam "VOZAC_WRITE"
+
+    Call TestHook_ImportOneOTKSheet(m_TestSpreadsheetID, m_TestSpreadsheetName, _
+                                    imported, skipped, errors)
+
+    TestHook_ArmFailSeam ""
+
+    AssertEquals "0", CStr(imported), "MASTER SYNC VOZ-FAIL: nothing imported"
+    AssertTrue errors >= 1, "MASTER SYNC VOZ-FAIL: counted as error (not silent skip)"
+    AssertTrue TestHook_ConsumePWAFatalSyncError(), _
+               "MASTER SYNC VOZ-FAIL: fatal flag set -> top level reports FAIL"
+
+    readBack = ReadSheetData(m_TestSpreadsheetID, "Sheet1")
+    AssertTrue Not IsEmpty(readBack), "MASTER SYNC VOZ-FAIL: read back fixture sheet"
+
+    statusCell = NormalizeGoogleCellText(readBack(2, 6))
+    AssertTrue InStr(1, statusCell, "SyncError", vbTextCompare) = 1, _
+               "MASTER SYNC VOZ-FAIL: Google row marked SyncError (not Duplicate)"
+
+    LogGoogleSmokePass "MASTER SYNC: VozacID update failure is fatal PASS"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    TestHook_ArmFailSeam ""
+    On Error GoTo 0
+    LogGoogleSmokeFail "MASTER SYNC: VozacID update failure is fatal", Err.description
+End Sub
+
+' RF-28 AUD-042(c) END-TO-END: kad header upis padne posle CreateSpreadsheet,
+' sheet MORA da ode u Drive trash. Provera je preko pravog Drive lookup-a --
+' upit filtrira trashed=false, pa "lookup uspeo + prazan ID" znaci da sheet vise
+' ne postoji kao "existing" za sledeci run (to je cela poenta popravke).
+Private Sub Test_MasterSyncPoisonSheetIsTrashed()
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim sheetName As String
+    Dim createdID As String
+    Dim foundID As String
+    Dim lookupOk As Boolean
+
+    folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+    AssertTrue Len(folderID) > 0, "MASTER SYNC POISON: GOOGLE_PWA_FOLDER_ID present"
+
+    sheetName = "OTK-TST-POISON-" & m_RunID
+
+    TestHook_ArmFailSeam "OTK_HEADER"
+    createdID = TestHook_CreateOTKSheetWithHeader(sheetName, folderID)
+    TestHook_ArmFailSeam ""
+
+    AssertEquals "", Trim$(createdID), _
+               "MASTER SYNC POISON: header failure reports no usable sheet"
+
+    lookupOk = TryGetSpreadsheetID(sheetName, folderID, foundID)
+    AssertTrue lookupOk, "MASTER SYNC POISON: Drive lookup succeeded"
+    AssertEquals "", Trim$(foundID), _
+               "MASTER SYNC POISON: poison sheet is trashed (next run cannot see it as existing)"
+
+    ' Ako trash NIJE prosao, ne ostavljaj otrovan sheet u PWA folderu.
+    If Len(Trim$(foundID)) > 0 Then
+        Call TrashGoogleDriveFile(foundID)
+    End If
+
+    LogGoogleSmokePass "MASTER SYNC: poison sheet trashed PASS"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    TestHook_ArmFailSeam ""
+    On Error GoTo 0
+    LogGoogleSmokeFail "MASTER SYNC: poison sheet trashed", Err.description
 End Sub
 
 Private Sub Test_MasterSyncMissingClientRecordID()
@@ -951,8 +1058,11 @@ Private Function CountTblOtkupRows() As Long
     CountTblOtkupRows = UBound(data, 1)
 End Function
 
+' vozacID: RF-28 -- za duplikat-putanju (TryUpdateVozacID) red MORA da nosi
+' VozacID; prazno je default (originalni fixture).
 Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
-                                     ByVal syncStatus As String) As Variant
+                                     ByVal syncStatus As String, _
+                                     Optional ByVal vozacID As String = "") As Variant
     Dim data(1 To 2, 1 To 22) As Variant
     Dim kooperantID As String
     Dim kooperantName As String
@@ -1012,7 +1122,7 @@ Private Function BuildOTKFixtureData(ByVal clientRecordID As String, _
     data(2, 17) = "12/1"
     data(2, 18) = 1
     data(2, 19) = ""
-    data(2, 20) = ""
+    data(2, 20) = vozacID
     data(2, 21) = "MasterSyncSmoke " & m_RunID
     data(2, 22) = Format$(Now, "yyyy-mm-dd hh:nn:ss")
 

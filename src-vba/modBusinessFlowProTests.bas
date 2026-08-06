@@ -85,6 +85,15 @@ Public Sub RunBusinessFlowProSuite()
     Test_MalinaAutoZbirnaFromOtpremnice
     Test_MalinaVozacMirror
 
+    ' RF-28 (MasterSync integritet -- AUD-041/042/043)
+    Test_RF28_AutoOtpremnicaNeMesaArtikle
+    Test_RF28_BrojZbirneRupaNeDajeDuplikat
+    Test_RF28_LinkKonfliktNePrepisuje
+    Test_RF28_MembershipKoristiSvojuZbirnu
+    Test_RF28_MembershipDanskiProzor
+    Test_RF28_NevalidanDatumJeSyncError
+    Test_RF28_VozacIDUpdateIshodi
+
     ' RF-05 (frmDokumenta unos + storno set)
     Test_ProsekGajbeExcludesStornirano
     Test_OpenFaktureExcludeStornirano
@@ -1465,6 +1474,23 @@ Private Sub SeedStanica()
     RequireAppend TBL_STANICE, rowData, "SeedStanica"
 End Sub
 
+' Idempotentan seed stanice po zadatom ID-u. AUD-046: mirror/stamp testovi vise ne
+' smeju da rade sa StanicaID-em koji ne postoji u tblStanice.
+Private Sub SeedStanicaByID(ByVal stanicaID As String, ByVal naziv As String)
+    If RowExists(TBL_STANICE, "StanicaID", stanicaID) Then Exit Sub
+
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_STANICE)
+
+    SetRequiredField rowData, TBL_STANICE, "StanicaID", stanicaID
+    SetRequiredField rowData, TBL_STANICE, "Naziv", naziv
+    SetOptionalField rowData, TBL_STANICE, "Mesto", "Test Mesto"
+    SetOptionalField rowData, TBL_STANICE, "Kontakt", "Test Kontakt"
+    SetOptionalField rowData, TBL_STANICE, "Aktivan", "Aktivan"
+
+    RequireAppend TBL_STANICE, rowData, "SeedStanicaByID"
+End Sub
+
 ' Stanica oznacena kao hladnjaca -> IsHladnjacaStanica = True (auto-lanac).
 Private Sub SeedHladnjacaStanica()
     If RowExists(TBL_STANICE, "StanicaID", TEST_HLAD_ST_ID) Then Exit Sub
@@ -1614,6 +1640,10 @@ Private Sub Test_MalinaVozacMirror()
     ' Fiksni test ID -> idempotentno; ne gomila redove kroz vise run-ova suite-a.
     Const MIR_ST As String = "ST-MIRTEST-90001"
 
+    ' AUD-046: stanica MORA da postoji da bi mirror smeo da se napravi, pa je
+    ' test-stanica sada deo pripreme (ranije se Ensure zvao za nepostojeci ID).
+    SeedStanicaByID MIR_ST, "TEST MIRROR STANICA"
+
     prevMode = GetConfigValue(CFG_KEY_MALINA_MODE)
     SetConfigValue CFG_KEY_MALINA_MODE, "YES"
 
@@ -1626,6 +1656,29 @@ Private Sub Test_MalinaVozacMirror()
     AssertFalse EnsureVozacMirrorForStanica(MIR_ST, "Test Naziv", "Test Mesto", ""), _
         "Malina mirror: ponovni poziv ne kreira duplikat (idempotentno)"
 
+    ' AUD-046: canonical par-provera vidi kompletan mirror.
+    AssertTrue IsManagedStationMirror(MIR_ST), _
+        "Malina mirror: IsManagedStationMirror True za kompletan par (tblStanice+tblVozaci)"
+
+    ' AUD-046: stanica koja NE postoji nije mirror i Ensure za nju MORA da padne
+    ' (ne sme da napravi vozaca bez stanice, ni da tiho vrati False).
+    Const MIR_NEPOSTOJI As String = "ST-MIRTEST-NEMA-90002"
+
+    AssertFalse IsManagedStationMirror(MIR_NEPOSTOJI), _
+        "Malina mirror: IsManagedStationMirror False za nepostojecu stanicu"
+
+    Dim raised As Boolean
+    On Error Resume Next
+    Call EnsureVozacMirrorForStanica(MIR_NEPOSTOJI, "X", "Y", "")
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "Malina mirror: Ensure re-raise-uje za nepostojecu stanicu (ne guta gresku)"
+    AssertFalse RowExists(TBL_VOZACI, "VozacID", MIR_NEPOSTOJI), _
+        "Malina mirror: nema vozaca bez stanice (nije kreiran shadow)"
+
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     Exit Sub
 
@@ -1634,6 +1687,515 @@ EH:
     SetConfigValue CFG_KEY_MALINA_MODE, prevMode
     On Error GoTo 0
     LogFatal "Test_MalinaVozacMirror", Err.Number, Err.description
+End Sub
+
+' ============================================================
+' RF-28 -- MasterSync integritet (AUD-041/042/043) regresija
+'
+' Svaki test radi u sopstvenoj clsTransaction i ROLLBACK-uje se, pa fixture redovi
+' ne ostaju u svesci i suite je ponovljiv. Privatne rutine se zovu kroz
+' modMasterSync.TestHook_* (bez Google/HTTP zavisnosti).
+'
+' MSVOZ_* ishodi su Private consts u modMasterSync, pa se ovde porede kao
+' literali ("UPDATED"/"NOCHANGE"/"CONFLICT"/"NOTFOUND") -- ako se preimenuju,
+' ovi testovi moraju da se azuriraju zajedno sa njima.
+' ============================================================
+
+' AUD-043(a): otkupi istog Stanica|Datum|Vozac|Klasa koji se razlikuju po BILO KOM
+' artikal-atributu moraju dati ZASEBNE otpremnice. Stari kljuc (bez
+' Vrsta|Sorta|Cena|TipAmb) ih je spajao u jednu i citao metadata sa PRVOG reda ->
+' pogresna vrsta, sorta, novac i ambalaza na otpremnici.
+'
+' Testiraju se sva cetiri polja zasebno (jedna promenljiva po redu, baseline je
+' red A) -- da regresija u samo jednom segmentu kljuca ne prode neopazeno.
+Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("RF28OTP")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim otkBase As String, otkCena As String, otkVrsta As String
+    Dim otkSorta As String, otkTipAmb As String
+
+    otkBase = "OTK-RF28-BASE-" & scenario
+    otkCena = "OTK-RF28-CENA-" & scenario
+    otkVrsta = "OTK-RF28-VRSTA-" & scenario
+    otkSorta = "OTK-RF28-SORTA-" & scenario
+    otkTipAmb = "OTK-RF28-AMB-" & scenario
+
+    Dim vrstaB As String, sortaB As String, tipAmbB As String
+    vrstaB = TEST_VRSTA & " RF28-2"
+    sortaB = TEST_SORTA & " RF28-2"
+    tipAmbB = TEST_TIP_AMB & " RF28-2"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_OTPREMNICA
+    tx.AddTableSnapshot TBL_AMBALAZA
+
+    ' Svi dele Stanica|Datum|Vozac|Klasa; svaki se od baseline-a razlikuje po
+    ' TACNO JEDNOM artikal-atributu.
+    AppendRF28OtkupFixture otkBase, testDate, TEST_VOZ_ID, "I", 120#, ""
+    AppendRF28OtkupFixture otkCena, testDate, TEST_VOZ_ID, "I", 175#, ""
+    AppendRF28OtkupFixture otkVrsta, testDate, TEST_VOZ_ID, "I", 120#, "", "", vrstaB
+    AppendRF28OtkupFixture otkSorta, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, sortaB
+    AppendRF28OtkupFixture otkTipAmb, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, TEST_SORTA, tipAmbB
+
+    ' Scope na test-dan -- run ne sme da zahvati nepovezane otkupe u svesci.
+    Call AutoCreateOtpremniceFromPWA_TX(testDate)
+
+    Dim otpBase As String, otpCena As String, otpVrsta As String
+    Dim otpSorta As String, otpTipAmb As String
+
+    otpBase = RF28OtpremnicaZaOtkup(otkBase)
+    otpCena = RF28OtpremnicaZaOtkup(otkCena)
+    otpVrsta = RF28OtpremnicaZaOtkup(otkVrsta)
+    otpSorta = RF28OtpremnicaZaOtkup(otkSorta)
+    otpTipAmb = RF28OtpremnicaZaOtkup(otkTipAmb)
+
+    AssertTrue Len(otpBase) > 0 And Len(otpCena) > 0 And Len(otpVrsta) > 0 _
+               And Len(otpSorta) > 0 And Len(otpTipAmb) > 0, _
+        "RF-28 AUD-043a: svih pet otkupa je povezano na otpremnicu"
+
+    ' Pet razlicitih kombinacija -> pet RAZLICITIH otpremnica.
+    Dim jedinstvene As Object
+    Set jedinstvene = CreateObject("Scripting.Dictionary")
+    jedinstvene(otpBase) = True
+    jedinstvene(otpCena) = True
+    jedinstvene(otpVrsta) = True
+    jedinstvene(otpSorta) = True
+    jedinstvene(otpTipAmb) = True
+
+    AssertEquals "5", CStr(jedinstvene.count), _
+        "RF-28 AUD-043a: pet artikal-kombinacija daje PET otpremnica (ne jednu mesanu)"
+
+    ' Svaka otpremnica nosi SVOJ atribut, ne onaj sa prvog reda grupe.
+    AssertDoubleNear 120#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpBase, COL_OTP_CENA)), _
+        0.001, "RF-28 AUD-043a: baseline otpremnica nosi svoju cenu"
+    AssertDoubleNear 175#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpCena, COL_OTP_CENA)), _
+        0.001, "RF-28 AUD-043a: razlicita Cena je zasebna otpremnica sa svojom cenom"
+    AssertEquals vrstaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpVrsta, COL_OTP_VRSTA))), _
+        "RF-28 AUD-043a: razlicita VrstaVoca je zasebna otpremnica sa svojom vrstom"
+    AssertEquals sortaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpSorta, COL_OTP_SORTA))), _
+        "RF-28 AUD-043a: razlicita SortaVoca je zasebna otpremnica sa svojom sortom"
+    AssertEquals tipAmbB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpTipAmb, COL_OTP_TIP_AMB))), _
+        "RF-28 AUD-043a: razlicit TipAmbalaze je zasebna otpremnica sa svojim tipom"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa artikle", Err.description
+End Sub
+
+Private Function RF28OtpremnicaZaOtkup(ByVal otkupID As String) As String
+    RF28OtpremnicaZaOtkup = _
+        Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_OTPREMNICA_ID)))
+End Function
+
+' AUD-041(b): rupa u nizu ne sme da proizvede vec zauzet broj. Row-count generator
+' je za {"N/ddmmyy", "N/ddmmyy-3"} vracao "-3" ponovo; MAX-seq vraca "-4".
+Private Sub Test_RF28_BrojZbirneRupaNeDajeDuplikat()
+    Dim tx As clsTransaction
+    Dim prevAuto As String
+
+    On Error GoTo EH
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim baza As String
+    baza = CStr(ExtractNumericFromEntityID(TEST_VOZ_ID)) & "/" & Format$(testDate, "ddmmyy")
+
+    prevAuto = GetConfigValue(CFG_AUTO_BROJ_DOK)
+    SetConfigValue CFG_AUTO_BROJ_DOK, "DA"
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_ZBIRNA
+
+    ' Niz sa rupom: postoje seq 1 i seq 3 (seq 2 obrisan/storniran).
+    AppendRF28ZbirnaFixture "ZBR-RF28G1-" & m_RunID, testDate, TEST_VOZ_ID, baza
+    AppendRF28ZbirnaFixture "ZBR-RF28G2-" & m_RunID, testDate, TEST_VOZ_ID, baza & "-3"
+
+    Dim predlog As String
+    predlog = TestHook_GenerateBrojZbirne(TEST_VOZ_ID, testDate)
+
+    AssertEquals baza & "-4", predlog, _
+        "RF-28 AUD-041b: rupa u nizu daje MAX+1 (-4), ne duplikat"
+
+    tx.RollbackTx
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    SetConfigValue CFG_AUTO_BROJ_DOK, prevAuto
+    On Error GoTo 0
+    LogFail "RF-28 AUD-041b broj zbirne rupa", Err.description
+End Sub
+
+' AUD-043(b): otkup koji je vec u DRUGOJ zbirnoj ne sme da bude tiho prepisan.
+Private Sub Test_RF28_LinkKonfliktNePrepisuje()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("RF28LNK")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim otkID As String, crid As String, zbrID As String
+    Dim brojA As String, brojB As String
+
+    otkID = "OTK-RF28LNK-" & scenario
+    crid = "CRID-RF28LNK-" & scenario
+    zbrID = "ZBR-RF28LNK-" & scenario
+    brojA = "RF28-A-" & scenario
+    brojB = "RF28-B-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    ' Otkup je VEC vezan na zbirnu A.
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid, brojA
+    AppendRF28ZbirnaFixture zbrID, testDate, TEST_VOZ_ID, brojB
+
+    Dim raised As Boolean
+    On Error Resume Next
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojB, crid
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "RF-28 AUD-043b: link na otkup sa drugim BrojZbirne podize konflikt"
+    AssertEquals brojA, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE))), _
+        "RF-28 AUD-043b: postojeci BrojZbirne NIJE prepisan"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "RF-28 AUD-043b link konflikt", Err.description
+End Sub
+
+' AUD-043(b): membership se razresava preko ZbirnaID (PK), NE preko BrojZbirne.
+' Dve zbirne sa ISTIM poslovnim brojem (multi-device kolizija): LookupValue bi
+' vratio PRVU (drugi vozac) i lazno prijavio konflikt vozaca -- PK putanja mora
+' da procita vozaca SVOG reda i da link prode.
+Private Sub Test_RF28_MembershipKoristiSvojuZbirnu()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("RF28PK")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim brojIsti As String
+    brojIsti = "RF28-DUP-" & scenario
+
+    Dim vozacDrugi As String
+    vozacDrugi = "VOZ-RF28-OTHER"
+
+    Dim otkID As String, crid As String
+    Dim zbrStara As String, zbrNova As String
+
+    otkID = "OTK-RF28PK-" & scenario
+    crid = "CRID-RF28PK-" & scenario
+    zbrStara = "ZBR-RF28PK-OLD-" & scenario
+    zbrNova = "ZBR-RF28PK-NEW-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    ' Redosled je bitan: STARA (tudji vozac) je PRVI match za BrojZbirne.
+    AppendRF28ZbirnaFixture zbrStara, testDate, vozacDrugi, brojIsti
+    AppendRF28ZbirnaFixture zbrNova, testDate, TEST_VOZ_ID, brojIsti
+
+    AppendRF28OtkupFixture otkID, testDate, TEST_VOZ_ID, "I", 100#, crid
+
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrNova, brojIsti, crid
+
+    AssertEquals brojIsti, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkID, COL_OTK_BROJ_ZBIRNE))), _
+        "RF-28 AUD-043b: membership preko PK povezuje otkup sa SVOJOM zbirnom"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "RF-28 AUD-043b membership preko PK", Err.description
+End Sub
+
+' AUD-043(b): dan je stvarni guard -- susedni dan prolazi (utovar posle ponoci),
+' veca razlika pada.
+Private Sub Test_RF28_MembershipDanskiProzor()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("RF28DAY")
+
+    Dim zbrDate As Date
+    zbrDate = NextTestDate()
+
+    Dim brojZ As String
+    brojZ = "RF28-DAY-" & scenario
+
+    Dim zbrID As String
+    zbrID = "ZBR-RF28DAY-" & scenario
+
+    Dim otkBlizu As String, cridBlizu As String
+    Dim otkDaleko As String, cridDaleko As String
+
+    otkBlizu = "OTK-RF28DAY-N-" & scenario
+    cridBlizu = "CRID-RF28DAY-N-" & scenario
+    otkDaleko = "OTK-RF28DAY-F-" & scenario
+    cridDaleko = "CRID-RF28DAY-F-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_ZBIRNA
+    tx.AddTableSnapshot TBL_OTPREMNICA
+
+    AppendRF28ZbirnaFixture zbrID, zbrDate, TEST_VOZ_ID, brojZ
+
+    ' Susedni dan -> dozvoljeno (samo LogWarn).
+    AppendRF28OtkupFixture otkBlizu, zbrDate - 1, TEST_VOZ_ID, "I", 100#, cridBlizu
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojZ, cridBlizu
+
+    AssertEquals brojZ, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkBlizu, COL_OTK_BROJ_ZBIRNE))), _
+        "RF-28 AUD-043b: otkup od prethodnog dana prolazi (post-midnight)"
+
+    ' 10 dana razlike -> nije membership.
+    AppendRF28OtkupFixture otkDaleko, zbrDate - 10, TEST_VOZ_ID, "I", 100#, cridDaleko
+
+    Dim raised As Boolean
+    On Error Resume Next
+    TestHook_LinkZbirnaToOtkupAndOtpremnica zbrID, brojZ, cridDaleko
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+        "RF-28 AUD-043b: otkup 10 dana od zbirne je odbijen (nije samo upozorenje)"
+    AssertEquals "", Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkDaleko, COL_OTK_BROJ_ZBIRNE))), _
+        "RF-28 AUD-043b: odbijen otkup nije dobio BrojZbirne"
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "RF-28 AUD-043b danski prozor", Err.description
+End Sub
+
+' AUD-042(b): nevalidan datum je SyncError, ne tihi danasnji datum.
+Private Sub Test_RF28_NevalidanDatumJeSyncError()
+    On Error GoTo EH
+
+    AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5)), _
+        "RF-28 AUD-042b: validan OTK datum prolazi"
+
+    ' STVARNI format iz pipeline-a: PWA salje ISO string (getTodayIsoDate ->
+    ' "yyyy-mm-dd"), a ne native Date serijal. Testira se bas taj oblik, jer se
+    ' validacija i import oslanjaju na CDate nad tim stringom.
+    AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "2090-05-05"), _
+        "RF-28 AUD-042b: ISO string datum (PWA format) prolazi"
+    AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "2026-01-31"), _
+        "RF-28 AUD-042b: backdate ISO string prolazi (donja granica ne odbija realne datume)"
+    AssertEquals "", TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, "2090-05-05"), _
+        "RF-28 AUD-042b: ISO string datum prolazi i na VOZ putanji"
+
+    AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "")) > 0, _
+        "RF-28 AUD-042b: prazan OTK datum je greska"
+    AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "nije datum")) > 0, _
+        "RF-28 AUD-042b: neparsiran OTK datum je greska"
+    AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "12:30")) > 0, _
+        "RF-28 AUD-042b: samo-vreme nije OTK datum"
+    AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "1899-12-30")) > 0, _
+        "RF-28 AUD-042b: 1899 baseline nije poslovni datum"
+
+    AssertEquals "", TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, DateSerial(2090, 5, 5)), _
+        "RF-28 AUD-042b: validan VOZ datum prolazi"
+    AssertTrue Len(TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, "")) > 0, _
+        "RF-28 AUD-042b: prazan VOZ datum je greska"
+    AssertTrue Len(TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, "nije datum")) > 0, _
+        "RF-28 AUD-042b: neparsiran VOZ datum je greska"
+
+    Exit Sub
+
+EH:
+    LogFail "RF-28 AUD-042b nevalidan datum", Err.description
+End Sub
+
+' AUD-042(a): ishodi VozacID update-a se razlikuju. CONFLICT/NOTFOUND ne smeju da
+' izgledaju kao obican Duplicate (pozivalac ih zato salje u SyncError).
+Private Sub Test_RF28_VozacIDUpdateIshodi()
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Dim scenario As String
+    scenario = NewScenarioCode("RF28VOZ")
+
+    Dim testDate As Date
+    testDate = NextTestDate()
+
+    Dim otkPrazan As String, cridPrazan As String
+    Dim otkZauzet As String, cridZauzet As String
+    Dim otkPad As String, cridPad As String
+
+    otkPrazan = "OTK-RF28VOZ-E-" & scenario
+    cridPrazan = "CRID-RF28VOZ-E-" & scenario
+    otkZauzet = "OTK-RF28VOZ-F-" & scenario
+    cridZauzet = "CRID-RF28VOZ-F-" & scenario
+    otkPad = "OTK-RF28VOZ-X-" & scenario
+    cridPad = "CRID-RF28VOZ-X-" & scenario
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    AppendRF28OtkupFixture otkPrazan, testDate, "", "I", 100#, cridPrazan
+    AppendRF28OtkupFixture otkZauzet, testDate, TEST_VOZ_ID, "I", 100#, cridZauzet
+    AppendRF28OtkupFixture otkPad, testDate, "", "I", 100#, cridPad
+
+    Dim detail As String
+
+    AssertEquals "UPDATED", TestHook_TryUpdateVozacID(cridPrazan, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: prazan VozacID se popunjava (UPDATED)"
+    AssertEquals TEST_VOZ_ID, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkPrazan, COL_OTK_VOZAC))), _
+        "RF-28 AUD-042a: VozacID je stvarno upisan"
+
+    AssertEquals "NOCHANGE", TestHook_TryUpdateVozacID(cridPrazan, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: isti VozacID je NOCHANGE (bezopasno -> Duplicate)"
+
+    AssertEquals "CONFLICT", TestHook_TryUpdateVozacID(cridZauzet, "VOZ-RF28-OTHER", detail), _
+        "RF-28 AUD-042a: drugi VozacID je CONFLICT (ne tihi Duplicate)"
+    AssertEquals TEST_VOZ_ID, Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkZauzet, COL_OTK_VOZAC))), _
+        "RF-28 AUD-042a: konflikt NE prepisuje postojeci VozacID"
+
+    AssertEquals "NOTFOUND", TestHook_TryUpdateVozacID("CRID-RF28-NEMA-" & scenario, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: nepostojeci ClientRecordID je NOTFOUND (greska, ne preskok)"
+
+    ' Armiran pad upisa (UpdateCell se ne moze naterati da padne "prirodno").
+    ' Ovo je putanja zbog koje je AUD-042a i postojao: stari kod je vracao True.
+    TestHook_ArmFailSeam "VOZAC_WRITE"
+
+    AssertEquals "FAILED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: neuspeo UpdateCell je FAILED (ne tihi uspeh)"
+    AssertTrue Len(detail) > 0, _
+        "RF-28 AUD-042a: FAILED nosi detalj za SyncError/log"
+    AssertEquals "", Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkPad, COL_OTK_VOZAC))), _
+        "RF-28 AUD-042a: posle neuspelog upisa VozacID je i dalje prazan"
+
+    ' Seam je jednokratan -- sledeci poziv mora ponovo da radi normalno.
+    AssertEquals "UPDATED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: fail seam je jednokratan (sledeci upis prolazi)"
+
+    TestHook_ArmFailSeam ""
+
+    tx.RollbackTx
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    TestHook_ArmFailSeam ""
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+    LogFail "RF-28 AUD-042a VozacID ishodi", Err.description
+End Sub
+
+' ------------------------------------------------------------
+' RF-28 fixture helperi (direktan append -- kontrolisemo tacno polja koja
+' grupisanje/membership citaju, bez zavisnosti od validacija save putanje)
+' ------------------------------------------------------------
+Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
+                                   ByVal datum As Date, _
+                                   ByVal vozacID As String, _
+                                   ByVal klasa As String, _
+                                   ByVal cena As Double, _
+                                   ByVal clientRecordID As String, _
+                                   Optional ByVal brojZbirne As String = "", _
+                                   Optional ByVal vrsta As String = TEST_VRSTA, _
+                                   Optional ByVal sorta As String = TEST_SORTA, _
+                                   Optional ByVal tipAmb As String = TEST_TIP_AMB)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_OTKUP)
+
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_ID, otkupID
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_DATUM, datum
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_KOOPERANT, TEST_KOOP_ID
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_STANICA, TEST_ST_ID
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_VRSTA, vrsta
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_SORTA, sorta
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_KOLICINA, 100#
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_CENA, cena
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_KLASA, klasa
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_KULTURA, TEST_KULTURA_ID
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_TIP_AMB, tipAmb
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_KOL_AMB, 0
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_VOZAC, vozacID
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_BR_DOK, "RF28-" & otkupID
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, brojZbirne
+    SetOptionalField rowData, TBL_OTKUP, "ClientRecordID", clientRecordID
+    SetOptionalField rowData, TBL_OTKUP, "SyncSource", "RF28TEST"
+
+    RequireAppend TBL_OTKUP, rowData, "AppendRF28OtkupFixture"
+End Sub
+
+Private Sub AppendRF28ZbirnaFixture(ByVal zbirnaID As String, _
+                                    ByVal datum As Date, _
+                                    ByVal vozacID As String, _
+                                    ByVal brojZbirne As String)
+    Dim rowData As Variant
+    rowData = BlankRow(TBL_ZBIRNA)
+
+    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_ID, zbirnaID
+    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_DATUM, datum
+    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_VOZAC, vozacID
+    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne
+    SetRequiredField rowData, TBL_ZBIRNA, COL_ZBR_KUPAC, TEST_KUP_ID
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_VRSTA, TEST_VRSTA
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_SORTA, TEST_SORTA
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KOLICINA, 100#
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_TIP_AMB, TEST_TIP_AMB
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KOL_AMB, 0
+    SetOptionalField rowData, TBL_ZBIRNA, COL_ZBR_KLASA, "I"
+
+    RequireAppend TBL_ZBIRNA, rowData, "AppendRF28ZbirnaFixture"
 End Sub
 
 ' ============================================================

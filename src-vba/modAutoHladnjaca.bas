@@ -132,13 +132,34 @@ Public Function AutoChainHladnjaca(ByVal datum As Date, ByVal stanicaID As Strin
     ' Vozac je obavezan na otpremnici/zbirnoj/prijemnici. U malina/hladnjaca
     ' konvenciji par-vozac ima VozacID == StanicaID. Ako otkup nema vozaca,
     ' koristimo stanicu kao vozaca (i napravimo par-vozaca ako je malina mod).
-    If Len(Trim$(vozacID)) = 0 Then
-        On Error Resume Next
-        EnsureVozacMirrorForStanica stanicaID, _
-            Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
-            "(hladnjaca)", ""
-        On Error GoTo EH
-        vozacID = stanicaID
+    If Len(Trim$(vozacID)) = 0 Then vozacID = stanicaID
+
+    ' AUD-046: mirror konvencija (vozac == stanica) vazi SAMO ako par stvarno
+    ' postoji (red u tblStanice I red u tblVozaci). Provera se radi kad god je
+    ' vozacID == stanicaID -- bez obzira da li ga je fallback iznad postavio ili
+    ' ga je pozivalac PROSLEDIO. (Guard vezan samo za prazan vozacID se
+    ' zaobilazio prostim prosledjivanjem stanicaID-a, i lanac je i dalje mogao
+    ' dobiti FK bez reda u tblVozaci.)
+    If StrComp(Trim$(vozacID), Trim$(stanicaID), vbTextCompare) = 0 Then
+        If Not IsManagedStationMirror(stanicaID) Then
+            ' Jedan pokusaj kreiranja para; Ensure re-raise-uje, a ovde smo
+            ' best-effort (greska ne sme da obori potvrdu otkupa) -> lokalno se
+            ' guta, a odluku donosi re-provera ispod.
+            On Error Resume Next
+            EnsureVozacMirrorForStanica stanicaID, _
+                Trim$(nz(LookupValue(TBL_STANICE, "StanicaID", stanicaID, "Naziv"), "")), _
+                "(hladnjaca)", ""
+            On Error GoTo EH
+        End If
+
+        If Not IsManagedStationMirror(stanicaID) Then
+            LogError "modAutoHladnjaca.AutoChainHladnjaca", _
+                     "Nema vozac-mirror para za StanicaID=" & stanicaID & _
+                     " -- auto-lanac se ne pokrece (izbegnut FK bez pokrica u " & TBL_VOZACI & ")."
+            AutoChainHladnjaca = "Auto-lanac hladnjace nije pokrenut: za stanicu " & stanicaID & _
+                " ne postoji par-voza" & ChrW(269) & " u " & TBL_VOZACI & "."
+            Exit Function
+        End If
     End If
 
     ' Broj otpremnice = broj otkupa (ili generisan). Zbirna se razdvaja: mirror-
