@@ -170,18 +170,14 @@ Public Function SyncStammdatenToGoogle_Core(ByVal showMessages As Boolean) As Bo
     End If
     
     sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
-    
+
+    ' AUD-001: get-or-create ide kroz TryGetOrCreateSpreadsheetID -- neuspeo
+    ' Drive lookup vise ne izgleda kao "ne postoji" (pravio bi duplikat sheeta).
     If Len(Trim$(sheetID)) = 0 Then
-        sheetID = GetSpreadsheetID("Stammdaten", folderID)
-    End If
-    
-    If Len(Trim$(sheetID)) = 0 Then
-        sheetID = CreateSpreadsheet("Stammdaten", folderID)
-        
-        If Len(sheetID) = 0 Then
+        If Not TryGetOrCreateSpreadsheetID("Stammdaten", folderID, sheetID) Then
             Monitor_StammdatenSyncFail _
                 errNum:=0, _
-                errDesc:="Google Stammdaten sheet could not be created.", _
+                errDesc:="Google Stammdaten sheet could not be resolved or created (Drive lookup failed or create failed).", _
                 errSrc:="modStammdatenSync.SyncStammdatenToGoogle_Core", _
                 successCount:=0, _
                 totalTabs:=TOTAL_STAMMDATEN_TABS
@@ -302,12 +298,12 @@ Public Function ExportKarticeToGoogle_Core(ByVal showMessages As Boolean) As Boo
     End If
     
     sheetID = GetConfigValue("GOOGLE_KARTICE_SHEET_ID")
-    If Len(Trim$(sheetID)) = 0 Then sheetID = GetSpreadsheetID("Kartice", folderID)
-    
+
+    ' AUD-001: fail-closed get-or-create (neuspeo lookup ne pravi duplikat).
     If Len(Trim$(sheetID)) = 0 Then
-        sheetID = CreateSpreadsheet("Kartice", folderID)
-        If Len(sheetID) = 0 Then
-            LogError "ExportKarticeToGoogle_Core", "Kartice Sheet could not be created."
+        If Not TryGetOrCreateSpreadsheetID("Kartice", folderID, sheetID) Then
+            LogError "ExportKarticeToGoogle_Core", _
+                     "Kartice Sheet could not be resolved or created (Drive lookup failed or create failed)."
             If showMessages Then MsgBox "Kartice Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
             Exit Function
         End If
@@ -488,13 +484,12 @@ Public Function ExportMgmtReports_Core(ByVal showMessages As Boolean) As Boolean
     End If
     
     sheetID = GetConfigValue("GOOGLE_MGMT_SHEET_ID")
-    If Len(Trim$(sheetID)) = 0 Then sheetID = GetSpreadsheetID("MgmtReports", folderID)
-    
+
+    ' AUD-001: fail-closed get-or-create (neuspeo lookup ne pravi duplikat).
     If Len(Trim$(sheetID)) = 0 Then
-        sheetID = CreateSpreadsheet("MgmtReports", folderID)
-        
-        If Len(sheetID) = 0 Then
-            LogError "ExportMgmtReports_Core", "MgmtReports Sheet could not be created."
+        If Not TryGetOrCreateSpreadsheetID("MgmtReports", folderID, sheetID) Then
+            LogError "ExportMgmtReports_Core", _
+                     "MgmtReports Sheet could not be resolved or created (Drive lookup failed or create failed)."
             If showMessages Then MsgBox "MgmtReports Sheet konnte nicht erstellt werden!", vbCritical, APP_NAME
             Exit Function
         End If
@@ -1592,18 +1587,13 @@ Public Function SyncParceleToGoogle_Core(ByVal showMessages As Boolean) As Boole
 
     sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
 
+    ' AUD-001: fail-closed get-or-create (neuspeo lookup ne pravi duplikat).
     If Len(Trim$(sheetID)) = 0 Then
-        sheetID = GetSpreadsheetID("Stammdaten", folderID)
-    End If
-
-    If Len(Trim$(sheetID)) = 0 Then
-        sheetID = CreateSpreadsheet("Stammdaten", folderID)
-    End If
-
-    If Len(Trim$(sheetID)) = 0 Then
-        LogError SRC, "Stammdaten sheet nije mogao biti pronadjen ili kreiran."
-        If showMessages Then MsgBox "Stammdaten Google Sheet nije mogao biti pronadjen ili kreiran.", vbCritical, APP_NAME
-        Exit Function
+        If Not TryGetOrCreateSpreadsheetID("Stammdaten", folderID, sheetID) Then
+            LogError SRC, "Stammdaten sheet nije mogao biti pronadjen ili kreiran (Drive lookup ili kreiranje nije uspelo)."
+            If showMessages Then MsgBox "Stammdaten Google Sheet nije mogao biti pronadjen ili kreiran.", vbCritical, APP_NAME
+            Exit Function
+        End If
     End If
 
     Call SetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID", sheetID)

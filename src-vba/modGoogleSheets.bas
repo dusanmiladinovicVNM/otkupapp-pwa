@@ -1480,6 +1480,46 @@ EH:
     TryGetSpreadsheetID = False
 End Function
 
+Public Function TryGetOrCreateSpreadsheetID(ByVal title As String, _
+                                            ByVal folderID As String, _
+                                            ByRef outID As String) As Boolean
+    ' FAIL-CLOSED get-or-create.
+    '
+    '   True  + outID -> Spreadsheet gefunden oder neu erstellt
+    '   False         -> Lookup fehlgeschlagen (dann wird NICHTS erstellt)
+    '                    oder Erstellen fehlgeschlagen
+    '
+    ' AUD-001: Der alte Ablauf war
+    '     id = GetSpreadsheetID(...) : If id = "" Then id = CreateSpreadsheet(...)
+    ' und hat einen HTTP-/JSON-Fehler beim Lookup als "existiert nicht"
+    ' gelesen -> zweites Spreadsheet mit gleichem Namen (Duplikat), im
+    ' schlimmsten Fall fuer viele Stanice gleichzeitig.
+    Dim foundID As String
+
+    outID = ""
+    TryGetOrCreateSpreadsheetID = False
+
+    If Not TryGetSpreadsheetID(title, folderID, foundID) Then
+        LogError "TryGetOrCreateSpreadsheetID", _
+                 "Drive lookup nije uspeo -- sheet se NE kreira (rizik od duplikata). Title=" & title
+        Exit Function
+    End If
+
+    If Len(Trim$(foundID)) > 0 Then
+        outID = foundID
+        TryGetOrCreateSpreadsheetID = True
+        Exit Function
+    End If
+
+    ' Lookup je prosao i sheet stvarno ne postoji -> bezbedno je kreirati.
+    foundID = CreateSpreadsheet(title, folderID)
+
+    If Len(Trim$(foundID)) = 0 Then Exit Function   ' CreateSpreadsheet loguje interno
+
+    outID = foundID
+    TryGetOrCreateSpreadsheetID = True
+End Function
+
 Public Function IsWellFormedJsonDocument(ByVal json As String) As Boolean
     ' Strukturpruefung (Klammern/Strings/Escapes) fuer beliebige
     ' Google-API-Antworten -- erkennt abgeschnittene und beschaedigte Bodies.

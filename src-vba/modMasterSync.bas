@@ -471,7 +471,17 @@ Public Function CreateOTKSheetsForAllStanice_Core( _
         End If
 
         sheetName = "OTK-" & stanicaID
-        existingID = GetSpreadsheetID(sheetName, folderID)
+
+        ' AUD-001: neuspeo Drive lookup NE SME da se procita kao "ne postoji" --
+        ' inace bi ova masovna putanja napravila duplikat OTK sheeta za svaku
+        ' stanicu u ciklusu.
+        If Not TryGetSpreadsheetID(sheetName, folderID, existingID) Then
+            failedCount = failedCount + 1
+            LogError SRC, _
+                "Drive lookup nije uspeo -- OTK sheet se NE kreira (rizik od duplikata). Sheet=" & sheetName & _
+                "; StanicaID=" & stanicaID
+            GoTo NextStanica
+        End If
 
         If Len(Trim$(existingID)) > 0 Then
             existingCount = existingCount + 1

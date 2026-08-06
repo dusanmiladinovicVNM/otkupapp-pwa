@@ -403,6 +403,7 @@ Public Sub RunMasterSyncSmokeSuite()
     Test_MasterSyncReadFailureIsFatalAndSkipsImport
     Test_MasterSyncEmptySheetIsNotAnError
     Test_BrojeviRemoteScanFailsClosed
+    Test_GetOrCreateSpreadsheetIDNoDuplicate
 
     tx.RollbackTx
     CleanupGoogleSmokeSpreadsheet
@@ -741,6 +742,51 @@ EH:
 
     On Error Resume Next
     If Len(Trim$(noHeaderID)) > 0 Then Call TrashGoogleDriveFile(noHeaderID)
+End Sub
+
+Private Sub Test_GetOrCreateSpreadsheetIDNoDuplicate()
+    ' AUD-001 regresija za get-or-create putanju:
+    '   (a) drugi poziv za isto ime NE pravi drugi sheet (vraca isti ID)
+    '   (b) kad lookup ne uspe, funkcija vraca False i NE kreira nista
+    On Error GoTo EH
+
+    Dim folderID As String
+    Dim sheetName As String
+    Dim firstID As String
+    Dim secondID As String
+    Dim rejectedID As String
+
+    folderID = Trim$(GetConfigValue("GOOGLE_PWA_FOLDER_ID"))
+    AssertTrue Len(folderID) > 0, "GET-OR-CREATE: GOOGLE_PWA_FOLDER_ID present"
+
+    sheetName = "OTK-TST-GOC-" & m_RunID
+
+    ' (a) prvi poziv kreira, drugi mora da NADE isti sheet
+    AssertTrue TryGetOrCreateSpreadsheetID(sheetName, folderID, firstID), _
+               "GET-OR-CREATE: prvi poziv uspeva (kreira)"
+    AssertTrue Len(Trim$(firstID)) > 0, "GET-OR-CREATE: prvi poziv vraca ID"
+
+    AssertTrue TryGetOrCreateSpreadsheetID(sheetName, folderID, secondID), _
+               "GET-OR-CREATE: drugi poziv uspeva"
+    AssertEquals firstID, secondID, _
+                 "GET-OR-CREATE: drugi poziv vraca ISTI ID (nema duplikata)"
+
+    ' (b) neuspeo lookup -> False i bez kreiranja
+    AssertTrue Not TryGetOrCreateSpreadsheetID("", folderID, rejectedID), _
+               "GET-OR-CREATE: neuspeo lookup vraca False"
+    AssertEquals "", rejectedID, _
+                 "GET-OR-CREATE: neuspeo lookup ne vraca ID (nista nije kreirano)"
+
+    Call TrashGoogleDriveFile(firstID)
+
+    LogGoogleSmokePass "GET-OR-CREATE: nema duplog sheeta, lookup greska ne kreira"
+    Exit Sub
+
+EH:
+    LogGoogleSmokeFail "GET-OR-CREATE: no duplicate", Err.description
+
+    On Error Resume Next
+    If Len(Trim$(firstID)) > 0 Then Call TrashGoogleDriveFile(firstID)
 End Sub
 
 Private Function CountTblOtkupRows() As Long

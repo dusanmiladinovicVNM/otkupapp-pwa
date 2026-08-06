@@ -546,12 +546,13 @@ Private Function GetOrCreateStammdatenSheetIDForSyncLock() As String
 
     sheetID = GetConfigValue("GOOGLE_STAMMDATEN_SHEET_ID")
 
+    ' AUD-001: fail-closed get-or-create -- neuspeo Drive lookup ne sme da
+    ' se procita kao "ne postoji" i napravi duplikat Stammdaten sheeta.
     If Len(Trim$(sheetID)) = 0 Then
-        sheetID = GetSpreadsheetID("Stammdaten", folderID)
-    End If
-
-    If Len(Trim$(sheetID)) = 0 Then
-        sheetID = CreateSpreadsheet("Stammdaten", folderID)
+        If Not TryGetOrCreateSpreadsheetID("Stammdaten", folderID, sheetID) Then
+            LogError SRC, "Stammdaten sheet nije razresen (Drive lookup ili kreiranje nije uspelo)."
+            Exit Function
+        End If
     End If
 
     If Len(Trim$(sheetID)) > 0 Then
