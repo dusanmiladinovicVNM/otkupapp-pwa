@@ -86,7 +86,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_MalinaVozacMirror
 
     ' RF-28 (MasterSync integritet -- AUD-041/042/043)
-    Test_RF28_AutoOtpremnicaNeMesaCene
+    Test_RF28_AutoOtpremnicaNeMesaArtikle
     Test_RF28_BrojZbirneRupaNeDajeDuplikat
     Test_RF28_LinkKonfliktNePrepisuje
     Test_RF28_MembershipKoristiSvojuZbirnu
@@ -1701,10 +1701,14 @@ End Sub
 ' ovi testovi moraju da se azuriraju zajedno sa njima.
 ' ============================================================
 
-' AUD-043(a): dva otkupa istog vozaca/dana/klase ali RAZLICITE cene moraju dati
-' DVE otpremnice. Stari grupni kljuc (bez Cena/Vrsta/Sorta/TipAmb) ih je spajao u
-' jednu i uzimao cenu PRVOG reda -> pogresan novac na otpremnici.
-Private Sub Test_RF28_AutoOtpremnicaNeMesaCene()
+' AUD-043(a): otkupi istog Stanica|Datum|Vozac|Klasa koji se razlikuju po BILO KOM
+' artikal-atributu moraju dati ZASEBNE otpremnice. Stari kljuc (bez
+' Vrsta|Sorta|Cena|TipAmb) ih je spajao u jednu i citao metadata sa PRVOG reda ->
+' pogresna vrsta, sorta, novac i ambalaza na otpremnici.
+'
+' Testiraju se sva cetiri polja zasebno (jedna promenljiva po redu, baseline je
+' red A) -- da regresija u samo jednom segmentu kljuca ne prode neopazeno.
+Private Sub Test_RF28_AutoOtpremnicaNeMesaArtikle()
     Dim tx As clsTransaction
 
     On Error GoTo EH
@@ -1715,9 +1719,19 @@ Private Sub Test_RF28_AutoOtpremnicaNeMesaCene()
     Dim testDate As Date
     testDate = NextTestDate()
 
-    Dim otkA As String, otkB As String
-    otkA = "OTK-RF28A-" & scenario
-    otkB = "OTK-RF28B-" & scenario
+    Dim otkBase As String, otkCena As String, otkVrsta As String
+    Dim otkSorta As String, otkTipAmb As String
+
+    otkBase = "OTK-RF28-BASE-" & scenario
+    otkCena = "OTK-RF28-CENA-" & scenario
+    otkVrsta = "OTK-RF28-VRSTA-" & scenario
+    otkSorta = "OTK-RF28-SORTA-" & scenario
+    otkTipAmb = "OTK-RF28-AMB-" & scenario
+
+    Dim vrstaB As String, sortaB As String, tipAmbB As String
+    vrstaB = TEST_VRSTA & " RF28-2"
+    sortaB = TEST_SORTA & " RF28-2"
+    tipAmbB = TEST_TIP_AMB & " RF28-2"
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -1725,26 +1739,53 @@ Private Sub Test_RF28_AutoOtpremnicaNeMesaCene()
     tx.AddTableSnapshot TBL_OTPREMNICA
     tx.AddTableSnapshot TBL_AMBALAZA
 
-    ' Isti Stanica|Datum|Vozac|Klasa, razlicita Cena.
-    AppendRF28OtkupFixture otkA, testDate, TEST_VOZ_ID, "I", 120#, ""
-    AppendRF28OtkupFixture otkB, testDate, TEST_VOZ_ID, "I", 175#, ""
+    ' Svi dele Stanica|Datum|Vozac|Klasa; svaki se od baseline-a razlikuje po
+    ' TACNO JEDNOM artikal-atributu.
+    AppendRF28OtkupFixture otkBase, testDate, TEST_VOZ_ID, "I", 120#, ""
+    AppendRF28OtkupFixture otkCena, testDate, TEST_VOZ_ID, "I", 175#, ""
+    AppendRF28OtkupFixture otkVrsta, testDate, TEST_VOZ_ID, "I", 120#, "", "", vrstaB
+    AppendRF28OtkupFixture otkSorta, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, sortaB
+    AppendRF28OtkupFixture otkTipAmb, testDate, TEST_VOZ_ID, "I", 120#, "", "", TEST_VRSTA, TEST_SORTA, tipAmbB
 
     ' Scope na test-dan -- run ne sme da zahvati nepovezane otkupe u svesci.
     Call AutoCreateOtpremniceFromPWA_TX(testDate)
 
-    Dim otpA As String, otpB As String
-    otpA = Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkA, COL_OTK_OTPREMNICA_ID)))
-    otpB = Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkB, COL_OTK_OTPREMNICA_ID)))
+    Dim otpBase As String, otpCena As String, otpVrsta As String
+    Dim otpSorta As String, otpTipAmb As String
 
-    AssertTrue Len(otpA) > 0, "RF-28 AUD-043a: otkup A je povezan na otpremnicu"
-    AssertTrue Len(otpB) > 0, "RF-28 AUD-043a: otkup B je povezan na otpremnicu"
-    AssertTrue otpA <> otpB, _
-        "RF-28 AUD-043a: razlicite cene daju DVE otpremnice (ne jednu mesanu)"
+    otpBase = RF28OtpremnicaZaOtkup(otkBase)
+    otpCena = RF28OtpremnicaZaOtkup(otkCena)
+    otpVrsta = RF28OtpremnicaZaOtkup(otkVrsta)
+    otpSorta = RF28OtpremnicaZaOtkup(otkSorta)
+    otpTipAmb = RF28OtpremnicaZaOtkup(otkTipAmb)
 
-    AssertDoubleNear 120#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpA, COL_OTP_CENA)), _
-        0.001, "RF-28 AUD-043a: otpremnica A nosi svoju cenu"
-    AssertDoubleNear 175#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpB, COL_OTP_CENA)), _
-        0.001, "RF-28 AUD-043a: otpremnica B nosi svoju cenu"
+    AssertTrue Len(otpBase) > 0 And Len(otpCena) > 0 And Len(otpVrsta) > 0 _
+               And Len(otpSorta) > 0 And Len(otpTipAmb) > 0, _
+        "RF-28 AUD-043a: svih pet otkupa je povezano na otpremnicu"
+
+    ' Pet razlicitih kombinacija -> pet RAZLICITIH otpremnica.
+    Dim jedinstvene As Object
+    Set jedinstvene = CreateObject("Scripting.Dictionary")
+    jedinstvene(otpBase) = True
+    jedinstvene(otpCena) = True
+    jedinstvene(otpVrsta) = True
+    jedinstvene(otpSorta) = True
+    jedinstvene(otpTipAmb) = True
+
+    AssertEquals "5", CStr(jedinstvene.count), _
+        "RF-28 AUD-043a: pet artikal-kombinacija daje PET otpremnica (ne jednu mesanu)"
+
+    ' Svaka otpremnica nosi SVOJ atribut, ne onaj sa prvog reda grupe.
+    AssertDoubleNear 120#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpBase, COL_OTP_CENA)), _
+        0.001, "RF-28 AUD-043a: baseline otpremnica nosi svoju cenu"
+    AssertDoubleNear 175#, CDbl(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpCena, COL_OTP_CENA)), _
+        0.001, "RF-28 AUD-043a: razlicita Cena je zasebna otpremnica sa svojom cenom"
+    AssertEquals vrstaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpVrsta, COL_OTP_VRSTA))), _
+        "RF-28 AUD-043a: razlicita VrstaVoca je zasebna otpremnica sa svojom vrstom"
+    AssertEquals sortaB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpSorta, COL_OTP_SORTA))), _
+        "RF-28 AUD-043a: razlicita SortaVoca je zasebna otpremnica sa svojom sortom"
+    AssertEquals tipAmbB, Trim$(CStr(GetValueByKey(TBL_OTPREMNICA, COL_OTP_ID, otpTipAmb, COL_OTP_TIP_AMB))), _
+        "RF-28 AUD-043a: razlicit TipAmbalaze je zasebna otpremnica sa svojim tipom"
 
     tx.RollbackTx
     Exit Sub
@@ -1753,8 +1794,13 @@ EH:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
-    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa cene", Err.description
+    LogFail "RF-28 AUD-043a auto-otpremnica ne mesa artikle", Err.description
 End Sub
+
+Private Function RF28OtpremnicaZaOtkup(ByVal otkupID As String) As String
+    RF28OtpremnicaZaOtkup = _
+        Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkupID, COL_OTK_OTPREMNICA_ID)))
+End Function
 
 ' AUD-041(b): rupa u nizu ne sme da proizvede vec zauzet broj. Row-count generator
 ' je za {"N/ddmmyy", "N/ddmmyy-3"} vracao "-3" ponovo; MAX-seq vraca "-4".
@@ -2017,11 +2063,14 @@ Private Sub Test_RF28_VozacIDUpdateIshodi()
 
     Dim otkPrazan As String, cridPrazan As String
     Dim otkZauzet As String, cridZauzet As String
+    Dim otkPad As String, cridPad As String
 
     otkPrazan = "OTK-RF28VOZ-E-" & scenario
     cridPrazan = "CRID-RF28VOZ-E-" & scenario
     otkZauzet = "OTK-RF28VOZ-F-" & scenario
     cridZauzet = "CRID-RF28VOZ-F-" & scenario
+    otkPad = "OTK-RF28VOZ-X-" & scenario
+    cridPad = "CRID-RF28VOZ-X-" & scenario
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -2029,6 +2078,7 @@ Private Sub Test_RF28_VozacIDUpdateIshodi()
 
     AppendRF28OtkupFixture otkPrazan, testDate, "", "I", 100#, cridPrazan
     AppendRF28OtkupFixture otkZauzet, testDate, TEST_VOZ_ID, "I", 100#, cridZauzet
+    AppendRF28OtkupFixture otkPad, testDate, "", "I", 100#, cridPad
 
     Dim detail As String
 
@@ -2048,11 +2098,29 @@ Private Sub Test_RF28_VozacIDUpdateIshodi()
     AssertEquals "NOTFOUND", TestHook_TryUpdateVozacID("CRID-RF28-NEMA-" & scenario, TEST_VOZ_ID, detail), _
         "RF-28 AUD-042a: nepostojeci ClientRecordID je NOTFOUND (greska, ne preskok)"
 
+    ' Armiran pad upisa (UpdateCell se ne moze naterati da padne "prirodno").
+    ' Ovo je putanja zbog koje je AUD-042a i postojao: stari kod je vracao True.
+    TestHook_ArmFailSeam "VOZAC_WRITE"
+
+    AssertEquals "FAILED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: neuspeo UpdateCell je FAILED (ne tihi uspeh)"
+    AssertTrue Len(detail) > 0, _
+        "RF-28 AUD-042a: FAILED nosi detalj za SyncError/log"
+    AssertEquals "", Trim$(CStr(GetValueByKey(TBL_OTKUP, COL_OTK_ID, otkPad, COL_OTK_VOZAC))), _
+        "RF-28 AUD-042a: posle neuspelog upisa VozacID je i dalje prazan"
+
+    ' Seam je jednokratan -- sledeci poziv mora ponovo da radi normalno.
+    AssertEquals "UPDATED", TestHook_TryUpdateVozacID(cridPad, TEST_VOZ_ID, detail), _
+        "RF-28 AUD-042a: fail seam je jednokratan (sledeci upis prolazi)"
+
+    TestHook_ArmFailSeam ""
+
     tx.RollbackTx
     Exit Sub
 
 EH:
     On Error Resume Next
+    TestHook_ArmFailSeam ""
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
     LogFail "RF-28 AUD-042a VozacID ishodi", Err.description
@@ -2068,7 +2136,10 @@ Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
                                    ByVal klasa As String, _
                                    ByVal cena As Double, _
                                    ByVal clientRecordID As String, _
-                                   Optional ByVal brojZbirne As String = "")
+                                   Optional ByVal brojZbirne As String = "", _
+                                   Optional ByVal vrsta As String = TEST_VRSTA, _
+                                   Optional ByVal sorta As String = TEST_SORTA, _
+                                   Optional ByVal tipAmb As String = TEST_TIP_AMB)
     Dim rowData As Variant
     rowData = BlankRow(TBL_OTKUP)
 
@@ -2076,13 +2147,13 @@ Private Sub AppendRF28OtkupFixture(ByVal otkupID As String, _
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_DATUM, datum
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_KOOPERANT, TEST_KOOP_ID
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_STANICA, TEST_ST_ID
-    SetRequiredField rowData, TBL_OTKUP, COL_OTK_VRSTA, TEST_VRSTA
-    SetRequiredField rowData, TBL_OTKUP, COL_OTK_SORTA, TEST_SORTA
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_VRSTA, vrsta
+    SetRequiredField rowData, TBL_OTKUP, COL_OTK_SORTA, sorta
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_KOLICINA, 100#
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_CENA, cena
     SetRequiredField rowData, TBL_OTKUP, COL_OTK_KLASA, klasa
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_KULTURA, TEST_KULTURA_ID
-    SetOptionalField rowData, TBL_OTKUP, COL_OTK_TIP_AMB, TEST_TIP_AMB
+    SetOptionalField rowData, TBL_OTKUP, COL_OTK_TIP_AMB, tipAmb
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_KOL_AMB, 0
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_VOZAC, vozacID
     SetOptionalField rowData, TBL_OTKUP, COL_OTK_BR_DOK, "RF28-" & otkupID

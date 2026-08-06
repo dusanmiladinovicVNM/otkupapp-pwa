@@ -21,6 +21,15 @@ Attribute VB_Name = "modMasterSync"
 ' ============================================================
 Private mLastPWAFatalSyncError As Boolean
 
+' TEST SEAM (isti obrazac kao modAutoHladnjaca.mTestFailStep): armira se iz smoke
+' suite-a, potrosi se pri PRVOJ upotrebi -- vazi samo za taj jedan poziv. U
+' produkciji je uvek prazan.
+'
+' Postoji zato sto se UpdateCell i WriteSheetData ne mogu naterati da padnu
+' "prirodno" (kolone/tabela postoje, HTTP radi), a bas ti fail-putevi su ono sto
+' AUD-042(a) i AUD-042(c) popravljaju -- bez seam-a bi ostali netestirani.
+Private mTestFailSeam As String
+
 Private Const SYNC_STATUS_PENDING As String = "Synced"
 Private Const SYNC_STATUS_MASTER As String = "Synced>Master"
 Private Const SYNC_STATUS_ERROR As String = "SyncError"
@@ -530,39 +539,14 @@ Public Function CreateOTKSheetsForAllStanice_Core( _
             GoTo NextStanica
         End If
 
-        newID = CreateSpreadsheet(sheetName, folderID)
+        newID = CreateOTKSheetWithHeader(sheetName, folderID, headers, SRC)
 
         If Len(Trim$(newID)) = 0 Then
             failedCount = failedCount + 1
             LogError SRC, _
-                "CreateSpreadsheet failed. Sheet=" & sheetName & _
+                "OTK sheet nije kreiran sa headerom. Sheet=" & sheetName & _
                 "; StanicaID=" & stanicaID & _
                 "; Naziv=" & stanicaNaziv
-            GoTo NextStanica
-        End If
-
-        If Not WriteSheetData(newID, "Sheet1", headers) Then
-            failedCount = failedCount + 1
-            LogError SRC, _
-                "WriteSheetData header failed. Sheet=" & sheetName & _
-                "; SpreadsheetID=" & newID & _
-                "; StanicaID=" & stanicaID
-
-            ' AUD-042(c): sheet je kreiran, header nije upisan -> "poison"
-            ' spreadsheet. Bez ovoga ga sledeci run vidi kao existing
-            ' (TryGetSpreadsheetID ga nalazi po imenu), preskoci ga i header
-            ' NIKAD ne bude upisan -- PWA pise u sheet bez sheme.
-            ' Zato ga saljemo u Drive trash; sledeci run pravi cist novi.
-            If DriveTrashFile(newID) Then
-                LogWarn SRC, _
-                    "Poison OTK sheet poslat u Drive trash (header nije upisan). Sheet=" & sheetName & _
-                    "; SpreadsheetID=" & newID
-            Else
-                LogError SRC, _
-                    "Poison OTK sheet NIJE obrisan -- obrisi ga rucno na Drive-u pre sledeceg run-a. Sheet=" & sheetName & _
-                    "; SpreadsheetID=" & newID
-            End If
-
             GoTo NextStanica
         End If
 
@@ -605,6 +589,57 @@ EH:
     End If
 
     CreateOTKSheetsForAllStanice_Core = False
+End Function
+
+'======================================================================
+' CreateOTKSheetWithHeader
+'
+' AUD-042(c): kreiranje sheeta i upis header-a su JEDNA operacija iz perspektive
+' sledeceg run-a. Ako header padne, sheet postoji na Drive-u i TryGetSpreadsheetID
+' ga po imenu nalazi kao "existing" -> preskoci se, header NIKAD ne bude upisan, a
+' PWA pise u sheet bez sheme. Zato pao header znaci: sheet u Drive trash (Drive
+' upit filtrira trashed=false, pa sledeci run pravi cist novi).
+'
+' Vraca SpreadsheetID na uspeh, "" na bilo koji neuspeh (pozivalac broji failed).
+'======================================================================
+Private Function CreateOTKSheetWithHeader(ByVal sheetName As String, _
+                                         ByVal folderID As String, _
+                                         ByVal headers As Variant, _
+                                         ByVal sourceName As String) As String
+    Dim newID As String
+    newID = CreateSpreadsheet(sheetName, folderID)
+
+    If Len(Trim$(newID)) = 0 Then
+        LogError sourceName, "CreateSpreadsheet failed. Sheet=" & sheetName
+        Exit Function
+    End If
+
+    Dim headerOk As Boolean
+
+    If ConsumeFailSeam("OTK_HEADER") Then
+        headerOk = False
+    Else
+        headerOk = WriteSheetData(newID, "Sheet1", headers)
+    End If
+
+    If headerOk Then
+        CreateOTKSheetWithHeader = newID
+        Exit Function
+    End If
+
+    LogError sourceName, _
+        "WriteSheetData header failed. Sheet=" & sheetName & _
+        "; SpreadsheetID=" & newID
+
+    If DriveTrashFile(newID) Then
+        LogWarn sourceName, _
+            "Poison OTK sheet poslat u Drive trash (header nije upisan). Sheet=" & sheetName & _
+            "; SpreadsheetID=" & newID
+    Else
+        LogError sourceName, _
+            "Poison OTK sheet NIJE obrisan -- obrisi ga rucno na Drive-u pre sledeceg run-a. Sheet=" & sheetName & _
+            "; SpreadsheetID=" & newID
+    End If
 End Function
 
 '======================================================================
@@ -1444,6 +1479,22 @@ Public Sub TestHook_LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
     LinkZbirnaToOtkupAndOtpremnica zbirnaID, brojZbirne, otkupRecordIDs
 End Sub
 
+' Armira jednokratni fail seam. Kodovi:
+'   "VOZAC_WRITE" -- sledeci UpdateCell VozacID-a se ponasa kao neuspeo (AUD-042a)
+'   "OTK_HEADER"  -- sledeci header WriteSheetData se ponasa kao neuspeo (AUD-042c)
+' Prazan string = razoruzaj (smoke test to radi u svom EH-u).
+Public Sub TestHook_ArmFailSeam(ByVal seamKod As String)
+    mTestFailSeam = UCase$(Trim$(seamKod))
+End Sub
+
+' AUD-042(c): kreiranje OTK sheeta + header, sa trash-om na pad header-a.
+Public Function TestHook_CreateOTKSheetWithHeader(ByVal sheetName As String, _
+                                                 ByVal folderID As String) As String
+    TestHook_CreateOTKSheetWithHeader = _
+        CreateOTKSheetWithHeader(sheetName, folderID, BuildOTKOperationalHeaders_(), _
+                                 "TestHook_CreateOTKSheetWithHeader")
+End Function
+
 ' ============================================================
 ' PRIVATE -- Import eines einzelnen OTK-Sheets
 ' ============================================================
@@ -2092,7 +2143,15 @@ Private Function TryUpdateVozacID(ByVal clientRecordID As String, _
             End If
 
             ' Povrat UpdateCell-a se MORA proveriti (modDataAccess vraca False na neuspeh).
-            If UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, wanted) Then
+            Dim writeOk As Boolean
+
+            If ConsumeFailSeam("VOZAC_WRITE") Then
+                writeOk = False
+            Else
+                writeOk = UpdateCell(TBL_OTKUP, i, COL_OTK_VOZAC, wanted)
+            End If
+
+            If writeOk Then
                 TryUpdateVozacID = MSVOZ_UPDATED
                 LogInfo SRC, "Updated VozacID=" & wanted & _
                         " for ClientRecordID=" & clientRecordID
@@ -3541,6 +3600,15 @@ Private Function ExtractNumericVozacBroj(ByVal vozacID As String) As String
     Else
         ExtractNumericVozacBroj = CStr(CLng(digits))
     End If
+End Function
+
+' True samo ako je seam armiran BAS za ovaj kod; potrosi ga (jednokratno).
+Private Function ConsumeFailSeam(ByVal seamKod As String) As Boolean
+    If Len(mTestFailSeam) = 0 Then Exit Function
+    If mTestFailSeam <> UCase$(Trim$(seamKod)) Then Exit Function
+
+    mTestFailSeam = ""
+    ConsumeFailSeam = True
 End Function
 
 Private Sub MarkPWAFatalSyncError(ByVal sourceName As String, ByVal message As String)
