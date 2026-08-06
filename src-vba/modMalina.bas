@@ -146,11 +146,26 @@ Public Function EnsureVozacMirrorForStanica(ByVal stanicaID As String, _
     Exit Function
 
 EH:
-    ' AUD-046: re-raise (isti model kao BackfillVozacMirrorsForMalina).
-    ' Pozivalac odlucuje da li nastavlja -- ali NE sme da nastavi u tisini.
+    ' AUD-046: re-raise -- pozivalac odlucuje da li nastavlja, ali NE sme da
+    ' nastavi u tisini.
+    '
+    ' Err se MORA sacuvati PRE LogErr-a: LogErr zove LogError, a LogError sadrzi
+    ' "On Error Resume Next"/"On Error GoTo 0" -- svaki On Error resetuje Err.
+    ' "Err.Raise Err.Number" posle logovanja bi bio Err.Raise 0, tj. tacno onaj
+    ' tihi swallow koji AUD-046 uklanja (i test bi merio Err.Number = 0).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    If errNum = 0 Then errNum = vbObjectError + 8414
+    If Len(errDesc) = 0 Then errDesc = "Vozac mirror nije kreiran."
+
     EnsureVozacMirrorForStanica = False
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' Jednokratni backfill: za svaku stanicu napravi par-vozaca ako ga nema.
@@ -192,7 +207,19 @@ Public Function BackfillVozacMirrorsForMalina() As Long
     Exit Function
 
 EH:
+    ' Isti razlog kao u EnsureVozacMirrorForStanica: Err se cuva PRE LogErr-a,
+    ' inace re-raise postaje Err.Raise 0 i backfill tiho "uspe" posle greske.
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    If errNum = 0 Then errNum = vbObjectError + 8415
+    If Len(errDesc) = 0 Then errDesc = "Backfill vozac mirrora nije uspeo."
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 

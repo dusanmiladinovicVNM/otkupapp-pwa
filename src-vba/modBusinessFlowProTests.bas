@@ -2028,12 +2028,24 @@ Private Sub Test_RF28_NevalidanDatumJeSyncError()
     AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, DateSerial(2090, 5, 5)), _
         "RF-28 AUD-042b: validan OTK datum prolazi"
 
+    ' STVARNI format iz pipeline-a: PWA salje ISO string (getTodayIsoDate ->
+    ' "yyyy-mm-dd"), a ne native Date serijal. Testira se bas taj oblik, jer se
+    ' validacija i import oslanjaju na CDate nad tim stringom.
+    AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "2090-05-05"), _
+        "RF-28 AUD-042b: ISO string datum (PWA format) prolazi"
+    AssertEquals "", TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "2026-01-31"), _
+        "RF-28 AUD-042b: backdate ISO string prolazi (donja granica ne odbija realne datume)"
+    AssertEquals "", TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, "2090-05-05"), _
+        "RF-28 AUD-042b: ISO string datum prolazi i na VOZ putanji"
+
     AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "")) > 0, _
         "RF-28 AUD-042b: prazan OTK datum je greska"
     AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "nije datum")) > 0, _
         "RF-28 AUD-042b: neparsiran OTK datum je greska"
     AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "12:30")) > 0, _
         "RF-28 AUD-042b: samo-vreme nije OTK datum"
+    AssertTrue Len(TestHook_ValidatePWAOtkupDatum(TEST_KOOP_ID, "1899-12-30")) > 0, _
+        "RF-28 AUD-042b: 1899 baseline nije poslovni datum"
 
     AssertEquals "", TestHook_ValidatePWAZbirnaDatum(TEST_VOZ_ID, TEST_KUP_ID, DateSerial(2090, 5, 5)), _
         "RF-28 AUD-042b: validan VOZ datum prolazi"

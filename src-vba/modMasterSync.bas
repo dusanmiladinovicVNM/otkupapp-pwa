@@ -794,14 +794,24 @@ Public Function AutoCreateOtpremniceFromPWA(Optional ByVal samoDatum As Date = 0
 
         If otpID = "" And vozID <> "" And inScope Then
             Dim gKey As String
+            ' PAZI: parts(0..3) se posle CITAJU iz kljuca i UPISUJU na otpremnicu
+            ' (GenerateBrojOtpremnice + SaveOtpremnica_TX), pa ta cetiri segmenta
+            ' moraju ostati SIROVA -- normalizacija bi upisala izmenjen ID/Klasu.
+            '
+            ' Nova cetiri segmenta se NE citaju kroz parts() (metadata ide sa
+            ' firstRow), pa se tekstualni normalizuju (Trim + UCase) samo za
+            ' grupisanje: PWA ih salje iz <select> lista a frmOtkup iz combo-a, ali
+            ' zaostali space ili razlika u velicini slova (legacy red, GAS upis) ne
+            ' sme da iscepa jednu otpremnicu na dve. Otpremnica i dalje nosi
+            ' ORIGINALNI zapis sa firstRow.
             gKey = CStr(data(i, colSt)) & "|" & _
                    Format$(CDate(data(i, colDat)), "YYYY-MM-DD") & "|" & _
                    vozID & "|" & _
                    CStr(nz(data(i, colKlasa), "")) & "|" & _
-                   CStr(nz(data(i, colVrsta), "")) & "|" & _
-                   CStr(nz(data(i, colSorta), "")) & "|" & _
+                   UCase$(Trim$(CStr(nz(data(i, colVrsta), "")))) & "|" & _
+                   UCase$(Trim$(CStr(nz(data(i, colSorta), "")))) & "|" & _
                    Format$(CDbl(nz(data(i, colCena), 0)), "0.000000") & "|" & _
-                   CStr(nz(data(i, colTipAmb), ""))
+                   UCase$(Trim$(CStr(nz(data(i, colTipAmb), ""))))
             
             If Not groups.Exists(gKey) Then
                 groups.Add gKey, New Collection
@@ -3373,8 +3383,24 @@ Private Sub LinkZbirnaToOtkupAndOtpremnica(ByVal zbirnaID As String, _
     Exit Sub
 
 EH:
+    ' Err se MORA sacuvati PRE logovanja: LogErr -> LogError, a LogError sadrzi
+    ' "On Error Resume Next"/"On Error GoTo 0" -- svaki On Error resetuje Err
+    ' objekat. Sa "Err.Raise Err.Number" posle LogErr-a raise bi bio Err.Raise 0,
+    ' pa membership/konflikt guard iznad ne bi propagirao do ImportVOZRow_RowTX
+    ' (red bi bio kvitiran kao uspesan uz nepovezan otkup). Isti obrazac vec
+    ' koriste _TX wrapperi u ovom modulu i modBrojevi.MaxSeqFromGoogleSheet.
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    If errNum = 0 Then errNum = ERR_MASTER_SYNC_GUARD_BASE + 44
+    If Len(errDesc) = 0 Then errDesc = "Kaskadno povezivanje nije uspelo."
+
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 ' ============================================================
 ' PRIVATE -- Helper: BrojZbirne aus ZbirnaID
