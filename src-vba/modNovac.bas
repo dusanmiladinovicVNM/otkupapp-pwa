@@ -897,11 +897,22 @@ End Function
 ' Podeli iznos po tezinama iz `udeli` (kljuc -> tezina). Cist racun, bez tabela:
 ' testira ga modIzvestajTests.RunIzvestajTests.
 '   - zbir tezina <= 0 (ili prazan dict) -> ceo iznos na "(Nepoznato)"
-'   - svaki deo se FINANSIJSKI zaokruzuje na 2 decimale, a poslednji kljuc nosi
-'     zaokruzeni ostatak. Bez toga bi 100 / 3 dalo 3 x 33,3333 -- prikaz bi
-'     pokazao 33,33 + 33,33 + 33,33 = 99,99 uz UKUPNO 100,00 (vidljiva razlika
-'     od jednog centa u izvestaju salda kupca).
-' Returns: Dictionary(kljuc -> deo iznosa, zaokruzen na 2 decimale)
+'   - racuna se u CELIM PARAMA metodom najvecih ostataka (largest remainder):
+'     svaki deo dobije floor svog idealnog udela, pa se visak para deli redom
+'     po najvecem ostatku.
+'
+' Dve invarijante koje metod garantuje (obe su bile potrebne):
+'   1. zbir delova == ZaokruziNovac(iznos)  -- prikaz po vrstama se slaze sa
+'      UKUPNO (100/3 daje 33,34 + 33,33 + 33,33, ne 33,33 x 3 = 99,99);
+'   2. nijedan deo NIJE negativan. Raniji oblik je poslednjem kljucu davao
+'      ostatak POSLE zaokruzivanja, pa kad se prethodni delovi zaokruze navise
+'      preko cilja poslednji ode u minus (0,03 na 5 jednakih vrsta -> poslednja
+'      vrsta -0,01). Clamp na nulu se NE sme koristiti kao popravka: razbio bi
+'      invarijantu 1 (zbir bi postao 0,04).
+'
+' Napomena o tipu: pare se drze u Double (celobrojne vrednosti do 2^53 su tacne),
+' a ne u Long -- Long bi pukao Overflow-om na iznosu preko ~21,4 miliona.
+' Returns: Dictionary(kljuc -> deo iznosa, tacno na 2 decimale)
 Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object) As Object
     Dim outDict As Object
     Set outDict = CreateObject("Scripting.Dictionary")
@@ -925,23 +936,60 @@ Public Function RaspodeliPoUdelima(ByVal iznos As Double, ByVal udeli As Object)
     Dim keys As Variant
     keys = udeli.keys
 
-    Dim ciljUkupno As Double
-    ciljUkupno = ZaokruziNovac(iznos)
+    Dim n As Long
+    n = UBound(keys) + 1
 
-    Dim dodeljeno As Double
-    dodeljeno = 0
+    Dim ciljPara As Double
+    ciljPara = ZaokruziNovac(iznos) * 100
+    ciljPara = Int(ciljPara + 0.5)          ' celobrojno, bez FP repa
+
+    Dim para() As Double
+    ReDim para(0 To n - 1)
+    Dim ostatak() As Double
+    ReDim ostatak(0 To n - 1)
+
+    Dim sumPara As Double
+    sumPara = 0
 
     Dim i As Long
-    For i = 0 To UBound(keys)
-        Dim deo As Double
-        If i = UBound(keys) Then
-            ' Ostatak POSLE zaokruzivanja -> zbir prikazanih delova = ceo iznos.
-            deo = ZaokruziNovac(ciljUkupno - dodeljeno)
-        Else
-            deo = ZaokruziNovac(iznos * (CDbl(udeli(keys(i))) / ukupno))
-        End If
-        outDict.Add CStr(keys(i)), deo
-        dodeljeno = dodeljeno + deo
+    For i = 0 To n - 1
+        Dim tezina As Double
+        tezina = 0
+        If IsNumeric(udeli(keys(i))) Then tezina = CDbl(udeli(keys(i)))
+        If tezina < 0 Then tezina = 0       ' negativna tezina nema smisla za udeo
+
+        Dim ideal As Double
+        ideal = (iznos * 100) * (tezina / ukupno)
+        If ideal < 0 Then ideal = 0         ' iznos je zbir uplata -> nikad < 0
+
+        para(i) = Int(ideal)                ' floor nad ne-negativnim
+        ostatak(i) = ideal - para(i)
+        sumPara = sumPara + para(i)
+    Next i
+
+    ' Visak para (0 <= visak <= n) ide redom na najveci ostatak.
+    Dim visak As Long
+    visak = CLng(ciljPara - sumPara)
+
+    Dim j As Long
+    For j = 1 To visak
+        Dim best As Long
+        best = -1
+        Dim bestOst As Double
+        bestOst = -1
+        For i = 0 To n - 1
+            If ostatak(i) > bestOst Then
+                bestOst = ostatak(i)
+                best = i
+            End If
+        Next i
+        If best < 0 Then Exit For           ' odbrana: nema vise kandidata
+        para(best) = para(best) + 1
+        ostatak(best) = -1                  ' iskoriscen
+    Next j
+
+    For i = 0 To n - 1
+        outDict.Add CStr(keys(i)), para(i) / 100#
     Next i
 
     Set RaspodeliPoUdelima = outDict

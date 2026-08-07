@@ -326,14 +326,32 @@ Private Sub T_UplataSrazmernoPoVrsti()
     ' NAPOMENA: ovde se poredi na NIVOU CENTA (IzvChkEqC), ne sa tolerancijom
     ' 0,01 -- nezaokruzeno 33,3333 bi proslo tolerantnu proveru i propustilo
     ' bas onu gresku koju test treba da fiksira.
+    ' Metod je largest-remainder: visak para ide na NAJVECI ostatak, pa kod tri
+    ' jednaka udela dodatnu paru dobija PRVI kljuc (svi ostaci su isti).
     Set p = RaspodeliPoUdelima(100#, tri)
-    IzvChkEqC CDbl(p("A")), 33.33, S & "prvi deo zaokruzen na 33,33"
-    IzvChkEqC CDbl(p("B")), 33.33, S & "drugi deo zaokruzen na 33,33"
-    IzvChkEqC CDbl(p("C")), 33.34, S & "poslednji deo nosi zaokruzeni ostatak 33,34"
+    IzvChkEqC CDbl(p("A")), 33.34, S & "prvi deo nosi visak pare -> 33,34"
+    IzvChkEqC CDbl(p("B")), 33.33, S & "drugi deo 33,33"
+    IzvChkEqC CDbl(p("C")), 33.33, S & "treci deo 33,33"
     IzvChkEqC CDbl(p("A")) + CDbl(p("B")) + CDbl(p("C")), 100#, _
               S & "zbir ZAOKRUZENIH delova = 100,00 (ne 99,99)"
     IzvChk IsRoundedTo2(CDbl(p("A"))) And IsRoundedTo2(CDbl(p("B"))) And IsRoundedTo2(CDbl(p("C"))), _
            S & "nijedan deo nema vise od 2 decimale"
+
+    ' Sitan iznos na vise vrsta: raniji oblik (poslednji nosi ostatak) je prva
+    ' cetiri dela zaokruzivao navise preko cilja, pa je POSLEDNJA vrsta dobijala
+    ' -0,01 -- negativan cent u izvestaju salda kupca.
+    Set p = RaspodeliPoUdelima(0.03, IzvUdeliJednaki(5))
+    Dim minDeo As Double: minDeo = IzvMinVrednost(p)
+    IzvChk minDeo >= 0, S & "0,03 na 5 vrsta: nijedan deo nije negativan"
+    IzvChkEqC IzvZbirVrednosti(p), 0.03, S & "0,03 na 5 vrsta: zbir = 0,03"
+
+    ' Invarijanta (zbir == iznos I nijedan deo < 0) na vise oblika ulaza.
+    ChkRaspodelaInvarijanta 0.01, IzvUdeliJednaki(2), S & "0,01 na 2"
+    ChkRaspodelaInvarijanta 0.03, IzvUdeliJednaki(5), S & "0,03 na 5"
+    ChkRaspodelaInvarijanta 0.07, IzvUdeliJednaki(3), S & "0,07 na 3"
+    ChkRaspodelaInvarijanta 100#, IzvUdeliJednaki(7), S & "100 na 7"
+    ChkRaspodelaInvarijanta 1234.56, IzvUdeliJednaki(3), S & "1234,56 na 3"
+    ChkRaspodelaInvarijanta 999999.99, IzvUdeliJednaki(11), S & "999.999,99 na 11"
 
     ' Isto na iznosu koji se ne deli lepo na dve vrste.
     Dim dve As Object
@@ -355,6 +373,49 @@ End Sub
 ' Da li vrednost stane u 2 decimale (bez repa tipa 33,3333).
 Private Function IsRoundedTo2(ByVal v As Double) As Boolean
     IsRoundedTo2 = (Abs(v * 100 - Int(v * 100 + 0.5)) < 0.000001)
+End Function
+
+' Dve invarijante raspodele: zbir delova == zaokruzen iznos, i nijedan deo < 0.
+' Clamp na nulu bi zadovoljio drugu a razbio prvu -- zato se proveravaju zajedno.
+Private Sub ChkRaspodelaInvarijanta(ByVal iznos As Double, ByVal udeli As Object, _
+                                    ByVal labela As String)
+    Dim p As Object
+    Set p = RaspodeliPoUdelima(iznos, udeli)
+
+    IzvChk Abs(IzvZbirVrednosti(p) - ZaokruziNovac(iznos)) < 0.005, _
+           labela & ": zbir delova = iznos"
+    IzvChk IzvMinVrednost(p) >= 0, labela & ": nijedan deo nije negativan"
+End Sub
+
+Private Function IzvZbirVrednosti(ByVal d As Object) As Double
+    Dim k As Variant
+    For Each k In d.keys
+        IzvZbirVrednosti = IzvZbirVrednosti + CDbl(d(k))
+    Next k
+End Function
+
+Private Function IzvMinVrednost(ByVal d As Object) As Double
+    Dim prvi As Boolean: prvi = True
+    Dim k As Variant
+    For Each k In d.keys
+        If prvi Then
+            IzvMinVrednost = CDbl(d(k))
+            prvi = False
+        ElseIf CDbl(d(k)) < IzvMinVrednost Then
+            IzvMinVrednost = CDbl(d(k))
+        End If
+    Next k
+End Function
+
+' N jednakih udela ("V1".."Vn") -- za provere zaokruzivanja na sitnim iznosima.
+Private Function IzvUdeliJednaki(ByVal n As Long) As Object
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Dim i As Long
+    For i = 1 To n
+        d.Add "V" & i, 1#
+    Next i
+    Set IzvUdeliJednaki = d
 End Function
 
 ' ============================================================
