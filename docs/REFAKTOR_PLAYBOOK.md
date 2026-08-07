@@ -149,10 +149,16 @@ i `ZaokruziNovac`. Nov `RunIzvestajTests` (tvrd gate — `Err.Raise` na pali ass
   `#V|` i dalje broji **vlasnike** bez klase (dve klase ≠ dva vlasnika).
   `ReportManjak` zadržava jedan red po dokumentu ali prijem sabira po klasama;
   `ReportOtkupRobaOM` radi srazmeru unutar klase.
-- **Finansijsko zaokruživanje raspodele:** `RaspodeliPoUdelima` je zaokruživala samo
-  ukupan zbir, pa je 100/3 davalo interne delove 33,3333 → prikaz `33,33 × 3 = 99,99`
-  uz UKUPNO `100,00`. Sada svaki deo ide kroz `ZaokruziNovac` (half-up; VBA `Round`
-  je banker's), a poslednji ključ nosi ostatak **posle** zaokruživanja.
+- **Finansijsko zaokruživanje raspodele (dva kruga).** `RaspodeliPoUdelima` je prvo
+  zaokruživala samo ukupan zbir, pa je 100/3 davalo interne delove 33,3333 → prikaz
+  `33,33 × 3 = 99,99` uz UKUPNO `100,00`. Prva popravka (poslednji ključ nosi ostatak
+  posle zaokruživanja) rešila je zbir ali uvela **negativan cent**: kad prethodni delovi
+  zaokruživanjem pređu cilj, poslednji ode u minus (`0,03` na 5 jednakih vrsta → `−0,01`).
+  Konačno rešenje je **largest-remainder u celim parama** — `Int` idealnog udela + višak
+  para po najvećim ostacima — jer jedino ono drži **obe** invarijante odjednom
+  (zbir == iznos **i** nijedan deo < 0; clamp na nulu bi razbio prvu). Pare u `Double`,
+  ne `Long` (Overflow preko ~21,4 mil.). Vidljiva promena: kod jednakih udela višak pare
+  dobija **prvi** ključ umesto poslednjeg.
 - **Test gate:** `RunIzvestajTests` sada podiže grešku na pali assert (konvencija iz
   RF-14) i dobio je **tri end-to-end testa nad tabelama** (dve zbirne istog broja,
   dva kupca, 900 vs 1500 kg — iz ugla `ReportManjak` i `ReportOtkupRobaOM`; plus Klasa I+II
