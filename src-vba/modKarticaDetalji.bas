@@ -28,6 +28,7 @@ Private mCurOtkupID As String          ' OtkupID trenutno prikazan u panelu (za 
 Private mCurOtpremnicaID As String     ' OtpremnicaID prikazanog reda (za grupni otkupni list)
 Private mCurAmbDokID As String         ' Ambalaza: DokumentID izabranog reda (za stampu po tipu)
 Private mCurAmbDokTip As String        ' Ambalaza: DokumentTip izabranog reda
+Private mCurAmbTip As String           ' Ambalaza: TipAmbalaze izabranog reda (RF-07: kljuc reversa)
 
 ' Dijagnostika (samo kad build ne uspe): jednom po sesiji prikazi razlog.
 Private mDiag As String
@@ -45,6 +46,7 @@ Public Sub KarticaDetalji_Reset()
     mCurOtpremnicaID = ""
     mCurAmbDokID = ""
     mCurAmbDokTip = ""
+    mCurAmbTip = ""
     mDiag = ""
     mDiagShown = False
 End Sub
@@ -128,6 +130,7 @@ Public Sub KarticaDetalji_Clear()
     mCurOtpremnicaID = ""
     mCurAmbDokID = ""
     mCurAmbDokTip = ""
+    mCurAmbTip = ""
     If Not mLst Is Nothing Then mLst.Clear
     If Not mLblTitle Is Nothing Then mLblTitle.caption = "DETALJI OTKUPA (klik na red)"
 End Sub
@@ -153,7 +156,7 @@ Public Sub KarticaDetalji_ShowOtpremnica(ByVal frm As Object, ByVal lst As MSFor
     On Error GoTo EH
     If idx < 0 Then Exit Sub
     mLst.Clear
-    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = ""
+    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = "": mCurAmbTip = ""
     ShowOtpremnicaRow lst, idx, otpID
     Exit Sub
 EH:
@@ -170,6 +173,14 @@ Public Sub KarticaDetalji_CurrentAmbDok(ByRef dokID As String, ByRef dokTip As S
     dokID = mCurAmbDokID
     dokTip = mCurAmbDokTip
 End Sub
+
+' Tip AMBALAZE trenutno prikazanog ambalaza reda ("" ako red nije ambalaza).
+' Revers se stampa po jednom tipu gajbica -- red pregleda je vec grupisan po
+' DokumentID + TipAmbalaze (modIzvestaj.ReportAmbalazePojedinacni), pa je ovo
+' treci deo kljuca za rekonstrukciju (AUD-012 / FM-0029 #4).
+Public Function KarticaDetalji_CurrentAmbTip() As String
+    KarticaDetalji_CurrentAmbTip = mCurAmbTip
+End Function
 
 ' Geometrija panela detalja (za pozicioniranje dugmeta ispod njega). 0 ako panel
 ' jos ne postoji.
@@ -234,7 +245,7 @@ Public Sub KarticaDetalji_ShowForRow(ByVal frm As Object, ByVal lstKartica As MS
     On Error GoTo EH
 
     mLst.Clear
-    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = ""
+    mCurOtkupID = "": mCurOtpremnicaID = "": mCurAmbDokID = "": mCurAmbDokTip = "": mCurAmbTip = ""
 
     If Left$(refKey, 4) = "OTK|" Then
         ShowOtkupDetails Mid$(refKey, 5)
@@ -332,10 +343,11 @@ Private Sub ShowAmbRow(ByVal lst As MSForms.ListBox, ByVal idx As Long, ByVal re
     Else
         mCurAmbDokID = refRest
     End If
+    mCurAmbTip = Trim$(CStr(lst.List(idx, 2)))   ' kol. 2 = TipAmbalaze (sirova vrednost iz ledgera)
     mLblTitle.caption = "DETALJI AMBALA" & ChrW(381) & "E"
     AddPair "Datum", CStr(lst.List(idx, 0))
     AddPair "Mesto", CStr(lst.List(idx, 1))
-    AddPair "Tip ambala" & ChrW(382) & "e", CStr(lst.List(idx, 2))
+    AddPair "Tip ambala" & ChrW(382) & "e", mCurAmbTip
     AddPair "Dokument", CStr(lst.List(idx, 3))
     AddPair "Ulaz (gajbe)", CStr(lst.List(idx, 4))
     AddPair "Izlaz (gajbe)", CStr(lst.List(idx, 5))

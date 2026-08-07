@@ -69,6 +69,16 @@ Private m_curZbirni As Boolean
 Private m_genTabs As Object
 Private m_inUpdateMode As Boolean
 
+' RF-07 (AUD-024) freshness stanje. Status/naslov stampe se grade iz m_cur*
+' (period STVARNO prikazanih podataka), a ne iz txtDatum* polja -- inace stara
+' lista dobije nov period u zaglavlju (FM-0029 #1/#19).
+Private m_hasGenerated As Boolean    ' bar jednom generisano za tekuce m_cur* parametre
+Private m_periodDirty As Boolean     ' txtDatum* promenjen posle poslednjeg "Prikazi"
+Private m_noValidTabs As Boolean     ' kombinacija entitet+rezim nema nijedan dostupan tab
+' RF-07 (FM-0029 #2): poslednja greska lazy generisanja + tab na kom se desila.
+Private m_genFailMsg As String
+Private m_genFailTab As Long
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
@@ -96,6 +106,7 @@ Private Sub UserForm_Activate()
     KarticaDetalji_Reset
     m_ambPageIdx = -1   ' dok se runtime tab "Pregled ambala" & ChrW(382) & "e" ne kreira
     m_otkPageIdx = -1   ' dok se runtime tab "Otkupni listovi" ne kreira
+    m_genFailTab = -1   ' nema neuspelog generisanja
 
     m_IsInitializing = True
     
@@ -448,46 +459,34 @@ End Sub
 ' ZBIRNI/POJEDINACNI
 ' ============================================================
 
+' RF-07 (AUD-024 / FM-0029 #3): vidljivost tabova vodi matrica
+' modIzvestaj.IzvestajTabDostupan, koja prati stvarni dispatch Report* funkcija.
+' Pre toga su zbirni tabovi 5/6/7 bili vidljivi SVIM tipovima entiteta, pa su
+' npr. Kooperanti/Vozaci dobijali kombinacije koje core ne podrzava (prazna
+' lista pod punim naslovom). Runtime tabovi imaju dinamicki indeks i nisu deo
+' matrice -> pale se eksplicitno.
 Private Sub UpdateReportMode()
     m_inUpdateMode = True   ' guard: mpReports.value setovanje ispod okida mpReports_Change
     Dim isPojed As Boolean
     isPojed = tglPojedinacni.value
     cmbEntitet.enabled = isPojed
-    
-    ' Alle erstmal ausblenden
+
+    Dim entKod As String
+    entKod = IzvestajEntitetKod(GetActiveEntitetTip())
+
     Dim pg As Long
     For pg = 0 To mpReports.Pages.count - 1
-        mpReports.Pages(pg).Visible = False
+        mpReports.Pages(pg).Visible = IzvestajTabDostupan(entKod, Not isPojed, pg)
     Next pg
-    
+
     If isPojed Then
-        Select Case GetActiveEntitetTip()
-            Case "Otkupna mesta"
-                mpReports.Pages(0).Visible = True  ' Saldo OM
-                mpReports.Pages(2).Visible = True  ' Otkupljena roba
-                mpReports.Pages(3).Visible = True  ' Ambalaza
-                mpReports.Pages(4).Visible = True  ' Isplata
-                mpReports.Pages(6).Visible = True  ' Prosecna cena
-                If m_otkPageIdx >= 0 Then mpReports.Pages(m_otkPageIdx).Visible = True  ' Otkupni listovi
-            Case "Kupci"
-                mpReports.Pages(1).Visible = True  ' Saldo Kupci
-                mpReports.Pages(2).Visible = True  ' Otkupljena roba
-                mpReports.Pages(3).Visible = True  ' Ambalaza
-                mpReports.Pages(6).Visible = True  ' Prosecna cena
-                mpReports.Pages(7).Visible = True  ' Manjak
-            Case "Vozaci"
-                mpReports.Pages(3).Visible = True  ' Ambalaza
-                mpReports.Pages(7).Visible = True  ' Manjak
-            Case "Kooperanti"
-                mpReports.Pages(8).Visible = True  ' Kartica
-                If m_ambPageIdx >= 0 Then mpReports.Pages(m_ambPageIdx).Visible = True  ' Pregled ambalaze
-        End Select
-    Else
-        mpReports.Pages(5).Visible = True  ' Zbirni
-        mpReports.Pages(6).Visible = True  ' Prosecna cena
-        mpReports.Pages(7).Visible = True  ' Manjak
+        If entKod = "OM" And m_otkPageIdx >= 0 Then
+            mpReports.Pages(m_otkPageIdx).Visible = True       ' Otkupni listovi
+        ElseIf entKod = "Kooperant" And m_ambPageIdx >= 0 Then
+            mpReports.Pages(m_ambPageIdx).Visible = True       ' Pregled ambalaze
+        End If
     End If
-    
+
     ' posle Visible=True podesavanja:
     Dim firstVisible As Long
     firstVisible = -1
@@ -499,7 +498,12 @@ Private Sub UpdateReportMode()
     Next pg
     If firstVisible >= 0 Then mpReports.value = firstVisible
 
+    ' Nijedan dostupan tab (npr. Kooperanti + Zbirni) -> vidljiva poruka umesto
+    ' prazne forme bez objasnjenja.
+    m_noValidTabs = (firstVisible < 0)
+
     m_inUpdateMode = False
+    UpdateStatusLabel
 End Sub
 
 ' ============================================================
@@ -561,34 +565,77 @@ Private Sub SetupListBoxes()
     LayoutSaldoOMHeaders
 End Sub
 
-Private Sub UpdateStatusLabel()
+' Lista aktivnog taba (staticki tabovi + runtime "Pregled ambalaze"/"Otkupni
+' listovi"); Nothing kad tab nema listu. Jedno mesto istine za UpdateStatusLabel
+' i za ciscenje liste posle neuspelog generisanja (RF-07).
+Private Function ActiveReportList() As MSForms.ListBox
     On Error Resume Next
-    
-    Dim msg As String
     Dim activeTab As Long
     activeTab = mpReports.value
-    
-    Dim activeList As MSForms.ListBox
-    
+    If activeTab < 0 Then Exit Function
+
+    Dim lst As MSForms.ListBox
     Select Case activeTab
-        Case 0:    Set activeList = lstSaldoOM
-        Case 1:    Set activeList = lstSaldoKupci
-        Case 2:    Set activeList = lstOtkupRoba
-        Case 3:    Set activeList = lstAmbalaza
-        Case 4:    Set activeList = lstIsplata
-        Case 5:    Set activeList = lstZbirni
-        Case 6:    Set activeList = lstProsecnaCena
-        Case 7:    Set activeList = lstManjak
-        Case 8:    Set activeList = lstKartica
+        Case 0:    Set lst = lstSaldoOM
+        Case 1:    Set lst = lstSaldoKupci
+        Case 2:    Set lst = lstOtkupRoba
+        Case 3:    Set lst = lstAmbalaza
+        Case 4:    Set lst = lstIsplata
+        Case 5:    Set lst = lstZbirni
+        Case 6:    Set lst = lstProsecnaCena
+        Case 7:    Set lst = lstManjak
+        Case 8:    Set lst = lstKartica
     End Select
 
-    If activeList Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
-        Set activeList = m_lstAmb
+    If lst Is Nothing And m_ambPageIdx >= 0 And activeTab = m_ambPageIdx Then
+        Set lst = m_lstAmb
     End If
 
-    If activeList Is Nothing And m_otkPageIdx >= 0 And activeTab = m_otkPageIdx Then
-        Set activeList = m_lstOtk
+    If lst Is Nothing And m_otkPageIdx >= 0 And activeTab = m_otkPageIdx Then
+        Set lst = m_lstOtk
     End If
+
+    Set ActiveReportList = lst
+End Function
+
+' Period STVARNO prikazanih podataka (m_curOd/m_curDo), prazno dok se izvestaj
+' nije nijednom generisao. Nikad txtDatum* -- ta polja opisuju sledeci "Prikazi".
+Private Function PrikazanPeriod() As String
+    If Not m_hasGenerated Then Exit Function
+    PrikazanPeriod = Format$(m_curOd, "d.m.yyyy") & " - " & Format$(m_curDo, "d.m.yyyy")
+End Function
+
+Private Sub UpdateStatusLabel()
+    On Error Resume Next
+
+    ' 1) Kombinacija entitet + rezim uopste nema izvestaj (FM-0029 #3).
+    If m_noValidTabs Then
+        lblStatus.caption = Poruka("RPT_MSG_NEMA_DOSTUPNOG_IZVESTAJA")
+        lblStatus.ForeColor = CLR_WARNING()
+        Exit Sub
+    End If
+
+    ' 2) Poslednje generisanje BAS ovog taba je palo (FM-0029 #2) -- lista je
+    '    ocisceno prazna, pa bi inace pisalo neutralno "Nema podataka".
+    If Len(m_genFailMsg) > 0 And mpReports.value = m_genFailTab Then
+        lblStatus.caption = Poruka("RPT_MSG_IZVESTAJ_NIJE_GENERISAN")
+        lblStatus.ForeColor = CLR_ERROR()
+        Exit Sub
+    End If
+
+    ' 3) Period je promenjen a "Prikazi" nije kliknut -- lista jos drzi STARE
+    '    podatke, pa status mora da kaze da nije osvezeno (FM-0029 #1).
+    If m_periodDirty Then
+        lblStatus.caption = Poruka("RPT_MSG_NIJE_OSVEZENO")
+        If m_hasGenerated Then
+            lblStatus.caption = lblStatus.caption & " | prikazano: " & PrikazanPeriod()
+        End If
+        lblStatus.ForeColor = CLR_WARNING()
+        Exit Sub
+    End If
+
+    Dim activeList As MSForms.ListBox
+    Set activeList = ActiveReportList()
 
     If activeList Is Nothing Then
         lblStatus.caption = "Spreman za izve" & ChrW(353) & "taj"
@@ -597,12 +644,27 @@ Private Sub UpdateStatusLabel()
         lblStatus.caption = "Nema podataka za izabran filter"
         lblStatus.ForeColor = TXT_MUTED()
     Else
-        lblStatus.caption = activeList.ListCount & " redova ucitano | Period: " & _
-                            txtDatumOd.value & " - " & txtDatumDo.value
+        lblStatus.caption = activeList.ListCount & " redova ucitano | Period: " & PrikazanPeriod()
         lblStatus.ForeColor = CLR_SUCCESS()
     End If
-    
+
     On Error GoTo 0
+End Sub
+
+' RF-07 (FM-0029 #1): izmena datuma bez ponovnog "Prikazi" ostavlja na ekranu
+' podatke starog perioda. Flag se cisti tek u btnUnos_Click (stvarno generisanje).
+Private Sub txtDatumOd_Change()
+    MarkPeriodDirty
+End Sub
+
+Private Sub txtDatumDo_Change()
+    MarkPeriodDirty
+End Sub
+
+Private Sub MarkPeriodDirty()
+    If m_IsInitializing Then Exit Sub
+    m_periodDirty = True
+    UpdateStatusLabel
 End Sub
 
 ' ============================================================
@@ -624,13 +686,7 @@ Private Sub btnUnos_Click()
 
     ' Entitet tip je uvek potreban (OM/Kupac/Vozac),
     ' entitetID je potreban samo za POJEDINACNI
-    Select Case GetActiveEntitetTip()
-        Case "Otkupna mesta": entitetTip = "OM"
-        Case "Kupci":         entitetTip = "Kupac"
-        Case "Vozaci":        entitetTip = "Vozac"
-        Case "Kooperanti":    entitetTip = "Kooperant"
-        Case Else:            entitetTip = "OM"
-    End Select
+    entitetTip = IzvestajEntitetKod(GetActiveEntitetTip())
 
     If Not zbirni Then
         If cmbEntitet.value = "" Then
@@ -664,6 +720,13 @@ Private Sub btnUnos_Click()
     If m_genTabs Is Nothing Then Set m_genTabs = CreateObject("Scripting.Dictionary")
     m_genTabs.RemoveAll   ' novi parametri -> svi tabovi ponovo prljavi
 
+    ' RF-07: od ovog trenutka m_cur* opisuju STVARNO prikazane podatke, pa
+    ' status/stampa smeju da ih koriste kao period.
+    m_hasGenerated = True
+    m_periodDirty = False
+    m_genFailMsg = ""
+    m_genFailTab = -1
+
     GenerateActivePage
     Exit Sub
 
@@ -684,6 +747,13 @@ Private Sub GenerateActivePage()
     If Not mpReports.Pages(idx).Visible Then Exit Sub
     If m_genTabs.Exists(CStr(idx)) Then Exit Sub
 
+    ' Nov pokusaj za ovaj tab -> zaboravi prethodnu gresku (inace bi status
+    ' ostao crven i posle uspesnog generisanja).
+    If m_genFailTab = idx Then
+        m_genFailMsg = ""
+        m_genFailTab = -1
+    End If
+
     Application.ScreenUpdating = False
     BeginTableCache
     On Error GoTo CleanFail
@@ -694,11 +764,33 @@ Private Sub GenerateActivePage()
 CleanExit:
     EndTableCache
     Application.ScreenUpdating = True
+    ' RF-07 (AUD-024 / FM-0029 #2): greska lazy generisanja vise nije tiha.
+    ' Prijava ide TEK ovde -- posle EndTableCache i ScreenUpdating=True, van
+    ' aktivnog error handlera (MsgBox pod `Resume` je nepouzdan).
+    If Len(m_genFailMsg) > 0 And m_genFailTab = idx Then ShowGenFailure
     Exit Sub
 
 CleanFail:
+    ' Tab NIJE upisan u m_genTabs -> ostaje prljav i pokusace ponovo.
+    m_genFailMsg = Err.description
+    If Len(m_genFailMsg) = 0 Then m_genFailMsg = "nepoznata gre" & ChrW(353) & "ka"
+    m_genFailTab = idx
     LogErr "frmIzvestaj.GenerateActivePage"
     Resume CleanExit
+End Sub
+
+' Neuspelo generisanje: stara lista se BRISE (inace na ekranu ostanu podaci
+' drugog entiteta/perioda uz zeleni status), status postaje crven i greska se
+' prijavljuje operateru.
+Private Sub ShowGenFailure()
+    On Error Resume Next
+    Dim lst As MSForms.ListBox
+    Set lst = ActiveReportList()
+    If Not lst Is Nothing Then lst.Clear
+    KarticaDetalji_Clear
+    UpdateStatusLabel
+    MsgBox Poruka("RPT_ERR_GENERISANJE_IZVESTAJA") & vbCrLf & vbCrLf & m_genFailMsg, _
+           vbCritical, APP_NAME
 End Sub
 
 ' Mapiranje pageIdx -> odgovarajuci Generate* (sa zapamcenim parametrima). Indeksi
@@ -732,6 +824,12 @@ Private Sub GenerateTabForPage(ByVal idx As Long)
 End Sub
 
 Private Sub mpReports_Change()
+    ' RF-07 (AUD-027 / FM-0030 #1 + FM-0029 #15): print target panela "Detalji"
+    ' je modul-stanje (modKarticaDetalji), a NIJE vezan za tab/listu/red. Bez
+    ' ciscenja je red izabran na Kartici prezivljavao prelaz na Ambalazu, pa je
+    ' "Stampaj dokument" stampao dokument SA DRUGOG taba (cross-tab print).
+    KarticaDetalji_Clear
+
     UpdateStatusLabel
     ' Deljeni "Detalji" panel: Kartica (8), "Otkupni listovi", Otkupljena roba (2),
     ' Ambalaza (3).
@@ -1107,7 +1205,10 @@ Private Sub GenerateKarticaReport(ByVal entitetID As String, _
     ime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Ime"))
     prezime = CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", entitetID, "Prezime"))
     lblKarticaKoop.caption = "KARTICA: " & ime & " " & prezime & " (" & entitetID & ")"
-    lblKarticaPeriod.caption = "Period: " & txtDatumOd.value & " - " & txtDatumDo.value
+    ' Period iz ARGUMENATA (= m_cur*), ne iz txtDatum* polja -- naslov kartice
+    ' mora da opisuje podatke koji se ispod njega crtaju (RF-07 / FM-0029 #1).
+    lblKarticaPeriod.caption = "Period: " & Format$(datumOd, "d.m.yyyy") & _
+                               " - " & Format$(datumDo, "d.m.yyyy")
     
     Dim data As Variant
     data = ReportKarticaKooperanta(entitetID, datumOd, datumDo)
@@ -1227,15 +1328,23 @@ Private Sub btnStampajKarticu_Click()
         Exit Sub
     End If
     
+    ' RF-07 (AUD-024 / FM-0029 #19): PDF kartice se stampa za period PRIKAZANIH
+    ' podataka (m_curOd/m_curDo). Pre toga je citao txtDatum*, pa je izmena polja
+    ' bez "Prikazi" davala PDF drugog perioda od onog na ekranu.
+    If Not m_hasGenerated Then
+        MsgBox Poruka("RPT_MSG_PRVO_PRIKAZI"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim koopID As String
     koopID = ExtractIDFromDisplay(cmbEntitet.value)
 
     ' Tab-aware: na runtime tabu "Pregled ambalaze" -> kartica ambalaze;
     ' inace (Kartica) -> finansijska kartica kooperanta (kao do sada).
     If m_ambPageIdx >= 0 And mpReports.value = m_ambPageIdx Then
-        PrintKarticaAmbalazePDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+        PrintKarticaAmbalazePDF koopID, m_curOd, m_curDo
     Else
-        PrintKarticaPDF koopID, CDate(txtDatumOd.value), CDate(txtDatumDo.value)
+        PrintKarticaPDF koopID, m_curOd, m_curDo
     End If
     Exit Sub
 
@@ -1258,9 +1367,16 @@ End Sub
 ' ============================================================
 Private Sub btnStampaj_Click()
     On Error GoTo EH
+
+    ' Bez generisanog izvestaja nema ni perioda za zaglavlje (RF-07).
+    If Not m_hasGenerated Then
+        MsgBox Poruka("RPT_MSG_PRVO_PRIKAZI"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim activeTab As Long
     activeTab = mpReports.value
-    
+
     Dim lst As MSForms.ListBox
     Dim title As String
     Dim headers As Variant
@@ -1439,10 +1555,13 @@ Private Sub btnStampaj_Click()
     Else
         entName = cmbEntitet.value
     End If
+    ' RF-07 (AUD-024 / FM-0029 #1): naslov nosi period PRIKAZANIH podataka
+    ' (m_cur*, kroz PrikazanPeriod), ne trenutni sadrzaj txtDatum* polja -- inace
+    ' se odstampa stara lista pod novim periodom.
     Dim fullTitle As String
     fullTitle = title & " - " & entLabel & ": " & entName & _
-            " (" & txtDatumOd.value & " - " & txtDatumDo.value & ")"
-    
+            " (" & PrikazanPeriod() & ")"
+
     PrintIzvestaj data, fullTitle, headers
     Exit Sub
 EH:
@@ -2113,7 +2232,10 @@ Private Sub m_btnStampajAmb_Click()
         Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
              DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
             ' OM<->kooperant / OM<->firma kretanje (prazne gajbe) -> revers.
-            StampajReversAmbDok dokID, dokTip
+            ' Tip ambalaze IZABRANOG reda je deo kljuca (red pregleda je vec
+            ' grupisan po DokumentID + TipAmbalaze) -- bez njega bi se vise
+            ' tipova gajbica jednog dokumenta odstampalo kao jedan (AUD-012).
+            StampajReversAmbDok dokID, dokTip, KarticaDetalji_CurrentAmbTip()
         Case Else
             MsgBox "Za tip dokumenta '" & dokTip & "' " & ChrW(353) & "tampa nije dostupna iz ovog pregleda.", _
                    vbInformation, APP_NAME
@@ -2127,9 +2249,21 @@ End Sub
 ' Revers (OM<->kooperant kretanje ambalaze) za izabrani ambalaza red. Argumenti se
 ' rekonstruisu iz dve noge ledger-a (Kooperant + Stanica) koje dele DokumentID
 ' (vazi i za samostalni revers i za nogu knjizenu uz otkup). prijem=True za povrat.
-Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String)
+'
+' RF-07 (AUD-012 / FM-0029 #4/#5/#16):
+'   - STORNIRANI redovi se iskljucuju (`ExcludeStornirano`) -- pre toga je
+'     revers stampao i kolicine koje su storno-om ponistene;
+'   - tip ambalaze je DEO KLJUCA (`ReversRedPripada`). Ranije se tip uzimao sa
+'     prvog reda dokumenta a kolicine sabirale preko SVIH tipova, pa je dokument
+'     sa dve vrste gajbica davao jedan revers sa pogresnim tipom i zbirom;
+'   - vise od dve noge po tipu (duplikat / vise generacija) se prijavljuje
+'     operateru umesto da se tiho sabere.
+Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String, _
+                                ByVal tipSel As String)
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Sub
+    d = ExcludeStornirano(d, TBL_AMBALAZA)
     If Not IsArray(d) Then Exit Sub
     Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
     Dim cEntTip As Long, cDok As Long, cDokTip As Long, cVoz As Long
@@ -2151,25 +2285,51 @@ Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String)
     Dim kolAmb As Long
     Dim revVozacID As String
     Dim i As Long
+
+    ' Tip ambalaze = tip IZABRANOG reda pregleda. Fallback (poziv bez tipa):
+    ' tip prvog reda dokumenta -- i tada se sabira SAMO taj tip, nikad mesavina.
+    tipAmb = Trim$(tipSel)
+    If Len(tipAmb) = 0 Then
+        For i = 1 To UBound(d, 1)
+            If Trim$(CStr(d(i, cDok))) = Trim$(dokID) And _
+               Trim$(CStr(d(i, cDokTip))) = Trim$(dokTip) Then
+                tipAmb = Trim$(CStr(d(i, cTip)))
+                Exit For
+            End If
+        Next i
+    End If
+
+    Dim nogeKoop As Long, nogeOM As Long
     For i = 1 To UBound(d, 1)
-        If CStr(d(i, cDok)) = dokID And CStr(d(i, cDokTip)) = dokTip Then
+        If ReversRedPripada(CStr(d(i, cDok)), CStr(d(i, cDokTip)), CStr(d(i, cTip)), _
+                            dokID, dokTip, tipAmb) Then
             If Not haveDatum And IsDate(d(i, cDat)) Then
                 datum = CDate(d(i, cDat)): haveDatum = True
             End If
-            If Len(tipAmb) = 0 Then tipAmb = CStr(d(i, cTip))
             Dim et As String: et = CStr(d(i, cEntTip))
             If et = "Stanica" Then
                 omID = CStr(d(i, cEnt))
+                nogeOM = nogeOM + 1
                 If isFirma Then
                     If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
                     If cVoz > 0 And Len(revVozacID) = 0 Then revVozacID = CStr(d(i, cVoz))
                 End If
             ElseIf et = "Kooperant" Then
                 koopID = CStr(d(i, cEnt))
+                nogeKoop = nogeKoop + 1
                 If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
             End If
         End If
     Next i
+
+    ' Ocekivano je po JEDNA noga sa svake strane (FM-0029 #16). Vise od toga =
+    ' duplikat ili vise generacija istog dokumenta -> zbir je verovatno naduvan.
+    If nogeOM > 1 Or nogeKoop > 1 Then
+        If MsgBox(Poruka("RPT_MSG_REVERS_VISE_NOGU") & vbCrLf & vbCrLf & _
+                  "OM: " & nogeOM & " | kooperant: " & nogeKoop & vbCrLf & _
+                  Poruka("RPT_MSG_NASTAVITI_STAMPU"), _
+                  vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    End If
 
     If isFirma Then
         If Len(Trim$(omID)) = 0 Then

@@ -176,13 +176,40 @@ operatori su literali iz podržanog skupa, nijedna report putanja ne zavisi od
 `Case Else`; grana je nedostižna u produkciji → flagovano u `KNOWN_ISSUES`, scope
 se ne širi (fix dira ceo `ExcludeStornirano` sloj).
 
-### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M]
-**Fajlovi:** `frmIzvestaj.frm`, `modKarticaDetalji.bas`.
+### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M] — ✅ urađeno
+**Fajlovi:** `frmIzvestaj.frm`, `modIzvestaj.bas`, `modKarticaDetalji.bas`, `modPoruke.bas`, `modIzvestajTests.bas`.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
 `CleanFail` čisti listu + vidljiva greška; zbirni tabovi 5/6/7 samo za validne tipove;
 `StampajReversAmbDok`: `ExcludeStornirano` + tip ambalaže u match; `KarticaDetalji_Clear`
-na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15, FM-0030 #1).
+na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, FM-0030 #1).
 **Regression:** ručni prolaz kroz tabove + revers štampa za slučaj sa storniranim redom.
+
+**Naučeno (RF-07):**
+- **Re-verifikacija pre koda (§2.7):** svih pet nalaza je re-lociran po IMENU posle RF-06
+  (linije iz audita v2.24.0 su pomerene) i **svi se i dalje reprodukuju** — RF-06 je dirao
+  `frmIzvestaj` samo u `Generate*Report` prikazu oznake `nema prijema`.
+- **`MsgBox` pod `Resume` se ne radi.** Prijava greške iz `CleanFail` bloka ide **posle**
+  `Resume CleanExit` (u samom `CleanExit`, kad su `EndTableCache` i `ScreenUpdating=True`
+  već odrađeni). Poruka se prenosi kroz `m_genFailMsg`/`m_genFailTab`, ne kroz `Err`
+  (`Resume` briše `Err`). Isti razlog zašto EH u projektu prvo prepiše `errNum/errDesc/errSrc`.
+- **Tab-matrica mora da fiksira i ono što OSTAJE.** Test `T_TabMatrica` ne proverava samo
+  da nevalidne kombinacije nestanu, nego i **ceo pojedinačni režim** — prelazak sa hardkodiranih
+  `Pages(n).Visible = True` na matricu je tačno ona izmena koja može tiho da skloni ispravan
+  tab. Matrica je izvedena iz `Select Case`-ova u `Report*`, ne iz zatečenog UI-ja.
+- **Ključ reversa je trojka, ne par.** `ReportAmbalazePojedinacni` red pregleda već grupiše
+  po `DokumentID|TipAmbalaze`, pa je jedini konzistentan ključ za rekonstrukciju
+  `DokumentID + DokumentTip + TipAmbalaze`. Prazan tip je **legitimna grupa** (red bez tipa),
+  ne wildcard — inače bi prazan tip pokupio sve tipove i vratio baš onaj bug koji se zatvara.
+- **`_Change` handler na `.frx` kontroli nije `WithEvents`.** Zamka #11 se odnosi isključivo na
+  `Private WithEvents` **deklaracije**; obični `txtDatumOd_Change` je isti obrazac kao zatečeni
+  `cmbEntitet_Change`/`lstKartica_Click` i ne dira code-merge. (Forme su i inače reinstall-only
+  zbog module-level `As MSForms.*` — zamka #20.)
+- **Novi `Poruka()` ključevi = obavezan `EnsurePoruke` posle importa.** RF-05/RF-06/RF-28 su svi
+  bili „bez novih ključeva"; RF-07 uvodi 7, pa release note to mora eksplicitno da nosi —
+  bez `EnsurePoruke` status i poruke prikazuju `[KLJUC]`.
+**Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
+datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
+svi P2/P3 van zadatog obima paketa.
 
 ### RF-08 — modFaktura + faktura štampa [Wave 2 · S/M]
 **Fajlovi:** `modFaktura.bas`, `modPrint.bas`.
@@ -383,7 +410,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
 | RF-06 | modIzvestaj brojke | 🟢 PR #175 | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14) + posledica AUD-052 u report sloju. **`Compile` čist, `RunIzvestajTests` 100%** (uklj. 3 e2e nad tabelama). Ostaje uporedni pregled izveštaja pre/posle — brojke se namerno menjaju |
-| RF-07 | frmIzvestaj + revers | ⬜ | — | |
+| RF-07 | frmIzvestaj + revers | 🟢 grana | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
 | RF-08 | Faktura + štampa | ⬜ | — | |
 | RF-09 | Banka import/map | ⬜ | — | |
 | RF-10 | Banka export | ⬜ | — | |

@@ -176,7 +176,7 @@ Paket je „gotov" tek kad je **sve** ispunjeno:
 | M2 SEF + agrohemija cena | ✅ gotov | — | 2026-07/08 | RF-21 (#152, P0 409) + RF-27 (#154) |
 | M3 Storno | 🟡 1/3 | — | 2026-08 | RF-03 ✅ (#167, +AUD-049 storno izvoda); ostaju RF-04, RF-05. re-verify vs aktuelni main |
 | M4 Sync jezgro | ⬜ | — | — | RF-14+RF-28 zajedno |
-| M5 Izveštaji i faktura | 🟡 1/3 | — | 2026-08 | RF-06 🟢 PR #175 (AUD-023 zatvoren; `Compile` + `RunIzvestajTests` zeleni, ostaje uporedni pregled izveštaja); ostaju RF-07, RF-08 |
+| M5 Izveštaji i faktura | 🟡 2/3 | — | 2026-08 | RF-06 ✅ merged PR #175 (AUD-023); RF-07 🟢 grana `claude/rf-07-izvestaj-freshness-u0jy43` (AUD-024 + AUD-012 zatvoreni, AUD-027 delimično — cross-tab print; `RunIzvestajTests` proširen sa 3 grupe, ostatak operater-smoke); ostaje RF-08 |
 | M6 SEF UX + banka | ⬜ | — | — | |
 | M7 Otkup UI i palete | ⬜ | — | — | |
 | M8 Infra + cenovnik + E2E | ⬜ | — | — | |

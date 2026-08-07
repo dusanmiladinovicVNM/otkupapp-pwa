@@ -59,6 +59,9 @@ Public Sub RunIzvestajTests()
     T_PrijemVlasnikRazresenje
     T_UplataSrazmernoPoVrsti
     T_DispatchNepodrzanTip
+    T_EntitetKod
+    T_TabMatrica
+    T_ReversKljucPoTipu
 
     ' --- End-to-end nad tabelama (u transakciji, UVEK rollback) ---
     ' Seam testovi ne mogu da uhvate gresku u samom table-join-u, a upravo je
@@ -688,6 +691,116 @@ Private Sub T_DispatchNepodrzanTip()
     dummy = ReportProsecnaCena("OM", "", od, doD)
     dummy = ReportManjak("", "", od, doD)
     IzvChk True, S & "podrzane kombinacije se i dalje izvrsavaju bez greske"
+End Sub
+
+' --- RF-07 (FM-0029 #3): UI labela entiteta -> kod za Report* dispatch ---
+Private Sub T_EntitetKod()
+    Const S As String = "Entitet kod: "
+
+    IzvChkEqText IzvestajEntitetKod("Otkupna mesta"), "OM", S & "Otkupna mesta -> OM"
+    IzvChkEqText IzvestajEntitetKod("Kupci"), "Kupac", S & "Kupci -> Kupac"
+    IzvChkEqText IzvestajEntitetKod("Vozaci"), "Vozac", S & "Vozaci -> Vozac"
+    IzvChkEqText IzvestajEntitetKod("Kooperanti"), "Kooperant", S & "Kooperanti -> Kooperant"
+    IzvChkEqText IzvestajEntitetKod("nepoznato"), "OM", S & "nepoznata labela -> OM (fallback kao ranije)"
+End Sub
+
+' --- RF-07 (AUD-024 / FM-0029 #3): matrica dostupnih tabova ---
+' Invarijanta: tab se nudi SAMO ako odgovarajuci Report* ima granu za taj tip.
+' Regresija (npr. vracanje tabova 5/6/7 svim tipovima u zbirnom rezimu) obara
+' ove assert-e.
+Private Sub T_TabMatrica()
+    Const S As String = "Tab matrica: "
+
+    ' Zbirni rezim -- nevalidne kombinacije koje su pre RF-07 bile ponudjene.
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_ZBIRNI) = False, _
+           S & "zbirni Kooperant: Zbirni NE (ReportZbirni nema granu)"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Kooperant: Prosecna cena NE"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_MANJAK) = False, _
+           S & "zbirni Kooperant: Manjak NE"
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Vozac: Prosecna cena NE (ReportProsecnaCena nema vozacku granu)"
+
+    ' Zbirni rezim -- validne kombinacije moraju da ostanu.
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_ZBIRNI), _
+           S & "zbirni Vozac: Zbirni DA"
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_MANJAK), _
+           S & "zbirni Vozac: Manjak DA"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ZBIRNI), S & "zbirni OM: Zbirni DA"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_PROSECNA_CENA), S & "zbirni OM: Prosecna cena DA"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_MANJAK), S & "zbirni OM: Manjak DA"
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_ZBIRNI), S & "zbirni Kupac: Zbirni DA"
+
+    ' Zbirni rezim NE sme da nudi pojedinacne tabove.
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_SALDO_OM) = False, _
+           S & "zbirni OM: Saldo OM NE"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ISPLATA) = False, _
+           S & "zbirni OM: Isplata NE"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_KARTICA) = False, _
+           S & "zbirni Kooperant: Kartica NE"
+
+    ' Pojedinacni rezim -- zatecena (validna) matrica se ne sme suziti.
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_SALDO_OM), S & "OM: Saldo OM DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_OTKUP_ROBA), S & "OM: Otkupljena roba DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_AMBALAZA), S & "OM: Ambalaza DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_ISPLATA), S & "OM: Isplata DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_PROSECNA_CENA), S & "OM: Prosecna cena DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_SALDO_KUPCI) = False, S & "OM: Saldo Kupci NE"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_MANJAK) = False, S & "OM: Manjak NE"
+
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_SALDO_KUPCI), S & "Kupac: Saldo Kupci DA"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_MANJAK), S & "Kupac: Manjak DA"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_SALDO_OM) = False, S & "Kupac: Saldo OM NE"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_ISPLATA) = False, S & "Kupac: Isplata NE"
+
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_AMBALAZA), S & "Vozac: Ambalaza DA"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_MANJAK), S & "Vozac: Manjak DA"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "Vozac: Prosecna cena NE"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_OTKUP_ROBA) = False, _
+           S & "Vozac: Otkupljena roba NE"
+
+    IzvChk IzvestajTabDostupan("Kooperant", False, IZV_TAB_KARTICA), S & "Kooperant: Kartica DA"
+    IzvChk IzvestajTabDostupan("Kooperant", False, IZV_TAB_AMBALAZA) = False, _
+           S & "Kooperant: Ambalaza (staticki tab) NE"
+
+    ' Runtime tabovi (dinamicki indeks preko statickih) nisu deo matrice.
+    IzvChk IzvestajTabDostupan("Kooperant", False, 9) = False, S & "runtime tab nije u matrici"
+    IzvChk IzvestajTabDostupan("OM", True, 10) = False, S & "runtime tab nije u matrici (zbirni)"
+End Sub
+
+' --- RF-07 (AUD-012 / FM-0029 #4): kljuc reversa nosi i TIP AMBALAZE ---
+Private Sub T_ReversKljucPoTipu()
+    Const S As String = "Revers kljuc: "
+
+    ' Isti dokument, DVA tipa gajbica -> samo izabrani tip pripada reversu.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
+           S & "isti dokument + isti tip -> pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Plasticna", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "isti dokument + DRUGI tip -> NE pripada (bez mesanja tipova)"
+
+    ' Kljuc i dalje trazi isti dokument i isti tip dokumenta.
+    IzvChk ReversRedPripada("OTK-2", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "drugi DokumentID -> NE pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_ULAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "drugi DokumentTip -> NE pripada"
+
+    ' Slobodan unos sifarnika: razmaci i velicina slova ne smeju da razbiju match.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, " letvarica ", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
+           S & "tip: trim + case-insensitive"
+
+    ' Prazan tip je legitimna grupa (red pregleda bez tipa), ne wildcard.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
+           S & "prazan tip sa obe strane -> pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "") = False, _
+           S & "prazan trazeni tip NIJE wildcard"
 End Sub
 
 ' ============================================================
