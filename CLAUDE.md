@@ -75,6 +75,15 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 - Pri merge-u: čist git-merge može dati VBA compile grešku (dupli `Public`
   `Sub`/`Function`/`Const` → „Ambiguous name"). Posle merge-a uradi
   `Debug → Compile VBAProject` i proveri duple definicije.
+- **Rezervisane reči — VBA je case-insensitive.** Ime promenljive koje se
+  case-insensitive poklapa sa ključnom reči obara compile, i kad se razlikuje po
+  velikim slovima: `Dim eNum As Long` = `Enum` → greška (RF-06). Isto važi za
+  `type`, `error`, `name`, `line`, `date`, `len`, `input`, `print`, `set`, `get`,
+  `event`, `property`, `option`, `base`, `text`, `time`, `mid`, `local`, `read`…
+  Za EH varijable koristi postojeću konvenciju projekta: **`errNum` / `errDesc` /
+  `errSrc`** (`modStorno.LogAndReraise`, `modAgrohemija`, `modBankaImport`), ne
+  izmišljaj `eNum`/`eSrc`. Grep pre commita nad novim `Dim`/`Const`/`ByVal`
+  imenima — CI ne kompajlira VBA, pa ovo hvata tek operater u VBE-u.
 - **Encoding (posle lokalizacije — `1jj9xw` / v2.6): VBA izvori (`.bas`/`.cls`/`.frm`/`.doccls`) su sada 100% ASCII i MORAJU ostati ASCII.** Sva dijakritika je izmeštena u runtime katalog (`modPoruke` → `Poruka("KLJUC")`, tekst se gradi sa `ChrW`), pa u izvoru nema ne-ASCII bajtova koje bi Edit/Write iskvario.
   - Pošto su fajlovi ASCII, **Edit/Write je sada bezbedan** na `.bas`/`.cls`/`.frm` (latin-1 round-trip više nije potreban). `file <fajl>` treba da kaže „ASCII text“.
   - **NIKAD ne upisuj ne-ASCII znak direktno u VBA izvor** — ni `š ž č ć đ Š Ž Č Ć Đ`, ni nemačke `ä ö ü ß`, ni tipografske `— « » • „ “`. Time fajl ponovo postaje UTF-8/mešan, a `ImportAllVBA` ga učita kao smeće (ista klasa greške kao `f08a0ee`).

@@ -99,17 +99,20 @@ Public Sub RunIzvestajTests()
     Exit Sub
 
 EH:
-    Dim eNum As Long, eDesc As String, eSrc As String
-    eNum = Err.Number: eDesc = Err.description: eSrc = Err.SOURCE
+    ' errNum/errDesc/errSrc -- ista imena kao u ostatku projekta (modStorno
+    ' LogAndReraise, modAgrohemija, modBankaImport). NE "eNum": VBA je
+    ' case-insensitive, pa se `eNum` poklapa sa rezervisanom reci `Enum`.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
 
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
     Debug.Print String(70, "!")
-    Debug.Print "RunIzvestajTests ERROR | " & eNum & " | " & eSrc & " | " & eDesc
+    Debug.Print "RunIzvestajTests ERROR | " & errNum & " | " & errSrc & " | " & errDesc
     Debug.Print String(70, "!")
-    Err.Raise eNum, eSrc, eDesc
+    Err.Raise errNum, errSrc, errDesc
 End Sub
 
 ' --- (a) FM-0028 #3/#9: isplata pripada stanici po OMID-u REDA ---
