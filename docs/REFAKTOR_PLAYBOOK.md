@@ -179,6 +179,7 @@ se ne širi (fix dira ceo `ExcludeStornirano` sloj).
 ### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M] — ✅ urađeno
 **Fajlovi:** `frmIzvestaj.frm`, `modIzvestaj.bas`, `modKarticaDetalji.bas`, `modPoruke.bas`, `modIzvestajTests.bas`.
 **Review (REQUEST CHANGES na `71355a4`) — sve tri stavke prihvaćene i ispravljene:** matrica vs core na `Kupac+Zbirni+Prosečna cena`, invalidacija konteksta pri promeni entiteta bez dostupnog izbora, kanonski ključ tipa ambalaže.
+**Review 2 (REQUEST CHANGES na `4f7b600`) — prihvaćeno:** grupni ključ pregleda ambalaže dopunjen `DokumentTip`-om (uz-otkup revers je bio nedostupan za štampu).
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
 `CleanFail` čisti listu + vidljiva greška; zbirni tabovi 5/6/7 samo za validne tipove;
 `StampajReversAmbDok`: `ExcludeStornirano` + tip ambalaže u match; `KarticaDetalji_Clear`
@@ -230,6 +231,16 @@ na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, F
   vbTextCompare` — „Letvarica"/„letvarica" dalo bi dva reda pregleda a svaki revers zbir oba,
   tj. tiho vraćanje baš onog mešanja koje se zatvara. Rešenje je jedan `AmbTipKljuc` koji zovu
   obe putanje.
+- **Izjednačavanje matchera i grupisanja znači CEO ključ, ne samo normalizaciju delova.**
+  Prva runda review-a izjednačila je normalizaciju tipa ambalaže (`AmbTipKljuc`) — ali je
+  grupni ključ pregleda i dalje bio `DokumentID + TipAmbalaze`, dok matcher traži
+  `DokumentID + DokumentTip + TipAmbalaze`. Kolizija je na **normalnoj putanji**:
+  `SaveOtkup` namerno piše isti `otkupID` i isti `tipAmb` pod `Otkup` (primljene pune) i
+  pod `OM-Izlaz-Koop` (izdate prazne), pa su se spajali u jedan red čiji ref-ključ nosi tip
+  prvog zapisa — i revers izdate ambalaže **nije se mogao odštampati iz pregleda**.
+  Pouka: kad se dve putanje proglase saglasnim, to mora biti svojstvo koda (isti izraz
+  ključa), ne tvrdnja u komentaru; i mora se proveriti šta **pisci** upisuju pod tim ključem,
+  ne samo kako ga čitaoci porede.
 **Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
 datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
 svi P2/P3 van zadatog obima paketa.

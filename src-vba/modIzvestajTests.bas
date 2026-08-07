@@ -67,8 +67,8 @@ Public Sub RunIzvestajTests()
     ' Seam testovi ne mogu da uhvate gresku u samom table-join-u, a upravo je
     ' join po `BrojZbirne` bio nosilac pogresnih brojki.
     If GetTable(TBL_ZBIRNA) Is Nothing Or GetTable(TBL_PRIJEMNICA) Is Nothing _
-       Or GetTable(TBL_OTPREMNICA) Is Nothing Then
-        Debug.Print "  SKIP | end-to-end: nema tabela zbirna/prijemnica/otpremnica"
+       Or GetTable(TBL_OTPREMNICA) Is Nothing Or GetTable(TBL_AMBALAZA) Is Nothing Then
+        Debug.Print "  SKIP | end-to-end: nema tabela zbirna/prijemnica/otpremnica/ambalaza"
     Else
         Set tx = New clsTransaction
         tx.BeginTx
@@ -76,11 +76,13 @@ Public Sub RunIzvestajTests()
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA
         tx.AddTableSnapshot TBL_OTKUP
+        tx.AddTableSnapshot TBL_AMBALAZA
 
         T_E2E_ManjakDvaVlasnikaIstiBroj
         T_E2E_RobaOMDvaVlasnikaIstiBroj
         T_E2E_KlasaIiIINeMesajuPrijem
         T_E2E_ProsecnaCenaZbirniKupac
+        T_E2E_AmbPregledRazdvajaTipDokumenta
 
         tx.RollbackTx
         Set tx = Nothing
@@ -864,6 +866,76 @@ EH:
     m_izvFail = m_izvFail + 1
     Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
 End Sub
+
+' --- RF-07 review nalaz: pregled ambalaze mora da grupise PUNIM kljucem ---
+' `modOtkup.SaveOtkup` na NORMALNOJ putanji upisuje isti otkupID i isti tip
+' ambalaze pod DVA tipa dokumenta: primljene pune gajbe kao DOK_TIP_OTKUP,
+' izdate prazne kao DOK_TIP_OM_IZLAZ_KOOP. Dok je grupni kljuc bio samo
+' DokumentID + TipAmbalaze, oba su padala u JEDAN red koji nosi tip PRVOG
+' zapisa -- skriveni ref-kljuc `AMB|Otkup|<id>`, pa je "Stampaj dokument" uvek
+' rutirao na otkupni list, a revers OM-Izlaz-Koop nije imao svoj red i bio je
+' NEDOSTUPAN za stampu. Test tvrdi DVA reda i DVA razlicita ref-kljuca.
+Private Sub T_E2E_AmbPregledRazdvajaTipDokumenta()
+    Const S As String = "E2E Amb pregled (dva tipa dokumenta, isti otkupID): "
+    On Error GoTo EH
+
+    Dim d As Date: d = IZVT_DATUM
+    Const DOK As String = "IZVT-OTK-AMB"
+    Const TIPA As String = "IZVT-Letvarica"
+
+    ' Samo OM/Stanica noge -- ReportAmbalaza("OM", ...) filtrira EntitetTip="Stanica".
+    ' Pune gajbe stizu na OM (Ulaz) pod tipom dokumenta "Otkup".
+    IzvSeed TBL_AMBALAZA, _
+        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
+              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
+        Array("IZVT-AMB-1", d, TIPA, 20, "Ulaz", _
+              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OTKUP)
+
+    ' Prazne gajbe OM izdaje kooperantu (Izlaz) -- ISTI DokumentID, ISTI tip
+    ' ambalaze, ali tip dokumenta "OM-Izlaz-Koop".
+    IzvSeed TBL_AMBALAZA, _
+        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
+              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
+        Array("IZVT-AMB-2", d, TIPA, 8, "Izlaz", _
+              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OM_IZLAZ_KOOP)
+
+    Dim r As Variant
+    r = ReportAmbalaza("OM", IZVT_STANICA, d, d, False)
+    IzvChk IsArray(r), S & "izvestaj vraca redove"
+    If Not IsArray(r) Then Exit Sub
+
+    ' Poslednji red je UKUPNO -> dva dokumenta = 3 reda.
+    IzvChkEq UBound(r, 1), 3, S & "dva dokumenta + UKUPNO = 3 reda"
+    If UBound(r, 1) < 3 Then Exit Sub
+
+    ' Skriveni ref-kljuc (kol. 7) mora da razlikuje tip dokumenta.
+    Dim k1 As String: k1 = CStr(r(1, 7))
+    Dim k2 As String: k2 = CStr(r(2, 7))
+    IzvChkEqText k1, "AMB|" & DOK_TIP_OTKUP & "|" & DOK, S & "1. red -> ref-kljuc Otkup"
+    IzvChkEqText k2, "AMB|" & DOK_TIP_OM_IZLAZ_KOOP & "|" & DOK, _
+           S & "2. red -> ref-kljuc OM-Izlaz-Koop (revers dostupan za stampu)"
+    IzvChk k1 <> k2, S & "ref-kljucevi su razliciti"
+
+    ' Kolicine ostaju na svom dokumentu (nema spajanja Ulaz+Izlaz tudjih tipova).
+    IzvChkEqD NzNum(r(1, 5)), 20#, S & "Otkup red: Ulaz 20"
+    IzvChk Len(Trim$(CStr(r(1, 6)))) = 0, S & "Otkup red: Izlaz prazan"
+    IzvChk Len(Trim$(CStr(r(2, 5)))) = 0, S & "OM-Izlaz-Koop red: Ulaz prazan"
+    IzvChkEqD NzNum(r(2, 6)), 8#, S & "OM-Izlaz-Koop red: Izlaz 8"
+
+    ' UKUPNO se ne menja grupisanjem -- i dalje 20 / 8.
+    IzvChkEqD NzNum(r(3, 5)), 20#, S & "UKUPNO Ulaz 20"
+    IzvChkEqD NzNum(r(3, 6)), 8#, S & "UKUPNO Izlaz 8"
+    Exit Sub
+
+EH:
+    m_izvFail = m_izvFail + 1
+    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
+End Sub
+
+' Prazna celija ("" kad je smer bez kolicine) -> 0, za brojcano poredjenje.
+Private Function NzNum(ByVal v As Variant) As Double
+    If IsNumeric(v) Then NzNum = CDbl(v)
+End Function
 
 ' ============================================================
 ' ASSERT HELPERI

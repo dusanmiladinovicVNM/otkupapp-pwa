@@ -2455,8 +2455,11 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     Dim rowCount As Long
     rowCount = UBound(filtered, 1)
 
-    ' Grupisanje po Dokumentu (+Tip): ako isti dokument ima i Ulaz i Izlaz red,
-    ' prikazi oba u istom redu. Ako ima samo jedan smer -> red ostaje kao i do sada.
+    ' Grupisanje po JEDNOM dokumentu (DokumentTip + DokumentID + TipAmbalaze):
+    ' ako isti dokument ima i Ulaz i Izlaz red, prikazi oba u istom redu. Ako ima
+    ' samo jedan smer -> red ostaje kao i do sada. Redovi RAZLICITOG DokumentTip-a
+    ' su razliciti dokumenti (uz-otkup: `Otkup` + `OM-Izlaz-Koop` dele otkupID) i
+    ' NE smeju u isti red -- vidi gkey nize.
     ' Scripting.Dictionary cuva redosled umetanja (kao redosled filtriranih redova).
     Dim grp As Object
     Set grp = CreateObject("Scripting.Dictionary")
@@ -2482,9 +2485,17 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         effSmer = CStr(filtered(i, colSmer))
         If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
 
-        ' Isti kanonski kljuc koji `ReversRedPripada` koristi za match -- inace
-        ' pregled i revers grupisu razlicito (RF-07 review nalaz).
-        Dim gkey As String: gkey = Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)
+        ' PUN identitet dokumenta, isti koji `ReversRedPripada` koristi za match:
+        ' DokumentTip + DokumentID + TipAmbalaze. `DokumentTip` je nuzan jer
+        ' `modOtkup.SaveOtkup` na NORMALNOJ putanji upisuje isti `otkupID` i isti
+        ' tip ambalaze pod DVA tipa dokumenta -- primljene pune gajbe kao
+        ' `DOK_TIP_OTKUP`, izdate prazne kao `DOK_TIP_OM_IZLAZ_KOOP`. Bez njega su
+        ' se spajali u JEDAN red koji nosi tip PRVOG zapisa ("Otkup"), pa je
+        ' skriveni ref-kljuc bio `AMB|Otkup|<id>` i "Stampaj dokument" je uvek
+        ' rutirao na `ReprintOtkupniListByOtkupID` -- revers `OM-Izlaz-Koop` nije
+        ' imao svoj red i bio je NEDOSTUPAN za stampu iz pregleda.
+        Dim gkey As String
+        gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)
         Dim rec As Variant
         If grp.Exists(gkey) Then
             rec = grp(gkey)
