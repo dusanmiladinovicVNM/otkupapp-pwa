@@ -178,6 +178,7 @@ se ne širi (fix dira ceo `ExcludeStornirano` sloj).
 
 ### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M] — ✅ urađeno
 **Fajlovi:** `frmIzvestaj.frm`, `modIzvestaj.bas`, `modKarticaDetalji.bas`, `modPoruke.bas`, `modIzvestajTests.bas`.
+**Review (REQUEST CHANGES na `71355a4`) — sve tri stavke prihvaćene i ispravljene:** matrica vs core na `Kupac+Zbirni+Prosečna cena`, invalidacija konteksta pri promeni entiteta bez dostupnog izbora, kanonski ključ tipa ambalaže.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
 `CleanFail` čisti listu + vidljiva greška; zbirni tabovi 5/6/7 samo za validne tipove;
 `StampajReversAmbDok`: `ExcludeStornirano` + tip ambalaže u match; `KarticaDetalji_Clear`
@@ -207,6 +208,28 @@ na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, F
 - **Novi `Poruka()` ključevi = obavezan `EnsurePoruke` posle importa.** RF-05/RF-06/RF-28 su svi
   bili „bez novih ključeva"; RF-07 uvodi 7, pa release note to mora eksplicitno da nosi —
   bez `EnsurePoruke` status i poruke prikazuju `[KLJUC]`.
+- **Matrica dostupnosti mora da se meri prema ULAZU koji joj pozivalac šalje, ne prema
+  postojanju grane.** `Kupac + Zbirni + Prosečna cena` je prošao prvu verziju matrice jer
+  `ReportProsecnaCena` *ima* `Case "Kupac"` — ali zbirni režim šalje `entitetID = ""`, a ta
+  grana ide kroz `GetPrijemniceByKupac` koji bezuslovno dodaje `KupacID = ""` i vraća prazno.
+  `OM` je imun samo zato što grana glasi `Case "OM", ""` i eksplicitno hvata prazan ID.
+  **Posledica za testove:** matrični `True/False` assert ne dokazuje da ponuđeni tab može da
+  vrati podatke — za svaku „DA" ćeliju koja zavisi od praznog `entitetID`-a treba E2E nad
+  tabelama (`T_E2E_ProsecnaCenaZbirniKupac`, seed dva kupca u sentinel prozoru, pada u oba smera).
+- **Guard koji preskače posao mora prvo da invalidira ono što ostavlja.** `AutoRefresh` izlazi
+  kad novi entitet nema nijedan izbor; bez invalidacije liste prethodnog entiteta ostaju kao
+  „svež" rezultat pod novim identitetom — **ista klasa greške koju paket zatvara**, samo što je
+  period ispravan a entitet pogrešan. Invalidacija ide na **početak jedinog ulaza** (`AutoRefresh`),
+  pre guarda, a ne u svaki `tgl*_Click`.
+- **Ako se period pamti, mora i identitet.** `m_curOd/m_curDo` su rešili „stari podaci, nov period";
+  isti argument važi za entitet — otud `m_curEntLabel`/`m_curEntName` i `m_curTip` kao izvor za
+  naslov štampe i za izbor zaglavlja kolona, umesto živog `GetActiveEntitetTip()`/`cmbEntitet.value`.
+  Uz to print guard `AktivanTabGenerisan()`: štampa se samo tab koji je **stvarno** generisan.
+- **Matcher nad nečim što je već grupisano mora da deli SIMBOL normalizacije, ne „istu ideju".**
+  Pregled je grupisao po sirovom tipu ambalaže, a novi `ReversRedPripada` poredio `Trim +
+  vbTextCompare` — „Letvarica"/„letvarica" dalo bi dva reda pregleda a svaki revers zbir oba,
+  tj. tiho vraćanje baš onog mešanja koje se zatvara. Rešenje je jedan `AmbTipKljuc` koji zovu
+  obe putanje.
 **Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
 datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
 svi P2/P3 van zadatog obima paketa.

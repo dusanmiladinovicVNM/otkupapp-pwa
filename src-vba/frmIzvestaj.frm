@@ -73,6 +73,11 @@ Private m_inUpdateMode As Boolean
 ' (period STVARNO prikazanih podataka), a ne iz txtDatum* polja -- inace stara
 ' lista dobije nov period u zaglavlju (FM-0029 #1/#19).
 Private m_hasGenerated As Boolean    ' bar jednom generisano za tekuce m_cur* parametre
+' Identitet PRIKAZANIH podataka -- isti princip kao m_curOd/m_curDo: naslov
+' stampe mora da opisuje ono sto je generisano, ne trenutno stanje toggle-a i
+' combo-a (koji se menjaju i kad se izvestaj ne regenerise).
+Private m_curEntLabel As String      ' "Otkupna mesta" / "Kupci" / "Vozaci" / "Kooperanti"
+Private m_curEntName As String       ' naziv entiteta ili "Svi" (zbirni)
 Private m_periodDirty As Boolean     ' txtDatum* promenjen posle poslednjeg "Prikazi"
 Private m_noValidTabs As Boolean     ' kombinacija entitet+rezim nema nijedan dostupan tab
 ' RF-07 (FM-0029 #2): poslednja greska lazy generisanja + tab na kom se desila.
@@ -211,6 +216,15 @@ Private Sub AutoRefresh()
 
     If m_IsInitializing Then Exit Sub
     If m_IsRefreshing Then Exit Sub
+
+    ' RF-07: AutoRefresh je JEDINI ulaz za svaku promenu konteksta (entitet,
+    ' rezim, izbor u combo-u), pa se kontekst invalidira OVDE -- pre guarda
+    ' ispod. Kad novi entitet nema nijedan izbor (npr. prelaz na "Vozaci" bez
+    ' aktivnog vozaca) guard preskace generisanje, a zatecene liste opisuju
+    ' STARI entitet: bez invalidacije bi ostale na ekranu sa zelenim statusom i
+    ' odstampale se pod novim identitetom (ista klasa greske kao AUD-024, samo
+    ' sto je period ispravan).
+    InvalidateReportContext
 
     If tglPojedinacni.value Then
         If cmbEntitet.ListIndex < 0 Or cmbEntitet.value = "" Then Exit Sub
@@ -623,7 +637,16 @@ Private Sub UpdateStatusLabel()
         Exit Sub
     End If
 
-    ' 3) Period je promenjen a "Prikazi" nije kliknut -- lista jos drzi STARE
+    ' 3) Kontekst jos nije generisan (npr. promenjen entitet, a novi nema nijedan
+    '    izbor -> AutoRefresh je invalidirao i preskocio generisanje). Liste su
+    '    prazne, ali to NIJE rezultat upita -- ne sme da pise "Nema podataka".
+    If Not m_hasGenerated Then
+        lblStatus.caption = Poruka("RPT_MSG_PRVO_PRIKAZI")
+        lblStatus.ForeColor = TXT_MUTED()
+        Exit Sub
+    End If
+
+    ' 4) Period je promenjen a "Prikazi" nije kliknut -- lista jos drzi STARE
     '    podatke, pa status mora da kaze da nije osvezeno (FM-0029 #1).
     If m_periodDirty Then
         lblStatus.caption = Poruka("RPT_MSG_NIJE_OSVEZENO")
@@ -650,6 +673,55 @@ Private Sub UpdateStatusLabel()
 
     On Error GoTo 0
 End Sub
+
+' Sve liste izvestaja (staticki + runtime tabovi) na prazno. Zove se pri promeni
+' konteksta -- lista koja opisuje drugi entitet ne sme da ostane na ekranu.
+Private Sub ClearAllReportLists()
+    On Error Resume Next
+    lstSaldoOM.Clear
+    lstSaldoKupci.Clear
+    lstOtkupRoba.Clear
+    lstAmbalaza.Clear
+    lstIsplata.Clear
+    lstZbirni.Clear
+    lstProsecnaCena.Clear
+    lstManjak.Clear
+    lstKartica.Clear
+    If Not m_lstAmb Is Nothing Then m_lstAmb.Clear
+    If Not m_lstOtk Is Nothing Then m_lstOtk.Clear
+    ' Red -> OtpremnicaID mapa prati lstOtkupRoba; prazna lista = prazna mapa.
+    If Not m_otkOtpID Is Nothing Then m_otkOtpID.RemoveAll
+End Sub
+
+' RF-07: kontekst izvestaja (entitet / rezim) se promenio -> SVE zatecene liste
+' i zapamceni parametri opisuju stari kontekst. Dok se ne generise ponovo,
+' nista se ne sme prikazivati kao svez rezultat niti stampati (AktivanTabGenerisan).
+Private Sub InvalidateReportContext()
+    On Error Resume Next
+    If m_genTabs Is Nothing Then Set m_genTabs = CreateObject("Scripting.Dictionary")
+    m_genTabs.RemoveAll
+    m_hasGenerated = False
+    m_curTip = ""
+    m_curID = ""
+    m_curEntLabel = ""
+    m_curEntName = ""
+    m_genFailMsg = ""
+    m_genFailTab = -1
+    ClearAllReportLists
+    KarticaDetalji_Clear
+    SyncDetaljiVisibility
+    UpdateStatusLabel
+End Sub
+
+' Print guard: sme li se stampati ono sto je trenutno na aktivnom tabu. Trazi da
+' je BAS taj tab generisan za tekuci kontekst -- prazna/stara lista se ne stampa.
+Private Function AktivanTabGenerisan() As Boolean
+    If m_noValidTabs Then Exit Function
+    If Not m_hasGenerated Then Exit Function
+    If m_genTabs Is Nothing Then Exit Function
+    If mpReports.value < 0 Then Exit Function
+    AktivanTabGenerisan = m_genTabs.Exists(CStr(mpReports.value))
+End Function
 
 ' RF-07 (FM-0029 #1): izmena datuma bez ponovnog "Prikazi" ostavlja na ekranu
 ' podatke starog perioda. Flag se cisti tek u btnUnos_Click (stvarno generisanje).
@@ -721,7 +793,9 @@ Private Sub btnUnos_Click()
     m_genTabs.RemoveAll   ' novi parametri -> svi tabovi ponovo prljavi
 
     ' RF-07: od ovog trenutka m_cur* opisuju STVARNO prikazane podatke, pa
-    ' status/stampa smeju da ih koriste kao period.
+    ' status/stampa smeju da ih koriste kao period I kao identitet.
+    m_curEntLabel = GetActiveEntitetTip()
+    If zbirni Then m_curEntName = "Svi" Else m_curEntName = cmbEntitet.value
     m_hasGenerated = True
     m_periodDirty = False
     m_genFailMsg = ""
@@ -823,16 +897,13 @@ Private Sub GenerateTabForPage(ByVal idx As Long)
     End Select
 End Sub
 
-Private Sub mpReports_Change()
-    ' RF-07 (AUD-027 / FM-0030 #1 + FM-0029 #15): print target panela "Detalji"
-    ' je modul-stanje (modKarticaDetalji), a NIJE vezan za tab/listu/red. Bez
-    ' ciscenja je red izabran na Kartici prezivljavao prelaz na Ambalazu, pa je
-    ' "Stampaj dokument" stampao dokument SA DRUGOG taba (cross-tab print).
-    KarticaDetalji_Clear
-
-    UpdateStatusLabel
-    ' Deljeni "Detalji" panel: Kartica (8), "Otkupni listovi", Otkupljena roba (2),
-    ' Ambalaza (3).
+' Vidljivost deljenog "Detalji" panela i pratecih dugmadi za tekuci tab:
+' Kartica (8), "Otkupni listovi" (runtime), Otkupljena roba (2), Ambalaza (3).
+' Izdvojeno iz mpReports_Change da isto pravilo vazi i posle invalidacije
+' konteksta (ciscenje lista okida Change evente listi, koji panel mogu da
+' pokazu na tabu kom ne pripada).
+Private Sub SyncDetaljiVisibility()
+    On Error Resume Next
     Dim onOtk As Boolean
     onOtk = (m_otkPageIdx >= 0 And mpReports.value = m_otkPageIdx)
     Dim onRoba As Boolean: onRoba = (mpReports.value = 2)
@@ -842,6 +913,17 @@ Private Sub mpReports_Change()
     If Not m_btnStampajOtk Is Nothing Then m_btnStampajOtk.Visible = onOtk
     If Not m_btnStampajOtkRoba Is Nothing Then m_btnStampajOtkRoba.Visible = onRoba
     If Not m_btnStampajAmb Is Nothing Then m_btnStampajAmb.Visible = onAmb
+End Sub
+
+Private Sub mpReports_Change()
+    ' RF-07 (AUD-027 / FM-0030 #1 + FM-0029 #15): print target panela "Detalji"
+    ' je modul-stanje (modKarticaDetalji), a NIJE vezan za tab/listu/red. Bez
+    ' ciscenja je red izabran na Kartici prezivljavao prelaz na Ambalazu, pa je
+    ' "Stampaj dokument" stampao dokument SA DRUGOG taba (cross-tab print).
+    KarticaDetalji_Clear
+
+    UpdateStatusLabel
+    SyncDetaljiVisibility
 
     ' Lazy: generisi tab tek kad korisnik predje na njega (ako vec nije generisan za
     ' tekuce parametre). Preskoci tokom Activate i programskog UpdateReportMode (oba
@@ -1330,8 +1412,9 @@ Private Sub btnStampajKarticu_Click()
     
     ' RF-07 (AUD-024 / FM-0029 #19): PDF kartice se stampa za period PRIKAZANIH
     ' podataka (m_curOd/m_curDo). Pre toga je citao txtDatum*, pa je izmena polja
-    ' bez "Prikazi" davala PDF drugog perioda od onog na ekranu.
-    If Not m_hasGenerated Then
+    ' bez "Prikazi" davala PDF drugog perioda od onog na ekranu. Guard trazi da
+    ' je aktivan tab stvarno generisan za tekuci kontekst.
+    If Not AktivanTabGenerisan() Then
         MsgBox Poruka("RPT_MSG_PRVO_PRIKAZI"), vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -1368,8 +1451,10 @@ End Sub
 Private Sub btnStampaj_Click()
     On Error GoTo EH
 
-    ' Bez generisanog izvestaja nema ni perioda za zaglavlje (RF-07).
-    If Not m_hasGenerated Then
+    ' RF-07 print guard: stampa se SAMO tab koji je stvarno generisan za tekuci
+    ' kontekst. Bez toga se moze odstampati lista starog entiteta (kontekst
+    ' promenjen, generisanje preskoceno) pod novim naslovom.
+    If Not AktivanTabGenerisan() Then
         MsgBox Poruka("RPT_MSG_PRVO_PRIKAZI"), vbExclamation, APP_NAME
         Exit Sub
     End If
@@ -1410,7 +1495,8 @@ Private Sub btnStampaj_Click()
             Set lst = lstOtkupRoba
             title = "Otkupljena roba"
             
-            If GetActiveEntitetTip() = "Otkupna mesta" Then
+            ' Identitet PRIKAZANIH podataka (m_curTip), ne trenutni toggle.
+            If m_curTip = "OM" Then
                 headers = Array( _
                     "Datum", _
                     "Otpremnica", _
@@ -1461,7 +1547,7 @@ Private Sub btnStampaj_Click()
             Set lst = lstZbirni
             title = "Zbirni izve" & ChrW(353) & "taj"
             
-            If GetActiveEntitetTip() = "Vozaci" Then
+            If m_curTip = "Vozac" Then
                 headers = Array( _
                     "Vozac", _
                     "Amb izlaz", _
@@ -1546,20 +1632,12 @@ Private Sub btnStampaj_Click()
         Next j
     Next i
     
-    Dim entLabel As String
-    entLabel = GetActiveEntitetTip()   ' "Otkupna mesta" / "Kupci" / "Vozaci"
-
-    Dim entName As String
-    If IsZbirniMode() Then
-        entName = "Svi"
-    Else
-        entName = cmbEntitet.value
-    End If
-    ' RF-07 (AUD-024 / FM-0029 #1): naslov nosi period PRIKAZANIH podataka
-    ' (m_cur*, kroz PrikazanPeriod), ne trenutni sadrzaj txtDatum* polja -- inace
-    ' se odstampa stara lista pod novim periodom.
+    ' RF-07 (AUD-024 / FM-0029 #1): naslov nosi period I identitet PRIKAZANIH
+    ' podataka (m_curEntLabel/m_curEntName/PrikazanPeriod), ne trenutno stanje
+    ' toggle-a, combo-a i txtDatum* polja -- inace se stara lista odstampa pod
+    ' novim entitetom i novim periodom.
     Dim fullTitle As String
-    fullTitle = title & " - " & entLabel & ": " & entName & _
+    fullTitle = title & " - " & m_curEntLabel & ": " & m_curEntName & _
             " (" & PrikazanPeriod() & ")"
 
     PrintIzvestaj data, fullTitle, headers

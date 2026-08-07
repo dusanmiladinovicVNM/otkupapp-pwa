@@ -80,6 +80,7 @@ Public Sub RunIzvestajTests()
         T_E2E_ManjakDvaVlasnikaIstiBroj
         T_E2E_RobaOMDvaVlasnikaIstiBroj
         T_E2E_KlasaIiIINeMesajuPrijem
+        T_E2E_ProsecnaCenaZbirniKupac
 
         tx.RollbackTx
         Set tx = Nothing
@@ -720,6 +721,11 @@ Private Sub T_TabMatrica()
            S & "zbirni Kooperant: Manjak NE"
     IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_PROSECNA_CENA) = False, _
            S & "zbirni Vozac: Prosecna cena NE (ReportProsecnaCena nema vozacku granu)"
+    ' Kupac + zbirni: grana POSTOJI ali ide kroz GetPrijemniceByKupac koji
+    ' bezuslovno filtrira KupacID = "" -> tab bi bio ponudjen a trajno prazan.
+    ' Dokazuje T_E2E_ProsecnaCenaZbirniKupac nad stvarnim prijemnicama.
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Kupac: Prosecna cena NE (KupacID='' filter -> uvek prazno)"
 
     ' Zbirni rezim -- validne kombinacije moraju da ostanu.
     IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_ZBIRNI), _
@@ -727,6 +733,8 @@ Private Sub T_TabMatrica()
     IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_MANJAK), _
            S & "zbirni Vozac: Manjak DA"
     IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ZBIRNI), S & "zbirni OM: Zbirni DA"
+    ' OM zadrzava tab: ReportProsecnaCena grana `Case "OM", ""` eksplicitno hvata
+    ' prazan entitetID kao "svi" (bez filtera po stanici).
     IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_PROSECNA_CENA), S & "zbirni OM: Prosecna cena DA"
     IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_MANJAK), S & "zbirni OM: Manjak DA"
     IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_ZBIRNI), S & "zbirni Kupac: Zbirni DA"
@@ -794,6 +802,13 @@ Private Sub T_ReversKljucPoTipu()
                             "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
            S & "tip: trim + case-insensitive"
 
+    ' Kanonizacija mora da bude ISTA kao u pregledu (`AmbTipKljuc` na obe
+    ' putanje) -- inace pregled napravi dva reda a svaki revers sabere oba.
+    IzvChkEqText AmbTipKljuc(" letvarica "), AmbTipKljuc("Letvarica"), _
+           S & "AmbTipKljuc: trim + velicina slova daju isti kljuc"
+    IzvChk AmbTipKljuc("Letvarica") <> AmbTipKljuc("Plasticna"), _
+           S & "AmbTipKljuc: razliciti tipovi ostaju razliciti"
+
     ' Prazan tip je legitimna grupa (red pregleda bez tipa), ne wildcard.
     IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "", _
                             "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
@@ -801,6 +816,53 @@ Private Sub T_ReversKljucPoTipu()
     IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
                             "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "") = False, _
            S & "prazan trazeni tip NIJE wildcard"
+End Sub
+
+' --- RF-07 review nalaz: matrica se ne sme raziti od core-a ---
+' Zbirni rezim salje entitetID = "". `ReportProsecnaCena` grana za Kupca ide
+' kroz `GetPrijemniceByKupac`, koji BEZUSLOVNO dodaje filter `KupacID = ""` --
+' upit trazi prijemnice BEZ kupca, pa vraca prazno i kad prijemnice postoje.
+' Matricni test proverava samo True/False; OVAJ test dokazuje da je False
+' ISPRAVAN -- nad stvarnim prijemnicama dva razlicita kupca.
+'
+' TVRD GATE U OBA SMERA: ako neko implementira globalni prosek svih kupaca,
+' prvi assert pada i tera da se matrica ponovo odluci -- umesto da tab ostane
+' skriven iako bi radio.
+Private Sub T_E2E_ProsecnaCenaZbirniKupac()
+    Const S As String = "E2E ProsecnaCena (zbirni Kupac): "
+    On Error GoTo EH
+
+    Dim d As Date: d = IZVT_DATUM
+
+    ' Dve prijemnice, dva RAZLICITA kupca, obe u sentinel prozoru (1999) -- ni
+    ' jedan produkcijski red ne moze da upadne u ovaj datumski opseg.
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
+        Array("IZVT-PC-A", "IZVT-PC-A", d, IZVT_BROJ, IZVT_KUPAC_A, 1000#, 100#)
+
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
+        Array("IZVT-PC-B", "IZVT-PC-B", d, IZVT_BROJ, IZVT_KUPAC_B, 2000#, 200#)
+
+    ' Pojedinacno (entitetID popunjen) izvestaj RADI -- seed je validan i grana
+    ' nije mrtva; prazan rezultat ispod je posledica bas praznog entitetID-a.
+    IzvChk IsArray(ReportProsecnaCena("Kupac", IZVT_KUPAC_A, d, d)), _
+           S & "pojedinacni Kupac A vraca redove (seed validan)"
+    IzvChk IsArray(ReportProsecnaCena("Kupac", IZVT_KUPAC_B, d, d)), _
+           S & "pojedinacni Kupac B vraca redove"
+
+    ' Zbirni (entitetID = "") NE vraca nista -- zato tab nije u matrici.
+    IzvChk IsEmpty(ReportProsecnaCena("Kupac", "", d, d)), _
+           S & "zbirni Kupac -> Empty i kad postoje prijemnice dva kupca"
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "matrica se slaze sa core-om: tab se NE nudi"
+    Exit Sub
+
+EH:
+    m_izvFail = m_izvFail + 1
+    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
 End Sub
 
 ' ============================================================
