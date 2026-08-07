@@ -31,6 +31,22 @@ Public Const IZV_VLASNIK_NEJASAN As String = "nejasan vlasnik"
 ' Labela reda pocetnog stanja u karticama (FM-0028 #1).
 Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 
+' RF-07 (AUD-024 / FM-0029 #3) - indeksi STATICKIH stranica mpReports u
+' frmIzvestaj (redosled iz .frx); koristi ih matrica IzvestajTabDostupan.
+' Runtime tabovi ("Pregled ambalaze", "Otkupni listovi") dobijaju dinamicki
+' indeks >= broja statickih stranica i NE prolaze kroz matricu.
+' NAPOMENA: modul-level Const MORA u deklaracionu sekciju (pre prve
+' procedure) -- VBA ne kompajlira Const izmedju procedura.
+Public Const IZV_TAB_SALDO_OM As Long = 0
+Public Const IZV_TAB_SALDO_KUPCI As Long = 1
+Public Const IZV_TAB_OTKUP_ROBA As Long = 2
+Public Const IZV_TAB_AMBALAZA As Long = 3
+Public Const IZV_TAB_ISPLATA As Long = 4
+Public Const IZV_TAB_ZBIRNI As Long = 5
+Public Const IZV_TAB_PROSECNA_CENA As Long = 6
+Public Const IZV_TAB_MANJAK As Long = 7
+Public Const IZV_TAB_KARTICA As Long = 8
+
 ' Pripada li tblNovac red stanici. Primarno po OMID-u SAMOG REDA (istorijska
 ' pripadnost -- isti kljuc koji ReportIsplata("OM") vec koristi), pa se isplate
 ' vise ne prelivaju izmedju stanica (FM-0028 #3). Red bez OMID-a (npr. stariji
@@ -254,19 +270,6 @@ End Function
 ' privatne procedure forme ne mogu testirati, a bas su te odluke nosile
 ' pogresne izvestaje (nevalidne zbirne kombinacije, mesanje tipova ambalaze).
 ' ============================================================
-
-' Indeksi STATICKIH stranica mpReports u frmIzvestaj (redosled iz .frx).
-' Runtime tabovi ("Pregled ambalaze", "Otkupni listovi") dobijaju dinamicki
-' indeks >= broja statickih stranica i NE prolaze kroz ovu matricu.
-Public Const IZV_TAB_SALDO_OM As Long = 0
-Public Const IZV_TAB_SALDO_KUPCI As Long = 1
-Public Const IZV_TAB_OTKUP_ROBA As Long = 2
-Public Const IZV_TAB_AMBALAZA As Long = 3
-Public Const IZV_TAB_ISPLATA As Long = 4
-Public Const IZV_TAB_ZBIRNI As Long = 5
-Public Const IZV_TAB_PROSECNA_CENA As Long = 6
-Public Const IZV_TAB_MANJAK As Long = 7
-Public Const IZV_TAB_KARTICA As Long = 8
 
 ' UI labela entiteta (caption toggle dugmeta) -> interni kod koji Report*
 ' funkcije dispecuju. Jedno mesto istine: pre RF-07 je isti Select Case

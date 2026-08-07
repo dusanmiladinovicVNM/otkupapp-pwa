@@ -255,6 +255,13 @@ na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, F
   pravilom** (`FilterArray` `"<>"` `"Da"` → `CStr` poređenje, bez trima i case-fold-a; kolona
   koje nema = nema storna) — ista odluka koju `ReportAmbalaza` već nosi i dokumentuje za istu
   tabelu. Kad se pravilo duplira radi performansi, komentar mora da imenuje izvor istine.
+- **Modul-level `Const` mora u deklaracionu sekciju — VBA ne kompajlira `Const` između
+  procedura.** `IZV_TAB_*` su bile stavljene tik iznad `IzvestajTabDostupan` („uz funkciju
+  koja ih koristi"), na sredini `modIzvestaj` — što je prirodno mesto i tačno pogrešno.
+  Operater je to morao ručno da premesti u Excelu da bi `Compile` prošao. Nijedna od mojih
+  statičkih provera (balans, ASCII, dupli `Public`) ovo ne hvata, jer je sintaksno ispravan
+  red na nedozvoljenoj poziciji. **Dodato u `CLAUDE.md` §4 kao pravilo i u §5 kao obaveznu
+  statičku proveru;** repo-wide skener potvrdio je da je ovo bio jedini takav slučaj.
 **Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
 datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
 svi P2/P3 van zadatog obima paketa.
