@@ -180,6 +180,7 @@ se ne širi (fix dira ceo `ExcludeStornirano` sloj).
 **Fajlovi:** `frmIzvestaj.frm`, `modIzvestaj.bas`, `modKarticaDetalji.bas`, `modPoruke.bas`, `modIzvestajTests.bas`.
 **Review (REQUEST CHANGES na `71355a4`) — sve tri stavke prihvaćene i ispravljene:** matrica vs core na `Kupac+Zbirni+Prosečna cena`, invalidacija konteksta pri promeni entiteta bez dostupnog izbora, kanonski ključ tipa ambalaže.
 **Review 2 (REQUEST CHANGES na `4f7b600`) — prihvaćeno:** grupni ključ pregleda ambalaže dopunjen `DokumentTip`-om (uz-otkup revers je bio nedostupan za štampu).
+**Review 3 (`/code-review` max-effort: 0 correctness bugova, 3 LOW) — sve tri rešene:** `m_periodDirty` reset u `InvalidateReportContext`, uklonjena mrtva grana u status poruci, uklonjena puna kopija ledgera u revers štampi.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
 `CleanFail` čisti listu + vidljiva greška; zbirni tabovi 5/6/7 samo za validne tipove;
 `StampajReversAmbDok`: `ExcludeStornirano` + tip ambalaže u match; `KarticaDetalji_Clear`
@@ -241,6 +242,19 @@ na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, F
   Pouka: kad se dve putanje proglase saglasnim, to mora biti svojstvo koda (isti izraz
   ključa), ne tvrdnja u komentaru; i mora se proveriti šta **pisci** upisuju pod tim ključem,
   ne samo kako ga čitaoci porede.
+- **Invarijanta stanja se ne sme oslanjati na redosled provera koje je čitaju.**
+  `InvalidateReportContext` nije resetovao `m_periodDirty`; radilo je tačno samo zato što
+  grana `Not m_hasGenerated` u `UpdateStatusLabel` izlazi **pre** grane `m_periodDirty`.
+  Nije bio živ bug, ali je „radi na sreću" — reset je dodat da invarijanta („nema
+  generisanog perioda → nema ni neosveženog u odnosu na šta") važi nezavisno od poretka
+  čitalaca. Isto je uklonjena i posledična mrtva grana `If m_hasGenerated Then` u toj poruci.
+- **Reuse deljenog helpera nije bezuslovan — merilo je šta helper radi na toj putanji.**
+  `ExcludeStornirano` je ispravan izbor u report sloju, ali u one-shot print handleru pravi
+  **još jednu kopiju celog `tblAmbalaza`** samo da bi se odštampao jedan dokument, dok petlja
+  ionako prolazi ceo ledger. Zato je provera inline (`AmbRedStorniran`) sa **identičnim
+  pravilom** (`FilterArray` `"<>"` `"Da"` → `CStr` poređenje, bez trima i case-fold-a; kolona
+  koje nema = nema storna) — ista odluka koju `ReportAmbalaza` već nosi i dokumentuje za istu
+  tabelu. Kad se pravilo duplira radi performansi, komentar mora da imenuje izvor istine.
 **Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
 datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
 svi P2/P3 van zadatog obima paketa.

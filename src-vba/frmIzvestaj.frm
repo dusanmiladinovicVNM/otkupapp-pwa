@@ -648,11 +648,11 @@ Private Sub UpdateStatusLabel()
 
     ' 4) Period je promenjen a "Prikazi" nije kliknut -- lista jos drzi STARE
     '    podatke, pa status mora da kaze da nije osvezeno (FM-0029 #1).
+    '    Do ovde se stize SAMO kad je m_hasGenerated = True (provera 3 iznad je
+    '    vec izasla za suprotan slucaj), pa PrikazanPeriod() uvek ima vrednost.
     If m_periodDirty Then
-        lblStatus.caption = Poruka("RPT_MSG_NIJE_OSVEZENO")
-        If m_hasGenerated Then
-            lblStatus.caption = lblStatus.caption & " | prikazano: " & PrikazanPeriod()
-        End If
+        lblStatus.caption = Poruka("RPT_MSG_NIJE_OSVEZENO") & _
+                            " | prikazano: " & PrikazanPeriod()
         lblStatus.ForeColor = CLR_WARNING()
         Exit Sub
     End If
@@ -707,6 +707,11 @@ Private Sub InvalidateReportContext()
     m_curEntName = ""
     m_genFailMsg = ""
     m_genFailTab = -1
+    ' Nema generisanog perioda -> nema ni "neosvezenog" u odnosu na sta. Danas je
+    ' ovo maskirano redom provera u UpdateStatusLabel (grana `Not m_hasGenerated`
+    ' izlazi pre grane `m_periodDirty`), ali stanje se ne sme oslanjati na taj
+    ' redosled -- reset je ovde da invarijanta vazi bez obzira na poredak provera.
+    m_periodDirty = False
     ClearAllReportLists
     KarticaDetalji_Clear
     SyncDetaljiVisibility
@@ -2324,13 +2329,27 @@ EH:
     MsgBox "Gre" & ChrW(353) & "ka pri stampi dokumenta: " & Err.description, vbCritical, APP_NAME
 End Sub
 
+' Je li red tblAmbalaza storniran. Pravilo je IDENTICNO `ExcludeStornirano`
+' (`FilterArray` "<>" "Da" -> `CStr` poredjenje, bez trima i bez case-fold-a) --
+' samo se primenjuje po redu, umesto da se napravi filtrirana kopija celog
+' ledgera. Kolona koje nema = nema storna (isto kao `ExcludeStornirano`).
+Private Function AmbRedStorniran(ByRef d As Variant, ByVal r As Long, _
+                                 ByVal cStorno As Long) As Boolean
+    If cStorno <= 0 Then Exit Function
+    AmbRedStorniran = (CStr(d(r, cStorno)) = "Da")
+End Function
+
 ' Revers (OM<->kooperant kretanje ambalaze) za izabrani ambalaza red. Argumenti se
 ' rekonstruisu iz dve noge ledger-a (Kooperant + Stanica) koje dele DokumentID
 ' (vazi i za samostalni revers i za nogu knjizenu uz otkup). prijem=True za povrat.
 '
 ' RF-07 (AUD-012 / FM-0029 #4/#5/#16):
-'   - STORNIRANI redovi se iskljucuju (`ExcludeStornirano`) -- pre toga je
-'     revers stampao i kolicine koje su storno-om ponistene;
+'   - STORNIRANI redovi se iskljucuju -- pre toga je revers stampao i kolicine
+'     koje su storno-om ponistene. Provera je INLINE (`AmbRedStorniran`), a ne
+'     `ExcludeStornirano`, jer bi ta funkcija napravila JOS jednu kopiju cele
+'     tblAmbalaza samo da bi se odstampao jedan dokument; petlja ionako prolazi
+'     ceo ledger. Isti razlog zbog kog `modIzvestaj.ReportAmbalaza` storno
+'     filtrira unutar svog jedinog prolaza umesto zasebnim `ExcludeStornirano`;
 '   - tip ambalaze je DEO KLJUCA (`ReversRedPripada`). Ranije se tip uzimao sa
 '     prvog reda dokumenta a kolicine sabirale preko SVIH tipova, pa je dokument
 '     sa dve vrste gajbica davao jedan revers sa pogresnim tipom i zbirom;
@@ -2341,10 +2360,10 @@ Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String, _
     On Error GoTo EH
     Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
     If Not IsArray(d) Then Exit Sub
-    d = ExcludeStornirano(d, TBL_AMBALAZA)
-    If Not IsArray(d) Then Exit Sub
     Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
     Dim cEntTip As Long, cDok As Long, cDokTip As Long, cVoz As Long
+    Dim cStorno As Long
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
     cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
     cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
     cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
@@ -2370,7 +2389,8 @@ Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String, _
     If Len(tipAmb) = 0 Then
         For i = 1 To UBound(d, 1)
             If Trim$(CStr(d(i, cDok))) = Trim$(dokID) And _
-               Trim$(CStr(d(i, cDokTip))) = Trim$(dokTip) Then
+               Trim$(CStr(d(i, cDokTip))) = Trim$(dokTip) And _
+               Not AmbRedStorniran(d, i, cStorno) Then
                 tipAmb = Trim$(CStr(d(i, cTip)))
                 Exit For
             End If
@@ -2380,7 +2400,8 @@ Private Sub StampajReversAmbDok(ByVal dokID As String, ByVal dokTip As String, _
     Dim nogeKoop As Long, nogeOM As Long
     For i = 1 To UBound(d, 1)
         If ReversRedPripada(CStr(d(i, cDok)), CStr(d(i, cDokTip)), CStr(d(i, cTip)), _
-                            dokID, dokTip, tipAmb) Then
+                            dokID, dokTip, tipAmb) _
+           And Not AmbRedStorniran(d, i, cStorno) Then
             If Not haveDatum And IsDate(d(i, cDat)) Then
                 datum = CDate(d(i, cDat)): haveDatum = True
             End If
