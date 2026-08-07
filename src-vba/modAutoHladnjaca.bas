@@ -585,8 +585,9 @@ Private Function AsLng(ByVal v As Variant) As Long
     If IsNumeric(v) Then AsLng = CLng(v)
 End Function
 
+' Pravilo default klase zivi u modHelpers.KlasaOrDefault (deli ga i report sloj
+' preko ZbirnaStavkaKljuc) -- ovde ostaje samo lokalno ime, bez druge kopije.
 Private Function ClassOrDefault(ByVal v As Variant) As String
-    ClassOrDefault = Trim$(CStr(v))
-    If Len(ClassOrDefault) = 0 Then ClassOrDefault = KLASA_I
+    ClassOrDefault = KlasaOrDefault(v)
 End Function
 

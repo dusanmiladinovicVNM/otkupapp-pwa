@@ -8,6 +8,245 @@ Option Explicit
 ' Form ist nur noch fuer UI-Darstellung zustaendig
 ' ============================================================
 
+' ============================================================
+' RF-06 (AUD-023) - deljeni racunski seam-ovi izvestaja.
+' Cist ulaz -> cist izlaz, bez citanja tabela: pokrivaju ih assert-i u
+' modIzvestajTests.RunIzvestajTests (regresija ponovo obara test).
+' Labele su ASCII (kao "UKUPNO" / "OM AVANS (nerasporedjen)") jer se po njima
+' traze redovi u testovima -- ne idu kroz modPoruke katalog.
+' ============================================================
+
+' Oznaka reda bez prijemnice. Pre RF-06: RobaOM je prikazivao 0 kg / 0,00%
+' manjka, a Manjak isti slucaj kao 100% manjka -- dva izvestaja, dva odgovora
+' za isti podatak (FM-0028 #5).
+Public Const IZV_NEMA_PRIJEMA As String = "nema prijema"
+
+' Oznaka reda kod kog se prijem NE moze pouzdano pripisati zbirnoj: isti
+' `BrojZbirne` nose dve aktivne zbirne razlicitih vlasnika (RF-05/AUD-052 je
+' dokazao da poslovni broj nije identitet), a red/prijemnica nema podatak koji
+' bi jednoznacno razresio vlasnika. Fail-closed: bolje vidljivo "ne znam" nego
+' tudja kilaza upisana kao manjak.
+Public Const IZV_VLASNIK_NEJASAN As String = "nejasan vlasnik"
+
+' Labela reda pocetnog stanja u karticama (FM-0028 #1).
+Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
+
+' Pripada li tblNovac red stanici. Primarno po OMID-u SAMOG REDA (istorijska
+' pripadnost -- isti kljuc koji ReportIsplata("OM") vec koristi), pa se isplate
+' vise ne prelivaju izmedju stanica (FM-0028 #3). Red bez OMID-a (npr. stariji
+' upis ili virman bez stanice) nema istorijsku stanicu, pa pada na maticnu
+' stanicu kooperanta -- inace bi takav novac nestao iz SVIH stanica (FM-0028 #9
+' ostaje pokriven samo za redove koji nose OMID; sire je stvar migracije).
+Public Function NovacRedPripadaStanici(ByVal rowOMID As String, _
+                                       ByVal koopMaticnaStanica As String, _
+                                       ByVal stanicaID As String) As Boolean
+    If Len(Trim$(rowOMID)) > 0 Then
+        NovacRedPripadaStanici = (Trim$(rowOMID) = Trim$(stanicaID))
+    Else
+        NovacRedPripadaStanici = (Trim$(koopMaticnaStanica) = Trim$(stanicaID))
+    End If
+End Function
+
+' Odluka o pouzdanosti prijema za jednu zbirnu -- deljena izmedju ReportManjak
+' i ReportOtkupRobaOM. Cist racun, bez tabela (testira RunIzvestajTests).
+'
+'   brojVlasnika     koliko RAZLICITIH aktivnih vlasnika (vozac+kupac) nosi taj
+'                    BrojZbirne; 1 = broj je pouzdan identitet
+'   vlasnikRazresen  da li je pozivalac uspeo da odredi TACNOG vlasnika reda
+'   cntNejasan       prijemnice tog broja bez kompletnog vlasnika
+'   cntPrijem/kgPrijem  prijem u opsegu koji je pozivalac razresio
+'
+' Returns: Array(imaPrijem As Boolean, prijemKg As Double, oznaka As String)
+Public Function PrijemZaZbirnu(ByVal brojVlasnika As Long, _
+                               ByVal vlasnikRazresen As Boolean, _
+                               ByVal cntNejasan As Long, _
+                               ByVal cntPrijem As Long, _
+                               ByVal kgPrijem As Double) As Variant
+    If brojVlasnika > 1 Then
+        ' Broj dele dve zbirne. Ako vlasnik reda nije razresen, ili postoji
+        ' prijemnica koja se ne moze pripisati nijednoj -- ne racunamo manjak.
+        If (Not vlasnikRazresen) Or cntNejasan > 0 Then
+            PrijemZaZbirnu = Array(False, 0#, IZV_VLASNIK_NEJASAN)
+            Exit Function
+        End If
+    End If
+
+    If cntPrijem <= 0 Then
+        PrijemZaZbirnu = Array(False, 0#, IZV_NEMA_PRIJEMA)
+        Exit Function
+    End If
+
+    PrijemZaZbirnu = Array(True, kgPrijem, "")
+End Function
+
+' Jedan racun manjka za obe putanje: ReportOtkupRobaOM (po otpremnici) i
+' ReportManjak (po zbirnoj). Bez prijema brojke ostaju PRAZNE (ne 0, ne 100%)
+' i nose oznaku (IZV_NEMA_PRIJEMA ili IZV_VLASNIK_NEJASAN); pozivalac ih tada
+' ne sme uracunati u UKUPNO.
+' Returns: Array(prijemKg, manjakKg, manjakPct, oznaka)
+Public Function ManjakStavka(ByVal osnovicaKg As Double, _
+                             ByVal prijemKg As Double, _
+                             ByVal imaPrijem As Boolean, _
+                             Optional ByVal oznakaBezPrijema As String = IZV_NEMA_PRIJEMA) As Variant
+    If Not imaPrijem Then
+        ManjakStavka = Array(Empty, Empty, Empty, oznakaBezPrijema)
+        Exit Function
+    End If
+
+    Dim manjak As Double
+    manjak = osnovicaKg - prijemKg
+
+    Dim pct As Double
+    pct = 0
+    If osnovicaKg > 0 Then pct = manjak / osnovicaKg * 100
+
+    ManjakStavka = Array(prijemKg, manjak, pct, "")
+End Function
+
+' Kartica kooperanta: sortirani period-redovi + pocetno stanje -> rezultat.
+' arr = (1..N, 1..8): 1 Datum, 2 BrojDok, 3 Parcela, 4 Opis, 5 Zaduzenje,
+' 6 Razduzenje, 7 AmbDelta, 8 RefKljuc.
+' Pre RF-06 je running saldo krenuo od NULE, pa je kolona "Saldo" zapravo
+' prikazivala neto promenu perioda (FM-0028 #1). Sada se, kad postoji promet
+' pre datumOd, ubacuje red IZV_POCETNO_STANJE i saldo krece od njega.
+' UKUPNO zadrzava PROMET PERIODA u kolonama 5/6, a kolona 7 je ZAVRSNI saldo
+' (pocetno + promet) -- to je red koji operater cita kao dug kooperanta.
+' Returns: 2D Array (1..N[+1], 1..9)
+Public Function KarticaRezultatSaPocetnim(ByVal arr As Variant, _
+                                          ByVal pocetniSaldo As Double, _
+                                          ByVal pocetniSaldoAmb As Double) As Variant
+    Dim redova As Long
+    redova = 0
+    If IsArray(arr) Then
+        If Not IsEmpty(arr) Then redova = UBound(arr, 1)
+    End If
+
+    Dim imaPocetno As Boolean
+    imaPocetno = (pocetniSaldo <> 0 Or pocetniSaldoAmb <> 0)
+
+    If redova = 0 And Not imaPocetno Then
+        KarticaRezultatSaPocetnim = Empty
+        Exit Function
+    End If
+
+    Dim offset As Long
+    offset = 0
+    If imaPocetno Then offset = 1
+
+    Dim result() As Variant
+    ReDim result(1 To redova + offset + 1, 1 To 9)
+
+    Dim runSaldo As Double, runSaldoAmb As Double
+    runSaldo = pocetniSaldo
+    runSaldoAmb = pocetniSaldoAmb
+
+    If imaPocetno Then
+        result(1, 1) = ""                  ' bez datuma: nije promet, nego stanje
+        result(1, 2) = ""
+        result(1, 3) = ""
+        result(1, 4) = IZV_POCETNO_STANJE
+        result(1, 5) = Empty               ' ne ulazi u promet perioda
+        result(1, 6) = Empty
+        result(1, 7) = pocetniSaldo
+        result(1, 8) = pocetniSaldoAmb
+        result(1, 9) = ""
+    End If
+
+    Dim totZad As Double, totRaz As Double
+    Dim i As Long
+    For i = 1 To redova
+        result(i + offset, 1) = arr(i, 1)
+        result(i + offset, 2) = arr(i, 2)
+        result(i + offset, 3) = arr(i, 3)
+        result(i + offset, 4) = arr(i, 4)
+        result(i + offset, 5) = arr(i, 5)
+        result(i + offset, 6) = arr(i, 6)
+
+        runSaldo = runSaldo + arr(i, 5) - arr(i, 6)
+        result(i + offset, 7) = runSaldo
+
+        runSaldoAmb = runSaldoAmb + arr(i, 7)
+        result(i + offset, 8) = runSaldoAmb
+
+        result(i + offset, 9) = arr(i, 8)
+
+        totZad = totZad + arr(i, 5)
+        totRaz = totRaz + arr(i, 6)
+    Next i
+
+    Dim ukRow As Long
+    ukRow = redova + offset + 1
+    result(ukRow, 4) = "UKUPNO"
+    result(ukRow, 5) = totZad
+    result(ukRow, 6) = totRaz
+    result(ukRow, 7) = runSaldo        ' zavrsni saldo = pocetno + promet perioda
+    result(ukRow, 8) = runSaldoAmb
+    result(ukRow, 9) = ""
+
+    KarticaRezultatSaPocetnim = result
+End Function
+
+' Pregled ambalaze kooperanta: isti princip kao KarticaRezultatSaPocetnim.
+' arr = (1..N, 1..5): 1 Datum, 2 BrojDok, 3 Opis, 4 Ulaz, 5 Izlaz.
+' Returns: 2D Array (1..N[+1], 1..6); kol. 6 = running saldo od pocetnog stanja.
+Public Function KarticaAmbRezultatSaPocetnim(ByVal arr As Variant, _
+                                             ByVal pocetniSaldo As Double) As Variant
+    Dim redova As Long
+    redova = 0
+    If IsArray(arr) Then
+        If Not IsEmpty(arr) Then redova = UBound(arr, 1)
+    End If
+
+    Dim imaPocetno As Boolean
+    imaPocetno = (pocetniSaldo <> 0)
+
+    If redova = 0 And Not imaPocetno Then
+        KarticaAmbRezultatSaPocetnim = Empty
+        Exit Function
+    End If
+
+    Dim offset As Long
+    offset = 0
+    If imaPocetno Then offset = 1
+
+    Dim result() As Variant
+    ReDim result(1 To redova + offset + 1, 1 To 6)
+
+    If imaPocetno Then
+        result(1, 1) = ""
+        result(1, 2) = ""
+        result(1, 3) = IZV_POCETNO_STANJE
+        result(1, 4) = Empty
+        result(1, 5) = Empty
+        result(1, 6) = pocetniSaldo
+    End If
+
+    Dim runSaldo As Double, totU As Double, totI As Double
+    runSaldo = pocetniSaldo
+
+    Dim i As Long
+    For i = 1 To redova
+        result(i + offset, 1) = arr(i, 1)
+        result(i + offset, 2) = arr(i, 2)
+        result(i + offset, 3) = arr(i, 3)
+        result(i + offset, 4) = arr(i, 4)
+        result(i + offset, 5) = arr(i, 5)
+        runSaldo = runSaldo + arr(i, 4) - arr(i, 5)
+        result(i + offset, 6) = runSaldo
+        totU = totU + arr(i, 4)
+        totI = totI + arr(i, 5)
+    Next i
+
+    Dim ukRow As Long
+    ukRow = redova + offset + 1
+    result(ukRow, 3) = "UKUPNO"
+    result(ukRow, 4) = totU
+    result(ukRow, 5) = totI
+    result(ukRow, 6) = runSaldo        ' zavrsno stanje, ne neto promena perioda
+
+    KarticaAmbRezultatSaPocetnim = result
+End Function
+
 Public Function ReportSaldoOM(ByVal stanicaID As String, _
                               ByVal datumOd As Date, _
                               ByVal datumDo As Date) As Variant
@@ -79,13 +318,17 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         novacData = ExcludeStornirano(novacData, TBL_NOVAC)
     End If
     
+    Dim colNovKoop As Long, colNovIsplata As Long, colNovDatum As Long
+    Dim colNovTip As Long, colNovOMID As Long
+    Dim n As Long
+
     If IsArray(novacData) And Not IsEmpty(novacData) Then
-        Dim colNovKoop As Long, colNovIsplata As Long, colNovDatum As Long
         colNovKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, "modIzvestaj.ReportSaldoOM")
         colNovIsplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA, "modIzvestaj.ReportSaldoOM")
         colNovDatum = RequireColumnIndex(TBL_NOVAC, COL_NOV_DATUM, "modIzvestaj.ReportSaldoOM")
-        
-        Dim n As Long
+        colNovTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, "modIzvestaj.ReportSaldoOM")
+        colNovOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, "modIzvestaj.ReportSaldoOM")
+
         For n = 1 To UBound(novacData, 1)
             Dim koopID As String
             koopID = CStr(novacData(n, colNovKoop))
@@ -93,17 +336,16 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
                 If IsDate(novacData(n, colNovDatum)) Then
                     If CDate(novacData(n, colNovDatum)) >= datumOd And _
                        CDate(novacData(n, colNovDatum)) <= datumDo Then
-                        ' Kooperant ins dict aufnehmen falls noch nicht vorhanden
-                        If Not dict.Exists(koopID) Then
-                            ' Pruefen ob Kooperant zu dieser Station gehoert
-                            Dim koopStation As String
-                            If koopStanicaDict.Exists(koopID) Then koopStation = koopStanicaDict(koopID) Else koopStation = ""
-                            If koopStation = stanicaID Then
-                                dict.Add koopID, Array(0#, 0#, 0#)
-                            End If
-                        End If
-                        
-                        If dict.Exists(koopID) Then
+                        ' Isplata pripada stanici po OMID-u REDA (istorijski), a tek
+                        ' za redove bez OMID-a po maticnoj stanici kooperanta.
+                        ' Pre RF-06 se gledala samo maticna stanica, pa je isplata
+                        ' izvrsena na jednom OM-u ulazila u izvestaj drugog OM-a.
+                        Dim koopStation As String
+                        If koopStanicaDict.Exists(koopID) Then koopStation = koopStanicaDict(koopID) Else koopStation = ""
+
+                        If NovacRedPripadaStanici(CStr(novacData(n, colNovOMID)), koopStation, stanicaID) Then
+                            If Not dict.Exists(koopID) Then dict.Add koopID, Array(0#, 0#, 0#)
+
                             If Not novacDict.Exists(koopID) Then novacDict.Add koopID, 0#
                             If IsNumeric(novacData(n, colNovIsplata)) Then
                                 novacDict(koopID) = novacDict(koopID) + CDbl(novacData(n, colNovIsplata))
@@ -114,17 +356,12 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
             End If
         Next n
     End If
-    
+
         ' --- OM Avans berechnen (VOR dem ReDim) ---
     Dim omAvans As Double
     omAvans = 0
-    
+
     If IsArray(novacData) And Not IsEmpty(novacData) Then
-        Dim colNovTip As Long
-        colNovTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, "modIzvestaj.ReportSaldoOM")
-        Dim colNovOMID As Long
-        colNovOMID = RequireColumnIndex(TBL_NOVAC, COL_NOV_OM_ID, "modIzvestaj.ReportSaldoOM")
-        
         For n = 1 To UBound(novacData, 1)
             If CStr(novacData(n, colNovOMID)) = stanicaID Then
                 If IsDate(novacData(n, colNovDatum)) Then
@@ -276,13 +513,16 @@ Public Function ReportSaldoOM(ByVal stanicaID As String, _
         totNov = totNov + omAvans
     End If
     
-    ' Agrohemija (nerasporedjena -- ohne Kooperant)
+    ' Agrohemija (nerasporedjena -- ohne Kooperant).
+    ' tblMagacin nema kolonu stanice, pa se ovaj iznos NE moze pripisati ni jednom
+    ' OM-u: isti broj se pojavljuje u izvestaju SVAKE stanice. Zato ostaje kao
+    ' informativan red, ali od RF-06 NE ulazi u UKUPNO (inace bi zbir po stanicama
+    ' visestruko brojao isti trosak -- FM-0028 #10).
     If agroBezStanica > 0 Then
         Dim agroRow As Long
         agroRow = rowCount - 1
-        result(agroRow, 1) = "AGROHEMIJA (nerasporedjena)"
+        result(agroRow, 1) = "AGROHEMIJA (nerasporedjena, van UKUPNO)"
         result(agroRow, 5) = agroBezStanica
-        totAgro = totAgro + agroBezStanica
     End If
     
     ' UKUPNO
@@ -310,14 +550,21 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
     ' Returns: 2D Array
     ' (1)=Datum, (2)=BrojDok, (3)=BrojParcele, (4)=Opis,
     ' (5)=Zaduzenje, (6)=Razduzenje, (7)=Saldo,
-    ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena; period od 0;
+    ' (8)=SaldoAmbalaze (running; gajbe = Izdata - Primljena;
     '     ukljucuje i samostalna kretanja ambalaze van otkupa),
     ' (9)=RefKljuc reda ("OTK|<OtkupID>" / "NOV" / "MAG" / "AMB") za Detalje otkupa
-    
+    '
+    ' RF-06: promet PRE datumOd se vise ne odbacuje nego se sabira u pocetno
+    ' stanje, pa kartica krece od stanja duga a ne od nule (FM-0028 #1).
+
     Dim moves As New Collection
-    
+
+    Dim pocetniSaldo As Double, pocetniSaldoAmb As Double
+    pocetniSaldo = 0
+    pocetniSaldoAmb = 0
+
     Dim i As Long
-    
+
     ' 1. Otkup = Zaduzenje
     Dim otkData As Variant
     otkData = GetTableData(TBL_OTKUP)
@@ -352,21 +599,21 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                         Dim otkDatum As Date
                         otkDatum = CDate(otkData(i, colOtkDat))
                         
-                        If otkDatum >= datumOd And otkDatum <= datumDo Then
+                        If otkDatum <= datumDo Then
                             Dim vr As Double
                             Dim otkKol As Double
-                            
+
                             vr = 0
                             otkKol = 0
-                            
+
                             If IsNumeric(otkData(i, colOtkKol)) Then
                                 otkKol = CDbl(otkData(i, colOtkKol))
                             End If
-                            
+
                             If IsNumeric(otkData(i, colOtkCena)) Then
                                 vr = otkKol * CDbl(otkData(i, colOtkCena))
                             End If
-                            
+
                             Dim opis As String
                             opis = "Otkup " & CStr(otkData(i, colOtkVrsta)) & " " & _
                                    CStr(otkData(i, colOtkKlasa)) & " " & _
@@ -382,15 +629,20 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                 If IsNumeric(otkData(i, colOtkAmbIzd)) Then ambIzdata = CDbl(otkData(i, colOtkAmbIzd))
                             End If
 
-                            moves.Add Array( _
-                                otkDatum, _
-                                CStr(otkData(i, colOtkBrDok)), _
-                                CStr(otkData(i, colParcela)), _
-                                opis, _
-                                vr, _
-                                0#, _
-                                ambIzdata - ambPrimljena, _
-                                "OTK|" & CStr(otkData(i, colOtkID)))
+                            If otkDatum < datumOd Then
+                                pocetniSaldo = pocetniSaldo + vr
+                                pocetniSaldoAmb = pocetniSaldoAmb + (ambIzdata - ambPrimljena)
+                            Else
+                                moves.Add Array( _
+                                    otkDatum, _
+                                    CStr(otkData(i, colOtkBrDok)), _
+                                    CStr(otkData(i, colParcela)), _
+                                    opis, _
+                                    vr, _
+                                    0#, _
+                                    ambIzdata - ambPrimljena, _
+                                    "OTK|" & CStr(otkData(i, colOtkID)))
+                            End If
                         End If
                     End If
                 End If
@@ -420,34 +672,38 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                         Dim novDatum As Date
                         novDatum = CDate(novData(n, colNovDat))
                         
-                        If novDatum >= datumOd And novDatum <= datumDo Then
+                        If novDatum <= datumDo Then
                             Dim iznos As Double
                             iznos = 0
                             If IsNumeric(novData(n, colNovIsplata)) Then
                                 iznos = CDbl(novData(n, colNovIsplata))
                             End If
-                            
+
                             If iznos > 0 Then
-                                Dim tipNovca As String
-                                Dim novOpis As String
-                                
-                                tipNovca = CStr(novData(n, colNovTip))
-                                Select Case tipNovca
-                                    Case NOV_KES_OTKUPAC_KOOP: novOpis = "Ke" & ChrW(353) & " Otkupac"
-                                    Case NOV_VIRMAN_FIRMA_KOOP: novOpis = "Virman Firma"
-                                    Case NOV_VIRMAN_AVANS_KOOP: novOpis = "Virman Avans"
-                                    Case Else: novOpis = tipNovca
-                                End Select
-                                
-                                moves.Add Array( _
-                                    novDatum, _
-                                    CStr(novData(n, colNovBrDok)), _
-                                    "", _
-                                    novOpis, _
-                                    0#, _
-                                    iznos, _
-                                    0#, _
-                                    "NOV")
+                                If novDatum < datumOd Then
+                                    pocetniSaldo = pocetniSaldo - iznos
+                                Else
+                                    Dim tipNovca As String
+                                    Dim novOpis As String
+
+                                    tipNovca = CStr(novData(n, colNovTip))
+                                    Select Case tipNovca
+                                        Case NOV_KES_OTKUPAC_KOOP: novOpis = "Ke" & ChrW(353) & " Otkupac"
+                                        Case NOV_VIRMAN_FIRMA_KOOP: novOpis = "Virman Firma"
+                                        Case NOV_VIRMAN_AVANS_KOOP: novOpis = "Virman Avans"
+                                        Case Else: novOpis = tipNovca
+                                    End Select
+
+                                    moves.Add Array( _
+                                        novDatum, _
+                                        CStr(novData(n, colNovBrDok)), _
+                                        "", _
+                                        novOpis, _
+                                        0#, _
+                                        iznos, _
+                                        0#, _
+                                        "NOV")
+                                End If
                             End If
                         End If
                     End If
@@ -484,27 +740,31 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                             Dim magDatum As Date
                             magDatum = CDate(magData(m, colMagDat))
                             
-                            If magDatum >= datumOd And magDatum <= datumDo Then
+                            If magDatum <= datumDo Then
                                 Dim magVr As Double
                                 magVr = 0
                                 If IsNumeric(magData(m, colMagVrednost)) Then
                                     magVr = CDbl(magData(m, colMagVrednost))
                                 End If
-                                
+
                                 If magVr > 0 Then
-                                    Dim artNaziv As String
-                                    Dim artKey As String: artKey = CStr(magData(m, colMagArtikal))
-                                    If artikalDict.Exists(artKey) Then artNaziv = artikalDict(artKey) Else artNaziv = ""
-                                    
-                                    moves.Add Array( _
-                                        magDatum, _
-                                        CStr(magData(m, colMagBrDok)), _
-                                        "", _
-                                        "Agrohemija " & artNaziv, _
-                                        0#, _
-                                        magVr, _
-                                        0#, _
-                                        "MAG")
+                                    If magDatum < datumOd Then
+                                        pocetniSaldo = pocetniSaldo - magVr
+                                    Else
+                                        Dim artNaziv As String
+                                        Dim artKey As String: artKey = CStr(magData(m, colMagArtikal))
+                                        If artikalDict.Exists(artKey) Then artNaziv = artikalDict(artKey) Else artNaziv = ""
+
+                                        moves.Add Array( _
+                                            magDatum, _
+                                            CStr(magData(m, colMagBrDok)), _
+                                            "", _
+                                            "Agrohemija " & artNaziv, _
+                                            0#, _
+                                            magVr, _
+                                            0#, _
+                                            "MAG")
+                                    End If
                                 End If
                             End If
                         End If
@@ -550,7 +810,7 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                         If IsDate(ambData(a, cAmbDat)) Then
                             Dim aDat As Date
                             aDat = CDate(ambData(a, cAmbDat))
-                            If aDat >= datumOd And aDat <= datumDo Then
+                            If aDat <= datumDo Then
                                 Dim aKol As Double
                                 aKol = 0
                                 If IsNumeric(ambData(a, cAmbKol)) Then aKol = CDbl(ambData(a, cAmbKol))
@@ -560,6 +820,11 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                                     aDelta = aKol            ' OM -> koop (drzi vise)
                                 Else
                                     aDelta = -aKol           ' koop -> OM (vratio)
+                                End If
+
+                                If aDat < datumOd Then
+                                    pocetniSaldoAmb = pocetniSaldoAmb + aDelta
+                                    GoTo NextAmbRed
                                 End If
 
                                 Dim aTip As String
@@ -585,77 +850,47 @@ Public Function ReportKarticaKooperanta(ByVal kooperantID As String, _
                         End If
                     End If
                 End If
+NextAmbRed:
             Next a
         End If
     End If
 
-    If moves.count = 0 Then
+    If moves.count = 0 And pocetniSaldo = 0 And pocetniSaldoAmb = 0 Then
         ReportKarticaKooperanta = Empty
         Exit Function
     End If
-    
+
     ' Prebaci u niz za sortiranje:
     ' 1 Datum, 2 BrojDok, 3 BrojParcele, 4 Opis, 5 Zaduzenje, 6 Razduzenje,
     ' 7 AmbDelta (Izdata - Primljena), 8 RefKljuc
-    Dim arr() As Variant
-    ReDim arr(1 To moves.count, 1 To 8)
+    Dim arr As Variant
+    arr = Empty
 
-    For i = 1 To moves.count
-        Dim mv As Variant
-        mv = moves(i)
-        arr(i, 1) = mv(0)
-        arr(i, 2) = mv(1)
-        arr(i, 3) = mv(2)
-        arr(i, 4) = mv(3)
-        arr(i, 5) = mv(4)
-        arr(i, 6) = mv(5)
-        arr(i, 7) = mv(6)
-        arr(i, 8) = mv(7)
-    Next i
-    
-    ' Sort po datumu
-    ' Sort po datumu, sekundarno po broju dokumenta
-    arr = SortArray(arr, 1, True, 2)
-    
-    ' Rezultat: running saldo novca (7) + running saldo ambalaze (8);
-    ' kol. 9 = ref-kljuc reda za "Detalji otkupa".
+    If moves.count > 0 Then
+        Dim tmpArr() As Variant
+        ReDim tmpArr(1 To moves.count, 1 To 8)
+
+        For i = 1 To moves.count
+            Dim mv As Variant
+            mv = moves(i)
+            tmpArr(i, 1) = mv(0)
+            tmpArr(i, 2) = mv(1)
+            tmpArr(i, 3) = mv(2)
+            tmpArr(i, 4) = mv(3)
+            tmpArr(i, 5) = mv(4)
+            tmpArr(i, 6) = mv(5)
+            tmpArr(i, 7) = mv(6)
+            tmpArr(i, 8) = mv(7)
+        Next i
+
+        ' Sort po datumu, sekundarno po broju dokumenta
+        arr = SortArray(tmpArr, 1, True, 2)
+    End If
+
+    ' Rezultat: red pocetnog stanja (ako ga ima) + running saldo novca (7) i
+    ' ambalaze (8); kol. 9 = ref-kljuc reda za "Detalji otkupa".
     ' GenerateKarticaReport i PrintKarticaPDF citaju kol. 1-8; kol. 9 je skrivena.
-    Dim result() As Variant
-    ReDim result(1 To UBound(arr, 1) + 1, 1 To 9)
-
-    Dim runSaldo As Double, runSaldoAmb As Double
-    Dim totZad As Double, totRaz As Double
-
-    For i = 1 To UBound(arr, 1)
-        result(i, 1) = arr(i, 1) ' Datum
-        result(i, 2) = arr(i, 2) ' BrojDok
-        result(i, 3) = arr(i, 3) ' BrojParcele
-        result(i, 4) = arr(i, 4) ' Opis
-        result(i, 5) = arr(i, 5) ' Zaduzenje
-        result(i, 6) = arr(i, 6) ' Razduzenje
-
-        runSaldo = runSaldo + arr(i, 5) - arr(i, 6)
-        result(i, 7) = runSaldo
-
-        runSaldoAmb = runSaldoAmb + arr(i, 7)   ' AmbDelta (Izdata - Primljena)
-        result(i, 8) = runSaldoAmb               ' Saldo ambalaze (running, gajbe)
-
-        result(i, 9) = arr(i, 8) ' RefKljuc (OTK|<id> / NOV / MAG)
-
-        totZad = totZad + arr(i, 5)
-        totRaz = totRaz + arr(i, 6)
-    Next i
-
-    Dim ukRow As Long
-    ukRow = UBound(arr, 1) + 1
-    result(ukRow, 4) = "UKUPNO"
-    result(ukRow, 5) = totZad
-    result(ukRow, 6) = totRaz
-    result(ukRow, 7) = totZad - totRaz
-    result(ukRow, 8) = runSaldoAmb   ' neto saldo ambalaze za period
-    result(ukRow, 9) = ""
-    
-    ReportKarticaKooperanta = result
+    ReportKarticaKooperanta = KarticaRezultatSaPocetnim(arr, pocetniSaldo, pocetniSaldoAmb)
     Exit Function
 
 EH:
@@ -779,7 +1014,9 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
     ' Returns: 2D Array (1)=Datum (2)=BrojDok (3)=Opis (4)=Ulaz (5)=Izlaz (6)=Saldo
     ' Smer kanonski (kao GetAmbalazeStanje): Ulaz (+ OM izdao prazne),
     ' Izlaz (- koop predao pune). Saldo (running) = SumaUlaz - SumaIzlaz =
-    ' koliko gajbica kooperant drzi/duguje. Period od 0 (kao novcana kartica).
+    ' koliko gajbica kooperant drzi/duguje.
+    ' RF-06: kretanja PRE datumOd ulaze u red IZV_POCETNO_STANJE, pa saldo vise
+    ' ne krece od nule (FM-0028 #1, ista greska kao na novcanoj kartici).
 
     Dim ambData As Variant
     ambData = GetTableData(TBL_AMBALAZA)
@@ -810,6 +1047,9 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
     Set brDokDict = BuildOtkupBrojDokDict()
 
     Dim moves As New Collection
+    Dim pocetniSaldo As Double
+    pocetniSaldo = 0
+
     Dim i As Long
     For i = 1 To UBound(ambData, 1)
         If NzToText(ambData(i, colEntTip)) = "Kooperant" And _
@@ -817,7 +1057,7 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
             If IsDate(ambData(i, colDat)) Then
                 Dim d As Date
                 d = CDate(ambData(i, colDat))
-                If d >= datumOd And d <= datumDo Then
+                If d <= datumDo Then
                     Dim kol As Double
                     kol = 0
                     If IsNumeric(ambData(i, colKol)) Then kol = CDbl(ambData(i, colKol))
@@ -830,6 +1070,11 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
                         ulaz = kol
                     Else
                         izlaz = kol
+                    End If
+
+                    If d < datumOd Then
+                        pocetniSaldo = pocetniSaldo + ulaz - izlaz
+                        GoTo NextAmbKartRed
                     End If
 
                     Dim dokID As String
@@ -853,49 +1098,33 @@ Public Function ReportKarticaAmbalaze(ByVal kooperantID As String, _
                 End If
             End If
         End If
+NextAmbKartRed:
     Next i
 
-    If moves.count = 0 Then
+    If moves.count = 0 And pocetniSaldo = 0 Then
         ReportKarticaAmbalaze = Empty
         Exit Function
     End If
 
-    Dim arr() As Variant
-    ReDim arr(1 To moves.count, 1 To 5)
-    For i = 1 To moves.count
-        Dim mv As Variant
-        mv = moves(i)
-        arr(i, 1) = mv(0)
-        arr(i, 2) = mv(1)
-        arr(i, 3) = mv(2)
-        arr(i, 4) = mv(3)
-        arr(i, 5) = mv(4)
-    Next i
-    arr = SortArray(arr, 1, True, 2)
+    Dim arr As Variant
+    arr = Empty
 
-    Dim result() As Variant
-    ReDim result(1 To UBound(arr, 1) + 1, 1 To 6)
-    Dim runSaldo As Double, totU As Double, totI As Double
-    For i = 1 To UBound(arr, 1)
-        result(i, 1) = arr(i, 1)
-        result(i, 2) = arr(i, 2)
-        result(i, 3) = arr(i, 3)
-        result(i, 4) = arr(i, 4)
-        result(i, 5) = arr(i, 5)
-        runSaldo = runSaldo + arr(i, 4) - arr(i, 5)
-        result(i, 6) = runSaldo
-        totU = totU + arr(i, 4)
-        totI = totI + arr(i, 5)
-    Next i
+    If moves.count > 0 Then
+        Dim tmpArr() As Variant
+        ReDim tmpArr(1 To moves.count, 1 To 5)
+        For i = 1 To moves.count
+            Dim mv As Variant
+            mv = moves(i)
+            tmpArr(i, 1) = mv(0)
+            tmpArr(i, 2) = mv(1)
+            tmpArr(i, 3) = mv(2)
+            tmpArr(i, 4) = mv(3)
+            tmpArr(i, 5) = mv(4)
+        Next i
+        arr = SortArray(tmpArr, 1, True, 2)
+    End If
 
-    Dim ukRow As Long
-    ukRow = UBound(arr, 1) + 1
-    result(ukRow, 3) = "UKUPNO"
-    result(ukRow, 4) = totU
-    result(ukRow, 5) = totI
-    result(ukRow, 6) = totU - totI
-
-    ReportKarticaAmbalaze = result
+    ReportKarticaAmbalaze = KarticaAmbRezultatSaPocetnim(arr, pocetniSaldo)
     Exit Function
 
 EH:
@@ -1547,15 +1776,14 @@ Public Function ReportOtkupRoba(ByVal entitetTip As String, _
     '   Vozac: Nr, Vrsta, Kg, RSD
     ' Letzte Zeile = UKUPNO
     
-    If entitetTip = "OM" Then
-        ReportOtkupRoba = ReportOtkupRobaOM(entitetID, datumOd, datumDo)
-    ElseIf entitetTip = "Kupac" Then
-        ReportOtkupRoba = ReportOtkupRobaKupac(entitetID, datumOd, datumDo)
-    ElseIf entitetTip = "Vozac" Then
-        ReportOtkupRoba = ReportOtkupRobaVozac(entitetID, datumOd, datumDo)
-    Else
-        ReportOtkupRoba = Empty
-    End If
+    ' Eksplicitan dispatch (RF-06): nepodrzan tip daje Empty, nikad "neki drugi"
+    ' izvestaj pod pogresnim naslovom.
+    Select Case entitetTip
+        Case "OM":    ReportOtkupRoba = ReportOtkupRobaOM(entitetID, datumOd, datumDo)
+        Case "Kupac": ReportOtkupRoba = ReportOtkupRobaKupac(entitetID, datumOd, datumDo)
+        Case "Vozac": ReportOtkupRoba = ReportOtkupRobaVozac(entitetID, datumOd, datumDo)
+        Case Else:    ReportOtkupRoba = Empty
+    End Select
     Exit Function
 
 EH:
@@ -1634,6 +1862,7 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     Dim totOtp As Double, totBlokovi As Double
     Dim totRazlika As Double, totManjak As Double
     Dim totPrijemnica As Double
+    Dim totOtpSaPrijemom As Double   ' osnovica za UKUPNO manjak % (samo redovi sa prijemom)
     Dim malinaMode As Boolean: malinaMode = IsMalinaMode()
     ' Mapa vozaca (ID -> "Ime Prezime") -- jednom, umesto LookupValue u petlji nize.
     Dim vozacDict As Object
@@ -1652,36 +1881,105 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         
         Dim razlika As Double
         razlika = kgBlokovi - kgOtp
-        
+
         ' Manjak proportional berechnen
         Dim thisBrZbirne As String
-        thisBrZbirne = CStr(otpData(i, colBrZbirne))
-        
-        Dim manjak As Double: manjak = 0
-        Dim manjakPct As Double: manjakPct = 0
+        thisBrZbirne = Trim$(CStr(otpData(i, colBrZbirne)))
+
+        ' Vozac i klasa otpremnice -- treba za razresenje STAVKE zbirne (dole) i
+        ' za prikaz, pa se citaju pre oba.
+        Dim vozID As String
+        vozID = Trim$(CStr(otpData(i, colVozac)))
+        Dim klasaOtp As String
+        klasaOtp = KlasaOrDefault(otpData(i, colKlasa))
+
+        ' Prijem po otpremnici -- vezan za STAVKU (vlasnik + Klasa), ne za broj.
+        ' Otpremnica nosi BrojZbirne, VozacID i Klasu, ali ne i KupacID, pa se
+        ' vlasnik razresava ovako:
+        '   #V = 1  -> broj ima jednog vlasnika: agregat po (broj, klasa) je
+        '              dokazano siguran (i hvata starije prijemnice bez vlasnika),
+        '   #V > 1  -> broj dele dve zbirne: pokusaj razresenja po vozacu (#O);
+        '              ako ne uspe ili postoji nepripisiva prijemnica -> fail-closed
+        '              oznaka IZV_VLASNIK_NEJASAN, bez izmisljene brojke.
+        ' Klasa MORA biti u kljucu: Klasa I i II istog dokumenta dele broj, vozaca
+        ' i kupca, ali imaju zasebnu otpremnicu/zbirnu/prijemnicu. Bez nje bi se
+        ' prijem obe klase sabrao i taj zbir dodelio SVAKOJ klasi (u malina modu
+        ' bukvalno duplo -- UKUPNO prijem 2x stvarni).
+        ' Bez prijema red NEMA brojku manjka nego oznaku -- pre RF-06 se isti
+        ' slucaj prikazivao kao 0 kg / 0,00% (FM-0028 #5).
         Dim prijemnicaKg As Double: prijemnicaKg = 0
-        Dim mVals As Variant
-        If manjakDict.Exists(thisBrZbirne) Then
-            mVals = manjakDict(thisBrZbirne)
-            Dim zbirnaTotal As Double: zbirnaTotal = mVals(0)
-            Dim prijTotal As Double: prijTotal = mVals(1)
-            
-            If prijTotal > 0 Then
-                If malinaMode Then
-                    ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica -> direktno.
-                    prijemnicaKg = prijTotal
-                ElseIf zbirnaTotal > 0 Then
-                    ' Prijemnica kg srazmerno udelu otpremnice u zbirnoj otpremnici.
-                    prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
+        Dim imaPrijem As Boolean: imaPrijem = False
+        Dim oznakaBez As String: oznakaBez = IZV_NEMA_PRIJEMA
+        Dim zbirnaTotal As Double: zbirnaTotal = 0
+        Dim prijTotal As Double: prijTotal = 0
+
+        Dim nVlasnika As Long: nVlasnika = 0
+        If manjakDict.Exists("#V|" & thisBrZbirne) Then nVlasnika = CLng(manjakDict("#V|" & thisBrZbirne))
+
+        Dim cntNejasan As Long: cntNejasan = 0
+        If manjakDict.Exists("#N|" & thisBrZbirne) Then cntNejasan = CLng(manjakDict("#N|" & thisBrZbirne))
+
+        Dim stavkaKey As String: stavkaKey = ""
+        Dim razresen As Boolean: razresen = False
+        Dim cntPrijem As Long: cntPrijem = 0
+
+        If nVlasnika = 1 Then
+            razresen = True
+            stavkaKey = ZbirnaStavkaKljuc(CStr(manjakDict("#1|" & thisBrZbirne)), klasaOtp)
+            ' Prijem po (broj, klasa): dokazano jedan vlasnik.
+            Dim bkKey As String
+            bkKey = thisBrZbirne & "|" & klasaOtp
+            If manjakDict.Exists("#C|" & bkKey) Then cntPrijem = CLng(manjakDict("#C|" & bkKey))
+            If manjakDict.Exists("#K|" & bkKey) Then prijTotal = CDbl(manjakDict("#K|" & bkKey))
+        ElseIf nVlasnika > 1 Then
+            Dim vozKey As String
+            vozKey = "#O|" & thisBrZbirne & "|" & Trim$(vozID)
+            If manjakDict.Exists(vozKey) Then
+                razresen = True
+                stavkaKey = ZbirnaStavkaKljuc(CStr(manjakDict(vozKey)), klasaOtp)
+            End If
+            If razresen Then
+                If manjakDict.Exists(stavkaKey) Then
+                    Dim ownVals As Variant
+                    ownVals = manjakDict(stavkaKey)
+                    prijTotal = CDbl(ownVals(1))
+                    cntPrijem = CLng(ownVals(2))
                 End If
-                manjak = kgOtp - prijemnicaKg
-                If kgOtp > 0 Then manjakPct = manjak / kgOtp * 100
             End If
         End If
-        
+
+        If Len(stavkaKey) > 0 Then
+            If manjakDict.Exists(stavkaKey) Then
+                Dim zbVals As Variant
+                zbVals = manjakDict(stavkaKey)
+                zbirnaTotal = CDbl(zbVals(0))   ' osnovica srazmere = kg TE klase
+            End If
+        End If
+
+        Dim pz As Variant
+        pz = PrijemZaZbirnu(nVlasnika, razresen, cntNejasan, cntPrijem, prijTotal)
+        imaPrijem = CBool(pz(0))
+        oznakaBez = CStr(pz(2))
+
+        If imaPrijem Then
+            prijTotal = CDbl(pz(1))
+            If malinaMode Then
+                ' Malina: 1 otpremnica = 1 zbirna = 1 prijemnica PO KLASI -> direktno.
+                prijemnicaKg = prijTotal
+            ElseIf zbirnaTotal > 0 Then
+                ' Srazmerno udelu otpremnice u zbirnoj -- UNUTAR iste klase.
+                prijemnicaKg = prijTotal * (kgOtp / zbirnaTotal)
+            Else
+                ' Nema upotrebljive osnovice za srazmeru -> ne izmisljaj manjak.
+                imaPrijem = False
+                oznakaBez = IZV_NEMA_PRIJEMA
+            End If
+        End If
+
+        Dim mStavka As Variant
+        mStavka = ManjakStavka(kgOtp, prijemnicaKg, imaPrijem, oznakaBez)
+
         ' Vozac Name
-        Dim vozID As String
-        vozID = CStr(otpData(i, colVozac))
         Dim vozNaziv As String
         If vozID <> "" Then
             If vozacDict.Exists(vozID) Then vozNaziv = vozacDict(vozID) Else vozNaziv = ""
@@ -1697,18 +1995,28 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
         result(i, 6) = kgOtp
         result(i, 7) = kgBlokovi
         result(i, 8) = razlika
-        result(i, 9) = prijemnicaKg
-        result(i, 10) = manjak
-        result(i, 11) = manjakPct
+        result(i, 9) = mStavka(0)      ' Prijemnica kg (prazno kad nema prijema)
+        result(i, 10) = mStavka(1)     ' Manjak kg     (prazno kad nema prijema)
+        If imaPrijem Then
+            result(i, 11) = mStavka(2) ' Manjak %
+        Else
+            result(i, 11) = mStavka(3) ' oznaka "nema prijema"
+        End If
         result(i, 12) = "OTP|" & thisOtpID
-        
+
         totOtp = totOtp + kgOtp
         totBlokovi = totBlokovi + kgBlokovi
         totRazlika = totRazlika + razlika
-        totManjak = totManjak + manjak
-        totPrijemnica = totPrijemnica + prijemnicaKg
+
+        ' Manjak-total ide SAMO preko redova sa prijemom; inace bi otpremnice bez
+        ' prijemnice pomerale i zbir i procenat manjka.
+        If imaPrijem Then
+            totManjak = totManjak + CDbl(mStavka(1))
+            totPrijemnica = totPrijemnica + prijemnicaKg
+            totOtpSaPrijemom = totOtpSaPrijemom + kgOtp
+        End If
     Next i
-    
+
     ' UKUPNO
     result(rowCount + 1, 2) = "UKUPNO"
     result(rowCount + 1, 6) = totOtp
@@ -1716,8 +2024,8 @@ Private Function ReportOtkupRobaOM(ByVal stanicaID As String, _
     result(rowCount + 1, 8) = totRazlika
     result(rowCount + 1, 9) = totPrijemnica
     result(rowCount + 1, 10) = totManjak
-    If totOtp > 0 Then result(rowCount + 1, 11) = totManjak / totOtp * 100
-    
+    If totOtpSaPrijemom > 0 Then result(rowCount + 1, 11) = totManjak / totOtpSaPrijemom * 100
+
     ReportOtkupRobaOM = result
     Exit Function
 
@@ -1864,25 +2172,29 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
     fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM, "modIzvestaj.ReportAmbalaza"), "BETWEEN", datumOd, datumDo
     filters.Add fp
     
-    If entitetTip = "OM" Then
+    ' Eksplicitan dispatch (RF-06): nepoznat tip je pre padao kroz SVE grane bez
+    ' entitet filtera -> globalni ambalazni izvestaj pod naslovom entiteta
+    ' (FM-0028 #12).
+    Select Case entitetTip
+    Case "OM"
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza"), "=", entitetID
         filters.Add fp
-        
+
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza"), "=", "Stanica"
         filters.Add fp
-        
-    ElseIf entitetTip = "Kupac" Then
+
+    Case "Kupac"
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, "modIzvestaj.ReportAmbalaza"), "=", entitetID
         filters.Add fp
-        
+
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, "modIzvestaj.ReportAmbalaza"), "=", "Kupac"
         filters.Add fp
-        
-    ElseIf entitetTip = "Vozac" Then
+
+    Case "Vozac"
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, "modIzvestaj.ReportAmbalaza"), "=", entitetID
         filters.Add fp
@@ -1894,8 +2206,12 @@ Public Function ReportAmbalaza(ByVal entitetTip As String, _
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, "modIzvestaj.ReportAmbalaza"), "<>", DOK_TIP_OTKUP
         filters.Add fp
-    End If
-    
+
+    Case Else
+        ReportAmbalaza = Empty
+        Exit Function
+    End Select
+
     Dim filtered As Variant
     filtered = FilterArray(data, filters)
     If IsEmpty(filtered) Or Not IsArray(filtered) Then
@@ -2123,13 +2439,20 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
     On Error GoTo EH
     
     ' Returns: 2D Array (Vrsta, Kolicina, Vrednost, ProsecnaCena)
-    
+    '
+    ' RF-06: dispatch je eksplicitan. Pre toga je SVAKI tip koji nije "Kupac"
+    ' padao u otkup granu, pa je zbirni mod za Kooperante/Vozace (tab 6 je i njima
+    ' vidljiv) prikazivao GLOBALNU prosecnu cenu otkupa pod pogresnim naslovom
+    ' (FM-0028 #13). Sada takva kombinacija daje Empty = cista prazna lista;
+    ' vidljiva poruka i suzavanje tab-matrice idu u RF-07 (frmIzvestaj).
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+
     Dim i As Long
-    
-    If entitetTip = "Kupac" Then
+
+    Select Case entitetTip
+    Case "Kupac"
         Dim prijData As Variant
         prijData = GetPrijemniceByKupac(entitetID, datumOd, datumDo)
         If IsEmpty(prijData) Then
@@ -2163,8 +2486,9 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
             End If
             dict(vrsta) = vals
         Next i
-    Else
-        ' OM einzeln oder Zbirni (alle)
+
+    Case "OM", ""
+        ' OM einzeln (entitetID) oder Zbirni/alle (entitetID = "")
         Dim otkData As Variant
         If entitetID <> "" Then
             otkData = GetOtkupByStation(entitetID, datumOd, datumDo)
@@ -2205,13 +2529,19 @@ Public Function ReportProsecnaCena(ByVal entitetTip As String, _
             End If
             dict(key) = vals
         Next i
-    End If
-    
+
+    Case Else
+        ' "Vozac" / "Kooperant" i sve nepoznato: prosecna cena za taj entitet
+        ' nije definisana -> prazan izvestaj umesto tudjih brojki.
+        ReportProsecnaCena = Empty
+        Exit Function
+    End Select
+
     If dict.count = 0 Then
         ReportProsecnaCena = Empty
         Exit Function
     End If
-    
+
     Dim result() As Variant
     ReDim result(1 To dict.count, 1 To 4)
     
@@ -2246,21 +2576,37 @@ Public Function ReportManjak(ByVal entitetTip As String, _
     
     ' Returns: 2D Array (BrojZbirne, ZbirnaKg, PrijKg, ManjakKg, ManjakPct, ProsekGajbe)
     ' Letzte Zeile = UKUPNO
-    
+    '
+    ' RF-06:
+    '  - dispatch je eksplicitan; nepodrzan tip (npr. zbirni Kooperanti, kojima
+    '    je tab Manjak vidljiv) vise ne dobija GLOBALNI izvestaj (FM-0028 #4/#14);
+    '  - zbirna bez prijemnice nosi oznaku IZV_NEMA_PRIJEMA umesto 100% manjka
+    '    (isti podatak koji RobaOM prikazuje kao "nema prijema" -- FM-0028 #5);
+    '  - UKUPNO se racuna SAMO nad zbirnama koje imaju prijem, pa nepreuzete
+    '    posiljke ne naduvavaju zbir i procenat manjka.
+
+    Select Case entitetTip
+        Case "", "OM", "Kupac", "Vozac"
+            ' podrzano (tblZbirna nema kolonu stanice -> "OM"/"" = bez entitet filtera)
+        Case Else
+            ReportManjak = Empty
+            Exit Function
+    End Select
+
     Dim zbrData As Variant
     zbrData = GetTableData(TBL_ZBIRNA)
     If IsEmpty(zbrData) Then
         ReportManjak = Empty
         Exit Function
     End If
-    
+
     Dim filters As New Collection
     Dim fp As clsFilterParam
-    
+
     Set fp = New clsFilterParam
     fp.Init RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, "modIzvestaj.ReportManjak"), "BETWEEN", datumOd, datumDo
     filters.Add fp
-    
+
     If entitetTip = "Kupac" And entitetID <> "" Then
         Set fp = New clsFilterParam
         fp.Init RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modIzvestaj.ReportManjak"), "=", entitetID
@@ -2270,7 +2616,7 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         fp.Init RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportManjak"), "=", entitetID
         filters.Add fp
     End If
-    
+
     Dim filtered As Variant
     filtered = FilterArray(zbrData, filters)
     If IsEmpty(filtered) Then
@@ -2283,59 +2629,62 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         Exit Function
     End If
     
-    ' Prijemnica EINMAL laden fuer Performance
-    Dim prijData As Variant
-    prijData = GetTableData(TBL_PRIJEMNICA)
-    
-    If IsArray(prijData) Then
-        prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
-    End If
-    
-    Dim colPBrZbr As Long, colPKol As Long
-    If IsArray(prijData) And Not IsEmpty(prijData) Then
-        colPBrZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, "modIzvestaj.ReportManjak")
-        colPKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "modIzvestaj.ReportManjak")
-    End If
-    
+    ' Prijem + indeks vlasnika: deljeni owner-scoped agregat (modHelpers).
+    ' Raniji oblik je ovde rucno sabirao prijemnice po SAMOM BrojZbirne -- isti
+    ' propust koji je RF-05/AUD-052 vec dokazao na storno putanji.
+    Dim manjakDict As Object
+    Set manjakDict = BuildManjakDict()
+
     ' Zbirna-Daten
     Dim colBroj As Long, colZbrKol As Long, colZbrAmb As Long
+    Dim colZbrVoz As Long, colZbrKup As Long, colZbrKla As Long
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, "modIzvestaj.ReportManjak")
     colZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, "modIzvestaj.ReportManjak")
     colZbrAmb = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOL_AMB, "modIzvestaj.ReportManjak")
-    
-    ' Zbirne aggregieren (mehrere Zeilen pro BrojZbirne bei Klasa I + II)
+    colZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, "modIzvestaj.ReportManjak")
+    colZbrKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, "modIzvestaj.ReportManjak")
+    colZbrKla = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA, "modIzvestaj.ReportManjak")
+
+    ' Zbirne aggregieren po VLASNIKU (broj|vozac|kupac), ne po broju: dve aktivne
+    ' zbirne mogu deliti isti poslovni broj. Klasa I i II istog dokumenta ostaju
+    ' u ISTOM redu (izvestaj namerno prikazuje ceo dokument jednim redom), ali se
+    ' prijem svake klase cita ZASEBNO pa sabira -- prijemnice su po klasi.
     Dim zbrDict As Object
     Set zbrDict = CreateObject("Scripting.Dictionary")
-    
+
+    ' vlasnikKljuc -> Dictionary(klasa -> True): koje klase red obuhvata.
+    Dim klasePoVlasniku As Object
+    Set klasePoVlasniku = CreateObject("Scripting.Dictionary")
+
     Dim i As Long
     For i = 1 To UBound(filtered, 1)
         Dim brZbr As String
-        brZbr = CStr(filtered(i, colBroj))
-        If Not zbrDict.Exists(brZbr) Then zbrDict.Add brZbr, Array(0#, 0#)
+        brZbr = Trim$(CStr(filtered(i, colBroj)))
+        Dim vlKey As String
+        vlKey = ZbirnaVlasnikKljuc(brZbr, _
+                                   Trim$(NzToText(filtered(i, colZbrVoz))), _
+                                   Trim$(NzToText(filtered(i, colZbrKup))))
+
+        ' vals: 0 = zbirna kg, 1 = ambalaza, 2 = BrojZbirne (za prikaz)
+        If Not zbrDict.Exists(vlKey) Then
+            zbrDict.Add vlKey, Array(0#, 0#, brZbr)
+        End If
         Dim zv As Variant
-        zv = zbrDict(brZbr)
+        zv = zbrDict(vlKey)
         If IsNumeric(filtered(i, colZbrKol)) Then zv(0) = zv(0) + CDbl(filtered(i, colZbrKol))
         If IsNumeric(filtered(i, colZbrAmb)) Then zv(1) = zv(1) + CLng(filtered(i, colZbrAmb))
-        zbrDict(brZbr) = zv
+        zbrDict(vlKey) = zv
+
+        If Not klasePoVlasniku.Exists(vlKey) Then
+            klasePoVlasniku.Add vlKey, CreateObject("Scripting.Dictionary")
+        End If
+        Dim klSet As Object
+        Set klSet = klasePoVlasniku(vlKey)
+        Dim thisKlasa As String
+        thisKlasa = KlasaOrDefault(filtered(i, colZbrKla))
+        If Not klSet.Exists(thisKlasa) Then klSet.Add thisKlasa, True
     Next i
-    
-    ' Prijemnica pro BrojZbirne aggregieren
-    Dim prijDict As Object
-    Set prijDict = CreateObject("Scripting.Dictionary")
-    
-    If IsArray(prijData) Then
-        For i = 1 To UBound(prijData, 1)
-            Dim pBrZbr As String
-            pBrZbr = CStr(prijData(i, colPBrZbr))
-            If zbrDict.Exists(pBrZbr) Then
-                If Not prijDict.Exists(pBrZbr) Then prijDict.Add pBrZbr, 0#
-                If IsNumeric(prijData(i, colPKol)) Then
-                    prijDict(pBrZbr) = prijDict(pBrZbr) + CDbl(prijData(i, colPKol))
-                End If
-            End If
-        Next i
-    End If
-    
+
     ' Ergebnis
     Dim rowCount As Long
     rowCount = zbrDict.count
@@ -2343,41 +2692,84 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         ReportManjak = Empty
         Exit Function
     End If
-    
+
     Dim result() As Variant
     ReDim result(1 To rowCount + 1, 1 To 6)  ' +1 UKUPNO
-    
+
     Dim keys As Variant
     keys = zbrDict.keys
     Dim totalZbrKg As Double, totalPrijKg As Double
-    
+
     For i = 0 To zbrDict.count - 1
         zv = zbrDict(keys(i))
         Dim zbrKg As Double: zbrKg = zv(0)
         Dim zbrAmb As Long: zbrAmb = CLng(zv(1))
-        
+        Dim rowBroj As String: rowBroj = CStr(zv(2))
+
+        ' Vlasnik reda je ovde POZNAT (zbirna nosi i vozaca i kupca), pa se
+        ' prijem cita owner-scoped. Kad broj ima jednog vlasnika koristi se
+        ' agregat po (broj, klasa) -- hvata i starije prijemnice bez vlasnika.
+        ' Red pokriva ceo dokument, pa se prijem sabira PO KLASAMA koje red
+        ' obuhvata (prijemnice postoje po klasi, ne po dokumentu).
+        Dim nVlasnika As Long: nVlasnika = 0
+        If manjakDict.Exists("#V|" & rowBroj) Then nVlasnika = CLng(manjakDict("#V|" & rowBroj))
+
+        Dim cntNejasan As Long: cntNejasan = 0
+        If manjakDict.Exists("#N|" & rowBroj) Then cntNejasan = CLng(manjakDict("#N|" & rowBroj))
+
+        Dim cntPrijem As Long: cntPrijem = 0
         Dim prijKg As Double: prijKg = 0
-        If prijDict.Exists(keys(i)) Then prijKg = prijDict(keys(i))
-        
-        Dim manjakKg As Double: manjakKg = zbrKg - prijKg
-        Dim manjakPct As Double
-        If zbrKg > 0 Then manjakPct = manjakKg / zbrKg * 100 Else manjakPct = 0
-        
+
+        Dim rowKlase As Object
+        Set rowKlase = klasePoVlasniku(CStr(keys(i)))
+        Dim kl As Variant
+        For Each kl In rowKlase.keys
+            If nVlasnika <= 1 Then
+                Dim bkKey As String
+                bkKey = rowBroj & "|" & CStr(kl)
+                If manjakDict.Exists("#C|" & bkKey) Then cntPrijem = cntPrijem + CLng(manjakDict("#C|" & bkKey))
+                If manjakDict.Exists("#K|" & bkKey) Then prijKg = prijKg + CDbl(manjakDict("#K|" & bkKey))
+            Else
+                Dim skKey As String
+                skKey = ZbirnaStavkaKljuc(CStr(keys(i)), CStr(kl))
+                If manjakDict.Exists(skKey) Then
+                    Dim ownVals As Variant
+                    ownVals = manjakDict(skKey)
+                    prijKg = prijKg + CDbl(ownVals(1))
+                    cntPrijem = cntPrijem + CLng(ownVals(2))
+                End If
+            End If
+        Next kl
+
+        Dim pz As Variant
+        pz = PrijemZaZbirnu(nVlasnika, True, cntNejasan, cntPrijem, prijKg)
+        Dim imaPrijem As Boolean: imaPrijem = CBool(pz(0))
+        prijKg = CDbl(pz(1))
+
+        Dim mStavka As Variant
+        mStavka = ManjakStavka(zbrKg, prijKg, imaPrijem, CStr(pz(2)))
+
         Dim prosek As Double: prosek = 0
         If zbrAmb > 0 Then prosek = zbrKg / zbrAmb
-        
-        result(i + 1, 1) = keys(i)
+
+        result(i + 1, 1) = rowBroj
         result(i + 1, 2) = zbrKg
-        result(i + 1, 3) = prijKg
-        result(i + 1, 4) = manjakKg
-        result(i + 1, 5) = manjakPct
+        result(i + 1, 3) = mStavka(0)
+        result(i + 1, 4) = mStavka(1)
+        If imaPrijem Then
+            result(i + 1, 5) = mStavka(2)
+        Else
+            result(i + 1, 5) = mStavka(3)      ' "nema prijema" / "nejasan vlasnik"
+        End If
         result(i + 1, 6) = prosek
-        
-        totalZbrKg = totalZbrKg + zbrKg
-        totalPrijKg = totalPrijKg + prijKg
+
+        If imaPrijem Then
+            totalZbrKg = totalZbrKg + zbrKg
+            totalPrijKg = totalPrijKg + prijKg
+        End If
     Next i
-    
-    ' UKUPNO
+
+    ' UKUPNO -- samo zbirne sa prijemom (v. napomenu na vrhu funkcije).
     result(rowCount + 1, 1) = "UKUPNO"
     result(rowCount + 1, 2) = totalZbrKg
     result(rowCount + 1, 3) = totalPrijKg
@@ -2388,7 +2780,7 @@ Public Function ReportManjak(ByVal entitetTip As String, _
         result(rowCount + 1, 5) = 0
     End If
     result(rowCount + 1, 6) = ""
-    
+
     ReportManjak = result
     Exit Function
 

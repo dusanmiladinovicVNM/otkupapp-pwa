@@ -210,13 +210,72 @@ Public Function NzToText(ByVal v As Variant) As String
     End If
 End Function
 
-Public Function BuildManjakDict(Optional ByVal filterZbirneKeys As Object = Nothing) As Object
-    ' Returns: Dictionary BrojZbirne ? Array(ZbirnaKg, PrijemnicaKg)
-    
+' Klasa dokumenta sa defaultom. Prazna kolona (starija sema / rucni unos) znaci
+' Klasa I -- ista konvencija koju vec primenjuje auto-lanac hladnjace.
+Public Function KlasaOrDefault(ByVal v As Variant) As String
+    KlasaOrDefault = Trim$(NzToText(v))
+    If Len(KlasaOrDefault) = 0 Then KlasaOrDefault = KLASA_I
+End Function
+
+' VLASNIK zbirne (ko je nosilac dokumenta) = BrojZbirne + VozacID + KupacID.
+' ISTA definicija koju koristi modStorno.RequireJedanVlasnikPoBroju (AUD-052 /
+' RF-05: broj se generise po vozacu, a dokument pripada kupcu). NE uvoditi drugu.
+Public Function ZbirnaVlasnikKljuc(ByVal brojZbirne As String, _
+                                   ByVal vozacID As String, _
+                                   ByVal kupacID As String) As String
+    ZbirnaVlasnikKljuc = Trim$(brojZbirne) & "|" & Trim$(vozacID) & "|" & Trim$(kupacID)
+End Function
+
+' STAVKA dokumenta = vlasnik + Klasa. Klasa I i II istog dokumenta dele broj,
+' vozaca i kupca, ali imaju ZASEBNU otpremnicu, zbirnu i prijemnicu (auto-lanac
+' hladnjace ih vodi kroz ceo lanac odvojeno), pa je (BrojZbirne + Klasa) prava
+' granularnost za racun manjka -- isti kljuc koji auto-lanac vec koristi za
+' idempotenciju (modAutoHladnjaca.KeyZbrKlasa). Bez Klase u kljucu se prijem
+' obe klase sabere pa dodeli SVAKOJ klasi ponaosob.
+Public Function ZbirnaStavkaKljuc(ByVal vlasnikKljuc As String, _
+                                  ByVal klasa As String) As String
+    ZbirnaStavkaKljuc = vlasnikKljuc & "|" & KlasaOrDefault(klasa)
+End Function
+
+Public Function BuildManjakDict() As Object
+    ' Agregacija zbirna/prijemnica za racun manjka -- po VLASNIKU, ne po broju.
+    '
+    ' RF-06/AUD-023: raniji oblik je grupisao ISKLJUCIVO po `BrojZbirne`, a
+    ' RF-05/AUD-052 je vec dokazao da poslovni broj NIJE identitet -- dve aktivne
+    ' zbirne mogu deliti isti broj (razliciti vozac/kupac). Posledica je bila
+    ' sabiranje tudje prijemne kolicine, pa pogresan manjak i procenat.
+    '
+    ' Granularnost je STAVKA (vlasnik + Klasa), ne dokument: Klasa I i II dele
+    ' broj/vozaca/kupca ali imaju zasebnu otpremnicu, zbirnu i prijemnicu, pa bi
+    ' kljuc bez Klase sabrao prijem obe klase i taj zbir dodelio svakoj ponaosob.
+    '
+    ' Returns: Dictionary sa dve vrste kljuceva
+    '   <stavkaKljuc>               -> Array(ZbirnaKg, PrijemnicaKg, CntPrijem)
+    '                                  stavkaKljuc = broj|vozac|kupac|klasa
+    '   "#V|" & broj                -> Long: koliko RAZLICITIH aktivnih VLASNIKA
+    '                                  (vozac+kupac, BEZ klase) nosi taj BrojZbirne;
+    '                                  1 = broj je pouzdan. Dve klase istog
+    '                                  dokumenta NISU dva vlasnika.
+    '   "#1|" & broj                -> vlasnikKljuc (samo kad je vlasnik jedinstven)
+    '   "#O|" & broj & "|" & vozac  -> vlasnikKljuc (samo kad je po tom vozacu
+    '                                  razresenje jednoznacno)
+    '   "#N|" & broj                -> Long: prijemnice tog broja koje NEMAJU
+    '                                  kompletnog vlasnika (prazan vozac ili kupac,
+    '                                  ili kolona ne postoji) -> fail-closed signal
+    '   "#C|" & broj & "|" & klasa  -> Long/Double: prijem agregiran po (broj, klasa)
+    '   "#K|" & broj & "|" & klasa     BEZ vlasnika. Sme se koristiti iskljucivo kad
+    '                                  je "#V|" = 1, tj. kad je dokazano da broj ima
+    '                                  jednog vlasnika; pokriva starije prijemnice
+    '                                  kojima vlasnik nije popunjen. Isti (broj,
+    '                                  klasa) kljuc koji auto-lanac hladnjace vec
+    '                                  koristi za idempotenciju.
+    ' Prefiks "#" se ne moze pojaviti u BrojZbirne (`x/ddmmyy[-rb]`), pa nema
+    ' kolizije sa stavka kljucevima.
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
-    ' Zbirna
+
+    ' --- Zbirna ---
     Dim zbrData As Variant
     zbrData = GetTableData(TBL_ZBIRNA)
     If Not IsArray(zbrData) Then
@@ -228,23 +287,87 @@ Public Function BuildManjakDict(Optional ByVal filterZbirneKeys As Object = Noth
         Set BuildManjakDict = dict
         Exit Function
     End If
-    
-    Dim colBroj As Long, colZbrKol As Long
+
+    Dim colBroj As Long, colZbrKol As Long, colZbrVoz As Long, colZbrKup As Long
+    Dim colZbrKla As Long
     colBroj = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
     colZbrKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
-    
+    colZbrVoz = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC)
+    colZbrKup = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC)
+    colZbrKla = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA)
+
+    ' broj -> Dictionary(vlasnikKljuc -> vozacID); sluzi za brojanje VLASNIKA
+    ' (bez klase!) i za razresenje po vozacu (otpremnica nema KupacID).
+    Dim vlasniciPoBroju As Object
+    Set vlasniciPoBroju = CreateObject("Scripting.Dictionary")
+
     Dim z As Long
     For z = 1 To UBound(zbrData, 1)
         Dim brZbr As String
-        brZbr = CStr(zbrData(z, colBroj))
-        If Not dict.Exists(brZbr) Then dict.Add brZbr, Array(0#, 0#)
+        brZbr = Trim$(NzToText(zbrData(z, colBroj)))
+
+        Dim zVoz As String, zKup As String, zKla As String
+        zVoz = ""
+        zKup = ""
+        zKla = KLASA_I
+        If colZbrVoz > 0 Then zVoz = Trim$(NzToText(zbrData(z, colZbrVoz)))
+        If colZbrKup > 0 Then zKup = Trim$(NzToText(zbrData(z, colZbrKup)))
+        If colZbrKla > 0 Then zKla = KlasaOrDefault(zbrData(z, colZbrKla))
+
+        Dim vk As String
+        vk = ZbirnaVlasnikKljuc(brZbr, zVoz, zKup)
+
+        Dim sk As String
+        sk = ZbirnaStavkaKljuc(vk, zKla)
+
+        If Not dict.Exists(sk) Then dict.Add sk, Array(0#, 0#, 0&)
         Dim vals As Variant
-        vals = dict(brZbr)
+        vals = dict(sk)
         If IsNumeric(zbrData(z, colZbrKol)) Then vals(0) = vals(0) + CDbl(zbrData(z, colZbrKol))
-        dict(brZbr) = vals
+        dict(sk) = vals
+
+        If Not vlasniciPoBroju.Exists(brZbr) Then
+            vlasniciPoBroju.Add brZbr, CreateObject("Scripting.Dictionary")
+        End If
+        Dim vSet As Object
+        Set vSet = vlasniciPoBroju(brZbr)
+        If Not vSet.Exists(vk) Then vSet.Add vk, zVoz
     Next z
-    
-    ' Prijemnica
+
+    ' --- Indeks vlasnika po broju (#V / #1 / #O) ---
+    Dim bKey As Variant
+    For Each bKey In vlasniciPoBroju.keys
+        Set vSet = vlasniciPoBroju(bKey)
+        dict("#V|" & CStr(bKey)) = CLng(vSet.count)
+
+        If vSet.count = 1 Then
+            Dim onlyKey As Variant
+            For Each onlyKey In vSet.keys
+                dict("#1|" & CStr(bKey)) = CStr(onlyKey)
+            Next onlyKey
+        Else
+            ' Razresenje po vozacu: upisi samo ako je za tog vozaca JEDINSTVENO.
+            Dim perVoz As Object
+            Set perVoz = CreateObject("Scripting.Dictionary")
+            Dim vKey As Variant
+            For Each vKey In vSet.keys
+                Dim vz As String
+                vz = CStr(vSet(vKey))
+                If Not perVoz.Exists(vz) Then
+                    perVoz.Add vz, CStr(vKey)
+                Else
+                    perVoz(vz) = ""          ' vise vlasnika istog vozaca -> nejednoznacno
+                End If
+            Next vKey
+            For Each vKey In perVoz.keys
+                If Len(CStr(perVoz(vKey))) > 0 Then
+                    dict("#O|" & CStr(bKey) & "|" & CStr(vKey)) = CStr(perVoz(vKey))
+                End If
+            Next vKey
+        End If
+    Next bKey
+
+    ' --- Prijemnica ---
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
     If Not IsArray(prijData) Then
@@ -256,24 +379,65 @@ Public Function BuildManjakDict(Optional ByVal filterZbirneKeys As Object = Noth
         Set BuildManjakDict = dict
         Exit Function
     End If
-    
-    Dim colPBrZbr As Long, colPKol As Long
+
+    Dim colPBrZbr As Long, colPKol As Long, colPVoz As Long, colPKup As Long
+    Dim colPKla As Long
     colPBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
     colPKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
-    
+    colPVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    colPKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    colPKla = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+
     Dim p As Long
     For p = 1 To UBound(prijData, 1)
         Dim pZbr As String
-        pZbr = CStr(prijData(p, colPBrZbr))
-        If dict.Exists(pZbr) Then
-            vals = dict(pZbr)
-            If IsNumeric(prijData(p, colPKol)) Then vals(1) = vals(1) + CDbl(prijData(p, colPKol))
-            dict(pZbr) = vals
+        pZbr = Trim$(NzToText(prijData(p, colPBrZbr)))
+        If Len(pZbr) = 0 Then GoTo NextPrijem
+        If Not vlasniciPoBroju.Exists(pZbr) Then GoTo NextPrijem
+
+        Dim pVoz As String, pKup As String, pKla As String
+        pVoz = ""
+        pKup = ""
+        pKla = KLASA_I
+        If colPVoz > 0 Then pVoz = Trim$(NzToText(prijData(p, colPVoz)))
+        If colPKup > 0 Then pKup = Trim$(NzToText(prijData(p, colPKup)))
+        If colPKla > 0 Then pKla = KlasaOrDefault(prijData(p, colPKla))
+
+        Dim pKg As Double
+        pKg = 0
+        If IsNumeric(prijData(p, colPKol)) Then pKg = CDbl(prijData(p, colPKol))
+
+        ' Agregat po (broj, klasa) bez vlasnika -- validan samo kad broj ima
+        ' jednog vlasnika. Klasa MORA biti u kljucu, inace se prijem Klase I i II
+        ' sabere pa taj zbir dodeli svakoj klasi ponaosob.
+        Dim bkKey As String
+        bkKey = pZbr & "|" & pKla
+        If Not dict.Exists("#C|" & bkKey) Then dict.Add "#C|" & bkKey, 0&
+        dict("#C|" & bkKey) = CLng(dict("#C|" & bkKey)) + 1
+        If Not dict.Exists("#K|" & bkKey) Then dict.Add "#K|" & bkKey, 0#
+        dict("#K|" & bkKey) = CDbl(dict("#K|" & bkKey)) + pKg
+
+        ' Prijemnica bez kompletnog vlasnika se NE sme pripisati nijednoj zbirnoj
+        ' kad broj nosi vise vlasnika -- broji se posebno kao fail-closed signal.
+        If Len(pVoz) = 0 Or Len(pKup) = 0 Then
+            If Not dict.Exists("#N|" & pZbr) Then dict.Add "#N|" & pZbr, 0&
+            dict("#N|" & pZbr) = CLng(dict("#N|" & pZbr)) + 1
         End If
+
+        Dim psk As String
+        psk = ZbirnaStavkaKljuc(ZbirnaVlasnikKljuc(pZbr, pVoz, pKup), pKla)
+        If dict.Exists(psk) Then
+            vals = dict(psk)
+            vals(1) = vals(1) + pKg
+            vals(2) = CLng(vals(2)) + 1
+            dict(psk) = vals
+        End If
+NextPrijem:
     Next p
-    
+
     Set BuildManjakDict = dict
 End Function
+
 
 Public Function CheckVerwaisteDokumente() As String
     Dim warnings As String

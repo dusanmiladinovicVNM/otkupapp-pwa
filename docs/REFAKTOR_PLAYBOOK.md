@@ -116,6 +116,66 @@ dispatch-u (Else → Empty/greška) (AUD-023; FM-0028 #1/#3/#5/#6/#13/#14 + P2 s
 #2/#9/#10/#11 po proceni sesije). **Regression:** `RunIzvestajTests` + uporedni
 pregled izveštaja pre/posle na istim podacima (checklista mora dati očekivane razlike).
 
+**Urađeno (grana `claude/rf-06-izvestaj-brojke-wquclc`):** svih 5 planiranih fiksa
++ P2 #9 (dolazi „besplatno" uz #3 — atribucija ide po `COL_NOV_OM_ID` reda) i #10
+(neraspoređena agrohemija van UKUPNO stanice). Uvedeni deljeni računski seam-ovi u
+`modIzvestaj`: `NovacRedPripadaStanici`, `ManjakStavka` (deljen između `ReportOtkupRobaOM`
+i `ReportManjak` — „rule of two", ista brojka na dva mesta), `PrijemZaZbirnu`,
+`KarticaRezultatSaPocetnim`, `KarticaAmbRezultatSaPocetnim`; u `modNovac`
+`BuildVrstaFakturaCache` → `BuildFakturaVrstaUdeoCache` + čiste `RaspodeliPoUdelima`
+i `ZaokruziNovac`. Nov `RunIzvestajTests` (tvrd gate — `Err.Raise` na pali assert).
+
+**Dopuna posle review-a (isti paket, 2. commit):**
+- **`BrojZbirne` nije identitet ni u report sloju** (posledica AUD-052 koju je RF-05
+  već dokazao na storno putanji). `modHelpers.BuildManjakDict` je spajao zbirne i
+  prijemnice **isključivo po poslovnom broju**, a `ReportManjak` je istu grešku
+  imao i u sopstvenoj, dupliranoj agregaciji → dve aktivne zbirne istog broja su
+  sabirale tuđu prijemnu količinu (pogrešan prijem, manjak, %). Sada je
+  `BuildManjakDict` scoped na vlasnika (`ZbirnaVlasnikKljuc` = `broj|vozac|kupac` —
+  **ista definicija vlasnika koju koristi `modStorno.RequireJedanVlasnikPoBroju`**,
+  bez druge paralelne definicije; klasa se dodaje u sledećoj stavci),
+  `ReportManjak` više ne duplira agregaciju, a
+  `ReportOtkupRobaOM` razrešava vlasnika preko vozača otpremnice (otpremnica nema
+  `KupacID`). Nedokaziv vlasnik → **fail-closed** oznaka `nejasan vlasnik`, van UKUPNO.
+  Broj sa jednim vlasnikom koristi agregat po broju → nema regresije na starijim
+  prijemnicama bez popunjenog vlasnika.
+- **`Klasa` mora biti u ključu manjka.** Owner-ključ `broj|vozač|kupac` je i dalje
+  spajao **Klasu I i Klasu II istog dokumenta** — auto-lanac hladnjače ih vodi kroz
+  ceo lanac odvojeno (zasebna otpremnica/zbirna/prijemnica) ali sa istim brojem,
+  vozačem i kupcem. Posledica u malina modu: zbirni prijem obe klase (npr. 900+150)
+  dodeljivao se **svakoj** otpremnici → UKUPNO prijem 2× stvarni. Ključ je sada
+  `broj|vozač|kupac|Klasa` (`ZbirnaStavkaKljuc`) — ista granularnost koju
+  `modAutoHladnjaca.KeyZbrKlasa` već koristi, pa nije uveden nov pojam.
+  `#V|` i dalje broji **vlasnike** bez klase (dve klase ≠ dva vlasnika).
+  `ReportManjak` zadržava jedan red po dokumentu ali prijem sabira po klasama;
+  `ReportOtkupRobaOM` radi srazmeru unutar klase.
+- **Finansijsko zaokruživanje raspodele (dva kruga).** `RaspodeliPoUdelima` je prvo
+  zaokruživala samo ukupan zbir, pa je 100/3 davalo interne delove 33,3333 → prikaz
+  `33,33 × 3 = 99,99` uz UKUPNO `100,00`. Prva popravka (poslednji ključ nosi ostatak
+  posle zaokruživanja) rešila je zbir ali uvela **negativan cent**: kad prethodni delovi
+  zaokruživanjem pređu cilj, poslednji ode u minus (`0,03` na 5 jednakih vrsta → `−0,01`).
+  Konačno rešenje je **largest-remainder u celim parama** — `Int` idealnog udela + višak
+  para po najvećim ostacima — jer jedino ono drži **obe** invarijante odjednom
+  (zbir == iznos **i** nijedan deo < 0; clamp na nulu bi razbio prvu). Pare u `Double`,
+  ne `Long` (Overflow preko ~21,4 mil.). Vidljiva promena: kod jednakih udela višak pare
+  dobija **prvi** ključ umesto poslednjeg.
+- **Test gate:** `RunIzvestajTests` sada podiže grešku na pali assert (konvencija iz
+  RF-14) i dobio je **tri end-to-end testa nad tabelama** (dve zbirne istog broja,
+  dva kupca, 900 vs 1500 kg — iz ugla `ReportManjak` i `ReportOtkupRobaOM`; plus Klasa I+II
+  istog dokumenta 1000/900 i 200/150), jer
+  seam testovi po definiciji ne mogu da uhvate grešku u samom table-join-u. E2E rade
+  u `clsTransaction` sa snapshot-om i uvek se rollback-uju. Novčane provere idu na
+  nivou centa (`IzvChkEqC`) — tolerancija 0,01 bi propustila nezaokruženo 33,3333.
+**Svesno NIJE uzeto (ostaje RF-07 / UI paket):** #2 header „Amb. (trenutno stanje)"
+i #11 labela „OM AVANS (promet perioda)" — čist UI tekst; #11 dodatno lomi
+`modTestStorno` T29 koji taj red traži po literalu, pa ide zajedno sa header izmenama.
+Vidljiva poruka za nevalidnu kombinaciju (core sad vraća `Empty`) traži `CleanFail`
+fix iz RF-07 — do tada je ishod čista prazna lista, ne pogrešne brojke.
+**AUD-013 (`MatchesFilter`):** prebrojani SVI `clsFilterParam.Init` pozivi u `src-vba/` —
+operatori su literali iz podržanog skupa, nijedna report putanja ne zavisi od
+`Case Else`; grana je nedostižna u produkciji → flagovano u `KNOWN_ISSUES`, scope
+se ne širi (fix dira ceo `ExcludeStornirano` sloj).
+
 ### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M]
 **Fajlovi:** `frmIzvestaj.frm`, `modKarticaDetalji.bas`.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
@@ -322,7 +382,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-03 | Storno lanac | ✅ merged | PR #167 | M3 · AUD-020/021 + AUD-049 (storno izvoda) + keš/virman; review OK, follow-up AUD-050/051 |
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
-| RF-06 | modIzvestaj brojke | ⬜ | — | |
+| RF-06 | modIzvestaj brojke | 🟢 PR #175 | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14) + posledica AUD-052 u report sloju. **`Compile` čist, `RunIzvestajTests` 100%** (uklj. 3 e2e nad tabelama). Ostaje uporedni pregled izveštaja pre/posle — brojke se namerno menjaju |
 | RF-07 | frmIzvestaj + revers | ⬜ | — | |
 | RF-08 | Faktura + štampa | ⬜ | — | |
 | RF-09 | Banka import/map | ⬜ | — | |
