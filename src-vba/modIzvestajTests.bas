@@ -59,13 +59,16 @@ Public Sub RunIzvestajTests()
     T_PrijemVlasnikRazresenje
     T_UplataSrazmernoPoVrsti
     T_DispatchNepodrzanTip
+    T_EntitetKod
+    T_TabMatrica
+    T_ReversKljucPoTipu
 
     ' --- End-to-end nad tabelama (u transakciji, UVEK rollback) ---
     ' Seam testovi ne mogu da uhvate gresku u samom table-join-u, a upravo je
     ' join po `BrojZbirne` bio nosilac pogresnih brojki.
     If GetTable(TBL_ZBIRNA) Is Nothing Or GetTable(TBL_PRIJEMNICA) Is Nothing _
-       Or GetTable(TBL_OTPREMNICA) Is Nothing Then
-        Debug.Print "  SKIP | end-to-end: nema tabela zbirna/prijemnica/otpremnica"
+       Or GetTable(TBL_OTPREMNICA) Is Nothing Or GetTable(TBL_AMBALAZA) Is Nothing Then
+        Debug.Print "  SKIP | end-to-end: nema tabela zbirna/prijemnica/otpremnica/ambalaza"
     Else
         Set tx = New clsTransaction
         tx.BeginTx
@@ -73,10 +76,13 @@ Public Sub RunIzvestajTests()
         tx.AddTableSnapshot TBL_PRIJEMNICA
         tx.AddTableSnapshot TBL_OTPREMNICA
         tx.AddTableSnapshot TBL_OTKUP
+        tx.AddTableSnapshot TBL_AMBALAZA
 
         T_E2E_ManjakDvaVlasnikaIstiBroj
         T_E2E_RobaOMDvaVlasnikaIstiBroj
         T_E2E_KlasaIiIINeMesajuPrijem
+        T_E2E_ProsecnaCenaZbirniKupac
+        T_E2E_AmbPregledRazdvajaTipDokumenta
 
         tx.RollbackTx
         Set tx = Nothing
@@ -689,6 +695,247 @@ Private Sub T_DispatchNepodrzanTip()
     dummy = ReportManjak("", "", od, doD)
     IzvChk True, S & "podrzane kombinacije se i dalje izvrsavaju bez greske"
 End Sub
+
+' --- RF-07 (FM-0029 #3): UI labela entiteta -> kod za Report* dispatch ---
+Private Sub T_EntitetKod()
+    Const S As String = "Entitet kod: "
+
+    IzvChkEqText IzvestajEntitetKod("Otkupna mesta"), "OM", S & "Otkupna mesta -> OM"
+    IzvChkEqText IzvestajEntitetKod("Kupci"), "Kupac", S & "Kupci -> Kupac"
+    IzvChkEqText IzvestajEntitetKod("Vozaci"), "Vozac", S & "Vozaci -> Vozac"
+    IzvChkEqText IzvestajEntitetKod("Kooperanti"), "Kooperant", S & "Kooperanti -> Kooperant"
+    IzvChkEqText IzvestajEntitetKod("nepoznato"), "OM", S & "nepoznata labela -> OM (fallback kao ranije)"
+End Sub
+
+' --- RF-07 (AUD-024 / FM-0029 #3): matrica dostupnih tabova ---
+' Invarijanta: tab se nudi SAMO ako odgovarajuci Report* ima granu za taj tip.
+' Regresija (npr. vracanje tabova 5/6/7 svim tipovima u zbirnom rezimu) obara
+' ove assert-e.
+Private Sub T_TabMatrica()
+    Const S As String = "Tab matrica: "
+
+    ' Zbirni rezim -- nevalidne kombinacije koje su pre RF-07 bile ponudjene.
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_ZBIRNI) = False, _
+           S & "zbirni Kooperant: Zbirni NE (ReportZbirni nema granu)"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Kooperant: Prosecna cena NE"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_MANJAK) = False, _
+           S & "zbirni Kooperant: Manjak NE"
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Vozac: Prosecna cena NE (ReportProsecnaCena nema vozacku granu)"
+    ' Kupac + zbirni: grana POSTOJI ali ide kroz GetPrijemniceByKupac koji
+    ' bezuslovno filtrira KupacID = "" -> tab bi bio ponudjen a trajno prazan.
+    ' Dokazuje T_E2E_ProsecnaCenaZbirniKupac nad stvarnim prijemnicama.
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "zbirni Kupac: Prosecna cena NE (KupacID='' filter -> uvek prazno)"
+
+    ' Zbirni rezim -- validne kombinacije moraju da ostanu.
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_ZBIRNI), _
+           S & "zbirni Vozac: Zbirni DA"
+    IzvChk IzvestajTabDostupan("Vozac", True, IZV_TAB_MANJAK), _
+           S & "zbirni Vozac: Manjak DA"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ZBIRNI), S & "zbirni OM: Zbirni DA"
+    ' OM zadrzava tab: ReportProsecnaCena grana `Case "OM", ""` eksplicitno hvata
+    ' prazan entitetID kao "svi" (bez filtera po stanici).
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_PROSECNA_CENA), S & "zbirni OM: Prosecna cena DA"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_MANJAK), S & "zbirni OM: Manjak DA"
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_ZBIRNI), S & "zbirni Kupac: Zbirni DA"
+
+    ' Zbirni rezim NE sme da nudi pojedinacne tabove.
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_SALDO_OM) = False, _
+           S & "zbirni OM: Saldo OM NE"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ISPLATA) = False, _
+           S & "zbirni OM: Isplata NE"
+    IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_KARTICA) = False, _
+           S & "zbirni Kooperant: Kartica NE"
+
+    ' Pojedinacni rezim -- zatecena (validna) matrica se ne sme suziti.
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_SALDO_OM), S & "OM: Saldo OM DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_OTKUP_ROBA), S & "OM: Otkupljena roba DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_AMBALAZA), S & "OM: Ambalaza DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_ISPLATA), S & "OM: Isplata DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_PROSECNA_CENA), S & "OM: Prosecna cena DA"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_SALDO_KUPCI) = False, S & "OM: Saldo Kupci NE"
+    IzvChk IzvestajTabDostupan("OM", False, IZV_TAB_MANJAK) = False, S & "OM: Manjak NE"
+
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_SALDO_KUPCI), S & "Kupac: Saldo Kupci DA"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_MANJAK), S & "Kupac: Manjak DA"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_SALDO_OM) = False, S & "Kupac: Saldo OM NE"
+    IzvChk IzvestajTabDostupan("Kupac", False, IZV_TAB_ISPLATA) = False, S & "Kupac: Isplata NE"
+
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_AMBALAZA), S & "Vozac: Ambalaza DA"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_MANJAK), S & "Vozac: Manjak DA"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "Vozac: Prosecna cena NE"
+    IzvChk IzvestajTabDostupan("Vozac", False, IZV_TAB_OTKUP_ROBA) = False, _
+           S & "Vozac: Otkupljena roba NE"
+
+    IzvChk IzvestajTabDostupan("Kooperant", False, IZV_TAB_KARTICA), S & "Kooperant: Kartica DA"
+    IzvChk IzvestajTabDostupan("Kooperant", False, IZV_TAB_AMBALAZA) = False, _
+           S & "Kooperant: Ambalaza (staticki tab) NE"
+
+    ' Runtime tabovi (dinamicki indeks preko statickih) nisu deo matrice.
+    IzvChk IzvestajTabDostupan("Kooperant", False, 9) = False, S & "runtime tab nije u matrici"
+    IzvChk IzvestajTabDostupan("OM", True, 10) = False, S & "runtime tab nije u matrici (zbirni)"
+End Sub
+
+' --- RF-07 (AUD-012 / FM-0029 #4): kljuc reversa nosi i TIP AMBALAZE ---
+Private Sub T_ReversKljucPoTipu()
+    Const S As String = "Revers kljuc: "
+
+    ' Isti dokument, DVA tipa gajbica -> samo izabrani tip pripada reversu.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
+           S & "isti dokument + isti tip -> pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Plasticna", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "isti dokument + DRUGI tip -> NE pripada (bez mesanja tipova)"
+
+    ' Kljuc i dalje trazi isti dokument i isti tip dokumenta.
+    IzvChk ReversRedPripada("OTK-2", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "drugi DokumentID -> NE pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_ULAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica") = False, _
+           S & "drugi DokumentTip -> NE pripada"
+
+    ' Slobodan unos sifarnika: razmaci i velicina slova ne smeju da razbiju match.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, " letvarica ", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica"), _
+           S & "tip: trim + case-insensitive"
+
+    ' Kanonizacija mora da bude ISTA kao u pregledu (`AmbTipKljuc` na obe
+    ' putanje) -- inace pregled napravi dva reda a svaki revers sabere oba.
+    IzvChkEqText AmbTipKljuc(" letvarica "), AmbTipKljuc("Letvarica"), _
+           S & "AmbTipKljuc: trim + velicina slova daju isti kljuc"
+    IzvChk AmbTipKljuc("Letvarica") <> AmbTipKljuc("Plasticna"), _
+           S & "AmbTipKljuc: razliciti tipovi ostaju razliciti"
+
+    ' Prazan tip je legitimna grupa (red pregleda bez tipa), ne wildcard.
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, ""), _
+           S & "prazan tip sa obe strane -> pripada"
+    IzvChk ReversRedPripada("OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "Letvarica", _
+                            "OTK-1", DOK_TIP_OM_IZLAZ_KOOP, "") = False, _
+           S & "prazan trazeni tip NIJE wildcard"
+End Sub
+
+' --- RF-07 review nalaz: matrica se ne sme raziti od core-a ---
+' Zbirni rezim salje entitetID = "". `ReportProsecnaCena` grana za Kupca ide
+' kroz `GetPrijemniceByKupac`, koji BEZUSLOVNO dodaje filter `KupacID = ""` --
+' upit trazi prijemnice BEZ kupca, pa vraca prazno i kad prijemnice postoje.
+' Matricni test proverava samo True/False; OVAJ test dokazuje da je False
+' ISPRAVAN -- nad stvarnim prijemnicama dva razlicita kupca.
+'
+' TVRD GATE U OBA SMERA: ako neko implementira globalni prosek svih kupaca,
+' prvi assert pada i tera da se matrica ponovo odluci -- umesto da tab ostane
+' skriven iako bi radio.
+Private Sub T_E2E_ProsecnaCenaZbirniKupac()
+    Const S As String = "E2E ProsecnaCena (zbirni Kupac): "
+    On Error GoTo EH
+
+    Dim d As Date: d = IZVT_DATUM
+
+    ' Dve prijemnice, dva RAZLICITA kupca, obe u sentinel prozoru (1999) -- ni
+    ' jedan produkcijski red ne moze da upadne u ovaj datumski opseg.
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
+        Array("IZVT-PC-A", "IZVT-PC-A", d, IZVT_BROJ, IZVT_KUPAC_A, 1000#, 100#)
+
+    IzvSeed TBL_PRIJEMNICA, _
+        Array(COL_PRJ_ID, COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_BROJ_ZBIRNE, _
+              COL_PRJ_KUPAC, COL_PRJ_KOLICINA, COL_PRJ_CENA), _
+        Array("IZVT-PC-B", "IZVT-PC-B", d, IZVT_BROJ, IZVT_KUPAC_B, 2000#, 200#)
+
+    ' Pojedinacno (entitetID popunjen) izvestaj RADI -- seed je validan i grana
+    ' nije mrtva; prazan rezultat ispod je posledica bas praznog entitetID-a.
+    IzvChk IsArray(ReportProsecnaCena("Kupac", IZVT_KUPAC_A, d, d)), _
+           S & "pojedinacni Kupac A vraca redove (seed validan)"
+    IzvChk IsArray(ReportProsecnaCena("Kupac", IZVT_KUPAC_B, d, d)), _
+           S & "pojedinacni Kupac B vraca redove"
+
+    ' Zbirni (entitetID = "") NE vraca nista -- zato tab nije u matrici.
+    IzvChk IsEmpty(ReportProsecnaCena("Kupac", "", d, d)), _
+           S & "zbirni Kupac -> Empty i kad postoje prijemnice dva kupca"
+    IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_PROSECNA_CENA) = False, _
+           S & "matrica se slaze sa core-om: tab se NE nudi"
+    Exit Sub
+
+EH:
+    m_izvFail = m_izvFail + 1
+    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
+End Sub
+
+' --- RF-07 review nalaz: pregled ambalaze mora da grupise PUNIM kljucem ---
+' `modOtkup.SaveOtkup` na NORMALNOJ putanji upisuje isti otkupID i isti tip
+' ambalaze pod DVA tipa dokumenta: primljene pune gajbe kao DOK_TIP_OTKUP,
+' izdate prazne kao DOK_TIP_OM_IZLAZ_KOOP. Dok je grupni kljuc bio samo
+' DokumentID + TipAmbalaze, oba su padala u JEDAN red koji nosi tip PRVOG
+' zapisa -- skriveni ref-kljuc `AMB|Otkup|<id>`, pa je "Stampaj dokument" uvek
+' rutirao na otkupni list, a revers OM-Izlaz-Koop nije imao svoj red i bio je
+' NEDOSTUPAN za stampu. Test tvrdi DVA reda i DVA razlicita ref-kljuca.
+Private Sub T_E2E_AmbPregledRazdvajaTipDokumenta()
+    Const S As String = "E2E Amb pregled (dva tipa dokumenta, isti otkupID): "
+    On Error GoTo EH
+
+    Dim d As Date: d = IZVT_DATUM
+    Const DOK As String = "IZVT-OTK-AMB"
+    Const TIPA As String = "IZVT-Letvarica"
+
+    ' Samo OM/Stanica noge -- ReportAmbalaza("OM", ...) filtrira EntitetTip="Stanica".
+    ' Pune gajbe stizu na OM (Ulaz) pod tipom dokumenta "Otkup".
+    IzvSeed TBL_AMBALAZA, _
+        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
+              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
+        Array("IZVT-AMB-1", d, TIPA, 20, "Ulaz", _
+              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OTKUP)
+
+    ' Prazne gajbe OM izdaje kooperantu (Izlaz) -- ISTI DokumentID, ISTI tip
+    ' ambalaze, ali tip dokumenta "OM-Izlaz-Koop".
+    IzvSeed TBL_AMBALAZA, _
+        Array(COL_AMB_ID, COL_AMB_DATUM, COL_AMB_TIP, COL_AMB_KOLICINA, COL_AMB_SMER, _
+              COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, COL_AMB_DOK_ID, COL_AMB_DOK_TIP), _
+        Array("IZVT-AMB-2", d, TIPA, 8, "Izlaz", _
+              IZVT_STANICA, "Stanica", DOK, DOK_TIP_OM_IZLAZ_KOOP)
+
+    Dim r As Variant
+    r = ReportAmbalaza("OM", IZVT_STANICA, d, d, False)
+    IzvChk IsArray(r), S & "izvestaj vraca redove"
+    If Not IsArray(r) Then Exit Sub
+
+    ' Poslednji red je UKUPNO -> dva dokumenta = 3 reda.
+    IzvChkEq UBound(r, 1), 3, S & "dva dokumenta + UKUPNO = 3 reda"
+    If UBound(r, 1) < 3 Then Exit Sub
+
+    ' Skriveni ref-kljuc (kol. 7) mora da razlikuje tip dokumenta.
+    Dim k1 As String: k1 = CStr(r(1, 7))
+    Dim k2 As String: k2 = CStr(r(2, 7))
+    IzvChkEqText k1, "AMB|" & DOK_TIP_OTKUP & "|" & DOK, S & "1. red -> ref-kljuc Otkup"
+    IzvChkEqText k2, "AMB|" & DOK_TIP_OM_IZLAZ_KOOP & "|" & DOK, _
+           S & "2. red -> ref-kljuc OM-Izlaz-Koop (revers dostupan za stampu)"
+    IzvChk k1 <> k2, S & "ref-kljucevi su razliciti"
+
+    ' Kolicine ostaju na svom dokumentu (nema spajanja Ulaz+Izlaz tudjih tipova).
+    IzvChkEqD NzNum(r(1, 5)), 20#, S & "Otkup red: Ulaz 20"
+    IzvChk Len(Trim$(CStr(r(1, 6)))) = 0, S & "Otkup red: Izlaz prazan"
+    IzvChk Len(Trim$(CStr(r(2, 5)))) = 0, S & "OM-Izlaz-Koop red: Ulaz prazan"
+    IzvChkEqD NzNum(r(2, 6)), 8#, S & "OM-Izlaz-Koop red: Izlaz 8"
+
+    ' UKUPNO se ne menja grupisanjem -- i dalje 20 / 8.
+    IzvChkEqD NzNum(r(3, 5)), 20#, S & "UKUPNO Ulaz 20"
+    IzvChkEqD NzNum(r(3, 6)), 8#, S & "UKUPNO Izlaz 8"
+    Exit Sub
+
+EH:
+    m_izvFail = m_izvFail + 1
+    Debug.Print "  FAIL | " & S & "ERROR " & Err.Number & ": " & Err.description
+End Sub
+
+' Prazna celija ("" kad je smer bez kolicine) -> 0, za brojcano poredjenje.
+Private Function NzNum(ByVal v As Variant) As Double
+    If IsNumeric(v) Then NzNum = CDbl(v)
+End Function
 
 ' ============================================================
 ' ASSERT HELPERI

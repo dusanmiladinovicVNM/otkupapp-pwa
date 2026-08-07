@@ -75,6 +75,14 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 - Pri merge-u: čist git-merge može dati VBA compile grešku (dupli `Public`
   `Sub`/`Function`/`Const` → „Ambiguous name"). Posle merge-a uradi
   `Debug → Compile VBAProject` i proveri duple definicije.
+- **Modul-level deklaracije IDU U DEKLARACIONU SEKCIJU** (vrh modula, posle
+  `Option Explicit`, **pre prve procedure**): `Public`/`Private Const`,
+  `Public`/`Private` promenljive, `Declare`, `Type`, `Enum`. VBA **ne kompajlira**
+  `Const` ubačen između dve procedure — a to je prirodno mesto na koje padne kad
+  se konstanta piše „uz funkciju koja je koristi" (RF-07: `IZV_TAB_*` stavljene
+  iznad `IzvestajTabDostupan`, na sredini `modIzvestaj`). Grep pre commita:
+  `Public|Private Const` posle prve `Sub`/`Function` linije = greška. Konstante
+  grupiši uz postojeće na vrhu i objasni ih komentarom tamo, ne kod korisnika.
 - **Rezervisane reči — VBA je case-insensitive.** Ime promenljive koje se
   case-insensitive poklapa sa ključnom reči obara compile, i kad se razlikuje po
   velikim slovima: `Dim eNum As Long` = `Enum` → greška (RF-06). Isto važi za
@@ -98,8 +106,10 @@ postoji; ne uvoditi novi sloj apstrakcije bez jasnog razloga („rule of three")
 ## 5) Verifikacija (CI ne pokreće Excel)
 
 - VBA se ne kompajlira/pokreće u ovom okruženju. Verifikuj **statički**: balans
-  `Sub`/`Function`/`Select Case`, nema duplih `Public` definicija, `git merge-tree`
-  za konflikte. Finalni smoke-test radi korisnik u Excelu.
+  `Sub`/`Function`/`Select Case`, nema duplih `Public` definicija, **nema
+  modul-level deklaracije (`Const`/promenljive/`Declare`/`Type`/`Enum`) posle
+  prve procedure** (§4 — VBA to ne kompajlira), `git merge-tree` za konflikte.
+  Finalni smoke-test radi korisnik u Excelu.
 - Forme: izmene su u kodu; `.frx` se ne dira. Pri re-importu, `.frm` ide sa svojim
   `.frx` parom.
 

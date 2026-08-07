@@ -176,13 +176,95 @@ operatori su literali iz podržanog skupa, nijedna report putanja ne zavisi od
 `Case Else`; grana je nedostižna u produkciji → flagovano u `KNOWN_ISSUES`, scope
 se ne širi (fix dira ceo `ExcludeStornirano` sloj).
 
-### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M]
-**Fajlovi:** `frmIzvestaj.frm`, `modKarticaDetalji.bas`.
+### RF-07 — frmIzvestaj freshness + revers [Wave 2 · M] — ✅ urađeno
+**Fajlovi:** `frmIzvestaj.frm`, `modIzvestaj.bas`, `modKarticaDetalji.bas`, `modPoruke.bas`, `modIzvestajTests.bas`.
+**Review (REQUEST CHANGES na `71355a4`) — sve tri stavke prihvaćene i ispravljene:** matrica vs core na `Kupac+Zbirni+Prosečna cena`, invalidacija konteksta pri promeni entiteta bez dostupnog izbora, kanonski ključ tipa ambalaže.
+**Review 2 (REQUEST CHANGES na `4f7b600`) — prihvaćeno:** grupni ključ pregleda ambalaže dopunjen `DokumentTip`-om (uz-otkup revers je bio nedostupan za štampu).
+**Review 3 (`/code-review` max-effort: 0 correctness bugova, 3 LOW) — sve tri rešene:** `m_periodDirty` reset u `InvalidateReportContext`, uklonjena mrtva grana u status poruci, uklonjena puna kopija ledgera u revers štampi.
 **Obim:** status/štampa iz `m_curOd/m_curDo` (+ „nije osveženo" na izmenu datuma);
 `CleanFail` čisti listu + vidljiva greška; zbirni tabovi 5/6/7 samo za validne tipove;
 `StampajReversAmbDok`: `ExcludeStornirano` + tip ambalaže u match; `KarticaDetalji_Clear`
-na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15, FM-0030 #1).
+na promenu taba (AUD-024, AUD-012, deo AUD-027; FM-0029 #1-#5/#14/#15/#16/#19, FM-0030 #1).
 **Regression:** ručni prolaz kroz tabove + revers štampa za slučaj sa storniranim redom.
+
+**Naučeno (RF-07):**
+- **Re-verifikacija pre koda (§2.7):** svih pet nalaza je re-lociran po IMENU posle RF-06
+  (linije iz audita v2.24.0 su pomerene) i **svi se i dalje reprodukuju** — RF-06 je dirao
+  `frmIzvestaj` samo u `Generate*Report` prikazu oznake `nema prijema`.
+- **`MsgBox` pod `Resume` se ne radi.** Prijava greške iz `CleanFail` bloka ide **posle**
+  `Resume CleanExit` (u samom `CleanExit`, kad su `EndTableCache` i `ScreenUpdating=True`
+  već odrađeni). Poruka se prenosi kroz `m_genFailMsg`/`m_genFailTab`, ne kroz `Err`
+  (`Resume` briše `Err`). Isti razlog zašto EH u projektu prvo prepiše `errNum/errDesc/errSrc`.
+- **Tab-matrica mora da fiksira i ono što OSTAJE.** Test `T_TabMatrica` ne proverava samo
+  da nevalidne kombinacije nestanu, nego i **ceo pojedinačni režim** — prelazak sa hardkodiranih
+  `Pages(n).Visible = True` na matricu je tačno ona izmena koja može tiho da skloni ispravan
+  tab. Matrica je izvedena iz `Select Case`-ova u `Report*`, ne iz zatečenog UI-ja.
+- **Ključ reversa je trojka, ne par.** `ReportAmbalazePojedinacni` red pregleda već grupiše
+  po `DokumentID|TipAmbalaze`, pa je jedini konzistentan ključ za rekonstrukciju
+  `DokumentID + DokumentTip + TipAmbalaze`. Prazan tip je **legitimna grupa** (red bez tipa),
+  ne wildcard — inače bi prazan tip pokupio sve tipove i vratio baš onaj bug koji se zatvara.
+- **`_Change` handler na `.frx` kontroli nije `WithEvents`.** Zamka #11 se odnosi isključivo na
+  `Private WithEvents` **deklaracije**; obični `txtDatumOd_Change` je isti obrazac kao zatečeni
+  `cmbEntitet_Change`/`lstKartica_Click` i ne dira code-merge. (Forme su i inače reinstall-only
+  zbog module-level `As MSForms.*` — zamka #20.)
+- **Novi `Poruka()` ključevi = obavezan `EnsurePoruke` posle importa.** RF-05/RF-06/RF-28 su svi
+  bili „bez novih ključeva"; RF-07 uvodi 7, pa release note to mora eksplicitno da nosi —
+  bez `EnsurePoruke` status i poruke prikazuju `[KLJUC]`.
+- **Matrica dostupnosti mora da se meri prema ULAZU koji joj pozivalac šalje, ne prema
+  postojanju grane.** `Kupac + Zbirni + Prosečna cena` je prošao prvu verziju matrice jer
+  `ReportProsecnaCena` *ima* `Case "Kupac"` — ali zbirni režim šalje `entitetID = ""`, a ta
+  grana ide kroz `GetPrijemniceByKupac` koji bezuslovno dodaje `KupacID = ""` i vraća prazno.
+  `OM` je imun samo zato što grana glasi `Case "OM", ""` i eksplicitno hvata prazan ID.
+  **Posledica za testove:** matrični `True/False` assert ne dokazuje da ponuđeni tab može da
+  vrati podatke — za svaku „DA" ćeliju koja zavisi od praznog `entitetID`-a treba E2E nad
+  tabelama (`T_E2E_ProsecnaCenaZbirniKupac`, seed dva kupca u sentinel prozoru, pada u oba smera).
+- **Guard koji preskače posao mora prvo da invalidira ono što ostavlja.** `AutoRefresh` izlazi
+  kad novi entitet nema nijedan izbor; bez invalidacije liste prethodnog entiteta ostaju kao
+  „svež" rezultat pod novim identitetom — **ista klasa greške koju paket zatvara**, samo što je
+  period ispravan a entitet pogrešan. Invalidacija ide na **početak jedinog ulaza** (`AutoRefresh`),
+  pre guarda, a ne u svaki `tgl*_Click`.
+- **Ako se period pamti, mora i identitet.** `m_curOd/m_curDo` su rešili „stari podaci, nov period";
+  isti argument važi za entitet — otud `m_curEntLabel`/`m_curEntName` i `m_curTip` kao izvor za
+  naslov štampe i za izbor zaglavlja kolona, umesto živog `GetActiveEntitetTip()`/`cmbEntitet.value`.
+  Uz to print guard `AktivanTabGenerisan()`: štampa se samo tab koji je **stvarno** generisan.
+- **Matcher nad nečim što je već grupisano mora da deli SIMBOL normalizacije, ne „istu ideju".**
+  Pregled je grupisao po sirovom tipu ambalaže, a novi `ReversRedPripada` poredio `Trim +
+  vbTextCompare` — „Letvarica"/„letvarica" dalo bi dva reda pregleda a svaki revers zbir oba,
+  tj. tiho vraćanje baš onog mešanja koje se zatvara. Rešenje je jedan `AmbTipKljuc` koji zovu
+  obe putanje.
+- **Izjednačavanje matchera i grupisanja znači CEO ključ, ne samo normalizaciju delova.**
+  Prva runda review-a izjednačila je normalizaciju tipa ambalaže (`AmbTipKljuc`) — ali je
+  grupni ključ pregleda i dalje bio `DokumentID + TipAmbalaze`, dok matcher traži
+  `DokumentID + DokumentTip + TipAmbalaze`. Kolizija je na **normalnoj putanji**:
+  `SaveOtkup` namerno piše isti `otkupID` i isti `tipAmb` pod `Otkup` (primljene pune) i
+  pod `OM-Izlaz-Koop` (izdate prazne), pa su se spajali u jedan red čiji ref-ključ nosi tip
+  prvog zapisa — i revers izdate ambalaže **nije se mogao odštampati iz pregleda**.
+  Pouka: kad se dve putanje proglase saglasnim, to mora biti svojstvo koda (isti izraz
+  ključa), ne tvrdnja u komentaru; i mora se proveriti šta **pisci** upisuju pod tim ključem,
+  ne samo kako ga čitaoci porede.
+- **Invarijanta stanja se ne sme oslanjati na redosled provera koje je čitaju.**
+  `InvalidateReportContext` nije resetovao `m_periodDirty`; radilo je tačno samo zato što
+  grana `Not m_hasGenerated` u `UpdateStatusLabel` izlazi **pre** grane `m_periodDirty`.
+  Nije bio živ bug, ali je „radi na sreću" — reset je dodat da invarijanta („nema
+  generisanog perioda → nema ni neosveženog u odnosu na šta") važi nezavisno od poretka
+  čitalaca. Isto je uklonjena i posledična mrtva grana `If m_hasGenerated Then` u toj poruci.
+- **Reuse deljenog helpera nije bezuslovan — merilo je šta helper radi na toj putanji.**
+  `ExcludeStornirano` je ispravan izbor u report sloju, ali u one-shot print handleru pravi
+  **još jednu kopiju celog `tblAmbalaza`** samo da bi se odštampao jedan dokument, dok petlja
+  ionako prolazi ceo ledger. Zato je provera inline (`AmbRedStorniran`) sa **identičnim
+  pravilom** (`FilterArray` `"<>"` `"Da"` → `CStr` poređenje, bez trima i case-fold-a; kolona
+  koje nema = nema storna) — ista odluka koju `ReportAmbalaza` već nosi i dokumentuje za istu
+  tabelu. Kad se pravilo duplira radi performansi, komentar mora da imenuje izvor istine.
+- **Modul-level `Const` mora u deklaracionu sekciju — VBA ne kompajlira `Const` između
+  procedura.** `IZV_TAB_*` su bile stavljene tik iznad `IzvestajTabDostupan` („uz funkciju
+  koja ih koristi"), na sredini `modIzvestaj` — što je prirodno mesto i tačno pogrešno.
+  Operater je to morao ručno da premesti u Excelu da bi `Compile` prošao. Nijedna od mojih
+  statičkih provera (balans, ASCII, dupli `Public`) ovo ne hvata, jer je sintaksno ispravan
+  red na nedozvoljenoj poziciji. **Dodato u `CLAUDE.md` §4 kao pravilo i u §5 kao obaveznu
+  statičku proveru;** repo-wide skener potvrdio je da je ovo bio jedini takav slučaj.
+**Svesno NIJE uzeto:** FM-0029 #11 (status broji UKUPNO/summary redove), #17 (revers bez
+datuma tiho postaje `Date`), #26 (redosled perioda nevalidiran), #9 (prazan `entitetID`) —
+svi P2/P3 van zadatog obima paketa.
 
 ### RF-08 — modFaktura + faktura štampa [Wave 2 · S/M]
 **Fajlovi:** `modFaktura.bas`, `modPrint.bas`.
@@ -383,7 +465,7 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
 | RF-06 | modIzvestaj brojke | 🟢 PR #175 | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14) + posledica AUD-052 u report sloju. **`Compile` čist, `RunIzvestajTests` 100%** (uklj. 3 e2e nad tabelama). Ostaje uporedni pregled izveštaja pre/posle — brojke se namerno menjaju |
-| RF-07 | frmIzvestaj + revers | ⬜ | — | |
+| RF-07 | frmIzvestaj + revers | 🟢 grana | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
 | RF-08 | Faktura + štampa | ⬜ | — | |
 | RF-09 | Banka import/map | ⬜ | — | |
 | RF-10 | Banka export | ⬜ | — | |

@@ -31,6 +31,22 @@ Public Const IZV_VLASNIK_NEJASAN As String = "nejasan vlasnik"
 ' Labela reda pocetnog stanja u karticama (FM-0028 #1).
 Public Const IZV_POCETNO_STANJE As String = "POCETNO STANJE"
 
+' RF-07 (AUD-024 / FM-0029 #3) - indeksi STATICKIH stranica mpReports u
+' frmIzvestaj (redosled iz .frx); koristi ih matrica IzvestajTabDostupan.
+' Runtime tabovi ("Pregled ambalaze", "Otkupni listovi") dobijaju dinamicki
+' indeks >= broja statickih stranica i NE prolaze kroz matricu.
+' NAPOMENA: modul-level Const MORA u deklaracionu sekciju (pre prve
+' procedure) -- VBA ne kompajlira Const izmedju procedura.
+Public Const IZV_TAB_SALDO_OM As Long = 0
+Public Const IZV_TAB_SALDO_KUPCI As Long = 1
+Public Const IZV_TAB_OTKUP_ROBA As Long = 2
+Public Const IZV_TAB_AMBALAZA As Long = 3
+Public Const IZV_TAB_ISPLATA As Long = 4
+Public Const IZV_TAB_ZBIRNI As Long = 5
+Public Const IZV_TAB_PROSECNA_CENA As Long = 6
+Public Const IZV_TAB_MANJAK As Long = 7
+Public Const IZV_TAB_KARTICA As Long = 8
+
 ' Pripada li tblNovac red stanici. Primarno po OMID-u SAMOG REDA (istorijska
 ' pripadnost -- isti kljuc koji ReportIsplata("OM") vec koristi), pa se isplate
 ' vise ne prelivaju izmedju stanica (FM-0028 #3). Red bez OMID-a (npr. stariji
@@ -245,6 +261,127 @@ Public Function KarticaAmbRezultatSaPocetnim(ByVal arr As Variant, _
     result(ukRow, 6) = runSaldo        ' zavrsno stanje, ne neto promena perioda
 
     KarticaAmbRezultatSaPocetnim = result
+End Function
+
+' ============================================================
+' RF-07 (AUD-024 / AUD-012) - deljeni UI seam-ovi izvestaja.
+' Cist ulaz -> cist izlaz, bez citanja tabela; pokrivaju ih assert-i u
+' modIzvestajTests.RunIzvestajTests. Zive OVDE (a ne u frmIzvestaj) jer se
+' privatne procedure forme ne mogu testirati, a bas su te odluke nosile
+' pogresne izvestaje (nevalidne zbirne kombinacije, mesanje tipova ambalaze).
+' ============================================================
+
+' UI labela entiteta (caption toggle dugmeta) -> interni kod koji Report*
+' funkcije dispecuju. Jedno mesto istine: pre RF-07 je isti Select Case
+' postojao samo u btnUnos_Click, dok je UpdateReportMode radio nad labelama.
+Public Function IzvestajEntitetKod(ByVal uiLabel As String) As String
+    Select Case uiLabel
+        Case "Otkupna mesta": IzvestajEntitetKod = "OM"
+        Case "Kupci":         IzvestajEntitetKod = "Kupac"
+        Case "Vozaci":        IzvestajEntitetKod = "Vozac"
+        Case "Kooperanti":    IzvestajEntitetKod = "Kooperant"
+        Case Else:            IzvestajEntitetKod = "OM"
+    End Select
+End Function
+
+' Sme li tab `pageIdx` da bude ponudjen za dati entitet + rezim (FM-0029 #3).
+' Matrica prati STVARNI dispatch Report* funkcija -- tab se nudi samo ako
+' odgovarajuci izvestaj ima granu za taj tip:
+'   ReportZbirni       OM / Kupac / Vozac
+'   ReportProsecnaCena OM (uklj. zbirno "") / Kupac SAMO pojedinacno
+'   ReportManjak       OM / Kupac / Vozac
+'   ReportAmbalaza     OM / Kupac / Vozac
+'   ReportOtkupRoba    OM / Kupac / Vozac
+' Pre RF-07 su zbirni tabovi 5/6/7 bili vidljivi SVIM tipovima, pa su npr.
+' Kooperanti u zbirnom rezimu dobijali prazne liste pod punim naslovom.
+'
+' Kriterijum NIJE "postoji Case grana za taj tip" nego "grana vraca podatke za
+' TAJ entitetID" -- zbirni rezim salje entitetID = "", pa grana koja taj prazan
+' ID ubacuje u filter ne moze nista da vrati (vidi Kupac ispod).
+Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
+                                    ByVal zbirni As Boolean, _
+                                    ByVal pageIdx As Long) As Boolean
+    If zbirni Then
+        Select Case entitetTip
+            Case "OM"
+                ' ReportProsecnaCena grana `Case "OM", ""` eksplicitno hvata
+                ' entitetID = "" kao "svi" (bez filtera po stanici) -> radi.
+                Select Case pageIdx
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK
+                        IzvestajTabDostupan = True
+                End Select
+            Case "Kupac", "Vozac"
+                ' Prosecna cena NEMA upotrebljivu zbirnu granu ni za jedan od
+                ' ova dva tipa:
+                '  - Vozac: `ReportProsecnaCena` uopste nema vozacku granu;
+                '  - Kupac: grana postoji, ali ide kroz `GetPrijemniceByKupac`
+                '    koji BEZUSLOVNO dodaje filter `KupacID = entitetID`. Zbirni
+                '    rezim salje "", pa upit trazi prijemnice BEZ kupca i vraca
+                '    prazno -- tab bi bio ponudjen a trajno prazan. Globalni
+                '    prosek svih kupaca NIJE implementiran; to je nov izvestaj
+                '    (poslovna odluka), ne UI podesavanje -> tab se ne nudi.
+                '    Gate: T_E2E_ProsecnaCenaZbirniKupac (pada ako core pocne da
+                '    vraca podatke -> matrica se mora ponovo odluciti).
+                Select Case pageIdx
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK
+                        IzvestajTabDostupan = True
+                End Select
+            Case Else
+                ' Kooperant: zbirni izvestaj ne postoji ni u jednom Report*.
+                IzvestajTabDostupan = False
+        End Select
+        Exit Function
+    End If
+
+    Select Case entitetTip
+        Case "OM"
+            Select Case pageIdx
+                Case IZV_TAB_SALDO_OM, IZV_TAB_OTKUP_ROBA, IZV_TAB_AMBALAZA, _
+                     IZV_TAB_ISPLATA, IZV_TAB_PROSECNA_CENA
+                    IzvestajTabDostupan = True
+            End Select
+        Case "Kupac"
+            Select Case pageIdx
+                Case IZV_TAB_SALDO_KUPCI, IZV_TAB_OTKUP_ROBA, IZV_TAB_AMBALAZA, _
+                     IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK
+                    IzvestajTabDostupan = True
+            End Select
+        Case "Vozac"
+            Select Case pageIdx
+                Case IZV_TAB_AMBALAZA, IZV_TAB_MANJAK
+                    IzvestajTabDostupan = True
+            End Select
+        Case "Kooperant"
+            IzvestajTabDostupan = (pageIdx = IZV_TAB_KARTICA)
+        Case Else
+            IzvestajTabDostupan = False
+    End Select
+End Function
+
+' Kanonski oblik tipa ambalaze -- JEDAN izvor istine za grupisanje reda u
+' pregledu (`ReportAmbalazePojedinacni`) i za match u reversu
+' (`ReversRedPripada`). Tip dolazi iz slobodnog unosa sifarnika, pa se razlikuju
+' po razmacima i velicini slova. Dok su dve putanje normalizovale RAZLICITO
+' (pregled: sirov string; revers: trim + vbTextCompare), "Letvarica" i
+' "letvarica" su davali DVA reda pregleda, a svaki revers je sabirao OBA --
+' tiho vracanje bas onog mesanja koje RF-07 zatvara.
+Public Function AmbTipKljuc(ByVal tipAmb As String) As String
+    AmbTipKljuc = UCase$(Trim$(tipAmb))
+End Function
+
+' Pripada li red tblAmbalaza reversu koji se stampa (AUD-012 / FM-0029 #4).
+' Kljuc reversa je DokumentID + DokumentTip + TIP AMBALAZE: jedan dokument sme
+' da nosi vise tipova gajbica, a pre RF-07 se tip uzimao sa PRVOG reda dok su
+' se kolicine sabirale preko SVIH tipova -> revers na 40 "letvarica" za promet
+' 25 letvarica + 15 plasticnih. Tip se poredi preko `AmbTipKljuc` -- istog
+' kljuca po kom pregled grupise redove, pa je poklapanje reda i reversa 1:1.
+Public Function ReversRedPripada(ByVal rowDokID As String, ByVal rowDokTip As String, _
+                                 ByVal rowTipAmb As String, _
+                                 ByVal dokID As String, ByVal dokTip As String, _
+                                 ByVal tipAmb As String) As Boolean
+    If Trim$(rowDokID) <> Trim$(dokID) Then Exit Function
+    If Trim$(rowDokTip) <> Trim$(dokTip) Then Exit Function
+    ReversRedPripada = (AmbTipKljuc(rowTipAmb) = AmbTipKljuc(tipAmb))
 End Function
 
 Public Function ReportSaldoOM(ByVal stanicaID As String, _
@@ -2321,8 +2458,11 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     Dim rowCount As Long
     rowCount = UBound(filtered, 1)
 
-    ' Grupisanje po Dokumentu (+Tip): ako isti dokument ima i Ulaz i Izlaz red,
-    ' prikazi oba u istom redu. Ako ima samo jedan smer -> red ostaje kao i do sada.
+    ' Grupisanje po JEDNOM dokumentu (DokumentTip + DokumentID + TipAmbalaze):
+    ' ako isti dokument ima i Ulaz i Izlaz red, prikazi oba u istom redu. Ako ima
+    ' samo jedan smer -> red ostaje kao i do sada. Redovi RAZLICITOG DokumentTip-a
+    ' su razliciti dokumenti (uz-otkup: `Otkup` + `OM-Izlaz-Koop` dele otkupID) i
+    ' NE smeju u isti red -- vidi gkey nize.
     ' Scripting.Dictionary cuva redosled umetanja (kao redosled filtriranih redova).
     Dim grp As Object
     Set grp = CreateObject("Scripting.Dictionary")
@@ -2348,7 +2488,17 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         effSmer = CStr(filtered(i, colSmer))
         If isVozac Then effSmer = VozacAmbEffectiveSmer(effSmer, entTipVal)
 
-        Dim gkey As String: gkey = dokIDv & "|" & tipv
+        ' PUN identitet dokumenta, isti koji `ReversRedPripada` koristi za match:
+        ' DokumentTip + DokumentID + TipAmbalaze. `DokumentTip` je nuzan jer
+        ' `modOtkup.SaveOtkup` na NORMALNOJ putanji upisuje isti `otkupID` i isti
+        ' tip ambalaze pod DVA tipa dokumenta -- primljene pune gajbe kao
+        ' `DOK_TIP_OTKUP`, izdate prazne kao `DOK_TIP_OM_IZLAZ_KOOP`. Bez njega su
+        ' se spajali u JEDAN red koji nosi tip PRVOG zapisa ("Otkup"), pa je
+        ' skriveni ref-kljuc bio `AMB|Otkup|<id>` i "Stampaj dokument" je uvek
+        ' rutirao na `ReprintOtkupniListByOtkupID` -- revers `OM-Izlaz-Koop` nije
+        ' imao svoj red i bio je NEDOSTUPAN za stampu iz pregleda.
+        Dim gkey As String
+        gkey = Trim$(dokTipv) & "|" & Trim$(dokIDv) & "|" & AmbTipKljuc(tipv)
         Dim rec As Variant
         If grp.Exists(gkey) Then
             rec = grp(gkey)
