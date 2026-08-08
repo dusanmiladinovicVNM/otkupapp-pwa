@@ -629,13 +629,18 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
     Const SRC As String = "modSEFValidator.PrepareRejectedInvoiceForResubmit_Row"
 
     Dim currentState As String
-    Dim dischargedCount As Long
+    Dim lastSubmissionID As String
+    Dim discharged As Boolean
 
     If Len(Trim$(fakturaID)) = 0 Then
         Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
 
     currentState = GetFakturaSEFWorkflowState(fakturaID)
+
+    ' Procitaj link PRE nego sto ga ClearFakturaLastSubmission_Row obrise --
+    ' razduzuje se tacno ta submisija, ne "sve SENT za ovu fakturu".
+    lastSubmissionID = GetLastSEFSubmissionID(fakturaID)
 
     If currentState <> WF_SEF_REJECTED Then
         Err.Raise ERR_SEF_STATE, SRC, _
@@ -656,7 +661,19 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
     ' NA REFRESH-u zadrzava submission red u statusu SENT (refresh ga namerno ne
     ' dira), pa bi `HasSuccessfulSEFSubmission` oborio bas ovaj pripremljeni
     ' resubmit kao duplikat.
-    dischargedCount = DischargeSentSEFSubmissions_Row(fakturaID)
+    discharged = DischargeSEFSubmission_Row(lastSubmissionID, fakturaID)
+
+    ' FAIL-CLOSED: priprema sme da uspe SAMO ako je faktura posle nje stvarno
+    ' posiljiva. Ako je i dalje blokira uspesna submisija (prethodna je ACCEPTED,
+    ' ili postoji stariji SENT red -- oba su neuskladjen podatak), bolje je da
+    ' priprema padne glasno nego da operater dobije "pripremljeno" pa tek klik na
+    ' slanje odbijanje zbog duplikata. TX se vraca, faktura ostaje SEF_REJECTED.
+    If HasSuccessfulSEFSubmission(fakturaID) Then
+        Err.Raise ERR_SEF_DUPLICATE, SRC, _
+                  "Faktura still has a successful SEF submission after discharge " & _
+                  "(LastSubmissionID=" & lastSubmissionID & _
+                  "; Discharged=" & CStr(discharged) & "). Manual review required."
+    End If
 
     Call AppendSEFEvent_Row( _
         fakturaID:=fakturaID, _
@@ -664,7 +681,8 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
         eventType:=SEF_EVT_STATE_CHANGED, _
         message:="Rejected invoice prepared for corrected resubmission.", _
         details:="PreviousState=" & currentState & _
-                 "; DischargedSubmissions=" & CStr(dischargedCount))
+                 "; DischargedSubmissionID=" & lastSubmissionID & _
+                 "; Discharged=" & CStr(discharged))
 
 End Sub
 

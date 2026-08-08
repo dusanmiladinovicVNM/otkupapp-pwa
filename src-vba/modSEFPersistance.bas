@@ -559,8 +559,8 @@ EH:
     GetSEFEventsForFaktura = Empty
 End Function
 
-' AUD-032b: razduzi prethodne submisije kad se odbijena faktura EKSPLICITNO
-' priprema za korektivni resubmit. Vraca broj razduzenih redova.
+' AUD-032b: razduzi TACNO ONU submisiju koju korektivni resubmit zamenjuje.
+' Vraca True ako je red stvarno razduzen.
 '
 ' Zasto uopste treba: status refresh NAMERNO ne dira submission red (poziv
 ' SaveSEFSubmissionResult_Row u modSEFStatusSync je zakomentarisan, da se podaci
@@ -574,48 +574,51 @@ End Function
 ' upisao za `response.Rejected` -- ne izmislja se novo stanje, primenjuje se
 ' postojece mapiranje sistema.
 '
-' SEF_SUB_ACCEPTED se NAMERNO ne dira: prihvacena submisija uz odbijen workflow
-' je neuskladjen podatak, pa duplicate guard s pravom nastavlja da blokira
-' (rucna provera) umesto da mu se istorija prepise.
+' NAMERNO uzak zahvat -- samo prosledjeni (poslednji) red, uz proveru vlasnistva:
+'   * SEF_SUB_ACCEPTED se ne dira (prihvacena submisija uz odbijen workflow je
+'     neuskladjen podatak -> duplicate guard s pravom nastavlja da blokira),
+'   * stariji SENT redovi iste fakture se ne diraju (ne prepisujemo istoriju o
+'     kojoj nista ne znamo). Ako takav red postoji, resubmit ostaje blokiran i
+'     pozivalac to prijavi kao rucnu proveru -- fail-closed.
 '
 ' `_Row` = pozivalac obezbedjuje transakciju (snapshot nad TBL_SEF_SUBMISSION).
-Public Function DischargeSentSEFSubmissions_Row(ByVal fakturaID As String) As Long
+Public Function DischargeSEFSubmission_Row(ByVal submissionID As String, _
+                                           ByVal fakturaID As String) As Boolean
 
     On Error GoTo EH
 
-    Const SRC As String = "modSEFPersistance.DischargeSentSEFSubmissions_Row"
+    Const SRC As String = "modSEFPersistance.DischargeSEFSubmission_Row"
 
     If Len(Trim$(fakturaID)) = 0 Then
         Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
     End If
 
+    ' Nema poslednje submisije -> nema sta da se razduzi. Pozivalac posle ovoga
+    ' ionako proverava duplicate guard, pa se tisina ovde ne pretvara u uspeh.
+    If Len(Trim$(submissionID)) = 0 Then Exit Function
+
     RequireSEFSubmissionSchema SRC
 
-    Dim data As Variant
-    data = GetTableData(TBL_SEF_SUBMISSION)
+    Dim rowIndex As Long
+    rowIndex = GetSingleRowIndexByKey(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, True)
 
-    If IsEmpty(data) Then Exit Function
+    Dim ownerFakturaID As String
+    ownerFakturaID = Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "FakturaID")))
 
-    Dim colFakturaID As Long
-    Dim colStatus As Long
+    If ownerFakturaID <> Trim$(fakturaID) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Submission " & submissionID & " belongs to faktura " & ownerFakturaID & _
+                  ", not " & fakturaID & "."
+    End If
 
-    colFakturaID = RequireColumnIndex(TBL_SEF_SUBMISSION, "FakturaID", SRC)
-    colStatus = RequireColumnIndex(TBL_SEF_SUBMISSION, "SubmissionStatus", SRC)
+    Dim currentStatus As String
+    currentStatus = Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "SubmissionStatus")))
 
-    Dim i As Long
-    Dim dischargedCount As Long
+    If currentStatus <> SEF_SUB_SENT Then Exit Function
 
-    For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colFakturaID))) = Trim$(fakturaID) Then
-            If Trim$(CStr(data(i, colStatus))) = SEF_SUB_SENT Then
-                RequireUpdateCell TBL_SEF_SUBMISSION, i, "SubmissionStatus", _
-                                  SEF_SUB_REJECTED, SRC
-                dischargedCount = dischargedCount + 1
-            End If
-        End If
-    Next i
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SubmissionStatus", SEF_SUB_REJECTED, SRC
 
-    DischargeSentSEFSubmissions_Row = dischargedCount
+    DischargeSEFSubmission_Row = True
     Exit Function
 
 EH:

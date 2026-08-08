@@ -918,9 +918,19 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
     Dim stateAfter As String
     Dim docIdAfter As String
     Dim statusAfter As String
+    Dim wasQuiet As Boolean
+    Dim quietSet As Boolean
 
     fakturaID = "TEST-SEF-RESUB-" & Format$(Now, "yyyymmddhhnnss")
     submissionID = "TEST-SUB-" & Format$(Now, "yyyymmddhhnnss")
+
+    ' AppendRow/UpdateCell pisu CSV crash-recovery journal, a njega tx.RollbackTx
+    ' NE moze da povuce -- test redovi bi ostali u Journal folderu i sledeci
+    ' start bi javio lazno upozorenje o mogucem gubitku podataka. Projekat za to
+    ' ima namenski test-mode (isti obrazac kao modAgrohemijaTests).
+    wasQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
+    quietSet = True
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -961,8 +971,45 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
     AssertTrue CanSendSEFInvoice(stateAfter, statusAfter, docIdAfter), _
                "Pripremljena faktura je sendable i po zajednickoj kapiji"
 
+    ' Scenario 2 (fail-closed): prethodna submisija je ACCEPTED -- neuskladjen
+    ' podatak. Priprema tada NE sme da "uspe" i ostavi fakturu koju ce slanje
+    ' odbiti kao duplikat; mora da padne glasno i trazi rucnu proveru.
+    Dim fakturaID2 As String
+    Dim submissionID2 As String
+    Dim raised As Boolean
+
+    fakturaID2 = fakturaID & "-ACC"
+    submissionID2 = submissionID & "-ACC"
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID2, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317569", _
+        "SEFSubmissionIDLast", submissionID2)
+
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID2, _
+        "FakturaID", fakturaID2, _
+        "SubmissionStatus", SEF_SUB_ACCEPTED)
+
+    raised = False
+    On Error Resume Next
+    PrepareRejectedInvoiceForResubmit_Row fakturaID2
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+               "Priprema pada kad prethodna submisija ostaje ACCEPTED (fail-closed)"
+    AssertTrue HasSuccessfulSEFSubmission(fakturaID2), _
+               "ACCEPTED submisija se ne prepisuje u REJECTED"
+
     tx.RollbackTx
     Set tx = Nothing
+
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    quietSet = False
 
     LogPass "Rejected -> prepare -> resubmit prolazi duplicate guard"
     Exit Sub
@@ -970,9 +1017,22 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
 EH:
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
+    RestoreSEFTestQuiet quietSet, wasQuiet
     On Error GoTo 0
 
     LogFail "Rejected resubmit passes duplicate guard", Err.description
+End Sub
+
+' Vraca journal test-mode na ZATECENO stanje (ne bezuslovno False), da ugnezdjen
+' poziv iz sireg test konteksta ne ostane bez zastite. Otkazuje i eventualno
+' zakazan AutoSave tick -- posle rollback-a nema sta da se snima.
+Private Sub RestoreSEFTestQuiet(ByVal wasSet As Boolean, ByVal previousValue As Boolean)
+    On Error Resume Next
+    If wasSet Then
+        modJournaling.SetTestModeQuiet previousValue
+        modJournaling.StopAutoSaveTimer
+    End If
+    On Error GoTo 0
 End Sub
 
 ' Seed helper: upis PO IMENU kolone (pozicijski AppendRow zavisi od redosleda
