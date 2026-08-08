@@ -180,9 +180,15 @@ End Sub
 ' HARD GATE: na kraju baca gresku ako je bilo koji test pao, da gate ne bi bio
 ' "zelen" samo zato sto nista nije puklo (lekcija iz AUD-039 / RF-08).
 '
-' OFFLINE: nijedan test odavde ne poziva pravi SEF (nema HTTP-a, nema mutacije
-' poslovnih tabela). Zivi SEF pozivi ostaju u Run*LiveSuite entry point-ima iza
-' SEF_TEST_ALLOW_LIVE / SEF_TEST_ALLOW_CANCEL_STORNO kapija.
+' OFFLINE: nijedan test odavde ne poziva pravi SEF (nema HTTP-a). Zivi SEF pozivi
+' ostaju u Run*LiveSuite entry point-ima iza SEF_TEST_ALLOW_LIVE /
+' SEF_TEST_ALLOW_CANCEL_STORNO kapija.
+'
+' TABELE: svi testovi su cisti OSIM
+' `Test_SEFRejectedResubmitPassesDuplicateGuard`, koji seed-uje redove u
+' tblFakture / tblSEFSubmission / tblSEFEventLog i UVEK ih rollback-uje
+' (clsTransaction, isti obrazac kao modFakturaTests). Taj lanac se ne moze
+' dokazati cistim funkcijama -- duplicate guard cita stvarne tabele.
 ' ============================================================
 Public Sub RunSEFTestSuite()
     On Error GoTo EH
@@ -203,6 +209,7 @@ Public Sub RunSEFTestSuite()
     Test_SEFStatusUnknownIsNotSent
     Test_SEFRefreshTransitionMatrix
     Test_SEFStatusCapabilities
+    Test_SEFRejectedResubmitPassesDuplicateGuard
     Test_SEFRecoveryOutcomeContract
 
     FinishSuite
@@ -887,6 +894,115 @@ Private Sub Test_SEFStatusCapabilities()
 
 EH:
     LogFail "SEF status capabilities", Err.description
+End Sub
+
+' (b5) INTEGRACIONI: odbijena faktura mora stvarno da prodje kroz resubmit.
+'
+' Ovo je jedini test u gate suite-u koji dira poslovne tabele -- namerno, jer se
+' bas ovaj lanac ne moze dokazati cistim funkcijama: submission red je u statusu
+' SENT (refresh ga NE dira), pa je duplicate guard obarao resubmit koji je
+' PrepareRejectedInvoiceForResubmit upravo pripremio. Capability funkcija je za
+' isti slucaj vracala "sendable" -- tacno, ali nedovoljno.
+'
+' Redovi se seed-uju u clsTransaction koja se UVEK rollback-uje (isti obrazac kao
+' modFakturaTests). Zove se `_Row` verzija, jer clsTransaction.BeginTx puca na
+' ugnezdjenu transakciju.
+Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
+    On Error GoTo EH
+
+    Dim tx As clsTransaction
+    Dim fakturaID As String
+    Dim submissionID As String
+    Dim guardBefore As Boolean
+    Dim guardAfter As Boolean
+    Dim stateAfter As String
+    Dim docIdAfter As String
+    Dim statusAfter As String
+
+    fakturaID = "TEST-SEF-RESUB-" & Format$(Now, "yyyymmddhhnnss")
+    submissionID = "TEST-SUB-" & Format$(Now, "yyyymmddhhnnss")
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_SUBMISSION
+    tx.AddTableSnapshot TBL_SEF_EVENT_LOG
+
+    ' Stanje posle: uspesan submit -> refresh vratio REJECTED.
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317568", _
+        "SEFSubmissionIDLast", submissionID)
+
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID, _
+        "FakturaID", fakturaID, _
+        "SubmissionStatus", SEF_SUB_SENT)
+
+    ' Pre pripreme: duplicate guard blokira (to je i bio simptom).
+    guardBefore = HasSuccessfulSEFSubmission(fakturaID)
+    AssertTrue guardBefore, _
+               "Pre pripreme duplicate guard vidi uspesnu submisiju"
+
+    PrepareRejectedInvoiceForResubmit_Row fakturaID
+
+    guardAfter = HasSuccessfulSEFSubmission(fakturaID)
+    stateAfter = GetFakturaSEFWorkflowState(fakturaID)
+    docIdAfter = GetFakturaSEFDocumentId(fakturaID)
+    statusAfter = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))
+
+    ' Sustina nalaza: posle pripreme resubmit vise NE sme da padne kao duplikat.
+    AssertTrue Not guardAfter, _
+               "Posle pripreme duplicate guard vise ne blokira resubmit"
+    AssertEquals WF_SEF_READY, stateAfter, "Priprema vraca workflow u SEF_READY"
+    AssertEquals "", Trim$(docIdAfter), "Priprema brise SEFDocumentId"
+    AssertTrue CanSendSEFInvoice(stateAfter, statusAfter, docIdAfter), _
+               "Pripremljena faktura je sendable i po zajednickoj kapiji"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    LogPass "Rejected -> prepare -> resubmit prolazi duplicate guard"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    LogFail "Rejected resubmit passes duplicate guard", Err.description
+End Sub
+
+' Seed helper: upis PO IMENU kolone (pozicijski AppendRow zavisi od redosleda
+' kolona, koji se razlikuje po instalaciji). Parovi "kolona", vrednost.
+Private Sub AppendSEFTestRow(ByVal tableName As String, ByVal columnValuePairs As Variant)
+
+    Const SRC As String = "modSEFTests.AppendSEFTestRow"
+
+    Dim lo As ListObject
+    Set lo = GetTable(tableName)
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To lo.ListColumns.count - 1)
+
+    Dim i As Long
+    Dim colIndex As Long
+
+    For i = LBound(columnValuePairs) To UBound(columnValuePairs) - 1 Step 2
+        colIndex = GetColumnIndex(tableName, CStr(columnValuePairs(i)))
+        If colIndex <= 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                      "Column not found: " & tableName & "." & CStr(columnValuePairs(i))
+        End If
+        rowData(colIndex - 1) = columnValuePairs(i + 1)
+    Next i
+
+    If AppendRow(tableName, rowData) <= 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Failed to append test row into " & tableName
+    End If
+
 End Sub
 
 ' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.

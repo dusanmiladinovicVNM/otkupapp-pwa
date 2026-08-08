@@ -559,6 +559,81 @@ EH:
     GetSEFEventsForFaktura = Empty
 End Function
 
+' AUD-032b: razduzi prethodne submisije kad se odbijena faktura EKSPLICITNO
+' priprema za korektivni resubmit. Vraca broj razduzenih redova.
+'
+' Zasto uopste treba: status refresh NAMERNO ne dira submission red (poziv
+' SaveSEFSubmissionResult_Row u modSEFStatusSync je zakomentarisan, da se podaci
+' o originalnom submit HTTP pozivu ne prepisu podacima iz status upita). Zato
+' faktura koju je SEF odbio TEK NA REFRESH-u zadrzava submission red u statusu
+' SENT, pa `HasSuccessfulSEFSubmission` (fail-closed duplicate guard, AUD-031d)
+' obara i onaj resubmit koji je `PrepareRejectedInvoiceForResubmit` upravo
+' pripremio -- dokumentovan tok je time bio mrtav.
+'
+' Upisuje se SEF_SUB_REJECTED, dakle tacno ono sto bi `SaveSEFSubmissionResult_Row`
+' upisao za `response.Rejected` -- ne izmislja se novo stanje, primenjuje se
+' postojece mapiranje sistema.
+'
+' SEF_SUB_ACCEPTED se NAMERNO ne dira: prihvacena submisija uz odbijen workflow
+' je neuskladjen podatak, pa duplicate guard s pravom nastavlja da blokira
+' (rucna provera) umesto da mu se istorija prepise.
+'
+' `_Row` = pozivalac obezbedjuje transakciju (snapshot nad TBL_SEF_SUBMISSION).
+Public Function DischargeSentSEFSubmissions_Row(ByVal fakturaID As String) As Long
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.DischargeSentSEFSubmissions_Row"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    RequireSEFSubmissionSchema SRC
+
+    Dim data As Variant
+    data = GetTableData(TBL_SEF_SUBMISSION)
+
+    If IsEmpty(data) Then Exit Function
+
+    Dim colFakturaID As Long
+    Dim colStatus As Long
+
+    colFakturaID = RequireColumnIndex(TBL_SEF_SUBMISSION, "FakturaID", SRC)
+    colStatus = RequireColumnIndex(TBL_SEF_SUBMISSION, "SubmissionStatus", SRC)
+
+    Dim i As Long
+    Dim dischargedCount As Long
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, colFakturaID))) = Trim$(fakturaID) Then
+            If Trim$(CStr(data(i, colStatus))) = SEF_SUB_SENT Then
+                RequireUpdateCell TBL_SEF_SUBMISSION, i, "SubmissionStatus", _
+                                  SEF_SUB_REJECTED, SRC
+                dischargedCount = dischargedCount + 1
+            End If
+        End If
+    Next i
+
+    DischargeSentSEFSubmissions_Row = dischargedCount
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
+End Function
+
 Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
     On Error GoTo EH
 

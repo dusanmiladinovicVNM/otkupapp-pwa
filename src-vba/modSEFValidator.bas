@@ -578,49 +578,26 @@ EH:
     Err.Raise Err.Number, SRC, Err.description
 End Sub
 
+' AUD-032b: telo je izdvojeno u `_Row` (pozivalac obezbedjuje TX) po obrascu
+' koji projekat vec koristi (CreateFaktura/_TX, SaveMagacinCore/SaveMagacin).
+' Razlog nije stil: clsTransaction.BeginTx PUCA na ugnezdjenu transakciju, pa se
+' ceo tok resubmit-a nije mogao pokriti testom dok je logika zivela unutar TX-a.
 Public Sub PrepareRejectedInvoiceForResubmit(ByVal fakturaID As String)
-    
+
     Dim tx As clsTransaction
-    Dim currentState As String
-    
+
     On Error GoTo EH
-    
-    If Len(Trim$(fakturaID)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "PrepareRejectedInvoiceForResubmit", _
-            "FakturaID is required."
-    End If
-    
-    currentState = GetFakturaSEFWorkflowState(fakturaID)
-    
-    If currentState <> WF_SEF_REJECTED Then
-        Err.Raise ERR_SEF_STATE, "PrepareRejectedInvoiceForResubmit", _
-            "Invoice is not in SEF_REJECTED state: " & currentState
-    End If
-    
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_SUBMISSION
     tx.AddTableSnapshot "tblSEFEventLog"
-    
-    Call UpdateFakturaSEFState_Row( _
-        fakturaID:=fakturaID, _
-        newState:=WF_SEF_READY, _
-        sefStatus:=WF_SEF_READY, _
-        errorCode:="", _
-        errorMessage:="", _
-        submissionID:="")
-    
-    Call ClearFakturaLastSubmission_Row(fakturaID)
-    
-    Call AppendSEFEvent_Row( _
-        fakturaID:=fakturaID, _
-        submissionID:="", _
-        eventType:=SEF_EVT_STATE_CHANGED, _
-        message:="Rejected invoice prepared for corrected resubmission.", _
-        details:="PreviousState=" & currentState)
-    
+
+    PrepareRejectedInvoiceForResubmit_Row fakturaID
+
     tx.CommitTx
-    
+
     Exit Sub
 
 EH:
@@ -647,10 +624,55 @@ EH:
     End If
 End Sub
 
+Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
+
+    Const SRC As String = "modSEFValidator.PrepareRejectedInvoiceForResubmit_Row"
+
+    Dim currentState As String
+    Dim dischargedCount As Long
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    currentState = GetFakturaSEFWorkflowState(fakturaID)
+
+    If currentState <> WF_SEF_REJECTED Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+            "Invoice is not in SEF_REJECTED state: " & currentState
+    End If
+
+    Call UpdateFakturaSEFState_Row( _
+        fakturaID:=fakturaID, _
+        newState:=WF_SEF_READY, _
+        sefStatus:=WF_SEF_READY, _
+        errorCode:="", _
+        errorMessage:="", _
+        submissionID:="")
+
+    Call ClearFakturaLastSubmission_Row(fakturaID)
+
+    ' AUD-032b: bez ovoga je dokumentovani tok bio mrtav -- faktura odbijena TEK
+    ' NA REFRESH-u zadrzava submission red u statusu SENT (refresh ga namerno ne
+    ' dira), pa bi `HasSuccessfulSEFSubmission` oborio bas ovaj pripremljeni
+    ' resubmit kao duplikat.
+    dischargedCount = DischargeSentSEFSubmissions_Row(fakturaID)
+
+    Call AppendSEFEvent_Row( _
+        fakturaID:=fakturaID, _
+        submissionID:="", _
+        eventType:=SEF_EVT_STATE_CHANGED, _
+        message:="Rejected invoice prepared for corrected resubmission.", _
+        details:="PreviousState=" & currentState & _
+                 "; DischargedSubmissions=" & CStr(dischargedCount))
+
+End Sub
+
 Public Function IsFinalSEFStatus(ByVal sefStatus As String) As Boolean
     
     ' AUD-032b: prati zvanicni SEF enum kroz zajednicki klasifikator
-    ' (APPROVED/ACCEPTED, REJECTED, STORNO/CANCELLED/DELETED/MISTAKE).
+    ' (APPROVED/ACCEPTED, REJECTED, STORNO/CANCELLED/DELETED).
+    ' MISTAKE NIJE finalan -- to je greska pri slanju, ima Cancel/rucnu putanju.
     Select Case ClassifySEFExternalStatus(sefStatus)
         Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_TERMINAL
             IsFinalSEFStatus = True
