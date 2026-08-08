@@ -395,7 +395,8 @@ Private Sub UpdateSEFButtonStates()
     Dim fakturaID As String
     Dim workflowState As String
     Dim sefStatus As String
-    
+    Dim sefDocumentId As String
+
     fakturaID = GetSelectedFakturaID()
     
     If Len(fakturaID) = 0 Then
@@ -410,12 +411,13 @@ Private Sub UpdateSEFButtonStates()
     
     workflowState = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))))
     sefStatus = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))))
+    sefDocumentId = Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId")))
     
     ' AUD-032b: isti spisak koji propusta `ValidateFakturaForSEF`. Sam workflow
     ' nije dovoljan -- SEF_TECH_FAILED nastao iz statusa MISTAKE ima ZIV dokument
     ' na SEF-u, pa bi novo slanje kapija odbila kao duplikat. Ranije je forma
     ' palila "Retry slanje na SEF" koji nije mogao da prodje.
-    Me.btnPosalji.enabled = CanSendSEFInvoice(workflowState, sefStatus)
+    Me.btnPosalji.enabled = CanSendSEFInvoice(workflowState, sefStatus, sefDocumentId)
 
     If Me.btnPosalji.enabled And workflowState = UCase$(WF_SEF_TECH_FAILED) Then
         Me.btnPosalji.caption = "Retry slanje na SEF"
@@ -435,7 +437,7 @@ Private Sub UpdateSEFButtonStates()
                             workflowState = UCase$(WF_SEF_SYNC_ERROR) Or _
                             workflowState = UCase$(WF_SEF_UNKNOWN) Or _
                             (workflowState = UCase$(WF_SEF_TECH_FAILED) And _
-                             Len(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId")))) > 0))
+                             Len(sefDocumentId) > 0))
     
     Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     

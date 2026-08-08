@@ -225,11 +225,17 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     ' sledecim korakom, a ne suvo "already has a successful SEF submission".
     ' Isti spisak koristi frmSEF za paljenje dugmeta, pa forma ne nudi akciju
     ' koju kapija odbija.
-    If Not CanSendSEFInvoice(workflowState, GetFakturaSEFStatusText(fakturaID, SRC)) Then
+    Dim sefStatusText As String
+    Dim sefDocIdText As String
+
+    sefStatusText = GetFakturaSEFStatusText(fakturaID, SRC)
+    sefDocIdText = GetFakturaSEFDocumentId(fakturaID)
+
+    If Not CanSendSEFInvoice(workflowState, sefStatusText, sefDocIdText) Then
         Err.Raise ERR_SEF_STATE, SRC, _
-                  "Faktura cannot be sent while a SEF document exists in status: " & _
-                  GetFakturaSEFStatusText(fakturaID, SRC) & _
-                  ". Cancel the SEF document first (manual review)."
+                  "Faktura cannot be sent while a SEF document exists (SEFStatus=" & _
+                  sefStatusText & "; SEFDocumentId=" & sefDocIdText & "). " & _
+                  SEFSendBlockedNextStep(sefStatusText)
     End If
 
     If HasSuccessfulSEFSubmission(fakturaID) Then
@@ -439,7 +445,8 @@ End Function
 ' (PrepareRejectedInvoiceForResubmit vraca workflow u SEF_READY, a SEFStatus
 ' ostaje REJECTED).
 Public Function CanSendSEFInvoice(ByVal workflowState As String, _
-                                  ByVal sefStatus As String) As Boolean
+                                  ByVal sefStatus As String, _
+                                  ByVal sefDocumentId As String) As Boolean
 
     Select Case UCase$(Trim$(workflowState))
         Case UCase$(WF_LOCAL_FINALIZED), UCase$(WF_SEF_READY), UCase$(WF_SEF_TECH_FAILED)
@@ -449,16 +456,55 @@ Public Function CanSendSEFInvoice(ByVal workflowState As String, _
             Exit Function
     End Select
 
+    ' PRVO trajna cinjenica, tek onda status. `SEFStatus` je PROMENLJIV: svaki
+    ' neuspeo refresh ga prepise u FAILED/HTTP_ERROR (klasa UNKNOWN), pa bi
+    ' provera samo po statusu ponovo upalila "Retry" nad fakturom koja ima ziv
+    ' dokument na SEF-u -- i klik bi pao na duplicate guard. `SEFDocumentId`
+    ' postoji samo ako je SEF stvarno primio dokument i ne brise se pri padu
+    ' refresh-a (jedino ga `ClearFakturaLastSubmission_Row` cisti, u resubmit
+    ' toku odbijene fakture).
+    If Len(Trim$(sefDocumentId)) > 0 Then
+        CanSendSEFInvoice = False
+        Exit Function
+    End If
+
+    ' Rezervna odbrana za slucaj da je dokument nastao a docId se izgubio:
+    ' sam status i dalje dokazuje da dokument zivi na SEF-u.
     Select Case ClassifySEFExternalStatus(sefStatus)
+
         Case SEF_CLS_ACCEPTED, SEF_CLS_PENDING, SEF_CLS_INFO, _
              SEF_CLS_TERMINAL, SEF_CLS_SEND_FAILED
-            ' Dokument postoji na SEF-u -> novo slanje bi bilo duplikat.
             CanSendSEFInvoice = False
+
+        Case SEF_CLS_REJECTED
+            ' Odbijena faktura se salje ponovo SAMO kroz pripremljen tok
+            ' (`PrepareRejectedInvoiceForResubmit` -> SEF_READY, obrisan
+            ' SEFDocumentId i submission link). Bilo koje drugo stanje sa
+            ' statusom REJECTED je nesredjeno -> rucna provera.
+            CanSendSEFInvoice = (UCase$(Trim$(workflowState)) = UCase$(WF_SEF_READY))
+
         Case Else
-            ' REJECTED (resubmit tok), ERROR/UNKNOWN (tehnicki pad, dokument
-            ' najverovatnije nije ni nastao) i prazan status.
+            ' ERROR / UNKNOWN / prazno + nema SEFDocumentId = slanje nije ni
+            ' stiglo do SEF-a (obican tehnicki pad). Retry je ispravan.
             CanSendSEFInvoice = True
+
     End Select
+
+End Function
+
+' Sledeci korak za operatera kad je slanje blokirano. Poruka se izvodi iz ISTIH
+' capability funkcija koje odlucuju sta je dozvoljeno, pa ne moze da uputi na
+' akciju koja nije moguca (raniji tekst je za svaki blokiran status savetovao
+' Cancel, koji nije dozvoljen za Approved/Sent/Paid/Archived/Cancelled).
+Public Function SEFSendBlockedNextStep(ByVal sefStatus As String) As String
+
+    If CanCancelSEFStatus(sefStatus) Then
+        SEFSendBlockedNextStep = "Cancel the SEF document first, then handle it manually."
+    ElseIf CanStornoSEFStatus(sefStatus) Then
+        SEFSendBlockedNextStep = "Storno the SEF document first, then handle it manually."
+    Else
+        SEFSendBlockedNextStep = "Refresh the SEF status and check the SEF portal (manual review)."
+    End If
 
 End Function
 

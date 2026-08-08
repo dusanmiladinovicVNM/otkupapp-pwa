@@ -139,8 +139,10 @@ Public Function SEFRefreshTargetState(ByVal currentState As String, _
             desired = WF_SEF_REJECTED
 
         Case SEF_CLS_SEND_FAILED
-            ' Greska pri slanju (SEF "Mistake"): faktura mora u SEF_TECH_FAILED,
-            ' jer je to jedino stanje iz kog UI nudi retry (isti requestId).
+            ' Greska pri slanju (SEF "Mistake"): faktura mora iz "poslato" u
+            ' SEF_TECH_FAILED, jer NIJE poslata. To NE znaci da se automatski
+            ' nudi retry -- dokument na SEF-u postoji, pa `CanSendSEFInvoice`
+            ' drzi slanje zatvorenim dok se ne otkaze (AUD-032b, runda 4).
             desired = WF_SEF_TECH_FAILED
 
         Case SEF_CLS_PENDING, SEF_CLS_TERMINAL, SEF_CLS_INFO

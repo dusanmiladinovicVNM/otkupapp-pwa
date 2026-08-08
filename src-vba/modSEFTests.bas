@@ -818,35 +818,70 @@ Private Sub Test_SEFStatusCapabilities()
 
     ' --- Slanje: workflow NIJE dovoljan uslov ---
     ' Obican tehnicki pad (nema dokumenta na SEF-u) sme ponovo da se salje...
-    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, WF_SEF_TECH_FAILED), _
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, WF_SEF_TECH_FAILED, ""), _
                "Tehnicki pad bez SEF dokumenta -> retry dozvoljen"
-    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, ""), _
-               "TECH_FAILED bez spoljnog statusa -> retry dozvoljen"
-    AssertTrue CanSendSEFInvoice(WF_LOCAL_FINALIZED, ""), _
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, "", ""), _
+               "TECH_FAILED bez spoljnog statusa i bez docId -> retry dozvoljen"
+    AssertTrue CanSendSEFInvoice(WF_LOCAL_FINALIZED, "", ""), _
                "Finalizovana faktura se salje prvi put"
-    AssertTrue CanSendSEFInvoice(WF_SEF_READY, "REJECTED"), _
+    AssertTrue CanSendSEFInvoice(WF_SEF_READY, WF_SEF_READY, ""), _
                "Pripremljena odbijena faktura (resubmit tok) se salje"
 
     ' ...ali dokument koji ZIVI na SEF-u ne sme ponovo (duplicate guard bi ga
     ' ionako odbio -- ranije je forma palila dugme koje kapija odbija).
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake"), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake", "5317568"), _
                "MISTAKE dokument se ne salje ponovo (prvo Cancel)"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Cancelled"), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Cancelled", "5317568"), _
                "Posle cancel-a se ista faktura ne nudi za slanje"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Approved"), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Approved", "5317568"), _
                "Odobren dokument se ne salje ponovo"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Paid"), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Paid", "5317568"), _
                "Placen dokument se ne salje ponovo"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENT, ""), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENT, "", ""), _
                "SEF_SENT nije sendable workflow"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENDING, ""), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENDING, "", ""), _
                "SEF_SENDING nije sendable workflow"
-    AssertTrue Not CanSendSEFInvoice(WF_SEF_UNKNOWN, ""), _
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_UNKNOWN, "", ""), _
                "SEF_UNKNOWN nije sendable workflow"
 
+    ' KLJUCNO: SEFStatus je PROMENLJIV -- svaki neuspeo refresh ga prepise u
+    ' FAILED/HTTP_ERROR. Odluka se zato vezuje za TRAJAN SEFDocumentId, inace
+    ' bi pad mreze ponovo upalio "Retry" nad fakturom sa zivim dokumentom.
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "HTTP_ERROR", "5317568"), _
+               "Pad refresh-a ne sme da otkljuca slanje dok SEFDocumentId postoji"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, SEF_STATUS_UNKNOWN, "5317568"), _
+               "Nepoznat status + postojeci SEFDocumentId -> slanje blokirano"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "FAILED", "5317568"), _
+               "FAILED status + postojeci SEFDocumentId -> slanje blokirano"
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, "HTTP_ERROR", ""), _
+               "Pad refresh-a BEZ SEFDocumentId -> retry i dalje dozvoljen"
+    AssertTrue Not CanSendSEFInvoice(WF_LOCAL_FINALIZED, "", "5317568"), _
+               "Bilo koji sendable workflow sa zivim dokumentom je blokiran"
+
+    ' REJECTED se salje samo kroz pripremljen tok (SEF_READY + obrisan docId).
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Rejected", ""), _
+               "REJECTED van pripremljenog toka nije sendable"
+    AssertTrue CanSendSEFInvoice(WF_SEF_READY, "Rejected", ""), _
+               "REJECTED iz SEF_READY (pripremljen resubmit) je sendable"
+
     ' MISTAKE mora da ima BAR jednu putanju: cancel jeste, slanje nije.
-    AssertTrue CanCancelSEFStatus("Mistake") And Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake"), _
+    AssertTrue CanCancelSEFStatus("Mistake") And _
+               Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake", "5317568"), _
                "MISTAKE putanja je Cancel, ne Retry"
+
+    ' --- Poruka mora da uputi na akciju koja je stvarno moguca ---
+    AssertContains SEFSendBlockedNextStep("Mistake"), "Cancel", _
+                   "Za MISTAKE poruka upucuje na Cancel"
+    AssertContains SEFSendBlockedNextStep("Approved"), "Storno", _
+                   "Za APPROVED poruka upucuje na Storno (cancel nije dozvoljen)"
+    AssertContains SEFSendBlockedNextStep("Sent"), "Storno", _
+                   "Za SENT poruka upucuje na Storno"
+    AssertContains SEFSendBlockedNextStep("Cancelled"), "portal", _
+                   "Za vec otkazan dokument poruka upucuje na proveru, ne na Cancel"
+    AssertContains SEFSendBlockedNextStep("Paid"), "portal", _
+                   "Za placen dokument poruka ne upucuje na Cancel"
+    AssertTrue InStr(1, SEFSendBlockedNextStep("Paid"), "Cancel", vbTextCompare) = 0, _
+               "Poruka ne nudi Cancel tamo gde Cancel nije dozvoljen"
 
     Exit Sub
 
@@ -1660,7 +1695,7 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
     ' AUD-032b: posle uspesnog cancel-a faktura NE sme da bude ponudjena za
     ' ponovno slanje. Sam "workflow je neprazan" je propustao SEF_TECH_FAILED
     ' (npr. iz MISTAKE putanje), gde je forma i dalje palila "Retry slanje".
-    AssertTrue Not CanSendSEFInvoice(afterWorkflow, afterStatus), _
+    AssertTrue Not CanSendSEFInvoice(afterWorkflow, afterStatus, afterDocID), _
                "Otkazana faktura se ne nudi za ponovno slanje (workflow=" & _
                afterWorkflow & ", status=" & afterStatus & ")"
 
