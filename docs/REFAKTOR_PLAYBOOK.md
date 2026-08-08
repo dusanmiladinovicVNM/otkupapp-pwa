@@ -273,6 +273,26 @@ svi P2/P3 van zadatog obima paketa.
 storniranog otkupa (ukinuti raw fallback :334) (AUD-011, AUD-027; FM-0034 #1/#2/#3,
 FM-0031 #3/#19). **Regression:** `RunFakturaSmokeSuite`; ručno: faktura sa 3 stavke
 posle fakture sa 1 stavkom (merge test).
+**Naučeno (RF-08):** (1) **„Isti obrazac kao ostali `Fill*`" nije uvek prenosiv.** Ostalih pet
+`Fill*` šablona radi `ws.cells.UnMerge` bezbedno **jer pre punjenja ruše i grade ceo list**;
+`FakturaSablon` je perzistentan (`EnsureFakturaSablon` gradi ga jednom, po `H1` `LAYOUT_VER`)
+i u zaglavlju ima namerne merge-ove (`FakKupac`, seller header, naslov). Blanket `UnMerge` bi
+ih trajno pokidao i sledeća faktura bi izašla sa razbijenim zaglavljem. Obrazac je zato preuzet
+**opsegom koji se puni** (isti `startCell`..`Offset(80, 5)` koji cleanup već koristi), ne celim
+listom. Pouka: pre kopiranja obrasca proveri i **pretpostavku** pod kojom on važi na izvornom
+mestu. (2) **Filter koji sakriva podatak sakriva i razlog za blokadu.** Reprint je zvao
+`ExcludeStornirano` pa tražio red — storniran red nije nađen, `brDok` je ostao prazan, i raw
+fallback (`If ids = "" Then ids = otkupID`) ga je ipak odštampao. „Nije nađen" i „poništen" su
+iz filtriranog niza **nerazlučivi**, pa provera mora da ide nad sirovom tabelom i **pre**
+filtriranja. (3) **Menjanje potpisa test-helpera je deo scope-a fixa:** `AppendTestPrijemnicaRow`
+nije upisivao `KupacID`, pa bi novi ownership guard oborio 4 postojeća testa. Dodat je obavezan
+parametar (ne `Optional` sa defaultom — test red bez kupca s pravom više ne sme da prođe).
+Provereno je i da svih 5 `CreateFaktura_TX` fixtura u `modBusinessFlowProTests` ide kroz
+`SavePrijemnica_TX(… TEST_KUP_ID …)`, pa ta suite ne regresira.
+**Svesno NIJE uzeto:** AUD-054 (SEF `Err.Raise 0`) — zaseban SEF-hardening; faktura-status /
+SEF lifecycle (RF-22); document-snapshot za reprint (TL-006, zaseban roadmap). Fallback za
+**aktivan** otkup bez `BrojDokumenta` je namerno zadržan — ukinut je samo put kojim je storno
+prolazio.
 
 ### RF-09 — Banka import + mapiranje [Wave 2 · M]
 **Fajlovi:** `modBankaImport.bas`, `modBankaMapiranje.bas`, `frmBankaImport.frm`.
@@ -465,8 +485,8 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
 | RF-06 | modIzvestaj brojke | 🟢 PR #175 | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14) + posledica AUD-052 u report sloju. **`Compile` čist, `RunIzvestajTests` 100%** (uklj. 3 e2e nad tabelama). Ostaje uporedni pregled izveštaja pre/posle — brojke se namerno menjaju |
-| RF-07 | frmIzvestaj + revers | 🟢 grana | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
-| RF-08 | Faktura + štampa | ⬜ | — | |
+| RF-07 | frmIzvestaj + revers | ✅ merged PR #176 | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
+| RF-08 | Faktura + štampa | 🟢 grana | `claude/rf-08-faktura-stampa-g5h1c5` | **M5 ✅ KOMPLETAN.** AUD-011 zatvoren (FM-0034 #1/#2/#3: vlasništvo prijemnice u `CreateFaktura`, fail-closed `rows.count > 1`, `CreateFaktura` → `Private` — caller check potvrdio da svi pozivi već idu kroz `_TX`) + AUD-027 zatvoren u celosti (FM-0031 #3 reprint storniranog otkupa preko novog seam-a `OtkupStorniranZaStampu`; #19 `FillFakturaSablon` `.UnMerge` **opsegom stavki**, ne `ws.cells` — šablon je perzistentan i ima namerne merge-ove u zaglavlju). `RunFakturaSmokeSuite` postao **tvrd gate** + 3 nova testa. Merge test (3 stavke posle 1 stavke) = operater-smoke. **1 nov `Poruka()` ključ → `EnsurePoruke` obavezan** |
 | RF-09 | Banka import/map | ⬜ | — | |
 | RF-10 | Banka export | ⬜ | — | |
 | RF-11 | Otkup UI | ⬜ | — | |
