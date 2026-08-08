@@ -1971,6 +1971,35 @@ EH:
     LogErr "modPrint.EnsureFakturaSablon"
 End Sub
 
+' Poslednji red sa STVARNIM sadrzajem u kolonama firstCol..lastCol (0 = nema).
+' Namerno NE koristi `UsedRange`: on obuhvata i prazne ali FORMATIRANE celije, a
+' sabloni se formatiraju preko `ws.cells.Font...` (ceo list), pa `UsedRange` moze
+' da se protegne do poslednjeg reda lista. Cleanup vezan za takvu granicu bi
+' obradjivao milione celija po renderu -- zamrznut Excel i naduvan fajl.
+' `Find` sa `xlFormulas` + `xlPrevious` gleda SAMO sadrzaj i samo zadate kolone.
+' Seam za RunFakturaSmokeSuite (test tvrdi da formatirana prazna celija duboko
+' ispod dokumenta NE siri granicu ciscenja).
+Public Function SablonLastContentRow(ByVal ws As Worksheet, _
+                                     ByVal firstCol As Long, _
+                                     ByVal lastCol As Long) As Long
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Dim rng As Range
+    Set rng = ws.Range(ws.cells(1, firstCol), ws.cells(ws.rows.count, lastCol))
+
+    Dim hit As Range
+    Set hit = rng.Find(What:="*", LookIn:=xlFormulas, LookAt:=xlPart, _
+                       SearchOrder:=xlByRows, SearchDirection:=xlPrevious)
+
+    If Not hit Is Nothing Then SablonLastContentRow = hit.row
+    Exit Function
+EH:
+    ' Fail-soft: 0 znaci "nema poznatog sadrzaja", pa cleanup pada na
+    ' `nStavke + 4` -- opseg koji ovaj dokument ionako mora da pokrije.
+    LogErr "modPrint.SablonLastContentRow"
+End Function
+
 ' Popuni FakturaSablon iz prikupljenih podataka. stavke(1..nStavke, 1..5):
 ' 1=BrojPrijemnice 2=Klasa 3=Kolicina 4=Cena 5=Vrednost. Vraca sheet.
 Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, _
@@ -1998,9 +2027,16 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
     '     i vrati Nothing = tiho izostala stampa), a `NumberFormat = "@"` je
     '     pokrivao samo prvih 80 redova, pa je broj prijemnice tipa "1/2026" od
     '     81. stavke Excel mogao da protumaci kao datum.
-    '     Donja granica = sta je dalje: sadrzaj koji je prethodni dokument
-    '     ostavio na listu (`UsedRange`) ili ono sto ovaj dokument treba da
-    '     napise (stavke + UKUPNO + prazan red + potpisi).
+    '     Donja granica = sta je dalje: STVARAN sadrzaj koji je prethodni dokument
+    '     ostavio na listu ili ono sto ovaj dokument treba da napise (stavke +
+    '     UKUPNO + prazan red + potpisi).
+    ' (3) Granica se trazi preko `SablonLastContentRow` (Find nad A:F), NE preko
+    '     `UsedRange`: `UsedRange` broji i prazne ali FORMATIRANE celije, a
+    '     `EnsureFakturaSablon` formatira CEO list (`ws.cells.Font...`) -- dno bi
+    '     tada moglo da bude poslednji red lista, pa bi svaki render radio
+    '     UnMerge/ClearContents/Borders/NumberFormat nad milionima celija
+    '     (zamrznut Excel, naduvan fajl). Sadrzajna granica je i semanticki
+    '     tacna: cistimo ono sto je NAPISANO, ne ono sto je formatirano.
     ' NAMERNO nije `ws.cells.UnMerge` (kao kod ostalih Fill* sablona): oni svaki
     ' put ruse i grade ceo list, a FakturaSablon je perzistentan (EnsureFakturaSablon
     ' gradi ga jednom, po LAYOUT_VER) i u zaglavlju ima svoje merge-ove (FakKupac,
@@ -2009,11 +2045,11 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
     Dim cleanupRows As Long
     cleanupRows = nStavke + 4
 
-    Dim usedBottom As Long
-    usedBottom = ws.UsedRange.row + ws.UsedRange.rows.count - 1
+    Dim contentBottom As Long
+    contentBottom = SablonLastContentRow(ws, 1, 6)
 
-    If usedBottom - startCell.row > cleanupRows Then
-        cleanupRows = usedBottom - startCell.row
+    If contentBottom - startCell.row > cleanupRows Then
+        cleanupRows = contentBottom - startCell.row
     End If
 
     With ws.Range(startCell, startCell.Offset(cleanupRows, 5))

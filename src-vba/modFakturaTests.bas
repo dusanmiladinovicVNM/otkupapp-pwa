@@ -598,12 +598,18 @@ Private Function ReprintGuardRaises(ByVal otkupID As String) As Boolean
     On Error GoTo 0
 End Function
 
-' AUD-027 / FM-0031 #19, review nalaz: cleanup opseg mora da prati STVARAN broj
+' AUD-027 / FM-0031 #19, review nalaz 1: cleanup opseg mora da prati STVARAN broj
 ' stavki, ne fiksnih 80 redova. Renderuje se 81 pa 82 stavke -- druga faktura
 ' mora da prodje bez zaostalog merge-a sa offseta 81 (ranije: pisanje preko
 ' merged celije -> EH -> `Nothing` -> tiho izostala stampa).
+' Review nalaz 2: granica NE sme da dodje iz `UsedRange` -- sablon je formatiran
+' preko `ws.cells.Font...`, pa bi prazna FORMATIRANA celija duboko ispod
+' dokumenta razvukla cleanup na milione celija. Zato se granica trazi po
+' sadrzaju (`SablonLastContentRow`), sto se ovde i tvrdi.
 ' Ne dira tabele: FillFakturaSablon prima stavke kao niz.
 Private Sub Test_FakturaSablonCleanupPratiBrojStavki()
+    ' Konvencija: Const na vrhu procedure, ne izmedju izvrsnih linija.
+    Const FAR_ROW As Long = 5000
     On Error GoTo EH
 
     Dim ws As Worksheet
@@ -639,10 +645,44 @@ Private Sub Test_FakturaSablonCleanupPratiBrojStavki()
     AssertFakturaTrue ws.Range("FakKupac").MergeCells, _
                       "Merge zaglavlja (FakKupac) je netaknut"
 
+    ' --- Granica ciscenja mora da dolazi iz SADRZAJA, ne iz formatiranja ---
+    Dim sadrzajPre As Long
+    sadrzajPre = SablonLastContentRow(ws, 1, 6)
+
+    ' Prazna, ali FORMATIRANA celija duboko ispod dokumenta.
+    ws.cells(FAR_ROW, 2).Interior.Color = RGB(255, 0, 0)
+
+    AssertFakturaTrue SablonLastContentRow(ws, 1, 6) = sadrzajPre, _
+                      "Formatirana prazna celija ne siri granicu ciscenja"
+
+    AssertFakturaTrue sadrzajPre < FAR_ROW, _
+                      "Granica ciscenja ostaje kod stvarnog sadrzaja"
+
+    ' Render posle toga ne sme da dodirne taj red (dokaz da cleanup nije
+    ' razvucen do FAR_ROW: boja bi bila obrisana `Interior.ColorIndex = xlNone`).
+    Set ws = FillFakturaSablon("TST-3", Date, "Test kupac", _
+                               BuildFakturaTestStavke(3), 3, 3#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 3 stavke after 82"
+
+    If ws Is Nothing Then GoTo CleanExit
+
+    AssertFakturaTrue ws.cells(FAR_ROW, 2).Interior.ColorIndex <> xlNone, _
+                      "Cleanup nije razvucen do formatirane celije na " & CStr(FAR_ROW)
+
 CleanExit:
-    ' Sablon je vidljiv list -- ne ostavljaj 82 test reda na njemu.
+    ' Vrati sablon u zateceno stanje: obrisan list `EnsureFakturaSablon`
+    ' regenerise pri sledecoj stampi, pa test ne ostavlja ni test stavke ni
+    ' potpise ni PrintArea ni onu formatiranu celiju na 5000.
     On Error Resume Next
-    FillFakturaSablon "", Empty, "", BuildFakturaTestStavke(1), 0, 0#
+    Dim cleanupWs As Worksheet
+    Set cleanupWs = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    If Not cleanupWs Is Nothing Then
+        Application.DisplayAlerts = False
+        cleanupWs.Delete
+        Application.DisplayAlerts = True
+    End If
     On Error GoTo 0
     Exit Sub
 
