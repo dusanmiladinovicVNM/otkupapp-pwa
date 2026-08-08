@@ -720,6 +720,18 @@ Public Const SEF_SUB_UNKNOWN As String = "UNKNOWN"
 ' marker i faktura ide na rucnu proveru.
 Public Const SEF_STATUS_UNKNOWN As String = "UNKNOWN_STATUS"
 
+' Klasifikacija eksternog SEF statusa (modSEFStatusSync.ClassifySEFExternalStatus).
+' Zvanicni SEF enum SalesInvoiceStatus ima 14+ vrednosti; lokalni workflow ima 5
+' ishoda. Ove klase su most izmedju to dvoje - jedno mesto na kome se odlucuje
+' sta koji spoljni status znaci.
+Public Const SEF_CLS_ACCEPTED As String = "ACCEPTED"   ' kupac odobrio (Approved)
+Public Const SEF_CLS_REJECTED As String = "REJECTED"   ' kupac odbio
+Public Const SEF_CLS_PENDING As String = "PENDING"     ' u obradi / ceka odluku
+Public Const SEF_CLS_TERMINAL As String = "TERMINAL"   ' storno/otkazano/obrisano
+Public Const SEF_CLS_INFO As String = "INFO"           ' poznat, ali ne menja workflow
+Public Const SEF_CLS_ERROR As String = "ERROR"         ' SEF/HTTP greska
+Public Const SEF_CLS_UNKNOWN As String = "UNKNOWN"     ' nepoznat -> rucna provera
+
 ' =========================
 ' Event types
 ' =========================

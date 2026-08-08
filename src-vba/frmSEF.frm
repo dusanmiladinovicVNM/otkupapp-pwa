@@ -336,17 +336,20 @@ Private Sub LoadSelectedFakturaInfo()
     Call UpdateSEFButtonStates
     
     ' NOVO - koristi theme constants
-    Select Case UCase$(Me.lblSEFStatus.caption)
-    Case "SENT"
-        Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
-    Case "ACCEPTED"
+    ' AUD-032b: boja se vodi po klasi statusa, ne po rucnoj listi imena --
+    ' inace zvanicni SEF statusi (APPROVED, SEEN, PAID, MISTAKE...) ispadnu
+    ' neobojeni, tj. izgledaju kao "nista posebno".
+    Select Case ClassifySEFExternalStatus(Me.lblSEFStatus.caption)
+    Case SEF_CLS_ACCEPTED
         Me.lblSEFStatus.ForeColor = CLR_SUCCESS()
-    Case "REJECTED"
+    Case SEF_CLS_REJECTED
         Me.lblSEFStatus.ForeColor = CLR_ERROR()
-    Case "CANCELLED", "STORNO"
+    Case SEF_CLS_PENDING
+        Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
+    Case SEF_CLS_TERMINAL, SEF_CLS_INFO
         Me.lblSEFStatus.ForeColor = CLR_WARNING()
-    Case UCase$(SEF_STATUS_UNKNOWN)
-        ' AUD-032b: nepoznat status = rucna provera, ne "sve u redu".
+    Case SEF_CLS_ERROR, SEF_CLS_UNKNOWN
+        ' Nepoznat status = rucna provera, ne "sve u redu".
         Me.lblSEFStatus.ForeColor = CLR_WARNING()
     Case Else
         Me.lblSEFStatus.ForeColor = TXT_LIGHT()
@@ -431,7 +434,11 @@ Private Sub UpdateSEFButtonStates()
     
     Me.btnCancel.enabled = (sefStatus = "DRAFT" Or sefStatus = "NEW" Or sefStatus = "ERROR")
     
-    Me.btnStorno.enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or sefStatus = "REJECTED")
+    ' AUD-032b: mora da obuhvati i zvanicni "APPROVED" -- inace prihvacena
+    ' faktura ostane bez dugmeta za storno. Lista prati
+    ' ValidateFakturaCanBeStorniranoOnSEF (fail-closed kapija je tamo).
+    Me.btnStorno.enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or _
+                            sefStatus = "APPROVED" Or sefStatus = "REJECTED")
     
     Me.btnRecoverSending.enabled = (workflowState = UCase$(WF_SEF_SENDING))
     

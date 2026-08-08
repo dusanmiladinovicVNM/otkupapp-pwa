@@ -66,6 +66,23 @@ InvalidTransition:
         "Illegal SEF state transition: " & oldState & " -> " & newState
 End Sub
 
+' AUD-032c: ne-bacajuci oblik iste odluke. Sluzi da pozivalac (planer tranzicije
+' u modSEFStatusSync) moze da PITA state machine umesto da pretpostavlja -- pa ne
+' moze da predlozi tranziciju koja ce dole puknuti i oboriti refresh. Jedini
+' izvor istine ostaje ValidateAllowedTransition.
+Public Function IsSEFTransitionAllowed(ByVal oldState As String, _
+                                       ByVal newState As String) As Boolean
+    On Error GoTo NotAllowed
+
+    ValidateAllowedTransition oldState, newState
+
+    IsSEFTransitionAllowed = True
+    Exit Function
+
+NotAllowed:
+    IsSEFTransitionAllowed = False
+End Function
+
 Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     On Error GoTo EH
 
@@ -401,8 +418,11 @@ Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
 
     sefStatus = GetFakturaSEFStatusText(fakturaID, SRC)
 
+    ' AUD-032b: "APPROVED" je zvanicni SEF naziv za prihvacenu fakturu
+    ' ("ACCEPTED" ostaje zbog zatecenih redova i submit odgovora). Bez njega bi
+    ' posle uskladjivanja adaptera prihvacena faktura postala nestorniva.
     Select Case sefStatus
-        Case "SENT", "ACCEPTED", "REJECTED"
+        Case "SENT", "ACCEPTED", "APPROVED", "REJECTED"
             ' allowed
 
         Case Else
@@ -488,8 +508,10 @@ End Sub
 
 Public Function IsFinalSEFStatus(ByVal sefStatus As String) As Boolean
     
-    Select Case UCase$(Trim$(sefStatus))
-        Case "ACCEPTED", "REJECTED", "STORNO", "CANCELLED"
+    ' AUD-032b: prati zvanicni SEF enum kroz zajednicki klasifikator
+    ' (APPROVED/ACCEPTED, REJECTED, STORNO/CANCELLED/DELETED/MISTAKE).
+    Select Case ClassifySEFExternalStatus(sefStatus)
+        Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_TERMINAL
             IsFinalSEFStatus = True
         Case Else
             IsFinalSEFStatus = False
@@ -499,8 +521,10 @@ End Function
 
 Public Function IsPendingSEFStatus(ByVal sefStatus As String) As Boolean
     
-    Select Case UCase$(Trim$(sefStatus))
-        Case "SENT", "NEW", "DRAFT"
+    ' AUD-032b: isti klasifikator kao svuda (dodaje SENDING i SEEN iz zvanicnog
+    ' SEF enum-a, koje je stara lista propustala).
+    Select Case ClassifySEFExternalStatus(sefStatus)
+        Case SEF_CLS_PENDING
             IsPendingSEFStatus = True
         Case Else
             IsPendingSEFStatus = False

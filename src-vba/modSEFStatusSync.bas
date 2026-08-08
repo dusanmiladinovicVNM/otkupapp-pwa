@@ -24,41 +24,174 @@ Public Function RefreshSubmissionStatus(ByVal fakturaID As String) As Boolean
     RefreshSubmissionStatus = RefreshSEFStatus_TX(fakturaID)
 End Function
 
-' AUD-032b: spisak statusa koje SEF sloj zaista razume. Sve van ovog spiska
-' (ukljucujuci prazan status) je NEPOZNAT status -> rucna provera, nikad tiho
-' "SENT". Koristi se i u refresh grani i u monitoring grani.
-Public Function IsKnownSEFRefreshStatus(ByVal apiStatus As String) As Boolean
+' =========================================================
+' ADAPTER: zvanicni SEF status -> interna klasa (AUD-032b)
+'
+' Zvanicni enum SalesInvoiceStatus (SEF tehnicko uputstvo):
+'   New, Draft, Sending, Sent, Seen, Approved, Rejected, Cancelled, Storno,
+'   Paid, OverDue, Archived, Mistake, Deleted, Unknown
+'
+' KLJUCNO: prihvatanje se na SEF-u zove **Approved**, ne "Accepted". Stari kod je
+' prepoznavao samo "ACCEPTED", pa je stvarno odobrena faktura padala u Case Else.
+' Dok je Case Else bio "SENT", to se nije videlo (AUD-032b); da je ostalo posle
+' popravke, odobrena faktura bi zavrsavala kao "nepoznat status - rucna provera".
+'
+' Nepoznat status (ukljucujuci zvanicni "Unknown" i prazan) NIKAD ne sme da se
+' protumaci kao poslato/prihvaceno - ide na rucnu proveru.
+' =========================================================
+Public Function ClassifySEFExternalStatus(ByVal apiStatus As String) As String
+
     Select Case UCase$(Trim$(apiStatus))
-        Case "ACCEPTED", "REJECTED", "SENT", "NEW", "DRAFT", _
-             "STORNO", "CANCELLED", "CANCELED", "ERROR"
-            IsKnownSEFRefreshStatus = True
+
+        ' Kupac je odobrio fakturu. "ACCEPTED" se zadrzava jer ga
+        ' ParseSubmitResponse postavlja iz submit odgovora (accepted=true) i jer
+        ' postoje zatecene fakture sa tom vrednoscu u tblFakture.
+        Case "APPROVED", "ACCEPTED"
+            ClassifySEFExternalStatus = SEF_CLS_ACCEPTED
+
+        Case "REJECTED"
+            ClassifySEFExternalStatus = SEF_CLS_REJECTED
+
+        ' Jos nije doneta odluka kupca -- faktura je na putu ili ceka.
+        Case "NEW", "DRAFT", "DRAFTED", "SENDING", "SENT", "SEEN"
+            ClassifySEFExternalStatus = SEF_CLS_PENDING
+
+        ' Dokument je ponisten/uklonjen na SEF-u; nema vise automatskog napretka.
+        ' "MISTAKE" (Greska) je isto terminalno stanje dokumenta, ne HTTP greska.
+        Case "STORNO", "CANCELLED", "CANCELED", "DELETED", "MISTAKE"
+            ClassifySEFExternalStatus = SEF_CLS_TERMINAL
+
+        ' Poznati statusi koji NE govore nista o odluci kupca (izdavalac moze da
+        ' obelezi placeno, rok moze da istekne, dokument moze biti arhiviran).
+        ' Beleze se u SEFStatus, ali ne pomeraju lokalni workflow.
+        Case "PAID", "OVERDUE", "OVER_DUE", "ARCHIVED"
+            ClassifySEFExternalStatus = SEF_CLS_INFO
+
+        Case "ERROR"
+            ClassifySEFExternalStatus = SEF_CLS_ERROR
+
+        ' Ovde padaju i zvanicni "Unknown" i prazan status i svaki nov status
+        ' koji SEF uvede posle ove verzije.
         Case Else
-            IsKnownSEFRefreshStatus = False
+            ClassifySEFExternalStatus = SEF_CLS_UNKNOWN
+
+    End Select
+
+End Function
+
+' Tanak omotac nad klasifikatorom -- "da li SEF sloj uopste razume ovaj status".
+Public Function IsKnownSEFRefreshStatus(ByVal apiStatus As String) As Boolean
+    IsKnownSEFRefreshStatus = _
+        (ClassifySEFExternalStatus(apiStatus) <> SEF_CLS_UNKNOWN)
+End Function
+
+' Da li je refresh dao upotrebljiv odgovor (za povratnu vrednost i brojace).
+Public Function IsUsableSEFRefreshClass(ByVal classification As String) As Boolean
+    Select Case classification
+        Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_PENDING, _
+             SEF_CLS_TERMINAL, SEF_CLS_INFO
+            IsUsableSEFRefreshClass = True
+        Case Else
+            IsUsableSEFRefreshClass = False
     End Select
 End Function
 
-' AUD-032b: kad je status nepoznat, lokalni workflow se NE pomera na SEF_SENT.
-' Jedini slucaj u kome mora da se pomeri je zaglavljen SEF_SENDING -- inace bi
-' recovery svaki put nalazio istu fakturu i lazno je prijavljivao kao oporavljenu.
-' Prazan povratak = "ne diraj workflow state, upisi samo refresh polja".
-Public Function SEFUnknownStatusTargetState(ByVal currentState As String) As String
-    If UCase$(Trim$(currentState)) = UCase$(WF_SEF_SENDING) Then
-        SEFUnknownStatusTargetState = WF_SEF_UNKNOWN
-    Else
-        SEFUnknownStatusTargetState = ""
-    End If
-End Function
+' =========================================================
+' PLANER TRANZICIJE (AUD-032b/c)
+'
+' Jedina odluka "gde workflow ide posle refresh-a". Vraca ciljno stanje ili
+' PRAZAN string = "ne diraj workflow, upisi samo refresh/error polja".
+'
+' Funkcija je cista i **sama proverava dozvoljenost** kroz
+' IsSEFTransitionAllowed, pa po konstrukciji ne moze da predlozi tranziciju
+' koju modSEFValidator odbija. Bez toga su nastajale bas ove kontradikcije:
+'   SEF_SYNC_ERROR + pad API-ja -> SEF_SYNC_ERROR (self-transition, zabranjena)
+'   SEF_UNKNOWN    + pad API-ja -> SEF_SYNC_ERROR (zabranjena)
+' obe su zavrsavale izuzetkom i rollback-om bas kad SEF ponovo ne odgovara.
+'
+' Dvokorak (npr. SEF_SYNC_ERROR -> SEF_SENT -> SEF_ACCEPTED) se dobija time sto
+' pozivalac planer zove ponovo sa novim stanjem; vidi ApplySEFRefreshOutcome.
+' =========================================================
+Public Function SEFRefreshTargetState(ByVal currentState As String, _
+                                      ByVal classification As String) As String
 
-' AUD-032c: kad refresh padne (API greska), SEF_SENDING NE sme u SEF_SYNC_ERROR --
-' ta tranzicija je zabranjena u modSEFValidator, pa je stari kod bacao izuzetak i
-' ostavljao fakturu trajno zaglavljenu u SEF_SENDING (greska pri svakom startup
-' recovery-ju). Za SEF_SENDING se koristi SEF_UNKNOWN (rucna provera).
-Public Function SEFRefreshFailureTargetState(ByVal currentState As String) As String
-    If UCase$(Trim$(currentState)) = UCase$(WF_SEF_SENDING) Then
-        SEFRefreshFailureTargetState = WF_SEF_UNKNOWN
-    Else
-        SEFRefreshFailureTargetState = WF_SEF_SYNC_ERROR
+    Dim curState As String
+    Dim desired As String
+
+    curState = UCase$(Trim$(currentState))
+
+    Select Case classification
+
+        Case SEF_CLS_ACCEPTED
+            desired = WF_SEF_ACCEPTED
+
+        Case SEF_CLS_REJECTED
+            desired = WF_SEF_REJECTED
+
+        Case SEF_CLS_PENDING, SEF_CLS_TERMINAL
+            ' Terminalni udaljeni status takodje dokazuje da je faktura stigla do
+            ' SEF-a, pa izvlaci zaglavljeni SEF_SENDING / SEF_UNKNOWN /
+            ' SEF_SYNC_ERROR na SEF_SENT. Iz SEF_SENT je to self-transition, pa
+            ' planer ispod vrati prazno i upisu se samo refresh polja.
+            desired = WF_SEF_SENT
+
+        Case SEF_CLS_INFO
+            ' Poznat status koji ne nosi odluku -> workflow ostaje gde jeste.
+            SEFRefreshTargetState = ""
+            Exit Function
+
+        Case Else
+            ' SEF_CLS_ERROR i SEF_CLS_UNKNOWN: nemamo upotrebljiv status.
+            ' SEF_SENDING mora da izadje iz "salje se" (inace ga startup recovery
+            ' nalazi zauvek), SEF_SENT ide u SEF_SYNC_ERROR. Sva ostala stanja
+            ' ostaju netaknuta -- ponovni pad ne sme da obori refresh.
+            If curState = UCase$(WF_SEF_SENDING) Then
+                desired = WF_SEF_UNKNOWN
+            ElseIf curState = UCase$(WF_SEF_SENT) Then
+                desired = WF_SEF_SYNC_ERROR
+            Else
+                SEFRefreshTargetState = ""
+                Exit Function
+            End If
+
+    End Select
+
+    ' Faktura bez zabelezenog stanja: UpdateFakturaSEFState_Row u tom slucaju
+    ' preskace validaciju tranzicije, pa je upis bezbedan.
+    If Len(curState) = 0 Then
+        SEFRefreshTargetState = desired
+        Exit Function
     End If
+
+    ' Vec smo u ciljnom stanju -> nema transition-a u samog sebe.
+    If curState = UCase$(desired) Then
+        SEFRefreshTargetState = ""
+        Exit Function
+    End If
+
+    ' Sve ostalo odlucuje state machine.
+    If IsSEFTransitionAllowed(curState, desired) Then
+        SEFRefreshTargetState = desired
+        Exit Function
+    End If
+
+    ' Direktan skok nije dozvoljen, ali state machine mozda dozvoljava put preko
+    ' SEF_SENT. Konkretan slucaj: prethodni refresh je pao (SEF_SYNC_ERROR), a
+    ' sada stize finalni status -- SEF_SYNC_ERROR -> SEF_SENT -> SEF_ACCEPTED.
+    ' Vracamo PRVI korak; pozivalac (ApplySEFRefreshOutcome) zove planer ponovo
+    ' sa novim stanjem i dobija drugi. Zato je most ogranicen na jedno stanje --
+    ' dva koraka su i gornja granica petlje.
+    If IsSEFTransitionAllowed(curState, WF_SEF_SENT) Then
+        If IsSEFTransitionAllowed(WF_SEF_SENT, desired) Then
+            SEFRefreshTargetState = WF_SEF_SENT
+            Exit Function
+        End If
+    End If
+
+    ' Nema legalnog puta -> ne diramo workflow (npr. SEF_ACCEPTED se ne vraca u
+    ' SEF_SENT samo zato sto je spoljni status jos "pending").
+    SEFRefreshTargetState = ""
+
 End Function
 
 ' Vraca True samo ako je SEF vratio upotrebljiv status.
@@ -74,9 +207,8 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
     Dim apiStatus As String
     Dim currentState As String
     Dim refreshOk As Boolean
-    Dim unknownTargetState As String
-    Dim failTargetState As String
-
+    Dim classification As String
+    Dim statusText As String
 
     On Error GoTo EH
     
@@ -104,163 +236,130 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
         'Call SaveSEFSubmissionResult_Row(submissionID, response)
     End If
     
-    If response.Accepted Then
-
-        refreshOk = True
-
-        Call ApplySEFStateOrRefreshOnly( _
-            fakturaID:=fakturaID, _
-            targetWorkflowState:=WF_SEF_ACCEPTED, _
-            sefStatus:="ACCEPTED", _
-            sefDocumentId:=response.sefDocumentId, _
-            errorCode:="", _
-            errorMessage:="")
-
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_OK, _
-            message:="SEF status refreshed: ACCEPTED.", _
-            details:="SEFDocumentId=" & response.sefDocumentId)
-
+    ' =========================================================
+    ' AUD-032b/c: jedan adapter + jedan planer za sve ishode
+    ' =========================================================
+    ' Klasa se izvodi iz response flagova (koje klijent postavlja preko istog
+    ' klasifikatora) i iz samog apiStatus-a. Pad HTTP/API poziva je uvek
+    ' SEF_CLS_ERROR bez obzira sta pise u apiStatus polju.
+    If Not response.Success Then
+        classification = SEF_CLS_ERROR
+    ElseIf response.Accepted Then
+        classification = SEF_CLS_ACCEPTED
     ElseIf response.Rejected Then
-
-        refreshOk = True
-
-        Call ApplySEFStateOrRefreshOnly( _
-            fakturaID:=fakturaID, _
-            targetWorkflowState:=WF_SEF_REJECTED, _
-            sefStatus:="REJECTED", _
-            sefDocumentId:=response.sefDocumentId, _
-            errorCode:=response.errorCode, _
-            errorMessage:=response.errorMessage)
-        
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_VALIDATION_FAILED, _
-            message:="SEF status refreshed: REJECTED.", _
-            details:=response.errorCode & " | " & response.errorMessage)
-    
-    ElseIf response.Success Then
-        
-        Select Case apiStatus
-
-            Case "SENT", "NEW", "DRAFT"
-
-                refreshOk = True
-
-                Call ApplySEFStateOrRefreshOnly( _
-                    fakturaID:=fakturaID, _
-                    targetWorkflowState:=WF_SEF_SENT, _
-                    sefStatus:=apiStatus, _
-                    sefDocumentId:=response.sefDocumentId, _
-                    errorCode:="", _
-                    errorMessage:="")
-                
-                Call AppendSEFEvent_Row( _
-                    fakturaID:=fakturaID, _
-                    submissionID:=submissionID, _
-                    eventType:=SEF_EVT_SYNC_OK, _
-                    message:="SEF status unchanged (pending).", _
-                    details:=apiStatus)
-            
-            Case "STORNO", "CANCELLED", "CANCELED"
-
-                refreshOk = True
-
-                ' AUD-032c: SEF_SENDING se ovde mora pomeriti na SEF_SENT.
-                ' Faktura sa terminalnim udaljenim statusom je ocigledno stigla
-                ' do SEF-a; dok je ostajala u SEF_SENDING, startup recovery ju je
-                ' pri svakom pokretanju nalazio i lazno prijavljivao "Recovered".
-                If UCase$(Trim$(currentState)) = UCase$(WF_SEF_SYNC_ERROR) Or _
-                   UCase$(Trim$(currentState)) = UCase$(WF_SEF_SENDING) Then
-                    Call UpdateFakturaSEFState_Row( _
-                        fakturaID:=fakturaID, _
-                        newState:=WF_SEF_SENT, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                Else
-                    Call UpdateFakturaSEFRefreshFields_Row( _
-                        fakturaID:=fakturaID, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:="", _
-                        errorMessage:="")
-                End If
-                
-                Call AppendSEFEvent_Row( _
-                    fakturaID:=fakturaID, _
-                    submissionID:=submissionID, _
-                    eventType:=SEF_EVT_SYNC_OK, _
-                    message:="SEF status refreshed: " & apiStatus & ".", _
-                    details:=apiStatus)
-            
-            Case Else
-
-                ' AUD-032b: prazan / nepoznat status NIJE dokaz da je faktura
-                ' poslata. Stari kod ga je mapirao na WF_SEF_SENT, pa je
-                ' nepotvrdjena faktura izgledala kao uspesno poslata.
-                refreshOk = False
-
-                If Len(Trim$(apiStatus)) = 0 Then apiStatus = SEF_STATUS_UNKNOWN
-
-                unknownTargetState = SEFUnknownStatusTargetState(currentState)
-
-                If Len(unknownTargetState) > 0 Then
-                    Call UpdateFakturaSEFState_Row( _
-                        fakturaID:=fakturaID, _
-                        newState:=unknownTargetState, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:=SEF_STATUS_UNKNOWN, _
-                        errorMessage:="SEF returned unknown status; manual review required.")
-                Else
-                    Call UpdateFakturaSEFRefreshFields_Row( _
-                        fakturaID:=fakturaID, _
-                        sefStatus:=apiStatus, _
-                        sefDocumentId:=response.sefDocumentId, _
-                        errorCode:=SEF_STATUS_UNKNOWN, _
-                        errorMessage:="SEF returned unknown status; manual review required.")
-                End If
-
-                Call AppendSEFEvent_Row( _
-                    fakturaID:=fakturaID, _
-                    submissionID:=submissionID, _
-                    eventType:=SEF_EVT_SYNC_FAILED, _
-                    message:="SEF returned unknown status; manual review required.", _
-                    details:="ApiStatus=" & apiStatus & _
-                             "; LocalState=" & currentState & _
-                             "; NewState=" & unknownTargetState)
-
-        End Select
-
+        classification = SEF_CLS_REJECTED
     Else
-
-        refreshOk = False
-
-        failTargetState = SEFRefreshFailureTargetState(currentState)
-
-        Call UpdateFakturaSEFState_Row( _
-            fakturaID:=fakturaID, _
-            newState:=failTargetState, _
-            sefStatus:=IIf(failTargetState = WF_SEF_UNKNOWN, SEF_STATUS_UNKNOWN, WF_SEF_SYNC_ERROR), _
-            errorCode:=response.errorCode, _
-            errorMessage:=response.errorMessage)
-
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_FAILED, _
-            message:="SEF status refresh failed.", _
-            details:=response.errorCode & " | " & response.errorMessage & _
-                     "; LocalState=" & currentState & _
-                     "; NewState=" & failTargetState)
-
+        classification = ClassifySEFExternalStatus(apiStatus)
     End If
-    
+
+    refreshOk = IsUsableSEFRefreshClass(classification)
+
+    ' SEFStatus se cuva DOSLOVNO onako kako ga je SEF vratio (kolona je po
+    ' definiciji "poslednji spoljni status"); samo prazan status dobija marker.
+    statusText = apiStatus
+    If Len(Trim$(statusText)) = 0 Then statusText = SEF_STATUS_UNKNOWN
+
+    Select Case classification
+
+        Case SEF_CLS_ACCEPTED
+
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, "", ""
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_OK, _
+                message:="SEF status refreshed: invoice approved by buyer.", _
+                details:="ApiStatus=" & statusText & _
+                         "; SEFDocumentId=" & response.sefDocumentId)
+
+        Case SEF_CLS_REJECTED
+
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, _
+                                   response.errorCode, response.errorMessage
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_VALIDATION_FAILED, _
+                message:="SEF status refreshed: REJECTED.", _
+                details:=response.errorCode & " | " & response.errorMessage)
+
+        Case SEF_CLS_PENDING
+
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, "", ""
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_OK, _
+                message:="SEF status unchanged (pending).", _
+                details:=statusText)
+
+        Case SEF_CLS_TERMINAL
+
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, "", ""
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_OK, _
+                message:="SEF status refreshed: " & statusText & ".", _
+                details:=statusText)
+
+        Case SEF_CLS_INFO
+
+            ' Poznat status koji ne nosi odluku kupca (PAID/OVERDUE/ARCHIVED):
+            ' belezi se, ali lokalni workflow se namerno ne pomera.
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, "", ""
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_OK, _
+                message:="SEF status refreshed (informational): " & statusText & ".", _
+                details:=statusText)
+
+        Case SEF_CLS_ERROR
+
+            ' SEFStatus nosi ono sto je SEF stvarno vratio (FAILED / HTTP_ERROR /
+            ' ERROR), a ne lokalno ime stanja: pri padu nad zaglavljenim
+            ' SEF_SENDING workflow ide u SEF_UNKNOWN, pa bi upis "SEF_SYNC_ERROR"
+            ' u kolonu spoljnog statusa bio i netacan i zbunjujuci.
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   "", response.errorCode, response.errorMessage
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_FAILED, _
+                message:="SEF status refresh failed.", _
+                details:=response.errorCode & " | " & response.errorMessage & _
+                         "; LocalState=" & currentState)
+
+        Case Else
+
+            ' AUD-032b: prazan / nepoznat status NIJE dokaz da je faktura
+            ' poslata. Stari kod ga je mapirao na WF_SEF_SENT.
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, SEF_STATUS_UNKNOWN, _
+                                   "SEF returned unknown status; manual review required."
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_FAILED, _
+                message:="SEF returned unknown status; manual review required.", _
+                details:="ApiStatus=" & statusText & _
+                         "; LocalState=" & currentState)
+
+    End Select
+
     Call UpdateSEFLastSyncAt_Row(fakturaID)
     
     tx.CommitTx
@@ -284,50 +383,19 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
             nextAction:="RETRY", _
             needsManualReview:=False
 
-    ElseIf response.Accepted Then
+    Else
 
-        Monitor_SEF _
-            eventType:="SEF_STATUS_ACCEPTED", _
-            severity:="INFO", _
-            invoiceLocalId:=fakturaID, _
-            businessInvoiceNo:=fakturaID, _
-            sefStatus:="ACCEPTED", _
-            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
-            sefRequestId:=submissionID, _
-            sefInvoiceId:=response.sefDocumentId, _
-            attemptCount:=0, _
-            lastHttpCode:=CStr(response.httpStatus), _
-            lastError:="", _
-            nextAction:="WAIT", _
-            needsManualReview:=False
+        ' Monitoring ide po ISTOJ klasi po kojoj je i workflow odlucen -- da se
+        ' dve liste statusa ne bi razisle (AUD-032b).
+        Select Case classification
 
-    ElseIf response.Rejected Then
-
-        Monitor_SEF _
-            eventType:="SEF_STATUS_REJECTED", _
-            severity:="WARN", _
-            invoiceLocalId:=fakturaID, _
-            businessInvoiceNo:=fakturaID, _
-            sefStatus:="REJECTED", _
-            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
-            sefRequestId:=submissionID, _
-            sefInvoiceId:=response.sefDocumentId, _
-            attemptCount:=0, _
-            lastHttpCode:=CStr(response.httpStatus), _
-            lastError:=response.errorCode & " | " & response.errorMessage, _
-            nextAction:="MANUAL_REVIEW", _
-            needsManualReview:=True
-
-    ElseIf response.Success Then
-
-        Select Case UCase$(Trim$(response.apiStatus))
-            Case "SENT", "NEW", "DRAFT"
+            Case SEF_CLS_ACCEPTED
                 Monitor_SEF _
-                    eventType:="SEF_STATUS_PENDING", _
+                    eventType:="SEF_STATUS_ACCEPTED", _
                     severity:="INFO", _
                     invoiceLocalId:=fakturaID, _
                     businessInvoiceNo:=fakturaID, _
-                    sefStatus:=response.apiStatus, _
+                    sefStatus:=statusText, _
                     localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
                     sefRequestId:=submissionID, _
                     sefInvoiceId:=response.sefDocumentId, _
@@ -337,13 +405,29 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     nextAction:="WAIT", _
                     needsManualReview:=False
 
-            Case "STORNO", "CANCELLED", "CANCELED"
+            Case SEF_CLS_REJECTED
                 Monitor_SEF _
-                    eventType:="SEF_STATUS_TERMINAL", _
+                    eventType:="SEF_STATUS_REJECTED", _
+                    severity:="WARN", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=statusText, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:=response.errorCode & " | " & response.errorMessage, _
+                    nextAction:="MANUAL_REVIEW", _
+                    needsManualReview:=True
+
+            Case SEF_CLS_PENDING
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_PENDING", _
                     severity:="INFO", _
                     invoiceLocalId:=fakturaID, _
                     businessInvoiceNo:=fakturaID, _
-                    sefStatus:=response.apiStatus, _
+                    sefStatus:=statusText, _
                     localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
                     sefRequestId:=submissionID, _
                     sefInvoiceId:=response.sefDocumentId, _
@@ -351,6 +435,38 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     lastHttpCode:=CStr(response.httpStatus), _
                     lastError:="", _
                     nextAction:="WAIT", _
+                    needsManualReview:=False
+
+            Case SEF_CLS_TERMINAL, SEF_CLS_INFO
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_TERMINAL", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=statusText, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
+
+            Case SEF_CLS_ERROR
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_REFRESH_FAIL", _
+                    severity:="ERROR", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=statusText, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:=response.errorCode & " | " & response.errorMessage, _
+                    nextAction:="RETRY", _
                     needsManualReview:=False
 
             Case Else
@@ -361,7 +477,7 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     severity:="WARN", _
                     invoiceLocalId:=fakturaID, _
                     businessInvoiceNo:=fakturaID, _
-                    sefStatus:=SEF_STATUS_UNKNOWN, _
+                    sefStatus:=statusText, _
                     localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
                     sefRequestId:=submissionID, _
                     sefInvoiceId:=response.sefDocumentId, _
@@ -370,24 +486,8 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     lastError:="SEF returned unknown status; manual review required.", _
                     nextAction:="MANUAL_REVIEW", _
                     needsManualReview:=True
+
         End Select
-
-    Else
-
-        Monitor_SEF _
-            eventType:="SEF_STATUS_REFRESH_FAIL", _
-            severity:="ERROR", _
-            invoiceLocalId:=fakturaID, _
-            businessInvoiceNo:=fakturaID, _
-            sefStatus:=response.apiStatus, _
-            localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
-            sefRequestId:=submissionID, _
-            sefInvoiceId:=response.sefDocumentId, _
-            attemptCount:=0, _
-            lastHttpCode:=CStr(response.httpStatus), _
-            lastError:=response.errorCode & " | " & response.errorMessage, _
-            nextAction:="RETRY", _
-            needsManualReview:=False
 
     End If
 
@@ -440,81 +540,59 @@ EH:
     Err.Raise errNo, "RefreshSEFStatus_TX", errDesc
 End Function
 
-Private Sub ApplySEFStateOrRefreshOnly(ByVal fakturaID As String, _
-                                       ByVal targetWorkflowState As String, _
-                                       ByVal sefStatus As String, _
-                                       Optional ByVal sefDocumentId As String = "", _
-                                       Optional ByVal errorCode As String = "", _
-                                       Optional ByVal errorMessage As String = "")
+' AUD-032b/c: JEDINI upisivac stanja pri refresh-u.
+'
+' Ciljno stanje odredjuje cist planer SEFRefreshTargetState (koji sam proverava
+' dozvoljenost tranzicije), pa ovaj Sub nema sopstvenu logiku o tome "sme li" --
+' samo primenjuje plan. Prazan plan = ne diraj workflow, upisi samo refresh polja.
+'
+' Petlja od najvise dva koraka pokriva dvokorak koji state machine zahteva:
+' SEF_SYNC_ERROR -> SEF_SENT -> SEF_ACCEPTED/SEF_REJECTED (direktan skok iz
+' SEF_SYNC_ERROR u finalno stanje nije dozvoljen). Posle drugog koraka planer
+' vrati prazno, pa petlja staje sama.
+Private Sub ApplySEFRefreshOutcome(ByVal fakturaID As String, _
+                                   ByVal classification As String, _
+                                   ByVal sefStatus As String, _
+                                   Optional ByVal sefDocumentId As String = "", _
+                                   Optional ByVal errorCode As String = "", _
+                                   Optional ByVal errorMessage As String = "")
     On Error GoTo EH
 
+    Const MAX_HOPS As Long = 2
+
     Dim currentState As String
+    Dim targetState As String
+    Dim hop As Long
+    Dim wroteState As Boolean
+
     currentState = UCase$(Trim$(GetFakturaSEFWorkflowState(fakturaID)))
 
-    Dim targetState As String
-    targetState = UCase$(Trim$(targetWorkflowState))
+    For hop = 1 To MAX_HOPS
 
-    If currentState = "" Then
+        targetState = SEFRefreshTargetState(currentState, classification)
+        If Len(targetState) = 0 Then Exit For
+
         UpdateFakturaSEFState_Row _
             fakturaID:=fakturaID, _
-            newState:=targetWorkflowState, _
+            newState:=targetState, _
             sefStatus:=sefStatus, _
             sefDocumentId:=sefDocumentId, _
             errorCode:=errorCode, _
             errorMessage:=errorMessage
-        Exit Sub
-    End If
 
-    ' Idempotent refresh:
-    ' ako je workflow vec u ciljnom stanju, ne radimo transition sam u sebe.
-    If currentState = targetState Then
+        wroteState = True
+        currentState = UCase$(Trim$(targetState))
+
+    Next hop
+
+    If Not wroteState Then
         UpdateFakturaSEFRefreshFields_Row _
             fakturaID:=fakturaID, _
             sefStatus:=sefStatus, _
             sefDocumentId:=sefDocumentId, _
             errorCode:=errorCode, _
             errorMessage:=errorMessage
-        Exit Sub
     End If
-
-    ' Ne vracamo finalne lokalne state-ove nazad u SEF_SENT samo zato
-    ' sto eksterni API vrati pending/non-final status.
-    If targetState = UCase$(WF_SEF_SENT) Then
-        If IsFinalLocalSEFWorkflowState(currentState) Then
-            UpdateFakturaSEFRefreshFields_Row _
-                fakturaID:=fakturaID, _
-                sefStatus:=sefStatus, _
-                sefDocumentId:=sefDocumentId, _
-                errorCode:=errorCode, _
-                errorMessage:=errorMessage
-            Exit Sub
-        End If
-    End If
-
-    ' Ako je prethodni refresh pao i faktura je u SEF_SYNC_ERROR,
-    ' a novi refresh sada vraca finalni status, prvo je vratimo u SEF_SENT,
-    ' jer state machine dozvoljava SEF_SYNC_ERROR -> SEF_SENT,
-    ' pa zatim SEF_SENT -> finalni state.
-    If currentState = UCase$(WF_SEF_SYNC_ERROR) Then
-        Select Case targetState
-            Case UCase$(WF_SEF_ACCEPTED), UCase$(WF_SEF_REJECTED)
-                UpdateFakturaSEFState_Row _
-                    fakturaID:=fakturaID, _
-                    newState:=WF_SEF_SENT, _
-                    sefStatus:=sefStatus, _
-                    sefDocumentId:=sefDocumentId, _
-                    errorCode:=errorCode, _
-                    errorMessage:=errorMessage
-        End Select
-    End If
-
-    UpdateFakturaSEFState_Row _
-        fakturaID:=fakturaID, _
-        newState:=targetWorkflowState, _
-        sefStatus:=sefStatus, _
-        sefDocumentId:=sefDocumentId, _
-        errorCode:=errorCode, _
-        errorMessage:=errorMessage
 
     Exit Sub
 
@@ -528,32 +606,20 @@ EH:
     errDesc = Err.description
 
     On Error Resume Next
-    LogErr "modSEFStatusSync.ApplySEFStateOrRefreshOnly"
+    LogErr "modSEFStatusSync.ApplySEFRefreshOutcome"
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
 
-    Err.Raise errNum, "modSEFStatusSync.ApplySEFStateOrRefreshOnly", errDesc
+    Err.Raise errNum, "modSEFStatusSync.ApplySEFRefreshOutcome", errDesc
 End Sub
 
-Private Function IsFinalLocalSEFWorkflowState(ByVal workflowState As String) As Boolean
-    Select Case UCase$(Trim$(workflowState))
-        Case UCase$(WF_SEF_ACCEPTED), _
-             UCase$(WF_SEF_REJECTED), _
-             UCase$(WF_SEF_STORNO)
-            IsFinalLocalSEFWorkflowState = True
-        Case Else
-            IsFinalLocalSEFWorkflowState = False
-    End Select
-End Function
-
+' Batch prolaz preskace fakture ciji je spoljni status terminalan (storno,
+' otkazano, obrisano, greska dokumenta) -- za njih nema sta da se osvezava.
+' Ide preko istog klasifikatora, pa se spisak ne moze razici sa adapterom.
 Private Function IsTerminalExternalRefreshStatus(ByVal sefStatus As String) As Boolean
-    Select Case UCase$(Trim$(sefStatus))
-        Case "STORNO", "CANCELLED", "CANCELED"
-            IsTerminalExternalRefreshStatus = True
-        Case Else
-            IsTerminalExternalRefreshStatus = False
-    End Select
+    IsTerminalExternalRefreshStatus = _
+        (ClassifySEFExternalStatus(sefStatus) = SEF_CLS_TERMINAL)
 End Function
 
 ' AUD-032f: vraca sazetak prolaza (Scanned/Refreshed/Unresolved/SkippedTerminal/Failed)

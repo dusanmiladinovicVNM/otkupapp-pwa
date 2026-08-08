@@ -536,12 +536,28 @@ Public Function SEFSendOutcomeMessage(ByVal workflowState As String, _
     SEFSendOutcomeMessage = messageText
 End Function
 
-' AUD-032c: recovery je uspeo samo ako faktura vise NIJE u SEF_SENDING.
-' Ranije se "Recovered" event upisivao bezuslovno, pa je zaglavljena faktura pri
-' svakom startup-u davala lazan izvestaj o oporavku.
+' AUD-032c: recovery je uspeo samo ako je faktura zavrsila u nekom od stanja u
+' koja SEF_SENDING sme da predje (modSEFValidator). Ranije se "Recovered" event
+' upisivao bezuslovno, pa je zaglavljena faktura pri svakom startup-u davala
+' lazan izvestaj o oporavku.
+'
+' NAMERNO whitelist, a ne "<> SEF_SENDING": provera se hrani iz
+' GetFakturaSEFWorkflowState, koje na schema/read gresci moze da vrati PRAZAN
+' string. Sa negativnim testom bi prazno stanje (i svako smece u koloni) prolazilo
+' kao uspesan oporavak -- fail-open bas tamo gde podatak nije procitan.
 Public Function IsSEFRecoveryComplete(ByVal stateAfterRecovery As String) As Boolean
-    IsSEFRecoveryComplete = _
-        (UCase$(Trim$(stateAfterRecovery)) <> UCase$(WF_SEF_SENDING))
+    Select Case UCase$(Trim$(stateAfterRecovery))
+        Case UCase$(WF_SEF_SENT), _
+             UCase$(WF_SEF_ACCEPTED), _
+             UCase$(WF_SEF_REJECTED), _
+             UCase$(WF_SEF_TECH_FAILED), _
+             UCase$(WF_SEF_UNKNOWN)
+            IsSEFRecoveryComplete = True
+        Case Else
+            ' Ukljucuje SEF_SENDING (nije se pomerila), prazno stanje
+            ' (neprocitano) i svako stanje van SEF_SENDING lanca.
+            IsSEFRecoveryComplete = False
+    End Select
 End Function
 
 Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelComment As String) As Boolean

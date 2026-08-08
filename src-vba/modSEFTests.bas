@@ -199,7 +199,9 @@ Public Sub RunSEFTestSuite()
 
     ' RF-22 / AUD-032 seam testovi
     Test_SEFSendOutcomeContract
+    Test_SEFOfficialStatusEnumClassified
     Test_SEFStatusUnknownIsNotSent
+    Test_SEFRefreshTransitionMatrix
     Test_SEFRecoveryOutcomeContract
 
     FinishSuite
@@ -513,7 +515,70 @@ EH:
     LogFail "SEF send outcome contract", Err.description
 End Sub
 
-' (b) Prazan / nepoznat status ne sme tiho da postane SENT.
+' (b1) Adapter: SVAKI status iz zvanicnog SalesInvoiceStatus enum-a mora imati
+' eksplicitnu klasu. Bez ovoga je "APPROVED" (zvanicno ime za prihvacenu
+' fakturu) padao u Case Else i zavrsavao kao nepoznat status.
+Private Sub Test_SEFOfficialStatusEnumClassified()
+    On Error GoTo EH
+
+    ' --- prihvatanje: zvanicno je Approved, ne Accepted ---
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("Approved"), _
+                 "Approved -> ACCEPTED klasa"
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("APPROVED"), _
+                 "APPROVED (velika slova) -> ACCEPTED klasa"
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("Accepted"), _
+                 "Accepted (zatecene fakture / submit odgovor) -> ACCEPTED klasa"
+
+    AssertEquals SEF_CLS_REJECTED, ClassifySEFExternalStatus("Rejected"), _
+                 "Rejected -> REJECTED klasa"
+
+    ' --- u obradi / ceka odluku ---
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("New"), "New -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Draft"), "Draft -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Sending"), "Sending -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Sent"), "Sent -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Seen"), "Seen -> PENDING"
+
+    ' --- terminalno na SEF-u ---
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), "Cancelled -> TERMINAL"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Storno"), "Storno -> TERMINAL"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Deleted"), "Deleted -> TERMINAL"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Mistake"), "Mistake -> TERMINAL"
+
+    ' --- poznato, ali ne nosi odluku kupca ---
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("Paid"), "Paid -> INFO"
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("OverDue"), "OverDue -> INFO"
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("Archived"), "Archived -> INFO"
+
+    ' --- zvanicni Unknown i sve van enum-a ---
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus("Unknown"), _
+                 "Zvanicni Unknown -> UNKNOWN klasa"
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus(""), _
+                 "Prazan status -> UNKNOWN klasa"
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus("NEKI_NOVI_STATUS"), _
+                 "Nov/nepoznat status -> UNKNOWN klasa"
+
+    ' Nijedan poznat status ne sme da ispadne "nepoznat" -- to je bio uzrok
+    ' zbog kog je odobrena faktura isla na rucnu proveru.
+    AssertTrue IsKnownSEFRefreshStatus("Approved"), "Approved je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("Seen"), "Seen je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("Paid"), "Paid je poznat status"
+    AssertTrue Not IsKnownSEFRefreshStatus("Unknown"), "Unknown nije poznat status"
+    AssertTrue Not IsKnownSEFRefreshStatus(""), "Prazan status nije poznat"
+
+    ' Refresh je "upotrebljiv" za sve sto nosi stvarnu informaciju.
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_ACCEPTED), "ACCEPTED je upotrebljiv refresh"
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_INFO), "INFO je upotrebljiv refresh"
+    AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_ERROR), "ERROR nije upotrebljiv refresh"
+    AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_UNKNOWN), "UNKNOWN nije upotrebljiv refresh"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF official status enum classified", Err.description
+End Sub
+
+' (b2) Prazan / nepoznat status ne sme tiho da postane SENT.
 Private Sub Test_SEFStatusUnknownIsNotSent()
     On Error GoTo EH
 
@@ -525,15 +590,24 @@ Private Sub Test_SEFStatusUnknownIsNotSent()
                  "Prazan SEF status -> UNKNOWN_STATUS (ne SENT)"
     AssertTrue UCase$(r.apiStatus) <> "SENT", _
                "Prazan SEF status se ne prijavljuje kao SENT"
+    AssertTrue r.Accepted = False, "Prazan status nije prihvatanje"
     AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
                "UNKNOWN_STATUS nije poznat status"
 
-    ' Poznati statusi ostaju netaknuti.
+    ' Zvanicno prihvatanje mora da podigne Accepted flag.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Approved""}")
+    AssertEquals "APPROVED", r.apiStatus, "APPROVED se cuva doslovno"
+    AssertTrue r.Accepted, "Approved postavlja Accepted flag"
+    AssertTrue r.Rejected = False, "Approved ne postavlja Rejected"
+
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Rejected""}")
+    AssertTrue r.Rejected, "Rejected postavlja Rejected flag"
+    AssertTrue r.Accepted = False, "Rejected ne postavlja Accepted"
+
+    ' Poznati pending statusi ostaju netaknuti.
     Set r = TestProxyForParseStatusResponse(200, "{""Status"":""SENT""}")
     AssertEquals "SENT", r.apiStatus, "SENT ostaje SENT"
-    AssertTrue IsKnownSEFRefreshStatus("SENT"), "SENT je poznat status"
-    AssertTrue IsKnownSEFRefreshStatus("ACCEPTED"), "ACCEPTED je poznat status"
-    AssertTrue IsKnownSEFRefreshStatus("STORNO"), "STORNO je poznat status"
+    AssertTrue r.Accepted = False, "SENT nije prihvatanje"
 
     ' Nepoznat, ali neprazan status se cuva doslovno i tretira kao nepoznat.
     Set r = TestProxyForParseStatusResponse(200, "{""Status"":""NEKI_NOVI_STATUS""}")
@@ -542,35 +616,117 @@ Private Sub Test_SEFStatusUnknownIsNotSent()
     AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
                "Nepoznat status se ne tretira kao poznat"
 
-    ' Zaglavljen SEF_SENDING sa nepoznatim statusom ide u SEF_UNKNOWN
-    ' (rucna provera); ostala stanja se NE pomeraju na SEF_SENT.
-    AssertEquals WF_SEF_UNKNOWN, SEFUnknownStatusTargetState(WF_SEF_SENDING), _
-                 "SEF_SENDING + nepoznat status -> SEF_UNKNOWN"
-    AssertEquals "", SEFUnknownStatusTargetState(WF_SEF_SENT), _
-                 "SEF_SENT + nepoznat status -> bez promene stanja"
-    AssertEquals "", SEFUnknownStatusTargetState(WF_SEF_SYNC_ERROR), _
-                 "SEF_SYNC_ERROR + nepoznat status -> bez promene stanja"
-
-    ' AUD-032c: pad refresh-a nad zaglavljenim SEF_SENDING ne sme da cilja
-    ' SEF_SYNC_ERROR (zabranjena tranzicija -> izuzetak -> faktura ostaje
-    ' zauvek u SEF_SENDING).
-    AssertEquals WF_SEF_UNKNOWN, SEFRefreshFailureTargetState(WF_SEF_SENDING), _
-                 "Pad refresh-a nad SEF_SENDING -> SEF_UNKNOWN"
-    AssertEquals WF_SEF_SYNC_ERROR, SEFRefreshFailureTargetState(WF_SEF_SENT), _
-                 "Pad refresh-a nad SEF_SENT -> SEF_SYNC_ERROR"
-    AssertTransitionAllowed WF_SEF_SENDING, SEFRefreshFailureTargetState(WF_SEF_SENDING)
-    AssertTransitionAllowed WF_SEF_SENT, SEFRefreshFailureTargetState(WF_SEF_SENT)
-
-    ' SEF_UNKNOWN ne sme da bude slepo crevo.
-    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_UNKNOWN
-    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_ACCEPTED
-    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_REJECTED
-    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_SENT
+    ' Dokument u ERROR statusu: poziv je uspeo, dokument nije.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Error""}")
+    AssertTrue r.Success = False, "ERROR status obara Success"
 
     Exit Sub
 
 EH:
     LogFail "SEF unknown status is not SENT", Err.description
+End Sub
+
+' (b3) ORKESTRACIJA: planer tranzicije za SVAKU kombinaciju (stanje x klasa).
+' Ovo je test koji hvata protivrecnosti tipa "SEF_UNKNOWN + pad API-ja ->
+' SEF_SYNC_ERROR", koje testovi samog validatora ne mogu da vide: planer i
+' state machine su dve strane iste odluke, pa se proveravaju zajedno.
+Private Sub Test_SEFRefreshTransitionMatrix()
+    On Error GoTo EH
+
+    Dim states As Variant
+    Dim classes As Variant
+    Dim i As Long
+    Dim j As Long
+    Dim st As String
+    Dim cls As String
+    Dim target As String
+    Dim illegalCount As Long
+
+    states = Array(WF_LOCAL_DRAFT, WF_LOCAL_FINALIZED, WF_SEF_READY, _
+                   WF_SEF_SENDING, WF_SEF_SENT, WF_SEF_ACCEPTED, _
+                   WF_SEF_REJECTED, WF_SEF_STORNO, WF_SEF_SYNC_ERROR, _
+                   WF_SEF_TECH_FAILED, WF_SEF_UNKNOWN, "")
+
+    classes = Array(SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_PENDING, _
+                    SEF_CLS_TERMINAL, SEF_CLS_INFO, SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
+
+    ' INVARIJANTA: planer sme da vrati samo prazno ili tranziciju koju state
+    ' machine dozvoljava. Sve ostalo bi u produkciji bacilo izuzetak i oborilo
+    ' refresh (i rollback-ovalo transakciju).
+    For i = LBound(states) To UBound(states)
+        For j = LBound(classes) To UBound(classes)
+
+            st = CStr(states(i))
+            cls = CStr(classes(j))
+            target = SEFRefreshTargetState(st, cls)
+
+            If Len(target) > 0 And Len(Trim$(st)) > 0 Then
+                If Not IsSEFTransitionAllowed(UCase$(Trim$(st)), target) Then
+                    illegalCount = illegalCount + 1
+                    LogFail "Planer predlaze zabranjenu tranziciju", _
+                            st & " + " & cls & " -> " & target
+                End If
+            End If
+
+        Next j
+    Next i
+
+    AssertTrue illegalCount = 0, _
+               "Planer nikad ne predlaze zabranjenu tranziciju (sva stanja x sve klase)"
+
+    ' --- konkretni ishodi koje trazi lifecycle ---
+
+    ' Odobrenje mora da stigne do SEF_ACCEPTED (jednim ili dva koraka).
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_ACCEPTED), _
+                 "SENDING + Approved -> SEF_ACCEPTED"
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_ACCEPTED), _
+                 "SENT + Approved -> SEF_ACCEPTED"
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_ACCEPTED), _
+                 "UNKNOWN + Approved -> SEF_ACCEPTED (izlazi iz rucne provere)"
+    ' SEF_SYNC_ERROR ne sme direktno u finalno stanje -> prvi korak je SEF_SENT,
+    ' drugi (isti planer, novo stanje) daje SEF_ACCEPTED.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ACCEPTED), _
+                 "SYNC_ERROR + Approved -> prvi korak SEF_SENT"
+    AssertEquals WF_SEF_ACCEPTED, _
+                 SEFRefreshTargetState(SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ACCEPTED), SEF_CLS_ACCEPTED), _
+                 "SYNC_ERROR + Approved -> drugi korak SEF_ACCEPTED"
+
+    ' Terminalni udaljeni status izvlaci fakturu iz svih zaglavljenih stanja.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_TERMINAL), _
+                 "SENDING + Storno -> SEF_SENT (ne ostaje zaglavljena)"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_TERMINAL), _
+                 "UNKNOWN + Storno -> SEF_SENT (izlazi iz UNKNOWN)"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_TERMINAL), _
+                 "SENT + Storno -> bez promene stanja (samo refresh polja)"
+
+    ' Pad API-ja: SENDING i SENT imaju svoj izlaz, ostalo se NE dira.
+    AssertEquals WF_SEF_UNKNOWN, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_ERROR), _
+                 "SENDING + pad API-ja -> SEF_UNKNOWN"
+    AssertEquals WF_SEF_SYNC_ERROR, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_ERROR), _
+                 "SENT + pad API-ja -> SEF_SYNC_ERROR"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ERROR), _
+                 "SYNC_ERROR + ponovni pad -> bez promene (nema self-transition)"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_ERROR), _
+                 "UNKNOWN + ponovni pad -> ostaje UNKNOWN, bez izuzetka"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_UNKNOWN), _
+                 "UNKNOWN + opet nepoznat status -> ostaje UNKNOWN"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_UNKNOWN), _
+                 "SYNC_ERROR + nepoznat status -> ostaje SYNC_ERROR"
+
+    ' Finalna lokalna stanja se ne vracaju unazad zbog pending/info statusa.
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_PENDING), _
+                 "ACCEPTED + pending status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_REJECTED, SEF_CLS_PENDING), _
+                 "REJECTED + pending status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_INFO), _
+                 "SENT + Paid/OverDue/Archived -> workflow se ne pomera"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO), _
+                 "SENDING + informativan status -> workflow se ne pomera"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF refresh transition matrix", Err.description
 End Sub
 
 ' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.
@@ -585,6 +741,33 @@ Private Sub Test_SEFRecoveryOutcomeContract()
                "Prelazak u SEF_SENT jeste oporavak"
     AssertTrue IsSEFRecoveryComplete(WF_SEF_UNKNOWN), _
                "Prelazak u SEF_UNKNOWN (rucna provera) izvlaci fakturu iz SEF_SENDING"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_ACCEPTED), _
+               "Prelazak u SEF_ACCEPTED jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_REJECTED), _
+               "Prelazak u SEF_REJECTED jeste oporavak"
+
+    ' FAIL-CLOSED: provera se hrani iz GetFakturaSEFWorkflowState, koja na
+    ' schema/read gresci vraca prazan string. Negativan test ("<> SENDING") bi
+    ' prazno stanje i smece u koloni proglasio uspesnim oporavkom.
+    AssertTrue Not IsSEFRecoveryComplete(""), _
+               "Prazno stanje NIJE oporavak (neprocitan podatak)"
+    AssertTrue Not IsSEFRecoveryComplete("   "), _
+               "Sam razmak NIJE oporavak"
+    AssertTrue Not IsSEFRecoveryComplete("BOGUS_STATE"), _
+               "Nepoznato stanje NIJE oporavak"
+    AssertTrue Not IsSEFRecoveryComplete(WF_SEF_READY), _
+               "SEF_READY nije stanje u koje SEF_SENDING sme da predje"
+    AssertTrue Not IsSEFRecoveryComplete(WF_LOCAL_DRAFT), _
+               "LOCAL_DRAFT nije ishod recovery-ja"
+
+    ' Whitelist mora da se poklapa sa state machine-om: svako stanje koje
+    ' racunamo kao oporavak mora biti dozvoljen izlaz iz SEF_SENDING.
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_SENT), _
+               "SENDING -> SENT je dozvoljen izlaz"
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_UNKNOWN), _
+               "SENDING -> UNKNOWN je dozvoljen izlaz"
+    AssertTrue Not IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_READY), _
+               "SENDING -> READY nije dozvoljen (pa nije ni oporavak)"
 
     Exit Sub
 

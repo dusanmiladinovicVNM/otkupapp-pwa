@@ -554,19 +554,30 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
     
     resp.correlationId = ExtractJsonString(body, "GlobUniqId")
     
-    ' ApiStatus is the exact external SEF status.
-    ' Higher layers decide whether that status changes internal workflow.
-    Select Case statusValue
-        
-        Case "ACCEPTED"
+    ' ApiStatus is the exact external SEF status, stored verbatim.
+    ' The MEANING of that status (approved / rejected / pending / terminal /
+    ' informational / unknown) is decided in ONE place --
+    ' modSEFStatusSync.ClassifySEFExternalStatus -- so the client and the
+    ' workflow layer cannot drift apart.
+    '
+    ' AUD-032b: the old hand-written list here knew only "ACCEPTED", while the
+    ' official SEF enum (SalesInvoiceStatus) calls approval **Approved**, and
+    ' also emits Seen / Paid / OverDue / Archived / Mistake / Deleted / Sending.
+    ' Everything outside the old list fell into a "SENT" fallback, which is how
+    ' an unconfirmed invoice could look delivered.
+    resp.apiStatus = statusValue
+    If Len(Trim$(resp.apiStatus)) = 0 Then resp.apiStatus = SEF_STATUS_UNKNOWN
+
+    resp.Accepted = False
+    resp.Rejected = False
+
+    Select Case ClassifySEFExternalStatus(resp.apiStatus)
+
+        Case SEF_CLS_ACCEPTED
             resp.Accepted = True
-            resp.Rejected = False
-            resp.apiStatus = "ACCEPTED"
-        
-        Case "REJECTED"
-            resp.Accepted = False
+
+        Case SEF_CLS_REJECTED
             resp.Rejected = True
-            resp.apiStatus = "REJECTED"
             resp.errorCode = FirstNonEmpty( _
                 ExtractJsonString(body, "ErrorCode"), _
                 ExtractJsonString(body, "errorCode"))
@@ -574,37 +585,10 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
                 ExtractJsonString(body, "Message"), _
                 ExtractJsonString(body, "message"), _
                 "SEF rejected invoice.")
-        
-        Case "SENT"
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "SENT"
-        
-        Case "NEW"
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "NEW"
-        
-        Case "DRAFT"
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "DRAFT"
-        
-        Case "CANCELLED"
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "CANCELLED"
-        
-        Case "STORNO"
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "STORNO"
-        
-        Case "ERROR"
+
+        Case SEF_CLS_ERROR
+            ' Document-level ERROR status: the call worked, the document did not.
             resp.Success = False
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = "ERROR"
             resp.errorCode = FirstNonEmpty( _
                 ExtractJsonString(body, "ErrorCode"), _
                 ExtractJsonString(body, "errorCode"), _
@@ -613,19 +597,14 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
                 ExtractJsonString(body, "Message"), _
                 ExtractJsonString(body, "message"), _
                 "SEF returned ERROR status.")
-        
+
         Case Else
-            ' AUD-032b: prazan status je NEPOZNAT status, ne "SENT". Stari
-            ' fallback je neposlatu/nepotvrdjenu fakturu tiho proglasavao
-            ' poslatom. Nepoznat ali neprazan status se cuva doslovno -- visi
-            ' sloj (IsKnownSEFRefreshStatus) odlucuje da ide na rucnu proveru.
-            resp.Accepted = False
-            resp.Rejected = False
-            resp.apiStatus = FirstNonEmpty(statusValue, SEF_STATUS_UNKNOWN)
+            ' PENDING / TERMINAL / INFO / UNKNOWN: flags stay False and the
+            ' verbatim status travels up; the workflow layer decides.
 
     End Select
-End Sub
 
+End Sub
 
 Private Function ExtractJsonString(ByVal json As String, ByVal key As String) As String
     
