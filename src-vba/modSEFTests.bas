@@ -760,6 +760,18 @@ Private Sub Test_SEFRefreshTransitionMatrix()
     AssertEquals "", SEFRefreshTargetState(WF_SEF_TECH_FAILED, SEF_CLS_SEND_FAILED), _
                  "TECH_FAILED + Mistake -> vec je tamo, bez self-transition"
 
+    ' NORMALNA sekvenca: uspesan submit -> lokalno SEF_SENT -> refresh vrati
+    ' MISTAKE. Ovo je najvaznija putanja i ranije je vracala prazno, pa je
+    ' faktura ostajala "uspesno poslata" iako SEF tvrdi suprotno.
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_SEND_FAILED), _
+                 "SENT + Mistake -> SEF_TECH_FAILED (normalna sekvenca)"
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_SEND_FAILED), _
+                 "SYNC_ERROR + Mistake -> SEF_TECH_FAILED"
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_SEND_FAILED) <> "", _
+                 "SENT + Mistake NE sme da ostane SEF_SENT"
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_TECH_FAILED
+    AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_TECH_FAILED
+
     Exit Sub
 
 EH:
@@ -802,7 +814,39 @@ Private Sub Test_SEFStatusCapabilities()
     AssertTrue IsSEFTransitionAllowed(WF_SEF_TECH_FAILED, WF_SEF_READY), _
                "TECH_FAILED -> READY je putanja za retry"
     AssertTrue Not IsSEFTransitionAllowed(WF_SEF_SENT, WF_SEF_READY), _
-               "Iz SEF_SENT nema retry putanje (zato Mistake ne sme da zavrsi kao SENT)"
+               "Iz SEF_SENT nema retry putanje (zato Mistake ide u TECH_FAILED)"
+
+    ' --- Slanje: workflow NIJE dovoljan uslov ---
+    ' Obican tehnicki pad (nema dokumenta na SEF-u) sme ponovo da se salje...
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, WF_SEF_TECH_FAILED), _
+               "Tehnicki pad bez SEF dokumenta -> retry dozvoljen"
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, ""), _
+               "TECH_FAILED bez spoljnog statusa -> retry dozvoljen"
+    AssertTrue CanSendSEFInvoice(WF_LOCAL_FINALIZED, ""), _
+               "Finalizovana faktura se salje prvi put"
+    AssertTrue CanSendSEFInvoice(WF_SEF_READY, "REJECTED"), _
+               "Pripremljena odbijena faktura (resubmit tok) se salje"
+
+    ' ...ali dokument koji ZIVI na SEF-u ne sme ponovo (duplicate guard bi ga
+    ' ionako odbio -- ranije je forma palila dugme koje kapija odbija).
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake"), _
+               "MISTAKE dokument se ne salje ponovo (prvo Cancel)"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Cancelled"), _
+               "Posle cancel-a se ista faktura ne nudi za slanje"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Approved"), _
+               "Odobren dokument se ne salje ponovo"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Paid"), _
+               "Placen dokument se ne salje ponovo"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENT, ""), _
+               "SEF_SENT nije sendable workflow"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENDING, ""), _
+               "SEF_SENDING nije sendable workflow"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_UNKNOWN, ""), _
+               "SEF_UNKNOWN nije sendable workflow"
+
+    ' MISTAKE mora da ima BAR jednu putanju: cancel jeste, slanje nije.
+    AssertTrue CanCancelSEFStatus("Mistake") And Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake"), _
+               "MISTAKE putanja je Cancel, ne Retry"
 
     Exit Sub
 
@@ -881,6 +925,11 @@ Private Sub Test_SEFAllowedTransitions()
 
     AssertTransitionAllowed WF_SEF_TECH_FAILED, WF_SEF_READY
     AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_SENT
+
+    ' AUD-032b: zvanicni status "Mistake" (greska pri slanju) stize i kad je
+    ' lokalno stanje vec SEF_SENT ili SEF_SYNC_ERROR.
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_TECH_FAILED
+    AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_TECH_FAILED
     AssertTransitionAllowed WF_SEF_ACCEPTED, WF_SEF_STORNO
     AssertTransitionAllowed WF_SEF_REJECTED, WF_SEF_READY
 End Sub
@@ -1607,6 +1656,13 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
 
     ' Workflow ne sme da regredira
     AssertTrue Len(Trim$(afterWorkflow)) > 0, "Cancel leaves workflow state populated"
+
+    ' AUD-032b: posle uspesnog cancel-a faktura NE sme da bude ponudjena za
+    ' ponovno slanje. Sam "workflow je neprazan" je propustao SEF_TECH_FAILED
+    ' (npr. iz MISTAKE putanje), gde je forma i dalje palila "Retry slanje".
+    AssertTrue Not CanSendSEFInvoice(afterWorkflow, afterStatus), _
+               "Otkazana faktura se ne nudi za ponovno slanje (workflow=" & _
+               afterWorkflow & ", status=" & afterStatus & ")"
 
     ' SEFStatus mora biti terminalan nakon cancel
     Dim afterStatusUC As String

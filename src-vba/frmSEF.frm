@@ -411,11 +411,13 @@ Private Sub UpdateSEFButtonStates()
     workflowState = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))))
     sefStatus = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))))
     
-    Me.btnPosalji.enabled = (workflowState = UCase$(WF_LOCAL_FINALIZED) Or _
-                             workflowState = UCase$(WF_SEF_READY) Or _
-                             workflowState = UCase$(WF_SEF_TECH_FAILED))
-    
-    If workflowState = UCase$(WF_SEF_TECH_FAILED) Then
+    ' AUD-032b: isti spisak koji propusta `ValidateFakturaForSEF`. Sam workflow
+    ' nije dovoljan -- SEF_TECH_FAILED nastao iz statusa MISTAKE ima ZIV dokument
+    ' na SEF-u, pa bi novo slanje kapija odbila kao duplikat. Ranije je forma
+    ' palila "Retry slanje na SEF" koji nije mogao da prodje.
+    Me.btnPosalji.enabled = CanSendSEFInvoice(workflowState, sefStatus)
+
+    If Me.btnPosalji.enabled And workflowState = UCase$(WF_SEF_TECH_FAILED) Then
         Me.btnPosalji.caption = "Retry slanje na SEF"
     Else
         Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
@@ -426,10 +428,14 @@ Private Sub UpdateSEFButtonStates()
     End If
     
     ' AUD-032b: SEF_UNKNOWN (SEF vratio nepoznat status) je stanje za rucnu
-    ' proveru -- operater mora da moze da ponovi "Osvezi status".
+    ' proveru -- operater mora da moze da ponovi "Osvezi status". SEF_TECH_FAILED
+    ' se osvezava samo kad dokument stvarno postoji na SEF-u (MISTAKE putanja);
+    ' obican tehnicki pad nema SEFDocumentId, pa bi refresh pukao.
     Me.btnOsvezi.enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
                             workflowState = UCase$(WF_SEF_SYNC_ERROR) Or _
-                            workflowState = UCase$(WF_SEF_UNKNOWN))
+                            workflowState = UCase$(WF_SEF_UNKNOWN) Or _
+                            (workflowState = UCase$(WF_SEF_TECH_FAILED) And _
+                             Len(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId")))) > 0))
     
     Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     

@@ -21,18 +21,29 @@ Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As
                 GoTo InvalidTransition
         End Select
         
+        ' AUD-032b: SEF_SENT -> SEF_TECH_FAILED je dodat zbog zvanicnog statusa
+        ' "Mistake" (greska prilikom slanja). NORMALNA sekvenca je: uspesan
+        ' submit -> lokalno SEF_SENT -> refresh vrati MISTAKE. Bez ove tranzicije
+        ' faktura je ostajala SEF_SENT ("uspesno poslata") iako SEF tvrdi da
+        ' slanje nije uspelo, a batch ju je osvezavao u nedogled.
         Case WF_SEF_SENT
             Select Case newState
-                Case WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_SYNC_ERROR, WF_SEF_STORNO
+                Case WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_SYNC_ERROR, _
+                     WF_SEF_STORNO, WF_SEF_TECH_FAILED
                 Case Else
                     GoTo InvalidTransition
             End Select
-        
+
         Case WF_SEF_TECH_FAILED
             If newState <> WF_SEF_READY Then GoTo InvalidTransition
-        
+
+        ' Isti razlog: refresh iz SEF_SYNC_ERROR takodje moze da vrati MISTAKE.
         Case WF_SEF_SYNC_ERROR
-            If newState <> WF_SEF_SENT Then GoTo InvalidTransition
+            Select Case newState
+                Case WF_SEF_SENT, WF_SEF_TECH_FAILED
+                Case Else
+                    GoTo InvalidTransition
+            End Select
         
         Case WF_SEF_ACCEPTED
             If newState <> WF_SEF_STORNO Then GoTo InvalidTransition
@@ -207,6 +218,19 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
             Err.Raise ERR_SEF_STATE, SRC, _
                       "Faktura is not in a sendable state: " & workflowState
     End Select
+
+    ' AUD-032b: dokument koji vec postoji na SEF-u (npr. status MISTAKE, ili
+    ' CANCELLED posle otkazivanja) ne sme da se posalje ponovo. Provera ide PRE
+    ' generickog duplicate guard-a da bi operater dobio poruku sa razlogom i
+    ' sledecim korakom, a ne suvo "already has a successful SEF submission".
+    ' Isti spisak koristi frmSEF za paljenje dugmeta, pa forma ne nudi akciju
+    ' koju kapija odbija.
+    If Not CanSendSEFInvoice(workflowState, GetFakturaSEFStatusText(fakturaID, SRC)) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Faktura cannot be sent while a SEF document exists in status: " & _
+                  GetFakturaSEFStatusText(fakturaID, SRC) & _
+                  ". Cancel the SEF document first (manual review)."
+    End If
 
     If HasSuccessfulSEFSubmission(fakturaID) Then
         Err.Raise ERR_SEF_DUPLICATE, SRC, _
@@ -386,6 +410,56 @@ Public Function CanCancelSEFStatus(ByVal sefStatus As String) As Boolean
         Case Else
             CanCancelSEFStatus = False
     End Select
+End Function
+
+' Sme li se faktura (ponovo) poslati na SEF -- JEDAN spisak za formu (enable
+' dugmeta) i za fail-closed kapiju u ValidateFakturaForSEF.
+'
+' Uslov je dvodelan, jer sam workflow nije dovoljan:
+'   1) lokalno stanje mora biti sendable (LOCAL_FINALIZED / SEF_READY /
+'      SEF_TECH_FAILED), i
+'   2) na SEF-u NE sme postojati dokument koji bi novo slanje pretvorilo u
+'      duplikat.
+'
+' AUD-032b, tacka 2 -- poslovna odluka za "Mistake":
+' MISTAKE fakturu vodimo u SEF_TECH_FAILED (jer NIJE poslata), ali retry NE
+' nudimo. Razlog je proverljiv u kodu: prvi uspesan submit upisuje
+' SubmissionStatus = SENT, status refresh namerno ne dira submission red, pa
+' HasSuccessfulSEFSubmission (fail-closed duplicate guard, AUD-031d) svako
+' sledece slanje odbija kao duplikat -- a ShouldReuseLastSubmission trazi
+' FAILED/CREATED, pa ne bi ni reuse-ovao isti requestId. Ranije je forma palila
+' "Retry slanje na SEF" koji je kapija svakako odbijala.
+' Da li SEF uopste prihvata ponovni POST istog requestId za dokument u statusu
+' Mistake NIJE proverivo staticki (isti zakljucak kao FM-0037 #2) -- dok se ne
+' potvrdi na demo SEF-u, putanja za MISTAKE je Cancel + rucna provera.
+' Isto vazi posle uspesnog cancel-a: dokument na SEF-u postoji (CANCELLED), pa
+' se ista faktura ne nudi za ponovno slanje.
+'
+' REJECTED je namerno DOZVOLJEN: to je postojeci resubmit tok
+' (PrepareRejectedInvoiceForResubmit vraca workflow u SEF_READY, a SEFStatus
+' ostaje REJECTED).
+Public Function CanSendSEFInvoice(ByVal workflowState As String, _
+                                  ByVal sefStatus As String) As Boolean
+
+    Select Case UCase$(Trim$(workflowState))
+        Case UCase$(WF_LOCAL_FINALIZED), UCase$(WF_SEF_READY), UCase$(WF_SEF_TECH_FAILED)
+            ' sendable lokalno stanje
+        Case Else
+            CanSendSEFInvoice = False
+            Exit Function
+    End Select
+
+    Select Case ClassifySEFExternalStatus(sefStatus)
+        Case SEF_CLS_ACCEPTED, SEF_CLS_PENDING, SEF_CLS_INFO, _
+             SEF_CLS_TERMINAL, SEF_CLS_SEND_FAILED
+            ' Dokument postoji na SEF-u -> novo slanje bi bilo duplikat.
+            CanSendSEFInvoice = False
+        Case Else
+            ' REJECTED (resubmit tok), ERROR/UNKNOWN (tehnicki pad, dokument
+            ' najverovatnije nije ni nastao) i prazan status.
+            CanSendSEFInvoice = True
+    End Select
+
 End Function
 
 ' Storno se radi nad dokumentom koji je stvarno predat kupcu.
