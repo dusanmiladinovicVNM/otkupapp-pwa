@@ -202,6 +202,7 @@ Public Sub RunSEFTestSuite()
     Test_SEFOfficialStatusEnumClassified
     Test_SEFStatusUnknownIsNotSent
     Test_SEFRefreshTransitionMatrix
+    Test_SEFStatusCapabilities
     Test_SEFRecoveryOutcomeContract
 
     FinishSuite
@@ -543,7 +544,14 @@ Private Sub Test_SEFOfficialStatusEnumClassified()
     AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), "Cancelled -> TERMINAL"
     AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Storno"), "Storno -> TERMINAL"
     AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Deleted"), "Deleted -> TERMINAL"
-    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Mistake"), "Mistake -> TERMINAL"
+
+    ' "Mistake" = greska prilikom slanja, NE terminalno stanje. Kad je bio u
+    ' TERMINAL klasi, planer ga je vodio u WF_SEF_SENT -- neuspelo slanje je
+    ' postajalo lokalno "poslato", bez retry-ja i bez cancel-a.
+    AssertEquals SEF_CLS_SEND_FAILED, ClassifySEFExternalStatus("Mistake"), _
+                 "Mistake -> SEND_FAILED klasa (ne TERMINAL)"
+    AssertTrue ClassifySEFExternalStatus("Mistake") <> SEF_CLS_TERMINAL, _
+                 "Mistake nije terminalan (batch ga ne sme preskakati)"
 
     ' --- poznato, ali ne nosi odluku kupca ---
     AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("Paid"), "Paid -> INFO"
@@ -569,6 +577,7 @@ Private Sub Test_SEFOfficialStatusEnumClassified()
     ' Refresh je "upotrebljiv" za sve sto nosi stvarnu informaciju.
     AssertTrue IsUsableSEFRefreshClass(SEF_CLS_ACCEPTED), "ACCEPTED je upotrebljiv refresh"
     AssertTrue IsUsableSEFRefreshClass(SEF_CLS_INFO), "INFO je upotrebljiv refresh"
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_SEND_FAILED), "SEND_FAILED je upotrebljiv refresh"
     AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_ERROR), "ERROR nije upotrebljiv refresh"
     AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_UNKNOWN), "UNKNOWN nije upotrebljiv refresh"
 
@@ -647,8 +656,9 @@ Private Sub Test_SEFRefreshTransitionMatrix()
                    WF_SEF_REJECTED, WF_SEF_STORNO, WF_SEF_SYNC_ERROR, _
                    WF_SEF_TECH_FAILED, WF_SEF_UNKNOWN, "")
 
-    classes = Array(SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_PENDING, _
-                    SEF_CLS_TERMINAL, SEF_CLS_INFO, SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
+    classes = Array(SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_SEND_FAILED, _
+                    SEF_CLS_PENDING, SEF_CLS_TERMINAL, SEF_CLS_INFO, _
+                    SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
 
     ' INVARIJANTA: planer sme da vrati samo prazno ili tranziciju koju state
     ' machine dozvoljava. Sve ostalo bi u produkciji bacilo izuzetak i oborilo
@@ -719,14 +729,85 @@ Private Sub Test_SEFRefreshTransitionMatrix()
     AssertEquals "", SEFRefreshTargetState(WF_SEF_REJECTED, SEF_CLS_PENDING), _
                  "REJECTED + pending status -> bez regresije"
     AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_INFO), _
-                 "SENT + Paid/OverDue/Archived -> workflow se ne pomera"
-    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO), _
-                 "SENDING + informativan status -> workflow se ne pomera"
+                 "SENT + Paid/OverDue/Archived -> nema promene (vec je SEF_SENT)"
+
+    ' AUD-032c: PAID/OVERDUE/ARCHIVED ne govore da li je kupac odobrio fakturu,
+    ' ali DOKAZUJU da dokument nije vise "u slanju". Dok su vracali prazno,
+    ' faktura je ostajala SEF_SENDING i startup recovery ju je nalazio zauvek.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO), _
+                 "SENDING + Paid/OverDue/Archived -> SEF_SENT (izlazi iz slanja)"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_INFO), _
+                 "UNKNOWN + informativan status -> SEF_SENT"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_INFO), _
+                 "SYNC_ERROR + informativan status -> SEF_SENT"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_INFO), _
+                 "ACCEPTED + informativan status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_REJECTED, SEF_CLS_INFO), _
+                 "REJECTED + informativan status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_STORNO, SEF_CLS_INFO), _
+                 "STORNO + informativan status -> bez regresije"
+    ' INFO nikad ne sme da proglasi fakturu prihvacenom -- za to je ACCEPTED klasa.
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO) <> WF_SEF_ACCEPTED, _
+                 "Placeno/dospelo/arhivirano NIJE dokaz prihvatanja"
+
+    ' Greska pri slanju mora u SEF_TECH_FAILED -- jedino stanje iz kog UI nudi retry.
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_SEND_FAILED), _
+                 "SENDING + Mistake -> SEF_TECH_FAILED (retry moguc)"
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_SEND_FAILED), _
+                 "UNKNOWN + Mistake -> SEF_TECH_FAILED"
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_SEND_FAILED) <> WF_SEF_SENT, _
+                 "Neuspelo slanje NIKAD ne postaje lokalno SEF_SENT"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_TECH_FAILED, SEF_CLS_SEND_FAILED), _
+                 "TECH_FAILED + Mistake -> vec je tamo, bez self-transition"
 
     Exit Sub
 
 EH:
     LogFail "SEF refresh transition matrix", Err.description
+End Sub
+
+' (b4) CAPABILITY UGOVOR: sta se sme raditi nad kojim SEF statusom.
+' Testira se stvarna sposobnost (cancel/storno/retry/batch-skip), ne ime klase --
+' jer se ista greska moze sakriti iza tacnog naziva klase.
+Private Sub Test_SEFStatusCapabilities()
+    On Error GoTo EH
+
+    ' --- Cancel: zvanicno Draft, New i Mistake (+ nas legacy ERROR marker) ---
+    AssertTrue CanCancelSEFStatus("Draft"), "Draft se moze otkazati"
+    AssertTrue CanCancelSEFStatus("New"), "New se moze otkazati"
+    AssertTrue CanCancelSEFStatus("Mistake"), _
+               "Mistake (greska pri slanju) se moze otkazati -- zvanicni ugovor"
+    AssertTrue CanCancelSEFStatus("ERROR"), "Legacy ERROR marker se moze otkazati"
+    AssertTrue Not CanCancelSEFStatus("Approved"), "Odobrena faktura se ne otkazuje (storno je putanja)"
+    AssertTrue Not CanCancelSEFStatus("Sent"), "Poslata faktura se ne otkazuje"
+    AssertTrue Not CanCancelSEFStatus(""), "Prazan status ne dozvoljava cancel (fail-closed)"
+
+    ' --- Storno: dokument koji je stvarno predat kupcu ---
+    AssertTrue CanStornoSEFStatus("Approved"), "Odobrena faktura se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Accepted"), "Zatecen ACCEPTED se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Sent"), "Poslata faktura se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Rejected"), "Odbijena faktura se moze stornirati"
+    AssertTrue Not CanStornoSEFStatus("Mistake"), _
+               "Mistake se ne stornira -- otkazuje se"
+    AssertTrue Not CanStornoSEFStatus("Draft"), "Draft se ne stornira"
+    AssertTrue Not CanStornoSEFStatus(""), "Prazan status ne dozvoljava storno (fail-closed)"
+
+    ' --- Cancel i storno se ne preklapaju ni na jednom statusu ---
+    AssertTrue Not (CanCancelSEFStatus("Mistake") And CanStornoSEFStatus("Mistake")), _
+               "Isti status ne nudi i cancel i storno"
+    AssertTrue Not (CanCancelSEFStatus("Approved") And CanStornoSEFStatus("Approved")), _
+               "Odobrena faktura nudi samo storno"
+
+    ' --- Retry: SEF_TECH_FAILED je jedino stanje iz kog se ponovo salje ---
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_TECH_FAILED, WF_SEF_READY), _
+               "TECH_FAILED -> READY je putanja za retry"
+    AssertTrue Not IsSEFTransitionAllowed(WF_SEF_SENT, WF_SEF_READY), _
+               "Iz SEF_SENT nema retry putanje (zato Mistake ne sme da zavrsi kao SENT)"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF status capabilities", Err.description
 End Sub
 
 ' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.

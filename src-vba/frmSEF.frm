@@ -342,7 +342,8 @@ Private Sub LoadSelectedFakturaInfo()
     Select Case ClassifySEFExternalStatus(Me.lblSEFStatus.caption)
     Case SEF_CLS_ACCEPTED
         Me.lblSEFStatus.ForeColor = CLR_SUCCESS()
-    Case SEF_CLS_REJECTED
+    Case SEF_CLS_REJECTED, SEF_CLS_SEND_FAILED
+        ' Greska pri slanju je neuspeh, ne "obavestenje".
         Me.lblSEFStatus.ForeColor = CLR_ERROR()
     Case SEF_CLS_PENDING
         Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
@@ -432,13 +433,13 @@ Private Sub UpdateSEFButtonStates()
     
     Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     
-    Me.btnCancel.enabled = (sefStatus = "DRAFT" Or sefStatus = "NEW" Or sefStatus = "ERROR")
-    
-    ' AUD-032b: mora da obuhvati i zvanicni "APPROVED" -- inace prihvacena
-    ' faktura ostane bez dugmeta za storno. Lista prati
-    ' ValidateFakturaCanBeStorniranoOnSEF (fail-closed kapija je tamo).
-    Me.btnStorno.enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or _
-                            sefStatus = "APPROVED" Or sefStatus = "REJECTED")
+    ' AUD-032b: dugmad se pale po ISTOM spisku po kom validator propusta akciju
+    ' (`CanCancelSEFStatus` / `CanStornoSEFStatus`), da forma ne bi nudila akciju
+    ' koju kapija odbija -- ni obrnuto. Time je i zvanicni "MISTAKE" (greska pri
+    ' slanju) dobio Cancel, a "APPROVED" Storno.
+    Me.btnCancel.enabled = CanCancelSEFStatus(sefStatus)
+
+    Me.btnStorno.enabled = CanStornoSEFStatus(sefStatus)
     
     Me.btnRecoverSending.enabled = (workflowState = UCase$(WF_SEF_SENDING))
     

@@ -728,7 +728,11 @@ Public Const SEF_CLS_ACCEPTED As String = "ACCEPTED"   ' kupac odobrio (Approved
 Public Const SEF_CLS_REJECTED As String = "REJECTED"   ' kupac odbio
 Public Const SEF_CLS_PENDING As String = "PENDING"     ' u obradi / ceka odluku
 Public Const SEF_CLS_TERMINAL As String = "TERMINAL"   ' storno/otkazano/obrisano
-Public Const SEF_CLS_INFO As String = "INFO"           ' poznat, ali ne menja workflow
+' Zvanicni SEF status "Mistake" = GRESKA PRILIKOM SLANJA dokumenta. To NIJE
+' terminalno stanje: takav dokument se po zvanicnom uputstvu moze otkazati
+' (Draft/New/Mistake), a lokalno mora u SEF_TECH_FAILED da bi retry bio moguc.
+Public Const SEF_CLS_SEND_FAILED As String = "SEND_FAILED"
+Public Const SEF_CLS_INFO As String = "INFO"           ' dokument je u SEF lifecycle-u, ali status ne nosi odluku kupca
 Public Const SEF_CLS_ERROR As String = "ERROR"         ' SEF/HTTP greska
 Public Const SEF_CLS_UNKNOWN As String = "UNKNOWN"     ' nepoznat -> rucna provera
 

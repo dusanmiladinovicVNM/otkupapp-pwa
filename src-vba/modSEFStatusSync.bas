@@ -57,13 +57,21 @@ Public Function ClassifySEFExternalStatus(ByVal apiStatus As String) As String
             ClassifySEFExternalStatus = SEF_CLS_PENDING
 
         ' Dokument je ponisten/uklonjen na SEF-u; nema vise automatskog napretka.
-        ' "MISTAKE" (Greska) je isto terminalno stanje dokumenta, ne HTTP greska.
-        Case "STORNO", "CANCELLED", "CANCELED", "DELETED", "MISTAKE"
+        Case "STORNO", "CANCELLED", "CANCELED", "DELETED"
             ClassifySEFExternalStatus = SEF_CLS_TERMINAL
+
+        ' "Mistake" = greska prilikom slanja dokumenta. Namerno NIJE u
+        ' SEF_CLS_TERMINAL: kad je bio tamo, planer ga je vodio u WF_SEF_SENT, pa
+        ' je NEUSPELO slanje lokalno postajalo "poslato" -- batch ga je preskakao
+        ' kao terminalan, Cancel je bio zakljucan, a Retry nedostupan jer
+        ' workflow nije SEF_TECH_FAILED. Faktura bi ostala bez ijedne putanje.
+        Case "MISTAKE"
+            ClassifySEFExternalStatus = SEF_CLS_SEND_FAILED
 
         ' Poznati statusi koji NE govore nista o odluci kupca (izdavalac moze da
         ' obelezi placeno, rok moze da istekne, dokument moze biti arhiviran).
-        ' Beleze se u SEFStatus, ali ne pomeraju lokalni workflow.
+        ' ALI: svi dokazuju da je dokument u SEF lifecycle-u, pa izvlace fakturu
+        ' iz "salje se" -- samo je ne proglasavaju prihvacenom.
         Case "PAID", "OVERDUE", "OVER_DUE", "ARCHIVED"
             ClassifySEFExternalStatus = SEF_CLS_INFO
 
@@ -89,7 +97,9 @@ End Function
 Public Function IsUsableSEFRefreshClass(ByVal classification As String) As Boolean
     Select Case classification
         Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_PENDING, _
-             SEF_CLS_TERMINAL, SEF_CLS_INFO
+             SEF_CLS_TERMINAL, SEF_CLS_INFO, SEF_CLS_SEND_FAILED
+            ' SEND_FAILED je upotrebljiv odgovor: SEF nam je jasno rekao da
+            ' slanje nije uspelo. Refresh je odradio svoje, faktura ide u retry.
             IsUsableSEFRefreshClass = True
         Case Else
             IsUsableSEFRefreshClass = False
@@ -128,17 +138,24 @@ Public Function SEFRefreshTargetState(ByVal currentState As String, _
         Case SEF_CLS_REJECTED
             desired = WF_SEF_REJECTED
 
-        Case SEF_CLS_PENDING, SEF_CLS_TERMINAL
-            ' Terminalni udaljeni status takodje dokazuje da je faktura stigla do
-            ' SEF-a, pa izvlaci zaglavljeni SEF_SENDING / SEF_UNKNOWN /
-            ' SEF_SYNC_ERROR na SEF_SENT. Iz SEF_SENT je to self-transition, pa
-            ' planer ispod vrati prazno i upisu se samo refresh polja.
-            desired = WF_SEF_SENT
+        Case SEF_CLS_SEND_FAILED
+            ' Greska pri slanju (SEF "Mistake"): faktura mora u SEF_TECH_FAILED,
+            ' jer je to jedino stanje iz kog UI nudi retry (isti requestId).
+            desired = WF_SEF_TECH_FAILED
 
-        Case SEF_CLS_INFO
-            ' Poznat status koji ne nosi odluku -> workflow ostaje gde jeste.
-            SEFRefreshTargetState = ""
-            Exit Function
+        Case SEF_CLS_PENDING, SEF_CLS_TERMINAL, SEF_CLS_INFO
+            ' Sve tri klase dokazuju da je dokument stigao u SEF lifecycle, pa
+            ' izvlace zaglavljeni SEF_SENDING / SEF_UNKNOWN / SEF_SYNC_ERROR na
+            ' SEF_SENT. Iz SEF_SENT je to self-transition, pa planer ispod vrati
+            ' prazno i upisu se samo refresh polja.
+            '
+            ' INFO (Paid/OverDue/Archived) je namerno OVDE, a ne u "ne diraj":
+            ' takav status ne govori da li je kupac odobrio fakturu, ali dokazuje
+            ' da dokument sigurno nije vise "u slanju". Dok je vracao prazno,
+            ' faktura je ostajala SEF_SENDING i startup recovery ju je nalazio
+            ' pri svakom pokretanju. Prihvacenom je NE proglasavamo -- za to
+            ' postoji zasebna klasa SEF_CLS_ACCEPTED.
+            desired = WF_SEF_SENT
 
         Case Else
             ' SEF_CLS_ERROR i SEF_CLS_UNKNOWN: nemamo upotrebljiv status.
@@ -311,10 +328,27 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                 message:="SEF status refreshed: " & statusText & ".", _
                 details:=statusText)
 
+        Case SEF_CLS_SEND_FAILED
+
+            ' SEF javlja gresku pri slanju dokumenta -> lokalno SEF_TECH_FAILED,
+            ' odakle UI nudi retry (i cancel je dozvoljen na SEF strani).
+            ApplySEFRefreshOutcome fakturaID, classification, statusText, _
+                                   response.sefDocumentId, statusText, _
+                                   "SEF reported a document send error; retry or cancel required."
+
+            Call AppendSEFEvent_Row( _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_FAILED, _
+                message:="SEF reported a document send error (Mistake).", _
+                details:="ApiStatus=" & statusText & _
+                         "; LocalState=" & currentState)
+
         Case SEF_CLS_INFO
 
             ' Poznat status koji ne nosi odluku kupca (PAID/OVERDUE/ARCHIVED):
-            ' belezi se, ali lokalni workflow se namerno ne pomera.
+            ' belezi se i izvlaci fakturu iz "salje se", ali je NE proglasava
+            ' prihvacenom.
             ApplySEFRefreshOutcome fakturaID, classification, statusText, _
                                    response.sefDocumentId, "", ""
 
@@ -437,7 +471,43 @@ Public Function RefreshSEFStatus_TX(ByVal fakturaID As String) As Boolean
                     nextAction:="WAIT", _
                     needsManualReview:=False
 
-            Case SEF_CLS_TERMINAL, SEF_CLS_INFO
+            Case SEF_CLS_SEND_FAILED
+                ' Nije terminalno i nije obicna greska osvezavanja: dokument je
+                ' na SEF-u obelezen kao neuspelo slanje -> retry/cancel.
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_SEND_FAILED", _
+                    severity:="WARN", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=statusText, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="SEF reported a document send error (Mistake).", _
+                    nextAction:="RETRY", _
+                    needsManualReview:=False
+
+            Case SEF_CLS_INFO
+                ' Odvojeno od TERMINAL: PAID/OVERDUE/ARCHIVED nisu kraj zivota
+                ' dokumenta, pa ih ni telemetrija ne sme tako prijavljivati.
+                Monitor_SEF _
+                    eventType:="SEF_STATUS_INFO", _
+                    severity:="INFO", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=statusText, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=submissionID, _
+                    sefInvoiceId:=response.sefDocumentId, _
+                    attemptCount:=0, _
+                    lastHttpCode:=CStr(response.httpStatus), _
+                    lastError:="", _
+                    nextAction:="WAIT", _
+                    needsManualReview:=False
+
+            Case SEF_CLS_TERMINAL
                 Monitor_SEF _
                     eventType:="SEF_STATUS_TERMINAL", _
                     severity:="INFO", _

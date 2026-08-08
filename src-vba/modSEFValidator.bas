@@ -368,6 +368,38 @@ EH:
     Err.Raise Err.Number, sourceName, Err.description
 End Function
 
+' =========================================================
+' CAPABILITY UGOVOR (AUD-032b)
+'
+' Jedan spisak po akciji, koji koriste I validator (fail-closed kapija) I forma
+' (enable dugmeta). Ranije su to bile dve rucne liste na dva mesta -- forma je
+' nudila dugme za statuse koje validator odbija, i obrnuto.
+'
+' Cancel: zvanicno uputstvo dozvoljava otkazivanje dokumenta u statusima
+' Draft, New i Mistake ("greska prilikom slanja"). "ERROR" je nas interni
+' marker iz ranijih verzija i zadrzan je zbog zatecenih redova.
+' =========================================================
+Public Function CanCancelSEFStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "DRAFT", "NEW", "MISTAKE", "ERROR"
+            CanCancelSEFStatus = True
+        Case Else
+            CanCancelSEFStatus = False
+    End Select
+End Function
+
+' Storno se radi nad dokumentom koji je stvarno predat kupcu.
+' "APPROVED" je zvanicni SEF naziv (AUD-032b); "ACCEPTED" ostaje zbog
+' zatecenih redova i submit odgovora.
+Public Function CanStornoSEFStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "SENT", "ACCEPTED", "APPROVED", "REJECTED"
+            CanStornoSEFStatus = True
+        Case Else
+            CanStornoSEFStatus = False
+    End Select
+End Function
+
 Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
     On Error GoTo EH
 
@@ -385,14 +417,10 @@ Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
 
     sefStatus = GetFakturaSEFStatusText(fakturaID, SRC)
 
-    Select Case sefStatus
-        Case "DRAFT", "NEW", "ERROR"
-            ' allowed
-
-        Case Else
-            Err.Raise ERR_SEF_STATE, SRC, _
-                      "Invoice cannot be cancelled on SEF in status: " & sefStatus
-    End Select
+    If Not CanCancelSEFStatus(sefStatus) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Invoice cannot be cancelled on SEF in status: " & sefStatus
+    End If
 
     Exit Sub
 
@@ -418,17 +446,10 @@ Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
 
     sefStatus = GetFakturaSEFStatusText(fakturaID, SRC)
 
-    ' AUD-032b: "APPROVED" je zvanicni SEF naziv za prihvacenu fakturu
-    ' ("ACCEPTED" ostaje zbog zatecenih redova i submit odgovora). Bez njega bi
-    ' posle uskladjivanja adaptera prihvacena faktura postala nestorniva.
-    Select Case sefStatus
-        Case "SENT", "ACCEPTED", "APPROVED", "REJECTED"
-            ' allowed
-
-        Case Else
-            Err.Raise ERR_SEF_STATE, SRC, _
-                      "Invoice cannot be storno on SEF in status: " & sefStatus
-    End Select
+    If Not CanStornoSEFStatus(sefStatus) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Invoice cannot be storno on SEF in status: " & sefStatus
+    End If
 
     Exit Sub
 
