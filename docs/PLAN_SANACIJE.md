@@ -174,9 +174,9 @@ Paket je „gotov" tek kad je **sve** ispunjeno:
 | M0 Higijena | ✅ gotov | v2.28.2 | 2026-07 | RF-01 (PR #147) |
 | M1 Pristup i startup | ✅ gotov | — | 2026-07 | RF-02 (#148) + RF-23 (#149); P0-klasa bezbednosti |
 | M2 SEF + agrohemija cena | ✅ gotov | — | 2026-07/08 | RF-21 (#152, P0 409) + RF-27 (#154) |
-| M3 Storno | 🟡 1/3 | — | 2026-08 | RF-03 ✅ (#167, +AUD-049 storno izvoda); ostaju RF-04, RF-05. re-verify vs aktuelni main |
-| M4 Sync jezgro | ⬜ | — | — | RF-14+RF-28 zajedno |
-| M5 Izveštaji i faktura | 🟡 2/3 | — | 2026-08 | RF-06 ✅ merged PR #175 (AUD-023); RF-07 🟢 grana `claude/rf-07-izvestaj-freshness-u0jy43` (AUD-024 + AUD-012 zatvoreni, AUD-027 delimično — cross-tab print; `RunIzvestajTests` proširen sa 3 grupe, ostatak operater-smoke); ostaje RF-08 |
+| M3 Storno | ✅ gotov | — | 2026-08 | RF-03 (#167, +AUD-049) + RF-04 (#169) + RF-05 (#170); AUD-020/005/008–010/022 + AUD-049; review follow-up AUD-050/051/052/053 |
+| M4 Sync jezgro | ✅ gotov | v2.32.0 / v2.33.0 | 2026-08 | RF-14 (#172, JSON korupcija — AUD-001/002/018) + RF-28 (#173, integritet delte — AUD-041/042/043/046); review follow-up AUD-054 |
+| M5 Izveštaji i faktura | 🟡 2/3 | v2.34.0 / v2.35.0 | 2026-08 | RF-06 ✅ (#175, v2.34.0 — AUD-023) + RF-07 ✅ (#176, v2.35.0 — AUD-024/012, AUD-027 delimično/cross-tab); ostaje RF-08 (AUD-011 + preostatak AUD-027 reprint/`.UnMerge`) → zatvara M5 |
 | M6 SEF UX + banka | ⬜ | — | — | |
 | M7 Otkup UI i palete | ⬜ | — | — | |
 | M8 Infra + cenovnik + E2E | ⬜ | — | — | |
