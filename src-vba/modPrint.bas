@@ -2574,7 +2574,10 @@ End Function
 ' ============================================================
 Public Sub EnsureSpecifikacijaSablon()
     On Error GoTo EH
-    Const LAYOUT_VER As String = "3"
+    ' 3 -> 4: samo da se zatecen sablon-sheet ponovo napravi i time izgubi
+    ' zaostalo PageSetup stanje (fiksan zoom / rucni page break) koje je
+    ' obaralo "sve na jednu stranu". Raspored kolona je nepromenjen.
+    Const LAYOUT_VER As String = "4"
     Dim ws As Worksheet
     On Error Resume Next
     Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
@@ -2692,23 +2695,14 @@ Public Function FillSpecifikacijaSablon(ByVal spec As Variant, ByVal nRows As Lo
         .Weight = xlThin
     End With
 
-    On Error Resume Next
-    Application.PrintCommunication = False
-    With ws.PageSetup
-        .PaperSize = xlPaperA4
-        .Orientation = xlLandscape
-        .Zoom = False
-        .FitToPagesWide = 1
-        .FitToPagesTall = False
-        .PrintTitleRows = "$" & (startRow - 1) & ":$" & (startRow - 1)
-        .LeftMargin = Application.InchesToPoints(0.3)
-        .RightMargin = Application.InchesToPoints(0.3)
-        .TopMargin = Application.InchesToPoints(0.4)
-        .BottomMargin = Application.InchesToPoints(0.4)
-        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(ukRow, 13)).Address
-    End With
-    Application.PrintCommunication = True
-    On Error GoTo 0
+    ' Sve 13 kolona MORAJU stati na jednu stranu po sirini - zajednicki
+    ' DocPageSetupFitWide (reset page break-ova + provera da li je fit
+    ' primljen + rucni zoom kao folbek). Raniji inline blok pod
+    ' Application.PrintCommunication = False je umeo tiho da padne, pa je
+    ' sheet ostajao na 100% i poslednje tri kolone su isle na drugu stranu.
+    DocPageSetupFitWide ws, xlLandscape, _
+        ws.Range(ws.cells(1, 1), ws.cells(ukRow, 13)), _
+        "$" & (startRow - 1) & ":$" & (startRow - 1), 0.3, 0.4
 
     Application.ScreenUpdating = oldScreen
     Set FillSpecifikacijaSablon = ws

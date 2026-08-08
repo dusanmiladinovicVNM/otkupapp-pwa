@@ -191,6 +191,67 @@ Public Sub DocPageSetupThirdA4(ByVal ws As Worksheet, ByVal lastRow As Long)
 End Sub
 
 ' ------------------------------------------------------------
+' PageSetup za tabelarne obrasce koji MORAJU stati na jednu stranu po
+' sirini (specifikacije, pregledi): A4, "Fit to 1 page wide", visina
+' slobodna (vise strana po duzini je u redu).
+'
+' Zasto helper, a ne inline blok kao ranije - tri zamke koje su obarale
+' "fit to page" tako da su poslednje kolone bezale na drugu stranu:
+'   1) Application.PrintCommunication = False: PageSetup upisi se keshiraju,
+'      a PrintArea/PrintTitleRows/Zoom pod njim znaju da padnu na 1004; uz
+'      On Error Resume Next to prodje TIHO i sheet ostane na starom zoom-u
+'      (= 100%). Zato ga ovde NE koristimo (isti hardening kao
+'      FillPrijemnicaSablon, vidi komentar tamo).
+'   2) Rucni page break zaostao na trajnom sablon-sheetu: Excel ga postuje
+'      i kad je fit-to-page ukljucen -> ResetAllPageBreaks pre svega.
+'   3) Ako "Zoom = False / FitToPagesWide = 1" ipak ne prodje (masina bez
+'      drajvera stampaca), racunamo procenat sami iz stvarne sirine
+'      print-area (Range.Width je u tackama, ne trazi drajver) i upisujemo
+'      fiksan .Zoom - dokument tada i dalje staje na jednu stranu.
+' ------------------------------------------------------------
+Public Sub DocPageSetupFitWide(ByVal ws As Worksheet, ByVal pgOrient As Long, _
+                               ByVal prArea As Range, ByVal titleRows As String, _
+                               ByVal lrMargin As Double, ByVal tbMargin As Double)
+    On Error Resume Next
+    ws.ResetAllPageBreaks
+    With ws.PageSetup
+        .PrintArea = prArea.Address
+        .PaperSize = xlPaperA4
+        .Orientation = pgOrient
+        .LeftMargin = Application.InchesToPoints(lrMargin)
+        .RightMargin = Application.InchesToPoints(lrMargin)
+        .TopMargin = Application.InchesToPoints(tbMargin)
+        .BottomMargin = Application.InchesToPoints(tbMargin)
+        .CenterHorizontally = True
+        .CenterVertically = False
+        If Len(titleRows) > 0 Then .PrintTitleRows = titleRows
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+    End With
+
+    ' --- provera da li je fit stvarno primljen; ako nije -> rucni zoom ---
+    Dim z As Variant
+    z = ws.PageSetup.Zoom
+    If VarType(z) = vbBoolean Then
+        If z = False And ws.PageSetup.FitToPagesWide = 1 Then Exit Sub
+    End If
+
+    Dim usableW As Double, needW As Double, pct As Long
+    ' A4 sirina: portrait 210mm = 595.28pt, landscape 297mm = 841.89pt.
+    If pgOrient = xlLandscape Then usableW = 841.89 Else usableW = 595.28
+    usableW = usableW - Application.InchesToPoints(lrMargin) * 2
+    usableW = usableW * 0.97   ' rezerva za hardversku (neispisivu) marginu drajvera
+    needW = prArea.Width
+    If usableW <= 0 Or needW <= 0 Then Exit Sub
+    pct = 100
+    If needW > usableW Then pct = Int(usableW / needW * 100)
+    If pct < 10 Then pct = 10
+    ws.PageSetup.Zoom = pct
+    On Error GoTo 0
+End Sub
+
+' ------------------------------------------------------------
 ' Izlazni mod obrasca. Prizna OFF/PRINT/PREVIEW/PDF; prazno ili nepoznato
 ' -> defMode (default ponasanje tog dokumenta: "PDF" ili "OFF"). Centralizuje
 ' razliku u defaultu (otkupni/grupni/izdamb=PDF, prijemnica/paleta=OFF) i daje
