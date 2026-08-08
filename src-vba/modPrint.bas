@@ -312,6 +312,15 @@ Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
     On Error GoTo EH
     If Trim$(otkupID) = "" Then Exit Sub
 
+    ' Stornirani otkup se NE stampa (AUD-027 / FM-0031 #3). Provera mora da ide
+    ' pre svega ostalog: `d` je ocisceno ExcludeStornirano-om, pa se stornirani
+    ' red ne nadje, brDok ostane prazan i raw fallback (ids = otkupID) bi ga
+    ' ipak odstampao -- tiho, kao da je aktivan.
+    If OtkupStorniranZaStampu(otkupID) Then
+        MsgBox Poruka("PRINT_ERR_STORNIRAN_OTKUP") & otkupID, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     Dim d As Variant: d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Sub
     d = ExcludeStornirano(d, TBL_OTKUP)
@@ -342,6 +351,34 @@ Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
 EH:
     LogErr "modPrint.ReprintOtkupniListByOtkupID"
 End Sub
+
+' Da li je otkup storniran. Cita SIROVU tabelu -- ExcludeStornirano bi red vec
+' izbacio, pa se iz filtriranog niza storno status ne moze utvrditi.
+' Nepoznat OtkupID -> False (ponasanje ostaje kao pre: dalje odlucuje reprint).
+' Seam za RunFakturaSmokeSuite (test ne sme da otvori MsgBox).
+Public Function OtkupStorniranZaStampu(ByVal otkupID As String) As Boolean
+    On Error GoTo EH
+    If Trim$(otkupID) = "" Then Exit Function
+
+    Dim d As Variant: d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+
+    Dim iID As Long, iSt As Long
+    iID = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    iSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    If iID = 0 Or iSt = 0 Then Exit Function
+
+    Dim r As Long
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, iID))) = Trim$(otkupID) Then
+            OtkupStorniranZaStampu = (UCase$(Trim$(CStr(d(r, iSt)))) = "DA")
+            Exit Function
+        End If
+    Next r
+    Exit Function
+EH:
+    LogErr "modPrint.OtkupStorniranZaStampu"
+End Function
 
 ' Popuni OtkupSablon sa dva primerka. Vraca sheet (ili Nothing).
 Private Function FillOtkupSablon(ByVal otkupIDs As String) As Worksheet
@@ -1901,7 +1938,15 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
     ws.Range("FakKupac").value = kupacNaziv
 
     Dim startCell As Range: Set startCell = ws.Range("FakStavkaStart")
+    ' .UnMerge pre punjenja: red "UKUPNO:" se spaja (tot..tot+4) na poziciji koja
+    ' zavisi od BROJA STAVKI. Bez razdvajanja bi faktura sa vise stavki pisala
+    ' preko merge-a zaostalog iz prethodne (manje) fakture -- AUD-027 / FM-0031 #19.
+    ' NAMERNO nije `ws.cells.UnMerge` (kao kod ostalih Fill* sablona): oni svaki
+    ' put ruse i grade ceo list, a FakturaSablon je perzistentan (EnsureFakturaSablon
+    ' gradi ga jednom, po LAYOUT_VER) i u zaglavlju ima svoje merge-ove (FakKupac,
+    ' seller header, naslov) koje ne smemo pokidati.
     With ws.Range(startCell, startCell.Offset(80, 5))
+        .UnMerge
         .ClearContents
         .Borders.LineStyle = xlNone
         .Interior.ColorIndex = xlNone
