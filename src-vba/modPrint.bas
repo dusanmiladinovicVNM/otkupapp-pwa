@@ -55,8 +55,11 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
     wsPrint.Visible = xlSheetVisible
     Dim pdfPath As String
     pdfPath = EnsureDocFolder(PDF_DIR_IZVESTAJI) & "\Izve" & ChrW(353) & "taj_" & Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
-    wsPrint.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
-                                          Quality:=xlQualityStandard, OpenAfterPublish:=True
+    ' Kroz zajednicki izlaz (DocExportPdf): A4 + sve kolone na jednu stranu
+    ' po sirini + provera pred izlaz. Sheet "_Print" se pravi u letu i ranije
+    ' nije imao NIKAKAV PageSetup - nasledjivao je sta zatekne od drajvera.
+    DocPageSetupFitWide wsPrint, xlPortrait, wsPrint.UsedRange, "", 0.4, 0.4
+    DocExportPdf wsPrint, pdfPath, True
     On Error GoTo 0
     
     ' Aufraeumen
@@ -1076,7 +1079,8 @@ End Sub
 ' Pojedinacni prijemnica -> fizicka stampa (simetricno PrintOtkupniList/PrintPaletniList).
 Public Sub PrintPrijemnica(ByVal prijemnicaID As String)
     Dim ws As Worksheet: Set ws = FillPrijemnicaSablon(prijemnicaID)
-    If Not ws Is Nothing Then ws.PrintOut Copies:=1
+    ' preko kapije: provera papira/skaliranja pred stampu
+    If Not ws Is Nothing Then DocPrintWs ws, "PRINT"
 End Sub
 
 ' PDF prijemnice -> <workbook>\Prijemnice\Prijemnica_<brPrij>.pdf. Vraca putanju.

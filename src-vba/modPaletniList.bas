@@ -691,7 +691,7 @@ Public Sub PrintPaletniList(ByVal palID As String)
     Dim ws As Worksheet
     Set ws = FillPaletaSablon(palID, broj, god)
     If ws Is Nothing Then Exit Sub
-    ws.PrintOut Copies:=1
+    DocPrintWs ws, "PRINT"   ' preko kapije: provera papira/skaliranja pred stampu
     Exit Sub
 EH:
     LogErr "modPaletniList.PrintPaletniList"
