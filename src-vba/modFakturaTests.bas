@@ -36,8 +36,15 @@ Public Sub RunFakturaSmokeSuite()
 
     Test_PrintFakturaBlocksStorniranaFaktura
     Test_ReprintBlocksStorniraniOtkup
+    Test_FakturaSablonCleanupPratiBrojStavki
 
     FinishFakturaSuite
+
+    ' HARD GATE -- summary je vec ispisan iznad.
+    ' On Error GoTo 0: raise ne sme da udje u EH ispod (dupli FAIL brojac,
+    ' dupli FinishFakturaSuite i dupli MsgBox). Isti obrazac kao
+    ' modGoogleSyncSmokeTests.RunMasterSyncSmokeSuite.
+    On Error GoTo 0
     RequireFakturaSuiteGreen
     Exit Sub
 
@@ -510,9 +517,10 @@ EH:
                    FormatErrDetails()
 End Sub
 
-' AUD-027 / FM-0031 #3: reprint otkupnog lista mora da odbije storniran otkup.
-' Testira se seam `OtkupStorniranZaStampu`, jer sam reprint na blokadi otvara
-' MsgBox (test ne sme da ceka operatera).
+' AUD-027 / FM-0031 #3: reprint otkupnog lista mora da odbije storniran otkup,
+' i mora da bude FAIL-CLOSED (nepoznat / dupliran ID takodje ne prolazi).
+' Testira se seam `RequireOtkupAktivanZaStampu`, jer sam reprint na blokadi
+' otvara MsgBox (test ne sme da ceka operatera).
 ' Redovi se upisuju u tblOtkup pod transakcijom i UVEK se rollback-uju.
 Private Sub Test_ReprintBlocksStorniraniOtkup()
     Dim tx As clsTransaction
@@ -528,9 +536,11 @@ Private Sub Test_ReprintBlocksStorniraniOtkup()
 
     Dim otkupStorniran As String
     Dim otkupAktivan As String
+    Dim otkupDupliran As String
 
     otkupStorniran = "OTK-TST-S-" & code
     otkupAktivan = "OTK-TST-A-" & code
+    otkupDupliran = "OTK-TST-D-" & code
 
     Set tx = New clsTransaction
     tx.BeginTx
@@ -538,12 +548,20 @@ Private Sub Test_ReprintBlocksStorniraniOtkup()
 
     AppendTestOtkupRow otkupStorniran, "TST-BRD-S-" & code, "Da"
     AppendTestOtkupRow otkupAktivan, "TST-BRD-A-" & code, ""
+    AppendTestOtkupRow otkupDupliran, "TST-BRD-D1-" & code, ""
+    AppendTestOtkupRow otkupDupliran, "TST-BRD-D2-" & code, ""
 
-    AssertFakturaTrue OtkupStorniranZaStampu(otkupStorniran), _
+    AssertFakturaTrue ReprintGuardRaises(otkupStorniran), _
                       "Reprint blocks storniran otkup"
 
-    AssertFakturaTrue Not OtkupStorniranZaStampu(otkupAktivan), _
+    AssertFakturaTrue Not ReprintGuardRaises(otkupAktivan), _
                       "Reprint allows aktivan otkup"
+
+    AssertFakturaTrue ReprintGuardRaises(otkupDupliran), _
+                      "Reprint blocks duplicate OtkupID (fail-closed)"
+
+    AssertFakturaTrue ReprintGuardRaises("OTK-TST-NEMA-" & code), _
+                      "Reprint blocks unknown OtkupID (fail-closed)"
 
     tx.RollbackTx
     Set tx = Nothing
@@ -568,6 +586,87 @@ EH:
                    " Source=" & errSrc & _
                    " Description=" & errDesc
 End Sub
+
+' True = kapija je odbila stampu (podigla gresku). Zamenjuje raniji Boolean
+' helper: guard je sada fail-closed, pa se ishod meri time DA LI je pukao.
+Private Function ReprintGuardRaises(ByVal otkupID As String) As Boolean
+    On Error Resume Next
+    Err.Clear
+    RequireOtkupAktivanZaStampu otkupID, "modFakturaTests"
+    ReprintGuardRaises = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' AUD-027 / FM-0031 #19, review nalaz: cleanup opseg mora da prati STVARAN broj
+' stavki, ne fiksnih 80 redova. Renderuje se 81 pa 82 stavke -- druga faktura
+' mora da prodje bez zaostalog merge-a sa offseta 81 (ranije: pisanje preko
+' merged celije -> EH -> `Nothing` -> tiho izostala stampa).
+' Ne dira tabele: FillFakturaSablon prima stavke kao niz.
+Private Sub Test_FakturaSablonCleanupPratiBrojStavki()
+    On Error GoTo EH
+
+    Dim ws As Worksheet
+    Set ws = FillFakturaSablon("TST-81", Date, "Test kupac", _
+                               BuildFakturaTestStavke(81), 81, 81#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 81 stavki"
+
+    Set ws = FillFakturaSablon("TST-82", Date, "Test kupac", _
+                               BuildFakturaTestStavke(82), 82, 82#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 82 stavki after 81"
+
+    If ws Is Nothing Then GoTo CleanExit
+
+    Dim startCell As Range
+    Set startCell = ws.Range("FakStavkaStart")
+
+    AssertFakturaTrue Not startCell.Offset(81, 1).MergeCells, _
+                      "Stavka 82 nije u zaostalom merge-u"
+
+    AssertFakturaTextEquals "PRJ-82", _
+        CStr(startCell.Offset(81, 1).value), _
+        "Stavka 82 je stvarno upisana"
+
+    AssertFakturaTextEquals "@", _
+        CStr(startCell.Offset(81, 1).NumberFormat), _
+        "Broj prijemnice ostaje tekst i posle 80. reda"
+
+    ' Zaglavlje sablona ima NAMERNE merge-ove -- cleanup ne sme da ih pokida.
+    AssertFakturaTrue ws.Range("FakKupac").MergeCells, _
+                      "Merge zaglavlja (FakKupac) je netaknut"
+
+CleanExit:
+    ' Sablon je vidljiv list -- ne ostavljaj 82 test reda na njemu.
+    On Error Resume Next
+    FillFakturaSablon "", Empty, "", BuildFakturaTestStavke(1), 0, 0#
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogFakturaFail "FillFakturaSablon cleanup prati broj stavki", _
+                   FormatErrDetails()
+    Resume CleanExit
+End Sub
+
+Private Function BuildFakturaTestStavke(ByVal n As Long) As Variant
+    Dim arr() As Variant
+    ReDim arr(1 To n, 1 To 5)
+
+    Dim i As Long
+    For i = 1 To n
+        arr(i, 1) = "PRJ-" & CStr(i)
+        arr(i, 2) = "I"
+        arr(i, 3) = 1#
+        arr(i, 4) = 1#
+        arr(i, 5) = 1#
+    Next i
+
+    BuildFakturaTestStavke = arr
+End Function
 
 Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
                                ByVal brojDokumenta As String, _
