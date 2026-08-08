@@ -273,6 +273,27 @@ svi P2/P3 van zadatog obima paketa.
 storniranog otkupa (ukinuti raw fallback :334) (AUD-011, AUD-027; FM-0034 #1/#2/#3,
 FM-0031 #3/#19). **Regression:** `RunFakturaSmokeSuite`; ručno: faktura sa 3 stavke
 posle fakture sa 1 stavkom (merge test).
+**Naučeno (RF-08):** (1) **„Isti obrazac kao ostali `Fill*`" nije uvek prenosiv.** Ostalih pet
+`Fill*` šablona radi `ws.cells.UnMerge` bezbedno **jer pre punjenja ruše i grade ceo list**;
+`FakturaSablon` je perzistentan (`EnsureFakturaSablon` gradi ga jednom, po `H1` `LAYOUT_VER`)
+i u zaglavlju ima namerne merge-ove (`FakKupac`, seller header, naslov). Blanket `UnMerge` bi
+ih trajno pokidao i sledeća faktura bi izašla sa razbijenim zaglavljem. Obrazac je zato preuzet
+**opsegom koji se puni** (isti `startCell`..`Offset(80, 5)` koji cleanup već koristi), ne celim
+listom. Pouka: pre kopiranja obrasca proveri i **pretpostavku** pod kojom on važi na izvornom
+mestu. (2) **Filter koji sakriva podatak sakriva i razlog za blokadu.** Reprint je zvao
+`ExcludeStornirano` pa tražio red — storniran red nije nađen, `brDok` je ostao prazan, i raw
+fallback (`If ids = "" Then ids = otkupID`) ga je ipak odštampao. „Nije nađen" i „poništen" su
+iz filtriranog niza **nerazlučivi**, pa provera mora da ide nad sirovom tabelom i **pre**
+filtriranja. (3) **Menjanje potpisa test-helpera je deo scope-a fixa:** `AppendTestPrijemnicaRow`
+nije upisivao `KupacID`, pa bi novi ownership guard oborio 4 postojeća testa. Dodat je obavezan
+parametar (ne `Optional` sa defaultom — test red bez kupca s pravom više ne sme da prođe).
+Provereno je i da svih 5 `CreateFaktura_TX` fixtura u `modBusinessFlowProTests` ide kroz
+`SavePrijemnica_TX(… TEST_KUP_ID …)`, pa ta suite ne regresira.
+**Naučeno iz code-review-a (RF-08, tri korekcije):** (4) **`Boolean` helper koji nosi sigurnosnu odluku bira smer otkaza svojim `EH`-om.** Prva verzija guarda (`OtkupStorniranZaStampu`) vraćala je `False` na svaku grešku — `Exit Function` posle `LogErr` je uvek „dozvoli". To je fail-**open** baš u schema-corruption scenariju, i to najgorem: `ExcludeStornirano` bez kolone `Stornirano` **takođe** vraća sirovu tabelu, pa bi guard koji „ne zna" i filter koji „ne filtrira" zajedno pustili poništen dokument na papir. Sigurnosne provere se pišu kao `Require*` koje **pucaju**, a pozivalac hvata i prikazuje; `GetColumnIndex` → `RequireColumnIndex`; „prvi pronađeni red" nije dokaz kad ID može biti dupliran. (5) **Fiksna „dovoljno velika" granica u rendereru je invarijanta koju niko ne održava.** `.UnMerge` je bio tačan alat na netačnom opsegu: cleanup je pokrivao 80 redova, a broj stavki nije ograničen ni u UI ni u `CreateFaktura` ni u rendereru — 81 → 82 stavke je i dalje lomilo isti bug (merge preživi, pisanje preko njega → `EH` → `Nothing` → tiho izostala štampa), plus `NumberFormat = "@"` je otpadao od 81. reda. Ili se maksimum enforce-uje na **sva tri** mesta, ili se opseg računa dinamički — pola rešenja pomera bug, ne uklanja ga. Uz to: regresioni scenario mora da gađa **granicu**, ne udoban slučaj (`1 → 3` ne dokazuje ništa o `81 → 82`). **Druga runda istog nalaza:** prvi pokušaj dinamičke granice koristio je `ws.UsedRange` — a `UsedRange` broji i prazne **formatirane** ćelije, dok `EnsureFakturaSablon` formatira ceo list (`ws.cells.Font...`). Granica je time mogla da odleti na poslednji red lista i svaki render bi čistio ~6M ćelija. Zamenjeno sa `SablonLastContentRow` (`Range.Find` `xlFormulas` + `xlPrevious`, samo `A:F`). **Pouka:** `UsedRange` odgovara na „dokle je list dodirnut", a pitanje je bilo „dokle je nešto napisano" — kad granica upravlja **cenom** operacije, semantika njenog izvora je deo ispravnosti, ne detalj. Isto tako: test koji proverava funkcionalni rezultat (`81 → 82` prolazi) ne proverava **koliko ćelija** je obrađeno — za to treba zaseban assert nad granicom. (6) **Hard gate mora da izađe iz aktivnog error handlera.** `RequireFakturaSuiteGreen` pozvan dok je `On Error GoTo EH` još aktivan šalje sopstveni raise u `EH` suite-a: `LogFakturaFatal` doda lažan failure, `FinishFakturaSuite` se izvrši drugi put, operater dobije dupli MsgBox i broj padova veći za jedan. `On Error GoTo 0` pre gate-a — obrazac koji `RunMasterSyncSmokeSuite` već nosi.
+**Svesno NIJE uzeto:** AUD-054 (SEF `Err.Raise 0`) — zaseban SEF-hardening; faktura-status /
+SEF lifecycle (RF-22); document-snapshot za reprint (TL-006, zaseban roadmap). Fallback za
+**aktivan** otkup bez `BrojDokumenta` je namerno zadržan — ukinut je samo put kojim je storno
+prolazio.
 
 ### RF-09 — Banka import + mapiranje [Wave 2 · M]
 **Fajlovi:** `modBankaImport.bas`, `modBankaMapiranje.bas`, `frmBankaImport.frm`.
@@ -465,8 +486,8 @@ mora ući u trag; PDF nepotpunog traga mora biti obeležen.
 | RF-04 | AutoHladnjaca | ⬜ | — | |
 | RF-05 | frmDokumenta set | 🟢 PR | `claude/rf-05-frmdokumenta-fixes-63yqjp` | M3 · AUD-009 + AUD-022 + deo AUD-003; uz to nova `GeneracijaID` kolona (schema) i guard protiv storna po nejedinstvenom broju (AUD-052 novo). BFP 276/276, Storno 181/181 |
 | RF-06 | modIzvestaj brojke | 🟢 PR #175 | `claude/rf-06-izvestaj-brojke-wquclc` | M5 · AUD-023 zatvoren (FM-0028 #1/#3/#5/#6/#9/#10/#12/#13/#14) + posledica AUD-052 u report sloju. **`Compile` čist, `RunIzvestajTests` 100%** (uklj. 3 e2e nad tabelama). Ostaje uporedni pregled izveštaja pre/posle — brojke se namerno menjaju |
-| RF-07 | frmIzvestaj + revers | 🟢 grana | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
-| RF-08 | Faktura + štampa | ⬜ | — | |
+| RF-07 | frmIzvestaj + revers | ✅ merged PR #176 | `claude/rf-07-izvestaj-freshness-u0jy43` | M5 · AUD-024 + AUD-012 zatvoreni, AUD-027 delimično (samo cross-tab print; reprint stornirani + `FillFakturaSablon` `.UnMerge` ostaju RF-08). Novi seam-ovi `IzvestajTabDostupan`/`IzvestajEntitetKod`/`ReversRedPripada` + 3 test grupe u `RunIzvestajTests`. Freshness/CleanFail/tab-meni = operater-smoke. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan** |
+| RF-08 | Faktura + štampa | 🟢 grana | `claude/rf-08-faktura-stampa-g5h1c5` | **M5 ✅ KOMPLETAN.** AUD-011 zatvoren (FM-0034 #1/#2/#3: vlasništvo prijemnice u `CreateFaktura`, fail-closed `rows.count > 1`, `CreateFaktura` → `Private` — caller check potvrdio da svi pozivi već idu kroz `_TX`) + AUD-027 zatvoren u celosti (FM-0031 #3 reprint storniranog otkupa preko nove **fail-closed kapije** `RequireOtkupAktivanZaStampu` — puca na nedostajuću kolonu, nepostojeći i dupliran `OtkupID`, ne samo na storno; #19 `FillFakturaSablon` `.UnMerge` na **dinamičnom** opsegu `max(nStavke + 4, SablonLastContentRow)` — po SADRŽAJU (`Range.Find` nad `A:F`), ne po `UsedRange` (broji i prazne formatirane ćelije), ne `ws.cells` i ne fiksnih 80 redova — šablon je perzistentan i ima namerne merge-ove u zaglavlju). `RunFakturaSmokeSuite` postao **tvrd gate** (uz `On Error GoTo 0` pre gate-a) + 4 nova testa, uklj. automatizovan **81 → 82 stavke** i assert da formatirana prazna ćelija ne širi granicu čišćenja. Merge test malog obima (3 posle 1) = operater-smoke. **2 nova `Poruka()` ključa → `EnsurePoruke` obavezan** |
 | RF-09 | Banka import/map | ⬜ | — | |
 | RF-10 | Banka export | ⬜ | — | |
 | RF-11 | Otkup UI | ⬜ | — | |

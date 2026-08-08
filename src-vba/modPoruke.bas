@@ -234,6 +234,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "STM_MSG_GRESKA_PRI_OTVARANJU_2", "Gre" & ChrW(353) & "ka pri otvaranju Google Maps. Pogledaj log."
     UpsertRow lo, existing, "STM_MSG_GRESKA_PRI_OTVARANJU_3", "Gre" & ChrW(353) & "ka pri otvaranju polygon editora. Pogledaj log."
     UpsertRow lo, existing, "FAK_ERR_STORNIRANA_FAKTURA_MOZE", "Stornirana faktura se ne mo" & ChrW(382) & "e " & ChrW(353) & "tampati kao aktivna faktura:"
+    UpsertRow lo, existing, "PRINT_ERR_STORNIRAN_OTKUP", "Storniran otkup se ne " & ChrW(353) & "tampa. OtkupID: "
+    UpsertRow lo, existing, "PRINT_ERR_OTKUP_BLOKIRAN", ChrW(352) & "tampa otkupnog lista je zaustavljena:"
     UpsertRow lo, existing, "LIC_MSG_SERVER_NEDOSTUPAN_OFFLINE", "Server nedostupan " & ChrW(8212) & " offline grace (masina je vezana)."
     UpsertRow lo, existing, "LIC_MSG_PROPUSTAM_VEZANU_MASINU", "' " & ChrW(8212) & " propustam vezanu masinu."
     UpsertRow lo, existing, "MATICNI_MSG_PODESAVANJA", "Pode" & ChrW(353) & "avanja"

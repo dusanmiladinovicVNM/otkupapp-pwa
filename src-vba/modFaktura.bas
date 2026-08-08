@@ -91,8 +91,12 @@ EH:
                 " Desc=" & errDesc
 End Function
 
-Public Function CreateFaktura(ByVal kupacID As String, _
-                              ByVal stavke As Collection) As String
+' Base funkcija -- NE zovi je spolja. Jedini ulaz je CreateFaktura_TX, koji drzi
+' snapshot transakciju; direktan poziv bi kod greske ostavio pola upisa
+' (faktura header bez stavki, prijemnice markirane bez fakture) -- AUD-011 /
+' FM-0034 #3.
+Private Function CreateFaktura(ByVal kupacID As String, _
+                               ByVal stavke As Collection) As String
     On Error GoTo EH
 
     If Trim$(kupacID) = "" Then
@@ -127,6 +131,7 @@ Public Function CreateFaktura(ByVal kupacID As String, _
     RequireColumnIndex TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRIJEMNICE, "CreateFaktura"
 
     RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_ID, "CreateFaktura"
+    RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_KUPAC, "CreateFaktura"
     RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, "CreateFaktura"
     RequireColumnIndex TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, "CreateFaktura"
     RequireColumnIndex TBL_PRIJEMNICA, COL_STORNIRANO, "CreateFaktura"
@@ -163,11 +168,13 @@ Public Function CreateFaktura(ByVal kupacID As String, _
     Dim colPrjCena As Long
     Dim colPrjKlasa As Long
     Dim colPrjBroj As Long
+    Dim colPrjKupac As Long
 
     colPrjKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "CreateFaktura")
     colPrjCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, "CreateFaktura")
     colPrjKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, "CreateFaktura")
     colPrjBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, "CreateFaktura")
+    colPrjKupac = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, "CreateFaktura")
 
     ' Pre-validacija svih prijemnica pre bilo kog upisa.
     ' Business module trusts only PrijemnicaID from caller.
@@ -197,8 +204,30 @@ Public Function CreateFaktura(ByVal kupacID As String, _
                       "Dupla prijemnica u izboru: " & prijemnicaID
         End If
 
+        ' Fail-closed kod duplog PrijemnicaID: bez ovoga se tiho uzima prvi
+        ' pogodak, pa se fakturise kolicina/cena pogresnog reda (AUD-011 /
+        ' FM-0034 #2). Isti obrazac kao RequireSingleFakturaRow nad tblFakture.
+        If rows.count > 1 Then
+            Err.Raise vbObjectError + 1707, "CreateFaktura", _
+                      "Duplikat PrijemnicaID=" & prijemnicaID & _
+                      "; Count=" & CStr(rows.count)
+        End If
+
         Dim rowPrijValidate As Long
         rowPrijValidate = CLng(rows(1))
+
+        ' Vlasnistvo: prijemnica mora da pripada kupcu fakture. Bez ove provere
+        ' se prijemnica drugog kupca moze zavuci u fakturu (UI filter po kupcu
+        ' nije sigurnosna granica) -- AUD-011 / FM-0034 #1.
+        Dim prjKupac As String
+        prjKupac = Trim$(CStr(prijData(rowPrijValidate, colPrjKupac)))
+
+        If prjKupac <> Trim$(kupacID) Then
+            Err.Raise vbObjectError + 1721, "CreateFaktura", _
+                      "Prijemnica pripada drugom kupcu. PrijemnicaID=" & prijemnicaID & _
+                      "; Prijemnica.KupacID=" & prjKupac & _
+                      "; Faktura.KupacID=" & Trim$(kupacID)
+        End If
 
         If Not IsPrijemnicaAvailableForFaktura(rowPrijValidate, prijemnicaID) Then
             Err.Raise vbObjectError + 1709, "CreateFaktura", _

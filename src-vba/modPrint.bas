@@ -309,8 +309,22 @@ End Function
 ' odstampaj ih zajedno (kao posle unosa), pa list ne bude nepotpun. Izlaz po
 ' CFG_OTKUP_PRINT_MODE (kao OutputOtkupniList).
 Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
+    Const SRC As String = "modPrint.ReprintOtkupniListByOtkupID"
     On Error GoTo EH
     If Trim$(otkupID) = "" Then Exit Sub
+
+    ' Stornirani otkup se NE stampa (AUD-027 / FM-0031 #3). Provera mora da ide
+    ' pre svega ostalog: `d` je ocisceno ExcludeStornirano-om, pa se stornirani
+    ' red ne nadje, brDok ostane prazan i raw fallback (ids = otkupID) bi ga
+    ' ipak odstampao -- tiho, kao da je aktivan.
+    ' Fail-closed: SVAKA greska provere (nema kolone, pad citanja, duplikat)
+    ' vodi u BLOKADA granu, ne u stampu. Bez toga bi schema drift otvorio bas
+    ' najgori scenario -- `ExcludeStornirano` bez kolone `Stornirano` vraca
+    ' SIROVU tabelu, pa bi guard koji "ne zna" i filter koji "ne filtrira"
+    ' zajedno pustili ponisten dokument na papir.
+    On Error GoTo BLOKADA
+    RequireOtkupAktivanZaStampu otkupID, SRC
+    On Error GoTo EH
 
     Dim d As Variant: d = GetTableData(TBL_OTKUP)
     If Not IsArray(d) Then Exit Sub
@@ -339,8 +353,79 @@ Public Sub ReprintOtkupniListByOtkupID(ByVal otkupID As String)
 
     OutputOtkupniList ids
     Exit Sub
+
+BLOKADA:
+    ' Razlog blokade se hvata PRE LogErr-a (LogErr cisti Err) -- BUG-1/AUD-054.
+    Dim blokadaMsg As String
+    blokadaMsg = Err.description
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    MsgBox Poruka("PRINT_ERR_OTKUP_BLOKIRAN") & vbCrLf & blokadaMsg, _
+           vbExclamation, APP_NAME
+    Exit Sub
+
 EH:
-    LogErr "modPrint.ReprintOtkupniListByOtkupID"
+    LogErr SRC
+End Sub
+
+' Fail-closed kapija pred stampu otkupnog lista: prolazi TIHO samo kad se otkup
+' moze DOKAZATI kao jedinstven i aktivan. Sve ostalo je greska koju pozivalac
+' prikazuje i odustaje od stampe:
+'   - nema kolone `OtkupID`/`Stornirano`   -> RequireColumnIndex puca
+'   - tabela prazna / nema reda            -> nema sta da se stampa
+'   - vise redova sa istim `OtkupID`       -> status prvog reda nije dokaz
+'   - `Stornirano = "Da"`                  -> ponisten dokument
+' Cita SIROVU tabelu: `ExcludeStornirano` bi storniran red vec izbacio, pa se
+' iz filtriranog niza storno status po definiciji ne moze utvrditi -- to je i
+' bio uzrok FM-0031 #3.
+' Seam za RunFakturaSmokeSuite (test ne sme da otvori MsgBox).
+Public Sub RequireOtkupAktivanZaStampu(ByVal otkupID As String, _
+                                       ByVal sourceName As String)
+    Dim wantID As String
+    wantID = Trim$(otkupID)
+
+    If Len(wantID) = 0 Then
+        Err.Raise vbObjectError + 1750, sourceName, "OtkupID je obavezan."
+    End If
+
+    Dim iID As Long, iSt As Long
+    iID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, sourceName)
+    iSt = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, sourceName)
+
+    Dim d As Variant
+    d = GetTableData(TBL_OTKUP)
+
+    If Not IsArray(d) Then
+        Err.Raise vbObjectError + 1751, sourceName, "Tabela otkupa je prazna."
+    End If
+
+    Dim r As Long, hits As Long
+    Dim jeStorniran As Boolean
+
+    For r = 1 To UBound(d, 1)
+        If Trim$(CStr(d(r, iID))) = wantID Then
+            hits = hits + 1
+            If UCase$(Trim$(CStr(d(r, iSt)))) = "DA" Then jeStorniran = True
+        End If
+    Next r
+
+    If hits = 0 Then
+        Err.Raise vbObjectError + 1752, sourceName, _
+                  "Otkup nije pronaden: " & wantID
+    End If
+
+    If hits > 1 Then
+        Err.Raise vbObjectError + 1753, sourceName, _
+                  "Duplikat OtkupID=" & wantID & "; Count=" & CStr(hits)
+    End If
+
+    If jeStorniran Then
+        Err.Raise vbObjectError + 1754, sourceName, _
+                  Poruka("PRINT_ERR_STORNIRAN_OTKUP") & wantID
+    End If
 End Sub
 
 ' Popuni OtkupSablon sa dva primerka. Vraca sheet (ili Nothing).
@@ -1886,6 +1971,35 @@ EH:
     LogErr "modPrint.EnsureFakturaSablon"
 End Sub
 
+' Poslednji red sa STVARNIM sadrzajem u kolonama firstCol..lastCol (0 = nema).
+' Namerno NE koristi `UsedRange`: on obuhvata i prazne ali FORMATIRANE celije, a
+' sabloni se formatiraju preko `ws.cells.Font...` (ceo list), pa `UsedRange` moze
+' da se protegne do poslednjeg reda lista. Cleanup vezan za takvu granicu bi
+' obradjivao milione celija po renderu -- zamrznut Excel i naduvan fajl.
+' `Find` sa `xlFormulas` + `xlPrevious` gleda SAMO sadrzaj i samo zadate kolone.
+' Seam za RunFakturaSmokeSuite (test tvrdi da formatirana prazna celija duboko
+' ispod dokumenta NE siri granicu ciscenja).
+Public Function SablonLastContentRow(ByVal ws As Worksheet, _
+                                     ByVal firstCol As Long, _
+                                     ByVal lastCol As Long) As Long
+    On Error GoTo EH
+    If ws Is Nothing Then Exit Function
+
+    Dim rng As Range
+    Set rng = ws.Range(ws.cells(1, firstCol), ws.cells(ws.rows.count, lastCol))
+
+    Dim hit As Range
+    Set hit = rng.Find(What:="*", LookIn:=xlFormulas, LookAt:=xlPart, _
+                       SearchOrder:=xlByRows, SearchDirection:=xlPrevious)
+
+    If Not hit Is Nothing Then SablonLastContentRow = hit.row
+    Exit Function
+EH:
+    ' Fail-soft: 0 znaci "nema poznatog sadrzaja", pa cleanup pada na
+    ' `nStavke + 4` -- opseg koji ovaj dokument ionako mora da pokrije.
+    LogErr "modPrint.SablonLastContentRow"
+End Function
+
 ' Popuni FakturaSablon iz prikupljenih podataka. stavke(1..nStavke, 1..5):
 ' 1=BrojPrijemnice 2=Klasa 3=Kolicina 4=Cena 5=Vrednost. Vraca sheet.
 Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, _
@@ -1901,12 +2015,51 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
     ws.Range("FakKupac").value = kupacNaziv
 
     Dim startCell As Range: Set startCell = ws.Range("FakStavkaStart")
-    With ws.Range(startCell, startCell.Offset(80, 5))
+
+    ' Cleanup pre punjenja -- opseg je DINAMICAN, ne fiksnih 80 redova.
+    ' (1) `.UnMerge`: red "UKUPNO:" se spaja (tot..tot+4) na poziciji koja zavisi
+    '     od BROJA STAVKI, pa bi faktura sa vise stavki pisala preko merge-a
+    '     zaostalog iz prethodne (manje) fakture -- AUD-027 / FM-0031 #19.
+    ' (2) Broj stavki NIJE ogranicen: forma dozvoljava proizvoljan izbor
+    '     prijemnica, a ni CreateFaktura ni ovaj renderer nemaju `nStavke <= 80`
+    '     invarijantu. Fiksni opseg je zato lomio 81 -> 82 stavke (merge sa
+    '     offseta 81 preziveo, 82. stavka pise preko njega, funkcija zavrsi u EH
+    '     i vrati Nothing = tiho izostala stampa), a `NumberFormat = "@"` je
+    '     pokrivao samo prvih 80 redova, pa je broj prijemnice tipa "1/2026" od
+    '     81. stavke Excel mogao da protumaci kao datum.
+    '     Donja granica = sta je dalje: STVARAN sadrzaj koji je prethodni dokument
+    '     ostavio na listu ili ono sto ovaj dokument treba da napise (stavke +
+    '     UKUPNO + prazan red + potpisi).
+    ' (3) Granica se trazi preko `SablonLastContentRow` (Find nad A:F), NE preko
+    '     `UsedRange`: `UsedRange` broji i prazne ali FORMATIRANE celije, a
+    '     `EnsureFakturaSablon` formatira CEO list (`ws.cells.Font...`) -- dno bi
+    '     tada moglo da bude poslednji red lista, pa bi svaki render radio
+    '     UnMerge/ClearContents/Borders/NumberFormat nad milionima celija
+    '     (zamrznut Excel, naduvan fajl). Sadrzajna granica je i semanticki
+    '     tacna: cistimo ono sto je NAPISANO, ne ono sto je formatirano.
+    ' NAMERNO nije `ws.cells.UnMerge` (kao kod ostalih Fill* sablona): oni svaki
+    ' put ruse i grade ceo list, a FakturaSablon je perzistentan (EnsureFakturaSablon
+    ' gradi ga jednom, po LAYOUT_VER) i u zaglavlju ima svoje merge-ove (FakKupac,
+    ' seller header, naslov) koje ne smemo pokidati. Zato opseg pocinje od
+    ' `startCell` (ispod zaglavlja), a ne od vrha lista.
+    Dim cleanupRows As Long
+    cleanupRows = nStavke + 4
+
+    Dim contentBottom As Long
+    contentBottom = SablonLastContentRow(ws, 1, 6)
+
+    If contentBottom - startCell.row > cleanupRows Then
+        cleanupRows = contentBottom - startCell.row
+    End If
+
+    With ws.Range(startCell, startCell.Offset(cleanupRows, 5))
+        .UnMerge
         .ClearContents
         .Borders.LineStyle = xlNone
         .Interior.ColorIndex = xlNone
     End With
-    ws.Range(startCell.Offset(0, 1), startCell.Offset(79, 1)).NumberFormat = "@"   ' broj prijemnice kao tekst
+    ' broj prijemnice kao tekst (npr. "1/2026" nije datum) -- na CELOM opsegu
+    ws.Range(startCell.Offset(0, 1), startCell.Offset(cleanupRows, 1)).NumberFormat = "@"
 
     Dim i As Long
     For i = 1 To nStavke

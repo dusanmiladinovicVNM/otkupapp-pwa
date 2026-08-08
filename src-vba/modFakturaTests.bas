@@ -26,18 +26,42 @@ Public Sub RunFakturaSmokeSuite()
     Test_CreateFakturaBlocksStorniranaPrijemnica
     Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica
 
+    ' RF-08 / AUD-011 + AUD-027
+    Test_CreateFakturaBlocksPrijemnicaDrugogKupca
+    Test_CreateFakturaBlocksDuplicatePrijemnicaID
+
     Test_UpdateFakturaStatusPreservesExistingDatumPlacanja
     Test_UpdateFakturaStatusReopensWhenPaymentMissing
     Test_UpdateFakturaStatusSkipsStorniranaFaktura
 
     Test_PrintFakturaBlocksStorniranaFaktura
+    Test_ReprintBlocksStorniraniOtkup
+    Test_FakturaSablonCleanupPratiBrojStavki
 
     FinishFakturaSuite
+
+    ' HARD GATE -- summary je vec ispisan iznad.
+    ' On Error GoTo 0: raise ne sme da udje u EH ispod (dupli FAIL brojac,
+    ' dupli FinishFakturaSuite i dupli MsgBox). Isti obrazac kao
+    ' modGoogleSyncSmokeTests.RunMasterSyncSmokeSuite.
+    On Error GoTo 0
+    RequireFakturaSuiteGreen
     Exit Sub
 
 EH:
     LogFakturaFatal "RunFakturaSmokeSuite", Err.Number, Err.description
     FinishFakturaSuite
+    RequireFakturaSuiteGreen
+End Sub
+
+' Tvrd gate: suite koja je pala mora da PADNE i za pozivaoca (isti obrazac kao
+' modIzvestajTests.RunIzvestajTests) -- inace zeleno/crveno vidi samo onaj ko
+' cita Immediate prozor.
+Private Sub RequireFakturaSuiteGreen()
+    If m_Failed <= 0 Then Exit Sub
+
+    Err.Raise vbObjectError + 9210, "modFakturaTests.RunFakturaSmokeSuite", _
+              "RunFakturaSmokeSuite: " & m_Failed & " od " & m_Total & " provera palo."
 End Sub
 
 Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
@@ -56,6 +80,7 @@ Private Sub Test_CreateFakturaUsesCanonicalPrijemnicaValues()
 
     AppendTestPrijemnicaRow _
         prijemnicaID:=prijemnicaID, _
+        kupacID:=kupacID, _
         brojPrijemnice:=realBrojPrij, _
         kolicina:=100#, _
         cena:=10#, _
@@ -127,7 +152,7 @@ Private Sub Test_CreateFakturaBlocksDuplicatePrijemnica()
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "", "", ""
+    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "", "", ""
 
     Dim stavke As New Collection
     stavke.Add Array(prijemnicaID)
@@ -166,7 +191,7 @@ Private Sub Test_CreateFakturaBlocksStorniranaPrijemnica()
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "Da", "", ""
+    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "Da", "", ""
 
     Dim stavke As New Collection
     stavke.Add Array(prijemnicaID)
@@ -200,7 +225,7 @@ Private Sub Test_CreateFakturaBlocksAlreadyFakturisanaPrijemnica()
     kupacID = "KUP-TST-" & code
     prijemnicaID = "PRJ-TST-" & code
 
-    AppendTestPrijemnicaRow prijemnicaID, "TST-PRJ-" & code, 50#, 20#, "I", "", "Da", ""
+    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-" & code, 50#, 20#, "I", "", "Da", ""
 
     Dim stavke As New Collection
     stavke.Add Array(prijemnicaID)
@@ -227,20 +252,116 @@ EH:
     Resume CleanExit
 End Sub
 
+' Markira SVE redove sa tim PrijemnicaID (duplikat-test namerno ostavlja dva),
+' da test podaci ne ostanu aktivni u tabeli.
 Private Sub MarkTestPrijemnicaStornirano(ByVal prijemnicaID As String)
     Dim rows As Collection
-    Dim rowIndex As Long
+    Dim i As Long
 
     If Len(Trim$(prijemnicaID)) = 0 Then Exit Sub
 
-    Set rows = FindRows(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID)
+    Set rows = FindRows(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID)
 
     If rows Is Nothing Then Exit Sub
     If rows.count = 0 Then Exit Sub
 
-    rowIndex = CLng(rows(1))
+    For i = 1 To rows.count
+        Call UpdateCell(TBL_PRIJEMNICA, CLng(rows(i)), COL_STORNIRANO, "Da")
+    Next i
+End Sub
 
-    Call UpdateCell(TBL_PRIJEMNICA, rowIndex, "Stornirano", "Da")
+' AUD-011 / FM-0034 #1: prijemnica tudjeg kupca ne sme da udje u fakturu.
+Private Sub Test_CreateFakturaBlocksPrijemnicaDrugogKupca()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("XKUPAC")
+
+    Dim kupacID As String
+    Dim drugiKupacID As String
+    Dim prijemnicaID As String
+
+    kupacID = "KUP-TST-A-" & code
+    drugiKupacID = "KUP-TST-B-" & code
+    prijemnicaID = "PRJ-TST-" & code
+
+    ' Prijemnica pripada kupcu B, faktura se pravi za kupca A.
+    AppendTestPrijemnicaRow prijemnicaID, drugiKupacID, "TST-PRJ-" & code, _
+                            50#, 20#, "I", "", "", ""
+
+    Dim stavke As New Collection
+    stavke.Add Array(prijemnicaID)
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        LogFakturaPass "CreateFaktura blocks Prijemnica of another Kupac"
+    Else
+        LogFakturaFail "CreateFaktura blocks Prijemnica of another Kupac", _
+                       "Expected empty result, got FakturaID=" & fakturaID
+    End If
+
+    AssertFakturaTextEquals "", _
+        CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaID, COL_PRJ_FAKTURISANO)), _
+        "Cross-kupac block leaves Prijemnica not fakturisano"
+
+CleanExit:
+    On Error Resume Next
+    MarkTestPrijemnicaStornirano prijemnicaID
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura blocks Prijemnica of another Kupac", _
+                   FormatErrDetails()
+    Resume CleanExit
+End Sub
+
+' AUD-011 / FM-0034 #2: dva aktivna reda sa istim PrijemnicaID -> Count=1 guard
+' mora da pukne umesto da tiho uzme prvi pogodak.
+Private Sub Test_CreateFakturaBlocksDuplicatePrijemnicaID()
+    On Error GoTo EH
+
+    Dim code As String
+    code = NewFakturaTestCode("DUPID")
+
+    Dim kupacID As String
+    Dim prijemnicaID As String
+
+    kupacID = "KUP-TST-" & code
+    prijemnicaID = "PRJ-TST-" & code
+
+    ' Isti PrijemnicaID, razlicite kolicine/cene -> tihi izbor prvog reda bi
+    ' fakturisao 1000, a ne 2100.
+    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-A-" & code, _
+                            50#, 20#, "I", "", "", ""
+    AppendTestPrijemnicaRow prijemnicaID, kupacID, "TST-PRJ-B-" & code, _
+                            70#, 30#, "I", "", "", ""
+
+    Dim stavke As New Collection
+    stavke.Add Array(prijemnicaID)
+
+    Dim fakturaID As String
+    fakturaID = CreateFaktura_TX(kupacID, stavke)
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        LogFakturaPass "CreateFaktura blocks duplicate PrijemnicaID rows"
+    Else
+        LogFakturaFail "CreateFaktura blocks duplicate PrijemnicaID rows", _
+                       "Expected empty result, got FakturaID=" & fakturaID
+    End If
+
+CleanExit:
+    On Error Resume Next
+    MarkTestPrijemnicaStornirano prijemnicaID
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogFakturaFail "CreateFaktura blocks duplicate PrijemnicaID rows", _
+                   FormatErrDetails()
+    Resume CleanExit
 End Sub
 
 Private Sub Test_UpdateFakturaStatusPreservesExistingDatumPlacanja()
@@ -396,6 +517,216 @@ EH:
                    FormatErrDetails()
 End Sub
 
+' AUD-027 / FM-0031 #3: reprint otkupnog lista mora da odbije storniran otkup,
+' i mora da bude FAIL-CLOSED (nepoznat / dupliran ID takodje ne prolazi).
+' Testira se seam `RequireOtkupAktivanZaStampu`, jer sam reprint na blokadi
+' otvara MsgBox (test ne sme da ceka operatera).
+' Redovi se upisuju u tblOtkup pod transakcijom i UVEK se rollback-uju.
+Private Sub Test_ReprintBlocksStorniraniOtkup()
+    Dim tx As clsTransaction
+    On Error GoTo EH
+
+    If GetTable(TBL_OTKUP) Is Nothing Then
+        LogFakturaSkip "Reprint blocks storniran otkup", "nema tabele " & TBL_OTKUP
+        Exit Sub
+    End If
+
+    Dim code As String
+    code = NewFakturaTestCode("RPRSTO")
+
+    Dim otkupStorniran As String
+    Dim otkupAktivan As String
+    Dim otkupDupliran As String
+
+    otkupStorniran = "OTK-TST-S-" & code
+    otkupAktivan = "OTK-TST-A-" & code
+    otkupDupliran = "OTK-TST-D-" & code
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+
+    AppendTestOtkupRow otkupStorniran, "TST-BRD-S-" & code, "Da"
+    AppendTestOtkupRow otkupAktivan, "TST-BRD-A-" & code, ""
+    AppendTestOtkupRow otkupDupliran, "TST-BRD-D1-" & code, ""
+    AppendTestOtkupRow otkupDupliran, "TST-BRD-D2-" & code, ""
+
+    AssertFakturaTrue ReprintGuardRaises(otkupStorniran), _
+                      "Reprint blocks storniran otkup"
+
+    AssertFakturaTrue Not ReprintGuardRaises(otkupAktivan), _
+                      "Reprint allows aktivan otkup"
+
+    AssertFakturaTrue ReprintGuardRaises(otkupDupliran), _
+                      "Reprint blocks duplicate OtkupID (fail-closed)"
+
+    AssertFakturaTrue ReprintGuardRaises("OTK-TST-NEMA-" & code), _
+                      "Reprint blocks unknown OtkupID (fail-closed)"
+
+    tx.RollbackTx
+    Set tx = Nothing
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
+
+    LogFakturaFail "Reprint blocks storniran otkup", _
+                   "Err.Number=" & CStr(errNum) & _
+                   " Source=" & errSrc & _
+                   " Description=" & errDesc
+End Sub
+
+' True = kapija je odbila stampu (podigla gresku). Zamenjuje raniji Boolean
+' helper: guard je sada fail-closed, pa se ishod meri time DA LI je pukao.
+Private Function ReprintGuardRaises(ByVal otkupID As String) As Boolean
+    On Error Resume Next
+    Err.Clear
+    RequireOtkupAktivanZaStampu otkupID, "modFakturaTests"
+    ReprintGuardRaises = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
+
+' AUD-027 / FM-0031 #19, review nalaz 1: cleanup opseg mora da prati STVARAN broj
+' stavki, ne fiksnih 80 redova. Renderuje se 81 pa 82 stavke -- druga faktura
+' mora da prodje bez zaostalog merge-a sa offseta 81 (ranije: pisanje preko
+' merged celije -> EH -> `Nothing` -> tiho izostala stampa).
+' Review nalaz 2: granica NE sme da dodje iz `UsedRange` -- sablon je formatiran
+' preko `ws.cells.Font...`, pa bi prazna FORMATIRANA celija duboko ispod
+' dokumenta razvukla cleanup na milione celija. Zato se granica trazi po
+' sadrzaju (`SablonLastContentRow`), sto se ovde i tvrdi.
+' Ne dira tabele: FillFakturaSablon prima stavke kao niz.
+Private Sub Test_FakturaSablonCleanupPratiBrojStavki()
+    ' Konvencija: Const na vrhu procedure, ne izmedju izvrsnih linija.
+    Const FAR_ROW As Long = 5000
+    On Error GoTo EH
+
+    Dim ws As Worksheet
+    Set ws = FillFakturaSablon("TST-81", Date, "Test kupac", _
+                               BuildFakturaTestStavke(81), 81, 81#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 81 stavki"
+
+    Set ws = FillFakturaSablon("TST-82", Date, "Test kupac", _
+                               BuildFakturaTestStavke(82), 82, 82#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 82 stavki after 81"
+
+    If ws Is Nothing Then GoTo CleanExit
+
+    Dim startCell As Range
+    Set startCell = ws.Range("FakStavkaStart")
+
+    AssertFakturaTrue Not startCell.Offset(81, 1).MergeCells, _
+                      "Stavka 82 nije u zaostalom merge-u"
+
+    AssertFakturaTextEquals "PRJ-82", _
+        CStr(startCell.Offset(81, 1).value), _
+        "Stavka 82 je stvarno upisana"
+
+    AssertFakturaTextEquals "@", _
+        CStr(startCell.Offset(81, 1).NumberFormat), _
+        "Broj prijemnice ostaje tekst i posle 80. reda"
+
+    ' Zaglavlje sablona ima NAMERNE merge-ove -- cleanup ne sme da ih pokida.
+    AssertFakturaTrue ws.Range("FakKupac").MergeCells, _
+                      "Merge zaglavlja (FakKupac) je netaknut"
+
+    ' --- Granica ciscenja mora da dolazi iz SADRZAJA, ne iz formatiranja ---
+    Dim sadrzajPre As Long
+    sadrzajPre = SablonLastContentRow(ws, 1, 6)
+
+    ' Prazna, ali FORMATIRANA celija duboko ispod dokumenta.
+    ws.cells(FAR_ROW, 2).Interior.Color = RGB(255, 0, 0)
+
+    AssertFakturaTrue SablonLastContentRow(ws, 1, 6) = sadrzajPre, _
+                      "Formatirana prazna celija ne siri granicu ciscenja"
+
+    AssertFakturaTrue sadrzajPre < FAR_ROW, _
+                      "Granica ciscenja ostaje kod stvarnog sadrzaja"
+
+    ' Render posle toga ne sme da dodirne taj red (dokaz da cleanup nije
+    ' razvucen do FAR_ROW: boja bi bila obrisana `Interior.ColorIndex = xlNone`).
+    Set ws = FillFakturaSablon("TST-3", Date, "Test kupac", _
+                               BuildFakturaTestStavke(3), 3, 3#)
+
+    AssertFakturaTrue Not ws Is Nothing, _
+                      "FillFakturaSablon renders 3 stavke after 82"
+
+    If ws Is Nothing Then GoTo CleanExit
+
+    AssertFakturaTrue ws.cells(FAR_ROW, 2).Interior.ColorIndex <> xlNone, _
+                      "Cleanup nije razvucen do formatirane celije na " & CStr(FAR_ROW)
+
+CleanExit:
+    ' Vrati sablon u zateceno stanje: obrisan list `EnsureFakturaSablon`
+    ' regenerise pri sledecoj stampi, pa test ne ostavlja ni test stavke ni
+    ' potpise ni PrintArea ni onu formatiranu celiju na 5000.
+    On Error Resume Next
+    Dim cleanupWs As Worksheet
+    Set cleanupWs = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    If Not cleanupWs Is Nothing Then
+        Application.DisplayAlerts = False
+        cleanupWs.Delete
+        Application.DisplayAlerts = True
+    End If
+    On Error GoTo 0
+    Exit Sub
+
+EH:
+    LogFakturaFail "FillFakturaSablon cleanup prati broj stavki", _
+                   FormatErrDetails()
+    Resume CleanExit
+End Sub
+
+Private Function BuildFakturaTestStavke(ByVal n As Long) As Variant
+    Dim arr() As Variant
+    ReDim arr(1 To n, 1 To 5)
+
+    Dim i As Long
+    For i = 1 To n
+        arr(i, 1) = "PRJ-" & CStr(i)
+        arr(i, 2) = "I"
+        arr(i, 3) = 1#
+        arr(i, 4) = 1#
+        arr(i, 5) = 1#
+    Next i
+
+    BuildFakturaTestStavke = arr
+End Function
+
+Private Sub AppendTestOtkupRow(ByVal otkupID As String, _
+                               ByVal brojDokumenta As String, _
+                               ByVal stornirano As String)
+    Const SRC As String = "AppendTestOtkupRow"
+
+    Dim values As Object
+    Set values = CreateObject("Scripting.Dictionary")
+
+    values.Add COL_OTK_ID, otkupID
+    values.Add COL_OTK_BR_DOK, brojDokumenta
+    values.Add COL_OTK_DATUM, Date
+    values.Add COL_OTK_KLASA, "I"
+    values.Add COL_OTK_KOLICINA, 100#
+    values.Add COL_OTK_CENA, 10#
+    values.Add COL_STORNIRANO, stornirano
+
+    AppendFakturaTestRowByColumnMap TBL_OTKUP, values, SRC
+End Sub
+
 Private Function NewFakturaTestCode(ByVal prefixText As String) As String
     Randomize
     NewFakturaTestCode = prefixText & "-" & _
@@ -403,7 +734,10 @@ Private Function NewFakturaTestCode(ByVal prefixText As String) As String
                          CStr(Int((9000 * Rnd) + 1000))
 End Function
 
+' kupacID je obavezan: CreateFaktura od RF-08 proverava da prijemnica pripada
+' kupcu fakture (AUD-011 / FM-0034 #1), pa test red bez KupacID-a vise ne prolazi.
 Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
+                                    ByVal kupacID As String, _
                                     ByVal brojPrijemnice As String, _
                                     ByVal kolicina As Double, _
                                     ByVal cena As Double, _
@@ -417,6 +751,7 @@ Private Sub AppendTestPrijemnicaRow(ByVal prijemnicaID As String, _
     Set values = CreateObject("Scripting.Dictionary")
 
     values.Add COL_PRJ_ID, prijemnicaID
+    values.Add COL_PRJ_KUPAC, kupacID
     values.Add COL_PRJ_BROJ, brojPrijemnice
     values.Add COL_PRJ_BROJ_ZBIRNE, "TST-ZBR-" & prijemnicaID
     values.Add COL_PRJ_DATUM, Date
@@ -620,6 +955,15 @@ Private Sub LogFakturaFail(ByVal testName As String, _
 
     Debug.Print "[FAIL] " & testName & " :: " & details
     AppendFakturaTestLog "TEST", testName, "FAIL", details
+End Sub
+
+Private Sub LogFakturaSkip(ByVal testName As String, _
+                           ByVal details As String)
+    m_Total = m_Total + 1
+    m_Skipped = m_Skipped + 1
+
+    Debug.Print "[SKIP] " & testName & " :: " & details
+    AppendFakturaTestLog "TEST", testName, "SKIP", details
 End Sub
 
 Private Sub LogFakturaFatal(ByVal sourceName As String, _
