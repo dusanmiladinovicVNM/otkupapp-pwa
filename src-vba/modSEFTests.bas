@@ -174,6 +174,62 @@ EH:
     FinishSuite
 End Sub
 
+' ============================================================
+' RunSEFTestSuite -- ciljani suite za SEF milestone (PLAN_SANACIJE, sekcija 5C).
+'
+' HARD GATE: na kraju baca gresku ako je bilo koji test pao, da gate ne bi bio
+' "zelen" samo zato sto nista nije puklo (lekcija iz AUD-039 / RF-08).
+'
+' OFFLINE: nijedan test odavde ne poziva pravi SEF (nema HTTP-a, nema mutacije
+' poslovnih tabela). Zivi SEF pozivi ostaju u Run*LiveSuite entry point-ima iza
+' SEF_TEST_ALLOW_LIVE / SEF_TEST_ALLOW_CANCEL_STORNO kapija.
+' ============================================================
+Public Sub RunSEFTestSuite()
+    On Error GoTo EH
+
+    ResetSEFCounters
+    InitSEFTestLog
+
+    StartSuite "SEF TEST SUITE (offline hard gate)"
+
+    Test_SubmitResponseClassification
+    Test_LinePrecisionConsistency
+    Test_SEFAllowedTransitions
+    Test_SEFBlockedTransitions
+
+    ' RF-22 / AUD-032 seam testovi
+    Test_SEFSendOutcomeContract
+    Test_SEFStatusUnknownIsNotSent
+    Test_SEFRecoveryOutcomeContract
+
+    FinishSuite
+
+    ' Gate se proverava tek posle gasenja EH-a, da raise ne bi upao u sopstveni
+    ' handler i bio prijavljen kao fatalna greska suite-a (RF-08 obrazac).
+    On Error GoTo 0
+
+    If m_Failed > 0 Then
+        Err.Raise ERR_SEF_VALIDATION, "RunSEFTestSuite", _
+                  "SEF test suite FAILED: " & CStr(m_Failed) & " od " & CStr(m_Total) & " testova."
+    End If
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogFatal "RunSEFTestSuite", errNum, errDesc
+    FinishSuite
+
+    On Error GoTo 0
+    Err.Raise ERR_SEF_VALIDATION, "RunSEFTestSuite", _
+              "SEF test suite FAILED (fatal): " & errDesc
+End Sub
+
 Public Sub RunSEFStateTransitionSuite()
     On Error GoTo EH
 
@@ -405,6 +461,137 @@ EH:
     LogSkip "ValidateFakturaForSEF for " & fakturaID, Err.description
 End Sub
 
+' ============================================================
+' RF-22 / AUD-032 -- lifecycle seam testovi (offline, bez SEF poziva)
+' ============================================================
+
+' (a) REJECTED / TECH_FAILED se NE smeju prikazati kao "Faktura poslata".
+Private Sub Test_SEFSendOutcomeContract()
+    On Error GoTo EH
+
+    AssertTrue IsSuccessfulSEFSendState(WF_SEF_SENT), _
+               "SEF_SENT je uspesan send"
+    AssertTrue IsSuccessfulSEFSendState(WF_SEF_ACCEPTED), _
+               "SEF_ACCEPTED je uspesan send"
+
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_REJECTED), _
+               "SEF_REJECTED NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_TECH_FAILED), _
+               "SEF_TECH_FAILED NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_SENDING), _
+               "SEF_SENDING NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(""), _
+               "Prazan workflow state NIJE uspesan send"
+
+    ' Tipizirane greske: odbijanje se razlikuje od tehnickog pada.
+    AssertTrue SEFSendFailureErrNumber(WF_SEF_REJECTED) = ERR_SEF_REJECTED, _
+               "REJECTED -> ERR_SEF_REJECTED"
+    AssertTrue SEFSendFailureErrNumber(WF_SEF_TECH_FAILED) = ERR_SEF_SEND_FAILED, _
+               "TECH_FAILED -> ERR_SEF_SEND_FAILED"
+    AssertTrue SEFSendFailureErrNumber("") = ERR_SEF_SEND_FAILED, _
+               "Nepoznat ishod -> ERR_SEF_SEND_FAILED"
+
+    ' Sustina AUD-032a: poruka za neuspeh ne sme da sadrzi tekst uspeha.
+    Dim successText As String
+    successText = Poruka("SEF_MSG_SEND_POSLATA")
+
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1"), successText, vbTextCompare) = 0, _
+               "Poruka za REJECTED ne tvrdi da je faktura poslata"
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_TECH_FAILED, "SUB-1"), successText, vbTextCompare) = 0, _
+               "Poruka za TECH_FAILED ne tvrdi da je faktura poslata"
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_SENT, "SUB-1"), successText, vbTextCompare) > 0, _
+               "Poruka za SEF_SENT jeste poruka o poslatoj fakturi"
+
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1"), WF_SEF_REJECTED, vbTextCompare) > 0, _
+               "Poruka za REJECTED nosi stvarno workflow stanje"
+    AssertTrue SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1") <> SEFSendOutcomeMessage(WF_SEF_SENT, "SUB-1"), _
+               "Poruka za REJECTED se razlikuje od poruke za uspeh"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF send outcome contract", Err.description
+End Sub
+
+' (b) Prazan / nepoznat status ne sme tiho da postane SENT.
+Private Sub Test_SEFStatusUnknownIsNotSent()
+    On Error GoTo EH
+
+    Dim r As clsSEFResponse
+
+    ' Nema "Status" polja u odgovoru -> UNKNOWN_STATUS, nikad "SENT".
+    Set r = TestProxyForParseStatusResponse(200, "{""InvoiceId"":5317568}")
+    AssertEquals SEF_STATUS_UNKNOWN, r.apiStatus, _
+                 "Prazan SEF status -> UNKNOWN_STATUS (ne SENT)"
+    AssertTrue UCase$(r.apiStatus) <> "SENT", _
+               "Prazan SEF status se ne prijavljuje kao SENT"
+    AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
+               "UNKNOWN_STATUS nije poznat status"
+
+    ' Poznati statusi ostaju netaknuti.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""SENT""}")
+    AssertEquals "SENT", r.apiStatus, "SENT ostaje SENT"
+    AssertTrue IsKnownSEFRefreshStatus("SENT"), "SENT je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("ACCEPTED"), "ACCEPTED je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("STORNO"), "STORNO je poznat status"
+
+    ' Nepoznat, ali neprazan status se cuva doslovno i tretira kao nepoznat.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""NEKI_NOVI_STATUS""}")
+    AssertEquals "NEKI_NOVI_STATUS", r.apiStatus, _
+                 "Nepoznat status se cuva doslovno"
+    AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
+               "Nepoznat status se ne tretira kao poznat"
+
+    ' Zaglavljen SEF_SENDING sa nepoznatim statusom ide u SEF_UNKNOWN
+    ' (rucna provera); ostala stanja se NE pomeraju na SEF_SENT.
+    AssertEquals WF_SEF_UNKNOWN, SEFUnknownStatusTargetState(WF_SEF_SENDING), _
+                 "SEF_SENDING + nepoznat status -> SEF_UNKNOWN"
+    AssertEquals "", SEFUnknownStatusTargetState(WF_SEF_SENT), _
+                 "SEF_SENT + nepoznat status -> bez promene stanja"
+    AssertEquals "", SEFUnknownStatusTargetState(WF_SEF_SYNC_ERROR), _
+                 "SEF_SYNC_ERROR + nepoznat status -> bez promene stanja"
+
+    ' AUD-032c: pad refresh-a nad zaglavljenim SEF_SENDING ne sme da cilja
+    ' SEF_SYNC_ERROR (zabranjena tranzicija -> izuzetak -> faktura ostaje
+    ' zauvek u SEF_SENDING).
+    AssertEquals WF_SEF_UNKNOWN, SEFRefreshFailureTargetState(WF_SEF_SENDING), _
+                 "Pad refresh-a nad SEF_SENDING -> SEF_UNKNOWN"
+    AssertEquals WF_SEF_SYNC_ERROR, SEFRefreshFailureTargetState(WF_SEF_SENT), _
+                 "Pad refresh-a nad SEF_SENT -> SEF_SYNC_ERROR"
+    AssertTransitionAllowed WF_SEF_SENDING, SEFRefreshFailureTargetState(WF_SEF_SENDING)
+    AssertTransitionAllowed WF_SEF_SENT, SEFRefreshFailureTargetState(WF_SEF_SENT)
+
+    ' SEF_UNKNOWN ne sme da bude slepo crevo.
+    AssertTransitionAllowed WF_SEF_SENDING, WF_SEF_UNKNOWN
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_ACCEPTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_REJECTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_SENT
+
+    Exit Sub
+
+EH:
+    LogFail "SEF unknown status is not SENT", Err.description
+End Sub
+
+' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.
+Private Sub Test_SEFRecoveryOutcomeContract()
+    On Error GoTo EH
+
+    AssertTrue Not IsSEFRecoveryComplete(WF_SEF_SENDING), _
+               "Faktura i dalje u SEF_SENDING NIJE oporavljena"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_TECH_FAILED), _
+               "Prelazak u SEF_TECH_FAILED jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_SENT), _
+               "Prelazak u SEF_SENT jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_UNKNOWN), _
+               "Prelazak u SEF_UNKNOWN (rucna provera) izvlaci fakturu iz SEF_SENDING"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF recovery outcome contract", Err.description
+End Sub
+
 Private Sub Test_SEFAllowedTransitions()
     AssertTransitionAllowed WF_LOCAL_DRAFT, WF_LOCAL_FINALIZED
 
@@ -421,6 +608,12 @@ Private Sub Test_SEFAllowedTransitions()
     AssertTransitionAllowed WF_SEF_SENT, WF_SEF_REJECTED
     AssertTransitionAllowed WF_SEF_SENT, WF_SEF_SYNC_ERROR
     AssertTransitionAllowed WF_SEF_SENT, WF_SEF_STORNO
+
+    ' AUD-032b: SEF_UNKNOWN mora imati izlaz (rucna provera pa refresh).
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_SENT
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_ACCEPTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_REJECTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_TECH_FAILED
 
     AssertTransitionAllowed WF_SEF_TECH_FAILED, WF_SEF_READY
     AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_SENT
@@ -446,6 +639,10 @@ Private Sub Test_SEFBlockedTransitions()
 
     AssertTransitionBlocked WF_SEF_TECH_FAILED, WF_SEF_SENT
     AssertTransitionBlocked WF_SEF_SYNC_ERROR, WF_SEF_ACCEPTED
+
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_READY
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_SENDING
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_STORNO
 
     AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_SENT
     AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_READY
@@ -500,13 +697,33 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     Dim httpStatus As String
     Dim errorCode As String
     Dim errorMessage As String
+    Dim sendErrNo As Long
+    Dim sendErrDesc As String
 
     LogInfo "==== Live send test start for " & fakturaID & " ===="
 
     beforeState = GetFakturaSEFWorkflowState(fakturaID)
     LogInfo "Workflow before send=" & beforeState
 
+    ' AUD-032a: neuspesan send (REJECTED / TECH_FAILED) sada dolazi kao
+    ' tipizirana greska umesto kao "uspeh + SubmissionID". Hvatamo je ovde da bi
+    ' test i dalje mogao da razlikuje poslovno odbijanje od tehnickog pada.
+    On Error Resume Next
     resultSubmissionID = SendInvoiceToSEF_TX(fakturaID)
+    sendErrNo = Err.Number
+    sendErrDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    If sendErrNo <> 0 And _
+       sendErrNo <> ERR_SEF_REJECTED And _
+       sendErrNo <> ERR_SEF_SEND_FAILED Then
+        Err.Raise sendErrNo, "Test_LiveSendAndRefresh", sendErrDesc
+    End If
+
+    If sendErrNo <> 0 Then
+        LogInfo "SendInvoiceToSEF_TX raised expected send-outcome error: " & sendErrDesc
+    End If
 
     afterSendState = GetFakturaSEFWorkflowState(fakturaID)
     sefDocumentId = GetFakturaSEFDocumentId(fakturaID)
@@ -530,12 +747,25 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     LogInfo "ErrorCode=" & errorCode
     LogInfo "ErrorMessage=" & errorMessage
 
-    AssertTrue Len(Trim$(resultSubmissionID)) > 0, _
-                "SendInvoiceToSEF_TX returned SubmissionID"
+    ' AUD-032a: SubmissionID se vraca SAMO za uspesan send; za neuspeh mora doci
+    ' greska i prazan povratak (inace bi UI to prikazao kao "Faktura poslata").
+    If IsSuccessfulSEFSendState(afterSendState) Then
+        AssertTrue sendErrNo = 0, _
+                    "Uspesan send ne baca gresku"
+        AssertTrue Len(Trim$(resultSubmissionID)) > 0, _
+                    "SendInvoiceToSEF_TX returned SubmissionID"
+        AssertEquals submissionID, resultSubmissionID, _
+                    "Returned SubmissionID matches Faktura last submission"
+    Else
+        AssertTrue sendErrNo <> 0, _
+                    "Neuspesan send (" & afterSendState & ") baca tipiziranu gresku"
+        AssertTrue Len(Trim$(resultSubmissionID)) = 0, _
+                    "Neuspesan send ne vraca SubmissionID kao potvrdu"
+        AssertTrue InStr(1, SEFSendOutcomeMessage(afterSendState, submissionID), _
+                            Poruka("SEF_MSG_SEND_POSLATA"), vbTextCompare) = 0, _
+                    "Poruka za neuspesan send ne tvrdi da je faktura poslata"
+    End If
 
-    AssertEquals submissionID, resultSubmissionID, _
-                "Returned SubmissionID matches Faktura last submission"
-             
     Select Case UCase$(Trim$(afterSendState))
 
         Case UCase$(WF_SEF_REJECTED)
@@ -656,10 +886,17 @@ Private Sub Test_RecoverStuckSendingInvoice(ByVal fakturaID As String)
         Exit Sub
     End If
 
-    RecoverStuckSEFSendingInvoice fakturaID
+    Dim recovered As Boolean
+    recovered = RecoverStuckSEFSendingInvoice(fakturaID)
     afterState = GetFakturaSEFWorkflowState(fakturaID)
 
     LogInfo "After recovery state=" & afterState
+    LogInfo "Recovery returned=" & CStr(recovered)
+
+    ' AUD-032c: povratna vrednost mora da odgovara stvarnom stanju -- nikad
+    ' "recovered" dok je faktura i dalje u SEF_SENDING.
+    AssertTrue recovered = IsSEFRecoveryComplete(afterState), _
+               "Recovery rezultat odgovara stvarnom stanju fakture"
     AssertTrue UCase$(Trim$(afterState)) <> UCase$(WF_SEF_SENDING), _
                "Recovered invoice no longer stuck in SEF_SENDING"
 
@@ -673,7 +910,15 @@ End Sub
 Private Sub Test_BatchRefreshPendingDoesNotCrash()
     On Error GoTo EH
 
-    RefreshPendingOutboundInvoices_TX
+    Dim summaryText As String
+
+    summaryText = RefreshPendingOutboundInvoices_TX()
+
+    ' AUD-032f: batch mora da vrati sazetak, ne da tiho prodje.
+    LogInfo "Pending refresh summary: " & summaryText
+    AssertTrue Len(Trim$(summaryText)) > 0, _
+               "RefreshPendingOutboundInvoices_TX vraca sazetak"
+
     LogPass "RefreshPendingOutboundInvoices_TX completed"
     Exit Sub
 
@@ -684,7 +929,14 @@ End Sub
 Private Sub Test_BatchRecoverStuckDoesNotCrash()
     On Error GoTo EH
 
-    RecoverAllStuckSEFSendingInvoices
+    Dim summaryText As String
+
+    summaryText = RecoverAllStuckSEFSendingInvoices()
+
+    LogInfo "Recovery summary: " & summaryText
+    AssertTrue InStr(1, summaryText, "Recovered=", vbTextCompare) > 0, _
+               "RecoverAllStuckSEFSendingInvoices vraca sazetak (Found/Recovered/NotRecovered/Failed)"
+
     LogPass "RecoverAllStuckSEFSendingInvoices completed"
     Exit Sub
 

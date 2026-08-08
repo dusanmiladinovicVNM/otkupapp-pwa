@@ -177,7 +177,7 @@ Paket je „gotov" tek kad je **sve** ispunjeno:
 | M3 Storno | 🟡 1/3 | — | 2026-08 | RF-03 ✅ (#167, +AUD-049 storno izvoda); ostaju RF-04, RF-05. re-verify vs aktuelni main |
 | M4 Sync jezgro | ⬜ | — | — | RF-14+RF-28 zajedno |
 | M5 Izveštaji i faktura | ✅ gotov | v2.36.0 | 2026-08 | RF-06 ✅ merged PR #175 (AUD-023); RF-07 ✅ merged PR #176 (AUD-024 + AUD-012, AUD-027 cross-tab deo); RF-08 🟢 grana `claude/rf-08-faktura-stampa-g5h1c5` (AUD-011 zatvoren u celosti — vlasništvo prijemnice, `Count=1` guard, `CreateFaktura` → `Private`; AUD-027 zatvoren u celosti — reprint storniranog otkupa + `FillFakturaSablon` `.UnMerge`). `RunFakturaSmokeSuite` prerastao u **tvrd gate** + 4 nova testa (uklj. automatizovan merge scenario 81 → 82 stavke); merge test malog obima (3 posle 1) je operater-smoke. **2 nova `Poruka()` ključa → `EnsurePoruke` obavezan** |
-| M6 SEF UX + banka | ⬜ | — | — | |
+| M6 SEF UX + banka | 🟡 1/3 | — | 2026-08 | RF-22 🟢 grana `claude/rf-22-sef-ux-lifecycle-kzzzvn` (AUD-032 zatvoren u celosti — ishod slanja, `UNKNOWN_STATUS`, pošten refresh/recovery, reset combo-a, dev makroi van Alt+F8, batch sažetak). Uz to: `SEF_UNKNOWN` je dobio izlazne tranzicije (bio slepo crevo) i **nov `RunSEFTestSuite`** — offline tvrd gate koji je §5C referencirao, a nije postojao. **7 novih `Poruka()` ključeva → `EnsurePoruke` obavezan.** Ostaju RF-09 (P0 AUD-007) i RF-10 |
 | M7 Otkup UI i palete | ⬜ | — | — | |
 | M8 Infra + cenovnik + E2E | ⬜ | — | — | |
 | M9 Dijagnostika + sledljivost | ⬜ | — | — | |

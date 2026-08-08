@@ -40,9 +40,20 @@ Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As
         Case WF_SEF_REJECTED
             If newState <> WF_SEF_READY Then GoTo InvalidTransition
             
+        Case WF_SEF_UNKNOWN
+            ' AUD-032b: SEF_UNKNOWN je stanje "SEF je vratio nepoznat status,
+            ' potrebna rucna provera". Do RF-22 je bilo slepo crevo (ulazak iz
+            ' SEF_SENDING je dozvoljen, a izlaz nije postojao), pa je faktura
+            ' ostajala zauvek zaglavljena. Operater sada moze da je osvezi.
+            Select Case newState
+                Case WF_SEF_SENT, WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_TECH_FAILED
+                Case Else
+                    GoTo InvalidTransition
+            End Select
+
         Case WF_SEF_STORNO
             GoTo InvalidTransition
-        
+
         Case Else
             Err.Raise ERR_SEF_STATE, "ValidateAllowedTransition", _
                 "Unknown current workflow state: " & oldState

@@ -615,10 +615,14 @@ Private Sub ParseStatusResponse(ByRef resp As clsSEFResponse)
                 "SEF returned ERROR status.")
         
         Case Else
+            ' AUD-032b: prazan status je NEPOZNAT status, ne "SENT". Stari
+            ' fallback je neposlatu/nepotvrdjenu fakturu tiho proglasavao
+            ' poslatom. Nepoznat ali neprazan status se cuva doslovno -- visi
+            ' sloj (IsKnownSEFRefreshStatus) odlucuje da ide na rucnu proveru.
             resp.Accepted = False
             resp.Rejected = False
-            resp.apiStatus = FirstNonEmpty(statusValue, "SENT")
-    
+            resp.apiStatus = FirstNonEmpty(statusValue, SEF_STATUS_UNKNOWN)
+
     End Select
 End Sub
 
@@ -1027,5 +1031,23 @@ Public Function TestProxyForParseSubmitResponse(ByVal httpStatus As Long, _
     ParseSubmitResponse resp
 
     Set TestProxyForParseSubmitResponse = resp
+End Function
+
+Public Function TestProxyForParseStatusResponse(ByVal httpStatus As Long, _
+                                                ByVal rawBody As String) As clsSEFResponse
+    ' Test-only proxy. Forwards to the private ParseStatusResponse so
+    ' RunSEFTestSuite can verify status -> apiStatus classification without an
+    ' HTTP call (notably: blank status -> UNKNOWN_STATUS, never SENT).
+    ' Not used by production code.
+
+    Dim resp As clsSEFResponse
+    Set resp = New clsSEFResponse
+
+    resp.httpStatus = httpStatus
+    resp.rawBody = rawBody
+
+    ParseStatusResponse resp
+
+    Set TestProxyForParseStatusResponse = resp
 End Function
 

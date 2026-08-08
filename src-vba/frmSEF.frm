@@ -281,10 +281,18 @@ Private Sub LoadFaktureIntoCombo()
 End Sub
 
 Private Function GetSelectedFakturaID() As String
-    
+
     GetSelectedFakturaID = Trim$(CStr(Me.cmbFaktura.value))
-    
+
 End Function
+
+' AUD-032d: promena izabrane fakture mora da obrise prikazan SEF kontekst.
+' Bez ovoga je na ekranu ostajao status/event log PRETHODNE fakture sve dok
+' operater ne klikne "Ucitaj fakturu" -- pa je tudji status izgledao kao njen.
+Private Sub cmbFaktura_Change()
+    On Error Resume Next
+    Call ClearSEFInfo
+End Sub
 
 Private Sub ClearSEFInfo()
     
@@ -336,6 +344,9 @@ Private Sub LoadSelectedFakturaInfo()
     Case "REJECTED"
         Me.lblSEFStatus.ForeColor = CLR_ERROR()
     Case "CANCELLED", "STORNO"
+        Me.lblSEFStatus.ForeColor = CLR_WARNING()
+    Case UCase$(SEF_STATUS_UNKNOWN)
+        ' AUD-032b: nepoznat status = rucna provera, ne "sve u redu".
         Me.lblSEFStatus.ForeColor = CLR_WARNING()
     Case Else
         Me.lblSEFStatus.ForeColor = TXT_LIGHT()
@@ -410,8 +421,11 @@ Private Sub UpdateSEFButtonStates()
         Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
     End If
     
+    ' AUD-032b: SEF_UNKNOWN (SEF vratio nepoznat status) je stanje za rucnu
+    ' proveru -- operater mora da moze da ponovi "Osvezi status".
     Me.btnOsvezi.enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
-                            workflowState = UCase$(WF_SEF_SYNC_ERROR))
+                            workflowState = UCase$(WF_SEF_SYNC_ERROR) Or _
+                            workflowState = UCase$(WF_SEF_UNKNOWN))
     
     Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     
@@ -439,6 +453,8 @@ Private Sub btnPosalji_Click()
 
     Dim fakturaID As String
     Dim submissionID As String
+    Dim sendErrNo As Long
+    Dim sendErrDesc As String
 
     Me.btnPosalji.enabled = False
     DoEvents
@@ -455,11 +471,28 @@ Private Sub btnPosalji_Click()
         GoTo CleanExit
     End If
 
+    ' AUD-032a: SendInvoiceToSEF_TX sada baca tipiziranu gresku kad SEF odbije
+    ' fakturu (ERR_SEF_REJECTED) ili kad slanje tehnicki padne
+    ' (ERR_SEF_SEND_FAILED). Stanje je u oba slucaja vec sacuvano, pa se ishod
+    ' hvata ovde i prikazuje kao ishod, a ne kao rusenje forme.
+    On Error Resume Next
     submissionID = SendInvoiceToSEF_TX(fakturaID)
+    sendErrNo = Err.Number
+    sendErrDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
 
     Call LoadSelectedFakturaInfo
 
-    MsgBox "Faktura poslata. SubmissionID: " & submissionID, vbInformation, APP_NAME
+    If sendErrNo = 0 Then
+        ' Poruka po stvarnom SEFWorkflowState-u, ne bezuslovno "Faktura poslata".
+        MsgBox SEFSendOutcomeMessage(GetFakturaSEFWorkflowState(fakturaID), submissionID), _
+               vbInformation, APP_NAME
+    ElseIf sendErrNo = ERR_SEF_REJECTED Or sendErrNo = ERR_SEF_SEND_FAILED Then
+        MsgBox sendErrDesc, vbExclamation, APP_NAME
+    Else
+        Err.Raise sendErrNo, "frmSEF.btnPosalji", sendErrDesc
+    End If
 
 CleanExit:
     Me.btnPosalji.enabled = True
@@ -474,19 +507,27 @@ End Sub
 
 Private Sub btnOsvezi_Click()
     On Error GoTo EH
-    
+
     Dim fakturaID As String
-    
+    Dim ok As Boolean
+
     fakturaID = GetSelectedFakturaID()
     If Len(fakturaID) = 0 Then
         MsgBox "Izaberite fakturu.", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Call RefreshSEFStatus_TX(fakturaID)
+
+    ok = RefreshSEFStatus_TX(fakturaID)
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_SEF_STATUS_OSVEZEN"), vbInformation, APP_NAME
+
+    ' AUD-032c: prikazuje se stvaran rezultat. Ranije je poruka uvek tvrdila da
+    ' je status osvezen, i kad je SEF pao ili vratio nepoznat status.
+    If ok Then
+        MsgBox Poruka("SEF_MSG_SEF_STATUS_OSVEZEN"), vbInformation, APP_NAME
+    Else
+        MsgBox Poruka("SEF_MSG_STATUS_NIJE_OSVEZEN") & vbCrLf & _
+               "SEFStatus: " & Me.lblSEFStatus.caption, vbExclamation, APP_NAME
+    End If
     Exit Sub
 
 EH:
@@ -593,19 +634,27 @@ End Sub
 
 Private Sub btnRecoverSending_Click()
     On Error GoTo EH
-    
+
     Dim fakturaID As String
-    
+    Dim recovered As Boolean
+
     fakturaID = GetSelectedFakturaID()
     If Len(fakturaID) = 0 Then
         MsgBox "Izaberite fakturu.", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Call RecoverStuckSEFSendingInvoice(fakturaID)
+
+    recovered = RecoverStuckSEFSendingInvoice(fakturaID)
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_RECOVERY_ZAVRSEN"), vbInformation, APP_NAME
+
+    ' AUD-032c: "Recovery zavrsen" samo ako faktura vise nije u SEF_SENDING.
+    If recovered Then
+        MsgBox Poruka("SEF_MSG_RECOVERY_ZAVRSEN") & vbCrLf & _
+               "Workflow: " & Me.lblWorkflow.caption, vbInformation, APP_NAME
+    Else
+        MsgBox Poruka("SEF_MSG_RECOVERY_NEUSPESAN") & vbCrLf & _
+               "Workflow: " & Me.lblWorkflow.caption, vbExclamation, APP_NAME
+    End If
     Exit Sub
 
 EH:
@@ -615,11 +664,15 @@ End Sub
 
 Private Sub btnRefreshPending_Click()
     On Error GoTo EH
-    
-    Call RefreshPendingOutboundInvoices_TX
+
+    Dim summaryText As String
+
+    summaryText = RefreshPendingOutboundInvoices_TX()
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_PENDING_FAKTURE_OSVEZENE"), vbInformation, APP_NAME
+
+    ' AUD-032f: batch prolaz prijavljuje sazetak, ne tihi "gotovo".
+    MsgBox Poruka("SEF_MSG_PENDING_FAKTURE_OSVEZENE") & vbCrLf & summaryText, _
+           vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -629,11 +682,15 @@ End Sub
 
 Private Sub btnRecoverAllSending_Click()
     On Error GoTo EH
-    
-    Call RecoverAllStuckSEFSendingInvoices
+
+    Dim summaryText As String
+
+    summaryText = RecoverAllStuckSEFSendingInvoices()
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_SEF_SENDING_RECOVERY"), vbInformation, APP_NAME
+
+    ' AUD-032f: sazetak (Found/Recovered/NotRecovered/Failed) umesto tihog prolaza.
+    MsgBox Poruka("SEF_MSG_SEF_SENDING_RECOVERY") & vbCrLf & summaryText, _
+           vbInformation, APP_NAME
     Exit Sub
 
 EH:
