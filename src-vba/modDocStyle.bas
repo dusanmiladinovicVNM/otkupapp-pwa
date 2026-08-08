@@ -230,10 +230,22 @@ Public Sub DocPageSetupFitWide(ByVal ws As Worksheet, ByVal pgOrient As Long, _
         .FitToPagesTall = False
     End With
 
-    ' --- provera da li je fit stvarno primljen; ako nije -> rucni zoom ---
+    ' --- provera sta je drajver STVARNO primio; ako nije -> rucni zoom ---
+    ' Papir se proverava zajedno sa fit-om: "1 strana po sirini" nista ne
+    ' znaci ako je .PaperSize = xlPaperA4 odbijen, jer se tada odnosi na
+    ' tudju velicinu papira (rolna stampaca za etikete, Letter, custom).
+    ' Zato tada idemo na rucni zoom racunat prema A4 geometriji.
+    Dim paperOk As Boolean
+    paperOk = (ws.PageSetup.PaperSize = xlPaperA4)
+    If Not paperOk Then
+        LogWarn "DocPageSetupFitWide", _
+                "Drajver nije primio A4 - podrazumevani stampac verovatno nije A4 stampac", _
+                "sheet=" & ws.name & "; stampac=" & Application.ActivePrinter
+    End If
+
     Dim z As Variant
     z = ws.PageSetup.Zoom
-    If VarType(z) = vbBoolean Then
+    If paperOk And VarType(z) = vbBoolean Then
         If z = False And ws.PageSetup.FitToPagesWide = 1 Then Exit Sub
     End If
 

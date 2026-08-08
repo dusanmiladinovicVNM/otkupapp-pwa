@@ -1576,6 +1576,52 @@ Public Sub DebugKoloneTabele()
            Join(h, " | "), vbInformation, APP_NAME
 End Sub
 
+' Dijagnostika stampe specifikacije - pokazuje sta je drajver STVARNO
+' primio (PageSetup je driver-zavisan i tiho odbija sta ne podrzava).
+' Zato dokument moze da izadje ispravno na jednoj masini a da se prelomi
+' na drugoj, ili na istoj masini posle promene podrazumevanog stampaca
+' (npr. stampac za etikete <-> A4 stampac).
+' Operater je pokrene sa jednim pa sa drugim podrazumevanim stampacem -
+' razlika u ispisu je odgovor. Isti obrazac kao DebugKoloneTabele (Alt+F8).
+Public Sub DebugStampaPageSetup()
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_SPECIFIKACIJA_SABLON)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        MsgBox "Sablon '" & WS_SPECIFIKACIJA_SABLON & "' jos ne postoji." & vbCrLf & _
+               "Odstampaj jednom specifikaciju pa ponovi ovu proveru.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim msg As String
+    On Error Resume Next
+    msg = "Podrazumevani stampac (Windows):" & vbCrLf & _
+          "  " & Application.ActivePrinter & vbCrLf & vbCrLf & _
+          "PageSetup sablona - sta je drajver primio:" & vbCrLf
+    msg = msg & "  PaperSize      = " & CStr(ws.PageSetup.PaperSize) & _
+          IIf(ws.PageSetup.PaperSize = xlPaperA4, "   (A4 - OK)", "   (NIJE A4 - problem)") & vbCrLf
+    msg = msg & "  Orientation    = " & CStr(ws.PageSetup.Orientation) & _
+          IIf(ws.PageSetup.Orientation = xlLandscape, "   (landscape - OK)", "   (NIJE landscape - problem)") & vbCrLf
+    msg = msg & "  Zoom           = " & CStr(ws.PageSetup.Zoom) & _
+          "   (False = fit to page)" & vbCrLf
+    msg = msg & "  FitToPagesWide = " & CStr(ws.PageSetup.FitToPagesWide) & vbCrLf
+    msg = msg & "  PrintArea      = " & ws.PageSetup.PrintArea & vbCrLf & vbCrLf
+
+    Dim needW As Double, usableW As Double
+    needW = ws.Range(ws.cells(1, 1), ws.cells(1, 13)).Width
+    usableW = 841.89 - Application.InchesToPoints(0.3) * 2
+    msg = msg & "Sirina 13 kolona           = " & Format$(needW, "0") & " tacaka" & vbCrLf
+    msg = msg & "A4 landscape bez margina   = " & Format$(usableW, "0") & " tacaka" & vbCrLf
+    If needW > 0 Then
+        msg = msg & "Zoom potreban da sve stane = " & CStr(Int(usableW / needW * 100)) & "%"
+    End If
+    On Error GoTo 0
+
+    MsgBox msg, vbInformation, APP_NAME
+End Sub
+
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
 Private Sub EnsureDataTable(ByVal tblName As String, _
                             ByVal sheetName As String, _
