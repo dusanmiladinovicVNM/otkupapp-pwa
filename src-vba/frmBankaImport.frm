@@ -26,6 +26,13 @@ Private mBtnStrongMap As MSForms.CommandButton
 Private m_uiSinks As Object                  ' tag -> clsUiSink
 Private Const STRONG_MAP_CAPTION As String = "Mapiraj jake kljuceve"
 
+' Da li je lista faktura za izabranog kupca zaista ucitana. Prazan combo posle
+' PADA ucitavanja izgleda isto kao "kupac nema otvorenih faktura", a prazan izbor
+' znaci "knjizi kao avans" -- operater bi potvrdjivao odluku na osnovu netacne
+' liste. Zato se pad pamti i knjizenje kupca se blokira dok se ne osvezi.
+Private m_FaktureLoadOk As Boolean
+Private m_FaktureLoadErr As String
+
 Private Sub UserForm_Activate()
     On Error GoTo EH
     
@@ -265,7 +272,22 @@ Private Sub UpdateStrongMapHint()
     Exit Sub
 
 EH:
+    ' Brojac vise ne guta gresku, pa je ovde i prikazujemo: tiho "0 spremno" bi
+    ' schema/read problem prikazalo kao "nema sta da se mapira" (AUD-014).
+    ' Opis se hvata PRE LogErr-a (BUG-1/AUD-054 idiom).
+    Dim errDesc As String
+    errDesc = Err.description
+
     LogErr "frmBankaImport.UpdateStrongMapHint"
+
+    On Error Resume Next
+
+    lblStatus.caption = lblStatus.caption & "  |  jaki kljucevi: GRESKA (" & errDesc & ")"
+
+    If Not mBtnStrongMap Is Nothing Then
+        StylePrimaryButton mBtnStrongMap, STRONG_MAP_CAPTION & " (?)"
+        mBtnStrongMap.enabled = False
+    End If
 End Sub
 
 Private Sub mBtnStrongMap_Click()
@@ -444,6 +466,8 @@ Private Sub LoadFaktureForSelectedKupac()
     Dim otvoreno As Double
 
     cmbFaktura.Clear
+    m_FaktureLoadOk = True
+    m_FaktureLoadErr = ""
 
     If Trim$(nz(cmbPartner.value, "")) = "" Then Exit Sub
 
@@ -477,7 +501,14 @@ Private Sub LoadFaktureForSelectedKupac()
     Exit Sub
 
 EH:
+    ' Pad ucitavanja NE sme da izgleda kao "nema otvorenih faktura" (= avans).
+    m_FaktureLoadOk = False
+    m_FaktureLoadErr = Err.description
+
     LogErr "frmBankaImport.LoadFaktureForSelectedKupac"
+
+    On Error Resume Next
+    cmbFaktura.Clear
 End Sub
 Private Sub cmbOtkupBlok_Change()
     UpdateAutoPreview
@@ -580,6 +611,17 @@ Private Sub btnSacuvajRucno_Click()
 
             fakturaID = ExtractIDFromDisplay(Trim$(nz(cmbFaktura.value, "")))
 
+            ' Ako lista faktura nije ucitana, prazan izbor NE znaci "nema fakture"
+            ' nego "ne znamo" -- knjizenje avansa na osnovu takve liste je pogadjanje.
+            If Not m_FaktureLoadOk Then
+                MsgBox "Lista faktura za ovog kupca nije ucitana:" & vbCrLf & _
+                       m_FaktureLoadErr & vbCrLf & vbCrLf & _
+                       "Mapiranje kupca je zaustavljeno (prazna lista bi znacila avans). " & _
+                       "Osvezi listu ili resi gresku pa pokusaj ponovo.", _
+                       vbCritical, APP_NAME
+                Exit Sub
+            End If
+
             ' FM-0024 #2: bez izabrane fakture uplata NIJE zatvaranje duga nego
             ' avans. Ranije se to desavalo tiho (uvek prazan FakturaID).
             If fakturaID = "" Then
@@ -602,10 +644,18 @@ Private Sub btnSacuvajRucno_Click()
                 Exit Sub
             End If
 
-            brojBloka = Trim$(cmbOtkupBlok.value)
+            brojBloka = Trim$(nz(cmbOtkupBlok.value, ""))
 
             If brojBloka <> "" Then
-                n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True)
+                ' Blok sa vise od MAX_BLOK_KANDIDATA otvorenih stavki automatski
+                ' put ODBIJA (ne pogadja raspodelu). Rucni put ga zavrsava, ali
+                ' tek kad operater vidi tacnu podelu i potvrdi je -- bez toga bi
+                ' red oznacen "za rucno" ostao trajno nezavrsiv.
+                Dim potvrdjenaPodela As Boolean
+
+                If Not ConfirmManyCandidatesSplit(bimID, kooperantID, brojBloka, potvrdjenaPodela) Then Exit Sub
+
+                n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True, potvrdjenaPodela)
             Else
                 n = MapBankaImportAsKooperantBlock_TX(bimID, kooperantID, True)
             End If
@@ -625,6 +675,78 @@ Private Sub btnSacuvajRucno_Click()
 
     LoadBankaRows
 End Sub
+
+' Blok sa 3+ otvorenih stavki: prikazi TACNU podelu (isti planer koji knjizi) i
+' trazi izricitu potvrdu. Vraca False = operater je odustao; `potvrdjeno` = True
+' znaci da smemo da predjemo granicu automatske raspodele.
+Private Function ConfirmManyCandidatesSplit(ByVal bankaImportID As String, _
+                                            ByVal kooperantID As String, _
+                                            ByVal brojBloka As String, _
+                                            ByRef potvrdjeno As Boolean) As Boolean
+    On Error GoTo EH
+
+    Dim kandidati As Variant
+    Dim kandErr As String
+
+    potvrdjeno = False
+    ConfirmManyCandidatesSplit = True
+
+    ' Bez prelaska granice: ako ovo prodje, blok je u granicama i nista se ne pita.
+    kandidati = SafeBlockCandidates(kooperantID, brojBloka, kandErr)
+    If kandErr = "" Then Exit Function
+
+    ' Preko granice -> ucitaj PUNU listu i predlozi podelu.
+    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, True)
+    If IsEmpty(kandidati) Then Exit Function
+
+    Dim isplata As Double
+    isplata = CDbl(nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_ISPLATA), "0"))
+
+    If MsgBox("Blok " & brojBloka & " ima " & CStr(UBound(kandidati, 1)) & _
+              " otvorene otkupne stavke -- vise nego sto automatska raspodela sme da podeli." & _
+              vbCrLf & vbCrLf & _
+              "Predlog podele iznosa " & Format$(isplata, "#,##0.00") & ":" & vbCrLf & _
+              SplitPreviewText(kandidati, isplata) & vbCrLf & _
+              "Knjiziti ovako?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+        ConfirmManyCandidatesSplit = False
+        Exit Function
+    End If
+
+    potvrdjeno = True
+    Exit Function
+
+EH:
+    LogErr "frmBankaImport.ConfirmManyCandidatesSplit"
+    MsgBox "Ne mogu da pripremim podelu po bloku: " & Err.description, vbCritical, APP_NAME
+    ConfirmManyCandidatesSplit = False
+End Function
+
+' Tekst predlozene podele -- racuna ga `PlanBlokRaspodela`, ISTI planer po kome
+' `MapBankaImportAsKooperantBlockCore` knjizi (prikaz i akcija ne mogu da se
+' razidju). Visak preko otvorenih stavki ide u avans, kao i u knjizenju.
+Private Function SplitPreviewText(ByVal kandidati As Variant, ByVal iznos As Double) As String
+    Dim plan As Variant
+    Dim s As String
+    Dim i As Long
+    Dim podeljeno As Double
+
+    plan = PlanBlokRaspodela(kandidati, iznos)
+
+    If Not IsEmpty(plan) Then
+        For i = 1 To UBound(plan, 1)
+            s = s & " - " & CStr(plan(i, 1)) & ": " & _
+                Format$(CDbl(plan(i, 2)), "#,##0.00") & " (" & CStr(plan(i, 3)) & ")" & vbCrLf
+            podeljeno = podeljeno + CDbl(plan(i, 2))
+        Next i
+    End If
+
+    If iznos - podeljeno > 0.009 Then
+        s = s & " - visak " & Format$(iznos - podeljeno, "#,##0.00") & " -> " & _
+            NOV_VIRMAN_AVANS_KOOP & vbCrLf
+    End If
+
+    SplitPreviewText = s
+End Function
 
 ' FM-0024 #11: rezultat rucnog mapiranja se vise ne ignorise (ranije "Call ...").
 ' Odbijeno mapiranje (npr. pogresan smer) je do sada izgledalo kao da se nista
@@ -742,11 +864,24 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
     uplata = CDbl(NzBIM(bim(1, 5), 0#))
     isplata = CDbl(NzBIM(bim(1, 6), 0#))
 
+    ' ISTI klasifikator koji koristi writer (RequireBimSmer preko ClassifyBimSmer),
+    ' da preview ne bi prikazao kao validan red koji ce komanda odbiti -- npr. red
+    ' sa OBA iznosa (nejasan smer) je ranije u preview-u prolazio kao ispravan.
+    Dim smer As String
+    smer = ClassifyBimSmer(uplata, isplata)
+
     s = s & "Tip: " & tipMap & vbCrLf
+
+    If smer = BIM_SMER_NEJASAN Then
+        BuildManualPreviewText = s & "ODBIJENO: stavka nema cist smer " & _
+            "(uplata " & Format$(uplata, "#,##0.00") & " / isplata " & _
+            Format$(isplata, "#,##0.00") & ") -- nijedan tip nije dozvoljen."
+        Exit Function
+    End If
 
     Select Case tipMap
         Case "Kupac"
-            If uplata <= 0 Then
+            If smer <> BIM_SMER_UPLATA Then
                 BuildManualPreviewText = s & "ODBIJENO: stavka je isplata, a tip Kupac trazi uplatu."
                 Exit Function
             End If
@@ -759,6 +894,12 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
 
             s = s & "KupacID: " & kupacID & vbCrLf
 
+            If Not m_FaktureLoadOk Then
+                BuildManualPreviewText = s & "ODBIJENO: lista faktura nije ucitana (" & _
+                    m_FaktureLoadErr & "). Prazna lista NE znaci avans."
+                Exit Function
+            End If
+
             If fakturaID <> "" Then
                 s = s & "FakturaID: " & fakturaID & vbCrLf
                 s = s & "Tip knjizenja: " & NOV_KUPCI_UPLATA
@@ -768,13 +909,15 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             End If
 
         Case "Kooperant"
-            If isplata <= 0 Then
+            If smer <> BIM_SMER_ISPLATA Then
                 BuildManualPreviewText = s & "ODBIJENO: stavka je uplata, a tip Kooperant trazi isplatu."
                 Exit Function
             End If
 
             Dim kooperantID As String
             Dim blokNo As String
+            Dim kandidati As Variant
+            Dim kandErr As String
 
             kooperantID = ExtractIDFromDisplay(cmbPartner.value)
             blokNo = EffectiveBlockNo(bankaImportID)
@@ -786,12 +929,27 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
                 s = s & "Blok (poziv na broj): " & blokNo & vbCrLf
             End If
 
-            s = s & CandidatesPreviewText(kooperantID, blokNo)
+            kandidati = SafeBlockCandidates(kooperantID, blokNo, kandErr)
+
+            If kandErr = "" Then
+                s = s & CandidatesPreviewText(kooperantID, blokNo)
+            Else
+                ' Preko granice automatske raspodele: rucni put ovo MOZE da zavrsi
+                ' (uz potvrdu), pa preview mora da pokaze punu listu i predlozenu
+                ' podelu -- isti planer koji ce knjiziti.
+                kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blokNo, True)
+
+                s = s & "Automatska raspodela ODBIJENA (blok ima " & _
+                    CStr(UBound(kandidati, 1)) & " otvorene stavke)." & vbCrLf
+                s = s & "Rucno knjizenje trazi potvrdu ove podele:" & vbCrLf
+                s = s & SplitPreviewText(kandidati, isplata)
+            End If
 
         Case "OM"
             Dim omID As String
             omID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbPartner.value, "StanicaID"))
             s = s & "OMID: " & omID & vbCrLf
+            s = s & "Smer: " & smer & vbCrLf
             s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_OTKUPAC
     End Select
 

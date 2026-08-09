@@ -31,6 +31,10 @@ Private mReport As String
 
 Private Const P As String = "BIT-"
 
+' Tvrd gate: posle izvestaja suite PODIZE gresku ako je ijedna provera pala, da
+' automatizovan pozivalac (ne samo operater koji gleda MsgBox) vidi neuspeh.
+Private Const ERR_BIT_SUITE_FAILED As Long = vbObjectError + 2961
+
 Public Sub RunBankaImportTestSuite()
     Dim tx As clsTransaction
     Dim wasQuiet As Boolean
@@ -80,7 +84,15 @@ Public Sub RunBankaImportTestSuite()
 
     RestoreJournalQuiet quietSet, wasQuiet
 
+    On Error GoTo 0
     ReportResults
+
+    If mFail > 0 Then
+        Err.Raise ERR_BIT_SUITE_FAILED, "modTestBanka.RunBankaImportTestSuite", _
+            "RunBankaImportTestSuite: " & CStr(mFail) & " provera palo (PASS=" & _
+            CStr(mPass) & "). Detalji u Immediate prozoru."
+    End If
+
     Exit Sub
 
 EH:
@@ -96,6 +108,9 @@ EH:
 
     Fail "SUITE prekinut greskom: " & errDesc
     ReportResults
+
+    Err.Raise ERR_BIT_SUITE_FAILED, "modTestBanka.RunBankaImportTestSuite", _
+        "RunBankaImportTestSuite prekinut: " & errDesc
 End Sub
 
 ' Vraca journal test-mode na ZATECENO stanje (ne bezuslovno False) i otkazuje
@@ -126,6 +141,13 @@ Private Sub T01_NemoguciDatumOdbijen()
     Chk Not TryParseDateValue("01.13.2026", d), S & "mesec 13 odbijen"
     Chk Not TryParseDateValue("29.02.2026", d), S & "29.02. u neprestupnoj godini odbijen"
     Chk Not TryParseDateValue("00.01.2026", d), S & "dan 0 odbijen"
+
+    ' Deklarisan opseg godina vazi za OBE grane parsera -- i za onu koju VBA sam
+    ' prihvati (IsDate/CDate), inace bi 1899. i 2200. prosle na mala vrata.
+    Chk Not TryParseDateValue("01.01.1899", d), S & "godina 1899 odbijena (van opsega)"
+    Chk Not TryParseDateValue("01.01.2200", d), S & "godina 2200 odbijena (van opsega)"
+    Chk Not TryParseDateValue("1899-01-01", d), S & "1899 odbijena i kroz IsDate granu"
+    Chk Not TryParseDateValue("12:30", d), S & "samo-vreme odbijeno (daje 1899-12-30)"
 
     ' Validni datumi moraju i dalje da prolaze, i to TACNO.
     d = 0
@@ -202,7 +224,7 @@ Private Sub T03_TriKandidataNeObarajuBatch()
     ' Blok sa JEDNOM otvorenom stavkom -> mora proci u istom batch-u.
     SeedOtkup P & "OTK-OK", P & "K-1", P & "BLOK-1K", 100, 20, "Malina"
 
-    ' 1) Resolver kandidata dize jasnu, prepoznatljivu gresku.
+    ' 1) Resolver kandidata dize jasnu, prepoznatljivu gresku (automatski put).
     On Error Resume Next
     dummy = GetOtkupCandidatesForKooperantBlock(P & "K-1", P & "BLOK-3K")
     errNum = Err.Number
@@ -210,6 +232,29 @@ Private Sub T03_TriKandidataNeObarajuBatch()
     On Error GoTo 0
 
     ChkEq errNum, ERR_BMAP_MANUAL_REQUIRED, S & "3 kandidata -> ERR_BMAP_MANUAL_REQUIRED"
+
+    ' ...ali uz izricitu potvrdu (rucni put) vraca punu listu, sortiranu opadajuce.
+    Dim sviKandidati As Variant
+    On Error Resume Next
+    sviKandidati = GetOtkupCandidatesForKooperantBlock(P & "K-1", P & "BLOK-3K", True)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    ChkEq errNum, 0, S & "allowOverMax:=True ne dize gresku"
+    Chk Not IsEmpty(sviKandidati), S & "allowOverMax:=True vraca kandidate"
+
+    If Not IsEmpty(sviKandidati) Then
+        ChkEq UBound(sviKandidati, 1), 3, S & "vracena sva tri kandidata"
+        ChkEqD CDbl(sviKandidati(1, 2)), 1400, S & "sortirano opadajuce (najveci otvoreni prvi)"
+
+        ' Planer koji koristi i preview i pisac: 3000 = 1400 + 1200 + 400.
+        Dim plan As Variant
+        plan = PlanBlokRaspodela(sviKandidati, 3000)
+
+        ChkEq UBound(plan, 1), 3, S & "plan raspodele ima tri reda"
+        ChkEqD CDbl(plan(3, 2)), 400, S & "poslednji red dobija samo ostatak (bez preplate)"
+    End If
 
     ' 2) Blok sa 2 kandidata i dalje mora da radi (granica se ne pomera).
     On Error Resume Next
@@ -238,6 +283,17 @@ Private Sub T03_TriKandidataNeObarajuBatch()
     Chk manualRequired >= 1, S & "batch prijavio 'za rucno' [manualRequired=" & CStr(manualRequired) & "]"
     Chk NovacZaBim(P & "BIM-OK") > 0, S & "zdrav red ima red(ove) u tblNovac"
     Chk NovacZaBim(P & "BIM-3K") = 0, S & "anomalan red NEMA parcijalno knjizenje"
+
+    ' 4) Red oznacen "za rucno" mora stvarno da se ZAVRSI rucnom putanjom (istom
+    ' koju zove dugme "Rucno mapiraj red" posle potvrde podele). Bez ovoga bi red
+    ' bio trajno nezavrsiv: rucni wrapper zove isti core i isti resolver.
+    Dim n As Long
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-3K", P & "K-1", P & "BLOK-3K", False, True)
+
+    Chk n >= 3, S & "rucna putanja (potvrdjena podela) knjizi sve stavke [n=" & CStr(n) & "]"
+    ChkEq BimObradjeno(P & "BIM-3K"), "Da", S & "posle rucnog mapiranja red je zatvoren"
+    ChkEq NovacZaBim(P & "BIM-3K"), n, S & "broj redova u tblNovac odgovara vracenom broju"
+    ChkEqD IsplataZaBim(P & "BIM-3K"), 3000, S & "ukupno knjizeno = iznos stavke izvoda (bez preplate)"
 End Sub
 
 ' ============================================================
@@ -409,6 +465,29 @@ Private Function NovacZaBim(ByVal bimID As String) As Long
     Next i
 End Function
 
+' Zbir isplata u tblNovac koje nose BIM marker ovog staging reda.
+Private Function IsplataZaBim(ByVal bimID As String) As Double
+    Dim data As Variant
+    Dim colNap As Long
+    Dim colIsplata As Long
+    Dim i As Long
+
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    colNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+    colIsplata = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
+
+    For i = 1 To UBound(data, 1)
+        If BimIdFromNapomena(CStr(NzTb(data(i, colNap)))) = bimID Then
+            IsplataZaBim = IsplataZaBim + CDbl(nz(data(i, colIsplata), "0"))
+        End If
+    Next i
+End Function
+
 Private Function NzTb(ByVal v As Variant) As String
     If IsError(v) Or IsNull(v) Or IsEmpty(v) Then NzTb = "" Else NzTb = CStr(v)
 End Function
@@ -428,6 +507,15 @@ End Sub
 
 Private Sub ChkEq(ByVal act As Variant, ByVal exp As Variant, ByVal nm As String)
     If CStr(act) = CStr(exp) Then
+        mPass = mPass + 1
+        mReport = mReport & "OK    " & nm & vbCrLf
+    Else
+        Fail nm & " [dobijeno=" & CStr(act) & " ocekivano=" & CStr(exp) & "]"
+    End If
+End Sub
+
+Private Sub ChkEqD(ByVal act As Double, ByVal exp As Double, ByVal nm As String)
+    If Abs(act - exp) <= 0.001 Then
         mPass = mPass + 1
         mReport = mReport & "OK    " & nm & vbCrLf
     Else

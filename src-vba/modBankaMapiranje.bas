@@ -63,9 +63,19 @@ Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
 
 ' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca). Treci kandidat
-' je anomalija podataka (recikliran broj bloka, duplirani unos) - ne pogadja se
-' raspodela, nego se red salje operateru na rucno mapiranje.
-Private Const MAX_BLOK_KANDIDATA As Long = 2
+' je anomalija podataka (recikliran broj bloka, duplirani unos) - AUTOMATSKA
+' raspodela se tu ne pogadja, nego se red salje operateru na rucno mapiranje
+' (rucni put sme preko granice, ali samo uz izricitu potvrdu - vidi
+' MapBankaImportAsKooperantBlockManual_TX allowManyCandidates).
+Public Const MAX_BLOK_KANDIDATA As Long = 2
+
+' Smer stavke izvoda - JEDAN klasifikator za citaoce (preview u formi) i pisce
+' (RequireBimSmer). Bez zajednickog koda su preview i writer imali razlicit
+' ugovor: preview je gledao samo "ima li uplate/isplate", pa je red sa OBA iznosa
+' izgledao validno a writer bi ga odbio.
+Public Const BIM_SMER_UPLATA As String = "UPLATA"
+Public Const BIM_SMER_ISPLATA As String = "ISPLATA"
+Public Const BIM_SMER_NEJASAN As String = "NEJASAN"
 
 ' Kad je True, batch auto-map (strong pass / Auto sve) ne prikazuje blokirajuci
 ' MsgBox po redu (npr. "Kooperant nema StanicaID"). Postavlja ga pozivalac oko petlje.
@@ -206,9 +216,8 @@ EH:
 
     manualRequiredCount = manualRequiredCount + 1
 
+    ' Monitoring je best-effort (telemetrija sme da padne).
     On Error Resume Next
-
-    If markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
 
     Monitor_Event _
         eventType:="BANKA_AUTOMAP_MANUAL_REQUIRED", _
@@ -223,6 +232,11 @@ EH:
         correlationId:=bankaImportID
 
     On Error GoTo 0
+
+    ' Poslovni status NIJE best-effort: ako se "Error" ne moze upisati, red bi
+    ' ostao otvoren dok batch prijavljuje da je poslat na rucno. Pad ovde ide
+    ' dalje i obara batch (rollback), umesto tihog neslaganja izvestaja i stanja.
+    If markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
 
     AutoMapBankaImportRowBatch = ""
 End Function
@@ -756,18 +770,23 @@ EH:
     MapBankaImportAsKooperantBlock_TX = 0
 End Function
 
+' allowManyCandidates: operater je video kandidate i predlozenu podelu pa je
+' potvrdio (frmBankaImport). Samo tako blok sa 3+ otvorenih stavki moze da se
+' zavrsi - automatski put ga i dalje odbija (ERR_BMAP_MANUAL_REQUIRED).
 Public Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As String, _
                                                      ByVal kooperantID As String, _
                                                      ByVal brojBloka As String, _
-                                                     Optional ByVal savePartnerMapFlag As Boolean = True) As Long
+                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
+                                                     Optional ByVal allowManyCandidates As Boolean = False) As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag)
+        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
                                                         ByVal kooperantID As String, _
                                                         ByVal brojBloka As String, _
-                                                        Optional ByVal savePartnerMapFlag As Boolean = True) As Long
+                                                        Optional ByVal savePartnerMapFlag As Boolean = True, _
+                                                        Optional ByVal allowManyCandidates As Boolean = False) As Long
     Dim tx As clsTransaction
     
     On Error GoTo EH
@@ -780,7 +799,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     tx.AddTableSnapshot TBL_PARTNER_MAP
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag)
+        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates)
     
     tx.CommitTx
 
@@ -829,15 +848,18 @@ End Function
 Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As String, _
                                                     ByVal kooperantID As String, _
                                                     ByVal blockNo As String, _
-                                                    Optional ByVal savePartnerMapFlag As Boolean = True) As Long
+                                                    Optional ByVal savePartnerMapFlag As Boolean = True, _
+                                                    Optional ByVal allowManyCandidates As Boolean = False) As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
     Dim isplataUkupno As Double
     Dim preostaloZaRaspodelu As Double
     Dim kandidati As Variant
+    Dim plan As Variant
+    Dim planCount As Long
     Dim i As Long
-    
+
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then Exit Function
     
     If Trim$(kooperantID) = "" Then
@@ -866,9 +888,9 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
 
     isplataUkupno = CDbl(NzBIM(bim(1, 6), 0#))
     
-    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo)
+    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo, allowManyCandidates)
     preostaloZaRaspodelu = isplataUkupno
-    
+
     If IsEmpty(kandidati) Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
@@ -896,29 +918,32 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         Exit Function
     End If
     
-    For i = 1 To UBound(kandidati, 1)
+    ' Podela je izracunata na JEDNOM mestu (PlanBlokRaspodela) koje koristi i
+    ' preview u formi -- prikaz i knjizenje ne mogu da se razidju.
+    plan = PlanBlokRaspodela(kandidati, isplataUkupno)
+
+    If IsEmpty(plan) Then
+        planCount = 0
+    Else
+        planCount = UBound(plan, 1)
+    End If
+
+    For i = 1 To planCount
         If preostaloZaRaspodelu <= 0 Then Exit For
-        
+
         Dim otkupID As String
-        Dim otvoreno As Double
         Dim iznosZaRed As Double
         Dim vrstaVoca As String
         Dim novID As String
-        
-        otkupID = CStr(kandidati(i, 1))
+
+        otkupID = CStr(plan(i, 1))
         RequireSingleRow TBL_OTKUP, COL_OTK_ID, otkupID, _
                  "MapBankaImportAsKooperantBlockCore"
-        otvoreno = CDbl(NzBIM(kandidati(i, 2), 0#))
-        vrstaVoca = CStr(kandidati(i, 3))
-        
-        If otvoreno <= 0 Then GoTo NextCandidate
-        
-        If preostaloZaRaspodelu >= otvoreno Then
-            iznosZaRed = otvoreno
-        Else
-            iznosZaRed = preostaloZaRaspodelu
-        End If
-        
+        iznosZaRed = CDbl(NzBIM(plan(i, 2), 0#))
+        vrstaVoca = CStr(plan(i, 3))
+
+        If iznosZaRed <= 0 Then GoTo NextCandidate
+
         novID = SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
             CDate(bim(1, 2)), _
@@ -945,10 +970,10 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
 
         MapBankaImportAsKooperantBlockCore = MapBankaImportAsKooperantBlockCore + 1
         preostaloZaRaspodelu = preostaloZaRaspodelu - iznosZaRed
-        
+
 NextCandidate:
     Next i
-    
+
     If preostaloZaRaspodelu > 0 Then
         If SaveNovac( _
             RequireIzvodBroj(bim, "MapBankaImportAsKooperantBlockCore"), _
@@ -1324,6 +1349,10 @@ End Function
 
 ' Koliko OTVORENIH stavki bi jaki kljucevi mapirali - bez ijednog upisa.
 ' Koristi ga frmBankaImport pri otvaranju (prikaz umesto tihog knjizenja).
+'
+' NE guta gresku: schema/read problem bi kao "0" izgledao isto kao "nema sta da
+' se mapira" - a AUD-014 je upravo o tome da greske jakog prolaza budu vidljive.
+' Pozivalac (forma) hvata i prikazuje stanje greske.
 Public Function CountStrongKeyReadyBankaImport() As Long
     Const SRC As String = "CountStrongKeyReadyBankaImport"
 
@@ -1365,10 +1394,20 @@ Public Function CountStrongKeyReadyBankaImport() As Long
     Exit Function
 
 EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     On Error Resume Next
     LogErr SRC
     On Error GoTo 0
+
     CountStrongKeyReadyBankaImport = 0
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
@@ -1596,7 +1635,8 @@ NextI:
 End Function
 
 Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
-                                                     ByVal brojBloka As String) As Variant
+                                                     ByVal brojBloka As String, _
+                                                     Optional ByVal allowOverMax As Boolean = False) As Variant
     Dim data As Variant
     Dim result() As Variant
     Dim colOtkID As Long
@@ -1661,11 +1701,16 @@ NextI:
 
     If count = 0 Then Exit Function
 
-    If count > MAX_BLOK_KANDIDATA Then
+    ' Granica vazi za AUTOMATSKU raspodelu. Rucni put je prosledjuje kao
+    ' allowOverMax:=True tek posto je operater video kandidate i potvrdio podelu
+    ' (inace bi red oznacen "za rucno" bio trajno nezavrsiv - ista greska bi ga
+    ' docekala i na rucnom dugmetu).
+    If count > MAX_BLOK_KANDIDATA And Not allowOverMax Then
         Err.Raise ERR_BMAP_MANUAL_REQUIRED, "GetOtkupCandidatesForKooperantBlock", _
             "Blok " & brojBloka & " (kooperant " & kooperantID & ") ima " & CStr(count) & _
-            " otvorene otkupne stavke, a model dozvoljava najvise " & CStr(MAX_BLOK_KANDIDATA) & _
-            ". Automatska raspodela bi pogadjala - stavka izvoda se mapira RUCNO."
+            " otvorene otkupne stavke, a automatska raspodela dozvoljava najvise " & _
+            CStr(MAX_BLOK_KANDIDATA) & ". Stavka izvoda se mapira RUCNO (izaberi " & _
+            "kooperanta i blok, pa potvrdi predlozenu podelu)."
     End If
 
     Dim finalResult() As Variant
@@ -1678,23 +1723,89 @@ NextI:
             finalResult(r, c) = result(r, c)
         Next c
     Next r
-    
-    ' Max 2 reda -> jednostavan swap, veca otvorena prva
-    If count = 2 Then
-        If CDbl(finalResult(2, 2)) > CDbl(finalResult(1, 2)) Then
-            Dim t1 As Variant, t2 As Variant, t3 As Variant
-            
-            t1 = finalResult(1, 1): t2 = finalResult(1, 2): t3 = finalResult(1, 3)
-            finalResult(1, 1) = finalResult(2, 1)
-            finalResult(1, 2) = finalResult(2, 2)
-            finalResult(1, 3) = finalResult(2, 3)
-            finalResult(2, 1) = t1
-            finalResult(2, 2) = t2
-            finalResult(2, 3) = t3
-        End If
-    End If
-    
+
+    SortKandidatiPoOtvorenomDesc finalResult
+
     GetOtkupCandidatesForKooperantBlock = finalResult
+End Function
+
+' Veci otvoreni iznos prvi (selection sort - lista je po prirodi kratka).
+' Ranije je ovo bio swap koji je radio samo za tacno 2 reda.
+Private Sub SortKandidatiPoOtvorenomDesc(ByRef kandidati As Variant)
+    Dim i As Long, j As Long, best As Long, c As Long
+    Dim tmp As Variant
+
+    For i = LBound(kandidati, 1) To UBound(kandidati, 1) - 1
+        best = i
+
+        For j = i + 1 To UBound(kandidati, 1)
+            If CDbl(NzBIM(kandidati(j, 2), 0#)) > CDbl(NzBIM(kandidati(best, 2), 0#)) Then best = j
+        Next j
+
+        If best <> i Then
+            For c = 1 To 3
+                tmp = kandidati(i, c)
+                kandidati(i, c) = kandidati(best, c)
+                kandidati(best, c) = tmp
+            Next c
+        End If
+    Next i
+End Sub
+
+' Raspodela iznosa isplate po kandidatima bloka (greedy: veci otvoreni prvi, do
+' iscrpljenja iznosa). JEDAN izvor istine - koriste ga i pisac
+' (MapBankaImportAsKooperantBlockCore) i preview u frmBankaImport, pa operater
+' pre klika vidi TACNO onu podelu koja ce biti proknjizena.
+' Vraca (1 To n, 1 To 3): OtkupID | iznos za taj otkup | VrstaVoca. Redovi sa
+' iznosom 0 se ne vracaju. Visak (iznos - suma plana) racuna pozivalac.
+Public Function PlanBlokRaspodela(ByVal kandidati As Variant, ByVal iznos As Double) As Variant
+    If IsEmpty(kandidati) Then Exit Function
+    If iznos <= 0 Then Exit Function
+
+    Dim plan() As Variant
+    Dim i As Long
+    Dim n As Long
+    Dim preostalo As Double
+    Dim otvoreno As Double
+    Dim zaRed As Double
+
+    ReDim plan(1 To UBound(kandidati, 1), 1 To 3)
+    preostalo = iznos
+
+    For i = 1 To UBound(kandidati, 1)
+        If preostalo <= 0 Then Exit For
+
+        otvoreno = CDbl(NzBIM(kandidati(i, 2), 0#))
+        If otvoreno > 0 Then
+            If preostalo >= otvoreno Then
+                zaRed = otvoreno
+            Else
+                zaRed = preostalo
+            End If
+
+            n = n + 1
+            plan(n, 1) = CStr(kandidati(i, 1))
+            plan(n, 2) = zaRed
+            plan(n, 3) = CStr(kandidati(i, 3))
+
+            preostalo = preostalo - zaRed
+        End If
+    Next i
+
+    If n = 0 Then Exit Function
+
+    Dim finalPlan() As Variant
+    Dim r As Long, c As Long
+
+    ReDim finalPlan(1 To n, 1 To 3)
+
+    For r = 1 To n
+        For c = 1 To 3
+            finalPlan(r, c) = plan(r, c)
+        Next c
+    Next r
+
+    PlanBlokRaspodela = finalPlan
 End Function
 
 ' ============================================================
@@ -1983,36 +2094,52 @@ End Sub
 ' pogresnom smeru, a u izvodu nema traga da je red pogresno knjizen. Auto put vec
 ' grana po smeru (AutoMapBankaImportRow), pa mu guard ne menja ponasanje.
 ' expectedSmer: "UPLATA" | "ISPLATA" | "" (bilo koji, ali cist smer).
+' Klasifikacija smera - jedini izvor istine (koriste ga i RequireBimSmer i preview
+' u frmBankaImport). Red sa OBA iznosa (ili bez ijednog) nije knjizljiv.
+Public Function ClassifyBimSmer(ByVal uplata As Double, ByVal isplata As Double) As String
+    If uplata > 0 And isplata > 0 Then
+        ClassifyBimSmer = BIM_SMER_NEJASAN
+    ElseIf uplata > 0 Then
+        ClassifyBimSmer = BIM_SMER_UPLATA
+    ElseIf isplata > 0 Then
+        ClassifyBimSmer = BIM_SMER_ISPLATA
+    Else
+        ClassifyBimSmer = BIM_SMER_NEJASAN
+    End If
+End Function
+
 Private Sub RequireBimSmer(ByVal bim As Variant, _
                            ByVal expectedSmer As String, _
                            ByVal sourceName As String)
     Dim uplata As Double
     Dim isplata As Double
+    Dim smer As String
 
     uplata = CDbl(NzBIM(bim(1, 5), 0#))
     isplata = CDbl(NzBIM(bim(1, 6), 0#))
+    smer = ClassifyBimSmer(uplata, isplata)
 
-    If uplata > 0 And isplata > 0 Then
-        Err.Raise ERR_BMAP_BASE + 46, sourceName, _
-            "Stavka izvoda ima i uplatu i isplatu - nema cist smer, mapiranje je odbijeno."
-    End If
+    If smer = BIM_SMER_NEJASAN Then
+        If uplata > 0 And isplata > 0 Then
+            Err.Raise ERR_BMAP_BASE + 46, sourceName, _
+                "Stavka izvoda ima i uplatu i isplatu - nema cist smer, mapiranje je odbijeno."
+        End If
 
-    If uplata <= 0 And isplata <= 0 Then
         Err.Raise ERR_BMAP_BASE + 47, sourceName, _
             "Stavka izvoda nema ni uplatu ni isplatu - mapiranje je odbijeno."
     End If
 
     Select Case UCase$(Trim$(expectedSmer))
-        Case "UPLATA"
-            If uplata <= 0 Then
+        Case BIM_SMER_UPLATA
+            If smer <> BIM_SMER_UPLATA Then
                 Err.Raise ERR_BMAP_BASE + 48, sourceName, _
                     "Smer ne odgovara: stavka izvoda je ISPLATA (" & _
                     Format$(isplata, "#,##0.00") & "), a izabrano mapiranje ocekuje UPLATU. " & _
                     "Mapiranje je odbijeno."
             End If
 
-        Case "ISPLATA"
-            If isplata <= 0 Then
+        Case BIM_SMER_ISPLATA
+            If smer <> BIM_SMER_ISPLATA Then
                 Err.Raise ERR_BMAP_BASE + 49, sourceName, _
                     "Smer ne odgovara: stavka izvoda je UPLATA (" & _
                     Format$(uplata, "#,##0.00") & "), a izabrano mapiranje ocekuje ISPLATU. " & _
