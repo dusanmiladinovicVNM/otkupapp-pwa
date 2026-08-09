@@ -713,10 +713,11 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
             rowData(colBrojDok) = CStr(data(i, 1))
             ' Datumi se upisuju kao Date (bez CStr): staging je jedini izvor
             ' istine za datum transakcije, a string bi ga vratio na locale
-            ' tumacenje pri svakom citanju.
-            rowData(colDatumIzvoda) = ToBimDatum(data(i, 2))
+            ' tumacenje pri svakom citanju. Nevalidan datum ovde PADA (writer je
+            ' javan, pa ne sme da se osloni na to da ga je parser vec proverio).
+            rowData(colDatumIzvoda) = RequireBimDatum(data(i, 2), COL_BIM_DATUM_IZVODA, i, SRC)
             rowData(colBrojRacuna) = CStr(data(i, 3))
-            rowData(colDatumTx) = ToBimDatum(data(i, 4))
+            rowData(colDatumTx) = RequireBimDatum(data(i, 4), COL_BIM_DATUM_TRANSAKCIJE, i, SRC)
             rowData(colPartner) = CStr(data(i, 5))
             rowData(colPartnerKonto) = CStr(data(i, 6))
             rowData(colOpis) = CStr(data(i, 10))
@@ -869,30 +870,30 @@ End Function
 
 'HELPERS
 
-' Vrednost datuma za staging: Date kad se moze deterministicki dobiti, inace
-' original (da se nista ne izgubi ako neki poziv dodje sa neocekivanim tipom).
+' Vrednost datuma za staging: UVEK `Date` ili greska. Staging je izvor istine za
+' datum transakcije, pa javni writer ne sme da propusti tekst ("nije datum") niti
+' datum van poslovnog opsega samo zato sto ga je neko pozvao mimo parsera --
+' fail-open bi vratio tacno onu klasu problema koju AUD-007 zatvara.
 ' `TryParseBankaDateDMY` ide PRE `IsDate` iz istog razloga kao u modParse.
-Private Function ToBimDatum(ByVal v As Variant) As Variant
+Private Function RequireBimDatum(ByVal v As Variant, _
+                                 ByVal poljeNaziv As String, _
+                                 ByVal rowIndex As Long, _
+                                 ByVal sourceName As String) As Date
     Dim d As Date
 
-    If IsDate(v) Then
-        If VarType(v) = vbDate Then
-            ToBimDatum = CDate(v)
-            Exit Function
-        End If
+    If Not TryBimDatum(v, d) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 7, sourceName, _
+                  poljeNaziv & " nije validan datum: '" & CStr(NzBIM(v, "")) & _
+                  "'. Row=" & CStr(rowIndex)
     End If
 
-    If TryParseBankaDateDMY(CStr(NzBIM(v, "")), d) Then
-        ToBimDatum = d
-        Exit Function
+    If Not IsPoslovnaGodina(d) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 8, sourceName, _
+                  poljeNaziv & " je van poslovnog opsega godina: " & _
+                  Format$(d, "yyyy-mm-dd") & ". Row=" & CStr(rowIndex)
     End If
 
-    If IsDate(v) Then
-        ToBimDatum = CDate(v)
-        Exit Function
-    End If
-
-    ToBimDatum = v
+    RequireBimDatum = d
 End Function
 
 ' Poredjenje datuma za dedupe: staging je od v2.38.0 typed Date, a zatecen

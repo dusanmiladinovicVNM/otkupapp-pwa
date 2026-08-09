@@ -420,6 +420,7 @@ Private Sub LoadManualTargets()
             ' pogodak -- uplata (ili avans) je mogla da zavrsi na pogresnom kupcu
             ' bez ijednog znaka operateru. Isti obrazac kao frmFakturisanje.
             FillComboDisplayID cmbPartner, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
+            ShowIDInComboDisplay cmbPartner    ' dva kupca istog naziva moraju da se razlikuju
 
         Case "Kooperant"
             Dim data As Variant
@@ -446,6 +447,7 @@ Private Sub LoadManualTargets()
             ' Isto kao za kupce: stanice istog naziva se ne smeju stopiti u jednu
             ' stavku, a izbor mora da nosi StanicaID.
             FillComboDisplayID cmbPartner, TBL_STANICE, "Naziv", "StanicaID"
+            ShowIDInComboDisplay cmbPartner    ' isto i za istoimene stanice
     End Select
 End Sub
 

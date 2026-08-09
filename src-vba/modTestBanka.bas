@@ -17,11 +17,15 @@ Option Explicit
 ' (BANKA_AUTOMAP_ALL_*) ako je monitoring ukljucen -- to je telemetrija, ne podatak
 ' u tabelama. Journal se za vreme suite-a stisava (SetTestModeQuiet).
 '
-' Pokriva cetiri nalaza koje RF-09 zatvara:
-'  T01 AUD-007  nemoguc datum (30.02., dan 32, mesec 13) se ODBIJA, ne pomera
+' Pokriva nalaze koje RF-09 zatvara:
+'  T01 AUD-007  nemoguc datum se ODBIJA (ne pomera); dd.mm.yyyy je locale-nezavisan
 '  T02 AUD-025  dedupe kljuc ukljucuje broj racuna (multi-account transakcija)
-'  T03 AUD-025  3+ kandidata bloka obara SAMO taj red, ne ceo AutoMapAll batch
+'  T03 AUD-025  3+ kandidata bloka obara SAMO taj red, ne ceo AutoMapAll batch;
+'               red oznacen "za rucno" se zavrsava javnom rucnom putanjom
 '  T04 AUD-025  rucno mapiranje pogresnog smera je odbijeno
+'  T05 AUD-007  staging cuva TYPED datum, a javni writer odbija nevalidan
+'  T06 FM-0023  uplata preko otvorenog iznosa fakture se deli (faktura + avans)
+'  T07 FM-0024  istoimeni partneri se razlikuju po ID-u (prikaz i knjizenje)
 ' ============================================================
 
 Private mPass As Long
@@ -80,6 +84,7 @@ Public Sub RunBankaImportTestSuite()
     T04_SmerGuardOdbijaPogresanTip
     T05_StagingCuvaTypedDatum
     T06_UplataPrekoOtvorenogSeDeli
+    T07_IstoimeniPartneriSeRazlikujuPoID
 
     tx.RollbackTx
     Set tx = Nothing
@@ -197,29 +202,12 @@ End Sub
 Private Sub T05_StagingCuvaTypedDatum()
     Const S As String = "T05 typed datum u stagingu: "
 
-    Dim red(1 To 1, 1 To 17) As Variant
     Dim saved As Long
     Dim v As Variant
+    Dim errNum As Long
 
-    red(1, 1) = P & "IZV-11"          ' BrojDokumenta
-    red(1, 2) = DateSerial(2026, 2, 1) ' DatumIzvoda (typed)
-    red(1, 3) = P & "RAC-9"           ' BrojRacuna
-    red(1, 4) = DateSerial(2026, 2, 1) ' DatumTransakcije (typed)
-    red(1, 5) = P & "PARTNER-T"       ' Partner
-    red(1, 6) = ""                    ' PartnerKonto
-    red(1, 7) = 1234.56               ' Uplata
-    red(1, 8) = 0                     ' Isplata
-    red(1, 9) = ""                    ' Sifra
-    red(1, 10) = "test"               ' Opis / Svrha
-    red(1, 11) = ""                   ' PozivNaBroj
-    red(1, 12) = P & "REF-T"          ' BankaReferenz
-    red(1, 13) = "test.pdf"           ' IzvorFajl
-    red(1, 14) = 0
-    red(1, 15) = 0
-    red(1, 16) = 0
-    red(1, 17) = 0
-
-    saved = SaveBankaImportRows(red)
+    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-11", P & "RAC-9", _
+                DateSerial(2026, 2, 1), DateSerial(2026, 2, 1), P & "REF-T"))
     ChkEq saved, 1, S & "red je staged"
 
     v = LookupValue(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, P & "IZV-11", COL_BIM_DATUM_TRANSAKCIJE)
@@ -236,6 +224,74 @@ Private Sub T05_StagingCuvaTypedDatum()
     Chk IsDuplicateBankaImport(P & "IZV-11", DateSerial(2026, 2, 1), 1234.56, 0, _
                                P & "PARTNER-T", "", P & "RAC-9"), _
         S & "dedupe prepoznaje duplikat po typed datumu"
+
+    Chk IsDuplicateBankaImport(P & "IZV-11", "01.02.2026", 1234.56, 0, _
+                               P & "PARTNER-T", "", P & "RAC-9"), _
+        S & "dedupe poredi typed datum i string zapis istog dana"
+
+    ' Javni writer je fail-closed za datum: tekst koji nije datum se ODBIJA
+    ' (ranije se upisivao kakav jeste), kao i datum van poslovnog opsega.
+    On Error Resume Next
+    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-14", P & "RAC-9", _
+                DateSerial(2026, 2, 1), "nije datum", P & "REF-X1"))
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "writer odbija tekst koji nije datum"
+
+    On Error Resume Next
+    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-15", P & "RAC-9", _
+                DateSerial(2026, 2, 1), DateSerial(1899, 12, 30), P & "REF-X2"))
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "writer odbija datum van poslovnog opsega (1899)"
+
+    ChkEq StagingRedova(P & "IZV-14") + StagingRedova(P & "IZV-15"), 0, _
+        S & "odbijeni redovi nisu upisani"
+End Sub
+
+' ============================================================
+' T07 - istoimeni partneri (FM-0024 #7).
+'
+' Rezolucija po nazivu vraca PRVI pogodak, a lista je istoimene partnere jos i
+' spajala u jednu stavku -- operater nije mogao da ih razlikuje, a uplata je mogla
+' da ode na pogresnog kupca. Identitet ide preko ID-a, a prikaz ga pokazuje.
+' ============================================================
+Private Sub T07_IstoimeniPartneriSeRazlikujuPoID()
+    Const S As String = "T07 istoimeni partneri: "
+
+    Dim novID As String
+
+    SeedKupac P & "KUP-A", P & "Agro Trade"
+    SeedKupac P & "KUP-B", P & "Agro Trade"
+    SeedStanica P & "OM-A", P & "Stanica Ista"
+    SeedStanica P & "OM-B", P & "Stanica Ista"
+
+    ' Zasto identitet NE sme da ide po nazivu: lookup vraca prvi pogodak.
+    ChkEq CStr(LookupValue(TBL_KUPCI, "Naziv", P & "Agro Trade", "KupacID")), P & "KUP-A", _
+        S & "lookup po nazivu vraca PRVOG (zato se ne koristi za identitet)"
+    ChkEq CStr(LookupValue(TBL_STANICE, "Naziv", P & "Stanica Ista", "StanicaID")), P & "OM-A", _
+        S & "isto vazi i za stanice"
+
+    ' Prikaz u listi mora da razlikuje duplikate (ID uz naziv).
+    ChkEq ComboDisplayWithID(P & "Agro Trade", P & "KUP-B"), _
+          P & "Agro Trade" & "  [" & P & "KUP-B" & "]", S & "prikaz nosi ID"
+    ChkEq ComboDisplayWithID(P & "Agro Trade", ""), P & "Agro Trade", _
+        S & "bez ID-a prikaz ostaje nepromenjen"
+
+    ' Knjizenje ide na IZABRAN ID, ne na prvi po nazivu.
+    SeedBim P & "BIM-DUP", P & "IZV-13", P & "RAC-1", P & "Agro Trade", 700, 0, "", "", ""
+
+    gBankaSilentBatch = True
+    novID = MapBankaImportAsKupac_TX(P & "BIM-DUP", P & "KUP-B", "", False)
+    gBankaSilentBatch = False
+
+    Chk novID <> "", S & "mapiranje na drugi ID je proslo"
+    ChkEq NovacPartnerID(novID), P & "KUP-B", _
+        S & "novac pripada IZABRANOM kupcu, ne prvom po nazivu"
 End Sub
 
 ' ============================================================
@@ -370,14 +426,12 @@ End Sub
 ' ============================================================
 ' T04 - AUD-025: rucno mapiranje ne sme da ignorise smer.
 '
-' Poziva se NE-TX varijanta (isti kod, bez MsgBox-a iz TX omotaca) da bi test bio
-' neinteraktivan; TX omotac istu gresku pokazuje operateru i vraca promene.
+' Ide kroz javni `_TX` API (ne-TX mutatori su Private): greska se loguje i vraca
+' pozivaocu, a `gBankaSilentBatch` sprecava blokirajuci dijalog u test rezimu.
 ' ============================================================
 Private Sub T04_SmerGuardOdbijaPogresanTip()
     Const S As String = "T04 smer guard: "
 
-    Dim errNum As Long
-    Dim errDesc As String
     Dim res As String
     Dim n As Long
 
@@ -388,36 +442,32 @@ Private Sub T04_SmerGuardOdbijaPogresanTip()
     SeedBim P & "BIM-UPL", P & "IZV-10", P & "RAC-1", P & "PARTNER-S", 4000, 0, "", "", ""
     SeedBim P & "BIM-ISP", P & "IZV-10", P & "RAC-1", P & "PARTNER-S", 0, 4000, "", "", ""
 
-    ' Uplata knjizena kao kooperant (isplata) -> odbijeno.
-    errDesc = ""
-    On Error Resume Next
-    n = MapBankaImportAsKooperantBlock(P & "BIM-UPL", P & "K-2", False)
-    errNum = Err.Number
-    errDesc = Err.description
-    Err.Clear
-    On Error GoTo 0
+    ' Javni API su samo `_TX` ulazi (ne-TX mutatori su Private), pa i test ide
+    ' kroz njih; gBankaSilentBatch drzi greske bez blokirajuceg dijaloga.
+    gBankaSilentBatch = True
 
-    Chk errNum <> 0, S & "uplata + tip Kooperant -> odbijeno"
-    Chk InStr(1, errDesc, "Smer ne odgovara", vbTextCompare) > 0, _
-        S & "razlog odbijanja je smer [" & errDesc & "]"
+    ' Uplata knjizena kao kooperant (isplata) -> odbijeno.
+    n = MapBankaImportAsKooperantBlock_TX(P & "BIM-UPL", P & "K-2", False)
+
+    ChkEq n, 0, S & "uplata + tip Kooperant -> odbijeno (0 redova)"
     ChkEq BimObradjeno(P & "BIM-UPL"), "", S & "odbijena uplata ostaje otvorena"
     ChkEq NovacZaBim(P & "BIM-UPL"), 0, S & "odbijena uplata nije knjizena"
 
     ' Isplata knjizena kao kupac (uplata) -> odbijeno.
-    errDesc = ""
-    On Error Resume Next
-    res = MapBankaImportAsKupac(P & "BIM-ISP", P & "KUP-1", "", False)
-    errNum = Err.Number
-    errDesc = Err.description
-    Err.Clear
-    On Error GoTo 0
+    res = MapBankaImportAsKupac_TX(P & "BIM-ISP", P & "KUP-1", "", False)
 
-    Chk errNum <> 0, S & "isplata + tip Kupac -> odbijeno"
-    Chk InStr(1, errDesc, "Smer ne odgovara", vbTextCompare) > 0, _
-        S & "razlog odbijanja je smer [" & errDesc & "]"
+    ChkEq res, "", S & "isplata + tip Kupac -> odbijeno (nema NovacID)"
     ChkEq BimObradjeno(P & "BIM-ISP"), "", S & "odbijena isplata ostaje otvorena"
     ChkEq NovacZaBim(P & "BIM-ISP"), 0, S & "odbijena isplata nije knjizena"
-    ChkEq res, "", S & "odbijeno mapiranje nije vratilo NovacID"
+
+    ' Razlog odbijanja mora biti smer -- proverava se na ne-TX putanji kroz
+    ' javni klasifikator (ClassifyBimSmer), koji writer koristi za istu odluku.
+    ChkEq ClassifyBimSmer(4000, 0), BIM_SMER_UPLATA, S & "klasifikator: 4000/0 = UPLATA"
+    ChkEq ClassifyBimSmer(0, 4000), BIM_SMER_ISPLATA, S & "klasifikator: 0/4000 = ISPLATA"
+    ChkEq ClassifyBimSmer(100, 100), BIM_SMER_NEJASAN, S & "klasifikator: oba iznosa = NEJASAN"
+    ChkEq ClassifyBimSmer(0, 0), BIM_SMER_NEJASAN, S & "klasifikator: bez iznosa = NEJASAN"
+
+    gBankaSilentBatch = False
 End Sub
 
 ' ============================================================
@@ -439,7 +489,7 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     ' (a) Uplata 1500 na fakturu sa 1000 otvorenog -> 1000 + 500 avans.
     SeedBim P & "BIM-VISAK", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 1500, 0, "", "", ""
 
-    res = MapBankaImportAsKupac(P & "BIM-VISAK", P & "KUP-2", P & "FAK-1", False)
+    res = MapBankaImportAsKupac_TX(P & "BIM-VISAK", P & "KUP-2", P & "FAK-1", False)
 
     Chk res <> "", S & "mapiranje vratilo NovacID"
     ChkEq NovacZaBim(P & "BIM-VISAK"), 2, S & "nastala DVA reda (faktura + avans)"
@@ -452,7 +502,7 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     SeedFaktura P & "FAK-2", P & "KUP-2", P & "F-002", 2000
     SeedBim P & "BIM-DEO", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 800, 0, "", "", ""
 
-    res = MapBankaImportAsKupac(P & "BIM-DEO", P & "KUP-2", P & "FAK-2", False)
+    res = MapBankaImportAsKupac_TX(P & "BIM-DEO", P & "KUP-2", P & "FAK-2", False)
 
     ChkEq NovacZaBim(P & "BIM-DEO"), 1, S & "delimicna uplata = jedan red"
     ChkEqD UplataZaFakturu(P & "FAK-2"), 800, S & "cela delimicna uplata na fakturu"
@@ -462,7 +512,7 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     SeedBim P & "BIM-PLAC", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 300, 0, "", "", ""
 
     On Error Resume Next
-    res = MapBankaImportAsKupac(P & "BIM-PLAC", P & "KUP-2", P & "FAK-1", False)
+    res = MapBankaImportAsKupac_TX(P & "BIM-PLAC", P & "KUP-2", P & "FAK-1", False)
     errNum = Err.Number
     Err.Clear
     On Error GoTo 0
@@ -524,6 +574,55 @@ Private Sub SeedStanica(ByVal stanicaID As String, ByVal naziv As String)
         Array("StanicaID", "Naziv"), _
         Array(stanicaID, naziv)
 End Sub
+
+' 17-kolonski staging red u obliku koji vraca ParseBankaIzvodForImport.
+Private Function BuildStagingRow(ByVal brojIzvoda As String, ByVal racun As String, _
+                                 ByVal datumIzvoda As Variant, ByVal datumTx As Variant, _
+                                 ByVal referenz As String) As Variant
+    Dim red(1 To 1, 1 To 17) As Variant
+
+    red(1, 1) = brojIzvoda        ' BrojDokumenta
+    red(1, 2) = datumIzvoda       ' DatumIzvoda
+    red(1, 3) = racun             ' BrojRacuna
+    red(1, 4) = datumTx           ' DatumTransakcije
+    red(1, 5) = P & "PARTNER-T"   ' Partner
+    red(1, 6) = ""                ' PartnerKonto
+    red(1, 7) = 1234.56           ' Uplata
+    red(1, 8) = 0                 ' Isplata
+    red(1, 9) = ""                ' Sifra
+    red(1, 10) = "test"           ' Opis / SvrhaPlacanja
+    red(1, 11) = ""               ' PozivNaBroj
+    red(1, 12) = referenz         ' BankaReferenz
+    red(1, 13) = "test.pdf"       ' IzvorFajl
+    red(1, 14) = 0
+    red(1, 15) = 0
+    red(1, 16) = 0
+    red(1, 17) = 0
+
+    BuildStagingRow = red
+End Function
+
+' Koliko staging redova nosi dati broj izvoda (za proveru da odbijen red NIJE upisan).
+Private Function StagingRedova(ByVal brojIzvoda As String) As Long
+    Dim data As Variant
+    Dim colBrojDok As Long
+    Dim i As Long
+
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    colBrojDok = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA)
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(NzTb(data(i, colBrojDok)))) = brojIzvoda Then
+            StagingRedova = StagingRedova + 1
+        End If
+    Next i
+End Function
+
+Private Function NovacPartnerID(ByVal novacID As String) As String
+    NovacPartnerID = Trim$(CStr(NzTb(LookupValue(TBL_NOVAC, COL_NOV_ID, novacID, COL_NOV_PARTNER_ID))))
+End Function
 
 Private Sub BitAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals As Variant)
     Dim lo As ListObject

@@ -79,7 +79,20 @@ Public Const BIM_SMER_NEJASAN As String = "NEJASAN"
 
 ' Kad je True, batch auto-map (strong pass / Auto sve) ne prikazuje blokirajuci
 ' MsgBox po redu (npr. "Kooperant nema StanicaID"). Postavlja ga pozivalac oko petlje.
+' Od review 3 vazi i za greske u `_TX` omotacima: batch/test rezim ne sme da
+' zaustavi rad dijalogom (rezultat se i dalje vraca pozivaocu, greska se loguje).
 Public gBankaSilentBatch As Boolean
+
+' ============================================================
+' JAVNI API OVOG MODULA = SAMO `_TX` ULAZI.
+'
+' Ne-TX mutatori (`MapBankaImportAs*`, `AutoMapBankaImportRow`,
+' `SkipBankaImportRow`) su `Private`: od RF-09 jedan poziv moze da napravi VISE
+' redova u tblNovac (uplata na fakturu + avans visak; raspodela po bloku), pa bez
+' transakcije pad drugog upisa ostavlja prvi trajno upisan, a stavku izvoda
+' otvorenu -- ponovni pokusaj bi duplirao prvi deo. Transakcija je time deo
+' ugovora, a ne stvar discipline pozivaoca (FM-0023 #6).
+' ============================================================
 
 ' ============================================================
 ' PUBLIC
@@ -138,7 +151,7 @@ Public Function GetBankaImportOpen() As Variant
     GetBankaImportOpen = finalResult
 End Function
 
-Public Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
+Private Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
                                       Optional ByVal strongOnly As Boolean = False, _
                                       Optional ByVal markErrorOnFail As Boolean = True) As String
     Dim bim As Variant
@@ -291,13 +304,15 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju banke, promene vra" & ChrW(263) & "ene: " & errDesc, _
-           vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju banke, promene vra" & ChrW(263) & "ene: " & errDesc, _
+               vbCritical, APP_NAME
+    End If
 
     AutoMapBankaImportRow_TX = ""
 End Function
 
-Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
+Private Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
                                       ByVal kupacID As String, _
                                       Optional ByVal fakturaID As String = "", _
                                       Optional ByVal savePartnerMapFlag As Boolean = True) As String
@@ -490,12 +505,14 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kupca, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kupca, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     MapBankaImportAsKupac_TX = ""
 End Function
 
-Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
+Private Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
                                           ByVal kooperantID As String, _
                                           Optional ByVal otkupID As String = "", _
                                           Optional ByVal vrstaVoca As String = "", _
@@ -637,12 +654,14 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     MapBankaImportAsKooperant_TX = ""
 End Function
 
-Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
+Private Function MapBankaImportAsOM(ByVal bankaImportID As String, _
                                    ByVal omID As String, _
                                    Optional ByVal vrstaVoca As String = "", _
                                    Optional ByVal savePartnerMapFlag As Boolean = True) As String
@@ -755,12 +774,14 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju OM, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju OM, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     MapBankaImportAsOM_TX = ""
 End Function
 
-Public Function MapBankaImportAsKooperantBlock(ByVal bankaImportID As String, _
+Private Function MapBankaImportAsKooperantBlock(ByVal bankaImportID As String, _
                                                ByVal kooperantID As String, _
                                                Optional ByVal savePartnerMapFlag As Boolean = True) As Long
     Dim blockNo As String
@@ -824,7 +845,9 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     MapBankaImportAsKooperantBlock_TX = 0
 End Function
@@ -832,7 +855,7 @@ End Function
 ' allowManyCandidates: operater je video kandidate i predlozenu podelu pa je
 ' potvrdio (frmBankaImport). Samo tako blok sa 3+ otvorenih stavki moze da se
 ' zavrsi - automatski put ga i dalje odbija (ERR_BMAP_MANUAL_REQUIRED).
-Public Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As String, _
+Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As String, _
                                                      ByVal kooperantID As String, _
                                                      ByVal brojBloka As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
@@ -899,7 +922,9 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     MapBankaImportAsKooperantBlockManual_TX = 0
 End Function
@@ -1064,7 +1089,7 @@ NextCandidate:
 End Function
 
 
-Public Function SkipBankaImportRow(ByVal bankaImportID As String) As Boolean
+Private Function SkipBankaImportRow(ByVal bankaImportID As String) As Boolean
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then
         SkipBankaImportRow = False
         Exit Function
@@ -1127,7 +1152,9 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri preskakanju bank stavke, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri preskakanju bank stavke, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     SkipBankaImportRow_TX = False
 End Function
@@ -1245,7 +1272,9 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju svih bank stavki, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    If Not gBankaSilentBatch Then
+        MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju svih bank stavki, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+    End If
 
     AutoMapAllBankaImport_TX = 0
 End Function

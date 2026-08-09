@@ -69,6 +69,51 @@ EH:
     LogErr "modComboBinding.FillComboDisplayID"
 End Sub
 
+' Prikaz sa vidljivim ID-em: "Agro Trade  [KUP-284]".
+'
+' `FillComboDisplayID` drzi ID u SKRIVENOJ koloni (0 pt), sto stiti kod (bira se
+' tacan ID izabranog reda), ali ne pomaze operateru: dva partnera istog naziva
+' izgledaju kao dve identicne stavke i izbor je pogadjanje. Tamo gde je izbor
+' finansijska odluka (mapiranje uplate/avansa) prikaz mora da razlikuje duplikate.
+Public Function ComboDisplayWithID(ByVal displayText As String, _
+                                   ByVal idValue As String) As String
+    Dim t As String
+    Dim id As String
+
+    t = Trim$(displayText)
+    id = Trim$(idValue)
+
+    If id = "" Then
+        ComboDisplayWithID = t
+        Exit Function
+    End If
+
+    If t = "" Then
+        ComboDisplayWithID = "[" & id & "]"
+        Exit Function
+    End If
+
+    ComboDisplayWithID = t & "  [" & id & "]"
+End Function
+
+' Dopuni vec napunjen 2-kolonski combo (FillComboDisplayID) tako da prikaz nosi i
+' ID. Skrivena ID kolona ostaje netaknuta, pa `GetComboID` radi kao i pre.
+Public Sub ShowIDInComboDisplay(ByVal cmb As MSForms.ComboBox)
+    On Error GoTo EH
+
+    If cmb.ColumnCount < 2 Then Exit Sub
+
+    Dim i As Long
+    For i = 0 To cmb.ListCount - 1
+        cmb.List(i, 0) = ComboDisplayWithID(CStr(cmb.List(i, 0)), CStr(cmb.List(i, 1)))
+    Next i
+
+    Exit Sub
+
+EH:
+    LogErr "modComboBinding.ShowIDInComboDisplay"
+End Sub
+
 Public Function GetComboID(ByVal cmb As MSForms.ComboBox) As String
     On Error GoTo Fallback
 

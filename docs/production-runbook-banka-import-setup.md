@@ -28,7 +28,7 @@ Lokalni Inbox  (npr. C:\...\OtkupAPP\Bank_Izvodi\Inbox)
   │  ImportBankaInbox_TX  ->  ExtractTextFromPdf (pdftotext)  ->  ParseBankaIzvodForImport (Komercijalna)
   ▼
 tblBankaImport  (staging)
-  │  frmBankaImport: auto-map na otvaranje (poziv/racun) + rucno
+  │  frmBankaImport: dugme "Mapiraj jake kljuceve (N)" (poziv/racun) + rucno
   ▼
 tblNovac  (finansijska knjiga)
 ```

@@ -44,6 +44,13 @@ EH:
     TryParseLong = False
 End Function
 
+' Da li je datum u deklarisanom poslovnom opsegu. Isti kriterijum koriste
+' `TryParseDateValue`/`TryParseBankaDateDMY` i staging writer banke, pa je opseg
+' definisan na jednom mestu.
+Public Function IsPoslovnaGodina(ByVal d As Date) As Boolean
+    IsPoslovnaGodina = (Year(d) >= MIN_POSLOVNA_GODINA And Year(d) <= MAX_POSLOVNA_GODINA)
+End Function
+
 ' Deterministicko `d.m.yyyy` / `d/m/yyyy` parsiranje - BEZ `CDate`, pa bez uticaja
 ' regionalnih podesavanja masine. To je format koji daju parseri izvoda banaka
 ' (`dd.mm.yyyy`), gde je zamena dana i meseca tiho pogresno datiranje transakcije.
