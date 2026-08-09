@@ -550,7 +550,8 @@ Private Sub Test_SEFOfficialStatusEnumClassified()
 
     ' --- terminalno na SEF-u ---
     AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), "Cancelled -> TERMINAL"
-    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Storno"), "Storno -> TERMINAL"
+    AssertEquals SEF_CLS_STORNO, ClassifySEFExternalStatus("Storno"), _
+                 "Storno -> STORNO (jedini spoljni terminal sa lokalnim parnjakom)"
     AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Deleted"), "Deleted -> TERMINAL"
 
     ' "Mistake" = greska prilikom slanja, NE terminalno stanje. Kad je bio u
@@ -711,7 +712,7 @@ Private Sub Test_SEFRefreshTransitionMatrix()
 
     ' Terminalni udaljeni status izvlaci fakturu iz svih zaglavljenih stanja.
     AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_TERMINAL), _
-                 "SENDING + Storno -> SEF_SENT (ne ostaje zaglavljena)"
+                 "SENDING + Cancelled -> SEF_SENT (ne ostaje zaglavljena)"
     AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_TERMINAL), _
                  "UNKNOWN + Cancelled -> SEF_SENT (izlazi iz UNKNOWN)"
 
@@ -732,7 +733,7 @@ Private Sub Test_SEFRefreshTransitionMatrix()
     AssertEquals "", SEFRefreshTargetState(WF_SEF_STORNO, SEF_CLS_STORNO), _
                  "Vec storniran -> bez self-transition"
     AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_TERMINAL), _
-                 "SENT + Storno -> bez promene stanja (samo refresh polja)"
+                 "SENT + Cancelled -> bez promene stanja (samo refresh polja)"
 
     ' Pad API-ja: SENDING i SENT imaju svoj izlaz, ostalo se NE dira.
     AssertEquals WF_SEF_UNKNOWN, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_ERROR), _
@@ -964,9 +965,12 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
         "SEFDocumentId", "5317568", _
         "SEFSubmissionIDLast", submissionID)
 
+    ' SEFDocumentId se poklapa sa fakturinim -- tako se izvrsava i lineage grana
+    ' razduzenja (bez njega bi ostala nepokrivena).
     AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
         "SEFSubmissionID", submissionID, _
         "FakturaID", fakturaID, _
+        "SEFDocumentId", "5317568", _
         "SubmissionStatus", SEF_SUB_SENT)
 
     ' Pre pripreme: duplicate guard blokira (to je i bio simptom).
@@ -1026,6 +1030,51 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
                "Priprema pada kad prethodna submisija ostaje ACCEPTED (fail-closed)"
     AssertTrue HasSuccessfulSEFSubmission(fakturaID2), _
                "ACCEPTED submisija se ne prepisuje u REJECTED"
+
+    ' Scenario 3 (fiskalni lineage): `SEFSubmissionIDLast` moze da bude zastareo,
+    ' pa submisija pokazuje na DRUGI SEF dokument. Razduzenje tada ne sme da
+    ' prepise istoriju -- puca i trazi rucnu proveru (zapis o predaji poreskom
+    ' organu). Gadja se helper direktno, da bi se videlo da NISTA nije upisano.
+    Dim fakturaID3 As String
+    Dim submissionID3 As String
+    Dim raisedLineage As Boolean
+
+    fakturaID3 = fakturaID & "-LIN"
+    submissionID3 = submissionID & "-LIN"
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID3, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317580", _
+        "SEFSubmissionIDLast", submissionID3)
+
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID3, _
+        "FakturaID", fakturaID3, _
+        "SEFDocumentId", "9999999", _
+        "SubmissionStatus", SEF_SUB_SENT)
+
+    raisedLineage = False
+    On Error Resume Next
+    DischargeSEFSubmission_Row submissionID3, fakturaID3, "5317580"
+    raisedLineage = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raisedLineage, _
+               "Neslaganje SEFDocumentId pri razduzenju puca (rucna provera)"
+    AssertEquals SEF_SUB_SENT, _
+                 Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID3, "SubmissionStatus"))), _
+                 "Submisija sa tudjim dokumentom ostaje NETAKNUTA"
+    AssertTrue HasSuccessfulSEFSubmission(fakturaID3), _
+               "Duplicate guard i dalje blokira (nista nije razduzeno)"
+
+    ' Kontrola: isti dokument -> razduzenje prolazi.
+    AssertTrue DischargeSEFSubmission_Row(submissionID3, fakturaID3, "9999999"), _
+               "Isti SEFDocumentId -> razduzenje prolazi"
+    AssertTrue Not HasSuccessfulSEFSubmission(fakturaID3), _
+               "Posle razduzenja duplicate guard vise ne blokira"
 
     tx.RollbackTx
     Set tx = Nothing
