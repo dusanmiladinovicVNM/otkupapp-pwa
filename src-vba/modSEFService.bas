@@ -536,22 +536,37 @@ Public Function SEFSendOutcomeMessage(ByVal workflowState As String, _
     SEFSendOutcomeMessage = messageText
 End Function
 
-' AUD-032c: recovery je uspeo samo ako je faktura zavrsila u nekom od stanja u
-' koja SEF_SENDING sme da predje (modSEFValidator). Ranije se "Recovered" event
-' upisivao bezuslovno, pa je zaglavljena faktura pri svakom startup-u davala
-' lazan izvestaj o oporavku.
+' AUD-032c: recovery je uspeo samo ako je faktura zavrsila u nekom od ISHODA
+' koje refresh planer moze da proizvede polazeci od SEF_SENDING. Ranije se
+' "Recovered" event upisivao bezuslovno, pa je zaglavljena faktura pri svakom
+' startup-u davala lazan izvestaj o oporavku.
 '
 ' NAMERNO whitelist, a ne "<> SEF_SENDING": provera se hrani iz
 ' GetFakturaSEFWorkflowState, koje na schema/read gresci moze da vrati PRAZAN
 ' string. Sa negativnim testom bi prazno stanje (i svako smece u koloni) prolazilo
 ' kao uspesan oporavak -- fail-open bas tamo gde podatak nije procitan.
+'
+' Spisak je izveden iz planera (SEFRefreshTargetState), NE iz same tabele
+' dozvoljenih tranzicija:
+'   ACCEPTED / REJECTED / SENT / TECH_FAILED / UNKNOWN  - direktni ishodi
+'   STORNO                                              - dvokorak
+'                                                         SENDING -> SENT -> STORNO
+' `WF_SEF_STORNO` je dodat kad je uveden `SEF_CLS_STORNO`: bez njega je
+' faktura koja je uspesno izasla iz SEF_SENDING i zavrsila u ispravnom
+' terminalnom SEF_STORNO bila prijavljena kao "recovery nije uspeo" i brojana
+' pod NotRecovered -- dakle bas ono lazno prijavljivanje ishoda koje AUD-032c
+' uklanja, samo u novom ruhu.
+'
+' SEF_READY i LOCAL_* se NE priznaju: planer ih ne proizvodi iz SEF_SENDING
+' (dohvatljivi su tek preko naknadnog retry/resubmit toka).
 Public Function IsSEFRecoveryComplete(ByVal stateAfterRecovery As String) As Boolean
     Select Case UCase$(Trim$(stateAfterRecovery))
         Case UCase$(WF_SEF_SENT), _
              UCase$(WF_SEF_ACCEPTED), _
              UCase$(WF_SEF_REJECTED), _
              UCase$(WF_SEF_TECH_FAILED), _
-             UCase$(WF_SEF_UNKNOWN)
+             UCase$(WF_SEF_UNKNOWN), _
+             UCase$(WF_SEF_STORNO)
             IsSEFRecoveryComplete = True
         Case Else
             ' Ukljucuje SEF_SENDING (nije se pomerila), prazno stanje

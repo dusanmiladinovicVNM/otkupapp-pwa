@@ -184,11 +184,13 @@ End Sub
 ' ostaju u Run*LiveSuite entry point-ima iza SEF_TEST_ALLOW_LIVE /
 ' SEF_TEST_ALLOW_CANCEL_STORNO kapija.
 '
-' TABELE: svi testovi su cisti OSIM
-' `Test_SEFRejectedResubmitPassesDuplicateGuard`, koji seed-uje redove u
-' tblFakture / tblSEFSubmission / tblSEFEventLog i UVEK ih rollback-uje
-' (clsTransaction, isti obrazac kao modFakturaTests). Taj lanac se ne moze
-' dokazati cistim funkcijama -- duplicate guard cita stvarne tabele.
+' TABELE: vecina testova je cista. DVA testa seed-uju redove u
+' tblFakture / tblSEFSubmission / tblSEFEventLog i UVEK ih rollback-uju
+' (clsTransaction + ugasen journal/AutoSave, isti obrazac kao modFakturaTests):
+'   * Test_SEFRejectedResubmitPassesDuplicateGuard -- duplicate guard cita
+'     stvarne tabele, pa se lanac ne moze dokazati cistim funkcijama
+'   * Test_SEFStornoMovesLocalWorkflow -- matrica dokazuje da state machine
+'     DOZVOLJAVA prelaz u SEF_STORNO, ali ne i da produkcioni put to RADI
 ' ============================================================
 Public Sub RunSEFTestSuite()
     On Error GoTo EH
@@ -1241,6 +1243,25 @@ Private Sub Test_SEFRecoveryOutcomeContract()
                "Prelazak u SEF_ACCEPTED jeste oporavak"
     AssertTrue IsSEFRecoveryComplete(WF_SEF_REJECTED), _
                "Prelazak u SEF_REJECTED jeste oporavak"
+
+    ' AUD-032c: STORNO je ishod dvokoraka SENDING -> SENT -> STORNO. Bez njega u
+    ' whitelisti je faktura koja je uspesno izasla iz SEF_SENDING i zavrsila u
+    ' ispravnom terminalnom stanju bila prijavljena kao "recovery nije uspeo".
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_STORNO), _
+               "Prelazak u SEF_STORNO jeste uspesan recovery"
+
+    ' Ceo lanac, ne samo krajnja tacka: planer iz SEF_SENDING za STORNO daje
+    ' SEF_SENT, pa SEF_STORNO -- i taj ishod mora da se broji kao oporavak.
+    Dim stornoHop1 As String
+    Dim stornoHop2 As String
+
+    stornoHop1 = SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO)
+    stornoHop2 = SEFRefreshTargetState(stornoHop1, SEF_CLS_STORNO)
+
+    AssertEquals WF_SEF_SENT, stornoHop1, "SENDING + Storno -> prvi korak SEF_SENT"
+    AssertEquals WF_SEF_STORNO, stornoHop2, "SENDING + Storno -> drugi korak SEF_STORNO"
+    AssertTrue IsSEFRecoveryComplete(stornoHop2), _
+               "SENDING -> SENT -> STORNO se prijavljuje kao uspesan recovery"
 
     ' FAIL-CLOSED: provera se hrani iz GetFakturaSEFWorkflowState, koja na
     ' schema/read gresci vraca prazan string. Negativan test ("<> SENDING") bi

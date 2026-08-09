@@ -12,8 +12,16 @@ Skripta PARSIRA produkcioni izvor (ne kopira logiku rucno):
   * `ClassifySEFExternalStatus` iz modSEFStatusSync
   * tabelu dozvoljenih tranzicija iz `ValidateAllowedTransition` u modSEFValidator
   * `WF_*` konstante iz modConfig
+  * mapu `klasa -> ciljno stanje` iz `SEFRefreshTargetState`
 pa uporedjuje sa SVAKIM `AssertEquals` nad `ClassifySEFExternalStatus` i
 `SEFRefreshTargetState` u modSEFTests.
+
+OGRANICENJE (posteno receno): checker je **parcijalno** izveden iz izvora. Dva
+pravila planera su ovde rucno preslikana -- grana za ERROR/UNKNOWN
+(SENDING -> UNKNOWN, SENT -> SYNC_ERROR) i pravilo mosta preko SEF_SENT. Ako se
+BAS ta dva pravila promene u VBA planeru, mora i ovde. Sve ostalo (spisak klasa,
+ciljna stanja po klasi, tabela dozvoljenih tranzicija, WF_* konstante) cita se
+iz koda, pa ne moze da zastari.
 
 Pokretanje iz korena repoa:  python3 tools/check-sef-asserts.py
 Izlaz 0 = nema neslaganja; 1 = ispisana lista neslaganja.
@@ -59,19 +67,42 @@ def allowed(old, new):
         if val_of(k).upper() == old.strip().upper():
             return any(val_of(v).upper() == new.strip().upper() for v in vs)
     return False
+# --- class -> desired-state map, PARSED from SEFRefreshTargetState -------------
+# Ranije je ovaj mapping bio rucno prepisan ovde, pa je alat koji hvata
+# duplirano znanje i sam bio duplirano znanje. Sada se cita iz izvora.
+pl = src[src.index('Public Function SEFRefreshTargetState'):]
+pl = pl[:pl.index('End Function')]
+pl = re.sub(r'_\n\s*', ' ', pl)
+DESIRED, pend = {}, []
+for line in pl.split('\n'):
+    st = line.strip()
+    if st.startswith("'"):
+        continue
+    m = re.match(r'^Case ((?:SEF_CLS_\w+\s*,?\s*)+)$', st)
+    if m:
+        pend = [x.strip() for x in m.group(1).split(',') if x.strip()]
+        continue
+    m2 = re.match(r'^desired = (WF_\w+)$', st)
+    if m2 and pend:
+        for c in pend:
+            DESIRED[c] = m2.group(1)
+        pend = []
+assert DESIRED, 'planer mapping nije isparsiran'
+
+# HAND-MIRRORED (jedini deo koji nije izveden iz izvora): grana za ERROR/UNKNOWN
+# (SENDING -> UNKNOWN, SENT -> SYNC_ERROR, ostalo bez promene) i pravilo mosta
+# preko SEF_SENT. Ako se TA dva pravila promene u VBA planeru, mora i ovde --
+# ostatak (klase, ciljna stanja, tabela tranzicija, konstante) se cita iz koda.
 def plan(cur_state, cls):
     c = val_of(cur_state).upper()
-    if cls == 'SEF_CLS_ACCEPTED': d = 'SEF_ACCEPTED'
-    elif cls == 'SEF_CLS_REJECTED': d = 'SEF_REJECTED'
-    elif cls == 'SEF_CLS_SEND_FAILED': d = 'SEF_TECH_FAILED'
-    elif cls == 'SEF_CLS_STORNO': d = 'SEF_STORNO'
-    elif cls in ('SEF_CLS_PENDING','SEF_CLS_TERMINAL','SEF_CLS_INFO'): d = 'SEF_SENT'
+    if cls in DESIRED:
+        d = val_of(DESIRED[cls])
     else:
         if c == 'SEF_SENDING': d = 'SEF_UNKNOWN'
         elif c == 'SEF_SENT': d = 'SEF_SYNC_ERROR'
         else: return ''
     if not c: return d
-    if c == d: return ''
+    if c == d.upper(): return ''
     if allowed(c, d): return d
     if allowed(c, 'SEF_SENT') and allowed('SEF_SENT', d): return 'SEF_SENT'
     return ''
