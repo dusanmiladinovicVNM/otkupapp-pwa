@@ -303,8 +303,11 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
                                       Optional ByVal savePartnerMapFlag As Boolean = True) As String
     Dim bim As Variant
     Dim kupacNaziv As String
-    Dim tip As String
-    
+    Dim uplataUkupno As Double
+    Dim otvorenoNaFakturi As Double
+    Dim naFakturu As Double
+    Dim avans As Double
+
     If Not ValidateBankaImportNotProcessed(bankaImportID) Then
         MapBankaImportAsKupac = ""
         Exit Function
@@ -328,40 +331,96 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
 
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     If kupacNaziv = "" Then kupacNaziv = CStr(bim(1, 3))
-    
-    If fakturaID <> "" Then
-        tip = NOV_KUPCI_UPLATA
-    Else
-        tip = NOV_KUPCI_AVANS
-    End If
-    
+
+    uplataUkupno = CDbl(NzBIM(bim(1, 5), 0#))
+    naFakturu = 0
+    avans = uplataUkupno
+
     If fakturaID <> "" Then
         RequireSingleRow TBL_FAKTURE, COL_FAK_ID, fakturaID, _
                          "MapBankaImportAsKupac"
         RequireFakturaZaKupca fakturaID, kupacID, "MapBankaImportAsKupac"
+
+        ' Preplata: na fakturu ide najvise njen OTVOREN iznos, visak je avans
+        ' kupca. Ranije je ceo iznos izvoda isao na fakturu sa `NOV_KUPCI_UPLATA`,
+        ' pa je faktura mogla da ostane preplacena, a stvaran avans neevidentiran.
+        ' Saldo se cita ovde (a ne iz liste u formi) jer se izmedju prikaza i
+        ' klika mogao promeniti.
+        otvorenoNaFakturi = GetOtvorenoNaFakturi(fakturaID)
+
+        If otvorenoNaFakturi <= 0.009 Then
+            Err.Raise ERR_BMAP_BASE + 53, "MapBankaImportAsKupac", _
+                "Faktura " & fakturaID & " nema otvoren iznos (vec je placena). " & _
+                "Osvezi listu pa izaberi drugu fakturu ili knjizi kao avans."
+        End If
+
+        If uplataUkupno <= otvorenoNaFakturi Then
+            naFakturu = uplataUkupno
+        Else
+            naFakturu = otvorenoNaFakturi
+        End If
+
+        avans = uplataUkupno - naFakturu
     End If
 
-    MapBankaImportAsKupac = SaveNovac( _
-        RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
-        CDate(bim(1, 2)), _
-        kupacNaziv, _
-        kupacID, _
-        "Kupac", _
-        "", _
-        "", _
-        fakturaID, _
-        "", _
-        tip, _
-        CDbl(NzBIM(bim(1, 5), 0#)), _
-        CDbl(NzBIM(bim(1, 6), 0#)), _
-        BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kupac") _
-    )
-    
+    If naFakturu > 0 Then
+        MapBankaImportAsKupac = SaveNovac( _
+            RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
+            CDate(bim(1, 2)), _
+            kupacNaziv, _
+            kupacID, _
+            "Kupac", _
+            "", _
+            "", _
+            fakturaID, _
+            "", _
+            NOV_KUPCI_UPLATA, _
+            naFakturu, _
+            0, _
+            BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kupac") _
+        )
+
+        If MapBankaImportAsKupac = "" Then
+            UpdateBankaImportStatus bankaImportID, "Error"
+            Exit Function
+        End If
+    End If
+
+    If avans > 0.009 Then
+        Dim avansID As String
+
+        avansID = SaveNovac( _
+            RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
+            CDate(bim(1, 2)), _
+            kupacNaziv, _
+            kupacID, _
+            "Kupac", _
+            "", _
+            "", _
+            "", _
+            "", _
+            NOV_KUPCI_AVANS, _
+            avans, _
+            0, _
+            BuildBIMNapomena(bankaImportID, CStr(bim(1, 9)), CStr(bim(1, 4)), CStr(bim(1, 7)), CStr(bim(1, 8)), "Kupac-visak") _
+        )
+
+        If avansID = "" Then
+            ' Deo iznosa bi ostao neproknjizen, a stavka bi bila zatvorena kao
+            ' obradjena -- fail-closed (TX omotac vraca i eventualni prvi red).
+            Err.Raise ERR_BMAP_BASE + 54, "MapBankaImportAsKupac", _
+                "Avansni deo uplate (" & Format$(avans, "#,##0.00") & _
+                ") nije proknjizen za BankaImportID=" & bankaImportID
+        End If
+
+        If MapBankaImportAsKupac = "" Then MapBankaImportAsKupac = avansID
+    End If
+
     If MapBankaImportAsKupac = "" Then
         UpdateBankaImportStatus bankaImportID, "Error"
         Exit Function
     End If
-    
+
     UpdateBankaImportStatus bankaImportID, "Da"
     
     If savePartnerMapFlag Then
@@ -2061,6 +2120,18 @@ End Function
 ' je prazan broj greska uvoza/parsera - ne slucaj za fallback. Raniji fallback je
 ' sve stavke bez broja slivao u literal "IZVOD" i time spajao nepovezane izvode u
 ' jednu storno grupu (tiha korupcija identiteta).
+' Otvoren (jos neplacen) iznos fakture = iznos - aktivne uplate. JEDAN izvor
+' istine: koristi ga i lista faktura u frmBankaImport (prikaz) i writer
+' (raspodela uplata/avans), pa prikazan i knjizen saldo ne mogu da se razidju.
+Public Function GetOtvorenoNaFakturi(ByVal fakturaID As String) As Double
+    Dim iznos As Double
+
+    If Trim$(fakturaID) = "" Then Exit Function
+
+    iznos = CDbl(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS), "0"))
+    GetOtvorenoNaFakturi = iznos - GetUplataForFaktura(fakturaID)
+End Function
+
 ' FM-0023 #2: uplata se sme vezati SAMO za fakturu tog kupca i to nestorniranu.
 ' Do RF-09 je ovo bilo latentno (UI je uvek slao prazan FakturaID); sada
 ' frmBankaImport nudi izbor fakture, pa veza mora da se proveri na upisu, ne samo

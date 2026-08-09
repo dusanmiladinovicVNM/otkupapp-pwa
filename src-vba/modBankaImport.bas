@@ -489,16 +489,19 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     ' pada ceo izvod sa jasnom porukom (fajl ide u Error folder) umesto tihog
     ' pomeranja dana. Prazan datum transakcije je ista klasa greske: red bi bio
     ' neupotrebljiv u mapiranju (CDate na praznom stringu puca).
-    Dim probeDate As Date
+    Dim datumIzvodaVal As Date
+    Dim datumTxVal() As Date
 
-    If Not TryParseDateValue(datumIzvoda, probeDate) Then
+    If Not TryParseDateValue(datumIzvoda, datumIzvodaVal) Then
         Err.Raise vbObjectError + 1009, "ParseBankaIzvodForImport", _
             "PARSER DATUM IZVODA nije validan datum: '" & datumIzvoda & _
             "' (izvod " & brojIzvoda & "). Nemoguc datum se ne sme uvesti pomeren."
     End If
 
+    ReDim datumTxVal(1 To UBound(txData, 1))
+
     For i = 1 To UBound(txData, 1)
-        If Not TryParseDateValue(CStr(NzBIM(txData(i, 2), "")), probeDate) Then
+        If Not TryParseDateValue(CStr(NzBIM(txData(i, 2), "")), datumTxVal(i)) Then
             Err.Raise vbObjectError + 1010, "ParseBankaIzvodForImport", _
                 "PARSER DATUM TRANSAKCIJE nije validan datum: '" & _
                 CStr(NzBIM(txData(i, 2), "")) & "' (izvod " & brojIzvoda & _
@@ -573,10 +576,14 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     ReDim result(1 To UBound(txData, 1), 1 To 17)
 
     For i = 1 To UBound(txData, 1)
+        ' Datumi izlaze kao TYPED Date (ne kao originalni tekst): vrednost je vec
+        ' deterministicki isparsirana gore, pa bi vracanje sirovog teksta znacilo
+        ' da se validirani datum baci i da ga staging/mapiranje ponovo tumace
+        ' preko locale-zavisnog CDate (FM-0022 #17 / FM-0023 #23).
         result(i, 1) = brojIzvoda          ' BrojDokumenta
-        result(i, 2) = datumIzvoda         ' DatumIzvoda
+        result(i, 2) = datumIzvodaVal      ' DatumIzvoda (Date)
         result(i, 3) = brojRacuna          ' BrojRacuna
-        result(i, 4) = txData(i, 2)        ' DatumTransakcije
+        result(i, 4) = datumTxVal(i)       ' DatumTransakcije (Date)
         result(i, 5) = txData(i, 3)        ' Partner
         result(i, 6) = txData(i, 4)        ' PartnerKonto
         result(i, 7) = txData(i, 6)        ' Uplata / Odobrenje
@@ -704,9 +711,12 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
 
             rowData(colID) = newID
             rowData(colBrojDok) = CStr(data(i, 1))
-            rowData(colDatumIzvoda) = CStr(data(i, 2))
+            ' Datumi se upisuju kao Date (bez CStr): staging je jedini izvor
+            ' istine za datum transakcije, a string bi ga vratio na locale
+            ' tumacenje pri svakom citanju.
+            rowData(colDatumIzvoda) = ToBimDatum(data(i, 2))
             rowData(colBrojRacuna) = CStr(data(i, 3))
-            rowData(colDatumTx) = CStr(data(i, 4))
+            rowData(colDatumTx) = ToBimDatum(data(i, 4))
             rowData(colPartner) = CStr(data(i, 5))
             rowData(colPartnerKonto) = CStr(data(i, 6))
             rowData(colOpis) = CStr(data(i, 10))
@@ -825,7 +835,7 @@ Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
                         Exit Function
                     End If
                 Else
-                    If Trim$(CStr(data(i, colDatumTx))) = Trim$(CStr(datumTransakcije)) _
+                    If SameBimDatum(data(i, colDatumTx), datumTransakcije) _
                        And CDbl(NzBIM(data(i, colUplata), 0#)) = uplata _
                        And CDbl(NzBIM(data(i, colIsplata), 0#)) = isplata _
                        And Trim$(CStr(data(i, colPartner))) = Trim$(partner) Then
@@ -858,6 +868,78 @@ EH:
 End Function
 
 'HELPERS
+
+' Vrednost datuma za staging: Date kad se moze deterministicki dobiti, inace
+' original (da se nista ne izgubi ako neki poziv dodje sa neocekivanim tipom).
+' `TryParseBankaDateDMY` ide PRE `IsDate` iz istog razloga kao u modParse.
+Private Function ToBimDatum(ByVal v As Variant) As Variant
+    Dim d As Date
+
+    If IsDate(v) Then
+        If VarType(v) = vbDate Then
+            ToBimDatum = CDate(v)
+            Exit Function
+        End If
+    End If
+
+    If TryParseBankaDateDMY(CStr(NzBIM(v, "")), d) Then
+        ToBimDatum = d
+        Exit Function
+    End If
+
+    If IsDate(v) Then
+        ToBimDatum = CDate(v)
+        Exit Function
+    End If
+
+    ToBimDatum = v
+End Function
+
+' Poredjenje datuma za dedupe: staging je od v2.38.0 typed Date, a zatecen
+' (legacy) staging je String. Zato se obe strane svode na Date kad je moguce, pa
+' se porede po danu; tek ako to ne uspe, pada se na poredjenje teksta. Bez ovoga
+' bi ponovni uvoz starog izvoda promasio duplikat (Date vs "01.02.2026").
+Private Function SameBimDatum(ByVal a As Variant, ByVal b As Variant) As Boolean
+    Dim da As Date
+    Dim db As Date
+    Dim okA As Boolean
+    Dim okB As Boolean
+
+    okA = TryBimDatum(a, da)
+    okB = TryBimDatum(b, db)
+
+    If okA And okB Then
+        SameBimDatum = (Int(CDbl(da)) = Int(CDbl(db)))
+        Exit Function
+    End If
+
+    SameBimDatum = (Trim$(CStr(NzBIM(a, ""))) = Trim$(CStr(NzBIM(b, ""))))
+End Function
+
+Private Function TryBimDatum(ByVal v As Variant, ByRef result As Date) As Boolean
+    On Error GoTo EH
+
+    If VarType(v) = vbDate Then
+        result = CDate(v)
+        TryBimDatum = True
+        Exit Function
+    End If
+
+    If TryParseBankaDateDMY(CStr(NzBIM(v, "")), result) Then
+        TryBimDatum = True
+        Exit Function
+    End If
+
+    If IsDate(v) Then
+        result = CDate(v)
+        TryBimDatum = True
+    End If
+
+    Exit Function
+
+EH:
+    TryBimDatum = False
+End Function
 
 Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
                                           ByVal errSource As String, _

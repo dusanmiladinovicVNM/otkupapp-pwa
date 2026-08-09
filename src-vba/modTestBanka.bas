@@ -78,6 +78,8 @@ Public Sub RunBankaImportTestSuite()
     T02_DedupeUkljucujeBrojRacuna
     T03_TriKandidataNeObarajuBatch
     T04_SmerGuardOdbijaPogresanTip
+    T05_StagingCuvaTypedDatum
+    T06_UplataPrekoOtvorenogSeDeli
 
     tx.RollbackTx
     Set tx = Nothing
@@ -165,6 +167,75 @@ Private Sub T01_NemoguciDatumOdbijen()
     d = 0
     Chk TryParseDateValue("15/03/2026", d), S & "kosa crta kao separator prolazi"
     ChkEq Format$(d, "yyyy-mm-dd"), "2026-03-15", S & "15/03/2026 tacno parsiran"
+
+    ' Locale kapija: dd.mm.yyyy iz izvoda banke mora da se parsira DETERMINISTICKI
+    ' (dan pa mesec), bez oslanjanja na CDate. Na MM/DD masini bi "01.02.2026"
+    ' inace postalo 2. januar umesto 1. februara.
+    d = 0
+    Chk TryParseBankaDateDMY("01.02.2026", d), S & "DMY parser prihvata 01.02.2026"
+    ChkEq Format$(d, "yyyy-mm-dd"), "2026-02-01", S & "01.02.2026 = 1. februar (ne 2. januar)"
+
+    d = 0
+    Chk TryParseDateValue("01.02.2026", d), S & "TryParseDateValue prihvata 01.02.2026"
+    ChkEq Format$(d, "yyyy-mm-dd"), "2026-02-01", S & "TryParseDateValue ide DMY granom prva"
+
+    d = 0
+    Chk TryParseDateValue("13.01.2026", d), S & "13.01.2026 prolazi (dan > 12)"
+    ChkEq Format$(d, "yyyy-mm-dd"), "2026-01-13", S & "13.01.2026 tacno parsiran"
+
+    Chk Not TryParseBankaDateDMY("2026-02-01", d), S & "ISO oblik nije DMY (ide na fallback)"
+    Chk Not TryParseBankaDateDMY("30.02.2026", d), S & "DMY parser odbija nemoguc datum"
+End Sub
+
+' ============================================================
+' T05 - staging cuva TYPED datum (a ne originalni tekst).
+'
+' Validiran Date je ranije bio odbacen: rezultat parsera je vracao sirovi tekst,
+' staging ga upisivao kroz CStr, a mapiranje ga opet tumacilo locale-zavisnim
+' CDate. Sada `SaveBankaImportRows` upisuje Date serial.
+' ============================================================
+Private Sub T05_StagingCuvaTypedDatum()
+    Const S As String = "T05 typed datum u stagingu: "
+
+    Dim red(1 To 1, 1 To 17) As Variant
+    Dim saved As Long
+    Dim v As Variant
+
+    red(1, 1) = P & "IZV-11"          ' BrojDokumenta
+    red(1, 2) = DateSerial(2026, 2, 1) ' DatumIzvoda (typed)
+    red(1, 3) = P & "RAC-9"           ' BrojRacuna
+    red(1, 4) = DateSerial(2026, 2, 1) ' DatumTransakcije (typed)
+    red(1, 5) = P & "PARTNER-T"       ' Partner
+    red(1, 6) = ""                    ' PartnerKonto
+    red(1, 7) = 1234.56               ' Uplata
+    red(1, 8) = 0                     ' Isplata
+    red(1, 9) = ""                    ' Sifra
+    red(1, 10) = "test"               ' Opis / Svrha
+    red(1, 11) = ""                   ' PozivNaBroj
+    red(1, 12) = P & "REF-T"          ' BankaReferenz
+    red(1, 13) = "test.pdf"           ' IzvorFajl
+    red(1, 14) = 0
+    red(1, 15) = 0
+    red(1, 16) = 0
+    red(1, 17) = 0
+
+    saved = SaveBankaImportRows(red)
+    ChkEq saved, 1, S & "red je staged"
+
+    v = LookupValue(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, P & "IZV-11", COL_BIM_DATUM_TRANSAKCIJE)
+
+    ' Ako ovo padne uz VarType=8 (String), kolona DatumTransakcije je formatirana
+    ' kao Tekst pa Excel i typed Date upisuje kao string -- promeni format kolone.
+    Chk VarType(v) = vbDate, S & "DatumTransakcije je Date, ne String [VarType=" & CStr(VarType(v)) & "]"
+
+    If VarType(v) = vbDate Then
+        ChkEq Format$(CDate(v), "yyyy-mm-dd"), "2026-02-01", S & "datum je 1. februar (bez pomeranja)"
+    End If
+
+    ' Dedupe mora da radi i kad je jedna strana String (zatecen legacy staging).
+    Chk IsDuplicateBankaImport(P & "IZV-11", DateSerial(2026, 2, 1), 1234.56, 0, _
+                               P & "PARTNER-T", "", P & "RAC-9"), _
+        S & "dedupe prepoznaje duplikat po typed datumu"
 End Sub
 
 ' ============================================================
@@ -350,6 +421,58 @@ Private Sub T04_SmerGuardOdbijaPogresanTip()
 End Sub
 
 ' ============================================================
+' T06 - uplata veca od otvorenog iznosa fakture.
+'
+' Ranije je CEO iznos izvoda isao na fakturu kao NOV_KUPCI_UPLATA -> faktura
+' preplacena, a stvaran avans neevidentiran. Sada: na fakturu ide najvise otvoren
+' iznos, visak je NOV_KUPCI_AVANS, oba reda u istoj transakciji.
+' ============================================================
+Private Sub T06_UplataPrekoOtvorenogSeDeli()
+    Const S As String = "T06 preplata fakture: "
+
+    Dim res As String
+    Dim errNum As Long
+
+    SeedKupac P & "KUP-2", P & "Kupac 2"
+    SeedFaktura P & "FAK-1", P & "KUP-2", P & "F-001", 1000
+
+    ' (a) Uplata 1500 na fakturu sa 1000 otvorenog -> 1000 + 500 avans.
+    SeedBim P & "BIM-VISAK", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 1500, 0, "", "", ""
+
+    res = MapBankaImportAsKupac(P & "BIM-VISAK", P & "KUP-2", P & "FAK-1", False)
+
+    Chk res <> "", S & "mapiranje vratilo NovacID"
+    ChkEq NovacZaBim(P & "BIM-VISAK"), 2, S & "nastala DVA reda (faktura + avans)"
+    ChkEqD UplataZaFakturu(P & "FAK-1"), 1000, S & "na fakturu tacno otvoreni iznos (bez preplate)"
+    ChkEqD UplataZaBimPoTipu(P & "BIM-VISAK", NOV_KUPCI_AVANS), 500, S & "visak knjizen kao avans"
+    ChkEqD UplataZaBim(P & "BIM-VISAK"), 1500, S & "zbir knjizenog = iznos iz izvoda"
+    ChkEq BimObradjeno(P & "BIM-VISAK"), "Da", S & "stavka zatvorena tek kad su oba reda knjizena"
+
+    ' (b) Delimicna uplata (manja od otvorenog) ide cela na fakturu, bez avansa.
+    SeedFaktura P & "FAK-2", P & "KUP-2", P & "F-002", 2000
+    SeedBim P & "BIM-DEO", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 800, 0, "", "", ""
+
+    res = MapBankaImportAsKupac(P & "BIM-DEO", P & "KUP-2", P & "FAK-2", False)
+
+    ChkEq NovacZaBim(P & "BIM-DEO"), 1, S & "delimicna uplata = jedan red"
+    ChkEqD UplataZaFakturu(P & "FAK-2"), 800, S & "cela delimicna uplata na fakturu"
+    ChkEqD UplataZaBimPoTipu(P & "BIM-DEO", NOV_KUPCI_AVANS), 0, S & "nema avans reda"
+
+    ' (c) Vec placena faktura se odbija (saldo se promenio izmedju prikaza i klika).
+    SeedBim P & "BIM-PLAC", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 300, 0, "", "", ""
+
+    On Error Resume Next
+    res = MapBankaImportAsKupac(P & "BIM-PLAC", P & "KUP-2", P & "FAK-1", False)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "uplata na vec placenu fakturu je odbijena"
+    ChkEq NovacZaBim(P & "BIM-PLAC"), 0, S & "odbijena uplata nije knjizena"
+    ChkEq BimObradjeno(P & "BIM-PLAC"), "", S & "odbijena uplata ostaje otvorena"
+End Sub
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
 
@@ -387,6 +510,13 @@ Private Sub SeedKupac(ByVal kupacID As String, ByVal naziv As String)
     BitAppend TBL_KUPCI, _
         Array("KupacID", "Naziv"), _
         Array(kupacID, naziv)
+End Sub
+
+Private Sub SeedFaktura(ByVal fakturaID As String, ByVal kupacID As String, _
+                        ByVal brojFakture As String, ByVal iznos As Double)
+    BitAppend TBL_FAKTURE, _
+        Array(COL_FAK_ID, COL_FAK_KUPAC, COL_FAK_BROJ, COL_FAK_IZNOS, COL_FAK_DATUM), _
+        Array(fakturaID, kupacID, brojFakture, iznos, Date)
 End Sub
 
 Private Sub SeedStanica(ByVal stanicaID As String, ByVal naziv As String)
@@ -486,6 +616,45 @@ Private Function IsplataZaBim(ByVal bimID As String) As Double
             IsplataZaBim = IsplataZaBim + CDbl(nz(data(i, colIsplata), "0"))
         End If
     Next i
+End Function
+
+' Zbir uplata u tblNovac koje nose BIM marker ovog staging reda.
+Private Function UplataZaBim(ByVal bimID As String) As Double
+    UplataZaBim = SumNovacZaBim(bimID, "")
+End Function
+
+' Zbir uplata za BIM marker, filtriran po tipu knjizenja.
+Private Function UplataZaBimPoTipu(ByVal bimID As String, ByVal tipNovca As String) As Double
+    UplataZaBimPoTipu = SumNovacZaBim(bimID, tipNovca)
+End Function
+
+Private Function SumNovacZaBim(ByVal bimID As String, ByVal tipNovca As String) As Double
+    Dim data As Variant
+    Dim colNap As Long, colUplata As Long, colTip As Long
+    Dim i As Long
+
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    colNap = GetColumnIndex(TBL_NOVAC, COL_NOV_NAPOMENA)
+    colUplata = GetColumnIndex(TBL_NOVAC, COL_NOV_UPLATA)
+    colTip = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
+
+    For i = 1 To UBound(data, 1)
+        If BimIdFromNapomena(CStr(NzTb(data(i, colNap)))) = bimID Then
+            If tipNovca = "" Or Trim$(CStr(NzTb(data(i, colTip)))) = tipNovca Then
+                SumNovacZaBim = SumNovacZaBim + CDbl(nz(data(i, colUplata), "0"))
+            End If
+        End If
+    Next i
+End Function
+
+' Zbir aktivnih uplata vezanih za fakturu (isti obracun koji koristi writer).
+Private Function UplataZaFakturu(ByVal fakturaID As String) As Double
+    UplataZaFakturu = GetUplataForFaktura(fakturaID)
 End Function
 
 Private Function NzTb(ByVal v As Variant) As String

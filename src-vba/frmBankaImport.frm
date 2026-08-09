@@ -415,13 +415,21 @@ Private Sub LoadManualTargets()
     
     Select Case cmbMapTip.value
         Case "Kupac"
-            FillCmb cmbPartner, GetLookupList(TBL_KUPCI, "Naziv")
-            
+            ' FM-0024 #7: identitet je ID, ne naziv. `GetLookupList` spaja kupce
+            ' istog naziva u JEDNU stavku, a `LookupValue` po nazivu vraca prvi
+            ' pogodak -- uplata (ili avans) je mogla da zavrsi na pogresnom kupcu
+            ' bez ijednog znaka operateru. Isti obrazac kao frmFakturisanje.
+            FillComboDisplayID cmbPartner, TBL_KUPCI, COL_KUP_NAZIV, COL_KUP_ID
+
         Case "Kooperant"
             Dim data As Variant
             Dim i As Long
             Dim colID As Long, colIme As Long, colPrezime As Long
-            
+
+            ' Kooperant lista je jednokolonska ("ID - Ime Prezime"); vrati
+            ' ColumnCount posle Kupac/OM punjenja (koje je bound 2-kolonsko).
+            cmbPartner.ColumnCount = 1
+
             data = GetTableData(TBL_KOOPERANTI)
             If IsEmpty(data) Then Exit Sub
             
@@ -435,9 +443,23 @@ Private Sub LoadManualTargets()
             Next i
             
         Case "OM"
-            FillCmb cmbPartner, GetLookupList(TBL_STANICE, "Naziv")
+            ' Isto kao za kupce: stanice istog naziva se ne smeju stopiti u jednu
+            ' stavku, a izbor mora da nosi StanicaID.
+            FillComboDisplayID cmbPartner, TBL_STANICE, "Naziv", "StanicaID"
     End Select
 End Sub
+
+' Stabilan ID izabranog partnera -- iz bound kolone combo-a (Kupac/OM) ili iz
+' "ID - Ime Prezime" prikaza (Kooperant). Jedno mesto za sve tri grane, da se
+' preview i komanda ne bi razlikovali u tome KOGA su izabrali.
+Private Function SelectedPartnerID() As String
+    Select Case Trim$(nz(cmbMapTip.value, ""))
+        Case "Kooperant"
+            SelectedPartnerID = ExtractIDFromDisplay(nz(cmbPartner.value, ""))
+        Case Else
+            SelectedPartnerID = GetComboID(cmbPartner)
+    End Select
+End Function
 Private Sub cmbPartner_Change()
     If cmbMapTip.value = "Kooperant" Then
         LoadOtkupBlokoviForSelectedKooperant
@@ -461,7 +483,7 @@ Private Sub LoadFaktureForSelectedKupac()
 
     Dim kupacID As String
     Dim data As Variant
-    Dim colFID As Long, colBroj As Long, colKup As Long, colIznos As Long
+    Dim colFID As Long, colBroj As Long, colKup As Long
     Dim i As Long
     Dim otvoreno As Double
 
@@ -471,7 +493,7 @@ Private Sub LoadFaktureForSelectedKupac()
 
     If Trim$(nz(cmbPartner.value, "")) = "" Then Exit Sub
 
-    kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbPartner.value, "KupacID"))
+    kupacID = SelectedPartnerID()
     If Trim$(kupacID) = "" Then Exit Sub
 
     data = GetTableData(TBL_FAKTURE)
@@ -483,12 +505,12 @@ Private Sub LoadFaktureForSelectedKupac()
     colFID = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
     colBroj = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
     colKup = GetColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC)
-    colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
 
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKup)) = kupacID Then
-            otvoreno = CDbl(nz(data(i, colIznos), "0")) - _
-                       GetUplataForFaktura(CStr(data(i, colFID)))
+            ' Isti obracun otvorenog iznosa koji koristi i writer pri raspodeli
+            ' uplate (GetOtvorenoNaFakturi) -- prikaz i knjizenje jedan izvor.
+            otvoreno = GetOtvorenoNaFakturi(CStr(data(i, colFID)))
 
             If otvoreno > 0.009 Then
                 cmbFaktura.AddItem CStr(data(i, colFID)) & " - " & _
@@ -524,7 +546,7 @@ Private Sub LoadOtkupBlokoviForSelectedKooperant()
     
     If cmbPartner.value = "" Then Exit Sub
     
-    kooperantID = ExtractIDFromDisplay(cmbPartner.value)
+    kooperantID = SelectedPartnerID()
     
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Sub
@@ -603,7 +625,7 @@ Private Sub btnSacuvajRucno_Click()
             Dim kupacID As String
             Dim fakturaID As String
 
-            kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbPartner.value, "KupacID"))
+            kupacID = SelectedPartnerID()
             If Trim$(kupacID) = "" Then
                 MsgBox "Izaberite kupca.", vbExclamation, APP_NAME
                 Exit Sub
@@ -638,7 +660,7 @@ Private Sub btnSacuvajRucno_Click()
             Dim brojBloka As String
             Dim n As Long
 
-            kooperantID = ExtractIDFromDisplay(cmbPartner.value)
+            kooperantID = SelectedPartnerID()
             If Trim$(kooperantID) = "" Then
                 MsgBox "Izaberite kooperanta.", vbExclamation, APP_NAME
                 Exit Sub
@@ -664,7 +686,7 @@ Private Sub btnSacuvajRucno_Click()
 
         Case "OM"
             Dim omID As String
-            omID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbPartner.value, "StanicaID"))
+            omID = SelectedPartnerID()
             If Trim$(omID) = "" Then
                 MsgBox "Izaberite OM.", vbExclamation, APP_NAME
                 Exit Sub
@@ -702,12 +724,35 @@ Private Function ConfirmManyCandidatesSplit(ByVal bankaImportID As String, _
     Dim isplata As Double
     isplata = CDbl(nz(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_ISPLATA), "0"))
 
-    If MsgBox("Blok " & brojBloka & " ima " & CStr(UBound(kandidati, 1)) & _
-              " otvorene otkupne stavke -- vise nego sto automatska raspodela sme da podeli." & _
-              vbCrLf & vbCrLf & _
+    ' Tri ishoda, jer je podela ovde HEURISTIKA (veci otvoreni prvi), a komentar
+    ' uz granicu kaze da 3+ stavki moze znaciti recikliran broj bloka ili dupliran
+    ' unos -- greedy raspodela tada moze da plati pogresan otkup. Zato operater
+    ' bira: DA = knjizi predlozenu podelu; NE = ceo iznos kao AVANS kooperanta
+    ' (lineage ostaje otvoren, avans se kasnije precizno vezuje dugmetom "Primeni
+    ' avans na blok" u Banka izvestaju); OTKAZI = ne diraj stavku.
+    Dim odgovor As VbMsgBoxResult
+
+    odgovor = MsgBox("Blok " & brojBloka & " ima " & CStr(UBound(kandidati, 1)) & _
+              " otvorene otkupne stavke -- vise nego sto automatska raspodela sme da podeli," & _
+              vbCrLf & "pa predlozena podela moze da pogodi POGRESAN otkup " & _
+              "(recikliran broj bloka, dupliran unos)." & vbCrLf & vbCrLf & _
               "Predlog podele iznosa " & Format$(isplata, "#,##0.00") & ":" & vbCrLf & _
               SplitPreviewText(kandidati, isplata) & vbCrLf & _
-              "Knjiziti ovako?", vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+              "DA = knjizi ovu podelu" & vbCrLf & _
+              "NE = knjizi ceo iznos kao AVANS kooperanta (vezes ga kasnije rucno)" & vbCrLf & _
+              "OTKAZI = ne diraj stavku", _
+              vbQuestion + vbYesNoCancel, APP_NAME)
+
+    If odgovor = vbCancel Then
+        ConfirmManyCandidatesSplit = False
+        Exit Function
+    End If
+
+    If odgovor = vbNo Then
+        ' Bezbedan izlaz: nista se ne vezuje za otkup dok je poreklo dvosmisleno.
+        ReportManualResult MapBankaImportAsKooperant_TX(bankaImportID, kooperantID, "", "", True) <> "", _
+                           "Kooperant (avans)"
+        LoadBankaRows
         ConfirmManyCandidatesSplit = False
         Exit Function
     End If
@@ -889,7 +934,7 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             Dim kupacID As String
             Dim fakturaID As String
 
-            kupacID = CStr(LookupValue(TBL_KUPCI, "Naziv", cmbPartner.value, "KupacID"))
+            kupacID = SelectedPartnerID()
             fakturaID = ExtractIDFromDisplay(Trim$(nz(cmbFaktura.value, "")))
 
             s = s & "KupacID: " & kupacID & vbCrLf
@@ -901,8 +946,35 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             End If
 
             If fakturaID <> "" Then
+                ' Ista raspodela koju ce writer da proknjizi: na fakturu ide
+                ' najvise njen otvoren iznos, visak je avans kupca.
+                Dim otvorenoFak As Double
+                Dim naFakturu As Double
+
+                otvorenoFak = GetOtvorenoNaFakturi(fakturaID)
+
                 s = s & "FakturaID: " & fakturaID & vbCrLf
-                s = s & "Tip knjizenja: " & NOV_KUPCI_UPLATA
+                s = s & "Otvoreno na fakturi: " & Format$(otvorenoFak, "#,##0.00") & vbCrLf
+
+                If otvorenoFak <= 0.009 Then
+                    BuildManualPreviewText = s & "ODBIJENO: faktura nema otvoren iznos " & _
+                        "(u medjuvremenu je placena) -- osvezi listu."
+                    Exit Function
+                End If
+
+                If uplata <= otvorenoFak Then
+                    naFakturu = uplata
+                Else
+                    naFakturu = otvorenoFak
+                End If
+
+                s = s & "Na fakturu: " & Format$(naFakturu, "#,##0.00") & _
+                    " (" & NOV_KUPCI_UPLATA & ")" & vbCrLf
+
+                If uplata - naFakturu > 0.009 Then
+                    s = s & "Visak -> avans: " & Format$(uplata - naFakturu, "#,##0.00") & _
+                        " (" & NOV_KUPCI_AVANS & ")"
+                End If
             Else
                 s = s & "Faktura: nije izabrana -> knjizi se kao AVANS" & vbCrLf
                 s = s & "Tip knjizenja: " & NOV_KUPCI_AVANS
@@ -919,7 +991,7 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             Dim kandidati As Variant
             Dim kandErr As String
 
-            kooperantID = ExtractIDFromDisplay(cmbPartner.value)
+            kooperantID = SelectedPartnerID()
             blokNo = EffectiveBlockNo(bankaImportID)
 
             s = s & "KooperantID: " & kooperantID & vbCrLf
@@ -947,7 +1019,7 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
 
         Case "OM"
             Dim omID As String
-            omID = CStr(LookupValue(TBL_STANICE, "Naziv", cmbPartner.value, "StanicaID"))
+            omID = SelectedPartnerID()
             s = s & "OMID: " & omID & vbCrLf
             s = s & "Smer: " & smer & vbCrLf
             s = s & "Tip knjizenja: " & NOV_VIRMAN_FIRMA_OTKUPAC

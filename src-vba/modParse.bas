@@ -44,6 +44,55 @@ EH:
     TryParseLong = False
 End Function
 
+' Deterministicko `d.m.yyyy` / `d/m/yyyy` parsiranje - BEZ `CDate`, pa bez uticaja
+' regionalnih podesavanja masine. To je format koji daju parseri izvoda banaka
+' (`dd.mm.yyyy`), gde je zamena dana i meseca tiho pogresno datiranje transakcije.
+' Vraca False za sve sto nije taj oblik (pozivalac sme da proba dalje).
+Public Function TryParseBankaDateDMY(ByVal rawText As String, ByRef result As Date) As Boolean
+    On Error GoTo EH
+
+    Dim s As String
+    Dim parts() As String
+    Dim d As Long
+    Dim m As Long
+    Dim Y As Long
+    Dim probe As Date
+
+    s = Trim$(rawText)
+    If s = "" Then Exit Function
+
+    parts = Split(Replace(s, "/", "."), ".")
+    If UBound(parts) <> 2 Then Exit Function
+
+    If Not (IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2))) Then Exit Function
+
+    d = CLng(parts(0))
+    m = CLng(parts(1))
+    Y = CLng(parts(2))
+
+    If Y < 100 Then Y = 2000 + Y
+
+    ' AUD-007: DateSerial NE puca na nemogucem datumu nego se "prelije"
+    ' (30.02.2026 -> 02.03.2026, 32.01. -> 01.02., mesec 13 -> januar sledece
+    ' godine). Zato: prvo opseg, pa round-trip - sto je uslo mora i da izadje.
+    If d < 1 Or d > 31 Then Exit Function
+    If m < 1 Or m > 12 Then Exit Function
+    If Y < MIN_POSLOVNA_GODINA Or Y > MAX_POSLOVNA_GODINA Then Exit Function
+
+    probe = DateSerial(Y, m, d)
+    If Day(probe) <> d Then Exit Function
+    If Month(probe) <> m Then Exit Function
+    If Year(probe) <> Y Then Exit Function
+
+    result = probe
+    TryParseBankaDateDMY = True
+
+    Exit Function
+
+EH:
+    TryParseBankaDateDMY = False
+End Function
+
 Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date) As Boolean
     On Error GoTo EH
 
@@ -54,47 +103,24 @@ Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date)
 
     If s = "" Then Exit Function
 
-    ' OBE grane pune samo `probe`; `result` se upisuje TEK posle zajednicke
-    ' provere opsega godine (dole). Ranije je `IsDate` grana pisala direktno u
-    ' `result` i time zaobilazila deklarisan opseg 1900-2199: VBA prihvata
-    ' "1.1.1899", a `CDate("12:30")` daje 1899-12-30 - ni jedno ni drugo nije
-    ' poslovni datum, a prolazilo je kao validno.
-    If IsDate(s) Then
-        probe = CDate(s)
-
-    Else
-        Dim parts() As String
-        parts = Split(Replace(s, "/", "."), ".")
-
-        If UBound(parts) <> 2 Then Exit Function
-
-        Dim d As Long
-        Dim m As Long
-        Dim Y As Long
-
-        If Not (IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2))) Then Exit Function
-
-        d = CLng(parts(0))
-        m = CLng(parts(1))
-        Y = CLng(parts(2))
-
-        If Y < 100 Then Y = 2000 + Y
-
-        ' AUD-007: DateSerial NE puca na nemogucem datumu nego se "prelije"
-        ' (30.02.2026 -> 02.03.2026, 32.01. -> 01.02., mesec 13 -> januar
-        ' sledece godine). Bez provere bi takav datum tiho usao u podatke
-        ' pomeren za dan/mesec (npr. datum transakcije iz izvoda banke).
-        ' Zato: prvo opseg, pa round-trip - sto je uslo mora i da izadje.
-        If d < 1 Or d > 31 Then Exit Function
-        If m < 1 Or m > 12 Then Exit Function
-
-        probe = DateSerial(Y, m, d)
-        If Day(probe) <> d Then Exit Function
-        If Month(probe) <> m Then Exit Function
-        If Year(probe) <> Y Then Exit Function
+    ' REDOSLED JE BITAN. `d.m.yyyy` (i `d/m/yyyy`) se parsira DETERMINISTICKI, PRE
+    ' `IsDate`/`CDate`. `CDate` je locale-zavisan: na masini sa MM/DD podesavanjem
+    ' "01.02.2026" postaje 2. januar umesto 1. februara -- a bas taj format daju
+    ' parseri izvoda banaka. Ranije je `IsDate` grana isla prva i tiho pomerala
+    ' datum transakcije. `IsDate` ostaje kao fallback za ostale zapise (npr.
+    ' "2026-02-01" ili vrednost koja je vec Date).
+    If TryParseBankaDateDMY(s, probe) Then
+        result = probe
+        TryParseDateValue = True
+        Exit Function
     End If
 
-    ' Zajednicka kapija opsega - vazi za obe grane.
+    If Not IsDate(s) Then Exit Function
+
+    probe = CDate(s)
+
+    ' Ista kapija opsega kao u DMY grani: `CDate("12:30")` daje 1899-12-30, a
+    ' 1899. nije poslovni datum -- ranije je ta grana pisala pravo u `result`.
     If Year(probe) < MIN_POSLOVNA_GODINA Or Year(probe) > MAX_POSLOVNA_GODINA Then Exit Function
 
     result = probe
