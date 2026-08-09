@@ -55,6 +55,18 @@ Option Explicit
 
 Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 
+' AUD-025: "za ovaj red je potrebno RUCNO mapiranje" - jedina greska koju batch
+' petlje (AutoMapAll / strong pass) smeju da progutaju po redu umesto da obore ceo
+' batch. Dize se PRE ijednog upisa za taj red, pa progutan slucaj ne moze ostaviti
+' parcijalno stanje. Public je da ga test suite moze proveriti po broju.
+' Vrednost = ERR_BMAP_BASE + 50 (ERR_BMAP_BASE je Private, pa se pise razvijeno).
+Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
+
+' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca). Treci kandidat
+' je anomalija podataka (recikliran broj bloka, duplirani unos) - ne pogadja se
+' raspodela, nego se red salje operateru na rucno mapiranje.
+Private Const MAX_BLOK_KANDIDATA As Long = 2
+
 ' Kad je True, batch auto-map (strong pass / Auto sve) ne prikazuje blokirajuci
 ' MsgBox po redu (npr. "Kooperant nema StanicaID"). Postavlja ga pozivalac oko petlje.
 Public gBankaSilentBatch As Boolean
@@ -163,6 +175,58 @@ Public Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
     AutoMapBankaImportRow = ""
 End Function
 
+' AUD-025: batch-bezbedan omotac oko AutoMapBankaImportRow.
+'
+' Guta SAMO ERR_BMAP_MANUAL_REQUIRED ("ovaj red mora rucno") - svaka druga greska
+' ide dalje i batch pada/rollback-uje se kao i pre. To je bezbedno jer se ta greska
+' dize PRE ijednog upisa za taj red (resolver kandidata bloka), pa progutan slucaj
+' ne moze ostaviti pola knjizenja. Ranije je jedan takav red (3+ otvorenih stavki u
+' bloku) obarao CEO AutoMapAll batch i ponistavao sve vec mapirane redove.
+Private Function AutoMapBankaImportRowBatch(ByVal bankaImportID As String, _
+                                            ByVal strongOnly As Boolean, _
+                                            ByVal markErrorOnFail As Boolean, _
+                                            ByRef manualRequiredCount As Long) As String
+    On Error GoTo EH
+
+    AutoMapBankaImportRowBatch = AutoMapBankaImportRow(bankaImportID, strongOnly, markErrorOnFail)
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    If errNum <> ERR_BMAP_MANUAL_REQUIRED Then
+        Err.Raise errNum, errSrc, errDesc
+    End If
+
+    manualRequiredCount = manualRequiredCount + 1
+
+    On Error Resume Next
+
+    If markErrorOnFail Then UpdateBankaImportStatus bankaImportID, "Error"
+
+    Monitor_Event _
+        eventType:="BANKA_AUTOMAP_MANUAL_REQUIRED", _
+        severity:="WARN", _
+        message:="Red trazi rucno mapiranje. BankaImportID=" & bankaImportID & _
+                 "; Razlog=" & errDesc, _
+        userId:="Operator", _
+        moduleName:="modBankaMapiranje", _
+        procedureName:="AutoMapBankaImportRowBatch", _
+        entityType:="BankaImport", _
+        entityID:=bankaImportID, _
+        correlationId:=bankaImportID
+
+    On Error GoTo 0
+
+    AutoMapBankaImportRowBatch = ""
+End Function
+
 Public Function AutoMapBankaImportRow_TX(ByVal bankaImportID As String) As String
     Dim tx As clsTransaction
     
@@ -244,7 +308,10 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
         MapBankaImportAsKupac = ""
         Exit Function
     End If
-    
+
+    ' Kupac = novac ULAZI u firmu. Isplata na ovom tipu je odbijena (AUD-025).
+    RequireBimSmer bim, "UPLATA", "MapBankaImportAsKupac"
+
     kupacNaziv = CStr(LookupValue(TBL_KUPCI, "KupacID", kupacID, "Naziv"))
     If kupacNaziv = "" Then kupacNaziv = CStr(bim(1, 3))
     
@@ -257,8 +324,9 @@ Public Function MapBankaImportAsKupac(ByVal bankaImportID As String, _
     If fakturaID <> "" Then
         RequireSingleRow TBL_FAKTURE, COL_FAK_ID, fakturaID, _
                          "MapBankaImportAsKupac"
+        RequireFakturaZaKupca fakturaID, kupacID, "MapBankaImportAsKupac"
     End If
-    
+
     MapBankaImportAsKupac = SaveNovac( _
         RequireIzvodBroj(bim, "MapBankaImportAsKupac"), _
         CDate(bim(1, 2)), _
@@ -382,6 +450,9 @@ Public Function MapBankaImportAsKooperant(ByVal bankaImportID As String, _
         Exit Function
     End If
     
+    ' Kooperant = novac IZLAZI iz firme. Uplata na ovom tipu je odbijena (AUD-025).
+    RequireBimSmer bim, "ISPLATA", "MapBankaImportAsKooperant"
+
     omID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     If omID = "" Then
         MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
@@ -523,9 +594,13 @@ Public Function MapBankaImportAsOM(ByVal bankaImportID As String, _
         Exit Function
     End If
     
+    ' OM promet ide u oba smera (dopuna OM / povracaj), pa se trazi samo CIST smer:
+    ' red sa oba iznosa ili bez iznosa nije knjizljiv (AUD-025).
+    RequireBimSmer bim, "", "MapBankaImportAsOM"
+
     omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
     If omNaziv = "" Then omNaziv = omID
-    
+
     MapBankaImportAsOM = SaveNovac( _
         RequireIzvodBroj(bim, "MapBankaImportAsOM"), _
         CDate(bim(1, 2)), _
@@ -776,17 +851,20 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
         Exit Function
     End If
     
+    ' Blok kooperanta = isplata. Raniji tihi `Exit Function` na uplati je iz UI
+    ' izgledao kao "nista se nije desilo"; sada je odbijanje glasno (AUD-025).
+    RequireBimSmer bim, "ISPLATA", "MapBankaImportAsKooperantBlockCore"
+
     omID = CStr(NzBIM(LookupValue(TBL_KOOPERANTI, "KooperantID", kooperantID, COL_KOOP_STANICA), ""))
     If omID = "" Then
         If Not gBankaSilentBatch Then MsgBox "Kooperant nema StanicaID!", vbExclamation, APP_NAME
         Exit Function
     End If
-    
+
     omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
     If omNaziv = "" Then omNaziv = omID
-    
+
     isplataUkupno = CDbl(NzBIM(bim(1, 6), 0#))
-    If isplataUkupno <= 0 Then Exit Function
     
     kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo)
     preostaloZaRaspodelu = isplataUkupno
@@ -970,7 +1048,7 @@ EH:
     SkipBankaImportRow_TX = False
 End Function
 
-Public Function AutoMapAllBankaImport_TX() As Long
+Public Function AutoMapAllBankaImport_TX(Optional ByRef manualRequiredCount As Long) As Long
     Dim tx As clsTransaction
     Dim data As Variant
     Dim colID As Long
@@ -978,7 +1056,9 @@ Public Function AutoMapAllBankaImport_TX() As Long
     Dim novID As String
     Dim openCount As Long
     Dim failedCount As Long
-    
+
+    manualRequiredCount = 0
+
     On Error GoTo EH
     
     data = GetBankaImportOpen()
@@ -1013,8 +1093,8 @@ Public Function AutoMapAllBankaImport_TX() As Long
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_FAKTURE
 
-        For i = 1 To UBound(data, 1)
-        novID = AutoMapBankaImportRow(CStr(data(i, colID)))
+    For i = 1 To UBound(data, 1)
+        novID = AutoMapBankaImportRowBatch(CStr(data(i, colID)), False, True, manualRequiredCount)
 
         If novID <> "" Then
             AutoMapAllBankaImport_TX = AutoMapAllBankaImport_TX + 1
@@ -1031,7 +1111,8 @@ Public Function AutoMapAllBankaImport_TX() As Long
         severity:="INFO", _
         message:="Bank auto mapping completed. OpenRows=" & CStr(openCount) & _
                  "; Mapped=" & CStr(AutoMapAllBankaImport_TX) & _
-                 "; NotMapped=" & CStr(failedCount), _
+                 "; NotMapped=" & CStr(failedCount) & _
+                 "; ManualRequired=" & CStr(manualRequiredCount), _
         userId:="Operator", _
         moduleName:="modBankaMapiranje", _
         procedureName:="AutoMapAllBankaImport_TX", _
@@ -1106,6 +1187,7 @@ Public Function AutoMapStrongKeysBankaImport_TX() As Long
     Dim i As Long
     Dim res As String
     Dim mappedCount As Long
+    Dim manualRequired As Long
 
     On Error GoTo EH
 
@@ -1127,8 +1209,10 @@ Public Function AutoMapStrongKeysBankaImport_TX() As Long
     tx.AddTableSnapshot TBL_OTKUP
     tx.AddTableSnapshot TBL_FAKTURE
 
+    ' markErrorOnFail = False: dvosmislena stavka ostaje OTVORENA za rucno mapiranje.
+    ' manualRequired se ovde samo broji (red ostaje otvoren, ne dobija status Error).
     For i = 1 To UBound(data, 1)
-        res = AutoMapBankaImportRow(CStr(data(i, colID)), True, False)
+        res = AutoMapBankaImportRowBatch(CStr(data(i, colID)), True, False, manualRequired)
         If res <> "" Then mappedCount = mappedCount + 1
     Next i
 
@@ -1141,25 +1225,157 @@ Public Function AutoMapStrongKeysBankaImport_TX() As Long
     Exit Function
 
 EH:
+    ' AUD-014: greska se vise NE guta. Pozivalac (dugme u frmBankaImport) mora da
+    ' vidi da pass nije prosao - tiho "0 mapirano" je izgledalo kao "nema sta da se
+    ' mapira", a u stvari je ceo pass bio rollback-ovan.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
     On Error Resume Next
     LogErr SRC
     If Not tx Is Nothing Then tx.RollbackTx
     gBankaSilentBatch = False
     On Error GoTo 0
+
     AutoMapStrongKeysBankaImport_TX = 0
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' ============================================================
+' JAKI KLJUCEVI - CISTO CITANJE (bez upisa)
+'
+' AUD-014: otvaranje frmBankaImport je ranije KNJIZILO novac (auto-map na
+' Activate). Da bi forma mogla da PRIKAZE sta bi se mapiralo, a da knjizi tek na
+' klik, odluka o jakim kljucevima mora da postoji kao read-only funkcija. Zato je
+' izdvojena ovde i koriste je oba puta (auto-map i prebrojavanje) - jedan izvor
+' istine, bez druge kopije pravila.
+' ============================================================
+
+' Vraca KupacID po jakim kljucevima ili "" (ukljucujuci konflikt racun<->poziv).
+' fakturaID je izlazni parametar: popunjen samo kad poziv na broj jednoznacno
+' pogodi fakturu.
+Private Function ResolveStrongKupac(ByVal bankaImportID As String, _
+                                    ByRef fakturaID As String) As String
+    Dim bim As Variant
+    Dim kupacByKonto As Variant
+    Dim fakByPoziv As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+
+    fakturaID = ""
+
+    bim = GetBankaImportRowByID(bankaImportID)
+    If IsEmpty(bim) Then Exit Function
+
+    kupacByKonto = TryResolveKupacByKonto(CStr(NzBIM(bim(1, 4), "")))
+    fakByPoziv = TryResolveFakturaByPoziv(CStr(NzBIM(bim(1, 10), "")))
+
+    If Not IsEmpty(fakByPoziv) Then
+        fakturaID = CStr(fakByPoziv(0))
+        idDoc = CStr(fakByPoziv(1))
+    End If
+
+    If Not IsEmpty(kupacByKonto) Then idKonto = CStr(kupacByKonto(0))
+
+    ' Konflikt: racun i poziv na broj pokazuju na razlicite kupce -> rucno, ne auto.
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        fakturaID = ""
+        Exit Function
+    End If
+
+    If idDoc <> "" Then
+        ResolveStrongKupac = idDoc
+    Else
+        ResolveStrongKupac = idKonto
+    End If
+End Function
+
+' Vraca KooperantID po jakim kljucevima ili "" (ukljucujuci konflikt poziv<->racun).
+Private Function ResolveStrongKooperant(ByVal bankaImportID As String) As String
+    Dim bim As Variant
+    Dim koopByKonto As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+
+    bim = GetBankaImportRowByID(bankaImportID)
+    If IsEmpty(bim) Then Exit Function
+
+    idDoc = TryResolveKooperantByOtkupPoziv(CStr(NzBIM(bim(1, 10), "")))
+    koopByKonto = TryResolveKooperantByKonto(CStr(NzBIM(bim(1, 4), "")))
+
+    If Not IsEmpty(koopByKonto) Then idKonto = CStr(koopByKonto(0))
+
+    ' Konflikt: poziv na broj i racun pokazuju na razlicite kooperante -> rucno.
+    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
+        Exit Function
+    End If
+
+    If idDoc <> "" Then
+        ResolveStrongKooperant = idDoc
+    Else
+        ResolveStrongKooperant = idKonto
+    End If
+End Function
+
+' Koliko OTVORENIH stavki bi jaki kljucevi mapirali - bez ijednog upisa.
+' Koristi ga frmBankaImport pri otvaranju (prikaz umesto tihog knjizenja).
+Public Function CountStrongKeyReadyBankaImport() As Long
+    Const SRC As String = "CountStrongKeyReadyBankaImport"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    Dim colID As Long
+    Dim colUplata As Long
+    Dim colIsplata As Long
+    Dim i As Long
+    Dim uplata As Double
+    Dim isplata As Double
+    Dim bimID As String
+    Dim fakturaID As String
+
+    data = GetBankaImportOpen()
+    If IsEmpty(data) Then Exit Function
+
+    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+    colUplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+
+    For i = 1 To UBound(data, 1)
+        bimID = CStr(data(i, colID))
+        uplata = CDbl(NzBIM(data(i, colUplata), 0#))
+        isplata = CDbl(NzBIM(data(i, colIsplata), 0#))
+
+        If uplata > 0 And isplata = 0 Then
+            If ResolveStrongKupac(bimID, fakturaID) <> "" Then
+                CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
+            End If
+        ElseIf isplata > 0 And uplata = 0 Then
+            If ResolveStrongKooperant(bimID) <> "" Then
+                CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
+            End If
+        End If
+    Next i
+
+    Exit Function
+
+EH:
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+    CountStrongKeyReadyBankaImport = 0
 End Function
 
 Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
-    Dim konto As String
-    Dim poziv As String
     Dim mapped As Variant
     Dim fakturaID As String
-    Dim kupacByKonto As Variant
-    Dim fakByPoziv As Variant
-    Dim idDoc As String
-    Dim idKonto As String
     Dim resolvedKupac As String
     Dim learn As Boolean
 
@@ -1167,35 +1383,12 @@ Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional By
     If IsEmpty(bim) Then Exit Function
 
     partnerName = CStr(bim(1, 3))
-    konto = CStr(NzBIM(bim(1, 4), ""))
-    poziv = CStr(NzBIM(bim(1, 10), ""))
     learn = (Len(Trim$(partnerName)) > 0)
 
-    ' PRIORITET: tekuci racun (kupac) + poziv na broj (faktura), uz unakrsnu proveru.
-    kupacByKonto = TryResolveKupacByKonto(konto)
-    fakByPoziv = TryResolveFakturaByPoziv(poziv)
-
-    fakturaID = ""
-    idDoc = ""
-    If Not IsEmpty(fakByPoziv) Then
-        fakturaID = CStr(fakByPoziv(0))
-        idDoc = CStr(fakByPoziv(1))
-    End If
-
-    If IsEmpty(kupacByKonto) Then
-        idKonto = ""
-    Else
-        idKonto = CStr(kupacByKonto(0))
-    End If
-
-    ' Konflikt: racun i poziv na broj pokazuju na razlicite kupce -> rucno, ne auto.
-    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
-        AutoMapIncomingKupac = ""
-        Exit Function
-    End If
-
-    resolvedKupac = idDoc
-    If resolvedKupac = "" Then resolvedKupac = idKonto
+    ' PRIORITET: jaki kljucevi (tekuci racun -> kupac, poziv na broj -> faktura).
+    ' Sama odluka zivi u ResolveStrongKupac da bi isti kod mogao i SAMO da prebroji
+    ' sta bi se mapiralo, bez knjizenja (CountStrongKeyReadyBankaImport).
+    resolvedKupac = ResolveStrongKupac(bankaImportID, fakturaID)
 
     If resolvedKupac <> "" Then
         If fakturaID = "" Then
@@ -1240,14 +1433,8 @@ End Function
 Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
     Dim bim As Variant
     Dim partnerName As String
-    Dim konto As String
-    Dim poziv As String
     Dim mapped As Variant
     Dim createdCount As Long
-    Dim koopByPoziv As String
-    Dim koopByKonto As Variant
-    Dim idDoc As String
-    Dim idKonto As String
     Dim resolvedKoop As String
     Dim learn As Boolean
 
@@ -1255,29 +1442,11 @@ Private Function AutoMapOutgoingKooperantOrOM(ByVal bankaImportID As String, Opt
     If IsEmpty(bim) Then Exit Function
 
     partnerName = CStr(bim(1, 3))
-    konto = CStr(NzBIM(bim(1, 4), ""))
-    poziv = CStr(NzBIM(bim(1, 10), ""))
     learn = (Len(Trim$(partnerName)) > 0)
 
-    ' PRIORITET: poziv na broj (otkupni list) + tekuci racun, uz unakrsnu proveru.
-    koopByPoziv = TryResolveKooperantByOtkupPoziv(poziv)
-    koopByKonto = TryResolveKooperantByKonto(konto)
-
-    idDoc = koopByPoziv
-    If IsEmpty(koopByKonto) Then
-        idKonto = ""
-    Else
-        idKonto = CStr(koopByKonto(0))
-    End If
-
-    ' Konflikt: poziv na broj i racun pokazuju na razlicite kooperante -> rucno, ne auto.
-    If idDoc <> "" And idKonto <> "" And UCase$(idDoc) <> UCase$(idKonto) Then
-        AutoMapOutgoingKooperantOrOM = ""
-        Exit Function
-    End If
-
-    resolvedKoop = idDoc
-    If resolvedKoop = "" Then resolvedKoop = idKonto
+    ' PRIORITET: jaki kljucevi (poziv na broj -> otkupni list, tekuci racun).
+    ' Odluka je izdvojena u ResolveStrongKooperant (vidi ResolveStrongKupac).
+    resolvedKoop = ResolveStrongKooperant(bankaImportID)
 
     If resolvedKoop <> "" Then
         createdCount = MapBankaImportAsKooperantBlock(bankaImportID, resolvedKoop, learn)
@@ -1455,37 +1624,49 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     
-    ReDim result(1 To 2, 1 To 3)
-    
+    ' AUD-025: bafer je velicine ulaza, ne fiksnih 2. Raniji `ReDim result(1 To 2)`
+    ' + `If count > 2 Then Exit For` je ostavljao count=3 uz bafer od 2 reda, pa je
+    ' kopiranje u finalResult padalo na "Subscript out of range" - a taj pad je iz
+    ' AutoMapAll rollback-ovao CEO batch (svi vec mapirani redovi se ponistavali
+    ' zbog jednog anomalnog bloka). Sada je 3+ kandidata eksplicitna, uhvatljiva
+    ' greska (ERR_BMAP_MANUAL_REQUIRED) koja obara SAMO taj red.
+    ReDim result(1 To UBound(data, 1), 1 To 3)
+
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
-        
+
         If NormalizePozivKey(CStr(data(i, colBrDok))) = NormalizePozivKey(brojBloka) Then
             Dim vrednost As Double
             Dim uplaceno As Double
             Dim otvoreno As Double
-            
+
+            vrednost = 0
             If IsNumeric(data(i, colKol)) And IsNumeric(data(i, colCena)) Then
                 vrednost = CDbl(data(i, colKol)) * CDbl(data(i, colCena))
             End If
-            
+
             uplaceno = GetUplataForOtkup(CStr(data(i, colOtkID)))
             otvoreno = vrednost - uplaceno
-            
+
             If otvoreno > 0.009 Then
                 count = count + 1
-                If count > 2 Then Exit For
-                
                 result(count, 1) = CStr(data(i, colOtkID))
                 result(count, 2) = otvoreno
                 result(count, 3) = CStr(data(i, colVrsta))
             End If
         End If
-        
+
 NextI:
     Next i
-    
+
     If count = 0 Then Exit Function
+
+    If count > MAX_BLOK_KANDIDATA Then
+        Err.Raise ERR_BMAP_MANUAL_REQUIRED, "GetOtkupCandidatesForKooperantBlock", _
+            "Blok " & brojBloka & " (kooperant " & kooperantID & ") ima " & CStr(count) & _
+            " otvorene otkupne stavke, a model dozvoljava najvise " & CStr(MAX_BLOK_KANDIDATA) & _
+            ". Automatska raspodela bi pogadjala - stavka izvoda se mapira RUCNO."
+    End If
 
     Dim finalResult() As Variant
     Dim r As Long, c As Long
@@ -1769,6 +1950,77 @@ End Function
 ' je prazan broj greska uvoza/parsera - ne slucaj za fallback. Raniji fallback je
 ' sve stavke bez broja slivao u literal "IZVOD" i time spajao nepovezane izvode u
 ' jednu storno grupu (tiha korupcija identiteta).
+' FM-0023 #2: uplata se sme vezati SAMO za fakturu tog kupca i to nestorniranu.
+' Do RF-09 je ovo bilo latentno (UI je uvek slao prazan FakturaID); sada
+' frmBankaImport nudi izbor fakture, pa veza mora da se proveri na upisu, ne samo
+' u listi koja se nudi.
+Private Sub RequireFakturaZaKupca(ByVal fakturaID As String, _
+                                  ByVal kupacID As String, _
+                                  ByVal sourceName As String)
+    Dim vlasnik As String
+    Dim storno As String
+
+    vlasnik = Trim$(CStr(NzBIM(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_KUPAC), "")))
+
+    If vlasnik <> Trim$(kupacID) Then
+        Err.Raise ERR_BMAP_BASE + 51, sourceName, _
+            "Faktura " & fakturaID & " pripada kupcu '" & vlasnik & "', a uplata se " & _
+            "vezuje za kupca '" & kupacID & "'. Mapiranje je odbijeno."
+    End If
+
+    storno = UCase$(Trim$(CStr(NzBIM(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_STORNIRANO), ""))))
+
+    If storno = "DA" Then
+        Err.Raise ERR_BMAP_BASE + 52, sourceName, _
+            "Faktura " & fakturaID & " je stornirana - uplata se ne moze vezati za nju."
+    End If
+End Sub
+
+' AUD-025 (FM-0023 #8) / AUD-014: smer stavke izvoda je deo identiteta knjizenja,
+' a rucni put (frmBankaImport -> cmbMapTip) sme da posalje bilo koji tip na bilo
+' koji red. Bez ove kapije se isplata kooperantu moze knjiziti kao uplata kupca
+' (i obrnuto): iznos ode u pogresnu kolonu tblNovac, saldo partnera se pomeri u
+' pogresnom smeru, a u izvodu nema traga da je red pogresno knjizen. Auto put vec
+' grana po smeru (AutoMapBankaImportRow), pa mu guard ne menja ponasanje.
+' expectedSmer: "UPLATA" | "ISPLATA" | "" (bilo koji, ali cist smer).
+Private Sub RequireBimSmer(ByVal bim As Variant, _
+                           ByVal expectedSmer As String, _
+                           ByVal sourceName As String)
+    Dim uplata As Double
+    Dim isplata As Double
+
+    uplata = CDbl(NzBIM(bim(1, 5), 0#))
+    isplata = CDbl(NzBIM(bim(1, 6), 0#))
+
+    If uplata > 0 And isplata > 0 Then
+        Err.Raise ERR_BMAP_BASE + 46, sourceName, _
+            "Stavka izvoda ima i uplatu i isplatu - nema cist smer, mapiranje je odbijeno."
+    End If
+
+    If uplata <= 0 And isplata <= 0 Then
+        Err.Raise ERR_BMAP_BASE + 47, sourceName, _
+            "Stavka izvoda nema ni uplatu ni isplatu - mapiranje je odbijeno."
+    End If
+
+    Select Case UCase$(Trim$(expectedSmer))
+        Case "UPLATA"
+            If uplata <= 0 Then
+                Err.Raise ERR_BMAP_BASE + 48, sourceName, _
+                    "Smer ne odgovara: stavka izvoda je ISPLATA (" & _
+                    Format$(isplata, "#,##0.00") & "), a izabrano mapiranje ocekuje UPLATU. " & _
+                    "Mapiranje je odbijeno."
+            End If
+
+        Case "ISPLATA"
+            If isplata <= 0 Then
+                Err.Raise ERR_BMAP_BASE + 49, sourceName, _
+                    "Smer ne odgovara: stavka izvoda je UPLATA (" & _
+                    Format$(uplata, "#,##0.00") & "), a izabrano mapiranje ocekuje ISPLATU. " & _
+                    "Mapiranje je odbijeno."
+            End If
+    End Select
+End Sub
+
 Private Function RequireIzvodBroj(ByVal bim As Variant, ByVal sourceName As String) As String
     Dim broj As String
     broj = Trim$(CStr(NzBIM(bim(1, 1), "")))

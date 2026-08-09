@@ -482,6 +482,30 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
         Exit Function
     End If
     
+    ' Level 0 (AUD-007): datumi moraju biti STVARNI datumi PRE staging-a.
+    ' Nemoguc datum (30.02., dan 32, mesec 13) se u DateSerial-u tiho prelije u
+    ' sledeci mesec, pa bi transakcija zavrsila pogresno datirana u tblBankaImport
+    ' (a odatle i u tblNovac). TryParseDateValue sada takav datum odbija, pa ovde
+    ' pada ceo izvod sa jasnom porukom (fajl ide u Error folder) umesto tihog
+    ' pomeranja dana. Prazan datum transakcije je ista klasa greske: red bi bio
+    ' neupotrebljiv u mapiranju (CDate na praznom stringu puca).
+    Dim probeDate As Date
+
+    If Not TryParseDateValue(datumIzvoda, probeDate) Then
+        Err.Raise vbObjectError + 1009, "ParseBankaIzvodForImport", _
+            "PARSER DATUM IZVODA nije validan datum: '" & datumIzvoda & _
+            "' (izvod " & brojIzvoda & "). Nemoguc datum se ne sme uvesti pomeren."
+    End If
+
+    For i = 1 To UBound(txData, 1)
+        If Not TryParseDateValue(CStr(NzBIM(txData(i, 2), "")), probeDate) Then
+            Err.Raise vbObjectError + 1010, "ParseBankaIzvodForImport", _
+                "PARSER DATUM TRANSAKCIJE nije validan datum: '" & _
+                CStr(NzBIM(txData(i, 2), "")) & "' (izvod " & brojIzvoda & _
+                ", transakcija " & CStr(i) & "). Nemoguc datum se ne sme uvesti pomeren."
+        End If
+    Next i
+
     ' v6.18+: integrity check (3 nivoa) PRE staging-a
     For i = 1 To UBound(txData, 1)
         Dim uplataVal As Double, isplataVal As Double
@@ -656,13 +680,16 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
     colCount = lo.ListColumns.count
     
     For i = 1 To UBound(data, 1)
+        ' AUD-025: broj racuna je deo dedupe kljuca (staging kolona 3) - bez njega
+        ' se transakcija sa drugog racuna firme tiho gubi kao "duplikat".
         If IsDuplicateBankaImport( _
             CStr(data(i, 1)), _
             data(i, 4), _
             CDbl(NzBIM(data(i, 7), 0#)), _
             CDbl(NzBIM(data(i, 8), 0#)), _
             CStr(data(i, 5)), _
-            CStr(data(i, 12)) _
+            CStr(data(i, 12)), _
+            CStr(data(i, 3)) _
         ) Then
             duplicateCount = duplicateCount + 1
         Else
@@ -738,12 +765,18 @@ EH:
 End Function
 
 
+' AUD-025: identitet transakcije izvoda je (BrojRacuna + BrojDokumenta + ...).
+' Broj izvoda je jedinstven PO RACUNU firme, ne globalno - dve banke (ili dva
+' racuna iste banke) redovno imaju izvod istog broja. Bez racuna u kljucu je
+' druga transakcija istog broja/datuma/iznosa/partnera tiho odbacena kao
+' duplikat i nikad ne stigne u staging (tihi gubitak podatka).
 Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
                                        ByVal datumTransakcije As Variant, _
                                        ByVal uplata As Double, _
                                        ByVal isplata As Double, _
                                        ByVal partner As String, _
-                                       ByVal bankaReferenz As String) As Boolean
+                                       ByVal bankaReferenz As String, _
+                                       ByVal brojRacuna As String) As Boolean
     Const SRC As String = "IsDuplicateBankaImport"
 
     On Error GoTo EH
@@ -757,6 +790,7 @@ Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
     Dim colIsplata As Long
     Dim colPartner As Long
     Dim colRef As Long
+    Dim colRacun As Long
 
     data = GetTableData(TBL_BANKA_IMPORT)
 
@@ -778,25 +812,29 @@ Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
     colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
     colPartner = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
     colRef = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)
+    colRacun = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
 
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBrojDok))) = Trim$(brojDokumenta) Then
+        ' Drugi racun = druga transakcija, bez obzira na broj izvoda i iznos.
+        If Trim$(CStr(NzBIM(data(i, colRacun), ""))) = Trim$(brojRacuna) Then
+            If Trim$(CStr(data(i, colBrojDok))) = Trim$(brojDokumenta) Then
 
-            If Len(Trim$(bankaReferenz)) > 0 Then
-                If Trim$(CStr(data(i, colRef))) = Trim$(bankaReferenz) Then
-                    IsDuplicateBankaImport = True
-                    Exit Function
+                If Len(Trim$(bankaReferenz)) > 0 Then
+                    If Trim$(CStr(data(i, colRef))) = Trim$(bankaReferenz) Then
+                        IsDuplicateBankaImport = True
+                        Exit Function
+                    End If
+                Else
+                    If Trim$(CStr(data(i, colDatumTx))) = Trim$(CStr(datumTransakcije)) _
+                       And CDbl(NzBIM(data(i, colUplata), 0#)) = uplata _
+                       And CDbl(NzBIM(data(i, colIsplata), 0#)) = isplata _
+                       And Trim$(CStr(data(i, colPartner))) = Trim$(partner) Then
+                        IsDuplicateBankaImport = True
+                        Exit Function
+                    End If
                 End If
-            Else
-                If Trim$(CStr(data(i, colDatumTx))) = Trim$(CStr(datumTransakcije)) _
-                   And CDbl(NzBIM(data(i, colUplata), 0#)) = uplata _
-                   And CDbl(NzBIM(data(i, colIsplata), 0#)) = isplata _
-                   And Trim$(CStr(data(i, colPartner))) = Trim$(partner) Then
-                    IsDuplicateBankaImport = True
-                    Exit Function
-                End If
+
             End If
-
         End If
     Next i
 
@@ -860,6 +898,7 @@ Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
        InStr(1, s, "PARSER", vbTextCompare) > 0 Or _
        InStr(1, s, "BROJ IZVODA", vbTextCompare) > 0 Or _
        InStr(1, s, "DATUM IZVODA", vbTextCompare) > 0 Or _
+       InStr(1, s, "DATUM TRANSAKCIJE", vbTextCompare) > 0 Or _
        InStr(1, s, "BROJ RA" & ChrW(268) & "UNA", vbTextCompare) > 0 Then
         ClassifyBankaImportError = BIM_STATUS_PARSE_ERROR
         Exit Function

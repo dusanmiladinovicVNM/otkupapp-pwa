@@ -145,6 +145,13 @@ Saldo: Pocetno=… Novo=… Duguje=… Potrazuje=…
 PARSER MISMATCH` znači promašena/viška transakcija ili loš saldo — pogledaj koja
 sekcija curi (npr. neisključena „na čekanju").
 
+> **Kapija datuma (od v2.38.0 / RF-09):** pre saldo-provera, `ParseBankaIzvodForImport`
+> traži da datum izvoda i datum **svake** transakcije prođu `TryParseDateValue`
+> (round-trip: `30.02.` i sl. se odbijaju, ne prelivaju u sledeći mesec). Parser mora
+> da vrati čist `dd.mm.yyyy` (ili `dd/mm/yyyy`) — spojene kolone, prazan datum ili
+> `d.m.` bez godine daju `PARSE FAIL: … PARSER DATUM TRANSAKCIJE nije validan datum`
+> uz redni broj transakcije.
+
 ### Korak 6 — kvalitet polja (integritet ovo NE pokriva)
 Iz per-red dumpa proveri `racun`, `partner`, `svrha`, `poziv`, `referenca` —
 njih integritet ne validira, a auto-map (`frmBankaImport`, Faza 7) koristi

@@ -60,6 +60,7 @@ Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date)
         Dim d As Long
         Dim m As Long
         Dim Y As Long
+        Dim probe As Date
 
         If IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2)) Then
             d = CLng(parts(0))
@@ -68,7 +69,21 @@ Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date)
 
             If Y < 100 Then Y = 2000 + Y
 
-            result = DateSerial(Y, m, d)
+            ' AUD-007: DateSerial NE puca na nemogucem datumu nego se "prelije"
+            ' (30.02.2026 -> 02.03.2026, 32.01. -> 01.02., mesec 13 -> januar
+            ' sledece godine). Bez provere bi takav datum tiho usao u podatke
+            ' pomeren za dan/mesec (npr. datum transakcije iz izvoda banke).
+            ' Zato: prvo opseg, pa round-trip - sto je uslo mora i da izadje.
+            If d < 1 Or d > 31 Then Exit Function
+            If m < 1 Or m > 12 Then Exit Function
+            If Y < 1900 Or Y > 2199 Then Exit Function
+
+            probe = DateSerial(Y, m, d)
+            If Day(probe) <> d Then Exit Function
+            If Month(probe) <> m Then Exit Function
+            If Year(probe) <> Y Then Exit Function
+
+            result = probe
             TryParseDateValue = True
         End If
     End If
