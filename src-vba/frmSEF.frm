@@ -347,7 +347,7 @@ Private Sub LoadSelectedFakturaInfo()
         Me.lblSEFStatus.ForeColor = CLR_ERROR()
     Case SEF_CLS_PENDING
         Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
-    Case SEF_CLS_TERMINAL, SEF_CLS_INFO
+    Case SEF_CLS_STORNO, SEF_CLS_TERMINAL, SEF_CLS_INFO
         Me.lblSEFStatus.ForeColor = CLR_WARNING()
     Case SEF_CLS_ERROR, SEF_CLS_UNKNOWN
         ' Nepoznat status = rucna provera, ne "sve u redu".

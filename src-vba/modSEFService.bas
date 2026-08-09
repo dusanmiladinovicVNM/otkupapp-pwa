@@ -582,13 +582,19 @@ Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelCom
     tx.AddTableSnapshot "tblSEFEventLog"
     
     If response.Success Then
-        Call UpdateFakturaSEFRefreshFields_Row( _
+        ' AUD-032b: ishod ide kroz ZAJEDNICKI upisivac (isti koji koristi
+        ' refresh), da bi "sta spoljni status znaci za workflow" bilo odluceno na
+        ' jednom mestu. Za cancel je to namerno **external-terminal-only**:
+        ' lokalni state machine NEMA WF_SEF_CANCELLED, pa se belezi SEFStatus, a
+        ' workflow se samo izvlaci iz "salje se" ako je tamo zaglavljen.
+        Call ApplySEFExternalOutcome_Row( _
             fakturaID:=fakturaID, _
+            classification:=ClassifySEFExternalStatus(response.apiStatus), _
             sefStatus:=response.apiStatus, _
             sefDocumentId:=response.sefDocumentId, _
             errorCode:="", _
             errorMessage:="")
-        
+
         Call AppendSEFEvent_Row( _
             fakturaID:=fakturaID, _
             submissionID:=submissionID, _
@@ -659,37 +665,9 @@ Public Function StornoInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal stornoCom
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot "tblSEFEventLog"
-    
-    If response.Success Then
-        Call UpdateFakturaSEFRefreshFields_Row( _
-            fakturaID:=fakturaID, _
-            sefStatus:=response.apiStatus, _
-            sefDocumentId:=response.sefDocumentId, _
-            errorCode:="", _
-            errorMessage:="")
-        
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_OK, _
-            message:="Invoice storno created on SEF.", _
-            details:=response.apiStatus & " | " & stornoComment)
-    Else
-        Call UpdateFakturaSEFRefreshFields_Row( _
-            fakturaID:=fakturaID, _
-            errorCode:=response.errorCode, _
-            errorMessage:=response.errorMessage)
-        
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_FAILED, _
-            message:="SEF storno failed.", _
-            details:=response.errorCode & " | " & response.errorMessage)
-    End If
-    
-    Call UpdateSEFLastSyncAt_Row(fakturaID)
-    
+
+    Call ApplyStornoResultOnSEF_Row(fakturaID, response, submissionID, stornoComment)
+
     tx.CommitTx
     StornoInvoiceOnSEF_TX = response.Success
     Exit Function
@@ -717,6 +695,64 @@ EH:
                   "Unexpected error during SEF storno; original Err was lost before EH capture."
     End If
 End Function
+
+' AUD-032b: telo storno rezultata, izdvojeno da bi lifecycle mogao da se
+' testira nad tabelama (clsTransaction.BeginTx puca na ugnezdjenu transakciju,
+' pa se telo unutar `_TX` procedure ne moze pokriti testom).
+'
+' KLJUCNA promena: uspesan storno vise ne menja samo SEFStatus. Ranije je zvao
+' UpdateFakturaSEFRefreshFields_Row, pa je faktura trajno ostajala
+' SEFWorkflowState = SEF_SENT / SEF_ACCEPTED uz SEFStatus = STORNO -- lifecycle
+' kontradikcija koju batch jos i preskace (terminalan spoljni status), tako da
+' je niko vise ne ispravlja. Sada ide kroz zajednicki upisivac, koji za klasu
+' STORNO cilja WF_SEF_STORNO (tranzicije SENT/ACCEPTED -> STORNO su dozvoljene).
+Public Sub ApplyStornoResultOnSEF_Row(ByVal fakturaID As String, _
+                                      ByVal response As clsSEFResponse, _
+                                      ByVal submissionID As String, _
+                                      ByVal stornoComment As String)
+
+    Const SRC As String = "modSEFService.ApplyStornoResultOnSEF_Row"
+
+    If response Is Nothing Then
+        Err.Raise ERR_SEF_RESPONSE_PARSE, SRC, "Response object is Nothing."
+    End If
+
+    If response.Success Then
+
+        Call ApplySEFExternalOutcome_Row( _
+            fakturaID:=fakturaID, _
+            classification:=ClassifySEFExternalStatus(response.apiStatus), _
+            sefStatus:=response.apiStatus, _
+            sefDocumentId:=response.sefDocumentId, _
+            errorCode:="", _
+            errorMessage:="")
+
+        Call AppendSEFEvent_Row( _
+            fakturaID:=fakturaID, _
+            submissionID:=submissionID, _
+            eventType:=SEF_EVT_SYNC_OK, _
+            message:="Invoice storno created on SEF.", _
+            details:=response.apiStatus & " | " & stornoComment)
+
+    Else
+
+        Call UpdateFakturaSEFRefreshFields_Row( _
+            fakturaID:=fakturaID, _
+            errorCode:=response.errorCode, _
+            errorMessage:=response.errorMessage)
+
+        Call AppendSEFEvent_Row( _
+            fakturaID:=fakturaID, _
+            submissionID:=submissionID, _
+            eventType:=SEF_EVT_SYNC_FAILED, _
+            message:="SEF storno failed.", _
+            details:=response.errorCode & " | " & response.errorMessage)
+
+    End If
+
+    Call UpdateSEFLastSyncAt_Row(fakturaID)
+
+End Sub
 
 Private Function ShouldReuseLastSubmission(ByVal fakturaID As String) As Boolean
     

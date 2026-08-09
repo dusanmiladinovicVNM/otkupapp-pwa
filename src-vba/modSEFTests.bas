@@ -210,6 +210,7 @@ Public Sub RunSEFTestSuite()
     Test_SEFRefreshTransitionMatrix
     Test_SEFStatusCapabilities
     Test_SEFRejectedResubmitPassesDuplicateGuard
+    Test_SEFStornoMovesLocalWorkflow
     Test_SEFRecoveryOutcomeContract
 
     FinishSuite
@@ -664,8 +665,8 @@ Private Sub Test_SEFRefreshTransitionMatrix()
                    WF_SEF_TECH_FAILED, WF_SEF_UNKNOWN, "")
 
     classes = Array(SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_SEND_FAILED, _
-                    SEF_CLS_PENDING, SEF_CLS_TERMINAL, SEF_CLS_INFO, _
-                    SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
+                    SEF_CLS_PENDING, SEF_CLS_STORNO, SEF_CLS_TERMINAL, _
+                    SEF_CLS_INFO, SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
 
     ' INVARIJANTA: planer sme da vrati samo prazno ili tranziciju koju state
     ' machine dozvoljava. Sve ostalo bi u produkciji bacilo izuzetak i oborilo
@@ -712,7 +713,24 @@ Private Sub Test_SEFRefreshTransitionMatrix()
     AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_TERMINAL), _
                  "SENDING + Storno -> SEF_SENT (ne ostaje zaglavljena)"
     AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_TERMINAL), _
-                 "UNKNOWN + Storno -> SEF_SENT (izlazi iz UNKNOWN)"
+                 "UNKNOWN + Cancelled -> SEF_SENT (izlazi iz UNKNOWN)"
+
+    ' STORNO je jedini spoljni terminal sa lokalnim parnjakom.
+    AssertEquals SEF_CLS_STORNO, ClassifySEFExternalStatus("Storno"), _
+                 "Storno ima zasebnu klasu (ima lokalni WF_SEF_STORNO)"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), _
+                 "Cancelled ostaje external-terminal-only (nema lokalni parnjak)"
+    AssertEquals WF_SEF_STORNO, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_STORNO), _
+                 "SENT + Storno -> SEF_STORNO"
+    AssertEquals WF_SEF_STORNO, SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_STORNO), _
+                 "ACCEPTED + Storno -> SEF_STORNO"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO), _
+                 "SENDING + Storno -> prvi korak SEF_SENT (most)"
+    AssertEquals WF_SEF_STORNO, _
+                 SEFRefreshTargetState(SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO), SEF_CLS_STORNO), _
+                 "SENDING + Storno -> drugi korak SEF_STORNO"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_STORNO, SEF_CLS_STORNO), _
+                 "Vec storniran -> bez self-transition"
     AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_TERMINAL), _
                  "SENT + Storno -> bez promene stanja (samo refresh polja)"
 
@@ -968,6 +986,10 @@ Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
                "Posle pripreme duplicate guard vise ne blokira resubmit"
     AssertEquals WF_SEF_READY, stateAfter, "Priprema vraca workflow u SEF_READY"
     AssertEquals "", Trim$(docIdAfter), "Priprema brise SEFDocumentId"
+    ' SEFStatus je kolona SPOLJNOG statusa -- priprema u nju NE sme da upise
+    ' interni marker "SEF_READY" (izgubio bi se podatak da je SEF odbio fakturu).
+    AssertEquals "REJECTED", Trim$(statusAfter), _
+                 "Priprema cuva spoljni status REJECTED (ne upisuje interni marker)"
     AssertTrue CanSendSEFInvoice(stateAfter, statusAfter, docIdAfter), _
                "Pripremljena faktura je sendable i po zajednickoj kapiji"
 
@@ -1063,6 +1085,95 @@ Private Sub AppendSEFTestRow(ByVal tableName As String, ByVal columnValuePairs A
         Err.Raise ERR_SEF_VALIDATION, SRC, "Failed to append test row into " & tableName
     End If
 
+End Sub
+
+' (b6) TABLE-LEVEL LIFECYCLE: uspesan storno mora da pomeri i lokalni workflow.
+'
+' Matrica dokazuje da state machine DOZVOLJAVA prelaz u SEF_STORNO; ovaj test
+' dokazuje da ga produkcioni put stvarno RADI. Bez njega je sedam rundi review-a
+' propustilo da `StornoInvoiceOnSEF_TX` menja samo SEFStatus, pa je faktura
+' trajno ostajala SEFWorkflowState = SEF_SENT uz SEFStatus = STORNO.
+'
+' Gadja se `ApplyStornoResultOnSEF_Row` (telo TX-a), jer sam `_TX` otvara
+' transakciju, a clsTransaction.BeginTx puca na ugnezdjenu.
+Private Sub Test_SEFStornoMovesLocalWorkflow()
+    On Error GoTo EH
+
+    Dim tx As clsTransaction
+    Dim resp As clsSEFResponse
+    Dim fakturaSent As String
+    Dim fakturaAccepted As String
+    Dim wasQuiet As Boolean
+    Dim quietSet As Boolean
+
+    fakturaSent = "TEST-SEF-STORNO-S-" & Format$(Now, "yyyymmddhhnnss")
+    fakturaAccepted = "TEST-SEF-STORNO-A-" & Format$(Now, "yyyymmddhhnnss")
+
+    wasQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
+    quietSet = True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_EVENT_LOG
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaSent, _
+        "SEFWorkflowState", WF_SEF_SENT, _
+        "SEFStatus", "SENT", _
+        "SEFDocumentId", "5317570")
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaAccepted, _
+        "SEFWorkflowState", WF_SEF_ACCEPTED, _
+        "SEFStatus", "APPROVED", _
+        "SEFDocumentId", "5317571")
+
+    Set resp = New clsSEFResponse
+    resp.Success = True
+    resp.apiStatus = "STORNO"
+    resp.sefDocumentId = "5317570"
+
+    ApplyStornoResultOnSEF_Row fakturaSent, resp, "", "smoke"
+
+    AssertEquals WF_SEF_STORNO, GetFakturaSEFWorkflowState(fakturaSent), _
+                 "Uspesan storno iz SEF_SENT pomera workflow u SEF_STORNO"
+    AssertEquals "STORNO", Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaSent, "SEFStatus"))), _
+                 "Spoljni status ostaje STORNO"
+
+    Set resp = New clsSEFResponse
+    resp.Success = True
+    resp.apiStatus = "STORNO"
+    resp.sefDocumentId = "5317571"
+
+    ApplyStornoResultOnSEF_Row fakturaAccepted, resp, "", "smoke"
+
+    AssertEquals WF_SEF_STORNO, GetFakturaSEFWorkflowState(fakturaAccepted), _
+                 "Uspesan storno iz SEF_ACCEPTED pomera workflow u SEF_STORNO"
+
+    ' Nijedna faktura ne sme da ostane u kontradikciji workflow/status.
+    AssertTrue GetFakturaSEFWorkflowState(fakturaSent) <> WF_SEF_SENT, _
+               "Posle storna workflow vise nije SEF_SENT"
+    AssertTrue GetFakturaSEFWorkflowState(fakturaAccepted) <> WF_SEF_ACCEPTED, _
+               "Posle storna workflow vise nije SEF_ACCEPTED"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    quietSet = False
+
+    LogPass "Uspesan storno pomera lokalni workflow u SEF_STORNO"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    On Error GoTo 0
+
+    LogFail "Storno moves local workflow", Err.description
 End Sub
 
 ' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.

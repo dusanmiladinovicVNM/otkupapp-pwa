@@ -250,8 +250,24 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 
@@ -277,8 +293,24 @@ Private Sub ValidateFakturaHasStavke(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub ValidateSEFPayload(ByVal payload As String)
@@ -299,8 +331,24 @@ Public Sub ValidateSEFPayload(ByVal payload As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 Private Sub ValidateKupacForSEF(ByVal kupacID As String)
     On Error GoTo EH
@@ -334,8 +382,24 @@ Private Sub ValidateKupacForSEF(ByVal kupacID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Sub ValidateSEFConfig()
@@ -367,8 +431,24 @@ Private Sub ValidateSEFConfig()
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
@@ -394,8 +474,24 @@ Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, sourceName, errDesc
 End Function
 
 ' =========================================================
@@ -473,7 +569,7 @@ Public Function CanSendSEFInvoice(ByVal workflowState As String, _
     Select Case ClassifySEFExternalStatus(sefStatus)
 
         Case SEF_CLS_ACCEPTED, SEF_CLS_PENDING, SEF_CLS_INFO, _
-             SEF_CLS_TERMINAL, SEF_CLS_SEND_FAILED
+             SEF_CLS_STORNO, SEF_CLS_TERMINAL, SEF_CLS_SEND_FAILED
             CanSendSEFInvoice = False
 
         Case SEF_CLS_REJECTED
@@ -545,8 +641,24 @@ Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
@@ -574,8 +686,24 @@ Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, SRC, ehErrDesc
 End Sub
 
 ' AUD-032b: telo je izdvojeno u `_Row` (pozivalac obezbedjuje TX) po obrascu
@@ -630,6 +758,7 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
 
     Dim currentState As String
     Dim lastSubmissionID As String
+    Dim currentDocumentId As String
     Dim discharged As Boolean
 
     If Len(Trim$(fakturaID)) = 0 Then
@@ -638,19 +767,25 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
 
     currentState = GetFakturaSEFWorkflowState(fakturaID)
 
-    ' Procitaj link PRE nego sto ga ClearFakturaLastSubmission_Row obrise --
-    ' razduzuje se tacno ta submisija, ne "sve SENT za ovu fakturu".
+    ' Procitaj link I remote identitet dokumenta PRE nego sto ih
+    ' ClearFakturaLastSubmission_Row obrise -- razduzuje se tacno ta submisija,
+    ' ne "sve SENT za ovu fakturu", i to samo ako joj se dokument poklapa.
     lastSubmissionID = GetLastSEFSubmissionID(fakturaID)
+    currentDocumentId = GetFakturaSEFDocumentId(fakturaID)
 
     If currentState <> WF_SEF_REJECTED Then
         Err.Raise ERR_SEF_STATE, SRC, _
             "Invoice is not in SEF_REJECTED state: " & currentState
     End If
 
+    ' AUD-032b: `sefStatus` se NAMERNO ne prosledjuje. Kolona `SEFStatus` po
+    ' definiciji nosi POSLEDNJI SPOLJNI status (modSEFPersistance zaglavlje), a
+    ' upis internog markera "SEF_READY" u nju je gubio podatak da je SEF fakturu
+    ' odbio -- audit trag bi tvrdio nesto sto SEF nikad nije rekao. Ostaje
+    ' REJECTED, sto je i ono sto `CanSendSEFInvoice` ocekuje za pripremljen tok.
     Call UpdateFakturaSEFState_Row( _
         fakturaID:=fakturaID, _
         newState:=WF_SEF_READY, _
-        sefStatus:=WF_SEF_READY, _
         errorCode:="", _
         errorMessage:="", _
         submissionID:="")
@@ -661,7 +796,7 @@ Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
     ' NA REFRESH-u zadrzava submission red u statusu SENT (refresh ga namerno ne
     ' dira), pa bi `HasSuccessfulSEFSubmission` oborio bas ovaj pripremljeni
     ' resubmit kao duplikat.
-    discharged = DischargeSEFSubmission_Row(lastSubmissionID, fakturaID)
+    discharged = DischargeSEFSubmission_Row(lastSubmissionID, fakturaID, currentDocumentId)
 
     ' FAIL-CLOSED: priprema sme da uspe SAMO ako je faktura posle nje stvarno
     ' posiljiva. Ako je i dalje blokira uspesna submisija (prethodna je ACCEPTED,
@@ -692,7 +827,7 @@ Public Function IsFinalSEFStatus(ByVal sefStatus As String) As Boolean
     ' (APPROVED/ACCEPTED, REJECTED, STORNO/CANCELLED/DELETED).
     ' MISTAKE NIJE finalan -- to je greska pri slanju, ima Cancel/rucnu putanju.
     Select Case ClassifySEFExternalStatus(sefStatus)
-        Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_TERMINAL
+        Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_STORNO, SEF_CLS_TERMINAL
             IsFinalSEFStatus = True
         Case Else
             IsFinalSEFStatus = False

@@ -727,7 +727,12 @@ Public Const SEF_STATUS_UNKNOWN As String = "UNKNOWN_STATUS"
 Public Const SEF_CLS_ACCEPTED As String = "ACCEPTED"   ' kupac odobrio (Approved)
 Public Const SEF_CLS_REJECTED As String = "REJECTED"   ' kupac odbio
 Public Const SEF_CLS_PENDING As String = "PENDING"     ' u obradi / ceka odluku
-Public Const SEF_CLS_TERMINAL As String = "TERMINAL"   ' storno/otkazano/obrisano
+' Storno je izdvojen iz opsteg TERMINAL-a jer je JEDINI spoljni terminal koji ima
+' svoj lokalni parnjak (WF_SEF_STORNO, uz dozvoljene tranzicije SENT/ACCEPTED ->
+' STORNO). Cancel/Deleted lokalnog parnjaka NEMAJU -- za njih je stanje samo
+' spoljno (vidi SEF_CLS_TERMINAL).
+Public Const SEF_CLS_STORNO As String = "STORNO"
+Public Const SEF_CLS_TERMINAL As String = "TERMINAL"   ' otkazano/obrisano (external-terminal-only)
 ' Zvanicni SEF status "Mistake" = GRESKA PRILIKOM SLANJA dokumenta. To NIJE
 ' terminalno stanje: takav dokument se po zvanicnom uputstvu moze otkazati
 ' (Draft/New/Mistake), a lokalno mora u SEF_TECH_FAILED da bi retry bio moguc.
