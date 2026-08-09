@@ -174,6 +174,75 @@ EH:
     FinishSuite
 End Sub
 
+' ============================================================
+' RunSEFTestSuite -- ciljani suite za SEF milestone (PLAN_SANACIJE, sekcija 5C).
+'
+' HARD GATE: na kraju baca gresku ako je bilo koji test pao, da gate ne bi bio
+' "zelen" samo zato sto nista nije puklo (lekcija iz AUD-039 / RF-08).
+'
+' OFFLINE: nijedan test odavde ne poziva pravi SEF (nema HTTP-a). Zivi SEF pozivi
+' ostaju u Run*LiveSuite entry point-ima iza SEF_TEST_ALLOW_LIVE /
+' SEF_TEST_ALLOW_CANCEL_STORNO kapija.
+'
+' TABELE: vecina testova je cista. DVA testa seed-uju redove u
+' tblFakture / tblSEFSubmission / tblSEFEventLog i UVEK ih rollback-uju
+' (clsTransaction + ugasen journal/AutoSave, isti obrazac kao modFakturaTests):
+'   * Test_SEFRejectedResubmitPassesDuplicateGuard -- duplicate guard cita
+'     stvarne tabele, pa se lanac ne moze dokazati cistim funkcijama
+'   * Test_SEFStornoMovesLocalWorkflow -- matrica dokazuje da state machine
+'     DOZVOLJAVA prelaz u SEF_STORNO, ali ne i da produkcioni put to RADI
+' ============================================================
+Public Sub RunSEFTestSuite()
+    On Error GoTo EH
+
+    ResetSEFCounters
+    InitSEFTestLog
+
+    StartSuite "SEF TEST SUITE (offline hard gate)"
+
+    Test_SubmitResponseClassification
+    Test_LinePrecisionConsistency
+    Test_SEFAllowedTransitions
+    Test_SEFBlockedTransitions
+
+    ' RF-22 / AUD-032 seam testovi
+    Test_SEFSendOutcomeContract
+    Test_SEFOfficialStatusEnumClassified
+    Test_SEFStatusUnknownIsNotSent
+    Test_SEFRefreshTransitionMatrix
+    Test_SEFStatusCapabilities
+    Test_SEFRejectedResubmitPassesDuplicateGuard
+    Test_SEFStornoMovesLocalWorkflow
+    Test_SEFRecoveryOutcomeContract
+
+    FinishSuite
+
+    ' Gate se proverava tek posle gasenja EH-a, da raise ne bi upao u sopstveni
+    ' handler i bio prijavljen kao fatalna greska suite-a (RF-08 obrazac).
+    On Error GoTo 0
+
+    If m_Failed > 0 Then
+        Err.Raise ERR_SEF_VALIDATION, "RunSEFTestSuite", _
+                  "SEF test suite FAILED: " & CStr(m_Failed) & " od " & CStr(m_Total) & " testova."
+    End If
+
+    Exit Sub
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogFatal "RunSEFTestSuite", errNum, errDesc
+    FinishSuite
+
+    On Error GoTo 0
+    Err.Raise ERR_SEF_VALIDATION, "RunSEFTestSuite", _
+              "SEF test suite FAILED (fatal): " & errDesc
+End Sub
+
 Public Sub RunSEFStateTransitionSuite()
     On Error GoTo EH
 
@@ -405,6 +474,824 @@ EH:
     LogSkip "ValidateFakturaForSEF for " & fakturaID, Err.description
 End Sub
 
+' ============================================================
+' RF-22 / AUD-032 -- lifecycle seam testovi (offline, bez SEF poziva)
+' ============================================================
+
+' (a) REJECTED / TECH_FAILED se NE smeju prikazati kao "Faktura poslata".
+Private Sub Test_SEFSendOutcomeContract()
+    On Error GoTo EH
+
+    AssertTrue IsSuccessfulSEFSendState(WF_SEF_SENT), _
+               "SEF_SENT je uspesan send"
+    AssertTrue IsSuccessfulSEFSendState(WF_SEF_ACCEPTED), _
+               "SEF_ACCEPTED je uspesan send"
+
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_REJECTED), _
+               "SEF_REJECTED NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_TECH_FAILED), _
+               "SEF_TECH_FAILED NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(WF_SEF_SENDING), _
+               "SEF_SENDING NIJE uspesan send"
+    AssertTrue Not IsSuccessfulSEFSendState(""), _
+               "Prazan workflow state NIJE uspesan send"
+
+    ' Tipizirane greske: odbijanje se razlikuje od tehnickog pada.
+    AssertTrue SEFSendFailureErrNumber(WF_SEF_REJECTED) = ERR_SEF_REJECTED, _
+               "REJECTED -> ERR_SEF_REJECTED"
+    AssertTrue SEFSendFailureErrNumber(WF_SEF_TECH_FAILED) = ERR_SEF_SEND_FAILED, _
+               "TECH_FAILED -> ERR_SEF_SEND_FAILED"
+    AssertTrue SEFSendFailureErrNumber("") = ERR_SEF_SEND_FAILED, _
+               "Nepoznat ishod -> ERR_SEF_SEND_FAILED"
+
+    ' Sustina AUD-032a: poruka za neuspeh ne sme da sadrzi tekst uspeha.
+    Dim successText As String
+    successText = Poruka("SEF_MSG_SEND_POSLATA")
+
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1"), successText, vbTextCompare) = 0, _
+               "Poruka za REJECTED ne tvrdi da je faktura poslata"
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_TECH_FAILED, "SUB-1"), successText, vbTextCompare) = 0, _
+               "Poruka za TECH_FAILED ne tvrdi da je faktura poslata"
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_SENT, "SUB-1"), successText, vbTextCompare) > 0, _
+               "Poruka za SEF_SENT jeste poruka o poslatoj fakturi"
+
+    AssertTrue InStr(1, SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1"), WF_SEF_REJECTED, vbTextCompare) > 0, _
+               "Poruka za REJECTED nosi stvarno workflow stanje"
+    AssertTrue SEFSendOutcomeMessage(WF_SEF_REJECTED, "SUB-1") <> SEFSendOutcomeMessage(WF_SEF_SENT, "SUB-1"), _
+               "Poruka za REJECTED se razlikuje od poruke za uspeh"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF send outcome contract", Err.description
+End Sub
+
+' (b1) Adapter: SVAKI status iz zvanicnog SalesInvoiceStatus enum-a mora imati
+' eksplicitnu klasu. Bez ovoga je "APPROVED" (zvanicno ime za prihvacenu
+' fakturu) padao u Case Else i zavrsavao kao nepoznat status.
+Private Sub Test_SEFOfficialStatusEnumClassified()
+    On Error GoTo EH
+
+    ' --- prihvatanje: zvanicno je Approved, ne Accepted ---
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("Approved"), _
+                 "Approved -> ACCEPTED klasa"
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("APPROVED"), _
+                 "APPROVED (velika slova) -> ACCEPTED klasa"
+    AssertEquals SEF_CLS_ACCEPTED, ClassifySEFExternalStatus("Accepted"), _
+                 "Accepted (zatecene fakture / submit odgovor) -> ACCEPTED klasa"
+
+    AssertEquals SEF_CLS_REJECTED, ClassifySEFExternalStatus("Rejected"), _
+                 "Rejected -> REJECTED klasa"
+
+    ' --- u obradi / ceka odluku ---
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("New"), "New -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Draft"), "Draft -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Sending"), "Sending -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Sent"), "Sent -> PENDING"
+    AssertEquals SEF_CLS_PENDING, ClassifySEFExternalStatus("Seen"), "Seen -> PENDING"
+
+    ' --- terminalno na SEF-u ---
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), "Cancelled -> TERMINAL"
+    AssertEquals SEF_CLS_STORNO, ClassifySEFExternalStatus("Storno"), _
+                 "Storno -> STORNO (jedini spoljni terminal sa lokalnim parnjakom)"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Deleted"), "Deleted -> TERMINAL"
+
+    ' "Mistake" = greska prilikom slanja, NE terminalno stanje. Kad je bio u
+    ' TERMINAL klasi, planer ga je vodio u WF_SEF_SENT -- neuspelo slanje je
+    ' postajalo lokalno "poslato", bez retry-ja i bez cancel-a.
+    AssertEquals SEF_CLS_SEND_FAILED, ClassifySEFExternalStatus("Mistake"), _
+                 "Mistake -> SEND_FAILED klasa (ne TERMINAL)"
+    AssertTrue ClassifySEFExternalStatus("Mistake") <> SEF_CLS_TERMINAL, _
+                 "Mistake nije terminalan (batch ga ne sme preskakati)"
+
+    ' --- poznato, ali ne nosi odluku kupca ---
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("Paid"), "Paid -> INFO"
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("OverDue"), "OverDue -> INFO"
+    AssertEquals SEF_CLS_INFO, ClassifySEFExternalStatus("Archived"), "Archived -> INFO"
+
+    ' --- zvanicni Unknown i sve van enum-a ---
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus("Unknown"), _
+                 "Zvanicni Unknown -> UNKNOWN klasa"
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus(""), _
+                 "Prazan status -> UNKNOWN klasa"
+    AssertEquals SEF_CLS_UNKNOWN, ClassifySEFExternalStatus("NEKI_NOVI_STATUS"), _
+                 "Nov/nepoznat status -> UNKNOWN klasa"
+
+    ' Nijedan poznat status ne sme da ispadne "nepoznat" -- to je bio uzrok
+    ' zbog kog je odobrena faktura isla na rucnu proveru.
+    AssertTrue IsKnownSEFRefreshStatus("Approved"), "Approved je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("Seen"), "Seen je poznat status"
+    AssertTrue IsKnownSEFRefreshStatus("Paid"), "Paid je poznat status"
+    AssertTrue Not IsKnownSEFRefreshStatus("Unknown"), "Unknown nije poznat status"
+    AssertTrue Not IsKnownSEFRefreshStatus(""), "Prazan status nije poznat"
+
+    ' Refresh je "upotrebljiv" za sve sto nosi stvarnu informaciju.
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_ACCEPTED), "ACCEPTED je upotrebljiv refresh"
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_INFO), "INFO je upotrebljiv refresh"
+    AssertTrue IsUsableSEFRefreshClass(SEF_CLS_SEND_FAILED), "SEND_FAILED je upotrebljiv refresh"
+    AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_ERROR), "ERROR nije upotrebljiv refresh"
+    AssertTrue Not IsUsableSEFRefreshClass(SEF_CLS_UNKNOWN), "UNKNOWN nije upotrebljiv refresh"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF official status enum classified", Err.description
+End Sub
+
+' (b2) Prazan / nepoznat status ne sme tiho da postane SENT.
+Private Sub Test_SEFStatusUnknownIsNotSent()
+    On Error GoTo EH
+
+    Dim r As clsSEFResponse
+
+    ' Nema "Status" polja u odgovoru -> UNKNOWN_STATUS, nikad "SENT".
+    Set r = TestProxyForParseStatusResponse(200, "{""InvoiceId"":5317568}")
+    AssertEquals SEF_STATUS_UNKNOWN, r.apiStatus, _
+                 "Prazan SEF status -> UNKNOWN_STATUS (ne SENT)"
+    AssertTrue UCase$(r.apiStatus) <> "SENT", _
+               "Prazan SEF status se ne prijavljuje kao SENT"
+    AssertTrue r.Accepted = False, "Prazan status nije prihvatanje"
+    AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
+               "UNKNOWN_STATUS nije poznat status"
+
+    ' Zvanicno prihvatanje mora da podigne Accepted flag.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Approved""}")
+    AssertEquals "APPROVED", r.apiStatus, "APPROVED se cuva doslovno"
+    AssertTrue r.Accepted, "Approved postavlja Accepted flag"
+    AssertTrue r.Rejected = False, "Approved ne postavlja Rejected"
+
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Rejected""}")
+    AssertTrue r.Rejected, "Rejected postavlja Rejected flag"
+    AssertTrue r.Accepted = False, "Rejected ne postavlja Accepted"
+
+    ' Poznati pending statusi ostaju netaknuti.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""SENT""}")
+    AssertEquals "SENT", r.apiStatus, "SENT ostaje SENT"
+    AssertTrue r.Accepted = False, "SENT nije prihvatanje"
+
+    ' Nepoznat, ali neprazan status se cuva doslovno i tretira kao nepoznat.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""NEKI_NOVI_STATUS""}")
+    AssertEquals "NEKI_NOVI_STATUS", r.apiStatus, _
+                 "Nepoznat status se cuva doslovno"
+    AssertTrue Not IsKnownSEFRefreshStatus(r.apiStatus), _
+               "Nepoznat status se ne tretira kao poznat"
+
+    ' Dokument u ERROR statusu: poziv je uspeo, dokument nije.
+    Set r = TestProxyForParseStatusResponse(200, "{""Status"":""Error""}")
+    AssertTrue r.Success = False, "ERROR status obara Success"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF unknown status is not SENT", Err.description
+End Sub
+
+' (b3) ORKESTRACIJA: planer tranzicije za SVAKU kombinaciju (stanje x klasa).
+' Ovo je test koji hvata protivrecnosti tipa "SEF_UNKNOWN + pad API-ja ->
+' SEF_SYNC_ERROR", koje testovi samog validatora ne mogu da vide: planer i
+' state machine su dve strane iste odluke, pa se proveravaju zajedno.
+Private Sub Test_SEFRefreshTransitionMatrix()
+    On Error GoTo EH
+
+    Dim states As Variant
+    Dim classes As Variant
+    Dim i As Long
+    Dim j As Long
+    Dim st As String
+    Dim cls As String
+    Dim target As String
+    Dim illegalCount As Long
+
+    states = Array(WF_LOCAL_DRAFT, WF_LOCAL_FINALIZED, WF_SEF_READY, _
+                   WF_SEF_SENDING, WF_SEF_SENT, WF_SEF_ACCEPTED, _
+                   WF_SEF_REJECTED, WF_SEF_STORNO, WF_SEF_SYNC_ERROR, _
+                   WF_SEF_TECH_FAILED, WF_SEF_UNKNOWN, "")
+
+    classes = Array(SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_SEND_FAILED, _
+                    SEF_CLS_PENDING, SEF_CLS_STORNO, SEF_CLS_TERMINAL, _
+                    SEF_CLS_INFO, SEF_CLS_ERROR, SEF_CLS_UNKNOWN)
+
+    ' INVARIJANTA: planer sme da vrati samo prazno ili tranziciju koju state
+    ' machine dozvoljava. Sve ostalo bi u produkciji bacilo izuzetak i oborilo
+    ' refresh (i rollback-ovalo transakciju).
+    For i = LBound(states) To UBound(states)
+        For j = LBound(classes) To UBound(classes)
+
+            st = CStr(states(i))
+            cls = CStr(classes(j))
+            target = SEFRefreshTargetState(st, cls)
+
+            If Len(target) > 0 And Len(Trim$(st)) > 0 Then
+                If Not IsSEFTransitionAllowed(UCase$(Trim$(st)), target) Then
+                    illegalCount = illegalCount + 1
+                    LogFail "Planer predlaze zabranjenu tranziciju", _
+                            st & " + " & cls & " -> " & target
+                End If
+            End If
+
+        Next j
+    Next i
+
+    AssertTrue illegalCount = 0, _
+               "Planer nikad ne predlaze zabranjenu tranziciju (sva stanja x sve klase)"
+
+    ' --- konkretni ishodi koje trazi lifecycle ---
+
+    ' Odobrenje mora da stigne do SEF_ACCEPTED (jednim ili dva koraka).
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_ACCEPTED), _
+                 "SENDING + Approved -> SEF_ACCEPTED"
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_ACCEPTED), _
+                 "SENT + Approved -> SEF_ACCEPTED"
+    AssertEquals WF_SEF_ACCEPTED, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_ACCEPTED), _
+                 "UNKNOWN + Approved -> SEF_ACCEPTED (izlazi iz rucne provere)"
+    ' SEF_SYNC_ERROR ne sme direktno u finalno stanje -> prvi korak je SEF_SENT,
+    ' drugi (isti planer, novo stanje) daje SEF_ACCEPTED.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ACCEPTED), _
+                 "SYNC_ERROR + Approved -> prvi korak SEF_SENT"
+    AssertEquals WF_SEF_ACCEPTED, _
+                 SEFRefreshTargetState(SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ACCEPTED), SEF_CLS_ACCEPTED), _
+                 "SYNC_ERROR + Approved -> drugi korak SEF_ACCEPTED"
+
+    ' Terminalni udaljeni status izvlaci fakturu iz svih zaglavljenih stanja.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_TERMINAL), _
+                 "SENDING + Cancelled -> SEF_SENT (ne ostaje zaglavljena)"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_TERMINAL), _
+                 "UNKNOWN + Cancelled -> SEF_SENT (izlazi iz UNKNOWN)"
+
+    ' STORNO je jedini spoljni terminal sa lokalnim parnjakom.
+    AssertEquals SEF_CLS_STORNO, ClassifySEFExternalStatus("Storno"), _
+                 "Storno ima zasebnu klasu (ima lokalni WF_SEF_STORNO)"
+    AssertEquals SEF_CLS_TERMINAL, ClassifySEFExternalStatus("Cancelled"), _
+                 "Cancelled ostaje external-terminal-only (nema lokalni parnjak)"
+    AssertEquals WF_SEF_STORNO, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_STORNO), _
+                 "SENT + Storno -> SEF_STORNO"
+    AssertEquals WF_SEF_STORNO, SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_STORNO), _
+                 "ACCEPTED + Storno -> SEF_STORNO"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO), _
+                 "SENDING + Storno -> prvi korak SEF_SENT (most)"
+    AssertEquals WF_SEF_STORNO, _
+                 SEFRefreshTargetState(SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO), SEF_CLS_STORNO), _
+                 "SENDING + Storno -> drugi korak SEF_STORNO"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_STORNO, SEF_CLS_STORNO), _
+                 "Vec storniran -> bez self-transition"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_TERMINAL), _
+                 "SENT + Cancelled -> bez promene stanja (samo refresh polja)"
+
+    ' Pad API-ja: SENDING i SENT imaju svoj izlaz, ostalo se NE dira.
+    AssertEquals WF_SEF_UNKNOWN, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_ERROR), _
+                 "SENDING + pad API-ja -> SEF_UNKNOWN"
+    AssertEquals WF_SEF_SYNC_ERROR, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_ERROR), _
+                 "SENT + pad API-ja -> SEF_SYNC_ERROR"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_ERROR), _
+                 "SYNC_ERROR + ponovni pad -> bez promene (nema self-transition)"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_ERROR), _
+                 "UNKNOWN + ponovni pad -> ostaje UNKNOWN, bez izuzetka"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_UNKNOWN), _
+                 "UNKNOWN + opet nepoznat status -> ostaje UNKNOWN"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_UNKNOWN), _
+                 "SYNC_ERROR + nepoznat status -> ostaje SYNC_ERROR"
+
+    ' Finalna lokalna stanja se ne vracaju unazad zbog pending/info statusa.
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_PENDING), _
+                 "ACCEPTED + pending status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_REJECTED, SEF_CLS_PENDING), _
+                 "REJECTED + pending status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_INFO), _
+                 "SENT + Paid/OverDue/Archived -> nema promene (vec je SEF_SENT)"
+
+    ' AUD-032c: PAID/OVERDUE/ARCHIVED ne govore da li je kupac odobrio fakturu,
+    ' ali DOKAZUJU da dokument nije vise "u slanju". Dok su vracali prazno,
+    ' faktura je ostajala SEF_SENDING i startup recovery ju je nalazio zauvek.
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO), _
+                 "SENDING + Paid/OverDue/Archived -> SEF_SENT (izlazi iz slanja)"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_INFO), _
+                 "UNKNOWN + informativan status -> SEF_SENT"
+    AssertEquals WF_SEF_SENT, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_INFO), _
+                 "SYNC_ERROR + informativan status -> SEF_SENT"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_ACCEPTED, SEF_CLS_INFO), _
+                 "ACCEPTED + informativan status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_REJECTED, SEF_CLS_INFO), _
+                 "REJECTED + informativan status -> bez regresije"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_STORNO, SEF_CLS_INFO), _
+                 "STORNO + informativan status -> bez regresije"
+    ' INFO nikad ne sme da proglasi fakturu prihvacenom -- za to je ACCEPTED klasa.
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_INFO) <> WF_SEF_ACCEPTED, _
+                 "Placeno/dospelo/arhivirano NIJE dokaz prihvatanja"
+
+    ' Greska pri slanju mora u SEF_TECH_FAILED -- jedino stanje iz kog UI nudi retry.
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_SEND_FAILED), _
+                 "SENDING + Mistake -> SEF_TECH_FAILED (retry moguc)"
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_UNKNOWN, SEF_CLS_SEND_FAILED), _
+                 "UNKNOWN + Mistake -> SEF_TECH_FAILED"
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_SEND_FAILED) <> WF_SEF_SENT, _
+                 "Neuspelo slanje NIKAD ne postaje lokalno SEF_SENT"
+    AssertEquals "", SEFRefreshTargetState(WF_SEF_TECH_FAILED, SEF_CLS_SEND_FAILED), _
+                 "TECH_FAILED + Mistake -> vec je tamo, bez self-transition"
+
+    ' NORMALNA sekvenca: uspesan submit -> lokalno SEF_SENT -> refresh vrati
+    ' MISTAKE. Ovo je najvaznija putanja i ranije je vracala prazno, pa je
+    ' faktura ostajala "uspesno poslata" iako SEF tvrdi suprotno.
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_SEND_FAILED), _
+                 "SENT + Mistake -> SEF_TECH_FAILED (normalna sekvenca)"
+    AssertEquals WF_SEF_TECH_FAILED, SEFRefreshTargetState(WF_SEF_SYNC_ERROR, SEF_CLS_SEND_FAILED), _
+                 "SYNC_ERROR + Mistake -> SEF_TECH_FAILED"
+    AssertTrue SEFRefreshTargetState(WF_SEF_SENT, SEF_CLS_SEND_FAILED) <> "", _
+                 "SENT + Mistake NE sme da ostane SEF_SENT"
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_TECH_FAILED
+    AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_TECH_FAILED
+
+    Exit Sub
+
+EH:
+    LogFail "SEF refresh transition matrix", Err.description
+End Sub
+
+' (b4) CAPABILITY UGOVOR: sta se sme raditi nad kojim SEF statusom.
+' Testira se stvarna sposobnost (cancel/storno/retry/batch-skip), ne ime klase --
+' jer se ista greska moze sakriti iza tacnog naziva klase.
+Private Sub Test_SEFStatusCapabilities()
+    On Error GoTo EH
+
+    ' --- Cancel: zvanicno Draft, New i Mistake (+ nas legacy ERROR marker) ---
+    AssertTrue CanCancelSEFStatus("Draft"), "Draft se moze otkazati"
+    AssertTrue CanCancelSEFStatus("New"), "New se moze otkazati"
+    AssertTrue CanCancelSEFStatus("Mistake"), _
+               "Mistake (greska pri slanju) se moze otkazati -- zvanicni ugovor"
+    AssertTrue CanCancelSEFStatus("ERROR"), "Legacy ERROR marker se moze otkazati"
+    AssertTrue Not CanCancelSEFStatus("Approved"), "Odobrena faktura se ne otkazuje (storno je putanja)"
+    AssertTrue Not CanCancelSEFStatus("Sent"), "Poslata faktura se ne otkazuje"
+    AssertTrue Not CanCancelSEFStatus(""), "Prazan status ne dozvoljava cancel (fail-closed)"
+
+    ' --- Storno: dokument koji je stvarno predat kupcu ---
+    AssertTrue CanStornoSEFStatus("Approved"), "Odobrena faktura se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Accepted"), "Zatecen ACCEPTED se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Sent"), "Poslata faktura se moze stornirati"
+    AssertTrue CanStornoSEFStatus("Rejected"), "Odbijena faktura se moze stornirati"
+    AssertTrue Not CanStornoSEFStatus("Mistake"), _
+               "Mistake se ne stornira -- otkazuje se"
+    AssertTrue Not CanStornoSEFStatus("Draft"), "Draft se ne stornira"
+    AssertTrue Not CanStornoSEFStatus(""), "Prazan status ne dozvoljava storno (fail-closed)"
+
+    ' --- Cancel i storno se ne preklapaju ni na jednom statusu ---
+    AssertTrue Not (CanCancelSEFStatus("Mistake") And CanStornoSEFStatus("Mistake")), _
+               "Isti status ne nudi i cancel i storno"
+    AssertTrue Not (CanCancelSEFStatus("Approved") And CanStornoSEFStatus("Approved")), _
+               "Odobrena faktura nudi samo storno"
+
+    ' --- Retry: SEF_TECH_FAILED je jedino stanje iz kog se ponovo salje ---
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_TECH_FAILED, WF_SEF_READY), _
+               "TECH_FAILED -> READY je putanja za retry"
+    AssertTrue Not IsSEFTransitionAllowed(WF_SEF_SENT, WF_SEF_READY), _
+               "Iz SEF_SENT nema retry putanje (zato Mistake ide u TECH_FAILED)"
+
+    ' --- Slanje: workflow NIJE dovoljan uslov ---
+    ' Obican tehnicki pad (nema dokumenta na SEF-u) sme ponovo da se salje...
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, WF_SEF_TECH_FAILED, ""), _
+               "Tehnicki pad bez SEF dokumenta -> retry dozvoljen"
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, "", ""), _
+               "TECH_FAILED bez spoljnog statusa i bez docId -> retry dozvoljen"
+    AssertTrue CanSendSEFInvoice(WF_LOCAL_FINALIZED, "", ""), _
+               "Finalizovana faktura se salje prvi put"
+    AssertTrue CanSendSEFInvoice(WF_SEF_READY, WF_SEF_READY, ""), _
+               "Pripremljena odbijena faktura (resubmit tok) se salje"
+
+    ' ...ali dokument koji ZIVI na SEF-u ne sme ponovo (duplicate guard bi ga
+    ' ionako odbio -- ranije je forma palila dugme koje kapija odbija).
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake", "5317568"), _
+               "MISTAKE dokument se ne salje ponovo (prvo Cancel)"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Cancelled", "5317568"), _
+               "Posle cancel-a se ista faktura ne nudi za slanje"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Approved", "5317568"), _
+               "Odobren dokument se ne salje ponovo"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Paid", "5317568"), _
+               "Placen dokument se ne salje ponovo"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENT, "", ""), _
+               "SEF_SENT nije sendable workflow"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_SENDING, "", ""), _
+               "SEF_SENDING nije sendable workflow"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_UNKNOWN, "", ""), _
+               "SEF_UNKNOWN nije sendable workflow"
+
+    ' KLJUCNO: SEFStatus je PROMENLJIV -- svaki neuspeo refresh ga prepise u
+    ' FAILED/HTTP_ERROR. Odluka se zato vezuje za TRAJAN SEFDocumentId, inace
+    ' bi pad mreze ponovo upalio "Retry" nad fakturom sa zivim dokumentom.
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "HTTP_ERROR", "5317568"), _
+               "Pad refresh-a ne sme da otkljuca slanje dok SEFDocumentId postoji"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, SEF_STATUS_UNKNOWN, "5317568"), _
+               "Nepoznat status + postojeci SEFDocumentId -> slanje blokirano"
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "FAILED", "5317568"), _
+               "FAILED status + postojeci SEFDocumentId -> slanje blokirano"
+    AssertTrue CanSendSEFInvoice(WF_SEF_TECH_FAILED, "HTTP_ERROR", ""), _
+               "Pad refresh-a BEZ SEFDocumentId -> retry i dalje dozvoljen"
+    AssertTrue Not CanSendSEFInvoice(WF_LOCAL_FINALIZED, "", "5317568"), _
+               "Bilo koji sendable workflow sa zivim dokumentom je blokiran"
+
+    ' REJECTED se salje samo kroz pripremljen tok (SEF_READY + obrisan docId).
+    AssertTrue Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Rejected", ""), _
+               "REJECTED van pripremljenog toka nije sendable"
+    AssertTrue CanSendSEFInvoice(WF_SEF_READY, "Rejected", ""), _
+               "REJECTED iz SEF_READY (pripremljen resubmit) je sendable"
+
+    ' MISTAKE mora da ima BAR jednu putanju: cancel jeste, slanje nije.
+    AssertTrue CanCancelSEFStatus("Mistake") And _
+               Not CanSendSEFInvoice(WF_SEF_TECH_FAILED, "Mistake", "5317568"), _
+               "MISTAKE putanja je Cancel, ne Retry"
+
+    ' --- Poruka mora da uputi na akciju koja je stvarno moguca ---
+    AssertContains SEFSendBlockedNextStep("Mistake"), "Cancel", _
+                   "Za MISTAKE poruka upucuje na Cancel"
+    AssertContains SEFSendBlockedNextStep("Approved"), "Storno", _
+                   "Za APPROVED poruka upucuje na Storno (cancel nije dozvoljen)"
+    AssertContains SEFSendBlockedNextStep("Sent"), "Storno", _
+                   "Za SENT poruka upucuje na Storno"
+    AssertContains SEFSendBlockedNextStep("Cancelled"), "portal", _
+                   "Za vec otkazan dokument poruka upucuje na proveru, ne na Cancel"
+    AssertContains SEFSendBlockedNextStep("Paid"), "portal", _
+                   "Za placen dokument poruka ne upucuje na Cancel"
+    AssertTrue InStr(1, SEFSendBlockedNextStep("Paid"), "Cancel", vbTextCompare) = 0, _
+               "Poruka ne nudi Cancel tamo gde Cancel nije dozvoljen"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF status capabilities", Err.description
+End Sub
+
+' (b5) INTEGRACIONI: odbijena faktura mora stvarno da prodje kroz resubmit.
+'
+' Ovo je jedini test u gate suite-u koji dira poslovne tabele -- namerno, jer se
+' bas ovaj lanac ne moze dokazati cistim funkcijama: submission red je u statusu
+' SENT (refresh ga NE dira), pa je duplicate guard obarao resubmit koji je
+' PrepareRejectedInvoiceForResubmit upravo pripremio. Capability funkcija je za
+' isti slucaj vracala "sendable" -- tacno, ali nedovoljno.
+'
+' Redovi se seed-uju u clsTransaction koja se UVEK rollback-uje (isti obrazac kao
+' modFakturaTests). Zove se `_Row` verzija, jer clsTransaction.BeginTx puca na
+' ugnezdjenu transakciju.
+Private Sub Test_SEFRejectedResubmitPassesDuplicateGuard()
+    On Error GoTo EH
+
+    Dim tx As clsTransaction
+    Dim fakturaID As String
+    Dim submissionID As String
+    Dim guardBefore As Boolean
+    Dim guardAfter As Boolean
+    Dim stateAfter As String
+    Dim docIdAfter As String
+    Dim statusAfter As String
+    Dim wasQuiet As Boolean
+    Dim quietSet As Boolean
+
+    fakturaID = "TEST-SEF-RESUB-" & Format$(Now, "yyyymmddhhnnss")
+    submissionID = "TEST-SUB-" & Format$(Now, "yyyymmddhhnnss")
+
+    ' AppendRow/UpdateCell pisu CSV crash-recovery journal, a njega tx.RollbackTx
+    ' NE moze da povuce -- test redovi bi ostali u Journal folderu i sledeci
+    ' start bi javio lazno upozorenje o mogucem gubitku podataka. Projekat za to
+    ' ima namenski test-mode (isti obrazac kao modAgrohemijaTests).
+    wasQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
+    quietSet = True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_SUBMISSION
+    tx.AddTableSnapshot TBL_SEF_EVENT_LOG
+
+    ' Stanje posle: uspesan submit -> refresh vratio REJECTED.
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317568", _
+        "SEFSubmissionIDLast", submissionID)
+
+    ' SEFDocumentId se poklapa sa fakturinim -- tako se izvrsava i lineage grana
+    ' razduzenja (bez njega bi ostala nepokrivena).
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID, _
+        "FakturaID", fakturaID, _
+        "SEFDocumentId", "5317568", _
+        "SubmissionStatus", SEF_SUB_SENT)
+
+    ' Pre pripreme: duplicate guard blokira (to je i bio simptom).
+    guardBefore = HasSuccessfulSEFSubmission(fakturaID)
+    AssertTrue guardBefore, _
+               "Pre pripreme duplicate guard vidi uspesnu submisiju"
+
+    PrepareRejectedInvoiceForResubmit_Row fakturaID
+
+    guardAfter = HasSuccessfulSEFSubmission(fakturaID)
+    stateAfter = GetFakturaSEFWorkflowState(fakturaID)
+    docIdAfter = GetFakturaSEFDocumentId(fakturaID)
+    statusAfter = CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))
+
+    ' Sustina nalaza: posle pripreme resubmit vise NE sme da padne kao duplikat.
+    AssertTrue Not guardAfter, _
+               "Posle pripreme duplicate guard vise ne blokira resubmit"
+    AssertEquals WF_SEF_READY, stateAfter, "Priprema vraca workflow u SEF_READY"
+    AssertEquals "", Trim$(docIdAfter), "Priprema brise SEFDocumentId"
+    ' SEFStatus je kolona SPOLJNOG statusa -- priprema u nju NE sme da upise
+    ' interni marker "SEF_READY" (izgubio bi se podatak da je SEF odbio fakturu).
+    AssertEquals "REJECTED", Trim$(statusAfter), _
+                 "Priprema cuva spoljni status REJECTED (ne upisuje interni marker)"
+    AssertTrue CanSendSEFInvoice(stateAfter, statusAfter, docIdAfter), _
+               "Pripremljena faktura je sendable i po zajednickoj kapiji"
+
+    ' Scenario 2 (fail-closed): prethodna submisija je ACCEPTED -- neuskladjen
+    ' podatak. Priprema tada NE sme da "uspe" i ostavi fakturu koju ce slanje
+    ' odbiti kao duplikat; mora da padne glasno i trazi rucnu proveru.
+    Dim fakturaID2 As String
+    Dim submissionID2 As String
+    Dim raised As Boolean
+
+    fakturaID2 = fakturaID & "-ACC"
+    submissionID2 = submissionID & "-ACC"
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID2, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317569", _
+        "SEFSubmissionIDLast", submissionID2)
+
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID2, _
+        "FakturaID", fakturaID2, _
+        "SubmissionStatus", SEF_SUB_ACCEPTED)
+
+    raised = False
+    On Error Resume Next
+    PrepareRejectedInvoiceForResubmit_Row fakturaID2
+    raised = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raised, _
+               "Priprema pada kad prethodna submisija ostaje ACCEPTED (fail-closed)"
+    AssertTrue HasSuccessfulSEFSubmission(fakturaID2), _
+               "ACCEPTED submisija se ne prepisuje u REJECTED"
+
+    ' Scenario 3 (fiskalni lineage): `SEFSubmissionIDLast` moze da bude zastareo,
+    ' pa submisija pokazuje na DRUGI SEF dokument. Razduzenje tada ne sme da
+    ' prepise istoriju -- puca i trazi rucnu proveru (zapis o predaji poreskom
+    ' organu). Gadja se helper direktno, da bi se videlo da NISTA nije upisano.
+    Dim fakturaID3 As String
+    Dim submissionID3 As String
+    Dim raisedLineage As Boolean
+
+    fakturaID3 = fakturaID & "-LIN"
+    submissionID3 = submissionID & "-LIN"
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaID3, _
+        "SEFWorkflowState", WF_SEF_REJECTED, _
+        "SEFStatus", "REJECTED", _
+        "SEFDocumentId", "5317580", _
+        "SEFSubmissionIDLast", submissionID3)
+
+    AppendSEFTestRow TBL_SEF_SUBMISSION, Array( _
+        "SEFSubmissionID", submissionID3, _
+        "FakturaID", fakturaID3, _
+        "SEFDocumentId", "9999999", _
+        "SubmissionStatus", SEF_SUB_SENT)
+
+    raisedLineage = False
+    On Error Resume Next
+    DischargeSEFSubmission_Row submissionID3, fakturaID3, "5317580"
+    raisedLineage = (Err.Number <> 0)
+    Err.Clear
+    On Error GoTo EH
+
+    AssertTrue raisedLineage, _
+               "Neslaganje SEFDocumentId pri razduzenju puca (rucna provera)"
+    AssertEquals SEF_SUB_SENT, _
+                 Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID3, "SubmissionStatus"))), _
+                 "Submisija sa tudjim dokumentom ostaje NETAKNUTA"
+    AssertTrue HasSuccessfulSEFSubmission(fakturaID3), _
+               "Duplicate guard i dalje blokira (nista nije razduzeno)"
+
+    ' Kontrola: isti dokument -> razduzenje prolazi.
+    AssertTrue DischargeSEFSubmission_Row(submissionID3, fakturaID3, "9999999"), _
+               "Isti SEFDocumentId -> razduzenje prolazi"
+    AssertTrue Not HasSuccessfulSEFSubmission(fakturaID3), _
+               "Posle razduzenja duplicate guard vise ne blokira"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    quietSet = False
+
+    LogPass "Rejected -> prepare -> resubmit prolazi duplicate guard"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    On Error GoTo 0
+
+    LogFail "Rejected resubmit passes duplicate guard", Err.description
+End Sub
+
+' Vraca journal test-mode na ZATECENO stanje (ne bezuslovno False), da ugnezdjen
+' poziv iz sireg test konteksta ne ostane bez zastite. Otkazuje i eventualno
+' zakazan AutoSave tick -- posle rollback-a nema sta da se snima.
+Private Sub RestoreSEFTestQuiet(ByVal wasSet As Boolean, ByVal previousValue As Boolean)
+    On Error Resume Next
+    If wasSet Then
+        modJournaling.SetTestModeQuiet previousValue
+        modJournaling.StopAutoSaveTimer
+    End If
+    On Error GoTo 0
+End Sub
+
+' Seed helper: upis PO IMENU kolone (pozicijski AppendRow zavisi od redosleda
+' kolona, koji se razlikuje po instalaciji). Parovi "kolona", vrednost.
+Private Sub AppendSEFTestRow(ByVal tableName As String, ByVal columnValuePairs As Variant)
+
+    Const SRC As String = "modSEFTests.AppendSEFTestRow"
+
+    Dim lo As ListObject
+    Set lo = GetTable(tableName)
+
+    Dim rowData() As Variant
+    ReDim rowData(0 To lo.ListColumns.count - 1)
+
+    Dim i As Long
+    Dim colIndex As Long
+
+    For i = LBound(columnValuePairs) To UBound(columnValuePairs) - 1 Step 2
+        colIndex = GetColumnIndex(tableName, CStr(columnValuePairs(i)))
+        If colIndex <= 0 Then
+            Err.Raise ERR_SEF_VALIDATION, SRC, _
+                      "Column not found: " & tableName & "." & CStr(columnValuePairs(i))
+        End If
+        rowData(colIndex - 1) = columnValuePairs(i + 1)
+    Next i
+
+    If AppendRow(tableName, rowData) <= 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, "Failed to append test row into " & tableName
+    End If
+
+End Sub
+
+' (b6) TABLE-LEVEL LIFECYCLE: uspesan storno mora da pomeri i lokalni workflow.
+'
+' Matrica dokazuje da state machine DOZVOLJAVA prelaz u SEF_STORNO; ovaj test
+' dokazuje da ga produkcioni put stvarno RADI. Bez njega je sedam rundi review-a
+' propustilo da `StornoInvoiceOnSEF_TX` menja samo SEFStatus, pa je faktura
+' trajno ostajala SEFWorkflowState = SEF_SENT uz SEFStatus = STORNO.
+'
+' Gadja se `ApplyStornoResultOnSEF_Row` (telo TX-a), jer sam `_TX` otvara
+' transakciju, a clsTransaction.BeginTx puca na ugnezdjenu.
+Private Sub Test_SEFStornoMovesLocalWorkflow()
+    On Error GoTo EH
+
+    Dim tx As clsTransaction
+    Dim resp As clsSEFResponse
+    Dim fakturaSent As String
+    Dim fakturaAccepted As String
+    Dim wasQuiet As Boolean
+    Dim quietSet As Boolean
+
+    fakturaSent = "TEST-SEF-STORNO-S-" & Format$(Now, "yyyymmddhhnnss")
+    fakturaAccepted = "TEST-SEF-STORNO-A-" & Format$(Now, "yyyymmddhhnnss")
+
+    wasQuiet = modJournaling.IsTestModeQuiet()
+    modJournaling.SetTestModeQuiet True
+    quietSet = True
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_EVENT_LOG
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaSent, _
+        "SEFWorkflowState", WF_SEF_SENT, _
+        "SEFStatus", "SENT", _
+        "SEFDocumentId", "5317570")
+
+    AppendSEFTestRow TBL_FAKTURE, Array( _
+        "FakturaID", fakturaAccepted, _
+        "SEFWorkflowState", WF_SEF_ACCEPTED, _
+        "SEFStatus", "APPROVED", _
+        "SEFDocumentId", "5317571")
+
+    Set resp = New clsSEFResponse
+    resp.Success = True
+    resp.apiStatus = "STORNO"
+    resp.sefDocumentId = "5317570"
+
+    ApplyStornoResultOnSEF_Row fakturaSent, resp, "", "smoke"
+
+    AssertEquals WF_SEF_STORNO, GetFakturaSEFWorkflowState(fakturaSent), _
+                 "Uspesan storno iz SEF_SENT pomera workflow u SEF_STORNO"
+    AssertEquals "STORNO", Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaSent, "SEFStatus"))), _
+                 "Spoljni status ostaje STORNO"
+
+    Set resp = New clsSEFResponse
+    resp.Success = True
+    resp.apiStatus = "STORNO"
+    resp.sefDocumentId = "5317571"
+
+    ApplyStornoResultOnSEF_Row fakturaAccepted, resp, "", "smoke"
+
+    AssertEquals WF_SEF_STORNO, GetFakturaSEFWorkflowState(fakturaAccepted), _
+                 "Uspesan storno iz SEF_ACCEPTED pomera workflow u SEF_STORNO"
+
+    ' Nijedna faktura ne sme da ostane u kontradikciji workflow/status.
+    AssertTrue GetFakturaSEFWorkflowState(fakturaSent) <> WF_SEF_SENT, _
+               "Posle storna workflow vise nije SEF_SENT"
+    AssertTrue GetFakturaSEFWorkflowState(fakturaAccepted) <> WF_SEF_ACCEPTED, _
+               "Posle storna workflow vise nije SEF_ACCEPTED"
+
+    tx.RollbackTx
+    Set tx = Nothing
+
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    quietSet = False
+
+    LogPass "Uspesan storno pomera lokalni workflow u SEF_STORNO"
+    Exit Sub
+
+EH:
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    RestoreSEFTestQuiet quietSet, wasQuiet
+    On Error GoTo 0
+
+    LogFail "Storno moves local workflow", Err.description
+End Sub
+
+' (c) Recovery ne sme da prijavi uspeh kad faktura ostaje zaglavljena.
+Private Sub Test_SEFRecoveryOutcomeContract()
+    On Error GoTo EH
+
+    AssertTrue Not IsSEFRecoveryComplete(WF_SEF_SENDING), _
+               "Faktura i dalje u SEF_SENDING NIJE oporavljena"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_TECH_FAILED), _
+               "Prelazak u SEF_TECH_FAILED jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_SENT), _
+               "Prelazak u SEF_SENT jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_UNKNOWN), _
+               "Prelazak u SEF_UNKNOWN (rucna provera) izvlaci fakturu iz SEF_SENDING"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_ACCEPTED), _
+               "Prelazak u SEF_ACCEPTED jeste oporavak"
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_REJECTED), _
+               "Prelazak u SEF_REJECTED jeste oporavak"
+
+    ' AUD-032c: STORNO je ishod dvokoraka SENDING -> SENT -> STORNO. Bez njega u
+    ' whitelisti je faktura koja je uspesno izasla iz SEF_SENDING i zavrsila u
+    ' ispravnom terminalnom stanju bila prijavljena kao "recovery nije uspeo".
+    AssertTrue IsSEFRecoveryComplete(WF_SEF_STORNO), _
+               "Prelazak u SEF_STORNO jeste uspesan recovery"
+
+    ' Ceo lanac, ne samo krajnja tacka: planer iz SEF_SENDING za STORNO daje
+    ' SEF_SENT, pa SEF_STORNO -- i taj ishod mora da se broji kao oporavak.
+    Dim stornoHop1 As String
+    Dim stornoHop2 As String
+
+    stornoHop1 = SEFRefreshTargetState(WF_SEF_SENDING, SEF_CLS_STORNO)
+    stornoHop2 = SEFRefreshTargetState(stornoHop1, SEF_CLS_STORNO)
+
+    AssertEquals WF_SEF_SENT, stornoHop1, "SENDING + Storno -> prvi korak SEF_SENT"
+    AssertEquals WF_SEF_STORNO, stornoHop2, "SENDING + Storno -> drugi korak SEF_STORNO"
+    AssertTrue IsSEFRecoveryComplete(stornoHop2), _
+               "SENDING -> SENT -> STORNO se prijavljuje kao uspesan recovery"
+
+    ' FAIL-CLOSED: provera se hrani iz GetFakturaSEFWorkflowState, koja na
+    ' schema/read gresci vraca prazan string. Negativan test ("<> SENDING") bi
+    ' prazno stanje i smece u koloni proglasio uspesnim oporavkom.
+    AssertTrue Not IsSEFRecoveryComplete(""), _
+               "Prazno stanje NIJE oporavak (neprocitan podatak)"
+    AssertTrue Not IsSEFRecoveryComplete("   "), _
+               "Sam razmak NIJE oporavak"
+    AssertTrue Not IsSEFRecoveryComplete("BOGUS_STATE"), _
+               "Nepoznato stanje NIJE oporavak"
+    AssertTrue Not IsSEFRecoveryComplete(WF_SEF_READY), _
+               "SEF_READY nije stanje u koje SEF_SENDING sme da predje"
+    AssertTrue Not IsSEFRecoveryComplete(WF_LOCAL_DRAFT), _
+               "LOCAL_DRAFT nije ishod recovery-ja"
+
+    ' Whitelist mora da se poklapa sa state machine-om: svako stanje koje
+    ' racunamo kao oporavak mora biti dozvoljen izlaz iz SEF_SENDING.
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_SENT), _
+               "SENDING -> SENT je dozvoljen izlaz"
+    AssertTrue IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_UNKNOWN), _
+               "SENDING -> UNKNOWN je dozvoljen izlaz"
+    AssertTrue Not IsSEFTransitionAllowed(WF_SEF_SENDING, WF_SEF_READY), _
+               "SENDING -> READY nije dozvoljen (pa nije ni oporavak)"
+
+    Exit Sub
+
+EH:
+    LogFail "SEF recovery outcome contract", Err.description
+End Sub
+
 Private Sub Test_SEFAllowedTransitions()
     AssertTransitionAllowed WF_LOCAL_DRAFT, WF_LOCAL_FINALIZED
 
@@ -422,8 +1309,19 @@ Private Sub Test_SEFAllowedTransitions()
     AssertTransitionAllowed WF_SEF_SENT, WF_SEF_SYNC_ERROR
     AssertTransitionAllowed WF_SEF_SENT, WF_SEF_STORNO
 
+    ' AUD-032b: SEF_UNKNOWN mora imati izlaz (rucna provera pa refresh).
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_SENT
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_ACCEPTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_REJECTED
+    AssertTransitionAllowed WF_SEF_UNKNOWN, WF_SEF_TECH_FAILED
+
     AssertTransitionAllowed WF_SEF_TECH_FAILED, WF_SEF_READY
     AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_SENT
+
+    ' AUD-032b: zvanicni status "Mistake" (greska pri slanju) stize i kad je
+    ' lokalno stanje vec SEF_SENT ili SEF_SYNC_ERROR.
+    AssertTransitionAllowed WF_SEF_SENT, WF_SEF_TECH_FAILED
+    AssertTransitionAllowed WF_SEF_SYNC_ERROR, WF_SEF_TECH_FAILED
     AssertTransitionAllowed WF_SEF_ACCEPTED, WF_SEF_STORNO
     AssertTransitionAllowed WF_SEF_REJECTED, WF_SEF_READY
 End Sub
@@ -446,6 +1344,10 @@ Private Sub Test_SEFBlockedTransitions()
 
     AssertTransitionBlocked WF_SEF_TECH_FAILED, WF_SEF_SENT
     AssertTransitionBlocked WF_SEF_SYNC_ERROR, WF_SEF_ACCEPTED
+
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_READY
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_SENDING
+    AssertTransitionBlocked WF_SEF_UNKNOWN, WF_SEF_STORNO
 
     AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_SENT
     AssertTransitionBlocked WF_SEF_STORNO, WF_SEF_READY
@@ -500,13 +1402,33 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     Dim httpStatus As String
     Dim errorCode As String
     Dim errorMessage As String
+    Dim sendErrNo As Long
+    Dim sendErrDesc As String
 
     LogInfo "==== Live send test start for " & fakturaID & " ===="
 
     beforeState = GetFakturaSEFWorkflowState(fakturaID)
     LogInfo "Workflow before send=" & beforeState
 
+    ' AUD-032a: neuspesan send (REJECTED / TECH_FAILED) sada dolazi kao
+    ' tipizirana greska umesto kao "uspeh + SubmissionID". Hvatamo je ovde da bi
+    ' test i dalje mogao da razlikuje poslovno odbijanje od tehnickog pada.
+    On Error Resume Next
     resultSubmissionID = SendInvoiceToSEF_TX(fakturaID)
+    sendErrNo = Err.Number
+    sendErrDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
+
+    If sendErrNo <> 0 And _
+       sendErrNo <> ERR_SEF_REJECTED And _
+       sendErrNo <> ERR_SEF_SEND_FAILED Then
+        Err.Raise sendErrNo, "Test_LiveSendAndRefresh", sendErrDesc
+    End If
+
+    If sendErrNo <> 0 Then
+        LogInfo "SendInvoiceToSEF_TX raised expected send-outcome error: " & sendErrDesc
+    End If
 
     afterSendState = GetFakturaSEFWorkflowState(fakturaID)
     sefDocumentId = GetFakturaSEFDocumentId(fakturaID)
@@ -530,12 +1452,25 @@ Private Sub Test_LiveSendAndRefresh(ByVal fakturaID As String)
     LogInfo "ErrorCode=" & errorCode
     LogInfo "ErrorMessage=" & errorMessage
 
-    AssertTrue Len(Trim$(resultSubmissionID)) > 0, _
-                "SendInvoiceToSEF_TX returned SubmissionID"
+    ' AUD-032a: SubmissionID se vraca SAMO za uspesan send; za neuspeh mora doci
+    ' greska i prazan povratak (inace bi UI to prikazao kao "Faktura poslata").
+    If IsSuccessfulSEFSendState(afterSendState) Then
+        AssertTrue sendErrNo = 0, _
+                    "Uspesan send ne baca gresku"
+        AssertTrue Len(Trim$(resultSubmissionID)) > 0, _
+                    "SendInvoiceToSEF_TX returned SubmissionID"
+        AssertEquals submissionID, resultSubmissionID, _
+                    "Returned SubmissionID matches Faktura last submission"
+    Else
+        AssertTrue sendErrNo <> 0, _
+                    "Neuspesan send (" & afterSendState & ") baca tipiziranu gresku"
+        AssertTrue Len(Trim$(resultSubmissionID)) = 0, _
+                    "Neuspesan send ne vraca SubmissionID kao potvrdu"
+        AssertTrue InStr(1, SEFSendOutcomeMessage(afterSendState, submissionID), _
+                            Poruka("SEF_MSG_SEND_POSLATA"), vbTextCompare) = 0, _
+                    "Poruka za neuspesan send ne tvrdi da je faktura poslata"
+    End If
 
-    AssertEquals submissionID, resultSubmissionID, _
-                "Returned SubmissionID matches Faktura last submission"
-             
     Select Case UCase$(Trim$(afterSendState))
 
         Case UCase$(WF_SEF_REJECTED)
@@ -656,10 +1591,17 @@ Private Sub Test_RecoverStuckSendingInvoice(ByVal fakturaID As String)
         Exit Sub
     End If
 
-    RecoverStuckSEFSendingInvoice fakturaID
+    Dim recovered As Boolean
+    recovered = RecoverStuckSEFSendingInvoice(fakturaID)
     afterState = GetFakturaSEFWorkflowState(fakturaID)
 
     LogInfo "After recovery state=" & afterState
+    LogInfo "Recovery returned=" & CStr(recovered)
+
+    ' AUD-032c: povratna vrednost mora da odgovara stvarnom stanju -- nikad
+    ' "recovered" dok je faktura i dalje u SEF_SENDING.
+    AssertTrue recovered = IsSEFRecoveryComplete(afterState), _
+               "Recovery rezultat odgovara stvarnom stanju fakture"
     AssertTrue UCase$(Trim$(afterState)) <> UCase$(WF_SEF_SENDING), _
                "Recovered invoice no longer stuck in SEF_SENDING"
 
@@ -673,7 +1615,15 @@ End Sub
 Private Sub Test_BatchRefreshPendingDoesNotCrash()
     On Error GoTo EH
 
-    RefreshPendingOutboundInvoices_TX
+    Dim summaryText As String
+
+    summaryText = RefreshPendingOutboundInvoices_TX()
+
+    ' AUD-032f: batch mora da vrati sazetak, ne da tiho prodje.
+    LogInfo "Pending refresh summary: " & summaryText
+    AssertTrue Len(Trim$(summaryText)) > 0, _
+               "RefreshPendingOutboundInvoices_TX vraca sazetak"
+
     LogPass "RefreshPendingOutboundInvoices_TX completed"
     Exit Sub
 
@@ -684,7 +1634,14 @@ End Sub
 Private Sub Test_BatchRecoverStuckDoesNotCrash()
     On Error GoTo EH
 
-    RecoverAllStuckSEFSendingInvoices
+    Dim summaryText As String
+
+    summaryText = RecoverAllStuckSEFSendingInvoices()
+
+    LogInfo "Recovery summary: " & summaryText
+    AssertTrue InStr(1, summaryText, "Recovered=", vbTextCompare) > 0, _
+               "RecoverAllStuckSEFSendingInvoices vraca sazetak (Found/Recovered/NotRecovered/Failed)"
+
     LogPass "RecoverAllStuckSEFSendingInvoices completed"
     Exit Sub
 
@@ -1091,6 +2048,13 @@ Private Sub Test_LiveCancelInvoice(ByVal fakturaID As String)
 
     ' Workflow ne sme da regredira
     AssertTrue Len(Trim$(afterWorkflow)) > 0, "Cancel leaves workflow state populated"
+
+    ' AUD-032b: posle uspesnog cancel-a faktura NE sme da bude ponudjena za
+    ' ponovno slanje. Sam "workflow je neprazan" je propustao SEF_TECH_FAILED
+    ' (npr. iz MISTAKE putanje), gde je forma i dalje palila "Retry slanje".
+    AssertTrue Not CanSendSEFInvoice(afterWorkflow, afterStatus, afterDocID), _
+               "Otkazana faktura se ne nudi za ponovno slanje (workflow=" & _
+               afterWorkflow & ", status=" & afterStatus & ")"
 
     ' SEFStatus mora biti terminalan nakon cancel
     Dim afterStatusUC As String

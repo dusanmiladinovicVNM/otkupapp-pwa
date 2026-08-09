@@ -281,10 +281,18 @@ Private Sub LoadFaktureIntoCombo()
 End Sub
 
 Private Function GetSelectedFakturaID() As String
-    
+
     GetSelectedFakturaID = Trim$(CStr(Me.cmbFaktura.value))
-    
+
 End Function
+
+' AUD-032d: promena izabrane fakture mora da obrise prikazan SEF kontekst.
+' Bez ovoga je na ekranu ostajao status/event log PRETHODNE fakture sve dok
+' operater ne klikne "Ucitaj fakturu" -- pa je tudji status izgledao kao njen.
+Private Sub cmbFaktura_Change()
+    On Error Resume Next
+    Call ClearSEFInfo
+End Sub
 
 Private Sub ClearSEFInfo()
     
@@ -328,14 +336,21 @@ Private Sub LoadSelectedFakturaInfo()
     Call UpdateSEFButtonStates
     
     ' NOVO - koristi theme constants
-    Select Case UCase$(Me.lblSEFStatus.caption)
-    Case "SENT"
-        Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
-    Case "ACCEPTED"
+    ' AUD-032b: boja se vodi po klasi statusa, ne po rucnoj listi imena --
+    ' inace zvanicni SEF statusi (APPROVED, SEEN, PAID, MISTAKE...) ispadnu
+    ' neobojeni, tj. izgledaju kao "nista posebno".
+    Select Case ClassifySEFExternalStatus(Me.lblSEFStatus.caption)
+    Case SEF_CLS_ACCEPTED
         Me.lblSEFStatus.ForeColor = CLR_SUCCESS()
-    Case "REJECTED"
+    Case SEF_CLS_REJECTED, SEF_CLS_SEND_FAILED
+        ' Greska pri slanju je neuspeh, ne "obavestenje".
         Me.lblSEFStatus.ForeColor = CLR_ERROR()
-    Case "CANCELLED", "STORNO"
+    Case SEF_CLS_PENDING
+        Me.lblSEFStatus.ForeColor = RGB(80, 130, 200)       ' info plava
+    Case SEF_CLS_STORNO, SEF_CLS_TERMINAL, SEF_CLS_INFO
+        Me.lblSEFStatus.ForeColor = CLR_WARNING()
+    Case SEF_CLS_ERROR, SEF_CLS_UNKNOWN
+        ' Nepoznat status = rucna provera, ne "sve u redu".
         Me.lblSEFStatus.ForeColor = CLR_WARNING()
     Case Else
         Me.lblSEFStatus.ForeColor = TXT_LIGHT()
@@ -380,7 +395,8 @@ Private Sub UpdateSEFButtonStates()
     Dim fakturaID As String
     Dim workflowState As String
     Dim sefStatus As String
-    
+    Dim sefDocumentId As String
+
     fakturaID = GetSelectedFakturaID()
     
     If Len(fakturaID) = 0 Then
@@ -395,12 +411,15 @@ Private Sub UpdateSEFButtonStates()
     
     workflowState = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFWorkflowState"))))
     sefStatus = UCase$(Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFStatus"))))
+    sefDocumentId = Trim$(CStr(LookupValue(TBL_FAKTURE, "FakturaID", fakturaID, "SEFDocumentId")))
     
-    Me.btnPosalji.enabled = (workflowState = UCase$(WF_LOCAL_FINALIZED) Or _
-                             workflowState = UCase$(WF_SEF_READY) Or _
-                             workflowState = UCase$(WF_SEF_TECH_FAILED))
-    
-    If workflowState = UCase$(WF_SEF_TECH_FAILED) Then
+    ' AUD-032b: isti spisak koji propusta `ValidateFakturaForSEF`. Sam workflow
+    ' nije dovoljan -- SEF_TECH_FAILED nastao iz statusa MISTAKE ima ZIV dokument
+    ' na SEF-u, pa bi novo slanje kapija odbila kao duplikat. Ranije je forma
+    ' palila "Retry slanje na SEF" koji nije mogao da prodje.
+    Me.btnPosalji.enabled = CanSendSEFInvoice(workflowState, sefStatus, sefDocumentId)
+
+    If Me.btnPosalji.enabled And workflowState = UCase$(WF_SEF_TECH_FAILED) Then
         Me.btnPosalji.caption = "Retry slanje na SEF"
     Else
         Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
@@ -410,14 +429,25 @@ Private Sub UpdateSEFButtonStates()
         Me.btnPosalji.caption = Poruka("SEF_LBL_POSALJI_SEF")
     End If
     
+    ' AUD-032b: SEF_UNKNOWN (SEF vratio nepoznat status) je stanje za rucnu
+    ' proveru -- operater mora da moze da ponovi "Osvezi status". SEF_TECH_FAILED
+    ' se osvezava samo kad dokument stvarno postoji na SEF-u (MISTAKE putanja);
+    ' obican tehnicki pad nema SEFDocumentId, pa bi refresh pukao.
     Me.btnOsvezi.enabled = (workflowState = UCase$(WF_SEF_SENT) Or _
-                            workflowState = UCase$(WF_SEF_SYNC_ERROR))
+                            workflowState = UCase$(WF_SEF_SYNC_ERROR) Or _
+                            workflowState = UCase$(WF_SEF_UNKNOWN) Or _
+                            (workflowState = UCase$(WF_SEF_TECH_FAILED) And _
+                             Len(sefDocumentId) > 0))
     
     Me.btnPrepareResubmit.enabled = (workflowState = UCase$(WF_SEF_REJECTED))
     
-    Me.btnCancel.enabled = (sefStatus = "DRAFT" Or sefStatus = "NEW" Or sefStatus = "ERROR")
-    
-    Me.btnStorno.enabled = (sefStatus = "SENT" Or sefStatus = "ACCEPTED" Or sefStatus = "REJECTED")
+    ' AUD-032b: dugmad se pale po ISTOM spisku po kom validator propusta akciju
+    ' (`CanCancelSEFStatus` / `CanStornoSEFStatus`), da forma ne bi nudila akciju
+    ' koju kapija odbija -- ni obrnuto. Time je i zvanicni "MISTAKE" (greska pri
+    ' slanju) dobio Cancel, a "APPROVED" Storno.
+    Me.btnCancel.enabled = CanCancelSEFStatus(sefStatus)
+
+    Me.btnStorno.enabled = CanStornoSEFStatus(sefStatus)
     
     Me.btnRecoverSending.enabled = (workflowState = UCase$(WF_SEF_SENDING))
     
@@ -439,6 +469,8 @@ Private Sub btnPosalji_Click()
 
     Dim fakturaID As String
     Dim submissionID As String
+    Dim sendErrNo As Long
+    Dim sendErrDesc As String
 
     Me.btnPosalji.enabled = False
     DoEvents
@@ -455,11 +487,28 @@ Private Sub btnPosalji_Click()
         GoTo CleanExit
     End If
 
+    ' AUD-032a: SendInvoiceToSEF_TX sada baca tipiziranu gresku kad SEF odbije
+    ' fakturu (ERR_SEF_REJECTED) ili kad slanje tehnicki padne
+    ' (ERR_SEF_SEND_FAILED). Stanje je u oba slucaja vec sacuvano, pa se ishod
+    ' hvata ovde i prikazuje kao ishod, a ne kao rusenje forme.
+    On Error Resume Next
     submissionID = SendInvoiceToSEF_TX(fakturaID)
+    sendErrNo = Err.Number
+    sendErrDesc = Err.description
+    Err.Clear
+    On Error GoTo EH
 
     Call LoadSelectedFakturaInfo
 
-    MsgBox "Faktura poslata. SubmissionID: " & submissionID, vbInformation, APP_NAME
+    If sendErrNo = 0 Then
+        ' Poruka po stvarnom SEFWorkflowState-u, ne bezuslovno "Faktura poslata".
+        MsgBox SEFSendOutcomeMessage(GetFakturaSEFWorkflowState(fakturaID), submissionID), _
+               vbInformation, APP_NAME
+    ElseIf sendErrNo = ERR_SEF_REJECTED Or sendErrNo = ERR_SEF_SEND_FAILED Then
+        MsgBox sendErrDesc, vbExclamation, APP_NAME
+    Else
+        Err.Raise sendErrNo, "frmSEF.btnPosalji", sendErrDesc
+    End If
 
 CleanExit:
     Me.btnPosalji.enabled = True
@@ -474,19 +523,27 @@ End Sub
 
 Private Sub btnOsvezi_Click()
     On Error GoTo EH
-    
+
     Dim fakturaID As String
-    
+    Dim ok As Boolean
+
     fakturaID = GetSelectedFakturaID()
     If Len(fakturaID) = 0 Then
         MsgBox "Izaberite fakturu.", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Call RefreshSEFStatus_TX(fakturaID)
+
+    ok = RefreshSEFStatus_TX(fakturaID)
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_SEF_STATUS_OSVEZEN"), vbInformation, APP_NAME
+
+    ' AUD-032c: prikazuje se stvaran rezultat. Ranije je poruka uvek tvrdila da
+    ' je status osvezen, i kad je SEF pao ili vratio nepoznat status.
+    If ok Then
+        MsgBox Poruka("SEF_MSG_SEF_STATUS_OSVEZEN"), vbInformation, APP_NAME
+    Else
+        MsgBox Poruka("SEF_MSG_STATUS_NIJE_OSVEZEN") & vbCrLf & _
+               "SEFStatus: " & Me.lblSEFStatus.caption, vbExclamation, APP_NAME
+    End If
     Exit Sub
 
 EH:
@@ -593,19 +650,27 @@ End Sub
 
 Private Sub btnRecoverSending_Click()
     On Error GoTo EH
-    
+
     Dim fakturaID As String
-    
+    Dim recovered As Boolean
+
     fakturaID = GetSelectedFakturaID()
     If Len(fakturaID) = 0 Then
         MsgBox "Izaberite fakturu.", vbExclamation, APP_NAME
         Exit Sub
     End If
-    
-    Call RecoverStuckSEFSendingInvoice(fakturaID)
+
+    recovered = RecoverStuckSEFSendingInvoice(fakturaID)
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_RECOVERY_ZAVRSEN"), vbInformation, APP_NAME
+
+    ' AUD-032c: "Recovery zavrsen" samo ako faktura vise nije u SEF_SENDING.
+    If recovered Then
+        MsgBox Poruka("SEF_MSG_RECOVERY_ZAVRSEN") & vbCrLf & _
+               "Workflow: " & Me.lblWorkflow.caption, vbInformation, APP_NAME
+    Else
+        MsgBox Poruka("SEF_MSG_RECOVERY_NEUSPESAN") & vbCrLf & _
+               "Workflow: " & Me.lblWorkflow.caption, vbExclamation, APP_NAME
+    End If
     Exit Sub
 
 EH:
@@ -615,11 +680,15 @@ End Sub
 
 Private Sub btnRefreshPending_Click()
     On Error GoTo EH
-    
-    Call RefreshPendingOutboundInvoices_TX
+
+    Dim summaryText As String
+
+    summaryText = RefreshPendingOutboundInvoices_TX()
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_PENDING_FAKTURE_OSVEZENE"), vbInformation, APP_NAME
+
+    ' AUD-032f: batch prolaz prijavljuje sazetak, ne tihi "gotovo".
+    MsgBox Poruka("SEF_MSG_PENDING_FAKTURE_OSVEZENE") & vbCrLf & summaryText, _
+           vbInformation, APP_NAME
     Exit Sub
 
 EH:
@@ -629,11 +698,15 @@ End Sub
 
 Private Sub btnRecoverAllSending_Click()
     On Error GoTo EH
-    
-    Call RecoverAllStuckSEFSendingInvoices
+
+    Dim summaryText As String
+
+    summaryText = RecoverAllStuckSEFSendingInvoices()
     Call LoadSelectedFakturaInfo
-    
-    MsgBox Poruka("SEF_MSG_SEF_SENDING_RECOVERY"), vbInformation, APP_NAME
+
+    ' AUD-032f: sazetak (Found/Recovered/NotRecovered/Failed) umesto tihog prolaza.
+    MsgBox Poruka("SEF_MSG_SEF_SENDING_RECOVERY") & vbCrLf & summaryText, _
+           vbInformation, APP_NAME
     Exit Sub
 
 EH:

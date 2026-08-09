@@ -48,8 +48,24 @@ Public Function GetNextSEFVersionNo(ByVal fakturaID As String) As Long
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Public Function GetCurrentSEFVersionNo(ByVal fakturaID As String) As Long
@@ -73,8 +89,24 @@ Public Function GetCurrentSEFVersionNo(ByVal fakturaID As String) As Long
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' =========================
@@ -166,8 +198,24 @@ Public Sub UpdateFakturaSEFState_Row( _
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 ' NOTE:
@@ -210,8 +258,24 @@ Public Sub UpdateFakturaSEFRefreshFields_Row( _
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Function CreateSEFSubmission_Row( _
@@ -290,8 +354,24 @@ Public Function CreateSEFSubmission_Row( _
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Public Sub SaveSEFSubmissionResult_Row( _
@@ -350,8 +430,24 @@ Public Sub SaveSEFSubmissionResult_Row( _
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub AppendSEFEvent_Row( _
@@ -397,8 +493,24 @@ Public Sub AppendSEFEvent_Row( _
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 ' =========================
@@ -482,8 +594,24 @@ Public Sub UpdateSEFLastSyncAt_Row(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Function GetCurrentOperatorName() As String
@@ -559,6 +687,103 @@ EH:
     GetSEFEventsForFaktura = Empty
 End Function
 
+' AUD-032b: razduzi TACNO ONU submisiju koju korektivni resubmit zamenjuje.
+' Vraca True ako je red stvarno razduzen.
+'
+' Zasto uopste treba: status refresh NAMERNO ne dira submission red (poziv
+' SaveSEFSubmissionResult_Row u modSEFStatusSync je zakomentarisan, da se podaci
+' o originalnom submit HTTP pozivu ne prepisu podacima iz status upita). Zato
+' faktura koju je SEF odbio TEK NA REFRESH-u zadrzava submission red u statusu
+' SENT, pa `HasSuccessfulSEFSubmission` (fail-closed duplicate guard, AUD-031d)
+' obara i onaj resubmit koji je `PrepareRejectedInvoiceForResubmit` upravo
+' pripremio -- dokumentovan tok je time bio mrtav.
+'
+' Upisuje se SEF_SUB_REJECTED, dakle tacno ono sto bi `SaveSEFSubmissionResult_Row`
+' upisao za `response.Rejected` -- ne izmislja se novo stanje, primenjuje se
+' postojece mapiranje sistema.
+'
+' NAMERNO uzak zahvat -- samo prosledjeni (poslednji) red, uz proveru vlasnistva:
+'   * SEF_SUB_ACCEPTED se ne dira (prihvacena submisija uz odbijen workflow je
+'     neuskladjen podatak -> duplicate guard s pravom nastavlja da blokira),
+'   * stariji SENT redovi iste fakture se ne diraju (ne prepisujemo istoriju o
+'     kojoj nista ne znamo). Ako takav red postoji, resubmit ostaje blokiran i
+'     pozivalac to prijavi kao rucnu proveru -- fail-closed.
+'
+' `_Row` = pozivalac obezbedjuje transakciju (snapshot nad TBL_SEF_SUBMISSION).
+Public Function DischargeSEFSubmission_Row(ByVal submissionID As String, _
+                                           ByVal fakturaID As String, _
+                                           ByVal expectedDocumentId As String) As Boolean
+
+    On Error GoTo EH
+
+    Const SRC As String = "modSEFPersistance.DischargeSEFSubmission_Row"
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    ' Nema poslednje submisije -> nema sta da se razduzi. Pozivalac posle ovoga
+    ' ionako proverava duplicate guard, pa se tisina ovde ne pretvara u uspeh.
+    If Len(Trim$(submissionID)) = 0 Then Exit Function
+
+    RequireSEFSubmissionSchema SRC
+
+    Dim rowIndex As Long
+    rowIndex = GetSingleRowIndexByKey(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, True)
+
+    Dim ownerFakturaID As String
+    ownerFakturaID = Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "FakturaID")))
+
+    If ownerFakturaID <> Trim$(fakturaID) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Submission " & submissionID & " belongs to faktura " & ownerFakturaID & _
+                  ", not " & fakturaID & "."
+    End If
+
+    ' Fiskalni lineage: kad OBA identiteta postoje, moraju da se poklope.
+    ' `SEFSubmissionIDLast` je pokazivac koji moze da bude zastareo (npr. red
+    ' zaostao iz ranijeg pokusaja), pa bi se bez ove provere kao "odbijen" mogao
+    ' obeleziti pogresan pokusaj -- a to je zapis o predaji poreskom organu.
+    ' Ako se ne poklapaju, ne pretpostavljamo koji je tacan: pucamo i trazimo
+    ' rucnu proveru (pozivalac je u TX-u, pa se sve vraca).
+    Dim submissionDocumentId As String
+    submissionDocumentId = Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "SEFDocumentId")))
+
+    If Len(submissionDocumentId) > 0 And Len(Trim$(expectedDocumentId)) > 0 Then
+        If submissionDocumentId <> Trim$(expectedDocumentId) Then
+            Err.Raise ERR_SEF_STATE, SRC, _
+                      "Submission " & submissionID & " points to SEF document " & _
+                      submissionDocumentId & ", but faktura " & fakturaID & _
+                      " carries " & Trim$(expectedDocumentId) & ". Manual review required."
+        End If
+    End If
+
+    Dim currentStatus As String
+    currentStatus = Trim$(CStr(LookupValue(TBL_SEF_SUBMISSION, "SEFSubmissionID", submissionID, "SubmissionStatus")))
+
+    If currentStatus <> SEF_SUB_SENT Then Exit Function
+
+    RequireUpdateCell TBL_SEF_SUBMISSION, rowIndex, "SubmissionStatus", SEF_SUB_REJECTED, SRC
+
+    DischargeSEFSubmission_Row = True
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
+    LogErr SRC
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
+End Function
+
 Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
     On Error GoTo EH
 
@@ -606,8 +831,24 @@ Public Function HasSuccessfulSEFSubmission(ByVal fakturaID As String) As Boolean
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Public Function GetLastSEFSubmissionStatus(ByVal fakturaID As String) As String
@@ -635,8 +876,24 @@ Public Function GetLastSEFSubmissionStatus(ByVal fakturaID As String) As String
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Public Function GetSubmissionRequestBody(ByVal submissionID As String) As String
@@ -661,8 +918,24 @@ Public Function GetSubmissionRequestBody(ByVal submissionID As String) As String
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, SRC, ehErrDesc
 End Function
 
 Public Function GetSubmissionPayloadHash(ByVal submissionID As String) As String
@@ -687,8 +960,24 @@ Public Function GetSubmissionPayloadHash(ByVal submissionID As String) As String
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, SRC, ehErrDesc
 End Function
 
 Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
@@ -718,8 +1007,24 @@ Public Sub ClearFakturaLastSubmission_Row(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, SRC, ehErrDesc
 End Sub
 
 Private Sub RequireFaktureSEFSchema(ByVal sourceName As String)
@@ -806,7 +1111,23 @@ Private Function GetFakturaSEFFieldText(ByVal fakturaID As String, _
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, sourceName, ehErrDesc
 End Function
 

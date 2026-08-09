@@ -713,6 +713,35 @@ Public Const SEF_SUB_FAILED As String = "FAILED"
 Public Const SEF_SUB_UNKNOWN As String = "UNKNOWN"
 
 ' =========================
+' External SEF status markers (SEFStatus kolona, NE workflow state)
+' =========================
+' AUD-032b: kad SEF vrati prazan status, on se NE sme tiho upisati kao "SENT"
+' (neposlata faktura bi bila obelezena kao poslata). Umesto toga se upisuje ovaj
+' marker i faktura ide na rucnu proveru.
+Public Const SEF_STATUS_UNKNOWN As String = "UNKNOWN_STATUS"
+
+' Klasifikacija eksternog SEF statusa (modSEFStatusSync.ClassifySEFExternalStatus).
+' Zvanicni SEF enum SalesInvoiceStatus ima 14+ vrednosti; lokalni workflow ima 5
+' ishoda. Ove klase su most izmedju to dvoje - jedno mesto na kome se odlucuje
+' sta koji spoljni status znaci.
+Public Const SEF_CLS_ACCEPTED As String = "ACCEPTED"   ' kupac odobrio (Approved)
+Public Const SEF_CLS_REJECTED As String = "REJECTED"   ' kupac odbio
+Public Const SEF_CLS_PENDING As String = "PENDING"     ' u obradi / ceka odluku
+' Storno je izdvojen iz opsteg TERMINAL-a jer je JEDINI spoljni terminal koji ima
+' svoj lokalni parnjak (WF_SEF_STORNO, uz dozvoljene tranzicije SENT/ACCEPTED ->
+' STORNO). Cancel/Deleted lokalnog parnjaka NEMAJU -- za njih je stanje samo
+' spoljno (vidi SEF_CLS_TERMINAL).
+Public Const SEF_CLS_STORNO As String = "STORNO"
+Public Const SEF_CLS_TERMINAL As String = "TERMINAL"   ' otkazano/obrisano (external-terminal-only)
+' Zvanicni SEF status "Mistake" = GRESKA PRILIKOM SLANJA dokumenta. To NIJE
+' terminalno stanje: takav dokument se po zvanicnom uputstvu moze otkazati
+' (Draft/New/Mistake), a lokalno mora u SEF_TECH_FAILED da bi retry bio moguc.
+Public Const SEF_CLS_SEND_FAILED As String = "SEND_FAILED"
+Public Const SEF_CLS_INFO As String = "INFO"           ' dokument je u SEF lifecycle-u, ali status ne nosi odluku kupca
+Public Const SEF_CLS_ERROR As String = "ERROR"         ' SEF/HTTP greska
+Public Const SEF_CLS_UNKNOWN As String = "UNKNOWN"     ' nepoznat -> rucna provera
+
+' =========================
 ' Event types
 ' =========================
 Public Const SEF_EVT_VALIDATION_STARTED As String = "VALIDATION_STARTED"
@@ -735,6 +764,10 @@ Public Const ERR_SEF_CONFIG As Long = vbObjectError + 3103
 Public Const ERR_SEF_HTTP As Long = vbObjectError + 3104
 Public Const ERR_SEF_RESPONSE_PARSE As Long = vbObjectError + 3105
 Public Const ERR_SEF_REJECTED As Long = vbObjectError + 3106
+' AUD-032a: tehnicki neuspeh slanja (TECH_FAILED / nepoznat ishod). Odvojen od
+' ERR_SEF_REJECTED da bi pozivalac (frmSEF) mogao da razlikuje poslovno odbijanje
+' od tehnickog pada, a da ni jedno ne prikaze kao "Faktura poslata".
+Public Const ERR_SEF_SEND_FAILED As Long = vbObjectError + 3107
 
 ' Status values suggested:
 Public Const BIM_STATUS_NOVO As String = "Novo"

@@ -21,7 +21,8 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     
     Dim reuseLastSubmission As Boolean
     Dim localSendingCommitted As Boolean
-    
+    Dim finalState As String
+
     On Error GoTo EH
     
     currentState = GetFakturaSEFWorkflowState(fakturaID)
@@ -400,7 +401,20 @@ Public Function SendInvoiceToSEF_TX(ByVal fakturaID As String) As String
     End If
 
     On Error GoTo 0
-    
+
+    ' =========================
+    ' AUD-032a: ishod slanja
+    ' =========================
+    ' TX 2 je vec komitovan, pa je stanje fakture (REJECTED / TECH_FAILED)
+    ' sacuvano i pre ovog raise-a. Ranije se SubmissionID vracao bezuslovno, pa
+    ' je frmSEF i za odbijenu fakturu prikazivao "Faktura poslata".
+    finalState = GetFakturaSEFWorkflowState(fakturaID)
+
+    If Not IsSuccessfulSEFSendState(finalState) Then
+        Err.Raise SEFSendFailureErrNumber(finalState), "SendInvoiceToSEF_TX", _
+                  SEFSendOutcomeMessage(finalState, submissionID)
+    End If
+
     SendInvoiceToSEF_TX = submissionID
     Exit Function
 
@@ -464,6 +478,103 @@ EH:
     End If
 End Function
 
+' =========================================================
+' AUD-032a: ugovor o ishodu slanja
+'
+' Uspesan send = faktura je stigla na SEF (SEF_SENT ili SEF_ACCEPTED).
+' Sve ostalo (REJECTED, TECH_FAILED, bilo sta trece) je neuspeh i NE sme da
+' vrati SubmissionID kao potvrdu, niti da se korisniku prikaze kao "poslata".
+'
+' Funkcije su ciste (bez I/O) da bi RunSEFTestSuite mogao da ih proveri bez
+' ijednog poziva ka pravom SEF-u.
+' =========================================================
+Public Function IsSuccessfulSEFSendState(ByVal workflowState As String) As Boolean
+    Select Case UCase$(Trim$(workflowState))
+        Case UCase$(WF_SEF_SENT), UCase$(WF_SEF_ACCEPTED)
+            IsSuccessfulSEFSendState = True
+        Case Else
+            IsSuccessfulSEFSendState = False
+    End Select
+End Function
+
+Public Function SEFSendFailureErrNumber(ByVal workflowState As String) As Long
+    If UCase$(Trim$(workflowState)) = UCase$(WF_SEF_REJECTED) Then
+        SEFSendFailureErrNumber = ERR_SEF_REJECTED
+    Else
+        SEFSendFailureErrNumber = ERR_SEF_SEND_FAILED
+    End If
+End Function
+
+Public Function SEFSendOutcomeMessage(ByVal workflowState As String, _
+                                      ByVal submissionID As String) As String
+
+    Dim stateText As String
+    Dim messageText As String
+
+    stateText = Trim$(workflowState)
+    If Len(stateText) = 0 Then stateText = "?"
+
+    Select Case UCase$(stateText)
+        Case UCase$(WF_SEF_ACCEPTED)
+            messageText = Poruka("SEF_MSG_SEND_PRIHVACENA")
+        Case UCase$(WF_SEF_SENT)
+            messageText = Poruka("SEF_MSG_SEND_POSLATA")
+        Case UCase$(WF_SEF_REJECTED)
+            messageText = Poruka("SEF_MSG_SEND_ODBIJENA")
+        Case UCase$(WF_SEF_TECH_FAILED)
+            messageText = Poruka("SEF_MSG_SEND_TEH_GRESKA")
+        Case Else
+            messageText = Poruka("SEF_MSG_SEND_NEPOZNAT_ISHOD")
+    End Select
+
+    messageText = messageText & vbCrLf & "Workflow: " & stateText
+
+    If Len(Trim$(submissionID)) > 0 Then
+        messageText = messageText & " | SubmissionID: " & submissionID
+    End If
+
+    SEFSendOutcomeMessage = messageText
+End Function
+
+' AUD-032c: recovery je uspeo samo ako je faktura zavrsila u nekom od ISHODA
+' koje refresh planer moze da proizvede polazeci od SEF_SENDING. Ranije se
+' "Recovered" event upisivao bezuslovno, pa je zaglavljena faktura pri svakom
+' startup-u davala lazan izvestaj o oporavku.
+'
+' NAMERNO whitelist, a ne "<> SEF_SENDING": provera se hrani iz
+' GetFakturaSEFWorkflowState, koje na schema/read gresci moze da vrati PRAZAN
+' string. Sa negativnim testom bi prazno stanje (i svako smece u koloni) prolazilo
+' kao uspesan oporavak -- fail-open bas tamo gde podatak nije procitan.
+'
+' Spisak je izveden iz planera (SEFRefreshTargetState), NE iz same tabele
+' dozvoljenih tranzicija:
+'   ACCEPTED / REJECTED / SENT / TECH_FAILED / UNKNOWN  - direktni ishodi
+'   STORNO                                              - dvokorak
+'                                                         SENDING -> SENT -> STORNO
+' `WF_SEF_STORNO` je dodat kad je uveden `SEF_CLS_STORNO`: bez njega je
+' faktura koja je uspesno izasla iz SEF_SENDING i zavrsila u ispravnom
+' terminalnom SEF_STORNO bila prijavljena kao "recovery nije uspeo" i brojana
+' pod NotRecovered -- dakle bas ono lazno prijavljivanje ishoda koje AUD-032c
+' uklanja, samo u novom ruhu.
+'
+' SEF_READY i LOCAL_* se NE priznaju: planer ih ne proizvodi iz SEF_SENDING
+' (dohvatljivi su tek preko naknadnog retry/resubmit toka).
+Public Function IsSEFRecoveryComplete(ByVal stateAfterRecovery As String) As Boolean
+    Select Case UCase$(Trim$(stateAfterRecovery))
+        Case UCase$(WF_SEF_SENT), _
+             UCase$(WF_SEF_ACCEPTED), _
+             UCase$(WF_SEF_REJECTED), _
+             UCase$(WF_SEF_TECH_FAILED), _
+             UCase$(WF_SEF_UNKNOWN), _
+             UCase$(WF_SEF_STORNO)
+            IsSEFRecoveryComplete = True
+        Case Else
+            ' Ukljucuje SEF_SENDING (nije se pomerila), prazno stanje
+            ' (neprocitano) i svako stanje van SEF_SENDING lanca.
+            IsSEFRecoveryComplete = False
+    End Select
+End Function
+
 Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelComment As String) As Boolean
     
     Dim tx As clsTransaction
@@ -486,13 +597,19 @@ Public Function CancelInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal cancelCom
     tx.AddTableSnapshot "tblSEFEventLog"
     
     If response.Success Then
-        Call UpdateFakturaSEFRefreshFields_Row( _
+        ' AUD-032b: ishod ide kroz ZAJEDNICKI upisivac (isti koji koristi
+        ' refresh), da bi "sta spoljni status znaci za workflow" bilo odluceno na
+        ' jednom mestu. Za cancel je to namerno **external-terminal-only**:
+        ' lokalni state machine NEMA WF_SEF_CANCELLED, pa se belezi SEFStatus, a
+        ' workflow se samo izvlaci iz "salje se" ako je tamo zaglavljen.
+        Call ApplySEFExternalOutcome_Row( _
             fakturaID:=fakturaID, _
+            classification:=ClassifySEFExternalStatus(response.apiStatus), _
             sefStatus:=response.apiStatus, _
             sefDocumentId:=response.sefDocumentId, _
             errorCode:="", _
             errorMessage:="")
-        
+
         Call AppendSEFEvent_Row( _
             fakturaID:=fakturaID, _
             submissionID:=submissionID, _
@@ -563,37 +680,9 @@ Public Function StornoInvoiceOnSEF_TX(ByVal fakturaID As String, ByVal stornoCom
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
     tx.AddTableSnapshot "tblSEFEventLog"
-    
-    If response.Success Then
-        Call UpdateFakturaSEFRefreshFields_Row( _
-            fakturaID:=fakturaID, _
-            sefStatus:=response.apiStatus, _
-            sefDocumentId:=response.sefDocumentId, _
-            errorCode:="", _
-            errorMessage:="")
-        
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_OK, _
-            message:="Invoice storno created on SEF.", _
-            details:=response.apiStatus & " | " & stornoComment)
-    Else
-        Call UpdateFakturaSEFRefreshFields_Row( _
-            fakturaID:=fakturaID, _
-            errorCode:=response.errorCode, _
-            errorMessage:=response.errorMessage)
-        
-        Call AppendSEFEvent_Row( _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_SYNC_FAILED, _
-            message:="SEF storno failed.", _
-            details:=response.errorCode & " | " & response.errorMessage)
-    End If
-    
-    Call UpdateSEFLastSyncAt_Row(fakturaID)
-    
+
+    Call ApplyStornoResultOnSEF_Row(fakturaID, response, submissionID, stornoComment)
+
     tx.CommitTx
     StornoInvoiceOnSEF_TX = response.Success
     Exit Function
@@ -622,6 +711,64 @@ EH:
     End If
 End Function
 
+' AUD-032b: telo storno rezultata, izdvojeno da bi lifecycle mogao da se
+' testira nad tabelama (clsTransaction.BeginTx puca na ugnezdjenu transakciju,
+' pa se telo unutar `_TX` procedure ne moze pokriti testom).
+'
+' KLJUCNA promena: uspesan storno vise ne menja samo SEFStatus. Ranije je zvao
+' UpdateFakturaSEFRefreshFields_Row, pa je faktura trajno ostajala
+' SEFWorkflowState = SEF_SENT / SEF_ACCEPTED uz SEFStatus = STORNO -- lifecycle
+' kontradikcija koju batch jos i preskace (terminalan spoljni status), tako da
+' je niko vise ne ispravlja. Sada ide kroz zajednicki upisivac, koji za klasu
+' STORNO cilja WF_SEF_STORNO (tranzicije SENT/ACCEPTED -> STORNO su dozvoljene).
+Public Sub ApplyStornoResultOnSEF_Row(ByVal fakturaID As String, _
+                                      ByVal response As clsSEFResponse, _
+                                      ByVal submissionID As String, _
+                                      ByVal stornoComment As String)
+
+    Const SRC As String = "modSEFService.ApplyStornoResultOnSEF_Row"
+
+    If response Is Nothing Then
+        Err.Raise ERR_SEF_RESPONSE_PARSE, SRC, "Response object is Nothing."
+    End If
+
+    If response.Success Then
+
+        Call ApplySEFExternalOutcome_Row( _
+            fakturaID:=fakturaID, _
+            classification:=ClassifySEFExternalStatus(response.apiStatus), _
+            sefStatus:=response.apiStatus, _
+            sefDocumentId:=response.sefDocumentId, _
+            errorCode:="", _
+            errorMessage:="")
+
+        Call AppendSEFEvent_Row( _
+            fakturaID:=fakturaID, _
+            submissionID:=submissionID, _
+            eventType:=SEF_EVT_SYNC_OK, _
+            message:="Invoice storno created on SEF.", _
+            details:=response.apiStatus & " | " & stornoComment)
+
+    Else
+
+        Call UpdateFakturaSEFRefreshFields_Row( _
+            fakturaID:=fakturaID, _
+            errorCode:=response.errorCode, _
+            errorMessage:=response.errorMessage)
+
+        Call AppendSEFEvent_Row( _
+            fakturaID:=fakturaID, _
+            submissionID:=submissionID, _
+            eventType:=SEF_EVT_SYNC_FAILED, _
+            message:="SEF storno failed.", _
+            details:=response.errorCode & " | " & response.errorMessage)
+
+    End If
+
+    Call UpdateSEFLastSyncAt_Row(fakturaID)
+
+End Sub
+
 Private Function ShouldReuseLastSubmission(ByVal fakturaID As String) As Boolean
     
     Dim lastSubmissionID As String
@@ -644,12 +791,17 @@ Private Function ShouldReuseLastSubmission(ByVal fakturaID As String) As Boolean
 
 End Function
 
- Public Sub RecoverStuckSEFSendingInvoice(ByVal fakturaID As String)
+' AUD-032c: vraca True samo ako faktura vise nije zaglavljena u SEF_SENDING.
+' Statement-pozivi (`Call RecoverStuckSEFSendingInvoice(id)`) rade i dalje.
+Public Function RecoverStuckSEFSendingInvoice(ByVal fakturaID As String) As Boolean
 
     Dim tx As clsTransaction
     Dim currentState As String
     Dim submissionID As String
     Dim sefDocumentId As String
+    Dim refreshOk As Boolean
+    Dim stateAfterRefresh As String
+    Dim recovered As Boolean
 
     On Error GoTo EH
 
@@ -670,16 +822,43 @@ End Function
 
     ' If SEF already knows the document, prefer refresh.
     If Len(Trim$(sefDocumentId)) > 0 Then
-        RefreshSEFStatus_TX fakturaID
 
-        AppendSEFEvent_Row _
-            fakturaID:=fakturaID, _
-            submissionID:=submissionID, _
-            eventType:=SEF_EVT_STATE_CHANGED, _
-            message:="Recovered stuck SEF_SENDING invoice via status refresh.", _
-            details:="SEFDocumentId=" & sefDocumentId
+        refreshOk = RefreshSEFStatus_TX(fakturaID)
+        stateAfterRefresh = GetFakturaSEFWorkflowState(fakturaID)
+        recovered = IsSEFRecoveryComplete(stateAfterRefresh)
 
-        Exit Sub
+        ' AUD-032c: "Recovered" se upisuje SAMO kad je refresh zaista vratio
+        ' upotrebljiv status I kad je faktura izasla iz SEF_SENDING. Ranije se
+        ' taj event upisivao bezuslovno, pri svakom startup-u.
+        If Not recovered Then
+            AppendSEFEvent_Row _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_FAILED, _
+                message:="Recovery via status refresh did not clear SEF_SENDING.", _
+                details:="SEFDocumentId=" & sefDocumentId & _
+                         "; RefreshOk=" & CStr(refreshOk) & _
+                         "; State=" & stateAfterRefresh
+        ElseIf refreshOk Then
+            AppendSEFEvent_Row _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_STATE_CHANGED, _
+                message:="Recovered stuck SEF_SENDING invoice via status refresh.", _
+                details:="SEFDocumentId=" & sefDocumentId & _
+                         "; NewState=" & stateAfterRefresh
+        Else
+            AppendSEFEvent_Row _
+                fakturaID:=fakturaID, _
+                submissionID:=submissionID, _
+                eventType:=SEF_EVT_SYNC_FAILED, _
+                message:="Stuck SEF_SENDING invoice moved out of SEF_SENDING for manual review; SEF returned no usable status.", _
+                details:="SEFDocumentId=" & sefDocumentId & _
+                         "; NewState=" & stateAfterRefresh
+        End If
+
+        RecoverStuckSEFSendingInvoice = recovered
+        Exit Function
     End If
 
     ' Otherwise mark as technical failure so normal retry logic can reuse same submission.
@@ -705,7 +884,10 @@ End Function
 
     tx.CommitTx
     Set tx = Nothing
-    Exit Sub
+
+    RecoverStuckSEFSendingInvoice = _
+        IsSEFRecoveryComplete(GetFakturaSEFWorkflowState(fakturaID))
+    Exit Function
 
 EH:
     Dim errNum As Long
@@ -729,9 +911,13 @@ EH:
         Err.Raise ERR_SEF_STATE, "RecoverStuckSEFSendingInvoice", _
                   "Unexpected error recovering stuck SEF_SENDING invoice; original Err was lost before EH capture."
     End If
-End Sub
+End Function
 
-Public Sub RecoverAllStuckSEFSendingInvoices()
+' AUD-032f: vraca sazetak prolaza (Found/Recovered/NotRecovered/Failed) da bi
+' frmSEF mogao da ga pokaze operateru umesto tihog "recovery zavrsen".
+' Statement-pozivi (`Call RecoverAllStuckSEFSendingInvoices`, modMain startup)
+' rade i dalje.
+Public Function RecoverAllStuckSEFSendingInvoices() As String
 
     On Error GoTo EH
 
@@ -739,7 +925,10 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
 
     Dim foundCount As Long
     Dim recoveredCount As Long
+    Dim notRecoveredCount As Long
     Dim failedCount As Long
+    Dim itemRecovered As Boolean
+    Dim summaryText As String
 
     On Error Resume Next
     Monitor_Event _
@@ -794,7 +983,8 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
             On Error GoTo EH
 
             On Error Resume Next
-            RecoverStuckSEFSendingInvoice fakturaID
+            itemRecovered = False
+            itemRecovered = RecoverStuckSEFSendingInvoice(fakturaID)
 
             If Err.Number <> 0 Then
                 failedCount = failedCount + 1
@@ -834,7 +1024,7 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
                     errorSource:=itemErrSrc
 
                 Err.Clear
-            Else
+            ElseIf itemRecovered Then
                 recoveredCount = recoveredCount + 1
 
                 Monitor_SEF _
@@ -850,6 +1040,24 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
                     lastError:="", _
                     nextAction:="WAIT", _
                     needsManualReview:=False
+            Else
+                ' AUD-032c: poziv nije pukao, ali faktura je i dalje u
+                ' SEF_SENDING. To se vise ne prijavljuje kao uspesan oporavak.
+                notRecoveredCount = notRecoveredCount + 1
+
+                Monitor_SEF _
+                    eventType:="SEF_RECOVERY_INVOICE_NOT_RECOVERED", _
+                    severity:="WARN", _
+                    invoiceLocalId:=fakturaID, _
+                    businessInvoiceNo:=fakturaID, _
+                    sefStatus:=WF_SEF_SENDING, _
+                    localStatus:=GetFakturaSEFWorkflowState(fakturaID), _
+                    sefRequestId:=GetLastSEFSubmissionID(fakturaID), _
+                    sefInvoiceId:=GetFakturaSEFDocumentId(fakturaID), _
+                    attemptCount:=0, _
+                    lastError:="Invoice is still stuck in SEF_SENDING after recovery attempt.", _
+                    nextAction:="CHECK_SEF_PORTAL", _
+                    needsManualReview:=True
             End If
 
             On Error GoTo EH
@@ -859,13 +1067,18 @@ Public Sub RecoverAllStuckSEFSendingInvoices()
     Next i
 
 SuccessExit:
+    summaryText = "Found=" & foundCount & _
+                  "; Recovered=" & recoveredCount & _
+                  "; NotRecovered=" & notRecoveredCount & _
+                  "; Failed=" & failedCount
+
+    RecoverAllStuckSEFSendingInvoices = summaryText
+
     On Error Resume Next
     Monitor_Event _
         eventType:="SEF_STARTUP_RECOVERY_SUCCESS", _
         severity:="INFO", _
-        message:="Startup SEF recovery completed. Found=" & foundCount & _
-                 "; Recovered=" & recoveredCount & _
-                 "; Failed=" & failedCount, _
+        message:="Startup SEF recovery completed. " & summaryText, _
         userId:="Operator", _
         moduleName:="modSEFService", _
         procedureName:="RecoverAllStuckSEFSendingInvoices", _
@@ -874,7 +1087,7 @@ SuccessExit:
         correlationId:="SEF-STARTUP-RECOVERY"
     On Error GoTo 0
 
-    Exit Sub
+    Exit Function
 
 EH:
     Dim errNo As Long
@@ -912,11 +1125,24 @@ EH:
 
     On Error GoTo 0
     Err.Raise errNo, SRC, errDesc
-End Sub
+End Function
 
 
+' =========================================================
+' DEV MAKROI (AUD-032e)
+'
+' Sve ispod je Private -- vise se NE vidi u Alt+F8 listi. Ovi makroi gadjaju
+' ZIVI SEF (slanje fakture je pravni cin) sa hardkodovanim FakturaID-jem i bez
+' potvrde, pa im nije mesto u operaterskoj listi makroa. Iz VBE-a se i dalje
+' pokrecu (kursor u proceduri -> F5).
+'
+' Test_CancelInvoiceOnSEF_TX / Test_StornoInvoiceOnSEF_TX su UKLONJENI: cancel i
+' storno na SEF-u su pravni cin, a gadjani ekvivalenti vec postoje u modSEFTests
+' (RunSEFCancelLiveSuite / RunSEFStornoLiveSuite -- SEF_TEST_ALLOW_LIVE +
+' SEF_TEST_ALLOW_CANCEL_STORNO + tipkana potvrda).
+' =========================================================
 
-Public Sub Test_SendInvoiceToSEF_TX()
+Private Sub Test_SendInvoiceToSEF_TX()
 
     On Error GoTo EH
     
@@ -935,7 +1161,7 @@ EH:
     Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
-Public Sub Test_SendInvoiceToSEF_TX_Debug()
+Private Sub Test_SendInvoiceToSEF_TX_Debug()
 
     On Error GoTo EH
     
@@ -957,29 +1183,7 @@ EH:
     Debug.Print "ERR.Description=" & Err.description
 End Sub
 
-Public Sub Test_CancelInvoiceOnSEF_TX()
-
-    On Error GoTo EH
-    
-    Debug.Print CancelInvoiceOnSEF_TX("FAK-00007", "Test cancel from VBA")
-    Exit Sub
-
-EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.description
-End Sub
-
-Public Sub Test_StornoInvoiceOnSEF_TX()
-
-    On Error GoTo EH
-    
-    Debug.Print StornoInvoiceOnSEF_TX("FAK-00007", "Test storno from VBA", "STORNO-0002")
-    Exit Sub
-
-EH:
-    Debug.Print "ERR " & Err.Number & " - " & Err.description
-End Sub
-
-Public Sub Test_SendInvoiceToSEF_TX_RetryCheck()
+Private Sub Test_SendInvoiceToSEF_TX_RetryCheck()
 
     On Error GoTo EH
     
@@ -1032,7 +1236,7 @@ EH:
     Debug.Print "ERR.Description=" & Err.description
 End Sub
 
-Public Sub Test_SendInvoiceToSEF_TX_RetryCheck_One(ByVal fakturaID As String)
+Private Sub Test_SendInvoiceToSEF_TX_RetryCheck_One(ByVal fakturaID As String)
 
     On Error GoTo EH
     
@@ -1082,7 +1286,7 @@ EH:
     Debug.Print "ERR.Description=" & Err.description
 End Sub
 
-Public Sub Test_PrepareRejectedInvoiceForResubmit()
+Private Sub Test_PrepareRejectedInvoiceForResubmit()
 
     On Error GoTo EH
     
@@ -1100,7 +1304,7 @@ EH:
     Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
-Public Sub Test_RecoverStuckSEFSendingInvoice()
+Private Sub Test_RecoverStuckSEFSendingInvoice()
 
     On Error GoTo EH
     
@@ -1117,7 +1321,7 @@ EH:
     Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
-Public Sub Test_RefreshPendingOutboundInvoices_TX()
+Private Sub Test_RefreshPendingOutboundInvoices_TX()
 
     On Error GoTo EH
     
@@ -1129,7 +1333,7 @@ EH:
     Debug.Print "ERR " & Err.Number & " - " & Err.description
 End Sub
 
-Public Sub Test_RecoverAllStuckSEFSendingInvoices()
+Private Sub Test_RecoverAllStuckSEFSendingInvoices()
 
     On Error GoTo EH
     

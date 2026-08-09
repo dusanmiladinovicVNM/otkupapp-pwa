@@ -21,18 +21,29 @@ Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As
                 GoTo InvalidTransition
         End Select
         
+        ' AUD-032b: SEF_SENT -> SEF_TECH_FAILED je dodat zbog zvanicnog statusa
+        ' "Mistake" (greska prilikom slanja). NORMALNA sekvenca je: uspesan
+        ' submit -> lokalno SEF_SENT -> refresh vrati MISTAKE. Bez ove tranzicije
+        ' faktura je ostajala SEF_SENT ("uspesno poslata") iako SEF tvrdi da
+        ' slanje nije uspelo, a batch ju je osvezavao u nedogled.
         Case WF_SEF_SENT
             Select Case newState
-                Case WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_SYNC_ERROR, WF_SEF_STORNO
+                Case WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_SYNC_ERROR, _
+                     WF_SEF_STORNO, WF_SEF_TECH_FAILED
                 Case Else
                     GoTo InvalidTransition
             End Select
-        
+
         Case WF_SEF_TECH_FAILED
             If newState <> WF_SEF_READY Then GoTo InvalidTransition
-        
+
+        ' Isti razlog: refresh iz SEF_SYNC_ERROR takodje moze da vrati MISTAKE.
         Case WF_SEF_SYNC_ERROR
-            If newState <> WF_SEF_SENT Then GoTo InvalidTransition
+            Select Case newState
+                Case WF_SEF_SENT, WF_SEF_TECH_FAILED
+                Case Else
+                    GoTo InvalidTransition
+            End Select
         
         Case WF_SEF_ACCEPTED
             If newState <> WF_SEF_STORNO Then GoTo InvalidTransition
@@ -40,9 +51,20 @@ Public Sub ValidateAllowedTransition(ByVal oldState As String, ByVal newState As
         Case WF_SEF_REJECTED
             If newState <> WF_SEF_READY Then GoTo InvalidTransition
             
+        Case WF_SEF_UNKNOWN
+            ' AUD-032b: SEF_UNKNOWN je stanje "SEF je vratio nepoznat status,
+            ' potrebna rucna provera". Do RF-22 je bilo slepo crevo (ulazak iz
+            ' SEF_SENDING je dozvoljen, a izlaz nije postojao), pa je faktura
+            ' ostajala zauvek zaglavljena. Operater sada moze da je osvezi.
+            Select Case newState
+                Case WF_SEF_SENT, WF_SEF_ACCEPTED, WF_SEF_REJECTED, WF_SEF_TECH_FAILED
+                Case Else
+                    GoTo InvalidTransition
+            End Select
+
         Case WF_SEF_STORNO
             GoTo InvalidTransition
-        
+
         Case Else
             Err.Raise ERR_SEF_STATE, "ValidateAllowedTransition", _
                 "Unknown current workflow state: " & oldState
@@ -54,6 +76,23 @@ InvalidTransition:
     Err.Raise ERR_SEF_STATE, "ValidateAllowedTransition", _
         "Illegal SEF state transition: " & oldState & " -> " & newState
 End Sub
+
+' AUD-032c: ne-bacajuci oblik iste odluke. Sluzi da pozivalac (planer tranzicije
+' u modSEFStatusSync) moze da PITA state machine umesto da pretpostavlja -- pa ne
+' moze da predlozi tranziciju koja ce dole puknuti i oboriti refresh. Jedini
+' izvor istine ostaje ValidateAllowedTransition.
+Public Function IsSEFTransitionAllowed(ByVal oldState As String, _
+                                       ByVal newState As String) As Boolean
+    On Error GoTo NotAllowed
+
+    ValidateAllowedTransition oldState, newState
+
+    IsSEFTransitionAllowed = True
+    Exit Function
+
+NotAllowed:
+    IsSEFTransitionAllowed = False
+End Function
 
 Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     On Error GoTo EH
@@ -180,6 +219,25 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
                       "Faktura is not in a sendable state: " & workflowState
     End Select
 
+    ' AUD-032b: dokument koji vec postoji na SEF-u (npr. status MISTAKE, ili
+    ' CANCELLED posle otkazivanja) ne sme da se posalje ponovo. Provera ide PRE
+    ' generickog duplicate guard-a da bi operater dobio poruku sa razlogom i
+    ' sledecim korakom, a ne suvo "already has a successful SEF submission".
+    ' Isti spisak koristi frmSEF za paljenje dugmeta, pa forma ne nudi akciju
+    ' koju kapija odbija.
+    Dim sefStatusText As String
+    Dim sefDocIdText As String
+
+    sefStatusText = GetFakturaSEFStatusText(fakturaID, SRC)
+    sefDocIdText = GetFakturaSEFDocumentId(fakturaID)
+
+    If Not CanSendSEFInvoice(workflowState, sefStatusText, sefDocIdText) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Faktura cannot be sent while a SEF document exists (SEFStatus=" & _
+                  sefStatusText & "; SEFDocumentId=" & sefDocIdText & "). " & _
+                  SEFSendBlockedNextStep(sefStatusText)
+    End If
+
     If HasSuccessfulSEFSubmission(fakturaID) Then
         Err.Raise ERR_SEF_DUPLICATE, SRC, _
                   "Faktura already has a successful SEF submission."
@@ -192,8 +250,24 @@ Public Sub ValidateFakturaForSEF(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 
@@ -219,8 +293,24 @@ Private Sub ValidateFakturaHasStavke(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub ValidateSEFPayload(ByVal payload As String)
@@ -241,8 +331,24 @@ Public Sub ValidateSEFPayload(ByVal payload As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 Private Sub ValidateKupacForSEF(ByVal kupacID As String)
     On Error GoTo EH
@@ -276,8 +382,24 @@ Private Sub ValidateKupacForSEF(ByVal kupacID As String)
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Sub ValidateSEFConfig()
@@ -309,8 +431,24 @@ Private Sub ValidateSEFConfig()
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
@@ -336,8 +474,146 @@ Private Function GetFakturaSEFStatusText(ByVal fakturaID As String, _
     Exit Function
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr sourceName
-    Err.Raise Err.Number, sourceName, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, sourceName, errDesc
+End Function
+
+' =========================================================
+' CAPABILITY UGOVOR (AUD-032b)
+'
+' Jedan spisak po akciji, koji koriste I validator (fail-closed kapija) I forma
+' (enable dugmeta). Ranije su to bile dve rucne liste na dva mesta -- forma je
+' nudila dugme za statuse koje validator odbija, i obrnuto.
+'
+' Cancel: zvanicno uputstvo dozvoljava otkazivanje dokumenta u statusima
+' Draft, New i Mistake ("greska prilikom slanja"). "ERROR" je nas interni
+' marker iz ranijih verzija i zadrzan je zbog zatecenih redova.
+' =========================================================
+Public Function CanCancelSEFStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "DRAFT", "NEW", "MISTAKE", "ERROR"
+            CanCancelSEFStatus = True
+        Case Else
+            CanCancelSEFStatus = False
+    End Select
+End Function
+
+' Sme li se faktura (ponovo) poslati na SEF -- JEDAN spisak za formu (enable
+' dugmeta) i za fail-closed kapiju u ValidateFakturaForSEF.
+'
+' Uslov je dvodelan, jer sam workflow nije dovoljan:
+'   1) lokalno stanje mora biti sendable (LOCAL_FINALIZED / SEF_READY /
+'      SEF_TECH_FAILED), i
+'   2) na SEF-u NE sme postojati dokument koji bi novo slanje pretvorilo u
+'      duplikat.
+'
+' AUD-032b, tacka 2 -- poslovna odluka za "Mistake":
+' MISTAKE fakturu vodimo u SEF_TECH_FAILED (jer NIJE poslata), ali retry NE
+' nudimo. Razlog je proverljiv u kodu: prvi uspesan submit upisuje
+' SubmissionStatus = SENT, status refresh namerno ne dira submission red, pa
+' HasSuccessfulSEFSubmission (fail-closed duplicate guard, AUD-031d) svako
+' sledece slanje odbija kao duplikat -- a ShouldReuseLastSubmission trazi
+' FAILED/CREATED, pa ne bi ni reuse-ovao isti requestId. Ranije je forma palila
+' "Retry slanje na SEF" koji je kapija svakako odbijala.
+' Da li SEF uopste prihvata ponovni POST istog requestId za dokument u statusu
+' Mistake NIJE proverivo staticki (isti zakljucak kao FM-0037 #2) -- dok se ne
+' potvrdi na demo SEF-u, putanja za MISTAKE je Cancel + rucna provera.
+' Isto vazi posle uspesnog cancel-a: dokument na SEF-u postoji (CANCELLED), pa
+' se ista faktura ne nudi za ponovno slanje.
+'
+' REJECTED je namerno DOZVOLJEN: to je postojeci resubmit tok
+' (PrepareRejectedInvoiceForResubmit vraca workflow u SEF_READY, a SEFStatus
+' ostaje REJECTED).
+Public Function CanSendSEFInvoice(ByVal workflowState As String, _
+                                  ByVal sefStatus As String, _
+                                  ByVal sefDocumentId As String) As Boolean
+
+    Select Case UCase$(Trim$(workflowState))
+        Case UCase$(WF_LOCAL_FINALIZED), UCase$(WF_SEF_READY), UCase$(WF_SEF_TECH_FAILED)
+            ' sendable lokalno stanje
+        Case Else
+            CanSendSEFInvoice = False
+            Exit Function
+    End Select
+
+    ' PRVO trajna cinjenica, tek onda status. `SEFStatus` je PROMENLJIV: svaki
+    ' neuspeo refresh ga prepise u FAILED/HTTP_ERROR (klasa UNKNOWN), pa bi
+    ' provera samo po statusu ponovo upalila "Retry" nad fakturom koja ima ziv
+    ' dokument na SEF-u -- i klik bi pao na duplicate guard. `SEFDocumentId`
+    ' postoji samo ako je SEF stvarno primio dokument i ne brise se pri padu
+    ' refresh-a (jedino ga `ClearFakturaLastSubmission_Row` cisti, u resubmit
+    ' toku odbijene fakture).
+    If Len(Trim$(sefDocumentId)) > 0 Then
+        CanSendSEFInvoice = False
+        Exit Function
+    End If
+
+    ' Rezervna odbrana za slucaj da je dokument nastao a docId se izgubio:
+    ' sam status i dalje dokazuje da dokument zivi na SEF-u.
+    Select Case ClassifySEFExternalStatus(sefStatus)
+
+        Case SEF_CLS_ACCEPTED, SEF_CLS_PENDING, SEF_CLS_INFO, _
+             SEF_CLS_STORNO, SEF_CLS_TERMINAL, SEF_CLS_SEND_FAILED
+            CanSendSEFInvoice = False
+
+        Case SEF_CLS_REJECTED
+            ' Odbijena faktura se salje ponovo SAMO kroz pripremljen tok
+            ' (`PrepareRejectedInvoiceForResubmit` -> SEF_READY, obrisan
+            ' SEFDocumentId i submission link). Bilo koje drugo stanje sa
+            ' statusom REJECTED je nesredjeno -> rucna provera.
+            CanSendSEFInvoice = (UCase$(Trim$(workflowState)) = UCase$(WF_SEF_READY))
+
+        Case Else
+            ' ERROR / UNKNOWN / prazno + nema SEFDocumentId = slanje nije ni
+            ' stiglo do SEF-a (obican tehnicki pad). Retry je ispravan.
+            CanSendSEFInvoice = True
+
+    End Select
+
+End Function
+
+' Sledeci korak za operatera kad je slanje blokirano. Poruka se izvodi iz ISTIH
+' capability funkcija koje odlucuju sta je dozvoljeno, pa ne moze da uputi na
+' akciju koja nije moguca (raniji tekst je za svaki blokiran status savetovao
+' Cancel, koji nije dozvoljen za Approved/Sent/Paid/Archived/Cancelled).
+Public Function SEFSendBlockedNextStep(ByVal sefStatus As String) As String
+
+    If CanCancelSEFStatus(sefStatus) Then
+        SEFSendBlockedNextStep = "Cancel the SEF document first, then handle it manually."
+    ElseIf CanStornoSEFStatus(sefStatus) Then
+        SEFSendBlockedNextStep = "Storno the SEF document first, then handle it manually."
+    Else
+        SEFSendBlockedNextStep = "Refresh the SEF status and check the SEF portal (manual review)."
+    End If
+
+End Function
+
+' Storno se radi nad dokumentom koji je stvarno predat kupcu.
+' "APPROVED" je zvanicni SEF naziv (AUD-032b); "ACCEPTED" ostaje zbog
+' zatecenih redova i submit odgovora.
+Public Function CanStornoSEFStatus(ByVal sefStatus As String) As Boolean
+    Select Case UCase$(Trim$(sefStatus))
+        Case "SENT", "ACCEPTED", "APPROVED", "REJECTED"
+            CanStornoSEFStatus = True
+        Case Else
+            CanStornoSEFStatus = False
+    End Select
 End Function
 
 Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
@@ -357,20 +633,32 @@ Public Sub ValidateFakturaCanBeCancelledOnSEF(ByVal fakturaID As String)
 
     sefStatus = GetFakturaSEFStatusText(fakturaID, SRC)
 
-    Select Case sefStatus
-        Case "DRAFT", "NEW", "ERROR"
-            ' allowed
-
-        Case Else
-            Err.Raise ERR_SEF_STATE, SRC, _
-                      "Invoice cannot be cancelled on SEF in status: " & sefStatus
-    End Select
+    If Not CanCancelSEFStatus(sefStatus) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Invoice cannot be cancelled on SEF in status: " & sefStatus
+    End If
 
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If errNum = 0 Then errNum = ERR_SEF_STATE
+
+    Err.Raise errNum, SRC, errDesc
 End Sub
 
 Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
@@ -390,65 +678,54 @@ Public Sub ValidateFakturaCanBeStorniranoOnSEF(ByVal fakturaID As String)
 
     sefStatus = GetFakturaSEFStatusText(fakturaID, SRC)
 
-    Select Case sefStatus
-        Case "SENT", "ACCEPTED", "REJECTED"
-            ' allowed
-
-        Case Else
-            Err.Raise ERR_SEF_STATE, SRC, _
-                      "Invoice cannot be storno on SEF in status: " & sefStatus
-    End Select
+    If Not CanStornoSEFStatus(sefStatus) Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+                  "Invoice cannot be storno on SEF in status: " & sefStatus
+    End If
 
     Exit Sub
 
 EH:
+    ' AUD-054: greska se hvata PRE LogErr-a. LogError interno radi
+    ' "On Error Resume Next" / "On Error GoTo 0", a svaka On Error naredba
+    ' resetuje Err objekat -- zatecno "Err.Raise Err.Number" je time postajalo
+    ' "Err.Raise 0", pa se greska GUTALA umesto da se propagira pozivaocu.
+    ' RF-22 se oslanja bas na ovu propagaciju (rollback TX-a, fail-closed kapije).
+    Dim ehErrNum As Long
+    Dim ehErrDesc As String
+
+    ehErrNum = Err.Number
+    ehErrDesc = Err.description
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
+
+    Err.Raise ehErrNum, SRC, ehErrDesc
 End Sub
 
+' AUD-032b: telo je izdvojeno u `_Row` (pozivalac obezbedjuje TX) po obrascu
+' koji projekat vec koristi (CreateFaktura/_TX, SaveMagacinCore/SaveMagacin).
+' Razlog nije stil: clsTransaction.BeginTx PUCA na ugnezdjenu transakciju, pa se
+' ceo tok resubmit-a nije mogao pokriti testom dok je logika zivela unutar TX-a.
 Public Sub PrepareRejectedInvoiceForResubmit(ByVal fakturaID As String)
-    
+
     Dim tx As clsTransaction
-    Dim currentState As String
-    
+
     On Error GoTo EH
-    
-    If Len(Trim$(fakturaID)) = 0 Then
-        Err.Raise ERR_SEF_STATE, "PrepareRejectedInvoiceForResubmit", _
-            "FakturaID is required."
-    End If
-    
-    currentState = GetFakturaSEFWorkflowState(fakturaID)
-    
-    If currentState <> WF_SEF_REJECTED Then
-        Err.Raise ERR_SEF_STATE, "PrepareRejectedInvoiceForResubmit", _
-            "Invoice is not in SEF_REJECTED state: " & currentState
-    End If
-    
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_SEF_SUBMISSION
     tx.AddTableSnapshot "tblSEFEventLog"
-    
-    Call UpdateFakturaSEFState_Row( _
-        fakturaID:=fakturaID, _
-        newState:=WF_SEF_READY, _
-        sefStatus:=WF_SEF_READY, _
-        errorCode:="", _
-        errorMessage:="", _
-        submissionID:="")
-    
-    Call ClearFakturaLastSubmission_Row(fakturaID)
-    
-    Call AppendSEFEvent_Row( _
-        fakturaID:=fakturaID, _
-        submissionID:="", _
-        eventType:=SEF_EVT_STATE_CHANGED, _
-        message:="Rejected invoice prepared for corrected resubmission.", _
-        details:="PreviousState=" & currentState)
-    
+
+    PrepareRejectedInvoiceForResubmit_Row fakturaID
+
     tx.CommitTx
-    
+
     Exit Sub
 
 EH:
@@ -475,10 +752,82 @@ EH:
     End If
 End Sub
 
+Public Sub PrepareRejectedInvoiceForResubmit_Row(ByVal fakturaID As String)
+
+    Const SRC As String = "modSEFValidator.PrepareRejectedInvoiceForResubmit_Row"
+
+    Dim currentState As String
+    Dim lastSubmissionID As String
+    Dim currentDocumentId As String
+    Dim discharged As Boolean
+
+    If Len(Trim$(fakturaID)) = 0 Then
+        Err.Raise ERR_SEF_STATE, SRC, "FakturaID is required."
+    End If
+
+    currentState = GetFakturaSEFWorkflowState(fakturaID)
+
+    ' Procitaj link I remote identitet dokumenta PRE nego sto ih
+    ' ClearFakturaLastSubmission_Row obrise -- razduzuje se tacno ta submisija,
+    ' ne "sve SENT za ovu fakturu", i to samo ako joj se dokument poklapa.
+    lastSubmissionID = GetLastSEFSubmissionID(fakturaID)
+    currentDocumentId = GetFakturaSEFDocumentId(fakturaID)
+
+    If currentState <> WF_SEF_REJECTED Then
+        Err.Raise ERR_SEF_STATE, SRC, _
+            "Invoice is not in SEF_REJECTED state: " & currentState
+    End If
+
+    ' AUD-032b: `sefStatus` se NAMERNO ne prosledjuje. Kolona `SEFStatus` po
+    ' definiciji nosi POSLEDNJI SPOLJNI status (modSEFPersistance zaglavlje), a
+    ' upis internog markera "SEF_READY" u nju je gubio podatak da je SEF fakturu
+    ' odbio -- audit trag bi tvrdio nesto sto SEF nikad nije rekao. Ostaje
+    ' REJECTED, sto je i ono sto `CanSendSEFInvoice` ocekuje za pripremljen tok.
+    Call UpdateFakturaSEFState_Row( _
+        fakturaID:=fakturaID, _
+        newState:=WF_SEF_READY, _
+        errorCode:="", _
+        errorMessage:="", _
+        submissionID:="")
+
+    Call ClearFakturaLastSubmission_Row(fakturaID)
+
+    ' AUD-032b: bez ovoga je dokumentovani tok bio mrtav -- faktura odbijena TEK
+    ' NA REFRESH-u zadrzava submission red u statusu SENT (refresh ga namerno ne
+    ' dira), pa bi `HasSuccessfulSEFSubmission` oborio bas ovaj pripremljeni
+    ' resubmit kao duplikat.
+    discharged = DischargeSEFSubmission_Row(lastSubmissionID, fakturaID, currentDocumentId)
+
+    ' FAIL-CLOSED: priprema sme da uspe SAMO ako je faktura posle nje stvarno
+    ' posiljiva. Ako je i dalje blokira uspesna submisija (prethodna je ACCEPTED,
+    ' ili postoji stariji SENT red -- oba su neuskladjen podatak), bolje je da
+    ' priprema padne glasno nego da operater dobije "pripremljeno" pa tek klik na
+    ' slanje odbijanje zbog duplikata. TX se vraca, faktura ostaje SEF_REJECTED.
+    If HasSuccessfulSEFSubmission(fakturaID) Then
+        Err.Raise ERR_SEF_DUPLICATE, SRC, _
+                  "Faktura still has a successful SEF submission after discharge " & _
+                  "(LastSubmissionID=" & lastSubmissionID & _
+                  "; Discharged=" & CStr(discharged) & "). Manual review required."
+    End If
+
+    Call AppendSEFEvent_Row( _
+        fakturaID:=fakturaID, _
+        submissionID:="", _
+        eventType:=SEF_EVT_STATE_CHANGED, _
+        message:="Rejected invoice prepared for corrected resubmission.", _
+        details:="PreviousState=" & currentState & _
+                 "; DischargedSubmissionID=" & lastSubmissionID & _
+                 "; Discharged=" & CStr(discharged))
+
+End Sub
+
 Public Function IsFinalSEFStatus(ByVal sefStatus As String) As Boolean
     
-    Select Case UCase$(Trim$(sefStatus))
-        Case "ACCEPTED", "REJECTED", "STORNO", "CANCELLED"
+    ' AUD-032b: prati zvanicni SEF enum kroz zajednicki klasifikator
+    ' (APPROVED/ACCEPTED, REJECTED, STORNO/CANCELLED/DELETED).
+    ' MISTAKE NIJE finalan -- to je greska pri slanju, ima Cancel/rucnu putanju.
+    Select Case ClassifySEFExternalStatus(sefStatus)
+        Case SEF_CLS_ACCEPTED, SEF_CLS_REJECTED, SEF_CLS_STORNO, SEF_CLS_TERMINAL
             IsFinalSEFStatus = True
         Case Else
             IsFinalSEFStatus = False
@@ -488,8 +837,10 @@ End Function
 
 Public Function IsPendingSEFStatus(ByVal sefStatus As String) As Boolean
     
-    Select Case UCase$(Trim$(sefStatus))
-        Case "SENT", "NEW", "DRAFT"
+    ' AUD-032b: isti klasifikator kao svuda (dodaje SENDING i SEEN iz zvanicnog
+    ' SEF enum-a, koje je stara lista propustala).
+    Select Case ClassifySEFExternalStatus(sefStatus)
+        Case SEF_CLS_PENDING
             IsPendingSEFStatus = True
         Case Else
             IsPendingSEFStatus = False

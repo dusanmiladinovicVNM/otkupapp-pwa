@@ -4,6 +4,11 @@ Status: **operativni runbook za incident „Ne mogu da pošaljem fakturu.”**
 Aplikacija: **OtkupApp**
 Glavni tok: Excel/VBA SEF modul, `frmSEF`, `tblFakture`, `tblSEFSubmission`, `tblSEFEventLog`
 
+> **Od `vba-v2.37.0` (RF-22):** značenje poruka, statusa i dugmadi na SEF ekranu
+> je promenjeno — vidi `docs/SEF_LIFECYCLE_MANUAL.md` (prevod SEF statusa u
+> lokalno stanje, kada je koje dugme aktivno, `Mistake` / `UNKNOWN_STATUS` /
+> resubmit putanje). Ovaj runbook ostaje za dijagnostiku incidenta.
+
 ---
 
 ## 1. Kada korisnik kaže: „Ne mogu da pošaljem fakturu”
