@@ -781,14 +781,21 @@ EH:
     MapBankaImportAsOM_TX = ""
 End Function
 
+' Blok koji AUTOMATSKO mapiranje koristi za stavku izvoda = ISKLJUCIVO poziv na
+' broj iz izvoda. Javno je da bi preview u frmBankaImport citao BAS OVO, a ne
+' rucni izbor iz combo-a: auto writer ne vidi nijednu kontrolu forme, pa bi
+' preview koji gleda combo mogao da prikaze jedan blok, a "Automatski mapiraj
+' red" da proknjizi drugi.
+Public Function AutoBlockNoForBim(ByVal bankaImportID As String) As String
+    AutoBlockNoForBim = Trim$(CStr(NzBIM( _
+        LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ), "")))
+End Function
+
 Private Function MapBankaImportAsKooperantBlock(ByVal bankaImportID As String, _
                                                ByVal kooperantID As String, _
                                                Optional ByVal savePartnerMapFlag As Boolean = True) As Long
-    Dim blockNo As String
-    
-    blockNo = Trim$(CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bankaImportID, COL_BIM_POZIV_NA_BROJ)))
     MapBankaImportAsKooperantBlock = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, blockNo, savePartnerMapFlag)
+        bankaImportID, kooperantID, AutoBlockNoForBim(bankaImportID), savePartnerMapFlag)
 End Function
 
 Public Function MapBankaImportAsKooperantBlock_TX(ByVal bankaImportID As String, _

@@ -27,6 +27,7 @@ Option Explicit
 '  T06 FM-0023  uplata preko otvorenog iznosa fakture se deli (faktura + avans)
 '  T07 FM-0024  istoimeni partneri se razlikuju po ID-u (prikaz i knjizenje)
 '  T08 AUD-014  batch koji padne propagira gresku (ne prijavljuje "0 mapirano")
+'  T09 FM-0024  AUTO mapiranje ide po pozivu na broj (ne po rucnom izboru bloka)
 ' ============================================================
 
 Private mPass As Long
@@ -87,6 +88,7 @@ Public Sub RunBankaImportTestSuite()
     T06_UplataPrekoOtvorenogSeDeli
     T07_IstoimeniPartneriSeRazlikujuPoID
     T08_PaliBatchNePrijavljujeUspeh
+    T09_AutoBlokIdePoPozivuNaBroj
 
     tx.RollbackTx
     Set tx = Nothing
@@ -593,6 +595,45 @@ Private Sub T08_PaliBatchNePrijavljujeUspeh()
     ChkEq BimObradjeno(P & "BIM-G1"), "", S & "uspeli red je vracen u otvoreno stanje"
     ChkEq NovacZaBim(P & "BIM-G1"), 0, S & "uspeli red nema zaostao novac posle rollback-a"
     ChkEq NovacZaBim(P & "BIM-G2"), 0, S & "pali red nije ostavio parcijalno knjizenje"
+End Sub
+
+' ============================================================
+' T09 - AUTO mapiranje ide ISKLJUCIVO po pozivu na broj iz izvoda.
+'
+' Preview u formi je jedno vreme za AUTO granu racunao blok preko istog helpera
+' koji koristi RUCNI put (koji gleda cmbOtkupBlok), pa je operater mogao da vidi
+' blok B a da "Automatski mapiraj red" proknjizi blok A. Writer i preview sada
+' zovu ISTU funkciju (AutoBlockNoForBim); ovaj test cuva njen ugovor i dokazuje
+' da auto knjizenje pogadja blok iz poziva na broj, a ne neki drugi blok istog
+' kooperanta.
+' ============================================================
+Private Sub T09_AutoBlokIdePoPozivuNaBroj()
+    Const S As String = "T09 auto blok = poziv na broj: "
+
+    Dim res As String
+
+    SeedStanica P & "OM-4", P & "Stanica 4"
+    SeedKooperant P & "K-4", "Test", "Auto", P & "OM-4"
+
+    ' Dva bloka ISTOG kooperanta; izvod pokazuje na prvi.
+    SeedOtkup P & "OTK-PA", P & "K-4", P & "BLOK-PA", 100, 10, "Malina"   ' 1000
+    SeedOtkup P & "OTK-PB", P & "K-4", P & "BLOK-PB", 100, 10, "Malina"   ' 1000
+
+    SeedBim P & "BIM-AUTO", P & "IZV-18", P & "RAC-1", P & "PARTNER-A", 0, 1000, P & "BLOK-PA", "", ""
+
+    ChkEq AutoBlockNoForBim(P & "BIM-AUTO"), P & "BLOK-PA", _
+        S & "AutoBlockNoForBim vraca poziv na broj iz izvoda"
+
+    gBankaSilentBatch = True
+    res = AutoMapBankaImportRow_TX(P & "BIM-AUTO")
+    gBankaSilentBatch = False
+
+    Chk res <> "", S & "auto mapiranje je proslo"
+    ChkEq BimObradjeno(P & "BIM-AUTO"), "Da", S & "stavka je zatvorena"
+
+    ' Knjizenje mora da pogodi blok iz poziva na broj, ne drugi blok kooperanta.
+    ChkEqD GetUplataForOtkup(P & "OTK-PA"), 1000, S & "placen otkup iz poziva na broj (BLOK-PA)"
+    ChkEqD GetUplataForOtkup(P & "OTK-PB"), 0, S & "drugi blok kooperanta NIJE dirnut (BLOK-PB)"
 End Sub
 
 ' ============================================================

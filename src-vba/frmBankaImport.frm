@@ -909,10 +909,20 @@ EH:
     lblPreview.caption = "Preview nije dostupan: " & errDesc
 End Sub
 
-' FM-0024 #3: izvor za PRIKAZ mora biti isti kao izvor za KOMANDU. Preview je
-' racunao kandidate po pozivu na broj IZ IZVODA, dok btnSacuvajRucno knjizi po
-' bloku izabranom u cmbOtkupBlok -- operater je gledao jedan blok, a knjizio drugi.
-Private Function EffectiveBlockNo(ByVal bankaImportID As String) As String
+' FM-0024 #3: izvor za PRIKAZ mora biti isti kao izvor za KOMANDU -- ali AUTO i
+' RUCNO imaju RAZLICITE komande, pa i razlicite izvore bloka:
+'
+'   AUTO   (btnAutoJedan/btnAutoSve -> AutoMapBankaImportRow_TX)
+'          = iskljucivo poziv na broj iz izvoda; writer ne vidi kontrole forme.
+'          -> `AutoBlockNoForBim` (modBankaMapiranje, ISTA funkcija koju zove writer)
+'
+'   RUCNO  (btnSacuvajRucno -> MapBankaImportAsKooperantBlockManual_TX)
+'          = izbor u cmbOtkupBlok, a ako nije izabran onda poziv na broj.
+'          -> ova funkcija
+'
+' Kad je ovo bila JEDNA funkcija za oba preview-a, rucni izbor bloka je menjao i
+' AUTO prikaz: preview je pokazivao blok B, a "Automatski mapiraj red" knjizio A.
+Private Function EffectiveManualBlockNo(ByVal bankaImportID As String) As String
     Dim manualBlok As String
 
     If Trim$(nz(cmbMapTip.value, "")) = "Kooperant" Then
@@ -920,10 +930,9 @@ Private Function EffectiveBlockNo(ByVal bankaImportID As String) As String
     End If
 
     If manualBlok <> "" Then
-        EffectiveBlockNo = manualBlok
+        EffectiveManualBlockNo = manualBlok
     Else
-        EffectiveBlockNo = Trim$(CStr(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, _
-                                                  bankaImportID, COL_BIM_POZIV_NA_BROJ)))
+        EffectiveManualBlockNo = AutoBlockNoForBim(bankaImportID)
     End If
 End Function
 
@@ -1039,7 +1048,7 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             Dim manualRequiredText As String
 
             kooperantID = SelectedPartnerID()
-            blokNo = EffectiveBlockNo(bankaImportID)
+            blokNo = EffectiveManualBlockNo(bankaImportID)
 
             s = s & "KooperantID: " & kooperantID & vbCrLf
             If Trim$(nz(cmbOtkupBlok.value, "")) <> "" Then
@@ -1360,7 +1369,7 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
 
     If resolvedKoop <> "" Then
         kooperantID = resolvedKoop
-        blockNo = EffectiveBlockNo(bankaImportID)
+        blockNo = AutoBlockNoForBim(bankaImportID)
 
         s = "Smer: Isplata" & vbCrLf
         s = s & "Auto match: Kooperant (" & matchVia & ")" & vbCrLf
@@ -1382,7 +1391,7 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
         Select Case CStr(mapped(1))
             Case "Kooperant"
                 kooperantID = CStr(mapped(0))
-                blockNo = EffectiveBlockNo(bankaImportID)
+                blockNo = AutoBlockNoForBim(bankaImportID)
 
                 s = "Smer: Isplata" & vbCrLf
                 s = s & "Auto match: Kooperant" & vbCrLf
@@ -1412,7 +1421,7 @@ Private Function BuildOutgoingPreview(ByVal bankaImportID As String, ByVal partn
     mapped = TryResolveKooperantBIM(partnerName)
     If Not IsEmpty(mapped) Then
         kooperantID = CStr(mapped(0))
-        blockNo = EffectiveBlockNo(bankaImportID)
+        blockNo = AutoBlockNoForBim(bankaImportID)
 
         s = "Smer: Isplata" & vbCrLf
         s = s & "Auto match: Kooperant (heuristika)" & vbCrLf
