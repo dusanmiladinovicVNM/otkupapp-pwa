@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-68"
+Public Const OTKUI_BUILD   As String = "v6-ui-69"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -4693,44 +4693,54 @@ End Function
 ' broj kontrola resurs koji se trosi - a granicu MSForms-a ne znamo unapred.
 ' Zato se meri od pocetka: koliko kontrola i koliko traje gradnja.
 Public Function OtkupUI_Stats() As String
-    Dim n As Long, sinks As Long
+    Dim sinks As Long
     On Error Resume Next
     If mFrm Is Nothing Then
         OtkupUI_Stats = "ekran nije izgradjen"
         Exit Function
     End If
-    n = CountCtls(mFrm)
     If Not Btns Is Nothing Then sinks = Btns.count
-    OtkupUI_Stats = "kontrola: " & n & "  |  vezanih sinkova: " & sinks & _
+    OtkupUI_Stats = "kontrola: " & mFrm.Controls.count & _
+                    "  |  vezanih sinkova: " & sinks & _
                     "  |  gradnja: " & mBuildMs & " ms"
 End Function
 
 ' Raspodela po zonama. Bez ovoga se ne moze odluciti sta u S3 ostaje deljeno
 ' (mreza, hrom) a sta svaki ekran nosi sam: prvo mora da se vidi ko trosi.
-' Ispis ide u Immediate, po jedna zona po redu.
+'
+' PAZNJA: UserForm.Controls je RAVNA lista - vec sadrzi i sve sto je unutar
+' okvira. Rekurzija kroz Frame.Controls zato broji iste kontrole po vise
+' puta (prva verzija ove rutine prijavila je 2703 umesto stvarnog broja).
+' Ovde se ide jednim prolazom kroz ravnu listu, a svaka kontrola se pripise
+' svojoj zoni preko lanca .Parent.
 Public Sub OtkupUI_StatsZone()
-    Dim c As Object, n As Long, uk As Long
+    Dim c As Object, d As Object, k As Variant, uk As Long
     On Error Resume Next
     If mFrm Is Nothing Then
         Debug.Print "ekran nije izgradjen"
         Exit Sub
     End If
+    Set d = CreateObject("Scripting.Dictionary")
     For Each c In mFrm.Controls
-        n = 1
-        If TypeName(c) = "Frame" Then n = n + CountCtls(c)
-        uk = uk + n
-        If n > 1 Then Debug.Print Right$("      " & n, 6) & "  " & c.name
+        uk = uk + 1
+        k = ZoneOf(c)
+        d(k) = d(k) + 1
     Next c
-    Debug.Print Right$("      " & uk, 6) & "  = UKUPNO"
+    For Each k In d.keys
+        Debug.Print Right$("      " & d(k), 6) & "  " & k
+    Next k
+    Debug.Print Right$("      " & uk, 6) & "  = UKUPNO (ravno, bez duplog brojanja)"
 End Sub
 
-Private Function CountCtls(ByVal parent As Object) As Long
-    Dim c As Object, n As Long
+' Najspoljasnji okvir u kome kontrola zivi = njena zona. Kontrola koja stoji
+' pravo na formi vraca svoje ime (nema zone).
+Private Function ZoneOf(ByVal c As Object) As String
+    Dim p As Object
     On Error Resume Next
-    For Each c In parent.Controls
-        n = n + 1
-        If TypeName(c) = "Frame" Then n = n + CountCtls(c)
-    Next c
-    CountCtls = n
+    Set p = c
+    Do While TypeName(p.parent) = "Frame"
+        Set p = p.parent
+    Loop
+    ZoneOf = p.name
 End Function
 '=== KRAJ FAJLA modOtkupUI ===
