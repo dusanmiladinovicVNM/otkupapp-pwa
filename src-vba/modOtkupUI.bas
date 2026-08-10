@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-65"
+Public Const OTKUI_BUILD   As String = "v6-ui-66"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -153,9 +153,9 @@ Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
 ' Sifre stanja placanja (odvojene od 0/1/2 koje nosi STATUS pilula).
 ' MORAJU biti u deklaracionom delu: VBA module-level Const iza prve procedure
 ' nije vidljiv procedurama iznad njega ("Variable not defined").
-Private Const PAY_PLACENO As Long = 10
-Private Const PAY_DELIM   As Long = 11
-Private Const PAY_NEPLAC  As Long = 12
+Public Const PAY_PLACENO As Long = 10
+Public Const PAY_DELIM   As Long = 11
+Public Const PAY_NEPLAC  As Long = 12
 Private Const PAY_NEFAKT  As Long = 13
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
@@ -185,16 +185,16 @@ Private Const BP_NARROW   As Single = 860
 ' Svi kodovi su iz opsega ispod EC00 (originalni Windows 10 glifovi): noviji
 ' opsezi (F1xx+) fale na starijim verzijama fonta i iscrtaju se kao pravougaonik.
 ' Sidebar
-Private Const IC_OTKUP    As Long = &HE70B&   ' QuickNote
-Private Const IC_BLOKOVI  As Long = &HE8A5&   ' Document
+Public Const IC_OTKUP    As Long = &HE70B&   ' QuickNote
+Public Const IC_BLOKOVI  As Long = &HE8A5&   ' Document
 Private Const IC_PALETE   As Long = &HE8F1&   ' Library
 Private Const IC_AGRO     As Long = &HE8BE&   ' Leaf
 Private Const IC_FAKT     As Long = &HE8C7&   ' PaymentCard
 Private Const IC_BANKA    As Long = &HE825&   ' Bank
 Private Const IC_UVOZ     As Long = &HEA90&   ' PDF - izvodi su PDF fajlovi
-Private Const IC_NALOZI   As Long = &HE9D5&   ' CheckList - nalozi su spisak stavki
+Public Const IC_NALOZI   As Long = &HE9D5&   ' CheckList - nalozi su spisak stavki
 Private Const IC_MARZA    As Long = &HE9D2&   ' AreaChart
-Private Const IC_IZVEST   As Long = &HE9F9&   ' ReportDocument
+Public Const IC_IZVEST   As Long = &HE9F9&   ' ReportDocument
 Private Const IC_SLEDLJ   As Long = &HE71B&   ' Link
 ' Akcije
 Private Const IC_SAVE     As Long = &HE74E&   ' Save
@@ -208,11 +208,11 @@ Private Const IC_SYNCBTN  As Long = &HE895&   ' Sync
 Private Const IC_SNIMI    As Long = &HE78C&   ' SaveLocal (razlicit od IC_SAVE)
 Private Const IC_EXCEL    As Long = &HE8A7&   ' OpenInNewWindow
 Private Const IC_OPERATER As Long = &HE748&   ' SwitchUser
-Private Const IC_STORNO   As Long = &HE7A7&   ' Undo - izbor korisnika
+Public Const IC_STORNO   As Long = &HE7A7&   ' Undo - izbor korisnika
 ' PRIVREMENO: E7B8 (Package) se ne iscrtava u ovoj verziji fonta, kao ni druge
 ' kutije koje sam probao. Dok ne stigne kod iz DumpMdl2Sheet, stoji Library -
 ' isti glif kao "Palete" u sidebaru, ali bar nije prazan kvadrat.
-Private Const IC_REVERS   As Long = &HE8F1&   ' Library - privremeno
+Public Const IC_REVERS   As Long = &HE8F1&   ' Library - privremeno
 Private Const IC_ENTER    As Long = &HE751&   ' ReturnKey - rezervisano
 Private Const IC_REFRESH  As Long = &HE72C&   ' Refresh - rezervisano
 ' Stanja
@@ -223,8 +223,8 @@ Private Const IC_KOPIRAJ  As Long = &HE8C8&   ' Copy - prepisi kolicinu
 Private Const IC_PROFIL   As Long = &HE77B&   ' Contact - profil u sidebaru
 ' Novac ima SMER, pa isplata i uplata nose strelice, ne "novcanik" - iz
 ' ikonice se odmah vidi da li novac izlazi iz firme ili ulazi u nju.
-Private Const IC_ISPLATA  As Long = &HE898&   ' Upload   - novac IZLAZI iz firme
-Private Const IC_UPLATA   As Long = &HE896&   ' Download - novac ULAZI u firmu
+Public Const IC_ISPLATA  As Long = &HE898&   ' Upload   - novac IZLAZI iz firme
+Public Const IC_UPLATA   As Long = &HE896&   ' Download - novac ULAZI u firmu
 Private Const IC_GORE     As Long = &HE70E&   ' ChevronUp - skrol panela
 Private Const IC_DOLE     As Long = &HE70D&   ' ChevronDown - skrol panela
 
@@ -1570,23 +1570,6 @@ Private Sub KpiPrazno(z As Object, ByVal i As Long)
     z.Controls("kpiS" & i).caption = ""
 End Sub
 
-' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
-' vec proverene i koriste se drugde u ovom modulu; nijedna nije pogodjena "po
-' opisu". Spisak svih glifova sa kodovima: Alt+F8 -> DumpMdl2Sheet.
-Private Function ModeIco(ByVal mode As String) As Long
-    Select Case mode
-        Case "F1": ModeIco = IC_OTKUP       ' QuickNote  - otkupni list
-        Case "F2": ModeIco = IC_BLOKOVI     ' Document   - otpremnica
-        Case "F3": ModeIco = IC_NALOZI      ' CheckList  - zbirna je spisak
-        Case "F4": ModeIco = IC_IZVEST      ' ReportDocument - prijemnica
-        Case "F5": ModeIco = IC_ISPLATA     ' Upload     - novac izlazi
-        Case "F6": ModeIco = IC_UPLATA      ' Download   - novac ulazi
-        Case "F7": ModeIco = IC_REVERS      ' privremeno - ceka izbor
-        Case "F8": ModeIco = IC_STORNO      ' Undo       - storno
-        Case Else: ModeIco = IC_OTKUP
-    End Select
-End Function
-
 Private Sub PlaceTitleBadge(frm As Object)
     Dim z As Object, w As Single
     On Error Resume Next
@@ -2015,14 +1998,6 @@ Private Sub RenderChipCounts(z As Object)
     z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & mCntBezZb
     z.Controls("chipNefaktC").caption = Poruka("OTKUI_CHIP_NEFAKT") & "  " & mCntNefakt
 End Sub
-
-' dupli klik na red -> ucitaj dokument u polja iznad
-' Rezimi koji NOSE vezu na zbirnu (imaju polje BROJ ZBIRNE).
-Private Function ModeVezujeZbirnu(ByVal mode As String) As Boolean
-    Select Case mode
-        Case "F1", "F2", "F4": ModeVezujeZbirnu = True
-    End Select
-End Function
 
 ' Otpremnica i prijemnica pri ulasku preuzimaju broj zbirne sa kojom se radilo.
 ' U frmDokumenta je to radila RefreshBrojZbirneSuggestion (isti broj u obe
@@ -3287,208 +3262,6 @@ Private Sub SetGridCols(ByVal mk As String)
     If mColN > MAX_COLS Then mColN = MAX_COLS
 End Sub
 
-Private Function GridCols(ByVal mk As String) As Variant
-    Dim c As Collection: Set c = New Collection
-    c.Add "OTKUI_HD_BROJ|" & ColBroj(mk) & "|txt|110|1"
-    c.Add "OTKUI_HD_DATUM|" & ColDatum(mk) & "|date|58|1"
-    c.Add "OTKUI_HD_PARTNER|" & ColPartner(mk) & "|part|0|1"
-
-    Select Case mk
-        Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA", "STORNO"
-            c.Add "OTKUI_HD_VRSTA|" & ColVrsta(mk) & "|txt|72|2"
-            ' 104 pt = najduza realna sorta ("Willamette teren") na TS_BODY;
-            ' visak uzima fleksibilna kolona PARTNER, ostale se ne pomeraju
-            c.Add "OTKUI_HD_SORTA|" & ColSorta(mk) & "|txt|104|3"
-            c.Add "OTKUI_HD_KLASA|" & ColKlasa(mk) & "|txt|46|2"
-            c.Add "OTKUI_HD_KG|" & ColKolicina(mk) & "|kg|60|1"
-            c.Add "OTKUI_HD_KOL_AMB|" & ColKolAmb(mk) & "|num|54|3"
-            c.Add "OTKUI_HD_TIP_AMB|" & ColTipAmb(mk) & "|txt|78|3"
-            ' tblZbirna nema Cenu - taj rezim ostaje bez kolone vrednosti
-            If Len(ColCena(mk)) > 0 Then
-                c.Add "OTKUI_HD_VREDNOST|" & ColCena(mk) & "|mult|92|1"
-            End If
-            ' Placanje se NE cita iz zastavice: tblOtkup.Isplaceno je samo "Da"
-            ' ili prazno, pa ne razlikuje delimicno od nista. Pravo stanje se
-            ' racuna iz tblNovac (modNovac.BuildIsplataDictByOtkup) i poredi sa
-            ' vrednoscu dokumenta - odatle tri stanja i ostatak duga.
-            If mk = "OTKUP" Or mk = "PRIJEMNICA" Then
-                c.Add "OTKUI_HD_PLACENO||paypill|86|1"
-                c.Add "OTKUI_HD_OSTATAK||rest|84|2"
-            End If
-        Case "AMB_ISPLATE"
-            c.Add "OTKUI_HD_KANAL||kanal|82|1"
-            c.Add "OTKUI_HD_VREDNOST|" & COL_NOV_ISPLATA & "|rsd|110|1"
-        Case "AMB_UPLATE"
-            c.Add "OTKUI_HD_KANAL||kanal|82|1"
-            c.Add "OTKUI_HD_VREDNOST|" & COL_NOV_UPLATA & "|rsd|110|1"
-        Case "REVERSI"
-            ' OSNOV nosi najduzi tekst u mrezi ("Revers " & em-dash & " OM prijem",
-            ' 18 znakova) - 112pt ga je seklo. 150pt prima i najduzu varijantu sa
-            ' rezervom, a mesta ima: ovaj rezim ima samo 7 kolona.
-            c.Add "OTKUI_HD_SMER|" & COL_AMB_SMER & "|txt|62|1"
-            c.Add "OTKUI_HD_OSNOV||osnov|150|1"
-            c.Add "OTKUI_HD_TIP_AMB|" & COL_AMB_TIP & "|txt|96|2"
-            c.Add "OTKUI_HD_KOMADA|" & COL_AMB_KOLICINA & "|sum0|80|1"
-    End Select
-
-    c.Add "OTKUI_HD_STATUS||pill|88|1"
-
-    Dim a() As Variant, i As Long
-    ReDim a(0 To c.count - 1)
-    For i = 1 To c.count
-        a(i - 1) = c(i)
-    Next i
-    GridCols = a
-End Function
-
-Private Function ColBroj(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                   ColBroj = COL_OTK_BR_DOK
-        Case "OTPREMNICA", "STORNO":    ColBroj = COL_OTP_BROJ
-        Case "ZBIRNA":                  ColBroj = COL_ZBR_BROJ
-        Case "PRIJEMNICA":              ColBroj = COL_PRJ_BROJ
-        Case "AMB_ISPLATE", "AMB_UPLATE": ColBroj = COL_NOV_BROJ_DOK
-        Case "REVERSI":                 ColBroj = COL_AMB_DOK_ID
-    End Select
-End Function
-
-Private Function ColDatum(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                   ColDatum = COL_OTK_DATUM
-        Case "OTPREMNICA", "STORNO":    ColDatum = COL_OTP_DATUM
-        Case "ZBIRNA":                  ColDatum = COL_ZBR_DATUM
-        Case "PRIJEMNICA":              ColDatum = COL_PRJ_DATUM
-        Case "AMB_ISPLATE", "AMB_UPLATE": ColDatum = COL_NOV_DATUM
-        Case "REVERSI":                 ColDatum = COL_AMB_DATUM
-    End Select
-End Function
-
-Private Function ColPartner(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                   ColPartner = COL_OTK_KOOPERANT
-        Case "OTPREMNICA", "STORNO":    ColPartner = COL_OTP_STANICA
-        Case "ZBIRNA":                  ColPartner = COL_ZBR_KUPAC
-        Case "PRIJEMNICA":              ColPartner = COL_PRJ_KUPAC
-        Case "AMB_ISPLATE", "AMB_UPLATE": ColPartner = COL_NOV_PARTNER
-        Case "REVERSI":                 ColPartner = COL_AMB_ENTITET
-    End Select
-End Function
-
-Private Function ColVrsta(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColVrsta = COL_OTK_VRSTA
-        Case "OTPREMNICA", "STORNO": ColVrsta = COL_OTP_VRSTA
-        Case "ZBIRNA":               ColVrsta = COL_ZBR_VRSTA
-        Case "PRIJEMNICA":           ColVrsta = COL_PRJ_VRSTA
-    End Select
-End Function
-
-Private Function ColSorta(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColSorta = COL_OTK_SORTA
-        Case "OTPREMNICA", "STORNO": ColSorta = COL_OTP_SORTA
-        Case "ZBIRNA":               ColSorta = COL_ZBR_SORTA
-        Case "PRIJEMNICA":           ColSorta = COL_PRJ_SORTA
-    End Select
-End Function
-
-Private Function ColKlasa(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColKlasa = COL_OTK_KLASA
-        Case "OTPREMNICA", "STORNO": ColKlasa = COL_OTP_KLASA
-        Case "ZBIRNA":               ColKlasa = COL_ZBR_KLASA
-        Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
-    End Select
-End Function
-
-Private Function ColKolicina(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColKolicina = COL_OTK_KOLICINA
-        Case "OTPREMNICA", "STORNO": ColKolicina = COL_OTP_KOLICINA
-        Case "ZBIRNA":               ColKolicina = COL_ZBR_KOLICINA
-        Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
-    End Select
-End Function
-
-Private Function ColKolAmb(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColKolAmb = COL_OTK_KOL_AMB
-        Case "OTPREMNICA", "STORNO": ColKolAmb = COL_OTP_KOL_AMB
-        Case "ZBIRNA":               ColKolAmb = COL_ZBR_KOL_AMB
-        Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
-    End Select
-End Function
-
-Private Function ColTipAmb(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColTipAmb = COL_OTK_TIP_AMB
-        Case "OTPREMNICA", "STORNO": ColTipAmb = COL_OTP_TIP_AMB
-        Case "ZBIRNA":               ColTipAmb = COL_ZBR_TIP_AMB
-        Case "PRIJEMNICA":           ColTipAmb = COL_PRJ_TIP_AMB
-    End Select
-End Function
-
-' Prazno = rezim nema cenu (tblZbirna), pa ni kolonu vrednosti.
-Private Function ColCena(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColCena = COL_OTK_CENA
-        Case "OTPREMNICA", "STORNO": ColCena = COL_OTP_CENA
-        Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
-    End Select
-End Function
-
-Private Function ColBrojZbirne(ByVal m As String) As String
-    Select Case m
-        Case "OTKUP":                ColBrojZbirne = COL_OTK_BROJ_ZBIRNE
-        Case "OTPREMNICA", "STORNO": ColBrojZbirne = COL_OTP_BROJ_ZBIRNE
-        Case "PRIJEMNICA":           ColBrojZbirne = COL_PRJ_BROJ_ZBIRNE
-    End Select
-End Function
-
-' Polje opisa kolone: 0=kljuc naslova 1=izvorna kolona 2=vrsta 3=sirina 4=prio
-Private Function ColF(ByVal spec As String, ByVal idx As Long) As String
-    Dim p As Variant: p = Split(spec, "|")
-    If idx > UBound(p) Then Exit Function
-    ColF = CStr(p(idx))
-End Function
-
-' 0=broj 1=datum 2=partner 3=kolicina 4=cena 5=brojZbirne 6=direktna vrednost
-Private Function ColumnSpec(ByVal mk As String) As Variant
-    Select Case mk
-        Case "OTKUP"
-            ' partner na otkupu je KOOPERANT (ranije je stajao BrojOtpremnice)
-            ColumnSpec = Array(COL_OTK_BR_DOK, COL_OTK_DATUM, COL_OTK_KOOPERANT, _
-                               COL_OTK_KOLICINA, COL_OTK_CENA, COL_OTK_BROJ_ZBIRNE, "")
-        Case "OTPREMNICA", "STORNO"
-            ColumnSpec = Array(COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, _
-                               COL_OTP_KOLICINA, COL_OTP_CENA, COL_OTP_BROJ_ZBIRNE, "")
-        Case "ZBIRNA"
-            ' 5. slot (cena) - tblZbirna NEMA kolonu Cena, pa je VREDNOST 0.
-            ' 6. slot prazan: ranije je pokazivao na samu sebe (COL_ZBR_BROJ),
-            ' pa je svaka zbirna dobijala status "Poslato".
-            ColumnSpec = Array(COL_ZBR_BROJ, COL_ZBR_DATUM, COL_ZBR_KUPAC, _
-                               COL_ZBR_KOLICINA, "", "", "")
-        Case "PRIJEMNICA"
-            ColumnSpec = Array(COL_PRJ_BROJ, COL_PRJ_DATUM, COL_PRJ_KUPAC, _
-                               COL_PRJ_KOLICINA, COL_PRJ_CENA, COL_PRJ_BROJ_ZBIRNE, "")
-        Case "AMB_ISPLATE"
-            ' tblNovac nema kolicinu/cenu - vrednost je sam iznos isplate
-            ColumnSpec = Array(COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER, _
-                               "", "", "", COL_NOV_ISPLATA)
-        Case "AMB_UPLATE"
-            ColumnSpec = Array(COL_NOV_BROJ_DOK, COL_NOV_DATUM, COL_NOV_PARTNER, _
-                               "", "", "", COL_NOV_UPLATA)
-        Case "REVERSI"
-            ' broj reversa zivi u DokumentID ("x/ddmmyy" namespace, vidi
-            ' modBrojevi.MaxSeqReversAmbalaza) - tblAmbalaza nema BrojDokumenta.
-            ' 4. kolona = tip ambalaze (tekst), 5. = kolicina u komadima.
-            ColumnSpec = Array(COL_AMB_DOK_ID, COL_AMB_DATUM, COL_AMB_ENTITET, _
-                               COL_AMB_TIP, "", "", COL_AMB_KOLICINA)
-        Case Else
-            ColumnSpec = Array("", "", "", "", "", "", "")
-    End Select
-End Function
-
 Private Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, _
                                  ByVal bezZbirne As Boolean, ByVal isStorno As Boolean, _
                                  ByVal bezFakture As Boolean) As Boolean
@@ -3501,16 +3274,6 @@ Private Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, 
         Case "mesec":     MatchFilterFast = (Not isStorno) And (vDatK >= mMonthStart)
         Case Else:        MatchFilterFast = Not isStorno
     End Select
-End Function
-
-Private Function StatusCode(ByVal isStorno As Boolean, ByVal bezZbirne As Boolean) As Long
-    If isStorno Then
-        StatusCode = 2
-    ElseIf bezZbirne Then
-        StatusCode = 0
-    Else
-        StatusCode = 1
-    End If
 End Function
 
 Private Function SortedView(ByRef a() As Variant, ByVal n As Long, ByVal nc As Long, _
@@ -3588,60 +3351,6 @@ EH:
     ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & mFillStep & " (" & Err.Number & ")", True
 End Sub
 
-' SEDAM dokumenata, F1..F7. Ranija sema (F2..F6+F8) je spajala dva razlicita
-' dokumenta u F5: kartica je pisala "Ulaz OM" a mreza je citala tblOtkup.
-' Sada je "Otkupni list" (tblOtkup) zaseban rezim F1, a F5/F6 su gotovinski
-' promet iz tblNovac (isplate kooperantu / uplate od kupca) - isti smer kao
-' frmDokumenta frame-ovi "Ulaz OM (Novac kooperantu)" i "Izlaz Kupci
-' (Novac od kupca)".
-Private Function ModeTable(ByVal mode As String) As String
-    Select Case mode
-        Case "F1": ModeTable = TBL_OTKUP
-        Case "F2": ModeTable = TBL_OTPREMNICA
-        Case "F3": ModeTable = TBL_ZBIRNA
-        Case "F4": ModeTable = TBL_PRIJEMNICA
-        Case "F5": ModeTable = TBL_NOVAC
-        Case "F6": ModeTable = TBL_NOVAC
-        Case "F7": ModeTable = TBL_AMBALAZA
-        Case "F8": ModeTable = TBL_OTPREMNICA
-        Case Else: ModeTable = TBL_OTKUP
-    End Select
-End Function
-
-Private Function modeKey(ByVal mode As String) As String
-    Select Case mode
-        Case "F1": modeKey = "OTKUP"
-        Case "F2": modeKey = "OTPREMNICA"
-        Case "F3": modeKey = "ZBIRNA"
-        Case "F4": modeKey = "PRIJEMNICA"
-        Case "F5": modeKey = "AMB_ISPLATE"
-        Case "F6": modeKey = "AMB_UPLATE"
-        Case "F7": modeKey = "REVERSI"
-        Case "F8": modeKey = "STORNO"
-        Case Else: modeKey = "OTKUP"
-    End Select
-End Function
-
-' Rezimi bez pojma "zbirne" - cipovi "Bez zbirne" / "Nefakturisane" se skrivaju.
-' Faktura postoji SAMO nad prijemnicom (tblPrijemnica.FakturaID). Nad otkupnim
-' listom pojam "fakturisano" nema smisla - otkup je nabavka, ne prodaja - pa se
-' cip tamo i ne prikazuje. Ranije je "Nefakturisane" bio doslovan duplikat cipa
-' "Bez zbirne": isti brojac i isti izraz u MatchFilterFast.
-Private Function ColFakturaID(ByVal mk As String) As String
-    If mk = "PRIJEMNICA" Then ColFakturaID = COL_PRJ_FAKTURA_ID
-End Function
-
-Private Function ModeHasFaktura(ByVal mode As String) As Boolean
-    ModeHasFaktura = (Len(ColFakturaID(modeKey(mode))) > 0)
-End Function
-
-Private Function ModeHasZbirna(ByVal mode As String) As Boolean
-    Select Case mode
-        Case "F1", "F2", "F4", "F8": ModeHasZbirna = True
-        Case Else:                   ModeHasZbirna = False
-    End Select
-End Function
-
 ' Rezimi kojima je 4. kolona TEKST, a ne broj: gotovinski promet nosi kanal,
 ' reversi nose tip ambalaze. CompareKey pada na StrComp kad vrednost nije broj,
 ' pa sortiranje po toj koloni radi i za tekst - nije potrebno sedmo polje.
@@ -3664,34 +3373,6 @@ Private Function ModeHasValCol() As Boolean
     Next i
 End Function
 
-Private Function ModeTextCol3(ByVal mode As String) As Boolean
-    Select Case mode
-        Case "F5", "F6", "F7": ModeTextCol3 = True
-    End Select
-End Function
-
-' Jedinica 5. kolone i podnozja: dinar za robu i novac, komad za reverse.
-Private Function ModeValUnit(ByVal mode As String) As String
-    If mode = "F7" Then ModeValUnit = Poruka("OTKUI_UNIT_KOM") Else ModeValUnit = Poruka("OTKUI_UNIT_RSD")
-End Function
-
-' Svako kretanje ambalaze je DVOJNI upis - dva reda sa istim brojem i istim
-' DokumentTip-om, jedna noga na kooperantu, druga na otkupnom mestu (vidi
-' modOtkup.SaveOtkup i modDokumenta.SaveOMUlaz_TX). Prikazivati obe znaci
-' duplirati svaki dokument i pokazivati otkupno mesto kao "partnera" tamo gde
-' ono nije protivpartner nego samo knjigovodstvena protivstavka.
-' Zato se po tipu dokumenta bira SAMO noga koja nosi znacenje:
-'   revers/otkup ka kooperantu  -> noga kooperanta
-'   revers firma <-> OM         -> noga otkupnog mesta (tada OM JESTE partner)
-Private Function RevRowVisible(ByVal dokTip As String, ByVal entTip As String) As Boolean
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, DOK_TIP_OTKUP
-            RevRowVisible = (Trim$(entTip) = "Kooperant")
-        Case DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
-            RevRowVisible = (Trim$(entTip) = "Stanica")
-    End Select
-End Function
-
 ' Citljiv osnov reda. DOK_TIP_OTKUP je tu jer kooperant i pri predaji PUNIH
 ' gajbi ima izlaz ambalaze - to nije revers, ali jeste njegovo kretanje.
 Private Function OsnovNaziv(ByVal dokTip As String, ByVal dokID As String) As String
@@ -3712,67 +3393,6 @@ Private Function OsnovNaziv(ByVal dokTip As String, ByVal dokID As String) As St
         Case DOK_TIP_OTKUP:          OsnovNaziv = Poruka("OTKUI_OSN_OTKUP_PUNE")
         Case Else:                   OsnovNaziv = dokTip
     End Select
-End Function
-
-' Gotovinski promet (tblNovac) nema kilograme, ali ima KANAL: novac je stigao
-' na blagajnu (kes) ili preko izvoda / virmana (banka). Zato 4. kolona mreze
-' u tim rezimima nosi kanal umesto kilograma - nista se ne gubi.
-Private Function ModeHasKanal(ByVal mode As String) As Boolean
-    Select Case mode
-        Case "F5", "F6": ModeHasKanal = True
-    End Select
-End Function
-
-' 1 = kes (blagajna), 2 = banka (izvod ili virman)
-'
-' "BIM:" u Napomeni je JEDINI trag veze novac -> bankovni izvod: tblNovac nema
-' BankaImportID kolonu (modBankaMapiranje.BuildBIMNapomena, modConfig
-' NOV_NAPOMENA_BIM_PREFIX). Zato se gleda PRVO, pre Tip-a: na strani kupaca
-' kanal uopste nije razdvojen u Tip-u (isti KupciUplata nastaje i rucnim unosom
-' u frmDokumenta i mapiranjem izvoda), pa je Napomena tamo jedini izvor.
-' Redovi uvezeni iz izvoda PRE razdvajanja kanala nose KES tip - i njih
-' "BIM:" ispravno svrstava u banku.
-Private Function KanalCode(ByVal tip As String, ByVal napomena As String) As Long
-    If Left$(LTrim$(napomena), Len(NOV_NAPOMENA_BIM_PREFIX)) = NOV_NAPOMENA_BIM_PREFIX Then
-        KanalCode = 2
-        Exit Function
-    End If
-    Select Case Trim$(tip)
-        Case NOV_VIRMAN_FIRMA_OTKUPAC, NOV_VIRMAN_FIRMA_KOOP, NOV_VIRMAN_AVANS_KOOP, _
-             NOV_BANKA_UPLATA, NOV_BANKA_ISPLATA
-            KanalCode = 2
-        Case Else
-            KanalCode = 1
-    End Select
-End Function
-
-' Kod reversa EntitetID pokazuje u RAZLICITU tabelu zavisno od EntitetTip
-' (modAmbalaza koristi "Kooperant" / "Stanica" / "Kupac"), pa se partner ne moze
-' razresiti jednim recnikom kao kod ostalih rezima.
-Private Function RevPartner(ByVal entTip As String, ByVal entID As String, _
-                            mKoop As Object, mStan As Object, mKup As Object) As String
-    Dim d As Object
-    RevPartner = entID
-    Select Case Trim$(entTip)
-        Case "Kooperant": Set d = mKoop
-        Case "Stanica":   Set d = mStan
-        Case "Kupac":     Set d = mKup
-        Case Else:        Exit Function
-    End Select
-    If d Is Nothing Then Exit Function
-    If d.Exists(entID) Then RevPartner = d(entID)
-End Function
-
-Private Function PayCode(ByVal duguje As Double, ByVal placeno As Double) As Long
-    If duguje <= 0 Then
-        PayCode = IIf(placeno > 0, PAY_PLACENO, PAY_NEPLAC)
-    ElseIf placeno >= duguje - 0.005 Then      ' tolerancija na zaokruzenje para
-        PayCode = PAY_PLACENO
-    ElseIf placeno > 0 Then
-        PayCode = PAY_DELIM
-    Else
-        PayCode = PAY_NEPLAC
-    End If
 End Function
 
 ' FakturaID -> Iznos. Prijemnica ne nosi svoj dug nego ga nasledjuje od fakture,
@@ -3883,10 +3503,6 @@ Private Function NovacPartner(ByVal entTip As String, ByVal koopID As String, _
         If d.Exists(partID) Then NovacPartner = d(partID): Exit Function
     End If
     NovacPartner = partTekst
-End Function
-
-Private Function KanalNaziv(ByVal code As Long) As String
-    If code = 2 Then KanalNaziv = Poruka("OTKUI_KANAL_BANKA") Else KanalNaziv = Poruka("OTKUI_KANAL_KES")
 End Function
 
 ' Najnovije zbirne u combo BROJ ZBIRNE. Zamena za lstZbirne iz frmDokumenta:
@@ -5058,12 +4674,14 @@ Public Function OtkupUI_SelfCheck() As String
     cv = CStr(CallByName(b, "Build", VbGet))
     On Error GoTo 0
     ver = "modOtkupUI " & OTKUI_BUILD & " + modUiKit " & UIKIT_BUILD & _
+          " + modScrDokumenti " & SCRDOK_BUILD & _
           " + clsFlatBtn " & IIf(Len(cv) = 0, "(stara)", cv)
     If Len(cv) = 0 Then
         OtkupUI_SelfCheck = ver & vbCrLf & _
             "PAZNJA: clsFlatBtn je STARA verzija (uvoz nije zamenio klasu; " & _
             "trazi komponentu clsFlatBtn1 u Project Exploreru)"
-    ElseIf cv <> OTKUI_BUILD Or UIKIT_BUILD <> OTKUI_BUILD Then
+    ElseIf cv <> OTKUI_BUILD Or UIKIT_BUILD <> OTKUI_BUILD _
+           Or SCRDOK_BUILD <> OTKUI_BUILD Then
         OtkupUI_SelfCheck = ver & vbCrLf & "PAZNJA: verzije se ne poklapaju"
     Else
         OtkupUI_SelfCheck = ver & vbCrLf & OtkupUI_Stats()
