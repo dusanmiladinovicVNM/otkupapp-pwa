@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-71"
+Public Const OTKUI_BUILD   As String = "v6-ui-72"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -170,7 +170,7 @@ Private Const VAL_CALC_W  As Single = 150     ' racunica DESNO od ploce iznosa
 Private Const VAL_PLATE_W As Single = 236     ' ploca iznosa (natpis + broj + RSD)
 Private Const GAP         As Single = 10
 Public Const ICO_INSET   As Single = 24     ' sirina zone ikonice u dugmetu
-Private Const PAD         As Single = 16
+Public Const PAD         As Single = 16
 Private Const STATUS_H    As Single = 24
 Private Const MIN_H       As Single = 620
 Private Const MIN_W       As Single = 900
@@ -269,6 +269,9 @@ Private mBuildMs As Long             ' koliko je trajala gradnja ekrana (ms)
 ' nav tag ("nav01") -> kljuc ekrana iz registra. Sidebar se gradi iz
 ' modUiScreens, pa se veza tag->ekran vise ne moze citati iz rednog broja.
 Private mNavKey As Object
+' Aktivan ekran iz registra. "DOKUMENTI" je zatecen ekran koji ljuska jos
+' crta po starom; svaki drugi se crta kroz ugovor, u svojoj zoni zScr_<kljuc>.
+Private mScreen As String
 Private mPopFor As String            ' combo za koji je otvoren nas dropdown ("" = zatvoren)
 Private mColX(0 To MAX_COLS - 1) As Single   ' x i sirina kolona mreze; postavlja
 Private mColW(0 To MAX_COLS - 1) As Single   ' LayoutGrid, RenderGrid samo puni
@@ -320,6 +323,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     mSelRow = 0
     mHoverRow = -1
     mHoverHd = -1
+    mScreen = "DOKUMENTI"
     modUiKit.ResetNumFields             ' popunjava ga NewTxt tokom gradnje
     mDisplayFont = DisplayFont()
 
@@ -1256,6 +1260,21 @@ Public Sub LayoutOtkup(frm As Object)
         .Controls("profHit").top = .Height - 56: .Controls("profHit").width = navW - 1
     End With
     NavCollapse frm, (navW = SIDEBAR_MIN)
+
+    ' Ugovorni ekran ne deli raspored sa ekranom dokumenata: dobija ceo
+    ' prostor desno od sidebara i sam se rasporedi. Statusna traka ostaje
+    ' zajednicka, pa se postavlja i ovde.
+    If mScreen <> "DOKUMENTI" Then
+        LayoutScreenZone frm, mainX, wTot, hTot
+        With frm.Controls("zStatus")
+            .Left = 0: .top = hTot - STATUS_H: .width = wTot: .Height = STATUS_H
+            .Controls("stLnT").width = wTot
+            .Controls("stHelp").Left = wTot - PAD - 70
+            .Controls("stSys").Left = wTot - PAD - 250
+            .Controls("stDot").Left = wTot - PAD - 260
+        End With
+        Exit Sub
+    End If
 
     With frm.Controls("zKpi")
         .Left = mainX: .top = HEADER_H: .width = mainW: .Height = KPI_H
@@ -2306,6 +2325,28 @@ Private Sub HoverHead(ByVal i As Long)
 End Sub
 
 Public Sub SelectNav(frm As Object, ByVal nm As String)
+    PaintNav frm, nm
+    Dim kljuc As String
+    If Not mNavKey Is Nothing Then
+        If mNavKey.Exists(nm) Then kljuc = CStr(mNavKey(nm))
+    End If
+    If Len(kljuc) > 0 Then ActivateScreen frm, kljuc
+End Sub
+
+' nav tag ekrana koji je aktivan - za vracanje oznake posle neuspelog prelaska
+Private Function NavTagFor(ByVal kljuc As String) As String
+    Dim k As Variant
+    If mNavKey Is Nothing Then Exit Function
+    For Each k In mNavKey.keys
+        If CStr(mNavKey(k)) = kljuc Then
+            NavTagFor = CStr(k)
+            Exit Function
+        End If
+    Next k
+End Function
+
+' samo bojenje sidebara - bez prelaska
+Private Sub PaintNav(frm As Object, ByVal nm As String)
     Dim c As Object, z As Object, on_ As Boolean, idx As String
     On Error Resume Next                ' navIco moze da ne postoji (kod 0)
     Set z = frm.Controls("zNav")
@@ -2321,18 +2362,6 @@ Public Sub SelectNav(frm As Object, ByVal nm As String)
             z.Controls("navIco" & idx).ForeColor = IIf(on_, C_GOLD, C_ICON_OFF)
         End If
     Next c
-    ' Zasto ekran nije otvoren - konkretno, ne "nije vezano" za sve.
-    Dim kljuc As String
-    If Not mNavKey Is Nothing Then
-        If mNavKey.Exists(nm) Then kljuc = CStr(mNavKey(nm))
-    End If
-    If Len(kljuc) = 0 Then Exit Sub
-    If kljuc = "DOKUMENTI" Then Exit Sub
-    If Not modUiScreens.ScrPostoji(kljuc) Then
-        ShowToast Poruka("OTKUI_SCR_NEMA"), False
-    ElseIf Not modUiScreens.ScrDozvoljen(kljuc) Then
-        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
-    End If
 End Sub
 
 Private Sub RefreshKpi(frm As Object)
@@ -2980,12 +3009,83 @@ Public Sub ShowOtkupUI()
 End Sub
 
 Private Sub ShowZones(frm As Object)
-    Dim nmv As Variant, i As Long
-    nmv = Array("zHdr", "zNav", "zKpi", "zTitle", "zCtx", "zForm", "zGrid", "zRight", "zStatus")
+    Dim nmv As Variant, i As Long, dok As Boolean
+    dok = (mScreen = "DOKUMENTI")
+    nmv = Array("zHdr", "zNav", "zStatus")
     For i = 0 To UBound(nmv)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = True
     Next i
+    ' Zone ekrana dokumenata i zona ugovornog ekrana se iskljucuju.
+    nmv = Array("zKpi", "zTitle", "zCtx", "zForm", "zGrid", "zRight")
+    For i = 0 To UBound(nmv)
+        On Error Resume Next
+        frm.Controls(CStr(nmv(i))).Visible = dok
+    Next i
+    For Each nmv In frm.Controls
+        On Error Resume Next
+        If Left$(nmv.name, 5) = "zScr_" Then
+            nmv.Visible = (Not dok) And (nmv.name = "zScr_" & mScreen)
+        End If
+    Next nmv
+End Sub
+
+' Prelazak na drugi ekran. Zona ekrana se gradi LENJO - tek pri prvom ulasku -
+' i ostaje izgradjena. Merenje na ekranu dokumenata: 863 kontrole, od toga 623
+' deljeni hrom i mreza, pa je ekran u proseku 240 kontrola i oko 180 ms; drzati
+' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
+Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
+    Dim z As Object, nm As String
+    If kljuc = mScreen Then Exit Sub
+    If kljuc <> "DOKUMENTI" Then
+        ' Neuspeh mora da VRATI oznaku u sidebaru na ekran na kome zaista
+        ' jesmo - inace bi meni pokazivao Palete dok je na ekranu jos Unos.
+        If Not modUiScreens.ScrPostoji(kljuc) Then
+            ShowToast Poruka("OTKUI_SCR_NEMA"), False
+            PaintNav frm, NavTagFor(mScreen)
+            Exit Sub
+        End If
+        If Not modUiScreens.ScrDozvoljen(kljuc) Then
+            ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+            PaintNav frm, NavTagFor(mScreen)
+            Exit Sub
+        End If
+        nm = "zScr_" & kljuc
+        On Error Resume Next
+        Set z = frm.Controls(nm)
+        On Error GoTo 0
+        If z Is Nothing Then
+            Set z = NewZone(frm, nm, SIDEBAR_W, HEADER_H, 400, 400, C_CREAM)
+            WireZone z
+            If Not modUiScreens.ScrBuild(kljuc, z) Then
+                ' ekran koji padne u gradnji ne sme da obori aplikaciju
+                z.Visible = False
+                ShowToast Poruka("OTKUI_SCR_NEMA"), True
+                PaintNav frm, NavTagFor(mScreen)
+                Exit Sub
+            End If
+        End If
+    End If
+    mScreen = kljuc
+    ClosePopup
+    CloseFilterPanel
+    ShowZones frm
+    LayoutOtkup frm
+End Sub
+
+' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
+' pravougaonik i pita ga da se rasporedi - sta u njemu stoji ne zna.
+Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, _
+                             ByVal wTot As Single, ByVal hTot As Single)
+    Dim z As Object
+    On Error Resume Next
+    Set z = frm.Controls("zScr_" & mScreen)
+    If z Is Nothing Then Exit Sub
+    With z
+        .Left = X: .top = HEADER_H
+        .width = wTot - X: .Height = hTot - HEADER_H - STATUS_H
+    End With
+    modUiScreens.ScrLayout mScreen, z, z.width, z.Height
 End Sub
 
 Public Sub EnsureGridLoaded()

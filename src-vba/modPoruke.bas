@@ -564,6 +564,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_TODO_NEVEZANO", "Nije vezano na postoje" & ChrW(263) & "u rutinu."
     UpsertRow lo, existing, "OTKUI_SCR_NEMA", "Ovaj ekran jo" & ChrW(353) & " nije preba" & ChrW(269) & "en na novi izgled."
     UpsertRow lo, existing, "OTKUI_SCR_ZABRANJEN", "Nemate dozvolu za ovu oblast."
+    UpsertRow lo, existing, "OTKUI_SCRPAL_SUB", "Pregled paleta " & ChrW(8212) & " samo za " & ChrW(269) & "itanje"
+    UpsertRow lo, existing, "OTKUI_SCRPAL_UKUPNO", "Ukupno paleta"
+    UpsertRow lo, existing, "OTKUI_SCRPAL_OTVORENE", "Otvorene"
+    UpsertRow lo, existing, "OTKUI_SCRPAL_GAJBICA", "Gajbica"
+    UpsertRow lo, existing, "OTKUI_SCRPAL_FOOT", "Prikazano"
     InvalidateCache
 End Sub
 
