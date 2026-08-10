@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-70"
+Public Const OTKUI_BUILD   As String = "v6-ui-71"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -4138,13 +4138,15 @@ End Sub
 
 ' Dijagnostika u UI-ju (ime izvorne tabele) samo kad je izricito ukljucena ili
 ' kad je build razvojni - u produkciji operater ne treba da vidi imena tabela.
+' Dijagnosticke oznake na ekranu (danas: "list: tblOtkup" iznad mreze).
+'
+' Ranije je ovo bilo ukljuceno i kad build tag sadrzi "dev". To je u praksi
+' znacilo UVEK: svaka nereleasovana radna sveska nosi tag v0.0.0-dev, pa je
+' oznaka stajala na ekranu i kod operatera. Sada je iskljucivo svesna odluka:
+' UI_DEBUG=DA u tblLocalConfig i nista drugo.
 Private Function IsDebugUI() As Boolean
     On Error Resume Next
-    If StrComp(GetLocalConfigValue("UI_DEBUG", ""), "DA", vbTextCompare) = 0 Then
-        IsDebugUI = True
-        Exit Function
-    End If
-    IsDebugUI = (InStr(1, BuildTagOrBlank(), "dev", vbTextCompare) > 0)
+    IsDebugUI = (StrComp(GetLocalConfigValue("UI_DEBUG", ""), "DA", vbTextCompare) = 0)
 End Function
 
 Private Function BuildTagOrBlank() As String

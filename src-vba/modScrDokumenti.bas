@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-70"
+Public Const SCRDOK_BUILD As String = "v6-ui-71"
 
 '--------------------------------------------------------- UGOVOR EKRANA
 ' Prva tacka ugovora iz modUiScreens. Sluzi dvostruko: opisuje ekran i
