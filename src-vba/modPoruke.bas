@@ -575,6 +575,21 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDP_GAJBICA", "Gajbica"
     UpsertRow lo, existing, "OTKUI_HDP_NETO", "Neto kg"
     UpsertRow lo, existing, "OTKUI_HDP_BRUTO", "Bruto kg"
+    UpsertRow lo, existing, "OTKUI_HDO_KUPAC", "Kupac"
+    UpsertRow lo, existing, "OTKUI_HDO_UBLOK", "U blokovima"
+    UpsertRow lo, existing, "OTKUI_HDO_OSTATAK", "Ostatak"
+    UpsertRow lo, existing, "OTKUI_HD_CENA", "Cena"
+    UpsertRow lo, existing, "OTKUI_SEG_LS_SVI", "Svi listovi"
+    UpsertRow lo, existing, "OTKUI_SEG_LS_OTP", "Otpremnice"
+    UpsertRow lo, existing, "OTKUI_SEG_LS_BLOK", "Blokovi otpremnice"
+    UpsertRow lo, existing, "OTKUI_OTP_TRAKA", "Aktivna otpremnica"
+    UpsertRow lo, existing, "OTKUI_OTP_NEMA", "Nema izabrane otpremnice " & ChrW(8212) & " izaberi je u listi Otpremnice"
+    UpsertRow lo, existing, "OTKUI_OTP_UKUPNO", "Ukupno kg"
+    UpsertRow lo, existing, "OTKUI_OTP_UBLOK", "U blokovima"
+    UpsertRow lo, existing, "OTKUI_OTP_OSTATAK", "Ostatak"
+    UpsertRow lo, existing, "OTKUI_OTP_CENA", "Cena"
+    UpsertRow lo, existing, "OTKUI_OTP_AMB", "amb"
+    UpsertRow lo, existing, "OTKUI_OTP_PO_OTP", "po otpremnici"
     InvalidateCache
 End Sub
 

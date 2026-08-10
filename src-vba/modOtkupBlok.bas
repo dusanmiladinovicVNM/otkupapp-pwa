@@ -1540,7 +1540,7 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
     Next i
 End Sub
 
-Private Function SumKolByOtp(ByVal otpID As String) As Double
+Public Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1558,7 +1558,7 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
 End Function
 
 ' Zbir BRUTO kg otkup blokova za otpremnicu (BrutoKg po redu; ako je prazno -> neto).
-Private Function SumBrutoByOtp(ByVal otpID As String) As Double
+Public Function SumBrutoByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1581,7 +1581,7 @@ Private Function SumBrutoByOtp(ByVal otpID As String) As Double
     SumBrutoByOtp = s
 End Function
 
-Private Function SumAmbByOtp(ByVal otpID As String) As Double
+Public Function SumAmbByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1598,7 +1598,7 @@ Private Function SumAmbByOtp(ByVal otpID As String) As Double
     SumAmbByOtp = s
 End Function
 
-Private Function ExistingBlokCena(ByVal otpID As String) As Double
+Public Function ExistingBlokCena(ByVal otpID As String) As Double
     If Len(otpID) = 0 Then Exit Function
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, otpID)
@@ -1629,7 +1629,9 @@ Private Function BuildFirstBlokCena() As Object
 End Function
 
 ' OtpremnicaID -> ukupna kolicina svih (ne-storniranih) blokova.
-Private Function BuildNapisanoByOtp() As Object
+' Javne od F1 radnog stola: isti bilans otpremnice treba i starom ekranu i
+' novom (modScrDokumenti). Racun se NE duplira - novi ekran zove ovo.
+Public Function BuildNapisanoByOtp() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set BuildNapisanoByOtp = d
 

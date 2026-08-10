@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-80"
+Public Const OTKUI_BUILD   As String = "v6-ui-81"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -125,6 +125,7 @@ Private Const SIDEBAR_W   As Single = 152
 Private Const SIDEBAR_MIN As Single = 36
 Public Const KPI_H       As Single = 64      ' tri reda: naslov, vrednost, kontekst
 Private Const TITLE_H     As Single = 46
+Private Const OTP_H       As Single = 60      ' traka otpremnice (F1)
 Private Const CTX_H       As Single = 72      ' eyebrow red + natpis + polje
 Private Const CTX_LBL_Y   As Single = 24      ' natpis IZNAD polja
 Private Const CTX_FLD_Y   As Single = 38      ' vrh polja u zoni konteksta
@@ -332,6 +333,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     BuildNav frm
     BuildKpi frm
     BuildTitle frm
+    BuildOtpTraka frm
     BuildCtx frm
     BuildForm frm
     BuildGrid frm
@@ -517,6 +519,99 @@ Private Sub BuildTitle(frm As Object)
 End Sub
 
 '------------------------------------------------------------ CTX ----
+' TRAKA OTPREMNICE (F1). Otpremnica je izvor robe; ovde stoji koja je aktivna
+' i koliko je od nje jos neraspodeljeno. Vidi se samo u F1 - u ostalim
+' rezimima zona je sakrivena i ne zauzima visinu.
+Private Sub BuildOtpTraka(frm As Object)
+    Dim z As Object, i As Long, X As Single
+    Set z = NewZone(frm, "zOtp", SIDEBAR_W, 0, 800, OTP_H, C_SOFT_BG)
+    WireZone z
+    NewLbl z, "otpLnB", "", 0, OTP_H - 1, 800, 1, 8, False, 0, C_BORDER
+
+    NewLbl z, "otpCap", UCase$(Poruka("OTKUI_OTP_TRAKA")), PAD, 8, 120, 11, _
+           TS_MICRO, True, C_MUTED, -1
+    NewLbl z, "otpBroj", ChrW(8212), PAD, 21, 260, 18, TS_H1, True, C_FOREST, -1
+    NewLbl z, "otpSub", "", PAD, 40, 260, 13, TS_META, False, C_MUTED, -1
+
+    ' tri meraca + cena; svaki ima natpis, veliku brojku i red za ambalazu
+    For i = 0 To 3
+        NewLbl z, "otpML" & i, "", 0, 8, 120, 11, TS_MICRO, True, C_MUTED, -1
+        NewLbl z, "otpMV" & i, ChrW(8212), 0, 20, 120, 20, TS_KPI, True, C_FOREST, _
+               -1, fmTextAlignLeft, F_NUM
+        NewLbl z, "otpMA" & i, "", 0, 41, 120, 12, TS_MICRO, False, C_MUTED, _
+               -1, fmTextAlignLeft, F_NUM
+    Next i
+    NewLbl z, "otpPrazno", Poruka("OTKUI_OTP_NEMA"), PAD, 26, 420, 16, _
+           TS_META, False, C_MUTED, -1
+End Sub
+
+' Puni traku iz opisa koji daje ekran (Scr_OtpInfo). Ljuska ne zna sta je
+' otpremnica - dobija gotove brojeve i samo ih crta.
+Private Sub RefreshOtpTraka(frm As Object)
+    Dim z As Object, info As String, p() As String, i As Long
+    Dim ost As Double, ostA As Double, ima As Boolean
+    On Error Resume Next
+    Set z = frm.Controls("zOtp")
+    If z Is Nothing Then Exit Sub
+    info = ""
+    If mScreen = "DOKUMENTI" Then _
+        info = CStr(Application.Run("modScrDokumenti.Scr_OtpInfo"))
+    Err.Clear
+    ima = (Len(info) > 0)
+
+    z.Controls("otpPrazno").Visible = Not ima
+    z.Controls("otpBroj").Visible = ima
+    z.Controls("otpSub").Visible = ima
+    For i = 0 To 3
+        z.Controls("otpML" & i).Visible = ima
+        z.Controls("otpMV" & i).Visible = ima
+        z.Controls("otpMA" & i).Visible = ima
+    Next i
+    If Not ima Then Exit Sub
+
+    p = Split(info, "|")
+    z.Controls("otpBroj").caption = p(0)
+    z.Controls("otpSub").caption = p(1) & "  " & ChrW(183) & "  " & p(2)
+
+    z.Controls("otpML0").caption = UCase$(Poruka("OTKUI_OTP_UKUPNO"))
+    z.Controls("otpMV0").caption = FmtBroj(CDbl(Val(p(3))), 2)
+    z.Controls("otpMA0").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(6))), 0)
+    z.Controls("otpML1").caption = UCase$(Poruka("OTKUI_OTP_UBLOK"))
+    z.Controls("otpMV1").caption = FmtBroj(CDbl(Val(p(4))), 2)
+    z.Controls("otpMA1").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(CDbl(Val(p(7))), 0)
+
+    ost = CDbl(Val(p(5))): ostA = CDbl(Val(p(8)))
+    z.Controls("otpML2").caption = UCase$(Poruka("OTKUI_OTP_OSTATAK"))
+    z.Controls("otpMV2").caption = FmtBroj(ost, 2)
+    ' Ostatak je jedini broj zbog koga ova traka postoji - zato ima semafor.
+    ' Negativan znaci da je u blokove upisano vise nego sto je otpremnica
+    ' donela; isto pravilo kao u staroj formi (RefreshSummary).
+    z.Controls("otpMV2").ForeColor = IIf(ost < -0.0001, C_RUST, C_GREEN)
+    z.Controls("otpMA2").caption = Poruka("OTKUI_OTP_AMB") & " " & FmtBroj(ostA, 0)
+    z.Controls("otpMA2").ForeColor = IIf(ostA < -0.0001, C_RUST, C_MUTED)
+
+    z.Controls("otpML3").caption = UCase$(Poruka("OTKUI_OTP_CENA"))
+    z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
+    z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+End Sub
+
+' Koji segment prekidaca je izabran - stanje drzi ekran.
+Private Sub RefreshListSeg(frm As Object)
+    Dim z As Object, akt As String, nmv As Variant, i As Long
+    On Error Resume Next
+    Set z = frm.Controls("zGrid")
+    akt = "SVI"
+    If mScreen = "DOKUMENTI" Then akt = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
+    Err.Clear
+    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI")
+    For i = 0 To 2
+        BoxState z, "ls" & nmv(i), _
+                 IIf(akt = nmv(i), C_FOREST, C_WHITE), _
+                 IIf(akt = nmv(i), C_CREAM, C_MUTED), (akt = nmv(i))
+        RebaseSink "ls" & nmv(i)
+    Next i
+End Sub
+
 Private Sub BuildCtx(frm As Object)
     Dim z As Object, i As Long, nm As Variant, w As Variant, X As Single
     Set z = NewZone(frm, "zCtx", SIDEBAR_W, HEADER_H + KPI_H + TITLE_H, 620, CTX_H, C_SAND_LT)
@@ -678,6 +773,11 @@ Private Sub BuildGrid(frm As Object)
 
     NewLbl z, "grdTitle", "-", PAD, 10, 180, 16, TS_H1, True, C_FOREST, -1
     NewLbl z, "grdSrc", "-", PAD + 176, 11, 120, 14, TS_MICRO, False, C_MUTED, C_SAND, fmTextAlignCenter, F_NUM
+    ' Prekidac liste - samo F1. Otpremnica je izvor robe, blokovi su njena
+    ' raspodela; operater bira sta gleda, a mreza je ista.
+    NewSegBtn z, "lsSVI", Poruka("OTKUI_SEG_LS_SVI"), 0, 9, 96, 20, True
+    NewSegBtn z, "lsOTPREMNICE", Poruka("OTKUI_SEG_LS_OTP"), 96, 9, 96, 20, False
+    NewSegBtn z, "lsBLOKOVI", Poruka("OTKUI_SEG_LS_BLOK"), 192, 9, 110, 20, False
     NewShell z, "srch", 0, 8, 200, 22, C_INPUT_BORDER, C_WHITE
     NewLbl z, "srchIco", ChrW(IC_SEARCH), 0, CenterIco(8, 22, TS_META), 16, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignCenter, F_ICON
@@ -1296,8 +1396,27 @@ Public Sub LayoutOtkup(frm As Object)
         PlaceTitleBadge frm
     End With
 
+    ' Traka otpremnice stoji izmedju naslova i "Osnovnih podataka": opisuje
+    ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
+    Dim otpH As Single, i2 As Long
+    otpH = 0
+    If modeKey(ActiveMode) = "OTKUP" And Not mGridMax Then otpH = OTP_H
+    frm.Controls("zOtp").Visible = (otpH > 0)
+    If otpH > 0 Then
+        With frm.Controls("zOtp")
+            .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H
+            .width = ctrW: .Height = OTP_H
+            .Controls("otpLnB").width = ctrW
+            For i2 = 0 To 3
+                .Controls("otpML" & i2).Left = ctrW - PAD - (4 - i2) * 132
+                .Controls("otpMV" & i2).Left = ctrW - PAD - (4 - i2) * 132
+                .Controls("otpMA" & i2).Left = ctrW - PAD - (4 - i2) * 132
+            Next i2
+        End With
+    End If
+
     With frm.Controls("zCtx")
-        .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H: .width = ctrW: .Height = CTX_H
+        .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H + otpH: .width = ctrW: .Height = CTX_H
         .Controls("ctxLnB").width = ctrW
         .Controls("ctxHint").Left = ctrW - PAD - 52
         .Controls("ctxLn").Left = PAD + 104
@@ -1310,6 +1429,7 @@ Public Sub LayoutOtkup(frm As Object)
         .Left = mainX: .top = HEADER_H + KPI_H + TITLE_H + CTX_H
         .width = ctrW: .Height = formH
     End With
+    frm.Controls("zForm").top = HEADER_H + KPI_H + TITLE_H + otpH + CTX_H
 
     ' Razvucena mreza: kontekst i forma se sklanjaju, mreza pocinje odmah ispod
     ' naslova dokumenta. Zone se ne unistavaju - drugi klik ih vraca netaknute.
@@ -1318,7 +1438,7 @@ Public Sub LayoutOtkup(frm As Object)
     If mGridMax Then
         gridY = HEADER_H + KPI_H + TITLE_H
     Else
-        gridY = HEADER_H + KPI_H + TITLE_H + CTX_H + formH
+        gridY = HEADER_H + KPI_H + TITLE_H + otpH + CTX_H + formH
     End If
     ' Donja granica zone mreze MORA da racuna i traku iznad tela (GRID_TOP:
     ' naslov, pretraga, cipovi). Ranije je bila 231pt bez nje, pa je zona bila
@@ -1642,6 +1762,17 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     Dim i As Long, r As Long, c As Long, X As Single, base As Variant
     Dim sc As Single, hd As Object, body As Object, ft As Object, bodyH As Single
     z.Controls("grdLnT").width = zw
+    Dim lsX As Single, lsV As Boolean
+    lsV = (mScreen = "DOKUMENTI") And (modeKey(ActiveMode) = "OTKUP")
+    lsX = PAD + 190
+    BoxShow z, "lsSVI", lsV
+    BoxShow z, "lsOTPREMNICE", lsV
+    BoxShow z, "lsBLOKOVI", lsV
+    If lsV Then
+        MoveBox z, "lsSVI", lsX, 9, 96
+        MoveBox z, "lsOTPREMNICE", lsX + 96, 9, 96
+        MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
+    End If
     z.Controls("grdSrc").Left = PAD + 176
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
@@ -2172,6 +2303,8 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End With
     PlaceTitleBadge frm
     frm.Controls("zGrid").Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & k)
+    RefreshListSeg frm
+    RefreshOtpTraka frm
     ' Ime tabele je dijagnostika, ne informacija za operatera - u produkciji se
     ' ne prikazuje (UI_DEBUG=DA u tblLocalConfig ili dev build).
     frm.Controls("zGrid").Controls("grdSrc").caption = "list: " & ModeTable(key)
@@ -2589,6 +2722,19 @@ Private Sub UiClickCore(ByVal tag As String)
         PagerClick tag
         Exit Sub
     End If
+    ' prekidac liste (F1) - ekran odlucuje sta znaci, ljuska samo osvezi
+    If Left$(tag, 2) = "ls" And Len(tag) > 2 Then
+        If modUiScreens.ScrEvent(mScreen, tag, "Click") Then
+            RefreshListSeg mFrm
+            mSelRow = 0
+            mSearch = ""
+            mFrm.Controls("zGrid").Controls("txtSearch").text = ""
+            ReloadGrid
+            RefreshOtpTraka mFrm
+            LayoutOtkup mFrm
+        End If
+        Exit Sub
+    End If
     ' klik na strelicu "combo"-a -> nas panel (toggle)
     ' (CloseFilterPanel je vec odradjen gore)
     If Right$(tag, 1) = "D" And Len(tag) > 2 Then
@@ -2779,6 +2925,17 @@ Private Sub RowFromTag(ByVal tag As String)
     If i < 0 Then Exit Sub
     mSelRow = (mPage - 1) * mPageSize + i + 1
     If mSelRow > mViewN Then mSelRow = 0
+    ' Izbor reda se javlja ekranu: u listi otpremnica klik BIRA otpremnicu, a
+    ' ljuska ne zna sta je otpremnica. Ako je ekran nesto uradio, mreza se
+    ' puni ponovo.
+    If mSelRow > 0 Then
+        If modUiScreens.ScrEvent(mScreen, "row:" & mSelRow, "Click") Then
+            RefreshListSeg mFrm
+            ReloadGrid
+            RefreshOtpTraka mFrm
+            LayoutOtkup mFrm
+        End If
+    End If
 End Sub
 
 Private Function RowIndexFromTag(ByVal tag As String) As Long
@@ -3314,6 +3471,15 @@ End Function
 '   2 = n, 3 = zbir kg, 4 = zbir vrednosti
 ' Ljuska odavde radi sve ostalo - sortiranje, strane, pretragu, izbor, crtanje.
 ' Suzavanje iz panela "Filteri" - ekran ga cita, ljuska ga drzi.
+' Celija prikazanog reda - ekran je cita kad korisnik izabere red. Bez ovoga
+' bi ekran morao da drzi svoju kopiju istih podataka.
+Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
+    On Error Resume Next
+    If r < 1 Or r > mViewN Then Exit Function
+    If Not IsArray(mView) Then Exit Function
+    GridCell = mView(r, c)
+End Function
+
 Public Function FltVrsta() As String
     FltVrsta = mFltVrsta
 End Function
