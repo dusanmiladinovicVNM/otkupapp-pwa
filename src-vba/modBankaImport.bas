@@ -225,7 +225,9 @@ Private Function ImportOnePdfIntoBankaImport_Core(ByVal pdfPath As String, _
                   "Parser nije vratio nijednu transakciju. File=" & fileName
     End If
 
-    savedCount = SaveBankaImportRows(parsed)
+    ' Core (bez sopstvene TX): pozivalac je vec u `ImportBankaInbox_TX`, pa bi
+    ' ugnezdjena transakcija bila suvisna. Spoljni pozivaoci koriste `_TX`.
+    savedCount = SaveBankaImportRowsCore(parsed)
 
     If savedCount > 0 Then
         ImportOnePdfIntoBankaImport_Core = BIM_STATUS_IMPORTED
@@ -602,8 +604,48 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     ParseBankaIzvodForImport = result
 End Function
 
-Public Function SaveBankaImportRows(ByRef data As Variant) As Long
-    Const SRC As String = "SaveBankaImportRows"
+' Javni ulaz u staging writer: SVI redovi jednog batch-a ulaze ili nijedan.
+'
+' Core dodaje red po red, pa bi bez transakcije prvi validan red ostao upisan kad
+' drugi padne (npr. nevalidan datum) -- polovicno uvezen izvod koji vise nije ni
+' duplikat ni ceo. Produkcioni put (`ImportBankaInbox_TX`) drzi spoljnu
+' transakciju i zove core direktno; ova funkcija je za svaki drugi/direktan poziv.
+Public Function SaveBankaImportRows_TX(ByRef data As Variant) As Long
+    Const SRC As String = "SaveBankaImportRows_TX"
+
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+
+    SaveBankaImportRows_TX = SaveBankaImportRowsCore(data)
+
+    tx.CommitTx
+    Exit Function
+
+EH:
+    Dim errNumTx As Long
+    Dim errDescTx As String
+    Dim errSrcTx As String
+
+    errNumTx = Err.Number
+    errDescTx = Err.description
+    errSrcTx = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    SaveBankaImportRows_TX = 0
+    Err.Raise errNumTx, SRC, "Source=" & errSrcTx & " | " & errDescTx
+End Function
+
+Private Function SaveBankaImportRowsCore(ByRef data As Variant) As Long
+    Const SRC As String = "SaveBankaImportRowsCore"
 
     On Error GoTo EH
 
@@ -756,7 +798,7 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
     Debug.Print SRC & " completed. Saved=" & CStr(savedCount) & _
                 " Duplicates=" & CStr(duplicateCount)
 
-    SaveBankaImportRows = savedCount
+    SaveBankaImportRowsCore = savedCount
     Exit Function
 
 EH:

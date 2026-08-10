@@ -206,7 +206,7 @@ Private Sub T05_StagingCuvaTypedDatum()
     Dim v As Variant
     Dim errNum As Long
 
-    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-11", P & "RAC-9", _
+    saved = SaveBankaImportRows_TX(BuildStagingRow(P & "IZV-11", P & "RAC-9", _
                 DateSerial(2026, 2, 1), DateSerial(2026, 2, 1), P & "REF-T"))
     ChkEq saved, 1, S & "red je staged"
 
@@ -232,7 +232,7 @@ Private Sub T05_StagingCuvaTypedDatum()
     ' Javni writer je fail-closed za datum: tekst koji nije datum se ODBIJA
     ' (ranije se upisivao kakav jeste), kao i datum van poslovnog opsega.
     On Error Resume Next
-    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-14", P & "RAC-9", _
+    saved = SaveBankaImportRows_TX(BuildStagingRow(P & "IZV-14", P & "RAC-9", _
                 DateSerial(2026, 2, 1), "nije datum", P & "REF-X1"))
     errNum = Err.Number
     Err.Clear
@@ -241,7 +241,7 @@ Private Sub T05_StagingCuvaTypedDatum()
     Chk errNum <> 0, S & "writer odbija tekst koji nije datum"
 
     On Error Resume Next
-    saved = SaveBankaImportRows(BuildStagingRow(P & "IZV-15", P & "RAC-9", _
+    saved = SaveBankaImportRows_TX(BuildStagingRow(P & "IZV-15", P & "RAC-9", _
                 DateSerial(2026, 2, 1), DateSerial(1899, 12, 30), P & "REF-X2"))
     errNum = Err.Number
     Err.Clear
@@ -251,6 +251,23 @@ Private Sub T05_StagingCuvaTypedDatum()
 
     ChkEq StagingRedova(P & "IZV-14") + StagingRedova(P & "IZV-15"), 0, _
         S & "odbijeni redovi nisu upisani"
+
+    ' Batch je atomican: prvi red validan, drugi nevalidan -> NIJEDAN ne ostaje.
+    ' Bez sopstvene TX u javnom ulazu prvi red bi ostao upisan (polovicno uvezen
+    ' izvod koji vise nije ni duplikat ni ceo).
+    Dim mesovit As Variant
+    mesovit = BuildStagingRowPair(P & "IZV-16", P & "RAC-9", _
+                DateSerial(2026, 2, 1), "nije datum")
+
+    On Error Resume Next
+    saved = SaveBankaImportRows_TX(mesovit)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "mesovit batch (validan + nevalidan) je odbijen"
+    ChkEq StagingRedova(P & "IZV-16"), 0, _
+        S & "ni PRVI (validan) red nije ostao -- batch je atomican"
 End Sub
 
 ' ============================================================
@@ -481,7 +498,6 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     Const S As String = "T06 preplata fakture: "
 
     Dim res As String
-    Dim errNum As Long
 
     SeedKupac P & "KUP-2", P & "Kupac 2"
     SeedFaktura P & "FAK-1", P & "KUP-2", P & "F-001", 1000
@@ -509,17 +525,25 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     ChkEqD UplataZaBimPoTipu(P & "BIM-DEO", NOV_KUPCI_AVANS), 0, S & "nema avans reda"
 
     ' (c) Vec placena faktura se odbija (saldo se promenio izmedju prikaza i klika).
+    '
+    ' `_TX` omotac gresku HVATA, rollback-uje i vraca "" -- ne propagira je dalje,
+    ' pa `Err.Number` posle poziva nije deo ugovora. Zato se proverava ugovor koji
+    ' omotac stvarno daje: prazan rezultat + nista knjizeno + stavka otvorena.
     SeedBim P & "BIM-PLAC", P & "IZV-12", P & "RAC-1", P & "PARTNER-F", 300, 0, "", "", ""
 
-    On Error Resume Next
+    gBankaSilentBatch = True
     res = MapBankaImportAsKupac_TX(P & "BIM-PLAC", P & "KUP-2", P & "FAK-1", False)
-    errNum = Err.Number
-    Err.Clear
-    On Error GoTo 0
+    gBankaSilentBatch = False
 
-    Chk errNum <> 0, S & "uplata na vec placenu fakturu je odbijena"
+    ChkEq res, "", S & "uplata na vec placenu fakturu je odbijena (nema NovacID)"
     ChkEq NovacZaBim(P & "BIM-PLAC"), 0, S & "odbijena uplata nije knjizena"
     ChkEq BimObradjeno(P & "BIM-PLAC"), "", S & "odbijena uplata ostaje otvorena"
+    ChkEqD UplataZaFakturu(P & "FAK-1"), 1000, S & "saldo fakture nepromenjen posle odbijanja"
+
+    ' Razlog odbijanja se proverava na cistom validatoru (writer koristi isti):
+    ' otvoreno = iznos - aktivne uplate, pa je vec placena faktura 0.
+    ChkEqD GetOtvorenoNaFakturi(P & "FAK-1"), 0, S & "GetOtvorenoNaFakturi = 0 za placenu fakturu"
+    ChkEqD GetOtvorenoNaFakturi(P & "FAK-2"), 1200, S & "GetOtvorenoNaFakturi = 2000 - 800"
 End Sub
 
 ' ============================================================
@@ -600,6 +624,26 @@ Private Function BuildStagingRow(ByVal brojIzvoda As String, ByVal racun As Stri
     red(1, 17) = 0
 
     BuildStagingRow = red
+End Function
+
+' Dva staging reda istog izvoda: prvi validan, drugi sa zadatim (lose) datumom.
+Private Function BuildStagingRowPair(ByVal brojIzvoda As String, ByVal racun As String, _
+                                     ByVal datumOk As Variant, _
+                                     ByVal datumLos As Variant) As Variant
+    Dim par(1 To 2, 1 To 17) As Variant
+    Dim prvi As Variant
+    Dim drugi As Variant
+    Dim c As Long
+
+    prvi = BuildStagingRow(brojIzvoda, racun, datumOk, datumOk, P & "REF-P1")
+    drugi = BuildStagingRow(brojIzvoda, racun, datumOk, datumLos, P & "REF-P2")
+
+    For c = 1 To 17
+        par(1, c) = prvi(1, c)
+        par(2, c) = drugi(1, c)
+    Next c
+
+    BuildStagingRowPair = par
 End Function
 
 ' Koliko staging redova nosi dati broj izvoda (za proveru da odbijen red NIJE upisan).
