@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-66"
+Public Const OTKUI_BUILD   As String = "v6-ui-67"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2875,6 +2875,7 @@ Private Sub NewCtxCombo(parent As Object, nm As String, X As Single, Y As Single
     NewChevron parent, nm & "D", X + w - 19, Y + 1, 18, 24
 End Sub
 
+#If VBA7 Then
 Private Function FormHwnd(frm As Object) As LongPtr
     Dim h As LongPtr
 #Else

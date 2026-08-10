@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-66"
+Public Const SCRDOK_BUILD As String = "v6-ui-67"
 
 ' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
 ' vec proverene i koriste se drugde u ovom modulu; nijedna nije pogodjena "po
