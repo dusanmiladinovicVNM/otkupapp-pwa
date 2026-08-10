@@ -428,7 +428,7 @@ Private Sub T03_TriKandidataNeObarajuBatch()
 
     ' Postojeci backlog se sklanja sa puta da batch bude deterministicki
     ' (rollback suite-a vraca originalne statuse).
-    SkipPostojeceOtvorene
+    OstaviOtvorenimSamo Array(P & "BIM-3K", P & "BIM-OK")
 
     gBankaSilentBatch = True
     mapped = AutoMapAllBankaImport_TX(manualRequired)
@@ -587,7 +587,7 @@ Private Sub T08_PaliBatchNePrijavljujeUspeh()
     SeedBim P & "BIM-G1", P & "IZV-17", P & "RAC-1", P & "PARTNER-B", 0, 1000, P & "BLOK-G1", "", ""
     SeedBim P & "BIM-G2", "", P & "RAC-1", P & "PARTNER-B", 0, 2000, P & "BLOK-G2", "", ""
 
-    SkipPostojeceOtvorene
+    OstaviOtvorenimSamo Array(P & "BIM-G1", P & "BIM-G2")
 
     gBankaSilentBatch = True
     On Error Resume Next
@@ -675,7 +675,7 @@ Private Sub T10_PlacenaFakturaNeObaraBatch()
 
     ChkEqD GetOtvorenoNaFakturi(P & "FAK-3"), 0, S & "faktura je stvarno placena (otvoreno = 0)"
 
-    SkipPostojeceOtvorene
+    OstaviOtvorenimSamo Array(P & "BIM-H1", P & "BIM-PLAC2")
 
     gBankaSilentBatch = True
     On Error Resume Next
@@ -881,9 +881,14 @@ Private Sub BitAppend(ByVal tblName As String, ByVal cols As Variant, ByVal vals
     Next i
 End Sub
 
-' Sve zatecene OTVORENE staging redove (koji nisu BIT-*) privremeno oznaci kao
-' "Skip" da batch test radi samo nad test podacima. Rollback suite-a ih vraca.
-Private Sub SkipPostojeceOtvorene()
+' Ostavi otvorenim SAMO navedene staging redove; sve ostale otvorene -- i zatecene
+' iz baze i one koje su RANIJE test grupe seed-ovale -- oznaci "Skip".
+'
+' Bez ovoga jedna grupa curi u sledecu: T08 namerno ostavlja red BEZ broja izvoda
+' (da obori batch), pa ga je T10 pokupio u svoj AutoMapAll i pao na tudjem redu
+' (ERR_BMAP_BASE + 45), sto je izgledalo kao da fiks ne radi. Rollback suite-a
+' vraca originalne statuse.
+Private Sub OstaviOtvorenimSamo(ByVal bimIDs As Variant)
     Dim data As Variant
     Dim colID As Long
     Dim colObr As Long
@@ -897,15 +902,26 @@ Private Sub SkipPostojeceOtvorene()
     colObr = GetColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO)
 
     For i = 1 To UBound(data, 1)
-        bimID = Trim$(CStr(data(i, colID)))
+        bimID = Trim$(CStr(NzTb(data(i, colID))))
 
-        If Left$(bimID, Len(P)) <> P Then
-            If Trim$(CStr(NzTb(data(i, colObr)))) = "" Then
+        If Trim$(CStr(NzTb(data(i, colObr)))) = "" Then
+            If Not SadrziID(bimIDs, bimID) Then
                 UpdateCell TBL_BANKA_IMPORT, i, COL_BIM_OBRADJENO, "Skip"
             End If
         End If
     Next i
 End Sub
+
+Private Function SadrziID(ByVal bimIDs As Variant, ByVal traziID As String) As Boolean
+    Dim i As Long
+
+    For i = LBound(bimIDs) To UBound(bimIDs)
+        If CStr(bimIDs(i)) = traziID Then
+            SadrziID = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Function BimObradjeno(ByVal bimID As String) As String
     BimObradjeno = Trim$(CStr(NzTb(LookupValue(TBL_BANKA_IMPORT, COL_BIM_ID, bimID, COL_BIM_OBRADJENO))))
