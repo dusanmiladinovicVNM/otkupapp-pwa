@@ -23,12 +23,21 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-73"
+Public Const SCRPAL_BUILD As String = "v6-ui-74"
 
 Private Const PAL_ROWS As Long = 18          ' koliko redova liste se pravi
 Private Const PAL_ROW_H As Single = 21
 Private Const PAL_HEAD_H As Single = 21
 Private Const PAL_TOP As Single = 86         ' ispod naslova i brojki
+' Razmak izmedju kolona. Bez njega se desno poravnat broj lepi uz levo
+' poravnat tekst susedne kolone: zaglavlje je pisalo "BRUTO KGSTATUS", a
+' red "50,47Otvorena". Kolona dobija svoju sirinu MINUS ovaj razmak.
+Private Const PAL_GUT As Single = 10
+
+' Koliko redova je trenutno napunjeno. Sirina zone se zna tek u Scr_Layout,
+' pa se i podaci ucitavaju tamo - u Scr_Build zona jos ima pocetnih 400pt i
+' stalo bi 11 redova umesto 18.
+Private mLoaded As Long
 
 ' Kolone liste: naslov | sirina | desno poravnanje
 Private Function PalCols() As Variant
@@ -79,7 +88,7 @@ Public Sub Scr_Build(ByVal z As Object)
     Next i
 
     modUiKit.NewLbl z, "palFoot", "", PAD, 0, 400, 14, TS_META, False, C_MUTED, -1
-    LoadPalete z
+    mLoaded = -1                     ' puni se u Scr_Layout, kad se zna visina
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
@@ -115,7 +124,7 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
                 p = Split(CStr(cols(c)), "|")
                 With z.Controls("palC" & i & "_" & c)
                     .Left = X
-                    .width = CSng(Val(p(1))) * ((w - 2 * PAD - 12) / uk)
+                    .width = CSng(Val(p(1))) * ((w - 2 * PAD - 12) / uk) - PAL_GUT
                     .top = Y + (PAL_ROW_H - modUiKit.TxtH(TS_CELL)) / 2
                 End With
                 z.Controls("palC" & i & "_" & c).ZOrder 0
@@ -138,13 +147,17 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     For c = 0 To UBound(cols)
         p = Split(CStr(cols(c)), "|")
         z.Controls("palH" & c).Left = X
-        z.Controls("palH" & c).width = CSng(Val(p(1))) * ((w - 2 * PAD - 12) / uk)
+        z.Controls("palH" & c).width = CSng(Val(p(1))) * ((w - 2 * PAD - 12) / uk) - PAL_GUT
         z.Controls("palH" & c).ZOrder 0
         X = X + CSng(Val(p(1))) * ((w - 2 * PAD - 12) / uk)
     Next c
 
     z.Controls("palFoot").top = Y + 8
     z.Controls("palFoot").width = w - 2 * PAD
+
+    ' Podaci se citaju tek kad se zna koliko redova staje. Ponovo se citaju
+    ' samo ako se taj broj promenio - promena sirine prozora ne dira tabelu.
+    If n <> mLoaded Then LoadPalete z, n
     Scr_Layout = Y + 24
 End Function
 
@@ -164,8 +177,8 @@ End Function
 
 ' Poslednje palete, najnovija prva. Cita se postojecim modDataAccess-om;
 ' nista se ne upisuje i nijedna paleta se ne zatvara odavde.
-Private Sub LoadPalete(ByVal z As Object)
-    Dim src As Variant, r As Long, i As Long, n As Long
+Private Sub LoadPalete(ByVal z As Object, ByVal n As Long)
+    Dim src As Variant, r As Long, i As Long, cc As Long
     Dim iBroj As Long, iGod As Long, iDat As Long, iVrsta As Long, iSorta As Long
     Dim iKlasa As Long, iGajb As Long, iNeto As Long, iBruto As Long, iStat As Long
     Dim otvorene As Long, gajbi As Double, neto As Double, uk As Long
@@ -193,7 +206,6 @@ Private Sub LoadPalete(ByVal z As Object)
         If UCase$(PalS(src, r, iStat)) <> "ZATVORENA" Then otvorene = otvorene + 1
     Next r
 
-    n = VidljivihRedova(z.Height)
     i = 0
     For r = uk To 1 Step -1                  ' najnovija prva
         If i >= n Then Exit For
@@ -220,6 +232,15 @@ Private Sub LoadPalete(ByVal z As Object)
     z.Controls("palFoot").caption = Poruka("OTKUI_SCRPAL_FOOT") & " " & _
                                    Format$(i, "#,##0") & " / " & Format$(uk, "#,##0") & _
                                    "  " & ChrW(183) & "  " & Format$(neto, "#,##0.00") & " kg"
+    ' redovi bez podatka ne smeju da ostanu vidljivi sa starim tekstom
+    For r = i To PAL_ROWS - 1
+        z.Controls("palRB" & r).Visible = False
+        z.Controls("palRL" & r).Visible = False
+        For cc = 0 To UBound(PalCols())
+            z.Controls("palC" & r & "_" & cc).Visible = False
+        Next cc
+    Next r
+    mLoaded = i
     Exit Sub
 EH:
     Debug.Print "modScrPalete.LoadPalete: " & Err.Number & " " & Err.description
