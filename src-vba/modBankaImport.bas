@@ -130,8 +130,24 @@ Public Sub ImportBankaInbox_WithDrivePull()
     Exit Sub
 
 EH:
+    ' AUD-054 na RF-09 putanji: `LogErr` interno radi `On Error Resume Next` /
+    ' `On Error GoTo 0`, sto RESETUJE `Err`. Citanje `Err.Number`/`Err.description`
+    ' POSLE njega je vracalo prazan/pogresan uzrok, pa je uvoz koji je uredno
+    ' rollback-ovan (`ImportBankaInbox_TX`) na vrhu lanca gubio ZASTO je pao.
+    ' Zato: hvatanje PRE logovanja, pa re-raise sa originalnim identitetom.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
 Private Sub ImportBankaInboxToPendingMoves(ByRef successMoves As Collection, _
@@ -225,7 +241,9 @@ Private Function ImportOnePdfIntoBankaImport_Core(ByVal pdfPath As String, _
                   "Parser nije vratio nijednu transakciju. File=" & fileName
     End If
 
-    savedCount = SaveBankaImportRows(parsed)
+    ' Core (bez sopstvene TX): pozivalac je vec u `ImportBankaInbox_TX`, pa bi
+    ' ugnezdjena transakcija bila suvisna. Spoljni pozivaoci koriste `_TX`.
+    savedCount = SaveBankaImportRowsCore(parsed)
 
     If savedCount > 0 Then
         ImportOnePdfIntoBankaImport_Core = BIM_STATUS_IMPORTED
@@ -482,6 +500,33 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
         Exit Function
     End If
     
+    ' Level 0 (AUD-007): datumi moraju biti STVARNI datumi PRE staging-a.
+    ' Nemoguc datum (30.02., dan 32, mesec 13) se u DateSerial-u tiho prelije u
+    ' sledeci mesec, pa bi transakcija zavrsila pogresno datirana u tblBankaImport
+    ' (a odatle i u tblNovac). TryParseDateValue sada takav datum odbija, pa ovde
+    ' pada ceo izvod sa jasnom porukom (fajl ide u Error folder) umesto tihog
+    ' pomeranja dana. Prazan datum transakcije je ista klasa greske: red bi bio
+    ' neupotrebljiv u mapiranju (CDate na praznom stringu puca).
+    Dim datumIzvodaVal As Date
+    Dim datumTxVal() As Date
+
+    If Not TryParseDateValue(datumIzvoda, datumIzvodaVal) Then
+        Err.Raise vbObjectError + 1009, "ParseBankaIzvodForImport", _
+            "PARSER DATUM IZVODA nije validan datum: '" & datumIzvoda & _
+            "' (izvod " & brojIzvoda & "). Nemoguc datum se ne sme uvesti pomeren."
+    End If
+
+    ReDim datumTxVal(1 To UBound(txData, 1))
+
+    For i = 1 To UBound(txData, 1)
+        If Not TryParseDateValue(CStr(NzBIM(txData(i, 2), "")), datumTxVal(i)) Then
+            Err.Raise vbObjectError + 1010, "ParseBankaIzvodForImport", _
+                "PARSER DATUM TRANSAKCIJE nije validan datum: '" & _
+                CStr(NzBIM(txData(i, 2), "")) & "' (izvod " & brojIzvoda & _
+                ", transakcija " & CStr(i) & "). Nemoguc datum se ne sme uvesti pomeren."
+        End If
+    Next i
+
     ' v6.18+: integrity check (3 nivoa) PRE staging-a
     For i = 1 To UBound(txData, 1)
         Dim uplataVal As Double, isplataVal As Double
@@ -549,10 +594,14 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     ReDim result(1 To UBound(txData, 1), 1 To 17)
 
     For i = 1 To UBound(txData, 1)
+        ' Datumi izlaze kao TYPED Date (ne kao originalni tekst): vrednost je vec
+        ' deterministicki isparsirana gore, pa bi vracanje sirovog teksta znacilo
+        ' da se validirani datum baci i da ga staging/mapiranje ponovo tumace
+        ' preko locale-zavisnog CDate (FM-0022 #17 / FM-0023 #23).
         result(i, 1) = brojIzvoda          ' BrojDokumenta
-        result(i, 2) = datumIzvoda         ' DatumIzvoda
+        result(i, 2) = datumIzvodaVal      ' DatumIzvoda (Date)
         result(i, 3) = brojRacuna          ' BrojRacuna
-        result(i, 4) = txData(i, 2)        ' DatumTransakcije
+        result(i, 4) = datumTxVal(i)       ' DatumTransakcije (Date)
         result(i, 5) = txData(i, 3)        ' Partner
         result(i, 6) = txData(i, 4)        ' PartnerKonto
         result(i, 7) = txData(i, 6)        ' Uplata / Odobrenje
@@ -571,8 +620,48 @@ Public Function ParseBankaIzvodForImport(ByVal txt As String, ByVal sourceFile A
     ParseBankaIzvodForImport = result
 End Function
 
-Public Function SaveBankaImportRows(ByRef data As Variant) As Long
-    Const SRC As String = "SaveBankaImportRows"
+' Javni ulaz u staging writer: SVI redovi jednog batch-a ulaze ili nijedan.
+'
+' Core dodaje red po red, pa bi bez transakcije prvi validan red ostao upisan kad
+' drugi padne (npr. nevalidan datum) -- polovicno uvezen izvod koji vise nije ni
+' duplikat ni ceo. Produkcioni put (`ImportBankaInbox_TX`) drzi spoljnu
+' transakciju i zove core direktno; ova funkcija je za svaki drugi/direktan poziv.
+Public Function SaveBankaImportRows_TX(ByRef data As Variant) As Long
+    Const SRC As String = "SaveBankaImportRows_TX"
+
+    Dim tx As clsTransaction
+
+    On Error GoTo EH
+
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_BANKA_IMPORT
+
+    SaveBankaImportRows_TX = SaveBankaImportRowsCore(data)
+
+    tx.CommitTx
+    Exit Function
+
+EH:
+    Dim errNumTx As Long
+    Dim errDescTx As String
+    Dim errSrcTx As String
+
+    errNumTx = Err.Number
+    errDescTx = Err.description
+    errSrcTx = Err.SOURCE
+
+    On Error Resume Next
+    LogErr SRC
+    If Not tx Is Nothing Then tx.RollbackTx
+    On Error GoTo 0
+
+    SaveBankaImportRows_TX = 0
+    Err.Raise errNumTx, SRC, "Source=" & errSrcTx & " | " & errDescTx
+End Function
+
+Private Function SaveBankaImportRowsCore(ByRef data As Variant) As Long
+    Const SRC As String = "SaveBankaImportRowsCore"
 
     On Error GoTo EH
 
@@ -656,13 +745,16 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
     colCount = lo.ListColumns.count
     
     For i = 1 To UBound(data, 1)
+        ' AUD-025: broj racuna je deo dedupe kljuca (staging kolona 3) - bez njega
+        ' se transakcija sa drugog racuna firme tiho gubi kao "duplikat".
         If IsDuplicateBankaImport( _
             CStr(data(i, 1)), _
             data(i, 4), _
             CDbl(NzBIM(data(i, 7), 0#)), _
             CDbl(NzBIM(data(i, 8), 0#)), _
             CStr(data(i, 5)), _
-            CStr(data(i, 12)) _
+            CStr(data(i, 12)), _
+            CStr(data(i, 3)) _
         ) Then
             duplicateCount = duplicateCount + 1
         Else
@@ -677,9 +769,13 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
 
             rowData(colID) = newID
             rowData(colBrojDok) = CStr(data(i, 1))
-            rowData(colDatumIzvoda) = CStr(data(i, 2))
+            ' Datumi se upisuju kao Date (bez CStr): staging je jedini izvor
+            ' istine za datum transakcije, a string bi ga vratio na locale
+            ' tumacenje pri svakom citanju. Nevalidan datum ovde PADA (writer je
+            ' javan, pa ne sme da se osloni na to da ga je parser vec proverio).
+            rowData(colDatumIzvoda) = RequireBimDatum(data(i, 2), COL_BIM_DATUM_IZVODA, i, SRC)
             rowData(colBrojRacuna) = CStr(data(i, 3))
-            rowData(colDatumTx) = CStr(data(i, 4))
+            rowData(colDatumTx) = RequireBimDatum(data(i, 4), COL_BIM_DATUM_TRANSAKCIJE, i, SRC)
             rowData(colPartner) = CStr(data(i, 5))
             rowData(colPartnerKonto) = CStr(data(i, 6))
             rowData(colOpis) = CStr(data(i, 10))
@@ -718,7 +814,7 @@ Public Function SaveBankaImportRows(ByRef data As Variant) As Long
     Debug.Print SRC & " completed. Saved=" & CStr(savedCount) & _
                 " Duplicates=" & CStr(duplicateCount)
 
-    SaveBankaImportRows = savedCount
+    SaveBankaImportRowsCore = savedCount
     Exit Function
 
 EH:
@@ -738,12 +834,18 @@ EH:
 End Function
 
 
+' AUD-025: identitet transakcije izvoda je (BrojRacuna + BrojDokumenta + ...).
+' Broj izvoda je jedinstven PO RACUNU firme, ne globalno - dve banke (ili dva
+' racuna iste banke) redovno imaju izvod istog broja. Bez racuna u kljucu je
+' druga transakcija istog broja/datuma/iznosa/partnera tiho odbacena kao
+' duplikat i nikad ne stigne u staging (tihi gubitak podatka).
 Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
                                        ByVal datumTransakcije As Variant, _
                                        ByVal uplata As Double, _
                                        ByVal isplata As Double, _
                                        ByVal partner As String, _
-                                       ByVal bankaReferenz As String) As Boolean
+                                       ByVal bankaReferenz As String, _
+                                       ByVal brojRacuna As String) As Boolean
     Const SRC As String = "IsDuplicateBankaImport"
 
     On Error GoTo EH
@@ -757,6 +859,7 @@ Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
     Dim colIsplata As Long
     Dim colPartner As Long
     Dim colRef As Long
+    Dim colRacun As Long
 
     data = GetTableData(TBL_BANKA_IMPORT)
 
@@ -778,25 +881,29 @@ Public Function IsDuplicateBankaImport(ByVal brojDokumenta As String, _
     colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
     colPartner = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
     colRef = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BANKA_REFERENZ, SRC)
+    colRacun = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
 
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBrojDok))) = Trim$(brojDokumenta) Then
+        ' Drugi racun = druga transakcija, bez obzira na broj izvoda i iznos.
+        If Trim$(CStr(NzBIM(data(i, colRacun), ""))) = Trim$(brojRacuna) Then
+            If Trim$(CStr(data(i, colBrojDok))) = Trim$(brojDokumenta) Then
 
-            If Len(Trim$(bankaReferenz)) > 0 Then
-                If Trim$(CStr(data(i, colRef))) = Trim$(bankaReferenz) Then
-                    IsDuplicateBankaImport = True
-                    Exit Function
+                If Len(Trim$(bankaReferenz)) > 0 Then
+                    If Trim$(CStr(data(i, colRef))) = Trim$(bankaReferenz) Then
+                        IsDuplicateBankaImport = True
+                        Exit Function
+                    End If
+                Else
+                    If SameBimDatum(data(i, colDatumTx), datumTransakcije) _
+                       And CDbl(NzBIM(data(i, colUplata), 0#)) = uplata _
+                       And CDbl(NzBIM(data(i, colIsplata), 0#)) = isplata _
+                       And Trim$(CStr(data(i, colPartner))) = Trim$(partner) Then
+                        IsDuplicateBankaImport = True
+                        Exit Function
+                    End If
                 End If
-            Else
-                If Trim$(CStr(data(i, colDatumTx))) = Trim$(CStr(datumTransakcije)) _
-                   And CDbl(NzBIM(data(i, colUplata), 0#)) = uplata _
-                   And CDbl(NzBIM(data(i, colIsplata), 0#)) = isplata _
-                   And Trim$(CStr(data(i, colPartner))) = Trim$(partner) Then
-                    IsDuplicateBankaImport = True
-                    Exit Function
-                End If
+
             End If
-
         End If
     Next i
 
@@ -820,6 +927,78 @@ EH:
 End Function
 
 'HELPERS
+
+' Vrednost datuma za staging: UVEK `Date` ili greska. Staging je izvor istine za
+' datum transakcije, pa javni writer ne sme da propusti tekst ("nije datum") niti
+' datum van poslovnog opsega samo zato sto ga je neko pozvao mimo parsera --
+' fail-open bi vratio tacno onu klasu problema koju AUD-007 zatvara.
+' `TryParseBankaDateDMY` ide PRE `IsDate` iz istog razloga kao u modParse.
+Private Function RequireBimDatum(ByVal v As Variant, _
+                                 ByVal poljeNaziv As String, _
+                                 ByVal rowIndex As Long, _
+                                 ByVal sourceName As String) As Date
+    Dim d As Date
+
+    If Not TryBimDatum(v, d) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 7, sourceName, _
+                  poljeNaziv & " nije validan datum: '" & CStr(NzBIM(v, "")) & _
+                  "'. Row=" & CStr(rowIndex)
+    End If
+
+    If Not IsPoslovnaGodina(d) Then
+        Err.Raise ERR_BIM_SAVE_BASE + 8, sourceName, _
+                  poljeNaziv & " je van poslovnog opsega godina: " & _
+                  Format$(d, "yyyy-mm-dd") & ". Row=" & CStr(rowIndex)
+    End If
+
+    RequireBimDatum = d
+End Function
+
+' Poredjenje datuma za dedupe: staging je od v2.38.0 typed Date, a zatecen
+' (legacy) staging je String. Zato se obe strane svode na Date kad je moguce, pa
+' se porede po danu; tek ako to ne uspe, pada se na poredjenje teksta. Bez ovoga
+' bi ponovni uvoz starog izvoda promasio duplikat (Date vs "01.02.2026").
+Private Function SameBimDatum(ByVal a As Variant, ByVal b As Variant) As Boolean
+    Dim da As Date
+    Dim db As Date
+    Dim okA As Boolean
+    Dim okB As Boolean
+
+    okA = TryBimDatum(a, da)
+    okB = TryBimDatum(b, db)
+
+    If okA And okB Then
+        SameBimDatum = (Int(CDbl(da)) = Int(CDbl(db)))
+        Exit Function
+    End If
+
+    SameBimDatum = (Trim$(CStr(NzBIM(a, ""))) = Trim$(CStr(NzBIM(b, ""))))
+End Function
+
+Private Function TryBimDatum(ByVal v As Variant, ByRef result As Date) As Boolean
+    On Error GoTo EH
+
+    If VarType(v) = vbDate Then
+        result = CDate(v)
+        TryBimDatum = True
+        Exit Function
+    End If
+
+    If TryParseBankaDateDMY(CStr(NzBIM(v, "")), result) Then
+        TryBimDatum = True
+        Exit Function
+    End If
+
+    If IsDate(v) Then
+        result = CDate(v)
+        TryBimDatum = True
+    End If
+
+    Exit Function
+
+EH:
+    TryBimDatum = False
+End Function
 
 Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
                                           ByVal errSource As String, _
@@ -860,6 +1039,7 @@ Private Function ClassifyBankaImportError(ByVal errNumber As Long, _
        InStr(1, s, "PARSER", vbTextCompare) > 0 Or _
        InStr(1, s, "BROJ IZVODA", vbTextCompare) > 0 Or _
        InStr(1, s, "DATUM IZVODA", vbTextCompare) > 0 Or _
+       InStr(1, s, "DATUM TRANSAKCIJE", vbTextCompare) > 0 Or _
        InStr(1, s, "BROJ RA" & ChrW(268) & "UNA", vbTextCompare) > 0 Then
         ClassifyBankaImportError = BIM_STATUS_PARSE_ERROR
         Exit Function
@@ -1256,8 +1436,21 @@ Public Function PullBankPdfsFromDriveProduction() As Long
     Exit Function
 
 EH:
+    ' Isti AUD-054 obrazac kao u ImportBankaInbox_WithDrivePull (koji ovu funkciju
+    ' zove): uzrok se hvata PRE `LogErr`, inace pozivalac dobija resetovan `Err`.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _

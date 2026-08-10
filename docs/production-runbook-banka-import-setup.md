@@ -28,7 +28,7 @@ Lokalni Inbox  (npr. C:\...\OtkupAPP\Bank_Izvodi\Inbox)
   │  ImportBankaInbox_TX  ->  ExtractTextFromPdf (pdftotext)  ->  ParseBankaIzvodForImport (Komercijalna)
   ▼
 tblBankaImport  (staging)
-  │  frmBankaImport: auto-map na otvaranje (poziv/racun) + rucno
+  │  frmBankaImport: dugme "Mapiraj jake kljuceve (N)" (poziv/racun) + rucno
   ▼
 tblNovac  (finansijska knjiga)
 ```
@@ -209,17 +209,20 @@ Bez ovoga import radi, ali auto-map slabo hvata (sve ide ručno).
 2. Alternativa iz Immediate: `ImportBankaInbox_TX` (bez pull-a, čita lokalni Inbox) ili `ImportOnePdfIntoBankaImport "<putanja>"` (jedan fajl, dijagnostika).
 3. Backfill (≫50 fajlova): `BANKA_DRIVE_MAX_FILES` diže granicu; ponavljaj uvoz dok `01_Bank` ne ostane prazan.
 
-> Uvoz je „sve ili ništa" po batch-u: jedan PDF koji ne prođe (sken, druga banka, saldo-integrity) rollback-uje ceo batch. Izoluj krivca sa `ImportOnePdfIntoBankaImport` ili `Diag_DumpPdfTextAroundStanje`.
+> Uvoz je „sve ili ništa" po batch-u: jedan PDF koji ne prođe (sken, druga banka, saldo-integrity, **nevalidan datum**) rollback-uje ceo batch. Izoluj krivca sa `ImportOnePdfIntoBankaImport` ili `Diag_DumpPdfTextAroundStanje`.
+
+> **Od v2.38.0 (RF-09) — kapija datuma:** pre saldo-integriteta se proverava da su datum izvoda i datum **svake** transakcije stvarni datumi. Nemoguć datum (`30.02.`, dan 32, mesec 13) ranije je prolazio **pomeren** u sledeći mesec (`DateSerial` ga ne odbija nego prelije); sada uvoz tog PDF-a staje sa porukom `PARSER DATUM TRANSAKCIJE nije validan datum: '<vrednost>' (izvod <broj>, transakcija <N>)`, fajl ide u `Error` folder. Ako je vrednost očito posledica lošeg parsiranja (spojene kolone, sken), to je posao za parser — vidi `docs/development-banka-parser.md`.
 
 ---
 
 ## Faza 7 — Mapiranje (`tblBankaImport` → `tblNovac`)
 
 Otvori formu **Banka uvoz izvoda** (`frmBankaImport`):
-- **Na otvaranje** se automatski mapira sve po **jakim ključevima** (poziv na broj → otkup/faktura, tekući račun) — `AutoMapStrongKeysBankaImport_TX`. Dvosmislene ostaju otvorene (bez Error).
+- **Na otvaranje se NE knjiži ništa** (od v2.38.0 / RF-09; ranije je otvaranje forme pokretalo `AutoMapStrongKeysBankaImport_TX` i pravilo redove u `tblNovac`). Umesto toga se prebroji koliko bi stavki mapirali **jaki ključevi** (poziv na broj → otkup/faktura, tekući račun) i to piše u statusu i na dugmetu **„Mapiraj jake ključeve (N)"** — knjiženje ide na klik, uz potvrdu i prikaz rezultata. Dvosmislene ostaju otvorene (bez Error).
 - Kartica **„Mapirano X / Ukupno Y"** = stvarno stanje (`Obradjeno=Da` / sve staged).
 - Preostale: selektuj red → „Pregled automatskog mapiranja" pokaže predlog i izvor poklapanja (`tekuci racun` / `poziv na broj`) → **„Automatski mapiraj red"** ili **„Ručno mapiraj red"**; **„Skip"** za naknade/interne.
-- **„Automatski mapiraj sve"** = pun cascade (uključuje ime/PartnerMap heuristiku).
+- **„Automatski mapiraj sve"** = pun cascade (uključuje ime/PartnerMap heuristiku). Poruka na kraju kaže i koliko je redova ostalo **za ručno** (nejednoznačno, npr. blok sa 3+ otvorenih stavki) — takav red dobija status `Error` i batch **ne pada** zbog njega.
+- **Ručno mapiranje** (od v2.38.0): tip mora da odgovara smeru stavke (Kupac = uplata, Kooperant = isplata, OM = oba, ali čist smer) — pogrešan izbor se odbija uz poruku. Za tip **Kupac** se nudi lista otvorenih faktura tog kupca; **bez izabrane fakture uplata se knjiži kao avans** i program to traži da se potvrdi. Ispod automatskog pregleda stoji sekcija **„RUČNO"** koja pokazuje šta bi tačno uradilo dugme „Ručno mapiraj red" sa trenutnim izborom (uključujući „ODBIJENO" i razlog).
 
 Backfill saveti:
 - Prvi veliki prolaz pokreni iz Immediate na **kopiji**: `?AutoMapStrongKeysBankaImport_TX` (vrati broj mapiranih), proveri par knjiženja, pa na produkciji.
@@ -233,7 +236,7 @@ Verifikacija (par stavki): lanac `BIM → NOV → otkup/faktura/avans`, BIM trag
 
 Dnevna rutina:
 1. GAS trigger u 07h puni `01_Bank`.
-2. Operater otvori „Banka uvoz izvoda" → (pull+import) → auto-map na otvaranju → dovrši ručno/„Auto sve".
+2. Operater otvori „Banka uvoz izvoda" → (pull+import) → klik **„Mapiraj jake ključeve (N)"** → dovrši ručno/„Auto sve".
 3. Provera „Mapirano" brojača i otvorenih stavki.
 
 ---
@@ -257,6 +260,16 @@ Dnevna rutina:
 | Ceo batch rollback na jednom PDF-u | „sve ili ništa" import + jedan loš PDF | `ImportOnePdfIntoBankaImport "<fajl>"` da izoluješ; izbaci/reši taj PDF |
 | Preview „Auto match: Nije pronađen" iako račun postoji | forma nije reimportovana (star preview) ili račun/stanica nisu uneti | `ImportAllVBA` (sa formom); Faza 5 (unesi `TekuciRacun`/`StanicaID`) |
 | Isplata se ne knjiži, red ostaje otvoren | kooperant nema `StanicaID` | Dodeli stanicu kooperantu |
+| `PARSER DATUM ... nije validan datum` pri uvozu | nemoguć/prazan datum u izvodu ili loše parsiran red (od v2.38.0 se odbija umesto da uđe pomeren) | Otvori PDF i uporedi taj red; ako je PDF ispravan a parser spojio kolone → `docs/development-banka-parser.md` |
+| `Blok N ... ima K otvorene otkupne stavke` i red ostane `Error` | blok ima 3+ otvorenih stavki (recikliran broj bloka ili dupliran unos otkupa) — automatska raspodela se ne pogađa | **Ručni izlaz:** izaberi kooperanta i taj blok → pregled („RUČNO") pokaže predloženu podelu → „Ručno mapiraj red" → potvrdi podelu. Ako je uzrok dupliran unos otkupa, prvo ispravi/storniraj pa „Automatski mapiraj red" |
+| Pregled pokazuje drugi blok nego što je knjiženo | do v2.38.0: ručni izbor bloka je menjao i **automatski** pregled, a „Automatski mapiraj red" i dalje knjiži po pozivu na broj | Ispravljeno: automatski pregled prati poziv na broj iz izvoda, ručni pregled prati izbor u listi. Sekcija „RUČNO" u pregledu uvek pokazuje šta radi dugme „Ručno mapiraj red" |
+| `Smer ne odgovara: stavka izvoda je ...` | ručno izabran tip ne odgovara smeru stavke (npr. isplata pod „Kupac") | Izaberi tip po smeru: uplata → Kupac, isplata → Kooperant; OM prima oba |
+| Ručna uplata kupca završi kao avans | faktura nije izabrana u listi (prazan izbor = avans; program to sada traži da se potvrdi) | Izaberi fakturu iz liste otvorenih; ako je nema — faktura je već zatvorena ili nije za tog kupca |
+| `Lista faktura za ovog kupca nije ucitana` i mapiranje kupca staje | učitavanje faktura je palo (šema/čitanje), a prazna lista bi značila „avans" | Reši prijavljenu grešku (najčešće kolone `tblFakture`), pa ponovo izaberi kupca; ne knjiži avans dok se lista ne učita |
+| `jaki ključevi: GREŠKA (...)` u statusu, dugme ugašeno | prebrojavanje jakih ključeva je palo (šema/čitanje) | Poruka nosi razlog; ranije se ovo prikazivalo kao „0 spremno" |
+| `Faktura ... nema otvoren iznos (vec je placena)` | faktura je plaćena između prikaza liste i klika | Osveži pa izaberi drugu fakturu ili knjiži kao avans |
+| Uplata veća od duga: nastala **dva** reda u `tblNovac` | od v2.38.0 se višak preko otvorenog iznosa fakture knjiži kao avans kupca | Očekivano ponašanje (ranije je faktura ostajala preplaćena) |
+| Datum transakcije pomeren za dan/mesec (stariji uvozi) | zatečeni staging je datum čuvao kao **tekst**, pa se tumačio po podešavanjima mašine | Novi uvozi pišu pravi datum (`dd.mm.yyyy` se čita deterministički); stare redove proveri u `tblBankaImport` — dedupe ih i dalje prepoznaje |
 | Fajlovi u `01_Bank` su „online-only" | Drive for Desktop nije materijalizovao | Preporučeno „Available offline"; od v2.12.0 pull koristi FSO pa radi i online-only |
 | Pull puca **greška 75** „Path/File access" / **76** „Path not found" na Drive putanji | **Najčešće: `SetupNewPC` nije pokrenut na klijentu** → `tblLocalConfig` nosi dev putanje iz `.xlsm`-a, pa pull gađa nepostojeći folder. Ređe: nema **Editor**-a na `01_Bank`/`Downloaded`, ili STAR build sa legacy file-op-ama | **1)** `Alt+F8 → SetupNewPC` (resetuje putanje na ovu mašinu) — vidi Faza 4.5 kritičnu napomenu. **2)** Proveri **Editor** na `01_Bank`+`Downloaded`. **3)** Ažuriraj build (od **v2.12.0** su pull op-e na FSO, robusnije na shortcut putanji) |
 | GAS re-skida iste izvode / `Downloaded` se puni | filename-dedupe + VBA iseli fajl iz `01_Bank` | benigno (staging-dedupe čuva tačnost); opciono Gmail label/arhiviranje u GAS-u |

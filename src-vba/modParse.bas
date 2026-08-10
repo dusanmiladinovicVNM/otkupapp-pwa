@@ -2,6 +2,11 @@ Attribute VB_Name = "modParse"
 
 Option Explicit
 
+' Deklarisan opseg poslovnih godina za TryParseDateValue. Van njega datum nije
+' poslovni podatak nego artefakt parsiranja (npr. `CDate("12:30")` = 1899-12-30).
+Private Const MIN_POSLOVNA_GODINA As Long = 1900
+Private Const MAX_POSLOVNA_GODINA As Long = 2199
+
 Public Function TryParseDouble(ByVal rawText As String, ByRef result As Double) As Boolean
     On Error GoTo EH
 
@@ -39,39 +44,117 @@ EH:
     TryParseLong = False
 End Function
 
+' Da li je datum u deklarisanom poslovnom opsegu. Isti kriterijum koriste
+' `TryParseDateValue`/`TryParseBankaDateDMY` i staging writer banke, pa je opseg
+' definisan na jednom mestu.
+Public Function IsPoslovnaGodina(ByVal d As Date) As Boolean
+    IsPoslovnaGodina = (Year(d) >= MIN_POSLOVNA_GODINA And Year(d) <= MAX_POSLOVNA_GODINA)
+End Function
+
+' Deterministicko `d.m.yyyy` / `d/m/yyyy` parsiranje - BEZ `CDate`, pa bez uticaja
+' regionalnih podesavanja masine. To je format koji daju parseri izvoda banaka
+' (`dd.mm.yyyy`), gde je zamena dana i meseca tiho pogresno datiranje transakcije.
+' Vraca False za sve sto nije taj oblik (pozivalac sme da proba dalje).
+Public Function TryParseBankaDateDMY(ByVal rawText As String, ByRef result As Date) As Boolean
+    On Error GoTo EH
+
+    Dim s As String
+    Dim parts() As String
+    Dim d As Long
+    Dim m As Long
+    Dim Y As Long
+    Dim probe As Date
+
+    s = Trim$(rawText)
+    If s = "" Then Exit Function
+
+    parts = Split(Replace(s, "/", "."), ".")
+    If UBound(parts) <> 2 Then Exit Function
+
+    If Not (IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2))) Then Exit Function
+
+    d = CLng(parts(0))
+    m = CLng(parts(1))
+    Y = CLng(parts(2))
+
+    If Y < 100 Then Y = 2000 + Y
+
+    ' AUD-007: DateSerial NE puca na nemogucem datumu nego se "prelije"
+    ' (30.02.2026 -> 02.03.2026, 32.01. -> 01.02., mesec 13 -> januar sledece
+    ' godine). Zato: prvo opseg, pa round-trip - sto je uslo mora i da izadje.
+    If d < 1 Or d > 31 Then Exit Function
+    If m < 1 Or m > 12 Then Exit Function
+    If Y < MIN_POSLOVNA_GODINA Or Y > MAX_POSLOVNA_GODINA Then Exit Function
+
+    probe = DateSerial(Y, m, d)
+    If Day(probe) <> d Then Exit Function
+    If Month(probe) <> m Then Exit Function
+    If Year(probe) <> Y Then Exit Function
+
+    result = probe
+    TryParseBankaDateDMY = True
+
+    Exit Function
+
+EH:
+    TryParseBankaDateDMY = False
+End Function
+
+' Da li vrednost IMA OBLIK `d.m.y` / `d/m/y` (tri numericka dela). Ne govori da li
+' je datum validan -- samo da za njega vazi DMY ugovor, pa `CDate` fallback nije
+' dozvoljen (inace bi "01.13.2026" prosao kao 13. januar, zamenom dana i meseca).
+Private Function LooksLikeDmyTriple(ByVal rawText As String) As Boolean
+    Dim parts() As String
+    Dim s As String
+
+    s = Trim$(rawText)
+    If s = "" Then Exit Function
+
+    parts = Split(Replace(s, "/", "."), ".")
+    If UBound(parts) <> 2 Then Exit Function
+
+    LooksLikeDmyTriple = IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2))
+End Function
+
 Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date) As Boolean
     On Error GoTo EH
 
     Dim s As String
+    Dim probe As Date
+
     s = Trim$(rawText)
 
     If s = "" Then Exit Function
 
-    If IsDate(s) Then
-        result = CDate(s)
+    ' REDOSLED JE BITAN. `d.m.yyyy` (i `d/m/yyyy`) se parsira DETERMINISTICKI, PRE
+    ' `IsDate`/`CDate`. `CDate` je locale-zavisan: na masini sa MM/DD podesavanjem
+    ' "01.02.2026" postaje 2. januar umesto 1. februara -- a bas taj format daju
+    ' parseri izvoda banaka. Ranije je `IsDate` grana isla prva i tiho pomerala
+    ' datum transakcije. `IsDate` ostaje kao fallback za ostale zapise (npr.
+    ' "2026-02-01" ili vrednost koja je vec Date).
+    If TryParseBankaDateDMY(s, probe) Then
+        result = probe
         TryParseDateValue = True
         Exit Function
     End If
 
-    Dim parts() As String
-    parts = Split(Replace(s, "/", "."), ".")
+    ' Za d.m.y OBLIK je DMY parser KONACAN: ako je on odbio vrednost, `CDate` je
+    ' ne sme "spasavati". VBA na en-US masini prihvata "01.13.2026" tako sto
+    ' ZAMENI dan i mesec (13. januar), a "13.01.2026" bi isto tako svela na
+    ' januar -- tj. tacno locale preuredjivanje zbog kog ovaj parser i postoji.
+    ' Fallback ostaje samo za zapise DRUGOG oblika ("2026-02-01", vec-Date, ...).
+    If LooksLikeDmyTriple(s) Then Exit Function
 
-    If UBound(parts) = 2 Then
-        Dim d As Long
-        Dim m As Long
-        Dim Y As Long
+    If Not IsDate(s) Then Exit Function
 
-        If IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2)) Then
-            d = CLng(parts(0))
-            m = CLng(parts(1))
-            Y = CLng(parts(2))
+    probe = CDate(s)
 
-            If Y < 100 Then Y = 2000 + Y
+    ' Ista kapija opsega kao u DMY grani: `CDate("12:30")` daje 1899-12-30, a
+    ' 1899. nije poslovni datum -- ranije je ta grana pisala pravo u `result`.
+    If Year(probe) < MIN_POSLOVNA_GODINA Or Year(probe) > MAX_POSLOVNA_GODINA Then Exit Function
 
-            result = DateSerial(Y, m, d)
-            TryParseDateValue = True
-        End If
-    End If
+    result = probe
+    TryParseDateValue = True
 
     Exit Function
 

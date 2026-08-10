@@ -925,7 +925,7 @@ Private Sub T24_StornoIzvodaReimportOslobadjaPonovniUvoz()
     SeedNovacBim "SVT-NOV-2A", "SVT-IZV-2", "SVT-BIM-2A", "SVT-P2", 7000, 0
 
     ' Pre storna: ponovni uvoz iste stavke bi bio odbijen kao duplikat.
-    Chk IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", ""), _
+    Chk IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", "", "SVT-RAC-2"), _
         S & "pre storna dedupe prepoznaje duplikat"
 
     Dim info As String
@@ -933,7 +933,7 @@ Private Sub T24_StornoIzvodaReimportOslobadjaPonovniUvoz()
 
     ChkEq NovStornirano("SVT-NOV-2A"), "Da", S & "novac storniran"
     ChkEq BimStornirano("SVT-BIM-2A"), "Da", S & "staging ugasen"
-    Chk Not IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", ""), _
+    Chk Not IsDuplicateBankaImport("SVT-IZV-2", Date, 7000, 0, "SVT-PARTNER-2", "", "SVT-RAC-2"), _
         S & "posle storna ponovni uvoz istog PDF-a NIJE duplikat"
 End Sub
 
