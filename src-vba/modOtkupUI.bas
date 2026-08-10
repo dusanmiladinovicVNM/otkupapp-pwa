@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-69"
+Public Const OTKUI_BUILD   As String = "v6-ui-70"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -187,15 +187,15 @@ Private Const BP_NARROW   As Single = 860
 ' Sidebar
 Public Const IC_OTKUP    As Long = &HE70B&   ' QuickNote
 Public Const IC_BLOKOVI  As Long = &HE8A5&   ' Document
-Private Const IC_PALETE   As Long = &HE8F1&   ' Library
-Private Const IC_AGRO     As Long = &HE8BE&   ' Leaf
-Private Const IC_FAKT     As Long = &HE8C7&   ' PaymentCard
+Public Const IC_PALETE   As Long = &HE8F1&   ' Library
+Public Const IC_AGRO     As Long = &HE8BE&   ' Leaf
+Public Const IC_FAKT     As Long = &HE8C7&   ' PaymentCard
 Private Const IC_BANKA    As Long = &HE825&   ' Bank
-Private Const IC_UVOZ     As Long = &HEA90&   ' PDF - izvodi su PDF fajlovi
+Public Const IC_UVOZ     As Long = &HEA90&   ' PDF - izvodi su PDF fajlovi
 Public Const IC_NALOZI   As Long = &HE9D5&   ' CheckList - nalozi su spisak stavki
-Private Const IC_MARZA    As Long = &HE9D2&   ' AreaChart
+Public Const IC_MARZA    As Long = &HE9D2&   ' AreaChart
 Public Const IC_IZVEST   As Long = &HE9F9&   ' ReportDocument
-Private Const IC_SLEDLJ   As Long = &HE71B&   ' Link
+Public Const IC_SLEDLJ   As Long = &HE71B&   ' Link
 ' Akcije
 Private Const IC_SAVE     As Long = &HE74E&   ' Save
 Private Const IC_PRINT    As Long = &HE749&   ' Print
@@ -266,6 +266,9 @@ Private mSelRow As Long              ' izabran red mreze (1..mViewN), 0 = nijeda
 Private mHoverRow As Long            ' red pod pokazivacem (0-bazirano), -1 = nijedan
 Private mHoverHd As Long             ' zaglavlje kolone pod pokazivacem, -1 = nijedno
 Private mBuildMs As Long             ' koliko je trajala gradnja ekrana (ms)
+' nav tag ("nav01") -> kljuc ekrana iz registra. Sidebar se gradi iz
+' modUiScreens, pa se veza tag->ekran vise ne moze citati iz rednog broja.
+Private mNavKey As Object
 Private mPopFor As String            ' combo za koji je otvoren nas dropdown ("" = zatvoren)
 Private mColX(0 To MAX_COLS - 1) As Single   ' x i sirina kolona mreze; postavlja
 Private mColW(0 To MAX_COLS - 1) As Single   ' LayoutGrid, RenderGrid samo puni
@@ -384,52 +387,57 @@ End Sub
 '------------------------------------------------------------ NAV ----
 Private Sub BuildNav(frm As Object)
     Dim z As Object, Y As Single, i As Long, j As Long
-    Dim grp As Variant, itm As Variant, ico As Variant
+    Dim grp As Variant, r As Variant, gk As String, kljuc As String
+    Dim aktivan As Boolean, ico As Long, nm As String, cap As String
     Set z = NewZone(frm, "zNav", 0, HEADER_H, SIDEBAR_W, 400, C_SAND)
     WireZone z
     NewLbl z, "navEdge", "", SIDEBAR_W - 1, 0, 1, 400, 8, False, 0, C_BORDER
 
-    grp = Array(Poruka("OTKUI_NAVG_OPERACIJE"), Poruka("OTKUI_NAVG_FINANSIJE"), Poruka("OTKUI_NAVG_ANALITIKA"))
+    ' Sidebar vise nije nabrojan ovde nego dolazi iz modUiScreens. Ekran ciji
+    ' modul jos ne postoji (ili na koji korisnik nema pravo) crta se prigusen
+    ' i klik na njega kaze zasto - umesto dosadasnjeg "nije vezano" za sve.
+    Set mNavKey = CreateObject("Scripting.Dictionary")
+    modUiScreens.ScrResetCache
+    grp = modUiScreens.ScrGroups()
     Y = 12
-    For i = 0 To 2
-        NewLbl z, "navGrp" & i, UCase$(CStr(grp(i))), 13, Y, 130, TxtH(TS_NAVGRP), _
-               TS_NAVGRP, True, C_MUTED, -1
+    For i = 0 To UBound(grp)
+        gk = Split(CStr(grp(i)), "|")(0)
+        NewLbl z, "navGrp" & i, UCase$(Poruka(Split(CStr(grp(i)), "|")(1))), 13, Y, 130, _
+               TxtH(TS_NAVGRP), TS_NAVGRP, True, C_MUTED, -1
         Y = Y + 20
-        Select Case i
-            Case 0
-                ' Otkup i blokovi su spojeni: svi dokumenti su na ovom ekranu,
-                ' pa dve stavke koje vode na isto mesto nemaju svrhu.
-                itm = Array(Poruka("OTKUI_NAV_UNOS"), _
-                            Poruka("OTKUI_NAV_PALETE"), Poruka("OTKUI_NAV_AGRO"))
-                ico = Array(IC_OTKUP, IC_PALETE, IC_AGRO)
-            Case 1
-                ' Banka nije podnaslov nego se raspada na svoje dve radnje -
-                ' operater bira sta radi, ne u koji modul ulazi.
-                itm = Array(Poruka("OTKUI_NAV_FAKT"), Poruka("OTKUI_NAV_BANKA_UVOZ"), _
-                            Poruka("OTKUI_NAV_BANKA_NALOZI"), Poruka("OTKUI_NAV_MARZA"))
-                ico = Array(IC_FAKT, IC_UVOZ, IC_NALOZI, IC_MARZA)
-            Case 2
-                itm = Array(Poruka("OTKUI_NAV_IZVESTAJI"), Poruka("OTKUI_NAV_SLEDLJIVOST"))
-                ico = Array(IC_IZVEST, IC_SLEDLJ)
-        End Select
-        For j = 0 To UBound(itm)
-            Dim sel As Boolean: sel = (i = 0 And j = 0)
-            NewLbl z, "navBar" & i & j, "", 0, Y, 3, NAV_H, 8, False, 0, IIf(sel, C_GOLD, C_SAND)
-            If CLng(ico(j)) <> 0 Then
-                NewLbl z, "navIco" & i & j, ChrW(CLng(ico(j))), 12, CenterIco(Y, NAV_H, TS_NAVICO), _
-                       20, TxtH(TS_NAVICO), TS_NAVICO, False, IIf(sel, C_GOLD, C_ICON_OFF), -1, _
-                       fmTextAlignLeft, F_ICON
+        j = 0
+        For Each r In modUiScreens.ScrRows()
+            If modUiScreens.ScrField(CStr(r), SCR_GRUPA) = gk Then
+                kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+                cap = Poruka(modUiScreens.ScrField(CStr(r), SCR_NASLOV))
+                ico = CLng(Val(modUiScreens.ScrField(CStr(r), SCR_IKONICA)))
+                aktivan = modUiScreens.ScrAktivan(kljuc)
+                nm = "nav" & i & j
+                mNavKey(nm) = kljuc
+
+                Dim sel As Boolean: sel = (kljuc = "DOKUMENTI")
+                NewLbl z, "navBar" & i & j, "", 0, Y, 3, NAV_H, 8, False, 0, _
+                       IIf(sel, C_GOLD, C_SAND)
+                If ico <> 0 Then
+                    NewLbl z, "navIco" & i & j, ChrW(ico), 12, CenterIco(Y, NAV_H, TS_NAVICO), _
+                           20, TxtH(TS_NAVICO), TS_NAVICO, False, _
+                           IIf(sel, C_GOLD, IIf(aktivan, C_ICON_OFF, C_DISABLED_FG)), -1, _
+                           fmTextAlignLeft, F_ICON
+                End If
+                NewNavItem z, nm, cap, 0, Y, SIDEBAR_W - 1, NAV_H, sel
+                If Not aktivan And Not sel Then _
+                    z.Controls(nm & "X").ForeColor = C_DISABLED_FG
+                ' stavka menija je neprozirna i preko pune sirine - bez ZOrder-a
+                ' bi prekrila i zlatnu traku selekcije i MDL2 ikonicu
+                z.Controls("navBar" & i & j).ZOrder 0
+                On Error Resume Next
+                z.Controls("navIco" & i & j).ZOrder 0     ' moze da ne postoji (kod 0)
+                On Error GoTo 0
+                z.Controls(nm & "X").ZOrder 0
+                Y = Y + NAV_H
+                j = j + 1
             End If
-            NewNavItem z, "nav" & i & j, CStr(itm(j)), 0, Y, SIDEBAR_W - 1, NAV_H, sel
-            ' stavka menija je neprozirna i preko pune sirine - bez ZOrder-a
-            ' bi prekrila i zlatnu traku selekcije i MDL2 ikonicu
-            z.Controls("navBar" & i & j).ZOrder 0
-            On Error Resume Next
-            z.Controls("navIco" & i & j).ZOrder 0     ' moze da ne postoji (kod 0)
-            On Error GoTo 0
-            z.Controls("nav" & i & j & "X").ZOrder 0
-            Y = Y + NAV_H
-        Next j
+        Next r
         Y = Y + 12
     Next i
 
@@ -2177,8 +2185,16 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ApplyChipVisual frm.Controls("zGrid")
     ' "Bez zbirne" i "Nefakturisane" nemaju smisla nad zbirnom ni nad
     ' gotovinskim prometom (tblNovac nema BrojZbirne)
-    ShowChip frm, "chipBezZbirne", ModeHasZbirna(key)
-    ShowChip frm, "chipNefakt", ModeHasFaktura(key)
+    ShowChip frm, "chipBezZbirne", ModeHasZbirna(key) And key <> "F8"
+    ShowChip frm, "chipNefakt", ModeHasFaktura(key) And key <> "F8"
+    ' F8 prikazuje ISKLJUCIVO ponistene dokumente, pa cipovi nemaju sta da
+    ' suze: svaki osim "Otkazane" izbacivao je operatera iz storna, a naslov
+    ' je i dalje govorio "Stornirani dokumenti". Skrivaju se dok F8 ne dobije
+    ' svoj ekran u S3 (lista kroz vise tabela, ne samo tblOtpremnica).
+    ShowChip frm, "chipDanas", key <> "F8"
+    ShowChip frm, "chipNedelja", key <> "F8"
+    ShowChip frm, "chipSve", key <> "F8"
+    ShowChip frm, "chipOtkazane", key <> "F8"
     LayoutChips frm
     ' sirine kolona zavise od rezima - bez ovoga bi mreza zadrzala raspored
     ' prethodnog dokumenta (za vreme izgradnje raspored radi UserForm_Activate)
@@ -2305,7 +2321,18 @@ Public Sub SelectNav(frm As Object, ByVal nm As String)
             z.Controls("navIco" & idx).ForeColor = IIf(on_, C_GOLD, C_ICON_OFF)
         End If
     Next c
-    If nm <> "nav00" Then ShowToast Poruka("OTKUI_TODO_NEVEZANO"), False
+    ' Zasto ekran nije otvoren - konkretno, ne "nije vezano" za sve.
+    Dim kljuc As String
+    If Not mNavKey Is Nothing Then
+        If mNavKey.Exists(nm) Then kljuc = CStr(mNavKey(nm))
+    End If
+    If Len(kljuc) = 0 Then Exit Sub
+    If kljuc = "DOKUMENTI" Then Exit Sub
+    If Not modUiScreens.ScrPostoji(kljuc) Then
+        ShowToast Poruka("OTKUI_SCR_NEMA"), False
+    ElseIf Not modUiScreens.ScrDozvoljen(kljuc) Then
+        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+    End If
 End Sub
 
 Private Sub RefreshKpi(frm As Object)
@@ -3008,6 +3035,11 @@ Public Sub FillGrid(ByVal tblName As String, ByVal filter As String, ByVal q As 
 
     mFillStep = "GridCols"
     mk = modeKey(ActiveMode)
+    ' Druga brana za F8: filter se ne sme izgubiti ni ako neko dodje ovde
+    ' zaobilazeci cipove. MatchFilterFast svaki filter osim "otkazane"
+    ' ogranicava na Not isStorno - bez ovoga ekran "Stornirani dokumenti"
+    ' prikazuje upravo AKTIVNE dokumente.
+    If mk = "STORNO" Then filter = "otkazane"
     If Not IsArray(mCols) Then SetGridCols mk     ' rezerva; postavlja SelectModeCore
 
     ' indeksi izvornih kolona - JEDNOM po pozivu, ne po redu
@@ -4676,13 +4708,14 @@ Public Function OtkupUI_SelfCheck() As String
     On Error GoTo 0
     ver = "modOtkupUI " & OTKUI_BUILD & " + modUiKit " & UIKIT_BUILD & _
           " + modScrDokumenti " & SCRDOK_BUILD & _
+          " + modUiScreens " & UISCR_BUILD & _
           " + clsFlatBtn " & IIf(Len(cv) = 0, "(stara)", cv)
     If Len(cv) = 0 Then
         OtkupUI_SelfCheck = ver & vbCrLf & _
             "PAZNJA: clsFlatBtn je STARA verzija (uvoz nije zamenio klasu; " & _
             "trazi komponentu clsFlatBtn1 u Project Exploreru)"
     ElseIf cv <> OTKUI_BUILD Or UIKIT_BUILD <> OTKUI_BUILD _
-           Or SCRDOK_BUILD <> OTKUI_BUILD Then
+           Or SCRDOK_BUILD <> OTKUI_BUILD Or UISCR_BUILD <> OTKUI_BUILD Then
         OtkupUI_SelfCheck = ver & vbCrLf & "PAZNJA: verzije se ne poklapaju"
     Else
         OtkupUI_SelfCheck = ver & vbCrLf & OtkupUI_Stats()

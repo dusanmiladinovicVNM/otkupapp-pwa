@@ -25,7 +25,20 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-69"
+Public Const SCRDOK_BUILD As String = "v6-ui-70"
+
+'--------------------------------------------------------- UGOVOR EKRANA
+' Prva tacka ugovora iz modUiScreens. Sluzi dvostruko: opisuje ekran i
+' javlja registru da modul POSTOJI - registar ga trazi bas ovim pozivom
+' (Application.Run), jer rano vezivanje bi oborilo compile klijentu kome
+' neki ekranski modul nedostaje.
+'
+' Ostatak ugovora (Scr_Build / Scr_Layout / Scr_Grid / Scr_Event /
+' Scr_Save) dolazi u S3b, kad se stanje mreze i forme preseli ovamo iz
+' ljuske. Do tada ljuska crta ovaj ekran po starom.
+Public Function Scr_Meta() As String
+    Scr_Meta = "kljuc=DOKUMENTI|naslov=OTKUI_NAV_UNOS|oblik=forma+mreza|rezima=8"
+End Function
 
 ' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
 ' vec proverene i koriste se drugde u ovom modulu; nijedna nije pogodjena "po

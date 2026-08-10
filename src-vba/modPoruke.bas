@@ -562,6 +562,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MSG_UCITANO", "U" & ChrW(269) & "itano:"
     UpsertRow lo, existing, "OTKUI_MSG_POMOC", "F9 " & ChrW(8212) & " pomo" & ChrW(263) & " jo" & ChrW(353) & " nije vezana."
     UpsertRow lo, existing, "OTKUI_TODO_NEVEZANO", "Nije vezano na postoje" & ChrW(263) & "u rutinu."
+    UpsertRow lo, existing, "OTKUI_SCR_NEMA", "Ovaj ekran jo" & ChrW(353) & " nije preba" & ChrW(269) & "en na novi izgled."
+    UpsertRow lo, existing, "OTKUI_SCR_ZABRANJEN", "Nemate dozvolu za ovu oblast."
     InvalidateCache
 End Sub
 
