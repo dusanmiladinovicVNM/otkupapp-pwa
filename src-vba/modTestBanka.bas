@@ -146,6 +146,11 @@ Private Sub T01_NemoguciDatumOdbijen()
 
     Dim d As Date
 
+    ' PAZNJA (nalaz iz prvog pravog pokretanja suite-a): ove provere ne cuvaju samo
+    ' DMY parser nego i to da `CDate` fallback NE "spasava" d.m.y vrednost koju je
+    ' DMY parser odbio. Na en-US masini `IsDate("01.13.2026")` je True jer VBA
+    ' ZAMENI dan i mesec (13. januar) -- pa je bas ta provera pala dok fallback nije
+    ' zatvoren za d.m.y oblik.
     Chk Not TryParseDateValue("30.02.2026", d), S & "30.02.2026 odbijen (ne prelije se u mart)"
     Chk Not TryParseDateValue("31.04.2026", d), S & "31.04.2026 odbijen (april ima 30 dana)"
     Chk Not TryParseDateValue("32.01.2026", d), S & "dan 32 odbijen"

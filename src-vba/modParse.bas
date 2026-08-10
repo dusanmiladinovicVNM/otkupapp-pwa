@@ -100,6 +100,22 @@ EH:
     TryParseBankaDateDMY = False
 End Function
 
+' Da li vrednost IMA OBLIK `d.m.y` / `d/m/y` (tri numericka dela). Ne govori da li
+' je datum validan -- samo da za njega vazi DMY ugovor, pa `CDate` fallback nije
+' dozvoljen (inace bi "01.13.2026" prosao kao 13. januar, zamenom dana i meseca).
+Private Function LooksLikeDmyTriple(ByVal rawText As String) As Boolean
+    Dim parts() As String
+    Dim s As String
+
+    s = Trim$(rawText)
+    If s = "" Then Exit Function
+
+    parts = Split(Replace(s, "/", "."), ".")
+    If UBound(parts) <> 2 Then Exit Function
+
+    LooksLikeDmyTriple = IsNumeric(parts(0)) And IsNumeric(parts(1)) And IsNumeric(parts(2))
+End Function
+
 Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date) As Boolean
     On Error GoTo EH
 
@@ -121,6 +137,13 @@ Public Function TryParseDateValue(ByVal rawText As String, ByRef result As Date)
         TryParseDateValue = True
         Exit Function
     End If
+
+    ' Za d.m.y OBLIK je DMY parser KONACAN: ako je on odbio vrednost, `CDate` je
+    ' ne sme "spasavati". VBA na en-US masini prihvata "01.13.2026" tako sto
+    ' ZAMENI dan i mesec (13. januar), a "13.01.2026" bi isto tako svela na
+    ' januar -- tj. tacno locale preuredjivanje zbog kog ovaj parser i postoji.
+    ' Fallback ostaje samo za zapise DRUGOG oblika ("2026-02-01", vec-Date, ...).
+    If LooksLikeDmyTriple(s) Then Exit Function
 
     If Not IsDate(s) Then Exit Function
 
