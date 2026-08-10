@@ -23,7 +23,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-72"
+Public Const SCRPAL_BUILD As String = "v6-ui-73"
 
 Private Const PAL_ROWS As Long = 18          ' koliko redova liste se pravi
 Private Const PAL_ROW_H As Single = 21
@@ -53,7 +53,7 @@ Public Sub Scr_Build(ByVal z As Object)
     ' tri brojke desno od naslova - isti materijal kao KPI trake, samo uze
     For i = 0 To 2
         modUiKit.NewLbl z, "palKL" & i, "", 0, 22, 120, 12, TS_MICRO, True, C_MUTED, -1
-        modUiKit.NewLbl z, "palKV" & i, ChrW(8212), 0, 36, 120, 20, TS_H2, True, C_FOREST, _
+        modUiKit.NewLbl z, "palKV" & i, ChrW(8212), 0, 36, 120, 20, TS_KPI, True, C_FOREST, _
                         -1, fmTextAlignLeft, F_NUM
     Next i
 
