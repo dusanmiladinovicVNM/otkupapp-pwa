@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-67"
+Public Const OTKUI_BUILD   As String = "v6-ui-68"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -4704,6 +4704,25 @@ Public Function OtkupUI_Stats() As String
     OtkupUI_Stats = "kontrola: " & n & "  |  vezanih sinkova: " & sinks & _
                     "  |  gradnja: " & mBuildMs & " ms"
 End Function
+
+' Raspodela po zonama. Bez ovoga se ne moze odluciti sta u S3 ostaje deljeno
+' (mreza, hrom) a sta svaki ekran nosi sam: prvo mora da se vidi ko trosi.
+' Ispis ide u Immediate, po jedna zona po redu.
+Public Sub OtkupUI_StatsZone()
+    Dim c As Object, n As Long, uk As Long
+    On Error Resume Next
+    If mFrm Is Nothing Then
+        Debug.Print "ekran nije izgradjen"
+        Exit Sub
+    End If
+    For Each c In mFrm.Controls
+        n = 1
+        If TypeName(c) = "Frame" Then n = n + CountCtls(c)
+        uk = uk + n
+        If n > 1 Then Debug.Print Right$("      " & n, 6) & "  " & c.name
+    Next c
+    Debug.Print Right$("      " & uk, 6) & "  = UKUPNO"
+End Sub
 
 Private Function CountCtls(ByVal parent As Object) As Long
     Dim c As Object, n As Long

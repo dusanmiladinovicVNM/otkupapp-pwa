@@ -87,7 +87,7 @@ End Property
 ' i dalje radi STARA klasa - tiho, bez ijedne poruke. OtkupUI_SelfCheck cita
 ' ovo i odmah kaze da li je klasa zaista zamenjena.
 Public Property Get Build() As String
-    Build = "v6-ui-67"
+    Build = "v6-ui-68"
 End Property
 
 '--------------------------------------------------------------- hover
