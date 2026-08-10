@@ -590,6 +590,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_OTP_CENA", "Cena"
     UpsertRow lo, existing, "OTKUI_OTP_AMB", "amb"
     UpsertRow lo, existing, "OTKUI_OTP_PO_OTP", "po otpremnici"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_BLOKOVI", "Blokovi otpremnice"
     InvalidateCache
 End Sub
 

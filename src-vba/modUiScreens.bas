@@ -32,7 +32,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-81"
+Public Const UISCR_BUILD As String = "v6-ui-82"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0

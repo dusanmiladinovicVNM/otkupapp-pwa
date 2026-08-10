@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-81"
+Public Const OTKUI_BUILD   As String = "v6-ui-82"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -593,6 +593,34 @@ Private Sub RefreshOtpTraka(frm As Object)
     z.Controls("otpML3").caption = UCase$(Poruka("OTKUI_OTP_CENA"))
     z.Controls("otpMV3").caption = FmtBroj(CDbl(Val(p(9))), 2)
     z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
+End Sub
+
+' Naslov liste i cipovi prate IZABRANU listu, ne samo rezim. U listi
+' otpremnica cipovi ("Danas", "Bez zbirne"...) nemaju sta da suze - ta lista
+' ih ne gleda - pa bi stajali kao mrtva dugmad sa nulama.
+Private Sub RefreshGridTitle(frm As Object)
+    Dim z As Object, akt As String, k As String, ch As Variant
+    On Error Resume Next
+    Set z = frm.Controls("zGrid")
+    akt = "SVI"
+    If mScreen = "DOKUMENTI" Then akt = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
+    Err.Clear
+    Select Case akt
+        Case "OTPREMNICE"
+            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_OTPREMNICA")
+        Case "BLOKOVI"
+            k = CStr(Application.Run("modScrDokumenti.Scr_OtpBroj"))
+            Err.Clear
+            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_BLOKOVI") & _
+                                             IIf(Len(k) > 0, " " & k, "")
+        Case Else
+            If mScreen = "DOKUMENTI" Then _
+                z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
+    End Select
+    For Each ch In ChipRow()
+        If akt <> "SVI" Then ShowChip frm, Split(CStr(ch), "|")(0), False
+    Next ch
+    LayoutChips frm
 End Sub
 
 ' Koji segment prekidaca je izabran - stanje drzi ekran.
@@ -1445,10 +1473,16 @@ Public Sub LayoutOtkup(frm As Object)
     ' visa od raspolozivog prostora i podnozje (Prikazano / Ukupno / strane)
     ' je ispadalo ispod donje ivice forme. Sada je minimum tacno ono sto zona
     ' zaista zahteva za tri reda.
+    ' Minimum se NE sme nametnuti preko raspolozivog prostora. Ranije je zona
+    ' u tesnom prozoru dobijala visinu za tri reda i podnozje (Prikazano /
+    ' Ukupno / strane) je ispadalo ispod donje ivice. Traka otpremnice je taj
+    ' slucaj napravila cestim: uzima 60pt koje je mreza do sada imala.
+    ' Pravilo je obrnuto: podnozje se uvek vidi, a broj redova pada koliko
+    ' treba - i do jednog.
     gridH = hTot - gridY - STATUS_H
-    If gridH < GRID_TOP + GRID_HEAD_H + GRID_FOOT_H + 3 * GRID_ROW_H + 6 Then
-        gridH = GRID_TOP + GRID_HEAD_H + GRID_FOOT_H + 3 * GRID_ROW_H + 6
-    End If
+    Dim gridMin As Single
+    gridMin = GRID_TOP + GRID_HEAD_H + GRID_FOOT_H + GRID_ROW_H + 6
+    If gridH < gridMin Then gridH = gridMin
     With frm.Controls("zGrid")
         .Left = mainX: .top = gridY: .width = ctrW: .Height = gridH
     End With
@@ -2305,6 +2339,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     frm.Controls("zGrid").Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & k)
     RefreshListSeg frm
     RefreshOtpTraka frm
+    RefreshGridTitle frm
     ' Ime tabele je dijagnostika, ne informacija za operatera - u produkciji se
     ' ne prikazuje (UI_DEBUG=DA u tblLocalConfig ili dev build).
     frm.Controls("zGrid").Controls("grdSrc").caption = "list: " & ModeTable(key)
@@ -2725,11 +2760,13 @@ Private Sub UiClickCore(ByVal tag As String)
     ' prekidac liste (F1) - ekran odlucuje sta znaci, ljuska samo osvezi
     If Left$(tag, 2) = "ls" And Len(tag) > 2 Then
         If modUiScreens.ScrEvent(mScreen, tag, "Click") Then
-            RefreshListSeg mFrm
             mSelRow = 0
             mSearch = ""
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
-            ReloadGrid
+            RefreshListSeg mFrm
+            ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
+            ' sakrio; postavlja ih SelectModeCore, pa ide preko njega
+            SelectModeCore mFrm, ActiveMode, True
             RefreshOtpTraka mFrm
             LayoutOtkup mFrm
         End If
@@ -2930,7 +2967,9 @@ Private Sub RowFromTag(ByVal tag As String)
     ' puni ponovo.
     If mSelRow > 0 Then
         If modUiScreens.ScrEvent(mScreen, "row:" & mSelRow, "Click") Then
+            mSelRow = 0
             RefreshListSeg mFrm
+            RefreshGridTitle mFrm
             ReloadGrid
             RefreshOtpTraka mFrm
             LayoutOtkup mFrm
