@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-77"
+Public Const OTKUI_BUILD   As String = "v6-ui-78"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2204,6 +2204,8 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ApplyChipVisual frm.Controls("zGrid")
     ' "Bez zbirne" i "Nefakturisane" nemaju smisla nad zbirnom ni nad
     ' gotovinskim prometom (tblNovac nema BrojZbirne)
+    ' povratak sa ugovornog ekrana - Filteri se vracaju samo ovde
+    BoxShow frm.Controls("zGrid"), "btnFilteri", True
     ShowChip frm, "chipBezZbirne", ModeHasZbirna(key) And key <> "F8"
     ShowChip frm, "chipNefakt", ModeHasFaktura(key) And key <> "F8"
     ' F8 prikazuje ISKLJUCIVO ponistene dokumente, pa cipovi nemaju sta da
@@ -3079,6 +3081,11 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     CloseFilterPanel
     mFilter = "sve"                  ' ugovorni ekran nema cipove
     mSearch = ""
+    ' Kolona sortiranja se NE prenosi izmedju ekrana: 9. kolona na Paletama i
+    ' 9. na otkupnom listu nisu isti podatak. Bez ovoga se posle povratka na
+    ' dokumenta strelica nasla na "Vrednost" umesto na "Datum".
+    mSortCol = 2
+    mSortAsc = False
     mSelRow = 0
     mHoverRow = -1
     mPage = 1
@@ -3152,6 +3159,10 @@ Private Sub RefreshTitleFor(frm As Object, ByVal kljuc As String)
     ' mreza: naslov liste iz istog opisa, dijagnostika i cipovi se sklanjaju
     frm.Controls("zGrid").Controls("grdTitle").caption = Poruka(MetaVal(meta, "lista"))
     frm.Controls("zGrid").Controls("grdSrc").Visible = False
+    ' Panel "Filteri" nudi vrste i partnere iz tabela dokumenata - na drugom
+    ' ekranu bi bio prazan ili pogresan. Dok ekran ne bude mogao da prijavi
+    ' svoje filtere, dugme se sklanja. Brza pretraga radi svuda.
+    BoxShow frm.Controls("zGrid"), "btnFilteri", False
     Dim ch As Variant
     For Each ch In ChipRow()
         ShowChip frm, Split(CStr(ch), "|")(0), False
@@ -3562,10 +3573,21 @@ Private Sub LoadGridFromScreen()
     If Not IsArray(d) Then Exit Sub
     If UBound(d) < 4 Then Exit Sub
     SetGridColsArr d(0)
-    mView = d(1)
     mViewN = CLng(d(2))
     mSumKg = CDbl(d(3))
     mSumVal = CDbl(d(4))
+    ' Sortiranje je do sada zivelo unutar FillGrid, pa je ovaj put isao mimo
+    ' njega: klik na zaglavlje je menjao mSortCol i ponovo citao redove, ali
+    ' ih niko nije prerasporedjivao. Zato ide ovde, nad onim sto ekran vrati.
+    ' Kopija u tipizirani niz je obavezna - SortedView prima a() As Variant,
+    ' a d(1) je Variant koji SADRZI niz.
+    Dim tmp() As Variant
+    tmp = d(1)
+    If mViewN > 0 Then
+        mView = SortedView(tmp, mViewN, mColN, mSortCol, mSortAsc)
+    Else
+        mView = tmp
+    End If
 End Sub
 
 Private Sub ReloadGrid()

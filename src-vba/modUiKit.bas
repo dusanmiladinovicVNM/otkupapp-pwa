@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-77"
+Public Const UIKIT_BUILD As String = "v6-ui-78"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -153,6 +153,9 @@ Public Sub BoxShow(parent As Object, ByVal nm As String, ByVal vis As Boolean)
     parent.Controls(nm).Visible = vis
     parent.Controls(nm & "B").Visible = vis
     parent.Controls(nm & "C").Visible = vis
+    ' i ikonica: BtnV je pravi kao ZASEBAN Label (jedan Label ne moze da drzi
+    ' dva fonta). Bez ovog reda sakriveno dugme ostavlja glif da lebdi.
+    parent.Controls(nm & "I").Visible = vis
 End Sub
 
 ' SHELL: ivica + ispuna. Time se dobija padding koji MSForms nema i
