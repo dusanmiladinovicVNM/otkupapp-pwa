@@ -1272,11 +1272,14 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    If Not gBankaSilentBatch Then
-        MsgBox "Gre" & ChrW(353) & "ka pri automatskom mapiranju svih bank stavki, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
-    End If
-
+    ' AUD-014 ugovor: "0 mapirano" i "batch NIJE izvrsen" ne smeju da izgledaju
+    ' isto. Vracanje 0 je pozivaocu davalo uspesan oblik rezultata posle punog
+    ' rollback-a (forma je odmah prikazivala "Automatski mapirano: 0"), pa se
+    ' greska propagira -- isti ugovor kao AutoMapStrongKeysBankaImport_TX.
     AutoMapAllBankaImport_TX = 0
+    manualRequiredCount = 0
+
+    Err.Raise errNum, "AutoMapAllBankaImport_TX", "Source=" & errSrc & " | " & errDesc
 End Function
 
 

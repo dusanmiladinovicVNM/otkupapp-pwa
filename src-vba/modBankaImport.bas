@@ -130,8 +130,24 @@ Public Sub ImportBankaInbox_WithDrivePull()
     Exit Sub
 
 EH:
+    ' AUD-054 na RF-09 putanji: `LogErr` interno radi `On Error Resume Next` /
+    ' `On Error GoTo 0`, sto RESETUJE `Err`. Citanje `Err.Number`/`Err.description`
+    ' POSLE njega je vracalo prazan/pogresan uzrok, pa je uvoz koji je uredno
+    ' rollback-ovan (`ImportBankaInbox_TX`) na vrhu lanca gubio ZASTO je pao.
+    ' Zato: hvatanje PRE logovanja, pa re-raise sa originalnim identitetom.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Sub
 
 Private Sub ImportBankaInboxToPendingMoves(ByRef successMoves As Collection, _
@@ -1420,8 +1436,21 @@ Public Function PullBankPdfsFromDriveProduction() As Long
     Exit Function
 
 EH:
+    ' Isti AUD-054 obrazac kao u ImportBankaInbox_WithDrivePull (koji ovu funkciju
+    ' zove): uzrok se hvata PRE `LogErr`, inace pozivalac dobija resetovan `Err`.
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+
+    On Error Resume Next
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    On Error GoTo 0
+
+    Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
 
 Private Sub BankaPullOnePdfFromDrive(ByVal sourcePdfPath As String, _

@@ -98,8 +98,13 @@ Private Sub UserForm_Activate()
     Exit Sub
     
 EH:
+    ' Opis se hvata PRE LogErr-a: LogErr ide kroz On Error Resume Next i resetuje
+    ' Err, pa bi poruka operateru ostala bez uzroka (AUD-054 obrazac).
+    Dim errDesc As String
+    errDesc = Err.description
+
     LogErr "frmBankaImport.UserForm_Activate"
-    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju forme: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju forme: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -597,6 +602,8 @@ Private Sub btnAutoJedan_Click()
 End Sub
 
 Private Sub btnAutoSve_Click()
+    On Error GoTo EH
+
     Dim n As Long
     Dim manualRequired As Long
     Dim msg As String
@@ -609,6 +616,22 @@ Private Sub btnAutoSve_Click()
     End If
 
     MsgBox msg, vbInformation, APP_NAME
+    LoadBankaRows
+    Exit Sub
+
+EH:
+    ' Batch koji padne se rollback-uje i sada PROPAGIRA gresku; bez ove grane bi
+    ' korisnik posle critical poruke dobio jos i "Automatski mapirano: 0", sto
+    ' izgleda kao uredno zavrsen batch bez pogodaka.
+    Dim errDesc As String
+    errDesc = Err.description
+
+    LogErr "frmBankaImport.btnAutoSve_Click"
+
+    MsgBox "Automatsko mapiranje NIJE izvrseno, promene su vracene: " & errDesc, _
+           vbCritical, APP_NAME
+
+    On Error Resume Next
     LoadBankaRows
 End Sub
 
@@ -710,14 +733,17 @@ Private Function ConfirmManyCandidatesSplit(ByVal bankaImportID As String, _
     On Error GoTo EH
 
     Dim kandidati As Variant
-    Dim kandErr As String
+    Dim manualRequiredText As String
 
     potvrdjeno = False
     ConfirmManyCandidatesSplit = True
 
     ' Bez prelaska granice: ako ovo prodje, blok je u granicama i nista se ne pita.
-    kandidati = SafeBlockCandidates(kooperantID, brojBloka, kandErr)
-    If kandErr = "" Then Exit Function
+    ' Prazan tekst = blok je U GRANICAMA (nema sta da se potvrdjuje). Bilo koja
+    ' DRUGA greska se iz SafeBlockCandidates propagira i hvata je EH ispod --
+    ' ne tumaci se kao "previse kandidata".
+    kandidati = SafeBlockCandidates(kooperantID, brojBloka, manualRequiredText)
+    If manualRequiredText = "" Then Exit Function
 
     ' Preko granice -> ucitaj PUNU listu i predlozi podelu.
     kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, True)
@@ -763,8 +789,12 @@ Private Function ConfirmManyCandidatesSplit(ByVal bankaImportID As String, _
     Exit Function
 
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
+
     LogErr "frmBankaImport.ConfirmManyCandidatesSplit"
-    MsgBox "Ne mogu da pripremim podelu po bloku: " & Err.description, vbCritical, APP_NAME
+
+    MsgBox "Ne mogu da pripremim podelu po bloku: " & errDesc, vbCritical, APP_NAME
     ConfirmManyCandidatesSplit = False
 End Function
 
@@ -854,14 +884,29 @@ End Sub
 
 'PREVIEW
 Private Sub UpdateAutoPreview()
+    On Error GoTo EH
+
     Dim bimID As String
-    
+
     lblPreview.caption = ""
-    
+
     If lstBanka.ListIndex < 0 Then Exit Sub
-    
+
     bimID = m_BimIDs(lstBanka.ListIndex)
     lblPreview.caption = BuildAutoPreviewText(bimID) & BuildManualPreviewText(bimID)
+    Exit Sub
+
+EH:
+    ' Preview sme da padne (npr. schema greska iz resolvera kandidata koja se
+    ' NAMERNO propagira umesto da se tumaci kao "previse kandidata"). Prikazi
+    ' razlog u panelu -- klik na listu ne sme da otvori VBA runtime dijalog.
+    Dim errDesc As String
+    errDesc = Err.description
+
+    LogErr "frmBankaImport.UpdateAutoPreview"
+
+    On Error Resume Next
+    lblPreview.caption = "Preview nije dostupan: " & errDesc
 End Sub
 
 ' FM-0024 #3: izvor za PRIKAZ mora biti isti kao izvor za KOMANDU. Preview je
@@ -991,7 +1036,7 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
             Dim kooperantID As String
             Dim blokNo As String
             Dim kandidati As Variant
-            Dim kandErr As String
+            Dim manualRequiredText As String
 
             kooperantID = SelectedPartnerID()
             blokNo = EffectiveBlockNo(bankaImportID)
@@ -1003,9 +1048,9 @@ Private Function BuildManualPreviewText(ByVal bankaImportID As String) As String
                 s = s & "Blok (poziv na broj): " & blokNo & vbCrLf
             End If
 
-            kandidati = SafeBlockCandidates(kooperantID, blokNo, kandErr)
+            kandidati = SafeBlockCandidates(kooperantID, blokNo, manualRequiredText)
 
-            If kandErr = "" Then
+            If manualRequiredText = "" Then
                 s = s & CandidatesPreviewText(kooperantID, blokNo)
             Else
                 ' Preko granice automatske raspodele: rucni put ovo MOZE da zavrsi
@@ -1202,21 +1247,40 @@ Private Function BuildIncomingPreview(ByVal bankaImportID As String, ByVal partn
     BuildIncomingPreview = "Smer: Uplata" & vbCrLf & "Auto match: Nije pronadjen"
 End Function
 
-' GetOtkupCandidatesForKooperantBlock od RF-09 moze da digne gresku (3+ otvorenih
-' stavki u bloku = rucno mapiranje). Preview to mora da PRIKAZE, ne da obori.
+' Kandidati bloka za PRIKAZ, sa jasno ogranicenim izuzetkom.
+'
+' SAMO `ERR_BMAP_MANUAL_REQUIRED` (3+ otvorenih stavki) se pretvara u tekst i
+' otvara "rucno uz potvrdu" tok -- to je jedina greska koja znaci "operater
+' odlucuje". Svaka druga (schema, citanje, obracun salda) se PROPAGIRA: ranije su
+' sve greske izgledale isto, pa je npr. schema problem vodio u tok koji nudi
+' potvrdu podele, kao da je rec o previse kandidata.
 Private Function SafeBlockCandidates(ByVal kooperantID As String, _
                                      ByVal blokNo As String, _
-                                     ByRef errText As String) As Variant
-    errText = ""
+                                     ByRef manualRequiredText As String) As Variant
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+
+    manualRequiredText = ""
 
     On Error Resume Next
     SafeBlockCandidates = GetOtkupCandidatesForKooperantBlock(kooperantID, blokNo)
-    If Err.Number <> 0 Then
-        errText = Err.description
-        SafeBlockCandidates = Empty
-        Err.Clear
-    End If
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    If errNum <> 0 Then Err.Clear
     On Error GoTo 0
+
+    If errNum = 0 Then Exit Function
+
+    SafeBlockCandidates = Empty
+
+    If errNum = ERR_BMAP_MANUAL_REQUIRED Then
+        manualRequiredText = errDesc
+        Exit Function
+    End If
+
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 ' Jedan tekst kandidata bloka za SVE preview grane (auto: jak kljuc / PartnerMap /
@@ -1224,14 +1288,14 @@ End Function
 Private Function CandidatesPreviewText(ByVal kooperantID As String, _
                                        ByVal blokNo As String) As String
     Dim kandidati As Variant
-    Dim kandErr As String
+    Dim manualRequiredText As String
     Dim s As String
     Dim i As Long
 
-    kandidati = SafeBlockCandidates(kooperantID, blokNo, kandErr)
+    kandidati = SafeBlockCandidates(kooperantID, blokNo, manualRequiredText)
 
-    If kandErr <> "" Then
-        CandidatesPreviewText = "Otkup kandidati: " & kandErr & vbCrLf & _
+    If manualRequiredText <> "" Then
+        CandidatesPreviewText = "Otkup kandidati: " & manualRequiredText & vbCrLf & _
                                 "Tip knjizenja: RUCNO (automatska raspodela odbijena)"
         Exit Function
     End If

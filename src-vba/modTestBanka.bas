@@ -26,6 +26,7 @@ Option Explicit
 '  T05 AUD-007  staging cuva TYPED datum, a javni writer odbija nevalidan
 '  T06 FM-0023  uplata preko otvorenog iznosa fakture se deli (faktura + avans)
 '  T07 FM-0024  istoimeni partneri se razlikuju po ID-u (prikaz i knjizenje)
+'  T08 AUD-014  batch koji padne propagira gresku (ne prijavljuje "0 mapirano")
 ' ============================================================
 
 Private mPass As Long
@@ -85,6 +86,7 @@ Public Sub RunBankaImportTestSuite()
     T05_StagingCuvaTypedDatum
     T06_UplataPrekoOtvorenogSeDeli
     T07_IstoimeniPartneriSeRazlikujuPoID
+    T08_PaliBatchNePrijavljujeUspeh
 
     tx.RollbackTx
     Set tx = Nothing
@@ -544,6 +546,53 @@ Private Sub T06_UplataPrekoOtvorenogSeDeli()
     ' otvoreno = iznos - aktivne uplate, pa je vec placena faktura 0.
     ChkEqD GetOtvorenoNaFakturi(P & "FAK-1"), 0, S & "GetOtvorenoNaFakturi = 0 za placenu fakturu"
     ChkEqD GetOtvorenoNaFakturi(P & "FAK-2"), 1200, S & "GetOtvorenoNaFakturi = 2000 - 800"
+End Sub
+
+' ============================================================
+' T08 - batch koji padne NE sme da izgleda kao "0 mapirano".
+'
+' Ranije je AutoMapAllBankaImport_TX posle rollback-a vracao 0 bez greske, pa je
+' forma odmah prikazivala "Automatski mapirano: 0" -- uredno zavrsen batch bez
+' pogodaka izgleda isto kao batch koji je ponisten. Greska se sada propagira.
+'
+' Pad se izaziva PODACIMA (bez test-hook-a u produkciji): stavka izvoda bez broja
+' dokumenta obara RequireIzvodBroj, sto NIJE ERR_BMAP_MANUAL_REQUIRED, pa batch
+' omotac tu gresku ne guta.
+' ============================================================
+Private Sub T08_PaliBatchNePrijavljujeUspeh()
+    Const S As String = "T08 pali batch: "
+
+    Dim mapped As Long
+    Dim manualRequired As Long
+    Dim errNum As Long
+
+    SeedStanica P & "OM-3", P & "Stanica 3"
+    SeedKooperant P & "K-3", "Test", "Batch", P & "OM-3"
+
+    SeedOtkup P & "OTK-G1", P & "K-3", P & "BLOK-G1", 100, 10, "Malina"   ' 1000
+    SeedOtkup P & "OTK-G2", P & "K-3", P & "BLOK-G2", 100, 20, "Malina"   ' 2000
+
+    ' Prvi red je ispravan i bio bi mapiran; drugi nema broj izvoda -> pad.
+    SeedBim P & "BIM-G1", P & "IZV-17", P & "RAC-1", P & "PARTNER-B", 0, 1000, P & "BLOK-G1", "", ""
+    SeedBim P & "BIM-G2", "", P & "RAC-1", P & "PARTNER-B", 0, 2000, P & "BLOK-G2", "", ""
+
+    SkipPostojeceOtvorene
+
+    gBankaSilentBatch = True
+    On Error Resume Next
+    mapped = AutoMapAllBankaImport_TX(manualRequired)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    gBankaSilentBatch = False
+
+    Chk errNum <> 0, S & "pali batch propagira gresku (ne vraca tiho 0)"
+    ChkEq mapped, 0, S & "rezultat je 0 (nista nije ostalo mapirano)"
+
+    ' Rollback mora da vrati i red koji je USPEO pre pada.
+    ChkEq BimObradjeno(P & "BIM-G1"), "", S & "uspeli red je vracen u otvoreno stanje"
+    ChkEq NovacZaBim(P & "BIM-G1"), 0, S & "uspeli red nema zaostao novac posle rollback-a"
+    ChkEq NovacZaBim(P & "BIM-G2"), 0, S & "pali red nije ostavio parcijalno knjizenje"
 End Sub
 
 ' ============================================================
