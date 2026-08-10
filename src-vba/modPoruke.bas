@@ -569,6 +569,12 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRPAL_OTVORENE", "Otvorene"
     UpsertRow lo, existing, "OTKUI_SCRPAL_GAJBICA", "Gajbica"
     UpsertRow lo, existing, "OTKUI_SCRPAL_FOOT", "Prikazano"
+    UpsertRow lo, existing, "OTKUI_SCRPAL_LISTA", "Palete"
+    UpsertRow lo, existing, "OTKUI_HDP_BROJ", "Broj"
+    UpsertRow lo, existing, "OTKUI_HDP_GODINA", "Godina"
+    UpsertRow lo, existing, "OTKUI_HDP_GAJBICA", "Gajbica"
+    UpsertRow lo, existing, "OTKUI_HDP_NETO", "Neto kg"
+    UpsertRow lo, existing, "OTKUI_HDP_BRUTO", "Bruto kg"
     InvalidateCache
 End Sub
 

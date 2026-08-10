@@ -17,7 +17,8 @@ Attribute VB_Name = "modUiScreens"
 '                                 postoji i da je ekran spreman
 '   Scr_Build(z)               -> izgradi kontrole u svoju zonu (jednom)
 '   Scr_Layout(z, w, h)        -> rasporedi; vraca zauzetu visinu
-'   Scr_Grid()                 -> deskriptor mreze (tabela, kolone, cipovi)
+'   Scr_Rows(filter, q)        -> Array(kolone, redovi, n, zbirKg, zbirVal)
+'                                 za DELJENU mrezu ljuske
 '   Scr_Event(tag, ev)         -> obradi klik; True ako je obradio
 '   Scr_Save()                 -> upisi; "" ako je proslo, inace greska
 '
@@ -30,7 +31,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-74"
+Public Const UISCR_BUILD As String = "v6-ui-76"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -183,6 +184,18 @@ Public Function ScrEvent(ByVal kljuc As String, ByVal tag As String, _
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) > 0 Then ScrEvent = CBool(Application.Run(m & ".Scr_Event", tag, ev))
+End Function
+
+' Redovi za deljenu mrezu. Vraca Array(kolone, redovi, n, zbirKg, zbirVal)
+' ili Empty ako ekran nema listu.
+' NE zove se ScrRows - to ime vec nosi spisak redova REGISTRA, a dve funkcije
+' istog imena u istom modulu su "Ambiguous name".
+Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
+                            ByVal q As String) As Variant
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) > 0 Then ScrGridData = Application.Run(m & ".Scr_Rows", filter, q)
 End Function
 
 Public Function ScrSave(ByVal kljuc As String) As String

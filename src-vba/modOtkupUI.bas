@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-74"
+Public Const OTKUI_BUILD   As String = "v6-ui-76"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -1265,7 +1265,7 @@ Public Sub LayoutOtkup(frm As Object)
     ' prostor desno od sidebara i sam se rasporedi. Statusna traka ostaje
     ' zajednicka, pa se postavlja i ovde.
     If mScreen <> "DOKUMENTI" Then
-        LayoutScreenZone frm, mainX, wTot, hTot
+        LayoutScreenZone frm, mainX, mainW, wTot, hTot
         With frm.Controls("zStatus")
             .Left = 0: .top = hTot - STATUS_H: .width = wTot: .Height = STATUS_H
             .Controls("stLnT").width = wTot
@@ -3016,8 +3016,16 @@ Private Sub ShowZones(frm As Object)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = True
     Next i
-    ' Zone ekrana dokumenata i zona ugovornog ekrana se iskljucuju.
-    nmv = Array("zKpi", "zTitle", "zCtx", "zForm", "zGrid", "zRight")
+    ' Naslovna traka i mreza su ZAJEDNICKE - nosi ih i ugovorni ekran. Da
+    ' nisu, svaki ekran bi izmislio svoj naslov i svoju listu, a lista je bas
+    ' ono sto se deli (strane, sortiranje, pretraga, izbor).
+    nmv = Array("zTitle", "zGrid")
+    For i = 0 To UBound(nmv)
+        On Error Resume Next
+        frm.Controls(CStr(nmv(i))).Visible = True
+    Next i
+    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
+    nmv = Array("zKpi", "zCtx", "zForm", "zRight")
     For i = 0 To UBound(nmv)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = dok
@@ -3069,24 +3077,98 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     mScreen = kljuc
     ClosePopup
     CloseFilterPanel
+    mFilter = "sve"                  ' ugovorni ekran nema cipove
+    mSearch = ""
+    mSelRow = 0
+    mHoverRow = -1
+    mPage = 1
     ShowZones frm
+    If kljuc = "DOKUMENTI" Then
+        SelectModeCore frm, ActiveMode, True
+    Else
+        RefreshTitleFor frm, kljuc
+        LayoutOtkup frm
+        ReloadGrid
+    End If
     LayoutOtkup frm
 End Sub
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
 ' pravougaonik i pita ga da se rasporedi - sta u njemu stoji ne zna.
-Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, _
+' Raspored ugovornog ekrana: zajednicka naslovna traka, pa zona ekrana
+' (visinu javlja sam ekran preko Scr_Layout), pa zajednicka mreza do dna.
+Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single, _
                              ByVal wTot As Single, ByVal hTot As Single)
-    Dim z As Object
+    Dim z As Object, h As Single, gy As Single
     On Error Resume Next
+    With frm.Controls("zTitle")
+        .Left = X: .top = HEADER_H: .width = w: .Height = TITLE_H
+        .Controls("titLnB").width = w
+        .Controls("titDatum").Left = w - PAD - 190
+        .Controls("titName").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
+        .Controls("titSub").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
+    End With
     Set z = frm.Controls("zScr_" & mScreen)
     If z Is Nothing Then Exit Sub
-    With z
-        .Left = X: .top = HEADER_H
-        .width = wTot - X: .Height = hTot - HEADER_H - STATUS_H
+    z.Left = X
+    z.top = HEADER_H + TITLE_H
+    z.width = w
+    z.Height = 10
+    h = modUiScreens.ScrLayout(mScreen, z, w, hTot - HEADER_H - TITLE_H - STATUS_H)
+    If h < 1 Then h = 1
+    z.Height = h
+    gy = HEADER_H + TITLE_H + h
+    With frm.Controls("zGrid")
+        .Left = X: .top = gy: .width = w
+        .Height = hTot - gy - STATUS_H
+        If .Height < GRID_TOP + GRID_HEAD_H + GRID_FOOT_H + 3 * GRID_ROW_H + 6 Then
+            .Height = GRID_TOP + GRID_HEAD_H + GRID_FOOT_H + 3 * GRID_ROW_H + 6
+        End If
     End With
-    modUiScreens.ScrLayout mScreen, z, z.width, z.Height
+    LayoutGrid frm.Controls("zGrid"), w, frm.Controls("zGrid").Height
 End Sub
+
+' Zona ugovornog ekrana, da ekranski modul moze da napuni svoje kontrole a da
+' ne pamti referencu koja preziveti rusenje forme ne bi.
+Public Function ScreenZone(ByVal kljuc As String) As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Function
+    Set ScreenZone = mFrm.Controls("zScr_" & kljuc)
+End Function
+
+' Naslovna traka za ugovorni ekran - iz Scr_Meta, ne iz rezima dokumenata.
+Private Sub RefreshTitleFor(frm As Object, ByVal kljuc As String)
+    Dim meta As String, z As Object, ico As Long
+    On Error Resume Next
+    Set z = frm.Controls("zTitle")
+    meta = modUiScreens.ScrMeta(kljuc)
+    z.Controls("titName").caption = Poruka(MetaVal(meta, "naslov"))
+    z.Controls("titSub").caption = Poruka(MetaVal(meta, "sub"))
+    ico = CLng(Val(modUiScreens.ScrField(modUiScreens.ScrRowByKey(kljuc), SCR_IKONICA)))
+    If ico <> 0 Then z.Controls("titIco").caption = ChrW(ico)
+    z.Controls("titBadgeB").Visible = False
+    z.Controls("titBadgeC").Visible = False
+    z.Controls("titDatum").caption = Format$(Now, "dd.mm.yyyy.")
+    ' mreza: naslov liste iz istog opisa, dijagnostika i cipovi se sklanjaju
+    frm.Controls("zGrid").Controls("grdTitle").caption = Poruka(MetaVal(meta, "lista"))
+    frm.Controls("zGrid").Controls("grdSrc").Visible = False
+    Dim ch As Variant
+    For Each ch In ChipRow()
+        ShowChip frm, Split(CStr(ch), "|")(0), False
+    Next ch
+    LayoutChips frm
+End Sub
+
+' Vrednost polja iz opisa oblika "kljuc=A|naslov=B|sub=C".
+Private Function MetaVal(ByVal meta As String, ByVal kljuc As String) As String
+    Dim p As Variant
+    For Each p In Split(meta, "|")
+        If Left$(CStr(p), Len(kljuc) + 1) = kljuc & "=" Then
+            MetaVal = Mid$(CStr(p), Len(kljuc) + 2)
+            Exit Function
+        End If
+    Next p
+End Function
 
 Public Sub EnsureGridLoaded()
     FillCombos mFrm
@@ -3460,6 +3542,24 @@ Private Function CompareKey(ByVal X As Variant, ByVal Y As Variant, ByVal asc As
     End If
     CompareKey = IIf(asc, r, -r)
 End Function
+
+' Redovi koje je dao ekran. Ugovor vraca niz:
+'   0 = kolone (isti oblik kao GridCols), 1 = redovi(1..n, 1..kolona),
+'   2 = n, 3 = zbir kg, 4 = zbir vrednosti
+' Ljuska odavde radi sve ostalo - sortiranje, strane, pretragu, izbor, crtanje.
+Private Sub LoadGridFromScreen()
+    Dim d As Variant
+    mViewN = 0: mSumKg = 0: mSumVal = 0
+    mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0
+    d = modUiScreens.ScrGridData(mScreen, mFilter, mSearch)
+    If Not IsArray(d) Then Exit Sub
+    If UBound(d) < 4 Then Exit Sub
+    SetGridColsArr d(0)
+    mView = d(1)
+    mViewN = CLng(d(2))
+    mSumKg = CDbl(d(3))
+    mSumVal = CDbl(d(4))
+End Sub
 
 Private Sub ReloadGrid()
     If mBusyGrid Then Exit Sub
