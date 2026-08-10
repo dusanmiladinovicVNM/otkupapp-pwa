@@ -1272,10 +1272,16 @@ EH:
 
     If Not tx Is Nothing Then tx.RollbackTx
 
+    ' OBAVEZNO pre `Err.Raise`: gore je aktiviran `On Error Resume Next` (za
+    ' best-effort logovanje i monitoring), a pod njim se raise TIHO PROGUTA i
+    ' funkcija se normalno vrati sa 0 -- tj. tacno ono ponasanje koje ovaj blok
+    ' treba da ukloni. Isti redosled ima AutoMapStrongKeysBankaImport_TX.
+    On Error GoTo 0
+
     ' AUD-014 ugovor: "0 mapirano" i "batch NIJE izvrsen" ne smeju da izgledaju
     ' isto. Vracanje 0 je pozivaocu davalo uspesan oblik rezultata posle punog
     ' rollback-a (forma je odmah prikazivala "Automatski mapirano: 0"), pa se
-    ' greska propagira -- isti ugovor kao AutoMapStrongKeysBankaImport_TX.
+    ' greska propagira.
     AutoMapAllBankaImport_TX = 0
     manualRequiredCount = 0
 

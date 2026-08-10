@@ -18,7 +18,15 @@ Ova skripta je jeftina kapija koja hvata povratak obrasca. Trazi u banka modulim
   (a) `Err.Raise Err.Number` / `Err.Raise Err.number, ...` bilo gde (uzrok se cita
       iz zive `Err` umesto iz uhvacene kopije);
   (b) citanje `Err.Number` / `Err.description` / `Err.Source` POSLE poziva `LogErr`
-      unutar istog EH bloka.
+      unutar istog EH bloka;
+  (c) `Err.Raise` dok je AKTIVAN `On Error Resume Next` -- takav raise se TIHO
+      PROGUTA i procedura se normalno vrati pozivaocu.
+
+(c) je dodato u review rundi 6: `AutoMapAllBankaImport_TX` je u EH bloku imao
+`On Error Resume Next` (za best-effort logovanje/monitoring), pa `Err.Raise` na
+kraju nije radio nista -- funkcija je vracala 0 i forma je opet prikazivala
+"Automatski mapirano: 0" nad ponistenim batch-om. Provera (a)+(b) to nije videla,
+pa je checker davao lazno zeleno na zivom blocker-u.
 
 CI ne pokrece Excel, pa se ovakva regresija inace vidi tek kad operater dobije
 gresku bez uzroka.
@@ -55,6 +63,9 @@ ERR_CLEAR = re.compile(r"^\s*Err\.Clear\b", re.IGNORECASE)
 # `On Error Resume Next` + citanje Err odmah posle poziva je legitiman obrazac
 # (npr. best-effort Drive pull), pa se resetuje "posle LogErr" stanje.
 ON_ERROR = re.compile(r"^\s*On\s+Error\b", re.IGNORECASE)
+ON_ERROR_RESUME = re.compile(r"^\s*On\s+Error\s+Resume\s+Next\b", re.IGNORECASE)
+ON_ERROR_GOTO = re.compile(r"^\s*On\s+Error\s+GoTo\s+(\S+)", re.IGNORECASE)
+ERR_RAISE = re.compile(r"\bErr\.Raise\b", re.IGNORECASE)
 
 
 def strip_comment(line: str) -> str:
@@ -72,6 +83,7 @@ def check_file(path: Path):
     problems = []
     proc = "(module level)"
     seen_logerr = False
+    resume_next = False   # da li je `On Error Resume Next` trenutno aktivan
 
     for lineno, raw in enumerate(path.read_text(encoding="latin-1").splitlines(), 1):
         code = strip_comment(raw)
@@ -82,9 +94,11 @@ def check_file(path: Path):
         if m:
             proc = m.group(1)
             seen_logerr = False
+            resume_next = False
         elif PROC_END.match(code):
             proc = "(module level)"
             seen_logerr = False
+            resume_next = False
 
         if RAISE_LIVE_ERR.search(code):
             problems.append(
@@ -92,11 +106,29 @@ def check_file(path: Path):
                                 "(uhvati errNum/errDesc/errSrc PRE logovanja)")
             )
 
+        # `Err.Raise` pod aktivnim Resume Next se tiho proguta -> pozivalac
+        # dobija "uspesan" povratak umesto greske.
+        if ERR_RAISE.search(code) and resume_next:
+            problems.append(
+                (lineno, proc, "Err.Raise pod aktivnim On Error Resume Next "
+                                "(raise se TIHO GUTA -- dodaj On Error GoTo 0 pre njega)")
+            )
+
+        if ON_ERROR_RESUME.match(code):
+            resume_next = True
+            seen_logerr = False
+            continue
+
+        if ON_ERROR_GOTO.match(code):
+            resume_next = False
+            seen_logerr = False
+            continue
+
         if LOGERR_CALL.match(code):
             seen_logerr = True
             continue
 
-        # `On Error ...` / `Err.Clear` zatvaraju prethodni EH kontekst.
+        # `On Error ...` (ostali oblici) / `Err.Clear` zatvaraju prethodni EH kontekst.
         if ON_ERROR.match(code) or ERR_CLEAR.match(code):
             seen_logerr = False
             continue
@@ -108,6 +140,25 @@ def check_file(path: Path):
             )
 
     return problems
+
+
+def scan_all_swallowed_raise():
+    """Informativno: `Err.Raise` pod Resume Next u CELOM src-vba.
+
+    Ovaj obrazac je uvek bug (raise se guta), za razliku od (a)/(b) koji su deo
+    sireg AUD-054 duga van RF-09 terena. Zato se skenira siroko, ali NE obara
+    exit kod -- kapija ostaje RF-09 teren.
+    """
+    found = []
+
+    for path in sorted(SRC.glob("*.bas")) + sorted(SRC.glob("*.frm")) + sorted(SRC.glob("*.cls")):
+        if path.name in FILES:
+            continue
+        for lineno, proc, msg in check_file(path):
+            if "TIHO GUTA" in msg:
+                found.append((path.name, lineno, proc))
+
+    return found
 
 
 def main() -> int:
@@ -127,6 +178,14 @@ def main() -> int:
         total += len(problems)
         for lineno, proc, msg in problems:
             print(f"FAIL  {name}:{lineno}  [{proc}]  {msg}")
+
+    # Sirok pregled samo za "progutan raise" (uvek bug, ne samo na RF-09 terenu).
+    wide = scan_all_swallowed_raise()
+    if wide:
+        print()
+        print("INFO  progutan Err.Raise van RF-09 terena (nije kapija ovog paketa):")
+        for name, lineno, proc in wide:
+            print(f"INFO    {name}:{lineno}  [{proc}]")
 
     print()
     if total:
