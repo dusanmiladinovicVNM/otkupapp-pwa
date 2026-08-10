@@ -23,7 +23,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-76"
+Public Const SCRPAL_BUILD As String = "v6-ui-77"
 
 Private Const PAL_ZONA_H As Single = 62      ' visina zone ekrana (tri brojke)
 

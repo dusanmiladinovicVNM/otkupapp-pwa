@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-76"
+Public Const OTKUI_BUILD   As String = "v6-ui-77"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -3472,7 +3472,14 @@ End Function
 ' FillGrid - a on se izvrsava POSLE oba - pa su zaglavlja i sirine kasnili jedan
 ' rezim unazad, a celije prethodnog rezima su ostajale vidljive.
 Private Sub SetGridCols(ByVal mk As String)
-    mCols = GridCols(mk)
+    SetGridColsArr GridCols(mk)
+End Sub
+
+' Isto, ali iz niza koji je dao EKRAN. Mreza od S4a ne pita ekran dokumenata
+' kako izgledaju kolone - pita AKTIVAN ekran.
+Private Sub SetGridColsArr(ByVal a As Variant)
+    If Not IsArray(a) Then Exit Sub
+    mCols = a
     mColN = UBound(mCols) + 1
     If mColN > MAX_COLS Then mColN = MAX_COLS
 End Sub
@@ -3568,7 +3575,14 @@ Private Sub ReloadGrid()
     On Error GoTo EH
     mToday = Int(Now)
     mMonthStart = CDbl(DateSerial(Year(Now), Month(Now), 1))
-    FillGrid ModeTable(ActiveMode), mFilter, mSearch
+    ' Ekran dokumenata jos puni mrezu po starom (FillGrid pise pravo u stanje
+    ' ljuske). Svaki drugi ekran je PREDAJE gotove redove kroz Scr_Rows - to je
+    ' put na koji i dokumenti prelaze u S4b, kad ostane jedna mreza i jedan put.
+    If mScreen = "DOKUMENTI" Then
+        FillGrid ModeTable(ActiveMode), mFilter, mSearch
+    Else
+        LoadGridFromScreen
+    End If
     mPage = 1
     RenderGrid
     mBusyGrid = False
