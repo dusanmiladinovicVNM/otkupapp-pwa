@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-78"
+Public Const OTKUI_BUILD   As String = "v6-ui-79"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -123,7 +123,7 @@ Public Const TS_CELL_LG As Single = 9       ' partner
 Private Const HEADER_H    As Single = 42
 Private Const SIDEBAR_W   As Single = 152
 Private Const SIDEBAR_MIN As Single = 36
-Private Const KPI_H       As Single = 64      ' tri reda: naslov, vrednost, kontekst
+Public Const KPI_H       As Single = 64      ' tri reda: naslov, vrednost, kontekst
 Private Const TITLE_H     As Single = 46
 Private Const CTX_H       As Single = 72      ' eyebrow red + natpis + polje
 Private Const CTX_LBL_Y   As Single = 24      ' natpis IZNAD polja
@@ -3102,29 +3102,31 @@ End Sub
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
 ' pravougaonik i pita ga da se rasporedi - sta u njemu stoji ne zna.
-' Raspored ugovornog ekrana: zajednicka naslovna traka, pa zona ekrana
-' (visinu javlja sam ekran preko Scr_Layout), pa zajednicka mreza do dna.
+' Raspored ugovornog ekrana. Redosled je isti kao na ekranu dokumenata i to
+' je namerno: zona ekrana stoji GORE, tamo gde je KPI traka, pa naslov, pa
+' mreza. Prvo je bilo obrnuto (naslov pa brojke) i odmah se videlo da dva
+' ekrana iste aplikacije imaju razlicit ritam.
 Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single, _
                              ByVal wTot As Single, ByVal hTot As Single)
     Dim z As Object, h As Single, gy As Single
     On Error Resume Next
-    With frm.Controls("zTitle")
-        .Left = X: .top = HEADER_H: .width = w: .Height = TITLE_H
-        .Controls("titLnB").width = w
-        .Controls("titDatum").Left = w - PAD - 190
-        .Controls("titName").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
-        .Controls("titSub").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
-    End With
     Set z = frm.Controls("zScr_" & mScreen)
     If z Is Nothing Then Exit Sub
     z.Left = X
-    z.top = HEADER_H + TITLE_H
+    z.top = HEADER_H
     z.width = w
     z.Height = 10
     h = modUiScreens.ScrLayout(mScreen, z, w, hTot - HEADER_H - TITLE_H - STATUS_H)
     If h < 1 Then h = 1
     z.Height = h
-    gy = HEADER_H + TITLE_H + h
+    With frm.Controls("zTitle")
+        .Left = X: .top = HEADER_H + h: .width = w: .Height = TITLE_H
+        .Controls("titLnB").width = w
+        .Controls("titDatum").Left = w - PAD - 190
+        .Controls("titName").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
+        .Controls("titSub").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
+    End With
+    gy = HEADER_H + h + TITLE_H
     With frm.Controls("zGrid")
         .Left = X: .top = gy: .width = w
         .Height = hTot - gy - STATUS_H

@@ -23,9 +23,12 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-78"
+Public Const SCRPAL_BUILD As String = "v6-ui-79"
 
-Private Const PAL_ZONA_H As Single = 62      ' visina zone ekrana (tri brojke)
+' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
+' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
+' na oba ekrana.
+Private Const PAL_ZONA_H As Single = KPI_H
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -37,8 +40,8 @@ Public Sub Scr_Build(ByVal z As Object)
     Dim i As Long
     ' tri brojke uz desnu ivicu - isti materijal kao KPI traka, samo uze
     For i = 0 To 2
-        modUiKit.NewLbl z, "palKL" & i, "", 0, 10, 120, 12, TS_MICRO, True, C_MUTED, -1
-        modUiKit.NewLbl z, "palKV" & i, ChrW(8212), 0, 24, 120, 20, TS_KPI, True, _
+        modUiKit.NewLbl z, "palKL" & i, "", 0, 14, 120, 12, TS_MICRO, True, C_MUTED, -1
+        modUiKit.NewLbl z, "palKV" & i, ChrW(8212), 0, 28, 120, 20, TS_KPI, True, _
                         C_FOREST, -1, fmTextAlignLeft, F_NUM
     Next i
     modUiKit.NewLbl z, "palLnB", "", 0, PAL_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
