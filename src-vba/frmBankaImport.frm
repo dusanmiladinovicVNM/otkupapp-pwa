@@ -691,21 +691,24 @@ Private Sub btnSacuvajRucno_Click()
                 Exit Sub
             End If
 
-            brojBloka = Trim$(nz(cmbOtkupBlok.value, ""))
+            ' ISTI blok koji pokazuje RUCNI preview: izbor iz liste ako postoji,
+            ' inace poziv na broj iz izvoda. Ranije je prazan combo isao u zasebnu
+            ' granu (`MapBankaImportAsKooperantBlock_TX`, bez potvrde podele), pa
+            ' je blok sa 3+ otvorenih stavki tu zavrsavao generickom greskom --
+            ' iako preview (koji vec racuna efektivni blok) nudi podelu. Kako je
+            ' lista blokova samo napunjena a NIJE auto-selektovana, prazan combo
+            ' je bio DEFAULT slucaj, tj. "3+ blok ima izlaz" je radilo samo ako
+            ' operater rucno klikne blok.
+            brojBloka = EffectiveManualBlockNo(bimID)
 
-            If brojBloka <> "" Then
-                ' Blok sa vise od MAX_BLOK_KANDIDATA otvorenih stavki automatski
-                ' put ODBIJA (ne pogadja raspodelu). Rucni put ga zavrsava, ali
-                ' tek kad operater vidi tacnu podelu i potvrdi je -- bez toga bi
-                ' red oznacen "za rucno" ostao trajno nezavrsiv.
-                Dim potvrdjenaPodela As Boolean
+            ' Blok sa vise od MAX_BLOK_KANDIDATA otvorenih stavki automatski put
+            ' ODBIJA (ne pogadja raspodelu). Rucni put ga zavrsava, ali tek kad
+            ' operater vidi tacnu podelu i potvrdi je.
+            Dim potvrdjenaPodela As Boolean
 
-                If Not ConfirmManyCandidatesSplit(bimID, kooperantID, brojBloka, potvrdjenaPodela) Then Exit Sub
+            If Not ConfirmManyCandidatesSplit(bimID, kooperantID, brojBloka, potvrdjenaPodela) Then Exit Sub
 
-                n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True, potvrdjenaPodela)
-            Else
-                n = MapBankaImportAsKooperantBlock_TX(bimID, kooperantID, True)
-            End If
+            n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True, potvrdjenaPodela)
 
             ReportManualResult (n > 0), "Kooperant"
 

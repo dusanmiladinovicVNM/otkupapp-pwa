@@ -28,6 +28,8 @@ Option Explicit
 '  T07 FM-0024  istoimeni partneri se razlikuju po ID-u (prikaz i knjizenje)
 '  T08 AUD-014  batch koji padne propagira gresku (ne prijavljuje "0 mapirano")
 '  T09 FM-0024  AUTO mapiranje ide po pozivu na broj (ne po rucnom izboru bloka)
+'  T10 AUD-025  vec placena faktura ne obara ceo "Auto sve" batch
+'  T11 AUD-025  rucni kooperant sa PRAZNIM izborom bloka ide kroz potvrdjenu podelu
 ' ============================================================
 
 Private mPass As Long
@@ -89,6 +91,8 @@ Public Sub RunBankaImportTestSuite()
     T07_IstoimeniPartneriSeRazlikujuPoID
     T08_PaliBatchNePrijavljujeUspeh
     T09_AutoBlokIdePoPozivuNaBroj
+    T10_PlacenaFakturaNeObaraBatch
+    T11_RucniKooperantBezIzboraBloka
 
     tx.RollbackTx
     Set tx = Nothing
@@ -642,6 +646,92 @@ Private Sub T09_AutoBlokIdePoPozivuNaBroj()
 End Sub
 
 ' ============================================================
+' T10 - vec placena faktura ne sme da obori CEO "Auto sve" batch.
+'
+' AUD-025 cilj je "jedan problematican red ne obara batch". Prva verzija je u
+' batch-u gutala samo ERR_BMAP_MANUAL_REQUIRED, pa je red koji se AUTO razresi na
+' vec placenu fakturu dizao ERR_BMAP_BASE + 53 i rollback-ovao sve -- ista rupa,
+' samo kroz drugu gresku. Obe znace "operater odlucuje" i obe se dizu PRE upisa.
+' ============================================================
+Private Sub T10_PlacenaFakturaNeObaraBatch()
+    Const S As String = "T10 placena faktura u batch-u: "
+
+    Dim mapped As Long
+    Dim manualRequired As Long
+    Dim errNum As Long
+
+    SeedKupac P & "KUP-3", P & "Kupac 3"
+    SeedFaktura P & "FAK-3", P & "KUP-3", P & "F-003", 500
+
+    ' Zdrav red: kooperant sa jednim otvorenim blokom (mapira se).
+    SeedStanica P & "OM-5", P & "Stanica 5"
+    SeedKooperant P & "K-5", "Test", "Batch2", P & "OM-5"
+    SeedOtkup P & "OTK-H1", P & "K-5", P & "BLOK-H1", 100, 10, "Malina"
+    SeedBim P & "BIM-H1", P & "IZV-19", P & "RAC-1", P & "PARTNER-H", 0, 1000, P & "BLOK-H1", "", ""
+
+    ' Problematican red: poziv na broj pogadja fakturu koja je VEC placena.
+    SeedBim P & "BIM-PLAC2", P & "IZV-19", P & "RAC-1", P & "PARTNER-H2", 300, 0, P & "F-003", "", ""
+    SeedNovacUplataFakture P & "NOV-PLAC", P & "KUP-3", P & "FAK-3", 500   ' faktura zatvorena
+
+    ChkEqD GetOtvorenoNaFakturi(P & "FAK-3"), 0, S & "faktura je stvarno placena (otvoreno = 0)"
+
+    SkipPostojeceOtvorene
+
+    gBankaSilentBatch = True
+    On Error Resume Next
+    mapped = AutoMapAllBankaImport_TX(manualRequired)
+    errNum = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    gBankaSilentBatch = False
+
+    ChkEq errNum, 0, S & "batch NIJE pao zbog placene fakture"
+    ChkEq BimObradjeno(P & "BIM-H1"), "Da", S & "zdrav red je mapiran (batch nije rollback-ovan)"
+    ChkEq BimObradjeno(P & "BIM-PLAC2"), "Error", S & "red sa placenom fakturom je oznacen za rucno"
+    Chk manualRequired >= 1, S & "batch prijavio 'za rucno' [" & CStr(manualRequired) & "]"
+    ChkEq NovacZaBim(P & "BIM-PLAC2"), 0, S & "problematican red nije parcijalno knjizen"
+    ChkEqD UplataZaFakturu(P & "FAK-3"), 500, S & "placena faktura nije preplacena"
+End Sub
+
+' ============================================================
+' T11 - rucni kooperant sa PRAZNIM izborom bloka.
+'
+' Lista blokova se puni ali se NE auto-selektuje, pa je prazan combo default
+' slucaj. Ranije je ta grana isla na auto-put (bez potvrde podele), pa je blok sa
+' 3+ otvorenih stavki tu zavrsavao generickom greskom -- "3+ blok ima izlaz" je
+' radilo samo ako operater rucno klikne blok. Sada obe grane koriste ISTI
+' efektivni blok (isti koji preview prikazuje) i isti potvrdjeni put.
+' ============================================================
+Private Sub T11_RucniKooperantBezIzboraBloka()
+    Const S As String = "T11 rucno bez izbora bloka: "
+
+    Dim n As Long
+
+    SeedStanica P & "OM-6", P & "Stanica 6"
+    SeedKooperant P & "K-6", "Test", "Prazno", P & "OM-6"
+
+    ' Blok sa TRI otvorene stavke; izvod pokazuje na njega preko poziva na broj.
+    SeedOtkup P & "OTK-Q1", P & "K-6", P & "BLOK-Q", 100, 10, "Malina"
+    SeedOtkup P & "OTK-Q2", P & "K-6", P & "BLOK-Q", 100, 12, "Kupina"
+    SeedOtkup P & "OTK-Q3", P & "K-6", P & "BLOK-Q", 100, 14, "Visnja"
+
+    SeedBim P & "BIM-Q", P & "IZV-20", P & "RAC-1", P & "PARTNER-Q", 0, 3000, P & "BLOK-Q", "", ""
+
+    ' Efektivni blok kad combo NIJE popunjen = poziv na broj iz izvoda; forma taj
+    ' isti blok salje u potvrdjeni rucni put.
+    ChkEq AutoBlockNoForBim(P & "BIM-Q"), P & "BLOK-Q", S & "efektivni blok = poziv na broj"
+
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-Q", P & "K-6", _
+                                                AutoBlockNoForBim(P & "BIM-Q"), False, True)
+    gBankaSilentBatch = False
+
+    Chk n >= 3, S & "potvrdjena podela knjizi sve stavke [n=" & CStr(n) & "]"
+    ChkEq BimObradjeno(P & "BIM-Q"), "Da", S & "stavka je zatvorena"
+    ChkEqD IsplataZaBim(P & "BIM-Q"), 3000, S & "ukupno knjizeno = iznos iz izvoda"
+End Sub
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
 
@@ -679,6 +769,15 @@ Private Sub SeedKupac(ByVal kupacID As String, ByVal naziv As String)
     BitAppend TBL_KUPCI, _
         Array("KupacID", "Naziv"), _
         Array(kupacID, naziv)
+End Sub
+
+' Novac red koji ZATVARA fakturu (koristi ga T10: auto put nadje placenu fakturu).
+Private Sub SeedNovacUplataFakture(ByVal novacID As String, ByVal kupacID As String, _
+                                   ByVal fakturaID As String, ByVal iznos As Double)
+    BitAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_DATUM, COL_NOV_PARTNER_ID, COL_NOV_ENTITET_TIP, _
+              COL_NOV_FAKTURA_ID, COL_NOV_TIP, COL_NOV_UPLATA), _
+        Array(novacID, Date, kupacID, "Kupac", fakturaID, NOV_KUPCI_UPLATA, iznos)
 End Sub
 
 Private Sub SeedFaktura(ByVal fakturaID As String, ByVal kupacID As String, _

@@ -198,6 +198,30 @@ Private Function AutoMapBankaImportRow(ByVal bankaImportID As String, _
     AutoMapBankaImportRow = ""
 End Function
 
+' Greske koje znace "ovaj RED mora rucno" -- batch ih guta po redu i nastavlja.
+'
+' Zajednicko im je dvoje: (1) odluku mora doneti operater, (2) dizu se PRE ijednog
+' upisa za taj red, pa progutan slucaj ne moze ostaviti pola knjizenja. Prvo je
+' ovde bio samo ERR_BMAP_MANUAL_REQUIRED, pa je red koji se auto-razresi na VEC
+' PLACENU fakturu (+53) obarao ceo "Auto sve" batch -- tacno ono "jedan red obara
+' batch" koje AUD-025 zatvara, samo kroz drugu gresku.
+'
+' NAMERNO NIJE ovde: ERR_BMAP_BASE + 54 (avansni deo uplate nije proknjizen) --
+' ta greska nastaje POSLE prvog SaveNovac-a, pa je gutanje ostavlja parcijalno
+' stanje; ona mora da obori batch i pokrene rollback.
+Private Function IsManualRequiredBankaError(ByVal errNum As Long) As Boolean
+    Select Case errNum
+        Case ERR_BMAP_MANUAL_REQUIRED       ' 3+ otvorenih stavki u bloku
+            IsManualRequiredBankaError = True
+        Case ERR_BMAP_BASE + 51             ' faktura pripada drugom kupcu
+            IsManualRequiredBankaError = True
+        Case ERR_BMAP_BASE + 52             ' faktura je stornirana
+            IsManualRequiredBankaError = True
+        Case ERR_BMAP_BASE + 53             ' faktura vec placena (nema otvoren iznos)
+            IsManualRequiredBankaError = True
+    End Select
+End Function
+
 ' AUD-025: batch-bezbedan omotac oko AutoMapBankaImportRow.
 '
 ' Guta SAMO ERR_BMAP_MANUAL_REQUIRED ("ovaj red mora rucno") - svaka druga greska
@@ -223,7 +247,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    If errNum <> ERR_BMAP_MANUAL_REQUIRED Then
+    If Not IsManualRequiredBankaError(errNum) Then
         Err.Raise errNum, errSrc, errDesc
     End If
 
@@ -1203,6 +1227,11 @@ Public Function AutoMapAllBankaImport_TX(Optional ByRef manualRequiredCount As L
     colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, _
                            "AutoMapAllBankaImport_TX")
     
+    ' Ugovor zastavice: batch NE sme da stane na blokirajucem dijalogu po redu
+    ' (npr. "Kooperant nema StanicaID"). Strong pass je to postavljao, "Auto sve"
+    ' nije -- pa je operater usred prolaza dobijao MsgBox po problematicnom redu.
+    gBankaSilentBatch = True
+
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_BANKA_IMPORT
@@ -1220,6 +1249,8 @@ Public Function AutoMapAllBankaImport_TX(Optional ByRef manualRequiredCount As L
             failedCount = failedCount + 1
         End If
     Next i
+
+    gBankaSilentBatch = False
 
     tx.CommitTx
 
@@ -1278,6 +1309,10 @@ EH:
         correlationId:="BANKA-AUTOMAP-ALL"
 
     If Not tx Is Nothing Then tx.RollbackTx
+
+    ' Zastavica se vraca PRE nego sto greska ode pozivaocu -- inace bi sledeci
+    ' (rucni) poziv ostao u "silent" rezimu i progutao svoju poruku operateru.
+    gBankaSilentBatch = False
 
     ' OBAVEZNO pre `Err.Raise`: gore je aktiviran `On Error Resume Next` (za
     ' best-effort logovanje i monitoring), a pod njim se raise TIHO PROGUTA i
@@ -1391,6 +1426,23 @@ End Function
 Private Function ResolveStrongKupac(ByVal bankaImportID As String, _
                                     ByRef fakturaID As String) As String
     Dim bim As Variant
+
+    fakturaID = ""
+
+    bim = GetBankaImportRowByID(bankaImportID)
+    If IsEmpty(bim) Then Exit Function
+
+    ResolveStrongKupac = ResolveStrongKupacByKeys( _
+        CStr(NzBIM(bim(1, 4), "")), CStr(NzBIM(bim(1, 10), "")), fakturaID)
+End Function
+
+' Ista odluka, ali iz VEC PROCITANIH kljuceva (konto + poziv na broj). Prebrojavanje
+' u formi ima ceo red u ruci, pa bi `GetBankaImportRowByID` po redu znacilo jos
+' jedno citanje CELE tblBankaImport za svaki otvoreni red (perf regres na velikom
+' izvodu, jer se hint racuna pri svakom osvezavanju liste).
+Private Function ResolveStrongKupacByKeys(ByVal konto As String, _
+                                          ByVal poziv As String, _
+                                          ByRef fakturaID As String) As String
     Dim kupacByKonto As Variant
     Dim fakByPoziv As Variant
     Dim idDoc As String
@@ -1398,11 +1450,8 @@ Private Function ResolveStrongKupac(ByVal bankaImportID As String, _
 
     fakturaID = ""
 
-    bim = GetBankaImportRowByID(bankaImportID)
-    If IsEmpty(bim) Then Exit Function
-
-    kupacByKonto = TryResolveKupacByKonto(CStr(NzBIM(bim(1, 4), "")))
-    fakByPoziv = TryResolveFakturaByPoziv(CStr(NzBIM(bim(1, 10), "")))
+    kupacByKonto = TryResolveKupacByKonto(konto)
+    fakByPoziv = TryResolveFakturaByPoziv(poziv)
 
     If Not IsEmpty(fakByPoziv) Then
         fakturaID = CStr(fakByPoziv(0))
@@ -1418,24 +1467,32 @@ Private Function ResolveStrongKupac(ByVal bankaImportID As String, _
     End If
 
     If idDoc <> "" Then
-        ResolveStrongKupac = idDoc
+        ResolveStrongKupacByKeys = idDoc
     Else
-        ResolveStrongKupac = idKonto
+        ResolveStrongKupacByKeys = idKonto
     End If
 End Function
 
 ' Vraca KooperantID po jakim kljucevima ili "" (ukljucujuci konflikt poziv<->racun).
 Private Function ResolveStrongKooperant(ByVal bankaImportID As String) As String
     Dim bim As Variant
-    Dim koopByKonto As Variant
-    Dim idDoc As String
-    Dim idKonto As String
 
     bim = GetBankaImportRowByID(bankaImportID)
     If IsEmpty(bim) Then Exit Function
 
-    idDoc = TryResolveKooperantByOtkupPoziv(CStr(NzBIM(bim(1, 10), "")))
-    koopByKonto = TryResolveKooperantByKonto(CStr(NzBIM(bim(1, 4), "")))
+    ResolveStrongKooperant = ResolveStrongKooperantByKeys( _
+        CStr(NzBIM(bim(1, 4), "")), CStr(NzBIM(bim(1, 10), "")))
+End Function
+
+' Vidi ResolveStrongKupacByKeys -- ista optimizacija za isplatnu granu.
+Private Function ResolveStrongKooperantByKeys(ByVal konto As String, _
+                                              ByVal poziv As String) As String
+    Dim koopByKonto As Variant
+    Dim idDoc As String
+    Dim idKonto As String
+
+    idDoc = TryResolveKooperantByOtkupPoziv(poziv)
+    koopByKonto = TryResolveKooperantByKonto(konto)
 
     If Not IsEmpty(koopByKonto) Then idKonto = CStr(koopByKonto(0))
 
@@ -1445,9 +1502,9 @@ Private Function ResolveStrongKooperant(ByVal bankaImportID As String) As String
     End If
 
     If idDoc <> "" Then
-        ResolveStrongKooperant = idDoc
+        ResolveStrongKooperantByKeys = idDoc
     Else
-        ResolveStrongKooperant = idKonto
+        ResolveStrongKooperantByKeys = idKonto
     End If
 End Function
 
@@ -1463,33 +1520,39 @@ Public Function CountStrongKeyReadyBankaImport() As Long
     On Error GoTo EH
 
     Dim data As Variant
-    Dim colID As Long
     Dim colUplata As Long
     Dim colIsplata As Long
+    Dim colKonto As Long
+    Dim colPoziv As Long
     Dim i As Long
     Dim uplata As Double
     Dim isplata As Double
-    Dim bimID As String
+    Dim konto As String
+    Dim poziv As String
     Dim fakturaID As String
 
     data = GetBankaImportOpen()
     If IsEmpty(data) Then Exit Function
 
-    colID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
     colUplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
     colIsplata = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+    colKonto = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO, SRC)
+    colPoziv = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ, SRC)
 
+    ' Kljucevi se citaju iz VEC ucitanog reda (`data`), pa se po redu ne ponavlja
+    ' citanje cele tblBankaImport -- hint se racuna pri svakom osvezavanju liste.
     For i = 1 To UBound(data, 1)
-        bimID = CStr(data(i, colID))
         uplata = CDbl(NzBIM(data(i, colUplata), 0#))
         isplata = CDbl(NzBIM(data(i, colIsplata), 0#))
+        konto = CStr(NzBIM(data(i, colKonto), ""))
+        poziv = CStr(NzBIM(data(i, colPoziv), ""))
 
         If uplata > 0 And isplata = 0 Then
-            If ResolveStrongKupac(bimID, fakturaID) <> "" Then
+            If ResolveStrongKupacByKeys(konto, poziv, fakturaID) <> "" Then
                 CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
             End If
         ElseIf isplata > 0 And uplata = 0 Then
-            If ResolveStrongKooperant(bimID) <> "" Then
+            If ResolveStrongKooperantByKeys(konto, poziv) <> "" Then
                 CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
             End If
         End If
