@@ -21,17 +21,18 @@ Attribute VB_Name = "modUiScreens"
 '                                 za DELJENU mrezu ljuske
 '   Scr_Event(tag, ev)         -> obradi klik; True ako je obradio
 '   Scr_Save()                 -> upisi; "" ako je proslo, inace greska
+'   Scr_ResetCache()           -> zaboravi izvedene mape (posle upisa)
 '
-' Ugovor danas ispunjavaju: modScrDokumenti (Scr_Meta; ljuska ga jos crta
-' po starom) i modScrPalete (Scr_Meta/Scr_Build/Scr_Layout/Scr_Event - prvi
-' ekran koji ljuska crta ISKLJUCIVO kroz ugovor). Ostali su u registru sa
-' modulom koji jos ne postoji - sidebar ih prikazuje prigusene.
+' Od S4b SVI ekrani daju svoje redove kroz Scr_Rows - i ekran dokumenata,
+' koji je do tada jedini punio mrezu po svom. Mreza je time neutralna.
+' Ostali ekrani su u registru sa modulom koji jos ne postoji - sidebar ih
+' prikazuje prigusene.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-79"
+Public Const UISCR_BUILD As String = "v6-ui-80"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0

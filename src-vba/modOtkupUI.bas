@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-79"
+Public Const OTKUI_BUILD   As String = "v6-ui-80"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -156,7 +156,7 @@ Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
 Public Const PAY_PLACENO As Long = 10
 Public Const PAY_DELIM   As Long = 11
 Public Const PAY_NEPLAC  As Long = 12
-Private Const PAY_NEFAKT  As Long = 13
+Public Const PAY_NEFAKT  As Long = 13
 Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
@@ -237,7 +237,6 @@ Public ActiveMode As String
 
 Private mFrm As Object
 Private mHovered As clsFlatBtn
-Private mCache As Object
 Private mView As Variant
 Private mViewN As Long
 Private mSumKg As Double
@@ -258,7 +257,6 @@ Private mLastPageSize As Long
 Private mCntOtkaz As Long
 Private mCntBezZb As Long
 Private mCntNefakt As Long
-Private mToday As Double
 Private mChromeRemoved As Boolean
 Private mCombosFilled As Boolean
 Private mPartMap As Object
@@ -282,7 +280,6 @@ Private mColN As Long                ' koliko ih je stvarno vidljivo
 ' Otpremnice, a btnUnosZbr ga je posle snimanja gurao u Prijemnicu. Ovde je to
 ' jedan sticky broj koji prati prelazak izmedju rezima.
 Private mAktivnaZbirna As String
-Private mFillStep As String          ' gde je FillGrid stigao (za prijavu greske)
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
 Private mSmerRev As Long             ' izabrani smer reversa (1..4)
 Private mPartnerFor As String        ' za koji rezim je partner lista vec napunjena
@@ -295,7 +292,6 @@ Private mPopMute As Boolean          ' programski upis u combo - ne otvaraj pane
 Private mFltOpen As Boolean          ' panel "Filteri" otvoren
 Private mFltVrsta As String          ' dodatni uslov: vrsta iz Osnovnih podataka
 Private mFltPart As String           ' dodatni uslov: partner iz Osnovnih podataka
-Private mMonthStart As Double        ' prvi dan tekuceg meseca (filter "mesec")
 Private mDirty As Boolean            ' ima neupisanih izmena u formi
 Private mLoading As Boolean          ' program puni polja - to NIJE izmena korisnika
 '=====================================================================
@@ -307,8 +303,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     Set mFrm = frm
     Set Btns = New Collection
     Set mHovered = Nothing
-    Set mCache = CreateObject("Scripting.Dictionary")
-    mCache.CompareMode = 1
+    modUiData.ResetCache
     Set mColSpec = CreateObject("Scripting.Dictionary")
     mColSpec.CompareMode = 1
 
@@ -3193,8 +3188,11 @@ End Sub
 
 Public Sub RefreshFromData()
     On Error Resume Next
-    Set mCache = CreateObject("Scripting.Dictionary")
-    mCache.CompareMode = 1
+    modUiData.ResetCache
+    ' i izvedene mape aktivnog ekrana - kasno vezano, ekran ne mora da ima
+    Application.Run modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), _
+                                          SCR_MODUL) & ".Scr_ResetCache"
+    Err.Clear
     Set mPartMap = Nothing
     Set mColSpec = CreateObject("Scripting.Dictionary")
     mColSpec.CompareMode = 1
@@ -3202,244 +3200,6 @@ Public Sub RefreshFromData()
     FillZbirneCombo mFrm      ' nove zbirne u picker
     mPartnerFor = ""          ' partner lista se ponovo puni
     ReloadGrid
-End Sub
-
-Public Sub FillGrid(ByVal tblName As String, ByVal filter As String, ByVal q As String)
-    Dim src As Variant, r As Long, n As Long, keep As Boolean, nRows As Long
-    Dim outA() As Variant, c As Long, mk As String
-    Dim ix() As Long, kind() As String
-    Dim iStorno As Long, iZbir As Long, iKg As Long, iDokTip As Long, iFakt As Long
-    Dim iTip As Long, iNap As Long, iEntTip As Long, iBrojCol As Long
-    Dim iKoopID As Long, iPartID As Long, iOtkID As Long
-    Dim mKoop As Object, mStan As Object, mKup As Object
-    Dim rev As Boolean, kanal As Boolean
-
-    On Error GoTo EH
-    mFillStep = "start"
-    mViewN = 0
-    mView = Empty
-    mSumKg = 0
-    mSumVal = 0
-    mCntOtkaz = 0
-    mCntBezZb = 0
-    mCntNefakt = 0
-    If Len(tblName) = 0 Then Exit Sub
-
-    src = CachedTable(tblName)
-    If Not IsArray(src) Then Exit Sub
-
-    mFillStep = "GridCols"
-    mk = modeKey(ActiveMode)
-    ' Druga brana za F8: filter se ne sme izgubiti ni ako neko dodje ovde
-    ' zaobilazeci cipove. MatchFilterFast svaki filter osim "otkazane"
-    ' ogranicava na Not isStorno - bez ovoga ekran "Stornirani dokumenti"
-    ' prikazuje upravo AKTIVNE dokumente.
-    If mk = "STORNO" Then filter = "otkazane"
-    If Not IsArray(mCols) Then SetGridCols mk     ' rezerva; postavlja SelectModeCore
-
-    ' indeksi izvornih kolona - JEDNOM po pozivu, ne po redu
-    ReDim ix(0 To mColN - 1)
-    ReDim kind(0 To mColN - 1)
-    iKg = -1
-    For c = 0 To mColN - 1
-        kind(c) = ColF(CStr(mCols(c)), 2)
-        ix(c) = ColIdx(tblName, ColF(CStr(mCols(c)), 1))
-        If kind(c) = "kg" Then iKg = c
-    Next c
-
-    mFillStep = "indeksi kolona"
-    iStorno = ColIdx(tblName, COL_STORNIRANO)
-    iZbir = ColIdx(tblName, ColBrojZbirne(mk))
-    If Len(ColFakturaID(mk)) > 0 Then iFakt = ColIdx(tblName, ColFakturaID(mk))
-
-    rev = (mk = "REVERSI")
-    If rev Then
-        iBrojCol = ColIdx(tblName, COL_AMB_DOK_ID)
-        iDokTip = ColIdx(tblName, COL_AMB_DOK_TIP)
-        iEntTip = ColIdx(tblName, COL_AMB_ENTITET_TIP)
-    End If
-    kanal = (mk = "AMB_ISPLATE" Or mk = "AMB_UPLATE")
-    If kanal Then
-        iTip = ColIdx(tblName, COL_NOV_TIP)
-        iNap = ColIdx(tblName, COL_NOV_NAPOMENA)
-        iEntTip = ColIdx(tblName, COL_NOV_ENTITET_TIP)
-        iKoopID = ColIdx(tblName, COL_NOV_KOOP_ID)
-        iPartID = ColIdx(tblName, COL_NOV_PARTNER_ID)
-        iOtkID = ColIdx(tblName, COL_NOV_OTKUP_ID)
-    End If
-
-    mFillStep = "partner mape"
-    If rev Or kanal Then
-        Set mKoop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-        Set mStan = PartnerMap(TBL_STANICE, "StanicaID", "Naziv", "")
-        Set mKup = PartnerMap(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV, "")
-    End If
-
-    ' Placanje: gotove bulk rutine iz modNovac, jedan prolaz po tabeli novca.
-    ' Za otkup je vezivanje direktno (tblNovac.OtkupID); za prijemnicu ide preko
-    ' fakture, pa se stanje cita NA NIVOU FAKTURE - vidi PayCode.
-    Dim pay As Boolean, dPay As Object, dFakIzn As Object
-    Dim iPayID As Long, iPayKol As Long, iPayCena As Long
-    mFillStep = "placanje"
-    pay = (mk = "OTKUP" Or mk = "PRIJEMNICA")
-    If pay Then
-        If mk = "OTKUP" Then
-            Set dPay = modNovac.BuildIsplataDictByOtkup()
-            iPayID = ColIdx(tblName, COL_OTK_ID)
-            iPayKol = ColIdx(tblName, COL_OTK_KOLICINA)
-            iPayCena = ColIdx(tblName, COL_OTK_CENA)
-        Else
-            Set dPay = modNovac.BuildUplataDictByFaktura()
-            Set dFakIzn = FakturaIznosMap()
-            iPayID = ColIdx(tblName, COL_PRJ_FAKTURA_ID)
-        End If
-        If dPay Is Nothing Then pay = False
-    End If
-
-    Dim pl As Variant, pmap As Object
-    pl = PartnerLookup(ActiveMode)
-    If Len(CStr(pl(0))) > 0 Then _
-        Set pmap = PartnerMap(CStr(pl(0)), CStr(pl(1)), CStr(pl(2)), CStr(pl(3)))
-
-    mFillStep = "petlja po redovima"
-    nRows = UBound(src, 1)
-    ReDim outA(1 To nRows, 1 To mColN)
-    n = 0
-
-    For r = 1 To nRows
-        Dim vDatK As Double, vZbir As String, hay As String
-        Dim isStorno As Boolean, bezZbirne As Boolean, bezFakture As Boolean
-        Dim vKgRow As Double, cell As Variant
-
-        ' reversi su podskup tblAmbalaza - ostalo iz te knjige ne ulazi
-        If rev Then
-            If Not RevRowVisible(CellS(src, r, iDokTip), CellS(src, r, iEntTip)) Then GoTo NextRow
-        End If
-
-        vDatK = 0
-        vKgRow = 0
-        hay = ""
-        If iKg >= 0 Then vKgRow = CellD(src, r, ix(iKg))
-
-        Dim pCode As Long, pRest As Double, duguje As Double, placeno As Double
-        Dim payKey As String
-        pCode = 0: pRest = 0
-        If pay Then
-            duguje = 0: placeno = 0
-            payKey = CellS(src, r, iPayID)
-            If mk = "OTKUP" Then
-                duguje = CellD(src, r, iPayKol) * CellD(src, r, iPayCena)
-                If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
-                pCode = PayCode(duguje, placeno)
-            ElseIf Len(payKey) = 0 Then
-                pCode = PAY_NEFAKT              ' prijemnica jos nije na fakturi
-            Else
-                If Not dFakIzn Is Nothing Then
-                    If dFakIzn.Exists(payKey) Then duguje = CDbl(dFakIzn(payKey))
-                End If
-                If dPay.Exists(payKey) Then placeno = CDbl(dPay(payKey))
-                pCode = PayCode(duguje, placeno)
-            End If
-            pRest = duguje - placeno
-            If pRest < 0 Then pRest = 0
-        End If
-
-        For c = 0 To mColN - 1
-            Select Case kind(c)
-                Case "txt"
-                    cell = CellS(src, r, ix(c))
-                    hay = hay & "|" & cell
-                Case "part"
-                    cell = CellS(src, r, ix(c))
-                    If rev Then
-                        cell = RevPartner(CellS(src, r, iEntTip), CStr(cell), mKoop, mStan, mKup)
-                    ElseIf kanal Then
-                        cell = NovacPartner(CellS(src, r, iEntTip), CellS(src, r, iKoopID), _
-                                            CellS(src, r, iPartID), CellS(src, r, iOtkID), _
-                                            CStr(cell), mKoop, mStan, mKup)
-                    ElseIf Not pmap Is Nothing Then
-                        If pmap.Exists(cell) Then cell = pmap(cell)
-                    End If
-                    hay = hay & "|" & cell
-                Case "date"
-                    vDatK = CellDate(src, r, ix(c))
-                    cell = vDatK
-                Case "kg", "num"
-                    cell = CellD(src, r, ix(c))
-                Case "sum0", "rsd"
-                    cell = CellD(src, r, ix(c))
-                    ' F5 i F6 dele tblNovac - red bez iznosa u SVOJOJ koloni
-                    ' pripada drugom smeru i odbacuje se ovde, ne u filteru
-                    If cell = 0 Then GoTo NextRow
-                Case "mult"
-                    cell = CellD(src, r, ix(c)) * vKgRow
-                Case "paypill"
-                    cell = pCode
-                Case "rest"
-                    ' ostatak ima smisla samo dok nije placeno do kraja
-                    If pCode = PAY_DELIM Or pCode = PAY_NEPLAC Then
-                        cell = pRest
-                    Else
-                        cell = 0
-                    End If
-                Case "osnov"
-                    cell = OsnovNaziv(CellS(src, r, iDokTip), CellS(src, r, iBrojCol))
-                    hay = hay & "|" & cell
-                Case "kanal"
-                    cell = KanalNaziv(KanalCode(CellS(src, r, iTip), CellS(src, r, iNap)))
-                    hay = hay & "|" & cell
-                Case Else
-                    cell = ""
-            End Select
-            outA(n + 1, c + 1) = cell
-        Next c
-
-        vZbir = CellS(src, r, iZbir)
-        isStorno = (iStorno > 0)
-        If isStorno Then isStorno = (UCase$(CellS(src, r, iStorno)) = "DA")
-        bezZbirne = (Len(vZbir) = 0)
-        hay = hay & "|" & vZbir
-
-        bezFakture = False
-        If iFakt > 0 Then bezFakture = (Len(CellS(src, r, iFakt)) = 0)
-
-        ' brojaci cipova - isti prolaz, bez zasebnog skena po cipu.
-        ' "Bez zbirne" i "Nefakturisane" su RAZLICITI uslovi i broje se odvojeno.
-        If isStorno Then
-            mCntOtkaz = mCntOtkaz + 1
-        Else
-            If bezZbirne Then mCntBezZb = mCntBezZb + 1
-            If bezFakture Then mCntNefakt = mCntNefakt + 1
-        End If
-
-        keep = MatchFilterFast(filter, vDatK, bezZbirne, isStorno, bezFakture)
-        If keep And Len(q) > 0 Then keep = (InStr(1, hay, q, vbTextCompare) > 0)
-        ' dodatni uslovi iz panela Filteri - isti "hay", bez drugog prolaza
-        If keep And Len(mFltVrsta) > 0 Then keep = (InStr(1, hay, mFltVrsta, vbTextCompare) > 0)
-        If keep And Len(mFltPart) > 0 Then keep = (InStr(1, hay, mFltPart, vbTextCompare) > 0)
-
-        If keep Then
-            n = n + 1
-            For c = 0 To mColN - 1
-                Select Case kind(c)
-                    Case "kg":                 mSumKg = mSumKg + CDbl(outA(n, c + 1))
-                    Case "rsd", "mult", "sum0": mSumVal = mSumVal + CDbl(outA(n, c + 1))
-                    Case "pill":               outA(n, c + 1) = StatusCode(isStorno, bezZbirne)
-                End Select
-            Next c
-        End If
-NextRow:
-    Next r
-
-    mFillStep = "sortiranje"
-    mViewN = n
-    If n = 0 Then Exit Sub
-    mView = SortedView(outA, n, mColN, mSortCol, mSortAsc)
-    mFillStep = "OK"
-    Exit Sub
-EH:
-    ' greska se NE guta - ReloadGrid je prijavljuje sa imenom koraka
-    Err.Raise Err.Number, "modOtkupUI.FillGrid[" & mFillStep & "]", Err.description
 End Sub
 
 ' Kljuc kesa je REZIM, ne tabela: F5 i F6 citaju istu tblNovac ali razlicite
@@ -3497,20 +3257,6 @@ Private Sub SetGridColsArr(ByVal a As Variant)
     If mColN > MAX_COLS Then mColN = MAX_COLS
 End Sub
 
-Private Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, _
-                                 ByVal bezZbirne As Boolean, ByVal isStorno As Boolean, _
-                                 ByVal bezFakture As Boolean) As Boolean
-    Select Case filter
-        Case "otkazane":  MatchFilterFast = isStorno
-        Case "bezzbirne": MatchFilterFast = (Not isStorno) And bezZbirne
-        Case "nefakt":    MatchFilterFast = (Not isStorno) And bezFakture
-        Case "danas":     MatchFilterFast = (Not isStorno) And (vDatK = mToday)
-        Case "nedelja":   MatchFilterFast = (Not isStorno) And (vDatK >= mToday - 6)
-        Case "mesec":     MatchFilterFast = (Not isStorno) And (vDatK >= mMonthStart)
-        Case Else:        MatchFilterFast = Not isStorno
-    End Select
-End Function
-
 Private Function SortedView(ByRef a() As Variant, ByVal n As Long, ByVal nc As Long, _
                             ByVal col As Long, ByVal asc As Boolean) As Variant
     Dim idx() As Long, outA() As Variant, i As Long, c As Long
@@ -3567,6 +3313,15 @@ End Function
 '   0 = kolone (isti oblik kao GridCols), 1 = redovi(1..n, 1..kolona),
 '   2 = n, 3 = zbir kg, 4 = zbir vrednosti
 ' Ljuska odavde radi sve ostalo - sortiranje, strane, pretragu, izbor, crtanje.
+' Suzavanje iz panela "Filteri" - ekran ga cita, ljuska ga drzi.
+Public Function FltVrsta() As String
+    FltVrsta = mFltVrsta
+End Function
+
+Public Function FltPart() As String
+    FltPart = mFltPart
+End Function
+
 Private Sub LoadGridFromScreen()
     Dim d As Variant
     mViewN = 0: mSumKg = 0: mSumVal = 0
@@ -3576,6 +3331,15 @@ Private Sub LoadGridFromScreen()
     If UBound(d) < 4 Then Exit Sub
     SetGridColsArr d(0)
     mViewN = CLng(d(2))
+    ' brojaci cipova - ekran ih vraca kao sesti clan; ekran koji nema cipove
+    ' ga ne salje, pa ostaju nule
+    If UBound(d) >= 5 Then
+        If IsArray(d(5)) Then
+            mCntOtkaz = CLng(d(5)(0))
+            mCntBezZb = CLng(d(5)(1))
+            mCntNefakt = CLng(d(5)(2))
+        End If
+    End If
     mSumKg = CDbl(d(3))
     mSumVal = CDbl(d(4))
     ' Sortiranje je do sada zivelo unutar FillGrid, pa je ovaj put isao mimo
@@ -3597,29 +3361,28 @@ Private Sub ReloadGrid()
     If mBuilding Then Exit Sub
     mBusyGrid = True
     On Error GoTo EH
-    mToday = Int(Now)
-    mMonthStart = CDbl(DateSerial(Year(Now), Month(Now), 1))
-    ' Ekran dokumenata jos puni mrezu po starom (FillGrid pise pravo u stanje
-    ' ljuske). Svaki drugi ekran je PREDAJE gotove redove kroz Scr_Rows - to je
-    ' put na koji i dokumenti prelaze u S4b, kad ostane jedna mreza i jedan put.
-    If mScreen = "DOKUMENTI" Then
-        FillGrid ModeTable(ActiveMode), mFilter, mSearch
-    Else
-        LoadGridFromScreen
-    End If
+    ' Od S4b SVI ekrani idu istim putem: mreza pita aktivan ekran za redove.
+    ' Ranije je ekran dokumenata imao svoj put (FillGrid je pisao pravo u
+    ' stanje ljuske), pa je mreza umela da sluzi samo njega.
+    LoadGridFromScreen
     mPage = 1
     RenderGrid
     mBusyGrid = False
     Exit Sub
 EH:
-    ' Ranije je ovde stajalo On Error GoTo Fin, pa je svaka greska u FillGrid-u
+    ' Ranije je ovde stajalo On Error GoTo Fin, pa je svaka greska u punjenju
     ' tiho preskakala RenderGrid - mreza bi ostala na starom rezimu i izgledalo
     ' bi da "klik ne radi". Sada se vidi gde je puklo.
+    '
+    ' Korak vise ne dolazi iz stanja ljuske: ekran ga upisuje u IZVOR greske
+    ' (Err.Raise ..., "modScrDokumenti.Scr_Rows[petlja po redovima]", ...), pa
+    ' se cita odatle. Tako svaki ekran prijavljuje svoje korake, a ljuska ne
+    ' mora da zna nijedan.
     mBusyGrid = False
-    Debug.Print "modOtkupUI.ReloadGrid PAO [" & ActiveMode & " / " & _
-                ModeTable(ActiveMode) & " / korak " & mFillStep & "]: " & _
-                Err.Number & " " & Err.description
-    ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & mFillStep & " (" & Err.Number & ")", True
+    Debug.Print "modOtkupUI.ReloadGrid PAO [" & mScreen & " / " & ActiveMode & _
+                " / " & Err.Source & "]: " & Err.Number & " " & Err.description
+    ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & Err.Source & _
+              " (" & Err.Number & ")", True
 End Sub
 
 ' Rezimi kojima je 4. kolona TEKST, a ne broj: gotovinski promet nosi kanal,
@@ -3644,56 +3407,6 @@ Private Function ModeHasValCol() As Boolean
     Next i
 End Function
 
-' Citljiv osnov reda. DOK_TIP_OTKUP je tu jer kooperant i pri predaji PUNIH
-' gajbi ima izlaz ambalaze - to nije revers, ali jeste njegovo kretanje.
-Private Function OsnovNaziv(ByVal dokTip As String, ByVal dokID As String) As String
-    Dim izOtkupa As Boolean
-    On Error Resume Next
-    izOtkupa = OtkupKoopMap().Exists(Trim$(dokID))
-    Select Case Trim$(dokTip)
-        Case DOK_TIP_OM_IZLAZ_KOOP
-            ' Prazne gajbe uz otkup se knjize ISTIM tipom kao pravi revers
-            ' (modOtkup.bas:611), samo im je DokumentID = OtkupID. Bez ove
-            ' razlike bi dva reda istog otkupa nosila razlicit osnov: jedan
-            ' "Uz otkup", drugi "Revers" - a revers dokument ne postoji.
-            OsnovNaziv = IIf(izOtkupa, Poruka("OTKUI_OSN_OTKUP_PRAZNE"), _
-                                       Poruka("OTKUI_OSN_REV_IZDATO"))
-        Case DOK_TIP_OM_ULAZ_KOOP:   OsnovNaziv = Poruka("OTKUI_OSN_REV_POVRAT")
-        Case DOK_TIP_OM_IZLAZ_FIRMA: OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_IZDATO")
-        Case DOK_TIP_OM_ULAZ_FIRMA:  OsnovNaziv = Poruka("OTKUI_OSN_REV_OM_PRIJEM")
-        Case DOK_TIP_OTKUP:          OsnovNaziv = Poruka("OTKUI_OSN_OTKUP_PUNE")
-        Case Else:                   OsnovNaziv = dokTip
-    End Select
-End Function
-
-' FakturaID -> Iznos. Prijemnica ne nosi svoj dug nego ga nasledjuje od fakture,
-' pa se ostatak racuna NA NIVOU FAKTURE. Ako jedna faktura pokriva vise
-' prijemnica, isti ostatak stoji u svakom njenom redu - to je tacno, ali se
-' odnosi na fakturu, ne na pojedinacnu prijemnicu.
-Private Function FakturaIznosMap() As Object
-    Dim d As Object, src As Variant, iId As Long, iIzn As Long, r As Long, k As String
-    If mPartMap Is Nothing Then Set mPartMap = CreateObject("Scripting.Dictionary")
-    If mPartMap.Exists("#FAKIZN") Then
-        Set FakturaIznosMap = mPartMap("#FAKIZN")
-        Exit Function
-    End If
-    Set d = CreateObject("Scripting.Dictionary")
-    d.CompareMode = 1
-    src = CachedTable(TBL_FAKTURE)
-    If IsArray(src) Then
-        iId = ColIdx(TBL_FAKTURE, COL_FAK_ID)
-        iIzn = ColIdx(TBL_FAKTURE, COL_FAK_IZNOS)
-        If iId > 0 And iIzn > 0 Then
-            For r = 1 To UBound(src, 1)
-                k = CellS(src, r, iId)
-                If Len(k) > 0 Then d(k) = CellD(src, r, iIzn)
-            Next r
-        End If
-    End If
-    Set mPartMap("#FAKIZN") = d
-    Set FakturaIznosMap = d
-End Function
-
 ' PLACENO nosi SAMO boju teksta, bez pozadine. Pozadinu (pilulu) nosi jedino
 ' kolona STATUS - dve pilule u susednim kolonama se takmice za paznju i red
 ' pocinje da lici na semafor. Pozadinu celije postavlja PaintRow, u boji reda.
@@ -3715,66 +3428,6 @@ Private Sub PaintPayPill(lbl As Object, ByVal code As Long)
     lbl.TextAlign = fmTextAlignLeft
     lbl.Font.bold = True
 End Sub
-
-' Kolona Partner u tblNovac NIJE primalac novca. SaveNovac se za isplatu
-' kooperantu poziva sa partner:=naziv OTKUPNOG MESTA, entitetTip:="OM",
-' omID:=stanicaID, a stvarni primalac ide u KooperantID (modDokumenta:3791,
-' modBankaMapiranje.MapBankaImportAsKooperant). Zato se ime vuce iz KooperantID
-' kad postoji; tek ako ga nema, red se odnosi na sam OM ili na kupca.
-' OtkupID -> KooperantID. Isti pristup koji koristi pregled otkupnih blokova
-' (modBankaExportPregled: BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_KOOPERANT)),
-' jednom umesto LookupValue po redu. Sluzi dvema stvarima: da se primalac isplate
-' nadje i kad red novca nema KooperantID, i da se prepozna da li je red ambalaze
-' nastao iz otkupa (DokumentID je tada OtkupID) ili iz zasebnog reversa.
-Private Function OtkupKoopMap() As Object
-    On Error Resume Next
-    If mPartMap Is Nothing Then Set mPartMap = CreateObject("Scripting.Dictionary")
-    If mPartMap.Exists("#OTKKOOP") Then
-        Set OtkupKoopMap = mPartMap("#OTKKOOP")
-        Exit Function
-    End If
-    Dim d As Object
-    Set d = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_KOOPERANT)
-    If d Is Nothing Then Set d = CreateObject("Scripting.Dictionary")
-    Set mPartMap("#OTKKOOP") = d
-    Set OtkupKoopMap = d
-End Function
-
-Private Function NovacPartner(ByVal entTip As String, ByVal koopID As String, _
-                              ByVal partID As String, ByVal otkID As String, _
-                              ByVal partTekst As String, _
-                              mKoop As Object, mStan As Object, mKup As Object) As String
-    If Len(Trim$(koopID)) > 0 Then
-        If Not mKoop Is Nothing Then
-            If mKoop.Exists(koopID) Then NovacPartner = mKoop(koopID): Exit Function
-        End If
-        NovacPartner = koopID
-        Exit Function
-    End If
-    ' red vezan za otkup, a bez KooperantID -> primaoca daje sam otkup
-    If Len(Trim$(otkID)) > 0 Then
-        Dim k As String
-        k = ""
-        If OtkupKoopMap().Exists(Trim$(otkID)) Then k = CStr(OtkupKoopMap()(Trim$(otkID)))
-        If Len(k) > 0 Then
-            If Not mKoop Is Nothing Then
-                If mKoop.Exists(k) Then NovacPartner = mKoop(k): Exit Function
-            End If
-            NovacPartner = k
-            Exit Function
-        End If
-    End If
-    Dim d As Object
-    Select Case Trim$(entTip)
-        Case "Kupac":     Set d = mKup
-        Case "OM":        Set d = mStan
-        Case "Kooperant": Set d = mKoop
-    End Select
-    If Not d Is Nothing Then
-        If d.Exists(partID) Then NovacPartner = d(partID): Exit Function
-    End If
-    NovacPartner = partTekst
-End Function
 
 ' Najnovije zbirne u combo BROJ ZBIRNE. Zamena za lstZbirne iz frmDokumenta:
 ' tamo je klik na red upisivao broj u prijemnicu, ovde se bira iz panela nad
@@ -3875,7 +3528,7 @@ Private Sub RefillSorta(frm As Object)
     FillCmb cbSorta, GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", vrsta, True)
 End Sub
 
-Private Function PartnerMap(ByVal tblName As String, ByVal idCol As String, _
+Public Function PartnerMap(ByVal tblName As String, ByVal idCol As String, _
                             ByVal nameCol As String, ByVal nameCol2 As String) As Object
     Dim d As Object, src As Variant, iId As Long, iNm As Long, iNm2 As Long
     Dim r As Long, k As String, v As String
@@ -4157,16 +3810,6 @@ Private Sub SetOstatak(ByVal v As Double)
     mFrm.Controls("zForm").Controls("fgOstatak").Controls("fgOstatakV").caption = FmtBroj(v, 0)
 End Sub
 
-Private Function PartnerLookup(ByVal mode As String) As Variant
-    Select Case mode
-        Case "F2", "F8":  PartnerLookup = Array(TBL_STANICE, "StanicaID", "Naziv", "")
-        Case "F3", "F4":  PartnerLookup = Array(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV, "")
-        Case "F1":        PartnerLookup = Array(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
-        Case Else:        PartnerLookup = Array("", "", "", "")
-                          ' F5/F6: tblNovac vec ima tekstualnu kolonu Partner
-    End Select
-End Function
-
 Private Function SumKgForDate(ByVal tbl As String, ByVal datCol As String, _
                               ByVal kgCol As String, ByVal dKey As Double) As Double
     Dim src As Variant, iD As Long, iK As Long, r As Long
@@ -4247,41 +3890,6 @@ Private Function ProfilPodnaslov(ByVal om As String) As String
     ProfilPodnaslov = Poruka("OTKUI_SMENA_1")
     If Len(om) > 0 Then _
         ProfilPodnaslov = ProfilPodnaslov & " " & ChrW(183) & " " & om
-End Function
-
-Private Function CachedTable(ByVal tblName As String) As Variant
-    If mCache Is Nothing Then Set mCache = CreateObject("Scripting.Dictionary")
-    If Not mCache.Exists(tblName) Then mCache(tblName) = GetTableData(tblName)
-    CachedTable = mCache(tblName)
-End Function
-
-Private Function ColIdx(ByVal tblName As String, ByVal colName As String) As Long
-    If Len(colName) = 0 Then Exit Function
-    On Error Resume Next
-    ColIdx = GetColumnIndex(tblName, colName)
-End Function
-
-Private Function CellS(ByRef src As Variant, ByVal r As Long, ByVal c As Long) As String
-    If c < 1 Then Exit Function
-    Dim v As Variant: v = src(r, c)
-    If IsEmpty(v) Then Exit Function
-    CellS = Trim$(CStr(v))
-End Function
-
-Private Function CellD(ByRef src As Variant, ByVal r As Long, ByVal c As Long) As Double
-    If c < 1 Then Exit Function
-    Dim v As Variant: v = src(r, c)
-    If IsNumeric(v) Then CellD = CDbl(v)
-End Function
-
-Private Function CellDate(ByRef src As Variant, ByVal r As Long, ByVal c As Long) As Double
-    If c < 1 Then Exit Function
-    Dim v As Variant: v = src(r, c)
-    If IsNumeric(v) Then
-        CellDate = Int(CDbl(v))
-    ElseIf IsDate(v) Then
-        CellDate = Int(CDbl(CDate(v)))
-    End If
 End Function
 
 Private Function FmtDatumKratko(ByVal v As Variant) As String
@@ -4462,7 +4070,7 @@ Public Sub OtkupUI_Release()
     Set Btns = Nothing
     modUiKit.ResetNumFields             ' drzi reference na kontrole oborene forme
     Set mFrm = Nothing
-    Set mCache = Nothing
+    modUiData.ResetCache
     Set mColSpec = Nothing
     Set mPartMap = Nothing
     mCombosFilled = False
