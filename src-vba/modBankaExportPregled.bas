@@ -83,8 +83,10 @@ Public Function BuildBlokIsplataList( _
     Set avansCache = BuildKooperantUnallocatedAvansDict()
     ' KooperantID po OtkupID: O(n) mapa JEDNOM (umesto LookupValue O(n) po redu
     ' u petlji, sto je bilo O(n^2) i glavni uzrok laga pri ucitavanju).
+    ' AUD-026: NE preko BuildLookupDict -- vidi BuildOtkupOwnerIndex.
     Dim koopByOtkup As Object
-    Set koopByOtkup = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_KOOPERANT)
+    Dim dupliOtkup As Object
+    Set koopByOtkup = BuildOtkupOwnerIndex(dupliOtkup)
     
     Dim i As Long
     For i = 1 To UBound(openOtkupi, 1)
@@ -97,11 +99,21 @@ Public Function BuildBlokIsplataList( _
         Dim stanicaID As String
         
         brojDok = CStr(openOtkupi(i, 1))
-        otkupID = CStr(openOtkupi(i, 2))
+        otkupID = Trim$(CStr(openOtkupi(i, 2)))
         ukupan = CDbl(openOtkupi(i, 3))
         isplaceno = CDbl(openOtkupi(i, 4))
         otvoren = CDbl(openOtkupi(i, 5))
-        
+
+        ' AUD-026: vlasnik OTVORENOG bloka mora biti jednoznacan. Provera ide
+        ' pre filtera (i pre citanja vlasnika), da se ekran ponasa isto kao
+        ' finalna kapija, koja listu gradi bez filtera.
+        If dupliOtkup.Exists(otkupID) Then
+            Err.Raise ERR_ISPLATA_DUPLI_OTKUPID, "modBankaExportPregled.BuildBlokIsplataList", _
+                      "Dupli OtkupID u tblOtkup: " & otkupID & " (otvoren blok: " & brojDok & "). " & _
+                      "Vlasnik i tekuci racun se ne mogu pouzdano utvrditi -- pokrenite proveru " & _
+                      "integriteta podataka."
+        End If
+
         If IsDate(openOtkupi(i, 6)) Then
             datumVal = CDate(openOtkupi(i, 6))
         Else
@@ -167,6 +179,60 @@ NextRow:
     
     Set BuildBlokIsplataList = result
 End Function
+'======================================================================
+' BuildOtkupOwnerIndex - OtkupID -> KooperantID iz SIROVE tblOtkup, uz
+' evidenciju dupliranih ID-eva (AUD-026).
+'
+' Zasto ne BuildLookupDict: on je "prvi pojav pobedjuje" nad SIROVOM
+' tabelom, a GetOpenOtkupi preskace stornirane i vec isplacene redove. Kod
+' dupliranog OtkupID-a te dve semantike se razilaze:
+'
+'   red A: OTK-777, kooperant K-A, blok BLOK-A, Isplaceno = "Da"
+'   red B: OTK-777, kooperant K-B, blok BLOK-B, otvoren
+'
+' GetOpenOtkupi vrati SAMO B (A je isplacen), pa u otvorenoj listi postoji
+' jedan jedini OTK-777 i stroga saldo-mapa nema sta da prijavi. Ali
+' first-wins vlasnik dolazi sa reda A -- blok B bi dobio naziv i TEKUCI
+' RACUN kooperanta A, i nalog bi otisao POGRESNOM PRIMAOCU. To je gore od
+' pogresnog prikaza, pa se identitet primaoca ne sme resavati "prvim
+' pogotkom".
+'
+' Zato: vlasnik se pamti samo za JEDNOZNACNE ID-eve, a dupli se vracaju
+' kroz outDupli. Pozivalac pada tek ako je bas taj ID medju OTVORENIMA --
+' istorijski duplikat koji ne proizvodi nalog ne obara ceo ekran.
+'======================================================================
+Private Function BuildOtkupOwnerIndex(ByRef outDupli As Object) As Object
+    Dim ownerDict As Object
+    Dim dupliDict As Object
+    Set ownerDict = CreateObject("Scripting.Dictionary")
+    Set dupliDict = CreateObject("Scripting.Dictionary")
+
+    Set outDupli = dupliDict
+    Set BuildOtkupOwnerIndex = ownerDict
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Const SRC As String = "BuildOtkupOwnerIndex"
+    Dim colID As Long, colKoop As Long
+    colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+
+    Dim i As Long
+    Dim oid As String
+    For i = 1 To UBound(data, 1)
+        oid = Trim$(CStr(data(i, colID)))
+        If LenB(oid) > 0 Then
+            If ownerDict.Exists(oid) Then
+                dupliDict(oid) = True
+            Else
+                ownerDict.Add oid, Trim$(CStr(data(i, colKoop)))
+            End If
+        End If
+    Next i
+End Function
+
 '======================================================================
 ' BuildKooperantTekuciRacunCache
 ' Single-pass cache KooperantID -> TekuciRacun

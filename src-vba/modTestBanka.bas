@@ -37,6 +37,8 @@ Option Explicit
 '  T14 AUD-026  kapija je UNUTAR putanje koja gradi CSV payload (ne samo validator)
 '  T15 AUD-026  dupli/prazan OtkupID obara saldo-mapu (fail-closed kanonski kljuc)
 '  T16 AUD-026  "Primeni avans" odbija dupli OtkupID (core guard, tabelarni test)
+'  T17 AUD-026  SAKRIVEN duplikat (samo jedan red otvoren) ne isplacuje pogresnog
+'               kooperanta -- vlasnik se ne resava "prvim pogotkom" nad sirovom tabelom
 ' ============================================================
 
 Private mPass As Long
@@ -106,6 +108,9 @@ Public Sub RunBankaImportTestSuite()
     T09_AutoBlokIdePoPozivuNaBroj
     T10_PlacenaFakturaNeObaraBatch
     T11_RucniKooperantBezIzboraBloka
+    ' T17 ide PRE T16: T16 namerno ostavlja dva OTVORENA reda sa istim OtkupID,
+    ' sto bi oborilo kontrolni slucaj u T17 (rollback je tek na kraju suite-a).
+    T17_SakrivenDuplikatNeIsplacujePogresnog
     T16_DupliOtkupIDNeDozvoljavaAvans
 
     tx.RollbackTx
@@ -1137,8 +1142,101 @@ Private Sub T16_DupliOtkupIDNeDozvoljavaAvans()
 End Sub
 
 ' ============================================================
+' T17 - AUD-026: SAKRIVEN duplikat ne sme da isplati pogresnog kooperanta.
+'
+' Najopasnija varijanta, koju stroga saldo-mapa NE vidi: duplikat postoji u
+' sirovoj tblOtkup, ali samo JEDAN od dva reda je otvoren.
+'
+'   red A: OTK-HID, kooperant K-17A (racun 160-AAA), blok BLOK-17A, Isplaceno
+'   red B: OTK-HID, kooperant K-17B (racun 160-BBB), blok BLOK-17B, otvoren
+'
+' GetOpenOtkupi vrati samo B, pa u otvorenoj listi nema duplikata i
+' BuildOpenAmountDict nema sta da prijavi. Ali vlasnik se ranije citao
+' first-wins iz SIROVE tabele -> blok B bi dobio naziv i TEKUCI RACUN
+' kooperanta A, i nalog od ~2.000 bi otisao POGRESNOM PRIMAOCU.
+'
+' Test zato daje kooperantima ocigledno razlicite racune i tvrdi da nikakav
+' payload nije nastao -- ne samo da je iznos tacan.
+' ============================================================
+Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
+    Const S As String = "T17 sakriven duplikat: "
+    Const RACUN_A As String = "160-AAAAAAAAAA-11"
+    Const RACUN_B As String = "160-BBBBBBBBBB-22"
+
+    SeedStanica P & "OM-17", P & "Stanica 17"
+    SeedKooperantSaRacunom P & "K-17A", "Prvi", "Vlasnik", P & "OM-17", RACUN_A
+    SeedKooperantSaRacunom P & "K-17B", "Drugi", "Vlasnik", P & "OM-17", RACUN_B
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (1) KONTROLA PRVA: duplikat kome NIJEDAN red nije otvoren ne sme da
+    '         obori pregled (istorijski duplikat ne proizvodi nalog).
+    SeedOtkupIsplacen P & "OTK-HIST", P & "K-17A", P & "BLOK-17C", 100, 5, "Malina"
+    SeedOtkupIsplacen P & "OTK-HIST", P & "K-17B", P & "BLOK-17D", 100, 20, "Kupina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zatvoren (istorijski) duplikat NE obara pregled"
+
+    ' --- (2) Sada pravi slucaj: red A isplacen (duplikat je skriven od
+    '         GetOpenOtkupi), red B otvoren i na DRUGOG kooperanta.
+    SeedOtkupIsplacen P & "OTK-HID", P & "K-17A", P & "BLOK-17A", 100, 5, "Malina"
+    SeedOtkup P & "OTK-HID", P & "K-17B", P & "BLOK-17B", 100, 20, "Kupina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_DUPLI_OTKUPID, S & "otvoren blok sa dupliranim OtkupID obara listu"
+    Chk InStr(errDesc, P & "OTK-HID") > 0, S & "poruka imenuje sporan OtkupID"
+
+    ' --- (3) I cela CSV putanja mora ostati bez fajla. Nalog se pravi za
+    '         BLOK-17B (otvoren red), a GenerisiNalogeCSV interno gradi svezu
+    '         listu -> pad pre nego sto payload uopste nastane.
+    Dim nalozi As Collection
+    Set nalozi = New Collection
+    nalozi.Add MakeNalog(P & "OTK-HID", P & "BLOK-17B", 1500, True)
+
+    Dim odbijeno As String
+    Dim putanja As String
+    putanja = GenerisiNalogeCSV(nalozi, "160-1111111111-11", odbijeno)
+
+    ChkEq putanja, "", S & "nijedan CSV fajl nije napravljen"
+    Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
+    Chk InStr(odbijeno, P & "OTK-HID") > 0, S & "razlog imenuje sporan OtkupID"
+
+End Sub
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
+
+' Kooperant sa tekucim racunom (T17: primalac naloga mora biti razlucljiv).
+Private Sub SeedKooperantSaRacunom(ByVal koopID As String, ByVal ime As String, _
+                                   ByVal prezime As String, ByVal stanicaID As String, _
+                                   ByVal racun As String)
+    BitAppend TBL_KOOPERANTI, _
+        Array("KooperantID", "Ime", "Prezime", COL_KOOP_STANICA, COL_KOOP_TEKUCI_RACUN), _
+        Array(koopID, ime, prezime, stanicaID, racun)
+End Sub
+
+' Otkup red koji je VEC ISPLACEN -> GetOpenOtkupi ga preskace.
+Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
+                              ByVal brDok As String, ByVal kolicina As Double, _
+                              ByVal cena As Double, ByVal vrsta As String)
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
+        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+End Sub
 
 ' Slobodan (nevezan) virman avans kooperanta -- ulaz za ApplyAvansToOtkup.
 Private Sub SeedAvansKooperanta(ByVal novacID As String, ByVal koopID As String, _

@@ -486,12 +486,24 @@ Private Sub LoadBlokovi()
 
 EH:
     ' Razlog se hvata PRE LogErr-a (BUG-1/AUD-054) i prikazuje: ovde zavrsava
-    ' i tvrd pad integriteta kanonskog kljuca (dupli/prazan OtkupID iz
-    ' BuildOpenAmountDict), a generican tekst bi operatera ostavio bez ideje
-    ' sta da uradi.
+    ' i tvrd pad integriteta kanonskog kljuca (dupli/prazan OtkupID), a
+    ' generican tekst bi operatera ostavio bez ideje sta da uradi.
     Dim errDesc As String
     errDesc = Err.description
     LogErr "frmBankaExportPregled.LoadBlokovi"
+
+    ' Neuspeo rebuild ne sme da ostavi PRETHODNU listu na ekranu: ona je
+    ' upravo ono sto provera nije potvrdila, a operater bi je video kao
+    ' vazecu (i cekirao redove za isplatu). Writer-i su fail-closed, ali
+    ' prikaz ne sme da tvrdi vise od njih.
+    On Error Resume Next
+    Set m_FullBlokovi = Nothing
+    Set m_Blokovi = Nothing
+    lstBlokovi.Clear
+    ClearDetailPanel
+    UpdateEmptyState
+    On Error GoTo 0
+
     lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju: " & errDesc
 End Sub
 
