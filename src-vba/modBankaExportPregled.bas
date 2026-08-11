@@ -422,8 +422,16 @@ End Function
 Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
                                      ByVal blokovi As Collection) As Long
     ClampOverridesToOpen = 0
+
+    ' Mapa se gradi PRE svih ranih izlaza: ona je i provera integriteta
+    ' kanonskog kljuca (BuildOpenAmountDict pada na dupli/prazan OtkupID).
+    ' Ako bi se preskocila kad override-a nema, prvi otvor forme -- gde je
+    ' dictionary uvek prazan -- pustio bi korumpiran OtkupID na ekran, a onda
+    ' i u akcije koje sa tog ekrana mutiraju podatke.
+    Dim openByOtkup As Object
+    If Not blokovi Is Nothing Then Set openByOtkup = BuildOpenAmountDict(blokovi)
+
     If overrideDict Is Nothing Then Exit Function
-    If overrideDict.count = 0 Then Exit Function
 
     ' Nema liste blokova = nema dokaza da je ijedan override jos vazeci.
     If blokovi Is Nothing Then
@@ -432,8 +440,7 @@ Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
         Exit Function
     End If
 
-    Dim openByOtkup As Object
-    Set openByOtkup = BuildOpenAmountDict(blokovi)
+    If overrideDict.count = 0 Then Exit Function
 
     Dim toRemove As Collection
     Set toRemove = New Collection

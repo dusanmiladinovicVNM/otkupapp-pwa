@@ -1335,7 +1335,22 @@ Public Sub ApplyAvansToOtkup(ByVal kooperantID As String, ByVal otkupID As Strin
     otkData = GetTableData(TBL_OTKUP)
     Dim otkRows As Collection
     Set otkRows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If otkRows Is Nothing Then Exit Sub
     If otkRows.count = 0 Then Exit Sub
+
+    ' AUD-026: target mora biti JEDNOZNACAN. OtkupID je kanonski kljuc, ali
+    ' ako je u podacima dupliran, "prvi red pobedjuje" znaci da se vrednost i
+    ' vlasnik citaju sa JEDNOG reda, a avans se u ledgeru vezuje samo za
+    ' dvosmislen OtkupID -- akcija nad prikazanim redom B moze da se izvrsi
+    ' nad redom A. Isto pravilo kao fail-closed kapije u modPrint/modFaktura
+    ' (RF-08): duplikat nije "uzmi jedan" nego "ne znam target".
+    ' Guard ide PRE svakog citanja target reda i PRE ijednog upisa.
+    If otkRows.count > 1 Then
+        Err.Raise vbObjectError + 1045, SRC, _
+                  "Dupli OtkupID: " & otkupID & " (" & CStr(otkRows.count) & " redova). " & _
+                  "Avans nije primenjen jer target nije jednoznacan -- pokrenite proveru " & _
+                  "integriteta podataka."
+    End If
 
     Dim r As Long: r = otkRows(1)
 

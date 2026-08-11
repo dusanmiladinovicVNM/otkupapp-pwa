@@ -36,6 +36,7 @@ Option Explicit
 '               (granice u cent-domenu: 600.01 na otvoreno 600.00 je preplata)
 '  T14 AUD-026  kapija je UNUTAR putanje koja gradi CSV payload (ne samo validator)
 '  T15 AUD-026  dupli/prazan OtkupID obara saldo-mapu (fail-closed kanonski kljuc)
+'  T16 AUD-026  "Primeni avans" odbija dupli OtkupID (core guard, tabelarni test)
 ' ============================================================
 
 Private mPass As Long
@@ -61,7 +62,7 @@ Public Sub RunBankaImportTestSuite()
         Exit Sub
     End If
 
-    If MsgBox("Pokrenuti banka import/mapiranje test suite (RF-09)?" & vbCrLf & vbCrLf & _
+    If MsgBox("Pokrenuti banka test suite (RF-09 uvoz/mapiranje + RF-10 nalozi)?" & vbCrLf & vbCrLf & _
               "Svi podaci (BIT-*) se prave u transakciji i UVEK se ponistavaju " & _
               "(rollback). Nista ne ostaje u tabelama.", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
@@ -105,6 +106,7 @@ Public Sub RunBankaImportTestSuite()
     T09_AutoBlokIdePoPozivuNaBroj
     T10_PlacenaFakturaNeObaraBatch
     T11_RucniKooperantBezIzboraBloka
+    T16_DupliOtkupIDNeDozvoljavaAvans
 
     tx.RollbackTx
     Set tx = Nothing
@@ -1068,8 +1070,134 @@ Private Function MakeNalog(ByVal otkupID As String, ByVal brDok As String, _
 End Function
 
 ' ============================================================
+' T16 - AUD-026: "Primeni avans" odbija dupli kanonski OtkupID.
+'
+' Tabelarni test (ne dictionary): ApplyAvansToOtkup je citao target red kao
+' FindRows(...)(1), dakle "prvi red pobedjuje". Kod dupliranog OtkupID-a to
+' znaci da se vrednost otkupa uzima sa JEDNOG reda, a avans se u ledgeru vezuje
+' samo za dvosmislen OtkupID -- akcija nad prikazanim redom moze da se izvrsi
+' nad drugim redom. Ekran isplata nudi bas tu akciju ("Primeni avans na blok" /
+' "(sel.)"), pa kapija mora da bude u CORE-u, ne u formi.
+'
+' Testira se ISTI kooperant na oba reda: to je slucaj koji je ranije TIHO
+' prolazio. Razlicit kooperant je vec obarao zatecen owner guard (AUD-010), pa
+' se i on proverava -- da ta odbrana ne oslabi.
+' ============================================================
+Private Sub T16_DupliOtkupIDNeDozvoljavaAvans()
+    Const S As String = "T16 avans nad duplim OtkupID: "
+
+    SeedStanica P & "OM-16", P & "Stanica 16"
+    SeedKooperant P & "K-16A", "Test", "Duplikat", P & "OM-16"
+    SeedKooperant P & "K-16B", "Test", "Drugi", P & "OM-16"
+
+    ' --- (1) ISTI kooperant, dva reda pod istim OtkupID, razlicit blok/iznos.
+    SeedOtkup P & "OTK-DUP", P & "K-16A", P & "BLOK-16A", 100, 5, "Malina"   ' 500
+    SeedOtkup P & "OTK-DUP", P & "K-16A", P & "BLOK-16B", 100, 20, "Kupina"  ' 2000
+    SeedAvansKooperanta P & "NOV-16", P & "K-16A", 300
+
+    Dim primenjeno As Double
+    Dim ok As Boolean
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16A", P & "OTK-DUP", primenjeno)
+
+    Chk Not ok, S & "avans nad duplim OtkupID je ODBIJEN"
+    ChkEqD primenjeno, 0, S & "nista nije proknjizeno (appliedAmount = 0)"
+    ChkEq NovacRedovaSaOtkupID(P & "OTK-DUP"), 0, S & "nijedan Novac red nije vezan za sporan OtkupID"
+    ChkEqD SlobodanAvansKooperanta(P & "K-16A"), 300, S & "avans kooperanta je ostao netaknut"
+    ChkEq OtkupRedova(P & "OTK-DUP"), 2, S & "oba Otkup reda su ostala netaknuta"
+
+    ' --- (2) Razlicit kooperant na duplikatu: i dalje odbijeno (owner guard
+    '         AUD-010 je gadjao bas to; nova kapija ga ne sme zameniti tise).
+    SeedOtkup P & "OTK-DUP2", P & "K-16A", P & "BLOK-16C", 100, 5, "Malina"
+    SeedOtkup P & "OTK-DUP2", P & "K-16B", P & "BLOK-16D", 100, 20, "Kupina"
+    SeedAvansKooperanta P & "NOV-16B", P & "K-16B", 300
+
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16B", P & "OTK-DUP2", primenjeno)
+
+    Chk Not ok, S & "duplikat sa drugim kooperantom je takodje odbijen"
+    ChkEqD primenjeno, 0, S & "nista nije proknjizeno ni u tom slucaju"
+    ChkEq NovacRedovaSaOtkupID(P & "OTK-DUP2"), 0, S & "ledger ostaje cist"
+
+    ' --- (3) KONTROLA: jedinstven OtkupID mora i dalje da radi (kapija ne sme
+    '         da blokira zdrav slucaj). Zaseban kooperant, da avans iz slucaja
+    '         (1) -- koji je ostao NEVEZAN jer je akcija odbijena -- ne udje u
+    '         ovaj zbir i ne pomeri ocekivan iznos.
+    SeedKooperant P & "K-16C", "Test", "Zdrav", P & "OM-16"
+    SeedOtkup P & "OTK-OK16", P & "K-16C", P & "BLOK-16E", 100, 5, "Malina"   ' 500
+    SeedAvansKooperanta P & "NOV-16C", P & "K-16C", 200
+
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16C", P & "OTK-OK16", primenjeno)
+
+    Chk ok, S & "jedinstven OtkupID i dalje prolazi"
+    ChkEqD primenjeno, 200, S & "primenjen je ceo raspolozivi avans (200)"
+    Chk NovacRedovaSaOtkupID(P & "OTK-OK16") > 0, S & "avans je vezan za otkup"
+    ChkEqD SlobodanAvansKooperanta(P & "K-16C"), 0, S & "avans vise nije nevezan"
+End Sub
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
+
+' Slobodan (nevezan) virman avans kooperanta -- ulaz za ApplyAvansToOtkup.
+Private Sub SeedAvansKooperanta(ByVal novacID As String, ByVal koopID As String, _
+                                ByVal iznos As Double)
+    BitAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_DATUM, COL_NOV_KOOP_ID, COL_NOV_PARTNER_ID, _
+              COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_ISPLATA, COL_NOV_OTKUP_ID), _
+        Array(novacID, Date, koopID, koopID, "Kooperant", NOV_VIRMAN_AVANS_KOOP, iznos, "")
+End Sub
+
+' Koliko Novac redova nosi dati OtkupID (0 = nista nije vezano).
+Private Function NovacRedovaSaOtkupID(ByVal otkupID As String) As Long
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim c As Long
+    c = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    If c = 0 Then Exit Function
+
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, c))) = otkupID Then n = n + 1
+    Next i
+    NovacRedovaSaOtkupID = n
+End Function
+
+' Zbir NEVEZANOG avansa kooperanta (OtkupID prazan).
+Private Function SlobodanAvansKooperanta(ByVal koopID As String) As Double
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cK As Long, cT As Long, cI As Long, cO As Long
+    cK = GetColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID)
+    cT = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
+    cI = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
+    cO = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    If cK = 0 Or cT = 0 Or cI = 0 Or cO = 0 Then Exit Function
+
+    Dim i As Long, sum As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cK))) = koopID Then
+            If CStr(data(i, cT)) = NOV_VIRMAN_AVANS_KOOP Then
+                If LenB(Trim$(CStr(data(i, cO)))) = 0 Then
+                    If IsNumeric(data(i, cI)) Then sum = sum + CDbl(data(i, cI))
+                End If
+            End If
+        End If
+    Next i
+    SlobodanAvansKooperanta = sum
+End Function
+
+' Koliko redova u tblOtkup nosi dati OtkupID (za proveru da nista nije diralo).
+Private Function OtkupRedova(ByVal otkupID As String) As Long
+    Dim rowsFound As Collection
+    Set rowsFound = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If Not rowsFound Is Nothing Then OtkupRedova = rowsFound.count
+End Function
 
 Private Sub SeedBim(ByVal bimID As String, ByVal brojIzvoda As String, _
                     ByVal racun As String, ByVal partner As String, _
