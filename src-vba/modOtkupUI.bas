@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-95"
+Public Const OTKUI_BUILD   As String = "v6-ui-96"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2408,6 +2408,19 @@ End Sub
 
 ' Kljucevi oznacenih redova, spojeni "|". Ekran ih tumaci - ljuska ne zna sta
 ' su brojevi u prvoj koloni.
+' Opseg datuma iznad liste otpremnica. Nije filter ljuske nego PARAMETAR koji
+' ekran cita i primenjuje na svoje redove - ljuska ne zna sta je datum
+' otpremnice. Isti par cita i stampa specifikacije.
+Public Function GridDatOd() As String
+    On Error Resume Next
+    GridDatOd = Trim$(CStr(mFrm.Controls("zGrid").Controls("specOdT").text))
+End Function
+
+Public Function GridDatDo() As String
+    On Error Resume Next
+    GridDatDo = Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text))
+End Function
+
 ' Dijagnostika iz Immediate prozora: ?OtkupUI_DiagMark()
 Public Function OtkupUI_DiagMark() As String
     OtkupUI_DiagMark = "rezim=" & mMarkOn & " oznaka=" & MarkCount() & _
@@ -3076,9 +3089,9 @@ Private Sub UiClickCore(ByVal tag As String)
             RefreshRowActions
             RenderGrid
         Case "btnRedSpecDat"
-            ScrAct "act:specdat:0:" & _
-                Trim$(CStr(mFrm.Controls("zGrid").Controls("specOdT").text)) & "|" & _
-                Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text))
+            ' Ekran sam procita opseg (GridDatOd / GridDatDo) - isti izvor po
+            ' kome je i filtrirao listu, pa se stampa i lista ne mogu razici.
+            ScrAct "act:specdat:0"
         Case "btnRedSpec"
             If MarkCount() = 0 And mSelRow <= 0 Then
                 ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
@@ -3206,6 +3219,12 @@ Private Sub UiChange(ByVal tag As String)
         Case "txtSearch"
             mSearch = Trim$(CStr(mFrm.Controls("zGrid").Controls("txtSearch").text))
             mFrm.Controls("zGrid").Controls("lblSearchPh").Visible = (Len(mSearch) = 0)
+            mSelRow = 0
+            ReloadGrid
+        Case "specOdT", "specDoT"
+            ' Opseg datuma suzava listu odmah, kao i pretraga. Nepotpun datum
+            ' ("2", "21.") nije greska nego "jos nema granice" - ekran ga
+            ' preskace, pa se lista ne prazni dok operater kuca.
             mSelRow = 0
             ReloadGrid
         Case "fgKgIT", "fgKgIIT", "fgCena1T", "fgCena2T"

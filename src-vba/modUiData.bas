@@ -16,7 +16,7 @@ Attribute VB_Name = "modUiData"
 '=====================================================================
 Option Explicit
 
-Public Const UIDATA_BUILD As String = "v6-ui-95"
+Public Const UIDATA_BUILD As String = "v6-ui-96"
 
 Private mCache As Object
 

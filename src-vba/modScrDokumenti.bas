@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-95"
+Public Const SCRDOK_BUILD As String = "v6-ui-96"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -213,7 +213,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
             RowAction = PrintSpec(red)
 
         Case "specdat"
-            If UBound(p) >= 2 Then RowAction = PrintSpecDat(CStr(p(2)))
+            RowAction = PrintSpecDat("")
 
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
@@ -286,25 +286,34 @@ Private Function OtpIdZaBroj(ByVal broj As String) As String
     OtpIdZaBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID))
 End Function
 
-' Dnevna / periodicna specifikacija. Opseg stize kao "od|do" onako kako ga je
-' operater otkucao; provera je ista rutina koju koristi i uvoz izvoda
-' (modParse.TryParseDateValue), pa se prihvataju isti oblici datuma.
+' Datum kao GRANICA opsega; 0 = nema granice. Prazan ili nepotpun unos nije
+' greska - dok operater kuca "21." nema smisla praznjenje liste.
+Private Function DatGranica(ByVal s As String) As Double
+    Dim d As Date
+    On Error Resume Next
+    If Len(Trim$(s)) = 0 Then Exit Function
+    If TryParseDateValue(s, d) Then DatGranica = Int(CDbl(d))
+End Function
+
+' "Po datumu" stampa SVE STO JE FILTRIRANO - dakle tacno one otpremnice koje
+' operater u tom trenutku vidi u listi (opseg datuma + cip + pretraga zajedno),
+' bez obzira na strane. Mapa mOtpIds je vec upravo taj skup: puni je
+' RowsOtpremnice iz istog prolaza kroz filter.
 Private Function PrintSpecDat(ByVal arg As String) As Boolean
-    Dim d() As String, dOd As Date, dDo As Date
+    Dim k As Variant, col As Collection
     On Error GoTo EH
-    d = Split(arg, "|")
-    If UBound(d) < 1 Then Exit Function
-    If Not TryParseDateValue(d(0), dOd) Or Not TryParseDateValue(d(1), dDo) Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DATUM"), True
+    Set col = New Collection
+    If Not mOtpIds Is Nothing Then
+        For Each k In mOtpIds.keys
+            col.Add CStr(mOtpIds(k))
+        Next k
+    End If
+    If col.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_FILT"), True
         Exit Function
     End If
-    If dDo < dOd Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DAT_OPSEG"), True
-        Exit Function
-    End If
-    modOtkupBlok.PrintSpecifikacijaPoDatumu dOd, dDo
-    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC_DAT") & " " & _
-                         Format$(dOd, "dd.mm.yyyy") & " - " & Format$(dDo, "dd.mm.yyyy"), False
+    modOtkupBlok.PrintSpecifikacija col
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
@@ -1145,7 +1154,12 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
     Dim otpID As String, ukKg As Double, blKg As Double, hay As String
     Dim sumOst As Double, ost As Double, jeOtvorena As Boolean
     Dim samoOtvorene As Boolean, cntOtvor As Long
+    Dim dOd As Double, dDo As Double, vDat As Double
     samoOtvorene = (filter = "otvorene")
+    ' Opseg datuma iznad liste. Nula znaci "nema granice" - tako se nepotpun
+    ' datum tokom kucanja ponasa kao da ga nema, umesto da isprazni listu.
+    dOd = DatGranica(modOtkupUI.GridDatOd())
+    dDo = DatGranica(modOtkupUI.GridDatDo())
     On Error GoTo EH
     mStep = "otpremnice"
 
@@ -1171,6 +1185,14 @@ Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Va
         If iStorno > 0 Then
             If UCase$(modUiData.CellS(src, r, iStorno)) = "DA" Then GoTo Sledeca
         End If
+        vDat = modUiData.CellDate(src, r, iDat)
+        If dOd > 0 Then
+            If vDat < dOd Then GoTo Sledeca
+        End If
+        If dDo > 0 Then
+            If vDat > dDo Then GoTo Sledeca
+        End If
+
         otpID = modUiData.CellS(src, r, iID)
         ukKg = modUiData.CellD(src, r, iKol)
         blKg = 0

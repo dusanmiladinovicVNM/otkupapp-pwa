@@ -1205,7 +1205,7 @@ End Sub
 
 ' Dnevna / periodicna specifikacija: svi (ne-stornirani) otkup blokovi cija je
 ' kolona Datum u opsegu [datumOd, datumDo]. Tanak omotac oko RenderSpec.
-Public Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As Date)
+Private Sub PrintSpecifikacijaPoDatumu(ByVal datumOd As Date, ByVal datumDo As Date)
     On Error GoTo EH
     Dim subtitle As String
     If Int(CDbl(datumOd)) = Int(CDbl(datumDo)) Then
