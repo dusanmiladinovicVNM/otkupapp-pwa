@@ -611,6 +611,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_LS_OTP", "Otpremnice"
     UpsertRow lo, existing, "OTKUI_SEG_LS_BLOK", "Blokovi otpremnice"
     UpsertRow lo, existing, "OTKUI_SEG_LS_LOST", "Izgubljeni"
+    UpsertRow lo, existing, "OTKUI_SEG_LS_KOOP", "Kooperanti"
     UpsertRow lo, existing, "OTKUI_OTP_TRAKA", "Aktivna otpremnica"
     UpsertRow lo, existing, "OTKUI_OTP_NEMA", "Nema izabrane otpremnice " & ChrW(8212) & " izaberi je u listi Otpremnice"
     UpsertRow lo, existing, "OTKUI_OTP_UKUPNO", "Ukupno kg"
@@ -621,6 +622,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_OTP_PO_OTP", "po otpremnici"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_BLOKOVI", "Blokovi otpremnice"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_LOST", "Izgubljeni blokovi"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_KOOP", "Kooperanti po iznosu otkupa"
+    UpsertRow lo, existing, "OTKUI_HDK_RANG", "RANG"
+    UpsertRow lo, existing, "OTKUI_HDK_KOOPERANT", "KOOPERANT"
+    UpsertRow lo, existing, "OTKUI_HDK_IZNOS", "IZNOS RSD"
+    UpsertRow lo, existing, "OTKUI_HD_OM", "OTKUPNO MESTO"
     UpsertRow lo, existing, "OTKUI_HDL_STARA", "STARA OTPREMNICA"
     InvalidateCache
 End Sub

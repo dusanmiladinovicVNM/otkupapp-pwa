@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-98"
+Public Const OTKUI_BUILD   As String = "v6-ui-99"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -657,6 +657,8 @@ Private Sub RefreshGridTitle(frm As Object)
                                              IIf(Len(k) > 0, " " & k, "")
         Case "IZGUBLJENI"
             z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_LOST")
+        Case "KOOPERANTI"
+            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_KOOP")
         Case Else
             If mScreen = "DOKUMENTI" Then _
                 z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
@@ -669,7 +671,7 @@ Private Sub RefreshGridTitle(frm As Object)
         Select Case akt
             Case "OTPREMNICE"
                 ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
-            Case "BLOKOVI", "IZGUBLJENI"
+            Case "BLOKOVI", "IZGUBLJENI", "KOOPERANTI"
                 ShowChip frm, k, False
             Case Else
                 If k = "chipOtvorene" Then ShowChip frm, k, False
@@ -684,7 +686,7 @@ Private Sub RefreshListSeg(frm As Object)
     On Error Resume Next
     Set z = frm.Controls("zGrid")
     akt = ActiveLista()
-    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI", "IZGUBLJENI")
+    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI", "IZGUBLJENI", "KOOPERANTI")
     For i = 0 To UBound(nmv)
         BoxState z, "ls" & nmv(i), _
                  IIf(akt = nmv(i), C_FOREST, C_WHITE), _
@@ -874,6 +876,10 @@ Private Sub BuildGrid(frm As Object)
     ' je to bio PREKIDAC koji menja sadrzaj iste liste ("Izgubljeni" / "Nazad"),
     ' dakle skriven rezim; ovde je obicna lista kao i ostale tri.
     NewSegBtn z, "lsIZGUBLJENI", Poruka("OTKUI_SEG_LS_LOST"), 302, 9, 104, 20, False
+    ' Peta lista: rang kooperanata po prometu. U legacy je to dugme koje otvara
+    ' panel preko pola forme; ovde je lista kao i ostale, pa dobija pretragu,
+    ' sortiranje i strane koje panel nije imao.
+    NewSegBtn z, "lsKOOPERANTI", Poruka("OTKUI_SEG_LS_KOOP"), 406, 9, 100, 20, False
     NewShell z, "srch", 0, 8, 200, 22, C_INPUT_BORDER, C_WHITE
     NewLbl z, "srchIco", ChrW(IC_SEARCH), 0, CenterIco(8, 22, TS_META), 16, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignCenter, F_ICON
@@ -1893,11 +1899,13 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     BoxShow z, "lsOTPREMNICE", lsV
     BoxShow z, "lsBLOKOVI", lsV
     BoxShow z, "lsIZGUBLJENI", lsV
+    BoxShow z, "lsKOOPERANTI", lsV
     If lsV Then
         MoveBox z, "lsSVI", lsX, 9, 96
         MoveBox z, "lsOTPREMNICE", lsX + 96, 9, 96
         MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
         MoveBox z, "lsIZGUBLJENI", lsX + 302, 9, 104
+        MoveBox z, "lsKOOPERANTI", lsX + 406, 9, 100
     End If
     z.Controls("grdSrc").Left = PAD + 176
     ' Radnje nad redom stoje uz desnu ivicu reda cipova. Koji par - zavisi od
@@ -3056,6 +3064,14 @@ Private Sub UiClickCore(ByVal tag As String)
             mSelRow = 0
             mSearch = ""
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
+            ' Sortiranje ne prelazi iz liste u listu: druga kolona je datum u
+            ' listama dokumenata, a ime kooperanta u rangu - ista strelica bi
+            ' znacila drugu stvar. Rang se otvara po rangu, ostalo po datumu.
+            If ActiveLista() = "KOOPERANTI" Then
+                mSortCol = 1: mSortAsc = True
+            Else
+                mSortCol = 2: mSortAsc = False
+            End If
             RefreshListSeg mFrm
             ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
             ' sakrio; postavlja ih SelectModeCore, pa ide preko njega

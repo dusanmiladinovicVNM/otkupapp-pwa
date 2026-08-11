@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-98"
+Public Const SCRDOK_BUILD As String = "v6-ui-99"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -342,6 +342,60 @@ Private Function OtpIdZaBroj(ByVal broj As String) As String
         End If
     End If
     OtpIdZaBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID))
+End Function
+
+'---------------------------------------------- LISTA: KOOPERANTI (F1)
+' Rang kooperanata po iznosu otkupnih listova u tekucoj godini - legacy "Lista
+' kooperanata". Racun je u modOtkupBlok.KoopRangRows, isti koji puni i legacy
+' panel; ovde se samo prevodi u redove mreze.
+'
+' Za razliku od legacy panela (listbox preko pola forme, bez sortiranja i
+' pretrage), ovo je obicna lista ljuske - pa ima pretragu, sortiranje po bilo
+' kojoj koloni i strane.
+Private Function KoopGridCols() As Variant
+    KoopGridCols = Array( _
+        "OTKUI_HDK_RANG||num|54|1", _
+        "OTKUI_HDK_KOOPERANT||part|0|1", _
+        "OTKUI_HD_OM||txt|170|2", _
+        "OTKUI_HDK_IZNOS||rsd|130|1")
+End Function
+
+Private Function RowsKooperanti(ByVal q As String) As Variant
+    Dim src As Variant, r As Long, n As Long, outA() As Variant
+    Dim hay As String, sumVal As Double, iznos As Double
+    Dim rawKg As Double, rawVal As Double, emptyKg As Double, emptyVal As Double
+    On Error GoTo EH
+    mStep = "kooperanti"
+
+    src = modOtkupBlok.KoopRangRows(rawKg, rawVal, emptyKg, emptyVal)
+    If Not IsArray(src) Then
+        RowsKooperanti = Array(KoopGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+
+    ReDim outA(1 To UBound(src, 1), 1 To 4)
+    For r = 1 To UBound(src, 1)
+        hay = CStr(src(r, 2)) & "|" & CStr(src(r, 3))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        iznos = CDbl(src(r, 4))
+        n = n + 1
+        ' rang je mesto na CELOJ listi, ne redni broj posle pretrage - inace bi
+        ' pretraga "prepakovala" rang i broj bi lagao
+        outA(n, 1) = r
+        outA(n, 2) = CStr(src(r, 2))
+        outA(n, 3) = CStr(src(r, 3))
+        outA(n, 4) = iznos
+        sumVal = sumVal + iznos
+Sledeci:
+    Next r
+
+    mStep = "OK"
+    RowsKooperanti = Array(KoopGridCols(), outA, n, 0#, sumVal, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrDokumenti.RowsKooperanti[" & mStep & "]", Err.description
 End Function
 
 '----------------------------------------------- LISTA: IZGUBLJENI (F1)
@@ -870,6 +924,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
         Case "IZGUBLJENI": Scr_Rows = RowsIzgubljeni(q): Exit Function
+        Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
     End Select
     Scr_Rows = RowsDokumenti(filter, q)
 End Function
