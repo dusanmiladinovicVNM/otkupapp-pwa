@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-82"
+Public Const OTKUI_BUILD   As String = "v6-ui-83"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -123,15 +123,15 @@ Public Const TS_CELL_LG As Single = 9       ' partner
 Private Const HEADER_H    As Single = 42
 Private Const SIDEBAR_W   As Single = 152
 Private Const SIDEBAR_MIN As Single = 36
-Public Const KPI_H       As Single = 64      ' tri reda: naslov, vrednost, kontekst
-Private Const TITLE_H     As Single = 46
-Private Const OTP_H       As Single = 60      ' traka otpremnice (F1)
-Private Const CTX_H       As Single = 72      ' eyebrow red + natpis + polje
-Private Const CTX_LBL_Y   As Single = 24      ' natpis IZNAD polja
-Private Const CTX_FLD_Y   As Single = 38      ' vrh polja u zoni konteksta
+Public Const KPI_H       As Single = 56      ' tri reda: naslov, vrednost, kontekst
+Private Const TITLE_H     As Single = 40
+Private Const OTP_H       As Single = 50      ' traka otpremnice (F1)
+Private Const CTX_H       As Single = 58      ' eyebrow red + natpis + polje
+Private Const CTX_LBL_Y   As Single = 14      ' natpis IZNAD polja
+Private Const CTX_FLD_Y   As Single = 26      ' vrh polja u zoni konteksta
 Private Const RIGHT_W     As Single = 188
-Private Const FIELD_H     As Single = 30
-Private Const FIELD_GRP_H As Single = 50
+Private Const FIELD_H     As Single = 26
+Private Const FIELD_GRP_H As Single = 42
 Private Const INPUT_PAD   As Single = 9      ' unutrasnji padding teksta
 Private Const NAV_H       As Single = 27     ' /3, i prima TS_NAV od 10.5
 ' 21, a NE 19: visina reda mora biti deljiva sa 3. MSForms racuna u tackama, a
@@ -145,7 +145,7 @@ Private Const GRID_ROW_H  As Single = 21
 ' 96/120/144 dpi). Zaglavlje je zato 21, ne 20: sa 20 je telo mreze pocinjalo na
 ' 82pt = 109,33 px, pa je frame mreze bio u podpiksel fazi i prvih par redova se
 ' rasterizovalo drugacije od ostalih.
-Private Const GRID_TOP    As Single = 63     ' 63 + 21 = 84pt = 112 px tacno
+Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
@@ -164,7 +164,11 @@ Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
 Private Const MODE_SEP_H  As Single = 11      ' razmak iznad kartice Storno
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
-Private Const GRP_H       As Single = 15      ' eyebrow red grupe polja
+Private Const GRP_H       As Single = 13      ' eyebrow red grupe polja
+' Vertikalni razmak izmedju redova polja. Do sada je i tu isao GAP (10),
+' isti koji razdvaja kolone - a po visini je 10pt cista rasipnja: tri reda
+' polja i tri grupe su tako uzimali 40pt koje je mreza trazila.
+Private Const ROW_GAP     As Single = 6
 Private Const GRP_LBL_W   As Single = 108     ' natpis grupe, pa linija do kraja
 Private Const SEG_KL_W    As Single = 30      ' prekidac klase u polju KLASA I CENA
 Private Const VAL_CALC_W  As Single = 150     ' racunica DESNO od ploce iznosa
@@ -480,11 +484,11 @@ Private Sub BuildKpi(frm As Object)
         NewLbl z, "kpiBg" & i, "", 0, 0, 120, KPI_H - 1, 8, False, 0, IIf(i = 4, C_KPI_OK, C_CREAM)
         WireBtn z.Controls("kpiBg" & i), "zKpi", "chev"
         NewLbl z, "kpiAcc" & i, "", 0, 12, 2, KPI_H - 24, 8, False, 0, CLng(acc(i))
-        NewSectionHdr z, "kpiC" & i, CStr(cap(i)), 0, 9, 120
-        NewLbl z, "kpiV" & i, ChrW(8212), 0, 22, 120, TxtH(TS_KPI), IIf(i = 4, TS_H1, TS_KPI), True, C_FOREST, -1, _
+        NewSectionHdr z, "kpiC" & i, CStr(cap(i)), 0, 6, 120
+        NewLbl z, "kpiV" & i, ChrW(8212), 0, 18, 120, TxtH(TS_KPI), IIf(i = 4, TS_H1, TS_KPI), True, C_FOREST, -1, _
                fmTextAlignLeft, IIf(i = 4, F_UI, F_NUM)
         ' treci red: kontekst uz vrednost; prazan kad nema sta da kaze
-        NewLbl z, "kpiS" & i, "", 0, 44, 120, TxtH(TS_MICRO), TS_MICRO, False, RGB(146, 158, 140), -1
+        NewLbl z, "kpiS" & i, "", 0, 38, 120, TxtH(TS_MICRO), TS_MICRO, False, RGB(146, 158, 140), -1
         If i < 4 Then NewLbl z, "kpiSep" & i, "", 0, 10, 1, KPI_H - 21, 8, False, 0, C_BORDER_LT
     Next i
 End Sub
@@ -505,11 +509,11 @@ Private Sub BuildTitle(frm As Object)
     z.Controls("titIco").top = CenterIco(z.Controls("titIcoB").top, TIT_ICO_W, TS_NAVICO)
     z.Controls("titIco").ZOrder 0
 
-    NewLbl z, "titName", "-", PAD + TIT_ICO_W + 10, 3, 230, TxtH(TS_DISPLAY), TS_DISPLAY, True, C_FOREST, -1, fmTextAlignLeft, mDisplayFont
-    NewLbl z, "titSub", "-", PAD + TIT_ICO_W + 10, 29, 380, TxtH(TS_META), TS_META, False, C_MUTED, -1
+    NewLbl z, "titName", "-", PAD + TIT_ICO_W + 10, 1, 230, TxtH(TS_DISPLAY), TS_DISPLAY, True, C_FOREST, -1, fmTextAlignLeft, mDisplayFont
+    NewLbl z, "titSub", "-", PAD + TIT_ICO_W + 10, 25, 380, TxtH(TS_META), TS_META, False, C_MUTED, -1
     ' znacka rezima (F1..F8) - stoji uz naslov, ne u liniji sa podnaslovom
-    NewLbl z, "titBadgeB", "", 0, 6, 26, 15, 8, False, 0, C_SOFT_BG
-    NewLbl z, "titBadgeC", "", 0, 7, 26, TxtH(TS_MICRO), TS_MICRO, True, C_GREEN, -1, fmTextAlignCenter, F_NUM
+    NewLbl z, "titBadgeB", "", 0, 4, 26, 15, 8, False, 0, C_SOFT_BG
+    NewLbl z, "titBadgeC", "", 0, 5, 26, TxtH(TS_MICRO), TS_MICRO, True, C_GREEN, -1, fmTextAlignCenter, F_NUM
     z.Controls("titBadgeC").ZOrder 0
     ' lenjir za merenje naslova - znacka mora da stane tacno iza teksta
     NewLbl z, "titRul", "", 0, -400, 10, 14, TS_DISPLAY, True, C_WHITE, -1, fmTextAlignLeft, mDisplayFont
@@ -528,20 +532,20 @@ Private Sub BuildOtpTraka(frm As Object)
     WireZone z
     NewLbl z, "otpLnB", "", 0, OTP_H - 1, 800, 1, 8, False, 0, C_BORDER
 
-    NewLbl z, "otpCap", UCase$(Poruka("OTKUI_OTP_TRAKA")), PAD, 8, 120, 11, _
+    NewLbl z, "otpCap", UCase$(Poruka("OTKUI_OTP_TRAKA")), PAD, 5, 120, 11, _
            TS_MICRO, True, C_MUTED, -1
-    NewLbl z, "otpBroj", ChrW(8212), PAD, 21, 260, 18, TS_H1, True, C_FOREST, -1
-    NewLbl z, "otpSub", "", PAD, 40, 260, 13, TS_META, False, C_MUTED, -1
+    NewLbl z, "otpBroj", ChrW(8212), PAD, 17, 260, 18, TS_H1, True, C_FOREST, -1
+    NewLbl z, "otpSub", "", PAD, 34, 260, 13, TS_META, False, C_MUTED, -1
 
     ' tri meraca + cena; svaki ima natpis, veliku brojku i red za ambalazu
     For i = 0 To 3
-        NewLbl z, "otpML" & i, "", 0, 8, 120, 11, TS_MICRO, True, C_MUTED, -1
-        NewLbl z, "otpMV" & i, ChrW(8212), 0, 20, 120, 20, TS_KPI, True, C_FOREST, _
+        NewLbl z, "otpML" & i, "", 0, 5, 120, 11, TS_MICRO, True, C_MUTED, -1
+        NewLbl z, "otpMV" & i, ChrW(8212), 0, 16, 120, 20, TS_KPI, True, C_FOREST, _
                -1, fmTextAlignLeft, F_NUM
-        NewLbl z, "otpMA" & i, "", 0, 41, 120, 12, TS_MICRO, False, C_MUTED, _
+        NewLbl z, "otpMA" & i, "", 0, 35, 120, 12, TS_MICRO, False, C_MUTED, _
                -1, fmTextAlignLeft, F_NUM
     Next i
-    NewLbl z, "otpPrazno", Poruka("OTKUI_OTP_NEMA"), PAD, 26, 420, 16, _
+    NewLbl z, "otpPrazno", Poruka("OTKUI_OTP_NEMA"), PAD, 20, 420, 16, _
            TS_META, False, C_MUTED, -1
 End Sub
 
@@ -1518,7 +1522,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     Dim g As Long, gk As Variant, imaPolja As Boolean
     Dim valFr As Object, btnY As Single, btnX As Single, tw As Single
     colW = (zw - 2 * PAD - (cols - 1) * GAP) / cols
-    Y = 10
+    Y = 6
     gk = GrpKeys()
 
     ' Polja se redjaju PO GRUPAMA, fiksnim redosledom. Grupa bez ijednog
@@ -1542,7 +1546,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
                     span = SpanOf(c)
                     If span > cols Then span = cols
                     If col + span > cols Then
-                        col = 0: Y = Y + FIELD_GRP_H + GAP
+                        col = 0: Y = Y + FIELD_GRP_H + ROW_GAP
                     End If
                     c.Left = PAD + col * (colW + GAP)
                     c.width = colW * span + (span - 1) * GAP
@@ -1550,13 +1554,13 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
                     c.Height = FIELD_GRP_H
                     LayoutFieldInner c
                     col = col + span
-                    If col >= cols Then col = 0: Y = Y + FIELD_GRP_H + GAP
+                    If col >= cols Then col = 0: Y = Y + FIELD_GRP_H + ROW_GAP
                 End If
             End If
         Next c
         If imaPolja Then
-            If col > 0 Then Y = Y + FIELD_GRP_H + GAP
-            Y = Y + 6                       ' vazduh izmedju grupa
+            If col > 0 Then Y = Y + FIELD_GRP_H + ROW_GAP
+            Y = Y + 2                       ' vazduh izmedju grupa
         Else
             z.Controls("grpH" & g).Visible = False
             z.Controls("grpLn" & g).Visible = False
@@ -1566,7 +1570,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     ' AKCIONI RED. Redosled sleva: poruka | racunica + IZNOS | dugmad.
     ' Iznos i potvrda su jedna radnja pa dele red - ploca ne trosi ceo red.
     ' Redosled dugmadi: Sacuvaj (najcesce) najblize poljima, Otkazi najdalje.
-    btnY = Y + 6
+    btnY = Y + 2
     btnX = zw - PAD - (196 + GAP + 132 + GAP + 72)
     MoveBtn z, "btnSacuvaj", btnX, btnY
     MoveBtn z, "btnSacuvajPrint", btnX + 196 + GAP, btnY
@@ -1590,7 +1594,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     If z.Controls("tstOk").width < 60 Then z.Controls("tstOk").width = 60
     z.Controls("tstOk").Controls("tstMsg").width = z.Controls("tstOk").width - 18
 
-    LayoutFields = btnY + 28 + 14
+    LayoutFields = btnY + 26 + 8
 End Function
 
 ' Redosled grupa polja. Isti niz koristi i BuildForm za naslove.
