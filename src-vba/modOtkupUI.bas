@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-92"
+Public Const OTKUI_BUILD   As String = "v6-ui-93"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -893,6 +893,16 @@ Private Sub BuildGrid(frm As Object)
     ' specifikacije otkupnih blokova za oznacene otpremnice.
     BtnV z, "btnRedMark", Poruka("OTKUI_BTN_RED_MARK"), 0, 36, 104, 19, "ghost"
     BtnV z, "btnRedSpec", Poruka("OTKUI_BTN_RED_SPEC"), 0, 36, 152, 19, "ghost", IC_PRINT
+    ' OD / DO za specifikaciju po datumu (legacy "Stampaj po datumu"). Ovo NISU
+    ' polja dokumenta nego parametri stampe - zato ne prljaju formu (UiChange
+    ' ih preskace pri MarkDirty).
+    NewLbl z, "specOdL", Poruka("OTKUI_LBL_OD"), 0, 39, 18, 12, TS_MICRO, True, C_MUTED, -1
+    NewShell z, "specOd", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
+    NewTxt z, "specOdT", Format$(Date, "dd.mm.yyyy"), 0, 39, 62, 14, False
+    NewLbl z, "specDoL", Poruka("OTKUI_LBL_DO"), 0, 39, 18, 12, TS_MICRO, True, C_MUTED, -1
+    NewShell z, "specDo", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
+    NewTxt z, "specDoT", Format$(Date, "dd.mm.yyyy"), 0, 39, 62, 14, False
+    BtnV z, "btnRedSpecDat", Poruka("OTKUI_BTN_RED_SPECDAT"), 0, 36, 112, 19, "ghost"
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -1895,7 +1905,24 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     ElseIf raK = "OTP" Then
         MoveBtn z, "btnRedSpec", zw - PAD - 152, 36
         MoveBtn z, "btnRedMark", zw - PAD - 152 - GAP - 104, 36
+        ' Opseg datuma trazi jos 296pt levo od dugmadi. Kad ih nema, ceo trio se
+        ' sklanja - isto pravilo po kome se sklanjaju kolone nizeg prioriteta:
+        ' bolje manje alata nego red koji se prelama.
+        Dim dx As Single, dV As Boolean
+        dx = zw - PAD - 152 - GAP - 104 - GAP - 112
+        dV = (dx - 190 > PAD + 190)
+        ShowSpecDat z, dV
+        If dV Then
+            MoveBtn z, "btnRedSpecDat", dx, 36
+            MoveShell z, "specDo", dx - 6 - 74, 36, 74
+            z.Controls("specDoT").Left = dx - 6 - 74 + 6
+            z.Controls("specDoL").Left = dx - 6 - 74 - 18
+            MoveShell z, "specOd", dx - 6 - 74 - 18 - 6 - 74, 36, 74
+            z.Controls("specOdT").Left = dx - 6 - 74 - 18 - 6 - 74 + 6
+            z.Controls("specOdL").Left = dx - 6 - 74 - 18 - 6 - 74 - 18
+        End If
     End If
+    If raK <> "OTP" Then ShowSpecDat z, False
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
     Dim sx As Single: sx = zw - PAD - 88 - GAP - 200
@@ -2289,6 +2316,19 @@ End Function
 ' Ugaseno dugme mora da IZGLEDA ugaseno - inace operater klikne i nista se ne
 ' desi. Ista dva stanja kao kod "Filteri": prigusen tekst dok je mrtvo, pun
 ' kad radi.
+' Opseg datuma nije jedna kontrola nego sest (dva natpisa, dve kutije, dva
+' polja) - BoxShow ume samo dugme, pa ovde ide rucno.
+Private Sub ShowSpecDat(z As Object, ByVal vis As Boolean)
+    Dim nmv As Variant, i As Long
+    On Error Resume Next
+    nmv = Array("specOdL", "specOdB", "specOdF", "specOdT", _
+                "specDoL", "specDoB", "specDoF", "specDoT")
+    For i = 0 To UBound(nmv)
+        z.Controls(CStr(nmv(i))).Visible = vis
+    Next i
+    BoxShow z, "btnRedSpecDat", vis
+End Sub
+
 Private Sub RefreshRowActions()
     Dim z As Object, on_ As Boolean, k As String, n As Long
     On Error Resume Next
@@ -3013,6 +3053,10 @@ Private Sub UiClickCore(ByVal tag As String)
             If Not mMarkOn Then Set mMark = Nothing
             RefreshRowActions
             RenderGrid
+        Case "btnRedSpecDat"
+            modUiScreens.ScrEvent mScreen, "act:specdat:0:" & _
+                Trim$(CStr(mFrm.Controls("zGrid").Controls("specOdT").text)) & "|" & _
+                Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text)), "Click"
         Case "btnRedSpec"
             If MarkCount() = 0 And mSelRow <= 0 Then
                 ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
@@ -3135,7 +3179,8 @@ Private Sub UiChange(ByVal tag As String)
     ' bi se panel otvarao sam od sebe pri svakoj promeni rezima.
     If Not mPopMute And Not mBuilding Then PopFromTyping tag
     ' pretraga nije izmena dokumenta
-    If tag <> "txtSearch" Then MarkDirty
+    ' Pretraga i opseg datuma za stampu nisu izmene dokumenta.
+    If tag <> "txtSearch" And Left$(tag, 4) <> "spec" Then MarkDirty
     Select Case tag
         Case "txtSearch"
             mSearch = Trim$(CStr(mFrm.Controls("zGrid").Controls("txtSearch").text))

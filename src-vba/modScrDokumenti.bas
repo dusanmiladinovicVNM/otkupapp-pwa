@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-92"
+Public Const SCRDOK_BUILD As String = "v6-ui-93"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -202,6 +202,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "spec"
             RowAction = PrintSpec(red)
 
+        Case "specdat"
+            If UBound(p) >= 2 Then RowAction = PrintSpecDat(CStr(p(2)))
+
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
@@ -249,6 +252,30 @@ Private Function PrintSpec(ByVal red As Long) As Boolean
     End If
     modOtkupBlok.PrintSpecifikacija col
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
+    Exit Function
+EH:
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Dnevna / periodicna specifikacija. Opseg stize kao "od|do" onako kako ga je
+' operater otkucao; provera je ista rutina koju koristi i uvoz izvoda
+' (modParse.TryParseDateValue), pa se prihvataju isti oblici datuma.
+Private Function PrintSpecDat(ByVal arg As String) As Boolean
+    Dim d() As String, dOd As Date, dDo As Date
+    On Error GoTo EH
+    d = Split(arg, "|")
+    If UBound(d) < 1 Then Exit Function
+    If Not TryParseDateValue(d(0), dOd) Or Not TryParseDateValue(d(1), dDo) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DATUM"), True
+        Exit Function
+    End If
+    If dDo < dOd Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_DAT_OPSEG"), True
+        Exit Function
+    End If
+    modOtkupBlok.PrintSpecifikacijaPoDatumu dOd, dDo
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC_DAT") & " " & _
+                         Format$(dOd, "dd.mm.yyyy") & " - " & Format$(dDo, "dd.mm.yyyy"), False
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True

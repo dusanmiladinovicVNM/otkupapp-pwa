@@ -508,6 +508,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_RED_STORNO", "Storniraj"
     UpsertRow lo, existing, "OTKUI_BTN_RED_MARK", "Izaberi vi" & ChrW(353) & "e"
     UpsertRow lo, existing, "OTKUI_BTN_RED_SPEC", ChrW(352) & "tampaj specifikaciju"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_SPECDAT", "Po datumu"
+    UpsertRow lo, existing, "OTKUI_LBL_OD", "OD"
+    UpsertRow lo, existing, "OTKUI_LBL_DO", "DO"
 
     UpsertRow lo, existing, "OTKUI_PH_PRETRAGA", "Pretra" & ChrW(382) & "i broj, partnera, zbirnu..."
     UpsertRow lo, existing, "OTKUI_CHIP_DANAS", "Danas"
@@ -566,6 +569,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"
+    UpsertRow lo, existing, "OTKUI_ERR_DAT_OPSEG", ChrW(10007) & " Datum " & ChrW(8222) & "do" & ChrW(8220) & " ne sme biti pre datuma " & ChrW(8222) & "od" & ChrW(8220)
+    UpsertRow lo, existing, "OTKUI_MSG_SPEC_DAT", ChrW(10003) & " Specifikacija po datumu poslata na " & ChrW(353) & "tampu:"
     UpsertRow lo, existing, "OTKUI_MSG_SPEC", ChrW(10003) & " Specifikacija poslata na " & ChrW(353) & "tampu, otpremnica:"
     UpsertRow lo, existing, "OTKUI_ERR_STORNO", ChrW(10007) & " Storno nije uspeo:"
     UpsertRow lo, existing, "OTKUI_ERR_RADNJA", ChrW(10007) & " Radnja nije uspela:"
