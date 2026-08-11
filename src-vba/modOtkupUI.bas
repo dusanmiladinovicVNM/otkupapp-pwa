@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-107"
+Public Const OTKUI_BUILD   As String = "v6-ui-108"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -5314,7 +5314,7 @@ Private Function ParseDatum(ByVal s As String) As Double
 End Function
 
 Private Sub ClearForm()
-    Dim nmv As Variant, i As Long
+    Dim nmv As Variant, i As Long, imaOtp As Boolean
     On Error Resume Next
     mPopMute = True
     mLoading = True
@@ -5327,9 +5327,22 @@ Private Sub ClearForm()
     mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").text = ""
     mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").text = ""
     mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").text = ""
-    ' datum se ne prazni nego vraca na danas - prazno polje bi bilo greska
-    ' koju operater mora da ispravi pri svakom novom dokumentu
-    SetDatumDanas mFrm.Controls("zForm")
+    ' PARTNER se prazni kao i sve ostalo - sledeci dokument je nov kooperant
+    ' (legacy ClearOtkupFields: cmbKooperant.value = "", cmbParcela.Clear). Bez
+    ' ovoga zatecen kooperant ostaje u polju, pa bi unos samo kilograma tiho
+    ' otisao na prethodnog. Prazna vrednost okida i FillOpenBlokovi/FillParcele,
+    ' koji na prazan partner ciste svoje liste.
+    mFrm.Controls("zCtx").Controls("cbKupac").value = ""
+    ' DATUM: dok je otpremnica aktivna, SVI njeni blokovi nose NJEN datum -
+    ' vracanje na danas bi drugi i svaki sledeci blok upisalo pod danasnjim
+    ' datumom, a RefreshBrojPredlog bi mu dao i danasnji broj (otpremnica
+    ' 8/220726 od 22.07 dobijala je blok 8/110826 od 11.08). Legacy
+    ' ClearOtkupFields datum uopste ne dira. Bez otpremnice ostaje staro
+    ' ponasanje: danas, jer prazno polje bi bilo greska koju operater mora da
+    ' ispravi pri svakom novom dokumentu.
+    imaOtp = ImaAktivnuOtpremnicu()
+    If Not imaOtp Then SetDatumDanas mFrm.Controls("zForm")
+    If ParseDatum(FldText("fgDatum")) = 0 Then SetDatumDanas mFrm.Controls("zForm")
     SetOstatak 0
     SetKlasa 1
     ' Cena je obrisana zajedno sa poljima, a vrsta/sorta su ostale izabrane -
@@ -5345,9 +5358,28 @@ Private Sub ClearForm()
     mPopMute = False
     mLoading = False
     MarkClean
+    ' Dok je otpremnica aktivna, sledecem bloku operater unosi samo kooperanta
+    ' i kolicine - zato kursor ide pravo na kooperanta, isto kao posle prefilla
+    ' i kao u legacy ClearOtkupFields (cmbKooperant.SetFocus).
+    If imaOtp Then
+        mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        Exit Sub
+    End If
     If Len(mPrvoPolje) = 0 Then mPrvoPolje = "fgBrOtpr"
     mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
 End Sub
+
+' Da li je otpremnica jos izabrana. Ista pitalica koju koristi traka otpremnice
+' (Scr_OtpInfo vraca prazno kad otpremnice nema), kasno vezano - ljuska ne sme
+' da rano vezuje modul ekrana (zamka #19).
+Private Function ImaAktivnuOtpremnicu() As Boolean
+    Dim info As String
+    On Error Resume Next
+    If mScreen <> "DOKUMENTI" Then Exit Function
+    info = CStr(Application.Run("modScrDokumenti.Scr_OtpInfo"))
+    Err.Clear
+    ImaAktivnuOtpremnicu = (Len(info) > 0)
+End Function
 
 ' Vrednost je zbir po klasama - svaka klasa ima svoju cenu, pa se kilogrami
 ' II klase NE mogu sabrati sa kilogramima I klase pre mnozenja.
