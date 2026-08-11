@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-104"
+Public Const OTKUI_BUILD   As String = "v6-ui-105"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2622,6 +2622,10 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             ' u rezimu Zbirne broj dokumenta JESTE broj zbirne - zasebno polje
             ' bi bilo isti podatak dvaput
             FldShow z, "fgBrZbir", ModeVezujeZbirnu(mode)
+            ' NOVAC NIJE POLJE ROBNOG DOKUMENTA. Kes isplate idu iskljucivo kroz
+            ' F5 (Isplate) i F6 (Kupci - uplate); otkupni list ih vise ne nosi,
+            ' iako legacy frmOtkup ima txtNovac/txtPrimalac pod KES_ISPLATE.
+            FldShow z, "fgNovac", False
             FldShow z, "fgKgI", True
             FldShow z, "fgKgII", True
             FldShow z, "fgCena", True
@@ -2629,10 +2633,6 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgTipAmb", True
             ' prazna ambalaza se izdaje uz otkup i vraca uz prijemnicu;
             ' otpremnica i zbirna je ne dodiruju
-            ' KES ISPLATE: uz otkupni list se moze odmah isplatiti gotovina.
-            ' Polje postoji samo dok je toggle ukljucen - isto kao u legacy
-            ' (ApplyOtkupTogglesState gasi txtNovac/txtPrimalac).
-            FldShow z, "fgNovac", (mode = "F1" And IsKesIsplate())
             FldShow z, "fgAmbPr", (mode = "F1" Or mode = "F4")
             FldShow z, "fgParcela", (mode = "F1" And IsPracenjeParcela())
             FldShow z, "fgSmerRev", False
