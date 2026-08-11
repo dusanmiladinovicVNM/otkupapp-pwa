@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-93"
+Public Const SCRDOK_BUILD As String = "v6-ui-94"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -183,8 +183,18 @@ Private Function RowAction(ByVal tag As String) As Boolean
     If red < 1 Then Exit Function
     ' Prva kolona je BROJ dokumenta u obe liste u kojima radnje postoje
     ' (svi listovi, blokovi otpremnice).
+    ' Broj iz reda trazi samo radnja koja se izvrsava NAD REDOM. Specifikacija
+    ' po oznacenima ("spec") i po datumu ("specdat") ne rade nad redom, pa im
+    ' prazan broj nije razlog da se odustane - na tome je "Po datumu" cutke
+    ' padao pre nego sto je uopste stigao do racuna.
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    If Len(broj) = 0 And p(0) <> "spec" Then Exit Function
+    Select Case p(0)
+        Case "print", "storno"
+            If Len(broj) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+                Exit Function
+            End If
+    End Select
 
     Select Case p(0)
         Case "print"
@@ -216,6 +226,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
             Else
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
+
+        Case Else
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
 EH:

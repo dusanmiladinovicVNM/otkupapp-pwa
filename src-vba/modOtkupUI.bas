@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-93"
+Public Const OTKUI_BUILD   As String = "v6-ui-94"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2301,6 +2301,17 @@ Private Sub RenderPager(ft As Object)
     BoxShow ft, "pgNext", (pages > 1)
 End Sub
 
+' Radnja se salje ekranu, a greska iz njega se PRIKAZUJE. Omotac u
+' modUiScreens gusi greske da ekran koji padne ne obori aplikaciju - ali
+' gusenje bez traga znaci dugme koje "ne radi" i niko ne zna zasto.
+Private Function ScrAct(ByVal tag As String) As Boolean
+    ScrAct = modUiScreens.ScrEvent(mScreen, tag, "Click")
+    If Len(modUiScreens.ScrLastErr) > 0 Then
+        Debug.Print "modOtkupUI.ScrAct: " & modUiScreens.ScrLastErr
+        ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & modUiScreens.ScrLastErr, True
+    End If
+End Function
+
 ' Koje radnje nad redom ima aktivna lista. "DOK" = red je otkupni dokument
 ' (stampa lista, storno), "OTP" = red je otpremnica (oznaci, specifikacija),
 ' "" = lista koju ljuska ne ume da tumaci (ugovorni ekrani, ostali rezimi).
@@ -3054,21 +3065,20 @@ Private Sub UiClickCore(ByVal tag As String)
             RefreshRowActions
             RenderGrid
         Case "btnRedSpecDat"
-            modUiScreens.ScrEvent mScreen, "act:specdat:0:" & _
+            ScrAct "act:specdat:0:" & _
                 Trim$(CStr(mFrm.Controls("zGrid").Controls("specOdT").text)) & "|" & _
-                Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text)), "Click"
+                Trim$(CStr(mFrm.Controls("zGrid").Controls("specDoT").text))
         Case "btnRedSpec"
             If MarkCount() = 0 And mSelRow <= 0 Then
                 ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
             Else
-                modUiScreens.ScrEvent mScreen, "act:spec:" & mSelRow, "Click"
+                ScrAct "act:spec:" & mSelRow
             End If
         Case "btnRedPrint", "btnRedStorno"
             If mSelRow <= 0 Then
                 ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
-            ElseIf modUiScreens.ScrEvent(mScreen, _
-                       "act:" & IIf(tag = "btnRedPrint", "print", "storno") & _
-                       ":" & mSelRow, "Click") Then
+            ElseIf ScrAct("act:" & IIf(tag = "btnRedPrint", "print", "storno") & _
+                          ":" & mSelRow) Then
                 mSelRow = 0
                 RefreshFromData
                 RefreshOtpTraka mFrm

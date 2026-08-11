@@ -32,7 +32,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-93"
+Public Const UISCR_BUILD As String = "v6-ui-94"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -41,6 +41,11 @@ Public Const SCR_NASLOV  As Long = 2
 Public Const SCR_IKONICA As Long = 3
 Public Const SCR_GRUPA   As Long = 4
 Public Const SCR_OBLAST  As Long = 5
+
+' Poslednja greska iz ekrana. Omotaci guse greske (ekran koji padne ne sme da
+' obori aplikaciju), ali gusenje BEZ TRAGA znaci da dugme "ne radi" i niko ne
+' zna zasto - tacno to se desilo sa "Po datumu". Ljuska ovo cita i prikazuje.
+Public ScrLastErr As String
 
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
@@ -182,9 +187,16 @@ End Function
 Public Function ScrEvent(ByVal kljuc As String, ByVal tag As String, _
                          ByVal ev As String) As Boolean
     Dim m As String
+    ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
-    If Len(m) > 0 Then ScrEvent = CBool(Application.Run(m & ".Scr_Event", tag, ev))
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrEvent = CBool(Application.Run(m & ".Scr_Event", tag, ev))
+    If Err.Number <> 0 Then
+        ScrLastErr = m & ".Scr_Event " & tag & " -> " & Err.Number & " " & Err.description
+        Err.Clear
+    End If
 End Function
 
 ' Redovi za deljenu mrezu. Vraca Array(kolone, redovi, n, zbirKg, zbirVal)
