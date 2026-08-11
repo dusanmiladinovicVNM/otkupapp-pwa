@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-86"
+Public Const UIKIT_BUILD As String = "v6-ui-87"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-86"
+Public Const OTKUI_BUILD   As String = "v6-ui-87"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -283,6 +283,9 @@ Private mCntNefakt As Long
 ' jos nije nula. Broj se racuna nad SVIM otpremnicama, ne nad filtriranom
 ' listom - cip mora da kaze koliko ih ukupno ceka, i kad je sam ugasen.
 Private mCntOtvor As Long
+' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
+' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
+Private mGridToast As Boolean
 Private mChromeRemoved As Boolean
 Private mCombosFilled As Boolean
 Private mPartMap As Object
@@ -1631,6 +1634,13 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
         valFr.Left = PAD
         valFr.top = btnY - 16            ' ploca (28pt) tacno u liniji sa dugmetom
         valFr.Height = FIELD_GRP_H
+        ' Okvir ploce je visok kao polje (46), ali mu je gornjih 16pt prazno -
+        ' ploca nema natpis iznad sebe. Taj prazan, BEO deo je ulazio 5pt u
+        ' poslednji red polja i brisao mu donju ivicu (KOL. AMBALAZE i TIP
+        ' AMBALAZE - tacno onoliko sirine koliko ploca zauzima). Ploca zato ide
+        ' na dno z-reda: prazan deo se sakrije iza polja, a njen vidljivi deo
+        ' pocinje 11pt nize i nista ne prekriva.
+        valFr.ZOrder 1
         LayoutFieldInner valFr
         tw = valFr.Left + valFr.width + GAP
     End If
@@ -3610,6 +3620,15 @@ Private Sub LoadGridFromScreen()
     End If
     mSumKg = CDbl(d(3))
     mSumVal = CDbl(d(4))
+    ' Ekran bez ijednog reda vraca Empty umesto niza - tako to radi lista
+    ' blokova dok otpremnica nije izabrana. Dodela Empty u tipizirani niz
+    ' obara "Type mismatch", pa je mreza javljala gresku za stanje koje je
+    ' potpuno ispravno (i crveni toast je posle toga ostajao na ekranu).
+    If Not IsArray(d(1)) Then
+        mViewN = 0
+        mView = Empty
+        Exit Sub
+    End If
     ' Sortiranje je do sada zivelo unutar FillGrid, pa je ovaj put isao mimo
     ' njega: klik na zaglavlje je menjao mSortCol i ponovo citao redove, ali
     ' ih niko nije prerasporedjivao. Zato ide ovde, nad onim sto ekran vrati.
@@ -3625,6 +3644,7 @@ Private Sub LoadGridFromScreen()
 End Sub
 
 Private Sub ReloadGrid()
+    Dim errNum As Long, errSrc As String, errDesc As String
     If mBusyGrid Then Exit Sub
     If mBuilding Then Exit Sub
     mBusyGrid = True
@@ -3635,6 +3655,13 @@ Private Sub ReloadGrid()
     LoadGridFromScreen
     mPage = 1
     RenderGrid
+    ' Uspelo citanje gasi PRETHODNU gresku mreze. Crveni toast nema tajmer -
+    ' namerno, greska ne sme da nestane sama - pa je bez ovoga ostajao na
+    ' ekranu i posle poteza koji je sve doveo u red.
+    If mGridToast Then
+        mGridToast = False
+        HideToast
+    End If
     mBusyGrid = False
     Exit Sub
 EH:
@@ -3646,11 +3673,16 @@ EH:
     ' (Err.Raise ..., "modScrDokumenti.Scr_Rows[petlja po redovima]", ...), pa
     ' se cita odatle. Tako svaki ekran prijavljuje svoje korake, a ljuska ne
     ' mora da zna nijedan.
+    ' Err se cita PRVI, pre bilo kog drugog poziva: Poruka() usput obrise
+    ' stanje greske (ima svoj On Error Resume Next), pa je toast prijavljivao
+    ' prazan izvor i sifru 0 - poruku od koje se nije imalo sta zakljuciti.
+    errNum = Err.Number: errSrc = Err.Source: errDesc = Err.description
     mBusyGrid = False
+    mGridToast = True
     Debug.Print "modOtkupUI.ReloadGrid PAO [" & mScreen & " / " & ActiveMode & _
-                " / " & Err.Source & "]: " & Err.Number & " " & Err.description
-    ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & Err.Source & _
-              " (" & Err.Number & ")", True
+                " / " & errSrc & "]: " & errNum & " " & errDesc
+    ShowToast Poruka("OTKUI_MSG_MREZA_PALA") & " " & errSrc & _
+              " (" & errNum & ")", True
 End Sub
 
 ' Rezimi kojima je 4. kolona TEKST, a ne broj: gotovinski promet nosi kanal,
