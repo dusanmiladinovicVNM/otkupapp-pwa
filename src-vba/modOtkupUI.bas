@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-91"
+Public Const OTKUI_BUILD   As String = "v6-ui-92"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -286,6 +286,11 @@ Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
 Private mGridToast As Boolean
+' Oznacavanje vise redova (lista otpremnica -> specifikacija). Kljuc je PRVA
+' KOLONA reda, ne njegov redni broj: sortiranje, pretraga i strane menjaju
+' redni broj, a broj otpremnice ostaje isti.
+Private mMarkOn As Boolean
+Private mMark As Object
 Private mChromeRemoved As Boolean
 Private mCombosFilled As Boolean
 Private mPartMap As Object
@@ -884,6 +889,10 @@ Private Sub BuildGrid(frm As Object)
     ' prosledjuje izbor reda. Ugasene su dok red nije izabran.
     BtnV z, "btnRedPrint", Poruka("OTKUI_BTN_RED_PRINT"), 0, 36, 116, 19, "ghost", IC_PRINT
     BtnV z, "btnRedStorno", Poruka("OTKUI_BTN_RED_STORNO"), 0, 36, 88, 19, "ghost"
+    ' Lista otpremnica ima svoj par: oznacavanje vise redova i stampa
+    ' specifikacije otkupnih blokova za oznacene otpremnice.
+    BtnV z, "btnRedMark", Poruka("OTKUI_BTN_RED_MARK"), 0, 36, 104, 19, "ghost"
+    BtnV z, "btnRedSpec", Poruka("OTKUI_BTN_RED_SPEC"), 0, 36, 152, 19, "ghost", IC_PRINT
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -1871,14 +1880,21 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
         MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
     End If
     z.Controls("grdSrc").Left = PAD + 176
-    ' radnje nad redom stoje uz desnu ivicu reda cipova; storno je najdalje
-    Dim raV As Boolean
-    raV = RowActionsVisible()
-    BoxShow z, "btnRedPrint", raV
-    BoxShow z, "btnRedStorno", raV
-    If raV Then
+    ' Radnje nad redom stoje uz desnu ivicu reda cipova. Koji par - zavisi od
+    ' liste: dokumenti dobijaju stampu lista i storno, otpremnice oznacavanje i
+    ' stampu specifikacije.
+    Dim raK As String
+    raK = RowActKind()
+    BoxShow z, "btnRedPrint", (raK = "DOK")
+    BoxShow z, "btnRedStorno", (raK = "DOK")
+    BoxShow z, "btnRedMark", (raK = "OTP")
+    BoxShow z, "btnRedSpec", (raK = "OTP")
+    If raK = "DOK" Then
         MoveBtn z, "btnRedStorno", zw - PAD - 88, 36
         MoveBtn z, "btnRedPrint", zw - PAD - 88 - GAP - 116, 36
+    ElseIf raK = "OTP" Then
+        MoveBtn z, "btnRedSpec", zw - PAD - 152, 36
+        MoveBtn z, "btnRedMark", zw - PAD - 152 - GAP - 104, 36
     End If
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
@@ -2140,7 +2156,7 @@ Public Sub RenderGrid()
                     End If
                 End With
             Next k
-            PaintRow body, i, (from_ + i = mSelRow), (i = mHoverRow)
+            PaintRow body, i, (from_ + i = mSelRow), (i = mHoverRow), RowMarked(from_ + i)
         Else
             body.Controls("rb" & i).Visible = False
             body.Controls("rl" & i).Visible = False
@@ -2207,10 +2223,15 @@ Private Function PillW(ByVal cap As String) As Single
     If PillW < 46 Then PillW = 46
 End Function
 
-Private Sub PaintRow(body As Object, ByVal i As Long, ByVal isSel As Boolean, ByVal isHover As Boolean)
+Private Sub PaintRow(body As Object, ByVal i As Long, ByVal isSel As Boolean, _
+                     ByVal isHover As Boolean, Optional ByVal isMark As Boolean = False)
     Dim bg As Long, c As Long
     On Error Resume Next
-    If isSel Then
+    If isMark Then
+        ' oznacen red ima svoju boju i kad je izabran - inace se posle klika ne
+        ' vidi da li je oznaka ostala
+        bg = C_SOFT_BG
+    ElseIf isSel Then
         bg = C_SAND
     ElseIf isHover Then
         bg = C_ROW_HOVER
@@ -2253,15 +2274,15 @@ Private Sub RenderPager(ft As Object)
     BoxShow ft, "pgNext", (pages > 1)
 End Sub
 
-' Radnje nad redom postoje samo tamo gde red JESTE otkupni dokument: u rezimu
-' otkupa, u listi svih listova ili blokova otpremnice. U listi otpremnica red
-' je otpremnica (nju se ne stampa kao otkupni list ni ne stornira odavde), a
-' na ugovornim ekranima ljuska ne zna sta je red.
-Private Function RowActionsVisible() As Boolean
+' Koje radnje nad redom ima aktivna lista. "DOK" = red je otkupni dokument
+' (stampa lista, storno), "OTP" = red je otpremnica (oznaci, specifikacija),
+' "" = lista koju ljuska ne ume da tumaci (ugovorni ekrani, ostali rezimi).
+Private Function RowActKind() As String
     If mScreen <> "DOKUMENTI" Then Exit Function
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case ActiveLista()
-        Case "SVI", "BLOKOVI": RowActionsVisible = True
+        Case "SVI", "BLOKOVI": RowActKind = "DOK"
+        Case "OTPREMNICE":     RowActKind = "OTP"
     End Select
 End Function
 
@@ -2269,16 +2290,77 @@ End Function
 ' desi. Ista dva stanja kao kod "Filteri": prigusen tekst dok je mrtvo, pun
 ' kad radi.
 Private Sub RefreshRowActions()
-    Dim z As Object, on_ As Boolean
+    Dim z As Object, on_ As Boolean, k As String, n As Long
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     Set z = mFrm.Controls("zGrid")
-    If Not RowActionsVisible() Then Exit Sub
+    k = RowActKind()
     on_ = (mSelRow > 0)
-    BoxState z, "btnRedPrint", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
-    BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
-    z.Controls("btnRedPrintI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
+    If k = "DOK" Then
+        BoxState z, "btnRedPrint", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
+        BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
+        z.Controls("btnRedPrintI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
+    ElseIf k = "OTP" Then
+        n = MarkCount()
+        ' dok je oznacavanje ukljuceno dugme nosi broj oznacenih - to je jedini
+        ' brojac koji operater u tom trenutku gleda
+        z.Controls("btnRedMarkC").caption = Poruka("OTKUI_BTN_RED_MARK") & _
+                                            IIf(mMarkOn, " " & n, "")
+        BoxState z, "btnRedMark", IIf(mMarkOn, C_SOFT_BG, C_WHITE), _
+                 IIf(mMarkOn, C_GREEN, C_MUTED), mMarkOn
+        on_ = (n > 0 Or mSelRow > 0)
+        BoxState z, "btnRedSpec", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
+        z.Controls("btnRedSpecI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
+    End If
 End Sub
+
+'------------------------------------------------------- OZNACENI REDOVI
+' Kljuc reda je njegova PRVA KOLONA (broj otpremnice) - preziveo sortiranje,
+' pretragu i promenu strane, sto redni broj ne bi.
+Private Function RowKeyAt(ByVal r As Long) As String
+    On Error Resume Next
+    If r < 1 Or r > mViewN Then Exit Function
+    RowKeyAt = Trim$(CStr(mView(r, 1)))
+End Function
+
+Private Function RowMarked(ByVal r As Long) As Boolean
+    If mMark Is Nothing Then Exit Function
+    RowMarked = mMark.Exists(RowKeyAt(r))
+End Function
+
+Private Function MarkCount() As Long
+    If mMark Is Nothing Then Exit Function
+    MarkCount = mMark.count
+End Function
+
+Private Sub ToggleMark(ByVal tag As String)
+    Dim i As Long, r As Long, k As String
+    i = RowIndexFromTag(tag)
+    If i < 0 Then Exit Sub
+    r = (mPage - 1) * mPageSize + i + 1
+    k = RowKeyAt(r)
+    If Len(k) = 0 Then Exit Sub
+    If mMark Is Nothing Then Set mMark = CreateObject("Scripting.Dictionary")
+    If mMark.Exists(k) Then mMark.Remove k Else mMark(k) = True
+End Sub
+
+' Prazni i oznake i sam rezim - zove se pri svakoj promeni liste, rezima ili
+' ekrana, da oznake iz jedne liste ne prezive u drugu.
+Private Sub ClearMarks()
+    mMarkOn = False
+    Set mMark = Nothing
+End Sub
+
+' Kljucevi oznacenih redova, spojeni "|". Ekran ih tumaci - ljuska ne zna sta
+' su brojevi u prvoj koloni.
+Public Function MarkedKeys() As String
+    Dim kk As Variant, res As String
+    If mMark Is Nothing Then Exit Function
+    For Each kk In mMark.keys
+        res = res & IIf(Len(res) > 0, "|", "") & CStr(kk)
+    Next kk
+    MarkedKeys = res
+End Function
 
 Private Sub RenderChipCounts(z As Object)
     On Error Resume Next
@@ -2463,6 +2545,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
             UCase$(Poruka("OTKUI_FLD_AMB_PR_" & k))
     End If
 
+    ClearMarks                       ' oznake pripadaju JEDNOJ listi jednog rezima
     If key = "F8" Then mFilter = "otkazane" Else mFilter = "danas"
     ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
     ' listu, a posao za koji ta lista postoji su bas neraspodeljene otpremnice.
@@ -2825,7 +2908,14 @@ Private Sub UiClickCore(ByVal tag As String)
     If mFltOpen And tag <> "btnFilteri" Then CloseFilterPanel
 
     If Left$(tag, 2) = "rb" Or (Left$(tag, 1) = "c" And InStr(tag, "_") > 0) Then
-        RowFromTag tag
+        ' U rezimu oznacavanja klik NE bira red (u listi otpremnica izbor vodi
+        ' pravo na blokove) nego ukljucuje/iskljucuje oznaku.
+        If mMarkOn Then
+            ToggleMark tag
+            RefreshRowActions
+        Else
+            RowFromTag tag
+        End If
         RenderGrid
         Exit Sub
     End If
@@ -2918,6 +3008,17 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "btnFilteri": ToggleFilterPanel
         ' Radnja nad izabranim redom. Ljuska proverava SAMO da je red izabran;
         ' sta radnja znaci zna ekran (upis i stampa ostaju u poslovnim modulima).
+        Case "btnRedMark"
+            mMarkOn = Not mMarkOn
+            If Not mMarkOn Then Set mMark = Nothing
+            RefreshRowActions
+            RenderGrid
+        Case "btnRedSpec"
+            If MarkCount() = 0 And mSelRow <= 0 Then
+                ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+            Else
+                modUiScreens.ScrEvent mScreen, "act:spec:" & mSelRow, "Click"
+            End If
         Case "btnRedPrint", "btnRedStorno"
             If mSelRow <= 0 Then
                 ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
@@ -3394,6 +3495,7 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     mScreen = kljuc
     ClosePopup
     CloseFilterPanel
+    ClearMarks
     mFilter = "sve"                  ' ugovorni ekran nema cipove
     mSearch = ""
     ' Kolona sortiranja se NE prenosi izmedju ekrana: 9. kolona na Paletama i

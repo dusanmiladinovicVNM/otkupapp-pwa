@@ -1160,7 +1160,7 @@ End Sub
 ' Specifikacija RUCNO izabranih otpremnica (postojeci tok: dugme "Biraj
 ' otpremnice" -> multiselect -> ChrW(352) & "tampaj specifikaciju"). Tanak omotac oko
 ' zajednickog renderera RenderSpec (filter po skupu OtpremnicaID).
-Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
+Public Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
     Dim selSet As Object: Set selSet = CreateObject("Scripting.Dictionary")
     Dim v As Variant

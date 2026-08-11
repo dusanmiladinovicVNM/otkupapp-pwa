@@ -506,6 +506,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_FILTERI", "Filteri"
     UpsertRow lo, existing, "OTKUI_BTN_RED_PRINT", ChrW(352) & "tampaj list"
     UpsertRow lo, existing, "OTKUI_BTN_RED_STORNO", "Storniraj"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_MARK", "Izaberi vi" & ChrW(353) & "e"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_SPEC", ChrW(352) & "tampaj specifikaciju"
 
     UpsertRow lo, existing, "OTKUI_PH_PRETRAGA", "Pretra" & ChrW(382) & "i broj, partnera, zbirnu..."
     UpsertRow lo, existing, "OTKUI_CHIP_DANAS", "Danas"
@@ -563,6 +565,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_CENA", ChrW(10007) & " Cena mora biti > 0"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
+    UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"
+    UpsertRow lo, existing, "OTKUI_MSG_SPEC", ChrW(10003) & " Specifikacija poslata na " & ChrW(353) & "tampu, otpremnica:"
     UpsertRow lo, existing, "OTKUI_ERR_STORNO", ChrW(10007) & " Storno nije uspeo:"
     UpsertRow lo, existing, "OTKUI_ERR_RADNJA", ChrW(10007) & " Radnja nije uspela:"
     UpsertRow lo, existing, "OTKUI_MSG_STAMPA", ChrW(10003) & " Poslato na " & ChrW(353) & "tampu:"

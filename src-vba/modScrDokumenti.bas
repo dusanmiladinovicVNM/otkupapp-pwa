@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-91"
+Public Const SCRDOK_BUILD As String = "v6-ui-92"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -184,7 +184,7 @@ Private Function RowAction(ByVal tag As String) As Boolean
     ' Prva kolona je BROJ dokumenta u obe liste u kojima radnje postoje
     ' (svi listovi, blokovi otpremnice).
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    If Len(broj) = 0 Then Exit Function
+    If Len(broj) = 0 And p(0) <> "spec" Then Exit Function
 
     Select Case p(0)
         Case "print"
@@ -199,6 +199,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
             modPrint.OutputOtkupniList ids
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_STAMPA") & " " & broj, False
 
+        Case "spec"
+            RowAction = PrintSpec(red)
+
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
@@ -211,6 +214,41 @@ Private Function RowAction(ByVal tag As String) As Boolean
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
     End Select
+    Exit Function
+EH:
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Specifikacija otkupnih blokova za OZNACENE otpremnice; ako nijedna nije
+' oznacena, za onu na izabranom redu. Posao radi postojeci
+' modOtkupBlok.PrintSpecifikacija - ovde se samo skupljaju ID-evi.
+Private Function PrintSpec(ByVal red As Long) As Boolean
+    Dim keys As String, k As Variant, col As Collection, broj As String
+    On Error GoTo EH
+    Set col = New Collection
+    ' mapu broj->OtkupremnicaID puni RowsOtpremnice; bez nje (lista jos nije
+    ' citana) nema sta da se stampa
+    If mOtpIds Is Nothing Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+        Exit Function
+    End If
+    keys = modOtkupUI.MarkedKeys()
+    If Len(keys) > 0 Then
+        For Each k In Split(keys, "|")
+            If mOtpIds.Exists(CStr(k)) Then col.Add CStr(mOtpIds(CStr(k)))
+        Next k
+    ElseIf red > 0 Then
+        broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+        If Len(broj) > 0 Then
+            If mOtpIds.Exists(broj) Then col.Add CStr(mOtpIds(broj))
+        End If
+    End If
+    If col.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+        Exit Function
+    End If
+    modOtkupBlok.PrintSpecifikacija col
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SPEC") & " " & col.count, False
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
