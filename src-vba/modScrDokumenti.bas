@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-88"
+Public Const SCRDOK_BUILD As String = "v6-ui-89"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -82,9 +82,16 @@ Public Function Scr_OtpInfo() As String
     blAmb = modOtkupBlok.SumAmbByOtp(mOtpID)
     cena = modOtkupBlok.ExistingBlokCena(mOtpID)
 
+    ' Brojevi IDU KROZ NumStr, ne kroz prosto nadovezivanje. Nadovezivanje
+    ' Double-a na String koristi LOKALNI decimalni znak, pa je 60,6 kg putovalo
+    ' kao "60,6"; ljuska taj niz cita sa Val(), koji je locale-nezavistan i
+    ' staje na zarezu - u traci se pojavljivalo 60,00, a ostatak 0,6 kg je
+    ' postajao 0,00 i gasio crveni semafor. Str$ uvek pise tacku, pa se par
+    ' Str$/Val poklapa.
     Scr_OtpInfo = mOtpBroj & "|" & OtpKupacNaziv(kupac) & "|" & dat & "|" & _
-                  ukKg & "|" & blKg & "|" & (ukKg - blKg) & "|" & _
-                  ukAmb & "|" & blAmb & "|" & (ukAmb - blAmb) & "|" & cena
+                  NumStr(ukKg) & "|" & NumStr(blKg) & "|" & NumStr(ukKg - blKg) & "|" & _
+                  NumStr(ukAmb) & "|" & NumStr(blAmb) & "|" & NumStr(ukAmb - blAmb) & _
+                  "|" & NumStr(cena)
 End Function
 
 ' Broj iz Variant-a. modOtkupBlok ima svoj NumVal ali je Private; ovde je
@@ -92,6 +99,13 @@ End Function
 ' modulu samo zbog konverzije.
 Private Function NumVal(ByVal v As Variant) As Double
     If IsNumeric(v) Then NumVal = CDbl(v)
+End Function
+
+' Broj u niz koji ne zavisi od lokalnih podesavanja - Str$ uvek pise tacku
+' kao decimalni znak i nikad ne grupise hiljade, tacno onako kako ga Val()
+' na drugoj strani i ocekuje.
+Private Function NumStr(ByVal v As Double) As String
+    NumStr = Trim$(Str$(v))
 End Function
 
 Private Function OtpKupacNaziv(ByVal stanicaID As String) As String

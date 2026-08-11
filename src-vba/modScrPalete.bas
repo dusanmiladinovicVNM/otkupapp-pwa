@@ -23,7 +23,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-88"
+Public Const SCRPAL_BUILD As String = "v6-ui-89"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
