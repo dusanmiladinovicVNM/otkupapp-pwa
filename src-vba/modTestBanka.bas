@@ -35,6 +35,7 @@ Option Explicit
 '  T13 AUD-026  CSV nalozi se ODBIJAJU kada nalog trazi vise nego sto je otvoreno
 '               (granice u cent-domenu: 600.01 na otvoreno 600.00 je preplata)
 '  T14 AUD-026  kapija je UNUTAR putanje koja gradi CSV payload (ne samo validator)
+'  T15 AUD-026  dupli/prazan OtkupID obara saldo-mapu (fail-closed kanonski kljuc)
 ' ============================================================
 
 Private mPass As Long
@@ -74,6 +75,7 @@ Public Sub RunBankaImportTestSuite()
     T12_ClampOverrideNaOtvoreno
     T13_NalogPrekoOtvorenogSeOdbija
     T14_CsvPayloadNosiKapiju
+    T15_DupliOtkupIDObaraSaldoMapu
 
     ' AppendRow/UpdateCell pisu CSV crash-recovery journal koji tx.RollbackTx NE
     ' povlaci -- test redovi bi ostali u Journal folderu i sledeci start bi javio
@@ -941,6 +943,83 @@ Private Sub T14_CsvPayloadNosiKapiju()
     Chk InStr(payload, ";0.00;") = 0, S & "u fajlu nema naloga na 0.00"
     Chk InStr(payload, P & "BLOK-P3") = 0, S & "blok sa ostatkom nije u fajlu"
     Chk InStr(payload, ";600.00;") > 0, S & "regularan nalog je i dalje tu"
+End Sub
+
+' ============================================================
+' T15 - AUD-026: dupli kanonski kljuc obara saldo-mapu (fail-closed).
+'
+' GetOpenOtkupi ne agregira po OtkupID nego vraca red po red. Kod korumpiranog
+' PK-a (dva reda, isti OtkupID, RAZLICIT broj dokumenta i otvoreni iznos) mapa
+' bi -- da se gradi assignment-om -- pustila da poslednji red odluci saldo, pa
+' bi otvoreno bloka B odobrilo nalog za blok A. Zato BuildOpenAmountDict na
+' duplikat PADA; posledica je da ni payload ne nastane (mapa se gradi PRE
+' njega), dakle nema fajla za banku.
+'
+' Namerno se testiraju KONFLIKTNE vrednosti -- to je slucaj koji tiho menja
+' finansijski ishod.
+' ============================================================
+Private Sub T15_DupliOtkupIDObaraSaldoMapu()
+    Const S As String = "T15 dupli OtkupID: "
+
+    ' Zdrava lista i dalje mora da prodje (da kapija ne bude preosetljiva).
+    Dim zdrava As Collection
+    Set zdrava = New Collection
+    zdrava.Add MakeBlok(P & "OTK-D1", P & "BLOK-D1", 500)
+    zdrava.Add MakeBlok(P & "OTK-D2", P & "BLOK-D2", 2000)
+
+    Dim mapa As Object
+    Dim errNum As Long
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(zdrava)
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zdrava lista gradi mapu bez greske"
+    If errNum = 0 Then ChkEq mapa.count, 2, S & "mapa ima oba bloka"
+
+    ' Dva reda, ISTI OtkupID, razlicit dokument i razlicit otvoreni iznos.
+    Dim korumpirana As Collection
+    Set korumpirana = New Collection
+    korumpirana.Add MakeBlok(P & "OTK-D9", P & "BLOK-A", 500)
+    korumpirana.Add MakeBlok(P & "OTK-D9", P & "BLOK-B", 2000)
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(korumpirana)
+    errNum = Err.Number
+    Dim errDesc As String
+    errDesc = Err.description
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "dupli OtkupID PODIZE gresku (ne bira poslednji red)"
+    ChkEq errNum, ERR_ISPLATA_DUPLI_OTKUPID, S & "greska je tipizirana"
+    Chk InStr(errDesc, P & "OTK-D9") > 0, S & "poruka imenuje sporan OtkupID"
+
+    ' Klamp koristi istu mapu -> ne sme da proguta pad (inace bi pregled tiho
+    ' odlucio koji duplikat vazi).
+    Dim ovr As Object
+    Set ovr = CreateObject("Scripting.Dictionary")
+    ovr(P & "OTK-D9") = 1000#
+
+    On Error Resume Next
+    Err.Clear
+    ClampOverridesToOpen ovr, korumpirana
+    errNum = Err.Number
+    On Error GoTo 0
+    Chk errNum <> 0, S & "ClampOverridesToOpen propagira pad (ne guta ga)"
+
+    ' Prazan OtkupID je ista klasa problema -- saldo se ne moze vezati za blok.
+    Dim praznaID As Collection
+    Set praznaID = New Collection
+    praznaID.Add MakeBlok("", P & "BLOK-D0", 500)
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(praznaID)
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_OTKUPID, S & "prazan OtkupID PODIZE tipiziranu gresku"
 End Sub
 
 ' Broj DATA redova u CSV payload-u (bez zaglavlja i bez zavrsnog praznog reda).

@@ -25,6 +25,10 @@ Option Explicit
 ' sazme u "..."), da poruka ostane citljiva i kad je lista velika.
 Private Const MAX_SALDO_PROBLEMA As Long = 10
 
+' Integritet kanonskog kljuca otvorenih blokova (vidi BuildOpenAmountDict).
+Public Const ERR_ISPLATA_DUPLI_OTKUPID As Long = vbObjectError + 2620
+Public Const ERR_ISPLATA_PRAZAN_OTKUPID As Long = vbObjectError + 2621
+
 ' ------------------------------------------------------------------
 ' PRAVILO ZA POREDJENJE NOVCA NA OVOJ PUTANJI (AUD-026)
 '
@@ -346,19 +350,51 @@ End Function
 ' iz GetOpenOtkupi -> vrednost minus knjizene isplate). Nema pozicijskog
 ' citanja tabela ovde: saldo se ne racuna ponovo, samo se indeksira.
 '
-' Dupli OtkupID nije ocekivan (ID je jedinstven u tblOtkup), ali se upisuje
-' assignment-om a ne .Add-om, da korumpirani podatak ne obori ceo pregled.
+' STRIKTNO na kanonskom kljucu (fail-closed): dupli ili prazan OtkupID
+' PODIZE gresku umesto da jedan red pobedi drugi. GetOpenOtkupi ne agregira
+' po OtkupID nego vraca red po red, pa bi kod korumpiranog PK-a (dva reda,
+' isti OtkupID, RAZLICIT BrojDokumenta i otvoreni iznos) poslednji upis
+' odlucio saldo -- i saldo bloka B bi odobrio nalog za blok A. Ranija
+' verzija je ovde svesno pisala assignment-om "da korumpirani podatak ne
+' obori pregled"; to je na finansijskoj kapiji fail-OPEN i zato je vraceno
+' na tvrd pad.
+'
+' Posledica je namerna i na obe strane:
+'   - pregled (ClampOverridesToOpen) prijavi gresku umesto da "nekako"
+'     izabere koji duplikat vazi;
+'   - GenerisiNalogeCSV pukne u svom EH pre nego sto payload uopste nastane,
+'     pa nema ni fajla za banku.
+' Duplikat OtkupID-a inace hvata i RunProductionHealthCheck, ali health-check
+' nije preduslov svakog klika na "Generisi naloge".
 '======================================================================
-Private Function BuildOpenAmountDict(ByVal blokovi As Collection) As Object
+Public Function BuildOpenAmountDict(ByVal blokovi As Collection) As Object
+    Const SRC As String = "modBankaExportPregled.BuildOpenAmountDict"
+
     Dim dict As Object
     Set dict = CreateObject("Scripting.Dictionary")
 
     If Not blokovi Is Nothing Then
         Dim blk As clsBlokIsplata
         Dim v As Variant
+        Dim oid As String
         For Each v In blokovi
             Set blk = v
-            dict(blk.otkupID) = blk.OtvorenIznos
+            oid = Trim$(blk.otkupID)
+
+            If LenB(oid) = 0 Then
+                Err.Raise ERR_ISPLATA_PRAZAN_OTKUPID, SRC, _
+                          "Prazan OtkupID u otvorenim blokovima (dokument: " & _
+                          blk.brojDokumenta & "). Saldo se ne moze pouzdano utvrditi."
+            End If
+
+            If dict.Exists(oid) Then
+                Err.Raise ERR_ISPLATA_DUPLI_OTKUPID, SRC, _
+                          "Dupli OtkupID u otvorenim blokovima: " & oid & _
+                          " (dokument: " & blk.brojDokumenta & "). Saldo se ne moze " & _
+                          "pouzdano utvrditi -- pokrenite proveru integriteta podataka."
+            End If
+
+            dict.Add oid, blk.OtvorenIznos
         Next v
     End If
 
@@ -567,7 +603,15 @@ Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
     Exit Function
 
 EH:
+    ' Razlog se hvata PRE LogErr-a (BUG-1/AUD-054) i vraca kroz outOdbijeno:
+    ' ovde zavrsava i tvrd pad integriteta kljuca (dupli/prazan OtkupID), pa
+    ' bi generican tekst "pogledajte log" ostavio operatera bez ideje sta se
+    ' desilo. Fajl u svakom slucaju NIJE napisan.
+    Dim errDesc As String
+    errDesc = Err.description
+
     LogErr "modBankaExportPregled.GenerisiNalogeCSV"
+    outOdbijeno = "Nalozi NISU generisani (gre" & ChrW(353) & "ka): " & errDesc
     GenerisiNalogeCSV = ""
 End Function
 

@@ -485,8 +485,14 @@ Private Sub LoadBlokovi()
     Exit Sub
 
 EH:
+    ' Razlog se hvata PRE LogErr-a (BUG-1/AUD-054) i prikazuje: ovde zavrsava
+    ' i tvrd pad integriteta kanonskog kljuca (dupli/prazan OtkupID iz
+    ' BuildOpenAmountDict), a generican tekst bi operatera ostavio bez ideje
+    ' sta da uradi.
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.LoadBlokovi"
-    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju."
+    lblStatus.caption = "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju: " & errDesc
 End Sub
 
 '======================================================================
