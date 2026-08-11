@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-99"
+Public Const SCRDOK_BUILD As String = "v6-ui-100"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -54,6 +54,42 @@ Private mOtpBroj As String        ' njen broj - za traku i naslov liste
 Private mOtpIds As Object
 ' broj bloka -> OtkupID, za listu izgubljenih; puni ga RowsIzgubljeni
 Private mLostIds As Object
+
+' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
+' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
+Public Function Scr_Liste() As Variant
+    If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
+    Scr_Liste = Array( _
+        "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTKUP|96", _
+        "OTPREMNICE|OTKUI_SEG_LS_OTP|OTKUI_GRID_TITLE_OTPREMNICA|96", _
+        "BLOKOVI|OTKUI_SEG_LS_BLOK|OTKUI_GRID_TITLE_BLOKOVI|110", _
+        "IZGUBLJENI|OTKUI_SEG_LS_LOST|OTKUI_GRID_TITLE_LOST|104", _
+        "KOOPERANTI|OTKUI_SEG_LS_KOOP|OTKUI_GRID_TITLE_KOOP|100")
+End Function
+
+' Dopuna naslova mreze: u listi blokova stoji broj aktivne otpremnice.
+Public Function Scr_NaslovDopuna() As String
+    If Scr_Lista() = "BLOKOVI" Then Scr_NaslovDopuna = mOtpBroj
+End Function
+
+' Radnje nad redom za AKTIVNU listu:
+'   kljuc : natpis : sirina : stil : trebaRed
+' Kljuc se vraca u Scr_Event kao "act:<kljuc>:<red>"; "mark" obradjuje sama
+' ljuska (oznacavanje je stanje mreze).
+Public Function Scr_Radnje() As String
+    If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
+    Select Case Scr_Lista()
+        Case "SVI", "BLOKOVI"
+            Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
+                         "storno:OTKUI_BTN_RED_STORNO:88:danger:1"
+        Case "OTPREMNICE"
+            Scr_Radnje = "mark:OTKUI_BTN_RED_MARK:104:ghost:0|" & _
+                         "spec:OTKUI_BTN_RED_SPEC:152:ghost:0"
+        Case "IZGUBLJENI"
+            Scr_Radnje = "print:OTKUI_BTN_RED_PRINT:116:ghost:1|" & _
+                         "preuzmi:OTKUI_BTN_RED_PREUZMI:96:soft:1"
+    End Select
+End Function
 
 ' Koju listu F1 trenutno pokazuje. Van F1 uvek "SVI".
 Public Function Scr_Lista() As String

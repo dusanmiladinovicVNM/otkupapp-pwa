@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-99"
+Public Const OTKUI_BUILD   As String = "v6-ui-100"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -157,6 +157,8 @@ Private Const GRID_ROW_H  As Single = 21
 Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
+Private Const MAX_SEG     As Long = 5        ' dugmadi prekidaca lista koje se PRAVE
+Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
 
@@ -628,70 +630,79 @@ Private Sub RefreshOtpTraka(frm As Object)
     z.Controls("otpMA3").caption = Poruka("OTKUI_OTP_PO_OTP")
 End Sub
 
-' Naslov liste i cipovi prate IZABRANU listu, ne samo rezim. U listi
-' otpremnica cipovi ("Danas", "Bez zbirne"...) nemaju sta da suze - ta lista
-' ih ne gleda - pa bi stajali kao mrtva dugmad sa nulama.
-' Koja je lista izabrana u F1. Ekran je vlasnik tog stanja; ljuska ga pita
-' kasno vezano, pa modul koji nedostaje daje "SVI" umesto greske.
+' Koja je lista izabrana. Stanje drzi EKRAN; ljuska ga pita kasno vezano, pa
+' ekran koji nema liste (ili modul koji nedostaje) daje prazno umesto greske.
 Private Function ActiveLista() As String
     On Error Resume Next
-    ActiveLista = "SVI"
-    If mScreen <> "DOKUMENTI" Then Exit Function
-    ActiveLista = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
-    If Err.Number <> 0 Then ActiveLista = "SVI"
+    ActiveLista = modUiScreens.ScrLista(mScreen)
     Err.Clear
 End Function
 
+' Naslov mreze i cipovi prate IZABRANU listu, ne samo rezim. Naslov svake liste
+' stoji u njenoj definiciji (treca kolona Scr_Liste) - ljuska ne poznaje nijedan
+' kljuc liste. Cipovi ("Danas", "Bez zbirne"...) pripadaju listi dokumenata; u
+' ostalim listama nemaju sta da suze pa bi stajali kao mrtva dugmad sa nulama.
 Private Sub RefreshGridTitle(frm As Object)
     Dim z As Object, akt As String, k As String, ch As Variant
+    Dim seg As Variant, i As Long, sp As Variant, dop As String
     On Error Resume Next
     Set z = frm.Controls("zGrid")
     akt = ActiveLista()
-    Select Case akt
-        Case "OTPREMNICE"
-            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_OTPREMNICA")
-        Case "BLOKOVI"
-            k = CStr(Application.Run("modScrDokumenti.Scr_OtpBroj"))
-            Err.Clear
-            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_BLOKOVI") & _
-                                             IIf(Len(k) > 0, " " & k, "")
-        Case "IZGUBLJENI"
-            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_LOST")
-        Case "KOOPERANTI"
-            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_KOOP")
-        Case Else
-            If mScreen = "DOKUMENTI" Then _
-                z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
-    End Select
-    ' Cipovi po listi: lista dokumenata ima svoje (postavlja ih SelectModeCore
-    ' i ovde se ne diraju), lista otpremnica ima svoja dva, blokovi nemaju sta
-    ' da suze - to je uvek jedna otpremnica.
+    seg = SegDefs()
+    If Len(akt) > 0 And IsArray(seg) Then
+        For i = 0 To UBound(seg)
+            sp = Split(CStr(seg(i)), "|")
+            If CStr(sp(0)) = akt Then
+                ' naslov sme da nosi dopunu (broj aktivne otpremnice, broj
+                ' palete) - ekran je daje kroz Scr_NaslovDopuna
+                dop = ScrNaslovDopuna()
+                z.Controls("grdTitle").caption = Poruka(CStr(sp(2))) & _
+                                                 IIf(Len(dop) > 0, " " & dop, "")
+                Exit For
+            End If
+        Next i
+    ElseIf mScreen = "DOKUMENTI" Then
+        z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
+    End If
+
     For Each ch In ChipRow()
         k = Split(CStr(ch), "|")(0)
-        Select Case akt
-            Case "OTPREMNICE"
-                ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
-            Case "BLOKOVI", "IZGUBLJENI", "KOOPERANTI"
-                ShowChip frm, k, False
-            Case Else
-                If k = "chipOtvorene" Then ShowChip frm, k, False
-        End Select
+        If Len(akt) = 0 Or akt = "SVI" Then
+            If k = "chipOtvorene" Then ShowChip frm, k, False
+        ElseIf akt = "OTPREMNICE" Then
+            ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
+        Else
+            ShowChip frm, k, False
+        End If
     Next ch
     LayoutChips frm
 End Sub
 
+' Dopuna naslova mreze (npr. broj aktivne otpremnice). Opciona - ekran koji je
+' nema vraca prazno.
+Private Function ScrNaslovDopuna() As String
+    Dim m As String
+    On Error Resume Next
+    m = modUiScreens.ScrField(modUiScreens.ScrRowByKey(mScreen), SCR_MODUL)
+    If Len(m) > 0 Then ScrNaslovDopuna = CStr(Application.Run(m & ".Scr_NaslovDopuna"))
+    Err.Clear
+End Function
+
 ' Koji segment prekidaca je izabran - stanje drzi ekran.
 Private Sub RefreshListSeg(frm As Object)
-    Dim z As Object, akt As String, nmv As Variant, i As Long
+    Dim z As Object, akt As String, seg As Variant, i As Long, k As String
     On Error Resume Next
     Set z = frm.Controls("zGrid")
     akt = ActiveLista()
-    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI", "IZGUBLJENI", "KOOPERANTI")
-    For i = 0 To UBound(nmv)
-        BoxState z, "ls" & nmv(i), _
-                 IIf(akt = nmv(i), C_FOREST, C_WHITE), _
-                 IIf(akt = nmv(i), C_CREAM, C_MUTED), (akt = nmv(i))
-        RebaseSink "ls" & nmv(i)
+    seg = SegDefs()
+    If Not IsArray(seg) Then Exit Sub
+    For i = 0 To UBound(seg)
+        If i >= MAX_SEG Then Exit For
+        k = Split(CStr(seg(i)), "|")(0)
+        BoxState z, "lsSeg" & i, _
+                 IIf(akt = k, C_FOREST, C_WHITE), _
+                 IIf(akt = k, C_CREAM, C_MUTED), (akt = k)
+        RebaseSink "lsSeg" & i
     Next i
 End Sub
 
@@ -867,19 +878,14 @@ Private Sub BuildGrid(frm As Object)
 
     NewLbl z, "grdTitle", "-", PAD, 10, 180, 16, TS_H1, True, C_FOREST, -1
     NewLbl z, "grdSrc", "-", PAD + 176, 11, 120, 14, TS_MICRO, False, C_MUTED, C_SAND, fmTextAlignCenter, F_NUM
-    ' Prekidac liste - samo F1. Otpremnica je izvor robe, blokovi su njena
-    ' raspodela; operater bira sta gleda, a mreza je ista.
-    NewSegBtn z, "lsSVI", Poruka("OTKUI_SEG_LS_SVI"), 0, 9, 96, 20, True
-    NewSegBtn z, "lsOTPREMNICE", Poruka("OTKUI_SEG_LS_OTP"), 96, 9, 96, 20, False
-    NewSegBtn z, "lsBLOKOVI", Poruka("OTKUI_SEG_LS_BLOK"), 192, 9, 110, 20, False
-    ' Cetvrta lista: blokovi ciji je otpremnica stornirana ili je nema. U legacy
-    ' je to bio PREKIDAC koji menja sadrzaj iste liste ("Izgubljeni" / "Nazad"),
-    ' dakle skriven rezim; ovde je obicna lista kao i ostale tri.
-    NewSegBtn z, "lsIZGUBLJENI", Poruka("OTKUI_SEG_LS_LOST"), 302, 9, 104, 20, False
-    ' Peta lista: rang kooperanata po prometu. U legacy je to dugme koje otvara
-    ' panel preko pola forme; ovde je lista kao i ostale, pa dobija pretragu,
-    ' sortiranje i strane koje panel nije imao.
-    NewSegBtn z, "lsKOOPERANTI", Poruka("OTKUI_SEG_LS_KOOP"), 406, 9, 100, 20, False
+    ' PREKIDAC LISTA - prazan. Ko su liste i kako se zovu zna EKRAN (Scr_Liste),
+    ' ne ljuska: F1 ima pet (svi listovi, otpremnice, blokovi, izgubljeni,
+    ' kooperanti), Palete tri (palete, stavke, prerade), a vecina ekrana nijednu.
+    ' Zato su dugmad bezimena - lsSeg0..4 - a natpis i kljuc dobijaju pri
+    ' rasporedu. Tako se nijedan kljuc liste ne pominje u ljusci.
+    For i = 0 To MAX_SEG - 1
+        NewSegBtn z, "lsSeg" & i, "", 0, 9, 96, 20, (i = 0)
+    Next i
     NewShell z, "srch", 0, 8, 200, 22, C_INPUT_BORDER, C_WHITE
     NewLbl z, "srchIco", ChrW(IC_SEARCH), 0, CenterIco(8, 22, TS_META), 16, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignCenter, F_ICON
@@ -897,14 +903,11 @@ Private Sub BuildGrid(frm As Object)
     Next i
 
     ' RADNJE NAD IZABRANIM REDOM - u redu cipova, uz desnu ivicu. Ljuska ne zna
-    ' sta rade: prosledjuje ih ekranu kao "act:<sta>:<red>", isto kao sto vec
-    ' prosledjuje izbor reda. Ugasene su dok red nije izabran.
-    BtnV z, "btnRedPrint", Poruka("OTKUI_BTN_RED_PRINT"), 0, 36, 116, 19, "ghost", IC_PRINT
-    BtnV z, "btnRedStorno", Poruka("OTKUI_BTN_RED_STORNO"), 0, 36, 88, 19, "ghost"
-    ' Lista otpremnica ima svoj par: oznacavanje vise redova i stampa
-    ' specifikacije otkupnih blokova za oznacene otpremnice.
-    BtnV z, "btnRedMark", Poruka("OTKUI_BTN_RED_MARK"), 0, 36, 104, 19, "ghost"
-    BtnV z, "btnRedSpec", Poruka("OTKUI_BTN_RED_SPEC"), 0, 36, 152, 19, "ghost", IC_PRINT
+    ' sta rade niti koliko ih ima: ekran ih prijavi kroz Scr_Radnje, a klik se
+    ' vraca kao "act:<kljuc>:<red>". Dugmad su zato bezimena - btnAct0..3.
+    For i = 0 To MAX_ACT - 1
+        BtnV z, "btnAct" & i, "", 0, 36, 100, 19, "ghost"
+    Next i
     ' OD / DO za specifikaciju po datumu (legacy "Stampaj po datumu"). Ovo NISU
     ' polja dokumenta nego parametri stampe - zato ne prljaju formu (UiChange
     ' ih preskace pri MarkDirty).
@@ -915,8 +918,6 @@ Private Sub BuildGrid(frm As Object)
     NewShell z, "specDo", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
     NewTxt z, "specDoT", Format$(Date, "dd.mm.yyyy"), 0, 39, 62, 14, False
     BtnV z, "btnRedSpecDat", Poruka("OTKUI_BTN_RED_SPECDAT"), 0, 36, 112, 19, "ghost"
-    ' Preuzimanje izgubljenog bloka na AKTIVNU otpremnicu - onu iz trake gore.
-    BtnV z, "btnRedPreuzmi", Poruka("OTKUI_BTN_RED_PREUZMI"), 0, 36, 96, 19, "soft"
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -1892,59 +1893,63 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     Dim i As Long, r As Long, c As Long, X As Single, base As Variant
     Dim sc As Single, hd As Object, body As Object, ft As Object, bodyH As Single
     z.Controls("grdLnT").width = zw
-    Dim lsX As Single, lsV As Boolean
-    lsV = (mScreen = "DOKUMENTI") And (modeKey(ActiveMode) = "OTKUP")
+    ' Prekidac lista: natpisi, sirine i broj dugmadi dolaze OD EKRANA.
+    Dim lsX As Single, seg As Variant, sp As Variant
     lsX = PAD + 190
-    BoxShow z, "lsSVI", lsV
-    BoxShow z, "lsOTPREMNICE", lsV
-    BoxShow z, "lsBLOKOVI", lsV
-    BoxShow z, "lsIZGUBLJENI", lsV
-    BoxShow z, "lsKOOPERANTI", lsV
-    If lsV Then
-        MoveBox z, "lsSVI", lsX, 9, 96
-        MoveBox z, "lsOTPREMNICE", lsX + 96, 9, 96
-        MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
-        MoveBox z, "lsIZGUBLJENI", lsX + 302, 9, 104
-        MoveBox z, "lsKOOPERANTI", lsX + 406, 9, 100
-    End If
-    z.Controls("grdSrc").Left = PAD + 176
-    ' Radnje nad redom stoje uz desnu ivicu reda cipova. Koji par - zavisi od
-    ' liste: dokumenti dobijaju stampu lista i storno, otpremnice oznacavanje i
-    ' stampu specifikacije.
-    Dim raK As String
-    raK = RowActKind()
-    BoxShow z, "btnRedPrint", (raK = "DOK" Or raK = "LOST")
-    BoxShow z, "btnRedStorno", (raK = "DOK")
-    BoxShow z, "btnRedMark", (raK = "OTP")
-    BoxShow z, "btnRedSpec", (raK = "OTP")
-    BoxShow z, "btnRedPreuzmi", (raK = "LOST")
-    If raK = "LOST" Then
-        MoveBtn z, "btnRedPreuzmi", zw - PAD - 96, 36
-        MoveBtn z, "btnRedPrint", zw - PAD - 96 - GAP - 116, 36
-    ElseIf raK = "DOK" Then
-        MoveBtn z, "btnRedStorno", zw - PAD - 88, 36
-        MoveBtn z, "btnRedPrint", zw - PAD - 88 - GAP - 116, 36
-    ElseIf raK = "OTP" Then
-        MoveBtn z, "btnRedSpec", zw - PAD - 152, 36
-        MoveBtn z, "btnRedMark", zw - PAD - 152 - GAP - 104, 36
-        ' Opseg datuma trazi jos 296pt levo od dugmadi. Kad ih nema, ceo trio se
-        ' sklanja - isto pravilo po kome se sklanjaju kolone nizeg prioriteta:
-        ' bolje manje alata nego red koji se prelama.
-        Dim dx As Single, dV As Boolean
-        dx = zw - PAD - 152 - GAP - 104 - GAP - 112
-        dV = (dx - 190 > PAD + 190)
-        ShowSpecDat z, dV
-        If dV Then
-            MoveBtn z, "btnRedSpecDat", dx, 36
-            MoveShell z, "specDo", dx - 6 - 74, 36, 74
-            z.Controls("specDoT").Left = dx - 6 - 74 + 6
-            z.Controls("specDoL").Left = dx - 6 - 74 - 18
-            MoveShell z, "specOd", dx - 6 - 74 - 18 - 6 - 74, 36, 74
-            z.Controls("specOdT").Left = dx - 6 - 74 - 18 - 6 - 74 + 6
-            z.Controls("specOdL").Left = dx - 6 - 74 - 18 - 6 - 74 - 18
+    seg = SegDefs()
+    For i = 0 To MAX_SEG - 1
+        If IsArray(seg) Then
+            If i <= UBound(seg) Then
+                sp = Split(CStr(seg(i)), "|")
+                z.Controls("lsSeg" & i & "C").caption = Poruka(CStr(sp(1)))
+                BoxShow z, "lsSeg" & i, True
+                MoveBox z, "lsSeg" & i, lsX, 9, CSng(val(sp(3)))
+                lsX = lsX + CSng(val(sp(3)))
+                GoTo SledeciSeg
+            End If
         End If
+        BoxShow z, "lsSeg" & i, False
+SledeciSeg:
+    Next i
+    z.Controls("grdSrc").Left = PAD + 176
+    ' Radnje nad redom: koje su i koliko ih ima kaze EKRAN, za svoju aktivnu
+    ' listu. Redjaju se zdesna nalevo, redom kojim su prijavljene.
+    Dim act As Variant, ap As Variant, ax As Single
+    act = ActDefs()
+    ax = zw - PAD
+    For i = 0 To MAX_ACT - 1
+        If IsArray(act) Then
+            If i <= UBound(act) Then
+                ap = Split(CStr(act(i)), ":")
+                z.Controls("btnAct" & i & "C").caption = Poruka(CStr(ap(1)))
+                BoxShow z, "btnAct" & i, True
+                ax = ax - CSng(val(ap(2)))
+                MoveBtn z, "btnAct" & i, ax, 36
+                ax = ax - GAP
+                GoTo SledecaAkcija
+            End If
+        End If
+        BoxShow z, "btnAct" & i, False
+SledecaAkcija:
+    Next i
+
+    ' Opseg datuma je jedini deo reda radnji koji nije dugme. Pripada listi
+    ' otpremnica; kad levo od dugmadi nema 296pt, ceo trio se sklanja - isto
+    ' pravilo po kome se sklanjaju kolone nizeg prioriteta.
+    Dim dV As Boolean
+    dV = SpecDatLista() And (ax - 112 - 190 > PAD + 190)
+    ShowSpecDat z, dV
+    If dV Then
+        Dim dx As Single
+        dx = ax - 112
+        MoveBtn z, "btnRedSpecDat", dx, 36
+        MoveShell z, "specDo", dx - 6 - 74, 36, 74
+        z.Controls("specDoT").Left = dx - 6 - 74 + 6
+        z.Controls("specDoL").Left = dx - 6 - 74 - 18
+        MoveShell z, "specOd", dx - 6 - 74 - 18 - 6 - 74, 36, 74
+        z.Controls("specOdT").Left = dx - 6 - 74 - 18 - 6 - 74 + 6
+        z.Controls("specOdL").Left = dx - 6 - 74 - 18 - 6 - 74 - 18
     End If
-    If raK <> "OTP" Then ShowSpecDat z, False
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
     Dim sx As Single: sx = zw - PAD - 88 - GAP - 200
@@ -2334,17 +2339,82 @@ Private Function ScrAct(ByVal tag As String) As Boolean
     End If
 End Function
 
-' Koje radnje nad redom ima aktivna lista. "DOK" = red je otkupni dokument
-' (stampa lista, storno), "OTP" = red je otpremnica (oznaci, specifikacija),
-' "" = lista koju ljuska ne ume da tumaci (ugovorni ekrani, ostali rezimi).
-Private Function RowActKind() As String
+' Kljuc liste iza dugmeta prekidaca.
+Private Function SegKey(ByVal i As Long) As String
+    Dim seg As Variant
+    seg = SegDefs()
+    If Not IsArray(seg) Then Exit Function
+    If i < 0 Or i > UBound(seg) Then Exit Function
+    SegKey = Split(CStr(seg(i)), "|")(0)
+End Function
+
+' Pokretanje radnje nad redom. Ljuska proverava samo ono sto je njeno: da je
+' red izabran kad radnja to trazi. Sve ostalo je na ekranu.
+Private Sub RunRowAction(ByVal i As Long)
+    Dim k As String, trebaRed As Boolean
+    k = ActField(i, 0)
+    If Len(k) = 0 Then Exit Sub
+
+    ' oznacavanje vise redova je stanje MREZE, pa ga drzi ljuska
+    If k = "mark" Then
+        mMarkOn = Not mMarkOn
+        If Not mMarkOn Then Set mMark = Nothing
+        RefreshRowActions
+        RenderGrid
+        Exit Sub
+    End If
+
+    trebaRed = (ActField(i, 4) = "1")
+    If k = "spec" Then trebaRed = (MarkCount() = 0 And mSelRow <= 0)
+    If trebaRed And mSelRow <= 0 Then
+        ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Sub
+    End If
+    If k = "spec" And MarkCount() = 0 And mSelRow <= 0 Then
+        ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
+        Exit Sub
+    End If
+
+    ' True znaci "podaci su promenjeni" - tada se sve preracunava
+    If ScrAct("act:" & k & ":" & mSelRow) Then
+        mSelRow = 0
+        RefreshFromData
+        RefreshOtpTraka mFrm
+    End If
+End Sub
+
+' Prekidac lista aktivnog ekrana: niz redova "KLJUC|natpis|naslov|sirina".
+' Prazno = ekran nema prekidac.
+Private Function SegDefs() As Variant
+    On Error Resume Next
+    SegDefs = modUiScreens.ScrListe(mScreen)
+End Function
+
+' Radnje nad redom za aktivnu listu: niz redova
+' "kljuc:natpis:sirina:stil:trebaRed".
+Private Function ActDefs() As Variant
+    Dim sRad As String
+    On Error Resume Next
+    sRad = modUiScreens.ScrRadnje(mScreen)
+    If Len(sRad) = 0 Then Exit Function
+    ActDefs = Split(sRad, "|")
+End Function
+
+Private Function ActField(ByVal i As Long, ByVal idx As Long) As String
+    Dim act As Variant, p As Variant
+    act = ActDefs()
+    If Not IsArray(act) Then Exit Function
+    If i > UBound(act) Then Exit Function
+    p = Split(CStr(act(i)), ":")
+    If idx > UBound(p) Then Exit Function
+    ActField = CStr(p(idx))
+End Function
+
+' Opseg datuma pripada listi otpremnica u F1 - jedini deo reda radnji koji nije
+' dugme, pa ga ekran ne moze prijaviti kroz Scr_Radnje.
+Private Function SpecDatLista() As Boolean
     If mScreen <> "DOKUMENTI" Then Exit Function
-    If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
-    Select Case ActiveLista()
-        Case "SVI", "BLOKOVI": RowActKind = "DOK"
-        Case "OTPREMNICE":     RowActKind = "OTP"
-        Case "IZGUBLJENI":     RowActKind = "LOST"
-    End Select
+    SpecDatLista = (ActiveLista() = "OTPREMNICE")
 End Function
 
 ' Ugaseno dugme mora da IZGLEDA ugaseno - inace operater klikne i nista se ne
@@ -2364,33 +2434,43 @@ Private Sub ShowSpecDat(z As Object, ByVal vis As Boolean)
 End Sub
 
 Private Sub RefreshRowActions()
-    Dim z As Object, on_ As Boolean, k As String, n As Long
+    Dim z As Object, act As Variant, p As Variant, i As Long
+    Dim on_ As Boolean, fc As Long, bg As Long
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     Set z = mFrm.Controls("zGrid")
-    k = RowActKind()
-    on_ = (mSelRow > 0)
-    If k = "DOK" Or k = "LOST" Then
-        BoxState z, "btnRedPrint", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
-        z.Controls("btnRedPrintI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
-        If k = "DOK" Then
-            BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
-        Else
-            BoxState z, "btnRedPreuzmi", IIf(on_, C_SOFT_BG, C_WHITE), _
-                     IIf(on_, C_GREEN, C_DISABLED_FG), on_
+    act = ActDefs()
+    If Not IsArray(act) Then Exit Sub
+    For i = 0 To UBound(act)
+        If i >= MAX_ACT Then Exit For
+        p = Split(CStr(act(i)), ":")
+        ' peto polje: 1 = radnja trazi izabran red, 0 = radi bez njega
+        on_ = True
+        If UBound(p) >= 4 Then
+            If CStr(p(4)) = "1" Then on_ = (mSelRow > 0)
         End If
-    ElseIf k = "OTP" Then
-        n = MarkCount()
-        ' dok je oznacavanje ukljuceno dugme nosi broj oznacenih - to je jedini
-        ' brojac koji operater u tom trenutku gleda
-        z.Controls("btnRedMarkC").caption = Poruka("OTKUI_BTN_RED_MARK") & _
-                                            IIf(mMarkOn, " " & n, "")
-        BoxState z, "btnRedMark", IIf(mMarkOn, C_SOFT_BG, C_WHITE), _
-                 IIf(mMarkOn, C_GREEN, C_MUTED), mMarkOn
-        on_ = (n > 0 Or mSelRow > 0)
-        BoxState z, "btnRedSpec", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
-        z.Controls("btnRedSpecI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
-    End If
+        ' oznacavanje je jedina radnja koju obradjuje sama ljuska; ono je
+        ' "upaljeno" dok traje, i nosi broj oznacenih redova
+        If CStr(p(0)) = "mark" Then
+            z.Controls("btnAct" & i & "C").caption = Poruka(CStr(p(1))) & _
+                                                     IIf(mMarkOn, " " & MarkCount(), "")
+            BoxState z, "btnAct" & i, IIf(mMarkOn, C_SOFT_BG, C_WHITE), _
+                     IIf(mMarkOn, C_GREEN, C_MUTED), mMarkOn
+            GoTo SledecaR
+        End If
+        ' specifikacija radi i nad oznacenim redovima, ne samo nad izabranim
+        If CStr(p(0)) = "spec" Then on_ = (MarkCount() > 0 Or mSelRow > 0)
+        bg = C_WHITE
+        fc = C_FOREST
+        Select Case CStr(p(3))
+            Case "danger": fc = C_RUST
+            Case "soft":   If on_ Then bg = C_SOFT_BG
+                           fc = C_GREEN
+        End Select
+        If Not on_ Then fc = C_DISABLED_FG
+        BoxState z, "btnAct" & i, bg, fc, (CStr(p(3)) = "soft" And on_)
+SledecaR:
+    Next i
 End Sub
 
 '------------------------------------------------------- OZNACENI REDOVI
@@ -3058,9 +3138,13 @@ Private Sub UiClickCore(ByVal tag As String)
         PagerClick tag
         Exit Sub
     End If
-    ' prekidac liste (F1) - ekran odlucuje sta znaci, ljuska samo osvezi
-    If Left$(tag, 2) = "ls" And Len(tag) > 2 Then
-        If modUiScreens.ScrEvent(mScreen, tag, "Click") Then
+    ' prekidac liste - ljuska zna samo REDNI BROJ dugmeta; kljuc liste je
+    ' ekranov, pa se cita iz njegove definicije i vraca mu nazad
+    If Left$(tag, 5) = "lsSeg" And Len(tag) = 6 Then
+        Dim segK As String
+        segK = SegKey(CLng(Mid$(tag, 6)))
+        If Len(segK) = 0 Then Exit Sub
+        If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then
             mSelRow = 0
             mSearch = ""
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
@@ -3073,10 +3157,17 @@ Private Sub UiClickCore(ByVal tag As String)
                 mSortCol = 2: mSortAsc = False
             End If
             RefreshListSeg mFrm
-            ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
-            ' sakrio; postavlja ih SelectModeCore, pa ide preko njega
-            SelectModeCore mFrm, ActiveMode, True
-            RefreshOtpTraka mFrm
+            If mScreen = "DOKUMENTI" Then
+                ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
+                ' sakrio; postavlja ih SelectModeCore, pa ide preko njega
+                SelectModeCore mFrm, ActiveMode, True
+                RefreshOtpTraka mFrm
+            Else
+                ' ugovorni ekran nema rezime ni cipove - dovoljni su naslov,
+                ' radnje nad redom i ponovno citanje
+                RefreshGridTitle mFrm
+                ReloadGrid
+            End If
             LayoutOtkup mFrm
         End If
         Exit Sub
@@ -3119,38 +3210,12 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "btnFilteri": ToggleFilterPanel
         ' Radnja nad izabranim redom. Ljuska proverava SAMO da je red izabran;
         ' sta radnja znaci zna ekran (upis i stampa ostaju u poslovnim modulima).
-        Case "btnRedMark"
-            mMarkOn = Not mMarkOn
-            If Not mMarkOn Then Set mMark = Nothing
-            RefreshRowActions
-            RenderGrid
         Case "btnRedSpecDat"
             ' Ekran sam procita opseg (GridDatOd / GridDatDo) - isti izvor po
             ' kome je i filtrirao listu, pa se stampa i lista ne mogu razici.
             ScrAct "act:specdat:0"
-        Case "btnRedSpec"
-            If MarkCount() = 0 And mSelRow <= 0 Then
-                ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
-            Else
-                ScrAct "act:spec:" & mSelRow
-            End If
-        Case "btnRedPreuzmi"
-            If mSelRow <= 0 Then
-                ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
-            ElseIf ScrAct("act:preuzmi:" & mSelRow) Then
-                mSelRow = 0
-                RefreshFromData
-                RefreshOtpTraka mFrm
-            End If
-        Case "btnRedPrint", "btnRedStorno"
-            If mSelRow <= 0 Then
-                ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
-            ElseIf ScrAct("act:" & IIf(tag = "btnRedPrint", "print", "storno") & _
-                          ":" & mSelRow) Then
-                mSelRow = 0
-                RefreshFromData
-                RefreshOtpTraka mFrm
-            End If
+        Case "btnAct0", "btnAct1", "btnAct2", "btnAct3", "btnAct4"
+            RunRowAction CLng(Mid$(tag, 7))
         Case "grdEmptyA"
             mFilter = "sve"
             mSelRow = 0
@@ -3716,6 +3781,10 @@ Private Sub RefreshTitleFor(frm As Object, ByVal kljuc As String)
         ShowChip frm, Split(CStr(ch), "|")(0), False
     Next ch
     LayoutChips frm
+    ' Ekran koji ima prekidac lista dobija naslov iz definicije AKTIVNE liste,
+    ' a ne iz opisa ekrana - inace bi u listi stavki i dalje pisalo "Palete".
+    RefreshGridTitle frm
+    RefreshListSeg frm
 End Sub
 
 ' Vrednost polja iz opisa oblika "kljuc=A|naslov=B|sub=C".

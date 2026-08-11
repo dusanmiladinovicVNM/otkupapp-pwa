@@ -19,6 +19,11 @@ Attribute VB_Name = "modUiScreens"
 '   Scr_Layout(z, w, h)        -> rasporedi; vraca zauzetu visinu
 '   Scr_Rows(filter, q)        -> Array(kolone, redovi, n, zbirKg, zbirVal)
 '                                 za DELJENU mrezu ljuske
+'   Scr_Liste()                -> prekidac lista ekrana; niz redova
+'                                 "KLJUC|natpis|naslov mreze|sirina"
+'   Scr_Lista()                -> kljuc aktivne liste
+'   Scr_Radnje()               -> radnje nad redom za AKTIVNU listu; redovi
+'                                 "kljuc:natpis:sirina:stil:trebaRed" spojeni "|"
 '   Scr_Event(tag, ev)         -> obradi klik; True ako je obradio
 '   Scr_Save()                 -> upisi; "" ako je proslo, inace greska
 '   Scr_ResetCache()           -> zaboravi izvedene mape (posle upisa)
@@ -32,7 +37,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-99"
+Public Const UISCR_BUILD As String = "v6-ui-100"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -209,6 +214,30 @@ Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) > 0 Then ScrGridData = Application.Run(m & ".Scr_Rows", filter, q)
+End Function
+
+' Prekidac lista ekrana. Prazno = ekran ima samo jednu listu, pa prekidaca
+' nema. Ljuska ne zna nijedan kljuc unapred - ni "OTPREMNICE" ni "PRERADE".
+Public Function ScrListe(ByVal kljuc As String) As Variant
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) > 0 Then ScrListe = Application.Run(m & ".Scr_Liste")
+End Function
+
+Public Function ScrLista(ByVal kljuc As String) As String
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) > 0 Then ScrLista = CStr(Application.Run(m & ".Scr_Lista"))
+End Function
+
+' Radnje nad izabranim redom za trenutno aktivnu listu ekrana.
+Public Function ScrRadnje(ByVal kljuc As String) As String
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) > 0 Then ScrRadnje = CStr(Application.Run(m & ".Scr_Radnje"))
 End Function
 
 Public Function ScrSave(ByVal kljuc As String) As String
