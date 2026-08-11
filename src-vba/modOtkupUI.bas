@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-85"
+Public Const OTKUI_BUILD   As String = "v6-ui-86"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -126,9 +126,13 @@ Private Const SIDEBAR_MIN As Single = 36
 Public Const KPI_H       As Single = 56      ' tri reda: naslov, vrednost, kontekst
 Private Const TITLE_H     As Single = 40
 Private Const OTP_H       As Single = 50      ' traka otpremnice (F1)
-Private Const CTX_H       As Single = 58      ' eyebrow red + natpis + polje
-Private Const CTX_LBL_Y   As Single = 14      ' natpis IZNAD polja
-Private Const CTX_FLD_Y   As Single = 26      ' vrh polja u zoni konteksta
+' Zona konteksta ima isti ritam kao grupa polja u formi: eyebrow (2..13),
+' pa natpis polja (18..30), pa polje (32..58). Sa 14 / 26 su se eyebrow
+' "OSNOVNI PODACI" i natpis "VRSTA" preklapali za 5pt i citali se kao jedan
+' zbijen blok. Zona zato raste za 2pt, ostatak je preraspodela unutar nje.
+Private Const CTX_H       As Single = 60      ' eyebrow red + natpis + polje
+Private Const CTX_LBL_Y   As Single = 18      ' natpis IZNAD polja
+Private Const CTX_FLD_Y   As Single = 32      ' vrh polja u zoni konteksta
 Private Const RIGHT_W     As Single = 188
 ' 28, a ne 26: na 26 su kutije za unos izgledale stisnuto (tekst od 20pt u
 ' kutiji od 26 ostavlja po 4pt gore i dole, ali je sama kutija bila niza od
@@ -275,6 +279,10 @@ Private mLastPageSize As Long
 Private mCntOtkaz As Long
 Private mCntBezZb As Long
 Private mCntNefakt As Long
+' Otpremnice kojima ostatak (kg otpremnice - kg upisanih otkupnih listova)
+' jos nije nula. Broj se racuna nad SVIM otpremnicama, ne nad filtriranom
+' listom - cip mora da kaze koliko ih ukupno ceka, i kad je sam ugasen.
+Private mCntOtvor As Long
 Private mChromeRemoved As Boolean
 Private mCombosFilled As Boolean
 Private mPartMap As Object
@@ -615,13 +623,22 @@ End Sub
 ' Naslov liste i cipovi prate IZABRANU listu, ne samo rezim. U listi
 ' otpremnica cipovi ("Danas", "Bez zbirne"...) nemaju sta da suze - ta lista
 ' ih ne gleda - pa bi stajali kao mrtva dugmad sa nulama.
+' Koja je lista izabrana u F1. Ekran je vlasnik tog stanja; ljuska ga pita
+' kasno vezano, pa modul koji nedostaje daje "SVI" umesto greske.
+Private Function ActiveLista() As String
+    On Error Resume Next
+    ActiveLista = "SVI"
+    If mScreen <> "DOKUMENTI" Then Exit Function
+    ActiveLista = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
+    If Err.Number <> 0 Then ActiveLista = "SVI"
+    Err.Clear
+End Function
+
 Private Sub RefreshGridTitle(frm As Object)
     Dim z As Object, akt As String, k As String, ch As Variant
     On Error Resume Next
     Set z = frm.Controls("zGrid")
-    akt = "SVI"
-    If mScreen = "DOKUMENTI" Then akt = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
-    Err.Clear
+    akt = ActiveLista()
     Select Case akt
         Case "OTPREMNICE"
             z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_OTPREMNICA")
@@ -634,8 +651,19 @@ Private Sub RefreshGridTitle(frm As Object)
             If mScreen = "DOKUMENTI" Then _
                 z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
     End Select
+    ' Cipovi po listi: lista dokumenata ima svoje (postavlja ih SelectModeCore
+    ' i ovde se ne diraju), lista otpremnica ima svoja dva, blokovi nemaju sta
+    ' da suze - to je uvek jedna otpremnica.
     For Each ch In ChipRow()
-        If akt <> "SVI" Then ShowChip frm, Split(CStr(ch), "|")(0), False
+        k = Split(CStr(ch), "|")(0)
+        Select Case akt
+            Case "OTPREMNICE"
+                ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
+            Case "BLOKOVI"
+                ShowChip frm, k, False
+            Case Else
+                If k = "chipOtvorene" Then ShowChip frm, k, False
+        End Select
     Next ch
     LayoutChips frm
 End Sub
@@ -645,9 +673,7 @@ Private Sub RefreshListSeg(frm As Object)
     Dim z As Object, akt As String, nmv As Variant, i As Long
     On Error Resume Next
     Set z = frm.Controls("zGrid")
-    akt = "SVI"
-    If mScreen = "DOKUMENTI" Then akt = CStr(Application.Run("modScrDokumenti.Scr_Lista"))
-    Err.Clear
+    akt = ActiveLista()
     nmv = Array("SVI", "OTPREMNICE", "BLOKOVI")
     For i = 0 To 2
         BoxState z, "ls" & nmv(i), _
@@ -666,8 +692,8 @@ Private Sub BuildCtx(frm As Object)
     ' Naslov sekcije dobija isti tretman kao grupe polja: eyebrow levo, tanka
     ' linija preko sredine, hint desno - pa tek onda red polja. Ranije je stajao
     ' u istoj liniji sa poljima, pa je izgledao kao natpis prvog polja.
-    NewSectionHdr z, "ctxHdr", Poruka("OTKUI_LBL_OSNOVNI"), PAD, 8, 96
-    NewLbl z, "ctxLn", "", 0, 13, 100, 1, 8, False, 0, C_BORDER_LT
+    NewSectionHdr z, "ctxHdr", Poruka("OTKUI_LBL_OSNOVNI"), PAD, 2, 96
+    NewLbl z, "ctxLn", "", 0, 7, 100, 1, 8, False, 0, C_BORDER_LT
     ' Poslednje polje (cbKupac / ctxL4) je PARTNER dokumenta - onaj koga
     ' zaduzujemo ili razduzujemo. Natpis je uvek "Partner" jer tip nije vezan
     ' za dokument (revers ide i kooperantu i kupcu); lista nosi SVE partnere,
@@ -687,7 +713,7 @@ Private Sub BuildCtx(frm As Object)
         NewCtxCombo z, CStr(nm(i)), X, CTX_FLD_Y, CSng(w(i))
         X = X + CSng(w(i)) + GAP
     Next i
-    NewLbl z, "ctxHint", "Ctrl+K", 0, 8, 52, TxtH(TS_MICRO), TS_MICRO, False, C_MUTED, -1, fmTextAlignRight
+    NewLbl z, "ctxHint", "Ctrl+K", 0, 2, 52, TxtH(TS_MICRO), TS_MICRO, False, C_MUTED, -1, fmTextAlignRight
 End Sub
 
 '----------------------------------------------------------- FORM ----
@@ -710,6 +736,11 @@ Private Sub BuildForm(frm As Object)
     ' PARTNER nije ovde - on je poslednje polje u "Osnovni podaci" (cbKupac),
     ' jer je isto pitanje "s kim radimo" kao otkupno mesto i vozac.
     NewFieldG z, "fgBrZbir", Poruka("OTKUI_FLD_BROJ_ZBIRNE"), "cmb", "", 1, False, False, "DOK"
+    ' DATUM dokumenta. Do sada je bio precutno "danas" - stajao je samo u
+    ' naslovu ekrana, pa se zaostali dokument nije mogao uneti sa svojim
+    ' datumom. Ide u grupu DOKUMENT, u trecu kolonu koja je u svakom rezimu
+    ' ostajala prazna, i vidljiv je u SVIM rezimima - datum ima svaki dokument.
+    NewFieldG z, "fgDatum", Poruka("OTKUI_FLD_DATUM"), "txt", "", 1, False, False, "DOK"
     NewFieldG z, "fgNovac", Poruka("OTKUI_FLD_NOVAC"), "txt", Poruka("OTKUI_UNIT_RSD"), 1, True, False, "NOV"
     NewFieldG z, "fgKgI", Poruka("OTKUI_FLD_KG_I"), "txt", Poruka("OTKUI_UNIT_KG"), 1, True, False, "ROBA"
     NewFieldG z, "fgKgII", Poruka("OTKUI_FLD_KG_II"), "txt", Poruka("OTKUI_UNIT_KG"), 1, True, False, "ROBA"
@@ -794,6 +825,8 @@ Private Sub BuildForm(frm As Object)
            TS_VAL, True, C_CREAM, -1, fmTextAlignRight, F_NUM
     NewLbl fr, "fgOstatakU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(16, FIELD_H, TS_MICRO), _
            28, TxtH(TS_MICRO), TS_MICRO, True, C_GOLD, -1, fmTextAlignRight
+
+    SetDatumDanas z
 
     ' akcije: sekundarno pa primarno, desno poravnato
     BtnV z, "btnOtkazi", Poruka("OTKUI_BTN_OTKAZI"), 0, 0, 72, 28, "plain"
@@ -2201,6 +2234,7 @@ Private Sub RenderChipCounts(z As Object)
     z.Controls("chipOtkazaneC").caption = Poruka("OTKUI_CHIP_OTKAZANE") & "  " & mCntOtkaz
     z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & mCntBezZb
     z.Controls("chipNefaktC").caption = Poruka("OTKUI_CHIP_NEFAKT") & "  " & mCntNefakt
+    z.Controls("chipOtvoreneC").caption = Poruka("OTKUI_CHIP_OTVORENE") & "  " & mCntOtvor
 End Sub
 
 ' Otpremnica i prijemnica pri ulasku preuzimaju broj zbirne sa kojom se radilo.
@@ -2356,7 +2390,6 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     frm.Controls("zGrid").Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & k)
     RefreshListSeg frm
     RefreshOtpTraka frm
-    RefreshGridTitle frm
     ' Ime tabele je dijagnostika, ne informacija za operatera - u produkciji se
     ' ne prikazuje (UI_DEBUG=DA u tblLocalConfig ili dev build).
     frm.Controls("zGrid").Controls("grdSrc").caption = "list: " & ModeTable(key)
@@ -2380,6 +2413,9 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End If
 
     If key = "F8" Then mFilter = "otkazane" Else mFilter = "danas"
+    ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
+    ' listu, a posao za koji ta lista postoji su bas neraspodeljene otpremnice.
+    If ActiveLista() = "OTPREMNICE" Then mFilter = "otvorene"
     mSelRow = 0
     ApplyChipVisual frm.Controls("zGrid")
     ' "Bez zbirne" i "Nefakturisane" nemaju smisla nad zbirnom ni nad
@@ -2396,7 +2432,11 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ShowChip frm, "chipNedelja", key <> "F8"
     ShowChip frm, "chipSve", key <> "F8"
     ShowChip frm, "chipOtkazane", key <> "F8"
-    LayoutChips frm
+    ' Naslov i cipovi po LISTI idu POSLE cipova po rezimu, ne pre njih: red
+    ' iznad postavlja cipove liste dokumenata bez obzira na izabranu listu, pa
+    ' bi ranije pozvan RefreshGridTitle bio pregazen (u listi otpremnica su se
+    ' vracali "Danas" / "Bez zbirne", koji tu nemaju sta da suze).
+    RefreshGridTitle frm
     ' sirine kolona zavise od rezima - bez ovoga bi mreza zadrzala raspored
     ' prethodnog dokumenta (za vreme izgradnje raspored radi UserForm_Activate)
     If Not mBuilding Then LayoutOtkup frm
@@ -3073,9 +3113,13 @@ End Sub
 ' cip se sakriva zajedno sa svojom ivicom
 ' ime | kljuc natpisa | sirina
 Private Function ChipRow() As Variant
+    ' Poslednji cip pripada ISKLJUCIVO listi otpremnica - u listi dokumenata se
+    ' ne prikazuje. Stoji na kraju niza da indeks 5 (Otkazane) zadrzi svoj
+    ' poseban rez u BuildGrid.
     ChipRow = Array("chipDanas|OTKUI_CHIP_DANAS|54", "chipNedelja|OTKUI_CHIP_NEDELJA|78", _
                     "chipSve|OTKUI_CHIP_SVE|40", "chipNefakt|OTKUI_CHIP_NEFAKT|98", _
-                    "chipBezZbirne|OTKUI_CHIP_BEZZBIRNE|86", "chipOtkazane|OTKUI_CHIP_OTKAZANE|82")
+                    "chipBezZbirne|OTKUI_CHIP_BEZZBIRNE|86", "chipOtkazane|OTKUI_CHIP_OTKAZANE|82", _
+                    "chipOtvorene|OTKUI_CHIP_OTVORENE|132")
 End Function
 
 Private Sub ShowChip(frm As Object, ByVal nm As String, ByVal vis As Boolean)
@@ -3547,7 +3591,7 @@ End Function
 Private Sub LoadGridFromScreen()
     Dim d As Variant
     mViewN = 0: mSumKg = 0: mSumVal = 0
-    mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0
+    mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0: mCntOtvor = 0
     d = modUiScreens.ScrGridData(mScreen, mFilter, mSearch)
     If Not IsArray(d) Then Exit Sub
     If UBound(d) < 4 Then Exit Sub
@@ -3560,6 +3604,8 @@ Private Sub LoadGridFromScreen()
             mCntOtkaz = CLng(d(5)(0))
             mCntBezZb = CLng(d(5)(1))
             mCntNefakt = CLng(d(5)(2))
+            ' cetvrti clan salje samo lista otpremnica - stariji ekran ga nema
+            If UBound(d(5)) >= 3 Then mCntOtvor = CLng(d(5)(3))
         End If
     End If
     mSumKg = CDbl(d(3))
@@ -4405,6 +4451,9 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     If Len(Trim$(FldText("fgBrOtpr"))) = 0 Then
         ShowToast Poruka("OTKUI_ERR_BROJ"), True: Exit Sub
     End If
+    If ParseDatum(FldText("fgDatum")) = 0 Then
+        ShowToast Poruka("OTKUI_ERR_DATUM"), True: Exit Sub
+    End If
     If kg <= 0 Then ShowToast Poruka("OTKUI_ERR_KOLICINA"), True: Exit Sub
     If cena <= 0 Then ShowToast Poruka("OTKUI_ERR_CENA"), True: Exit Sub
 
@@ -4413,6 +4462,27 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     MarkClean
     ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
 End Sub
+
+' Datum dokumenta: podrazumevano danas. Ista vrednost koju je ekran do sada
+' cutke pretpostavljao - sada se vidi i moze da se promeni.
+Private Sub SetDatumDanas(z As Object)
+    On Error Resume Next
+    z.Controls("fgDatum").Controls("fgDatumT").text = Format$(Date, "dd.mm.yyyy")
+End Sub
+
+' Datum iz polja kao serijski broj; 0 znaci "necitljivo". Trailing tacka
+' ("11.08.2026.") je nacin na koji se datum kod nas pise, pa se skida pre
+' provere umesto da obori unos.
+Private Function ParseDatum(ByVal s As String) As Double
+    Dim t As String
+    On Error Resume Next
+    t = Trim$(s)
+    Do While Right$(t, 1) = "."
+        t = Left$(t, Len(t) - 1)
+    Loop
+    If Len(t) = 0 Then Exit Function
+    If IsDate(t) Then ParseDatum = CDbl(CDate(t))
+End Function
 
 Private Sub ClearForm()
     Dim nmv As Variant, i As Long
@@ -4428,6 +4498,9 @@ Private Sub ClearForm()
     mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").text = ""
     mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").text = ""
     mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").text = ""
+    ' datum se ne prazni nego vraca na danas - prazno polje bi bilo greska
+    ' koju operater mora da ispravi pri svakom novom dokumentu
+    SetDatumDanas mFrm.Controls("zForm")
     SetOstatak 0
     SetKlasa 1
     RecalcVrednost
@@ -4516,6 +4589,7 @@ Private Function ChipFilter(ByVal tag As String) As String
         Case "chipNefakt":    ChipFilter = "nefakt"
         Case "chipBezZbirne": ChipFilter = "bezzbirne"
         Case "chipOtkazane":  ChipFilter = "otkazane"
+        Case "chipOtvorene":  ChipFilter = "otvorene"
         Case Else:            ChipFilter = "sve"
     End Select
 End Function

@@ -475,6 +475,7 @@ Public Sub UpsertPoruke(lo As ListObject)
 
     UpsertRow lo, existing, "OTKUI_FLD_BROJ_OTPR", "BROJ OTPREMNICE"
     UpsertRow lo, existing, "OTKUI_FLD_BROJ_ZBIRNE", "BROJ ZBIRNE"
+    UpsertRow lo, existing, "OTKUI_FLD_DATUM", "DATUM"
     UpsertRow lo, existing, "OTKUI_FLD_TIP_AMB", "TIP AMBALA" & ChrW(381) & "E"
     UpsertRow lo, existing, "OTKUI_FLD_KG_I", "KOLI" & ChrW(268) & "INA I KLASA"
     UpsertRow lo, existing, "OTKUI_FLD_KG_II", "KOLI" & ChrW(268) & "INA II KLASA"
@@ -511,6 +512,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_CHIP_NEFAKT", "Nefakturisane"
     UpsertRow lo, existing, "OTKUI_CHIP_BEZZBIRNE", "Bez zbirne"
     UpsertRow lo, existing, "OTKUI_CHIP_OTKAZANE", "Otkazane"
+    UpsertRow lo, existing, "OTKUI_CHIP_OTVORENE", "Neraspodeljene"
     UpsertRow lo, existing, "OTKUI_FLT_PERIOD", "PERIOD"
     UpsertRow lo, existing, "OTKUI_FLT_MESEC", "Ovaj mesec"
     UpsertRow lo, existing, "OTKUI_FLT_SUZI", "SUZI IZBOR"
@@ -557,6 +559,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BROJ", ChrW(10007) & " Broj dokumenta je obavezan"
     UpsertRow lo, existing, "OTKUI_ERR_KOLICINA", ChrW(10007) & " Koli" & ChrW(269) & "ina mora biti > 0"
     UpsertRow lo, existing, "OTKUI_ERR_CENA", ChrW(10007) & " Cena mora biti > 0"
+    UpsertRow lo, existing, "OTKUI_ERR_DATUM", ChrW(10007) & " Datum nije " & ChrW(269) & "itljiv " & ChrW(8212) & " upi" & ChrW(353) & "i ga kao 11.08.2026."
     UpsertRow lo, existing, "OTKUI_MSG_SNIMLJENO", ChrW(10003) & " Dokument spreman za upis"
     UpsertRow lo, existing, "OTKUI_MSG_PRINT", ChrW(353) & "tampa"
     UpsertRow lo, existing, "OTKUI_MSG_UCITANO", "U" & ChrW(269) & "itano:"

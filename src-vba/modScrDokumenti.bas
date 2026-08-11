@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-85"
+Public Const SCRDOK_BUILD As String = "v6-ui-86"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -542,7 +542,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' F1 ima tri liste. Dve su svoje - otpremnice kao izvor i blokovi aktivne
     ' otpremnice; treca je zatecena lista dokumenata, ista za svih osam rezima.
     Select Case Scr_Lista()
-        Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(q): Exit Function
+        Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
     End Select
     Scr_Rows = RowsDokumenti(filter, q)
@@ -950,13 +950,18 @@ Private Function OtpGridCols() As Variant
         "OTKUI_HD_KOL_AMB||num|54|3")
 End Function
 
-Private Function RowsOtpremnice(ByVal q As String) As Variant
+' Filter "otvorene" = otpremnice koje jos nisu do kraja rasknjizene u otkupne
+' listove (ostatak kg razlicit od nule). To je jedini filter koji ova lista
+' poznaje; svaki drugi (cipovi liste dokumenata) znaci "sve".
+Private Function RowsOtpremnice(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, nRows As Long
     Dim outA() As Variant, d As Object, stan As Object
     Dim iID As Long, iBroj As Long, iDat As Long, iSt As Long, iVr As Long
     Dim iSo As Long, iKol As Long, iAmb As Long, iStorno As Long
     Dim otpID As String, ukKg As Double, blKg As Double, hay As String
-    Dim sumOst As Double
+    Dim sumOst As Double, ost As Double, jeOtvorena As Boolean
+    Dim samoOtvorene As Boolean, cntOtvor As Long
+    samoOtvorene = (filter = "otvorene")
     On Error GoTo EH
     mStep = "otpremnice"
 
@@ -986,6 +991,13 @@ Private Function RowsOtpremnice(ByVal q As String) As Variant
         ukKg = modUiData.CellD(src, r, iKol)
         blKg = 0
         If d.Exists(otpID) Then blKg = CDbl(d(otpID))
+        ost = ukKg - blKg
+        ' Prag je 0,001 kg: ostatak nastaje oduzimanjem decimalnih vrednosti,
+        ' pa "nula" prakticno nikad nije tacna nula.
+        jeOtvorena = (Abs(ost) > 0.001)
+        ' brojac ide preko SVIH otpremnica - i kad je cip ugasen
+        If jeOtvorena Then cntOtvor = cntOtvor + 1
+        If samoOtvorene And Not jeOtvorena Then GoTo Sledeca
 
         hay = modUiData.CellS(src, r, iBroj) & "|" & modUiData.CellS(src, r, iVr) & _
               "|" & modUiData.CellS(src, r, iSo)
@@ -1008,14 +1020,16 @@ Private Function RowsOtpremnice(ByVal q As String) As Variant
         outA(n, 5) = modUiData.CellS(src, r, iSo)
         outA(n, 6) = ukKg
         outA(n, 7) = blKg
-        outA(n, 8) = ukKg - blKg
+        outA(n, 8) = ost
         outA(n, 9) = modUiData.CellD(src, r, iAmb)
-        sumOst = sumOst + (ukKg - blKg)
+        sumOst = sumOst + ost
 Sledeca:
     Next r
 
     mStep = "OK"
-    RowsOtpremnice = Array(OtpGridCols(), outA, n, sumOst, 0#, Array(0, 0, 0))
+    ' cetvrti brojac je cip "Neraspodeljene"; prva tri pripadaju listi
+    ' dokumenata i ovde su uvek nula
+    RowsOtpremnice = Array(OtpGridCols(), outA, n, sumOst, 0#, Array(0, 0, 0, cntOtvor))
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsOtpremnice[" & mStep & "]", Err.description
