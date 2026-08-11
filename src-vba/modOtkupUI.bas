@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-109"
+Public Const OTKUI_BUILD   As String = "v6-ui-110"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -322,6 +322,10 @@ Private mColN As Long                ' koliko ih je stvarno vidljivo
 ' Otpremnice, a btnUnosZbr ga je posle snimanja gurao u Prijemnicu. Ovde je to
 ' jedan sticky broj koji prati prelazak izmedju rezima.
 Private mAktivnaZbirna As String
+' Traje dok FillZbirneCombo puni listu. ComboBox.Clear brise i UPISANU vrednost,
+' pa polje javi promenu koju operater nije napravio - bez ovog garda bi svako
+' osvezavanje posle snimanja obrisalo zapamcenu zbirnu i zaprljalo dokument.
+Private mZbirnaFill As Boolean
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
 Private mSmerRev As Long             ' izabrani smer reversa (1..4)
 Private mPartnerFor As String        ' za koji rezim je partner lista vec napunjena
@@ -3358,6 +3362,9 @@ Private Function OperaterText() As String
 End Function
 
 Private Sub UiChange(ByVal tag As String)
+    ' Promene koje pravi FillZbirneCombo (Clear + vracanje teksta) nisu unos
+    ' operatera - ne diraju ni zapamcenu zbirnu ni "dokument je menjan".
+    If mZbirnaFill And tag = "fgBrZbirT" Then Exit Sub
     ' Kucanje u combo otvara nas panel i suzava listu. Programski upisi
     ' (punjenje lista, ClearForm, izbor iz panela) su pod mPopMute - bez toga
     ' bi se panel otvarao sam od sebe pri svakoj promeni rezima.
@@ -4186,14 +4193,22 @@ End Sub
 Public Sub FillZbirneCombo(frm As Object)
     Dim CB As MSForms.ComboBox, src As Variant, iBroj As Long, iDat As Long
     Dim r As Long, n As Long, arr() As Variant, key() As Double, i As Long, j As Long
+    Dim cur As String
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT")
+    ' Punjenje liste NE sme da pojede upisani broj. ComboBox.Clear brise stavke
+    ' ALI I vrednost polja, a BROJ ZBIRNE je kontekst koji mora da prezivi
+    ' RefreshFromData posle snimanja (bez ovoga je prvi otkupni list dobijao
+    ' zbirnu, a svaki sledeci ne). Zato: zapamti tekst, napuni, vrati - a za to
+    ' vreme se promene ne racunaju kao izbor operatera.
+    cur = CStr(CB.text)
+    mZbirnaFill = True
     CB.Clear
     src = CachedTable(TBL_ZBIRNA)
-    If Not IsArray(src) Then Exit Sub
+    If Not IsArray(src) Then GoTo XIT
     iBroj = ColIdx(TBL_ZBIRNA, COL_ZBR_BROJ)
     iDat = ColIdx(TBL_ZBIRNA, COL_ZBR_DATUM)
-    If iBroj < 1 Then Exit Sub
+    If iBroj < 1 Then GoTo XIT
 
     n = UBound(src, 1)
     ReDim arr(1 To n): ReDim key(1 To n)
@@ -4205,7 +4220,7 @@ Public Sub FillZbirneCombo(frm As Object)
             key(j) = CellDate(src, r, iDat)
         End If
     Next r
-    If j = 0 Then Exit Sub
+    If j = 0 Then GoTo XIT
 
     ' opadajuce po datumu; lista je kratka pa je prosto umetanje dosta
     For i = 1 To j - 1
@@ -4222,9 +4237,14 @@ Public Sub FillZbirneCombo(frm As Object)
     For i = 1 To j
         CB.AddItem CStr(arr(i))
     Next i
+XIT:
+    On Error Resume Next
+    If Len(cur) > 0 Then CB.text = cur
+    mZbirnaFill = False
     Exit Sub
 EH:
     Debug.Print "modOtkupUI.FillZbirneCombo PAO: " & Err.Number & " " & Err.description
+    Resume XIT
 End Sub
 
 Public Sub FillCombos(frm As Object)
