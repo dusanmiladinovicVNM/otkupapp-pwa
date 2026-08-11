@@ -2,7 +2,8 @@ Attribute VB_Name = "modTestBanka"
 Option Explicit
 
 ' ============================================================
-' modTestBanka - tvrde kapije za RF-09 (banka import + mapiranje)
+' modTestBanka - tvrde kapije za banku: RF-09 (import + mapiranje)
+'                i RF-10 (export naloga / AUD-026)
 '
 ' Pokretanje: Alt+F8 -> RunBankaImportTestSuite
 '
@@ -30,6 +31,18 @@ Option Explicit
 '  T09 FM-0024  AUTO mapiranje ide po pozivu na broj (ne po rucnom izboru bloka)
 '  T10 AUD-025  vec placena faktura ne obara ceo "Auto sve" batch
 '  T11 AUD-025  rucni kooperant sa PRAZNIM izborom bloka ide kroz potvrdjenu podelu
+'  T12 AUD-026  zaostao "Isplatiti" override se clamp-uje na trenutno otvoreno
+'  T13 AUD-026  CSV nalozi se ODBIJAJU kada nalog trazi vise nego sto je otvoreno
+'               (granice u cent-domenu: 600.01 na otvoreno 600.00 je preplata)
+'  T14 AUD-026  kapija je UNUTAR putanje koja gradi CSV payload (ne samo validator)
+'  T15 AUD-026  dupli/prazan OtkupID obara saldo-mapu (fail-closed kanonski kljuc)
+'  T16 AUD-026  "Primeni avans" odbija dupli OtkupID (core guard, tabelarni test)
+'  T17 AUD-026  SAKRIVEN duplikat (samo jedan red otvoren) ne isplacuje pogresnog
+'               kooperanta -- vlasnik se ne resava "prvim pogotkom" nad sirovom tabelom
+'  T18 AUD-026  otvoren blok bez OtkupID PADA (ranije je tiho nestajao sa ekrana)
+'  T19 AUD-026  otvoren blok bez kooperanta PADA (primalac se ne moze utvrditi)
+'  T20 AUD-026  dupli KooperantID (dva master reda, dva racuna) ne sme da bira
+'               racun primaoca -- health-check duplicate provera ne pokriva KooperantID
 ' ============================================================
 
 Private mPass As Long
@@ -55,7 +68,7 @@ Public Sub RunBankaImportTestSuite()
         Exit Sub
     End If
 
-    If MsgBox("Pokrenuti banka import/mapiranje test suite (RF-09)?" & vbCrLf & vbCrLf & _
+    If MsgBox("Pokrenuti banka test suite (RF-09 uvoz/mapiranje + RF-10 nalozi)?" & vbCrLf & vbCrLf & _
               "Svi podaci (BIT-*) se prave u transakciji i UVEK se ponistavaju " & _
               "(rollback). Nista ne ostaje u tabelama.", _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
@@ -64,6 +77,12 @@ Public Sub RunBankaImportTestSuite()
 
     ' T01 je cist parser (bez tabela) -> moze i van transakcije.
     T01_NemoguciDatumOdbijen
+
+    ' RF-10 seam-ovi rade nad kolekcijom/Dictionary-jem u memoriji (bez tabela).
+    T12_ClampOverrideNaOtvoreno
+    T13_NalogPrekoOtvorenogSeOdbija
+    T14_CsvPayloadNosiKapiju
+    T15_DupliOtkupIDObaraSaldoMapu
 
     ' AppendRow/UpdateCell pisu CSV crash-recovery journal koji tx.RollbackTx NE
     ' povlaci -- test redovi bi ostali u Journal folderu i sledeci start bi javio
@@ -93,6 +112,13 @@ Public Sub RunBankaImportTestSuite()
     T09_AutoBlokIdePoPozivuNaBroj
     T10_PlacenaFakturaNeObaraBatch
     T11_RucniKooperantBezIzboraBloka
+    ' T16-T19 citaju CELU tabelu, pa svaki radi u SVOJOJ izolovanoj transakciji
+    ' (BeginIsolatedTx) -- inace bi seed jednog obarao kontrolne slucajeve drugog.
+    T16_DupliOtkupIDNeDozvoljavaAvans
+    T17_SakrivenDuplikatNeIsplacujePogresnog
+    T18_NepotpunIdentitetNeNestajeTiho
+    T19_OtvorenBlokBezKooperantaPada
+    T20_DupliKooperantIDNeBiraRacun
 
     tx.RollbackTx
     Set tx = Nothing
@@ -732,8 +758,755 @@ Private Sub T11_RucniKooperantBezIzboraBloka()
 End Sub
 
 ' ============================================================
+' T12 - AUD-026 / FM-0020 #1: clamp zaostalog "Isplatiti" override-a.
+'
+' Override po bloku prezivljava reload liste. Ako se posle unosa deo bloka
+' isplati (ili se blok zatvori/stornira), zaostao override moze da naruci
+' vise nego sto je otvoreno. ClampOverridesToOpen ga mora spustiti/obrisati.
+' Cist seam: Dictionary + kolekcija blokova, bez tabela.
+' ============================================================
+Private Sub T12_ClampOverrideNaOtvoreno()
+    Const S As String = "T12 clamp override: "
+
+    Dim blokovi As Collection
+    Set blokovi = New Collection
+    blokovi.Add MakeBlok(P & "OTK-C1", P & "BLOK-C1", 600)    ' otvoreno palo sa 1000 na 600
+    blokovi.Add MakeBlok(P & "OTK-C2", P & "BLOK-C2", 900)    ' delimicna isplata, jos vazi
+    blokovi.Add MakeBlok(P & "OTK-C4", P & "BLOK-C4", 0)      ' vise nema otvorenog iznosa
+    blokovi.Add MakeBlok(P & "OTK-C5", P & "BLOK-C5", 600)    ' granica: override je tacno cent veci
+    blokovi.Add MakeBlok(P & "OTK-C6", P & "BLOK-C6", 600)    ' granica: sub-cent ispod polovine
+
+    Dim ovr As Object
+    Set ovr = CreateObject("Scripting.Dictionary")
+    ovr(P & "OTK-C1") = 1000#      ' > otvoreno -> clamp na 600
+    ovr(P & "OTK-C2") = 300#       ' < otvoreno -> namerna delimicna isplata, ne dirati
+    ovr(P & "OTK-C3") = 500#       ' bloka vise nema u listi -> brisanje
+    ovr(P & "OTK-C4") = 200#       ' blok bez otvorenog iznosa -> brisanje
+    ovr(P & "OTK-C5") = 600.01     ' PUN cent preko otvorenog -> mora se spustiti
+    ovr(P & "OTK-C6") = 600.004    ' zaokruzuje se na 600.00 -> nije preplata
+
+    Dim changed As Long
+    changed = ClampOverridesToOpen(ovr, blokovi)
+
+    ChkEq changed, 4, S & "4 promenjena unosa (2 clamp + 2 brisanja)"
+    ChkEqD CDbl(ovr(P & "OTK-C1")), 600, S & "override 1000 spusten na otvoreno 600"
+    ChkEqD CDbl(ovr(P & "OTK-C2")), 300, S & "override manji od otvorenog ostaje netaknut"
+    Chk Not ovr.Exists(P & "OTK-C3"), S & "override za nestao blok je obrisan"
+    Chk Not ovr.Exists(P & "OTK-C4"), S & "override za blok bez otvorenog je obrisan"
+    ChkEqD CDbl(ovr(P & "OTK-C5")), 600, S & "override 600.01 na otvoreno 600.00 je spusten (pun cent)"
+    ChkEqD CDbl(ovr(P & "OTK-C6")), 600.004, S & "sub-cent ispod polovine se ne dira"
+    ChkEq ovr.count, 4, S & "u Dictionary-ju su ostala samo 4 vazeca override-a"
+
+    ' Ponovljen poziv nad vec uskladjenim stanjem ne sme nista da menja.
+    ChkEq ClampOverridesToOpen(ovr, blokovi), 0, S & "drugi prolaz je no-op"
+
+    ' Bez liste blokova nema dokaza da je ijedan override vazeci -> sve pada.
+    ChkEq ClampOverridesToOpen(ovr, Nothing), 4, S & "bez liste blokova se svi override-i brisu"
+    ChkEq ovr.count, 0, S & "Dictionary je prazan posle brisanja"
+End Sub
+
+' ============================================================
+' T13 - AUD-026 / FM-0020 #2 + FM-0021 #1: finalna saldo kapija CSV naloga.
+'
+' Izmedju prikaza i klika na "Generisi" saldo se moze promeniti (uvoz izvoda,
+' vezan avans, storno). ValidateNalogSaldo mora da odbije ceo CSV kada ijedan
+' nalog trazi vise nego sto je TADA otvoreno -- fail-closed, sa imenom bloka.
+' ============================================================
+Private Sub T13_NalogPrekoOtvorenogSeOdbija()
+    Const S As String = "T13 saldo revalidacija: "
+
+    Dim otvoreno As Object
+    Set otvoreno = CreateObject("Scripting.Dictionary")
+    otvoreno(P & "OTK-V1") = 600#
+    otvoreno(P & "OTK-V2") = 900#
+
+    ' 1) Nalozi u granicama otvorenog -> prolaz.
+    Dim ok As Collection
+    Set ok = New Collection
+    ok.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600, True)
+    ok.Add MakeNalog(P & "OTK-V2", P & "BLOK-V2", 250, True)
+    ChkEq ValidateNalogSaldo(ok, otvoreno), "", S & "nalozi u granicama otvorenog prolaze"
+
+    ' 2) Jedan nalog preko otvorenog -> odbijanje, sa brojem bloka u poruci.
+    Dim preplata As Collection
+    Set preplata = New Collection
+    preplata.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600, True)
+    preplata.Add MakeNalog(P & "OTK-V2", P & "BLOK-V2", 1000, True)
+
+    Dim res As String
+    res = ValidateNalogSaldo(preplata, otvoreno)
+    Chk LenB(res) > 0, S & "nalog veci od otvorenog je odbijen"
+    Chk InStr(res, P & "BLOK-V2") > 0, S & "poruka imenuje problematican blok"
+    Chk InStr(res, "1.000,00") > 0 Or InStr(res, "1,000.00") > 0, _
+        S & "poruka sadrzi trazeni iznos"
+    Chk InStr(res, P & "BLOK-V1") = 0, S & "ispravan blok se ne prijavljuje"
+
+    ' 3) Blok kog vise NEMA medju otvorenima = otvoreno 0 -> svaki iznos je preplata.
+    Dim nestao As Collection
+    Set nestao = New Collection
+    nestao.Add MakeNalog(P & "OTK-V9", P & "BLOK-V9", 10, True)
+    Chk LenB(ValidateNalogSaldo(nestao, otvoreno)) > 0, _
+        S & "blok koji vise nije otvoren je odbijen (fail-closed)"
+
+    ' 4) Blok BEZ tekuceg racuna ne ide u CSV, pa ne sme ni da obori generisanje.
+    Dim bezTR As Collection
+    Set bezTR = New Collection
+    bezTR.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 5000, False)
+    ChkEq ValidateNalogSaldo(bezTR, otvoreno), "", S & "blok bez TR ne obara naloge"
+
+    ' 5) GRANICE u cent-domenu (bez epsilon tolerancije). CSV nosi dve decimale,
+    '    pa se poredi tacno ono sto ce u fajlu i biti.
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600#), otvoreno)) = 0, _
+        S & "600.00 na otvoreno 600.00 prolazi"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.01), otvoreno)) > 0, _
+        S & "600.01 na otvoreno 600.00 je ODBIJEN (pun cent preplate)"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.005), otvoreno)) > 0, _
+        S & "600.005 se zaokruzuje na 600.01 -> odbijen"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.004), otvoreno)) = 0, _
+        S & "600.004 se zaokruzuje na 600.00 -> prolazi"
+
+    ' 6) Nepostojeca mapa otvorenih iznosa -> odbijanje, ne tiho propustanje.
+    Chk LenB(ValidateNalogSaldo(ok, Nothing)) > 0, S & "bez mape otvorenih se odbija"
+End Sub
+
+' ============================================================
+' T14 - AUD-026: kapija je UNUTAR putanje koja gradi CSV.
+'
+' T13 gadja samo validator. Da uklanjanje ili preskakanje tog poziva ne bi
+' prosla nezapazeno, ovde se testira BuildNalogCsvPayload -- ista funkcija
+' koju GenerisiNalogeCSV koristi da napravi sadrzaj fajla, i jedina putanja
+' do WriteAllTextUtf8. Preplata mora da da PRAZAN payload (nema sta da se
+' upise), a ispravan izbor payload sa tacno onim iznosima koje kapija odobri.
+' Bez diranja diska.
+' ============================================================
+Private Sub T14_CsvPayloadNosiKapiju()
+    Const S As String = "T14 CSV payload: "
+    Const RACUN As String = "160-1111111111-11"
+
+    Dim otvoreno As Object
+    Set otvoreno = CreateObject("Scripting.Dictionary")
+    otvoreno(P & "OTK-P1") = 600#
+    otvoreno(P & "OTK-P2") = 900#
+
+    ' 1) Preplata -> payload je PRAZAN i razlog je popunjen (fajl se ne pise).
+    Dim preplata As Collection
+    Set preplata = New Collection
+    preplata.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    preplata.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 900.01, True)
+
+    Dim odbijeno As String
+    Dim payload As String
+    payload = BuildNalogCsvPayload(preplata, RACUN, otvoreno, odbijeno)
+
+    ChkEq payload, "", S & "preplata daje prazan payload (nema sta da se upise)"
+    Chk LenB(odbijeno) > 0, S & "razlog odbijanja je vracen"
+    Chk InStr(odbijeno, P & "BLOK-P2") > 0, S & "razlog imenuje problematican blok"
+
+    ' 2) Ispravan izbor -> zaglavlje + tacno 2 reda, iznosi sa decimalnom TACKOM.
+    Dim ok As Collection
+    Set ok = New Collection
+    ok.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    ok.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 250.5, True)
+
+    odbijeno = "x"
+    payload = BuildNalogCsvPayload(ok, RACUN, otvoreno, odbijeno)
+
+    Chk LenB(payload) > 0, S & "ispravan izbor daje payload"
+    ChkEq odbijeno, "", S & "nema razloga odbijanja kad je sve u granicama"
+    ChkEq CsvRedova(payload), 2, S & "payload ima tacno 2 naloga"
+    Chk InStr(payload, "RacunPlatioca;") = 1, S & "payload pocinje zaglavljem"
+    Chk InStr(payload, ";600.00;") > 0, S & "iznos ide sa decimalnom tackom"
+    Chk InStr(payload, ";250.50;") > 0, S & "druga stavka je u payload-u"
+    Chk InStr(payload, P & "BLOK-P1") > 0, S & "poziv na broj = broj bloka"
+
+    ' 3) Sub-cent iznos se u fajl upisuje NORMALIZOVAN (ista vrednost koju je
+    '    kapija odobrila) -- writer i validator ne smeju da se raziidju.
+    Dim subCent As Collection
+    Set subCent = New Collection
+    subCent.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600.004, True)
+    payload = BuildNalogCsvPayload(subCent, RACUN, otvoreno, odbijeno)
+    Chk InStr(payload, ";600.00;") > 0, S & "600.004 je u fajlu normalizovan na 600.00"
+
+    ' 4) Blok bez tekuceg racuna ne ulazi u fajl (i ne obara ga).
+    Dim bezTR As Collection
+    Set bezTR = New Collection
+    bezTR.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    bezTR.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 100#, False)
+    payload = BuildNalogCsvPayload(bezTR, RACUN, otvoreno, odbijeno)
+    ChkEq CsvRedova(payload), 1, S & "blok bez TR nije u fajlu"
+    ChkEq odbijeno, "", S & "blok bez TR ne obara generisanje"
+
+    ' 5) Sub-cent ostatak NE sme da napravi nalog na nula dinara. Otvoreno iz
+    '    GetOpenOtkupi je sirovo (kolicina * cena - isplaceno), pa je ostatak
+    '    tipa 0.004 RSD legitiman produkcioni rezultat; sirov prag "> 0" bi ga
+    '    pustio, a CsvIznos bi ga upisao kao "0.00" -- nevalidan nalog koji
+    '    banci moze da obori uvoz celog paketa.
+    Dim ostatak As Object
+    Set ostatak = CreateObject("Scripting.Dictionary")
+    ostatak(P & "OTK-P1") = 600#
+    ostatak(P & "OTK-P3") = 0.004
+
+    Dim saOstatkom As Collection
+    Set saOstatkom = New Collection
+    saOstatkom.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    saOstatkom.Add MakeNalog(P & "OTK-P3", P & "BLOK-P3", 0.004, True)
+
+    payload = BuildNalogCsvPayload(saOstatkom, RACUN, ostatak, odbijeno)
+    ChkEq odbijeno, "", S & "sub-cent ostatak nije preplata (ne obara generisanje)"
+    ChkEq CsvRedova(payload), 1, S & "sub-cent ostatak ne pravi svoj nalog"
+    Chk InStr(payload, ";0.00;") = 0, S & "u fajlu nema naloga na 0.00"
+    Chk InStr(payload, P & "BLOK-P3") = 0, S & "blok sa ostatkom nije u fajlu"
+    Chk InStr(payload, ";600.00;") > 0, S & "regularan nalog je i dalje tu"
+End Sub
+
+' ============================================================
+' T15 - AUD-026: dupli kanonski kljuc obara saldo-mapu (fail-closed).
+'
+' GetOpenOtkupi ne agregira po OtkupID nego vraca red po red. Kod korumpiranog
+' PK-a (dva reda, isti OtkupID, RAZLICIT broj dokumenta i otvoreni iznos) mapa
+' bi -- da se gradi assignment-om -- pustila da poslednji red odluci saldo, pa
+' bi otvoreno bloka B odobrilo nalog za blok A. Zato BuildOpenAmountDict na
+' duplikat PADA; posledica je da ni payload ne nastane (mapa se gradi PRE
+' njega), dakle nema fajla za banku.
+'
+' Namerno se testiraju KONFLIKTNE vrednosti -- to je slucaj koji tiho menja
+' finansijski ishod.
+' ============================================================
+Private Sub T15_DupliOtkupIDObaraSaldoMapu()
+    Const S As String = "T15 dupli OtkupID: "
+
+    ' Zdrava lista i dalje mora da prodje (da kapija ne bude preosetljiva).
+    Dim zdrava As Collection
+    Set zdrava = New Collection
+    zdrava.Add MakeBlok(P & "OTK-D1", P & "BLOK-D1", 500)
+    zdrava.Add MakeBlok(P & "OTK-D2", P & "BLOK-D2", 2000)
+
+    Dim mapa As Object
+    Dim errNum As Long
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(zdrava)
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zdrava lista gradi mapu bez greske"
+    If errNum = 0 Then ChkEq mapa.count, 2, S & "mapa ima oba bloka"
+
+    ' Dva reda, ISTI OtkupID, razlicit dokument i razlicit otvoreni iznos.
+    Dim korumpirana As Collection
+    Set korumpirana = New Collection
+    korumpirana.Add MakeBlok(P & "OTK-D9", P & "BLOK-A", 500)
+    korumpirana.Add MakeBlok(P & "OTK-D9", P & "BLOK-B", 2000)
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(korumpirana)
+    errNum = Err.Number
+    Dim errDesc As String
+    errDesc = Err.description
+    On Error GoTo 0
+
+    Chk errNum <> 0, S & "dupli OtkupID PODIZE gresku (ne bira poslednji red)"
+    ChkEq errNum, ERR_ISPLATA_DUPLI_OTKUPID, S & "greska je tipizirana"
+    Chk InStr(errDesc, P & "OTK-D9") > 0, S & "poruka imenuje sporan OtkupID"
+
+    ' Klamp koristi istu mapu -> ne sme da proguta pad (inace bi pregled tiho
+    ' odlucio koji duplikat vazi).
+    Dim ovr As Object
+    Set ovr = CreateObject("Scripting.Dictionary")
+    ovr(P & "OTK-D9") = 1000#
+
+    On Error Resume Next
+    Err.Clear
+    ClampOverridesToOpen ovr, korumpirana
+    errNum = Err.Number
+    On Error GoTo 0
+    Chk errNum <> 0, S & "ClampOverridesToOpen propagira pad (ne guta ga)"
+
+    ' Prazan OtkupID je ista klasa problema -- saldo se ne moze vezati za blok.
+    Dim praznaID As Collection
+    Set praznaID = New Collection
+    praznaID.Add MakeBlok("", P & "BLOK-D0", 500)
+
+    On Error Resume Next
+    Err.Clear
+    Set mapa = BuildOpenAmountDict(praznaID)
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_OTKUPID, S & "prazan OtkupID PODIZE tipiziranu gresku"
+End Sub
+
+' Broj DATA redova u CSV payload-u (bez zaglavlja i bez zavrsnog praznog reda).
+Private Function CsvRedova(ByVal payload As String) As Long
+    If LenB(payload) = 0 Then Exit Function
+    Dim parts As Variant
+    parts = Split(payload, vbCrLf)
+    Dim i As Long, n As Long
+    For i = LBound(parts) To UBound(parts)
+        If LenB(Trim$(CStr(parts(i)))) > 0 Then n = n + 1
+    Next i
+    If n > 0 Then n = n - 1          ' zaglavlje
+    CsvRedova = n
+End Function
+
+' Kolekcija sa tacno jednim nalogom -- za granicne provere u T13.
+Private Function JedanNalog(ByVal otkupID As String, ByVal brDok As String, _
+                            ByVal iznos As Double) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    c.Add MakeNalog(otkupID, brDok, iznos, True)
+    Set JedanNalog = c
+End Function
+
+' Blok za RF-10 seam testove (otvoreni iznos je jedino sto clamp gleda).
+Private Function MakeBlok(ByVal otkupID As String, ByVal brDok As String, _
+                          ByVal otvoreno As Double) As clsBlokIsplata
+    Dim blk As clsBlokIsplata
+    Set blk = New clsBlokIsplata
+    blk.otkupID = otkupID
+    blk.brojDokumenta = brDok
+    blk.kooperantNaziv = "Test Kooperant"
+    blk.OtvorenIznos = otvoreno
+    Set MakeBlok = blk
+End Function
+
+' Blok pripremljen za nalog: IsplatitiIznos + TR (sto GenerisiNalogeCSV gleda).
+Private Function MakeNalog(ByVal otkupID As String, ByVal brDok As String, _
+                           ByVal iznos As Double, ByVal imaTR As Boolean) As clsBlokIsplata
+    Dim blk As clsBlokIsplata
+    Set blk = MakeBlok(otkupID, brDok, iznos)
+    blk.IsplatitiIznos = iznos
+    blk.HasTekuciRacun = imaTR
+    If imaTR Then blk.TekuciRacun = "160-0000000000-11"
+    Set MakeNalog = blk
+End Function
+
+' ============================================================
+' T16 - AUD-026: "Primeni avans" odbija dupli kanonski OtkupID.
+'
+' Tabelarni test (ne dictionary): ApplyAvansToOtkup je citao target red kao
+' FindRows(...)(1), dakle "prvi red pobedjuje". Kod dupliranog OtkupID-a to
+' znaci da se vrednost otkupa uzima sa JEDNOG reda, a avans se u ledgeru vezuje
+' samo za dvosmislen OtkupID -- akcija nad prikazanim redom moze da se izvrsi
+' nad drugim redom. Ekran isplata nudi bas tu akciju ("Primeni avans na blok" /
+' "(sel.)"), pa kapija mora da bude u CORE-u, ne u formi.
+'
+' Testira se ISTI kooperant na oba reda: to je slucaj koji je ranije TIHO
+' prolazio. Razlicit kooperant je vec obarao zatecen owner guard (AUD-010), pa
+' se i on proverava -- da ta odbrana ne oslabi.
+' ============================================================
+Private Sub T16_DupliOtkupIDNeDozvoljavaAvans()
+    Const S As String = "T16 avans nad duplim OtkupID: "
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    SeedStanica P & "OM-16", P & "Stanica 16"
+    SeedKooperant P & "K-16A", "Test", "Duplikat", P & "OM-16"
+    SeedKooperant P & "K-16B", "Test", "Drugi", P & "OM-16"
+
+    ' --- (1) ISTI kooperant, dva reda pod istim OtkupID, razlicit blok/iznos.
+    SeedOtkup P & "OTK-DUP", P & "K-16A", P & "BLOK-16A", 100, 5, "Malina"   ' 500
+    SeedOtkup P & "OTK-DUP", P & "K-16A", P & "BLOK-16B", 100, 20, "Kupina"  ' 2000
+    SeedAvansKooperanta P & "NOV-16", P & "K-16A", 300
+
+    Dim primenjeno As Double
+    Dim ok As Boolean
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16A", P & "OTK-DUP", primenjeno)
+
+    Chk Not ok, S & "avans nad duplim OtkupID je ODBIJEN"
+    ChkEqD primenjeno, 0, S & "nista nije proknjizeno (appliedAmount = 0)"
+    ChkEq NovacRedovaSaOtkupID(P & "OTK-DUP"), 0, S & "nijedan Novac red nije vezan za sporan OtkupID"
+    ChkEqD SlobodanAvansKooperanta(P & "K-16A"), 300, S & "avans kooperanta je ostao netaknut"
+    ChkEq OtkupRedova(P & "OTK-DUP"), 2, S & "oba Otkup reda su ostala netaknuta"
+
+    ' --- (2) Razlicit kooperant na duplikatu: i dalje odbijeno (owner guard
+    '         AUD-010 je gadjao bas to; nova kapija ga ne sme zameniti tise).
+    SeedOtkup P & "OTK-DUP2", P & "K-16A", P & "BLOK-16C", 100, 5, "Malina"
+    SeedOtkup P & "OTK-DUP2", P & "K-16B", P & "BLOK-16D", 100, 20, "Kupina"
+    SeedAvansKooperanta P & "NOV-16B", P & "K-16B", 300
+
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16B", P & "OTK-DUP2", primenjeno)
+
+    Chk Not ok, S & "duplikat sa drugim kooperantom je takodje odbijen"
+    ChkEqD primenjeno, 0, S & "nista nije proknjizeno ni u tom slucaju"
+    ChkEq NovacRedovaSaOtkupID(P & "OTK-DUP2"), 0, S & "ledger ostaje cist"
+
+    ' --- (3) KONTROLA: jedinstven OtkupID mora i dalje da radi (kapija ne sme
+    '         da blokira zdrav slucaj). Zaseban kooperant, da avans iz slucaja
+    '         (1) -- koji je ostao NEVEZAN jer je akcija odbijena -- ne udje u
+    '         ovaj zbir i ne pomeri ocekivan iznos.
+    SeedKooperant P & "K-16C", "Test", "Zdrav", P & "OM-16"
+    SeedOtkup P & "OTK-OK16", P & "K-16C", P & "BLOK-16E", 100, 5, "Malina"   ' 500
+    SeedAvansKooperanta P & "NOV-16C", P & "K-16C", 200
+
+    primenjeno = -1
+    ok = ApplyAvansToOtkup_TX(P & "K-16C", P & "OTK-OK16", primenjeno)
+
+    Chk ok, S & "jedinstven OtkupID i dalje prolazi"
+    ChkEqD primenjeno, 200, S & "primenjen je ceo raspolozivi avans (200)"
+    Chk NovacRedovaSaOtkupID(P & "OTK-OK16") > 0, S & "avans je vezan za otkup"
+    ChkEqD SlobodanAvansKooperanta(P & "K-16C"), 0, S & "avans vise nije nevezan"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T17 - AUD-026: SAKRIVEN duplikat ne sme da isplati pogresnog kooperanta.
+'
+' Najopasnija varijanta, koju stroga saldo-mapa NE vidi: duplikat postoji u
+' sirovoj tblOtkup, ali samo JEDAN od dva reda je otvoren.
+'
+'   red A: OTK-HID, kooperant K-17A (racun 160-AAA), blok BLOK-17A, Isplaceno
+'   red B: OTK-HID, kooperant K-17B (racun 160-BBB), blok BLOK-17B, otvoren
+'
+' GetOpenOtkupi vrati samo B, pa u otvorenoj listi nema duplikata i
+' BuildOpenAmountDict nema sta da prijavi. Ali vlasnik se ranije citao
+' first-wins iz SIROVE tabele -> blok B bi dobio naziv i TEKUCI RACUN
+' kooperanta A, i nalog od ~2.000 bi otisao POGRESNOM PRIMAOCU.
+'
+' Test zato daje kooperantima ocigledno razlicite racune i tvrdi da nikakav
+' payload nije nastao -- ne samo da je iznos tacan.
+' ============================================================
+Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
+    Const S As String = "T17 sakriven duplikat: "
+    Const RACUN_A As String = "160-AAAAAAAAAA-11"
+    Const RACUN_B As String = "160-BBBBBBBBBB-22"
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    SeedStanica P & "OM-17", P & "Stanica 17"
+    SeedKooperantSaRacunom P & "K-17A", "Prvi", "Vlasnik", P & "OM-17", RACUN_A
+    SeedKooperantSaRacunom P & "K-17B", "Drugi", "Vlasnik", P & "OM-17", RACUN_B
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (1) KONTROLA PRVA: duplikat kome NIJEDAN red nije otvoren ne sme da
+    '         obori pregled (istorijski duplikat ne proizvodi nalog).
+    SeedOtkupIsplacen P & "OTK-HIST", P & "K-17A", P & "BLOK-17C", 100, 5, "Malina"
+    SeedOtkupIsplacen P & "OTK-HIST", P & "K-17B", P & "BLOK-17D", 100, 20, "Kupina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zatvoren (istorijski) duplikat NE obara pregled"
+
+    ' --- (2) Sada pravi slucaj: red A isplacen (duplikat je skriven od
+    '         GetOpenOtkupi), red B otvoren i na DRUGOG kooperanta.
+    SeedOtkupIsplacen P & "OTK-HID", P & "K-17A", P & "BLOK-17A", 100, 5, "Malina"
+    SeedOtkup P & "OTK-HID", P & "K-17B", P & "BLOK-17B", 100, 20, "Kupina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_DUPLI_OTKUPID, S & "otvoren blok sa dupliranim OtkupID obara listu"
+    Chk InStr(errDesc, P & "OTK-HID") > 0, S & "poruka imenuje sporan OtkupID"
+
+    ' --- (3) I cela CSV putanja mora ostati bez fajla. Nalog se pravi za
+    '         BLOK-17B (otvoren red), a GenerisiNalogeCSV interno gradi svezu
+    '         listu -> pad pre nego sto payload uopste nastane.
+    Dim nalozi As Collection
+    Set nalozi = New Collection
+    nalozi.Add MakeNalog(P & "OTK-HID", P & "BLOK-17B", 1500, True)
+
+    Dim odbijeno As String
+    Dim putanja As String
+    putanja = GenerisiNalogeCSV(nalozi, "160-1111111111-11", odbijeno)
+
+    ChkEq putanja, "", S & "nijedan CSV fajl nije napravljen"
+    Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
+    Chk InStr(odbijeno, P & "OTK-HID") > 0, S & "razlog imenuje sporan OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T18 - AUD-026: nepotpun identitet otvorenog bloka ne sme TIHO da nestane.
+'
+' Ranije je nedostajuci identitet zavrsavao u "GoTo NextRow": otvorena obaveza
+' od npr. 100.000 RSD bi jednostavno izostala iz pregleda, bez greske i bez
+' upozorenja, dok bi ostali nalozi uredno otisli u fajl. Ekran bi tvrdio da
+' prikazuje otvorene obaveze, a jedna bi nedostajala.
+'
+' Sada je fail-closed, isto pravilo kao za dupliran OtkupID. Kontrola (3)
+' cuva granicu iz R7: korupcija koja NE moze proizvesti nalog (zatvoren red)
+' ne obara ceo ekran.
+' ============================================================
+Private Sub T18_NepotpunIdentitetNeNestajeTiho()
+    Const S As String = "T18 nepotpun identitet: "
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    SeedStanica P & "OM-18", P & "Stanica 18"
+    SeedKooperantSaRacunom P & "K-18", "Test", "Potpun", P & "OM-18", "160-CCCCCCCCCC-33"
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (3) prvo KONTROLA: zatvoren (isplacen) red bez OtkupID ne sme da
+    '         obori pregled -- GetOpenOtkupi ga i ne vraca, pa nalog iz njega
+    '         ne moze nastati.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
+        Array("", P & "BLOK-18Z", P & "K-18", 100, 5, "Malina", Date, STATUS_ISPLACENO)
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zatvoren red bez OtkupID NE obara pregled"
+
+    ' --- (1) OTVOREN blok bez OtkupID -> tvrd pad (ranije: tiho nestajanje).
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array("", P & "BLOK-18A", P & "K-18", 1000, 100, "Malina", Date)
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_OTKUPID, S & "otvoren blok bez OtkupID PADA (ne nestaje)"
+    Chk InStr(errDesc, P & "BLOK-18A") > 0, S & "poruka imenuje dokument bez OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T19 - AUD-026: otvoren blok bez kooperanta (primaoca) takodje pada.
+'
+' Zaseban test jer T18 ostavlja red bez OtkupID koji bi obarao svaku sledecu
+' proveru u istoj transakciji -- ovaj scenario mora da se dokaze sam za sebe.
+' ============================================================
+Private Sub T19_OtvorenBlokBezKooperantaPada()
+    Const S As String = "T19 blok bez kooperanta: "
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' Jedinstven OtkupID, ali BEZ kooperanta -> primalac se ne moze utvrditi.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina", Date)
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_KOOPERANTID, S & "otvoren blok bez kooperanta PADA (ne nestaje)"
+    Chk InStr(errDesc, P & "OTK-NOKOOP") > 0, S & "poruka imenuje sporan OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T20 - AUD-026: dupli KooperantID ne sme da bira racun primaoca.
+'
+' Poslednji FK korak istog lanca: OtkupID moze biti savrseno jedinstven, pa
+' sve kapije iznad prolaze -- ali ako tblKooperanti ima DVA reda sa istim
+' KooperantID i RAZLICITIM tekucim racunom, cache je bio "prvi pojav
+' pobedjuje" i nalog bi otisao na racun onog reda koji je slucajno prvi.
+' RunProductionHealthCheck ovo ne amortizuje: njegova duplicate-key provera
+' pokriva OtkupID/OtpremnicaID/FakturaID/NovacID..., ali NE KooperantID.
+'
+' Kontrola (1) cuva istu granicu kao R7/R8: duplikat kooperanta koga nijedan
+' otvoren blok ne koristi ne obara ekran.
+' ============================================================
+Private Sub T20_DupliKooperantIDNeBiraRacun()
+    Const S As String = "T20 dupli KooperantID: "
+    Const RACUN_A As String = "160-DDDDDDDDDD-44"
+    Const RACUN_B As String = "160-EEEEEEEEEE-55"
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+    SeedStanica P & "OM-20", P & "Stanica 20"
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (1) KONTROLA: dupliran kooperant koga NIJEDAN otvoren blok ne koristi
+    '         ne sme da obori pregled.
+    SeedKooperantSaRacunom P & "K-NEKOR", "Nije", "Koriscen", P & "OM-20", RACUN_A
+    SeedKooperantSaRacunom P & "K-NEKOR", "Nije", "Koriscen", P & "OM-20", RACUN_B
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "neiskoriscen duplikat kooperanta NE obara pregled"
+
+    ' --- (2) Sada duplikat KOJI stoji iza otvorenog bloka. OtkupID je
+    '         jedinstven, dakle sve prethodne kapije prolaze.
+    SeedKooperantSaRacunom P & "K-DUP20", "Dupli", "Kooperant", P & "OM-20", RACUN_A
+    SeedKooperantSaRacunom P & "K-DUP20", "Dupli", "Kooperant", P & "OM-20", RACUN_B
+    SeedOtkup P & "OTK-K20", P & "K-DUP20", P & "BLOK-20A", 1000, 100, "Malina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_DUPLI_KOOPERANTID, S & "otvoren blok sa duplim kooperantom PADA"
+    Chk InStr(errDesc, P & "K-DUP20") > 0, S & "poruka imenuje sporan KooperantID"
+
+    ' --- (3) Cela CSV putanja mora ostati bez fajla (racun se ne sme pogadjati).
+    Dim nalozi As Collection
+    Set nalozi = New Collection
+    nalozi.Add MakeNalog(P & "OTK-K20", P & "BLOK-20A", 1000, True)
+
+    Dim odbijeno As String
+    Dim putanja As String
+    putanja = GenerisiNalogeCSV(nalozi, "160-1111111111-11", odbijeno)
+
+    ChkEq putanja, "", S & "nijedan CSV fajl nije napravljen"
+    Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
+    Chk InStr(odbijeno, P & "K-DUP20") > 0, S & "razlog imenuje sporan KooperantID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' Izolovana transakcija za testove koji citaju CELU tabelu (BuildBlokIsplataList
+' gleda sve otvorene blokove, ne samo BIT- redove). Bez izolacije bi podaci
+' jednog testa obarali KONTROLNE slucajeve sledecih -- npr. otvoren duplikat iz
+' T17 bi oborio "zdravu" proveru u T18 -- jer se spoljni rollback radi tek na
+' kraju suite-a. Isti obrazac koriste storno testovi.
+Private Function BeginIsolatedTx() As clsTransaction
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_KOOPERANTI
+    tx.AddTableSnapshot TBL_STANICE
+    Set BeginIsolatedTx = tx
+End Function
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
+
+' Kooperant sa tekucim racunom (T17: primalac naloga mora biti razlucljiv).
+Private Sub SeedKooperantSaRacunom(ByVal koopID As String, ByVal ime As String, _
+                                   ByVal prezime As String, ByVal stanicaID As String, _
+                                   ByVal racun As String)
+    BitAppend TBL_KOOPERANTI, _
+        Array("KooperantID", "Ime", "Prezime", COL_KOOP_STANICA, COL_KOOP_TEKUCI_RACUN), _
+        Array(koopID, ime, prezime, stanicaID, racun)
+End Sub
+
+' Otkup red koji je VEC ISPLACEN -> GetOpenOtkupi ga preskace.
+Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
+                              ByVal brDok As String, ByVal kolicina As Double, _
+                              ByVal cena As Double, ByVal vrsta As String)
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
+        Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+End Sub
+
+' Slobodan (nevezan) virman avans kooperanta -- ulaz za ApplyAvansToOtkup.
+Private Sub SeedAvansKooperanta(ByVal novacID As String, ByVal koopID As String, _
+                                ByVal iznos As Double)
+    BitAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_DATUM, COL_NOV_KOOP_ID, COL_NOV_PARTNER_ID, _
+              COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_ISPLATA, COL_NOV_OTKUP_ID), _
+        Array(novacID, Date, koopID, koopID, "Kooperant", NOV_VIRMAN_AVANS_KOOP, iznos, "")
+End Sub
+
+' Koliko Novac redova nosi dati OtkupID (0 = nista nije vezano).
+Private Function NovacRedovaSaOtkupID(ByVal otkupID As String) As Long
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim c As Long
+    c = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    If c = 0 Then Exit Function
+
+    Dim i As Long, n As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, c))) = otkupID Then n = n + 1
+    Next i
+    NovacRedovaSaOtkupID = n
+End Function
+
+' Zbir NEVEZANOG avansa kooperanta (OtkupID prazan).
+Private Function SlobodanAvansKooperanta(ByVal koopID As String) As Double
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cK As Long, cT As Long, cI As Long, cO As Long
+    cK = GetColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID)
+    cT = GetColumnIndex(TBL_NOVAC, COL_NOV_TIP)
+    cI = GetColumnIndex(TBL_NOVAC, COL_NOV_ISPLATA)
+    cO = GetColumnIndex(TBL_NOVAC, COL_NOV_OTKUP_ID)
+    If cK = 0 Or cT = 0 Or cI = 0 Or cO = 0 Then Exit Function
+
+    Dim i As Long, sum As Double
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cK))) = koopID Then
+            If CStr(data(i, cT)) = NOV_VIRMAN_AVANS_KOOP Then
+                If LenB(Trim$(CStr(data(i, cO)))) = 0 Then
+                    If IsNumeric(data(i, cI)) Then sum = sum + CDbl(data(i, cI))
+                End If
+            End If
+        End If
+    Next i
+    SlobodanAvansKooperanta = sum
+End Function
+
+' Koliko redova u tblOtkup nosi dati OtkupID (za proveru da nista nije diralo).
+Private Function OtkupRedova(ByVal otkupID As String) As Long
+    Dim rowsFound As Collection
+    Set rowsFound = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If Not rowsFound Is Nothing Then OtkupRedova = rowsFound.count
+End Function
 
 Private Sub SeedBim(ByVal bimID As String, ByVal brojIzvoda As String, _
                     ByVal racun As String, ByVal partner As String, _
@@ -1053,7 +1826,7 @@ End Sub
 
 Private Sub ReportResults()
     Dim hdr As String
-    hdr = "BANKA IMPORT TEST SUITE (RF-09)  ->  PASS=" & mPass & "  FAIL=" & mFail
+    hdr = "BANKA TEST SUITE (RF-09 + RF-10)  ->  PASS=" & mPass & "  FAIL=" & mFail
 
     Debug.Print String(60, "=")
     Debug.Print hdr
