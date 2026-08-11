@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-87"
+Public Const OTKUI_BUILD   As String = "v6-ui-88"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2111,7 +2111,8 @@ Public Sub RenderGrid()
                         .Visible = True
                         Select Case ColKind(k)
                             Case "date":               .caption = FmtDatumKratko(mView(r, k + 1))
-                            Case "kg", "num", "sum0":  .caption = FmtBroj(CDbl(mView(r, k + 1)), 0)
+                            Case "kg":                 .caption = FmtKg(CDbl(mView(r, k + 1)))
+                            Case "num", "sum0":        .caption = FmtBroj(CDbl(mView(r, k + 1)), 0)
                             Case "rsd", "mult":        .caption = FmtBroj(CDbl(mView(r, k + 1)), 2)
                             Case "pill":               PaintPill body.Controls("c" & i & "_" & k), CLng(mView(r, k + 1))
                             Case "paypill":            PaintPayPill body.Controls("c" & i & "_" & k), CLng(mView(r, k + 1))
@@ -2145,7 +2146,7 @@ Public Sub RenderGrid()
     End If
     ' gotovinski promet i reversi nemaju kilograme - zbir kg bi bio prazna nula
     ft.Controls("ftKg").Visible = Not kanal
-    ft.Controls("ftKg").caption = Poruka("OTKUI_FT_UKUPNO") & " " & FmtBroj(mSumKg, 0) & " " & Poruka("OTKUI_UNIT_KG")
+    ft.Controls("ftKg").caption = Poruka("OTKUI_FT_UKUPNO") & " " & FmtKg(mSumKg) & " " & Poruka("OTKUI_UNIT_KG")
     ' rezim bez kolone vrednosti (Zbirna) nema ni zbir
     ft.Controls("ftVal").Visible = ModeHasValCol()
     ' reversi se broje u komadima, sve ostalo u dinarima (i bez decimala)
@@ -4201,6 +4202,19 @@ End Function
 Private Function FmtDatumPun(ByVal v As Variant) As String
     On Error Resume Next
     FmtDatumPun = Format$(CDate(v), "dd.mm.yyyy")
+End Function
+
+' Kilogrami se u ovom poslu vode na decimalu (60,6 kg), pa zaokruzivanje na
+' ceo broj nije stvar ukusa nego netacan podatak: blok od 60,6 kg se ispisivao
+' kao 61 i mreza se onda nije slagala sa trakom otpremnice, koja isti broj
+' pise sa dve decimale. Ceo broj se i dalje pise bez decimala - lista ostaje
+' mirna dok stvarno nema sta da se pokaze.
+Private Function FmtKg(ByVal v As Double) As String
+    If v = Int(v) Then
+        FmtKg = FmtBroj(v, 0)
+    Else
+        FmtKg = FmtBroj(v, 2)
+    End If
 End Function
 
 Private Function FmtBroj(ByVal d As Double, ByVal dec As Long) As String
