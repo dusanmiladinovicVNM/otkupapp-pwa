@@ -105,6 +105,23 @@ End Function
 ' Opis aktivne otpremnice za traku iznad forme. Prazno = nema izabrane.
 ' Oblik: broj | kupac | datum | ukupnoKg | uBlokKg | ostatakKg |
 '        ukupnoAmb | uBlokAmb | ostatakAmb | cena
+' Stanica aktivne otpremnice. Ljuska time proverava da li je promena otkupnog
+' mesta izasla iz konteksta otpremnice (legacy cmbOtkupnoMesto_Change).
+Public Function Scr_OtpStanica() As String
+    On Error Resume Next
+    If Len(mOtpID) = 0 Then Exit Function
+    Scr_OtpStanica = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                mOtpID, COL_OTP_STANICA)))
+End Function
+
+' Napusti otpremnicu: njen datum, zbirna i roba vise ne vaze, pa se lista vraca
+' na otpremnice. Legacy par: OtkupBlok_ClearActiveOtp + ResetDatumKontekst.
+Public Sub Scr_OtpOtkazi()
+    mOtpID = ""
+    mOtpBroj = ""
+    mLista = "OTPREMNICE"
+End Sub
+
 Public Function Scr_OtpInfo() As String
     Dim ukKg As Double, blKg As Double, ukAmb As Double, blAmb As Double
     Dim kupac As String, dat As String, cena As Double

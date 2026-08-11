@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-110"
+Public Const OTKUI_BUILD   As String = "v6-ui-111"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2813,6 +2813,10 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     MarkClean
     mPopMute = False
     mLoading = False
+    ' Svaki rezim ima svoj brojevni niz (otkupni list / otpremnica / zbirna /
+    ' revers), pa se predlog racuna i pri promeni rezima - inace bi u polju
+    ' ostao broj iz prethodnog niza. Rezimi bez niza ga ne diraju.
+    If Not mBuilding Then RefreshBrojPredlog False
     If doReload Then
         mView = Empty: mViewN = 0
         ReloadGrid
@@ -5110,11 +5114,13 @@ Private Sub OnStanicaChanged()
         Exit Sub
     End If
 
+    ' Promena otkupnog mesta VAN konteksta izabrane otpremnice: njen datum,
+    ' zbirna i roba vise ne vaze. Isto sto legacy radi u cmbOtkupnoMesto_Change.
+    NapustiOtpremnicu stID
+
     dat = DatumIzPolja()
-    If Not AcquireStanicaLock(stID, dat) Then
+    If Not AcquireStanicaLock(stID, dat) Then _
         ShowToast Poruka("OTKUI_ERR_STANICA") & " " & stID, True
-        Exit Sub
-    End If
 
     ' MALINA: vozac je par-vozac otkupnog mesta (VozacID = StanicaID), pa se
     ' bira sam - isto kao u legacy. Ako par-vozac ne postoji, ostaje prazno.
@@ -5124,8 +5130,45 @@ Private Sub OnStanicaChanged()
         SelectComboByDisplayID cbVoz, stID
     End If
 
+    ' BROJ DOKUMENTA UVEK PRATI STANICU. Predlog se racuna i kad zakljucavanje
+    ' stanice padne (mreza, tudji lock): broj je stvar prikaza, a pravo na upis
+    ' se ionako proverava pri snimanju. Ranije je pad locka radio Exit Sub, pa
+    ' je u polju ostajao broj prethodnog otkupnog mesta.
     RefreshBrojPredlog False
     RefreshStatusBar mFrm
+End Sub
+
+' Izlazak iz konteksta otpremnice kad se promeni otkupno mesto. Polja se pisu
+' pod mLoading da ugnjezdeni okidaci (datum, vrsta) ne bi ponovo ulazili u
+' OnStanicaChanged - stanje se sredjuje jednom, na kraju.
+Private Sub NapustiOtpremnicu(ByVal stID As String)
+    Dim otpSt As String
+    On Error Resume Next
+    If mScreen <> "DOKUMENTI" Then Exit Sub
+    otpSt = CStr(Application.Run("modScrDokumenti.Scr_OtpStanica"))
+    Err.Clear
+    If Len(otpSt) = 0 Then Exit Sub
+    If StrComp(otpSt, stID, vbTextCompare) = 0 Then Exit Sub
+
+    Application.Run "modScrDokumenti.Scr_OtpOtkazi"
+    Err.Clear
+
+    mLoading = True
+    SetDatumDanas mFrm.Controls("zForm")
+    SetFld "fgBrZbir", ""
+    mAktivnaZbirna = ""
+    ' roba je bila prepisana sa otpremnice - vrati podrazumevanu iz Podesavanja
+    mFrm.Controls("zCtx").Controls("cbVrsta").value = ""
+    mFrm.Controls("zCtx").Controls("cbSorta").value = ""
+    mLoading = False
+    ApplyDefaultRoba
+
+    mSelRow = 0                       ' lista je druga - stari izbor ne vazi
+    RefreshOtpTraka mFrm
+    RefreshListSeg mFrm
+    RefreshGridTitle mFrm
+    ReloadGrid
+    LayoutOtkup mFrm
 End Sub
 
 Private Sub OnDatumChanged()
