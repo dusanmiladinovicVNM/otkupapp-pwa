@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-83"
+Public Const SCRDOK_BUILD As String = "v6-ui-84"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String

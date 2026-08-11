@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-83"
+Public Const OTKUI_BUILD   As String = "v6-ui-84"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -130,8 +130,13 @@ Private Const CTX_H       As Single = 58      ' eyebrow red + natpis + polje
 Private Const CTX_LBL_Y   As Single = 14      ' natpis IZNAD polja
 Private Const CTX_FLD_Y   As Single = 26      ' vrh polja u zoni konteksta
 Private Const RIGHT_W     As Single = 188
-Private Const FIELD_H     As Single = 26
-Private Const FIELD_GRP_H As Single = 42
+' 28, a ne 26: na 26 su kutije za unos izgledale stisnuto (tekst od 20pt u
+' kutiji od 26 ostavlja po 4pt gore i dole, ali je sama kutija bila niza od
+' dugmeta pored nje). 28 je tacno visina dugmeta u akcionom redu, pa se ploca
+' iznosa i dugme poklapaju bez pomeranja za pola tacke.
+Private Const FIELD_H     As Single = 28
+' natpis (0..12) + kutija (16..16+FIELD_H) + 2pt vazduha
+Private Const FIELD_GRP_H As Single = 46
 Private Const INPUT_PAD   As Single = 9      ' unutrasnji padding teksta
 Private Const NAV_H       As Single = 27     ' /3, i prima TS_NAV od 10.5
 ' 21, a NE 19: visina reda mora biti deljiva sa 3. MSForms racuna u tackama, a
@@ -164,11 +169,14 @@ Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
 Private Const MODE_SEP_H  As Single = 11      ' razmak iznad kartice Storno
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
-Private Const GRP_H       As Single = 13      ' eyebrow red grupe polja
+Private Const GRP_H       As Single = 15      ' eyebrow red grupe polja
 ' Vertikalni razmak izmedju redova polja. Do sada je i tu isao GAP (10),
 ' isti koji razdvaja kolone - a po visini je 10pt cista rasipnja: tri reda
 ' polja i tri grupe su tako uzimali 40pt koje je mreza trazila.
-Private Const ROW_GAP     As Single = 6
+' 7 je kompromis: sa 6 (i kutijom od 26) je razmak izmedju dna kutije i
+' sledeceg natpisa padao na 6pt i unosni deo je izgledao zbijeno; sa 7 i
+' kutijom od 28 taj razmak je 9pt, a mreza gubi samo 3pt po redu polja.
+Private Const ROW_GAP     As Single = 7
 Private Const GRP_LBL_W   As Single = 108     ' natpis grupe, pa linija do kraja
 Private Const SEG_KL_W    As Single = 30      ' prekidac klase u polju KLASA I CENA
 Private Const VAL_CALC_W  As Single = 150     ' racunica DESNO od ploce iznosa
@@ -1560,7 +1568,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
         Next c
         If imaPolja Then
             If col > 0 Then Y = Y + FIELD_GRP_H + ROW_GAP
-            Y = Y + 2                       ' vazduh izmedju grupa
+            Y = Y + 3                       ' vazduh izmedju grupa
         Else
             z.Controls("grpH" & g).Visible = False
             z.Controls("grpLn" & g).Visible = False
@@ -1570,7 +1578,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     ' AKCIONI RED. Redosled sleva: poruka | racunica + IZNOS | dugmad.
     ' Iznos i potvrda su jedna radnja pa dele red - ploca ne trosi ceo red.
     ' Redosled dugmadi: Sacuvaj (najcesce) najblize poljima, Otkazi najdalje.
-    btnY = Y + 2
+    btnY = Y + 4
     btnX = zw - PAD - (196 + GAP + 132 + GAP + 72)
     MoveBtn z, "btnSacuvaj", btnX, btnY
     MoveBtn z, "btnSacuvajPrint", btnX + 196 + GAP, btnY
@@ -1583,7 +1591,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     If Not valFr Is Nothing Then
         valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), GAP + 4 + VAL_CALC_W, 0)
         valFr.Left = PAD
-        valFr.top = btnY - 17            ' ploca (30pt) centrirana na dugme (28pt)
+        valFr.top = btnY - 16            ' ploca (28pt) tacno u liniji sa dugmetom
         valFr.Height = FIELD_GRP_H
         LayoutFieldInner valFr
         tw = valFr.Left + valFr.width + GAP
@@ -1594,7 +1602,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     If z.Controls("tstOk").width < 60 Then z.Controls("tstOk").width = 60
     z.Controls("tstOk").Controls("tstMsg").width = z.Controls("tstOk").width - 18
 
-    LayoutFields = btnY + 26 + 8
+    LayoutFields = btnY + 28 + 8
 End Function
 
 ' Redosled grupa polja. Isti niz koristi i BuildForm za naslove.
