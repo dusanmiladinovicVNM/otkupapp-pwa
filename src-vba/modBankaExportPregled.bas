@@ -29,6 +29,7 @@ Private Const MAX_SALDO_PROBLEMA As Long = 10
 Public Const ERR_ISPLATA_DUPLI_OTKUPID As Long = vbObjectError + 2620
 Public Const ERR_ISPLATA_PRAZAN_OTKUPID As Long = vbObjectError + 2621
 Public Const ERR_ISPLATA_PRAZAN_KOOPERANTID As Long = vbObjectError + 2622
+Public Const ERR_ISPLATA_DUPLI_KOOPERANTID As Long = vbObjectError + 2623
 
 ' ------------------------------------------------------------------
 ' PRAVILO ZA POREDJENJE NOVCA NA OVOJ PUTANJI (AUD-026)
@@ -79,7 +80,8 @@ Public Function BuildBlokIsplataList( _
     Dim trCache As Object
     Dim nazivCache As Object
     Dim avansCache As Object
-    Set trCache = BuildKooperantTekuciRacunCache()
+    Dim dupliKooperant As Object
+    Set trCache = BuildKooperantTekuciRacunCache(dupliKooperant)
     Set nazivCache = CreateObject("Scripting.Dictionary")
     Set avansCache = BuildKooperantUnallocatedAvansDict()
     ' KooperantID po OtkupID: O(n) mapa JEDNOM (umesto LookupValue O(n) po redu
@@ -127,6 +129,31 @@ Public Function BuildBlokIsplataList( _
                       "integriteta podataka."
         End If
 
+        ' Vlasnik otvorenog bloka je primalac novca -- bez njega nema ni naloga
+        ' ni tekuceg racuna. Raniji tihi "GoTo NextRow" je otvorenu obavezu
+        ' izbacivao iz liste bez traga (FM-0021 #5); sada je fail-closed, isto
+        ' kao prazan i dupliran OtkupID. Prazan kooperant nije legitimno stanje:
+        ' SaveOtkupMulti_TX ga odbija pri upisu.
+        Dim kooperantID As String
+        If koopByOtkup.Exists(otkupID) Then kooperantID = Trim$(CStr(koopByOtkup(otkupID)))
+        If LenB(kooperantID) = 0 Then
+            Err.Raise ERR_ISPLATA_PRAZAN_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                      "Otvoren blok bez kooperanta: OtkupID=" & otkupID & " (dokument: " & brojDok & _
+                      "). Primalac se ne moze utvrditi -- nalozi nisu generisani; pokrenite proveru " & _
+                      "integriteta podataka."
+        End If
+
+        ' ...i taj kooperant mora imati JEDAN master red: TekuciRacun iz njega
+        ' postaje RacunPrimaoca. Dva reda sa istim KooperantID i razlicitim
+        ' racunom = pogadjanje primaoca, isto kao dupli OtkupID (vidi
+        ' BuildKooperantTekuciRacunCache).
+        If dupliKooperant.Exists(kooperantID) Then
+            Err.Raise ERR_ISPLATA_DUPLI_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                      "Dupli KooperantID u tblKooperanti: " & kooperantID & " (otvoren blok: " & _
+                      brojDok & "). Tekuci racun primaoca se ne moze pouzdano utvrditi -- nalozi " & _
+                      "nisu generisani; pokrenite proveru integriteta podataka."
+        End If
+
         If IsDate(openOtkupi(i, 6)) Then
             datumVal = CDate(openOtkupi(i, 6))
         Else
@@ -145,20 +172,6 @@ Public Function BuildBlokIsplataList( _
         If stanicaIDFilter <> "" And stanicaID <> stanicaIDFilter Then GoTo NextRow
         If datumOd > #1/1/1900# And datumVal < datumOd Then GoTo NextRow
         If datumDo > #1/1/1900# And datumVal > datumDo Then GoTo NextRow
-        
-        ' Vlasnik otvorenog bloka je primalac novca -- bez njega nema ni naloga
-        ' ni tekuceg racuna. Raniji tihi "GoTo NextRow" je otvorenu obavezu
-        ' izbacivao iz liste bez traga (FM-0021 #5); sada je fail-closed, isto
-        ' kao prazan i dupliran OtkupID. Prazan kooperant nije legitimno stanje:
-        ' SaveOtkupMulti_TX ga odbija pri upisu.
-        Dim kooperantID As String
-        If koopByOtkup.Exists(otkupID) Then kooperantID = Trim$(CStr(koopByOtkup(otkupID)))
-        If LenB(kooperantID) = 0 Then
-            Err.Raise ERR_ISPLATA_PRAZAN_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
-                      "Otvoren blok bez kooperanta: OtkupID=" & otkupID & " (dokument: " & brojDok & _
-                      "). Primalac se ne moze utvrditi -- nalozi nisu generisani; pokrenite proveru " & _
-                      "integriteta podataka."
-        End If
         
         Dim kooperantNaziv As String
         If nazivCache.Exists(kooperantID) Then
@@ -258,36 +271,56 @@ End Function
 
 '======================================================================
 ' BuildKooperantTekuciRacunCache
-' Single-pass cache KooperantID -> TekuciRacun
+' Single-pass cache KooperantID -> TekuciRacun, uz evidenciju dupliranih
+' KooperantID-eva (AUD-026).
+'
+' Isti razlog kao kod BuildOtkupOwnerIndex, samo jedan FK korak dalje:
+' TekuciRacun je RacunPrimaoca u nalogu, a ovaj cache je bio "prvi pojav
+' pobedjuje". Dva reda u tblKooperanti sa istim KooperantID i RAZLICITIM
+' racunom znace da se ne moze dokazati koji je master -- novac bi otisao na
+' racun onog reda koji je slucajno prvi u tabeli. Jedinstven OtkupID tu ne
+' pomaze: sve kapije iznad prolaze, a primalac je i dalje pogadjan.
+'
+' Duplikati se zato vracaju kroz outDupli, a pozivalac pada tek ako bas taj
+' kooperant stoji iza OTVORENOG bloka (istorijski duplikat koji ne proizvodi
+' nalog ne obara ekran). Kad je jedinstvenost dokazana, "prvi pogodak" u
+' GetKooperantNaziv postaje jedini pogodak, pa i naziv primaoca postaje
+' pouzdan bez dodatnog indeksa.
+'
+' KooperantID koji uopste NEMA master red ostaje zatecena putanja: nema TR
+' -> HasTekuciRacun = False -> blok se vidi, ne izvozi se i broji se u
+' "Bez TR". To je vec fail-safe (nema isplate) i nije dvosmislen identitet.
 '======================================================================
-Private Function BuildKooperantTekuciRacunCache() As Object
+Private Function BuildKooperantTekuciRacunCache(ByRef outDupli As Object) As Object
     Dim dict As Object
+    Dim dupliDict As Object
     Set dict = CreateObject("Scripting.Dictionary")
-    
+    Set dupliDict = CreateObject("Scripting.Dictionary")
+
+    Set outDupli = dupliDict
+    Set BuildKooperantTekuciRacunCache = dict
+
     Dim data As Variant
     data = GetTableData(TBL_KOOPERANTI)
-    If IsEmpty(data) Then
-        Set BuildKooperantTekuciRacunCache = dict
-        Exit Function
-    End If
-    
+    If IsEmpty(data) Then Exit Function
+
     Const SRC As String = "BuildKooperantTekuciRacunCache"
     Dim colID As Long, colTR As Long
     colID = RequireColumnIndex(TBL_KOOPERANTI, COL_KOOP_ID, SRC)
     colTR = RequireColumnIndex(TBL_KOOPERANTI, COL_KOOP_TEKUCI_RACUN, SRC)
-    
+
     Dim i As Long
     For i = 1 To UBound(data, 1)
         Dim kID As String
         kID = Trim$(CStr(data(i, colID)))
         If LenB(kID) > 0 Then
-            If Not dict.Exists(kID) Then
+            If dict.Exists(kID) Then
+                dupliDict(kID) = True
+            Else
                 dict.Add kID, Trim$(CStr(data(i, colTR)))
             End If
         End If
     Next i
-    
-    Set BuildKooperantTekuciRacunCache = dict
 End Function
 
 '======================================================================

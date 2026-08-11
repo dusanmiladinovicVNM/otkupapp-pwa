@@ -41,6 +41,8 @@ Option Explicit
 '               kooperanta -- vlasnik se ne resava "prvim pogotkom" nad sirovom tabelom
 '  T18 AUD-026  otvoren blok bez OtkupID PADA (ranije je tiho nestajao sa ekrana)
 '  T19 AUD-026  otvoren blok bez kooperanta PADA (primalac se ne moze utvrditi)
+'  T20 AUD-026  dupli KooperantID (dva master reda, dva racuna) ne sme da bira
+'               racun primaoca -- health-check duplicate provera ne pokriva KooperantID
 ' ============================================================
 
 Private mPass As Long
@@ -116,6 +118,7 @@ Public Sub RunBankaImportTestSuite()
     T17_SakrivenDuplikatNeIsplacujePogresnog
     T18_NepotpunIdentitetNeNestajeTiho
     T19_OtvorenBlokBezKooperantaPada
+    T20_DupliKooperantIDNeBiraRacun
 
     tx.RollbackTx
     Set tx = Nothing
@@ -1280,7 +1283,7 @@ Private Sub T18_NepotpunIdentitetNeNestajeTiho()
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array("", P & "BLOK-18A", P & "K-18", 1000, 100, "Malina")
+        Array("", P & "BLOK-18A", P & "K-18", 1000, 100, "Malina", Date)
 
     On Error Resume Next
     Err.Clear
@@ -1318,7 +1321,7 @@ Private Sub T19_OtvorenBlokBezKooperantaPada()
     BitAppend TBL_OTKUP, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
-        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina")
+        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina", Date)
 
     On Error Resume Next
     Err.Clear
@@ -1329,6 +1332,79 @@ Private Sub T19_OtvorenBlokBezKooperantaPada()
 
     ChkEq errNum, ERR_ISPLATA_PRAZAN_KOOPERANTID, S & "otvoren blok bez kooperanta PADA (ne nestaje)"
     Chk InStr(errDesc, P & "OTK-NOKOOP") > 0, S & "poruka imenuje sporan OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T20 - AUD-026: dupli KooperantID ne sme da bira racun primaoca.
+'
+' Poslednji FK korak istog lanca: OtkupID moze biti savrseno jedinstven, pa
+' sve kapije iznad prolaze -- ali ako tblKooperanti ima DVA reda sa istim
+' KooperantID i RAZLICITIM tekucim racunom, cache je bio "prvi pojav
+' pobedjuje" i nalog bi otisao na racun onog reda koji je slucajno prvi.
+' RunProductionHealthCheck ovo ne amortizuje: njegova duplicate-key provera
+' pokriva OtkupID/OtpremnicaID/FakturaID/NovacID..., ali NE KooperantID.
+'
+' Kontrola (1) cuva istu granicu kao R7/R8: duplikat kooperanta koga nijedan
+' otvoren blok ne koristi ne obara ekran.
+' ============================================================
+Private Sub T20_DupliKooperantIDNeBiraRacun()
+    Const S As String = "T20 dupli KooperantID: "
+    Const RACUN_A As String = "160-DDDDDDDDDD-44"
+    Const RACUN_B As String = "160-EEEEEEEEEE-55"
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+    SeedStanica P & "OM-20", P & "Stanica 20"
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (1) KONTROLA: dupliran kooperant koga NIJEDAN otvoren blok ne koristi
+    '         ne sme da obori pregled.
+    SeedKooperantSaRacunom P & "K-NEKOR", "Nije", "Koriscen", P & "OM-20", RACUN_A
+    SeedKooperantSaRacunom P & "K-NEKOR", "Nije", "Koriscen", P & "OM-20", RACUN_B
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "neiskoriscen duplikat kooperanta NE obara pregled"
+
+    ' --- (2) Sada duplikat KOJI stoji iza otvorenog bloka. OtkupID je
+    '         jedinstven, dakle sve prethodne kapije prolaze.
+    SeedKooperantSaRacunom P & "K-DUP20", "Dupli", "Kooperant", P & "OM-20", RACUN_A
+    SeedKooperantSaRacunom P & "K-DUP20", "Dupli", "Kooperant", P & "OM-20", RACUN_B
+    SeedOtkup P & "OTK-K20", P & "K-DUP20", P & "BLOK-20A", 1000, 100, "Malina"
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_DUPLI_KOOPERANTID, S & "otvoren blok sa duplim kooperantom PADA"
+    Chk InStr(errDesc, P & "K-DUP20") > 0, S & "poruka imenuje sporan KooperantID"
+
+    ' --- (3) Cela CSV putanja mora ostati bez fajla (racun se ne sme pogadjati).
+    Dim nalozi As Collection
+    Set nalozi = New Collection
+    nalozi.Add MakeNalog(P & "OTK-K20", P & "BLOK-20A", 1000, True)
+
+    Dim odbijeno As String
+    Dim putanja As String
+    putanja = GenerisiNalogeCSV(nalozi, "160-1111111111-11", odbijeno)
+
+    ChkEq putanja, "", S & "nijedan CSV fajl nije napravljen"
+    Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
+    Chk InStr(odbijeno, P & "K-DUP20") > 0, S & "razlog imenuje sporan KooperantID"
 
     tx.RollbackTx
     Set tx = Nothing
