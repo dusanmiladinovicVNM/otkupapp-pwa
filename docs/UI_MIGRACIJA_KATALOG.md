@@ -45,7 +45,7 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 |---|---|---|---|---|
 | Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` | **IMA** (`AutoFillCena`, v6-ui-102) |
 | Z2 | **Tip ambalaže iz kulture** po vrsti+sorti | isto | `GetKulturaTipAmbalaze` | **IMA** (v6-ui-102) |
-| Z3 | **Predlog broja dokumenta** iz otkupnog mesta + datuma; poštuje toggle auto-broja | isto | `modBrojevi.SuggestNextBroj(kind, entityID, datum)` | **IMA** (`RefreshBrojPredlog`, v6-ui-104) |
+| Z3 | **Predlog broja dokumenta** — po režimu (tabela ispod); poštuje toggle auto-broja | isto | `modBrojevi.SuggestNextBroj(kind, entityID, datum)`, `GenerateBrojPrijemnice` | **IMA** (`RefreshBrojPredlog`, v6-ui-104; pravila po režimu v6-ui-112) |
 | Z4 | **Živi zbir kg** uz polje količine; u bruto režimu prikazuje neto posle tare | `UpdateUkupnoKg`, `UpdateUkupnoKgOtp`, `UpdateUkupnoKgPrij` | `GetTezinaGajbice`, `OtkupBrutoUnos()` | **IMA** (`SetKgLine`, v6-ui-102) |
 | Z5 | **Dve klase** — prekidač otvara drugi red količine/cene/ambalaže | `chkDveKlase*_Click`, `ShowKolAmbalazeII`, `ShowKlIIAmb` | — | **IMA** (segment I/II uz KLASA I CENA) |
 | Z6 | **Parcele** — lista zavisi od kooperanta; celo polje gasi `PRACENJE_PARCELA` | `cmbKooperant_Change`, `ApplyOtkupTogglesState` | `IsPracenjeParcela()` | **IMA** |
@@ -57,6 +57,25 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 | Z12 | **KPI traka** iznad forme | `LayoutTopKpis`, `RefreshTopKpis`, `SumOtkupKgToday` | `GetOMAvansSaldo` | **DELIMIČNO** — traka postoji, dva KPI-ja nisu vezana |
 | Z13 | **Podrazumevani proizvod** po otvaranju/resetu | `ResetProizvodNaDefault` | `ApplyDefaultProizvod` | **IMA** (`ApplyDefaultRoba`, v6-ui-103) |
 | Z14 | **Kontekst datuma i otkupnog mesta** se pamti između dokumenata | `txtDatum_AfterUpdate`, `cmbOtkupnoMesto_Change` | `AcquireStanicaLock`, `GetActiveStanica/Datum` | **IMA** (v6-ui-104) |
+
+### Z3a — brojevni niz po režimu (poslovno pravilo)
+
+Svaki režim ima svoj niz i svoj **entitet** po kome se broji. Pogrešan entitet
+ne daje samo pogrešan broj — `ApplyMirrorPrefix` gleda da li je entitet
+mirror-vozač, pa je stanica podmetnuta kao vozač davala `S…` van zbirnih.
+
+| Režim | Niz | Entitet (po čemu se broji) | Oblik |
+|---|---|---|---|
+| F1 otkupni list | `KIND_OTK` | otkupno mesto (`cbOM`) | `st/ddmmyy[-n]` |
+| F2 otpremnica | `KIND_OTP` | otkupno mesto | `st/ddmmyy[-n]` |
+| F3 zbirna | `KIND_ZBR` | **vozač** (`cbVozac`) | `st/ddmmyy[-n]`, sa `S` prefiksom kad je vozač mirror-vozač OM-a — **`S` postoji samo ovde** |
+| F4 prijemnica | `GenerateBrojPrijemnice` | **kupac**; auto **samo** za hladnjaču (`MALINA_DEFAULT_KUPAC`) | `1/ddmmyy[-n]` (x-deo fiksno `1`); ostali kupci → **slobodan unos**, polje se ne dira |
+| F5/F6 isplate/uplate | — | — | **slobodan unos** |
+| F7 revers | `KIND_REV` | otkupno mesto | isto kao otpremnica, skenira `tblAmbalaza` |
+| F8 storno | — | — | nema broj (nije nov dokument) |
+
+Predlog se preračunava na promenu: otkupnog mesta, datuma, režima, vozača (F3),
+kupca (F4) i posle svakog upisa.
 
 ---
 

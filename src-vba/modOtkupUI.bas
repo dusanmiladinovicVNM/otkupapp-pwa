@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-111"
+Public Const OTKUI_BUILD   As String = "v6-ui-112"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -3401,6 +3401,9 @@ Private Sub UiChange(ByVal tag As String)
         Case "cbKupac"
             FillOpenBlokovi mFrm
             FillParcele mFrm
+            ' broj prijemnice zavisi od KUPCA (hladnjaca ima svoj niz, ostali
+            ' unose svoj broj) - u drugim rezimima partner na broj ne utice
+            If modeKey(ActiveMode) = "PRIJEMNICA" Then RefreshBrojPredlog False
         Case "fgBlokT"
             ApplyBlokIzbor
         Case "cbVrsta"
@@ -3412,6 +3415,9 @@ Private Sub UiChange(ByVal tag As String)
             OnStanicaChanged
             RefreshKpi mFrm
             RefreshStatusBar mFrm
+        Case "cbVozac"
+            ' zbirna se broji po vozacu, pa promena vozaca menja i njen niz
+            If modeKey(ActiveMode) = "ZBIRNA" Then RefreshBrojPredlog False
         Case "fgDatumT"
             OnDatumChanged
     End Select
@@ -5194,30 +5200,80 @@ End Function
 ' Predlog broja dokumenta za tekuci kontekst. Kad je auto-broj iskljucen u
 ' Podesavanjima, generator vrati prazno i polje ostaje operateru.
 Private Sub RefreshBrojPredlog(Optional ByVal checkRemote As Boolean = True)
-    Dim stID As String, kind As String, sug As String
-    Dim CB As MSForms.ComboBox
+    Dim entID As String, kind As String, sug As String, mk As String
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
-    kind = KindZaRezim(modeKey(ActiveMode))
+    mk = modeKey(ActiveMode)
+
+    ' PRIJEMNICA ne ide kroz SuggestNextBroj - ima svoj generator (niz po kupcu,
+    ' x-deo fiksno "1"), i to samo za hladnjaca-kupca.
+    If mk = "PRIJEMNICA" Then PredlogPrijemnice: Exit Sub
+
+    kind = KindZaRezim(mk)
     If Len(kind) = 0 Then Exit Sub
-    Set CB = mFrm.Controls("zCtx").Controls("cbOM")
-    stID = GetComboID(CB)
-    If Len(stID) = 0 Then Exit Sub
-    sug = SuggestNextBroj(kind, stID, DatumIzPolja(), checkRemote)
+    entID = EntitetZaBroj(kind)
+    If Len(entID) = 0 Then Exit Sub
+    sug = SuggestNextBroj(kind, entID, DatumIzPolja(), checkRemote)
     If Len(sug) = 0 Then Exit Sub
-    mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").text = sug
+    SetFld "fgBrOtpr", sug
 End Sub
 
-' Koji brojevni niz pripada rezimu. Rezimi koji nemaju svoj niz (gotovinski
-' promet, storno) vracaju prazno i predlog se ne racuna.
+' Koji brojevni niz pripada rezimu. Rezimi koji nemaju svoj niz vracaju prazno i
+' predlog se ne racuna - broj tada unosi operater:
+'   AMB_ISPLATE / AMB_UPLATE (gotovinski promet)  -> slobodan unos
+'   PRIJEMNICA vec je obradjena pre ovog poziva   -> vidi PredlogPrijemnice
+'   STORNO nije nov dokument                      -> nema broj
+' REVERSI su ovde od v6-ui-112: modeKey vraca "REVERSI", a stajalo je "REVERS",
+' pa se uslov nikad nije poklopio i revers nije dobijao broj. Niz mu je isti kao
+' otpremnici (stanica/ddmmyy-seq), samo se skenira tblAmbalaza.
 Private Function KindZaRezim(ByVal key As String) As String
     Select Case key
         Case "OTKUP":      KindZaRezim = KIND_OTK
         Case "OTPREMNICA": KindZaRezim = KIND_OTP
         Case "ZBIRNA":     KindZaRezim = KIND_ZBR
-        Case "REVERS":     KindZaRezim = KIND_REV
+        Case "REVERSI":    KindZaRezim = KIND_REV
     End Select
 End Function
+
+' CIJI je to niz. Otkupni list, otpremnica i revers se broje po OTKUPNOM MESTU,
+' a zbirna po VOZACU (tblZbirna.VozacID) - kao u legacy
+' frmDokumenta.RefreshBrojZbirneSuggestion.
+'
+' Ovo je i razlog zasto se "S" prefiks pojavljivao van zbirnih: ApplyMirrorPrefix
+' gleda da li je entitet mirror-vozac (VozacID == StanicaID), pa je stanica
+' podmetnuta kao vozac davala "S..." i tamo gde mu nije mesto. Prefiks je sada
+' moguc samo u rezimu zbirne, jer samo on i salje vozaca.
+Private Function EntitetZaBroj(ByVal kind As String) As String
+    Dim ctx As Object, CB As MSForms.ComboBox
+    On Error Resume Next
+    Set ctx = mFrm.Controls("zCtx")
+    If kind = KIND_ZBR Then
+        Set CB = ctx.Controls("cbVozac")
+    Else
+        Set CB = ctx.Controls("cbOM")
+    End If
+    If CB Is Nothing Then Exit Function
+    EntitetZaBroj = GetComboID(CB)
+End Function
+
+' PRIJEMNICA: auto-broj SAMO za hladnjaca-kupca (CFG_MALINA_DEFAULT_KUPAC).
+' Ostali kupci nose svoj eksterni, nezavisni broj - polje se tada NE dira.
+' x-deo je fiksno "1" (konvencija za hladnjacu), a dnevni niz se broji po kupcu;
+' sve to zna postojeci GenerateBrojPrijemnice, pa se racun ovde ne ponavlja.
+' Legacy par: frmDokumenta.RefreshBrojPrijSuggestion.
+Private Sub PredlogPrijemnice()
+    Dim CB As MSForms.ComboBox, kupacID As String, hlad As String, sug As String
+    On Error Resume Next
+    Set CB = mFrm.Controls("zCtx").Controls("cbKupac")
+    If CB Is Nothing Then Exit Sub
+    kupacID = GetComboID(CB)
+    If Len(kupacID) = 0 Then Exit Sub
+    hlad = Trim$(GetConfigValue(CFG_MALINA_DEFAULT_KUPAC))
+    If Len(hlad) = 0 Then Exit Sub
+    If StrComp(kupacID, hlad, vbTextCompare) <> 0 Then Exit Sub
+    sug = GenerateBrojPrijemnice(kupacID, DatumIzPolja())
+    If Len(sug) > 0 Then SetFld "fgBrOtpr", sug
+End Sub
 
 ' PODRAZUMEVANI PROIZVOD iz Podesavanja (DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA).
 '
