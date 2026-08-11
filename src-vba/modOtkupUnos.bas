@@ -36,7 +36,7 @@ Attribute VB_Name = "modOtkupUnos"
 '=====================================================================
 Option Explicit
 
-Public Const OTKUNOS_BUILD As String = "v6-ui-106"
+Public Const OTKUNOS_BUILD As String = "v6-ui-107"
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-106"
+Public Const OTKUI_BUILD   As String = "v6-ui-107"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -289,6 +289,11 @@ Private mCntOtvor As Long
 ' Stoji li na ekranu crveni toast koji je podigla mreza. Sledece uspelo
 ' citanje ga gasi; toast greske nema tajmer, pa bi inace ostao zauvek.
 Private mGridToast As Boolean
+' Polje na koje ide kursor pri novom dokumentu, i polje koje TRENUTNO ima
+' zeleni okvir. Drugo se pamti da bi se okvir skinuo i kad MSForms preskoci
+' dogadjaj napustanja (a preskace ga kad se forma sakrije ili polje ugasi).
+Private mPrvoPolje As String
+Private mFokusTag As String
 ' Oznacavanje vise redova (lista otpremnica -> specifikacija). Kljuc je PRVA
 ' KOLONA reda, ne njegov redni broj: sortiranje, pretraga i strane menjaju
 ' redni broj, a broj otpremnice ostaje isti.
@@ -2797,6 +2802,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ' dodatni uslovi vaze preko rezima; dugme i panel moraju to da pokazu
     RefreshFilterBadge
     RenderFilterPanel
+    ResetFokusOkvira
     ' podrazumevana vrsta/sorta iz Podesavanja - samo ako roba nije izabrana
     ApplyDefaultRoba
     ' nov dokument -> nista nije neupisano
@@ -2987,8 +2993,8 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
         Case "DblClick": RowFromTag tag: LoadRowIntoForm
         Case "Change":   UiChange tag
         Case "Hover":    UiHover tag
-        Case "Focus":    CloseOverlays tag: ShellFor tag, "focus"
-        Case "Blur":     ShellFor tag, "normal"
+        Case "Focus":    CloseOverlays tag: PostaviFokus tag
+        Case "Blur":     SkiniFokus tag
         Case "KeyDown":  HandleGlobalKey CLng(arg), 0
         Case "Menu":     UiMenu tag
         Case "Drop":     OpenPopupFor tag
@@ -3447,6 +3453,39 @@ Private Function RowIndexFromTag(ByVal tag As String) As Long
 End Function
 
 ' focus/error ivica: tag je npr. "fgKgIT" -> shell se zove "fgKgI"
+' Zeleni okvir dobija polje koje je upravo dobilo kursor, a gubi ga ono koje
+' ga je imalo - bez obzira da li je za njega stigao dogadjaj napustanja.
+Private Sub PostaviFokus(ByVal tag As String)
+    If Len(mFokusTag) > 0 And mFokusTag <> tag Then ShellFor mFokusTag, "normal"
+    mFokusTag = tag
+    ShellFor tag, "focus"
+End Sub
+
+Private Sub SkiniFokus(ByVal tag As String)
+    ShellFor tag, "normal"
+    If mFokusTag = tag Then mFokusTag = ""
+End Sub
+
+' Sva polja u "normalno" stanje - pri promeni rezima i pri praznjenju forme,
+' da zeleni okvir ne ostane na polju koje je u medjuvremenu sakriveno.
+Private Sub ResetFokusOkvira()
+    Dim c As Object, z As Object, nm As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    mFokusTag = ""
+    Set z = mFrm.Controls("zForm")
+    For Each c In z.Controls
+        If TypeName(c) = "Frame" Then
+            nm = c.name
+            If HasCtl(c, nm & "B") Then ShellState c, nm, "normal"
+        End If
+    Next c
+    Set z = mFrm.Controls("zCtx")
+    For Each c In z.Controls
+        If Left$(c.name, 2) = "cb" Then ShellState z, c.name, "normal"
+    Next c
+End Sub
+
 Private Sub ShellFor(ByVal tag As String, ByVal state As String)
     Dim nm As String, fr As Object
     On Error Resume Next
@@ -3462,7 +3501,7 @@ Private Sub ShellFor(ByVal tag As String, ByVal state As String)
     nm = Left$(tag, Len(tag) - 1)
     Set fr = mFrm.Controls("zForm").Controls(nm)
     If fr Is Nothing Then Exit Sub
-    If nm = "fgKgII" And mKlasa <> 2 Then Exit Sub
+    If mKlasa <> 2 And (nm = "fgKgII" Or nm = "fgKolAmbII") Then Exit Sub
     ShellState fr, nm, state
 End Sub
 
@@ -3577,7 +3616,10 @@ Private Sub NewFieldG(parent As Object, nm As String, cap As String, kind As Str
                TS_MICRO, False, C_DISABLED_FG, -1, fmTextAlignCenter
         fr.Controls(nm & "U").ZOrder 0
     End If
-    If isFocus Then ShellState fr, nm, "focus"
+    ' isFocus vise NE boji polje pri gradnji. Zeleni okvir je stanje kursora,
+    ' pa ga postavlja dogadjaj fokusa; ranije je ostajao zauvek na prvom polju i
+    ' pokazivao fokus tamo gde ga nema.
+    If isFocus Then mPrvoPolje = nm
 End Sub
 
 ' Polovina polja CENA: kutija sa oznakom klase levo i brojem desno.
@@ -5293,6 +5335,7 @@ Private Sub ClearForm()
     ' Cena je obrisana zajedno sa poljima, a vrsta/sorta su ostale izabrane -
     ' pa se cena i tip ambalaze vracaju iz cenovnika i kulture. Ako robe nema
     ' (prvi unos), uzima se podrazumevana iz Podesavanja.
+    ResetFokusOkvira
     ApplyDefaultRoba
     AutoFillCena
     ' sledeci dokument dobija sledeci broj - bez upita na Google (lokalno je
@@ -5302,7 +5345,8 @@ Private Sub ClearForm()
     mPopMute = False
     mLoading = False
     MarkClean
-    mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
+    If Len(mPrvoPolje) = 0 Then mPrvoPolje = "fgBrOtpr"
+    mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
 End Sub
 
 ' Vrednost je zbir po klasama - svaka klasa ima svoju cenu, pa se kilogrami
