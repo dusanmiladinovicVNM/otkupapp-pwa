@@ -94,8 +94,10 @@ Private Sub UserForm_Activate()
     Exit Sub
 
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.UserForm_Activate"
-    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju pregleda: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri otvaranju pregleda: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub SetupList()
@@ -751,37 +753,47 @@ Private Sub txtIsplatiti_Exit(ByVal Cancel As MSForms.ReturnBoolean)
         Exit Sub
     End If
     
-    If newAmount <= 0 Then
+    ' AUD-026: sve provere idu u cent-domenu, bez tolerancije (isto pravilo
+    ' kao klamp i finalna kapija -- vidi vrh modBankaExportPregled). Prag
+    ' "+ 0.01" je propustao preplatu od punog centa, a bas taj cent banka
+    ' isplati. Normalizacija ide PRE provere nule, da sub-cent unos ne bi
+    ' prosao validaciju pa tiho ispao iz CSV-a (writer trazi iznos > 0).
+    Dim iznosCent As Double, otvorenoCent As Double
+    iznosCent = ZaokruziNovac(newAmount)
+    otvorenoCent = ZaokruziNovac(blk.OtvorenIznos)
+
+    If iznosCent <= 0 Then
         lblDetailValidacija.caption = "Iznos mora biti veci od 0."
         lblDetailValidacija.ForeColor = CLR_ERROR()
         lblDetailValidacija.Visible = True
         txtIsplatiti.value = Format$(GetIsplatitiAmount(blk), "0.00")
         Exit Sub
     End If
-    
-    If newAmount > blk.OtvorenIznos + 0.01 Then
+
+    If iznosCent > otvorenoCent Then
         lblDetailValidacija.caption = "Iznos veci od otvorenog (" & _
-                                       Format$(blk.OtvorenIznos, "#,##0.00") & ")."
+                                       Format$(otvorenoCent, "#,##0.00") & ")."
         lblDetailValidacija.ForeColor = CLR_ERROR()
         lblDetailValidacija.Visible = True
         txtIsplatiti.value = Format$(GetIsplatitiAmount(blk), "0.00")
         Exit Sub
     End If
-    
-    ' Validacija OK, zapamti override
-    If Abs(newAmount - blk.OtvorenIznos) < 0.01 Then
+
+    ' Validacija OK, zapamti override (normalizovan, da prikaz, kapija i CSV
+    ' rade nad istom vrednoscu).
+    If iznosCent = otvorenoCent Then
         ' Vraceno na otvoreno = ne treba override
         If m_OverrideAmounts.Exists(blk.otkupID) Then
             m_OverrideAmounts.Remove blk.otkupID
         End If
     Else
-        m_OverrideAmounts(blk.otkupID) = newAmount
+        m_OverrideAmounts(blk.otkupID) = iznosCent
     End If
     
     lblDetailValidacija.Visible = False
     
     ' Re-render samo te kolone u listbox-u
-    lstBlokovi.List(lstBlokovi.ListIndex, 8) = Format$(newAmount, "#,##0.00")
+    lstBlokovi.List(lstBlokovi.ListIndex, 8) = Format$(iznosCent, "#,##0.00")
     
     UpdateSelectionSummary
     RefreshTopKpis
@@ -921,8 +933,10 @@ Private Sub btnExport_Click()
     Exit Sub
 
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.btnExport_Click"
-    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 Private Function CountSelected() As Long
@@ -1125,8 +1139,10 @@ Private Sub mBtnAvansBlok_Click()
     End If
     Exit Sub
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.mBtnAvansBlok_Click"
-    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' Na cekirane: veze avans na svaki cekiran blok sa raspolozivim avansom.
@@ -1188,8 +1204,10 @@ Private Sub mBtnAvansSel_Click()
     End If
     Exit Sub
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.mBtnAvansSel_Click"
-    MsgBox "Gre" & ChrW(353) & "ka: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 Private Sub mBtnAvansBlok_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
@@ -1330,8 +1348,10 @@ Private Sub btnGenerisiCSV_Click()
     Exit Sub
 
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "frmBankaExportPregled.btnGenerisiCSV_Click"
-    MsgBox "Gre" & ChrW(353) & "ka pri generisanju naloga: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri generisanju naloga: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 '======================================================================

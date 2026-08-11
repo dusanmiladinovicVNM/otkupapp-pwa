@@ -21,15 +21,25 @@ Option Explicit
 ' (modBankaImport/modBankaMapiranje, auto-map poziv na broj = broj bloka).
 ' ============================================================
 
-' Tolerancija pri poredjenju novcanih iznosa (dinar-centi zaokruzenja).
-' Ista vrednost koju frmBankaExportPregled.txtIsplatiti_Exit koristi kada
-' proverava operater unos -- clamp, unos i finalna revalidacija moraju da
-' sude po ISTOM pragu, inace bi CSV odbio iznos koji je unos propustio.
-Private Const ISPLATA_EPS As Double = 0.01
-
 ' Koliko problematicnih blokova se nabroji u poruci odbijanja (ostatak se
 ' sazme u "..."), da poruka ostane citljiva i kad je lista velika.
 Private Const MAX_SALDO_PROBLEMA As Long = 10
+
+' ------------------------------------------------------------------
+' PRAVILO ZA POREDJENJE NOVCA NA OVOJ PUTANJI (AUD-026)
+'
+' Iznosi se NE porede sa epsilon tolerancijom nego u cent-domenu: oba se
+' zaokruze postojecim modNovac.ZaokruziNovac (half-up) pa se porede TACNO.
+' Prag tipa "> otvoreno + 0.01" je propustao preplatu od PUNOG centa
+' (600.01 nije vece od 600.00 + 0.01), a to je iznos koji banka stvarno
+' naplati -- CSV izvozi dve decimale, pa sub-cent razlike u fajlu ionako
+' ne postoje.
+'
+' Isto pravilo vazi za klamp override-a, finalnu revalidaciju, CSV writer
+' (CsvIznos normalizuje PRE Format$) i operaterski unos u formi
+' (frmBankaExportPregled.txtIsplatiti_Exit). NE uvoditi novu granicu ni
+' novi helper -- ZaokruziNovac je jedina normalizacija.
+' ------------------------------------------------------------------
 
 '======================================================================
 ' BuildBlokIsplataList
@@ -294,8 +304,10 @@ Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection, _
     End Select
     Exit Sub
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
     LogErr "modBankaExportPregled.PrintIsplataSpecifikacija"
-    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & Err.description, vbCritical, APP_NAME
+    MsgBox "Gre" & ChrW(353) & "ka pri izradi specifikacije: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 '======================================================================
@@ -401,12 +413,12 @@ Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
         If Not openByOtkup.Exists(otkupKey) Then
             toRemove.Add otkupKey
         Else
-            otvoreno = CDbl(openByOtkup(otkupKey))
+            otvoreno = ZaokruziNovac(CDbl(openByOtkup(otkupKey)))
             If otvoreno <= 0 Then
                 toRemove.Add otkupKey
             Else
-                trenutni = CDbl(overrideDict(otkupKey))
-                If trenutni > otvoreno + ISPLATA_EPS Then
+                trenutni = ZaokruziNovac(CDbl(overrideDict(otkupKey)))
+                If trenutni > otvoreno Then
                     overrideDict(otkupKey) = otvoreno
                     changed = changed + 1
                 End If
@@ -458,19 +470,23 @@ Public Function ValidateNalogSaldo(ByVal blokovi As Collection, _
     Dim blk As clsBlokIsplata
     Dim v As Variant
     Dim otvoreno As Double
+    Dim trazeno As Double
 
     For Each v In blokovi
         Set blk = v
         If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
+            ' Poredi se ono sto CSV stvarno nosi: oba iznosa u cent-domenu,
+            ' bez tolerancije (vidi pravilo na vrhu modula).
+            trazeno = ZaokruziNovac(blk.IsplatitiIznos)
             otvoreno = 0
-            If openByOtkup.Exists(blk.otkupID) Then otvoreno = CDbl(openByOtkup(blk.otkupID))
+            If openByOtkup.Exists(blk.otkupID) Then otvoreno = ZaokruziNovac(CDbl(openByOtkup(blk.otkupID)))
 
-            If blk.IsplatitiIznos > otvoreno + ISPLATA_EPS Then
+            If trazeno > otvoreno Then
                 brojProblema = brojProblema + 1
                 If brojProblema <= MAX_SALDO_PROBLEMA Then
                     problemi = problemi & vbCrLf & "  " & blk.brojDokumenta & _
                                " (" & blk.kooperantNaziv & "): tra" & ChrW(382) & "i " & _
-                               Format$(blk.IsplatitiIznos, "#,##0.00") & _
+                               Format$(trazeno, "#,##0.00") & _
                                " / otvoreno " & Format$(otvoreno, "#,##0.00")
                 End If
             End If
@@ -525,23 +541,65 @@ Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
     If blokovi Is Nothing Then Exit Function
     If blokovi.count = 0 Then Exit Function
 
-    ' AUD-026: finalna kapija -- svez saldo po OtkupID, pa provera da nijedan
-    ' nalog ne prelazi otvoreno. Cita se ovde (a ne iz prikaza) bas zato sto
-    ' se stanje moglo promeniti otkad je lista ucitana.
+    ' Platilac racun: prosledjen iz forme (combo "Sa racuna"); prazno ->
+    ' SELLER_ACCOUNT (backward-compatible kada racuna ima samo jedan).
+    platilacRacun = NormalizujRacun(platilacRacun)
+    If LenB(platilacRacun) = 0 Then platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
+    If LenB(platilacRacun) = 0 Then Exit Function   ' forma validira i javlja poruku
+
+    ' AUD-026: sadrzaj fajla se gradi TEK kroz BuildNalogCsvPayload, koji u
+    ' sebi nosi finalnu saldo kapiju -- nema putanje do WriteAllTextUtf8 koja
+    ' bi zaobisla proveru. Svez saldo se cita ovde (a ne iz prikaza) bas zato
+    ' sto se stanje moglo promeniti otkad je lista ucitana.
+    Dim s As String
+    s = BuildNalogCsvPayload(blokovi, platilacRacun, _
+                             BuildOpenAmountDict(BuildBlokIsplataList()), outOdbijeno)
+    If LenB(s) = 0 Then Exit Function
+
+    Dim csvPath As String
+    csvPath = EnsureDocFolder(CSV_DIR_BANKA_NALOZI) & "\Nalozi_za_prenos_" & _
+              IsplataFileTag(platilacRacun) & "_" & Format$(Now, "hhnnss") & ".csv"
+    WriteAllTextUtf8 csvPath, s
+
+    GenerisiNalogeCSV = csvPath
+    Exit Function
+
+EH:
+    LogErr "modBankaExportPregled.GenerisiNalogeCSV"
+    GenerisiNalogeCSV = ""
+End Function
+
+'======================================================================
+' BuildNalogCsvPayload - AUD-026: sadrzaj CSV fajla (zaglavlje + redovi),
+' sa finalnom saldo kapijom UNUTAR iste funkcije.
+'
+' Razlog za izdvajanje: kapija i pisanje fajla ne smeju da budu dva koraka
+' koja neko kasnije moze da razdvoji. Ovde je gradnja sadrzaja fizicki iza
+' provere -- ako ijedan nalog prelazi otvoreno, funkcija vraca "" i razlog
+' kroz outOdbijeno, pa GenerisiNalogeCSV nema sta da upise. Uz to je cela
+' putanja (validacija + payload) testabilna bez diranja diska.
+'
+' Vraca "" i kada nema nijednog naloga za upis (bez outOdbijeno -- to nije
+' greska, nego prazan izbor).
+'======================================================================
+Public Function BuildNalogCsvPayload(ByVal blokovi As Collection, _
+                                     ByVal platilacRacun As String, _
+                                     ByVal openByOtkup As Object, _
+                                     Optional ByRef outOdbijeno As String) As String
+    BuildNalogCsvPayload = ""
+    outOdbijeno = ""
+    If blokovi Is Nothing Then Exit Function
+    If blokovi.count = 0 Then Exit Function
+
     Dim odbijeno As String
-    odbijeno = ValidateNalogSaldo(blokovi, BuildOpenAmountDict(BuildBlokIsplataList()))
+    odbijeno = ValidateNalogSaldo(blokovi, openByOtkup)
     If LenB(odbijeno) > 0 Then
         outOdbijeno = odbijeno
         Exit Function
     End If
 
-    ' Platilac racun: prosledjen iz forme (combo "Sa racuna"); prazno ->
-    ' SELLER_ACCOUNT (backward-compatible kada racuna ima samo jedan).
     Dim platilacNaziv As String
     platilacNaziv = DocConfigOr("SELLER_NAME", "")
-    platilacRacun = NormalizujRacun(platilacRacun)
-    If LenB(platilacRacun) = 0 Then platilacRacun = NormalizujRacun(DocConfigOr("SELLER_ACCOUNT", ""))
-    If LenB(platilacRacun) = 0 Then Exit Function   ' forma validira i javlja poruku
 
     Dim sifra As String, svrhaBase As String
     sifra = DocConfigOr(CFG_BANKA_NALOG_SIFRA, BANKA_NALOG_SIFRA_DEFAULT)
@@ -560,7 +618,7 @@ Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
     For Each v In blokovi
         Set blk = v
         If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
-            s = s & CsvField(platilacRacun) & ";" & _
+            s = s & CsvField(NormalizujRacun(platilacRacun)) & ";" & _
                     CsvField(platilacNaziv) & ";" & _
                     CsvField(NormalizujRacun(blk.TekuciRacun)) & ";" & _
                     CsvField(blk.kooperantNaziv) & ";" & _
@@ -576,24 +634,16 @@ Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
     Next v
 
     If rows = 0 Then Exit Function
-
-    Dim csvPath As String
-    csvPath = EnsureDocFolder(CSV_DIR_BANKA_NALOZI) & "\Nalozi_za_prenos_" & _
-              IsplataFileTag(platilacRacun) & "_" & Format$(Now, "hhnnss") & ".csv"
-    WriteAllTextUtf8 csvPath, s
-
-    GenerisiNalogeCSV = csvPath
-    Exit Function
-
-EH:
-    LogErr "modBankaExportPregled.GenerisiNalogeCSV"
-    GenerisiNalogeCSV = ""
+    BuildNalogCsvPayload = s
 End Function
 
 ' Iznos za CSV: uvek decimalna TACKA, bez hiljada separatora, 2 decimale.
 ' Format$ "0.00" na sr locale daje zarez -> normalizuj deterministicki.
+' Iznos se PRE formatiranja normalizuje u cent-domen (ZaokruziNovac, half-up),
+' da fajl nosi tacno onu vrednost koju je kapija odobrila -- Format$ sam
+' zaokruzuje po svom pravilu, pa bi se inace mogli razlikovati.
 Private Function CsvIznos(ByVal amt As Double) As String
-    CsvIznos = Replace(Format$(amt, "0.00"), ",", ".")
+    CsvIznos = Replace(Format$(ZaokruziNovac(amt), "0.00"), ",", ".")
 End Function
 
 ' CSV polje: trim + quote ako sadrzi separator/navodnik/novi red.

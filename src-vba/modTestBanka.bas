@@ -33,6 +33,8 @@ Option Explicit
 '  T11 AUD-025  rucni kooperant sa PRAZNIM izborom bloka ide kroz potvrdjenu podelu
 '  T12 AUD-026  zaostao "Isplatiti" override se clamp-uje na trenutno otvoreno
 '  T13 AUD-026  CSV nalozi se ODBIJAJU kada nalog trazi vise nego sto je otvoreno
+'               (granice u cent-domenu: 600.01 na otvoreno 600.00 je preplata)
+'  T14 AUD-026  kapija je UNUTAR putanje koja gradi CSV payload (ne samo validator)
 ' ============================================================
 
 Private mPass As Long
@@ -71,6 +73,7 @@ Public Sub RunBankaImportTestSuite()
     ' RF-10 seam-ovi rade nad kolekcijom/Dictionary-jem u memoriji (bez tabela).
     T12_ClampOverrideNaOtvoreno
     T13_NalogPrekoOtvorenogSeOdbija
+    T14_CsvPayloadNosiKapiju
 
     ' AppendRow/UpdateCell pisu CSV crash-recovery journal koji tx.RollbackTx NE
     ' povlaci -- test redovi bi ostali u Journal folderu i sledeci start bi javio
@@ -754,6 +757,8 @@ Private Sub T12_ClampOverrideNaOtvoreno()
     blokovi.Add MakeBlok(P & "OTK-C1", P & "BLOK-C1", 600)    ' otvoreno palo sa 1000 na 600
     blokovi.Add MakeBlok(P & "OTK-C2", P & "BLOK-C2", 900)    ' delimicna isplata, jos vazi
     blokovi.Add MakeBlok(P & "OTK-C4", P & "BLOK-C4", 0)      ' vise nema otvorenog iznosa
+    blokovi.Add MakeBlok(P & "OTK-C5", P & "BLOK-C5", 600)    ' granica: override je tacno cent veci
+    blokovi.Add MakeBlok(P & "OTK-C6", P & "BLOK-C6", 600)    ' granica: sub-cent ispod polovine
 
     Dim ovr As Object
     Set ovr = CreateObject("Scripting.Dictionary")
@@ -761,22 +766,26 @@ Private Sub T12_ClampOverrideNaOtvoreno()
     ovr(P & "OTK-C2") = 300#       ' < otvoreno -> namerna delimicna isplata, ne dirati
     ovr(P & "OTK-C3") = 500#       ' bloka vise nema u listi -> brisanje
     ovr(P & "OTK-C4") = 200#       ' blok bez otvorenog iznosa -> brisanje
+    ovr(P & "OTK-C5") = 600.01     ' PUN cent preko otvorenog -> mora se spustiti
+    ovr(P & "OTK-C6") = 600.004    ' zaokruzuje se na 600.00 -> nije preplata
 
     Dim changed As Long
     changed = ClampOverridesToOpen(ovr, blokovi)
 
-    ChkEq changed, 3, S & "3 promenjena unosa (1 clamp + 2 brisanja)"
+    ChkEq changed, 4, S & "4 promenjena unosa (2 clamp + 2 brisanja)"
     ChkEqD CDbl(ovr(P & "OTK-C1")), 600, S & "override 1000 spusten na otvoreno 600"
     ChkEqD CDbl(ovr(P & "OTK-C2")), 300, S & "override manji od otvorenog ostaje netaknut"
     Chk Not ovr.Exists(P & "OTK-C3"), S & "override za nestao blok je obrisan"
     Chk Not ovr.Exists(P & "OTK-C4"), S & "override za blok bez otvorenog je obrisan"
-    ChkEq ovr.count, 2, S & "u Dictionary-ju su ostala samo 2 vazeca override-a"
+    ChkEqD CDbl(ovr(P & "OTK-C5")), 600, S & "override 600.01 na otvoreno 600.00 je spusten (pun cent)"
+    ChkEqD CDbl(ovr(P & "OTK-C6")), 600.004, S & "sub-cent ispod polovine se ne dira"
+    ChkEq ovr.count, 4, S & "u Dictionary-ju su ostala samo 4 vazeca override-a"
 
     ' Ponovljen poziv nad vec uskladjenim stanjem ne sme nista da menja.
     ChkEq ClampOverridesToOpen(ovr, blokovi), 0, S & "drugi prolaz je no-op"
 
     ' Bez liste blokova nema dokaza da je ijedan override vazeci -> sve pada.
-    ChkEq ClampOverridesToOpen(ovr, Nothing), 2, S & "bez liste blokova se svi override-i brisu"
+    ChkEq ClampOverridesToOpen(ovr, Nothing), 4, S & "bez liste blokova se svi override-i brisu"
     ChkEq ovr.count, 0, S & "Dictionary je prazan posle brisanja"
 End Sub
 
@@ -829,16 +838,110 @@ Private Sub T13_NalogPrekoOtvorenogSeOdbija()
     bezTR.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 5000, False)
     ChkEq ValidateNalogSaldo(bezTR, otvoreno), "", S & "blok bez TR ne obara naloge"
 
-    ' 5) Zaokruzenje unutar tolerancije (0.01) nije preplata -- ista granica koju
-    '    koristi i operater unos u formi.
-    Dim naGranici As Collection
-    Set naGranici = New Collection
-    naGranici.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600.005, True)
-    ChkEq ValidateNalogSaldo(naGranici, otvoreno), "", S & "razlika ispod tolerancije prolazi"
+    ' 5) GRANICE u cent-domenu (bez epsilon tolerancije). CSV nosi dve decimale,
+    '    pa se poredi tacno ono sto ce u fajlu i biti.
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600#), otvoreno)) = 0, _
+        S & "600.00 na otvoreno 600.00 prolazi"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.01), otvoreno)) > 0, _
+        S & "600.01 na otvoreno 600.00 je ODBIJEN (pun cent preplate)"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.005), otvoreno)) > 0, _
+        S & "600.005 se zaokruzuje na 600.01 -> odbijen"
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.004), otvoreno)) = 0, _
+        S & "600.004 se zaokruzuje na 600.00 -> prolazi"
 
     ' 6) Nepostojeca mapa otvorenih iznosa -> odbijanje, ne tiho propustanje.
     Chk LenB(ValidateNalogSaldo(ok, Nothing)) > 0, S & "bez mape otvorenih se odbija"
 End Sub
+
+' ============================================================
+' T14 - AUD-026: kapija je UNUTAR putanje koja gradi CSV.
+'
+' T13 gadja samo validator. Da uklanjanje ili preskakanje tog poziva ne bi
+' prosla nezapazeno, ovde se testira BuildNalogCsvPayload -- ista funkcija
+' koju GenerisiNalogeCSV koristi da napravi sadrzaj fajla, i jedina putanja
+' do WriteAllTextUtf8. Preplata mora da da PRAZAN payload (nema sta da se
+' upise), a ispravan izbor payload sa tacno onim iznosima koje kapija odobri.
+' Bez diranja diska.
+' ============================================================
+Private Sub T14_CsvPayloadNosiKapiju()
+    Const S As String = "T14 CSV payload: "
+    Const RACUN As String = "160-1111111111-11"
+
+    Dim otvoreno As Object
+    Set otvoreno = CreateObject("Scripting.Dictionary")
+    otvoreno(P & "OTK-P1") = 600#
+    otvoreno(P & "OTK-P2") = 900#
+
+    ' 1) Preplata -> payload je PRAZAN i razlog je popunjen (fajl se ne pise).
+    Dim preplata As Collection
+    Set preplata = New Collection
+    preplata.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    preplata.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 900.01, True)
+
+    Dim odbijeno As String
+    Dim payload As String
+    payload = BuildNalogCsvPayload(preplata, RACUN, otvoreno, odbijeno)
+
+    ChkEq payload, "", S & "preplata daje prazan payload (nema sta da se upise)"
+    Chk LenB(odbijeno) > 0, S & "razlog odbijanja je vracen"
+    Chk InStr(odbijeno, P & "BLOK-P2") > 0, S & "razlog imenuje problematican blok"
+
+    ' 2) Ispravan izbor -> zaglavlje + tacno 2 reda, iznosi sa decimalnom TACKOM.
+    Dim ok As Collection
+    Set ok = New Collection
+    ok.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    ok.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 250.5, True)
+
+    odbijeno = "x"
+    payload = BuildNalogCsvPayload(ok, RACUN, otvoreno, odbijeno)
+
+    Chk LenB(payload) > 0, S & "ispravan izbor daje payload"
+    ChkEq odbijeno, "", S & "nema razloga odbijanja kad je sve u granicama"
+    ChkEq CsvRedova(payload), 2, S & "payload ima tacno 2 naloga"
+    Chk InStr(payload, "RacunPlatioca;") = 1, S & "payload pocinje zaglavljem"
+    Chk InStr(payload, ";600.00;") > 0, S & "iznos ide sa decimalnom tackom"
+    Chk InStr(payload, ";250.50;") > 0, S & "druga stavka je u payload-u"
+    Chk InStr(payload, P & "BLOK-P1") > 0, S & "poziv na broj = broj bloka"
+
+    ' 3) Sub-cent iznos se u fajl upisuje NORMALIZOVAN (ista vrednost koju je
+    '    kapija odobrila) -- writer i validator ne smeju da se raziidju.
+    Dim subCent As Collection
+    Set subCent = New Collection
+    subCent.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600.004, True)
+    payload = BuildNalogCsvPayload(subCent, RACUN, otvoreno, odbijeno)
+    Chk InStr(payload, ";600.00;") > 0, S & "600.004 je u fajlu normalizovan na 600.00"
+
+    ' 4) Blok bez tekuceg racuna ne ulazi u fajl (i ne obara ga).
+    Dim bezTR As Collection
+    Set bezTR = New Collection
+    bezTR.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    bezTR.Add MakeNalog(P & "OTK-P2", P & "BLOK-P2", 100#, False)
+    payload = BuildNalogCsvPayload(bezTR, RACUN, otvoreno, odbijeno)
+    ChkEq CsvRedova(payload), 1, S & "blok bez TR nije u fajlu"
+    ChkEq odbijeno, "", S & "blok bez TR ne obara generisanje"
+End Sub
+
+' Broj DATA redova u CSV payload-u (bez zaglavlja i bez zavrsnog praznog reda).
+Private Function CsvRedova(ByVal payload As String) As Long
+    If LenB(payload) = 0 Then Exit Function
+    Dim parts As Variant
+    parts = Split(payload, vbCrLf)
+    Dim i As Long, n As Long
+    For i = LBound(parts) To UBound(parts)
+        If LenB(Trim$(CStr(parts(i)))) > 0 Then n = n + 1
+    Next i
+    If n > 0 Then n = n - 1          ' zaglavlje
+    CsvRedova = n
+End Function
+
+' Kolekcija sa tacno jednim nalogom -- za granicne provere u T13.
+Private Function JedanNalog(ByVal otkupID As String, ByVal brDok As String, _
+                            ByVal iznos As Double) As Collection
+    Dim c As Collection
+    Set c = New Collection
+    c.Add MakeNalog(otkupID, brDok, iznos, True)
+    Set JedanNalog = c
+End Function
 
 ' Blok za RF-10 seam testove (otvoreni iznos je jedino sto clamp gleda).
 Private Function MakeBlok(ByVal otkupID As String, ByVal brDok As String, _
