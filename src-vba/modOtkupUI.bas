@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-102"
+Public Const OTKUI_BUILD   As String = "v6-ui-103"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2782,6 +2782,8 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ' dodatni uslovi vaze preko rezima; dugme i panel moraju to da pokazu
     RefreshFilterBadge
     RenderFilterPanel
+    ' podrazumevana vrsta/sorta iz Podesavanja - samo ako roba nije izabrana
+    ApplyDefaultRoba
     ' nov dokument -> nista nije neupisano
     MarkClean
     mPopMute = False
@@ -4898,6 +4900,25 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
 End Sub
 
+' PODRAZUMEVANI PROIZVOD iz Podesavanja (DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA).
+'
+' Postavlja se SAMO kad je vrsta prazna - isto pravilo koje legacy koristi u
+' frmDokumenta ("If cmbVrstaVoca.value = "" Then ApplyDefaultProizvod"). Izbor
+' operatera i ono sto je prepisano sa otpremnice se ne diraju.
+'
+' Postavljanje vrste okida cenu iz cenovnika i tip ambalaze iz kulture, isto
+' kao da je operater sam izabrao robu.
+Private Sub ApplyDefaultRoba()
+    Dim ctx As Object, zf As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    Set ctx = mFrm.Controls("zCtx")
+    Set zf = mFrm.Controls("zForm")
+    If Not zf.Controls("fgCena").Visible Then Exit Sub        ' rezim bez robe
+    If Len(Trim$(CStr(ctx.Controls("cbVrsta").value))) > 0 Then Exit Sub
+    ApplyDefaultProizvod ctx.Controls("cbVrsta"), ctx.Controls("cbSorta")
+End Sub
+
 ' CENA IZ CENOVNIKA I TIP AMBALAZE IZ KULTURE.
 '
 ' Isti potez koji legacy radi u AutoFillCenaOtkup / AutoFillCenaDok, na svaku
@@ -5034,6 +5055,11 @@ Private Sub ClearForm()
     SetDatumDanas mFrm.Controls("zForm")
     SetOstatak 0
     SetKlasa 1
+    ' Cena je obrisana zajedno sa poljima, a vrsta/sorta su ostale izabrane -
+    ' pa se cena i tip ambalaze vracaju iz cenovnika i kulture. Ako robe nema
+    ' (prvi unos), uzima se podrazumevana iz Podesavanja.
+    ApplyDefaultRoba
+    AutoFillCena
     RecalcVrednost
     mPopMute = False
     mLoading = False

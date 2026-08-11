@@ -30,7 +30,7 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 | Z10 | **Prefill iz storniranog dokumenta** — ispravka posle storna | `PrefillOtkupFromStornirano`, `PrefillOtpremnicaFromStornirana`, `PrefillZbirnaFromStornirana`, `PrefillPrijemnicaFromStornirana` | — | **NEMA** |
 | Z11 | **F-tasteri i Enter/Exit ivice** polja | `SetupFkeyAccelerators`, `HandleFkey`, `txt*_Enter/_Exit` | — | **IMA** (F1–F8 globalno, fokus ivice u `clsFlatBtn`) |
 | Z12 | **KPI traka** iznad forme | `LayoutTopKpis`, `RefreshTopKpis`, `SumOtkupKgToday` | `GetOMAvansSaldo` | **DELIMIČNO** — traka postoji, dva KPI-ja nisu vezana |
-| Z13 | **Podrazumevani proizvod** po otvaranju/resetu | `ResetProizvodNaDefault` | `ApplyDefaultProizvod` | **NEMA** |
+| Z13 | **Podrazumevani proizvod** po otvaranju/resetu | `ResetProizvodNaDefault` | `ApplyDefaultProizvod` | **IMA** (`ApplyDefaultRoba`, v6-ui-103) |
 | Z14 | **Kontekst datuma i otkupnog mesta** se pamti između dokumenata | `txtDatum_AfterUpdate`, `cmbOtkupnoMesto_Change`, `ResetDatumKontekst` | `GetActiveDatum`, `GetActiveStanica` | **NEMA** |
 
 ---
@@ -130,8 +130,8 @@ Rangirano po tome koliko svaka stavka blokuje **stvarni rad**, ne po veličini.
 3. **Z9**: „još N gajbica do zatvaranja palete" uz izabranu robu.
 4. **Z3 + Z14**: predlog broja na promenu OM/datuma; pamćenje aktivne stanice i
    datuma.
-5. **Z7 + Z8 + Z13**: toggle-i (keš isplate, validacija unosa, podrazumevani
-   proizvod).
+5. **Z7 + Z8**: toggle-i (keš isplate, validacija unosa).
+   ~~Z13 podrazumevani proizvod~~ **URAĐENO** (v6-ui-103)
 
 ### Faza B — upis (`CommitDokument`)
 6. F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).
