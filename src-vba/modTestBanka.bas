@@ -39,6 +39,8 @@ Option Explicit
 '  T16 AUD-026  "Primeni avans" odbija dupli OtkupID (core guard, tabelarni test)
 '  T17 AUD-026  SAKRIVEN duplikat (samo jedan red otvoren) ne isplacuje pogresnog
 '               kooperanta -- vlasnik se ne resava "prvim pogotkom" nad sirovom tabelom
+'  T18 AUD-026  otvoren blok bez OtkupID PADA (ranije je tiho nestajao sa ekrana)
+'  T19 AUD-026  otvoren blok bez kooperanta PADA (primalac se ne moze utvrditi)
 ' ============================================================
 
 Private mPass As Long
@@ -108,10 +110,12 @@ Public Sub RunBankaImportTestSuite()
     T09_AutoBlokIdePoPozivuNaBroj
     T10_PlacenaFakturaNeObaraBatch
     T11_RucniKooperantBezIzboraBloka
-    ' T17 ide PRE T16: T16 namerno ostavlja dva OTVORENA reda sa istim OtkupID,
-    ' sto bi oborilo kontrolni slucaj u T17 (rollback je tek na kraju suite-a).
-    T17_SakrivenDuplikatNeIsplacujePogresnog
+    ' T16-T19 citaju CELU tabelu, pa svaki radi u SVOJOJ izolovanoj transakciji
+    ' (BeginIsolatedTx) -- inace bi seed jednog obarao kontrolne slucajeve drugog.
     T16_DupliOtkupIDNeDozvoljavaAvans
+    T17_SakrivenDuplikatNeIsplacujePogresnog
+    T18_NepotpunIdentitetNeNestajeTiho
+    T19_OtvorenBlokBezKooperantaPada
 
     tx.RollbackTx
     Set tx = Nothing
@@ -1091,6 +1095,11 @@ End Function
 Private Sub T16_DupliOtkupIDNeDozvoljavaAvans()
     Const S As String = "T16 avans nad duplim OtkupID: "
 
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
     SeedStanica P & "OM-16", P & "Stanica 16"
     SeedKooperant P & "K-16A", "Test", "Duplikat", P & "OM-16"
     SeedKooperant P & "K-16B", "Test", "Drugi", P & "OM-16"
@@ -1139,6 +1148,9 @@ Private Sub T16_DupliOtkupIDNeDozvoljavaAvans()
     ChkEqD primenjeno, 200, S & "primenjen je ceo raspolozivi avans (200)"
     Chk NovacRedovaSaOtkupID(P & "OTK-OK16") > 0, S & "avans je vezan za otkup"
     ChkEqD SlobodanAvansKooperanta(P & "K-16C"), 0, S & "avans vise nije nevezan"
+
+    tx.RollbackTx
+    Set tx = Nothing
 End Sub
 
 ' ============================================================
@@ -1162,6 +1174,11 @@ Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
     Const S As String = "T17 sakriven duplikat: "
     Const RACUN_A As String = "160-AAAAAAAAAA-11"
     Const RACUN_B As String = "160-BBBBBBBBBB-22"
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
 
     SeedStanica P & "OM-17", P & "Stanica 17"
     SeedKooperantSaRacunom P & "K-17A", "Prvi", "Vlasnik", P & "OM-17", RACUN_A
@@ -1213,7 +1230,125 @@ Private Sub T17_SakrivenDuplikatNeIsplacujePogresnog()
     Chk LenB(odbijeno) > 0, S & "razlog je vracen operateru"
     Chk InStr(odbijeno, P & "OTK-HID") > 0, S & "razlog imenuje sporan OtkupID"
 
+    tx.RollbackTx
+    Set tx = Nothing
 End Sub
+
+' ============================================================
+' T18 - AUD-026: nepotpun identitet otvorenog bloka ne sme TIHO da nestane.
+'
+' Ranije je nedostajuci identitet zavrsavao u "GoTo NextRow": otvorena obaveza
+' od npr. 100.000 RSD bi jednostavno izostala iz pregleda, bez greske i bez
+' upozorenja, dok bi ostali nalozi uredno otisli u fajl. Ekran bi tvrdio da
+' prikazuje otvorene obaveze, a jedna bi nedostajala.
+'
+' Sada je fail-closed, isto pravilo kao za dupliran OtkupID. Kontrola (3)
+' cuva granicu iz R7: korupcija koja NE moze proizvesti nalog (zatvoren red)
+' ne obara ceo ekran.
+' ============================================================
+Private Sub T18_NepotpunIdentitetNeNestajeTiho()
+    Const S As String = "T18 nepotpun identitet: "
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    SeedStanica P & "OM-18", P & "Stanica 18"
+    SeedKooperantSaRacunom P & "K-18", "Test", "Potpun", P & "OM-18", "160-CCCCCCCCCC-33"
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' --- (3) prvo KONTROLA: zatvoren (isplacen) red bez OtkupID ne sme da
+    '         obori pregled -- GetOpenOtkupi ga i ne vraca, pa nalog iz njega
+    '         ne moze nastati.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
+        Array("", P & "BLOK-18Z", P & "K-18", 100, 5, "Malina", Date, STATUS_ISPLACENO)
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    On Error GoTo 0
+    ChkEq errNum, 0, S & "zatvoren red bez OtkupID NE obara pregled"
+
+    ' --- (1) OTVOREN blok bez OtkupID -> tvrd pad (ranije: tiho nestajanje).
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array("", P & "BLOK-18A", P & "K-18", 1000, 100, "Malina")
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_OTKUPID, S & "otvoren blok bez OtkupID PADA (ne nestaje)"
+    Chk InStr(errDesc, P & "BLOK-18A") > 0, S & "poruka imenuje dokument bez OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' ============================================================
+' T19 - AUD-026: otvoren blok bez kooperanta (primaoca) takodje pada.
+'
+' Zaseban test jer T18 ostavlja red bez OtkupID koji bi obarao svaku sledecu
+' proveru u istoj transakciji -- ovaj scenario mora da se dokaze sam za sebe.
+' ============================================================
+Private Sub T19_OtvorenBlokBezKooperantaPada()
+    Const S As String = "T19 blok bez kooperanta: "
+
+    ' Izolacija: seed-ovi ovog testa ne smeju da procure u sledece.
+    Dim tx As clsTransaction
+    Set tx = BeginIsolatedTx()
+
+
+    Dim lista As Collection
+    Dim errNum As Long
+    Dim errDesc As String
+
+    ' Jedinstven OtkupID, ali BEZ kooperanta -> primalac se ne moze utvrditi.
+    BitAppend TBL_OTKUP, _
+        Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
+              COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM), _
+        Array(P & "OTK-NOKOOP", P & "BLOK-18B", "", 1000, 100, "Malina")
+
+    On Error Resume Next
+    Err.Clear
+    Set lista = BuildBlokIsplataList()
+    errNum = Err.Number
+    errDesc = Err.description
+    On Error GoTo 0
+
+    ChkEq errNum, ERR_ISPLATA_PRAZAN_KOOPERANTID, S & "otvoren blok bez kooperanta PADA (ne nestaje)"
+    Chk InStr(errDesc, P & "OTK-NOKOOP") > 0, S & "poruka imenuje sporan OtkupID"
+
+    tx.RollbackTx
+    Set tx = Nothing
+End Sub
+
+' Izolovana transakcija za testove koji citaju CELU tabelu (BuildBlokIsplataList
+' gleda sve otvorene blokove, ne samo BIT- redove). Bez izolacije bi podaci
+' jednog testa obarali KONTROLNE slucajeve sledecih -- npr. otvoren duplikat iz
+' T17 bi oborio "zdravu" proveru u T18 -- jer se spoljni rollback radi tek na
+' kraju suite-a. Isti obrazac koriste storno testovi.
+Private Function BeginIsolatedTx() As clsTransaction
+    Dim tx As clsTransaction
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_KOOPERANTI
+    tx.AddTableSnapshot TBL_STANICE
+    Set BeginIsolatedTx = tx
+End Function
 
 ' ============================================================
 ' SEED / READ HELPERS

@@ -28,6 +28,7 @@ Private Const MAX_SALDO_PROBLEMA As Long = 10
 ' Integritet kanonskog kljuca otvorenih blokova (vidi BuildOpenAmountDict).
 Public Const ERR_ISPLATA_DUPLI_OTKUPID As Long = vbObjectError + 2620
 Public Const ERR_ISPLATA_PRAZAN_OTKUPID As Long = vbObjectError + 2621
+Public Const ERR_ISPLATA_PRAZAN_KOOPERANTID As Long = vbObjectError + 2622
 
 ' ------------------------------------------------------------------
 ' PRAVILO ZA POREDJENJE NOVCA NA OVOJ PUTANJI (AUD-026)
@@ -104,9 +105,21 @@ Public Function BuildBlokIsplataList( _
         isplaceno = CDbl(openOtkupi(i, 4))
         otvoren = CDbl(openOtkupi(i, 5))
 
-        ' AUD-026: vlasnik OTVORENOG bloka mora biti jednoznacan. Provera ide
-        ' pre filtera (i pre citanja vlasnika), da se ekran ponasa isto kao
-        ' finalna kapija, koja listu gradi bez filtera.
+        ' AUD-026: identitet OTVORENOG bloka mora biti potpun i jednoznacan.
+        ' Redosled je namerno: OtkupID postoji -> jedinstven je -> kooperant
+        ' postoji -> tek onda TR/naziv/filteri. Provere idu PRE filtera, da se
+        ' ekran ponasa isto kao finalna kapija (ona listu gradi bez filtera).
+        '
+        ' Prazan OtkupID je ranije zavrsavao u tihom "GoTo NextRow" (vlasnik se
+        ' nije mogao naci), pa je otvorena obaveza NESTAJALA sa ekrana bez
+        ' ijedne poruke, dok bi ostali nalozi uredno otisli u fajl. To je
+        ' suprotno pravilu koje ovaj paket uvodi.
+        If LenB(otkupID) = 0 Then
+            Err.Raise ERR_ISPLATA_PRAZAN_OTKUPID, "modBankaExportPregled.BuildBlokIsplataList", _
+                      "Otvoren blok bez OtkupID (dokument: " & brojDok & "). Identitet obaveze " & _
+                      "nije utvrdiv -- nalozi nisu generisani; pokrenite proveru integriteta podataka."
+        End If
+
         If dupliOtkup.Exists(otkupID) Then
             Err.Raise ERR_ISPLATA_DUPLI_OTKUPID, "modBankaExportPregled.BuildBlokIsplataList", _
                       "Dupli OtkupID u tblOtkup: " & otkupID & " (otvoren blok: " & brojDok & "). " & _
@@ -133,9 +146,19 @@ Public Function BuildBlokIsplataList( _
         If datumOd > #1/1/1900# And datumVal < datumOd Then GoTo NextRow
         If datumDo > #1/1/1900# And datumVal > datumDo Then GoTo NextRow
         
+        ' Vlasnik otvorenog bloka je primalac novca -- bez njega nema ni naloga
+        ' ni tekuceg racuna. Raniji tihi "GoTo NextRow" je otvorenu obavezu
+        ' izbacivao iz liste bez traga (FM-0021 #5); sada je fail-closed, isto
+        ' kao prazan i dupliran OtkupID. Prazan kooperant nije legitimno stanje:
+        ' SaveOtkupMulti_TX ga odbija pri upisu.
         Dim kooperantID As String
         If koopByOtkup.Exists(otkupID) Then kooperantID = Trim$(CStr(koopByOtkup(otkupID)))
-        If LenB(kooperantID) = 0 Then GoTo NextRow
+        If LenB(kooperantID) = 0 Then
+            Err.Raise ERR_ISPLATA_PRAZAN_KOOPERANTID, "modBankaExportPregled.BuildBlokIsplataList", _
+                      "Otvoren blok bez kooperanta: OtkupID=" & otkupID & " (dokument: " & brojDok & _
+                      "). Primalac se ne moze utvrditi -- nalozi nisu generisani; pokrenite proveru " & _
+                      "integriteta podataka."
+        End If
         
         Dim kooperantNaziv As String
         If nazivCache.Exists(kooperantID) Then
