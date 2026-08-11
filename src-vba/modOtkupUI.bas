@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-100"
+Public Const OTKUI_BUILD   As String = "v6-ui-101"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -4859,6 +4859,63 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ' Namerno NIJE vezano - prototip ne sme da knjizi.
     MarkClean
     ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
+End Sub
+
+' PREPISIVANJE POZNATOG (prefill). Ekran zna sta je otpremnica i sta se sa nje
+' moze prepisati; ljuska zna gde ta polja stoje. Zato ekran salje LOGICKA imena
+' ("vrsta", "omid", "cena"), a ne imena kontrola:
+'
+'   datum brdok brzbirne vrsta sorta omid vozacid cena tipamb
+'
+' Sve ide pod mLoading/mPopMute: prepisivanje nije izmena operatera, pa ne sme
+' ni da upali "nesacuvane izmene" ni da otvori nas dropdown.
+Public Sub ApplyPrefill(ByVal spec As String)
+    Dim par As Variant, kv As Variant, k As String, v As String
+    Dim ctx As Object, zf As Object
+    ' Tipizirani lokali: SetComboByID prima MSForms.ComboBox, a Controls(...)
+    ' vraca Object - direktno prosledjivanje ume da padne na neslaganju tipa.
+    ' Procedure-level "As MSForms." je bezbedno (IsHardModuleBody gleda samo
+    ' modul-level deo, pa modul ostaje "mek" za self-update).
+    Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If Len(spec) = 0 Then Exit Sub
+    Set ctx = mFrm.Controls("zCtx")
+    Set zf = mFrm.Controls("zForm")
+    Set cbOM = ctx.Controls("cbOM")
+    Set cbVoz = ctx.Controls("cbVozac")
+
+    mPopMute = True
+    mLoading = True
+    For Each par In Split(spec, "|")
+        kv = Split(CStr(par), "=")
+        If UBound(kv) >= 1 Then
+            k = CStr(kv(0))
+            v = CStr(kv(1))
+            Select Case k
+                Case "datum":    zf.Controls("fgDatum").Controls("fgDatumT").text = v
+                Case "brdok":    If Len(v) > 0 Then zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = v
+                Case "brzbirne": zf.Controls("fgBrZbir").Controls("fgBrZbirT").text = v
+                Case "cena":     If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = v
+                Case "tipamb":   If Len(v) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = v
+                Case "vrsta"
+                    ctx.Controls("cbVrsta").value = v
+                    ' sorta zavisi od vrste - lista se puni tek posle nje
+                    RefillSorta mFrm
+                Case "sorta":    ctx.Controls("cbSorta").value = v
+                Case "omid":     If Len(v) > 0 Then SetComboByID cbOM, v
+                Case "vozacid":  If Len(v) > 0 Then SetComboByID cbVoz, v
+            End Select
+        End If
+    Next par
+
+    RecalcVrednost
+    mPopMute = False
+    mLoading = False
+    MarkClean
+    ' Sve sto se moglo prepisati je prepisano; ostaje kooperant - zato fokus
+    ' ide pravo na njega, kao u legacy panelu.
+    ctx.Controls("cbKupac").SetFocus
 End Sub
 
 ' Datum dokumenta: podrazumevano danas. Ista vrednost koju je ekran do sada

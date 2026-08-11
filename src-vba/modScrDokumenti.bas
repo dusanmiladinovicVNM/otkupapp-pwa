@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-100"
+Public Const SCRDOK_BUILD As String = "v6-ui-101"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -204,6 +204,10 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         If Not mOtpIds.Exists(broj) Then Exit Function
         mOtpID = CStr(mOtpIds(broj))
         mOtpBroj = broj
+        ' Sve sto otpremnica zna o robi prepisuje se u formu; operateru ostaju
+        ' kooperant i kolicine. Isto sto legacy radi u PrefillLeftForm, samo sto
+        ' ovde ekran salje LOGICKA imena polja, a ljuska zna gde koje stoji.
+        modOtkupUI.ApplyPrefill PrefillSpec(mOtpID)
         ' izbor otpremnice vodi pravo na njene blokove - to je sledeci potez
         mLista = "BLOKOVI"
         Scr_Event = True
@@ -563,6 +567,45 @@ Private Function OtkupIdsByBrDok(ByVal broj As String) As String
         End If
     Next r
     OtkupIdsByBrDok = res
+End Function
+
+' Sta se sa otpremnice moze prepisati u formu otkupnog lista. Vrednosti se
+' citaju iz tblOtpremnica; cena je ona po kojoj su vec pisani blokovi te
+' otpremnice (ExistingBlokCena), a tek ako njih nema - cena sa otpremnice.
+' Broj otkupnog lista se ne izmislja nego trazi od kanonskog generatora
+' (SuggestNextBroj), isto kao u legacy panelu.
+Private Function PrefillSpec(ByVal otpID As String) As String
+    Dim vDat As Variant, stanica As String, cena As Double, res As String
+    On Error Resume Next
+    If Len(otpID) = 0 Then Exit Function
+
+    vDat = LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_DATUM)
+    stanica = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_STANICA))
+    cena = modOtkupBlok.ExistingBlokCena(otpID)
+    If cena <= 0 Then cena = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_CENA))
+
+    If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
+    res = Dodaj(res, "brzbirne", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)))
+    res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA)))
+    res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA)))
+    res = Dodaj(res, "omid", stanica)
+    res = Dodaj(res, "vozacid", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VOZAC)))
+    res = Dodaj(res, "tipamb", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_TIP_AMB)))
+    If cena > 0 Then res = Dodaj(res, "cena", Format$(cena, "0.00"))
+
+    ' Broj otkupnog lista: otkupno mesto + datum otpremnice, kanonski generator.
+    ' Kad je auto-broj iskljucen u Podesavanjima, generator vrati prazno i polje
+    ' ostaje operateru - isto kao u legacy panelu.
+    If Len(stanica) > 0 And IsDate(vDat) Then
+        res = Dodaj(res, "brdok", SuggestNextBroj(KIND_OTK, stanica, CDate(vDat), False))
+    End If
+    PrefillSpec = res
+End Function
+
+Private Function Dodaj(ByVal res As String, ByVal k As String, ByVal v As String) As String
+    Dodaj = res
+    If Len(v) = 0 Then Exit Function
+    Dodaj = res & IIf(Len(res) > 0, "|", "") & k & "=" & v
 End Function
 
 ' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
