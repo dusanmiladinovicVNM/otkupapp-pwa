@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-90"
+Public Const OTKUI_BUILD   As String = "v6-ui-91"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -878,6 +878,12 @@ Private Sub BuildGrid(frm As Object)
         ChipV z, CStr(p(0)), Poruka(CStr(p(1))), X, 36, CSng(p(2)), 19, (i = 0), (i = 5)
         X = X + CSng(p(2)) + 6
     Next i
+
+    ' RADNJE NAD IZABRANIM REDOM - u redu cipova, uz desnu ivicu. Ljuska ne zna
+    ' sta rade: prosledjuje ih ekranu kao "act:<sta>:<red>", isto kao sto vec
+    ' prosledjuje izbor reda. Ugasene su dok red nije izabran.
+    BtnV z, "btnRedPrint", Poruka("OTKUI_BTN_RED_PRINT"), 0, 36, 116, 19, "ghost", IC_PRINT
+    BtnV z, "btnRedStorno", Poruka("OTKUI_BTN_RED_STORNO"), 0, 36, 88, 19, "ghost"
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -1865,6 +1871,15 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
         MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
     End If
     z.Controls("grdSrc").Left = PAD + 176
+    ' radnje nad redom stoje uz desnu ivicu reda cipova; storno je najdalje
+    Dim raV As Boolean
+    raV = RowActionsVisible()
+    BoxShow z, "btnRedPrint", raV
+    BoxShow z, "btnRedStorno", raV
+    If raV Then
+        MoveBtn z, "btnRedStorno", zw - PAD - 88, 36
+        MoveBtn z, "btnRedPrint", zw - PAD - 88 - GAP - 116, 36
+    End If
     MoveBtn z, "btnMax", zw - PAD - 26, 8
     MoveBtn z, "btnFilteri", zw - PAD - 26 - GAP - 88, 8
     Dim sx As Single: sx = zw - PAD - 88 - GAP - 200
@@ -2156,6 +2171,7 @@ Public Sub RenderGrid()
     End If
     RenderPager ft
     RenderChipCounts z
+    RefreshRowActions
 End Sub
 
 ' status-pilula u boji - ono sto MSForms ListBox nije mogao.
@@ -2235,6 +2251,33 @@ Private Sub RenderPager(ft As Object)
     Next i
     BoxShow ft, "pgPrev", (pages > 1)
     BoxShow ft, "pgNext", (pages > 1)
+End Sub
+
+' Radnje nad redom postoje samo tamo gde red JESTE otkupni dokument: u rezimu
+' otkupa, u listi svih listova ili blokova otpremnice. U listi otpremnica red
+' je otpremnica (nju se ne stampa kao otkupni list ni ne stornira odavde), a
+' na ugovornim ekranima ljuska ne zna sta je red.
+Private Function RowActionsVisible() As Boolean
+    If mScreen <> "DOKUMENTI" Then Exit Function
+    If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
+    Select Case ActiveLista()
+        Case "SVI", "BLOKOVI": RowActionsVisible = True
+    End Select
+End Function
+
+' Ugaseno dugme mora da IZGLEDA ugaseno - inace operater klikne i nista se ne
+' desi. Ista dva stanja kao kod "Filteri": prigusen tekst dok je mrtvo, pun
+' kad radi.
+Private Sub RefreshRowActions()
+    Dim z As Object, on_ As Boolean
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    Set z = mFrm.Controls("zGrid")
+    If Not RowActionsVisible() Then Exit Sub
+    on_ = (mSelRow > 0)
+    BoxState z, "btnRedPrint", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
+    BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
+    z.Controls("btnRedPrintI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
 End Sub
 
 Private Sub RenderChipCounts(z As Object)
@@ -2873,6 +2916,18 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "btnExcel": DoShowExcel
         Case "btnOperater": DoSwitchOperater
         Case "btnFilteri": ToggleFilterPanel
+        ' Radnja nad izabranim redom. Ljuska proverava SAMO da je red izabran;
+        ' sta radnja znaci zna ekran (upis i stampa ostaju u poslovnim modulima).
+        Case "btnRedPrint", "btnRedStorno"
+            If mSelRow <= 0 Then
+                ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+            ElseIf modUiScreens.ScrEvent(mScreen, _
+                       "act:" & IIf(tag = "btnRedPrint", "print", "storno") & _
+                       ":" & mSelRow, "Click") Then
+                mSelRow = 0
+                RefreshFromData
+                RefreshOtpTraka mFrm
+            End If
         Case "grdEmptyA"
             mFilter = "sve"
             mSelRow = 0

@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-90"
+Public Const SCRDOK_BUILD As String = "v6-ui-91"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -151,6 +151,14 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         Exit Function
     End If
 
+    ' Radnja nad izabranim redom: "act:<sta>:<red>". Ljuska zna samo koji je
+    ' red izabran; sta se nad njim radi zna ovaj modul, a POSAO rade postojece
+    ' rutine (modPrint / modStorno) - ovde se nista ne upisuje rucno.
+    If Left$(tag, 4) = "act:" Then
+        Scr_Event = RowAction(tag)
+        Exit Function
+    End If
+
     If Left$(tag, 4) = "row:" And Scr_Lista() = "OTPREMNICE" Then
         broj = CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1))
         If Len(broj) = 0 Then Exit Function
@@ -162,6 +170,74 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         mLista = "BLOKOVI"
         Scr_Event = True
     End If
+End Function
+
+' Vraca True ako je radnja PROMENILA podatke (pa mreza mora ponovo da se cita).
+' Stampa vraca False - ona nista ne menja.
+Private Function RowAction(ByVal tag As String) As Boolean
+    Dim p() As String, red As Long, broj As String, ids As String
+    On Error GoTo EH
+    p = Split(Mid$(tag, 5), ":")
+    If UBound(p) < 1 Then Exit Function
+    red = CLng(val(p(1)))
+    If red < 1 Then Exit Function
+    ' Prva kolona je BROJ dokumenta u obe liste u kojima radnje postoje
+    ' (svi listovi, blokovi otpremnice).
+    broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    If Len(broj) = 0 Then Exit Function
+
+    Select Case p(0)
+        Case "print"
+            ' Klase I i II dele broj dokumenta, a imaju zasebne OtkupID-eve.
+            ' Stampa ide nad SVIMA - isto kao posle SaveOtkupMulti_TX, koji
+            ' OutputOtkupniList i dobija spojene ID-eve.
+            ids = OtkupIdsByBrDok(broj)
+            If Len(ids) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_DOK") & " " & broj, True
+                Exit Function
+            End If
+            modPrint.OutputOtkupniList ids
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_STAMPA") & " " & broj, False
+
+        Case "storno"
+            If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
+                      Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
+                      APP_NAME) = vbNo Then Exit Function
+            If modStorno.StornoOtkupByBrDok_TX(broj) Then
+                Scr_ResetCache
+                modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
+                RowAction = True
+            Else
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
+            End If
+    End Select
+    Exit Function
+EH:
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Svi nestornirani OtkupID-evi jednog broja dokumenta, spojeni onako kako ih
+' modPrint ocekuje (" + ").
+Private Function OtkupIdsByBrDok(ByVal broj As String) As String
+    Dim src As Variant, r As Long, iBr As Long, iID As Long, iSt As Long
+    Dim res As String
+    On Error Resume Next
+    src = modUiData.CachedTable(TBL_OTKUP)
+    If Not IsArray(src) Then Exit Function
+    iBr = modUiData.ColIdx(TBL_OTKUP, COL_OTK_BR_DOK)
+    iID = modUiData.ColIdx(TBL_OTKUP, COL_OTK_ID)
+    iSt = modUiData.ColIdx(TBL_OTKUP, COL_STORNIRANO)
+    If iBr < 1 Or iID < 1 Then Exit Function
+    For r = 1 To UBound(src, 1)
+        If modUiData.CellS(src, r, iBr) = broj Then
+            If iSt < 1 Then
+                res = res & IIf(Len(res) > 0, " + ", "") & modUiData.CellS(src, r, iID)
+            ElseIf UCase$(modUiData.CellS(src, r, iSt)) <> "DA" Then
+                res = res & IIf(Len(res) > 0, " + ", "") & modUiData.CellS(src, r, iID)
+            End If
+        End If
+    Next r
+    OtkupIdsByBrDok = res
 End Function
 
 ' Ikonica u markeru uz naslov - po DOKUMENTU, ne po modulu. Sve kodne tacke su
