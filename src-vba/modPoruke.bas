@@ -506,6 +506,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_FILTERI", "Filteri"
     UpsertRow lo, existing, "OTKUI_BTN_RED_PRINT", ChrW(352) & "tampaj list"
     UpsertRow lo, existing, "OTKUI_BTN_RED_STORNO", "Storniraj"
+    UpsertRow lo, existing, "OTKUI_BTN_RED_PREUZMI", "Preuzmi"
     UpsertRow lo, existing, "OTKUI_BTN_RED_MARK", "Izaberi vi" & ChrW(353) & "e"
     UpsertRow lo, existing, "OTKUI_BTN_RED_SPEC", ChrW(352) & "tampaj specifikaciju"
     UpsertRow lo, existing, "OTKUI_BTN_RED_SPECDAT", "Po datumu"
@@ -575,6 +576,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_RADNJA", ChrW(10007) & " Radnja nije uspela:"
     UpsertRow lo, existing, "OTKUI_MSG_STAMPA", ChrW(10003) & " Poslato na " & ChrW(353) & "tampu:"
     UpsertRow lo, existing, "OTKUI_MSG_STORNIRANO", ChrW(10003) & " Storniran dokument"
+    UpsertRow lo, existing, "OTKUI_ASK_PREUZMI", "Preuzeti blok br."
+    UpsertRow lo, existing, "OTKUI_ASK_PREUZMI2", "na otpremnicu"
+    UpsertRow lo, existing, "OTKUI_MSG_PREUZET", ChrW(10003) & " Preuzet blok"
+    UpsertRow lo, existing, "OTKUI_ERR_PREUZMI", ChrW(10007) & " Preuzimanje nije uspelo (cilj je mo" & ChrW(382) & "da storniran):"
+    UpsertRow lo, existing, "OTKUI_ERR_NEMA_AKT_OTP", ChrW(10007) & " Prvo izaberi ciljnu otpremnicu u listi Otpremnice"
     UpsertRow lo, existing, "OTKUI_ASK_STORNO", "Stornirati ceo otkup br."
     UpsertRow lo, existing, "OTKUI_ASK_STORNO2", "?" & vbCrLf & _
               "Storno obuhvata SVE klase istog dokumenta."
@@ -604,6 +610,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_LS_SVI", "Svi listovi"
     UpsertRow lo, existing, "OTKUI_SEG_LS_OTP", "Otpremnice"
     UpsertRow lo, existing, "OTKUI_SEG_LS_BLOK", "Blokovi otpremnice"
+    UpsertRow lo, existing, "OTKUI_SEG_LS_LOST", "Izgubljeni"
     UpsertRow lo, existing, "OTKUI_OTP_TRAKA", "Aktivna otpremnica"
     UpsertRow lo, existing, "OTKUI_OTP_NEMA", "Nema izabrane otpremnice " & ChrW(8212) & " izaberi je u listi Otpremnice"
     UpsertRow lo, existing, "OTKUI_OTP_UKUPNO", "Ukupno kg"
@@ -613,6 +620,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_OTP_AMB", "amb"
     UpsertRow lo, existing, "OTKUI_OTP_PO_OTP", "po otpremnici"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_BLOKOVI", "Blokovi otpremnice"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_LOST", "Izgubljeni blokovi"
+    UpsertRow lo, existing, "OTKUI_HDL_STARA", "STARA OTPREMNICA"
     InvalidateCache
 End Sub
 

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-97"
+Public Const OTKUI_BUILD   As String = "v6-ui-98"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -655,6 +655,8 @@ Private Sub RefreshGridTitle(frm As Object)
             Err.Clear
             z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_BLOKOVI") & _
                                              IIf(Len(k) > 0, " " & k, "")
+        Case "IZGUBLJENI"
+            z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_LOST")
         Case Else
             If mScreen = "DOKUMENTI" Then _
                 z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
@@ -667,7 +669,7 @@ Private Sub RefreshGridTitle(frm As Object)
         Select Case akt
             Case "OTPREMNICE"
                 ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
-            Case "BLOKOVI"
+            Case "BLOKOVI", "IZGUBLJENI"
                 ShowChip frm, k, False
             Case Else
                 If k = "chipOtvorene" Then ShowChip frm, k, False
@@ -682,8 +684,8 @@ Private Sub RefreshListSeg(frm As Object)
     On Error Resume Next
     Set z = frm.Controls("zGrid")
     akt = ActiveLista()
-    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI")
-    For i = 0 To 2
+    nmv = Array("SVI", "OTPREMNICE", "BLOKOVI", "IZGUBLJENI")
+    For i = 0 To UBound(nmv)
         BoxState z, "ls" & nmv(i), _
                  IIf(akt = nmv(i), C_FOREST, C_WHITE), _
                  IIf(akt = nmv(i), C_CREAM, C_MUTED), (akt = nmv(i))
@@ -868,6 +870,10 @@ Private Sub BuildGrid(frm As Object)
     NewSegBtn z, "lsSVI", Poruka("OTKUI_SEG_LS_SVI"), 0, 9, 96, 20, True
     NewSegBtn z, "lsOTPREMNICE", Poruka("OTKUI_SEG_LS_OTP"), 96, 9, 96, 20, False
     NewSegBtn z, "lsBLOKOVI", Poruka("OTKUI_SEG_LS_BLOK"), 192, 9, 110, 20, False
+    ' Cetvrta lista: blokovi ciji je otpremnica stornirana ili je nema. U legacy
+    ' je to bio PREKIDAC koji menja sadrzaj iste liste ("Izgubljeni" / "Nazad"),
+    ' dakle skriven rezim; ovde je obicna lista kao i ostale tri.
+    NewSegBtn z, "lsIZGUBLJENI", Poruka("OTKUI_SEG_LS_LOST"), 302, 9, 104, 20, False
     NewShell z, "srch", 0, 8, 200, 22, C_INPUT_BORDER, C_WHITE
     NewLbl z, "srchIco", ChrW(IC_SEARCH), 0, CenterIco(8, 22, TS_META), 16, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignCenter, F_ICON
@@ -903,6 +909,8 @@ Private Sub BuildGrid(frm As Object)
     NewShell z, "specDo", 0, 36, 74, 20, C_INPUT_BORDER, C_WHITE
     NewTxt z, "specDoT", Format$(Date, "dd.mm.yyyy"), 0, 39, 62, 14, False
     BtnV z, "btnRedSpecDat", Poruka("OTKUI_BTN_RED_SPECDAT"), 0, 36, 112, 19, "ghost"
+    ' Preuzimanje izgubljenog bloka na AKTIVNU otpremnicu - onu iz trake gore.
+    BtnV z, "btnRedPreuzmi", Poruka("OTKUI_BTN_RED_PREUZMI"), 0, 36, 96, 19, "soft"
 
     ' zaglavlje mreze - sami crtamo (ListBox zaglavlje se ne moze stilizovati)
     Set hd = NewFrame(z, "grdHead", 0, 0, 620, GRID_HEAD_H, C_HEAD_BG)
@@ -1884,10 +1892,12 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     BoxShow z, "lsSVI", lsV
     BoxShow z, "lsOTPREMNICE", lsV
     BoxShow z, "lsBLOKOVI", lsV
+    BoxShow z, "lsIZGUBLJENI", lsV
     If lsV Then
         MoveBox z, "lsSVI", lsX, 9, 96
         MoveBox z, "lsOTPREMNICE", lsX + 96, 9, 96
         MoveBox z, "lsBLOKOVI", lsX + 192, 9, 110
+        MoveBox z, "lsIZGUBLJENI", lsX + 302, 9, 104
     End If
     z.Controls("grdSrc").Left = PAD + 176
     ' Radnje nad redom stoje uz desnu ivicu reda cipova. Koji par - zavisi od
@@ -1895,11 +1905,15 @@ Private Sub LayoutGrid(z As Object, zw As Single, zh As Single)
     ' stampu specifikacije.
     Dim raK As String
     raK = RowActKind()
-    BoxShow z, "btnRedPrint", (raK = "DOK")
+    BoxShow z, "btnRedPrint", (raK = "DOK" Or raK = "LOST")
     BoxShow z, "btnRedStorno", (raK = "DOK")
     BoxShow z, "btnRedMark", (raK = "OTP")
     BoxShow z, "btnRedSpec", (raK = "OTP")
-    If raK = "DOK" Then
+    BoxShow z, "btnRedPreuzmi", (raK = "LOST")
+    If raK = "LOST" Then
+        MoveBtn z, "btnRedPreuzmi", zw - PAD - 96, 36
+        MoveBtn z, "btnRedPrint", zw - PAD - 96 - GAP - 116, 36
+    ElseIf raK = "DOK" Then
         MoveBtn z, "btnRedStorno", zw - PAD - 88, 36
         MoveBtn z, "btnRedPrint", zw - PAD - 88 - GAP - 116, 36
     ElseIf raK = "OTP" Then
@@ -2321,6 +2335,7 @@ Private Function RowActKind() As String
     Select Case ActiveLista()
         Case "SVI", "BLOKOVI": RowActKind = "DOK"
         Case "OTPREMNICE":     RowActKind = "OTP"
+        Case "IZGUBLJENI":     RowActKind = "LOST"
     End Select
 End Function
 
@@ -2347,10 +2362,15 @@ Private Sub RefreshRowActions()
     Set z = mFrm.Controls("zGrid")
     k = RowActKind()
     on_ = (mSelRow > 0)
-    If k = "DOK" Then
+    If k = "DOK" Or k = "LOST" Then
         BoxState z, "btnRedPrint", C_WHITE, IIf(on_, C_FOREST, C_DISABLED_FG), False
-        BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
         z.Controls("btnRedPrintI").ForeColor = IIf(on_, C_FOREST, C_DISABLED_FG)
+        If k = "DOK" Then
+            BoxState z, "btnRedStorno", C_WHITE, IIf(on_, C_RUST, C_DISABLED_FG), False
+        Else
+            BoxState z, "btnRedPreuzmi", IIf(on_, C_SOFT_BG, C_WHITE), _
+                     IIf(on_, C_GREEN, C_DISABLED_FG), on_
+        End If
     ElseIf k = "OTP" Then
         n = MarkCount()
         ' dok je oznacavanje ukljuceno dugme nosi broj oznacenih - to je jedini
@@ -3097,6 +3117,14 @@ Private Sub UiClickCore(ByVal tag As String)
                 ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
             Else
                 ScrAct "act:spec:" & mSelRow
+            End If
+        Case "btnRedPreuzmi"
+            If mSelRow <= 0 Then
+                ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+            ElseIf ScrAct("act:preuzmi:" & mSelRow) Then
+                mSelRow = 0
+                RefreshFromData
+                RefreshOtpTraka mFrm
             End If
         Case "btnRedPrint", "btnRedStorno"
             If mSelRow <= 0 Then

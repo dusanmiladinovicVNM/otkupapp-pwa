@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-97"
+Public Const SCRDOK_BUILD As String = "v6-ui-98"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -52,6 +52,8 @@ Private mOtpBroj As String        ' njen broj - za traku i naslov liste
 ' broj otpremnice -> OtpremnicaID; puni ga RowsOtpremnice u istom prolazu.
 ' Mreza prikazuje broj (to je ono sto operater vidi), a ekranu treba ID.
 Private mOtpIds As Object
+' broj bloka -> OtkupID, za listu izgubljenih; puni ga RowsIzgubljeni
+Private mLostIds As Object
 
 ' Koju listu F1 trenutno pokazuje. Van F1 uvek "SVI".
 Public Function Scr_Lista() As String
@@ -214,6 +216,9 @@ Private Function RowAction(ByVal tag As String) As Boolean
         Case "specdat"
             RowAction = PrintSpecDat("")
 
+        Case "preuzmi"
+            RowAction = PreuzmiBlok(broj)
+
         Case "storno"
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
@@ -268,6 +273,60 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
+' Preuzimanje izgubljenog bloka na AKTIVNU otpremnicu. Sav posao radi
+' postojeci modDokumenta.ReassignOtkupToOtpremnica_TX - menja se samo veza,
+' OtkupID, uplate i ambalaza ostaju.
+'
+' Za razliku od legacy-ja, ciljna otpremnica se ne bira posebno: to je ona iz
+' trake gore, koja se cele vreme vidi. Legacy je trazio da se prvo klikne
+' otpremnica u levoj listi, pa je poruka "prvo izaberi ciljnu otpremnicu" bila
+' najcesci ishod prvog pokusaja.
+Private Function PreuzmiBlok(ByVal broj As String) As Boolean
+    Dim otkupID As String, ciljBroj As String
+    On Error GoTo EH
+    If Len(broj) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    If Len(mOtpID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_AKT_OTP"), True
+        Exit Function
+    End If
+    otkupID = ""
+    If Not mLostIds Is Nothing Then
+        If mLostIds.Exists(broj) Then otkupID = CStr(mLostIds(broj))
+    End If
+    If Len(otkupID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_DOK") & " " & broj, True
+        Exit Function
+    End If
+
+    ciljBroj = mOtpBroj
+    If MsgBox(Poruka("OTKUI_ASK_PREUZMI") & " " & broj & " " & _
+              Poruka("OTKUI_ASK_PREUZMI2") & " " & ciljBroj & "?", _
+              vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
+
+    Dim idv As Variant, sviOK As Boolean
+    sviOK = True
+    For Each idv In Split(otkupID, "|")
+        If Not ReassignOtkupToOtpremnica_TX(CStr(idv), mOtpID) Then sviOK = False
+    Next idv
+
+    If sviOK Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_PREUZET") & " " & broj & " " & _
+                             Poruka("OTKUI_ASK_PREUZMI2") & " " & ciljBroj, False
+        PreuzmiBlok = True
+    Else
+        ' i delimican uspeh trazi osvezavanje - jedna klasa je mozda presla
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_PREUZMI") & " " & broj, True
+        PreuzmiBlok = True
+    End If
+    Exit Function
+EH:
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
 ' Broj otpremnice -> OtpremnicaID. Prvo iz mape koju puni lista (jeftino), pa
 ' iz same tabele. Drugi put postoji jer mapa zivi u modulu: dovoljno je da se
 ' lista jednom ne procita (drugi rezim, drugi ekran, greska u citanju) pa da
@@ -283,6 +342,80 @@ Private Function OtpIdZaBroj(ByVal broj As String) As String
         End If
     End If
     OtpIdZaBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID))
+End Function
+
+'----------------------------------------------- LISTA: IZGUBLJENI (F1)
+' Blokovi cija je otpremnica stornirana ili je vise nema. Racun radi postojeci
+' modDokumenta.GetLostOtkupBlokovi (1-bazirano, 7 kolona):
+'   1 OtkupID | 2 BrDok | 3 KooperantID | 4 Datum | 5 Kolicina | 6 stari OtpID
+'   7 broj stare otpremnice
+Private Function LostGridCols() As Variant
+    LostGridCols = Array( _
+        "OTKUI_HD_BROJ||txt|110|1", _
+        "OTKUI_HD_DATUM||date|62|1", _
+        "OTKUI_HD_PARTNER||part|0|1", _
+        "OTKUI_HD_KG||kg|76|1", _
+        "OTKUI_HDL_STARA||txt|150|2")
+End Function
+
+Private Function RowsIzgubljeni(ByVal q As String) As Variant
+    Dim src As Variant, r As Long, n As Long, outA() As Variant
+    Dim koop As Object, ime As String, hay As String, sumKg As Double, kg As Double
+    On Error GoTo EH
+    mStep = "izgubljeni"
+
+    Set mLostIds = CreateObject("Scripting.Dictionary")
+    src = GetLostOtkupBlokovi()
+    If Not IsArray(src) Then
+        RowsIzgubljeni = Array(LostGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    Set koop = PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+
+    ReDim outA(1 To UBound(src, 1), 1 To 5)
+    For r = 1 To UBound(src, 1)
+        ime = Trim$(CStr(src(r, 3)))
+        If Not koop Is Nothing Then
+            If koop.Exists(ime) Then ime = CStr(koop(ime))
+        End If
+        hay = CStr(src(r, 2)) & "|" & ime & "|" & CStr(src(r, 7))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        kg = NumVal(src(r, 5))
+        n = n + 1
+        outA(n, 1) = CStr(src(r, 2))
+        ' Klase I i II dele broj dokumenta a imaju zasebne OtkupID-eve, pa mapa
+        ' cuva SVE ID-eve tog broja. Preuzimanje onda vodi ceo dokument, isto
+        ' kao sto storno stornira sve njegove klase.
+        If mLostIds.Exists(CStr(outA(n, 1))) Then
+            mLostIds(CStr(outA(n, 1))) = CStr(mLostIds(CStr(outA(n, 1)))) & "|" & CStr(src(r, 1))
+        Else
+            mLostIds(CStr(outA(n, 1))) = CStr(src(r, 1))
+        End If
+        outA(n, 2) = DatSerijski(src(r, 4))
+        outA(n, 3) = ime
+        outA(n, 4) = kg
+        outA(n, 5) = CStr(src(r, 7))
+        sumKg = sumKg + kg
+Sledeci:
+    Next r
+
+    mStep = "OK"
+    RowsIzgubljeni = Array(LostGridCols(), outA, n, sumKg, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrDokumenti.RowsIzgubljeni[" & mStep & "]", Err.description
+End Function
+
+' Datum iz proizvoljne celije u serijski broj koji mreza ocekuje.
+Private Function DatSerijski(ByVal v As Variant) As Double
+    On Error Resume Next
+    If IsDate(v) Then
+        DatSerijski = Int(CDbl(CDate(v)))
+    ElseIf IsNumeric(v) Then
+        DatSerijski = Int(CDbl(v))
+    End If
 End Function
 
 ' Datum kao GRANICA opsega; 0 = nema granice. Prazan ili nepotpun unos nije
@@ -736,6 +869,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     Select Case Scr_Lista()
         Case "OTPREMNICE": Scr_Rows = RowsOtpremnice(filter, q): Exit Function
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
+        Case "IZGUBLJENI": Scr_Rows = RowsIzgubljeni(q): Exit Function
     End Select
     Scr_Rows = RowsDokumenti(filter, q)
 End Function
