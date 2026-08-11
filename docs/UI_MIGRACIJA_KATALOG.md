@@ -20,18 +20,18 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 |---|---|---|---|---|
 | Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` | **IMA** (`AutoFillCena`, v6-ui-102) |
 | Z2 | **Tip ambalaže iz kulture** po vrsti+sorti | isto | `GetKulturaTipAmbalaze` | **IMA** (v6-ui-102) |
-| Z3 | **Predlog broja dokumenta** iz otkupnog mesta + datuma; poštuje toggle auto-broja | `RefreshBrojDokumentaSuggestion`, `RefreshBrojOtpSuggestion`, `RefreshBrojZbirneSuggestion`, `RefreshBrojPrijSuggestion`, `RefreshBrojReversSuggestion` | `modBrojevi.SuggestNextBroj(kind, entityID, datum)` | **DELIMIČNO** — samo pri izboru otpremnice (prefill); ne i na promenu OM/datuma |
+| Z3 | **Predlog broja dokumenta** iz otkupnog mesta + datuma; poštuje toggle auto-broja | isto | `modBrojevi.SuggestNextBroj(kind, entityID, datum)` | **IMA** (`RefreshBrojPredlog`, v6-ui-104) |
 | Z4 | **Živi zbir kg** uz polje količine; u bruto režimu prikazuje neto posle tare | `UpdateUkupnoKg`, `UpdateUkupnoKgOtp`, `UpdateUkupnoKgPrij` | `GetTezinaGajbice`, `OtkupBrutoUnos()` | **IMA** (`SetKgLine`, v6-ui-102) |
 | Z5 | **Dve klase** — prekidač otvara drugi red količine/cene/ambalaže | `chkDveKlase*_Click`, `ShowKolAmbalazeII`, `ShowKlIIAmb` | — | **IMA** (segment I/II uz KLASA I CENA) |
 | Z6 | **Parcele** — lista zavisi od kooperanta; celo polje gasi `PRACENJE_PARCELA` | `cmbKooperant_Change`, `ApplyOtkupTogglesState` | `IsPracenjeParcela()` | **IMA** |
-| Z7 | **Keš isplate** — polja Novac/Primalac gasi `KES_ISPLATE` | `ApplyOtkupTogglesState`, `ApplyKesIsplateState` | `IsKesIsplate()` | **DELIMIČNO** — polja postoje u F5/F6, toggle se ne primenjuje |
-| Z8 | **Blokada praznih polja** pri snimanju, gejtovana `VALIDACIJA_UNOSA` | `btnUnos*_Click` | `IsValidacijaUnosa()` | **DELIMIČNO** — `CommitDokument` proverava broj, količinu, cenu i datum; toggle se ne gleda |
-| Z9 | **Info o paleti** — „još N gajbica do zatvaranja" uz izabranu robu | `UpdatePaletaInfo` | `GajbeDoZatvaranjaPaleteInfo` | **NEMA** |
+| Z7 | **Keš isplate** — polja Novac/Primalac gasi `KES_ISPLATE` | `ApplyOtkupTogglesState`, `ApplyKesIsplateState` | `IsKesIsplate()` | **IMA** za polje Novac u F1 (v6-ui-104); zasebno polje Primalac ne postoji — pri upisu ide kooperant |
+| Z8 | **Blokada praznih polja** pri snimanju, gejtovana `VALIDACIJA_UNOSA` | `btnUnos*_Click` | `IsValidacijaUnosa()` | **IMA** (v6-ui-104); datum se proverava uvek |
+| Z9 | **Info o paleti** — „još N gajbica do zatvaranja" uz izabranu robu | `UpdatePaletaInfo` | `GajbeDoZatvaranjaPaleteInfo` | **IMA** (`RefreshPaletaInfo`, v6-ui-104) |
 | Z10 | **Prefill iz storniranog dokumenta** — ispravka posle storna | `PrefillOtkupFromStornirano`, `PrefillOtpremnicaFromStornirana`, `PrefillZbirnaFromStornirana`, `PrefillPrijemnicaFromStornirana` | — | **NEMA** |
 | Z11 | **F-tasteri i Enter/Exit ivice** polja | `SetupFkeyAccelerators`, `HandleFkey`, `txt*_Enter/_Exit` | — | **IMA** (F1–F8 globalno, fokus ivice u `clsFlatBtn`) |
 | Z12 | **KPI traka** iznad forme | `LayoutTopKpis`, `RefreshTopKpis`, `SumOtkupKgToday` | `GetOMAvansSaldo` | **DELIMIČNO** — traka postoji, dva KPI-ja nisu vezana |
 | Z13 | **Podrazumevani proizvod** po otvaranju/resetu | `ResetProizvodNaDefault` | `ApplyDefaultProizvod` | **IMA** (`ApplyDefaultRoba`, v6-ui-103) |
-| Z14 | **Kontekst datuma i otkupnog mesta** se pamti između dokumenata | `txtDatum_AfterUpdate`, `cmbOtkupnoMesto_Change`, `ResetDatumKontekst` | `GetActiveDatum`, `GetActiveStanica` | **NEMA** |
+| Z14 | **Kontekst datuma i otkupnog mesta** se pamti između dokumenata | `txtDatum_AfterUpdate`, `cmbOtkupnoMesto_Change` | `AcquireStanicaLock`, `GetActiveStanica/Datum` | **IMA** (v6-ui-104) |
 
 ---
 
@@ -127,11 +127,14 @@ Rangirano po tome koliko svaka stavka blokuje **stvarni rad**, ne po veličini.
 1. ~~**Z1 + Z2**: cena iz cenovnika i tip ambalaže iz kulture na promenu
    vrste/sorte.~~ **URAĐENO** (v6-ui-102)
 2. ~~**Z4**: živi zbir kg / neto iz bruta.~~ **URAĐENO** (v6-ui-102)
-3. **Z9**: „još N gajbica do zatvaranja palete" uz izabranu robu.
-4. **Z3 + Z14**: predlog broja na promenu OM/datuma; pamćenje aktivne stanice i
-   datuma.
-5. **Z7 + Z8**: toggle-i (keš isplate, validacija unosa).
-   ~~Z13 podrazumevani proizvod~~ **URAĐENO** (v6-ui-103)
+3. ~~**Z9**: „još N gajbica do zatvaranja palete".~~ **URAĐENO** (v6-ui-104)
+4. ~~**Z3 + Z14**: predlog broja i kontekst stanice/datuma.~~ **URAĐENO** (v6-ui-104)
+5. ~~**Z7 + Z8 + Z13**: toggle-i.~~ **URAĐENO** (v6-ui-103, v6-ui-104)
+
+**Faza A je time zatvorena.** Ostaje iz nje samo ono što traži put upisa:
+`ShowLockStatus` (peščanik za vreme upisa) i filtriranje kooperanata po
+otkupnom mestu (`FillKooperantCombo stanicaID`) — novi UI prikazuje sve
+kooperante sa oznakom otkupnog mesta.
 
 ### Faza B — upis (`CommitDokument`)
 6. F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).

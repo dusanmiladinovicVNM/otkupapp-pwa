@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-103"
+Public Const OTKUI_BUILD   As String = "v6-ui-104"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -737,6 +737,10 @@ Private Sub BuildCtx(frm As Object)
         NewCtxCombo z, CStr(nm(i)), X, CTX_FLD_Y, CSng(w(i))
         X = X + CSng(w(i)) + GAP
     Next i
+    ' PALETA INFO - "jos N gajbi do zatvaranja palete br. X". Stoji u eyebrow
+    ' redu, uz robu na koju se odnosi (vrsta/sorta su u istom redu). Legacy ga
+    ' ima kao runtime labelu ispod dugmadi (UpdatePaletaInfo).
+    NewLbl z, "ctxPal", "", 0, 2, 420, TxtH(TS_MICRO), TS_MICRO, False, C_GREEN, -1, fmTextAlignRight
     NewLbl z, "ctxHint", "Ctrl+K", 0, 2, 52, TxtH(TS_MICRO), TS_MICRO, False, C_MUTED, -1, fmTextAlignRight
 End Sub
 
@@ -1894,6 +1898,8 @@ Private Sub LayoutCtx(z As Object, ByVal zw As Single)
         MoveCtxCombo z, CStr(nm(i)), X, cw
         X = X + cell + GAP
     Next i
+    z.Controls("ctxPal").Left = zw - PAD - 52 - GAP - 420
+    z.Controls("ctxPal").width = 420
 End Sub
 
 ' shell + combo + strelica se pomeraju zajedno (parnjak NewCtxCombo-a)
@@ -2616,7 +2622,6 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             ' u rezimu Zbirne broj dokumenta JESTE broj zbirne - zasebno polje
             ' bi bilo isti podatak dvaput
             FldShow z, "fgBrZbir", ModeVezujeZbirnu(mode)
-            FldShow z, "fgNovac", False
             FldShow z, "fgKgI", True
             FldShow z, "fgKgII", True
             FldShow z, "fgCena", True
@@ -2624,6 +2629,10 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgTipAmb", True
             ' prazna ambalaza se izdaje uz otkup i vraca uz prijemnicu;
             ' otpremnica i zbirna je ne dodiruju
+            ' KES ISPLATE: uz otkupni list se moze odmah isplatiti gotovina.
+            ' Polje postoji samo dok je toggle ukljucen - isto kao u legacy
+            ' (ApplyOtkupTogglesState gasi txtNovac/txtPrimalac).
+            FldShow z, "fgNovac", (mode = "F1" And IsKesIsplate())
             FldShow z, "fgAmbPr", (mode = "F1" Or mode = "F4")
             FldShow z, "fgParcela", (mode = "F1" And IsPracenjeParcela())
             FldShow z, "fgSmerRev", False
@@ -3377,8 +3386,11 @@ Private Sub UiChange(ByVal tag As String)
         Case "cbSorta"
             AutoFillCena
         Case "cbOM"
+            OnStanicaChanged
             RefreshKpi mFrm
             RefreshStatusBar mFrm
+        Case "fgDatumT"
+            OnDatumChanged
     End Select
 End Sub
 
@@ -3494,6 +3506,7 @@ Private Sub SetKlasa(ByVal k As Long)
     ' kutija ostajala prazna dok je operater ne otkuca, iako cena za tu robu i
     ' klasu vec postoji.
     If k = 2 Then AutoFillCena
+    RefreshPaletaInfo
 
     If k = 2 Then mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
     RecalcVrednost
@@ -4885,20 +4898,114 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     If mKlasa = 2 Then kg = kg + ParseNum(FldText("fgKgII"))
     cena = CenaText(1)
 
-    If Len(Trim$(FldText("fgBrOtpr"))) = 0 Then
-        ShowToast Poruka("OTKUI_ERR_BROJ"), True: Exit Sub
-    End If
+    ' Datum se proverava UVEK: necitljiv datum se ne moze upisati ni sa
+    ' iskljucenom validacijom, upisao bi se pogresan dan.
     If ParseDatum(FldText("fgDatum")) = 0 Then
         ShowToast Poruka("OTKUI_ERR_DATUM"), True: Exit Sub
     End If
-    If kg <= 0 Then ShowToast Poruka("OTKUI_ERR_KOLICINA"), True: Exit Sub
-    If cena <= 0 Then ShowToast Poruka("OTKUI_ERR_CENA"), True: Exit Sub
+    ' Ostalo je "blokada praznih polja" i gasi je VALIDACIJA_UNOSA u
+    ' Podesavanjima - isto pravilo koje legacy primenjuje u btnUnos*_Click.
+    If IsValidacijaUnosa() Then
+        If Len(Trim$(FldText("fgBrOtpr"))) = 0 Then
+            ShowToast Poruka("OTKUI_ERR_BROJ"), True: Exit Sub
+        End If
+        If ModeHasKgCol() Then
+            If kg <= 0 Then ShowToast Poruka("OTKUI_ERR_KOLICINA"), True: Exit Sub
+            If cena <= 0 Then ShowToast Poruka("OTKUI_ERR_CENA"), True: Exit Sub
+        End If
+    End If
 
     ' SEAM: ovde ide postojeci upis (modOtkup / modDokumenta / clsTransaction).
     ' Namerno NIJE vezano - prototip ne sme da knjizi.
     MarkClean
     ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
 End Sub
+
+' KONTEKST OTKUPNOG MESTA I DATUMA (Z3 + Z14).
+'
+' Otkupno mesto i datum nisu samo dva polja: iz njih se racuna predlog broja
+' dokumenta, i oni cine "aktivni kontekst" koji modStanicaLock cuva izmedju
+' dokumenata (na desktop instalaciji lock je no-op, ali kontekst se i dalje
+' pamti). Legacy to radi u cmbOtkupnoMesto_Change i txtDatum_AfterUpdate.
+Private Sub OnStanicaChanged()
+    Dim ctx As Object, CB As MSForms.ComboBox, stID As String, dat As Date
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mLoading Or mBuilding Then Exit Sub      ' prefill sam postavlja kontekst
+    Set ctx = mFrm.Controls("zCtx")
+    Set CB = ctx.Controls("cbOM")
+    stID = GetComboID(CB)
+    If Len(stID) = 0 Then
+        ' operater je obrisao izbor - pusti aktivnu stanicu
+        If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
+        Exit Sub
+    End If
+
+    dat = DatumIzPolja()
+    If Not AcquireStanicaLock(stID, dat) Then
+        ShowToast Poruka("OTKUI_ERR_STANICA") & " " & stID, True
+        Exit Sub
+    End If
+
+    ' MALINA: vozac je par-vozac otkupnog mesta (VozacID = StanicaID), pa se
+    ' bira sam - isto kao u legacy. Ako par-vozac ne postoji, ostaje prazno.
+    If IsMalinaMode() Then
+        Dim cbVoz As MSForms.ComboBox
+        Set cbVoz = ctx.Controls("cbVozac")
+        SelectComboByDisplayID cbVoz, stID
+    End If
+
+    RefreshBrojPredlog False
+    RefreshStatusBar mFrm
+End Sub
+
+Private Sub OnDatumChanged()
+    Dim dat As Date
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mLoading Or mBuilding Then Exit Sub
+    If Not TryParseDateValue(FldText("fgDatum"), dat) Then Exit Sub
+    If Len(GetActiveStanica()) > 0 Then
+        If GetActiveDatum() <> dat Then AcquireStanicaLock GetActiveStanica(), dat
+    End If
+    RefreshBrojPredlog False
+End Sub
+
+' Datum iz polja; danas kad polje jos nije citljivo.
+Private Function DatumIzPolja() As Date
+    Dim d As Date
+    DatumIzPolja = Date
+    On Error Resume Next
+    If TryParseDateValue(FldText("fgDatum"), d) Then DatumIzPolja = d
+End Function
+
+' Predlog broja dokumenta za tekuci kontekst. Kad je auto-broj iskljucen u
+' Podesavanjima, generator vrati prazno i polje ostaje operateru.
+Private Sub RefreshBrojPredlog(Optional ByVal checkRemote As Boolean = True)
+    Dim stID As String, kind As String, sug As String
+    Dim CB As MSForms.ComboBox
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    kind = KindZaRezim(modeKey(ActiveMode))
+    If Len(kind) = 0 Then Exit Sub
+    Set CB = mFrm.Controls("zCtx").Controls("cbOM")
+    stID = GetComboID(CB)
+    If Len(stID) = 0 Then Exit Sub
+    sug = SuggestNextBroj(kind, stID, DatumIzPolja(), checkRemote)
+    If Len(sug) = 0 Then Exit Sub
+    mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").text = sug
+End Sub
+
+' Koji brojevni niz pripada rezimu. Rezimi koji nemaju svoj niz (gotovinski
+' promet, storno) vracaju prazno i predlog se ne racuna.
+Private Function KindZaRezim(ByVal key As String) As String
+    Select Case key
+        Case "OTKUP":      KindZaRezim = KIND_OTK
+        Case "OTPREMNICA": KindZaRezim = KIND_OTP
+        Case "ZBIRNA":     KindZaRezim = KIND_ZBR
+        Case "REVERS":     KindZaRezim = KIND_REV
+    End Select
+End Function
 
 ' PODRAZUMEVANI PROIZVOD iz Podesavanja (DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA).
 '
@@ -4955,7 +5062,28 @@ Private Sub AutoFillCena()
     ta = GetKulturaTipAmbalaze(vrsta, sorta)
     If Len(ta) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = ta
 
+    RefreshPaletaInfo
     RecalcVrednost
+End Sub
+
+' "Paleta br. 186/2026: jos 23 gajbi do zatvaranja (217/240)" - za izabranu
+' robu i klasu. Racun radi postojeci GajbeDoZatvaranjaPaleteInfo; kad je
+' paletiranje iskljuceno, on vraca prazno pa reda nema.
+Private Sub RefreshPaletaInfo()
+    Dim ctx As Object, vrsta As String, sorta As String, info As String, i2 As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    Set ctx = mFrm.Controls("zCtx")
+    vrsta = Trim$(CStr(ctx.Controls("cbVrsta").value))
+    sorta = Trim$(CStr(ctx.Controls("cbSorta").value))
+    If Len(vrsta) > 0 Then
+        info = GajbeDoZatvaranjaPaleteInfo(vrsta, sorta, KLASA_I)
+        If mKlasa = 2 Then
+            i2 = GajbeDoZatvaranjaPaleteInfo(vrsta, sorta, KLASA_II)
+            If Len(i2) > 0 Then info = info & "   " & ChrW(183) & "   II: " & i2
+        End If
+    End If
+    ctx.Controls("ctxPal").caption = info
 End Sub
 
 ' PREPISIVANJE POZNATOG (prefill). Ekran zna sta je otpremnica i sta se sa nje
@@ -5060,6 +5188,9 @@ Private Sub ClearForm()
     ' (prvi unos), uzima se podrazumevana iz Podesavanja.
     ApplyDefaultRoba
     AutoFillCena
+    ' sledeci dokument dobija sledeci broj - bez upita na Google (lokalno je
+    ' vec upisan red koji je upravo snimljen)
+    RefreshBrojPredlog False
     RecalcVrednost
     mPopMute = False
     mLoading = False

@@ -569,6 +569,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BROJ", ChrW(10007) & " Broj dokumenta je obavezan"
     UpsertRow lo, existing, "OTKUI_ERR_KOLICINA", ChrW(10007) & " Koli" & ChrW(269) & "ina mora biti > 0"
     UpsertRow lo, existing, "OTKUI_ERR_CENA", ChrW(10007) & " Cena mora biti > 0"
+    UpsertRow lo, existing, "OTKUI_ERR_STANICA", ChrW(10007) & " Nije mogu" & ChrW(263) & "e preuzeti otkupno mesto:"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"
