@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-89"
+Public Const OTKUI_BUILD   As String = "v6-ui-90"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -799,34 +799,38 @@ Private Sub BuildForm(frm As Object)
     ' polje: levo od nje stoji racunica po klasi, pa se vidi ODAKLE iznos.
     ' Ploca iznosa NEMA grupu: ne redja se sa poljima nego deli red sa dugmadima
     ' (iznos i potvrda su jedna radnja), pa ne trosi ceo red za sebe.
-    Set fr = NewFrame(z, "fgVrednost", 0, 0, 180, FIELD_GRP_H, C_WHITE)
+    ' Okvir ploce je visok TACNO kao ploca (FIELD_H) i pocinje na nuli. Ranije
+    ' je pozajmljivao geometriju polja - okvir 46pt sa praznih 16pt gore, gde
+    ' kod polja stoji natpis. Ploca natpis nema (nosi ga u sebi), pa je taj
+    ' prazan BEO pojas ulazio 5pt u poslednji red polja i brisao mu donju
+    ' ivicu. Slanje na dno z-reda to nije resilo - okvir i dalje prekriva ono
+    ' preko cega stoji - pa praznog pojasa vise nema.
+    Set fr = NewFrame(z, "fgVrednost", 0, 0, 180, FIELD_H, C_WHITE)
     fr.tag = "fld:1:"
-    NewLbl fr, "fgVrednostL2", "", 0, 0, 170, 12, TS_LABEL, True, C_MUTED, -1
-    NewShell fr, "fgVrednost", 0, 16, 180, FIELD_H, C_FOREST, C_FOREST
-    NewLbl fr, "fgVrednostA", "", 1, 17, 3, FIELD_H - 2, 8, False, 0, C_GOLD
-    NewLbl fr, "fgVrednostL", Poruka("OTKUI_LBL_VREDNOST"), INPUT_PAD, CenterY(16, FIELD_H, TS_MICRO), _
+    NewShell fr, "fgVrednost", 0, 0, 180, FIELD_H, C_FOREST, C_FOREST
+    NewLbl fr, "fgVrednostA", "", 1, 1, 3, FIELD_H - 2, 8, False, 0, C_GOLD
+    NewLbl fr, "fgVrednostL", Poruka("OTKUI_LBL_VREDNOST"), INPUT_PAD, CenterY(0, FIELD_H, TS_MICRO), _
            66, TxtH(TS_MICRO), TS_MICRO, False, RGB(166, 178, 160), -1
-    NewLbl fr, "fgVrednostV", "0", 0, CenterY(16, FIELD_H, TS_VAL), 100, TxtH(TS_VAL), _
+    NewLbl fr, "fgVrednostV", "0", 0, CenterY(0, FIELD_H, TS_VAL), 100, TxtH(TS_VAL), _
            TS_VAL, True, C_CREAM, -1, fmTextAlignRight, F_NUM
-    NewLbl fr, "fgVrednostU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(16, FIELD_H, TS_MICRO), _
+    NewLbl fr, "fgVrednostU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(0, FIELD_H, TS_MICRO), _
            28, TxtH(TS_MICRO), TS_MICRO, True, C_GOLD, -1, fmTextAlignRight
     ' dva reda racunice - po jedan za svaku klasu; stoje DESNO od ploce
-    NewLbl fr, "fgVrednostK1", "", 0, 18, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
-    NewLbl fr, "fgVrednostK2", "", 0, 31, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
+    NewLbl fr, "fgVrednostK1", "", 0, 2, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
+    NewLbl fr, "fgVrednostK2", "", 0, 15, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
 
     ' OTVORENI BLOK + NEISPLACENI OSTATAK (samo isplate). U frmDokumenta je to
     ' cmbOtkupBlok, poznat kao "preostali kes" - poslovno to nije kes nego
     ' neisplaceni ostatak po otkupnom bloku, pa polje tako i pise.
     NewFieldG z, "fgBlok", Poruka("OTKUI_FLD_BLOK"), "cmb", "", 1, False, False, "NOV"
-    Set fr = NewFrame(z, "fgOstatak", 0, 0, 180, FIELD_GRP_H, C_WHITE)
+    Set fr = NewFrame(z, "fgOstatak", 0, 0, 180, FIELD_H, C_WHITE)
     fr.tag = "fld:1:"
-    NewLbl fr, "fgOstatakL2", "", 0, 0, 170, 12, TS_LABEL, True, C_MUTED, -1
-    NewShell fr, "fgOstatak", 0, 16, 180, FIELD_H, C_FOREST, C_FOREST
-    NewLbl fr, "fgOstatakL", Poruka("OTKUI_LBL_OSTATAK"), INPUT_PAD, CenterY(16, FIELD_H, TS_MICRO), _
+    NewShell fr, "fgOstatak", 0, 0, 180, FIELD_H, C_FOREST, C_FOREST
+    NewLbl fr, "fgOstatakL", Poruka("OTKUI_LBL_OSTATAK"), INPUT_PAD, CenterY(0, FIELD_H, TS_MICRO), _
            86, TxtH(TS_MICRO), TS_MICRO, False, RGB(166, 178, 160), -1
-    NewLbl fr, "fgOstatakV", "0", 0, CenterY(16, FIELD_H, TS_VAL), 100, TxtH(TS_VAL), _
+    NewLbl fr, "fgOstatakV", "0", 0, CenterY(0, FIELD_H, TS_VAL), 100, TxtH(TS_VAL), _
            TS_VAL, True, C_CREAM, -1, fmTextAlignRight, F_NUM
-    NewLbl fr, "fgOstatakU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(16, FIELD_H, TS_MICRO), _
+    NewLbl fr, "fgOstatakU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(0, FIELD_H, TS_MICRO), _
            28, TxtH(TS_MICRO), TS_MICRO, True, C_GOLD, -1, fmTextAlignRight
 
     SetDatumDanas z
@@ -1632,15 +1636,8 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     If Not valFr Is Nothing Then
         valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), GAP + 4 + VAL_CALC_W, 0)
         valFr.Left = PAD
-        valFr.top = btnY - 16            ' ploca (28pt) tacno u liniji sa dugmetom
-        valFr.Height = FIELD_GRP_H
-        ' Okvir ploce je visok kao polje (46), ali mu je gornjih 16pt prazno -
-        ' ploca nema natpis iznad sebe. Taj prazan, BEO deo je ulazio 5pt u
-        ' poslednji red polja i brisao mu donju ivicu (KOL. AMBALAZE i TIP
-        ' AMBALAZE - tacno onoliko sirine koliko ploca zauzima). Ploca zato ide
-        ' na dno z-reda: prazan deo se sakrije iza polja, a njen vidljivi deo
-        ' pocinje 11pt nize i nista ne prekriva.
-        valFr.ZOrder 1
+        valFr.top = btnY                 ' ploca (28pt) i dugme (28pt) u istoj liniji
+        valFr.Height = FIELD_H
         LayoutFieldInner valFr
         tw = valFr.Left + valFr.width + GAP
     End If
@@ -1766,7 +1763,7 @@ Private Sub LayoutFieldInner(fr As Object)
     If HasCtl(fr, nm & "V") Then
         plateW = VAL_PLATE_W
         If plateW > fr.width Then plateW = fr.width
-        MoveShell fr, nm, 0, 16, plateW
+        MoveShell fr, nm, 0, 0, plateW
         If HasCtl(fr, nm & "A") Then fr.Controls(nm & "A").Left = 1
         fr.Controls(nm & "L").Left = INPUT_PAD + 3
         fr.Controls(nm & "L").width = 62
