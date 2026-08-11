@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-96"
+Public Const OTKUI_BUILD   As String = "v6-ui-97"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.

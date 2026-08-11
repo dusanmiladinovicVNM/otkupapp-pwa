@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-96"
+Public Const SCRDOK_BUILD As String = "v6-ui-97"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -180,13 +180,12 @@ Private Function RowAction(ByVal tag As String) As Boolean
     p = Split(Mid$(tag, 5), ":")
     If UBound(p) < 1 Then Exit Function
     red = CLng(val(p(1)))
-    If red < 1 Then Exit Function
-    ' Prva kolona je BROJ dokumenta u obe liste u kojima radnje postoje
-    ' (svi listovi, blokovi otpremnice).
-    ' Broj iz reda trazi samo radnja koja se izvrsava NAD REDOM. Specifikacija
-    ' po oznacenima ("spec") i po datumu ("specdat") ne rade nad redom, pa im
-    ' prazan broj nije razlog da se odustane - na tome je "Po datumu" cutke
-    ' padao pre nego sto je uopste stigao do racuna.
+    ' NEMA provere "red < 1" - radnja ne mora da radi nad redom. Specifikacija
+    ' po datumu se salje sa red=0 (stampa se cela filtrirana lista), pa ju je
+    ' ta provera obarala u tisini, pre nego sto je uopste stigla do racuna.
+    ' Ko trazi red, trazi ga sam - odmah ispod.
+    ' Prva kolona je BROJ dokumenta u listama u kojima radnje nad redom postoje
+    ' (svi listovi, blokovi otpremnice); GridCell na red 0 vraca prazno.
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     Select Case p(0)
         Case "print", "storno"
