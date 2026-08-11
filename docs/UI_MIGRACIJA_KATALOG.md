@@ -18,10 +18,10 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 
 | # | Pravilo | Legacy mesto | Poslovna rutina | Novi UI |
 |---|---|---|---|---|
-| Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` | **NEMA** |
-| Z2 | **Tip ambalaže iz kulture** po vrsti+sorti | isto | `GetKulturaTipAmbalaze` | **NEMA** |
+| Z1 | **Cena iz cenovnika** po vrsti+sorti+klasi, na svaku promenu vrste/sorte | `AutoFillCenaOtkup`, `AutoFillCenaDok` | `modCenovnik.GetVazecaCena(vrsta, sorta, klasa)` | **IMA** (`AutoFillCena`, v6-ui-102) |
+| Z2 | **Tip ambalaže iz kulture** po vrsti+sorti | isto | `GetKulturaTipAmbalaze` | **IMA** (v6-ui-102) |
 | Z3 | **Predlog broja dokumenta** iz otkupnog mesta + datuma; poštuje toggle auto-broja | `RefreshBrojDokumentaSuggestion`, `RefreshBrojOtpSuggestion`, `RefreshBrojZbirneSuggestion`, `RefreshBrojPrijSuggestion`, `RefreshBrojReversSuggestion` | `modBrojevi.SuggestNextBroj(kind, entityID, datum)` | **DELIMIČNO** — samo pri izboru otpremnice (prefill); ne i na promenu OM/datuma |
-| Z4 | **Živi zbir kg** uz polje količine; u bruto režimu prikazuje neto posle tare | `UpdateUkupnoKg`, `UpdateUkupnoKgOtp`, `UpdateUkupnoKgPrij` | `GetTezinaGajbice`, `OtkupBrutoUnos()` | **NEMA** (nova forma računa samo vrednost u RSD) |
+| Z4 | **Živi zbir kg** uz polje količine; u bruto režimu prikazuje neto posle tare | `UpdateUkupnoKg`, `UpdateUkupnoKgOtp`, `UpdateUkupnoKgPrij` | `GetTezinaGajbice`, `OtkupBrutoUnos()` | **IMA** (`SetKgLine`, v6-ui-102) |
 | Z5 | **Dve klase** — prekidač otvara drugi red količine/cene/ambalaže | `chkDveKlase*_Click`, `ShowKolAmbalazeII`, `ShowKlIIAmb` | — | **IMA** (segment I/II uz KLASA I CENA) |
 | Z6 | **Parcele** — lista zavisi od kooperanta; celo polje gasi `PRACENJE_PARCELA` | `cmbKooperant_Change`, `ApplyOtkupTogglesState` | `IsPracenjeParcela()` | **IMA** |
 | Z7 | **Keš isplate** — polja Novac/Primalac gasi `KES_ISPLATE` | `ApplyOtkupTogglesState`, `ApplyKesIsplateState` | `IsKesIsplate()` | **DELIMIČNO** — polja postoje u F5/F6, toggle se ne primenjuje |
@@ -124,11 +124,9 @@ Da se ne izgubi iz vida — prelazak nije samo prepisivanje:
 Rangirano po tome koliko svaka stavka blokuje **stvarni rad**, ne po veličini.
 
 ### Faza A — pravila unosa (bez upisa, mala i vidljiva)
-1. **Z1 + Z2**: cena iz cenovnika i tip ambalaže iz kulture na promenu
-   vrste/sorte. *(Ovo je i ispravka: prefill sa otpremnice trenutno prepisuje
-   tip ambalaže sa otpremnice — treba iz kulture, a cena iz cenovnika osim kad
-   otpremnica već ima blokove.)*
-2. **Z4**: živi zbir kg / neto iz bruta uz polje količine.
+1. ~~**Z1 + Z2**: cena iz cenovnika i tip ambalaže iz kulture na promenu
+   vrste/sorte.~~ **URAĐENO** (v6-ui-102)
+2. ~~**Z4**: živi zbir kg / neto iz bruta.~~ **URAĐENO** (v6-ui-102)
 3. **Z9**: „još N gajbica do zatvaranja palete" uz izabranu robu.
 4. **Z3 + Z14**: predlog broja na promenu OM/datuma; pamćenje aktivne stanice i
    datuma.

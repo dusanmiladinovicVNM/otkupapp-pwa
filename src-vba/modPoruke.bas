@@ -492,6 +492,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_FLD_KLASA", "KLASA ROBE"
     UpsertRow lo, existing, "OTKUI_SEG_KLASA_I", "I klasa"
     UpsertRow lo, existing, "OTKUI_SEG_KLASA_II", "II klasa"
+    UpsertRow lo, existing, "OTKUI_KG_NETO", "NETO"
+    UpsertRow lo, existing, "OTKUI_KG_UKUPNO", "UKUPNO"
     UpsertRow lo, existing, "OTKUI_LBL_VREDNOST", "VREDNOST"
     UpsertRow lo, existing, "OTKUI_LBL_OSTATAK", "NEISPLA" & ChrW(262) & "ENO"
     UpsertRow lo, existing, "OTKUI_FLD_BLOK", "Otvoreni otkupni blok"

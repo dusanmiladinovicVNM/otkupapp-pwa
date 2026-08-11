@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-101"
+Public Const OTKUI_BUILD   As String = "v6-ui-102"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -191,6 +191,7 @@ Private Const ROW_GAP     As Single = 7
 Private Const GRP_LBL_W   As Single = 108     ' natpis grupe, pa linija do kraja
 Private Const SEG_KL_W    As Single = 30      ' prekidac klase u polju KLASA I CENA
 Private Const VAL_CALC_W  As Single = 150     ' racunica DESNO od ploce iznosa
+Private Const VAL_KG_W    As Single = 250     ' kilogrami desno od racunice
 Private Const VAL_PLATE_W As Single = 236     ' ploca iznosa (natpis + broj + RSD)
 Private Const GAP         As Single = 10
 Public Const ICO_INSET   As Single = 24     ' sirina zone ikonice u dugmetu
@@ -838,6 +839,11 @@ Private Sub BuildForm(frm As Object)
     ' dva reda racunice - po jedan za svaku klasu; stoje DESNO od ploce
     NewLbl fr, "fgVrednostK1", "", 0, 2, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
     NewLbl fr, "fgVrednostK2", "", 0, 15, 120, TxtH(TS_MICRO), TS_MICRO, False, C_DISABLED_FG, -1
+    ' KILOGRAMI - desno od racunice po klasama. U bruto rezimu pokazuje neto
+    ' posle tare, inace zbir klasa. Legacy je to imao kao lblUkupnoKG uz polje
+    ' kolicine; ovde stoji uz iznos, jer se cita zajedno sa njim.
+    NewLbl fr, "fgVrednostKg", "", 0, CenterY(0, FIELD_H, TS_META), 250, TxtH(TS_META), _
+           TS_META, True, C_FOREST, -1, fmTextAlignLeft, F_NUM
 
     ' OTVORENI BLOK + NEISPLACENI OSTATAK (samo isplate). U frmDokumenta je to
     ' cmbOtkupBlok, poznat kao "preostali kes" - poslovno to nije kes nego
@@ -1674,12 +1680,19 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     Set valFr = VisibleValFrame(z)
     tw = PAD
     If Not valFr Is Nothing Then
-        valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), GAP + 4 + VAL_CALC_W, 0)
+        valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), _
+                                        GAP + 4 + VAL_CALC_W + GAP + VAL_KG_W, 0)
+        ' okvir ploce ne sme da zadje pod dugmad - beo je i pokrio bi ih
+        If PAD + valFr.width > btnX - GAP Then valFr.width = btnX - GAP - PAD
         valFr.Left = PAD
         valFr.top = btnY                 ' ploca (28pt) i dugme (28pt) u istoj liniji
         valFr.Height = FIELD_H
         LayoutFieldInner valFr
-        tw = valFr.Left + valFr.width + GAP
+        ' Poruka pocinje POSLE racunice, ne posle kilograma: kilogrami i poruka
+        ' dele isti prostor, a poruka je prolazna (ShowToast ih sakrije dok
+        ' stoji). Tako poruka ima citljivu sirinu, a kilogrami stalno mesto.
+        tw = PAD + VAL_PLATE_W + GAP + 4 + VAL_CALC_W + GAP
+        If tw > valFr.Left + valFr.width Then tw = valFr.Left + valFr.width + GAP
     End If
     z.Controls("tstOk").top = btnY
     z.Controls("tstOk").Left = tw
@@ -1818,6 +1831,11 @@ Private Sub LayoutFieldInner(fr As Object)
             fr.Controls(nm & "K2").width = VAL_CALC_W
             fr.Controls(nm & "K1").Visible = True
             fr.Controls(nm & "K2").Visible = True
+        End If
+        If HasCtl(fr, nm & "Kg") Then
+            fr.Controls(nm & "Kg").Left = plateW + GAP + 4 + VAL_CALC_W + GAP
+            fr.Controls(nm & "Kg").width = fr.width - _
+                (plateW + GAP + 4 + VAL_CALC_W + GAP)
         End If
     End If
 End Sub
@@ -3338,6 +3356,9 @@ Private Sub UiChange(ByVal tag As String)
             ReloadGrid
         Case "fgKgIT", "fgKgIIT", "fgCena1T", "fgCena2T"
             RecalcVrednost
+        ' u bruto rezimu neto zavisi i od ambalaze - tara se racuna iz nje
+        Case "fgKolAmbT", "fgTipAmbT"
+            RecalcVrednost
         Case "fgBrZbirT"
             SetAktivnaZbirna mFrm.Controls("zForm").Controls("fgBrZbir").Controls("fgBrZbirT").text
         Case "fgBrOtprT"
@@ -3350,6 +3371,9 @@ Private Sub UiChange(ByVal tag As String)
             ApplyBlokIzbor
         Case "cbVrsta"
             RefillSorta mFrm
+            AutoFillCena
+        Case "cbSorta"
+            AutoFillCena
         Case "cbOM"
             RefreshKpi mFrm
             RefreshStatusBar mFrm
@@ -3463,6 +3487,11 @@ Private Sub SetKlasa(ByVal k As Long)
     ShellState fr, "fgCena2", IIf(k = 2, "normal", "off")
     fr.Controls("fgCena2P").ForeColor = IIf(k = 2, C_MUTED, C_DISABLED_FG)
     If k <> 2 Then t.text = ""
+
+    ' Ukljucivanje II klase povlaci i njenu cenu iz cenovnika - do sada je
+    ' kutija ostajala prazna dok je operater ne otkuca, iako cena za tu robu i
+    ' klasu vec postoji.
+    If k = 2 Then AutoFillCena
 
     If k = 2 Then mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
     RecalcVrednost
@@ -4694,6 +4723,8 @@ Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     fr.Controls("tstMsg").caption = msg
     fr.Controls("tstMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
     fr.Visible = True
+    ' poruka i zbir kilograma dele isti prostor u akcionom redu
+    KgLineVisible False
     CancelToastTimer
     If Not isErr Then
         mToastPending = Format$(Now + TimeSerial(0, 0, 4), "yyyy-mm-dd hh:nn:ss")
@@ -4706,6 +4737,12 @@ Public Sub HideToast()
     mToastPending = ""
     If mFrm Is Nothing Then Exit Sub
     mFrm.Controls("zForm").Controls("tstOk").Visible = False
+    KgLineVisible True
+End Sub
+
+Private Sub KgLineVisible(ByVal vis As Boolean)
+    On Error Resume Next
+    mFrm.Controls("zForm").Controls("fgVrednost").Controls("fgVrednostKg").Visible = vis
 End Sub
 
 Private Sub CancelToastTimer()
@@ -4861,6 +4898,45 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
 End Sub
 
+' CENA IZ CENOVNIKA I TIP AMBALAZE IZ KULTURE.
+'
+' Isti potez koji legacy radi u AutoFillCenaOtkup / AutoFillCenaDok, na svaku
+' promenu vrste ili sorte. Cena NIJE podatak dokumenta nego vazeca cena za tu
+' robu i klasu (tblCenovnik, append-only istorija), a tip ambalaze pripada
+' kulturi - operater ih ne kuca nego ispravlja kad treba.
+'
+' Postavlja se SAMO ako postoji vrednost: prazan cenovnik ne sme da obrise ono
+' sto je operater vec upisao, niti ono sto je prepisano sa otpremnice. Zato
+' prefill sa otpremnice ide POSLE ovoga (ista relacija kao u legacy: cenovnik
+' je podrazumevano, otpremnica ima poslednju rec).
+Private Sub AutoFillCena()
+    Dim ctx As Object, zf As Object, vrsta As String, sorta As String
+    Dim cI As Double, cII As Double, ta As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mBuilding Then Exit Sub
+    Set ctx = mFrm.Controls("zCtx")
+    Set zf = mFrm.Controls("zForm")
+    ' rezimi bez robe (gotovinski promet) nemaju ni cenu ni ambalazu
+    If Not zf.Controls("fgCena").Visible Then Exit Sub
+
+    vrsta = Trim$(CStr(ctx.Controls("cbVrsta").value))
+    sorta = Trim$(CStr(ctx.Controls("cbSorta").value))
+    If Len(vrsta) = 0 Then Exit Sub
+
+    cI = GetVazecaCena(vrsta, sorta, KLASA_I)
+    If cI > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = Format$(cI, "0.######")
+    If mKlasa = 2 Then
+        cII = GetVazecaCena(vrsta, sorta, KLASA_II)
+        If cII > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = Format$(cII, "0.######")
+    End If
+
+    ta = GetKulturaTipAmbalaze(vrsta, sorta)
+    If Len(ta) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = ta
+
+    RecalcVrednost
+End Sub
+
 ' PREPISIVANJE POZNATOG (prefill). Ekran zna sta je otpremnica i sta se sa nje
 ' moze prepisati; ljuska zna gde ta polja stoje. Zato ekran salje LOGICKA imena
 ' ("vrsta", "omid", "cena"), a ne imena kontrola:
@@ -4975,7 +5051,46 @@ Private Sub RecalcVrednost()
     SetCalcLine 1, Poruka("OTKUI_SEG_KLASA_I"), ParseNum(FldText("fgKgI")), CenaText(1), (v1 > 0)
     SetCalcLine 2, Poruka("OTKUI_SEG_KLASA_II"), ParseNum(FldText("fgKgII")), CenaText(2), _
                 (mKlasa = 2 And v2 > 0)
+    SetKgLine
     PaintVrednost v1 + v2
+End Sub
+
+' ZIVI ZBIR KILOGRAMA. Dva slucaja, isti kao u legacy UpdateUkupnoKg:
+'
+'   bruto rezim (OTKUP_BRUTO_UNOS)  ->  neto posle tare, sa racunom kako je
+'                                       dobijen; upisuje se NETO, pa operater
+'                                       mora da ga vidi pre snimanja
+'   dve klase                       ->  zbir I + II
+'
+' Van toga red je prazan: jedna klasa u neto rezimu nema sta da sabira.
+Private Sub SetKgLine()
+    Dim L As Object, kgI As Double, kgII As Double, amb As Double, tara As Double
+    Dim tip As String, cap As String
+    On Error Resume Next
+    Set L = mFrm.Controls("zForm").Controls("fgVrednost").Controls("fgVrednostKg")
+    If L Is Nothing Then Exit Sub
+    kgI = ParseNum(FldText("fgKgI"))
+    If mKlasa = 2 Then kgII = ParseNum(FldText("fgKgII"))
+
+    If OtkupBrutoUnos() Then
+        amb = ParseNum(FldText("fgKolAmb"))
+        tip = Trim$(FldText("fgTipAmb"))
+        If kgI > 0 And amb > 0 And Len(tip) > 0 Then
+            tara = amb * GetTezinaGajbice(tip)
+            If tara > 0 And tara < kgI Then
+                cap = Poruka("OTKUI_KG_NETO") & " " & FmtBroj(kgI - tara, 2) & " " & _
+                      Poruka("OTKUI_UNIT_KG") & "   (" & FmtBroj(kgI, 2) & " " & _
+                      ChrW(8722) & " " & FmtBroj(tara, 2) & ")"
+            End If
+        End If
+    End If
+
+    If Len(cap) = 0 And mKlasa = 2 And (kgI > 0 Or kgII > 0) Then
+        cap = Poruka("OTKUI_KG_UKUPNO") & " " & FmtBroj(kgI + kgII, 2) & " " & _
+              Poruka("OTKUI_UNIT_KG") & "   (" & FmtBroj(kgI, 2) & " + " & _
+              FmtBroj(kgII, 2) & ")"
+    End If
+    L.caption = cap
 End Sub
 
 ' "I klasa  3.200 kg x 48,50" - jedan red po klasi, jer sa dve cene jedan
