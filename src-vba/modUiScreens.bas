@@ -37,7 +37,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-105"
+Public Const UISCR_BUILD As String = "v6-ui-106"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -240,9 +240,20 @@ Public Function ScrRadnje(ByVal kljuc As String) As String
     If Len(m) > 0 Then ScrRadnje = CStr(Application.Run(m & ".Scr_Radnje"))
 End Function
 
-Public Function ScrSave(ByVal kljuc As String) As String
+' Upis dokumenta. Ljuska predaje RECNIK vrednosti pod logickim imenima; ekran
+' zna sta su i sta se sa njima radi. Vraca "" kad je proslo, inace poruku za
+' operatera (jedan razmak = operater je odustao, ne prikazuje se nista).
+' Ekran u isti recnik upisuje "fokus", "rezultat" i "poruke".
+Public Function ScrSave(ByVal kljuc As String, ByVal polja As Object) As String
     Dim m As String
+    ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
-    If Len(m) > 0 Then ScrSave = CStr(Application.Run(m & ".Scr_Save"))
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrSave = CStr(Application.Run(m & ".Scr_Save", polja))
+    If Err.Number <> 0 Then
+        ScrLastErr = m & ".Scr_Save -> " & Err.Number & " " & Err.description
+        Err.Clear
+    End If
 End Function

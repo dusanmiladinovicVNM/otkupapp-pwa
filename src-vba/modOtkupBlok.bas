@@ -1428,7 +1428,7 @@ End Sub
 ' VEZIVANJE + CENA
 ' ============================================================
 
-Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
+Public Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
     Dim tx As clsTransaction
     On Error GoTo EH
     If Len(otpID) = 0 Or Len(Trim$(otkupIDs)) = 0 Then Exit Sub

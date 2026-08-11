@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-105"
+Public Const OTKUI_BUILD   As String = "v6-ui-106"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -788,6 +788,9 @@ Private Sub BuildForm(frm As Object)
     NewFieldG z, "fgKolAmb", Poruka("OTKUI_FLD_KOL_AMB"), "txt", Poruka("OTKUI_UNIT_KOM"), 1, True, False, "AMB"
 
     NewFieldG z, "fgTipAmb", Poruka("OTKUI_FLD_TIP_AMB"), "cmb", "", 1, False, False, "AMB"
+    ' Gajbe II klase - zasebne od gajbi I klase, jer nose svoju taru. Vide se
+    ' samo kad je II klasa ukljucena (legacy runtime polje txtKolAmbalazeII).
+    NewFieldG z, "fgKolAmbII", Poruka("OTKUI_FLD_KOL_AMB_II"), "txt", Poruka("OTKUI_UNIT_KOM"), 1, True, False, "AMB"
 
     ' PRAZNA AMBALAZA - izdata uz otkup (F1) ili vracena uz prijemnicu (F4).
     ' Natpis postavlja SelectModeCore. Malo dugme "=" prepisuje kolicinu pune
@@ -2596,6 +2599,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgKgII", False
             FldShow z, "fgCena", False
             FldShow z, "fgKolAmb", False
+            FldShow z, "fgKolAmbII", False
             FldShow z, "fgTipAmb", False
             FldShow z, "fgAmbPr", False
             FldShow z, "fgParcela", False
@@ -2611,6 +2615,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgKgII", False
             FldShow z, "fgCena", False
             FldShow z, "fgKolAmb", True
+            FldShow z, "fgKolAmbII", False
             FldShow z, "fgTipAmb", True
             FldShow z, "fgAmbPr", False
             FldShow z, "fgParcela", False
@@ -2630,6 +2635,7 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgKgII", True
             FldShow z, "fgCena", True
             FldShow z, "fgKolAmb", True
+            FldShow z, "fgKolAmbII", (mKlasa = 2)
             FldShow z, "fgTipAmb", True
             ' prazna ambalaza se izdaje uz otkup i vraca uz prijemnicu;
             ' otpremnica i zbirna je ne dodiruju
@@ -3506,6 +3512,11 @@ Private Sub SetKlasa(ByVal k As Long)
     ' kutija ostajala prazna dok je operater ne otkuca, iako cena za tu robu i
     ' klasu vec postoji.
     If k = 2 Then AutoFillCena
+    ' gajbe II klase postoje samo dok II klasa postoji
+    FldShow mFrm.Controls("zForm"), "fgKolAmbII", _
+            (k = 2 And mFrm.Controls("zForm").Controls("fgKolAmb").Visible)
+    If k <> 2 Then mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").text = ""
+    If Not mBuilding Then LayoutOtkup mFrm
     RefreshPaletaInfo
 
     If k = 2 Then mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
@@ -4225,6 +4236,15 @@ Private Sub RefillSorta(frm As Object)
     FillCmb cbSorta, GetLookupList(TBL_KULTURE, "SortaVoca", "VrstaVoca", vrsta, True)
 End Sub
 
+' Ponovo napuni listu partnera. Zove je ekran kad je tokom upisa kreiran nov
+' kooperant - inace bi ga operater video tek posle ponovnog otvaranja.
+Public Sub RefreshPartnerLista()
+    On Error Resume Next
+    Set mPartMap = Nothing
+    mPartnerFor = ""
+    FillFormPartner mFrm, ActiveMode
+End Sub
+
 Public Function PartnerMap(ByVal tblName As String, ByVal idCol As String, _
                             ByVal nameCol As String, ByVal nameCol2 As String) As Object
     Dim d As Object, src As Variant, iId As Long, iNm As Long, iNm2 As Long
@@ -4893,32 +4913,119 @@ Public Sub FocusPretraga()
 End Sub
 
 Private Sub CommitDokument(ByVal alsoPrint As Boolean)
-    Dim kg As Double, cena As Double
-    kg = ParseNum(FldText("fgKgI"))
-    If mKlasa = 2 Then kg = kg + ParseNum(FldText("fgKgII"))
-    cena = CenaText(1)
+    Dim p As Object, greska As String, fokus As String, dat As Double
+    On Error GoTo EH
 
-    ' Datum se proverava UVEK: necitljiv datum se ne moze upisati ni sa
-    ' iskljucenom validacijom, upisao bi se pogresan dan.
-    If ParseDatum(FldText("fgDatum")) = 0 Then
-        ShowToast Poruka("OTKUI_ERR_DATUM"), True: Exit Sub
-    End If
-    ' Ostalo je "blokada praznih polja" i gasi je VALIDACIJA_UNOSA u
-    ' Podesavanjima - isto pravilo koje legacy primenjuje u btnUnos*_Click.
-    If IsValidacijaUnosa() Then
-        If Len(Trim$(FldText("fgBrOtpr"))) = 0 Then
-            ShowToast Poruka("OTKUI_ERR_BROJ"), True: Exit Sub
-        End If
-        If ModeHasKgCol() Then
-            If kg <= 0 Then ShowToast Poruka("OTKUI_ERR_KOLICINA"), True: Exit Sub
-            If cena <= 0 Then ShowToast Poruka("OTKUI_ERR_CENA"), True: Exit Sub
-        End If
+    ' Datum se proverava OVDE jer je jedini podatak koji ljuska ume da procita
+    ' pogresno; sve ostale provere pripadaju dokumentu, pa ih radi ekran.
+    dat = ParseDatum(FldText("fgDatum"))
+    If dat = 0 Then
+        ShowToast Poruka("OTKUI_ERR_DATUM"), True
+        Exit Sub
     End If
 
-    ' SEAM: ovde ide postojeci upis (modOtkup / modDokumenta / clsTransaction).
-    ' Namerno NIJE vezano - prototip ne sme da knjizi.
-    MarkClean
-    ShowToast Poruka("OTKUI_MSG_SNIMLJENO") & IIf(alsoPrint, " " & ChrW(183) & " " & Poruka("OTKUI_MSG_PRINT"), ""), False
+    Set p = SkupiPolja(dat, alsoPrint)
+    greska = modUiScreens.ScrSave(mScreen, p)
+    If Len(modUiScreens.ScrLastErr) > 0 Then
+        Debug.Print "modOtkupUI.CommitDokument: " & modUiScreens.ScrLastErr
+        ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & modUiScreens.ScrLastErr, True
+        Exit Sub
+    End If
+
+    If Len(Trim$(greska)) > 0 Then
+        ' Prazna poruka sa razmakom znaci "operater je odustao" - nista se ne
+        ' prikazuje, forma ostaje kako jeste.
+        If greska <> " " Then
+            ShowToast greska, True
+            fokus = ""
+            If p.Exists("fokus") Then fokus = CStr(p("fokus"))
+            FokusNaPolje fokus
+        End If
+        Exit Sub
+    End If
+
+    ' Uspeh: poruke koje je ekran vratio idu u toast, forma se prazni, podaci
+    ' se citaju ponovo (traka otpremnice, KPI, liste).
+    ClearForm
+    RefreshFromData
+    RefreshOtpTraka mFrm
+    ShowToast Poruka("OTKUNOS_MSG_UPISAN") & " " & CStr(p("rezultat")) & _
+              IIf(p.Exists("poruke"), IIf(Len(CStr(p("poruke"))) > 0, _
+                  "  " & ChrW(183) & "  " & CStr(p("poruke")), ""), ""), False
+    Exit Sub
+EH:
+    ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Sub
+
+' Vrednosti forme pod LOGICKIM imenima. Ljuska zna gde koje polje stoji, ekran
+' zna sta ono znaci - ista podela kao kod ApplyPrefill, samo u drugom smeru.
+Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Object
+    Dim p As Object, ctx As Object
+    Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
+    Set p = CreateObject("Scripting.Dictionary")
+    p.CompareMode = vbTextCompare
+    On Error Resume Next
+    Set ctx = mFrm.Controls("zCtx")
+    Set cbOM = ctx.Controls("cbOM")
+    Set cbVoz = ctx.Controls("cbVozac")
+
+    p("rezim") = modeKey(ActiveMode)
+    p("datum") = CDate(dat)
+    p("stanicaID") = GetComboID(cbOM)
+    p("kooperantID") = PartnerID(mFrm)
+    p("partnerTekst") = Trim$(CStr(ctx.Controls("cbKupac").value))
+    p("vrsta") = Trim$(CStr(ctx.Controls("cbVrsta").value))
+    p("sorta") = Trim$(CStr(ctx.Controls("cbSorta").value))
+    p("vozacID") = GetComboID(cbVoz)
+    p("brDok") = Trim$(FldText("fgBrOtpr"))
+    p("brojZbirne") = Trim$(FldText("fgBrZbir"))
+    p("parcelaID") = ParcelaID()
+    p("tipAmb") = Trim$(FldText("fgTipAmb"))
+    p("kolicinaI") = ParseNum(FldText("fgKgI"))
+    p("cenaI") = CenaText(1)
+    p("kolAmb") = ParseNum(FldText("fgKolAmb"))
+    p("kolAmbIzdata") = ParseNum(FldText("fgAmbPr"))
+    p("dveKlase") = (mKlasa = 2)
+    p("kolicinaII") = IIf(mKlasa = 2, ParseNum(FldText("fgKgII")), 0#)
+    p("cenaII") = IIf(mKlasa = 2, CenaText(2), 0#)
+    p("kolAmbII") = IIf(mKlasa = 2, ParseNum(FldText("fgKolAmbII")), 0#)
+    p("novac") = ParseNum(FldText("fgNovac"))
+    p("stampajUvek") = stampaj
+    Set SkupiPolja = p
+End Function
+
+' ID parcele iz prikaza ("123 - Njiva 2" -> "123"); prazno kad polje nije
+' vidljivo ili nista nije izabrano.
+Private Function ParcelaID() As String
+    Dim t As String, i As Long
+    On Error Resume Next
+    If Not mFrm.Controls("zForm").Controls("fgParcela").Visible Then Exit Function
+    t = Trim$(FldText("fgParcela"))
+    If Len(t) = 0 Then Exit Function
+    i = InStr(t, " - ")
+    If i > 1 Then ParcelaID = Trim$(Left$(t, i - 1)) Else ParcelaID = t
+End Function
+
+' Fokus na polje koje je ekran prijavio kao sporno. Imena su LOGICKA, ista ona
+' koja ekran koristi u recniku.
+Private Sub FokusNaPolje(ByVal kljuc As String)
+    On Error Resume Next
+    If Len(kljuc) = 0 Then Exit Sub
+    Select Case kljuc
+        Case "stanicaID":    mFrm.Controls("zCtx").Controls("cbOM").SetFocus
+        Case "kooperantID":  mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        Case "vrsta":        mFrm.Controls("zCtx").Controls("cbVrsta").SetFocus
+        Case "sorta":        mFrm.Controls("zCtx").Controls("cbSorta").SetFocus
+        Case "brDok":        mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
+        Case "kolicinaI":    mFrm.Controls("zForm").Controls("fgKgI").Controls("fgKgIT").SetFocus
+        Case "kolicinaII":   mFrm.Controls("zForm").Controls("fgKgII").Controls("fgKgIIT").SetFocus
+        Case "cenaI":        mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").SetFocus
+        Case "cenaII":       mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").SetFocus
+        Case "kolAmb":       mFrm.Controls("zForm").Controls("fgKolAmb").Controls("fgKolAmbT").SetFocus
+        Case "kolAmbII":     mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").SetFocus
+        Case "tipAmb":       mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").SetFocus
+        Case "parcelaID":    mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").SetFocus
+    End Select
 End Sub
 
 ' KONTEKST OTKUPNOG MESTA I DATUMA (Z3 + Z14).

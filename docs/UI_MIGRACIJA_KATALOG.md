@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-105`.
+Stanje na dan `v6-ui-106`.
 
 ---
 
@@ -15,10 +15,13 @@ Stanje na dan `v6-ui-105`.
 
 Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
 
-1. **Upis — nijedan dokument se ne knjiži.** `CommitDokument` je i dalje šav:
-   svih šest `Save*_TX` rutina (otkup, otpremnica, zbirna, prijemnica, OM ulaz,
-   kupci izlaz) nije vezano. Sve ostalo u novom UI-ju je čitanje, prikaz i
-   radnje nad postojećim dokumentima.
+1. **Upis — knjiži se samo otkupni list (F1).** Od `v6-ui-106` `CommitDokument`
+   više nije šav za F1: posao je izvučen iz `frmOtkup.btnUnos_Click` u
+   `modOtkupUnos` (provere, bruto→neto, `SaveOtkupMulti_TX`, štampa, auto-lanac
+   hladnjače, prevezivanje paleta pri ispravci). Preostalih pet režima
+   (otpremnica, zbirna, prijemnica, OM ulaz, kupci izlaz) i dalje ne upisuju.
+   **`frmOtkup` još uvek ima svoju kopiju te logike** — prebacivanje legacy
+   forme na `modOtkupUnos` je sledeći korak, do tada postoje dve kopije.
 2. **Storno okvir frmDokumenta** — sedam panela i ~2/3 te forme. Novi UI danas
    ume da stornira **samo otkupni list** (iz F1 liste); otpremnica, zbirna,
    prijemnica, faktura, novac i izvod — ne.
@@ -74,7 +77,7 @@ Jedan režim, jedna forma. Sve što radi:
 | `cmbParcela_Change`, `ExtractParcelaID` | ID parcele iz prikaza | — | IMA |
 | `chkDveKlase_Click` | druga klasa | Z5 | IMA |
 | `ApplyOtkupTogglesState` | parcele / keš isplate | Z6, Z7 | IMA (keš namerno izostavljen) |
-| `btnUnos_Click` | **snimanje otkupa**; relink paleta hladnjače ako je bio storno | `SaveOtkupMulti_TX`, `ReassignPaleteToPrijemnica_TX`, `GetHladnjacaRelinkPending` | **NEMA** (`CommitDokument` je šav) |
+| `btnUnos_Click` | **snimanje otkupa**; relink paleta hladnjače ako je bio storno | `SaveOtkupMulti_TX`, `ReassignPaleteToPrijemnica_TX`, `GetHladnjacaRelinkPending` | **IMA** (`modOtkupUnos`, v6-ui-106); legacy forma još nije prebačena na isti modul |
 | `ClearOtkupFields` | reset forme posle snimanja | — | IMA (`ClearForm`) |
 | `btnStornoOtkup_Click` | storno otkupa iz forme | `modStorno` | IMA (radnja nad redom) |
 | `ShowLockStatus` / `HideLockStatus` | status bar + peščanik za vreme upisa | — | **NEMA** |
@@ -160,7 +163,8 @@ otkupnom mestu (`FillKooperantCombo stanicaID`) — novi UI prikazuje sve
 kooperante sa oznakom otkupnog mesta.
 
 ### Faza B — upis (`CommitDokument`)
-6. F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).
+6. ~~F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).~~ **URAĐENO**
+   (v6-ui-106) — ostaje prebaciti `frmOtkup` na isti `modOtkupUnos`.
 7. F2/F3/F4 → `SaveOtpremnicaMulti_TX`, `SaveZbirnaMulti_TX` (+
    `ValidateZbirnaPreUnosa`), `SavePrijemnicaMulti_TX` (+ status palete).
 8. F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.

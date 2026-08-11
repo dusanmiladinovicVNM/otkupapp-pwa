@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-105"
+Public Const SCRDOK_BUILD As String = "v6-ui-106"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -567,6 +567,113 @@ Private Function OtkupIdsByBrDok(ByVal broj As String) As String
         End If
     Next r
     OtkupIdsByBrDok = res
+End Function
+
+'--------------------------------------------------------------- UPIS
+' Ljuska predaje vrednosti forme pod logickim imenima; ovde se odlucuje sta su
+' i sta se sa njima radi. Vraca "" kad je proslo, poruku kad nije, jedan razmak
+' kad je operater odustao. U isti recnik se upisuju "fokus" (polje na koje
+' treba vratiti kursor), "rezultat" (broj/ID upisanog) i "poruke" (napomene).
+'
+' NIJEDAN racun nije ovde: provere, bruto->neto, upis, stampa i auto-lanac
+' hladnjace rade modOtkupUnos i rutine koje on zove - iste one koje zove i
+' legacy frmOtkup.
+Public Function Scr_Save(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    On Error GoTo EH
+    polja("fokus") = ""
+    polja("rezultat") = ""
+    polja("poruke") = ""
+
+    If CStr(polja("rezim")) <> "OTKUP" Then
+        Scr_Save = Poruka("OTKUI_TODO_NEVEZANO")
+        Exit Function
+    End If
+
+    Set p = modOtkupUnos.NoviOtkupUnos()
+    p("datum") = polja("datum")
+    p("stanicaID") = polja("stanicaID")
+    ' Kooperant moze biti izabran iz liste (ima ID) ili otkucan rukom. U drugom
+    ' slucaju se trazi po imenu, pa i kreira ako je auto-kreiranje ukljuceno -
+    ' isto sto legacy radi kroz ResolveKooperantByName.
+    Dim koopID As String, koopNov As Boolean
+    koopID = CStr(polja("kooperantID"))
+    If Len(koopID) = 0 Then
+        koopID = ResolveKooperantByText(CStr(polja("partnerTekst")), _
+                                        CStr(polja("stanicaID")), koopNov)
+    End If
+    p("kooperantID") = koopID
+    p("vrsta") = polja("vrsta")
+    p("sorta") = polja("sorta")
+    p("tipAmb") = polja("tipAmb")
+    p("vozacID") = polja("vozacID")
+    p("brDok") = polja("brDok")
+    p("brojZbirne") = polja("brojZbirne")
+    p("parcelaID") = polja("parcelaID")
+    p("kolicinaI") = polja("kolicinaI")
+    p("cenaI") = polja("cenaI")
+    p("kolAmb") = polja("kolAmb")
+    p("kolAmbIzdata") = polja("kolAmbIzdata")
+    p("dveKlase") = polja("dveKlase")
+    p("kolicinaII") = polja("kolicinaII")
+    p("cenaII") = polja("cenaII")
+    p("kolAmbII") = polja("kolAmbII")
+    ' Kes se uz otkupni list vise ne knjizi - ide kroz F5/F6.
+    p("novac") = 0#
+    p("primalac") = ""
+
+    greska = modOtkupUnos.OtkupValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        Scr_Save = greska
+        Exit Function
+    End If
+
+    ' Upozorenje na prekoracenje aktivne otpremnice - isto sto legacy radi kroz
+    ' OtkupBlok_ConfirmUnos, samo nad ovdasnjim stanjem. Kolicine su vec NETO
+    ' (OtkupValidiraj je oduzeo taru), pa se porede sa neto ostatkom.
+    If Not PotvrdiPrekoracenje(CDbl(p("kolicinaI")) + CDbl(p("kolicinaII"))) Then
+        Scr_Save = " "
+        Exit Function
+    End If
+
+    res = modOtkupUnos.OtkupUpisi(p, poruke)
+    If Len(res) = 0 Then
+        Scr_Save = Poruka("OTKUP_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    ' Vezivanje za aktivnu otpremnicu - bez toga blok ne pripada nijednoj i
+    ' pojavljuje se medju "izgubljenima".
+    If Len(mOtpID) > 0 Then modOtkupBlok.LinkOtkupIDsToOtpremnica res, mOtpID
+
+    ' Nov kooperant je kreiran tokom upisa - lista partnera mora da ga vidi
+    ' odmah, bez zatvaranja ekrana.
+    If koopNov Then modOtkupUI.RefreshPartnerLista
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+    Exit Function
+EH:
+    Scr_Save = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' Pita operatera kad blok prelazi ono sto je od otpremnice ostalo. Bez aktivne
+' otpremnice nema sta da se poredi.
+Private Function PotvrdiPrekoracenje(ByVal kg As Double) As Boolean
+    Dim ukKg As Double, blKg As Double, ost As Double
+    PotvrdiPrekoracenje = True
+    On Error Resume Next
+    If Len(mOtpID) = 0 Then Exit Function
+    ukKg = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, mOtpID, COL_OTP_KOLICINA))
+    blKg = modOtkupBlok.SumKolByOtp(mOtpID)
+    ost = ukKg - blKg
+    If kg <= ost + 0.0001 Then Exit Function
+    PotvrdiPrekoracenje = (MsgBox(Poruka("OTKUI_ASK_PREKORACENJE_1") & " " & _
+                                  Format$(kg - ost, "#,##0.00") & " kg " & _
+                                  Poruka("OTKUI_ASK_PREKORACENJE_2"), _
+                                  vbQuestion + vbYesNo, APP_NAME) = vbYes)
 End Function
 
 ' Sta se sa otpremnice moze prepisati u formu otkupnog lista. Vrednosti se
