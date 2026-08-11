@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-108"
+Public Const OTKUI_BUILD   As String = "v6-ui-109"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -5261,6 +5261,11 @@ Public Sub ApplyPrefill(ByVal spec As String)
 
     mPopMute = True
     mLoading = True
+    ' Izabrana otpremnica postavlja CEO svoj kontekst, pa se zatecena zbirna
+    ' brise pre prepisa: otpremnica koja zbirnu nema ne sme da nasledi zbirnu
+    ' prethodne. (Datum i broj dokumenta uvek stizu u spec-u, pa oni nemaju
+    ' ovaj problem.)
+    zf.Controls("fgBrZbir").Controls("fgBrZbirT").text = ""
     For Each par In Split(spec, "|")
         kv = Split(CStr(par), "=")
         If UBound(kv) >= 1 Then
@@ -5318,7 +5323,11 @@ Private Sub ClearForm()
     On Error Resume Next
     mPopMute = True
     mLoading = True
-    nmv = Array("fgBrOtpr", "fgBrZbir", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr")
+    ' BROJ ZBIRNE se NE prazni - on je kontekst, kao i datum: svi blokovi jedne
+    ' otpremnice idu na istu zbirnu. Legacy ClearOtkupFields ga takodje ne dira
+    ' (cisti ga tek ResetDatumKontekst, kad se otpremnica napusti). Uz to bi
+    ' praznjenje polja okinulo SetAktivnaZbirna "" i obrisalo zapamcenu zbirnu.
+    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr")
     For i = 0 To UBound(nmv)
         mFrm.Controls("zForm").Controls(CStr(nmv(i))).Controls(CStr(nmv(i)) & "T").text = ""
     Next i

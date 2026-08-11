@@ -1599,6 +1599,19 @@ Public Function SumAmbByOtp(ByVal otpID As String) As Double
 End Function
 
 Public Function ExistingBlokCena(ByVal otpID As String) As Double
+    ExistingBlokCena = NumVal(FirstBlokVal(otpID, COL_OTK_CENA))
+End Function
+
+' Broj zbirne sa vec napisanih blokova otpremnice. Otpremnica svoju zbirnu ne
+' mora da zna (veza se pravi kasnije), a blokovi je nose - pa je ovo drugi
+' izvor za "zbirna je poznata u ovom trenutku".
+Public Function ExistingBlokZbirna(ByVal otpID As String) As String
+    ExistingBlokZbirna = Trim$(NzToText(FirstBlokVal(otpID, COL_OTK_BROJ_ZBIRNE)))
+End Function
+
+' Vrednost trazene kolone iz PRVOG bloka otpremnice. Blokovi jedne otpremnice
+' dele i cenu i zbirnu, pa je prvi red dovoljan; jedno citanje za oba pozivaoca.
+Private Function FirstBlokVal(ByVal otpID As String, ByVal col As String) As Variant
     If Len(otpID) = 0 Then Exit Function
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, otpID)
@@ -1606,8 +1619,9 @@ Public Function ExistingBlokCena(ByVal otpID As String) As Double
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
-    Dim cCena As Long: cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    ExistingBlokCena = NumVal(data(rows(1), cCena))
+    Dim c As Long: c = GetColumnIndex(TBL_OTKUP, col)
+    If c < 1 Then Exit Function
+    FirstBlokVal = data(rows(1), c)
 End Function
 
 ' OtpremnicaID -> cena prvog povezanog bloka.

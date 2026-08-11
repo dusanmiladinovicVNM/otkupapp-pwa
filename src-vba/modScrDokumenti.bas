@@ -683,6 +683,7 @@ End Function
 ' (SuggestNextBroj), isto kao u legacy panelu.
 Private Function PrefillSpec(ByVal otpID As String) As String
     Dim vDat As Variant, stanica As String, cena As Double, res As String
+    Dim zbirna As String
     On Error Resume Next
     If Len(otpID) = 0 Then Exit Function
 
@@ -692,7 +693,12 @@ Private Function PrefillSpec(ByVal otpID As String) As String
     If cena <= 0 Then cena = NumVal(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_CENA))
 
     If IsDate(vDat) Then res = "datum=" & Format$(CDate(vDat), "dd.mm.yyyy")
-    res = Dodaj(res, "brzbirne", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)))
+    ' Zbirna: prvo ono sto otpremnica zna o sebi, a ako je ne zna (veza sa
+    ' zbirnom se cesto pravi tek kasnije) - ono sto nose vec napisani blokovi.
+    ' Isti odnos kao kod cene.
+    zbirna = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE)))
+    If Len(zbirna) = 0 Then zbirna = modOtkupBlok.ExistingBlokZbirna(otpID)
+    res = Dodaj(res, "brzbirne", zbirna)
     res = Dodaj(res, "vrsta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_VRSTA)))
     res = Dodaj(res, "sorta", NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_SORTA)))
     res = Dodaj(res, "omid", stanica)
