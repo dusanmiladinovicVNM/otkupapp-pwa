@@ -21,6 +21,16 @@ Option Explicit
 ' (modBankaImport/modBankaMapiranje, auto-map poziv na broj = broj bloka).
 ' ============================================================
 
+' Tolerancija pri poredjenju novcanih iznosa (dinar-centi zaokruzenja).
+' Ista vrednost koju frmBankaExportPregled.txtIsplatiti_Exit koristi kada
+' proverava operater unos -- clamp, unos i finalna revalidacija moraju da
+' sude po ISTOM pragu, inace bi CSV odbio iznos koji je unos propustio.
+Private Const ISPLATA_EPS As Double = 0.01
+
+' Koliko problematicnih blokova se nabroji u poruci odbijanja (ostatak se
+' sazme u "..."), da poruka ostane citljiva i kad je lista velika.
+Private Const MAX_SALDO_PROBLEMA As Long = 10
+
 '======================================================================
 ' BuildBlokIsplataList
 '
@@ -317,6 +327,171 @@ Public Function BankaNalogRacuniCSV() As String
 End Function
 
 '======================================================================
+' BuildOpenAmountDict - OtkupID -> OtvorenIznos iz kolekcije blokova.
+'
+' Koriste je i clamp override-a i finalna revalidacija naloga, pa obe
+' gledaju iznos iz ISTOG izvora (clsBlokIsplata.OtvorenIznos, koji dolazi
+' iz GetOpenOtkupi -> vrednost minus knjizene isplate). Nema pozicijskog
+' citanja tabela ovde: saldo se ne racuna ponovo, samo se indeksira.
+'
+' Dupli OtkupID nije ocekivan (ID je jedinstven u tblOtkup), ali se upisuje
+' assignment-om a ne .Add-om, da korumpirani podatak ne obori ceo pregled.
+'======================================================================
+Private Function BuildOpenAmountDict(ByVal blokovi As Collection) As Object
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    If Not blokovi Is Nothing Then
+        Dim blk As clsBlokIsplata
+        Dim v As Variant
+        For Each v In blokovi
+            Set blk = v
+            dict(blk.otkupID) = blk.OtvorenIznos
+        Next v
+    End If
+
+    Set BuildOpenAmountDict = dict
+End Function
+
+'======================================================================
+' ClampOverridesToOpen - AUD-026 / FM-0020 #1.
+'
+' Per-blok "Isplatiti" override zivi u formi (Dictionary OtkupID -> iznos)
+' i PREZIVLJAVA reload liste. Ako se u medjuvremenu deo bloka isplati,
+' veze avans ili se otkup stornira, zaostao override moze biti VECI od
+' onoga sto je jos otvoreno -> nalog bi narucio preplatu. Zato se pri
+' svakom rebuild-u liste override uskladi sa trenutnim stanjem:
+'   - blok kog vise nema u otvorenima (zatvoren/storniran) -> override se BRISE
+'   - blok bez otvorenog iznosa                            -> override se BRISE
+'   - override veci od otvorenog                           -> SPUSTA se na otvoreno
+'
+' Override MANJI od otvorenog se ne dira: to je namerna operater odluka
+' (delimicna isplata) i ona i dalje vazi.
+'
+' Menja prosledjeni Dictionary na mestu. Vraca broj promenjenih unosa
+' (clamp-ovanih + obrisanih), da forma moze da javi operateru; 0 = nista.
+'======================================================================
+Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
+                                     ByVal blokovi As Collection) As Long
+    ClampOverridesToOpen = 0
+    If overrideDict Is Nothing Then Exit Function
+    If overrideDict.count = 0 Then Exit Function
+
+    ' Nema liste blokova = nema dokaza da je ijedan override jos vazeci.
+    If blokovi Is Nothing Then
+        ClampOverridesToOpen = overrideDict.count
+        overrideDict.RemoveAll
+        Exit Function
+    End If
+
+    Dim openByOtkup As Object
+    Set openByOtkup = BuildOpenAmountDict(blokovi)
+
+    Dim toRemove As Collection
+    Set toRemove = New Collection
+
+    Dim changed As Long
+    Dim k As Variant
+    Dim otkupKey As String
+    Dim otvoreno As Double
+    Dim trenutni As Double
+
+    For Each k In overrideDict.keys
+        otkupKey = CStr(k)
+        If Not openByOtkup.Exists(otkupKey) Then
+            toRemove.Add otkupKey
+        Else
+            otvoreno = CDbl(openByOtkup(otkupKey))
+            If otvoreno <= 0 Then
+                toRemove.Add otkupKey
+            Else
+                trenutni = CDbl(overrideDict(otkupKey))
+                If trenutni > otvoreno + ISPLATA_EPS Then
+                    overrideDict(otkupKey) = otvoreno
+                    changed = changed + 1
+                End If
+            End If
+        End If
+    Next k
+
+    Dim s As Variant
+    For Each s In toRemove
+        overrideDict.Remove CStr(s)
+        changed = changed + 1
+    Next s
+
+    ClampOverridesToOpen = changed
+End Function
+
+'======================================================================
+' ValidateNalogSaldo - AUD-026 / FM-0020 #2 + FM-0021 #1.
+'
+' Finalna kapija pred upis CSV-a: nijedan nalog ne sme da naruci vise nego
+' sto je NA TAJ TRENUTAK otvoreno. Clamp pri reload-u nije dovoljan, jer se
+' podaci mogu promeniti izmedju prikaza i klika na "Generisi" (uvoz izvoda,
+' vezivanje avansa, storno u drugom delu aplikacije).
+'
+' Proverava tacno one blokove koje bi GenerisiNalogeCSV i upisao
+' (HasTekuciRacun + IsplatitiIznos > 0) -- inace bi blok koji uopste ne ide
+' u fajl mogao da obori generisanje.
+'
+' Blok kog vise NEMA u openByOtkup se tretira kao otvoreno = 0, dakle svaki
+' iznos na njemu je preplata (fail-closed: nestao je jer je zatvoren/storniran).
+'
+' Vraca "" kada je sve u redu, inace poruku za operatera (koji blok, koliko
+' trazi vs koliko je otvoreno).
+'======================================================================
+Public Function ValidateNalogSaldo(ByVal blokovi As Collection, _
+                                   ByVal openByOtkup As Object) As String
+    ValidateNalogSaldo = ""
+    If blokovi Is Nothing Then Exit Function
+    If blokovi.count = 0 Then Exit Function
+
+    If openByOtkup Is Nothing Then
+        ValidateNalogSaldo = "Nalozi nisu generisani: nije mogu" & ChrW(263) & "e proveriti " & _
+                             "otvorene iznose blokova."
+        Exit Function
+    End If
+
+    Dim problemi As String
+    Dim brojProblema As Long
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    Dim otvoreno As Double
+
+    For Each v In blokovi
+        Set blk = v
+        If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
+            otvoreno = 0
+            If openByOtkup.Exists(blk.otkupID) Then otvoreno = CDbl(openByOtkup(blk.otkupID))
+
+            If blk.IsplatitiIznos > otvoreno + ISPLATA_EPS Then
+                brojProblema = brojProblema + 1
+                If brojProblema <= MAX_SALDO_PROBLEMA Then
+                    problemi = problemi & vbCrLf & "  " & blk.brojDokumenta & _
+                               " (" & blk.kooperantNaziv & "): tra" & ChrW(382) & "i " & _
+                               Format$(blk.IsplatitiIznos, "#,##0.00") & _
+                               " / otvoreno " & Format$(otvoreno, "#,##0.00")
+                End If
+            End If
+        End If
+    Next v
+
+    If brojProblema = 0 Then Exit Function
+
+    If brojProblema > MAX_SALDO_PROBLEMA Then
+        problemi = problemi & vbCrLf & "  ... i jo" & ChrW(353) & " " & _
+                   CStr(brojProblema - MAX_SALDO_PROBLEMA) & " blok(ova)"
+    End If
+
+    ValidateNalogSaldo = "Nalozi NISU generisani: " & CStr(brojProblema) & _
+                         " blok(ova) tra" & ChrW(382) & "i vi" & ChrW(353) & "e nego " & _
+                         ChrW(353) & "to je otvoreno." & vbCrLf & problemi & vbCrLf & vbCrLf & _
+                         "Otvoreni iznosi su se promenili u me" & ChrW(273) & "uvremenu. " & _
+                         "Osve" & ChrW(382) & "ite pregled i ponovite."
+End Function
+
+'======================================================================
 ' GenerisiNalogeCSV - CSV naloga za prenos za uvoz u e-banking.
 '
 ' Jedan red = jedan nalog za prenos po otkupnom bloku:
@@ -330,17 +505,35 @@ End Function
 ' preskace i tiho broji (defenzivno). Vraca punu putanju CSV fajla,
 ' "" ako nema nijednog reda ili upis ne uspe.
 '
+' AUD-026: pre upisa se saldo SVAKOG naloga revalidira protiv SVEZE
+' ocitanih otvorenih iznosa (ValidateNalogSaldo). Ako ijedan nalog trazi
+' vise nego sto je otvoreno, fajl se NE pise -- razlog se vraca kroz
+' outOdbijeno (forma ga pokazuje operateru). Fail-closed: i greska pri
+' ocitavanju zavrsi u EH, dakle bez fajla.
+'
 ' Format: ";" separator, UTF-8 (BOM - vidi WriteAllTextUtf8), decimalna
 ' tacka u iznosu (deterministicki, nezavisno od Windows locale-a).
 ' Kolone drzati stabilnim: e-banking uvozi se mapiraju po pozicijama.
 '======================================================================
 Public Function GenerisiNalogeCSV(ByVal blokovi As Collection, _
-                                  Optional ByVal platilacRacun As String = "") As String
+                                  Optional ByVal platilacRacun As String = "", _
+                                  Optional ByRef outOdbijeno As String) As String
     On Error GoTo EH
 
     GenerisiNalogeCSV = ""
+    outOdbijeno = ""
     If blokovi Is Nothing Then Exit Function
     If blokovi.count = 0 Then Exit Function
+
+    ' AUD-026: finalna kapija -- svez saldo po OtkupID, pa provera da nijedan
+    ' nalog ne prelazi otvoreno. Cita se ovde (a ne iz prikaza) bas zato sto
+    ' se stanje moglo promeniti otkad je lista ucitana.
+    Dim odbijeno As String
+    odbijeno = ValidateNalogSaldo(blokovi, BuildOpenAmountDict(BuildBlokIsplataList()))
+    If LenB(odbijeno) > 0 Then
+        outOdbijeno = odbijeno
+        Exit Function
+    End If
 
     ' Platilac racun: prosledjen iz forme (combo "Sa racuna"); prazno ->
     ' SELLER_ACCOUNT (backward-compatible kada racuna ima samo jedan).

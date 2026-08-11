@@ -468,10 +468,18 @@ Private Sub LoadBlokovi()
 
     ' Override cleanup + punjenje combo imena idu protiv PUNE liste -> SAMO
     ' pri rebuild-u (kooperant-filter ne sme da obrise "Isplatiti" unose)
-    PruneStaleOverrides
+    Dim uskladjeno As Long
+    uskladjeno = PruneStaleOverrides()
     RefillKooperantCombo
 
     ApplyKooperantFilter
+
+    ' Tiho spustanje iznosa bi operater lako promasio -- javi ga u statusu
+    ' (ApplyKooperantFilter tek sto je prepisao lblStatus).
+    If uskladjeno > 0 Then
+        lblStatus.caption = lblStatus.caption & " | Uskla" & ChrW(273) & "eno 'Isplatiti': " & _
+                            CStr(uskladjeno)
+    End If
     Exit Sub
 
 EH:
@@ -505,38 +513,22 @@ EH:
     lblStatus.caption = "Gre" & ChrW(353) & "ka pri filtriranju."
 End Sub
 
-Private Sub PruneStaleOverrides()
-    If m_OverrideAmounts Is Nothing Then Exit Sub
-    If m_FullBlokovi Is Nothing Then
-        m_OverrideAmounts.RemoveAll
-        Exit Sub
-    End If
-
-    Dim currentSet As Object
-    Set currentSet = CreateObject("Scripting.Dictionary")
-
-    Dim v As Variant
-    For Each v In m_FullBlokovi
-        Dim blk As clsBlokIsplata
-        Set blk = v
-        currentSet.Add blk.otkupID, True
-    Next v
-    
-    Dim toRemove As Collection
-    Set toRemove = New Collection
-    
-    Dim k As Variant
-    For Each k In m_OverrideAmounts.keys
-        If Not currentSet.Exists(k) Then
-            toRemove.Add CStr(k)
-        End If
-    Next k
-    
-    Dim s As Variant
-    For Each s In toRemove
-        m_OverrideAmounts.Remove CStr(s)
-    Next s
-End Sub
+'======================================================================
+' PruneStaleOverrides - AUD-026 / FM-0020 #1.
+'
+' Zaostali "Isplatiti" override-i se pri svakom rebuild-u usklade sa
+' TRENUTNO otvorenim iznosima: blok kog vise nema (ili je zatvoren) gubi
+' override, override veci od otvorenog se spusta na otvoreno. Ranije se
+' brisao samo override za nestao blok, pa je posle delimicne isplate ili
+' vezanog avansa u prikazu (i u CSV nalozima) mogao ostati iznos veci od
+' otvorenog. Logika je u modBankaExportPregled.ClampOverridesToOpen, da
+' bude testabilna van forme.
+'
+' Vraca broj promenjenih unosa (za status liniju).
+'======================================================================
+Private Function PruneStaleOverrides() As Long
+    PruneStaleOverrides = ClampOverridesToOpen(m_OverrideAmounts, m_FullBlokovi)
+End Function
 
 Private Sub RenderListbox()
     If m_Blokovi Is Nothing Then
@@ -1063,10 +1055,20 @@ End Sub
 ' Motor: ApplyAvansToOtkup_TX (postojeci, transakcija). Po vezivanju se
 ' skida "Isplatiti" override (otvoreno bloka se menja) i radi pun reload
 ' (LoadBlokovi) jer je tblNovac promenjen.
+'
+' AUD-026 (c) / FM-0020 #2:
+' ApplyAvansToOtkup_TX vraca True i kada nije bilo sta da se veze (nema
+' slobodnog avansa, blok vise nije otvoren) -- transakcija je uspela, samo
+' je bila no-op. Zato se stvarno proknjizen iznos cita iz ByRef parametra
+' (RF-02 / AUD-010) i tek on je dokaz da se nesto desilo: pozivalac po
+' njemu broji "primenjene" avanse, a override se skida SAMO ako se otvoreno
+' bloka zaista promenilo.
 '======================================================================
-Private Function PrimeniAvansTX(ByVal blk As clsBlokIsplata) As Boolean
-    PrimeniAvansTX = ApplyAvansToOtkup_TX(blk.kooperantID, blk.otkupID)
-    If PrimeniAvansTX Then
+Private Function PrimeniAvansTX(ByVal blk As clsBlokIsplata, _
+                                Optional ByRef appliedAmount As Double) As Boolean
+    appliedAmount = 0
+    PrimeniAvansTX = ApplyAvansToOtkup_TX(blk.kooperantID, blk.otkupID, appliedAmount)
+    If PrimeniAvansTX And appliedAmount > 0 Then
         If Not m_OverrideAmounts Is Nothing Then
             If m_OverrideAmounts.Exists(blk.otkupID) Then m_OverrideAmounts.Remove blk.otkupID
         End If
@@ -1104,9 +1106,20 @@ Private Sub mBtnAvansBlok_Click()
     If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
 
     Dim brDok As String: brDok = blk.brojDokumenta
-    If PrimeniAvansTX(blk) Then
+    Dim primenjeno As Double
+    If PrimeniAvansTX(blk, primenjeno) Then
         LoadBlokovi
-        lblStatus.caption = "Avans vezan na blok " & brDok & "."
+        If primenjeno > 0 Then
+            lblStatus.caption = "Avans vezan na blok " & brDok & ": " & _
+                                Format$(primenjeno, "#,##0.00") & " RSD."
+        Else
+            ' TX je prosla, ali nista nije proknjizeno (avans u medjuvremenu
+            ' potrosen ili blok vise nije otvoren) -- ne prijavljuj uspeh.
+            lblStatus.caption = "Blok " & brDok & ": nije bilo avansa za vezivanje."
+            MsgBox "Ni" & ChrW(353) & "ta nije proknji" & ChrW(382) & "eno: kooperant nema " & _
+                   "slobodan avans ili blok vi" & ChrW(353) & "e nije otvoren." & vbCrLf & _
+                   "Pregled je osve" & ChrW(382) & "en.", vbInformation, APP_NAME
+        End If
     Else
         MsgBox "Gre" & ChrW(353) & "ka pri vezivanju avansa. Pogledajte log.", vbCritical, APP_NAME
     End If
@@ -1142,19 +1155,35 @@ Private Sub mBtnAvansSel_Click()
               "(upisuje se u tblNovac za svaki blok)", _
               vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
 
-    Dim okCount As Long, failCount As Long
+    ' AUD-026 (c): broji se STVARNO proknjizen iznos, ne puko True. Uspela
+    ' transakcija bez ijednog dinara je "bez promene", ne "primenjen avans".
+    Dim okCount As Long, noopCount As Long, failCount As Long
+    Dim okSum As Double
+    Dim primenjeno As Double
     Dim v As Variant
     For Each v In sel
         Dim blk As clsBlokIsplata
         Set blk = v
-        If PrimeniAvansTX(blk) Then okCount = okCount + 1 Else failCount = failCount + 1
+        If PrimeniAvansTX(blk, primenjeno) Then
+            If primenjeno > 0 Then
+                okCount = okCount + 1
+                okSum = okSum + primenjeno
+            Else
+                noopCount = noopCount + 1
+            End If
+        Else
+            failCount = failCount + 1
+        End If
     Next v
 
     LoadBlokovi
-    lblStatus.caption = "Avans obradjen: " & okCount & " blokova" & _
+    lblStatus.caption = "Avans primenjen: " & okCount & " blokova | " & _
+                        Format$(okSum, "#,##0.00") & " RSD" & _
+                        IIf(noopCount > 0, " | bez promene: " & noopCount, "") & _
                         IIf(failCount > 0, " | gre" & ChrW(353) & "ka: " & failCount, "")
     If failCount > 0 Then
-        MsgBox "Obra" & ChrW(273) & "eno: " & okCount & ". Gre" & ChrW(353) & "ka: " & failCount & _
+        MsgBox "Primenjeno: " & okCount & " (" & Format$(okSum, "#,##0.00") & " RSD)." & vbCrLf & _
+               "Bez promene: " & noopCount & ". Gre" & ChrW(353) & "ka: " & failCount & _
                ". Pogledajte log.", vbExclamation, APP_NAME
     End If
     Exit Sub
@@ -1271,7 +1300,17 @@ Private Sub btnGenerisiCSV_Click()
     If MsgBox(msg, vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
 
     Dim csvPath As String
-    csvPath = GenerisiNalogeCSV(blokovi, racun)
+    Dim odbijeno As String
+    csvPath = GenerisiNalogeCSV(blokovi, racun, odbijeno)
+
+    ' AUD-026: finalna saldo kapija je odbila naloge (neki blok trazi vise
+    ' nego sto je otvoreno). Fajl NIJE napisan; osvezi prikaz da operater
+    ' vidi trenutno stanje (clamp tada spusta zaostale override-e).
+    If LenB(odbijeno) > 0 Then
+        MsgBox odbijeno, vbExclamation, APP_NAME
+        LoadBlokovi
+        Exit Sub
+    End If
 
     If LenB(csvPath) = 0 Then
         MsgBox "Gre" & ChrW(353) & "ka pri generisanju CSV fajla. Pogledajte log.", vbCritical, APP_NAME

@@ -2,7 +2,8 @@ Attribute VB_Name = "modTestBanka"
 Option Explicit
 
 ' ============================================================
-' modTestBanka - tvrde kapije za RF-09 (banka import + mapiranje)
+' modTestBanka - tvrde kapije za banku: RF-09 (import + mapiranje)
+'                i RF-10 (export naloga / AUD-026)
 '
 ' Pokretanje: Alt+F8 -> RunBankaImportTestSuite
 '
@@ -30,6 +31,8 @@ Option Explicit
 '  T09 FM-0024  AUTO mapiranje ide po pozivu na broj (ne po rucnom izboru bloka)
 '  T10 AUD-025  vec placena faktura ne obara ceo "Auto sve" batch
 '  T11 AUD-025  rucni kooperant sa PRAZNIM izborom bloka ide kroz potvrdjenu podelu
+'  T12 AUD-026  zaostao "Isplatiti" override se clamp-uje na trenutno otvoreno
+'  T13 AUD-026  CSV nalozi se ODBIJAJU kada nalog trazi vise nego sto je otvoreno
 ' ============================================================
 
 Private mPass As Long
@@ -64,6 +67,10 @@ Public Sub RunBankaImportTestSuite()
 
     ' T01 je cist parser (bez tabela) -> moze i van transakcije.
     T01_NemoguciDatumOdbijen
+
+    ' RF-10 seam-ovi rade nad kolekcijom/Dictionary-jem u memoriji (bez tabela).
+    T12_ClampOverrideNaOtvoreno
+    T13_NalogPrekoOtvorenogSeOdbija
 
     ' AppendRow/UpdateCell pisu CSV crash-recovery journal koji tx.RollbackTx NE
     ' povlaci -- test redovi bi ostali u Journal folderu i sledeci start bi javio
@@ -732,6 +739,131 @@ Private Sub T11_RucniKooperantBezIzboraBloka()
 End Sub
 
 ' ============================================================
+' T12 - AUD-026 / FM-0020 #1: clamp zaostalog "Isplatiti" override-a.
+'
+' Override po bloku prezivljava reload liste. Ako se posle unosa deo bloka
+' isplati (ili se blok zatvori/stornira), zaostao override moze da naruci
+' vise nego sto je otvoreno. ClampOverridesToOpen ga mora spustiti/obrisati.
+' Cist seam: Dictionary + kolekcija blokova, bez tabela.
+' ============================================================
+Private Sub T12_ClampOverrideNaOtvoreno()
+    Const S As String = "T12 clamp override: "
+
+    Dim blokovi As Collection
+    Set blokovi = New Collection
+    blokovi.Add MakeBlok(P & "OTK-C1", P & "BLOK-C1", 600)    ' otvoreno palo sa 1000 na 600
+    blokovi.Add MakeBlok(P & "OTK-C2", P & "BLOK-C2", 900)    ' delimicna isplata, jos vazi
+    blokovi.Add MakeBlok(P & "OTK-C4", P & "BLOK-C4", 0)      ' vise nema otvorenog iznosa
+
+    Dim ovr As Object
+    Set ovr = CreateObject("Scripting.Dictionary")
+    ovr(P & "OTK-C1") = 1000#      ' > otvoreno -> clamp na 600
+    ovr(P & "OTK-C2") = 300#       ' < otvoreno -> namerna delimicna isplata, ne dirati
+    ovr(P & "OTK-C3") = 500#       ' bloka vise nema u listi -> brisanje
+    ovr(P & "OTK-C4") = 200#       ' blok bez otvorenog iznosa -> brisanje
+
+    Dim changed As Long
+    changed = ClampOverridesToOpen(ovr, blokovi)
+
+    ChkEq changed, 3, S & "3 promenjena unosa (1 clamp + 2 brisanja)"
+    ChkEqD CDbl(ovr(P & "OTK-C1")), 600, S & "override 1000 spusten na otvoreno 600"
+    ChkEqD CDbl(ovr(P & "OTK-C2")), 300, S & "override manji od otvorenog ostaje netaknut"
+    Chk Not ovr.Exists(P & "OTK-C3"), S & "override za nestao blok je obrisan"
+    Chk Not ovr.Exists(P & "OTK-C4"), S & "override za blok bez otvorenog je obrisan"
+    ChkEq ovr.count, 2, S & "u Dictionary-ju su ostala samo 2 vazeca override-a"
+
+    ' Ponovljen poziv nad vec uskladjenim stanjem ne sme nista da menja.
+    ChkEq ClampOverridesToOpen(ovr, blokovi), 0, S & "drugi prolaz je no-op"
+
+    ' Bez liste blokova nema dokaza da je ijedan override vazeci -> sve pada.
+    ChkEq ClampOverridesToOpen(ovr, Nothing), 2, S & "bez liste blokova se svi override-i brisu"
+    ChkEq ovr.count, 0, S & "Dictionary je prazan posle brisanja"
+End Sub
+
+' ============================================================
+' T13 - AUD-026 / FM-0020 #2 + FM-0021 #1: finalna saldo kapija CSV naloga.
+'
+' Izmedju prikaza i klika na "Generisi" saldo se moze promeniti (uvoz izvoda,
+' vezan avans, storno). ValidateNalogSaldo mora da odbije ceo CSV kada ijedan
+' nalog trazi vise nego sto je TADA otvoreno -- fail-closed, sa imenom bloka.
+' ============================================================
+Private Sub T13_NalogPrekoOtvorenogSeOdbija()
+    Const S As String = "T13 saldo revalidacija: "
+
+    Dim otvoreno As Object
+    Set otvoreno = CreateObject("Scripting.Dictionary")
+    otvoreno(P & "OTK-V1") = 600#
+    otvoreno(P & "OTK-V2") = 900#
+
+    ' 1) Nalozi u granicama otvorenog -> prolaz.
+    Dim ok As Collection
+    Set ok = New Collection
+    ok.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600, True)
+    ok.Add MakeNalog(P & "OTK-V2", P & "BLOK-V2", 250, True)
+    ChkEq ValidateNalogSaldo(ok, otvoreno), "", S & "nalozi u granicama otvorenog prolaze"
+
+    ' 2) Jedan nalog preko otvorenog -> odbijanje, sa brojem bloka u poruci.
+    Dim preplata As Collection
+    Set preplata = New Collection
+    preplata.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600, True)
+    preplata.Add MakeNalog(P & "OTK-V2", P & "BLOK-V2", 1000, True)
+
+    Dim res As String
+    res = ValidateNalogSaldo(preplata, otvoreno)
+    Chk LenB(res) > 0, S & "nalog veci od otvorenog je odbijen"
+    Chk InStr(res, P & "BLOK-V2") > 0, S & "poruka imenuje problematican blok"
+    Chk InStr(res, "1.000,00") > 0 Or InStr(res, "1,000.00") > 0, _
+        S & "poruka sadrzi trazeni iznos"
+    Chk InStr(res, P & "BLOK-V1") = 0, S & "ispravan blok se ne prijavljuje"
+
+    ' 3) Blok kog vise NEMA medju otvorenima = otvoreno 0 -> svaki iznos je preplata.
+    Dim nestao As Collection
+    Set nestao = New Collection
+    nestao.Add MakeNalog(P & "OTK-V9", P & "BLOK-V9", 10, True)
+    Chk LenB(ValidateNalogSaldo(nestao, otvoreno)) > 0, _
+        S & "blok koji vise nije otvoren je odbijen (fail-closed)"
+
+    ' 4) Blok BEZ tekuceg racuna ne ide u CSV, pa ne sme ni da obori generisanje.
+    Dim bezTR As Collection
+    Set bezTR = New Collection
+    bezTR.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 5000, False)
+    ChkEq ValidateNalogSaldo(bezTR, otvoreno), "", S & "blok bez TR ne obara naloge"
+
+    ' 5) Zaokruzenje unutar tolerancije (0.01) nije preplata -- ista granica koju
+    '    koristi i operater unos u formi.
+    Dim naGranici As Collection
+    Set naGranici = New Collection
+    naGranici.Add MakeNalog(P & "OTK-V1", P & "BLOK-V1", 600.005, True)
+    ChkEq ValidateNalogSaldo(naGranici, otvoreno), "", S & "razlika ispod tolerancije prolazi"
+
+    ' 6) Nepostojeca mapa otvorenih iznosa -> odbijanje, ne tiho propustanje.
+    Chk LenB(ValidateNalogSaldo(ok, Nothing)) > 0, S & "bez mape otvorenih se odbija"
+End Sub
+
+' Blok za RF-10 seam testove (otvoreni iznos je jedino sto clamp gleda).
+Private Function MakeBlok(ByVal otkupID As String, ByVal brDok As String, _
+                          ByVal otvoreno As Double) As clsBlokIsplata
+    Dim blk As clsBlokIsplata
+    Set blk = New clsBlokIsplata
+    blk.otkupID = otkupID
+    blk.brojDokumenta = brDok
+    blk.kooperantNaziv = "Test Kooperant"
+    blk.OtvorenIznos = otvoreno
+    Set MakeBlok = blk
+End Function
+
+' Blok pripremljen za nalog: IsplatitiIznos + TR (sto GenerisiNalogeCSV gleda).
+Private Function MakeNalog(ByVal otkupID As String, ByVal brDok As String, _
+                           ByVal iznos As Double, ByVal imaTR As Boolean) As clsBlokIsplata
+    Dim blk As clsBlokIsplata
+    Set blk = MakeBlok(otkupID, brDok, iznos)
+    blk.IsplatitiIznos = iznos
+    blk.HasTekuciRacun = imaTR
+    If imaTR Then blk.TekuciRacun = "160-0000000000-11"
+    Set MakeNalog = blk
+End Function
+
+' ============================================================
 ' SEED / READ HELPERS
 ' ============================================================
 
@@ -1053,7 +1185,7 @@ End Sub
 
 Private Sub ReportResults()
     Dim hdr As String
-    hdr = "BANKA IMPORT TEST SUITE (RF-09)  ->  PASS=" & mPass & "  FAIL=" & mFail
+    hdr = "BANKA TEST SUITE (RF-09 + RF-10)  ->  PASS=" & mPass & "  FAIL=" & mFail
 
     Debug.Print String(60, "=")
     Debug.Print hdr
