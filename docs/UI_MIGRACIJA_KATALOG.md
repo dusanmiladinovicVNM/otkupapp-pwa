@@ -7,7 +7,29 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-101`.
+Stanje na dan `v6-ui-105`.
+
+---
+
+## 0. Šta još NIJE pokriveno (sažetak)
+
+Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
+
+1. **Upis — nijedan dokument se ne knjiži.** `CommitDokument` je i dalje šav:
+   svih šest `Save*_TX` rutina (otkup, otpremnica, zbirna, prijemnica, OM ulaz,
+   kupci izlaz) nije vezano. Sve ostalo u novom UI-ju je čitanje, prikaz i
+   radnje nad postojećim dokumentima.
+2. **Storno okvir frmDokumenta** — sedam panela i ~2/3 te forme. Novi UI danas
+   ume da stornira **samo otkupni list** (iz F1 liste); otpremnica, zbirna,
+   prijemnica, faktura, novac i izvod — ne.
+3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
+   zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4), avans saldo OM
+   (F7), otvorene fakture (F6), otvoreni otkupi (F7).
+4. **Sitno:** filtriranje kooperanata po otkupnom mestu, peščanik za vreme
+   upisa, dva nevezana KPI-ja, prefill iz storniranog (Z10).
+
+Tačke 1 i 2 su Faza B i Faza D iz plana; 3 ide uz Fazu B (svaki režim sa
+svojim upisom); 4 su ostaci.
 
 ---
 
@@ -44,14 +66,14 @@ Jedan režim, jedna forma. Sve što radi:
 | `UserForm_Initialize` | puni combo-e (vrsta, sorta, tip ambalaže, vozači, kooperanti) | `GetLookupList`, `GetTipAmbalazeOptions`, `GetVozacDisplayList` | IMA (`FillCombos`) |
 | `SetupAmbIzdataField`, `SetupKolAmbalazeIIField` | runtime polja koja nisu u `.frx` | — | IMA (cela forma je runtime) |
 | `cmbVrstaVoca_Change` | puni sorte za vrstu | `GetLookupList` | IMA (`RefillSorta`) |
-| `cmbSortaVoca_Change` → `AutoFillCenaOtkup` | **cena iz cenovnika + tip ambalaže iz kulture + paleta info** | Z1, Z2, Z9 | **NEMA** |
-| `UpdateUkupnoKg` | živi zbir kg / neto iz bruta | Z4 | **NEMA** |
-| `cmbOtkupnoMesto_Change` | pamti aktivnu stanicu, osvežava predlog broja | Z3, Z14 | DELIMIČNO |
-| `txtDatum_AfterUpdate` | pamti aktivni datum, osvežava predlog broja | Z3, Z14 | **NEMA** |
+| `cmbSortaVoca_Change` → `AutoFillCenaOtkup` | **cena iz cenovnika + tip ambalaže iz kulture + paleta info** | Z1, Z2, Z9 | IMA |
+| `UpdateUkupnoKg` | živi zbir kg / neto iz bruta | Z4 | IMA |
+| `cmbOtkupnoMesto_Change` | pamti aktivnu stanicu, osvežava predlog broja, MALINA auto-vozač | Z3, Z14 | IMA, osim **filtriranja kooperanata po stanici** (`FillKooperantCombo`) |
+| `txtDatum_AfterUpdate` | pamti aktivni datum, osvežava predlog broja | Z3, Z14 | IMA |
 | `cmbKooperant_Change` | puni parcele; osvežava ukupan iznos kooperanta u panelu blokova | Z6, `OtkupBlok_RefreshKoopTotal` | DELIMIČNO — parcele ima, ukupan iznos nema |
 | `cmbParcela_Change`, `ExtractParcelaID` | ID parcele iz prikaza | — | IMA |
 | `chkDveKlase_Click` | druga klasa | Z5 | IMA |
-| `ApplyOtkupTogglesState` | parcele / keš isplate | Z6, Z7 | DELIMIČNO |
+| `ApplyOtkupTogglesState` | parcele / keš isplate | Z6, Z7 | IMA (keš namerno izostavljen) |
 | `btnUnos_Click` | **snimanje otkupa**; relink paleta hladnjače ako je bio storno | `SaveOtkupMulti_TX`, `ReassignPaleteToPrijemnica_TX`, `GetHladnjacaRelinkPending` | **NEMA** (`CommitDokument` je šav) |
 | `ClearOtkupFields` | reset forme posle snimanja | — | IMA (`ClearForm`) |
 | `btnStornoOtkup_Click` | storno otkupa iz forme | `modStorno` | IMA (radnja nad redom) |
