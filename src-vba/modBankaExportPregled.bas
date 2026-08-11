@@ -444,8 +444,8 @@ End Function
 ' vezivanje avansa, storno u drugom delu aplikacije).
 '
 ' Proverava tacno one blokove koje bi GenerisiNalogeCSV i upisao
-' (HasTekuciRacun + IsplatitiIznos > 0) -- inace bi blok koji uopste ne ide
-' u fajl mogao da obori generisanje.
+' (HasTekuciRacun + ZAOKRUZEN iznos > 0, isti prag koji koristi writer) --
+' inace bi blok koji uopste ne ide u fajl mogao da obori generisanje.
 '
 ' Blok kog vise NEMA u openByOtkup se tretira kao otvoreno = 0, dakle svaki
 ' iznos na njemu je preplata (fail-closed: nestao je jer je zatvoren/storniran).
@@ -474,10 +474,12 @@ Public Function ValidateNalogSaldo(ByVal blokovi As Collection, _
 
     For Each v In blokovi
         Set blk = v
-        If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
-            ' Poredi se ono sto CSV stvarno nosi: oba iznosa u cent-domenu,
-            ' bez tolerancije (vidi pravilo na vrhu modula).
-            trazeno = ZaokruziNovac(blk.IsplatitiIznos)
+        ' Poredi se ono sto CSV stvarno nosi: iznos u cent-domenu, bez
+        ' tolerancije (vidi pravilo na vrhu modula). Normalizacija ide i PRE
+        ' praga "> 0" -- sirov ostatak (0.004) inace prodje kao nalog, a u
+        ' fajlu zavrsi kao "0.00".
+        trazeno = ZaokruziNovac(blk.IsplatitiIznos)
+        If blk.HasTekuciRacun And trazeno > 0 Then
             otvoreno = 0
             If openByOtkup.Exists(blk.otkupID) Then otvoreno = ZaokruziNovac(CDbl(openByOtkup(blk.otkupID)))
 
@@ -613,16 +615,21 @@ Public Function BuildNalogCsvPayload(ByVal blokovi As Collection, _
         "SifraPlacanja;Model;PozivNaBroj;SvrhaPlacanja;DatumValute" & vbCrLf
 
     Dim rows As Long
+    Dim trazeno As Double
     Dim blk As clsBlokIsplata
     Dim v As Variant
     For Each v In blokovi
         Set blk = v
-        If blk.HasTekuciRacun And blk.IsplatitiIznos > 0 Then
+        ' Isti normalizovan iznos koji je kapija odobrila -- i za prag "> 0"
+        ' i za upis. Sirov prag bi propustio ostatak koji se u fajlu prikaze
+        ' kao "0.00" (nalog na nula dinara).
+        trazeno = ZaokruziNovac(blk.IsplatitiIznos)
+        If blk.HasTekuciRacun And trazeno > 0 Then
             s = s & CsvField(NormalizujRacun(platilacRacun)) & ";" & _
                     CsvField(platilacNaziv) & ";" & _
                     CsvField(NormalizujRacun(blk.TekuciRacun)) & ";" & _
                     CsvField(blk.kooperantNaziv) & ";" & _
-                    CsvIznos(blk.IsplatitiIznos) & ";" & _
+                    CsvIznos(trazeno) & ";" & _
                     "RSD;" & _
                     CsvField(sifra) & ";" & _
                     ";" & _

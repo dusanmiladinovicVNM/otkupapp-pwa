@@ -974,7 +974,11 @@ Private Function CollectIsplataBlokovi(ByRef outMissingTR As Long) As Collection
             GoTo NextRow
         End If
 
-        blk.IsplatitiIznos = GetIsplatitiAmount(blk)
+        ' AUD-026: normalizuj PRE praga "> 0". Otvoreno iz GetOpenOtkupi je
+        ' sirovo (kolicina * cena - isplaceno), pa legitiman ostatak od npr.
+        ' 0.004 RSD prolazi sirov "> 0", a u fajl bi otisao kao "0.00" --
+        ' nalog na nula dinara koji banci moze da obori uvoz celog paketa.
+        blk.IsplatitiIznos = ZaokruziNovac(GetIsplatitiAmount(blk))
         If blk.IsplatitiIznos > 0 Then result.Add blk
 NextRow:
     Next i

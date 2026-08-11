@@ -919,6 +919,28 @@ Private Sub T14_CsvPayloadNosiKapiju()
     payload = BuildNalogCsvPayload(bezTR, RACUN, otvoreno, odbijeno)
     ChkEq CsvRedova(payload), 1, S & "blok bez TR nije u fajlu"
     ChkEq odbijeno, "", S & "blok bez TR ne obara generisanje"
+
+    ' 5) Sub-cent ostatak NE sme da napravi nalog na nula dinara. Otvoreno iz
+    '    GetOpenOtkupi je sirovo (kolicina * cena - isplaceno), pa je ostatak
+    '    tipa 0.004 RSD legitiman produkcioni rezultat; sirov prag "> 0" bi ga
+    '    pustio, a CsvIznos bi ga upisao kao "0.00" -- nevalidan nalog koji
+    '    banci moze da obori uvoz celog paketa.
+    Dim ostatak As Object
+    Set ostatak = CreateObject("Scripting.Dictionary")
+    ostatak(P & "OTK-P1") = 600#
+    ostatak(P & "OTK-P3") = 0.004
+
+    Dim saOstatkom As Collection
+    Set saOstatkom = New Collection
+    saOstatkom.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600#, True)
+    saOstatkom.Add MakeNalog(P & "OTK-P3", P & "BLOK-P3", 0.004, True)
+
+    payload = BuildNalogCsvPayload(saOstatkom, RACUN, ostatak, odbijeno)
+    ChkEq odbijeno, "", S & "sub-cent ostatak nije preplata (ne obara generisanje)"
+    ChkEq CsvRedova(payload), 1, S & "sub-cent ostatak ne pravi svoj nalog"
+    Chk InStr(payload, ";0.00;") = 0, S & "u fajlu nema naloga na 0.00"
+    Chk InStr(payload, P & "BLOK-P3") = 0, S & "blok sa ostatkom nije u fajlu"
+    Chk InStr(payload, ";600.00;") > 0, S & "regularan nalog je i dalje tu"
 End Sub
 
 ' Broj DATA redova u CSV payload-u (bez zaglavlja i bez zavrsnog praznog reda).
