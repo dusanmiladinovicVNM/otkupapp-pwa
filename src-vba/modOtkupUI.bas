@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-84"
+Public Const OTKUI_BUILD   As String = "v6-ui-85"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -169,7 +169,12 @@ Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
 Private Const MODE_SEP_H  As Single = 11      ' razmak iznad kartice Storno
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
-Private Const GRP_H       As Single = 15      ' eyebrow red grupe polja
+' Eyebrow red grupe polja. Sam natpis je visok ~11pt, pa 18 ostavlja 7pt do
+' natpisa prvog polja ispod. Sa 15 je taj razmak bio 4pt - naslov grupe je bio
+' blizi redu IZNAD sebe nego svojim poljima, pa je delovao kao da pripada
+' prethodnoj grupi. Razlika je uzeta iz vazduha izmedju grupa (3 -> 0), koji
+' je radio isti posao sa pogresne strane natpisa; forma po visini ostaje ista.
+Private Const GRP_H       As Single = 18
 ' Vertikalni razmak izmedju redova polja. Do sada je i tu isao GAP (10),
 ' isti koji razdvaja kolone - a po visini je 10pt cista rasipnja: tri reda
 ' polja i tri grupe su tako uzimali 40pt koje je mreza trazila.
@@ -1568,7 +1573,7 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
         Next c
         If imaPolja Then
             If col > 0 Then Y = Y + FIELD_GRP_H + ROW_GAP
-            Y = Y + 3                       ' vazduh izmedju grupa
+            ' vazduh izmedju grupa vise ne ide ovde nego u GRP_H, ispod natpisa
         Else
             z.Controls("grpH" & g).Visible = False
             z.Controls("grpLn" & g).Visible = False
