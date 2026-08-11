@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-94"
+Public Const SCRDOK_BUILD As String = "v6-ui-95"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -240,26 +240,25 @@ End Function
 ' modOtkupBlok.PrintSpecifikacija - ovde se samo skupljaju ID-evi.
 Private Function PrintSpec(ByVal red As Long) As Boolean
     Dim keys As String, k As Variant, col As Collection, broj As String
+    Dim oid As String
     On Error GoTo EH
     Set col = New Collection
-    ' mapu broj->OtkupremnicaID puni RowsOtpremnice; bez nje (lista jos nije
-    ' citana) nema sta da se stampa
-    If mOtpIds Is Nothing Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
-        Exit Function
-    End If
     keys = modOtkupUI.MarkedKeys()
     If Len(keys) > 0 Then
         For Each k In Split(keys, "|")
-            If mOtpIds.Exists(CStr(k)) Then col.Add CStr(mOtpIds(CStr(k)))
+            oid = OtpIdZaBroj(CStr(k))
+            If Len(oid) > 0 Then col.Add oid
         Next k
     ElseIf red > 0 Then
         broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-        If Len(broj) > 0 Then
-            If mOtpIds.Exists(broj) Then col.Add CStr(mOtpIds(broj))
-        End If
+        oid = OtpIdZaBroj(broj)
+        If Len(oid) > 0 Then col.Add oid
     End If
     If col.count = 0 Then
+        ' Sta je tacno izostalo - oznake ili razresenje broja u ID - vidi se
+        ' samo ovde; toast operateru kaze sta da uradi, Immediate kaze zasto.
+        Debug.Print "modScrDokumenti.PrintSpec: red=" & red & " oznake=[" & keys & _
+                    "] mapa=" & IIf(mOtpIds Is Nothing, "nema", CStr(mOtpIds.count))
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_OTP"), True
         Exit Function
     End If
@@ -268,6 +267,23 @@ Private Function PrintSpec(ByVal red As Long) As Boolean
     Exit Function
 EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Broj otpremnice -> OtpremnicaID. Prvo iz mape koju puni lista (jeftino), pa
+' iz same tabele. Drugi put postoji jer mapa zivi u modulu: dovoljno je da se
+' lista jednom ne procita (drugi rezim, drugi ekran, greska u citanju) pa da
+' oznaceni redovi vise ne mogu da se razrese - a broj otpremnice je u tabeli
+' sve vreme.
+Private Function OtpIdZaBroj(ByVal broj As String) As String
+    On Error Resume Next
+    If Len(broj) = 0 Then Exit Function
+    If Not mOtpIds Is Nothing Then
+        If mOtpIds.Exists(broj) Then
+            OtpIdZaBroj = CStr(mOtpIds(broj))
+            Exit Function
+        End If
+    End If
+    OtpIdZaBroj = NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID))
 End Function
 
 ' Dnevna / periodicna specifikacija. Opseg stize kao "od|do" onako kako ga je

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-94"
+Public Const OTKUI_BUILD   As String = "v6-ui-95"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -2393,6 +2393,10 @@ Private Sub ToggleMark(ByVal tag As String)
     If Len(k) = 0 Then Exit Sub
     If mMark Is Nothing Then Set mMark = CreateObject("Scripting.Dictionary")
     If mMark.Exists(k) Then mMark.Remove k Else mMark(k) = True
+    ' Red na koji je kliknuto ostaje i TEKUCI red. Bez toga oznacavanje ostavi
+    ' ljusku bez izabranog reda, pa radnja koja ume da radi "nad izabranim" (a
+    ' specifikacija ume) nema na cemu da radi cim oznake zataje.
+    mSelRow = r
 End Sub
 
 ' Prazni i oznake i sam rezim - zove se pri svakoj promeni liste, rezima ili
@@ -2404,6 +2408,13 @@ End Sub
 
 ' Kljucevi oznacenih redova, spojeni "|". Ekran ih tumaci - ljuska ne zna sta
 ' su brojevi u prvoj koloni.
+' Dijagnostika iz Immediate prozora: ?OtkupUI_DiagMark()
+Public Function OtkupUI_DiagMark() As String
+    OtkupUI_DiagMark = "rezim=" & mMarkOn & " oznaka=" & MarkCount() & _
+                       " red=" & mSelRow & " lista=" & ActiveLista() & _
+                       " kljucevi=[" & MarkedKeys() & "]"
+End Function
+
 Public Function MarkedKeys() As String
     Dim kk As Variant, res As String
     If mMark Is Nothing Then Exit Function
