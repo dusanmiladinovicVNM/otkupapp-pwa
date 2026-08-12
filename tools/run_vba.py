@@ -151,11 +151,12 @@ class DialogWatchdog(threading.Thread):
 
     @staticmethod
     def _click_default(win32gui, hwnd) -> None:
-        buttons: list[int] = []
+        buttons: list[tuple[int, str]] = []
 
         def on_child(child, _):
             if win32gui.GetClassName(child) == "Button":
-                buttons.append(child)
+                caption = win32gui.GetWindowText(child).replace("&", "").strip().lower()
+                buttons.append((child, caption))
 
         try:
             win32gui.EnumChildWindows(hwnd, on_child, None)
@@ -164,32 +165,76 @@ class DialogWatchdog(threading.Thread):
 
         BM_CLICK = 0x00F5
         WM_CLOSE = 0x0010
-        if buttons:
-            win32gui.PostMessage(buttons[0], BM_CLICK, 0, 0)
-        else:
+        if not buttons:
             win32gui.PostMessage(hwnd, WM_CLOSE, 0, 0)
+            return
+
+        # NIKAD "Debug": na VBA runtime-error dijalogu to ubacuje VBE u break
+        # mode, posle cega COM pozivi vise ne odgovaraju i run visi zauvek.
+        # (Stari kod je klikao buttons[0] naslepo -- a "Debug" ume da bude prvi.)
+        forbidden = ("debug", "help", "pomoc")
+        preferred = ("end", "ok", "u redu", "da", "yes", "cancel", "otkazi", "zavrsi")
+
+        safe = [(h, c) for h, c in buttons if not any(f in c for f in forbidden)]
+        if not safe:
+            win32gui.PostMessage(hwnd, WM_CLOSE, 0, 0)
+            return
+
+        for want in preferred:
+            for h, c in safe:
+                if c == want or c.startswith(want):
+                    win32gui.PostMessage(h, BM_CLICK, 0, 0)
+                    return
+
+        win32gui.PostMessage(safe[0][0], BM_CLICK, 0, 0)
 
 
 # --- Import src-vba preko COM-a ----------------------------------------------
 
 def _read_code_body(path: str) -> str:
-    """Vrati samo kod, bez VBA header bloka -- za .doccls merge."""
+    """Vrati samo kod, bez VBA header bloka -- za .doccls merge.
+
+    Header izgleda ovako:
+
+        VERSION 1.0 CLASS
+        BEGIN
+          MultiUse = -1  'True
+        END
+        Attribute VB_Name = "ThisWorkbook"
+        Attribute VB_GlobalNameSpace = False
+        ...
+        <ovde pocinje kod>
+
+    Header se mora skinuti POZICIJSKI, red po red. Raniji filter "preskoci sve
+    sto lici na header" je puknuo na `MultiUse = -1  'True`: ta linija ne lici ni
+    na sta iz liste, pa je proglasena pocetkom koda -- i `END` + sve `Attribute`
+    linije su zavrsile U MODULU. `End` je u VBA naredba koja obara izvrsavanje,
+    pa je uvezena sveska padala u break mode i run je visio zauvek.
+    """
     with open(path, "r", encoding="ascii", errors="replace") as fh:
         lines = fh.read().splitlines()
 
-    out, started = [], False
-    for line in lines:
-        if not started:
-            stripped = line.strip()
-            if stripped.startswith("VERSION") or stripped.startswith("Attribute VB_Name"):
-                continue
-            if stripped.startswith("BEGIN") or stripped == "END" or stripped.startswith("Attribute "):
-                continue
-            if not stripped:
-                continue
-            started = True
-        out.append(line)
-    return "\r\n".join(out)
+    i, n = 0, len(lines)
+
+    if i < n and lines[i].strip().upper().startswith("VERSION"):
+        i += 1
+
+    if i < n and lines[i].strip().upper().startswith("BEGIN"):
+        depth = 0
+        while i < n:
+            token = lines[i].strip().upper()
+            if token.startswith("BEGIN"):
+                depth += 1
+            elif token == "END":
+                depth -= 1
+            i += 1
+            if depth == 0:
+                break
+
+    while i < n and lines[i].strip().startswith("Attribute "):
+        i += 1
+
+    return "\r\n".join(lines[i:])
 
 
 def _has_vb_header(path: str) -> bool:
@@ -252,6 +297,48 @@ def import_src_vba(wb, log: list[str]) -> None:
             vbc.CodeModule.AddFromFile(path)
         else:
             log.append(f"SKIP {name} (forma bez headera)")
+
+
+def self_test() -> int:
+    """Provere koje NE traze Excel -- rade i na Linux/macOS.
+
+    Postoje zato sto se strip VBA header-a pokvario u tisini: header je zavrsio
+    u kodu, sveska je pala u break mode, a to se videlo tek na Windows masini,
+    kroz screenshot. Ova provera hvata istu klasu greske bez Excela.
+    """
+    leaks: list[str] = []
+    checked = 0
+    for name in sorted(os.listdir(SRC_VBA)):
+        if not name.endswith(".doccls"):
+            continue
+        checked += 1
+        body = _read_code_body(os.path.join(SRC_VBA, name))
+        for line in body.splitlines()[:5]:
+            s = line.strip()
+            if (s.startswith("Attribute ") or s.startswith("MultiUse")
+                    or s.upper() in ("BEGIN", "END") or s.upper().startswith("VERSION ")):
+                leaks.append(f"{name}: header procureo u kod -> {s!r}")
+                break
+
+    for line in leaks:
+        print(line, file=sys.stderr)
+    if leaks:
+        print(f"\nself-test: {len(leaks)} nalaza od {checked} .doccls fajlova.", file=sys.stderr)
+        return 2
+    print(f"self-test: cisto ({checked} .doccls fajlova).")
+    return 0
+
+
+def _terminate_pid(pid: int, flag: dict) -> None:
+    """Ubij Excel proces. Zove se iz Timer niti kad glavni tok stoji na COM-u."""
+    flag["fired"] = True
+    try:
+        import win32api
+        import win32con
+        h = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
+        win32api.TerminateProcess(h, 0)
+    except Exception:
+        pass
 
 
 # --- Compile ------------------------------------------------------------------
@@ -367,6 +454,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--all", action="store_true", help="pokreni sve suite iz kataloga")
     ap.add_argument("--keep", action="store_true", help="ne brisi temp kopiju sveske")
     ap.add_argument("--timeout-dialog", type=float, default=0.4, help="interval watchdog-a u sekundama")
+    ap.add_argument("--timeout", type=float, default=600.0,
+                    help="tvrdi prekid u sekundama (ubija Excel proces; default 600)")
+    ap.add_argument("--self-test", action="store_true",
+                    help="provere koje ne traze Excel (radi i na Linux/macOS)")
     return ap.parse_args(argv)
 
 
@@ -385,6 +476,9 @@ def chosen_suites(args: argparse.Namespace) -> list[str]:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+
+    if args.self_test:
+        return self_test()
 
     if os.name != "nt":
         print("run_vba.py radi samo na Windows-u (Excel COM).", file=sys.stderr)
@@ -425,6 +519,8 @@ def main(argv: list[str]) -> int:
     xl = None
     pid = None
     watchdog = None
+    killer = None
+    hard_stop: dict = {"fired": False}
 
     pythoncom.CoInitialize()
     try:
@@ -433,6 +529,13 @@ def main(argv: list[str]) -> int:
 
         watchdog = DialogWatchdog(pid, poll=args.timeout_dialog)
         watchdog.start()
+
+        # Tvrdi prekid: ako Excel iz bilo kog razloga prestane da odgovara (break
+        # mode, dijalog koji watchdog ne prepozna), COM poziv ne puca -- samo
+        # stoji. Bez ovoga run visi dok ga neko ne ubije rukom.
+        killer = threading.Timer(args.timeout, _terminate_pid, args=(pid, hard_stop))
+        killer.daemon = True
+        killer.start()
 
         xl.Visible = False
         xl.DisplayAlerts = False
@@ -478,6 +581,13 @@ def main(argv: list[str]) -> int:
         report["fatal"] = str(exc)
         rc = 2
     finally:
+        if killer is not None:
+            killer.cancel()
+        if hard_stop["fired"]:
+            report["fatal"] = (f"Excel nije odgovarao {args.timeout:g}s -- proces je ubijen. "
+                               "Najcesci uzrok: VBE je u break mode-u (vidi "
+                               "docs/EXCEL_TEST_HARNESS.md).")
+            rc = 2
         if watchdog is not None:
             time.sleep(1.0)
             watchdog.stop()

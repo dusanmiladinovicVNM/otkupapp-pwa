@@ -110,8 +110,25 @@ Katalog `SUITES` u skripti nosi zastavicu `gate`:
 Kad pišeš novu suite, napravi je `gate` i upiši je u katalog. Puna tabela:
 `.claude/rules/testovi.md`.
 
+## Provera bez Excela
+
+```bash
+python3 tools/run_vba.py --self-test
+```
+
+Radi svuda (i u Claude Code sesiji na Linuxu). Proverava da strip VBA header-a ne
+propušta header u kod — greška koja je jednom već prošla neopaženo i videla se
+tek kao `[break]` u naslovu VBE prozora na Windows mašini.
+
 ## Ako zapne
 
+- Skripta ima **tvrdi prekid** (`--timeout`, default 600 s): ako Excel prestane da
+  odgovara, proces se ubija i run pada sa `FATAL`. Bez toga COM poziv ne puca —
+  samo stoji zauvek.
+- **Break mode** (`[break]` u naslovu VBE prozora) znači da je VBA stao usred
+  izvršavanja. Najčešći uzrok je bio pokvaren import (header u kodu → naredba
+  `End`), a drugi klik na **Debug** u dijalogu greške. Watchdog sada nikad ne
+  klika `Debug` ni `Help` — bira `End` / `OK` / `Cancel`.
 - `Ctrl+C`, pa proveri Task Manager za zaostali `EXCEL.EXE` — skripta pokreće
   zaseban proces (`DispatchEx`), pa ne dira tvoj otvoreni Excel.
 - `--keep` ostavlja temp kopiju sveske da možeš da je otvoriš i vidiš stanje.

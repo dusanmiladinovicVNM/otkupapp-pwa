@@ -44,6 +44,11 @@ Import `src-vba/` → `Debug > Compile` → test suite, headless. U ovoj sesiji 
 **ne može pokrenuti** (nema COM-a); to je alat za operatera i za Windows dev
 mašinu.
 
+Jedini deo koji radi svuda: `python3 tools/run_vba.py --self-test` — provera da
+strip VBA header-a ne propušta header u kod. **Pokreni ga posle svake izmene
+`_read_code_body`/import logike**; ta greška je jednom prošla neopaženo i videla
+se tek kao `[break]` u VBE-u.
+
 ```powershell
 python tools\run_vba.py --compile-only     # najbrže i najstabilnije
 python tools\run_vba.py                    # + podrazumevani set suite-ova
