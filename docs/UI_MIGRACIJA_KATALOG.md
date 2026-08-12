@@ -77,6 +77,53 @@ mirror-vozač, pa je stanica podmetnuta kao vozač davala `S…` van zbirnih.
 Predlog se preračunava na promenu: otkupnog mesta, datuma, režima, vozača (F3),
 kupca (F4) i posle svakog upisa.
 
+### Z3b — revizija ulaznog sloja 1:1 (v6-ui-113)
+
+Kompletan popis legacy handlera koji nešto **automatski popune ili preračunaju**,
+i status u novom UI. Ovo je izvor istine za „šta još nije preneto" — ne
+zaključivati iz koda.
+
+**`frmOtkup` (F1)**
+
+| Legacy | Šta radi | Novi UI |
+|---|---|---|
+| `chkDveKlase_Click` | II klasa on/off + auto-cena II + paleta info | **IMA** (`SetKlasa`) |
+| `txtKolicina/KolAmbalaze/TipAmbalaze/KolicinaKlII_Change` → `UpdateUkupnoKg` | živi zbir / neto | **IMA** (`RecalcVrednost`, `SetKgLine`) |
+| `cmbVrstaVoca_Change` / `cmbSortaVoca_Change` | kaskada sorte + auto-cena | **IMA** |
+| `AutoFillCenaOtkup` | cena I (uvek), cena II (samo uz II klasu), tip ambalaže, paleta info | **IMA** (`AutoFillCena`) |
+| `ApplyOtkupTogglesState` | parcele / keš | parcele **IMA**; keš **namerno izostavljen** (Z7) |
+| `cmbOtkupnoMesto_Change` | briše kooperanta+parcelu, filtrira kooperante po OM, lock, MALINA vozač, predlog broja (remote), prazna stanica briše broj, izlazak iz konteksta otpremnice | **IMA** (v6-ui-111 + v6-ui-113) |
+| `cmbKooperant_Change` | puni parcele | **IMA** (`FillParcele`) |
+| `cmbKooperant_Change` → `OtkupBlok_RefreshKoopTotal` | inline „ukupan iznos otk. listova" za kooperanta | **NEMA** (informativno) |
+| `cmbParcela_Change` | parcela → vrsta/sorta iz kulture | **IMA** (v6-ui-113) |
+| `txtDatum_AfterUpdate` | re-lock na nov datum + predlog broja (remote) | **IMA** (v6-ui-113) |
+| `ResetDatumKontekst` / `ResetProizvodNaDefault` | izlazak iz konteksta otpremnice | **IMA** (`NapustiOtpremnicu`, v6-ui-111) |
+| `ClearOtkupFields` | reset posle snimanja | **IMA** (v6-ui-108/109/110) |
+| `FillKooperantCombo` | `KOOP_FILTER_BY_OM` | **IMA** (v6-ui-113) |
+| `btnUnos_Click` | snimanje | **IMA** (`modOtkupUnos`) |
+| `UserForm_QueryClose`, `btnPovratak_Click` | `ReleaseStanicaLock` pri izlasku | **NEMA** |
+| `ShowLockStatus` / `HideLockStatus` | peščanik za vreme sinhronizacije | **NEMA** |
+
+**`frmDokumenta` (F2–F7)**
+
+| Legacy | Šta radi | Novi UI |
+|---|---|---|
+| `cmbOtkupnoMesto_Change` | primalac po stanici, predlog otpremnice i reversa, MALINA vozač | **IMA** (isti handler) |
+| `cmbVozac_Change` | predlog zbirne; prazan vozač briše broj | **IMA** (v6-ui-112/113) |
+| `txtDatum_AfterUpdate` | predlozi otp/zbr/prij | **IMA** |
+| `cmbVrstaVoca/SortaVoca_Change` → `AutoFillCenaDok` | cena + tip ambalaže za otp/zbr/prij | **IMA** |
+| `chkDveKlaseOtp/Zbr/Prij_Click` | II klasa | **IMA** (`SetKlasa`) |
+| `RefreshBrojOtp/Zbirne/Prij/ReversSuggestion` | predlozi po nizu | **IMA** (v6-ui-112) |
+| `cmbKupac_Change` → broj prijemnice | briše pa predlaže | **IMA** (v6-ui-113) |
+| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** |
+| `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **NEMA** — Faza B |
+| `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B |
+| `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B |
+| `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **NEMA** — Faza B |
+| `btnUnosOtp/Zbr/Prij/OMUlaz/Izlaz_Click` | upis F2–F6 | **NEMA** — Faza B |
+| `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D |
+| storno paneli (7 kom.) | `btnStorno_Click` i dalje | **NEMA** — Faza D |
+
 ---
 
 ## 2. frmOtkup (1.294 linije) — otkupni list

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-112"
+Public Const OTKUI_BUILD   As String = "v6-ui-113"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -326,6 +326,9 @@ Private mAktivnaZbirna As String
 ' pa polje javi promenu koju operater nije napravio - bez ovog garda bi svako
 ' osvezavanje posle snimanja obrisalo zapamcenu zbirnu i zaprljalo dokument.
 Private mZbirnaFill As Boolean
+' Isto za listu partnera: FillFormPartner radi CB.Clear, sto polje javi kao
+' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
+Private mPartnerFill As Boolean
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
 Private mSmerRev As Long             ' izabrani smer reversa (1..4)
 Private mPartnerFor As String        ' za koji rezim je partner lista vec napunjena
@@ -3369,6 +3372,7 @@ Private Sub UiChange(ByVal tag As String)
     ' Promene koje pravi FillZbirneCombo (Clear + vracanje teksta) nisu unos
     ' operatera - ne diraju ni zapamcenu zbirnu ni "dokument je menjan".
     If mZbirnaFill And tag = "fgBrZbirT" Then Exit Sub
+    If mPartnerFill And tag = "cbKupac" Then Exit Sub
     ' Kucanje u combo otvara nas panel i suzava listu. Programski upisi
     ' (punjenje lista, ClearForm, izbor iz panela) su pod mPopMute - bez toga
     ' bi se panel otvarao sam od sebe pri svakoj promeni rezima.
@@ -3401,9 +3405,15 @@ Private Sub UiChange(ByVal tag As String)
         Case "cbKupac"
             FillOpenBlokovi mFrm
             FillParcele mFrm
-            ' broj prijemnice zavisi od KUPCA (hladnjaca ima svoj niz, ostali
-            ' unose svoj broj) - u drugim rezimima partner na broj ne utice
-            If modeKey(ActiveMode) = "PRIJEMNICA" Then RefreshBrojPredlog False
+            ' Broj prijemnice zavisi od KUPCA. Legacy cmbKupac_Change prvo
+            ' OBRISE broj pa trazi predlog - bez brisanja bi kod ne-hladnjaca
+            ' kupca (koji predlog ne dobija) ostao broj hladnjace.
+            If modeKey(ActiveMode) = "PRIJEMNICA" Then
+                SetFld "fgBrOtpr", ""
+                RefreshBrojPredlog True
+            End If
+        Case "fgParcelaT"
+            ApplyParcelaProizvod
         Case "fgBlokT"
             ApplyBlokIzbor
         Case "cbVrsta"
@@ -3416,8 +3426,15 @@ Private Sub UiChange(ByVal tag As String)
             RefreshKpi mFrm
             RefreshStatusBar mFrm
         Case "cbVozac"
-            ' zbirna se broji po vozacu, pa promena vozaca menja i njen niz
-            If modeKey(ActiveMode) = "ZBIRNA" Then RefreshBrojPredlog False
+            ' Zbirna se broji po vozacu, pa promena vozaca menja i njen niz.
+            ' Bez vozaca niz ne postoji - broj se brise (legacy cmbVozac_Change).
+            If modeKey(ActiveMode) = "ZBIRNA" Then
+                If Len(Trim$(CStr(mFrm.Controls("zCtx").Controls("cbVozac").value))) = 0 Then
+                    SetFld "fgBrOtpr", ""
+                Else
+                    RefreshBrojPredlog True
+                End If
+            End If
         Case "fgDatumT"
             OnDatumChanged
     End Select
@@ -4406,6 +4423,35 @@ Private Function NeaktivniSet(ByVal tblName As String) As Object
     Set NeaktivniSet = d
 End Function
 
+' KooperantID -> StanicaID (sirov ID, ne naziv). Zaseban kes ("#KOOPST") jer
+' PartnerMap kesira po IMENU TABELE, pa bi drugi par kolona nad tblKooperanti
+' pregazio mapu imena koju koristi i mreza.
+Private Function KoopStanicaMap() As Object
+    Dim d As Object, src As Variant, iId As Long, iSt As Long, r As Long
+    Dim k As String, sid As String
+    If mPartMap Is Nothing Then Set mPartMap = CreateObject("Scripting.Dictionary")
+    If mPartMap.Exists("#KOOPST") Then
+        Set KoopStanicaMap = mPartMap("#KOOPST")
+        Exit Function
+    End If
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = 1
+    src = CachedTable(TBL_KOOPERANTI)
+    If IsArray(src) Then
+        iId = ColIdx(TBL_KOOPERANTI, COL_KOOP_ID)
+        iSt = ColIdx(TBL_KOOPERANTI, COL_KOOP_STANICA)
+        If iId > 0 And iSt > 0 Then
+            For r = 1 To UBound(src, 1)
+                k = CellS(src, r, iId)
+                sid = CellS(src, r, iSt)
+                If Len(k) > 0 And Len(sid) > 0 Then d(k) = sid
+            Next r
+        End If
+    End If
+    Set mPartMap("#KOOPST") = d
+    Set KoopStanicaMap = d
+End Function
+
 Private Function PartnerIdCol(ByVal tblName As String) As String
     Select Case tblName
         Case TBL_KOOPERANTI: PartnerIdCol = COL_KOOP_ID
@@ -4471,9 +4517,17 @@ End Function
 Private Sub FillFormPartner(frm As Object, ByVal mode As String)
     Dim CB As MSForms.ComboBox, ord As Variant, sd As Variant, d As Object
     Dim neakt As Object, i As Long, k As Variant
+    Dim omFilt As String, koopSt As Object, preskoci As Boolean
     On Error GoTo EH
     Set CB = frm.Controls("zCtx").Controls("cbKupac")
-    If mPartnerFor = mode Then Exit Sub          ' isti redosled, ne puni ponovo
+    ' KOOP_FILTER_BY_OM (Podesavanja, default ON): kooperanti se suzavaju na
+    ' izabrano otkupno mesto - legacy frmOtkup.FillKooperantCombo /
+    ' FillComboKooperantiByStanica. Stanica ulazi u kljuc kesa, inace bi lista
+    ' ostala od prethodnog otkupnog mesta.
+    If KoopFilterByOM() Then omFilt = SelectedStanicaID(frm)
+    If mPartnerFor = mode & "|" & omFilt Then Exit Sub    ' isto stanje, ne puni ponovo
+    If Len(omFilt) > 0 Then Set koopSt = KoopStanicaMap()
+    mPartnerFill = True
     CB.Clear
     CB.ColumnCount = 2
     ' BEZ ListWidth-a i BEZ ListRows - lista se otvara tacno u sirini kontrole,
@@ -4490,17 +4544,33 @@ Private Sub FillFormPartner(frm As Object, ByVal mode As String)
         Set neakt = NeaktivniSet(CStr(sd(0)))
         If Not d Is Nothing Then
             For Each k In d.keys
-                If Not neakt.Exists(CStr(k)) Then
+                preskoci = neakt.Exists(CStr(k))
+                ' suzavanje po otkupnom mestu vazi samo za kooperante -
+                ' otkupna mesta i kupci nisu vezani za stanicu
+                If Not preskoci And Len(omFilt) > 0 And CStr(ord(i)) = "KOOP" Then
+                    If koopSt Is Nothing Then
+                        preskoci = False
+                    ElseIf Not koopSt.Exists(CStr(k)) Then
+                        preskoci = True          ' bez stanice = nije sa ovog OM
+                    Else
+                        preskoci = (StrComp(CStr(koopSt(CStr(k))), omFilt, _
+                                            vbTextCompare) <> 0)
+                    End If
+                End If
+                If Not preskoci Then
                     CB.AddItem PartnerPrikaz(CStr(ord(i)), CStr(k), CStr(d(k)))
                     CB.List(CB.ListCount - 1, 1) = CStr(k)
                 End If
             Next k
         End If
     Next i
-    mPartnerFor = mode
+    mPartnerFor = mode & "|" & omFilt
+XIT:
+    mPartnerFill = False
     Exit Sub
 EH:
     Debug.Print "modOtkupUI.FillFormPartner PAO [" & mode & "]: " & Err.Number & " " & Err.description
+    Resume XIT
 End Sub
 
 ' ID izabranog partnera - druga, skrivena kolona combo-a (isti raspored
@@ -5068,15 +5138,39 @@ End Function
 
 ' ID parcele iz prikaza ("123 - Njiva 2" -> "123"); prazno kad polje nije
 ' vidljivo ili nista nije izabrano.
+' ID izabrane parcele = SKRIVENA druga kolona combo-a, kao kod svih ostalih
+' dropdown-a (PartnerID / modComboBinding.GetComboID). Ranije se ID vadio iz
+' teksta trazenjem " - ", a FillParcele gradi prikaz sa " " & ChrW(183) & " "
+' - separator se nikad nije nasao, pa je u ParcelaID (i u tblOtkup) odlazio ceo
+' prikazni string.
 Private Function ParcelaID() As String
-    Dim t As String, i As Long
+    Dim CB As MSForms.ComboBox
     On Error Resume Next
     If Not mFrm.Controls("zForm").Controls("fgParcela").Visible Then Exit Function
-    t = Trim$(FldText("fgParcela"))
-    If Len(t) = 0 Then Exit Function
-    i = InStr(t, " - ")
-    If i > 1 Then ParcelaID = Trim$(Left$(t, i - 1)) Else ParcelaID = t
+    Set CB = mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT")
+    If CB Is Nothing Then Exit Function
+    If CB.ListIndex >= 0 Then ParcelaID = Trim$(CStr(CB.List(CB.ListIndex, 1)))
 End Function
+
+' Izabrana parcela odredjuje ROBU: kultura parcele je sorta, a iz nje se cita
+' vrsta. Legacy par: frmOtkup.cmbParcela_Change. Postavljanje vrste okida
+' RefillSorta i cenu iz cenovnika, pa se sorta upisuje posle nje.
+Private Sub ApplyParcelaProizvod()
+    Dim parID As String, kultura As String, vrsta As String, ctx As Object
+    On Error Resume Next
+    If mLoading Or mBuilding Then Exit Sub
+    parID = ParcelaID()
+    If Len(parID) = 0 Then Exit Sub
+    kultura = NzToText(LookupValue(TBL_PARCELE, COL_PAR_ID, parID, COL_PAR_KULTURA))
+    If Len(kultura) = 0 Then Exit Sub
+    vrsta = NzToText(LookupValue(TBL_KULTURE, "SortaVoca", kultura, "VrstaVoca"))
+    If Len(vrsta) = 0 Then Exit Sub
+    Set ctx = mFrm.Controls("zCtx")
+    ctx.Controls("cbVrsta").value = vrsta
+    RefillSorta mFrm
+    ctx.Controls("cbSorta").value = kultura
+    AutoFillCena
+End Sub
 
 ' Fokus na polje koje je ekran prijavio kao sporno. Imena su LOGICKA, ista ona
 ' koja ekran koristi u recniku.
@@ -5115,10 +5209,24 @@ Private Sub OnStanicaChanged()
     Set CB = ctx.Controls("cbOM")
     stID = GetComboID(CB)
     If Len(stID) = 0 Then
-        ' operater je obrisao izbor - pusti aktivnu stanicu
+        ' operater je obrisao izbor - pusti aktivnu stanicu i skloni predlog
+        ' broja: bez stanice niz ne postoji, a zatecen broj bi bio tudji
+        ' (legacy cmbOtkupnoMesto_Change: txtBrojDokumenta / txtBrojOtp = "")
         If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
+        SetFld "fgBrOtpr", ""
         Exit Sub
     End If
+
+    ' Kooperant i parcela pripadaju PRETHODNOM otkupnom mestu - legacy ih brise
+    ' na samom pocetku cmbOtkupnoMesto_Change. Vazi za rezime u kojima je
+    ' partner kooperant; kupac (otpremnica, prijemnica) sa stanicom ne stoji u
+    ' toj vezi, pa se ne dira.
+    If PartnerJeKooperant(ActiveMode) Then
+        mFrm.Controls("zCtx").Controls("cbKupac").value = ""
+        mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").Clear
+    End If
+    ' lista kooperanata prati stanicu kad je KOOP_FILTER_BY_OM ukljucen
+    RefreshPartnerLista
 
     ' Promena otkupnog mesta VAN konteksta izabrane otpremnice: njen datum,
     ' zbirna i roba vise ne vaze. Isto sto legacy radi u cmbOtkupnoMesto_Change.
@@ -5140,9 +5248,23 @@ Private Sub OnStanicaChanged()
     ' stanice padne (mreza, tudji lock): broj je stvar prikaza, a pravo na upis
     ' se ionako proverava pri snimanju. Ranije je pad locka radio Exit Sub, pa
     ' je u polju ostajao broj prethodnog otkupnog mesta.
-    RefreshBrojPredlog False
+    ' checkRemote=True kao u legacy: promena stanice je redak potez i sme da
+    ' pita i Google (drugi uredjaj je mogao zauzeti broj). Bez upita se ovde
+    ' dobija broj koji na serveru vec postoji.
+    RefreshBrojPredlog True
     RefreshStatusBar mFrm
 End Sub
+
+' Da li je partner dokumenta kooperant (pa ga stanica filtrira i brise).
+' Izvedeno iz iste liste izvora koju koristi i sam combo - bez drugog spiska
+' rezima koji bi mogao da odluta.
+Private Function PartnerJeKooperant(ByVal mode As String) As Boolean
+    Dim ord As Variant
+    On Error Resume Next
+    ord = PartnerSrcOrder(mode)
+    If Not IsArray(ord) Then Exit Function
+    PartnerJeKooperant = (CStr(ord(LBound(ord))) = "KOOP")
+End Function
 
 ' Izlazak iz konteksta otpremnice kad se promeni otkupno mesto. Polja se pisu
 ' pod mLoading da ugnjezdeni okidaci (datum, vrsta) ne bi ponovo ulazili u
@@ -5186,7 +5308,9 @@ Private Sub OnDatumChanged()
     If Len(GetActiveStanica()) > 0 Then
         If GetActiveDatum() <> dat Then AcquireStanicaLock GetActiveStanica(), dat
     End If
-    RefreshBrojPredlog False
+    ' checkRemote=True kao legacy txtDatum_AfterUpdate: drugi dan = drugi niz,
+    ' pa se pita i Google da broj ne bude vec zauzet
+    RefreshBrojPredlog True
 End Sub
 
 ' Datum iz polja; danas kad polje jos nije citljivo.
