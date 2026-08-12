@@ -203,6 +203,11 @@ def import_src_vba(wb, log: list[str]) -> None:
     files = sorted(os.listdir(SRC_VBA))
 
     # 1) document moduli (.doccls) -- kod se MERGE-uje u postojecu komponentu
+    #
+    # Nedostajuce komponente se sabiraju u JEDNU liniju: nad praznim fixture-om
+    # nedostaje svih 40+ listova, a 40 linija SKIP-a zatrpa nalaz zbog kog se
+    # ovo i pokrece.
+    missing: list[str] = []
     for name in files:
         base, ext = os.path.splitext(name)
         if ext != ".doccls":
@@ -210,12 +215,16 @@ def import_src_vba(wb, log: list[str]) -> None:
         try:
             vbc = proj.VBComponents(base)
         except Exception:
-            log.append(f"SKIP {name} (nema komponente '{base}')")
+            missing.append(base)
             continue
         cm = vbc.CodeModule
         if cm.CountOfLines > 0:
             cm.DeleteLines(1, cm.CountOfLines)
         cm.AddFromString(_read_code_body(os.path.join(SRC_VBA, name)))
+
+    if missing:
+        log.append(f"SKIP {len(missing)} .doccls (nema komponente u svesci): "
+                   + ", ".join(missing))
 
     # 2) standardni / klasni / forme
     for name in files:
@@ -243,6 +252,73 @@ def import_src_vba(wb, log: list[str]) -> None:
             vbc.CodeModule.AddFromFile(path)
         else:
             log.append(f"SKIP {name} (forma bez headera)")
+
+
+# --- Compile ------------------------------------------------------------------
+
+COMPILE_PROBE_MODULE = "modZzCompileProbe"
+COMPILE_PROBE_FUNC = "ZzCompileProbe"
+COMPILE_PROBE_CODE = (
+    "Option Explicit\r\n"
+    "\r\n"
+    "Public Function ZzCompileProbe() As Long\r\n"
+    "    ZzCompileProbe = 42\r\n"
+    "End Function\r\n"
+)
+
+
+def compile_project(xl, wb, watchdog) -> dict:
+    """Vrati {"ok": True|False|None, "error": ...} za compile celog projekta.
+
+    NE oslanja se na `Enabled` stanje menija "Debug > Compile VBAProject". VBE
+    osvezava enabled-stanje kontrola tek kad se meni iscrta, pa u nevidljivom
+    Excelu ostaje `True` i posle uspesnog compile-a -- ta heuristika je davala
+    "NEJASNO" uvek.
+
+    Verdikt daje probe: u projekat se doda trivijalan modul sa funkcijom koja
+    vraca 42, pa se ta funkcija pozove. VBA pred izvrsavanje BILO KOJE procedure
+    kompajlira ceo projekat, pa greska u ma kom modulu obara `Application.Run`.
+    Vracenih 42 znaci da se ceo projekat kompajlira -- to je tvrdo DA.
+    """
+    before = len(watchdog.seen)
+
+    # 1) Forsiraj pun compile kroz meni. Greska ovde ide kroz modalni dijalog,
+    #    koji watchdog zatvori i ostavi u `seen`.
+    try:
+        ctl = xl.VBE.CommandBars.FindControl(Id=COMPILE_CONTROL_ID)
+        ctl.Execute()
+        time.sleep(1.0)
+    except Exception as exc:            # noqa: BLE001
+        return {"ok": False, "error": f"Compile meni: {exc}"}
+
+    dialogs = watchdog.seen[before:]
+    bad = [d for d in dialogs
+           if any(k in d.lower() for k in ("compile", "kompajl", "greska", "error"))]
+    if bad:
+        return {"ok": False, "error": " ;; ".join(bad)}
+
+    # 2) Probe -- jedini korak koji daje tvrd DA.
+    proj = wb.VBProject
+    try:
+        vbc = proj.VBComponents.Add(VBE_TYPE[".bas"])
+        vbc.Name = COMPILE_PROBE_MODULE
+        vbc.CodeModule.AddFromString(COMPILE_PROBE_CODE)
+    except Exception as exc:            # noqa: BLE001
+        return {"ok": None, "error": f"Ne mogu da dodam probe modul: {exc}"}
+
+    try:
+        value = xl.Run(f"'{wb.Name}'!{COMPILE_PROBE_FUNC}")
+    except Exception as exc:            # noqa: BLE001
+        return {"ok": False, "error": f"Probe pao -- compile greska u projektu: {exc}"}
+    finally:
+        try:
+            proj.VBComponents.Remove(proj.VBComponents(COMPILE_PROBE_MODULE))
+        except Exception:
+            pass
+
+    if int(value or 0) != 42:
+        return {"ok": None, "error": f"Probe vratio {value!r} umesto 42."}
+    return {"ok": True, "error": None}
 
 
 # --- Fixture -----------------------------------------------------------------
@@ -372,30 +448,11 @@ def main(argv: list[str]) -> int:
         # najjeftiniji gate koji hvata najcescu klasu kvara posle Edit/Write nad
         # src-vba (duple definicije, deklaracija posle prve procedure, ime koje
         # se poklapa sa rezervisanom reci).
-        before = len(watchdog.seen)
-        try:
-            ctl = xl.VBE.CommandBars.FindControl(Id=COMPILE_CONTROL_ID)
-            ctl.Execute()
-            time.sleep(1.0)             # daj watchdog-u sansu da uhvati dijalog
-            # Posle uspesnog compile-a stavka "Compile VBAProject" postaje siva.
-            enabled_after = bool(ctl.Enabled)
-        except Exception as exc:        # noqa: BLE001
-            report["compile"] = {"ok": False, "error": f"{exc}"}
-        else:
-            dialogs = watchdog.seen[before:]
-            bad = [d for d in dialogs if "compile" in d.lower() or "kompajl" in d.lower()]
-            if bad:
-                report["compile"] = {"ok": False, "error": " ;; ".join(bad)}
-            elif enabled_after:
-                report["compile"] = {
-                    "ok": None,
-                    "error": "Compile stavka je i dalje aktivna -- rezultat nejasan "
-                             "(vidi docs/EXCEL_TEST_HARNESS.md, zamka #5).",
-                }
-            else:
-                report["compile"] = {"ok": True, "error": None}
+        report["compile"] = compile_project(xl, wb, watchdog)
 
-        if report["compile"] and report["compile"].get("ok") is False:
+        if report["compile"].get("ok") is not True:
+            # Sve osim eksplicitnog True je pad. "Nejasno" ne sme da prodje kao
+            # zeleno -- alat koji ne zna ishod mora da kaze da ne zna, glasno.
             rc = 2
         elif args.compile_only:
             rc = 0

@@ -77,6 +77,28 @@ Modalne dijaloge zatvara watchdog nit (prozori klase `#32770` u Excel procesu,
 klik na podrazumevano dugme). Svaki uhvaćen dijalog se prijavljuje u izveštaju —
 neočekivan dijalog je nalaz, ne šum.
 
+## Kako se compile stvarno meri (i zašto ne preko menija)
+
+Prva verzija je zaključivala iz `Enabled` stanja stavke **Debug → Compile
+VBAProject** („posle uspešnog compile-a postaje siva"). To **ne radi** u
+nevidljivom Excelu: VBE osvežava enabled-stanje kontrola tek kad se meni iscrta,
+pa stavka ostaje aktivna i kad je projekat uredno kompajliran. Rezultat je bio
+`COMPILE NEJASNO` na svakom pokretanju — a, gore, `NEJASNO` je prolazilo kao
+`REZULTAT: ZELENO`.
+
+Sada ide u dva koraka:
+
+1. **Meni `Compile VBAProject`** — forsira pun compile. Greška izlazi kao modalni
+   dijalog, koji watchdog zatvori i zapamti → `COMPILE FAIL` sa tekstom dijaloga.
+2. **Probe** — u projekat se doda trivijalan modul `modZzCompileProbe` sa
+   funkcijom koja vraća `42`, pa se ta funkcija pozove i modul obriše. VBA pred
+   izvršavanje **bilo koje** procedure kompajlira **ceo** projekat, pa greška u
+   ma kom modulu obara `Application.Run`. Vraćenih `42` je jedino što se računa
+   kao „compile prošao".
+
+Pravilo: **sve što nije eksplicitno `OK` je pad** (izlazni kod 2). Alat koji ne
+zna ishod mora to da kaže glasno, ne da ćuti u zeleno.
+
 ## `gate` vs „blind" suite
 
 Katalog `SUITES` u skripti nosi zastavicu `gate`:
