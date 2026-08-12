@@ -14,6 +14,11 @@ Upotreba:
     python tools/run_vba.py --all
     python tools/run_vba.py --workbook "C:\\putanja\\AgriX_OtkupApp.xlsm"
 
+Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`, a ako ga nema,
+skript ga sam napravi kao PRAZNU .xlsm. Za compile je to dovoljno; suite-ovima
+trebaju podaci, pa im prosledi pravu radnu svesku kroz `--workbook`. Sveska se
+uvek kopira u temp -- original se ne dira. Detalji: docs/EXCEL_TEST_HARNESS.md.
+
 Izlazni kod: 0 = zeleno, 2 = palo (compile greska, pala suite, ili neocekivan dijalog).
 
 Zasto ovaj skript NE zove `ImportAllVBA`:
@@ -73,6 +78,9 @@ SELF_MODULE = "modVbaTools"          # isto kao modVbaTools.SELF_MODULE
 COMPILE_CONTROL_ID = 578             # VBE: Debug > Compile VBAProject
 
 VBE_TYPE = {".bas": 1, ".cls": 2, ".frm": 3, ".doccls": 100}
+
+DEFAULT_FIXTURE = os.path.join(ROOT, "tests", "fixtures", "otkup_test.xlsm")
+XL_OPENXML_MACRO = 52                # xlOpenXMLWorkbookMacroEnabled (.xlsm)
 
 
 # --- Watchdog za modalne dijaloge --------------------------------------------
@@ -237,6 +245,41 @@ def import_src_vba(wb, log: list[str]) -> None:
             log.append(f"SKIP {name} (forma bez headera)")
 
 
+# --- Fixture -----------------------------------------------------------------
+
+def create_blank_fixture(path: str, win32) -> None:
+    """Napravi praznu .xlsm svesku na `path`.
+
+    Za `--compile-only` je prazna sveska dovoljna, i to nije srecna slucajnost:
+    nijedan modul ne referencira sheet CodeName rano-vezano (svi `SHT_*` u
+    `modConfig` su string literali), a nijedan `.doccls` nema `Public` clan koji
+    bi neko spolja zvao. Sheet `.doccls`-ovi se zato uredno preskoce ("nema
+    komponente") i compile i dalje pokriva ceo `src-vba/`.
+
+    Za suite-ove prazna sveska NIJE dovoljna -- one citaju `tblOtkup`,
+    `tblKooperanti` i ostale tabele, pa tamo ide prava radna sveska kroz
+    `--workbook`.
+    """
+    import pythoncom
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Zaseban COM apartment: ovo se zove PRE glavnog CoInitialize u main().
+    pythoncom.CoInitialize()
+    xl = win32.DispatchEx("Excel.Application")
+    try:
+        xl.Visible = False
+        xl.DisplayAlerts = False
+        wb = xl.Workbooks.Add()
+        wb.SaveAs(path, FileFormat=XL_OPENXML_MACRO)
+        wb.Close(SaveChanges=False)
+    finally:
+        try:
+            xl.Quit()
+        except Exception:
+            pass
+        pythoncom.CoUninitialize()
+
+
 # --- Glavni tok --------------------------------------------------------------
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -277,11 +320,25 @@ def main(argv: list[str]) -> int:
     import win32con
     import win32process
 
-    fixture = args.workbook or os.path.join(ROOT, "tests", "fixtures", "otkup_test.xlsm")
+    fixture = args.workbook or DEFAULT_FIXTURE
     if not os.path.exists(fixture):
-        print(f"Sveska ne postoji: {fixture}", file=sys.stderr)
-        print("Napravi je po docs/EXCEL_TEST_HARNESS.md ili prosledi --workbook.", file=sys.stderr)
-        return 2
+        if args.workbook:
+            print(f"Sveska ne postoji: {fixture}", file=sys.stderr)
+            return 2
+        # Podrazumevani fixture se pravi sam -- prazna sveska je dovoljna za
+        # compile (vidi create_blank_fixture). Ovo se desi tacno jednom.
+        print(f"Fixture ne postoji, pravim praznu svesku: {fixture}")
+        try:
+            create_blank_fixture(fixture, win32)
+        except Exception as exc:
+            print(f"Ne mogu da napravim fixture: {exc}", file=sys.stderr)
+            print('Prosledi postojecu svesku: --workbook "...\\AgriX_OtkupApp.xlsm"',
+                  file=sys.stderr)
+            return 2
+        if not args.compile_only:
+            print("UPOZORENJE: prazna sveska nema tabele -- suite ce pasti na podacima.",
+                  file=sys.stderr)
+            print('Za suite koristi --workbook "...\\AgriX_OtkupApp.xlsm".', file=sys.stderr)
 
     tmp = tempfile.mkdtemp(prefix="vbatest_")
     wbpath = os.path.join(tmp, os.path.basename(fixture))

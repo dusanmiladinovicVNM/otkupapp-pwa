@@ -7,3 +7,6 @@ src-vba/*.log
 
 # Generisani izlaz iz tools/ugovor.sh build
 docs/Legal/build/
+
+# Excel test fixture (pravi ga tools/run_vba.py, ne ide u git)
+tests/fixtures/

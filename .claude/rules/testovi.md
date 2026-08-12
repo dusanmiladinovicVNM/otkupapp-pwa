@@ -55,6 +55,12 @@ Ne zove `modVbaTools.ImportAllVBA` (hardkodiran folder + završni `MsgBox` = smr
 za headless), nego ponavlja njegovu logiku preko COM-a. Modalne dijaloge zatvara
 watchdog.
 
+Sveska: bez `--workbook` ide `tests/fixtures/otkup_test.xlsm`, a ako ga nema,
+skripta ga sama napravi kao **praznu** `.xlsm` — za compile je to dovoljno (nijedan
+modul ne referencira sheet `CodeName` rano-vezano). Suite-ovima trebaju podaci, pa
+im prosledi pravu radnu svesku. Original se nikad ne dira — radi se nad temp
+kopijom. Detalji: `docs/EXCEL_TEST_HARNESS.md`.
+
 ## 3) `gate` vs „blind" suite — bez ovoga se lako pogrešno zaključi
 
 Suite sa `gate: True` **podiže grešku** kad provera padne, pa je runner vidi kao
