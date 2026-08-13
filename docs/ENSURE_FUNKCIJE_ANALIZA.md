@@ -283,11 +283,32 @@ Dva jeftina koraka:
 
 | Faza | Sadržaj | Fajlovi | Rizik | Vrednost |
 |---|---|---|---|---|
-| **F1** | N1 + N2 + N3: per-korak logovanje u `EnsureRuntimeSchema`/`EnsureSledljivostSchema`; `MsgBox` iz jezgara u `Setup*` omotače; `AdminEnsureEverything` skuplja i prijavljuje stvarni rezultat; ukloniti dupli `EnsureCenovnikSchema` | `modSetup`, `modAdmin` | nizak | **visoka** — kraj tihim padovima i lažnom „sve OK" |
+| **F1** ✅ | N1 + N2 + N3: per-korak logovanje u `EnsureRuntimeSchema`/`EnsureSledljivostSchema`; `MsgBox` iz jezgara u omotače; `AdminEnsureEverything` skuplja i prijavljuje stvarni rezultat; ukloniti dupli `EnsureCenovnikSchema` | `modSetup`, `modAdmin`, `modMain`, `modPoruke` | nizak | **visoka** — kraj tihim padovima i lažnom „sve OK" |
 | **F2** | N4: primitivi `Public`, brisanje 3 forka | `modSetup`, `modPaletniList`, `modBankaImport` | nizak-srednji | visoka — anti-duplication |
 | **F3** | 4.1 preimenovanja (5 komada) + `RequirePrijemnicaNotPaletized` | ~6 fajlova | nizak (mehanički, `vba_check` hvata promašaje) | srednja — čitljivost ugovora |
 | **F4** | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modBusinessFlowProTests` | nizak | srednja — sprečava povratak |
 | **F5** *(opciono)* | 4.4 skuplja varijanta; deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup` + `modConfig` | **srednji-visok** | visoka, ali je to redizajn — tek kad F1–F4 legnu |
+
+### F1 — izvršeno
+
+- `EnsureRuntimeSchema` i `EnsureSledljivostSchema`: `Sub` → `Function As Long`
+  (vraćaju broj palih koraka), per-korak `Err` provera + `LogSetup "ERROR"` kroz
+  novi privatni `StepFailed`. Pad koraka **ne prekida** ostale.
+- `EnsurePaletniListSchemaCore` / `EnsureDoradeSchemaCore`: nova tiha jezgra;
+  `EnsurePaletniListSchema` / `EnsureDoradeSchema` ostaju kao `MsgBox` omotači na
+  istom imenu (Alt+F8 navika operatera se ne menja).
+- `AdminEnsureEverything`: zove tiha jezgra, skuplja padove i javlja stvarno
+  stanje jednim dijalogom; dupli `EnsureCenovnikSchema` uklonjen. Dijaloga po
+  kliku: **4 → 2** (`SetupNewPC` izveštaj + finalni rezime).
+- `modMain.InitApp`: mrtva `If Err.Number <> 0` provera zamenjena brojem palih
+  koraka; sažetak ide u dnevni log fajl preko `LogError` (fajl koji korisnik
+  šalje podršci), detalji po koraku u `SETUP_LOG`.
+- Nove poruke u katalogu (`modPoruke`): `SETUP_MSG_KORAKA_NIJE_PROSLO`,
+  `SETUP_MSG_ENSURE_SVE_PROSLO`, `SETUP_MSG_ENSURE_SA_PADOVIMA`.
+
+Zaostalo za F2: `EnsureAuditColumnsCore` i dalje prekida obradu preostalih tabela
+kad jedna padne — ali **glasno** (propagira `Err`), pa je van F1 opsega (F1 gasi
+tihe padove).
 
 F5 je namerno poslednja i označena kao opciona: `AuditableTables()`
 (`modSetup.bas:1090`) je već mikro-registar i pokazuje da obrazac radi, ali

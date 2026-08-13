@@ -209,12 +209,22 @@ Public Sub InitApp()
 
     ' Schema self-heal: kolone dodate kroz self-update KODA nastanu automatski
     ' posle restarta (silent, idempotentno; isti obrazac kao EnsurePoruke).
+    '
+    ' Signal je BROJ palih koraka, ne Err: EnsureRuntimeSchema radi pod "On Error
+    ' Resume Next" i vraca se normalno, pa se Err resetuje na izlasku iz procedure
+    ' i raniji "If Err.Number <> 0" ovde nikad nije opalio -- pad self-heal-a je bio
+    ' potpuno nevidljiv. (Kod EnsurePoruke gore Err provera RADI jer ono re-raise-uje.)
+    ' Detalji po koraku idu u SETUP_LOG; ovde se pise samo sazetak u dnevni log fajl,
+    ' jer je to fajl koji korisnik salje podrsci.
     On Error Resume Next
-    EnsureRuntimeSchema
-    If Err.Number <> 0 Then
-        LogErr "modMain.InitApp.EnsureRuntimeSchema"
-        Err.Clear
+    Dim schemaFails As Long
+    schemaFails = EnsureRuntimeSchema()
+    If schemaFails > 0 Then
+        LogError "modMain.InitApp", _
+                 "EnsureRuntimeSchema: " & schemaFails & " koraka nije proslo (detalji u SETUP_LOG).", _
+                 0, LOG_WARN
     End If
+    Err.Clear
     On Error GoTo ErrHandler
 
     ValidateAllTables

@@ -267,23 +267,75 @@ EH:
 End Sub
 
 ' Agregat "ensure everything": glavni setup + sve pojedinacne seme (reuse).
-' Sve su idempotentne; svaka javlja svoj rezultat, pa finalni rezime.
+' Sve su idempotentne.
+'
+' Ranije je ovo zvalo MsgBox-varijante jezgara, pa je jedan klik davao CETIRI
+' dijaloga -- a gore od toga, pad koraka je zavrsavao u sopstvenom MsgBox-u i
+' procedura se normalno vracala, pa je agregat odmah zatim javljao "sve
+' provereno". Sada se zovu TIHA jezgra (*Core), rezultat se skuplja i na kraju
+' se javlja STVARNO stanje. Jedini tudji dijalog je SetupNewPC -- on je Setup*
+' ulazna tacka i njegov izvestaj nosi dijagnostiku koju nema smisla gutati.
 Private Sub AdminEnsureEverything()
+    Dim problems As String
+    Dim fails As Long
+
     On Error GoTo EH
-    SetupNewPC
-    EnsurePoruke
-    EnsureCenovnikSchema
-    EnsurePaletniListSchema
-    EnsureDoradeSchema
-    EnsureKorisniciSchema
-    EnsureAuditColumns
-    MsgBox "Ensure zavr" & ChrW(353) & "en (setup + sve " & ChrW(353) & "eme provereno).", _
-           vbInformation, APP_NAME
+    SetupNewPC                       ' prikazuje svoj izvestaj (setup health-check)
+
+    On Error Resume Next
+
+    Err.Clear: EnsurePoruke
+    problems = problems & EnsureStepLine("Poruke (tblPoruke)", 0)
+
+    ' EnsureCenovnikSchema se NE zove posebno -- EnsurePaletniListSchemaCore ga
+    ' vec zove, pa je raniji direktan poziv bio cist duplikat.
+    ' fails = 0 pre poziva: pod "Resume Next" dodela izostane ako poziv pukne, pa
+    ' bi promenljiva zadrzala broj iz PRETHODNOG koraka i lazno ga prijavila.
+    Err.Clear: fails = 0: fails = EnsurePaletniListSchemaCore()
+    problems = problems & EnsureStepLine("Paletni list + cenovnik", fails)
+
+    Err.Clear: fails = 0: fails = EnsureDoradeSchemaCore()
+    problems = problems & EnsureStepLine("Dorade + runtime schema", fails)
+
+    Err.Clear: EnsureKorisniciSchema
+    problems = problems & EnsureStepLine("Korisnici", 0)
+
+    Err.Clear: EnsureAuditColumnsCore
+    problems = problems & EnsureStepLine("Audit kolone", 0)
+
+    On Error GoTo EH
+
+    If Len(problems) = 0 Then
+        MsgBox Poruka("SETUP_MSG_ENSURE_SVE_PROSLO"), vbInformation, APP_NAME
+    Else
+        MsgBox Poruka("SETUP_MSG_ENSURE_SA_PADOVIMA") & vbCrLf & vbCrLf & problems & _
+               vbCrLf & "Detalji: list SETUP_LOG (Level = ERROR).", _
+               vbExclamation, APP_NAME
+    End If
     Exit Sub
 EH:
     LogErr "modAdmin.AdminEnsureEverything"
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbExclamation, APP_NAME
 End Sub
+
+' Rezultat jednog Ensure koraka -> red izvestaja (prazno kad je proslo).
+' Pokriva oba oblika signala koja jezgra danas koriste: Err (jezgra koja
+' re-raise-uju) i broj palih koraka (jezgra koja nastavljaju posle pada).
+' errNum/errDesc: konvencija projekta za EH promenljive.
+Private Function EnsureStepLine(ByVal labelText As String, ByVal failCount As Long) As String
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    errDesc = Err.description
+    Err.Clear
+
+    If errNum <> 0 Then
+        EnsureStepLine = "- " & labelText & ": " & errDesc & " (" & errNum & ")" & vbCrLf
+    ElseIf failCount > 0 Then
+        EnsureStepLine = "- " & labelText & ": " & failCount & " korak(a) nije proslo" & vbCrLf
+    End If
+End Function
 
 ' Objava na Drive je outward-facing (ceo fleet) i build/dev komanda -> trazi
 ' sifru (RELEASE_PUBLISH_SIFRA, modConfig). Unos sifre je ujedno i potvrda

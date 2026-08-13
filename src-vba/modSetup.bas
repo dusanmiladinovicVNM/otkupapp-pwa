@@ -913,55 +913,15 @@ End Sub
 Public Sub EnsurePaletniListSchema()
     On Error GoTo EH
 
-    EnsureDataTable TBL_TIP_PALETE, "TipPalete", _
-        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+    Dim fails As Long
+    fails = EnsurePaletniListSchemaCore()
 
-    EnsureDataTable TBL_TIP_AMBALAZE, "TipAmbalaze", _
-        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+    If fails > 0 Then
+        MsgBox "Paletni list: " & fails & Poruka("SETUP_MSG_KORAKA_NIJE_PROSLO"), _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
 
-    EnsureDataTable TBL_PALETA, "Palete", _
-        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
-              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
-              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
-              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
-              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO, _
-              COL_PAL_ISTORIJA)
-
-    EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
-        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
-              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
-              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
-              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO)
-
-    EnsureDataTable TBL_PRERADA, "Prerada", _
-        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
-              COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
-              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
-              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
-              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
-
-    EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
-        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
-              COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
-
-    EnsureDataTable TBL_KUTIJE, "Kutije", _
-        Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
-
-    EnsureDataTable TBL_KESE, "Kese", _
-        Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
-
-    EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
-        Array(COL_VGP_TIP, "Aktivan")
-
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
-    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
-
-    EnsureCenovnikSchema
-
-    EnsurePaletaSablon
-    EnsurePreradaSablon
-
-    LogSetup "OK", "EnsurePaletniListSchema done"
     MsgBox "Paletni list: seme su kreirane/proverene." & vbCrLf & vbCrLf & _
            "Popunite: tblTipAmbalaze (12/1, 6/1 -> kg), tblTipPalete (tip -> kg)," & vbCrLf & _
            "i kolonu GajbicaPoPaleti u tblKulture (malina = 240)." & vbCrLf & _
@@ -975,6 +935,91 @@ EH:
     LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
     MsgBox "Gre" & ChrW(353) & "ka u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Postoji da bi agregat
+' (modAdmin.AdminEnsureEverything) mogao da ga pozove bez dijaloga i da SAZNA da
+' li je nesto palo: ranije je pad ovde zavrsavao u MsgBox-u pa se procedura
+' normalno vracala, a agregat je odmah zatim javljao "sve provereno".
+Public Function EnsurePaletniListSchemaCore() As Long
+    Dim fails As Long
+
+    InitSetupLog
+    On Error Resume Next
+
+    Err.Clear
+    EnsureDataTable TBL_TIP_PALETE, "TipPalete", _
+        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+    fails = fails + StepFailed("PaletniList/" & TBL_TIP_PALETE)
+
+    Err.Clear
+    EnsureDataTable TBL_TIP_AMBALAZE, "TipAmbalaze", _
+        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+    fails = fails + StepFailed("PaletniList/" & TBL_TIP_AMBALAZE)
+
+    Err.Clear
+    EnsureDataTable TBL_PALETA, "Palete", _
+        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
+              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
+              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
+              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
+              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO, _
+              COL_PAL_ISTORIJA)
+    fails = fails + StepFailed("PaletniList/" & TBL_PALETA)
+
+    Err.Clear
+    EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
+              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
+              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
+              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO)
+    fails = fails + StepFailed("PaletniList/" & TBL_PALETA_STAVKA)
+
+    Err.Clear
+    EnsureDataTable TBL_PRERADA, "Prerada", _
+        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
+              COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
+              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
+              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
+              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
+    fails = fails + StepFailed("PaletniList/" & TBL_PRERADA)
+
+    Err.Clear
+    EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
+        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+              COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
+    fails = fails + StepFailed("PaletniList/" & TBL_PRERADA_STAVKA)
+
+    Err.Clear
+    EnsureDataTable TBL_KUTIJE, "Kutije", _
+        Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
+    EnsureDataTable TBL_KESE, "Kese", _
+        Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
+    EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
+        Array(COL_VGP_TIP, "Aktivan")
+    fails = fails + StepFailed("PaletniList/Sifarnici")
+
+    Err.Clear
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
+    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
+    fails = fails + StepFailed("PaletniList/Kolone")
+
+    Err.Clear
+    EnsureCenovnikSchema
+    fails = fails + StepFailed("PaletniList/" & TBL_CENOVNIK)
+
+    Err.Clear
+    EnsurePaletaSablon
+    EnsurePreradaSablon
+    fails = fails + StepFailed("PaletniList/Sabloni")
+
+    If fails > 0 Then
+        LogSetup "ERROR", "EnsurePaletniListSchema: " & fails & " koraka nije proslo"
+    Else
+        LogSetup "OK", "EnsurePaletniListSchema done"
+    End If
+
+    EnsurePaletniListSchemaCore = fails
+End Function
 
 ' ============================================================
 ' Cenovnik (cene po proizvodu) -- jednokratni schema setup.
@@ -1131,42 +1176,90 @@ End Sub
 ' self-update KODA nastanu automatski posle restarta -- bez rucnog Alt+F8.
 ' EnsureColumnOnTable je no-op kad kolona postoji (cena posle prvog heal-a
 ' zanemarljiva). Ovde idu SAMO sigurne, idempotentne izmene bez backfill-a.
+'
+' Vraca BROJ PALIH koraka (0 = sve proslo). Ranije je ceo blok bio pod golim
+' "On Error Resume Next" bez ijednog loga: zakljucana tabela ili zasticen sheet
+' su prolazili nemo, aplikacija se dizala bez kolone, a greska je isplivavala tek
+' kasnije kao pogresan podatak u dokumentu. Provera "If Err.Number <> 0" kod
+' pozivaoca (modMain.InitApp) nikad nije opalila jer se Err resetuje na izlasku
+' iz procedure. Sada svaki korak ostavlja trag u SETUP_LOG-u (StepFailed), a
+' tok se NE prekida -- 11 od 12 odradjenih koraka je bolje od nula.
 ' ============================================================
-Public Sub EnsureRuntimeSchema()
+Public Function EnsureRuntimeSchema() As Long
+    Dim fails As Long
+
+    InitSetupLog          ' bez SETUP_LOG sheet-a LogSetup tiho pada (isto radi EnsureAuditColumnsCore)
     On Error Resume Next
+
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
+    Err.Clear
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+    fails = fails + StepFailed("RuntimeSchema/PragoviKulture")
 
     ' Format kolona (schema-drift: reinstall/self-update vrati kolone na General ->
     ' E-notacija/tarabe na dokumentima). Idempotentno, tera se na SVAKI start.
     ' BPG je identifikator (dug broj), ne racunska vrednost -> Text ("@").
+    Err.Clear
     SetColumnNumberFormat TBL_KOOPERANTI, COL_KOOP_BPG, "@"
     ' Prerada: tezine su Double (samo prikaz) -> fiksni decimalni format spreci General/E.
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_BRUTO, "0.00"
     SetColumnNumberFormat TBL_PRERADA, COL_PRE_AMBALAZA, "0.00"
+    fails = fails + StepFailed("RuntimeSchema/FormatiKolona")
 
     ' Vidljivi audit trag na paleti (relabel/detach/adjust). Deo je i punog
     ' EnsurePaletniListSchema, ali se dodaje ovde da nastane AUTOMATSKI posle
     ' self-update-a KODA -- bez rucnog Alt+F8 koraka. EnsureColumnOnTable je no-op
     ' kad kolona postoji.
+    Err.Clear
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA
+    fails = fails + StepFailed("RuntimeSchema/PaletaIstorija")
 
     ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
     ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
+    Err.Clear
     EnsureStornoVezeSchemaCore
+    fails = fails + StepFailed("RuntimeSchema/" & TBL_STORNO_VEZE)
 
     ' Storno operacioni zurnal (tblStornoZurnal) za lossless "Vrati storno".
     ' Idempotentno; nastane automatski posle self-update-a KODA.
+    Err.Clear
     EnsureStornoZurnalSchemaCore
+    fails = fails + StepFailed("RuntimeSchema/" & TBL_STORNO_ZURNAL)
 
     ' Sledljivost ispravki (ADR-0002 / Faza 7). Idempotentno; nastane automatski
-    ' posle self-update-a KODA (bez rucnog Alt+F8).
-    EnsureSledljivostSchema
-End Sub
+    ' posle self-update-a KODA (bez rucnog Alt+F8). Sam loguje svoje korake.
+    fails = fails + EnsureSledljivostSchema()
+
+    If fails > 0 Then
+        LogSetup "ERROR", "EnsureRuntimeSchema: " & fails & " koraka nije proslo"
+    Else
+        LogSetup "OK", "EnsureRuntimeSchema done"
+    End If
+
+    EnsureRuntimeSchema = fails
+End Function
+
+' Jedan korak Ensure-a: ako je prethodna naredba pala (radi se pod "On Error
+' Resume Next"), upisi trag u SETUP_LOG, ocisti Err i vrati 1. Inace vrati 0.
+' Time Ensure* jezgra mogu da nastave posle pada, a da pad ne ostane nem.
+' errNum/errDesc: konvencija projekta za EH promenljive (.claude/rules/vba-izvor.md).
+Private Function StepFailed(ByVal ctx As String) As Long
+    Dim errNum As Long
+    Dim errDesc As String
+
+    errNum = Err.Number
+    If errNum = 0 Then Exit Function
+
+    errDesc = Err.description
+    Err.Clear
+
+    LogSetup "ERROR", ctx & ": " & errDesc & " (" & errNum & ")"
+    StepFailed = 1
+End Function
 
 ' ============================================================
 ' Sledljivost ispravki (ADR-0002, append-only dokument model; Faza 7 korak 1).
@@ -1176,14 +1269,19 @@ End Sub
 ' svakom startu i nastane automatski posle self-update-a KODA.
 ' Bez backfill-a (skup na svakom startu): PRAZAN IzdatoStatus se tumaci kao IZDATO
 ' (konzervativno -> teski korektivni put) u read-logici kasnijih koraka.
+' Vraca broj tabela na kojima korak nije prosao (0 = sve proslo); pad na jednoj
+' tabeli ne prekida ostale.
 ' ============================================================
-Public Sub EnsureSledljivostSchema()
+Public Function EnsureSledljivostSchema() As Long
+    Dim fails As Long
+
     On Error Resume Next
     Dim tbls As Variant
     tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
+        Err.Clear
         EnsureColumnOnTable t, COL_TRACE_ISPRAVKA_OD
         EnsureColumnOnTable t, COL_TRACE_ZAMENJEN_SA
         EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
@@ -1191,10 +1289,16 @@ Public Sub EnsureSledljivostSchema()
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
         ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
         EnsureColumnOnTable t, COL_GENERACIJA_ID
+        fails = fails + StepFailed("SledljivostSchema/" & t)
     Next i
+
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
+    Err.Clear
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
-End Sub
+    fails = fails + StepFailed("SledljivostSchema/" & TBL_OTKUP & "." & COL_OTK_BROJ_OTPREMNICE)
+
+    EnsureSledljivostSchema = fails
+End Function
 
 ' ============================================================
 ' Backfill BrojOtpremnice na tblOtkup iz OtpremnicaID (Faza 7 korak 5). Alt+F8,
@@ -1249,50 +1353,15 @@ End Sub
 Public Sub EnsureDoradeSchema()
     On Error GoTo EH
 
-    ' #1 soft-delete: kolona Aktivan na sifarnicima koji je nemaju (+ backfill).
-    EnsureAktivanColumn TBL_KULTURE
-    EnsureAktivanColumn TBL_TIP_AMBALAZE
-    EnsureAktivanColumn TBL_TIP_PALETE
-    EnsureAktivanColumn TBL_KUTIJE
-    EnsureAktivanColumn TBL_KESE
-    EnsureAktivanColumn TBL_VRSTA_GP
+    Dim fails As Long
+    fails = EnsureDoradeSchemaCore()
 
-    ' #6: podrazumevani tip ambalaze po kulturi.
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
+    If fails > 0 Then
+        MsgBox "Dorade: " & fails & Poruka("SETUP_MSG_KORAKA_NIJE_PROSLO"), _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
 
-    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
-    ' Deljeno sa startup self-heal-om (modMain.InitApp -> EnsureRuntimeSchema),
-    ' pa kolone nastanu i automatski posle self-update-a KODA (bez rucnog koraka).
-    EnsureRuntimeSchema
-
-    ' #3: flag hladnjaca na stanici (+ backfill "Ne").
-    EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
-    BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
-
-    ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
-
-    ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA
-    BackfillColumn TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
-
-    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_VREME_UNOSA
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
-
-    ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
-    ' Prazno = unet neto (bruto == neto); ne backfill-uje se (modPrint tretira >0 kao prisutno).
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BRUTO
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
-
-    LogSetup "OK", "EnsureDoradeSchema done"
     MsgBox "Dorade: seme su proverene/kreirane." & vbCrLf & vbCrLf & _
            "- Aktivan: Kulture/Ambala" & ChrW(382) & "a/Palete (postojeci -> Aktivan)" & vbCrLf & _
            "- TipAmbalaze: tblKulture (podrazumevani po kulturi)" & vbCrLf & _
@@ -1308,6 +1377,82 @@ EH:
     LogSetup "ERROR", "EnsureDoradeSchema failed: " & Err.description
     MsgBox "Gre" & ChrW(353) & "ka u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Isti razlog kao kod
+' EnsurePaletniListSchemaCore: agregat mora da zna sta je palo, a ne da mu pad
+' zavrsi u dijalogu i vrati se kao "uspeh". Pad jednog koraka NE prekida ostale.
+Public Function EnsureDoradeSchemaCore() As Long
+    Dim fails As Long
+
+    InitSetupLog
+    On Error Resume Next
+
+    ' #1 soft-delete: kolona Aktivan na sifarnicima koji je nemaju (+ backfill).
+    Err.Clear
+    EnsureAktivanColumn TBL_KULTURE
+    EnsureAktivanColumn TBL_TIP_AMBALAZE
+    EnsureAktivanColumn TBL_TIP_PALETE
+    EnsureAktivanColumn TBL_KUTIJE
+    EnsureAktivanColumn TBL_KESE
+    EnsureAktivanColumn TBL_VRSTA_GP
+    fails = fails + StepFailed("Dorade/AktivanKolone")
+
+    ' #6: podrazumevani tip ambalaze po kulturi.
+    Err.Clear
+    EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
+    fails = fails + StepFailed("Dorade/" & TBL_KULTURE & "." & COL_KUL_TIP_AMBALAZE)
+
+    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
+    ' Deljeno sa startup self-heal-om (modMain.InitApp -> EnsureRuntimeSchema),
+    ' pa kolone nastanu i automatski posle self-update-a KODA (bez rucnog koraka).
+    ' Sam loguje svoje korake -- ovde se samo preuzima broj padova.
+    fails = fails + EnsureRuntimeSchema()
+
+    ' #3: flag hladnjaca na stanici (+ backfill "Ne").
+    Err.Clear
+    EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
+    BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
+    fails = fails + StepFailed("Dorade/" & TBL_STANICE & "." & COL_STA_JE_HLADNJACA)
+
+    ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
+    Err.Clear
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
+    SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
+    fails = fails + StepFailed("Dorade/FormatKolicine")
+
+    ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
+    Err.Clear
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA
+    BackfillColumn TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
+    fails = fails + StepFailed("Dorade/" & TBL_OTKUP & "." & COL_OTK_KOL_AMB_IZDATA)
+
+    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
+    Err.Clear
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_VREME_UNOSA
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
+    fails = fails + StepFailed("Dorade/" & TBL_OTKUP & "." & COL_OTK_VREME_UNOSA)
+
+    ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
+    ' Prazno = unet neto (bruto == neto); ne backfill-uje se (modPrint tretira >0 kao prisutno).
+    Err.Clear
+    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BRUTO
+    SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
+    EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
+    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
+    EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO
+    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
+    fails = fails + StepFailed("Dorade/BrutoKg")
+
+    If fails > 0 Then
+        LogSetup "ERROR", "EnsureDoradeSchema: " & fails & " koraka nije proslo"
+    Else
+        LogSetup "OK", "EnsureDoradeSchema done"
+    End If
+
+    EnsureDoradeSchemaCore = fails
+End Function
 
 ' Dodaj kolonu Aktivan ako fali i postavi "Aktivan" na sve prazne (backfill).
 Private Sub EnsureAktivanColumn(ByVal tblName As String)
