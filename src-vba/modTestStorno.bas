@@ -29,6 +29,11 @@ Private mFail As Long
 Private mFails As String
 Private mReport As String
 
+' Gate: suite mora da PODIGNE gresku kad provera padne, inace je runner vidi kao
+' "blind" -- proslo bez greske, sto NIJE isto sto i sve provere prosle. Konvencija
+' preuzeta iz modTestBanka.ERR_BIT_SUITE_FAILED.
+Private Const ERR_STORNO_SUITE_FAILED As Long = vbObjectError + 2962
+
 ' Deterministicki hladnjaca-kupac za testove (config se snapshotuje pa vraca
 ' rollback-om). Zbirna sa ovim KupacID = interni hladnjaca-tok (kaskada); bilo koji
 ' drugi KupacID = eksterni kupac (prijemnica netaknuta).
@@ -115,14 +120,32 @@ Public Sub RunStornoTestSuite()
     tx.RollbackTx
     Set tx = Nothing
 
+    On Error GoTo 0
     ReportResults
+
+    If mFail > 0 Then
+        Err.Raise ERR_STORNO_SUITE_FAILED, "modTestStorno.RunStornoTestSuite", _
+            "RunStornoTestSuite: " & CStr(mFail) & " provera palo (PASS=" & _
+            CStr(mPass) & "). Detalji u Immediate prozoru."
+    End If
+
     Exit Sub
 EH:
+    Dim errDesc As String
+    errDesc = Err.description
+
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     LogErr "modTestStorno.RunStornoTestSuite"
-    MsgBox "Greska u test suite-u: " & Err.description & vbCrLf & vbCrLf & _
-           "Do sada: PASS=" & mPass & " FAIL=" & mFail, vbCritical, APP_NAME
+    On Error GoTo 0
+
+    ' Prekid je pad, ne "nije se desilo": ubroji ga i podigni, da runner ne
+    ' prijavi zeleno za suite koja nije dosla do kraja.
+    Fail "SUITE prekinut greskom: " & errDesc
+    ReportResults
+
+    Err.Raise ERR_STORNO_SUITE_FAILED, "modTestStorno.RunStornoTestSuite", _
+        "RunStornoTestSuite prekinut: " & errDesc
 End Sub
 
 ' ============================================================
