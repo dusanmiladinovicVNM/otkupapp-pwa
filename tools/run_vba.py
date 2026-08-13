@@ -65,7 +65,7 @@ SUITES = {
     "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunFakturaSmokeSuite":     {"gate": True,  "dialogs": True,  "default": True},
     "Test_StornoCentar_All":    {"gate": True,  "dialogs": False, "default": True},
-    "TestLicense_All":          {"gate": False, "dialogs": False, "default": True},
+    "TestLicense_All":          {"gate": True,  "dialogs": False, "default": True},
     # Nisu u podrazumevanom setu: traze mrezu, live SEF nalog ili duze rade.
     "RunGoogleSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunMasterSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},

@@ -48,26 +48,13 @@ if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
     exit 2
 fi
 
-# Svi gate suite-ovi iz podrazumevanog seta -- oko 1000 provera, ne samo tri.
-# Lista je eksplicitna, nikad izvedena obrascem: medju Run* procedurama nisu sve
-# testovi (RunSelfUpdate, RunGoogleAuthSetup...), pa bi "pusti sve Run*" pokrenulo
-# self-update na svakoj sesiji.
+# Podrazumevani set -- oko 1050 provera, ne samo nase tri. Vise nema eksplicitne
+# liste: katalog u tools/run_vba.py je jedini izvor istine (default: True), pa
+# nova suite ulazi u hook time sto je upisana tamo, a ne izmenom ovog fajla.
 #
-# Goli `run_vba.py` se ne koristi jer podrazumevani set nosi i TestLicense_All,
-# koji ne moze da se pokrene ("Cannot run the macro") pa bi obarao svaku sesiju --
-# a blind je, dakle ionako ne daje verdikt. Cim se raescisti, lista se brise i
-# ostaje goli poziv.
-out="$("$PY" tools/run_vba.py \
-        --suite RunAllTests \
-        --suite RunIzvestajTests \
-        --suite RunSheetsJsonParserTests \
-        --suite RunBankaImportTestSuite \
-        --suite RunFakturaSmokeSuite \
-        --suite RunStornoTestSuite \
-        --suite Test_StornoCentar_All \
-        --suite RunPaleteTestSuite \
-        --suite RunAgrohemijaSmokeSuite \
-        --suite RunBusinessFlowProSuite 2>&1)"
+# NE prosirivati na --all: medju Run* procedurama nisu sve testovi
+# (RunSelfUpdate, RunGoogleAuthSetup...), a deo trazi mrezu ili live SEF nalog.
+out="$("$PY" tools/run_vba.py 2>&1)"
 rc=$?
 
 if [ "$rc" -ne 0 ]; then
