@@ -25,6 +25,7 @@ Private Const FX_DATUM As String = "15.3.2026"      ' FIXTURE_DATE, d.m.yyyy
 Private Const FX_ZBIRNA As String = "ZB-TEST-1"     ' zbirna na OTP-TEST-1
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
+Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
 
 Private Const ERR_ASSERT As Long = vbObjectError + 9500
 Private Const ERR_GOLDEN As Long = vbObjectError + 9501
@@ -46,6 +47,8 @@ Public Sub RunAllTests()
     m_Report = ""
 
     RunOne 1
+    RunOne 2
+    RunOne 3
 
     SetTestMode prevMode
     WriteResultFile
@@ -72,6 +75,8 @@ End Sub
 Private Function TestName(ByVal idx As Long) As String
     Select Case idx
         Case 1: TestName = "T_PosleSnimanja_ZadrzavaKontekstOtpremnice"
+        Case 2: TestName = "T_PosleSnimanja_ZadrzavaZbirnu"
+        Case 3: TestName = "T_ClearForm_BrisePartnera"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -81,6 +86,8 @@ End Function
 Private Sub InvokeTest(ByVal idx As Long)
     Select Case idx
         Case 1: T_PosleSnimanja_ZadrzavaKontekstOtpremnice
+        Case 2: T_PosleSnimanja_ZadrzavaZbirnu
+        Case 3: T_ClearForm_BrisePartnera
     End Select
 End Sub
 
@@ -93,16 +100,7 @@ End Sub
 ' vrati brisanje datuma (txtDatum.value = "").
 Private Sub T_PosleSnimanja_ZadrzavaKontekstOtpremnice()
     Dim f As frmOtkup
-    Set f = New frmOtkup
-
-    Dim ctlCount As Long
-    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
-
-    ' Kontekst otpremnice OTP-TEST-1 iz fixture-a (bez .Show)
-    f.txtDatum.value = FX_DATUM
-    f.txtBrojZbirne.value = FX_ZBIRNA
-    f.txtBrojDokumenta.value = FX_BROJ_OTP
-    f.cmbKooperant.value = FX_KOOPERANT
+    Set f = NewOtkupForm()
 
     f.ClearOtkupFields
 
@@ -114,17 +112,87 @@ Private Sub T_PosleSnimanja_ZadrzavaKontekstOtpremnice()
     Unload f
 End Sub
 
+' Broj zbirne ostaje popunjen posle snimanja: sledeci blok iste otpremnice mora
+' da dobije istu zbirnu, inace operater kuca broj iznova na svaki unos. Pada ako
+' se u ClearOtkupFields vrati txtBrojZbirne.value = "".
+Private Sub T_PosleSnimanja_ZadrzavaZbirnu()
+    Dim f As frmOtkup
+    Set f = NewOtkupForm()
+
+    f.ClearOtkupFields
+    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
+             "broj zbirne mora da ostane popunjen posle snimanja"
+
+    ' Drugi blok nad istom otpremnicom -- posle jos jednog snimanja zbirna je ista.
+    f.cmbKooperant.value = FX_KOOPERANT2
+    f.ClearOtkupFields
+    AssertEq f.txtBrojZbirne.value, FX_ZBIRNA, _
+             "drugi blok mora da dobije istu zbirnu"
+
+    Unload f
+End Sub
+
+' Kooperant se BRISE posle snimanja -- sledeci unos je nov partner. Suprotno od
+' prethodna dva testa: ovde je brisanje trazeno ponasanje. Pada ako se iz
+' ClearOtkupFields ukloni cmbKooperant.value = "".
+Private Sub T_ClearForm_BrisePartnera()
+    Dim f As frmOtkup
+    Set f = NewOtkupForm()
+
+    ' Preduslov: bez ovoga bi test bio zelen i kad kontrola uopste ne prima
+    ' vrednost, pa ne bi merio nista.
+    AssertEq f.cmbKooperant.value, FX_KOOPERANT, _
+             "preduslov: kooperant je postavljen pre ciscenja"
+
+    f.ClearOtkupFields
+
+    AssertEq f.cmbKooperant.value, "", _
+             "kooperant mora da bude obrisan posle snimanja"
+
+    Unload f
+End Sub
+
+' Forma sa kontekstom otpremnice OTP-TEST-1 iz fixture-a, bez .Show.
+Private Function NewOtkupForm() As frmOtkup
+    Dim f As frmOtkup
+    Set f = New frmOtkup
+
+    Dim ctlCount As Long
+    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
+
+    f.txtDatum.value = FX_DATUM
+    f.txtBrojZbirne.value = FX_ZBIRNA
+    f.txtBrojDokumenta.value = FX_BROJ_OTP
+    f.cmbKooperant.value = FX_KOOPERANT
+
+    Set NewOtkupForm = f
+End Function
+
 ' ============================================================
 ' Assert-i
 ' ============================================================
 Public Sub AssertEq(ByVal actual As Variant, ByVal expected As Variant, _
                     ByVal label As String)
-    If CStr(actual) <> CStr(expected) Then
+    Dim a As String, e As String
+    a = SafeStr(actual)
+    e = SafeStr(expected)
+    If a <> e Then
         Err.Raise ERR_ASSERT, "modTest.AssertEq", _
-                  label & " -- ocekivano [" & CStr(expected) & _
-                  "], dobijeno [" & CStr(actual) & "]"
+                  label & " -- ocekivano [" & e & "], dobijeno [" & a & "]"
     End If
 End Sub
+
+' Prazna kontrola ume da vrati Null umesto "", a CStr(Null) puca ("Invalid use
+' of Null") -- test bi pao na toj gresci umesto na ponasanju koje meri.
+Private Function SafeStr(ByVal v As Variant) As String
+    If IsNull(v) Then
+        SafeStr = ""
+    ElseIf IsEmpty(v) Then
+        SafeStr = ""
+    Else
+        SafeStr = CStr(v)
+    End If
+End Function
 
 ' Snapshot hvata i polja koja niko nije trazio da se provere. Kad golden ne
 ' postoji, upisuje ga i PADA -- nov golden mora da prodje ljudski pregled pre
