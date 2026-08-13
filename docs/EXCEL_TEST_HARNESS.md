@@ -86,15 +86,30 @@ pa stavka ostaje aktivna i kad je projekat uredno kompajliran. Rezultat je bio
 `COMPILE NEJASNO` na svakom pokretanju — a, gore, `NEJASNO` je prolazilo kao
 `REZULTAT: ZELENO`.
 
-Sada ide u dva koraka:
+Druga verzija je verdikt tražila od **probe-a**: doda se modul sa funkcijom koja
+vraća `42`, pozove se, i ako `Application.Run` prođe — projekat se kompajlira.
+Ni to ne radi: **VBA kompajlira lenjo**. Prevede modul koji se zove i ono što taj
+modul stvarno referencira. Probe modul ne referencira ništa, pa je namerno
+ubačena greška u `modConfig` prošla netaknuta — treće lažno zeleno.
 
-1. **Meni `Compile VBAProject`** — forsira pun compile. Greška izlazi kao modalni
-   dijalog, koji watchdog zatvori i zapamti → `COMPILE FAIL` sa tekstom dijaloga.
-2. **Probe** — u projekat se doda trivijalan modul `modZzCompileProbe` sa
-   funkcijom koja vraća `42`, pa se ta funkcija pozove i modul obriše. VBA pred
-   izvršavanje **bilo koje** procedure kompajlira **ceo** projekat, pa greška u
-   ma kom modulu obara `Application.Run`. Vraćenih `42` je jedino što se računa
-   kao „compile prošao".
+Ispostavilo se i zašto meni-compile nije prijavio grešku: **`Execute()` bez
+vidljivog VBE prozora ne uradi ništa.** Kontrola „Compile VBAProject" je tada
+disabled, `Execute` tiho prođe i nikakav dijalog se ne pojavi — pa je izostanak
+dijaloga izgledao kao uspeh.
+
+Sada:
+
+1. **VBE prozor se otvara** (minimizovan) i projekat se postavlja kao aktivan —
+   bez toga meni kontrola ne reaguje.
+2. **`Enabled` stanje kontrole je verdikt.** `True` = projekat nije kompajliran,
+   `False` = jeste. Pre compile-a mora biti `True` (tek smo uvezli module); ako
+   nije, alat kaže `NEJASNO` umesto da tvrdi ishod.
+3. **Dijalozi** koje watchdog uhvati sa „compile"/„error" u tekstu = `FAIL`.
+4. **Probe** ostaje kao dodatna kontrola (hvata projekat koji uopšte nije
+   izvršiv), ali više nije izvor verdikta.
+
+Ispis uvek sadrži i sirovo stanje (`enabled_before`, `enabled_after`, `dialogs`,
+`probe`), da se sledeći pogrešan ishod ne mora pogađati.
 
 Pravilo: **sve što nije eksplicitno `OK` je pad** (izlazni kod 2). Alat koji ne
 zna ishod mora to da kaže glasno, ne da ćuti u zeleno.

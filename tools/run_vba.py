@@ -355,57 +355,130 @@ COMPILE_PROBE_CODE = (
 
 
 def compile_project(xl, wb, watchdog) -> dict:
-    """Vrati {"ok": True|False|None, "error": ...} za compile celog projekta.
+    """Vrati {"ok": True|False|None, "error": ..., "detail": {...}}.
 
-    NE oslanja se na `Enabled` stanje menija "Debug > Compile VBAProject". VBE
-    osvezava enabled-stanje kontrola tek kad se meni iscrta, pa u nevidljivom
-    Excelu ostaje `True` i posle uspesnog compile-a -- ta heuristika je davala
-    "NEJASNO" uvek.
+    Dva pokusaja su se ovde vec pokazala kao lazno zeleno, pa vredi zapisati
+    zasto oba NE rade:
 
-    Verdikt daje probe: u projekat se doda trivijalan modul sa funkcijom koja
-    vraca 42, pa se ta funkcija pozove. VBA pred izvrsavanje BILO KOJE procedure
-    kompajlira ceo projekat, pa greska u ma kom modulu obara `Application.Run`.
-    Vracenih 42 znaci da se ceo projekat kompajlira -- to je tvrdo DA.
+    - `Application.Run` nad probe funkcijom NE kompajlira ceo projekat. VBA
+      kompajlira lenjo -- prevede modul koji se zove i ono sto taj modul stvarno
+      referencira. Probe modul ne referencira nista, pa je greska u `modConfig`
+      prosla netaknuta.
+    - `FindControl(...).Execute()` bez vidljivog VBE prozora ne uradi nista.
+      Kontrola "Compile VBAProject" je tada disabled, `Execute` tiho prodje, i
+      nikakav dijalog se ne pojavi -- pa je izostanak dijaloga izgledao kao
+      uspeh.
+
+    Zato: VBE prozor se OTVARA (minimizovan), projekat se postavlja kao aktivan,
+    i tek onda se meni izvrsava. Verdikt daje `Enabled` stanje same kontrole --
+    ono je True dok projekat NIJE kompajliran, i postaje False tek kad prodje pun
+    compile. Uz to i dalje vazi: bilo kakav compile dijalog = pad.
+
+    `detail` nosi sirovo stanje (enabled pre/posle, dijalozi, probe) da sledeci
+    pogresan ishod ne mora opet da se pogadja.
     """
+    detail: dict = {}
     before = len(watchdog.seen)
 
-    # 1) Forsiraj pun compile kroz meni. Greska ovde ide kroz modalni dijalog,
-    #    koji watchdog zatvori i ostavi u `seen`.
     try:
-        ctl = xl.VBE.CommandBars.FindControl(Id=COMPILE_CONTROL_ID)
-        ctl.Execute()
-        time.sleep(1.0)
+        vbe = xl.VBE
     except Exception as exc:            # noqa: BLE001
-        return {"ok": False, "error": f"Compile meni: {exc}"}
+        return {"ok": None, "error": f"Nema pristupa VBE ({exc}) -- ukljuci "
+                                     '"Trust access to the VBA project object model".',
+                "detail": detail}
 
-    dialogs = watchdog.seen[before:]
-    bad = [d for d in dialogs
-           if any(k in d.lower() for k in ("compile", "kompajl", "greska", "error"))]
+    # VBE prozor mora biti vidljiv da bi meni kontrola bila enabled. Minimizovan
+    # je da ne skace preko ekrana.
+    try:
+        vbe.MainWindow.Visible = True
+        vbe.MainWindow.WindowState = 2      # vbext_ws_Minimize
+        detail["vbe_visible"] = bool(vbe.MainWindow.Visible)
+    except Exception as exc:                # noqa: BLE001
+        detail["vbe_visible"] = f"greska: {exc}"
+
+    try:
+        vbe.ActiveVBProject = wb.VBProject
+        detail["active_project"] = str(vbe.ActiveVBProject.Name)
+    except Exception as exc:                # noqa: BLE001
+        detail["active_project"] = f"greska: {exc}"
+
+    try:
+        ctl = vbe.CommandBars.FindControl(Id=COMPILE_CONTROL_ID)
+    except Exception as exc:                # noqa: BLE001
+        return {"ok": None, "error": f"FindControl pao: {exc}", "detail": detail}
+
+    if ctl is None:
+        return {"ok": None, "error": f"Nema kontrole 'Compile VBAProject' (Id={COMPILE_CONTROL_ID}).",
+                "detail": detail}
+
+    try:
+        detail["enabled_before"] = bool(ctl.Enabled)
+    except Exception as exc:                # noqa: BLE001
+        detail["enabled_before"] = f"greska: {exc}"
+
+    # Odmah posle importa projekat NIJE kompajliran -- kontrola mora biti
+    # enabled. Ako nije, meni nam ne govori nista i ne smemo da tvrdimo ishod.
+    if detail.get("enabled_before") is False:
+        return {"ok": None,
+                "error": "Kontrola 'Compile' je disabled JOS PRE compile-a -- meni ne "
+                         "reaguje, ishod se ne moze utvrditi.",
+                "detail": detail}
+
+    try:
+        ctl.Execute()
+        time.sleep(2.0)                     # daj VBE-u i watchdog-u vremena
+    except Exception as exc:                # noqa: BLE001
+        return {"ok": False, "error": f"Compile meni: {exc}", "detail": detail}
+
+    detail["dialogs"] = watchdog.seen[before:]
+    bad = [d for d in detail["dialogs"]
+           if any(k in d.lower() for k in ("compile", "kompajl", "greska", "error", "fehler"))]
+
+    try:
+        detail["enabled_after"] = bool(ctl.Enabled)
+    except Exception as exc:                # noqa: BLE001
+        detail["enabled_after"] = f"greska: {exc}"
+
+    # Probe ostaje kao dodatna kontrola -- ne kompajlira ceo projekat, ali hvata
+    # slucaj kad projekat uopste nije izvrsiv.
+    detail["probe"] = _run_probe(xl, wb)
+
     if bad:
-        return {"ok": False, "error": " ;; ".join(bad)}
+        return {"ok": False, "error": " ;; ".join(bad), "detail": detail}
+    if detail["probe"] not in (42, "42"):
+        return {"ok": False, "error": f"Probe nije vratio 42: {detail['probe']!r}",
+                "detail": detail}
+    if detail.get("enabled_after") is True:
+        return {"ok": False,
+                "error": "Posle compile-a stavka 'Compile VBAProject' je i dalje aktivna "
+                         "-- projekat se NIJE kompajlirao do kraja.",
+                "detail": detail}
+    if detail.get("enabled_after") is not False:
+        return {"ok": None, "error": "Ne mogu da procitam stanje 'Compile' kontrole.",
+                "detail": detail}
 
-    # 2) Probe -- jedini korak koji daje tvrd DA.
+    return {"ok": True, "error": None, "detail": detail}
+
+
+def _run_probe(xl, wb):
+    """Dodaj trivijalan modul, pozovi ga, obrisi. Vrati vrednost ili tekst greske."""
     proj = wb.VBProject
     try:
         vbc = proj.VBComponents.Add(VBE_TYPE[".bas"])
         vbc.Name = COMPILE_PROBE_MODULE
         vbc.CodeModule.AddFromString(COMPILE_PROBE_CODE)
-    except Exception as exc:            # noqa: BLE001
-        return {"ok": None, "error": f"Ne mogu da dodam probe modul: {exc}"}
+    except Exception as exc:                # noqa: BLE001
+        return f"probe modul nije dodat: {exc}"
 
     try:
-        value = xl.Run(f"'{wb.Name}'!{COMPILE_PROBE_FUNC}")
-    except Exception as exc:            # noqa: BLE001
-        return {"ok": False, "error": f"Probe pao -- compile greska u projektu: {exc}"}
+        return int(xl.Run(f"'{wb.Name}'!{COMPILE_PROBE_FUNC}") or 0)
+    except Exception as exc:                # noqa: BLE001
+        return f"Run pao: {exc}"
     finally:
         try:
             proj.VBComponents.Remove(proj.VBComponents(COMPILE_PROBE_MODULE))
         except Exception:
             pass
-
-    if int(value or 0) != 42:
-        return {"ok": None, "error": f"Probe vratio {value!r} umesto 42."}
-    return {"ok": True, "error": None}
 
 
 # --- Fixture -----------------------------------------------------------------
@@ -632,6 +705,10 @@ def _write_report(report: dict, rc: int) -> None:
     if c:
         state = {True: "OK", False: "FAIL", None: "NEJASNO"}[c.get("ok")]
         lines.append(f"COMPILE {state}" + (f"  {c['error']}" if c.get("error") else ""))
+        # Sirovo stanje ide u ispis uvek: tri puta je "zeleno" bilo netacno, pa
+        # jedan run mora da nosi dovoljno podataka za dijagnozu.
+        for key, value in (c.get("detail") or {}).items():
+            lines.append(f"        {key} = {value!r}")
 
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
