@@ -10,9 +10,31 @@
 
 ---
 
+## 0) Dijagnoza pre zakrpe
+
+**Kad se prijavi bug, prvo se pravi dokaz da postoji, pa tek onda ispravka.**
+Redosled nije stvar stila — bez njega se popravlja simptom, a pravilo koje je
+prekršeno ostaje prekršeno.
+
+1. **Reprodukuj.** Test u `modTest` koji pada iz tog razloga, ili merenje sa
+   priloženim izlazom. Ako se ne može reprodukovati, to je nalaz — reci da nije
+   reprodukovano i ne nagađaj ispravku.
+2. **Nađi pravilo.** Koja invarijanta je prekršena (`docs/DOMEN/README.md`) i ko
+   sve piše taj podatak (`docs/DOMEN/WHO_WRITES.md`). Isto polje često piše više
+   modula; zakrpa na jednom mestu ostavlja ostale.
+3. **Tek onda ispravka**, pa isti dokaz u oba smera (§5).
+
+U plan-modu plan mora da počne dokazom, ne rešenjem. Predlog ispravke bez
+reprodukcije je pretpostavka i tako se prijavljuje.
+
+Izuzetak su očigledne mehaničke greške (tipfeler, nedostajući argument) koje
+`vba_check` ionako hvata.
+
 ## 1) Pre svake izmene (obavezno)
 
 1. **Reference-first.** Pogledaj izvore istine:
+   - `docs/DOMEN/README.md` — šta dokumenti jesu i koje invarijante drže
+   - `docs/DOMEN/WHO_WRITES.md` — ko piše koju tabelu (generisano iz koda)
    - `docs/ARCHITECTURE_REFERENCE.md`, `docs/ARCHITECTURE_CHANGELOG.md`
    - `instructions/AGRIX_ARCHITECTURE_REFERENCE_FILLED_v6_12_DRAFT.md`
    - `instructions/DOMAIN_MODELS_REVIEW_DRAFT_v6_21_WITH_AGROHEMIJA.md`
@@ -39,6 +61,8 @@ Kratka mapa „gde šta živi" — ne praviti paralele:
 
 | Oblast | Gde | Detaljna pravila |
 |---|---|---|
+| Domen: šta dokumenti jesu, invarijante | `docs/DOMEN/` | `docs/DOMEN/README.md` |
+| Ko piše koju tabelu (vlasništvo) | generisano iz `src-vba/` | `docs/DOMEN/WHO_WRITES.md` |
 | Tabele / kolone / konstante | `modConfig.bas` (`TBL_*`, `COL_*`) | `.claude/rules/podaci-i-config.md` |
 | Pristup podacima | `modDataAccess.bas` (`GetTableData`/`GetColumnIndex`/`UpdateCell`/`AppendRow`/`GetNextID`/`LookupValue`) | ↑ isto |
 | Filter/sort/util nad nizovima | `modArrayUtils.bas`, `modHelpers.bas` | ↑ isto |
