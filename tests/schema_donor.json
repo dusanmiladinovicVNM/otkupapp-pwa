@@ -1,0 +1,1164 @@
+{
+  "sheets": [
+    {
+      "code_name": "Sheet4",
+      "name": "Pregled listova",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet18",
+      "name": "_Print",
+      "tables": 0,
+      "visible": 2
+    },
+    {
+      "code_name": "sOtkup",
+      "name": "Otkup",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sZbirna",
+      "name": "Zbirna",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sOtpremnica",
+      "name": "Otpremnica",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sPrijemnica",
+      "name": "Prijemnica",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sAmbalaza",
+      "name": "Ambalaza",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet13",
+      "name": "Paleta",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet14",
+      "name": "PaletaStavka",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet16",
+      "name": "Prerada",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet23",
+      "name": "PreradaStavke",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sFakture",
+      "name": "Fakture",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sFakturaStavke",
+      "name": "FakturaStavke",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet9",
+      "name": "SEFConfig",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sStanice",
+      "name": "Otkupna Mesta",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sKooperanti",
+      "name": "Kooperanti",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sParcele",
+      "name": "Parcele",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sKupci",
+      "name": "Kupci",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sVozaci",
+      "name": "Vozaci",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sKulture",
+      "name": "Kulture",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet12",
+      "name": "TipAmbalaze",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet11",
+      "name": "TipPalete",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet7",
+      "name": "Kutije",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet8",
+      "name": "Kese",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet26",
+      "name": "VrstaGotProizvoda",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet17",
+      "name": "Cenovnik",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sArtikli",
+      "name": "Artikli",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sMagacin",
+      "name": "Magacin",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sNovac",
+      "name": "Novac",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "sBankaImport",
+      "name": "BankaImport",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet1",
+      "name": "PartnerMap",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet19",
+      "name": "SpecifikacijaSablon",
+      "tables": 0,
+      "visible": 0
+    },
+    {
+      "code_name": "sConfig",
+      "name": "Config",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet15",
+      "name": "LocalConfig",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet21",
+      "name": "OtkupSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet5",
+      "name": "PrijemnicaSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet22",
+      "name": "PaletaSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet24",
+      "name": "PreradaSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "sSledljivostSablon",
+      "name": "SledljivostSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "sKarticaKoop",
+      "name": "KarticaSablon",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet2",
+      "name": "SEFSubmission",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet3",
+      "name": "SEFEventLog",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet10",
+      "name": "MGMT",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet20",
+      "name": "SETUP_LOG",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet25",
+      "name": "BUSINESS_FLOW_PRO_TEST_LOG",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet6",
+      "name": "PRODUCTION_HEALTH_LOG",
+      "tables": 0,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet27",
+      "name": "sPoruke",
+      "tables": 1,
+      "visible": 2
+    },
+    {
+      "code_name": "Sheet28",
+      "name": "Korisnici",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet29",
+      "name": "StornoVeze",
+      "tables": 1,
+      "visible": -1
+    },
+    {
+      "code_name": "Sheet30",
+      "name": "StornoZurnal",
+      "tables": 1,
+      "visible": -1
+    }
+  ],
+  "tables": [
+    {
+      "code_name": "sOtkup",
+      "headers": [
+        "OtkupID",
+        "Datum",
+        "KooperantID",
+        "StanicaID",
+        "KulturaID",
+        "VrstaVoca",
+        "SortaVoca",
+        "Kolicina",
+        "Cena",
+        "TipAmbalaze",
+        "KolAmbalaze",
+        "VozacID",
+        "BrojDokumenta",
+        "Novac",
+        "PrimalacNovca",
+        "Klasa",
+        "Stornirano",
+        "BrojZbirne",
+        "Isplaceno",
+        "DatumIsplate",
+        "OtpremnicaID",
+        "ParcelaID",
+        "ClientRecordID",
+        "SyncSource",
+        "KolAmbIzdata",
+        "VremeUnosa",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus",
+        "BrojOtpremnice"
+      ],
+      "rows": 0,
+      "sheet": "Otkup",
+      "table": "tblOtkup"
+    },
+    {
+      "code_name": "sZbirna",
+      "headers": [
+        "ZbirnaID",
+        "Datum",
+        "VozacID",
+        "BrojZbirne",
+        "KupacID",
+        "Hladnjaca",
+        "Pogon",
+        "VrstaVoca",
+        "SortaVoca",
+        "UkupnoKolicina",
+        "TipAmbalaze",
+        "UkupnoAmbalaze",
+        "Klasa",
+        "Stornirano",
+        "ClientRecordID",
+        "SyncSource",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus"
+      ],
+      "rows": 0,
+      "sheet": "Zbirna",
+      "table": "tblZbirna"
+    },
+    {
+      "code_name": "sOtpremnica",
+      "headers": [
+        "OtpremnicaID",
+        "Datum",
+        "StanicaID",
+        "VozacID",
+        "BrojOtpremnice",
+        "BrojZbirne",
+        "VrstaVoca",
+        "SortaVoca",
+        "Kolicina",
+        "Cena",
+        "TipAmbalaze",
+        "KolAmbalaze",
+        "Klasa",
+        "Stornirano",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus"
+      ],
+      "rows": 0,
+      "sheet": "Otpremnica",
+      "table": "tblOtpremnica"
+    },
+    {
+      "code_name": "sPrijemnica",
+      "headers": [
+        "PrijemnicaID",
+        "Datum",
+        "KupacID",
+        "VozacID",
+        "BrojPrijemnice",
+        "BrojZbirne",
+        "VrstaVoca",
+        "SortaVoca",
+        "Kolicina",
+        "Cena",
+        "TipAmbalaze",
+        "KolAmbalaze",
+        "KolAmbVracena",
+        "Klasa",
+        "Fakturisano",
+        "FakturaID",
+        "Stornirano",
+        "BrutoKg",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus"
+      ],
+      "rows": 0,
+      "sheet": "Prijemnica",
+      "table": "tblPrijemnica"
+    },
+    {
+      "code_name": "sAmbalaza",
+      "headers": [
+        "AmbID",
+        "Datum",
+        "TipAmbalaze",
+        "Kolicina",
+        "Smer",
+        "EntitetID",
+        "EntitetTip",
+        "VozacID",
+        "DokumentID",
+        "DokumentTIP",
+        "Stornirano",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Ambalaza",
+      "table": "tblAmbalaza"
+    },
+    {
+      "code_name": "Sheet13",
+      "headers": [
+        "PaletaID",
+        "BrojPalete",
+        "Godina",
+        "Datum",
+        "VrstaVoca",
+        "TipPalete",
+        "BrojGajbica",
+        "NetoKg",
+        "AmbalazaKg",
+        "PaletaKg",
+        "BrutoKg",
+        "Status",
+        "Stornirano",
+        "Preradjeno",
+        "SortaVoca",
+        "Klasa",
+        "TipAmbalaze",
+        "KapacitetGajbica",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "Istorija"
+      ],
+      "rows": 0,
+      "sheet": "Paleta",
+      "table": "tblPaleta"
+    },
+    {
+      "code_name": "Sheet14",
+      "headers": [
+        "StavkaID",
+        "PaletaID",
+        "BrojPrijemnice",
+        "BrojZbirne",
+        "BrojGajbica",
+        "NetoKg",
+        "AmbalazaKg",
+        "PrijemnicaID",
+        "Klasa",
+        "VrstaVoca",
+        "SortaVoca",
+        "CreatedAt",
+        "Stornirano",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "PaletaStavka",
+      "table": "tblPaletaStavka"
+    },
+    {
+      "code_name": "Sheet16",
+      "headers": [
+        "PreradaID",
+        "BrojPrerade",
+        "Godina",
+        "Datum",
+        "NetoKolicina",
+        "BrojKutija",
+        "BrojKesa",
+        "Stornirano",
+        "NetoUlazKg",
+        "NetoIzlazKg",
+        "Napomena",
+        "CreatedAt",
+        "TezinaPaleteKg",
+        "BrutoKg",
+        "AmbalazaKg",
+        "TipKutije",
+        "TipKese",
+        "TipGotovogProizvoda",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Prerada",
+      "table": "tblPrerada"
+    },
+    {
+      "code_name": "Sheet23",
+      "headers": [
+        "StavkaID",
+        "PreradaID",
+        "PaletaID",
+        "BrojPalete",
+        "NetoKg",
+        "CreatedAt",
+        "Stornirano",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "PreradaStavke",
+      "table": "tblPreradaStavka"
+    },
+    {
+      "code_name": "sFakture",
+      "headers": [
+        "FakturaID",
+        "BrojFakture",
+        "Datum",
+        "KupacID",
+        "Iznos",
+        "Status",
+        "DatumPlacanja",
+        "Stornirano",
+        "OsirocenoOd",
+        "SEFWorkflowState",
+        "SEFStatus",
+        "SEFDocumentId",
+        "SEFInvoiceNumber",
+        "SEFSentAt",
+        "SEFLastSyncAt",
+        "SEFLastErrorCode",
+        "SEFLastErrorMessage",
+        "SEFPayloadHash",
+        "SEFVersionNo",
+        "PoslatNaSEF",
+        "SEFSubmissionIDLast",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus"
+      ],
+      "rows": 0,
+      "sheet": "Fakture",
+      "table": "tblFakture"
+    },
+    {
+      "code_name": "sFakturaStavke",
+      "headers": [
+        "StavkaID",
+        "FakturaID",
+        "PrijemnicaID",
+        "Kolicina",
+        "Cena",
+        "Klasa",
+        "BrojPrijemnice",
+        "Stornirano",
+        "OsirocenoOd",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "FakturaStavke",
+      "table": "tblFakturaStavke"
+    },
+    {
+      "code_name": "Sheet9",
+      "headers": [
+        "ConfigKey",
+        "ConfigValue",
+        "Opis",
+        "Aktivan"
+      ],
+      "rows": 102,
+      "sheet": "SEFConfig",
+      "table": "tblSEFConfig"
+    },
+    {
+      "code_name": "sStanice",
+      "headers": [
+        "StanicaID",
+        "Naziv",
+        "Mesto",
+        "Kontakt",
+        "Aktivan",
+        "Ime",
+        "Prezime",
+        "PIN",
+        "JeHladnjaca",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Otkupna Mesta",
+      "table": "tblStanice"
+    },
+    {
+      "code_name": "sKooperanti",
+      "headers": [
+        "KooperantID",
+        "Ime",
+        "Prezime",
+        "Mesto",
+        "Telefon",
+        "StanicaID",
+        "Aktivan",
+        "BPGBroj",
+        "TekuciRacun",
+        "Pin",
+        "Adresa",
+        "JMBG",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Kooperanti",
+      "table": "tblKooperanti"
+    },
+    {
+      "code_name": "sParcele",
+      "headers": [
+        "ParcelaID",
+        "KooperantID",
+        "KatBroj",
+        "KatOpstina",
+        "Kultura",
+        "PovrsinaHa",
+        "GGAPStatus",
+        "Aktivna",
+        "GeoStatus",
+        "GeoSource",
+        "N_Coord",
+        "E_Coord",
+        "Lat",
+        "Lng",
+        "PolygonGeoJSON",
+        "MeteoEnabled",
+        "RizikStatus",
+        "DatumGeoUnosa",
+        "DatumAzuriranja",
+        "Napomena",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 2,
+      "sheet": "Parcele",
+      "table": "tblParcele"
+    },
+    {
+      "code_name": "sKupci",
+      "headers": [
+        "KupacID",
+        "Naziv",
+        "Ulica",
+        "Mesto",
+        "PostanskiBroj",
+        "Drzava",
+        "PIB",
+        "MaticniBroj",
+        "Email",
+        "Hladnjaca",
+        "Aktivan",
+        "TekuciRacun",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Kupci",
+      "table": "tblKupci"
+    },
+    {
+      "code_name": "sVozaci",
+      "headers": [
+        "VozacID",
+        "Ime",
+        "Prezime",
+        "Telefon",
+        "Aktivan",
+        "PIN",
+        "KapacitetKG",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Vozaci",
+      "table": "tblVozaci"
+    },
+    {
+      "code_name": "sKulture",
+      "headers": [
+        "KulturaID",
+        "VrstaVoca",
+        "SortaVoca",
+        "GajbicaPoPaleti",
+        "Aktivan",
+        "TipAmbalaze",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "PragProsekUpoz",
+        "PragProsekBlok"
+      ],
+      "rows": 0,
+      "sheet": "Kulture",
+      "table": "tblKulture"
+    },
+    {
+      "code_name": "Sheet12",
+      "headers": [
+        "TipAmbalaze",
+        "TezinaGajbiceKg",
+        "Aktivan",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "TipAmbalaze",
+      "table": "tblTipAmbalaze"
+    },
+    {
+      "code_name": "Sheet11",
+      "headers": [
+        "TipPalete",
+        "TezinaKg",
+        "Aktivan",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "TipPalete",
+      "table": "tblTipPalete"
+    },
+    {
+      "code_name": "Sheet7",
+      "headers": [
+        "TipKutije",
+        "TezinaKg",
+        "Aktivan"
+      ],
+      "rows": 0,
+      "sheet": "Kutije",
+      "table": "tblKutije"
+    },
+    {
+      "code_name": "Sheet8",
+      "headers": [
+        "TipKese",
+        "TezinaKg",
+        "Aktivan"
+      ],
+      "rows": 0,
+      "sheet": "Kese",
+      "table": "tblKese"
+    },
+    {
+      "code_name": "Sheet26",
+      "headers": [
+        "TipGotovogProizvoda",
+        "Aktivan"
+      ],
+      "rows": 0,
+      "sheet": "VrstaGotProizvoda",
+      "table": "tblVrstaGotovihProizvoda"
+    },
+    {
+      "code_name": "Sheet17",
+      "headers": [
+        "CenaID",
+        "Datum",
+        "VrstaVoca",
+        "SortaVoca",
+        "Klasa",
+        "Cena",
+        "CreatedAt",
+        "Stornirano",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Cenovnik",
+      "table": "tblCenovnik"
+    },
+    {
+      "code_name": "sArtikli",
+      "headers": [
+        "ArtikalID",
+        "Naziv",
+        "Tip",
+        "JedinicaMere",
+        "CenaPoJedinici",
+        "DozaPoHa",
+        "Kultura",
+        "Pakovanje",
+        "BarKod",
+        "KarencaDana",
+        "Aktivan",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Artikli",
+      "table": "tblArtikli"
+    },
+    {
+      "code_name": "sMagacin",
+      "headers": [
+        "MagacinID",
+        "Datum",
+        "ArtikalID",
+        "Tip",
+        "Kolicina",
+        "KooperantID",
+        "ParcelaID",
+        "BrojDokumenta",
+        "CenaPoJedinici",
+        "Vrednost",
+        "Napomena",
+        "Stornirano",
+        "DobavljacID",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "Magacin",
+      "table": "tblMagacin"
+    },
+    {
+      "code_name": "sNovac",
+      "headers": [
+        "NovacID",
+        "BrojDokumenta",
+        "Datum",
+        "Partner",
+        "PartnerID",
+        "EntitetTip",
+        "OMID",
+        "KooperantID",
+        "FakturaID",
+        "VrstaVoca",
+        "Tip",
+        "Uplata",
+        "Isplata",
+        "Napomena",
+        "Stornirano",
+        "OtkupID",
+        "OsirocenoOd",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy",
+        "IspravkaOd",
+        "ZamenjenSa",
+        "CorrectionID",
+        "IzdatoStatus"
+      ],
+      "rows": 0,
+      "sheet": "Novac",
+      "table": "tblNovac"
+    },
+    {
+      "code_name": "sBankaImport",
+      "headers": [
+        "BankaImportID",
+        "BrojDokumenta",
+        "DatumIzvoda",
+        "BrojRacuna",
+        "DatumTransakcije",
+        "Partner",
+        "PartnerKonto",
+        "Opis",
+        "Uplata",
+        "Isplata",
+        "Valuta",
+        "PozivNaBroj",
+        "SvrhaPlacanja",
+        "BankaReferenz",
+        "IzvorFajl",
+        "ImportVreme",
+        "Obradjeno",
+        "Stornirano",
+        "PocetnoStanje",
+        "ZavrsnoStanje",
+        "UkupanDuguje",
+        "UkupanPotrazuje",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 0,
+      "sheet": "BankaImport",
+      "table": "tblBankaImport"
+    },
+    {
+      "code_name": "Sheet1",
+      "headers": [
+        "BankaName",
+        "PartnerID",
+        "EntitetTip",
+        "OMID",
+        "CreatedAt",
+        "CreatedBy",
+        "ModifiedAt",
+        "ModifiedBy"
+      ],
+      "rows": 1,
+      "sheet": "PartnerMap",
+      "table": "tblPartnerMap"
+    },
+    {
+      "code_name": "sConfig",
+      "headers": [
+        "Kljuc",
+        "Vrednost",
+        "Opis"
+      ],
+      "rows": 3,
+      "sheet": "Config",
+      "table": "tblConfig"
+    },
+    {
+      "code_name": "Sheet15",
+      "headers": [
+        "Kljuc",
+        "Vrednost",
+        "Opis"
+      ],
+      "rows": 23,
+      "sheet": "LocalConfig",
+      "table": "tblLocalConfig"
+    },
+    {
+      "code_name": "Sheet2",
+      "headers": [
+        "SEFSubmissionID",
+        "FakturaID",
+        "VersionNo",
+        "WorkflowStateAtSubmit",
+        "CreatedAt",
+        "SubmittedAt",
+        "SubmissionStatus",
+        "PayloadHash",
+        "RequestFormat",
+        "RequestBody",
+        "ResponseBody",
+        "HttpStatus",
+        "ApiStatus",
+        "CorrelationId",
+        "SEFDocumentId",
+        "ErrorCode",
+        "ErrorMessage",
+        "OperatorName",
+        "Stornirano",
+        "FinishedAt"
+      ],
+      "rows": 0,
+      "sheet": "SEFSubmission",
+      "table": "tblSEFSubmission"
+    },
+    {
+      "code_name": "Sheet3",
+      "headers": [
+        "SEFEventID",
+        "FakturaID",
+        "SEFSubmissionID",
+        "EventTime",
+        "EventType",
+        "Message",
+        "Details",
+        "OperatorName",
+        "Stornirano"
+      ],
+      "rows": 0,
+      "sheet": "SEFEventLog",
+      "table": "tblSEFEventLog"
+    },
+    {
+      "code_name": "Sheet10",
+      "headers": [
+        "MGMTID",
+        "Ime",
+        "Prezime",
+        "Mesto",
+        "Adresa",
+        "JMBG",
+        "Telefon",
+        "Email",
+        "Aktivan",
+        "Pozicija",
+        "TekuciRacun",
+        "PIN"
+      ],
+      "rows": 1,
+      "sheet": "MGMT",
+      "table": "tblMGMT"
+    },
+    {
+      "code_name": "Sheet27",
+      "headers": [
+        "Kljuc",
+        "Tekst"
+      ],
+      "rows": 226,
+      "sheet": "sPoruke",
+      "table": "tblPoruke"
+    },
+    {
+      "code_name": "Sheet28",
+      "headers": [
+        "KorisnikID",
+        "Username",
+        "ImePrezime",
+        "PIN",
+        "Uloga",
+        "Aktivan",
+        "StanicaID",
+        "CreatedAt",
+        "Otkup",
+        "Dokumenta",
+        "Agrohemija",
+        "Izvestaji",
+        "Fakturisanje",
+        "Banka",
+        "Marza",
+        "Sledljivost",
+        "MaticniPodaci",
+        "Palete",
+        "OtvoriExcel",
+        "SyncPWA"
+      ],
+      "rows": 0,
+      "sheet": "Korisnici",
+      "table": "tblKorisnici"
+    },
+    {
+      "code_name": "Sheet29",
+      "headers": [
+        "CorrectionID",
+        "Mode",
+        "Status",
+        "OldDocType",
+        "OldDocID",
+        "OldBroj",
+        "NewDocType",
+        "NewDocID",
+        "NewBroj",
+        "ParentDocType",
+        "ParentDocID",
+        "ParentBroj",
+        "CreatedAt",
+        "CreatedBy",
+        "CompletedAt",
+        "Message",
+        "NeedsRecovery",
+        "RecoveryAction"
+      ],
+      "rows": 0,
+      "sheet": "StornoVeze",
+      "table": "tblStornoVeze"
+    },
+    {
+      "code_name": "Sheet30",
+      "headers": [
+        "ZurnalID",
+        "OperationID",
+        "Timestamp",
+        "DocType",
+        "Broj",
+        "Tabela",
+        "RowID",
+        "Kolona",
+        "StaraVrednost",
+        "NovaVrednost"
+      ],
+      "rows": 0,
+      "sheet": "StornoZurnal",
+      "table": "tblStornoZurnal"
+    }
+  ],
+  "workbook": "C:\\Users\\Dusan\\Desktop\\AgriX\\Builds\\AgriX_2.28.4.xlsm"
+}

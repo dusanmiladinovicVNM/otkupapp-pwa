@@ -4,6 +4,9 @@ paths:
   - "src-vba/modTest*.bas"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
+  - "tools/make_fixture.py"
+  - "tools/dump_schema.py"
+  - "tests/golden/*"
 ---
 
 # Verifikacija: šta se stvarno može proveriti
@@ -67,11 +70,19 @@ Ne zove `modVbaTools.ImportAllVBA` (hardkodiran folder + završni `MsgBox` = smr
 za headless), nego ponavlja njegovu logiku preko COM-a. Modalne dijaloge zatvara
 watchdog.
 
-Sveska: bez `--workbook` ide `tests/fixtures/otkup_test.xlsm`, a ako ga nema,
-skripta ga sama napravi kao **praznu** `.xlsm` — za compile je to dovoljno (nijedan
-modul ne referencira sheet `CodeName` rano-vezano). Suite-ovima trebaju podaci, pa
-im prosledi pravu radnu svesku. Original se nikad ne dira — radi se nad temp
-kopijom. Detalji: `docs/EXCEL_TEST_HARNESS.md`.
+Sveska: bez `--workbook` ide `tests/fixtures/otkup_test.xlsm`. Ako ga nema, skripta
+napravi **praznu** `.xlsm` — dovoljno za compile, ali **ne i za suite**: prazna
+sveska nema tabele, pa `New frmOtkup` pukne na 1004 već u `UserForm_Initialize`
+(`FillCmb ... TBL_KULTURE` i `FillComboDisplayID ... TBL_STANICE` nisu pod
+`On Error`). Za suite napravi pravi fixture — `tools/make_fixture.py`, §4.
+Original se nikad ne dira — radi se nad temp kopijom.
+Detalji: `docs/EXCEL_TEST_HARNESS.md`.
+
+Compile verdikt **ne obara** run kad suite-ovi idu: `COMPILE NEJASNO` se i dalje
+ispisuje, ali odgovor nose testovi (da bi se `RunAllTests` uopšte pokrenuo, VBA
+mora da kompajlira `modTest` i sve što on referencira). Eksplicitan compile
+`FAIL` i dalje pada, kao i `NEJASNO` uz `--compile-only`, gde je probe jedini
+izvor istine.
 
 ## 3) `gate` vs „blind" suite — bez ovoga se lako pogrešno zaključi
 
@@ -82,22 +93,110 @@ prošle".
 
 | gate (crveno se vidi) | blind (rezultat samo u Immediate) |
 |---|---|
-| `RunIzvestajTests` | `Test_StornoCentar_All` |
-| `RunSheetsJsonParserTests` | `TestLicense_All` |
-| `RunBankaImportTestSuite` | `RunStornoTestSuite` |
-| `RunFakturaSmokeSuite` | `RunPaleteTestSuite` |
-| `RunGoogleSyncSmokeSuite`¹ | `RunNovacSmokeSuite` |
-| `RunMasterSyncSmokeSuite`¹ | `RunBusinessFlowProSuite` |
-| `RunSEFTestSuite`¹ | `RunAgrohemijaSmokeSuite` |
-| | `RunProductionHealthCheck`, `TestMonitoring_All` |
+| `RunAllTests`² | `Test_StornoCentar_All` |
+| `RunIzvestajTests` | `TestLicense_All`³ |
+| `RunSheetsJsonParserTests` | `RunStornoTestSuite` |
+| `RunBankaImportTestSuite`³ | `RunPaleteTestSuite` |
+| `RunFakturaSmokeSuite` | `RunNovacSmokeSuite` |
+| `RunGoogleSyncSmokeSuite`¹ | `RunBusinessFlowProSuite` |
+| `RunMasterSyncSmokeSuite`¹ | `RunAgrohemijaSmokeSuite` |
+| `RunSEFTestSuite`¹ | `RunProductionHealthCheck`, `TestMonitoring_All` |
 
 ¹ Nije u podrazumevanom setu — traži mrežu ili live SEF nalog.
+² Verdikt ne dolazi iz toga da li `Run()` pukne — `modTest` hvata grešku po testu
+da jedan pad ne obori ostale — nego iz `last_run.txt` pored sveske. Nema fajla =
+pad. Vidi §4.
+³ Pada nezavisno od ove suite i nije popravljano — vidi „Zatečeni padovi" u §4.
 
 Kad pišeš NOVU suite, napravi je `gate` (`Err.Raise` na pad) i upiši je u
 `SUITES` katalog u `tools/run_vba.py`. Nova „blind" suite je test koji niko neće
 videti kad pukne.
 
-## 4) Šta i dalje ostaje na operateru
+## 4) `modTest` — suite koja pada na PONAŠANJU, ne na sintaksi
+
+`vba_check` hvata sintaksu; `modTest` hvata izmenu koja se uredno kompajlira, a
+menja ponašanje. Tri testa nad `frmOtkup.ClearOtkupFields` (tu bug i živi):
+
+| Test | Šta drži |
+|---|---|
+| `T_PosleSnimanja_ZadrzavaKontekstOtpremnice` | datum se posle snimanja NE briše (+ pun snapshot forme) |
+| `T_PosleSnimanja_ZadrzavaZbirnu` | broj zbirne ostaje, i drugi blok dobija istu zbirnu |
+| `T_ClearForm_BrisePartnera` | `cmbKooperant` se BRIŠE (obrnut smer od prva dva) |
+
+```powershell
+python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
+python tools/run_vba.py --suite RunAllTests                       # exit 0 / 2
+```
+
+**Dokazano u oba smera** (bez toga suite ne znači ništa — vidi PR #181, četiri
+puta zeleno-ali-nedokazano-crveno). Sabotaža se radi u `ClearOtkupFields`, revert
+je `git checkout -- src-vba/frmOtkup.frm`:
+
+| Sabotaža | Očekivano |
+|---|---|
+| dodaj `txtDatum.value = ""` | `FAIL T_PosleSnimanja_ZadrzavaKontekstOtpremnice` |
+| dodaj `txtBrojZbirne.value = ""` | `FAIL T_PosleSnimanja_ZadrzavaZbirnu` |
+| ukloni `cmbKooperant.value = ""` | `FAIL T_ClearForm_BrisePartnera` |
+
+Svaka sabotaža obara i snapshot iz prvog testa — to je namerno, snapshot hvata i
+polja koja niko nije tražio da se provere.
+
+**Kako se dodaje test:** `RunOne n` u `RunAllTests`, plus grana u `TestName` i
+`InvokeTest`. Poziv je direktan (ne `Application.Run`) da bi VBA morao da
+kompajlira i test i sve što on referencira — odatle stiže compile signal.
+
+**Forma bez prikaza:** `Set f = New frmOtkup`, pa odmah `f.Controls.Count` (bez
+toga se `Initialize` ne okine). Bez `.Show`. `modTestMode.SetTestMode True` gasi
+sve što čeka operatera — trenutno `SetFocus` u `ClearOtkupFields`; kad naiđeš na
+`MsgBox`/`InputBox` na testiranoj putanji, gard ide istim oblikom.
+
+### Golden snapshot-i
+
+`tests/golden/*.txt`, idu u git. Kad golden ne postoji, test ga upiše i **padne** —
+nov golden mora proći ljudski pregled pre nego što postane merilo. Dva pravila
+koja su već jednom slomila suite:
+
+- **ASCII.** `DumpKontrole` escape-uje dijakritiku u `\uXXXX`. VBA `Print #` piše u
+  ANSI kodnu stranu koja `ć` nema, pa bi round-trip bio gubitav a poruka o razlici
+  besmislena („golden [Vrsta voca] vs tekuci [Vrsta voca]").
+- **LF.** `.gitattributes` drži `tests/golden/*.txt` na `eol=lf`; bez toga git na
+  Windows-u konvertuje u CRLF i suite pada na svakom svežem klonu.
+
+### Fixture
+
+`tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
+`tools/make_fixture.py` iz **donor** sveske. Donor daje samo strukturu — osnovnu
+šemu ne pravi nijedan kod (`Ensure*` rutine u `modSetup` samo dodaju kolone na
+postojeće tabele), pa bi zakucavanje spiska kolona u Python bilo drugi izvor
+istine (CLAUDE.md §4). Podaci su 100% sintetički: nijedan klijentski podatak ne
+može da završi u golden fajlu koji ide na GitHub.
+
+Šemu donora ispisuje `tools/dump_schema.py` (samo čitanje, ne dira svesku) —
+batch varijanta onoga što `modSetup.DebugKoloneTabele` radi interaktivno.
+
+### Zatečeni padovi u punom setu (NISU iz ove suite)
+
+Golo `python tools/run_vba.py` je crveno zbog dva pada koja postoje nezavisno od
+`modTest` i nisu popravljana (svaki zaslužuje svoj zadatak):
+
+- `RunBankaImportTestSuite` — `PASS=186 FAIL=1`, pada `T13`
+  (`modTestBanka.bas:863`): nalog od `600.005` zaokružen na `600.01` treba da bude
+  odbijen kao veći od otvorenog, a `ValidateNalogSaldo` ga propušta. Granični
+  slučaj u logici oko novca.
+- `TestLicense_All` — „Cannot run the macro". Makro **postoji**
+  (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je
+  najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo, pa
+  odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno.**
+
+Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv.
+
+### Stop hook
+
+`.claude/hooks/vba-test.sh` pušta suite na kraju sesije kad je `src-vba/` diran (u
+radnom stablu ili u poslednjem commit-u). Bez `pywin32`/Excela prolazi **tiho** —
+u Linux sesiji ostaje samo `vba_check` kroz PostToolUse.
+
+## 5) Šta i dalje ostaje na operateru
 
 Finalni smoke-test u Excelu (klik po klik). Zato svaki rad završi kratkom,
 numerisanom test-checklistom u chatu — vidi `.claude/rules/git-i-release.md`.

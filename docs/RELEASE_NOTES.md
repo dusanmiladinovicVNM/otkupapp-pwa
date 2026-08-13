@@ -936,3 +936,59 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Rizik za podatke: nikakav.** Nema promene šeme, `.frx` netaknut, nijedna VBA linija nije izmenjena, nema novih `Poruka()` ključeva. Menjaju se samo `tools/`, `docs/`, `.claude/` i `.gitignore`.
 - **Stanje verifikacije:** `python3 tools/vba_check.py` nad celim `src-vba/` — **175 fajlova, čisto, exit 0**, dakle nijedan lažan nalaz od dve nove provere. Negativna proba (namenski modul sa 2 pogrešne arnosti i 2 nedefinisana poziva) daje **tačno ta 4 nalaza** i ne prijavljuje ispravan poziv u istom modulu. `git merge-tree` vs `main` čist.
 - **Dodirnuti fajlovi:** `tools/vba_check.py` (`NEDEFINISAN`, `ARNOST`, `collect_definitions`, `collect_arities`, `check_undefined`), `tools/run_vba.py` (harness, četiri ispravke verdikta i importa), `.claude/hooks/vba-check.sh`, `.claude/settings.json`, `.claude/rules/*` (9 novih), `CLAUDE.md` (sveden), `docs/EXCEL_TEST_HARNESS.md` (nov), `.gitignore`.
+
+---
+
+## vba-v2.39.2 — 2026-08-13
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Rizik za aplikaciju: praktično nikakav** — u `frmOtkup.frm` su promenjene dve
+> linije, obe bez efekta na produkciju (v. „Rizik za podatke i verifikacija").
+> Nema promene šeme, `.frx` netaknut, nema novih `Poruka()` ključeva.
+>
+> **Suština:** do sada je verifikacija hvatala sintaksu i compile greške. Sada
+> postoji i suite koja hvata izmenu koja se **uredno kompajlira, a menja
+> ponašanje** — i koja je **dokazano crvena** nad namerno pokvarenim kodom, ne
+> samo zelena nad ispravnim.
+
+**Test suite koja pada na ponašanju**
+
+- **Tri testa nad `frmOtkup.ClearOtkupFields`**, rutinom koja se izvršava posle svakog snimanja otkupnog lista: datum otpremnice se NE briše (sledeći blok ide u niz istog datuma), broj zbirne ostaje popunjen (i drugi blok dobija istu zbirnu), a kooperant se briše (sledeći unos je nov partner). To je klasa buga koja nastaje pri radu na UI-ju: ukloni se ili doda jedna linija, kod se uredno kompajlira, `vba_check` je zelen — a operater od sledećeg dana kuca datum i broj zbirne iznova na svaki unos.
+- **Dokazano u OBA smera, sva tri testa.** Nad čistim kodom `python tools/run_vba.py --suite RunAllTests` → exit 0, `TESTS 3 ukupno, 0 palo`. Nad namerno vraćenim brisanjem datuma → exit 2 uz `FAIL T_PosleSnimanja_ZadrzavaKontekstOtpremnice -- ocekivano [15.3.2026], dobijeno []`; isto i za zbirnu i za partnera, svaki sa svojom porukom. Posle `git checkout` ponovo exit 0. Svaka sabotaža obara **samo svoje** testove — ostali ostaju `OK`, dakle testovi su specifični, ne padaju u gomili. (Zelena suite koja nije dokazano crvena ne dokazuje ništa; to je u PR #181 bio ishod četiri puta.)
+- **Snapshot hvata i polja koja niko nije tražio da se provere.** `DumpKontrole` snima svih 43 kontrole forme kao sortirano `ime=vrednost` (sortira postojećim `modArrayUtils.SortArray`) i poredi sa `tests/golden/*.txt`. Kad golden ne postoji, test ga upiše i **padne** — nov golden mora proći ljudski pregled pre nego što postane merilo. U dokazu je snapshot samostalno uhvatio obe regresije (`golden [cmbKooperant=] vs tekuci [cmbKooperant=KOOP-TEST-1]`).
+
+**Fixture bez ijednog klijentskog podatka**
+
+- **`tools/make_fixture.py`** pravi `tests/fixtures/otkup_test.xlsm` iz **donor** sveske (npr. `builds/AgriX_2.28.4.xlsm`): obriše redove iz svih tabela osim kataloga, pa poseje samo sintetiku — 3 kooperanta, 2 parcele, tri otpremnice (sa zbirnom i ostatkom 600, bez zbirne, bez zbirne ali sa blokom koji zbirnu nosi), `APP_SETUP_COMPLETED=DA`, licenca off. Donor se nikad ne dira. Time nijedan pravi kooperant ne može da završi u golden fajlu koji ide na GitHub.
+- **Zašto donor a ne „od nule":** osnovnu šemu ne pravi nijedan kod — `Ensure*` rutine u `modSetup` samo **dodaju kolone** na postojeće tabele, a spiskovi kolona osnovnih tabela žive isključivo u `.xlsm`. Zakucavanje tih spiskova u Python napravilo bi drugi izvor istine koji konkuriše svesci (`CLAUDE.md` §4).
+- **`tools/dump_schema.py`** ispisuje šemu bilo koje sveske (sheetovi, `CodeName`-ovi, tabele, kolone, broj redova) — samo čitanje, sveska se ne snima. Batch varijanta onoga što `modSetup.DebugKoloneTabele` radi interaktivno kroz `InputBox`, jednu tabelu po pozivu. Korisno i mimo testova, za dijagnozu schema drift-a po instalaciji.
+
+**Tri kvara koja bi suite lažno zelenila ili trajno crvenila**
+
+Sva tri su izašla tek kroz pokretanje, ne kroz čitanje koda:
+
+- **Cleanup je visio na „Want to save your changes?" bez ijednog čuvara.** U `run_vba.py` je redosled bio `killer.cancel()` → `watchdog.stop()` → `Workbooks.Close()`. Goli `Close()` pita za snimanje kad je sveska prljava, a `DisplayAlerts=False` ne pomaže jer ga suite u svom čišćenju vrati na `True` — u tom trenutku nema ko da klikne dijalog ni ko da ubije proces. Sveska se sada zatvara **pre** gašenja čuvara, uz eksplicitan `SaveChanges=False`.
+- **Golden je bio neuporediv zbog dijakritike.** VBA `Print #` piše u ANSI kodnu stranu (cp1252 na ENG Windows-u) koja `ć` nema, pa se golden snimi osakaćen i svako sledeće poređenje pada — a poruka o razlici izgleda besmisleno („golden [Vrsta voca] vs tekuci [Vrsta voca]"), jer se i ona gubi na istom mestu. `DumpKontrole` sada escape-uje sve van štampanog ASCII-ja u `\uXXXX`, isto pravilo koje već važi za VBA izvor.
+- **Golden bi pukao na svakom svežem klonu.** VBA ga piše sa `vbLf`; git na Windows-u konvertuje u CRLF pri checkout-u i pročitani golden prestaje da bude jednak dump-u. `.gitattributes` sada drži `tests/golden/*.txt` na `eol=lf`, a `ReadTextFile` izbacuje `CR` pri čitanju.
+
+**Regresija se hvata bez sećanja operatera**
+
+- **`Stop` hook** (`.claude/hooks/vba-test.sh`) pušta suite na kraju sesije kad je `src-vba/` diran — u radnom stablu ili u poslednjem commit-u. Bez `pywin32`/Excela prolazi **tiho**, pa Claude Code sesija na webu nije ometana; tamo i dalje radi `vba_check` kroz `PostToolUse`.
+- **`run_vba.py` je dopunjen, ne prepisan:** `RunAllTests` u `SUITES` katalogu, verdikt iz `last_run.txt` pored sveske (a ne iz „`Run()` nije pukao", jer `modTest` hvata grešku po testu da jedan pad ne obori ostale), **nema `last_run.txt` → exit 2**, golden fajlovi u temp pre rana i nazad posle.
+- **Compile verdikt više ne obara run kad suite-ovi idu.** `COMPILE NEJASNO` se i dalje ispisuje nepromenjen, ali odgovor nose testovi: da bi se `RunAllTests` uopšte pokrenuo, VBA mora da kompajlira `modTest` i sve što on referencira — a to je baš kod pod testom. Eksplicitan compile `FAIL` i dalje pada, kao i `NEJASNO` uz `--compile-only`, gde je probe jedini izvor istine.
+
+**Zatečeni padovi — prijavljeni, NISU popravljani**
+
+Golo `python tools/run_vba.py` (pun set suite-ova) je crveno zbog dva pada koji postoje nezavisno od ove suite. Svaki zaslužuje svoj zadatak i nije diran:
+
+- **`RunBankaImportTestSuite` — `PASS=186 FAIL=1`.** Pada `T13` (`modTestBanka.bas:863`): nalog od `600.005`, zaokružen na `600.01`, treba da bude odbijen kao veći od otvorenog iznosa, a `ValidateNalogSaldo` ga propušta. Granični slučaj u logici oko novca.
+- **`TestLicense_All` — „Cannot run the macro".** Makro postoji (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo i odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za potvrdu treba `Alt+F11 → Debug → Compile` ručno.
+
+Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv.
+
+**Rizik za podatke i verifikacija**
+
+- **Rizik za podatke: nikakav.** Nema promene šeme, `.frx` netaknut, nema novih `Poruka()` ključeva. Fixture je lokalan artefakt (`.gitignore`) sa isključivo sintetičkim podacima; golden fajlovi ne sadrže nijedan klijentski podatak.
+- **Rizik za aplikaciju: dve linije u `frmOtkup.frm`.** `ClearOtkupFields` je `Private` → `Public` (test seam; poziva je samo forma i `modTest`), a `cmbKooperant.SetFocus` je dobio `If Not IsTestMode() Then` — forma koja nije `.Show`-ovana ne može da primi fokus, pa bi test padao na fokusu umesto na ponašanju. U produkciji `IsTestMode()` je uvek `False` (flag postavlja isključivo test modul), pa je ponašanje identično. **To je jedina tačka koju operater treba da proveri u Excelu:** posle snimanja otkupnog unosa fokus mora i dalje da skoči na polje kooperanta.
+- **Novi moduli u `.xlsm`:** `modTestMode.bas` (mora da se isporučuje — referencira ga `frmOtkup`) i `modTest.bas` (test modul, kao postojeći `mod*Tests`; ne radi ništa dok se ne pozove).
+- **Stanje verifikacije:** `python3 tools/vba_check.py` — **177 fajlova, čisto, exit 0**. `tools/run_vba.py --self-test` čist. `--suite RunAllTests` **3/3 OK, exit 0**; sve tri sabotaže daju exit 2 sa imenom ciljanog testa; posle reverta ponovo 3/3.
+- **Dodirnuti fajlovi:** `src-vba/modTest.bas` (nov), `src-vba/modTestMode.bas` (nov), `src-vba/frmOtkup.frm` (2 linije), `tools/make_fixture.py` (nov), `tools/dump_schema.py` (nov), `tools/run_vba.py` (dopuna), `.claude/hooks/vba-test.sh` (nov), `.claude/settings.json`, `.claude/rules/testovi.md`, `.gitattributes` (nov), `tests/golden/PosleSnimanja_KontekstOtpremnice.txt` (nov), `docs/TEST_SUITE_OTKUP_HANDOFF.md` (nov).

@@ -1,0 +1,4 @@
+# Golden snapshot-i za modTest: pise ih VBA sa vbLf, a cita ih i poredi kao tekst.
+# Bez ovoga git na Windows-u konvertuje LF -> CRLF pri checkout-u, pa procitani
+# golden vise nije jednak dump-u i test pada trajno -- na svakom svezem klonu.
+tests/golden/*.txt text eol=lf
