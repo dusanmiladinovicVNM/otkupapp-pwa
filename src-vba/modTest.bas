@@ -269,11 +269,18 @@ Private Sub WriteTextFile(ByVal path As String, ByVal content As String)
 End Sub
 
 Private Function ReadTextFile(ByVal path As String) As String
+    Dim raw As String
     Dim fnum As Integer
     fnum = FreeFile
     Open path For Input As #fnum
-    ReadTextFile = Input$(LOF(fnum), fnum)
+    raw = Input$(LOF(fnum), fnum)
     Close #fnum
+
+    ' CR se izbacuje: .gitattributes drzi golden na LF, ali klon sa drugim
+    ' podesavanjem (ili rucno editovanje u Notepad-u) vrati CRLF, a tada golden
+    ' vise nije jednak dump-u koji se spaja sa vbLf. Pravi CR u sadrzaju ne
+    ' postoji -- AsciiEscape ga pretvara u \u000D.
+    ReadTextFile = Replace$(raw, vbCr, "")
 End Function
 
 Private Sub AppendReport(ByVal testNm As String, ByVal status As String, _
