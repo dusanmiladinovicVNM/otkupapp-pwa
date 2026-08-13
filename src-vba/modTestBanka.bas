@@ -860,8 +860,15 @@ Private Sub T13_NalogPrekoOtvorenogSeOdbija()
         S & "600.00 na otvoreno 600.00 prolazi"
     Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.01), otvoreno)) > 0, _
         S & "600.01 na otvoreno 600.00 je ODBIJEN (pun cent preplate)"
-    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.005), otvoreno)) > 0, _
-        S & "600.005 se zaokruzuje na 600.01 -> odbijen"
+    ' NAPOMENA: 600.005 NIJE dobar test vektor. U double-u se cuva kao
+    ' 600.00499999999999545..., dakle ISPOD pola pare, pa ga half-up
+    ' zaokruzivanje spusta na 600.00 -- a da li ce se prevrnuti zavisi i od
+    ' preciznosti medjurezultata (VBA drzi 80-bit u registru). Zato se koristi
+    ' 600.006, koji je jednoznacan na svakoj putanji. Invarijanta za granicne
+    ' vrednosti se dokazuje u T14: sta god da zaokruzivanje uradi, u fajl NE
+    ' sme otici iznos veci od otvorenog.
+    Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.006), otvoreno)) > 0, _
+        S & "600.006 se zaokruzuje na 600.01 -> odbijen"
     Chk LenB(ValidateNalogSaldo(JedanNalog(P & "OTK-V1", P & "BLOK-V1", 600.004), otvoreno)) = 0, _
         S & "600.004 se zaokruzuje na 600.00 -> prolazi"
 
@@ -926,6 +933,21 @@ Private Sub T14_CsvPayloadNosiKapiju()
     subCent.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600.004, True)
     payload = BuildNalogCsvPayload(subCent, RACUN, otvoreno, odbijeno)
     Chk InStr(payload, ";600.00;") > 0, S & "600.004 je u fajlu normalizovan na 600.00"
+
+    ' Granicna vrednost (tacno pola pare): smer zaokruzivanja zavisi od binarne
+    ' reprezentacije i preciznosti medjurezultata, pa se NE tvrdi smer -- tvrdi
+    ' se ono sto je zaista bitno: ako je nalog uopste prosao kapiju, iznos u
+    ' fajlu NE SME biti veci od otvorenog (600.00).
+    Dim naGranici As Collection
+    Set naGranici = New Collection
+    naGranici.Add MakeNalog(P & "OTK-P1", P & "BLOK-P1", 600.005, True)
+    payload = BuildNalogCsvPayload(naGranici, RACUN, otvoreno, odbijeno)
+    If LenB(odbijeno) > 0 Then
+        Chk LenB(payload) = 0, S & "granicna vrednost odbijena -> nema payload-a"
+    Else
+        Chk InStr(payload, ";600.01;") = 0, S & "granicna vrednost NIKAD ne izlazi preko otvorenog"
+        Chk InStr(payload, ";600.00;") > 0, S & "granicna vrednost izlazi kao 600.00"
+    End If
 
     ' 4) Blok bez tekuceg racuna ne ulazi u fajl (i ne obara ga).
     Dim bezTR As Collection
