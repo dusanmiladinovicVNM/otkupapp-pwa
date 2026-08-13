@@ -48,7 +48,7 @@ if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
     exit 2
 fi
 
-# Svi gate suite-ovi iz podrazumevanog seta -- ~190+ provera, ne samo naše tri.
+# Svi gate suite-ovi iz podrazumevanog seta -- 299 provera izmereno, ne samo tri.
 # Ne ide goli `run_vba.py` iz dva razloga:
 #   TestLicense_All  ne moze da se pokrene ("Cannot run the macro"), pa bi obarao
 #                    svaku sesiju; blind je, dakle ionako ne daje verdikt.

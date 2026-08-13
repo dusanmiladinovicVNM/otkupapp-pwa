@@ -138,7 +138,7 @@ python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
 python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 ```
 
-### Akceptaciona komanda — gate je ~190 provera, ne tri
+### Akceptaciona komanda — gate je ~300 provera, ne tri
 
 `--suite RunAllTests` vrti samo tri nova testa. Pravi gate su **svi gate suite-ovi
 iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
@@ -149,13 +149,16 @@ python tools/run_vba.py --suite RunAllTests --suite RunIzvestajTests ^
     --suite RunFakturaSmokeSuite
 ```
 
+Izmereno na operaterskoj mašini (`EXIT=0`, sve zeleno):
+
 | Suite | Provera |
 |---|---|
-| `RunBankaImportTestSuite` | 187 |
+| `RunBankaImportTestSuite` | 189 |
 | `RunSheetsJsonParserTests` | 72 |
 | `RunFakturaSmokeSuite` | 35 |
 | `RunAllTests` | 3 |
 | `RunIzvestajTests` | ne prijavljuje broj |
+| **ukupno** | **299** + `RunIzvestajTests` |
 
 Izostavljena su tačno dva: `TestLicense_All` (ne može da se pokrene — v. dole) i
 `Test_StornoCentar_All` (blind, rezultat samo u Immediate, troši vreme bez
