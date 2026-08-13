@@ -996,3 +996,36 @@ Vredi izdvojiti, jer se lako previdi pored tri nova testa: do sada se **nijedna*
 - **Novi moduli u `.xlsm`:** `modTestMode.bas` (mora da se isporučuje — referencira ga `frmOtkup`) i `modTest.bas` (test modul, kao postojeći `mod*Tests`; ne radi ništa dok se ne pozove).
 - **Stanje verifikacije:** `python3 tools/vba_check.py` — **177 fajlova, čisto, exit 0**. `tools/run_vba.py --self-test` čist. `--suite RunAllTests` **3/3 OK, exit 0**; sve tri sabotaže daju exit 2 sa imenom ciljanog testa; posle reverta ponovo 3/3.
 - **Dodirnuti fajlovi:** `src-vba/modTest.bas` (nov), `src-vba/modTestMode.bas` (nov), `src-vba/frmOtkup.frm` (2 linije), `tools/make_fixture.py` (nov), `tools/dump_schema.py` (nov), `tools/run_vba.py` (dopuna), `.claude/hooks/vba-test.sh` (nov), `.claude/settings.json`, `.claude/rules/testovi.md`, `.gitattributes` (nov), `tests/golden/PosleSnimanja_KontekstOtpremnice.txt` (nov), `docs/TEST_SUITE_OTKUP_HANDOFF.md` (nov).
+
+---
+
+## vba-v2.39.3 — 2026-08-14
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Rizik za aplikaciju: nikakav** — dirani su isključivo test moduli
+> (`mod*Tests`, `modTest*`), i to samo dodavanjem `Err.Raise` na kraju suite-a.
+> Nijedna produkciona rutina, nema promene šeme, `.frx` netaknut.
+>
+> **Suština:** zaštita po sesiji je otišla sa **3 provere na ~1050**, i to ne
+> pisanjem novih testova nego time što su postojeći prestali da lažu.
+
+**„Blind" suite nisu bile zaštita nego privid**
+
+- **Suite sa `gate: False` je runner prijavljivao kao „prošla bez greške", što NIJE „sve provere prošle".** Rezultat je postojao samo u Immediate prozoru; pale provere niko nije video. Pet takvih suite-ova prevedeno je u `gate`: `RunStornoTestSuite` (181), `Test_StornoCentar_All` (88), `RunPaleteTestSuite` (97), `RunAgrohemijaSmokeSuite` (25), `RunBusinessFlowProSuite` (336), `TestLicense_All` (23). Konverzija je po tri linije jer su sve već brojale padove — samo nisu podizale grešku.
+- **Svaka je dokazana u oba smera:** namerno oborena jedna provera → `exit 2` sa imenom baš te suite → `git checkout` → ponovo zeleno. Bez tog dokaza konverzija se ne prijavljuje kao gotova (`CLAUDE.md` §5).
+- **„Suite se nije pokrenuo" nije „prošlo".** Uz konverziju su zatvorene četiri putanje tihog `Exit Sub` pre nego što ijedna provera krene — paletiranje isključeno, zatečen `TST-` ostatak, operater odustao na potvrdi, dev-guard odbijen. Sve su runneru izgledale kao `OK`; sada podižu grešku sa porukom koja počinje `suite NIJE pokrenut:`.
+
+**Dva „nalaza" koja to nisu bila**
+
+- **147 palih provera u `RunBusinessFlowProSuite` nije bila regresija nego nepripremljena sveska.** Fixture nastaje iz starijeg donora (2.28.4), a kod je noviji; kolone dodate u međuvremenu ne postoje dok se ne pusti schema upgrade. `run_vba.py` sada **uvek** pušta `EnsureRuntimeSchema` posle importa a pre suite-ova i ispisuje `SCHEMA OK` / `SCHEMA FAIL`. Posle toga suite daje `336/336`. Pala priprema šeme obara run i kad su sve suite zelene.
+- **`TestLicense_All` („Cannot run the macro") nije bila compile greška nego zaostali duplikat u svesci.** Fixture je nasleđivao **131** VBA modul iz donora; import prepisuje samo ono što repo ima, pa zaostali modul ostaje i izvršava se — a duplo `Public` ime daje „Ambiguous name". Otud je ručno pokretanje prolazilo (druga sveska), driver padao (fixture), a `vba_check` bio zelen s pravom (duplikata u repou nema). `make_fixture.py` sada uklanja sav kod iz donora; za sveske iz `--workbook` driver ih ne briše nego prijavljuje kao `ORPHAN`.
+
+**Alati**
+
+- **`tools/read_test_log.py`** — čita log sheet suite-a i grupiše padove po temi i po razlogu (`pao / ukupno`), da se masovan pad razlikuje od pojedinačnog. `run_vba.py --keep` sada i **snima** temp kopiju; ranije ju je čuvao u stanju pre rana, pa je trijaža čitala stariji, tuđi run.
+- **`Stop` hook pušta goli `run_vba.py`.** Katalog `SUITES` je jedini izvor istine — nova suite ulazi u gate time što je upisana sa `default: True`, bez diranja hook-a.
+
+**Stanje verifikacije**
+
+- Golo `python tools/run_vba.py` → **`EXIT=0`**, 11 suite-ova, `SCHEMA OK`, **bez `BLIND` reda**. Banka 189, BFP 336, storno 181, palete 97, centar 88, json 72, faktura 35, agro 25, licenca 23, `modTest` 3, plus `RunIzvestajTests`.
+- Svih šest konverzija pokazano crveno pod sabotažom i vraćeno u zeleno.
+- `python3 tools/vba_check.py` — 177 fajlova, čisto.

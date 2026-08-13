@@ -175,6 +175,9 @@ i to je ono što pušta `Stop` hook:
 python tools/run_vba.py
 ```
 
+Izmereno: `EXIT=0`, 11 suite-ova, i **bez `BLIND` reda u ispisu** — u
+podrazumevanom setu nema više nijedne suite bez verdikta.
+
 Nema više eksplicitne liste: katalog `SUITES` u `tools/run_vba.py` je jedini izvor
 istine. Nova suite ulazi u gate time što je upisana tamo sa `default: True` —
 hook se ne dira. **Ne proširivati na `--all`**: među `Run*` procedurama nisu sve
