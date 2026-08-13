@@ -171,7 +171,7 @@ Public Function DumpKontrole(ByVal f As Object) As String
     i = 0
     For Each ctl In f.Controls
         i = i + 1
-        arr(i, 1) = ctl.name & "=" & ControlValue(ctl)
+        arr(i, 1) = AsciiEscape(ctl.name & "=" & ControlValue(ctl))
     Next ctl
 
     Dim sorted As Variant
@@ -183,6 +183,31 @@ Public Function DumpKontrole(ByVal f As Object) As String
     Next i
 
     DumpKontrole = sb
+End Function
+
+' Sve van stampanog ASCII-ja ide kao \uXXXX. Bez ovoga je golden neupotrebljiv:
+' VBA Print # pise u ANSI kodnu stranu, koja "Vrsta voca" sa ch ne moze da
+' predstavi (cp1252) -- snimi se osakaceno, pa svako sledece poredjenje pada, a
+' poruka o razlici izgleda kao da su stringovi isti jer se i ona gubi na istom
+' mestu. Uz escape je golden cist ASCII, round-trip je tacan, a razlika citljiva.
+Private Function AsciiEscape(ByVal s As String) As String
+    Dim i As Long
+    Dim ch As Long
+    Dim out As String
+
+    For i = 1 To Len(s)
+        ch = AscW(Mid$(s, i, 1))
+        If ch < 0 Then ch = ch + 65536      ' AscW je Integer: > 32767 dolazi negativno
+        If ch = 92 Then
+            out = out & "\\"            ' inace bi putanja "C:\users" izgledala kao escape
+        ElseIf ch >= 32 And ch <= 126 Then
+            out = out & Chr$(ch)
+        Else
+            out = out & "\u" & Right$("000" & Hex$(ch), 4)
+        End If
+    Next i
+
+    AsciiEscape = out
 End Function
 
 ' Kontrole nemaju sve .Value (Label/Frame imaju Caption, neke nemaju nista).
