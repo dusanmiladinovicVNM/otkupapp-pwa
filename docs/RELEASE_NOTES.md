@@ -976,14 +976,18 @@ Sva tri su izašla tek kroz pokretanje, ne kroz čitanje koda:
 - **`run_vba.py` je dopunjen, ne prepisan:** `RunAllTests` u `SUITES` katalogu, verdikt iz `last_run.txt` pored sveske (a ne iz „`Run()` nije pukao", jer `modTest` hvata grešku po testu da jedan pad ne obori ostale), **nema `last_run.txt` → exit 2**, golden fajlovi u temp pre rana i nazad posle.
 - **Compile verdikt više ne obara run kad suite-ovi idu.** `COMPILE NEJASNO` se i dalje ispisuje nepromenjen, ali odgovor nose testovi: da bi se `RunAllTests` uopšte pokrenuo, VBA mora da kompajlira `modTest` i sve što on referencira — a to je baš kod pod testom. Eksplicitan compile `FAIL` i dalje pada, kao i `NEJASNO` uz `--compile-only`, gde je probe jedini izvor istine.
 
-**Zatečeni padovi — prijavljeni, NISU popravljani**
+**Zatečeni padovi — prijavljeni, ne popravljani u ovom PR-u**
 
-Golo `python tools/run_vba.py` (pun set suite-ova) je crveno zbog dva pada koji postoje nezavisno od ove suite. Svaki zaslužuje svoj zadatak i nije diran:
+Prvo pokretanje golog `python tools/run_vba.py` (pun set suite-ova) dalo je dva pada nezavisna od ove suite. Nijedan nije diran ovde; jedan je u međuvremenu rešen zasebno:
 
-- **`RunBankaImportTestSuite` — `PASS=186 FAIL=1`.** Pada `T13` (`modTestBanka.bas:863`): nalog od `600.005`, zaokružen na `600.01`, treba da bude odbijen kao veći od otvorenog iznosa, a `ValidateNalogSaldo` ga propušta. Granični slučaj u logici oko novca.
+- **`RunBankaImportTestSuite` — `PASS=186 FAIL=1`** na prvom pokretanju. **Rešeno u #183, i to nije bio bug u produkciji nego u test vektoru:** `600.005` se u `Double`-u čuva kao `600.00499999...`, dakle ispod pola pare, pa ga half-up zaokruživanje korektno spušta na `600.00` — `ValidateNalogSaldo` je bio u pravu. Vektor je zamenjen jednoznačnim `600.006`, a za vrednost tačno na pola pare se sada tvrdi invarijanta (iznos u fajlu ne prelazi otvoreno) umesto smera zaokruživanja. Vredi zabeležiti kako je nađen: suite koja je puštena zbog sasvim drugog posla iznela je dvosmislen vektor koji je stajao u repou.
 - **`TestLicense_All` — „Cannot run the macro".** Makro postoji (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo i odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za potvrdu treba `Alt+F11 → Debug → Compile` ručno.
 
-Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv.
+Dok `TestLicense_All` stoji, akceptaciona komanda za ovu suite je `--suite RunAllTests`, a ne goli poziv. Kad se i to raščisti, u `.claude/hooks/vba-test.sh` se `--suite RunAllTests` menja golim pozivom i hook počinje da vrti ceo podrazumevani set — blizu 300 provera pod gate-om umesto tri.
+
+**Šta je zapravo najveća promena**
+
+Vredi izdvojiti, jer se lako previdi pored tri nova testa: do sada se **nijedna** postojeća suite nije pokretala kroz `run_vba.py`. Compile probe je vraćao `NEJASNO`, `rc = 2` je padao pre suite petlje, i petlja se nikad nije dosegla — suite su postojale, ali samo kao ručni `Alt+F8`. Otkad probe više ne obara run, jedna komanda vrti ceo podrazumevani set: `RunSheetsJsonParserTests` (72), `RunBankaImportTestSuite` (187), `RunFakturaSmokeSuite` (35), `RunIzvestajTests`, `RunAllTests` (3) pod gate-om, plus `Test_StornoCentar_All` (88) kao blind. Tri nova testa su manji deo dobitka od toga.
 
 **Rizik za podatke i verifikacija**
 

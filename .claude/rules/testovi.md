@@ -96,7 +96,7 @@ prošle".
 | `RunAllTests`² | `Test_StornoCentar_All` |
 | `RunIzvestajTests` | `TestLicense_All`³ |
 | `RunSheetsJsonParserTests` | `RunStornoTestSuite` |
-| `RunBankaImportTestSuite`³ | `RunPaleteTestSuite` |
+| `RunBankaImportTestSuite` | `RunPaleteTestSuite` |
 | `RunFakturaSmokeSuite` | `RunNovacSmokeSuite` |
 | `RunGoogleSyncSmokeSuite`¹ | `RunBusinessFlowProSuite` |
 | `RunMasterSyncSmokeSuite`¹ | `RunAgrohemijaSmokeSuite` |
@@ -176,19 +176,28 @@ batch varijanta onoga što `modSetup.DebugKoloneTabele` radi interaktivno.
 
 ### Zatečeni padovi u punom setu (NISU iz ove suite)
 
-Golo `python tools/run_vba.py` je crveno zbog dva pada koja postoje nezavisno od
-`modTest` i nisu popravljana (svaki zaslužuje svoj zadatak):
+Prvo pokretanje punog seta dalo je dva pada nezavisna od `modTest`. Jedan je rešen,
+jedan stoji:
 
-- `RunBankaImportTestSuite` — `PASS=186 FAIL=1`, pada `T13`
-  (`modTestBanka.bas:863`): nalog od `600.005` zaokružen na `600.01` treba da bude
-  odbijen kao veći od otvorenog, a `ValidateNalogSaldo` ga propušta. Granični
-  slučaj u logici oko novca.
+- ~~`RunBankaImportTestSuite` — `T13`~~ **REŠENO u #183.** Pao je **test vektor, ne
+  produkcija**: `600.005` se u `Double`-u čuva kao `600.00499999...`, dakle ispod
+  pola pare, pa ga half-up zaokruživanje korektno spušta na `600.00`.
+  `ValidateNalogSaldo` je bio u pravu. Vektor je zamenjen jednoznačnim `600.006`, a
+  za vrednost tačno na pola pare se sada tvrdi invarijanta (iznos u fajlu ne prelazi
+  otvoreno) umesto smera zaokruživanja.
 - `TestLicense_All` — „Cannot run the macro". Makro **postoji**
   (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je
   najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo, pa
-  odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno.**
+  odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za
+  potvrdu treba `Alt+F11 → Debug → Compile` ručno.
 
-Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv.
+Dok `TestLicense_All` stoji, akceptaciona komanda za ovu suite je
+`--suite RunAllTests`, a ne goli poziv.
+
+**Kad se i to reši**, u `.claude/hooks/vba-test.sh` se `--suite RunAllTests` menja
+golim pozivom i hook počinje da vrti ceo podrazumevani set — blizu 300 provera pod
+gate-om umesto tri. To je jedan red izmene i glavni razlog da se `TestLicense_All`
+ne ostavi da visi.
 
 ### Stop hook
 
