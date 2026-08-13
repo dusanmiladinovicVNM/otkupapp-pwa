@@ -100,7 +100,15 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-113"
+Public Const OTKUI_BUILD   As String = "v6-ui-114"
+' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
+' provera prava pri otvaranju (ShowOtkupUI).
+Public Const SCR_POCETNI   As String = "DOKUMENTI"
+' Najstarija verzija pratecih modula sa kojom ova ljuska radi. Nije jednakost:
+' moduli se menjaju nezavisno (clsFlatBtn je namerno zamrznut), pa bi zahtev
+' "sve verzije iste" prijavljivao neispravnu instalaciju i kad je ispravna.
+' Podici SAMO kad se ugovor izmedju modula stvarno promeni.
+Public Const OTKUI_MIN_BUILD As String = "v6-ui-107"
 
 '--- TIPOGRAFSKA SKALA -----------------------------------------------
 ' Jedan izvor istine za velicine. Ako neka velicina nije ovde, ne koristi se.
@@ -348,6 +356,11 @@ Private mLoading As Boolean          ' program puni polja - to NIJE izmena koris
 '=====================================================================
 Public Sub BuildOtkupScreen(frm As Object)
     Dim t0 As Double: t0 = Timer
+    Dim errNum As Long, errDesc As String
+    ' Gradnja pipa stotine runtime kontrola; ako bilo koja padne, mBuilding mora
+    ' da se vrati na False (svi handleri ga proveravaju) pre nego sto greska ode
+    ' dalje - inace ostaje "ziv" ekran koji ne reaguje ni na sta.
+    On Error GoTo EH
     mBuilding = True
     Set mFrm = frm
     Set Btns = New Collection
@@ -367,7 +380,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     mSelRow = 0
     mHoverRow = -1
     mHoverHd = -1
-    mScreen = "DOKUMENTI"
+    mScreen = SCR_POCETNI
     modUiKit.ResetNumFields             ' popunjava ga NewTxt tokom gradnje
     mDisplayFont = DisplayFont()
 
@@ -395,6 +408,11 @@ Public Sub BuildOtkupScreen(frm As Object)
     ShowZones frm
     mBuilding = False
     mBuildMs = CLng((Timer - t0) * 1000)
+    Exit Sub
+EH:
+    errNum = Err.Number: errDesc = Err.description
+    mBuilding = False
+    Err.Raise errNum, "modOtkupUI.BuildOtkupScreen", errDesc
 End Sub
 
 '--------------------------------------------------------- HEADER ----
@@ -3254,7 +3272,7 @@ Private Sub UiClickCore(ByVal tag As String)
                 ChrW(IIf(mGridMax, IC_MIN, IC_MAX))
             LayoutOtkup mFrm
             RenderGrid
-        Case "btnClose": mFrm.Hide
+        Case "btnClose": OtkupUI_Sakrij
         Case "btnSync": DoSync
         Case "btnSnimi": DoSaveWorkbook
         Case "btnExcel": DoShowExcel
@@ -3748,7 +3766,33 @@ Public Sub FixVbeCaption()
 End Sub
 
 Public Sub ShowOtkupUI()
+    ' Javan makro se moze pozvati i direktno (Alt+F8), mimo navigacije - zato se
+    ' pravo na POCETNI ekran proverava ovde. Bez ovoga bi se ekran sa pravom
+    ' upisa otvarao i korisniku kome ActivateScreen taj ekran ne bi dao.
+    If Not modUiScreens.ScrDozvoljen(SCR_POCETNI) Then
+        MsgBox Poruka("OTKUI_SCR_ZABRANJEN"), vbExclamation, APP_NAME
+        Exit Sub
+    End If
     frmOtkupUI.show vbModeless
+End Sub
+
+' Zatvaranje ekrana (dugme X u zaglavlju ili sistemski X). Forma se SAKRIVA, ne
+' unload-uje, pa UserForm_Terminate ne puca i lock stanice bi ostao zauzet na
+' serveru do gasenja Excela. Legacy frmOtkup pusta stanicu i u btnPovratak_Click
+' i u UserForm_QueryClose - isto radi i ovaj ekran.
+Public Sub OtkupUI_Sakrij()
+    On Error Resume Next
+    If Len(GetActiveStanica()) > 0 Then ReleaseStanicaLock GetActiveStanica()
+    If Not mFrm Is Nothing Then mFrm.Hide
+End Sub
+
+' Gradnja ekrana je pukla. Zastavica mBuilding mora da padne, inace bi svaki
+' sledeci dogadjaj cutke izlazio (svi handleri je proveravaju), pa bi ekran
+' izgledao "ziv" a ne bi reagovao ni na sta.
+Public Sub OtkupUI_BuildFailed(ByVal errNum As Long, ByVal errDesc As String)
+    On Error Resume Next
+    mBuilding = False
+    LogError "modOtkupUI.BuildOtkupScreen", CStr(errNum) & " " & errDesc
 End Sub
 
 Private Sub ShowZones(frm As Object)
@@ -3788,16 +3832,18 @@ End Sub
 Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     Dim z As Object, nm As String
     If kljuc = mScreen Then Exit Sub
-    If kljuc <> "DOKUMENTI" Then
+    ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je "DOKUMENTI"
+    ' bio izuzet, pa se na njega moglo vratiti i bez prava.
+    If Not modUiScreens.ScrDozvoljen(kljuc) Then
+        ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
+        PaintNav frm, NavTagFor(mScreen)
+        Exit Sub
+    End If
+    If kljuc <> SCR_POCETNI Then
         ' Neuspeh mora da VRATI oznaku u sidebaru na ekran na kome zaista
         ' jesmo - inace bi meni pokazivao Palete dok je na ekranu jos Unos.
         If Not modUiScreens.ScrPostoji(kljuc) Then
             ShowToast Poruka("OTKUI_SCR_NEMA"), False
-            PaintNav frm, NavTagFor(mScreen)
-            Exit Sub
-        End If
-        If Not modUiScreens.ScrDozvoljen(kljuc) Then
-            ShowToast Poruka("OTKUI_SCR_ZABRANJEN"), True
             PaintNav frm, NavTagFor(mScreen)
             Exit Sub
         End If
@@ -5551,14 +5597,19 @@ End Sub
 ' ("11.08.2026.") je nacin na koji se datum kod nas pise, pa se skida pre
 ' provere umesto da obori unos.
 Private Function ParseDatum(ByVal s As String) As Double
-    Dim t As String
+    Dim t As String, d As Date
     On Error Resume Next
     t = Trim$(s)
     Do While Right$(t, 1) = "."
         t = Left$(t, Len(t) - 1)
     Loop
     If Len(t) = 0 Then Exit Function
-    If IsDate(t) Then ParseDatum = CDbl(CDate(t))
+    ' SAMO deterministicki parser. IsDate/CDate citaju po Windows locale-u, pa
+    ' bi isti tekst "01.02.2026" na MDY masini bio 2. januar, a na DMY masini
+    ' 1. februar - dok predlog broja i zakljucavanje stanice isti tekst vec
+    ' citaju kroz TryParseDateValue. Upis i kontekst NE SMEJU da se raziidju
+    ' (ista klasa greske kao AUD-007 / RF-09).
+    If TryParseDateValue(t, d) Then ParseDatum = CDbl(d)
 End Function
 
 Private Sub ClearForm()
@@ -6020,12 +6071,37 @@ Public Function OtkupUI_SelfCheck() As String
         OtkupUI_SelfCheck = ver & vbCrLf & _
             "PAZNJA: clsFlatBtn je STARA verzija (uvoz nije zamenio klasu; " & _
             "trazi komponentu clsFlatBtn1 u Project Exploreru)"
-    ElseIf cv <> OTKUI_BUILD Or UIKIT_BUILD <> OTKUI_BUILD _
-           Or SCRDOK_BUILD <> OTKUI_BUILD Or UISCR_BUILD <> OTKUI_BUILD Then
-        OtkupUI_SelfCheck = ver & vbCrLf & "PAZNJA: verzije se ne poklapaju"
+    ElseIf StaraKomponenta(cv) Or StaraKomponenta(UIKIT_BUILD) _
+           Or StaraKomponenta(SCRDOK_BUILD) Or StaraKomponenta(UISCR_BUILD) Then
+        OtkupUI_SelfCheck = ver & vbCrLf & _
+            "PAZNJA: neki modul je stariji od " & OTKUI_MIN_BUILD & _
+            " (uvoz nije prosao do kraja)"
     Else
         OtkupUI_SelfCheck = ver & vbCrLf & OtkupUI_Stats()
     End If
+End Function
+
+' Da li je komponenta starija od najstarije podrzane. Verzije se NE porede na
+' jednakost: moduli se menjaju nezavisno (clsFlatBtn je zamrznut, ekrani se
+' dodaju svojim tempom), pa je ugovor "ne stariji od OTKUI_MIN_BUILD".
+' Neprepoznat oblik verzije se ne prijavljuje kao greska - provera je tu da
+' uhvati nepotpun uvoz, ne da tumaci tudje sheme oznacavanja.
+Private Function StaraKomponenta(ByVal v As String) As Boolean
+    Dim a As Long, b As Long
+    a = BuildSeq(v)
+    b = BuildSeq(OTKUI_MIN_BUILD)
+    If a = 0 Or b = 0 Then Exit Function
+    StaraKomponenta = (a < b)
+End Function
+
+' "v6-ui-113" -> 113. Redni broj je jedini deo koji raste monotono.
+Private Function BuildSeq(ByVal v As String) As Long
+    Dim i As Long, c As String, d As String
+    For i = Len(v) To 1 Step -1
+        c = Mid$(v, i, 1)
+        If c >= "0" And c <= "9" Then d = c & d Else Exit For
+    Next i
+    If Len(d) > 0 Then BuildSeq = CLng(d)
 End Function
 
 ' Merilo rasta ekrana. Plan je da SVI ekrani predju na ovu jednu formu, pa je

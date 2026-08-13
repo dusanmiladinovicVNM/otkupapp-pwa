@@ -36,7 +36,7 @@ Attribute VB_Name = "modOtkupUnos"
 '=====================================================================
 Option Explicit
 
-Public Const OTKUNOS_BUILD As String = "v6-ui-107"
+Public Const OTKUNOS_BUILD As String = "v6-ui-114"
 
 '--------------------------------------------------------------- ULAZ
 ' Prazan recnik sa svim kljucevima - da pozivalac ne mora da pamti spisak.
@@ -104,6 +104,7 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
     Dim kolAmb As Long, kolAmbII As Long, kolAmbIzd As Long
     Dim imaKlasaI As Boolean, dveKl As Boolean
     Dim tara As Double, taraII As Double
+    Dim errDesc As String
     On Error GoTo EH
     fokus = ""
 
@@ -253,8 +254,11 @@ Public Function OtkupValidiraj(ByVal p As Object, ByRef fokus As String) As Stri
     End If
     Exit Function
 EH:
+    ' Opis se cita PRE logovanja: LogErr (i Poruka) imaju svoj On Error Resume
+    ' Next, koji cisti Err - operater bi inace dobio poruku bez objasnjenja.
+    errDesc = Err.description
     LogErr "modOtkupUnos.OtkupValidiraj"
-    OtkupValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description
+    OtkupValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
 '------------------------------------------------------------- UPIS
@@ -264,6 +268,7 @@ End Function
 Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, hlPending As String, hlNewPrij As String, hlWarn As String
     Dim doHlRelink As Boolean, hlRelWarn As String, hlGajbDiff As Boolean
+    Dim errDesc As String
     On Error GoTo EH
     poruke = ""
 
@@ -343,7 +348,9 @@ Public Function OtkupUpisi(ByVal p As Object, ByRef poruke As String) As String
     OtkupUpisi = res
     Exit Function
 EH:
+    ' isto pravilo: opis pre logovanja (LogErr / Poruka cuvaju svoj Err)
+    errDesc = Err.description
     SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modOtkupUnos.OtkupUpisi"
-    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description
+    poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function

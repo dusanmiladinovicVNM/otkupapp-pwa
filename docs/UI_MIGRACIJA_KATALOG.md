@@ -77,6 +77,23 @@ mirror-vozač, pa je stanica podmetnuta kao vozač davala `S…` van zbirnih.
 Predlog se preračunava na promenu: otkupnog mesta, datuma, režima, vozača (F3),
 kupca (F4) i posle svakog upisa.
 
+### Z3c — isporuka: novi UI NE ide kroz online self-update
+
+`frmOtkupUI.frm/.frx` je **nova forma**. `modSelfUpdate` namerno razlikuje dva
+slučaja: postojeća forma → code-merge; **nova forma ili sheet → `needsReinstall`**.
+Zaštita postoji jer runtime `Remove`/`Import` forme ume da korumpira workbook —
+i **ne sme se slabiti** da bi ovaj UI prošao kroz update.
+
+Posledica za rollout: prelazak na novi UI je **jednokratna puna isporuka**
+(nov `AgriX_OtkupApp.xlsm` ili `ImportAllVBA` na svakoj mašini), ne online update.
+Sve kasnije izmene shell-a i ekrana (`modOtkupUI`, `modScr*`, `modUiKit`,
+`modUiScreens`) su „meki" moduli i idu normalnim self-update-om.
+
+Zato `OtkupUI_SelfCheck` od v6-ui-114 **ne traži jednake verzije** nego
+`>= OTKUI_MIN_BUILD`: forma stiže punom isporukom, moduli se posle menjaju
+nezavisno, a `clsFlatBtn` je namerno zamrznut — jednakost bi prijavljivala
+neispravnu instalaciju i kad je ispravna.
+
 ### Z3b — revizija ulaznog sloja 1:1 (v6-ui-113)
 
 Kompletan popis legacy handlera koji nešto **automatski popune ili preračunaju**,
@@ -101,7 +118,7 @@ zaključivati iz koda.
 | `ClearOtkupFields` | reset posle snimanja | **IMA** (v6-ui-108/109/110) |
 | `FillKooperantCombo` | `KOOP_FILTER_BY_OM` | **IMA** (v6-ui-113) |
 | `btnUnos_Click` | snimanje | **IMA** (`modOtkupUnos`) |
-| `UserForm_QueryClose`, `btnPovratak_Click` | `ReleaseStanicaLock` pri izlasku | **NEMA** |
+| `UserForm_QueryClose`, `btnPovratak_Click` | `ReleaseStanicaLock` pri izlasku | **IMA** (`OtkupUI_Sakrij`, v6-ui-114) |
 | `ShowLockStatus` / `HideLockStatus` | peščanik za vreme sinhronizacije | **NEMA** |
 
 **`frmDokumenta` (F2–F7)**

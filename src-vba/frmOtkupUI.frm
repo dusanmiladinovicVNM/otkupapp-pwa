@@ -32,9 +32,18 @@ Attribute VB_Exposed = False
 Option Explicit
 
 Private Sub UserForm_Initialize()
+    ' ScreenUpdating se MORA vratiti i kad gradnja pukne - inace Excel ostaje
+    ' zamrznut ekran bez ijedne poruke, a operater misli da je aplikacija pala.
+    On Error GoTo EH
     Application.ScreenUpdating = False
     modOtkupUI.BuildOtkupScreen Me
     Application.ScreenUpdating = True
+    Exit Sub
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    Application.ScreenUpdating = True
+    modOtkupUI.OtkupUI_BuildFailed errNum, errDesc
 End Sub
 
 Private Sub UserForm_Activate()
@@ -58,7 +67,10 @@ End Sub
 Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
     If CloseMode = vbFormControlMenu Then
         Cancel = True
-        Me.Hide
+        ' NE "Me.Hide": posto se forma ne unload-uje, Terminate ne puca, pa bi
+        ' zakljucana stanica ostala zauzeta na serveru. OtkupUI_Sakrij pusta
+        ' lock pa sakriva - isto sto legacy radi u frmOtkup.UserForm_QueryClose.
+        modOtkupUI.OtkupUI_Sakrij
     End If
 End Sub
 
