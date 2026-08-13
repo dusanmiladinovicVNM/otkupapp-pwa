@@ -53,6 +53,10 @@ import time
 # watchdog koji dijalog zatvara podrazumevanim dugmetom.
 
 SUITES = {
+    # Verdikt NE dolazi iz toga da li Run() pukne (modTest hvata gresku po testu
+    # da jedan pad ne obori ostale), nego iz last_run.txt pored sveske.
+    "RunAllTests":              {"gate": True,  "dialogs": False, "default": True,
+                                 "result_file": True},
     "RunIzvestajTests":         {"gate": True,  "dialogs": False, "default": True},
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
     "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
@@ -80,7 +84,50 @@ COMPILE_CONTROL_ID = 578             # VBE: Debug > Compile VBAProject
 VBE_TYPE = {".bas": 1, ".cls": 2, ".frm": 3, ".doccls": 100}
 
 DEFAULT_FIXTURE = os.path.join(ROOT, "tests", "fixtures", "otkup_test.xlsm")
+GOLDEN_DIR = os.path.join(ROOT, "tests", "golden")
 XL_OPENXML_MACRO = 52                # xlOpenXMLWorkbookMacroEnabled (.xlsm)
+
+
+def _copy_golden(src: str, dst: str) -> None:
+    os.makedirs(dst, exist_ok=True)
+    if not os.path.isdir(src):
+        return
+    for name in os.listdir(src):
+        if name.lower().endswith(".txt"):
+            shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
+
+
+def _read_test_results(wbdir: str, report: dict) -> int:
+    """Verdikt iz last_run.txt koji je upisao modTest.RunAllTests.
+
+    Nema fajla = pad, ne prolaz: to znaci da RunAllTests nije stigao do kraja
+    (compile error, visenje, ubijen proces) -- ishod koji nije eksplicitno OK.
+    """
+    path = os.path.join(wbdir, "last_run.txt")
+    if not os.path.exists(path):
+        report["tests"] = {"error": "modTest nije upisao last_run.txt "
+                                    "(RunAllTests nije stigao do kraja)"}
+        return 2
+
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+
+    lines = [ln.rstrip("\r") for ln in text.split("\n")]
+    head = lines[0] if lines else ""
+    total = failed = -1
+    for token in head.split():
+        if token.startswith("TESTS="):
+            total = int(token[6:] or -1)
+        elif token.startswith("FAIL="):
+            failed = int(token[5:] or -1)
+
+    detail = [ln for ln in lines[1:] if ln.strip()]
+    report["tests"] = {"total": total, "failed": failed, "detail": detail}
+
+    if total < 0 or failed < 0:
+        report["tests"]["error"] = f"neocekivan prvi red: {head!r}"
+        return 2
+    return 2 if failed else 0
 
 
 # --- Watchdog za modalne dijaloge --------------------------------------------
@@ -624,6 +671,11 @@ def main(argv: list[str]) -> int:
     wbpath = os.path.join(tmp, os.path.basename(fixture))
     shutil.copy2(fixture, wbpath)
 
+    # Golden fajlovi idu u temp pre rana i vracaju se posle: modTest ih trazi
+    # pored sveske, a nov golden mora da zavrsi u repou (tests/golden) na
+    # ljudski pregled -- inace bi ga sledeci run tiho napravio ponovo.
+    _copy_golden(GOLDEN_DIR, os.path.join(tmp, "golden"))
+
     report: dict = {"workbook": fixture, "import": [], "compile": None, "suites": [], "dialogs": []}
     rc = 2
     xl = None
@@ -663,13 +715,20 @@ def main(argv: list[str]) -> int:
         # se poklapa sa rezervisanom reci).
         report["compile"] = compile_project(xl, wb, watchdog)
 
-        if report["compile"].get("ok") is not True:
-            # Sve osim eksplicitnog True je pad. "Nejasno" ne sme da prodje kao
-            # zeleno -- alat koji ne zna ishod mora da kaze da ne zna, glasno.
+        compile_ok = report["compile"].get("ok")
+
+        if compile_ok is False:
+            # Eksplicitan "Compile error: ..." dijalog je pravi signal -- ostaje fatalan.
             rc = 2
         elif args.compile_only:
-            rc = 0
+            # Bez suite-ova je probe jedini izvor istine, pa NEJASNO i dalje pada:
+            # alat koji ne zna ishod mora da kaze da ne zna, glasno.
+            rc = 0 if compile_ok is True else 2
         else:
+            # NEJASNO vise ne obara run kad suite-ovi mogu da daju pravi odgovor.
+            # Da bi se RunAllTests uopste pokrenuo, VBA mora da kompajlira modTest
+            # i sve sto on referencira -- a to je bas kod pod testom. Verdikt probe
+            # se i dalje racuna i ispisuje nepromenjen, samo vise nije prepreka.
             failed = 0
             for suite in chosen_suites(args):
                 meta = SUITES[suite]
@@ -682,7 +741,15 @@ def main(argv: list[str]) -> int:
                     entry["error"] = str(exc)
                     failed += 1
                 else:
-                    entry["status"] = "OK" if meta["gate"] else "BLIND"
+                    if meta.get("result_file"):
+                        # Verdikt iz last_run.txt, ne iz "Run() nije pukao".
+                        if _read_test_results(tmp, report) == 0:
+                            entry["status"] = "OK"
+                        else:
+                            entry["status"] = "FAIL"
+                            failed += 1
+                    else:
+                        entry["status"] = "OK" if meta["gate"] else "BLIND"
                 entry["seconds"] = round(time.time() - t0, 1)
                 report["suites"].append(entry)
             rc = 2 if failed else 0
@@ -719,6 +786,11 @@ def main(argv: list[str]) -> int:
                 win32api.TerminateProcess(h, 0)
             except Exception:
                 pass
+        # Nov golden nastaje u temp-u -- vrati ga u repo da ga covek pregleda i
+        # commit-uje. Bez ovoga bi ga svaki sledeci run pravio iznova i test bi
+        # zauvek padao istom porukom.
+        _copy_golden(os.path.join(tmp, "golden"), GOLDEN_DIR)
+
         if args.keep:
             print(f"\nTemp kopija zadrzana: {tmp}")
         else:
@@ -750,6 +822,17 @@ def _write_report(report: dict, rc: int) -> None:
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
                      + (f"  {s.get('error', '')}" if s["status"] == "FAIL" else ""))
+
+    t = report.get("tests")
+    if t:
+        if t.get("error"):
+            lines.append(f"TESTS   {t['error']}")
+        else:
+            lines.append(f"TESTS   {t['total']} ukupno, {t['failed']} palo")
+        # Ime bas tog testa mora da se vidi u ispisu -- to je razlika izmedju
+        # "nesto je palo" i upotrebljivog nalaza.
+        for ln in t.get("detail", []):
+            lines.append(f"        {ln}")
 
     for d in report.get("dialogs", []):
         lines.append(f"DIALOG  {d}")

@@ -1183,7 +1183,10 @@ EH:
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
 End Sub
 
-Private Sub ClearOtkupFields()
+' Public (a ne Private) da modTest.T_PosleSnimanja_* moze da je pozove bez
+' vozenja celog btnUnos_Click (koji trazi stanica-lock, PDF izlaz i auto-lanac
+' hladnjace). Sva tri testa ciljaju bas ovu rutinu -- tu bug i zivi.
+Public Sub ClearOtkupFields()
     txtBrojDokumenta.value = ""
     txtKolicina.value = ""
     txtCena.value = ""
@@ -1208,7 +1211,9 @@ Private Sub ClearOtkupFields()
     On Error GoTo 0
 
     ' Kooperant je ociscen -> fokus na njega (sledeci unos = novi kooperant).
-    cmbKooperant.SetFocus
+    ' Test-rezim: forma nije .Show-ovana pa SetFocus puca -- test bi pao na
+    ' fokusu umesto na ponasanju koje meri.
+    If Not IsTestMode() Then cmbKooperant.SetFocus
 
     ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
     RefreshBrojDokumentaSuggestion False
