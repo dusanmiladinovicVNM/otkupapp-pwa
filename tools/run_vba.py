@@ -14,10 +14,13 @@ Upotreba:
     python tools/run_vba.py --all
     python tools/run_vba.py --workbook "C:\\putanja\\AgriX_OtkupApp.xlsm"
 
-Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`, a ako ga nema,
-skript ga sam napravi kao PRAZNU .xlsm. Za compile je to dovoljno; suite-ovima
-trebaju podaci, pa im prosledi pravu radnu svesku kroz `--workbook`. Sveska se
-uvek kopira u temp -- original se ne dira. Detalji: docs/EXCEL_TEST_HARNESS.md.
+Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`. Ako ga nema,
+skript napravi PRAZNU .xlsm -- dovoljno za compile, ali NE i za suite (prazna
+sveska nema tabele). Pravi fixture se pravi sa `tools/make_fixture.py`; sadrzi
+samo sinteticke podatke, a suite koje diraju tabele ionako seju sebi svoje
+(SVT-*, BIT-*, TST-*) u transakciji koja se uvek ponistava -- prava radna sveska
+im NIJE potrebna. Sveska se uvek kopira u temp, original se ne dira.
+Detalji: docs/EXCEL_TEST_HARNESS.md.
 
 Izlazni kod: 0 = zeleno, 2 = palo (compile greska, pala suite, ili neocekivan dijalog).
 
@@ -68,10 +71,10 @@ SUITES = {
     "RunMasterSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunSEFTestSuite":          {"gate": True,  "dialogs": True,  "default": False},
     "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
-    "RunPaleteTestSuite":       {"gate": False, "dialogs": True,  "default": False},
+    "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
     "RunBusinessFlowProSuite":  {"gate": False, "dialogs": True,  "default": False},
-    "RunAgrohemijaSmokeSuite":  {"gate": False, "dialogs": True,  "default": False},
+    "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},
 }

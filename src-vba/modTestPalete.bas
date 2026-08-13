@@ -50,6 +50,12 @@ Private Const TST_CRATE_KG As Double = 2#   ' tezina test-gajbice (tblTipAmbalaz
 Private mPass As Long
 Private mFail As Long
 Private mFails As String
+
+' Gate: suite mora da PODIGNE gresku i kad provera padne i kad se uopste NE
+' pokrene (paletiranje iskljuceno, zatecen TST- ostatak, operater odustao).
+' Tih Exit Sub bi runner video kao OK -- "nije pokrenuto" nije "proslo".
+' Konvencija: modTestBanka.ERR_BIT_SUITE_FAILED.
+Private Const ERR_PALETE_SUITE_FAILED As Long = vbObjectError + 2964
 Private mReport As String
 
 Public Sub RunPaleteTestSuite()
@@ -59,7 +65,8 @@ Public Sub RunPaleteTestSuite()
     If Not IsPaletiranjeEnabled() Then
         MsgBox "Paletiranje je iskljuceno u Podesavanjima - test-suite radi na paleta-engine-u" & vbCrLf & _
                "i zahteva ukljuceno paletiranje. Ukljuci pa pokreni ponovo.", vbExclamation, APP_NAME
-        Exit Sub
+        Err.Raise ERR_PALETE_SUITE_FAILED, "modTestPalete.RunPaleteTestSuite", _
+            "suite NIJE pokrenut: paletiranje je iskljuceno u Podesavanjima"
     End If
     SetPaletizeSkip False
 
@@ -69,14 +76,18 @@ Public Sub RunPaleteTestSuite()
         MsgBox "Nadjeni su TST- test podaci od ranije (verovatno prekinut test-run)." & vbCrLf & _
                "Zatvori svesku BEZ snimanja i otvori ponovo, pa pokreni test iz cistog stanja.", _
                vbExclamation, APP_NAME
-        Exit Sub
+        Err.Raise ERR_PALETE_SUITE_FAILED, "modTestPalete.RunPaleteTestSuite", _
+            "suite NIJE pokrenut: zatecen TST- ostatak od prekinutog run-a"
     End If
 
     If MsgBox("Pokrece PALETE test-suite na OVOJ radnoj svesci." & vbCrLf & vbCrLf & _
               "Sve izmene se rade u jednoj transakciji i UVEK se ponistavaju" & vbCrLf & _
               "(i na uspehu i na gresci) - podaci ostaju netaknuti." & vbCrLf & _
               "Preporuka za prvi put: pokreni na KOPIJI fajla." & vbCrLf & vbCrLf & _
-              "Nastaviti?", vbYesNo + vbQuestion, APP_NAME) <> vbYes Then Exit Sub
+              "Nastaviti?", vbYesNo + vbQuestion, APP_NAME) <> vbYes Then
+        Err.Raise ERR_PALETE_SUITE_FAILED, "modTestPalete.RunPaleteTestSuite", _
+            "suite NIJE pokrenut: operater odustao na potvrdi"
+    End If
 
     mPass = 0: mFail = 0: mFails = "": mReport = ""
 
@@ -105,7 +116,15 @@ Public Sub RunPaleteTestSuite()
 
     tx.RollbackTx                ' UVEK vrati sve - test ne ostavlja podatke
     Set tx = Nothing
+    On Error GoTo 0
     ReportResults True
+
+    If mFail > 0 Then
+        Err.Raise ERR_PALETE_SUITE_FAILED, "modTestPalete.RunPaleteTestSuite", _
+            "RunPaleteTestSuite: " & CStr(mFail) & " provera palo (PASS=" & _
+            CStr(mPass) & "). Detalji u Immediate prozoru."
+    End If
+
     Exit Sub
 
 EH:
@@ -115,6 +134,10 @@ EH:
     Set tx = Nothing
     Fail "NEOCEKIVANA GRESKA (suite prekinut): " & eDesc
     ReportResults False
+    On Error GoTo 0
+
+    Err.Raise ERR_PALETE_SUITE_FAILED, "modTestPalete.RunPaleteTestSuite", _
+        "RunPaleteTestSuite prekinut: " & eDesc
 End Sub
 
 ' ============================================================
