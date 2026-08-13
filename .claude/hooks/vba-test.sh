@@ -37,7 +37,18 @@ if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
     exit 2
 fi
 
-out="$("$PY" tools/run_vba.py --suite RunAllTests 2>&1)"
+# Svi gate suite-ovi iz podrazumevanog seta -- ~190+ provera, ne samo naše tri.
+# Ne ide goli `run_vba.py` iz dva razloga:
+#   TestLicense_All  ne moze da se pokrene ("Cannot run the macro"), pa bi obarao
+#                    svaku sesiju; blind je, dakle ionako ne daje verdikt.
+#   Test_StornoCentar_All  blind -- rezultat samo u Immediate, trosi vreme bez verdikta.
+# Cim se TestLicense_All raescisti, cela lista se brise i ostaje goli poziv.
+out="$("$PY" tools/run_vba.py \
+        --suite RunAllTests \
+        --suite RunIzvestajTests \
+        --suite RunSheetsJsonParserTests \
+        --suite RunBankaImportTestSuite \
+        --suite RunFakturaSmokeSuite 2>&1)"
 rc=$?
 
 if [ "$rc" -ne 0 ]; then

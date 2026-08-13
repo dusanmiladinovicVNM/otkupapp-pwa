@@ -2,6 +2,7 @@
 paths:
   - "src-vba/mod*Tests.bas"
   - "src-vba/modTest*.bas"
+  - "src-vba/frmOtkup.frm"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
   - "tools/make_fixture.py"
@@ -9,11 +10,17 @@ paths:
   - "tests/golden/*"
 ---
 
+<!-- frmOtkup.frm je u paths namerno: u njoj su meta sva tri testa ponasanja
+     (ClearOtkupFields), test seam (Public umesto Private) i IsTestMode gard.
+     Bez ovoga agent koji menja formu ne bi ni znao da to postoji. -->
+
+
 # Verifikacija: šta se stvarno može proveriti
 
-> CLAUDE.md §5 kaže „CI ne pokreće Excel". To i dalje važi, ali od sada postoje
-> dva alata koja pomeraju granicu — jedan radi svuda, drugi samo na Windows
-> mašini sa Excelom.
+> CI i dalje ne pokreće Excel. Postoje dva alata: jedan radi svuda i gleda izvor,
+> drugi traži Windows + Excel i gleda **ponašanje**. Definicija gotovog je u
+> CLAUDE.md §5 — zeleno nad ispravnim **i dokazano crveno** nad namerno pokvarenim
+> kodom, izlaz priložen.
 
 ## 1) `tools/vba_check.py` — radi i u Claude Code sesiji (Linux/macOS)
 
@@ -50,9 +57,12 @@ simbol. Za to i dalje treba VBE.
 
 ## 2) `tools/run_vba.py` — SAMO Windows + Excel + `pywin32`
 
-Import `src-vba/` → `Debug > Compile` → test suite, headless. U ovoj sesiji se
-**ne može pokrenuti** (nema COM-a); to je alat za operatera i za Windows dev
-mašinu.
+Import `src-vba/` → `Debug > Compile` → test suite, headless. Traži COM, pa se
+**ne pokreće na Linux/macOS** — ni u Claude Code sesiji na webu, ni u GitHub
+Actions. Tamo se testovi ponašanja **ne izvršavaju uopšte**, a `Stop` hook prolazi
+tiho: sesija može da se završi „zeleno" bez ijedne provere ponašanja. To nije
+verifikacija i ne sme se tako prijaviti — VBA izmena koja dira ponašanje ide na
+Windows mašinu ili ostaje neverifikovana.
 
 Jedini deo koji radi svuda: `python3 tools/run_vba.py --self-test` — provera da
 strip VBA header-a ne propušta header u kod. **Pokreni ga posle svake izmene
@@ -125,8 +135,36 @@ menja ponašanje. Tri testa nad `frmOtkup.ClearOtkupFields` (tu bug i živi):
 
 ```powershell
 python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
-python tools/run_vba.py --suite RunAllTests                       # exit 0 / 2
+python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 ```
+
+### Akceptaciona komanda — gate je ~190 provera, ne tri
+
+`--suite RunAllTests` vrti samo tri nova testa. Pravi gate su **svi gate suite-ovi
+iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
+
+```powershell
+python tools/run_vba.py --suite RunAllTests --suite RunIzvestajTests ^
+    --suite RunSheetsJsonParserTests --suite RunBankaImportTestSuite ^
+    --suite RunFakturaSmokeSuite
+```
+
+| Suite | Provera |
+|---|---|
+| `RunBankaImportTestSuite` | 187 |
+| `RunSheetsJsonParserTests` | 72 |
+| `RunFakturaSmokeSuite` | 35 |
+| `RunAllTests` | 3 |
+| `RunIzvestajTests` | ne prijavljuje broj |
+
+Izostavljena su tačno dva: `TestLicense_All` (ne može da se pokrene — v. dole) i
+`Test_StornoCentar_All` (blind, rezultat samo u Immediate, troši vreme bez
+verdikta). Čim se `TestLicense_All` raščisti, cela lista se briše i ostaje goli
+`python tools/run_vba.py`.
+
+**Do ove verzije nijedna od tih suite nije se pokretala kroz `run_vba.py`
+uopšte** — compile probe je vraćao `NEJASNO`, `rc = 2` je padao pre suite petlje i
+petlja se nikad nije dosegla. Suite su postojale samo kao ručni `Alt+F8`.
 
 **Dokazano u oba smera** (bez toga suite ne znači ništa — vidi PR #181, četiri
 puta zeleno-ali-nedokazano-crveno). Sabotaža se radi u `ClearOtkupFields`, revert
@@ -176,28 +214,21 @@ batch varijanta onoga što `modSetup.DebugKoloneTabele` radi interaktivno.
 
 ### Zatečeni padovi u punom setu (NISU iz ove suite)
 
-Prvo pokretanje punog seta dalo je dva pada nezavisna od `modTest`. Jedan je rešen,
-jedan stoji:
+Jedan jedini: **`TestLicense_All` — „Cannot run the macro".** Makro postoji
+(`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je
+najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo i odbija
+da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za potvrdu treba
+`Alt+F11 → Debug → Compile` ručno. Suite je `blind`, pa ni da se pokrene ne bi
+davala verdikt; jedina šteta je što obara goli `run_vba.py`.
 
-- ~~`RunBankaImportTestSuite` — `T13`~~ **REŠENO u #183.** Pao je **test vektor, ne
-  produkcija**: `600.005` se u `Double`-u čuva kao `600.00499999...`, dakle ispod
-  pola pare, pa ga half-up zaokruživanje korektno spušta na `600.00`.
-  `ValidateNalogSaldo` je bio u pravu. Vektor je zamenjen jednoznačnim `600.006`, a
-  za vrednost tačno na pola pare se sada tvrdi invarijanta (iznos u fajlu ne prelazi
-  otvoreno) umesto smera zaokruživanja.
-- `TestLicense_All` — „Cannot run the macro". Makro **postoji**
-  (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je
-  najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo, pa
-  odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za
-  potvrdu treba `Alt+F11 → Debug → Compile` ručno.
+Zato hook i akceptacija idu kroz **eksplicitnu listu gate suite-ova** (v. gore),
+a ne kroz goli poziv. Čim se `TestLicense_All` raščisti, lista se briše i ostaje
+goli `run_vba.py`.
 
-Dok `TestLicense_All` stoji, akceptaciona komanda za ovu suite je
-`--suite RunAllTests`, a ne goli poziv.
-
-**Kad se i to reši**, u `.claude/hooks/vba-test.sh` se `--suite RunAllTests` menja
-golim pozivom i hook počinje da vrti ceo podrazumevani set — blizu 300 provera pod
-gate-om umesto tri. To je jedan red izmene i glavni razlog da se `TestLicense_All`
-ne ostavi da visi.
+> `RunBankaImportTestSuite` je bio drugi pad na prvom pokretanju (`T13`,
+> `PASS=186 FAIL=1`) i **rešen je u #183** — pao je test vektor, ne produkcija:
+> `600.005` se u `Double`-u čuva ispod pola pare, pa ga zaokruživanje korektno
+> spušta na `600.00`. Ne vodi se više kao zatečen pad.
 
 ### Stop hook
 

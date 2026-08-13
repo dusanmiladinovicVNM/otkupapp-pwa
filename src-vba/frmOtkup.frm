@@ -1183,9 +1183,16 @@ EH:
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Public (a ne Private) da modTest.T_PosleSnimanja_* moze da je pozove bez
-' vozenja celog btnUnos_Click (koji trazi stanica-lock, PDF izlaz i auto-lanac
-' hladnjace). Sva tri testa ciljaju bas ovu rutinu -- tu bug i zivi.
+' NE VRACATI NA Private -- to je test seam, ne previd.
+' modTest.T_PosleSnimanja_* i T_ClearForm_* zovu ovu rutinu direktno, bez vozenja
+' celog btnUnos_Click (koji trazi stanica-lock, PDF izlaz i auto-lanac hladnjace).
+' Sva tri testa ponasanja ciljaju bas nju -- tu bug i zivi.
+'
+' UGOVOR ove rutine (svaka linija je test):
+'   OSTAJE  txtDatum      -- sledeci blok ide u niz istog datuma
+'   OSTAJE  txtBrojZbirne -- sledeci blok iste otpremnice nosi istu zbirnu
+'   BRISE   cmbKooperant  -- sledeci unos je nov partner
+' Pravila: .claude/rules/otkup-i-dokumenta.md i .claude/rules/testovi.md
 Public Sub ClearOtkupFields()
     txtBrojDokumenta.value = ""
     txtKolicina.value = ""
@@ -1211,8 +1218,10 @@ Public Sub ClearOtkupFields()
     On Error GoTo 0
 
     ' Kooperant je ociscen -> fokus na njega (sledeci unos = novi kooperant).
-    ' Test-rezim: forma nije .Show-ovana pa SetFocus puca -- test bi pao na
-    ' fokusu umesto na ponasanju koje meri.
+    ' NE UKLANJATI gard: forma koja nije .Show-ovana ne moze da primi fokus, pa bi
+    ' bez njega sva tri testa ponasanja padala na fokusu umesto na onome sto mere.
+    ' U produkciji je IsTestMode() uvek False (flag postavlja iskljucivo modTest),
+    ' pa je ponasanje identicno. Vidi .claude/rules/testovi.md.
     If Not IsTestMode() Then cmbKooperant.SetFocus
 
     ' Lokalni predlog (bez Google) -- just-saved red je vec u tblOtkup-u
