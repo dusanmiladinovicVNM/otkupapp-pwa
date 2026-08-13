@@ -900,3 +900,39 @@ Tačan broj/datum se postavlja pri `tools/release.sh` (planirano: **2.7.0**).
 - **Stanje verifikacije:** statički — ASCII, balans `Sub`/`Function`/`Select Case`, nema modul-level deklaracija posle prve procedure, nema duplih `Public` definicija, arnost svih test seed-ova proverena mehanički, `git merge-tree` vs `main` čist. Granice zaokruživanja proverene i van Excela za sva četiri slučaja. **`ImportAllVBA` + `Compile` + `RunBankaImportTestSuite` još nisu pokrenuti na operaterskoj mašini** — to je uslov za merge, uz smoke ekrana (unos → izmena podataka → osvežavanje → odbijeno generisanje).
 - **Napomena za smoke:** kontrolni delovi novih testova čitaju **stvarne** podatke te mašine. Ako neki padne, to je po pravilu **stvaran nalaz u podacima** (oštećena šifra otkupa, blok bez kooperanta, dvojnik kooperanta), a ne greška testa.
 - **Dodirnuti moduli:** `modNovac` (`ApplyAvansToOtkup` — fail-closed guard na dupli `OtkupID`), `modBankaExportPregled` (novi `ClampOverridesToOpen`, `ValidateNalogSaldo`, `BuildOpenAmountDict`, `BuildNalogCsvPayload`, `BuildOtkupOwnerIndex`; `GenerisiNalogeCSV` dobio finalnu kapiju i `outOdbijeno`; `BuildKooperantTekuciRacunCache` vraća i duplikate), `frmBankaExportPregled` (`PruneStaleOverrides` → `Function`, status o usklađivanju, cent-domen u `txtIsplatiti_Exit`, `PrimeniAvansTX` + oba avans dugmeta, `btnGenerisiCSV_Click`, čišćenje liste na grešci, `Err` pre `LogErr`), `modTestBanka` (T12–T20 + izolovane transakcije). Prateći: `docs/KNOWN_ISSUES.md` (AUD-026 zatvoren; FM-0021 #5 zatvoren strože nego što je katalog predlagao; FM-0021 #6 ostaje otvoren i zaveden), `docs/REFAKTOR_PLAYBOOK.md`, `docs/PLAN_SANACIJE.md` (M6 ✅), `docs/ARCHITECTURE_CHANGELOG.md` (v6.48), `CLAUDE.md`.
+
+---
+
+## vba-v2.39.1 — 2026-08-13
+> Verzija/datum se **finalizuju pri `tools/release.sh`**. **Razvojna verzija — ne menja `.xlsm`.**
+> Nijedan `.bas`/`.cls`/`.frm` nije dirnut, nema promene šeme, nema promene ponašanja
+> aplikacije. Operater ovde nema šta da testira; entry postoji da se u istoriji vidi
+> **kada je verifikacija pre commita prestala da bude „na dobru volju"**.
+>
+> **Suština:** dve compile greške koje su ranije čekale operatera u VBE-u (`Alt+F11 →
+> Compile`) sada se hvataju iz izvora, u milisekundama, pre commita — bez Excela.
+
+**Compile greške se hvataju pre commita**
+
+- **„Sub or Function not defined" i „Wrong number of arguments" više ne čekaju Excel.** To su, uz „Ambiguous name", tri najčešće compile greške u ovom projektu, i sve tri se vide iz samog izvora. `tools/vba_check.py` dobija dve nove provere — `NEDEFINISAN` (poziv procedure koja nigde u `src-vba/` nije definisana) i `ARNOST` (poziv sa brojem argumenata van deklarisanog opsega) — uz postojeći `DUPLIKAT`. Ranije se za to pravio headless compile gate; posle **četiri pokušaja** koji su svaki put lagali (v. `docs/EXCEL_TEST_HARNESS.md`) zaključak je da za ove tri greške Excel uopšte ne treba.
+- **Nalaz stiže odmah, ne pred commit.** Checker se vrti kao PostToolUse hook (`.claude/hooks/vba-check.sh`) nad fajlom koji je upravo izmenjen, pa greška ne stiže posle importa u Excel nego u trenutku izmene.
+- **Provera je namerno uska, jer je lažan nalaz gori od propuštenog.** Gleda samo `.bas` module (u `.frm`/`.cls` se nasleđeni članovi zovu bez kvalifikatora — `Repaint`, `Show`, `SetFocus` — pa bi lažni nalazi bili pravilo, ne izuzetak) i samo poziv u poziciji naredbe (`x = Foo(1)` se ne dira: bez tipova se poziv funkcije ne razlikuje od indeksiranja niza). Ime sa zagradom bez `Call` prefiksa računa se kao indeks kolekcije/niza — svih 8 prvih lažnih nalaza pri uvođenju bilo je upravo to. Ime definisano na više mesta sa različitom arnošću se isključuje.
+- **Šta i dalje traži Excel:** tipovi, nedeklarisane promenljive, greške u `.frm`/`.cls`. Za to ostaje `Alt+F11 → Debug → Compile VBAProject` na operaterskoj mašini.
+
+**Harness za Excel — četiri laži i šta je od njih ostalo**
+
+- **`run_vba.py` je tražio fixture koji nikad nije postojao**, pa se nikad nije ni pokrenuo do kraja.
+- **„COMPILE NEJASNO" je prolazilo kao „REZULTAT: ZELENO".** Nejasan ishod je izveštaj prikazivao kao uspeh — najgora vrsta greške u kapiji, jer se crveno stanje čita kao zeleno.
+- **Import je upisivao VBA header u kod**, pa je sveska završavala u break modu.
+- **Verdikt se čitao iz `Enabled` stanja stavke `Debug → Compile`**, što je treći put dalo lažno zeleno — provera ne kompajlira projekat. Uz to: minimizovan VBE prozor znači da meni uopšte ne reaguje, pa verdikt više ne laže ni u crveno.
+- Ono što je od harnessa preživelo i dalje radi (watchdog za modalne dijaloge, merenje compile-a mimo menija) i dokumentovano je u `docs/EXCEL_TEST_HARNESS.md`; zaključak „pravo rešenje je statičko, ne headless" stoji na vrhu tog dokumenta.
+
+**Kontekst pravila (`CLAUDE.md`)**
+
+- **`CLAUDE.md` je sveden na ono što važi uvek**, a detalji po oblastima preseljeni u `.claude/rules/` (9 fajlova sa `paths:` frontmatter-om — podaci i config, forme i kontrole, agrohemija i cene, banka, sync i self-update, VBA izvor, testovi, git i release). Pravila se učitavaju kad se ta oblast dira, umesto da svaka sesija nosi ceo tekst.
+
+**Rizik za podatke i verifikacija**
+
+- **Rizik za podatke: nikakav.** Nema promene šeme, `.frx` netaknut, nijedna VBA linija nije izmenjena, nema novih `Poruka()` ključeva. Menjaju se samo `tools/`, `docs/`, `.claude/` i `.gitignore`.
+- **Stanje verifikacije:** `python3 tools/vba_check.py` nad celim `src-vba/` — **175 fajlova, čisto, exit 0**, dakle nijedan lažan nalaz od dve nove provere. Negativna proba (namenski modul sa 2 pogrešne arnosti i 2 nedefinisana poziva) daje **tačno ta 4 nalaza** i ne prijavljuje ispravan poziv u istom modulu. `git merge-tree` vs `main` čist.
+- **Dodirnuti fajlovi:** `tools/vba_check.py` (`NEDEFINISAN`, `ARNOST`, `collect_definitions`, `collect_arities`, `check_undefined`), `tools/run_vba.py` (harness, četiri ispravke verdikta i importa), `.claude/hooks/vba-check.sh`, `.claude/settings.json`, `.claude/rules/*` (9 novih), `CLAUDE.md` (sveden), `docs/EXCEL_TEST_HARNESS.md` (nov), `.gitignore`.
