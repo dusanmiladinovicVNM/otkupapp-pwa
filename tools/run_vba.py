@@ -73,7 +73,7 @@ SUITES = {
     "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
-    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},
