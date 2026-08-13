@@ -21,6 +21,15 @@ Provere:
   4. DUPLIKAT     -- isti Public Sub/Function/Const u dva modula = "Ambiguous name"
                      posle merge-a.
   5. PORUKA       -- `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke`.
+  6. NEDEFINISAN  -- poziv procedure koja nigde u projektu nije definisana
+                     ("Sub or Function not defined").
+  7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
+                     arguments").
+
+Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
+kojih je i pravljen headless compile gate koji se nije dao ukrotiti
+(docs/EXCEL_TEST_HARNESS.md). Ovde se hvataju bez Excela, u milisekundama.
+Ne pokrivaju: tipove, nedeklarisane promenljive, greske u .frm/.cls.
 """
 
 from __future__ import annotations
@@ -86,6 +95,199 @@ PARAM_NAMES = re.compile(r"(?:ByVal|ByRef)\s+(\w+)", re.IGNORECASE)
 
 PORUKA_USE = re.compile(r'Poruka\(\s*"([A-Z0-9_]+)"\s*\)')
 PORUKA_DEF = re.compile(r'UpsertRow\s+lo,\s*existing,\s*"([A-Z0-9_]+)"')
+
+
+# --- 6. NEDEFINISAN ----------------------------------------------------------
+#
+# "Sub or Function not defined" je, uz "Ambiguous name" (v. DUPLIKAT), najcesca
+# compile greska u ovom projektu. Obe se vide iz izvora, pa Excel ovde uopste ne
+# treba -- sto je dobro, jer se headless compile gate nije dao ukrotiti
+# (docs/EXCEL_TEST_HARNESS.md).
+#
+# Provera je NAMERNO uska:
+#   - gleda SAMO .bas module. U .frm/.cls se nasledjeni clanovi zovu bez
+#     kvalifikatora (`Repaint`, `Show`, `SetFocus`), pa bi tamo lazni nalazi bili
+#     pravilo, a ne izuzetak.
+#   - gleda SAMO poziv u poziciji naredbe (`Foo`, `Foo a, b`, `Call Foo(a)`).
+#     Izraz `x = Foo(1)` se ne dira: bez tipova se poziv funkcije ne razlikuje od
+#     indeksiranja niza.
+# Lazan nalaz u hook-u je gori od propustenog, pa je prag namerno visok.
+
+PROC_DEF = re.compile(
+    r"^\s*(?:Public\s+|Private\s+|Friend\s+|Global\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+(\w+)", re.IGNORECASE)
+
+DECLARE_DEF = re.compile(
+    r"^\s*(?:Public\s+|Private\s+|Global\s+)?Declare\s+(?:PtrSafe\s+)?"
+    r"(?:Sub|Function)\s+(\w+)", re.IGNORECASE)
+
+CALL_STMT = re.compile(r"^(?:Call\s+)?([A-Za-z_]\w*)\s*(.*)$", re.IGNORECASE)
+
+BLOCK_OPEN = re.compile(r"^\s*(?:Public\s+|Private\s+)?(Type|Enum)\s+\w+", re.IGNORECASE)
+BLOCK_CLOSE = re.compile(r"^\s*End\s+(Type|Enum)\b", re.IGNORECASE)
+
+# Reci koje na pocetku naredbe NISU poziv procedure: VBA naredbe, kljucne reci i
+# ugradjene rutine koje se zovu bez tacke.
+STMT_WORDS = {
+    "if", "for", "next", "do", "loop", "while", "wend", "select", "case", "end",
+    "exit", "on", "resume", "goto", "gosub", "return", "with", "set", "let",
+    "dim", "redim", "const", "static", "public", "private", "friend", "global",
+    "type", "enum", "declare", "sub", "function", "property", "option", "erase",
+    "stop", "rem", "else", "elseif", "then", "call", "implements", "attribute",
+    "raiseevent", "event", "open", "close", "print", "write", "input", "put",
+    "get", "seek", "lock", "unlock", "width", "line", "name", "kill", "mkdir",
+    "rmdir", "chdir", "chdrive", "setattr", "filecopy", "reset", "randomize",
+    "beep", "doevents", "load", "unload", "msgbox", "debug", "err", "error",
+    "date", "time", "sendkeys", "appactivate", "savesetting", "deletesetting",
+    "lset", "rset", "mid", "midb", "version", "begin", "multiuse", "true",
+    "false", "nothing", "me", "new", "each", "to", "step", "is", "and", "or",
+    "not", "xor", "mod", "like", "imp", "eqv", "byval", "byref", "optional",
+    "paramarray", "preserve", "in", "as", "lib", "alias", "withevents", "class",
+    "application", "sleep", "shell",
+}
+
+
+def collect_definitions(files: list[str]) -> set[str]:
+    """Sva imena procedura definisana bilo gde u projektu (sva rasirenja)."""
+    names: set[str] = set()
+    for path in files:
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            for line in fh:
+                for rx in (DECLARE_DEF, PROC_DEF):
+                    m = rx.match(line)
+                    if m:
+                        names.add(m.group(1).lower())
+                        break
+    return names
+
+
+def _strip_comment(text: str) -> str:
+    """Odbaci prateci ' komentar, ali ne apostrof unutar stringa."""
+    in_str = False
+    for i, ch in enumerate(text):
+        if ch == '"':
+            in_str = not in_str
+        elif ch == "'" and not in_str:
+            return text[:i].rstrip()
+    return text
+
+
+def _split_top_level(text: str) -> list[str]:
+    """Podeli po zarezima koji NISU unutar zagrada ili navodnika."""
+    parts, depth, in_str, cur = [], 0, False, ""
+    for ch in text:
+        if ch == '"':
+            in_str = not in_str
+        elif not in_str and ch in "([":
+            depth += 1
+        elif not in_str and ch in ")]":
+            depth -= 1
+        elif not in_str and ch == "," and depth == 0:
+            parts.append(cur.strip())
+            cur = ""
+            continue
+        cur += ch
+    if cur.strip():
+        parts.append(cur.strip())
+    return parts
+
+
+def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
+    """Ime procedure -> (min, max) broj argumenata; max = inf uz ParamArray.
+
+    Ime definisano na vise mesta sa razlicitom arnoscu se ISKLJUCUJE -- tu se bez
+    razresavanja opsega ne moze tvrditi sta je pozvano.
+    """
+    seen: dict[str, set[tuple[int, float]]] = defaultdict(set)
+    for path in files:
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            lines = fh.read().replace("\r\n", "\n").split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            while line.rstrip().endswith("_") and i + 1 < len(lines):
+                line = line.rstrip()[:-1] + " " + lines[i + 1]
+                i += 1
+            m = PROC_DEF.match(line) or DECLARE_DEF.match(line)
+            if m and "(" in line:
+                params = _split_top_level(line[line.index("(") + 1:line.rindex(")")]
+                                          if ")" in line else "")
+                lo = sum(1 for p in params
+                         if p and not re.match(r"^(Optional|ParamArray)\b", p, re.IGNORECASE))
+                hi: float = float("inf") if any(
+                    re.match(r"^ParamArray\b", p, re.IGNORECASE) for p in params) else len(params)
+                seen[m.group(1).lower()].add((lo, hi))
+            i += 1
+    return {name: next(iter(v)) for name, v in seen.items() if len(v) == 1}
+
+
+def check_undefined(path: str, lines: list[str], defined: set[str],
+                    arities: dict) -> list[Finding]:
+    if not path.lower().endswith(".bas"):
+        return []
+
+    out: list[Finding] = []
+    block_depth = 0
+    continued = False
+
+    for i, raw in enumerate(lines, start=1):
+        line = raw.rstrip()
+        was_continued, continued = continued, line.endswith("_")
+
+        if BLOCK_OPEN.match(line):
+            block_depth += 1
+            continue
+        if BLOCK_CLOSE.match(line):
+            block_depth = max(0, block_depth - 1)
+            continue
+        if block_depth or was_continued:
+            continue
+
+        stmt = _strip_comment(line.strip())
+        if not stmt or stmt.startswith("'") or stmt.startswith("#") or ":" in stmt:
+            continue        # komentar, uslovna kompilacija, labela ili vise naredbi
+        if PROC_DEF.match(line) or DECLARE_DEF.match(line):
+            continue
+
+        explicit_call = bool(re.match(r"^Call\s", stmt, re.IGNORECASE))
+        m = CALL_STMT.match(stmt)
+        if not m:
+            continue
+        name, rest = m.group(1), m.group(2).lstrip()
+
+        if name.lower() in STMT_WORDS or name.lower() in RESERVED:
+            continue
+        # `Foo = 1` (dodela), `Foo.Bar` (clan), `Foo As Long` (clan tipa) --
+        # nista od toga nije poziv procedure.
+        if rest.startswith(("=", ".", "!")) or re.match(r"^As\s", rest, re.IGNORECASE):
+            continue
+        # `Foo(kljuc).Add x` / `Foo(i) = 1` -- indeksiranje kolekcije ili niza.
+        # Bez `Call` prefiksa, ime sa zagradom na pocetku naredbe je u ovom
+        # kodu uvek indeks, ne poziv. (Sve 8 prvih laznih nalaza bilo je ovo.)
+        if rest.startswith("(") and not explicit_call:
+            continue
+        if name.lower() not in defined:
+            out.append(Finding(path, i, "NEDEFINISAN",
+                               f"poziv '{name}' -- nigde u src-vba nije definisan "
+                               f'Sub/Function/Property. VBA: "Sub or Function not defined".'))
+            continue
+
+        # Arnost -- druga polovina istog compile problema ("Wrong number of
+        # arguments"). Proverava se samo kad je poziv cela naredba u jednoj
+        # liniji i kad je ime jednoznacno definisano.
+        span = arities.get(name.lower())
+        if span is None or line.rstrip().endswith("_"):
+            continue
+        args = rest[1:rest.rindex(")")] if explicit_call and rest.startswith("(") else rest
+        n_args = len(_split_top_level(args))
+        lo, hi = span
+        if n_args < lo or n_args > hi:
+            ocekivano = f"{lo:g}" if lo == hi else (
+                f"{lo:g}-{hi:g}" if hi != float("inf") else f"{lo:g}+")
+            out.append(Finding(path, i, "ARNOST",
+                               f"poziv '{name}' sa {n_args} argumenata, a deklarisano je "
+                               f'{ocekivano}. VBA: "Wrong number of arguments".'))
+    return out
 
 
 class Finding:
@@ -213,6 +415,11 @@ def main(argv: list[str]) -> int:
     findings: list[Finding] = []
     publics: dict[str, list[tuple[str, int]]] = defaultdict(list)
 
+    # Definicije se UVEK skupljaju nad celim src-vba, i kad se proverava jedan
+    # fajl (hook) -- inace bi svaki poziv van tog fajla izgledao nedefinisano.
+    defined = collect_definitions(vba_files([]))
+    arities = collect_arities(vba_files([]))
+
     for path in files:
         with open(path, "rb") as fh:
             raw = fh.read()
@@ -221,6 +428,7 @@ def main(argv: list[str]) -> int:
         lines = raw.decode("ascii", errors="replace").replace("\r\n", "\n").split("\n")
         findings += check_decl_after_proc(path, lines)
         findings += check_reserved(path, lines)
+        findings += check_undefined(path, lines, defined, arities)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
         # pa isto ime u dve forme NIJE "Ambiguous name".

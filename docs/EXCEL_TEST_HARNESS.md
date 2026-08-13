@@ -77,6 +77,25 @@ Modalne dijaloge zatvara watchdog nit (prozori klase `#32770` u Excel procesu,
 klik na podrazumevano dugme). Svaki uhvaćen dijalog se prijavljuje u izveštaju —
 neočekivan dijalog je nalaz, ne šum.
 
+## Compile: pravo rešenje je statičko, ne headless
+
+Posle četiri pokušaja headless compile gate-a (istorija ispod) ostaje zaključak:
+**dve najčešće compile greške u ovom projektu ne traže Excel.**
+
+| Greška | Hvata je |
+|---|---|
+| „Sub or Function not defined" | `vba_check.py` → `NEDEFINISAN` |
+| „Wrong number of arguments" | `vba_check.py` → `ARNOST` |
+| „Ambiguous name detected" | `vba_check.py` → `DUPLIKAT` |
+
+To radi u milisekundama, na svakoj platformi, i vrti se kao PostToolUse hook —
+dakle greška stiže pre commita, a ne posle importa u Excel. Namerno je usko
+(samo `.bas`, samo poziv u poziciji naredbe), jer je lažan nalaz u hook-u gori od
+propuštenog.
+
+Šta i dalje traži Excel: tipovi, nedeklarisane promenljive, greške u `.frm`/`.cls`.
+Za to ostaje `Alt+F11 → Debug → Compile VBAProject`.
+
 ## Kako se compile stvarno meri (i zašto ne preko menija)
 
 Prva verzija je zaključivala iz `Enabled` stanja stavke **Debug → Compile

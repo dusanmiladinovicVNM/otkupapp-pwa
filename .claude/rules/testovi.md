@@ -30,6 +30,13 @@ hvatao tek operater u VBE-u:
 | `REZERVISANO` | ime koje se case-insensitive poklapa sa VBA ključnom reči | §4 (RF-06, `eNum`) |
 | `DUPLIKAT` | isti `Public Sub/Function/Const` u dva modula → „Ambiguous name" | §4 merge |
 | `PORUKA` | `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke` | §4 katalog |
+| `NEDEFINISAN` | poziv procedure koja nigde nije definisana → „Sub or Function not defined" | compile |
+| `ARNOST` | poziv sa pogrešnim brojem argumenata → „Wrong number of arguments" | compile |
+
+Poslednje dve pokrivaju **dve najčešće compile greške** u ovom projektu — one
+zbog kojih je i pravljen headless compile gate koji se nije dao ukrotiti. Ovde se
+hvataju bez Excela. Namerno su uske (samo `.bas`, samo poziv u poziciji naredbe),
+jer je lažan nalaz u hook-u gori od propuštenog.
 
 **Ovo je obavezan korak pre commita** svake VBA izmene. Ne prijavljuj izmenu kao
 gotovu dok `vba_check` nije zelen — to je jedini deo §5 koji više nije „na
