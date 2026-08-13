@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-107"
+Public Const SCRDOK_BUILD As String = "v6-ui-115"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -602,10 +602,15 @@ Public Function Scr_Save(ByVal polja As Object) As String
     polja("rezultat") = ""
     polja("poruke") = ""
 
-    If CStr(polja("rezim")) <> "OTKUP" Then
-        Scr_Save = Poruka("OTKUI_TODO_NEVEZANO")
-        Exit Function
-    End If
+    Select Case CStr(polja("rezim"))
+        Case "OTKUP"        ' nastavlja se ispod
+        Case "OTPREMNICA"
+            Scr_Save = SaveOtpremnica(polja)
+            Exit Function
+        Case Else
+            Scr_Save = Poruka("OTKUI_TODO_NEVEZANO")
+            Exit Function
+    End Select
 
     Set p = modOtkupUnos.NoviOtkupUnos()
     p("datum") = polja("datum")
@@ -674,6 +679,46 @@ Public Function Scr_Save(ByVal polja As Object) As String
     Exit Function
 EH:
     Scr_Save = Poruka("OTKUI_ERR_RADNJA") & " " & Err.description
+End Function
+
+' F2 OTPREMNICA. Ekran samo prevodi polja u recnik i vraca poruku - posao radi
+' modDokUnos, isti modul koji ce (kad za to dodje red) moci da zove i legacy
+' forma. Ovde nema nijedne provere: sve sto je provera zivi u modulu.
+Private Function SaveOtpremnica(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modDokUnos.NoviOtpremnicaUnos()
+    p("datum") = polja("datum")
+    p("stanicaID") = polja("stanicaID")
+    p("vozacID") = polja("vozacID")
+    p("brDok") = polja("brDok")
+    p("brojZbirne") = polja("brojZbirne")
+    p("vrsta") = polja("vrsta")
+    p("sorta") = polja("sorta")
+    p("tipAmb") = polja("tipAmb")
+    p("kolicinaI") = polja("kolicinaI")
+    p("cenaI") = polja("cenaI")
+    p("kolAmb") = polja("kolAmb")
+    p("dveKlase") = polja("dveKlase")
+    p("kolicinaII") = polja("kolicinaII")
+    p("cenaII") = polja("cenaII")
+    p("kolAmbII") = polja("kolAmbII")
+
+    greska = modDokUnos.OtpremnicaValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SaveOtpremnica = greska
+        Exit Function
+    End If
+
+    res = modDokUnos.OtpremnicaUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SaveOtpremnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
 End Function
 
 ' Pita operatera kad blok prelazi ono sto je od otpremnice ostalo. Bez aktivne

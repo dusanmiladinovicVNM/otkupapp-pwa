@@ -590,6 +590,17 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_1", "Blok prelazi ostatak otpremnice za"
     UpsertRow lo, existing, "OTKUI_ASK_PREKORACENJE_2", ChrW(8212) & " ipak upisati?"
     UpsertRow lo, existing, "OTKUNOS_MSG_UPISAN", ChrW(10003) & " Otkupni list sa" & ChrW(269) & "uvan:"
+
+    ' --- unos dokumenata (modDokUnos): otpremnica, zbirna, prijemnica ---
+    UpsertRow lo, existing, "DOKUNOS_ERR_VOZAC", ChrW(10007) & " Izaberi voza" & ChrW(269) & "a"
+    UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_OTP", ChrW(10003) & " Otpremnica sa" & ChrW(269) & "uvana:"
+    UpsertRow lo, existing, "OTKUI_MSG_UPISANO", ChrW(10003) & " Dokument sa" & ChrW(269) & "uvan:"
+    UpsertRow lo, existing, "DOKUNOS_MSG_ZBIRNA_NIJE", ChrW(10007) & " Zbirna NIJE kreirana automatski " & ChrW(8212) & " unesi je ru" & ChrW(269) & "no (rezim Zbirna)."
+    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i kroz Osiro" & ChrW(269) & "eni dokumenti."
+    UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_1", ChrW(268) & "eka ISPRAVKA za stornirano"
+    UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_2", "Da li je upravo snimljeni dokument ZAMENA za njega?"
+    UpsertRow lo, existing, "DOKUNOS_MSG_ISPRAVKA_OK", ChrW(10003) & " Ispravka zavr" & ChrW(353) & "ena:"
+    UpsertRow lo, existing, "DOKUNOS_MSG_ISPRAVKA_NIJE", ChrW(10007) & " Ispravka nije zavr" & ChrW(353) & "ena automatski:"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_REDA", ChrW(10007) & " Prvo izaberi red u listi"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
     UpsertRow lo, existing, "OTKUI_ERR_NEMA_OTP", ChrW(10007) & " Izaberi otpremnicu (ili vi" & ChrW(353) & "e njih preko " & ChrW(8222) & "Izaberi vi" & ChrW(353) & "e" & ChrW(8220) & ")"

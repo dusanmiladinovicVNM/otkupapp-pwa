@@ -137,7 +137,8 @@ zaključivati iz koda.
 | `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B |
 | `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B |
 | `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **NEMA** — Faza B |
-| `btnUnosOtp/Zbr/Prij/OMUlaz/Izlaz_Click` | upis F2–F6 | **NEMA** — Faza B |
+| `btnUnosOtp_Click` | upis otpremnice (F2) | **IMA** (`modDokUnos`, v6-ui-115) |
+| `btnUnosZbr/Prij/OMUlaz/Izlaz_Click` | upis F3–F6 | **NEMA** — Faza B |
 | `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D |
 | storno paneli (7 kom.) | `btnStorno_Click` i dalje | **NEMA** — Faza D |
 
@@ -247,11 +248,21 @@ kooperante sa oznakom otkupnog mesta.
 
 ### Faza B — upis (`CommitDokument`)
 6. ~~F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).~~ **URAĐENO**
-   (v6-ui-106) — ostaje prebaciti `frmOtkup` na isti `modOtkupUnos`.
-7. F2/F3/F4 → `SaveOtpremnicaMulti_TX`, `SaveZbirnaMulti_TX` (+
-   `ValidateZbirnaPreUnosa`), `SavePrijemnicaMulti_TX` (+ status palete).
-8. F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.
-9. Z12: preostali KPI-jevi (`GetOMAvansSaldo`, otvoreno kg).
+   (v6-ui-106, `modOtkupUnos`).
+7. ~~F2 → `SaveOtpremnicaMulti_TX` (+ auto-zbirna MALINA, ispravka).~~
+   **URAĐENO** (v6-ui-115, `modDokUnos`).
+8. F3/F4 → `SaveZbirnaMulti_TX` (+ `ValidateZbirnaPreUnosa`),
+   `SavePrijemnicaMulti_TX` (+ status palete, manjak vs zbirna).
+9. F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.
+10. Z12: preostali KPI-jevi (`GetOMAvansSaldo`, otvoreno kg).
+
+**Legacy se NE gasi i NE menja.** `frmOtkup` i `frmDokumenta` ostaju potpuno
+operativni dok novi UI ne bude umeo sve što one umeju; do tada obe kopije
+poslovne logike postoje **namerno**. Pravilo za taj period: pravilo unosa se
+menja u `modOtkupUnos` / `modDokUnos`, pa se **ručno preslika** u legacy formu,
+i to se zapiše uz izmenu. Prebacivanje legacy formi na zajedničke module je
+odluka koja dolazi tek kad novi UI prođe rad u pogonu (i moguće nikad, ako se
+legacy do tada penzioniše).
 
 ### Faza C — Palete P2
 10. Unos prerade (traži prosleđivanje događaja sopstvenih kontrola ekranu).

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-114"
+Public Const OTKUI_BUILD   As String = "v6-ui-115"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -5137,7 +5137,7 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ClearForm
     RefreshFromData
     RefreshOtpTraka mFrm
-    ShowToast Poruka("OTKUNOS_MSG_UPISAN") & " " & CStr(p("rezultat")) & _
+    ShowToast PorukaUpisano(CStr(p("rezim"))) & " " & CStr(p("rezultat")) & _
               IIf(p.Exists("poruke"), IIf(Len(CStr(p("poruke"))) > 0, _
                   "  " & ChrW(183) & "  " & CStr(p("poruke")), ""), ""), False
     Exit Sub
@@ -5218,6 +5218,16 @@ Private Sub ApplyParcelaProizvod()
     AutoFillCena
 End Sub
 
+' Potvrda upisa po rezimu - svaki dokument se zove svojim imenom. Nepokriven
+' rezim pada na opstu potvrdu umesto da tvrdi da je upisan otkupni list.
+Private Function PorukaUpisano(ByVal rezim As String) As String
+    Select Case rezim
+        Case "OTKUP":      PorukaUpisano = Poruka("OTKUNOS_MSG_UPISAN")
+        Case "OTPREMNICA": PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_OTP")
+        Case Else:         PorukaUpisano = Poruka("OTKUI_MSG_UPISANO")
+    End Select
+End Function
+
 ' Fokus na polje koje je ekran prijavio kao sporno. Imena su LOGICKA, ista ona
 ' koja ekran koristi u recniku.
 Private Sub FokusNaPolje(ByVal kljuc As String)
@@ -5237,6 +5247,7 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
         Case "kolAmbII":     mFrm.Controls("zForm").Controls("fgKolAmbII").Controls("fgKolAmbIIT").SetFocus
         Case "tipAmb":       mFrm.Controls("zForm").Controls("fgTipAmb").Controls("fgTipAmbT").SetFocus
         Case "parcelaID":    mFrm.Controls("zForm").Controls("fgParcela").Controls("fgParcelaT").SetFocus
+        Case "vozacID":      mFrm.Controls("zCtx").Controls("cbVozac").SetFocus
     End Select
 End Sub
 
