@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-106`.
+Stanje na dan `v6-ui-115`.
 
 ---
 
@@ -15,13 +15,14 @@ Stanje na dan `v6-ui-106`.
 
 Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
 
-1. **Upis — knjiži se samo otkupni list (F1).** Od `v6-ui-106` `CommitDokument`
-   više nije šav za F1: posao je izvučen iz `frmOtkup.btnUnos_Click` u
-   `modOtkupUnos` (provere, bruto→neto, `SaveOtkupMulti_TX`, štampa, auto-lanac
-   hladnjače, prevezivanje paleta pri ispravci). Preostalih pet režima
-   (otpremnica, zbirna, prijemnica, OM ulaz, kupci izlaz) i dalje ne upisuju.
-   **`frmOtkup` još uvek ima svoju kopiju te logike** — prebacivanje legacy
-   forme na `modOtkupUnos` je sledeći korak, do tada postoje dve kopije.
+1. **Upis — knjiže se otkupni list (F1) i otpremnica (F2).** Posao je izvučen
+   iz formi u `modOtkupUnos` (v6-ui-106) i `modDokUnos` (v6-ui-115): provere,
+   bruto→neto, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna, završetak
+   ispravke. Preostala četiri režima (zbirna, prijemnica, OM ulaz, kupci izlaz)
+   još ne upisuju.
+   **Legacy zadržava svoju kopiju te logike — namerno.** `frmOtkup` i
+   `frmDokumenta` ostaju potpuno operativni dok novi UI ne bude umeo sve; do
+   tada se pravilo menja u zajedničkom modulu pa **ručno preslikava** u legacy.
 2. **Storno okvir frmDokumenta** — sedam panela i ~2/3 te forme. Novi UI danas
    ume da stornira **samo otkupni list** (iz F1 liste); otpremnica, zbirna,
    prijemnica, faktura, novac i izvod — ne.
