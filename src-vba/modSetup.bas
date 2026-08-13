@@ -1109,22 +1109,38 @@ End Sub
 
 ' Silent worker (bez MsgBox-a) -- vraca broj obradjenih tabela. Reuse iz
 ' migracije (modMigracija) gde ne zelimo popup usred toka kopiranja.
+' Pad na JEDNOJ tabeli (zakljucana, zasticen sheet) je ranije prekidao obradu svih
+' preostalih -- od 26 tabela audit kolone bi dobilo samo onih par pre nje. Sada se
+' svaka tabela obradjuje zasebno i pad se belezi (StepFailed), ali se na kraju
+' IPAK re-raise-uje: pozivaoci (modAdmin.AdminEnsureEverything, modMigracija) na
+' Err prepoznaju neuspeh, pa ga ne smemo progutati.
 Public Function EnsureAuditColumnsCore() As Long
     InitSetupLog
 
     Dim tbls As Variant
     tbls = AuditableTables()
 
-    Dim i As Long, n As Long
+    Dim i As Long, n As Long, fails As Long
+
+    On Error Resume Next
     For i = LBound(tbls) To UBound(tbls)
         If Not GetTable(CStr(tbls(i))) Is Nothing Then
+            Err.Clear
             EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_AT
             EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_BY
             EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_AT
             EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_BY
+            fails = fails + StepFailed("AuditKolone/" & CStr(tbls(i)))
             n = n + 1
         End If
     Next i
+    On Error GoTo 0
+
+    If fails > 0 Then
+        LogSetup "ERROR", "EnsureAuditColumns: " & fails & " tabela nije proslo"
+        Err.Raise vbObjectError + 9330, "EnsureAuditColumnsCore", _
+                  fails & " tabela nije dobilo audit kolone (detalji u SETUP_LOG)."
+    End If
 
     LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
     EnsureAuditColumnsCore = n
@@ -1721,10 +1737,17 @@ Public Sub DebugKoloneTabele()
            Join(h, " | "), vbInformation, APP_NAME
 End Sub
 
-' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec postoji.
-Private Sub EnsureDataTable(ByVal tblName As String, _
-                            ByVal sheetName As String, _
-                            ByVal headers As Variant)
+' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec
+' postoji (tada samo dopuni nedostajuce kolone -- repair schema drift).
+'
+' Public: ovo je centralni schema primitiv (CLAUDE.md sec.3 -- seme zive u
+' modSetup). Dok je bio Private, moduli van modSetup-a nisu mogli da ga zovu pa
+' su pravili kopije (modPaletniList.EnsurePreradaCols/EnsurePreradaCol).
+' Greska se NE guta -- propagira pozivaocu, koji je hvata (Ensure* jezgra kroz
+' StepFailed, ulazne tacke kroz svoj EH).
+Public Sub EnsureDataTable(ByVal tblName As String, _
+                           ByVal sheetName As String, _
+                           ByVal headers As Variant)
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
     If Not lo Is Nothing Then
@@ -1759,8 +1782,12 @@ Private Sub EnsureDataTable(ByVal tblName As String, _
     LogSetup "OK", "Created " & tblName
 End Sub
 
-' Dodaje kolonu na postojecu tabelu ako je nema. No-op ako tabela ne postoji.
-Private Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
+' Dodaje kolonu na postojecu tabelu ako je nema. No-op ako tabela ne postoji ili
+' kolona vec postoji (zato je jeftino terati je na svaki start).
+'
+' Public iz istog razloga kao EnsureDataTable: modPaletniList.EnsurePreradaCol je
+' bio doslovna kopija ove procedure jer joj se nije moglo prici spolja.
+Public Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
     If lo Is Nothing Then Exit Sub
@@ -1860,17 +1887,36 @@ End Function
 ' FILE/FOLDER HELPERS
 ' ============================================================
 
-Private Sub EnsureFolder(ByVal folderPath As String)
+' Kreira folder (i nedostajuce roditelje) ako fali. Vraca True ako folder POSTOJI
+' posle poziva, pa pozivalac bira politiku: setup ga zove kao naredbu (fail-soft,
+' nalazi se skupljaju u health-check report), a banka import kroz svoj
+' RequireFolder puca -- bez inbox/processed foldera import bi pao tek na
+' premestanju fajla, na pola posla.
+'
+' Public jer je ovo JEDINI rekurzivni folder-maker u projektu: modBankaImport je
+' drzao svoju kopiju (EnsureFolderExists -> BankaEnsureFolderExistsRecursive)
+' samo zato sto ova nije bila dostupna izvan modSetup-a.
+'
+' FSO.FolderExists, ne Dir$(..., vbDirectory): Dir$ lazno vraca "" na Google Drive
+' virtuelnim (.shortcut-targets-by-id) putanjama, pa je kod pokusavao da kreira
+' VEC POSTOJECI folder (greska 75). Trailing "\" se skida jer
+' fso.GetParentFolderName("C:\a\b\") vraca "C:\a\b" -- rekurzija bi vrtela isti nivo.
+Public Function EnsureFolder(ByVal folderPath As String) As Boolean
     On Error GoTo EH
 
-    If Len(Trim$(folderPath)) = 0 Then Exit Sub
+    folderPath = Trim$(folderPath)
+    Do While Len(folderPath) > 1 And Right$(folderPath, 1) = "\"
+        folderPath = Left$(folderPath, Len(folderPath) - 1)
+    Loop
+
+    If Len(folderPath) = 0 Then Exit Function
 
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
     If fso.FolderExists(folderPath) Then
-        LogSetup "OK", "Folder exists: " & folderPath
-        Exit Sub
+        EnsureFolder = True
+        Exit Function
     End If
 
     Dim parentPath As String
@@ -1878,18 +1924,19 @@ Private Sub EnsureFolder(ByVal folderPath As String)
 
     If Len(parentPath) > 0 Then
         If Not fso.FolderExists(parentPath) Then
-            EnsureFolder parentPath
+            If Not EnsureFolder(parentPath) Then Exit Function
         End If
     End If
 
     fso.CreateFolder folderPath
     LogSetup "OK", "Created folder: " & folderPath
+    EnsureFolder = True
 
-    Exit Sub
+    Exit Function
 
 EH:
     LogSetup "ERROR", "Cannot create folder: " & folderPath & " | " & Err.description
-End Sub
+End Function
 
 ' Vraca putanju do podfoldera za generisane PDF dokumente (pored radne sveske) i
 ' kreira ga ako fali. Npr. EnsureDocFolder(PDF_DIR_OTKUPNI). Fallback na TEMP ako
@@ -1907,11 +1954,8 @@ Public Function EnsureDocFolder(ByVal category As String) As String
 
     Dim target As String
     target = rootPath & "\" & category
-    EnsureFolder target
 
-    Dim fso As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    If fso.FolderExists(target) Then
+    If EnsureFolder(target) Then
         EnsureDocFolder = target
     Else
         EnsureDocFolder = rootPath

@@ -284,7 +284,7 @@ Dva jeftina koraka:
 | Faza | Sadržaj | Fajlovi | Rizik | Vrednost |
 |---|---|---|---|---|
 | **F1** ✅ | N1 + N2 + N3: per-korak logovanje u `EnsureRuntimeSchema`/`EnsureSledljivostSchema`; `MsgBox` iz jezgara u omotače; `AdminEnsureEverything` skuplja i prijavljuje stvarni rezultat; ukloniti dupli `EnsureCenovnikSchema` | `modSetup`, `modAdmin`, `modMain`, `modPoruke` | nizak | **visoka** — kraj tihim padovima i lažnom „sve OK" |
-| **F2** | N4: primitivi `Public`, brisanje 3 forka | `modSetup`, `modPaletniList`, `modBankaImport` | nizak-srednji | visoka — anti-duplication |
+| **F2** ✅ | N4: primitivi `Public`, brisanje 3 forka | `modSetup`, `modPaletniList`, `modBankaImport` | nizak-srednji | visoka — anti-duplication |
 | **F3** | 4.1 preimenovanja (5 komada) + `RequirePrijemnicaNotPaletized` | ~6 fajlova | nizak (mehanički, `vba_check` hvata promašaje) | srednja — čitljivost ugovora |
 | **F4** | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modBusinessFlowProTests` | nizak | srednja — sprečava povratak |
 | **F5** *(opciono)* | 4.4 skuplja varijanta; deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup` + `modConfig` | **srednji-visok** | visoka, ali je to redizajn — tek kad F1–F4 legnu |
@@ -309,6 +309,28 @@ Dva jeftina koraka:
 Zaostalo za F2: `EnsureAuditColumnsCore` i dalje prekida obradu preostalih tabela
 kad jedna padne — ali **glasno** (propagira `Err`), pa je van F1 opsega (F1 gasi
 tihe padove).
+
+### F2 — izvršeno
+
+- `EnsureDataTable` i `EnsureColumnOnTable`: `Private` → `Public` (bez novog
+  modula — `CLAUDE.md` §3 već kaže da šeme žive u `modSetup`).
+- `EnsureFolder`: `Private Sub` → `Public Function … As Boolean`. Vraća da li
+  folder postoji posle poziva, pa **pozivalac bira politiku**. Dodata
+  normalizacija trailing `\` (bez nje `fso.GetParentFolderName("C:\a\b\")` vraća
+  `"C:\a\b"` i rekurzija vrti isti nivo). Uklonjen `LogSetup "Folder exists"` —
+  no-op grana je bila čist šum, a sad bi bila i spam iz import putanje.
+- **Tri forka obrisana:**
+  - `modPaletniList.EnsurePreradaCol` → `EnsureColumnOnTable` (ostao samo spisak
+    kolona, koji jeste lokalno znanje)
+  - `modBankaImport.EnsureFolderExists` + `BankaEnsureFolderExistsRecursive` →
+    `modSetup.EnsureFolder`, a politika „puca" ostala lokalno kao
+    `modBankaImport.RequireFolder` — prvi primer `Require*` konvencije iz §4.1
+    primenjene na novi kod. Bitno: `ImportBankaInbox_TX` **mora** da pukne ako
+    inbox/processed folder ne može da nastane, jer bi inače import pao tek na
+    premeštanju fajla — na pola posla, sa već upisanim redovima.
+- `EnsureAuditColumnsCore`: pad na jednoj tabeli više ne prekida preostalih 25
+  (per-tabela `StepFailed`), ali se na kraju **re-raise-uje** — `modMigracija` i
+  `AdminEnsureEverything` prepoznaju neuspeh po `Err`, pa se ne sme progutati.
 
 F5 je namerno poslednja i označena kao opciona: `AuditableTables()`
 (`modSetup.bas:1090`) je već mikro-registar i pokazuje da obrazac radi, ali

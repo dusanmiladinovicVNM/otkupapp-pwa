@@ -58,9 +58,9 @@ Public Sub ImportBankaInbox_TX()
 
     On Error GoTo EH
 
-    EnsureFolderExists GetBankaInboxPath()
-    EnsureFolderExists GetBankaProcessedPath()
-    EnsureFolderExists GetBankaErrorPath()
+    RequireFolder GetBankaInboxPath(), SRC
+    RequireFolder GetBankaProcessedPath(), SRC
+    RequireFolder GetBankaErrorPath(), SRC
 
     Set successMoves = New Collection
     Set errorMoves = New Collection
@@ -1150,11 +1150,19 @@ Private Sub ClearRowBuffer(ByRef rowData() As Variant)
     Next j
 End Sub
 
-Private Sub EnsureFolderExists(ByVal folderPath As String)
-    ' Rekurzivno + FSO: kreira i nedostajuce roditelje (goli MkDir je non-rekurzivan
-    ' -> greska 76 "Path not found" kad roditelj fali) i pouzdano proverava
-    ' postojanje i na Drive virtuelnim putanjama.
-    BankaEnsureFolderExistsRecursive folderPath
+' Folder MORA postojati pre importa (inbox / processed / error): bez njega import
+' ne pada odmah nego tek na premestanju fajla -- na pola posla, sa vec upisanim
+' redovima. Zato ovde puca.
+'
+' Telo je modSetup.EnsureFolder (rekurzivno + FSO, radi i na Drive virtuelnim
+' putanjama). Lokalni BankaEnsureFolderExistsRecursive je bio kopija tog
+' primitiva, napravljena samo zato sto je original bio Private; ostaje samo
+' politika "puca", koja je stvarno lokalna odluka -- otud Require*, ne Ensure*.
+Private Sub RequireFolder(ByVal folderPath As String, ByVal sourceName As String)
+    If EnsureFolder(folderPath) Then Exit Sub
+
+    Err.Raise ERR_BIM_IMPORT_BASE + 10, sourceName, _
+              "Ne mogu da pripremim folder: " & folderPath
 End Sub
 
 Private Sub MoveFileSafe(ByVal sourcePath As String, ByVal targetPath As String)
@@ -1415,8 +1423,8 @@ Public Function PullBankPdfsFromDriveProduction() As Long
             "Drive source i lokalni inbox ne smeju biti isti folder."
     End If
 
-    BankaEnsureFolderExistsRecursive localInboxPath
-    BankaEnsureFolderExistsRecursive driveDownloadedPath
+    RequireFolder localInboxPath, SRC
+    RequireFolder driveDownloadedPath, SRC
 
     Set files = BankaCollectPdfFiles(driveSourcePath)
 
@@ -1655,29 +1663,4 @@ Private Function BankaFileSize(ByVal filePath As String) As Double
     BankaFileSize = CreateObject("Scripting.FileSystemObject").GetFile(filePath).Size
     On Error GoTo 0
 End Function
-
-Private Sub BankaEnsureFolderExistsRecursive(ByVal folderPath As String)
-    Dim parts() As String
-    Dim currentPath As String
-    Dim i As Long
-
-    folderPath = BankaNormalizeFolderPath(folderPath)
-
-    If Len(folderPath) = 0 Then Exit Sub
-    If BankaFolderExists(folderPath) Then Exit Sub
-
-    parts = Split(folderPath, "\")
-    currentPath = parts(0)
-
-    If Right$(currentPath, 1) = ":" Then currentPath = currentPath & "\"
-
-    For i = 1 To UBound(parts)
-        If Len(parts(i)) > 0 Then
-            If Right$(currentPath, 1) <> "\" Then currentPath = currentPath & "\"
-            currentPath = currentPath & parts(i)
-
-            If Not BankaFolderExists(currentPath) Then MkDir currentPath
-        End If
-    Next i
-End Sub
 

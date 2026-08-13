@@ -2430,26 +2430,19 @@ End Sub
 ' Schema-drift: dodaj nove tblPrerada kolone (bruto/paleta/ambalaza/tipovi)
 ' ako fale. Idempotentno (no-op kad postoje). Resava 0 u sazetku paletnog
 ' lista kada EnsurePaletniListSchema nije pokrenut posle nadogradnje.
+'
+' Telo je delegirano na modSetup.EnsureColumnOnTable -- lokalni EnsurePreradaCol
+' je bio doslovna kopija tog primitiva, napravljena samo zato sto je original bio
+' Private. Ovde ostaje jedino spisak kolona, koji je stvarno lokalno znanje.
 Private Sub EnsurePreradaCols()
     On Error Resume Next
-    Dim lo As ListObject: Set lo = GetTable(TBL_PRERADA)
-    If lo Is Nothing Then Exit Sub
-    EnsurePreradaCol lo, COL_PRE_TEZINA_PALETE
-    EnsurePreradaCol lo, COL_PRE_BRUTO
-    EnsurePreradaCol lo, COL_PRE_AMBALAZA
-    EnsurePreradaCol lo, COL_PRE_TIP_KUTIJE
-    EnsurePreradaCol lo, COL_PRE_TIP_KESE
-    EnsurePreradaCol lo, COL_PRE_TIP_GP
-End Sub
-
-Private Sub EnsurePreradaCol(ByVal lo As ListObject, ByVal colName As String)
-    On Error Resume Next
-    Dim c As ListColumn
-    Set c = lo.ListColumns(colName)
-    If c Is Nothing Then
-        lo.ListColumns.Add
-        lo.ListColumns(lo.ListColumns.count).name = colName
-    End If
+    If GetTable(TBL_PRERADA) Is Nothing Then Exit Sub
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TEZINA_PALETE
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_BRUTO
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_AMBALAZA
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_KUTIJE
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_KESE
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_GP
 End Sub
 
 ' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).
