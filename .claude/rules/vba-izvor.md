@@ -66,6 +66,18 @@ ne menjaj ih usput.
 Posle merge-a: `Debug → Compile VBAProject`. Statički to hvata `vba_check.py`
 (DUPLIKAT) — samo nad `.bas`, jer `Public` član forme/klase nije globalno ime.
 
+**Jedan izuzetak: ugovor ekrana novog UI-ja.** Ljuska `modOtkupUI` ne poznaje
+nijedan ekran po imenu — svaki `modScr*` modul implementira isti skup procedura
+(`Scr_Meta`, `Scr_Rows`, `Scr_Event`…), a ljuska ih zove **isključivo kasno
+vezano i kvalifikovano** (`Application.Run "modScrDokumenti.Scr_Rows"`). Poziv
+nikad nije nekvalifikovan, pa VBA nema šta da razrešava i „Ambiguous name" ne
+nastaje. Spisak je `SCR_UGOVOR` u `vba_check.py`.
+
+Izuzetak važi **samo kad su svi definicioni fajlovi `modScr*`**. Ista procedura
+u bilo kom drugom modulu i dalje pada — što je i bio smisao provere. Dokazano u
+oba smera: `Scr_Rows` prekopiran u `modUiData` puca, obična dupla definicija u
+dva `modScr*` modula puca, čist kod je zelen.
+
 ## 5) Ostalo
 
 - **Ne zaključuj iz par linija.** Logika je raspoređena kroz module/forme/klase/
