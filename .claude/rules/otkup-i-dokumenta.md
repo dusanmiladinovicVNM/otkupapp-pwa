@@ -85,7 +85,14 @@ Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
   preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
   namerno.
 - Ugovor `ClearOtkupFields` iz §1 važi i za `modOtkupUI.ClearForm` — ista tri
-  ponašanja, ista tri razloga.
+  ponašanja, ista tri razloga. **Pokriven je testom** (`T_ClearForm_Ugovor` u
+  `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Novi UI ima i seam-ove iz §2
+  u svom obliku (`ClearForm`/`ParseDatum`/`ParcelaID` su `Public`, tri `SetFocus`-a
+  su iza `IsTestMode`, `Scr_OtpTestSet` je gejtovan) — detalji i sabotaže:
+  `.claude/rules/testovi.md` §4.
+- Razlika u odnosu na legacy koju test fiksira: **bez** aktivne otpremnice novi UI
+  vraća datum na danas (legacy ga uopšte ne dira). Uz aktivnu otpremnicu ponašanje
+  je isto — datum ostaje njen.
 
 ## 6) Verifikacija
 

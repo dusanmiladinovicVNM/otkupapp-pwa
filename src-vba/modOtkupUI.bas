@@ -5189,7 +5189,10 @@ End Function
 ' teksta trazenjem " - ", a FillParcele gradi prikaz sa " " & ChrW(183) & " "
 ' - separator se nikad nije nasao, pa je u ParcelaID (i u tblOtkup) odlazio ceo
 ' prikazni string.
-Private Function ParcelaID() As String
+'
+' TEST SEAM: Public, ne Private -- modTest.T_ParcelaID_IzSkriveneKolone cuva bas
+' taj regres (prikaz umesto ID-ja).
+Public Function ParcelaID() As String
     Dim CB As MSForms.ComboBox
     On Error Resume Next
     If Not mFrm.Controls("zForm").Controls("fgParcela").Visible Then Exit Function
@@ -5593,8 +5596,10 @@ Public Sub ApplyPrefill(ByVal spec As String)
     mLoading = False
     MarkClean
     ' Sve sto se moglo prepisati je prepisano; ostaje kooperant - zato fokus
-    ' ide pravo na njega, kao u legacy panelu.
-    ctx.Controls("cbKupac").SetFocus
+    ' ide pravo na njega, kao u legacy panelu. IsTestMode gard je isti kao u
+    ' ClearForm: forma koja nije .Show-ovana ne moze da primi fokus, a u
+    ' nevidljivom Excelu SetFocus ne puca nego TRAJNO visi (modTestMode).
+    If Not IsTestMode() Then ctx.Controls("cbKupac").SetFocus
 End Sub
 
 ' Datum dokumenta: podrazumevano danas. Ista vrednost koju je ekran do sada
@@ -5607,7 +5612,11 @@ End Sub
 ' Datum iz polja kao serijski broj; 0 znaci "necitljivo". Trailing tacka
 ' ("11.08.2026.") je nacin na koji se datum kod nas pise, pa se skida pre
 ' provere umesto da obori unos.
-Private Function ParseDatum(ByVal s As String) As Double
+'
+' TEST SEAM: Public, ne Private -- modTest.T_ParseDatum_Ugovor je zove direktno
+' (isti razlog kao frmOtkup.ClearOtkupFields; .claude/rules/otkup-i-dokumenta.md
+' odeljak 2). Poziva je samo ovaj modul i test.
+Public Function ParseDatum(ByVal s As String) As Double
     Dim t As String, d As Date
     On Error Resume Next
     t = Trim$(s)
@@ -5623,7 +5632,14 @@ Private Function ParseDatum(ByVal s As String) As Double
     If TryParseDateValue(t, d) Then ParseDatum = CDbl(d)
 End Function
 
-Private Sub ClearForm()
+' UGOVOR, ne "ciscenje forme". Ista tri ponasanja i ista tri razloga kao
+' frmOtkup.ClearOtkupFields (.claude/rules/otkup-i-dokumenta.md odeljak 1 i 5):
+' datum i broj zbirne su KONTEKST otpremnice i ostaju, partner se brise.
+'
+' TEST SEAM: Public, ne Private -- modTest.T_ClearForm_Ugovor je zove direktno,
+' bez voznje celog upisa (koji trazi stanica-lock, PDF izlaz i auto-lanac
+' hladnjace). Pre izmene ove rutine procitaj sta test tvrdi.
+Public Sub ClearForm()
     Dim nmv As Variant, i As Long, imaOtp As Boolean
     On Error Resume Next
     mPopMute = True
@@ -5675,12 +5691,18 @@ Private Sub ClearForm()
     ' Dok je otpremnica aktivna, sledecem bloku operater unosi samo kooperanta
     ' i kolicine - zato kursor ide pravo na kooperanta, isto kao posle prefilla
     ' i kao u legacy ClearOtkupFields (cmbKooperant.SetFocus).
+    '
+    ' IsTestMode gard je isti kao u frmOtkup.ClearOtkupFields: forma koja nije
+    ' .Show-ovana ne moze da primi fokus, a u nevidljivom Excelu SetFocus ne
+    ' puca nego TRAJNO visi (modTestMode). U produkciji je IsTestMode() uvek
+    ' False -- flag postavlja iskljucivo test modul -- pa je ponasanje isto.
     If imaOtp Then
-        mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        If Not IsTestMode() Then mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
         Exit Sub
     End If
     If Len(mPrvoPolje) = 0 Then mPrvoPolje = "fgBrOtpr"
-    mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
+    If Not IsTestMode() Then _
+        mFrm.Controls("zForm").Controls(mPrvoPolje).Controls(mPrvoPolje & "T").SetFocus
 End Sub
 
 ' Da li je otpremnica jos izabrana. Ista pitalica koju koristi traka otpremnice

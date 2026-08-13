@@ -122,6 +122,20 @@ Public Sub Scr_OtpOtkazi()
     mLista = "OTPREMNICE"
 End Sub
 
+' TEST SEAM -- suprotan smer od Scr_OtpOtkazi, i JEDINI nacin da test dobije
+' aktivnu otpremnicu. Produkcija je bira klikom na red (Scr_Event "row:N"), sto
+' trazi ucitanu mrezu, filtere i strane -- previse za proveru jednog pravila.
+' A bas to pravilo je glavna polovina ugovora ClearForm-a: dok je otpremnica
+' aktivna, svi njeni blokovi nose NJEN datum (v. modOtkupUI.ClearForm).
+'
+' Gard je tvrd: van test-rezima ovo ne radi NISTA, pa se ne moze upotrebiti kao
+' precica u produkcionom toku. IsTestMode postavlja iskljucivo test modul.
+Public Sub Scr_OtpTestSet(ByVal otpID As String, ByVal broj As String)
+    If Not IsTestMode() Then Exit Sub
+    mOtpID = otpID
+    mOtpBroj = broj
+End Sub
+
 Public Function Scr_OtpInfo() As String
     Dim ukKg As Double, blKg As Double, ukAmb As Double, blAmb As Double
     Dim kupac As String, dat As String, cena As Double
