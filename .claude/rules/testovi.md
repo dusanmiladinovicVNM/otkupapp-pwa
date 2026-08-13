@@ -103,14 +103,16 @@ prošle".
 
 | gate (crveno se vidi) | blind (rezultat samo u Immediate) |
 |---|---|
-| `RunAllTests`² | `Test_StornoCentar_All` |
-| `RunIzvestajTests` | `TestLicense_All`³ |
-| `RunSheetsJsonParserTests` | `RunStornoTestSuite` |
-| `RunBankaImportTestSuite` | `RunPaleteTestSuite` |
-| `RunFakturaSmokeSuite` | `RunNovacSmokeSuite` |
-| `RunGoogleSyncSmokeSuite`¹ | `RunBusinessFlowProSuite` |
-| `RunMasterSyncSmokeSuite`¹ | `RunAgrohemijaSmokeSuite` |
-| `RunSEFTestSuite`¹ | `RunProductionHealthCheck`, `TestMonitoring_All` |
+| `RunAllTests`² | `TestLicense_All`³ |
+| `RunIzvestajTests` | `RunPaleteTestSuite` (97) |
+| `RunSheetsJsonParserTests` | `RunNovacSmokeSuite` (12) |
+| `RunBankaImportTestSuite` | `RunBusinessFlowProSuite` (337) |
+| `RunFakturaSmokeSuite` | `RunAgrohemijaSmokeSuite` (26) |
+| `RunStornoTestSuite` | `RunProductionHealthCheck` |
+| `Test_StornoCentar_All` | `TestMonitoring_All` |
+| `RunGoogleSyncSmokeSuite`¹ | |
+| `RunMasterSyncSmokeSuite`¹ | |
+| `RunSEFTestSuite`¹ | |
 
 ¹ Nije u podrazumevanom setu — traži mrežu ili live SEF nalog.
 ² Verdikt ne dolazi iz toga da li `Run()` pukne — `modTest` hvata grešku po testu
@@ -121,6 +123,30 @@ pad. Vidi §4.
 Kad pišeš NOVU suite, napravi je `gate` (`Err.Raise` na pad) i upiši je u
 `SUITES` katalog u `tools/run_vba.py`. Nova „blind" suite je test koji niko neće
 videti kad pukne.
+
+### Kako se blind prevodi u gate
+
+Blind suite **već broji** padove (`mFail`) — samo ne podiže grešku, pa runner
+vidi „prošlo bez greške". Konverzija je tri linije, po uzoru na
+`modTestBanka.ERR_BIT_SUITE_FAILED`:
+
+1. `Private Const ERR_X_SUITE_FAILED As Long = vbObjectError + <slobodan>` u
+   deklaracionu sekciju (zauzeti offseti: 2900, 2950, 2960–2963, 3010–3012, 3100)
+2. posle završnog izveštaja: `If mFail > 0 Then Err.Raise ERR_X_SUITE_FAILED, ...`
+3. u `EH`: prebroj prekid kao pad (`Fail "SUITE prekinut..."`) pa podigni —
+   prekinuta suite nije „nije se desilo" nego pad
+
+Pa `gate: True` u `SUITES` i u listu u `.claude/hooks/vba-test.sh`.
+
+**Konverzija nije gotova bez dvosmernog dokaza** (§5): obori namerno jednu proveru
+(`Chk False, "SABOTAZA"`), pokaži `exit 2` sa imenom te suite, pa vrati i pokaži
+zeleno.
+
+> **Zamka pri pisanju sabotaže skriptom:** `src-vba` se na Windows-u checkout-uje
+> kao **CRLF**, a na Linuxu kao LF. Sidro sa zakucanim `\n` neće pogoditi ništa i
+> skripta tiho ne uradi ništa — pa run prođe nad neizmenjenim fajlom i izgleda
+> kao da sabotaža „nije oborila" suite. Uvek detektuj:
+> `nl = '\r\n' if '\r\n' in s else '\n'`, i tvrdi `assert s.count(old) == 1`.
 
 ## 4) `modTest` — suite koja pada na PONAŠANJU, ne na sintaksi
 
@@ -138,7 +164,7 @@ python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
 python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 ```
 
-### Akceptaciona komanda — gate je ~300 provera, ne tri
+### Akceptaciona komanda — gate je ~570 provera, ne tri
 
 `--suite RunAllTests` vrti samo tri nova testa. Pravi gate su **svi gate suite-ovi
 iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
@@ -146,7 +172,8 @@ iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
 ```powershell
 python tools/run_vba.py --suite RunAllTests --suite RunIzvestajTests ^
     --suite RunSheetsJsonParserTests --suite RunBankaImportTestSuite ^
-    --suite RunFakturaSmokeSuite
+    --suite RunFakturaSmokeSuite --suite RunStornoTestSuite ^
+    --suite Test_StornoCentar_All
 ```
 
 Izmereno na operaterskoj mašini (`EXIT=0`, sve zeleno):
@@ -154,11 +181,21 @@ Izmereno na operaterskoj mašini (`EXIT=0`, sve zeleno):
 | Suite | Provera |
 |---|---|
 | `RunBankaImportTestSuite` | 189 |
+| `RunStornoTestSuite` | 181 |
+| `Test_StornoCentar_All` | 88 |
 | `RunSheetsJsonParserTests` | 72 |
 | `RunFakturaSmokeSuite` | 35 |
 | `RunAllTests` | 3 |
 | `RunIzvestajTests` | ne prijavljuje broj |
-| **ukupno** | **299** + `RunIzvestajTests` |
+| **ukupno** | **568** + `RunIzvestajTests` |
+
+Sve rade nad **sintetičkim** fixture-om — suite koje diraju tabele seju sebi
+podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`), pa im prava
+sveska nije potrebna.
+
+**Ostalo u blind stanju: ~470 provera** — `RunBusinessFlowProSuite` (337),
+`RunPaleteTestSuite` (97), `RunAgrohemijaSmokeSuite` (26), `RunNovacSmokeSuite`
+(12). To je sledeći posao; recept je iznad, u §3.
 
 Izostavljena su tačno dva: `TestLicense_All` (ne može da se pokrene — v. dole) i
 `Test_StornoCentar_All` (blind, rezultat samo u Immediate, troši vreme bez
