@@ -357,28 +357,26 @@ COMPILE_PROBE_CODE = (
 def compile_project(xl, wb, watchdog) -> dict:
     """Vrati {"ok": True|False|None, "error": ..., "detail": {...}}.
 
-    Dva pokusaja su se ovde vec pokazala kao lazno zeleno, pa vredi zapisati
-    zasto oba NE rade:
+    Sta je ovde vec bilo netacno (tri lazna "zeleno"):
 
     - `Application.Run` nad probe funkcijom NE kompajlira ceo projekat. VBA
       kompajlira lenjo -- prevede modul koji se zove i ono sto taj modul stvarno
       referencira. Probe modul ne referencira nista, pa je greska u `modConfig`
       prosla netaknuta.
-    - `FindControl(...).Execute()` bez vidljivog VBE prozora ne uradi nista.
-      Kontrola "Compile VBAProject" je tada disabled, `Execute` tiho prodje, i
-      nikakav dijalog se ne pojavi -- pa je izostanak dijaloga izgledao kao
-      uspeh.
+    - `FindControl(...).Execute()` bez VIDLJIVOG I AKTIVNOG VBE prozora ne uradi
+      nista: kontrola je disabled, `Execute` tiho prodje, dijalog se ne pojavi --
+      pa je izostanak dijaloga izgledao kao uspeh. Minimizovan prozor se broji
+      kao neaktivan.
 
-    Zato: VBE prozor se OTVARA (minimizovan), projekat se postavlja kao aktivan,
-    i tek onda se meni izvrsava. Verdikt daje `Enabled` stanje same kontrole --
-    ono je True dok projekat NIJE kompajliran, i postaje False tek kad prodje pun
-    compile. Uz to i dalje vazi: bilo kakav compile dijalog = pad.
+    Verdikt (redom):
+      1. compile dijalog uhvacen  -> PAO
+      2. kontrola postala disabled -> PROSAO (projekat je kompajliran)
+      3. inace                     -> NEPOZNATO, nikad zeleno
 
-    `detail` nosi sirovo stanje (enabled pre/posle, dijalozi, probe) da sledeci
-    pogresan ishod ne mora opet da se pogadja.
+    `detail` nosi sirovo stanje svakog pokusaja, da sledeci pogresan ishod ne
+    mora opet da se pogadja.
     """
     detail: dict = {}
-    before = len(watchdog.seen)
 
     try:
         vbe = xl.VBE
@@ -387,12 +385,18 @@ def compile_project(xl, wb, watchdog) -> dict:
                                      '"Trust access to the VBA project object model".',
                 "detail": detail}
 
-    # VBE prozor mora biti vidljiv da bi meni kontrola bila enabled. Minimizovan
-    # je da ne skace preko ekrana.
+    # VBE prozor mora biti vidljiv I AKTIVAN. Prethodni pokusaj ga je
+    # minimizovao "da ne skace preko ekrana" -- minimizovan prozor nije aktivan,
+    # pa je meni kontrola ostala mrtva i `Execute` je tiho prolazio.
     try:
         vbe.MainWindow.Visible = True
-        vbe.MainWindow.WindowState = 2      # vbext_ws_Minimize
+        vbe.MainWindow.WindowState = 0      # vbext_ws_Normal
+        try:
+            vbe.MainWindow.SetFocus()
+        except Exception:
+            pass
         detail["vbe_visible"] = bool(vbe.MainWindow.Visible)
+        detail["vbe_caption"] = str(vbe.MainWindow.Caption)
     except Exception as exc:                # noqa: BLE001
         detail["vbe_visible"] = f"greska: {exc}"
 
@@ -424,40 +428,73 @@ def compile_project(xl, wb, watchdog) -> dict:
                          "reaguje, ishod se ne moze utvrditi.",
                 "detail": detail}
 
-    try:
-        ctl.Execute()
-        time.sleep(2.0)                     # daj VBE-u i watchdog-u vremena
-    except Exception as exc:                # noqa: BLE001
-        return {"ok": False, "error": f"Compile meni: {exc}", "detail": detail}
+    # Pokusaj 1: COM Execute nad meni kontrolom.
+    _attempt_compile(ctl, watchdog, detail, "com", lambda: ctl.Execute())
 
-    detail["dialogs"] = watchdog.seen[before:]
-    bad = [d for d in detail["dialogs"]
+    # Pokusaj 2: SendKeys u VBE prozor (Alt+D, C = Debug > Compile VBAProject).
+    # Ide samo ako COM put nije nista uradio -- i samo ako AppActivate potvrdi da
+    # je VBE prozor zaista aktivan, da tastatura ne odleti u tudju aplikaciju.
+    if detail.get("com_enabled_after") is True and not detail.get("com_dialogs"):
+        _attempt_compile(ctl, watchdog, detail, "keys",
+                         lambda: _sendkeys_compile(win32_shell(), vbe, detail))
+
+    stage = "keys" if "keys_enabled_after" in detail else "com"
+    dialogs = list(detail.get("com_dialogs") or []) + list(detail.get("keys_dialogs") or [])
+    enabled_after = detail.get(f"{stage}_enabled_after")
+
+    bad = [d for d in dialogs
            if any(k in d.lower() for k in ("compile", "kompajl", "greska", "error", "fehler"))]
 
-    try:
-        detail["enabled_after"] = bool(ctl.Enabled)
-    except Exception as exc:                # noqa: BLE001
-        detail["enabled_after"] = f"greska: {exc}"
-
-    # Probe ostaje kao dodatna kontrola -- ne kompajlira ceo projekat, ali hvata
-    # slucaj kad projekat uopste nije izvrsiv.
+    # Probe ostaje kao dodatna kontrola -- NE kompajlira ceo projekat (VBA je
+    # lenj), ali hvata projekat koji uopste nije izvrsiv.
     detail["probe"] = _run_probe(xl, wb)
 
     if bad:
         return {"ok": False, "error": " ;; ".join(bad), "detail": detail}
-    if detail["probe"] not in (42, "42"):
-        return {"ok": False, "error": f"Probe nije vratio 42: {detail['probe']!r}",
-                "detail": detail}
-    if detail.get("enabled_after") is True:
-        return {"ok": False,
-                "error": "Posle compile-a stavka 'Compile VBAProject' je i dalje aktivna "
-                         "-- projekat se NIJE kompajlirao do kraja.",
-                "detail": detail}
-    if detail.get("enabled_after") is not False:
-        return {"ok": None, "error": "Ne mogu da procitam stanje 'Compile' kontrole.",
-                "detail": detail}
+    if enabled_after is False:
+        return {"ok": True, "error": None, "detail": detail}
 
-    return {"ok": True, "error": None, "detail": detail}
+    # Ovde se NE sme tvrditi ni "prosao" ni "pao": nijedan compile dijalog nije
+    # video svetlo dana, a kontrola je ostala aktivna -- sto znaci da compile
+    # verovatno uopste nije izvrsen. Nepoznat ishod je nalaz, ne zeleno.
+    return {"ok": None,
+            "error": "Compile nije izvrsen (nema dijaloga, kontrola ostala aktivna) "
+                     "-- ishod NEPOZNAT. Uradi rucno: Alt+F11 > Debug > Compile VBAProject.",
+            "detail": detail}
+
+
+def win32_shell():
+    import win32com.client as win32
+    return win32.Dispatch("WScript.Shell")
+
+
+def _attempt_compile(ctl, watchdog, detail, prefix: str, action) -> None:
+    """Odradi jedan pokusaj compile-a i zapisi sirovo stanje pod `prefix`."""
+    before = len(watchdog.seen)
+    try:
+        action()
+        detail[f"{prefix}_exec"] = "ok"
+    except Exception as exc:                # noqa: BLE001
+        detail[f"{prefix}_exec"] = f"greska: {exc}"
+    time.sleep(2.5)
+    detail[f"{prefix}_dialogs"] = watchdog.seen[before:]
+    try:
+        detail[f"{prefix}_enabled_after"] = bool(ctl.Enabled)
+    except Exception as exc:                # noqa: BLE001
+        detail[f"{prefix}_enabled_after"] = f"greska: {exc}"
+
+
+def _sendkeys_compile(shell, vbe, detail) -> None:
+    """Alt+D, C u VBE prozoru. Salje se SAMO ako je prozor stvarno aktiviran."""
+    caption = str(vbe.MainWindow.Caption)
+    active = bool(shell.AppActivate(caption))
+    detail["keys_appactivate"] = active
+    if not active:
+        raise RuntimeError(f"AppActivate('{caption}') nije uspeo -- SendKeys se preskace")
+    time.sleep(0.5)
+    shell.SendKeys("%d")
+    time.sleep(0.4)
+    shell.SendKeys("c")
 
 
 def _run_probe(xl, wb):

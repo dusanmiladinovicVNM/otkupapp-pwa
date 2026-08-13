@@ -97,19 +97,30 @@ vidljivog VBE prozora ne uradi ništa.** Kontrola „Compile VBAProject" je tada
 disabled, `Execute` tiho prođe i nikakav dijalog se ne pojavi — pa je izostanak
 dijaloga izgledao kao uspeh.
 
+Treći pokušaj je VBE prozor otvarao **minimizovan** („da ne skače preko ekrana").
+Minimizovan prozor nije aktivan — kontrola je ostala mrtva, `Execute` je opet
+tiho prošao. To se videlo iz dijagnostike: `dialogs = []` **i na namerno
+slomljenom kodu**, gde je compile error dijalog morao da iskoči.
+
 Sada:
 
-1. **VBE prozor se otvara** (minimizovan) i projekat se postavlja kao aktivan —
-   bez toga meni kontrola ne reaguje.
-2. **`Enabled` stanje kontrole je verdikt.** `True` = projekat nije kompajliran,
-   `False` = jeste. Pre compile-a mora biti `True` (tek smo uvezli module); ako
-   nije, alat kaže `NEJASNO` umesto da tvrdi ishod.
-3. **Dijalozi** koje watchdog uhvati sa „compile"/„error" u tekstu = `FAIL`.
-4. **Probe** ostaje kao dodatna kontrola (hvata projekat koji uopšte nije
-   izvršiv), ali više nije izvor verdikta.
+1. **VBE prozor se otvara u normalnom stanju i dobija fokus**, projekat se
+   postavlja kao aktivan.
+2. **Pokušaj 1** — `FindControl(578).Execute()`.
+3. **Pokušaj 2** (samo ako prvi nije ništa uradio) — `SendKeys` `Alt+D`, `C` u
+   VBE prozor. Šalje se isključivo ako `AppActivate` potvrdi da je VBE prozor
+   zaista aktivan, da tastatura ne odleti u tuđu aplikaciju.
+4. **Verdikt, tim redom:** uhvaćen compile dijalog → `FAIL`; kontrola postala
+   disabled → `OK`; sve ostalo → `NEJASNO`.
+5. **Probe** ostaje kao dodatna kontrola (hvata projekat koji uopšte nije
+   izvršiv), ali nije izvor verdikta.
 
-Ispis uvek sadrži i sirovo stanje (`enabled_before`, `enabled_after`, `dialogs`,
-`probe`), da se sledeći pogrešan ishod ne mora pogađati.
+Ispis uvek sadrži sirovo stanje svakog pokušaja (`com_*`, `keys_*`,
+`enabled_before`, `probe`), da se sledeći pogrešan ishod ne mora pogađati.
+
+**`NEJASNO` znači da compile nije izvršen, a ne da je pao** — u tom slučaju
+uradi ručno `Alt+F11 → Debug → Compile VBAProject`. Izlazni kod je i tada 2:
+nepoznat ishod je nalaz, ne zeleno.
 
 Pravilo: **sve što nije eksplicitno `OK` je pad** (izlazni kod 2). Alat koji ne
 zna ishod mora to da kaže glasno, ne da ćuti u zeleno.
