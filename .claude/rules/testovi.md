@@ -103,13 +103,15 @@ prošle".
 
 | gate (crveno se vidi) | blind (rezultat samo u Immediate) |
 |---|---|
-| `RunAllTests`² | `TestLicense_All`³ |
-| `RunIzvestajTests` | `RunPaleteTestSuite` (97) |
+| `RunAllTests`² | `RunBusinessFlowProSuite` (337) |
+| `RunIzvestajTests` | `TestLicense_All`³ (23) |
 | `RunSheetsJsonParserTests` | `RunNovacSmokeSuite` (12) |
-| `RunBankaImportTestSuite` | `RunBusinessFlowProSuite` (337) |
-| `RunFakturaSmokeSuite` | `RunAgrohemijaSmokeSuite` (26) |
-| `RunStornoTestSuite` | `RunProductionHealthCheck` |
-| `Test_StornoCentar_All` | `TestMonitoring_All` |
+| `RunBankaImportTestSuite` | `RunProductionHealthCheck` |
+| `RunFakturaSmokeSuite` | `TestMonitoring_All` |
+| `RunStornoTestSuite` | |
+| `Test_StornoCentar_All` | |
+| `RunPaleteTestSuite` | |
+| `RunAgrohemijaSmokeSuite` | |
 | `RunGoogleSyncSmokeSuite`¹ | |
 | `RunMasterSyncSmokeSuite`¹ | |
 | `RunSEFTestSuite`¹ | |
@@ -164,7 +166,7 @@ python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
 python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 ```
 
-### Akceptaciona komanda — gate je ~570 provera, ne tri
+### Akceptaciona komanda — gate je ~690 provera, ne tri
 
 `--suite RunAllTests` vrti samo tri nova testa. Pravi gate su **svi gate suite-ovi
 iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
@@ -173,29 +175,52 @@ iz podrazumevanog seta**, i to je ono što pušta `Stop` hook:
 python tools/run_vba.py --suite RunAllTests --suite RunIzvestajTests ^
     --suite RunSheetsJsonParserTests --suite RunBankaImportTestSuite ^
     --suite RunFakturaSmokeSuite --suite RunStornoTestSuite ^
-    --suite Test_StornoCentar_All
+    --suite Test_StornoCentar_All --suite RunPaleteTestSuite ^
+    --suite RunAgrohemijaSmokeSuite
 ```
 
-Izmereno na operaterskoj mašini (`EXIT=0`, sve zeleno):
+Izmereno na operaterskoj mašini (`EXIT=0`, svih devet zeleno):
 
 | Suite | Provera |
 |---|---|
 | `RunBankaImportTestSuite` | 189 |
 | `RunStornoTestSuite` | 181 |
+| `RunPaleteTestSuite` | 97 |
 | `Test_StornoCentar_All` | 88 |
 | `RunSheetsJsonParserTests` | 72 |
 | `RunFakturaSmokeSuite` | 35 |
+| `RunAgrohemijaSmokeSuite` | 25 |
 | `RunAllTests` | 3 |
 | `RunIzvestajTests` | ne prijavljuje broj |
-| **ukupno** | **568** + `RunIzvestajTests` |
+| **ukupno** | **690** + `RunIzvestajTests` |
 
 Sve rade nad **sintetičkim** fixture-om — suite koje diraju tabele seju sebi
-podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`), pa im prava
-sveska nije potrebna.
+podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`, `TST-*`), pa im
+prava radna sveska nije potrebna.
 
-**Ostalo u blind stanju: ~470 provera** — `RunBusinessFlowProSuite` (337),
-`RunPaleteTestSuite` (97), `RunAgrohemijaSmokeSuite` (26), `RunNovacSmokeSuite`
-(12). To je sledeći posao; recept je iznad, u §3.
+**Ostalo u blind stanju: ~372 provere** — `RunBusinessFlowProSuite` (337),
+`TestLicense_All` (23), `RunNovacSmokeSuite` (12), plus `RunProductionHealthCheck`
+i `TestMonitoring_All`. Recept je iznad, u §3.
+
+### „Suite se nije pokrenuo" nije „prošlo"
+
+Uz konverziju para palete/agrohemija zatvorene su **četiri putanje lažnog
+zelenog** — tihi `Exit Sub` pre nego što ijedna provera krene, koji je runner
+video kao `OK`:
+
+| Suite | Uslov koji je tiho izlazio |
+|---|---|
+| `RunPaleteTestSuite` | paletiranje isključeno u Podešavanjima |
+| `RunPaleteTestSuite` | zatečen `TST-` ostatak od prekinutog run-a |
+| `RunPaleteTestSuite` | operater odustao na potvrdi |
+| `RunAgrohemijaSmokeSuite` | dev-guard odbijen |
+
+Sve sada podižu grešku sa porukom koja počinje `suite NIJE pokrenut:`, pa se u
+ispisu razlikuje od pale provere. **Kad pišeš ili konvertuješ suite, prođi i rane
+izlaze** — pala provera je glasna, a suite koji se nije ni pokrenuo je tih.
+
+Ista rupa i dalje stoji u `RunBankaImportTestSuite` (rani `Exit Sub` kad
+`tblBankaImport`/`tblOtkup` ne postoje) — poznata, nije zatvorena.
 
 Izostavljena su tačno dva: `TestLicense_All` (ne može da se pokrene — v. dole) i
 `Test_StornoCentar_All` (blind, rezultat samo u Immediate, troši vreme bez

@@ -48,12 +48,15 @@ if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
     exit 2
 fi
 
-# Svi gate suite-ovi iz podrazumevanog seta -- 568 provera izmereno, ne samo tri.
-# Ne ide goli `run_vba.py` iz dva razloga:
-#   TestLicense_All  ne moze da se pokrene ("Cannot run the macro"), pa bi obarao
-#                    svaku sesiju; blind je, dakle ionako ne daje verdikt.
-#   Test_StornoCentar_All  blind -- rezultat samo u Immediate, trosi vreme bez verdikta.
-# Cim se TestLicense_All raescisti, cela lista se brise i ostaje goli poziv.
+# Svi gate suite-ovi iz podrazumevanog seta -- 690 provera izmereno, ne samo tri.
+# Lista je eksplicitna, nikad izvedena obrascem: medju Run* procedurama nisu sve
+# testovi (RunSelfUpdate, RunGoogleAuthSetup...), pa bi "pusti sve Run*" pokrenulo
+# self-update na svakoj sesiji.
+#
+# Goli `run_vba.py` se ne koristi jer podrazumevani set nosi i TestLicense_All,
+# koji ne moze da se pokrene ("Cannot run the macro") pa bi obarao svaku sesiju --
+# a blind je, dakle ionako ne daje verdikt. Cim se raescisti, lista se brise i
+# ostaje goli poziv.
 out="$("$PY" tools/run_vba.py \
         --suite RunAllTests \
         --suite RunIzvestajTests \
