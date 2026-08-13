@@ -1,8 +1,11 @@
 # Handoff: test suite nad .xlsm koja dokazano pada na pravom bugu
 
-> Status: **nije započeto — čeka Windows sesiju.** Ovaj fajl je ulaz za tu sesiju.
-> Nastao u Linux sesiji (`claude/test-suite-otkup-proof-lsx0ky`) u kojoj se
-> kriterijum prihvatanja ne može izvršiti. Kod nije pisan namerno — vidi §1.
+> Status: **URAĐENO.** Sva tri testa dokazana u oba smera na Windows mašini
+> (Excel + pywin32), kod pisan u ovoj sesiji uz operatera koji je izvršavao.
+> Živa dokumentacija je `.claude/rules/testovi.md` §4 — **tamo gledaj kad radiš**.
+> Ovaj fajl ostaje kao zapis zašto je zadatak morao da se preformuliše: imena iz
+> originalnog teksta ne postoje u kodu (§2), a obim `gTestMode` garda je bio
+> pogrešno procenjen (§3). §5 i §6 su izvedene; §1 opisuje zatečeno stanje.
 
 ## 1) Zašto ovde nije rađeno
 
