@@ -293,6 +293,41 @@ def _has_vb_header(path: str) -> bool:
     return "Attribute VB_Name" in first or first.lstrip().upper().startswith("VERSION")
 
 
+def report_orphan_components(wb, log: list[str]) -> None:
+    """Moduli koji postoje u svesci a NEMA ih u src-vba/.
+
+    Import prepisuje samo ono sto repo ima; zaostao modul iz donora ostaje i
+    izvrsava se. Ako nosi Public ime koje postoji i u svezem kodu, VBA to vidi kao
+    "Ambiguous name" i odbija da pokrene makro iz njega -- sto izgleda kao
+    "Cannot run the macro", a ne kao compile greska. Tako je TestLicense_All bio
+    mrtav a `vba_check` uredno zelen: duplikat nije bio u repou nego u svesci.
+
+    Samo prijavljuje. Brisanje bi bilo agresivno prema svesci koju je operater
+    prosledio kroz --workbook.
+    """
+    STD, CLS, FRM = 1, 2, 3          # vbext_ct_StdModule / ClassModule / MSForm
+    have = {os.path.splitext(n)[0].lower()
+            for n in os.listdir(SRC_VBA)
+            if os.path.splitext(n)[1] in (".bas", ".cls", ".frm")}
+
+    orphans = []
+    for vbc in wb.VBProject.VBComponents:
+        try:
+            if int(vbc.Type) not in (STD, CLS, FRM):
+                continue                      # document moduli se merge-uju, ne brisu
+            name = str(vbc.Name)
+        except Exception:
+            continue
+        if name.lower() == SELF_MODULE.lower():
+            continue
+        if name.lower() not in have:
+            orphans.append(name)
+
+    if orphans:
+        log.append(f"ORPHAN {len(orphans)} modul(a) u svesci bez para u src-vba/ "
+                   f"(mogu da daju 'Ambiguous name'): " + ", ".join(sorted(orphans)))
+
+
 def import_src_vba(wb, log: list[str]) -> None:
     proj = wb.VBProject
     files = sorted(os.listdir(SRC_VBA))
@@ -711,6 +746,7 @@ def main(argv: list[str]) -> int:
 
         if not args.no_import:
             import_src_vba(wb, report["import"])
+            report_orphan_components(wb, report["import"])
 
         # Compile se radi UVEK -- i uz --compile-only i pre suite-ova. To je
         # najjeftiniji gate koji hvata najcescu klasu kvara posle Edit/Write nad
