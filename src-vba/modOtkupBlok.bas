@@ -1160,7 +1160,7 @@ End Sub
 ' Specifikacija RUCNO izabranih otpremnica (postojeci tok: dugme "Biraj
 ' otpremnice" -> multiselect -> ChrW(352) & "tampaj specifikaciju"). Tanak omotac oko
 ' zajednickog renderera RenderSpec (filter po skupu OtpremnicaID).
-Private Sub PrintSpecifikacija(ByVal otpIDs As Collection)
+Public Sub PrintSpecifikacija(ByVal otpIDs As Collection)
     On Error GoTo EH
     Dim selSet As Object: Set selSet = CreateObject("Scripting.Dictionary")
     Dim v As Variant
@@ -1428,7 +1428,7 @@ End Sub
 ' VEZIVANJE + CENA
 ' ============================================================
 
-Private Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
+Public Sub LinkOtkupIDsToOtpremnica(ByVal otkupIDs As String, ByVal otpID As String)
     Dim tx As clsTransaction
     On Error GoTo EH
     If Len(otpID) = 0 Or Len(Trim$(otkupIDs)) = 0 Then Exit Sub
@@ -1540,7 +1540,7 @@ Private Sub SetComboByIdAny(ByVal cmb As Object, ByVal idValue As String)
     Next i
 End Sub
 
-Private Function SumKolByOtp(ByVal otpID As String) As Double
+Public Function SumKolByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1558,7 +1558,7 @@ Private Function SumKolByOtp(ByVal otpID As String) As Double
 End Function
 
 ' Zbir BRUTO kg otkup blokova za otpremnicu (BrutoKg po redu; ako je prazno -> neto).
-Private Function SumBrutoByOtp(ByVal otpID As String) As Double
+Public Function SumBrutoByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1581,7 +1581,7 @@ Private Function SumBrutoByOtp(ByVal otpID As String) As Double
     SumBrutoByOtp = s
 End Function
 
-Private Function SumAmbByOtp(ByVal otpID As String) As Double
+Public Function SumAmbByOtp(ByVal otpID As String) As Double
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
@@ -1598,7 +1598,20 @@ Private Function SumAmbByOtp(ByVal otpID As String) As Double
     SumAmbByOtp = s
 End Function
 
-Private Function ExistingBlokCena(ByVal otpID As String) As Double
+Public Function ExistingBlokCena(ByVal otpID As String) As Double
+    ExistingBlokCena = NumVal(FirstBlokVal(otpID, COL_OTK_CENA))
+End Function
+
+' Broj zbirne sa vec napisanih blokova otpremnice. Otpremnica svoju zbirnu ne
+' mora da zna (veza se pravi kasnije), a blokovi je nose - pa je ovo drugi
+' izvor za "zbirna je poznata u ovom trenutku".
+Public Function ExistingBlokZbirna(ByVal otpID As String) As String
+    ExistingBlokZbirna = Trim$(NzToText(FirstBlokVal(otpID, COL_OTK_BROJ_ZBIRNE)))
+End Function
+
+' Vrednost trazene kolone iz PRVOG bloka otpremnice. Blokovi jedne otpremnice
+' dele i cenu i zbirnu, pa je prvi red dovoljan; jedno citanje za oba pozivaoca.
+Private Function FirstBlokVal(ByVal otpID As String, ByVal col As String) As Variant
     If Len(otpID) = 0 Then Exit Function
     Dim rows As Collection
     Set rows = FindRows(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, otpID)
@@ -1606,8 +1619,9 @@ Private Function ExistingBlokCena(ByVal otpID As String) As Double
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
-    Dim cCena As Long: cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
-    ExistingBlokCena = NumVal(data(rows(1), cCena))
+    Dim c As Long: c = GetColumnIndex(TBL_OTKUP, col)
+    If c < 1 Then Exit Function
+    FirstBlokVal = data(rows(1), c)
 End Function
 
 ' OtpremnicaID -> cena prvog povezanog bloka.
@@ -1629,7 +1643,9 @@ Private Function BuildFirstBlokCena() As Object
 End Function
 
 ' OtpremnicaID -> ukupna kolicina svih (ne-storniranih) blokova.
-Private Function BuildNapisanoByOtp() As Object
+' Javne od F1 radnog stola: isti bilans otpremnice treba i starom ekranu i
+' novom (modScrDokumenti). Racun se NE duplira - novi ekran zove ovo.
+Public Function BuildNapisanoByOtp() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set BuildNapisanoByOtp = d
 
@@ -1927,31 +1943,31 @@ End Sub
 
 ' Napuni rang: svi kooperanti firme sortirani opadajuce po ukupnom iznosu
 ' otkupnih listova (Sum Kolicina*Cena) u tekucoj godini; bez storniranih.
-Private Sub LoadKoopRang()
+' RACUN ranga, bez ijedne kontrole. Vraca 1-bazirani 2D niz (n x 4):
+'   1 KooperantID | 2 ime | 3 otkupno mesto | 4 iznos
+' sortiran opadajuce po iznosu, plus kontrolne sume kroz izlazne parametre.
+'
+' Izdvojeno iz LoadKoopRang da isti racun mogu da koriste i legacy panel i novi
+' ekran (modScrDokumenti), umesto da se agregacija prepisuje na dva mesta.
+Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
+                             ByRef emptyKg As Double, ByRef emptyVal As Double) As Variant
     On Error GoTo EH
-    mLstRang.Clear
+    rawKg = 0: rawVal = 0: emptyKg = 0: emptyVal = 0
     Dim yr As Integer: yr = Year(Date)
-    mLblRangTitle.caption = "LISTA KOOPERANATA PO IZNOSU OTKUPNIH LISTOVA (" & yr & _
-                            ")  --  klik 'Zatvori' za povratak"
 
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Sub
+    If IsEmpty(data) Then Exit Function
     data = ExcludeStornirano(data, TBL_OTKUP)
-    If IsEmpty(data) Then Exit Sub
+    If IsEmpty(data) Then Exit Function
 
     Dim cKoop As Long, cKol As Long, cCena As Long, cDat As Long
     cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     cCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
-    If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Sub
+    If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Function
 
-    ' Agregacija po KooperantID (samo tekuca godina) + kontrolne sume za
-    ' reconciliation footer: sirov tblOtkup total (kg + vrednost) i deo koji
-    ' ispada iz liste jer ima prazan KooperantID.
     Dim agg As Object: Set agg = CreateObject("Scripting.Dictionary")
-    Dim rawVal As Double, rawKg As Double
-    Dim emptyVal As Double, emptyKg As Double
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If cDat = 0 Or RowYear(data(i, cDat)) = yr Then
@@ -1972,9 +1988,8 @@ Private Sub LoadKoopRang()
             End If
         End If
     Next i
-    If agg.count = 0 Then Exit Sub
+    If agg.count = 0 Then Exit Function
 
-    ' Kljucevi + iznosi u paralelne nizove, pa sort opadajuce po iznosu.
     Dim n As Long: n = agg.count
     Dim koopIDs() As String: ReDim koopIDs(1 To n)
     Dim iznosi() As Double: ReDim iznosi(1 To n)
@@ -1988,6 +2003,31 @@ Private Sub LoadKoopRang()
 
     Dim dKo As Object: Set dKo = BuildKoopNames()
     Dim dOM As Object: Set dOM = BuildKoopOM()
+    Dim outA() As Variant: ReDim outA(1 To n, 1 To 4)
+    For i = 1 To n
+        Dim nm2 As String: nm2 = DictVal(dKo, koopIDs(i))
+        If Len(nm2) = 0 Then nm2 = koopIDs(i)
+        outA(i, 1) = koopIDs(i)
+        outA(i, 2) = nm2
+        outA(i, 3) = DictVal(dOM, koopIDs(i))
+        outA(i, 4) = iznosi(i)
+    Next i
+    KoopRangRows = outA
+    Exit Function
+EH:
+    LogErr "modOtkupBlok.KoopRangRows"
+End Function
+
+Private Sub LoadKoopRang()
+    On Error GoTo EH
+    mLstRang.Clear
+    Dim yr As Integer: yr = Year(Date)
+    mLblRangTitle.caption = "LISTA KOOPERANATA PO IZNOSU OTKUPNIH LISTOVA (" & yr & _
+                            ")  --  klik 'Zatvori' za povratak"
+
+    Dim rawKg As Double, rawVal As Double, emptyKg As Double, emptyVal As Double
+    Dim rows As Variant
+    rows = KoopRangRows(rawKg, rawVal, emptyKg, emptyVal)
 
     ' Zaglavlje kolona (red 0).
     mLstRang.AddItem "#"
@@ -1995,16 +2035,16 @@ Private Sub LoadKoopRang()
     mLstRang.List(0, 2) = "OM"
     mLstRang.List(0, 3) = "Iznos (RSD)"
 
-    Dim r As Long
-    For i = 1 To n
-        mLstRang.AddItem CStr(i)
-        r = mLstRang.ListCount - 1
-        Dim nm As String: nm = DictVal(dKo, koopIDs(i))
-        If Len(nm) = 0 Then nm = koopIDs(i)
-        mLstRang.List(r, 1) = nm
-        mLstRang.List(r, 2) = DictVal(dOM, koopIDs(i))
-        mLstRang.List(r, 3) = FmtRsd(iznosi(i))
-    Next i
+    Dim i As Long, r As Long
+    If IsArray(rows) Then
+        For i = 1 To UBound(rows, 1)
+            mLstRang.AddItem CStr(i)
+            r = mLstRang.ListCount - 1
+            mLstRang.List(r, 1) = CStr(rows(i, 2))
+            mLstRang.List(r, 2) = CStr(rows(i, 3))
+            mLstRang.List(r, 3) = FmtRsd(CDbl(rows(i, 4)))
+        Next i
+    End If
 
     ' --- Footer: UKUPNO (prikazano) + reconciliation vs tblOtkup (tekuca god.) ---
     ' "Prikazano" == tblOtkup total osim za redove sa praznim KooperantID (koje

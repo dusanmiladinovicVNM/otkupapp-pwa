@@ -31,25 +31,39 @@ Public Function ResolveKooperantByName(ByVal cmb As MSForms.ComboBox, _
         Exit Function
     End If
 
-    Dim nm As String: nm = Trim$(cmb.value)
+    ResolveKooperantByName = ResolveKooperantByText(Trim$(cmb.value), stanicaID, created)
+    Exit Function
+EH:
+    LogErr "modKooperant.ResolveKooperantByName"
+End Function
+
+' Isti posao, ali bez kontrole: iz IMENA nadji kooperanta, pa ga po potrebi i
+' kreiraj. Postoji zato sto novi UI ne moze da prosledi combo - njegov ekran
+' nema pristup kontrolama, dobija samo tekst koji je operater otkucao.
+Public Function ResolveKooperantByText(ByVal nm As String, _
+                                       ByVal stanicaID As String, _
+                                       Optional ByRef created As Boolean) As String
+    On Error GoTo EH
+    created = False
+    nm = Trim$(nm)
     If Len(nm) = 0 Then Exit Function
 
     Dim existing As String: existing = FindKooperantIDByName(nm, stanicaID)
     If Len(existing) > 0 Then
-        ResolveKooperantByName = existing
+        ResolveKooperantByText = existing
         Exit Function
     End If
 
     ' Toggle (Podesavanja): auto-kreiranje nepoznatog kooperanta. OFF -> vrati ""
-    ' pa frmOtkup javlja da kooperant nije pronadjen (bez tihog kreiranja).
+    ' pa forma javlja da kooperant nije pronadjen (bez tihog kreiranja).
     If Not KoopAutoCreate() Then Exit Function
 
     Dim newID As String: newID = CreateKooperantByName(nm, stanicaID)
     If Len(newID) > 0 Then created = True
-    ResolveKooperantByName = newID
+    ResolveKooperantByText = newID
     Exit Function
 EH:
-    LogErr "modKooperant.ResolveKooperantByName"
+    LogErr "modKooperant.ResolveKooperantByText"
 End Function
 
 ' Nadji KooperantID po punom imenu (Ime + Prezime), case-insensitive.

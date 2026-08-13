@@ -36,6 +36,8 @@ Izuzetak su očigledne mehaničke greške (tipfeler, nedostajući argument) koje
    - `docs/DOMEN/README.md` — šta dokumenti jesu i koje invarijante drže
    - `docs/DOMEN/WHO_WRITES.md` — ko piše koju tabelu (generisano iz koda)
    - `docs/ARCHITECTURE_REFERENCE.md`, `docs/ARCHITECTURE_CHANGELOG.md`
+   - `docs/UI_MIGRACIJA_KATALOG.md` — prelazak `frmOtkup`/`frmDokumenta` na
+     `frmOtkupUI`: šta je preneto, šta nije i u kojoj fazi je
    - `instructions/AGRIX_ARCHITECTURE_REFERENCE_FILLED_v6_12_DRAFT.md`
    - `instructions/DOMAIN_MODELS_REVIEW_DRAFT_v6_21_WITH_AGROHEMIJA.md`
 2. **Pretraži postojeće** u `src-vba/` (VBA/Excel app) i `src/` (PWA) PRE nego što

@@ -19,6 +19,7 @@ Provere:
   3. REZERVISANO  -- ime promenljive/konstante koje se case-insensitive poklapa sa
                      VBA kljucnom reci (`Dim eNum As Long` -> `Enum` -> compile error).
   4. DUPLIKAT     -- isti Public Sub/Function/Const u dva modula = "Ambiguous name"
+                     (izuzetak: ugovor ekrana `Scr_*` u `modScr*` -- v. SCR_UGOVOR)
                      posle merge-a.
   5. PORUKA       -- `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke`.
   6. NEDEFINISAN  -- poziv procedure koja nigde u projektu nije definisana
@@ -78,6 +79,28 @@ MODULE_DECL = re.compile(
 
 PUBLIC_PROC = re.compile(
     r"^Public\s+(?:Static\s+)?(?:Sub|Function|Const)\s+(\w+)", re.IGNORECASE)
+
+# --- izuzetak od DUPLIKAT-a: ugovor ekrana novog UI-ja ---------------------
+#
+# Ljuska `modOtkupUI` ne poznaje nijedan ekran po imenu: svaki ekranski modul
+# (`modScr*`) implementira isti skup procedura, a ljuska ih zove ISKLJUCIVO
+# kasno vezano -- `Application.Run "modScrDokumenti.Scr_Rows"`. Poziv je uvek
+# kvalifikovan imenom modula, pa VBA nema sta da razresava i "Ambiguous name"
+# ne nastaje (potvrdjeno: oba modula su u projektu i kompajlira se).
+#
+# Izuzetak je namerno uzak i vazi SAMO kad su SVI definicioni fajlovi ekranski
+# moduli. Isto ime u bilo kom drugom modulu i dalje pada -- ukljucujuci slucaj
+# kad neko ugovornu proceduru prekopira u obican modul pa je pozove nekvalifi-
+# kovano, sto je bas greska koju ova provera treba da uhvati.
+SCR_UGOVOR = {
+    "scr_meta", "scr_build", "scr_layout", "scr_rows", "scr_event",
+    "scr_save", "scr_resetcache", "scr_liste", "scr_lista", "scr_radnje",
+    "scr_naslovdopuna",
+}
+
+
+def je_ekranski_modul(path: str) -> bool:
+    return os.path.basename(path).lower().startswith("modscr")
 
 # Ime deklarisane promenljive/konstante -- modifikatori se preskacu, pa
 # `Public Const FOO As String` daje FOO, a ne "Const".
@@ -441,6 +464,9 @@ def main(argv: list[str]) -> int:
     if not args.paths:
         for name, sites in sorted(publics.items()):
             if len(sites) > 1:
+                # ugovor ekrana -- kasno vezan, uvek kvalifikovan (v. SCR_UGOVOR)
+                if name in SCR_UGOVOR and all(je_ekranski_modul(p) for p, _ in sites):
+                    continue
                 where = ", ".join(f"{os.path.basename(p)}:{ln}" for p, ln in sites)
                 findings.append(Finding(sites[0][0], sites[0][1], "DUPLIKAT",
                                         f"Public '{name}' definisan na vise mesta ({where}) "
