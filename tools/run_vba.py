@@ -758,6 +758,22 @@ def main(argv: list[str]) -> int:
         report["fatal"] = str(exc)
         rc = 2
     finally:
+        # Sveska se zatvara PRE gasenja cuvara. Close() ume da podigne
+        # "Want to save your changes?" -- dovoljno je da jedna suite u svom
+        # ciscenju vrati Application.DisplayAlerts na True. Ranije su i watchdog
+        # i killer vec bili ugaseni na tom mestu, pa je taj dijalog visio zauvek:
+        # nije imao ko da ga klikne ni ko da ubije proces.
+        try:
+            xl.DisplayAlerts = False
+        except Exception:
+            pass
+        try:
+            # SaveChanges=False eksplicitno -- goli Workbooks.Close() pita.
+            while int(xl.Workbooks.Count) > 0:
+                xl.Workbooks(1).Close(SaveChanges=False)
+        except Exception:
+            pass
+
         if killer is not None:
             killer.cancel()
         if hard_stop["fired"]:
@@ -769,10 +785,6 @@ def main(argv: list[str]) -> int:
             time.sleep(1.0)
             watchdog.stop()
             report["dialogs"] = watchdog.seen
-        try:
-            xl.Workbooks.Close()
-        except Exception:
-            pass
         try:
             xl.Quit()
         except Exception:
