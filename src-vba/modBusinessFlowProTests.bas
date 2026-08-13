@@ -34,6 +34,13 @@ Option Explicit
 Private m_Total As Long
 Private m_Passed As Long
 Private m_Failed As Long
+
+' Gate: verdikt se podize u EndRun, koji zovu SVA cetiri Run* runnera -- i na
+' uspesnoj putanji i iz EH. LogFatal takodje inkrementira m_Failed, pa prekinuta
+' suite izlazi kao pad, ne kao "nije se desilo". Bez ovoga bi runner video
+' "proslo bez greske", sto NIJE isto sto i sve provere prosle.
+' Konvencija: modTestBanka.ERR_BIT_SUITE_FAILED.
+Private Const ERR_BFP_SUITE_FAILED As Long = vbObjectError + 2966
 Private m_Skipped As Long
 Private m_RunID As String
 Private m_DateSeq As Long
@@ -122,6 +129,7 @@ Public Sub RunBusinessFlowProSuite()
     Test_AutoLinkMustNotCrossBrojZbirne
     Test_NoCrossZbirnaLinksAudit
 
+    On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
 
@@ -139,6 +147,7 @@ Public Sub RunBusinessFlowProSeedOnly()
     SeedBusinessFlowProMasterData
     Test_SeedMasterDataAvailable
 
+    On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
 
@@ -158,6 +167,7 @@ Public Sub RunBusinessFlowProTraceabilityOnly()
     Test_AutoLinkMustNotCrossBrojZbirne
     Test_NoCrossZbirnaLinksAudit
 
+    On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
 
@@ -174,6 +184,7 @@ Public Sub RunBusinessFlowProAuditOnly()
     Test_CoreTablesAndColumnsExist
     Test_NoCrossZbirnaLinksAudit
 
+    On Error GoTo 0        ' verdikt podize EndRun -- bez ovoga bi skocio u EH i dvaput brojao
     EndRun
     Exit Sub
 
@@ -3908,6 +3919,13 @@ Private Sub EndRun()
     Else
         MsgBox "Business Flow Pro tests finished." & vbCrLf & summary, _
                vbInformation, APP_NAME
+    End If
+
+    ' Gate. Zove se iz sva cetiri runnera, pa je ovo jedina tacka verdikta.
+    If m_Failed > 0 Then
+        Err.Raise ERR_BFP_SUITE_FAILED, "modBusinessFlowProTests.EndRun", _
+            "Business Flow Pro: " & CStr(m_Failed) & " provera palo (PASS=" & _
+            CStr(m_Passed) & "). Detalji u Immediate prozoru."
     End If
 End Sub
 

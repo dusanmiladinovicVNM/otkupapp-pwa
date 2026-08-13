@@ -66,7 +66,8 @@ out="$("$PY" tools/run_vba.py \
         --suite RunStornoTestSuite \
         --suite Test_StornoCentar_All \
         --suite RunPaleteTestSuite \
-        --suite RunAgrohemijaSmokeSuite 2>&1)"
+        --suite RunAgrohemijaSmokeSuite \
+        --suite RunBusinessFlowProSuite 2>&1)"
 rc=$?
 
 if [ "$rc" -ne 0 ]; then
