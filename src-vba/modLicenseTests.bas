@@ -15,6 +15,10 @@ Option Explicit
 Private mPass As Long
 Private mFail As Long
 
+' Gate: bez ovoga runner vidi suite kao "blind" -- proslo bez greske, sto NIJE
+' isto sto i sve provere prosle. Konvencija: modTestBanka.ERR_BIT_SUITE_FAILED.
+Private Const ERR_LICENSE_SUITE_FAILED As Long = vbObjectError + 2967
+
 Public Sub TestLicense_All()
     mPass = 0: mFail = 0
     Debug.Print String(60, "-")
@@ -30,6 +34,12 @@ Public Sub TestLicense_All()
     Debug.Print "LICENSE TEST SUITE END  PASS=" & mPass & "  FAIL=" & mFail & _
                 IIf(mFail = 0, "  (SVE PROSLO)", "  (IMA PADOVA!)")
     Debug.Print String(60, "-")
+
+    If mFail > 0 Then
+        Err.Raise ERR_LICENSE_SUITE_FAILED, "modLicenseTests.TestLicense_All", _
+            "TestLicense_All: " & CStr(mFail) & " provera palo (PASS=" & _
+            CStr(mPass) & "). Detalji u Immediate prozoru."
+    End If
 End Sub
 
 ' LicSplitParts uvek mora da vrati >= 3 elementa (stiti od index out of range).

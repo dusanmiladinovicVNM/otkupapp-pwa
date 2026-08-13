@@ -175,6 +175,45 @@ def header_index(lo) -> dict:
     return {str(c.Name).strip().lower(): int(c.Index) for c in lo.ListColumns}
 
 
+def strip_vba(wb) -> list:
+    """Izbaci SAV standardni/klasni/form kod iz donora.
+
+    Kod u fixture-u je balast: run_vba.py na svakom pokretanju uveze svez
+    src-vba/ preko njega. Ali uvozi samo ono sto repo IMA -- modul zaostao iz
+    starijeg donora ostaje i izvrsava se. Ako nosi Public ime koje postoji i u
+    svezem kodu, VBA to vidi kao "Ambiguous name" i odbija da pokrene makro iz
+    njega, uz poruku "Cannot run the macro" koja ne lici na compile gresku.
+    Tako je TestLicense_All bio mrtav dok je vba_check bio uredno zelen --
+    duplikat nije bio u repou nego u svesci.
+
+    Document moduli (listovi, ThisWorkbook) se NE mogu ukloniti; njihov kod
+    run_vba merge-uje iz .doccls fajlova.
+
+    Trazi "Trust access to the VBA project object model".
+    """
+    STD, CLS, FRM = 1, 2, 3
+    removed = []
+    try:
+        proj = wb.VBProject
+        comps = [c for c in proj.VBComponents]      # snapshot: brisemo iz kolekcije
+    except Exception as exc:
+        raise SchemaError(
+            f"nema pristupa VBA projektu ({exc}). Ukljuci: File > Options > "
+            "Trust Center > Trust Center Settings > Macro Settings > "
+            "'Trust access to the VBA project object model'")
+
+    for comp in comps:
+        try:
+            if int(comp.Type) not in (STD, CLS, FRM):
+                continue
+            name = str(comp.Name)
+            proj.VBComponents.Remove(comp)
+            removed.append(name)
+        except Exception:
+            pass                                    # zakljucan projekat/komponenta
+    return sorted(removed)
+
+
 def strip_rows(wb) -> list:
     cleared = []
     for lo in iter_tables(wb):
@@ -278,6 +317,12 @@ def build(donor: str, out: str, force: bool) -> int:
         xl.EnableEvents = False       # KLJUCNO: Workbook_Open (StartApp) se ne pokrece
 
         wb = xl.Workbooks.Open(out, UpdateLinks=0)
+
+        stripped = strip_vba(wb)
+        if stripped:
+            print(f"Uklonjeno {len(stripped)} VBA modula iz donora: "
+                  + ", ".join(stripped[:8])
+                  + (f" ... (+{len(stripped) - 8})" if len(stripped) > 8 else ""))
 
         cleared = strip_rows(wb)
         print(f"Obrisani redovi u {len(cleared)} tabela"

@@ -15,20 +15,31 @@ PY=python3
 command -v "$PY" >/dev/null 2>&1 || PY=python
 command -v "$PY" >/dev/null 2>&1 || exit 0
 
-# Bez Excela nema sta da se vrti. Linux/macOS sesija (Claude Code na webu) prolazi
-# TIHO -- tamo i dalje radi vba_check kroz PostToolUse. Hook koji bi tamo pao na
-# svakom stop-u bio bi samo smetnja.
-"$PY" -c "import win32com.client" >/dev/null 2>&1 || exit 0
-
-# Suite kosta ~15s uz podizanje Excela, pa se pali samo kad je VBA izvor stvarno
-# diran: ili u radnom stablu, ili u poslednjem commit-u (Claude cesto commit-uje
-# pa tek onda stane -- tada radno stablo izgleda cisto).
+# Sve dalje se pali samo kad je VBA izvor stvarno diran: ili u radnom stablu, ili
+# u poslednjem commit-u (Claude cesto commit-uje pa tek onda stane -- tada radno
+# stablo izgleda cisto).
 changed=0
 git diff --quiet HEAD -- src-vba/ 2>/dev/null || changed=1
 if [ "$changed" -eq 0 ] && git rev-parse HEAD~1 >/dev/null 2>&1; then
     git diff --quiet HEAD~1 HEAD -- src-vba/ 2>/dev/null || changed=1
 fi
 [ "$changed" -eq 1 ] || exit 0
+
+# Mapa vlasnistva se generise iz koda, pa istruli cim neko doda AddTableSnapshot
+# ili AppendRow nad novom tabelom. Instant je i ne trazi Excel -- zato ide PRE
+# win32com granice, da se proveri i u Linux sesiji.
+if ! "$PY" tools/who_writes.py --check >/dev/null 2>&1; then
+    echo "docs/DOMEN/WHO_WRITES.md je zastareo posle izmene u src-vba/." >&2
+    echo "Regenerisi: python3 tools/who_writes.py --out" >&2
+    exit 2
+fi
+
+# Bez Excela nema sta da se vrti. Linux/macOS sesija (Claude Code na webu) prolazi
+# TIHO -- tamo i dalje radi vba_check kroz PostToolUse i provera mape iznad. Hook
+# koji bi tamo pao na svakom stop-u bio bi samo smetnja.
+"$PY" -c "import win32com.client" >/dev/null 2>&1 || exit 0
+
+# Suite kosta ~15s uz podizanje Excela.
 
 # Fixture je lokalan artefakt (.gitignore) -- bez njega suite nema nad cim.
 if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
@@ -37,7 +48,13 @@ if [ ! -f tests/fixtures/otkup_test.xlsm ]; then
     exit 2
 fi
 
-out="$("$PY" tools/run_vba.py --suite RunAllTests 2>&1)"
+# Podrazumevani set -- oko 1050 provera, ne samo nase tri. Vise nema eksplicitne
+# liste: katalog u tools/run_vba.py je jedini izvor istine (default: True), pa
+# nova suite ulazi u hook time sto je upisana tamo, a ne izmenom ovog fajla.
+#
+# NE prosirivati na --all: medju Run* procedurama nisu sve testovi
+# (RunSelfUpdate, RunGoogleAuthSetup...), a deo trazi mrezu ili live SEF nalog.
+out="$("$PY" tools/run_vba.py 2>&1)"
 rc=$?
 
 if [ "$rc" -ne 0 ]; then

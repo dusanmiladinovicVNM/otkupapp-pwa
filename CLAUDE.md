@@ -10,9 +10,31 @@
 
 ---
 
+## 0) Dijagnoza pre zakrpe
+
+**Kad se prijavi bug, prvo se pravi dokaz da postoji, pa tek onda ispravka.**
+Redosled nije stvar stila — bez njega se popravlja simptom, a pravilo koje je
+prekršeno ostaje prekršeno.
+
+1. **Reprodukuj.** Test u `modTest` koji pada iz tog razloga, ili merenje sa
+   priloženim izlazom. Ako se ne može reprodukovati, to je nalaz — reci da nije
+   reprodukovano i ne nagađaj ispravku.
+2. **Nađi pravilo.** Koja invarijanta je prekršena (`docs/DOMEN/README.md`) i ko
+   sve piše taj podatak (`docs/DOMEN/WHO_WRITES.md`). Isto polje često piše više
+   modula; zakrpa na jednom mestu ostavlja ostale.
+3. **Tek onda ispravka**, pa isti dokaz u oba smera (§5).
+
+U plan-modu plan mora da počne dokazom, ne rešenjem. Predlog ispravke bez
+reprodukcije je pretpostavka i tako se prijavljuje.
+
+Izuzetak su očigledne mehaničke greške (tipfeler, nedostajući argument) koje
+`vba_check` ionako hvata.
+
 ## 1) Pre svake izmene (obavezno)
 
 1. **Reference-first.** Pogledaj izvore istine:
+   - `docs/DOMEN/README.md` — šta dokumenti jesu i koje invarijante drže
+   - `docs/DOMEN/WHO_WRITES.md` — ko piše koju tabelu (generisano iz koda)
    - `docs/ARCHITECTURE_REFERENCE.md`, `docs/ARCHITECTURE_CHANGELOG.md`
    - `instructions/AGRIX_ARCHITECTURE_REFERENCE_FILLED_v6_12_DRAFT.md`
    - `instructions/DOMAIN_MODELS_REVIEW_DRAFT_v6_21_WITH_AGROHEMIJA.md`
@@ -39,12 +61,14 @@ Kratka mapa „gde šta živi" — ne praviti paralele:
 
 | Oblast | Gde | Detaljna pravila |
 |---|---|---|
+| Domen: šta dokumenti jesu, invarijante | `docs/DOMEN/` | `docs/DOMEN/README.md` |
+| Ko piše koju tabelu (vlasništvo) | generisano iz `src-vba/` | `docs/DOMEN/WHO_WRITES.md` |
 | Tabele / kolone / konstante | `modConfig.bas` (`TBL_*`, `COL_*`) | `.claude/rules/podaci-i-config.md` |
 | Pristup podacima | `modDataAccess.bas` (`GetTableData`/`GetColumnIndex`/`UpdateCell`/`AppendRow`/`GetNextID`/`LookupValue`) | ↑ isto |
 | Filter/sort/util nad nizovima | `modArrayUtils.bas`, `modHelpers.bas` | ↑ isto |
 | Config tabele (SEF / Local / legacy) | `tblSEFConfig`, `tblLocalConfig`, `tblConfig` | ↑ isto |
 | Setup / šeme / health-check | `modSetup`, `modAdmin`, `DebugKoloneTabele` | ↑ isto |
-| Otkup / dokumenta | `frmOtkup`+`modOtkup`, `frmDokumenta`+`modDokumenta` | — |
+| Otkup / dokumenta | `frmOtkup`+`modOtkup`, `frmDokumenta`+`modDokumenta` | `.claude/rules/otkup-i-dokumenta.md` |
 | Matični podaci (UI), forme, `.frx`, runtime kontrole | `frmMaticniPodaci`/`frmStammdaten`/`modMaticniLookups`, `clsBlokUI`, `clsUiSink` | `.claude/rules/forme-i-kontrole.md` |
 | Agrohemija / magacin, ambalaža, cenovnik | `modAgrohemija`, `modAmbalaza`, `modCenovnik` | `.claude/rules/agrohemija-i-cene.md` |
 | Banka — import izvoda i nalozi za isplatu | `modBankaImport`+parseri, `modBankaMapiranje`, `modBankaExportPregled` | `.claude/rules/banka.md` |
@@ -73,7 +97,16 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`. Minimum koji ne smeš zabora
 - **Šema tabela je izvor istine, ne kod** (schema drift po instalaciji). Pre upisa
   proveri stvarne nazive kolona.
 
-## 5) Verifikacija (CI ne pokreće Excel)
+## 5) Verifikacija — definicija gotovog
+
+> **Gotovo = zeleno nad ispravnim i dokazano crveno nad namerno pokvarenim kodom,
+> izlaz priložen.** Zadatak se ne preformuliše u uži koji je uspeo. „Nejasno" se
+> prijavljuje kao nejasno, nikad kao zeleno.
+
+Suite koja je zelena nad ispravnim kodom, a nije pokazana crvena nad pokvarenim,
+ne dokazuje da išta meri — to je u PR #181 bio ishod četiri puta. Kad dodaš ili
+menjaš proveru, pokvari kod namerno, pokaži da baš ta provera pukne po imenu, pa
+vrati kod i pokaži da je opet zeleno. Bez oba smera nije gotovo.
 
 **Posle svake izmene u `src-vba/` obavezno:**
 
@@ -85,10 +118,24 @@ Isti checker se vrti i kao PostToolUse hook (`.claude/hooks/vba-check.sh`) nad
 fajlom koji si upravo izmenio, pa nalaz stiže odmah. Ne prijavljuj izmenu kao
 gotovu dok nije zelen.
 
-Šta checker NE hvata: tip-greške, arnost, nepostojeći simbol — VBA se ovde ne
-kompajlira. Za to postoji `tools/run_vba.py` (Windows + Excel + `pywin32`,
-`--compile-only` je najbrži), a finalni smoke-test radi operater u Excelu.
-Detalji i `gate` vs „blind" suite: `.claude/rules/testovi.md`.
+Checker **hvata i tri najčešće compile greške** iz samog izvora, bez Excela:
+nepostojeći simbol (`NEDEFINISAN`), pogrešnu arnost (`ARNOST`) i duplu `Public`
+definiciju (`DUPLIKAT`). Namerno je usko — samo `.bas` i samo poziv u poziciji
+naredbe — jer je lažan nalaz u hook-u gori od propuštenog.
+
+Šta NE hvata: tip-greške, nedeklarisane promenljive, i bilo šta u `.frm`/`.cls`
+(tamo se nasleđeni članovi zovu bez kvalifikatora, pa bi lažni nalazi bili
+pravilo). Za to treba Excel.
+
+**Ponašanje se ne proverava statički.** Izmena koja se uredno kompajlira, a menja
+ponašanje, hvata se samo test suite-om: `python tools/run_vba.py`. To traži
+**Windows + Excel + `pywin32`** i zato **ne radi u Linux/macOS sesiji** (Claude
+Code na webu). U takvoj sesiji `Stop` hook prolazi tiho — što znači da sesija
+može da se završi „zeleno" **bez ijednog testa ponašanja**. Ne čitaj to kao
+verifikovano: za VBA izmene koje diraju ponašanje, sesija ide na Windows mašinu,
+ili izmena ostaje neverifikovana i tako se prijavljuje.
+
+Detalji, katalog suite-ova i `gate` vs „blind": `.claude/rules/testovi.md`.
 
 Uz to i dalje: balans `Sub`/`Function`/`Select Case`, `git merge-tree` za
 konflikte. Forme: izmene su u kodu, `.frm` ide sa svojim `.frx` parom.
@@ -102,8 +149,11 @@ Detalji: `.claude/rules/git-i-release.md`. Uvek važi:
   → rebase lokalno → **pokaži rezultat** → `push --force-with-lease` tek po
   odobrenju. Nikad force-push pre pokazivanja.
 - **Na kraju svake izmene koda:** git bash komande za preuzimanje grane
-  (`~/Documents/GitHub/otkupapp-pwa` = `ImportAllVBA` folder) + kratka numerisana
-  test-checklista u chatu (klik po klik, očekivani rezultat).
+  (`~/Documents/GitHub/otkupapp-pwa` = `ImportAllVBA` folder).
+- **Izmena ponašanja nosi test u `modTest`** — ne checklistu. Checklista u chatu
+  je samo za ono što se ne može automatizovati: izgled forme, štampa, PDF,
+  ponašanje nad pravim podacima. Checklista NIJE zamena za test koji je moguće
+  napisati; ako je moguć, piše se.
 
 ---
 

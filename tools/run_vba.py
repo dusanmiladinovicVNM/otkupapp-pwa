@@ -14,10 +14,13 @@ Upotreba:
     python tools/run_vba.py --all
     python tools/run_vba.py --workbook "C:\\putanja\\AgriX_OtkupApp.xlsm"
 
-Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`, a ako ga nema,
-skript ga sam napravi kao PRAZNU .xlsm. Za compile je to dovoljno; suite-ovima
-trebaju podaci, pa im prosledi pravu radnu svesku kroz `--workbook`. Sveska se
-uvek kopira u temp -- original se ne dira. Detalji: docs/EXCEL_TEST_HARNESS.md.
+Sveska: bez `--workbook` koristi se `tests/fixtures/otkup_test.xlsm`. Ako ga nema,
+skript napravi PRAZNU .xlsm -- dovoljno za compile, ali NE i za suite (prazna
+sveska nema tabele). Pravi fixture se pravi sa `tools/make_fixture.py`; sadrzi
+samo sinteticke podatke, a suite koje diraju tabele ionako seju sebi svoje
+(SVT-*, BIT-*, TST-*) u transakciji koja se uvek ponistava -- prava radna sveska
+im NIJE potrebna. Sveska se uvek kopira u temp, original se ne dira.
+Detalji: docs/EXCEL_TEST_HARNESS.md.
 
 Izlazni kod: 0 = zeleno, 2 = palo (compile greska, pala suite, ili neocekivan dijalog).
 
@@ -61,17 +64,17 @@ SUITES = {
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
     "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunFakturaSmokeSuite":     {"gate": True,  "dialogs": True,  "default": True},
-    "Test_StornoCentar_All":    {"gate": False, "dialogs": False, "default": True},
-    "TestLicense_All":          {"gate": False, "dialogs": False, "default": True},
+    "Test_StornoCentar_All":    {"gate": True,  "dialogs": False, "default": True},
+    "TestLicense_All":          {"gate": True,  "dialogs": False, "default": True},
     # Nisu u podrazumevanom setu: traze mrezu, live SEF nalog ili duze rade.
     "RunGoogleSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunMasterSyncSmokeSuite":  {"gate": True,  "dialogs": True,  "default": False},
     "RunSEFTestSuite":          {"gate": True,  "dialogs": True,  "default": False},
-    "RunStornoTestSuite":       {"gate": False, "dialogs": True,  "default": False},
-    "RunPaleteTestSuite":       {"gate": False, "dialogs": True,  "default": False},
+    "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
+    "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
-    "RunBusinessFlowProSuite":  {"gate": False, "dialogs": True,  "default": False},
-    "RunAgrohemijaSmokeSuite":  {"gate": False, "dialogs": True,  "default": False},
+    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},
 }
@@ -288,6 +291,41 @@ def _has_vb_header(path: str) -> bool:
     with open(path, "r", encoding="ascii", errors="replace") as fh:
         first = fh.readline()
     return "Attribute VB_Name" in first or first.lstrip().upper().startswith("VERSION")
+
+
+def report_orphan_components(wb, log: list[str]) -> None:
+    """Moduli koji postoje u svesci a NEMA ih u src-vba/.
+
+    Import prepisuje samo ono sto repo ima; zaostao modul iz donora ostaje i
+    izvrsava se. Ako nosi Public ime koje postoji i u svezem kodu, VBA to vidi kao
+    "Ambiguous name" i odbija da pokrene makro iz njega -- sto izgleda kao
+    "Cannot run the macro", a ne kao compile greska. Tako je TestLicense_All bio
+    mrtav a `vba_check` uredno zelen: duplikat nije bio u repou nego u svesci.
+
+    Samo prijavljuje. Brisanje bi bilo agresivno prema svesci koju je operater
+    prosledio kroz --workbook.
+    """
+    STD, CLS, FRM = 1, 2, 3          # vbext_ct_StdModule / ClassModule / MSForm
+    have = {os.path.splitext(n)[0].lower()
+            for n in os.listdir(SRC_VBA)
+            if os.path.splitext(n)[1] in (".bas", ".cls", ".frm")}
+
+    orphans = []
+    for vbc in wb.VBProject.VBComponents:
+        try:
+            if int(vbc.Type) not in (STD, CLS, FRM):
+                continue                      # document moduli se merge-uju, ne brisu
+            name = str(vbc.Name)
+        except Exception:
+            continue
+        if name.lower() == SELF_MODULE.lower():
+            continue
+        if name.lower() not in have:
+            orphans.append(name)
+
+    if orphans:
+        log.append(f"ORPHAN {len(orphans)} modul(a) u svesci bez para u src-vba/ "
+                   f"(mogu da daju 'Ambiguous name'): " + ", ".join(sorted(orphans)))
 
 
 def import_src_vba(wb, log: list[str]) -> None:
@@ -708,6 +746,7 @@ def main(argv: list[str]) -> int:
 
         if not args.no_import:
             import_src_vba(wb, report["import"])
+            report_orphan_components(wb, report["import"])
 
         # Compile se radi UVEK -- i uz --compile-only i pre suite-ova. To je
         # najjeftiniji gate koji hvata najcescu klasu kvara posle Edit/Write nad
@@ -729,6 +768,19 @@ def main(argv: list[str]) -> int:
             # Da bi se RunAllTests uopste pokrenuo, VBA mora da kompajlira modTest
             # i sve sto on referencira -- a to je bas kod pod testom. Verdikt probe
             # se i dalje racuna i ispisuje nepromenjen, samo vise nije prepreka.
+            # Fixture dolazi iz starijeg donora (npr. 2.28.4), a kod je noviji --
+            # kolone dodate u medjuvremenu ne postoje dok se ne pokrene schema
+            # upgrade. Bez ovoga je RunBusinessFlowProSuite davao 147/310 palih
+            # provera, a uzrok je izgledao kao regresija. Rutina je idempotentna
+            # (EnsureColumnOnTable je no-op kad kolona postoji), pa se vrti uvek.
+            # Isti redosled trazi i modTestStornoCentar (v. komentar na vrhu tog
+            # modula). Mora POSLE importa -- schema pravila dolaze iz svezeg koda.
+            try:
+                xl.Run("EnsureRuntimeSchema")
+                report["schema"] = "OK"
+            except Exception as exc:        # noqa: BLE001
+                report["schema"] = f"FAIL {exc}"
+
             failed = 0
             for suite in chosen_suites(args):
                 meta = SUITES[suite]
@@ -752,7 +804,9 @@ def main(argv: list[str]) -> int:
                         entry["status"] = "OK" if meta["gate"] else "BLIND"
                 entry["seconds"] = round(time.time() - t0, 1)
                 report["suites"].append(entry)
-            rc = 2 if failed else 0
+            # Pala priprema seme = rezultati nisu merodavni, pa run pada i kad su
+            # sve suite zelene. Neuspela pretpostavka se ne precutkuje.
+            rc = 2 if (failed or report.get("schema", "OK") != "OK") else 0
 
     except Exception as exc:                # noqa: BLE001
         report["fatal"] = str(exc)
@@ -768,9 +822,16 @@ def main(argv: list[str]) -> int:
         except Exception:
             pass
         try:
-            # SaveChanges=False eksplicitno -- goli Workbooks.Close() pita.
+            # SaveChanges eksplicitno -- goli Workbooks.Close() pita.
+            #
+            # Uz --keep se SNIMA: temp kopija se zadrzava bas zato da bi se u njoj
+            # gledao trag rana (log sheet-ovi koje pisu suite, npr.
+            # BUSINESS_FLOW_PRO_TEST_LOG za tools/read_test_log.py). Bez snimanja
+            # se zadrzi fajl u stanju PRE rana, pa trijaza cita tudji, stariji run
+            # i ne zna da ga cita. Original se ni ovde ne dira -- radi se nad temp
+            # kopijom.
             while int(xl.Workbooks.Count) > 0:
-                xl.Workbooks(1).Close(SaveChanges=False)
+                xl.Workbooks(1).Close(SaveChanges=bool(args.keep))
         except Exception:
             pass
 
@@ -830,6 +891,10 @@ def _write_report(report: dict, rc: int) -> None:
         # jedan run mora da nosi dovoljno podataka za dijagnozu.
         for key, value in (c.get("detail") or {}).items():
             lines.append(f"        {key} = {value!r}")
+
+    schema = report.get("schema")
+    if schema:
+        lines.append(f"SCHEMA  {schema}")
 
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"

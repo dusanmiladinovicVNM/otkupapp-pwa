@@ -976,14 +976,18 @@ Sva tri su izašla tek kroz pokretanje, ne kroz čitanje koda:
 - **`run_vba.py` je dopunjen, ne prepisan:** `RunAllTests` u `SUITES` katalogu, verdikt iz `last_run.txt` pored sveske (a ne iz „`Run()` nije pukao", jer `modTest` hvata grešku po testu da jedan pad ne obori ostale), **nema `last_run.txt` → exit 2**, golden fajlovi u temp pre rana i nazad posle.
 - **Compile verdikt više ne obara run kad suite-ovi idu.** `COMPILE NEJASNO` se i dalje ispisuje nepromenjen, ali odgovor nose testovi: da bi se `RunAllTests` uopšte pokrenuo, VBA mora da kompajlira `modTest` i sve što on referencira — a to je baš kod pod testom. Eksplicitan compile `FAIL` i dalje pada, kao i `NEJASNO` uz `--compile-only`, gde je probe jedini izvor istine.
 
-**Zatečeni padovi — prijavljeni, NISU popravljani**
+**Zatečeni padovi — prijavljeni, ne popravljani u ovom PR-u**
 
-Golo `python tools/run_vba.py` (pun set suite-ova) je crveno zbog dva pada koji postoje nezavisno od ove suite. Svaki zaslužuje svoj zadatak i nije diran:
+Prvo pokretanje golog `python tools/run_vba.py` (pun set suite-ova) dalo je dva pada nezavisna od ove suite. Nijedan nije diran ovde; jedan je u međuvremenu rešen zasebno:
 
-- **`RunBankaImportTestSuite` — `PASS=186 FAIL=1`.** Pada `T13` (`modTestBanka.bas:863`): nalog od `600.005`, zaokružen na `600.01`, treba da bude odbijen kao veći od otvorenog iznosa, a `ValidateNalogSaldo` ga propušta. Granični slučaj u logici oko novca.
+- **`RunBankaImportTestSuite` — `PASS=186 FAIL=1`** na prvom pokretanju. **Rešeno u #183, i to nije bio bug u produkciji nego u test vektoru:** `600.005` se u `Double`-u čuva kao `600.00499999...`, dakle ispod pola pare, pa ga half-up zaokruživanje korektno spušta na `600.00` — `ValidateNalogSaldo` je bio u pravu. Vektor je zamenjen jednoznačnim `600.006`, a za vrednost tačno na pola pare se sada tvrdi invarijanta (iznos u fajlu ne prelazi otvoreno) umesto smera zaokruživanja. Vredi zabeležiti kako je nađen: suite koja je puštena zbog sasvim drugog posla iznela je dvosmislen vektor koji je stajao u repou.
 - **`TestLicense_All` — „Cannot run the macro".** Makro postoji (`modLicenseTests.bas:18`, `Public Sub`) i import prolazi bez primedbe, pa je najverovatnije compile greška u `modLicenseTests` (VBA kompajlira lenjo i odbija da pokrene makro iz modula koji ne prolazi). **Nije potvrđeno** — za potvrdu treba `Alt+F11 → Debug → Compile` ručno.
 
-Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv.
+Dok `TestLicense_All` stoji, akceptaciona komanda za ovu suite je `--suite RunAllTests`, a ne goli poziv. Kad se i to raščisti, u `.claude/hooks/vba-test.sh` se `--suite RunAllTests` menja golim pozivom i hook počinje da vrti ceo podrazumevani set — blizu 300 provera pod gate-om umesto tri.
+
+**Šta je zapravo najveća promena**
+
+Vredi izdvojiti, jer se lako previdi pored tri nova testa: do sada se **nijedna** postojeća suite nije pokretala kroz `run_vba.py`. Compile probe je vraćao `NEJASNO`, `rc = 2` je padao pre suite petlje, i petlja se nikad nije dosegla — suite su postojale, ali samo kao ručni `Alt+F8`. Otkad probe više ne obara run, jedna komanda vrti ceo podrazumevani set: `RunSheetsJsonParserTests` (72), `RunBankaImportTestSuite` (187), `RunFakturaSmokeSuite` (35), `RunIzvestajTests`, `RunAllTests` (3) pod gate-om, plus `Test_StornoCentar_All` (88) kao blind. Tri nova testa su manji deo dobitka od toga.
 
 **Rizik za podatke i verifikacija**
 
@@ -992,3 +996,36 @@ Zato je akceptaciona komanda za ovu suite `--suite RunAllTests`, a ne goli poziv
 - **Novi moduli u `.xlsm`:** `modTestMode.bas` (mora da se isporučuje — referencira ga `frmOtkup`) i `modTest.bas` (test modul, kao postojeći `mod*Tests`; ne radi ništa dok se ne pozove).
 - **Stanje verifikacije:** `python3 tools/vba_check.py` — **177 fajlova, čisto, exit 0**. `tools/run_vba.py --self-test` čist. `--suite RunAllTests` **3/3 OK, exit 0**; sve tri sabotaže daju exit 2 sa imenom ciljanog testa; posle reverta ponovo 3/3.
 - **Dodirnuti fajlovi:** `src-vba/modTest.bas` (nov), `src-vba/modTestMode.bas` (nov), `src-vba/frmOtkup.frm` (2 linije), `tools/make_fixture.py` (nov), `tools/dump_schema.py` (nov), `tools/run_vba.py` (dopuna), `.claude/hooks/vba-test.sh` (nov), `.claude/settings.json`, `.claude/rules/testovi.md`, `.gitattributes` (nov), `tests/golden/PosleSnimanja_KontekstOtpremnice.txt` (nov), `docs/TEST_SUITE_OTKUP_HANDOFF.md` (nov).
+
+---
+
+## vba-v2.39.3 — 2026-08-14
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Rizik za aplikaciju: nikakav** — dirani su isključivo test moduli
+> (`mod*Tests`, `modTest*`), i to samo dodavanjem `Err.Raise` na kraju suite-a.
+> Nijedna produkciona rutina, nema promene šeme, `.frx` netaknut.
+>
+> **Suština:** zaštita po sesiji je otišla sa **3 provere na ~1050**, i to ne
+> pisanjem novih testova nego time što su postojeći prestali da lažu.
+
+**„Blind" suite nisu bile zaštita nego privid**
+
+- **Suite sa `gate: False` je runner prijavljivao kao „prošla bez greške", što NIJE „sve provere prošle".** Rezultat je postojao samo u Immediate prozoru; pale provere niko nije video. Pet takvih suite-ova prevedeno je u `gate`: `RunStornoTestSuite` (181), `Test_StornoCentar_All` (88), `RunPaleteTestSuite` (97), `RunAgrohemijaSmokeSuite` (25), `RunBusinessFlowProSuite` (336), `TestLicense_All` (23). Konverzija je po tri linije jer su sve već brojale padove — samo nisu podizale grešku.
+- **Svaka je dokazana u oba smera:** namerno oborena jedna provera → `exit 2` sa imenom baš te suite → `git checkout` → ponovo zeleno. Bez tog dokaza konverzija se ne prijavljuje kao gotova (`CLAUDE.md` §5).
+- **„Suite se nije pokrenuo" nije „prošlo".** Uz konverziju su zatvorene četiri putanje tihog `Exit Sub` pre nego što ijedna provera krene — paletiranje isključeno, zatečen `TST-` ostatak, operater odustao na potvrdi, dev-guard odbijen. Sve su runneru izgledale kao `OK`; sada podižu grešku sa porukom koja počinje `suite NIJE pokrenut:`.
+
+**Dva „nalaza" koja to nisu bila**
+
+- **147 palih provera u `RunBusinessFlowProSuite` nije bila regresija nego nepripremljena sveska.** Fixture nastaje iz starijeg donora (2.28.4), a kod je noviji; kolone dodate u međuvremenu ne postoje dok se ne pusti schema upgrade. `run_vba.py` sada **uvek** pušta `EnsureRuntimeSchema` posle importa a pre suite-ova i ispisuje `SCHEMA OK` / `SCHEMA FAIL`. Posle toga suite daje `336/336`. Pala priprema šeme obara run i kad su sve suite zelene.
+- **`TestLicense_All` („Cannot run the macro") nije bila compile greška nego zaostali duplikat u svesci.** Fixture je nasleđivao **131** VBA modul iz donora; import prepisuje samo ono što repo ima, pa zaostali modul ostaje i izvršava se — a duplo `Public` ime daje „Ambiguous name". Otud je ručno pokretanje prolazilo (druga sveska), driver padao (fixture), a `vba_check` bio zelen s pravom (duplikata u repou nema). `make_fixture.py` sada uklanja sav kod iz donora; za sveske iz `--workbook` driver ih ne briše nego prijavljuje kao `ORPHAN`.
+
+**Alati**
+
+- **`tools/read_test_log.py`** — čita log sheet suite-a i grupiše padove po temi i po razlogu (`pao / ukupno`), da se masovan pad razlikuje od pojedinačnog. `run_vba.py --keep` sada i **snima** temp kopiju; ranije ju je čuvao u stanju pre rana, pa je trijaža čitala stariji, tuđi run.
+- **`Stop` hook pušta goli `run_vba.py`.** Katalog `SUITES` je jedini izvor istine — nova suite ulazi u gate time što je upisana sa `default: True`, bez diranja hook-a.
+
+**Stanje verifikacije**
+
+- Golo `python tools/run_vba.py` → **`EXIT=0`**, 11 suite-ova, `SCHEMA OK`, **bez `BLIND` reda**. Banka 189, BFP 336, storno 181, palete 97, centar 88, json 72, faktura 35, agro 25, licenca 23, `modTest` 3, plus `RunIzvestajTests`.
+- Svih šest konverzija pokazano crveno pod sabotažom i vraćeno u zeleno.
+- `python3 tools/vba_check.py` — 177 fajlova, čisto.

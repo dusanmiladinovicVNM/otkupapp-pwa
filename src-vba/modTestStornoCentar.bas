@@ -16,6 +16,11 @@ Option Explicit
 Private mPass As Long
 Private mFail As Long
 
+' Gate: bez ovoga runner vidi suite kao "blind" -- proslo bez greske, sto NIJE
+' isto sto i sve provere prosle. Pojedinacni Test_*_Auto vec hvataju gresku i
+' broje mFail; ovde se taj zbir pretvara u verdikt. Konvencija: modTestBanka.
+Private Const ERR_STORNOCENTAR_SUITE_FAILED As Long = vbObjectError + 2963
+
 Public Sub Test_StornoCentar_All()
     mPass = 0: mFail = 0
     Test_StampIspravkaTrace_Auto
@@ -42,6 +47,12 @@ Public Sub Test_StornoCentar_All()
     Test_StornoJournalEmptyBrDokUndo_Auto
     Test_ImpactHeaderSum_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
+
+    If mFail > 0 Then
+        Err.Raise ERR_STORNOCENTAR_SUITE_FAILED, "modTestStornoCentar.Test_StornoCentar_All", _
+            "Test_StornoCentar_All: " & CStr(mFail) & " provera palo (PASS=" & _
+            CStr(mPass) & "). Detalji u Immediate prozoru."
+    End If
 End Sub
 
 ' #6: impact header kolicina = SUMA aktivnih Klasa I+II (ranije citao samo prvu klasu

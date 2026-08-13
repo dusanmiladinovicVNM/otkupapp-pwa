@@ -26,6 +26,11 @@ Private m_Passed As Long
 Private m_Failed As Long
 Private m_Skipped As Long
 
+' Gate: suite mora da PODIGNE gresku i kad provera padne i kad se uopste NE
+' pokrene (dev-guard odbijen). Tih Exit Sub bi runner video kao OK -- "nije
+' pokrenuto" nije "proslo". Konvencija: modTestBanka.ERR_BIT_SUITE_FAILED.
+Private Const ERR_AGRO_SUITE_FAILED As Long = vbObjectError + 2965
+
 Private Const ART_TEST As String = "ART-TEST-AGRO"
 Private Const KOOP_TEST As String = "KOOP-TEST-AGRO"
 Private Const KOOP_OTHER As String = "KOOP-OTHER-AGRO"
@@ -44,7 +49,8 @@ Public Sub RunAgrohemijaSmokeSuite()
               "Privremeno menja tblMagacin/Artikli/Kooperanti/Parcele i vraca ih " & _
               "rollback-om; journaling i AutoSave su ugaseni za vreme testa." & vbCrLf & vbCrLf & _
               "Pokrenuti?", vbYesNo + vbQuestion + vbDefaultButton2, APP_NAME) <> vbYes Then
-        Exit Sub
+        Err.Raise ERR_AGRO_SUITE_FAILED, "modAgrohemijaTests.RunAgrohemijaSmokeSuite", _
+            "suite NIJE pokrenut: dev-guard odbijen"
     End If
 
     On Error GoTo EH
@@ -92,16 +98,31 @@ Public Sub RunAgrohemijaSmokeSuite()
     CleanupAgroTestMode quietSet
     quietSet = False
 
+    On Error GoTo 0
     FinishAgroSuite
+
+    If m_Failed > 0 Then
+        Err.Raise ERR_AGRO_SUITE_FAILED, "modAgrohemijaTests.RunAgrohemijaSmokeSuite", _
+            "RunAgrohemijaSmokeSuite: " & CStr(m_Failed) & " provera palo (PASS=" & _
+            CStr(m_Passed) & "). Detalji u Immediate prozoru."
+    End If
+
     Exit Sub
 
 EH:
-    LogAgroFatal "RunAgrohemijaSmokeSuite", Err.Number, Err.description
+    Dim errDesc As String
+    errDesc = Err.description
+
+    LogAgroFatal "RunAgrohemijaSmokeSuite", Err.Number, errDesc
     On Error Resume Next
     If txStarted And Not tx Is Nothing Then tx.RollbackTx
     If quietSet Then CleanupAgroTestMode True
     On Error GoTo 0
     FinishAgroSuite
+
+    ' Prekid je pad, ne "nije se desilo".
+    Err.Raise ERR_AGRO_SUITE_FAILED, "modAgrohemijaTests.RunAgrohemijaSmokeSuite", _
+        "RunAgrohemijaSmokeSuite prekinut: " & errDesc
 End Sub
 
 Private Sub CleanupAgroTestMode(ByVal wasSet As Boolean)
