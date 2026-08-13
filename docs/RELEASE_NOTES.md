@@ -1029,3 +1029,56 @@ Vredi izdvojiti, jer se lako previdi pored tri nova testa: do sada se **nijedna*
 - Golo `python tools/run_vba.py` → **`EXIT=0`**, 11 suite-ova, `SCHEMA OK`, **bez `BLIND` reda**. Banka 189, BFP 336, storno 181, palete 97, centar 88, json 72, faktura 35, agro 25, licenca 23, `modTest` 3, plus `RunIzvestajTests`.
 - Svih šest konverzija pokazano crveno pod sabotažom i vraćeno u zeleno.
 - `python3 tools/vba_check.py` — 177 fajlova, čisto.
+
+---
+
+## vba-v2.40.0 — 2026-08-14
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: NIJE online update.** Paket nosi **novu formu** (`frmOtkupUI.frm/.frx`),
+> a `modSelfUpdate` novu formu namerno rutira na `needsReinstall` (runtime
+> `Remove`/`Import` forme ume da korumpira svesku). Prelazak traži **jednokratnu
+> punu isporuku** — nov `AgriX_OtkupApp.xlsm` ili `ImportAllVBA` po mašini.
+>
+> **Legacy se NE gasi.** `frmOtkup` i `frmDokumenta` rade nepromenjeno; novi UI se
+> gradi paralelno i preuzima posao tek kad u kompletu bude umeo sve što one umeju.
+
+**Novi ekran otkupa i dokumenata (`frmOtkupUI`)**
+
+- Jedna runtime forma umesto 19 zatečenih: ljuska `modOtkupUI` (zaglavlje, KPI, kontekst, forma, mreža, sidebar) + ekranski moduli `modScr*` koji se zovu kasno vezano. Kontrole se grade u runtime-u (`Controls.Add`), `.frx` se ne dira, `WithEvents` živi isključivo u `clsFlatBtn`.
+- **F1 Otkupni list** — pet lista (svi listovi, otpremnice, blokovi, izgubljeni, kooperanti), radnje nad redom (štampa, storno, specifikacija, preuzmi), višestruki izbor otpremnica za štampu, filter po opsegu datuma i štampa svega filtriranog, traka aktivne otpremnice sa ostatkom.
+- **Prefill sa otpremnice:** klik na otpremnicu prepisuje sve što ona zna (datum, roba, otkupno mesto, vozač, tip ambalaže, cena, broj zbirne), operateru ostaju kooperant i količine.
+- **Palete** — tri liste (palete, stavke, prerade) sa radnjama (štampa, PDF, zatvaranje, storno, nepotpune).
+- Pravila unosa iz legacy formi: cena iz cenovnika, tip ambalaže iz kulture, živi zbir kg / neto iz bruta, info o paleti, podrazumevani proizvod, predlog broja dokumenta, kontekst otkupnog mesta i datuma.
+
+**Upis (Faza B, u toku)**
+
+- Poslovna logika unosa **izdvojena iz formi u module bez kontrola**: `modOtkupUnos` (otkupni list) i `modDokUnos` (otpremnica). Provere u legacy redosledu, bruto→neto sa zamrzavanjem `BrutoKg`, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna (MALINA), završetak ispravke.
+- Knjiže se **otkupni list (F1)** i **otpremnica (F2)**. Zbirna, prijemnica, OM ulaz i kupci izlaz još ne upisuju.
+- Keš isplate uz otkupni list **namerno ne prelaze** — idu isključivo kroz F5/F6.
+
+**Brojevni niz po režimu — ispravljena tri kvara**
+
+- **Zbirna se broji po vozaču**, ne po otkupnom mestu. Predlog je slao stanicu kao entitet, a `ApplyMirrorPrefix` gleda da li je entitet mirror-vozač — pa se `S` prefiks pojavljivao i van zbirnih.
+- **Reversi nisu dobijali broj:** `modeKey` vraća `"REVERSI"`, a uslov je proveravao `"REVERS"`.
+- **Prijemnica je dobila predlog** (`GenerateBrojPrijemnice`, `1/ddmmyy`), gejtovan na hladnjača-kupca; ostali kupci nose eksterni broj i polje se ne dira.
+- Predlog prati promenu otkupnog mesta, datuma, režima, vozača i kupca. Pad zaključavanja stanice više ne preskače preračun.
+
+**Ispravke koje se tiču podataka**
+
+- **`ParcelaID` je u `tblOtkup` upisivao ceo prikazni string** umesto ID-a: vadio ga je iz teksta tražeći `" - "`, a lista parcela gradi prikaz sa `ChrW(183)`. Sada se čita skrivena kolona combo-a, kao kod svih ostalih.
+- **Datum u putu upisa bio locale-zavisan** (`IsDate`/`CDate`), dok ga predlog broja i zaključavanje već čitaju kroz `TryParseDateValue` — isti tekst je mogao dati dva datuma. Sada ide isključivo kroz deterministički parser.
+- **Kontekst otpremnice se gubio posle snimanja:** datum se vraćao na danas, pa je drugi blok otpremnice od 22.07 dobijao današnji datum i današnji broj. Isto i broj zbirne, koji je usput brisalo i ponovno punjenje liste (`ComboBox.Clear` briše i vrednost).
+- **Zaključana stanica se nije puštala** pri zatvaranju ekrana (forma se sakriva, `Terminate` ne puca).
+
+**Revizija ulaznog sloja 1:1 sa legacy**
+
+Prođen ceo reaktivni sloj obe legacy forme i upoređen sa novim UI-jem; zatvoreno: parcela postavlja vrstu/sortu, promena stanice briše kooperanta i parcelu, lista kooperanata se sužava na otkupno mesto (`KOOP_FILTER_BY_OM`), prazan entitet briše predlog broja, promena kupca u prijemnici briše broj pre predloga, predlog uvažava i udaljeni maksimum (Google) na promenu stanice i datuma. Popis svih legacy handlera sa statusom je `docs/UI_MIGRACIJA_KATALOG.md` (Z3b).
+
+**Alat**
+
+- `tools/vba_check.py`: uzak izuzetak od `DUPLIKAT` za ugovor ekrana (`Scr_*` u `modScr*`) — ljuska ih zove isključivo kvalifikovano i kasno vezano, pa „Ambiguous name" ne nastaje. Dokazano u oba smera: ista procedura u bilo kom drugom modulu i dalje pada.
+
+**Stanje verifikacije**
+
+- `python3 tools/vba_check.py` → **čisto (187 fajlova)**, exit 0.
+- `python tools/run_vba.py` **NIJE pokrenut** — sesija je bila na Linuxu (traži Windows + Excel + `pywin32`). **Novi UI sloj nema nijedan test ponašanja** i tako se i prijavljuje: neverifikovano, ne zeleno. Sledeći korak je `modTest` za `modOtkupUI.ClearForm` po ugovoru iz `.claude/rules/otkup-i-dokumenta.md` §1.

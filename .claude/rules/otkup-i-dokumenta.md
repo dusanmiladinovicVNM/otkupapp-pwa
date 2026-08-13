@@ -68,7 +68,26 @@ koraci koji **ne smeju** da obore potvrdu snimanja (`OutputOtkupniList`,
 Ne dodavati upis u tabele mimo `SaveOtkupMulti_TX`, i ne premeštati best-effort
 korake iznad nje.
 
-## 5) Verifikacija
+## 5) Novi UI (`frmOtkupUI`) postoji paralelno — legacy se NE gasi
+
+Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
+`modOtkupUI` + ekranski moduli `modScr*`). **Dok oba sistema ne budu potpuna,
+`frmOtkup` i `frmDokumenta` ostaju potpuno operativni i ne diraju se.**
+
+- **Izvor istine za stanje prelaska:** `docs/UI_MIGRACIJA_KATALOG.md` — pravila
+  Z1–Z14, brojevni niz po režimu (Z3a), revizija ulaznog sloja 1:1 (Z3b),
+  isporuka (Z3c) i plan po fazama. „Šta još nije preneto" se čita odatle, ne
+  zaključuje iz koda.
+- **Poslovna logika unosa je izdvojena iz formi:** `modOtkupUnos` (otkupni list)
+  i `modDokUnos` (otpremnica…) — bez ijedne kontrole, zovu ih i ekran i, kad za
+  to dođe red, forma.
+- **Prelazno pravilo:** pravilo unosa se menja u tim modulima, pa se **ručno
+  preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
+  namerno.
+- Ugovor `ClearOtkupFields` iz §1 važi i za `modOtkupUI.ClearForm` — ista tri
+  ponašanja, ista tri razloga.
+
+## 6) Verifikacija
 
 Izmena u ovoj oblasti nosi test u `modTest` — vidi `.claude/rules/testovi.md`.
 Checklista u chatu je samo za ono što se ne može automatizovati (izgled forme,
