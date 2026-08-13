@@ -73,7 +73,7 @@ SUITES = {
     "RunStornoTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunPaleteTestSuite":       {"gate": True,  "dialogs": True,  "default": True},
     "RunNovacSmokeSuite":       {"gate": False, "dialogs": True,  "default": False},
-    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": False},
+    "RunBusinessFlowProSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunAgrohemijaSmokeSuite":  {"gate": True,  "dialogs": True,  "default": True},
     "RunProductionHealthCheck": {"gate": False, "dialogs": True,  "default": False},
     "TestMonitoring_All":       {"gate": False, "dialogs": False, "default": False},
@@ -732,6 +732,19 @@ def main(argv: list[str]) -> int:
             # Da bi se RunAllTests uopste pokrenuo, VBA mora da kompajlira modTest
             # i sve sto on referencira -- a to je bas kod pod testom. Verdikt probe
             # se i dalje racuna i ispisuje nepromenjen, samo vise nije prepreka.
+            # Fixture dolazi iz starijeg donora (npr. 2.28.4), a kod je noviji --
+            # kolone dodate u medjuvremenu ne postoje dok se ne pokrene schema
+            # upgrade. Bez ovoga je RunBusinessFlowProSuite davao 147/310 palih
+            # provera, a uzrok je izgledao kao regresija. Rutina je idempotentna
+            # (EnsureColumnOnTable je no-op kad kolona postoji), pa se vrti uvek.
+            # Isti redosled trazi i modTestStornoCentar (v. komentar na vrhu tog
+            # modula). Mora POSLE importa -- schema pravila dolaze iz svezeg koda.
+            try:
+                xl.Run("EnsureRuntimeSchema")
+                report["schema"] = "OK"
+            except Exception as exc:        # noqa: BLE001
+                report["schema"] = f"FAIL {exc}"
+
             failed = 0
             for suite in chosen_suites(args):
                 meta = SUITES[suite]
@@ -755,7 +768,9 @@ def main(argv: list[str]) -> int:
                         entry["status"] = "OK" if meta["gate"] else "BLIND"
                 entry["seconds"] = round(time.time() - t0, 1)
                 report["suites"].append(entry)
-            rc = 2 if failed else 0
+            # Pala priprema seme = rezultati nisu merodavni, pa run pada i kad su
+            # sve suite zelene. Neuspela pretpostavka se ne precutkuje.
+            rc = 2 if (failed or report.get("schema", "OK") != "OK") else 0
 
     except Exception as exc:                # noqa: BLE001
         report["fatal"] = str(exc)
@@ -771,9 +786,16 @@ def main(argv: list[str]) -> int:
         except Exception:
             pass
         try:
-            # SaveChanges=False eksplicitno -- goli Workbooks.Close() pita.
+            # SaveChanges eksplicitno -- goli Workbooks.Close() pita.
+            #
+            # Uz --keep se SNIMA: temp kopija se zadrzava bas zato da bi se u njoj
+            # gledao trag rana (log sheet-ovi koje pisu suite, npr.
+            # BUSINESS_FLOW_PRO_TEST_LOG za tools/read_test_log.py). Bez snimanja
+            # se zadrzi fajl u stanju PRE rana, pa trijaza cita tudji, stariji run
+            # i ne zna da ga cita. Original se ni ovde ne dira -- radi se nad temp
+            # kopijom.
             while int(xl.Workbooks.Count) > 0:
-                xl.Workbooks(1).Close(SaveChanges=False)
+                xl.Workbooks(1).Close(SaveChanges=bool(args.keep))
         except Exception:
             pass
 
@@ -833,6 +855,10 @@ def _write_report(report: dict, rc: int) -> None:
         # jedan run mora da nosi dovoljno podataka za dijagnozu.
         for key, value in (c.get("detail") or {}).items():
             lines.append(f"        {key} = {value!r}")
+
+    schema = report.get("schema")
+    if schema:
+        lines.append(f"SCHEMA  {schema}")
 
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"

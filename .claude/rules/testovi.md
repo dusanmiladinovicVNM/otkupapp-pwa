@@ -198,33 +198,36 @@ Sve rade nad **sintetičkim** fixture-om — suite koje diraju tabele seju sebi
 podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`, `TST-*`), pa im
 prava radna sveska nije potrebna.
 
-**Ostalo u blind stanju: ~35 provera** — `TestLicense_All` (23),
-`RunNovacSmokeSuite` (12), plus `RunProductionHealthCheck` i `TestMonitoring_All`.
-Recept je iznad, u §3.
+Uz `RunBusinessFlowProSuite` (310) gate je **oko 1000 provera**.
 
-### `RunBusinessFlowProSuite` — 147 palih provera, zatečeno
+**Ostalo u blind stanju: ~35** — `TestLicense_All` (23), `RunNovacSmokeSuite` (12),
+plus `RunProductionHealthCheck` i `TestMonitoring_All`. Recept je iznad, u §3.
 
-Konvertovana je u `gate` (verdikt u `EndRun`, koji zovu sva četiri `Run*` runnera
-tog modula), ali je **van podrazumevanog seta i van `Stop` hook-a** dok se ne
-trijažira:
+Za trijažu masovnih padova: `run_vba.py --suite X --keep` zadrži temp kopiju i
+**snimi je**, pa `tools/read_test_log.py <temp>/otkup_test.xlsm` grupiše padove po
+temi i po razlogu. (Bez snimanja bi kopija ostala u stanju pre rana i trijaža bi
+čitala stariji, tuđi run — što se jednom i desilo.)
 
-```
-Total=310 | Passed=163 | Failed=147
-```
+### Šema se mora podići pre suite-ova — inače „regresija" koje nema
 
-**Te provere su padale i ranije** — suite je bila `blind`, pa je runner prijavljivao
-„prošla bez greške" dok je skoro polovina padala. Konverzija ih nije napravila nego
-otkrila; dokaz: sabotaža jedne provere pomera brojač za tačno `+1` (147 → 148 →
-147), dakle brojanje je suite-ovo i nepromenjeno.
+Fixture nastaje iz **starijeg donora** (npr. 2.28.4), a kod je noviji. Kolone
+dodate u međuvremenu ne postoje dok se ne pokrene schema upgrade, pa suite koje
+ih diraju padaju masovno — a izgleda kao regresija u proizvodu.
 
-Uzrok **nije utvrđen**. Dve hipoteze, obe neproverene: suite traži master podatke
-koje sintetički fixture nema (seje svoje kroz `SeedBusinessFlowProMasterData`, ali
-može zavisiti i od zatečenog config-a), ili je deo provera stvarno u regresiji.
-Trijaža ide kroz Immediate prozor posle
-`python tools/run_vba.py --suite RunBusinessFlowProSuite --keep`.
+`RunBusinessFlowProSuite` je na tome davao `Total=310 | Passed=163 | Failed=147`.
+Posle `EnsureRuntimeSchema` prolazi **100%**.
 
-Dok se to ne razreši, suite se pokreće ručno i njen verdikt je vidljiv — ali ne
-obara svaku sesiju.
+Zato `run_vba.py` sada **uvek** pusti `EnsureRuntimeSchema` posle importa a pre
+suite-ova, i ispiše `SCHEMA OK` / `SCHEMA FAIL`. Rutina je idempotentna
+(`EnsureColumnOnTable` je no-op kad kolona postoji). Pala priprema šeme obara run
+i kad su sve suite zelene — rezultati nad nepripremljenom šemom nisu merodavni.
+
+Redosled je bitan i nije proizvoljan: **posle importa**, jer schema pravila
+dolaze iz svežeg koda, ne iz onoga što je u donoru. Isto traži i komentar na vrhu
+`modTestStornoCentar`.
+
+> Ovo je bio i najskuplji promašaj u ovom poslu: 147 padova je izgledalo kao
+> nalaz o proizvodu, a bila je nepripremljena sveska.
 
 ### „Suite se nije pokrenuo" nije „prošlo"
 
