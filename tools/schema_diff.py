@@ -34,17 +34,19 @@ import sys
 # Ovde stoje SVA imena koja je jedna oblast nosila kroz istoriju; kad se ulazna
 # tacka opet preimenuje, dopisuje se novo ime, staro OSTAJE (inace alat prestane
 # da vidi semu u starijim verzijama fajla, sto mu je cela svrha).
+# NAMERNO bez `Setup*` omotaca: oni ne nose nijednu DDL operaciju, samo pozovu
+# jezgro i prikazu dijalog. Da su ovde, njihov poziv jezgra bi -- posto jezgro
+# pripada ISTOJ oblasti -- bio self-referenca i dao lazan <ciklus> marker koji
+# pomera ceo tok za jedno mesto.
 AREA_PROCS = {
-    "paletni": {"SetupPaletniListSchema", "EnsurePaletniListSchema",
-                "EnsurePaletniListSchemaCore"},
+    "paletni": {"EnsurePaletniListSchema", "EnsurePaletniListSchemaCore"},
     "cenovnik": {"EnsureCenovnikSchema"},
-    "stornoveze": {"SetupStornoVezeSchema", "EnsureStornoVezeSchema",
-                   "EnsureStornoVezeSchemaCore"},
+    "stornoveze": {"EnsureStornoVezeSchema", "EnsureStornoVezeSchemaCore"},
     "stornozurnal": {"EnsureStornoZurnalSchema", "EnsureStornoZurnalSchemaCore"},
     "poruke": {"EnsurePoruke"},
     "korisnici": {"EnsureKorisniciSchema"},
     "runtime": {"EnsureRuntimeSchema"},
-    "dorade": {"SetupDoradeSchema", "EnsureDoradeSchema", "EnsureDoradeSchemaCore"},
+    "dorade": {"EnsureDoradeSchema", "EnsureDoradeSchemaCore"},
 }
 
 PROC_AREA = {proc: area for area, procs in AREA_PROCS.items() for proc in procs}
@@ -74,6 +76,16 @@ APPLY_GROUP = re.compile(r"ApplySchemaGroup\(\s*(SG_\w+)\s*\)")
 # Ulazne tacke koje jedna drugu zovu. EnsureSledljivostSchema nije registrom
 # vodjena (petlja nad tabelama), ali se belezi da bi se videlo GDE u toku stoji.
 CALLABLE = set(PROC_AREA) | {"EnsureSledljivostSchema"}
+
+
+def strip_strings(text: str) -> str:
+    """Izbaci sadrzaj string literala.
+
+    Bez ovoga `LogSetup "OK", "EnsureDoradeSchema done"` izgleda kao POZIV
+    EnsureDoradeSchema i ubaci lazan korak u tok -- ime procedure se u ovom
+    modulu redovno pojavljuje u porukama za log.
+    """
+    return re.sub(r'"[^"]*"', '""', text)
 
 
 def strip_comment(text: str) -> str:
@@ -212,10 +224,16 @@ def parse(path: str) -> dict[str, list[str]]:
         # Poziv druge ulazne tacke -> marker poziva na TOM mestu u toku. Ovo je
         # ono zbog cega alat vidi interleaving: dorade zovu runtime IZMEDJU svoje
         # dve grupe, i to je semantika (kolone se dodaju na kraj tabele).
+        code = strip_strings(s)
         for callee in CALLABLE:
             if callee == proc:
                 continue
-            if re.search(r"\b" + callee + r"\b", s) and not s.startswith(callee + " ="):
+            # Poziv procedure iz ISTE oblasti je delegacija omotac -> jezgro, ne
+            # korak seme: jezgrove operacije su vec u toku te oblasti, pa bi ovo
+            # bilo dvostruko brojanje (i self-referenca -> lazan <ciklus>).
+            if PROC_AREA.get(callee) == PROC_AREA.get(proc):
+                continue
+            if re.search(r"\b" + callee + r"\b", code) and not code.startswith(callee + " ="):
                 per_proc.setdefault(PROC_AREA[proc], []).append(("CALL", callee))
                 break
 
