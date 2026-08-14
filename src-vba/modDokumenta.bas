@@ -1685,6 +1685,14 @@ Public Function SaveKupciIzlaz_TX(ByVal datum As Date, _
     If novac > 0 Then
         Dim novacID As String
 
+        ' Ista kapija kao u SaveOMUlaz_TX, samo nad fakturom: vlasnistvo, storno
+        ' stanje i TRENUTNO preostalo se citaju ovde, ne uzimaju iz parametara.
+        Dim fakErr As String
+        fakErr = UplataFakturaProblem(fakturaID, kupacID, novac)
+        If Len(fakErr) > 0 Then
+            Err.Raise vbObjectError + 1604, "SaveKupciIzlaz_TX", fakErr
+        End If
+
         novacID = SaveNovac( _
             brojDok:=brojDok, _
             datum:=datum, _
@@ -3787,6 +3795,17 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
 
     If novac > 0 Then
         Dim novacID As String
+
+        ' KAPIJA VLASNISTVA I TRENUTNOG OSTATKA (AUD-026 obrazac). UI je ovo vec
+        ' proverio, ali nad snimkom iz trenutka kad je lista punjena -- a izmedju
+        ' punjenja i potvrde stanje se moze promeniti. Writer zato ne veruje
+        ' parametrima nego cita stanje SADA. Vazi za SVAKOG pozivaoca, pa i za
+        ' legacy frmDokumenta.
+        Dim blokErr As String
+        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac)
+        If Len(blokErr) > 0 Then
+            Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr
+        End If
 
         novacID = SaveNovac( _
             brojDok:=brojDok, _

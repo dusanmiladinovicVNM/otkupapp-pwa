@@ -52,7 +52,7 @@ Attribute VB_Name = "modNovacUnos"
 '=====================================================================
 Option Explicit
 
-Public Const NOVUNOS_BUILD As String = "v6-ui-117"
+Public Const NOVUNOS_BUILD As String = "v6-ui-118"
 
 ' Smer reversa: redni broj segmenta u polju SMER REVERSA (modOtkupUI,
 ' isti raspored kao frmDokumenta.SetupOMIzdavanjeToggle) -> vrednost
@@ -78,6 +78,9 @@ Public Function NoviIsplataUnos() As Object
     p("brDok") = ""
     p("novac") = 0#
     p("otkupID") = ""
+    ' Vidljivi tekst polja "otvoreni blok" ide uz ID bas zbog NerazresenIzbor:
+    ' bez njega se ukucan a nerazresen blok ne razlikuje od praznog polja.
+    p("blokTekst") = ""
     p("otkupOstatak") = 0#
     p("izAvansa") = False
     p("tipNovca") = ""
@@ -153,6 +156,25 @@ Private Function BrojIliOznaka(ByVal brDok As String) As String
     If Len(Trim$(brDok)) > 0 Then BrojIliOznaka = Trim$(brDok) Else BrojIliOznaka = Poruka("NOVUNOS_BEZ_BROJA")
 End Function
 
+' UKUCAN A NERAZRESEN IZBOR = GRESKA, NE "NIJE IZABRANO".
+'
+' Combo-i ljuske dopustaju kucanje, a ID i tip stizu iz SKRIVENIH kolona koje
+' postoje samo kad je stavka stvarno izabrana (ListIndex >= 0). Operater zato
+' moze da vidi ime u polju, a da ljuska posalje prazan ID - i tada bi svaka od
+' ovih grana tiho promenila znacenje dokumenta:
+'
+'   partner  -> isplata prestaje da bude isplata kooperantu i postaje
+'               kes firma->otkupac, vezan za otkupno mesto umesto za coveka
+'   blok     -> razduzenje otkupnog bloka postaje avans kooperantu
+'   faktura  -> uplata po fakturi postaje avans kupca, faktura ostaje otvorena
+'
+' Sve tri se knjize kao ISPRAVAN dokument, samo pogresan. Zato prazan ID uz
+' NEPRAZAN tekst nije stanje nego greska: dokument staje dok operater ne izabere
+' stavku iz liste. Prazno polje i dalje znaci "nije izabrano" i prolazi.
+Private Function NerazresenIzbor(ByVal tekst As String, ByVal iD As String) As Boolean
+    NerazresenIzbor = (Len(Trim$(tekst)) > 0 And Len(Trim$(iD)) = 0)
+End Function
+
 ' Isti par provera kao legacy: broj dokumenta je zajednicki namespace za
 ' ambalazu i za novac, pa se duplikat trazi u OBE tabele.
 Private Function DuplBroj(ByVal brDok As String) As String
@@ -173,7 +195,7 @@ End Function
 Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As String
     Dim strogo As Boolean, novac As Double, dup As String
     Dim partTip As String, partID As String
-    Dim ostatak As Double, omSaldo As Double
+    Dim omSaldo As Double, blokErr As String
     Dim errDesc As String
     On Error GoTo EH
     fokus = ""
@@ -184,6 +206,15 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
     End If
     If strogo And Len(S(p, "vrsta")) = 0 Then
         fokus = "vrsta": IsplataValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
+    End If
+
+    ' Ukucano ime primaoca koje nije izabrano iz liste ne sme da prodje kao
+    ' "nema primaoca" - vidi NerazresenIzbor.
+    If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+        fokus = "partnerID": IsplataValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+    End If
+    If NerazresenIzbor(S(p, "blokTekst"), S(p, "otkupID")) Then
+        fokus = "otkupID": IsplataValidiraj = Poruka("NOVUNOS_ERR_BLOK_NEIZABRAN"): Exit Function
     End If
 
     ' Duplikat broja se proverava PRE iznosa - isti redosled kao legacy.
@@ -203,15 +234,16 @@ Public Function IsplataValidiraj(ByVal p As Object, ByRef fokus As String) As St
     If partTip = "KOOP" And Len(partID) > 0 Then
         ' --- isplata kooperantu ---
         If Len(S(p, "otkupID")) > 0 Then
-            ' Uz izabran otkupni blok isplata ne sme da predje neisplaceni
-            ' ostatak tog bloka. Ostatak racuna modNovac.GetOpenOtkupi -
-            ' ovde stize kao vrednost, racunica se ne ponavlja.
-            ostatak = D(p, "otkupOstatak")
-            If ostatak > 0 And novac > ostatak Then
-                fokus = "novac"
-                IsplataValidiraj = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
-                                   Format$(ostatak, "#,##0.00")
-                Exit Function
+            ' VLASNISTVO I TRENUTNI OSTATAK BLOKA. Provera se NE radi nad
+            ' vrednoscu koju je ekran poslao: taj broj je snimak iz trenutka
+            ' kad je lista punjena, a izmedju punjenja i potvrde stanje se moze
+            ' promeniti (drugi unos, uvoz izvoda, drugi pozivalac writer-a).
+            ' modNovac.IsplataBlokProblem cita stanje SADA, i istu kapiju
+            ' nezavisno podize i SaveOMUlaz_TX - ovde je samo da operater dobije
+            ' poruku uz polje umesto izuzetka.
+            blokErr = IsplataBlokProblem(S(p, "otkupID"), partID, S(p, "stanicaID"), novac)
+            If Len(blokErr) > 0 Then
+                fokus = "novac": IsplataValidiraj = blokErr: Exit Function
             End If
             ' "Isplata iz OM avansa" ima smisla samo dok su kes isplate
             ' ukljucene - legacy taj prekidac tada i ne pusta da se pritisne.
@@ -295,7 +327,7 @@ End Function
 '=====================================================================
 Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As String
     Dim strogo As Boolean, novac As Double, dup As String
-    Dim ostatak As Double
+    Dim fakErr As String
     Dim errDesc As String
     On Error GoTo EH
     fokus = ""
@@ -303,8 +335,16 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 
     ' Kupac je obavezan UVEK (SaveKupciIzlaz_TX ga i sam trazi), za razliku
     ' od vrste koja pada pod VALIDACIJA_UNOSA.
+    ' Ukucano ime kupca ide PRE opste provere "kupac je obavezan": operater vidi
+    ' ime u polju, pa mu poruka "izaberi kupca" ne bi rekla sta nije u redu.
+    If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+        fokus = "partnerID": UplataValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+    End If
     If Len(S(p, "partnerID")) = 0 Then
         fokus = "partnerID": UplataValidiraj = Poruka("DOKUNOS_ERR_KUPAC"): Exit Function
+    End If
+    If NerazresenIzbor(S(p, "fakturaTekst"), S(p, "fakturaID")) Then
+        fokus = "fakturaID": UplataValidiraj = Poruka("NOVUNOS_ERR_FAKTURA_NEIZABRANA"): Exit Function
     End If
     If strogo And Len(S(p, "vrsta")) = 0 Then
         fokus = "vrsta": UplataValidiraj = Poruka("OTKUNOS_ERR_VRSTA"): Exit Function
@@ -321,15 +361,12 @@ Public Function UplataValidiraj(ByVal p As Object, ByRef fokus As String) As Str
     End If
 
     If Len(S(p, "fakturaID")) > 0 Then
-        ' Preostalo po fakturi racuna modNovac.GetOpenFakture - ovde stize
-        ' kao vrednost. Legacy poredi samo kad je preostalo > 0 (fakture
-        ' bez iznosa ne blokiraju uplatu).
-        ostatak = D(p, "fakturaOstatak")
-        If ostatak > 0 And novac > ostatak Then
-            fokus = "novac"
-            UplataValidiraj = Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & _
-                              Format$(ostatak, "#,##0.00")
-            Exit Function
+        ' VLASNISTVO I TRENUTNO PREOSTALO. Isti razlog kao kod bloka: vrednost
+        ' koju je ekran poslao je snimak iz trenutka punjenja liste. Kapija se
+        ' cita SADA i istu nezavisno podize SaveKupciIzlaz_TX.
+        fakErr = UplataFakturaProblem(S(p, "fakturaID"), S(p, "partnerID"), novac)
+        If Len(fakErr) > 0 Then
+            fokus = "novac": UplataValidiraj = fakErr: Exit Function
         End If
         p("tipNovca") = NOV_KUPCI_UPLATA
         p("napomena") = Poruka("NOVUNOS_NAP_FAKTURA") & " " & S(p, "fakturaTekst")
@@ -418,6 +455,11 @@ Public Function ReversValidiraj(ByVal p As Object, ByRef fokus As String) As Str
 
     partTip = UCase$(S(p, "partnerTip"))
     If smer = SMER_REV_IZD_KOOP Or smer = SMER_REV_PRI_KOOP Then
+        ' Ukucano ime bez izbora iz liste dobija svoju poruku: opsta ("izaberi
+        ' kooperanta") ne bi objasnila zasto polje sa vidljivim imenom ne valja.
+        If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then
+            fokus = "partnerID": ReversValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function
+        End If
         ' Dvojni upis (kooperant + razduzenje/zaduzenje OM) trazi kooperanta.
         ' Kupac ovde ne postoji ni u legacy (razlika 3 iz zaglavlja).
         If Len(S(p, "partnerID")) = 0 Or partTip <> "KOOP" Then

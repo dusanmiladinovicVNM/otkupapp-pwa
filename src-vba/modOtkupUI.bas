@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-117"
+Public Const OTKUI_BUILD   As String = "v6-ui-118"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -3510,6 +3510,10 @@ Private Sub UiChange(ByVal tag As String)
         Case "cbOM"
             OnStanicaChanged
             RefreshSaldoOM              ' avans se vodi po otkupnom mestu
+            ' Lista otvorenih blokova je suzena na OM, pa promena OM menja i nju.
+            ' Ne oslanjamo se na to sto OnStanicaChanged usput brise partnera:
+            ' zavisnost od tudjeg sporednog efekta je tacno ono sto tiho zataji.
+            FillOpenBlokovi mFrm
             RefreshKpi mFrm
             RefreshStatusBar mFrm
         Case "cbVozac"
@@ -4639,7 +4643,14 @@ Private Sub FillFormPartner(frm As Object, ByVal mode As String)
     ' izabrano otkupno mesto - legacy frmOtkup.FillKooperantCombo /
     ' FillComboKooperantiByStanica. Stanica ulazi u kljuc kesa, inace bi lista
     ' ostala od prethodnog otkupnog mesta.
-    If KoopFilterByOM() Then omFilt = SelectedStanicaID(frm)
+    '
+    ' IZUZETAK: u rezimu ISPLATA (F5) suzavanje vazi UVEK, bez obzira na
+    ' zastavicu. Legacy frmDokumenta.cmbOtkupnoMesto_Change je za taj combo
+    ' (cmbPrimalacOMUlaz) zvao FillComboKooperantiByStanica BEZUSLOVNO - zastavica
+    ' je gejtovala samo otkupni list. Bez ovog izuzetka je iskljucena zastavica
+    ' otvarala isplatu kooperantu sa TUDJEG otkupnog mesta, a red novca se i dalje
+    ' knjizi na aktivno OM (SaveNovac omID) - novac bi otisao na pogresnu stanicu.
+    If KoopFilterByOM() Or mode = "F5" Then omFilt = SelectedStanicaID(frm)
     If mPartnerFor = mode & "|" & omFilt Then Exit Sub    ' isto stanje, ne puni ponovo
     If Len(omFilt) > 0 Then Set koopSt = KoopStanicaMap()
     mPartnerFill = True
@@ -4719,6 +4730,7 @@ End Function
 ' otvorenih blokova, pa se dva ekrana ne mogu raziici.
 Private Sub FillOpenBlokovi(frm As Object)
     Dim CB As MSForms.ComboBox, koopID As String, o As Variant, i As Long
+    Dim omID As String, n As Long
     On Error GoTo EH
     Set CB = frm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
     CB.Clear
@@ -4730,14 +4742,33 @@ Private Sub FillOpenBlokovi(frm As Object)
     If Len(koopID) = 0 Then Exit Sub
     o = GetOpenOtkupi(koopID)
     If IsEmpty(o) Then Exit Sub
+    ' BLOKOVI SE SUZAVAJU NA AKTIVNO OTKUPNO MESTO. GetOpenOtkupi vraca StanicaID
+    ' u sedmoj koloni, a red novca se knjizi na aktivno OM (SaveNovac omID) - bez
+    ' ovog filtera bi lista nudila blok sa OM-B dok je u kontekstu OM-A, pa bi
+    ' razduzenje tog bloka bilo proknjizeno na pogresnu stanicu. Kapija za isti
+    ' slucaj postoji i u core-u (SaveOMUlaz_TX); ovo je da se ne ponudi.
+    omID = SelectedStanicaID(frm)
     ReDim mBlokIDs(1 To UBound(o, 1))
     ReDim mBlokRest(1 To UBound(o, 1))
+    n = 0
     For i = 1 To UBound(o, 1)
-        mBlokIDs(i) = CStr(o(i, 2))
-        mBlokRest(i) = CDbl(o(i, 5))
-        CB.AddItem CStr(o(i, 1)) & "   " & ChrW(183) & "   " & _
-                   FmtBroj(CDbl(o(i, 5)), 0) & " / " & FmtBroj(CDbl(o(i, 3)), 0)
+        If Len(omID) = 0 Or StrComp(CStr(o(i, 7)), omID, vbTextCompare) = 0 Then
+            n = n + 1
+            mBlokIDs(n) = CStr(o(i, 2))
+            mBlokRest(n) = CDbl(o(i, 5))
+            CB.AddItem CStr(o(i, 1)) & "   " & ChrW(183) & "   " & _
+                       FmtBroj(CDbl(o(i, 5)), 0) & " / " & FmtBroj(CDbl(o(i, 3)), 0)
+        End If
     Next i
+    ' Bez ijednog bloka sa ovog OM niz mora ostati PRAZAN, a ne pun praznih
+    ' mesta: BlokID indeksira po rednom broju stavke u combo-u.
+    If n = 0 Then
+        mBlokIDs = Empty
+        mBlokRest = Empty
+    ElseIf n < UBound(o, 1) Then
+        ReDim Preserve mBlokIDs(1 To n)
+        ReDim Preserve mBlokRest(1 To n)
+    End If
     Exit Sub
 EH:
     Debug.Print "modOtkupUI.FillOpenBlokovi PAO: " & Err.Number & " " & Err.description
@@ -5380,6 +5411,9 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     ' IzborIdx vraca 0 za sakriveno polje, pa se u ostalim rezimima salje
     ' prazno i bez ijedne provere ovde (provere pripadaju ekranu i modulu).
     p("otkupID") = BlokID()
+    ' Vidljiv tekst ide UZ ID: combo dopusta kucanje, pa "tekst ima a ID nema"
+    ' znaci da stavka nije razresena. Ekran to ne tumaci - tumaci modul.
+    p("blokTekst") = Trim$(FldText("fgBlok"))
     p("otkupOstatak") = BlokOstatak()
     p("izAvansa") = mIzAvansa
     p("fakturaID") = FakturaID()
@@ -5455,6 +5489,8 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
         ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant)
         Case "kooperantID", "partnerID": mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
         Case "novac":        mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT").SetFocus
+        Case "otkupID":      mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT").SetFocus
+        Case "fakturaID":    mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT").SetFocus
         ' "smerRev" ovde NEMA granu i to nije propust: segmenti su Label-i
         ' (modUiKit.BoxText), a Label ne prima fokus. Poruka o gresci sama kaze
         ' sta se bira, pa kursor ostaje gde jeste umesto da odleti na tudje polje.

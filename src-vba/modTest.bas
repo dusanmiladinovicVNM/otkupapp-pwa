@@ -37,10 +37,20 @@ Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
 Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
 Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
 Private Const FX_VOZAC As String = "VOZ-TEST-1"
-' Otkupno mesto koje u fixture-u NE postoji -- namerno: provere gledaju samo da
-' li je izabrano (Len > 0), a GetOMAvansSaldo nad nepoznatim OM vraca nulu, pa
-' tvrdnja o avansu ne zavisi od toga koliko novca fixture ima.
-Private Const FX_STANICA As String = "OM-TEST-1"
+' Otkupno mesto IZ FIXTURE-a. Mora biti stvarno: kapija IsplataBlokProblem
+' poredi otkupno mesto bloka sa ovim, pa izmisljen ID vise ne prolazi.
+Private Const FX_STANICA As String = "STA-TEST-1"
+Private Const FX_STANICA2 As String = "STA-DRUGO"    ' ne postoji -- "tudje OM"
+' Otkupni blokovi iz fixture-a: prvi je KOOP-TEST-1, drugi KOOP-TEST-2, oba na
+' FX_STANICA. Vrednost prvog = Kolicina 400 * Cena 50; fixture nema tblNovac,
+' pa je neisplaceni ostatak jednak vrednosti -- ali test ga i dalje racuna
+' kroz GetUplataForOtkup, da tvrdnja ne padne ako fixture jednom dobije uplate.
+Private Const FX_BLOK As String = "OTK-TEST-1"
+Private Const FX_BLOK_TUDJ As String = "OTK-TEST-2"
+Private Const FX_BLOK_VREDNOST As Double = 20000
+' Faktura iz fixture-a (tblFakture): pripada FX_KUPAC, iznos FX_FAKTURA_IZNOS.
+Private Const FX_FAKTURA As String = "FAK-TEST-1"
+Private Const FX_FAKTURA_IZNOS As Double = 10000
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -88,6 +98,9 @@ Public Sub RunAllTests()
     RunOne 12
     RunOne 13
     RunOne 14
+    RunOne 15
+    RunOne 16
+    RunOne 17
 
     SetTestMode prevMode
     WriteResultFile
@@ -154,6 +167,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 12: TestName = "T_IsplataValidiraj_TipNovcaPoIzboru"
         Case 13: TestName = "T_UplataValidiraj_FakturaOdlucujeTip"
         Case 14: TestName = "T_ReversValidiraj_SmerJeObavezan"
+        Case 15: TestName = "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak"
+        Case 16: TestName = "T_NerazresenIzbor_NeProlaziKaoPrazno"
+        Case 17: TestName = "T_WriterGuard_OdbijaTudjBlok"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -176,6 +192,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 12: T_IsplataValidiraj_TipNovcaPoIzboru
         Case 13: T_UplataValidiraj_FakturaOdlucujeTip
         Case 14: T_ReversValidiraj_SmerJeObavezan
+        Case 15: T_IsplataBlokGuard_VlasnistvoITrenutniOstatak
+        Case 16: T_NerazresenIzbor_NeProlaziKaoPrazno
+        Case 17: T_WriterGuard_OdbijaTudjBlok
     End Select
 End Sub
 
@@ -576,11 +595,12 @@ Private Sub T_ScrSave_RutaPoRezimu()
     p("vrsta") = FX_VRSTA
     p("kooperantID") = FX_KOOPERANT
     p("partnerTip") = "KOOP"
-    p("otkupID") = "OTK-TEST-1"
-    p("otkupOstatak") = 100
-    p("novac") = 500
+    p("otkupID") = FX_BLOK
+    p("blokTekst") = FX_BLOK
+    p("novac") = OstatakFixtureBloka() + 1
     AssertEq modScrDokumenti.Scr_Save(p), _
-             Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & Format$(100, "#,##0.00"), _
+             Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
+             Format$(OstatakFixtureBloka(), "#,##0.00"), _
              "isplata ide u modNovacUnos.IsplataValidiraj"
     AssertEq CStr(p("fokus")), "novac", "ekran vraca i polje na koje ide fokus"
 
@@ -622,9 +642,12 @@ Private Sub T_IsplataValidiraj_TipNovcaPoIzboru()
     AssertEq modNovacUnos.IsplataValidiraj(p, fokus), Poruka("NOVUNOS_ERR_NOVAC"), _
              "isplata bez iznosa se ne knjizi"
 
-    ' (3) kooperant BEZ izabranog bloka -- to nije razduzenje nego avans
+    ' (3) kooperant BEZ izabranog bloka -- to nije razduzenje nego avans.
+    ' Cisti se I tekst polja: prazan ID uz nepraznu tekst znaci "ukucano a
+    ' nerazreseno" i tada kapija namerno staje (T_NerazresenIzbor...).
     Set p = IsplataUnosKojiProlazi()
     p("otkupID") = ""
+    p("blokTekst") = ""
     AssertEq modNovacUnos.IsplataValidiraj(p, fokus), "", "avans kooperantu prolazi"
     AssertEq CStr(p("tipNovca")), NOV_VIRMAN_AVANS_KOOP, _
              "bez bloka isplata kooperantu je avans, ne razduzenje"
@@ -635,13 +658,15 @@ Private Sub T_IsplataValidiraj_TipNovcaPoIzboru()
     AssertEq CStr(p("tipNovca")), NOV_VIRMAN_FIRMA_KOOP, _
              "uz blok bez prekidaca isplata je virman firme"
 
-    ' (5) iznos preko neisplacenog ostatka bloka -- blokada
+    ' (5) iznos preko neisplacenog ostatka bloka -- blokada. Ostatak se cita iz
+    ' PODATAKA; prosledjeni snimak (999999) se namerno ne poklapa sa njim, pa
+    ' bi povratak na "veruj ekranu" ovu tvrdnju odmah oborio.
     Set p = IsplataUnosKojiProlazi()
-    p("otkupOstatak") = 100
-    p("novac") = 101
+    p("novac") = OstatakFixtureBloka() + 1
     res = modNovacUnos.IsplataValidiraj(p, fokus)
-    AssertEq res, Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & Format$(100, "#,##0.00"), _
-             "preko ostatka bloka se ne isplacuje"
+    AssertEq res, Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
+             Format$(OstatakFixtureBloka(), "#,##0.00"), _
+             "preko TRENUTNOG ostatka bloka se ne isplacuje"
 
     ' (6) "kes iz OM avansa" preko raspolozivog salda -- blokada. Saldo se cita
     ' iz istog read-modela koji koristi i pravilo, pa tvrdnja ne zavisi od toga
@@ -698,16 +723,19 @@ End Sub
 Private Sub T_UplataValidiraj_FakturaOdlucujeTip()
     Dim p As Object, fokus As String
 
-    ' kupac je prvo pravilo -- SaveKupciIzlaz_TX ga i sam trazi
+    ' Kupac je prvo pravilo -- SaveKupciIzlaz_TX ga i sam trazi. Prazni se i
+    ' tekst: ukucano ime bez izbora ima svoju, precizniju poruku.
     Set p = UplataUnosKojiProlazi()
     p("partnerID") = ""
+    p("partnerTekst") = ""
     AssertEq modNovacUnos.UplataValidiraj(p, fokus), Poruka("DOKUNOS_ERR_KUPAC"), _
              "kupac je prvo pravilo uplate"
     AssertEq fokus, "partnerID", "fokus ide na partnera"
 
-    ' bez fakture -> avans kupca
+    ' bez fakture -> avans kupca (prazno je i polje, ne samo ID)
     Set p = UplataUnosKojiProlazi()
     p("fakturaID") = ""
+    p("fakturaTekst") = ""
     AssertEq modNovacUnos.UplataValidiraj(p, fokus), "", "uplata bez fakture prolazi"
     AssertEq CStr(p("tipNovca")), NOV_KUPCI_AVANS, "bez fakture uplata je avans kupca"
     AssertEq CStr(p("napomena")), Poruka("NOVUNOS_NAP_AVANS_KUP"), _
@@ -720,13 +748,166 @@ Private Sub T_UplataValidiraj_FakturaOdlucujeTip()
     AssertEq CStr(p("napomena")), Poruka("NOVUNOS_NAP_FAKTURA") & " FAK-TEST-1", _
              "napomena nosi broj fakture"
 
-    ' preko preostalog iznosa fakture -- blokada
+    ' preko preostalog iznosa fakture -- blokada, po TRENUTNOM stanju
     Set p = UplataUnosKojiProlazi()
-    p("fakturaOstatak") = 100
-    p("novac") = 101
+    p("novac") = OstatakFixtureFakture() + 1
     AssertEq modNovacUnos.UplataValidiraj(p, fokus), _
-             Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & Format$(100, "#,##0.00"), _
-             "preko preostalog iznosa fakture se ne uplacuje"
+             Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & _
+             Format$(OstatakFixtureFakture(), "#,##0.00"), _
+             "preko TRENUTNOG preostalog iznosa fakture se ne uplacuje"
+
+    ' faktura drugog kupca -- vlasnistvo se proverava u kapiji, ne u ekranu
+    Set p = UplataUnosKojiProlazi()
+    p("partnerID") = "KUP-DRUGI"
+    AssertEq modNovacUnos.UplataValidiraj(p, fokus), _
+             Poruka("NOVAC_ERR_FAK_TUDJ_KUPAC") & " " & FX_FAKTURA, _
+             "uplata se ne vezuje za fakturu drugog kupca"
+
+    ' nepostojeca faktura -- ID koji nije iz liste ne sme da prodje kao avans
+    Set p = UplataUnosKojiProlazi()
+    p("fakturaID") = "FAK-NEPOSTOJI"
+    p("fakturaTekst") = "FAK-NEPOSTOJI"
+    AssertEq modNovacUnos.UplataValidiraj(p, fokus), _
+             Poruka("NOVAC_ERR_FAK_NEMA") & " FAK-NEPOSTOJI", _
+             "nepostojeca faktura se odbija, ne knjizi kao avans"
+End Sub
+
+' KAPIJA VLASNISTVA I TRENUTNOG OSTATKA (modNovac.IsplataBlokProblem).
+' Ovo je pravilo koje UI ne moze da odbrani: iznos je proveren nad snimkom iz
+' trenutka kad je lista punjena, a izmedju punjenja i potvrde stanje se moze
+' promeniti. Zato kapija cita podatke SADA, i zato je istu podize i writer.
+' Pada ako se bilo koja od cetiri provere ukloni ili ako se vrati oslanjanje na
+' vrednost koju je poslao ekran.
+Private Sub T_IsplataBlokGuard_VlasnistvoITrenutniOstatak()
+    Dim p As Object, fokus As String
+
+    ' prazan blok NIJE greska -- to je avans kooperantu
+    AssertEq modNovac.IsplataBlokProblem("", FX_KOOPERANT, FX_STANICA, 100), "", _
+             "bez izabranog bloka kapija propusta (avans)"
+
+    ' blok koji ne postoji
+    AssertEq modNovac.IsplataBlokProblem("OTK-NEPOSTOJI", FX_KOOPERANT, FX_STANICA, 100), _
+             Poruka("NOVAC_ERR_BLOK_NEMA") & " OTK-NEPOSTOJI", _
+             "nepostojeci blok se odbija"
+
+    ' blok drugog kooperanta
+    AssertEq modNovac.IsplataBlokProblem(FX_BLOK_TUDJ, FX_KOOPERANT, FX_STANICA, 100), _
+             Poruka("NOVAC_ERR_BLOK_TUDJ_KOOP") & " " & FX_BLOK_TUDJ, _
+             "blok drugog kooperanta se odbija"
+
+    ' blok sa drugog otkupnog mesta -- red novca se knjizi na aktivno OM, pa bi
+    ' ovo razduzilo jedno mesto a teretilo drugo
+    AssertEq modNovac.IsplataBlokProblem(FX_BLOK, FX_KOOPERANT, FX_STANICA2, 100), _
+             Poruka("NOVAC_ERR_BLOK_TUDJ_OM") & " " & FX_BLOK, _
+             "blok sa drugog otkupnog mesta se odbija"
+
+    ' ispravna kombinacija prolazi
+    AssertEq modNovac.IsplataBlokProblem(FX_BLOK, FX_KOOPERANT, FX_STANICA, 100), "", _
+             "sopstveni blok na sopstvenom OM prolazi"
+
+    ' iznos preko TRENUTNOG ostatka
+    AssertEq modNovac.IsplataBlokProblem(FX_BLOK, FX_KOOPERANT, FX_STANICA, _
+                                         OstatakFixtureBloka() + 1), _
+             Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
+             Format$(OstatakFixtureBloka(), "#,##0.00"), _
+             "iznos preko trenutnog ostatka se odbija"
+
+    ' Ista kapija kroz put unosa: cross-OM kombinacija mora da padne i kad ekran
+    ' posalje savrsen snimak. Ovo je tvrdnja koju stari testovi nisu imali.
+    Set p = IsplataUnosKojiProlazi()
+    p("stanicaID") = FX_STANICA2
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), _
+             Poruka("NOVAC_ERR_BLOK_TUDJ_OM") & " " & FX_BLOK, _
+             "IsplataValidiraj zove kapiju, ne veruje snimku ekrana"
+End Sub
+
+' WRITER SE BRANI SAM. Svi ostali testovi voze put unosa (ekran -> modul), pa
+' bi prosli i kad bi kapija postojala SAMO u modulu. Ovaj zove writer direktno,
+' zaobilazeci ceo UI sloj -- kao sto ga zove legacy frmDokumenta ili bilo koji
+' drugi pozivalac. Kombinacija je nemoguca (blok sa FX_STANICA, kontekst
+' FX_STANICA2), pa upis mora da padne i NISTA ne sme da ostane u tabelama:
+' guard puca posle BeginTx, a EH grana radi RollbackTx.
+Private Sub T_WriterGuard_OdbijaTudjBlok()
+    Dim ok As Boolean, uplataPre As Double, uplataPosle As Double
+
+    uplataPre = GetUplataForOtkup(FX_BLOK)
+
+    ok = SaveOMUlaz_TX(datum:=Date, _
+                       brojDok:=FX_BROJ_NOVAC & "-W", _
+                       stanicaNaziv:=FX_STANICA2, _
+                       stanicaID:=FX_STANICA2, _
+                       vozacID:="", _
+                       tipAmb:="", _
+                       kolAmb:=0, _
+                       vrstaVoca:=FX_VRSTA, _
+                       novac:=100, _
+                       kooperantID:=FX_KOOPERANT, _
+                       primalacDisplay:=FX_KOOPERANT, _
+                       otkupID:=FX_BLOK, _
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, _
+                       koopSmer:="")
+
+    uplataPosle = GetUplataForOtkup(FX_BLOK)
+
+    AssertEq ok, False, "writer odbija blok sa drugog otkupnog mesta i bez UI provere"
+    AssertEq uplataPosle, uplataPre, "odbijen upis ne ostavlja red u tblNovac"
+End Sub
+
+' UKUCAN A NERAZRESEN IZBOR NIJE "NIJE IZABRANO".
+' Combo dopusta kucanje, a ID stize iz skrivene kolone koja postoji samo uz
+' stvarno izabranu stavku. Bez ove kapije operater vidi ime u polju, pritisne
+' Sacuvaj, a dokument se knjizi na nekog drugog (ili kao avans).
+Private Sub T_NerazresenIzbor_NeProlaziKaoPrazno()
+    Dim p As Object, fokus As String
+
+    ' F5 partner: ime u polju, ID prazan
+    Set p = IsplataUnosKojiProlazi()
+    p("partnerID") = ""
+    p("otkupID") = ""
+    p("blokTekst") = ""
+    p("partnerTekst") = "Petar Petrovic"
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), _
+             Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"), _
+             "ukucan partner bez izbora ne prolazi kao isplata otkupnom mestu"
+    AssertEq fokus, "partnerID", "fokus ide na partnera"
+
+    ' F5 blok: tekst u polju, ID prazan -> ne sme da postane avans
+    Set p = IsplataUnosKojiProlazi()
+    p("otkupID") = ""
+    p("blokTekst") = "1/TEST"
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), _
+             Poruka("NOVUNOS_ERR_BLOK_NEIZABRAN"), _
+             "ukucan blok bez izbora ne prolazi kao avans"
+
+    ' F6 faktura: tekst u polju, ID prazan -> ne sme da postane avans kupca
+    Set p = UplataUnosKojiProlazi()
+    p("fakturaID") = ""
+    p("fakturaTekst") = "12/2026"
+    AssertEq modNovacUnos.UplataValidiraj(p, fokus), _
+             Poruka("NOVUNOS_ERR_FAKTURA_NEIZABRANA"), _
+             "ukucana faktura bez izbora ne prolazi kao avans kupca"
+
+    ' F7 partner uz kooperantski smer
+    Set p = ReversUnosKojiProlazi()
+    p("partnerID") = ""
+    p("partnerTip") = ""
+    p("partnerTekst") = "Petar Petrovic"
+    AssertEq modNovacUnos.ReversValidiraj(p, fokus), _
+             Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"), _
+             "ukucan partner bez izbora ne prolazi ni u reversu"
+
+    ' KONTROLA (obrnut smer): PRAZNO polje i dalje znaci "nije izabrano" i
+    ' prolazi -- kapija sme da hvata samo tekst bez ID-a.
+    Set p = IsplataUnosKojiProlazi()
+    p("partnerID") = ""
+    p("partnerTip") = ""
+    p("partnerTekst") = ""
+    p("otkupID") = ""
+    p("blokTekst") = ""
+    AssertEq modNovacUnos.IsplataValidiraj(p, fokus), "", _
+             "prazan partner i dalje znaci isplata otkupnom mestu"
+    AssertEq CStr(p("tipNovca")), NOV_KES_FIRMA_OTKUPAC, _
+             "bez partnera tip ostaje kes firma-otkupac"
 End Sub
 
 ' F7 REVERS -- SMER JE OBAVEZAN I NIJE PRIKAZ. Bez smera je SaveOMUlaz_TX ranije
@@ -797,9 +978,19 @@ Private Function IsplataUnosKojiProlazi() As Object
     ' provera duplikata ne nadje ni u tblAmbalaza ni u tblNovac.
     p("brDok") = FX_BROJ_NOVAC
     p("novac") = 500
-    p("otkupID") = "OTK-TEST-1"
-    p("otkupOstatak") = 5000
+    p("otkupID") = FX_BLOK
+    p("blokTekst") = FX_BLOK
+    ' Namerno LAZAN snimak ostatka. Modul ga vise ne koristi -- cita trenutno
+    ' stanje kroz IsplataBlokProblem. Da se na njega vrati, testovi koji ovde
+    ' salju nemoguce vrednosti bi to odmah pokazali.
+    p("otkupOstatak") = 999999
     Set IsplataUnosKojiProlazi = p
+End Function
+
+' Trenutni neisplaceni ostatak fixture bloka -- racuna se isto kao u kapiji,
+' pa tvrdnja ne zavisi od toga da li fixture ima uplate.
+Private Function OstatakFixtureBloka() As Double
+    OstatakFixtureBloka = FX_BLOK_VREDNOST - GetUplataForOtkup(FX_BLOK)
 End Function
 
 Private Function UplataUnosKojiProlazi() As Object
@@ -810,10 +1001,15 @@ Private Function UplataUnosKojiProlazi() As Object
     p("vrsta") = FX_VRSTA
     p("brDok") = FX_BROJ_NOVAC
     p("novac") = 500
-    p("fakturaID") = "FAKID-TEST-1"
-    p("fakturaTekst") = "FAK-TEST-1"
-    p("fakturaOstatak") = 5000
+    p("fakturaID") = FX_FAKTURA
+    p("fakturaTekst") = FX_FAKTURA
+    ' Lazan snimak, iz istog razloga kao kod bloka.
+    p("fakturaOstatak") = 999999
     Set UplataUnosKojiProlazi = p
+End Function
+
+Private Function OstatakFixtureFakture() As Double
+    OstatakFixtureFakture = FX_FAKTURA_IZNOS - GetUplataForFaktura(FX_FAKTURA)
 End Function
 
 ' Revers kome fali samo ono sto test pokvari. Broj je POPUNJEN namerno: prazan
@@ -903,6 +1099,7 @@ Private Function PoljaEkrana(ByVal rezim As String) As Object
     p("stanicaTekst") = ""
     p("partnerTip") = ""
     p("otkupID") = ""
+    p("blokTekst") = ""
     p("otkupOstatak") = 0#
     p("izAvansa") = False
     p("fakturaID") = ""

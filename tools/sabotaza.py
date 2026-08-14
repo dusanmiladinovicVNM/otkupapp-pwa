@@ -232,6 +232,85 @@ SABOTAZE = {
         "T_ReversValidiraj_SmerJeObavezan",
         "kooperantski smer reversa ne prima kupca",
     ),
+    # --- ukucan a nerazresen izbor (F5/F6/F7) -------------------------------
+    # Najopasnija klasa greske u ovom rezimu: dokument se knjizi kao ISPRAVAN,
+    # samo na pogresnog partnera / kao avans. Bez ovih kapija testovi su zeleni
+    # a novac ide na pogresno mesto.
+    "nerazresen-partner": (
+        "modNovacUnos.bas",
+        '    If NerazresenIzbor(S(p, "partnerTekst"), S(p, "partnerID")) Then\n'
+        '        fokus = "partnerID": IsplataValidiraj = Poruka("NOVUNOS_ERR_PARTNER_NEIZABRAN"): Exit Function\n'
+        "    End If\n",
+        "    ' SABOTAZA: ukucan partner bez izbora opet prolazi\n",
+        "T_NerazresenIzbor_NeProlaziKaoPrazno",
+        "ukucano ime partnera bez izbora iz liste se ne knjizi",
+    ),
+    "nerazresen-faktura": (
+        "modNovacUnos.bas",
+        '    If NerazresenIzbor(S(p, "fakturaTekst"), S(p, "fakturaID")) Then\n'
+        '        fokus = "fakturaID": UplataValidiraj = Poruka("NOVUNOS_ERR_FAKTURA_NEIZABRANA"): Exit Function\n'
+        "    End If\n",
+        "    ' SABOTAZA: ukucana faktura bez izbora opet prolazi kao avans\n",
+        "T_NerazresenIzbor_NeProlaziKaoPrazno",
+        "ukucana faktura bez izbora iz liste ne postaje avans kupca",
+    ),
+    # --- kapija vlasnistva i trenutnog ostatka ------------------------------
+    "blok-tudj-koop": (
+        "modNovac.bas",
+        '    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)\n'
+        '    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then\n'
+        '        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_KOOP") & " " & otkupID\n'
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: vlasnik bloka se vise ne proverava\n",
+        "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
+        "isplata se ne vezuje za blok drugog kooperanta",
+    ),
+    "blok-tudj-om": (
+        "modNovac.bas",
+        '            If StrComp(Trim$(CStr(data(r, colSt))), Trim$(stanicaID), vbTextCompare) <> 0 Then\n'
+        '                IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_OM") & " " & otkupID\n'
+        "                Exit Function\n"
+        "            End If\n",
+        "            ' SABOTAZA: otkupno mesto bloka se vise ne proverava\n",
+        "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
+        "blok sa drugog otkupnog mesta se ne razduzuje na aktivnom",
+    ),
+    # Podmukliji oblik: kapija ostaje, ali umesto trenutnog stanja veruje
+    # vrednosti koju je poslao ekran. Obara TRI testa i to je tacan nalaz --
+    # isto pravilo je namerno provereno na tri nivoa (kapija, put unosa, ruta).
+    "blok-ostatak-snapshot": (
+        "modNovac.bas",
+        "    preostalo = vrednost - GetUplataForOtkup(otkupID)\n",
+        "    preostalo = vrednost + 1000000   ' SABOTAZA: ostatak se ne cita iz podataka\n",
+        "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
+        "neisplaceni ostatak se cita iz podataka, ne iz snimka ekrana",
+    ),
+    "faktura-tudj-kupac": (
+        "modNovac.bas",
+        '    colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)\n'
+        '    If StrComp(Trim$(CStr(data(r, colKupac))), Trim$(kupacID), vbTextCompare) <> 0 Then\n'
+        '        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_TUDJ_KUPAC") & " " & fakturaID\n'
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: vlasnik fakture se vise ne proverava\n",
+        "T_UplataValidiraj_FakturaOdlucujeTip",
+        "uplata se ne vezuje za fakturu drugog kupca",
+    ),
+    # --- writer se brani sam ------------------------------------------------
+    # Jedina sabotaza koja ne dira UI put: dokazuje da kapija postoji i kad
+    # pozivalac nije nas ekran (legacy forma, uvoz, bilo ko).
+    "writer-bez-kapije": (
+        "modDokumenta.bas",
+        "        Dim blokErr As String\n"
+        "        blokErr = IsplataBlokProblem(otkupID, kooperantID, stanicaID, novac)\n"
+        "        If Len(blokErr) > 0 Then\n"
+        '            Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr\n'
+        "        End If\n",
+        "        ' SABOTAZA: writer opet veruje parametrima\n",
+        "T_WriterGuard_OdbijaTudjBlok",
+        "SaveOMUlaz_TX sam odbija nemogucu kombinaciju bloka i otkupnog mesta",
+    ),
     # --- ruta ekrana --------------------------------------------------------
     "ruta-zbirna": (
         "modScrDokumenti.bas",
