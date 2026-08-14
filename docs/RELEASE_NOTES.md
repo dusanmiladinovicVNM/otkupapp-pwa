@@ -1093,6 +1093,19 @@ Prođen ceo reaktivni sloj obe legacy forme i upoređen sa novim UI-jem; zatvore
 - Tri **test seam-a** koje novi UI zbog toga nosi u isporuci: `ClearForm`/`ParseDatum`/`ParcelaID` su `Public` umesto `Private`; tri `SetFocus`-a su iza `IsTestMode()` (forma bez `.Show` ne može da primi fokus, a u nevidljivom Excelu `SetFocus` ne puca nego trajno visi); `modScrDokumenti.Scr_OtpTestSet` je jedini način da test dobije aktivnu otpremnicu i **tvrdo je gejtovan** — van test-režima ne radi ništa. U produkciji je `IsTestMode()` uvek `False`, pa je ponašanje nepromenjeno.
 - **Izolacija suite-a ispravljena:** test koji padne nije stizao do svog `ReleaseOtkupUIForm`, pa su `mFrm`/`Btns`/keš u `modOtkupUI` i aktivna otpremnica u `modScrDokumenti` ostajali sledećem testu — jedna sabotaža obarala je dva testa, a drugi pad je bio lažan trag (`Err.Number=0`, prazan opis). `modTest.RunOne` sada čisti iz `EH` grane, a `Err` čita pre čišćenja.
 
+**Kapija nad `.claude/settings*.json`**
+
+- **Jedan izostavljen zarez je oborio ceo `settings.json`, i to je prošlo neprimećeno pola dana.** Merge `5b3777c` spojio je dve grane koje su obe dopisivale na kraj `allow` niza — **bez ijednog konflikt markera** — i rezultat nije bio validan JSON. Claude Code takav fajl odbacuje **u celini**: nije važilo nijedno od 29 permission pravila ni jedan od dva hook-a, pa se tražilo odobrenje za svaku komandu a `PostToolUse vba_check` se nije palio. Za konfiguraciju koja upravlja celim development workflow-om nije postojao ni `json.load()`.
+- **Provera je sada na dva ulaza, jer jedan ne bi bio dovoljan.** `PostToolUse` hvata slučaj kad taj fajl menja `Edit` (odgovor stiže u istom turnu, pre nego što sledeći alat krene bez pravila). `Stop` proverava na **svakom** prolazu, bez obzira šta je dirano — merge/rebase ne prolazi kroz `Edit`, a `check_merge.ps1` nad takvim spojem javlja `CISTO`. Provera je instant, ne traži ni Excel ni `win32com`, i stoji pre svih ostalih kapija.
+- **Dokazano u oba smera, šest slučajeva** (u peščaniku, pravi `settings.json` nije diran): pokvaren JSON kroz `Edit` → `exit 2` uz tačan `Expecting ',' delimiter: line 5 column 7`; ispravan → `exit 0` bez poruke; `.bas` sa ne-ASCII bajtom → `exit 2` sa nalazom `ASCII`; čist `.bas` → `exit 0`; `Stop` nad pokvarenim → `exit 2`; `Stop` nad ispravnim → propušta i stiže do sledeće kapije.
+
+**Rezanje pravila — `testovi.md` sa 527 na 316 linija**
+
+- `.claude/rules/testovi.md` je narastao na najveći fajl instrukcija u repou — veći od celog `CLAUDE.md`. Istorija incidenata (147 lažnih padova zbog šeme, `TestLicense_All` / 131 zaostali modul, curenje izolacije, PR #181, četiri putanje tihog `Exit Sub`, `T13`, `Stop` hook sa punim gate-om, zarez u `settings.json`, `python3` alias) preseljena je u **`docs/engineering/postmortems/2026-08-verifikacija.md`**, sa poukom uz svaki slučaj. U pravilima je ostalo samo pravilo.
+- **Izbačeno i ono što je bilo doslovan duplikat koda:** tabela `gate`/`blind` suita i tabela sa brojem provera po suite-u (izvor istine je `SUITES` katalog u `run_vba.py`), i tri tabele sabotaža (izvor istine je `sabotaza.py --lista`, koji ispisuje isto). Duplikat nije bezopasan: red `RunAllTests` je u jednom danu bio netačan dva puta (3 → 6 → 11), a sekcija „Stop hook" je i posle ispravke tabele i dalje tvrdila „6 provera".
+- Svih 11 testova i 14 sabotaža koje je donela ova verzija **ostaju zapisani** — sečena je arheologija, ne pokrivenost.
+- `CLAUDE.md` §7: dekoracija komande ne sme ni na kraj (`; echo "rc=$?"`), jer „always allow" nad compound komandom upisuje pravila **po segmentu, doslovnim tekstom** — pa allow lista dobije `Bash(echo "rc=$?")` ili putanju sa UUID-om sesije, pravila koja se nikad više neće poklopiti. Jedan compound poziv tako proizvede odobrenje sada i odobrenje svaki sledeći put.
+
 **Stanje verifikacije**
 
 Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
