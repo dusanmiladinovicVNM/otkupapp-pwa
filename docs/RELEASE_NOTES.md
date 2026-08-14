@@ -1078,7 +1078,21 @@ Prođen ceo reaktivni sloj obe legacy forme i upoređen sa novim UI-jem; zatvore
 
 - `tools/vba_check.py`: uzak izuzetak od `DUPLIKAT` za ugovor ekrana (`Scr_*` u `modScr*`) — ljuska ih zove isključivo kvalifikovano i kasno vezano, pa „Ambiguous name" ne nastaje. Dokazano u oba smera: ista procedura u bilo kom drugom modulu i dalje pada.
 
+- `tools/sabotaza.py`: sedam imenovanih sabotaža nad `modOtkupUI` (`--lista` / `--vrati`), svaka obara tačno jedan test — druga polovina dokaza iz `CLAUDE.md` §5. Rešava tri zamke koje su već ujedale: CRLF vs LF sidro, uvlačenje, i vraćanje obrnutom zamenom umesto `git checkout --` (koji je jednom pojeo test seam-ove).
+
+**Testovi ponašanja za novi UI**
+
+- Tri nova testa u `modTest` (`RunAllTests` sada vrti šest): `T_ClearForm_Ugovor` (datum i broj zbirne su kontekst i ostaju, partner se briše, a bez aktivne otpremnice datum se vraća na danas), `T_ParseDatum_Ugovor` (prazno/nečitljivo je `0`, `d.m.yyyy` bez `CDate`, trailing tačka se skida, nemoguć datum se odbija umesto da se prelije) i `T_ParcelaID_IzSkriveneKolone` (ID iz skrivene kolone, sakriveno polje ne šalje parcelu u dokument).
+- Tri **test seam-a** koje novi UI zbog toga nosi u isporuci: `ClearForm`/`ParseDatum`/`ParcelaID` su `Public` umesto `Private`; tri `SetFocus`-a su iza `IsTestMode()` (forma bez `.Show` ne može da primi fokus, a u nevidljivom Excelu `SetFocus` ne puca nego trajno visi); `modScrDokumenti.Scr_OtpTestSet` je jedini način da test dobije aktivnu otpremnicu i **tvrdo je gejtovan** — van test-režima ne radi ništa. U produkciji je `IsTestMode()` uvek `False`, pa je ponašanje nepromenjeno.
+- **Izolacija suite-a ispravljena:** test koji padne nije stizao do svog `ReleaseOtkupUIForm`, pa su `mFrm`/`Btns`/keš u `modOtkupUI` i aktivna otpremnica u `modScrDokumenti` ostajali sledećem testu — jedna sabotaža obarala je dva testa, a drugi pad je bio lažan trag (`Err.Number=0`, prazan opis). `modTest.RunOne` sada čisti iz `EH` grane, a `Err` čita pre čišćenja.
+
 **Stanje verifikacije**
 
-- `python3 tools/vba_check.py` → **čisto (187 fajlova)**, exit 0.
-- `python tools/run_vba.py` **NIJE pokrenut** — sesija je bila na Linuxu (traži Windows + Excel + `pywin32`). **Novi UI sloj nema nijedan test ponašanja** i tako se i prijavljuje: neverifikovano, ne zeleno. Sledeći korak je `modTest` za `modOtkupUI.ClearForm` po ugovoru iz `.claude/rules/otkup-i-dokumenta.md` §1.
+Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
+
+- `python tools/vba_check.py` → **čisto (187 fajlova)**, exit 0.
+- `python tools/run_vba.py --suite RunAllTests` → **TESTS=6, FAIL=0**.
+- **Dokaz u oba smera:** svih sedam sabotaža iz `tools/sabotaza.py` obara tačno jedan test, po imenu, pa se vraća i suite je opet zelena.
+- `python tools/run_vba.py` (pun podrazumevani set) → **`EXIT=0`**, 11 suite-ova zeleno, bez `BLIND` reda (~1050 provera).
+
+Ograničenje se i dalje prijavljuje kako jeste: testovi pokrivaju `ClearForm`/`ParseDatum`/`ParcelaID`, **ne i put upisa** (`modOtkupUnos`/`modDokUnos`), mrežu i storno. Forma se gradi bez `.Show`, pa `UserForm_Activate` (raspored, `GoFullScreen`, punjenje mreže) nikad ne ide.

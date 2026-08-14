@@ -18,6 +18,10 @@ Option Explicit
 '
 ' Greska se hvata PO TESTU: jedan pad ne obara ostale, i u ispisu stoji ime
 ' bas tog testa.
+'
+' NOVI UI (frmOtkupUI + modOtkupUI) ima svoja tri testa, 4-6. Legacy forma se
+' NE gasi (docs/UI_MIGRACIJA_KATALOG.md), pa oba skupa stoje jedan pored drugog
+' -- ugovor je isti, kod je namerno dvostruk.
 ' ============================================================
 
 ' --- Fixture konstante (moraju da prate tools/make_fixture.py) --------------
@@ -26,6 +30,8 @@ Private Const FX_ZBIRNA As String = "ZB-TEST-1"     ' zbirna na OTP-TEST-1
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
+Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
+Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
 
 Private Const ERR_ASSERT As Long = vbObjectError + 9500
 Private Const ERR_GOLDEN As Long = vbObjectError + 9501
@@ -49,6 +55,9 @@ Public Sub RunAllTests()
     RunOne 1
     RunOne 2
     RunOne 3
+    RunOne 4
+    RunOne 5
+    RunOne 6
 
     SetTestMode prevMode
     WriteResultFile
@@ -59,6 +68,7 @@ End Sub
 ' test pukne.
 Private Sub RunOne(ByVal idx As Long)
     Dim nm As String
+    Dim errNum As Long, errDesc As String
     nm = TestName(idx)
 
     On Error GoTo EH
@@ -68,8 +78,34 @@ Private Sub RunOne(ByVal idx As Long)
     Exit Sub
 
 EH:
+    ' Err se cita PRE ciscenja: CleanupPosleTesta ide kroz On Error Resume Next
+    ' (OtkupUI_Release ga ima), a to brise Err -- bez ovoga bi izvestaj o padu
+    ' ostao prazan.
+    errNum = Err.Number
+    errDesc = Err.description
     m_Failed = m_Failed + 1
-    AppendReport nm, "FAIL", Err.description
+    CleanupPosleTesta
+    ' Pad bez opisa je vec jednom kostao dva rana dijagnostike: "FAIL T_X" bez
+    ' razloga ne kaze operateru nista. Broj greske je tada jedini trag.
+    If Len(errDesc) = 0 Then errDesc = "greska bez opisa (Err.Number=" & errNum & ")"
+    AppendReport nm, "FAIL", errDesc
+End Sub
+
+' Test koji je pao NIJE stigao do svog ReleaseOtkupUIForm, pa modul novog UI-ja
+' (mFrm, Btns, kes tabela) i aktivna otpremnica u modScrDokumenti ostaju
+' zaprljani. Sledeci test bi tada gradio ekran nad ostacima prethodnog i pao BEZ
+' SVOJE KRIVICE -- jedna sabotaza obarala bi dva testa, pa bi drugi pad bio lazan
+' trag. (Dokazano: sabotaza parcela-tekst obarala je i T_ClearForm_Ugovor, sa
+' Err.Number=0 i praznim opisom.)
+'
+' Ciscenje je idempotentno (OtkupUI_Release je ceo pod On Error Resume Next,
+' Scr_OtpOtkazi samo prazni tri promenljive), pa je bezbedno i posle testa koji
+' formu nikad nije napravio. Samu formu otpusta odmotavanje steka -- ovde ostaje
+' ono sto zivi na MODULIMA i sto odmotavanje ne dira.
+Private Sub CleanupPosleTesta()
+    On Error Resume Next
+    modOtkupUI.OtkupUI_Release
+    modScrDokumenti.Scr_OtpOtkazi
 End Sub
 
 Private Function TestName(ByVal idx As Long) As String
@@ -77,6 +113,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 1: TestName = "T_PosleSnimanja_ZadrzavaKontekstOtpremnice"
         Case 2: TestName = "T_PosleSnimanja_ZadrzavaZbirnu"
         Case 3: TestName = "T_ClearForm_BrisePartnera"
+        Case 4: TestName = "T_ParseDatum_Ugovor"
+        Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
+        Case 6: TestName = "T_ClearForm_Ugovor"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -88,6 +127,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 1: T_PosleSnimanja_ZadrzavaKontekstOtpremnice
         Case 2: T_PosleSnimanja_ZadrzavaZbirnu
         Case 3: T_ClearForm_BrisePartnera
+        Case 4: T_ParseDatum_Ugovor
+        Case 5: T_ParcelaID_IzSkriveneKolone
+        Case 6: T_ClearForm_Ugovor
     End Select
 End Sub
 
@@ -150,6 +192,196 @@ Private Sub T_ClearForm_BrisePartnera()
              "kooperant mora da bude obrisan posle snimanja"
 
     Unload f
+End Sub
+
+' ============================================================
+' Novi UI (frmOtkupUI + modOtkupUI)
+' ============================================================
+
+' DATUM DOKUMENTA ide u tblOtkup i u kontekst (predlog broja, zakljucavanje
+' stanice), pa "necitljivo" mora da bude 0 -- nikad priblizan datum. Parser je
+' NAMERNO deterministican (modParse.TryParseDateValue): CDate isti tekst cita po
+' Windows locale-u, pa bi "01.02.2026" na MDY masini bio 2. januar a na DMY
+' masini 1. februar. Pada ako se ParseDatum vrati na IsDate/CDate ili ako se
+' izgubi skidanje trailing tacke.
+Private Sub T_ParseDatum_Ugovor()
+    AssertEq modOtkupUI.ParseDatum(""), 0, "prazno polje nije datum"
+    AssertEq modOtkupUI.ParseDatum("   "), 0, "sami razmaci nisu datum"
+    AssertEq modOtkupUI.ParseDatum("besmislica"), 0, "necitljiv tekst nije datum"
+
+    AssertEq modOtkupUI.ParseDatum("11.08.2026"), CDbl(DateSerial(2026, 8, 11)), _
+             "d.m.yyyy se cita kao dan.mesec.godina"
+
+    ' Trailing tacka je nacin na koji se datum kod nas pise ("11.08.2026."), pa
+    ' se skida umesto da obori unos. Petlja, ne jedno skidanje.
+    AssertEq modOtkupUI.ParseDatum("11.08.2026."), CDbl(DateSerial(2026, 8, 11)), _
+             "trailing tacka se skida, ne obara unos"
+    AssertEq modOtkupUI.ParseDatum("11.08.2026.."), CDbl(DateSerial(2026, 8, 11)), _
+             "skidaju se SVE trailing tacke, ne samo poslednja"
+
+    ' AUD-007: DateSerial se na nemogucem datumu PRELIVA (30.02 -> 2.3, mesec 13
+    ' -> januar sledece godine) umesto da pukne. Round-trip u parseru to odbija --
+    ' inace bi dokument tiho dobio pomeren datum.
+    AssertEq modOtkupUI.ParseDatum("30.02.2026"), 0, _
+             "nepostojeci dan se odbija, ne preliva u sledeci mesec"
+    AssertEq modOtkupUI.ParseDatum("01.13.2026"), 0, _
+             "mesec 13 se odbija, ne preliva u sledecu godinu"
+
+    ' Kapija poslovnih godina dolazi iz zajednickog parsera (modParse), ali se
+    ' vidi kroz ovo polje -- zato stoji ovde, uz ostatak ugovora.
+    AssertEq modOtkupUI.ParseDatum("11.08.1899"), 0, "godina van poslovnog opsega"
+End Sub
+
+' ID PARCELE JE SKRIVENA DRUGA KOLONA combo-a, kao kod svih ostalih dropdown-a
+' (PartnerID / modComboBinding.GetComboID). Regres koji ovaj test cuva: ID se
+' nekad vadio iz prikaznog teksta trazenjem " - ", a FillParcele gradi prikaz sa
+' " " & ChrW(183) & " " -- separator se nikad nije nasao, pa je ceo prikazni
+' string odlazio u ParcelaID i u tblOtkup. Pada ako se ID opet cita iz teksta,
+' ili ako se izgubi provera vidljivosti polja.
+Private Sub T_ParcelaID_IzSkriveneKolone()
+    Dim f As frmOtkupUI, fr As Object, CB As MSForms.ComboBox
+    Set f = NewOtkupUIForm()
+
+    Set fr = f.Controls("zForm").Controls("fgParcela")
+    Set CB = fr.Controls("fgParcelaT")
+    fr.Visible = True
+
+    ' Isti oblik koji gradi FillParcele: prikaz u koloni 1, ID u koloni 2.
+    ' Prikaz NAMERNO nosi separator koji nije " - ".
+    CB.Clear
+    CB.ColumnCount = 2
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
+    CB.AddItem "1001   " & ChrW(183) & "   Malina   " & ChrW(183) & "   1,20 ha"
+    CB.List(0, 1) = FX_PARCELA
+    CB.ListIndex = 0
+
+    ' Preduslov: bez ovoga bi test bio zelen i kad combo uopste ne prima stavke.
+    AssertEq CB.ListCount, 1, "preduslov: parcela je u listi"
+
+    AssertEq modOtkupUI.ParcelaID(), FX_PARCELA, _
+             "ID parcele dolazi iz skrivene kolone, ne iz prikaznog teksta"
+
+    CB.ListIndex = -1
+    AssertEq modOtkupUI.ParcelaID(), "", "bez izabrane parcele dokument ne dobija ID"
+
+    ' PRACENJE_PARCELA iskljuceno -> polje je sakriveno. Zatecen izbor tada NE
+    ' sme da procuri u dokument.
+    CB.ListIndex = 0
+    fr.Visible = False
+    AssertEq modOtkupUI.ParcelaID(), "", "sakriveno polje ne salje parcelu u dokument"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' UGOVOR ClearForm-a, isti kao frmOtkup.ClearOtkupFields (.claude/rules/
+' otkup-i-dokumenta.md odeljak 1 i 5): datum i broj zbirne su KONTEKST
+' otpremnice i ostaju, partner se brise. Uz to i nova razlika koju legacy nema:
+' bez aktivne otpremnice datum se vraca na danas.
+'
+' Zasto datum: otpremnica 8/220726 od 22.07 dobijala je blok 8/110826 od 11.08 --
+' vracanje na danas je i broj i datum bloka odvlacilo iz niza otpremnice.
+Private Sub T_ClearForm_Ugovor()
+    Dim f As frmOtkupUI, zf As Object, ctx As Object
+    Dim datumBloka As String, danas As String
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+    Set ctx = f.Controls("zCtx")
+
+    ' Datum se izvodi iz danasnjeg, da NIKAD ne bude jednak "danas" -- zakucan
+    ' datum bi jednog dana u godini prosao test i kad pravilo ne radi.
+    datumBloka = Format$(Date - 30, "dd.mm.yyyy")
+
+    ' Blok koji se upravo snimio nad aktivnom otpremnicom.
+    '
+    ' Datum i zbirna se postavljaju kroz ApplyPrefill, ne pisanjem u kontrolu:
+    ' to je put kojim ih i produkcija dobija (izbor otpremnice), i jedini koji
+    ' ide pod mLoading. Direktan upis u fgDatum okine OnDatumChanged, a on trazi
+    ' stanica-lock i predlog broja SA PITANJEM GOOGLE-U -- mreza u testu.
+    ' Kilogrami i ambalaza su TextBox-evi: njihova promena samo preracunava
+    ' vrednost, pa idu direktno.
+    modScrDokumenti.Scr_OtpTestSet FX_OTP_ID, FX_BROJ_OTP
+    modOtkupUI.ApplyPrefill "datum=" & datumBloka & "|brzbirne=" & FX_ZBIRNA
+    SetPolje zf, "fgKgI", "123,4"
+    SetPolje zf, "fgKolAmb", "10"
+    ctx.Controls("cbKupac").value = FX_KOOPERANT
+
+    ' Preduslovi: bez njih bi test bio zelen i kad kontrole uopste ne primaju
+    ' vrednost, pa ne bi merio nista.
+    AssertEq Polje(zf, "fgDatum"), datumBloka, "preduslov: datum otpremnice je upisan"
+    AssertEq Polje(zf, "fgBrZbir"), FX_ZBIRNA, "preduslov: broj zbirne je upisan"
+    AssertEq Polje(zf, "fgKgI"), "123,4", "preduslov: kilogrami su upisani"
+    AssertEq ctx.Controls("cbKupac").value, FX_KOOPERANT, "preduslov: partner je upisan"
+
+    modOtkupUI.ClearForm
+
+    ' 1) DATUM OSTAJE -- sledeci blok ide u niz istog datuma otpremnice.
+    AssertEq Polje(zf, "fgDatum"), datumBloka, _
+             "dok je otpremnica aktivna datum se NE vraca na danas"
+    ' 2) BROJ ZBIRNE OSTAJE -- svi blokovi jedne otpremnice idu na istu zbirnu.
+    AssertEq Polje(zf, "fgBrZbir"), FX_ZBIRNA, _
+             "broj zbirne je kontekst -- ne brise se posle snimanja"
+    ' 3) PARTNER SE BRISE -- sledeci unos je nov kooperant. Obrnut smer od prva
+    '    dva: ovde je brisanje trazeno ponasanje.
+    AssertEq ctx.Controls("cbKupac").value, "", _
+             "partner mora da bude obrisan posle snimanja"
+    ' ... a podaci bloka odlaze sa njim.
+    AssertEq Polje(zf, "fgKgI"), "", "kilogrami se brisu posle snimanja"
+    AssertEq Polje(zf, "fgKolAmb"), "", "kolicina ambalaze se brise posle snimanja"
+
+    ' BEZ AKTIVNE OTPREMNICE datum se vraca na danas: prazno ili staro polje bi
+    ' bila greska koju operater mora da ispravlja pri svakom novom dokumentu.
+    modScrDokumenti.Scr_OtpOtkazi
+    modOtkupUI.ApplyPrefill "datum=" & datumBloka & "|brzbirne=" & FX_ZBIRNA
+    danas = Format$(Date, "dd.mm.yyyy")
+    modOtkupUI.ClearForm
+    AssertEq Polje(zf, "fgDatum"), danas, _
+             "bez aktivne otpremnice datum se vraca na danas"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod
+' frmOtkup; .Show se NE zove -- GoFullScreen, raspored i punjenje mreze idu tek
+' u UserForm_Activate, a nista od toga ovi testovi ne mere.
+Private Function NewOtkupUIForm() As frmOtkupUI
+    Dim f As frmOtkupUI
+    Set f = New frmOtkupUI
+
+    Dim ctlCount As Long
+    ctlCount = f.Controls.count          ' bez ovoga se UserForm_Initialize ne okine
+
+    ' UserForm_Initialize hvata pad gradnje i salje ga u OtkupUI_BuildFailed, pa
+    ' greska NE stize ovamo. Bez ove provere bi svaka sledeca tvrdnja padala na
+    ' "Could not find the specified object" -- pad na trazenju kontrole, a ne na
+    ' ponasanju koje test meri.
+    If ctlCount < 2 Then
+        Err.Raise ERR_ASSERT, "modTest.NewOtkupUIForm", _
+                  "frmOtkupUI nije izgradjen (kontrola: " & ctlCount & ")"
+    End If
+
+    Set NewOtkupUIForm = f
+End Function
+
+' Unload gasi formu (Terminate -> OtkupUI_FormClosed), a OtkupUI_Release pusta i
+' ono sto ostaje na modulu (Btns, kes tabela, num-polja) -- inace sledeci test
+' gradi ekran nad ostacima prethodnog. Aktivna otpremnica zivi u TRECEM modulu
+' (modScrDokumenti) i nju OtkupUI_Release ne dira, pa se otpusta ovde.
+Private Sub ReleaseOtkupUIForm(f As frmOtkupUI)
+    Unload f
+    modOtkupUI.OtkupUI_Release
+    modScrDokumenti.Scr_OtpOtkazi
+End Sub
+
+' Polja novog UI-ja su ugnjezdena: zona -> okvir polja -> kontrola (ime + "T").
+' Test se kroz to stablo krece SAM, ne kroz modOtkupUI.FldText/SetFld: rutina
+' koja se testira ne sme da bude i merni instrument.
+Private Function Polje(z As Object, ByVal grp As String) As String
+    Polje = z.Controls(grp).Controls(grp & "T").text
+End Function
+
+Private Sub SetPolje(z As Object, ByVal grp As String, ByVal v As String)
+    z.Controls(grp).Controls(grp & "T").text = v
 End Sub
 
 ' Forma sa kontekstom otpremnice OTP-TEST-1 iz fixture-a, bez .Show.

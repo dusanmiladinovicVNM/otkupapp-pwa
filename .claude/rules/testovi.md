@@ -3,8 +3,11 @@ paths:
   - "src-vba/mod*Tests.bas"
   - "src-vba/modTest*.bas"
   - "src-vba/frmOtkup.frm"
+  - "src-vba/modOtkupUI.bas"
+  - "src-vba/modScrDokumenti.bas"
   - "tools/vba_check.py"
   - "tools/run_vba.py"
+  - "tools/sabotaza.py"
   - "tools/make_fixture.py"
   - "tools/dump_schema.py"
   - "tests/golden/*"
@@ -12,7 +15,10 @@ paths:
 
 <!-- frmOtkup.frm je u paths namerno: u njoj su meta sva tri testa ponasanja
      (ClearOtkupFields), test seam (Public umesto Private) i IsTestMode gard.
-     Bez ovoga agent koji menja formu ne bi ni znao da to postoji. -->
+     Bez ovoga agent koji menja formu ne bi ni znao da to postoji.
+     Isto vazi za modOtkupUI.bas (ClearForm / ParseDatum / ParcelaID su Public
+     zbog testa, dva SetFocus-a su iza IsTestMode) i modScrDokumenti.bas
+     (Scr_OtpTestSet postoji samo za test i tvrdo je gejtovan). -->
 
 
 # Verifikacija: šta se stvarno može proveriti
@@ -161,6 +167,44 @@ menja ponašanje. Tri testa nad `frmOtkup.ClearOtkupFields` (tu bug i živi):
 | `T_PosleSnimanja_ZadrzavaZbirnu` | broj zbirne ostaje, i drugi blok dobija istu zbirnu |
 | `T_ClearForm_BrisePartnera` | `cmbKooperant` se BRIŠE (obrnut smer od prva dva) |
 
+I tri nad novim UI-jem (`modOtkupUI`), jer legacy se **ne gasi** — obe kopije
+postoje namerno (`docs/UI_MIGRACIJA_KATALOG.md`), pa obe nose svoj test:
+
+| Test | Šta drži |
+|---|---|
+| `T_ParseDatum_Ugovor` | prazno/necitljivo je `0`; `d.m.yyyy` se čita kao DMY bez `CDate`; trailing tačka se skida; nemoguć datum se **odbija**, ne preliva (`30.02` → `2.3`, mesec 13 → januar sledeće godine) |
+| `T_ParcelaID_IzSkriveneKolone` | ID parcele dolazi iz **skrivene druge kolone**, ne iz prikaznog teksta; sakriveno polje ne šalje parcelu u dokument |
+| `T_ClearForm_Ugovor` | ista tri ponašanja kao legacy trojka (datum ostaje, zbirna ostaje, partner se briše) + razlika novog UI-ja: **bez** aktivne otpremnice datum se vraća na danas |
+
+**Šta ovi testovi NE pokrivaju:** ništa iznad `ClearForm` — put upisa (`modOtkupUnos`
+/ `modDokUnos`), mreža, storno. Forma se gradi bez `.Show` (`New frmOtkupUI` pa
+`Controls.count`), pa `UserForm_Activate` — raspored, `GoFullScreen`, punjenje
+mreže — nikad ne ide.
+
+### Tri seam-a koja novi UI nosi zbog ovih testova
+
+Isti oblik kao u `frmOtkup` (§2 u `.claude/rules/otkup-i-dokumenta.md`):
+
+- `ClearForm` / `ParseDatum` / `ParcelaID` su **`Public`**, ne `Private` — test ih
+  zove direktno, bez vožnje celog upisa (stanica-lock, PDF, auto-lanac hladnjače).
+- **Tri `SetFocus`-a** (dva u `ClearForm`, jedan na kraju `ApplyPrefill`) su iza
+  `If Not IsTestMode()`. Forma koja nije `.Show`-ovana ne može da primi fokus, a u
+  nevidljivom Excelu `SetFocus` **ne puca nego trajno visi**. U produkciji je
+  `IsTestMode()` uvek `False`.
+- `modScrDokumenti.Scr_OtpTestSet` — suprotan smer od `Scr_OtpOtkazi` i **jedini**
+  način da test dobije aktivnu otpremnicu (produkcija je bira klikom na red, što
+  traži učitanu mrežu). Tvrdo gejtovan: van test-režima ne radi ništa.
+
+Test polja postavlja kroz `ApplyPrefill`, ne pisanjem u kontrolu: direktan upis u
+`fgDatum` okine `OnDatumChanged`, a on traži stanica-lock i predlog broja **sa
+pitanjem Google-u** — mreža u testu. `ApplyPrefill` je isti put kojim polja stižu
+i u produkciji (izbor otpremnice) i jedini koji ide pod `mLoading`.
+
+**Golden snapshot za novi UI ne postoji i ne treba da postoji.** `DumpKontrole`
+nad `frmOtkupUI` uhvatio bi i `titDatum` (`FmtDatumPun(Now)`), pa bi golden padao
+svakog sledećeg dana. Legacy forma ima fiksne `.frx` kontrole i tu je snapshot
+smislen; runtime forma sa vremenom u natpisu nije ista stvar.
+
 ```powershell
 python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom
 python tools/run_vba.py --suite RunAllTests                       # samo ove tri
@@ -168,15 +212,17 @@ python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 
 ### Akceptaciona komanda — goli poziv, ~1050 provera
 
-`--suite RunAllTests` vrti samo tri nova testa. Pun gate je ceo podrazumevani set,
-i to je ono što pušta `Stop` hook:
+`--suite RunAllTests` vrti samo `modTest` (tri testa nad legacy formom + tri nad
+novim UI-jem). Pun gate je ceo podrazumevani set, i to je ono što pušta `Stop`
+hook:
 
 ```powershell
 python tools/run_vba.py
 ```
 
-Izmereno: `EXIT=0`, 11 suite-ova, i **bez `BLIND` reda u ispisu** — u
-podrazumevanom setu nema više nijedne suite bez verdikta.
+Izmereno (14.08.2026, Windows + Excel): `EXIT=0`, 11 suite-ova zeleno, i **bez
+`BLIND` reda u ispisu** — u podrazumevanom setu nema više nijedne suite bez
+verdikta.
 
 Nema više eksplicitne liste: katalog `SUITES` u `tools/run_vba.py` je jedini izvor
 istine. Nova suite ulazi u gate time što je upisana tamo sa `default: True` —
@@ -184,7 +230,7 @@ hook se ne dira. **Ne proširivati na `--all`**: među `Run*` procedurama nisu s
 testovi (`RunSelfUpdate`, `RunGoogleAuthSetup`), a deo traži mrežu ili live SEF
 nalog.
 
-Izmereno na operaterskoj mašini (`EXIT=0`, svih devet zeleno):
+Izmereno na operaterskoj mašini 14.08.2026 (`EXIT=0`, svih jedanaest zeleno):
 
 | Suite | Provera |
 |---|---|
@@ -197,9 +243,15 @@ Izmereno na operaterskoj mašini (`EXIT=0`, svih devet zeleno):
 | `RunBusinessFlowProSuite` | 336 |
 | `RunAgrohemijaSmokeSuite` | 25 |
 | `TestLicense_All` | 23 |
-| `RunAllTests` | 3 |
+| `RunAllTests` | 6 |
 | `RunIzvestajTests` | ne prijavljuje broj |
 | **ukupno** | **~1050** + `RunIzvestajTests` |
+
+> Red `RunAllTests` je 14.08.2026 ispravljen sa 3 na 6 — tri testa novog UI-ja su
+> od tada pokrenuta na Windows mašini. Ostali brojevi su potvrđeni istim ranom
+> (`RunBankaImportTestSuite` 189, `RunStornoTestSuite` 181, `RunPaleteTestSuite`
+> 97, `RunSheetsJsonParserTests` 72, `RunFakturaSmokeSuite` 35,
+> `RunBusinessFlowProSuite` 336, `RunAgrohemijaSmokeSuite` 25).
 
 Sve rade nad **sintetičkim** fixture-om — suite koje diraju tabele seju sebi
 podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`, `TST-*`), pa im
@@ -276,6 +328,67 @@ je `git checkout -- src-vba/frmOtkup.frm`:
 
 Svaka sabotaža obara i snapshot iz prvog testa — to je namerno, snapshot hvata i
 polja koja niko nije tražio da se provere.
+
+### Sabotaže novog UI-ja — `tools/sabotaza.py`
+
+Sedam sabotaža nad `modOtkupUI`, svaka obara **tačno jedan** test i po imenu:
+
+```bash
+python tools/sabotaza.py --lista
+python tools/sabotaza.py clear-datum          # primeni jednu
+python tools/run_vba.py --suite RunAllTests   # ocekuj FAIL po imenu
+python tools/sabotaza.py --vrati              # vrati
+```
+
+| Sabotaža | Šta kvari | Očekivano |
+|---|---|---|
+| `parse-tacka` | ukloni skidanje trailing tačke | `FAIL T_ParseDatum_Ugovor` |
+| `parse-cdate` | vrati `IsDate`/`CDate` umesto determinističkog parsera | `FAIL T_ParseDatum_Ugovor` |
+| `parcela-tekst` | čitaj ID iz prikaznog teksta (`CB.text`) | `FAIL T_ParcelaID_IzSkriveneKolone` |
+| `parcela-vidljivost` | ukloni proveru vidljivosti polja | `FAIL T_ParcelaID_IzSkriveneKolone` |
+| `clear-datum` | vraćaj datum na danas i uz aktivnu otpremnicu | `FAIL T_ClearForm_Ugovor` |
+| `clear-zbirna` | dodaj `fgBrZbir` u listu polja koja se prazne | `FAIL T_ClearForm_Ugovor` |
+| `clear-partner` | prestani da brišeš partnera | `FAIL T_ClearForm_Ugovor` |
+
+Sve sedam su **pokrenute i potvrđene 14.08.2026** na Windows mašini: svaka obara
+tačno onaj test koji piše u tabeli, po imenu, a baseline ostaje `TESTS=6 FAIL=0`.
+
+> **„Tačno jedan test" je do tog rana bila NETAČNA tvrdnja.** `parcela-tekst` i
+> `parcela-vidljivost` obarale su **dva** testa — svoj, pa još `T_ClearForm_Ugovor`
+> sa `Err.Number=0` i **praznim opisom**. Uzrok nije bio u proizvodu nego u
+> izolaciji suite-a: `T_ParcelaID_IzSkriveneKolone` čisti za sobom tek poslednjom
+> linijom (`ReleaseOtkupUIForm`), pa test koji **padne** nikad do nje ne stigne —
+> `mFrm`/`Btns`/keš u `modOtkupUI` i aktivna otpremnica u `modScrDokumenti` ostaju,
+> i sledeći test gradi ekran nad ostacima prethodnog. Tačno ono na šta upozorava
+> komentar iznad `ReleaseOtkupUIForm`, samo što je čišćenje stajalo na zelenoj
+> putanji.
+>
+> Ispravka je u `modTest.RunOne`: `CleanupPosleTesta` (idempotentan
+> `OtkupUI_Release` + `Scr_OtpOtkazi`) zove se **iz `EH` grane**, a `Err` se čita
+> **pre** njega — `OtkupUI_Release` je ceo pod `On Error Resume Next`, što briše
+> `Err`, pa bi izveštaj inače ostao prazan. Uz to: pad bez opisa sada prijavljuje
+> `Err.Number`, jer je „`FAIL T_X`" bez razloga koštalo dva rana dijagnostike.
+>
+> Pouka je ista kao kod šeme (§4): **drugi pad u ispisu ne mora biti drugi nalaz.**
+> Kad jedna sabotaža obori dva testa, prvo proveri izolaciju, pa tek onda proizvod.
+
+`parse-cdate` pada na tvrdnji „godina van poslovnog opsega" (`11.08.1899`) —
+namerno, jer je to jedina tvrdnja koja razlikuje `CDate` od determinističkog
+parsera **na DMY mašini**. Ostale (`01.02.2026`, `30.02.2026`) na operaterskoj
+mašini daju isti rezultat u oba slučaja; tu razliku bi pokazala tek MDY mašina.
+To se ne prijavljuje kao pokriveno.
+
+**Tri zamke koje skripta rešava** (sve tri su već jednom ujele, treća u ovoj
+sesiji):
+
+1. **Kraj reda** — `src-vba` je CRLF na Windows-u, LF na Linuxu. Sidro sa
+   zakucanim `\n` ne pogodi ništa, skripta tiho ne uradi ništa, run prođe nad
+   neizmenjenim fajlom i izgleda kao da sabotaža „nije oborila" suite.
+2. **Uvlačenje** — sidro se poredi **od početka reda**. Bez toga je
+   `    mFrm...cbKupac.value = ""` (4 razmaka) podniz istog reda uvučenog za 8, pa
+   je isto sidro pogađalo dva različita mesta.
+3. **Vraćanje** — `git checkout --` vraća fajl na `HEAD`, pa briše i nesnimljene
+   izmene koje sa sabotažom nemaju veze. `--vrati` radi **obrnutu zamenu**.
 
 **Kako se dodaje test:** `RunOne n` u `RunAllTests`, plus grana u `TestName` i
 `InvokeTest`. Poziv je direktan (ne `Application.Run`) da bi VBA morao da
