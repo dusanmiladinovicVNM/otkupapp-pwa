@@ -1,0 +1,78 @@
+name: static
+
+# Centralni verdikt koji NE zavisi od toga na kojoj masini, u kojoj sesiji ili
+# kroz kog agenta je kod nastao. Do sada takav verdikt nije postojao: svaka
+# provera je zivela u Claude hook-u na jednoj Windows masini, pa je nevalidan
+# JSON u .claude/settings.json prezivio pola dana i dve sesije.
+#
+# Ovde idu SAMO determinsticke provere bez Excela. Excel/VBE automatizacija ne
+# pripada ovde i nikad nece: run_vba.py ostaje lokalni Windows integration
+# harness (.claude/rules/testovi.md, nivo TARGETED/FULL).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Fajl koji ne prodje JSON validaciju Claude Code odbacuje U CELINI -- ne
+      # to jedno pravilo, nego sva permission pravila i svaki hook odjednom.
+      # PostToolUse hook hvata slucaj kad taj fajl menja Edit; ovo hvata drugi
+      # ulaz, onaj koji je i ujeo (2da7ee8e): merge dve grane koje obe dopisuju
+      # na kraj istog niza spoji se BEZ konflikt markera, pa lokalna provera
+      # merge-a javi CISTO a fajl je pokvaren.
+      - name: settings JSON je validan
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          rc = 0
+          for name in (".claude/settings.json", ".claude/settings.local.json"):
+              path = pathlib.Path(name)
+              if not path.exists():
+                  print(f"preskocen (ne postoji): {name}")
+                  continue
+              try:
+                  json.loads(path.read_text(encoding="utf-8"))
+              except ValueError as exc:
+                  print(f"::error file={name}::nije validan JSON: {exc}")
+                  rc = 1
+              else:
+                  print(f"OK: {name}")
+          sys.exit(rc)
+          PY
+
+      # Tih hook izgleda isto kao cist repo. Sintaksna greska u .sh fajlu bi ga
+      # ucinila tihim, a nista je ne bi prijavilo.
+      - name: hook skripte se parsiraju
+        run: |
+          for f in .claude/hooks/*.sh; do
+            [ -e "$f" ] || continue
+            bash -n "$f" && echo "OK: $f"
+          done
+
+      - name: vba_check
+        run: python3 tools/vba_check.py
+
+      # Mapa vlasnistva se generise iz koda, pa istruli cim neko doda upis nad
+      # novom tabelom. Instant je i ne trazi Excel.
+      - name: WHO_WRITES je azuran
+        run: python3 tools/who_writes.py --check
+
+      # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
+      # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
+      # i videla se tek kao [break] u VBE-u na Windows masini.
+      - name: run_vba self-test
+        run: python3 tools/run_vba.py --self-test
