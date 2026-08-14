@@ -1184,6 +1184,31 @@ Oba čitaju postojeće read-modele (`GetOpenOtkupi`, `GetOpenFakture`,
   i kupci-izlaz, ne kroz revers. Izbor kupca se odbija porukom umesto da se tiho
   proknjiži na pogrešan entitet.
 
+**Novac se više ne knjiži na osnovu onoga što piše u polju**
+
+Tri kapije koje su došle iz pregleda PR-a, sve na istom mestu: greška tu nije
+UI bug nego pogrešno proknjižen novac.
+
+- **Ukucano ime koje nije izabrano iz liste zaustavlja dokument.** Padajuće
+  liste dozvoljavaju kucanje, a veza ka partneru/bloku/fakturi postoji samo kad
+  je stavka stvarno izabrana. Operater je mogao da vidi ime kooperanta u polju,
+  pritisne Sačuvaj — i da isplata bude proknjižena na otkupno mesto umesto na
+  njega. Isto je važilo za blok (postajao avans) i fakturu (postajala avans
+  kupca, faktura ostajala otvorena). Sva tri slučaja su izgledala kao uredan
+  dokument. Sada se unos zaustavlja dok se stavka ne izabere; **prazno** polje i
+  dalje znači „nije izabrano" i prolazi.
+- **Isplate (F5) su vraćene u granice otkupnog mesta.** Lista kooperanata se u
+  tom režimu sužava na aktivno otkupno mesto **uvek** (kao u staroj formi, gde
+  to nije zavisilo od podešavanja), a lista otvorenih blokova se filtrira po
+  istom mestu. Ranije je bila moguća kombinacija „blok sa jednog otkupnog
+  mesta, novac knjižen na drugo".
+- **Ograničenja iznosa se proveravaju u trenutku upisa, ne u trenutku otvaranja
+  liste.** Između punjenja liste i potvrde stanje se može promeniti — drugim
+  unosom, uvozom izvoda ili drugim delom programa. Sada se pred svaki upis
+  ponovo čita ko je vlasnik bloka/fakture, da nije storniran i koliko je
+  **stvarno** ostalo. Provera stoji u samom upisu, pa važi i za staru formu i
+  za svaki drugi put do knjiženja, ne samo za novi ekran.
+
 **Dva kvara zatečena usput**
 
 - **Polje „Novac" se nije praznilo posle snimanja.** `ClearForm` ga nije imao u
@@ -1207,16 +1232,20 @@ Oba čitaju postojeće read-modele (`GetOpenOtkupi`, `GetOpenFakture`,
 Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
 
 - `python tools\vba_check.py` → **čisto (188 fajlova)**, exit 0.
-- `python tools\run_vba.py --suite RunAllTests` → **TESTS=14, FAIL=0** (tri nova
-  testa nad `modNovacUnos`).
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=17, FAIL=0** (šest
+  novih testova: tri nad `modNovacUnos`, tri nad kapijama vlasništva i
+  trenutnog ostatka — uključujući jedan koji zove sam upis, bez UI sloja).
 - `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno, bez
   `BLIND` reda.
-- **Dokaz u oba smera:** sedam novih sabotaža, svaka obara test **po imenu**, pa
-  se vraća i suite je opet zelena. Osma je popravka postojećeg sidra
+- **Dokaz u oba smera:** četrnaest novih sabotaža, svaka obara test **po imenu**,
+  pa se vraća i suite je opet zelena. Jedna je popravka postojećeg sidra
   (`clear-zbirna`) — razvezalo se čim je `ClearForm` dobio novo polje, i tek bi
   pri sledećem pokretanju tiho prijavilo da sidro nije jednoznačno. Pravilo je
   zapisano u `.claude/rules/testovi.md`: kad menjaš red koji je nečije sidro,
   promeni i sidro pa ponovo pokaži crveno.
+- **Fixture je proširen jednom fakturom** — bez nje kapija nad fakturom nema nad
+  čim da radi. Ko vrti testove lokalno mora da regeneriše `otkup_test.xlsm`
+  (uputstvo u `.claude/rules/testovi.md`; donor može biti i postojeći fixture).
 - **`COMPILE` je i dalje `NEJASNO`** — automatski Compile ne prolazi, pa se
   potvrđuje **ručno**: `Alt+F11 → Debug → Compile VBAProject`. Prijavljuje se
   kako jeste.
