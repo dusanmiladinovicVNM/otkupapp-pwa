@@ -22,6 +22,10 @@ Option Explicit
 ' NOVI UI (frmOtkupUI + modOtkupUI) ima svoja tri testa, 4-6. Legacy forma se
 ' NE gasi (docs/UI_MIGRACIJA_KATALOG.md), pa oba skupa stoje jedan pored drugog
 ' -- ugovor je isti, kod je namerno dvostruk.
+'
+' UPIS ZBIRNE I PRIJEMNICE (F3/F4, modDokUnos) ima testove 7-11. Oni ne diraju
+' formu: pravilo unosa zivi u modulu bez ijedne kontrole, pa se i proverava
+' tamo -- brzo, bez gradnje ekrana i bez stanja koje ostaje za sobom.
 ' ============================================================
 
 ' --- Fixture konstante (moraju da prate tools/make_fixture.py) --------------
@@ -32,6 +36,17 @@ Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
 Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
 Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
+Private Const FX_VOZAC As String = "VOZ-TEST-1"
+Private Const FX_VRSTA As String = "TESTVOCE"
+Private Const FX_SORTA As String = "TESTSORTA"
+Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg = 1
+' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran
+' (Len > 0). Upis, koji bi trazio postojeceg, ovi testovi ne voze.
+Private Const FX_KUPAC As String = "KUP-TEST-1"
+' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
+' toliko da prijavi, inace je kapija obara.
+Private Const FX_ZBIRNA_KG As Double = 1000
+Private Const FX_ZBIRNA_AMB As Long = 100
 
 Private Const ERR_ASSERT As Long = vbObjectError + 9500
 Private Const ERR_GOLDEN As Long = vbObjectError + 9501
@@ -58,6 +73,11 @@ Public Sub RunAllTests()
     RunOne 4
     RunOne 5
     RunOne 6
+    RunOne 7
+    RunOne 8
+    RunOne 9
+    RunOne 10
+    RunOne 11
 
     SetTestMode prevMode
     WriteResultFile
@@ -116,6 +136,11 @@ Private Function TestName(ByVal idx As Long) As String
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
+        Case 7: TestName = "T_ZbirnaValidiraj_TraziVozaca"
+        Case 8: TestName = "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama"
+        Case 9: TestName = "T_PrijemnicaValidiraj_TraziKupca"
+        Case 10: TestName = "T_BrutoNeto_PoRezimu"
+        Case 11: TestName = "T_ScrSave_RutaPoRezimu"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -130,6 +155,11 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
+        Case 7: T_ZbirnaValidiraj_TraziVozaca
+        Case 8: T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama
+        Case 9: T_PrijemnicaValidiraj_TraziKupca
+        Case 10: T_BrutoNeto_PoRezimu
+        Case 11: T_ScrSave_RutaPoRezimu
     End Select
 End Sub
 
@@ -340,6 +370,251 @@ Private Sub T_ClearForm_Ugovor()
 
     ReleaseOtkupUIForm f
 End Sub
+
+' ============================================================
+' Upis zbirne (F3) i prijemnice (F4) -- modDokUnos + ruta u modScrDokumenti
+'
+' Ovi testovi ne grade formu: pravilo unosa zivi u modulu bez ijedne kontrole,
+' pa se tamo i proverava. Datum se ne postavlja jer ga nijedna provera ne cita
+' (njega proverava ljuska, pre poziva ekrana -- modOtkupUI.CommitDokument).
+' ============================================================
+
+' VOZAC JE ENTITET NIZA ZBIRNE (Z3a): po njemu se broji, njegova je tura i on
+' nosi robu kupcu. Zato je prva provera, pre kupca i pre broja -- isti redosled
+' kao frmDokumenta.btnUnosZbr_Click. Pada ako se provera ukloni ili spusti
+' ispod ostalih.
+Private Sub T_ZbirnaValidiraj_TraziVozaca()
+    Dim p As Object, fokus As String, res As String
+
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("vozacID") = ""
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_VOZAC"), "zbirna bez vozaca se odbija"
+    AssertEq fokus, "vozacID", "fokus se vraca na vozaca"
+
+    ' Obrnut smer: sa vozacem ta poruka vise ne dolazi. Bez ovoga bi test bio
+    ' zelen i kad rutina odbija SVE.
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("kupacID") = ""
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_KUPAC"), "sa vozacem zbirna staje tek na kupcu"
+    AssertEq fokus, "kupacID", "fokus se vraca na kupca"
+End Sub
+
+' ZBIRNA JE POKLOPAC NAD OTPREMNICAMA, ne slobodan unos: kilogrami i ambalaza
+' moraju da se poklope sa nestorniranim otpremnicama tog broja. U legacy je to
+' hard-gate (btnUnosZbr_Click: "If Not UpdateValidacija()") koji NE zavisi od
+' podesavanja VALIDACIJA_UNOSA. Pada ako se kapija ukloni, gejtuje tim
+' podesavanjem, ili ako se ambalaza prestane porediti.
+Private Sub T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama()
+    Dim p As Object, fokus As String, res As String
+    Dim prevVal As String, resBezVal As String
+
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("kolicinaI") = FX_ZBIRNA_KG - 100          ' 100 kg manje nego sto izvor nosi
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), _
+             "zbirna koja ne prijavljuje sve kilograme otpremnica se odbija"
+
+    ' Ambalaza se poredi zasebno od kilograma.
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("kolAmb") = FX_ZBIRNA_AMB - 10
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), _
+             "zbirna sa pogresnim brojem gajbi se odbija"
+
+    ' Zbirna bez unete ambalaze se ne pusta ni kad se kilogrami slazu: razlika bi
+    ' ispala 0 i kad izvor ambalazu ima (legacy uslov "zbrAmb > 0").
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("kolAmb") = 0
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), _
+             "zbirna bez unete ambalaze ne prolazi kapiju"
+
+    ' Obrnut smer: zbirna koja se u svemu slaze PROLAZI kapiju. Dalje je
+    ' zaustavlja samo duplikat (FX_ZBIRNA vec postoji u fixture-u) -- druga
+    ' provera i druga poruka, pa je razlika merljiva.
+    Set p = ZbirnaUnosKojiSeSlaze()
+    res = modDokUnos.ZbirnaValidiraj(p, fokus)
+    AssertEq (res = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")), False, _
+             "zbirna koja se poklapa sa otpremnicama prolazi kapiju"
+
+    ' Kapija NE zavisi od VALIDACIJA_UNOSA: i sa iskljucenim podesavanjem zbirna
+    ' koja ne pokriva svoje otpremnice mora da padne (legacy zove UpdateValidacija
+    ' bezuslovno, za razliku od provera vrste/sorte/gajbi iznad).
+    prevVal = GetConfigValue(CFG_VALIDACIJA_UNOSA)
+    SetConfigValue CFG_VALIDACIJA_UNOSA, "NE"
+    Set p = ZbirnaUnosKojiSeSlaze()
+    p("kolicinaI") = FX_ZBIRNA_KG - 100
+    resBezVal = modDokUnos.ZbirnaValidiraj(p, fokus)
+    ' Podesavanje se vraca PRE tvrdnje: pala tvrdnja ne sme da ostavi iskljucenu
+    ' validaciju ostatku suite-a nad istom sveskom.
+    SetConfigValue CFG_VALIDACIJA_UNOSA, prevVal
+    AssertEq resBezVal, Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA"), _
+             "kapija vazi i kad je VALIDACIJA_UNOSA iskljucena"
+End Sub
+
+' PRIJEMNICA JE PRIJEM KOD KUPCA: bez kupca ne postoji, pa je on prva provera
+' (kod zbirne je prvi vozac -- redosled nije stil nego navika operatera, isto
+' kao u frmDokumenta.btnUnosPrij_Click). Uz to: broj zbirne je obavezan, jer je
+' prijemnica prijem po JEDNOJ zbirnoj.
+Private Sub T_PrijemnicaValidiraj_TraziKupca()
+    Dim p As Object, fokus As String, res As String
+
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("kupacID") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_KUPAC"), "prijemnica bez kupca se odbija"
+    AssertEq fokus, "kupacID", "fokus se vraca na kupca"
+
+    ' Obrnut smer + red provera: sa kupcem prijemnica staje tek na vozacu.
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("vozacID") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_VOZAC"), "sa kupcem prijemnica staje tek na vozacu"
+    AssertEq fokus, "vozacID", "fokus se vraca na vozaca"
+
+    Set p = PrijemnicaUnosKojiProlazi()
+    p("brojZbirne") = ""
+    res = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    AssertEq res, Poruka("DOKUNOS_ERR_BROJ_ZBIRNE"), "prijemnica bez broja zbirne se odbija"
+    AssertEq fokus, "brojZbirne", "fokus se vraca na broj zbirne"
+End Sub
+
+' BRUTO -> NETO PO REZIMU, i to razlicito -- zato je jedan test za oba:
+'
+'   PRIJEMNICA ima BrutoKg (tblPrijemnica): uneti bruto se zamrzava, u Kolicinu
+'   ide neto, i to po klasama zasebno jer su im gajbice zasebne.
+'
+'   ZBIRNA ga NEMA i ne sme da ga dobije: ona je zbir SVOJIH otpremnica, a one
+'   su vec u netu. Oduzimanje tare i drugi put spustilo bi kilograme ispod
+'   izvora i oborilo bas kapiju iz testa 8. tblZbirna zato nema kolonu BrutoKg.
+Private Sub T_BrutoNeto_PoRezimu()
+    Dim pp As Object, pz As Object, fokus As String
+    Dim resP As String, resZ As String, prevBruto As String
+
+    prevBruto = GetConfigValue(CFG_OTKUP_BRUTO_UNOS)
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, "DA"
+
+    Set pp = PrijemnicaUnosKojiProlazi()
+    pp("kolicinaI") = 110               ' bruto = 100 kg voca + 10 gajbica po 1 kg
+    pp("kolAmb") = 10
+    pp("dveKlase") = True
+    pp("kolicinaII") = 55               ' bruto = 50 kg + 5 gajbica
+    pp("cenaII") = 40
+    pp("kolAmbII") = 5
+    resP = modDokUnos.PrijemnicaValidiraj(pp, fokus)
+
+    Set pz = ZbirnaUnosKojiSeSlaze()
+    resZ = modDokUnos.ZbirnaValidiraj(pz, fokus)
+
+    ' Podesavanje se vraca PRE tvrdnji: pala tvrdnja ne sme da ostavi ukljucen
+    ' bruto rezim ostatku suite-a nad istom sveskom.
+    SetConfigValue CFG_OTKUP_BRUTO_UNOS, prevBruto
+
+    AssertEq pp("brutoKgI"), 110, "uneti bruto Kl.I se zamrzava u BrutoKg"
+    AssertEq pp("kolicinaI"), 100, "u Kolicinu Kl.I ide neto (bruto - tara)"
+    AssertEq pp("brutoKgII"), 55, "uneti bruto Kl.II se zamrzava u BrutoKg"
+    AssertEq pp("kolicinaII"), 50, "u Kolicinu Kl.II ide neto (bruto - tara)"
+    AssertEq resP, "", "prijemnica sa ispravnim bruto unosom prolazi provere"
+
+    AssertEq pz("kolicinaI"), FX_ZBIRNA_KG, "zbirna se NE preracunava iz bruta"
+    AssertEq pz.Exists("brutoKgI"), False, "zbirna nema BrutoKg (nema ga ni tabela)"
+    AssertEq (resZ = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")), False, _
+             "zbirna se i u bruto rezimu poklapa sa (neto) otpremnicama"
+End Sub
+
+' RUTA PO REZIMU. Ekran samo prevodi polja i zove pravi modul; rezim koji jos
+' nema svoj upis mora da ostane iskren -- "nije vezano", ne lazna potvrda.
+' Pada ako se ruta izgubi (F3/F4 padnu na Case Else) ili ako se nepokriven
+' rezim tiho propusti u neki od upisa.
+Private Sub T_ScrSave_RutaPoRezimu()
+    Dim p As Object
+
+    ' F5 (gotovinske isplate) jos nema upis.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F5"))
+    AssertEq modScrDokumenti.Scr_Save(p), Poruka("OTKUI_TODO_NEVEZANO"), _
+             "nepokriven rezim vraca OTKUI_TODO_NEVEZANO"
+
+    ' F3 i F4 su od sada vezani: prazna polja ih zaustavljaju na PRVOM pravilu
+    ' svog dokumenta -- a koje je to pravilo, dokazuje do kog modula je poziv
+    ' stigao.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F3"))
+    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_VOZAC"), _
+             "zbirna ide u modDokUnos.ZbirnaValidiraj"
+    AssertEq CStr(p("fokus")), "vozacID", "ekran vraca i polje na koje ide fokus"
+
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F4"))
+    AssertEq modScrDokumenti.Scr_Save(p), Poruka("DOKUNOS_ERR_KUPAC"), _
+             "prijemnica ide u modDokUnos.PrijemnicaValidiraj"
+    AssertEq CStr(p("fokus")), "kupacID", "ekran vraca i polje na koje ide fokus"
+End Sub
+
+' Zbirna koja se u SVEMU poklapa sa fixture otpremnicom OTP-TEST-1 (jedina koja
+' nosi FX_ZBIRNA). Testovi je onda kvare po jednom polju.
+Private Function ZbirnaUnosKojiSeSlaze() As Object
+    Dim p As Object
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("vozacID") = FX_VOZAC
+    p("kupacID") = FX_KUPAC
+    p("brDok") = FX_ZBIRNA              ' u F3 broj dokumenta JESTE broj zbirne
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = FX_ZBIRNA_KG
+    p("kolAmb") = FX_ZBIRNA_AMB
+    Set ZbirnaUnosKojiSeSlaze = p
+End Function
+
+' Prijemnica koja prolazi sve provere: broj koji nije zauzet, postojeca zbirna,
+' popunjena roba i cena. Testovi je kvare po jednom polju.
+Private Function PrijemnicaUnosKojiProlazi() As Object
+    Dim p As Object
+    Set p = modDokUnos.NoviPrijemnicaUnos()
+    p("kupacID") = FX_KUPAC
+    p("vozacID") = FX_VOZAC
+    p("brDok") = "PR-TEST-1"
+    p("brojZbirne") = FX_ZBIRNA
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = 100
+    p("cenaI") = 50
+    p("kolAmb") = 10
+    Set PrijemnicaUnosKojiProlazi = p
+End Function
+
+' Recnik kakav ljuska predaje ekranu (modOtkupUI.SkupiPolja), sa praznim
+' vrednostima. Imena kljuceva su deo ugovora izmedju ljuske i ekrana, pa ih
+' test navodi eksplicitno umesto da ih pozajmi iz ljuske.
+Private Function PoljaEkrana(ByVal rezim As String) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p.CompareMode = vbTextCompare
+    p("rezim") = rezim
+    p("datum") = Date
+    p("stanicaID") = ""
+    p("kooperantID") = ""
+    p("partnerTekst") = ""
+    p("vrsta") = ""
+    p("sorta") = ""
+    p("vozacID") = ""
+    p("brDok") = ""
+    p("brojZbirne") = ""
+    p("parcelaID") = ""
+    p("tipAmb") = ""
+    p("kolicinaI") = 0#
+    p("cenaI") = 0#
+    p("kolAmb") = 0&
+    p("kolAmbIzdata") = 0&
+    p("dveKlase") = False
+    p("kolicinaII") = 0#
+    p("cenaII") = 0#
+    p("kolAmbII") = 0&
+    p("novac") = 0#
+    p("stampajUvek") = False
+    Set PoljaEkrana = p
+End Function
 
 ' Novi UI bez prikaza. Gradnja se okida dodirom Controls.count, isto kao kod
 ' frmOtkup; .Show se NE zove -- GoFullScreen, raspored i punjenje mreze idu tek

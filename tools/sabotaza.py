@@ -90,6 +90,86 @@ SABOTAZE = {
         "T_ClearForm_Ugovor",
         "partner mora da bude obrisan posle snimanja",
     ),
+    # --- upis zbirne (F3) ---------------------------------------------------
+    # Sidra su namerno vise-linijska: OtpremnicaValidiraj u istom fajlu ima
+    # doslovno iste redove, pa jednolinijsko sidro pogadja dva mesta i skripta
+    # odbija da radi (v. zamka 2).
+    "zbirna-vozac": (
+        "modDokUnos.bas",
+        '    If Len(S(p, "vozacID")) = 0 Then\n'
+        '        fokus = "vozacID": ZbirnaValidiraj = Poruka("DOKUNOS_ERR_VOZAC"): Exit Function\n'
+        "    End If\n",
+        "    ' SABOTAZA: zbirna vise ne trazi vozaca\n",
+        "T_ZbirnaValidiraj_TraziVozaca",
+        "zbirna bez vozaca se odbija",
+    ),
+    "zbirna-kapija": (
+        "modDokUnos.bas",
+        '    If Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n'
+        '        fokus = "kolicinaI"\n'
+        '        ZbirnaValidiraj = Poruka("DOK_MSG_VALIDACIJA_NIJE_PROSLA")\n'
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: zbir se vise ne poredi sa otpremnicama\n",
+        "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama",
+        "zbirna koja ne prijavljuje sve kilograme otpremnica se odbija",
+    ),
+    # Podmukliji oblik iste greske: kapija ostaje, ali se gejtuje podesavanjem.
+    # Sa ukljucenom validacijom (default) sve i dalje radi -- pada tek tvrdnja
+    # da kapija vazi i kad je VALIDACIJA_UNOSA iskljucena.
+    "zbirna-kapija-strogo": (
+        "modDokUnos.bas",
+        '    If Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then\n',
+        '    If strogo And Not ZbirnaSeSlazeSaIzvorom(S(p, "brDok"), kolI, kolII, kolAmb + kolAmbII, dveKl) Then   \' SABOTAZA\n',
+        "T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama",
+        "kapija vazi i kad je VALIDACIJA_UNOSA iskljucena",
+    ),
+    # --- upis prijemnice (F4) -----------------------------------------------
+    "prijemnica-kupac": (
+        "modDokUnos.bas",
+        '    If Len(S(p, "kupacID")) = 0 Then\n'
+        '        fokus = "kupacID": PrijemnicaValidiraj = Poruka("DOKUNOS_ERR_KUPAC"): Exit Function\n'
+        "    End If\n",
+        "    ' SABOTAZA: prijemnica vise ne trazi kupca\n",
+        "T_PrijemnicaValidiraj_TraziKupca",
+        "prijemnica bez kupca se odbija",
+    ),
+    "bruto-prijemnica": (
+        "modDokUnos.bas",
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        "        ' SABOTAZA: uneti bruto ostaje u Kolicini, tara se ne oduzima\n",
+        "T_BrutoNeto_PoRezimu",
+        "u Kolicinu Kl.I ide neto (bruto - tara)",
+    ),
+    # Obrnut smer istog pravila: zbirna DOBIJA bruto->neto koji ne sme da ima.
+    "bruto-zbirna": (
+        "modDokUnos.bas",
+        "    ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->\n",
+        '    If OtkupBrutoUnos() And kolAmb > 0 Then kolI = kolI - kolAmb * GetTezinaGajbice(S(p, "tipAmb")): p("kolicinaI") = kolI   \' SABOTAZA\n'
+        "    ' Hard-blokada: izvorne otpremnice imaju Klasu II a prekidac je iskljucen ->\n",
+        "T_BrutoNeto_PoRezimu",
+        "zbirna se NE preracunava iz bruta",
+    ),
+    # --- ruta ekrana --------------------------------------------------------
+    "ruta-zbirna": (
+        "modScrDokumenti.bas",
+        '        Case "ZBIRNA"\n'
+        "            Scr_Save = SaveZbirna(polja)\n"
+        "            Exit Function\n",
+        "        ' SABOTAZA: zbirna vise nije vezana na svoj upis\n",
+        "T_ScrSave_RutaPoRezimu",
+        "zbirna ide u modDokUnos.ZbirnaValidiraj",
+    ),
 }
 
 

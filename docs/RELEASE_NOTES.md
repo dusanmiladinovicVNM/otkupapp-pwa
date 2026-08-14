@@ -1052,8 +1052,11 @@ Vredi izdvojiti, jer se lako previdi pored tri nova testa: do sada se **nijedna*
 
 **Upis (Faza B, u toku)**
 
-- Poslovna logika unosa **izdvojena iz formi u module bez kontrola**: `modOtkupUnos` (otkupni list) i `modDokUnos` (otpremnica). Provere u legacy redosledu, bruto→neto sa zamrzavanjem `BrutoKg`, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna (MALINA), završetak ispravke.
-- Knjiže se **otkupni list (F1)** i **otpremnica (F2)**. Zbirna, prijemnica, OM ulaz i kupci izlaz još ne upisuju.
+- Poslovna logika unosa **izdvojena iz formi u module bez kontrola**: `modOtkupUnos` (otkupni list) i `modDokUnos` (otpremnica, zbirna, prijemnica). Provere u legacy redosledu, bruto→neto sa zamrzavanjem `BrutoKg`, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna (MALINA), završetak ispravke.
+- Knjiže se **otkupni list (F1)**, **otpremnica (F2)**, **zbirna (F3)** i **prijemnica (F4)**. OM ulaz i kupci izlaz još ne upisuju.
+- **Zbirna (F3)** nosi svoju kapiju iz legacy: kilogrami i ambalaža moraju da se poklope sa nestorniranim otpremnicama te zbirne (`ValidateZbirnaPreUnosa`), i to **bez obzira na podešavanje `VALIDACIJA_UNOSA`**. Uz to: blokada kad izvor ima Klasu II a prekidač je isključen (inače bi se Kl.II tiho izgubila). Zbirna **nema** bruto→neto ni cenu — `tblZbirna` ih nema, a otpremnice koje zbraja su već u netu.
+- **Prijemnica (F4)**: broj zbirne je obavezan i zbirna mora da postoji (ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA`), bruto→neto po klasama, pravilo „1 zbirna = 1 prijemnica" kao pitanje, auto-štampa i grupni otkupni list samo za default hladnjaču, status palete uz potvrdu upisa.
+- **Šta prijemnica još ne radi:** ispravku posle storna (prevezivanje paleta stare prijemnice). To traži storno okvir (Faza D) i ostaje u `frmDokumenta`, gde takva ispravka i može da nastane — novi UI još ne ume da stornira prijemnicu.
 - Keš isplate uz otkupni list **namerno ne prelaze** — idu isključivo kroz F5/F6.
 
 **Brojevni niz po režimu — ispravljena tri kvara**
@@ -1091,8 +1094,8 @@ Prođen ceo reaktivni sloj obe legacy forme i upoređen sa novim UI-jem; zatvore
 Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
 
 - `python tools/vba_check.py` → **čisto (187 fajlova)**, exit 0.
-- `python tools/run_vba.py --suite RunAllTests` → **TESTS=6, FAIL=0**.
-- **Dokaz u oba smera:** svih sedam sabotaža iz `tools/sabotaza.py` obara tačno jedan test, po imenu, pa se vraća i suite je opet zelena.
-- `python tools/run_vba.py` (pun podrazumevani set) → **`EXIT=0`**, 11 suite-ova zeleno, bez `BLIND` reda (~1050 provera).
+- `python tools/run_vba.py --suite RunAllTests` → **TESTS=11, FAIL=0** (šest testova UI ugovora + pet nad upisom zbirne i prijemnice).
+- **Dokaz u oba smera:** svih 14 sabotaža iz `tools/sabotaza.py` obara test po imenu, pa se vraća i suite je opet zelena.
+- `python tools/run_vba.py` (pun podrazumevani set) → **`EXIT=0`**, 11 suite-ova zeleno, bez `BLIND` reda (~1055 provera).
 
-Ograničenje se i dalje prijavljuje kako jeste: testovi pokrivaju `ClearForm`/`ParseDatum`/`ParcelaID`, **ne i put upisa** (`modOtkupUnos`/`modDokUnos`), mrežu i storno. Forma se gradi bez `.Show`, pa `UserForm_Activate` (raspored, `GoFullScreen`, punjenje mreže) nikad ne ide.
+Ograničenje se i dalje prijavljuje kako jeste: testovi pokrivaju `ClearForm`/`ParseDatum`/`ParcelaID` i **provere + bruto→neto** puta upisa zbirne i prijemnice — **ne i sam transakcioni upis** (`Save*_TX`, koji pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`), mrežu i storno. Forma se gradi bez `.Show`, pa `UserForm_Activate` (raspored, `GoFullScreen`, punjenje mreže) nikad ne ide.

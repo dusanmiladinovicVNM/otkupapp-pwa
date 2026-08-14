@@ -79,14 +79,17 @@ Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
   isporuka (Z3c) i plan po fazama. „Šta još nije preneto" se čita odatle, ne
   zaključuje iz koda.
 - **Poslovna logika unosa je izdvojena iz formi:** `modOtkupUnos` (otkupni list)
-  i `modDokUnos` (otpremnica…) — bez ijedne kontrole, zovu ih i ekran i, kad za
-  to dođe red, forma.
+  i `modDokUnos` (otpremnica, zbirna, prijemnica) — bez ijedne kontrole, zovu ih
+  i ekran i, kad za to dođe red, forma. Ekran (`modScrDokumenti.Scr_Save`) samo
+  prevodi polja u rečnik; **nijedna provera ne živi u ekranu.**
 - **Prelazno pravilo:** pravilo unosa se menja u tim modulima, pa se **ručno
   preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
   namerno.
 - Ugovor `ClearOtkupFields` iz §1 važi i za `modOtkupUI.ClearForm` — ista tri
   ponašanja, ista tri razloga. **Pokriven je testom** (`T_ClearForm_Ugovor` u
-  `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Novi UI ima i seam-ove iz §2
+  `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Upis zbirne i prijemnice
+  (`ZbirnaValidiraj` / `PrijemnicaValidiraj`) ima svojih pet testova u istoj
+  suite-i — spisak i sabotaže: `.claude/rules/testovi.md` §4. Novi UI ima i seam-ove iz §2
   u svom obliku (`ClearForm`/`ParseDatum`/`ParcelaID` su `Public`, tri `SetFocus`-a
   su iza `IsTestMode`, `Scr_OtpTestSet` je gejtovan) — detalji i sabotaže:
   `.claude/rules/testovi.md` §4.
