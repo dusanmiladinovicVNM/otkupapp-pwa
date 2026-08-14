@@ -338,10 +338,17 @@ Private mZbirnaFill As Boolean
 ' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
 Private mPartnerFill As Boolean
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
-Private mSmerRev As Long             ' izabrani smer reversa (1..4)
+' Izabran smer reversa (1..4); NULA znaci "operater jos nije izabrao" i tako se
+' i predaje ekranu. Nijedan segment nije unapred obelezen namerno: legacy
+' izricito trazi eksplicitan izbor, jer je prazan smer ranije tiho knjizio
+' "OM prima od vozaca" (modNovacUnos.ReversValidiraj).
+Private mSmerRev As Long
+Private mIzAvansa As Boolean         ' F5: isplata ide iz OM avansa, ne virmanom
 Private mPartnerFor As String        ' za koji rezim je partner lista vec napunjena
 Private mBlokIDs As Variant          ' OtkupID po indeksu combo-a otvorenih blokova
 Private mBlokRest As Variant         ' neisplaceni ostatak po istom indeksu
+Private mFakIDs As Variant           ' FakturaID po indeksu combo-a otvorenih faktura
+Private mFakRest As Variant          ' preostali iznos fakture po istom indeksu
 Private mPopSrc() As Long            ' indeksi stavki combo-a koje panel prikazuje
 Private mPopN As Long                ' koliko ih je posle suzavanja kucanjem
 Private mPopTop As Long              ' prva prikazana (skrol po stranama)
@@ -847,7 +854,10 @@ Private Sub BuildForm(frm As Object)
     fr.tag = "fld:3:AMB"
     NewLbl fr, "fgSmerRevL", Poruka("OTKUI_FLD_SMER_REV"), 0, 0, 300, 12, TS_LABEL, True, C_MUTED, -1
     NewShell fr, "fgSmerRev", 0, 16, 370, FIELD_H, C_BORDER_LT, C_WHITE
-    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, True
+    ' NIJEDAN segment nije unapred obelezen: smer se bira eksplicitno. Ranije je
+    ' segRev1 izgledao izabrano a mSmerRev je bio 0, pa je forma pokazivala smer
+    ' koji dokument nije imao.
+    NewSegBtn fr, "segRev1", Poruka("OTKUI_SEG_REV_IZD_KOOP"), 1, 17, 91, FIELD_H - 2, False
     NewSegBtn fr, "segRev2", Poruka("OTKUI_SEG_REV_PRI_KOOP"), 93, 17, 91, FIELD_H - 2, False
     NewSegBtn fr, "segRev3", Poruka("OTKUI_SEG_REV_IZD_OM"), 185, 17, 91, FIELD_H - 2, False
     NewSegBtn fr, "segRev4", Poruka("OTKUI_SEG_REV_PRI_OM"), 277, 17, 91, FIELD_H - 2, False
@@ -895,6 +905,29 @@ Private Sub BuildForm(frm As Object)
            TS_VAL, True, C_CREAM, -1, fmTextAlignRight, F_NUM
     NewLbl fr, "fgOstatakU", Poruka("OTKUI_UNIT_RSD"), 0, CenterY(0, FIELD_H, TS_MICRO), _
            28, TxtH(TS_MICRO), TS_MICRO, True, C_GOLD, -1, fmTextAlignRight
+
+    ' ISPLATA IZ (samo F5) - legacy tglIzOMAvansa. Nije kozmetika: prekidac
+    ' bira TIP NOVCA (kes iz avansa otkupnog mesta vs virman firme), a od tipa
+    ' zavisi da li se isplata skida sa avansa OM-a. Bez njega bi svaka isplata
+    ' po otkupnom bloku bila virman, pa avans OM-a nikad ne bi bio razduzen.
+    ' Dva medjusobno iskljuciva segmenta - isti obrazac kao klasa i smer reversa.
+    Set fr = NewFrame(z, "fgAvans", 0, 0, 250, FIELD_GRP_H, C_WHITE)
+    fr.tag = "fld:2:NOV"
+    NewLbl fr, "fgAvansL", Poruka("OTKUI_FLD_AVANS"), 0, 0, 240, 12, TS_LABEL, True, C_MUTED, -1
+    NewShell fr, "fgAvans", 0, 16, 250, FIELD_H, C_BORDER_LT, C_WHITE
+    NewSegBtn fr, "segAvans1", Poruka("OTKUI_SEG_AVANS_VIRMAN"), 1, 17, 123, FIELD_H - 2, True
+    NewSegBtn fr, "segAvans2", Poruka("OTKUI_SEG_AVANS_OM"), 125, 17, 123, FIELD_H - 2, False
+
+    ' RASPOLOZIV AVANS OTKUPNOG MESTA (legacy UpdateOMAvansSaldo) NIJE zasebna
+    ' ploca nego stoji u NATPISU ovog polja (RefreshSaldoOM). Dva razloga:
+    ' akcioni red vec nosi jednu plocu (VisibleValFrame bira izmedju VREDNOST i
+    ' NEISPLACENO, treca nema gde), a broj se ionako cita bas u trenutku izbora
+    ' "kes iz OM avansa" - iz avansa se ne moze isplatiti vise nego sto ga ima.
+
+    ' OTVORENA FAKTURA (samo F6) - legacy cmbFakturaIzlaz + FillOpenFakture.
+    ' Izbor fakture je jedina razlika izmedju uplate po fakturi i avansa kupca:
+    ' bez njega nijedna faktura iz novog UI-ja ne bi bila zatvorena.
+    NewFieldG z, "fgFaktura", Poruka("OTKUI_FLD_FAKTURA"), "cmb", "", 2, False, False, "NOV"
 
     SetDatumDanas z
 
@@ -2638,6 +2671,10 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             ' otvoreni blok i neisplaceni ostatak imaju smisla samo kod isplata
             FldShow z, "fgBlok", (mode = "F5")
             FldShow z, "fgOstatak", (mode = "F5")
+            ' odakle novac izlazi pita se samo kod isplata; kod uplata se pita
+            ' sta se zatvara, pa je tamo faktura umesto prekidaca
+            FldShow z, "fgAvans", (mode = "F5")
+            FldShow z, "fgFaktura", (mode = "F6")
         Case "F7"                           ' ambalaza: samo tip i kolicina
             FldShow z, "fgBrZbir", False
             FldShow z, "fgNovac", False
@@ -2653,6 +2690,8 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgVrednost", False
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
+            FldShow z, "fgAvans", False
+            FldShow z, "fgFaktura", False
         Case Else                           ' robni dokumenti
             ' u rezimu Zbirne broj dokumenta JESTE broj zbirne - zasebno polje
             ' bi bilo isti podatak dvaput
@@ -2675,10 +2714,13 @@ Private Sub ApplyFormFields(frm As Object, ByVal mode As String)
             FldShow z, "fgVrednost", True
             FldShow z, "fgBlok", False
             FldShow z, "fgOstatak", False
+            FldShow z, "fgAvans", False
+            FldShow z, "fgFaktura", False
     End Select
 End Sub
 
 ' Cetiri smera reversa su medjusobno iskljuciva - isti obrazac kao SetKlasa.
+' n = 0 gasi sve cetiri (stanje "nije izabrano", u koje se rezim i vraca).
 Private Sub SetSmerRev(ByVal n As Long)
     Dim z As Object, i As Long, sel As Boolean
     On Error Resume Next
@@ -2689,6 +2731,23 @@ Private Sub SetSmerRev(ByVal n As Long)
         sel = (i = n)
         BoxState z, "segRev" & i, IIf(sel, C_FOREST, C_WHITE), IIf(sel, C_CREAM, C_MUTED), sel
     Next i
+End Sub
+
+' Isplata iz OM avansa vs virman firme - dva segmenta, isti obrazac. Prekidac
+' se pusta samo kad su kes isplate ukljucene (legacy: tglIzOMAvansa.enabled =
+' IsKesIsplate() And primalac izabran); kad nisu, izbor ostaje na virmanu.
+Private Sub SetAvans(ByVal n As Long)
+    Dim z As Object
+    On Error Resume Next
+    If n = 2 And Not IsKesIsplate() Then
+        ShowToast Poruka("OTKUI_ERR_KES_ISKLJUCEN"), True
+        Exit Sub
+    End If
+    Set z = mFrm.Controls("zForm").Controls("fgAvans")
+    mIzAvansa = (n = 2)
+    MarkDirty
+    BoxState z, "segAvans1", IIf(n = 1, C_FOREST, C_WHITE), IIf(n = 1, C_CREAM, C_MUTED), (n = 1)
+    BoxState z, "segAvans2", IIf(n = 2, C_FOREST, C_WHITE), IIf(n = 2, C_CREAM, C_MUTED), (n = 2)
 End Sub
 
 Private Sub FldShow(z As Object, ByVal nm As String, ByVal vis As Boolean)
@@ -2784,7 +2843,13 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     frm.Controls("zCtx").Controls("ctxL4").caption = UCase$(Poruka("OTKUI_FLDPART_" & k))
     FillFormPartner frm, key
     FillOpenBlokovi frm
+    FillOpenFakture frm
     FillParcele frm
+    ' Smer reversa i "isplata iz" pripadaju JEDNOM dokumentu - prelazak u drugi
+    ' rezim ih vraca na pocetno stanje, kao i sve ostale izbore u formi.
+    SetSmerRev 0
+    SetAvans 1
+    RefreshSaldoOM
     ' prazna ambalaza: uz otkup se izdaje, uz prijemnicu se vraca
     If key = "F1" Or key = "F4" Then
         frm.Controls("zForm").Controls("fgAmbPr").Controls("fgAmbPrL").caption = _
@@ -3261,6 +3326,8 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "segRev2": SetSmerRev 2
         Case "segRev3": SetSmerRev 3
         Case "segRev4": SetSmerRev 4
+        Case "segAvans1": SetAvans 1
+        Case "segAvans2": SetAvans 2
         Case "btnSacuvaj", "btnSacuvajPrint": CommitDokument (tag = "btnSacuvajPrint")
         Case "btnOtkazi": ClearForm
         Case "btnAmbEq": CopyAmbNaPraznu
@@ -3422,6 +3489,7 @@ Private Sub UiChange(ByVal tag As String)
                 SetAktivnaZbirna mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").text
         Case "cbKupac"
             FillOpenBlokovi mFrm
+            FillOpenFakture mFrm
             FillParcele mFrm
             ' Broj prijemnice zavisi od KUPCA. Legacy cmbKupac_Change prvo
             ' OBRISE broj pa trazi predlog - bez brisanja bi kod ne-hladnjaca
@@ -3441,6 +3509,7 @@ Private Sub UiChange(ByVal tag As String)
             AutoFillCena
         Case "cbOM"
             OnStanicaChanged
+            RefreshSaldoOM              ' avans se vodi po otkupnom mestu
             RefreshKpi mFrm
             RefreshStatusBar mFrm
         Case "cbVozac"
@@ -4575,12 +4644,16 @@ Private Sub FillFormPartner(frm As Object, ByVal mode As String)
     If Len(omFilt) > 0 Then Set koopSt = KoopStanicaMap()
     mPartnerFill = True
     CB.Clear
-    CB.ColumnCount = 2
+    ' Treca kolona nosi TIP partnera ("KOOP" / "OM" / "KUP"). U mesovitoj listi
+    ' se tip ne moze zakljuciti iz ID-ja, a od njega zavisi kako se dokument
+    ' knjizi: isplata kooperantu i isplata otkupnom mestu su dva razlicita tipa
+    ' novca, a revers "izdato koop." kupca uopste ne prima (modNovacUnos).
+    CB.ColumnCount = 3
     ' BEZ ListWidth-a i BEZ ListRows - lista se otvara tacno u sirini kontrole,
     ' kao kod svih ostalih dropdown-a; svaka druga vrednost napravi zaseban,
     ' siri okvir koji se vidi kao "druga forma". Kolona mora da stane u
     ' kontrolu umanjenu za vertikalni skroler, inace se javi i horizontalni.
-    CB.ColumnWidths = "146 pt;0 pt"
+    CB.ColumnWidths = "146 pt;0 pt;0 pt"
     CB.BoundColumn = 1
     CB.TextColumn = 1
     ord = PartnerSrcOrder(mode)
@@ -4606,6 +4679,7 @@ Private Sub FillFormPartner(frm As Object, ByVal mode As String)
                 If Not preskoci Then
                     CB.AddItem PartnerPrikaz(CStr(ord(i)), CStr(k), CStr(d(k)))
                     CB.List(CB.ListCount - 1, 1) = CStr(k)
+                    CB.List(CB.ListCount - 1, 2) = CStr(ord(i))
                 End If
             Next k
         End If
@@ -4626,6 +4700,16 @@ Private Function PartnerID(frm As Object) As String
     On Error Resume Next
     Set CB = frm.Controls("zCtx").Controls("cbKupac")
     If CB.ListIndex >= 0 Then PartnerID = Trim$(CStr(CB.List(CB.ListIndex, 1)))
+End Function
+
+' Tip izabranog partnera ("KOOP" / "OM" / "KUP") - treca, skrivena kolona.
+' Prazno kad nista nije izabrano ili je ime otkucano rukom; ekran to tumaci
+' (F5 tada knjizi kao isplatu otkupnom mestu, F7 odbija smer ka kooperantu).
+Private Function PartnerTip(frm As Object) As String
+    Dim CB As MSForms.ComboBox
+    On Error Resume Next
+    Set CB = frm.Controls("zCtx").Controls("cbKupac")
+    If CB.ListIndex >= 0 Then PartnerTip = Trim$(CStr(CB.List(CB.ListIndex, 2)))
 End Function
 
 ' "Preostali kes" iz frmDokumenta (cmbOtkupBlok): otkupni blokovi izabranog
@@ -4661,14 +4745,123 @@ End Sub
 
 ' Izbor bloka puni plocu NEISPLACENO - iznos koji jos moze da se isplati.
 Private Sub ApplyBlokIzbor()
-    Dim CB As MSForms.ComboBox, i As Long
     On Error Resume Next
-    Set CB = mFrm.Controls("zForm").Controls("fgBlok").Controls("fgBlokT")
-    i = CB.ListIndex + 1
-    If i < 1 Then SetOstatak 0: Exit Sub
-    If Not IsArray(mBlokRest) Then SetOstatak 0: Exit Sub
-    If i > UBound(mBlokRest) Then SetOstatak 0: Exit Sub
-    SetOstatak CDbl(mBlokRest(i))
+    SetOstatak BlokOstatak()
+End Sub
+
+' Redni broj izabrane stavke u combo-u polja (1-bazno, 0 = nista izabrano).
+' Sakriveno polje se racuna kao "nista izabrano": rezim koji ga ne prikazuje
+' ne sme da posalje zatecenu vrednost u dokument (isto pravilo kao ParcelaID).
+Private Function IzborIdx(ByVal grp As String) As Long
+    Dim CB As MSForms.ComboBox
+    On Error Resume Next
+    If Not mFrm.Controls("zForm").Controls(grp).Visible Then Exit Function
+    Set CB = mFrm.Controls("zForm").Controls(grp).Controls(grp & "T")
+    If CB Is Nothing Then Exit Function
+    IzborIdx = CB.ListIndex + 1
+End Function
+
+' OtkupID izabranog otkupnog bloka i njegov neisplaceni ostatak. Ostatak NE
+' racunamo ovde - vrednost je ona koju je dala modNovac.GetOpenOtkupi.
+Private Function BlokID() As String
+    Dim i As Long
+    On Error Resume Next
+    i = IzborIdx("fgBlok")
+    If i < 1 Then Exit Function
+    If Not IsArray(mBlokIDs) Then Exit Function
+    If i > UBound(mBlokIDs) Then Exit Function
+    BlokID = CStr(mBlokIDs(i))
+End Function
+
+Private Function BlokOstatak() As Double
+    Dim i As Long
+    On Error Resume Next
+    i = IzborIdx("fgBlok")
+    If i < 1 Then Exit Function
+    If Not IsArray(mBlokRest) Then Exit Function
+    If i > UBound(mBlokRest) Then Exit Function
+    BlokOstatak = CDbl(mBlokRest(i))
+End Function
+
+' Otvorene fakture izabranog kupca (F6). Racunicu NE ponavljamo - koristi se
+' postojeci read-model modNovac.GetOpenFakture (6 kolona: BrojFakture |
+' FakturaID | Iznos | Uplaceno | Preostalo | Datum), isti izvor koji koristi i
+' frmDokumenta.FillOpenFakture, pa se dva ekrana ne mogu raziici. Taj model vec
+' izbacuje stornirane i one bez ostatka, pa ovde filtera nema.
+Private Sub FillOpenFakture(frm As Object)
+    Dim CB As MSForms.ComboBox, kupID As String, f As Variant, i As Long
+    Dim prikaz As String, datTxt As String
+    On Error GoTo EH
+    Set CB = frm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT")
+    CB.Clear
+    mFakIDs = Empty
+    mFakRest = Empty
+    If ActiveMode <> "F6" Then Exit Sub
+    kupID = PartnerID(frm)
+    If Len(kupID) = 0 Then Exit Sub
+    f = GetOpenFakture(kupID)
+    If Not IsArray(f) Then Exit Sub
+    CB.ColumnCount = 2
+    CB.ColumnWidths = "268 pt;0 pt"
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
+    ReDim mFakIDs(1 To UBound(f, 1))
+    ReDim mFakRest(1 To UBound(f, 1))
+    ' Iznosi se citaju CDbl-om, kao u FillOpenBlokovi i u legacy FillOpenFakture:
+    ' kolone read-modela su vec brojevi. ParseNum bi ovde bio pogresan alat -
+    ' on ocekuje SRPSKI zapis, pa bi "1234.56" pretvorio u 123456.
+    For i = 1 To UBound(f, 1)
+        mFakIDs(i) = NzToText(f(i, 2))
+        mFakRest(i) = CDbl(f(i, 5))
+        datTxt = ""
+        If IsDate(f(i, 6)) Then datTxt = "   " & ChrW(183) & "   " & Format$(CDate(f(i, 6)), "dd.mm.yyyy")
+        ' isti oblik kao lista otvorenih blokova: preostalo / ukupno
+        prikaz = NzToText(f(i, 1)) & datTxt & "   " & ChrW(183) & "   " & _
+                 FmtBroj(CDbl(f(i, 5)), 0) & " / " & FmtBroj(CDbl(f(i, 3)), 0)
+        CB.AddItem prikaz
+        CB.List(CB.ListCount - 1, 1) = NzToText(f(i, 2))
+    Next i
+    Exit Sub
+EH:
+    Debug.Print "modOtkupUI.FillOpenFakture PAO: " & Err.Number & " " & Err.description
+End Sub
+
+Private Function FakturaID() As String
+    Dim i As Long
+    On Error Resume Next
+    i = IzborIdx("fgFaktura")
+    If i < 1 Then Exit Function
+    If Not IsArray(mFakIDs) Then Exit Function
+    If i > UBound(mFakIDs) Then Exit Function
+    FakturaID = CStr(mFakIDs(i))
+End Function
+
+Private Function FakturaOstatak() As Double
+    Dim i As Long
+    On Error Resume Next
+    i = IzborIdx("fgFaktura")
+    If i < 1 Then Exit Function
+    If Not IsArray(mFakRest) Then Exit Function
+    If i > UBound(mFakRest) Then Exit Function
+    FakturaOstatak = CDbl(mFakRest(i))
+End Function
+
+' Raspoloziv avans otkupnog mesta - legacy UpdateOMAvansSaldo. Saldo racuna
+' modNovac.GetOMAvansSaldo; ovde se samo prikazuje, i to u natpisu polja
+' "ISPLATA IZ" (vidi napomenu uz gradnju tog polja).
+Private Sub RefreshSaldoOM()
+    Dim v As Double, stID As String, cap As String
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If Not mFrm.Controls("zForm").Controls("fgAvans").Visible Then Exit Sub
+    cap = Poruka("OTKUI_FLD_AVANS")
+    stID = SelectedStanicaID(mFrm)
+    If Len(stID) > 0 Then
+        v = GetOMAvansSaldo(stID)
+        cap = cap & "   " & ChrW(183) & "   " & Poruka("OTKUI_LBL_SALDO_OM") & " " & _
+              FmtBroj(v, 0) & " " & Poruka("OTKUI_UNIT_RSD")
+    End If
+    mFrm.Controls("zForm").Controls("fgAvans").Controls("fgAvansL").caption = cap
 End Sub
 
 ' Parcele izabranog kooperanta - isti prikaz i isti izvor kao
@@ -5160,7 +5353,11 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     p("rezim") = modeKey(ActiveMode)
     p("datum") = CDate(dat)
     p("stanicaID") = GetComboID(cbOM)
+    p("stanicaTekst") = Trim$(CStr(cbOM.value))
     p("kooperantID") = PartnerID(mFrm)
+    ' Tip partnera (KOOP / OM / KUP) - u mesovitoj listi se ne moze zakljuciti
+    ' iz ID-ja, a gotovinski rezimi po njemu biraju kako se dokument knjizi.
+    p("partnerTip") = PartnerTip(mFrm)
     p("partnerTekst") = Trim$(CStr(ctx.Controls("cbKupac").value))
     p("vrsta") = Trim$(CStr(ctx.Controls("cbVrsta").value))
     p("sorta") = Trim$(CStr(ctx.Controls("cbSorta").value))
@@ -5178,6 +5375,17 @@ Private Function SkupiPolja(ByVal dat As Double, ByVal stampaj As Boolean) As Ob
     p("cenaII") = IIf(mKlasa = 2, CenaText(2), 0#)
     p("kolAmbII") = IIf(mKlasa = 2, ParseNum(FldText("fgKolAmbII")), 0#)
     p("novac") = ParseNum(FldText("fgNovac"))
+    ' --- gotovinski rezimi i reversi (F5 / F6 / F7) ---
+    ' Sve cetiri vrednosti dolaze iz polja koja postoje samo u svom rezimu;
+    ' IzborIdx vraca 0 za sakriveno polje, pa se u ostalim rezimima salje
+    ' prazno i bez ijedne provere ovde (provere pripadaju ekranu i modulu).
+    p("otkupID") = BlokID()
+    p("otkupOstatak") = BlokOstatak()
+    p("izAvansa") = mIzAvansa
+    p("fakturaID") = FakturaID()
+    p("fakturaTekst") = Trim$(FldText("fgFaktura"))
+    p("fakturaOstatak") = FakturaOstatak()
+    p("smerRev") = mSmerRev
     p("stampajUvek") = stampaj
     Set SkupiPolja = p
 End Function
@@ -5225,11 +5433,14 @@ End Sub
 ' rezim pada na opstu potvrdu umesto da tvrdi da je upisan otkupni list.
 Private Function PorukaUpisano(ByVal rezim As String) As String
     Select Case rezim
-        Case "OTKUP":      PorukaUpisano = Poruka("OTKUNOS_MSG_UPISAN")
-        Case "OTPREMNICA": PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_OTP")
-        Case "ZBIRNA":     PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_ZBR")
-        Case "PRIJEMNICA": PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_PRIJ")
-        Case Else:         PorukaUpisano = Poruka("OTKUI_MSG_UPISANO")
+        Case "OTKUP":       PorukaUpisano = Poruka("OTKUNOS_MSG_UPISAN")
+        Case "OTPREMNICA":  PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_OTP")
+        Case "ZBIRNA":      PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_ZBR")
+        Case "PRIJEMNICA":  PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_PRIJ")
+        Case "AMB_ISPLATE": PorukaUpisano = Poruka("NOVUNOS_MSG_UPISANA_ISPL")
+        Case "AMB_UPLATE":  PorukaUpisano = Poruka("NOVUNOS_MSG_UPISANA_UPL")
+        Case "REVERSI":     PorukaUpisano = Poruka("NOVUNOS_MSG_UPISAN_REV")
+        Case Else:          PorukaUpisano = Poruka("OTKUI_MSG_UPISANO")
     End Select
 End Function
 
@@ -5240,7 +5451,13 @@ Private Sub FokusNaPolje(ByVal kljuc As String)
     If Len(kljuc) = 0 Then Exit Sub
     Select Case kljuc
         Case "stanicaID":    mFrm.Controls("zCtx").Controls("cbOM").SetFocus
-        Case "kooperantID":  mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        ' isto polje, dva imena: robni dokumenti ga zovu kooperantID, gotovinski
+        ' rezimi i reversi partnerID (tamo partner ne mora biti kooperant)
+        Case "kooperantID", "partnerID": mFrm.Controls("zCtx").Controls("cbKupac").SetFocus
+        Case "novac":        mFrm.Controls("zForm").Controls("fgNovac").Controls("fgNovacT").SetFocus
+        ' "smerRev" ovde NEMA granu i to nije propust: segmenti su Label-i
+        ' (modUiKit.BoxText), a Label ne prima fokus. Poruka o gresci sama kaze
+        ' sta se bira, pa kursor ostaje gde jeste umesto da odleti na tudje polje.
         Case "vrsta":        mFrm.Controls("zCtx").Controls("cbVrsta").SetFocus
         Case "sorta":        mFrm.Controls("zCtx").Controls("cbSorta").SetFocus
         Case "brDok":        mFrm.Controls("zForm").Controls("fgBrOtpr").Controls("fgBrOtprT").SetFocus
@@ -5650,10 +5867,14 @@ Public Sub ClearForm()
     ' otpremnice idu na istu zbirnu. Legacy ClearOtkupFields ga takodje ne dira
     ' (cisti ga tek ResetDatumKontekst, kad se otpremnica napusti). Uz to bi
     ' praznjenje polja okinulo SetAktivnaZbirna "" i obrisalo zapamcenu zbirnu.
-    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr")
+    ' fgNovac je u istom spisku: iznos pripada JEDNOM dokumentu, a zatecen iznos
+    ' u polju posle snimanja je najskuplja greska ovog rezima - sledeca potvrda
+    ' bi isplatila isti novac drugi put.
+    nmv = Array("fgBrOtpr", "fgKgI", "fgKgII", "fgKolAmb", "fgAmbPr", "fgNovac")
     For i = 0 To UBound(nmv)
         mFrm.Controls("zForm").Controls(CStr(nmv(i))).Controls(CStr(nmv(i)) & "T").text = ""
     Next i
+    mFrm.Controls("zForm").Controls("fgFaktura").Controls("fgFakturaT").text = ""
     ' cena ima dve kutije pa ne staje u sablon grp -> grp & "T"
     mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena1T").text = ""
     mFrm.Controls("zForm").Controls("fgCena").Controls("fgCena2T").text = ""
@@ -5677,6 +5898,14 @@ Public Sub ClearForm()
     If ParseDatum(FldText("fgDatum")) = 0 Then SetDatumDanas mFrm.Controls("zForm")
     SetOstatak 0
     SetKlasa 1
+    ' Smer reversa i "isplata iz" su izbori JEDNOG dokumenta, kao i klasa:
+    ' zadrzan smer bi sledeci revers proknjizio u suprotnom pravcu.
+    SetSmerRev 0
+    SetAvans 1
+    ' Posle isplate/uplate saldo avansa i lista otvorenih faktura vise nisu
+    ' tacni - citaju se ponovo, da sledeci dokument ne racuna po starom stanju.
+    RefreshSaldoOM
+    FillOpenFakture mFrm
     ' Cena je obrisana zajedno sa poljima, a vrsta/sorta su ostale izabrane -
     ' pa se cena i tip ambalaze vracaju iz cenovnika i kulture. Ako robe nema
     ' (prvi unos), uzima se podrazumevana iz Podesavanja.

@@ -157,7 +157,16 @@ kontrole, pa se tamo i proverava — brzo i bez stanja koje ostaje za sobom.
 | `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` | zbirna je poklopac nad otpremnicama: kg **i** ambalaža moraju da se poklope (`ValidateZbirnaPreUnosa`); zbirna bez ambalaže ne prolazi; **kapija ne zavisi od `VALIDACIJA_UNOSA`** |
 | `T_PrijemnicaValidiraj_TraziKupca` | kupac je **prva** provera (kod zbirne je vozač); broj zbirne je obavezan |
 | `T_BrutoNeto_PoRezimu` | prijemnica: uneti bruto → `BrutoKg`, u `Kolicina` ide neto, po klasama zasebno. Zbirna: bruto→neto **nema i ne sme da ga dobije** (`tblZbirna` nema `BrutoKg`; ona zbraja već netirane otpremnice) |
-| `T_ScrSave_RutaPoRezimu` | `Scr_Save` vodi F3/F4 u njihov modul (dokaz: staju na prvom pravilu **svog** dokumenta), a nepokriven režim (F5) i dalje vraća `OTKUI_TODO_NEVEZANO` |
+| `T_ScrSave_RutaPoRezimu` | `Scr_Save` vodi F2–F7 u njihov modul (dokaz: svaki staje na pravilu koje je **isključivo njegovo**), a nepokriven režim (F8 storno) i dalje vraća `OTKUI_TODO_NEVEZANO` |
+
+Tri nad **upisom novca i ambalaže** (`modNovacUnos`, v6-ui-117). Isti obrazac:
+pravilo živi u modulu bez ijedne kontrole, pa se tamo i proverava.
+
+| Test | Šta drži |
+|---|---|
+| `T_IsplataValidiraj_TipNovcaPoIzboru` | tip novca po izboru primaoca/bloka/prekidača — sve četiri grane (`KesOtkupacKoop`, `VirmanFirmaKoop`, `VirmanAvansKoop`, `KesFirmaOtkupac`); iznos ne preko ostatka bloka ni preko OM avansa; primalac-otkupno-mesto je entitet novca i odbacuje blok; broj dokumenta je kapija **oba smera** `VALIDACIJA_UNOSA` |
+| `T_UplataValidiraj_FakturaOdlucujeTip` | izabrana faktura → `KupciUplata` + napomena sa brojem; bez nje → `KupciAvans`; uplata ne preko preostalog iznosa fakture |
+| `T_ReversValidiraj_SmerJeObavezan` | smer je obavezan (prazan je ranije tiho knjižio „OM prima od vozača"); količina i tip ambalaže idu pre smera; kooperantski smer ne prima kupca; firma↔OM traži vozača **i bez** stroge validacije; prevod segmenta u `koopSmer` |
 
 **Šta NE pokrivaju:** iznad `ClearForm` — mrežu i storno; a od puta upisa samo
 **provere i bruto→neto**, ne i sam `Save*_TX` (transakcioni upis pokrivaju
@@ -225,10 +234,19 @@ python tools/run_vba.py --suite RunAllTests   # ocekuj FAIL po IMENU tog testa
 python tools/sabotaza.py --vrati              # vrati
 ```
 
-Četrnaest sabotaža: sedam nad `modOtkupUI`, sedam nad putem upisa F3/F4
-(`modDokUnos`, `modScrDokumenti`). Koja obara koji test i sa kojom tvrdnjom —
-**`--lista`**, ne prepisivati ovde; skripta je izvor istine. Sve su pokrenute i
-potvrđene 14.08.2026, baseline `TESTS=11 FAIL=0`.
+Dvadeset dve sabotaže: sedam nad `modOtkupUI`, sedam nad putem upisa F3/F4
+(`modDokUnos`, `modScrDokumenti`), sedam nad putem upisa F5/F6/F7
+(`modNovacUnos`) i jedna nad rutom isplate. Koja obara koji test i sa kojom
+tvrdnjom — **`--lista`**, ne prepisivati ovde; skripta je izvor istine. Prvih
+četrnaest potvrđeno 14.08.2026 (`TESTS=11 FAIL=0`), osam iz v6-ui-117 (sedam
+novih + popravljeno sidro `clear-zbirna`) potvrđeno nad baseline-om
+`TESTS=14 FAIL=0`.
+
+> **Sidro sabotaže je deo koda koji sabotira.** `clear-zbirna` se razvezalo čim
+> je `ClearForm` dobio `fgNovac` u spisak polja — skripta bi tiho prijavila
+> „sidro nije jednoznačno" tek pri sledećem pokretanju, a do tada bi izgledalo
+> da je dokaz i dalje važeći. Kad menjaš red koji je nečije sidro, promeni i
+> sidro, pa ponovo pokaži crveno.
 
 Za legacy formu sabotaža se radi ručno u `ClearOtkupFields` (dodaj
 `txtDatum.value = ""`, `txtBrojZbirne.value = ""`, ukloni `cmbKooperant.value = ""`),
