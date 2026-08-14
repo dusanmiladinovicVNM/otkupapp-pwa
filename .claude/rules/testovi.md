@@ -220,8 +220,9 @@ hook:
 python tools/run_vba.py
 ```
 
-Izmereno: `EXIT=0`, 11 suite-ova, i **bez `BLIND` reda u ispisu** — u
-podrazumevanom setu nema više nijedne suite bez verdikta.
+Izmereno (14.08.2026, Windows + Excel): `EXIT=0`, 11 suite-ova zeleno, i **bez
+`BLIND` reda u ispisu** — u podrazumevanom setu nema više nijedne suite bez
+verdikta.
 
 Nema više eksplicitne liste: katalog `SUITES` u `tools/run_vba.py` je jedini izvor
 istine. Nova suite ulazi u gate time što je upisana tamo sa `default: True` —
@@ -229,7 +230,7 @@ hook se ne dira. **Ne proširivati na `--all`**: među `Run*` procedurama nisu s
 testovi (`RunSelfUpdate`, `RunGoogleAuthSetup`), a deo traži mrežu ili live SEF
 nalog.
 
-Izmereno na operaterskoj mašini (`EXIT=0`, svih devet zeleno):
+Izmereno na operaterskoj mašini 14.08.2026 (`EXIT=0`, svih jedanaest zeleno):
 
 | Suite | Provera |
 |---|---|
@@ -242,13 +243,15 @@ Izmereno na operaterskoj mašini (`EXIT=0`, svih devet zeleno):
 | `RunBusinessFlowProSuite` | 336 |
 | `RunAgrohemijaSmokeSuite` | 25 |
 | `TestLicense_All` | 23 |
-| `RunAllTests` | 3 |
+| `RunAllTests` | 6 |
 | `RunIzvestajTests` | ne prijavljuje broj |
 | **ukupno** | **~1050** + `RunIzvestajTests` |
 
-> Merenje je **starije od tri testa novog UI-ja** (`RunAllTests` ih sada vrti
-> šest). Brojevi se ne prepravljaju napamet — red se ispravlja tek posle
-> pokretanja na Windows mašini.
+> Red `RunAllTests` je 14.08.2026 ispravljen sa 3 na 6 — tri testa novog UI-ja su
+> od tada pokrenuta na Windows mašini. Ostali brojevi su potvrđeni istim ranom
+> (`RunBankaImportTestSuite` 189, `RunStornoTestSuite` 181, `RunPaleteTestSuite`
+> 97, `RunSheetsJsonParserTests` 72, `RunFakturaSmokeSuite` 35,
+> `RunBusinessFlowProSuite` 336, `RunAgrohemijaSmokeSuite` 25).
 
 Sve rade nad **sintetičkim** fixture-om — suite koje diraju tabele seju sebi
 podatke u transakciji koja se uvek poništava (`SVT-*`, `BIT-*`, `TST-*`), pa im
@@ -346,6 +349,28 @@ python tools/sabotaza.py --vrati              # vrati
 | `clear-datum` | vraćaj datum na danas i uz aktivnu otpremnicu | `FAIL T_ClearForm_Ugovor` |
 | `clear-zbirna` | dodaj `fgBrZbir` u listu polja koja se prazne | `FAIL T_ClearForm_Ugovor` |
 | `clear-partner` | prestani da brišeš partnera | `FAIL T_ClearForm_Ugovor` |
+
+Sve sedam su **pokrenute i potvrđene 14.08.2026** na Windows mašini: svaka obara
+tačno onaj test koji piše u tabeli, po imenu, a baseline ostaje `TESTS=6 FAIL=0`.
+
+> **„Tačno jedan test" je do tog rana bila NETAČNA tvrdnja.** `parcela-tekst` i
+> `parcela-vidljivost` obarale su **dva** testa — svoj, pa još `T_ClearForm_Ugovor`
+> sa `Err.Number=0` i **praznim opisom**. Uzrok nije bio u proizvodu nego u
+> izolaciji suite-a: `T_ParcelaID_IzSkriveneKolone` čisti za sobom tek poslednjom
+> linijom (`ReleaseOtkupUIForm`), pa test koji **padne** nikad do nje ne stigne —
+> `mFrm`/`Btns`/keš u `modOtkupUI` i aktivna otpremnica u `modScrDokumenti` ostaju,
+> i sledeći test gradi ekran nad ostacima prethodnog. Tačno ono na šta upozorava
+> komentar iznad `ReleaseOtkupUIForm`, samo što je čišćenje stajalo na zelenoj
+> putanji.
+>
+> Ispravka je u `modTest.RunOne`: `CleanupPosleTesta` (idempotentan
+> `OtkupUI_Release` + `Scr_OtpOtkazi`) zove se **iz `EH` grane**, a `Err` se čita
+> **pre** njega — `OtkupUI_Release` je ceo pod `On Error Resume Next`, što briše
+> `Err`, pa bi izveštaj inače ostao prazan. Uz to: pad bez opisa sada prijavljuje
+> `Err.Number`, jer je „`FAIL T_X`" bez razloga koštalo dva rana dijagnostike.
+>
+> Pouka je ista kao kod šeme (§4): **drugi pad u ispisu ne mora biti drugi nalaz.**
+> Kad jedna sabotaža obori dva testa, prvo proveri izolaciju, pa tek onda proizvod.
 
 `parse-cdate` pada na tvrdnji „godina van poslovnog opsega" (`11.08.1899`) —
 namerno, jer je to jedina tvrdnja koja razlikuje `CDate` od determinističkog

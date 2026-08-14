@@ -68,6 +68,7 @@ End Sub
 ' test pukne.
 Private Sub RunOne(ByVal idx As Long)
     Dim nm As String
+    Dim errNum As Long, errDesc As String
     nm = TestName(idx)
 
     On Error GoTo EH
@@ -77,8 +78,34 @@ Private Sub RunOne(ByVal idx As Long)
     Exit Sub
 
 EH:
+    ' Err se cita PRE ciscenja: CleanupPosleTesta ide kroz On Error Resume Next
+    ' (OtkupUI_Release ga ima), a to brise Err -- bez ovoga bi izvestaj o padu
+    ' ostao prazan.
+    errNum = Err.Number
+    errDesc = Err.description
     m_Failed = m_Failed + 1
-    AppendReport nm, "FAIL", Err.description
+    CleanupPosleTesta
+    ' Pad bez opisa je vec jednom kostao dva rana dijagnostike: "FAIL T_X" bez
+    ' razloga ne kaze operateru nista. Broj greske je tada jedini trag.
+    If Len(errDesc) = 0 Then errDesc = "greska bez opisa (Err.Number=" & errNum & ")"
+    AppendReport nm, "FAIL", errDesc
+End Sub
+
+' Test koji je pao NIJE stigao do svog ReleaseOtkupUIForm, pa modul novog UI-ja
+' (mFrm, Btns, kes tabela) i aktivna otpremnica u modScrDokumenti ostaju
+' zaprljani. Sledeci test bi tada gradio ekran nad ostacima prethodnog i pao BEZ
+' SVOJE KRIVICE -- jedna sabotaza obarala bi dva testa, pa bi drugi pad bio lazan
+' trag. (Dokazano: sabotaza parcela-tekst obarala je i T_ClearForm_Ugovor, sa
+' Err.Number=0 i praznim opisom.)
+'
+' Ciscenje je idempotentno (OtkupUI_Release je ceo pod On Error Resume Next,
+' Scr_OtpOtkazi samo prazni tri promenljive), pa je bezbedno i posle testa koji
+' formu nikad nije napravio. Samu formu otpusta odmotavanje steka -- ovde ostaje
+' ono sto zivi na MODULIMA i sto odmotavanje ne dira.
+Private Sub CleanupPosleTesta()
+    On Error Resume Next
+    modOtkupUI.OtkupUI_Release
+    modScrDokumenti.Scr_OtpOtkazi
 End Sub
 
 Private Function TestName(ByVal idx As Long) As String
