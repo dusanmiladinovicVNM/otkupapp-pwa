@@ -20,7 +20,7 @@ Option Explicit
 '   palete (otvorene/zatvorene), funkcija markira Preradjeno=Da.
 '
 ' Reuse: GetTableData / RequireColumnIndex / LogErr (postojeci helperi).
-' Sema tabela: modSetup.EnsurePaletniListSchema (pokrenuti jednom).
+' Sema tabela: modSetup.SetupPaletniListSchema (pokrenuti jednom).
 ' ============================================================
 
 ' Ispravka stornirane prijemnice: kad se ista roba samo prevezuje na ispravljenu
@@ -2434,7 +2434,7 @@ End Sub
 
 ' Schema-drift: dodaj nove tblPrerada kolone (bruto/paleta/ambalaza/tipovi)
 ' ako fale. Idempotentno (no-op kad postoje). Resava 0 u sazetku paletnog
-' lista kada EnsurePaletniListSchema nije pokrenut posle nadogradnje.
+' lista kada SetupPaletniListSchema nije pokrenut posle nadogradnje.
 '
 ' Telo je delegirano na modSetup.EnsureColumnOnTable -- lokalni EnsurePreradaCol
 ' je bio doslovna kopija tog primitiva, napravljena samo zato sto je original bio

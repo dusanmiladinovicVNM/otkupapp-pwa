@@ -173,14 +173,14 @@ Private Sub T_EnsureSchema_JeIdempotentna()
 
     ' Prvi prolaz dovodi svesku u zeljeno stanje (fixture donora ga nema ceo).
     EnsureRuntimeSchema
-    EnsureDoradeSchemaCore
-    EnsurePaletniListSchemaCore
+    EnsureDoradeSchema
+    EnsurePaletniListSchema
     prvi = SchemaOtisak()
 
     ' Drugi prolaz sme SAMO da bude no-op.
     EnsureRuntimeSchema
-    EnsureDoradeSchemaCore
-    EnsurePaletniListSchemaCore
+    EnsureDoradeSchema
+    EnsurePaletniListSchema
     drugi = SchemaOtisak()
 
     ' Preduslov: bez ijedne tabele otisak bi bio prazan u oba prolaza, pa bi test

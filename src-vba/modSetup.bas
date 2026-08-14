@@ -938,14 +938,14 @@ End Sub
 ' ============================================================
 ' Paletni list (Phase 2) -- jednokratni schema setup.
 ' Idempotentno: kreira nedostajuce tabele i kolonu na tblKulture.
-' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> EnsurePaletniListSchema).
+' Pokrenuti JEDNOM na master workbook-u (Alt+F8 -> SetupPaletniListSchema).
 ' Reuse: FindListObject / GetOrCreateWorksheet / LogSetup (gore).
 ' ============================================================
-Public Sub EnsurePaletniListSchema()
+Public Sub SetupPaletniListSchema()
     On Error GoTo EH
 
     Dim fails As Long
-    fails = EnsurePaletniListSchemaCore()
+    fails = EnsurePaletniListSchema()
 
     If fails > 0 Then
         MsgBox "Paletni list: " & fails & Poruka("SETUP_MSG_KORAKA_NIJE_PROSLO"), _
@@ -963,15 +963,15 @@ Public Sub EnsurePaletniListSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsurePaletniListSchema failed: " & Err.description
-    MsgBox "Gre" & ChrW(353) & "ka u EnsurePaletniListSchema: " & Err.description, vbCritical, APP_NAME
+    LogSetup "ERROR", "SetupPaletniListSchema failed: " & Err.description
+    MsgBox "Gre" & ChrW(353) & "ka u SetupPaletniListSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Postoji da bi agregat
 ' (modAdmin.AdminEnsureEverything) mogao da ga pozove bez dijaloga i da SAZNA da
 ' li je nesto palo: ranije je pad ovde zavrsavao u MsgBox-u pa se procedura
 ' normalno vracala, a agregat je odmah zatim javljao "sve provereno".
-Public Function EnsurePaletniListSchemaCore() As Long
+Public Function EnsurePaletniListSchema() As Long
     Dim fails As Long
 
     InitSetupLog
@@ -993,25 +993,25 @@ Public Function EnsurePaletniListSchemaCore() As Long
     fails = fails + StepFailed("PaletniList/Sabloni")
 
     If fails > 0 Then
-        LogSetup "ERROR", "EnsurePaletniListSchema: " & fails & " koraka nije proslo"
+        LogSetup "ERROR", "SetupPaletniListSchema: " & fails & " koraka nije proslo"
     Else
-        LogSetup "OK", "EnsurePaletniListSchema done"
+        LogSetup "OK", "SetupPaletniListSchema done"
     End If
 
-    EnsurePaletniListSchemaCore = fails
+    EnsurePaletniListSchema = fails
 End Function
 
 ' ============================================================
 ' Cenovnik (cene po proizvodu) -- jednokratni schema setup.
 ' Idempotentno: kreira tblCenovnik ako ne postoji, inace dopuni kolone.
-' Pokrenuti na master workbook-u (deo je EnsurePaletniListSchema, a moze
+' Pokrenuti na master workbook-u (deo je SetupPaletniListSchema, a moze
 ' i samostalno: Alt+F8 -> EnsureCenovnikSchema).
 ' ============================================================
 Public Sub EnsureCenovnikSchema()
     On Error GoTo EH
 
     ' Ugovor greske ostaje kakav je bio: ova procedura RE-RAISE-uje. Pozivaoci
-    ' (EnsurePaletniListSchemaCore, modAdmin agregat) neuspeh prepoznaju po Err.
+    ' (EnsurePaletniListSchema, modAdmin agregat) neuspeh prepoznaju po Err.
     If ApplySchemaGroup(SG_CENOVNIK) > 0 Then
         Err.Raise vbObjectError + 9331, "EnsureCenovnikSchema", _
                   TBL_CENOVNIK & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
@@ -1030,13 +1030,13 @@ End Sub
 ' storno/ispravke (staro -> novo trag, mod, status, recovery). Idempotentno.
 ' Silent core se poziva iz EnsureRuntimeSchema (self-heal na svaki start), pa
 ' tabela nastane automatski posle self-update-a KODA -- bez rucnog Alt+F8.
-' Alt+F8 -> EnsureStornoVezeSchema (sa MsgBox potvrdom).
+' Alt+F8 -> SetupStornoVezeSchema (sa MsgBox potvrdom).
 ' ============================================================
 ' Sema je u registru (grupa "stornoveze"). Ugovor greske ostaje: propagira se
 ' pozivaocu (modStornoContext.EnsureTable, modTestStorno, runtime self-heal).
-Public Sub EnsureStornoVezeSchemaCore()
+Public Sub EnsureStornoVezeSchema()
     If ApplySchemaGroup(SG_STORNO_VEZE) > 0 Then
-        Err.Raise vbObjectError + 9332, "EnsureStornoVezeSchemaCore", _
+        Err.Raise vbObjectError + 9332, "EnsureStornoVezeSchema", _
                   TBL_STORNO_VEZE & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
     End If
 End Sub
@@ -1044,19 +1044,19 @@ End Sub
 ' Storno operacioni zurnal (append-only cell-level trag za lossless undo).
 ' Registar grupa "stornozurnal" nosi i aditivnu kolonu NovaVrednost za
 ' instalacije sa v2.24 ranim build-om.
-Public Sub EnsureStornoZurnalSchemaCore()
+Public Sub EnsureStornoZurnalSchema()
     If ApplySchemaGroup(SG_STORNO_ZURNAL) > 0 Then
-        Err.Raise vbObjectError + 9333, "EnsureStornoZurnalSchemaCore", _
+        Err.Raise vbObjectError + 9333, "EnsureStornoZurnalSchema", _
                   TBL_STORNO_ZURNAL & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
     End If
 End Sub
 
-Public Sub EnsureStornoVezeSchema()
+Public Sub SetupStornoVezeSchema()
     On Error GoTo EH
 
-    EnsureStornoVezeSchemaCore
+    EnsureStornoVezeSchema
 
-    LogSetup "OK", "EnsureStornoVezeSchema done"
+    LogSetup "OK", "SetupStornoVezeSchema done"
     MsgBox "Storno/ispravka kontekst (tblStornoVeze) je kreiran/proveren." & vbCrLf & vbCrLf & _
            "Ovde se belezi svaka storno/ispravka: staro -> novo, mod, status i " & vbCrLf & _
            "recovery flag. Pregled: Dokumenta -> Osiroceni dokumenti.", _
@@ -1064,30 +1064,30 @@ Public Sub EnsureStornoVezeSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureStornoVezeSchema failed: " & Err.description
-    MsgBox "Greska u EnsureStornoVezeSchema: " & Err.description, vbCritical, APP_NAME
+    LogSetup "ERROR", "SetupStornoVezeSchema failed: " & Err.description
+    MsgBox "Greska u SetupStornoVezeSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
 ' Audit kolone (timestamp + userstamp) na svim glavnim tabelama.
-' Idempotentno. Alt+F8 -> EnsureAuditColumns.
+' Idempotentno. Alt+F8 -> SetupAuditColumns.
 ' Posle ovoga modDataAccess.AppendRow/UpdateCell automatski upisuju
 ' CreatedAt/CreatedBy (na unos) i ModifiedAt/ModifiedBy (na svaku izmenu) -
 ' vidi se KO je i KADA radio. Userstamp: prijavljeni korisnik (AUTH) ili Windows nalog.
 ' ============================================================
-Public Sub EnsureAuditColumns()
+Public Sub SetupAuditColumns()
     On Error GoTo EH
 
     Dim n As Long
-    n = EnsureAuditColumnsCore()
+    n = EnsureAuditColumns()
 
     MsgBox "Audit kolone postavljene na " & n & Poruka("AUD_MSG_KOLONE_SUFIX"), _
            vbInformation, APP_NAME
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureAuditColumns failed: " & Err.description
-    MsgBox "Greska u EnsureAuditColumns: " & Err.description, vbCritical, APP_NAME
+    LogSetup "ERROR", "SetupAuditColumns failed: " & Err.description
+    MsgBox "Greska u SetupAuditColumns: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Silent worker (bez MsgBox-a) -- vraca broj obradjenih tabela. Reuse iz
@@ -1097,7 +1097,7 @@ End Sub
 ' svaka tabela obradjuje zasebno i pad se belezi (StepFailed), ali se na kraju
 ' IPAK re-raise-uje: pozivaoci (modAdmin.AdminEnsureEverything, modMigracija) na
 ' Err prepoznaju neuspeh, pa ga ne smemo progutati.
-Public Function EnsureAuditColumnsCore() As Long
+Public Function EnsureAuditColumns() As Long
     InitSetupLog
 
     Dim tbls As Variant
@@ -1120,13 +1120,13 @@ Public Function EnsureAuditColumnsCore() As Long
     On Error GoTo 0
 
     If fails > 0 Then
-        LogSetup "ERROR", "EnsureAuditColumns: " & fails & " tabela nije proslo"
-        Err.Raise vbObjectError + 9330, "EnsureAuditColumnsCore", _
+        LogSetup "ERROR", "SetupAuditColumns: " & fails & " tabela nije proslo"
+        Err.Raise vbObjectError + 9330, "EnsureAuditColumns", _
                   fails & " tabela nije dobilo audit kolone (detalji u SETUP_LOG)."
     End If
 
-    LogSetup "OK", "EnsureAuditColumns done (" & n & " tabela)"
-    EnsureAuditColumnsCore = n
+    LogSetup "OK", "SetupAuditColumns done (" & n & " tabela)"
+    EnsureAuditColumns = n
 End Function
 
 ' Spisak tabela koje dobijaju audit kolone (master + transakcione + ledger).
@@ -1190,7 +1190,7 @@ End Sub
 Public Function EnsureRuntimeSchema() As Long
     Dim fails As Long
 
-    InitSetupLog          ' bez SETUP_LOG sheet-a LogSetup tiho pada (isto radi EnsureAuditColumnsCore)
+    InitSetupLog          ' bez SETUP_LOG sheet-a LogSetup tiho pada (isto radi EnsureAuditColumns)
 
     ' Kolone i formati dolaze iz registra (SchemaOps, grupa "runtime").
     fails = ApplySchemaGroup(SG_RUNTIME)
@@ -1200,13 +1200,13 @@ Public Function EnsureRuntimeSchema() As Long
     ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
     ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
     Err.Clear
-    EnsureStornoVezeSchemaCore
+    EnsureStornoVezeSchema
     fails = fails + StepFailed("RuntimeSchema/" & TBL_STORNO_VEZE)
 
     ' Storno operacioni zurnal (tblStornoZurnal) za lossless "Vrati storno".
     ' Idempotentno; nastane automatski posle self-update-a KODA.
     Err.Clear
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     fails = fails + StepFailed("RuntimeSchema/" & TBL_STORNO_ZURNAL)
 
     ' Sledljivost ispravki (ADR-0002 / Faza 7). Idempotentno; nastane automatski
@@ -1327,13 +1327,13 @@ End Sub
 ' ============================================================
 ' Dorade (soft-delete + tip ambalaze po kulturi + hladnjaca + decimalna
 ' kolicina) -- jednokratni schema setup. Idempotentno.
-' Alt+F8 -> EnsureDoradeSchema.
+' Alt+F8 -> SetupDoradeSchema.
 ' ============================================================
-Public Sub EnsureDoradeSchema()
+Public Sub SetupDoradeSchema()
     On Error GoTo EH
 
     Dim fails As Long
-    fails = EnsureDoradeSchemaCore()
+    fails = EnsureDoradeSchema()
 
     If fails > 0 Then
         MsgBox "Dorade: " & fails & Poruka("SETUP_MSG_KORAKA_NIJE_PROSLO"), _
@@ -1353,14 +1353,14 @@ Public Sub EnsureDoradeSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureDoradeSchema failed: " & Err.description
-    MsgBox "Gre" & ChrW(353) & "ka u EnsureDoradeSchema: " & Err.description, vbCritical, APP_NAME
+    LogSetup "ERROR", "SetupDoradeSchema failed: " & Err.description
+    MsgBox "Gre" & ChrW(353) & "ka u SetupDoradeSchema: " & Err.description, vbCritical, APP_NAME
 End Sub
 
 ' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Isti razlog kao kod
-' EnsurePaletniListSchemaCore: agregat mora da zna sta je palo, a ne da mu pad
+' EnsurePaletniListSchema: agregat mora da zna sta je palo, a ne da mu pad
 ' zavrsi u dijalogu i vrati se kao "uspeh". Pad jednog koraka NE prekida ostale.
-Public Function EnsureDoradeSchemaCore() As Long
+Public Function EnsureDoradeSchema() As Long
     Dim fails As Long
 
     InitSetupLog
@@ -1379,12 +1379,12 @@ Public Function EnsureDoradeSchemaCore() As Long
     fails = fails + ApplySchemaGroup(SG_DORADE_DOKUMENTI)
 
     If fails > 0 Then
-        LogSetup "ERROR", "EnsureDoradeSchema: " & fails & " koraka nije proslo"
+        LogSetup "ERROR", "SetupDoradeSchema: " & fails & " koraka nije proslo"
     Else
-        LogSetup "OK", "EnsureDoradeSchema done"
+        LogSetup "OK", "SetupDoradeSchema done"
     End If
 
-    EnsureDoradeSchemaCore = fails
+    EnsureDoradeSchema = fails
 End Function
 
 ' Postavi vrednost u koloni za sve redove gde je prazno (ne gazi postojece).

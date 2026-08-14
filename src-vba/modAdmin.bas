@@ -287,20 +287,20 @@ Private Sub AdminEnsureEverything()
     Err.Clear: EnsurePoruke
     problems = problems & EnsureStepLine("Poruke (tblPoruke)", 0)
 
-    ' EnsureCenovnikSchema se NE zove posebno -- EnsurePaletniListSchemaCore ga
+    ' EnsureCenovnikSchema se NE zove posebno -- EnsurePaletniListSchema ga
     ' vec zove, pa je raniji direktan poziv bio cist duplikat.
     ' fails = 0 pre poziva: pod "Resume Next" dodela izostane ako poziv pukne, pa
     ' bi promenljiva zadrzala broj iz PRETHODNOG koraka i lazno ga prijavila.
-    Err.Clear: fails = 0: fails = EnsurePaletniListSchemaCore()
+    Err.Clear: fails = 0: fails = EnsurePaletniListSchema()
     problems = problems & EnsureStepLine("Paletni list + cenovnik", fails)
 
-    Err.Clear: fails = 0: fails = EnsureDoradeSchemaCore()
+    Err.Clear: fails = 0: fails = EnsureDoradeSchema()
     problems = problems & EnsureStepLine("Dorade + runtime schema", fails)
 
     Err.Clear: EnsureKorisniciSchema
     problems = problems & EnsureStepLine("Korisnici", 0)
 
-    Err.Clear: EnsureAuditColumnsCore
+    Err.Clear: EnsureAuditColumns
     problems = problems & EnsureStepLine("Audit kolone", 0)
 
     On Error GoTo EH

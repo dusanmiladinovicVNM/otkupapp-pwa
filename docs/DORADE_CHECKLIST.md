@@ -10,14 +10,14 @@
   - Izmenjeni: `frmStammdaten.frm`, `frmOtkup.frm`, `frmDokumenta.frm`,
     `modConfig.bas`, `modPodesavanja.bas`, `modSetup.bas`, `modAmbalaza.bas`,
     `modHelpers.bas`, `modComboBinding.bas`, `modDataAccess.bas`
-- [ ] **`Alt+F8 → EnsureDoradeSchema`** (kreira kolone + decimalni format)
+- [ ] **`Alt+F8 → SetupDoradeSchema`** (kreira kolone + decimalni format)
 - [ ] **Debug → Compile VBAProject** (mora bez greške)
 - [ ] **Maticni podaci → Podešavanja** — proveri da se vide novi ključevi
   (grupa „Otkup / dokumenta"): `DEFAULT_VRSTA_VOCA`, `DEFAULT_SORTA_VOCA`,
   `KOOP_FILTER_BY_OM`, `AUTO_PRIJEMNICA_HLADNJACA`
 
 ## 1) Soft-delete (Aktivan ⇄ Neaktivan) u svim šifarnicima
-- [ ] U `EnsureDoradeSchema` dodate kolone `Aktivan` u Kulture/Ambalaza/Palete,
+- [ ] U `SetupDoradeSchema` dodate kolone `Aktivan` u Kulture/Ambalaza/Palete,
       postojeći redovi popunjeni „Aktivan"
 - [ ] Maticni podaci → bilo koji šifarnik sa statusom (Kooperanti/Stanice/Kupci/
       Vozaci/Kulture/Ambalaza/Palete): pojavljuje se dugme **„Deaktiviraj/Aktiviraj"**
@@ -56,7 +56,7 @@
 ## 5) Decimalna količina
 - [ ] frmOtkup/frmDokumenta: unesi količinu sa decimalom („12,5" ili „12.5")
 - [ ] Sačuvaj → vrednost u `tblOtkup.Kolicina` je 12,5 (format `0.00` posle
-      `EnsureDoradeSchema`), ne zaokružena
+      `SetupDoradeSchema`), ne zaokružena
 
 ## 6) Podrazumevani tip ambalaže po kulturi
 - [ ] Maticni podaci → **Kulture**: za kulturu izaberi „Tip ambalaže (podraz.)"

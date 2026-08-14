@@ -1512,7 +1512,7 @@ Ovaj engine ne radi:
 
 ### 5.10. Paletna i preradna šema
 
-`EnsurePaletniListSchema` kreira/proverava:
+`SetupPaletniListSchema` kreira/proverava:
 
 - `tblTipPalete`;
 - `tblTipAmbalaze`;
@@ -1550,9 +1550,9 @@ Time je izvršno potvrđeno da setup sloj formalno podržava instalaciju komplet
 
 ### 5.12. Persistentni storno/correction context
 
-`EnsureStornoVezeSchemaCore` je tihi schema worker koji kreira `tblStornoVeze`.
+`EnsureStornoVezeSchema` je tihi schema worker koji kreira `tblStornoVeze`.
 
-`EnsureStornoVezeSchema` je ručni UI wrapper sa logom i porukom.
+`SetupStornoVezeSchema` je ručni UI wrapper sa logom i porukom.
 
 Core worker ulazi i u startup self-heal, pa correction tabela može nastati automatski posle self-update-a koda.
 
@@ -1560,7 +1560,7 @@ Core worker ulazi i u startup self-heal, pa correction tabela može nastati auto
 
 ### 5.13. Audit schema
 
-`EnsureAuditColumnsCore` dodaje:
+`EnsureAuditColumns` dodaje:
 
 - `CreatedAt`;
 - `CreatedBy`;
@@ -1604,7 +1604,7 @@ Ovo potvrđuje da centralni audit iz `modDataAccess` ima široku predviđenu pok
 
 ### 5.15. Dorade schema
 
-`EnsureDoradeSchema` instalira ili backfilluje:
+`SetupDoradeSchema` instalira ili backfilluje:
 
 - `Aktivan` na više šifarnika;
 - default tip ambalaže po kulturi;
@@ -1669,15 +1669,15 @@ To potvrđuje centralizovan resource-string model i automatsko seedovanje poruka
 | `GetLocalConfigValue` | Čitanje workstation konfiguracije |
 | `SetLocalConfigValue` | Upis workstation konfiguracije |
 | `TestServerLink` | Ručna server-link dijagnostika |
-| `EnsurePaletniListSchema` | Paletna i preradna šema |
+| `SetupPaletniListSchema` | Paletna i preradna šema |
 | `EnsureCenovnikSchema` | Cenovnik |
-| `EnsureStornoVezeSchemaCore` | Tihi correction-context schema worker |
-| `EnsureStornoVezeSchema` | Ručni correction-context setup |
-| `EnsureAuditColumns` | Ručna instalacija audit kolona |
-| `EnsureAuditColumnsCore` | Tihi audit schema worker |
+| `EnsureStornoVezeSchema` | Tihi correction-context schema worker |
+| `SetupStornoVezeSchema` | Ručni correction-context setup |
+| `SetupAuditColumns` | Ručna instalacija audit kolona |
+| `EnsureAuditColumns` | Tihi audit schema worker |
 | `EnsurePoruke` | Resource tabela i seed |
 | `EnsureRuntimeSchema` | Startup self-heal |
-| `EnsureDoradeSchema` | Aditivne poslovne dorade i backfill |
+| `SetupDoradeSchema` | Aditivne poslovne dorade i backfill |
 | `EnsureKorisniciSchema` | Korisnička prava |
 | `KreirajPrvogAdmina` | Bootstrap prvog admina |
 | `EnableAuth` | Uključivanje prijave |
@@ -8649,7 +8649,7 @@ Kreiranje koristi fiksni niz:
 rowData(0 To 17)
 ```
 
-Redosled mora tačno pratiti schema redosled iz `EnsureStornoVezeSchemaCore`.
+Redosled mora tačno pratiti schema redosled iz `EnsureStornoVezeSchema`.
 
 Ako se kolone:
 
@@ -9073,7 +9073,7 @@ Ako tabela ne postoji:
 
 ```text
 On Error Resume Next
-EnsureStornoVezeSchemaCore
+EnsureStornoVezeSchema
 ```
 
 Nakon toga se ne proverava eksplicitno da:
@@ -9136,7 +9136,7 @@ Nema potvrđenog user ID-ja u `LogContext` pozivu.
 ### 15.29. Potvrđene zavisnosti
 
 - `tblStornoVeze`;
-- `EnsureStornoVezeSchemaCore`;
+- `EnsureStornoVezeSchema`;
 - `clsTransaction`;
 - `AppendRow`;
 - `UpdateCell`/`RequireUpdateCell`;
@@ -49702,7 +49702,7 @@ Za otkupni cenovnik najverovatnije je primeren efektivni dan, odvojen od tehnič
 `EnsureCenovnikSchema` postoji i pravilno kreira osam osnovnih kolona. Međutim, poziva se:
 
 - ručno preko `Alt+F8`;
-- ili kao deo `EnsurePaletniListSchema`.
+- ili kao deo `SetupPaletniListSchema`.
 
 `EnsureRuntimeSchema`, koji se izvršava na svakom startupu posle code self-update-a, ne kreira `tblCenovnik`.
 
@@ -65009,7 +65009,7 @@ Zato posle rollback-a CSV može sadržati više append događaja nego workbook t
 Runner prvo poziva:
 
 ```vb
-modSetup.EnsureStornoVezeSchemaCore
+modSetup.EnsureStornoVezeSchema
 ```
 
 Tek zatim prikazuje Yes/No pitanje.
@@ -65874,7 +65874,7 @@ Header kaže da pre pokretanja treba ručno izvršiti `EnsureRuntimeSchema`, da 
 
 Runner to ne radi niti proverava.
 
-Istovremeno journal testovi sami pozivaju `EnsureStornoZurnalSchemaCore` pre snapshot-a.
+Istovremeno journal testovi sami pozivaju `EnsureStornoZurnalSchema` pre snapshot-a.
 
 To stvara nedosledan contract:
 

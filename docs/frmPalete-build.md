@@ -492,4 +492,4 @@ nova polja. Sve je u `frmPalete` code-behind-u:
 (`TipKutije`,`TezinaKg`,`Aktivan`), `tblKese` (`TipKese`,`TezinaKg`,`Aktivan`),
 `tblVrstaGotovihProizvoda` (`TipGotovogProizvoda`,`Aktivan`). Sekcije su data-driven
 (`modMaticniLookups.MaticniSekcije` + `Case` u `frmStammdaten`, isti obrazac kao
-TipAmbalaze/TipPalete). Šeme se kreiraju jednokratno: `Alt+F8 → EnsurePaletniListSchema`.
+TipAmbalaze/TipPalete). Šeme se kreiraju jednokratno: `Alt+F8 → SetupPaletniListSchema`.

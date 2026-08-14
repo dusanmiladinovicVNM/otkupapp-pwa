@@ -44,7 +44,7 @@ Public Sub RunStornoTestSuite()
     On Error GoTo EH
 
     ' Tabela context-a mora postojati PRE snapshot-a (AddTableSnapshot cita tabelu).
-    modSetup.EnsureStornoVezeSchemaCore
+    modSetup.EnsureStornoVezeSchema
 
     If GetTable(TBL_OTPREMNICA) Is Nothing Or GetTable(TBL_ZBIRNA) Is Nothing Then
         MsgBox "Tabele otpremnica/zbirna ne postoje. Prekid.", vbExclamation, APP_NAME

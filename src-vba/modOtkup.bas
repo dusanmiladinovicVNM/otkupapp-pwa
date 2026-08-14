@@ -580,7 +580,7 @@ Public Function SaveOtkup(ByVal datum As Date, ByVal kooperantID As String, _
     End If
 
     ' Izdata ambalaza (OM->kooperant) -> upis u kolonu PO IMENU (kolona je na kraju
-    ' tblOtkup; pozicijski rowData se ne dira). Kolona postoji posle EnsureDoradeSchema.
+    ' tblOtkup; pozicijski rowData se ne dira). Kolona postoji posle SetupDoradeSchema.
     If kolAmbIzdata > 0 Then
         UpdateCell TBL_OTKUP, newRow, COL_OTK_KOL_AMB_IZDATA, kolAmbIzdata
     End If

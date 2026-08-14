@@ -681,7 +681,7 @@ Public Const OBL_SYNC_PWA As String = "SyncPWA"
 
 ' --- Audit (timestamp + userstamp) - zajednicke kolone za sve glavne tabele ---
 ' Upisuju se centralno u modDataAccess.AppendRow (insert) i UpdateCell (izmena).
-' Kolone se kreiraju jednokratno: Alt+F8 -> EnsureAuditColumns.
+' Kolone se kreiraju jednokratno: Alt+F8 -> SetupAuditColumns.
 Public Const COL_AUDIT_CREATED_AT As String = "CreatedAt"
 Public Const COL_AUDIT_CREATED_BY As String = "CreatedBy"
 Public Const COL_AUDIT_MODIFIED_AT As String = "ModifiedAt"
@@ -797,7 +797,7 @@ Public Const HTTP_TIMEOUT_RECEIVE_MS As Long = 30000
 ' CENTRALNI STORNO / CORRECTION CONTEXT (tblStornoVeze)
 ' Persistentni zapis svake storno/ispravke: staro -> novo trag, mod, status,
 ' recovery flag. Zivi nezavisno od module-level UI state-a i prezivljava
-' zatvaranje forme/Excela. Schema: modSetup.EnsureStornoVezeSchema.
+' zatvaranje forme/Excela. Schema: modSetup.SetupStornoVezeSchema.
 ' ============================================================
 Public Const TBL_STORNO_VEZE As String = "tblStornoVeze"
 

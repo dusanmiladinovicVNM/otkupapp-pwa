@@ -1455,7 +1455,7 @@ Public Function SavePrijemnica(ByVal datum As Date, ByVal kupacID As String, _
                       COL_PRJ_KUPAC, kupacID
 
     ' Bruto tezina (preneto iz otkupa kad je OTKUP_BRUTO_UNOS) -> upis po imenu;
-    ' prazno = neto. Kolona postoji posle EnsureDoradeSchema (na kraju tblPrijemnica).
+    ' prazno = neto. Kolona postoji posle SetupDoradeSchema (na kraju tblPrijemnica).
     If brutoKg > 0 Then UpdateCell TBL_PRIJEMNICA, appendedRow, COL_PRJ_BRUTO, brutoKg
 
     ' Ambalaza je ENTITETSKI-relativna (smer iz ugla hladnjace / Kupca):

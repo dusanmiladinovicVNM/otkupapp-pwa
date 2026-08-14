@@ -180,7 +180,7 @@ audit kolone) — mapiranjem po imenu kolone.
   (ne kroz auto-ažuriranje koda). Za aktivaciju prijave koristi distribuirani
   `.xlsm` koji je sadrži.
 - **Audit trag:** kolone `CreatedAt/CreatedBy/ModifiedAt/ModifiedBy` na glavnim
-  tabelama — vidi se ko je i kada uneo/izmenio red (`Alt+F8 → EnsureAuditColumns`).
+  tabelama — vidi se ko je i kada uneo/izmenio red (`Alt+F8 → SetupAuditColumns`).
 - **Gde su podaci:** korisnici su u tabeli `tblKorisnici`; prekidač prijave je
   `AUTH_ENABLED` u `tblSEFConfig` (skriven posle setup-a).
 
@@ -192,5 +192,11 @@ audit kolone) — mapiranjem po imenu kolone.
 | `KreirajPrvogAdmina` | napravi prvog admina (ime, PIN) |
 | `EnableAuth` / `DisableAuth` | uključi / isključi prijavu |
 | `EnablePinHash` / `DisablePinHash` | uključi / isključi heširanje PIN-a |
-| `EnsureAuditColumns` | dodaj audit kolone (ko/kada) |
+| `SetupAuditColumns` | dodaj audit kolone (ko/kada) |
 | `ShowConfigSheet` / `HideConfigSheet` | otkrij / sakrij `tblSEFConfig` (oporavak) |
+
+> **Preimenovano.** Komande koje prikazuju izveštaj sada počinju sa `Setup…`:
+> `SetupAuditColumns`, `SetupPaletniListSchema`, `SetupDoradeSchema`,
+> `SetupStornoVezeSchema` (ranije `Ensure…`). Stara `Ensure…` imena i dalje
+> postoje, ali su sada **tiha jezgra za poziv iz koda** — ne prikazuju se u
+> `Alt+F8` listi i ne javljaju rezultat. Traži komandu pod `Setup…`.

@@ -441,9 +441,11 @@ def check_poruke(files: list[str]) -> list[Finding]:
 # odmah zatim javljao da je sve provereno.
 #
 # Provera je namerno blaga: `Ensure*` SME da ima MsgBox dok postoji tiho jezgro
-# `<ime>Core`, koje pozivalac iz koda moze da uhvati. Time zatecene ulazne tacke
-# (EnsurePaletniListSchema, EnsureDoradeSchema, EnsureAuditColumns,
-# EnsureStornoVezeSchema) prolaze, a NOV `Ensure*` sa dijalogom i bez jezgra pada.
+# `<ime>Core`, koje pozivalac iz koda moze da uhvati. Ta rupa je bila potrebna dok
+# su ulazne tacke jos nosile `Ensure*` ime; posle F3b (Ensure* -> Setup*) nijedan
+# `Ensure*` vise nema MsgBox, pa pravilo prolazi bez izuzetka. Ostaje blago jer
+# opisuje UGOVOR, ne trenutno stanje: `Ensure*` sa dijalogom je prihvatljiv samo
+# ako uz njega ide jezgro; bez jezgra pada.
 ENSURE_PROC = re.compile(r"^\s*(?:Public\s+|Private\s+)?(?:Sub|Function)\s+(Ensure\w+)", re.I)
 PROC_END = re.compile(r"^\s*End\s+(?:Sub|Function)\s*$", re.I)
 

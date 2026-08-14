@@ -103,8 +103,8 @@ Public Sub MigrirajPodatkeIzStarog()
     On Error Resume Next
     Err.Clear: EnsureKorisniciSchema
     If Err.Number <> 0 Then problems = problems + 1: summary = summary & "  !! EnsureKorisniciSchema NIJE izvedena (" & Err.description & ") -> korisnici/kolone mozda nepotpuni" & vbCrLf
-    Err.Clear: EnsureAuditColumnsCore
-    If Err.Number <> 0 Then problems = problems + 1: summary = summary & "  !! EnsureAuditColumnsCore NIJE izvedena (" & Err.description & ") -> audit kolone mozda nedostaju" & vbCrLf
+    Err.Clear: EnsureAuditColumns
+    If Err.Number <> 0 Then problems = problems + 1: summary = summary & "  !! EnsureAuditColumns NIJE izvedena (" & Err.description & ") -> audit kolone mozda nedostaju" & vbCrLf
     Err.Clear
     On Error GoTo 0
 
@@ -628,7 +628,7 @@ Private Function JeKriticnaKolona(ByVal tabela As String, ByVal kolona As String
     End Select
 End Function
 
-' Audit kolone (EnsureAuditColumnsCore): pune se unapred iz sloja podataka, pa
+' Audit kolone (EnsureAuditColumns): pune se unapred iz sloja podataka, pa
 ' prazne posle migracije sa pre-audit verzije NISU problem -> preskacu se tiho.
 Private Function JeAuditKolona(ByVal kolona As String) As Boolean
     Select Case LCase$(Trim$(kolona))

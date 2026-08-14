@@ -286,7 +286,7 @@ Dva jeftina koraka:
 | **F1** ✅ | N1 + N2 + N3: per-korak logovanje u `EnsureRuntimeSchema`/`EnsureSledljivostSchema`; `MsgBox` iz jezgara u omotače; `AdminEnsureEverything` skuplja i prijavljuje stvarni rezultat; ukloniti dupli `EnsureCenovnikSchema` | `modSetup`, `modAdmin`, `modMain`, `modPoruke` | nizak | **visoka** — kraj tihim padovima i lažnom „sve OK" |
 | **F2** ✅ | N4: primitivi `Public`, brisanje 3 forka | `modSetup`, `modPaletniList`, `modBankaImport` | nizak-srednji | visoka — anti-duplication |
 | **F3a** ✅ | `EnsurePrijemnicaNotAlreadyPaletized` → `RequirePrijemnicaNotPaletized` | `modPaletniList` | nizak | srednja — ime govori istinu |
-| **F3b** ⏸ | preimenovanje 4 Alt+F8 ulazne tačke u `Setup*` | ~8 fajlova + ~75 pomena u `docs/`+`instructions/` | **operater-facing** | srednja — **čeka odluku** |
+| **F3b** ✅ | preimenovanje 4 Alt+F8 ulazne tačke u `Setup*`, jezgra preuzimaju čisto `Ensure*` ime | 21 fajl, 116 linija | **operater-facing** | srednja — ugovor važi bez izuzetka |
 | **F4** ✅ | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modTest` | nizak | srednja — sprečava povratak |
 | **F5** ✅ | deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup`, `tools/schema_diff.py` | **srednji-visok** | visoka — jedno mesto za celu šemu |
 
@@ -347,17 +347,33 @@ tihe padove).
   `.claude/rules/testovi.md` §3). Pušta tri tiha jezgra dvaput i poredi otisak
   šeme (tabela → broj kolona). Ide **poslednji** jer menja šemu fixture-a.
 
-### F3b — čeka odluku (nije urađeno)
+### F3b — izvršeno
 
-Preimenovanje četiri **Alt+F8 ulazne tačke** u `Setup*`:
-`EnsurePaletniListSchema`, `EnsureDoradeSchema`, `EnsureAuditColumns`,
-`EnsureStornoVezeSchema`. Mereni obim: ~56 pomena u `src-vba/` i **~75 u
-`docs/` + `instructions/`** — uključujući uputstva koja operater čita.
+**`*Core` sufiks je nestao kao pojam.** Imena su se *zamenila*: omotač sa
+dijalogom je dobio `Setup*`, a tiho jezgro je preuzelo oslobođeno `Ensure*` ime.
 
-Dobit je čitljivost ugovora iz imena. Cena je promena onoga što operater kuca u
-Alt+F8 i sweep kroz napisana uputstva. Kako `*Core` jezgra već postoje (F1),
-tehnički ništa ne zavisi od ovog koraka — `ENSURE` pravilo prolazi i ovako.
-**Odluka je vlasnika, ne implementatora.**
+| Alt+F8 ulazna tačka (dijalog) | Tiho jezgro (iz koda) |
+|---|---|
+| `SetupPaletniListSchema` | `EnsurePaletniListSchema` |
+| `SetupDoradeSchema` | `EnsureDoradeSchema` |
+| `SetupAuditColumns` | `EnsureAuditColumns` |
+| `SetupStornoVezeSchema` | `EnsureStornoVezeSchema` |
+| — *(nije imao omotač)* | `EnsureStornoZurnalSchema` |
+
+`EnsureCenovnikSchema`, `EnsurePoruke` i `EnsureKorisniciSchema` **nisu dirani** —
+oni nikad nisu imali dijalog, pa već zadovoljavaju ugovor.
+
+Kako je urađeno: dvofazno, jer se imena zamenjuju i naivni `sed` pravi kašu.
+Faza 1 `\bEnsureX\b → SetupX` (granica reči ne hvata `EnsureXCore`), faza 2
+`\bEnsureXCore\b → EnsureX`. 21 fajl, 116 linija.
+
+**Istorijski zapis nije prepisan** — `docs/ARCHITECTURE_CHANGELOG.md`,
+`docs/RELEASE_NOTES.md` i `instructions/PREDLOG_…_v1.md` zadržavaju imena koja su
+u tom trenutku bila tačna. Prepisivanje istorije bi ih učinilo lažnim.
+
+Ono što operater treba da zna: u Alt+F8 listi se sada vide **`Setup*`** komande.
+Stara imena više nisu `Sub`-ovi bez parametara nego `Function … As Long`, pa se u
+Alt+F8 listi **ne prikazuju** — komandu treba tražiti pod `Setup…`.
 
 ### F5 — izvršeno
 

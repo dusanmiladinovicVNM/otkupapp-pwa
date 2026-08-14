@@ -43,7 +43,7 @@ Public Function CreateCorrectionContext(ByVal mode As String, _
     Dim newID As String
     newID = GetNextID(TBL_STORNO_VEZE, COL_SV_ID, "COR-")
 
-    ' Redosled MORA pratiti EnsureStornoVezeSchemaCore (AppendRow po poziciji):
+    ' Redosled MORA pratiti EnsureStornoVezeSchema (AppendRow po poziciji):
     ' CorrectionID, Mode, Status, OldDocType, OldDocID, OldBroj, NewDocType,
     ' NewDocID, NewBroj, ParentDocType, ParentDocID, ParentBroj, CreatedAt,
     ' CreatedBy, CompletedAt, Message, NeedsRecovery, RecoveryAction
@@ -344,7 +344,7 @@ End Function
 Private Sub EnsureTable()
     If GetTable(TBL_STORNO_VEZE) Is Nothing Then
         On Error Resume Next
-        modSetup.EnsureStornoVezeSchemaCore
+        modSetup.EnsureStornoVezeSchema
         On Error GoTo 0
     End If
 End Sub

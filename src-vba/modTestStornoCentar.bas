@@ -83,7 +83,7 @@ End Sub
 Public Sub Test_StornoJournalReusedBroj_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
@@ -113,7 +113,7 @@ End Sub
 Public Sub Test_StornoJournalDeadParentOtherGen_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_OTPREMNICA
@@ -141,7 +141,7 @@ End Sub
 Public Sub Test_StornoJournalEmptyBrDokUndo_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
@@ -166,7 +166,7 @@ End Sub
 Public Sub Test_StornoJournalDrift_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
@@ -194,7 +194,7 @@ End Sub
 Public Sub Test_StornoJournalPartialClass_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
@@ -221,7 +221,7 @@ End Sub
 Public Sub Test_StornoJournalMixedOp_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_STORNO_ZURNAL
@@ -243,7 +243,7 @@ End Sub
 Public Sub Test_StornoJournalEmptyBrDok_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP: tx.AddTableSnapshot TBL_AMBALAZA
@@ -269,7 +269,7 @@ End Sub
 Public Sub Test_StornoJournalUndo_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore                 ' tabela mora postojati za snapshot
+    EnsureStornoZurnalSchema                 ' tabela mora postojati za snapshot
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
@@ -312,7 +312,7 @@ End Sub
 Public Sub Test_StornoJournalDualClass_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_OTKUP
@@ -340,7 +340,7 @@ End Sub
 Public Sub Test_StornoJournalReversGuard_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_AMBALAZA
@@ -366,7 +366,7 @@ End Sub
 Public Sub Test_StornoJournalUndoValidation_Auto()
     Dim tx As clsTransaction
     On Error GoTo EH
-    EnsureStornoZurnalSchemaCore
+    EnsureStornoZurnalSchema
     Set tx = New clsTransaction
     tx.BeginTx
     tx.AddTableSnapshot TBL_STORNO_ZURNAL

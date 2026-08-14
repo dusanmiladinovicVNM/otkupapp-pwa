@@ -557,7 +557,7 @@ Transaction tables record source business events or operational movements.
 
 Transaction table writes must be protected by the transaction model defined in the VBA architecture section unless the write is an external transport write owned by GAS/PWA.
 
-`tblOtkup` carries dorade columns added idempotently by `EnsureDoradeSchema`: `KolAmbIzdata` (empties issued OM→kooperant alongside the otkup), `VremeUnosa` (save timestamp), and `BrutoKg` (frozen gross when bruto input; empty = neto was entered). Klasa II is a separate `tblOtkup` row sharing the otkup's `BrDok`, so its quantity/ambalaža live on that row (no per-class columns).
+`tblOtkup` carries dorade columns added idempotently by `SetupDoradeSchema`: `KolAmbIzdata` (empties issued OM→kooperant alongside the otkup), `VremeUnosa` (save timestamp), and `BrutoKg` (frozen gross when bruto input; empty = neto was entered). Klasa II is a separate `tblOtkup` row sharing the otkup's `BrDok`, so its quantity/ambalaža live on that row (no per-class columns).
 
 ### 5.5 Document Tables
 
@@ -579,7 +579,7 @@ Current rules:
 - `BrojPrijemnice + Klasa` is the relink identity for orphaned faktura stavke when class rows are recreated.
 - `BrojZbirne` is a business document number and must not be confused with `ServerRecordID` or `ZbirnaID`.
 - Document-chain status changes must not be done by report/read-model code.
-- `tblOtpremnica` and `tblPrijemnica` each carry a `BrutoKg` column (added by `EnsureDoradeSchema`): in bruto mode the stored quantity is neto and `BrutoKg` freezes the gross (empty = neto), so panel/chain comparisons are neto-against-neto.
+- `tblOtpremnica` and `tblPrijemnica` each carry a `BrutoKg` column (added by `SetupDoradeSchema`): in bruto mode the stored quantity is neto and `BrutoKg` freezes the gross (empty = neto), so panel/chain comparisons are neto-against-neto.
 
 ### 5.6 Finance Tables
 

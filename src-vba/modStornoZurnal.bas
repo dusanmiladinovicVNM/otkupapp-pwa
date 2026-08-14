@@ -80,7 +80,7 @@ Public Sub JournalCell(ByVal tbl As String, ByVal rowID As String, ByVal col As 
     Const SRC As String = MOD_NAME & ".JournalCell"
     If Not mActive Then Exit Sub
     Dim zid As String: zid = "ZUR-" & CStr(mNextZur)
-    ' Redosled MORA pratiti EnsureStornoZurnalSchemaCore:
+    ' Redosled MORA pratiti EnsureStornoZurnalSchema:
     ' ZurnalID, OperationID, Timestamp, DocType, Broj, Tabela, RowID, Kolona, StaraVrednost, NovaVrednost
     If AppendRow(TBL_STORNO_ZURNAL, Array(zid, mOpID, Format$(Now, "yyyy-mm-dd hh:nn:ss"), _
         mDocType, mBroj, tbl, CStr(rowID), col, CStr(oldVal), CStr(newVal))) = 0 Then

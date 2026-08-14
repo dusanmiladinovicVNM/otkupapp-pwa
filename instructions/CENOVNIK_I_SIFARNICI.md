@@ -56,7 +56,7 @@ Logika: `modCenovnik.GetVazecaCena` / `modCenovnik.AddCena`.
 
 ## Setup (jednokratno, na master workbook-u)
 
-`tblCenovnik` se kreira automatski u sklopu `EnsurePaletniListSchema`, ili
+`tblCenovnik` se kreira automatski u sklopu `SetupPaletniListSchema`, ili
 samostalno:
 
 ```
@@ -87,7 +87,7 @@ Predlog obima za PWA fazu:
 
 ## Rucni test (u Excelu, posle importa modula)
 
-1. **Setup:** pokrenuti `EnsureCenovnikSchema` (ili `EnsurePaletniListSchema`).
+1. **Setup:** pokrenuti `EnsureCenovnikSchema` (ili `SetupPaletniListSchema`).
 2. **Maticni podaci -> Ambalaza:** dodaj tip (npr. "12/1", 0.9 kg), izmeni,
    proveri da se cuva.
 3. **Maticni podaci -> Palete:** dodaj tip palete + tezina.
