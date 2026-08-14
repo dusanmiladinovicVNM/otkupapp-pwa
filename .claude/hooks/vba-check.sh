@@ -30,6 +30,27 @@ print(d.get("tool_input", {}).get("file_path", "") or "")
 
 [ -n "$file_path" ] || exit 0
 
+# .claude/settings*.json: fajl koji ne prodje JSON validaciju Claude Code odbacuje
+# U CELINI -- ne to jedno pravilo, nego SVA permission pravila i OBA hook-a
+# odjednom (2da7ee8e: jedan izostavljen zarez ih je drzao van snage pola dana).
+# Odgovor mora da stigne u istom turnu, jer sledeci Edit vec radi bez ijednog
+# pravila i bez ovog hook-a.
+case "$file_path" in
+  *.claude/settings.json|*.claude/settings.local.json)
+    [ -f "$file_path" ] || exit 0
+    err="$("$PY" -c 'import json,sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$file_path" 2>&1)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "$file_path nije validan JSON:" >&2
+      printf '%s\n' "$err" | tail -n 1 >&2
+      echo "Claude Code takav fajl odbacuje U CELINI -- ne vazi nijedno permission" >&2
+      echo "pravilo ni jedan hook. Popravi pre nego sto nastavis." >&2
+      exit 2
+    fi
+    exit 0
+    ;;
+esac
+
 case "$file_path" in
   *.bas|*.cls|*.frm|*.doccls) ;;
   *) exit 0 ;;

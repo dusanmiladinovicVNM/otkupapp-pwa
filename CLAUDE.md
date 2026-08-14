@@ -169,9 +169,16 @@ poziva odlučuje da li run prolazi tiho ili traži odobrenje.
 
 - **Proste jednolinijske komande, ne inline skriptice.** Read-only git komande
   izvršavaj kao ODVOJENE pozive (`git log ...`, `git status`, `git diff ...`,
-  `git merge-base ...`) — bez echo/string dekoracije na početku, bez dodele
-  promenljivih (`$x = ...`), bez spajanja u compound blok. Svaka takva
+  `git merge-base ...`) — bez echo/string dekoracije **ni na početku ni na kraju**
+  (`; echo "rc=$?"` je najčešći prestup; izlazni kod ionako stiže kroz alat), bez
+  dodele promenljivih (`$x = ...`), bez spajanja u compound blok. Svaka takva
   dekoracija menja prefix i obara pravilo na ručno odobrenje.
+- **Compound poziv košta dvaput.** „Always allow" nad compound komandom upisuje
+  pravila **po segmentu, doslovnim tekstom** — pa `settings.local.json` dobije
+  `Bash(echo "rc=$?")` ili putanju sa UUID-om tekuće sesije. Takvo pravilo se
+  nikad više neće poklopiti, a lista raste dok ne postane neupotrebljiva (jednom
+  je narasla na 92 pravila od kojih je većina bila mrtva). Jedan compound poziv
+  zato proizvede klik sada i klik svaki sledeći put.
 - **`cd ... &&` prefiks je zabranjen.** Radi iz root-a repoa sa relativnim
   putanjama; komanda koja počinje sa `cd` ne matchuje nijedno pravilo.
 - **Backslash oblik putanja** (`tools\run_vba.py`), bez navodnika oko putanje
