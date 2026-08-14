@@ -112,8 +112,10 @@ vrati kod i pokaži da je opet zeleno. Bez oba smera nije gotovo.
 
 **Posle svake izmene u `src-vba/` obavezno:**
 
-```bash
-python3 tools/vba_check.py        # exit 0 = čisto, 2 = ima nalaza
+```
+# Windows (PowerShell):        python tools\vba_check.py
+# Linux/macOS (web sesija):    python3 tools/vba_check.py
+# exit 0 = čisto, 2 = ima nalaza
 ```
 
 Isti checker se vrti i kao PostToolUse hook (`.claude/hooks/vba-check.sh`) nad
@@ -130,7 +132,7 @@ naredbe — jer je lažan nalaz u hook-u gori od propuštenog.
 pravilo). Za to treba Excel.
 
 **Ponašanje se ne proverava statički.** Izmena koja se uredno kompajlira, a menja
-ponašanje, hvata se samo test suite-om: `python tools/run_vba.py`. To traži
+ponašanje, hvata se samo test suite-om: `python tools\run_vba.py`. To traži
 **Windows + Excel + `pywin32`** i zato **ne radi u Linux/macOS sesiji** (Claude
 Code na webu). U takvoj sesiji `Stop` hook prolazi tiho — što znači da sesija
 može da se završi „zeleno" **bez ijednog testa ponašanja**. Ne čitaj to kao
@@ -140,22 +142,52 @@ ili izmena ostaje neverifikovana i tako se prijavljuje.
 Detalji, katalog suite-ova i `gate` vs „blind": `.claude/rules/testovi.md`.
 
 Uz to i dalje: balans `Sub`/`Function`/`Select Case`, `git merge-tree` za
-konflikte. Forme: izmene su u kodu, `.frm` ide sa svojim `.frx` parom.
+konflikte (kroz `tools\check_merge.ps1`, vidi §7). Forme: izmene su u kodu,
+`.frm` ide sa svojim `.frx` parom.
 
 ## 6) Git / PR / release
 
 Detalji: `.claude/rules/git-i-release.md`. Uvek važi:
 
 - Razvoj na zadatoj feature grani. **Ne praviti PR bez eksplicitnog zahteva.**
-- Integracija `main`-a u feature granu = **„Opcija 3"**: fetch → `git merge-tree`
-  → rebase lokalno → **pokaži rezultat** → `push --force-with-lease` tek po
-  odobrenju. Nikad force-push pre pokazivanja.
-- **Na kraju svake izmene koda:** git bash komande za preuzimanje grane
-  (`~/Documents/GitHub/otkupapp-pwa` = `ImportAllVBA` folder).
+- Integracija `main`-a u feature granu = **„Opcija 3"**: fetch →
+  `powershell -File tools\check_merge.ps1` (main ispred? konflikti?) → rebase
+  lokalno → **pokaži rezultat** → `push --force-with-lease` tek po odobrenju.
+  Nikad force-push pre pokazivanja.
+- **Na kraju svake izmene koda:** komande za preuzimanje grane u PowerShell
+  obliku (`~/Documents/GitHub/otkupapp-pwa` = `ImportAllVBA` folder).
 - **Izmena ponašanja nosi test u `modTest`** — ne checklistu. Checklista u chatu
   je samo za ono što se ne može automatizovati: izgled forme, štampa, PDF,
   ponašanje nad pravim podacima. Checklista NIJE zamena za test koji je moguće
   napisati; ako je moguć, piše se.
+
+## 7) Shell pravila (Windows / PowerShell sesija)
+
+Na razvojnoj mašini svaki Bash tool poziv ide kroz **PowerShell** — permission
+pravila u `.claude/settings.json` matchuju **prefix cele komande**, pa oblik
+poziva odlučuje da li run prolazi tiho ili traži odobrenje.
+
+- **Proste jednolinijske komande, ne inline skriptice.** Read-only git komande
+  izvršavaj kao ODVOJENE pozive (`git log ...`, `git status`, `git diff ...`,
+  `git merge-base ...`) — bez echo/string dekoracije na početku, bez dodele
+  promenljivih (`$x = ...`), bez spajanja u compound blok. Svaka takva
+  dekoracija menja prefix i obara pravilo na ručno odobrenje.
+- **`cd ... &&` prefiks je zabranjen.** Radi iz root-a repoa sa relativnim
+  putanjama; komanda koja počinje sa `cd` ne matchuje nijedno pravilo.
+- **Backslash oblik putanja** (`tools\run_vba.py`), bez navodnika oko putanje
+  osim kad putanja sadrži razmak — pravila su pisana za taj oblik.
+- **Ponavljajuće provere idu u imenovanu skriptu u `tools/`**, ne u inline blok:
+  imenovana skripta = stabilan prefix = pouzdan match + jedno pravilo u allow.
+  Postojeće: `run_vba.py`, `vba_check.py`, `check_merge.ps1` (merge-conflict
+  provera iz „Opcije 3": exit 0 = čisto, 1 = konflikt). Za proveru main/konflikti
+  NE piši inline verziju — pozovi `powershell -File tools\check_merge.ps1`.
+- **Compound blokove** (`&&`, `;`, pipe, `if`) koristi samo kad je zaista
+  neophodno — svaki pada na ručno odobrenje, i to je u redu za write operacije
+  (`git commit`, `git push`), koje su **namerno** van whitelist-a.
+- Ako run neočekivano traži odobrenje: uporedi tačan string komande iz prompta
+  sa pravilom znak po znak — razlika je gotovo uvek `cd &&` prefiks, slash
+  varijanta ili navodnici. Posle izmene `settings.json` restartuj sesiju ili
+  proveri `/permissions`.
 
 ---
 

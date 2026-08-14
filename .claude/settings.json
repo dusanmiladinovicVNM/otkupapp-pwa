@@ -1,11 +1,16 @@
 {
   "permissions": {
     "allow": [
+      "Bash(python tools\\vba_check.py:*)",
+      "Bash(python tools\\run_vba.py:*)",
       "Bash(python3 tools/vba_check.py:*)",
       "Bash(python tools/vba_check.py:*)",
       "Bash(python tools/run_vba.py:*)",
       "Bash(python tools/sabotaza.py:*)",
+      "Bash(powershell -File tools\\check_merge.ps1:*)",
+      "Bash(powershell.exe -File tools\\check_merge.ps1:*)",
       "Bash(git merge-tree:*)",
+      "Bash(git merge-base:*)",
       "Bash(git fetch:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
@@ -22,6 +27,9 @@
       "PowerShell(git show:*)",
       "PowerShell(git fetch:*)",
       "PowerShell(git merge-tree:*)"
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git tag:*)"
     ]
   },
   "hooks": {
