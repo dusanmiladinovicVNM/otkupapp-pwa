@@ -152,8 +152,25 @@ Katalog `SUITES` u skripti nosi zastavicu `gate`:
 - `gate: False` — rezultat postoji samo u Immediate prozoru → runner je prijavljuje
   kao **`blind`**, što znači „prošla bez greške", a **ne** „sve provere prošle"
 
-Kad pišeš novu suite, napravi je `gate` i upiši je u katalog. Puna tabela:
-`.claude/rules/testovi.md`.
+Kad pišeš novu suite, napravi je `gate` i upiši je u katalog. **Katalog `SUITES` u
+`tools/run_vba.py` je jedini izvor istine** — koja suite postoji, da li je `gate`
+i da li je u punom setu (`default: True`). Ne prepisivati ga u dokumentaciju.
+
+Konverzija blind → gate, po uzoru na `modTestBanka.ERR_BIT_SUITE_FAILED`:
+
+1. `Private Const ERR_X_SUITE_FAILED As Long = vbObjectError + <slobodan>` u
+   deklaracionu sekciju (zauzeti offseti: 2900, 2950, 2960–2963, 3010–3012, 3100)
+2. posle završnog izveštaja: `If mFail > 0 Then Err.Raise ERR_X_SUITE_FAILED, ...`
+3. u `EH`: prebroj prekid kao pad (`Fail "SUITE prekinut..."`) pa podigni
+
+**Prođi i rane izlaze:** uslov koji tiho radi `Exit Sub` pre prve provere mora da
+podigne grešku sa porukom koja počinje `suite NIJE pokrenut:` — inače runner
+„nije se pokrenulo" vidi kao `OK`. Poznata otvorena rupa:
+`RunBankaImportTestSuite` (rani `Exit Sub` kad `tblBankaImport` / `tblOtkup` ne
+postoje).
+
+**Ne proširivati na `--all`**: među `Run*` procedurama nisu sve testovi
+(`RunSelfUpdate`, `RunGoogleAuthSetup`), a deo traži mrežu ili live SEF nalog.
 
 ## Provera bez Excela
 
@@ -179,3 +196,117 @@ tek kao `[break]` u naslovu VBE prozora na Windows mašini.
 - `--keep` ostavlja temp kopiju sveske da možeš da je otvoriš i vidiš stanje.
 - Ako `import` prijavi puno `SKIP ... (nema komponente ...)` nad **pravom**
   sveskom — to znači da sveska nema te listove, tj. da nije AgriX radna sveska.
+
+## Pisanje testa
+
+- **Nov test:** `RunOne n` u `RunAllTests`, plus grana u `TestName` i `InvokeTest`.
+  Poziv je direktan (ne `Application.Run`) da bi VBA morao da kompajlira i test i
+  sve što on referencira — odatle stiže compile signal.
+- **Forma bez prikaza:** `Set f = New frmOtkup`, pa odmah `f.Controls.Count` (bez
+  toga se `Initialize` ne okine). Bez `.Show`. `modTestMode.SetTestMode True` gasi
+  sve što čeka operatera; kad naiđeš na `MsgBox`/`InputBox` na testiranoj putanji,
+  gard ide istim oblikom.
+- **Čišćenje ide u `EH` granu, ne na zelenu putanju.** `CleanupPosleTesta` se zove
+  iz `EH`, a `Err` se čita **pre** njega (`OtkupUI_Release` je pod
+  `On Error Resume Next`, što briše `Err`). Test koji padne inače ostavlja `mFrm`,
+  keš i aktivnu otpremnicu sledećem testu — i onda jedan uzrok daje dva pada.
+- **Polja se postavljaju kroz `ApplyPrefill`**, ne pisanjem u kontrolu: direktan
+  upis u `fgDatum` okine `OnDatumChanged`, a on traži stanica-lock i predlog broja
+  **sa pitanjem Google-u** — mreža u testu.
+- **Golden za novi UI ne postoji i ne treba.** `DumpKontrole` nad `frmOtkupUI`
+  uhvatio bi i `titDatum` (`FmtDatumPun(Now)`), pa bi golden padao svakog sledećeg
+  dana. Legacy forma ima fiksne `.frx` kontrole i tu je snapshot smislen.
+
+Test seam-ovi koje produkcioni kod nosi zbog ovoga (`Public` umesto `Private`,
+`IsTestMode` gardovi oko `SetFocus`, `Scr_OtpTestSet`) popisani su u
+`.claude/rules/testovi.md` §4 — tamo, jer ih mora videti i onaj ko menja formu, a
+ne samo onaj ko piše test.
+
+## Fixture i golden
+
+`tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
+`tools/make_fixture.py` iz **donor** sveske.
+
+> **Kad se `FIXTURE` dict u `make_fixture.py` promeni, fixture se MORA
+> regenerisati** — inače testovi padaju na podacima kojih nema. Donor može biti i
+> **postojeći fixture**: on nosi punu šemu i nema VBA, a generator ionako briše sve
+> redove pre sejanja. Izlaz mora biti druga putanja (donor = izlaz se odbija), pa se
+> fajl posle premesti:
+>
+> ```powershell
+> python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --out tests\fixtures\otkup_test_new.xlsm --force
+> ```
+
+- Donor daje samo strukturu; spisak kolona se **ne** zakucava u Python (šema
+  tabela je izvor istine). Podaci su 100% sintetički, u transakciji koja se uvek
+  poništava — nijedan klijentski podatak ne može da završi u golden fajlu na
+  GitHub-u.
+- Generator **uklanja sav VBA kod iz donora**: modul zaostao iz starijeg donora se
+  izvršava i, ako nosi `Public` ime koje postoji i u svežem kodu, daje „Ambiguous
+  name" → `Cannot run the macro`, poruka koja ne liči na compile grešku. Za sveske
+  kroz `--workbook` ne briše ništa, nego prijavljuje `ORPHAN` red.
+- Šemu donora ispisuje `tools/dump_schema.py` (samo čitanje).
+
+`tests/golden/*.txt` idu u git. Kad golden ne postoji, test ga upiše i **padne** —
+nov golden mora proći ljudski pregled pre nego što postane merilo. Dva pravila:
+**ASCII** (`DumpKontrole` escape-uje dijakritiku u `\uXXXX`; VBA `Print #` piše u
+ANSI stranu koja `ć` nema) i **LF** (`.gitattributes` drži `eol=lf`, inače suite
+pada na svakom svežem klonu na Windows-u).
+
+## Sabotaža — kako se radi
+
+Kada je obavezna, pravilo je u `.claude/rules/testovi.md` §6. Mehanika:
+
+```bash
+python tools/sabotaza.py --lista
+python tools/sabotaza.py clear-datum          # primeni jednu
+python tools/run_vba.py --suite RunAllTests   # ocekuj FAIL po IMENU tog testa
+python tools/sabotaza.py --vrati              # vrati
+```
+
+Koja sabotaža obara koji test i sa kojom tvrdnjom — **`--lista`**, ne prepisivati
+nigde; skripta je izvor istine.
+
+Za legacy formu radi se ručno u `ClearOtkupFields` (dodaj `txtDatum.value = ""`,
+`txtBrojZbirne.value = ""`, ukloni `cmbKooperant.value = ""`), revert je
+`git checkout -- src-vba/frmOtkup.frm`.
+
+> **Kad sabotaža obori VIŠE testova, to ne mora biti curenje stanja.**
+> `zbirna-vozac` i `prijemnica-kupac` obaraju i `T_ScrSave_RutaPoRezimu`, jer taj
+> test dokazuje rutu time što prazan dokument staje na **prvom pravilu svog tipa**.
+> `blok-ostatak-snapshot` obara **tri** (kapija, put unosa, ruta), a `blok-tudj-om`
+> **dva** (kapija i writer) — isto pravilo je namerno provereno na više nivoa, pa
+> njegovo uklanjanje mora da se vidi na svakom.
+> Razlika u odnosu na pravo curenje je merljiva: svaki pad ima **svoju poruku i
+> svoju tvrdnju**, a ne `Err.Number=0` sa praznim opisom. Prvo proveri izolaciju,
+> pa tek onda proizvod.
+
+> **Sidro sabotaže je deo koda koji sabotira.** `clear-zbirna` se razvezalo čim je
+> `ClearForm` dobio `fgNovac` u spisak polja — skripta bi tiho prijavila „sidro
+> nije jednoznačno" tek pri sledećem pokretanju, a do tada bi izgledalo da je dokaz
+> i dalje važeći. **Kad menjaš red koji je nečije sidro, promeni i sidro, pa ponovo
+> pokaži crveno.**
+
+Tri zamke koje skripta rešava, i koje važe za svaki sličan zahvat nad izvorom:
+
+1. **Kraj reda** — `src-vba` je CRLF na Windows-u, LF na Linuxu. Sidro sa zakucanim
+   `\n` ne pogodi ništa, skripta tiho ne uradi ništa, run prođe nad neizmenjenim
+   fajlom i izgleda kao da sabotaža „nije oborila" suite. Detektuj
+   (`nl = '\r\n' if '\r\n' in s else '\n'`) i tvrdi `assert s.count(old) == 1`.
+2. **Uvlačenje** — sidro se poredi od početka reda; inače isti niz pogađa dva mesta.
+3. **Vraćanje** — `git checkout --` briše i nesnimljene izmene koje sa sabotažom
+   nemaju veze (jednom je pojelo test seam-ove). `--vrati` radi obrnutu zamenu.
+
+`parse-cdate` pada na tvrdnji „godina van poslovnog opsega" (`11.08.1899`) —
+jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
+mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
+pokriveno.
+
+## Trijaža masovnih padova
+
+```bash
+python tools/run_vba.py --suite X --keep
+```
+
+Snimi temp kopiju, pa `tools/read_test_log.py <temp>/otkup_test.xlsm` grupiše
+padove po temi i razlogu.
