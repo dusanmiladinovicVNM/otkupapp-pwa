@@ -14,16 +14,22 @@
 # Exit 2 => stderr ide nazad Claude-u kao blokirajuci nalaz.
 set -uo pipefail
 
-# Brzi set: modTest -- 6 provera ponasanja (tri nad legacy formom, tri nad novim
-# UI-jem). Sekunde uz Excel, ne minuti.
+# Brzi set: modTest -- 11 provera ponasanja (tri nad legacy formom, tri nad novim
+# UI-jem, pet nad upisom zbirne i prijemnice). Sekunde uz Excel, ne minuti.
 SUITE=RunAllTests
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT" || exit 0
 
+# NE "command -v": na Windows-u PATH sadrzi Microsoft Store execution alias za
+# python3 (~/AppData/Local/Microsoft/WindowsApps/python3). Fajl POSTOJI, pa ga
+# command -v nadje, ali svaki poziv ispise "Python was not found" i izadje 49.
+# $PY je tako bio interpreter koji ne radi: who_writes --check ispod je "padao"
+# iz pogresnog razloga (lazno "WHO_WRITES.md je zastareo", exit 2 na svakom
+# Stop-u), a do ziga i Excela se nikad nije stizalo. Proverava se IZVRSAVANJE.
 PY=python3
-command -v "$PY" >/dev/null 2>&1 || PY=python
-command -v "$PY" >/dev/null 2>&1 || exit 0
+"$PY" -c "" >/dev/null 2>&1 || PY=python
+"$PY" -c "" >/dev/null 2>&1 || exit 0
 
 # Sve dalje se pali samo kad je VBA izvor stvarno diran: ili u radnom stablu, ili
 # u poslednjem commit-u (Claude cesto commit-uje pa tek onda stane -- tada radno

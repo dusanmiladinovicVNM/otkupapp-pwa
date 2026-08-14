@@ -10,3 +10,7 @@ docs/Legal/build/
 
 # Excel test fixture (pravi ga tools/run_vba.py, ne ide u git)
 tests/fixtures/
+
+# Izlaz poslednjeg run_vba.py -- lokalan po masini i po prolazu
+tests/last_run.json
+tests/last_run.txt

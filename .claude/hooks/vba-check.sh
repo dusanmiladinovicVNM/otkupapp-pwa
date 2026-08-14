@@ -9,9 +9,17 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# NE hardkodiran python3: na Windows-u PATH sadrzi Microsoft Store execution
+# alias za python3 koji POSTOJI kao fajl, ali svaki poziv izadje sa 49. Parsiranje
+# payload-a je zato tiho puklo, file_path je ostajao prazan i hook je izlazio 0 --
+# provera se NIKAD nije izvrsila, bez ijedne poruke. Proverava se IZVRSAVANJE.
+PY=python3
+"$PY" -c "" >/dev/null 2>&1 || PY=python
+"$PY" -c "" >/dev/null 2>&1 || exit 0
+
 payload="$(cat)"
 
-file_path="$(printf '%s' "$payload" | python3 -c '
+file_path="$(printf '%s' "$payload" | "$PY" -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -29,7 +37,7 @@ esac
 
 [ -f "$file_path" ] || exit 0
 
-if ! python3 "$ROOT/tools/vba_check.py" --hook "$file_path"; then
+if ! "$PY" "$ROOT/tools/vba_check.py" --hook "$file_path"; then
   echo "" >&2
   echo "vba_check je pao nad $file_path -- popravi pre nego sto nastavis (.claude/rules/vba-izvor.md)." >&2
   exit 2

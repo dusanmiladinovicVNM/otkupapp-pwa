@@ -1083,6 +1083,10 @@ Prođen ceo reaktivni sloj obe legacy forme i upoređen sa novim UI-jem; zatvore
 
 - `tools/sabotaza.py`: sedam imenovanih sabotaža nad `modOtkupUI` (`--lista` / `--vrati`), svaka obara tačno jedan test — druga polovina dokaza iz `CLAUDE.md` §5. Rešava tri zamke koje su već ujedale: CRLF vs LF sidro, uvlačenje, i vraćanje obrnutom zamenom umesto `git checkout --` (koji je jednom pojeo test seam-ove).
 
+- **Oba hooka su na Windows mašini bila mrtva — ispravljeno.** Interpreter se birao po `command -v python3`, a na Windows-u PATH sadrži Microsoft Store execution alias `python3` koji **postoji kao fajl**, ali svaki poziv ispiše „Python was not found" i izađe sa 49. Posledice su bile različite i obe tihe u pogrešnom smeru: `vba-check.sh` (PostToolUse) nije mogao da isparsira payload, `file_path` je ostajao prazan i hook je izlazio **0** — provera VBA izvora **nikad se nije izvršila, bez ijedne poruke**; `vba-test.sh` (Stop) je na tom interpreteru obarao `who_writes.py --check` i lažno prijavljivao „`WHO_WRITES.md` je zastareo" uz `exit 2` na svakom Stop-u, pa se do žiga i Excela nije ni stizalo — ceo brzi set iz v2.40.0 bio je nedostižan. Sada se proverava **izvršavanje** (`"$PY" -c ""`), ne postojanje fajla.
+
+- `.claude/settings.json`: allow lista prebačena sa „pravilo po skripti" na prefiks po familiji (`python tools\`, `powershell -File tools\`, read-only `git`, read-only `gh`), i to u obe forme — `Bash(...)` i `PowerShell(...)`. Nova skripta u `tools/` više ne traži novo pravilo. Write operacije (`commit`, `push`, `reset`) ostaju namerno van liste.
+
 **Testovi ponašanja za novi UI**
 
 - Tri nova testa u `modTest` (`RunAllTests` sada vrti šest): `T_ClearForm_Ugovor` (datum i broj zbirne su kontekst i ostaju, partner se briše, a bez aktivne otpremnice datum se vraća na danas), `T_ParseDatum_Ugovor` (prazno/nečitljivo je `0`, `d.m.yyyy` bez `CDate`, trailing tačka se skida, nemoguć datum se odbija umesto da se prelije) i `T_ParcelaID_IzSkriveneKolone` (ID iz skrivene kolone, sakriveno polje ne šalje parcelu u dokument).
@@ -1097,5 +1101,7 @@ Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
 - `python tools/run_vba.py --suite RunAllTests` → **TESTS=11, FAIL=0** (šest testova UI ugovora + pet nad upisom zbirne i prijemnice).
 - **Dokaz u oba smera:** svih 14 sabotaža iz `tools/sabotaza.py` obara test po imenu, pa se vraća i suite je opet zelena.
 - `python tools/run_vba.py` (pun podrazumevani set) → **`EXIT=0`**, 11 suite-ova zeleno, bez `BLIND` reda (~1055 provera).
+- **Hookovi, dokaz u oba smera** (posle ispravke izbora interpretera): `.bas` sa `š` → `vba-check.sh` staje sa `ASCII: ne-ASCII bajt (\xc5\xa1)` i `exit 2`; isti fajl u čistom ASCII → `exit 0`. `vba-test.sh`: prvi prolaz odradi `RunAllTests` (**TESTS=11, FAIL=0**) i upiše žig, drugi prolaz nad istim stanjem staje **pre** Excela (`tests/last_run.txt` nepromenjen).
+- **`COMPILE` je ostao `NEJASNO`** — `Compile nije izvrsen (nema dijaloga, kontrola ostala aktivna), ishod NEPOZNAT`. Automatski Compile nije prošao, pa se compile status i dalje potvrđuje **ručno**: `Alt+F11 → Debug → Compile VBAProject`. Prijavljuje se kako jeste, ne kao zeleno.
 
 Ograničenje se i dalje prijavljuje kako jeste: testovi pokrivaju `ClearForm`/`ParseDatum`/`ParcelaID` i **provere + bruto→neto** puta upisa zbirne i prijemnice — **ne i sam transakcioni upis** (`Save*_TX`, koji pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`), mrežu i storno. Forma se gradi bez `.Show`, pa `UserForm_Activate` (raspored, `GoFullScreen`, punjenje mreže) nikad ne ide.
