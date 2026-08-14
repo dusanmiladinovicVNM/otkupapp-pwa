@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-115"
+Public Const OTKUI_BUILD   As String = "v6-ui-116"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -5227,6 +5227,8 @@ Private Function PorukaUpisano(ByVal rezim As String) As String
     Select Case rezim
         Case "OTKUP":      PorukaUpisano = Poruka("OTKUNOS_MSG_UPISAN")
         Case "OTPREMNICA": PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_OTP")
+        Case "ZBIRNA":     PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_ZBR")
+        Case "PRIJEMNICA": PorukaUpisano = Poruka("DOKUNOS_MSG_UPISANA_PRIJ")
         Case Else:         PorukaUpisano = Poruka("OTKUI_MSG_UPISANO")
     End Select
 End Function

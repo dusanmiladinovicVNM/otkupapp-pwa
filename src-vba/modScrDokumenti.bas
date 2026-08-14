@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-115"
+Public Const SCRDOK_BUILD As String = "v6-ui-116"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -621,6 +621,12 @@ Public Function Scr_Save(ByVal polja As Object) As String
         Case "OTPREMNICA"
             Scr_Save = SaveOtpremnica(polja)
             Exit Function
+        Case "ZBIRNA"
+            Scr_Save = SaveZbirna(polja)
+            Exit Function
+        Case "PRIJEMNICA"
+            Scr_Save = SavePrijemnica(polja)
+            Exit Function
         Case Else
             Scr_Save = Poruka("OTKUI_TODO_NEVEZANO")
             Exit Function
@@ -727,6 +733,87 @@ Private Function SaveOtpremnica(ByVal polja As Object) As String
     res = modDokUnos.OtpremnicaUpisi(p, poruke)
     If Len(res) = 0 Then
         SaveOtpremnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+End Function
+
+' F3 ZBIRNA. Isti obrazac kao SaveOtpremnica: ekran samo prevodi polja u recnik.
+' Dve razlike koje dolaze iz same forme, ne iz odluke ovog modula:
+'   - BROJ DOKUMENTA JE BROJ ZBIRNE (u F3 polje "broj zbirne" i ne postoji -
+'     modOtkupUI.ModeVezujeZbirnu je False za taj rezim), pa ide kao "brDok";
+'   - PARTNER je kupac. Ljuska ga skuplja pod kljucem "kooperantID" jer je to
+'     ista kontrola (cbKupac) u svim rezimima; ovde dobija svoje ime.
+Private Function SaveZbirna(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modDokUnos.NoviZbirnaUnos()
+    p("datum") = polja("datum")
+    p("vozacID") = polja("vozacID")
+    p("kupacID") = polja("kooperantID")
+    p("brDok") = polja("brDok")
+    p("vrsta") = polja("vrsta")
+    p("sorta") = polja("sorta")
+    p("tipAmb") = polja("tipAmb")
+    p("kolicinaI") = polja("kolicinaI")
+    p("kolAmb") = polja("kolAmb")
+    p("dveKlase") = polja("dveKlase")
+    p("kolicinaII") = polja("kolicinaII")
+    p("kolAmbII") = polja("kolAmbII")
+
+    greska = modDokUnos.ZbirnaValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SaveZbirna = greska
+        Exit Function
+    End If
+
+    res = modDokUnos.ZbirnaUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SaveZbirna = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+End Function
+
+' F4 PRIJEMNICA. Kao gore; ovde broj dokumenta jeste broj prijemnice, a broj
+' zbirne dolazi iz svog polja. "kolAmbIzdata" je u ovom rezimu VRACENA ambalaza
+' (isto polje forme, drugo znacenje - modOtkupUI.ApplyFormFields).
+Private Function SavePrijemnica(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modDokUnos.NoviPrijemnicaUnos()
+    p("datum") = polja("datum")
+    p("kupacID") = polja("kooperantID")
+    p("vozacID") = polja("vozacID")
+    p("brDok") = polja("brDok")
+    p("brojZbirne") = polja("brojZbirne")
+    p("vrsta") = polja("vrsta")
+    p("sorta") = polja("sorta")
+    p("tipAmb") = polja("tipAmb")
+    p("kolicinaI") = polja("kolicinaI")
+    p("cenaI") = polja("cenaI")
+    p("kolAmb") = polja("kolAmb")
+    p("kolAmbVracena") = polja("kolAmbIzdata")
+    p("dveKlase") = polja("dveKlase")
+    p("kolicinaII") = polja("kolicinaII")
+    p("cenaII") = polja("cenaII")
+    p("kolAmbII") = polja("kolAmbII")
+
+    greska = modDokUnos.PrijemnicaValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SavePrijemnica = greska
+        Exit Function
+    End If
+
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SavePrijemnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
 

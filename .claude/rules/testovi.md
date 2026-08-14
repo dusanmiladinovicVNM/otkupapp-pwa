@@ -178,10 +178,24 @@ postoje namerno (`docs/UI_MIGRACIJA_KATALOG.md`), pa obe nose svoj test:
 | `T_ParcelaID_IzSkriveneKolone` | ID parcele dolazi iz **skrivene druge kolone**, ne iz prikaznog teksta; sakriveno polje ne šalje parcelu u dokument |
 | `T_ClearForm_Ugovor` | ista tri ponašanja kao legacy trojka (datum ostaje, zbirna ostaje, partner se briše) + razlika novog UI-ja: **bez** aktivne otpremnice datum se vraća na danas |
 
-**Šta ovi testovi NE pokrivaju:** ništa iznad `ClearForm` — put upisa (`modOtkupUnos`
-/ `modDokUnos`), mreža, storno. Forma se gradi bez `.Show` (`New frmOtkupUI` pa
-`Controls.count`), pa `UserForm_Activate` — raspored, `GoFullScreen`, punjenje
-mreže — nikad ne ide.
+I pet nad **upisom zbirne i prijemnice** (`modDokUnos` + ruta u
+`modScrDokumenti`, v6-ui-116). Ovi **ne grade formu**: pravilo unosa živi u
+modulu bez ijedne kontrole, pa se tamo i proverava — brzo i bez stanja koje
+ostaje za sobom.
+
+| Test | Šta drži |
+|---|---|
+| `T_ZbirnaValidiraj_TraziVozaca` | vozač je entitet niza zbirne (Z3a) i **prva** provera; sa vozačem zbirnu zaustavlja tek kupac |
+| `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` | zbirna je poklopac nad otpremnicama: kg **i** ambalaža moraju da se poklope (`ValidateZbirnaPreUnosa`); zbirna bez ambalaže ne prolazi; **kapija ne zavisi od `VALIDACIJA_UNOSA`** |
+| `T_PrijemnicaValidiraj_TraziKupca` | kupac je **prva** provera (kod zbirne je vozač); broj zbirne je obavezan |
+| `T_BrutoNeto_PoRezimu` | prijemnica: uneti bruto → `BrutoKg`, u `Kolicina` ide neto, po klasama zasebno. Zbirna: bruto→neto **nema i ne sme da ga dobije** (`tblZbirna` nema `BrutoKg`; ona zbraja već netirane otpremnice) |
+| `T_ScrSave_RutaPoRezimu` | `Scr_Save` vodi F3/F4 u njihov modul (dokaz: staju na prvom pravilu **svog** dokumenta), a nepokriven režim (F5) i dalje vraća `OTKUI_TODO_NEVEZANO` |
+
+**Šta ovi testovi NE pokrivaju:** iznad `ClearForm` — mrežu i storno; a od puta
+upisa samo **provere i bruto→neto**, ne i sam `Save*_TX` (transakcioni upis
+pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`). Forma se gradi bez
+`.Show` (`New frmOtkupUI` pa `Controls.count`), pa `UserForm_Activate` —
+raspored, `GoFullScreen`, punjenje mreže — nikad ne ide.
 
 ### Tri seam-a koja novi UI nosi zbog ovih testova
 
@@ -214,9 +228,10 @@ python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 
 ### Akceptaciona komanda — goli poziv, ~1050 provera
 
-`--suite RunAllTests` vrti samo `modTest` (tri testa nad legacy formom + tri nad
-novim UI-jem) — to je **brzi set** i to je ono što pušta `Stop` hook. Pun gate je
-ceo podrazumevani set i pušta se **namerno**, pred commit ili release:
+`--suite RunAllTests` vrti samo `modTest` (tri testa nad legacy formom, tri nad
+novim UI-jem, pet nad upisom F3/F4) — to je **brzi set** i to je ono što pušta
+`Stop` hook. Pun gate je ceo podrazumevani set i pušta se **namerno**, pred
+commit ili release:
 
 ```powershell
 python tools/run_vba.py
@@ -246,12 +261,13 @@ Izmereno na operaterskoj mašini 14.08.2026 (`EXIT=0`, svih jedanaest zeleno):
 | `RunBusinessFlowProSuite` | 336 |
 | `RunAgrohemijaSmokeSuite` | 25 |
 | `TestLicense_All` | 23 |
-| `RunAllTests` | 6 |
+| `RunAllTests` | 11 |
 | `RunIzvestajTests` | ne prijavljuje broj |
-| **ukupno** | **~1050** + `RunIzvestajTests` |
+| **ukupno** | **~1055** + `RunIzvestajTests` |
 
 > Red `RunAllTests` je 14.08.2026 ispravljen sa 3 na 6 — tri testa novog UI-ja su
-> od tada pokrenuta na Windows mašini. Ostali brojevi su potvrđeni istim ranom
+> od tada pokrenuta na Windows mašini — pa istog dana na 11, uz pet testova
+> upisa F3/F4 (v6-ui-116). Ostali brojevi su potvrđeni istim ranom
 > (`RunBankaImportTestSuite` 189, `RunStornoTestSuite` 181, `RunPaleteTestSuite`
 > 97, `RunSheetsJsonParserTests` 72, `RunFakturaSmokeSuite` 35,
 > `RunBusinessFlowProSuite` 336, `RunAgrohemijaSmokeSuite` 25).
@@ -334,7 +350,8 @@ polja koja niko nije tražio da se provere.
 
 ### Sabotaže novog UI-ja — `tools/sabotaza.py`
 
-Sedam sabotaža nad `modOtkupUI`, svaka obara **tačno jedan** test i po imenu:
+Četrnaest sabotaža: sedam nad `modOtkupUI`, sedam nad putem upisa F3/F4
+(`modDokUnos`, `modScrDokumenti`). Svaka obara test **po imenu**:
 
 ```bash
 python tools/sabotaza.py --lista
@@ -354,7 +371,28 @@ python tools/sabotaza.py --vrati              # vrati
 | `clear-partner` | prestani da brišeš partnera | `FAIL T_ClearForm_Ugovor` |
 
 Sve sedam su **pokrenute i potvrđene 14.08.2026** na Windows mašini: svaka obara
-tačno onaj test koji piše u tabeli, po imenu, a baseline ostaje `TESTS=6 FAIL=0`.
+tačno onaj test koji piše u tabeli, po imenu.
+
+Sabotaže puta upisa zbirne i prijemnice (`src-vba/modDokUnos.bas`, osim
+poslednje) — **pokrenute i potvrđene 14.08.2026**, baseline `TESTS=11 FAIL=0`:
+
+| Sabotaža | Šta kvari | Očekivano |
+|---|---|---|
+| `zbirna-vozac` | zbirna više ne traži vozača | `FAIL T_ZbirnaValidiraj_TraziVozaca` **+ `T_ScrSave_RutaPoRezimu`** |
+| `zbirna-kapija` | zbir se više ne poredi sa otpremnicama | `FAIL T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` |
+| `zbirna-kapija-strogo` | kapija ostaje, ali se gejtuje `VALIDACIJA_UNOSA` | `FAIL T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` (samo poslednja tvrdnja) |
+| `prijemnica-kupac` | prijemnica više ne traži kupca | `FAIL T_PrijemnicaValidiraj_TraziKupca` **+ `T_ScrSave_RutaPoRezimu`** |
+| `bruto-prijemnica` | uneti bruto ostaje u `Kolicina`, tara se ne oduzima | `FAIL T_BrutoNeto_PoRezimu` |
+| `bruto-zbirna` | zbirna **dobija** bruto→neto koji ne sme da ima | `FAIL T_BrutoNeto_PoRezimu` |
+| `ruta-zbirna` | `Scr_Save` više ne vodi zbirnu u njen upis (`modScrDokumenti.bas`) | `FAIL T_ScrSave_RutaPoRezimu` |
+
+> **Dve sabotaže ovde obaraju DVA testa — i to je tačno, nije curenje stanja.**
+> `T_ScrSave_RutaPoRezimu` dokazuje da ruta stiže do pravog modula time što
+> prazan dokument staje na **prvom pravilu svog tipa** (zbirna na vozaču,
+> prijemnica na kupcu). Ukloniš li to prvo pravilo, menja se i ono što ruta
+> vidi. Razlika u odnosu na slučaj iz #186 (gde je drugi pad bio lažan trag) je
+> merljiva: ovde drugi pad ima **svoju poruku i svoju tvrdnju**, a ne
+> `Err.Number=0` sa praznim opisom.
 
 > **„Tačno jedan test" je do tog rana bila NETAČNA tvrdnja.** `parcela-tekst` i
 > `parcela-vidljivost` obarale su **dva** testa — svoj, pa još `T_ClearForm_Ugovor`

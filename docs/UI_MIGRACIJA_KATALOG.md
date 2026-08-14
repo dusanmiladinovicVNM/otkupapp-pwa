@@ -15,11 +15,11 @@ Stanje na dan `v6-ui-115`.
 
 Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
 
-1. **Upis — knjiže se otkupni list (F1) i otpremnica (F2).** Posao je izvučen
-   iz formi u `modOtkupUnos` (v6-ui-106) i `modDokUnos` (v6-ui-115): provere,
+1. **Upis — knjiže se otkupni list (F1), otpremnica (F2), zbirna (F3) i
+   prijemnica (F4).** Posao je izvučen iz formi u `modOtkupUnos` (v6-ui-106) i
+   `modDokUnos` (v6-ui-115 otpremnica, v6-ui-116 zbirna i prijemnica): provere,
    bruto→neto, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna, završetak
-   ispravke. Preostala četiri režima (zbirna, prijemnica, OM ulaz, kupci izlaz)
-   još ne upisuju.
+   ispravke. Preostala dva režima (OM ulaz, kupci izlaz) još ne upisuju.
    **Legacy zadržava svoju kopiju te logike — namerno.** `frmOtkup` i
    `frmDokumenta` ostaju potpuno operativni dok novi UI ne bude umeo sve; do
    tada se pravilo menja u zajedničkom modulu pa **ručno preslikava** u legacy.
@@ -28,7 +28,8 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    prijemnica, faktura, novac i izvod — ne.
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
    zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4), avans saldo OM
-   (F7), otvorene fakture (F6), otvoreni otkupi (F7).
+   (F7), otvorene fakture (F6), otvoreni otkupi (F7). Upis F3/F4 od v6-ui-116
+   radi i bez njih — to su prikazi, ne kapije.
 4. **Sitno:** filtriranje kooperanata po otkupnom mestu, peščanik za vreme
    upisa, dva nevezana KPI-ja, prefill iz storniranog (Z10).
 
@@ -133,13 +134,16 @@ zaključivati iz koda.
 | `chkDveKlaseOtp/Zbr/Prij_Click` | II klasa | **IMA** (`SetKlasa`) |
 | `RefreshBrojOtp/Zbirne/Prij/ReversSuggestion` | predlozi po nizu | **IMA** (v6-ui-112) |
 | `cmbKupac_Change` → broj prijemnice | briše pa predlaže | **IMA** (v6-ui-113) |
-| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** |
+| `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** — zato `SaveZbirnaMulti_TX` iz novog UI-ja dobija prazne `hladnjaca`/`pogon` |
 | `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **NEMA** — Faza B |
-| `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B |
-| `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B |
+| `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B (živi prikaz; upis F4 ne zavisi od njega) |
+| `UpdateValidacija` (živi prikaz + kapija pri upisu zbirne) | poklapanje zbirne sa otpremnicama | **kapija IMA** (`ZbirnaValidiraj`, v6-ui-116), **živi prikaz NEMA** |
+| `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B (F3 klikom na red pamti aktivnu zbirnu, pa je F4 nasledi) |
 | `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **NEMA** — Faza B |
 | `btnUnosOtp_Click` | upis otpremnice (F2) | **IMA** (`modDokUnos`, v6-ui-115) |
-| `btnUnosZbr/Prij/OMUlaz/Izlaz_Click` | upis F3–F6 | **NEMA** — Faza B |
+| `btnUnosZbr_Click` | upis zbirne (F3) | **IMA** (`modDokUnos`, v6-ui-116) |
+| `btnUnosPrij_Click` | upis prijemnice (F4) | **IMA** (`modDokUnos`, v6-ui-116) — **bez ispravke posle storna** (v. §3.1) |
+| `btnUnosOMUlaz/Izlaz_Click` | upis F5–F6 | **NEMA** — Faza B |
 | `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D |
 | storno paneli (7 kom.) | `btnStorno_Click` i dalje | **NEMA** — Faza D |
 
@@ -180,11 +184,28 @@ specifikacija, storno, preuzimanje, prefill sa otpremnice.
 
 | Režim | Dugme | Poslovna rutina | Novi UI |
 |---|---|---|---|
-| Otpremnica | `btnUnosOtp_Click` | `SaveOtpremnicaMulti_TX` | F2 — forma IMA, upis NEMA |
-| Zbirna | `btnUnosZbr_Click` | `SaveZbirnaMulti_TX` + `ValidateZbirnaPreUnosa` | F3 — forma IMA, upis i validacija NEMA |
-| Prijemnica | `btnUnosPrij_Click` | `SavePrijemnicaMulti_TX`, `GetPaletaStatusForPrijemnica`, `ReassignPaleteToPrijemnica_TX` | F4 — forma IMA, upis NEMA |
+| Otpremnica | `btnUnosOtp_Click` | `SaveOtpremnicaMulti_TX` | F2 — **upis IMA** (`modDokUnos`, v6-ui-115) |
+| Zbirna | `btnUnosZbr_Click` | `SaveZbirnaMulti_TX` + `ValidateZbirnaPreUnosa` | F3 — **upis IMA** (`modDokUnos`, v6-ui-116) |
+| Prijemnica | `btnUnosPrij_Click` | `SavePrijemnicaMulti_TX`, `GetPaletaStatusForPrijemnica`, `ReassignPaleteToPrijemnica_TX` | F4 — **upis IMA** (v6-ui-116) **osim ispravke posle storna** (relink paleta) |
 | OM ulaz (revers/avans) | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX`, `GetOMAvansSaldo`, `GetOpenOtkupi` | F7 — forma IMA, upis NEMA |
 | Kupci izlaz (uplate) | `btnUnosIzlaz_Click` | `SaveKupciIzlaz_TX`, `GetUplataForFaktura`, `GetOpenFakture` | F6 — forma IMA, upis NEMA |
+
+**Šta upis F3/F4 nosi, a šta namerno ne (v6-ui-116):**
+
+| Pravilo iz legacy | Gde je sad | Napomena |
+|---|---|---|
+| Zbirna: vozač → kupac → broj → roba, pa kapija | `ZbirnaValidiraj` | vozač je entitet niza (Z3a), zato prvi |
+| Zbirna se mora poklopiti sa svojim otpremnicama (kg **i** ambalaža) | `ZbirnaValidiraj` → `ValidateZbirnaPreUnosa` | hard-kapija, **ne zavisi** od `VALIDACIJA_UNOSA` — kao u legacy |
+| Zbirna: izvor ima Kl.II a prekidač isključen → blokada | `ZbirnaValidiraj` → `ZbirnaIzvorImaKlasuII` | inače bi se Kl.II tiho izgubila |
+| Zbirna **nema** bruto→neto ni cenu | — | `tblZbirna` nema ni `BrutoKg` ni `Cena`; zbirna je zbir već netiranih otpremnica |
+| Zbirna: `Hladnjaca` / `Pogon` | — | novi UI nema ta polja (Z3b) → upisuje se prazno |
+| Prijemnica: kupac → vozač → broj → broj zbirne → zbirna postoji | `PrijemnicaValidiraj` | ponašanje po `PRIJEMNICA_ZBIRNA_PROVERA` (BLOK / UPOZORENJE) |
+| Prijemnica: bruto→neto po klasama, `BrutoKg` zamrznut | `PrijemnicaValidiraj` | isto kao otkup i otpremnica |
+| Prijemnica: 1 zbirna = 1 prijemnica (pitanje, ne greška) | `PrijemnicaValidiraj` → `LookupActiveID` | |
+| Prijemnica: auto-štampa + grupni otkupni list samo za hladnjaču | `PrijemnicaUpisi` | best-effort, ne obara potvrdu upisa |
+| Prijemnica: status palete uz potvrdu | `PrijemnicaUpisi` → `GetPaletaStatusForPrijemnica` | |
+| Zbirna: završetak ispravke posle storna | `ZbirnaUpisi` → `ZavrsiIspravkuAko` → `CompleteZbirnaIspravka` | samo nad **persistentnom** ispravkom (`tblStornoVeza`) |
+| **Prijemnica: ispravka posle storna (relink paleta)** | **NIJE preneto** | traži `SetPaletizeSkip` **pre** upisa + `ReassignPaleteToPrijemnica_TX` + `PaletaAdjustPrompt` — to je storno okvir (Faza D). Novi UI još ne ume da stornira prijemnicu, pa takva ispravka može da nastane samo u `frmDokumenta`, gde se i završava. Prijemnica upisana iz novog UI-ja dok takva ispravka visi dobija **sveže** palete, a stare ostaju osirotele. |
 
 Uz njih: `LoadZbirneListbox` / `lstZbirne_Click` (izbor zbirne iz liste),
 `UpdateManjak` (manjak prijemnice vs zbirna), `UpdateValidacija`,
@@ -252,8 +273,11 @@ kooperante sa oznakom otkupnog mesta.
    (v6-ui-106, `modOtkupUnos`).
 7. ~~F2 → `SaveOtpremnicaMulti_TX` (+ auto-zbirna MALINA, ispravka).~~
    **URAĐENO** (v6-ui-115, `modDokUnos`).
-8. F3/F4 → `SaveZbirnaMulti_TX` (+ `ValidateZbirnaPreUnosa`),
-   `SavePrijemnicaMulti_TX` (+ status palete, manjak vs zbirna).
+8. ~~F3/F4 → `SaveZbirnaMulti_TX` (+ `ValidateZbirnaPreUnosa`),
+   `SavePrijemnicaMulti_TX` (+ status palete).~~ **URAĐENO** (v6-ui-116,
+   `modDokUnos`). Ostaje iz te stavke: **živi prikaz manjka** prijemnice vs
+   zbirna (`UpdateManjak`) i **lista zbirnih za izbor**, oboje prikaz a ne upis;
+   i **ispravka prijemnice posle storna** (relink paleta), koja pripada Fazi D.
 9. F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.
 10. Z12: preostali KPI-jevi (`GetOMAvansSaldo`, otvoreno kg).
 
