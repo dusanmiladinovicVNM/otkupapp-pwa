@@ -1118,3 +1118,143 @@ Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
 - **`COMPILE` je ostao `NEJASNO`** — `Compile nije izvrsen (nema dijaloga, kontrola ostala aktivna), ishod NEPOZNAT`. Automatski Compile nije prošao, pa se compile status i dalje potvrđuje **ručno**: `Alt+F11 → Debug → Compile VBAProject`. Prijavljuje se kako jeste, ne kao zeleno.
 
 Ograničenje se i dalje prijavljuje kako jeste: testovi pokrivaju `ClearForm`/`ParseDatum`/`ParcelaID` i **provere + bruto→neto** puta upisa zbirne i prijemnice — **ne i sam transakcioni upis** (`Save*_TX`, koji pokrivaju `RunStornoTestSuite` i `RunBusinessFlowProSuite`), mrežu i storno. Forma se gradi bez `.Show`, pa `UserForm_Activate` (raspored, `GoFullScreen`, punjenje mreže) nikad ne ide.
+
+---
+
+## vba-v2.41.0 — 2026-08-14
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: običan online update** — za razliku od 2.40.0. Ovaj paket ne nosi
+> nijednu novu formu; `frmOtkupUI.frm/.frx` je nepromenjen, dirani su samo
+> „meki" moduli. Ko je već dobio 2.40.0 punom isporukom, ovo dobija normalnim
+> self-update-om.
+>
+> **Obavezno posle uvoza:** `Alt+F8 → EnsurePoruke`. Petnaest novih ključeva
+> poruka do tada postoji samo u kodu, pa bi se prikazali kao `[KLJUC]`.
+>
+> **Legacy se i dalje NE gasi.** `frmOtkup` i `frmDokumenta` rade nepromenjeno.
+
+**Upis novca i ambalaže — novi UI sada knjiži i F5, F6 i F7**
+
+Time je upis zatvoren za **sve unosne režime** novog ekrana (F1–F7). Posao je,
+kao i do sada, izvučen iz forme u modul bez ijedne kontrole — novi
+`modNovacUnos`, treći uz `modOtkupUnos` (F1) i `modDokUnos` (F2–F4):
+
+- **F5 Isplate** → `SaveOMUlaz_TX`. Nosi sve četiri grane **tipa novca** iz
+  legacy `btnUnosOMUlaz_Click`: keš iz avansa otkupnog mesta, virman firme,
+  virman avansa kooperantu i keš firma→otkupac. To nije formalnost — pogrešan
+  tip se ne vidi u formi nego tek u saldu: ne razdužuje otkupni blok i ne skida
+  avans otkupnog mesta.
+- **F6 Uplate kupaca** → `SaveKupciIzlaz_TX`. Izabrana faktura daje „uplata po
+  fakturi" (i zatvara je kroz `UpdateFakturaStatus`); bez nje je red avans kupca.
+- **F7 Reversi** → `SaveOMUlaz_TX` sa smerom, auto-broj po `KIND_REV`, PDF
+  revers i završetak ispravke posle storna (oba best-effort, ne obaraju potvrdu
+  upisa).
+
+Jedan legacy handler pokrivao je dva današnja režima: tamo su novac i ambalaža
+mogli u isti dokument, ovde ne mogu — F5 nema polja ambalaže, F7 nema polje
+iznosa.
+
+**Dva polja bez kojih upis ne bi bio tačan**
+
+- **„ISPLATA IZ" (F5)** — legacy `tglIzOMAvansa`, sa raspoloživim avansom
+  otkupnog mesta u natpisu polja (legacy `UpdateOMAvansSaldo`). Bez prekidača bi
+  **svaka** isplata po otkupnom bloku bila virman, pa avans otkupnog mesta nikad
+  ne bi bio razdužen.
+- **„OTVORENA FAKTURA" (F6)** — legacy `cmbFakturaIzlaz`. Bez izbora fakture bi
+  svaka uplata iz novog UI-ja bila avans kupca i **nijedna faktura ne bi bila
+  zatvorena**.
+
+Oba čitaju postojeće read-modele (`GetOpenOtkupi`, `GetOpenFakture`,
+`GetOMAvansSaldo`) — nijedna računica se ne ponavlja u ekranu.
+
+**Tri namerne razlike u odnosu na legacy** (zapisane i u kodu i u
+`docs/UI_MIGRACIJA_KATALOG.md`)
+
+- **Vozač se za čist novac ne traži.** Legacy ga traži uz `VALIDACIJA_UNOSA`,
+  ali samo zato što je isti dokument mogao da nosi i ambalažu; `SaveNovac`
+  vozača uopšte nema, pa bi provera zaustavljala operatera na podatku koji se
+  odbacuje. U F7, gde ambalaža postoji, vozač je obavezan i **bez** stroge
+  validacije (firma↔OM ide preko vozača).
+- **U F5 partner koji je otkupno mesto jeste entitet novca.** Polje se u tom
+  režimu zove „Primalac". Legacy tu mogućnost nije imao — primalac je bio samo
+  kooperant, a otkupno mesto se podrazumevalo iz konteksta forme. Kad je partner
+  kooperant, entitet ostaje kontekst, tačno kao pre.
+- **F7 ne prima kupca kao partnera.** Četiri smera reversa idu isključivo
+  kooperant ↔ OM ↔ firma; ambalaža kupca i u legacy ide kroz prijemnicu (povrat)
+  i kupci-izlaz, ne kroz revers. Izbor kupca se odbija porukom umesto da se tiho
+  proknjiži na pogrešan entitet.
+
+**Novac se više ne knjiži na osnovu onoga što piše u polju**
+
+Tri kapije koje su došle iz pregleda PR-a, sve na istom mestu: greška tu nije
+UI bug nego pogrešno proknjižen novac.
+
+- **Ukucano ime koje nije izabrano iz liste zaustavlja dokument.** Padajuće
+  liste dozvoljavaju kucanje, a veza ka partneru/bloku/fakturi postoji samo kad
+  je stavka stvarno izabrana. Operater je mogao da vidi ime kooperanta u polju,
+  pritisne Sačuvaj — i da isplata bude proknjižena na otkupno mesto umesto na
+  njega. Isto je važilo za blok (postajao avans) i fakturu (postajala avans
+  kupca, faktura ostajala otvorena). Sva tri slučaja su izgledala kao uredan
+  dokument. Sada se unos zaustavlja dok se stavka ne izabere; **prazno** polje i
+  dalje znači „nije izabrano" i prolazi.
+- **Isplate (F5) su vraćene u granice otkupnog mesta.** Lista kooperanata se u
+  tom režimu sužava na aktivno otkupno mesto **uvek** (kao u staroj formi, gde
+  to nije zavisilo od podešavanja), a lista otvorenih blokova se filtrira po
+  istom mestu. Ranije je bila moguća kombinacija „blok sa jednog otkupnog
+  mesta, novac knjižen na drugo".
+- **Ograničenja iznosa se proveravaju u trenutku upisa, ne u trenutku otvaranja
+  liste.** Između punjenja liste i potvrde stanje se može promeniti — drugim
+  unosom, uvozom izvoda ili drugim delom programa. Sada se pred svaki upis
+  ponovo čita ko je vlasnik bloka/fakture, da nije storniran i koliko je
+  **stvarno** ostalo. Provera stoji u samom upisu, pa važi i za staru formu i
+  za svaki drugi put do knjiženja, ne samo za novi ekran.
+
+**Dva kvara zatečena usput**
+
+- **Polje „Novac" se nije praznilo posle snimanja.** `ClearForm` ga nije imao u
+  spisku, pa je zatečen iznos ostajao u formi — sledeća potvrda bi isplatila isti
+  novac drugi put. Najskuplja greška ovog režima.
+- **Forma je pokazivala smer reversa koji dokument nije imao.** Prvi segment je
+  izgledao izabrano, a interno stanje je bilo „nije izabrano" (0). Sada nijedan
+  nije unapred obeležen — smer se bira eksplicitno, jer je prazan smer ranije
+  tiho knjižio „OM prima od vozača".
+
+**Ostalo**
+
+- Partner combo dobio **treću skrivenu kolonu sa tipom partnera**
+  (kooperant / otkupno mesto / kupac). U mešovitoj listi se tip ne može
+  zaključiti iz ID-ja, a od njega zavisi kako se dokument knjiži.
+- `modDokUnos.ZavrsiIspravkuAko` postao `Public` i dobio granu za revers —
+  umesto da se isto pravilo prepiše u treći modul.
+
+**Stanje verifikacije**
+
+Pokrenuto na Windows mašini (Excel + `pywin32`), 14.08.2026:
+
+- `python tools\vba_check.py` → **čisto (188 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=17, FAIL=0** (šest
+  novih testova: tri nad `modNovacUnos`, tri nad kapijama vlasništva i
+  trenutnog ostatka — uključujući jedan koji zove sam upis, bez UI sloja).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno, bez
+  `BLIND` reda.
+- **Dokaz u oba smera:** četrnaest novih sabotaža, svaka obara test **po imenu**,
+  pa se vraća i suite je opet zelena. Jedna je popravka postojećeg sidra
+  (`clear-zbirna`) — razvezalo se čim je `ClearForm` dobio novo polje, i tek bi
+  pri sledećem pokretanju tiho prijavilo da sidro nije jednoznačno. Pravilo je
+  zapisano u `.claude/rules/testovi.md`: kad menjaš red koji je nečije sidro,
+  promeni i sidro pa ponovo pokaži crveno.
+- **Fixture je proširen jednom fakturom** — bez nje kapija nad fakturom nema nad
+  čim da radi. Ko vrti testove lokalno mora da regeneriše `otkup_test.xlsm`
+  (uputstvo u `.claude/rules/testovi.md`; donor može biti i postojeći fixture).
+- **`COMPILE` je i dalje `NEJASNO`** — automatski Compile ne prolazi, pa se
+  potvrđuje **ručno**: `Alt+F11 → Debug → Compile VBAProject`. Prijavljuje se
+  kako jeste.
+
+Ograničenje: testovi pokrivaju **provere i izbor tipa novca**, ne i sam
+transakcioni upis (`SaveOMUlaz_TX` / `SaveKupciIzlaz_TX`, koje pokrivaju
+`RunStornoTestSuite` i `RunBusinessFlowProSuite`). Izgled novih polja, PDF revers
+i ponašanje nad pravim podacima ostaju na operateru.
+
+**Šta i dalje nedostaje novom UI-ju:** storno okvir (sedam panela — Faza D),
+živi prikaz manjka prijemnice i lista zbirnih za izbor, peščanik za vreme upisa,
+dva nevezana KPI-ja i prefill iz storniranog dokumenta.

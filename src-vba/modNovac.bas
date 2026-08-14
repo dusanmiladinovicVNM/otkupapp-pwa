@@ -1036,6 +1036,163 @@ Public Function GetUplataForOtkup(ByVal otkupID As String) As Double
     Next i
 End Function
 
+'=====================================================================
+' KAPIJE ZA ISPLATU / UPLATU -- vlasnistvo i TRENUTNI ostatak
+'
+' Obe funkcije vracaju "" kad je knjizenje dozvoljeno, inace razlog. Dva
+' pozivaoca, dva idioma, JEDNO pravilo:
+'
+'   modNovacUnos (F5/F6)  -> razlog ide operateru kao poruka uz polje
+'   SaveOMUlaz_TX /       -> razlog se dize kao greska, pa transakcija pada
+'   SaveKupciIzlaz_TX        i kad pozivalac nije nas ekran
+'
+' Zasto i u writeru, kad UI vec proverava: UI proverava nad SNIMKOM koji je
+' napravljen kad je lista punjena. Izmedju punjenja i potvrde stanje se moze
+' promeniti -- drugi unos, uvoz izvoda, drugi pozivalac istog writer-a -- pa
+' bi prosla prevelika isplata. Zato writer ponovo cita trenutno stanje i ne
+' veruje parametrima. Isti obrazac vec postoji u ApplyAvansToOtkup
+' (target-owner + target-active + preracunat preostali iznos).
+'=====================================================================
+
+' Prazan otkupID nije greska: isplata bez izabranog bloka je avans kooperantu.
+Public Function IsplataBlokProblem(ByVal otkupID As String, _
+                                   ByVal kooperantID As String, _
+                                   ByVal stanicaID As String, _
+                                   ByVal iznos As Double) As String
+    Const SRC As String = "IsplataBlokProblem"
+    Dim data As Variant, rows As Collection, r As Long
+    Dim colKoop As Long, colSt As Long, colStorno As Long
+    Dim colKol As Long, colCena As Long
+    Dim vrednost As Double, preostalo As Double
+
+    otkupID = Trim$(otkupID)
+    If Len(otkupID) = 0 Then Exit Function
+
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then
+        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_NEMA") & " " & otkupID
+        Exit Function
+    End If
+
+    Set rows = FindRows(TBL_OTKUP, COL_OTK_ID, otkupID)
+    If rows Is Nothing Then
+        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_NEMA") & " " & otkupID
+        Exit Function
+    End If
+    If rows.count = 0 Then
+        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_NEMA") & " " & otkupID
+        Exit Function
+    End If
+    ' Isti razlog kao AUD-026 u ApplyAvansToOtkup: dvosmislen target nije
+    ' "uzmi prvi" nego "ne znam nad cim radim".
+    If rows.count > 1 Then
+        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_DUPLI") & " " & otkupID
+        Exit Function
+    End If
+    r = rows(1)
+
+    colStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    If colStorno > 0 Then
+        If UCase$(Trim$(CStr(data(r, colStorno)))) = "DA" Then
+            IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_STORNIRAN") & " " & otkupID
+            Exit Function
+        End If
+    End If
+
+    colKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    If StrComp(Trim$(CStr(data(r, colKoop))), Trim$(kooperantID), vbTextCompare) <> 0 Then
+        IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_KOOP") & " " & otkupID
+        Exit Function
+    End If
+
+    ' Otkupno mesto se poredi samo kad je poznato. Red novca se knjizi na
+    ' aktivno OM (SaveNovac omID), pa bi blok sa drugog OM razduzivao jedno
+    ' mesto a teretio drugo.
+    If Len(Trim$(stanicaID)) > 0 Then
+        colSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+        If colSt > 0 Then
+            If StrComp(Trim$(CStr(data(r, colSt))), Trim$(stanicaID), vbTextCompare) <> 0 Then
+                IsplataBlokProblem = Poruka("NOVAC_ERR_BLOK_TUDJ_OM") & " " & otkupID
+                Exit Function
+            End If
+        End If
+    End If
+
+    ' TRENUTNI neisplaceni ostatak -- cita se sada, ne uzima iz parametra.
+    colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    If colKol > 0 And colCena > 0 Then
+        If IsNumeric(data(r, colKol)) And IsNumeric(data(r, colCena)) Then
+            vrednost = CDbl(data(r, colKol)) * CDbl(data(r, colCena))
+        End If
+    End If
+    preostalo = vrednost - GetUplataForOtkup(otkupID)
+    If iznos > preostalo Then
+        IsplataBlokProblem = Poruka("NOVUNOS_ERR_VECI_OD_OSTATKA") & " " & _
+                             Format$(preostalo, "#,##0.00")
+    End If
+End Function
+
+' Prazan fakturaID nije greska: uplata bez izabrane fakture je avans kupca.
+Public Function UplataFakturaProblem(ByVal fakturaID As String, _
+                                     ByVal kupacID As String, _
+                                     ByVal iznos As Double) As String
+    Const SRC As String = "UplataFakturaProblem"
+    Dim data As Variant, rows As Collection, r As Long
+    Dim colKupac As Long, colIznos As Long, colStorno As Long
+    Dim iznosFak As Double, preostalo As Double
+
+    fakturaID = Trim$(fakturaID)
+    If Len(fakturaID) = 0 Then Exit Function
+
+    data = GetTableData(TBL_FAKTURE)
+    If IsEmpty(data) Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_NEMA") & " " & fakturaID
+        Exit Function
+    End If
+
+    Set rows = FindRows(TBL_FAKTURE, COL_FAK_ID, fakturaID)
+    If rows Is Nothing Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_NEMA") & " " & fakturaID
+        Exit Function
+    End If
+    If rows.count = 0 Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_NEMA") & " " & fakturaID
+        Exit Function
+    End If
+    If rows.count > 1 Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_DUPLA") & " " & fakturaID
+        Exit Function
+    End If
+    r = rows(1)
+
+    colStorno = GetColumnIndex(TBL_FAKTURE, COL_STORNIRANO)
+    If colStorno > 0 Then
+        If UCase$(Trim$(CStr(data(r, colStorno)))) = "DA" Then
+            UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_STORNIRANA") & " " & fakturaID
+            Exit Function
+        End If
+    End If
+
+    colKupac = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+    If StrComp(Trim$(CStr(data(r, colKupac))), Trim$(kupacID), vbTextCompare) <> 0 Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_TUDJ_KUPAC") & " " & fakturaID
+        Exit Function
+    End If
+
+    ' TRENUTNO preostalo. Kao u legacy, poredi se samo kad je vece od nule -
+    ' faktura bez iznosa ne blokira uplatu.
+    colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
+    If colIznos > 0 Then
+        If IsNumeric(data(r, colIznos)) Then iznosFak = CDbl(data(r, colIznos))
+    End If
+    preostalo = iznosFak - GetUplataForFaktura(fakturaID)
+    If preostalo > 0 And iznos > preostalo Then
+        UplataFakturaProblem = Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & _
+                               Format$(preostalo, "#,##0.00")
+    End If
+End Function
+
 Public Sub UpdateOtkupStatus(ByVal otkupID As String)
     Const SRC As String = "UpdateOtkupStatus"
 

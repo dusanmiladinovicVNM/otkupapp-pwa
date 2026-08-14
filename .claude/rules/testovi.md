@@ -157,7 +157,34 @@ kontrole, pa se tamo i proverava — brzo i bez stanja koje ostaje za sobom.
 | `T_ZbirnaValidiraj_MoraDaSeSlazeSaOtpremnicama` | zbirna je poklopac nad otpremnicama: kg **i** ambalaža moraju da se poklope (`ValidateZbirnaPreUnosa`); zbirna bez ambalaže ne prolazi; **kapija ne zavisi od `VALIDACIJA_UNOSA`** |
 | `T_PrijemnicaValidiraj_TraziKupca` | kupac je **prva** provera (kod zbirne je vozač); broj zbirne je obavezan |
 | `T_BrutoNeto_PoRezimu` | prijemnica: uneti bruto → `BrutoKg`, u `Kolicina` ide neto, po klasama zasebno. Zbirna: bruto→neto **nema i ne sme da ga dobije** (`tblZbirna` nema `BrutoKg`; ona zbraja već netirane otpremnice) |
-| `T_ScrSave_RutaPoRezimu` | `Scr_Save` vodi F3/F4 u njihov modul (dokaz: staju na prvom pravilu **svog** dokumenta), a nepokriven režim (F5) i dalje vraća `OTKUI_TODO_NEVEZANO` |
+| `T_ScrSave_RutaPoRezimu` | `Scr_Save` vodi F2–F7 u njihov modul (dokaz: svaki staje na pravilu koje je **isključivo njegovo**), a nepokriven režim (F8 storno) i dalje vraća `OTKUI_TODO_NEVEZANO` |
+
+Tri nad **upisom novca i ambalaže** (`modNovacUnos`, v6-ui-117). Isti obrazac:
+pravilo živi u modulu bez ijedne kontrole, pa se tamo i proverava.
+
+| Test | Šta drži |
+|---|---|
+| `T_IsplataValidiraj_TipNovcaPoIzboru` | tip novca po izboru primaoca/bloka/prekidača — sve četiri grane (`KesOtkupacKoop`, `VirmanFirmaKoop`, `VirmanAvansKoop`, `KesFirmaOtkupac`); iznos ne preko ostatka bloka ni preko OM avansa; primalac-otkupno-mesto je entitet novca i odbacuje blok; broj dokumenta je kapija **oba smera** `VALIDACIJA_UNOSA` |
+| `T_UplataValidiraj_FakturaOdlucujeTip` | izabrana faktura → `KupciUplata` + napomena sa brojem; bez nje → `KupciAvans`; uplata ne preko **trenutnog** preostalog iznosa; faktura drugog kupca i nepostojeća faktura se odbijaju |
+| `T_ReversValidiraj_SmerJeObavezan` | smer je obavezan (prazan je ranije tiho knjižio „OM prima od vozača"); količina i tip ambalaže idu pre smera; kooperantski smer ne prima kupca; firma↔OM traži vozača **i bez** stroge validacije; prevod segmenta u `koopSmer` |
+
+Tri nad **kapijama koje UI ne može da odbrani** (pregled PR #190). Ovo su
+pravila oko kojih je ranije bilo moguće da suite bude zelen a novac ode na
+pogrešno mesto:
+
+| Test | Šta drži |
+|---|---|
+| `T_IsplataBlokGuard_VlasnistvoITrenutniOstatak` | `IsplataBlokProblem`: blok mora postojati, ne biti storniran, pripadati **tom** kooperantu i **tom** otkupnom mestu, a neisplaćeni ostatak se čita iz podataka **sada** — ne iz snimka koji je ekran poslao (helper zato namerno šalje lažnih 999999) |
+| `T_NerazresenIzbor_NeProlaziKaoPrazno` | ukucano a nerazrešeno ime/blok/faktura (`ListIndex = -1` uz vidljiv tekst) **zaustavlja** dokument umesto da tiho postane isplata otkupnom mestu / avans kooperantu / avans kupca; obrnut smer: **prazno** polje i dalje prolazi |
+| `T_WriterGuard_OdbijaTudjBlok` | `SaveOMUlaz_TX` odbija nemoguću kombinaciju **bez ijedne UI provere** — zove se direktno, kao što ga zove i legacy `frmDokumenta`; odbijen upis ne ostavlja red u `tblNovac` |
+
+> **Zašto writer, kad modul već proverava.** Modul proverava nad snimkom iz
+> trenutka kad je lista punjena. Između punjenja i potvrde stanje se može
+> promeniti — drugi unos, uvoz izvoda, drugi pozivalac istog writer-a — pa bi
+> prošla prevelika isplata. Isti obrazac postoji u `ApplyAvansToOtkup`
+> (target-owner + target-active + preračunat preostali iznos) i sada ga dele
+> `IsplataBlokProblem` i `UplataFakturaProblem`: jedna implementacija, dva
+> pozivaoca — core je diže kao grešku, modul je vraća kao poruku uz polje.
 
 **Šta NE pokrivaju:** iznad `ClearForm` — mrežu i storno; a od puta upisa samo
 **provere i bruto→neto**, ne i sam `Save*_TX` (transakcioni upis pokrivaju
@@ -225,10 +252,26 @@ python tools/run_vba.py --suite RunAllTests   # ocekuj FAIL po IMENU tog testa
 python tools/sabotaza.py --vrati              # vrati
 ```
 
-Četrnaest sabotaža: sedam nad `modOtkupUI`, sedam nad putem upisa F3/F4
-(`modDokUnos`, `modScrDokumenti`). Koja obara koji test i sa kojom tvrdnjom —
-**`--lista`**, ne prepisivati ovde; skripta je izvor istine. Sve su pokrenute i
-potvrđene 14.08.2026, baseline `TESTS=11 FAIL=0`.
+Dvadeset devet sabotaža: sedam nad `modOtkupUI`, sedam nad putem upisa F3/F4
+(`modDokUnos`, `modScrDokumenti`), osam nad putem upisa F5/F6/F7
+(`modNovacUnos`, ruta isplate) i sedam nad kapijama vlasništva i trenutnog
+ostatka (`modNovac`, `modDokumenta`). Koja obara koji test i sa kojom tvrdnjom
+— **`--lista`**, ne prepisivati ovde; skripta je izvor istine. Prvih četrnaest
+potvrđeno 14.08.2026 (`TESTS=11 FAIL=0`), osam iz v6-ui-117 nad `TESTS=14`,
+sedam iz v6-ui-118 nad `TESTS=17 FAIL=0`.
+
+**Dve sabotaže namerno obaraju više od jednog testa** i to je tačan nalaz, ne
+curenje stanja: `blok-ostatak-snapshot` obara tri (kapija, put unosa, ruta), a
+`blok-tudj-om` dva (kapija i writer). Isto pravilo je namerno provereno na više
+nivoa, pa njegovo uklanjanje mora da se vidi na svakom. Razlika u odnosu na
+pravo curenje je i dalje merljiva: svaki pad ima **svoju** poruku i svoju
+tvrdnju, a ne `Err.Number=0` sa praznim opisom.
+
+> **Sidro sabotaže je deo koda koji sabotira.** `clear-zbirna` se razvezalo čim
+> je `ClearForm` dobio `fgNovac` u spisak polja — skripta bi tiho prijavila
+> „sidro nije jednoznačno" tek pri sledećem pokretanju, a do tada bi izgledalo
+> da je dokaz i dalje važeći. Kad menjaš red koji je nečije sidro, promeni i
+> sidro, pa ponovo pokaži crveno.
 
 Za legacy formu sabotaža se radi ručno u `ClearOtkupFields` (dodaj
 `txtDatum.value = ""`, `txtBrojZbirne.value = ""`, ukloni `cmbKooperant.value = ""`),
@@ -262,6 +305,13 @@ Tri zamke koje skripta rešava, i koje važe za svaki sličan zahvat nad izvorom
 
 `tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
 `tools/make_fixture.py` iz **donor** sveske.
+
+> **Kad se `FIXTURE` dict u `make_fixture.py` promeni, fixture se MORA
+> regenerisati** — inače testovi padaju na podacima kojih nema. Donor može biti
+> i **postojeći fixture**: on nosi punu šemu i nema VBA, a generator ionako
+> briše sve redove pre sejanja. Izlaz mora biti druga putanja (donor = izlaz se
+> odbija), pa se fajl posle premesti:
+> `python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --out tests\fixtures\otkup_test_new.xlsm --force`
 
 - Donor daje samo strukturu; spisak kolona se **ne** zakucava u Python (šema tabela
   je izvor istine — CLAUDE.md §4). Podaci su 100% sintetički, u transakciji koja se

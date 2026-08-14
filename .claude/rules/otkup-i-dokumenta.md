@@ -78,10 +78,11 @@ Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
   Z1–Z14, brojevni niz po režimu (Z3a), revizija ulaznog sloja 1:1 (Z3b),
   isporuka (Z3c) i plan po fazama. „Šta još nije preneto" se čita odatle, ne
   zaključuje iz koda.
-- **Poslovna logika unosa je izdvojena iz formi:** `modOtkupUnos` (otkupni list)
-  i `modDokUnos` (otpremnica, zbirna, prijemnica) — bez ijedne kontrole, zovu ih
-  i ekran i, kad za to dođe red, forma. Ekran (`modScrDokumenti.Scr_Save`) samo
-  prevodi polja u rečnik; **nijedna provera ne živi u ekranu.**
+- **Poslovna logika unosa je izdvojena iz formi:** `modOtkupUnos` (otkupni list),
+  `modDokUnos` (otpremnica, zbirna, prijemnica) i `modNovacUnos` (isplate, uplate
+  kupaca, reversi) — bez ijedne kontrole, zovu ih i ekran i, kad za to dođe red,
+  forma. Ekran (`modScrDokumenti.Scr_Save`) samo prevodi polja u rečnik;
+  **nijedna provera ne živi u ekranu.**
 - **Prelazno pravilo:** pravilo unosa se menja u tim modulima, pa se **ručno
   preslika** u legacy formu, i to se zabeleži uz izmenu. Dve kopije postoje
   namerno.
@@ -89,7 +90,8 @@ Otkup i dokumenta se prenose na jednu runtime formu (`frmOtkupUI` + ljuska
   ponašanja, ista tri razloga. **Pokriven je testom** (`T_ClearForm_Ugovor` u
   `modTest`), zajedno sa `ParseDatum` i `ParcelaID`. Upis zbirne i prijemnice
   (`ZbirnaValidiraj` / `PrijemnicaValidiraj`) ima svojih pet testova u istoj
-  suite-i — spisak i sabotaže: `.claude/rules/testovi.md` §4. Novi UI ima i seam-ove iz §2
+  suite-i, a upis novca i ambalaže (`IsplataValidiraj` / `UplataValidiraj` /
+  `ReversValidiraj`) svoja tri — spisak i sabotaže: `.claude/rules/testovi.md` §4. Novi UI ima i seam-ove iz §2
   u svom obliku (`ClearForm`/`ParseDatum`/`ParcelaID` su `Public`, tri `SetFocus`-a
   su iza `IsTestMode`, `Scr_OtpTestSet` je gejtovan) — detalji i sabotaže:
   `.claude/rules/testovi.md` §4.

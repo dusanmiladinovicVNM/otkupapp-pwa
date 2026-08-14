@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-115`.
+Stanje na dan `v6-ui-118`.
 
 ---
 
@@ -15,11 +15,11 @@ Stanje na dan `v6-ui-115`.
 
 Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
 
-1. **Upis — knjiže se otkupni list (F1), otpremnica (F2), zbirna (F3) i
-   prijemnica (F4).** Posao je izvučen iz formi u `modOtkupUnos` (v6-ui-106) i
-   `modDokUnos` (v6-ui-115 otpremnica, v6-ui-116 zbirna i prijemnica): provere,
-   bruto→neto, `Save*_TX`, štampa, auto-lanac hladnjače, auto-zbirna, završetak
-   ispravke. Preostala dva režima (OM ulaz, kupci izlaz) još ne upisuju.
+1. ~~**Upis** — svi unosni režimi (F1–F7) sada knjiže.~~ **ZATVORENO**
+   (v6-ui-117). Posao je izvučen iz formi u `modOtkupUnos` (F1, v6-ui-106),
+   `modDokUnos` (F2 v6-ui-115, F3/F4 v6-ui-116) i `modNovacUnos` (F5/F6/F7,
+   v6-ui-117): provere, bruto→neto, `Save*_TX`, štampa, auto-lanac hladnjače,
+   auto-zbirna, završetak ispravke.
    **Legacy zadržava svoju kopiju te logike — namerno.** `frmOtkup` i
    `frmDokumenta` ostaju potpuno operativni dok novi UI ne bude umeo sve; do
    tada se pravilo menja u zajedničkom modulu pa **ručno preslikava** u legacy.
@@ -27,14 +27,15 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    ume da stornira **samo otkupni list** (iz F1 liste); otpremnica, zbirna,
    prijemnica, faktura, novac i izvod — ne.
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
-   zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4), avans saldo OM
-   (F7), otvorene fakture (F6), otvoreni otkupi (F7). Upis F3/F4 od v6-ui-116
-   radi i bez njih — to su prikazi, ne kapije.
-4. **Sitno:** filtriranje kooperanata po otkupnom mestu, peščanik za vreme
-   upisa, dva nevezana KPI-ja, prefill iz storniranog (Z10).
+   zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4). Upis F3/F4 od
+   v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
+   zatvoren u v6-ui-117: avans saldo OM, otvorene fakture (F6) i otvoreni
+   otkupi (F5) sada postoje, jer bez njih upis ne bi bio tačan (v. §3.1).
+4. **Sitno:** peščanik za vreme upisa, dva nevezana KPI-ja, prefill iz
+   storniranog (Z10). Filtriranje kooperanata po otkupnom mestu je urađeno
+   (v6-ui-113, `KOOP_FILTER_BY_OM`).
 
-Tačke 1 i 2 su Faza B i Faza D iz plana; 3 ide uz Fazu B (svaki režim sa
-svojim upisom); 4 su ostaci.
+Tačka 2 je Faza D iz plana; 3 i 4 su ostaci.
 
 ---
 
@@ -135,15 +136,17 @@ zaključivati iz koda.
 | `RefreshBrojOtp/Zbirne/Prij/ReversSuggestion` | predlozi po nizu | **IMA** (v6-ui-112) |
 | `cmbKupac_Change` → broj prijemnice | briše pa predlaže | **IMA** (v6-ui-113) |
 | `cmbKupac_Change` → `cmbHladnjaca` / `cmbPogon` | odredište otpremnice | **NEMA** — zato `SaveZbirnaMulti_TX` iz novog UI-ja dobija prazne `hladnjaca`/`pogon` |
-| `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **NEMA** — Faza B |
+| `cmbKupac_Change` → `FillOpenFakture`, `cmbFakturaIzlaz_Change` | otvorene fakture (F6) | **IMA** (v6-ui-117, `FillOpenFakture` uz polje `fgFaktura`) |
 | `txtBrojZbirnePrij_AfterUpdate` → `UpdateManjak` | manjak prijemnice vs zbirna | **NEMA** — Faza B (živi prikaz; upis F4 ne zavisi od njega) |
 | `UpdateValidacija` (živi prikaz + kapija pri upisu zbirne) | poklapanje zbirne sa otpremnicama | **kapija IMA** (`ZbirnaValidiraj`, v6-ui-116), **živi prikaz NEMA** |
 | `lstZbirne_Click` | izbor zbirne iz liste (F4) | **NEMA** — Faza B (F3 klikom na red pamti aktivnu zbirnu, pa je F4 nasledi) |
-| `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **NEMA** — Faza B |
+| `cmbPrimalacOMUlaz_Change` → `UpdateOMAvansSaldo` | avans saldo OM (F5) | **IMA** (v6-ui-117, u natpisu polja „ISPLATA IZ") |
+| `tglIzOMAvansa` | keš iz OM avansa vs virman firme (F5) | **IMA** (v6-ui-117, polje `fgAvans`) |
 | `btnUnosOtp_Click` | upis otpremnice (F2) | **IMA** (`modDokUnos`, v6-ui-115) |
 | `btnUnosZbr_Click` | upis zbirne (F3) | **IMA** (`modDokUnos`, v6-ui-116) |
 | `btnUnosPrij_Click` | upis prijemnice (F4) | **IMA** (`modDokUnos`, v6-ui-116) — **bez ispravke posle storna** (v. §3.1) |
-| `btnUnosOMUlaz/Izlaz_Click` | upis F5–F6 | **NEMA** — Faza B |
+| `btnUnosOMUlaz_Click` | upis F5 (isplate) i F7 (reversi) | **IMA** (`modNovacUnos`, v6-ui-117) |
+| `btnUnosIzlaz_Click` | upis F6 (uplate kupaca) | **IMA** (`modNovacUnos`, v6-ui-117) |
 | `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D |
 | storno paneli (7 kom.) | `btnStorno_Click` i dalje | **NEMA** — Faza D |
 
@@ -160,7 +163,7 @@ Jedan režim, jedna forma. Sve što radi:
 | `cmbVrstaVoca_Change` | puni sorte za vrstu | `GetLookupList` | IMA (`RefillSorta`) |
 | `cmbSortaVoca_Change` → `AutoFillCenaOtkup` | **cena iz cenovnika + tip ambalaže iz kulture + paleta info** | Z1, Z2, Z9 | IMA |
 | `UpdateUkupnoKg` | živi zbir kg / neto iz bruta | Z4 | IMA |
-| `cmbOtkupnoMesto_Change` | pamti aktivnu stanicu, osvežava predlog broja, MALINA auto-vozač | Z3, Z14 | IMA, osim **filtriranja kooperanata po stanici** (`FillKooperantCombo`) |
+| `cmbOtkupnoMesto_Change` | pamti aktivnu stanicu, osvežava predlog broja, MALINA auto-vozač | Z3, Z14 | IMA (filtriranje kooperanata po stanici od v6-ui-113) |
 | `txtDatum_AfterUpdate` | pamti aktivni datum, osvežava predlog broja | Z3, Z14 | IMA |
 | `cmbKooperant_Change` | puni parcele; osvežava ukupan iznos kooperanta u panelu blokova | Z6, `OtkupBlok_RefreshKoopTotal` | DELIMIČNO — parcele ima, ukupan iznos nema |
 | `cmbParcela_Change`, `ExtractParcelaID` | ID parcele iz prikaza | — | IMA |
@@ -187,8 +190,34 @@ specifikacija, storno, preuzimanje, prefill sa otpremnice.
 | Otpremnica | `btnUnosOtp_Click` | `SaveOtpremnicaMulti_TX` | F2 — **upis IMA** (`modDokUnos`, v6-ui-115) |
 | Zbirna | `btnUnosZbr_Click` | `SaveZbirnaMulti_TX` + `ValidateZbirnaPreUnosa` | F3 — **upis IMA** (`modDokUnos`, v6-ui-116) |
 | Prijemnica | `btnUnosPrij_Click` | `SavePrijemnicaMulti_TX`, `GetPaletaStatusForPrijemnica`, `ReassignPaleteToPrijemnica_TX` | F4 — **upis IMA** (v6-ui-116) **osim ispravke posle storna** (relink paleta) |
-| OM ulaz (revers/avans) | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX`, `GetOMAvansSaldo`, `GetOpenOtkupi` | F7 — forma IMA, upis NEMA |
-| Kupci izlaz (uplate) | `btnUnosIzlaz_Click` | `SaveKupciIzlaz_TX`, `GetUplataForFaktura`, `GetOpenFakture` | F6 — forma IMA, upis NEMA |
+| OM ulaz — novac | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX`, `GetOMAvansSaldo`, `GetOpenOtkupi` | F5 — **upis IMA** (`modNovacUnos`, v6-ui-117) |
+| OM ulaz — ambalaža | `btnUnosOMUlaz_Click` | `SaveOMUlaz_TX` (`koopSmer`), `OutputIzdavanjeAmbalaze` | F7 — **upis IMA** (v6-ui-117) |
+| Kupci izlaz (uplate) | `btnUnosIzlaz_Click` | `SaveKupciIzlaz_TX`, `GetUplataForFaktura`, `GetOpenFakture` | F6 — **upis IMA** (v6-ui-117) |
+
+Jedan legacy handler (`btnUnosOMUlaz_Click`) pokriva **dva** režima novog UI-ja:
+novac i ambalaža su tamo mogli u isti dokument, ovde ne mogu — F5 nema polja
+ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
+
+**Šta upis F5/F6/F7 nosi, a šta namerno ne (v6-ui-117):**
+
+| Pravilo iz legacy | Gde je sad | Napomena |
+|---|---|---|
+| F5: primalac + izabran blok + „iz OM avansa" biraju **tip novca** | `IsplataValidiraj` | četiri grane: `KesOtkupacKoop`, `VirmanFirmaKoop`, `VirmanAvansKoop`, `KesFirmaOtkupac`. Pogrešan tip se ne vidi u formi nego tek u saldu — zato tri sabotaže baš o njemu |
+| F5: iznos ne sme preko neisplaćenog ostatka bloka | `IsplataValidiraj` | ostatak računa `GetOpenOtkupi`, ekran ga samo prosleđuje |
+| F5: iz OM avansa ne više nego što ga ima | `IsplataValidiraj` → `GetOMAvansSaldo` | |
+| F6: izabrana faktura → `KupciUplata` + napomena; bez nje → `KupciAvans` | `UplataValidiraj` | bez izbora fakture nijedna faktura iz novog UI-ja ne bi bila zatvorena (`UpdateFakturaStatus`) |
+| F6: uplata ne sme preko preostalog iznosa fakture | `UplataValidiraj` | preostalo daje `GetOpenFakture` |
+| F7: smer je **obavezan** uz količinu | `ReversValidiraj` | prazan smer je ranije tiho knjižio „OM prima od vozača" |
+| F7: auto-broj reversa kad je polje prazno | `ReversValidiraj` → `SuggestNextBroj(KIND_REV, …)` | posle izbora smera, kao u legacy |
+| F7: PDF revers i završetak ispravke posle upisa | `ReversUpisi` | best-effort, ne obara potvrdu upisa |
+| Broj dokumenta je zajednički namespace | `DuplBroj` | duplikat se traži u **obe** tabele (`tblAmbalaza`, `tblNovac`) |
+| **Vozač se za čist novac NE traži** | — | legacy ga traži uz `VALIDACIJA_UNOSA`, ali samo zbog ambalaže u istom dokumentu; `SaveNovac` ga nema, pa se odbacuje. U F7, gde ambalaža postoji, vozač je obavezan i **bez** `VALIDACIJA_UNOSA` (firma↔OM ide preko vozača) |
+| **F5: partner koji je otkupno mesto JESTE entitet novca** | `IsplataValidiraj` | polje se u F5 zove „Primalac". Legacy tu mogućnost nije imao — primalac je bio samo kooperant, a otkupno mesto se podrazumevalo iz konteksta forme. Kad je partner kooperant, entitet ostaje kontekst — tačno kao legacy |
+| **F7 ne prima kupca kao partnera** | `ReversValidiraj` | četiri smera idu isključivo kooperant ↔ OM ↔ firma; ambalaža kupca u legacy ide kroz prijemnicu (povrat) i kupci-izlaz, ne kroz revers |
+| F5/F6: broj dokumenta je slobodan unos | Z3a | prazan je dozvoljen samo bez `VALIDACIJA_UNOSA`; tada upis vraća „(bez broja)", jer je prazan povratak rezervisan za neuspeh |
+| **Ukucan a nerazrešen izbor zaustavlja dokument** | `NerazresenIzbor` | combo dopušta kucanje, a ID dolazi iz skrivene kolone koja postoji samo uz stvarno izabranu stavku. Tekst bez ID-a bi tiho promenio značenje: partner → isplata otkupnom mestu, blok → avans kooperantu, faktura → avans kupca. Sve tri se knjiže kao **ispravan** dokument, samo pogrešan |
+| **Vlasništvo i trenutni ostatak proverava CORE** | `IsplataBlokProblem`, `UplataFakturaProblem` (`modNovac`) | blok mora pripadati tom kooperantu i tom otkupnom mestu, faktura tom kupcu; ostatak se čita **u trenutku upisa**, ne iz snimka koji je ekran poslao. Istu kapiju diže i `SaveOMUlaz_TX` / `SaveKupciIzlaz_TX`, pa važi i za legacy formu i za svakog drugog pozivaoca |
+| **F5: lista kooperanata i blokova je sužena na aktivno OM** | `FillFormPartner`, `FillOpenBlokovi` | legacy `frmDokumenta` je taj combo sužavao **bezuslovno** (ne kroz `KOOP_FILTER_BY_OM`), pa isto važi i ovde; blokovi se filtriraju po `StanicaID` iz `GetOpenOtkupi` |
 
 **Šta upis F3/F4 nosi, a šta namerno ne (v6-ui-116):**
 
@@ -263,10 +292,9 @@ Rangirano po tome koliko svaka stavka blokuje **stvarni rad**, ne po veličini.
 5. ~~**Z8 + Z13**: toggle-i.~~ **URAĐENO** (v6-ui-103, v6-ui-104)
    Z7 otpada — keš isplate ne idu kroz otkupni list (v6-ui-105).
 
-**Faza A je time zatvorena.** Ostaje iz nje samo ono što traži put upisa:
-`ShowLockStatus` (peščanik za vreme upisa) i filtriranje kooperanata po
-otkupnom mestu (`FillKooperantCombo stanicaID`) — novi UI prikazuje sve
-kooperante sa oznakom otkupnog mesta.
+**Faza A je time zatvorena.** Ostaje iz nje samo `ShowLockStatus` (peščanik za
+vreme upisa); filtriranje kooperanata po otkupnom mestu je urađeno u v6-ui-113
+(`KOOP_FILTER_BY_OM`).
 
 ### Faza B — upis (`CommitDokument`)
 6. ~~F1 → `SaveOtkupMulti_TX` (+ relink paleta hladnjače).~~ **URAĐENO**
@@ -278,7 +306,10 @@ kooperante sa oznakom otkupnog mesta.
    `modDokUnos`). Ostaje iz te stavke: **živi prikaz manjka** prijemnice vs
    zbirna (`UpdateManjak`) i **lista zbirnih za izbor**, oboje prikaz a ne upis;
    i **ispravka prijemnice posle storna** (relink paleta), koja pripada Fazi D.
-9. F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.
+9. ~~F5/F6/F7 → `SaveOMUlaz_TX`, `SaveKupciIzlaz_TX`, novac.~~ **URAĐENO**
+   (v6-ui-117, `modNovacUnos`). Uz upis su došla i dva polja bez kojih upis ne
+   bi bio tačan: prekidač „ISPLATA IZ" sa avans saldom OM (F5) i lista
+   otvorenih faktura (F6) — v. §3.1.
 10. Z12: preostali KPI-jevi (`GetOMAvansSaldo`, otvoreno kg).
 
 **Legacy se NE gasi i NE menja.** `frmOtkup` i `frmDokumenta` ostaju potpuno

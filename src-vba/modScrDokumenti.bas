@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-116"
+Public Const SCRDOK_BUILD As String = "v6-ui-118"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -627,6 +627,15 @@ Public Function Scr_Save(ByVal polja As Object) As String
         Case "PRIJEMNICA"
             Scr_Save = SavePrijemnica(polja)
             Exit Function
+        Case "AMB_ISPLATE"
+            Scr_Save = SaveIsplata(polja)
+            Exit Function
+        Case "AMB_UPLATE"
+            Scr_Save = SaveUplata(polja)
+            Exit Function
+        Case "REVERSI"
+            Scr_Save = SaveRevers(polja)
+            Exit Function
         Case Else
             Scr_Save = Poruka("OTKUI_TODO_NEVEZANO")
             Exit Function
@@ -814,6 +823,115 @@ Private Function SavePrijemnica(ByVal polja As Object) As String
     res = modDokUnos.PrijemnicaUpisi(p, poruke)
     If Len(res) = 0 Then
         SavePrijemnica = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+End Function
+
+' F5 ISPLATE. Gotovinski rezimi nemaju ni robu ni ambalazu, pa je recnik kratak.
+' Partner se u ljusci zove "kooperantID" (ista kontrola u svim rezimima); ovde
+' dobija svoje ime i, uz njega, TIP partnera - od koga zavisi tip novca.
+Private Function SaveIsplata(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modNovacUnos.NoviIsplataUnos()
+    p("datum") = polja("datum")
+    p("stanicaID") = polja("stanicaID")
+    p("stanicaTekst") = polja("stanicaTekst")
+    p("partnerID") = polja("kooperantID")
+    p("partnerTip") = polja("partnerTip")
+    p("partnerTekst") = polja("partnerTekst")
+    p("vrsta") = polja("vrsta")
+    p("brDok") = polja("brDok")
+    p("novac") = polja("novac")
+    p("otkupID") = polja("otkupID")
+    p("blokTekst") = polja("blokTekst")
+    p("otkupOstatak") = polja("otkupOstatak")
+    p("izAvansa") = polja("izAvansa")
+
+    greska = modNovacUnos.IsplataValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SaveIsplata = greska
+        Exit Function
+    End If
+
+    res = modNovacUnos.IsplataUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SaveIsplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+End Function
+
+' F6 UPLATE KUPACA. Partner je kupac, a izabrana faktura odlucuje da li je red
+' uplata po fakturi ili avans - zato i njen preostali iznos ide u recnik.
+Private Function SaveUplata(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modNovacUnos.NoviUplataUnos()
+    p("datum") = polja("datum")
+    p("partnerID") = polja("kooperantID")
+    p("partnerTekst") = polja("partnerTekst")
+    p("vrsta") = polja("vrsta")
+    p("brDok") = polja("brDok")
+    p("novac") = polja("novac")
+    p("fakturaID") = polja("fakturaID")
+    p("fakturaTekst") = polja("fakturaTekst")
+    p("fakturaOstatak") = polja("fakturaOstatak")
+
+    greska = modNovacUnos.UplataValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SaveUplata = greska
+        Exit Function
+    End If
+
+    res = modNovacUnos.UplataUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SaveUplata = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
+        Exit Function
+    End If
+
+    Scr_ResetCache
+    polja("rezultat") = res
+    polja("poruke") = Replace(Trim$(poruke), vbCrLf, "  ")
+End Function
+
+' F7 REVERSI. Jedini rezim u kome ambalaza ide bez robe; smer je redni broj
+' izabranog segmenta, a modNovacUnos ga prevodi u ono sto core ocekuje.
+' Broj reversa se predlaze u ljusci, a ako je ostao prazan generise ga
+' ReversValidiraj - pa se posle upisa cita IZ RECNIKA, ne iz polja forme.
+Private Function SaveRevers(ByVal polja As Object) As String
+    Dim p As Object, fokus As String, greska As String, res As String, poruke As String
+    Set p = modNovacUnos.NoviReversUnos()
+    p("datum") = polja("datum")
+    p("stanicaID") = polja("stanicaID")
+    p("stanicaTekst") = polja("stanicaTekst")
+    p("partnerID") = polja("kooperantID")
+    p("partnerTip") = polja("partnerTip")
+    p("partnerTekst") = polja("partnerTekst")
+    p("vozacID") = polja("vozacID")
+    p("vrsta") = polja("vrsta")
+    p("brDok") = polja("brDok")
+    p("tipAmb") = polja("tipAmb")
+    p("kolAmb") = polja("kolAmb")
+    p("smerRev") = polja("smerRev")
+
+    greska = modNovacUnos.ReversValidiraj(p, fokus)
+    If Len(greska) > 0 Then
+        polja("fokus") = fokus
+        SaveRevers = greska
+        Exit Function
+    End If
+
+    res = modNovacUnos.ReversUpisi(p, poruke)
+    If Len(res) = 0 Then
+        SaveRevers = Poruka("DOK_MSG_GRESKA_PRI_CUVANJU") & " " & poruke
         Exit Function
     End If
 

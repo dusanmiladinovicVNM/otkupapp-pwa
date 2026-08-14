@@ -792,8 +792,12 @@ End Function
 ' PRIJEMNICA NIJE U OVOM SELECT-u namerno: njena ispravka nije samo zatvaranje
 ' konteksta nego i prevezivanje paleta, koje mora da krene PRE upisa
 ' (SetPaletizeSkip). Vidi napomenu iznad PrijemnicaUpisi.
-Private Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
-                              ByRef poruke As String)
+'
+' PUBLIC je zbog modNovacUnos (revers, F7): pravilo "posle zamenskog dokumenta
+' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se
+' prepise u treci modul.
+Public Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, _
+                             ByRef poruke As String)
     Dim cnt As Long, cid As String, oldBroj As String, res As Object
     On Error GoTo EH
     newBroj = Trim$(newBroj)
@@ -819,6 +823,7 @@ Private Sub ZavrsiIspravkuAko(ByVal docType As String, ByVal newBroj As String, 
     Select Case docType
         Case FLOW_DOC_OTPREMNICA: Set res = CompleteOtpremnicaIspravka(cid, newBroj)
         Case FLOW_DOC_ZBIRNA:     Set res = CompleteZbirnaIspravka(cid, newBroj)
+        Case FLOW_DOC_REVERS:     Set res = CompleteReversIspravka(cid, newBroj)
         Case Else: Exit Sub
     End Select
 

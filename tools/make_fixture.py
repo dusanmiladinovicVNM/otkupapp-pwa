@@ -47,6 +47,11 @@ VRSTA = "TESTVOCE"
 SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
 ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
+# Kupac postoji SAMO kao ID na fakturi -- red u tblKupci ne treba: kapije koje
+# ga koriste porede identifikatore, ne citaju karticu kupca.
+KUPAC = "KUP-TEST-1"
+FAKTURA = "FAK-TEST-1"
+FAKTURA_IZNOS = 10000
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -119,6 +124,13 @@ SEED = {
          "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "3/TEST",
          "Klasa": "I", "BrojZbirne": ZBIRNA_U_BLOKU, "OtpremnicaID": "OTP-TEST-3",
          "BrojOtpremnice": "3/TEST", "ParcelaID": "PAR-TEST-2"},
+    ],
+    # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
+    # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
+    # razlika "postoji / ne postoji". Namerno samo tri kolone -- sejanje ide PO
+    # IMENU, pa svaka dodatna kolona koju donor nema obara generator.
+    "tblFakture": [
+        {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
     ],
 }
 
