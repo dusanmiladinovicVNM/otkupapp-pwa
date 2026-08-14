@@ -143,8 +143,10 @@ vidi „prošlo bez greške". Konverzija je tri linije, po uzoru na
 3. u `EH`: prebroj prekid kao pad (`Fail "SUITE prekinut..."`) pa podigni —
    prekinuta suite nije „nije se desilo" nego pad
 
-Pa `gate: True` i `default: True` u `SUITES` katalogu — hook se **ne dira**, jer
-pušta goli `run_vba.py` i katalog je jedini izvor istine.
+Pa `gate: True` i `default: True` u `SUITES` katalogu — time suite ulazi u **pun
+set** (goli `run_vba.py`), gde je katalog jedini izvor istine. `Stop` hook se i
+dalje ne dira, ali iz drugog razloga: on namerno pušta samo `RunAllTests`, pa
+nova suite u njega **ne ulazi** — vidi „Stop hook" niže.
 
 **Konverzija nije gotova bez dvosmernog dokaza** (§5): obori namerno jednu proveru
 (`Chk False, "SABOTAZA"`), pokaži `exit 2` sa imenom te suite, pa vrati i pokaži
@@ -213,8 +215,8 @@ python tools/run_vba.py --suite RunAllTests                       # samo ove tri
 ### Akceptaciona komanda — goli poziv, ~1050 provera
 
 `--suite RunAllTests` vrti samo `modTest` (tri testa nad legacy formom + tri nad
-novim UI-jem). Pun gate je ceo podrazumevani set, i to je ono što pušta `Stop`
-hook:
+novim UI-jem) — to je **brzi set** i to je ono što pušta `Stop` hook. Pun gate je
+ceo podrazumevani set i pušta se **namerno**, pred commit ili release:
 
 ```powershell
 python tools/run_vba.py
@@ -225,8 +227,9 @@ Izmereno (14.08.2026, Windows + Excel): `EXIT=0`, 11 suite-ova zeleno, i **bez
 verdikta.
 
 Nema više eksplicitne liste: katalog `SUITES` u `tools/run_vba.py` je jedini izvor
-istine. Nova suite ulazi u gate time što je upisana tamo sa `default: True` —
-hook se ne dira. **Ne proširivati na `--all`**: među `Run*` procedurama nisu sve
+istine. Nova suite ulazi u pun set time što je upisana tamo sa `default: True` —
+hook se ne dira, jer on ionako pušta samo `RunAllTests` (vidi „Stop hook").
+**Ne proširivati na `--all`**: među `Run*` procedurama nisu sve
 testovi (`RunSelfUpdate`, `RunGoogleAuthSetup`), a deo traži mrežu ili live SEF
 nalog.
 
@@ -458,9 +461,26 @@ podrazumevanim setom. Oba zatečena pada su zatvorena, i nijedan nije bio ono na
 
 ### Stop hook
 
-`.claude/hooks/vba-test.sh` pušta suite na kraju sesije kad je `src-vba/` diran (u
-radnom stablu ili u poslednjem commit-u). Bez `pywin32`/Excela prolazi **tiho** —
-u Linux sesiji ostaje samo `vba_check` kroz PostToolUse.
+`.claude/hooks/vba-test.sh` pušta **brzi set** (`--suite RunAllTests`, 6 provera)
+na kraju sesije kad je `src-vba/` diran (u radnom stablu ili u poslednjem
+commit-u). Bez `pywin32`/Excela prolazi **tiho** — u Linux sesiji ostaje samo
+`vba_check` kroz PostToolUse i provera `WHO_WRITES.md`.
+
+**Zašto brzi set, a ne pun gate.** Do 14.08.2026. hook je puštao ceo podrazumevani
+set — 11 suite-ova, ~1050 provera, uz podizanje Excela na svakom Stop-u. Uz to je
+grana „poslednji commit" bila zamka: čim jednom commit-uješ izmenu u `src-vba/`,
+`git diff HEAD~1 HEAD` ostaje neprazan **do kraja sesije**, pa se pun set vrteo na
+svakom sledećem Stop-u — i na turnovima gde nije dirnut nijedan fajl, gde se samo
+razgovaralo. Na operaterskoj mašini je to sesiju činilo neupotrebljivom.
+
+Sada: brzi set + **žig** u `.git/vba-test-stamp` (HEAD + hash nekomitovanog diffa
+nad `src-vba/`). Isto stanje se ne proverava dvaput; svaka nova izmena i svaki nov
+commit ponovo pale set. Žig se piše samo na zeleno — pao set se ponavlja na
+sledećem Stop-u dok se ne popravi.
+
+Pun set nije ukinut, nego je postao **namerna** komanda pred commit/release
+(`python tools\run_vba.py`). Nova suite u katalogu ulazi u pun set, a **ne** u
+hook.
 
 ## 5) Šta i dalje ostaje na operateru
 

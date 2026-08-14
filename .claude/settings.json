@@ -26,7 +26,7 @@
       "PowerShell(git diff:*)",
       "PowerShell(git show:*)",
       "PowerShell(git fetch:*)",
-      "PowerShell(git merge-tree:*)"
+      "PowerShell(git merge-tree:*)",
       "Bash(git show:*)",
       "Bash(git branch:*)",
       "Bash(git tag:*)"
