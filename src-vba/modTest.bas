@@ -49,6 +49,7 @@ Public Sub RunAllTests()
     RunOne 1
     RunOne 2
     RunOne 3
+    RunOne 4          ' menja semu fixture-a -> mora posle testova forme
 
     SetTestMode prevMode
     WriteResultFile
@@ -77,6 +78,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 1: TestName = "T_PosleSnimanja_ZadrzavaKontekstOtpremnice"
         Case 2: TestName = "T_PosleSnimanja_ZadrzavaZbirnu"
         Case 3: TestName = "T_ClearForm_BrisePartnera"
+        Case 4: TestName = "T_EnsureSchema_JeIdempotentna"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -88,6 +90,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 1: T_PosleSnimanja_ZadrzavaKontekstOtpremnice
         Case 2: T_PosleSnimanja_ZadrzavaZbirnu
         Case 3: T_ClearForm_BrisePartnera
+        Case 4: T_EnsureSchema_JeIdempotentna
     End Select
 End Sub
 
@@ -150,6 +153,45 @@ Private Sub T_ClearForm_BrisePartnera()
              "kooperant mora da bude obrisan posle snimanja"
 
     Unload f
+End Sub
+
+' Idempotencija je JEDINA osobina koju sve Ensure* rutine obecavaju, a nijedna je
+' do sada nije dokazivala. Test pusti tiha schema jezgra DVAPUT i tvrdi da drugi
+' prolaz nije promenio semu -- ni jednu tabelu, ni jednu kolonu.
+'
+' Pada na dve klase regresije:
+'   - bezuslovan ListColumns.Add / ListObjects.Add u nekom Ensure* (drugi prolaz
+'     doda duplu kolonu ili tabelu -> otisak se razlikuje)
+'   - MsgBox vracen u tiho jezgro (suite bi stao na modalnom dijalogu; staticki
+'     isto hvata vba_check pravilo ENSURE)
+'
+' Ide na kraj RunAllTests-a: menja semu fixture-a, pa ne sme da utice na testove
+' forme pre sebe. Fixture je ionako temp kopija (docs/EXCEL_TEST_HARNESS.md).
+Private Sub T_EnsureSchema_JeIdempotentna()
+    Dim prvi As String
+    Dim drugi As String
+
+    ' Prvi prolaz dovodi svesku u zeljeno stanje (fixture donora ga nema ceo).
+    EnsureRuntimeSchema
+    EnsureDoradeSchemaCore
+    EnsurePaletniListSchemaCore
+    prvi = SchemaOtisak()
+
+    ' Drugi prolaz sme SAMO da bude no-op.
+    EnsureRuntimeSchema
+    EnsureDoradeSchemaCore
+    EnsurePaletniListSchemaCore
+    drugi = SchemaOtisak()
+
+    ' Preduslov: bez ijedne tabele otisak bi bio prazan u oba prolaza, pa bi test
+    ' bio zelen a ne bi merio nista.
+    If Len(prvi) = 0 Then
+        Err.Raise ERR_ASSERT, "modTest.T_EnsureSchema_JeIdempotentna", _
+                  "preduslov: sveska nema nijednu tabelu -- otisak je prazan"
+    End If
+
+    AssertEq drugi, prvi, _
+             "drugi prolaz Ensure* jezgara je promenio semu -- nije idempotentno"
 End Sub
 
 ' Forma sa kontekstom otpremnice OTP-TEST-1 iz fixture-a, bez .Show.
@@ -220,6 +262,24 @@ End Sub
 ' ============================================================
 ' Pomocno
 ' ============================================================
+
+' "Otisak" seme: naziv tabele + broj kolona, jedan red po tabeli. Dovoljno da
+' uhvati i dodatu kolonu i dodatu tabelu, a ne zavisi od podataka. Redosled je
+' redosled listova/tabela u svesci -- stabilan izmedju dva prolaza u istoj
+' sesiji, pa razlika u redosledu i JESTE nalaz (nesto je dodato).
+Private Function SchemaOtisak() As String
+    Dim ws As Worksheet
+    Dim lo As ListObject
+    Dim parts As String
+
+    For Each ws In ThisWorkbook.Worksheets
+        For Each lo In ws.ListObjects
+            parts = parts & lo.name & "=" & lo.ListColumns.count & vbLf
+        Next lo
+    Next ws
+
+    SchemaOtisak = parts
+End Function
 
 ' Sve kontrole forme kao sortirano "ime=vrednost", jedan par po liniji.
 ' Sortira se postojecim modArrayUtils.SortArray (nema novog sorta).

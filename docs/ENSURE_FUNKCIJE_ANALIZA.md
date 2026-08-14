@@ -285,8 +285,9 @@ Dva jeftina koraka:
 |---|---|---|---|---|
 | **F1** ✅ | N1 + N2 + N3: per-korak logovanje u `EnsureRuntimeSchema`/`EnsureSledljivostSchema`; `MsgBox` iz jezgara u omotače; `AdminEnsureEverything` skuplja i prijavljuje stvarni rezultat; ukloniti dupli `EnsureCenovnikSchema` | `modSetup`, `modAdmin`, `modMain`, `modPoruke` | nizak | **visoka** — kraj tihim padovima i lažnom „sve OK" |
 | **F2** ✅ | N4: primitivi `Public`, brisanje 3 forka | `modSetup`, `modPaletniList`, `modBankaImport` | nizak-srednji | visoka — anti-duplication |
-| **F3** | 4.1 preimenovanja (5 komada) + `RequirePrijemnicaNotPaletized` | ~6 fajlova | nizak (mehanički, `vba_check` hvata promašaje) | srednja — čitljivost ugovora |
-| **F4** | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modBusinessFlowProTests` | nizak | srednja — sprečava povratak |
+| **F3a** ✅ | `EnsurePrijemnicaNotAlreadyPaletized` → `RequirePrijemnicaNotPaletized` | `modPaletniList` | nizak | srednja — ime govori istinu |
+| **F3b** ⏸ | preimenovanje 4 Alt+F8 ulazne tačke u `Setup*` | ~8 fajlova + ~75 pomena u `docs/`+`instructions/` | **operater-facing** | srednja — **čeka odluku** |
+| **F4** ✅ | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modTest` | nizak | srednja — sprečava povratak |
 | **F5** *(opciono)* | 4.4 skuplja varijanta; deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup` + `modConfig` | **srednji-visok** | visoka, ali je to redizajn — tek kad F1–F4 legnu |
 
 ### F1 — izvršeno
@@ -331,6 +332,32 @@ tihe padove).
 - `EnsureAuditColumnsCore`: pad na jednoj tabeli više ne prekida preostalih 25
   (per-tabela `StepFailed`), ali se na kraju **re-raise-uje** — `modMigracija` i
   `AdminEnsureEverything` prepoznaju neuspeh po `Err`, pa se ne sme progutati.
+
+### F3a + F4 — izvršeno
+
+- `EnsurePrijemnicaNotAlreadyPaletized` → **`RequirePrijemnicaNotPaletized`**
+  (`modPaletniList`, `Private`). Ništa ne menja — samo čita i puca; staro ime je
+  pozivaocu obećavalo mutaciju koje nema.
+- **Novo `ENSURE` pravilo u `tools/vba_check.py`** (provera br. 8): `Ensure*` koji
+  prikazuje `MsgBox` mora imati tiho jezgro `<ime>Core`. Namerno blago — zatečene
+  ulazne tačke prolaze jer jezgra sad postoje, a **nov** `Ensure*` sa dijalogom i
+  bez jezgra pada. Dokazano u oba smera (nalaz kad `Core` fali, tišina kad postoji).
+- **Test idempotencije** `T_EnsureSchema_JeIdempotentna` u `modTest` — u **gate**
+  suite `RunAllTests`, ne u „blind" (blind test niko ne vidi kad pukne,
+  `.claude/rules/testovi.md` §3). Pušta tri tiha jezgra dvaput i poredi otisak
+  šeme (tabela → broj kolona). Ide **poslednji** jer menja šemu fixture-a.
+
+### F3b — čeka odluku (nije urađeno)
+
+Preimenovanje četiri **Alt+F8 ulazne tačke** u `Setup*`:
+`EnsurePaletniListSchema`, `EnsureDoradeSchema`, `EnsureAuditColumns`,
+`EnsureStornoVezeSchema`. Mereni obim: ~56 pomena u `src-vba/` i **~75 u
+`docs/` + `instructions/`** — uključujući uputstva koja operater čita.
+
+Dobit je čitljivost ugovora iz imena. Cena je promena onoga što operater kuca u
+Alt+F8 i sweep kroz napisana uputstva. Kako `*Core` jezgra već postoje (F1),
+tehnički ništa ne zavisi od ovog koraka — `ENSURE` pravilo prolazi i ovako.
+**Odluka je vlasnika, ne implementatora.**
 
 F5 je namerno poslednja i označena kao opciona: `AuditableTables()`
 (`modSetup.bas:1090`) je već mikro-registar i pokazuje da obrazac radi, ali

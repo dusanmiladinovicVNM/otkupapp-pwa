@@ -42,6 +42,7 @@ hvatao tek operater u VBE-u:
 | `PORUKA` | `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke` | §4 katalog |
 | `NEDEFINISAN` | poziv procedure koja nigde nije definisana → „Sub or Function not defined" | compile |
 | `ARNOST` | poziv sa pogrešnim brojem argumenata → „Wrong number of arguments" | compile |
+| `ENSURE` | `Ensure*` sa `MsgBox`-om, a bez tihog jezgra `<ime>Core` | `docs/ENSURE_FUNKCIJE_ANALIZA.md` §4.1 |
 
 Poslednje dve pokrivaju **dve najčešće compile greške** u ovom projektu — one
 zbog kojih je i pravljen headless compile gate koji se nije dao ukrotiti. Ovde se
@@ -160,6 +161,12 @@ menja ponašanje. Tri testa nad `frmOtkup.ClearOtkupFields` (tu bug i živi):
 | `T_PosleSnimanja_ZadrzavaKontekstOtpremnice` | datum se posle snimanja NE briše (+ pun snapshot forme) |
 | `T_PosleSnimanja_ZadrzavaZbirnu` | broj zbirne ostaje, i drugi blok dobija istu zbirnu |
 | `T_ClearForm_BrisePartnera` | `cmbKooperant` se BRIŠE (obrnut smer od prva dva) |
+| `T_EnsureSchema_JeIdempotentna` | drugi prolaz `Ensure*` jezgara ne menja šemu |
+
+`T_EnsureSchema_JeIdempotentna` ide **poslednji** (`RunOne 4`) jer menja šemu
+fixture-a — ne sme da utiče na testove forme pre sebe. Sabotaža za dokaz u
+suprotnom smeru: u `modSetup.EnsureColumnOnTable` ukloni `If col Is Nothing`
+uslov oko `ListColumns.Add` → drugi prolaz doda duple kolone i test padne.
 
 ```powershell
 python tools/make_fixture.py --donor "<put>\AgriX_2.28.4.xlsm"   # jednom

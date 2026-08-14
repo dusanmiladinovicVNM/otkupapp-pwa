@@ -109,7 +109,7 @@ Public Function PaletizePrijemnica( _
 
     RequirePaletaSchema SRC
     RequirePaletaStavkaSchema SRC
-    EnsurePrijemnicaNotAlreadyPaletized prijemnicaID, SRC
+    RequirePrijemnicaNotPaletized prijemnicaID, SRC
 
     Dim crateW As Double: crateW = GetTezinaGajbice(tipAmb)
 
@@ -127,8 +127,13 @@ End Function
 
 ' Idempotency guard: ista PrijemnicaID ne sme imati aktivnu (ne-storniranu)
 ' paletnu stavku -> sprecava dvostruku paletizaciju (retry/re-save).
-Private Sub EnsurePrijemnicaNotAlreadyPaletized(ByVal prijemnicaID As String, _
-                                                ByVal SRC As String)
+'
+' Require*, ne Ensure*: ovo NISTA ne menja -- samo cita i puca. Ime je ranije bilo
+' EnsurePrijemnicaNotAlreadyPaletized, sto je pozivaocu obecavalo mutaciju koje
+' nema. Require* je zatecena konvencija projekta za provere preduslova
+' (RequireSingleRow, RequireColumnIndex, RequireBimSmer...).
+Private Sub RequirePrijemnicaNotPaletized(ByVal prijemnicaID As String, _
+                                          ByVal SRC As String)
     Dim d As Variant: d = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(d) Then Exit Sub
 
