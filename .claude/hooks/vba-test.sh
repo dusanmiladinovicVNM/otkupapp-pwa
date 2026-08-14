@@ -31,6 +31,30 @@ PY=python3
 "$PY" -c "" >/dev/null 2>&1 || PY=python
 "$PY" -c "" >/dev/null 2>&1 || exit 0
 
+# .claude/settings*.json mora da ostane validan JSON. Fajl koji ne prodje
+# validaciju Claude Code odbacuje U CELINI -- padnu sva permission pravila i oba
+# hook-a odjednom (2da7ee8e). PostToolUse hvata slucaj kad taj fajl menja Edit;
+# ovde je drugi ulaz, onaj koji je i ujeo: merge/rebase dve grane koje obe dopisuju
+# na kraj istog niza spoji BEZ konflikt markera, pa check_merge.ps1 javi CISTO a
+# fajl je pokvaren. Zato provera ne visi o tome sta je dirano nego ide na SVAKOM
+# Stop-u -- instant je, ne trazi ni Excel ni win32com, kao i who_writes nize.
+err="$("$PY" -c 'import json,sys
+for p in sys.argv[1:]:
+    try:
+        json.load(open(p, encoding="utf-8"))
+    except IOError:
+        pass
+    except ValueError as e:
+        sys.stderr.write("%s: %s\n" % (p, e))
+        sys.exit(1)' .claude/settings.json .claude/settings.local.json 2>&1)"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+    printf '%s\n' "$err" | tail -n 1 >&2
+    echo "Nije validan JSON -- Claude Code taj fajl odbacuje U CELINI, pa ne vazi" >&2
+    echo "nijedno permission pravilo ni jedan hook. Popravi pre nastavka." >&2
+    exit 2
+fi
+
 # Sve dalje se pali samo kad je VBA izvor stvarno diran: ili u radnom stablu, ili
 # u poslednjem commit-u (Claude cesto commit-uje pa tek onda stane -- tada radno
 # stablo izgleda cisto).
