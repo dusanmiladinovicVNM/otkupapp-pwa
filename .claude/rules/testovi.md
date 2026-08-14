@@ -63,9 +63,15 @@ git show <ref>:src-vba/modSetup.bas > /tmp/old.bas
 python3 tools/schema_diff.py /tmp/old.bas src-vba/modSetup.bas
 ```
 
-Exit `0` = šema identična, `1` = razlika (ispisana red po red). Izvlači po ulaznoj
-tački (`Ensure*Schema`) **uređenu** listu DDL operacija i diff-uje dve verzije;
-redosled je deo semantike jer se kolona dodaje na kraj tabele.
+Exit `0` = šema identična, `1` = razlika (ispisana red po red). Gradi **pun uređen
+izvršni tok** po oblasti šeme: `ApplySchemaGroup(SG_*)` i pozivi drugih ulaznih
+tačaka se razvijaju **na svom mestu u toku**, pa se vidi i preslagivanje grupa
+(npr. `Dorade1 → Runtime → Dorade2` u `Runtime → Dorade1 → Dorade2`) — a to je
+semantika, jer se kolona dodaje na kraj tabele.
+
+Ključ poređenja je **oblast**, ne ime procedure (`AREA_PROCS`), pa alat preživi
+preimenovanje ulaznih tačaka. Kad se ulazna tačka preimenuje, novo ime se dopisuje
+a **staro ostaje** — inače alat prestane da vidi šemu u starijim verzijama fajla.
 
 Razume oba zapisa — stare inline `EnsureDataTable` pozive i `SchemaTables`/
 `SchemaOps` registar — pa radi i **preko** refaktora koji je registar uveo.

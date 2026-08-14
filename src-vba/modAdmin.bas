@@ -284,6 +284,16 @@ Private Sub AdminEnsureEverything()
 
     On Error Resume Next
 
+    ' SetupNewPC nema povratnu vrednost: na nalaze upise APP_SETUP_COMPLETED="NE",
+    ' prikaze svoj warning i vrati se NORMALNO -- a i njegov EH zavrsi isto tako.
+    ' Bez ove provere agregat je posle "setup ima probleme" mogao da javi
+    ' "setup i sve seme su provereni". IsSetupHealthy cita bas taj ishod
+    ' (APP_SETUP_COMPLETED + core folderi + obavezne tabele).
+    Err.Clear
+    If Not IsSetupHealthy() Then
+        problems = problems & "- Setup (SetupNewPC): health-check nije prosao" & vbCrLf
+    End If
+
     Err.Clear: EnsurePoruke
     problems = problems & EnsureStepLine("Poruke (tblPoruke)", 0)
 

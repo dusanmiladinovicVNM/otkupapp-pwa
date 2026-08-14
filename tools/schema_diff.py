@@ -69,6 +69,12 @@ REGISTRY_FN = re.compile(r"^\s*Private Function (SchemaTables|SchemaOps)\(", re.
 
 OP_KIND = {"OP_COLUMN": "COLUMN", "OP_FORMAT": "FORMAT", "OP_BACKFILL": "BACKFILL"}
 
+APPLY_GROUP = re.compile(r"ApplySchemaGroup\(\s*(SG_\w+)\s*\)")
+
+# Ulazne tacke koje jedna drugu zovu. EnsureSledljivostSchema nije registrom
+# vodjena (petlja nad tabelama), ali se belezi da bi se videlo GDE u toku stoji.
+CALLABLE = set(PROC_AREA) | {"EnsureSledljivostSchema"}
+
 
 def strip_comment(text: str) -> str:
     """Odbaci prateci ' komentar, ali ne apostrof unutar stringa.
@@ -168,38 +174,88 @@ def parse(path: str) -> dict[str, list[str]]:
 
         m = re.match(r'EnsureDataTable\s+([^,]+),\s*("?[^,]+"?),\s*(Array\(.*\))$', s)
         if m:
-            per_proc.setdefault(PROC_AREA[proc], []).append(
+            per_proc.setdefault(PROC_AREA[proc], []).append(("OP",
                 f"TABLE {m.group(1).strip()} {m.group(2).strip()} "
-                f"[{norm_cols(m.group(3))}]")
+                f"[{norm_cols(m.group(3))}]"))
             continue
 
         m = re.match(r"EnsureColumnOnTable\s+([^,]+),\s*(.+)$", s)
         if m:
-            per_proc.setdefault(PROC_AREA[proc], []).append(
-                f"COLUMN {m.group(1).strip()} {m.group(2).strip()}")
+            per_proc.setdefault(PROC_AREA[proc], []).append(("OP",
+                f"COLUMN {m.group(1).strip()} {m.group(2).strip()}"))
             continue
 
         m = re.match(r"SetColumnNumberFormat\s+([^,]+),\s*([^,]+),\s*(.+)$", s)
         if m:
-            per_proc.setdefault(PROC_AREA[proc], []).append(
-                f"FORMAT {m.group(1).strip()} {m.group(2).strip()} {m.group(3).strip()}")
+            per_proc.setdefault(PROC_AREA[proc], []).append(("OP",
+                f"FORMAT {m.group(1).strip()} {m.group(2).strip()} {m.group(3).strip()}"))
             continue
 
         m = re.match(r"BackfillColumn\s+([^,]+),\s*([^,]+),\s*(.+)$", s)
         if m:
-            per_proc.setdefault(PROC_AREA[proc], []).append(
-                f"BACKFILL {m.group(1).strip()} {m.group(2).strip()} {m.group(3).strip()}")
+            per_proc.setdefault(PROC_AREA[proc], []).append(("OP",
+                f"BACKFILL {m.group(1).strip()} {m.group(2).strip()} {m.group(3).strip()}"))
             continue
 
         m = re.match(r"EnsureAktivanColumn\s+(\w+)$", s)
         if m:
-            per_proc.setdefault(PROC_AREA[proc], []).extend(aktivan_pair(m.group(1)))
+            for op in aktivan_pair(m.group(1)):
+                per_proc.setdefault(PROC_AREA[proc], []).append(("OP", op))
+            continue
 
-    for grp in GROUP_AREA:
-        if per_group[grp]:
-            per_proc.setdefault(GROUP_AREA[grp], []).extend(per_group[grp])
+        # Poziv ApplySchemaGroup(SG_X) -> marker grupe na TOM mestu u toku.
+        m = APPLY_GROUP.search(s)
+        if m:
+            per_proc.setdefault(PROC_AREA[proc], []).append(("GROUP", m.group(1)))
+            continue
 
-    return per_proc
+        # Poziv druge ulazne tacke -> marker poziva na TOM mestu u toku. Ovo je
+        # ono zbog cega alat vidi interleaving: dorade zovu runtime IZMEDJU svoje
+        # dve grupe, i to je semantika (kolone se dodaju na kraj tabele).
+        for callee in CALLABLE:
+            if callee == proc:
+                continue
+            if re.search(r"\b" + callee + r"\b", s) and not s.startswith(callee + " ="):
+                per_proc.setdefault(PROC_AREA[proc], []).append(("CALL", callee))
+                break
+
+    return per_proc, per_group
+
+
+def resolve(area, per_proc, per_group, seen=None):
+    """Razvij stavke oblasti u PUN uredjen tok DDL operacija.
+
+    GROUP marker -> operacije te grupe iz registra.
+    CALL marker  -> rekurzivno tok pozvane ulazne tacke; ako ona nije registrom
+                    vodjena (EnsureSledljivostSchema je petlja nad tabelama),
+                    ostaje neprozirni marker, ali NA SVOM MESTU -- pa se promena
+                    redosleda i dalje vidi.
+    """
+    if seen is None:
+        seen = set()
+    if area in seen:
+        return [f"<ciklus {area}>"]
+    seen = seen | {area}
+
+    out = []
+    for kind, val in per_proc.get(area, []):
+        if kind == "OP":
+            out.append(val)
+        elif kind == "GROUP":
+            out.extend(per_group.get(val, []))
+        elif kind == "CALL":
+            sub = PROC_AREA.get(val)
+            if sub is None:
+                out.append(f"CALL {val}")
+            else:
+                out.extend(resolve(sub, per_proc, per_group, seen))
+    return out
+
+
+def streams(path):
+    per_proc, per_group = parse(path)
+    areas = set(per_proc) | {GROUP_AREA[g] for g in per_group if per_group[g]}
+    return {a: resolve(a, per_proc, per_group) for a in areas}
 
 
 def main(argv: list[str]) -> int:
@@ -209,7 +265,7 @@ def main(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
 
-    old, new = parse(argv[0]), parse(argv[1])
+    old, new = streams(argv[0]), streams(argv[1])
     bad = 0
 
     for area in sorted(set(old) | set(new)):

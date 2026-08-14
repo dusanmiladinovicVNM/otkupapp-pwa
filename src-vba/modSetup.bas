@@ -65,6 +65,19 @@ Private Const OP_COLUMN As String = "COLUMN"
 Private Const OP_FORMAT As String = "FORMAT"
 Private Const OP_BACKFILL As String = "BACKFILL"
 
+' Ishod JEDNE schema operacije. Leaf primitivi ga VRACAJU umesto da se oslanjaju
+' na Err: Err ne prezivi izlazak iz procedure koja ima svoj "On Error Resume
+' Next", pa je pozivalac dobijao Err = 0 i pad tabele/lista je prolazio kao uspeh
+' (tacno ono sto je F1 tvrdio da je zatvorio, a nije bilo).
+'
+' SKIPPED nije greska nego "nema sta da se radi na OVOJ instalaciji": tabele
+' nema (paletni list nije podesen, desktop-only), kolone nema, ili je tabela
+' prazna pa nema data-celija za format. Da se to broji kao pad, svaki start bi
+' prijavljivao greske za funkcije koje se na toj instalaciji ne koriste.
+Public Const SCHEMA_OK As Long = 0
+Public Const SCHEMA_SKIPPED As Long = 1
+Public Const SCHEMA_FAILED As Long = 2
+
 ' ============================================================
 ' PUBLIC ENTRY POINTS
 ' ============================================================
@@ -987,10 +1000,15 @@ Public Function EnsurePaletniListSchema() As Long
     fails = fails + StepFailed("PaletniList/" & TBL_CENOVNIK)
 
     ' Sabloni nisu sema nego radni listovi -- ostaju eksplicitan poziv.
-    Err.Clear
+    ' NE broje se u `fails`: Ensure*Sablon su best-effort (svoj EH -> LogErr ->
+    ' normalan povratak), pa bi provera preko Err bila mrtva -- tacno ona greska
+    ' koju ovaj modul inace ispravlja. Neuspeh sablona ne obara semu; trag ide u
+    ' error log kroz njihov LogErr.
+    On Error Resume Next
     EnsurePaletaSablon
     EnsurePreradaSablon
-    fails = fails + StepFailed("PaletniList/Sabloni")
+    Err.Clear
+    On Error GoTo 0
 
     If fails > 0 Then
         LogSetup "ERROR", "SetupPaletniListSchema: " & fails & " koraka nije proslo"
@@ -1104,20 +1122,20 @@ Public Function EnsureAuditColumns() As Long
     tbls = AuditableTables()
 
     Dim i As Long, n As Long, fails As Long
+    Dim cols As Variant, k As Long
+    cols = Array(COL_AUDIT_CREATED_AT, COL_AUDIT_CREATED_BY, _
+                 COL_AUDIT_MODIFIED_AT, COL_AUDIT_MODIFIED_BY)
 
-    On Error Resume Next
     For i = LBound(tbls) To UBound(tbls)
         If Not GetTable(CStr(tbls(i))) Is Nothing Then
-            Err.Clear
-            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_AT
-            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_CREATED_BY
-            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_AT
-            EnsureColumnOnTable CStr(tbls(i)), COL_AUDIT_MODIFIED_BY
-            fails = fails + StepFailed("AuditKolone/" & CStr(tbls(i)))
+            For k = LBound(cols) To UBound(cols)
+                If EnsureColumnOnTable(CStr(tbls(i)), CStr(cols(k))) = SCHEMA_FAILED Then
+                    fails = fails + 1
+                End If
+            Next k
             n = n + 1
         End If
     Next i
-    On Error GoTo 0
 
     If fails > 0 Then
         LogSetup "ERROR", "SetupAuditColumns: " & fails & " tabela nije proslo"
@@ -1254,29 +1272,38 @@ End Function
 Public Function EnsureSledljivostSchema() As Long
     Dim fails As Long
 
-    On Error Resume Next
     Dim tbls As Variant
     tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
-        Err.Clear
-        EnsureColumnOnTable t, COL_TRACE_ISPRAVKA_OD
-        EnsureColumnOnTable t, COL_TRACE_ZAMENJEN_SA
-        EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
-        EnsureColumnOnTable t, COL_TRACE_IZDATO_STATUS
-        ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
-        ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
-        EnsureColumnOnTable t, COL_GENERACIJA_ID
-        fails = fails + StepFailed("SledljivostSchema/" & t)
+        ' Ishod se cita iz povratne vrednosti, ne iz Err -- EnsureColumnOnTable
+        ' hvata svoju gresku, pa je Err kod pozivaoca bezvredan signal.
+        fails = fails + TraceColumnFails(t)
     Next i
 
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
-    Err.Clear
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
-    fails = fails + StepFailed("SledljivostSchema/" & TBL_OTKUP & "." & COL_OTK_BROJ_OTPREMNICE)
+    If EnsureColumnOnTable(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) = SCHEMA_FAILED Then
+        fails = fails + 1
+    End If
 
     EnsureSledljivostSchema = fails
+End Function
+
+' Trace kolone na jednoj dokument-tabeli -> broj padova.
+Private Function TraceColumnFails(ByVal tblName As String) As Long
+    Dim cols As Variant
+    cols = Array(COL_TRACE_ISPRAVKA_OD, COL_TRACE_ZAMENJEN_SA, COL_TRACE_CORRECTION_ID, _
+                 COL_TRACE_IZDATO_STATUS, COL_GENERACIJA_ID)
+
+    ' COL_GENERACIJA_ID: Klasa I + II iz istog Multi_TX poziva dele vrednost;
+    ' prefill iz stornirane bira poslednju generaciju po toj koloni.
+    Dim i As Long, fails As Long
+    For i = LBound(cols) To UBound(cols)
+        If EnsureColumnOnTable(tblName, CStr(cols(i))) = SCHEMA_FAILED Then fails = fails + 1
+    Next i
+
+    TraceColumnFails = fails
 End Function
 
 ' ============================================================
@@ -1388,34 +1415,83 @@ Public Function EnsureDoradeSchema() As Long
 End Function
 
 ' Postavi vrednost u koloni za sve redove gde je prazno (ne gazi postojece).
-Private Sub BackfillColumn(ByVal tblName As String, ByVal colName As String, ByVal val As String)
-    On Error Resume Next
+' Vraca SCHEMA_* (v. konstante na vrhu): pad se PRIJAVLJUJE, ne guta.
+Private Function BackfillColumn(ByVal tblName As String, ByVal colName As String, _
+                                ByVal val As String) As Long
+    On Error GoTo EH
+
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
-    If lo Is Nothing Then Exit Sub
-    If lo.DataBodyRange Is Nothing Then Exit Sub
+    If lo Is Nothing Then
+        BackfillColumn = SCHEMA_SKIPPED
+        Exit Function
+    End If
+    If lo.DataBodyRange Is Nothing Then          ' prazna tabela -- nema sta da se puni
+        BackfillColumn = SCHEMA_SKIPPED
+        Exit Function
+    End If
+
     Dim col As ListColumn
+    On Error Resume Next
     Set col = lo.ListColumns(colName)
-    If col Is Nothing Then Exit Sub
+    On Error GoTo EH
+    If col Is Nothing Then
+        BackfillColumn = SCHEMA_SKIPPED
+        Exit Function
+    End If
 
     Dim cell As Range
     For Each cell In col.DataBodyRange.cells
         If Trim$(CStr(cell.value)) = "" Then cell.value = val
     Next cell
-End Sub
 
-' Postavi NumberFormat kolone (no-op ako tabela/kolona ne postoji).
-Private Sub SetColumnNumberFormat(ByVal tblName As String, ByVal colName As String, ByVal fmt As String)
-    On Error Resume Next
+    BackfillColumn = SCHEMA_OK
+    Exit Function
+
+EH:
+    LogSetup "ERROR", "BackfillColumn " & tblName & "." & colName & ": " & Err.description
+    BackfillColumn = SCHEMA_FAILED
+End Function
+
+' Postavi NumberFormat kolone. Vraca SCHEMA_* -- pad (zasticen list, zakljucana
+' tabela) se PRIJAVLJUJE. Ranije je ceo blok bio pod golim "On Error Resume Next"
+' pa se vracao normalno, a pozivalac je video Err = 0 i racunao to kao uspeh.
+Private Function SetColumnNumberFormat(ByVal tblName As String, ByVal colName As String, _
+                                       ByVal fmt As String) As Long
+    On Error GoTo EH
+
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
-    If lo Is Nothing Then Exit Sub
-    If lo.DataBodyRange Is Nothing Then Exit Sub
+    If lo Is Nothing Then
+        SetColumnNumberFormat = SCHEMA_SKIPPED
+        Exit Function
+    End If
+
     Dim col As ListColumn
+    On Error Resume Next
     Set col = lo.ListColumns(colName)
-    If col Is Nothing Then Exit Sub
+    On Error GoTo EH
+    If col Is Nothing Then
+        SetColumnNumberFormat = SCHEMA_SKIPPED
+        Exit Function
+    End If
+
+    ' Prazna tabela: nema data-celija za formatiranje. NIJE greska, ali NIJE ni
+    ' obavljeno -- zato SKIPPED a ne OK. Samoleci se: EnsureRuntimeSchema se vrti
+    ' na svaki start, pa format legne na prvom startu posle prvog reda.
+    If lo.DataBodyRange Is Nothing Then
+        SetColumnNumberFormat = SCHEMA_SKIPPED
+        Exit Function
+    End If
+
     col.DataBodyRange.NumberFormat = fmt
-End Sub
+    SetColumnNumberFormat = SCHEMA_OK
+    Exit Function
+
+EH:
+    LogSetup "ERROR", "SetColumnNumberFormat " & tblName & "." & colName & ": " & Err.description
+    SetColumnNumberFormat = SCHEMA_FAILED
+End Function
 
 ' ============================================================
 ' Korisnici (Faza 1) - admin + prava po oblasti. Idempotentni schema setup.
@@ -1822,39 +1898,90 @@ End Sub
 
 ' Primeni jednu grupu registra: prvo tabele (kreiranje/dopuna), pa operacije nad
 ' postojecim tabelama -- isti redosled koji su zatecene Ensure*Schema imale.
-' Vraca broj palih koraka; pad jednog reda NE prekida ostale, ali ostavlja trag.
+' Vraca broj PALIH koraka.
+'
+' Ovo je JEDINO mesto koje bira politiku "nastavi posle greske". Leaf primitivi
+' (EnsureDataTable / EnsureColumnOnTable / SetColumnNumberFormat / BackfillColumn)
+' vise ne gutaju gresku nego vracaju SCHEMA_*; oslanjanje na Err je bilo pogresno
+' jer Err ne prezivi izlazak iz procedure sa sopstvenim "On Error Resume Next".
+'
+' Preskoceni koraci (tabele/kolone kojih na ovoj instalaciji nema) se NE broje kao
+' padovi, ali se sumarno loguju -- inace bi "0 padova" krilo i to da grupa nije
+' imala nad cim da radi.
 Private Function ApplySchemaGroup(ByVal groupName As String) As Long
     Dim fails As Long
+    Dim skips As Long
     Dim it As Variant
-
-    On Error Resume Next
+    Dim res As Long
 
     For Each it In SchemaTables()
         If StrComp(CStr(it(0)), groupName, vbTextCompare) = 0 Then
-            Err.Clear
-            EnsureDataTable CStr(it(1)), CStr(it(2)), it(3)
-            fails = fails + StepFailed(groupName & "/" & CStr(it(1)))
+            If EnsureDataTable(CStr(it(1)), CStr(it(2)), it(3)) = SCHEMA_FAILED Then
+                fails = fails + 1
+            End If
         End If
     Next it
 
     For Each it In SchemaOps()
         If StrComp(CStr(it(0)), groupName, vbTextCompare) = 0 Then
-            Err.Clear
-            ApplySchemaOp it
-            fails = fails + StepFailed(groupName & "/" & CStr(it(2)) & "." & CStr(it(3)))
+            res = ApplySchemaOp(it)
+            If res = SCHEMA_FAILED Then
+                fails = fails + 1
+            ElseIf res = SCHEMA_SKIPPED Then
+                skips = skips + 1
+            End If
         End If
     Next it
+
+    If skips > 0 Then
+        LogSetup "INFO", groupName & ": " & skips & " koraka preskoceno (tabela/kolona ne postoji ili je tabela prazna)"
+    End If
 
     ApplySchemaGroup = fails
 End Function
 
-Private Sub ApplySchemaOp(ByVal op As Variant)
+Private Function ApplySchemaOp(ByVal op As Variant) As Long
     Select Case UCase$(CStr(op(1)))
-        Case OP_COLUMN:   EnsureColumnOnTable CStr(op(2)), CStr(op(3))
-        Case OP_FORMAT:   SetColumnNumberFormat CStr(op(2)), CStr(op(3)), CStr(op(4))
-        Case OP_BACKFILL: BackfillColumn CStr(op(2)), CStr(op(3)), CStr(op(4))
+        Case OP_COLUMN:   ApplySchemaOp = EnsureColumnOnTable(CStr(op(2)), CStr(op(3)))
+        Case OP_FORMAT:   ApplySchemaOp = SetColumnNumberFormat(CStr(op(2)), CStr(op(3)), CStr(op(4)))
+        Case OP_BACKFILL: ApplySchemaOp = BackfillColumn(CStr(op(2)), CStr(op(3)), CStr(op(4)))
     End Select
-End Sub
+End Function
+
+' Primeni SVE redove registra koji se ticu JEDNE tabele -- za lokalni self-heal
+' (npr. modPaletniList pre snimanja prerade). Time lokalni pozivalac ne mora da
+' drzi svoju kopiju spiska kolona; registar ostaje jedini izvor istine.
+'
+' REPAIR-ONLY: ako tabela ne postoji, ne kreira je. Lokalni self-heal usred
+' poslovnog toka ne sme da pravi nove listove -- to je posao Setup* komande.
+' Vraca broj palih koraka.
+Public Function EnsureTableSchema(ByVal tblName As String) As Long
+    Dim fails As Long
+    Dim it As Variant
+    Dim headers As Variant
+    Dim k As Long
+
+    If FindListObject(tblName) Is Nothing Then Exit Function
+
+    For Each it In SchemaTables()
+        If StrComp(CStr(it(1)), tblName, vbTextCompare) = 0 Then
+            headers = it(3)
+            For k = LBound(headers) To UBound(headers)
+                If EnsureColumnOnTable(tblName, CStr(headers(k))) = SCHEMA_FAILED Then
+                    fails = fails + 1
+                End If
+            Next k
+        End If
+    Next it
+
+    For Each it In SchemaOps()
+        If StrComp(CStr(it(2)), tblName, vbTextCompare) = 0 Then
+            If ApplySchemaOp(it) = SCHEMA_FAILED Then fails = fails + 1
+        End If
+    Next it
+
+    EnsureTableSchema = fails
+End Function
 
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec
 ' postoji (tada samo dopuni nedostajuce kolone -- repair schema drift).
@@ -1864,18 +1991,24 @@ End Sub
 ' su pravili kopije (modPaletniList.EnsurePreradaCols/EnsurePreradaCol).
 ' Greska se NE guta -- propagira pozivaocu, koji je hvata (Ensure* jezgra kroz
 ' StepFailed, ulazne tacke kroz svoj EH).
-Public Sub EnsureDataTable(ByVal tblName As String, _
-                           ByVal sheetName As String, _
-                           ByVal headers As Variant)
+Public Function EnsureDataTable(ByVal tblName As String, _
+                                ByVal sheetName As String, _
+                                ByVal headers As Variant) As Long
+    On Error GoTo EH
+
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
     If Not lo Is Nothing Then
         ' tabela postoji -> dopuni nedostajuce kolone (repair schema drift)
         Dim k As Long
+        Dim worst As Long
         For k = LBound(headers) To UBound(headers)
-            EnsureColumnOnTable tblName, CStr(headers(k))
+            If EnsureColumnOnTable(tblName, CStr(headers(k))) = SCHEMA_FAILED Then
+                worst = SCHEMA_FAILED
+            End If
         Next k
-        Exit Sub
+        EnsureDataTable = worst          ' 0 (SCHEMA_OK) ili SCHEMA_FAILED
+        Exit Function
     End If
 
     Dim ws As Worksheet
@@ -1899,29 +2032,47 @@ Public Sub EnsureDataTable(ByVal tblName As String, _
 
     ws.columns.AutoFit
     LogSetup "OK", "Created " & tblName
-End Sub
+    EnsureDataTable = SCHEMA_OK
+    Exit Function
+
+EH:
+    LogSetup "ERROR", "EnsureDataTable " & tblName & ": " & Err.description
+    EnsureDataTable = SCHEMA_FAILED
+End Function
 
 ' Dodaje kolonu na postojecu tabelu ako je nema. No-op ako tabela ne postoji ili
 ' kolona vec postoji (zato je jeftino terati je na svaki start).
 '
 ' Public iz istog razloga kao EnsureDataTable: modPaletniList.EnsurePreradaCol je
 ' bio doslovna kopija ove procedure jer joj se nije moglo prici spolja.
-Public Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
+Public Function EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String) As Long
+    On Error GoTo EH
+
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
-    If lo Is Nothing Then Exit Sub
+    If lo Is Nothing Then
+        EnsureColumnOnTable = SCHEMA_SKIPPED
+        Exit Function
+    End If
 
     Dim col As ListColumn
     On Error Resume Next
     Set col = lo.ListColumns(colName)
-    On Error GoTo 0
+    On Error GoTo EH
 
     If col Is Nothing Then
         lo.ListColumns.Add
         lo.ListColumns(lo.ListColumns.count).name = colName
         LogSetup "OK", "Added column " & colName & " to " & tblName
     End If
-End Sub
+
+    EnsureColumnOnTable = SCHEMA_OK
+    Exit Function
+
+EH:
+    LogSetup "ERROR", "EnsureColumnOnTable " & tblName & "." & colName & ": " & Err.description
+    EnsureColumnOnTable = SCHEMA_FAILED
+End Function
 
 Private Function GetOrCreateWorksheet(ByVal sheetName As String) As Worksheet
     On Error Resume Next

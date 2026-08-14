@@ -172,15 +172,18 @@ Private Sub T_EnsureSchema_JeIdempotentna()
     Dim drugi As String
 
     ' Prvi prolaz dovodi svesku u zeljeno stanje (fixture donora ga nema ceo).
-    EnsureRuntimeSchema
-    EnsureDoradeSchema
-    EnsurePaletniListSchema
+    ' Povratna vrednost se PROVERAVA. Bez toga bi test bio zelen i kad oba prolaza
+    ' podjednako NE uspeju (zasticen list, zakljucana tabela): stanje bi ostalo
+    ' isto, pa bi zeleno dolazilo od dvostrukog pada, a ne od idempotencije.
+    AssertEq EnsureRuntimeSchema(), 0, "prvi prolaz: EnsureRuntimeSchema bez padova"
+    AssertEq EnsureDoradeSchema(), 0, "prvi prolaz: EnsureDoradeSchema bez padova"
+    AssertEq EnsurePaletniListSchema(), 0, "prvi prolaz: EnsurePaletniListSchema bez padova"
     prvi = SchemaOtisak()
 
-    ' Drugi prolaz sme SAMO da bude no-op.
-    EnsureRuntimeSchema
-    EnsureDoradeSchema
-    EnsurePaletniListSchema
+    ' Drugi prolaz sme SAMO da bude no-op -- i takodje bez padova.
+    AssertEq EnsureRuntimeSchema(), 0, "drugi prolaz: EnsureRuntimeSchema bez padova"
+    AssertEq EnsureDoradeSchema(), 0, "drugi prolaz: EnsureDoradeSchema bez padova"
+    AssertEq EnsurePaletniListSchema(), 0, "drugi prolaz: EnsurePaletniListSchema bez padova"
     drugi = SchemaOtisak()
 
     ' Preduslov: bez ijedne tabele otisak bi bio prazan u oba prolaza, pa bi test
@@ -263,22 +266,56 @@ End Sub
 ' Pomocno
 ' ============================================================
 
-' "Otisak" seme: naziv tabele + broj kolona, jedan red po tabeli. Dovoljno da
-' uhvati i dodatu kolonu i dodatu tabelu, a ne zavisi od podataka. Redosled je
-' redosled listova/tabela u svesci -- stabilan izmedju dva prolaza u istoj
-' sesiji, pa razlika u redosledu i JESTE nalaz (nesto je dodato).
+' "Otisak" seme: po tabeli UREDJENA lista kolona sa formatom, jedan red po tabeli.
+'
+' Raniji otisak je bio samo "ime=broj kolona" -- preslabo. Nije video
+' preimenovanu kolonu, promenjen redosled (a redosled JESTE semantika: pozicijski
+' AppendRow zavisi od njega) ni izgubljen NumberFormat, sto runtime self-heal bas
+' postavlja. Ne zavisi od PODATAKA, pa je stabilan izmedju dva prolaza.
 Private Function SchemaOtisak() As String
     Dim ws As Worksheet
     Dim lo As ListObject
+    Dim i As Long
     Dim parts As String
+    Dim red As String
 
     For Each ws In ThisWorkbook.Worksheets
         For Each lo In ws.ListObjects
-            parts = parts & lo.name & "=" & lo.ListColumns.count & vbLf
+            red = lo.name & ":"
+            For i = 1 To lo.ListColumns.count
+                red = red & " " & lo.ListColumns(i).name & _
+                      "[" & ColFormat(lo.ListColumns(i)) & "]"
+            Next i
+            parts = parts & red & vbLf
         Next lo
     Next ws
 
     SchemaOtisak = parts
+End Function
+
+' NumberFormat kolone: "-" kad tabela nema redova, "?" kad je format mesan
+' (DataBodyRange.NumberFormat vrati Null), "!" kad citanje pukne. Sva tri su
+' deterministicna izmedju dva prolaza u istoj sesiji, pa ne prave lazno crven test.
+Private Function ColFormat(ByVal col As ListColumn) As String
+    On Error GoTo EH
+
+    If col.DataBodyRange Is Nothing Then
+        ColFormat = "-"
+        Exit Function
+    End If
+
+    Dim v As Variant
+    v = col.DataBodyRange.NumberFormat
+
+    If IsNull(v) Then
+        ColFormat = "?"
+    Else
+        ColFormat = CStr(v)
+    End If
+    Exit Function
+
+EH:
+    ColFormat = "!"
 End Function
 
 ' Sve kontrole forme kao sortirano "ime=vrednost", jedan par po liniji.

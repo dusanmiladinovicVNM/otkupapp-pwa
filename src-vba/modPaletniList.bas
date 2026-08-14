@@ -2432,22 +2432,20 @@ Private Sub RequirePreradaStavkaSchema(ByVal SRC As String)
         COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_STORNIRANO
 End Sub
 
-' Schema-drift: dodaj nove tblPrerada kolone (bruto/paleta/ambalaza/tipovi)
-' ako fale. Idempotentno (no-op kad postoje). Resava 0 u sazetku paletnog
-' lista kada SetupPaletniListSchema nije pokrenut posle nadogradnje.
+' Schema-drift: dopuni tblPrerada kolone ako fale. Idempotentno (no-op kad
+' postoje). Resava 0 u sazetku paletnog lista kada SetupPaletniListSchema nije
+' pokrenut posle nadogradnje.
 '
-' Telo je delegirano na modSetup.EnsureColumnOnTable -- lokalni EnsurePreradaCol
-' je bio doslovna kopija tog primitiva, napravljena samo zato sto je original bio
-' Private. Ovde ostaje jedino spisak kolona, koji je stvarno lokalno znanje.
+' Spisak kolona se NE drzi ovde. Ranije je bio lokalno hardkodiran (sest
+' COL_PRE_*), pa bi izmena registra u modSetup-u ostavila ovu funkciju da leci
+' zastarelu semu. Sada se trazi od registra "sredi tblPrerada" -- jedan izvor
+' istine, kako i kaze .claude/rules/podaci-i-config.md.
+'
+' EnsureTableSchema je repair-only: ako tabele nema, ne pravi je (self-heal usred
+' poslovnog toka ne sme da otvara nove listove -- to radi Setup* komanda).
 Private Sub EnsurePreradaCols()
     On Error Resume Next
-    If GetTable(TBL_PRERADA) Is Nothing Then Exit Sub
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TEZINA_PALETE
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_BRUTO
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_AMBALAZA
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_KUTIJE
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_KESE
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_TIP_GP
+    EnsureTableSchema TBL_PRERADA
 End Sub
 
 ' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).

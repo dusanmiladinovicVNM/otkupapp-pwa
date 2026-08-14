@@ -40,6 +40,24 @@ telo im je `ApplySchemaGroup(SG_*)`.
   kolone ispred dorada na `tblKulture`.
 - Registar je `Collection`, ne jedan `Array` literal: VBA dozvoljava najviše **25
   nastavaka reda** po naredbi.
+- **Lokalni self-heal ne drži svoj spisak kolona.** Ako modul mora da popravi šemu
+  usred toka (npr. `modPaletniList` pre snimanja prerade), zove
+  `modSetup.EnsureTableSchema(TBL_X)` — repair-only, ne kreira tabelu koje nema.
+  Lokalna kopija spiska bi ostala da leči zastarelu šemu kad se registar promeni.
+
+### Leaf primitivi vraćaju ishod, ne oslanjaju se na `Err`
+
+`EnsureDataTable` / `EnsureColumnOnTable` / `SetColumnNumberFormat` /
+`BackfillColumn` vraćaju `SCHEMA_OK` / `SCHEMA_SKIPPED` / `SCHEMA_FAILED`.
+
+Ne piši `On Error Resume Next` pa proveru `Err.Number` **oko poziva procedure koja
+ima svoj `On Error Resume Next`** — `Err` ne preživi izlazak iz te procedure, pa je
+provera mrtva i pad prolazi kao uspeh. Pozivalac čita **povratnu vrednost**.
+
+`SCHEMA_SKIPPED` nije greška: tabele/kolone nema na ovoj instalaciji, ili je
+tabela prazna pa nema data-ćelija za format. Da se to broji kao pad, svaki start
+bi prijavljivao greške za funkcije koje se ne koriste. `ApplySchemaGroup` je
+**jedino** mesto koje bira politiku „nastavi posle greške".
 
 **Posle svake izmene registra ili refaktora `modSetup`-a:**
 

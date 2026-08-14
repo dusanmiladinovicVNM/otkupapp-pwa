@@ -26,7 +26,7 @@ Provere:
                      ("Sub or Function not defined").
   7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
                      arguments").
-  8. ENSURE       -- `Ensure*` sa MsgBox-om, a bez tihog jezgra `<ime>Core`.
+  8. ENSURE       -- MsgBox unutar `Ensure*` procedure.
                      Nije compile greska nego ugovor: `Ensure*` mora da se moze
                      pozvati IZ KODA -- bez dijaloga i sa saznatljivim ishodom.
 
@@ -440,17 +440,16 @@ def check_poruke(files: list[str]) -> list[Finding]:
 # zavrsavao u sopstvenom MsgBox-u i procedura se NORMALNO vracala, pa je agregat
 # odmah zatim javljao da je sve provereno.
 #
-# Provera je namerno blaga: `Ensure*` SME da ima MsgBox dok postoji tiho jezgro
-# `<ime>Core`, koje pozivalac iz koda moze da uhvati. Ta rupa je bila potrebna dok
-# su ulazne tacke jos nosile `Ensure*` ime; posle F3b (Ensure* -> Setup*) nijedan
-# `Ensure*` vise nema MsgBox, pa pravilo prolazi bez izuzetka. Ostaje blago jer
-# opisuje UGOVOR, ne trenutno stanje: `Ensure*` sa dijalogom je prihvatljiv samo
-# ako uz njega ide jezgro; bez jezgra pada.
+# Pravilo je bez izuzetka: MsgBox u `Ensure*` je nalaz, tacka. Prelazno je
+# postojala rupa "sme ako ima jezgro <ime>Core", potrebna dok su ulazne tacke jos
+# nosile `Ensure*` ime; posle F3b (Ensure* -> Setup*) nijedan `Ensure*` nema
+# MsgBox, `*Core` vise ne postoji kao pojam, pa rupa nema koga da stiti -- a
+# ostavljena bi bila poziv da se stari obrazac vrati kroz nova `*Core` imena.
 ENSURE_PROC = re.compile(r"^\s*(?:Public\s+|Private\s+)?(?:Sub|Function)\s+(Ensure\w+)", re.I)
 PROC_END = re.compile(r"^\s*End\s+(?:Sub|Function)\s*$", re.I)
 
 
-def check_ensure(path: str, lines: list[str], defined: set[str]) -> list[Finding]:
+def check_ensure(path: str, lines: list[str]) -> list[Finding]:
     out = []
     i = 0
     while i < len(lines):
@@ -465,18 +464,14 @@ def check_ensure(path: str, lines: list[str], defined: set[str]) -> list[Finding
         while j < len(lines) and not PROC_END.match(lines[j]):
             j += 1
 
-        hit = None
         for k in range(body_start, j):
             if "MsgBox" in _strip_comment(lines[k]):
-                hit = k + 1
+                out.append(Finding(path, k + 1, "ENSURE",
+                                   f"'{name}' prikazuje MsgBox. `Ensure*` mora da se "
+                                   f"moze pozvati IZ KODA -- bez dijaloga i sa ishodom "
+                                   f"koji se vraca. Dijalog ide u `Setup*` ulaznu tacku "
+                                   f"koja delegira ovoj proceduri."))
                 break
-
-        if hit is not None and (name + "Core").lower() not in defined:
-            out.append(Finding(path, hit, "ENSURE",
-                               f"'{name}' prikazuje MsgBox, a nema tiho jezgro "
-                               f"'{name}Core' -- pozivalac iz koda ne moze ni da ga "
-                               f"pozove bez dijaloga ni da sazna da je pao. "
-                               f"Izdvoj telo u '{name}Core' koje vraca ishod."))
         i = j + 1
     return out
 
@@ -508,7 +503,7 @@ def main(argv: list[str]) -> int:
         findings += check_decl_after_proc(path, lines)
         findings += check_reserved(path, lines)
         findings += check_undefined(path, lines, defined, arities)
-        findings += check_ensure(path, lines, defined)
+        findings += check_ensure(path, lines)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
         # pa isto ime u dve forme NIJE "Ambiguous name".

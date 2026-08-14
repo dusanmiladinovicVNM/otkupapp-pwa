@@ -439,6 +439,54 @@ radi; F5 ga je proširila na celu šemu.
 
 ---
 
+## 6b) Posle code review-a — šta je bilo nedovršeno
+
+Review grane je našao da je smer dobar, ali da mehanizam ispod nije bio
+`fail-closed`. Nalazi i ispravke:
+
+**BLOCKER 1 — `fails = 0` nije značilo da je Ensure uspeo.** `ApplySchemaGroup`
+je čitao ishod iz `Err`, a leaf primitivi (`SetColumnNumberFormat`,
+`BackfillColumn`) su imali sopstveni `On Error Resume Next` i vraćali se normalno.
+`Err` ne preživi izlazak iz takve procedure, pa je pad na zaštićenom listu prolazio
+kao uspeh — **tačno ono što je F1 tvrdio da je zatvorio.**
+
+Ispravka: leaf primitivi vraćaju `SCHEMA_OK` / `SCHEMA_SKIPPED` / `SCHEMA_FAILED`.
+`ApplySchemaGroup` čita povratnu vrednost i jedini bira politiku „nastavi posle
+greške". `SKIPPED` je odvojen od `FAILED` jer tabele kojih na instalaciji nema
+(paletni list nije podešen, desktop-only) nisu greška — inače bi svaki start
+prijavljivao padove za funkcije koje se ne koriste. Prazna tabela kod formata je
+sada `SKIPPED` a ne tihi `OK`; samoleči se na prvom startu posle prvog reda.
+
+Uz to: `StepFailed` oko `EnsurePaletaSablon`/`EnsurePreradaSablon` je bio ista
+mrtva provera (šabloni su best-effort, `LogErr` pa normalan povratak) — uklonjeno
+lažno brojanje.
+
+**BLOCKER 2 — agregat je mogao da javi uspeh posle neuspelog setup-a.**
+`SetupNewPC` na nalaze upiše `APP_SETUP_COMPLETED="NE"`, prikaže warning i vrati se
+normalno; `AdminEnsureEverything` je posle toga mogao reći „setup i sve šeme su
+provereni". Ispravka: provera `IsSetupHealthy()` odmah posle `SetupNewPC`.
+
+**`schema_diff` je davao jači dokaz nego što je mogao.** Poredio je liste po
+oblasti odvojeno, pa preslagivanje `Dorade1 → Runtime → Dorade2` u
+`Runtime → Dorade1 → Dorade2` ne bi video — a baš to je semantika. Sada gradi
+**pun uređen izvršni tok**: `ApplySchemaGroup` i pozivi drugih ulaznih tačaka se
+razvijaju na svom mestu. Dokazano: ta sabotaža sada daje `DIFF` i exit 1.
+
+**Test idempotencije je imao false-green rupe.** Ignorisao je povratne vrednosti
+(zelen i kad oba prolaza podjednako padnu) i beležio samo broj kolona. Sada
+proverava `= 0` za sva tri jezgra u oba prolaza, a otisak nosi **uređena imena
+kolona + `NumberFormat`**.
+
+**Registar nije bio jedini izvor istine.** `modPaletniList.EnsurePreradaCols` je
+lokalno držao šest `COL_PRE_*`. Sada zove `EnsureTableSchema(TBL_PRERADA)`
+(repair-only), pa spisak ostaje na jednom mestu.
+
+**`ENSURE` pravilo je imalo prelaznu rupu** („`MsgBox` sme ako postoji `<ime>Core`").
+Posle F3b `*Core` ne postoji kao pojam, pa je rupa uklonjena — svaki `MsgBox` u
+`Ensure*` je sada nalaz.
+
+---
+
 ## 7) Sažetak u tri rečenice
 
 `Ensure*` je u ovom kodu postao skupno ime za šest različitih ugovora, pa
