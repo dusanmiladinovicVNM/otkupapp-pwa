@@ -33,6 +33,8 @@ Izuzetak su očigledne mehaničke greške (tipfeler, nedostajući argument) koje
 ## 1) Pre svake izmene (obavezno)
 
 1. **Reference-first.** Pogledaj izvore istine:
+   - `docs/PLAN_STAVKI.md` — trajni plan stavki za rešavanje (preživljava chatove).
+     Sesija koja radi po planu **upisuje taj plan u §4 (Dnevnik) pre kraja**.
    - `docs/DOMEN/README.md` — šta dokumenti jesu i koje invarijante drže
    - `docs/DOMEN/WHO_WRITES.md` — ko piše koju tabelu (generisano iz koda)
    - `docs/ARCHITECTURE_REFERENCE.md`, `docs/ARCHITECTURE_CHANGELOG.md`
