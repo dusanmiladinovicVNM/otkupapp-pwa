@@ -2,11 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(python3 tools/vba_check.py:*)",
+      "Bash(python tools/vba_check.py:*)",
+      "Bash(python tools/run_vba.py:*)",
+      "Bash(python tools/sabotaza.py:*)",
       "Bash(git merge-tree:*)",
       "Bash(git fetch:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "PowerShell(python tools\\vba_check.py:*)",
+      "PowerShell(python tools\\run_vba.py:*)",
+      "PowerShell(python tools\\sabotaza.py:*)",
+      "PowerShell(python tools\\make_fixture.py:*)",
+      "PowerShell(python tools\\dump_schema.py:*)",
+      "PowerShell(python tools\\read_test_log.py:*)",
+      "PowerShell(git status:*)",
+      "PowerShell(git log:*)",
+      "PowerShell(git diff:*)",
+      "PowerShell(git show:*)",
+      "PowerShell(git fetch:*)",
+      "PowerShell(git merge-tree:*)"
     ]
   },
   "hooks": {
