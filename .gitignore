@@ -10,3 +10,9 @@ docs/Legal/build/
 
 # Excel test fixture (pravi ga tools/run_vba.py, ne ide u git)
 tests/fixtures/
+
+# Izvestaj poslednjeg rana (pise ga tools/run_vba.py u tests/ na svakom
+# pokretanju). Artefakt jednog rana na jednoj masini -- u gitu bi bio samo
+# konflikt na svakom pull-u, a "git add -A" ga inace tiho pokupi.
+tests/last_run.json
+tests/last_run.txt
