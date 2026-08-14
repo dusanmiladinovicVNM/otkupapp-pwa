@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-115"
+Public Const OTKUI_BUILD   As String = "v6-ui-116"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -2748,11 +2748,21 @@ Public Sub SelectMode(frm As Object, key As String)
 End Sub
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
-    Dim k As String
+    Dim k As String, staraKey As String
     On Error Resume Next
+    staraKey = ActiveMode
     mPopMute = True                    ' punjenje lista pise u combo -> ne otvaraj panel
     mLoading = True                    ' i to NIJE izmena korisnika
     ClosePopup
+    ' OTPREMNICA JE KONTEKST SAMO OTKUPNOG LISTA (F1) - njeni blokovi SU otkupni
+    ' listovi. Izlazak iz F1 je napustanje tog konteksta: nova otpremnica (F2) ne
+    ' sme da nasledi datum stare, a povratak u F1 ne sme da nastavi da visi o
+    ' otpremnici koju je operater ostavio.
+    '
+    ' Uslov gleda STARI rezim (staraKey), pa gradnja ekrana (F1 -> F1) i povratak
+    ' sa drugog ekrana (ActivateScreen zove ovo sa nepromenjenim ActiveMode) ne
+    ' otpustaju nista - njih pokriva ActivateScreen sam, na izlasku.
+    If modeKey(staraKey) = "OTKUP" And modeKey(key) <> "OTKUP" Then OtpustiOtpremnicu False
     ActiveMode = key
     k = modeKey(key)
     SetGridCols k                      ' pre LayoutGrid-a i pre naslova kolona
@@ -2830,6 +2840,11 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ResetFokusOkvira
     ' podrazumevana vrsta/sorta iz Podesavanja - samo ako roba nije izabrana
     ApplyDefaultRoba
+    ' DATUM PRIPADA REZIMU, ne ekranu. Racuna se samo na stvarnu promenu rezima
+    ' (staraKey <> key), da povratak sa drugog ekrana i gradnja ne pregaze ono sto
+    ' je operater upisao. Ide PRE RefreshBrojPredlog - predlog broja cita datum iz
+    ' polja (DatumIzPolja), pa bi sa starim datumom dao broj iz tudjeg niza.
+    If staraKey <> key Then SetDatumPoRezimu
     ' nov dokument -> nista nije neupisano
     MarkClean
     mPopMute = False
@@ -3863,6 +3878,14 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
             End If
         End If
     End If
+    ' Napustanje ekrana dokumenata je i napustanje konteksta otpremnice - inace
+    ' operater ode na Palete, vrati se, i zatekne datum i broj koji jos vise o
+    ' otpremnici koju je ostavio (traka je i dalje pokazuje).
+    '
+    ' Ide PRE "mScreen = kljuc": ImaAktivnuOtpremnicu pita da li je ekran
+    ' DOKUMENTI, pa posle promene ne bi imala sta da otpusti. I posle svih ranih
+    ' izlaza gore - ekran koji se nije otvorio nije ni napusten.
+    If mScreen = "DOKUMENTI" And kljuc <> "DOKUMENTI" Then OtpustiOtpremnicu False
     mScreen = kljuc
     ClosePopup
     CloseFilterPanel
@@ -5338,9 +5361,38 @@ Private Sub NapustiOtpremnicu(ByVal stID As String)
     If Len(otpSt) = 0 Then Exit Sub
     If StrComp(otpSt, stID, vbTextCompare) = 0 Then Exit Sub
 
+    OtpustiOtpremnicu True
+End Sub
+
+' OTPREMNICA PRESTAJE DA BUDE KONTEKST: datum na danas, zbirna prazna, roba
+' vracena na podrazumevanu, traka nestaje. Do sada je ovo stajalo samo u
+' NapustiOtpremnicu, pa se kontekst pustao ISKLJUCIVO na promenu otkupnog mesta -
+' ni izlazak iz F1, ni odlazak na drugi ekran ga nisu dirali, a datum, broj i
+' traka vise o njemu. Legacy je imao dva mesta (.claude/rules/otkup-i-dokumenta.md
+' odeljak 3): promenu OM-a I ResetDatumKontekst kad se panel blokova sakrije; u
+' novi UI je bio prenet samo prvi.
+'
+' refresh=True za pozivaoca koji SAM ne osvezava mrezu i raspored (promena OM-a).
+' SelectModeCore i ActivateScreen to ionako rade posle ovoga, pa im ide False -
+' inace bi mreza bila procitana dva puta.
+'
+' mLoading se CUVA I VRACA, ne zakucava na False: SelectModeCore je zove dok je
+' vec unutar svog mLoading bloka, a gasenje flag-a na sredini pustilo bi
+' ugnjezdene okidace (datum -> stanica-lock i predlog broja preko mreze) da rade
+' nad pola preuredjenog stanja.
+Private Sub OtpustiOtpremnicu(ByVal refresh As Boolean)
+    Dim prevLoading As Boolean
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    ' Bez aktivne otpremnice nema sta da se pusti - a ni da se pregazi datum koji
+    ' je operater sam upisao. Bez ovog garda bi svaka promena rezima brisala
+    ' rucno unet datum zaostalog dokumenta.
+    If Not ImaAktivnuOtpremnicu() Then Exit Sub
+
     Application.Run "modScrDokumenti.Scr_OtpOtkazi"
     Err.Clear
 
+    prevLoading = mLoading
     mLoading = True
     SetDatumDanas mFrm.Controls("zForm")
     SetFld "fgBrZbir", ""
@@ -5348,9 +5400,10 @@ Private Sub NapustiOtpremnicu(ByVal stID As String)
     ' roba je bila prepisana sa otpremnice - vrati podrazumevanu iz Podesavanja
     mFrm.Controls("zCtx").Controls("cbVrsta").value = ""
     mFrm.Controls("zCtx").Controls("cbSorta").value = ""
-    mLoading = False
+    mLoading = prevLoading
     ApplyDefaultRoba
 
+    If Not refresh Then Exit Sub
     mSelRow = 0                       ' lista je druga - stari izbor ne vazi
     RefreshOtpTraka mFrm
     RefreshListSeg mFrm
@@ -5600,6 +5653,22 @@ Public Sub ApplyPrefill(ByVal spec As String)
     ' ClearForm: forma koja nije .Show-ovana ne moze da primi fokus, a u
     ' nevidljivom Excelu SetFocus ne puca nego TRAJNO visi (modTestMode).
     If Not IsTestMode() Then ctx.Controls("cbKupac").SetFocus
+End Sub
+
+' DATUM PO REZIMU. Otpremnica je kontekst samo otkupnog lista, pa samo u F1 - i
+' samo dok je stvarno aktivna - datum ostaje njen. Svaki drugi rezim pravi svoj
+' dokument i pocinje od danas.
+'
+' Bez ovoga je nova otpremnica u F2 nasledjivala datum prethodno izabrane
+' otpremnice (22.07 dok je danas 14.08), bez ijednog znaka operateru - a to nije
+' neugodnost nego pogresan datum u dokumentu.
+Private Sub SetDatumPoRezimu()
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If modeKey(ActiveMode) = "OTKUP" Then
+        If ImaAktivnuOtpremnicu() Then Exit Sub     ' svi njeni blokovi nose NJEN datum
+    End If
+    SetDatumDanas mFrm.Controls("zForm")
 End Sub
 
 ' Datum dokumenta: podrazumevano danas. Ista vrednost koju je ekran do sada

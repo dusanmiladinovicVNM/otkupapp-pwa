@@ -167,7 +167,7 @@ menja ponašanje. Tri testa nad `frmOtkup.ClearOtkupFields` (tu bug i živi):
 | `T_PosleSnimanja_ZadrzavaZbirnu` | broj zbirne ostaje, i drugi blok dobija istu zbirnu |
 | `T_ClearForm_BrisePartnera` | `cmbKooperant` se BRIŠE (obrnut smer od prva dva) |
 
-I tri nad novim UI-jem (`modOtkupUI`), jer legacy se **ne gasi** — obe kopije
+I četiri nad novim UI-jem (`modOtkupUI`), jer legacy se **ne gasi** — obe kopije
 postoje namerno (`docs/UI_MIGRACIJA_KATALOG.md`), pa obe nose svoj test:
 
 | Test | Šta drži |
@@ -175,11 +175,24 @@ postoje namerno (`docs/UI_MIGRACIJA_KATALOG.md`), pa obe nose svoj test:
 | `T_ParseDatum_Ugovor` | prazno/necitljivo je `0`; `d.m.yyyy` se čita kao DMY bez `CDate`; trailing tačka se skida; nemoguć datum se **odbija**, ne preliva (`30.02` → `2.3`, mesec 13 → januar sledeće godine) |
 | `T_ParcelaID_IzSkriveneKolone` | ID parcele dolazi iz **skrivene druge kolone**, ne iz prikaznog teksta; sakriveno polje ne šalje parcelu u dokument |
 | `T_ClearForm_Ugovor` | ista tri ponašanja kao legacy trojka (datum ostaje, zbirna ostaje, partner se briše) + razlika novog UI-ja: **bez** aktivne otpremnice datum se vraća na danas |
+| `T_OtpremnicaKontekst_PustaSeIzlaskomIzF1` | izlazak iz F1 **otpušta** otpremnicu (`Scr_OtpInfo` prazan, datum na danas, zbirna prazna); povratak u F1 je ne oživljava; bez otpremnice promena režima i dalje vraća datum na danas |
 
-**Šta ovi testovi NE pokrivaju:** ništa iznad `ClearForm` — put upisa (`modOtkupUnos`
-/ `modDokUnos`), mreža, storno. Forma se gradi bez `.Show` (`New frmOtkupUI` pa
-`Controls.count`), pa `UserForm_Activate` — raspored, `GoFullScreen`, punjenje
-mreže — nikad ne ide.
+Četvrti je došao iz **terenske prijave, ne iz suite-a** — i to je nalaz o suite-u
+koliko i o proizvodu. Kontekst otpremnice se puštao samo na promenu otkupnog mesta,
+pa je `F1 → F2 → F1` ostavljalo datum otpremnice u polju, a nova otpremnica u F2
+nasleđivala datum stare. Prva tri testa to nisu mogla da vide: svi rade nad **jednim**
+režimom i **jednim** ekranom. Detalji pravila: `.claude/rules/otkup-i-dokumenta.md` §3.
+
+**Šta ovi testovi NE pokrivaju:**
+
+- Ništa iznad `ClearForm` — put upisa (`modOtkupUnos` / `modDokUnos`), mreža, storno.
+  Forma se gradi bez `.Show` (`New frmOtkupUI` pa `Controls.count`), pa
+  `UserForm_Activate` — raspored, `GoFullScreen`, punjenje mreže — nikad ne ide.
+- **Otpuštanje na izlasku sa EKRANA** (`ActivateScreen`, Palete/Agrohemija).
+  Rutinu `OtpustiOtpremnicu` pokriva `otp-izlaz-f1`, ali samo pozivno mesto u
+  `SelectModeCore`. Poziv iz `ActivateScreen` bi tražio izgrađen `zScr_PALETE`, a
+  kad `ScrBuild` padne `ActivateScreen` izlazi **pre** otpuštanja — test bi padao
+  iz tuđeg razloga. Ostaje na operaterskoj checklisti.
 
 ### Tri seam-a koja novi UI nosi zbog ovih testova
 
@@ -331,7 +344,7 @@ polja koja niko nije tražio da se provere.
 
 ### Sabotaže novog UI-ja — `tools/sabotaza.py`
 
-Sedam sabotaža nad `modOtkupUI`, svaka obara **tačno jedan** test i po imenu:
+Devet sabotaža nad `modOtkupUI`, svaka obara **tačno jedan** test i po imenu:
 
 ```bash
 python tools/sabotaza.py --lista
@@ -349,9 +362,16 @@ python tools/sabotaza.py --vrati              # vrati
 | `clear-datum` | vraćaj datum na danas i uz aktivnu otpremnicu | `FAIL T_ClearForm_Ugovor` |
 | `clear-zbirna` | dodaj `fgBrZbir` u listu polja koja se prazne | `FAIL T_ClearForm_Ugovor` |
 | `clear-partner` | prestani da brišeš partnera | `FAIL T_ClearForm_Ugovor` |
+| `otp-izlaz-f1` | izlazak iz F1 više ne otpušta otpremnicu | `FAIL T_OtpremnicaKontekst_PustaSeIzlaskomIzF1` |
+| `otp-datum-rezim` | datum se više ne računa po režimu | `FAIL T_OtpremnicaKontekst_PustaSeIzlaskomIzF1` |
 
-Sve sedam su **pokrenute i potvrđene 14.08.2026** na Windows mašini: svaka obara
-tačno onaj test koji piše u tabeli, po imenu, a baseline ostaje `TESTS=6 FAIL=0`.
+Prvih **sedam** je pokrenuto i potvrđeno 14.08.2026 na Windows mašini: svaka obara
+tačno onaj test koji piše u tabeli, po imenu, a baseline je bio `TESTS=6 FAIL=0`.
+
+**Poslednje dve (`otp-*`) NISU pokrenute** — dodate su u Linux sesiji, gde
+`run_vba.py` ne radi. Sidra su im proverena (primena + vraćanje bajt-identično,
+i pod CRLF), ali da baš taj test padne po imenu **nije izmereno**. Novi baseline je
+`TESTS=7`, i ni on nije izmeren.
 
 > **„Tačno jedan test" je do tog rana bila NETAČNA tvrdnja.** `parcela-tekst` i
 > `parcela-vidljivost` obarale su **dva** testa — svoj, pa još `T_ClearForm_Ugovor`

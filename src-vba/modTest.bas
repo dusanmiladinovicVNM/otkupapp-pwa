@@ -58,6 +58,7 @@ Public Sub RunAllTests()
     RunOne 4
     RunOne 5
     RunOne 6
+    RunOne 7
 
     SetTestMode prevMode
     WriteResultFile
@@ -116,6 +117,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 4: TestName = "T_ParseDatum_Ugovor"
         Case 5: TestName = "T_ParcelaID_IzSkriveneKolone"
         Case 6: TestName = "T_ClearForm_Ugovor"
+        Case 7: TestName = "T_OtpremnicaKontekst_PustaSeIzlaskomIzF1"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -130,6 +132,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 4: T_ParseDatum_Ugovor
         Case 5: T_ParcelaID_IzSkriveneKolone
         Case 6: T_ClearForm_Ugovor
+        Case 7: T_OtpremnicaKontekst_PustaSeIzlaskomIzF1
     End Select
 End Sub
 
@@ -337,6 +340,66 @@ Private Sub T_ClearForm_Ugovor()
     modOtkupUI.ClearForm
     AssertEq Polje(zf, "fgDatum"), danas, _
              "bez aktivne otpremnice datum se vraca na danas"
+
+    ReleaseOtkupUIForm f
+End Sub
+
+' OTPREMNICA JE KONTEKST SAMO OTKUPNOG LISTA (F1). Izlazak iz F1 je napustanje
+' tog konteksta: datum se vraca na danas, zbirna se prazni, traka nestaje.
+'
+' Regres koji ovaj test cuva -- prijavljen sa terena: kontekst se pustao
+' ISKLJUCIVO na promenu otkupnog mesta (jedini pozivalac Scr_OtpOtkazi bio je
+' NapustiOtpremnicu), pa je posle F1 -> F2 -> F1, ili odlaska na Palete i natrag,
+' u polju i dalje stajao datum otpremnice (22.07 dok je danas 14.08) i traka je
+' pokazivala otpremnicu koju je operater ostavio. Gore od neugodnosti: NOVA
+' otpremnica u F2 dobijala je datum stare, bez ijednog znaka operateru.
+'
+' Legacy je imao dva mesta resetovanja (.claude/rules/otkup-i-dokumenta.md
+' odeljak 3) -- promenu OM-a I ResetDatumKontekst kad se panel blokova sakrije;
+' u novi UI je bio prenet samo prvi.
+Private Sub T_OtpremnicaKontekst_PustaSeIzlaskomIzF1()
+    Dim f As frmOtkupUI, zf As Object
+    Dim datumOtpremnice As String, danas As String, imaOtp As Boolean
+    Set f = NewOtkupUIForm()
+    Set zf = f.Controls("zForm")
+
+    ' Izvedeni datumi, ne zakucani -- zakucan datum bi jednog dana u godini bio
+    ' jednak danasnjem i test bi prosao i kad pravilo ne radi.
+    datumOtpremnice = Format$(Date - 30, "dd.mm.yyyy")
+    danas = Format$(Date, "dd.mm.yyyy")
+
+    ' F1 sa aktivnom otpremnicom: datum i zbirna su njeni (isto sto radi izbor
+    ' otpremnice u mrezi -> Scr_Event "row:N" -> ApplyPrefill).
+    modScrDokumenti.Scr_OtpTestSet FX_OTP_ID, FX_BROJ_OTP
+    modOtkupUI.ApplyPrefill "datum=" & datumOtpremnice & "|brzbirne=" & FX_ZBIRNA
+
+    imaOtp = (Len(modScrDokumenti.Scr_OtpInfo()) > 0)
+    AssertEq imaOtp, True, "preduslov: otpremnica je aktivna"
+    AssertEq Polje(zf, "fgDatum"), datumOtpremnice, "preduslov: datum otpremnice je u polju"
+    AssertEq Polje(zf, "fgBrZbir"), FX_ZBIRNA, "preduslov: zbirna otpremnice je u polju"
+
+    ' F1 -> F2: kontekst se pusta.
+    modOtkupUI.SelectMode f, "F2"
+    AssertEq modScrDokumenti.Scr_OtpInfo(), "", _
+             "izlazak iz F1 otpusta otpremnicu"
+    AssertEq Polje(zf, "fgDatum"), danas, _
+             "nova otpremnica ne nasledjuje datum stare"
+    AssertEq Polje(zf, "fgBrZbir"), "", _
+             "zbirna stare otpremnice se ne prenosi u nov dokument"
+
+    ' Povratak u F1 ne ozivljava otpustenu otpremnicu.
+    modOtkupUI.SelectMode f, "F1"
+    AssertEq Polje(zf, "fgDatum"), danas, _
+             "povratak u F1 ne vraca datum otpustene otpremnice"
+
+    ' BEZ aktivne otpremnice datum i dalje pripada rezimu: rucno unet datum se na
+    ' promeni rezima vraca na danas. Ovo je jedini deo koji drzi SetDatumPoRezimu
+    ' sam -- kad otpremnice ima, datum je vec vratilo otpustanje konteksta.
+    modOtkupUI.ApplyPrefill "datum=" & datumOtpremnice
+    AssertEq Polje(zf, "fgDatum"), datumOtpremnice, "preduslov: rucni datum je u polju"
+    modOtkupUI.SelectMode f, "F3"
+    AssertEq Polje(zf, "fgDatum"), danas, _
+             "promena rezima bez otpremnice vraca datum na danas"
 
     ReleaseOtkupUIForm f
 End Sub

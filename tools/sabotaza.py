@@ -90,7 +90,29 @@ SABOTAZE = {
         "T_ClearForm_Ugovor",
         "partner mora da bude obrisan posle snimanja",
     ),
+    # --- kontekst otpremnice ------------------------------------------------
+    "otp-izlaz-f1": (
+        "modOtkupUI.bas",
+        "    If modeKey(staraKey) = \"OTKUP\" And modeKey(key) <> \"OTKUP\" Then "
+        "OtpustiOtpremnicu False\n",
+        "    ' SABOTAZA: izlazak iz F1 vise ne otpusta otpremnicu\n",
+        "T_OtpremnicaKontekst_PustaSeIzlaskomIzF1",
+        "izlazak iz F1 otpusta otpremnicu",
+    ),
+    "otp-datum-rezim": (
+        "modOtkupUI.bas",
+        "    If staraKey <> key Then SetDatumPoRezimu\n",
+        "    ' SABOTAZA: datum se vise ne racuna po rezimu\n",
+        "T_OtpremnicaKontekst_PustaSeIzlaskomIzF1",
+        "promena rezima bez otpremnice vraca datum na danas",
+    ),
 }
+# NIJE ovde: otpustanje na izlasku sa EKRANA (ActivateScreen, Palete/Agrohemija).
+# Rutinu OtpustiOtpremnicu pokriva otp-izlaz-f1, ali samo POZIVNO MESTO u
+# SelectModeCore. Poziv iz ActivateScreen nema test -- trazio bi izgradjen
+# zScr_PALETE ekran, a kad ScrBuild padne ActivateScreen izlazi PRE otpustanja,
+# pa bi test padao iz tudjeg razloga. Ostaje na operaterskoj checklisti; sabotaza
+# koja nema test ne ide u ovaj katalog jer bi razvodnila njegov ugovor.
 
 
 def _procitaj(path: str) -> tuple[str, str]:

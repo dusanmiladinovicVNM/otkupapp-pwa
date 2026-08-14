@@ -45,18 +45,45 @@ Obe su pod `On Error Resume Next` odnosno tolerantne na prazan kontekst.
 Obe linije nose komentar u samoj formi. „Čišćenje" koje ih vrati u prethodno
 stanje obara test suite — i to je jedini način da se to primeti.
 
-## 3) Kontekst otpremnice se resetuje na tačno dva mesta
+## 3) Kontekst otpremnice se resetuje samo kad se stvarno napušta
 
 Datum i broj zbirne se nasleđuju sa izabrane otpremnice (panel „Otkupni
 blokovi"). Vraćaju se na „danas / prazno" samo kad se taj kontekst stvarno
-napušta:
+napušta.
+
+**Legacy (`frmOtkup`) — dva mesta:**
 
 - `ResetDatumKontekst` (`Public`, zove `modOtkupBlok` kad se blokovi sakriju)
 - promena otkupnog mesta **van** konteksta otpremnice, uz `OtkupBlok_IsPrefilling`
   gard — prefill sam postavlja stanicu i NE sme da se resetuje
 
-Ako dodaješ treće mesto, pitanje nije „da li da očistim polja" nego „da li se
-kontekst otpremnice zaista napušta".
+**Novi UI (`modOtkupUI`) — jedna rutina, tri poziva.** Otpuštanje je izdvojeno u
+`OtpustiOtpremnicu(refresh)`; ona i zove `Scr_OtpOtkazi`, i vraća datum, zbirnu
+(`mAktivnaZbirna`) i robu. Poziva se sa:
+
+| Poziv | Kada | `refresh` |
+|---|---|---|
+| `NapustiOtpremnicu` | promena OM-a na **drugu** stanicu | `True` |
+| `SelectModeCore` | izlazak iz **F1** u drugi režim | `False` |
+| `ActivateScreen` | izlazak sa ekrana **DOKUMENTI** (Palete, Agrohemija…) | `False` |
+
+`refresh=False` je zato što ta dva pozivaoca mrežu i raspored osvežavaju sama —
+inače bi lista bila pročitana dva puta.
+
+Uz to, datum pripada **režimu**: `SetDatumPoRezimu` (u `SelectModeCore`, samo na
+stvarnu promenu režima) daje datum otpremnice u F1 dok je aktivna, a **danas** u
+svakom drugom slučaju.
+
+> Do `v6-ui-116` je `Scr_OtpOtkazi` imao **jednog jedinog pozivaoca**
+> (`NapustiOtpremnicu`), pa se kontekst puštao isključivo na promenu OM-a. F1 → F2
+> → F1 i odlazak na Palete ostavljali su datum otpremnice u polju i traku na
+> ekranu, a **nova otpremnica u F2 nasleđivala je datum stare** — pogrešan datum u
+> dokumentu, bez ijednog znaka operateru. Prijavljeno sa terena, a ne testom: u
+> novi UI je bio prenet samo drugi red legacy tabele iznad.
+
+Ako dodaješ novo mesto, pitanje nije „da li da očistim polja" nego „da li se
+kontekst otpremnice zaista napušta" — i ide kroz `OtpustiOtpremnicu`, ne kao nova
+kopija tih pet upisa.
 
 ## 4) Snimanje ide kroz transakciju, ne kroz formu
 
