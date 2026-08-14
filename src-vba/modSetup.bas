@@ -35,6 +35,37 @@ Private Const CFG_VALUE As String = "Vrednost"
 Private Const CFG_DESC As String = "Opis"
 
 ' ============================================================
+' SCHEMA REGISTAR -- grupe i vrste operacija
+'
+' Sema aplikacije je do sada zivela razbacana po 8 Ensure*Schema procedura, pa
+' pitanje "koje kolone ima tblOtkup" nije imalo jedno mesto sa odgovorom, a nova
+' kolona se dodavala tek posto se pronadje KOJA od tih 8 procedura drzi tu tabelu.
+' Registar (SchemaTables + SchemaOps) je sada jedini izvor istine, a Ensure*Schema
+' su tanke ulazne tacke koje primene svoju grupu (ApplySchemaGroup).
+'
+' Redosled u registru = redosled primene. To NIJE kozmetika: EnsureColumnOnTable
+' dodaje kolonu na KRAJ tabele, a pozicijski AppendRow zavisi od redosleda kolona
+' (.claude/rules/podaci-i-config.md), pa preslagivanje redova menja semu.
+' ============================================================
+Private Const SG_PALETNI As String = "paletni"
+Private Const SG_CENOVNIK As String = "cenovnik"
+Private Const SG_STORNO_VEZE As String = "stornoveze"
+Private Const SG_STORNO_ZURNAL As String = "stornozurnal"
+Private Const SG_PORUKE As String = "poruke"
+Private Const SG_KORISNICI As String = "korisnici"
+Private Const SG_RUNTIME As String = "runtime"
+
+' Dorade su namerno DVE grupe: izmedju njih se zove EnsureRuntimeSchema, tacno
+' kao i pre registra. Spajanje u jednu grupu bi pomerilo runtime kolone
+' (PragProsek*) ispred dorada na tblKulture i time promenilo redosled kolona.
+Private Const SG_DORADE_SIFARNICI As String = "dorade-sifarnici"
+Private Const SG_DORADE_DOKUMENTI As String = "dorade-dokumenti"
+
+Private Const OP_COLUMN As String = "COLUMN"
+Private Const OP_FORMAT As String = "FORMAT"
+Private Const OP_BACKFILL As String = "BACKFILL"
+
+' ============================================================
 ' PUBLIC ENTRY POINTS
 ' ============================================================
 
@@ -944,69 +975,18 @@ Public Function EnsurePaletniListSchemaCore() As Long
     Dim fails As Long
 
     InitSetupLog
+
+    ' Tabele i kolone dolaze iz registra (SchemaTables/SchemaOps, grupa "paletni").
+    fails = ApplySchemaGroup(SG_PALETNI)
+
     On Error Resume Next
 
-    Err.Clear
-    EnsureDataTable TBL_TIP_PALETE, "TipPalete", _
-        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
-    fails = fails + StepFailed("PaletniList/" & TBL_TIP_PALETE)
-
-    Err.Clear
-    EnsureDataTable TBL_TIP_AMBALAZE, "TipAmbalaze", _
-        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
-    fails = fails + StepFailed("PaletniList/" & TBL_TIP_AMBALAZE)
-
-    Err.Clear
-    EnsureDataTable TBL_PALETA, "Palete", _
-        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
-              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
-              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
-              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
-              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO, _
-              COL_PAL_ISTORIJA)
-    fails = fails + StepFailed("PaletniList/" & TBL_PALETA)
-
-    Err.Clear
-    EnsureDataTable TBL_PALETA_STAVKA, "PaleteStavke", _
-        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
-              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
-              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
-              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO)
-    fails = fails + StepFailed("PaletniList/" & TBL_PALETA_STAVKA)
-
-    Err.Clear
-    EnsureDataTable TBL_PRERADA, "Prerada", _
-        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
-              COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
-              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
-              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
-              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
-    fails = fails + StepFailed("PaletniList/" & TBL_PRERADA)
-
-    Err.Clear
-    EnsureDataTable TBL_PRERADA_STAVKA, "PreradaStavke", _
-        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
-              COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
-    fails = fails + StepFailed("PaletniList/" & TBL_PRERADA_STAVKA)
-
-    Err.Clear
-    EnsureDataTable TBL_KUTIJE, "Kutije", _
-        Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
-    EnsureDataTable TBL_KESE, "Kese", _
-        Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
-    EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
-        Array(COL_VGP_TIP, "Aktivan")
-    fails = fails + StepFailed("PaletniList/Sifarnici")
-
-    Err.Clear
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
-    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
-    fails = fails + StepFailed("PaletniList/Kolone")
-
+    ' Cenovnik je svoja grupa (moze i samostalno, Alt+F8 -> EnsureCenovnikSchema).
     Err.Clear
     EnsureCenovnikSchema
     fails = fails + StepFailed("PaletniList/" & TBL_CENOVNIK)
 
+    ' Sabloni nisu sema nego radni listovi -- ostaju eksplicitan poziv.
     Err.Clear
     EnsurePaletaSablon
     EnsurePreradaSablon
@@ -1030,9 +1010,12 @@ End Function
 Public Sub EnsureCenovnikSchema()
     On Error GoTo EH
 
-    EnsureDataTable TBL_CENOVNIK, "Cenovnik", _
-        Array(COL_CEN_ID, COL_CEN_DATUM, COL_CEN_VRSTA, COL_CEN_SORTA, _
-              COL_CEN_KLASA, COL_CEN_CENA, COL_CEN_CREATED, COL_STORNIRANO)
+    ' Ugovor greske ostaje kakav je bio: ova procedura RE-RAISE-uje. Pozivaoci
+    ' (EnsurePaletniListSchemaCore, modAdmin agregat) neuspeh prepoznaju po Err.
+    If ApplySchemaGroup(SG_CENOVNIK) > 0 Then
+        Err.Raise vbObjectError + 9331, "EnsureCenovnikSchema", _
+                  TBL_CENOVNIK & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
+    End If
 
     LogSetup "OK", "EnsureCenovnikSchema done"
     Exit Sub
@@ -1049,23 +1032,23 @@ End Sub
 ' tabela nastane automatski posle self-update-a KODA -- bez rucnog Alt+F8.
 ' Alt+F8 -> EnsureStornoVezeSchema (sa MsgBox potvrdom).
 ' ============================================================
+' Sema je u registru (grupa "stornoveze"). Ugovor greske ostaje: propagira se
+' pozivaocu (modStornoContext.EnsureTable, modTestStorno, runtime self-heal).
 Public Sub EnsureStornoVezeSchemaCore()
-    EnsureDataTable TBL_STORNO_VEZE, "StornoVeze", _
-        Array(COL_SV_ID, COL_SV_MODE, COL_SV_STATUS, _
-              COL_SV_OLD_DOCTYPE, COL_SV_OLD_DOCID, COL_SV_OLD_BROJ, _
-              COL_SV_NEW_DOCTYPE, COL_SV_NEW_DOCID, COL_SV_NEW_BROJ, _
-              COL_SV_PARENT_DOCTYPE, COL_SV_PARENT_DOCID, COL_SV_PARENT_BROJ, _
-              COL_SV_CREATED_AT, COL_SV_CREATED_BY, COL_SV_COMPLETED_AT, _
-              COL_SV_MESSAGE, COL_SV_NEEDS_RECOVERY, COL_SV_RECOVERY_ACTION)
+    If ApplySchemaGroup(SG_STORNO_VEZE) > 0 Then
+        Err.Raise vbObjectError + 9332, "EnsureStornoVezeSchemaCore", _
+                  TBL_STORNO_VEZE & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
+    End If
 End Sub
 
 ' Storno operacioni zurnal (append-only cell-level trag za lossless undo).
+' Registar grupa "stornozurnal" nosi i aditivnu kolonu NovaVrednost za
+' instalacije sa v2.24 ranim build-om.
 Public Sub EnsureStornoZurnalSchemaCore()
-    EnsureDataTable TBL_STORNO_ZURNAL, "StornoZurnal", _
-        Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_TS, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
-              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA)
-    ' Aditivno za postojece instalacije (v2.24 rani build bez NovaVrednost).
-    EnsureColumnOnTable TBL_STORNO_ZURNAL, COL_SZ_NOVA
+    If ApplySchemaGroup(SG_STORNO_ZURNAL) > 0 Then
+        Err.Raise vbObjectError + 9333, "EnsureStornoZurnalSchemaCore", _
+                  TBL_STORNO_ZURNAL & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
+    End If
 End Sub
 
 Public Sub EnsureStornoVezeSchema()
@@ -1166,7 +1149,10 @@ End Function
 Public Sub EnsurePoruke()
     On Error GoTo EH
 
-    EnsureDataTable TBL_PORUKE, PORUKE_SHEET, Array(COL_POR_KLJUC, COL_POR_TEKST)
+    If ApplySchemaGroup(SG_PORUKE) > 0 Then
+        Err.Raise vbObjectError + 9334, "EnsurePoruke", _
+                  TBL_PORUKE & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
+    End If
 
     Dim lo As ListObject
     Set lo = FindListObject(TBL_PORUKE)
@@ -1205,34 +1191,11 @@ Public Function EnsureRuntimeSchema() As Long
     Dim fails As Long
 
     InitSetupLog          ' bez SETUP_LOG sheet-a LogSetup tiho pada (isto radi EnsureAuditColumnsCore)
+
+    ' Kolone i formati dolaze iz registra (SchemaOps, grupa "runtime").
+    fails = ApplySchemaGroup(SG_RUNTIME)
+
     On Error Resume Next
-
-    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
-    Err.Clear
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
-    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
-    SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
-    fails = fails + StepFailed("RuntimeSchema/PragoviKulture")
-
-    ' Format kolona (schema-drift: reinstall/self-update vrati kolone na General ->
-    ' E-notacija/tarabe na dokumentima). Idempotentno, tera se na SVAKI start.
-    ' BPG je identifikator (dug broj), ne racunska vrednost -> Text ("@").
-    Err.Clear
-    SetColumnNumberFormat TBL_KOOPERANTI, COL_KOOP_BPG, "@"
-    ' Prerada: tezine su Double (samo prikaz) -> fiksni decimalni format spreci General/E.
-    SetColumnNumberFormat TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
-    SetColumnNumberFormat TBL_PRERADA, COL_PRE_BRUTO, "0.00"
-    SetColumnNumberFormat TBL_PRERADA, COL_PRE_AMBALAZA, "0.00"
-    fails = fails + StepFailed("RuntimeSchema/FormatiKolona")
-
-    ' Vidljivi audit trag na paleti (relabel/detach/adjust). Deo je i punog
-    ' EnsurePaletniListSchema, ali se dodaje ovde da nastane AUTOMATSKI posle
-    ' self-update-a KODA -- bez rucnog Alt+F8 koraka. EnsureColumnOnTable je no-op
-    ' kad kolona postoji.
-    Err.Clear
-    EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA
-    fails = fails + StepFailed("RuntimeSchema/PaletaIstorija")
 
     ' Centralni storno/correction context (tblStornoVeze). Idempotentno; nastane
     ' automatski posle self-update-a KODA. EnsureDataTable je no-op kad postoji.
@@ -1401,65 +1364,19 @@ Public Function EnsureDoradeSchemaCore() As Long
     Dim fails As Long
 
     InitSetupLog
-    On Error Resume Next
 
-    ' #1 soft-delete: kolona Aktivan na sifarnicima koji je nemaju (+ backfill).
-    Err.Clear
-    EnsureAktivanColumn TBL_KULTURE
-    EnsureAktivanColumn TBL_TIP_AMBALAZE
-    EnsureAktivanColumn TBL_TIP_PALETE
-    EnsureAktivanColumn TBL_KUTIJE
-    EnsureAktivanColumn TBL_KESE
-    EnsureAktivanColumn TBL_VRSTA_GP
-    fails = fails + StepFailed("Dorade/AktivanKolone")
+    ' Redosled je isti kao pre registra i NIJE proizvoljan: sifarnicke dorade
+    ' (Aktivan, TipAmbalaze) idu PRE runtime self-heal-a, jer obe grupe dodaju
+    ' kolone na tblKulture -- zamena mesta bi promenila redosled kolona, a
+    ' pozicijski AppendRow zavisi od njega (.claude/rules/podaci-i-config.md).
+    fails = ApplySchemaGroup(SG_DORADE_SIFARNICI)
 
-    ' #6: podrazumevani tip ambalaze po kulturi.
-    Err.Clear
-    EnsureColumnOnTable TBL_KULTURE, COL_KUL_TIP_AMBALAZE
-    fails = fails + StepFailed("Dorade/" & TBL_KULTURE & "." & COL_KUL_TIP_AMBALAZE)
-
-    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
     ' Deljeno sa startup self-heal-om (modMain.InitApp -> EnsureRuntimeSchema),
     ' pa kolone nastanu i automatski posle self-update-a KODA (bez rucnog koraka).
     ' Sam loguje svoje korake -- ovde se samo preuzima broj padova.
     fails = fails + EnsureRuntimeSchema()
 
-    ' #3: flag hladnjaca na stanici (+ backfill "Ne").
-    Err.Clear
-    EnsureColumnOnTable TBL_STANICE, COL_STA_JE_HLADNJACA
-    BackfillColumn TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
-    fails = fails + StepFailed("Dorade/" & TBL_STANICE & "." & COL_STA_JE_HLADNJACA)
-
-    ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
-    Err.Clear
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
-    SetColumnNumberFormat TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
-    fails = fails + StepFailed("Dorade/FormatKolicine")
-
-    ' Izdata ambalaza (OM->kooperant uz otkup) -> kolona na tblOtkup za otkupni list.
-    Err.Clear
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA
-    BackfillColumn TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
-    fails = fails + StepFailed("Dorade/" & TBL_OTKUP & "." & COL_OTK_KOL_AMB_IZDATA)
-
-    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
-    Err.Clear
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_VREME_UNOSA
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
-    fails = fails + StepFailed("Dorade/" & TBL_OTKUP & "." & COL_OTK_VREME_UNOSA)
-
-    ' Bruto tezina (kad kupac unosi bruto -> sistem cuva neto u Kolicina, bruto ovde).
-    ' Prazno = unet neto (bruto == neto); ne backfill-uje se (modPrint tretira >0 kao prisutno).
-    Err.Clear
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BRUTO
-    SetColumnNumberFormat TBL_OTKUP, COL_OTK_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_PRIJEMNICA, COL_PRJ_BRUTO
-    SetColumnNumberFormat TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
-    EnsureColumnOnTable TBL_OTPREMNICA, COL_OTP_BRUTO
-    SetColumnNumberFormat TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
-    fails = fails + StepFailed("Dorade/BrutoKg")
+    fails = fails + ApplySchemaGroup(SG_DORADE_DOKUMENTI)
 
     If fails > 0 Then
         LogSetup "ERROR", "EnsureDoradeSchema: " & fails & " koraka nije proslo"
@@ -1469,12 +1386,6 @@ Public Function EnsureDoradeSchemaCore() As Long
 
     EnsureDoradeSchemaCore = fails
 End Function
-
-' Dodaj kolonu Aktivan ako fali i postavi "Aktivan" na sve prazne (backfill).
-Private Sub EnsureAktivanColumn(ByVal tblName As String)
-    EnsureColumnOnTable tblName, "Aktivan"
-    BackfillColumn tblName, "Aktivan", STATUS_AKTIVAN
-End Sub
 
 ' Postavi vrednost u koloni za sve redove gde je prazno (ne gazi postojece).
 Private Sub BackfillColumn(ByVal tblName As String, ByVal colName As String, ByVal val As String)
@@ -1515,12 +1426,10 @@ End Sub
 Public Sub EnsureKorisniciSchema()
     On Error GoTo EH
 
-    EnsureDataTable TBL_KORISNICI, "Korisnici", _
-        Array(COL_KOR_ID, COL_KOR_USERNAME, COL_KOR_IME, COL_KOR_PIN, _
-              COL_KOR_ULOGA, COL_KOR_AKTIVAN, COL_KOR_STANICA, COL_KOR_CREATED, _
-              OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
-              OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI, _
-              OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA)
+    If ApplySchemaGroup(SG_KORISNICI) > 0 Then
+        Err.Raise vbObjectError + 9335, "EnsureKorisniciSchema", _
+                  TBL_KORISNICI & " nije kreiran/dopunjen (detalji u SETUP_LOG)."
+    End If
 
     LogSetup "OK", "EnsureKorisniciSchema done"
     Exit Sub
@@ -1735,6 +1644,216 @@ Public Sub DebugKoloneTabele()
 
     MsgBox t & " kolone (" & (UBound(h) - LBound(h) + 1) & "):" & vbCrLf & _
            Join(h, " | "), vbInformation, APP_NAME
+End Sub
+
+' ============================================================
+' SCHEMA REGISTAR -- jedini izvor istine o tabelama koje aplikacija pravi.
+'
+' Collection (ne jedan veliki Array literal): VBA dozvoljava najvise 25 nastavaka
+' reda po naredbi, pa bi 14 ugnjezdenih Array(...) u jednoj dodeli oborilo compile
+' ("Too many line continuations"). Ovako je svaka tabela svoja naredba.
+' ============================================================
+Private Function SchemaTables() As Collection
+    Dim c As Collection
+    Set c = New Collection
+
+    ' --- Paletni list (Faza 2) ---
+    AddTableSpec c, SG_PALETNI, TBL_TIP_PALETE, "TipPalete", _
+        Array(COL_TPAL_TIP, COL_TPAL_TEZINA)
+
+    AddTableSpec c, SG_PALETNI, TBL_TIP_AMBALAZE, "TipAmbalaze", _
+        Array(COL_TAMB_TIP, COL_TAMB_TEZINA)
+
+    AddTableSpec c, SG_PALETNI, TBL_PALETA, "Palete", _
+        Array(COL_PAL_ID, COL_PAL_BROJ, COL_PAL_GODINA, COL_PAL_DATUM, _
+              COL_PAL_VRSTA, COL_PAL_SORTA, COL_PAL_KLASA, COL_PAL_TIP_AMBALAZE, _
+              COL_PAL_TIP_PALETE, COL_PAL_KAPACITET, COL_PAL_BR_GAJBICA, _
+              COL_PAL_NETO, COL_PAL_AMBALAZA, COL_PAL_PALETA_KG, COL_PAL_BRUTO, _
+              COL_PAL_STATUS, COL_PAL_PRERADJENO, COL_PAL_CREATED, COL_STORNIRANO, _
+              COL_PAL_ISTORIJA)
+
+    AddTableSpec c, SG_PALETNI, TBL_PALETA_STAVKA, "PaleteStavke", _
+        Array(COL_PALS_ID, COL_PALS_PALETA_ID, COL_PALS_PRIJEMNICA_ID, _
+              COL_PALS_BROJ_PRIJ, COL_PALS_BROJ_ZBIRNE, COL_PALS_KLASA, _
+              COL_PALS_VRSTA, COL_PALS_SORTA, COL_PALS_BR_GAJBICA, _
+              COL_PALS_NETO, COL_PALS_AMBALAZA, COL_PALS_CREATED, COL_STORNIRANO)
+
+    AddTableSpec c, SG_PALETNI, TBL_PRERADA, "Prerada", _
+        Array(COL_PRE_ID, COL_PRE_BROJ, COL_PRE_GODINA, COL_PRE_DATUM, _
+              COL_PRE_NETO_ULAZ, COL_PRE_NETO_IZLAZ, COL_PRE_KUTIJE, COL_PRE_KESE, _
+              COL_PRE_TEZINA_PALETE, COL_PRE_BRUTO, COL_PRE_AMBALAZA, _
+              COL_PRE_TIP_KUTIJE, COL_PRE_TIP_KESE, COL_PRE_TIP_GP, _
+              COL_PRE_NAPOMENA, COL_PRE_CREATED, COL_STORNIRANO)
+
+    AddTableSpec c, SG_PALETNI, TBL_PRERADA_STAVKA, "PreradaStavke", _
+        Array(COL_PRES_ID, COL_PRES_PRERADA_ID, COL_PRES_PALETA_ID, _
+              COL_PRES_BROJ_PALETE, COL_PRES_NETO, COL_PRES_CREATED, COL_STORNIRANO)
+
+    AddTableSpec c, SG_PALETNI, TBL_KUTIJE, "Kutije", _
+        Array(COL_KUT_TIP, COL_KUT_TEZINA, "Aktivan")
+
+    AddTableSpec c, SG_PALETNI, TBL_KESE, "Kese", _
+        Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
+
+    AddTableSpec c, SG_PALETNI, TBL_VRSTA_GP, "VrstaGotProizvoda", _
+        Array(COL_VGP_TIP, "Aktivan")
+
+    ' --- Cenovnik (cene po proizvodu) ---
+    AddTableSpec c, SG_CENOVNIK, TBL_CENOVNIK, "Cenovnik", _
+        Array(COL_CEN_ID, COL_CEN_DATUM, COL_CEN_VRSTA, COL_CEN_SORTA, _
+              COL_CEN_KLASA, COL_CEN_CENA, COL_CEN_CREATED, COL_STORNIRANO)
+
+    ' --- Storno / correction context ---
+    AddTableSpec c, SG_STORNO_VEZE, TBL_STORNO_VEZE, "StornoVeze", _
+        Array(COL_SV_ID, COL_SV_MODE, COL_SV_STATUS, _
+              COL_SV_OLD_DOCTYPE, COL_SV_OLD_DOCID, COL_SV_OLD_BROJ, _
+              COL_SV_NEW_DOCTYPE, COL_SV_NEW_DOCID, COL_SV_NEW_BROJ, _
+              COL_SV_PARENT_DOCTYPE, COL_SV_PARENT_DOCID, COL_SV_PARENT_BROJ, _
+              COL_SV_CREATED_AT, COL_SV_CREATED_BY, COL_SV_COMPLETED_AT, _
+              COL_SV_MESSAGE, COL_SV_NEEDS_RECOVERY, COL_SV_RECOVERY_ACTION)
+
+    ' --- Storno operacioni zurnal (append-only, za lossless undo) ---
+    AddTableSpec c, SG_STORNO_ZURNAL, TBL_STORNO_ZURNAL, "StornoZurnal", _
+        Array(COL_SZ_ID, COL_SZ_OP_ID, COL_SZ_TS, COL_SZ_DOCTYPE, COL_SZ_BROJ, _
+              COL_SZ_TABELA, COL_SZ_ROWID, COL_SZ_KOLONA, COL_SZ_STARA, COL_SZ_NOVA)
+
+    ' --- Katalog poruka (skriveni sheet) ---
+    AddTableSpec c, SG_PORUKE, TBL_PORUKE, PORUKE_SHEET, _
+        Array(COL_POR_KLJUC, COL_POR_TEKST)
+
+    ' --- Korisnici + prava po oblasti (Faza 1) ---
+    AddTableSpec c, SG_KORISNICI, TBL_KORISNICI, "Korisnici", _
+        Array(COL_KOR_ID, COL_KOR_USERNAME, COL_KOR_IME, COL_KOR_PIN, _
+              COL_KOR_ULOGA, COL_KOR_AKTIVAN, COL_KOR_STANICA, COL_KOR_CREATED, _
+              OBL_OTKUP, OBL_DOKUMENTA, OBL_AGROHEMIJA, OBL_IZVESTAJI, _
+              OBL_FAKTURISANJE, OBL_BANKA, OBL_MARZA, OBL_SLEDLJIVOST, OBL_MATICNI, _
+              OBL_PALETE, OBL_OTVORI_EXCEL, OBL_SYNC_PWA)
+
+    Set SchemaTables = c
+End Function
+
+' Operacije nad POSTOJECIM tabelama: dodavanje kolone, format kolone, backfill
+' praznih celija. Redosled je znacajan (vidi napomenu uz SG_* konstante).
+Private Function SchemaOps() As Collection
+    Dim c As Collection
+    Set c = New Collection
+
+    ' --- Paletni list: kolone na tudjim tabelama ---
+    AddOp c, SG_PALETNI, OP_COLUMN, TBL_KULTURE, COL_KUL_GAJBICA_PALETA, ""
+    ' vidljivi audit trag (relabel/detach/adjust)
+    AddOp c, SG_PALETNI, OP_COLUMN, TBL_PALETA, COL_PAL_ISTORIJA, ""
+
+    ' --- Storno zurnal: aditivno za instalacije sa v2.24 ranim build-om ---
+    AddOp c, SG_STORNO_ZURNAL, OP_COLUMN, TBL_STORNO_ZURNAL, COL_SZ_NOVA, ""
+
+    ' --- Runtime self-heal (svaki start) ---
+    ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
+    AddOp c, SG_RUNTIME, OP_COLUMN, TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, ""
+    AddOp c, SG_RUNTIME, OP_COLUMN, TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, ""
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
+    ' Schema-drift: reinstall/self-update vrati kolone na General -> E-notacija i
+    ' tarabe na dokumentima. BPG je identifikator (dug broj), ne racunska vrednost.
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_KOOPERANTI, COL_KOOP_BPG, "@"
+    ' Prerada: tezine su Double (samo prikaz) -> fiksni format spreci General/E.
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_PRERADA, COL_PRE_TEZINA_PALETE, "0.00"
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_PRERADA, COL_PRE_BRUTO, "0.00"
+    AddOp c, SG_RUNTIME, OP_FORMAT, TBL_PRERADA, COL_PRE_AMBALAZA, "0.00"
+    ' Deo je i punog paletnog seta, ali se tera i ovde da nastane automatski
+    ' posle self-update-a KODA -- bez rucnog Alt+F8 koraka.
+    AddOp c, SG_RUNTIME, OP_COLUMN, TBL_PALETA, COL_PAL_ISTORIJA, ""
+
+    ' --- Dorade #1: soft-delete na sifarnicima (kolona Aktivan + backfill) ---
+    AddAktivanOps c, TBL_KULTURE
+    AddAktivanOps c, TBL_TIP_AMBALAZE
+    AddAktivanOps c, TBL_TIP_PALETE
+    AddAktivanOps c, TBL_KUTIJE
+    AddAktivanOps c, TBL_KESE
+    AddAktivanOps c, TBL_VRSTA_GP
+    ' #6: podrazumevani tip ambalaze po kulturi.
+    AddOp c, SG_DORADE_SIFARNICI, OP_COLUMN, TBL_KULTURE, COL_KUL_TIP_AMBALAZE, ""
+
+    ' --- Dorade #2: dokument-tabele (posle EnsureRuntimeSchema) ---
+    ' #3: flag hladnjaca na stanici.
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_STANICE, COL_STA_JE_HLADNJACA, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_BACKFILL, TBL_STANICE, COL_STA_JE_HLADNJACA, "Ne"
+    ' #5: decimalni format kolicine (vrednost je vec Double; samo prikaz).
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_OTKUP, COL_OTK_KOLICINA, "0.00"
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_OTPREMNICA, COL_OTP_KOLICINA, "0.00"
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_PRIJEMNICA, COL_PRJ_KOLICINA, "0.00"
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_ZBIRNA, COL_ZBR_KOLICINA, "0.00"
+    ' Izdata ambalaza (OM->kooperant uz otkup) -> za otkupni list.
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_BACKFILL, TBL_OTKUP, COL_OTK_KOL_AMB_IZDATA, "0"
+    ' Vreme snimanja otkupa (Now() pri upisu) -> za otkupni list.
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_OTKUP, COL_OTK_VREME_UNOSA, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_OTKUP, COL_OTK_VREME_UNOSA, "dd.mm.yyyy hh:nn"
+    ' Bruto tezina: kad kupac unosi bruto, sistem cuva neto u Kolicina a bruto ovde.
+    ' Prazno = unet neto (bruto == neto); NE backfill-uje se -- modPrint tretira >0
+    ' kao prisutno.
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_OTKUP, COL_OTK_BRUTO, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_OTKUP, COL_OTK_BRUTO, "0.00"
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_PRIJEMNICA, COL_PRJ_BRUTO, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_PRIJEMNICA, COL_PRJ_BRUTO, "0.00"
+    AddOp c, SG_DORADE_DOKUMENTI, OP_COLUMN, TBL_OTPREMNICA, COL_OTP_BRUTO, ""
+    AddOp c, SG_DORADE_DOKUMENTI, OP_FORMAT, TBL_OTPREMNICA, COL_OTP_BRUTO, "0.00"
+
+    Set SchemaOps = c
+End Function
+
+' Kolona Aktivan na sifarniku + backfill postojecih redova na "Aktivan".
+' Zamenjuje raniju EnsureAktivanColumn: isti par operacija, samo deklarativno.
+Private Sub AddAktivanOps(ByVal c As Collection, ByVal tblName As String)
+    AddOp c, SG_DORADE_SIFARNICI, OP_COLUMN, tblName, "Aktivan", ""
+    AddOp c, SG_DORADE_SIFARNICI, OP_BACKFILL, tblName, "Aktivan", STATUS_AKTIVAN
+End Sub
+
+Private Sub AddTableSpec(ByVal c As Collection, ByVal groupName As String, _
+                         ByVal tblName As String, ByVal sheetName As String, _
+                         ByVal headers As Variant)
+    c.Add Array(groupName, tblName, sheetName, headers)
+End Sub
+
+Private Sub AddOp(ByVal c As Collection, ByVal groupName As String, _
+                  ByVal opKind As String, ByVal tblName As String, _
+                  ByVal colName As String, ByVal opArg As String)
+    c.Add Array(groupName, opKind, tblName, colName, opArg)
+End Sub
+
+' Primeni jednu grupu registra: prvo tabele (kreiranje/dopuna), pa operacije nad
+' postojecim tabelama -- isti redosled koji su zatecene Ensure*Schema imale.
+' Vraca broj palih koraka; pad jednog reda NE prekida ostale, ali ostavlja trag.
+Private Function ApplySchemaGroup(ByVal groupName As String) As Long
+    Dim fails As Long
+    Dim it As Variant
+
+    On Error Resume Next
+
+    For Each it In SchemaTables()
+        If StrComp(CStr(it(0)), groupName, vbTextCompare) = 0 Then
+            Err.Clear
+            EnsureDataTable CStr(it(1)), CStr(it(2)), it(3)
+            fails = fails + StepFailed(groupName & "/" & CStr(it(1)))
+        End If
+    Next it
+
+    For Each it In SchemaOps()
+        If StrComp(CStr(it(0)), groupName, vbTextCompare) = 0 Then
+            Err.Clear
+            ApplySchemaOp it
+            fails = fails + StepFailed(groupName & "/" & CStr(it(2)) & "." & CStr(it(3)))
+        End If
+    Next it
+
+    ApplySchemaGroup = fails
+End Function
+
+Private Sub ApplySchemaOp(ByVal op As Variant)
+    Select Case UCase$(CStr(op(1)))
+        Case OP_COLUMN:   EnsureColumnOnTable CStr(op(2)), CStr(op(3))
+        Case OP_FORMAT:   SetColumnNumberFormat CStr(op(2)), CStr(op(3)), CStr(op(4))
+        Case OP_BACKFILL: BackfillColumn CStr(op(2)), CStr(op(3)), CStr(op(4))
+    End Select
 End Sub
 
 ' Kreira ListObject sa zadatim zaglavljima na (novom) sheet-u. No-op ako vec

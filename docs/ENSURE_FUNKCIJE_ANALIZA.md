@@ -288,7 +288,7 @@ Dva jeftina koraka:
 | **F3a** ✅ | `EnsurePrijemnicaNotAlreadyPaletized` → `RequirePrijemnicaNotPaletized` | `modPaletniList` | nizak | srednja — ime govori istinu |
 | **F3b** ⏸ | preimenovanje 4 Alt+F8 ulazne tačke u `Setup*` | ~8 fajlova + ~75 pomena u `docs/`+`instructions/` | **operater-facing** | srednja — **čeka odluku** |
 | **F4** ✅ | 4.5: `ENSURE` pravilo u checkeru + test idempotencije | `tools/vba_check.py`, `modTest` | nizak | srednja — sprečava povratak |
-| **F5** *(opciono)* | 4.4 skuplja varijanta; deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup` + `modConfig` | **srednji-visok** | visoka, ali je to redizajn — tek kad F1–F4 legnu |
+| **F5** ✅ | deklarativni registar šeme (tabela → kolone → format) koji vozi sve `Ensure*Schema` | `modSetup`, `tools/schema_diff.py` | **srednji-visok** | visoka — jedno mesto za celu šemu |
 
 ### F1 — izvršeno
 
@@ -359,10 +359,50 @@ Alt+F8 i sweep kroz napisana uputstva. Kako `*Core` jezgra već postoje (F1),
 tehnički ništa ne zavisi od ovog koraka — `ENSURE` pravilo prolazi i ovako.
 **Odluka je vlasnika, ne implementatora.**
 
-F5 je namerno poslednja i označena kao opciona: `AuditableTables()`
-(`modSetup.bas:1090`) je već mikro-registar i pokazuje da obrazac radi, ali
-prevođenje svih 8 `Ensure*Schema` na deklarativni model je idealizovan redizajn,
-ne minimalna izmena — protiv default stava iz `CLAUDE.md`.
+### F5 — izvršeno
+
+**`modSetup.SchemaTables()` + `SchemaOps()` su sada jedini izvor istine o šemi.**
+14 tabela koje su bile razbacane po 6 procedura stoje na jednom mestu; svih 8
+`Ensure*Schema` su tanke ulazne tačke sa telom `ApplySchemaGroup(SG_*)`.
+
+Odluke koje nisu očigledne:
+
+- **`Collection`, ne jedan `Array` literal.** VBA dozvoljava najviše 25 nastavaka
+  reda po naredbi; 14 ugnježdenih `Array(...)` u jednoj dodeli obara compile
+  („Too many line continuations"). Svaka tabela je zato svoja `AddTableSpec`
+  naredba.
+- **Dorade su dve grupe** (`SG_DORADE_SIFARNICI` / `SG_DORADE_DOKUMENTI`) jer se
+  između njih zove `EnsureRuntimeSchema`. Spajanje u jednu grupu bi pomerilo
+  runtime kolone (`PragProsek*`) ispred dorada na `tblKulture` — a `EnsureColumnOnTable`
+  dodaje kolonu na **kraj**, pa bi to promenilo redosled kolona, od kojeg zavisi
+  pozicijski `AppendRow`.
+- **Ugovori o grešci su netaknuti.** `EnsureCenovnikSchema` / `EnsurePoruke` /
+  `EnsureKorisniciSchema` / oba storno jezgra i dalje **re-raise-uju** (pozivaoci
+  ih prepoznaju po `Err`); jezgra koja broje padove i dalje broje. Registar je
+  promenio odakle DDL dolazi, ne kako se greška prijavljuje.
+- `EnsureAktivanColumn` obrisan — isti par operacija je sada `AddAktivanOps`.
+- `EnsureSledljivostSchema` i `EnsureAuditColumnsCore` **nisu** prevedeni na
+  registar: već su petlje nad listom tabela (6×5 i 26×4 kolone). Ravnanje u
+  registar bi dalo 134 reda umesto dve petlje — lošije, ne bolje.
+
+**Dokaz ekvivalencije.** Novi `tools/schema_diff.py` izvlači po ulaznoj tački
+uređenu listu DDL operacija i diff-uje dve verzije `modSetup.bas`; razume oba
+zapisa (stare inline pozive i registar), pa radi preko refaktora:
+
+```
+$ git show c2b72f3:src-vba/modSetup.bas > /tmp/old.bas
+$ python3 tools/schema_diff.py /tmp/old.bas src-vba/modSetup.bas
+schema_diff: sema identicna (8 ulaznih tacaka, 55 operacija).
+```
+
+Dokazan i u suprotnom smeru: izbačena `COL_CEN_KLASA` iz registra → alat prijavi
+razliku i vrati exit 1. Bez tog drugog smera „zeleno" ne bi značilo ništa.
+
+F5 je u planu bila označena kao opciona, uz obrazloženje da je to redizajn a ne
+minimalna izmena — protiv default stava iz `CLAUDE.md`. Vlasnik ju je ipak
+naručio, pa je urađena sa mehaničkim dokazom ekvivalencije umesto „na oko".
+Postojeći `AuditableTables()` je bio mikro-registar i pokazivao je da obrazac
+radi; F5 ga je proširila na celu šemu.
 
 ---
 

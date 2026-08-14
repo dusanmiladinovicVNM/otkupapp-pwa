@@ -56,6 +56,24 @@ poverenje".
 Ograničenje: ne kompajlira VBA. Ne hvata tip-greške, pogrešnu arnost, nepostojeći
 simbol. Za to i dalje treba VBE.
 
+## 1b) `tools/schema_diff.py` — dokaz da refaktor `modSetup`-a nije promenio šemu
+
+```bash
+git show <ref>:src-vba/modSetup.bas > /tmp/old.bas
+python3 tools/schema_diff.py /tmp/old.bas src-vba/modSetup.bas
+```
+
+Exit `0` = šema identična, `1` = razlika (ispisana red po red). Izvlači po ulaznoj
+tački (`Ensure*Schema`) **uređenu** listu DDL operacija i diff-uje dve verzije;
+redosled je deo semantike jer se kolona dodaje na kraj tabele.
+
+Razume oba zapisa — stare inline `EnsureDataTable` pozive i `SchemaTables`/
+`SchemaOps` registar — pa radi i **preko** refaktora koji je registar uveo.
+Koristi ga kad je izmena trebalo da bude čist refaktor: ispuštena `COL_*` iz
+`Array` liste se inače vidi tek kao prazna kolona na dokumentu kod klijenta.
+
+Ograničenje: čita samo `modSetup.bas` i samo četiri DDL primitiva.
+
 ## 2) `tools/run_vba.py` — SAMO Windows + Excel + `pywin32`
 
 Import `src-vba/` → `Debug > Compile` → test suite, headless. Traži COM, pa se
