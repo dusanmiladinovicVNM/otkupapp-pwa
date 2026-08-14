@@ -42,7 +42,7 @@ hvatao tek operater u VBE-u:
 | `PORUKA` | `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke` | §4 katalog |
 | `NEDEFINISAN` | poziv procedure koja nigde nije definisana → „Sub or Function not defined" | compile |
 | `ARNOST` | poziv sa pogrešnim brojem argumenata → „Wrong number of arguments" | compile |
-| `ENSURE` | `Ensure*` sa `MsgBox`-om, a bez tihog jezgra `<ime>Core` | `docs/ENSURE_FUNKCIJE_ANALIZA.md` §4.1 |
+| `ENSURE` | `MsgBox` unutar `Ensure*` procedure (dijalog ide u `Setup*`) | `docs/ENSURE_FUNKCIJE_ANALIZA.md` §4.1 |
 
 Poslednje dve pokrivaju **dve najčešće compile greške** u ovom projektu — one
 zbog kojih je i pravljen headless compile gate koji se nije dao ukrotiti. Ovde se
