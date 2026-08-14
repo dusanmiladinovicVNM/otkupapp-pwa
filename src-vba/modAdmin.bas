@@ -324,8 +324,16 @@ Private Sub AdminEnsureEverything()
     End If
     Exit Sub
 EH:
+    ' Snapshot Err PRE LogErr-a: on zove LogError, koji pocinje sa "On Error
+    ' Resume Next" -- a svaki oblik On Error naredbe resetuje Err. Bez ovoga bi
+    ' dijalog prikazao prazan razlog.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     LogErr "modAdmin.AdminEnsureEverything"
-    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbExclamation, APP_NAME
+    MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & errDesc, vbExclamation, APP_NAME
 End Sub
 
 ' Rezultat jednog Ensure koraka -> red izvestaja (prazno kad je proslo).

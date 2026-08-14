@@ -944,8 +944,16 @@ Private Sub EnsureLocalConfigTable()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureLocalConfigTable failed: " & Err.description
-    Err.Raise Err.Number, "EnsureLocalConfigTable", Err.description
+    ' Snapshot Err PRE logera: LogSetup/LogErr pocinju sa "On Error Resume Next",
+    ' a svaki oblik On Error naredbe RESETUJE Err. Bez ovoga bi re-raise isao sa
+    ' brojem 0 i praznim opisom -- signal na koji se pozivalac oslanja bi nestao.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureLocalConfigTable failed: " & errDesc
+    Err.Raise errNum, "EnsureLocalConfigTable", errDesc
 End Sub
 
 ' ============================================================
@@ -976,8 +984,15 @@ Public Sub SetupPaletniListSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "SetupPaletniListSchema failed: " & Err.description
-    MsgBox "Gre" & ChrW(353) & "ka u SetupPaletniListSchema: " & Err.description, vbCritical, APP_NAME
+    ' Snapshot Err PRE logera: LogSetup pocinje sa "On Error Resume Next", a to
+    ' resetuje Err -- bez ovoga bi dijalog prikazao prazan razlog.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "SetupPaletniListSchema failed: " & errDesc
+    MsgBox "Gre" & ChrW(353) & "ka u SetupPaletniListSchema: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Postoji da bi agregat
@@ -1039,8 +1054,16 @@ Public Sub EnsureCenovnikSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureCenovnikSchema failed: " & Err.description
-    Err.Raise Err.Number, "EnsureCenovnikSchema", Err.description
+    ' Snapshot Err PRE logera: LogSetup/LogErr pocinju sa "On Error Resume Next",
+    ' a svaki oblik On Error naredbe RESETUJE Err. Bez ovoga bi re-raise isao sa
+    ' brojem 0 i praznim opisom -- signal na koji se pozivalac oslanja bi nestao.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureCenovnikSchema failed: " & errDesc
+    Err.Raise errNum, "EnsureCenovnikSchema", errDesc
 End Sub
 
 ' ============================================================
@@ -1082,8 +1105,15 @@ Public Sub SetupStornoVezeSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "SetupStornoVezeSchema failed: " & Err.description
-    MsgBox "Greska u SetupStornoVezeSchema: " & Err.description, vbCritical, APP_NAME
+    ' Snapshot Err PRE logera: LogSetup pocinje sa "On Error Resume Next", a to
+    ' resetuje Err -- bez ovoga bi dijalog prikazao prazan razlog.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "SetupStornoVezeSchema failed: " & errDesc
+    MsgBox "Greska u SetupStornoVezeSchema: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' ============================================================
@@ -1104,8 +1134,15 @@ Public Sub SetupAuditColumns()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "SetupAuditColumns failed: " & Err.description
-    MsgBox "Greska u SetupAuditColumns: " & Err.description, vbCritical, APP_NAME
+    ' Snapshot Err PRE logera: LogSetup pocinje sa "On Error Resume Next", a to
+    ' resetuje Err -- bez ovoga bi dijalog prikazao prazan razlog.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "SetupAuditColumns failed: " & errDesc
+    MsgBox "Greska u SetupAuditColumns: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' Silent worker (bez MsgBox-a) -- vraca broj obradjenih tabela. Reuse iz
@@ -1186,8 +1223,16 @@ Public Sub EnsurePoruke()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsurePoruke failed: " & Err.description
-    Err.Raise Err.Number, "EnsurePoruke", Err.description
+    ' Snapshot Err PRE logera: LogSetup/LogErr pocinju sa "On Error Resume Next",
+    ' a svaki oblik On Error naredbe RESETUJE Err. Bez ovoga bi re-raise isao sa
+    ' brojem 0 i praznim opisom -- signal na koji se pozivalac oslanja bi nestao.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsurePoruke failed: " & errDesc
+    Err.Raise errNum, "EnsurePoruke", errDesc
 End Sub
 
 ' ============================================================
@@ -1360,10 +1405,18 @@ Public Sub BackfillOtkupBrojOtpremnice()
     MsgBox "Backfill BrojOtpremnice: popunjeno " & n & " otkupnih redova.", vbInformation, APP_NAME
     Exit Sub
 EH:
+    ' Snapshot PRE LogErr-a: on zove LogError, koji pocinje sa "On Error Resume
+    ' Next" -- a svaki oblik On Error naredbe resetuje Err. Log dobija ispravan
+    ' tekst (Err se cita kao argument), ali bi dijalog posle toga bio prazan.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
     ' Interaktivna Alt+F8 komanda: uspeh javlja dijalogom, pa i neuspeh mora.
     ' Sa samim LogErr operater ne bi video NISTA -- ni uspeh ni pad.
     LogErr "modSetup.BackfillOtkupBrojOtpremnice"
-    MsgBox "Backfill BrojOtpremnice nije izveden: " & Err.description, _
+    MsgBox "Backfill BrojOtpremnice nije izveden: " & errDesc, _
            vbExclamation, APP_NAME
 End Sub
 
@@ -1396,8 +1449,15 @@ Public Sub SetupDoradeSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "SetupDoradeSchema failed: " & Err.description
-    MsgBox "Gre" & ChrW(353) & "ka u SetupDoradeSchema: " & Err.description, vbCritical, APP_NAME
+    ' Snapshot Err PRE logera: LogSetup pocinje sa "On Error Resume Next", a to
+    ' resetuje Err -- bez ovoga bi dijalog prikazao prazan razlog.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "SetupDoradeSchema failed: " & errDesc
+    MsgBox "Gre" & ChrW(353) & "ka u SetupDoradeSchema: " & errDesc, vbCritical, APP_NAME
 End Sub
 
 ' Tiho jezgro (bez MsgBox-a) -- vraca broj palih koraka. Isti razlog kao kod
@@ -1527,8 +1587,16 @@ Public Sub EnsureKorisniciSchema()
     Exit Sub
 
 EH:
-    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & Err.description
-    Err.Raise Err.Number, "EnsureKorisniciSchema", Err.description
+    ' Snapshot Err PRE logera: LogSetup/LogErr pocinju sa "On Error Resume Next",
+    ' a svaki oblik On Error naredbe RESETUJE Err. Bez ovoga bi re-raise isao sa
+    ' brojem 0 i praznim opisom -- signal na koji se pozivalac oslanja bi nestao.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "EnsureKorisniciSchema failed: " & errDesc
+    Err.Raise errNum, "EnsureKorisniciSchema", errDesc
 End Sub
 
 ' Kreira prvog ADMINA (sa svim pravima). Bezbedan bootstrap protiv lockout-a:

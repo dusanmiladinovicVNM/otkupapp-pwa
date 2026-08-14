@@ -60,6 +60,40 @@ konvenciju projekta: **`errNum` / `errDesc` / `errSrc`** (`modStorno.LogAndRerai
 `mid`, `local`, `read`…) je **stilska** — zatečeni kod ih koristi i kompajlira se;
 ne menjaj ih usput.
 
+## 3b) EH prvo snapshot-uje `Err`, pa tek onda loguje
+
+`LogSetup` / `LogErr` → `LogError` počinju sa `On Error Resume Next`, a **svaki
+oblik `On Error` naredbe resetuje `Err`**. Zato je ovo pokvareno:
+
+```vba
+EH:
+    LogSetup "ERROR", "X failed: " & Err.description   ' OK -- argument se evaluira pre poziva
+    Err.Raise Err.Number, "X", Err.description         ' POKVARENO -- Err.Number je vec 0
+```
+
+Log dobije ispravan tekst (čita se kao argument), ali sve posle poziva vidi
+prazan `Err`. Posledice: `Err.Raise 0` — signal greške na koji se pozivalac
+oslanja **nestane**; `MsgBox … & Err.description` — operater dobije prazan razlog.
+
+Ispravno, uz konvenciju `errNum`/`errDesc` iz §3:
+
+```vba
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+
+    LogSetup "ERROR", "X failed: " & errDesc
+    Err.Raise errNum, "X", errDesc
+```
+
+**Zatečeni dug:** obrazac postoji na ~190 mesta u repou (`modSEF*`, `modStorno*`,
+`frm*`…) i **nije** uveden ovom granom. Sanirani su samo handleri u `modSetup` /
+`modAdmin` čiji re-raise nosi signal greške u schema lancu. Ostalo je zaseban
+zadatak — dok se ne očisti, pravilo se **ne može** mehanizovati u `vba_check`
+(oborilo bi checker na zatečenom kodu).
+
 ## 4) Duple `Public` definicije = „Ambiguous name"
 
 Čist git-merge može dati VBA compile grešku (dupli `Public` `Sub`/`Function`/`Const`).
