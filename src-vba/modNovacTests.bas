@@ -13,6 +13,11 @@ Private m_Skipped As Long
 
 Private Const NOVAC_TEST_LOG_SHEET As String = "NOVAC_TEST_LOG"
 
+' Tvrd gate: bez ovoga runner vidi suite kao "blind" -- proslo bez greske, sto
+' NIJE isto sto i sve provere prosle. Bila je poslednja takva u lokalnim
+' kapijama. Konvencija i slobodan offset: v. .claude/rules/testovi.md sec.3.
+Private Const ERR_NOVAC_SUITE_FAILED As Long = vbObjectError + 2972
+
 Public Sub RunNovacSmokeSuite()
     On Error GoTo EH
 
@@ -32,11 +37,29 @@ Public Sub RunNovacSmokeSuite()
     Test_ResetNovacOtkupLinkRecomputesStatus
 
     FinishNovacSuite
+
+    ' Gate se proverava tek posle gasenja EH-a, da raise ne bi upao u sopstveni
+    ' handler i bio prijavljen kao fatalna greska suite-a (isti obrazac kao
+    ' modFakturaTests.RunFakturaSmokeSuite).
+    On Error GoTo 0
+    RequireNovacSuiteGreen
     Exit Sub
 
 EH:
     LogNovacFatal "RunNovacSmokeSuite", Err.Number, Err.description
+    ' Prekid nije "nije se desilo" nego pad -- broji se kao pala provera, pa gate
+    ' ispod ima sta da vidi i kad suite pukne pre prve prave provere.
+    m_Failed = m_Failed + 1
+    m_Total = m_Total + 1
     FinishNovacSuite
+    RequireNovacSuiteGreen
+End Sub
+
+Private Sub RequireNovacSuiteGreen()
+    If m_Failed <= 0 Then Exit Sub
+    Err.Raise ERR_NOVAC_SUITE_FAILED, "modNovacTests.RunNovacSmokeSuite", _
+        "RunNovacSmokeSuite: " & CStr(m_Failed) & " provera palo (PASS=" & _
+        CStr(m_Passed) & "). Detalji u Immediate prozoru."
 End Sub
 
 Private Sub Test_SaveNovacRejectsInvalidAmounts()
@@ -215,6 +238,9 @@ End Sub
 
 Private Sub FinishNovacSuite()
     Dim summary As String
+
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    TR_Report "RunNovacSmokeSuite", m_Passed, m_Failed
 
     summary = "Total=" & m_Total & _
               " | Passed=" & m_Passed & _

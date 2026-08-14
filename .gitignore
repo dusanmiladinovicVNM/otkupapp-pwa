@@ -11,6 +11,14 @@ docs/Legal/build/
 # Excel test fixture (pravi ga tools/run_vba.py, ne ide u git)
 tests/fixtures/
 
-# Izlaz poslednjeg run_vba.py -- lokalan po masini i po prolazu
+# Izlaz poslednjeg run_vba.py i release kapije -- lokalno po masini i po prolazu.
+# MORAJU biti ignorisani: release kapija trazi cisto radno stablo, a sama pravi
+# ove fajlove -- bez ovoga bi drugo pokretanje release-a padalo na "nije cist".
 tests/last_run.json
 tests/last_run.txt
+tests/last_run.xml
+tests/last_run_external.json
+tests/last_run_external.txt
+tests/last_run_external.xml
+tests/last_release.json
+tests/forensics/

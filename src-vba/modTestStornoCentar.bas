@@ -48,6 +48,9 @@ Public Sub Test_StornoCentar_All()
     Test_ImpactHeaderSum_Auto
     Debug.Print "=== StornoCentar: " & mPass & " OK, " & mFail & " FAIL ==="
 
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    TR_Report "Test_StornoCentar_All", mPass, mFail
+
     If mFail > 0 Then
         Err.Raise ERR_STORNOCENTAR_SUITE_FAILED, "modTestStornoCentar.Test_StornoCentar_All", _
             "Test_StornoCentar_All: " & CStr(mFail) & " provera palo (PASS=" & _

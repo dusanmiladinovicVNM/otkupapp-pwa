@@ -3903,6 +3903,11 @@ End Sub
 Private Sub EndRun()
     Dim summary As String
 
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    ' EndRun dele i tri *Only varijante, ali one nisu u manifestu i runner ih ne
+    ' pokrece -- red koji bi one upisale niko ne cita.
+    TR_Report "RunBusinessFlowProSuite", m_Passed, m_Failed
+
     summary = "RunID=" & m_RunID & _
               " | Total=" & m_Total & _
               " | Passed=" & m_Passed & _

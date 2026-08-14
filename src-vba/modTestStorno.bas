@@ -1345,6 +1345,9 @@ End Sub
 Private Sub ReportResults()
     Dim hdr As String
     hdr = "STORNO TEST SUITE  ->  PASS=" & mPass & "  FAIL=" & mFail
+
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    TR_Report "RunStornoTestSuite", mPass, mFail
     Debug.Print String(60, "=")
     Debug.Print hdr
     Debug.Print String(60, "=")

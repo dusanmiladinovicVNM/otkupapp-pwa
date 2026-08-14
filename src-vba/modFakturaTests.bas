@@ -920,6 +920,9 @@ End Sub
 Private Sub FinishFakturaSuite()
     Dim summary As String
 
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    TR_Report "RunFakturaSmokeSuite", m_Passed, m_Failed
+
     summary = "Total=" & m_Total & _
               " | Passed=" & m_Passed & _
               " | Failed=" & m_Failed & _

@@ -1795,6 +1795,11 @@ End Sub
 Private Sub FinishSuite()
     Dim summary As String
 
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    ' FinishSuite dele i SEF suite-ovi iz 'unlisted' liste manifesta -- njih
+    ' runner ne pokrece, pa red koji bi oni upisali niko ne cita.
+    TR_Report "RunSEFTestSuite", m_Passed, m_Failed
+
     summary = "Total=" & m_Total & _
               " | Passed=" & m_Passed & _
               " | Failed=" & m_Failed & _

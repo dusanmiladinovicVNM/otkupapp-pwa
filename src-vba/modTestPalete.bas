@@ -663,6 +663,9 @@ Private Sub Fail(ByVal nm As String)
 End Sub
 
 Private Sub ReportResults(ByVal clean As Boolean)
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json).
+    TR_Report "RunPaleteTestSuite", mPass, mFail
+
     On Error Resume Next
     Debug.Print "===== PALETE TEST SUITE ====="
     Debug.Print mReport

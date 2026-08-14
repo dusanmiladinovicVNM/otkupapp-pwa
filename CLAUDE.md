@@ -63,8 +63,8 @@ Puni tekst i primeri: `.claude/rules/vba-izvor.md`.
 | Banka — izvodi i nalozi | `modBankaImport`+parseri, `modBankaMapiranje` | `.claude/rules/banka.md` |
 | Sync / PWA, self-update, release build | `mod*Sync`, `modSelfUpdate`, `modRelease`, `gas/` | `.claude/rules/sync-i-self-update.md` |
 | VBA izvor (ASCII, deklaracije, duplikati) | ceo `src-vba/` | `.claude/rules/vba-izvor.md` |
-| Testovi i verifikacija | `mod*Tests`, `tools/vba_check.py`, `tools/run_vba.py` | `.claude/rules/testovi.md` |
-| Git, PR, release | `tools/release.sh`, `docs/RELEASE_*` | `.claude/rules/git-i-release.md` |
+| Testovi i verifikacija | `mod*Tests`, `modTestRunner`/`modTestAssert`/`clsTestContext`, `tests/suite_manifest.json`, `tools/vba_check.py`, `tools/vba_gate.py`, `tools/run_vba.py` | `.claude/rules/testovi.md` · `docs/TEST_PLATFORM.md` |
+| Git, PR, release | `tools/release.sh`/`release.ps1`, `tools/release_gate.py`, `docs/RELEASE_*` | `.claude/rules/git-i-release.md` |
 
 Fajlovi u `.claude/rules/` imaju `paths:` frontmatter (koja putanja ih aktivira).
 Ako oblast nema svoj fajl, važi samo ovo ovde.
@@ -89,17 +89,28 @@ Ako oblast nema svoj fajl, važi samo ovo ovde.
   zeleno) obavezan je kad menjaš **sam test ili checker**, i kod naročito kritične
   poslovne invarijante. Razlog: zelena suite koja nikad nije pokazana crvena ne
   dokazuje da išta meri. Za običnu funkcionalnu izmenu se ne traži.
+- **Verdikt nije jedan broj.** `run_vba` ispisuje sedam nezavisnih istina —
+  `STATIC`, `COMPILE`, `SCHEMA`, `BEHAVIOR`, `COUNTS`, `CLEANUP`, `EXTERNAL`.
+  `COMPILE UNKNOWN` uz zelen `BEHAVIOR` je dozvoljen ishod za dnevni rad, ali mora
+  tako i da piše; release kapija ga ne prihvata.
+- **Da li je BAŠ OVAJ izvor testiran** ne pogađa se iz git istorije nego iz
+  kanonskog hasha `src-vba`: `python tools\vba_gate.py --status`.
 - „Nejasno" se prijavljuje kao nejasno. Zadatak se ne preformuliše u uži koji je
   uspeo.
 
-Detalji i katalog: `.claude/rules/testovi.md`. Zašto su pravila ovakva:
-`docs/engineering/postmortems/2026-08-verifikacija.md`.
+Detalji i katalog: `.claude/rules/testovi.md`. Proces (kapije DEV/PR/RELEASE,
+identitet run-a, Definition of Done): `docs/TEST_PLATFORM.md`. Zašto su pravila
+ovakva: `docs/engineering/postmortems/2026-08-verifikacija.md`.
 
 ## 6) Git / PR
 
 Detalji: `.claude/rules/git-i-release.md`.
 
 - Razvoj na zadatoj feature grani. **Ne praviti PR bez eksplicitnog zahteva.**
+- **Release ide isključivo kroz `tools/release.ps1` / `tools/release.sh`**, koji
+  pre commita i taga vrte `tools/release_gate.py`. Tag ne sme da nastane nad
+  izvorom koji nije prošao behavior kapiju; izuzetak je `--waive <kapija>
+  --reason "..."`, koji ostaje zapisan u poruci taga.
 - Integracija `main`-a: `git fetch` → `powershell -File tools\check_merge.ps1` →
   rebase lokalno → **pokaži rezultat** → `push --force-with-lease` tek po
   eksplicitnom odobrenju. Nikad force-push pre pokazivanja.

@@ -63,15 +63,22 @@ Public Sub RunBankaImportTestSuite()
 
     On Error GoTo EH
 
+    ' Dva rana izlaza koja su do sada bila TIHA: runner je video Exit Sub kao OK,
+    ' pa je "suite se nije ni pokrenuo" izgledalo isto kao "sve provere prosle".
+    ' Poslednja takva rupa u podrazumevanom setu (v. .claude/rules/testovi.md sec.4).
+    ' TR_NotRun upisuje NOT_RUN red u izvestaj i podize gresku -- EH ispod je
+    ' pretvara u pad suite-a, kao i svaki drugi prekid.
     If GetTable(TBL_BANKA_IMPORT) Is Nothing Or GetTable(TBL_OTKUP) Is Nothing Then
-        MsgBox "Tabele tblBankaImport/tblOtkup ne postoje. Prekid.", vbExclamation, APP_NAME
-        Exit Sub
+        TR_NotRun "RunBankaImportTestSuite", _
+                  "tabele tblBankaImport/tblOtkup ne postoje u ovoj svesci"
     End If
 
     If MsgBox("Pokrenuti banka test suite (RF-09 uvoz/mapiranje + RF-10 nalozi)?" & vbCrLf & vbCrLf & _
               "Svi podaci (BIT-*) se prave u transakciji i UVEK se ponistavaju " & _
               "(rollback). Nista ne ostaje u tabelama.", _
-              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then
+        TR_NotRun "RunBankaImportTestSuite", "operater odustao na potvrdi"
+    End If
 
     mPass = 0: mFail = 0: mFails = "": mReport = ""
 
@@ -2003,9 +2010,14 @@ Private Sub ReportResults()
     Dim hdr As String
     hdr = "BANKA TEST SUITE (RF-09 + RF-10)  ->  PASS=" & mPass & "  FAIL=" & mFail
 
+    ' Dva izvestaja, dva razlicita citaoca -- ne preklapaju se:
+    '   last_run_banka.txt  ime PALOG TESTA (detalj pada ne prezivi COM granicu)
+    '   suite_results.txt   BROJ provera, za COUNTS kapiju (min_asserts)
     On Error Resume Next
     WriteResultFileBanka
     On Error GoTo 0
+
+    TR_Report "RunBankaImportTestSuite", mPass, mFail
 
     Debug.Print String(60, "=")
     Debug.Print hdr

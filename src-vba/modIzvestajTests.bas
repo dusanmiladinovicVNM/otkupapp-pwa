@@ -88,6 +88,11 @@ Public Sub RunIzvestajTests()
         Set tx = Nothing
     End If
 
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json). Ovaj suite
+    ' do sada nije prijavljivao broj nigde -- odatle "ne prijavljuje broj" u
+    ' .claude/rules/testovi.md.
+    TR_Report "RunIzvestajTests", m_izvPass, m_izvFail
+
     Debug.Print String(70, "-")
     If m_izvFail = 0 Then
         Debug.Print "RunIzvestajTests OK  | " & m_izvPass & " provera proslo"

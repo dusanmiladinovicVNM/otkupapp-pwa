@@ -6212,6 +6212,11 @@ Private Sub AppendReport(ByVal testNm As String, ByVal status As String, _
 End Sub
 
 Private Sub WriteResultFile()
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json). Verdikt i
+    ' dalje ide kroz last_run.txt (result_file: true u manifestu) -- ovo je samo
+    ' brojac, da i ovaj suite ucestvuje u COUNTS kapiji.
+    TR_Report "RunAllTests", m_Total - m_Failed, m_Failed
+
     Dim path As String
     path = ThisWorkbook.path & Application.PathSeparator & "last_run.txt"
     WriteTextFile path, "TESTS=" & m_Total & " FAIL=" & m_Failed & vbLf & m_Report

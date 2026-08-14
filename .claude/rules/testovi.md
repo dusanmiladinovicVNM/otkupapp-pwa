@@ -5,11 +5,15 @@ paths:
   - "src-vba/frmOtkup.frm"
   - "src-vba/modOtkupUI.bas"
   - "src-vba/modScrDokumenti.bas"
+  - "src-vba/clsTest*.cls"
   - "tools/vba_check.py"
+  - "tools/vba_gate.py"
   - "tools/run_vba.py"
+  - "tools/release_gate.py"
   - "tools/sabotaza.py"
   - "tools/make_fixture.py"
   - "tools/dump_schema.py"
+  - "tests/suite_manifest.json"
   - "tests/golden/*"
 ---
 
@@ -37,8 +41,8 @@ u hook: 11 suite-ova uz podizanje Excela na svakom zaustavljanju je desktop
 sesiju činilo neupotrebljivom.
 
 **Centralni verdikt nezavisan od mašine daje CI** (`.github/workflows/static.yml`):
-JSON validnost `settings*.json`, `vba_check`, `who_writes --check`. CI ne pokreće
-Excel i nikad neće.
+JSON validnost `settings*.json`, `vba_check`, `who_writes --check`, `vba_gate
+--manifest-check` i self-testovi alata. CI ne pokreće Excel i nikad neće.
 
 ## 2) `tools/vba_check.py` — radi svuda, i u Linux sesiji
 
@@ -109,13 +113,22 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
 **ne izvršavaju uopšte**, pa se VBA izmena koja dira ponašanje prijavljuje kao
 **neverifikovana**, nikad kao zelena.
 
-- **Katalog `SUITES` u `tools/run_vba.py` je jedini izvor istine** — koja suite
-  postoji, da li je `gate` i da li je u punom setu. Ne prepisivati ga nigde.
-- `gate: True` podiže grešku pa je runner vidi kao crvenu. `gate: False` piše samo
-  u Immediate i runner je prijavljuje kao **`blind`** — to znači „prošla bez
-  greške", **ne** „sve provere prošle". **Nova suite mora biti `gate`.**
-- Verdikt ne dolazi iz toga da li `Run()` pukne, nego iz `last_run.txt` pored
-  sveske. **Nema fajla = pad.**
+- **Katalog je `tests/suite_manifest.json`, ne kod** — koja suite postoji, u
+  kojoj je kapiji (`dev`/`pr`/`release`), da li podiže grešku (`raises`), koliko
+  provera najmanje mora da prijavi (`min_asserts`) i koliki joj je timeout. Ne
+  prepisivati ga nigde. `python tools\vba_gate.py --manifest-check` proverava oba
+  smera: upisana suite mora da postoji u kodu, a nova ulazna tačka koju niko ne
+  poziva mora da bude upisana — ili u `suites`, ili u `unlisted` sa razlogom.
+- `raises: true` znači da suite podiže grešku pa je runner vidi kao crvenu.
+  `false` piše samo u Immediate i runner je prijavljuje kao **`blind`** — to znači
+  „prošla bez greške", **ne** „sve provere prošle". **Nova suite mora biti gate.**
+- Verdikt ne dolazi iz toga da li `Run()` pukne, nego iz izveštaja pored sveske
+  (`last_run.txt`, `last_run_banka.txt`, `suite_results.txt`). **Nema fajla = pad**,
+  a prijavljen `FAIL > 0` obara run i kad `Run()` nije pukao.
+- **`NOT_RUN` nije prolaz**, ni za suite ni za ceo run. Run u kome nijedan skup
+  nije dao `PASS` izlazi sa 2.
+- **`--no-import` nikad ne upisuje last-green marker** — sveska tada nosi tuđi
+  kod, a hash bi opisivao repo.
 - **Fixture je gitignored, pa ga `git checkout` NE menja.** Posle prelaska na
   drugu granu na disku ostaje sveska prethodne i testovi padaju *na podacima*, a
   pad izgleda kao regresija koda. Runner to sada hvata sam: `make_fixture` piše
@@ -126,6 +139,13 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
   `docs/EXCEL_TEST_HARNESS.md`.
 - `COMPILE NEJASNO` ne obara run kad suite-ovi idu. **Compile ostaje ručna kapija
   pred release:** `Alt+F11 → Debug → Compile VBAProject`.
+- Kapije: `--gate dev` (podrazumevano), `--gate pr` (pun lokalni set),
+  `--gate release` (+ external ugovori). U `pr`/`release` je i **CLEANUP
+  blokirajući** (zaostao `TST-`/`SVT-`/`BIT-` red obara run); `--no-enforce-cleanup`
+  je izlaz dok detektor ne bude dokazan u oba smera.
+- **Verdikt nije jedan**: `STATIC`, `COMPILE`, `SCHEMA`, `BEHAVIOR`, `COUNTS`,
+  `CLEANUP`, `EXTERNAL` — svaki svoj red. Proces, identitet run-a i Definition of
+  Done: `docs/TEST_PLATFORM.md`.
 
 ## 4) Test seam-ovi koje produkcioni kod nosi
 

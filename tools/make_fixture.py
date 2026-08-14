@@ -2209,15 +2209,49 @@ def strip_vba(wb) -> list:
             "Trust Center > Trust Center Settings > Macro Settings > "
             "'Trust access to the VBA project object model'")
 
+    failed = []
     for comp in comps:
         try:
             if int(comp.Type) not in (STD, CLS, FRM):
                 continue
             name = str(comp.Name)
+        except Exception as exc:                    # noqa: BLE001
+            failed.append(f"<nepoznata komponenta>: {exc}")
+            continue
+        try:
             proj.VBComponents.Remove(comp)
             removed.append(name)
-        except Exception:
-            pass                                    # zakljucan projekat/komponenta
+        except Exception as exc:                    # noqa: BLE001
+            failed.append(f"{name}: {exc}")         # zakljucan projekat/komponenta
+
+    # FAIL-CLOSED. Ranije se neuspelo brisanje TIHO gutalo, pa je fixture mogao
+    # da izadje sa zaostalim modulima donora -- a bas to je klasa kvara zbog koje
+    # ova rutina postoji: zaostao modul sa Public imenom koje postoji i u svezem
+    # kodu daje "Ambiguous name", pa VBA odbija da pokrene makro iz njega. To se
+    # ne vidi kao compile greska nego kao "Cannot run the macro", i tako je
+    # TestLicense_All bio mrtav dok je vba_check bio uredno zelen.
+    #
+    # Zato se posle brisanja DOKAZUJE da nije ostao nijedan modul tipa 1/2/3.
+    leftovers = []
+    try:
+        for comp in proj.VBComponents:
+            try:
+                if int(comp.Type) in (STD, CLS, FRM):
+                    leftovers.append(str(comp.Name))
+            except Exception:                       # noqa: BLE001
+                continue
+    except Exception as exc:                        # noqa: BLE001
+        raise SchemaError(f"provera posle brisanja VBA koda nije uspela ({exc})")
+
+    if leftovers or failed:
+        raise SchemaError(
+            "VBA kod donora nije uklonjen do kraja -- fixture bi nosio module koji "
+            "mogu da daju 'Ambiguous name'.\n"
+            f"  zaostalo ({len(leftovers)}): {', '.join(sorted(leftovers)[:10])}\n"
+            f"  neuspelo brisanje ({len(failed)}): {'; '.join(failed[:5])}\n"
+            "  Najcesci uzrok: VBA projekat donora je zakljucan lozinkom. "
+            "Otkljucaj ga u VBE (Tools > VBAProject Properties > Protection) pa ponovi.")
+
     return sorted(removed)
 
 

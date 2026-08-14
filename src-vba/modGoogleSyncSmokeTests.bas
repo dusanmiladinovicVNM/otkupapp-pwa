@@ -65,6 +65,12 @@ EH:
 End Sub
 
 Private Sub RaiseIfSuiteFailed(ByVal suiteName As String)
+    ' Broj provera runneru (min_asserts u tests/suite_manifest.json). Ovde a ne u
+    ' End*Run: tri suite-a iz ovog modula dele dve End* rutine, a ime suite-a
+    ' postoji samo ovde -- inace bi MasterSync run bio upisan pod tudjim imenom.
+    ' Ide PRE ranog izlaza, da se broj prijavi i kad je suite zelen.
+    TR_Report suiteName, m_Passed, m_Failed
+
     ' modE2EReleaseGate.E2E_RunVbaSuite meri samo da li je Application.Run
     ' zavrsio bez neuhvacene greske. Bez ovog raise-a gate prijavljuje PASS
     ' i kad suite interno ima FAIL (lazno-zeleni release gate).

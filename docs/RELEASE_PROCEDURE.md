@@ -85,19 +85,52 @@ tagu je čisto (`vba-v2.2.1`), a posle N commita se **sama diže**
 prekretnici (korak 3); između tagova verzija odražava stvarnost bez ijedne ručne
 izmene. `APP_VERSION` u `modConfig` ostaje gruba baza koju zoveš klijentu.
 
-## Jedna komanda (rutina)
-
-Koraci 1–4 su spojeni u skriptu (pokreni iz repo klona **na build mašini**):
+## Jedna komanda (rutina) — sa OBAVEZNOM kapijom pre taga
 
 ```
 bash tools/release.sh 2.2.2
 # Windows:  powershell -ExecutionPolicy Bypass -File tools\release.ps1 2.2.2
+# probni prolaz:  ... 2.2.2 --dry-run   /   ... 2.2.2 -DryRun
 ```
 
-Ona uradi: `checkout main` + `pull` → bump `APP_VERSION` → commit → `git tag
-vba-v2.2.2` + push → `stamp-build`. Zatim ti ostaju **3 Excel klika** (Import →
-Compile → Snimi) i `git checkout -- src-vba/modBuildInfo.bas`, što skripta ispiše
-na kraju. Excel deo se ne automatizuje (cloud/CLI ne pokreću Excel).
+**Redosled je promenjen i to je suština.** Ranije je skripta radila bump → commit
+→ push → tag → push, pa TEK ONDA rekla operateru da uradi Import i Compile;
+behavior gate uopšte nije bio deo skripte. Tako je nastao `vba-v2.40.0`: tagovan i
+objavljen uz pošteno zapisanu napomenu da testovi nisu ni pokrenuti. Poštena
+napomena posle taga ne pomaže — tag već postoji.
+
+Sada:
+
+```
+1  main + pull + cisto radno stablo
+2  bump APP_VERSION U RADNO STABLO (bez commita)   <- kapija vrti BAS to
+3  release gate: static / fixture / behavior / green / compile / external
+4  commit + push                                    <- tek posle zelene kapije
+5  anotiran tag sa verdiktom kapije + push
+6  stamp build otisak
+7  preostali Excel koraci (isporuka, ne provera)
+```
+
+Ako kapija padne: **nema commita, nema taga, nema push-a**, bump se vraća i radno
+stablo ostaje čisto. Verdikt završava u poruci anotiranog taga — `git show
+vba-v2.2.2` kasnije tačno kaže šta je bilo zeleno, šta izuzeto i nad kojim hashom
+`src-vba`.
+
+Kapija traži **Windows + Excel + pywin32**. Iz Linux sesije `behavior` i `compile`
+padaju i release se zaustavlja — to je namerno, a ne kvar.
+
+### Kad nešto stvarno ne može da se pokrene
+
+```
+bash tools/release.sh 2.2.2 --waive external --reason "SEF sandbox nedostupan 14.08."
+powershell -File tools\release.ps1 2.2.2 -Waive external -WaiveReason "..."
+```
+
+Waiver **bez razloga se odbija**. Izuzeta kapija zadržava originalni status u
+zapisu (`WAIVED (razlog) -- bilo je: FAIL ...`), pa se u tagu vidi i šta je tačno
+zaobiđeno. `NOT_RUN` blokira isto kao `FAIL` — „nije pokrenuto" nije „prošlo".
+
+Puna slika kapija i verdikata: `docs/TEST_PLATFORM.md`.
 
 ## R3 — Podaci: migracija, ne kopiranje koda
 
@@ -215,11 +248,13 @@ hardening „samo potpisani makroi". Inače su `BUILD_SHA` telemetrija +
 
 ### B) Svaki release (zameni `2.2.2` svojim brojem)
 1. **[Git Bash]** Otvori Git Bash u folderu klona (desni klik → *Git Bash Here*), ili `cd /putanja/do/otkupapp-pwa`.
-2. **[Git Bash]** `bash tools/release.sh 2.2.2`  *(pull → bump APP_VERSION → commit → tag `vba-v2.2.2` → push → stamp)*
+2. **[Git Bash]** `bash tools/release.sh 2.2.2`  *(pull → bump u radno stablo → **release kapija** → commit → anotiran tag `vba-v2.2.2` → push → stamp)*. Ako kapija padne, ovde staje i ništa nije tagovano.
 3. **[Git Bash]** `cat src-vba/modBuildInfo.bas` → mora `BUILD_VERSION As String = "vba-v2.2.2"` (bez `+dirty`).
 4. **[Excel]** Otvori **prazan build-master** `.xlsm` (master koji NE drži podatke — vidi R3 „Blanko garancija").
 5. **[Excel]** `Alt+F8` → **ImportAllVBA** → Run.
-6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške).
+6. **[Excel]** **Debug → Compile VBAProject** (mora bez greške). *Napomena: od
+   uvođenja release kapije compile je već proveren u koraku 2 — ovo je potvrda nad
+   build-master fajlom, ne prva provera.*
 7. **[Excel]** `Alt+F8` → **AssertBlankBuild** → mora „BLANKO OK". Ako prijavi tabele s podacima → isprazni ih pa ponovi (taj fajl ide SVIMA).
 7b. **[Excel]** `Alt+F8` → **PublishReleaseToDrive** (`modRelease`) → objavi `src-vba` kod + `version.json` u Drive folder `AgriX_Release` (kanal za self-update postojećih klijenata). Radi **tek pošto Compile prođe**, a **pre** koraka 9 (čita stamp-ovan `BUILD_*`). Preduslov: `REL_FOLDER_ID` postavljen u `modConfig.bas`.
 8. **[Excel]** **File → Save As** → `builds\AgriX_2.2.2.xlsm` (ime prati `vba-v2.2.2`).
