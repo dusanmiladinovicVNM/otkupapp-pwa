@@ -2443,9 +2443,23 @@ End Sub
 '
 ' EnsureTableSchema je repair-only: ako tabele nema, ne pravi je (self-heal usred
 ' poslovnog toka ne sme da otvara nove listove -- to radi Setup* komanda).
-Private Sub EnsurePreradaCols()
-    On Error Resume Next
-    EnsureTableSchema TBL_PRERADA
+'
+' PUCA ako popravka ne prodje. Ranije je ovde stajao goli "On Error Resume Next",
+' pa je zasticen list ili zakljucana tabela znacio: kolona se ne doda -> PalAppendRow
+' je preskoci (mapira po imenu, a GetColumnIndex vrati 0) -> prerada se snimi BEZ
+' bruto/tezine palete/ambalaze/tipova. Tih gubitak poslovnog podatka, i to bas onaj
+' koji ova procedura postoji da spreci. RequirePreradaSchema NE pokriva te kolone
+' (drzi ID/Broj/Godina/NetoIzlaz/Kutije/Kese/Stornirano), pa nema druge brane.
+Private Sub EnsurePreradaCols(ByVal SRC As String)
+    Dim fails As Long
+    fails = EnsureTableSchema(TBL_PRERADA)
+
+    If fails > 0 Then
+        Err.Raise vbObjectError + 7345, SRC, _
+                  "Sema " & TBL_PRERADA & " nije mogla da se popravi (" & fails & _
+                  " koraka palo; detalji u SETUP_LOG). Prerada se NE snima -- upis bi " & _
+                  "tiho preskocio bruto/tezinu palete/ambalazu."
+    End If
 End Sub
 
 ' Exact-row lookup po kljucu. Puca ako nema reda (0) ili ima vise (>1).
@@ -2535,8 +2549,9 @@ Public Function SavePrerada_TX(ByVal paletaIDs As Collection, _
     End If
 
     ' Osiguraj nove kolone PRE transakcije (inace PalAppendRow tiho preskoci
-    ' upis bruto/paleta/ambalaza -> 0 u sazetku paletnog lista).
-    EnsurePreradaCols
+    ' upis bruto/paleta/ambalaza -> 0 u sazetku paletnog lista). Puca ako popravka
+    ' ne prodje -- namerno PRE BeginTx, da ni ne otvaramo transakciju.
+    EnsurePreradaCols SRC
 
     Set tx = New clsTransaction
     tx.BeginTx

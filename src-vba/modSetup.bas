@@ -1313,7 +1313,19 @@ End Function
 ' ============================================================
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+
+    ' Kolona je PREDUSLOV, ne "lepo bi bilo": bez nje UpdateCell nema gde da pise i
+    ' komanda bi zavrsila sa "popunjeno 0 redova" kao da je sve u redu. Dok je
+    ' EnsureColumnOnTable bio Sub, realan pad ListColumns.Add je propagirao ovamo;
+    ' sada ga on hvata i vraca SCHEMA_FAILED, pa se ishod MORA procitati.
+    ' SCHEMA_SKIPPED je ovde takodje greska -- za eksplicitnu migracionu komandu
+    ' tblOtkup i ciljna kolona nisu opcioni.
+    If EnsureColumnOnTable(TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE) <> SCHEMA_OK Then
+        Err.Raise vbObjectError + 9336, "BackfillOtkupBrojOtpremnice", _
+                  "Kolona " & COL_OTK_BROJ_OTPREMNICE & " na " & TBL_OTKUP & _
+                  " nije dostupna -- backfill se ne izvodi."
+    End If
+
     Dim od As Variant: od = GetTableData(TBL_OTPREMNICA)
     Dim map As Object: Set map = CreateObject("Scripting.Dictionary")
     If IsArray(od) Then
@@ -1348,7 +1360,11 @@ Public Sub BackfillOtkupBrojOtpremnice()
     MsgBox "Backfill BrojOtpremnice: popunjeno " & n & " otkupnih redova.", vbInformation, APP_NAME
     Exit Sub
 EH:
+    ' Interaktivna Alt+F8 komanda: uspeh javlja dijalogom, pa i neuspeh mora.
+    ' Sa samim LogErr operater ne bi video NISTA -- ni uspeh ni pad.
     LogErr "modSetup.BackfillOtkupBrojOtpremnice"
+    MsgBox "Backfill BrojOtpremnice nije izveden: " & Err.description, _
+           vbExclamation, APP_NAME
 End Sub
 
 ' ============================================================
