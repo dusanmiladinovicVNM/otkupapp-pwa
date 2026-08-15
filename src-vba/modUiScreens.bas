@@ -37,7 +37,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-107"
+Public Const UISCR_BUILD As String = "v6-ui-121"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -64,6 +64,12 @@ Public Function ScrRows() As Variant
           "|OPERACIJE|" & OBL_DOKUMENTA
     c.Add "PALETE|modScrPalete|OTKUI_NAV_PALETE|" & IC_PALETE & _
           "|OPERACIJE|" & OBL_PALETE
+    ' Oporavak stoji uz Dokumenta i po oblasti prava: sve sto radi je
+    ' prevezivanje i vracanje DOKUMENATA, pa ko sme da ih unosi sme i da ih
+    ' popravi. Zaseban ekran, a ne jos jedan rezim u F8, jer ovo nisu
+    ' dokumenti nego POSAO koji ceka - i ne bira se po tipu nego po problemu.
+    c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _
+          "|OPERACIJE|" & OBL_DOKUMENTA
     c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _
           "|OPERACIJE|" & OBL_AGROHEMIJA
     c.Add "FAKTURE|modScrFakture|OTKUI_NAV_FAKT|" & IC_FAKT & _

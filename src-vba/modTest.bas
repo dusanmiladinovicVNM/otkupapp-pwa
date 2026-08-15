@@ -31,6 +31,9 @@ Option Explicit
 ' --- Fixture konstante (moraju da prate tools/make_fixture.py) --------------
 Private Const FX_DATUM As String = "15.3.2026"      ' FIXTURE_DATE, d.m.yyyy
 Private Const FX_ZBIRNA As String = "ZB-TEST-1"     ' zbirna na OTP-TEST-1
+' Stornirana zbirna -- postoji SAMO da bi lista ciljeva na ekranu Oporavak
+' imala sta da izostavi (bez nje ta tvrdnja nema nad cim da padne).
+Private Const FX_ZBIRNA_STORNO As String = "ZB-TEST-STORNO"
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
@@ -117,6 +120,8 @@ Public Sub RunAllTests()
     RunOne 23
     RunOne 24
     RunOne 25
+    RunOne 26
+    RunOne 27
 
     SetTestMode prevMode
     WriteResultFile
@@ -194,6 +199,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 23: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
         Case 24: TestName = "T_Prefill_PoIdentitetuNePoBroju"
         Case 25: TestName = "T_IspravkaDetekcija_FailClosed"
+        Case 26: TestName = "T_Oporavak_UgovorIRadnje"
+        Case 27: TestName = "T_Oporavak_CiljneListe"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -227,6 +234,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 23: T_FrameworkIspravke_SamoCetiriTipa
         Case 24: T_Prefill_PoIdentitetuNePoBroju
         Case 25: T_IspravkaDetekcija_FailClosed
+        Case 26: T_Oporavak_UgovorIRadnje
+        Case 27: T_Oporavak_CiljneListe
     End Select
 End Sub
 

@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-120`.
+Stanje na dan `v6-ui-121`.
 
 ---
 
@@ -28,9 +28,10 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    sedam tabela), radnja nad redom zove tačan `Storno*_TX` kroz nov
    `modStornoDok`. Do tada je F8 čitao samo `tblOtpremnica` i pokazivao samo
    već stornirane.
-   **Ostatak storno okvira NIJE prenet:** ispravka i dupli unos posle storna
-   (`modStornoFlow`, Z10), Undo operacija, „Nedovršeno" i Recovery — to je
-   Faza D, stavke 13 i 14, i i dalje živi samo u `frmDokumenta`.
+   **Ostatak storno okvira je zatvoren posle toga:** ispravka i dupli unos
+   posle storna (`modStornoFlow`, Z10) u v6-ui-120, a Undo operacija,
+   „Nedovršeno" i Recovery u v6-ui-121, kroz nov ekran **Oporavak**
+   (`modScrOporavak`). **Faza D je time cela zatvorena.**
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
    zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4). Upis F3/F4 od
    v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
@@ -40,8 +41,8 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    storniranog (Z10) je zatvoren u v6-ui-120; filtriranje kooperanata po
    otkupnom mestu u v6-ui-113 (`KOOP_FILTER_BY_OM`).
 
-Od Faze D ostaje samo stavka 14 (Recovery, Nedovršeno, Undo operacija, i uz
-njih multiselect storna otkupnih blokova); 3 i 4 su ostaci ranijih faza.
+**Faza D je zatvorena** (v6-ui-121). Ostaju 3 i 4 — ostaci ranijih faza — plus
+Faze C i E, koje nisu počele.
 
 ---
 
@@ -258,11 +259,34 @@ Sedam panela, svaki sa svojim `Ensure/Layout/Populate/Set*Visible`:
 | **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | **IMA** (`modStornoDok` + F8, v6-ui-119) — **običan storno**, bez framework-a ispravke |
 | **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **IMA** (v6-ui-120) — sva četiri moda; **bez** multiselect storna otkupnih blokova (deo legacy overlay panela) |
 | **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | **IMA** — čip „Otkazane" nad svakim tipom u F8 |
-| **Undo operacija** (`ShowUndoOpsPanel`) | poništavanje storna | `GetUndoableStornoOperations` | **NEMA** |
+| **Undo operacija** (`ShowUndoOpsPanel`) | poništavanje storna | `GetUndoableStornoOperations` | **IMA** (ekran Oporavak → lista „Vrati storno", v6-ui-121) |
 | **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | **IMA** — prekidač tipa + pretraga i filteri mreže u F8 |
-| **Nedovršeno** (`m_btnNedovrseno_Click`) | lanci koji nisu dovršeni | `GetNedovrseno` | **NEMA** |
-| **Recovery** (`m_btnRecovery_Click`) | osirotele prijemnice i palete, prevezivanje | `GetOsirocenePrijemnice`, `GetPrijemniceSaOsirocenimPaletama`, `ReassignPaleteToPrijemnica_TX`, `ReassignPrijemnicaToZbirna_TX` | **NEMA** |
-| `CheckVerwaisteDokumente` | upozorenje na siročiće pri otvaranju | `GetVerwaisteDokumente` | **NEMA** |
+| **Nedovršeno** (`m_btnNedovrseno_Click`) | lanci koji nisu dovršeni | `GetNedovrseno` | **IMA** (ekran Oporavak → lista „Nedovršeno", v6-ui-121) |
+| **Recovery** (`m_btnRecovery_Click`) | osirotele prijemnice i palete, prevezivanje | `GetOsirocenePrijemnice`, `GetPrijemniceSaOsirocenimPaletama`, `ReassignPaleteToPrijemnica_TX`, `ReassignPrijemnicaToZbirna_TX` | **IMA** (ekran Oporavak, četiri liste, v6-ui-121) |
+| `CheckVerwaisteDokumente` | upozorenje na siročiće pri otvaranju | `GetVerwaisteDokumente` | **NAMERNO IZOSTAVLJENO** — zamenjeno stalnom listom „Nedovršeno" i brojkom u zoni; modalni dijalog pri otvaranju se zatvara i zaboravlja, lista ne može |
+
+**Ekran „Oporavak" (v6-ui-121) — šta nosi:**
+
+Četiri legacy panela radila su istu stvar: pokazivala šta je ostalo nedovršeno i
+nudila prevezivanje. Ovde su to **šest lista** istog prekidača koji F1 i Palete
+već koriste (`modScrOporavak`, registrovan u `modUiScreens.ScrRows`).
+
+| Lista | Izvor | Radnja nad redom |
+|---|---|---|
+| Nedovršeno | `GetNedovrseno` | — (pregled) |
+| Osirotele prijemnice | `GetOsirocenePrijemnice` | Prevezi → `ReassignPrijemnicaToZbirna_TX` |
+| Zbirne (cilj) | aktivne `tblZbirna` | klik bira CILJ |
+| Osirotele palete | `GetPrijemniceSaOsirocenimPaletama` | Prevezi → `ReassignPaleteToPrijemnica_TX` |
+| Prijemnice (cilj) | aktivne `tblPrijemnica` | klik bira CILJ |
+| Vrati storno | `GetUndoableStornoOperations` | `UndoOperation_TX` po **OperationID** |
+
+| Pravilo | Napomena |
+|---|---|
+| Cilj se bira klikom na red i stoji u zoni gore | isti obrazac kao aktivna otpremnica u F1 i aktivna paleta na ekranu Palete; legacy je za to imao combo u panelu — ovde je lista, pa se cilj može i pretražiti i sortirati |
+| Liste ciljeva nude **samo aktivne** dokumente, jedan red po broju | prevezivanje na storniran cilj bi napravilo drugu siroticu umesto da reši prvu; klase I i II dele broj, a cilj JESTE broj |
+| „Vrati storno" cilja **OperationID**, ne poslednju operaciju po broju | isti broj dokumenta može imati više generacija; zato je prva kolona baš `OperationID` |
+| Kapija je `UndoGuardReason` (fail-closed) | ista koju diže i legacy dugme |
+| Prevezivanje paleta ide sa `force=True` | ovaj ekran postoji baš da razreši ono što automatika nije umela; razlika u broju gajbica se prijavljuje i koriguje u mestu (`PaletaAdjustPrompt`), ne blokira |
 
 **Šta F8 nosi, a šta namerno ne (v6-ui-119):**
 
@@ -296,7 +320,7 @@ poslovno znači**. Smart trigger je isti kao u legacy: pun izbor se nudi samo ka
 | PONIŠTENJE se izvršava u **dva** poziva | `IzvrsiMod` | prvi vrati `blocked=True` i pun spisak posledica; drugi ide tek po svesnoj potvrdi, sa `forceConfirm` — spisak se tako pravi PRE nego što se išta promeni |
 | „Ne diraj palete" (prijemnica, DUPLI/PONIŠTENJE) | `IzvrsiMod` | uz ISPRAVKU se ne pita: tamo se palete prevezuju na novi dokument |
 | ISPRAVKA → prefill + prelazak u režim unosa | `OtvoriIspravku` | režim se menja **pre** prefilla — `SelectMode` čisti formu, pa bi obrnut redosled obrisao upravo prepisane vrednosti |
-| **Multiselect storna otkupnih blokova** | **NIJE preneto** | `SelectedBlockIDs` / `StornoSelectedBlocks_TX` / `BlockStornoDriftReason` su deo legacy overlay panela — ide uz stavku 14 |
+| Storno otkupnih blokova uz DUPLI/PONIŠTENJE | `StornirajBlokoveAko` (v6-ui-121) | **sve-ili-ništa**, ne multiselect: pre pitanja se ispiše pun spisak (broj, klasa, kg, kooperant), pa operater vidi nad čim odlučuje. Delimičan izbor ostaje na ekranu Oporavak, gde izgubljeni blokovi imaju svoju listu i radnju po redu. Kapija `BlockStornoDriftReason` (ADR-0001) je ista. |
 
 ### 3.3 Ostalo
 
@@ -378,9 +402,12 @@ legacy do tada penzioniše).
     račun (`modStornoDok.PrefillIzStorniranog`) umesto četiri kopije vezane
     za kontrole; ispravka prijemnice preskače svežu paletizaciju i prevezuje
     palete; hladnjača ispravka se nudi posle storna otkupa iz F1.
-    **Nije preneto:** multiselect storna otkupnih blokova uz DUPLI/PONIŠTENJE
-    — to je deo legacy overlay panela i ide uz stavku 14.
-14. Recovery, Nedovršeno, Undo operacija (+ multiselect blokova iz stavke 13).
+14. ~~Recovery, Nedovršeno, Undo operacija (+ storno blokova iz stavke 13).~~
+    **URAĐENO** (v6-ui-121). Nov ekran **Oporavak** (`modScrOporavak`) sa šest
+    lista zamenjuje četiri legacy panela; storno otkupnih blokova uz
+    DUPLI/PONIŠTENJE je vezan u F8, sve-ili-ništa uz pun spisak.
+
+**Faza D je time ZATVORENA.**
 
 ### Faza E — ostali ekrani
 15. Agrohemija, Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji,

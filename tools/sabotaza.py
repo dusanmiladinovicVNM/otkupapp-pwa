@@ -460,6 +460,34 @@ SABOTAZE = {
         "T_IspravkaDetekcija_FailClosed",
         "dve ispravke na cekanju zaustavljaju upis (safe-stop)",
     ),
+    # --- ekran Oporavak -----------------------------------------------------
+    "oporavak-registar": (
+        "modUiScreens.bas",
+        '    c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
+        '    c.Add "OPORAVAK|modScrOporavakX|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
+        "T_Oporavak_UgovorIRadnje",
+        "ime modula u registru mora da pogadja stvaran modul (kasno vezivanje)",
+    ),
+    "oporavak-cilj-radnja": (
+        "modScrOporavak.bas",
+        "        Case \"PRIJEMNICE\"\n"
+        "            Scr_Radnje = \"prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1\"\n",
+        "        Case \"PRIJEMNICE\", \"ZBIRNE\"   ' SABOTAZA: i ciljna lista dobija dugme\n"
+        "            Scr_Radnje = \"prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1\"\n",
+        "T_Oporavak_UgovorIRadnje",
+        "ciljna lista nema radnju -- dugme bi prevezivalo cilj na samog sebe",
+    ),
+    "oporavak-stornirani-cilj": (
+        "modScrOporavak.bas",
+        "        If iSt > 0 Then\n"
+        "            If UCase$(modUiData.CellS(src, r, iSt)) = \"DA\" Then GoTo Sledeci\n"
+        "        End If\n"
+        "        broj = modUiData.CellS(src, r, iBr)\n",
+        "        ' SABOTAZA: stornirani dokumenti ulaze u listu ciljeva\n"
+        "        broj = modUiData.CellS(src, r, iBr)\n",
+        "T_Oporavak_CiljneListe",
+        "lista ciljeva nudi SAMO aktivne dokumente",
+    ),
     "storno-revers-smer": (
         "modStornoDok.bas",
         "            If Len(Trim$(opcija)) = 0 Then\n"

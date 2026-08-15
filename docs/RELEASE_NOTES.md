@@ -1528,3 +1528,89 @@ lepak koji odlučuje **kada** se zove — prepoznavanje ispravke na čekanju i
 `SetPaletizeSkip` oko upisa — proverava se **ručno**, po checklisti u PR-u.
 Fixture nema nijednu prijemnicu ni paletu, pa se taj tok ne može odvrteti bez
 proširenja fixture-a.
+
+---
+
+## vba-v2.44.0 — 2026-08-15
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: običan online update.** Nijedna nova forma ni sheet;
+> `frmOtkupUI.frm/.frx` je nepromenjen. Nov modul `modScrOporavak.bas` je
+> običan `.bas` i self-update ga dodaje sam.
+>
+> **Obavezno posle uvoza:** `Alt+F8 → EnsurePoruke`. Četrdeset pet novih
+> ključeva poruka do tada postoji samo u kodu.
+>
+> **Legacy se i dalje NE gasi.** `frmDokumenta` i `frmOtkup` rade nepromenjeno.
+
+**Nov ekran „Oporavak" — Faza D je zatvorena**
+
+Četiri legacy panela iz `frmDokumenta` radila su istu stvar: pokazivala šta je
+ostalo nedovršeno i nudila prevezivanje. Sada je to jedan ekran u sidebaru, sa
+šest lista istog prekidača koji F1 i Palete već koriste:
+
+| Lista | Šta pokazuje | Radnja |
+|---|---|---|
+| **Nedovršeno** | sve što čeka: pending/manual konteksti + osirotele prijemnice, palete i izgubljeni blokovi | pregled |
+| **Osirotele prijemnice** | zbirna im je stornirana ili je nema | Prevezi na ciljnu zbirnu |
+| **Zbirne (cilj)** | aktivne zbirne | klik bira cilj |
+| **Osirotele palete** | prijemnice sa osirotelim paletnim stavkama | Prevezi na ciljnu prijemnicu |
+| **Prijemnice (cilj)** | aktivne prijemnice | klik bira cilj |
+| **Vrati storno** | storno operacije koje se mogu vratiti | Vrati storno |
+
+**Zašto dva cilja umesto dijaloga sa listom:** prevezivanje uvek ima izvor i
+cilj, a novi UI za izbor cilja već ima obrazac — aktivna otpremnica u F1 i
+aktivna paleta na ekranu Palete. Isti obrazac: cilj se bira klikom na red u
+svojoj listi i stoji u zoni gore, gde se vidi sve vreme. Legacy je za to imao
+combo u panelu; ovde je lista, pa se cilj može i **pretražiti i sortirati**.
+
+**Tri pravila koja test drži**
+
+- liste ciljeva nude **samo aktivne** dokumente — prevezivanje na storniran cilj
+  napravilo bi drugu siroticu umesto da reši prvu;
+- **jedan red po broju** — klase I i II dele broj, a cilj prevezivanja JESTE broj;
+- „Vrati storno" cilja **OperationID**, ne poslednju operaciju po broju: isti broj
+  dokumenta može imati više generacija. Zato je prva kolona baš `OperationID`.
+
+**Razlika u odnosu na legacy — namerna**
+
+Upozorenje na siročiće pri otvaranju forme (`CheckVerwaisteDokumente`) se **ne
+prenosi kao modalni dijalog**. Umesto njega stalno stoji lista „Nedovršeno" i
+brojka u zoni gore. Dijalog pri otvaranju se zatvarao i zaboravljao; lista ne
+može da se zaboravi.
+
+**Storno otkupnih blokova uz DUPLIKAT/PONIŠTENJE**
+
+Poslednji deo stavke 13. Kad dokument nestaje bez naslednika, blokovi koji o
+njemu vise mogu da padnu s njim. Legacy nudi multiselect u overlay panelu; ovde
+je **sve-ili-ništa**, ali se pre pitanja ispiše pun spisak (broj, klasa,
+kilogrami, kooperant), pa operater vidi tačno nad čim odlučuje. Delimičan izbor
+ostaje na ekranu Oporavak, gde izgubljeni blokovi imaju svoju listu i radnju po
+redu. Kapija `BlockStornoDriftReason` (ADR-0001) je ista: blok vezan za **živu**
+otpremnicu se ne stornira, jer bi je ostavio precenjenu.
+
+**Verifikacija**
+
+Pokrenuto na Windows mašini (Excel + `pywin32`), 15.08.2026:
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=23, FAIL=0** (dva nova
+  testa: ugovor ekrana i radnje po listi, i ponašanje ciljnih lista).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Dokaz u oba smera:** tri nove sabotaže (`oporavak-registar`,
+  `oporavak-cilj-radnja`, `oporavak-stornirani-cilj`), svaka obara test **po
+  imenu**.
+- **`COMPILE` je i dalje `NEJASNO`** — potvrđuje se ručno.
+
+**Fixture je proširen jednom storniranom zbirnom** (`ZB-TEST-STORNO`). Razlog je
+sam po sebi nalaz: sabotaža `oporavak-stornirani-cilj` je nad starim fixture-om
+ostajala **zelena** — u njemu nije bilo nijednog storniranog dokumenta, pa
+tvrdnja „lista ciljeva nudi samo aktivne" nije imala nad čim da padne. Test koji
+ne može da pocrveni ne meri ništa. Ko vrti testove lokalno mora da regeneriše
+`tests/fixtures/otkup_test.xlsm` (`python tools\make_fixture.py --donor <put>
+--force`; donor može biti i postojeći fixture).
+
+Ograničenje: testovi pokrivaju **ugovor ekrana i čitanje lista**, ne i sama
+prevezivanja iz ovog ekrana. Jezgro je pokriveno drugde
+(`ReassignPaleteToPrijemnica_TX` u `RunPaleteTestSuite`, `UndoOperation_TX` u
+`Test_StornoCentar_All`); lepak — izbor cilja i redosled potvrda — proverava se
+**ručno**, po checklisti u PR-u.

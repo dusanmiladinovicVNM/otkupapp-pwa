@@ -738,6 +738,15 @@ Public Sub UpsertPoruke(lo As ListObject)
               "Polja su ve" & ChrW(263) & " popunjena iz storniranog " & ChrW(8212) & " promeni samo ono " & ChrW(353) & "to je bilo pogre" & ChrW(353) & "no." & vbCrLf & _
               "Prevezivanje i prera" & ChrW(269) & "un se rade AUTOMATSKI po snimanju."
     UpsertRow lo, existing, "STORNO_MSG_ODUSTANAK", "Odustalo se " & ChrW(8212) & " ni" & ChrW(353) & "ta nije promenjeno."
+    UpsertRow lo, existing, "STORNO_ASK_BLOKOVI_1", "Uz ovaj dokument visi"
+    UpsertRow lo, existing, "STORNO_ASK_BLOKOVI_2", " otkupnih blokova:"
+    UpsertRow lo, existing, "STORNO_ASK_BLOKOVI_3", "Stornirati i NJIH?" & vbCrLf & vbCrLf & _
+              "DA = roba nije otkupljena " & ChrW(8212) & " blokovi padaju sa dokumentom" & vbCrLf & _
+              "NE = blokovi ostaju (oslobo" & ChrW(273) & "eni; vide se u listi Izgubljeni)"
+    UpsertRow lo, existing, "STORNO_MSG_BLOKOVI_OK", ChrW(10003) & " Stornirano otkupnih blokova:"
+    UpsertRow lo, existing, "STORNO_ERR_BLOKOVI", ChrW(10007) & " Storno otkupnih blokova nije uspeo." & vbCrLf & vbCrLf & _
+              "Dokument JESTE storniran. Blokove storniraj ru" & ChrW(269) & "no " & ChrW(8212) & _
+              " zadatak je zabele" & ChrW(382) & "en u: Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     ' --- ispravka prijemnice (prevezivanje paleta) ---
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ", "Postoji VI" & ChrW(352) & "E ispravki prijemnice na " & ChrW(269) & "ekanju." & vbCrLf & _
               "Palete NISU automatski prevezane (da se ne pove" & ChrW(382) & "e pogre" & ChrW(353) & "na)." & vbCrLf & _
@@ -774,7 +783,51 @@ Public Sub UpsertPoruke(lo As ListObject)
               " izmeni gre" & ChrW(353) & "ku pa snimi"
     UpsertRow lo, existing, "OTKUI_MSG_HLAD_NISTA", "Ni" & ChrW(353) & "ta nije skinuto."
     UpsertRow lo, existing, "OTKUI_MSG_HLAD_OSIROCENE", "Palete su osiro" & ChrW(263) & "ene (i dalje broje robu)." & vbCrLf & _
-              "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Mod: Palete."
+              "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Oporavak " & ChrW(8594) & " Palete."
+    ' --- ekran Oporavak (Faza D/14) ---
+    UpsertRow lo, existing, "OTKUI_NAV_OPORAVAK", "Oporavak"
+    UpsertRow lo, existing, "OTKUI_SCROPO_SUB", "Nedovr" & ChrW(353) & "eno, osiro" & ChrW(263) & "eni dokumenti i vra" & ChrW(263) & "anje storna"
+    UpsertRow lo, existing, "OTKUI_SCROPO_LISTA", "Nedovr" & ChrW(353) & "eno"
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_NED", "Nedovr" & ChrW(353) & "eno"
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_PRI", "Osiro" & ChrW(263) & "ene prijem."
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_ZBR", "Zbirne (cilj)"
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_PAL", "Osiro" & ChrW(263) & ".palete"
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_CPR", "Prijemnice (cilj)"
+    UpsertRow lo, existing, "OTKUI_SEG_OPO_UND", "Vrati storno"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_NEDOVRSENO", "Nedovr" & ChrW(353) & "eno " & ChrW(8212) & " sve " & ChrW(353) & "to " & ChrW(269) & "eka"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_OSIR_PRIJ", "Osiro" & ChrW(263) & "ene prijemnice (zbirna stornirana ili je nema)"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_CILJ_ZBIRNA", "Aktivne zbirne " & ChrW(8212) & " izaberi CILJ"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_OSIR_PAL", "Prijemnice sa osiro" & ChrW(263) & "enim paletama"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_CILJ_PRIJ", "Aktivne prijemnice " & ChrW(8212) & " izaberi CILJ"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_UNDO", "Storno operacije koje se mogu vratiti"
+    UpsertRow lo, existing, "OTKUI_HDO_REF", "DOKUMENT"
+    UpsertRow lo, existing, "OTKUI_HDO_VRSTA_PROB", "VRSTA PROBLEMA"
+    UpsertRow lo, existing, "OTKUI_HDO_OPIS", "OPIS"
+    UpsertRow lo, existing, "OTKUI_HDO_AKCIJA", "GDE SE RE" & ChrW(352) & "AVA"
+    UpsertRow lo, existing, "OTKUI_HDO_OPID", "OPERACIJA"
+    UpsertRow lo, existing, "OTKUI_HDO_VREME", "VREME"
+    UpsertRow lo, existing, "OTKUI_HDO_TIPDOK", "TIP DOKUMENTA"
+    UpsertRow lo, existing, "OTKUI_OPO_CILJEVI", "Ciljevi prevezivanja"
+    UpsertRow lo, existing, "OTKUI_OPO_CILJ_ZBIRNA", "Zbirna:"
+    UpsertRow lo, existing, "OTKUI_OPO_CILJ_PRIJ", "Prijemnica:"
+    UpsertRow lo, existing, "OTKUI_OPO_KPI_NED", "Nedovr" & ChrW(353) & "eno"
+    UpsertRow lo, existing, "OTKUI_OPO_KPI_OSIR", "Osiro" & ChrW(263) & "eno"
+    UpsertRow lo, existing, "OTKUI_OPO_KPI_UNDO", "Za vra" & ChrW(263) & "anje"
+    UpsertRow lo, existing, "OTKUI_BTN_OPO_PREVEZI", "Prevezi"
+    UpsertRow lo, existing, "OTKUI_BTN_OPO_VRATI", "Vrati storno"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_PRI", "Prevezati prijemnicu"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_PAL", "Prevezati palete prijemnice"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_NA", "na"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO", "Vratiti storno:"
+    UpsertRow lo, existing, "OTKUI_ASK_OPO_UNDO2", "Dokument se vra" & ChrW(263) & "a u AKTIVNO stanje, sa svim posledicama."
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_PREVEZANO", ChrW(10003) & " Prevezano:"
+    UpsertRow lo, existing, "OTKUI_MSG_OPO_VRACENO", ChrW(10003) & " Storno vra" & ChrW(263) & "en:"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_ZBIRNE", ChrW(10007) & " Prvo izaberi ciljnu zbirnu u listi " & ChrW(8222) & "Zbirne (cilj)" & ChrW(8220)
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_NEMA_PRIJ", ChrW(10007) & " Prvo izaberi ciljnu prijemnicu u listi " & ChrW(8222) & "Prijemnice (cilj)" & ChrW(8220)
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_ISTA", ChrW(10007) & " Izvor i cilj su ista prijemnica"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_PRI", ChrW(10007) & " Prevezivanje nije uspelo " & ChrW(8212) & " proveri da li je ciljna zbirna aktivna:"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_PAL", ChrW(10007) & " Prevezivanje paleta nije uspelo."
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_UNDO", ChrW(10007) & " Vra" & ChrW(263) & "anje storna nije uspelo:"
     UpsertRow lo, existing, "OTKUI_ERR_DATUM", ChrW(10007) & " Datum nije " & ChrW(269) & "itljiv " & ChrW(8212) & " upi" & ChrW(353) & "i ga kao 11.08.2026."
     UpsertRow lo, existing, "OTKUI_MSG_SNIMLJENO", ChrW(10003) & " Dokument spreman za upis"
     UpsertRow lo, existing, "OTKUI_MSG_PRINT", ChrW(353) & "tampa"

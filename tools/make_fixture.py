@@ -48,6 +48,7 @@ VRSTA = "TESTVOCE"
 SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
 ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
+ZBIRNA_STORNIRANA = "ZB-TEST-STORNO"  # ne sme se pojaviti u listi ciljeva
 # Kupac postoji SAMO kao ID na fakturi -- red u tblKupci ne treba: kapije koje
 # ga koriste porede identifikatore, ne citaju karticu kupca.
 KUPAC = "KUP-TEST-1"
@@ -101,11 +102,19 @@ SEED = {
          "KatOpstina": "Test Opstina", "Kultura": VRSTA, "PovrsinaHa": 2.25,
          "Aktivna": STATUS_AKTIVAN},
     ],
+    # Druga zbirna je STORNIRANA i postoji samo zbog ekrana Oporavak: lista
+    # ciljeva prevezivanja sme da nudi iskljucivo AKTIVNE dokumente. Bez
+    # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
+    # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
     "tblZbirna": [
         {"ZbirnaID": "ZBI-TEST-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 1000, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 100,
          "Klasa": "I"},
+        {"ZbirnaID": "ZBI-TEST-STOR", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_STORNIRANA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 500, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 50,
+         "Klasa": "I", "Stornirano": "Da"},
     ],
     # Tri slucaja koje zadatak trazi:
     #   OTP-TEST-1  datum iz proslosti + poznata zbirna + ostatak != 0 (1000 - 400)
