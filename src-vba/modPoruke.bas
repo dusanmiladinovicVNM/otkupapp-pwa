@@ -666,6 +666,55 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ASK_STORNO", "Stornirati ceo otkup br."
     UpsertRow lo, existing, "OTKUI_ASK_STORNO2", "?" & vbCrLf & _
               "Storno obuhvata SVE klase istog dokumenta."
+    ' --- F8 Storno centar (modStornoDok + ekran F8) ---
+    UpsertRow lo, existing, "STORNO_TIP_OTKUP", "otkupni list"
+    UpsertRow lo, existing, "STORNO_TIP_OTPREMNICA", "otpremnicu"
+    UpsertRow lo, existing, "STORNO_TIP_ZBIRNA", "zbirnu"
+    UpsertRow lo, existing, "STORNO_TIP_PRIJEMNICA", "prijemnicu"
+    UpsertRow lo, existing, "STORNO_TIP_ISPLATA", "isplatu"
+    UpsertRow lo, existing, "STORNO_TIP_UPLATA", "uplatu kupca"
+    UpsertRow lo, existing, "STORNO_TIP_FAKTURA", "fakturu"
+    UpsertRow lo, existing, "STORNO_TIP_IZVOD", "CEO izvod"
+    UpsertRow lo, existing, "STORNO_TIP_REVERS", "revers"
+    UpsertRow lo, existing, "STORNO_TIP_REV_IZD_KOOP", "revers izdavanje kooperantu"
+    UpsertRow lo, existing, "STORNO_TIP_REV_PRI_KOOP", "revers povrat od kooperanta"
+    UpsertRow lo, existing, "STORNO_TIP_REV_IZD_OM", "revers izdato OM (firma)"
+    UpsertRow lo, existing, "STORNO_TIP_REV_PRI_OM", "revers prijem od OM (firma)"
+    UpsertRow lo, existing, "STORNO_MSG_OK", ChrW(10003) & " Stornirano"
+    UpsertRow lo, existing, "STORNO_MSG_ZBIRNA_PRIJ", "Zbirna je stornirana, ali AKTIVNA prijemnica ostaje vezana za nju " & _
+              ChrW(8212) & " sledljivost je prekinuta. Kad unese" & ChrW(353) & "te novu zbirnu, prevezite prijemnicu:"
+    UpsertRow lo, existing, "STORNO_ERR_NEMA_BROJA", ChrW(10007) & " Red nema broj dokumenta"
+    UpsertRow lo, existing, "STORNO_ERR_NEMA_DOK", ChrW(10007) & " Nema nestorniranog dokumenta broj"
+    UpsertRow lo, existing, "STORNO_ERR_NEMA_SMERA", ChrW(10007) & " Revers bez smera " & ChrW(8212) & " " & _
+              ChrW(269) & "etiri smera dele isti brojevni niz"
+    UpsertRow lo, existing, "STORNO_ERR_NEMA_ISHODA", ChrW(10007) & " Nije izabran ishod storna izvoda"
+    UpsertRow lo, existing, "STORNO_ERR_NEPOZNAT_TIP", ChrW(10007) & " Nepoznat tip dokumenta:"
+    UpsertRow lo, existing, "STORNO_ERR_RAZRESENJE", ChrW(10007) & " Gre" & ChrW(353) & "ka pri razre" & ChrW(353) & "avanju dokumenta:"
+    UpsertRow lo, existing, "STORNO_ERR_NEUSPEH", ChrW(10007) & " Storno nije uspeo:"
+    UpsertRow lo, existing, "STORNO_ASK", "Stornirati"
+    UpsertRow lo, existing, "STORNO_ASK_IZVOD", "Stornirati CEO izvod?"
+    UpsertRow lo, existing, "STORNO_ASK_IZVOD_PDF", "Da li je PDF izvoda bio ISPRAVAN?" & vbCrLf & vbCrLf & _
+              "DA = samo je mapiranje pogre" & ChrW(353) & "no " & ChrW(8212) & _
+              " stavke se vra" & ChrW(263) & "aju u " & ChrW(8222) & "za obradu" & ChrW(8220) & _
+              ", PDF se NE uvozi ponovo." & vbCrLf & vbCrLf & _
+              "NE = PDF je bio lo" & ChrW(353) & " ili korumpiran " & ChrW(8212) & _
+              " izvod se gasi, uvezi ga PONOVO iz ispravnog PDF-a." & vbCrLf & vbCrLf & _
+              "OTKAZI = odustani."
+    ' natpisi prekidaca tipova u F8 - kratki, jer ih je devet u jednom redu
+    UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_ZBR", "Zbirne"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_PRJ", "Prijemnice"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_ISP", "Isplate"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_UPL", "Uplate"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_REV", "Reversi"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_FAK", "Fakture"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_IZV", "Izvodi"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FAKTURA", "Postoje" & ChrW(263) & "e fakture"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZVOD", "Uvezeni bankovni izvodi"
+    UpsertRow lo, existing, "OTKUI_HD_IZNOS", "IZNOS"
+    UpsertRow lo, existing, "OTKUI_HD_RACUN", "RA" & ChrW(268) & "UN"
+    UpsertRow lo, existing, "OTKUI_HD_STAVKI", "STAVKI"
     UpsertRow lo, existing, "OTKUI_ERR_DATUM", ChrW(10007) & " Datum nije " & ChrW(269) & "itljiv " & ChrW(8212) & " upi" & ChrW(353) & "i ga kao 11.08.2026."
     UpsertRow lo, existing, "OTKUI_MSG_SNIMLJENO", ChrW(10003) & " Dokument spreman za upis"
     UpsertRow lo, existing, "OTKUI_MSG_PRINT", ChrW(353) & "tampa"

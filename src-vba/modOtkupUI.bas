@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-118"
+Public Const OTKUI_BUILD   As String = "v6-ui-119"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -165,7 +165,11 @@ Private Const GRID_ROW_H  As Single = 21
 Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
-Private Const MAX_SEG     As Long = 5        ' dugmadi prekidaca lista koje se PRAVE
+' Devet, zbog F8: tamo prekidac bira TIP dokumenta, a tipova je devet
+' (sedam rezima F1..F7 + fakture + izvodi). Ostali ekrani koriste manje i
+' visak dugmadi ostaje sakriven (LayoutGrid). Natpisi u F8 su kratki bas
+' zato da devet komada stane levo od polja za pretragu.
+Private Const MAX_SEG     As Long = 9        ' dugmadi prekidaca lista koje se PRAVE
 Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
@@ -2321,8 +2325,9 @@ Public Sub RenderGrid()
     ft.Controls("ftKg").caption = Poruka("OTKUI_FT_UKUPNO") & " " & FmtKg(mSumKg) & " " & Poruka("OTKUI_UNIT_KG")
     ' rezim bez kolone vrednosti (Zbirna) nema ni zbir
     ft.Controls("ftVal").Visible = ModeHasValCol()
-    ' reversi se broje u komadima, sve ostalo u dinarima (i bez decimala)
-    If ActiveMode = "F7" Then
+    ' reversi se broje u komadima, sve ostalo u dinarima (i bez decimala);
+    ' pitanje ide ekranu, jer reversi mogu biti i sadrzaj F8 (storno centar)
+    If ModeBrojiKomade(ActiveMode) Then
         ft.Controls("ftVal").caption = Poruka("OTKUI_FT_UKUPNO") & " " & _
                                        FmtBroj(mSumVal, 0) & " " & ModeValUnit(ActiveMode)
     Else
@@ -2857,7 +2862,11 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End If
 
     ClearMarks                       ' oznake pripadaju JEDNOJ listi jednog rezima
-    If key = "F8" Then mFilter = "otkazane" Else mFilter = "danas"
+    ' F8 od v6-ui-119 STORNIRA, pa mu je radna lista lista AKTIVNIH dokumenata
+    ' - "otkazane" bi ga otvarao nad onima nad kojima nema sta da se radi.
+    ' "Sve" a ne "danas": dokument koji se stornira je najcesce od juce ili
+    ' pre nedelju dana, ne od danas.
+    If key = "F8" Then mFilter = "sve" Else mFilter = "danas"
     ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
     ' listu, a posao za koji ta lista postoji su bas neraspodeljene otpremnice.
     If ActiveLista() = "OTPREMNICE" Then mFilter = "otvorene"
@@ -2867,16 +2876,17 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ' gotovinskim prometom (tblNovac nema BrojZbirne)
     ' povratak sa ugovornog ekrana - Filteri se vracaju samo ovde
     BoxShow frm.Controls("zGrid"), "btnFilteri", True
-    ShowChip frm, "chipBezZbirne", ModeHasZbirna(key) And key <> "F8"
-    ShowChip frm, "chipNefakt", ModeHasFaktura(key) And key <> "F8"
-    ' F8 prikazuje ISKLJUCIVO ponistene dokumente, pa cipovi nemaju sta da
-    ' suze: svaki osim "Otkazane" izbacivao je operatera iz storna, a naslov
-    ' je i dalje govorio "Stornirani dokumenti". Skrivaju se dok F8 ne dobije
-    ' svoj ekran u S3 (lista kroz vise tabela, ne samo tblOtpremnica).
-    ShowChip frm, "chipDanas", key <> "F8"
-    ShowChip frm, "chipNedelja", key <> "F8"
-    ShowChip frm, "chipSve", key <> "F8"
-    ShowChip frm, "chipOtkazane", key <> "F8"
+    ShowChip frm, "chipBezZbirne", ModeHasZbirna(key)
+    ShowChip frm, "chipNefakt", ModeHasFaktura(key)
+    ' Cipovi su se u F8 skrivali dok je taj rezim umeo samo da PRIKAZE
+    ' stornirane iz tblOtpremnica - tada je svaki osim "Otkazane" izbacivao
+    ' operatera iz storna. Od v6-ui-119 F8 cita svih devet tipova i stornira,
+    ' pa mu cipovi rade isto sto i svuda: suzavaju listu, a "Otkazane" je i
+    ' dalje pregled vec storniranih.
+    ShowChip frm, "chipDanas", True
+    ShowChip frm, "chipNedelja", True
+    ShowChip frm, "chipSve", True
+    ShowChip frm, "chipOtkazane", True
     ' Naslov i cipovi po LISTI idu POSLE cipova po rezimu, ne pre njih: red
     ' iznad postavlja cipove liste dokumenata bez obzira na izabranu listu, pa
     ' bi ranije pozvan RefreshGridTitle bio pregazen (u listi otpremnica su se
@@ -6366,13 +6376,15 @@ Public Function OtkupUI_SelfCheck() As String
     ver = "modOtkupUI " & OTKUI_BUILD & " + modUiKit " & UIKIT_BUILD & _
           " + modScrDokumenti " & SCRDOK_BUILD & _
           " + modUiScreens " & UISCR_BUILD & _
+          " + modStornoDok " & STORNODOK_BUILD & _
           " + clsFlatBtn " & IIf(Len(cv) = 0, "(stara)", cv)
     If Len(cv) = 0 Then
         OtkupUI_SelfCheck = ver & vbCrLf & _
             "PAZNJA: clsFlatBtn je STARA verzija (uvoz nije zamenio klasu; " & _
             "trazi komponentu clsFlatBtn1 u Project Exploreru)"
     ElseIf StaraKomponenta(cv) Or StaraKomponenta(UIKIT_BUILD) _
-           Or StaraKomponenta(SCRDOK_BUILD) Or StaraKomponenta(UISCR_BUILD) Then
+           Or StaraKomponenta(SCRDOK_BUILD) Or StaraKomponenta(UISCR_BUILD) _
+           Or StaraKomponenta(STORNODOK_BUILD) Then
         OtkupUI_SelfCheck = ver & vbCrLf & _
             "PAZNJA: neki modul je stariji od " & OTKUI_MIN_BUILD & _
             " (uvoz nije prosao do kraja)"
