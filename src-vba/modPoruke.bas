@@ -715,6 +715,56 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HD_IZNOS", "IZNOS"
     UpsertRow lo, existing, "OTKUI_HD_RACUN", "RA" & ChrW(268) & "UN"
     UpsertRow lo, existing, "OTKUI_HD_STAVKI", "STAVKI"
+    ' --- framework ispravke posle storna (Faza D/13) ---
+    UpsertRow lo, existing, "STORNO_ASK_REVERS", ChrW(352) & "ta radi" & ChrW(353) & " sa reversom?" & vbCrLf & vbCrLf & _
+              "DA = obi" & ChrW(269) & "an STORNO (saldo se koriguje)" & vbCrLf & _
+              "NE = ISPRAVKA (storniraj stari, unesi novi " & ChrW(8212) & " veza staro" & ChrW(8594) & "novo)" & vbCrLf & _
+              "OTKAZI = odustani"
+    UpsertRow lo, existing, "STORNO_ASK_MOD_1", ChrW(352) & "ta storno POSLOVNO zna" & ChrW(269) & "i?" & vbCrLf & vbCrLf & _
+              "DA = ISPRAVKA: pogre" & ChrW(353) & "an unos, isti doga" & ChrW(273) & "aj " & ChrW(8212) & _
+              " storniraj stari pa unesi ispravan; veze i prera" & ChrW(269) & "un idu automatski" & vbCrLf & vbCrLf & _
+              "NE = ne" & ChrW(353) & "to drugo (bira se u slede" & ChrW(263) & "em koraku)" & vbCrLf & vbCrLf & _
+              "OTKAZI = odustani, ni" & ChrW(353) & "ta se ne menja"
+    UpsertRow lo, existing, "STORNO_ASK_MOD_2", ChrW(352) & "ta onda?" & vbCrLf & vbCrLf & _
+              "DA = DUPLIKAT: dokument nikad nije trebalo da postoji " & ChrW(8212) & _
+              " skini posledice, nema zamene" & vbCrLf & vbCrLf & _
+              "NE = PONI" & ChrW(352) & "TENJE: fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava, nema novog dokumenta" & vbCrLf & vbCrLf & _
+              "OTKAZI = RE" & ChrW(352) & "I KASNIJE: zapamti kao nedovr" & ChrW(353) & "eno (Osiro" & ChrW(263) & "eni dokumenti)"
+    UpsertRow lo, existing, "STORNO_ASK_PALETE", "Da li palete da OSTANU vezane za storniranu prijemnicu?" & vbCrLf & vbCrLf & _
+              "DA = ne diraj palete (roba je fizi" & ChrW(269) & "ki tu, samo je dokument pogre" & ChrW(353) & "an)" & vbCrLf & _
+              "NE = odve" & ChrW(382) & "i palete (roba nije primljena)"
+    UpsertRow lo, existing, "STORNO_ASK_PONISTI", "PONI" & ChrW(352) & "TITI dokument i SVE gore navedeno?"
+    UpsertRow lo, existing, "STORNO_MSG_ISPRAVKA_DALJE", "SLEDE" & ChrW(262) & "E: unesi i snimi NOVI dokument (normalno)." & vbCrLf & _
+              "Polja su ve" & ChrW(263) & " popunjena iz storniranog " & ChrW(8212) & " promeni samo ono " & ChrW(353) & "to je bilo pogre" & ChrW(353) & "no." & vbCrLf & _
+              "Prevezivanje i prera" & ChrW(269) & "un se rade AUTOMATSKI po snimanju."
+    UpsertRow lo, existing, "STORNO_MSG_ODUSTANAK", "Odustalo se " & ChrW(8212) & " ni" & ChrW(353) & "ta nije promenjeno."
+    ' --- ispravka prijemnice (prevezivanje paleta) ---
+    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ", "Postoji VI" & ChrW(352) & "E ispravki prijemnice na " & ChrW(269) & "ekanju." & vbCrLf & _
+              "Palete NISU automatski prevezane (da se ne pove" & ChrW(382) & "e pogre" & ChrW(353) & "na)." & vbCrLf & _
+              "Re" & ChrW(353) & "i kroz: Osiro" & ChrW(263) & "eni dokumenti."
+    UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_1", ChrW(268) & "eka ISPRAVKA za storniranu prijemnicu"
+    UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_2", "Da li je OVAJ unos zamena za nju?" & vbCrLf & vbCrLf & _
+              "DA = ispravka (palete se prevezuju na novu prijemnicu)" & vbCrLf & _
+              "NE = obi" & ChrW(269) & "an, nepovezan unos (normalna paletizacija)"
+    UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_ZBIRNA", "Zbirna je promenjena. Da li je ovo i dalje ISPRAVKA?" & vbCrLf & vbCrLf & _
+              "DA = ispravka (palete se prevezuju i dobijaju novu zbirnu)" & vbCrLf & _
+              "NE = nov, nepovezan unos (normalna paletizacija)" & vbCrLf & _
+              "OTKAZI = ne snimaj jo" & ChrW(353)
+    UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_PREVEZANE", ChrW(10003) & " Palete prevezane:"
+    UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Prevezivanje paleta nije uspelo " & ChrW(8212) & _
+              " uradi ru" & ChrW(269) & "no (Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Palete):"
+    ' --- hladnjaca ispravka posle storna otkupa (F1) ---
+    UpsertRow lo, existing, "OTKUI_MSG_HLAD_LANAC", "Otkup storniran (autohladnja" & ChrW(269) & "a: ceo lanac oboren)."
+    UpsertRow lo, existing, "OTKUI_MSG_HLAD_PALETE", "Paletizovana prijemnica:"
+    UpsertRow lo, existing, "OTKUI_ASK_HLAD", ChrW(352) & "ta dalje sa paletama?" & vbCrLf & vbCrLf & _
+              "DA = ISPRAVKA: izmeni gre" & ChrW(353) & "ku, palete idu na nov lanac" & vbCrLf & _
+              "NE = DUPLI UNOS: nije primljeno 2x, skini stavke" & vbCrLf & _
+              "OTKAZI = ni" & ChrW(353) & "ta sada (palete ostaju osiro" & ChrW(263) & "ene)"
+    UpsertRow lo, existing, "OTKUI_MSG_HLAD_ISPRAVKA", ChrW(10003) & " Polja popunjena iz storniranog " & ChrW(8212) & _
+              " izmeni gre" & ChrW(353) & "ku pa snimi"
+    UpsertRow lo, existing, "OTKUI_MSG_HLAD_NISTA", "Ni" & ChrW(353) & "ta nije skinuto."
+    UpsertRow lo, existing, "OTKUI_MSG_HLAD_OSIROCENE", "Palete su osiro" & ChrW(263) & "ene (i dalje broje robu)." & vbCrLf & _
+              "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Mod: Palete."
     UpsertRow lo, existing, "OTKUI_ERR_DATUM", ChrW(10007) & " Datum nije " & ChrW(269) & "itljiv " & ChrW(8212) & " upi" & ChrW(353) & "i ga kao 11.08.2026."
     UpsertRow lo, existing, "OTKUI_MSG_SNIMLJENO", ChrW(10003) & " Dokument spreman za upis"
     UpsertRow lo, existing, "OTKUI_MSG_PRINT", ChrW(353) & "tampa"

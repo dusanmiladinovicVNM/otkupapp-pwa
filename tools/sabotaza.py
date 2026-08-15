@@ -391,6 +391,35 @@ SABOTAZE = {
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument PRE poziva Storno*_TX",
     ),
+    # --- prefill posle storna (Z10) -----------------------------------------
+    "prefill-zbirna-kolona": (
+        "modStornoDok.bas",
+        "        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA\n",
+        '        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = "Kolicina"   \' SABOTAZA\n',
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "zbirna cita UkupnoKolicina -- literal 'Kolicina' tiho vraca nulu",
+    ),
+    "prefill-tabela": (
+        "modStornoDok.bas",
+        "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTKUP\n",
+        "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTPREMNICA   ' SABOTAZA\n",
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "prefill cita tabelu SVOG tipa (otkup i otpremnica dele broj 1/TEST)",
+    ),
+    "prefill-broj": (
+        "modStornoDok.bas",
+        '    res = Spoji(res, "fokus", "kolicina")\n',
+        '    res = Spoji(res, "brdok", NzToText(d(base, cBroj)))   \' SABOTAZA\n',
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "broj dokumenta se NE preuzima -- ispravka je nov dokument, nov broj",
+    ),
+    "framework-otkup": (
+        "modStornoDok.bas",
+        "        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA\n",
+        "        Case STIP_OTPREMNICA, STIP_OTKUP: TipUFlowDoc = FLOW_DOC_OTPREMNICA   ' SABOTAZA\n",
+        "T_FrameworkIspravke_SamoCetiriTipa",
+        "framework ispravke vazi SAMO za cetiri tipa sa nizvodnim tokom",
+    ),
     "storno-revers-smer": (
         "modStornoDok.bas",
         "            If Len(Trim$(opcija)) = 0 Then\n"

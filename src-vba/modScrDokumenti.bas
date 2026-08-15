@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-119"
+Public Const SCRDOK_BUILD As String = "v6-ui-120"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -370,6 +370,14 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         Exit Function
     End If
 
+    ' FRAMEWORK ISPRAVKE: za cetiri tipa sa nizvodnim tokom storno nije
+    ' Da/Ne nego izbor STA storno poslovno znaci. Ako framework preuzme
+    ' dokument, obicna potvrda ispod se preskace.
+    If IspravkaPreuzela(tip, kljuc, opcija) Then
+        StornoRedF8 = True
+        Exit Function
+    End If
+
     If tip = STIP_IZVOD Then
         ' Izvod pada u CELOSTI, pa potvrda bez pregleda ne bi bila
         ' informisana; posle nje se bira ishod za staging redove. Taj izbor
@@ -411,6 +419,164 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
+'------------------------------------------- FRAMEWORK ISPRAVKE (Faza D/13)
+' Vraca True ako je framework preuzeo dokument - tada obican storno ne ide.
+'
+' Dva razlicita pitanja, jer su dva razlicita posla:
+'   REVERS   nema nizvodni tok, ali IMA poslovnu razliku storno vs ispravka
+'            (isti fizicki dogadjaj, pogresno unet) -> kratko pitanje
+'   ostali   pun izbor moda, i to SAMO kad StornoTraziIzborModa kaze da ima
+'            o cemu da se odlucuje (prijemnica, palete, faktura, blokovi)
+'
+' Sve poslovne posledice racuna modStornoFlow kroz modStornoDok; ovde je
+' samo redosled pitanja i ono sto se posle njih pokaze operateru.
+Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
+                                  ByVal opcija As String) As Boolean
+    Dim mode As String, res As Object
+    On Error GoTo EH
+    If Len(modStornoDok.TipUFlowDoc(tip)) = 0 Then Exit Function
+
+    If tip = STIP_REVERSI Then
+        Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija) & vbCrLf & vbCrLf & _
+                           Poruka("STORNO_ASK_REVERS"), vbQuestion + vbYesNoCancel, APP_NAME)
+            Case vbYes:    Exit Function          ' obican storno -> pusti dalje
+            Case vbCancel: IspravkaPreuzela = True: Exit Function
+            Case Else:     mode = SV_MODE_ISPRAVKA
+        End Select
+    Else
+        If Not modStornoDok.StornoTraziIzborModa(tip, broj, opcija) Then Exit Function
+        mode = IzborModa(tip, broj, opcija)
+        If Len(mode) = 0 Then
+            IspravkaPreuzela = True               ' operater je odustao
+            Exit Function
+        End If
+    End If
+
+    IspravkaPreuzela = True
+    Set res = IzvrsiMod(tip, broj, opcija, mode)
+    If res Is Nothing Then
+        modOtkupUI.ShowToast Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip, True
+        Exit Function
+    End If
+
+    If CBool(res("needsForm")) Then
+        ' ISPRAVKA: stari dokument je stigao do storna, novi se tek unosi.
+        ' Rezim se menja PRE prefilla - SelectMode cisti formu, pa bi
+        ' obrnut redosled obrisao upravo prepisane vrednosti.
+        OtvoriIspravku tip, broj, CStr(res("correctionID"))
+        MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
+               Poruka("STORNO_MSG_ISPRAVKA_DALJE"), vbInformation, APP_NAME
+    ElseIf CBool(res("success")) Then
+        MsgBox CStr(res("message")), vbInformation, APP_NAME
+    Else
+        MsgBox CStr(res("message")), vbExclamation, APP_NAME
+    End If
+    Scr_ResetCache
+    Exit Function
+EH:
+    LogErr "modScrDokumenti.IspravkaPreuzela"
+    IspravkaPreuzela = True
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Function
+
+' Izbor jednog od cetiri moda. Cetiri odgovora ne staju u jedan MsgBox, pa
+' idu u dva koraka: prvo ISPRAVKA (najcesci slucaj - pogresan unos), pa
+' ostala tri. Prazan povratak = operater je odustao.
+'
+' Legacy ovo pokazuje kao overlay panel preko celog ekrana, sa multiselect
+' listom otkupnih blokova i prekidacem "ne diraj palete". Panel NIJE prenet
+' (blok-multiselect je stavka 14); ovde je pitanje, ne panel, pa je i
+' blok-storno nedostupan - o tome govori i sam tekst prvog koraka.
+Private Function IzborModa(ByVal tip As String, ByVal broj As String, _
+                           ByVal opcija As String) As String
+    On Error Resume Next
+    Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija) & vbCrLf & vbCrLf & _
+                       Poruka("STORNO_ASK_MOD_1"), vbQuestion + vbYesNoCancel, APP_NAME)
+        Case vbYes:    IzborModa = SV_MODE_ISPRAVKA: Exit Function
+        Case vbCancel: Exit Function
+    End Select
+    Select Case MsgBox(Poruka("STORNO_ASK_MOD_2"), vbQuestion + vbYesNoCancel, APP_NAME)
+        Case vbYes:  IzborModa = SV_MODE_DUPLI
+        Case vbNo:   IzborModa = SV_MODE_PONISTENJE
+        Case Else:   IzborModa = SV_MODE_RESI_KASNIJE
+    End Select
+End Function
+
+' Izvrsenje izabranog moda, sa dva pitanja koja pripadaju samo njemu.
+'
+' PONISTENJE se NAMERNO izvrsava u dva poziva: prvi vrati blocked=True i
+' pun spisak posledica, i tek posle svesne potvrde ide drugi sa
+' forceConfirm. Spisak se tako pravi PRE nego sto se ista promeni.
+Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
+                           ByVal opcija As String, ByVal mode As String) As Object
+    Dim res As Object, neDiraj As Boolean
+    On Error GoTo EH
+    ' "Ne diraj palete" ima smisla samo tamo gde palete vise za dokument, i
+    ' samo kad dokument nestaje bez naslednika. Uz ISPRAVKU se palete
+    ' prevezuju na novi dokument, pa se pitanje ne postavlja.
+    If tip = STIP_PRIJEMNICA And (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE) Then
+        neDiraj = (MsgBox(Poruka("STORNO_ASK_PALETE"), vbQuestion + vbYesNo, APP_NAME) = vbYes)
+    End If
+
+    Set res = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, False, neDiraj)
+    If res Is Nothing Then Exit Function
+    If Not CBool(res("blocked")) Then
+        Set IzvrsiMod = res
+        Exit Function
+    End If
+
+    If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & Poruka("STORNO_ASK_PONISTI"), _
+              vbExclamation + vbYesNo, APP_NAME) <> vbYes Then
+        Set res = Nothing
+        Set IzvrsiMod = OdustanakRes()
+        Exit Function
+    End If
+    Set IzvrsiMod = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, True, neDiraj)
+    Exit Function
+EH:
+    LogErr "modScrDokumenti.IzvrsiMod"
+End Function
+
+' Rezultat "operater je odustao" - isti oblik koji vraca modStornoFlow, da
+' pozivalac ne mora da razlikuje odustajanje od neuspeha.
+Private Function OdustanakRes() As Object
+    Dim r As Object
+    Set r = CreateObject("Scripting.Dictionary")
+    r("success") = False
+    r("blocked") = False
+    r("needsForm") = False
+    r("correctionID") = ""
+    r("message") = Poruka("STORNO_MSG_ODUSTANAK")
+    Set OdustanakRes = r
+End Function
+
+' Otvori unos zamenskog dokumenta: predji u njegov rezim, pa prepisi polja
+' iz stornirane. Redosled je obavezan - SelectMode cisti formu.
+'
+' Prefill polazi od PK-a stornirane (OldDocID iz correction context-a), ne
+' od broja: broj nije globalno jedinstven.
+Private Sub OtvoriIspravku(ByVal tip As String, ByVal broj As String, _
+                           ByVal correctionID As String)
+    Dim spec As String
+    On Error Resume Next
+    modOtkupUI.IdiNaRezim RezimZaTip(tip)
+    spec = modStornoDok.PrefillIzStorniranog(tip, broj, modStornoDok.StorniraniDocID(correctionID))
+    If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
+End Sub
+
+' Rezim u kome se unosi zamenski dokument. Revers ide u F7; smer operater
+' bira sam, jer prefill reversa ne postoji ni u legacy.
+Private Function RezimZaTip(ByVal tip As String) As String
+    Select Case tip
+        Case STIP_OTKUP:      RezimZaTip = "F1"
+        Case STIP_OTPREMNICA: RezimZaTip = "F2"
+        Case STIP_ZBIRNA:     RezimZaTip = "F3"
+        Case STIP_PRIJEMNICA: RezimZaTip = "F4"
+        Case STIP_REVERSI:    RezimZaTip = "F7"
+        Case Else:            RezimZaTip = ActiveMode
+    End Select
+End Function
+
 ' Koji je od cetiri smera reversa aktivan pod ovim brojem. Cetiri smera
 ' dele jedan brojevni niz (KIND_REV), pa broj sam ne kaze koji je red u
 ' tblAmbalaza; pita se istom rutinom kojom legacy proverava postojanje.
@@ -433,6 +599,69 @@ End Function
 Private Function IzvodKljuc(ByVal broj As String, ByVal racun As String) As String
     If Len(racun) = 0 Then IzvodKljuc = broj Else IzvodKljuc = broj & "/" & racun
 End Function
+
+'---------------------------------------- HLADNJACA ISPRAVKA (Faza D/13)
+' Autohladnjaca: jedan otkupni list na hladnjaci povlaci ceo lanac
+' (otpremnica -> zbirna -> prijemnica -> palete). Storno tog otkupa obara
+' ceo lanac, ali PALETE ostaju - one su fizicke, roba je stvarno na njima.
+'
+' Zato se posle storna pita sta sa njima. Kontekst se cita PRE storna:
+' posle njega otkup vise nije aktivan pa se veza ka prijemnici gubi.
+' Prazan palInfo znaci "nema sta da se pita" (nije hladnjaca, nema zbirne
+' ili prijemnica nije paletizovana).
+Private Sub HladnjacaLanac(ByVal brDok As String, ByRef prijBroj As String, _
+                           ByRef palInfo As String)
+    Dim stanica As String, zbirna As String
+    On Error Resume Next
+    prijBroj = "": palInfo = ""
+    stanica = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_STANICA))
+    zbirna = NzToText(LookupValue(TBL_OTKUP, COL_OTK_BR_DOK, brDok, COL_OTK_BROJ_ZBIRNE))
+    If Len(zbirna) = 0 Then Exit Sub
+    If Not IsHladnjacaStanica(stanica) Then Exit Sub
+    prijBroj = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, zbirna, COL_PRJ_BROJ))
+    If Len(prijBroj) = 0 Then Exit Sub
+    palInfo = GetPaleteInfoForPrijemnicaBroj(prijBroj)
+End Sub
+
+' Tri ishoda, isti kao u legacy modOtkupBlok.OfferHladnjacaIspravka:
+'   DA     ISPRAVKA - zapamti pending relink i prefiluj otkup iz storniranog;
+'          po Unosu se lanac gradi bez sveze paletizacije, a stare palete se
+'          prevezuju (posao vec radi modOtkupUnos.OtkupUpisi)
+'   NE     DUPLI UNOS - roba nije primljena dvaput, pa se fantomske stavke
+'          odmah skidaju; paleta koja ostane prazna se stornira
+'   OTKAZI nista - palete ostaju osirocene i dalje broje robu
+Private Sub PonudiHladnjacaIspravku(ByVal brDok As String, ByVal prijBroj As String, _
+                                    ByVal palInfo As String)
+    Dim odg As VbMsgBoxResult, info As String, spec As String
+    On Error GoTo EH
+    odg = MsgBox(Poruka("OTKUI_MSG_HLAD_LANAC") & vbCrLf & _
+                 Poruka("OTKUI_MSG_HLAD_PALETE") & " " & prijBroj & " (" & palInfo & ")" & vbCrLf & vbCrLf & _
+                 Poruka("OTKUI_ASK_HLAD"), vbQuestion + vbYesNoCancel, APP_NAME)
+
+    If odg = vbYes Then
+        SetHladnjacaRelinkPending prijBroj
+        ' Prefill bez correction context-a: ovaj tok ne stvara zapis u
+        ' tblStornoVeza (veza se cuva kroz pending relink), pa se polazi od
+        ' broja. PickPrefillRows tada uzima poslednje upisan red tog broja i
+        ' ostaje unutar njegove generacije.
+        spec = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, brDok, "")
+        If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_HLAD_ISPRAVKA"), False
+    ElseIf odg = vbNo Then
+        If DetachOsirocenePaletaStavke_TX(prijBroj, info) > 0 Then
+            MsgBox info, vbInformation, APP_NAME
+        Else
+            MsgBox Poruka("OTKUI_MSG_HLAD_NISTA") & IIf(Len(info) > 0, " " & info, ""), _
+                   vbExclamation, APP_NAME
+        End If
+    Else
+        MsgBox Poruka("OTKUI_MSG_HLAD_OSIROCENE"), vbInformation, APP_NAME
+    End If
+    Exit Sub
+EH:
+    LogErr "modScrDokumenti.PonudiHladnjacaIspravku"
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+End Sub
 
 ' Vraca True ako je radnja PROMENILA podatke (pa mreza mora ponovo da se cita).
 ' Stampa vraca False - ona nista ne menja.
@@ -483,10 +712,18 @@ Private Function RowAction(ByVal tag As String) As Boolean
             If MsgBox(Poruka("OTKUI_ASK_STORNO") & " " & broj & _
                       Poruka("OTKUI_ASK_STORNO2"), vbQuestion + vbYesNo, _
                       APP_NAME) = vbNo Then Exit Function
+            ' Autohladnjaca: kontekst lanca se cita PRE storna - posle njega
+            ' otkup vise nije aktivan, pa se veza ka prijemnici ne bi nasla.
+            Dim hlPrij As String, hlPal As String
+            HladnjacaLanac broj, hlPrij, hlPal
             If modStorno.StornoOtkupByBrDok_TX(broj) Then
                 Scr_ResetCache
-                modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
                 RowAction = True
+                If Len(hlPal) > 0 Then
+                    PonudiHladnjacaIspravku broj, hlPrij, hlPal
+                Else
+                    modOtkupUI.ShowToast Poruka("OTKUI_MSG_STORNIRANO") & " " & broj, False
+                End If
             Else
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_STORNO") & " " & broj, True
             End If
