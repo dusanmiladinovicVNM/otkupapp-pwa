@@ -80,8 +80,13 @@ Public Const STIP_IZVOD      As String = "IZVOD"
 ' dolazi gotova iz modStorno (ResolveNovacForStorno, ResolveIzvodZaStorno,
 ' GetIzvodStornoBlokade), jer je tamo i pravilo koje ih pravi.
 '=====================================================================
+' docID: KANONSKI IDENTITET reda koji je operater izabrao u F8 --
+' GeneracijaID za robna dokumenta, PK za novac i fakturu. Kad je poznat,
+' dokument se NE trazi ponovo po broju. Opcion je zbog legacy forme i
+' zatecenih zapisa bez generacije; tada vazi kapija nad jednoznacnoscu broja.
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
-                             ByVal opcija As String) As String
+                             ByVal opcija As String, _
+                             Optional ByVal docID As String = "") As String
     Dim razlog As String, izvBroj As String, izvRacun As String
     On Error GoTo EH
     broj = Trim$(broj)
@@ -177,7 +182,8 @@ End Function
 '   IZVOD   - StornoIzvod_TX sam vraca izvestaj (koliko redova, koji ishod).
 '=====================================================================
 Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
-                             ByVal opcija As String, ByRef poruka As String) As Boolean
+                             ByVal opcija As String, ByRef poruka As String, _
+                             Optional ByVal docID As String = "") As Boolean
     Dim ok As Boolean, novID As String, razlog As String
     Dim izvBroj As String, izvRacun As String, izvInfo As String
     Dim fakID As String, vezPrij As String
@@ -302,7 +308,8 @@ End Function
 ' pitanja o nizvodnom toku. Neizvesnost mora da vodi ka VISE pitanja, ne ka
 ' manje.
 Public Function StornoTraziIzborModa(ByVal tip As String, ByVal broj As String, _
-                                     ByVal opcija As String) As Boolean
+                                     ByVal opcija As String, _
+                                     Optional ByVal docID As String = "") As Boolean
     Dim dt As String
     On Error GoTo EH
     dt = TipUFlowDoc(tip)
@@ -317,7 +324,8 @@ End Function
 ' Pun pregled lanca za dijalog: sta sve visi o ovom dokumentu. Prazno =
 ' tip nije framework tip (tada se koristi StornoPregled iz odeljka 2).
 Public Function StornoPregledLanca(ByVal tip As String, ByVal broj As String, _
-                                   ByVal opcija As String) As String
+                                   ByVal opcija As String, _
+                                   Optional ByVal docID As String = "") As String
     Dim dt As String
     On Error Resume Next
     dt = TipUFlowDoc(tip)
@@ -335,7 +343,8 @@ End Function
 Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
                                 ByVal opcija As String, ByVal mode As String, _
                                 ByVal forceConfirm As Boolean, _
-                                ByVal neDiraj As Boolean) As Object
+                                ByVal neDiraj As Boolean, _
+                                Optional ByVal docID As String = "") As Object
     Dim dt As String
     On Error GoTo EH
     dt = TipUFlowDoc(tip)
