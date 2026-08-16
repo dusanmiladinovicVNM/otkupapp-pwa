@@ -63,6 +63,11 @@ Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg 
 ' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran
 ' (Len > 0). Upis, koji bi trazio postojeceg, ovi testovi ne voze.
 Private Const FX_KUPAC As String = "KUP-TEST-1"
+' Kolizija brojeva: PRJ-TEST-A (KUP-TEST-1) i PRJ-TEST-B (KUP-TEST-2) nose ISTI
+' BrojPrijemnice. Tako je i u produkciji -- broj se racuna po kupcu.
+Private Const FX_KUPAC2 As String = "KUP-TEST-2"
+Private Const FX_PRIJ_BROJ As String = "1/150326"
+Private Const FX_PRIJ_STORNO As String = "9/150326"
 ' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
 ' toliko da prijavi, inace je kapija obara.
 Private Const FX_ZBIRNA_KG As Double = 1000
@@ -110,6 +115,8 @@ Public Sub RunAllTests()
     RunOne 21
     RunOne 22
     RunOne 23
+    RunOne 24
+    RunOne 25
 
     SetTestMode prevMode
     WriteResultFile
@@ -185,6 +192,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 21: TestName = "T_StornoDok_KapijePreUpisa"
         Case 22: TestName = "T_PrefillIzStorniranog_CitaSvojuTabelu"
         Case 23: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
+        Case 24: TestName = "T_Prefill_PoIdentitetuNePoBroju"
+        Case 25: TestName = "T_IspravkaDetekcija_FailClosed"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -216,6 +225,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 21: T_StornoDok_KapijePreUpisa
         Case 22: T_PrefillIzStorniranog_CitaSvojuTabelu
         Case 23: T_FrameworkIspravke_SamoCetiriTipa
+        Case 24: T_Prefill_PoIdentitetuNePoBroju
+        Case 25: T_IspravkaDetekcija_FailClosed
     End Select
 End Sub
 
@@ -1164,6 +1175,77 @@ Private Sub T_FrameworkIspravke_SamoCetiriTipa()
                   SV_MODE_ISPRAVKA, False, False) Is Nothing), True, _
                  "framework ne izvrsava nista nad: " & CStr(nisu(i))
     Next i
+End Sub
+
+' PREFILL BIRA DOKUMENT PO PK-u, NE PO BROJU.
+'
+' Fixture ima dve AKTIVNE prijemnice sa istim brojem i razlicitim kupcem
+' (PRJ-TEST-A / KUP-TEST-1, PRJ-TEST-B / KUP-TEST-2). Tako i mora da bude u
+' produkciji: GenerateBrojPrijemnice racuna sekvencu PO KUPCU, pa dva kupca
+' istog dana dobiju isti "1/ddmmyy".
+'
+' Ako prefill krene od broja, ispravka jednog kupca ponudi kolicine i cenu
+' DRUGOG. Dokument bi i dalje bio "ispravan" - samo tudji.
+'
+' Prethodna verzija ovog testa zvala je PrefillIzStorniranog sa oldDocID:="",
+' pa bas ovaj slucaj nije ni doticala.
+Private Sub T_Prefill_PoIdentitetuNePoBroju()
+    Dim sA As String, sB As String
+
+    sA = modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-TEST-A")
+    sB = modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-TEST-B")
+
+    AssertEq (Len(sA) > 0), True, "prefill po PK-u A nije prazan"
+    AssertEq (Len(sB) > 0), True, "prefill po PK-u B nije prazan"
+
+    ' Isti broj, dva PK-a -> DVE razlicite vrednosti. Da prefill ide po broju,
+    ' obe strane bi vratile isti dokument.
+    AssertEq SpecVal(sA, "kol1"), "300", "PK A daje SVOJU kolicinu"
+    AssertEq SpecVal(sB, "kol1"), "700", "PK B daje SVOJU kolicinu"
+    AssertEq SpecVal(sA, "partnerid"), FX_KUPAC, "PK A daje svog kupca"
+    AssertEq SpecVal(sB, "partnerid"), FX_KUPAC2, "PK B daje svog kupca"
+    AssertEq SpecVal(sA, "cena"), "60", "PK A daje svoju cenu"
+    AssertEq SpecVal(sB, "cena"), "80", "PK B daje svoju cenu"
+
+    ' Nepoznat PK ne sme da "padne nazad" na prvi red istog broja - to bi bila
+    ' ista greska, samo tise.
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-NE-POSTOJI"), "", _
+             "nepoznat PK ne pogadja tudji dokument istog broja"
+
+    ' Ista kolizija je razlog zasto prevezivanje po broju mora da stane.
+    AssertEq (modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+              COL_PRJ_KUPAC, FX_PRIJ_BROJ) > 1), True, _
+             "broj sa dva kupca se prijavljuje kao dvosmislen"
+    AssertEq modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+             COL_PRJ_KUPAC, FX_PRIJ_STORNO), 0, _
+             "storniran dokument se ne broji kao vlasnik"
+End Sub
+
+' NEIZVESNOST ZAUSTAVLJA UPIS, NE PROPUSTA GA.
+'
+' Kad se ne zna da li ispravka na cekanju postoji, "nastavi kao obican unos"
+' znaci: nova prijemnica dobija SVEZE palete, stare ostaju osirocene, a
+' correction ostaje PENDING i ceka jos jednu prijemnicu. Zato je detekcija
+' fail-closed.
+'
+' Fixture ima DVE ispravke na cekanju nad otpremnicom - namerno ne nad
+' prijemnicom, jer detekcija prijemnice pita operatera kroz MsgBox, a MsgBox
+' u headless runu visi. Pravilo je isto i deli ga ista rutina.
+Private Sub T_IspravkaDetekcija_FailClosed()
+    Dim cid As String, stari As String, parent As String, razlog As String
+    Dim ishod As Long
+
+    ' Dve na cekanju -> STOP, sa razlogom (safe-stop).
+    ishod = modDokUnos.NadjiIspravku(FLOW_DOC_OTPREMNICA, cid, stari, parent, razlog)
+    AssertEq ishod, -1, "dve ispravke na cekanju zaustavljaju upis"
+    AssertEq (Len(razlog) > 0), True, "safe-stop nosi razlog za operatera"
+
+    ' Nijedna za drugi tip -> obican unos. Dokazuje i da se tipovi ne mesaju:
+    ' otpremnicke ispravke ne smeju da zaustave unos prijemnice.
+    ishod = modDokUnos.NadjiIspravku(FLOW_DOC_PRIJEMNICA, cid, stari, parent, razlog)
+    AssertEq ishod, 0, "ispravka drugog tipa ne dira ovaj unos"
+    AssertEq razlog, "", "bez ispravke nema ni razloga"
+    AssertEq cid, "", "bez ispravke nema ni CorrectionID"
 End Sub
 
 ' Vrednost jednog polja iz prefill opisa ("kljuc=vrednost|kljuc=vrednost").

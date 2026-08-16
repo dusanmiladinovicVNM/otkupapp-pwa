@@ -1030,6 +1030,63 @@ End Sub
 ' Iz anchor-a se cita generacija (COL_GENERACIJA_ID) i uzimaju Kl.I i Kl.II SAMO
 ' iz nje. Bez generacije (red stariji od uvodjenja kolone) prefiluje se samo sam
 ' anchor -- konzervativno, jer pripadnost druge klase nije dokaziva.
+' Koliko RAZLICITIH vlasnika ima aktivnih dokumenata pod istim poslovnim
+' brojem. Vise od jednog znaci da broj NIJE jednoznacan kljuc.
+'
+' Zasto ovo postoji: BrojPrijemnice se racuna PO KUPCU (GenerateBrojPrijemnice),
+' pa dva kupca istog dana dobiju isti "1/ddmmyy". Rutine prevezivanja
+' (ReassignPaleteToPrijemnica_TX, ReassignPrijemnicaToZbirna_TX) primaju BROJ i
+' skeniraju tabelu po njemu - kod dva vlasnika poslednji pogodak pregazi
+' prethodni i palete odu na TUDJU robu, tiho.
+'
+' Dok te rutine ne prime pravi identitet dokumenta, pozivaoci ovom proverom
+' odbijaju dvosmislen slucaj umesto da ga proknjize naslepo. Nula ili jedan =
+' bezbedno; vise = stani.
+Public Function AktivnihVlasnikaPoBroju(ByVal tableName As String, _
+                                        ByVal brojCol As String, _
+                                        ByVal vlasnikCol As String, _
+                                        ByVal broj As String) As Long
+    Const SRC As String = "modDokumenta.AktivnihVlasnikaPoBroju"
+    On Error GoTo EH
+    broj = Trim$(broj)
+    If Len(broj) = 0 Then Exit Function
+
+    Dim data As Variant: data = GetTableData(tableName)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cBr As Long, cVl As Long, cSt As Long
+    cBr = GetColumnIndex(tableName, brojCol)
+    cVl = GetColumnIndex(tableName, vlasnikCol)
+    cSt = GetColumnIndex(tableName, COL_STORNIRANO)
+    If cBr = 0 Or cVl = 0 Then
+        ' Bez kolone vlasnika se dvosmislenost NE moze iskljuciti; fail-closed
+        ' bi ovde blokirao svaki upis, pa se vraca 2 samo kad broj postoji.
+        AktivnihVlasnikaPoBroju = 0
+        Exit Function
+    End If
+
+    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
+    seen.CompareMode = vbTextCompare
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cBr))) = broj Then
+            Dim jeStorno As Boolean: jeStorno = False
+            If cSt > 0 Then jeStorno = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
+            If Not jeStorno Then
+                Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))
+                If Not seen.Exists(vl) Then seen(vl) = True
+            End If
+        End If
+    Next i
+    AktivnihVlasnikaPoBroju = seen.count
+    Exit Function
+EH:
+    ' Fail-closed: greska u proveri jednoznacnosti se prijavljuje kao
+    ' dvosmislenost, pa pozivalac stane.
+    LogErr SRC
+    AktivnihVlasnikaPoBroju = 2
+End Function
+
 Public Sub PickPrefillRows(ByVal data As Variant, _
                            ByVal cBroj As Long, ByVal cKlasa As Long, _
                            ByVal cId As Long, ByVal cGen As Long, _
@@ -1093,6 +1150,14 @@ Private Function FindAnchorRow(ByVal data As Variant, ByVal cBroj As Long, _
                 Exit Function
             End If
         Next r
+        ' PK je ZADAT ali ga u tabeli NEMA -> vrati prazno, bez fallback-a.
+        '
+        ' Fallback po broju postoji samo za STARE kontekste koji OldDocID
+        ' uopste nemaju. Kad kontekst tvrdi konkretan dokument a njega nema,
+        ' "uzmi poslednji red istog broja" znaci: prefiluj TUDJI dokument.
+        ' Broj nije jedinstven (GenerateBrojPrijemnice broji po kupcu), pa je
+        ' to realan scenario, a ne teorijski.
+        Exit Function
     End If
 
     If cBroj <= 0 Then Exit Function

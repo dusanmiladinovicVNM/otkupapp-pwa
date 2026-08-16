@@ -51,10 +51,21 @@ ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
 # Kupac postoji SAMO kao ID na fakturi -- red u tblKupci ne treba: kapije koje
 # ga koriste porede identifikatore, ne citaju karticu kupca.
 KUPAC = "KUP-TEST-1"
+KUPAC2 = "KUP-TEST-2"
 FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
 # Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
 FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
+
+# KOLIZIJA BROJEVA -- srce ovog fixture-a.
+#
+# BrojPrijemnice NIJE globalno jedinstven: GenerateBrojPrijemnice racuna
+# sekvencu PO KUPCU, pa dva kupca istog dana dobiju isti "1/ddmmyy". Dokle god
+# u fixture-u nije postojao takav par, svaka tvrdnja oblika "cilj/izvor se
+# jednoznacno razresava po broju" bila je zelena bez pokrica -- i sabotaza koja
+# bi je oborila prolazila je neprimeceno.
+PRIJEMNICA_BROJ = "1/150326"        # isti broj kod KUPAC i KUPAC2
+PRIJEMNICA_STORNO = "9/150326"      # stornirana; njene palete su osirocene
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -139,6 +150,52 @@ SEED = {
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
         {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
+    ],
+    # Tri prijemnice, sve tri sa razlogom:
+    #   PRJ-TEST-A i PRJ-TEST-B  ISTI broj, RAZLICIT kupac -> kolizija identiteta
+    #   PRJ-TEST-S               stornirana; nosi paletu koja time postaje osirocena
+    # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
+    # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
+    "tblPrijemnica": [
+        {"PrijemnicaID": "PRJ-TEST-A", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 60.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 30, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-B", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 700, "Cena": 80.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 70, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-S", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
+    ],
+    # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
+    # GetPrijemniceSaOsirocenimPaletama treba da nadje.
+    "tblPaleta": [
+        {"PaletaID": "PAL-TEST-1", "BrojPalete": 1, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
+         "KapacitetGajbica": 100, "NetoKg": 400, "Status": "OTVORENA"},
+    ],
+    "tblPaletaStavka": [
+        {"StavkaID": "PST-TEST-1", "PaletaID": "PAL-TEST-1",
+         "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
+         "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-S",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+    ],
+    # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
+    # prijemnicom: detekcija ispravke prijemnice pita operatera kroz MsgBox, a
+    # MsgBox u headless runu visi. Ovako se safe-stop pravilo ("dve ili vise na
+    # cekanju = ne biraj naslepo") proverava nad istom deljenom rutinom, bez
+    # ijednog dijaloga.
+    "tblStornoVeze": [
+        {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
+         "OldDocType": "Otpremnica", "OldDocID": "OTP-TEST-2", "OldBroj": "2/TEST",
+         "NeedsRecovery": "Da", "Message": "fixture: ispravka na cekanju"},
+        {"CorrectionID": "SV-TEST-2", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
+         "OldDocType": "Otpremnica", "OldDocID": "OTP-TEST-3", "OldBroj": "3/TEST",
+         "NeedsRecovery": "Da", "Message": "fixture: druga ispravka na cekanju"},
     ],
 }
 

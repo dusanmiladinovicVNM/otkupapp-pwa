@@ -58,7 +58,7 @@ Attribute VB_Name = "modStornoDok"
 '=====================================================================
 Option Explicit
 
-Public Const STORNODOK_BUILD As String = "v6-ui-120"
+Public Const STORNODOK_BUILD As String = "v6-ui-122"
 
 ' Kljucevi tipova - isti kao modScrDokumenti.modeKey, plus dva koja novi
 ' UI jos nema kao rezim (fakture i bankovni izvodi se u njemu ne kreiraju,
@@ -296,13 +296,22 @@ End Function
 ' Revers je list u lancu, pa nikad ne trazi pun izbor; njegova jedina
 ' poslovna razlika (storno vs ispravka) resava se kratkim pitanjem u
 ' ekranu, isto kao u legacy RunReversStornoUI.
+' FAIL-CLOSED: greska znaci "ponudi izbor". CorrectionNeedsDialog je i sam
+' takav (na gresku vraca True), pa bi ovde "On Error Resume Next" ponistio
+' njegovu zastitu - rezultat bi ostao False i storno bi presao u obican, bez
+' pitanja o nizvodnom toku. Neizvesnost mora da vodi ka VISE pitanja, ne ka
+' manje.
 Public Function StornoTraziIzborModa(ByVal tip As String, ByVal broj As String, _
                                      ByVal opcija As String) As Boolean
     Dim dt As String
-    On Error Resume Next
+    On Error GoTo EH
     dt = TipUFlowDoc(tip)
-    If Len(dt) = 0 Then Exit Function
+    If Len(dt) = 0 Then Exit Function      ' nije framework tip - to se zna pouzdano
     StornoTraziIzborModa = CorrectionNeedsDialog(dt, broj, opcija)
+    Exit Function
+EH:
+    LogErr "modStornoDok.StornoTraziIzborModa"
+    StornoTraziIzborModa = True
 End Function
 
 ' Pun pregled lanca za dijalog: sta sve visi o ovom dokumentu. Prazno =

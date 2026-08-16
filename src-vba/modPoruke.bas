@@ -753,6 +753,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_PREVEZANE", ChrW(10003) & " Palete prevezane:"
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Prevezivanje paleta nije uspelo " & ChrW(8212) & _
               " uradi ru" & ChrW(269) & "no (Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Palete):"
+    UpsertRow lo, existing, "DOKUNOS_ERR_ISPRAVKA_NECITLJIVA", ChrW(10007) & " Ne mo" & ChrW(382) & "e se utvrditi da li ISPRAVKA " & _
+              ChrW(269) & "eka na ovu prijemnicu." & vbCrLf & vbCrLf & _
+              "Upis je zaustavljen namerno: da je nastavljen, nova prijemnica bi dobila SVE" & ChrW(381) & "E palete, " & _
+              "a stare bi ostale osiro" & ChrW(263) & "ene." & vbCrLf & _
+              "Proveri stanje u: Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
+    UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_DVOSMISLEN", ChrW(10007) & " Broj prijemnice nije jednozna" & ChrW(269) & "an " & _
+              ChrW(8212) & " isti broj nose dokumenta VI" & ChrW(352) & "E kupaca:"
+    UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_DVOSMISLEN2", "Prevezivanje paleta ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _
+              "Palete su ostale na staroj prijemnici " & ChrW(8212) & " prevezi ih ru" & ChrW(269) & "no kroz Oporavak, " & _
+              "posle ispravke broja."
     ' --- hladnjaca ispravka posle storna otkupa (F1) ---
     UpsertRow lo, existing, "OTKUI_MSG_HLAD_LANAC", "Otkup storniran (autohladnja" & ChrW(269) & "a: ceo lanac oboren)."
     UpsertRow lo, existing, "OTKUI_MSG_HLAD_PALETE", "Paletizovana prijemnica:"
