@@ -2169,37 +2169,9 @@ Public Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
                   "RequireJedanVlasnikPoBroju: nije zadata nijedna vlasnik kolona."
     End If
 
-    Dim data As Variant
-    data = GetTableData(tblName)
-    If IsEmpty(data) Then Exit Sub
-
-    Dim cBr As Long, cSt As Long
-    cBr = RequireColumnIndex(tblName, brojCol, sourceName)
-    cSt = RequireColumnIndex(tblName, COL_STORNIRANO, sourceName)
-
-    Dim cVl() As Long
-    ReDim cVl(LBound(vlasnikCols) To UBound(vlasnikCols))
-
-    Dim j As Long
-    For j = LBound(vlasnikCols) To UBound(vlasnikCols)
-        cVl(j) = RequireColumnIndex(tblName, CStr(vlasnikCols(j)), sourceName)
-    Next j
-
     Dim vlasnici As Object
-    Set vlasnici = CreateObject("Scripting.Dictionary")
-
-    Dim i As Long, k As String
-    For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then
-            If Not IsStorniranoValue(data(i, cSt)) Then
-                k = ""
-                For j = LBound(cVl) To UBound(cVl)
-                    k = k & "|" & Trim$(NzToText(data(i, cVl(j))))
-                Next j
-                If Not vlasnici.Exists(k) Then vlasnici.Add k, 1
-            End If
-        End If
-    Next i
+    Set vlasnici = VlasniciPoBroju(tblName, brojCol, broj, sourceName, False, _
+                                   ScopeColsToArray(vlasnikCols))
 
     If vlasnici.count > 1 Then
         Err.Raise ERR_STORNO_BASE + 11, sourceName, _
@@ -2209,6 +2181,66 @@ Public Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
                   "ili razdvoj brojeve."
     End If
 End Sub
+
+' Recnik razlicitih VLASNIKA koji pod istim brojem imaju dokument.
+'
+' Jedan racun za dve upotrebe koje se razlikuju u jednoj jedinoj stvari - da li
+' se stornirani redovi broje:
+'
+'   CILJ prevezivanja / storno  -> samo aktivni (ukljuciStornirane = False)
+'   IZVOR prevezivanja          -> i stornirani (True), jer je izvor bas
+'                                  storniran dokument; brojanje samo aktivnih
+'                                  bi tu uvek dalo nulu i kapija ne bi radila
+'
+' Vlasnik je KOMPOZITAN i razlicit po tipu dokumenta - isti spisak koji vec
+' koristi modDokumenta.ApplyGeneracijaID: otpremnica StanicaID, prijemnica
+' KupacID, zbirna VozacID + KupacID.
+Public Function VlasniciPoBroju(ByVal tblName As String, ByVal brojCol As String, _
+                                ByVal broj As String, ByVal sourceName As String, _
+                                ByVal ukljuciStornirane As Boolean, _
+                                ByVal vlasnikCols As Variant) As Object
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    Set VlasniciPoBroju = res
+
+    Dim data As Variant
+    data = GetTableData(tblName)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cBr As Long, cSt As Long
+    cBr = RequireColumnIndex(tblName, brojCol, sourceName)
+    cSt = RequireColumnIndex(tblName, COL_STORNIRANO, sourceName)
+
+    Dim cVl() As Long
+    ReDim cVl(LBound(vlasnikCols) To UBound(vlasnikCols))
+    Dim j As Long
+    For j = LBound(vlasnikCols) To UBound(vlasnikCols)
+        cVl(j) = RequireColumnIndex(tblName, CStr(vlasnikCols(j)), sourceName)
+    Next j
+
+    Dim i As Long, k As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cBr))) = Trim$(broj) Then
+            If ukljuciStornirane Or Not IsStorniranoValue(data(i, cSt)) Then
+                k = ""
+                For j = LBound(cVl) To UBound(cVl)
+                    k = k & "|" & Trim$(NzToText(data(i, cVl(j))))
+                Next j
+                If Not res.Exists(k) Then res.Add k, 1
+            End If
+        End If
+    Next i
+End Function
+
+' ParamArray se ne prosledjuje dalje kao ParamArray - prepakuje se u obican niz.
+Private Function ScopeColsToArray(ByVal p As Variant) As Variant
+    Dim out() As Variant, i As Long
+    ReDim out(LBound(p) To UBound(p))
+    For i = LBound(p) To UBound(p)
+        out(i) = p(i)
+    Next i
+    ScopeColsToArray = out
+End Function
 
 Private Sub RequireNonBlank(ByVal value As String, _
                             ByVal fieldName As String, _

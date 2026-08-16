@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-121"
+Public Const SCROPO_BUILD As String = "v6-ui-123"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -188,6 +188,13 @@ EH:
 End Function
 
 ' Vraca True samo ako je radnja PROMENILA podatke (mreza se tada cita ponovo).
+' Generacija iz reda mreze. Kolona je prioriteta 3, pa se na uskom ekranu ne
+' CRTA - ali podatak ostaje u mView, a GridCell cita njega, ne sirinu.
+Private Function GenIzReda(ByVal red As Long, ByVal kolona As Long) As String
+    On Error Resume Next
+    GenIzReda = Trim$(CStr(modOtkupUI.GridCell(red, kolona)))
+End Function
+
 Private Function OpoAkcija(ByVal tag As String) As Boolean
     Dim p() As String, red As Long, kljuc As String
     On Error GoTo EH
@@ -200,9 +207,12 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
         Exit Function
     End If
 
+    ' GENERACIJA je poslednja kolona obe izvorne liste. Ona je identitet
+    ' dokumenta - broj je labela. Bez nje bi prevezivanje pogodilo i dokument
+    ' drugog kupca koji deli broj.
     Select Case p(0)
-        Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc)
-        Case "prevezipal": OpoAkcija = PreveziPalete(kljuc)
+        Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc, GenIzReda(red, 8))
+        Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, GenIzReda(red, 7))
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
         Case Else
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
@@ -217,7 +227,7 @@ End Function
 ' PrijemnicaID ostaje, pa faktura i palete ostaju ispravne. Ceo posao radi
 ' postojeci ReassignPrijemnicaToZbirna_TX, ukljucujuci proveru da je cilj
 ' aktivna zbirna.
-Private Function PreveziPrijemnicu(ByVal brojPrij As String) As Boolean
+Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal gen As String) As Boolean
     On Error GoTo EH
     If Len(mCiljZbirna) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_ZBIRNE"), True
@@ -227,7 +237,7 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String) As Boolean
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna) Then
+    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, gen) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
                              " " & ChrW(8594) & " " & mCiljZbirna, False
@@ -247,7 +257,7 @@ End Function
 ' namerno: ovaj ekran postoji bas da razresi slucajeve koje automatika nije
 ' umela, pa razlika u broju gajbica ne sme da bude kapija - prijavljuje se
 ' i koriguje u mestu (PaletaAdjustPrompt).
-Private Function PreveziPalete(ByVal brojPrij As String) As Boolean
+Private Function PreveziPalete(ByVal brojPrij As String, ByVal gen As String) As Boolean
     Dim upoz As String, gajbDiff As Boolean
     On Error GoTo EH
     If Len(mCiljPrijemnica) = 0 Then
@@ -258,11 +268,14 @@ Private Function PreveziPalete(ByVal brojPrij As String) As Boolean
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
         Exit Function
     End If
+    ' Kapija nad dvosmislenim CILJEM vise nije ovde: ista provera sada stoji u
+    ' samom writeru (VlasniciPoBroju / RequireJedanVlasnikPoBroju), pa vazi za
+    ' SVAKOG pozivaoca, i za legacy formu. Ekran samo prikaze razlog.
     If MsgBox(Poruka("OTKUI_ASK_OPO_PAL") & " " & brojPrij & " " & _
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljPrijemnica & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff) Then
+    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, gen) Then
         Scr_ResetCache
         MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
                " " & mCiljPrijemnica & _
@@ -391,11 +404,12 @@ Private Function OsirPrijGridCols() As Variant
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||txt|72|1", _
         "OTKUI_HD_BROJ_ZBIRNE||txt|110|1", _
-        "OTKUI_HD_STATUS||txt|132|1")
+        "OTKUI_HD_STATUS||txt|132|1", _
+        "OTKUI_HDO_GENERACIJA||txt|110|3")
 End Function
 
 Private Function RowsOsiroceninPrijemnica(ByVal q As String) As Variant
-    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 7, q, True)
+    RowsOsiroceninPrijemnica = Rows2D(GetOsirocenePrijemnice(), OsirPrijGridCols(), 8, q, True)
 End Function
 
 '--- OSIROTELE PALETE -------------------------------------------------
@@ -408,11 +422,12 @@ Private Function OsirPalGridCols() As Variant
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HDP_GAJBICA||num|72|1", _
-        "OTKUI_HD_STAVKI||num|72|1")
+        "OTKUI_HD_STAVKI||num|72|1", _
+        "OTKUI_HDO_GENERACIJA||txt|110|3")
 End Function
 
 Private Function RowsOsirocenePalete(ByVal q As String) As Variant
-    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 6, q, True)
+    RowsOsirocenePalete = Rows2D(GetPrijemniceSaOsirocenimPaletama(), OsirPalGridCols(), 7, q, True)
 End Function
 
 ' Zajednicko telo za dve liste koje dolaze kao 2D niz iz modDokumenta.
@@ -526,6 +541,14 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         Exit Function
     End If
 
+    ' Klase I i II su JEDAN dokument: dele broj i vlasnika. Prvi red pravi
+    ' izlazni red, svaki sledeci samo DODAJE svoje kilograme - ranije se
+    ' preskakao, pa je dvoklasni dokument prikazivao samo Klasu I, a i zbir
+    ' u podnozju je bio manji od stvarnog.
+    '
+    ' Filter se primenjuje PRE nego sto se dokument upamti: da se prvo pamti,
+    ' dokument koji ne pogadja pretragu prvim redom ne bi mogao da je pogodi
+    ' drugim.
     Set seen = CreateObject("Scripting.Dictionary")
     seen.CompareMode = vbTextCompare
     ReDim outA(1 To UBound(src, 1), 1 To 5)
@@ -535,13 +558,23 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         End If
         broj = modUiData.CellS(src, r, iBr)
         If Len(broj) = 0 Then GoTo Sledeci
-        If seen.Exists(broj) Then GoTo Sledeci
-        seen(broj) = True
-        hay = broj & "|" & modUiData.CellS(src, r, iVr) & "|" & modUiData.CellS(src, r, iSo)
+        vlasnik = ""
+        If iVl > 0 Then vlasnik = modUiData.CellS(src, r, iVl)
+        kljuc = broj & Chr$(1) & vlasnik
+        hay = broj & "|" & vlasnik & "|" & modUiData.CellS(src, r, iVr) & _
+              "|" & modUiData.CellS(src, r, iSo)
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
+        If seen.Exists(kljuc) Then
+            ' druga klasa istog dokumenta - samo dopuni kolicinu
+            outA(CLng(seen(kljuc)), 6) = CDbl(outA(CLng(seen(kljuc)), 6)) + _
+                                         modUiData.CellD(src, r, iKol)
+            sumKg = sumKg + modUiData.CellD(src, r, iKol)
+            GoTo Sledeci
+        End If
         n = n + 1
+        seen(kljuc) = n
         outA(n, 1) = broj
         outA(n, 2) = modUiData.CellDate(src, r, iDat)
         outA(n, 3) = modUiData.CellS(src, r, iVr)

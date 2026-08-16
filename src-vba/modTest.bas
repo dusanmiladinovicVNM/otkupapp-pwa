@@ -71,6 +71,8 @@ Private Const FX_KUPAC As String = "KUP-TEST-1"
 Private Const FX_KUPAC2 As String = "KUP-TEST-2"
 Private Const FX_PRIJ_BROJ As String = "1/150326"
 Private Const FX_PRIJ_STORNO As String = "9/150326"
+' Kolizioni par storniranih: isti broj, dva kupca, dve palete.
+Private Const FX_PRIJ_KOLIZIJA As String = "8/150326"
 ' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
 ' toliko da prijavi, inace je kapija obara.
 Private Const FX_ZBIRNA_KG As Double = 1000
@@ -123,6 +125,7 @@ Public Sub RunAllTests()
     RunOne 26
     RunOne 27
     RunOne 28
+    RunOne 29
 
     SetTestMode prevMode
     WriteResultFile
@@ -203,6 +206,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 26: TestName = "T_Oporavak_UgovorIRadnje"
         Case 27: TestName = "T_Oporavak_CiljneListe"
         Case 28: TestName = "T_IspravkaPrijemnice_SkipIRelink"
+        Case 29: TestName = "T_RelinkPoGeneraciji_NeDiraTudjDokument"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -239,6 +243,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 26: T_Oporavak_UgovorIRadnje
         Case 27: T_Oporavak_CiljneListe
         Case 28: T_IspravkaPrijemnice_SkipIRelink
+        Case 29: T_RelinkPoGeneraciji_NeDiraTudjDokument
     End Select
 End Sub
 
@@ -1225,12 +1230,24 @@ Private Sub T_Prefill_PoIdentitetuNePoBroju()
              "nepoznat PK ne pogadja tudji dokument istog broja"
 
     ' Ista kolizija je razlog zasto prevezivanje po broju mora da stane.
-    AssertEq (modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
-              COL_PRJ_KUPAC, FX_PRIJ_BROJ) > 1), True, _
+    ' Racun je jedan i deli ga sa storno jezgrom (RequireJedanVlasnikPoBroju),
+    ' sa kompozitnim vlasnistvom po tipu dokumenta.
+    AssertEq (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_BROJ, _
+              "test", False, Array(COL_PRJ_KUPAC)).count > 1), True, _
              "broj sa dva kupca se prijavljuje kao dvosmislen"
-    AssertEq modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
-             COL_PRJ_KUPAC, FX_PRIJ_STORNO), 0, _
-             "storniran dokument se ne broji kao vlasnik"
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_STORNO, _
+             "test", False, Array(COL_PRJ_KUPAC)).count, 0, _
+             "storniran dokument se ne broji medju AKTIVNIM vlasnicima"
+    ' ...ali se broji kad se izricito trazi i stornirane - to je slucaj IZVORA
+    ' prevezivanja, gde je izvor bas storniran dokument.
+    ' Isti racun, sa ukljucenim storniranima, vidi i KOLIZIONI par -- a bas to
+    ' je slucaj IZVORA prevezivanja, gde je izvor storniran dokument.
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_KOLIZIJA, _
+             "test", True, Array(COL_PRJ_KUPAC)).count, 2, _
+             "sa storniranima se vidi da broj nose DVA dokumenta"
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_KOLIZIJA, _
+             "test", False, Array(COL_PRJ_KUPAC)).count, 0, _
+             "medju AKTIVNIMA ih nema - oba su stornirana"
 End Sub
 
 ' NEIZVESNOST ZAUSTAVLJA UPIS, NE PROPUSTA GA.
@@ -1423,6 +1440,64 @@ Private Function StavkiZaPrijemnicu(ByVal brojPrij As String) As Long
         End If
     Next i
 End Function
+
+' PREVEZIVANJE DIRA SAMO SVOJ DOKUMENT, I KAD DVA DELE BROJ.
+'
+' Ovo je test koji je nedostajao. Prethodni E2E test dokazuje da mehanizam
+' radi, ali koristi jedinstven broj - pa ne dokazuje IZOLACIJU. Fixture zato
+'  ima dve STORNIRANE prijemnice istog broja (8/150326), razlicitih kupaca,
+' svaka sa svojom paletom:
+'
+'   PRJ-TEST-C1  KUP-TEST-1   40 gajbica
+'   PRJ-TEST-C2  KUP-TEST-2   25 gajbica
+'
+' Tako je i u produkciji: BrojPrijemnice se racuna PO KUPCU.
+'
+' Identitet nosi GeneracijaID - kolonu pravi EnsureSledljivostSchema na svakom
+' startu, a pecate je writeri. Fixture redovi su sejani mimo writera, pa im
+' test sam upisuje generacije: to je jedini nacin da dva dokumenta budu
+' razlucena bas onako kako bi ih razlucio pravi upis.
+Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
+    Dim upoz As String, gajbDiff As Boolean, ok As Boolean
+
+    ' Preduslov: kolona postoji (Ensure je odradio svoje) i oba dokumenta nose
+    ' svoje palete pod ISTIM brojem.
+    AssertEq (GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID) > 0), True, _
+             "preduslov: EnsureSledljivostSchema je napravio GeneracijaID"
+    AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), 2, _
+             "preduslov: dva dokumenta istog broja nose dve paletne stavke"
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C1", "GEN-TEST-A"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C2", "GEN-TEST-B"
+    AssertEq modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C1"), _
+             "GEN-TEST-A", "preduslov: generacija A je upisana"
+
+    ' Cilj je aktivna prijemnica; koristi se ona kupca 2 iz kolizionog para
+    ' 1/150326 -- svejedno koja, bitno je da postoji.
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-TEST-A")
+    AssertEq ok, True, "prevezivanje po generaciji je proslo"
+
+    ' JEDINA prava tvrdnja ovog testa: dokument B se NIJE pomerio.
+    ' Da izvor ide po broju, obe stavke bi otisle na cilj.
+    AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), 1, _
+             "tudji dokument istog broja OSTAJE na svom mestu"
+    AssertEq GajbicaZaPrijemnicu(FX_PRIJ_KOLIZIJA), 25, _
+             "na starom broju ostaje bas roba dokumenta B (25 gajbica)"
+    AssertEq GajbicaZaPrijemnicu(FX_PRIJ_BROJ), 40, _
+             "na cilj je otisla bas roba dokumenta A (40 gajbica)"
+End Sub
+
+' Upisi generaciju na red po PK-u. Fixture redovi se seju mimo writera, pa
+' generacije nemaju; test ih postavlja da bi dva dokumenta bila razluciva.
+Private Sub StampGeneraciju(ByVal tbl As String, ByVal idCol As String, _
+                            ByVal docID As String, ByVal gen As String)
+    Dim rows As Collection
+    Set rows = FindRows(tbl, idCol, docID)
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+    UpdateCell tbl, rows(1), COL_GENERACIJA_ID, gen
+End Sub
 
 ' Vrednost jednog polja iz prefill opisa ("kljuc=vrednost|kljuc=vrednost").
 ' Prazno = kljuca nema, sto je za ovaj opis isto sto i "nema vrednosti"

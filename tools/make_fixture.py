@@ -49,6 +49,10 @@ SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
 ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
 ZBIRNA_STORNIRANA = "ZB-TEST-STORNO"  # ne sme se pojaviti u listi ciljeva
+# Druga AKTIVNA zbirna: nosi kolizioni par prijemnica. Da su oni na ZB-TEST-1,
+# provera "1 zbirna = 1 prijemnica" bi u testovima otvarala dijalog, a dijalog
+# u headless runu nema ko da zatvori.
+ZBIRNA2 = "ZB-TEST-2"
 # Kupac postoji SAMO kao ID na fakturi -- red u tblKupci ne treba: kapije koje
 # ga koriste porede identifikatore, ne citaju karticu kupca.
 KUPAC = "KUP-TEST-1"
@@ -67,6 +71,7 @@ FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
 # bi je oborila prolazila je neprimeceno.
 PRIJEMNICA_BROJ = "1/150326"        # isti broj kod KUPAC i KUPAC2
 PRIJEMNICA_STORNO = "9/150326"      # stornirana; njene palete su osirocene
+PRIJEMNICA_STORNO2 = "8/150326"     # kolizioni par storniranih (dva kupca)
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -110,6 +115,10 @@ SEED = {
         {"ZbirnaID": "ZBI-TEST-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 1000, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 100,
+         "Klasa": "I"},
+        {"ZbirnaID": "ZBI-TEST-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA2, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 950, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 95,
          "Klasa": "I"},
         {"ZbirnaID": "ZBI-TEST-STOR", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_STORNIRANA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
@@ -167,17 +176,33 @@ SEED = {
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
         {"PrijemnicaID": "PRJ-TEST-A", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
-         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA2,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 60.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 30, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-B", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
-         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA2,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 700, "Cena": 80.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 70, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-S", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
+        # KOLIZIONI PAR: dve STORNIRANE prijemnice ISTOG broja, dva kupca,
+        # svaka sa svojom paletom. Bez njega se ne moze dokazati da prevezivanje
+        # dira SAMO svoj dokument -- a to je bio otvoren nalaz: izvor se birao
+        # po broju, pa bi ovaj par bio zahvacen zajedno.
+        #
+        # Na ZASEBNOM broju (8/150326), ne na 9/150326: testovi dele svesku, pa
+        # test koji prevezuje 9/150326 ne sme da potrosi podatke onome koji
+        # dokazuje izolaciju.
+        {"PrijemnicaID": "PRJ-TEST-C1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
+        {"PrijemnicaID": "PRJ-TEST-C2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 250, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 25, "Klasa": "I", "Stornirano": "Da"},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
@@ -186,11 +211,28 @@ SEED = {
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
          "KapacitetGajbica": 100, "NetoKg": 400, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-2", "BrojPalete": 2, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
+         "KapacitetGajbica": 100, "NetoKg": 400, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-3", "BrojPalete": 3, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
+         "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
     ],
     "tblPaletaStavka": [
         {"StavkaID": "PST-TEST-1", "PaletaID": "PAL-TEST-1",
          "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-S",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        # Kolizioni par: dve palete pod ISTIM brojem prijemnice, dva dokumenta.
+        {"StavkaID": "PST-TEST-C1", "PaletaID": "PAL-TEST-2",
+         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-C1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-C2", "PaletaID": "PAL-TEST-3",
+         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-TEST-C2",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad

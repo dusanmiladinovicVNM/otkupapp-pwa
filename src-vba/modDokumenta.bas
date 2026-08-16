@@ -1030,61 +1030,78 @@ End Sub
 ' Iz anchor-a se cita generacija (COL_GENERACIJA_ID) i uzimaju Kl.I i Kl.II SAMO
 ' iz nje. Bez generacije (red stariji od uvodjenja kolone) prefiluje se samo sam
 ' anchor -- konzervativno, jer pripadnost druge klase nije dokaziva.
-' Koliko RAZLICITIH vlasnika ima aktivnih dokumenata pod istim poslovnim
-' brojem. Vise od jednog znaci da broj NIJE jednoznacan kljuc.
+' ============================================================
+' IDENTITET DOKUMENTA NA GRANICI PREVEZIVANJA
 '
-' Zasto ovo postoji: BrojPrijemnice se racuna PO KUPCU (GenerateBrojPrijemnice),
-' pa dva kupca istog dana dobiju isti "1/ddmmyy". Rutine prevezivanja
-' (ReassignPaleteToPrijemnica_TX, ReassignPrijemnicaToZbirna_TX) primaju BROJ i
-' skeniraju tabelu po njemu - kod dva vlasnika poslednji pogodak pregazi
-' prethodni i palete odu na TUDJU robu, tiho.
+' Broj dokumenta je LABELA, ne identitet: BrojPrijemnice se racuna po kupcu
+' (GenerateBrojPrijemnice), broj zbirne po vozacu. Dva dokumenta lako dele broj.
 '
-' Dok te rutine ne prime pravi identitet dokumenta, pozivaoci ovom proverom
-' odbijaju dvosmislen slucaj umesto da ga proknjize naslepo. Nula ili jedan =
-' bezbedno; vise = stani.
-Public Function AktivnihVlasnikaPoBroju(ByVal tableName As String, _
-                                        ByVal brojCol As String, _
-                                        ByVal vlasnikCol As String, _
-                                        ByVal broj As String) As Long
-    Const SRC As String = "modDokumenta.AktivnihVlasnikaPoBroju"
-    On Error GoTo EH
-    broj = Trim$(broj)
-    If Len(broj) = 0 Then Exit Function
+' Identitet logickog dokumenta (Klasa I + II zajedno) je GeneracijaID -- kolonu
+' pravi modSetup.EnsureSledljivostSchema na SVAKOM startu, a pecate je svi
+' writer-i kroz ApplyGeneracijaID, sa vec tacnim kompozitnim vlasnistvom po
+' tipu (otpremnica StanicaID, prijemnica KupacID, zbirna VozacID + KupacID).
+'
+' Rutine prevezivanja su do sada primale samo broj i skenirale tabelu po njemu.
+' Ove dve funkcije im daju identitet.
+' ============================================================
+
+' Da li red tabele pripada izvornom dokumentu. Sa poznatom generacijom odlucuje
+' iskljucivo PK; bez nje broj (pozivalac je pre toga dokazao jednoznacnost).
+Public Function PripadaIzvoru(ByVal data As Variant, ByVal rowIdx As Long, _
+                              ByVal cBroj As Long, ByVal cId As Long, _
+                              ByVal broj As String, ByVal srcIds As Object) As Boolean
+    If Not srcIds Is Nothing Then
+        If srcIds.count > 0 Then
+            If cId > 0 Then
+                PripadaIzvoru = srcIds.Exists(Trim$(NzToText(data(rowIdx, cId))))
+                Exit Function
+            End If
+        End If
+    End If
+    If cBroj > 0 Then PripadaIzvoru = (Trim$(NzToText(data(rowIdx, cBroj))) = Trim$(broj))
+End Function
+
+' GeneracijaID dokumenta kome pripada dati red (po PK-u). Prazno = red ne
+' postoji ili nema generaciju (stari zapis, pre uvodjenja kolone).
+Public Function GeneracijaPoID(ByVal tableName As String, ByVal idCol As String, _
+                               ByVal docID As String) As String
+    On Error Resume Next
+    docID = Trim$(docID)
+    If Len(docID) = 0 Then Exit Function
+    GeneracijaPoID = Trim$(NzToText(LookupValue(tableName, idCol, docID, COL_GENERACIJA_ID)))
+End Function
+
+' Svi PK-evi koji pripadaju datoj generaciji. To je "koji su redovi OVAJ
+' dokument" - i Klasa I i Klasa II, i nijedan tudji.
+'
+' Prazna generacija vraca prazan recnik, NE sve redove: pozivalac tada mora da
+' padne na kapiju nad brojem, ne na tiho zahvatanje svega.
+Public Function IdoviGeneracije(ByVal tableName As String, ByVal idCol As String, _
+                                ByVal gen As String) As Object
+    Dim res As Object
+    Set res = CreateObject("Scripting.Dictionary")
+    res.CompareMode = vbTextCompare
+    Set IdoviGeneracije = res
+
+    On Error Resume Next
+    gen = Trim$(gen)
+    If Len(gen) = 0 Then Exit Function
 
     Dim data As Variant: data = GetTableData(tableName)
     If IsEmpty(data) Then Exit Function
 
-    Dim cBr As Long, cVl As Long, cSt As Long
-    cBr = GetColumnIndex(tableName, brojCol)
-    cVl = GetColumnIndex(tableName, vlasnikCol)
-    cSt = GetColumnIndex(tableName, COL_STORNIRANO)
-    If cBr = 0 Or cVl = 0 Then
-        ' Bez kolone vlasnika se dvosmislenost NE moze iskljuciti; fail-closed
-        ' bi ovde blokirao svaki upis, pa se vraca 2 samo kad broj postoji.
-        AktivnihVlasnikaPoBroju = 0
-        Exit Function
-    End If
+    Dim cId As Long, cGen As Long
+    cId = GetColumnIndex(tableName, idCol)
+    cGen = GetColumnIndex(tableName, COL_GENERACIJA_ID)
+    If cId = 0 Or cGen = 0 Then Exit Function
 
-    Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
-    seen.CompareMode = vbTextCompare
-    Dim i As Long
+    Dim i As Long, k As String
     For i = 1 To UBound(data, 1)
-        If Trim$(NzToText(data(i, cBr))) = broj Then
-            Dim jeStorno As Boolean: jeStorno = False
-            If cSt > 0 Then jeStorno = (UCase$(Trim$(NzToText(data(i, cSt)))) = "DA")
-            If Not jeStorno Then
-                Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))
-                If Not seen.Exists(vl) Then seen(vl) = True
-            End If
+        If Trim$(NzToText(data(i, cGen))) = gen Then
+            k = Trim$(NzToText(data(i, cId)))
+            If Len(k) > 0 Then res(k) = True
         End If
     Next i
-    AktivnihVlasnikaPoBroju = seen.count
-    Exit Function
-EH:
-    ' Fail-closed: greska u proveri jednoznacnosti se prijavljuje kao
-    ' dvosmislenost, pa pozivalac stane.
-    LogErr SRC
-    AktivnihVlasnikaPoBroju = 2
 End Function
 
 Public Sub PickPrefillRows(ByVal data As Variant, _
@@ -3379,7 +3396,8 @@ Public Function GetOsirocenePrijemnice() As Variant
     End If
 
     Dim cBr As Long, cDat As Long, cVr As Long, cSo As Long
-    Dim cKol As Long, cZbr As Long, cSt As Long
+    Dim cKol As Long, cZbr As Long, cSt As Long, cGen As Long
+    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
     cVr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA)
@@ -3401,19 +3419,27 @@ Public Function GetOsirocenePrijemnice() As Variant
             Dim brp As String: brp = Trim$(NzToText(prj(i, cBr)))
             If Len(bz) > 0 And Len(brp) > 0 Then
                 If Not aktZbr.Exists(bz) Then
-                    If Not seen.Exists(brp) Then
-                        seen(brp) = True
+                    ' Grupise se po BROJ + GENERACIJA, ne po samom broju: dva
+                    ' kupca istog dana dele "1/ddmmyy", pa bi dedup po broju
+                    ' spojio DVA dokumenta u jedan red - i recovery bi posle
+                    ' prevezao onaj koji zatekne.
+                    Dim gen As String: gen = Trim$(NzToText(prj(i, cGen)))
+                    Dim kljuc As String: kljuc = brp & Chr$(1) & gen
+                    If Not seen.Exists(kljuc) Then
+                        seen(kljuc) = True
                         Dim st As String
                         If allZbr.Exists(bz) Then st = "zbirna stornirana" Else st = "zbirna ne postoji"
+                        ' 8. kolona je GENERACIJA - dodata na KRAJ, pa legacy
+                        ' panel (cita fiksno 1..7) ostaje netaknut.
                         rows.Add Array(brp, prj(i, cDat), Trim$(NzToText(prj(i, cVr))), _
-                            Trim$(NzToText(prj(i, cSo))), StornoNumText(prj(i, cKol), "#,##0.00"), bz, st)
+                            Trim$(NzToText(prj(i, cSo))), StornoNumText(prj(i, cKol), "#,##0.00"), bz, st, gen)
                     End If
                 End If
             End If
         End If
     Next i
 
-    GetOsirocenePrijemnice = StornoRowsTo2D(rows, 7)
+    GetOsirocenePrijemnice = StornoRowsTo2D(rows, 8)
     Exit Function
 EH:
     LogErr "modDokumenta.GetOsirocenePrijemnice"
@@ -3492,10 +3518,17 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
     If cBr = 0 Or cPid = 0 Then Exit Function
 
+    ' Grupise se po GENERACIJI storniranog dokumenta, ne po njegovom broju.
+    ' Dve stornirane prijemnice razlicitih kupaca lako dele broj (racuna se po
+    ' kupcu), pa bi grupisanje po broju spojilo DVA dokumenta u jedan recovery
+    ' red - a prevezivanje bi posle pomerilo palete oba.
+    ' Generacija se cita sa PRIJEMNICE, preko PrijemnicaID koji stavka nosi.
     Dim gSum As Object: Set gSum = CreateObject("Scripting.Dictionary"): gSum.CompareMode = vbTextCompare
     Dim sCnt As Object: Set sCnt = CreateObject("Scripting.Dictionary"): sCnt.CompareMode = vbTextCompare
     Dim vrD As Object: Set vrD = CreateObject("Scripting.Dictionary"): vrD.CompareMode = vbTextCompare
     Dim soD As Object: Set soD = CreateObject("Scripting.Dictionary"): soD.CompareMode = vbTextCompare
+    Dim brD As Object: Set brD = CreateObject("Scripting.Dictionary"): brD.CompareMode = vbTextCompare
+    Dim genD As Object: Set genD = CreateObject("Scripting.Dictionary"): genD.CompareMode = vbTextCompare
     Dim order As Collection: Set order = New Collection
     Dim i As Long
     For i = 1 To UBound(ps, 1)
@@ -3505,12 +3538,15 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
             Dim pid As String: pid = Trim$(NzToText(ps(i, cPid)))
             Dim br As String: br = Trim$(NzToText(ps(i, cBr)))
             If stPrij.Exists(pid) And Len(br) > 0 Then
-                If Not gSum.Exists(br) Then
-                    gSum(br) = 0&: sCnt(br) = 0&: order.Add br
-                    vrD(br) = Trim$(NzToText(ps(i, cVr))): soD(br) = Trim$(NzToText(ps(i, cSo)))
+                Dim gen As String: gen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, pid)
+                Dim kl As String: kl = br & Chr$(1) & gen
+                If Not gSum.Exists(kl) Then
+                    gSum(kl) = 0&: sCnt(kl) = 0&: order.Add kl
+                    vrD(kl) = Trim$(NzToText(ps(i, cVr))): soD(kl) = Trim$(NzToText(ps(i, cSo)))
+                    brD(kl) = br: genD(kl) = gen
                 End If
-                If IsNumeric(ps(i, cGajb)) Then gSum(br) = CLng(gSum(br)) + CLng(ps(i, cGajb))
-                sCnt(br) = CLng(sCnt(br)) + 1
+                If IsNumeric(ps(i, cGajb)) Then gSum(kl) = CLng(gSum(kl)) + CLng(ps(i, cGajb))
+                sCnt(kl) = CLng(sCnt(kl)) + 1
             End If
         End If
     Next i
@@ -3518,11 +3554,13 @@ Public Function GetPrijemniceSaOsirocenimPaletama() As Variant
     Dim rows As Collection: Set rows = New Collection
     Dim v As Variant
     For Each v In order
-        Dim br2 As String: br2 = CStr(v)
-        rows.Add Array(br2, LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, br2, COL_PRJ_DATUM), _
-                       CStr(vrD(br2)), CStr(soD(br2)), CLng(gSum(br2)), CLng(sCnt(br2)))
+        Dim k2 As String: k2 = CStr(v)
+        ' 7. kolona je GENERACIJA - na KRAJ, pa legacy panel (cita 1..6) ostaje.
+        rows.Add Array(CStr(brD(k2)), _
+                       LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, CStr(brD(k2)), COL_PRJ_DATUM), _
+                       CStr(vrD(k2)), CStr(soD(k2)), CLng(gSum(k2)), CLng(sCnt(k2)), CStr(genD(k2)))
     Next v
-    GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 6)
+    GetPrijemniceSaOsirocenimPaletama = StornoRowsTo2D(rows, 7)
     Exit Function
 EH:
     LogErr "modDokumenta.GetPrijemniceSaOsirocenimPaletama"
@@ -3665,8 +3703,12 @@ End Function
 ' zbirnu pa "osirocenu" prijemnicu prevezuje na nju. Handle = BrojPrijemnice
 ' (citljiv, eksteran kad nije autohladnjaca); stvarna veza lanca = BrojZbirne.
 ' PrijemnicaID se NE dira -> faktura-stavke i paleta-stavke ostaju ispravne.
+' prijemnicaGeneracijaID: identitet prijemnice koja se prevezuje. Kad je poznat,
+' menjaju se samo redovi TE generacije; broj ostaje labela. Opcion je zbog
+' zatecenih pozivalaca - bez njega vazi kapija nad jednoznacnoscu broja.
 Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
-                                              ByVal targetBrZbirne As String) As Boolean
+                                              ByVal targetBrZbirne As String, _
+                                              Optional ByVal prijemnicaGeneracijaID As String = "") As Boolean
     Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -3685,6 +3727,12 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
     If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj-zbirna stornirana
 
+    ' CILJ MORA BITI JEDNOZNACAN. LookupValue iznad uzima PRVI pogodak, a broj
+    ' zbirne se generise PO VOZACU - vlasnistvo zbirne je zato vozac + kupac,
+    ' isti par koji koriste StornoZbirna i ApplyGeneracijaID.
+    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, SRC, _
+                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
+
     Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
     cBrPrij = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cBrZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
@@ -3694,11 +3742,23 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(data) Then Exit Function
 
-    ' Aktivni redovi prijemnice za dati BrojPrijemnice (Klasa I i II dele broj).
+    ' IZVOR SE BIRA PO IDENTITETU. Sa poznatom generacijom menjaju se samo redovi
+    ' TE generacije (Klasa I i II zajedno, i nijedan tudji). Bez nje ostaje izbor
+    ' po broju, ali tek posto se dokaze da je broj jednoznacan - inace bi se
+    ' prevezala i prijemnica drugog kupca koja deli broj.
+    Dim srcIds As Object
+    Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaGeneracijaID)
+    If srcIds.count = 0 Then
+        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
+                                   COL_PRJ_KUPAC
+    End If
+    Dim cPrjId As Long: cPrjId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+
+    ' Aktivni redovi prijemnice (Klasa I i II dele broj I generaciju).
     Dim targetRows As Collection: Set targetRows = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, cBrPrij))) = brPrijemnice Then
+        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then
             If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> "DA" Then
                 targetRows.Add i
             End If

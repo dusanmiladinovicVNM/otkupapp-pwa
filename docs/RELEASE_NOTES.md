@@ -1727,3 +1727,72 @@ potrošen broj)". Broj palete se ne vraća.
 
 Time sa operaterske checkliste ispada tačka 7 iz PR #194 — ostaje samo ono što
 se zaista ne može automatizovati (izgled, štampa, ponašanje nad pravim podacima).
+
+---
+
+## vba-v2.45.0 — 2026-08-16 (identitet dokumenta na granici prevezivanja)
+> Završnica Faze D po pregledu. Bez novih sposobnosti — izbacuje **goli poslovni
+> broj** sa write granice recovery/relink operacija.
+
+**Broj nije identitet**
+
+`BrojPrijemnice` se računa **po kupcu**, broj zbirne **po vozaču**. Dva dokumenta
+lako dele broj. Rutine prevezivanja su do sada primale samo broj i skenirale
+tabelu po njemu — pa su kod kolizije zahvatale i tuđi dokument.
+
+**Infrastruktura je već postojala.** `GeneracijaID` (identitet logičkog
+dokumenta, Kl.I + Kl.II zajedno) pečate svi writeri kroz `ApplyGeneracijaID`, i
+to sa već tačnim kompozitnim vlasništvom po tipu — otpremnica `StanicaID`,
+prijemnica `KupacID`, zbirna `VozacID + KupacID`. Kolonu pravi
+`EnsureSledljivostSchema` na svakom startu. Nedostajalo je samo da je
+recovery/relink putanja **koristi**.
+
+| Sloj | Pre | Sada |
+|---|---|---|
+| `ReassignPaleteToPrijemnica_TX` | izvor po `bp = oldBroj` | opcioni `oldGeneracijaID`; izvor po `PrijemnicaID` te generacije |
+| `ReassignPrijemnicaToZbirna_TX` | svi aktivni redovi broja | opcioni `prijemnicaGeneracijaID`; + kapija nad **ciljnom zbirnom** (vozač + kupac) |
+| `GetOsirocenePrijemnice` | grupa po broju | grupa po **broj + generacija**, generacija kao 8. kolona |
+| `GetPrijemniceSaOsirocenimPaletama` | grupa po broju | grupa po **broj + generacija**, generacija kao 7. kolona |
+| ekran Oporavak | šalje broj | šalje i generaciju iz reda |
+| `modDokUnos` ispravka | broj + ad-hoc kapija | generacija iz correction context-a |
+
+Legacy panel čita fiksne indekse (1..6 / 1..7), pa je dodavanje kolone **na kraj**
+za njega nevidljivo.
+
+**Bez generacije → fail-closed, ne fail-open**
+
+Stari zapisi generaciju nemaju. Tada se pada na kapiju nad jednoznačnošću broja —
+ali kroz **postojeći** `RequireJedanVlasnikPoBroju`, koji već nosi kompozitno
+vlasništvo po tipu. Moja ranija `AktivnihVlasnikaPoBroju` (jedan vlasnik, i
+fail-open na nedostajuću kolonu) je **obrisana**; jedini račun je sada
+`VlasniciPoBroju`, sa prekidačem „broji li i stornirane" — jer je izvor
+prevezivanja baš storniran dokument, pa bi brojanje samo aktivnih tu uvek dalo
+nulu i kapija ne bi radila.
+
+**Sitno iz istog pregleda**
+
+- ciljna lista je sabirala samo Kl.I; sada obe klase idu u isti red i u zbir;
+- filter pretrage se primenjuje **pre** nego što se dokument upamti, pa dokument
+  koji ne pogađa prvim redom može da pogodi drugim.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=27, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže: `relink-izvor-po-broju`, `relink-ignorise-generaciju`,
+  `vlasnik-broji-stornirane`.
+
+**Fixture** je dobio **kolizioni par storniranih** prijemnica (`8/150326`, dva
+kupca, svaka sa svojom paletom) i drugu aktivnu zbirnu. Novi
+`T_RelinkPoGeneraciji_NeDiraTudjDokument` prevezuje jedan dokument i tvrdi da
+drugi **ostaje na svom mestu** — što je tvrdnja koju raniji E2E test nije mogao
+da napravi, jer je koristio jedinstven broj.
+
+Par je namerno na **zasebnom** broju od `9/150326`: testovi dele svesku, pa test
+koji prevezuje jedan dokument ne sme da potroši podatke onome koji dokazuje
+izolaciju.
+
+> **Fixture je gitignored.** Prelazak grane ga ne regeneriše — posle
+> `git checkout` pokreni:
+> `python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --force`

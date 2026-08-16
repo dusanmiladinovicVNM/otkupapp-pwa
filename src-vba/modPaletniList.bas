@@ -38,6 +38,31 @@ Public Sub SetPaletizeSkip(ByVal b As Boolean)
     mSkipPaletize = b
 End Sub
 
+' Da li paletna stavka pripada IZVORNOM dokumentu.
+'
+' Sa poznatom generacijom odlucuje iskljucivo PrijemnicaID - broj se tada ni ne
+' gleda, pa dokument koji deli broj ne moze da udje. Stavka bez PrijemnicaID
+' (stari zapis) pada na broj, jer drugog traga nema.
+' Bez generacije vazi staro ponasanje po broju; pozivalac je pre toga vec
+' dokazao da je broj jednoznacan.
+Private Function JeIzvornaStavka(ByVal brojStavke As String, ByVal oldBroj As String, _
+                                 ByVal prijemnicaID As String, _
+                                 ByVal srcIds As Object) As Boolean
+    If srcIds Is Nothing Then
+        JeIzvornaStavka = (brojStavke = oldBroj)
+        Exit Function
+    End If
+    If srcIds.count = 0 Then
+        JeIzvornaStavka = (brojStavke = oldBroj)
+        Exit Function
+    End If
+    If Len(prijemnicaID) > 0 Then
+        JeIzvornaStavka = srcIds.Exists(prijemnicaID)
+    Else
+        JeIzvornaStavka = (brojStavke = oldBroj)
+    End If
+End Function
+
 ' Vraca sledeci redni broj palete za TEKUCU godinu (1 ako jos nema palete
 ' u ovoj godini). Prikaz na listu: BrojPalete & "/" & Godina.
 Public Function GenerateBrojPalete() As Long
@@ -1262,11 +1287,15 @@ End Function
 '      etiketu na prevezanim stavkama + njihovim paletama (roba se ne pomera).
 ' Sve u jednoj transakciji. outWarn nosi poruke za UI (prazno = bez napomena).
 ' ============================================================
+' oldGeneracijaID: identitet STAROG dokumenta. Kad je poznat, izvor se bira po
+' njemu i broj sluzi samo kao labela. Opcion je zbog zatecenih pozivalaca
+' (legacy forma) - bez njega vazi kapija nad jednoznacnoscu broja.
 Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                               ByVal newBroj As String, _
                                               Optional ByRef outWarn As String, _
                                               Optional ByVal allowRelabel As Boolean = False, _
-                                              Optional ByRef outGajbDiff As Boolean = False) As Boolean
+                                              Optional ByRef outGajbDiff As Boolean = False, _
+                                              Optional ByVal oldGeneracijaID As String = "") As Boolean
     Const SRC As String = "modPaletniList.ReassignPaleteToPrijemnica_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -1346,6 +1375,26 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     sZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
     sSt = RequireColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO, SRC)
 
+    ' IZVOR SE BIRA PO IDENTITETU, NE PO BROJU.
+    '
+    ' Kad je zadata generacija starog dokumenta, u izvor ulaze samo stavke cija
+    ' PrijemnicaID pripada TOJ generaciji. Bez toga bi "bp = oldBroj" pokupio i
+    ' stavke tudjeg dokumenta koji deli broj - a broj se racuna po kupcu, pa je
+    ' to svakodnevan slucaj, ne teorijski.
+    '
+    ' Bez generacije (stari zapisi, pre uvodjenja kolone) ostaje izbor po broju,
+    ' ali tek posto se dokaze da je broj jednoznacan - i to UKLJUCUJUCI
+    ' stornirane, jer je izvor prevezivanja bas storniran dokument.
+    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)
+    If srcIds.count = 0 Then
+        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
+                           Array(COL_PRJ_KUPAC)).count > 1 Then
+            outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a generacija " & _
+                      "izvora nije poznata. Prevezivanje bi zahvatilo i tudje palete."
+            Exit Function
+        End If
+    End If
+
     Dim freshRows As Collection: Set freshRows = New Collection
     Dim oldRows As Collection: Set oldRows = New Collection
     Dim oldGajbByKl As Object: Set oldGajbByKl = CreateObject("Scripting.Dictionary")
@@ -1356,7 +1405,7 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
             Dim bp As String: bp = Trim$(CStr(ps(i, sBr)))
             If bp = newBroj Then
                 freshRows.Add i
-            ElseIf bp = oldBroj Then
+            ElseIf JeIzvornaStavka(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then
                 oldRows.Add i
                 Dim kO As String: kO = Trim$(CStr(ps(i, sKl)))
                 If Len(kO) = 0 Then kO = "I"

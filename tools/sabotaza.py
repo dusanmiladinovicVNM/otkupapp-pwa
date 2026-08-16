@@ -440,16 +440,27 @@ SABOTAZE = {
         "T_Prefill_PoIdentitetuNePoBroju",
         "prefill bira dokument po PK-u, ne po broju (dva kupca dele broj)",
     ),
+    # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
+    "relink-izvor-po-broju": (
+        "modPaletniList.bas",
+        "            ElseIf JeIzvornaStavka(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
+        "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "prevezivanje dira SAMO svoj dokument, i kad dva dele broj",
+    ),
+    "relink-ignorise-generaciju": (
+        "modPaletniList.bas",
+        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)\n",
+        '    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, "")   \' SABOTAZA\n',
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "generacija izvora se stvarno koristi, ne samo prosledjuje",
+    ),
     "vlasnik-broji-stornirane": (
-        "modDokumenta.bas",
-        "            If Not jeStorno Then\n"
-        "                Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))\n"
-        "                If Not seen.Exists(vl) Then seen(vl) = True\n"
-        "            End If\n",
-        "            Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))   ' SABOTAZA\n"
-        "            If Not seen.Exists(vl) Then seen(vl) = True\n",
+        "modStorno.bas",
+        "            If ukljuciStornirane Or Not IsStorniranoValue(data(i, cSt)) Then\n",
+        "            If True Then   ' SABOTAZA: stornirani se uvek broje kao vlasnici\n",
         "T_Prefill_PoIdentitetuNePoBroju",
-        "storniran dokument se ne broji kao vlasnik broja",
+        "storniran dokument se ne broji medju AKTIVNIM vlasnicima",
     ),
     # --- ispravka prijemnice od kraja do kraja -------------------------------
     "ispravka-bez-skipa": (

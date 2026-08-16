@@ -828,6 +828,13 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_OPO_PRI", ChrW(10007) & " Prevezivanje nije uspelo " & ChrW(8212) & " proveri da li je ciljna zbirna aktivna:"
     UpsertRow lo, existing, "OTKUI_ERR_OPO_PAL", ChrW(10007) & " Prevezivanje paleta nije uspelo."
     UpsertRow lo, existing, "OTKUI_ERR_OPO_UNDO", ChrW(10007) & " Vra" & ChrW(263) & "anje storna nije uspelo:"
+    UpsertRow lo, existing, "OTKUI_HDO_VLASNIK", "VLASNIK"
+    UpsertRow lo, existing, "OTKUI_HDO_GENERACIJA", "GENERACIJA"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN", ChrW(10007) & " Ciljni broj nije jednozna" & ChrW(269) & "an " & _
+              ChrW(8212) & " isti broj nose dokumenta VI" & ChrW(352) & "E vlasnika:"
+    UpsertRow lo, existing, "OTKUI_ERR_OPO_DVOSMISLEN2", "Prevezivanje ide PO BROJU, pa se ne zna na koji dokument." & vbCrLf & _
+              "U listi ciljeva se vide oba reda " & ChrW(8212) & " razlikuju se po koloni VLASNIK." & vbCrLf & _
+              "Ispravi broj jednog dokumenta, pa ponovi."
     UpsertRow lo, existing, "OTKUI_ERR_DATUM", ChrW(10007) & " Datum nije " & ChrW(269) & "itljiv " & ChrW(8212) & " upi" & ChrW(353) & "i ga kao 11.08.2026."
     UpsertRow lo, existing, "OTKUI_MSG_SNIMLJENO", ChrW(10003) & " Dokument spreman za upis"
     UpsertRow lo, existing, "OTKUI_MSG_PRINT", ChrW(353) & "tampa"
