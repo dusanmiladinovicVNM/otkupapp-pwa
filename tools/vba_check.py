@@ -39,9 +39,13 @@ Ne pokrivaju: tipove, nedeklarisane promenljive, greske u .frm/.cls.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import os
 import re
+import shutil
 import sys
+import tempfile
 from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -531,6 +535,25 @@ def check_poruke(files: list[str]) -> list[Finding]:
     return out
 
 
+# --- jedna putanja za sve provere nad jednim fajlom ---------------------------
+#
+# Postoji da bi self-test isao KROZ NJU, a ne pored nje. Da self-test zove
+# check_local_dupes direktno, dokazivao bi samo da funkcija ume da nadje duplikat
+# -- ne i da je CLI zaista zove. Brisanje jednog reda iz main() tada ostavlja i
+# repo-run i self-test zelene, a checker prakticno iskljucen. To je ista klasa
+# greske kao placebo test: zeleno, ali nije prikljuceno na produkcionu putanju.
+
+def check_file(path: str, raw: bytes, lines: list[str],
+               defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
+    out = []
+    out += check_ascii(path, raw)
+    out += check_decl_after_proc(path, lines)
+    out += check_reserved(path, lines)
+    out += check_undefined(path, lines, defined, arities)
+    out += check_local_dupes(path, lines)
+    return out
+
+
 # --- self-test: dokaz u oba smera, trajno ------------------------------------
 #
 # CLAUDE.md par.5 trazi dvosmerni dokaz kad se menja SAM CHECKER: zelena provera
@@ -607,21 +630,50 @@ End Sub
 ]
 
 
+def _dupli_nalazi(findings: list[Finding]) -> int:
+    return sum(1 for f in findings if f.code == "DUPLIKAT_LOKALNI")
+
+
 def self_test() -> int:
     palo = []
+
+    # Sve kroz check_file -- istu funkciju koju zove main(). Ostale provere se
+    # ne racunaju, ali se izvrsavaju: slucaj koji bi im pao rusio bi i CLI.
     for naziv, ocekivano, izvor in SELF_TEST_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
-        dobijeno = len(check_local_dupes("<self-test>", lines))
+        raw = izvor.encode("ascii")
+        dobijeno = _dupli_nalazi(check_file("<self-test>", raw, lines, set(), {}))
         if dobijeno != ocekivano:
             palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
 
+    # I jedan slucaj kroz CEO CLI, nad pravim fajlom na disku. check_file dokazuje
+    # da provera radi; ovo dokazuje da je CLI zaista zove i da vraca exit 2.
+    naziv = "ceo CLI nad pravim .bas fajlom"
+    tmp = tempfile.mkdtemp(prefix="vbacheck_")
+    try:
+        put = os.path.join(tmp, "modSelfTest.bas")
+        with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write(SELF_TEST_CASES[0][2])
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            rc = main([put])
+        izlaz = buf.getvalue()
+        if rc != 2:
+            palo.append(f"  {naziv}: ocekivan exit 2, dobijen {rc}")
+        elif "DUPLIKAT_LOKALNI" not in izlaz:
+            palo.append(f"  {naziv}: exit 2 je stigao, ali ne od DUPLIKAT_LOKALNI "
+                        f"-- CLI mozda vise ne zove tu proveru")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    ukupno = len(SELF_TEST_CASES) + 1
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
-        print(f"\nself-test: {len(palo)} od {len(SELF_TEST_CASES)} slucajeva palo.",
-              file=sys.stderr)
+        print(f"\nself-test: {len(palo)} od {ukupno} slucajeva palo.", file=sys.stderr)
         return 2
-    print(f"self-test: cisto ({len(SELF_TEST_CASES)} slucajeva DUPLIKAT_LOKALNI).")
+    print(f"self-test: cisto ({ukupno} slucajeva DUPLIKAT_LOKALNI, "
+          f"ukljucujuci jedan kroz ceo CLI).")
     return 0
 
 
@@ -651,13 +703,8 @@ def main(argv: list[str]) -> int:
     for path in files:
         with open(path, "rb") as fh:
             raw = fh.read()
-        findings += check_ascii(path, raw)
-
         lines = raw.decode("ascii", errors="replace").replace("\r\n", "\n").split("\n")
-        findings += check_decl_after_proc(path, lines)
-        findings += check_reserved(path, lines)
-        findings += check_undefined(path, lines, defined, arities)
-        findings += check_local_dupes(path, lines)
+        findings += check_file(path, raw, lines, defined, arities)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
         # pa isto ime u dve forme NIJE "Ambiguous name".

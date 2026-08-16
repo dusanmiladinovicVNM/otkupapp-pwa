@@ -261,18 +261,29 @@ posejanih podataka, a `run_vba.py` ga poredi **pre podizanja Excela**:
 |---|---|
 | potpis se slaže | tiho nastavlja |
 | potpis se razlikuje | **staje, exit 2**, ispiše komandu za regeneraciju |
-| potpisa nema | upozori i nastavi (sveska od starijeg generatora ili `--workbook`) |
+| potpisa nema | **staje, exit 2** — sveska od generatora pre ovog sistema |
+| `--workbook` (tuđa sveska) | ne dira ništa |
+| `--ignore-fixture-sig` | nastavlja svesno, uz poruku |
+
+Odsustvo potpisa je **fail-closed** namerno: sveska bez njega ne može da se
+proveri, a to je baš prvi run na svakoj zatečenoj mašini — tačno onaj u kome se
+incident i desio. Upozorenje bi ga propustilo jednom po mašini, što je isto kao
+da provere nema. Prazna auto-sveska ovde ne stiže; nju pravi grana iznad poziva.
 
 Potpis pokriva **samo deklarativne podatke** (`SEED`, config, `FIXTURE_DATE`,
-`KEEP_ROWS`). Izmena logike upisa (`add_row`, `strip_rows`) mu je nevidljiva —
-nju operater regeneriše namerno. Uži i tačan potpis je bolji od širokog koji bi
-tražio regeneraciju na svaku izmenu komentara.
+`KEEP_ROWS`). Izmena logike upisa (`add_row`, `strip_rows`, `upsert_config`) ili
+sadržaja tabela koje se čuvaju iz donora (`KEEP_ROWS`) mu je **nevidljiva**. Za
+to postoji ručna poluga — `FIXTURE_FORMAT_VERSION` u `make_fixture.py`, koja
+ulazi u hash: kad se promeni semantika generatora, podigne se za jedan i svi
+fixture-i postaju ustajali. Jeftinije i tačnije nego hashirati ceo `.py`, koji bi
+tražio regeneraciju i na izmenu komentara.
 
 Potpis se **briše na početku** build-a i piše tek posle uspešnog `Save`: neuspeo
 build (donor bez kolone → `SEMA:`) prepiše svesku, pa bi zadržan stari `.sig`
 tvrdio da je fixture svež. Bolje „nema potpisa" nego lažan.
 
-Svestan run nad starim podacima: `--ignore-fixture-sig`.
+Svestan run nad starim podacima: `--ignore-fixture-sig`. To je jedini način da
+run prođe bez važećeg potpisa — nema tihe grane.
 
 `tests/golden/*.txt` idu u git. Kad golden ne postoji, test ga upiše i **padne** —
 nov golden mora proći ljudski pregled pre nego što postane merilo. Dva pravila:

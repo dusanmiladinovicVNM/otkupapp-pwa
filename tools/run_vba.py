@@ -687,13 +687,21 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
 
     komanda = 'python tools\\make_fixture.py --donor "<put do .xlsm>" --force'
     if not zapisan:
-        # Nema potpisa: sveska od starijeg generatora ili prazna auto-sveska.
-        # Ne zna se je li ustajala, pa se ne staje -- ali se kaze glasno.
-        print(f"UPOZORENJE: {os.path.basename(fixture)} nema potpis -- ne moze da se "
-              f"utvrdi da li su podaci svezi.", file=sys.stderr)
-        print(f"            Ako testovi padnu na podacima, prvo: {komanda}",
+        # FAIL-CLOSED. Sveska od generatora pre ovog sistema NE moze da se
+        # proveri, a to je bas prvi run na svakoj zatecenoj masini -- tacno
+        # onaj u kome se incident i desio. Upozorenje bi ga propustilo jednom
+        # po masini, sto je isto kao da provere nema.
+        #
+        # Prazna auto-sveska ovde ne stize: nju pravi grana IZNAD ovog poziva.
+        print(f"FIXTURE BEZ POTPISA: {fixture}", file=sys.stderr)
+        print(f"  Sveska je od generatora pre uvodjenja potpisa, pa se ne moze",
               file=sys.stderr)
-        return 0
+        print(f"  utvrditi da li su podaci svezi. Regenerisi je jednom:", file=sys.stderr)
+        print(f"\n  {komanda}\n", file=sys.stderr)
+        if ignorisi:
+            print("  --ignore-fixture-sig: nastavljam ipak.", file=sys.stderr)
+            return 0
+        return 2
 
     print(f"USTAJAO FIXTURE: {fixture}", file=sys.stderr)
     print(f"  posejan potpisom {zapisan}, generator sada trazi {tekuci}", file=sys.stderr)

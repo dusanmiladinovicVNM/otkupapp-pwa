@@ -71,6 +71,12 @@ kompajlira obara ceo projekat. Simptom ne pokazuje na krivca.
 i legalan VBA koji **ne sme**. Vrti se i u CI-ju: zelen checker nad čistim repoom
 ne razlikuje „nema greške" od „provera ništa ne meri".
 
+Slučajevi idu **kroz `check_file()`, istu funkciju koju zove CLI**, a jedan ide
+kroz ceo `main()` nad pravim fajlom na disku. Namerno: self-test koji zove
+proveru direktno dokazuje da funkcija radi, ali ne i da je CLI zove — otkačen
+jedan red tada ostavlja i repo-run i self-test zelene, a checker isključen. Isti
+oblik greške kao placebo test, samo u alatu.
+
 ## 3) `tools/run_vba.py` — SAMO Windows + Excel + `pywin32`
 
 Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi ponašanja
@@ -88,8 +94,10 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
   drugu granu na disku ostaje sveska prethodne i testovi padaju *na podacima*, a
   pad izgleda kao regresija koda. Runner to sada hvata sam: `make_fixture` piše
   potpis podataka u `otkup_test.sig`, `run_vba` ga poredi pre Excela i staje uz
-  komandu za regeneraciju. **Crveno posle prelaska grane — prvo regeneriši
-  fixture, pa tek onda traži krivca u kodu.** Detalji: `docs/EXCEL_TEST_HARNESS.md`.
+  komandu za regeneraciju. Bez važećeg potpisa run **ne prolazi** — jedini izlaz
+  je svestan `--ignore-fixture-sig`. **Crveno posle prelaska grane — prvo
+  regeneriši fixture, pa tek onda traži krivca u kodu.** Detalji:
+  `docs/EXCEL_TEST_HARNESS.md`.
 - `COMPILE NEJASNO` ne obara run kad suite-ovi idu. **Compile ostaje ručna kapija
   pred release:** `Alt+F11 → Debug → Compile VBAProject`.
 

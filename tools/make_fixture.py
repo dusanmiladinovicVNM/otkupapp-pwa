@@ -177,9 +177,18 @@ EXCEL_EPOCH = datetime.date(1899, 12, 30)
 # sirok koji trazi regeneraciju na svaku izmenu komentara.
 FIXTURE_SIG_EXT = ".sig"
 
+# Rucna poluga za ono sto hash ne vidi. Kad se promeni SEMANTIKA generatora
+# (add_row, strip_rows, upsert_config, ili sadrzaj tabela koje se cuvaju iz
+# donora preko KEEP_ROWS), podaci u svesci se promene a deklarativni blokovi
+# ostanu isti -- potpis bi tvrdio da je stari fixture i dalje dobar. Tada se
+# ovaj broj podigne za jedan. Jeftinije i tacnije nego hashirati ceo .py, koji
+# bi trazio regeneraciju i na izmenu komentara.
+FIXTURE_FORMAT_VERSION = 1
+
 
 def signature() -> str:
     payload = "\n".join([
+        "FORMAT=" + str(FIXTURE_FORMAT_VERSION),
         "FIXTURE_DATE=" + FIXTURE_DATE.isoformat(),
         "KEEP_ROWS=" + repr(sorted(KEEP_ROWS)),
         "LOCAL_CONFIG=" + repr(sorted(LOCAL_CONFIG.items())),
