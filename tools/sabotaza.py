@@ -514,6 +514,27 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Zamena zbirne bez kapije: zaglavlje se stornira tacno, a completion posle
+    # snimanja zamene odnese decu TUDJE zbirne.
+    "zbirna-zamena-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
+        '        If CBool(s("brojDvosmislen")) Then\n',
+        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
+        '        If CBool(s("brojDvosmislen")) Then\n',
+        "T_ZamenaZbirne_NeDiraDecuTudje",
+        "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
+    ),
+    # Zavrsetak ispravke: tacan OldDocID degradiran u prazan opseg -> broj.
+    "completion-degradira-olddocid": (
+        "modStornoFlow.bas",
+        "        If Len(srcGen) = 0 And Len(oldDocID) > 0 Then _\n"
+        "            srcStanica = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _\n"
+        "                                                COL_OTP_STANICA)))\n",
+        "        ' SABOTAZA: bez generacije se pada na goli broj\n",
+        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
+        "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici",
+    ),
     # Otkup bez generacije bez kapije nad brojem. BrojDokumenta je scoped po
     # otkupnom mestu, pa storno po broju hvata i tudje OM.
     "otkup-bez-kapije": (

@@ -542,6 +542,12 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     Dim newOtpID As String
     If VlasniciPoBroju(TBL_OTPREMNICA, COL_OTP_BROJ, newBroj, SRC, False, _
                        Array(COL_OTP_STANICA)).count > 1 Then
+        ' MANUAL, ne tiho PENDING: bez ovoga context ostaje otvoren i sledeci
+        ' unos otpremnice ponovo pokrece pitanje "je li ovo zamena?".
+        MarkCorrectionManual correctionID, _
+                             "Prevezi otkupne blokove rucno (Osiroceni dokumenti).", _
+                             "Broj nove otpremnice '" & newBroj & "' nose dva aktivna " & _
+                             "dokumenta -- zamena se ne moze utvrditi automatski."
         r("message") = "Broj nove otpremnice '" & newBroj & "' nose dva aktivna " & _
                        "dokumenta -- ne moze se utvrditi koji je zamena."
         Exit Function
@@ -562,7 +568,7 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     ' restart Excela i ne zavisi od toga da li je neko usput prosledio docID.
     ' Bez ovoga je zavrsetak ispravke ponovo birao po poslovnom broju, pa su
     ' blokovi sibling dokumenta iste oznake mogli da udju u relink.
-    Dim srcGen As String
+    Dim srcGen As String, srcStanica As String
     If Len(Trim$(docID)) > 0 Then
         srcGen = docID
     Else
@@ -571,8 +577,16 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
                                           COL_SV_OLD_DOCID)))
         If Len(oldDocID) > 0 Then _
             srcGen = modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, oldDocID)
+        ' ZATECEN DOKUMENT BEZ GENERACIJE: OldDocID je tacan, pa se ne sme
+        ' pretvoriti u prazan scope i zavrsiti na golom broju. Stanica je
+        ' vlasnik broja otpremnice (niz je scoped po njoj), pa broj + stanica
+        ' izdvaja bas taj dokument -- i obe klase istog upisa.
+        If Len(srcGen) = 0 And Len(oldDocID) > 0 Then _
+            srcStanica = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _
+                                                COL_OTP_STANICA)))
     End If
-    Dim oldIDs As Collection: Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen)
+    Dim oldIDs As Collection
+    Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)
     Dim blokovi As Collection: Set blokovi = GetBlokOtkupIDs(oldIDs)
     Dim k As Long
     For k = 1 To blokovi.count
@@ -682,6 +696,25 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
 
     ' PK aktivne zbirne PRE storna -> OldDocID u context-u. Prefill ispravke polazi
     ' od njega (broj dokumenta nije globalno jedinstven identitet).
+    ' MODOVI KOJI DIRAJU DECU STAJU PRE ICEGA kad broj nije jednoznacan.
+    '
+    ' Zaglavlje se moze stornirati po generaciji -- to je tacno. Ali completion
+    ' (CompleteZbirnaIspravka) prevezuje otpremnice i prijemnice po BrojZbirne,
+    ' jer drugog kljuca u semi nema. Kod dva aktivna dokumenta istog broja to
+    ' znaci: storniram TACNO svoje zaglavlje, pa TUDJOJ zbirni odnesem decu.
+    ' Tiho, i tek posle snimanja zamene.
+    '
+    ' Dok child mutacije ne budu scoped (VozacID/KupacID postoje, v. katalog),
+    ' jedina postena opcija je stati PRE nego sto se ista promeni.
+    If mode <> SV_MODE_RESI_KASNIJE Then
+        If CBool(s("brojDvosmislen")) Then
+            r("message") = "Broj zbirne '" & broj & "' nose dva aktivna dokumenta. " & _
+                           "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
+                           "prijemnice vezuju BROJEM. Razdvoj brojeve pa ponovi."
+            Exit Function
+        End If
+    End If
+
     Dim zbrOldID As String
     zbrOldID = CStr(s("zbrID"))
 
@@ -1078,8 +1111,13 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
                 Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP)
                 If Not CBool(cascP("ok")) Then
+                    ' RAZLOG iz kaskade ide dalje -- isto kao u zbirna grani.
+                    Dim razlogP As String: razlogP = ""
+                    If cascP.Exists("message") Then razlogP = Trim$(CStr(cascP("message")))
                     FailCorrectionContext cidP, "Kaskadno ponistenje toka (zbirna " & parentZbirna & ") nije uspelo."
-                    r("message") = "Ponistenje nije uspelo (kaskada zbirne).": Exit Function
+                    r("message") = "Ponistenje nije uspelo (kaskada zbirne)."
+                    If Len(razlogP) > 0 Then r("message") = razlogP
+                    Exit Function
                 End If
                 ' Eksterni kupac (zbirna ne poseduje prijemnicu u kaskadi) -> prijemnicu
                 ' + njene palete storniramo ovde (retko: prijemnica ~ hladnjaca = internal).
@@ -2180,8 +2218,11 @@ Private Function RedJeGeneracije(ByRef data As Variant, ByVal i As Long, _
     RedJeGeneracije = (Trim$(NzToText(data(i, cGen))) = Trim$(gen))
 End Function
 
+' stanicaID: opseg za ZATECEN dokument bez generacije. Broj otpremnice je
+' scoped po stanici, pa broj + stanica izdvaja jedan logicki dokument.
 Private Function GetOtpremnicaIDsByBroj(ByVal broj As String, _
-                                        Optional ByVal gen As String = "") As Collection
+                                        Optional ByVal gen As String = "", _
+                                        Optional ByVal stanicaID As String = "") As Collection
     Dim result As New Collection
     Set GetOtpremnicaIDsByBroj = result
     On Error GoTo EH
@@ -2193,11 +2234,14 @@ Private Function GetOtpremnicaIDsByBroj(ByVal broj As String, _
     cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     Dim cGen As Long: cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
+    Dim cSta As Long: cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
     If cBr = 0 Or cId = 0 Then Exit Function
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim i As Long, id As String
     For i = 1 To UBound(data, 1)
-        If RedJeGeneracije(data, i, cBr, cGen, broj, gen) Then
+        If RedJeGeneracije(data, i, cBr, cGen, broj, gen) _
+           And (Len(Trim$(stanicaID)) = 0 Or cSta = 0 _
+                Or Trim$(NzToText(data(i, cSta))) = Trim$(stanicaID)) Then
             id = Trim$(CStr(data(i, cId)))
             If Len(id) > 0 And Not seen.Exists(id) Then
                 seen(id) = True

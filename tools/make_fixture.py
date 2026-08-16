@@ -64,6 +64,11 @@ ZBIRNA_MIRNA = "ZB-TEST-4"
 ZBIRNA_KASK = "ZB-TEST-KASK"
 OTKUP_KOLIZIJA = "7/150326"          # isti BrDok na dva otkupna mesta
 OTPREMNICA_KOLIZIJA = "8/TEST"       # isti broj otpremnice, dve stanice, ista zbirna
+# ZATECEN par BEZ generacije, za zavrsetak ispravke: OldDocID je tacan, pa se ne
+# sme degradirati u prazan opseg i zavrsiti na golom broju. Testovi koji pecate
+# generacije ne smeju da ga dodirnu, pa ima svoj broj.
+OTPREMNICA_LEGACY = "6/TEST"
+OTPREMNICA_ZAMENA = "7/TEST"
 VRSTA = "TESTVOCE"
 # Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
 # presuda o RELABEL-u mora da opisuje BAS izabran dokument. PRJ-TEST-C2 je zato
@@ -204,6 +209,18 @@ SEED = {
     #   OTP-TEST-2  bez zbirne
     #   OTP-TEST-3  bez zbirne, ali blok u tblOtkup nosi zbirnu (ZB-TEST-3)
     "tblOtpremnica": [
+        {"OtpremnicaID": "OTP-LEG-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_LEGACY, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-LEG-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_LEGACY, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-LEG-N", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_ZAMENA, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         # Dve otpremnice ISTOG broja sa RAZLICITIH stanica u ISTOJ zbirni.
         # Zbirna je po invarijanti zbir svih svojih otpremnica, pa je ovo
         # normalno stanje -- a "jedini vlasnik" po distinct BROJU tu laze.
@@ -229,6 +246,18 @@ SEED = {
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 80, "Klasa": "I"},
     ],
     "tblOtkup": [
+        # Po jedan blok na svakoj legacy otpremnici -- zavrsetak ispravke sme da
+        # preveze SAMO blok dokumenta ciji je OldDocID u context-u.
+        {"OtkupID": "OTK-LEG-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "L1/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-LEG-A", "BrojOtpremnice": OTPREMNICA_LEGACY},
+        {"OtkupID": "OTK-LEG-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "L2/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-LEG-B", "BrojOtpremnice": OTPREMNICA_LEGACY},
         # Isti BrojDokumenta na DVA otkupna mesta -- legitimno, broj je scoped
         # po stanici. Bez generacije storno po broju bi zahvatio oba.
         {"OtkupID": "OTK-KOL-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
@@ -278,6 +307,13 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        # Prijemnica ciji je RODITELJ zbirna sa dvosmislenim brojem. Kroz nju se
+        # dohvata kaskadna kapija: PONISTENJE prijemnice zove PonistiZbirnaChain_TX
+        # nad roditeljem, a taj put ne prolazi kroz kapiju na nivou moda zbirne.
+        {"PrijemnicaID": "PRJ-KASK-1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": "2/150326", "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-I1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ISPRAVKA, "BrojZbirne": ZBIRNA_MIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 120, "Cena": 50.0,

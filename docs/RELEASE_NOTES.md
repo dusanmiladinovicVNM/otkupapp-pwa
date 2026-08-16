@@ -2277,3 +2277,71 @@ nemogućnost.
 staje, a stajala je od **zatečene** kapije u `StornoZbirna` — sabotaža moje
 provere ništa nije menjala. Prepravljen da meri ono što moja provera stvarno
 dodaje: **razlog** koji stiže do operatera umesto generičkog „nije uspelo".
+
+## v2.46.4 — `v6-ui-133` · completion sloj: gde se identitet gubio na kraju
+
+Dva P1 su bila u **completion** putanjama — onome što se izvršava tek **posle**
+snimanja zamenskog dokumenta. Tamo testova nije bilo, i to nije slučajnost:
+početak operacije je izgledao ispravno, pa se dalje nije gledalo.
+
+### P1 — zamena zbirne je mogla da odnese decu tuđe zbirne
+
+Početak ISPRAVKE je tačan: `StornoZbirna_TX(broj, docID)` stornira samo izabrano
+zaglavlje, tuđe ostaje aktivno. Ali `CompleteZbirnaIspravka` — koja ide tek posle
+snimanja zamene — prevezuje otpremnice i prijemnice **po `BrojZbirne`**.
+
+Ishod: storniram tačno **svoje** zaglavlje, pa **tuđoj** zbirni odnesem decu.
+Ništa ne izgleda pokvareno u trenutku storna.
+
+Dok child mutacije ne budu scoped, modovi koji diraju decu (`ISPRAVKA`, `DUPLI`,
+`PONIŠTENJE`) **staju pre nego što se išta promeni**. `REŠI KASNIJE` prolazi —
+on ne dira decu.
+
+### P1 — završetak ispravke otpremnice degradirao je tačan `OldDocID`
+
+Zatečen dokument nema `GeneracijaID`. Completion je iz contexta čitao `OldDocID`,
+`GeneracijaPoID` je vraćao `""`, i prazan opseg je značio **„izaberi po
+poslovnom broju"**. Broj otpremnice je scoped po stanici, pa su blokovi dokumenta
+sa **druge stanice** ulazili u relink.
+
+`OldDocID` je bio tačan sve vreme — gubio se jedan korak kasnije. Sada se, kad
+generacije nema, čita `StanicaID` baš tog `OldDocID` i opseg je **broj + stanica**.
+
+### P2
+
+Dvosmislen cilj u `CompleteOtpremnicaIspravka` sada ide u **`MANUAL`**, ne u tiho
+`PENDING` — inače sledeći unos otpremnice ponovo pokreće pitanje „je li ovo
+zamena?".
+
+Uz to, **razlog iz kaskade sada stiže do operatera** u obe grane (zbirna i
+prijemnica) umesto generičkog „nije uspelo (kaskada)".
+
+### Testovi 42 i 43 — tamo gde ih nije bilo
+
+- **42** — dve aktivne zbirne istog broja, svaka sa decom → ISPRAVKA staje,
+  forma za zamenu se **ne otvara**, nijedno zaglavlje nije stornirano, tuđa
+  otpremnica ostaje na svojoj zbirni.
+- **43** — zatečen par bez generacije na dve stanice → completion prevezuje samo
+  blok svog dokumenta.
+
+Sabotaža za 43 reprodukuje kvar doslovno: blok `OTK-LEG-B` završi na zamenskoj
+otpremnici `OTP-LEG-N` umesto da ostane na `OTP-LEG-B`.
+
+### Test 41 je premešten, jer ga je nova kapija učinila nedostižnim
+
+Kapija na nivou moda staje pre kaskadne, pa sabotaža kaskade više nije obarala
+test 41. Umesto da ga ostavim kao ukras, premešten je na **PONIŠTENJE
+prijemnice** — jedini put koji kaskadnu kapiju stvarno dohvata, jer ide nad
+roditeljskom zbirnom.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=43, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Pet sabotaža iz poslednje dve runde, **svaka obara svoju tvrdnju**.
+- `COMPILE` → **`NEJASNO`**.
+
+Usput nađen i ispravljen poziv `MarkCorrectionManual` sa **četiri argumenta za
+tri parametra**. Suite je bio zelen — VBA ne kompajlira modul dok ga ne dotakne.
+Preostalih 20 poziva iste rutine je prebrojano mehanički.
