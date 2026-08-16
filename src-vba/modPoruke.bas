@@ -640,6 +640,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "NOVAC_ERR_FAK_DUPLA", ChrW(10007) & " Dupli FakturaID " & ChrW(8212) & " target nije jednozna" & ChrW(269) & "an:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_STORNIRANA", ChrW(10007) & " Faktura je stornirana:"
     UpsertRow lo, existing, "NOVAC_ERR_FAK_TUDJ_KUPAC", ChrW(10007) & " Faktura pripada DRUGOM kupcu:"
+    UpsertRow lo, existing, "NOVAC_ERR_FAK_VEC_PLACENA", ChrW(10007) & " Faktura je ve" & ChrW(263) & _
+              " u potpunosti pla" & ChrW(263) & "ena " & ChrW(8212) & " nema " & ChrW(353) & "ta da se uplati:"
+    UpsertRow lo, existing, "NOVAC_ERR_AVANS_PREKO", ChrW(10007) & " Isplata prelazi avans saldo otkupnog mesta. Raspolo" & ChrW(382) & "ivo:"
     UpsertRow lo, existing, "NOVUNOS_BEZ_BROJA", "(bez broja)"
     UpsertRow lo, existing, "NOVUNOS_NAP_FAKTURA", "Uplata po fakturi:"
     UpsertRow lo, existing, "NOVUNOS_NAP_AVANS_KUP", "Avans kupca"

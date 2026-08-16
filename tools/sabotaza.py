@@ -312,6 +312,43 @@ SABOTAZE = {
         "SaveOMUlaz_TX sam odbija nemogucu kombinaciju bloka i otkupnog mesta",
     ),
     # --- ruta ekrana --------------------------------------------------------
+    # --- kapije nad novcem (hotfix posle pregleda #190) ---------------------
+    # Vracanje na tacno onu formulaciju koja je propustala uplatu na vec
+    # zatvorenu fakturu: kad je preostalo 0 ili manje, "preostalo > 0" je False
+    # pa cela kapija cuti.
+    "faktura-preostalo-nula": (
+        "modNovac.bas",
+        "    If preostalo <= 0 Then\n"
+        '        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_VEC_PLACENA") & " " & fakturaID\n'
+        "    ElseIf ZaokruziNovac(iznos) > preostalo Then\n",
+        "    If False Then   ' SABOTAZA: vec placena faktura opet prolazi\n"
+        '        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_VEC_PLACENA") & " " & fakturaID\n'
+        "    ElseIf preostalo > 0 And ZaokruziNovac(iznos) > preostalo Then\n",
+        "T_UplataGuard_VecPlacenaFaktura",
+        "potpuno placena faktura ne prima jos jednu uplatu",
+    ),
+    # Obrnut smer istog pravila: kapija se prosiruje i na fakturu BEZ iznosa,
+    # koju nikad nije ni smela da blokira.
+    "faktura-bez-iznosa": (
+        "modNovac.bas",
+        "    If iznosFak <= 0 Then Exit Function          ' faktura bez iznosa - bez kapije\n",
+        "    ' SABOTAZA: i faktura bez iznosa se sada blokira\n",
+        "T_UplataGuard_VecPlacenaFaktura",
+        "faktura bez evidentiranog iznosa ne blokira uplatu",
+    ),
+    "avans-bez-writer-kapije": (
+        "modDokumenta.bas",
+        "        If tipNovca = NOV_KES_OTKUPAC_KOOP Then\n"
+        "            Dim avansSaldo As Double\n"
+        "            avansSaldo = ZaokruziNovac(GetOMAvansSaldo(stanicaID))\n"
+        "            If ZaokruziNovac(novac) > avansSaldo Then\n",
+        "        If False Then   ' SABOTAZA: writer vise ne cuva avans saldo OM\n"
+        "            Dim avansSaldo As Double\n"
+        "            avansSaldo = ZaokruziNovac(GetOMAvansSaldo(stanicaID))\n"
+        "            If ZaokruziNovac(novac) > avansSaldo Then\n",
+        "T_WriterGuard_AvansSaldoOM",
+        "isplata iz OM avansa preko salda se odbija u WRITER-u, ne samo u UI",
+    ),
     "ruta-zbirna": (
         "modScrDokumenti.bas",
         '        Case "ZBIRNA"\n'

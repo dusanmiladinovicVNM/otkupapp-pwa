@@ -52,6 +52,8 @@ ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
 KUPAC = "KUP-TEST-1"
 FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
+# Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
+FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -129,8 +131,13 @@ SEED = {
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
     # razlika "postoji / ne postoji". Namerno samo tri kolone -- sejanje ide PO
     # IMENU, pa svaka dodatna kolona koju donor nema obara generator.
+    # Druga faktura je BEZ IZNOSA i postoji zbog jednog pravila koje se lako
+    # izgubi: faktura kojoj iznos nije evidentiran NE SME da blokira uplatu.
+    # To je razlog zbog koga je kapija u UplataFakturaProblem uopste uslovna;
+    # bez ovog reda popravka te kapije mogla bi tiho da ukine i to pravilo.
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
+        {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
     ],
 }
 

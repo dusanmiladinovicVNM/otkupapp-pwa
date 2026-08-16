@@ -3807,6 +3807,25 @@ Public Function SaveOMUlaz_TX(ByVal datum As Date, _
             Err.Raise vbObjectError + 1512, "SaveOMUlaz_TX", blokErr
         End If
 
+        ' ISTA KAPIJA ZA AVANS OTKUPNOG MESTA. Blok i faktura su vec bili
+        ' zasticeni i u writer-u; avans je ostajao samo na UI sloju
+        ' (modNovacUnos.IsplataValidiraj), pa je writer bio poslednja linija
+        ' za dve od tri stvari koje isti dokument moze da prekoraci.
+        '
+        ' Kes isplata kooperantu TROSI avans koji je firma dala otkupnom mestu -
+        ' GetOMAvansSaldo ga i racuna kao "avansi firma->OM minus vec izdate
+        ' NOV_KES_OTKUPAC_KOOP isplate". Isplata preko tog salda pravi minus
+        ' koji se nigde ne vidi do sledeceg obracuna.
+        If tipNovca = NOV_KES_OTKUPAC_KOOP Then
+            Dim avansSaldo As Double
+            avansSaldo = ZaokruziNovac(GetOMAvansSaldo(stanicaID))
+            If ZaokruziNovac(novac) > avansSaldo Then
+                Err.Raise vbObjectError + 1513, "SaveOMUlaz_TX", _
+                          Poruka("NOVAC_ERR_AVANS_PREKO") & " " & _
+                          Format$(avansSaldo, "#,##0.00")
+            End If
+        End If
+
         novacID = SaveNovac( _
             brojDok:=brojDok, _
             datum:=datum, _
