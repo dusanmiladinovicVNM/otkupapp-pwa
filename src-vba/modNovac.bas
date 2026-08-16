@@ -1180,14 +1180,34 @@ Public Function UplataFakturaProblem(ByVal fakturaID As String, _
         Exit Function
     End If
 
-    ' TRENUTNO preostalo. Kao u legacy, poredi se samo kad je vece od nule -
-    ' faktura bez iznosa ne blokira uplatu.
+    ' TRENUTNO preostalo, procitano SADA - ne iz snimka koji je ekran poslao.
+    '
+    ' Kapija je uslovljena IZNOSOM FAKTURE, ne preostalim iznosom. Ranije je
+    ' stajalo "If preostalo > 0 And iznos > preostalo", i to je bila rupa u
+    ' samom mehanizmu koji je uveden da spreci zastarelo stanje:
+    '
+    '   faktura 10.000, operater otvorio ekran dok je preostalo 500,
+    '   u medjuvremenu je faktura zatvorena -> preostalo = 0
+    '   -> "0 > 0" je False -> kapija cuti -> jos jedna uplata prolazi.
+    '
+    ' Isto je vazilo i za PREPLACENU fakturu (preostalo < 0).
+    '
+    ' Uslov koji je tu zaista trebao je "faktura ima iznos": faktura kojoj
+    ' iznos nije evidentiran (0) ne sme da blokira uplatu - to je razlog zbog
+    ' koga je provera uopste bila uslovna, i on ostaje.
     colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
     If colIznos > 0 Then
         If IsNumeric(data(r, colIznos)) Then iznosFak = CDbl(data(r, colIznos))
     End If
-    preostalo = iznosFak - GetUplataForFaktura(fakturaID)
-    If preostalo > 0 And iznos > preostalo Then
+    If iznosFak <= 0 Then Exit Function          ' faktura bez iznosa - bez kapije
+
+    ' Cent-domen, bez epsilon tolerancije (isto pravilo kao nalozi za banku):
+    ' bez zaokruzenja bi ostatak od 0,000001 zbog float aritmetike prijavljivao
+    ' "preostalo 0,00" a ipak blokirao.
+    preostalo = ZaokruziNovac(iznosFak - GetUplataForFaktura(fakturaID))
+    If preostalo <= 0 Then
+        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_VEC_PLACENA") & " " & fakturaID
+    ElseIf ZaokruziNovac(iznos) > preostalo Then
         UplataFakturaProblem = Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & _
                                Format$(preostalo, "#,##0.00")
     End If

@@ -1258,3 +1258,76 @@ i ponašanje nad pravim podacima ostaju na operateru.
 **Šta i dalje nedostaje novom UI-ju:** storno okvir (sedam panela — Faza D),
 živi prikaz manjka prijemnice i lista zbirnih za izbor, peščanik za vreme upisa,
 dva nevezana KPI-ja i prefill iz storniranog dokumenta.
+
+---
+
+## vba-v2.41.1 — 2026-08-16 (hotfix: kapije nad novcem)
+> Follow-up na 2.41.0 (PR #190) po pregledu. Dva finansijska nalaza, oba u
+> jezgru — važe i za legacy `frmDokumenta` i za novi UI.
+
+**Potpuno plaćena faktura mogla je da primi još jednu uplatu**
+
+`UplataFakturaProblem` je od 2.41.0 ponovo čitao stvarno stanje fakture pred
+knjiženje — ali je poslednji uslov glasio:
+
+```
+If preostalo > 0 And iznos > preostalo Then
+```
+
+Kad je `preostalo = 0`, `0 > 0` je `False` i **cela kapija ćuti**. Scenario je
+realan i vodi pravo kroz mehanizam koji je uveden da spreči zastarelo stanje:
+
+1. faktura 10.000, operater otvori F6 dok je preostalo 500;
+2. u međuvremenu neko fakturu zatvori u celosti;
+3. operater snimi svojih 500 → `preostalo = 0` → prolazi.
+
+Isto je važilo za **preplaćenu** fakturu (`preostalo < 0`).
+
+Uslov koji je tu zaista trebao je *„faktura ima iznos"* — faktura kojoj iznos
+nije evidentiran ne sme da blokira uplatu, i to je razlog zbog koga je provera
+uopšte bila uslovna. Sada:
+
+```
+If iznosFak <= 0 Then Exit Function        ' bez iznosa -> bez kapije
+preostalo = ZaokruziNovac(iznosFak - GetUplataForFaktura(fakturaID))
+If preostalo <= 0 Then       -> "faktura je već u potpunosti plaćena"
+ElseIf ZaokruziNovac(iznos) > preostalo Then -> "veće od preostalog"
+```
+
+Poređenje je u **cent-domenu**, bez epsilon tolerancije — isto pravilo koje već
+važi za naloge za banku. Bez zaokruženja bi ostatak od 0,000001 zbog float
+aritmetike prijavljivao „preostalo 0,00" a ipak blokirao.
+
+**Avans otkupnog mesta nije bio zaštićen u writer-u**
+
+Blok i faktura su od 2.41.0 imali kapiju i u `SaveOMUlaz_TX` / `SaveKupciIzlaz_TX`,
+a avans je ostajao samo na UI sloju (`modNovacUnos.IsplataValidiraj`). Writer je
+time bio poslednja linija za **dve od tri** stvari koje isti dokument može da
+prekorači.
+
+`SaveOMUlaz_TX` sada odbija keš isplatu kooperantu (`NOV_KES_OTKUPAC_KOOP`) koja
+prelazi `GetOMAvansSaldo(stanicaID)` — istu vrednost koju UI već proverava.
+Virman firme ne troši avans i prolazi nepromenjen.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (188 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=19, FAIL=0** (dva nova
+  testa, oba idu kroz **pravi writer**, ne kroz validator).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Tri nove sabotaže**, svaka obara test po imenu: `faktura-preostalo-nula`,
+  `faktura-bez-iznosa`, `avans-bez-writer-kapije`.
+
+Test za avans je **diferencijalan**: ista suma i isti prazan saldo, dva tipa
+novca — keš isplata se odbija, virman firme prolazi. Bez te druge grane test ne
+bi razlikovao ciljanu kapiju od opšte blokade svake isplate.
+
+**Fixture** je dobio drugu fakturu, **bez iznosa** (`FAK-TEST-0`). Ona postoji
+zbog jednog pravila koje se lako izgubi: faktura kojoj iznos nije evidentiran ne
+sme da blokira uplatu. Bez tog reda popravka gornje kapije mogla bi tiho da
+ukine i to pravilo — sabotaža `faktura-bez-iznosa` to sada drži.
+
+**Usput, o alatu:** compile grešku koja je nastala u radu (dupli
+`Private Const` u istom modulu) `vba_check` **nije** uhvatio — `DUPLIKAT` gleda
+samo `Public` imena između modula. Videlo se tek kao „Cannot run the macro" nad
+celim projektom. Podsetnik da `COMPILE = NEJASNO` nije formalnost.

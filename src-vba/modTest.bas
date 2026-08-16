@@ -51,6 +51,9 @@ Private Const FX_BLOK_VREDNOST As Double = 20000
 ' Faktura iz fixture-a (tblFakture): pripada FX_KUPAC, iznos FX_FAKTURA_IZNOS.
 Private Const FX_FAKTURA As String = "FAK-TEST-1"
 Private Const FX_FAKTURA_IZNOS As Double = 10000
+' Faktura BEZ evidentiranog iznosa: kapija nad uplatom se na nju ne primenjuje,
+' i to pravilo mora da prezivi popravku te kapije.
+Private Const FX_FAKTURA_BEZ_IZNOSA As String = "FAK-TEST-0"
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -101,6 +104,8 @@ Public Sub RunAllTests()
     RunOne 15
     RunOne 16
     RunOne 17
+    RunOne 18
+    RunOne 19
 
     SetTestMode prevMode
     WriteResultFile
@@ -170,6 +175,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 15: TestName = "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak"
         Case 16: TestName = "T_NerazresenIzbor_NeProlaziKaoPrazno"
         Case 17: TestName = "T_WriterGuard_OdbijaTudjBlok"
+        Case 18: TestName = "T_UplataGuard_VecPlacenaFaktura"
+        Case 19: TestName = "T_WriterGuard_AvansSaldoOM"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -195,6 +202,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 15: T_IsplataBlokGuard_VlasnistvoITrenutniOstatak
         Case 16: T_NerazresenIzbor_NeProlaziKaoPrazno
         Case 17: T_WriterGuard_OdbijaTudjBlok
+        Case 18: T_UplataGuard_VecPlacenaFaktura
+        Case 19: T_WriterGuard_AvansSaldoOM
     End Select
 End Sub
 
@@ -852,6 +861,116 @@ Private Sub T_WriterGuard_OdbijaTudjBlok()
     AssertEq ok, False, "writer odbija blok sa drugog otkupnog mesta i bez UI provere"
     AssertEq uplataPosle, uplataPre, "odbijen upis ne ostavlja red u tblNovac"
 End Sub
+
+' POTPUNO PLACENA FAKTURA NE SME DA PRIMI JOS JEDNU UPLATU.
+'
+' Kapija je ranije glasila "If preostalo > 0 And iznos > preostalo", i to je
+' bila rupa u samom mehanizmu koji je uveden da spreci zastarelo stanje:
+'
+'   faktura 10.000, operater otvorio ekran dok je preostalo 500,
+'   u medjuvremenu je faktura zatvorena -> preostalo = 0
+'   -> "0 > 0" je False -> kapija cuti -> jos jedna uplata prolazi.
+'
+' Test to vrti kroz PRAVI writer: prvo plati fakturu u celosti, pa pokusa jos
+' jednu uplatu. Uslov "faktura bez iznosa ne blokira" je i dalje tu i proverava
+' se zasebno - to je razlog zbog koga je provera uopste bila uslovna.
+Private Sub T_UplataGuard_VecPlacenaFaktura()
+    Dim ok As Boolean, pre As Double, posle As Double
+
+    ' Preduslov: faktura ima iznos i nije placena.
+    AssertEq FakturaIznos(FX_FAKTURA), FX_FAKTURA_IZNOS, "preduslov: faktura ima iznos"
+    AssertEq modNovac.UplataFakturaProblem(FX_FAKTURA, FX_KUPAC, 1), "", _
+             "dok ima ostatka, uplata prolazi kapiju"
+
+    ' Plati je u CELOSTI, kroz pravi writer.
+    ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-FULL", _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
+                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           novac:=FX_FAKTURA_IZNOS, fakturaID:=FX_FAKTURA, _
+                           napomena:="test: puna uplata", tipNovca:=NOV_KUPCI_UPLATA)
+    AssertEq ok, True, "puna uplata je proknjizena"
+    AssertEq GetUplataForFaktura(FX_FAKTURA), FX_FAKTURA_IZNOS, "faktura je zatvorena"
+
+    ' Sada je preostalo TACNO nula - stara kapija je bas tu cutala.
+    AssertEq (Len(modNovac.UplataFakturaProblem(FX_FAKTURA, FX_KUPAC, 1)) > 0), True, _
+             "vec placena faktura se odbija (preostalo = 0)"
+
+    ' I writer mora da odbije, bez ijedne UI provere.
+    pre = GetUplataForFaktura(FX_FAKTURA)
+    ok = SaveKupciIzlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VISAK", _
+                           kupacNaziv:=FX_KUPAC, kupacID:=FX_KUPAC, vozacID:="", _
+                           tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                           novac:=1, fakturaID:=FX_FAKTURA, _
+                           napomena:="test: uplata preko pune", tipNovca:=NOV_KUPCI_UPLATA)
+    posle = GetUplataForFaktura(FX_FAKTURA)
+
+    AssertEq ok, False, "writer odbija uplatu na vec placenu fakturu"
+    AssertEq posle, pre, "odbijen upis ne ostavlja red u tblNovac"
+
+    ' PREPLACENA faktura (preostalo < 0) mora da se ponasa isto - ranije je i
+    ' negativan ostatak prolazio kroz "preostalo > 0".
+    AssertEq (Len(modNovac.UplataFakturaProblem(FX_FAKTURA, FX_KUPAC, 0.01)) > 0), True, _
+             "ni najmanji iznos ne prolazi na zatvorenu fakturu"
+
+    ' Faktura BEZ iznosa i dalje ne blokira - to pravilo se ne gubi uz popravku.
+    AssertEq modNovac.UplataFakturaProblem(FX_FAKTURA_BEZ_IZNOSA, FX_KUPAC, 5000), "", _
+             "faktura bez evidentiranog iznosa ne blokira uplatu"
+End Sub
+
+' ISPLATA IZ OM AVANSA NE SME DA PREDJE SALDO - I TO PROVERAVA WRITER.
+'
+' Blok i faktura su vec bili zasticeni u writer-u; avans je ostajao samo na UI
+' sloju (modNovacUnos.IsplataValidiraj). Writer je time bio poslednja linija za
+' dve od tri stvari koje isti dokument moze da prekoraci.
+'
+' Test je DIFERENCIJALAN: ista suma, isti prazan saldo, dva tipa novca. Samo
+' kes isplata kooperantu trosi OM avans (GetOMAvansSaldo je i racuna kao
+' odbitak), pa samo ona sme da bude odbijena - inace bi kapija bila obicna
+' blokada svake isplate, a test to ne bi razlikovao.
+Private Sub T_WriterGuard_AvansSaldoOM()
+    Dim ok As Boolean, pre As Long
+
+    AssertEq GetOMAvansSaldo(FX_STANICA), 0, _
+             "preduslov: otkupno mesto nema avans salda"
+
+    pre = NovacRedova()
+    ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-AV", _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
+                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       novac:=100, kooperantID:=FX_KOOPERANT, _
+                       primalacDisplay:=FX_KOOPERANT, otkupID:="", _
+                       tipNovca:=NOV_KES_OTKUPAC_KOOP, koopSmer:="")
+    AssertEq ok, False, "writer odbija kes isplatu preko avans salda OM"
+    AssertEq NovacRedova(), pre, "odbijen upis ne ostavlja red u tblNovac"
+
+    ' KONTROLA: virman firme NE trosi OM avans, pa isti iznos mora da prodje.
+    ' Bez ove grane test ne bi razlikovao ciljanu kapiju od opste blokade.
+    ok = SaveOMUlaz_TX(datum:=Date, brojDok:=FX_BROJ_NOVAC & "-VIR", _
+                       stanicaNaziv:=FX_STANICA, stanicaID:=FX_STANICA, _
+                       vozacID:="", tipAmb:="", kolAmb:=0, vrstaVoca:=FX_VRSTA, _
+                       novac:=100, kooperantID:=FX_KOOPERANT, _
+                       primalacDisplay:=FX_KOOPERANT, otkupID:="", _
+                       tipNovca:=NOV_VIRMAN_FIRMA_KOOP, koopSmer:="")
+    AssertEq ok, True, "virman firme ne trosi OM avans i prolazi"
+    AssertEq NovacRedova(), pre + 1, "prosao upis JESTE ostavio red"
+End Sub
+
+' NumVal se NE koristi: postoji u modOtkupBlok i modScrDokumenti, ali je u oba
+' Private. vba_check to ne prijavljuje (ime jeste definisano), pa se videlo tek
+' kao "Cannot run the macro" - ceo projekat se nije kompajlirao.
+Private Function FakturaIznos(ByVal fakturaID As String) As Double
+    Dim v As Variant
+    On Error Resume Next
+    v = LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_IZNOS)
+    If IsNumeric(v) Then FakturaIznos = CDbl(v)
+End Function
+
+Private Function NovacRedova() As Long
+    Dim d As Variant
+    d = GetTableData(TBL_NOVAC)
+    If IsEmpty(d) Then Exit Function
+    NovacRedova = UBound(d, 1)
+End Function
 
 ' UKUCAN A NERAZRESEN IZBOR NIJE "NIJE IZABRANO".
 ' Combo dopusta kucanje, a ID stize iz skrivene kolone koja postoji samo uz
