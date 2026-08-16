@@ -1844,3 +1844,59 @@ samo **aktivni** dokumenti (cilj ne sme biti storniran), za izvor i stornirani.
   - `relink-cilj-bez-kapije` → „bez generacije CILJA dvosmislen broj se odbija —
     očekivano [False], dobijeno [True]"
 - `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.2 — `v6-ui-125` · recovery: identitet do kraja lanca
+
+Treća runda po pregledu. v2.45.1 je zatvorila **izbor** dokumenta na obe strane;
+ovo zatvara **upis koji je posle tog izbora išao svojim putem**.
+
+### P1 — prevezivanje na zbirnu je vuklo tuđu paletu
+
+`ReassignPrijemnicaToZbirna_TX` je redove `tblPrijemnica` birala po generaciji —
+tačno. Zatim je novu `BrojZbirne` propagirala u `tblPaletaStavka` **po
+`BrojPrijemnice`**, čime je poništavala ceo taj izbor.
+
+Posledica nije bila „prevezano malo više" nego dokument koji **sam sebi
+protivreči**: prijemnica drugog kupca ostaje na staroj zbirni, a njena paleta
+završi na novoj. Sledljivost paleta → zbirna → kooperanti tada laže.
+
+Sada se, posle izbora `targetRows`, iz njih čitaju `PrijemnicaID` i upis ide po
+njima. Stavka **bez** `PrijemnicaID` (zatečen zapis) sme po broju samo ako taj
+broj nosi jedan dokument; kad ga nose dva, transakcija se prekida uz poruku, jer
+se ne može utvrditi čija je. Isto pravilo dobio je i `PripadaDokumentu`.
+
+### Identity downgrade — zadata generacija koje nema je greška
+
+Razdvojena su dva stanja koja su se ponašala isto:
+
+| Argument | Ponašanje |
+|---|---|
+| `""` | pozivalac ne zna identitet (legacy zapis) → fallback po broju, kroz kapiju |
+| `"GEN-X"`, a nema ga | **STOP** — pad na broj bi značio da se dira nešto drugo |
+
+Važi za izvor i cilj, u obe rutine.
+
+### Ciljna lista zbirnih je gubila deo identiteta
+
+`RowsAktivni` je vlasnikom smatrala **samo kupca**, a broj zbirne se generiše
+**po vozaču**. Dve zbirne istog broja i istog kupca a različitih vozača — u
+jezgru dva dokumenta — padale su u **jedan red**, pa operater nije mogao ni da
+izabere onaj koji mu treba, a skrivena generacija je nosila generaciju reda koji
+je slučajno pobedio.
+
+Sada: grupisanje po **generaciji** kad postoji, vlasnik je **niz kolona**
+(`VozacID` + `KupacID` za zbirnu) i prikazuje se ceo.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=29, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže, svaka obara **baš svoju** tvrdnju:
+  - `zbirna-paleta-po-broju` → „tuđa paleta OSTAJE na staroj zbirni — očekivano
+    [ZB-TEST-4], dobijeno [ZB-TEST-2]"
+  - `generacija-nema-pa-po-broju` → „zadata generacija prijemnice koje nema
+    zaustavlja upis — očekivano [False], dobijeno [True]"
+  - `zbirna-vlasnik-samo-kupac` → „isti broj zbirne kod dva vozača daje DVA
+    ciljna dokumenta — očekivano [2], dobijeno [1]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.

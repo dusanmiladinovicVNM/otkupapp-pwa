@@ -3727,6 +3727,8 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     Dim tgtIds As Object
     Set tgtIds = IdoviGeneracije(TBL_ZBIRNA, COL_ZBR_ID, zbirnaGeneracijaID)
 
+    If Len(Trim$(zbirnaGeneracijaID)) > 0 And tgtIds.count = 0 Then Exit Function
+
     Dim tId As Variant
     If tgtIds.count > 0 Then
         tId = tgtIds.Keys()(0)
@@ -3766,7 +3768,13 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     ' prevezala i prijemnica drugog kupca koja deli broj.
     Dim srcIds As Object
     Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, prijemnicaGeneracijaID)
-    If srcIds.count = 0 Then
+    If Len(Trim$(prijemnicaGeneracijaID)) > 0 Then
+        ' ZADATA generacija koja se ne razresava je GRESKA, ne poziv na fallback.
+        ' Pad na broj bi znacio: pozivalac je rekao "bas ovaj dokument", nije
+        ' nadjen, pa se dira nesto drugo. Prazan argument je nesto sasvim drugo
+        ' (legacy zapis) i za njega fallback ostaje.
+        If srcIds.count = 0 Then Exit Function
+    Else
         RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
                                    COL_PRJ_KUPAC
     End If
@@ -3797,18 +3805,57 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     ' Sledljivost: paletne stavke te prijemnice moraju dobiti NOVU BrojZbirne, inace
     ' ostaju sa mrtvom zbirnom (paleta -> zbirna -> kooperanti pukne). Menja se samo
     ' veza (BrojZbirne); roba/pripadnost prijemnici ostaje.
+    '
+    ' PO PrijemnicaID, NE PO BROJU. Ovaj upis je ranije isao po BrojPrijemnice i
+    ' time je ponistavao ceo izbor iznad: tblPrijemnica se menjala samo dokumentu
+    ' A, a paletne stavke i dokumenta A i dokumenta B. Dokument B je tako
+    ' postajao SAM SEBI PROTIVRECAN -- prijemnica na staroj zbirni, njena paleta
+    ' na novoj. Redovi su vec izabrani u targetRows; odatle se citaju ID-evi.
+    Dim docIds As Object: Set docIds = CreateObject("Scripting.Dictionary")
+    docIds.CompareMode = vbTextCompare
+    Dim q As Long, pidT As String
+    For q = 1 To targetRows.count
+        If cPrjId > 0 Then
+            pidT = Trim$(NzToText(data(targetRows(q), cPrjId)))
+            If Len(pidT) > 0 Then docIds(pidT) = True
+        End If
+    Next q
+
+    ' Stavka bez PrijemnicaID (zatecen zapis) sme po broju SAMO ako taj broj nosi
+    ' jedan dokument. Kad ga nose dva, ne moze se utvrditi cija je, pa se staje
+    ' umesto da se pogodi -- transakcija se povlaci u celini.
+    Dim brojDvosmislen As Boolean
+    brojDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
+                                      True, Array(COL_PRJ_KUPAC)).count > 1)
+
     Dim ps As Variant: ps = GetTableData(TBL_PALETA_STAVKA)
     If Not IsEmpty(ps) Then
-        Dim pBr As Long, pZb As Long, pSt As Long
+        Dim pBr As Long, pZb As Long, pSt As Long, pPid As Long
         pBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
         pZb = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE)
         pSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+        pPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
         If pBr > 0 And pZb > 0 Then
-            Dim r2 As Long
+            Dim r2 As Long, pidS As String, pripada As Boolean
             For r2 = 1 To UBound(ps, 1)
-                If Trim$(CStr(ps(r2, pBr))) = brPrijemnice _
-                   And (pSt = 0 Or UCase$(Trim$(CStr(ps(r2, pSt)))) <> "DA") Then
-                    RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, targetBrZbirne, SRC
+                If pSt = 0 Or UCase$(Trim$(CStr(ps(r2, pSt)))) <> "DA" Then
+                    pidS = ""
+                    If pPid > 0 Then pidS = Trim$(NzToText(ps(r2, pPid)))
+                    If Len(pidS) > 0 Then
+                        pripada = docIds.Exists(pidS)
+                    Else
+                        If Trim$(CStr(ps(r2, pBr))) = brPrijemnice And brojDvosmislen Then
+                            Err.Raise vbObjectError + 7311, SRC, _
+                                      "Paletna stavka broja '" & brPrijemnice & "' nema " & _
+                                      "PrijemnicaID, a taj broj nose dokumenta vise kupaca. " & _
+                                      "Ne moze se utvrditi cija je -- prevezivanje je " & _
+                                      "prekinuto. Popuni PrijemnicaID pa ponovi."
+                        End If
+                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)
+                    End If
+                    If pripada Then
+                        RequireUpdateCell TBL_PALETA_STAVKA, r2, COL_PALS_BROJ_ZBIRNE, targetBrZbirne, SRC
+                    End If
                 End If
             Next r2
         End If

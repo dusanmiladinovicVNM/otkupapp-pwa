@@ -34,6 +34,10 @@ Private Const FX_ZBIRNA As String = "ZB-TEST-1"     ' zbirna na OTP-TEST-1
 ' Stornirana zbirna -- postoji SAMO da bi lista ciljeva na ekranu Oporavak
 ' imala sta da izostavi (bez nje ta tvrdnja nema nad cim da padne).
 Private Const FX_ZBIRNA_STORNO As String = "ZB-TEST-STORNO"
+Private Const FX_ZBIRNA2 As String = "ZB-TEST-2"
+' Zbirna u koju nijedan test ne upisuje -- kolizioni par aktivnih
+' prijemnica pocinje na njoj, da upis iz drugog testa ne otvori dijalog.
+Private Const FX_ZBIRNA_MIRNA As String = "ZB-TEST-4"
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
@@ -73,6 +77,13 @@ Private Const FX_PRIJ_BROJ As String = "1/150326"
 Private Const FX_PRIJ_STORNO As String = "9/150326"
 ' Kolizioni par storniranih: isti broj, dva kupca, dve palete.
 Private Const FX_PRIJ_KOLIZIJA As String = "8/150326"
+' Kolizioni par AKTIVNIH prijemnica, svaka sa svojom paletom. Prevezivanje na
+' zbirnu sme da dira samo svoj dokument -- i u tblPrijemnica I u tblPaletaStavka.
+Private Const FX_PRIJ_ZBR_KOLIZIJA As String = "6/150326"
+' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
+' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
+Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
+Private Const FX_VOZAC2 As String = "VOZ-TEST-2"
 ' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
 ' toliko da prijavi, inace je kapija obara.
 Private Const FX_ZBIRNA_KG As Double = 1000
@@ -126,6 +137,8 @@ Public Sub RunAllTests()
     RunOne 27
     RunOne 28
     RunOne 29
+    RunOne 30
+    RunOne 31
 
     SetTestMode prevMode
     WriteResultFile
@@ -207,6 +220,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 27: TestName = "T_Oporavak_CiljneListe"
         Case 28: TestName = "T_IspravkaPrijemnice_SkipIRelink"
         Case 29: TestName = "T_RelinkPoGeneraciji_NeDiraTudjDokument"
+        Case 30: TestName = "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu"
+        Case 31: TestName = "T_ZadataGeneracijaKojeNema_Staje"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -244,6 +259,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 27: T_Oporavak_CiljneListe
         Case 28: T_IspravkaPrijemnice_SkipIRelink
         Case 29: T_RelinkPoGeneraciji_NeDiraTudjDokument
+        Case 30: T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu
+        Case 31: T_ZadataGeneracijaKojeNema_Staje
     End Select
 End Sub
 
@@ -1527,6 +1544,93 @@ Private Function GajbicaZaDokument(ByVal prijemnicaID As String) As Long
             End If
         End If
     Next i
+End Function
+
+' ============================================================
+' 28. Prevezivanje prijemnice na zbirnu ne sme da povuce TUDJU paletu
+' ============================================================
+' Prvi deo ReassignPrijemnicaToZbirna_TX je birao redove tblPrijemnica po
+' generaciji -- tacno. Ali je zatim NOVU BrojZbirne propagirao u tblPaletaStavka
+' po BrojPrijemnice, cime je ponistavao ceo taj izbor.
+'
+' Posledica nije bila "prevezano malo vise" nego dokument koji SAM SEBI
+' PROTIVRECI: prijemnica drugog kupca ostaje na staroj zbirni, a njena paleta
+' zavrsi na novoj. Sledljivost paleta -> zbirna -> kooperanti tada laze.
+'
+'   PRJ-TEST-Z1  KUP-TEST-1   paleta PST-TEST-Z1   <- prevezuje se
+'   PRJ-TEST-Z2  KUP-TEST-2   paleta PST-TEST-Z2   <- ne sme da se pomeri
+'
+' Oba nose broj 6/150326, kao u produkciji: broj se racuna po kupcu.
+Private Sub T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu()
+    Dim ok As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-ZBR-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-ZBR-2"
+
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), FX_ZBIRNA_MIRNA, _
+             "preduslov: tudji dokument pocinje na staroj zbirni"
+    AssertEq ZbirnaNaStavci("PST-TEST-Z2"), FX_ZBIRNA_MIRNA, _
+             "preduslov: tudja paleta pocinje na staroj zbirni"
+
+    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "GEN-ZBR-1")
+    AssertEq ok, True, "prevezivanje po generaciji je proslo"
+
+    ' Svoj dokument -- oba reda, i prijemnica i njena paleta.
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z1"), FX_ZBIRNA2, _
+             "svoja prijemnica je presla na novu zbirnu"
+    AssertEq ZbirnaNaStavci("PST-TEST-Z1"), FX_ZBIRNA2, _
+             "svoja paleta je presla na novu zbirnu"
+
+    ' TUDJI dokument -- nijedan od ta dva reda. Druga tvrdnja je ono sto je
+    ' propustala: prijemnica je ostajala, paleta nije.
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), FX_ZBIRNA_MIRNA, _
+             "tudja prijemnica OSTAJE na staroj zbirni"
+    AssertEq ZbirnaNaStavci("PST-TEST-Z2"), FX_ZBIRNA_MIRNA, _
+             "tudja paleta OSTAJE na staroj zbirni"
+End Sub
+
+' ============================================================
+' 29. Zadata generacija koje nema NIJE poziv na fallback po broju
+' ============================================================
+' Prazan argument i zadat-ali-nepostojeci su dva razlicita stanja:
+'
+'   ""        pozivalac ne zna identitet (zatecen zapis) -> fallback po broju,
+'             ali tek kroz kapiju nad jednoznacnoscu
+'   "GEN-X"   pozivalac je rekao BAS TAJ dokument. Ako ga nema, pad na broj bi
+'             znacio da se dira NESTO DRUGO -- tise i gore od greske.
+Private Sub T_ZadataGeneracijaKojeNema_Staje()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean
+    Dim preZbirna As String, preStavki As Long
+
+    preZbirna = ZbirnaNaPrijemnici("PRJ-TEST-Z2")
+    preStavki = StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA)
+
+    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, "GEN-NE-POSTOJI")
+    AssertEq ok, False, "zadata generacija prijemnice koje nema zaustavlja upis"
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-Z2"), preZbirna, _
+             "posle odbijanja nijedan dokument nije pomeren"
+
+    ok = ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ZBR_KOLIZIJA, FX_ZBIRNA2, _
+                                       "GEN-ZBR-1", "GEN-ZBIRNE-NEMA")
+    AssertEq ok, False, "zadata generacija CILJNE zbirne koje nema zaustavlja upis"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-NE-POSTOJI", "GEN-CILJ-A")
+    AssertEq ok, False, "zadata generacija izvora paleta koje nema zaustavlja upis"
+    AssertEq (Len(upoz) > 0), True, "odbijanje nosi razlog za operatera"
+    AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), preStavki, _
+             "posle odbijanja nijedna paletna stavka nije pomerena"
+End Sub
+
+' BrojZbirne sa jednog reda -- po PK-u, ne po broju dokumenta.
+Private Function ZbirnaNaPrijemnici(ByVal prijemnicaID As String) As String
+    ZbirnaNaPrijemnici = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+                                                    prijemnicaID, COL_PRJ_BROJ_ZBIRNE)))
+End Function
+
+Private Function ZbirnaNaStavci(ByVal stavkaID As String) As String
+    ZbirnaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _
+                                                stavkaID, COL_PALS_BROJ_ZBIRNE)))
 End Function
 
 ' Upisi generaciju na red po PK-u. Fixture redovi se seju mimo writera, pa

@@ -48,9 +48,15 @@ End Sub
 ' Pripada li paleta-stavka dokumentu? Po PrijemnicaID kad su ID-evi te
 ' generacije poznati, inace po broju kao labeli. Koristi se za OBE strane
 ' prevezivanja - izvor i cilj - da bi pravilo bilo doslovno isto.
+'
+' brojDvosmislen: nose li taj broj dokumenta vise vlasnika. Stavka bez
+' PrijemnicaID (zatecen zapis) tada NE sme da padne na broj -- ne moze se
+' utvrditi cija je, pa se staje umesto da se pogodi. Kad broj nosi jedan
+' dokument, fallback je bezbedan i zatecen podatak i dalje radi.
 Private Function PripadaDokumentu(ByVal brojStavke As String, ByVal broj As String, _
                                   ByVal prijemnicaID As String, _
-                                  ByVal ids As Object) As Boolean
+                                  ByVal ids As Object, _
+                                  Optional ByVal brojDvosmislen As Boolean = False) As Boolean
     If ids Is Nothing Then
         PripadaDokumentu = (brojStavke = broj)
         Exit Function
@@ -62,6 +68,12 @@ Private Function PripadaDokumentu(ByVal brojStavke As String, ByVal broj As Stri
     If Len(prijemnicaID) > 0 Then
         PripadaDokumentu = ids.Exists(prijemnicaID)
     Else
+        If brojStavke = broj And brojDvosmislen Then
+            Err.Raise vbObjectError + 7312, "modPaletniList.PripadaDokumentu", _
+                      "Paletna stavka broja '" & broj & "' nema PrijemnicaID, a taj " & _
+                      "broj nose dokumenta vise kupaca. Ne moze se utvrditi cija je " & _
+                      "-- prevezivanje je prekinuto. Popuni PrijemnicaID pa ponovi."
+        End If
         PripadaDokumentu = (brojStavke = broj)
     End If
 End Function
@@ -1351,9 +1363,16 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     Dim pcGen As Long: pcGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     Dim tgtGen As String: tgtGen = Trim$(newGeneracijaID)
     If pcGen = 0 Then tgtGen = ""
+    If Len(Trim$(newGeneracijaID)) > 0 And Len(tgtGen) = 0 Then
+        outWarn = "Generacija cilja je zadata, ali tabela nema kolonu " & _
+                  COL_GENERACIJA_ID & ". Prevezivanje je zaustavljeno."
+        Exit Function
+    End If
+    Dim tgtDvosmislen As Boolean
+    tgtDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _
+                                     Array(COL_PRJ_KUPAC)).count > 1)
     If Len(tgtGen) = 0 Then
-        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _
-                           Array(COL_PRJ_KUPAC)).count > 1 Then
+        If tgtDvosmislen Then
             outWarn = "Broj '" & newBroj & "' nose dokumenta vise kupaca, a generacija " & _
                       "cilja nije poznata. Palete bi mogle da odu tudjem kupcu."
             Exit Function
@@ -1434,13 +1453,22 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ' ali tek posto se dokaze da je broj jednoznacan - i to UKLJUCUJUCI
     ' stornirane, jer je izvor prevezivanja bas storniran dokument.
     Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)
-    If srcIds.count = 0 Then
-        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
-                           Array(COL_PRJ_KUPAC)).count > 1 Then
-            outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a generacija " & _
-                      "izvora nije poznata. Prevezivanje bi zahvatilo i tudje palete."
+    Dim srcDvosmislen As Boolean
+    srcDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
+                                     Array(COL_PRJ_KUPAC)).count > 1)
+    If Len(Trim$(oldGeneracijaID)) > 0 Then
+        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback:
+        ' pozivalac je rekao "bas ovaj dokument", nije nadjen, pa bi pad na broj
+        ' dirao nesto drugo. Prazan argument (legacy) je sasvim druga stvar.
+        If srcIds.count = 0 Then
+            outWarn = "Generacija izvora '" & oldGeneracijaID & "' ne postoji. " & _
+                      "Prevezivanje je zaustavljeno da ne bi zahvatilo drugi dokument."
             Exit Function
         End If
+    ElseIf srcDvosmislen Then
+        outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a generacija " & _
+                  "izvora nije poznata. Prevezivanje bi zahvatilo i tudje palete."
+        Exit Function
     End If
 
     Dim freshRows As Collection: Set freshRows = New Collection
@@ -1451,9 +1479,9 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     For i = 1 To UBound(ps, 1)
         If UCase$(Trim$(CStr(ps(i, sSt)))) <> "DA" Then
             Dim bp As String: bp = Trim$(CStr(ps(i, sBr)))
-            If PripadaDokumentu(bp, newBroj, Trim$(CStr(ps(i, sPid))), tgtIds) Then
+            If PripadaDokumentu(bp, newBroj, Trim$(CStr(ps(i, sPid))), tgtIds, tgtDvosmislen) Then
                 freshRows.Add i
-            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then
+            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then
                 oldRows.Add i
                 Dim kO As String: kO = Trim$(CStr(ps(i, sKl)))
                 If Len(kO) = 0 Then kO = "I"

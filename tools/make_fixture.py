@@ -44,6 +44,16 @@ AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
 
 STANICA = "STA-TEST-1"
 VOZAC = "VOZ-TEST-1"
+# Drugi vozac postoji zbog CILJNE liste zbirnih: broj zbirne se generise PO
+# VOZACU, pa su dve zbirne istog broja i istog kupca a razlicitih vozaca DVA
+# dokumenta. Lista ciljeva mora da ponudi oba.
+VOZAC2 = "VOZ-TEST-2"
+ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
+# Zbirna u koju NIJEDAN test ne upisuje. Kolizioni par aktivnih prijemnica mora
+# da pocne na takvoj: na ZB-TEST-1 je okidao dijalog "dupla prijemnica" iz testa
+# koji tamo upisuje, a MsgBox u headless runu je visenje koje watchdog samo
+# maskira.
+ZBIRNA_MIRNA = "ZB-TEST-4"
 VRSTA = "TESTVOCE"
 SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
@@ -72,6 +82,12 @@ FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
 PRIJEMNICA_BROJ = "1/150326"        # isti broj kod KUPAC i KUPAC2
 PRIJEMNICA_STORNO = "9/150326"      # stornirana; njene palete su osirocene
 PRIJEMNICA_STORNO2 = "8/150326"     # kolizioni par storniranih (dva kupca)
+# Kolizioni par AKTIVNIH prijemnica sa svojim paletama. Postoji zbog jednog
+# propusta koji se video tek kad se tvrdnja napisala: prevezivanje prijemnice na
+# zbirnu menjalo je tblPrijemnica po identitetu, a tblPaletaStavka jos po BROJU
+# -- pa je dokument drugog kupca ostajao sam sebi protivrecan (prijemnica na
+# staroj zbirni, njena paleta na novoj).
+PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -83,6 +99,8 @@ SEED = {
     "tblVozaci": [
         {"VozacID": VOZAC, "Ime": "Test", "Prezime": "Vozac",
          "Aktivan": STATUS_AKTIVAN, "KapacitetKG": 5000},
+        {"VozacID": VOZAC2, "Ime": "Drugi", "Prezime": "Vozac",
+         "Aktivan": STATUS_AKTIVAN, "KapacitetKG": 4000},
     ],
     "tblKulture": [
         {"KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA, "SortaVoca": SORTA,
@@ -112,6 +130,21 @@ SEED = {
     # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
     # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
     "tblZbirna": [
+        # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
+        # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
+        # smatrala samo kupca, pa operater nije mogao da izabere pravi.
+        {"ZbirnaID": "ZBI-TEST-4", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_MIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-DUPL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-DUPL-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
+         "Klasa": "I", "KupacID": KUPAC},
         {"ZbirnaID": "ZBI-TEST-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 1000, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 100,
@@ -175,6 +208,15 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        # Kolizioni par AKTIVNIH: prevezivanje na zbirnu sme da dira SAMO Z1.
+        {"PrijemnicaID": "PRJ-TEST-Z1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-Z2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-A", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA2,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 60.0,
@@ -207,6 +249,14 @@ SEED = {
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
     "tblPaleta": [
+        {"PaletaID": "PAL-TEST-Z1", "BrojPalete": 11, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 10,
+         "KapacitetGajbica": 100, "NetoKg": 100, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-Z2", "BrojPalete": 12, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 20,
+         "KapacitetGajbica": 100, "NetoKg": 200, "Status": "OTVORENA"},
         {"PaletaID": "PAL-TEST-1", "BrojPalete": 1, "Godina": 2026,
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
@@ -221,6 +271,14 @@ SEED = {
          "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
     ],
     "tblPaletaStavka": [
+        {"StavkaID": "PST-TEST-Z1", "PaletaID": "PAL-TEST-Z1",
+         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-Z1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-Z2", "PaletaID": "PAL-TEST-Z2",
+         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 20, "NetoKg": 200, "PrijemnicaID": "PRJ-TEST-Z2",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-1", "PaletaID": "PAL-TEST-1",
          "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-S",

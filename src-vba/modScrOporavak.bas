@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-124"
+Public Const SCROPO_BUILD As String = "v6-ui-125"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -509,8 +509,11 @@ Private Function CiljZbirnaGridCols() As Variant
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
+    ' Vlasnistvo zbirne je VOZAC + KUPAC -- broj zbirne se generise po vozacu,
+    ' pa sam kupac ne razlikuje dva dokumenta istog broja.
     RowsAktivneZbirne = RowsAktivni(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
                                     COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KOLICINA, _
+                                    Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
                                     CiljZbirnaGridCols(), q)
 End Function
 
@@ -530,16 +533,37 @@ Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
                                         CiljPrijGridCols(), q)
 End Function
 
-' Liste kandidata za cilj: nestornirani redovi, jedan red po BROJU (klase I i
-' II dele broj, a cilj prevezivanja je broj - ne pojedinacan red).
+' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU.
+'
+' "Jedan red po dokumentu" NIJE isto sto i "jedan red po broju", i ta razlika
+' je razlog zasto ova rutina izgleda ovako:
+'
+'   klase I i II dele broj I VLASNIKA -> to je jedan dokument, jedan red
+'   dva kupca sa istim brojem         -> to su DVA dokumenta, dva reda
+'
+' Broj se racuna PO KUPCU (GenerateBrojPrijemnice), pa je drugi slucaj
+' svakodnevan, ne teorijski. Dedup samo po broju sveo bi ta dva dokumenta na
+' jedan red - operater bi izabrao "cilj" ne znajuci ciji je, a prevezivanje bi
+' otislo na onaj koji zatekne poslednji.
+'
+' Zato je kljuc grupisanja broj + VLASNIK, a vlasnik se i PRIKAZUJE: kolizija
+' mora da bude vidljiva, ne samo tacno obradjena.
+' colVlasnik je NIZ kolona, ne jedna: vlasnistvo zbirne je vozac + kupac, isti
+' kompozit koji koriste StornoZbirna, ApplyGeneracijaID i kapija u
+' ReassignPrijemnicaToZbirna_TX. Sa samim kupcem bi dve zbirne istog broja i
+' istog kupca a razlicitih vozaca -- u jezgru dva dokumenta -- pale u JEDAN red,
+' pa operater ne bi mogao ni da izabere onaj koji mu treba.
 Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colDatum As String, ByVal colVrsta As String, _
                              ByVal colSorta As String, ByVal colKol As String, _
+                             ByVal colVlasnik As Variant, _
                              ByVal cols As Variant, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim iBr As Long, iDat As Long, iVr As Long, iSo As Long, iKol As Long
-    Dim iSt As Long, iVl As Long, iGen As Long
+    Dim iSt As Long, iGen As Long
+    Dim vlCols As Variant, iVl() As Long, v As Long
     Dim broj As String, vlasnik As String, kljuc As String, hay As String, sumKg As Double
+    Dim gen As String
     Dim seen As Object
     On Error GoTo EH
     mStep = "cilj " & tbl
@@ -554,6 +578,15 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     iVr = modUiData.ColIdx(tbl, colVrsta)
     iSo = modUiData.ColIdx(tbl, colSorta)
     iKol = modUiData.ColIdx(tbl, colKol)
+    If IsArray(colVlasnik) Then
+        vlCols = colVlasnik
+    Else
+        vlCols = Array(colVlasnik)
+    End If
+    ReDim iVl(LBound(vlCols) To UBound(vlCols))
+    For v = LBound(vlCols) To UBound(vlCols)
+        iVl(v) = modUiData.ColIdx(tbl, CStr(vlCols(v)))
+    Next v
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
     iGen = modUiData.ColIdx(tbl, COL_GENERACIJA_ID)
     If iBr = 0 Then
@@ -579,8 +612,23 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         broj = modUiData.CellS(src, r, iBr)
         If Len(broj) = 0 Then GoTo Sledeci
         vlasnik = ""
-        If iVl > 0 Then vlasnik = modUiData.CellS(src, r, iVl)
-        kljuc = broj & Chr$(1) & vlasnik
+        For v = LBound(iVl) To UBound(iVl)
+            If iVl(v) > 0 Then
+                If Len(vlasnik) > 0 Then vlasnik = vlasnik & " / "
+                vlasnik = vlasnik & modUiData.CellS(src, r, iVl(v))
+            End If
+        Next v
+
+        ' Kljuc grupisanja: GENERACIJA kad postoji, inace broj + pun vlasnik.
+        ' Klase I i II istog dokumenta dele generaciju, pa se i dalje sabiraju u
+        ' jedan red; dva razlicita dokumenta je vise ne dele, pa se ne spajaju.
+        gen = ""
+        If iGen > 0 Then gen = modUiData.CellS(src, r, iGen)
+        If Len(gen) > 0 Then
+            kljuc = "g" & Chr$(1) & gen
+        Else
+            kljuc = broj & Chr$(1) & vlasnik
+        End If
         hay = broj & "|" & vlasnik & "|" & modUiData.CellS(src, r, iVr) & _
               "|" & modUiData.CellS(src, r, iSo)
         If Len(q) > 0 Then
@@ -601,10 +649,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         outA(n, 4) = modUiData.CellS(src, r, iVr)
         outA(n, 5) = modUiData.CellS(src, r, iSo)
         outA(n, 6) = modUiData.CellD(src, r, iKol)
-        ' Identitet ciljnog dokumenta. Broj je labela: prijemnica se broji po
-        ' kupcu, zbirna po vozacu, pa dva dokumenta lako dele broj. Radnja mora
-        ' da posalje BAS ovaj dokument, ne "prvi sa tim brojem".
-        If iGen > 0 Then outA(n, 7) = modUiData.CellS(src, r, iGen)
+        ' Identitet ciljnog dokumenta ide u red: radnja mora da posalje BAS
+        ' ovaj dokument, ne "prvi sa tim brojem".
+        outA(n, 7) = gen
         sumKg = sumKg + modUiData.CellD(src, r, iKol)
 Sledeci:
     Next r

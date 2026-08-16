@@ -24,6 +24,18 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 3. VRACANJE. `git checkout --` vraca fajl na HEAD, pa BRISE i nesnimljene izmene
    koje sa sabotazom nemaju veze (jednom vec pojelo test seam-ove). Zato se
    vraca obrnutom zamenom -- dira se tacno ono sto je i pokvareno.
+
+4. KOMENTAR POSLE `_`. U VBA line-continuation `_` mora biti POSLEDNJI znak u
+   redu; `..., _   ' SABOTAZA` je syntax error. Sabotaza tada ne obara test nego
+   COMPILE: run visi do timeout-a, Excel ostaje u [break], a izlaz je
+   "Exception occurred" umesto imena tvrdnje. Ako sabotaza pada tako, greska je
+   u sabotazi. Oznaku pisi u red IZNAD ili je izostavi -- ime u katalogu je
+   dovoljna dokumentacija.
+
+5. POGADJAJ BAS SVOJU TVRDNJU. Sabotaza koja obori PRVU tvrdnju u testu (npr.
+   tako sto rutina digne gresku pa vrati False) dokazuje samo da se kod izvrsava,
+   ne i da ta konkretna tvrdnja meri. Ako izlaz prijavi drugu tvrdnju od
+   ocekivane, suzi sabotazu dok ne pogodi svoju.
 """
 
 import argparse
@@ -475,6 +487,31 @@ SABOTAZE = {
         "        If False Then   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "bez generacije cilja dvosmislen broj se odbija (fail-closed)",
+    ),
+    # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
+    # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
+    "zbirna-paleta-po-broju": (
+        "modDokumenta.bas",
+        "                        pripada = docIds.Exists(pidS)\n",
+        "                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)   ' SABOTAZA\n",
+        "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
+        "paletna stavka tudjeg dokumenta istog broja se NE pomera",
+    ),
+    # Zadata generacija koje nema nije poziv na fallback po broju.
+    "generacija-nema-pa-po-broju": (
+        "modDokumenta.bas",
+        "        If srcIds.count = 0 Then Exit Function\n",
+        "        If False Then Exit Function   ' SABOTAZA: pada na broj\n",
+        "T_ZadataGeneracijaKojeNema_Staje",
+        "zadata generacija koje nema zaustavlja upis, ne prelazi na broj",
+    ),
+    # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
+    "zbirna-vlasnik-samo-kupac": (
+        "modScrOporavak.bas",
+        "                                    Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _\n",
+        "                                    Array(COL_ZBR_KUPAC), _\n",
+        "T_Oporavak_CiljneListe",
+        "dve zbirne istog broja a razlicitih vozaca ostaju DVA reda",
     ),
     "vlasnik-broji-stornirane": (
         "modStorno.bas",
