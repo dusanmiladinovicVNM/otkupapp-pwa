@@ -227,7 +227,7 @@ ne samo onaj ko piše test.
 `tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
 `tools/make_fixture.py` iz **donor** sveske.
 
-> **Kad se `FIXTURE` dict u `make_fixture.py` promeni, fixture se MORA
+> **Kad se `SEED` dict u `make_fixture.py` promeni, fixture se MORA
 > regenerisati** — inače testovi padaju na podacima kojih nema. Donor može biti i
 > **postojeći fixture**: on nosi punu šemu i nema VBA, a generator ionako briše sve
 > redove pre sejanja. Izlaz mora biti druga putanja (donor = izlaz se odbija), pa se
@@ -246,6 +246,44 @@ ne samo onaj ko piše test.
   name" → `Cannot run the macro`, poruka koja ne liči na compile grešku. Za sveske
   kroz `--workbook` ne briše ništa, nego prijavljuje `ORPHAN` red.
 - Šemu donora ispisuje `tools/dump_schema.py` (samo čitanje).
+
+### Potpis fixture-a — zašto `git checkout` nije dovoljan
+
+Fixture je gitignored, pa ga **`git checkout` ne menja**. Posle prelaska na drugu
+granu na disku ostaje sveska prethodne: testovi padaju **na podacima**, a pad
+izgleda kao regresija koda. To je već pojelo pola sata trijaže — četiri crvena
+testa nad ispravnim kodom.
+
+Zato generator pored sveske ostavlja `tests/fixtures/otkup_test.sig` sa hash-om
+posejanih podataka, a `run_vba.py` ga poredi **pre podizanja Excela**:
+
+| Stanje | Šta radi `run_vba` |
+|---|---|
+| potpis se slaže | tiho nastavlja |
+| potpis se razlikuje | **staje, exit 2**, ispiše komandu za regeneraciju |
+| potpisa nema | **staje, exit 2** — sveska od generatora pre ovog sistema |
+| `--workbook` (tuđa sveska) | ne dira ništa |
+| `--ignore-fixture-sig` | nastavlja svesno, uz poruku |
+
+Odsustvo potpisa je **fail-closed** namerno: sveska bez njega ne može da se
+proveri, a to je baš prvi run na svakoj zatečenoj mašini — tačno onaj u kome se
+incident i desio. Upozorenje bi ga propustilo jednom po mašini, što je isto kao
+da provere nema. Prazna auto-sveska ovde ne stiže; nju pravi grana iznad poziva.
+
+Potpis pokriva **samo deklarativne podatke** (`SEED`, config, `FIXTURE_DATE`,
+`KEEP_ROWS`). Izmena logike upisa (`add_row`, `strip_rows`, `upsert_config`) ili
+sadržaja tabela koje se čuvaju iz donora (`KEEP_ROWS`) mu je **nevidljiva**. Za
+to postoji ručna poluga — `FIXTURE_FORMAT_VERSION` u `make_fixture.py`, koja
+ulazi u hash: kad se promeni semantika generatora, podigne se za jedan i svi
+fixture-i postaju ustajali. Jeftinije i tačnije nego hashirati ceo `.py`, koji bi
+tražio regeneraciju i na izmenu komentara.
+
+Potpis se **briše na početku** build-a i piše tek posle uspešnog `Save`: neuspeo
+build (donor bez kolone → `SEMA:`) prepiše svesku, pa bi zadržan stari `.sig`
+tvrdio da je fixture svež. Bolje „nema potpisa" nego lažan.
+
+Svestan run nad starim podacima: `--ignore-fixture-sig`. To je jedini način da
+run prođe bez važećeg potpisa — nema tihe grane.
 
 `tests/golden/*.txt` idu u git. Kad golden ne postoji, test ga upiše i **padne** —
 nov golden mora proći ljudski pregled pre nego što postane merilo. Dva pravila:

@@ -50,14 +50,32 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `DEKLARACIJA` | modul-level `Const`/`Dim`/`Declare`/`Type`/`Enum` posle prve procedure |
 | `REZERVISANO` | ime koje se case-insensitive poklapa sa VBA ključnom reči (`eNum`) |
 | `DUPLIKAT` | isti `Public Sub/Function/Const` u dva modula → „Ambiguous name" |
+| `DUPLIKAT_LOKALNI` | isto ime dva puta u **istom** modulu → modul se ne kompajlira |
 | `PORUKA` | `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke` |
 | `NEDEFINISAN` | poziv procedure koja nigde nije definisana |
 | `ARNOST` | poziv sa pogrešnim brojem argumenata |
 
-Poslednje dve su namerno uske (samo `.bas`, samo poziv u poziciji naredbe) — lažan
-nalaz je gori od propuštenog. Uzak izuzetak od `DUPLIKAT`-a postoji za ugovor
-ekrana (`Scr_*` u `modScr*`). Ne kompajlira VBA: ne hvata tip-greške ni
+`NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
+naredbe) — lažan nalaz je gori od propuštenog. Uzak izuzetak od `DUPLIKAT`-a
+postoji za ugovor ekrana (`Scr_*` u `modScr*`), a od `DUPLIKAT_LOKALNI`-og za
+`Property Get/Let/Set` trojku. Ne kompajlira VBA: ne hvata tip-greške ni
 nedeklarisane promenljive, a u `.frm`/`.cls` ne radi `NEDEFINISAN`/`ARNOST`.
+
+**Dve provere duplikata nisu ista provera.** `DUPLIKAT` gleda globalni imenski
+prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je
+nevidljivo. A ono obara compile isto tako — i **ne prijavljuje se kao compile
+greška** nego kao `Cannot run the macro` na bilo kom makrou, jer modul koji se ne
+kompajlira obara ceo projekat. Simptom ne pokazuje na krivca.
+
+`python tools\vba_check.py --self-test` vrti slučajeve koji **moraju** da zapište
+i legalan VBA koji **ne sme**. Vrti se i u CI-ju: zelen checker nad čistim repoom
+ne razlikuje „nema greške" od „provera ništa ne meri".
+
+Slučajevi idu **kroz `check_file()`, istu funkciju koju zove CLI**, a jedan ide
+kroz ceo `main()` nad pravim fajlom na disku. Namerno: self-test koji zove
+proveru direktno dokazuje da funkcija radi, ali ne i da je CLI zove — otkačen
+jedan red tada ostavlja i repo-run i self-test zelene, a checker isključen. Isti
+oblik greške kao placebo test, samo u alatu.
 
 ## 3) `tools/run_vba.py` — SAMO Windows + Excel + `pywin32`
 
@@ -72,6 +90,14 @@ Ne pokreće se na Linux/macOS — ni u web sesiji ni u CI. Tamo se testovi pona�
   greške", **ne** „sve provere prošle". **Nova suite mora biti `gate`.**
 - Verdikt ne dolazi iz toga da li `Run()` pukne, nego iz `last_run.txt` pored
   sveske. **Nema fajla = pad.**
+- **Fixture je gitignored, pa ga `git checkout` NE menja.** Posle prelaska na
+  drugu granu na disku ostaje sveska prethodne i testovi padaju *na podacima*, a
+  pad izgleda kao regresija koda. Runner to sada hvata sam: `make_fixture` piše
+  potpis podataka u `otkup_test.sig`, `run_vba` ga poredi pre Excela i staje uz
+  komandu za regeneraciju. Bez važećeg potpisa run **ne prolazi** — jedini izlaz
+  je svestan `--ignore-fixture-sig`. **Crveno posle prelaska grane — prvo
+  regeneriši fixture, pa tek onda traži krivca u kodu.** Detalji:
+  `docs/EXCEL_TEST_HARNESS.md`.
 - `COMPILE NEJASNO` ne obara run kad suite-ovi idu. **Compile ostaje ručna kapija
   pred release:** `Alt+F11 → Debug → Compile VBAProject`.
 

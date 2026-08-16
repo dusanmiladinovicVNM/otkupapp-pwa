@@ -21,6 +21,7 @@ Windows + Excel + pywin32. Semu donora ispisuje tools/dump_schema.py.
 
 import argparse
 import datetime
+import hashlib
 import os
 import shutil
 import sys
@@ -165,6 +166,57 @@ SEF_CONFIG = {
 # deterministicno za golden snapshot.
 
 EXCEL_EPOCH = datetime.date(1899, 12, 30)
+
+
+# --- potpis: koji podaci su u fixture-u --------------------------------------
+#
+# Fixture je gitignored (.gitignore: tests/fixtures/), pa `git checkout` NE menja
+# fajl na disku. Prelazak na granu koja seje nove redove ostavlja fixture
+# prethodne grane, testovi padnu na podacima, a pad izgleda kao regresija koda.
+# To je vec pojelo pola sata trijaze.
+#
+# Zato generator pored sveske ostavlja `otkup_test.sig` sa hash-om PODATAKA koje
+# je posejao. run_vba.py ga poredi sa tekucim generatorom i staje pre Excela.
+#
+# Hash pokriva SAMO deklarativne podatke (SEED, config, datum, KEEP_ROWS) -- to
+# je ono sto se menja od grane do grane. Izmena LOGIKE upisa (add_row, strip_rows)
+# se ne vidi; nju operater regenerise namerno. Bolje uzak i tacan potpis nego
+# sirok koji trazi regeneraciju na svaku izmenu komentara.
+FIXTURE_SIG_EXT = ".sig"
+
+# Rucna poluga za ono sto hash ne vidi. Kad se promeni SEMANTIKA generatora
+# (add_row, strip_rows, upsert_config, ili sadrzaj tabela koje se cuvaju iz
+# donora preko KEEP_ROWS), podaci u svesci se promene a deklarativni blokovi
+# ostanu isti -- potpis bi tvrdio da je stari fixture i dalje dobar. Tada se
+# ovaj broj podigne za jedan. Jeftinije i tacnije nego hashirati ceo .py, koji
+# bi trazio regeneraciju i na izmenu komentara.
+FIXTURE_FORMAT_VERSION = 1
+
+
+def signature() -> str:
+    payload = "\n".join([
+        "FORMAT=" + str(FIXTURE_FORMAT_VERSION),
+        "FIXTURE_DATE=" + FIXTURE_DATE.isoformat(),
+        "KEEP_ROWS=" + repr(sorted(KEEP_ROWS)),
+        "LOCAL_CONFIG=" + repr(sorted(LOCAL_CONFIG.items())),
+        "SEF_CONFIG=" + repr(sorted(SEF_CONFIG.items())),
+        "SEED=" + repr([(t, [sorted(r.items()) for r in rows])
+                        for t, rows in sorted(SEED.items())]),
+    ])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def sig_path(workbook: str) -> str:
+    return os.path.splitext(workbook)[0] + FIXTURE_SIG_EXT
+
+
+def read_sig(workbook: str) -> str:
+    """Potpis zapisan uz svesku; "" ako ga nema (fixture od starijeg generatora)."""
+    try:
+        with open(sig_path(workbook), "r", encoding="ascii") as fh:
+            return fh.read().strip()
+    except OSError:
+        return ""
 
 
 class SchemaError(Exception):
@@ -325,6 +377,15 @@ def build(donor: str, out: str, force: bool) -> int:
         return 2
 
     os.makedirs(os.path.dirname(out), exist_ok=True)
+
+    # Potpis pada PRE nego sto se sveska dirne. Bez ovoga neuspeo build (donor bez
+    # kolone -> SchemaError) ostavlja prepisanu svesku uz stari .sig, pa run_vba
+    # cita potpis koji vise ne opisuje nista. Bolje "nema potpisa" nego lazan.
+    try:
+        os.remove(sig_path(out))
+    except OSError:
+        pass
+
     shutil.copy2(donor, out)          # radi se nad kopijom; donor ostaje netaknut
 
     xl = win32.DispatchEx("Excel.Application")
@@ -363,7 +424,15 @@ def build(donor: str, out: str, force: bool) -> int:
         print(f"Config: tblLocalConfig({len(LOCAL_CONFIG)}), tblSEFConfig({len(SEF_CONFIG)}) -- licenca OFF")
 
         wb.Save()
+
+        # Potpis se pise TEK posle uspesnog Save-a: sig uz svesku koja nije do
+        # kraja napravljena tvrdio bi da je fixture svez.
+        sig = signature()
+        with open(sig_path(out), "w", encoding="ascii") as fh:
+            fh.write(sig + "\n")
+
         print(f"\nFixture: {out}")
+        print(f"Potpis:  {sig}  ({os.path.basename(sig_path(out))})")
         return 0
     except SchemaError as exc:
         print(f"\nSEMA: {exc}", file=sys.stderr)

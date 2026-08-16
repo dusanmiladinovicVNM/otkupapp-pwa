@@ -66,6 +66,12 @@ jobs:
       - name: vba_check
         run: python3 tools/vba_check.py
 
+      # Druga polovina dokaza: da provere zaista grizu. Zelen checker nad cistim
+      # repoom ne razlikuje "nema greske" od "provera nista ne meri" -- ovo vrti
+      # slucajeve koji MORAJU da zapiste i legalan VBA koji NE SME.
+      - name: vba_check self-test
+        run: python3 tools/vba_check.py --self-test
+
       # Mapa vlasnistva se generise iz koda, pa istruli cim neko doda upis nad
       # novom tabelom. Instant je i ne trazi Excel.
       - name: WHO_WRITES je azuran
