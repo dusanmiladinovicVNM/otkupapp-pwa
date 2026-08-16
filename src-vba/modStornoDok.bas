@@ -195,11 +195,11 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
         Case STIP_OTKUP
             ' Klasa I i II dele isti BrDok (zaseban red po klasi) -> stornira
             ' se ceo dokument, ne jedan red. Isto sto radi F1 lista.
-            ok = StornoOtkupByBrDok_TX(broj)
+            ok = StornoOtkupByBrDok_TX(broj, docID)
 
         Case STIP_OTPREMNICA
             ' i ovde klase dele broj
-            ok = StornoOtpremnicaByBroj_TX(broj)
+            ok = StornoOtpremnicaByBroj_TX(broj, docID)
 
         Case STIP_ZBIRNA
             ok = StornoZbirna_TX(broj)
@@ -209,10 +209,14 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             End If
 
         Case STIP_PRIJEMNICA
-            ok = StornoPrijemnicaByBroj_TX(broj)
+            ok = StornoPrijemnicaByBroj_TX(broj, docID)
 
         Case STIP_FAKTURA
-            fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)
+            ' Identitet fakture JE njen PK -- kad ga ekran posalje, ne trazi se
+            ' ponovo po broju (LookupActiveID uzima prvi pogodak).
+            fakID = docID
+            If Len(fakID) = 0 Then _
+                fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)
             If Len(fakID) = 0 Then
                 poruka = NijePronadjen(broj)
                 Exit Function
@@ -223,10 +227,15 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ' StornoNovac_TX ocekuje NovacID, a mreza pokazuje BROJ. Isto
             ' razresavanje kao u StornoRazlog - i ovde, jer se izmedju
             ' provere i potvrde stanje moglo promeniti.
-            novID = ResolveNovacForStorno(broj, razlog)
-            If Len(razlog) > 0 Then
-                poruka = razlog
-                Exit Function
+            ' Isto i za novac: NovacID iz kliknutog reda. ResolveNovacForStorno
+            ' ostaje za legacy pozivaoce koji salju samo broj.
+            novID = docID
+            If Len(novID) = 0 Then
+                novID = ResolveNovacForStorno(broj, razlog)
+                If Len(razlog) > 0 Then
+                    poruka = razlog
+                    Exit Function
+                End If
             End If
             ok = StornoNovac_TX(novID)
 
@@ -314,7 +323,7 @@ Public Function StornoTraziIzborModa(ByVal tip As String, ByVal broj As String, 
     On Error GoTo EH
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function      ' nije framework tip - to se zna pouzdano
-    StornoTraziIzborModa = CorrectionNeedsDialog(dt, broj, opcija)
+    StornoTraziIzborModa = CorrectionNeedsDialog(dt, broj, opcija, docID)
     Exit Function
 EH:
     LogErr "modStornoDok.StornoTraziIzborModa"
@@ -330,7 +339,7 @@ Public Function StornoPregledLanca(ByVal tip As String, ByVal broj As String, _
     On Error Resume Next
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function
-    StornoPregledLanca = BuildStornoPreview(dt, broj, opcija)
+    StornoPregledLanca = BuildStornoPreview(dt, broj, opcija, docID)
 End Function
 
 ' Izvrsi izabrani mod. Vraca recnik iz modStornoFlow:
@@ -350,12 +359,12 @@ Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function
     Select Case dt
-        Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm)
-        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm)
+        Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm, docID)
+        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)
         Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode)
         ' neDiraj = "ne diraj palete" (samo prijemnica, DUPLI/PONISTENJE):
         ' palete ostaju vezane za storniranu prijemnicu umesto da se odvezu.
-        Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj)
+        Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj, docID)
     End Select
     Exit Function
 EH:

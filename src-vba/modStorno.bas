@@ -67,7 +67,34 @@ End Function
 ' Storno SVIH otkup redova za dati broj dokumenta. Klasa I i Klasa II dele isti
 ' BrDok (zaseban OtkupID po klasi) -> storno dokumenta mora obuhvatiti OBE.
 ' Atomicno: jedna transakcija, unutra reuse StornoOtkup po svakom OtkupID.
-Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
+' ============================================================
+' Pripada li red IZABRANOM dokumentu
+' ============================================================
+' Po GeneracijaID kad je poznat, inace po broju. Broj je labela: BrojPrijemnice
+' se racuna PO KUPCU, BrojDokumenta otkupa PO OTKUPNOM MESTU -- prosirenje
+' operacije na sve redove tog broja moze da zahvati tudji dokument.
+'
+' Kad je generacija zadata a kolone nema (zatecena instalacija pre
+' EnsureSledljivostSchema), staje se glasno: pozivalac je rekao BAS TAJ
+' dokument, pa tihi pad na broj znaci da se dira nesto drugo.
+Private Function RedJeIzabranogDokumenta(ByRef data As Variant, ByVal i As Long, _
+                                         ByVal colBroj As Long, ByVal colGen As Long, _
+                                         ByVal broj As String, ByVal gen As String, _
+                                         ByVal sourceName As String) As Boolean
+    If Len(Trim$(gen)) = 0 Then
+        RedJeIzabranogDokumenta = (Trim$(CStr(data(i, colBroj))) = Trim$(broj))
+        Exit Function
+    End If
+    If colGen = 0 Then
+        Err.Raise ERR_STORNO_BASE + 13, sourceName, _
+                  "Zadata je generacija dokumenta, a tabela nema kolonu " & _
+                  COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
+    End If
+    RedJeIzabranogDokumenta = (Trim$(NzToText(data(i, colGen))) = Trim$(gen))
+End Function
+
+Public Function StornoOtkupByBrDok_TX(ByVal brDok As String, _
+                                      Optional ByVal generacijaID As String = "") As Boolean
     Const SRC As String = "StornoOtkupByBrDok_TX"
 
     Dim tx As clsTransaction
@@ -91,6 +118,7 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
 
     Dim colBr As Long, colID As Long, colStorno As Long, colSta As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    Dim colGen As Long: colGen = GetColumnIndex(TBL_OTKUP, COL_GENERACIJA_ID)
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
     colStorno = RequireColumnIndex(TBL_OTKUP, COL_STORNIRANO, SRC)
     colSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
@@ -103,7 +131,7 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String) As Boolean
     Dim stanicaID As String
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBr))) = Trim$(brDok) Then
+        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brDok, generacijaID, SRC) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 ids.Add Trim$(CStr(data(i, colID)))
                 If colSta > 0 Then stanicaID = Trim$(CStr(data(i, colSta)))
@@ -260,7 +288,8 @@ End Function
 
 ' Storniraj SVE aktivne redove otpremnice za dati BrojOtpremnice (Klasa I i II
 ' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
-Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
+Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String, _
+                                          Optional ByVal generacijaID As String = "") As Boolean
     Const SRC As String = "StornoOtpremnicaByBroj_TX"
 
     Dim tx As clsTransaction
@@ -288,6 +317,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
 
     Dim colBr As Long, colID As Long, colStorno As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+    Dim colGen As Long: colGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
     colID = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
     colStorno = RequireColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO, SRC)
     colZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
@@ -296,7 +326,7 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String) As Boolean
     Dim zbrSet As Object: Set zbrSet = CreateObject("Scripting.Dictionary")
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBr))) = Trim$(brBroj) Then
+        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brBroj, generacijaID, SRC) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 ids.Add Trim$(CStr(data(i, colID)))
                 If malinaMode And colZbr > 0 Then
@@ -754,7 +784,8 @@ End Function
 
 ' Storniraj SVE aktivne redove prijemnice za dati BrojPrijemnice (Klasa I i II
 ' dele isti broj, zaseban red po klasi). Mirror StornoOtkupByBrDok_TX.
-Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String) As Boolean
+Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String, _
+                                          Optional ByVal generacijaID As String = "") As Boolean
     Const SRC As String = "StornoPrijemnicaByBroj_TX"
 
     Dim tx As clsTransaction
@@ -780,13 +811,14 @@ Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String) As Boolean
 
     Dim colBr As Long, colID As Long, colStorno As Long
     colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    Dim colGen As Long: colGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
     colID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
     colStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
 
     Dim ids As Collection: Set ids = New Collection
     Dim i As Long
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBr))) = Trim$(brBroj) Then
+        If RedJeIzabranogDokumenta(data, i, colBr, colGen, brBroj, generacijaID, SRC) Then
             If Not IsStorniranoValue(data(i, colStorno)) Then
                 ids.Add Trim$(CStr(data(i, colID)))
             End If
