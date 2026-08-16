@@ -1195,10 +1195,14 @@ Public Function UplataFakturaProblem(ByVal fakturaID As String, _
     ' Uslov koji je tu zaista trebao je "faktura ima iznos": faktura kojoj
     ' iznos nije evidentiran (0) ne sme da blokira uplatu - to je razlog zbog
     ' koga je provera uopste bila uslovna, i on ostaje.
-    colIznos = GetColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS)
-    If colIznos > 0 Then
-        If IsNumeric(data(r, colIznos)) Then iznosFak = CDbl(data(r, colIznos))
-    End If
+    '
+    ' RequireColumnIndex, ne GetColumnIndex: bez kolone Iznos vraca 0, iznosFak
+    ' ostaje 0 i sledeci red TIHO gasi celu kapiju -- schema drift bi tada bio
+    ' nerazlikovan od legitimne fakture bez iznosa. Iznos je osnovna kolona
+    ' tblFakture (za razliku od Stornirano, koje dodaje Ensure* i sme da fali),
+    ' pa je njeno odsustvo greska koja treba da pukne glasno.
+    colIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
+    If IsNumeric(data(r, colIznos)) Then iznosFak = CDbl(data(r, colIznos))
     If iznosFak <= 0 Then Exit Function          ' faktura bez iznosa - bez kapije
 
     ' Cent-domen, bez epsilon tolerancije (isto pravilo kao nalozi za banku):
