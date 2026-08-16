@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-127"
+Public Const SCROPO_BUILD As String = "v6-ui-128"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.

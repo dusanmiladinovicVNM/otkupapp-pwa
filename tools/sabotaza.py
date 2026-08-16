@@ -519,10 +519,10 @@ SABOTAZE = {
     # okine i relabel prepravi header cele palete.
     "cotenant-po-broju": (
         "modPaletniList.bas",
-        "                jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
-        "                jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
-        "                jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
-        "                jeCilj = (bpg = newBroj)\n",
+        "                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
+        "                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
+        "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
+        "                    jeCilj = (bpg = newBroj)\n",
         "T_DeljenaPaleta_SuStanarPoIdentitetu",
         "su-stanar deljene palete je drugi DOKUMENT, ne drugi broj",
     ),

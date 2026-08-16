@@ -1999,3 +1999,25 @@ upisu — ali panel u `frmDokumenta` može prikazati pogrešnu ocenu.
   - `writer-isti-broj-odbija` → „isti broj a različite generacije PROLAZI —
     očekivano [True], dobijeno [False]"
 - `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.5 — `v6-ui-128` · obim co-tenant provere
+
+Sitna izmena po pregledu: u `ReassignPaleteToPrijemnica_TX` se **prvo** proverava
+da li je stavka uopšte na paleti koju relabel dira, pa se tek onda računa
+pripadnost dokumentu. Ranije je obrnut redosled radio analizu identiteta nad
+svakom aktivnom stavkom u tabeli.
+
+**Ovo nije ispravka buga.** Opisani scenario — zatečena stavka bez
+`PrijemnicaID` pod dvosmislenim brojem, na paleti bez veze sa operacijom, koja
+prekida relabel — nije dostižan: ista provera sa istim argumentima već se izvrši
+u ranijoj petlji koja skuplja `oldRows`/`freshRows` nad **svim** aktivnim
+stavkama. Red koji bi ovde podigao grešku podigao bi je tamo, jedan korak pre.
+
+Izmena je svejedno urađena: obim kapije postaje očigledan iz koda, ne radi se
+posao koji ne može ništa da promeni, i mogućnost nestaje ako se ranija petlja
+ikad promeni.
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Sabotaža `cotenant-po-broju` i dalje obara `T_DeljenaPaleta_SuStanarPoIdentitetu`.

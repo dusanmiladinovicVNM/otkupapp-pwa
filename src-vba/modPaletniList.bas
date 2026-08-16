@@ -1558,14 +1558,19 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         Dim qg As Long, sharedPal As String
         Dim bpg As String, pidG As String
         Dim jeIzvor As Boolean, jeCilj As Boolean
+        ' Prvo paleta, pa tek onda identitet. Obrnut redosled je radio analizu
+        ' pripadnosti nad SVAKOM aktivnom stavkom u tabeli, ukljucujuci one na
+        ' paletama koje ovaj relabel uopste ne dira -- a PripadaDokumentu na
+        ' zatecenoj stavci bez PrijemnicaID pod dvosmislenim brojem podize
+        ' gresku. Ovako se gledaju samo palete koje bi se stvarno promenile.
         For qg = 1 To UBound(ps, 1)
             If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
-                bpg = Trim$(CStr(ps(qg, sBr)))
-                pidG = Trim$(NzToText(ps(qg, sPid)))
-                jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)
-                jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)
-                If Not jeIzvor And Not jeCilj Then
-                    If tgtPal.Exists(CStr(ps(qg, sPal))) Then
+                If tgtPal.Exists(CStr(ps(qg, sPal))) Then
+                    bpg = Trim$(CStr(ps(qg, sBr)))
+                    pidG = Trim$(NzToText(ps(qg, sPid)))
+                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)
+                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)
+                    If Not jeIzvor And Not jeCilj Then
                         sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
                         Exit For
                     End If
