@@ -2105,3 +2105,62 @@ FAIL … bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem
 - `COMPILE` → **`NEJASNO`**. Posle ovog PR-a ručni `Alt+F11 → Debug → Compile
   VBAProject` je prava kapija, ne formalnost — u prethodnom rebase-u se pokazalo
   da statički checker propušta nedefinisan simbol i pogrešnu arnost.
+
+## v2.46.1 — `v6-ui-130` · identitet do kraja lanca, i gde ne može
+
+Dopuna v2.46.0 po pregledu. Identitet je stizao do prve putanje, pa sam ga
+proglasio provučenim. **Nije bio** — `REŠI KASNIJE` je bio identity-aware, a
+`ISPRAVKA`, `DUPLI` i deo `PONIŠTENJA` su se vraćali na broj.
+
+### Preflight je primao identitet pa ga ignorisao
+
+`StornoRazlog` je dobio `docID` i nije ga koristio. Za novac je i dalje zvao
+`ResolveNovacForStorno(broj)`, koji kod dva aktivna reda istog broja kaže „treba
+`NovacID`" — **iako mu je F8 `NovacID` upravo poslao**. `StornoIzvrsi` niže je
+već bio ispravan, ali se do njega nije stizalo: kapija iznad je zaustavljala
+operaciju.
+
+To je poučan oblik greške — popravka jednog sloja bez drugog izgleda kao da radi,
+jer je donji sloj tačan.
+
+### Šta je sada identity-aware
+
+| Putanja | Bilo | Sada |
+|---|---|---|
+| `StornoRazlog` (svih 6 tipova) | uvek po broju | `AktivanPoIdentitetu` |
+| prijemnica ISPRAVKA/DUPLI/PONIŠTENJE | `…ByBroj_TX(broj)` | `(broj, docID)` |
+| otpremnica ISPRAVKA/DUPLI | `…Atomic_TX(broj)` | `(broj, gen)`, `GetOtpremnicaIDsByBroj` filtrira |
+| zbirna — **zaglavlje** | po broju | `StornoZbirna_TX(broj, gen)` |
+
+Kapije nad brojem su sada **uslovne**: kad je identitet poznat, ne primenjuju se.
+Bez toga su obarale potpuno legitimnu operaciju — storno je bio bezbedan, ali
+funkcija nije radila.
+
+### Zbirna: granica koja se ne može preći
+
+Otpremnice, prijemnice i paletne stavke vezuju zbirnu **kolonom `BrojZbirne`** —
+`ZbirnaID` im nije strani ključ nigde u šemi. **Deca dva dokumenta istog broja su
+nerazlučiva podatkom koji postoji.**
+
+Zato: zaglavlje se stornira po generaciji (tačno), a putanje koje bi menjale decu
+(`PonistiZbirnaChain_TX`, `StornoZbirnaIDetach_TX`) **staju** kad broj nose dve
+aktivne zbirne. To nije previd nego jedina poštena opcija — i tako je zapisano u
+kodu, ne samo ovde.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=38, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Tri nove sabotaže, svaka obara svoju tvrdnju:
+  - `preflight-ignorise-id` → „sa NovacID-em preflight propušta izabran red"
+  - `kapija-i-uz-identitet` → „ISPRAVKA pod kolizijom broja PROLAZI…"
+  - `zbirna-zaglavlje-po-broju` → „zbirna drugog vozača istog broja OSTAJE aktivna"
+- `COMPILE` → **`NEJASNO`**.
+
+### Dva compile pada koje headless harness nije video
+
+`IsStorniranoValue` je `Private` u `modStorno`, a pozvao sam je iz `modStornoDok`;
+i `RunSimpleStornoZbirna` je dobio `docID` u telu bez parametra u potpisu. Oba su
+prošla `vba_check` — pozivi su u izrazu, a to je rupa svesno ostavljena u #199.
+Oba je pokazao **screenshot VBE-a**, ne harness.

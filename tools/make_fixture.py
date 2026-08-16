@@ -77,6 +77,10 @@ FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
 # Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
 FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
+# Dva AKTIVNA reda tblNovac pod ISTIM brojem -- avans raspodela to radi
+# svakodnevno. Bez NovacID-a je broj dvosmislen i storno se odbija; sa njim se
+# stornira bas izabran red. Preflight je do sada odbijao i kad ID postoji.
+NOVAC_DUPLI_BROJ = "NOV-DUPLI-1"
 
 # KOLIZIJA BROJEVA -- srce ovog fixture-a.
 #
@@ -101,6 +105,10 @@ PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
 PRIJEMNICA_DELJENA = "5/150326"
 # Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
 PRIJEMNICA_CILJ_V2 = "4/150326"
+# Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
+# RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
+# zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
+PRIJEMNICA_ISPRAVKA = "3/150326"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -211,6 +219,14 @@ SEED = {
     # izgubi: faktura kojoj iznos nije evidentiran NE SME da blokira uplatu.
     # To je razlog zbog koga je kapija u UplataFakturaProblem uopste uslovna;
     # bez ovog reda popravka te kapije mogla bi tiho da ukine i to pravilo.
+    "tblNovac": [
+        {"NovacID": "NOV-TEST-D1", "BrojDokumenta": NOVAC_DUPLI_BROJ,
+         "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 1000,
+         "KooperantID": "KOOP-TEST-1"},
+        {"NovacID": "NOV-TEST-D2", "BrojDokumenta": NOVAC_DUPLI_BROJ,
+         "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 2000,
+         "KooperantID": "KOOP-TEST-2"},
+    ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
         {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
@@ -221,6 +237,14 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        {"PrijemnicaID": "PRJ-TEST-I1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ISPRAVKA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 120, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 12, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-I2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ISPRAVKA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 180, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 18, "Klasa": "I"},
         # Deljena paleta: D1 i D2 nose isti broj i istu robu, svaki svom kupcu.
         {"PrijemnicaID": "PRJ-TEST-D1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,

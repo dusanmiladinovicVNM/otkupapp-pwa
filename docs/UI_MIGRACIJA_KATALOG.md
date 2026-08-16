@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-129`.
+Stanje na dan `v6-ui-130`.
 
 ---
 
@@ -31,7 +31,7 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    **Ostatak storno okvira je zatvoren posle toga:** ispravka i dupli unos
    posle storna (`modStornoFlow`, Z10) u v6-ui-120, a Undo operacija,
    „Nedovršeno" i Recovery u v6-ui-121, kroz nov ekran **Oporavak**
-   (`modScrOporavak`). **Faza D je zatvorena tek od `v6-ui-129`**, ne od
+   (`modScrOporavak`). **Faza D je zatvorena tek od `v6-ui-130`**, ne od
    `v6-ui-121` kako je ovde ranije pisalo: ekran je bio gotov, ali je F8 do
    tada gubio identitet izabranog reda i dokument je nizvodno biran po
    poslovnom broju.
@@ -44,7 +44,7 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    storniranog (Z10) je zatvoren u v6-ui-120; filtriranje kooperanata po
    otkupnom mestu u v6-ui-113 (`KOOP_FILTER_BY_OM`).
 
-**Faza D je zatvorena** (v6-ui-129). Ostaju 3 i 4 — ostaci ranijih faza — plus
+**Faza D je zatvorena** (v6-ui-130). Ostaju 3 i 4 — ostaci ranijih faza — plus
 Faze C i E, koje nisu počele.
 
 ---

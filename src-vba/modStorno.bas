@@ -604,7 +604,16 @@ Private Function StornoPrijemnicaCascade(ByVal brojZbirne As String, ByVal calle
     StornoPrijemnicaCascade = ids.count
 End Function
 
-Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
+' generacijaID: identitet izabrane zbirne. Sa njim se storniraju SAMO redovi te
+' generacije.
+'
+' OGRANICENJE SEME, ne previd: otpremnice, prijemnice i paletne stavke vezuju
+' zbirnu KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca se
+' zato NE MOGU razdvojiti po generaciji ni u principu. Kad broj nose dve
+' aktivne zbirne, kaskada bi dirala i tudju decu, pa te putanje staju
+' (RequireJedanVlasnikPoBroju). Sam storno zaglavlja je i tada tacan.
+Public Function StornoZbirna_TX(ByVal brojZbirne As String, _
+                                Optional ByVal generacijaID As String = "") As Boolean
     Const SRC As String = "StornoZbirna_TX"
 
     Dim tx As clsTransaction
@@ -615,7 +624,7 @@ Public Function StornoZbirna_TX(ByVal brojZbirne As String) As Boolean
     tx.BeginTx
     tx.AddTableSnapshot TBL_ZBIRNA
 
-    If Not StornoZbirna(brojZbirne) Then
+    If Not StornoZbirna(brojZbirne, generacijaID) Then
         Err.Raise ERR_STORNO_BASE + 3, SRC, _
                   "StornoZbirna nije uspeo. BrojZbirne=" & brojZbirne
     End If
@@ -633,7 +642,8 @@ EH:
     StornoZbirna_TX = False
 End Function
 
-Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
+Public Function StornoZbirna(ByVal brojZbirne As String, _
+                             Optional ByVal generacijaID As String = "") As Boolean
     Const SRC As String = "StornoZbirna"
 
     On Error GoTo EH
@@ -653,19 +663,24 @@ Public Function StornoZbirna(ByVal brojZbirne As String) As Boolean
 
     colBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
     colStorno = RequireColumnIndex(TBL_ZBIRNA, COL_STORNIRANO, SRC)
+    Dim colGenZ As Long: colGenZ = GetColumnIndex(TBL_ZBIRNA, COL_GENERACIJA_ID)
 
     ' Guard je u CORE-u (ne u _TX wrapperu): StornoZbirna zovu i SIMPLE/DUPLI
     ' putanje i kaskade preko StornoZbirnaIDetach_TX, pa sve moraju biti pokrivene.
     ' Vlasnik zbirne = vozac (broj se generise po vozacu) + kupac (kome pripada).
-    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
-                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
+    ' Sa generacijom se zaglavlje bira po identitetu, pa kapija nad brojem nije
+    ' potrebna za NJEGA. Ostaje za sve ostalo.
+    If Len(Trim$(generacijaID)) = 0 Then _
+        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
+                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
 
     Dim foundAny As Boolean
     Dim changedCount As Long
     Dim i As Long
 
     For i = 1 To UBound(data, 1)
-        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then
+        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _
+                                   generacijaID, SRC) Then
             foundAny = True
 
             If Not IsStorniranoValue(data(i, colStorno)) Then
@@ -807,7 +822,11 @@ Public Function StornoPrijemnicaByBroj_TX(ByVal brBroj As String, _
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_PRIJEMNICA
     End If
 
-    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC
+    ' Sa generacijom se dokument bira po identitetu, pa kapija nad brojem nije
+    ' potrebna -- bez ovoga bi kapija obarala potpuno legitimnu operaciju nad
+    ' jednim od dva dokumenta istog broja.
+    If Len(Trim$(generacijaID)) = 0 Then _
+        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC
 
     Dim colBr As Long, colID As Long, colStorno As Long
     colBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)

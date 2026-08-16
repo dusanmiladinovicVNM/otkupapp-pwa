@@ -514,6 +514,36 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
+    # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
+    "preflight-ignorise-id": (
+        "modStornoDok.bas",
+        "            If Len(Trim$(docID)) > 0 Then\n"
+        "                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _\n",
+        "            If False Then   ' SABOTAZA: NovacID se ignorise\n"
+        "                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _\n",
+        "T_Preflight_KoristiIdentitet",
+        "sa NovacID-em preflight propusta izabran red",
+    ),
+    # Kapija nad brojem koja se primenjuje i kad je identitet poznat. Storno je
+    # tada bezbedan, ali legitimna ispravka pada -- feature ne radi.
+    "kapija-i-uz-identitet": (
+        "modStorno.bas",
+        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
+        "        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
+        "    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
+        "T_IspravkaPrijemnice_PodKolizijomBroja",
+        "ISPRAVKA pod kolizijom broja prolazi kad je identitet poznat",
+    ),
+    # Zaglavlje zbirne po broju umesto po generaciji.
+    "zbirna-zaglavlje-po-broju": (
+        "modStorno.bas",
+        "        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _\n"
+        "                                   generacijaID, SRC) Then\n",
+        "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then   ' SABOTAZA\n",
+        "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje",
+        "stornira se SAMO zbirna izabrane generacije",
+    ),
     # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
     # prvi dokument tog broja -- a kod RESI KASNIJE se guarded writer uopste ne
     # zove, pa gresku nista ne prijavljuje.

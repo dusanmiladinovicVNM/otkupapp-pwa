@@ -84,6 +84,29 @@ Public Const STIP_IZVOD      As String = "IZVOD"
 ' GeneracijaID za robna dokumenta, PK za novac i fakturu. Kad je poznat,
 ' dokument se NE trazi ponovo po broju. Opcion je zbog legacy forme i
 ' zatecenih zapisa bez generacije; tada vazi kapija nad jednoznacnoscu broja.
+' Postoji li AKTIVAN dokument koji je operater izabrao?
+'
+' Sa docID se pita za BAS TAJ dokument. Bez njega ostaje provera po broju --
+' ista koju je preflight oduvek radio.
+'
+' Zasto je bitno: preflight je do sada primao identitet pa ga ignorisao, i za
+' novac je i dalje govorio "broj je dvosmislen, treba NovacID" iako mu je F8
+' NovacID upravo poslao. StornoIzvrsi nize je vec bio ispravan, ali se do njega
+' nije stizalo -- kapija iznad je zaustavljala operaciju.
+Private Function AktivanPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
+                                     ByVal idCol As String, ByVal broj As String, _
+                                     ByVal docID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(docID)) = 0 Then
+        AktivanPoIdentitetu = (Len(LookupActiveID(tblName, brojCol, broj, idCol)) > 0)
+        Exit Function
+    End If
+    Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, docID)
+    If ids.count = 0 Then Exit Function
+    AktivanPoIdentitetu = (UCase$(Trim$(NzToText( _
+        LookupValue(tblName, idCol, CStr(ids.Keys()(0)), COL_STORNIRANO)))) <> "DA")
+End Function
+
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
@@ -97,33 +120,48 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
 
     Select Case tip
         Case STIP_OTKUP
-            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_OTPREMNICA
-            If Len(LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_ZBIRNA
             ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera
             ' postojanja je ista kao za ostale robne dokumente.
-            If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_BROJ)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_PRIJEMNICA
-            If Len(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_BROJ)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_FAKTURA
-            If Len(LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)) = 0 Then _
+            ' Identitet fakture JE njen PK, pa se proverava direktno.
+            If Len(Trim$(docID)) > 0 Then
+                If UCase$(Trim$(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, docID, _
+                                                     COL_STORNIRANO)))) = "DA" Then _
+                    StornoRazlog = NijePronadjen(broj)
+            ElseIf Len(LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)) = 0 Then
                 StornoRazlog = NijePronadjen(broj)
+            End If
 
         Case STIP_ISPLATE, STIP_UPLATE
             ' Ceo razlog dolazi iz modStorno: izvod se ne stornira
             ' parcijalno, a broj sa vise aktivnih redova (avans raspodela
             ' deli isti broj) trazi NovacID umesto tihog storna jednog reda.
-            ResolveNovacForStorno broj, razlog
-            StornoRazlog = razlog
+            ' Sa poznatim NovacID-em nema sta da se razresava: pita se BAS taj
+            ' red. ResolveNovacForStorno ostaje za legacy poziv bez ID-a -- i
+            ' bas on je javljao "broj je dvosmislen" i kad ID postoji.
+            If Len(Trim$(docID)) > 0 Then
+                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _
+                                                     COL_STORNIRANO)))) = "DA" Then _
+                    StornoRazlog = NijePronadjen(broj)
+            Else
+                ResolveNovacForStorno broj, razlog
+                StornoRazlog = razlog
+            End If
 
         Case STIP_REVERSI
             If Len(Trim$(opcija)) = 0 Then

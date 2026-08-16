@@ -84,6 +84,10 @@ Private Const FX_PRIJ_ZBR_KOLIZIJA As String = "6/150326"
 ' druge vrste -- da prevezivanje uopste bude relabel.
 Private Const FX_PRIJ_DELJENA As String = "5/150326"
 Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
+' Dva AKTIVNA reda tblNovac pod istim brojem -- avans raspodela.
+Private Const FX_NOVAC_DUPLI As String = "NOV-DUPLI-1"
+' Dve AKTIVNE prijemnice istog broja, za ispravku pod kolizijom.
+Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -147,6 +151,9 @@ Public Sub RunAllTests()
     RunOne 33
     RunOne 34
     RunOne 35
+    RunOne 36
+    RunOne 37
+    RunOne 38
 
     SetTestMode prevMode
     WriteResultFile
@@ -233,6 +240,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 38: TestName = "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje"
+        Case 37: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
+        Case 36: TestName = "T_Preflight_KoristiIdentitet"
         Case 35: TestName = "T_F8_IzabranRedOstajeIzabran"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
@@ -276,6 +286,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 38: T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje
+        Case 37: T_IspravkaPrijemnice_PodKolizijomBroja
+        Case 36: T_Preflight_KoristiIdentitet
         Case 35: T_F8_IzabranRedOstajeIzabran
     End Select
 End Sub
@@ -1726,6 +1739,83 @@ Private Sub T_F8_IzabranRedOstajeIzabran()
     AssertEq ocekivan, "GEN-F8-2", "preduslov: generacija je upisana na Z2"
     AssertEq OldDocIDKonteksta(cid), "PRJ-TEST-Z2", _
              "recovery zapis pokazuje na IZABRAN dokument"
+End Sub
+
+' ============================================================
+' 36. Preflight koristi identitet umesto da ga ignorise
+' ============================================================
+' StornoRazlog je dobio docID pa ga nije koristio. Za novac je zato i dalje
+' zvao ResolveNovacForStorno(broj), koji kod dva aktivna reda istog broja kaze
+' "treba NovacID" -- iako mu je F8 NovacID upravo poslao. StornoIzvrsi nize je
+' vec bio ispravan, ali se do njega nije stizalo: kapija iznad je zaustavljala
+' operaciju. Popravka jednog sloja bez drugog izgleda kao da radi.
+Private Sub T_Preflight_KoristiIdentitet()
+    Dim razlog As String
+
+    ' Bez identiteta: broj je dvosmislen i preflight to kaze.
+    razlog = modStornoDok.StornoRazlog(STIP_ISPLATE, FX_NOVAC_DUPLI, "")
+    AssertEq (Len(razlog) > 0), True, _
+             "bez NovacID-a dvosmislen broj se odbija u preflight-u"
+
+    ' Sa identitetom: pita se BAS taj red, pa nema sta da se razresava.
+    razlog = modStornoDok.StornoRazlog(STIP_ISPLATE, FX_NOVAC_DUPLI, "", "NOV-TEST-D2")
+    AssertEq razlog, "", "sa NovacID-em preflight propusta izabran red"
+End Sub
+
+' ============================================================
+' 37. Ispravka prijemnice pod kolizijom broja
+' ============================================================
+' REZIM RESI KASNIJE je bio identity-aware, a ISPRAVKA i DUPLI su se vracali na
+' broj -- pa je owner guard u writeru obarao potpuno legitimnu operaciju.
+' Storno je bio bezbedan, ali funkcija nije radila.
+Private Sub T_IspravkaPrijemnice_PodKolizijomBroja()
+    Dim res As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I1", "GEN-ISP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I2", "GEN-ISP-2"
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
+                             "T_Isp", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "preduslov: broj nose dva dokumenta"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ISPRAVKA, "", _
+                                           SV_MODE_ISPRAVKA, False, True, "GEN-ISP-1")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
+    AssertEq CBool(res("needsForm")), True, _
+             "ISPRAVKA pod kolizijom broja PROLAZI kad je identitet poznat"
+
+    ' Tudji dokument nije ni takao.
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+             "PRJ-TEST-I2", COL_STORNIRANO)))) = "DA"), False, _
+             "dokument drugog kupca istog broja OSTAJE aktivan"
+End Sub
+
+' ============================================================
+' 38. Zbirna: zaglavlje po generaciji, kaskada fail-closed
+' ============================================================
+' Kod zbirne se identitet ne moze provuci do kraja lanca, i to nije previd nego
+' OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
+' KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca dva dokumenta
+' istog broja su nerazluciva podatkom koji postoji.
+'
+' Zato: zaglavlje se stornira po generaciji (tacno), a putanje koje bi menjale
+' DECU staju kad je broj dvosmislen (postene).
+Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
+    Dim ok As Boolean
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", "GEN-ZB-1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", "GEN-ZB-2"
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_DUPL, "T_Zbr", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj zbirne nose dva aktivna dokumenta"
+
+    ok = StornoZbirna_TX(FX_ZBIRNA_DUPL, "GEN-ZB-2")
+    AssertEq ok, True, "zaglavlje izabrane generacije se stornira"
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
+             "ZBI-DUPL-2", COL_STORNIRANO)))) = "DA"), True, _
+             "izabrana zbirna je stornirana"
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
+             "ZBI-DUPL-1", COL_STORNIRANO)))) = "DA"), False, _
+             "zbirna drugog vozaca istog broja OSTAJE aktivna"
 End Sub
 
 ' OldDocID iz correction context-a po njegovom PK-u.
