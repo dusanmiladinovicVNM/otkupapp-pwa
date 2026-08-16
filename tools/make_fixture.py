@@ -94,6 +94,13 @@ PRIJEMNICA_STORNO2 = "8/150326"     # kolizioni par storniranih (dva kupca)
 # -- pa je dokument drugog kupca ostajao sam sebi protivrecan (prijemnica na
 # staroj zbirni, njena paleta na novoj).
 PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
+# DELJENA FIZICKA PALETA. Dva kupca istog broja i ISTE robe smeju legitimno da
+# dele paletu -- roba im je identicna, pa nema sta da se razlikuje. Kapija koja
+# su-stanara trazi po BROJU tu ne okine (bpg == oldBroj), pa relabel prepravi
+# header cele palete i tudja roba ostane pogresno oznacena.
+PRIJEMNICA_DELJENA = "5/150326"
+# Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
+PRIJEMNICA_CILJ_V2 = "4/150326"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -214,6 +221,20 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        # Deljena paleta: D1 i D2 nose isti broj i istu robu, svaki svom kupcu.
+        {"PrijemnicaID": "PRJ-TEST-D1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I", "Stornirano": "Da"},
+        {"PrijemnicaID": "PRJ-TEST-D2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 150, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 15, "Klasa": "I", "Stornirano": "Da"},
+        # Cilj druge vrste -- jedinstven broj, bez kolizije.
+        {"PrijemnicaID": "PRJ-TEST-T2", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_CILJ_V2, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA2, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         # Kolizioni par AKTIVNIH: prevezivanje na zbirnu sme da dira SAMO Z1.
         {"PrijemnicaID": "PRJ-TEST-Z1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
@@ -255,6 +276,10 @@ SEED = {
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
     "tblPaleta": [
+        {"PaletaID": "PAL-TEST-D", "BrojPalete": 21, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
+         "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
         {"PaletaID": "PAL-TEST-Z1", "BrojPalete": 11, "Godina": 2026,
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 10,
@@ -277,6 +302,15 @@ SEED = {
          "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
     ],
     "tblPaletaStavka": [
+        # ISTA fizicka paleta, dva dokumenta istog broja.
+        {"StavkaID": "PST-TEST-D1", "PaletaID": "PAL-TEST-D",
+         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-D1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-D2", "PaletaID": "PAL-TEST-D",
+         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 15, "NetoKg": 150, "PrijemnicaID": "PRJ-TEST-D2",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-Z1", "PaletaID": "PAL-TEST-Z1",
          "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
          "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-Z1",

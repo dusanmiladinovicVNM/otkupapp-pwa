@@ -1324,8 +1324,20 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     outGajbDiff = False
     oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
     If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
-    If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then
-        outWarn = "Stara i nova prijemnica su isti broj."
+    ' "Isti dokument" se meri GENERACIJOM kad je obe strane imaju. Broj nastaje PO
+    ' KUPCU, pa ispravka koja menja kupca lako dobije isti poslovni broj kao
+    ' original -- to su dva dokumenta i prevezivanje je legitimno. Ova kapija je
+    ' ranije stajala PRE razresavanja generacija i odbijala tu operaciju; ista
+    ' provera je popravljena u ekranu, a ovde je ostala stara, pa je pravilo samo
+    ' preseljeno iz UI-ja u writer.
+    If Len(Trim$(oldGeneracijaID)) > 0 And Len(Trim$(newGeneracijaID)) > 0 Then
+        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then
+            outWarn = "Izvor i cilj su ISTI dokument."
+            Exit Function
+        End If
+    ElseIf StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then
+        outWarn = "Stara i nova prijemnica su isti broj, a generacije nisu poznate " & _
+                  "-- ne moze se dokazati da su razliciti dokumenti."
         Exit Function
     End If
 
@@ -1538,11 +1550,21 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
         For k = 1 To oldRows.count
             tgtPal(CStr(ps(oldRows(k), sPal))) = True
         Next k
+        ' "Druga prijemnica" se meri IDENTITETOM, ne brojem. Dva kupca istog broja
+        ' i iste robe smeju legitimno da dele fizicku paletu; sa poredjenjem po
+        ' broju su izgledali kao ista prijemnica, pa kapija nije okidala. STEP 2b
+        ' bi tada prepravio header CELE palete na novu robu, a su-stanar ostaje
+        ' stara roba -- paleta i njena stavka bi tvrdile razlicito.
         Dim qg As Long, sharedPal As String
+        Dim bpg As String, pidG As String
+        Dim jeIzvor As Boolean, jeCilj As Boolean
         For qg = 1 To UBound(ps, 1)
             If UCase$(Trim$(CStr(ps(qg, sSt)))) <> "DA" Then
-                Dim bpg As String: bpg = Trim$(CStr(ps(qg, sBr)))
-                If bpg <> oldBroj And bpg <> newBroj Then
+                bpg = Trim$(CStr(ps(qg, sBr)))
+                pidG = Trim$(NzToText(ps(qg, sPid)))
+                jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)
+                jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)
+                If Not jeIzvor And Not jeCilj Then
                     If tgtPal.Exists(CStr(ps(qg, sPal))) Then
                         sharedPal = PaletaLabel(CStr(ps(qg, sPal)))
                         Exit For

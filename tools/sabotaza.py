@@ -514,6 +514,28 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
+    # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
+    # okine i relabel prepravi header cele palete.
+    "cotenant-po-broju": (
+        "modPaletniList.bas",
+        "                jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
+        "                jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
+        "                jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
+        "                jeCilj = (bpg = newBroj)\n",
+        "T_DeljenaPaleta_SuStanarPoIdentitetu",
+        "su-stanar deljene palete je drugi DOKUMENT, ne drugi broj",
+    ),
+    # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
+    "writer-isti-broj-odbija": (
+        "modPaletniList.bas",
+        "    If Len(Trim$(oldGeneracijaID)) > 0 And Len(Trim$(newGeneracijaID)) > 0 Then\n"
+        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
+        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
+        "isti broj a razlicite generacije su dva dokumenta i prolaze",
+    ),
     # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
     "zbirna-vlasnik-samo-kupac": (
         "modScrOporavak.bas",

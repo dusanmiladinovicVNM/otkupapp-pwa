@@ -80,6 +80,10 @@ Private Const FX_PRIJ_KOLIZIJA As String = "8/150326"
 ' Kolizioni par AKTIVNIH prijemnica, svaka sa svojom paletom. Prevezivanje na
 ' zbirnu sme da dira samo svoj dokument -- i u tblPrijemnica I u tblPaletaStavka.
 Private Const FX_PRIJ_ZBR_KOLIZIJA As String = "6/150326"
+' Dva dokumenta istog broja i iste robe koja DELE fizicku paletu, i cilj
+' druge vrste -- da prevezivanje uopste bude relabel.
+Private Const FX_PRIJ_DELJENA As String = "5/150326"
+Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -140,6 +144,8 @@ Public Sub RunAllTests()
     RunOne 30
     RunOne 31
     RunOne 32
+    RunOne 33
+    RunOne 34
 
     SetTestMode prevMode
     WriteResultFile
@@ -224,6 +230,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 30: TestName = "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu"
         Case 31: TestName = "T_ZadataGeneracijaKojeNema_Staje"
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
+        Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
+        Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -264,6 +272,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 30: T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu
         Case 31: T_ZadataGeneracijaKojeNema_Staje
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
+        Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
+        Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
     End Select
 End Sub
 
@@ -1658,6 +1668,92 @@ Private Sub T_VerdiktPoIdentitetu_RelabelSeNePreskace()
     AssertEq VrstaNaStavci("PST-TEST-C2"), FX_VRSTA, _
              "stavka je prelabelirana na vrstu ciljnog dokumenta"
 End Sub
+
+' ============================================================
+' 31. Su-stanar na deljenoj paleti je DRUGI DOKUMENT, ne drugi broj
+' ============================================================
+' Pred relabel se proverava da li fizicka paleta nosi i tudju robu: ako nosi,
+' promena headera bi iskvarila i nju, pa se operacija blokira. Ideja je tacna,
+' ali se "tudja" merilo poredjenjem BROJEVA:
+'
+'   If bpg <> oldBroj And bpg <> newBroj Then ...
+'
+' Dva kupca istog broja i ISTE robe smeju legitimno da dele paletu -- roba im
+' je identicna, nema sta da se razlikuje. Za tu kapiju su izgledali kao ista
+' prijemnica (bpg = oldBroj), pa nije okidala: STEP 2b bi prepravio header CELE
+' palete na novu robu, a su-stanar ostaje stara. Paleta i njena stavka bi od
+' tog trenutka tvrdile razlicito.
+'
+'   PRJ-TEST-D1  KUP-TEST-1  TESTVOCE  \  ista paleta PAL-TEST-D
+'   PRJ-TEST-D2  KUP-TEST-2  TESTVOCE  /  isti broj 5/150326
+'   cilj PRJ-TEST-T2         TESTVOCE2 -> relabel
+Private Sub T_DeljenaPaleta_SuStanarPoIdentitetu()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-D1", "GEN-DEL-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-D2", "GEN-DEL-2"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-T2", "GEN-CILJ-V2"
+
+    AssertEq VrstaNaPaleti("PAL-TEST-D"), FX_VRSTA, _
+             "preduslov: deljena paleta pocinje sa starom robom"
+
+    ' allowRelabel = True: potvrda relabela POSTOJI, a operacija se svejedno
+    ' odbija -- deljena paleta se ne moze prelabelirati ni uz potvrdu.
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_DELJENA, FX_PRIJ_CILJ_V2, upoz, True, _
+                                       gajbDiff, "GEN-DEL-1", "GEN-CILJ-V2")
+    AssertEq ok, False, "relabel deljene palete se odbija i uz potvrdu"
+    AssertEq (InStr(upoz, "BLOKIRANO") > 0), True, "odbijanje kaze zasto"
+
+    ' Nista se nije pomerilo ni prelabeliralo.
+    AssertEq VrstaNaPaleti("PAL-TEST-D"), FX_VRSTA, _
+             "header deljene palete OSTAJE stara roba"
+    AssertEq VrstaNaStavci("PST-TEST-D2"), FX_VRSTA, _
+             "su-stanar OSTAJE stara roba"
+    AssertEq PrijemnicaNaStavci("PST-TEST-D1"), "PRJ-TEST-D1", _
+             "izvorna stavka nije prevezana"
+End Sub
+
+' ============================================================
+' 32. Isti broj sa RAZLICITIM generacijama nije isti dokument
+' ============================================================
+' Ova kapija je popravljena u ekranu, a u writeru je ostala stara -- pravilo je
+' time bilo samo preseljeno iz UI-ja u core. Writer se testira direktno, bez
+' forme: ekranska putanja otvara MsgBox potvrde i headless se ne vozi.
+Private Sub T_IstiBrojRazliciteGeneracije_NijeIstiDokument()
+    Dim ok As Boolean, upoz As String, gajbDiff As Boolean
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_BROJ, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-CILJ-A", "GEN-CILJ-A")
+    AssertEq ok, False, "ista generacija sa obe strane je ISTI dokument -- odbija se"
+
+    ' Isti broj, druge generacije: dva dokumenta, operacija je legitimna.
+    '
+    ' Meri se DELTA, ne apsolutan zbir: na PRJ-TEST-A stoji ono sto su tamo
+    ' ostavili raniji testovi, a testovi dele svesku. Tvrdnja je "sve sto je bilo
+    ' na A preslo je na B", i ona ne zavisi od toga koliko je toga bilo.
+    Dim preA As Long, preB As Long
+    preA = GajbicaZaDokument("PRJ-TEST-A")
+    preB = GajbicaZaDokument("PRJ-TEST-B")
+    AssertEq (preA > 0), True, "preduslov: izvorni dokument uopste nosi robu"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_BROJ, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-CILJ-A", "GEN-CILJ-B")
+    AssertEq ok, True, "isti broj a razlicite generacije PROLAZI"
+    AssertEq GajbicaZaDokument("PRJ-TEST-B"), preB + preA, _
+             "sva roba je presla na drugi dokument ISTOG broja"
+    AssertEq GajbicaZaDokument("PRJ-TEST-A"), 0, _
+             "na izvornom dokumentu vise nema robe"
+End Sub
+
+Private Function VrstaNaPaleti(ByVal paletaID As String) As String
+    VrstaNaPaleti = Trim$(NzToText(LookupValue(TBL_PALETA, COL_PAL_ID, _
+                                               paletaID, COL_PAL_VRSTA)))
+End Function
+
+Private Function PrijemnicaNaStavci(ByVal stavkaID As String) As String
+    PrijemnicaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _
+                                                    stavkaID, COL_PALS_PRIJEMNICA_ID)))
+End Function
 
 Private Function VrstaNaStavci(ByVal stavkaID As String) As String
     VrstaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _

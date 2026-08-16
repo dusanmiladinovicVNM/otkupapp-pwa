@@ -1942,3 +1942,60 @@ generacija kad je obe strane imaju; broj ostaje fallback samo za zapise bez nje.
 
 **Nije pokriveno testom:** P2 guard u `PreveziPalete` — ta putanja otvara `MsgBox`
 potvrde, pa se headless ne vozi. Ide na operatersku checklistu.
+
+## v2.45.4 — `v6-ui-127` · deljena paleta i „isti dokument" u writeru
+
+Dva mesta na kojima je staro pravilo **„broj = dokument"** još curilo.
+
+### P1 — su-stanar na deljenoj paleti se tražio po broju
+
+Pred relabel se proverava da li fizička paleta nosi i tuđu robu; ako nosi,
+promena headera bi iskvarila i nju, pa se operacija blokira. Ideja je tačna, ali
+se „tuđa" merilo poređenjem brojeva:
+
+```vb
+If bpg <> oldBroj And bpg <> newBroj Then ...
+```
+
+Dva kupca istog broja i **iste robe** smeju legitimno da dele paletu — roba im je
+identična, nema šta da se razlikuje. Za tu kapiju su izgledali kao ista prijemnica
+(`bpg = oldBroj`), pa nije okidala: `STEP 2b` bi prepravio header **cele** palete
+na novu robu, a su-stanar ostaje stara. Paleta i njena stavka bi od tog trenutka
+tvrdile različito.
+
+Sada se pripadnost meri kroz `PripadaDokumentu` nad `srcIds` / `tgtIds`, uz već
+postojeći fail-closed za zapise bez `PrijemnicaID`.
+
+### P2 — kapija „isti dokument" je bila popravljena samo u ekranu
+
+`PreveziPalete` je dobio ispravnu logiku prošlu rundu, ali je na ulazu u writer
+ostalo staro poređenje, i to **pre** razrešavanja generacija:
+
+```vb
+If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then Exit Function
+```
+
+Pravilo je time bilo samo preseljeno iz UI-ja u core. Sada isti princip stoji i u
+writeru: generacije kad ih obe strane imaju, broj kao fallback samo bez njih.
+
+Testira se **direktno na writeru** — ekranska putanja otvara `MsgBox` potvrde i
+headless se ne vozi, pa bi test kroz UI bio nemoguć a kroz checklistu nepouzdan.
+
+### Ostaje otvoreno (P3)
+
+Legacy poziv `EvaluatePaletaReassign(oldBroj, newBroj)` bez generacija nema
+ambiguity guard i može dati **pogrešan preview** kad brojevi nisu jedinstveni.
+Nije data-integrity problem — writer taj preview više ne koristi za odluku o
+upisu — ali panel u `frmDokumenta` može prikazati pogrešnu ocenu.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže:
+  - `cotenant-po-broju` → „relabel deljene palete se odbija i uz potvrdu —
+    očekivano [False], dobijeno [True]"
+  - `writer-isti-broj-odbija` → „isti broj a različite generacije PROLAZI —
+    očekivano [True], dobijeno [False]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.

@@ -52,7 +52,7 @@ Attribute VB_Name = "modDokUnos"
 '=====================================================================
 Option Explicit
 
-Public Const DOKUNOS_BUILD As String = "v6-ui-126"
+Public Const DOKUNOS_BUILD As String = "v6-ui-127"
 
 '--------------------------------------------------------------- ULAZ
 Public Function NoviOtpremnicaUnos() As Object
