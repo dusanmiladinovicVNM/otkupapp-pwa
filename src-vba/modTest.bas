@@ -88,6 +88,11 @@ Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
 Private Const FX_NOVAC_DUPLI As String = "NOV-DUPLI-1"
 ' Dve AKTIVNE prijemnice istog broja, za ispravku pod kolizijom.
 Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
+' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
+Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
+Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
+' Svez par zbirnih za kaskadu (test 38 potrosi ZB-TEST-DUPL).
+Private Const FX_ZBIRNA_KASK As String = "ZB-TEST-KASK"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -154,6 +159,9 @@ Public Sub RunAllTests()
     RunOne 36
     RunOne 37
     RunOne 38
+    RunOne 39
+    RunOne 40
+    RunOne 41
 
     SetTestMode prevMode
     WriteResultFile
@@ -240,6 +248,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 41: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
+        Case 40: TestName = "T_SoleOwner_MeriDokumenteNeBrojeve"
+        Case 39: TestName = "T_OtkupBezGeneracije_NeStorniraTudjeOM"
         Case 38: TestName = "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje"
         Case 37: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
         Case 36: TestName = "T_Preflight_KoristiIdentitet"
@@ -286,6 +297,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 41: T_ZbirnaKaskada_StajeNaDvosmislenom
+        Case 40: T_SoleOwner_MeriDokumenteNeBrojeve
+        Case 39: T_OtkupBezGeneracije_NeStorniraTudjeOM
         Case 38: T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje
         Case 37: T_IspravkaPrijemnice_PodKolizijomBroja
         Case 36: T_Preflight_KoristiIdentitet
@@ -1822,6 +1836,109 @@ Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
              "ZBI-DUPL-1", COL_STORNIRANO)))) = "DA"), False, _
              "zbirna drugog vozaca istog broja OSTAJE aktivna"
 End Sub
+
+' ============================================================
+' 39. Otkup bez generacije NE SME da stornira oba otkupna mesta
+' ============================================================
+' BrojDokumenta otkupa je scoped PO OTKUPNOM MESTU (KIND_OTK, entitet je
+' stanica), pa isti broj na dva OM-a postoji legitimno. Writer je do sada bez
+' generacije skupljao SVE aktivne redove tog broja -- zatecen zapis bez
+' generacije je tako mogao da obori i tudji dokument.
+'
+' Test je na WRITERU, ne na preflight-u: preflight se moze zaobici (legacy
+' forma, kaskada), writer ne moze.
+Private Sub T_OtkupBezGeneracije_NeStorniraTudjeOM()
+    Dim ok As Boolean, greska As String
+
+    AssertEq VlasniciPoBroju(TBL_OTKUP, COL_OTK_BR_DOK, FX_OTKUP_KOLIZIJA, _
+                             "T_Otk", False, Array(COL_OTK_STANICA)).count, 2, _
+             "preduslov: isti broj na DVA otkupna mesta"
+
+    ' BEZ generacije -- mora stati, i nista ne sme da se promeni.
+    On Error Resume Next
+    ok = StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA)
+    greska = Err.description
+    On Error GoTo 0
+    AssertEq ok, False, "bez generacije dvosmislen broj otkupa se odbija"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), False, _
+             "posle odbijanja dokument A nije diran"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
+             "posle odbijanja dokument B nije diran"
+
+    ' SA generacijom -- prolazi, i dira samo svoj dokument.
+    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A", "GEN-OTK-A"
+    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B", "GEN-OTK-B"
+    AssertEq StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA, "GEN-OTK-A"), True, _
+             "sa generacijom storno prolazi"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), True, _
+             "storniran je izabran dokument"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
+             "dokument drugog otkupnog mesta OSTAJE aktivan"
+End Sub
+
+' ============================================================
+' 40. "Jedini vlasnik" zbirne se meri DOKUMENTIMA, ne brojevima
+' ============================================================
+' Zbirna je po invarijanti zbir SVIH svojih aktivnih otpremnica, pa je vise
+' otpremnica u jednoj zbirni normalno stanje. Broj otpremnice je scoped po
+' stanici, pa dve otpremnice istog broja sa razlicitih stanica u istoj zbirni
+' daju JEDAN distinct broj -- i stara provera je tada rekla "jedini vlasnik".
+'
+' Posledica: PONISTENJE izabrane otpremnice ulazilo bi u punu kaskadu nad
+' zbirnom i oborilo i tudju otpremnicu.
+Private Sub T_SoleOwner_MeriDokumenteNeBrojeve()
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A", "GEN-OTP-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B", "GEN-OTP-B"
+
+    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA_KASK, _
+                             FX_OTPREMNICA_KOLIZIJA, "GEN-OTP-A"), False, _
+             "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik"
+
+    ' Kontrola: kad je stvarno sama, tvrdnja mora biti True -- inace bi test
+    ' prolazio i da provera uvek vraca False.
+    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA, "1/TEST", ""), _
+                                                          True, _
+             "jedina otpremnica svoje zbirne JESTE jedini vlasnik"
+End Sub
+
+' ============================================================
+' 41. Kaskada zbirne staje dok broj nose dva aktivna dokumenta
+' ============================================================
+' Svez par (ZBI-KASK-1/2), jer test 38 stornira jedno zaglavlje -- posle njega
+' bi ostao jedan aktivan vlasnik i kapija ne bi imala sta da detektuje.
+Private Sub T_ZbirnaKaskada_StajeNaDvosmislenom()
+    Dim res As Object
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1", "GEN-ZB-K1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2", "GEN-ZB-K2"
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Kask", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj nose dva aktivna dokumenta"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, FX_ZBIRNA_KASK, "", _
+                                           SV_MODE_PONISTENJE, True, False, "GEN-ZB-K1")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
+    AssertEq CBool(res("success")), False, _
+             "ponistenje lanca staje dok broj nose dva aktivna dokumenta"
+    ' Sama BEZBEDNOST dolazi od zatecene kapije u StornoZbirna -- kaskada bi
+    ' pala i bez moje provere. Ono sto moja provera dodaje je RAZLOG: staje
+    ' pre transakcije i kaze operateru sta je problem, umesto generickog
+    ' "nije uspelo". Bas to se ovde tvrdi.
+    AssertEq (InStr(1, CStr(res("message")), "nose dva aktivna", vbTextCompare) > 0), _
+             True, "odbijanje imenuje dvosmislen broj, ne samo neuspeh"
+
+    ' Nista nije poniisteno -- ni zaglavlja ni deca.
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "tudja zbirna istog broja nije dirana"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B"), False, _
+             "otpremnica tudjeg dokumenta nije dirana"
+End Sub
+
+Private Function StorniranoNaID(ByVal tbl As String, ByVal idCol As String, _
+                                ByVal id As String) As Boolean
+    StorniranoNaID = (UCase$(Trim$(NzToText(LookupValue(tbl, idCol, id, _
+                                                        COL_STORNIRANO)))) = "DA")
+End Function
 
 ' OldDocID iz correction context-a po njegovom PK-u.
 Private Function OldDocIDKonteksta(ByVal correctionID As String) As String

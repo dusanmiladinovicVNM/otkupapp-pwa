@@ -43,6 +43,10 @@ STATUS_AKTIVAN = "Aktivan"          # modConfig.STATUS_AKTIVAN
 AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
 
 STANICA = "STA-TEST-1"
+# Druga stanica: BrojDokumenta otkupa i BrojOtpremnice su scoped PO STANICI, pa
+# isti broj na dva OM-a postoji legitimno. Bez druge stanice se ta kolizija ne
+# moze ni napisati kao test.
+STANICA2 = "STA-TEST-2"
 VOZAC = "VOZ-TEST-1"
 # Drugi vozac postoji zbog CILJNE liste zbirnih. Broj zbirne generator DRZI
 # JEDINSTVENIM (SuggestNextBroj za ZBR bumpuje sekvencu dok ne nadje slobodan),
@@ -55,6 +59,11 @@ ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
 # koji tamo upisuje, a MsgBox u headless runu je visenje koje watchdog samo
 # maskira.
 ZBIRNA_MIRNA = "ZB-TEST-4"
+# Svez par zbirnih za KASKADU: test 38 stornira jedno zaglavlje, pa bi posle
+# njega ostao jedan aktivan vlasnik i kapija ne bi imala sta da detektuje.
+ZBIRNA_KASK = "ZB-TEST-KASK"
+OTKUP_KOLIZIJA = "7/150326"          # isti BrDok na dva otkupna mesta
+OTPREMNICA_KOLIZIJA = "8/TEST"       # isti broj otpremnice, dve stanice, ista zbirna
 VRSTA = "TESTVOCE"
 # Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
 # presuda o RELABEL-u mora da opisuje BAS izabran dokument. PRJ-TEST-C2 je zato
@@ -117,6 +126,8 @@ SEED = {
     "tblStanice": [
         {"StanicaID": STANICA, "Naziv": "Test Otkupno Mesto", "Mesto": "Test Mesto",
          "Aktivan": STATUS_AKTIVAN, "JeHladnjaca": "NE"},
+        {"StanicaID": STANICA2, "Naziv": "Drugo Otkupno Mesto", "Mesto": "Test Mesto",
+         "Aktivan": STATUS_AKTIVAN, "JeHladnjaca": "NE"},
     ],
     "tblVozaci": [
         {"VozacID": VOZAC, "Ime": "Test", "Prezime": "Vozac",
@@ -152,6 +163,14 @@ SEED = {
     # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
     # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
     "tblZbirna": [
+        {"ZbirnaID": "ZBI-KASK-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-KASK-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 400, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 40,
+         "Klasa": "I", "KupacID": KUPAC},
         # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
         # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
         # smatrala samo kupca, pa operater nije mogao da izabere pravi.
@@ -185,6 +204,17 @@ SEED = {
     #   OTP-TEST-2  bez zbirne
     #   OTP-TEST-3  bez zbirne, ali blok u tblOtkup nosi zbirnu (ZB-TEST-3)
     "tblOtpremnica": [
+        # Dve otpremnice ISTOG broja sa RAZLICITIH stanica u ISTOJ zbirni.
+        # Zbirna je po invarijanti zbir svih svojih otpremnica, pa je ovo
+        # normalno stanje -- a "jedini vlasnik" po distinct BROJU tu laze.
+        {"OtpremnicaID": "OTP-KOL-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_KOLIZIJA, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-KOL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_KOLIZIJA, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
         {"OtpremnicaID": "OTP-TEST-1", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
          "VozacID": VOZAC, "BrojOtpremnice": "1/TEST", "BrojZbirne": ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 1000, "Cena": 50.0,
@@ -199,6 +229,16 @@ SEED = {
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 80, "Klasa": "I"},
     ],
     "tblOtkup": [
+        # Isti BrojDokumenta na DVA otkupna mesta -- legitimno, broj je scoped
+        # po stanici. Bez generacije storno po broju bi zahvatio oba.
+        {"OtkupID": "OTK-KOL-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
+        {"OtkupID": "OTK-KOL-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
         {"OtkupID": "OTK-TEST-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0, "TipAmbalaze": AMB_12_1,

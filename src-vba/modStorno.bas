@@ -117,6 +117,12 @@ Public Function StornoOtkupByBrDok_TX(ByVal brDok As String, _
     End If
 
     Dim colBr As Long, colID As Long, colStorno As Long, colSta As Long, colZbr As Long
+    ' BEZ GENERACIJE -> kapija nad brojem. BrojDokumenta otkupa je scoped po
+    ' OTKUPNOM MESTU (KIND_OTK, entitet = stanica), pa isti broj kod dva OM-a
+    ' postoji legitimno. Bez ovoga bi zatecen zapis bez generacije stornirao oba.
+    If Len(Trim$(generacijaID)) = 0 Then _
+        RequireJedanVlasnikPoBroju TBL_OTKUP, COL_OTK_BR_DOK, brDok, SRC, COL_OTK_STANICA
+
     colBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
     Dim colGen As Long: colGen = GetColumnIndex(TBL_OTKUP, COL_GENERACIJA_ID)
     colID = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
@@ -313,7 +319,11 @@ Public Function StornoOtpremnicaByBroj_TX(ByVal brBroj As String, _
         Err.Raise ERR_STORNO_BASE + 8, SRC, "Tabela je prazna: " & TBL_OTPREMNICA
     End If
 
-    RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, brBroj, SRC, COL_OTP_STANICA
+    ' Sa generacijom dokument je izabran po identitetu; bez ovog uslova bi
+    ' writer odbijao tacno zadat GEN-A samo zato sto GEN-B iste oznake postoji
+    ' na drugoj stanici.
+    If Len(Trim$(generacijaID)) = 0 Then _
+        RequireJedanVlasnikPoBroju TBL_OTPREMNICA, COL_OTP_BROJ, brBroj, SRC, COL_OTP_STANICA
 
     Dim colBr As Long, colID As Long, colStorno As Long, colZbr As Long
     colBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
@@ -611,9 +621,13 @@ End Function
 ' bumpuje dok BrojZbirneExists ne kaze da je slobodan), pa je generacija ovde
 ' pojas za RUCNI UNOS -- ne za redovan tok.
 '
-' OGRANICENJE SEME, ne previd: otpremnice, prijemnice i paletne stavke vezuju
-' zbirnu KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca se
-' zato NE MOGU razdvojiti po generaciji ni u principu. Kad broj nose dve
+' OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
+' KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde.
+'
+' Ovo NIJE tvrdnja da podataka nema: kaskade vec umeju BrojZbirne + VozacID
+' (otpremnica) i + KupacID (prijemnica), a palete nose PrijemnicaID. Znaci
+' scope se moze izvesti -- samo child mutacije jos nisu sve dovedene dotle.
+' Do tada je fail-closed bezbedan izbor, ne dokaz nemogucnosti. Kad broj nose dve
 ' aktivne zbirne, kaskada bi dirala i tudju decu, pa te putanje staju
 ' (RequireJedanVlasnikPoBroju). Sam storno zaglavlja je i tada tacan.
 Public Function StornoZbirna_TX(ByVal brojZbirne As String, _

@@ -514,6 +514,35 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Otkup bez generacije bez kapije nad brojem. BrojDokumenta je scoped po
+    # otkupnom mestu, pa storno po broju hvata i tudje OM.
+    "otkup-bez-kapije": (
+        "modStorno.bas",
+        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
+        "        RequireJedanVlasnikPoBroju TBL_OTKUP, COL_OTK_BR_DOK, brDok, SRC, COL_OTK_STANICA\n",
+        "    ' SABOTAZA: dvosmislen broj otkupa vise ne zaustavlja storno\n",
+        "T_OtkupBezGeneracije_NeStorniraTudjeOM",
+        "bez generacije dvosmislen broj otkupa se odbija",
+    ),
+    # "Jedini vlasnik" po distinct BROJU umesto po dokumentima.
+    "sole-owner-po-broju": (
+        "modStornoFlow.bas",
+        "    If svi.count <> 1 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: broji se broj, ne dokument\n",
+        "T_SoleOwner_MeriDokumenteNeBrojeve",
+        "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik",
+    ),
+    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
+    "zbirna-kaskada-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, False, _\n"
+        "                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then\n"
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' nose dva aktivna " & _\n',
+        "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n"
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' nose dva aktivna " & _\n',
+        "T_ZbirnaKaskada_StajeNaDvosmislenom",
+        "ponistenje lanca staje dok broj nose dva aktivna dokumenta",
+    ),
     # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
     # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
     "preflight-ignorise-id": (

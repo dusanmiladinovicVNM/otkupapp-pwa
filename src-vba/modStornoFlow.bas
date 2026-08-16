@@ -474,7 +474,8 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
             r("correctionID") = cidP
             ' Bez context-a nema recovery reda ni MANUAL flag-a -> ne diraj podatke.
             If Len(cidP) = 0 Then r("message") = "Ne mogu da kreiram correction context.": Exit Function
-            If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) And OtpremnicaIsSoleOwner(parentZbirna, oldBroj) Then
+            If Len(parentZbirna) > 0 And ZbirnaPostoji(parentZbirna) _
+               And OtpremnicaIsSoleOwner(parentZbirna, oldBroj, docID) Then
                 Dim ownsP As Boolean: ownsP = ZbirnaOwnsExternalChain(parentZbirna)
                 Dim cascP As Object: Set cascP = PonistiZbirnaChain_TX(parentZbirna, ownsP)
                 If Not CBool(cascP("ok")) Then
@@ -534,7 +535,17 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     oldBroj = GetCorrectionField(correctionID, COL_SV_OLD_BROJ)
     oldZbirna = GetCorrectionField(correctionID, COL_SV_PARENT_BROJ)
 
+    ' CILJ je upravo snimljena zamena. Ako broj nose dva aktivna dokumenta,
+    ' LookupActiveID uzima prvi -- pa se prvo trazi jednoznacnost, a tek onda
+    ' pada na broj. Novi dokument jos nema svoju generaciju u context-u, pa je
+    ' ovo najuza kapija koja se ovde moze postaviti.
     Dim newOtpID As String
+    If VlasniciPoBroju(TBL_OTPREMNICA, COL_OTP_BROJ, newBroj, SRC, False, _
+                       Array(COL_OTP_STANICA)).count > 1 Then
+        r("message") = "Broj nove otpremnice '" & newBroj & "' nose dva aktivna " & _
+                       "dokumenta -- ne moze se utvrditi koji je zamena."
+        Exit Function
+    End If
     newOtpID = LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, newBroj, COL_OTP_ID)
     If Len(newOtpID) = 0 Then
         MarkCorrectionManual correctionID, "Snimi novu otpremnicu pa ponovi prevezivanje.", _
@@ -546,7 +557,22 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     newZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, newOtpID, COL_OTP_BROJ_ZBIRNE))
 
     ' 1) Relink otkupnih blokova: svi blokovi vezani za ID-jeve stare otpremnice.
-    Dim oldIDs As Collection: Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, docID)
+    ' IDENTITET IZVORA DOLAZI IZ CONTEXT-a, ne od pozivaoca. Context nosi
+    ' OldDocID (PK stornirane otpremnice) i persistentan je -- prezivljava
+    ' restart Excela i ne zavisi od toga da li je neko usput prosledio docID.
+    ' Bez ovoga je zavrsetak ispravke ponovo birao po poslovnom broju, pa su
+    ' blokovi sibling dokumenta iste oznake mogli da udju u relink.
+    Dim srcGen As String
+    If Len(Trim$(docID)) > 0 Then
+        srcGen = docID
+    Else
+        Dim oldDocID As String
+        oldDocID = Trim$(NzTx(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, correctionID, _
+                                          COL_SV_OLD_DOCID)))
+        If Len(oldDocID) > 0 Then _
+            srcGen = modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, oldDocID)
+    End If
+    Dim oldIDs As Collection: Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen)
     Dim blokovi As Collection: Set blokovi = GetBlokOtkupIDs(oldIDs)
     Dim k As Long
     For k = 1 To blokovi.count
@@ -736,8 +762,14 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
             Dim ownsZ As Boolean: ownsZ = ZbirnaOwnsExternalChain(broj)
             Dim cascZ As Object: Set cascZ = PonistiZbirnaChain_TX(broj, ownsZ, docID)
             If Not CBool(cascZ("ok")) Then
+                ' RAZLOG iz kaskade ide dalje. Bez ovoga operater vidi samo
+                ' "nije uspelo", pa mu specificna kapija ne znaci nista.
+                Dim razlogK As String: razlogK = ""
+                If cascZ.Exists("message") Then razlogK = Trim$(CStr(cascZ("message")))
                 FailCorrectionContext cidP, "Kaskadno ponistenje zbirne nije uspelo."
-                r("message") = "Ponistenje zbirne nije uspelo (kaskada).": Exit Function
+                r("message") = "Ponistenje zbirne nije uspelo (kaskada)."
+                If Len(razlogK) > 0 Then r("message") = razlogK
+                Exit Function
             End If
             CompleteCorrectionContext cidP, , , "Ponistena zbirna " & broj & " + ceo interni tok."
             r("success") = True
@@ -1108,7 +1140,7 @@ End Function
 ' bi se inace napravio TRAJAN recovery zapis nad tudjim dokumentom.
 Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
                                 ByVal idCol As String, ByVal broj As String, _
-                                ByVal gen As String, ByVal vlasnikCol As String) As String
+                                ByVal gen As String, ByVal vlasnikCols As Variant) As String
     Const SRC As String = "modStornoFlow.PkPoIdentitetu"
     On Error GoTo EH
 
@@ -1120,7 +1152,12 @@ Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String
         Exit Function
     End If
 
-    If VlasniciPoBroju(tblName, brojCol, broj, SRC, False, Array(vlasnikCol)).count > 1 Then
+    ' Vlasnik moze biti KOMPOZIT -- zbirna je vozac + kupac. Sa jednom kolonom
+    ' je ovaj racun bio u kontradikciji sa ScanZbirna, koji ambiguity meri sa
+    ' oba.
+    Dim vc As Variant
+    If IsArray(vlasnikCols) Then vc = vlasnikCols Else vc = Array(vlasnikCols)
+    If VlasniciPoBroju(tblName, brojCol, broj, SRC, False, vc).count > 1 Then
         Exit Function
     End If
     PkPoIdentitetu = LookupActiveID(tblName, brojCol, broj, idCol)
@@ -1232,7 +1269,7 @@ Public Function GetStornoChainRows(ByVal docType As String, ByVal broj As String
             AddChainRow result, "Otpremnica", broj, ChainEff("stornira se (uz ambalazu)", "stornira se (uz ambalazu)")
             If CBool(so("hasZbirna")) Then
                 Dim zEff As String
-                If OtpremnicaIsSoleOwner(CStr(so("brojZbirne")), broj) Then
+                If OtpremnicaIsSoleOwner(CStr(so("brojZbirne")), broj, docID) Then
                     zEff = "preracun, storno ako ostane prazna (jedini vlasnik)"
                 Else
                     zEff = "preracun, NE pada (deljena - sestre ostaju)"
@@ -1859,17 +1896,67 @@ End Function
 ' Da li je otpremnica JEDINA (aktivna) otpremnica svoje zbirne -> ekskluzivno je
 ' poseduje (malina 1:1 ili poslednja). Tada PONISTENJE sme da obori ceo tok zbirne;
 ' deljena zbirna -> ne sme (oborio bi sestre) -> samo rekalk.
-Private Function OtpremnicaIsSoleOwner(ByVal parentZbirna As String, ByVal oldBroj As String) As Boolean
+' TEST SEAM: OtpremnicaIsSoleOwner je Private, a "jedini vlasnik" je poslovna
+' odluka od koje zavisi da li PONISTENJE ide u punu kaskadu. Test to mora da
+' meri direktno. Tvrdo gejtovano -- van test-rezima ne radi nista, isto kao
+' Scr_OtpTestSet.
+Public Function OtpremnicaJeJediniVlasnik_Test(ByVal parentZbirna As String, _
+                                               ByVal oldBroj As String, _
+                                               ByVal gen As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    OtpremnicaJeJediniVlasnik_Test = OtpremnicaIsSoleOwner(parentZbirna, oldBroj, gen)
+End Function
+
+' Je li IZABRANA otpremnica jedini aktivan izvor te zbirne?
+'
+' Meri se brojem LOGICKIH DOKUMENATA, ne distinct poslovnih brojeva. Zbirna je
+' po invarijanti zbir SVIH svojih aktivnih otpremnica, pa je vise otpremnica u
+' jednoj zbirni normalno stanje. Broj otpremnice je scoped po STANICI, pa dve
+' otpremnice istog broja sa razlicitih stanica u istoj zbirni daju JEDAN
+' distinct broj -- i stara verzija je tada rekla "sole owner", pa je
+' PONISTENJE izabrane obaralo i tudju kroz punu kaskadu.
+Private Function OtpremnicaIsSoleOwner(ByVal parentZbirna As String, ByVal oldBroj As String, _
+                                       Optional ByVal gen As String = "") As Boolean
     On Error GoTo EH
     parentZbirna = Trim$(parentZbirna): oldBroj = Trim$(oldBroj)
     If Len(parentZbirna) = 0 Then Exit Function
-    Dim brojevi As Collection
-    Set brojevi = DistinctActiveValues(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_BROJ_ZBIRNE, parentZbirna)
-    Dim k As Long
-    For k = 1 To brojevi.count
-        If StrComp(Trim$(CStr(brojevi(k))), oldBroj, vbTextCompare) <> 0 Then Exit Function
-    Next k
-    OtpremnicaIsSoleOwner = True
+
+    Dim data As Variant: data = GetTableData(TBL_OTPREMNICA)
+    If IsEmpty(data) Then Exit Function
+    Dim cZbr As Long, cId As Long, cSt As Long, cGen As Long, cBr As Long
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cSt = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
+    If cZbr = 0 Or cId = 0 Or cBr = 0 Then Exit Function
+
+    ' Kljuc logickog dokumenta: generacija kad postoji, inace PK reda.
+    Dim svi As Object: Set svi = CreateObject("Scripting.Dictionary")
+    svi.CompareMode = vbTextCompare
+    Dim i As Long, kljuc As String, mojKljuc As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(NzToText(data(i, cZbr))) = parentZbirna Then
+            If cSt = 0 Or UCase$(Trim$(NzToText(data(i, cSt)))) <> "DA" Then
+                kljuc = ""
+                If cGen > 0 Then kljuc = Trim$(NzToText(data(i, cGen)))
+                If Len(kljuc) = 0 Then kljuc = Trim$(NzToText(data(i, cId)))
+                svi(kljuc) = True
+                If Len(Trim$(gen)) > 0 Then
+                    If cGen > 0 Then
+                        If Trim$(NzToText(data(i, cGen))) = Trim$(gen) Then mojKljuc = kljuc
+                    End If
+                ElseIf Trim$(NzToText(data(i, cBr))) = oldBroj Then
+                    mojKljuc = kljuc
+                End If
+            End If
+        End If
+    Next i
+
+    ' Jedini vlasnik = tacno jedan aktivan dokument, i to bas izabrani.
+    If svi.count <> 1 Then Exit Function
+    If Len(mojKljuc) = 0 Then Exit Function
+    OtpremnicaIsSoleOwner = svi.Exists(mojKljuc)
     Exit Function
 EH:
     LogErr MOD_NAME & ".OtpremnicaIsSoleOwner"
@@ -2079,9 +2166,16 @@ End Function
 Private Function RedJeGeneracije(ByRef data As Variant, ByVal i As Long, _
                                  ByVal cBroj As Long, ByVal cGen As Long, _
                                  ByVal broj As String, ByVal gen As String) As Boolean
-    If Len(Trim$(gen)) = 0 Or cGen = 0 Then
+    If Len(Trim$(gen)) = 0 Then
         RedJeGeneracije = (Trim$(CStr(data(i, cBroj))) = broj)
         Exit Function
+    End If
+    ' Zadata generacija a kolone nema: tih pad na broj bi znacio da se dira
+    ' nesto drugo. Isto pravilo kao RedJeIzabranogDokumenta u modStorno.
+    If cGen = 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 63, MOD_NAME & ".RedJeGeneracije", _
+                  "Zadata je generacija dokumenta, a tabela nema kolonu " & _
+                  COL_GENERACIJA_ID & ". Pokreni EnsureRuntimeSchema pa ponovi."
     End If
     RedJeGeneracije = (Trim$(NzToText(data(i, cGen))) = Trim$(gen))
 End Function
@@ -2207,7 +2301,7 @@ Private Function ScanZbirna(ByVal broj As String, _
     d("broj") = broj
     ' PK izabrane zbirne -- correction context polazi od njega.
     d("zbrID") = PkPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, gen, _
-                                COL_ZBR_VOZAC)
+                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))
     ' Deca (otpremnice, prijemnice, palete) vezuju zbirnu KOLONOM BrojZbirne --
     ' ZbirnaID im nije strani kljuc nigde u semi. Zato se broje po broju, a kad
     ' broj nose DVE aktivne zbirne, brojke opisuju oba dokumenta. To se ne moze

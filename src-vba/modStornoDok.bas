@@ -241,7 +241,7 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoOtpremnicaByBroj_TX(broj, docID)
 
         Case STIP_ZBIRNA
-            ok = StornoZbirna_TX(broj)
+            ok = StornoZbirna_TX(broj, docID)
             If ok Then
                 vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
                 If Len(vezPrij) > 0 Then poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij

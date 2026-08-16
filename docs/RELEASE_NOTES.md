@@ -2213,3 +2213,67 @@ gde je stajalo „po vozaču, pa se dele".
 
 Fixture `ZBI-DUPL-1/2` i test 38 ostaju, ali sada kažu šta stvarno brane:
 **ručni unos**, ne redovan tok.
+
+## v2.46.3 — `v6-ui-132` · identitet i na putanjama koje su ostale
+
+Prethodni commit je tvrdio da je „svih pet nalaza zatvoreno". **Nije bilo** —
+zatvorena je prva putanja svakog nalaza. Ovo zatvara ostale.
+
+### P1 — otkup bez generacije je mogao da stornira dva otkupna mesta
+
+`BrojDokumenta` otkupa je scoped **po otkupnom mestu**, pa isti broj na dva OM-a
+postoji legitimno. Writer je bez generacije skupljao **sve** aktivne redove tog
+broja. Prijemnica je taj obrazac već imala; otkup nije.
+
+### P1 — „jedini vlasnik" zbirne merio se distinct brojevima
+
+`OtpremnicaIsSoleOwner` je pitao `DistinctActiveValues(COL_OTP_BROJ)`. Zbirna je
+po invarijanti zbir **svih** svojih aktivnih otpremnica, a broj otpremnice je
+scoped po stanici — pa dve otpremnice istog broja sa različitih stanica u istoj
+zbirni daju **jedan** distinct broj. Odgovor je bio „jedini vlasnik", `PONIŠTENJE`
+izabrane je ulazilo u punu kaskadu i obaralo i tuđu.
+
+Sada se broje **logički dokumenti** (generacija, PK kao fallback), i „jedini
+vlasnik" znači: tačno jedan aktivan dokument, i to baš izabrani.
+
+### P1 — završetak ispravke otpremnice vraćao se na broj
+
+`CompleteOtpremnicaIspravka` je imao `docID`, ali ga pravi pozivaoci
+(`modDokUnos`, `frmDokumenta`) nisu slali. Umesto da to traži od njih, completion
+sada **izvodi identitet iz `correctionID`**: context nosi `OldDocID`, iz njega se
+čita generacija stare otpremnice. Persistentan je i preživljava restart Excela.
+
+Cilj (upravo snimljena zamena) dobio je kapiju nad jednoznačnošću broja — nova
+otpremnica još nema generaciju u contextu, pa je to najuža provera koja se tu
+može postaviti.
+
+### P2
+
+- `StornoIzvrsi` je bacao `docID` neposredno pre `StornoZbirna_TX`.
+- `StornoOtpremnicaByBroj_TX` je imao **bezuslovnu** kapiju nad brojem — odbijao
+  je tačno zadat `GEN-A` samo zato što `GEN-B` iste oznake postoji na drugoj stanici.
+- `PkPoIdentitetu` je primao jednu kolonu vlasnika, dok je `ScanZbirna` odmah
+  zatim merio dvosmislenost sa `VozacID + KupacID`. Sada prima niz.
+- `RedJeGeneracije` je kod zadate generacije bez kolone **tiho** padao na broj;
+  sada diže grešku, isto kao `RedJeIzabranogDokumenta`.
+
+### Ispravka jedne prejake tvrdnje
+
+Napisao sam da se deca zbirne „ne mogu razdvojiti ni u principu". Netačno:
+otpremnica kaskada već ume `BrojZbirne + VozacID`, prijemnica `+ KupacID`, palete
+nose `PrijemnicaID`. Scope se **može** izvesti — child mutacije samo još nisu sve
+dovedene dotle. Fail-closed ostaje kao bezbedan izbor, ali više nije opisan kao
+nemogućnost.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=41, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Tri nove sabotaže, svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`**.
+
+**Test 41 je prvo bio placebo** i to je vredno zapisati: tvrdio je da kaskada
+staje, a stajala je od **zatečene** kapije u `StornoZbirna` — sabotaža moje
+provere ništa nije menjala. Prepravljen da meri ono što moja provera stvarno
+dodaje: **razlog** koji stiže do operatera umesto generičkog „nije uspelo".
