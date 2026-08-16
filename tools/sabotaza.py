@@ -367,6 +367,41 @@ SABOTAZE = {
         "T_ScrSave_RutaPoRezimu",
         "isplata ide u modNovacUnos.IsplataValidiraj",
     ),
+    # --- F8 storno centar ---------------------------------------------------
+    "f8-jedna-tabela": (
+        "modScrDokumenti.bas",
+        "    If mk = \"STORNO\" Then EffKey = StornoTipKey() Else EffKey = mk\n",
+        "    EffKey = mk   ' SABOTAZA: F8 opet svira po jednoj tabeli\n",
+        "T_F8_TipBiraTabeluIKolone",
+        "F8 cita tabelu IZABRANOG tipa, ne uvek tblOtpremnica",
+    ),
+    "f8-tabela-tipa": (
+        "modScrDokumenti.bas",
+        "        Case \"FAKTURA\":     TabelaTipa = TBL_FAKTURE\n",
+        "        ' SABOTAZA: tip fakture ispao iz mape tabela\n",
+        "T_F8_TipBiraTabeluIKolone",
+        "svaki od devet tipova F8 ima svoju tabelu",
+    ),
+    # --- kapije storna ------------------------------------------------------
+    "storno-nema-dok": (
+        "modStornoDok.bas",
+        "            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) = 0 Then _\n"
+        "                StornoRazlog = NijePronadjen(broj)\n",
+        "            ' SABOTAZA: nepostojeci otkup prolazi kapiju\n",
+        "T_StornoDok_KapijePreUpisa",
+        "kapija zaustavlja nepostojeci dokument PRE poziva Storno*_TX",
+    ),
+    "storno-revers-smer": (
+        "modStornoDok.bas",
+        "            If Len(Trim$(opcija)) = 0 Then\n"
+        "                StornoRazlog = Poruka(\"STORNO_ERR_NEMA_SMERA\")\n"
+        "            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then\n",
+        "            If False Then\n"
+        "                StornoRazlog = \"\"   ' SABOTAZA: smer reversa vise nije obavezan\n"
+        "            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then\n",
+        "T_StornoDok_KapijePreUpisa",
+        "revers bez smera se odbija -- cetiri smera dele isti brojevni niz",
+    ),
 }
 
 

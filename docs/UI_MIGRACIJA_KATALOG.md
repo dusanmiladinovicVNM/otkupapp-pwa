@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-118`.
+Stanje na dan `v6-ui-119`.
 
 ---
 
@@ -23,9 +23,14 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    **Legacy zadržava svoju kopiju te logike — namerno.** `frmOtkup` i
    `frmDokumenta` ostaju potpuno operativni dok novi UI ne bude umeo sve; do
    tada se pravilo menja u zajedničkom modulu pa **ručno preslikava** u legacy.
-2. **Storno okvir frmDokumenta** — sedam panela i ~2/3 te forme. Novi UI danas
-   ume da stornira **samo otkupni list** (iz F1 liste); otpremnica, zbirna,
-   prijemnica, faktura, novac i izvod — ne.
+2. ~~**Storno bilo kog tipa dokumenta**~~ **ZATVORENO** (v6-ui-119). F8 je
+   postao storno centar: prekidač bira **tip dokumenta** (devet tipova, kroz
+   sedam tabela), radnja nad redom zove tačan `Storno*_TX` kroz nov
+   `modStornoDok`. Do tada je F8 čitao samo `tblOtpremnica` i pokazivao samo
+   već stornirane.
+   **Ostatak storno okvira NIJE prenet:** ispravka i dupli unos posle storna
+   (`modStornoFlow`, Z10), Undo operacija, „Nedovršeno" i Recovery — to je
+   Faza D, stavke 13 i 14, i i dalje živi samo u `frmDokumenta`.
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
    zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4). Upis F3/F4 od
    v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
@@ -35,7 +40,8 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    storniranog (Z10). Filtriranje kooperanata po otkupnom mestu je urađeno
    (v6-ui-113, `KOOP_FILTER_BY_OM`).
 
-Tačka 2 je Faza D iz plana; 3 i 4 su ostaci.
+Od Faze D ostaju stavke 13 i 14 (ispravka posle storna, Recovery / Nedovršeno /
+Undo); 3 i 4 su ostaci ranijih faza.
 
 ---
 
@@ -147,8 +153,9 @@ zaključivati iz koda.
 | `btnUnosPrij_Click` | upis prijemnice (F4) | **IMA** (`modDokUnos`, v6-ui-116) — **bez ispravke posle storna** (v. §3.1) |
 | `btnUnosOMUlaz_Click` | upis F5 (isplate) i F7 (reversi) | **IMA** (`modNovacUnos`, v6-ui-117) |
 | `btnUnosIzlaz_Click` | upis F6 (uplate kupaca) | **IMA** (`modNovacUnos`, v6-ui-117) |
-| `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D |
-| storno paneli (7 kom.) | `btnStorno_Click` i dalje | **NEMA** — Faza D |
+| `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D, stavka 13 |
+| `btnStorno_Click` (storno po tipu i broju) | storno bilo kog dokumenta | **IMA** (`modStornoDok` + F8, v6-ui-119) |
+| ostali storno paneli (Ispravka, Undo, Nedovršeno, Recovery) | — | **NEMA** — Faza D, stavke 13 i 14 |
 
 ---
 
@@ -247,14 +254,33 @@ Sedam panela, svaki sa svojim `Ensure/Layout/Populate/Set*Visible`:
 
 | Panel | Šta radi | Poslovna rutina | Novi UI |
 |---|---|---|---|
-| **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | DELIMIČNO — F8 lista postoji, storno radi samo nad otkupom |
+| **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | **IMA** (`modStornoDok` + F8, v6-ui-119) — **običan storno**, bez framework-a ispravke |
 | **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **NEMA** |
-| **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | DELIMIČNO — F8 lista |
+| **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | **IMA** — čip „Otkazane" nad svakim tipom u F8 |
 | **Undo operacija** (`ShowUndoOpsPanel`) | poništavanje storna | `GetUndoableStornoOperations` | **NEMA** |
-| **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | DELIMIČNO — brza pretraga u mreži |
+| **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | **IMA** — prekidač tipa + pretraga i filteri mreže u F8 |
 | **Nedovršeno** (`m_btnNedovrseno_Click`) | lanci koji nisu dovršeni | `GetNedovrseno` | **NEMA** |
 | **Recovery** (`m_btnRecovery_Click`) | osirotele prijemnice i palete, prevezivanje | `GetOsirocenePrijemnice`, `GetPrijemniceSaOsirocenimPaletama`, `ReassignPaleteToPrijemnica_TX`, `ReassignPrijemnicaToZbirna_TX` | **NEMA** |
 | `CheckVerwaisteDokumente` | upozorenje na siročiće pri otvaranju | `GetVerwaisteDokumente` | **NEMA** |
+
+**Šta F8 nosi, a šta namerno ne (v6-ui-119):**
+
+F8 više nije pogled na jednu tabelu. Prekidač bira **tip dokumenta**, a sve što
+pita „koja tabela" i „koje kolone" razrešava `modScrDokumenti.EffKey` — do tada
+je `"STORNO"` bio tih sinonim za `"OTPREMNICA"` u desetak `Col*` funkcija.
+
+| Pravilo iz legacy | Gde je sad | Napomena |
+|---|---|---|
+| Tip dokumenta bira šta se stornira | prekidač lista (`Scr_Liste` za F8) | devet tipova kroz sedam tabela; legacy `cmbStornoDokument` ima jedanaest stavki, jer četiri smera reversa broji zasebno |
+| Otkup i otpremnica: klase I i II dele broj → stornira se **ceo** dokument | `StornoIzvrsi` → `*ByBrDok_TX` / `*ByBroj_TX` | isto pravilo koje F1 lista već poštuje |
+| Novac: izvod se ne stornira parcijalno; broj sa više aktivnih redova traži `NovacID` | `ResolveNovacForStorno` (`modStorno`) | avans raspodela deli broj originalne stavke — **posledica:** takav red se iz F8 **ne može** stornirati, isto kao iz legacy forme bez ukucanog `NovacID` |
+| Izvod: „broj" ili „broj/račun" → jedan izvod | `ResolveIzvodZaStorno` | broj računa se čita iz **treće kolone reda**, ne iz mape — dva izvoda istog broja tako ostaju razlučiva |
+| Izvod: preflight blokada pre potvrde | `GetIzvodStornoBlokade` | razlog se vidi pre „Da", ne kao tih neuspeh posle |
+| Izvod: ishod REMAP vs REIMPORT | ekran (`StornoRedF8`) | to je **odluka operatera o PDF-u**, ne pravilo — zato je u ekranu, a ne u `modStornoDok` |
+| Revers: broj + **smer** | `StornoRazlog` → `ActiveAmbalazaDokExists` | četiri smera dele `KIND_REV`, pa broj sam ne kaže koji je red u `tblAmbalaza`; ekran smer nalazi tako što pita koji od četiri ima aktivan red |
+| Zbirna: upozorenje da aktivna prijemnica ostaje vezana | `StornoIzvrsi` | `StornoZbirna` namerno ne kaskadira na prijemnice; bez poruke operater ne zna da mu je ostao posao |
+| **Ispravka / dupli unos posle storna** | **NIJE preneto** | `TryRunCorrectionFramework` / `RunSimpleStornoUI` / `RunReversStornoUI` ostaju u `frmDokumenta`. Storno iz F8 je **običan** storno — onaj koji legacy radi kad framework ne preuzme tip. Faza D, stavka 13. |
+| **Storno palete i prerade** | **NIJE preneto** | `StornoPaleta_TX` / `StornoPrerada_TX` pripadaju ekranu Palete (F8 nema tip „paleta"); tamo su i danas, kroz `modScrPalete` |
 
 ### 3.3 Ostalo
 
@@ -325,9 +351,14 @@ legacy do tada penzioniše).
 11. Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.
 
 ### Faza D — storno okvir (najveći, ide poslednji)
-12. Storno svih tipova dokumenata iz F8.
+12. ~~Storno svih tipova dokumenata iz F8.~~ **URAĐENO** (v6-ui-119,
+    `modStornoDok` + prekidač tipa u F8). Prenet je **običan** storno — onaj
+    koji legacy radi kad `TryRunCorrectionFramework` ne preuzme tip. Uz njega su
+    došli i „Storno pregled" (čip „Otkazane" po tipu) i „Nađi dokument"
+    (prekidač tipa + pretraga mreže), koji su bili zasebni paneli.
 13. Ispravka / dupli unos posle storna (Z10) + „hladnjača ispravka".
-14. Recovery, Nedovršeno, Undo operacija, Nađi dokument.
+    Uz to ide i **ispravka prijemnice** (relink paleta) iz §3.1.
+14. Recovery, Nedovršeno, Undo operacija.
 
 ### Faza E — ostali ekrani
 15. Agrohemija, Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji,

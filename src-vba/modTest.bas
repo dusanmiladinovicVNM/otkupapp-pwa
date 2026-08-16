@@ -106,6 +106,8 @@ Public Sub RunAllTests()
     RunOne 17
     RunOne 18
     RunOne 19
+    RunOne 20
+    RunOne 21
 
     SetTestMode prevMode
     WriteResultFile
@@ -177,6 +179,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 17: TestName = "T_WriterGuard_OdbijaTudjBlok"
         Case 18: TestName = "T_UplataGuard_VecPlacenaFaktura"
         Case 19: TestName = "T_WriterGuard_AvansSaldoOM"
+        Case 20: TestName = "T_F8_TipBiraTabeluIKolone"
+        Case 21: TestName = "T_StornoDok_KapijePreUpisa"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -204,6 +208,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 17: T_WriterGuard_OdbijaTudjBlok
         Case 18: T_UplataGuard_VecPlacenaFaktura
         Case 19: T_WriterGuard_AvansSaldoOM
+        Case 20: T_F8_TipBiraTabeluIKolone
+        Case 21: T_StornoDok_KapijePreUpisa
     End Select
 End Sub
 
@@ -971,6 +977,98 @@ Private Function NovacRedova() As Long
     If IsEmpty(d) Then Exit Function
     NovacRedova = UBound(d, 1)
 End Function
+
+' F8 CITA TABELU IZABRANOG TIPA, ne uvek tblOtpremnica.
+'
+' Do v6-ui-118 je "STORNO" bio tih sinonim za "OTPREMNICA" u ModeTable i u
+' desetak Col* funkcija, pa je storno centar mogao da pokaze samo otpremnice.
+' Pada ako se EffKey ukloni ili ako se neki tip izgubi iz TabelaTipa: tada
+' F8 opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente
+' pod pravim naslovom -- greska koju operater ne moze da vidi.
+'
+' Kolone se proveravaju ZAJEDNO sa tabelom: tabela bez odgovarajucih kolona
+' daje praznu mrezu, sto izgleda kao "nema dokumenata".
+Private Sub T_F8_TipBiraTabeluIKolone()
+    Dim tipovi As Variant, tabele As Variant, i As Long, cols As Variant
+
+    tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
+                   STIP_ISPLATE, STIP_UPLATE, STIP_REVERSI, STIP_FAKTURA, STIP_IZVOD)
+    tabele = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, _
+                   TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA, TBL_FAKTURE, TBL_BANKA_IMPORT)
+
+    For i = 0 To UBound(tipovi)
+        modScrDokumenti.Scr_StornoTipTestSet CStr(tipovi(i))
+        AssertEq modScrDokumenti.ModeTable("F8"), CStr(tabele(i)), _
+                 "F8 / " & CStr(tipovi(i)) & " cita svoju tabelu"
+        AssertEq modScrDokumenti.EffKey("STORNO"), CStr(tipovi(i)), _
+                 "F8 / " & CStr(tipovi(i)) & " razresava kljuc rezima u kljuc tipa"
+        cols = modScrDokumenti.GridCols("STORNO")
+        AssertEq (IsArray(cols)), True, _
+                 "F8 / " & CStr(tipovi(i)) & " ima opis kolona"
+        AssertEq (UBound(cols) >= 3), True, _
+                 "F8 / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
+    Next i
+
+    ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je F8 bio
+    ' otpremnica, cip "Bez zbirne" je bio ukljucen i nad novcem, gde tblNovac
+    ' tu kolonu nema.
+    modScrDokumenti.Scr_StornoTipTestSet STIP_ISPLATE
+    AssertEq modScrDokumenti.ModeHasZbirna("F8"), False, _
+             "novac u F8 nema pojam zbirne"
+    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
+    AssertEq modScrDokumenti.ModeHasZbirna("F8"), True, _
+             "otkupni list u F8 ima pojam zbirne"
+
+    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
+End Sub
+
+' KAPIJA STOJI PRE UPISA, I VRACA RAZLOG.
+'
+' Ekran pita StornoRazlog pre nego sto uopste ponudi potvrdu -- da operater
+' vidi zasto se nesto ne moze stornirati, umesto tihog neuspeha posle "Da".
+' Pada ako se neka grana Select Case-a izgubi (tada nepostojeci dokument
+' prolazi kapiju i ide pravo u Storno*_TX) ili ako se izgubi zahtev za
+' smerom reversa (cetiri smera dele isti brojevni niz, pa bi bez smera
+' StornoOMKoopByBrDok_TX gadjao pogresne redove).
+'
+' Test NE upisuje nista: svi brojevi su izmisljeni, pa nijedna grana ne
+' stigne do transakcije.
+Private Sub T_StornoDok_KapijePreUpisa()
+    Dim tipovi As Variant, i As Long, r As String
+    Const NEMA As String = "NE-POSTOJI-9999"
+
+    ' 1) Nepostojeci dokument -- svaki tip mora da vrati razlog.
+    tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
+                   STIP_FAKTURA, STIP_ISPLATE, STIP_UPLATE)
+    For i = 0 To UBound(tipovi)
+        r = modStornoDok.StornoRazlog(CStr(tipovi(i)), NEMA, "")
+        AssertEq (Len(r) > 0), True, _
+                 "kapija zaustavlja nepostojeci dokument, tip " & CStr(tipovi(i))
+    Next i
+
+    ' 2) Prazan broj (red bez broja) -- ne sme da prodje ni za jedan tip.
+    AssertEq (Len(modStornoDok.StornoRazlog(STIP_OTKUP, "", "")) > 0), True, _
+             "kapija zaustavlja prazan broj"
+
+    ' 3) Revers bez smera. Broj postoji ili ne -- svejedno: bez smera se ne
+    '    zna koji je od cetiri dokumenta, pa se ne sme ni pokusati.
+    AssertEq modStornoDok.StornoRazlog(STIP_REVERSI, NEMA, ""), _
+             Poruka("STORNO_ERR_NEMA_SMERA"), _
+             "revers bez smera se odbija PRE trazenja dokumenta"
+
+    ' 4) Nepoznat tip ne sme tiho da ne uradi nista.
+    AssertEq (Len(modStornoDok.StornoRazlog("NEPOSTOJECI_TIP", NEMA, "")) > 0), True, _
+             "nepoznat tip vraca razlog"
+
+    ' 5) Ime tipa je ono sto operater vidi u potvrdi -- prazno ime bi dalo
+    '    "Stornirati  12/010826?" i operater ne bi znao STA stornira.
+    For i = 0 To UBound(tipovi)
+        AssertEq (Len(modStornoDok.TipNaziv(CStr(tipovi(i)), "")) > 0), True, _
+                 "tip ima ime za potvrdu: " & CStr(tipovi(i))
+    Next i
+    AssertEq (Len(modStornoDok.TipNaziv(STIP_REVERSI, DOK_TIP_OM_IZLAZ_KOOP)) > 0), True, _
+             "revers ima ime po SMERU"
+End Sub
 
 ' UKUCAN A NERAZRESEN IZBOR NIJE "NIJE IZABRANO".
 ' Combo dopusta kucanje, a ID stize iz skrivene kolone koja postoji samo uz

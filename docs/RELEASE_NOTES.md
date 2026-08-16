@@ -1331,3 +1331,100 @@ ukine i to pravilo — sabotaža `faktura-bez-iznosa` to sada drži.
 `Private Const` u istom modulu) `vba_check` **nije** uhvatio — `DUPLIKAT` gleda
 samo `Public` imena između modula. Videlo se tek kao „Cannot run the macro" nad
 celim projektom. Podsetnik da `COMPILE = NEJASNO` nije formalnost.
+## vba-v2.42.0 — 2026-08-15
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: običan online update.** Paket ne nosi nijednu novu formu ni sheet;
+> `frmOtkupUI.frm/.frx` je nepromenjen — nova dugmad prekidača se prave u
+> runtime-u, kao i sve ostalo u toj formi. Nov modul `modStornoDok.bas` je
+> običan `.bas` i self-update ga dodaje sam.
+>
+> **Obavezno posle uvoza:** `Alt+F8 → EnsurePoruke`. Trideset osam novih
+> ključeva poruka do tada postoji samo u kodu, pa bi se prikazali kao `[KLJUC]`.
+>
+> **Legacy se i dalje NE gasi.** `frmOtkup` i `frmDokumenta` rade nepromenjeno;
+> `frmDokumenta.btnStorno_Click` nije ni dirnut.
+
+**F8 je postao storno centar — stornira svih devet tipova dokumenata**
+
+Do sada je F8 bio pregled: čitao je isključivo `tblOtpremnica` i pokazivao samo
+već stornirane otpremnice. Storno je iz novog UI-ja radio jedino nad otkupnim
+listom, iz F1 liste. Sve ostalo je moralo u `frmDokumenta`.
+
+Sada F8 ima **prekidač tipa dokumenta** (isti izbor koji legacy traži kroz
+`cmbStornoDokument`, samo se lista bira pa red u njoj — umesto da se broj kuca
+napamet):
+
+| Tip | Tabela | Rutina koja radi posao |
+|---|---|---|
+| Otkupni list | `tblOtkup` | `StornoOtkupByBrDok_TX` |
+| Otpremnica | `tblOtpremnica` | `StornoOtpremnicaByBroj_TX` |
+| Zbirna | `tblZbirna` | `StornoZbirna_TX` |
+| Prijemnica | `tblPrijemnica` | `StornoPrijemnicaByBroj_TX` |
+| Isplate / Uplate | `tblNovac` | `StornoNovac_TX` |
+| Reversi | `tblAmbalaza` | `StornoOMKoopByBrDok_TX` |
+| Fakture | `tblFakture` | `StornoFaktura_TX` |
+| Izvodi (ceo) | `tblBankaImport` | `StornoIzvod_TX` |
+
+Fakture i izvodi su tu iako novi UI **nema režim koji ih kreira** — stornirati
+se moraju, a legacy ih ima u istom combo-u.
+
+**Kapije su ostale gde jesu — u `modStorno`, ne u ekranu**
+
+Nov `modStornoDok` je četvrti modul bez ijedne kontrole, uz `modOtkupUnos`,
+`modDokUnos` i `modNovacUnos`. Izvučen je iz `frmDokumenta.btnStorno_Click`, gde
+je jedan `Select Case` radio tri pomešane stvari: razrešavanje broja u ID,
+kapije, i poziv pravog `Storno*_TX`. Sada su to tri javne rutine, pa ekran može
+da **pita „sme li" pre nego što uopšte ponudi potvrdu**:
+
+- izvod se ne stornira parcijalno (`ResolveNovacForStorno`);
+- broj sa više aktivnih novac-redova (avans raspodela deli isti broj) traži
+  `NovacID` umesto tihog storna jednog reda;
+- `GetIzvodStornoBlokade` je preflight — razlog se vidi pre potvrde, ne kao tih
+  neuspeh posle „Da";
+- revers bez smera se odbija: četiri smera dele isti brojevni niz, pa broj sam
+  ne kaže koji je red u `tblAmbalaza`.
+
+Nijedna od tih provera nije prepisana — sve su već bile javne u `modStorno` i
+diže ih i legacy forma.
+
+**Dve razlike u odnosu na legacy — namerne**
+
+- **Storno se bira iz liste, ne kuca.** Legacy traži tip + broj napamet; ovde je
+  red u mreži, sa pretragom, filterima i opsegom datuma. Za izvod se broj računa
+  čita iz same liste, pa „isti broj na dve banke" više nije dvosmislenost koju
+  operater mora da razreši kucanjem.
+- **F8 se otvara nad AKTIVNIM dokumentima**, ne nad storniranima — to je lista
+  nad kojom se radi. Pregled storniranih ostaje, kroz čip „Otkazane", isti onaj
+  koji rade svi ostali režimi. Čipovi su u F8 bili sakriveni dok je taj režim
+  umeo samo da prikazuje.
+
+**Šta Faza D još NIJE donela**
+
+Storno iz novog UI-ja je **običan storno** — isti onaj koji legacy radi kad
+`TryRunCorrectionFramework` ne preuzme tip. Ispravka i dupli unos posle storna
+(`modStornoFlow`, prefill iz storniranog — Z10), Undo operacija, „Nedovršeno" i
+Recovery panel i dalje postoje samo u `frmDokumenta`.
+
+**Verifikacija**
+
+Pokrenuto na Windows mašini (Excel + `pywin32`), 15.08.2026:
+
+- `python tools\vba_check.py` → **čisto (189 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=19, FAIL=0** (dva nova
+  testa: mapa tip→tabela→kolone za svih devet tipova, i kapije dispečera pre
+  upisa).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno, bez
+  `BLIND` reda. `Test_StornoCentar_All` i `RunStornoTestSuite` (181 tvrdnja)
+  zeleni — postojeći storno nije pomeren.
+- **Dokaz u oba smera:** četiri nove sabotaže (`f8-jedna-tabela`,
+  `f8-tabela-tipa`, `storno-nema-dok`, `storno-revers-smer`), svaka obara test
+  **po imenu**, pa se vraća i suite je opet zelena.
+- **`COMPILE` je i dalje `NEJASNO`** — automatski Compile ne prolazi, pa se
+  potvrđuje **ručno**: `Alt+F11 → Debug → Compile VBAProject`. Prijavljuje se
+  kako jeste.
+
+Ograničenje: testovi pokrivaju **rutiranje po tipu i kapije pre upisa**, ne i
+sam storno iz F8 nad pravim podacima (transakcije pokrivaju `RunStornoTestSuite`
+i `Test_StornoCentar_All`, ali kroz svoje ulazne tačke, ne kroz ekran). Izgled
+prekidača sa devet dugmadi na užem ekranu, tri dijaloga storna izvoda i ponašanje
+nad pravim podacima ostaju na operateru — checklista je u PR-u.
