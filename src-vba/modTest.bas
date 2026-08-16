@@ -1411,10 +1411,14 @@ Private Sub T_Oporavak_CiljneListe()
 
     ' --- KOLIZIJA ZBIRNIH: isti broj, ISTI kupac, dva vozaca ---
     '
-    ' Broj zbirne se generise PO VOZACU, pa su ZBI-DUPL-1 i ZBI-DUPL-2 dva
-    ' dokumenta. Lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red
-    ' -- operater tada ne moze ni da izabere onaj koji mu treba, a skrivena
-    ' generacija nosi generaciju reda koji je slucajno pobedio.
+    ' Broj zbirne generator DRZI JEDINSTVENIM: SuggestNextBroj za ZBR bumpuje
+    ' sekvencu dok BrojZbirneExists ne kaze da je slobodan, a ApplyMirrorPrefix
+    ' dodaje 'S' da se mirror-vozac ne sudari sa realnim. Dva reda istog broja
+    ' zato mogu nastati SAMO mimo generatora -- rucnim unosom (auto-broj se
+    ' iskljucuje u Podesavanjima), uvozom ili ispravkom u tabeli.
+    '
+    ' Test brani bas taj slucaj: lista je vlasnikom smatrala samo kupca i spajala
+    ' ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu treba.
     Dim duplih As Long, vozaci As String
     For i = 1 To n
         If CStr(redovi(i, 1)) = FX_ZBIRNA_DUPL Then
@@ -1792,8 +1796,9 @@ End Sub
 ' ============================================================
 ' 38. Zbirna: zaglavlje po generaciji, kaskada fail-closed
 ' ============================================================
-' Kod zbirne se identitet ne moze provuci do kraja lanca, i to nije previd nego
-' OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
+' Broj zbirne generator drzi jedinstvenim (v. T_Oporavak_CiljneListe), pa ovaj
+' test brani RUCNI UNOS. Uz to, identitet se ni tada ne moze provuci do kraja
+' lanca -- i to nije previd nego OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
 ' KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca dva dokumenta
 ' istog broja su nerazluciva podatkom koji postoji.
 '

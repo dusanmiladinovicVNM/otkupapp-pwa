@@ -607,6 +607,10 @@ End Function
 ' generacijaID: identitet izabrane zbirne. Sa njim se storniraju SAMO redovi te
 ' generacije.
 '
+' Napomena: broj zbirne generator drzi jedinstvenim (SuggestNextBroj za ZBR
+' bumpuje dok BrojZbirneExists ne kaze da je slobodan), pa je generacija ovde
+' pojas za RUCNI UNOS -- ne za redovan tok.
+'
 ' OGRANICENJE SEME, ne previd: otpremnice, prijemnice i paletne stavke vezuju
 ' zbirnu KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca se
 ' zato NE MOGU razdvojiti po generaciji ni u principu. Kad broj nose dve

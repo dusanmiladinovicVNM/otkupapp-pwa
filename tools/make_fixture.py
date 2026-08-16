@@ -44,9 +44,10 @@ AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
 
 STANICA = "STA-TEST-1"
 VOZAC = "VOZ-TEST-1"
-# Drugi vozac postoji zbog CILJNE liste zbirnih: broj zbirne se generise PO
-# VOZACU, pa su dve zbirne istog broja i istog kupca a razlicitih vozaca DVA
-# dokumenta. Lista ciljeva mora da ponudi oba.
+# Drugi vozac postoji zbog CILJNE liste zbirnih. Broj zbirne generator DRZI
+# JEDINSTVENIM (SuggestNextBroj za ZBR bumpuje sekvencu dok ne nadje slobodan),
+# pa dve zbirne istog broja mogu nastati samo RUCNIM UNOSOM ili uvozom -- a
+# tada lista ciljeva mora da ponudi oba dokumenta, ne jedan spojen red.
 VOZAC2 = "VOZ-TEST-2"
 ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
 # Zbirna u koju NIJEDAN test ne upisuje. Kolizioni par aktivnih prijemnica mora

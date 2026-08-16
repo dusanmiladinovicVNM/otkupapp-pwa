@@ -1010,7 +1010,8 @@ Public Sub ApplyGeneracijaID(ByVal tableName As String, ByVal rowIndex As Long, 
 
     ' Identitet dokumenta = broj + vlasnik: broj sam nije jedinstven. Vlasnik je
     ' otpremnica -> StanicaID, prijemnica -> KupacID, zbirna -> VozacID + KupacID
-    ' (broj zbirne se generise po vozacu, a dokument pripada kupcu).
+    ' (sekvenca se broji po vozacu, a dokument pripada kupcu; sam BROJ je
+    ' jedinstven -- SuggestNextBroj za ZBR vrti petlju dok ne nadje slobodan).
     RequireUpdateCell tableName, rowIndex, COL_GENERACIJA_ID, _
                       GeneracijaIDZaBrojArr(tableName, brojCol, broj, _
                                             ScopePairsToArray(vlasnikPairs, SRC)), SRC
@@ -3723,7 +3724,9 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     ' popunjen -> dokaz postojanja; Stornirano je blank za aktivnu pa se NE sme
     ' koristiti kao dokaz postojanja.
     ' Sa generacijom cilj se bira po IDENTITETU: LookupValue po broju uzima prvi
-    ' pogodak, a broj zbirne se generise PO VOZACU pa ga dva dokumenta lako dele.
+    ' pogodak. Broj zbirne JESTE jedinstven kad ga da generator (SuggestNextBroj
+    ' za ZBR bumpuje sekvencu dok BrojZbirneExists ne kaze da je slobodan), ali
+    ' ne i kad je unet rucno -- auto-broj se moze iskljuciti u Podesavanjima.
     Dim tgtIds As Object
     Set tgtIds = IdoviGeneracije(TBL_ZBIRNA, COL_ZBR_ID, zbirnaGeneracijaID)
 

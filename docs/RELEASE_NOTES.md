@@ -2164,3 +2164,52 @@ kodu, ne samo ovde.
 i `RunSimpleStornoZbirna` je dobio `docID` u telu bez parametra u potpisu. Oba su
 prošla `vba_check` — pozivi su u izrazu, a to je rupa svesno ostavljena u #199.
 Oba je pokazao **screenshot VBE-a**, ne harness.
+
+## v2.46.2 — `v6-ui-131` · ispravka obrazloženja: broj zbirne JESTE jedinstven
+
+Ne menja ponašanje. Ispravlja **tvrdnju** na kojoj je deo prethodnog rada
+obrazložen — a pogrešno obrazloženje je gore od suvišne provere, jer sledeći
+čovek na osnovu njega donese isti zaključak.
+
+### Šta je bilo pogrešno
+
+Pisao sam da se „broj zbirne generiše po vozaču, pa ga dva dokumenta lako dele".
+**Ne dele ga.** `SuggestNextBroj` za `KIND_ZBR` ima eksplicitnu petlju:
+
+```vb
+Do While BrojZbirneExists(SuggestNextBroj)
+    nextSeq = nextSeq + 1
+    SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
+Loop
+```
+
+`BrojZbirneExists` skenira **celu** `tblZbirna`, bez opsega po vozaču, a
+`ApplyMirrorPrefix` dodaje `S` baš da se mirror-vozač ne sudari sa realnim.
+Generator ne može da izda zauzet broj.
+
+### Zašto prijemnica jeste drugačija
+
+```vb
+maxSeq = MaxSeqFromTable(TBL_PRIJEMNICA, ..., COL_PRJ_KUPAC, kupacID, datum)
+GenerateBrojPrijemnice = FormatBroj("1", datum, maxSeq + 1)
+```
+
+Fiksan prefiks `"1"`, sekvenca **po kupcu**, i **nema provere jedinstvenosti**.
+Uz to auto-broj postoji samo za hladnjaču — ostali kupci unose slobodno. Tu je
+kolizija stvarna, i tamo identitet nije pojas nego nužnost.
+
+Grešku sam napravio izvodeći pravilo iz **oblika broja** umesto iz generatora.
+
+### Šta ostaje i zašto
+
+Zbirna zadržava `generacijaID` i fail-closed kaskade: broj koji generator drži
+jedinstvenim i dalje može ući **mimo generatora** — ručnim unosom kad je
+auto-broj isključen u Podešavanjima, uvozom, ili ispravkom u tabeli. Zaštita od
+toga ne škodi.
+
+Ispravljena su obrazloženja u `modStorno`, `modStornoFlow`, `modScrDokumenti`,
+`modScrOporavak`, `modDokumenta`, `modTest`, `make_fixture.py` i katalogu — svuda
+gde je stajalo „po vozaču, pa se dele".
+
+Fixture `ZBI-DUPL-1/2` i test 38 ostaju, ali sada kažu šta stvarno brane:
+**ručni unos**, ne redovan tok.

@@ -1560,8 +1560,11 @@ End Function
 
 ' Izvor KANONSKOG IDENTITETA po tipu dokumenta.
 '
-' Broj je labela: BrojPrijemnice se racuna PO KUPCU, broj zbirne PO VOZACU, pa
-' dva dokumenta lako dele broj. Za robna dokumenta identitet je GeneracijaID --
+' Broj je labela. Za prijemnicu to nije teorija: GenerateBrojPrijemnice ima
+' fiksan prefiks "1", broji sekvencu PO KUPCU i NEMA proveru jedinstvenosti, a
+' auto-broj postoji samo za hladnjacu -- ostali kupci unose slobodno.
+' Broj zbirne generator drzi jedinstvenim; tamo je identitet pojas za rucni
+' unos. Za robna dokumenta identitet je GeneracijaID --
 ' Klasa I i II iz istog upisa dele vrednost, sto je tacno "jedan logicki
 ' dokument". Novac i faktura su jednoredni, pa im je identitet sopstveni PK.
 '

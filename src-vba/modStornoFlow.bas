@@ -1097,7 +1097,9 @@ End Function
 ' ============================================================
 ' Zamena za LookupActiveID(tbl, brojCol, broj, idCol), koji uzima PRVI aktivan
 ' red tog broja. Broj je labela: BrojPrijemnice se racuna PO KUPCU, broj zbirne
-' PO VOZACU -- prvi red tog broja ne mora biti dokument koji je operater izabrao.
+' PO KUPCU i bez provere jedinstvenosti -- prvi red tog broja ne mora biti
+' dokument koji je operater izabrao. (Kod zbirne generator broj drzi
+' jedinstvenim; tamo je ovo pojas za rucni unos.)
 '
 ' Kad je generacija poznata, bira se BAS taj dokument. Kad nije (zatecen zapis),
 ' pad na broj je dozvoljen tek posto se dokaze da broj nosi JEDNOG vlasnika;

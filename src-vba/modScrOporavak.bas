@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-130"
+Public Const SCROPO_BUILD As String = "v6-ui-131"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -519,8 +519,9 @@ Private Function CiljZbirnaGridCols() As Variant
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
-    ' Vlasnistvo zbirne je VOZAC + KUPAC -- broj zbirne se generise po vozacu,
-    ' pa sam kupac ne razlikuje dva dokumenta istog broja.
+    ' Vlasnistvo zbirne je VOZAC + KUPAC. Broj zbirne generator drzi
+    ' jedinstvenim, pa se dva reda istog broja mogu pojaviti samo iz rucnog
+    ' unosa ili uvoza; tada sam kupac ne razlikuje dokumenta.
     RowsAktivneZbirne = RowsAktivni(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_DATUM, _
                                     COL_ZBR_VRSTA, COL_ZBR_SORTA, COL_ZBR_KOLICINA, _
                                     Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _
