@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-123"
+Public Const SCROPO_BUILD As String = "v6-ui-124"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -56,6 +56,10 @@ Private mLista As String          ' kljuc aktivne liste
 ' javlja umesto da preveze na nesto nasumicno.
 Private mCiljZbirna As String
 Private mCiljPrijemnica As String
+' Generacija izabranog CILJA. Drzi se uz broj, ne umesto njega: broj i dalje
+' ide u prikaz i u labele na stavkama, generacija samo bira dokument.
+Private mCiljZbirnaGen As String
+Private mCiljPrijemnicaGen As String
 Private mStep As String           ' korak za poruku o gresci
 ' Brojke u zoni; racuna ih Scr_Rows u istom prolazu kroz podatke.
 Private mBrNedovrseno As Long
@@ -168,12 +172,23 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' mesto u listi.
     If Left$(tag, 4) = "row:" Then
         Select Case Scr_Lista()
+            ' Uz broj se pamti i GENERACIJA izabranog reda: broj je labela, a
+            ' radnja mora da posalje bas ovaj dokument. Kolona je poslednja i
+            ' prioriteta 3 -- na uskom ekranu se sakrije, u podacima ostaje.
             Case "ZBIRNE"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
-                If Len(broj) > 0 Then mCiljZbirna = broj: OsveziZonu
+                If Len(broj) > 0 Then
+                    mCiljZbirna = broj
+                    mCiljZbirnaGen = GenIzReda(CLng(Mid$(tag, 5)), 7)
+                    OsveziZonu
+                End If
             Case "CILJPRIJ"
                 broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
-                If Len(broj) > 0 Then mCiljPrijemnica = broj: OsveziZonu
+                If Len(broj) > 0 Then
+                    mCiljPrijemnica = broj
+                    mCiljPrijemnicaGen = GenIzReda(CLng(Mid$(tag, 5)), 7)
+                    OsveziZonu
+                End If
         End Select
         Exit Function
     End If
@@ -237,7 +252,7 @@ Private Function PreveziPrijemnicu(ByVal brojPrij As String, ByVal gen As String
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljZbirna & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, gen) Then
+    If ReassignPrijemnicaToZbirna_TX(brojPrij, mCiljZbirna, gen, mCiljZbirnaGen) Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & _
                              " " & ChrW(8594) & " " & mCiljZbirna, False
@@ -275,7 +290,8 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal gen As String) As
               Poruka("OTKUI_ASK_OPO_NA") & " " & mCiljPrijemnica & "?", _
               vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
 
-    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, gen) Then
+    If ReassignPaleteToPrijemnica_TX(brojPrij, mCiljPrijemnica, upoz, True, gajbDiff, _
+                                     gen, mCiljPrijemnicaGen) Then
         Scr_ResetCache
         MsgBox Poruka("OTKUI_MSG_OPO_PREVEZANO") & " " & brojPrij & " " & ChrW(8594) & _
                " " & mCiljPrijemnica & _
@@ -488,7 +504,8 @@ Private Function CiljZbirnaGridCols() As Variant
         "OTKUI_HD_DATUM||date|62|1", _
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
-        "OTKUI_HD_KG||kg|76|1")
+        "OTKUI_HD_KG||kg|76|1", _
+        "OTKUI_HDO_GENERACIJA||txt|110|3")
 End Function
 
 Private Function RowsAktivneZbirne(ByVal q As String) As Variant
@@ -503,7 +520,8 @@ Private Function CiljPrijGridCols() As Variant
         "OTKUI_HD_DATUM||date|62|1", _
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
-        "OTKUI_HD_KG||kg|76|1")
+        "OTKUI_HD_KG||kg|76|1", _
+        "OTKUI_HDO_GENERACIJA||txt|110|3")
 End Function
 
 Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
@@ -519,8 +537,9 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
                              ByVal colSorta As String, ByVal colKol As String, _
                              ByVal cols As Variant, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
-    Dim iBr As Long, iDat As Long, iVr As Long, iSo As Long, iKol As Long, iSt As Long
-    Dim broj As String, hay As String, sumKg As Double
+    Dim iBr As Long, iDat As Long, iVr As Long, iSo As Long, iKol As Long
+    Dim iSt As Long, iVl As Long, iGen As Long
+    Dim broj As String, vlasnik As String, kljuc As String, hay As String, sumKg As Double
     Dim seen As Object
     On Error GoTo EH
     mStep = "cilj " & tbl
@@ -536,6 +555,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     iSo = modUiData.ColIdx(tbl, colSorta)
     iKol = modUiData.ColIdx(tbl, colKol)
     iSt = modUiData.ColIdx(tbl, COL_STORNIRANO)
+    iGen = modUiData.ColIdx(tbl, COL_GENERACIJA_ID)
     If iBr = 0 Then
         RowsAktivni = Array(cols, Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
@@ -551,7 +571,7 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
     ' drugim.
     Set seen = CreateObject("Scripting.Dictionary")
     seen.CompareMode = vbTextCompare
-    ReDim outA(1 To UBound(src, 1), 1 To 5)
+    ReDim outA(1 To UBound(src, 1), 1 To 7)
     For r = 1 To UBound(src, 1)
         If iSt > 0 Then
             If UCase$(modUiData.CellS(src, r, iSt)) = "DA" Then GoTo Sledeci
@@ -577,9 +597,14 @@ Private Function RowsAktivni(ByVal tbl As String, ByVal colBroj As String, _
         seen(kljuc) = n
         outA(n, 1) = broj
         outA(n, 2) = modUiData.CellDate(src, r, iDat)
-        outA(n, 3) = modUiData.CellS(src, r, iVr)
-        outA(n, 4) = modUiData.CellS(src, r, iSo)
-        outA(n, 5) = modUiData.CellD(src, r, iKol)
+        outA(n, 3) = vlasnik
+        outA(n, 4) = modUiData.CellS(src, r, iVr)
+        outA(n, 5) = modUiData.CellS(src, r, iSo)
+        outA(n, 6) = modUiData.CellD(src, r, iKol)
+        ' Identitet ciljnog dokumenta. Broj je labela: prijemnica se broji po
+        ' kupcu, zbirna po vozacu, pa dva dokumenta lako dele broj. Radnja mora
+        ' da posalje BAS ovaj dokument, ne "prvi sa tim brojem".
+        If iGen > 0 Then outA(n, 7) = modUiData.CellS(src, r, iGen)
         sumKg = sumKg + modUiData.CellD(src, r, iKol)
 Sledeci:
     Next r
@@ -649,9 +674,13 @@ End Function
 ' Test bira aktivnu listu i ciljeve bez klika po prekidacu. Tvrdo gejtovano,
 ' isto kao Scr_OtpTestSet - van test-rezima ne radi nista.
 Public Sub Scr_OpoTestSet(ByVal lista As String, ByVal ciljZbirna As String, _
-                          ByVal ciljPrijemnica As String)
+                          ByVal ciljPrijemnica As String, _
+                          Optional ByVal ciljZbirnaGen As String = "", _
+                          Optional ByVal ciljPrijemnicaGen As String = "")
     If Not IsTestMode() Then Exit Sub
     mLista = lista
     mCiljZbirna = ciljZbirna
     mCiljPrijemnica = ciljPrijemnica
+    mCiljZbirnaGen = ciljZbirnaGen
+    mCiljPrijemnicaGen = ciljPrijemnicaGen
 End Sub

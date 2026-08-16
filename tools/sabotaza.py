@@ -455,6 +455,27 @@ SABOTAZE = {
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "generacija izvora se stvarno koristi, ne samo prosledjuje",
     ),
+    # Cilj prevezivanja. Izvor po identitetu a cilj po labeli i dalje moze da
+    # odnese palete pogresnom kupcu -- samo na drugom kraju.
+    "relink-cilj-po-broju": (
+        "modPaletniList.bas",
+        "        If Len(tgtGen) > 0 Then\n"
+        "            ciljni = (Trim$(NzToText(prj(r, pcGen))) = tgtGen)\n"
+        "        Else\n"
+        "            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)\n"
+        "        End If\n",
+        "        ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)   ' SABOTAZA\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "cilj se bira po identitetu, ne po broju koji dele dva kupca",
+    ),
+    "relink-cilj-bez-kapije": (
+        "modPaletniList.bas",
+        "        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
+        "                           Array(COL_PRJ_KUPAC)).count > 1 Then\n",
+        "        If False Then   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "bez generacije cilja dvosmislen broj se odbija (fail-closed)",
+    ),
     "vlasnik-broji-stornirane": (
         "modStorno.bas",
         "            If ukljuciStornirane Or Not IsStorniranoValue(data(i, cSt)) Then\n",

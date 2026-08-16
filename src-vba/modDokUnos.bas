@@ -52,7 +52,7 @@ Attribute VB_Name = "modDokUnos"
 '=====================================================================
 Option Explicit
 
-Public Const DOKUNOS_BUILD As String = "v6-ui-123"
+Public Const DOKUNOS_BUILD As String = "v6-ui-124"
 
 '--------------------------------------------------------------- ULAZ
 Public Function NoviOtpremnicaUnos() As Object
@@ -956,7 +956,13 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
     stariGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, _
                               modStornoDok.StorniraniDocID(cid))
 
-    relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, stariGen)
+    ' CILJ SE TAKODJE SALJE PO IDENTITETU. Nova prijemnica je upravo upisana, pa
+    ' joj je PK poznat -- nema razloga da se cilj trazi po broju koji je labela.
+    Dim noviGen As String
+    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(Split(res, " + ")(0)))
+
+    relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, _
+                                          stariGen, noviGen)
     If relOk Then
         poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
                  stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf

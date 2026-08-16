@@ -1472,21 +1472,62 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     AssertEq modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-C1"), _
              "GEN-TEST-A", "preduslov: generacija A je upisana"
 
-    ' Cilj je aktivna prijemnica; koristi se ona kupca 2 iz kolizionog para
-    ' 1/150326 -- svejedno koja, bitno je da postoji.
+    ' CILJ JE ISTO TAKO KOLIZIONO. Broj 1/150326 nose DVE AKTIVNE prijemnice,
+    ' PRJ-TEST-A (kupac 1) i PRJ-TEST-B (kupac 2). Raniji oblik ovog testa je tu
+    ' pisalo "svejedno koja, bitno je da postoji" -- a nije bilo svejedno: cilj se
+    ' birao po golom broju, pa je roba isla onom dokumentu koji je slucajno
+    ' POSLEDNJI u tabeli. Izvor po identitetu a cilj po labeli i dalje moze da
+    ' odnese palete pogresnom kupcu, samo na drugom kraju.
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-A", "GEN-CILJ-A"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-B", "GEN-CILJ-B"
+
+    ' Prvo FAIL-CLOSED: bez generacije cilja broj je dvosmislen i writer odbija.
     ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
                                        gajbDiff, "GEN-TEST-A")
+    AssertEq ok, False, "bez generacije CILJA dvosmislen broj se odbija"
+    AssertEq (Len(upoz) > 0), True, "odbijanje nosi razlog za operatera"
+    AssertEq GajbicaZaDokument("PRJ-TEST-A"), 0, _
+             "odbijeno prevezivanje nije nista pomerilo"
+
+    ' Pa po identitetu, na dokument kupca 1.
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-TEST-A", "GEN-CILJ-A")
     AssertEq ok, True, "prevezivanje po generaciji je proslo"
 
-    ' JEDINA prava tvrdnja ovog testa: dokument B se NIJE pomerio.
-    ' Da izvor ide po broju, obe stavke bi otisle na cilj.
+    ' Tvrdnja na IZVORNOJ strani: dokument B se nije pomerio.
     AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), 1, _
              "tudji dokument istog broja OSTAJE na svom mestu"
     AssertEq GajbicaZaPrijemnicu(FX_PRIJ_KOLIZIJA), 25, _
              "na starom broju ostaje bas roba dokumenta B (25 gajbica)"
-    AssertEq GajbicaZaPrijemnicu(FX_PRIJ_BROJ), 40, _
-             "na cilj je otisla bas roba dokumenta A (40 gajbica)"
+
+    ' Tvrdnja na CILJNOJ strani: roba je otisla bas izabranom kupcu.
+    AssertEq GajbicaZaDokument("PRJ-TEST-A"), 40, _
+             "roba je stigla na dokument kupca 1 (40 gajbica)"
+    AssertEq GajbicaZaDokument("PRJ-TEST-B"), 0, _
+             "dokument drugog kupca istog broja NIJE nista dobio"
 End Sub
+
+' Gajbice vezane za JEDAN dokument (po PrijemnicaID), ne za broj. Broj je
+' labela i dele ga dva kupca, pa zbir po broju ne moze da razlikuje ciljeve --
+' bas ono sto ovaj test treba da dokaze.
+Private Function GajbicaZaDokument(ByVal prijemnicaID As String) As Long
+    Dim d As Variant, i As Long, cPid As Long, cSt As Long, cGa As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Function
+    cPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
+    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If cPid = 0 Or cGa = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cPid))) = prijemnicaID Then
+            If cSt = 0 Then
+                GajbicaZaDokument = GajbicaZaDokument + NzL(d(i, cGa))
+            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+                GajbicaZaDokument = GajbicaZaDokument + NzL(d(i, cGa))
+            End If
+        End If
+    Next i
+End Function
 
 ' Upisi generaciju na red po PK-u. Fixture redovi se seju mimo writera, pa
 ' generacije nemaju; test ih postavlja da bi dva dokumenta bila razluciva.

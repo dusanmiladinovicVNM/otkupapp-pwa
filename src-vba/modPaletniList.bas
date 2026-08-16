@@ -45,21 +45,24 @@ End Sub
 ' (stari zapis) pada na broj, jer drugog traga nema.
 ' Bez generacije vazi staro ponasanje po broju; pozivalac je pre toga vec
 ' dokazao da je broj jednoznacan.
-Private Function JeIzvornaStavka(ByVal brojStavke As String, ByVal oldBroj As String, _
-                                 ByVal prijemnicaID As String, _
-                                 ByVal srcIds As Object) As Boolean
-    If srcIds Is Nothing Then
-        JeIzvornaStavka = (brojStavke = oldBroj)
+' Pripada li paleta-stavka dokumentu? Po PrijemnicaID kad su ID-evi te
+' generacije poznati, inace po broju kao labeli. Koristi se za OBE strane
+' prevezivanja - izvor i cilj - da bi pravilo bilo doslovno isto.
+Private Function PripadaDokumentu(ByVal brojStavke As String, ByVal broj As String, _
+                                  ByVal prijemnicaID As String, _
+                                  ByVal ids As Object) As Boolean
+    If ids Is Nothing Then
+        PripadaDokumentu = (brojStavke = broj)
         Exit Function
     End If
-    If srcIds.count = 0 Then
-        JeIzvornaStavka = (brojStavke = oldBroj)
+    If ids.count = 0 Then
+        PripadaDokumentu = (brojStavke = broj)
         Exit Function
     End If
     If Len(prijemnicaID) > 0 Then
-        JeIzvornaStavka = srcIds.Exists(prijemnicaID)
+        PripadaDokumentu = ids.Exists(prijemnicaID)
     Else
-        JeIzvornaStavka = (brojStavke = oldBroj)
+        PripadaDokumentu = (brojStavke = broj)
     End If
 End Function
 
@@ -1287,15 +1290,20 @@ End Function
 '      etiketu na prevezanim stavkama + njihovim paletama (roba se ne pomera).
 ' Sve u jednoj transakciji. outWarn nosi poruke za UI (prazno = bez napomena).
 ' ============================================================
-' oldGeneracijaID: identitet STAROG dokumenta. Kad je poznat, izvor se bira po
-' njemu i broj sluzi samo kao labela. Opcion je zbog zatecenih pozivalaca
-' (legacy forma) - bez njega vazi kapija nad jednoznacnoscu broja.
+' oldGeneracijaID / newGeneracijaID: identitet STAROG i NOVOG dokumenta. Kad je
+' poznat, strana se bira po njemu i broj sluzi samo kao labela. Oba su opciona
+' zbog zatecenih pozivalaca (legacy forma) - bez njih vazi kapija nad
+' jednoznacnoscu broja, na svakoj strani zasebno.
+'
+' Simetrija je bitna: izvor po generaciji a cilj po golom broju i dalje bi kod
+' kolizije mogao da odnese palete POGRESNOM kupcu - samo na drugom kraju.
 Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                                               ByVal newBroj As String, _
                                               Optional ByRef outWarn As String, _
                                               Optional ByVal allowRelabel As Boolean = False, _
                                               Optional ByRef outGajbDiff As Boolean = False, _
-                                              Optional ByVal oldGeneracijaID As String = "") As Boolean
+                                              Optional ByVal oldGeneracijaID As String = "", _
+                                              Optional ByVal newGeneracijaID As String = "") As Boolean
     Const SRC As String = "modPaletniList.ReassignPaleteToPrijemnica_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -1333,9 +1341,34 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
     Dim nVr As String, nSo As String, nTa As String
 
+    ' --- Po cemu se prepoznaje CILJNI dokument ---
+    '
+    ' Broj prijemnice se generise PO KUPCU, pa dva kupca lako nose isti broj.
+    ' Sa generacijom se cilj bira po identitetu; bez nje (stari zapisi, pre
+    ' uvodjenja kolone) ostaje izbor po broju, ali tek posto se dokaze da je
+    ' broj jednoznacan. Za razliku od izvora ovde se gledaju SAMO AKTIVNI
+    ' dokumenti - cilj prevezivanja ne sme da bude storniran.
+    Dim pcGen As Long: pcGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
+    Dim tgtGen As String: tgtGen = Trim$(newGeneracijaID)
+    If pcGen = 0 Then tgtGen = ""
+    If Len(tgtGen) = 0 Then
+        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _
+                           Array(COL_PRJ_KUPAC)).count > 1 Then
+            outWarn = "Broj '" & newBroj & "' nose dokumenta vise kupaca, a generacija " & _
+                      "cilja nije poznata. Palete bi mogle da odu tudjem kupcu."
+            Exit Function
+        End If
+    End If
+
     Dim r As Long
+    Dim ciljni As Boolean
     For r = 1 To UBound(prj, 1)
-        If Trim$(CStr(prj(r, pcBr))) = newBroj Then
+        If Len(tgtGen) > 0 Then
+            ciljni = (Trim$(NzToText(prj(r, pcGen))) = tgtGen)
+        Else
+            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)
+        End If
+        If ciljni Then
             Dim stN As Boolean: stN = False
             If pcSt > 0 Then stN = (UCase$(Trim$(CStr(prj(r, pcSt)))) = "DA")
             If Not stN Then
@@ -1346,6 +1379,9 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                 newGajb(kl) = NzL(prj(r, pcAmb))
                 If Len(newBrZbr) = 0 Then
                     newBrZbr = Trim$(CStr(prj(r, pcZbr)))
+                    ' Labela mora da opisuje BAS izabrani dokument: kad generacija
+                    ' odlucuje, broj se cita iz nje umesto da se veruje pozivaocu.
+                    If Len(tgtGen) > 0 Then newBroj = Trim$(CStr(prj(r, pcBr)))
                     nVr = Trim$(NzToText(SafeCell(prj, r, pcVr)))
                     nSo = Trim$(NzToText(SafeCell(prj, r, pcSo)))
                     If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
@@ -1356,6 +1392,18 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     If newById.count = 0 Then
         outWarn = "Nova prijemnica " & newBroj & " nije aktivna / ne postoji."
         Exit Function
+    End If
+
+    ' ID-evi ciljnog dokumenta - po njima se prepoznaju vec paletizovane stavke
+    ' te prijemnice. Bez ovoga bi se stavke TUDJEG dokumenta istog broja brojale
+    ' kao "fresh" i usle u zbir na koji se posle porede kolicine.
+    Dim tgtIds As Object: Set tgtIds = CreateObject("Scripting.Dictionary")
+    tgtIds.CompareMode = vbTextCompare
+    If Len(tgtGen) > 0 Then
+        Dim kT As Variant
+        For Each kT In newById.Keys
+            tgtIds(CStr(newById(kT))) = True
+        Next kT
     End If
 
     ' --- Jedan citanje stavki; sakupi fresh(new) i orphan(old) redove + old gajbica po klasi. ---
@@ -1403,9 +1451,9 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     For i = 1 To UBound(ps, 1)
         If UCase$(Trim$(CStr(ps(i, sSt)))) <> "DA" Then
             Dim bp As String: bp = Trim$(CStr(ps(i, sBr)))
-            If bp = newBroj Then
+            If PripadaDokumentu(bp, newBroj, Trim$(CStr(ps(i, sPid))), tgtIds) Then
                 freshRows.Add i
-            ElseIf JeIzvornaStavka(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then
+            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then
                 oldRows.Add i
                 Dim kO As String: kO = Trim$(CStr(ps(i, sKl)))
                 If Len(kO) = 0 Then kO = "I"

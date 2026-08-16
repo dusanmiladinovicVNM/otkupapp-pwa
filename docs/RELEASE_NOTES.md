@@ -1796,3 +1796,51 @@ izolaciju.
 > **Fixture je gitignored.** Prelazak grane ga ne regeneriše — posle
 > `git checkout` pokreni:
 > `python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --force`
+
+## v2.45.1 — `v6-ui-124` · identitet i na CILJNOJ strani prevezivanja
+
+Nastavak v2.45.0 po pregledu. Prethodna verzija je izvor prevezivanja prebacila
+na `GeneracijaID`, a **cilj je ostao goli poslovni broj** — pola posla.
+
+### Zašto je to bio otvoren nalaz
+
+`BrojPrijemnice` se generiše **po kupcu**, pa dva aktivna dokumenta lako dele
+broj. Ciljni dokument se biran po tom broju, a mapa `newById(klasa)` prima jedan
+ID po klasi — pobeđivao je **onaj red koji je slučajno poslednji u tabeli**.
+Palete su tako mogle da odu tuđem kupcu; isti kvar kao na izvornoj strani, samo
+na drugom kraju.
+
+Fixture je to već modelovao (`1/150326` nose i `PRJ-TEST-A` i `PRJ-TEST-B`), a
+raniji test je uz taj cilj imao komentar „svejedno koja, bitno je da postoji".
+Nije bilo svejedno.
+
+### Izmene
+
+| Sloj | Sada |
+|---|---|
+| `ReassignPaleteToPrijemnica_TX` | `newGeneracijaID` uz `oldGeneracijaID`; cilj po identitetu |
+| `ReassignPrijemnicaToZbirna_TX` | `zbirnaGeneracijaID` uz `prijemnicaGeneracijaID` |
+| ciljne mreže (`ZBIRNE`, `CILJPRIJ`) | nose generaciju, kolona prioriteta 3 |
+| izbor cilja u ekranu | pamti `mCiljZbirnaGen` / `mCiljPrijemnicaGen` |
+| `modDokUnos` ispravka | cilj je upravo upisana prijemnica — PK je poznat |
+| `JeIzvornaStavka` → `PripadaDokumentu` | isto pravilo za obe strane, jedna funkcija |
+
+**Labela se čita iz izabranog dokumenta**, ne veruje se pozivaocu: kad generacija
+odlučuje, `newBroj` / `targetBrZbirne` se preuzimaju sa tog reda. Neusklađen par
+(broj jednog, generacija drugog dokumenta) bi inače tiho upisao tuđi broj.
+
+**Bez generacije — fail-closed.** Dvosmislen ciljni broj zaustavlja prevezivanje
+uz razlog za operatera, kroz isti `VlasniciPoBroju` primitiv. Za cilj se broje
+samo **aktivni** dokumenti (cilj ne sme biti storniran), za izvor i stornirani.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=27, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže, obe obaraju `T_RelinkPoGeneraciji_NeDiraTudjDokument` po imenu:
+  - `relink-cilj-po-broju` → „roba je stigla na dokument kupca 1 (40 gajbica) —
+    očekivano [40], dobijeno [0]"
+  - `relink-cilj-bez-kapije` → „bez generacije CILJA dvosmislen broj se odbija —
+    očekivano [False], dobijeno [True]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.

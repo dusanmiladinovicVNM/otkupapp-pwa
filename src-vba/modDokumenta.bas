@@ -3703,12 +3703,14 @@ End Function
 ' zbirnu pa "osirocenu" prijemnicu prevezuje na nju. Handle = BrojPrijemnice
 ' (citljiv, eksteran kad nije autohladnjaca); stvarna veza lanca = BrojZbirne.
 ' PrijemnicaID se NE dira -> faktura-stavke i paleta-stavke ostaju ispravne.
-' prijemnicaGeneracijaID: identitet prijemnice koja se prevezuje. Kad je poznat,
-' menjaju se samo redovi TE generacije; broj ostaje labela. Opcion je zbog
-' zatecenih pozivalaca - bez njega vazi kapija nad jednoznacnoscu broja.
+' prijemnicaGeneracijaID / zbirnaGeneracijaID: identitet prijemnice koja se
+' prevezuje i zbirne na koju ide. Kad su poznati, bira se BAS taj dokument, a
+' broj ostaje labela. Oba su opciona zbog zatecenih pozivalaca - bez njih vazi
+' kapija nad jednoznacnoscu broja, na svakoj strani zasebno.
 Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                                               ByVal targetBrZbirne As String, _
-                                              Optional ByVal prijemnicaGeneracijaID As String = "") As Boolean
+                                              Optional ByVal prijemnicaGeneracijaID As String = "", _
+                                              Optional ByVal zbirnaGeneracijaID As String = "") As Boolean
     Const SRC As String = "modDokumenta.ReassignPrijemnicaToZbirna_TX"
     Dim tx As clsTransaction
     On Error GoTo EH
@@ -3720,18 +3722,34 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
     ' Cilj mora biti AKTIVNA zbirna (postoji + nije stornirana). ZbirnaID je uvek
     ' popunjen -> dokaz postojanja; Stornirano je blank za aktivnu pa se NE sme
     ' koristiti kao dokaz postojanja.
-    Dim tId As Variant
-    tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
-    If IsEmpty(tId) Then Exit Function                          ' zbirna ne postoji
-    Dim tStor As String
-    tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
-    If UCase$(Trim$(tStor)) = "DA" Then Exit Function           ' cilj-zbirna stornirana
+    ' Sa generacijom cilj se bira po IDENTITETU: LookupValue po broju uzima prvi
+    ' pogodak, a broj zbirne se generise PO VOZACU pa ga dva dokumenta lako dele.
+    Dim tgtIds As Object
+    Set tgtIds = IdoviGeneracije(TBL_ZBIRNA, COL_ZBR_ID, zbirnaGeneracijaID)
 
-    ' CILJ MORA BITI JEDNOZNACAN. LookupValue iznad uzima PRVI pogodak, a broj
-    ' zbirne se generise PO VOZACU - vlasnistvo zbirne je zato vozac + kupac,
-    ' isti par koji koriste StornoZbirna i ApplyGeneracijaID.
-    RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, SRC, _
-                               COL_ZBR_VOZAC, COL_ZBR_KUPAC
+    Dim tId As Variant
+    If tgtIds.count > 0 Then
+        tId = tgtIds.Keys()(0)
+        If UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, CStr(tId), _
+                                             COL_STORNIRANO)))) = "DA" Then Exit Function
+        ' Labela koja se upisuje mora da opisuje BAS izabrani dokument. Kad
+        ' generacija odlucuje, broj se cita iz nje - ne veruje se onome sto je
+        ' pozivalac poslao, jer bi neuskladjen par tiho upisao tudji broj.
+        targetBrZbirne = Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, CStr(tId), _
+                                                    COL_ZBR_BROJ)))
+        If Len(targetBrZbirne) = 0 Then Exit Function
+    Else
+        tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
+        If IsEmpty(tId) Then Exit Function                      ' zbirna ne postoji
+        Dim tStor As String
+        tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
+        If UCase$(Trim$(tStor)) = "DA" Then Exit Function       ' cilj-zbirna stornirana
+
+        ' Bez generacije CILJ MORA BITI JEDNOZNACAN. Vlasnistvo zbirne je vozac +
+        ' kupac, isti par koji koriste StornoZbirna i ApplyGeneracijaID.
+        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, SRC, _
+                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
+    End If
 
     Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
     cBrPrij = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
