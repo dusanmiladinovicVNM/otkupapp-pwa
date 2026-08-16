@@ -55,6 +55,12 @@ ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
 # maskira.
 ZBIRNA_MIRNA = "ZB-TEST-4"
 VRSTA = "TESTVOCE"
+# Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
+# presuda o RELABEL-u mora da opisuje BAS izabran dokument. PRJ-TEST-C2 je zato
+# druge vrste od svog kolizionog blizanca C1 i od cilja -- kad se presuda racuna
+# po broju, ona vidi C1 (ista vrsta kao cilj) i kaze CLEAN, pa se relabel
+# preskoci i paleta ostane pogresno oznacena.
+VRSTA2 = "TESTVOCE2"
 SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
 ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
@@ -243,7 +249,7 @@ SEED = {
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
         {"PrijemnicaID": "PRJ-TEST-C2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
-         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 250, "Cena": 50.0,
+         "VrstaVoca": VRSTA2, "SortaVoca": SORTA, "Kolicina": 250, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 25, "Klasa": "I", "Stornirano": "Da"},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
@@ -291,7 +297,7 @@ SEED = {
         {"StavkaID": "PST-TEST-C2", "PaletaID": "PAL-TEST-3",
          "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
          "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-TEST-C2",
-         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+         "Klasa": "I", "VrstaVoca": VRSTA2, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
     # prijemnicom: detekcija ispravke prijemnice pita operatera kroz MsgBox, a

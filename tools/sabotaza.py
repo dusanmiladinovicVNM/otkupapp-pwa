@@ -505,6 +505,15 @@ SABOTAZE = {
         "T_ZadataGeneracijaKojeNema_Staje",
         "zadata generacija koje nema zaustavlja upis, ne prelazi na broj",
     ),
+    # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
+    # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
+    "verdikt-po-broju": (
+        "modPaletniList.bas",
+        "    verdict = PresudiPaletaReassign(oVrS, oSoS, oTaS, nVr, nSo, nTa, oldGajbByKl, newGajb)\n",
+        "    verdict = EvaluatePaletaReassign(oldBroj, newBroj)   ' SABOTAZA\n",
+        "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
+        "presuda opisuje izabran dokument, ne prvi sa tim brojem",
+    ),
     # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
     "zbirna-vlasnik-samo-kupac": (
         "modScrOporavak.bas",

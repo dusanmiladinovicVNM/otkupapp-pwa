@@ -139,6 +139,7 @@ Public Sub RunAllTests()
     RunOne 29
     RunOne 30
     RunOne 31
+    RunOne 32
 
     SetTestMode prevMode
     WriteResultFile
@@ -222,6 +223,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 29: TestName = "T_RelinkPoGeneraciji_NeDiraTudjDokument"
         Case 30: TestName = "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu"
         Case 31: TestName = "T_ZadataGeneracijaKojeNema_Staje"
+        Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -261,6 +263,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 29: T_RelinkPoGeneraciji_NeDiraTudjDokument
         Case 30: T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu
         Case 31: T_ZadataGeneracijaKojeNema_Staje
+        Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
     End Select
 End Sub
 
@@ -1621,6 +1624,45 @@ Private Sub T_ZadataGeneracijaKojeNema_Staje()
     AssertEq StavkiZaPrijemnicu(FX_PRIJ_KOLIZIJA), preStavki, _
              "posle odbijanja nijedna paletna stavka nije pomerena"
 End Sub
+
+' ============================================================
+' 30. Presuda o RELABEL-u mora da opisuje BAS izabran dokument
+' ============================================================
+' Writer je dokument birao po GeneracijaID, a onda zvao
+' EvaluatePaletaReassign(oldBroj, newBroj), koja ga je PONOVO trazila po
+' poslovnom broju i uzimala PRVI red. Kod kolizije je presuda opisivala drugi
+' dokument.
+'
+' Kvar je tisi od pogresnog prevezivanja: upis ide na tacnu prijemnicu, samo se
+' RELABEL preskoci, pa paleta ostane oznacena starom robom.
+'
+'   PRJ-TEST-C1  TESTVOCE    <- prvi red broja 8/150326; ISTA vrsta kao cilj
+'   PRJ-TEST-C2  TESTVOCE2   <- stvarni izvor (GEN-TEST-B)
+'   cilj 1/150326            TESTVOCE
+'
+' Presuda po broju vidi C1 i kaze CLEAN. Presuda po identitetu vidi C2 i mora
+' reci RELABEL.
+Private Sub T_VerdiktPoIdentitetu_RelabelSeNePreskace()
+    Dim v As Variant, ok As Boolean, upoz As String, gajbDiff As Boolean
+
+    v = EvaluatePaletaReassign(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, "GEN-TEST-B", "GEN-CILJ-A")
+    AssertEq CStr(v(0)), "RELABEL", _
+             "presuda po identitetu vidi razliku vrste izabranog dokumenta"
+
+    ok = ReassignPaleteToPrijemnica_TX(FX_PRIJ_KOLIZIJA, FX_PRIJ_BROJ, upoz, True, _
+                                       gajbDiff, "GEN-TEST-B", "GEN-CILJ-A")
+    AssertEq ok, True, "prevezivanje uz relabel je proslo"
+
+    ' Ono zbog cega presuda uopste postoji: etiketa na stavci mora da prati robu
+    ' na koju je stavka prevezana. Bez relabela ostaje stara vrsta.
+    AssertEq VrstaNaStavci("PST-TEST-C2"), FX_VRSTA, _
+             "stavka je prelabelirana na vrstu ciljnog dokumenta"
+End Sub
+
+Private Function VrstaNaStavci(ByVal stavkaID As String) As String
+    VrstaNaStavci = Trim$(NzToText(LookupValue(TBL_PALETA_STAVKA, COL_PALS_ID, _
+                                               stavkaID, COL_PALS_VRSTA)))
+End Function
 
 ' BrojZbirne sa jednog reda -- po PK-u, ne po broju dokumenta.
 Private Function ZbirnaNaPrijemnici(ByVal prijemnicaID As String) As String

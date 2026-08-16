@@ -1352,6 +1352,29 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     pcSo = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
     pcTa = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
     Dim nVr As String, nSo As String, nTa As String
+    ' Identitet IZVORNOG dokumenta -- cita se u istom prolazu kroz tblPrijemnica,
+    ' iz redova koji su vec izabrani po generaciji. Bez toga bi presuda morala
+    ' ponovo da trazi dokument, a to je bas ono sto se ovde ispravlja.
+    Dim oVrS As String, oSoS As String, oTaS As String, imamIzvor As Boolean
+
+    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)
+    Dim srcDvosmislen As Boolean
+    srcDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
+                                     Array(COL_PRJ_KUPAC)).count > 1)
+    If Len(Trim$(oldGeneracijaID)) > 0 Then
+        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback:
+        ' pozivalac je rekao "bas ovaj dokument", nije nadjen, pa bi pad na broj
+        ' dirao nesto drugo. Prazan argument (legacy) je sasvim druga stvar.
+        If srcIds.count = 0 Then
+            outWarn = "Generacija izvora '" & oldGeneracijaID & "' ne postoji. " & _
+                      "Prevezivanje je zaustavljeno da ne bi zahvatilo drugi dokument."
+            Exit Function
+        End If
+    ElseIf srcDvosmislen Then
+        outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a generacija " & _
+                  "izvora nije poznata. Prevezivanje bi zahvatilo i tudje palete."
+        Exit Function
+    End If
 
     ' --- Po cemu se prepoznaje CILJNI dokument ---
     '
@@ -1406,6 +1429,18 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
                     If pcTa > 0 Then nTa = Trim$(NzToText(SafeCell(prj, r, pcTa)))
                 End If
             End If
+        ElseIf Not imamIzvor Then
+            ' Identitet IZVORA, iz istog prolaza kroz tabelu. Bira se po generaciji
+            ' kad je poznata; bez nje po broju, ali je dvosmislenost broja vec
+            ' odbijena iznad. Presuda o relabelu se posle racuna nad OVIM, umesto
+            ' da ponovo trazi dokument.
+            If PripadaDokumentu(Trim$(CStr(prj(r, pcBr))), oldBroj, _
+                                Trim$(NzToText(SafeCell(prj, r, pcId))), srcIds) Then
+                oVrS = Trim$(NzToText(SafeCell(prj, r, pcVr)))
+                oSoS = Trim$(NzToText(SafeCell(prj, r, pcSo)))
+                If pcTa > 0 Then oTaS = Trim$(NzToText(SafeCell(prj, r, pcTa)))
+                imamIzvor = True
+            End If
         End If
     Next r
     If newById.count = 0 Then
@@ -1452,25 +1487,6 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
     ' Bez generacije (stari zapisi, pre uvodjenja kolone) ostaje izbor po broju,
     ' ali tek posto se dokaze da je broj jednoznacan - i to UKLJUCUJUCI
     ' stornirane, jer je izvor prevezivanja bas storniran dokument.
-    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)
-    Dim srcDvosmislen As Boolean
-    srcDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, oldBroj, SRC, True, _
-                                     Array(COL_PRJ_KUPAC)).count > 1)
-    If Len(Trim$(oldGeneracijaID)) > 0 Then
-        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback:
-        ' pozivalac je rekao "bas ovaj dokument", nije nadjen, pa bi pad na broj
-        ' dirao nesto drugo. Prazan argument (legacy) je sasvim druga stvar.
-        If srcIds.count = 0 Then
-            outWarn = "Generacija izvora '" & oldGeneracijaID & "' ne postoji. " & _
-                      "Prevezivanje je zaustavljeno da ne bi zahvatilo drugi dokument."
-            Exit Function
-        End If
-    ElseIf srcDvosmislen Then
-        outWarn = "Broj '" & oldBroj & "' nose dokumenta vise kupaca, a generacija " & _
-                  "izvora nije poznata. Prevezivanje bi zahvatilo i tudje palete."
-        Exit Function
-    End If
-
     Dim freshRows As Collection: Set freshRows = New Collection
     Dim oldRows As Collection: Set oldRows = New Collection
     Dim oldGajbByKl As Object: Set oldGajbByKl = CreateObject("Scripting.Dictionary")
@@ -1496,7 +1512,13 @@ Public Function ReassignPaleteToPrijemnica_TX(ByVal oldBroj As String, _
 
     ' Identitet-guard: razlika vrsta/sorta/tipAmb -> re-point bez relabela bi ostavio
     ' pogresno oznacenu paletu (paleta jos nosi staru etiketu). Trazi potvrdu (allowRelabel).
-    Dim verdict As Variant: verdict = EvaluatePaletaReassign(oldBroj, newBroj)
+    '
+    ' Presuda ide nad VEC RAZRESENIM dokumentima, bez drugog citanja tabela.
+    ' Ranije je ovde stajalo EvaluatePaletaReassign(oldBroj, newBroj), koja je
+    ' dokumente trazila PONOVO -- po poslovnom broju, uzimajuci prvi red. Writer
+    ' je birao GEN-A, a presudu je mogao dobiti za tudji dokument istog broja.
+    Dim verdict As Variant
+    verdict = PresudiPaletaReassign(oVrS, oSoS, oTaS, nVr, nSo, nTa, oldGajbByKl, newGajb)
     Dim relabelNeeded As Boolean: relabelNeeded = (CStr(verdict(0)) = "RELABEL")
     If relabelNeeded And Not allowRelabel Then
         outWarn = "Razlika u identitetu (" & CStr(verdict(2)) & ") - re-point bi ostavio " & _
@@ -1726,15 +1748,26 @@ End Function
 '   NONE    = nova nije aktivna / nema osirocenih stavki
 ' Vraca Array(0..2): kategorija, kratka oznaka (za UI kolonu), detalj.
 ' ============================================================
+' oldGeneracijaID / newGeneracijaID: kad su zadati, dokumenti se biraju po
+' IDENTITETU, isto kao u writeru. Opcioni su zbog legacy forme, koja jos zove
+' oblik sa dva broja radi prikaza ocene u panelu.
 Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
-                                       ByVal newBroj As String) As Variant
+                                       ByVal newBroj As String, _
+                                       Optional ByVal oldGeneracijaID As String = "", _
+                                       Optional ByVal newGeneracijaID As String = "") As Variant
     On Error GoTo EH
     oldBroj = Trim$(oldBroj): newBroj = Trim$(newBroj)
     EvaluatePaletaReassign = Array("NONE", "", "")
     If Len(oldBroj) = 0 Or Len(newBroj) = 0 Then Exit Function
 
+    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)
+    Dim tgtIds As Object: Set tgtIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, newGeneracijaID)
+    If Len(Trim$(oldGeneracijaID)) > 0 And srcIds.count = 0 Then Exit Function
+    If Len(Trim$(newGeneracijaID)) > 0 And tgtIds.count = 0 Then Exit Function
+
     Dim prj As Variant: prj = GetTableData(TBL_PRIJEMNICA)
     If IsEmpty(prj) Then Exit Function
+    Dim pId As Long: pId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
     Dim pBr As Long, pKl As Long, pVr As Long, pSo As Long, pTa As Long, pAmb As Long, pStt As Long
     pBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     pKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
@@ -1751,9 +1784,12 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     Dim newGajb As Object: Set newGajb = CreateObject("Scripting.Dictionary")
     newGajb.CompareMode = vbTextCompare
     Dim r As Long, kl As String
+    Dim pk As String
     For r = 1 To UBound(prj, 1)
         Dim b As String: b = Trim$(CStr(SafeCell(prj, r, pBr)))
-        If b = newBroj Then
+        pk = ""
+        If pId > 0 Then pk = Trim$(NzToText(SafeCell(prj, r, pId)))
+        If PripadaDokumentu(b, newBroj, pk, tgtIds) Then
             If Not (pStt > 0 And UCase$(Trim$(CStr(SafeCell(prj, r, pStt)))) = "DA") Then
                 If Not haveNew Then
                     nVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
@@ -1764,7 +1800,7 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
                 kl = Trim$(CStr(SafeCell(prj, r, pKl))): If Len(kl) = 0 Then kl = "I"
                 newGajb(kl) = NzL(newGajb(kl)) + NzL(SafeCell(prj, r, pAmb))
             End If
-        ElseIf b = oldBroj Then
+        ElseIf PripadaDokumentu(b, oldBroj, pk, srcIds) Then
             If Not haveOldId Then
                 oVr = Trim$(NzToText(SafeCell(prj, r, pVr)))
                 oSo = Trim$(NzToText(SafeCell(prj, r, pSo)))
@@ -1778,16 +1814,19 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     ' STARA: gajbice PO KLASI iz aktivnih (osirocenih) stavki.
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
-    Dim sBr As Long, sKl As Long, sGa As Long, sStt As Long
+    Dim sBr As Long, sKl As Long, sGa As Long, sStt As Long, sPid As Long
     sBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
     sKl = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_KLASA)
     sGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
     sStt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    sPid = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID)
     Dim oldGajb As Object: Set oldGajb = CreateObject("Scripting.Dictionary")
     oldGajb.CompareMode = vbTextCompare
-    Dim haveOld As Boolean
+    Dim haveOld As Boolean, spk As String
     For r = 1 To UBound(s, 1)
-        If Trim$(CStr(SafeCell(s, r, sBr))) = oldBroj _
+        spk = ""
+        If sPid > 0 Then spk = Trim$(NzToText(SafeCell(s, r, sPid)))
+        If PripadaDokumentu(Trim$(CStr(SafeCell(s, r, sBr))), oldBroj, spk, srcIds) _
            And UCase$(Trim$(CStr(SafeCell(s, r, sStt)))) <> "DA" Then
             kl = Trim$(CStr(SafeCell(s, r, sKl))): If Len(kl) = 0 Then kl = "I"
             oldGajb(kl) = NzL(oldGajb(kl)) + NzL(SafeCell(s, r, sGa))
@@ -1796,13 +1835,42 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     Next r
     If Not haveOld Then EvaluatePaletaReassign = Array("NONE", "nema osirocenih stavki", ""): Exit Function
 
-    ' --- presuda: identitet pa gajbice PER KLASA ---
+    EvaluatePaletaReassign = PresudiPaletaReassign(oVr, oSo, oTa, nVr, nSo, nTa, _
+                                                   oldGajb, newGajb)
+    Exit Function
+EH:
+    LogErr "modPaletniList.EvaluatePaletaReassign"
+    EvaluatePaletaReassign = Array("NONE", "", "")
+End Function
+
+' ============================================================
+' PRESUDA nad VEC RAZRESENIM dokumentima. Ne cita nijednu tabelu, pa ne moze
+' da izabere drugi dokument nego onaj koji joj je dat.
+' ============================================================
+' Zasto postoji zasebno: writer je dokumente birao po GeneracijaID, a onda
+' zvao EvaluatePaletaReassign(oldBroj, newBroj), koja ih je PONOVO trazila po
+' poslovnom broju -- i uzimala PRVI red tog broja. Kod kolizije je presuda
+' mogla da opisuje sasvim drugi dokument.
+'
+' Kvar nije bio teoretski. Izvor A (jabuka) i tudji dokument B (kruska) dele
+' broj, cilj X je kruska: presuda po B vidi kruska->kruska i vrati CLEAN, pa
+' writer PRESKOCI relabel. Paleta zavrsi vezana za kruska-prijemnicu a i dalje
+' oznacena kao jabuka. Verdikt je tise pogresan od pogresnog prevezivanja --
+' upis je tacan, samo etiketa laze.
+Private Function PresudiPaletaReassign(ByVal oVr As String, ByVal oSo As String, _
+                                       ByVal oTa As String, _
+                                       ByVal nVr As String, ByVal nSo As String, _
+                                       ByVal nTa As String, _
+                                       ByVal oldGajb As Object, _
+                                       ByVal newGajb As Object) As Variant
     Dim idDiff As String
+    PresudiPaletaReassign = Array("NONE", "", "")
+
     If StrComp(oVr, nVr, vbTextCompare) <> 0 Then idDiff = idDiff & "Vrsta " & oVr & "->" & nVr & " "
     If StrComp(oSo, nSo, vbTextCompare) <> 0 Then idDiff = idDiff & "Sorta " & oSo & "->" & nSo & " "
     If StrComp(oTa, nTa, vbTextCompare) <> 0 Then idDiff = idDiff & "TipAmb " & oTa & "->" & nTa & " "
     If Len(idDiff) > 0 Then
-        EvaluatePaletaReassign = Array("RELABEL", "Prevezi + etiketa", Trim$(idDiff))
+        PresudiPaletaReassign = Array("RELABEL", "Prevezi + etiketa", Trim$(idDiff))
         Exit Function
     End If
 
@@ -1821,14 +1889,10 @@ Public Function EvaluatePaletaReassign(ByVal oldBroj As String, _
     Next v
 
     If Len(gDiff) > 0 Then
-        EvaluatePaletaReassign = Array("GAJBICA", "Prevezi + koriguj", Trim$(gDiff))
+        PresudiPaletaReassign = Array("GAJBICA", "Prevezi + koriguj", Trim$(gDiff))
     Else
-        EvaluatePaletaReassign = Array("CLEAN", "Prevezi", "cisto")
+        PresudiPaletaReassign = Array("CLEAN", "Prevezi", "cisto")
     End If
-    Exit Function
-EH:
-    LogErr "modPaletniList.EvaluatePaletaReassign"
-    EvaluatePaletaReassign = Array("NONE", "", "")
 End Function
 
 ' ============================================================

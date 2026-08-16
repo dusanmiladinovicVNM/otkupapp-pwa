@@ -1900,3 +1900,45 @@ Sada: grupisanje po **generaciji** kad postoji, vlasnik je **niz kolona**
   - `zbirna-vlasnik-samo-kupac` → „isti broj zbirne kod dva vozača daje DVA
     ciljna dokumenta — očekivano [2], dobijeno [1]"
 - `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.3 — `v6-ui-126` · presuda o relabelu ide nad izabranim dokumentom
+
+Poslednji ostatak starog identity modela u recovery putanji.
+
+### P1 — verdikt je ponovo razrešavao dokument po broju
+
+Writer je već birao po `GeneracijaID` — `srcIds`, `tgtIds`, konkretni
+`PrijemnicaID`. Onda je pozivao `EvaluatePaletaReassign(oldBroj, newBroj)`, koja
+je dokumente **tražila iznova, po poslovnom broju**, uzimajući prvi red.
+
+Kvar je **tiši** od pogrešnog prevezivanja. Izvor A (jabuka) i tuđi dokument B
+(kruška) dele broj, cilj X je kruška: presuda po B vidi kruška → kruška i vrati
+`CLEAN`, pa writer **preskoči relabel**. Paleta završi vezana za kruška-prijemnicu
+a i dalje označena kao jabuka. Upis je tačan — laže samo etiketa.
+
+Presuda je izdvojena u `PresudiPaletaReassign`, koja **ne čita nijednu tabelu**,
+pa ne može da izabere drugi dokument nego onaj koji joj je dat. Writer je zove sa
+onim što već ima (identitet izvora se čita u istom prolazu kroz `tblPrijemnica`);
+nema drugog čitanja. `EvaluatePaletaReassign` ostaje javna zbog legacy panela, ali
+je sada adapter koji prvo razreši identitet — uz opcione `oldGeneracijaID` /
+`newGeneracijaID` — pa pozove isto jezgro.
+
+### P2 — „isti broj" više nije „isti dokument"
+
+Guard u `PreveziPalete` je odbijao prevezivanje kad se brojevi poklope. Ali broj
+nastaje **po kupcu**, pa ispravka koja menja kupca lako dobije isti poslovni broj
+kao original — a to su dva dokumenta i operacija je legitimna. Sada se poredi
+generacija kad je obe strane imaju; broj ostaje fallback samo za zapise bez nje.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=30, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nova sabotaža `verdikt-po-broju` → „stavka je prelabelirana na vrstu ciljnog
+  dokumenta — očekivano [TESTVOCE], dobijeno [TESTVOCE2]" — doslovna reprodukcija
+  kvara: stavka ostaje označena starom robom.
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+**Nije pokriveno testom:** P2 guard u `PreveziPalete` — ta putanja otvara `MsgBox`
+potvrde, pa se headless ne vozi. Ide na operatersku checklistu.

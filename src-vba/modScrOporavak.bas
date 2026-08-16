@@ -45,7 +45,7 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-125"
+Public Const SCROPO_BUILD As String = "v6-ui-126"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -279,7 +279,16 @@ Private Function PreveziPalete(ByVal brojPrij As String, ByVal gen As String) As
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_NEMA_PRIJ"), True
         Exit Function
     End If
-    If StrComp(brojPrij, mCiljPrijemnica, vbTextCompare) = 0 Then
+    ' "Isti dokument" se meri GENERACIJOM kad je obe strane imaju. Broj je labela
+    ' i nastaje PO KUPCU, pa ispravka koja menja kupca lako dobije isti poslovni
+    ' broj kao original -- a to su dva dokumenta i prevezivanje je legitimno.
+    ' Poredjenje po broju bi tu odbilo potpuno ispravnu operaciju.
+    If Len(gen) > 0 And Len(mCiljPrijemnicaGen) > 0 Then
+        If StrComp(gen, mCiljPrijemnicaGen, vbTextCompare) = 0 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
+            Exit Function
+        End If
+    ElseIf StrComp(brojPrij, mCiljPrijemnica, vbTextCompare) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_OPO_ISTA"), True
         Exit Function
     End If
