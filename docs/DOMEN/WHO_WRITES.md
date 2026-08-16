@@ -52,9 +52,9 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 ## Test moduli po tabeli
 
-- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
-- `tblFakture`: `modSEFTests`, `modTestBanka`, `modTestStorno`
-- `tblNovac`: `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
+- `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
+- `tblFakture`: `modNovacTests`, `modSEFTests`, `modTestBanka`, `modTestStorno`
+- `tblNovac`: `modNovacTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblFakturaStavke`: `modTestStorno`
 - `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
@@ -70,7 +70,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
-- `tblPartnerMap`: `modTestBanka`
+- `tblPartnerMap`: `modNovacTests`, `modTestBanka`
 - `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`

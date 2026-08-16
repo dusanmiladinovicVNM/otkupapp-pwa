@@ -77,8 +77,26 @@ jobs:
       - name: WHO_WRITES je azuran
         run: python3 tools/who_writes.py --check
 
-      # Jedini deo run_vba.py koji radi bez Excela: provera da strip VBA
-      # header-a ne propusta header u kod. Ta greska je jednom prosla neopazeno
-      # i videla se tek kao [break] u VBE-u na Windows masini.
+      # Katalog suite-ova (tests/suite_manifest.json) istruli tiho: preimenovana
+      # suite ispada iz kapije, a nova koju niko ne poziva nikad se ne pokrene.
+      # Provera ide u oba smera i ne trazi Excel.
+      - name: suite manifest je saglasan sa src-vba
+        run: python3 tools/vba_gate.py --manifest-check
+
+      # Cist-Python deo runnera: izbor suite-ova po kapiji, racunanje verdikta
+      # (STATIC/COMPILE/SCHEMA/BEHAVIOR/COUNTS/CLEANUP/EXTERNAL) i pravila koja
+      # sprecavaju lazno zeleno -- prijavljen FAIL>0 bez VBA raise, --no-import
+      # koji bi oznacio netestiran izvor kao zelen, prazan izbor suite-ova.
+      # Uz to i provera da strip VBA header-a ne propusta header u kod: ta greska
+      # je jednom prosla neopazeno i videla se tek kao [break] u VBE-u.
       - name: run_vba self-test
         run: python3 tools/run_vba.py --self-test
+
+      # Kanonski hash src-vba (CRLF-neutralan), last-green marker i rang kapija.
+      - name: vba_gate self-test
+        run: python3 tools/vba_gate.py --self-test
+
+      # Logika release kapija: sta blokira tag, i da --waive external stvarno
+      # odblokira release bez diranja BEHAVIOR/GREEN.
+      - name: release_gate self-test
+        run: python3 tools/release_gate.py --self-test

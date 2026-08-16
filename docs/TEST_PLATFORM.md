@@ -1,4 +1,4 @@
-# AgriX test platforma — kapije, identitet run-a, lifecycle
+# AgriX Test Platform Foundation (Faza 1) — kapije, identitet run-a, lifecycle
 
 > **Šta ovaj dokument rešava.** Do sada je pitanje bilo „ima li AgriX dovoljno
 > testova?" — ima ih, ~1050 provera. Pitanje je postalo drugo:
@@ -14,6 +14,11 @@
 >
 > Ovaj dokument opisuje sloj koji to zatvara. Detalji o pojedinačnim suite-ovima
 > ostaju u `.claude/rules/testovi.md`; ovde je *proces*.
+>
+> **Ovo je Faza 1, ne završena unifikacija.** Skelet platforme (kapije, manifest,
+> identitet run-a, lifecycle API) stoji; migracija suite-ova na zajednički
+> lifecycle je tek počela — jedan od jedanaest. Šta konkretno nije urađeno stoji
+> u §11 i nije popis želja nego popis duga.
 
 ---
 
@@ -21,7 +26,7 @@
 
 | Kapija | Kada | Komanda | Šta mora da prođe |
 |---|---|---|---|
-| **DEV** | kraj svake sesije u kojoj je `src-vba/` menjan (Stop hook) | `python tools\run_vba.py` | STATIC + brzi determinističan Excel set (11 suite-ova, ~1050 provera) |
+| **DEV** | namerno, posle izmene koja dira ponašanje | `python tools\run_vba.py` | STATIC + brzi determinističan Excel set (11 suite-ova, ~1050 provera) |
 | **PR** | pre merge-a u `main` | `python tools\run_vba.py --gate pr` | sve iz DEV + `RunNovacSmokeSuite`, COUNTS, CLEANUP izveštaj |
 | **RELEASE** | pre taga | `powershell -File tools\release.ps1 <verzija>` | sve iz PR + **dokazan** compile + fixture provenance + external ugovori (PASS/NOT_RUN/WAIVED) |
 
@@ -31,6 +36,15 @@ poruci taga.
 
 Katalog koje suite ulaze u koju kapiju je **`tests/suite_manifest.json`**, ne
 kod. Nova suite ulazi u kapiju time što je upisana tamo.
+
+**Nijedna od ove tri kapije nije automatika.** Stop hook je uklonjen u #191 sa
+merenim razlogom (Excel na svakom zaustavljanju, i na turnovima bez ijedne
+izmene). Automatski i bez Excela vrti se samo CI (`.github/workflows/static.yml`):
+JSON, `vba_check`, `who_writes`, manifest i self-testovi alata.
+
+RELEASE kapija vrti **dva odvojena Excel run-a**: `--gate pr` (BEHAVIOR, bez
+mreže) i `--category external` (EXTERNAL). Bez tog razdvajanja nedostupan SEF
+sandbox obara BEHAVIOR i GREEN, pa `--waive external` ne bi rešavao ništa.
 
 ---
 
@@ -56,7 +70,12 @@ Dva pravila koja nisu očigledna:
   referencira. Ali mora tako i da **piše**. Release kapija `UNKNOWN` ne prihvata:
   isporučuje se ceo projekat, uključujući module koje nijedna suite ne dodiruje.
 - **Sama `BLIND` suite ne daje `BEHAVIOR PASS`.** „Prošlo bez greške" nije isto
-  što i „sve provere prošle".
+  što i „sve provere prošle". Isto važi za ceo run: ako nijedan skup ne da
+  `PASS`, izlazni kod je 2. `NOT_RUN` nigde nije prolaz.
+- **Suitin sopstveni izveštaj je jači dokaz od `Run()`.** Ako je `Err.Raise` u
+  suite-u uklonjen ili zaobiđen, VBA završi uredno i runner bi rekao `OK` — iznad
+  reda `SUITE|...|188|1|...` koji je suite sama upisala. Prijavljen `FAIL > 0`
+  zato prepravlja status u `FAIL`, a `NOT_RUN` u `NOT_RUN`.
 
 ---
 
@@ -75,6 +94,19 @@ KAPIJA  dev|pr|release   [shuffle seed=N] [repeat=N]
 
 Tek uz to „zeleno" znači: **ovaj tačan VBA izvor, nad ovim tačnim fixture-om,
 prošao je ovaj set suite-ova.**
+
+Hash mora da opisuje **kod koji je stvarno uvezen**, ne samo repo:
+
+- `--no-import` (testiraj zatečen kod u svesci) **nikad** ne piše marker.
+  Bez toga je bila moguća sekvenca: repo = nov kod, sveska = star kod, run zelen
+  → marker tvrdi da je nov izvor testiran. `last_run.json` nosi
+  `source_imported: true/false`.
+- `modVbaTools` **se uvozi**. Self-skip postoji u `ImportAllVBA` jer VBA
+  procedura ne može da ukloni modul iz kog se izvršava; Python nema taj problem,
+  a `source_hash` taj modul uračunava.
+- Nedostajući `.doccls` nad **našim** fixture-om je tvrd pad: kod tih listova nije
+  ni uvezen, a hash ga uračunava. Nad automatski napravljenom praznom sveskom
+  nije pad, ali se takav run ne zove pun compile izvora (`SOURCE` red u ispisu).
 
 ### Kanonski hash — zašto normalizacija prelomaka
 
@@ -108,9 +140,10 @@ python3 tools/vba_gate.py --hash
 hook, ali **ne** zadovoljava release — `dev` ne vrti ni `RunNovacSmokeSuite` ni
 external ugovore.
 
-### Zašto je Stop hook prešao sa `HEAD~1` na hash
+### Zašto hash, a ne git istorija
 
-Stari uslov (`git diff HEAD~1 -- src-vba/`) bio je netačan u oba smera:
+Raniji uslov (`git diff HEAD~1 -- src-vba/`, u Stop hook-u koji je u međuvremenu
+uklonjen) bio je netačan u oba smera:
 
 - commit koji dira samo `docs/` „resetuje" potrebu za testom, jer poslednji
   commit više ne dira `src-vba` — a izvor je u međuvremenu promenjen;
@@ -118,7 +151,9 @@ Stari uslov (`git diff HEAD~1 -- src-vba/`) bio je netačan u oba smera:
   jednom traži a drugi put ne.
 
 Sada se poredi hash. Isti hash = nema šta da se testira. Različit = testira se,
-bez obzira na to kako git istorija u tom trenutku izgleda.
+bez obzira na to kako git istorija u tom trenutku izgleda. To pitanje se sada
+postavlja **namerno** (`vba_gate.py --status`) i u release kapiji, a ne na svakom
+zaustavljanju sesije.
 
 ---
 
@@ -333,9 +368,9 @@ Zapisano da ne bi izgledalo kao pokriveno:
 
 | Stavka | Stanje |
 |---|---|
-| **Migracija suite-ova na `modTestAssert`** | urađen samo kanarinac (`modLicenseTests`). Ostalih 10 su na `TR_Report` — broj provera je vidljiv, ali harness je i dalje njihov. |
+| **Migracija suite-ova na `modTestAssert`** | urađen samo kanarinac (`modLicenseTests`) — **1 od 11**. Ostale su na `TR_Report`: broj provera je vidljiv runneru, ali harness, brojači i `Err.Raise` su i dalje njihovi. Zato ovo nije „unified framework" nego temelj. |
 | **`dialogs: false` svuda** | 9 od 17 suite-ova i dalje otvara `MsgBox` i oslanja se na watchdog. Cilj je `IUserPrompt`/`TestMode` seam; watchdog je sigurnosna mreža, ne model izvršavanja. Neočekivan dijalog i dalje NIJE FAIL. |
-| **CLEANUP kao blokirajuća kapija** | implementirano, ali radi kao **prijava** (`--enforce-cleanup` da blokira). Provera nikad nije pokrenuta nad pravim Excelom, pa bi tvrd crven verdikt bio tvrdnja koju niko nije proverio. Uključuje se posle jednog Windows run-a koji pokaže oba smera. |
+| **CLEANUP** | **blokirajuć u `pr` i `release`**, prijava u `dev`. `--no-enforce-cleanup` je izlaz dok detektor ne bude dokazan u oba smera nad pravim Excelom — a to još nije. |
 | **Test Data Builder (`modTestData`)** | nije urađen. Svaki modul i dalje sam sklapa `TST-*` podatke. |
 | **Dependency seams (`Now`/ID/FS/HTTP/MsgBox)** | nije urađeno. |
 | **Contract testovi legacy vs `frmOtkupUI`** | nije urađeno — kategorija `contract` postoji u manifestu, prazna je. |
@@ -343,7 +378,23 @@ Zapisano da ne bi izgledalo kao pokriveno:
 | **Mutation testing kao alat** | nije urađen; sabotaže su i dalje ručne. |
 | **Coverage matrica po RF/AUD invarijantama** | nije urađena. |
 | **`RunSEFTestSuite` kategorija** | zaveden kao `external`, ali sopstveni header kaže „offline hard gate" i zove samo `Test_*` seam provere. Možda spada u `pr`. **Neprovereno** — traži jedan Windows run. |
+| **Release dokazuje izvor, ne artefakt** | kapija pokriva `src-vba` + fixture. Finalni `.xlsm` (ImportAllVBA → Compile → AssertBlankBuild → hash) i dalje nastaje POSLE taga. Sledeći nivo: napravi artefakt, hešuj ga, pa tek onda tag. |
+| **`dialogs` i dalje `true` za 9 suite-ova** | watchdog klika dijaloge. Neočekivan dijalog i dalje NIJE `FAIL`. |
 | **10 `unlisted` suite-ova** | zapisani sa razlogom, nijedan nije priključen kapiji. |
+
+### Šta je pregled (NO-MERGE nad 7ec4052) našao i gde je zatvoreno
+
+| Nalaz | Gde je zatvoreno |
+|---|---|
+| P0 `--no-import` označava netestiran izvor kao GREEN | `run_vba.py` — `--no-import` isključen iz uslova za marker; `source_imported` u zapisu |
+| P0 prijavljen `FAIL=1` prolazi kao zeleno | `check_counts` + `apply_reported_failures` |
+| P1 `--waive external` ne odblokira release | BEHAVIOR = `--gate pr`, EXTERNAL = zaseban run |
+| P1 hash tvrdi više nego što je uvezeno | `modVbaTools` se uvozi; nedostajući `.doccls` je pad |
+| P1 `AssertTableRowMissing` fail-open | `CountMatching` vraća `okFlag`; infrastrukturna greška ≠ nula pogodaka |
+| P1 Novac nije izolovan, a ušao je u kapiju | jedna transakcija nad 4 tabele + `clsTestContext` |
+| P1 `NOT_RUN` / prazan izbor daju uspeh | `rc_from` traži pozitivan dokaz; prazan izbor je greška |
+| P2 `Drift()` se nigde ne proverava | `TestLicense_All` ga asertuje; neuspeo restore izlazi kroz `Drift` |
+| P2 fixture nije „100% sintetički" | tačna formulacija u `make_fixture.py`; `AutomationSecurity=ForceDisable` |
 
 ### I jedno upozorenje za prvi Windows run
 
@@ -358,6 +409,23 @@ pokaže:
 - suite čiji `TR_Report` poziv nije dosegnut na zelenoj putanji → `COUNTS FAIL` sa
   imenom te suite. Popravka je pomeriti poziv ili spustiti `reports_counts` na
   `false` za nju;
-- `RunNovacSmokeSuite` konvertovan iz blind u gate — ako je do sada imao skrivene
-  padove, sada će se videti. To je i bila poenta konverzije;
-- `RunIzvestajTests` `min_asserts: 0` → upisati izmerenu vrednost posle run-a.
+- `RunNovacSmokeSuite` konvertovan iz blind u gate **i** izolovan transakcijom —
+  ako je do sada imao skrivene padove ili je zavisio od podataka koje je sam
+  ostavljao, sada će se videti. To je i bila poenta;
+- `RunIzvestajTests` `min_asserts: 0` → upisati izmerenu vrednost posle run-a;
+- `RunAllTests` `min_asserts: 17` je broj `RunOne` poziva u `modTest`, ne broj
+  provera — proveriti da li se poklapa sa izmerenim;
+- `CLEANUP` je sada blokirajuć u `pr`/`release` a nikad nije pokrenut nad Excelom;
+  ako da lažan nalaz, izlaz je `--no-enforce-cleanup` dok se ne popravi.
+
+**Redosled dokaza koji se traži pre merge-a** (`tools/sabotaza.py --lista` nosi
+prve tri):
+
+1. `python tools\run_vba.py --gate pr` → `exit 0`
+2. `python tools\sabotaza.py license-assert` → `FAIL TestLicense_All`, pa `--vrati`
+3. `python tools\sabotaza.py license-cleanup` → `FAIL` na `ctx.Drift()`, pa `--vrati`
+4. `python tools\sabotaza.py counts-pad` → `COUNTS FAIL` (suite prolazi, broj pao)
+5. ručno ostavi `TST-` red → `CLEANUP FAIL` u `--gate pr`
+6. `--no-import` posle izmene izvora → marker se NE upisuje (`vba_gate --status`)
+7. izmena izvora posle zelenog → `vba_gate --require-green` `exit 2`
+8. bez mreže + `--waive external --reason "..."` → release prolazi ostale kapije

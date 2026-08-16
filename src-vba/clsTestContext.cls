@@ -35,6 +35,7 @@ Option Explicit
 
 Private mTaken As Boolean
 Private mRestored As Boolean
+Private mRestoreError As String
 
 Private mCalculation As Long
 Private mEnableEvents As Boolean
@@ -93,7 +94,13 @@ Public Sub Restore()
     If mRestored Then Exit Sub
     mRestored = True
 
+    ' On Error Resume Next mora da stoji: restore se zove i iz Class_Terminate,
+    ' gde podignuta greska nema ko da uhvati. Ali greska se ZAPAMTI i izlazi kroz
+    ' Drift() -- inace bi neuspeo restore nestao bez traga, a to je tacno stanje
+    ' koje ova klasa postoji da spreci.
     On Error Resume Next
+    Err.Clear
+
     ' Journal se vraca na ZATECENO stanje, ne bezuslovno na False -- suite ume da
     ' se pokrene iz konteksta koji je journal vec bio stisao.
     If mQuietTouched Then
@@ -108,6 +115,11 @@ Public Sub Restore()
     Application.DisplayAlerts = mDisplayAlerts
     Application.StatusBar = mStatusBar
     Application.Cursor = mCursor
+
+    If Err.Number <> 0 Then
+        mRestoreError = "restore pao: " & CStr(Err.Number) & " " & Err.description
+        Err.Clear
+    End If
     On Error GoTo 0
 End Sub
 
@@ -116,6 +128,7 @@ End Sub
 ' pretpostavi. Isto sto CLEANUP kapija radi nad tabelama, samo za stanje aplikacije.
 Public Function Drift() As String
     Dim s As String
+    If Len(mRestoreError) > 0 Then s = mRestoreError & "; "
     On Error Resume Next
     If Application.Calculation <> mCalculation Then _
         s = s & "Calculation=" & Application.Calculation & " (bilo " & mCalculation & "); "

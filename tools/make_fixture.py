@@ -5,13 +5,26 @@ ne postoji nigde u kodu -- Ensure* rutine u modSetup samo DODAJU kolone na
 postojece tabele, a spiskovi kolona osnovnih tabela zive iskljucivo u .xlsm.
 Zakucavanje tih spiskova u Python napravilo bi drugi izvor istine koji konkurise
 svesci (CLAUDE.md S4: "Sema tabela je izvor istine, ne kod"). Zato: struktura se
-uzima iz donora, a podaci su 100% sinteticki.
+uzima iz donora, a POSLOVNI podaci su 100% sinteticki.
 
 Donor se NIKAD ne menja -- radi se nad kopijom.
 
-Rezultat: sveska u kojoj su svi redovi obrisani (osim kataloga -- vidi KEEP_ROWS)
-i posejani samo test unosi. Nijedan klijentski podatak ne moze da zavrsi u
-tests/golden/*.txt koji idu u git.
+STA JE TACNO SINTETICKO, A STA NIJE
+    Sinteticki (svi redovi obrisani pa posejani ovde): sve transakcione i
+    maticne tabele -- otkup, otpremnice, zbirne, prijemnice, fakture, novac,
+    kooperanti, parcele, stanice, vozaci, kulture, ambalaza.
+
+    NASLEDJENO IZ DONORA (v. KEEP_ROWS): tblPoruke (katalog poruka -- bez njega
+    Poruka("KLJUC") vraca prazno), tblConfig, tblLocalConfig i tblSEFConfig.
+    Od config vrednosti se ovde override-uje samo ono sto testovi traze
+    (APP_SETUP_COMPLETED, LICENSE_*), pa OSTALE donorske vrednosti ULAZE u
+    fixture i mogu da menjaju ponasanje testa. To je poznat kompromis, ne
+    previd: spisak dozvoljenih config vrednosti bio bi drugi izvor istine pored
+    sveske. Ako neki test zavisi od config vrednosti, mora da je postavi sam.
+
+    Klijentski PODACI (imena, iznosi, racuni) ne mogu da zavrse u
+    tests/golden/*.txt koji idu u git -- oni dolaze iskljucivo iz tabela koje se
+    brisu.
 
     python tools/make_fixture.py --donor "C:/.../AgriX_2.28.4.xlsm"
     python tools/make_fixture.py --donor <put> --out tests/fixtures/otkup_test.xlsm --force
@@ -26,7 +39,10 @@ import os
 import shutil
 import sys
 
-MSO_AUTOMATION_SECURITY_LOW = 1
+# Generatoru fixture-a makroi donora NE trebaju: cita se sema i brise se kod.
+# ForceDisable je uzi izbor od Low -- donor je tudja sveska i njegov Workbook_Open
+# nema sta da radi u ovom procesu.
+MSO_AUTOMATION_SECURITY_FORCE_DISABLE = 3
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_OUT = os.path.join(ROOT, "tests", "fixtures", "otkup_test.xlsm")
@@ -2372,7 +2388,7 @@ def build(donor: str, out: str, force: bool) -> int:
     try:
         xl.Visible = False
         xl.DisplayAlerts = False
-        xl.AutomationSecurity = MSO_AUTOMATION_SECURITY_LOW
+        xl.AutomationSecurity = MSO_AUTOMATION_SECURITY_FORCE_DISABLE
         xl.EnableEvents = False       # KLJUCNO: Workbook_Open (StartApp) se ne pokrece
 
         wb = xl.Workbooks.Open(out, UpdateLinks=0)

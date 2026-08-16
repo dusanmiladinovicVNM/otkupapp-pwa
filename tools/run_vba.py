@@ -54,7 +54,14 @@ Zasto ovaj skript NE zove `ImportAllVBA`:
     preko COM-a, sa folderom izvedenim iz lokacije ovog fajla.
   - Poredak i pravila su ista kao u `ImportAllVBA`: .doccls se MERGE-uje u
     postojecu komponentu, .bas/.cls/.frm se uklone pa uvezu, .frm mora imati .frx
-    par, `modVbaTools` se preskace (izvrsava se).
+    par.
+
+JEDNA RAZLIKA U ODNOSU NA `ImportAllVBA`: modVbaTools SE UVOZI.
+    VBA procedura ne moze da ukloni modul iz kojeg se sama izvrsava, pa
+    `ImportAllVBA` sebe preskace. Python nema taj problem. Ranije je i ovaj
+    skript preskakao `modVbaTools` -- a `source_hash` ga UKLJUCUJE, pa je marker
+    tvrdio da je testiran ceo `src-vba`, dok jedan modul nije bio ni u projektu.
+    Hash i uvezeni kod moraju da opisuju istu stvar.
 """
 
 from __future__ import annotations
@@ -76,7 +83,6 @@ import vba_gate                       # noqa: E402  -- manifest, hash, marker
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_VBA = os.path.join(ROOT, "src-vba")
-SELF_MODULE = "modVbaTools"          # isto kao modVbaTools.SELF_MODULE
 COMPILE_CONTROL_ID = 578             # VBE: Debug > Compile VBAProject
 RUNNER_VERSION = 2                   # menja se kad se promeni oblik last_run.json
 
@@ -208,6 +214,16 @@ def check_counts(manifest: dict, counts: dict, ran: list[str]) -> tuple[str, lis
         if rec["notrun"]:
             lines.append(f"{sid}: NOT_RUN -- {rec['message'] or 'bez razloga'}")
             bad = True
+        elif rec["fail"] > 0:
+            # Suite je SAMA prijavila pad. Ovo je jaci dokaz od "Run() nije
+            # pukao": ako je Err.Raise u suite-u uklonjen ili pokvaren, VBA
+            # zavrsi uredno, `raises: true` da status OK, a broj provera i dalje
+            # zadovolji min_asserts -- i ceo run bi bio zelen iznad zapisanog
+            # FAIL=1. Zato prijavljen pad ima prednost nad statusom iz Run().
+            lines.append(f"{sid}: suite prijavila FAIL={rec['fail']} "
+                         f"(PASS={rec['pass']}) -- pad je zapisan u {SUITE_RESULTS} "
+                         f"i kad Run() nije pukao")
+            bad = True
         elif want and got < want:
             lines.append(f"{sid}: {got} provera, a manifest trazi >= {want} "
                          f"-- pokrivenost je pala, spusti min_asserts svesno ili vrati testove")
@@ -223,6 +239,27 @@ def check_counts(manifest: dict, counts: dict, ran: list[str]) -> tuple[str, lis
     if not measured:
         return "NOT_RUN", lines
     return "PASS", lines
+
+
+def apply_reported_failures(suites: list[dict], counts: dict) -> None:
+    """Status suite-a iz NJENOG izvestaja ima prednost nad ishodom `Run()`.
+
+    `xl.Run(suite)` puca samo ako suite podigne gresku. Ako je taj `Err.Raise`
+    uklonjen, pokvaren ili zaobidjen (rana grana, `On Error Resume Next` na
+    pogresnom mestu), `Run()` zavrsi uredno i runner bi rekao `OK` -- iznad reda
+    `SUITE|...|188|1|...` koji suite sama upisala. Ovde se to ispravlja.
+    """
+    for entry in suites:
+        rec = counts.get(entry["name"])
+        if not rec:
+            continue
+        if rec.get("notrun"):
+            entry["status"] = "NOT_RUN"
+            entry["error"] = rec.get("message") or "suite se nije pokrenuo"
+        elif rec.get("fail", 0) > 0 and entry.get("status") == "OK":
+            entry["status"] = "FAIL"
+            entry["error"] = (f"suite prijavila FAIL={rec['fail']} PASS={rec['pass']} "
+                              f"u {SUITE_RESULTS}, a Run() nije pukao")
 
 
 # --- Watchdog za modalne dijaloge --------------------------------------------
@@ -416,8 +453,6 @@ def report_orphan_components(wb, log: list[str], authoritative: bool) -> bool:
             name = str(vbc.Name)
         except Exception:
             continue
-        if name.lower() == SELF_MODULE.lower():
-            continue
         if name.lower() not in have:
             orphans.append(name)
 
@@ -433,7 +468,7 @@ def report_orphan_components(wb, log: list[str], authoritative: bool) -> bool:
     return authoritative
 
 
-def import_src_vba(wb, log: list[str]) -> None:
+def import_src_vba(wb, log: list[str]) -> list[str]:
     proj = wb.VBProject
     files = sorted(os.listdir(SRC_VBA))
 
@@ -460,13 +495,12 @@ def import_src_vba(wb, log: list[str]) -> None:
     if missing:
         log.append(f"SKIP {len(missing)} .doccls (nema komponente u svesci): "
                    + ", ".join(missing))
+    return missing
 
     # 2) standardni / klasni / forme
     for name in files:
         base, ext = os.path.splitext(name)
         if ext not in (".bas", ".cls", ".frm"):
-            continue
-        if base.lower() == SELF_MODULE.lower():
             continue
         path = os.path.join(SRC_VBA, name)
 
@@ -555,16 +589,18 @@ def _self_test_pure() -> int:
     chk(len(chosen_suites(parse_args(["--repeat", "3"]), man)) == 3 * len(dev),
         "--repeat 3 vrti isti set tri puta")
 
-    # COUNTS: tih pad broja provera mora biti crven.
-    counts = {"TestLicense_All": {"pass": 23, "fail": 0, "notrun": False,
+    # COUNTS: tih pad broja provera mora biti crven. Ocekivani broj se CITA iz
+    # manifesta -- zakucan broj bi se razisao sa njim cim neko doda proveru.
+    want = int(vba_gate.suite_meta(man, "TestLicense_All")["min_asserts"])
+    counts = {"TestLicense_All": {"pass": want, "fail": 0, "notrun": False,
                                   "seconds": 0.1, "message": ""}}
     st, _ = check_counts(man, counts, ["TestLicense_All"])
-    chk(st == "PASS", "COUNTS: 23 provera pri min_asserts=23 je PASS")
+    chk(st == "PASS", f"COUNTS: {want} provera pri min_asserts={want} je PASS")
 
-    counts["TestLicense_All"]["pass"] = 12
+    counts["TestLicense_All"]["pass"] = want - 11
     st, lines = check_counts(man, counts, ["TestLicense_All"])
     chk(st == "FAIL" and any("min" in ln for ln in lines),
-        "COUNTS: pad sa 23 na 12 provera je FAIL")
+        f"COUNTS: pad sa {want} na {want - 11} provera je FAIL")
 
     counts["TestLicense_All"] = {"pass": 0, "fail": 0, "notrun": True,
                                  "seconds": 0.0, "message": "licenca ugasena"}
@@ -585,6 +621,77 @@ def _self_test_pure() -> int:
             "NOT_RUN prezivljava kasniji red iste suite (EH grana ga ne prepise)")
         chk("odustao" in merged["RunBankaImportTestSuite"]["message"],
             "razlog za NOT_RUN se cuva")
+
+    # --- P0: suite prijavila FAIL, a Run() nije pukao ------------------------
+    # Ako je Err.Raise u suite-u uklonjen ili zaobidjen, VBA zavrsi uredno,
+    # manifest `raises: true` da status OK, a 188+1=189 zadovolji min_asserts.
+    # Bez ove provere je ceo run bio zelen iznad zapisanog FAIL=1.
+    counts = {"RunBankaImportTestSuite": {"pass": 188, "fail": 1, "notrun": False,
+                                          "seconds": 9.0, "message": ""}}
+    st, lines = check_counts(man, counts, ["RunBankaImportTestSuite"])
+    chk(st == "FAIL" and any("FAIL=1" in ln for ln in lines),
+        "COUNTS: 188 pass + 1 fail je FAIL i kad je zbir >= min_asserts")
+
+    rows = [{"name": "RunBankaImportTestSuite", "status": "OK", "gate": True}]
+    apply_reported_failures(rows, counts)
+    chk(rows[0]["status"] == "FAIL",
+        "prijavljen FAIL pregazi status OK iz Run()")
+
+    v = verdicts({"static": "PASS", "compile": {"ok": True}, "schema": "OK",
+                  "suites": rows, "counts_status": st, "mode": "suites"},
+                 enforce_cleanup=False)
+    chk(rc_from(v) == 2, "188 pass + 1 fail bez VBA raise -> ceo run pada (exit 2)")
+
+    rows = [{"name": "RunPaleteTestSuite", "status": "OK", "gate": True}]
+    apply_reported_failures(rows, {"RunPaleteTestSuite": {
+        "pass": 0, "fail": 0, "notrun": True, "seconds": 0.1,
+        "message": "paletiranje iskljuceno"}})
+    chk(rows[0]["status"] == "NOT_RUN", "prijavljen NOT_RUN pregazi status OK iz Run()")
+
+    v = verdicts({"static": "PASS", "compile": {"ok": True}, "schema": "OK",
+                  "suites": rows, "counts_status": "FAIL", "mode": "suites"},
+                 enforce_cleanup=False)
+    chk(v["BEHAVIOR"] == "FAIL" and rc_from(v) == 2,
+        "NOT_RUN red daje BEHAVIOR FAIL, ne 'nista se nije desilo'")
+
+    # --- P0: --no-import ne sme da vodi u last-green -------------------------
+    def marks_green(argv: list[str]) -> bool:
+        a = parse_args(argv)
+        return (not a.suite and not a.category and not a.compile_only
+                and not a.no_import and not a.no_mark_green)
+
+    chk(marks_green(["--gate", "pr"]), "pun 'pr' run upisuje marker")
+    chk(not marks_green(["--gate", "pr", "--no-import"]),
+        "--no-import NIKAD ne upisuje marker (sveska nosi tudji kod)")
+    chk(not marks_green(["--suite", "RunAllTests"]), "--suite ne upisuje marker")
+    chk(not marks_green(["--category", "unit"]), "--category ne upisuje marker")
+    chk(not marks_green(["--compile-only"]), "--compile-only ne upisuje marker")
+
+    # --- prazan izbor i rezimi ----------------------------------------------
+    try:
+        chosen_suites(parse_args(["--category", "nepostojeca"]), man)
+        chk(False, "prazan izbor suite-ova je tvrda greska")
+    except SystemExit:
+        chk(True, "prazan izbor suite-ova je tvrda greska")
+
+    v = verdicts({"static": "PASS", "compile": {"ok": True}, "schema": "OK",
+                  "suites": [], "counts_status": "NOT_RUN", "mode": "suites"},
+                 enforce_cleanup=False)
+    chk(rc_from(v) == 2, "run bez ijedne izvrsene suite ne moze da bude uspeh")
+
+    v = verdicts({"static": "PASS", "compile": {"ok": True}, "schema": "OK",
+                  "suites": [{"name": "H", "status": "BLIND", "gate": False}],
+                  "counts_status": "PASS", "mode": "suites"}, enforce_cleanup=False)
+    chk(rc_from(v) == 2, "run u kome su SVE suite blind ne daje verdikt -> exit 2")
+
+    v = verdicts({"static": "PASS", "compile": {"ok": None}, "schema": None,
+                  "suites": [], "counts_status": "NOT_RUN", "mode": "compile-only"},
+                 enforce_cleanup=False)
+    chk(rc_from(v) == 2, "--compile-only sa NEJASNO i dalje pada")
+    v = verdicts({"static": "PASS", "compile": {"ok": True}, "schema": None,
+                  "suites": [], "counts_status": "NOT_RUN", "mode": "compile-only"},
+                 enforce_cleanup=False)
+    chk(rc_from(v) == 0, "--compile-only sa COMPILE OK prolazi")
 
     # Verdikt: UNKNOWN compile ne obara run kad su suite prosle, ali se VIDI.
     v = verdicts({"static": "PASS", "compile": {"ok": None}, "schema": "OK",
@@ -624,6 +731,14 @@ def _self_test_pure() -> int:
                   "counts_status": "PASS", "cleanup": {"status": "FAIL", "detail": ["x"]}},
                  enforce_cleanup=True)
     chk(rc_from(v) == 2, "--enforce-cleanup pretvara CLEANUP FAIL u pad")
+
+    chk(not cleanup_enforced(parse_args([])), "CLEANUP je prijava u 'dev' kapiji")
+    chk(cleanup_enforced(parse_args(["--gate", "pr"])),
+        "CLEANUP je BLOKIRAJUCI u 'pr' kapiji")
+    chk(cleanup_enforced(parse_args(["--gate", "release"])),
+        "CLEANUP je BLOKIRAJUCI u 'release' kapiji")
+    chk(not cleanup_enforced(parse_args(["--gate", "pr", "--no-enforce-cleanup"])),
+        "--no-enforce-cleanup je izlaz dok detektor nije dokazan")
 
     print()
     if fails:
@@ -936,7 +1051,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                          "(hvata stale cache, static Boolean, license latch)")
     ap.add_argument("--keep", action="store_true", help="ne brisi temp kopiju sveske")
     ap.add_argument("--enforce-cleanup", action="store_true",
-                    help="CLEANUP nalaz obara run (podrazumevano se samo prijavljuje)")
+                    help="CLEANUP nalaz obara run (podrazumevano za --gate pr/release)")
+    ap.add_argument("--no-enforce-cleanup", action="store_true",
+                    help="CLEANUP samo prijavi, ne obaraj run (izlaz za slucaj laznog nalaza)")
     ap.add_argument("--no-mark-green", action="store_true",
                     help="ne upisuj last-green marker ni kad je sve zeleno")
     ap.add_argument("--timeout-dialog", type=float, default=0.4, help="interval watchdog-a u sekundama")
@@ -944,6 +1061,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                     help="tvrdi prekid celog run-a u sekundama; 0 = suma timeout_s iz manifesta + 120")
     ap.add_argument("--ignore-fixture-sig", action="store_true",
                     help="ne staj na ustajao fixture (svesno testiranje nad starim podacima)")
+    ap.add_argument("--report-name", default="last_run",
+                    help="osnova imena izvestaja u tests/ (podrazumevano last_run); "
+                         "release kapija vrti dva runa pa im treba odvojen zapis")
     ap.add_argument("--self-test", action="store_true",
                     help="provere koje ne traze Excel (radi i na Linux/macOS)")
     return ap.parse_args(argv)
@@ -1004,6 +1124,21 @@ def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
         return 0
     return 2
 
+def cleanup_enforced(args: argparse.Namespace) -> bool:
+    """CLEANUP je BLOKIRAJUCI u `pr` i `release`, prijava u `dev`.
+
+    Razlog za razliku: dev kapija se vrti stalno i lazan nalaz bi je ucinio
+    neupotrebljivom; `pr`/`release` se vrte namerno i tamo je zaostao TST- red
+    ozbiljan -- svaka sledeca suite, ukljucujuci external ugovore, radila bi nad
+    prljavom sveskom. `--no-enforce-cleanup` postoji kao izlaz dok se detektor ne
+    dokaze u oba smera nad pravim Excelom.
+    """
+    if args.no_enforce_cleanup:
+        return False
+    if args.enforce_cleanup:
+        return True
+    return args.gate in ("pr", "release") and not args.suite and not args.category
+
 
 def chosen_suites(args: argparse.Namespace, manifest: dict) -> list[str]:
     known = [s["id"] for s in manifest["suites"]]
@@ -1023,6 +1158,13 @@ def chosen_suites(args: argparse.Namespace, manifest: dict) -> list[str]:
                   if str(s.get("category", "")).lower() in want]
     else:
         picked = vba_gate.suites_for_gate(manifest, args.gate)
+
+    if not picked:
+        # Prazan izbor bi ranije dao run bez ijedne suite i exit 0 -- "nista nije
+        # palo". Filter koji ne pogadja nijednu suite je greska u pozivu, ne prolaz.
+        print("Izbor ne pogadja nijednu suite (gate="
+              f"{args.gate}, category={args.category or '-'}).", file=sys.stderr)
+        raise SystemExit(2)
 
     if args.shuffle:
         # Seed ide u ispis i u last_run.json: pad koji se vidi samo u jednom
@@ -1061,26 +1203,52 @@ def verdicts(report: dict, enforce_cleanup: bool) -> dict:
     def _status(rows: list[dict]) -> str:
         if not rows:
             return "NOT_RUN"
-        if any(r["status"] in ("FAIL", "TIMEOUT") for r in rows):
+        # NOT_RUN red je PAD, ne odsustvo rezultata: suite koja se nije pokrenula
+        # ostavlja rupu u pokrivenosti isto kao suite koja je pala.
+        if any(r["status"] in ("FAIL", "TIMEOUT", "NOT_RUN") for r in rows):
             return "FAIL"
         if any(r["status"] == "OK" for r in rows):
             return "PASS"
-        return "NOT_RUN"        # samo BLIND redovi
+        return "NOT_RUN"        # samo BLIND redovi -- prosle bez verdikta
 
     v["BEHAVIOR"] = _status(local)
     v["EXTERNAL"] = _status(ext)
     v["COUNTS"] = report.get("counts_status") or "NOT_RUN"
     v["CLEANUP"] = (report.get("cleanup") or {}).get("status", "NOT_RUN")
     v["_cleanup_enforced"] = enforce_cleanup
+    v["_mode"] = report.get("mode") or "suites"
     return v
 
 
 def rc_from(v: dict) -> int:
-    if v["STATIC"] == "FAIL" or v["COMPILE"] == "FAIL":
+    """Uspeh trazi POZITIVAN dokaz, ne izostanak greske.
+
+    Ranije je `NOT_RUN` prolazio kroz sve provere (nije `FAIL`), pa je run u kome
+    se nista nije izvrsilo zavrsavao sa exit 0. "Nije pokrenuto" nije "proslo" --
+    to pravilo vazi za suite, pa mora da vazi i za ceo run.
+    """
+    if v["STATIC"] != "PASS":
         return 2
-    if v["SCHEMA"] == "FAIL" or v["BEHAVIOR"] == "FAIL" or v["EXTERNAL"] == "FAIL":
+    if v["COMPILE"] == "FAIL":
         return 2
-    if v["COUNTS"] == "FAIL":
+
+    mode = v.get("_mode") or "suites"
+    if mode == "compile-only":
+        # Bez suite-ova je probe jedini izvor istine, pa NEJASNO i dalje pada.
+        return 0 if v["COMPILE"] == "PASS" else 2
+    if mode == "static-only":
+        # Linux/macOS ili prekid pre Excela: nista se nije izvrsilo.
+        return 2
+
+    if v["SCHEMA"] != "PASS":
+        return 2
+    if v["BEHAVIOR"] == "FAIL" or v["EXTERNAL"] == "FAIL":
+        return 2
+    # Bar jedan skup mora da da PASS. Run u kome su sve suite BLIND (ili ih nema)
+    # nije dao nijedan verdikt i ne sme da izadje kao uspeh.
+    if v["BEHAVIOR"] != "PASS" and v["EXTERNAL"] != "PASS":
+        return 2
+    if v["COUNTS"] != "PASS":
         return 2
     if v.get("_cleanup_enforced") and v["CLEANUP"] == "FAIL":
         return 2
@@ -1100,6 +1268,7 @@ def main(argv: list[str]) -> int:
         return 2
 
     fixture = args.workbook or DEFAULT_FIXTURE
+    blank_fixture = False
     report: dict = {
         "runner_version": RUNNER_VERSION,
         "gate": args.gate,
@@ -1108,6 +1277,10 @@ def main(argv: list[str]) -> int:
         "repeat": args.repeat,
         "provenance": vba_gate.provenance(fixture),
         "workbook": fixture,
+        # Da li je src-vba iz repoa STVARNO uvezen u svesku nad kojom su suite
+        # isle. `False` znaci da source_hash u provenance-u opisuje repo, a ne
+        # ono sto je izvrseno -- zato takav run nikad ne pise last-green marker.
+        "source_imported": not args.no_import,
         "static": None,
         "import": [],
         "compile": None,
@@ -1119,6 +1292,8 @@ def main(argv: list[str]) -> int:
     # Ide PRE Excela i vrti se svuda. Nema smisla dizati Excel nad izvorom koji
     # ima ne-ASCII bajt ili duplu Public definiciju -- to bi bio pad u compile-u,
     # samo trideset sekundi kasnije i uz nejasniju poruku.
+    report["mode"] = "compile-only" if args.compile_only else "suites"
+
     static_rc = vba_check.main(["--hook"])
     report["static"] = "PASS" if static_rc == 0 else "FAIL"
 
@@ -1128,15 +1303,17 @@ def main(argv: list[str]) -> int:
         report["manifest"] = manifest_findings
 
     if report["static"] == "FAIL":
-        v = verdicts(report, args.enforce_cleanup)
-        _write_report(report, v, 2)
+        report["mode"] = "static-only"
+        v = verdicts(report, cleanup_enforced(args))
+        _write_report(report, v, 2, args.report_name)
         return 2
 
     if os.name != "nt":
+        report["mode"] = "static-only"
         report["behavior_skip"] = ("Excel COM postoji samo na Windows-u -- testovi ponasanja "
                                    "se OVDE NE IZVRSAVAJU. To nije 'proslo'.")
-        v = verdicts(report, args.enforce_cleanup)
-        _write_report(report, v, 2)
+        v = verdicts(report, cleanup_enforced(args))
+        _write_report(report, v, 2, args.report_name)
         return 2
 
     import pythoncom
@@ -1152,6 +1329,7 @@ def main(argv: list[str]) -> int:
         # Podrazumevani fixture se pravi sam -- prazna sveska je dovoljna za
         # compile (vidi create_blank_fixture). Ovo se desi tacno jednom.
         print(f"Fixture ne postoji, pravim praznu svesku: {fixture}")
+        blank_fixture = True
         try:
             create_blank_fixture(fixture, win32)
         except Exception as exc:
@@ -1171,8 +1349,8 @@ def main(argv: list[str]) -> int:
         if rc_sig:
             report["fatal"] = ("Ustajao ili nepotpisan fixture -- v. poruku iznad. "
                                "Rezultati nad starim podacima nisu merodavni.")
-            v = verdicts(report, args.enforce_cleanup)
-            _write_report(report, v, 2)
+            v = verdicts(report, cleanup_enforced(args))
+            _write_report(report, v, 2, args.report_name)
             return 2
 
     suites = chosen_suites(args, manifest)
@@ -1223,10 +1401,29 @@ def main(argv: list[str]) -> int:
         wb = xl.Workbooks.Open(wbpath, UpdateLinks=0)
 
         orphan_fatal = False
+        source_gap = ""
         if not args.no_import:
-            import_src_vba(wb, report["import"])
+            missing_doccls = import_src_vba(wb, report["import"])
             orphan_fatal = report_orphan_components(wb, report["import"],
                                                     authoritative=not args.workbook)
+            # Nedostajuci .doccls znaci da kod tih listova NIJE ni uvezen, a
+            # `source_hash` ih uracunava -- marker bi tvrdio da je testiran ceo
+            # src-vba. Nad NASIM fixture-om (donor ima sve listove) to je pad.
+            # Nad praznom automatski napravljenom sveskom nije: tamo nedostaje
+            # svih 40+ listova po dizajnu, ali takav run sme samo `--compile-only`
+            # i njegov rezultat se NE zove pun compile izvora.
+            if missing_doccls and not args.workbook:
+                if blank_fixture:
+                    source_gap = (f"{len(missing_doccls)} .doccls nije uvezeno "
+                                  f"(prazna sveska) -- ovo NIJE compile celog izvora")
+                    report["import"].append("SOURCE  " + source_gap)
+                else:
+                    report["fatal"] = (
+                        f"{len(missing_doccls)} .doccls modula nije uvezeno u fixture "
+                        f"({', '.join(missing_doccls[:6])}) -- kod tih listova nije "
+                        f"testiran, a source_hash ga uracunava. Napravi fixture "
+                        f"ponovo: python tools/make_fixture.py --donor <put> --force")
+        report["source_gap"] = source_gap
 
         # Compile se radi UVEK -- i uz --compile-only i pre suite-ova. To je
         # najjeftiniji gate koji hvata najcescu klasu kvara posle Edit/Write nad
@@ -1236,7 +1433,9 @@ def main(argv: list[str]) -> int:
 
         compile_ok = report["compile"].get("ok")
 
-        if orphan_fatal:
+        if "fatal" in report:
+            pass                        # nedostajuci .doccls -- v. import granu
+        elif orphan_fatal:
             report["fatal"] = ("ORPHAN moduli u sopstvenom fixture-u -- rezultati nisu "
                                "merodavni (v. IMPORT redove iznad).")
         elif compile_ok is False:
@@ -1296,6 +1495,9 @@ def main(argv: list[str]) -> int:
             report["counts"] = counts
             ran = [s["name"] for s in report["suites"]]
             report["counts_status"], report["counts_detail"] = check_counts(manifest, counts, ran)
+            # Status suite-a se PREPRAVLJA iz njenog sopstvenog izvestaja: "Run()
+            # nije pukao" je slabiji dokaz od "suite je zapisala FAIL=1".
+            apply_reported_failures(report["suites"], counts)
 
             if not hard_stop["fired"]:
                 report["cleanup"] = check_leaks(wb, manifest)
@@ -1359,7 +1561,7 @@ def main(argv: list[str]) -> int:
         else:
             shutil.rmtree(tmp, ignore_errors=True)
 
-    v = verdicts(report, args.enforce_cleanup)
+    v = verdicts(report, cleanup_enforced(args))
     rc = 2 if "fatal" in report else rc_from(v)
 
     # Marker se pise SAMO za pun set izabrane kapije: `--suite X` je zelen za X,
@@ -1370,8 +1572,13 @@ def main(argv: list[str]) -> int:
     # U marker ide i IME kapije: zelen `dev` run zadovoljava Stop hook, ali NE
     # zadovoljava release (koji trazi bar `pr`) -- `dev` ne vrti ni
     # RunNovacSmokeSuite ni external ugovore.
+    # `--no-import` je OBAVEZAN deo uslova. Bez njega je postojala ova sekvenca:
+    # repo src-vba = NOV kod, sveska = STARI kod, `--no-import --gate pr` prodje
+    # nad starim kodom -- a marker dobije hash NOVOG izvora. To rusi centralni
+    # invarijant cele ove arhitekture: hash mora da predstavlja kod koji je
+    # zaista uvezen i izvrsen.
     full_set = (not args.suite and not args.category and not args.compile_only
-                and not args.no_mark_green)
+                and not args.no_import and not args.no_mark_green)
     if rc == 0 and full_set:
         payload = dict(report["provenance"])
         payload["suites"] = sorted({s["name"] for s in report["suites"]})
@@ -1380,7 +1587,7 @@ def main(argv: list[str]) -> int:
         vba_gate.write_green(payload)
         report["marked_green"] = payload["source_hash"]
 
-    _write_report(report, v, rc)
+    _write_report(report, v, rc, args.report_name)
     return rc
 
 
@@ -1409,13 +1616,13 @@ def _write_junit(report: dict, path: str) -> None:
     ET.ElementTree(suites_el).write(path, encoding="utf-8", xml_declaration=True)
 
 
-def _write_report(report: dict, v: dict, rc: int) -> None:
+def _write_report(report: dict, v: dict, rc: int, name: str = "last_run") -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
     report["verdicts"] = {k: val for k, val in v.items() if not k.startswith("_")}
-    with open(os.path.join(OUT_DIR, "last_run.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(OUT_DIR, f"{name}.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
     try:
-        _write_junit(report, os.path.join(OUT_DIR, "last_run.xml"))
+        _write_junit(report, os.path.join(OUT_DIR, f"{name}.xml"))
     except Exception as exc:                # noqa: BLE001
         report.setdefault("import", []).append(f"JUnit XML nije upisan: {exc}")
 
@@ -1478,6 +1685,8 @@ def _write_report(report: dict, v: dict, rc: int) -> None:
     for d in report.get("dialogs", []):
         lines.append(f"DIALOG  {d}")
 
+    if report.get("source_gap"):
+        lines.append(f"SOURCE  {report['source_gap']}")
     if report.get("behavior_skip"):
         lines.append(f"NAPOMENA {report['behavior_skip']}")
     if "fatal" in report:
@@ -1489,8 +1698,9 @@ def _write_report(report: dict, v: dict, rc: int) -> None:
         suffix = ""
         if key == "COMPILE" and v[key] == "UNKNOWN":
             suffix = "  (dozvoljeno uz zelen BEHAVIOR; release kapija ovo NE prihvata)"
-        if key == "CLEANUP" and not v.get("_cleanup_enforced") and v[key] != "NOT_RUN":
-            suffix = "  (ne-blokirajuce: provera jos nije dokazana u oba smera)"
+        if key == "CLEANUP" and v[key] != "NOT_RUN":
+            suffix = ("  (blokirajuce)" if v.get("_cleanup_enforced")
+                      else "  (ne-blokirajuce u 'dev' kapiji; --enforce-cleanup da obara)")
         lines.append(f"{key:9} {v[key]}{suffix}")
     lines.append("------------------------------------------------------------")
     lines.append("ISHOD: " + ("PROSLO" if rc == 0 else "PALO"))
@@ -1504,7 +1714,7 @@ def _write_report(report: dict, v: dict, rc: int) -> None:
                      f"kapija={report.get('gate')} (vba_gate.py --status)")
 
     text = "\n".join(lines)
-    with open(os.path.join(OUT_DIR, "last_run.txt"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(OUT_DIR, f"{name}.txt"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     # Ispis ne sme da PUKNE zbog jednog znaka. Konzola je cp1252, a poruka o
     # padu nosi ono sto je test video -- pa je jedan ChrW(183) iz prikaznog

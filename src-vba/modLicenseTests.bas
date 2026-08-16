@@ -49,6 +49,12 @@ Public Sub TestLicense_All()
     TestLicense_NonEmptyParts
     TestLicense_DeviceFingerprint
 
+    ' Cleanup se DOKAZUJE, ne pretpostavlja. Class_Terminate bi stanje vratio i
+    ' bez ovoga, ali destruktor je sigurnosna mreza -- dokaz je provera koja se
+    ' broji i koja pukne po imenu ako restore nije uspeo.
+    ctx.Restore
+    AssertEmpty ctx.Drift(), "stanje Excela vraceno na ulazno"
+
     On Error GoTo 0
     TR_EndSuite          ' upisuje izvestaj i PODIZE gresku ako je nesto palo
     Exit Sub

@@ -169,16 +169,36 @@ End Sub
 ' Tabele
 ' ============================================================
 
+' FAIL-CLOSED. Provere nad tabelama moraju da razlikuju TRI ishoda, ne dva:
+'
+'   nema reda            -> validan poslovni rezultat
+'   ima reda             -> validan poslovni rezultat
+'   nema tabele/kolone   -> greska u TESTU, ne odgovor o poslovnoj logici
+'
+' Prva verzija je trecu spajala sa prvom: `FindRows` pod `On Error Resume Next`
+' je vracao Nothing, brojac je davao 0, pa je `AssertTableRowMissing` prijavljivao
+' PASS i kad tabela uopste ne postoji. Test infrastruktura koja na pogresno ime
+' tabele odgovara "provera prosla" je gora od one koje nema.
+
 Public Sub AssertRowCount(ByVal tblName As String, ByVal expected As Long, _
                           ByVal label As String)
-    AssertEqual TableRowCount(tblName), expected, label
+    Dim n As Long
+    n = TableRowCount(tblName)
+    If n < 0 Then
+        TR_Fail label & " -- INFRASTRUKTURA: tabela " & tblName & " ne postoji"
+        Exit Sub
+    End If
+    AssertEqual n, expected, label
 End Sub
 
 Public Sub AssertTableRowExists(ByVal tblName As String, ByVal colName As String, _
                                 ByVal value As Variant, ByVal label As String)
     Dim hits As Long
-    hits = CountMatching(tblName, colName, value)
-    If hits > 0 Then
+    Dim okFlag As Boolean
+    hits = CountMatching(tblName, colName, value, okFlag)
+    If Not okFlag Then
+        TR_Fail label & " -- " & InfraReason(tblName, colName)
+    ElseIf hits > 0 Then
         TR_Pass label
     Else
         TR_Fail label & " -- nema reda u " & tblName & " sa " & colName & _
@@ -189,8 +209,12 @@ End Sub
 Public Sub AssertTableRowMissing(ByVal tblName As String, ByVal colName As String, _
                                  ByVal value As Variant, ByVal label As String)
     Dim hits As Long
-    hits = CountMatching(tblName, colName, value)
-    If hits = 0 Then
+    Dim okFlag As Boolean
+    hits = CountMatching(tblName, colName, value, okFlag)
+    If Not okFlag Then
+        ' Bez ovoga bi "cela tabela ne postoji" prolazilo kao "reda nema".
+        TR_Fail label & " -- " & InfraReason(tblName, colName)
+    ElseIf hits = 0 Then
         TR_Pass label
     Else
         TR_Fail label & " -- " & tblName & " i dalje ima " & CStr(hits) & _
@@ -201,6 +225,8 @@ End Sub
 ' Broj redova tabele NA ULASKU vs NA IZLASKU. Za provere tipa "ova putanja ne sme
 ' nista da upise" i za dokaz da je rollback stvarno vratio stanje -- transakcija
 ' koja "bi trebalo" da rollback-uje nije dokaz da jeste.
+'
+' -1 znaci NEMA TABELE i nikad ne sme da se poredi sa drugom -1 kao "isto".
 Public Function TableRowCount(ByVal tblName As String) As Long
     Dim lo As ListObject
     On Error Resume Next
@@ -219,6 +245,15 @@ Public Sub AssertUnchanged(ByVal tblName As String, ByVal countBefore As Long, _
                            ByVal label As String)
     Dim nowCount As Long
     nowCount = TableRowCount(tblName)
+
+    ' Dve -1 vrednosti bi se poklopile i dale PASS ("nista se nije promenilo"),
+    ' a znace da tabele nema ni pre ni posle -- provera tada ne meri nista.
+    If countBefore < 0 Or nowCount < 0 Then
+        TR_Fail label & " -- INFRASTRUKTURA: tabela " & tblName & " ne postoji " & _
+                "(pre=" & CStr(countBefore) & ", posle=" & CStr(nowCount) & ")"
+        Exit Sub
+    End If
+
     If nowCount = countBefore Then
         TR_Pass label
     Else
@@ -251,15 +286,40 @@ Public Function SafeStr(ByVal v As Variant) As String
     On Error GoTo 0
 End Function
 
+' okFlag = False znaci da odgovor NE VREDI (nema tabele, nema kolone, FindRows
+' pukao). Pozivalac to mora da prijavi kao pad, ne kao "nula pogodaka".
 Private Function CountMatching(ByVal tblName As String, ByVal colName As String, _
-                               ByVal value As Variant) As Long
+                               ByVal value As Variant, ByRef okFlag As Boolean) As Long
+    okFlag = False
+    CountMatching = 0
+
+    If GetTable(tblName) Is Nothing Then Exit Function
+    If GetColumnIndex(tblName, colName) = 0 Then Exit Function
+
     Dim hitRows As Collection
     On Error Resume Next
+    Err.Clear
     Set hitRows = FindRows(tblName, colName, value)
+    If Err.Number <> 0 Then
+        Err.Clear
+        On Error GoTo 0
+        Exit Function
+    End If
     On Error GoTo 0
-    If hitRows Is Nothing Then
-        CountMatching = 0
+
+    If hitRows Is Nothing Then Exit Function
+
+    okFlag = True
+    CountMatching = hitRows.count
+End Function
+
+' Zasto odgovor ne vredi -- tacan razlog, da se ne pogadja.
+Private Function InfraReason(ByVal tblName As String, ByVal colName As String) As String
+    If GetTable(tblName) Is Nothing Then
+        InfraReason = "INFRASTRUKTURA: tabela " & tblName & " ne postoji"
+    ElseIf GetColumnIndex(tblName, colName) = 0 Then
+        InfraReason = "INFRASTRUKTURA: " & tblName & " nema kolonu " & colName
     Else
-        CountMatching = hitRows.count
+        InfraReason = "INFRASTRUKTURA: citanje " & tblName & "." & colName & " je puklo"
     End If
 End Function

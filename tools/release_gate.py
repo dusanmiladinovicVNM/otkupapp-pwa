@@ -11,9 +11,17 @@ na git plumbing oko njega:
 
     STATIC     tools/vba_check.py + who_writes --check + manifest
     FIXTURE    fixture postoji i njegov hash ide u zapis
-    BEHAVIOR   tools/run_vba.py --gate release nad OVIM izvorom
+    BEHAVIOR   tools/run_vba.py --gate pr -- pun LOKALNI set, bez mreze
     GREEN      last-green marker se poklapa sa hashom src-vba KOJI SE TAG-UJE
     COMPILE    pravi Debug > Compile VBAProject -- UNKNOWN nije prihvatljivo
+    EXTERNAL   ZASEBAN run (--category external) -- Google / MasterSync / SEF
+
+BEHAVIOR I EXTERNAL SU DVA RUNA, NE JEDAN
+    Prva verzija je za BEHAVIOR pustala `--gate release`, koji ukljucuje i
+    external suite. Nedostupan SEF sandbox je zato obarao ceo run: BEHAVIOR FAIL,
+    marker se ne upise pa i GREEN FAIL -- a `--waive external` je menjao samo
+    EXTERNAL. Waiver koji je ponudjen bas za taj slucaj nije resavao nista.
+    Sada su odvojeni, pa je `--waive external` dovoljan.
 
     python3 tools/release_gate.py --version 2.41.0
     python3 tools/release_gate.py --version 2.41.0 --dry-run
@@ -133,10 +141,19 @@ def gate_fixture(g: Gate, fixture: str, dry: bool) -> None:
 
 
 def gate_behavior(g: Gate, dry: bool, extra: list[str]) -> None:
+    """Pun LOKALNI set (`--gate pr`), bez external ugovora.
+
+    Ranije je ovde islo `--gate release`, koje ukljucuje i Google/MasterSync/SEF.
+    Posledica: nedostupan SEF sandbox je obarao run_vba, pa je BEHAVIOR bio FAIL,
+    marker se nije upisao pa je i GREEN bio FAIL -- a `--waive external` je menjao
+    samo EXTERNAL. Waiver koji dokumentacija nudi bas za taj slucaj nije resavao
+    nista. Zato su to sada dva odvojena run-a: ovaj upisuje `pr` marker i ne
+    zavisi ni od jedne mreze.
+    """
     if dry:
         g.status, g.detail = "NOT_RUN", "dry-run"
         return
-    cmd = [_py(), os.path.join("tools", "run_vba.py"), "--gate", "release"] + extra
+    cmd = [_py(), os.path.join("tools", "run_vba.py"), "--gate", "pr"] + extra
     rc, out = _run(cmd, timeout=7200, echo=True)
     g.status = "PASS" if rc == 0 else "FAIL"
     g.detail = _tail(out, 4) + "  (pun ispis iznad i u tests/last_run.txt)"
@@ -171,8 +188,8 @@ def gate_green(g: Gate, dry: bool) -> None:
                     f"ni external ugovore)")
 
 
-def _last_run() -> dict | None:
-    path = os.path.join(ROOT, "tests", "last_run.json")
+def _last_run(name: str = "last_run") -> dict | None:
+    path = os.path.join(ROOT, "tests", f"{name}.json")
     if not os.path.exists(path):
         return None
     try:
@@ -222,20 +239,32 @@ def gate_compile(g: Gate, dry: bool) -> None:
         '--waive compile --reason "rucni Debug>Compile cist, <datum>"' if unknown else "")
 
 
-def gate_external(g: Gate, dry: bool) -> None:
-    """External ugovori (Google / MasterSync / SEF) nisu obavezni za svaki release,
-    ali NE SMEJU da nestanu iz zapisa. Behavior gate ih vrti (`--gate release`),
-    pa je ovde samo prepis njegovog ishoda: PASS, FAIL ili NOT_RUN."""
+def gate_external(g: Gate, dry: bool, extra: list[str]) -> None:
+    """External ugovori (Google / MasterSync / SEF) -- ZASEBAN run.
+
+    Nisu obavezni za svaki release, ali ne smeju da nestanu iz zapisa: ishod je
+    PASS, FAIL, NOT_RUN ili WAIVED, i uvek zavrsi u poruci taga. Run ide u svoj
+    izvestaj (`tests/last_run_external.*`) da ne prepise behavior run, i ne
+    upisuje last-green marker (`--category` ga ionako iskljucuje).
+    """
     if dry:
         g.status, g.detail = "NOT_RUN", "dry-run"
         return
-    data = _last_run()
-    if data is None:
-        g.status, g.detail = "NOT_RUN", "nema tests/last_run.json"
-        return
-    ext = [s for s in (data.get("suites") or []) if s.get("external")]
-    g.status = (data.get("verdicts") or {}).get("EXTERNAL", "NOT_RUN")
-    g.detail = ", ".join(f"{s['name']}={s['status']}" for s in ext) or "nijedna nije isla"
+    cmd = [_py(), os.path.join("tools", "run_vba.py"), "--category", "external",
+           "--report-name", "last_run_external"] + extra
+    rc, out = _run(cmd, timeout=7200, echo=True)
+    data = _last_run("last_run_external") or {}
+    ext = [x for x in (data.get("suites") or []) if x.get("external")]
+    detail = ", ".join(f"{x['name']}={x['status']}" for x in ext)
+    if rc == 0:
+        g.status = "PASS"
+    elif ext:
+        g.status = "FAIL"
+    else:
+        # Nijedna external suite nije stigla ni da se pokrene (nema mreze, nema
+        # Excela). To je NOT_RUN, ne FAIL -- ali i dalje blokira dok se ne izuzme.
+        g.status = "NOT_RUN"
+    g.detail = (detail or _tail(out, 3)) + "  (ispis u tests/last_run_external.txt)"
 
 
 # --- orkestracija ---------------------------------------------------------------
@@ -253,7 +282,7 @@ def run_gates(version: str, fixture: str, waivers: dict, dry: bool,
     gate_behavior(by_name["behavior"], dry, extra_run_args)
     gate_green(by_name["green"], dry)
     gate_compile(by_name["compile"], dry)
-    gate_external(by_name["external"], dry)
+    gate_external(by_name["external"], dry, extra_run_args)
 
     for name, reason in waivers.items():
         g = by_name[name]
@@ -263,10 +292,7 @@ def run_gates(version: str, fixture: str, waivers: dict, dry: bool,
         g.detail = f"WAIVED ({reason}) -- bilo je: {g.status} {prev}".strip()
         g.status = "WAIVED"
 
-    blocked = [g.name for g in order if g.status in ("FAIL", "NOT_RUN")
-               and not (dry and g.status == "NOT_RUN")]
-    # NOT_RUN blokira isto kao FAIL: "nije pokrenuto" nije "proslo". Jedini izlaz
-    # je waiver, koji ostavlja trag.
+    blocked = blocked_gates(order, dry)
     rc = 2 if blocked else 0
 
     record = {
@@ -280,6 +306,65 @@ def run_gates(version: str, fixture: str, waivers: dict, dry: bool,
         "dry_run": dry,
     }
     return rc, record
+
+
+def blocked_gates(gates: list, dry: bool) -> list[str]:
+    """Koje kapije zaustavljaju release.
+
+    `NOT_RUN` blokira isto kao `FAIL`: "nije pokrenuto" nije "proslo". Jedini
+    izlaz je waiver, koji ostavlja trag u tagu. U `--dry-run` se `NOT_RUN` ne
+    racuna, jer tamo kapije namerno nisu ni pokrenute.
+    """
+    return [g.name for g in gates
+            if g.status in ("FAIL", "NOT_RUN") and not (dry and g.status == "NOT_RUN")]
+
+
+def self_test() -> int:
+    """Provere logike kapija -- bez Excela, bez mreze, bez git operacija."""
+    fails: list[str] = []
+
+    def chk(cond: bool, label: str) -> None:
+        if cond:
+            print(f"  PASS  {label}")
+        else:
+            fails.append(label)
+            print(f"  FAIL  {label}")
+
+    def mk(**kw) -> list:
+        out = []
+        for name in GATES:
+            g = Gate(name)
+            g.status = kw.get(name, "PASS")
+            out.append(g)
+        return out
+
+    chk(blocked_gates(mk(), False) == [], "sve PASS -> nista ne blokira")
+    chk(blocked_gates(mk(behavior="FAIL"), False) == ["behavior"], "FAIL blokira")
+    chk(blocked_gates(mk(external="NOT_RUN"), False) == ["external"],
+        "NOT_RUN blokira isto kao FAIL")
+    chk(blocked_gates(mk(external="NOT_RUN"), True) == [],
+        "u --dry-run NOT_RUN ne blokira (kapije namerno nisu ni isle)")
+    chk(blocked_gates(mk(external="WAIVED"), False) == [],
+        "WAIVED ne blokira")
+
+    # Sustina P1 nalaza: nedostupan SEF sandbox vise ne obara BEHAVIOR i GREEN,
+    # pa je `--waive external` dovoljan sam za sebe.
+    gates = mk(external="FAIL")
+    for g in gates:
+        if g.name == "external":
+            g.status = "WAIVED"
+    chk(blocked_gates(gates, False) == [],
+        "--waive external sam za sebe odblokira release (BEHAVIOR/GREEN su odvojeni run)")
+
+    chk(gate_behavior.__doc__ and "--gate pr" in gate_behavior.__doc__,
+        "BEHAVIOR kapija vrti lokalni 'pr' set, ne 'release'")
+
+    print()
+    if fails:
+        print(f"self-test: {len(fails)} nalaza", file=sys.stderr)
+        return 2
+    print("self-test: cisto")
+    return 0
 
 
 def verdict_text(record: dict) -> str:
@@ -305,7 +390,7 @@ def verdict_text(record: dict) -> str:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description="Release kapije pre taga i push-a.")
-    ap.add_argument("--version", required=True, help="verzija koja se izdaje, npr. 2.41.0")
+    ap.add_argument("--version", default="", help="verzija koja se izdaje, npr. 2.41.0")
     ap.add_argument("--fixture", default=vba_gate.DEFAULT_FIXTURE)
     ap.add_argument("--dry-run", action="store_true",
                     help="ne pokreci Excel; pokazi redosled kapija i sta bi blokiralo")
@@ -314,6 +399,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--reason", default="", help="razlog za --waive")
     ap.add_argument("--run-arg", action="append", default=[],
                     help="dodatni argument za run_vba.py (npr. --run-arg --shuffle)")
+    ap.add_argument("--self-test", action="store_true",
+                    help="provere logike kapija (bez Excela, mreze i git-a)")
     ap.add_argument("--tag-message", action="store_true",
                     help="ispisi SAMO tekst za poruku anotiranog taga (bez pokretanja kapija)")
     return ap.parse_args(argv)
@@ -321,6 +408,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+
+    if args.self_test:
+        return self_test()
+
     version = args.version.lstrip("v")
 
     if args.tag_message:
@@ -330,6 +421,10 @@ def main(argv: list[str]) -> int:
         with open(OUT, "r", encoding="utf-8") as fh:
             print(verdict_text(json.load(fh)))
         return 0
+
+    if not version:
+        print("--version je obavezan (osim uz --self-test).", file=sys.stderr)
+        return 2
 
     if args.waive and not args.reason.strip():
         print("--waive trazi --reason \"...\". Izuzeta kapija bez zapisanog razloga je "

@@ -106,14 +106,14 @@
       "gates": ["dev", "pr", "release"],
       "raises": true,
       "dialogs": false,
-      "min_asserts": 3,
+      "min_asserts": 17,
       "reports_counts": true,
       "timeout_s": 120,
       "uses_workbook": true,
       "mutates": false,
       "external": false,
       "result_file": "last_run.txt",
-      "note": "Tri testa ponasanja nad frmOtkup.ClearOtkupFields + golden snapshot."
+      "note": "Testovi ponasanja: 1-3 legacy frmOtkup + golden snapshot, 4-6 novi UI (modOtkupUI), 7-11 upis zbirne/prijemnice (modDokUnos), 12-17 novac/revers (modNovacUnos). Broj je BROJ TESTOVA, ne provera -- ovaj suite broji kroz RunOne."
     },
     {
       "id": "RunIzvestajTests",
@@ -202,14 +202,14 @@
       "gates": ["dev", "pr", "release"],
       "raises": true,
       "dialogs": false,
-      "min_asserts": 23,
+      "min_asserts": 24,
       "reports_counts": true,
       "timeout_s": 60,
       "uses_workbook": false,
       "mutates": false,
       "external": false,
       "result_file": "",
-      "note": "Kanarinac migracije: prvi suite prebacen na modTestAssert/modTestRunner."
+      "note": "Kanarinac migracije: prvi suite prebacen na modTestAssert/modTestRunner/clsTestContext. 23 poslovne provere + 1 koja DOKAZUJE da je stanje Excela vraceno (ctx.Drift)."
     },
     {
       "id": "RunStornoTestSuite",

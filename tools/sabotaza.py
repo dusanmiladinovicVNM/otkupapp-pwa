@@ -72,6 +72,7 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -4309,6 +4310,37 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "preradjena paleta nije u ponudi kao sveza",
     ),
+    # --- test platforma: sabotaze koje obaraju SAM FRAMEWORK -----------------
+    # Ove ne dokazuju poslovno pravilo nego da nova infrastruktura stvarno meri.
+    # Suite koja je zelena nad ispravnim frameworkom, a nije pokazana crvena nad
+    # pokvarenim, ne dokazuje da lifecycle/brojac/assert-i rade.
+    "license-assert": (
+        "modLicenseTests.bas",
+        '    AssertEqual LicPartsMatch("A|B|C", "A|B|C"), 3, "identicno = 3"\n',
+        '    AssertEqual LicPartsMatch("A|B|C", "A|B|C"), 4, "identicno = 3"   \' SABOTAZA\n',
+        "TestLicense_All",
+        "modTestAssert.AssertEqual stvarno poredi i broji kroz modTestRunner",
+    ),
+    "license-cleanup": (
+        "modLicenseTests.bas",
+        '    AssertEmpty ctx.Drift(), "stanje Excela vraceno na ulazno"\n',
+        "    Application.Calculation = xlCalculationManual   ' SABOTAZA: stanje ostaje\n"
+        '    AssertEmpty ctx.Drift(), "stanje Excela vraceno na ulazno"\n',
+        "TestLicense_All",
+        "clsTestContext.Drift hvata nevraceno stanje Excela",
+    ),
+    # Tih pad pokrivenosti: suite i dalje PROLAZI, ali prijavljuje manje provera.
+    # Obara COUNTS kapiju (min_asserts u tests/suite_manifest.json), ne test.
+    "counts-pad": (
+        "modLicenseTests.bas",
+        '    AssertEqual LicNonEmptyParts("A|B|C"), 3, "sve tri"\n'
+        '    AssertEqual LicNonEmptyParts("A||C"), 2, "dve"\n'
+        '    AssertEqual LicNonEmptyParts("A||"), 1, "jedna"\n'
+        '    AssertEqual LicNonEmptyParts("||"), 0, "nijedna"\n',
+        '    AssertEqual LicNonEmptyParts("A|B|C"), 3, "sve tri"   \' SABOTAZA: tri manje\n',
+        "TestLicense_All",
+        "COUNTS kapija: manifest min_asserts hvata tih pad broja provera",
+    ),
 }
 
 
@@ -4364,7 +4396,15 @@ def primeni(ime: str) -> int:
     print(f"sabotaza '{ime}' primenjena u src-vba/{fajl}")
     print(f"  ocekuj:  FAIL {test}")
     print(f"  tvrdnja: {tvrdnja}")
-    print("  pokreni: python tools/run_vba.py --suite RunAllTests")
+    # Suite se izvodi iz imena testa: sve sto pocinje sa T_ vozi modTest
+    # (RunAllTests), ostalo je ime same suite ili kapije.
+    if test.startswith("T_"):
+        print("  pokreni: python tools/run_vba.py --suite RunAllTests")
+    elif test.startswith("COUNTS"):
+        print("  pokreni: python tools/run_vba.py --gate pr"
+              "   (pad se vidi kao COUNTS FAIL, ne kao pao test)")
+    else:
+        print(f"  pokreni: python tools/run_vba.py --suite {test}")
     print("  vrati:   python tools/sabotaza.py --vrati")
     return 0
 
@@ -4481,7 +4521,25 @@ def _imena_testova() -> set:
             continue
         tekst, _ = _procitaj(put)
         imena.update(_TEST_SUB.findall(tekst))
+
+    # Sabotaza sme da cilja i CELU SUITE, ne samo pojedinacan T_ test. Takve su
+    # one koje obaraju sam framework (modTestAssert/modTestRunner/clsTestContext):
+    # tamo nema jednog T_ testa koji pada, nego suite prijavi FAIL. Imena suite-ova
+    # dolaze iz manifesta, pa i tu vazi provera -- sabotaza koja imenuje nepostojecu
+    # suite je i dalje nalaz.
+    imena.update(_imena_suita())
     return imena
+
+
+def _imena_suita() -> set:
+    put = os.path.join(ROOT, "tests", "suite_manifest.json")
+    if not os.path.exists(put):
+        return set()
+    try:
+        with open(put, "r", encoding="utf-8") as fh:
+            return {s["id"] for s in json.load(fh).get("suites", [])}
+    except Exception:                       # noqa: BLE001
+        return set()
 
 
 # Tvrdnja iz kataloga mora da bude tvrdnja BAS TOG testa.

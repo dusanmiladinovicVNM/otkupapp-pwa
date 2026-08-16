@@ -18,23 +18,50 @@ Private Const NOVAC_TEST_LOG_SHEET As String = "NOVAC_TEST_LOG"
 ' kapijama. Konvencija i slobodan offset: v. .claude/rules/testovi.md sec.3.
 Private Const ERR_NOVAC_SUITE_FAILED As Long = vbObjectError + 2972
 
+' IZOLACIJA. Suite pise prave TST- redove kroz SaveNovac, savePartnerMap i
+' AppendTest*Row. Do sada nije imala nijedan spoljasnji okvir, pa su ti redovi
+' OSTAJALI u svesci -- sto je bilo podnosljivo dok je suite bila van kapija, ali
+' vise nije: sada je u `pr` i `release`, pa bi svaki sledeci suite (i external
+' ugovori) radio nad prljavom sveskom. Zato jedna transakcija koja se UVEK
+' ponistava, po uzoru na modTestBanka/modTestPalete.
+'
+' clsTestContext gasi journal trag i vraca stanje Excela u Class_Terminate --
+' i na urednom izlazu i posle greske. AppendRow/UpdateCell pisu CSV crash-recovery
+' journal koji tx.RollbackTx NE povlaci; bez gasenja bi test redovi ostali u
+' Journal folderu i sledeci start bi javio lazno upozorenje o gubitku podataka.
 Public Sub RunNovacSmokeSuite()
+    Dim tx As clsTransaction
+    Dim ctx As clsTestContext
+
     On Error GoTo EH
+
+    Set ctx = New clsTestContext
+    ctx.Quiet
 
     ResetNovacTestCounters
     InitNovacTestLog
 
     StartNovacSuite "NOVAC SMOKE SUITE"
 
+    Set tx = New clsTransaction
+    tx.BeginTx
+    tx.AddTableSnapshot TBL_NOVAC
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_OTKUP
+    tx.AddTableSnapshot TBL_PARTNER_MAP
+
     Test_SaveNovacRejectsInvalidAmounts
     Test_SaveNovacAcceptsValidUplata
     Test_SaveNovacAcceptsValidIsplata
     Test_StorniranoNovacExcludedFromFakturaUplata
     Test_PartnerMapConflictBlocked
-    
+
     Test_PartialBuyerAvansSplitFaktura
     Test_PartialOtkupAvansSplit
     Test_ResetNovacOtkupLinkRecomputesStatus
+
+    tx.RollbackTx                ' UVEK vrati sve -- test ne ostavlja podatke
+    Set tx = Nothing
 
     FinishNovacSuite
 
@@ -47,6 +74,10 @@ Public Sub RunNovacSmokeSuite()
 
 EH:
     LogNovacFatal "RunNovacSmokeSuite", Err.Number, Err.description
+    On Error Resume Next
+    If Not tx Is Nothing Then tx.RollbackTx
+    Set tx = Nothing
+    On Error GoTo 0
     ' Prekid nije "nije se desilo" nego pad -- broji se kao pala provera, pa gate
     ' ispod ima sta da vidi i kad suite pukne pre prve prave provere.
     m_Failed = m_Failed + 1
