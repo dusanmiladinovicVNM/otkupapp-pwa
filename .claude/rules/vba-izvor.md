@@ -78,6 +78,23 @@ u bilo kom drugom modulu i dalje pada — što je i bio smisao provere. Dokazano
 oba smera: `Scr_Rows` prekopiran u `modUiData` puca, obična dupla definicija u
 dva `modScr*` modula puca, čist kod je zelen.
 
+## 4a) Duplo ime unutar JEDNOG modula — drugi simptom, druga provera
+
+`DUPLIKAT` gleda **globalni** imenski prostor. Dva ista imena u **istom** modulu
+su mu nevidljiva, a obaraju compile isto tako — i javljaju se drugačije:
+
+> Modul koji se ne kompajlira obara **ceo projekat**, pa greška stigne kao
+> **`Cannot run the macro`** na bilo kom makrou, ne kao „Ambiguous name". Simptom
+> ne pokazuje na krivca; izgleda kao da je pukao harness ili instalacija.
+
+Hvata to `DUPLIKAT_LOKALNI` (radi i nad `.frm`/`.cls` — unutar modula je sudar
+sudar bez obzira na vrstu fajla). Jedini izuzetak je `Property Get/Let/Set`
+trojka nad istim imenom. Ne gleda `Const`/`Dim` **unutar** procedure — isto ime u
+dve procedure je legalno i uobičajeno.
+
+Najčešći ulaz nije merge nego **neuspeo pokušaj izmene**: python heredoc koji je
+„pukao" već je upisao konstantu, pa je `Edit` doda još jednom.
+
 ## 5) Ostalo
 
 - **Ne zaključuj iz par linija.** Logika je raspoređena kroz module/forme/klase/

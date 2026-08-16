@@ -26,6 +26,9 @@ Provere:
                      ("Sub or Function not defined").
   7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
                      arguments").
+  8. DUPLIKAT_LOKALNI -- isto ime dva puta u ISTOM modulu (izuzetak: Property
+                     Get/Let/Set trojka). Modul se ne kompajlira, a greska se
+                     javlja kao "Cannot run the macro" na bilo kom makrou.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -404,6 +407,109 @@ def collect_public(path: str, lines: list[str]) -> list[tuple[str, int]]:
     return out
 
 
+# --- 8. DUPLIKAT_LOKALNI -----------------------------------------------------
+#
+# DUPLIKAT (provera 4) gleda GLOBALNI imenski prostor -- isto Public ime u dva
+# modula. Duplo ime unutar JEDNOG modula mu je nevidljivo, a obara compile isto
+# tako: dupli `Private Const FX_FAKTURA_BEZ_IZNOSA` u modTest.bas prosao je
+# checker cist, a projekat se posle toga nije kompajlirao. Simptom nije bio
+# "Ambiguous name" nego "Cannot run the macro" na SVAKOM makrou -- modul koji se
+# ne kompajlira obara ceo projekat, pa greska izgleda kao da je bilo gde.
+#
+# VBA u jednom modulu ne trpi dva clana istog imena, sa TACNO JEDNIM izuzetkom:
+# `Property Get/Let/Set X` je trojka nad istim imenom. Zato se procedura pamti sa
+# vrstom, pa se trojka prepoznaje, a `Property Get X` dvaput i dalje pada.
+#
+# Za razliku od DUPLIKAT-a ova provera radi i nad .frm/.cls: ogranicenje na .bas
+# je tamo bilo zato sto Public clan forme nije globalno ime -- unutar modula je
+# sudar sudar bez obzira na vrstu fajla.
+#
+# Namerno se NE gleda:
+#   - `Const`/`Dim` unutar procedure -- lokalni su, isto ime u dve procedure je
+#     potpuno legalno i najcesci oblik u kodu;
+#   - druga i dalja imena iz `Private a As Long, b As Long` -- promasaj, ne
+#     lazan nalaz.
+
+PROP_DEF = re.compile(
+    r"^\s*(?:Public\s+|Private\s+|Friend\s+|Global\s+)?(?:Static\s+)?"
+    r"Property\s+(Get|Let|Set)\s+(\w+)", re.IGNORECASE)
+
+
+def collect_local_names(lines: list[str]) -> dict[str, list[tuple[str, int]]]:
+    """ime -> [(vrsta, linija)] za sve clanove modula.
+
+    Vrsta je "Get"/"Let"/"Set" za Property, inace "proc" ili "deklaracija".
+    Uslovna kompilacija se preskace iz istog razloga kao u collect_public.
+    """
+    names: dict[str, list[tuple[str, int]]] = defaultdict(list)
+    cond_depth = 0
+    in_block = False
+    first_proc = None
+
+    for i, line in enumerate(lines, start=1):
+        stripped = line.strip().lower()
+        if stripped.startswith("#if"):
+            cond_depth += 1
+            continue
+        if stripped.startswith("#end if"):
+            cond_depth = max(0, cond_depth - 1)
+            continue
+        if cond_depth:
+            continue
+
+        # Clanovi Type/Enum bloka su u imenskom prostoru tog tipa, ne modula.
+        if BLOCK_OPEN.match(line):
+            in_block = True
+            continue
+        if in_block:
+            if BLOCK_CLOSE.match(line):
+                in_block = False
+            continue
+
+        m = PROP_DEF.match(line)
+        if m:
+            first_proc = first_proc or i
+            names[m.group(2).lower()].append((m.group(1).capitalize(), i))
+            continue
+
+        m = PROC_DEF.match(line)
+        if m:
+            first_proc = first_proc or i
+            names[m.group(1).lower()].append(("proc", i))
+            continue
+
+        m = DECLARE_DEF.match(line)
+        if m:
+            names[m.group(1).lower()].append(("proc", i))
+            continue
+
+        # Deklaracije samo IZNAD prve procedure -- ispod su lokalne (a modul-level
+        # deklaracija na tom mestu je vec nalaz provere DEKLARACIJA).
+        if first_proc is None and not NOT_A_VAR.match(line):
+            m = DECL_NAMES.match(line)
+            if m:
+                names[m.group(1).lower()].append(("deklaracija", i))
+
+    return names
+
+
+def check_local_dupes(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    for name, sites in sorted(collect_local_names(lines).items()):
+        if len(sites) < 2:
+            continue
+        kinds = [k for k, _ in sites]
+        # Property trojka nad istim imenom: legalna dok je svaka vrsta jednom.
+        if all(k in ("Get", "Let", "Set") for k in kinds) and len(set(kinds)) == len(kinds):
+            continue
+        where = ", ".join(f"{k}@{ln}" for k, ln in sites)
+        out.append(Finding(path, sites[1][1], "DUPLIKAT_LOKALNI",
+                           f"'{name}' definisan {len(sites)} puta u istom modulu ({where}) "
+                           f"-- modul se NE kompajlira, a greska se javlja kao "
+                           f'"Cannot run the macro" na bilo kom makrou.'))
+    return out
+
+
 def check_poruke(files: list[str]) -> list[Finding]:
     poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
     if not os.path.exists(poruke_path):
@@ -425,11 +531,110 @@ def check_poruke(files: list[str]) -> list[Finding]:
     return out
 
 
+# --- self-test: dokaz u oba smera, trajno ------------------------------------
+#
+# CLAUDE.md par.5 trazi dvosmerni dokaz kad se menja SAM CHECKER: zelena provera
+# koja nikad nije pokazana crvena ne dokazuje da isla sta meri. Za DUPLIKAT_LOKALNI
+# taj dokaz ne moze da bude sabotaza u src-vba (sabotaza.py obara modTest testove,
+# a ovo je staticka provera), pa stoji ovde -- i vrti se u CI-ju, na svakom PR-u.
+#
+# Svaki slucaj je (naziv, ocekivan broj nalaza, izvor). Nula znaci "legalan VBA
+# koji NE sme da zapisti" -- ta polovina je vaznija: lazan nalaz u PostToolUse
+# hook-u je gori od propustenog, jer uci da se checker ignorise.
+
+SELF_TEST_CASES = [
+    # --- mora da zapisti ---
+    ("dupli Private Const (zatecen incident)", 1, """Option Explicit
+Private Const FX_FAKTURA As String = "FAK-TEST-0"
+Private Const FX_DRUGO As String = "X"
+Private Const FX_FAKTURA As String = "FAK-TEST-0"
+Public Sub Radi()
+End Sub
+"""),
+    ("Sub i Function istog imena", 1, """Option Explicit
+Public Sub Obradi()
+End Sub
+Private Function Obradi() As Long
+End Function
+"""),
+    ("dva Property Get istog imena", 1, """Option Explicit
+Public Property Get Ime() As String
+End Property
+Public Property Get Ime() As String
+End Property
+"""),
+    # --- ne sme da zapisti ---
+    ("Property Get/Let/Set trojka", 0, """Option Explicit
+Private mIme As String
+Public Property Get Ime() As String
+    Ime = mIme
+End Property
+Public Property Let Ime(ByVal v As String)
+    mIme = v
+End Property
+Public Property Set Ime(ByVal v As Object)
+End Property
+"""),
+    ("isto lokalno ime u dve procedure", 0, """Option Explicit
+Public Sub Prva()
+    Const LIMIT As Long = 10
+    Dim i As Long
+End Sub
+Public Sub Druga()
+    Const LIMIT As Long = 20
+    Dim i As Long
+End Sub
+"""),
+    ("uslovna kompilacija (modMouseWheel obrazac)", 0, """Option Explicit
+#If VBA7 Then
+Public Sub HookMouse()
+End Sub
+#Else
+Public Sub HookMouse()
+End Sub
+#End If
+"""),
+    ("clan Type/Enum bloka nije clan modula", 0, """Option Explicit
+Public Type TRed
+    Naziv As String
+End Type
+Public Enum EStatus
+    Naziv = 1
+End Enum
+Public Sub Naziv()
+End Sub
+"""),
+]
+
+
+def self_test() -> int:
+    palo = []
+    for naziv, ocekivano, izvor in SELF_TEST_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        dobijeno = len(check_local_dupes("<self-test>", lines))
+        if dobijeno != ocekivano:
+            palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
+
+    for line in palo:
+        print(line, file=sys.stderr)
+    if palo:
+        print(f"\nself-test: {len(palo)} od {len(SELF_TEST_CASES)} slucajeva palo.",
+              file=sys.stderr)
+        return 2
+    print(f"self-test: cisto ({len(SELF_TEST_CASES)} slucajeva DUPLIKAT_LOKALNI).")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
     ap.add_argument("--hook", action="store_true", help="bez izlaza kad je cisto")
+    ap.add_argument("--self-test", action="store_true",
+                    help="dokazi da provere zaista grizu (ne cita src-vba)")
     args = ap.parse_args(argv)
+
+    if args.self_test:
+        return self_test()
 
     files = vba_files(args.paths)
     if not files:
@@ -452,6 +657,7 @@ def main(argv: list[str]) -> int:
         findings += check_decl_after_proc(path, lines)
         findings += check_reserved(path, lines)
         findings += check_undefined(path, lines, defined, arities)
+        findings += check_local_dupes(path, lines)
         # Samo standardni moduli (.bas) dele globalni imenski prostor. Public clan
         # forme ili klase (.frm/.cls/.doccls) je clan tog objekta, ne globalno ime,
         # pa isto ime u dve forme NIJE "Ambiguous name".

@@ -227,7 +227,7 @@ ne samo onaj ko piše test.
 `tests/fixtures/otkup_test.xlsm` je lokalan artefakt (`.gitignore`), pravi ga
 `tools/make_fixture.py` iz **donor** sveske.
 
-> **Kad se `FIXTURE` dict u `make_fixture.py` promeni, fixture se MORA
+> **Kad se `SEED` dict u `make_fixture.py` promeni, fixture se MORA
 > regenerisati** — inače testovi padaju na podacima kojih nema. Donor može biti i
 > **postojeći fixture**: on nosi punu šemu i nema VBA, a generator ionako briše sve
 > redove pre sejanja. Izlaz mora biti druga putanja (donor = izlaz se odbija), pa se
@@ -246,6 +246,33 @@ ne samo onaj ko piše test.
   name" → `Cannot run the macro`, poruka koja ne liči na compile grešku. Za sveske
   kroz `--workbook` ne briše ništa, nego prijavljuje `ORPHAN` red.
 - Šemu donora ispisuje `tools/dump_schema.py` (samo čitanje).
+
+### Potpis fixture-a — zašto `git checkout` nije dovoljan
+
+Fixture je gitignored, pa ga **`git checkout` ne menja**. Posle prelaska na drugu
+granu na disku ostaje sveska prethodne: testovi padaju **na podacima**, a pad
+izgleda kao regresija koda. To je već pojelo pola sata trijaže — četiri crvena
+testa nad ispravnim kodom.
+
+Zato generator pored sveske ostavlja `tests/fixtures/otkup_test.sig` sa hash-om
+posejanih podataka, a `run_vba.py` ga poredi **pre podizanja Excela**:
+
+| Stanje | Šta radi `run_vba` |
+|---|---|
+| potpis se slaže | tiho nastavlja |
+| potpis se razlikuje | **staje, exit 2**, ispiše komandu za regeneraciju |
+| potpisa nema | upozori i nastavi (sveska od starijeg generatora ili `--workbook`) |
+
+Potpis pokriva **samo deklarativne podatke** (`SEED`, config, `FIXTURE_DATE`,
+`KEEP_ROWS`). Izmena logike upisa (`add_row`, `strip_rows`) mu je nevidljiva —
+nju operater regeneriše namerno. Uži i tačan potpis je bolji od širokog koji bi
+tražio regeneraciju na svaku izmenu komentara.
+
+Potpis se **briše na početku** build-a i piše tek posle uspešnog `Save`: neuspeo
+build (donor bez kolone → `SEMA:`) prepiše svesku, pa bi zadržan stari `.sig`
+tvrdio da je fixture svež. Bolje „nema potpisa" nego lažan.
+
+Svestan run nad starim podacima: `--ignore-fixture-sig`.
 
 `tests/golden/*.txt` idu u git. Kad golden ne postoji, test ga upiše i **padne** —
 nov golden mora proći ljudski pregled pre nego što postane merilo. Dva pravila:

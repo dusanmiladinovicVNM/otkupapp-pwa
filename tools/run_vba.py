@@ -653,7 +653,57 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                     help="tvrdi prekid u sekundama (ubija Excel proces; default 600)")
     ap.add_argument("--self-test", action="store_true",
                     help="provere koje ne traze Excel (radi i na Linux/macOS)")
+    ap.add_argument("--ignore-fixture-sig", action="store_true",
+                    help="ne staj na ustajao fixture (svesno testiranje nad starim podacima)")
     return ap.parse_args(argv)
+
+
+# --- ustajao fixture ---------------------------------------------------------
+#
+# Fixture je gitignored, pa ga `git checkout` NE menja: posle prelaska na drugu
+# granu na disku ostaje sveska prethodne. Testovi tada padaju NA PODACIMA, a pad
+# izgleda kao regresija koda -- tacno taj pad je jednom pojeo pola sata trijaze
+# (cetiri crvena testa, kod ispravan).
+#
+# make_fixture.py pored sveske ostavlja `.sig` sa hash-om posejanih podataka.
+# Poredi se PRE podizanja Excela: neslaganje je stanje diska, ne koda.
+
+def proveri_fixture_potpis(fixture: str, koriscen_workbook: bool,
+                           ignorisi: bool) -> int:
+    """0 = nastavi. 2 = stani (ustajao fixture)."""
+    if koriscen_workbook:
+        return 0            # tudja sveska, generator nema sta da tvrdi o njoj
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import make_fixture
+    except ImportError:
+        return 0
+
+    zapisan = make_fixture.read_sig(fixture)
+    tekuci = make_fixture.signature()
+    if zapisan == tekuci:
+        return 0
+
+    komanda = 'python tools\\make_fixture.py --donor "<put do .xlsm>" --force'
+    if not zapisan:
+        # Nema potpisa: sveska od starijeg generatora ili prazna auto-sveska.
+        # Ne zna se je li ustajala, pa se ne staje -- ali se kaze glasno.
+        print(f"UPOZORENJE: {os.path.basename(fixture)} nema potpis -- ne moze da se "
+              f"utvrdi da li su podaci svezi.", file=sys.stderr)
+        print(f"            Ako testovi padnu na podacima, prvo: {komanda}",
+              file=sys.stderr)
+        return 0
+
+    print(f"USTAJAO FIXTURE: {fixture}", file=sys.stderr)
+    print(f"  posejan potpisom {zapisan}, generator sada trazi {tekuci}", file=sys.stderr)
+    print(f"  Fixture je gitignored -- `git checkout` ga NE menja, pa je na disku", file=sys.stderr)
+    print(f"  ostala sveska prethodne grane. Testovi bi pali na PODACIMA.", file=sys.stderr)
+    print(f"\n  {komanda}\n", file=sys.stderr)
+    if ignorisi:
+        print("  --ignore-fixture-sig: nastavljam ipak.", file=sys.stderr)
+        return 0
+    return 2
 
 
 def chosen_suites(args: argparse.Namespace) -> list[str]:
@@ -704,6 +754,12 @@ def main(argv: list[str]) -> int:
             print("UPOZORENJE: prazna sveska nema tabele -- suite ce pasti na podacima.",
                   file=sys.stderr)
             print('Za suite koristi --workbook "...\\AgriX_OtkupApp.xlsm".', file=sys.stderr)
+    elif not args.compile_only:
+        # Compile ne cita podatke, pa ga ustajao fixture ne dotice.
+        rc_sig = proveri_fixture_potpis(fixture, bool(args.workbook),
+                                        args.ignore_fixture_sig)
+        if rc_sig:
+            return rc_sig
 
     tmp = tempfile.mkdtemp(prefix="vbatest_")
     wbpath = os.path.join(tmp, os.path.basename(fixture))
