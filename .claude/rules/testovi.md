@@ -56,7 +56,10 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `ARNOST` | poziv sa pogrešnim brojem argumenata |
 
 `NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
-naredbe) — lažan nalaz je gori od propuštenog. Uzak izuzetak od `DUPLIKAT`-a
+naredbe) — lažan nalaz je gori od propuštenog. **Poziv u izrazu (`x = Foo(1)`)
+se ne proverava**: bez tipova se poziv funkcije ne razlikuje od indeksiranja
+niza. To je poznata rupa, ne previd — pokušaj proširenja je dao 406 lažnih
+nalaza (ime funkcije unutar string literala, između ostalog). Uzak izuzetak od `DUPLIKAT`-a
 postoji za ugovor ekrana (`Scr_*` u `modScr*`), a od `DUPLIKAT_LOKALNI`-og za
 `Property Get/Let/Set` trojku. Ne kompajlira VBA: ne hvata tip-greške ni
 nedeklarisane promenljive, a u `.frm`/`.cls` ne radi `NEDEFINISAN`/`ARNOST`.

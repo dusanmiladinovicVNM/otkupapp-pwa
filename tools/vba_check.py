@@ -222,6 +222,59 @@ def _split_top_level(text: str) -> list[str]:
     return parts
 
 
+def _logical_lines(lines: list[str]) -> list[tuple[str, int]]:
+    """Spoji VBA nastavke reda (` _`) u jednu logicku liniju.
+
+    Vraca (tekst, broj PRVOG fizickog reda) -- nalaz se prijavljuje na redu na
+    kome poziv POCINJE, jer tamo operater i trazi.
+
+    Postoji zato sto je provera arnosti preskakala svaki prelomljen poziv:
+    `line.rstrip().endswith("_")` je znacio "ne gledaj". Bas tako je prosao
+    RowsAktivni sa 8 argumenata za 9 parametara -- greska koja se videla tek
+    kao [break] u VBE-u.
+    """
+    out: list[tuple[str, int]] = []
+    i = 0
+    while i < len(lines):
+        prvi = i + 1
+        tekst = lines[i].rstrip()
+        while tekst.endswith("_") and i + 1 < len(lines):
+            tekst = tekst[:-1].rstrip() + " " + lines[i + 1].strip()
+            i += 1
+        out.append((tekst, prvi))
+        i += 1
+    return out
+
+
+def _split_statements(text: str) -> list[tuple[str, bool]]:
+    """Podeli po dvotackama koje NISU u stringu ili zagradi.
+
+    Vraca (naredba, je_labela). VBA dvotacka radi dve stvari: razdvaja naredbe
+    (`Case 26: Foo`, `fokus = "x": Exit Function`) i zavrsava labelu (`EH:`).
+    Ranije je checker preskakao SVAKU liniju sa dvotackom, pa mu je izmakao
+    svaki poziv iza `Case N:` -- ukljucujuci ceo registar testova u modTest.
+    """
+    parts: list[tuple[str, bool]] = []
+    depth, in_str, cur = 0, False, ""
+    for i, ch in enumerate(text):
+        if ch == '"':
+            in_str = not in_str
+        elif not in_str and ch in "([":
+            depth += 1
+        elif not in_str and ch in ")]":
+            depth -= 1
+        # `:=` je IMENOVAN ARGUMENT, ne kraj naredbe. Bez ove provere se
+        # `Monitor_Error moduleName:="x", procedureName:="y"` cepa na prvom
+        # dvotackom i ostane poziv sa jednim argumentom -- 101 lazan nalaz.
+        elif not in_str and ch == ":" and depth == 0 and text[i + 1:i + 2] != "=":
+            parts.append((cur.strip(), True))
+            cur = ""
+            continue
+        cur += ch
+    parts.append((cur.strip(), False))
+    return [(p, lab) for p, lab in parts if p]
+
+
 def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
     """Ime procedure -> (min, max) broj argumenata; max = inf uz ParamArray.
 
@@ -238,10 +291,16 @@ def collect_arities(files: list[str]) -> dict[str, tuple[int, float]]:
             while line.rstrip().endswith("_") and i + 1 < len(lines):
                 line = line.rstrip()[:-1] + " " + lines[i + 1]
                 i += 1
-            m = PROC_DEF.match(line) or DECLARE_DEF.match(line)
-            if m and "(" in line:
-                params = _split_top_level(line[line.index("(") + 1:line.rindex(")")]
-                                          if ")" in line else "")
+            # SAMO PRVA NAREDBA REDA.
+            # `Function CLR_ERROR() As Long: CLR_ERROR = RGB(1,2,3): End Function`
+            # je jedan red sa tri naredbe; bez ovoga bi lista parametara progutala
+            # i argumente RGB-a, pa bi arnost bila 3 umesto 0 -- i svaki poziv
+            # CLR() bio prijavljen kao pogresna arnost.
+            glava = _split_statements(line)[0][0] if _split_statements(line) else line
+            m = PROC_DEF.match(glava) or DECLARE_DEF.match(glava)
+            if m and "(" in glava:
+                params = _split_top_level(
+                    glava[glava.index("(") + 1:glava.rindex(")")] if ")" in glava else "")
                 lo = sum(1 for p in params
                          if p and not re.match(r"^(Optional|ParamArray)\b", p, re.IGNORECASE))
                 hi: float = float("inf") if any(
@@ -258,56 +317,64 @@ def check_undefined(path: str, lines: list[str], defined: set[str],
 
     out: list[Finding] = []
     block_depth = 0
-    continued = False
 
-    for i, raw in enumerate(lines, start=1):
-        line = raw.rstrip()
-        was_continued, continued = continued, line.endswith("_")
-
+    for line, i in _logical_lines(lines):
         if BLOCK_OPEN.match(line):
             block_depth += 1
             continue
         if BLOCK_CLOSE.match(line):
             block_depth = max(0, block_depth - 1)
             continue
-        if block_depth or was_continued:
+        if block_depth:
             continue
 
-        stmt = _strip_comment(line.strip())
-        if not stmt or stmt.startswith("'") or stmt.startswith("#") or ":" in stmt:
-            continue        # komentar, uslovna kompilacija, labela ili vise naredbi
+        cela = _strip_comment(line.strip())
+        if not cela or cela.startswith("'") or cela.startswith("#"):
+            continue        # komentar ili uslovna kompilacija
         if PROC_DEF.match(line) or DECLARE_DEF.match(line):
             continue
 
+        for stmt, je_labela in _split_statements(cela):
+            # `EH:` je labela, ne poziv -- bez nje bi svaki EH blok u projektu
+            # bio prijavljen kao poziv nedefinisane procedure.
+            if je_labela and re.fullmatch(r"[A-Za-z_]\w*", stmt):
+                continue
+            out += _proveri_naredbu(path, i, line, stmt, defined, arities)
+    return out
+
+
+def _proveri_naredbu(path: str, i: int, line: str, stmt: str,
+                     defined: set[str], arities: dict) -> list[Finding]:
+        out: list[Finding] = []
         explicit_call = bool(re.match(r"^Call\s", stmt, re.IGNORECASE))
         m = CALL_STMT.match(stmt)
         if not m:
-            continue
+            return out
         name, rest = m.group(1), m.group(2).lstrip()
 
         if name.lower() in STMT_WORDS or name.lower() in RESERVED:
-            continue
+            return out
         # `Foo = 1` (dodela), `Foo.Bar` (clan), `Foo As Long` (clan tipa) --
         # nista od toga nije poziv procedure.
         if rest.startswith(("=", ".", "!")) or re.match(r"^As\s", rest, re.IGNORECASE):
-            continue
+            return out
         # `Foo(kljuc).Add x` / `Foo(i) = 1` -- indeksiranje kolekcije ili niza.
         # Bez `Call` prefiksa, ime sa zagradom na pocetku naredbe je u ovom
         # kodu uvek indeks, ne poziv. (Sve 8 prvih laznih nalaza bilo je ovo.)
         if rest.startswith("(") and not explicit_call:
-            continue
+            return out
         if name.lower() not in defined:
             out.append(Finding(path, i, "NEDEFINISAN",
                                f"poziv '{name}' -- nigde u src-vba nije definisan "
                                f'Sub/Function/Property. VBA: "Sub or Function not defined".'))
-            continue
+            return out
 
         # Arnost -- druga polovina istog compile problema ("Wrong number of
         # arguments"). Proverava se samo kad je poziv cela naredba u jednoj
         # liniji i kad je ime jednoznacno definisano.
         span = arities.get(name.lower())
-        if span is None or line.rstrip().endswith("_"):
-            continue
+        if span is None:
+            return out
         args = rest[1:rest.rindex(")")] if explicit_call and rest.startswith("(") else rest
         n_args = len(_split_top_level(args))
         lo, hi = span
@@ -317,7 +384,7 @@ def check_undefined(path: str, lines: list[str], defined: set[str],
             out.append(Finding(path, i, "ARNOST",
                                f"poziv '{name}' sa {n_args} argumenata, a deklarisano je "
                                f'{ocekivano}. VBA: "Wrong number of arguments".'))
-    return out
+        return out
 
 
 class Finding:
@@ -634,8 +701,95 @@ def _dupli_nalazi(findings: list[Finding]) -> int:
     return sum(1 for f in findings if f.code == "DUPLIKAT_LOKALNI")
 
 
+# Slucajevi za NEDEFINISAN / ARNOST. Definicije se zadaju uz slucaj, jer se
+# inace skupljaju nad celim src-vba -- a ovi izvori tamo ne postoje.
+#
+# Sve cetiri "mora da zapisti" stavke su greske koje su STVARNO prosle checker
+# u ovoj sesiji i videle se tek kao [break] u VBE-u ili kao visenje harnessa.
+SELF_TEST_POZIVI = [
+    # --- mora da zapisti ---
+    ("poziv iza Case N:", {"NEDEFINISAN": 1}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Registar(ByVal idx As Long)
+    Select Case idx
+        Case 1: Radi 1, 2
+        Case 2: NePostojiNikako
+    End Select
+End Sub
+"""),
+    ("arnost prelomljenog poziva", {"ARNOST": 1}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Prelomljen()
+    Radi 1, _
+         2, _
+         3
+End Sub
+"""),
+    ("poziv iza dvotacke u istom redu", {"NEDEFINISAN": 1}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Dve()
+    Radi 1, 2: NemaMeNigde
+End Sub
+"""),
+    ("arnost poziva sa premalo argumenata", {"ARNOST": 1}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Malo()
+    Radi 1
+End Sub
+"""),
+    # --- ne sme da zapisti ---
+    ("labela EH: nije poziv", {}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub SaLabelom()
+    On Error GoTo EH
+    Radi 1, 2
+    Exit Sub
+EH:
+    Radi 1, 2
+End Sub
+"""),
+    ("imenovani argumenti (`:=`)", {}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Imenovani()
+    Radi a:=1, b:=2
+End Sub
+"""),
+    ("prelomljen poziv sa tacnom arnoscu", {}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Sub Dobar()
+    Radi 1, _
+         2
+End Sub
+"""),
+    ("clan Type bloka nije poziv", {}, {"radi"}, {"radi": (2, 2)}, """Option Explicit
+Public Type TRed
+    Naziv As String
+End Type
+"""),
+]
+
+
 def self_test() -> int:
     palo = []
+
+    # collect_arities nad jednolinijskom funkcijom: parametri se citaju do PARNE
+    # zatvorene zagrade i samo iz PRVE naredbe reda. Ranije je uzimao poslednju
+    # zagradu u redu, pa je `Function F() As Long: F = RGB(1,2,3): End Function`
+    # dobijao arnost 3 umesto 0 -- i svaki poziv F() bi bio prijavljen.
+    tmp1 = tempfile.mkdtemp(prefix="vbacheck_ar_")
+    try:
+        put1 = os.path.join(tmp1, "modJednolinijska.bas")
+        with open(put1, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write("Option Explicit\n"
+                     "Public Function CLR() As Long: CLR = RGB(1, 2, 3): End Function\n")
+        dobijeno_ar = collect_arities([put1]).get("clr")
+        if dobijeno_ar != (0, 0):
+            palo.append(f"  arnost jednolinijske funkcije: ocekivano (0, 0), "
+                        f"dobijeno {dobijeno_ar}")
+    finally:
+        shutil.rmtree(tmp1, ignore_errors=True)
+
+    for naziv, ocekivano, defined, arities, izvor in SELF_TEST_POZIVI:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        nalazi = check_undefined("<self-test>.bas", lines, defined, arities)
+        dobijeno: dict[str, int] = defaultdict(int)
+        for f in nalazi:
+            dobijeno[f.code] += 1
+        if dict(dobijeno) != ocekivano:
+            palo.append(f"  {naziv}: ocekivano {ocekivano or '{}'}, dobijeno {dict(dobijeno) or '{}'}")
 
     # Sve kroz check_file -- istu funkciju koju zove main(). Ostale provere se
     # ne racunaju, ali se izvrsavaju: slucaj koji bi im pao rusio bi i CLI.
@@ -666,14 +820,14 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    ukupno = len(SELF_TEST_CASES) + 1
+    ukupno = len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + 2
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
         print(f"\nself-test: {len(palo)} od {ukupno} slucajeva palo.", file=sys.stderr)
         return 2
-    print(f"self-test: cisto ({ukupno} slucajeva DUPLIKAT_LOKALNI, "
-          f"ukljucujuci jedan kroz ceo CLI).")
+    print(f"self-test: cisto ({ukupno} slucajeva: DUPLIKAT_LOKALNI, "
+          f"NEDEFINISAN/ARNOST, i jedan kroz ceo CLI).")
     return 0
 
 
