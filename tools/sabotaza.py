@@ -514,6 +514,16 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
+    # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
+    # cine vlasnika, ova sam kljuc.
+    "oporavak-cilj-po-broju": (
+        "modScrOporavak.bas",
+        "            kljuc = broj & Chr$(1) & vlasnik\n",
+        "            kljuc = broj   ' SABOTAZA: dva vlasnika istog broja postaju jedan cilj\n",
+        "T_Oporavak_CiljneListe",
+        "cilj je DOKUMENT (broj + vlasnik), ne sam broj",
+    ),
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
     # okine i relabel prepravi header cele palete.

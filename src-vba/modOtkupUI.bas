@@ -6375,7 +6375,7 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_STORNO", "Naslov F8: Storno", "Undo", IC_STORNO
     IcoRow a, "IC_REVERS", "Naslov F7: Reversi (PRIVREMENO)", "Library", IC_REVERS
     IcoRow a, "IC_ENTER", "(nije vezano)", "ReturnKey", IC_ENTER
-    IcoRow a, "IC_REFRESH", "(nije vezano)", "Refresh", IC_REFRESH
+    IcoRow a, "IC_OPORAVAK", "Naslov: Oporavak", "Refresh", IC_OPORAVAK
 
     Set wb = Workbooks.Add
     Set ws = wb.Sheets(1)

@@ -1307,6 +1307,137 @@ Private Sub T_IspravkaDetekcija_FailClosed()
     AssertEq cid, "", "bez ispravke nema ni CorrectionID"
 End Sub
 
+' EKRAN OPORAVAK JE U REGISTRU I ODGOVARA NA UGOVOR.
+'
+' Ljuska ne poznaje nijedan ekran po imenu - sve ide kroz Application.Run po
+' redu iz registra. Zato je "ekran postoji" isto sto i "modul odgovara na
+' Scr_Meta": ako se ime modula u registru omakne, sidebar ga samo prikaze
+' prigusenog i niko ne zna zasto. Ovaj test je jedino mesto koje to hvata.
+'
+' Radnje po listi su drugi deo: ciljne liste (Zbirne, Prijemnice) NE SMEJU
+' da imaju dugme "Prevezi". Cilj se bira klikom na red; dugme nad ciljem bi
+' prevezivalo cilj na samog sebe.
+Private Sub T_Oporavak_UgovorIRadnje()
+    Dim liste As Variant, i As Long, kljucevi As String
+
+    ' 1) Registar zna za ekran, i modul odgovara.
+    AssertEq (Len(modUiScreens.ScrRowByKey("OPORAVAK")) > 0), True, _
+             "OPORAVAK postoji u registru ekrana"
+    AssertEq modUiScreens.ScrPostoji("OPORAVAK"), True, _
+             "modul ekrana odgovara na Scr_Meta (kasno vezivanje radi)"
+    AssertEq (InStr(modUiScreens.ScrMeta("OPORAVAK"), "kljuc=OPORAVAK") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+
+    ' 2) Sest lista, i to bas ovih sest.
+    liste = modScrOporavak.Scr_Liste()
+    AssertEq (UBound(liste) + 1), 6, "ekran ima sest lista"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|NEDOVRSENO|PRIJEMNICE|ZBIRNE|PALETE|CILJPRIJ|UNDO", _
+             "redosled i kljucevi lista"
+
+    ' 3) Radnje po listi. Prazno = lista je samo pregled ili izbor cilja.
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    AssertEq modScrOporavak.Scr_Radnje(), "", "Nedovrseno je samo pregled"
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    AssertEq modScrOporavak.Scr_Radnje(), "", "ciljna lista zbirnih nema radnju"
+    modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
+    AssertEq modScrOporavak.Scr_Radnje(), "", "ciljna lista prijemnica nema radnju"
+    modScrOporavak.Scr_OpoTestSet "PRIJEMNICE", "", ""
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), "prevezipri:") = 1), True, _
+             "osirotele prijemnice imaju Prevezi"
+    modScrOporavak.Scr_OpoTestSet "PALETE", "", ""
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), "prevezipal:") = 1), True, _
+             "osirotele palete imaju Prevezi"
+    modScrOporavak.Scr_OpoTestSet "UNDO", "", ""
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), "vrati:") = 1), True, _
+             "Undo lista ima Vrati storno"
+    ' Radnja koja menja podatke i tesko se poziva nazad mora da bude crvena.
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), ":danger:") > 0), True, _
+             "Vrati storno nosi danger stil"
+
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+End Sub
+
+' CILJNE LISTE: SAMO AKTIVNI, I JEDAN RED PO DOKUMENTU - NE PO BROJU.
+'
+' Prva verzija ovog testa tvrdila je "cilj prevezivanja JESTE broj". To je
+' bila greska koju je test KODIFIKOVAO umesto da je uhvati - i prosla je
+' jer fixture tada nije imao nijedan par dokumenata koji dele broj.
+'
+' Broj se racuna PO KUPCU (GenerateBrojPrijemnice), pa dva kupca istog dana
+' dobiju isti "1/ddmmyy". To su DVA dokumenta. Dedup po samom broju sveo bi
+' ih na jedan red: operater bi izabrao "cilj" ne znajuci ciji je, a
+' prevezivanje bi otislo na onaj koji zatekne poslednji.
+'
+' Klase I i II i dalje dele jedan red - one dele i broj i vlasnika, pa jesu
+' jedan dokument.
+Private Sub T_Oporavak_CiljneListe()
+    Dim d As Variant, redovi As Variant, n As Long, i As Long, nadjen As Long
+    Dim storniranih As Long, istiBroj As Long, vlasnici As String
+
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    d = modScrOporavak.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "ciljna lista zbirnih vraca ugovor mreze"
+    n = CLng(d(2))
+    AssertEq (n > 0), True, "fixture ima bar jednu aktivnu zbirnu"
+
+    redovi = d(1)
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = FX_ZBIRNA Then nadjen = nadjen + 1
+        If CStr(redovi(i, 1)) = FX_ZBIRNA_STORNO Then storniranih = storniranih + 1
+    Next i
+    AssertEq nadjen, 1, "zbirna iz fixture-a stoji TACNO jednom"
+    ' Zasto ovo mora da postoji: prevezivanje na STORNIRAN cilj bi napravilo
+    ' drugu siroticu umesto da resi prvu.
+    AssertEq storniranih, 0, "stornirana zbirna se NE nudi kao cilj"
+
+    ' --- KOLIZIJA ZBIRNIH: isti broj, ISTI kupac, dva vozaca ---
+    '
+    ' Broj zbirne se generise PO VOZACU, pa su ZBI-DUPL-1 i ZBI-DUPL-2 dva
+    ' dokumenta. Lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red
+    ' -- operater tada ne moze ni da izabere onaj koji mu treba, a skrivena
+    ' generacija nosi generaciju reda koji je slucajno pobedio.
+    Dim duplih As Long, vozaci As String
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = FX_ZBIRNA_DUPL Then
+            duplih = duplih + 1
+            vozaci = vozaci & "|" & CStr(redovi(i, 3))
+        End If
+    Next i
+    AssertEq duplih, 2, "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"
+    AssertEq (InStr(vozaci, FX_VOZAC2) > 0), True, "drugi vozac je vidljiv u listi"
+    AssertEq (InStr(vozaci, FX_KUPAC) > 0), True, _
+             "vlasnik je kompozit -- uz vozaca se vidi i kupac"
+
+    ' --- KOLIZIJA BROJEVA: dva kupca, isti broj -> DVA reda ---
+    modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
+    d = modScrOporavak.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "ciljna lista prijemnica vraca ugovor mreze"
+    n = CLng(d(2))
+    redovi = d(1)
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = FX_PRIJ_BROJ Then
+            istiBroj = istiBroj + 1
+            vlasnici = vlasnici & "|" & CStr(redovi(i, 3))
+        End If
+        AssertEq (CStr(redovi(i, 1)) = FX_PRIJ_STORNO), False, _
+                 "stornirana prijemnica se NE nudi kao cilj"
+    Next i
+    AssertEq istiBroj, 2, "dva kupca sa istim brojem daju DVA ciljna dokumenta"
+    AssertEq (InStr(vlasnici, FX_KUPAC) > 0), True, "prvi vlasnik je vidljiv u listi"
+    AssertEq (InStr(vlasnici, FX_KUPAC2) > 0), True, "drugi vlasnik je vidljiv u listi"
+
+    ' Pretraga suzava istu listu.
+    modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
+    d = modScrOporavak.Scr_Rows("sve", "NE-POSTOJI-NIGDE")
+    AssertEq CLng(d(2)), 0, "pretraga koja nista ne pogadja daje praznu listu"
+
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+End Sub
+
+
 ' ISPRAVKA PRIJEMNICE OD KRAJA DO KRAJA: preskoci paletizaciju, prevezi palete.
 '
 ' Ovo je najrizicniji put celog paketa i do sada je bio samo na operaterskoj

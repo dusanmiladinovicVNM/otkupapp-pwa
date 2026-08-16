@@ -511,6 +511,7 @@ Private Function CiljZbirnaGridCols() As Variant
     CiljZbirnaGridCols = Array( _
         "OTKUI_HD_BROJ||txt|120|1", _
         "OTKUI_HD_DATUM||date|62|1", _
+        "OTKUI_HDO_VLASNIK||txt|120|1", _
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
@@ -530,6 +531,7 @@ Private Function CiljPrijGridCols() As Variant
     CiljPrijGridCols = Array( _
         "OTKUI_HD_BROJ||txt|120|1", _
         "OTKUI_HD_DATUM||date|62|1", _
+        "OTKUI_HDO_VLASNIK||txt|120|1", _
         "OTKUI_HD_VRSTA||txt|84|2", _
         "OTKUI_HD_SORTA||part|0|3", _
         "OTKUI_HD_KG||kg|76|1", _
@@ -539,7 +541,7 @@ End Function
 Private Function RowsAktivnePrijemnice(ByVal q As String) As Variant
     RowsAktivnePrijemnice = RowsAktivni(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_DATUM, _
                                         COL_PRJ_VRSTA, COL_PRJ_SORTA, COL_PRJ_KOLICINA, _
-                                        CiljPrijGridCols(), q)
+                                        COL_PRJ_KUPAC, CiljPrijGridCols(), q)
 End Function
 
 ' Liste kandidata za cilj: nestornirani redovi, jedan red po DOKUMENTU.
