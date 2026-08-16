@@ -122,6 +122,7 @@ Public Sub RunAllTests()
     RunOne 25
     RunOne 26
     RunOne 27
+    RunOne 28
 
     SetTestMode prevMode
     WriteResultFile
@@ -201,6 +202,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 25: TestName = "T_IspravkaDetekcija_FailClosed"
         Case 26: TestName = "T_Oporavak_UgovorIRadnje"
         Case 27: TestName = "T_Oporavak_CiljneListe"
+        Case 28: TestName = "T_IspravkaPrijemnice_SkipIRelink"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -236,6 +238,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 25: T_IspravkaDetekcija_FailClosed
         Case 26: T_Oporavak_UgovorIRadnje
         Case 27: T_Oporavak_CiljneListe
+        Case 28: T_IspravkaPrijemnice_SkipIRelink
     End Select
 End Sub
 
@@ -1256,6 +1259,170 @@ Private Sub T_IspravkaDetekcija_FailClosed()
     AssertEq razlog, "", "bez ispravke nema ni razloga"
     AssertEq cid, "", "bez ispravke nema ni CorrectionID"
 End Sub
+
+' ISPRAVKA PRIJEMNICE OD KRAJA DO KRAJA: preskoci paletizaciju, prevezi palete.
+'
+' Ovo je najrizicniji put celog paketa i do sada je bio samo na operaterskoj
+' checklisti. Pokriva ga BEZ ijednog novog seam-a u produkcionom kodu: recnik
+' koji PrijemnicaUpisi prima je vec javni ulazni ugovor (NoviPrijemnicaUnos ga
+' i objavljuje), pa test postavlja "ispravkaID" direktno. MsgBox iz
+' PrepoznajIspravkuPrijemnice tako uopste nije na putanji -- a odluka koju taj
+' dijalog donosi vec je pokrivena kroz NadjiIspravku.
+'
+' Test je DIFERENCIJALAN, i to namerno. "Nema svezih paleta" samo po sebi ne
+' dokazuje nista: isto bi se videlo da je paletiranje ugaseno u Podesavanjima,
+' ili da paletizacija uopste ne radi nad ovim fixture-om. Zato se ISTI upis
+' izvrsi dvaput:
+'
+'   A) bez ispravke  -> sveza paletizacija MORA da napravi stavku
+'   B) kao ispravka  -> nema sveze, a stara stavka je PREVEZANA
+'
+' Tek razlika izmedju A i B dokazuje da SetPaletizeSkip radi.
+'
+' Gajbice su namerno jednake starim (40): tada ReassignPaleteToPrijemnica_TX
+' ne prijavljuje razliku, pa PaletaAdjustPrompt (koji ume da pita operatera)
+' ne ulazi u igru.
+Private Sub T_IspravkaPrijemnice_SkipIRelink()
+    Dim p As Object, res As String, poruke As String
+    Dim cid As String, prevPal As String
+
+    ' Preduslov: bez ukljucenog paletiranja ceo test meri prazno.
+    prevPal = GetConfigValue(CFG_PALETIRANJE)
+    SetConfigValue CFG_PALETIRANJE, "DA"
+    AssertEq IsPaletiranjeEnabled(), True, "preduslov: paletiranje je ukljuceno"
+    AssertEq StavkiZaPrijemnicu(FX_PRIJ_STORNO), 1, _
+             "preduslov: stornirana prijemnica nosi jednu paletnu stavku"
+
+    ' --- A) KONTROLA: obican upis -> sveza paletizacija RADI ---
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicu p, "T-KTRL-1"
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(res) > 0), True, "kontrolni upis je prosao"
+    AssertEq (StavkiZaPrijemnicu("T-KTRL-1") > 0), True, _
+             "bez ispravke sveza paletizacija pravi stavku"
+
+    ' --- B) ISPRAVKA: nema sveze paletizacije, stara stavka se prevezuje ---
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, _
+              FLOW_DOC_PRIJEMNICA, "PRJ-TEST-S", FX_PRIJ_STORNO, _
+              FLOW_DOC_PRIJEMNICA, , , FLOW_DOC_ZBIRNA, , FX_ZBIRNA, _
+              "test: ispravka prijemnice")
+    AssertEq (Len(cid) > 0), True, "correction context je kreiran"
+
+    Set p = NoviPrijemnicaUnos()
+    PopuniPrijemnicu p, "T-ISPR-1"
+    p("ispravkaID") = cid
+    p("ispravkaStariBroj") = FX_PRIJ_STORNO
+
+    res = modDokUnos.PrijemnicaUpisi(p, poruke)
+    AssertEq (Len(res) > 0), True, "upis ispravke je prosao"
+
+    AssertEq StavkiZaPrijemnicu("T-ISPR-1"), 1, _
+             "ispravka nosi prevezenu paletnu stavku"
+    AssertEq StavkiZaPrijemnicu(FX_PRIJ_STORNO), 0, _
+             "stara prijemnica vise ne nosi paletnu stavku"
+
+    AssertEq GajbicaZaPrijemnicu("T-ISPR-1"), 40, _
+             "prevezena roba je 40 gajbica"
+
+    ' KLJUCNA TVRDNJA, i broji SVE redove - i stornirane.
+    '
+    ' Dve ranije verzije ovog testa bile su placebo: brojale su samo AKTIVNE
+    ' stavke, pa je sabotaza koja ukloni SetPaletizeSkip ostajala ZELENA.
+    ' Izmereno stanje pokazuje zasto: bez preskakanja se sveza paleta ipak
+    ' napravi, a onda je ReassignPaleteToPrijemnica_TX odmah STORNIRA. U
+    ' aktivnom preseku se zato ne vidi nista - ostaje samo trag:
+    '
+    '   sa preskakanjem : [ST T-ISPR-1 gaj=40]
+    '   bez preskakanja : [ST T-ISPR-1 gaj=40] + [ST T-ISPR-1 gaj=40 st=Da]
+    '
+    ' To je tacno ono sto komentar uz SetPaletizeSkip i opisuje kao stetu:
+    ' "kreirale bi se palete koje se odmah storniraju (prazna otvorena paleta
+    ' + potrosen broj)". Broj palete se ne vraca.
+    AssertEq SvihStavkiZaPrijemnicu("T-ISPR-1"), 1, _
+             "nema paletizacije-pa-storna: nijedna stavka nije nastala uzalud"
+
+    ' Kontekst mora da bude ZATVOREN - inace bi sledeci unos opet bio ponudjen
+    ' kao zamena za isti stari dokument.
+    AssertEq modStornoContext.GetCorrectionField(cid, COL_SV_STATUS), SV_STATUS_COMPLETED, _
+             "correction context je zatvoren posle uspesnog prevezivanja"
+    ' Recnik se TROSI: ponovljen poziv ne sme da prevezuje drugi put.
+    AssertEq CStr(p("ispravkaID")), "", "ispravka je potrosena iz recnika"
+
+    SetConfigValue CFG_PALETIRANJE, prevPal
+End Sub
+
+' Zajednicka polja za oba upisa iz gornjeg testa. Kolicine i gajbice su iste
+' kao na storniranoj prijemnici (400 kg / 40 gajbica) - v. napomenu o
+' PaletaAdjustPrompt.
+Private Sub PopuniPrijemnicu(ByVal p As Object, ByVal broj As String)
+    p("datum") = CDate(FX_DATUM)
+    p("kupacID") = FX_KUPAC
+    p("vozacID") = FX_VOZAC
+    p("brDok") = broj
+    p("brojZbirne") = FX_ZBIRNA
+    p("vrsta") = FX_VRSTA
+    p("sorta") = FX_SORTA
+    p("tipAmb") = FX_TIP_AMB
+    p("kolicinaI") = 400
+    p("cenaI") = 50
+    p("kolAmb") = 40
+End Sub
+
+' Zbir gajbica na AKTIVNIM paletnim stavkama date prijemnice. Ovo je mera
+' ROBE - jedina koja razlikuje "prevezeno" od "paletizovano pa prevezeno",
+' jer se stavke na istoj paleti spajaju u jedan red.
+Private Function GajbicaZaPrijemnicu(ByVal brojPrij As String) As Long
+    Dim d As Variant, i As Long, cBr As Long, cSt As Long, cGa As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Function
+    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    cGa = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BR_GAJBICA)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If cBr = 0 Or cGa = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
+            If cSt = 0 Then
+                GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
+            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+                GajbicaZaPrijemnicu = GajbicaZaPrijemnicu + NzL(d(i, cGa))
+            End If
+        End If
+    Next i
+End Function
+
+' SVE paletne stavke datog broja, ukljucujuci stornirane. Aktivan presek ne
+' razlikuje "nije paletizovano" od "paletizovano pa stornirano" - a bas ta
+' razlika je ono sto SetPaletizeSkip sprecava.
+Private Function SvihStavkiZaPrijemnicu(ByVal brojPrij As String) As Long
+    Dim d As Variant, i As Long, cBr As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Function
+    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    If cBr = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then _
+            SvihStavkiZaPrijemnicu = SvihStavkiZaPrijemnicu + 1
+    Next i
+End Function
+
+' Broj AKTIVNIH paletnih stavki koje pokazuju na dati broj prijemnice.
+Private Function StavkiZaPrijemnicu(ByVal brojPrij As String) As Long
+    Dim d As Variant, i As Long, cBr As Long, cSt As Long
+    d = GetTableData(TBL_PALETA_STAVKA)
+    If IsEmpty(d) Then Exit Function
+    cBr = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_PRIJ)
+    cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
+    If cBr = 0 Then Exit Function
+    For i = 1 To UBound(d, 1)
+        If Trim$(NzToText(d(i, cBr))) = brojPrij Then
+            If cSt = 0 Then
+                StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
+            ElseIf UCase$(Trim$(NzToText(d(i, cSt)))) <> "DA" Then
+                StavkiZaPrijemnicu = StavkiZaPrijemnicu + 1
+            End If
+        End If
+    Next i
+End Function
 
 ' Vrednost jednog polja iz prefill opisa ("kljuc=vrednost|kljuc=vrednost").
 ' Prazno = kljuca nema, sto je za ovaj opis isto sto i "nema vrednosti"

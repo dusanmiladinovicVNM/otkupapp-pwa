@@ -1614,3 +1614,116 @@ prevezivanja iz ovog ekrana. Jezgro je pokriveno drugde
 (`ReassignPaleteToPrijemnica_TX` u `RunPaleteTestSuite`, `UndoOperation_TX` u
 `Test_StornoCentar_All`); lepak — izbor cilja i redosled potvrda — proverava se
 **ručno**, po checklisti u PR-u.
+
+---
+
+## vba-v2.44.1 — 2026-08-16 (hardening po pregledu)
+> Bez novih sposobnosti. Zatvara **fail-open** putanje i **dvosmislenost
+> identiteta dokumenta** koje je pregled našao u 2.43.0 i 2.44.0.
+
+**Neizvesnost sada zaustavlja upis, ne propušta ga**
+
+Tri mesta su na grešku birala „nastavi":
+
+- **detekcija ispravke prijemnice** — ako čitanje `tblStornoVeze` pukne dok
+  ispravka možda čeka, unos je nastavljao kao običan: nova prijemnica dobije
+  **sveže** palete, stare ostanu osirotele, a korekcija ostane `PENDING` i čeka
+  još jednu prijemnicu. Sada je detekcija izdvojena u `NadjiIspravku`
+  (0 / 1 / −1 = STOP) i fail-closed;
+- **neočekivana greška u prevezivanju paleta** — prijemnica je već snimljena a
+  paletizacija preskočena; bez oznake `MANUAL` korekcija bi ostala `PENDING` i
+  sledeći unos bi opet bio ponuđen kao zamena. Sada i ta grana ide u `MANUAL`;
+- **`StornoTraziIzborModa`** — `CorrectionNeedsDialog` je sam fail-closed (na
+  grešku vraća `True`), a omotač sa `On Error Resume Next` je tu zaštitu
+  poništavao: rezultat ostaje `False` i storno prelazi u običan, bez pitanja o
+  nizvodnom toku.
+
+**Broj dokumenta nije identitet**
+
+`BrojPrijemnice` se računa **po kupcu**, pa dva kupca istog dana dobiju isti
+`1/ddmmyy`. Iz toga su sledile dve greške:
+
+- **prefill je padao nazad na broj.** `FindAnchorRow` je, kad je `OldDocID`
+  zadat ali ga u tabeli nema, uzimao „poslednji red istog broja" — dakle tuđi
+  dokument. Fallback ostaje samo za stare kontekste koji `OldDocID` uopšte
+  nemaju.
+- **ciljne liste u Oporavku su deduplikovale po broju**, pa su dva dokumenta
+  postajala jedan red. Sada je ključ **broj + vlasnik**, kolona VLASNIK je
+  vidljiva, a prevezivanje na dvosmislen broj se **odbija**
+  (`modDokumenta.AktivnihVlasnikaPoBroju`) umesto da ode na onaj koji zatekne
+  poslednji.
+
+> Prava popravka je da `ReassignPaleteToPrijemnica_TX` i
+> `ReassignPrijemnicaToZbirna_TX` prime **identitet dokumenta** umesto broja.
+> One su i danas broj-bazirane i zovu ih i legacy forma i `modOtkupUnos`, pa je
+> to zaseban zahvat u jezgru. Dok se ne uradi, dvosmislen slučaj staje.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=25, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Pet novih sabotaža**, svaka obara test po imenu: `prefill-fallback-po-broju`,
+  `prefill-anchor-broj`, `vlasnik-broji-stornirane`, `ispravka-fail-open`,
+  `oporavak-cilj-po-broju`.
+
+**Fixture je ponovo proširen** — dve aktivne prijemnice sa **istim brojem i
+različitim kupcem**, jedna stornirana sa paletom, i dve ispravke na čekanju.
+Bez tog para nijedna tvrdnja oblika „dokument se jednoznačno razrešava po broju"
+nije imala nad čim da padne; testovi su bili zeleni jer kolizija u fixture-u
+nije postojala. Regeneracija:
+
+```
+python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --force
+```
+
+---
+
+## vba-v2.44.2 — 2026-08-16 (end-to-end pokriće ispravke prijemnice)
+> Bez izmena u ponašanju. Zatvara poslednju rupu u pokriću koju su prethodna
+> dva paketa prijavila kao „ostaje na operaterskoj checklisti".
+
+**Najrizičniji put je sada odvrćen automatski**
+
+`SetPaletizeSkip` + prevezivanje paleta + zatvaranje korekcije — do sada
+proveravano samo ručno. Novi `T_IspravkaPrijemnice_SkipIRelink` vrti ceo tok.
+
+**Bez novog seam-a u produkcionom kodu.** Rečnik koji `PrijemnicaUpisi` prima
+već je javni ulazni ugovor (`NoviPrijemnicaUnos` ga i objavljuje), pa test
+postavlja `ispravkaID` direktno. `MsgBox` iz `PrepoznajIspravkuPrijemnice` tako
+uopšte nije na putanji, a odluka koju taj dijalog donosi već je pokrivena kroz
+`NadjiIspravku`.
+
+Test je **diferencijalan**: isti upis se izvrši dvaput — jednom bez ispravke
+(kontrola: sveža paletizacija *mora* da odradi) i jednom kao ispravka. Bez tog
+para „nema svežih paleta" ne bi dokazivalo ništa: isto bi se videlo da je
+paletiranje ugašeno u Podešavanjima.
+
+**Dve verzije testa bile su placebo — sabotaža ih je otkrila**
+
+Prva je brojala aktivne paletne stavke. Druga je merila gajbice. **Obe su
+ostajale zelene** kad se `SetPaletizeSkip` ukloni.
+
+Izmereno stanje pokazuje zašto — bez preskakanja se sveža paleta ipak napravi,
+a `ReassignPaleteToPrijemnica_TX` je odmah **stornira**:
+
+```
+sa preskakanjem : [ST T-ISPR-1 gaj=40]
+bez preskakanja : [ST T-ISPR-1 gaj=40] + [ST T-ISPR-1 gaj=40 st=Da]
+```
+
+U aktivnom preseku razlike nema. Tvrdnja zato broji **sve** stavke, uključujući
+stornirane — što je i tačno ono što komentar uz `SetPaletizeSkip` opisuje kao
+štetu: „kreirale bi se palete koje se odmah storniraju (prazna otvorena paleta +
+potrošen broj)". Broj palete se ne vraća.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=26, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Tri nove sabotaže**, svaka obara test po imenu: `ispravka-bez-skipa`,
+  `ispravka-bez-relinka`, `ispravka-context-ostaje`.
+
+Time sa operaterske checkliste ispada tačka 7 iz PR #194 — ostaje samo ono što
+se zaista ne može automatizovati (izgled, štampa, ponašanje nad pravim podacima).

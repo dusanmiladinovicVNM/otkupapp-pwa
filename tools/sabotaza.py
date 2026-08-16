@@ -451,6 +451,31 @@ SABOTAZE = {
         "T_Prefill_PoIdentitetuNePoBroju",
         "storniran dokument se ne broji kao vlasnik broja",
     ),
+    # --- ispravka prijemnice od kraja do kraja -------------------------------
+    "ispravka-bez-skipa": (
+        "modDokUnos.bas",
+        "    ispravka = (Len(S(p, \"ispravkaID\")) > 0)\n"
+        "    If ispravka Then SetPaletizeSkip True\n",
+        "    ispravka = (Len(S(p, \"ispravkaID\")) > 0)\n"
+        "    ' SABOTAZA: sveza paletizacija se vise ne preskace\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "ispravka preskace svezu paletizaciju (inace ista roba ide na dve palete)",
+    ),
+    "ispravka-bez-relinka": (
+        "modDokUnos.bas",
+        "    If ispravka Then PreveziPaleteIspravke p, res, poruke\n",
+        "    ' SABOTAZA: palete stare prijemnice se vise ne prevezuju\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "palete stare prijemnice prelaze na novu",
+    ),
+    "ispravka-context-ostaje": (
+        "modDokUnos.bas",
+        "            modStornoContext.CompleteCorrectionContext cid, \"\", noviBroj, _\n"
+        "                \"Ispravka prijemnice: palete prevezane na \" & noviBroj & \".\"\n",
+        "            ' SABOTAZA: correction ostaje PENDING posle uspesnog prevezivanja\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "correction se zatvara -- inace sledeci unos opet bude ponudjen kao zamena",
+    ),
     "ispravka-fail-open": (
         "modDokUnos.bas",
         '        razlog = Poruka("DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ")\n'
