@@ -2021,3 +2021,87 @@ ikad promeni.
 - `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
 - `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
 - Sabotaža `cotenant-po-broju` i dalje obara `T_DeljenaPaleta_SuStanarPoIdentitetu`.
+
+## v2.46.0 — `v6-ui-129` · F8 nosi identitet izabranog reda
+
+Poslednje mesto na kome je storno centar vraćao kanonski izbor reda nazad u
+poslovni broj. **Tek ovim je Faza D stvarno zatvorena** — katalog je do sada
+tvrdio da je zatvorena od `v6-ui-121`, što nije bilo tačno.
+
+### Šta je bilo
+
+`StornoRedF8` je izabran red svodio na `GridCell(red, 1)` — broj. Revers je uz
+njega nosio smer, izvod broj računa, ostalih šest tipova ništa. Niže je
+`modStornoDok` dokument tražio **iznova, po broju**.
+
+Za običan storno to je od #194/#195 uglavnom hvatao owner guard u writeru. Ali
+mod **`REŠI KASNIJE` guarded writer uopšte ne zove** — napravi samo trajan
+recovery zapis. Taj zapis je mogao zauvek da pokazuje na tuđi dokument, i ništa
+to nije prijavljivalo. `ScanPrijemnica` je uz to palete brojao po
+`BrojPrijemnice`, pa su i brojke u pregledu mogle biti tuđe.
+
+### Kako identitet putuje
+
+Nevidljiva kolona u `GridCols`, **samo za F8**:
+
+```
+"OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
+```
+
+Tri činjenice iz ljuske koje to čine ispravnim — sve tri proverene u kodu:
+
+| Mehanizam | Posledica |
+|---|---|
+| `SortedView` kopira tačno `mColN` kolona | kolona van `cols` ne preživi sortiranje |
+| `mColN = UBound(mCols) + 1` | deklarisana kolona uvek putuje |
+| `For pass = 3 To 1 Step -1` | prioritet **4** se nikad ne renderuje |
+
+Mapa `red → identitet` sa strane bi bila **pogrešna**: ljuska sortira posle
+`Scr_Rows`, pa izlazni indeks nije indeks u mreži.
+
+Identitet po tipu: `GeneracijaID` za otkup/otpremnicu/zbirnu/prijemnicu,
+`FakturaID`, `NovacID`. Revers i izvod već idu uz smer, odnosno broj računa.
+
+### Lanac
+
+`StornoRedF8` → `StornoRazlog` / `StornoTraziIzborModa` / `StornoPregledLanca` /
+`StornoIzvrsi` / `StornoIzvrsiMod` → `Scan*` i writeri.
+
+`PkPoIdentitetu` zamenjuje `LookupActiveID(... broj ...)` u sva tri `Scan*`:
+generacija bira dokument; bez nje se pada na broj **tek pošto se dokaže da broj
+nosi jednog vlasnika**, inače prazno → `exists=False` i flow staje. Writeri
+(`StornoOtkupByBrDok_TX`, `StornoOtpremnicaByBroj_TX`, `StornoPrijemnicaByBroj_TX`)
+dobili su opcionu generaciju i biraju redove po njoj.
+
+### Test je prvo bio placebo
+
+Prva verzija je birala dokument i poredila `OldDocID` sa njim — i **prolazila je
+i kad se identitet potpuno ignoriše**, jer je razrešavanje po broju slučajno
+davalo baš taj dokument. Sabotaža je to pokazala.
+
+Prepravljen da meri **razliku u ponašanju**, ne konkretan PK: bez identiteta se
+nad dvosmislenim brojem recovery zapis **ne pravi**, sa identitetom se pravi i
+pokazuje na izabran dokument. Prva tvrdnja pada čim se identitet zaobiđe, bez
+obzira na redosled redova.
+
+```
+FAIL … bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem
+       -- ocekivano [0], dobijeno [9]        (f8-identitet-po-broju)
+```
+
+### Sitno, iz istog pregleda
+
+- `Err.description` se u `StornoRazlog` i `StornoIzvrsi` čita **pre** `LogErr`-a:
+  `LogError` ima `On Error Resume Next` i fajl I/O, pa greška u samom logovanju
+  prepiše `Err` i operater vidi pogrešnu poruku.
+- `docs/EXCEL_TEST_HARNESS.md`: izričita napomena da je `--out` obavezan kad je
+  donor postojeći fixture — komanda bez njega je već dvaput napisana kao da radi.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=35, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- `COMPILE` → **`NEJASNO`**. Posle ovog PR-a ručni `Alt+F11 → Debug → Compile
+  VBAProject` je prava kapija, ne formalnost — u prethodnom rebase-u se pokazalo
+  da statički checker propušta nedefinisan simbol i pogrešnu arnost.

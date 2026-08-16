@@ -236,6 +236,10 @@ ne samo onaj ko piše test.
 > ```powershell
 > python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --out tests\fixtures\otkup_test_new.xlsm --force
 > ```
+>
+> **`--out` je tu obavezan.** Generator odbija donor koji je isti fajl kao
+> izlaz, pa `--donor testsixtures\otkup_test.xlsm --force` bez `--out`
+> ne radi — ta komanda je već dva puta napisana u pregledima kao da radi.
 
 - Donor daje samo strukturu; spisak kolona se **ne** zakucava u Python (šema
   tabela je izvor istine). Podaci su 100% sintetički, u transakciji koja se uvek

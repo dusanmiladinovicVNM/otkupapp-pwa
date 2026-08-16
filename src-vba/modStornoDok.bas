@@ -87,7 +87,7 @@ Public Const STIP_IZVOD      As String = "IZVOD"
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, _
                              Optional ByVal docID As String = "") As String
-    Dim razlog As String, izvBroj As String, izvRacun As String
+    Dim razlog As String, izvBroj As String, izvRacun As String, errDesc As String
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then
@@ -146,8 +146,9 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
     End Select
     Exit Function
 EH:
+    errDesc = Err.description
     LogErr "modStornoDok.StornoRazlog"
-    StornoRazlog = Poruka("STORNO_ERR_RAZRESENJE") & " " & Err.description
+    StornoRazlog = Poruka("STORNO_ERR_RAZRESENJE") & " " & errDesc
 End Function
 
 '=====================================================================
@@ -184,7 +185,7 @@ End Function
 Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                              ByVal opcija As String, ByRef poruka As String, _
                              Optional ByVal docID As String = "") As Boolean
-    Dim ok As Boolean, novID As String, razlog As String
+    Dim ok As Boolean, novID As String, razlog As String, errDesc As String
     Dim izvBroj As String, izvRacun As String, izvInfo As String
     Dim fakID As String, vezPrij As String
     On Error GoTo EH
@@ -264,8 +265,9 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
     If Not ok And Len(poruka) = 0 Then poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj
     Exit Function
 EH:
+    errDesc = Err.description
     LogErr "modStornoDok.StornoIzvrsi"
-    poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & Err.description
+    poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & errDesc
 End Function
 
 '=====================================================================

@@ -146,6 +146,7 @@ Public Sub RunAllTests()
     RunOne 32
     RunOne 33
     RunOne 34
+    RunOne 35
 
     SetTestMode prevMode
     WriteResultFile
@@ -232,6 +233,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 35: TestName = "T_F8_IzabranRedOstajeIzabran"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -274,6 +276,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 35: T_F8_IzabranRedOstajeIzabran
     End Select
 End Sub
 
@@ -1667,6 +1670,69 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     AssertEq GajbicaZaDokument("PRJ-TEST-B"), 0, _
              "dokument drugog kupca istog broja NIJE nista dobio"
 End Sub
+
+' ============================================================
+' 35. F8: izabran red ostaje izabran do correction context-a
+' ============================================================
+' Ovo je jedina putanja koju ni jedan owner guard ne pokriva.
+'
+' Kod modova ISPRAVKA i DUPLI se posle kreiranja context-a zove guarded writer,
+' pa dvosmislen broj tamo pukne i context bude obelezen neuspelim. Kod moda
+' RESI KASNIJE writer se NE ZOVE UOPSTE -- napravi se samo trajan recovery
+' zapis. Ako je dokument razresen po broju, taj zapis moze zauvek da pokazuje
+' na TUDJI dokument, i nista to ne prijavljuje.
+'
+'   PRJ-TEST-A  KUP-TEST-1  \  isti broj 1/150326
+'   PRJ-TEST-B  KUP-TEST-2  /  dva aktivna dokumenta
+'
+' Bira se A. Tvrdnja je da OldDocID u context-u bude BAS A.
+' Tvrdnja je namerno napisana tako da NE zavisi od toga koji red je "prvi" u
+' tabeli. Prva verzija ovog testa je birala dokument i poredila OldDocID sa njim
+' -- i prolazila je i kad se identitet potpuno ignorise, jer je razresavanje po
+' broju SLUCAJNO davalo bas taj dokument. Sabotaza je to pokazala; bez nje bi
+' test bio placebo.
+'
+' Zato se meri RAZLIKA U PONASANJU, ne konkretan PK:
+'   bez identiteta  -> dvosmislen broj se odbija, recovery zapisa NEMA
+'   sa identitetom  -> zapis postoji i pokazuje na izabran dokument
+' Prva tvrdnja pada cim se identitet zaobidje, bez obzira na redosled redova.
+Private Sub T_F8_IzabranRedOstajeIzabran()
+    Dim res As Object, cid As String, ocekivan As String
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-F8-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-F8-2"
+
+    ' Preduslov: broj je stvarno dvosmislen -- inace test ne meri nista.
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ZBR_KOLIZIJA, _
+                             "T_F8", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "preduslov: broj nose DVA aktivna kupca"
+
+    ' BEZ identiteta: dokument se ne moze utvrditi, pa se ne sme napraviti
+    ' trajan recovery zapis. Kod RESI KASNIJE guarded writer se ne zove, pa je
+    ' ovo jedina kapija na toj putanji.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "", _
+                                           SV_MODE_RESI_KASNIJE, False, False, "")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat i bez identiteta"
+    AssertEq Len(Trim$(NzToText(res("correctionID")))), 0, _
+             "bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem"
+
+    ' SA identitetom: zapis postoji i pokazuje na bas taj dokument.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "", _
+                                           SV_MODE_RESI_KASNIJE, False, False, "GEN-F8-2")
+    cid = Trim$(NzToText(res("correctionID")))
+    AssertEq (Len(cid) > 0), True, "sa identitetom se recovery zapis pravi"
+
+    ocekivan = modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2")
+    AssertEq ocekivan, "GEN-F8-2", "preduslov: generacija je upisana na Z2"
+    AssertEq OldDocIDKonteksta(cid), "PRJ-TEST-Z2", _
+             "recovery zapis pokazuje na IZABRAN dokument"
+End Sub
+
+' OldDocID iz correction context-a po njegovom PK-u.
+Private Function OldDocIDKonteksta(ByVal correctionID As String) As String
+    OldDocIDKonteksta = Trim$(NzToText(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, _
+                                                   correctionID, COL_SV_OLD_DOCID)))
+End Function
 
 ' Gajbice vezane za JEDAN dokument (po PrijemnicaID), ne za broj. Broj je
 ' labela i dele ga dva kupca, pa zbir po broju ne moze da razlikuje ciljeve --

@@ -514,6 +514,26 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
+    # prvi dokument tog broja -- a kod RESI KASNIJE se guarded writer uopste ne
+    # zove, pa gresku nista ne prijavljuje.
+    "f8-identitet-po-broju": (
+        "modStornoFlow.bas",
+        "    If Len(Trim$(gen)) > 0 Then\n"
+        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n"
+        "        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.\n"
+        "        If ids.count = 0 Then Exit Function\n"
+        "        PkPoIdentitetu = CStr(ids.Keys()(0))\n"
+        "        Exit Function\n"
+        "    End If\n"
+        "\n"
+        "    If VlasniciPoBroju(tblName, brojCol, broj, SRC, False, Array(vlasnikCol)).count > 1 Then\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: identitet se ignorise -- prvi aktivan red tog broja\n",
+        "T_F8_IzabranRedOstajeIzabran",
+        "recovery zapis pokazuje na IZABRAN dokument, ne na prvi tog broja",
+    ),
     # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
     # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
     # cine vlasnika, ova sam kljuc.
