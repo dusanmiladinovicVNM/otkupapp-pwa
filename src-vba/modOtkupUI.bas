@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-119"
+Public Const OTKUI_BUILD   As String = "v6-ui-120"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -2809,6 +2809,18 @@ End Sub
 '=====================================================================
 Public Sub SelectMode(frm As Object, key As String)
     SelectModeCore frm, key, True
+End Sub
+
+' Isto, ali bez forme u argumentu - za ekran, koji formu nema.
+' Postoji zbog ispravke posle storna (Faza D/13): posle storna starog
+' dokumenta operater mora da zavrsi u rezimu u kome se unosi zamenski, a
+' storno se pokrece iz F8. Ekran zna KOJI je to rezim; formu drzi ljuska.
+Public Sub IdiNaRezim(ByVal key As String)
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If Len(key) = 0 Then Exit Sub
+    If key = ActiveMode Then Exit Sub
+    SelectMode mFrm, key
 End Sub
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
@@ -5819,6 +5831,8 @@ Public Sub ApplyPrefill(ByVal spec As String)
     ' Procedure-level "As MSForms." je bezbedno (IsHardModuleBody gleda samo
     ' modul-level deo, pa modul ostaje "mek" za self-update).
     Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
+    Dim cbPart As MSForms.ComboBox, cbPar As MSForms.ComboBox
+    Dim fokus As String
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(spec) = 0 Then Exit Sub
@@ -5826,6 +5840,8 @@ Public Sub ApplyPrefill(ByVal spec As String)
     Set zf = mFrm.Controls("zForm")
     Set cbOM = ctx.Controls("cbOM")
     Set cbVoz = ctx.Controls("cbVozac")
+    Set cbPart = ctx.Controls("cbKupac")
+    Set cbPar = zf.Controls("fgParcela").Controls("fgParcelaT")
 
     mPopMute = True
     mLoading = True
@@ -5852,6 +5868,26 @@ Public Sub ApplyPrefill(ByVal spec As String)
                 Case "sorta":    ctx.Controls("cbSorta").value = v
                 Case "omid":     If Len(v) > 0 Then SetComboByID cbOM, v
                 Case "vozacid":  If Len(v) > 0 Then SetComboByID cbVoz, v
+                ' --- ispravka posle storna (Z10) salje i ostatak dokumenta ---
+                ' Partner: kooperant na otkupu, kupac na zbirnoj i prijemnici.
+                ' Parcele zavise od njega, pa se lista puni odmah - inace bi
+                ' "parcela" ispod imala praznu listu u kojoj nema sta da nadje.
+                Case "partnerid"
+                    If Len(v) > 0 Then
+                        SetComboByID cbPart, v
+                        FillParcele mFrm
+                    End If
+                ' Druga klasa PRE svojih polja: SetKlasa ih tek otkriva
+                ' (fgKgII / fgKolAmbII su sakriveni u jednoklasnom dokumentu).
+                Case "dveklase": SetKlasa CLng(val(v))
+                Case "kol1":     If Len(v) > 0 Then zf.Controls("fgKgI").Controls("fgKgIT").text = v
+                Case "kol2":     If Len(v) > 0 Then zf.Controls("fgKgII").Controls("fgKgIIT").text = v
+                Case "amb1":     If Len(v) > 0 Then zf.Controls("fgKolAmb").Controls("fgKolAmbT").text = v
+                Case "amb2":     If Len(v) > 0 Then zf.Controls("fgKolAmbII").Controls("fgKolAmbIIT").text = v
+                Case "cena2":    If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena2T").text = v
+                Case "ambpr":    If Len(v) > 0 Then zf.Controls("fgAmbPr").Controls("fgAmbPrT").text = v
+                Case "parcela":  If Len(v) > 0 Then SetComboByID cbPar, v
+                Case "fokus":    fokus = v
             End Select
         End If
     Next par
@@ -5860,11 +5896,19 @@ Public Sub ApplyPrefill(ByVal spec As String)
     mPopMute = False
     mLoading = False
     MarkClean
-    ' Sve sto se moglo prepisati je prepisano; ostaje kooperant - zato fokus
-    ' ide pravo na njega, kao u legacy panelu. IsTestMode gard je isti kao u
-    ' ClearForm: forma koja nije .Show-ovana ne moze da primi fokus, a u
-    ' nevidljivom Excelu SetFocus ne puca nego TRAJNO visi (modTestMode).
-    If Not IsTestMode() Then ctx.Controls("cbKupac").SetFocus
+    ' Kuda fokus: kod prefilla sa otpremnice (F1) partner NIJE popunjen, pa
+    ' kursor ide na njega - to je jedino sto operateru ostaje. Kod ispravke
+    ' posle storna popunjeno je i to, pa ide na kolicinu: greska koja se
+    ' ispravlja je skoro uvek u njoj.
+    ' IsTestMode gard je isti kao u ClearForm: forma koja nije .Show-ovana ne
+    ' moze da primi fokus, a u nevidljivom Excelu SetFocus ne puca nego
+    ' TRAJNO visi (modTestMode).
+    If IsTestMode() Then Exit Sub
+    If fokus = "kolicina" Then
+        zf.Controls("fgKgI").Controls("fgKgIT").SetFocus
+    Else
+        ctx.Controls("cbKupac").SetFocus
+    End If
 End Sub
 
 ' Datum dokumenta: podrazumevano danas. Ista vrednost koju je ekran do sada

@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-119`.
+Stanje na dan `v6-ui-120`.
 
 ---
 
@@ -36,12 +36,12 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
    zatvoren u v6-ui-117: avans saldo OM, otvorene fakture (F6) i otvoreni
    otkupi (F5) sada postoje, jer bez njih upis ne bi bio tačan (v. §3.1).
-4. **Sitno:** peščanik za vreme upisa, dva nevezana KPI-ja, prefill iz
-   storniranog (Z10). Filtriranje kooperanata po otkupnom mestu je urađeno
-   (v6-ui-113, `KOOP_FILTER_BY_OM`).
+4. **Sitno:** peščanik za vreme upisa i dva nevezana KPI-ja. Prefill iz
+   storniranog (Z10) je zatvoren u v6-ui-120; filtriranje kooperanata po
+   otkupnom mestu u v6-ui-113 (`KOOP_FILTER_BY_OM`).
 
-Od Faze D ostaju stavke 13 i 14 (ispravka posle storna, Recovery / Nedovršeno /
-Undo); 3 i 4 su ostaci ranijih faza.
+Od Faze D ostaje samo stavka 14 (Recovery, Nedovršeno, Undo operacija, i uz
+njih multiselect storna otkupnih blokova); 3 i 4 su ostaci ranijih faza.
 
 ---
 
@@ -61,7 +61,7 @@ event-handlere. U novom UI-ju svako od njih mora imati tačno jedno mesto.
 | Z7 | ~~Keš isplate uz otkupni list~~ **NE PRENOSI SE** — keš isplate idu isključivo kroz F5 (Isplate) i F6 (Kupci-uplate); otkupni list ih više ne nosi | `ApplyOtkupTogglesState` | — | **NAMERNO IZOSTAVLJENO** (v6-ui-105); pri upisu `SaveOtkupMulti_TX` dobija `novac=0`, `primalac=""` |
 | Z8 | **Blokada praznih polja** pri snimanju, gejtovana `VALIDACIJA_UNOSA` | `btnUnos*_Click` | `IsValidacijaUnosa()` | **IMA** (v6-ui-104); datum se proverava uvek |
 | Z9 | **Info o paleti** — „još N gajbica do zatvaranja" uz izabranu robu | `UpdatePaletaInfo` | `GajbeDoZatvaranjaPaleteInfo` | **IMA** (`RefreshPaletaInfo`, v6-ui-104) |
-| Z10 | **Prefill iz storniranog dokumenta** — ispravka posle storna | `PrefillOtkupFromStornirano`, `PrefillOtpremnicaFromStornirana`, `PrefillZbirnaFromStornirana`, `PrefillPrijemnicaFromStornirana` | — | **NEMA** |
+| Z10 | **Prefill iz storniranog dokumenta** — ispravka posle storna | `PrefillOtkupFromStornirano`, `PrefillOtpremnicaFromStornirana`, `PrefillZbirnaFromStornirana`, `PrefillPrijemnicaFromStornirana` | `modDokumenta.PickPrefillRows` | **IMA** (`modStornoDok.PrefillIzStorniranog`, v6-ui-120) — jedan račun umesto četiri kopije vezane za kontrole |
 | Z11 | **F-tasteri i Enter/Exit ivice** polja | `SetupFkeyAccelerators`, `HandleFkey`, `txt*_Enter/_Exit` | — | **IMA** (F1–F8 globalno, fokus ivice u `clsFlatBtn`) |
 | Z12 | **KPI traka** iznad forme | `LayoutTopKpis`, `RefreshTopKpis`, `SumOtkupKgToday` | `GetOMAvansSaldo` | **DELIMIČNO** — traka postoji, dva KPI-ja nisu vezana |
 | Z13 | **Podrazumevani proizvod** po otvaranju/resetu | `ResetProizvodNaDefault` | `ApplyDefaultProizvod` | **IMA** (`ApplyDefaultRoba`, v6-ui-103) |
@@ -153,9 +153,10 @@ zaključivati iz koda.
 | `btnUnosPrij_Click` | upis prijemnice (F4) | **IMA** (`modDokUnos`, v6-ui-116) — **bez ispravke posle storna** (v. §3.1) |
 | `btnUnosOMUlaz_Click` | upis F5 (isplate) i F7 (reversi) | **IMA** (`modNovacUnos`, v6-ui-117) |
 | `btnUnosIzlaz_Click` | upis F6 (uplate kupaca) | **IMA** (`modNovacUnos`, v6-ui-117) |
-| `Prefill*FromStornirana` | ispravka posle storna | **NEMA** — Faza D, stavka 13 |
+| `Prefill*FromStornirana` | ispravka posle storna | **IMA** (`modStornoDok.PrefillIzStorniranog`, v6-ui-120) |
 | `btnStorno_Click` (storno po tipu i broju) | storno bilo kog dokumenta | **IMA** (`modStornoDok` + F8, v6-ui-119) |
-| ostali storno paneli (Ispravka, Undo, Nedovršeno, Recovery) | — | **NEMA** — Faza D, stavke 13 i 14 |
+| `TryRunCorrectionFramework` (četiri moda) | ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE | **IMA** (v6-ui-120) — kroz pitanja, ne kroz overlay panel |
+| Undo operacija, „Nedovršeno", Recovery | — | **NEMA** — Faza D, stavka 14 |
 
 ---
 
@@ -241,7 +242,7 @@ ambalaže, F7 nema polje iznosa (`ApplyFormFields`). Zato je i podeljen na dva.
 | Prijemnica: auto-štampa + grupni otkupni list samo za hladnjaču | `PrijemnicaUpisi` | best-effort, ne obara potvrdu upisa |
 | Prijemnica: status palete uz potvrdu | `PrijemnicaUpisi` → `GetPaletaStatusForPrijemnica` | |
 | Zbirna: završetak ispravke posle storna | `ZbirnaUpisi` → `ZavrsiIspravkuAko` → `CompleteZbirnaIspravka` | samo nad **persistentnom** ispravkom (`tblStornoVeza`) |
-| **Prijemnica: ispravka posle storna (relink paleta)** | **NIJE preneto** | traži `SetPaletizeSkip` **pre** upisa + `ReassignPaleteToPrijemnica_TX` + `PaletaAdjustPrompt` — to je storno okvir (Faza D). Novi UI još ne ume da stornira prijemnicu, pa takva ispravka može da nastane samo u `frmDokumenta`, gde se i završava. Prijemnica upisana iz novog UI-ja dok takva ispravka visi dobija **sveže** palete, a stare ostaju osirotele. |
+| **Prijemnica: ispravka posle storna (relink paleta)** | `PrepoznajIspravkuPrijemnice` (u `PrijemnicaValidiraj`) + `PreveziPaleteIspravke` (u `PrijemnicaUpisi`) | **PRENETO u v6-ui-120.** `SetPaletizeSkip` ide **pre** upisa, pa `ReassignPaleteToPrijemnica_TX` + `PaletaAdjustPrompt` posle njega. Ispravka na čekanju traži se u `tblStornoVeza`, ne u stanju sesije: storno se pokreće u F8, unos u F4, a između to dvoje sme da se zatvori Excel. **Safe-stop:** dve ili više ispravki na čekanju → ne bira se naslepo. |
 
 Uz njih: `LoadZbirneListbox` / `lstZbirne_Click` (izbor zbirne iz liste),
 `UpdateManjak` (manjak prijemnice vs zbirna), `UpdateValidacija`,
@@ -255,7 +256,7 @@ Sedam panela, svaki sa svojim `Ensure/Layout/Populate/Set*Visible`:
 | Panel | Šta radi | Poslovna rutina | Novi UI |
 |---|---|---|---|
 | **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | **IMA** (`modStornoDok` + F8, v6-ui-119) — **običan storno**, bez framework-a ispravke |
-| **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **NEMA** |
+| **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **IMA** (v6-ui-120) — sva četiri moda; **bez** multiselect storna otkupnih blokova (deo legacy overlay panela) |
 | **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | **IMA** — čip „Otkazane" nad svakim tipom u F8 |
 | **Undo operacija** (`ShowUndoOpsPanel`) | poništavanje storna | `GetUndoableStornoOperations` | **NEMA** |
 | **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | **IMA** — prekidač tipa + pretraga i filteri mreže u F8 |
@@ -279,8 +280,23 @@ je `"STORNO"` bio tih sinonim za `"OTPREMNICA"` u desetak `Col*` funkcija.
 | Izvod: ishod REMAP vs REIMPORT | ekran (`StornoRedF8`) | to je **odluka operatera o PDF-u**, ne pravilo — zato je u ekranu, a ne u `modStornoDok` |
 | Revers: broj + **smer** | `StornoRazlog` → `ActiveAmbalazaDokExists` | četiri smera dele `KIND_REV`, pa broj sam ne kaže koji je red u `tblAmbalaza`; ekran smer nalazi tako što pita koji od četiri ima aktivan red |
 | Zbirna: upozorenje da aktivna prijemnica ostaje vezana | `StornoIzvrsi` | `StornoZbirna` namerno ne kaskadira na prijemnice; bez poruke operater ne zna da mu je ostao posao |
-| **Ispravka / dupli unos posle storna** | **NIJE preneto** | `TryRunCorrectionFramework` / `RunSimpleStornoUI` / `RunReversStornoUI` ostaju u `frmDokumenta`. Storno iz F8 je **običan** storno — onaj koji legacy radi kad framework ne preuzme tip. Faza D, stavka 13. |
 | **Storno palete i prerade** | **NIJE preneto** | `StornoPaleta_TX` / `StornoPrerada_TX` pripadaju ekranu Palete (F8 nema tip „paleta"); tamo su i danas, kroz `modScrPalete` |
+
+**Šta nosi framework ispravke (v6-ui-120):**
+
+Za četiri tipa sa nizvodnim tokom storno nije Da/Ne nego izbor **šta storno
+poslovno znači**. Smart trigger je isti kao u legacy: pun izbor se nudi samo kad
+`CorrectionNeedsDialog` kaže da ima o čemu da se odlučuje.
+
+| Pravilo iz legacy | Gde je sad | Napomena |
+|---|---|---|
+| Četiri moda (ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE) | `IzborModa` → `modStornoDok.StornoIzvrsiMod` → `modStornoFlow.Run*Correction` | legacy ih nudi kao overlay panel; ovde su dva pitanja, jer četiri odgovora ne staju u jedan `MsgBox` |
+| Framework važi **samo** za otpremnicu, zbirnu, prijemnicu i revers | `TipUFlowDoc` | ostalih pet tipova nema nizvodni tok — njihov storno je običan, kao i u legacy |
+| Revers: kratko pitanje storno vs ispravka | `IspravkaPreuzela` | revers je list u lancu, pa nikad ne traži pun izbor (legacy `RunReversStornoUI`) |
+| PONIŠTENJE se izvršava u **dva** poziva | `IzvrsiMod` | prvi vrati `blocked=True` i pun spisak posledica; drugi ide tek po svesnoj potvrdi, sa `forceConfirm` — spisak se tako pravi PRE nego što se išta promeni |
+| „Ne diraj palete" (prijemnica, DUPLI/PONIŠTENJE) | `IzvrsiMod` | uz ISPRAVKU se ne pita: tamo se palete prevezuju na novi dokument |
+| ISPRAVKA → prefill + prelazak u režim unosa | `OtvoriIspravku` | režim se menja **pre** prefilla — `SelectMode` čisti formu, pa bi obrnut redosled obrisao upravo prepisane vrednosti |
+| **Multiselect storna otkupnih blokova** | **NIJE preneto** | `SelectedBlockIDs` / `StornoSelectedBlocks_TX` / `BlockStornoDriftReason` su deo legacy overlay panela — ide uz stavku 14 |
 
 ### 3.3 Ostalo
 
@@ -356,9 +372,15 @@ legacy do tada penzioniše).
     koji legacy radi kad `TryRunCorrectionFramework` ne preuzme tip. Uz njega su
     došli i „Storno pregled" (čip „Otkazane" po tipu) i „Nađi dokument"
     (prekidač tipa + pretraga mreže), koji su bili zasebni paneli.
-13. Ispravka / dupli unos posle storna (Z10) + „hladnjača ispravka".
-    Uz to ide i **ispravka prijemnice** (relink paleta) iz §3.1.
-14. Recovery, Nedovršeno, Undo operacija.
+13. ~~Ispravka / dupli unos posle storna (Z10) + „hladnjača ispravka" +
+    ispravka prijemnice (relink paleta).~~ **URAĐENO** (v6-ui-120). Sva
+    četiri moda (`modStornoFlow`) idu iz F8; prefill iz storniranog je jedan
+    račun (`modStornoDok.PrefillIzStorniranog`) umesto četiri kopije vezane
+    za kontrole; ispravka prijemnice preskače svežu paletizaciju i prevezuje
+    palete; hladnjača ispravka se nudi posle storna otkupa iz F1.
+    **Nije preneto:** multiselect storna otkupnih blokova uz DUPLI/PONIŠTENJE
+    — to je deo legacy overlay panela i ide uz stavku 14.
+14. Recovery, Nedovršeno, Undo operacija (+ multiselect blokova iz stavke 13).
 
 ### Faza E — ostali ekrani
 15. Agrohemija, Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji,

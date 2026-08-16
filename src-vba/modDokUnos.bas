@@ -52,7 +52,7 @@ Attribute VB_Name = "modDokUnos"
 '=====================================================================
 Option Explicit
 
-Public Const DOKUNOS_BUILD As String = "v6-ui-116"
+Public Const DOKUNOS_BUILD As String = "v6-ui-122"
 
 '--------------------------------------------------------------- ULAZ
 Public Function NoviOtpremnicaUnos() As Object
@@ -540,6 +540,11 @@ Public Function NoviPrijemnicaUnos() As Object
     p("kolAmbII") = 0&
     p("brutoKgI") = 0#
     p("brutoKgII") = 0#
+    ' Ispravka posle storna: puni ih PrijemnicaValidiraj kad prepozna da je
+    ' ovaj unos ZAMENA za storniranu prijemnicu, a cita ih PrijemnicaUpisi.
+    ' Prazan ispravkaID znaci obican unos.
+    p("ispravkaID") = ""
+    p("ispravkaStariBroj") = ""
     Set NoviPrijemnicaUnos = p
 End Function
 
@@ -691,11 +696,22 @@ Public Function PrijemnicaValidiraj(ByVal p As Object, ByRef fokus As String) As
         fokus = "brDok": PrijemnicaValidiraj = dup: Exit Function
     End If
 
+    ' ISPRAVKA POSLE STORNA - mora PRE provere "1 zbirna = 1 prijemnica".
+    ' Ako je ovaj unos zamena za storniranu prijemnicu, ta provera ne vazi:
+    ' zbirna namerno dobija novu prijemnicu umesto oborene.
+    Dim isprPoruka As String
+    isprPoruka = PrepoznajIspravkuPrijemnice(p)
+    If Len(isprPoruka) > 0 Then
+        fokus = "brojZbirne": PrijemnicaValidiraj = isprPoruka: Exit Function
+    End If
+
     ' 1 zbirna = 1 prijemnica. Ako zbirna vec ima AKTIVNU prijemnicu, ovo je
-    ' verovatno dupli unos -> pitanje, ne greska (legacy ima isti izuzetak za
-    ' ispravku posle storna; taj tok jos zivi samo u frmDokumenta - v. dole).
-    postojeca = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
-                               S(p, "brojZbirne"), COL_PRJ_BROJ)
+    ' verovatno dupli unos -> pitanje, ne greska. Uz ispravku se preskace
+    ' (isti izuzetak ima i legacy btnUnosPrij_Click).
+    postojeca = ""
+    If Len(S(p, "ispravkaID")) = 0 Then _
+        postojeca = LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, _
+                                   S(p, "brojZbirne"), COL_PRJ_BROJ)
     If Len(postojeca) > 0 Then
         If MsgBox(Poruka("DOKUNOS_ASK_DUPLA_PRIJ_1") & " " & S(p, "brojZbirne") & " " & _
                   Poruka("DOKUNOS_ASK_DUPLA_PRIJ_2") & " " & postojeca & "." & vbCrLf & vbCrLf & _
@@ -711,21 +727,133 @@ EH:
     PrijemnicaValidiraj = Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
 
+'--------------------------------------------- ISPRAVKA PRIJEMNICE
+' Da li je OVAJ unos zamena za storniranu prijemnicu.
+'
+' Novi UI nema stanje sesije izmedju storna i unosa (storno se pokrece u
+' F8, unos u F4), pa se ispravka na cekanju trazi u tblStornoVeza - istoj
+' persistentnoj evidenciji koju legacy koristi kao crash-safe putanju kad
+' je forma bila zatvorena izmedju ta dva koraka.
+'
+' SAFE-STOP: dve ili vise ispravki na cekanju = ne biraj naslepo. Pogresno
+' pogodjena veza bi palete jedne prijemnice prevezala na tudju robu.
+'
+' Vraca False SAMO kad je operater rekao "ne snimaj jos" (promenjena
+' zbirna, odgovor OTKAZI). U svim ostalim slucajevima vraca True, a da li
+' je ispravka prihvacena vidi se po p("ispravkaID").
+' Ima li ispravke na cekanju za dati tip dokumenta. ODVOJENO od pitanja
+' operateru, iz dva razloga: da se moze testirati bez dijaloga, i da
+' odluka "sme li se uopste nastaviti" ne zavisi od toga da li je neko
+' kliknuo Da.
+'
+' Vraca:
+'    0  nema ispravke na cekanju -> obican unos
+'    1  ima tacno jedna -> cid / stariBroj / parentBroj su popunjeni
+'   -1  STOP: ne zna se koja, ili citanje evidencije nije uspelo; razlog
+'       nosi poruku za operatera
+'
+' FAIL-CLOSED je ovde poslovno pravilo, ne stil. Ako se evidencija
+' ispravki ne moze procitati, a ispravka mozda postoji, "nastavi kao
+' obican unos" znaci: nova prijemnica dobija SVEZE palete, stare ostaju
+' osirocene, a correction ostaje pending i ceka jos jednu prijemnicu.
+' Neizvesnost mora da zaustavi upis, ne da ga propusti.
+'
+' SAFE-STOP nad dve ili vise: pogresno pogodjena veza prevezala bi palete
+' jedne prijemnice na tudju robu.
+Public Function NadjiIspravku(ByVal docType As String, ByRef cid As String, _
+                              ByRef stariBroj As String, ByRef parentBroj As String, _
+                              ByRef razlog As String) As Long
+    Dim cnt As Long
+    On Error GoTo EH
+    cid = "": stariBroj = "": parentBroj = "": razlog = ""
+
+    cnt = modStornoContext.CountPendingCorrectionsByDocType(docType, SV_MODE_ISPRAVKA)
+    If cnt = 0 Then Exit Function
+    If cnt > 1 Then
+        razlog = Poruka("DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ")
+        NadjiIspravku = -1
+        Exit Function
+    End If
+
+    cid = modStornoContext.FindLatestPending(docType, SV_MODE_ISPRAVKA)
+    stariBroj = modStornoContext.GetCorrectionField(cid, COL_SV_OLD_BROJ)
+    If Len(cid) = 0 Or Len(stariBroj) = 0 Then
+        ' Brojac kaze da ispravka postoji, a ne moze da se procita koja -
+        ' to je isti stepen neizvesnosti kao greska, pa isti ishod.
+        razlog = Poruka("DOKUNOS_ERR_ISPRAVKA_NECITLJIVA")
+        NadjiIspravku = -1
+        Exit Function
+    End If
+    parentBroj = modStornoContext.GetCorrectionField(cid, COL_SV_PARENT_BROJ)
+    NadjiIspravku = 1
+    Exit Function
+EH:
+    LogErr "modDokUnos.NadjiIspravku"
+    razlog = Poruka("DOKUNOS_ERR_ISPRAVKA_NECITLJIVA") & " " & Err.description
+    NadjiIspravku = -1
+End Function
+
+' Pita operatera i, ako je odgovorio potvrdno, oznaci unos kao zamenu.
+'
+' Vraca "" kad upis sme dalje, jedan RAZMAK kad je operater sam odustao
+' (poruka se ne prikazuje), inace poruku koja zaustavlja upis.
+Private Function PrepoznajIspravkuPrijemnice(ByVal p As Object) As String
+    Dim ishod As Long, cid As String, stariBroj As String
+    Dim parentZbr As String, razlog As String
+    On Error GoTo EH
+
+    ishod = NadjiIspravku(FLOW_DOC_PRIJEMNICA, cid, stariBroj, parentZbr, razlog)
+    If ishod = 0 Then Exit Function                 ' obican unos
+    If ishod < 0 Then
+        PrepoznajIspravkuPrijemnice = razlog        ' neizvesno -> upis staje
+        Exit Function
+    End If
+
+    ' Potvrda je obavezna: operater je mozda napustio ispravku pa uneo DRUGU
+    ' prijemnicu - tiho vezivanje bi joj dodelilo tudje palete.
+    If MsgBox(Poruka("DOKUNOS_ASK_ISPRAVKA_PRIJ_1") & " '" & stariBroj & "'." & vbCrLf & vbCrLf & _
+              Poruka("DOKUNOS_ASK_ISPRAVKA_PRIJ_2"), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+
+    ' Promena zbirne NE gasi ispravku sama od sebe - zbirna bira podrazumevanu
+    ' vrednost, nije kapija. Ali se PITA: ako je operater u medjuvremenu
+    ' promenio zbirnu, mozda ovo vise nije zamena za tu prijemnicu.
+    If Len(parentZbr) > 0 And StrComp(S(p, "brojZbirne"), parentZbr, vbTextCompare) <> 0 Then
+        Select Case MsgBox(Poruka("DOKUNOS_ASK_ISPRAVKA_ZBIRNA") & " (" & parentZbr & " " & _
+                           ChrW(8594) & " " & S(p, "brojZbirne") & ")", _
+                           vbQuestion + vbYesNoCancel, APP_NAME)
+            Case vbYes:  ' ostaje ispravka
+            Case vbNo:   Exit Function                        ' obican, nepovezan unos
+            Case Else:   PrepoznajIspravkuPrijemnice = " "     ' ne snimaj jos
+                         Exit Function
+        End Select
+    End If
+
+    p("ispravkaID") = cid
+    p("ispravkaStariBroj") = stariBroj
+    Exit Function
+EH:
+    LogErr "modDokUnos.PrepoznajIspravkuPrijemnice"
+    ' I ovde fail-closed: greska u prepoznavanju zaustavlja upis.
+    PrepoznajIspravkuPrijemnice = Poruka("DOKUNOS_ERR_ISPRAVKA_NECITLJIVA") & " " & Err.description
+End Function
+
 ' Upisuje prijemnicu. Vraca PrijemnicaID (ili spojene ID-eve obe klase);
 ' prazno znaci da upis nije uspeo.
 '
-' STO OVDE NEMA - ISPRAVKA PRIJEMNICE POSLE STORNA. Legacy btnUnosPrij_Click
-' ume da ovaj unos proglasi ZAMENOM za storniranu prijemnicu: preskoci svezu
-' paletizaciju (SetPaletizeSkip pre upisa), pa palete stare prevezuje na novu
-' (ReassignPaleteToPrijemnica_TX + PaletaAdjustPrompt). To je storno okvir
-' (Faza D iz docs/UI_MIGRACIJA_KATALOG.md) i ovde NIJE preneto - novi UI jos
-' ne ume da stornira prijemnicu, pa ispravka na cekanju moze da nastane samo u
-' legacy formi, gde se i zavrsava. Prijemnica upisana odavde dok takva ispravka
-' visi dobija SVEZE palete, a stare ostaju osirocene ("Osiroceni dokumenti").
+' ISPRAVKA POSLE STORNA (Faza D/13): kad je ovaj unos zamena za storniranu
+' prijemnicu, sveza paletizacija se PRESKACE (SetPaletizeSkip PRE upisa),
+' pa se palete stare prevezuju na novu - ista roba, iste palete. Bez toga
+' bi ista roba bila paletizovana dvaput: jednom pod starom prijemnicom
+' (osirocene palete) i jednom pod novom.
 Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As String
     Dim res As String, defHlad As String, palStatus As String, errDesc As String
+    Dim ispravka As Boolean
     On Error GoTo EH
     poruke = ""
+
+    ispravka = (Len(S(p, "ispravkaID")) > 0)
+    If ispravka Then SetPaletizeSkip True
 
     res = SavePrijemnicaMulti_TX( _
         datum:=CDate(p("datum")), _
@@ -747,7 +875,15 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
         brutoKgI:=D(p, "brutoKgI"), _
         brutoKgII:=D(p, "brutoKgII"))
 
+    ' Toggle se vraca UVEK, i kad upis nije uspeo: ostavljen ukljucen bi
+    ' sledecoj prijemnici tiho preskocio paletizaciju.
+    SetPaletizeSkip False
+
     If Len(res) = 0 Then Exit Function
+
+    ' Prevezivanje paleta ide ODMAH posle upisa, pre stampe: stampa je
+    ' best-effort i sme da padne, a palete ne smeju da ostanu osirocene.
+    If ispravka Then PreveziPaleteIspravke p, res, poruke
 
     ' Auto-stampa SAMO za default hladnjacu: eksterni kupci se ne stampaju sami.
     ' Best-effort - greska u izlazu ne sme da obori potvrdu upisa.
@@ -773,25 +909,107 @@ Public Function PrijemnicaUpisi(ByVal p As Object, ByRef poruke As String) As St
     Exit Function
 EH:
     errDesc = Err.description
+    SetPaletizeSkip False        ' toggle ne sme da ostane ukljucen ni na gresci
     LogErr "modDokUnos.PrijemnicaUpisi"
     poruke = poruke & Poruka("OTKUP_ERR_GRESKA_PRI_UNOSU") & errDesc
 End Function
+
+' Nova prijemnica preuzima palete stare (bez ponovne paletizacije - ista
+' roba). Razlika u broju gajbica se koriguje U MESTU, na istoj paleti
+' (PaletaAdjustPrompt), pa se ne pravi nova.
+'
+' Sav posao rade postojece rutine: ReassignPaleteToPrijemnica_TX veze,
+' modStornoContext zatvara ili oznacava kontekst. Ovde je samo redosled i
+' ono sto se javi operateru.
+'
+' Neuspeh prevezivanja NE obara upis - prijemnica je vec proknjizena. Umesto
+' toga se kontekst oznacava kao MANUAL, da posao ostane vidljiv u
+' "Osirocenim dokumentima" umesto da se izgubi u poruci koja prodje.
+Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
+                                  ByRef poruke As String)
+    Dim stariBroj As String, noviBroj As String, cid As String
+    Dim relWarn As String, gajbDiff As Boolean, relOk As Boolean
+    On Error GoTo EH
+    stariBroj = S(p, "ispravkaStariBroj")
+    cid = S(p, "ispravkaID")
+    ' Ispravka se trosi ODMAH: ponovljen poziv nad istim recnikom ne sme da
+    ' prevezuje drugi put.
+    p("ispravkaID") = ""
+    p("ispravkaStariBroj") = ""
+    If Len(stariBroj) = 0 Then Exit Sub
+
+    ' Broj nove prijemnice: ono sto je operater uneo; ako je polje bilo
+    ' prazno (auto-broj), procita se sa upravo upisanog reda.
+    noviBroj = Trim$(S(p, "brDok"))
+    If Len(noviBroj) = 0 Then _
+        noviBroj = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+                   Trim$(Split(res, " + ")(0)), COL_PRJ_BROJ)))
+
+    ' KAPIJA NAD DVOSMISLENIM BROJEM. ReassignPaleteToPrijemnica_TX trazi novu
+    ' prijemnicu PO BROJU; ako isti broj nose dokumenta dva kupca, uzela bi
+    ' poslednji pogodak i palete bi otisle na tudju robu. Bolje je stati i
+    ' ostaviti ih na staroj (gde su vidljive kao osirocene) nego ih tiho
+    ' proknjiziti pogresno.
+    If AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_KUPAC, noviBroj) > 1 Then
+        poruke = poruke & Poruka("DOKUNOS_ERR_BROJ_DVOSMISLEN") & " " & noviBroj & vbCrLf & _
+                 Poruka("DOKUNOS_ERR_BROJ_DVOSMISLEN2") & vbCrLf
+        OznaciRucnuIspravku cid, "Broj " & noviBroj & " nije jednoznacan (vise kupaca)."
+        Exit Sub
+    End If
+
+    relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff)
+    If relOk Then
+        poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
+                 stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf
+        If Len(relWarn) > 0 Then poruke = poruke & relWarn & vbCrLf
+        If gajbDiff Then poruke = poruke & PaletaAdjustPrompt(noviBroj) & vbCrLf
+        If Len(cid) > 0 Then
+            modStornoContext.CompleteCorrectionContext cid, "", noviBroj, _
+                "Ispravka prijemnice: palete prevezane na " & noviBroj & "."
+            StampIspravkaTrace TBL_PRIJEMNICA, COL_PRJ_BROJ, noviBroj, stariBroj, cid
+        End If
+    Else
+        LogRelinkFailure stariBroj, noviBroj, relWarn
+        poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_NISU") & " " & relWarn & vbCrLf
+        OznaciRucnuIspravku cid, "Auto-prevezivanje paleta nije uspelo: " & relWarn
+    End If
+    Exit Sub
+EH:
+    ' NEOCEKIVANA greska je opasnija od ocekivanog neuspeha: prijemnica je vec
+    ' snimljena, paletizacija je bila PRESKOCENA, a correction bi bez ovoga
+    ' ostao PENDING - pa bi sledeca prijemnica opet bila ponudjena kao zamena
+    ' za isti stari dokument. Zato i ova grana zavrsava u MANUAL.
+    LogErr "modDokUnos.PreveziPaleteIspravke"
+    poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_NISU") & " " & Err.description & vbCrLf
+    OznaciRucnuIspravku cid, "Greska pri prevezivanju paleta: " & Err.description
+End Sub
+
+' Zatvori correction kao "trazi rucnu intervenciju". Posao tako ostaje vidljiv
+' u "Nedovrsenom" umesto da nestane u poruci koja prodje, i - vazno - context
+' vise nije PENDING, pa sledeci unos nije lazno ponudjen kao zamena.
+Private Sub OznaciRucnuIspravku(ByVal cid As String, ByVal razlog As String)
+    On Error Resume Next
+    If Len(cid) = 0 Then Exit Sub
+    modStornoContext.MarkCorrectionManual cid, _
+        "Prevezi palete rucno (Oporavak -> Osirocene palete).", razlog
+End Sub
 
 '--------------------------------------------------------- ISPRAVKA
 ' Zavrsetak ispravke posle snimanja zamenskog dokumenta.
 '
 ' Radi SAMO nad PERSISTENTNOM ispravkom na cekanju (tblStornoVeza), ne nad
-' stanjem sesije: storno panel jos zivi iskljucivo u frmDokumenta (Faza D),
-' pa ovaj modul nema odakle da zna sta je operater upravo stornirao u toj
-' formi. Persistentan zapis prezivljava zatvaranje forme i Excela, pa je i
-' dovoljan da se veza ne izgubi.
+' stanjem sesije. Razlog vazi i sad kad F8 ume da pokrene ispravku: storno
+' se pokrece u jednom rezimu (F8), a zamenski dokument se unosi u drugom
+' (F2/F3/F7), i izmedju to dvoje operater sme da zatvori Excel. Persistentan
+' zapis to prezivljava, promenljiva u modulu ne bi.
 '
 ' SAFE-STOP kao u legacy: dve ili vise otvorenih ispravki istog tipa = ne
 ' biraj naslepo, nego pusti operatera kroz "Osiroceni dokumenti".
 '
 ' PRIJEMNICA NIJE U OVOM SELECT-u namerno: njena ispravka nije samo zatvaranje
 ' konteksta nego i prevezivanje paleta, koje mora da krene PRE upisa
-' (SetPaletizeSkip). Vidi napomenu iznad PrijemnicaUpisi.
+' (SetPaletizeSkip). Zato ima svoj tok - PrepoznajIspravkuPrijemnice u
+' PrijemnicaValidiraj i PreveziPaleteIspravke u PrijemnicaUpisi.
 '
 ' PUBLIC je zbog modNovacUnos (revers, F7): pravilo "posle zamenskog dokumenta
 ' zavrsi ispravku" je isto za sva tri tipa, pa se zove odavde umesto da se

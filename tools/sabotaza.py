@@ -391,6 +391,75 @@ SABOTAZE = {
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument PRE poziva Storno*_TX",
     ),
+    # --- prefill posle storna (Z10) -----------------------------------------
+    "prefill-zbirna-kolona": (
+        "modStornoDok.bas",
+        "        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA\n",
+        '        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = "Kolicina"   \' SABOTAZA\n',
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "zbirna cita UkupnoKolicina -- literal 'Kolicina' tiho vraca nulu",
+    ),
+    "prefill-tabela": (
+        "modStornoDok.bas",
+        "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTKUP\n",
+        "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTPREMNICA   ' SABOTAZA\n",
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "prefill cita tabelu SVOG tipa (otkup i otpremnica dele broj 1/TEST)",
+    ),
+    "prefill-broj": (
+        "modStornoDok.bas",
+        '    res = Spoji(res, "fokus", "kolicina")\n',
+        '    res = Spoji(res, "brdok", NzToText(d(base, cBroj)))   \' SABOTAZA\n',
+        "T_PrefillIzStorniranog_CitaSvojuTabelu",
+        "broj dokumenta se NE preuzima -- ispravka je nov dokument, nov broj",
+    ),
+    "framework-otkup": (
+        "modStornoDok.bas",
+        "        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA\n",
+        "        Case STIP_OTPREMNICA, STIP_OTKUP: TipUFlowDoc = FLOW_DOC_OTPREMNICA   ' SABOTAZA\n",
+        "T_FrameworkIspravke_SamoCetiriTipa",
+        "framework ispravke vazi SAMO za cetiri tipa sa nizvodnim tokom",
+    ),
+    # --- identitet dokumenta i fail-closed grane (hardening posle review-a) ---
+    "prefill-fallback-po-broju": (
+        "modDokumenta.bas",
+        "        ' to realan scenario, a ne teorijski.\n"
+        "        Exit Function\n",
+        "        ' SABOTAZA: nepostojeci PK opet pada nazad na broj\n",
+        "T_Prefill_PoIdentitetuNePoBroju",
+        "zadat a nepostojeci PK NE sme da prefiluje tudji dokument istog broja",
+    ),
+    "prefill-anchor-broj": (
+        "modDokumenta.bas",
+        "    If Len(Trim$(oldDocID)) > 0 And cId > 0 Then\n"
+        "        For r = 1 To UBound(data, 1)\n"
+        "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n",
+        "    If False Then   ' SABOTAZA: PK se ignorise, ide se po broju\n"
+        "        For r = 1 To UBound(data, 1)\n"
+        "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n",
+        "T_Prefill_PoIdentitetuNePoBroju",
+        "prefill bira dokument po PK-u, ne po broju (dva kupca dele broj)",
+    ),
+    "vlasnik-broji-stornirane": (
+        "modDokumenta.bas",
+        "            If Not jeStorno Then\n"
+        "                Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))\n"
+        "                If Not seen.Exists(vl) Then seen(vl) = True\n"
+        "            End If\n",
+        "            Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))   ' SABOTAZA\n"
+        "            If Not seen.Exists(vl) Then seen(vl) = True\n",
+        "T_Prefill_PoIdentitetuNePoBroju",
+        "storniran dokument se ne broji kao vlasnik broja",
+    ),
+    "ispravka-fail-open": (
+        "modDokUnos.bas",
+        '        razlog = Poruka("DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ")\n'
+        "        NadjiIspravku = -1\n",
+        '        razlog = ""   \' SABOTAZA: vise ispravki vise ne zaustavlja upis\n'
+        "        NadjiIspravku = 0\n",
+        "T_IspravkaDetekcija_FailClosed",
+        "dve ispravke na cekanju zaustavljaju upis (safe-stop)",
+    ),
     "storno-revers-smer": (
         "modStornoDok.bas",
         "            If Len(Trim$(opcija)) = 0 Then\n"

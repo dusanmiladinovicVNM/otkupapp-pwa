@@ -63,6 +63,11 @@ Private Const FX_TIP_AMB As String = "12/1"         ' AMB_12_1, TezinaGajbiceKg 
 ' Kupca u fixture-u NEMA i ne treba ga: provere gledaju samo da li je izabran
 ' (Len > 0). Upis, koji bi trazio postojeceg, ovi testovi ne voze.
 Private Const FX_KUPAC As String = "KUP-TEST-1"
+' Kolizija brojeva: PRJ-TEST-A (KUP-TEST-1) i PRJ-TEST-B (KUP-TEST-2) nose ISTI
+' BrojPrijemnice. Tako je i u produkciji -- broj se racuna po kupcu.
+Private Const FX_KUPAC2 As String = "KUP-TEST-2"
+Private Const FX_PRIJ_BROJ As String = "1/150326"
+Private Const FX_PRIJ_STORNO As String = "9/150326"
 ' Zbir OTP-TEST-1 -- jedine otpremnice koja nosi FX_ZBIRNA. Zbirna mora tacno
 ' toliko da prijavi, inace je kapija obara.
 Private Const FX_ZBIRNA_KG As Double = 1000
@@ -108,6 +113,10 @@ Public Sub RunAllTests()
     RunOne 19
     RunOne 20
     RunOne 21
+    RunOne 22
+    RunOne 23
+    RunOne 24
+    RunOne 25
 
     SetTestMode prevMode
     WriteResultFile
@@ -181,6 +190,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 19: TestName = "T_WriterGuard_AvansSaldoOM"
         Case 20: TestName = "T_F8_TipBiraTabeluIKolone"
         Case 21: TestName = "T_StornoDok_KapijePreUpisa"
+        Case 22: TestName = "T_PrefillIzStorniranog_CitaSvojuTabelu"
+        Case 23: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
+        Case 24: TestName = "T_Prefill_PoIdentitetuNePoBroju"
+        Case 25: TestName = "T_IspravkaDetekcija_FailClosed"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -210,6 +223,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 19: T_WriterGuard_AvansSaldoOM
         Case 20: T_F8_TipBiraTabeluIKolone
         Case 21: T_StornoDok_KapijePreUpisa
+        Case 22: T_PrefillIzStorniranog_CitaSvojuTabelu
+        Case 23: T_FrameworkIspravke_SamoCetiriTipa
+        Case 24: T_Prefill_PoIdentitetuNePoBroju
+        Case 25: T_IspravkaDetekcija_FailClosed
     End Select
 End Sub
 
@@ -1069,6 +1086,184 @@ Private Sub T_StornoDok_KapijePreUpisa()
     AssertEq (Len(modStornoDok.TipNaziv(STIP_REVERSI, DOK_TIP_OM_IZLAZ_KOOP)) > 0), True, _
              "revers ima ime po SMERU"
 End Sub
+
+' PREFILL POSLE STORNA CITA TABELU SVOG TIPA, I TO PO PRAVOM IMENU KOLONE.
+'
+' Fixture je za ovo idealan: otkupni list OTK-TEST-1 i otpremnica OTP-TEST-1
+' dele BROJ "1/TEST", a nose razlicite kolicine (400 vs 1000). Ako prefill
+' pogresi tabelu, ispravka otkupa ponudi kilograme otpremnice - i to niko
+' ne bi primetio, jer je dokument i dalje "ispravan", samo pogresan.
+'
+' Zbirna je drugi razlog za ovaj test: njena kolicina se u semi zove
+' "UkupnoKolicina", a ambalaza "UkupnoAmbalaze". Literal "Kolicina" bi tiho
+' vratio nulu, pa bi ispravka zbirne dosla prazna.
+'
+' Tri pravila koja se lako izgube i koja test drzi:
+'   datum se preuzima iz storniranog (ispravka sutradan ne menja dan)
+'   broj dokumenta se NE preuzima (ispravka je NOV dokument, nov broj)
+'   nula se ne salje (prazno polje i "0" su dva razlicita stanja)
+Private Sub T_PrefillIzStorniranog_CitaSvojuTabelu()
+    Dim s As String
+
+    ' --- OTKUPNI LIST: 400 kg, 40 gajbi, kooperant, parcela ---
+    s = modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "1/TEST", "")
+    AssertEq (Len(s) > 0), True, "prefill otkupa nije prazan"
+    AssertEq SpecVal(s, "kol1"), "400", "otkup daje SVOJU kolicinu (ne otpremnicinu)"
+    AssertEq SpecVal(s, "amb1"), "40", "otkup daje svoje gajbe"
+    AssertEq SpecVal(s, "cena"), "50", "otkup daje svoju cenu"
+    AssertEq SpecVal(s, "partnerid"), FX_KOOPERANT, "partner otkupa je kooperant"
+    AssertEq SpecVal(s, "omid"), FX_STANICA, "otkup nosi otkupno mesto"
+    AssertEq SpecVal(s, "parcela"), FX_PARCELA, "parcelu ima SAMO otkup"
+    AssertEq SpecVal(s, "brzbirne"), FX_ZBIRNA, "otkup nosi broj zbirne"
+    AssertEq SpecVal(s, "dveklase"), "1", "jednoklasni dokument"
+    ' Datum iz storniranog, ne danasnji.
+    AssertEq SpecVal(s, "datum"), "15.03.2026", "datum se preuzima iz storniranog"
+    ' Broj se NE preuzima: ispravka je nov dokument sa novim brojem.
+    AssertEq SpecVal(s, "brdok"), "", "broj dokumenta se NE preuzima"
+    ' Nula se ne salje: fixture nema izdatu ambalazu na otkupu.
+    AssertEq SpecVal(s, "ambpr"), "", "nula se ne salje kao vrednost"
+
+    ' --- OTPREMNICA: isti BROJ, druga tabela, druge kolicine ---
+    s = modStornoDok.PrefillIzStorniranog(STIP_OTPREMNICA, "1/TEST", "")
+    AssertEq SpecVal(s, "kol1"), "1000", "otpremnica daje SVOJU kolicinu"
+    AssertEq SpecVal(s, "amb1"), "100", "otpremnica daje svoje gajbe"
+    AssertEq SpecVal(s, "omid"), FX_STANICA, "otpremnica nosi otkupno mesto"
+    AssertEq SpecVal(s, "parcela"), "", "otpremnica nema parcelu"
+    AssertEq SpecVal(s, "partnerid"), "", "otpremnica nema partnera (njen je stanica)"
+
+    ' --- ZBIRNA: UkupnoKolicina / UkupnoAmbalaze, bez cene i bez zbirne ---
+    s = modStornoDok.PrefillIzStorniranog(STIP_ZBIRNA, FX_ZBIRNA, "")
+    AssertEq SpecVal(s, "kol1"), "1000", "zbirna cita UkupnoKolicina, ne Kolicina"
+    AssertEq SpecVal(s, "amb1"), "100", "zbirna cita UkupnoAmbalaze, ne KolAmbalaze"
+    AssertEq SpecVal(s, "cena"), "", "zbirna NEMA cenu (nema je ni tabela)"
+    AssertEq SpecVal(s, "brzbirne"), "", "zbirna ne preuzima samu sebe kao broj zbirne"
+
+    ' --- nepostojeci dokument i tip koji se ne prefiluje ---
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_OTKUP, "NE-POSTOJI", ""), "", _
+             "nepostojeci dokument ne daje prefill"
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_IZVOD, "1/TEST", ""), "", _
+             "izvod se ne prefiluje (nije dokument unosa)"
+End Sub
+
+' FRAMEWORK ISPRAVKE VAZI SAMO ZA CETIRI TIPA.
+'
+' Otkup, novac, faktura i izvod nemaju nizvodni tok o kome se odlucuje, pa
+' im je storno obican - isto kao u legacy formi, gde TryRunCorrectionFramework
+' za njih vraca False i posao preuzima obican Select Case.
+'
+' Pada ako se neki tip ubaci u framework: tada bi npr. storno isplate poceo
+' da nudi "ISPRAVKA / DUPLIKAT / PONISTENJE", a modStornoFlow za novac nema
+' nijednu od tih grana - dokument bi ostao neopisan i nestorniran.
+Private Sub T_FrameworkIspravke_SamoCetiriTipa()
+    Dim jesu As Variant, nisu As Variant, i As Long
+
+    jesu = Array(STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, STIP_REVERSI)
+    nisu = Array(STIP_OTKUP, STIP_ISPLATE, STIP_UPLATE, STIP_FAKTURA, STIP_IZVOD)
+
+    For i = 0 To UBound(jesu)
+        AssertEq (Len(modStornoDok.TipUFlowDoc(CStr(jesu(i)))) > 0), True, _
+                 "framework tip: " & CStr(jesu(i))
+    Next i
+    For i = 0 To UBound(nisu)
+        AssertEq modStornoDok.TipUFlowDoc(CStr(nisu(i))), "", _
+                 "obican storno, bez framework-a: " & CStr(nisu(i))
+        ' Ako tip nije framework tip, ne sme ni da trazi izbor moda niti da
+        ' ima sta da izvrsi kroz njega.
+        AssertEq modStornoDok.StornoTraziIzborModa(CStr(nisu(i)), "1/TEST", ""), False, _
+                 "ne trazi izbor moda: " & CStr(nisu(i))
+        AssertEq (modStornoDok.StornoIzvrsiMod(CStr(nisu(i)), "1/TEST", "", _
+                  SV_MODE_ISPRAVKA, False, False) Is Nothing), True, _
+                 "framework ne izvrsava nista nad: " & CStr(nisu(i))
+    Next i
+End Sub
+
+' PREFILL BIRA DOKUMENT PO PK-u, NE PO BROJU.
+'
+' Fixture ima dve AKTIVNE prijemnice sa istim brojem i razlicitim kupcem
+' (PRJ-TEST-A / KUP-TEST-1, PRJ-TEST-B / KUP-TEST-2). Tako i mora da bude u
+' produkciji: GenerateBrojPrijemnice racuna sekvencu PO KUPCU, pa dva kupca
+' istog dana dobiju isti "1/ddmmyy".
+'
+' Ako prefill krene od broja, ispravka jednog kupca ponudi kolicine i cenu
+' DRUGOG. Dokument bi i dalje bio "ispravan" - samo tudji.
+'
+' Prethodna verzija ovog testa zvala je PrefillIzStorniranog sa oldDocID:="",
+' pa bas ovaj slucaj nije ni doticala.
+Private Sub T_Prefill_PoIdentitetuNePoBroju()
+    Dim sA As String, sB As String
+
+    sA = modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-TEST-A")
+    sB = modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-TEST-B")
+
+    AssertEq (Len(sA) > 0), True, "prefill po PK-u A nije prazan"
+    AssertEq (Len(sB) > 0), True, "prefill po PK-u B nije prazan"
+
+    ' Isti broj, dva PK-a -> DVE razlicite vrednosti. Da prefill ide po broju,
+    ' obe strane bi vratile isti dokument.
+    AssertEq SpecVal(sA, "kol1"), "300", "PK A daje SVOJU kolicinu"
+    AssertEq SpecVal(sB, "kol1"), "700", "PK B daje SVOJU kolicinu"
+    AssertEq SpecVal(sA, "partnerid"), FX_KUPAC, "PK A daje svog kupca"
+    AssertEq SpecVal(sB, "partnerid"), FX_KUPAC2, "PK B daje svog kupca"
+    AssertEq SpecVal(sA, "cena"), "60", "PK A daje svoju cenu"
+    AssertEq SpecVal(sB, "cena"), "80", "PK B daje svoju cenu"
+
+    ' Nepoznat PK ne sme da "padne nazad" na prvi red istog broja - to bi bila
+    ' ista greska, samo tise.
+    AssertEq modStornoDok.PrefillIzStorniranog(STIP_PRIJEMNICA, FX_PRIJ_BROJ, "PRJ-NE-POSTOJI"), "", _
+             "nepoznat PK ne pogadja tudji dokument istog broja"
+
+    ' Ista kolizija je razlog zasto prevezivanje po broju mora da stane.
+    AssertEq (modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+              COL_PRJ_KUPAC, FX_PRIJ_BROJ) > 1), True, _
+             "broj sa dva kupca se prijavljuje kao dvosmislen"
+    AssertEq modDokumenta.AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, _
+             COL_PRJ_KUPAC, FX_PRIJ_STORNO), 0, _
+             "storniran dokument se ne broji kao vlasnik"
+End Sub
+
+' NEIZVESNOST ZAUSTAVLJA UPIS, NE PROPUSTA GA.
+'
+' Kad se ne zna da li ispravka na cekanju postoji, "nastavi kao obican unos"
+' znaci: nova prijemnica dobija SVEZE palete, stare ostaju osirocene, a
+' correction ostaje PENDING i ceka jos jednu prijemnicu. Zato je detekcija
+' fail-closed.
+'
+' Fixture ima DVE ispravke na cekanju nad otpremnicom - namerno ne nad
+' prijemnicom, jer detekcija prijemnice pita operatera kroz MsgBox, a MsgBox
+' u headless runu visi. Pravilo je isto i deli ga ista rutina.
+Private Sub T_IspravkaDetekcija_FailClosed()
+    Dim cid As String, stari As String, parent As String, razlog As String
+    Dim ishod As Long
+
+    ' Dve na cekanju -> STOP, sa razlogom (safe-stop).
+    ishod = modDokUnos.NadjiIspravku(FLOW_DOC_OTPREMNICA, cid, stari, parent, razlog)
+    AssertEq ishod, -1, "dve ispravke na cekanju zaustavljaju upis"
+    AssertEq (Len(razlog) > 0), True, "safe-stop nosi razlog za operatera"
+
+    ' Nijedna za drugi tip -> obican unos. Dokazuje i da se tipovi ne mesaju:
+    ' otpremnicke ispravke ne smeju da zaustave unos prijemnice.
+    ishod = modDokUnos.NadjiIspravku(FLOW_DOC_PRIJEMNICA, cid, stari, parent, razlog)
+    AssertEq ishod, 0, "ispravka drugog tipa ne dira ovaj unos"
+    AssertEq razlog, "", "bez ispravke nema ni razloga"
+    AssertEq cid, "", "bez ispravke nema ni CorrectionID"
+End Sub
+
+' Vrednost jednog polja iz prefill opisa ("kljuc=vrednost|kljuc=vrednost").
+' Prazno = kljuca nema, sto je za ovaj opis isto sto i "nema vrednosti"
+' (Spoji prazne vrednosti uopste ne upisuje).
+Private Function SpecVal(ByVal spec As String, ByVal kljuc As String) As String
+    Dim par As Variant, kv As Variant
+    If Len(spec) = 0 Then Exit Function
+    For Each par In Split(spec, "|")
+        kv = Split(CStr(par), "=")
+        If UBound(kv) >= 1 Then
+            If CStr(kv(0)) = kljuc Then
+                SpecVal = CStr(kv(1))
+                Exit Function
+            End If
+        End If
+    Next par
+End Function
 
 ' UKUCAN A NERAZRESEN IZBOR NIJE "NIJE IZABRANO".
 ' Combo dopusta kucanje, a ID stize iz skrivene kolone koja postoji samo uz

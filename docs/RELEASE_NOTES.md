@@ -1428,3 +1428,103 @@ sam storno iz F8 nad pravim podacima (transakcije pokrivaju `RunStornoTestSuite`
 i `Test_StornoCentar_All`, ali kroz svoje ulazne tačke, ne kroz ekran). Izgled
 prekidača sa devet dugmadi na užem ekranu, tri dijaloga storna izvoda i ponašanje
 nad pravim podacima ostaju na operateru — checklista je u PR-u.
+
+---
+
+## vba-v2.43.0 — 2026-08-15
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: običan online update.** Nijedna nova forma ni sheet;
+> `frmOtkupUI.frm/.frx` je nepromenjen.
+>
+> **Obavezno posle uvoza:** `Alt+F8 → EnsurePoruke`. Dvadeset novih ključeva
+> poruka do tada postoji samo u kodu.
+>
+> **Legacy se i dalje NE gasi.** `frmDokumenta` i `frmOtkup` rade nepromenjeno.
+
+**Storno posle ovoga nije Da/Ne — bira se šta poslovno znači**
+
+Prethodni paket (2.42.0) dao je F8 sposobnost da stornira svih devet tipova, ali
+uvek kao **običan** storno. Ovaj dodaje ono što legacy zove „centralni storno /
+ispravka framework": za četiri tipa sa nizvodnim tokom (otpremnica, zbirna,
+prijemnica, revers) bira se **šta storno znači**:
+
+| Mod | Šta radi |
+|---|---|
+| **ISPRAVKA** | pogrešan unos, isti fizički događaj — storniraj stari, unesi ispravan; veze i preračun idu automatski |
+| **DUPLIKAT** | dokument nikad nije trebalo da postoji — skini posledice, nema zamene |
+| **PONIŠTENJE** | fizički tok se poništava — blokada ako postoje zavisni dokumenti, osim uz svesnu potvrdu |
+| **REŠI KASNIJE** | trajan recovery zapis, ne samo poruka koja prođe |
+
+Izbor se nudi **samo kad ima o čemu da se odlučuje** (`CorrectionNeedsDialog`) —
+isti smart trigger koji legacy koristi. Revers dobija kratko pitanje storno vs
+ispravka, jer je list u lancu.
+
+**Z10: polja se pune iz storniranog dokumenta**
+
+Posle ISPRAVKE operater više ne kuca dokument iznova napamet — menja samo
+grešku. Legacy to radi u **četiri kopije** istog računa, svaka vezana za svoje
+kontrole (`PrefillOtkupFromStornirano` u `modOtkupBlok`, tri
+`Prefill*FromStornirana` u `frmDokumenta`). Ovde je izdvojen jedan račun
+(`modStornoDok.PrefillIzStorniranog`), koji vraća opis vrednosti — ekran ne zna
+nijednu kolonu tabele, a modul nijednu kontrolu.
+
+Tri pravila iz legacy koja test drži:
+
+- polazi se od **PK-a** stornirane (`OldDocID`), ne od broja — broj nije globalno
+  jedinstven (`GenerateBrojPrijemnice` broji po kupcu, pa dva kupca istog dana
+  dobiju „1/ddmmyy");
+- **datum** se preuzima iz stornirane — ispravka sutradan ne sme da promeni dan;
+- **broj** se NE preuzima — ispravka je nov dokument sa novim brojem, a veza na
+  stari živi u `tblStornoVeza`.
+
+**Ispravka prijemnice — zatvorena poznata rupa iz Faze B**
+
+Do sada je prijemnica upisana iz novog UI-ja dok visi ispravka dobijala **sveže**
+palete, a stare ostajale osirotele. Sada `PrijemnicaValidiraj` prepoznaje da je
+unos zamena (traži ispravku na čekanju u `tblStornoVeza` — ne u stanju sesije,
+jer se storno pokreće u F8 a unos u F4 i između to dvoje sme da se zatvori
+Excel), `PrijemnicaUpisi` preskače svežu paletizaciju (`SetPaletizeSkip` **pre**
+upisa) i prevezuje palete stare na novu.
+
+**Safe-stop:** dve ili više ispravki na čekanju → ne bira se naslepo. Pogrešno
+pogođena veza bi palete jedne prijemnice prevezala na tuđu robu.
+
+**Hladnjača ispravka radi i iz novog UI-ja**
+
+Završetak je postojao od v6-ui-106 (`modOtkupUnos`), ali ga niko iz novog UI-ja
+nije mogao pokrenuti. Sada se posle storna otkupa iz F1 nudi isti izbor kao u
+legacy: ISPRAVKA (palete idu na nov lanac) / DUPLI UNOS (skini fantomske stavke)
+/ OTKAZI (palete ostaju osirotele, rešava se ručno).
+
+**Šta Faza D još NIJE donela**
+
+Recovery panel, „Nedovršeno" i Undo operacija (stavka 14). Uz njih ide i
+**multiselect storna otkupnih blokova** uz DUPLIKAT/PONIŠTENJE — to je deo legacy
+overlay panela, koji nije prenet: izbor moda su ovde pitanja, ne panel.
+
+**Verifikacija**
+
+Pokrenuto na Windows mašini (Excel + `pywin32`), 15.08.2026:
+
+- `python tools\vba_check.py` → **čisto (189 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=21, FAIL=0** (dva nova
+  testa: prefill čita tabelu svog tipa, i framework važi samo za četiri tipa).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Dokaz u oba smera:** četiri nove sabotaže (`prefill-zbirna-kolona`,
+  `prefill-tabela`, `prefill-broj`, `framework-otkup`), svaka obara test **po
+  imenu**.
+- **`COMPILE` je i dalje `NEJASNO`** — potvrđuje se ručno.
+
+**Jedna greška uhvaćena pre nego što je ušla:** `tblZbirna` kolonu količine zove
+`UkupnoKolicina`, a ambalaže `UkupnoAmbalaze` — ne `Kolicina`/`KolAmbalaze` kao
+ostale tri tabele. Literal bi tiho vratio nulu i prefill ispravke zbirne došao bi
+prazan, bez ijedne poruke o grešci. Zato ime kolone nigde nije literal, a
+sabotaža `prefill-zbirna-kolona` to drži.
+
+Ograničenje: testovi pokrivaju **prefill i rutiranje po modu**, ne i sam relink
+paleta iz ekrana. Sam `ReassignPaleteToPrijemnica_TX` je pokriven
+(`RunPaleteTestSuite`, devet slučajeva uključujući razliku u broju gajbica), ali
+lepak koji odlučuje **kada** se zove — prepoznavanje ispravke na čekanju i
+`SetPaletizeSkip` oko upisa — proverava se **ručno**, po checklisti u PR-u.
+Fixture nema nijednu prijemnicu ni paletu, pa se taj tok ne može odvrteti bez
+proširenja fixture-a.
