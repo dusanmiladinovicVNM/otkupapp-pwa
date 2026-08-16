@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-120"
+Public Const SCRDOK_BUILD As String = "v6-ui-121"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -468,6 +468,10 @@ Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
                Poruka("STORNO_MSG_ISPRAVKA_DALJE"), vbInformation, APP_NAME
     ElseIf CBool(res("success")) Then
         MsgBox CStr(res("message")), vbInformation, APP_NAME
+        ' Blokovi se storniraju POSLE dokumenta: kapija gleda da li je
+        ' roditeljska otpremnica jos aktivna, a to zavisi od toga sta je
+        ' upravo odradjeno.
+        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID"))
     Else
         MsgBox CStr(res("message")), vbExclamation, APP_NAME
     End If
@@ -536,6 +540,78 @@ Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
 EH:
     LogErr "modScrDokumenti.IzvrsiMod"
 End Function
+
+' Dodatni storno otkupnih blokova koji vise o dokumentu.
+'
+' Dozvoljen je SAMO uz DUPLI/PONISTENJE - roba tada stvarno nestaje. Uz
+' ISPRAVKU blokovi ostaju: storno pa ponovni unos dokumenta je celina, a
+' blokovi se prevezuju na novi. Uz RESI KASNIJE se ne dira nista.
+'
+' RAZLIKA U ODNOSU NA LEGACY, i to je jedino sto od panela nije preneto:
+' legacy nudi multiselect - operater cekira KOJE blokove stornira, a
+' ostali se oslobadjaju. Ovde je sve-ili-nista, ali se pre pitanja ispise
+' pun spisak (broj, klasa, kilogrami, kooperant), pa operater vidi tacno
+' nad cim odlucuje. Delimican izbor ostaje na ekranu Oporavak, gde
+' izgubljeni blokovi imaju svoju listu i radnju po redu.
+'
+' Kapija BlockStornoDriftReason ostaje ista (ADR-0001): blok vezan za
+' ZIVU otpremnicu se ne stornira, jer bi je ostavio precenjenu.
+Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
+                                ByVal opcija As String, ByVal mode As String, _
+                                ByVal correctionID As String)
+    Dim dt As String, blokovi As Collection, ids As Collection
+    Dim spisak As String, i As Long, red As Variant, n As Long, razlog As String
+    On Error GoTo EH
+    If mode <> SV_MODE_DUPLI And mode <> SV_MODE_PONISTENJE Then Exit Sub
+    dt = modStornoDok.TipUFlowDoc(tip)
+    If Len(dt) = 0 Then Exit Sub
+
+    Set blokovi = GetStornoBlockRows(dt, broj, opcija)
+    If blokovi Is Nothing Then Exit Sub
+    If blokovi.count = 0 Then Exit Sub
+
+    For i = 1 To blokovi.count
+        red = blokovi(i)
+        spisak = spisak & vbCrLf & "  " & CStr(red(1)) & "  " & ChrW(183) & " Kl." & _
+                 CStr(red(3)) & "  " & ChrW(183) & " " & CStr(red(2)) & " kg  " & _
+                 ChrW(183) & " " & CStr(red(4))
+    Next i
+
+    If MsgBox(Poruka("STORNO_ASK_BLOKOVI_1") & " " & blokovi.count & _
+              Poruka("STORNO_ASK_BLOKOVI_2") & spisak & vbCrLf & vbCrLf & _
+              Poruka("STORNO_ASK_BLOKOVI_3"), _
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
+
+    Set ids = New Collection
+    For i = 1 To blokovi.count
+        red = blokovi(i)
+        ids.Add CStr(red(0))
+    Next i
+
+    razlog = BlockStornoDriftReason(dt, mode, ids)
+    If Len(razlog) > 0 Then
+        MsgBox razlog, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
+    n = StornoSelectedBlocks_TX(ids)
+    If n > 0 Then
+        modOtkupUI.ShowToast Poruka("STORNO_MSG_BLOKOVI_OK") & " " & n, False
+        Exit Sub
+    End If
+
+    ' Storno dokumenta je vec komitovan; ako blok-storno padne, posao se ne
+    ' gubi u poruci koja prodje nego ostaje vidljiv kao MANUAL zadatak.
+    MsgBox Poruka("STORNO_ERR_BLOKOVI"), vbExclamation, APP_NAME
+    If Len(correctionID) > 0 Then
+        modStornoContext.MarkCorrectionManual correctionID, _
+            "Storniraj otkupne blokove rucno.", _
+            "Posle " & mode & " nad " & dt & " " & broj & " storno blokova nije uspeo."
+    End If
+    Exit Sub
+EH:
+    LogErr "modScrDokumenti.StornirajBlokoveAko"
+End Sub
 
 ' Rezultat "operater je odustao" - isti oblik koji vraca modStornoFlow, da
 ' pozivalac ne mora da razlikuje odustajanje od neuspeha.

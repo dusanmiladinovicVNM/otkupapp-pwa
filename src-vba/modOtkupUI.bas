@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-120"
+Public Const OTKUI_BUILD   As String = "v6-ui-121"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -251,7 +251,10 @@ Public Const IC_STORNO   As Long = &HE7A7&   ' Undo - izbor korisnika
 ' isti glif kao "Palete" u sidebaru, ali bar nije prazan kvadrat.
 Public Const IC_REVERS   As Long = &HE8F1&   ' Library - privremeno
 Private Const IC_ENTER    As Long = &HE751&   ' ReturnKey - rezervisano
-Private Const IC_REFRESH  As Long = &HE72C&   ' Refresh - rezervisano
+' Refresh: bio rezervisan, od v6-ui-121 nosi ekran "Oporavak" u sidebaru -
+' taj ekran i jeste "vrati u ispravno stanje". Kod je iz verifikovanog
+' opsega ispod EC00, kao i ostali.
+Public Const IC_OPORAVAK As Long = &HE72C&   ' Refresh
 ' Stanja
 Private Const IC_SYNC     As Long = &HE753&   ' Cloud
 Private Const IC_HELP     As Long = &HE897&   ' Help
@@ -6372,7 +6375,7 @@ Public Sub DumpMdl2Used()
     IcoRow a, "IC_STORNO", "Naslov F8: Storno", "Undo", IC_STORNO
     IcoRow a, "IC_REVERS", "Naslov F7: Reversi (PRIVREMENO)", "Library", IC_REVERS
     IcoRow a, "IC_ENTER", "(nije vezano)", "ReturnKey", IC_ENTER
-    IcoRow a, "IC_REFRESH", "(nije vezano)", "Refresh", IC_REFRESH
+    IcoRow a, "IC_OPORAVAK", "Naslov: Oporavak", "Refresh", IC_OPORAVAK
 
     Set wb = Workbooks.Add
     Set ws = wb.Sheets(1)

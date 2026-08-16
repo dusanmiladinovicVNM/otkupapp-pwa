@@ -44,10 +44,31 @@ AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
 
 STANICA = "STA-TEST-1"
 VOZAC = "VOZ-TEST-1"
+# Drugi vozac postoji zbog CILJNE liste zbirnih: broj zbirne se generise PO
+# VOZACU, pa su dve zbirne istog broja i istog kupca a razlicitih vozaca DVA
+# dokumenta. Lista ciljeva mora da ponudi oba.
+VOZAC2 = "VOZ-TEST-2"
+ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
+# Zbirna u koju NIJEDAN test ne upisuje. Kolizioni par aktivnih prijemnica mora
+# da pocne na takvoj: na ZB-TEST-1 je okidao dijalog "dupla prijemnica" iz testa
+# koji tamo upisuje, a MsgBox u headless runu je visenje koje watchdog samo
+# maskira.
+ZBIRNA_MIRNA = "ZB-TEST-4"
 VRSTA = "TESTVOCE"
+# Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
+# presuda o RELABEL-u mora da opisuje BAS izabran dokument. PRJ-TEST-C2 je zato
+# druge vrste od svog kolizionog blizanca C1 i od cilja -- kad se presuda racuna
+# po broju, ona vidi C1 (ista vrsta kao cilj) i kaze CLEAN, pa se relabel
+# preskoci i paleta ostane pogresno oznacena.
+VRSTA2 = "TESTVOCE2"
 SORTA = "TESTSORTA"
 ZBIRNA = "ZB-TEST-1"
 ZBIRNA_U_BLOKU = "ZB-TEST-3"        # zbirnu nosi otkupni blok, ne otpremnica
+ZBIRNA_STORNIRANA = "ZB-TEST-STORNO"  # ne sme se pojaviti u listi ciljeva
+# Druga AKTIVNA zbirna: nosi kolizioni par prijemnica. Da su oni na ZB-TEST-1,
+# provera "1 zbirna = 1 prijemnica" bi u testovima otvarala dijalog, a dijalog
+# u headless runu nema ko da zatvori.
+ZBIRNA2 = "ZB-TEST-2"
 # Kupac postoji SAMO kao ID na fakturi -- red u tblKupci ne treba: kapije koje
 # ga koriste porede identifikatore, ne citaju karticu kupca.
 KUPAC = "KUP-TEST-1"
@@ -66,6 +87,20 @@ FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
 # bi je oborila prolazila je neprimeceno.
 PRIJEMNICA_BROJ = "1/150326"        # isti broj kod KUPAC i KUPAC2
 PRIJEMNICA_STORNO = "9/150326"      # stornirana; njene palete su osirocene
+PRIJEMNICA_STORNO2 = "8/150326"     # kolizioni par storniranih (dva kupca)
+# Kolizioni par AKTIVNIH prijemnica sa svojim paletama. Postoji zbog jednog
+# propusta koji se video tek kad se tvrdnja napisala: prevezivanje prijemnice na
+# zbirnu menjalo je tblPrijemnica po identitetu, a tblPaletaStavka jos po BROJU
+# -- pa je dokument drugog kupca ostajao sam sebi protivrecan (prijemnica na
+# staroj zbirni, njena paleta na novoj).
+PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
+# DELJENA FIZICKA PALETA. Dva kupca istog broja i ISTE robe smeju legitimno da
+# dele paletu -- roba im je identicna, pa nema sta da se razlikuje. Kapija koja
+# su-stanara trazi po BROJU tu ne okine (bpg == oldBroj), pa relabel prepravi
+# header cele palete i tudja roba ostane pogresno oznacena.
+PRIJEMNICA_DELJENA = "5/150326"
+# Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
+PRIJEMNICA_CILJ_V2 = "4/150326"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -77,6 +112,8 @@ SEED = {
     "tblVozaci": [
         {"VozacID": VOZAC, "Ime": "Test", "Prezime": "Vozac",
          "Aktivan": STATUS_AKTIVAN, "KapacitetKG": 5000},
+        {"VozacID": VOZAC2, "Ime": "Drugi", "Prezime": "Vozac",
+         "Aktivan": STATUS_AKTIVAN, "KapacitetKG": 4000},
     ],
     "tblKulture": [
         {"KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA, "SortaVoca": SORTA,
@@ -101,11 +138,38 @@ SEED = {
          "KatOpstina": "Test Opstina", "Kultura": VRSTA, "PovrsinaHa": 2.25,
          "Aktivna": STATUS_AKTIVAN},
     ],
+    # Druga zbirna je STORNIRANA i postoji samo zbog ekrana Oporavak: lista
+    # ciljeva prevezivanja sme da nudi iskljucivo AKTIVNE dokumente. Bez
+    # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
+    # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
     "tblZbirna": [
+        # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
+        # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
+        # smatrala samo kupca, pa operater nije mogao da izabere pravi.
+        {"ZbirnaID": "ZBI-TEST-4", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_MIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-DUPL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-DUPL-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_DUPL, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
+         "Klasa": "I", "KupacID": KUPAC},
         {"ZbirnaID": "ZBI-TEST-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 1000, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 100,
          "Klasa": "I"},
+        {"ZbirnaID": "ZBI-TEST-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA2, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 950, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 95,
+         "Klasa": "I"},
+        {"ZbirnaID": "ZBI-TEST-STOR", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_STORNIRANA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 500, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 50,
+         "Klasa": "I", "Stornirano": "Da"},
     ],
     # Tri slucaja koje zadatak trazi:
     #   OTP-TEST-1  datum iz proslosti + poznata zbirna + ostatak != 0 (1000 - 400)
@@ -157,32 +221,117 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        # Deljena paleta: D1 i D2 nose isti broj i istu robu, svaki svom kupcu.
+        {"PrijemnicaID": "PRJ-TEST-D1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I", "Stornirano": "Da"},
+        {"PrijemnicaID": "PRJ-TEST-D2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 150, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 15, "Klasa": "I", "Stornirano": "Da"},
+        # Cilj druge vrste -- jedinstven broj, bez kolizije.
+        {"PrijemnicaID": "PRJ-TEST-T2", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_CILJ_V2, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA2, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # Kolizioni par AKTIVNIH: prevezivanje na zbirnu sme da dira SAMO Z1.
+        {"PrijemnicaID": "PRJ-TEST-Z1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-Z2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-A", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
-         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA2,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 60.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 30, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-B", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
-         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_BROJ, "BrojZbirne": ZBIRNA2,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 700, "Cena": 80.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 70, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-TEST-S", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
+        # KOLIZIONI PAR: dve STORNIRANE prijemnice ISTOG broja, dva kupca,
+        # svaka sa svojom paletom. Bez njega se ne moze dokazati da prevezivanje
+        # dira SAMO svoj dokument -- a to je bio otvoren nalaz: izvor se birao
+        # po broju, pa bi ovaj par bio zahvacen zajedno.
+        #
+        # Na ZASEBNOM broju (8/150326), ne na 9/150326: testovi dele svesku, pa
+        # test koji prevezuje 9/150326 ne sme da potrosi podatke onome koji
+        # dokazuje izolaciju.
+        {"PrijemnicaID": "PRJ-TEST-C1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 40, "Klasa": "I", "Stornirano": "Da"},
+        {"PrijemnicaID": "PRJ-TEST-C2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "VrstaVoca": VRSTA2, "SortaVoca": SORTA, "Kolicina": 250, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 25, "Klasa": "I", "Stornirano": "Da"},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
     "tblPaleta": [
+        {"PaletaID": "PAL-TEST-D", "BrojPalete": 21, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
+         "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-Z1", "BrojPalete": 11, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 10,
+         "KapacitetGajbica": 100, "NetoKg": 100, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-Z2", "BrojPalete": 12, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 20,
+         "KapacitetGajbica": 100, "NetoKg": 200, "Status": "OTVORENA"},
         {"PaletaID": "PAL-TEST-1", "BrojPalete": 1, "Godina": 2026,
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
          "KapacitetGajbica": 100, "NetoKg": 400, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-2", "BrojPalete": 2, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
+         "KapacitetGajbica": 100, "NetoKg": 400, "Status": "OTVORENA"},
+        {"PaletaID": "PAL-TEST-3", "BrojPalete": 3, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
+         "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
     ],
     "tblPaletaStavka": [
+        # ISTA fizicka paleta, dva dokumenta istog broja.
+        {"StavkaID": "PST-TEST-D1", "PaletaID": "PAL-TEST-D",
+         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-D1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-D2", "PaletaID": "PAL-TEST-D",
+         "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 15, "NetoKg": 150, "PrijemnicaID": "PRJ-TEST-D2",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-Z1", "PaletaID": "PAL-TEST-Z1",
+         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 10, "NetoKg": 100, "PrijemnicaID": "PRJ-TEST-Z1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-Z2", "PaletaID": "PAL-TEST-Z2",
+         "BrojPrijemnice": PRIJEMNICA_ZBR_KOLIZIJA, "BrojZbirne": ZBIRNA_MIRNA,
+         "BrojGajbica": 20, "NetoKg": 200, "PrijemnicaID": "PRJ-TEST-Z2",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
         {"StavkaID": "PST-TEST-1", "PaletaID": "PAL-TEST-1",
          "BrojPrijemnice": PRIJEMNICA_STORNO, "BrojZbirne": ZBIRNA,
          "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-S",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        # Kolizioni par: dve palete pod ISTIM brojem prijemnice, dva dokumenta.
+        {"StavkaID": "PST-TEST-C1", "PaletaID": "PAL-TEST-2",
+         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "BrojGajbica": 40, "NetoKg": 400, "PrijemnicaID": "PRJ-TEST-C1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-TEST-C2", "PaletaID": "PAL-TEST-3",
+         "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
+         "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-TEST-C2",
+         "Klasa": "I", "VrstaVoca": VRSTA2, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
     # prijemnicom: detekcija ispravke prijemnice pita operatera kroz MsgBox, a

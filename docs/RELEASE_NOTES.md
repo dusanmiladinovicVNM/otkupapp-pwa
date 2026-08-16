@@ -1528,3 +1528,496 @@ lepak koji odlučuje **kada** se zove — prepoznavanje ispravke na čekanju i
 `SetPaletizeSkip` oko upisa — proverava se **ručno**, po checklisti u PR-u.
 Fixture nema nijednu prijemnicu ni paletu, pa se taj tok ne može odvrteti bez
 proširenja fixture-a.
+
+---
+
+## vba-v2.44.0 — 2026-08-15
+> Verzija/datum se **finalizuju pri `tools/release.sh`**.
+> **Isporuka: običan online update.** Nijedna nova forma ni sheet;
+> `frmOtkupUI.frm/.frx` je nepromenjen. Nov modul `modScrOporavak.bas` je
+> običan `.bas` i self-update ga dodaje sam.
+>
+> **Obavezno posle uvoza:** `Alt+F8 → EnsurePoruke`. Četrdeset pet novih
+> ključeva poruka do tada postoji samo u kodu.
+>
+> **Legacy se i dalje NE gasi.** `frmDokumenta` i `frmOtkup` rade nepromenjeno.
+
+**Nov ekran „Oporavak" — Faza D je zatvorena**
+
+Četiri legacy panela iz `frmDokumenta` radila su istu stvar: pokazivala šta je
+ostalo nedovršeno i nudila prevezivanje. Sada je to jedan ekran u sidebaru, sa
+šest lista istog prekidača koji F1 i Palete već koriste:
+
+| Lista | Šta pokazuje | Radnja |
+|---|---|---|
+| **Nedovršeno** | sve što čeka: pending/manual konteksti + osirotele prijemnice, palete i izgubljeni blokovi | pregled |
+| **Osirotele prijemnice** | zbirna im je stornirana ili je nema | Prevezi na ciljnu zbirnu |
+| **Zbirne (cilj)** | aktivne zbirne | klik bira cilj |
+| **Osirotele palete** | prijemnice sa osirotelim paletnim stavkama | Prevezi na ciljnu prijemnicu |
+| **Prijemnice (cilj)** | aktivne prijemnice | klik bira cilj |
+| **Vrati storno** | storno operacije koje se mogu vratiti | Vrati storno |
+
+**Zašto dva cilja umesto dijaloga sa listom:** prevezivanje uvek ima izvor i
+cilj, a novi UI za izbor cilja već ima obrazac — aktivna otpremnica u F1 i
+aktivna paleta na ekranu Palete. Isti obrazac: cilj se bira klikom na red u
+svojoj listi i stoji u zoni gore, gde se vidi sve vreme. Legacy je za to imao
+combo u panelu; ovde je lista, pa se cilj može i **pretražiti i sortirati**.
+
+**Tri pravila koja test drži**
+
+- liste ciljeva nude **samo aktivne** dokumente — prevezivanje na storniran cilj
+  napravilo bi drugu siroticu umesto da reši prvu;
+- **jedan red po broju** — klase I i II dele broj, a cilj prevezivanja JESTE broj;
+- „Vrati storno" cilja **OperationID**, ne poslednju operaciju po broju: isti broj
+  dokumenta može imati više generacija. Zato je prva kolona baš `OperationID`.
+
+**Razlika u odnosu na legacy — namerna**
+
+Upozorenje na siročiće pri otvaranju forme (`CheckVerwaisteDokumente`) se **ne
+prenosi kao modalni dijalog**. Umesto njega stalno stoji lista „Nedovršeno" i
+brojka u zoni gore. Dijalog pri otvaranju se zatvarao i zaboravljao; lista ne
+može da se zaboravi.
+
+**Storno otkupnih blokova uz DUPLIKAT/PONIŠTENJE**
+
+Poslednji deo stavke 13. Kad dokument nestaje bez naslednika, blokovi koji o
+njemu vise mogu da padnu s njim. Legacy nudi multiselect u overlay panelu; ovde
+je **sve-ili-ništa**, ali se pre pitanja ispiše pun spisak (broj, klasa,
+kilogrami, kooperant), pa operater vidi tačno nad čim odlučuje. Delimičan izbor
+ostaje na ekranu Oporavak, gde izgubljeni blokovi imaju svoju listu i radnju po
+redu. Kapija `BlockStornoDriftReason` (ADR-0001) je ista: blok vezan za **živu**
+otpremnicu se ne stornira, jer bi je ostavio precenjenu.
+
+**Verifikacija**
+
+Pokrenuto na Windows mašini (Excel + `pywin32`), 15.08.2026:
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=23, FAIL=0** (dva nova
+  testa: ugovor ekrana i radnje po listi, i ponašanje ciljnih lista).
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Dokaz u oba smera:** tri nove sabotaže (`oporavak-registar`,
+  `oporavak-cilj-radnja`, `oporavak-stornirani-cilj`), svaka obara test **po
+  imenu**.
+- **`COMPILE` je i dalje `NEJASNO`** — potvrđuje se ručno.
+
+**Fixture je proširen jednom storniranom zbirnom** (`ZB-TEST-STORNO`). Razlog je
+sam po sebi nalaz: sabotaža `oporavak-stornirani-cilj` je nad starim fixture-om
+ostajala **zelena** — u njemu nije bilo nijednog storniranog dokumenta, pa
+tvrdnja „lista ciljeva nudi samo aktivne" nije imala nad čim da padne. Test koji
+ne može da pocrveni ne meri ništa. Ko vrti testove lokalno mora da regeneriše
+`tests/fixtures/otkup_test.xlsm` (`python tools\make_fixture.py --donor <put>
+--force`; donor može biti i postojeći fixture).
+
+Ograničenje: testovi pokrivaju **ugovor ekrana i čitanje lista**, ne i sama
+prevezivanja iz ovog ekrana. Jezgro je pokriveno drugde
+(`ReassignPaleteToPrijemnica_TX` u `RunPaleteTestSuite`, `UndoOperation_TX` u
+`Test_StornoCentar_All`); lepak — izbor cilja i redosled potvrda — proverava se
+**ručno**, po checklisti u PR-u.
+
+---
+
+## vba-v2.44.1 — 2026-08-16 (hardening po pregledu)
+> Bez novih sposobnosti. Zatvara **fail-open** putanje i **dvosmislenost
+> identiteta dokumenta** koje je pregled našao u 2.43.0 i 2.44.0.
+
+**Neizvesnost sada zaustavlja upis, ne propušta ga**
+
+Tri mesta su na grešku birala „nastavi":
+
+- **detekcija ispravke prijemnice** — ako čitanje `tblStornoVeze` pukne dok
+  ispravka možda čeka, unos je nastavljao kao običan: nova prijemnica dobije
+  **sveže** palete, stare ostanu osirotele, a korekcija ostane `PENDING` i čeka
+  još jednu prijemnicu. Sada je detekcija izdvojena u `NadjiIspravku`
+  (0 / 1 / −1 = STOP) i fail-closed;
+- **neočekivana greška u prevezivanju paleta** — prijemnica je već snimljena a
+  paletizacija preskočena; bez oznake `MANUAL` korekcija bi ostala `PENDING` i
+  sledeći unos bi opet bio ponuđen kao zamena. Sada i ta grana ide u `MANUAL`;
+- **`StornoTraziIzborModa`** — `CorrectionNeedsDialog` je sam fail-closed (na
+  grešku vraća `True`), a omotač sa `On Error Resume Next` je tu zaštitu
+  poništavao: rezultat ostaje `False` i storno prelazi u običan, bez pitanja o
+  nizvodnom toku.
+
+**Broj dokumenta nije identitet**
+
+`BrojPrijemnice` se računa **po kupcu**, pa dva kupca istog dana dobiju isti
+`1/ddmmyy`. Iz toga su sledile dve greške:
+
+- **prefill je padao nazad na broj.** `FindAnchorRow` je, kad je `OldDocID`
+  zadat ali ga u tabeli nema, uzimao „poslednji red istog broja" — dakle tuđi
+  dokument. Fallback ostaje samo za stare kontekste koji `OldDocID` uopšte
+  nemaju.
+- **ciljne liste u Oporavku su deduplikovale po broju**, pa su dva dokumenta
+  postajala jedan red. Sada je ključ **broj + vlasnik**, kolona VLASNIK je
+  vidljiva, a prevezivanje na dvosmislen broj se **odbija**
+  (`modDokumenta.AktivnihVlasnikaPoBroju`) umesto da ode na onaj koji zatekne
+  poslednji.
+
+> Prava popravka je da `ReassignPaleteToPrijemnica_TX` i
+> `ReassignPrijemnicaToZbirna_TX` prime **identitet dokumenta** umesto broja.
+> One su i danas broj-bazirane i zovu ih i legacy forma i `modOtkupUnos`, pa je
+> to zaseban zahvat u jezgru. Dok se ne uradi, dvosmislen slučaj staje.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=25, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Pet novih sabotaža**, svaka obara test po imenu: `prefill-fallback-po-broju`,
+  `prefill-anchor-broj`, `vlasnik-broji-stornirane`, `ispravka-fail-open`,
+  `oporavak-cilj-po-broju`.
+
+**Fixture je ponovo proširen** — dve aktivne prijemnice sa **istim brojem i
+različitim kupcem**, jedna stornirana sa paletom, i dve ispravke na čekanju.
+Bez tog para nijedna tvrdnja oblika „dokument se jednoznačno razrešava po broju"
+nije imala nad čim da padne; testovi su bili zeleni jer kolizija u fixture-u
+nije postojala. Regeneracija:
+
+```
+python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --force
+```
+
+---
+
+## vba-v2.44.2 — 2026-08-16 (end-to-end pokriće ispravke prijemnice)
+> Bez izmena u ponašanju. Zatvara poslednju rupu u pokriću koju su prethodna
+> dva paketa prijavila kao „ostaje na operaterskoj checklisti".
+
+**Najrizičniji put je sada odvrćen automatski**
+
+`SetPaletizeSkip` + prevezivanje paleta + zatvaranje korekcije — do sada
+proveravano samo ručno. Novi `T_IspravkaPrijemnice_SkipIRelink` vrti ceo tok.
+
+**Bez novog seam-a u produkcionom kodu.** Rečnik koji `PrijemnicaUpisi` prima
+već je javni ulazni ugovor (`NoviPrijemnicaUnos` ga i objavljuje), pa test
+postavlja `ispravkaID` direktno. `MsgBox` iz `PrepoznajIspravkuPrijemnice` tako
+uopšte nije na putanji, a odluka koju taj dijalog donosi već je pokrivena kroz
+`NadjiIspravku`.
+
+Test je **diferencijalan**: isti upis se izvrši dvaput — jednom bez ispravke
+(kontrola: sveža paletizacija *mora* da odradi) i jednom kao ispravka. Bez tog
+para „nema svežih paleta" ne bi dokazivalo ništa: isto bi se videlo da je
+paletiranje ugašeno u Podešavanjima.
+
+**Dve verzije testa bile su placebo — sabotaža ih je otkrila**
+
+Prva je brojala aktivne paletne stavke. Druga je merila gajbice. **Obe su
+ostajale zelene** kad se `SetPaletizeSkip` ukloni.
+
+Izmereno stanje pokazuje zašto — bez preskakanja se sveža paleta ipak napravi,
+a `ReassignPaleteToPrijemnica_TX` je odmah **stornira**:
+
+```
+sa preskakanjem : [ST T-ISPR-1 gaj=40]
+bez preskakanja : [ST T-ISPR-1 gaj=40] + [ST T-ISPR-1 gaj=40 st=Da]
+```
+
+U aktivnom preseku razlike nema. Tvrdnja zato broji **sve** stavke, uključujući
+stornirane — što je i tačno ono što komentar uz `SetPaletizeSkip` opisuje kao
+štetu: „kreirale bi se palete koje se odmah storniraju (prazna otvorena paleta +
+potrošen broj)". Broj palete se ne vraća.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=26, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Tri nove sabotaže**, svaka obara test po imenu: `ispravka-bez-skipa`,
+  `ispravka-bez-relinka`, `ispravka-context-ostaje`.
+
+Time sa operaterske checkliste ispada tačka 7 iz PR #194 — ostaje samo ono što
+se zaista ne može automatizovati (izgled, štampa, ponašanje nad pravim podacima).
+
+---
+
+## vba-v2.45.0 — 2026-08-16 (identitet dokumenta na granici prevezivanja)
+> Završnica Faze D po pregledu. Bez novih sposobnosti — izbacuje **goli poslovni
+> broj** sa write granice recovery/relink operacija.
+
+**Broj nije identitet**
+
+`BrojPrijemnice` se računa **po kupcu**, broj zbirne **po vozaču**. Dva dokumenta
+lako dele broj. Rutine prevezivanja su do sada primale samo broj i skenirale
+tabelu po njemu — pa su kod kolizije zahvatale i tuđi dokument.
+
+**Infrastruktura je već postojala.** `GeneracijaID` (identitet logičkog
+dokumenta, Kl.I + Kl.II zajedno) pečate svi writeri kroz `ApplyGeneracijaID`, i
+to sa već tačnim kompozitnim vlasništvom po tipu — otpremnica `StanicaID`,
+prijemnica `KupacID`, zbirna `VozacID + KupacID`. Kolonu pravi
+`EnsureSledljivostSchema` na svakom startu. Nedostajalo je samo da je
+recovery/relink putanja **koristi**.
+
+| Sloj | Pre | Sada |
+|---|---|---|
+| `ReassignPaleteToPrijemnica_TX` | izvor po `bp = oldBroj` | opcioni `oldGeneracijaID`; izvor po `PrijemnicaID` te generacije |
+| `ReassignPrijemnicaToZbirna_TX` | svi aktivni redovi broja | opcioni `prijemnicaGeneracijaID`; + kapija nad **ciljnom zbirnom** (vozač + kupac) |
+| `GetOsirocenePrijemnice` | grupa po broju | grupa po **broj + generacija**, generacija kao 8. kolona |
+| `GetPrijemniceSaOsirocenimPaletama` | grupa po broju | grupa po **broj + generacija**, generacija kao 7. kolona |
+| ekran Oporavak | šalje broj | šalje i generaciju iz reda |
+| `modDokUnos` ispravka | broj + ad-hoc kapija | generacija iz correction context-a |
+
+Legacy panel čita fiksne indekse (1..6 / 1..7), pa je dodavanje kolone **na kraj**
+za njega nevidljivo.
+
+**Bez generacije → fail-closed, ne fail-open**
+
+Stari zapisi generaciju nemaju. Tada se pada na kapiju nad jednoznačnošću broja —
+ali kroz **postojeći** `RequireJedanVlasnikPoBroju`, koji već nosi kompozitno
+vlasništvo po tipu. Moja ranija `AktivnihVlasnikaPoBroju` (jedan vlasnik, i
+fail-open na nedostajuću kolonu) je **obrisana**; jedini račun je sada
+`VlasniciPoBroju`, sa prekidačem „broji li i stornirane" — jer je izvor
+prevezivanja baš storniran dokument, pa bi brojanje samo aktivnih tu uvek dalo
+nulu i kapija ne bi radila.
+
+**Sitno iz istog pregleda**
+
+- ciljna lista je sabirala samo Kl.I; sada obe klase idu u isti red i u zbir;
+- filter pretrage se primenjuje **pre** nego što se dokument upamti, pa dokument
+  koji ne pogađa prvim redom može da pogodi drugim.
+
+**Verifikacija**
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=27, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže: `relink-izvor-po-broju`, `relink-ignorise-generaciju`,
+  `vlasnik-broji-stornirane`.
+
+**Fixture** je dobio **kolizioni par storniranih** prijemnica (`8/150326`, dva
+kupca, svaka sa svojom paletom) i drugu aktivnu zbirnu. Novi
+`T_RelinkPoGeneraciji_NeDiraTudjDokument` prevezuje jedan dokument i tvrdi da
+drugi **ostaje na svom mestu** — što je tvrdnja koju raniji E2E test nije mogao
+da napravi, jer je koristio jedinstven broj.
+
+Par je namerno na **zasebnom** broju od `9/150326`: testovi dele svesku, pa test
+koji prevezuje jedan dokument ne sme da potroši podatke onome koji dokazuje
+izolaciju.
+
+> **Fixture je gitignored.** Prelazak grane ga ne regeneriše — posle
+> `git checkout` pokreni:
+> `python tools\make_fixture.py --donor tests\fixtures\otkup_test.xlsm --force`
+
+## v2.45.1 — `v6-ui-124` · identitet i na CILJNOJ strani prevezivanja
+
+Nastavak v2.45.0 po pregledu. Prethodna verzija je izvor prevezivanja prebacila
+na `GeneracijaID`, a **cilj je ostao goli poslovni broj** — pola posla.
+
+### Zašto je to bio otvoren nalaz
+
+`BrojPrijemnice` se generiše **po kupcu**, pa dva aktivna dokumenta lako dele
+broj. Ciljni dokument se biran po tom broju, a mapa `newById(klasa)` prima jedan
+ID po klasi — pobeđivao je **onaj red koji je slučajno poslednji u tabeli**.
+Palete su tako mogle da odu tuđem kupcu; isti kvar kao na izvornoj strani, samo
+na drugom kraju.
+
+Fixture je to već modelovao (`1/150326` nose i `PRJ-TEST-A` i `PRJ-TEST-B`), a
+raniji test je uz taj cilj imao komentar „svejedno koja, bitno je da postoji".
+Nije bilo svejedno.
+
+### Izmene
+
+| Sloj | Sada |
+|---|---|
+| `ReassignPaleteToPrijemnica_TX` | `newGeneracijaID` uz `oldGeneracijaID`; cilj po identitetu |
+| `ReassignPrijemnicaToZbirna_TX` | `zbirnaGeneracijaID` uz `prijemnicaGeneracijaID` |
+| ciljne mreže (`ZBIRNE`, `CILJPRIJ`) | nose generaciju, kolona prioriteta 3 |
+| izbor cilja u ekranu | pamti `mCiljZbirnaGen` / `mCiljPrijemnicaGen` |
+| `modDokUnos` ispravka | cilj je upravo upisana prijemnica — PK je poznat |
+| `JeIzvornaStavka` → `PripadaDokumentu` | isto pravilo za obe strane, jedna funkcija |
+
+**Labela se čita iz izabranog dokumenta**, ne veruje se pozivaocu: kad generacija
+odlučuje, `newBroj` / `targetBrZbirne` se preuzimaju sa tog reda. Neusklađen par
+(broj jednog, generacija drugog dokumenta) bi inače tiho upisao tuđi broj.
+
+**Bez generacije — fail-closed.** Dvosmislen ciljni broj zaustavlja prevezivanje
+uz razlog za operatera, kroz isti `VlasniciPoBroju` primitiv. Za cilj se broje
+samo **aktivni** dokumenti (cilj ne sme biti storniran), za izvor i stornirani.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=27, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže, obe obaraju `T_RelinkPoGeneraciji_NeDiraTudjDokument` po imenu:
+  - `relink-cilj-po-broju` → „roba je stigla na dokument kupca 1 (40 gajbica) —
+    očekivano [40], dobijeno [0]"
+  - `relink-cilj-bez-kapije` → „bez generacije CILJA dvosmislen broj se odbija —
+    očekivano [False], dobijeno [True]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.2 — `v6-ui-125` · recovery: identitet do kraja lanca
+
+Treća runda po pregledu. v2.45.1 je zatvorila **izbor** dokumenta na obe strane;
+ovo zatvara **upis koji je posle tog izbora išao svojim putem**.
+
+### P1 — prevezivanje na zbirnu je vuklo tuđu paletu
+
+`ReassignPrijemnicaToZbirna_TX` je redove `tblPrijemnica` birala po generaciji —
+tačno. Zatim je novu `BrojZbirne` propagirala u `tblPaletaStavka` **po
+`BrojPrijemnice`**, čime je poništavala ceo taj izbor.
+
+Posledica nije bila „prevezano malo više" nego dokument koji **sam sebi
+protivreči**: prijemnica drugog kupca ostaje na staroj zbirni, a njena paleta
+završi na novoj. Sledljivost paleta → zbirna → kooperanti tada laže.
+
+Sada se, posle izbora `targetRows`, iz njih čitaju `PrijemnicaID` i upis ide po
+njima. Stavka **bez** `PrijemnicaID` (zatečen zapis) sme po broju samo ako taj
+broj nosi jedan dokument; kad ga nose dva, transakcija se prekida uz poruku, jer
+se ne može utvrditi čija je. Isto pravilo dobio je i `PripadaDokumentu`.
+
+### Identity downgrade — zadata generacija koje nema je greška
+
+Razdvojena su dva stanja koja su se ponašala isto:
+
+| Argument | Ponašanje |
+|---|---|
+| `""` | pozivalac ne zna identitet (legacy zapis) → fallback po broju, kroz kapiju |
+| `"GEN-X"`, a nema ga | **STOP** — pad na broj bi značio da se dira nešto drugo |
+
+Važi za izvor i cilj, u obe rutine.
+
+### Ciljna lista zbirnih je gubila deo identiteta
+
+`RowsAktivni` je vlasnikom smatrala **samo kupca**, a broj zbirne se generiše
+**po vozaču**. Dve zbirne istog broja i istog kupca a različitih vozača — u
+jezgru dva dokumenta — padale su u **jedan red**, pa operater nije mogao ni da
+izabere onaj koji mu treba, a skrivena generacija je nosila generaciju reda koji
+je slučajno pobedio.
+
+Sada: grupisanje po **generaciji** kad postoji, vlasnik je **niz kolona**
+(`VozacID` + `KupacID` za zbirnu) i prikazuje se ceo.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=29, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže, svaka obara **baš svoju** tvrdnju:
+  - `zbirna-paleta-po-broju` → „tuđa paleta OSTAJE na staroj zbirni — očekivano
+    [ZB-TEST-4], dobijeno [ZB-TEST-2]"
+  - `generacija-nema-pa-po-broju` → „zadata generacija prijemnice koje nema
+    zaustavlja upis — očekivano [False], dobijeno [True]"
+  - `zbirna-vlasnik-samo-kupac` → „isti broj zbirne kod dva vozača daje DVA
+    ciljna dokumenta — očekivano [2], dobijeno [1]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.3 — `v6-ui-126` · presuda o relabelu ide nad izabranim dokumentom
+
+Poslednji ostatak starog identity modela u recovery putanji.
+
+### P1 — verdikt je ponovo razrešavao dokument po broju
+
+Writer je već birao po `GeneracijaID` — `srcIds`, `tgtIds`, konkretni
+`PrijemnicaID`. Onda je pozivao `EvaluatePaletaReassign(oldBroj, newBroj)`, koja
+je dokumente **tražila iznova, po poslovnom broju**, uzimajući prvi red.
+
+Kvar je **tiši** od pogrešnog prevezivanja. Izvor A (jabuka) i tuđi dokument B
+(kruška) dele broj, cilj X je kruška: presuda po B vidi kruška → kruška i vrati
+`CLEAN`, pa writer **preskoči relabel**. Paleta završi vezana za kruška-prijemnicu
+a i dalje označena kao jabuka. Upis je tačan — laže samo etiketa.
+
+Presuda je izdvojena u `PresudiPaletaReassign`, koja **ne čita nijednu tabelu**,
+pa ne može da izabere drugi dokument nego onaj koji joj je dat. Writer je zove sa
+onim što već ima (identitet izvora se čita u istom prolazu kroz `tblPrijemnica`);
+nema drugog čitanja. `EvaluatePaletaReassign` ostaje javna zbog legacy panela, ali
+je sada adapter koji prvo razreši identitet — uz opcione `oldGeneracijaID` /
+`newGeneracijaID` — pa pozove isto jezgro.
+
+### P2 — „isti broj" više nije „isti dokument"
+
+Guard u `PreveziPalete` je odbijao prevezivanje kad se brojevi poklope. Ali broj
+nastaje **po kupcu**, pa ispravka koja menja kupca lako dobije isti poslovni broj
+kao original — a to su dva dokumenta i operacija je legitimna. Sada se poredi
+generacija kad je obe strane imaju; broj ostaje fallback samo za zapise bez nje.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=30, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nova sabotaža `verdikt-po-broju` → „stavka je prelabelirana na vrstu ciljnog
+  dokumenta — očekivano [TESTVOCE], dobijeno [TESTVOCE2]" — doslovna reprodukcija
+  kvara: stavka ostaje označena starom robom.
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+**Nije pokriveno testom:** P2 guard u `PreveziPalete` — ta putanja otvara `MsgBox`
+potvrde, pa se headless ne vozi. Ide na operatersku checklistu.
+
+## v2.45.4 — `v6-ui-127` · deljena paleta i „isti dokument" u writeru
+
+Dva mesta na kojima je staro pravilo **„broj = dokument"** još curilo.
+
+### P1 — su-stanar na deljenoj paleti se tražio po broju
+
+Pred relabel se proverava da li fizička paleta nosi i tuđu robu; ako nosi,
+promena headera bi iskvarila i nju, pa se operacija blokira. Ideja je tačna, ali
+se „tuđa" merilo poređenjem brojeva:
+
+```vb
+If bpg <> oldBroj And bpg <> newBroj Then ...
+```
+
+Dva kupca istog broja i **iste robe** smeju legitimno da dele paletu — roba im je
+identična, nema šta da se razlikuje. Za tu kapiju su izgledali kao ista prijemnica
+(`bpg = oldBroj`), pa nije okidala: `STEP 2b` bi prepravio header **cele** palete
+na novu robu, a su-stanar ostaje stara. Paleta i njena stavka bi od tog trenutka
+tvrdile različito.
+
+Sada se pripadnost meri kroz `PripadaDokumentu` nad `srcIds` / `tgtIds`, uz već
+postojeći fail-closed za zapise bez `PrijemnicaID`.
+
+### P2 — kapija „isti dokument" je bila popravljena samo u ekranu
+
+`PreveziPalete` je dobio ispravnu logiku prošlu rundu, ali je na ulazu u writer
+ostalo staro poređenje, i to **pre** razrešavanja generacija:
+
+```vb
+If StrComp(oldBroj, newBroj, vbTextCompare) = 0 Then Exit Function
+```
+
+Pravilo je time bilo samo preseljeno iz UI-ja u core. Sada isti princip stoji i u
+writeru: generacije kad ih obe strane imaju, broj kao fallback samo bez njih.
+
+Testira se **direktno na writeru** — ekranska putanja otvara `MsgBox` potvrde i
+headless se ne vozi, pa bi test kroz UI bio nemoguć a kroz checklistu nepouzdan.
+
+### Ostaje otvoreno (P3)
+
+Legacy poziv `EvaluatePaletaReassign(oldBroj, newBroj)` bez generacija nema
+ambiguity guard i može dati **pogrešan preview** kad brojevi nisu jedinstveni.
+Nije data-integrity problem — writer taj preview više ne koristi za odluku o
+upisu — ali panel u `frmDokumenta` može prikazati pogrešnu ocenu.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Nove sabotaže:
+  - `cotenant-po-broju` → „relabel deljene palete se odbija i uz potvrdu —
+    očekivano [False], dobijeno [True]"
+  - `writer-isti-broj-odbija` → „isti broj a različite generacije PROLAZI —
+    očekivano [True], dobijeno [False]"
+- `COMPILE` → **`NEJASNO`**, ručna kapija pred release.
+
+## v2.45.5 — `v6-ui-128` · obim co-tenant provere
+
+Sitna izmena po pregledu: u `ReassignPaleteToPrijemnica_TX` se **prvo** proverava
+da li je stavka uopšte na paleti koju relabel dira, pa se tek onda računa
+pripadnost dokumentu. Ranije je obrnut redosled radio analizu identiteta nad
+svakom aktivnom stavkom u tabeli.
+
+**Ovo nije ispravka buga.** Opisani scenario — zatečena stavka bez
+`PrijemnicaID` pod dvosmislenim brojem, na paleti bez veze sa operacijom, koja
+prekida relabel — nije dostižan: ista provera sa istim argumentima već se izvrši
+u ranijoj petlji koja skuplja `oldRows`/`freshRows` nad **svim** aktivnim
+stavkama. Red koji bi ovde podigao grešku podigao bi je tamo, jedan korak pre.
+
+Izmena je svejedno urađena: obim kapije postaje očigledan iz koda, ne radi se
+posao koji ne može ništa da promeni, i mogućnost nestaje ako se ranija petlja
+ikad promeni.
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Sabotaža `cotenant-po-broju` i dalje obara `T_DeljenaPaleta_SuStanarPoIdentitetu`.

@@ -52,7 +52,7 @@ Attribute VB_Name = "modDokUnos"
 '=====================================================================
 Option Explicit
 
-Public Const DOKUNOS_BUILD As String = "v6-ui-122"
+Public Const DOKUNOS_BUILD As String = "v6-ui-128"
 
 '--------------------------------------------------------------- ULAZ
 Public Function NoviOtpremnicaUnos() As Object
@@ -945,19 +945,24 @@ Private Sub PreveziPaleteIspravke(ByVal p As Object, ByVal res As String, _
         noviBroj = Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
                    Trim$(Split(res, " + ")(0)), COL_PRJ_BROJ)))
 
-    ' KAPIJA NAD DVOSMISLENIM BROJEM. ReassignPaleteToPrijemnica_TX trazi novu
-    ' prijemnicu PO BROJU; ako isti broj nose dokumenta dva kupca, uzela bi
-    ' poslednji pogodak i palete bi otisle na tudju robu. Bolje je stati i
-    ' ostaviti ih na staroj (gde su vidljive kao osirocene) nego ih tiho
-    ' proknjiziti pogresno.
-    If AktivnihVlasnikaPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_KUPAC, noviBroj) > 1 Then
-        poruke = poruke & Poruka("DOKUNOS_ERR_BROJ_DVOSMISLEN") & " " & noviBroj & vbCrLf & _
-                 Poruka("DOKUNOS_ERR_BROJ_DVOSMISLEN2") & vbCrLf
-        OznaciRucnuIspravku cid, "Broj " & noviBroj & " nije jednoznacan (vise kupaca)."
-        Exit Sub
-    End If
+    ' IZVOR SE SALJE PO IDENTITETU. Correction context nosi PK stornirane
+    ' prijemnice; iz njega se cita njena GENERACIJA, pa writer bira bas njene
+    ' paletne stavke. Bez toga bi izbor isao po broju - a broj se racuna po
+    ' kupcu, pa bi dokument drugog kupca istog broja bio zahvacen.
+    '
+    ' Kapija nad jednoznacnoscu broja vise nije ovde: ista provera sada stoji u
+    ' writeru i vazi za svakog pozivaoca, ukljucujuci legacy formu.
+    Dim stariGen As String
+    stariGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, _
+                              modStornoDok.StorniraniDocID(cid))
 
-    relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff)
+    ' CILJ SE TAKODJE SALJE PO IDENTITETU. Nova prijemnica je upravo upisana, pa
+    ' joj je PK poznat -- nema razloga da se cilj trazi po broju koji je labela.
+    Dim noviGen As String
+    noviGen = GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, Trim$(Split(res, " + ")(0)))
+
+    relOk = ReassignPaleteToPrijemnica_TX(stariBroj, noviBroj, relWarn, True, gajbDiff, _
+                                          stariGen, noviGen)
     If relOk Then
         poruke = poruke & Poruka("DOKUNOS_MSG_PALETE_PREVEZANE") & " " & _
                  stariBroj & " " & ChrW(8594) & " " & noviBroj & vbCrLf

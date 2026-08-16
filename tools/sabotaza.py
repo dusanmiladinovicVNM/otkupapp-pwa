@@ -24,6 +24,18 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 3. VRACANJE. `git checkout --` vraca fajl na HEAD, pa BRISE i nesnimljene izmene
    koje sa sabotazom nemaju veze (jednom vec pojelo test seam-ove). Zato se
    vraca obrnutom zamenom -- dira se tacno ono sto je i pokvareno.
+
+4. KOMENTAR POSLE `_`. U VBA line-continuation `_` mora biti POSLEDNJI znak u
+   redu; `..., _   ' SABOTAZA` je syntax error. Sabotaza tada ne obara test nego
+   COMPILE: run visi do timeout-a, Excel ostaje u [break], a izlaz je
+   "Exception occurred" umesto imena tvrdnje. Ako sabotaza pada tako, greska je
+   u sabotazi. Oznaku pisi u red IZNAD ili je izostavi -- ime u katalogu je
+   dovoljna dokumentacija.
+
+5. POGADJAJ BAS SVOJU TVRDNJU. Sabotaza koja obori PRVU tvrdnju u testu (npr.
+   tako sto rutina digne gresku pa vrati False) dokazuje samo da se kod izvrsava,
+   ne i da ta konkretna tvrdnja meri. Ako izlaz prijavi drugu tvrdnju od
+   ocekivane, suzi sabotazu dok ne pogodi svoju.
 """
 
 import argparse
@@ -440,16 +452,139 @@ SABOTAZE = {
         "T_Prefill_PoIdentitetuNePoBroju",
         "prefill bira dokument po PK-u, ne po broju (dva kupca dele broj)",
     ),
-    "vlasnik-broji-stornirane": (
+    # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
+    "relink-izvor-po-broju": (
+        "modPaletniList.bas",
+        "            ElseIf JeIzvornaStavka(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
+        "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "prevezivanje dira SAMO svoj dokument, i kad dva dele broj",
+    ),
+    "relink-ignorise-generaciju": (
+        "modPaletniList.bas",
+        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)\n",
+        '    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, "")   \' SABOTAZA\n',
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "generacija izvora se stvarno koristi, ne samo prosledjuje",
+    ),
+    # Cilj prevezivanja. Izvor po identitetu a cilj po labeli i dalje moze da
+    # odnese palete pogresnom kupcu -- samo na drugom kraju.
+    "relink-cilj-po-broju": (
+        "modPaletniList.bas",
+        "        If Len(tgtGen) > 0 Then\n"
+        "            ciljni = (Trim$(NzToText(prj(r, pcGen))) = tgtGen)\n"
+        "        Else\n"
+        "            ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)\n"
+        "        End If\n",
+        "        ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)   ' SABOTAZA\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "cilj se bira po identitetu, ne po broju koji dele dva kupca",
+    ),
+    "relink-cilj-bez-kapije": (
+        "modPaletniList.bas",
+        "        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
+        "                           Array(COL_PRJ_KUPAC)).count > 1 Then\n",
+        "        If False Then   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
+        "T_RelinkPoGeneraciji_NeDiraTudjDokument",
+        "bez generacije cilja dvosmislen broj se odbija (fail-closed)",
+    ),
+    # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
+    # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
+    "zbirna-paleta-po-broju": (
         "modDokumenta.bas",
-        "            If Not jeStorno Then\n"
-        "                Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))\n"
-        "                If Not seen.Exists(vl) Then seen(vl) = True\n"
-        "            End If\n",
-        "            Dim vl As String: vl = Trim$(NzToText(data(i, cVl)))   ' SABOTAZA\n"
-        "            If Not seen.Exists(vl) Then seen(vl) = True\n",
+        "                        pripada = docIds.Exists(pidS)\n",
+        "                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)   ' SABOTAZA\n",
+        "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
+        "paletna stavka tudjeg dokumenta istog broja se NE pomera",
+    ),
+    # Zadata generacija koje nema nije poziv na fallback po broju.
+    "generacija-nema-pa-po-broju": (
+        "modDokumenta.bas",
+        "        If srcIds.count = 0 Then Exit Function\n",
+        "        If False Then Exit Function   ' SABOTAZA: pada na broj\n",
+        "T_ZadataGeneracijaKojeNema_Staje",
+        "zadata generacija koje nema zaustavlja upis, ne prelazi na broj",
+    ),
+    # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
+    # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
+    "verdikt-po-broju": (
+        "modPaletniList.bas",
+        "    verdict = PresudiPaletaReassign(oVrS, oSoS, oTaS, nVr, nSo, nTa, oldGajbByKl, newGajb)\n",
+        "    verdict = EvaluatePaletaReassign(oldBroj, newBroj)   ' SABOTAZA\n",
+        "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
+        "presuda opisuje izabran dokument, ne prvi sa tim brojem",
+    ),
+    # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
+    # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
+    # cine vlasnika, ova sam kljuc.
+    "oporavak-cilj-po-broju": (
+        "modScrOporavak.bas",
+        "            kljuc = broj & Chr$(1) & vlasnik\n",
+        "            kljuc = broj   ' SABOTAZA: dva vlasnika istog broja postaju jedan cilj\n",
+        "T_Oporavak_CiljneListe",
+        "cilj je DOKUMENT (broj + vlasnik), ne sam broj",
+    ),
+    # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
+    # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
+    # okine i relabel prepravi header cele palete.
+    "cotenant-po-broju": (
+        "modPaletniList.bas",
+        "                    jeIzvor = PripadaDokumentu(bpg, oldBroj, pidG, srcIds, srcDvosmislen)\n"
+        "                    jeCilj = PripadaDokumentu(bpg, newBroj, pidG, tgtIds, tgtDvosmislen)\n",
+        "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
+        "                    jeCilj = (bpg = newBroj)\n",
+        "T_DeljenaPaleta_SuStanarPoIdentitetu",
+        "su-stanar deljene palete je drugi DOKUMENT, ne drugi broj",
+    ),
+    # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
+    "writer-isti-broj-odbija": (
+        "modPaletniList.bas",
+        "    If Len(Trim$(oldGeneracijaID)) > 0 And Len(Trim$(newGeneracijaID)) > 0 Then\n"
+        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
+        "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
+        "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
+        "isti broj a razlicite generacije su dva dokumenta i prolaze",
+    ),
+    # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
+    "zbirna-vlasnik-samo-kupac": (
+        "modScrOporavak.bas",
+        "                                    Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _\n",
+        "                                    Array(COL_ZBR_KUPAC), _\n",
+        "T_Oporavak_CiljneListe",
+        "dve zbirne istog broja a razlicitih vozaca ostaju DVA reda",
+    ),
+    "vlasnik-broji-stornirane": (
+        "modStorno.bas",
+        "            If ukljuciStornirane Or Not IsStorniranoValue(data(i, cSt)) Then\n",
+        "            If True Then   ' SABOTAZA: stornirani se uvek broje kao vlasnici\n",
         "T_Prefill_PoIdentitetuNePoBroju",
-        "storniran dokument se ne broji kao vlasnik broja",
+        "storniran dokument se ne broji medju AKTIVNIM vlasnicima",
+    ),
+    # --- ispravka prijemnice od kraja do kraja -------------------------------
+    "ispravka-bez-skipa": (
+        "modDokUnos.bas",
+        "    ispravka = (Len(S(p, \"ispravkaID\")) > 0)\n"
+        "    If ispravka Then SetPaletizeSkip True\n",
+        "    ispravka = (Len(S(p, \"ispravkaID\")) > 0)\n"
+        "    ' SABOTAZA: sveza paletizacija se vise ne preskace\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "ispravka preskace svezu paletizaciju (inace ista roba ide na dve palete)",
+    ),
+    "ispravka-bez-relinka": (
+        "modDokUnos.bas",
+        "    If ispravka Then PreveziPaleteIspravke p, res, poruke\n",
+        "    ' SABOTAZA: palete stare prijemnice se vise ne prevezuju\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "palete stare prijemnice prelaze na novu",
+    ),
+    "ispravka-context-ostaje": (
+        "modDokUnos.bas",
+        "            modStornoContext.CompleteCorrectionContext cid, \"\", noviBroj, _\n"
+        "                \"Ispravka prijemnice: palete prevezane na \" & noviBroj & \".\"\n",
+        "            ' SABOTAZA: correction ostaje PENDING posle uspesnog prevezivanja\n",
+        "T_IspravkaPrijemnice_SkipIRelink",
+        "correction se zatvara -- inace sledeci unos opet bude ponudjen kao zamena",
     ),
     "ispravka-fail-open": (
         "modDokUnos.bas",
@@ -459,6 +594,34 @@ SABOTAZE = {
         "        NadjiIspravku = 0\n",
         "T_IspravkaDetekcija_FailClosed",
         "dve ispravke na cekanju zaustavljaju upis (safe-stop)",
+    ),
+    # --- ekran Oporavak -----------------------------------------------------
+    "oporavak-registar": (
+        "modUiScreens.bas",
+        '    c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
+        '    c.Add "OPORAVAK|modScrOporavakX|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
+        "T_Oporavak_UgovorIRadnje",
+        "ime modula u registru mora da pogadja stvaran modul (kasno vezivanje)",
+    ),
+    "oporavak-cilj-radnja": (
+        "modScrOporavak.bas",
+        "        Case \"PRIJEMNICE\"\n"
+        "            Scr_Radnje = \"prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1\"\n",
+        "        Case \"PRIJEMNICE\", \"ZBIRNE\"   ' SABOTAZA: i ciljna lista dobija dugme\n"
+        "            Scr_Radnje = \"prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1\"\n",
+        "T_Oporavak_UgovorIRadnje",
+        "ciljna lista nema radnju -- dugme bi prevezivalo cilj na samog sebe",
+    ),
+    "oporavak-stornirani-cilj": (
+        "modScrOporavak.bas",
+        "        If iSt > 0 Then\n"
+        "            If UCase$(modUiData.CellS(src, r, iSt)) = \"DA\" Then GoTo Sledeci\n"
+        "        End If\n"
+        "        broj = modUiData.CellS(src, r, iBr)\n",
+        "        ' SABOTAZA: stornirani dokumenti ulaze u listu ciljeva\n"
+        "        broj = modUiData.CellS(src, r, iBr)\n",
+        "T_Oporavak_CiljneListe",
+        "lista ciljeva nudi SAMO aktivne dokumente",
     ),
     "storno-revers-smer": (
         "modStornoDok.bas",
