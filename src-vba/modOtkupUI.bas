@@ -5926,7 +5926,7 @@ Public Sub ApplyPrefill(ByVal spec As String)
     ' modul-level deo, pa modul ostaje "mek" za self-update).
     Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
     Dim cbPart As MSForms.ComboBox, cbPar As MSForms.ComboBox
-    Dim fokus As String
+    Dim fokus As String, imaBroj As Boolean
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(spec) = 0 Then Exit Sub
@@ -5951,7 +5951,11 @@ Public Sub ApplyPrefill(ByVal spec As String)
             v = CStr(kv(1))
             Select Case k
                 Case "datum":    zf.Controls("fgDatum").Controls("fgDatumT").text = v
-                Case "brdok":    If Len(v) > 0 Then zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = v
+                Case "brdok"
+                    If Len(v) > 0 Then
+                        zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = v
+                        imaBroj = True
+                    End If
                 Case "brzbirne": zf.Controls("fgBrZbir").Controls("fgBrZbirT").text = v
                 Case "cena":     If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = v
                 Case "tipamb":   If Len(v) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = v
@@ -5989,6 +5993,25 @@ Public Sub ApplyPrefill(ByVal spec As String)
     RecalcVrednost
     mPopMute = False
     mLoading = False
+
+    ' BROJ DOKUMENTA. Prefill ga ne donosi kad novi dokument mora da dobije SVOJ
+    ' broj -- kod ispravke posle storna to je pravilo, ne propust (stari broj
+    ' pripada storniranom dokumentu). Ali predlog se do sada nije ni racunao:
+    ' RefreshBrojPredlog visi o promeni stanice ili datuma, a prefill oba
+    ' postavlja pod "mLoading = True", pa se nijedan event ne okine. Operater je
+    ' zato dobijao popunjenu formu sa PRAZNIM brojem otpremnice.
+    '
+    ' Racuna se tek OVDE, posle "mLoading = False": generator cita stanicu i
+    ' datum iz POLJA, a ona su popunjena tek na kraju petlje. SelectModeCore ga
+    ' racuna ranije (RefreshBrojPredlog False), ali tada stanice jos nema --
+    ' EntitetZaBroj vrati prazno i predlog se preskoci.
+    '
+    ' Remote provera se PRESKACE u testu: SuggestNextBroj sa checkRemote pita
+    ' Google, a suite ne sme da zavisi od mreze (isti gard kao kod SetFocus-a).
+    ' U produkciji ostaje ukljucena -- broj dokumenta je poslovni podatak, i
+    ' lokalni sken ga na drugoj masini moze predloziti dvaput.
+    If Not imaBroj Then RefreshBrojPredlog (Not IsTestMode())
+
     MarkClean
     ' Kuda fokus: kod prefilla sa otpremnice (F1) partner NIJE popunjen, pa
     ' kursor ide na njega - to je jedino sto operateru ostaje. Kod ispravke

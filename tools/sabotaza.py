@@ -627,6 +627,17 @@ SABOTAZE = {
         "T_StornoJeEkranNeRezim",
         "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
     ),
+    # Posle ispravke je forma bila popunjena a BROJ DOKUMENTA prazan: prefill ga
+    # namerno ne donosi (stari broj pripada storniranom), a predlog se nije ni
+    # racunao -- RefreshBrojPredlog visi o promeni stanice/datuma, a prefill oba
+    # postavlja pod mLoading, pa se nijedan event ne okine.
+    "prefill-bez-predloga-broja": (
+        "modOtkupUI.bas",
+        "    If Not imaBroj Then RefreshBrojPredlog (Not IsTestMode())\n",
+        "    ' SABOTAZA: predlog broja se posle prefilla ne racuna\n",
+        "T_PrefillBezBroja_PredlaziBroj",
+        "prefill bez broja predlaze broj dokumenta za svoj kontekst",
+    ),
     # Ljuska crta samo prvih MAX_SEG dugmadi prekidaca. Ekran Storno ih ima
     # deset; na devet je "Izvodi" TIHO nestajao -- bio je u Scr_Liste, ali se
     # nije mogao izabrati ni na koji nacin, bez greske i bez traga. Operater je

@@ -192,6 +192,7 @@ Public Sub RunAllTests()
     RunOne 56
     RunOne 57
     RunOne 58
+    RunOne 59
 
     SetTestMode prevMode
     WriteResultFile
@@ -282,6 +283,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 56: TestName = "T_Storno_UgovorIRadnje"
         Case 57: TestName = "T_StornoEkran_KolonaIdentiteta"
         Case 58: TestName = "T_StornoEkran_SvakaListaVracaRedove"
+        Case 59: TestName = "T_PrefillBezBroja_PredlaziBroj"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -348,6 +350,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 56: T_Storno_UgovorIRadnje
         Case 57: T_StornoEkran_KolonaIdentiteta
         Case 58: T_StornoEkran_SvakaListaVracaRedove
+        Case 59: T_PrefillBezBroja_PredlaziBroj
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2443,6 +2446,58 @@ Private Sub T_StornoEkran_SvakaListaVracaRedove()
     Next i
 
     modScrStorno.Scr_TipTestSet STIP_OTKUP
+End Sub
+
+' ============================================================
+' 59. Prefill bez broja MORA da predlozi broj
+' ============================================================
+' Posle ispravke je forma bila popunjena, a BROJ OTPREMNICE prazan. Prefill ga
+' namerno ne donosi -- stari broj pripada storniranom dokumentu, novi mora da
+' dobije svoj -- ali predlog se ni ne racuna:
+'
+'   RefreshBrojPredlog visi o promeni STANICE ili DATUMA, a prefill oba
+'   postavlja pod "mLoading = True", pa se nijedan event ne okine.
+'   SelectModeCore ga zove ranije, ali tada stanice jos nema (forma je tek
+'   ocisceno), pa EntitetZaBroj vrati prazno i predlog se preskoci.
+'
+' Rezultat: dokument koji operater treba samo da potvrdi ostaje bez broja, i to
+' bez ijedne poruke. Ovaj test meri POSLEDICU (polje je popunjeno), ne put.
+Private Sub T_PrefillBezBroja_PredlaziBroj()
+    Dim f As frmOtkupUI, zf As Object, broj As String
+
+    Set f = NewOtkupUIForm()
+    ' Combo-i moraju biti PUNJENI: generator broja cita stanicu iz cbOM
+    ' (EntitetZaBroj -> GetComboID), a SetComboByID ne moze da izabere stavku u
+    ' praznoj listi. U produkciji ih puni StartApp; u testu se forma gradi bez
+    ' .Show, pa se punjenje trazi izricito.
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F2"
+    Set zf = f.Controls("zForm")
+
+    ' Preduslov: polje je prazno pre prefilla -- inace test meri zatecenu
+    ' vrednost umesto onoga sto prefill uradi.
+    zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = ""
+
+    ' Spec BEZ "brdok", sa stanicom i datumom -- tacno ono sto ispravka salje.
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & _
+                            "|omid=" & FX_STANICA & "|vrsta=" & FX_VRSTA
+
+    ' PREDUSLOV: stanica je stvarno izabrana. Generator broja je cita iz combo-a
+    ' (EntitetZaBroj -> GetComboID), pa bez nje ne bi bilo predloga ni kad je
+    ' pravilo ispravno -- test bi merio prazan combo umesto pravila.
+    AssertEq (Len(Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))) > 0), True, _
+             "preduslov: prefill je izabrao otkupno mesto"
+
+    broj = Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text))
+    AssertEq (Len(broj) > 0), True, _
+             "prefill bez broja predlaze broj dokumenta za svoj kontekst"
+
+    ' Suprotan smer: kad prefill DONESE broj, predlog ga ne sme pregaziti --
+    ' inace bi izbor otpremnice u F1 gubio broj koji je stigao uz nju.
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & _
+                            "|omid=" & FX_STANICA & "|brdok=TEST-BR-1"
+    AssertEq Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text)), "TEST-BR-1", _
+             "broj koji prefill donese se ne pregazuje predlogom"
 End Sub
 
 ' ============================================================

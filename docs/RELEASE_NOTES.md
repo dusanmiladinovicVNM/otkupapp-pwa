@@ -3086,3 +3086,57 @@ radnje koja je prošla.
   zatečeno.
 - **Peta sabotaža** (`ljuska-odseca-liste`) oborila svoju tvrdnju po imenu.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.48.2 — `v6-ui-144` · broj dokumenta posle ispravke, i keš oko celog izbora
+
+Dva nalaza sa drugog smoke testa.
+
+### Broj dokumenta je ostajao prazan posle ispravke
+
+Prefill **namerno** ne donosi broj — stari broj pripada storniranom dokumentu, a
+novi mora da dobije svoj. Ali predlog se ni **nije računao**:
+
+`RefreshBrojPredlog` visi o promeni **stanice** ili **datuma**, a `ApplyPrefill`
+oba postavlja pod `mLoading = True`, pa se nijedan event ne okine.
+`SelectModeCore` ga zove ranije, ali tada stanice još nema (forma je tek
+očišćena) → `EntitetZaBroj` vrati prazno → predlog se preskoči.
+
+Rezultat: dokument koji operater treba samo da potvrdi ostaje bez broja, i to
+bez ijedne poruke. Predlog se sada računa na kraju `ApplyPrefill`, kad su stanica
+i datum već u poljima — i **samo** kad prefill broj nije doneo, da izbor
+otpremnice u F1 ne izgubi broj koji je stigao uz nju.
+
+Remote provera (`SuggestNextBroj` pita Google) se preskače u test-režimu, isti
+gard koji već postoji kod `SetFocus`-a: suite ne sme da zavisi od mreže. U
+produkciji ostaje uključena — broj dokumenta je poslovni podatak i lokalni sken
+ga na drugoj mašini može predložiti dvaput.
+
+**Test 59 je prvo pao na PREDUSLOVU**, ne na pravilu: `ApplyPrefill` u testu nije
+mogao da izabere stanicu jer combo-i nisu bili punjeni (`FillCombos` u produkciji
+zove `StartApp`). Bez tog preduslova test bi merio prazan combo umesto pravila —
+i „prošao" bi i nad neispravnim kodom.
+
+### Keš je stajao oko pogrešnog dela
+
+`BeginTableCache` je u prethodnoj verziji obuhvatao samo `BuildStornoImpact`.
+Ali red odluke (`AkcijeZaTip` → `StornoTraziIzborModa` → `CorrectionNeedsDialog`)
+je **još jedan prolaz kroz isti lanac**, i stajao je **izvan** keša — pa je svoje
+skeniranje plaćao ponovo. Baš taj deo operater vidi kao „sporo se puni efekat po
+modu". Keš sada obuhvata ceo izbor reda; ugnježđivanje je bezbedno jer
+`modDataAccess` broji dubinu. `EndTableCache` ide i u error handler — otvoren keš
+zamrzava snimak tabela do kraja sesije.
+
+### Nije defekt: prazan KUPAC na otpremnici
+
+`tblOtpremnica` nema kolonu kupca — partner otpremnice je **stanica**
+(`COL_OTP_STANICA`), i `ColPartnerZaPrefill` zato za nju i ne vraća ništa. Prazno
+polje KUPAC na otpremnici je tačno stanje, ne propust prefilla.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → 29.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=59, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite crvene
+  zatečeno.
+- **Šesta sabotaža** (`prefill-bez-predloga-broja`) oborila svoju tvrdnju po imenu.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

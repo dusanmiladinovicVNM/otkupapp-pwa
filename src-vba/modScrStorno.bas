@@ -633,10 +633,24 @@ Private Function IzborReda(ByVal red As Long) As Boolean
         mSelBroj = IzvodKljuc(broj, Trim$(CStr(modOtkupUI.GridCell(red, 3))))
 
     mNeDiraj = False
+    ' BATCH KES OKO CELOG IZBORA, ne samo oko uvida. Uvid i red odluke citaju
+    ' ISTE tabele: BuildStornoImpact ide kroz lanac, blokove, zastavice i palete,
+    ' a AkcijeZaTip kroz StornoTraziIzborModa -> CorrectionNeedsDialog, sto je
+    ' jos jedan prolaz kroz isti lanac. Dok je kes stajao samo oko uvida, drugi
+    ' deo je svoje skeniranje placao ponovo -- a bas on je onaj koji operater
+    ' vidi kao "sporo se puni efekat po modu".
+    '
+    ' Kes je ugnjezdiv (brojac dubine u modDataAccess), pa unutrasnji
+    ' BeginTableCache u GradiUvid ostaje bezopasan.
+    BeginTableCache
     Set mImpact = GradiUvid()
     OsveziZonu
+    EndTableCache
     Exit Function
 EH:
+    ' Kes se zatvara i na gresci: otvoren kes zamrzava snimak tabela do kraja
+    ' sesije, pa bi sve nizvodno radilo nad zatecenim podacima.
+    EndTableCache
     LogErr "modScrStorno.IzborReda"
     Err.Clear
 End Function
