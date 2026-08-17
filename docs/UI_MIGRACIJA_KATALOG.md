@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-128`.
+Stanje na dan `v6-ui-141`.
 
 ---
 
@@ -31,7 +31,10 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    **Ostatak storno okvira je zatvoren posle toga:** ispravka i dupli unos
    posle storna (`modStornoFlow`, Z10) u v6-ui-120, a Undo operacija,
    „Nedovršeno" i Recovery u v6-ui-121, kroz nov ekran **Oporavak**
-   (`modScrOporavak`). **Faza D je time cela zatvorena.**
+   (`modScrOporavak`). **Faza D je zatvorena tek od `v6-ui-130`**, ne od
+   `v6-ui-121` kako je ovde ranije pisalo: ekran je bio gotov, ali je F8 do
+   tada gubio identitet izabranog reda i dokument je nizvodno biran po
+   poslovnom broju.
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
    zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4). Upis F3/F4 od
    v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
@@ -41,8 +44,40 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    storniranog (Z10) je zatvoren u v6-ui-120; filtriranje kooperanata po
    otkupnom mestu u v6-ui-113 (`KOOP_FILTER_BY_OM`).
 
-**Faza D je zatvorena** (v6-ui-121). Ostaju 3 i 4 — ostaci ranijih faza — plus
+**Faza D je zatvorena** (v6-ui-130). Ostaju 3 i 4 — ostaci ranijih faza — plus
 Faze C i E, koje nisu počele.
+
+**Identitet nije bio dovoljan samo za sam dokument.** Do `v6-ui-136` je storno
+otpremnice mutirao **roditeljsku zbirnu po golom `BrojZbirne`** — rekalkulacija,
+storno prazne zbirne, relink prijemnica. Nad dvosmislenim brojem roditelja to je
+moglo da ažurira zaglavlje jednog dokumenta zbirom otpremnica oba. Kapija
+`ZbirnaBrojJeDvosmislenIkad` stoji na četiri mesta, uključujući **završetak
+ispravke** — jer correction context je persistentan i zatečen context preživljava
+upgrade, pa kapija samo na startu ne pokriva njega.
+
+Od `v6-ui-137` ta kapija proverava **istu vrednost koju kod mutira**: do tada je
+roditelja tražila po poslovnom broju (`LookupValue` po `BrojOtpremnice`), a
+mutacije su išle nad `ParentBroj` iz context-a — pa je proveravala zbirnu
+siblinga. Roditelj se sada uzima iz context-a, fallback ide isključivo preko
+tačnog `OldDocID`, a nerazrešen roditelj je MANUAL. Kapija je i **fail-closed na
+sopstvenu grešku**: schema drift znači „ne mutiraj", ne „jednoznačno je".
+
+Od `v6-ui-138` kapija stoji na **obe strane**: i nad ciljnom zbirnom, ne samo nad
+izvornom. Zatečena kapija u writeru (`RequireJedanVlasnikPoBroju`) to ne pokriva
+jer broji samo **aktivne** vlasnike — a storniran vlasnik i dalje ima aktivnu decu.
+Ista rupa je zatvorena i u `CompleteZbirnaIspravka`, gde po broju idu i izvor i
+cilj. Sam primitiv (`RecalculateZbirnaFromOtpremnice_TX`,
+`ReassignPrijemnicaToZbirna_TX` bez generacije) ostaje number-based — tu bi jednog
+dana trebala centralna kapija umesto zaštite po call-site-u.
+
+Od `v6-ui-140` identitet nosi i **dodatni storno otkupnih blokova**
+(`StornirajBlokoveAko → GetStornoBlockRows → ActiveBlocksForFlow`), plus pregledi
+u `ScanOtpremnica` i `ScanPrijemnica`. Do tada je spisak blokova nastajao po
+poslovnom broju i mogao je da obori blok drugog dokumenta — a kapija
+`BlockStornoDriftReason` se na toj putanji ne izvršava, jer `ModeStornoBlokParent`
+vraća `True` za `PONISTENJE` i za `OTPREMNICA+DUPLI/ISPRAVKA`, to jest za jedine
+modove koji tu i dolaze. Grana `FLOW_DOC_ZBIRNA` ostaje po broju jer `tblOtkup`
+nosi `BrojZbirne`, ne `ZbirnaID`; taj put je zaštićen uzvodno.
 
 ---
 
@@ -291,7 +326,10 @@ već koriste (`modScrOporavak`, registrovan u `modUiScreens.ScrRows`).
 | Labela se čita iz izabranog dokumenta, ne od pozivaoca | neusklađen par (broj jednog, generacija drugog) inače tiho upisuje tuđi broj |
 | Propagacija u `tblPaletaStavka` ide po `PrijemnicaID` | prvi upis je bio po identitetu a drugi po broju, pa je tuđi dokument ostajao sam sebi protivrečan — prijemnica na staroj zbirni, njena paleta na novoj (v6-ui-125) |
 | Zadata generacija koje nema → **STOP**, ne fallback po broju | prazan argument (legacy zapis) i „baš taj dokument, a nema ga” su dva različita stanja |
-| Ciljna lista zbirnih grupiše po **generaciji**, vlasnik je vozač + kupac | broj zbirne se generiše po vozaču: sa samim kupcem su dva dokumenta padala u jedan red i operater nije mogao da izabere pravi |
+| Ciljna lista zbirnih grupiše po **generaciji**, vlasnik je vozač + kupac | sa samim kupcem bi dva dokumenta istog broja pala u jedan red i operater ne bi mogao da izabere pravi |
+| „Jedini vlasnik" zbirne se meri **dokumentima**, ne distinct brojevima | zbirna je zbir svih svojih otpremnica, a broj otpremnice je scoped po stanici — dve otpremnice istog broja sa različitih stanica davale su jedan distinct broj, pa je PONIŠTENJE ulazilo u punu kaskadu i obaralo tuđu |
+| Deca zbirne **nisu** nerešiva, samo još nisu scoped | otpremnica kaskada već ume `BrojZbirne + VozacID`, prijemnica `+ KupacID`, palete nose `PrijemnicaID`. Fail-closed je bezbedan izbor **dok se child mutacije ne dovedu dotle**, ne dokaz nemogućnosti |
+| **Broj zbirne je jedinstven, broj prijemnice nije** | `SuggestNextBroj` za `ZBR` bumpuje sekvencu dok `BrojZbirneExists` ne kaže da je slobodan; `GenerateBrojPrijemnice` ima fiksan prefiks `1`, broji po kupcu i **nema takvu proveru**. Kod zbirne je identitet pojas za ručni unos, kod prijemnice je nužnost |
 | Presuda o relabelu ide nad **već razrešenim** dokumentima (`PresudiPaletaReassign`) | writer je birao po generaciji, a `EvaluatePaletaReassign` ga je ponovo tražila po broju — kod kolizije je presuda opisivala tuđi dokument i relabel se tiho preskakao (v6-ui-126) |
 | „Isti dokument” u ekranu se meri **generacijom**, ne brojem | ispravka koja menja kupca dobija isti poslovni broj kao original — poređenje po broju je odbijalo potpuno ispravnu operaciju |
 | Su-stanar na deljenoj paleti je **drugi dokument**, ne drugi broj | dva kupca istog broja i iste robe smeju da dele paletu; poređenje po broju ih je videlo kao istu prijemnicu, pa bi relabel prepravio header cele palete a tuđa roba ostala pogrešno označena (v6-ui-127) |

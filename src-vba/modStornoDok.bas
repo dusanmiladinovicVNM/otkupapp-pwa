@@ -80,9 +80,37 @@ Public Const STIP_IZVOD      As String = "IZVOD"
 ' dolazi gotova iz modStorno (ResolveNovacForStorno, ResolveIzvodZaStorno,
 ' GetIzvodStornoBlokade), jer je tamo i pravilo koje ih pravi.
 '=====================================================================
+' docID: KANONSKI IDENTITET reda koji je operater izabrao u F8 --
+' GeneracijaID za robna dokumenta, PK za novac i fakturu. Kad je poznat,
+' dokument se NE trazi ponovo po broju. Opcion je zbog legacy forme i
+' zatecenih zapisa bez generacije; tada vazi kapija nad jednoznacnoscu broja.
+' Postoji li AKTIVAN dokument koji je operater izabrao?
+'
+' Sa docID se pita za BAS TAJ dokument. Bez njega ostaje provera po broju --
+' ista koju je preflight oduvek radio.
+'
+' Zasto je bitno: preflight je do sada primao identitet pa ga ignorisao, i za
+' novac je i dalje govorio "broj je dvosmislen, treba NovacID" iako mu je F8
+' NovacID upravo poslao. StornoIzvrsi nize je vec bio ispravan, ali se do njega
+' nije stizalo -- kapija iznad je zaustavljala operaciju.
+Private Function AktivanPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
+                                     ByVal idCol As String, ByVal broj As String, _
+                                     ByVal docID As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(docID)) = 0 Then
+        AktivanPoIdentitetu = (Len(LookupActiveID(tblName, brojCol, broj, idCol)) > 0)
+        Exit Function
+    End If
+    Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, docID)
+    If ids.count = 0 Then Exit Function
+    AktivanPoIdentitetu = (UCase$(Trim$(NzToText( _
+        LookupValue(tblName, idCol, CStr(ids.Keys()(0)), COL_STORNIRANO)))) <> "DA")
+End Function
+
 Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
-                             ByVal opcija As String) As String
-    Dim razlog As String, izvBroj As String, izvRacun As String
+                             ByVal opcija As String, _
+                             Optional ByVal docID As String = "") As String
+    Dim razlog As String, izvBroj As String, izvRacun As String, errDesc As String
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then
@@ -92,33 +120,48 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
 
     Select Case tip
         Case STIP_OTKUP
-            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_OTPREMNICA
-            If Len(LookupActiveID(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_ID)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_ZBIRNA
             ' StornoZbirna_TX prima BROJ (ne ID) i sam razresava; provera
             ' postojanja je ista kao za ostale robne dokumente.
-            If Len(LookupActiveID(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_BROJ)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_PRIJEMNICA
-            If Len(LookupActiveID(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_BROJ)) = 0 Then _
+            If Not AktivanPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, docID) Then _
                 StornoRazlog = NijePronadjen(broj)
 
         Case STIP_FAKTURA
-            If Len(LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)) = 0 Then _
+            ' Identitet fakture JE njen PK, pa se proverava direktno.
+            If Len(Trim$(docID)) > 0 Then
+                If UCase$(Trim$(NzToText(LookupValue(TBL_FAKTURE, COL_FAK_ID, docID, _
+                                                     COL_STORNIRANO)))) = "DA" Then _
+                    StornoRazlog = NijePronadjen(broj)
+            ElseIf Len(LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)) = 0 Then
                 StornoRazlog = NijePronadjen(broj)
+            End If
 
         Case STIP_ISPLATE, STIP_UPLATE
             ' Ceo razlog dolazi iz modStorno: izvod se ne stornira
             ' parcijalno, a broj sa vise aktivnih redova (avans raspodela
             ' deli isti broj) trazi NovacID umesto tihog storna jednog reda.
-            ResolveNovacForStorno broj, razlog
-            StornoRazlog = razlog
+            ' Sa poznatim NovacID-em nema sta da se razresava: pita se BAS taj
+            ' red. ResolveNovacForStorno ostaje za legacy poziv bez ID-a -- i
+            ' bas on je javljao "broj je dvosmislen" i kad ID postoji.
+            If Len(Trim$(docID)) > 0 Then
+                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _
+                                                     COL_STORNIRANO)))) = "DA" Then _
+                    StornoRazlog = NijePronadjen(broj)
+            Else
+                ResolveNovacForStorno broj, razlog
+                StornoRazlog = razlog
+            End If
 
         Case STIP_REVERSI
             If Len(Trim$(opcija)) = 0 Then
@@ -141,8 +184,9 @@ Public Function StornoRazlog(ByVal tip As String, ByVal broj As String, _
     End Select
     Exit Function
 EH:
+    errDesc = Err.description
     LogErr "modStornoDok.StornoRazlog"
-    StornoRazlog = Poruka("STORNO_ERR_RAZRESENJE") & " " & Err.description
+    StornoRazlog = Poruka("STORNO_ERR_RAZRESENJE") & " " & errDesc
 End Function
 
 '=====================================================================
@@ -177,8 +221,9 @@ End Function
 '   IZVOD   - StornoIzvod_TX sam vraca izvestaj (koliko redova, koji ishod).
 '=====================================================================
 Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
-                             ByVal opcija As String, ByRef poruka As String) As Boolean
-    Dim ok As Boolean, novID As String, razlog As String
+                             ByVal opcija As String, ByRef poruka As String, _
+                             Optional ByVal docID As String = "") As Boolean
+    Dim ok As Boolean, novID As String, razlog As String, errDesc As String
     Dim izvBroj As String, izvRacun As String, izvInfo As String
     Dim fakID As String, vezPrij As String
     On Error GoTo EH
@@ -189,24 +234,35 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
         Case STIP_OTKUP
             ' Klasa I i II dele isti BrDok (zaseban red po klasi) -> stornira
             ' se ceo dokument, ne jedan red. Isto sto radi F1 lista.
-            ok = StornoOtkupByBrDok_TX(broj)
+            ok = StornoOtkupByBrDok_TX(broj, docID)
 
         Case STIP_OTPREMNICA
             ' i ovde klase dele broj
-            ok = StornoOtpremnicaByBroj_TX(broj)
+            ok = StornoOtpremnicaByBroj_TX(broj, docID)
 
         Case STIP_ZBIRNA
-            ok = StornoZbirna_TX(broj)
+            ok = StornoZbirna_TX(broj, docID)
             If ok Then
                 vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
-                If Len(vezPrij) > 0 Then poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
+                ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",
+                ' a VBA je case-insensitive -- pa nekvalifikovan poziv te funkcije
+                ' unutar ove procedure nije poziv funkcije nego indeksiranje tog
+                ' String parametra. Compile error "Expected array", i to samo u
+                ' Debug > Compile: nijedna suite ovu proceduru nije zvala, a VBA
+                ' proceduru kompajlira tek kad se pozove.
+                If Len(vezPrij) > 0 Then _
+                    poruka = modPoruke.Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
             End If
 
         Case STIP_PRIJEMNICA
-            ok = StornoPrijemnicaByBroj_TX(broj)
+            ok = StornoPrijemnicaByBroj_TX(broj, docID)
 
         Case STIP_FAKTURA
-            fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)
+            ' Identitet fakture JE njen PK -- kad ga ekran posalje, ne trazi se
+            ' ponovo po broju (LookupActiveID uzima prvi pogodak).
+            fakID = docID
+            If Len(fakID) = 0 Then _
+                fakID = LookupActiveID(TBL_FAKTURE, COL_FAK_BROJ, broj, COL_FAK_ID)
             If Len(fakID) = 0 Then
                 poruka = NijePronadjen(broj)
                 Exit Function
@@ -217,10 +273,15 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ' StornoNovac_TX ocekuje NovacID, a mreza pokazuje BROJ. Isto
             ' razresavanje kao u StornoRazlog - i ovde, jer se izmedju
             ' provere i potvrde stanje moglo promeniti.
-            novID = ResolveNovacForStorno(broj, razlog)
-            If Len(razlog) > 0 Then
-                poruka = razlog
-                Exit Function
+            ' Isto i za novac: NovacID iz kliknutog reda. ResolveNovacForStorno
+            ' ostaje za legacy pozivaoce koji salju samo broj.
+            novID = docID
+            If Len(novID) = 0 Then
+                novID = ResolveNovacForStorno(broj, razlog)
+                If Len(razlog) > 0 Then
+                    poruka = razlog
+                    Exit Function
+                End If
             End If
             ok = StornoNovac_TX(novID)
 
@@ -233,24 +294,25 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                 Exit Function
             End If
             If opcija <> IZVOD_STORNO_REMAP And opcija <> IZVOD_STORNO_REIMPORT Then
-                poruka = Poruka("STORNO_ERR_NEMA_ISHODA")
+                poruka = modPoruke.Poruka("STORNO_ERR_NEMA_ISHODA")
                 Exit Function
             End If
             ok = StornoIzvod_TX(izvBroj, izvRacun, opcija, izvInfo)
             If ok Then poruka = izvInfo
 
         Case Else
-            poruka = Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip
+            poruka = modPoruke.Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip
             Exit Function
     End Select
 
     StornoIzvrsi = ok
-    If ok And Len(poruka) = 0 Then poruka = Poruka("STORNO_MSG_OK")
-    If Not ok And Len(poruka) = 0 Then poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj
+    If ok And Len(poruka) = 0 Then poruka = modPoruke.Poruka("STORNO_MSG_OK")
+    If Not ok And Len(poruka) = 0 Then poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj
     Exit Function
 EH:
+    errDesc = Err.description
     LogErr "modStornoDok.StornoIzvrsi"
-    poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & Err.description
+    poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & errDesc
 End Function
 
 '=====================================================================
@@ -302,12 +364,13 @@ End Function
 ' pitanja o nizvodnom toku. Neizvesnost mora da vodi ka VISE pitanja, ne ka
 ' manje.
 Public Function StornoTraziIzborModa(ByVal tip As String, ByVal broj As String, _
-                                     ByVal opcija As String) As Boolean
+                                     ByVal opcija As String, _
+                                     Optional ByVal docID As String = "") As Boolean
     Dim dt As String
     On Error GoTo EH
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function      ' nije framework tip - to se zna pouzdano
-    StornoTraziIzborModa = CorrectionNeedsDialog(dt, broj, opcija)
+    StornoTraziIzborModa = CorrectionNeedsDialog(dt, broj, opcija, docID)
     Exit Function
 EH:
     LogErr "modStornoDok.StornoTraziIzborModa"
@@ -317,12 +380,13 @@ End Function
 ' Pun pregled lanca za dijalog: sta sve visi o ovom dokumentu. Prazno =
 ' tip nije framework tip (tada se koristi StornoPregled iz odeljka 2).
 Public Function StornoPregledLanca(ByVal tip As String, ByVal broj As String, _
-                                   ByVal opcija As String) As String
+                                   ByVal opcija As String, _
+                                   Optional ByVal docID As String = "") As String
     Dim dt As String
     On Error Resume Next
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function
-    StornoPregledLanca = BuildStornoPreview(dt, broj, opcija)
+    StornoPregledLanca = BuildStornoPreview(dt, broj, opcija, docID)
 End Function
 
 ' Izvrsi izabrani mod. Vraca recnik iz modStornoFlow:
@@ -335,18 +399,19 @@ End Function
 Public Function StornoIzvrsiMod(ByVal tip As String, ByVal broj As String, _
                                 ByVal opcija As String, ByVal mode As String, _
                                 ByVal forceConfirm As Boolean, _
-                                ByVal neDiraj As Boolean) As Object
+                                ByVal neDiraj As Boolean, _
+                                Optional ByVal docID As String = "") As Object
     Dim dt As String
     On Error GoTo EH
     dt = TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Function
     Select Case dt
-        Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm)
-        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm)
+        Case FLOW_DOC_OTPREMNICA: Set StornoIzvrsiMod = RunOtpremnicaCorrection(broj, mode, forceConfirm, docID)
+        Case FLOW_DOC_ZBIRNA:     Set StornoIzvrsiMod = RunZbirnaCorrection(broj, mode, forceConfirm, docID)
         Case FLOW_DOC_REVERS:     Set StornoIzvrsiMod = RunReversCorrection(broj, opcija, mode)
         ' neDiraj = "ne diraj palete" (samo prijemnica, DUPLI/PONISTENJE):
         ' palete ostaju vezane za storniranu prijemnicu umesto da se odvezu.
-        Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj)
+        Case FLOW_DOC_PRIJEMNICA: Set StornoIzvrsiMod = RunPrijemnicaCorrection(broj, mode, forceConfirm, neDiraj, docID)
     End Select
     Exit Function
 EH:

@@ -36,6 +36,13 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    tako sto rutina digne gresku pa vrati False) dokazuje samo da se kod izvrsava,
    ne i da ta konkretna tvrdnja meri. Ako izlaz prijavi drugu tvrdnju od
    ocekivane, suzi sabotazu dok ne pogodi svoju.
+
+6. `AssertEq` DIZE GRESKU, pa se test PREKIDA na prvom padu. Tvrdnje posle njega
+   se ne izvrsavaju -- a to znaci da sabotaza koja obori uzgrednu tvrdnju
+   ("operacija je vratila success=False") ostavlja poslovnu tvrdnju ispod nje
+   NEMERENOM, i to izgleda kao uspesan dvosmerni dokaz. Redosled tvrdnji u testu
+   je zato deo dokaza: NAJVAZNIJA tvrdnja ide PRVA. Simptom: izlaz prijavi drugu
+   tvrdnju od one koja je u katalogu (v. zamka 5).
 """
 
 import argparse
@@ -513,6 +520,230 @@ SABOTAZE = {
         "    verdict = EvaluatePaletaReassign(oldBroj, newBroj)   ' SABOTAZA\n",
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
+    ),
+    # Otpremnica flow mutira roditeljsku zbirnu po golom broju.
+    "otpremnica-bez-kapije-nad-zbirnom": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
+        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: dvosmislena roditeljska zbirna se ignorise\n"
+        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "T_OtpremnicaNadDvosmislenomZbirnom_Staje",
+        "DUPLI staje kad je broj roditeljske zbirne dvosmislen",
+    ),
+    # Zatecen PENDING context iz starije verzije zaobilazi kapiju na startu.
+    "zatecen-context-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: zatecen context prolazi bez provere\n",
+        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
+        "tudja prijemnica NIJE prevezana na novu zbirnu",
+    ),
+    # Ista kapija, ali ono STO proverava: roditelj po poslovnom broju umesto iz
+    # context-a. Vraca tacno diverganciju iz pregleda -- kapija proveri
+    # jednoznacnu zbirnu SIBLINGA, a mutacije nize idu nad oldZbirna izabranog
+    # dokumenta. Guard prolazi, tudja prijemnica se preveze.
+    "stale-parent-po-broju": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
+        "    Dim sabZbirna As String   ' SABOTAZA: roditelj po broju, ne iz context-a\n"
+        "    sabZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE))\n"
+        "    If ZbirnaBrojJeDvosmislenIkad(sabZbirna) Then\n",
+        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
+        "tudja prijemnica NIJE prevezana na novu zbirnu",
+    ),
+    # Nesimetricna zastita: izvor cuvan, CILJ nije. Nizvodne operacije nad ciljem
+    # idu po golom broju, a zatecena kapija u writeru broji samo AKTIVNE vlasnike
+    # -- pa storniran vlasnik sa aktivnom decom prolazi.
+    "cilj-bez-istorijske-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: ciljna zbirna se ne proverava\n",
+        "T_CiljnaZbirnaDvosmislena_Staje",
+        "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
+    ),
+    # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
+    # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.
+    #
+    # NAPOMENA: compile gresku iz istog reda (nekvalifikovan poziv koji zaklanja
+    # parametar "poruka") ovaj katalog NE moze da dokaze imenovanom tvrdnjom --
+    # takva sabotaza obara COMPILE, pa izlaz bude "Exception occurred" (v. zamka
+    # 4). Ono sto test 52 dodaje je da tu proceduru IZVRSAVA: dok je nijedna
+    # suite nije zvala, VBA je nije ni kompajlirao.
+    "zbirna-poruka-bez-prijemnice": (
+        "modStornoDok.bas",
+        "                If Len(vezPrij) > 0 Then _\n"
+        '                    poruka = modPoruke.Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij\n',
+        "                ' SABOTAZA: poruka ne imenuje vezanu prijemnicu\n",
+        "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu",
+        "poruka imenuje prijemnicu koja je ostala vezana",
+    ),
+    # Spisak blokova za F8 po golom broju: u korpu ulazi i blok drugog dokumenta,
+    # a odatle ide pravo u StornoSelectedBlocks_TX.
+    "blokovi-po-broju": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))   ' SABOTAZA\n",
+        "T_StorniranSibling_ZadrzavaSvojBlok",
+        "blok storniranog siblinga je ostao AKTIVAN",
+    ),
+    # Ista rupa u pregledu: blockCount po broju, pa dijalog nudi tudje blokove.
+    "blockcount-po-broju": (
+        "modStornoFlow.bas",
+        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj, gen)\n",
+        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj)   ' SABOTAZA\n",
+        "T_BlokoviF8_PoIdentitetu",
+        "pregled broji blokove IZABRANOG dokumenta, ne svih tog broja",
+    ),
+    # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
+    "zbirna-ispravka-cilj-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(newBroj) Then\n"
+        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
+        "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n"
+        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
+        "T_IspravkaZbirne_KapijaNaObeStrane",
+        "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece",
+    ),
+    # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
+    "zbirna-ispravka-izvor-bez-kapije": (
+        "modStornoFlow.bas",
+        "    ElseIf ZbirnaBrojJeDvosmislenIkad(oldBroj) Then\n",
+        "    ElseIf False Then   ' SABOTAZA: izvorna strana se ne proverava\n",
+        "T_IspravkaZbirne_KapijaNaObeStrane",
+        "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja",
+    ),
+    # Kapija fail-open na sopstvenu gresku: schema drift -> "jednoznacno je".
+    "kapija-fail-open": (
+        "modStornoFlow.bas",
+        "EH:\n"
+        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
+        "    ZbirnaBrojJeDvosmislenIkad = True\n",
+        "EH:\n"
+        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
+        "    ZbirnaBrojJeDvosmislenIkad = False   ' SABOTAZA: fail-open kapija\n",
+        "T_KapijaZbirne_FailClosedNaSvojuGresku",
+        "nerazresena jednoznacnost se tretira kao dvosmislena",
+    ),
+    # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
+    # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
+    "guard-samo-aktivni-vlasnici": (
+        "modStornoFlow.bas",
+        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
+        "                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
+        "                              MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        "T_StorniranVlasnik_JosImaAktivnuDecu",
+        "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
+    ),
+    # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
+    # "tudji blok nije pomeren" bez pozitivne kontrole.
+    "completion-ne-prevezuje": (
+        "modStornoFlow.bas",
+        "    Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)\n",
+        "    Set oldIDs = New Collection   ' SABOTAZA: nijedan blok se ne prevezuje\n",
+        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
+        "MOJ blok JESTE prevezan na zamensku otpremnicu",
+    ),
+    # Zamena zbirne bez kapije: zaglavlje se stornira tacno, a completion posle
+    # snimanja zamene odnese decu TUDJE zbirne.
+    "zbirna-zamena-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
+        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
+        '        If CBool(s("brojDvosmislenIkad")) Then\n',
+        "T_ZamenaZbirne_NeDiraDecuTudje",
+        "ISPRAVKA staje dok je broj pripadao vise vlasnika",
+    ),
+    # Zavrsetak ispravke: tacan OldDocID degradiran u prazan opseg -> broj.
+    "completion-degradira-olddocid": (
+        "modStornoFlow.bas",
+        "        If Len(srcGen) = 0 And Len(oldDocID) > 0 Then _\n"
+        "            srcStanica = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _\n"
+        "                                                COL_OTP_STANICA)))\n",
+        "        ' SABOTAZA: bez generacije se pada na goli broj\n",
+        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
+        "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici",
+    ),
+    # Otkup bez generacije bez kapije nad brojem. BrojDokumenta je scoped po
+    # otkupnom mestu, pa storno po broju hvata i tudje OM.
+    "otkup-bez-kapije": (
+        "modStorno.bas",
+        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
+        "        RequireJedanVlasnikPoBroju TBL_OTKUP, COL_OTK_BR_DOK, brDok, SRC, COL_OTK_STANICA\n",
+        "    ' SABOTAZA: dvosmislen broj otkupa vise ne zaustavlja storno\n",
+        "T_OtkupBezGeneracije_NeStorniraTudjeOM",
+        "bez generacije dvosmislen broj otkupa se odbija",
+    ),
+    # "Jedini vlasnik" po distinct BROJU umesto po dokumentima.
+    "sole-owner-po-broju": (
+        "modStornoFlow.bas",
+        "    If svi.count <> 1 Then Exit Function\n",
+        "    If False Then Exit Function   ' SABOTAZA: broji se broj, ne dokument\n",
+        "T_SoleOwner_MeriDokumenteNeBrojeve",
+        "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik",
+    ),
+    # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
+    "zbirna-kaskada-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _\n"
+        "                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then\n"
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
+        "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n"
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
+        "T_ZbirnaKaskada_StajeNaDvosmislenom",
+        "ponistenje lanca staje dok je broj pripadao vise vlasnika",
+    ),
+    # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
+    # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
+    "preflight-ignorise-id": (
+        "modStornoDok.bas",
+        "            If Len(Trim$(docID)) > 0 Then\n"
+        "                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _\n",
+        "            If False Then   ' SABOTAZA: NovacID se ignorise\n"
+        "                If UCase$(Trim$(NzToText(LookupValue(TBL_NOVAC, COL_NOV_ID, docID, _\n",
+        "T_Preflight_KoristiIdentitet",
+        "sa NovacID-em preflight propusta izabran red",
+    ),
+    # Kapija nad brojem koja se primenjuje i kad je identitet poznat. Storno je
+    # tada bezbedan, ali legitimna ispravka pada -- feature ne radi.
+    "kapija-i-uz-identitet": (
+        "modStorno.bas",
+        "    If Len(Trim$(generacijaID)) = 0 Then _\n"
+        "        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
+        "    RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brBroj, SRC, COL_PRJ_KUPAC\n",
+        "T_IspravkaPrijemnice_PodKolizijomBroja",
+        "ISPRAVKA pod kolizijom broja prolazi kad je identitet poznat",
+    ),
+    # Zaglavlje zbirne po broju umesto po generaciji.
+    "zbirna-zaglavlje-po-broju": (
+        "modStorno.bas",
+        "        If RedJeIzabranogDokumenta(data, i, colBroj, colGenZ, brojZbirne, _\n"
+        "                                   generacijaID, SRC) Then\n",
+        "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then   ' SABOTAZA\n",
+        "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje",
+        "stornira se SAMO zbirna izabrane generacije",
+    ),
+    # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
+    # prvi dokument tog broja -- a kod RESI KASNIJE se guarded writer uopste ne
+    # zove, pa gresku nista ne prijavljuje.
+    "f8-identitet-po-broju": (
+        "modStornoFlow.bas",
+        "    If Len(Trim$(gen)) > 0 Then\n"
+        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n"
+        "        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.\n"
+        "        If ids.count = 0 Then Exit Function\n"
+        "        PkPoIdentitetu = CStr(ids.Keys()(0))\n"
+        "        Exit Function\n"
+        "    End If\n"
+        "\n"
+        "    If VlasniciPoBroju(tblName, brojCol, broj, SRC, False, Array(vlasnikCol)).count > 1 Then\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: identitet se ignorise -- prvi aktivan red tog broja\n",
+        "T_F8_IzabranRedOstajeIzabran",
+        "recovery zapis pokazuje na IZABRAN dokument, ne na prvi tog broja",
     ),
     # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
     # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone

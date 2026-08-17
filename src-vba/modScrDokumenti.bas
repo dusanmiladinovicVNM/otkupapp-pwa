@@ -341,8 +341,27 @@ End Function
 '             legacy koristi kao proveru postojanja)
 '   IZVOD   - koji racun; isti broj izvoda postoji na vise banaka, pa se
 '             salje "broj/racun" oblik koji ResolveIzvodZaStorno razume
+' Indeks nevidljive kolone identiteta: uvek POSLEDNJA koju je GridCols dodao.
+' Racuna se iz istog niza koji je mreza dobila, pa ne moze da se razidje sa njim.
+Private Function IdentKolona(ByVal tip As String) As Long
+    If Len(IdKolonaTipa(tip)) = 0 Then Exit Function
+    Dim cols As Variant: cols = GridCols(tip)
+    If Not IsArray(cols) Then Exit Function
+    IdentKolona = UBound(cols) + 1
+End Function
+
+' Kanonski identitet KLIKNUTOG reda. Prazno = tip ga nema (revers, izvod) ili
+' zatecen zapis bez generacije -- tada nizvodno vazi fail-closed kapija nad
+' jednoznacnoscu broja, ista koju koristi i prevezivanje.
+Private Function IdentIzReda(ByVal red As Long, ByVal tip As String) As String
+    Dim k As Long: k = IdentKolona(tip)
+    If k = 0 Then Exit Function
+    On Error Resume Next
+    IdentIzReda = Trim$(CStr(modOtkupUI.GridCell(red, k)))
+End Function
+
 Private Function StornoRedF8(ByVal red As Long) As Boolean
-    Dim tip As String, kljuc As String, opcija As String
+    Dim tip As String, kljuc As String, opcija As String, docID As String
     Dim razlog As String, poruka As String, odg As VbMsgBoxResult
     On Error GoTo EH
     tip = StornoTipKey()
@@ -351,9 +370,16 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
     ' prve kolone; izvod je izuzetak - vidi ispod.
     kljuc = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     If Len(kljuc) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
     End If
+
+    ' IDENTITET IZABRANOG REDA. Operater je kliknuo konkretan dokument; broj je
+    ' ono sto vidi, ali nizvodno se dokument bira po OVOME. Bez toga bi svaki
+    ' sloj ispod ponovo trazio po broju i mogao da nadje tudji dokument istog
+    ' broja -- a kod REZIM "RESI KASNIJE" se guarded writer uopste ne zove, pa
+    ' bi se napravio TRAJAN recovery zapis nad pogresnim dokumentom.
+    docID = IdentIzReda(red, tip)
 
     If tip = STIP_REVERSI Then opcija = ReversSmerZaBroj(kljuc)
     ' Izvod: broj sam nije kljuc (isti broj postoji na vise banaka), a treca
@@ -364,7 +390,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         kljuc = IzvodKljuc(kljuc, Trim$(CStr(modOtkupUI.GridCell(red, 3))))
 
     ' Kapija PRE potvrde: operater vidi razlog, a ne tih neuspeh posle "Da".
-    razlog = modStornoDok.StornoRazlog(tip, kljuc, opcija)
+    razlog = modStornoDok.StornoRazlog(tip, kljuc, opcija, docID)
     If Len(razlog) > 0 Then
         MsgBox razlog, vbExclamation, APP_NAME
         Exit Function
@@ -373,7 +399,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
     ' FRAMEWORK ISPRAVKE: za cetiri tipa sa nizvodnim tokom storno nije
     ' Da/Ne nego izbor STA storno poslovno znaci. Ako framework preuzme
     ' dokument, obicna potvrda ispod se preskace.
-    If IspravkaPreuzela(tip, kljuc, opcija) Then
+    If IspravkaPreuzela(tip, kljuc, opcija, docID) Then
         StornoRedF8 = True
         Exit Function
     End If
@@ -384,11 +410,11 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         ' JESTE odluka operatera o PDF-u, ne pravilo - zato je ovde, a ne u
         ' modStornoDok.
         If MsgBox(modStornoDok.StornoPregled(tip, kljuc, "") & vbCrLf & vbCrLf & _
-                  Poruka("STORNO_ASK_IZVOD"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
-        odg = MsgBox(Poruka("STORNO_ASK_IZVOD_PDF"), vbQuestion + vbYesNoCancel, APP_NAME)
+                  modPoruke.Poruka("STORNO_ASK_IZVOD"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+        odg = MsgBox(modPoruke.Poruka("STORNO_ASK_IZVOD_PDF"), vbQuestion + vbYesNoCancel, APP_NAME)
         If odg = vbCancel Then Exit Function
         opcija = IIf(odg = vbYes, IZVOD_STORNO_REMAP, IZVOD_STORNO_REIMPORT)
-        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka) Then
+        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
             MsgBox poruka, vbExclamation, APP_NAME
             Exit Function
         End If
@@ -396,15 +422,15 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         ' vise nego sto toast moze da pokaze.
         MsgBox poruka, vbInformation, APP_NAME
     Else
-        If MsgBox(Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(tip, opcija) & _
+        If MsgBox(modPoruke.Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(tip, opcija) & _
                   " " & kljuc & "?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
-        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka) Then
+        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
             modOtkupUI.ShowToast poruka, True
             Exit Function
         End If
         ' Zbirna moze da vrati UPOZORENJE uz uspeh (aktivna prijemnica ostaje
         ' vezana za storniranu zbirnu) - toast bi ga progutao, pa ide u MsgBox.
-        If InStr(1, poruka, Poruka("STORNO_MSG_OK"), vbBinaryCompare) = 1 Then
+        If InStr(1, poruka, modPoruke.Poruka("STORNO_MSG_OK"), vbBinaryCompare) = 1 Then
             modOtkupUI.ShowToast poruka & " " & kljuc, False
         Else
             MsgBox poruka, vbExclamation, APP_NAME
@@ -416,7 +442,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
     Exit Function
 EH:
     LogErr "modScrDokumenti.StornoRedF8"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
 '------------------------------------------- FRAMEWORK ISPRAVKE (Faza D/13)
@@ -431,21 +457,22 @@ End Function
 ' Sve poslovne posledice racuna modStornoFlow kroz modStornoDok; ovde je
 ' samo redosled pitanja i ono sto se posle njih pokaze operateru.
 Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
-                                  ByVal opcija As String) As Boolean
+                                  ByVal opcija As String, _
+                                  Optional ByVal docID As String = "") As Boolean
     Dim mode As String, res As Object
     On Error GoTo EH
     If Len(modStornoDok.TipUFlowDoc(tip)) = 0 Then Exit Function
 
     If tip = STIP_REVERSI Then
-        Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija) & vbCrLf & vbCrLf & _
+        Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija, docID) & vbCrLf & vbCrLf & _
                            Poruka("STORNO_ASK_REVERS"), vbQuestion + vbYesNoCancel, APP_NAME)
             Case vbYes:    Exit Function          ' obican storno -> pusti dalje
             Case vbCancel: IspravkaPreuzela = True: Exit Function
             Case Else:     mode = SV_MODE_ISPRAVKA
         End Select
     Else
-        If Not modStornoDok.StornoTraziIzborModa(tip, broj, opcija) Then Exit Function
-        mode = IzborModa(tip, broj, opcija)
+        If Not modStornoDok.StornoTraziIzborModa(tip, broj, opcija, docID) Then Exit Function
+        mode = IzborModa(tip, broj, opcija, docID)
         If Len(mode) = 0 Then
             IspravkaPreuzela = True               ' operater je odustao
             Exit Function
@@ -453,7 +480,7 @@ Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
     End If
 
     IspravkaPreuzela = True
-    Set res = IzvrsiMod(tip, broj, opcija, mode)
+    Set res = IzvrsiMod(tip, broj, opcija, mode, docID)
     If res Is Nothing Then
         modOtkupUI.ShowToast Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip, True
         Exit Function
@@ -471,7 +498,7 @@ Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
         ' Blokovi se storniraju POSLE dokumenta: kapija gleda da li je
         ' roditeljska otpremnica jos aktivna, a to zavisi od toga sta je
         ' upravo odradjeno.
-        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID"))
+        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID")), docID
     Else
         MsgBox CStr(res("message")), vbExclamation, APP_NAME
     End If
@@ -492,9 +519,10 @@ End Function
 ' (blok-multiselect je stavka 14); ovde je pitanje, ne panel, pa je i
 ' blok-storno nedostupan - o tome govori i sam tekst prvog koraka.
 Private Function IzborModa(ByVal tip As String, ByVal broj As String, _
-                           ByVal opcija As String) As String
+                           ByVal opcija As String, _
+                           Optional ByVal docID As String = "") As String
     On Error Resume Next
-    Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija) & vbCrLf & vbCrLf & _
+    Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija, docID) & vbCrLf & vbCrLf & _
                        Poruka("STORNO_ASK_MOD_1"), vbQuestion + vbYesNoCancel, APP_NAME)
         Case vbYes:    IzborModa = SV_MODE_ISPRAVKA: Exit Function
         Case vbCancel: Exit Function
@@ -512,7 +540,8 @@ End Function
 ' pun spisak posledica, i tek posle svesne potvrde ide drugi sa
 ' forceConfirm. Spisak se tako pravi PRE nego sto se ista promeni.
 Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
-                           ByVal opcija As String, ByVal mode As String) As Object
+                           ByVal opcija As String, ByVal mode As String, _
+                           Optional ByVal docID As String = "") As Object
     Dim res As Object, neDiraj As Boolean
     On Error GoTo EH
     ' "Ne diraj palete" ima smisla samo tamo gde palete vise za dokument, i
@@ -522,7 +551,7 @@ Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
         neDiraj = (MsgBox(Poruka("STORNO_ASK_PALETE"), vbQuestion + vbYesNo, APP_NAME) = vbYes)
     End If
 
-    Set res = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, False, neDiraj)
+    Set res = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, False, neDiraj, docID)
     If res Is Nothing Then Exit Function
     If Not CBool(res("blocked")) Then
         Set IzvrsiMod = res
@@ -535,7 +564,7 @@ Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
         Set IzvrsiMod = OdustanakRes()
         Exit Function
     End If
-    Set IzvrsiMod = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, True, neDiraj)
+    Set IzvrsiMod = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, True, neDiraj, docID)
     Exit Function
 EH:
     LogErr "modScrDokumenti.IzvrsiMod"
@@ -558,7 +587,8 @@ End Function
 ' ZIVU otpremnicu se ne stornira, jer bi je ostavio precenjenu.
 Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
                                 ByVal opcija As String, ByVal mode As String, _
-                                ByVal correctionID As String)
+                                ByVal correctionID As String, _
+                                ByVal docID As String)
     Dim dt As String, blokovi As Collection, ids As Collection
     Dim spisak As String, i As Long, red As Variant, n As Long, razlog As String
     On Error GoTo EH
@@ -566,7 +596,9 @@ Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
     dt = modStornoDok.TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Sub
 
-    Set blokovi = GetStornoBlockRows(dt, broj, opcija)
+    ' Identitet izabranog F8 reda ide i ovde: spisak koji operater potvrdjuje
+    ' zavrsava u StornoSelectedBlocks_TX, dakle u MUTACIJI.
+    Set blokovi = GetStornoBlockRows(dt, broj, opcija, docID)
     If blokovi Is Nothing Then Exit Sub
     If blokovi.count = 0 Then Exit Sub
 
@@ -1529,6 +1561,27 @@ Public Function ModeVezujeZbirnu(ByVal mode As String) As Boolean
     End Select
 End Function
 
+' Izvor KANONSKOG IDENTITETA po tipu dokumenta.
+'
+' Broj je labela. Za prijemnicu to nije teorija: GenerateBrojPrijemnice ima
+' fiksan prefiks "1", broji sekvencu PO KUPCU i NEMA proveru jedinstvenosti, a
+' auto-broj postoji samo za hladnjacu -- ostali kupci unose slobodno.
+' Broj zbirne generator drzi jedinstvenim; tamo je identitet pojas za rucni
+' unos. Za robna dokumenta identitet je GeneracijaID --
+' Klasa I i II iz istog upisa dele vrednost, sto je tacno "jedan logicki
+' dokument". Novac i faktura su jednoredni, pa im je identitet sopstveni PK.
+'
+' Revers i izvod nisu ovde: revers vec ide uz SMER (cetiri smera dele brojevni
+' niz), a izvod uz BROJ RACUNA -- oba su vec kompoziti koji razlucuju dokument.
+Public Function IdKolonaTipa(ByVal tk As String) As String
+    Select Case EffKey(tk)
+        Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA": IdKolonaTipa = COL_GENERACIJA_ID
+        Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
+        Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
+        Case Else:                                          IdKolonaTipa = ""
+    End Select
+End Function
+
 Public Function GridCols(ByVal mk As String) As Variant
     Dim c As Collection: Set c = New Collection
     ' F8 pozajmljuje kolone tipa koji pokazuje - odatle i naslov "STORNO"
@@ -1586,6 +1639,28 @@ Public Function GridCols(ByVal mk As String) As Variant
     End Select
 
     c.Add "OTKUI_HD_STATUS||pill|88|1"
+
+    ' KANONSKI IDENTITET izabranog reda -- samo u F8, i NEVIDLJIVO.
+    '
+    ' Zasto kolona a ne mapa sa strane: ljuska sortira redove POSLE Scr_Rows
+    ' (SortedView), pa izlazni indeks nije indeks u mrezi -- mapa "red -> ID"
+    ' bi posle prvog klika na zaglavlje pokazivala na pogresan dokument.
+    ' SortedView kopira tacno mColN kolona, pa ono sto nije u ovom nizu ne
+    ' prezivi sortiranje.
+    '
+    ' Prioritet 4 znaci NIKAD vidljiva: petlja vidljivosti ide "For pass = 3
+    ' To 1", pa uslov (4 <= pass) nikad nije tacan. Podatak svejedno putuje,
+    ' jer mColN broji sve deklarisane kolone. Sirina 0 je bez znacaja dok je
+    ' kolona nevidljiva, ali stoji da flex-raspodela ne bi imala sta da uzme.
+    '
+    ' Dodaje se SAMO za F8: GridCols je zajednicki za rezim unosa i za storno
+    ' centar istog tipa (F4 i F8/Prijemnica daju isti mk), pa bi bezuslovno
+    ' dodavanje menjalo i liste ostalih rezima.
+    If modOtkupUI.ActiveMode = "F8" Then
+        If Len(IdKolonaTipa(mk)) > 0 Then
+            c.Add "OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
+        End If
+    End If
 
     Dim a() As Variant, i As Long
     ReDim a(0 To c.count - 1)

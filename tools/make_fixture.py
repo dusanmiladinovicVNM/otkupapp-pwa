@@ -43,10 +43,15 @@ STATUS_AKTIVAN = "Aktivan"          # modConfig.STATUS_AKTIVAN
 AMB_12_1 = "12/1"                   # modConfig.AMB_12_1
 
 STANICA = "STA-TEST-1"
+# Druga stanica: BrojDokumenta otkupa i BrojOtpremnice su scoped PO STANICI, pa
+# isti broj na dva OM-a postoji legitimno. Bez druge stanice se ta kolizija ne
+# moze ni napisati kao test.
+STANICA2 = "STA-TEST-2"
 VOZAC = "VOZ-TEST-1"
-# Drugi vozac postoji zbog CILJNE liste zbirnih: broj zbirne se generise PO
-# VOZACU, pa su dve zbirne istog broja i istog kupca a razlicitih vozaca DVA
-# dokumenta. Lista ciljeva mora da ponudi oba.
+# Drugi vozac postoji zbog CILJNE liste zbirnih. Broj zbirne generator DRZI
+# JEDINSTVENIM (SuggestNextBroj za ZBR bumpuje sekvencu dok ne nadje slobodan),
+# pa dve zbirne istog broja mogu nastati samo RUCNIM UNOSOM ili uvozom -- a
+# tada lista ciljeva mora da ponudi oba dokumenta, ne jedan spojen red.
 VOZAC2 = "VOZ-TEST-2"
 ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
 # Zbirna u koju NIJEDAN test ne upisuje. Kolizioni par aktivnih prijemnica mora
@@ -54,6 +59,46 @@ ZBIRNA_DUPL = "ZB-TEST-DUPL"        # isti broj, isti kupac, dva vozaca
 # koji tamo upisuje, a MsgBox u headless runu je visenje koje watchdog samo
 # maskira.
 ZBIRNA_MIRNA = "ZB-TEST-4"
+# Svez par zbirnih za KASKADU: test 38 stornira jedno zaglavlje, pa bi posle
+# njega ostao jedan aktivan vlasnik i kapija ne bi imala sta da detektuje.
+ZBIRNA_KASK = "ZB-TEST-KASK"
+OTKUP_KOLIZIJA = "7/150326"          # isti BrDok na dva otkupna mesta
+OTPREMNICA_KOLIZIJA = "8/TEST"       # isti broj otpremnice, dve stanice, ista zbirna
+# ZATECEN par BEZ generacije, za zavrsetak ispravke: OldDocID je tacan, pa se ne
+# sme degradirati u prazan opseg i zavrsiti na golom broju. Testovi koji pecate
+# generacije ne smeju da ga dodirnu, pa ima svoj broj.
+OTPREMNICA_LEGACY = "6/TEST"
+# ZATECEN ("stale") context za zavrsetak ispravke. Dve otpremnice ISTOG broja sa
+# RAZLICITIM roditeljima: prva u tabeli visi na JEDNOZNACNOJ zbirni, a izabrana
+# (ona iz context-a) na DVOSMISLENOJ. Lookup po poslovnom broju zato vraca
+# POGRESNOG roditelja -- kapija proveri jednoznacnu zbirnu siblinga, a kod mutira
+# dvosmislenu zbirnu izabranog dokumenta. Bez ovog para se ta razlika ne meri.
+OTPREMNICA_STALE = "9/TEST"
+OTPREMNICA_STALE_NOVA = "10/TEST"    # cilj zamene; mora imati NEPRAZNU zbirnu
+# Namenska zbirna i prijemnica za stale scenario. NIJEDAN drugi test ih ne
+# dira: naslanjanje na ZB-TEST-4 i PRJ-KASK-1 je poslovnu tvrdnju cinilo
+# vakuumskom -- dotle bi ih drugi testovi vec pomerili ili stornirali, pa
+# relink nije imao sta da preveze i sabotaza nije obarala svoju tvrdnju.
+ZBIRNA_STALE = "ZB-TEST-STL"         # cilj relinka; jednoznacna, mirna
+PRIJEMNICA_STALE = "12/TEST"         # TUDJA prijemnica na dvosmislenoj zbirni
+# F8 DODATNI STORNO BLOKOVA. Isti BrojOtpremnice na dve stanice je legitiman,
+# a spisak blokova se pravio po tom broju -- pa je u korpu ulazio i blok
+# drugog dokumenta. Zato je B STORNIRANA a njen blok AKTIVAN: tacno to stanje
+# gasi kapiju BlockStornoDriftReason (nema zivog roditelja), a i inace je ona
+# na ovoj putanji preskocena za DUPLI/PONISTENJE.
+OTPREMNICA_BLOK = "18/TEST"
+# CILJNA zbirna sa istorijski dvosmislenim brojem: owner A je STORNIRAN a
+# njegovo dete je AKTIVNO (test 44 dokazuje da storno zaglavlja ne stornira
+# dete), owner B je aktivan i njegovo dete je zamena. Zatecena kapija u
+# writeru broji samo AKTIVNE vlasnike, pa ovde vidi jednog i pusti relink --
+# a rekalkulacija po broju onda sabere decu OBA scope-a.
+ZBIRNA_TGT = "ZB-TEST-TGT"
+ZBIRNA_OLDU = "ZB-TEST-OLDU"        # izvorna zbirna; jednoznacna, mirna
+OTPREMNICA_OLD_U = "13/TEST"        # izvorna otpremnica koja se ispravlja
+OTPREMNICA_HIST = "14/TEST"         # aktivno dete STORNIRANOG vlasnika cilja
+OTPREMNICA_NEW_T = "15/TEST"        # zamena; dete AKTIVNOG vlasnika cilja
+PRIJEMNICA_OLD_U = "16/TEST"        # izvorna prijemnica; ne sme se prevezati
+OTPREMNICA_ZAMENA = "7/TEST"
 VRSTA = "TESTVOCE"
 # Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
 # presuda o RELABEL-u mora da opisuje BAS izabran dokument. PRJ-TEST-C2 je zato
@@ -77,6 +122,10 @@ FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
 # Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
 FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
+# Dva AKTIVNA reda tblNovac pod ISTIM brojem -- avans raspodela to radi
+# svakodnevno. Bez NovacID-a je broj dvosmislen i storno se odbija; sa njim se
+# stornira bas izabran red. Preflight je do sada odbijao i kad ID postoji.
+NOVAC_DUPLI_BROJ = "NOV-DUPLI-1"
 
 # KOLIZIJA BROJEVA -- srce ovog fixture-a.
 #
@@ -101,12 +150,18 @@ PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
 PRIJEMNICA_DELJENA = "5/150326"
 # Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
 PRIJEMNICA_CILJ_V2 = "4/150326"
+# Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
+# RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
+# zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
+PRIJEMNICA_ISPRAVKA = "3/150326"
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
 SEED = {
     "tblStanice": [
         {"StanicaID": STANICA, "Naziv": "Test Otkupno Mesto", "Mesto": "Test Mesto",
+         "Aktivan": STATUS_AKTIVAN, "JeHladnjaca": "NE"},
+        {"StanicaID": STANICA2, "Naziv": "Drugo Otkupno Mesto", "Mesto": "Test Mesto",
          "Aktivan": STATUS_AKTIVAN, "JeHladnjaca": "NE"},
     ],
     "tblVozaci": [
@@ -143,9 +198,44 @@ SEED = {
     # storniranog reda ta tvrdnja nema nad cim da padne (sabotaza
     # "oporavak-stornirani-cilj" je nad starim fixture-om ostajala zelena).
     "tblZbirna": [
+        {"ZbirnaID": "ZBI-KASK-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-KASK-2", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_KASK, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 400, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 40,
+         "Klasa": "I", "KupacID": KUPAC},
         # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
         # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
         # smatrala samo kupca, pa operater nije mogao da izabere pravi.
+        # Mirna, jednoznacna zbirna: cilj relinka u stale scenariju.
+        # Ciljna zbirna, dva vlasnika ISTOG broja: B aktivan, A storniran.
+        # UkupnoKolicina zaglavlja B je namerno = kolicina SAMO njegovog deteta,
+        # da kontaminacija (dete A + dete B) bude vidljiva kao promena broja.
+        #
+        # REDOSLED JE DEO SCENARIJA i ne sme se menjati. Aktivan vlasnik mora biti
+        # PRVI red tog broja: ReassignPrijemnicaToZbirna_TX bez generacije cita
+        # Stornirano PRVOG reda po broju, pa bi sa storniranim prvim slucajno
+        # odbio relink -- ne zato sto proverava vlasnistvo, nego zato sto je prvi
+        # red slucajno bio storniran. Test bi tada bio zelen bez pokrica.
+        {"ZbirnaID": "ZBI-TGT-B", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-TGT-A", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC, "Stornirano": "Da"},
+        # Izvorna zbirna: jednoznacna, da test meri BAS cilj a ne izvor.
+        {"ZbirnaID": "ZBI-OLDU-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_OLDU, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-STL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_STALE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
+         "Klasa": "I", "KupacID": KUPAC},
         {"ZbirnaID": "ZBI-TEST-4", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_MIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
@@ -176,6 +266,71 @@ SEED = {
     #   OTP-TEST-2  bez zbirne
     #   OTP-TEST-3  bez zbirne, ali blok u tblOtkup nosi zbirnu (ZB-TEST-3)
     "tblOtpremnica": [
+        {"OtpremnicaID": "OTP-LEG-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_LEGACY, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-LEG-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_LEGACY, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-LEG-N", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_ZAMENA, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # Dve otpremnice ISTOG broja sa RAZLICITIH stanica u ISTOJ zbirni.
+        # Zbirna je po invarijanti zbir svih svojih otpremnica, pa je ovo
+        # normalno stanje -- a "jedini vlasnik" po distinct BROJU tu laze.
+        {"OtpremnicaID": "OTP-KOL-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_KOLIZIJA, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-KOL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_KOLIZIJA, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        # ZATECEN CONTEXT: redosled je deo scenarija. OTP-STL-B je PRVI red tog
+        # broja i visi na JEDNOZNACNOJ zbirni; izabrana OTP-STL-A je druga i visi
+        # na DVOSMISLENOJ. Ne menjati redosled -- test 46 meri bas to da kod ne
+        # sme da uzme prvog po broju.
+        {"OtpremnicaID": "OTP-OLD-U", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_OLD_U, "BrojZbirne": ZBIRNA_OLDU,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # AKTIVNO dete STORNIRANOG vlasnika cilja -- srce scenarija.
+        {"OtpremnicaID": "OTP-HIST", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": OTPREMNICA_HIST, "BrojZbirne": ZBIRNA_TGT,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 30, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-NEW-T", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_NEW_T, "BrojZbirne": ZBIRNA_TGT,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-BLK-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_BLOK, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # STORNIRANA, ali njen blok ostaje aktivan (recovery stanje).
+        {"OtpremnicaID": "OTP-BLK-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_BLOK, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I",
+         "Stornirano": "Da"},
+        {"OtpremnicaID": "OTP-STL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_STALE,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-STL-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # Cilj zamene. Zbirna mora biti NEPRAZNA i jednoznacna: relink prijemnica
+        # se radi samo kad nova zbirna postoji, pa bi prazna napravila placebo
+        # test -- tudja prijemnica se ne bi prevezala ni bez kapije.
+        {"OtpremnicaID": "OTP-STL-N", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE_NOVA, "BrojZbirne": ZBIRNA_STALE,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"OtpremnicaID": "OTP-TEST-1", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
          "VozacID": VOZAC, "BrojOtpremnice": "1/TEST", "BrojZbirne": ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 1000, "Cena": 50.0,
@@ -190,6 +345,39 @@ SEED = {
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 80, "Klasa": "I"},
     ],
     "tblOtkup": [
+        # Po jedan blok na svakoj legacy otpremnici -- zavrsetak ispravke sme da
+        # preveze SAMO blok dokumenta ciji je OldDocID u context-u.
+        {"OtkupID": "OTK-LEG-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "L1/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-LEG-A", "BrojOtpremnice": OTPREMNICA_LEGACY},
+        {"OtkupID": "OTK-LEG-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "L2/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-LEG-B", "BrojOtpremnice": OTPREMNICA_LEGACY},
+        # Isti BrojDokumenta na DVA otkupna mesta -- legitimno, broj je scoped
+        # po stanici. Bez generacije storno po broju bi zahvatio oba.
+        {"OtkupID": "OTK-KOL-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
+        {"OtkupID": "OTK-KOL-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
+        # Po jedan AKTIVAN blok na svakoj od dve otpremnice istog broja.
+        {"OtkupID": "OTK-BLK-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "B1/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-BLK-A", "BrojOtpremnice": OTPREMNICA_BLOK},
+        {"OtkupID": "OTK-BLK-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "B2/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-BLK-B", "BrojOtpremnice": OTPREMNICA_BLOK},
         {"OtkupID": "OTK-TEST-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
@@ -211,6 +399,14 @@ SEED = {
     # izgubi: faktura kojoj iznos nije evidentiran NE SME da blokira uplatu.
     # To je razlog zbog koga je kapija u UplataFakturaProblem uopste uslovna;
     # bez ovog reda popravka te kapije mogla bi tiho da ukine i to pravilo.
+    "tblNovac": [
+        {"NovacID": "NOV-TEST-D1", "BrojDokumenta": NOVAC_DUPLI_BROJ,
+         "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 1000,
+         "KooperantID": "KOOP-TEST-1"},
+        {"NovacID": "NOV-TEST-D2", "BrojDokumenta": NOVAC_DUPLI_BROJ,
+         "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 2000,
+         "KooperantID": "KOOP-TEST-2"},
+    ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
         {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
@@ -221,6 +417,32 @@ SEED = {
     # Sve tri imaju aktivnu zbirnu, pa NISU osirocene prijemnice -- lista
     # osirocenih ostaje prazna i meri bas ono sto treba (zbirna, ne kupac).
     "tblPrijemnica": [
+        # Prijemnica ciji je RODITELJ zbirna sa dvosmislenim brojem. Kroz nju se
+        # dohvata kaskadna kapija: PONISTENJE prijemnice zove PonistiZbirnaChain_TX
+        # nad roditeljem, a taj put ne prolazi kroz kapiju na nivou moda zbirne.
+        # TUDJA prijemnica na dvosmislenoj zbirni. Nijedan test je ne stornira
+        # ni ne pomera, pa relink po BROJU stare zbirne ima sta da zahvati.
+        # Izvorna prijemnica: bez kapije bi presla na ciljnu zbirnu.
+        {"PrijemnicaID": "PRJ-OLD-U", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_OLD_U, "BrojZbirne": ZBIRNA_OLDU,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-STL-T", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STALE, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-KASK-1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": "2/150326", "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-I1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ISPRAVKA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 120, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 12, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-TEST-I2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_ISPRAVKA, "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 180, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 18, "Klasa": "I"},
         # Deljena paleta: D1 i D2 nose isti broj i istu robu, svaki svom kupcu.
         {"PrijemnicaID": "PRJ-TEST-D1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,

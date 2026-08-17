@@ -2021,3 +2021,810 @@ ikad promeni.
 - `python tools\run_vba.py --suite RunAllTests` → **TESTS=32, FAIL=0**.
 - `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
 - Sabotaža `cotenant-po-broju` i dalje obara `T_DeljenaPaleta_SuStanarPoIdentitetu`.
+
+## v2.46.0 — `v6-ui-129` · F8 nosi identitet izabranog reda
+
+Poslednje mesto na kome je storno centar vraćao kanonski izbor reda nazad u
+poslovni broj. **Tek ovim je Faza D stvarno zatvorena** — katalog je do sada
+tvrdio da je zatvorena od `v6-ui-121`, što nije bilo tačno.
+
+### Šta je bilo
+
+`StornoRedF8` je izabran red svodio na `GridCell(red, 1)` — broj. Revers je uz
+njega nosio smer, izvod broj računa, ostalih šest tipova ništa. Niže je
+`modStornoDok` dokument tražio **iznova, po broju**.
+
+Za običan storno to je od #194/#195 uglavnom hvatao owner guard u writeru. Ali
+mod **`REŠI KASNIJE` guarded writer uopšte ne zove** — napravi samo trajan
+recovery zapis. Taj zapis je mogao zauvek da pokazuje na tuđi dokument, i ništa
+to nije prijavljivalo. `ScanPrijemnica` je uz to palete brojao po
+`BrojPrijemnice`, pa su i brojke u pregledu mogle biti tuđe.
+
+### Kako identitet putuje
+
+Nevidljiva kolona u `GridCols`, **samo za F8**:
+
+```
+"OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
+```
+
+Tri činjenice iz ljuske koje to čine ispravnim — sve tri proverene u kodu:
+
+| Mehanizam | Posledica |
+|---|---|
+| `SortedView` kopira tačno `mColN` kolona | kolona van `cols` ne preživi sortiranje |
+| `mColN = UBound(mCols) + 1` | deklarisana kolona uvek putuje |
+| `For pass = 3 To 1 Step -1` | prioritet **4** se nikad ne renderuje |
+
+Mapa `red → identitet` sa strane bi bila **pogrešna**: ljuska sortira posle
+`Scr_Rows`, pa izlazni indeks nije indeks u mreži.
+
+Identitet po tipu: `GeneracijaID` za otkup/otpremnicu/zbirnu/prijemnicu,
+`FakturaID`, `NovacID`. Revers i izvod već idu uz smer, odnosno broj računa.
+
+### Lanac
+
+`StornoRedF8` → `StornoRazlog` / `StornoTraziIzborModa` / `StornoPregledLanca` /
+`StornoIzvrsi` / `StornoIzvrsiMod` → `Scan*` i writeri.
+
+`PkPoIdentitetu` zamenjuje `LookupActiveID(... broj ...)` u sva tri `Scan*`:
+generacija bira dokument; bez nje se pada na broj **tek pošto se dokaže da broj
+nosi jednog vlasnika**, inače prazno → `exists=False` i flow staje. Writeri
+(`StornoOtkupByBrDok_TX`, `StornoOtpremnicaByBroj_TX`, `StornoPrijemnicaByBroj_TX`)
+dobili su opcionu generaciju i biraju redove po njoj.
+
+### Test je prvo bio placebo
+
+Prva verzija je birala dokument i poredila `OldDocID` sa njim — i **prolazila je
+i kad se identitet potpuno ignoriše**, jer je razrešavanje po broju slučajno
+davalo baš taj dokument. Sabotaža je to pokazala.
+
+Prepravljen da meri **razliku u ponašanju**, ne konkretan PK: bez identiteta se
+nad dvosmislenim brojem recovery zapis **ne pravi**, sa identitetom se pravi i
+pokazuje na izabran dokument. Prva tvrdnja pada čim se identitet zaobiđe, bez
+obzira na redosled redova.
+
+```
+FAIL … bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem
+       -- ocekivano [0], dobijeno [9]        (f8-identitet-po-broju)
+```
+
+### Sitno, iz istog pregleda
+
+- `Err.description` se u `StornoRazlog` i `StornoIzvrsi` čita **pre** `LogErr`-a:
+  `LogError` ima `On Error Resume Next` i fajl I/O, pa greška u samom logovanju
+  prepiše `Err` i operater vidi pogrešnu poruku.
+- `docs/EXCEL_TEST_HARNESS.md`: izričita napomena da je `--out` obavezan kad je
+  donor postojeći fixture — komanda bez njega je već dvaput napisana kao da radi.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=35, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- `COMPILE` → **`NEJASNO`**. Posle ovog PR-a ručni `Alt+F11 → Debug → Compile
+  VBAProject` je prava kapija, ne formalnost — u prethodnom rebase-u se pokazalo
+  da statički checker propušta nedefinisan simbol i pogrešnu arnost.
+
+## v2.46.1 — `v6-ui-130` · identitet do kraja lanca, i gde ne može
+
+Dopuna v2.46.0 po pregledu. Identitet je stizao do prve putanje, pa sam ga
+proglasio provučenim. **Nije bio** — `REŠI KASNIJE` je bio identity-aware, a
+`ISPRAVKA`, `DUPLI` i deo `PONIŠTENJA` su se vraćali na broj.
+
+### Preflight je primao identitet pa ga ignorisao
+
+`StornoRazlog` je dobio `docID` i nije ga koristio. Za novac je i dalje zvao
+`ResolveNovacForStorno(broj)`, koji kod dva aktivna reda istog broja kaže „treba
+`NovacID`" — **iako mu je F8 `NovacID` upravo poslao**. `StornoIzvrsi` niže je
+već bio ispravan, ali se do njega nije stizalo: kapija iznad je zaustavljala
+operaciju.
+
+To je poučan oblik greške — popravka jednog sloja bez drugog izgleda kao da radi,
+jer je donji sloj tačan.
+
+### Šta je sada identity-aware
+
+| Putanja | Bilo | Sada |
+|---|---|---|
+| `StornoRazlog` (svih 6 tipova) | uvek po broju | `AktivanPoIdentitetu` |
+| prijemnica ISPRAVKA/DUPLI/PONIŠTENJE | `…ByBroj_TX(broj)` | `(broj, docID)` |
+| otpremnica ISPRAVKA/DUPLI | `…Atomic_TX(broj)` | `(broj, gen)`, `GetOtpremnicaIDsByBroj` filtrira |
+| zbirna — **zaglavlje** | po broju | `StornoZbirna_TX(broj, gen)` |
+
+Kapije nad brojem su sada **uslovne**: kad je identitet poznat, ne primenjuju se.
+Bez toga su obarale potpuno legitimnu operaciju — storno je bio bezbedan, ali
+funkcija nije radila.
+
+### Zbirna: granica koja se ne može preći
+
+Otpremnice, prijemnice i paletne stavke vezuju zbirnu **kolonom `BrojZbirne`** —
+`ZbirnaID` im nije strani ključ nigde u šemi. **Deca dva dokumenta istog broja su
+nerazlučiva podatkom koji postoji.**
+
+Zato: zaglavlje se stornira po generaciji (tačno), a putanje koje bi menjale decu
+(`PonistiZbirnaChain_TX`, `StornoZbirnaIDetach_TX`) **staju** kad broj nose dve
+aktivne zbirne. To nije previd nego jedina poštena opcija — i tako je zapisano u
+kodu, ne samo ovde.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**, exit 0.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=38, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Tri nove sabotaže, svaka obara svoju tvrdnju:
+  - `preflight-ignorise-id` → „sa NovacID-em preflight propušta izabran red"
+  - `kapija-i-uz-identitet` → „ISPRAVKA pod kolizijom broja PROLAZI…"
+  - `zbirna-zaglavlje-po-broju` → „zbirna drugog vozača istog broja OSTAJE aktivna"
+- `COMPILE` → **`NEJASNO`**.
+
+### Dva compile pada koje headless harness nije video
+
+`IsStorniranoValue` je `Private` u `modStorno`, a pozvao sam je iz `modStornoDok`;
+i `RunSimpleStornoZbirna` je dobio `docID` u telu bez parametra u potpisu. Oba su
+prošla `vba_check` — pozivi su u izrazu, a to je rupa svesno ostavljena u #199.
+Oba je pokazao **screenshot VBE-a**, ne harness.
+
+## v2.46.2 — `v6-ui-131` · ispravka obrazloženja: broj zbirne JESTE jedinstven
+
+Ne menja ponašanje. Ispravlja **tvrdnju** na kojoj je deo prethodnog rada
+obrazložen — a pogrešno obrazloženje je gore od suvišne provere, jer sledeći
+čovek na osnovu njega donese isti zaključak.
+
+### Šta je bilo pogrešno
+
+Pisao sam da se „broj zbirne generiše po vozaču, pa ga dva dokumenta lako dele".
+**Ne dele ga.** `SuggestNextBroj` za `KIND_ZBR` ima eksplicitnu petlju:
+
+```vb
+Do While BrojZbirneExists(SuggestNextBroj)
+    nextSeq = nextSeq + 1
+    SuggestNextBroj = ApplyMirrorPrefix(entityID, FormatBroj(entityID, datum, nextSeq))
+Loop
+```
+
+`BrojZbirneExists` skenira **celu** `tblZbirna`, bez opsega po vozaču, a
+`ApplyMirrorPrefix` dodaje `S` baš da se mirror-vozač ne sudari sa realnim.
+Generator ne može da izda zauzet broj.
+
+### Zašto prijemnica jeste drugačija
+
+```vb
+maxSeq = MaxSeqFromTable(TBL_PRIJEMNICA, ..., COL_PRJ_KUPAC, kupacID, datum)
+GenerateBrojPrijemnice = FormatBroj("1", datum, maxSeq + 1)
+```
+
+Fiksan prefiks `"1"`, sekvenca **po kupcu**, i **nema provere jedinstvenosti**.
+Uz to auto-broj postoji samo za hladnjaču — ostali kupci unose slobodno. Tu je
+kolizija stvarna, i tamo identitet nije pojas nego nužnost.
+
+Grešku sam napravio izvodeći pravilo iz **oblika broja** umesto iz generatora.
+
+### Šta ostaje i zašto
+
+Zbirna zadržava `generacijaID` i fail-closed kaskade: broj koji generator drži
+jedinstvenim i dalje može ući **mimo generatora** — ručnim unosom kad je
+auto-broj isključen u Podešavanjima, uvozom, ili ispravkom u tabeli. Zaštita od
+toga ne škodi.
+
+Ispravljena su obrazloženja u `modStorno`, `modStornoFlow`, `modScrDokumenti`,
+`modScrOporavak`, `modDokumenta`, `modTest`, `make_fixture.py` i katalogu — svuda
+gde je stajalo „po vozaču, pa se dele".
+
+Fixture `ZBI-DUPL-1/2` i test 38 ostaju, ali sada kažu šta stvarno brane:
+**ručni unos**, ne redovan tok.
+
+## v2.46.3 — `v6-ui-132` · identitet i na putanjama koje su ostale
+
+Prethodni commit je tvrdio da je „svih pet nalaza zatvoreno". **Nije bilo** —
+zatvorena je prva putanja svakog nalaza. Ovo zatvara ostale.
+
+### P1 — otkup bez generacije je mogao da stornira dva otkupna mesta
+
+`BrojDokumenta` otkupa je scoped **po otkupnom mestu**, pa isti broj na dva OM-a
+postoji legitimno. Writer je bez generacije skupljao **sve** aktivne redove tog
+broja. Prijemnica je taj obrazac već imala; otkup nije.
+
+### P1 — „jedini vlasnik" zbirne merio se distinct brojevima
+
+`OtpremnicaIsSoleOwner` je pitao `DistinctActiveValues(COL_OTP_BROJ)`. Zbirna je
+po invarijanti zbir **svih** svojih aktivnih otpremnica, a broj otpremnice je
+scoped po stanici — pa dve otpremnice istog broja sa različitih stanica u istoj
+zbirni daju **jedan** distinct broj. Odgovor je bio „jedini vlasnik", `PONIŠTENJE`
+izabrane je ulazilo u punu kaskadu i obaralo i tuđu.
+
+Sada se broje **logički dokumenti** (generacija, PK kao fallback), i „jedini
+vlasnik" znači: tačno jedan aktivan dokument, i to baš izabrani.
+
+### P1 — završetak ispravke otpremnice vraćao se na broj
+
+`CompleteOtpremnicaIspravka` je imao `docID`, ali ga pravi pozivaoci
+(`modDokUnos`, `frmDokumenta`) nisu slali. Umesto da to traži od njih, completion
+sada **izvodi identitet iz `correctionID`**: context nosi `OldDocID`, iz njega se
+čita generacija stare otpremnice. Persistentan je i preživljava restart Excela.
+
+Cilj (upravo snimljena zamena) dobio je kapiju nad jednoznačnošću broja — nova
+otpremnica još nema generaciju u contextu, pa je to najuža provera koja se tu
+može postaviti.
+
+### P2
+
+- `StornoIzvrsi` je bacao `docID` neposredno pre `StornoZbirna_TX`.
+- `StornoOtpremnicaByBroj_TX` je imao **bezuslovnu** kapiju nad brojem — odbijao
+  je tačno zadat `GEN-A` samo zato što `GEN-B` iste oznake postoji na drugoj stanici.
+- `PkPoIdentitetu` je primao jednu kolonu vlasnika, dok je `ScanZbirna` odmah
+  zatim merio dvosmislenost sa `VozacID + KupacID`. Sada prima niz.
+- `RedJeGeneracije` je kod zadate generacije bez kolone **tiho** padao na broj;
+  sada diže grešku, isto kao `RedJeIzabranogDokumenta`.
+
+### Ispravka jedne prejake tvrdnje
+
+Napisao sam da se deca zbirne „ne mogu razdvojiti ni u principu". Netačno:
+otpremnica kaskada već ume `BrojZbirne + VozacID`, prijemnica `+ KupacID`, palete
+nose `PrijemnicaID`. Scope se **može** izvesti — child mutacije samo još nisu sve
+dovedene dotle. Fail-closed ostaje kao bezbedan izbor, ali više nije opisan kao
+nemogućnost.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=41, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Tri nove sabotaže, svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`**.
+
+**Test 41 je prvo bio placebo** i to je vredno zapisati: tvrdio je da kaskada
+staje, a stajala je od **zatečene** kapije u `StornoZbirna` — sabotaža moje
+provere ništa nije menjala. Prepravljen da meri ono što moja provera stvarno
+dodaje: **razlog** koji stiže do operatera umesto generičkog „nije uspelo".
+
+## v2.46.4 — `v6-ui-133` · completion sloj: gde se identitet gubio na kraju
+
+Dva P1 su bila u **completion** putanjama — onome što se izvršava tek **posle**
+snimanja zamenskog dokumenta. Tamo testova nije bilo, i to nije slučajnost:
+početak operacije je izgledao ispravno, pa se dalje nije gledalo.
+
+### P1 — zamena zbirne je mogla da odnese decu tuđe zbirne
+
+Početak ISPRAVKE je tačan: `StornoZbirna_TX(broj, docID)` stornira samo izabrano
+zaglavlje, tuđe ostaje aktivno. Ali `CompleteZbirnaIspravka` — koja ide tek posle
+snimanja zamene — prevezuje otpremnice i prijemnice **po `BrojZbirne`**.
+
+Ishod: storniram tačno **svoje** zaglavlje, pa **tuđoj** zbirni odnesem decu.
+Ništa ne izgleda pokvareno u trenutku storna.
+
+Dok child mutacije ne budu scoped, modovi koji diraju decu (`ISPRAVKA`, `DUPLI`,
+`PONIŠTENJE`) **staju pre nego što se išta promeni**. `REŠI KASNIJE` prolazi —
+on ne dira decu.
+
+### P1 — završetak ispravke otpremnice degradirao je tačan `OldDocID`
+
+Zatečen dokument nema `GeneracijaID`. Completion je iz contexta čitao `OldDocID`,
+`GeneracijaPoID` je vraćao `""`, i prazan opseg je značio **„izaberi po
+poslovnom broju"**. Broj otpremnice je scoped po stanici, pa su blokovi dokumenta
+sa **druge stanice** ulazili u relink.
+
+`OldDocID` je bio tačan sve vreme — gubio se jedan korak kasnije. Sada se, kad
+generacije nema, čita `StanicaID` baš tog `OldDocID` i opseg je **broj + stanica**.
+
+### P2
+
+Dvosmislen cilj u `CompleteOtpremnicaIspravka` sada ide u **`MANUAL`**, ne u tiho
+`PENDING` — inače sledeći unos otpremnice ponovo pokreće pitanje „je li ovo
+zamena?".
+
+Uz to, **razlog iz kaskade sada stiže do operatera** u obe grane (zbirna i
+prijemnica) umesto generičkog „nije uspelo (kaskada)".
+
+### Testovi 42 i 43 — tamo gde ih nije bilo
+
+- **42** — dve aktivne zbirne istog broja, svaka sa decom → ISPRAVKA staje,
+  forma za zamenu se **ne otvara**, nijedno zaglavlje nije stornirano, tuđa
+  otpremnica ostaje na svojoj zbirni.
+- **43** — zatečen par bez generacije na dve stanice → completion prevezuje samo
+  blok svog dokumenta.
+
+Sabotaža za 43 reprodukuje kvar doslovno: blok `OTK-LEG-B` završi na zamenskoj
+otpremnici `OTP-LEG-N` umesto da ostane na `OTP-LEG-B`.
+
+### Test 41 je premešten, jer ga je nova kapija učinila nedostižnim
+
+Kapija na nivou moda staje pre kaskadne, pa sabotaža kaskade više nije obarala
+test 41. Umesto da ga ostavim kao ukras, premešten je na **PONIŠTENJE
+prijemnice** — jedini put koji kaskadnu kapiju stvarno dohvata, jer ide nad
+roditeljskom zbirnom.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=43, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Pet sabotaža iz poslednje dve runde, **svaka obara svoju tvrdnju**.
+- `COMPILE` → **`NEJASNO`**.
+
+Usput nađen i ispravljen poziv `MarkCorrectionManual` sa **četiri argumenta za
+tri parametra**. Suite je bio zelen — VBA ne kompajlira modul dok ga ne dotakne.
+Preostalih 20 poziva iste rutine je prebrojano mehanički.
+
+## v2.46.5 — `v6-ui-134` · storniran vlasnik i dalje ima aktivnu decu
+
+### P1 — kapija je brojala samo AKTIVNE vlasnike
+
+`StornoZbirna_TX` stornira **samo redove `tblZbirna`** — otpremnice, prijemnice i
+palete ne dira. Zato je ovo dostižno stanje, ne teorija:
+
+```
+Zbirna A  broj Z-10  STORNIRANA   ali OTP-A i PRJ-A još AKTIVNI
+Zbirna B  broj Z-10  AKTIVNA
+```
+
+Sa brojanjem samo aktivnih vlasnika, izbor B daje „broj je jednoznačan" — pa
+`DetachOtpremniceInline` i kaskada, koje idu **po broju**, odvežu i decu
+stornirane A. **Storniran vlasnik nestaje iz računa, njegova deca ne.**
+
+Sve tri kapije koje rade child mutaciju sada broje i stornirane vlasnike:
+guard na nivou moda, `StornoZbirnaIDetach_TX` i `PonistiZbirnaChain_TX`.
+Konzervativnije nego što je nužno — u skladu sa strategijom „fail-closed dok se
+deca ne scope-uju po owneru".
+
+### P2 — `stanicaID` opseg je bio fail-open na schema drift
+
+`Or cSta = 0` je značilo: kolone nema → **propusti sve stanice**. Tačno suprotno
+od razloga zbog kog opseg postoji. Sada diže grešku.
+
+### P2 — test 43 dobio pozitivnu kontrolu
+
+Tvrdio je samo „tuđ blok nije pomeren" — što prolazi i kod verzije koja **ne
+preveže nijedan** blok. Sada tvrdi oba smera: moj blok **jeste** prevezan na
+zamensku otpremnicu, tuđi **nije**. Sabotaža `completion-ne-prevezuje` obara
+pozitivnu polovinu.
+
+### Test 44 i jedna stvar koju je otkrio
+
+Test počinje od storniranog zaglavlja A sa aktivnim detetom, pa traži da `DUPLI`
+nad B stane.
+
+Prve tri sabotaže **nisu ugrizle**, i razlog je vredan zapisa: ishod čuvaju
+**dve nezavisne kapije** (na nivou moda i u detach-u), pa ga nijedna pojedinačna
+sabotaža ne može oboriti. To je dobra odbrana, ali test koji tvrdi samo ishod ne
+može da pokaže koja kapija radi.
+
+Zato test sada tvrdi i **koja** je stala: kapija na nivou moda staje **pre
+transakcije** i objašnjava razlog, dok bi detach pukao iznutra i dao samo „Storno
+zbirne nije uspeo". Isto rešenje kao kod testa 41.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=44, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Sedam sabotaža iz poslednje tri runde, **svaka obara svoju tvrdnju**.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija pred merge.
+
+## v2.46.6 — `v6-ui-135` · kapija koja se sama guta nije kapija
+
+### P2 blocker — `Err.Raise` u funkciji koja sve guta
+
+Prethodna runda je u `GetOtpremnicaIDsByBroj` dodala fail-closed proveru: zadat
+opseg stanice a kolone nema → greška. Ali ista funkcija završava sa:
+
+```vb
+EH:
+    LogErr MOD_NAME & ".GetOtpremnicaIDsByBroj"
+End Function
+```
+
+Dakle greška se digne, EH je proguta, pozivalac dobije **praznu kolekciju**,
+petlja se preskoči — i completion završi kao **uspeh nad neprevezanim
+blokovima**, uz `COMPLETED` context. Zaštita je postojala samo na papiru.
+
+Sada se `Err.Number` / `Description` / `Source` sačuvaju, loguju i **ponovo
+dignu**.
+
+### Invarijanta kod pozivaoca
+
+Context tvrdi da stari dokument postoji. Nula razrešenih ID-eva zato nije prazan
+posao nego **nerazrešen izvor** — i `CompleteOtpremnicaIspravka` sada tu staje.
+Štiti i buduće greške resolvera, ne samo nedostajuću kolonu.
+
+### P3 — poruka je protivrečila tabeli
+
+Kapije od `v6-ui-134` broje i **stornirane** vlasnike, a poruke su i dalje
+govorile „nose dva **aktivna** dokumenta". Test 44 upravo dokazuje suprotan
+slučaj: A stornirana, B aktivna, operacija svejedno staje. Operater bi dobio
+poruku koja protivreči tabeli koju gleda.
+
+Sve tri poruke sada kažu da je broj **pripadao više vlasnika** i da storniran
+vlasnik i dalje može imati aktivnu decu.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=44, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Sedam sabotaža** iz poslednje četiri runde, svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+### Dve sabotaže su usput bile mrtve, i to se skoro nije videlo
+
+Izmena poruka je zastarela sidra dvema sabotažama. `sabotaza.py` to prijavljuje
+glasno („sidro nadjeno 0 puta"), ali sam u sweep-u imao `2>&1 >/dev/null` — pa je
+izgledalo kao da sabotaža ne grize, umesto da nije ni primenjena.
+
+**Kad se menja tekst poruke koja je deo sidra, sidro se menja s njom.** Sweep
+odsad ne guta `stderr`.
+
+## v2.46.7 — `v6-ui-136` · roditeljska zbirna je bila poslednji broj u lancu
+
+Identitet je dotad bio rešen za **sam** dokument koji se stornira. Otpremnica ima
+roditelja, i taj roditelj se sve vreme mutirao **po golom `BrojZbirne`**.
+
+### P1 — mutacija roditelja po broju
+
+`RunSimpleStornoOtpremnica`, `RunOtpremnicaCorrection` i
+`CompleteOtpremnicaIspravka` sve tri dohvataju roditeljsku zbirnu po broju, pa
+nad njom rade rekalkulaciju, storno prazne zbirne i relink prijemnica.
+
+`RecalculateZbirnaFromOtpremnice_TX` je najgori slučaj: sabere otpremnice po
+broju, pa tim zbirom ažurira **jedan** nađen red. Nad dvosmislenim brojem to
+znači zaglavlje jednog dokumenta ažurirano zbirom otpremnica **oba**.
+
+Nova kapija `ZbirnaBrojJeDvosmislenIkad(broj)` stoji na četiri mesta: pred
+običnim stornom, pred svim modovima ispravke osim `RESI_KASNIJE`, u završetku
+ispravke, i kao poslednja odbrana u `RecalcOrStornoEmptyZbirna_TX`.
+
+### P2 — obična F8 putanja je i dalje ispuštala `docID`
+
+Prosti storno otpremnice je zvao `StornoOtpremnicaByBroj_TX` bez identiteta —
+isti oblik greške koji je već dva puta zatvaran na drugim tipovima.
+
+### P2 — `Err.Description` posle `LogErr`
+
+`LogErr` interno diže sopstveni EH i time briše `Err`. Novi re-raise je stizao u
+blok koji je opis čitao **posle** `LogErr` — pa bi poruka bila prazna. Opis se
+sada čita pre.
+
+### Zatečen context preživljava upgrade
+
+Kapija na startu ne pomaže za correction context napravljen **pre** nje.
+Context je persistentan; posle upgrade-a bi završetak ispravke prošao bez ijedne
+provere. Zato završetak pita ponovo, a ne veruje da je start pitao.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=46, FAIL=0**.
+- `python tools\run_vba.py --all` → **11 suite-ova punog seta zeleno**.
+- **Dve nove sabotaže** (`otpremnica-bez-kapije-nad-zbirnom`,
+  `zatecen-context-bez-kapije`), svaka obara svoju tvrdnju i samo svoj test.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+### Dve sync suite padaju, i to nije od ovoga
+
+`RunGoogleSyncSmokeSuite` (4/81) i `RunMasterSyncSmokeSuite` (9/26) padaju u
+`--all`. **Nisu u punom setu** (`default: False`) i traže mrežu. Provereno na
+worktree-u nad čistim `main`-om: identični brojevi padova, bez ijedne izmene sa
+grane. Zatečeno stanje, prijavljeno kao zatečeno — ne kao zeleno.
+
+## v2.46.8 — `v6-ui-137` · jedna linija je poništavala celu prethodnu rundu
+
+Kapija iz `v6-ui-136` je proveravala **drugu zbirnu** od one koju kod mutira.
+
+### P1 — roditelj se opet tražio po poslovnom broju
+
+```
+staraZbirna = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE)
+```
+
+To je tačno obrazac koji ceo PR uklanja: *imam identitet → odbacim ga → ponovo
+biram prvi red po poslovnom broju*. Kapija je gledala `staraZbirna`, a relink
+prijemnica, rekalkulacija i storno prazne zbirne su išli nad `oldZbirna` iz
+context-a. Dve različite promenljive — pa je kapija mogla proveriti jednoznačnu
+zbirnu **siblinga** i pustiti mutaciju nad dvosmislenom zbirnom izabranog
+dokumenta.
+
+Sada postoji **jedna** promenljiva: `ParentBroj` iz context-a → fallback
+isključivo preko tačnog `OldDocID` → inače MANUAL. Nerazrešen roditelj se
+razlikuje od **nepostojećeg**: otpremnica bez zbirne nema šta da mutira i to nije
+greška, a nestao red jeste.
+
+### P2 — kapija je bila fail-open na sopstvenu grešku
+
+`On Error Resume Next` je pod schema drift-om davao `False`, to jest „broj je
+jednoznačan, mutiraj" — baš kad se ništa ne zna. Sada `EH:` vraća `True`: za
+kapiju je „ne mogu da dokažem jednoznačnost" isto što i „ne mutiraj".
+
+### P2 — test 46 nije reprodukovao stvarni kvar
+
+Stari test 46 je pravio context bez `ParentBroj`, pa completion nije ni imao
+roditelja preko kog bi prevezao prijemnicu. Sabotaža je obarala uzgrednu tvrdnju
+o `success`-u, a poslovnu nije ni doticala.
+
+Nov scenario: dve otpremnice **istog broja** sa **različitim** roditeljima
+(`OTP-STL-A` → dvosmislena, `OTP-STL-B` → jednoznačna, i B je prvi red), namenska
+ciljna zbirna i namenska tuđa prijemnica. Sabotaža sada pokazuje **štetu**:
+
+```
+ocekivano [ZB-TEST-KASK], dobijeno [ZB-TEST-STL]
+```
+
+Prijemnica drugog dokumenta prevezana na zbirnu koja joj ne pripada.
+
+### Test 47 — kapija mora blokirati kad ne može da dokaže
+
+Drift se pravi stvarno (preimenovanje `VozacID` u `tblZbirna`), pa se meri kroz
+seam: nad zdravom šemom `False`, pod driftom `True`. Pozitivna kontrola postoji
+jer bi test inače prošao i sa kapijom koja blokira sve.
+
+### Šesta zamka sabotaže: `AssertEq` diže grešku
+
+Test se **prekida** na prvom padu, pa tvrdnje ispod ostaju neizvršene. Sabotaža
+koja obori uzgrednu tvrdnju ostavlja poslovnu **nemerenom**, a to izgleda kao
+uspešan dvosmerni dokaz. **Redosled tvrdnji je deo dokaza — najvažnija ide prva.**
+Zapisano u `tools/sabotaza.py`.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=47, FAIL=0**.
+- `python tools\run_vba.py --all` → **11 suite-ova punog seta zeleno**.
+- **Četiri sabotaže** nad ovim područjem, svaka obara **svoju** tvrdnju.
+- Dve sync suite (van punog seta, traže mrežu) padaju identično i na čistom
+  `main`-u — zatečeno.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.9 — `v6-ui-138` · zaštita je bila jednostrana: izvor da, cilj ne
+
+Kapija iz `v6-ui-137` je stajala samo nad **starom** zbirnom. Ciljna nije imala
+nijednu — a nizvodne operacije nad ciljem idu po golom broju:
+`ReassignPrijemnicaToZbirna_TX`, `RecalculateZbirnaFromOtpremnice_TX`,
+`ValidateZbirnaInvariant`.
+
+### P1 — zatečena kapija u writeru ovo ne pokriva
+
+`ReassignPrijemnicaToZbirna_TX` bez generacije zove
+`RequireJedanVlasnikPoBroju`, a taj broji **samo aktivne** vlasnike. Kad je jedan
+vlasnik broja storniran a njegovo dete aktivno (upravo ono što test 44 dokazuje),
+writer vidi jednog vlasnika i pusti relink.
+
+Posle toga `SumOtpremniceByKlasa` sabira po broju, bez ownera — pa aktivno
+zaglavlje dobije zbir dece **oba** vlasnika. Sabotaža to pokazuje kao broj:
+
+```
+ocekivano [100], dobijeno [400]
+```
+
+100 je količina njegovog jedinog deteta, 400 je 300 (dete storniranog vlasnika) +
+100. Kapija sada stoji i nad `newZbirna`, **pre relinka blokova** — inače se
+blokovi prevežu pa se tek onda otkrije da ostatak ne može bezbedno da se završi.
+
+### Ista rupa je bila i u ispravci zbirne, na obe strane
+
+`CompleteZbirnaIspravka` nije proveravala ni izvor ni cilj, a po broju ide sve:
+`RelinkOtpremniceToZbirna_TX(oldBroj, newBroj)`, `DistinctActiveValues` po
+`oldBroj`, relink prijemnica na `newBroj`, rekalkulacija `newBroj`. Dvosmislen
+cilj znači „čije zaglavlje dobija zbir", dvosmislen izvor „čija deca se sele".
+Obe grane su sada zatvorene i obe imaju sabotažu: cilj `100 → 500`, izvor —
+otpremnica tuđeg dokumenta odseljena sa dvosmislenog broja.
+
+### Zašto je ovo bilo najgore od svega
+
+Invarijanta je i sama po broju. U pokvarenom stanju bi oba iznosa bila 400 i
+`ValidateZbirnaInvariant` bi rekla **ISPRAVNO**. Test 48 to fiksira kao tvrdnju:
+u zdravom stanju invarijanta kaže *neispravno* za `ZB-TEST-TGT`, jer sabira decu
+oba vlasnika protiv jednog zaglavlja. Validacija koja potvrđuje kontaminaciju je
+gora od validacije koje nema.
+
+### Zatečena provera koja štiti slučajno, ne po pravilu
+
+Sabotaža je prvo izgledala kao da ne grize. Uzrok: `ReassignPrijemnicaToZbirna_TX`
+bez generacije čita `Stornirano` **prvog reda po broju** — a u prvoj verziji
+fixture-a je prvi red slučajno bio stornirani vlasnik, pa je relink odbijen. Ne
+zato što proverava vlasništvo, nego zato što je prvi red slučajno bio storniran.
+Redosled redova u fixture-u je zato deo scenarija i tako je i zapisan.
+
+To je i mesto gde bi jednog dana trebala **centralna** kapija: ovaj PR štiti svoje
+call-site-ove, ali sam primitiv ostaje number-based.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=49, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno** (11 punog seta + SEF).
+- **Tri nove sabotaže**, svaka obara svoju tvrdnju i pokazuje štetu brojem.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.10 — `v6-ui-139` · `Err.Description` posle `LogErr`, svih deset mesta
+
+`LogErr` interno zove `LogError`, a taj ima `On Error Resume Next` i fajl I/O — pa
+briše `Err`. Svaki EH blok koji opis čita **posle** `LogErr`-a prijavljuje
+`"Greska: "` i ništa više.
+
+Prijavljeno je bilo jedno mesto (`CompleteZbirnaIspravka`). Mehaničkim skeniranjem
+`modStornoFlow` ih je **deset**: četiri `RunSimpleStorno*`, četiri `Run*Correction`,
+`CompleteZbirnaIspravka` i `CompleteReversIspravka`. Sva su ispravljena istim
+obrascem — opis se čita u prvi red EH bloka, pre `LogErr`-a.
+
+Sređivanje samo prijavljenog mesta bi ostavilo devet identičnih, a to je već tri
+puta bio problem u ovom PR-u.
+
+### Ovo NIJE pokriveno testom, i to je namerno
+
+Do tih EH blokova se iz testa ne može deterministički doći: svaki sloj ispod
+(`ZbirnaPostoji`, `RecalculateZbirnaFromOtpremnice_TX`, `ReassignPrijemnica…`) ima
+svoj `On Error` i grešku vraća kao `False`, pa operacija stane u redovnoj putanji
+sa svojom porukom. Test bi zahtevao raise-seam u produkcionom kodu — što je gore
+od same ispravke.
+
+Obrazac je **mehanički prepoznatljiv u izvoru** i tu mu je mesto: provera u
+`vba_check` („`Err.description` čitan posle `LogErr`-a u istom EH bloku") ide kao
+zaseban posao, kad se `tools/vba_check.py` oslobodi (menja ga #199).
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno, TESTS=49 FAIL=0** —
+  dokaz da ispravka ništa nije pokvarila, ne da je EH putanja izvršena.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.11 — `v6-ui-140` · poslednja putanja koja je birala po broju: spisak blokova
+
+Identitet je stigao do svakog dokumenta i do njihovih roditelja, ali **dodatni
+storno otkupnih blokova** je i dalje birao po poslovnom broju.
+
+### P1 — spisak blokova je nosio blokove tuđeg dokumenta
+
+`ActiveBlocksForFlow` je za otpremnicu radila
+`GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))` — bez generacije. Isti
+`BrojOtpremnice` na dve stanice je legitiman, a `GetOtpremnicaIDsByBroj` namerno
+uključuje i **stornirane** otpremnice, jer njihovi blokovi još mogu pokazivati na
+njih.
+
+Taj spisak nije pregled: iz njega se pravi `ids` i ide pravo u
+`StornoSelectedBlocks_TX`.
+
+### Zašto zatečena kapija tu nije pomagala
+
+`BlockStornoDriftReason` počinje sa:
+
+```vb
+If ModeStornoBlokParent(docType, mode) Then Exit Function     ' roditelj umire -> ok
+```
+
+a `ModeStornoBlokParent` je `True` za **svaki** `PONISTENJE` i za
+`OTPREMNICA + DUPLI/ISPRAVKA` — dakle za tačno one modove koji jedini i stižu do
+dodatnog storna blokova. Kapija se ne izvršava. Njena pretpostavka („roditelj
+umire, pa je blok-storno bezbedan") važi samo za blokove **izabranog** dokumenta.
+
+Sabotaža pokazuje mutaciju, ne pregled:
+
+```
+FAIL T_StorniranSibling_ZadrzavaSvojBlok
+     blok storniranog siblinga je ostao AKTIVAN
+     ocekivano [False], dobijeno [True]
+```
+
+### Isti kvar u pregledu, na dva mesta
+
+- `ScanOtpremnica` je razrešila dokument po identitetu pa `blockCount` računala po
+  broju — pregled bi pokazao tuđe blokove i correction dijalog bi se otvorio i nad
+  dokumentom koji blokove nema.
+- `ScanPrijemnica` je imala tačan `prijID`, ali je `blockCount` išao kroz
+  `ActiveBlocksForFlow(PRIJEMNICA, broj)`, a ta je roditeljsku zbirnu izvodila iz
+  **prvog reda tog broja**. `BrojPrijemnice` nije globalno jedinstven (sekvenca po
+  kupcu), pa je to bio verovatniji ulaz od otpremnice.
+
+Sada: `StornirajBlokoveAko → GetStornoBlockRows → ActiveBlocksForFlow` nose
+`docID`, prijemnica čita roditelja iz tačnog `prijID`, a `ScanOtpremnica` broji po
+generaciji.
+
+### Šta ostaje number-based, i zašto
+
+Grana `FLOW_DOC_ZBIRNA` u `ActiveBlocksForFlow`: `tblOtkup` nosi denormalizovan
+`BrojZbirne`, ne `ZbirnaID`, pa se deca po generaciji zbirne **ne mogu** razdvojiti.
+Taj put je zaštićen uzvodno — kapije nad dvosmislenim brojem zbirne obore mode
+operaciju, a dodatni storno blokova ide samo posle uspešne. Zapisano u kodu, jer
+ako se te kapije jednog dana suze, mesto se otvara.
+
+`modStornoImpact.BuildStornoImpact` (ekran „Uvid") i dalje zove
+`GetStornoBlockRows` bez identiteta. To je read-only pregled i njegovi pozivaoci
+identitet ne nose, pa nisam dodavao parametar koji niko ne prosleđuje.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=51, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno**.
+- **Dve nove sabotaže**: `blokovi-po-broju` (mutacija) i `blockcount-po-broju`
+  (pregled), svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.12 — `v6-ui-141` · compile greška koja je živela pet PR-ova
+
+Operater je ručnim `Debug → Compile VBAProject` našao ono što 51 zelen test nije:
+
+```
+Compile error: Expected array
+    poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
+```
+
+`StornoIzvrsi` ima izlazni parametar `ByRef poruka As String`. VBA je
+case-insensitive, pa nekvalifikovan `Poruka("KLJUC")` unutar te procedure **nije
+poziv funkcije nego indeksiranje tog String parametra**. Šest poziva u istoj
+proceduri, svi pogrešni od `v6-ui-119` (#193).
+
+### Zašto je pet PR-ova prošlo pored ovoga
+
+**VBA kompajlira proceduru tek kad se pozove.** `StornoIzvrsi` je zvao samo UI
+(`modScrDokumenti`), nijedan test — pa je ceo blok bio mrtav za suite-ove.
+Statički ga ne vidi ni `vba_check`: poziv je u **poziciji izraza**
+(`x = Foo(...)`), a to je dokumentovana rupa checkera (pokušaj proširenja je dao
+406 lažnih nalaza).
+
+Dakle: ni suite, ni checker, ni CI. Samo `Debug → Compile`.
+
+### Ispravka
+
+Svih šest poziva je sada **kvalifikovano** (`modPoruke.Poruka(...)`) i u kodu stoji
+zašto to mora ostati tako.
+
+Mehanički sweep nad celim `src-vba` (`.bas`, `.frm`, `.cls`) traži isti obrazac —
+lokalna skalarna promenljiva ili parametar čije ime zaklanja `Public Function`, pa
+se poziva sa zagradom i string literalom. Posle ispravke: **0 nalaza**. Devet
+kandidata koje sweep prijavi bez tipa su lažni — niz i objekat se legitimno zovu sa
+zagradom; compile obara samo skalar.
+
+### Test 52 — procedura mora da se IZVRŠI, ne samo da postoji
+
+`T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu` zove `StornoIzvrsi` za
+`STIP_ZBIRNA` i traži da poruka imenuje prijemnicu koja je ostala vezana za
+storniranu zbirnu (`StornoZbirna` namerno ne kaskadira).
+
+Da test radi to što treba, dokazano je **slučajno i najuverljivije**: prva verzija
+je puštena kad je bio ispravljen samo jedan od šest poziva, i suite je pao —
+`SUITE FAIL RunAllTests (91.1s)`, dijalog `Compile error`. Isti kod je do tada bio
+51/51 zelen.
+
+Sabotaža (`zbirna-poruka-bez-prijemnice`) obara tvrdnju o poruci. Sama compile
+greška se sabotažom **ne može** dokazati imenovanom tvrdnjom — takva sabotaža
+obara compile, pa izlaz bude „Exception occurred" umesto imena tvrdnje (zamka 4).
+To je i zapisano u katalogu, uz ono što test 52 stvarno dodaje: proceduru koja se
+izvršava.
+
+### Drugi nalaz iz istog Compile-a: `StornoRedF8`
+
+Operater je posle prve ispravke pustio Compile ponovo i dobio **isto** u
+`modScrDokumenti.StornoRedF8` — još šest poziva, isti obrazac. Ukupno dvanaest, u
+dve procedure.
+
+Moj prvi sweep ih nije prijavio zbog svoje greške: čitao je samo **prvu**
+deklaraciju u `Dim` redu, a ovde je `poruka` druga:
+
+```vb
+Dim razlog As String, poruka As String, odg As VbMsgBoxResult
+```
+
+Ispravljen sweep je zatim dao 20 nalaza od kojih **14 lažnih** — ime unutar
+**string literala** (`"...bez OtkupID (dokument: ..."`). To je tačno ona klasa
+lažnih nalaza zbog koje je proširenje `ARNOST`-a odbijeno u #199. Posle skidanja
+literala i komentara: **6 nalaza, svih 6 stvarnih, 0 lažnih.** Svi ispravljeni,
+ponovni sweep daje **0**.
+
+### Šta ovo znači za verifikaciju
+
+Nijedan od dvanaest pogrešnih poziva nije bio dohvatljiv suite-om: `StornoIzvrsi` i
+`StornoRedF8` zove **samo UI**, a VBA kompajlira proceduru tek kad se pozove. Test
+52 pokriva prvu; `StornoRedF8` je `Private` i otvara `MsgBox`, pa se iz testa ne
+može pozvati.
+
+Zato ovaj obrazac ide u `vba_check` kao provera, kroz **zaseban process PR**.
+Uslovi su ispunjeni: mehanički je prepoznatljiv, ima **0 lažnih nalaza** kad se
+literali i komentari skinu, i dva puta je našao stvarne greške koje ništa drugo
+nije videlo.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=52, FAIL=0**.
+- Sweep nad `src-vba` za zaklonjena imena → **0** (bio 12).
+- `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova, dva puta.**

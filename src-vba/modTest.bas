@@ -84,6 +84,28 @@ Private Const FX_PRIJ_ZBR_KOLIZIJA As String = "6/150326"
 ' druge vrste -- da prevezivanje uopste bude relabel.
 Private Const FX_PRIJ_DELJENA As String = "5/150326"
 Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
+' Dva AKTIVNA reda tblNovac pod istim brojem -- avans raspodela.
+Private Const FX_NOVAC_DUPLI As String = "NOV-DUPLI-1"
+' Dve AKTIVNE prijemnice istog broja, za ispravku pod kolizijom.
+Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
+' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
+Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
+Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
+' Svez par zbirnih za kaskadu (test 38 potrosi ZB-TEST-DUPL).
+Private Const FX_ZBIRNA_KASK As String = "ZB-TEST-KASK"
+' Zatecen par BEZ generacije + zamena, za zavrsetak ispravke.
+Private Const FX_OTPREMNICA_LEGACY As String = "6/TEST"
+Private Const FX_OTPREMNICA_ZAMENA As String = "7/TEST"
+Private Const FX_OTPREMNICA_STALE As String = "9/TEST"
+Private Const FX_OTPREMNICA_STALE_NOVA As String = "10/TEST"
+Private Const FX_ZBIRNA_STALE As String = "ZB-TEST-STL"
+Private Const FX_PRIJEMNICA_STALE As String = "12/TEST"
+Private Const FX_OTPREMNICA_BLOK As String = "18/TEST"
+Private Const FX_PRIJEMNICA_OLD_U As String = "16/TEST"
+Private Const FX_ZBIRNA_TGT As String = "ZB-TEST-TGT"
+Private Const FX_ZBIRNA_OLDU As String = "ZB-TEST-OLDU"
+Private Const FX_OTPREMNICA_OLD_U As String = "13/TEST"
+Private Const FX_OTPREMNICA_NEW_T As String = "15/TEST"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -146,6 +168,24 @@ Public Sub RunAllTests()
     RunOne 32
     RunOne 33
     RunOne 34
+    RunOne 35
+    RunOne 36
+    RunOne 37
+    RunOne 38
+    RunOne 39
+    RunOne 40
+    RunOne 41
+    RunOne 42
+    RunOne 43
+    RunOne 44
+    RunOne 45
+    RunOne 46
+    RunOne 47
+    RunOne 48
+    RunOne 49
+    RunOne 50
+    RunOne 51
+    RunOne 52
 
     SetTestMode prevMode
     WriteResultFile
@@ -232,6 +272,24 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
+        Case 51: TestName = "T_StorniranSibling_ZadrzavaSvojBlok"
+        Case 50: TestName = "T_BlokoviF8_PoIdentitetu"
+        Case 49: TestName = "T_IspravkaZbirne_KapijaNaObeStrane"
+        Case 48: TestName = "T_CiljnaZbirnaDvosmislena_Staje"
+        Case 47: TestName = "T_KapijaZbirne_FailClosedNaSvojuGresku"
+        Case 46: TestName = "T_ZatecenContext_NePrevezujeTudjePrijemnice"
+        Case 45: TestName = "T_OtpremnicaNadDvosmislenomZbirnom_Staje"
+        Case 44: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
+        Case 43: TestName = "T_ZavrsetakIspravke_NeDegradiraOldDocID"
+        Case 42: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
+        Case 41: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
+        Case 40: TestName = "T_SoleOwner_MeriDokumenteNeBrojeve"
+        Case 39: TestName = "T_OtkupBezGeneracije_NeStorniraTudjeOM"
+        Case 38: TestName = "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje"
+        Case 37: TestName = "T_IspravkaPrijemnice_PodKolizijomBroja"
+        Case 36: TestName = "T_Preflight_KoristiIdentitet"
+        Case 35: TestName = "T_F8_IzabranRedOstajeIzabran"
         Case Else: TestName = "T_Nepoznat_" & idx
     End Select
 End Function
@@ -274,6 +332,24 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
+        Case 51: T_StorniranSibling_ZadrzavaSvojBlok
+        Case 50: T_BlokoviF8_PoIdentitetu
+        Case 49: T_IspravkaZbirne_KapijaNaObeStrane
+        Case 48: T_CiljnaZbirnaDvosmislena_Staje
+        Case 47: T_KapijaZbirne_FailClosedNaSvojuGresku
+        Case 46: T_ZatecenContext_NePrevezujeTudjePrijemnice
+        Case 45: T_OtpremnicaNadDvosmislenomZbirnom_Staje
+        Case 44: T_StorniranVlasnik_JosImaAktivnuDecu
+        Case 43: T_ZavrsetakIspravke_NeDegradiraOldDocID
+        Case 42: T_ZamenaZbirne_NeDiraDecuTudje
+        Case 41: T_ZbirnaKaskada_StajeNaDvosmislenom
+        Case 40: T_SoleOwner_MeriDokumenteNeBrojeve
+        Case 39: T_OtkupBezGeneracije_NeStorniraTudjeOM
+        Case 38: T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje
+        Case 37: T_IspravkaPrijemnice_PodKolizijomBroja
+        Case 36: T_Preflight_KoristiIdentitet
+        Case 35: T_F8_IzabranRedOstajeIzabran
     End Select
 End Sub
 
@@ -1395,10 +1471,14 @@ Private Sub T_Oporavak_CiljneListe()
 
     ' --- KOLIZIJA ZBIRNIH: isti broj, ISTI kupac, dva vozaca ---
     '
-    ' Broj zbirne se generise PO VOZACU, pa su ZBI-DUPL-1 i ZBI-DUPL-2 dva
-    ' dokumenta. Lista je vlasnikom smatrala samo kupca i spajala ih u JEDAN red
-    ' -- operater tada ne moze ni da izabere onaj koji mu treba, a skrivena
-    ' generacija nosi generaciju reda koji je slucajno pobedio.
+    ' Broj zbirne generator DRZI JEDINSTVENIM: SuggestNextBroj za ZBR bumpuje
+    ' sekvencu dok BrojZbirneExists ne kaze da je slobodan, a ApplyMirrorPrefix
+    ' dodaje 'S' da se mirror-vozac ne sudari sa realnim. Dva reda istog broja
+    ' zato mogu nastati SAMO mimo generatora -- rucnim unosom (auto-broj se
+    ' iskljucuje u Podesavanjima), uvozom ili ispravkom u tabeli.
+    '
+    ' Test brani bas taj slucaj: lista je vlasnikom smatrala samo kupca i spajala
+    ' ih u JEDAN red, pa operater ne bi mogao da izabere onaj koji mu treba.
     Dim duplih As Long, vozaci As String
     For i = 1 To n
         If CStr(redovi(i, 1)) = FX_ZBIRNA_DUPL Then
@@ -1667,6 +1747,727 @@ Private Sub T_RelinkPoGeneraciji_NeDiraTudjDokument()
     AssertEq GajbicaZaDokument("PRJ-TEST-B"), 0, _
              "dokument drugog kupca istog broja NIJE nista dobio"
 End Sub
+
+' ============================================================
+' 35. F8: izabran red ostaje izabran do correction context-a
+' ============================================================
+' Ovo je jedina putanja koju ni jedan owner guard ne pokriva.
+'
+' Kod modova ISPRAVKA i DUPLI se posle kreiranja context-a zove guarded writer,
+' pa dvosmislen broj tamo pukne i context bude obelezen neuspelim. Kod moda
+' RESI KASNIJE writer se NE ZOVE UOPSTE -- napravi se samo trajan recovery
+' zapis. Ako je dokument razresen po broju, taj zapis moze zauvek da pokazuje
+' na TUDJI dokument, i nista to ne prijavljuje.
+'
+'   PRJ-TEST-A  KUP-TEST-1  \  isti broj 1/150326
+'   PRJ-TEST-B  KUP-TEST-2  /  dva aktivna dokumenta
+'
+' Bira se A. Tvrdnja je da OldDocID u context-u bude BAS A.
+' Tvrdnja je namerno napisana tako da NE zavisi od toga koji red je "prvi" u
+' tabeli. Prva verzija ovog testa je birala dokument i poredila OldDocID sa njim
+' -- i prolazila je i kad se identitet potpuno ignorise, jer je razresavanje po
+' broju SLUCAJNO davalo bas taj dokument. Sabotaza je to pokazala; bez nje bi
+' test bio placebo.
+'
+' Zato se meri RAZLIKA U PONASANJU, ne konkretan PK:
+'   bez identiteta  -> dvosmislen broj se odbija, recovery zapisa NEMA
+'   sa identitetom  -> zapis postoji i pokazuje na izabran dokument
+' Prva tvrdnja pada cim se identitet zaobidje, bez obzira na redosled redova.
+Private Sub T_F8_IzabranRedOstajeIzabran()
+    Dim res As Object, cid As String, ocekivan As String
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-F8-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-F8-2"
+
+    ' Preduslov: broj je stvarno dvosmislen -- inace test ne meri nista.
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ZBR_KOLIZIJA, _
+                             "T_F8", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "preduslov: broj nose DVA aktivna kupca"
+
+    ' BEZ identiteta: dokument se ne moze utvrditi, pa se ne sme napraviti
+    ' trajan recovery zapis. Kod RESI KASNIJE guarded writer se ne zove, pa je
+    ' ovo jedina kapija na toj putanji.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "", _
+                                           SV_MODE_RESI_KASNIJE, False, False, "")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat i bez identiteta"
+    AssertEq Len(Trim$(NzToText(res("correctionID")))), 0, _
+             "bez identiteta se NE pravi recovery zapis nad dvosmislenim brojem"
+
+    ' SA identitetom: zapis postoji i pokazuje na bas taj dokument.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "", _
+                                           SV_MODE_RESI_KASNIJE, False, False, "GEN-F8-2")
+    cid = Trim$(NzToText(res("correctionID")))
+    AssertEq (Len(cid) > 0), True, "sa identitetom se recovery zapis pravi"
+
+    ocekivan = modDokumenta.GeneracijaPoID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2")
+    AssertEq ocekivan, "GEN-F8-2", "preduslov: generacija je upisana na Z2"
+    AssertEq OldDocIDKonteksta(cid), "PRJ-TEST-Z2", _
+             "recovery zapis pokazuje na IZABRAN dokument"
+End Sub
+
+' ============================================================
+' 36. Preflight koristi identitet umesto da ga ignorise
+' ============================================================
+' StornoRazlog je dobio docID pa ga nije koristio. Za novac je zato i dalje
+' zvao ResolveNovacForStorno(broj), koji kod dva aktivna reda istog broja kaze
+' "treba NovacID" -- iako mu je F8 NovacID upravo poslao. StornoIzvrsi nize je
+' vec bio ispravan, ali se do njega nije stizalo: kapija iznad je zaustavljala
+' operaciju. Popravka jednog sloja bez drugog izgleda kao da radi.
+Private Sub T_Preflight_KoristiIdentitet()
+    Dim razlog As String
+
+    ' Bez identiteta: broj je dvosmislen i preflight to kaze.
+    razlog = modStornoDok.StornoRazlog(STIP_ISPLATE, FX_NOVAC_DUPLI, "")
+    AssertEq (Len(razlog) > 0), True, _
+             "bez NovacID-a dvosmislen broj se odbija u preflight-u"
+
+    ' Sa identitetom: pita se BAS taj red, pa nema sta da se razresava.
+    razlog = modStornoDok.StornoRazlog(STIP_ISPLATE, FX_NOVAC_DUPLI, "", "NOV-TEST-D2")
+    AssertEq razlog, "", "sa NovacID-em preflight propusta izabran red"
+End Sub
+
+' ============================================================
+' 37. Ispravka prijemnice pod kolizijom broja
+' ============================================================
+' REZIM RESI KASNIJE je bio identity-aware, a ISPRAVKA i DUPLI su se vracali na
+' broj -- pa je owner guard u writeru obarao potpuno legitimnu operaciju.
+' Storno je bio bezbedan, ali funkcija nije radila.
+Private Sub T_IspravkaPrijemnice_PodKolizijomBroja()
+    Dim res As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I1", "GEN-ISP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-I2", "GEN-ISP-2"
+    AssertEq VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
+                             "T_Isp", False, Array(COL_PRJ_KUPAC)).count, 2, _
+             "preduslov: broj nose dva dokumenta"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, FX_PRIJ_ISPRAVKA, "", _
+                                           SV_MODE_ISPRAVKA, False, True, "GEN-ISP-1")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
+    AssertEq CBool(res("needsForm")), True, _
+             "ISPRAVKA pod kolizijom broja PROLAZI kad je identitet poznat"
+
+    ' Tudji dokument nije ni takao.
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, _
+             "PRJ-TEST-I2", COL_STORNIRANO)))) = "DA"), False, _
+             "dokument drugog kupca istog broja OSTAJE aktivan"
+End Sub
+
+' ============================================================
+' 38. Zbirna: zaglavlje po generaciji, kaskada fail-closed
+' ============================================================
+' Broj zbirne generator drzi jedinstvenim (v. T_Oporavak_CiljneListe), pa ovaj
+' test brani RUCNI UNOS. Uz to, identitet se ni tada ne moze provuci do kraja
+' lanca -- i to nije previd nego OGRANICENJE SEME: otpremnice, prijemnice i paletne stavke vezuju zbirnu
+' KOLONOM BrojZbirne -- ZbirnaID im nije strani kljuc nigde. Deca dva dokumenta
+' istog broja su nerazluciva podatkom koji postoji.
+'
+' Zato: zaglavlje se stornira po generaciji (tacno), a putanje koje bi menjale
+' DECU staju kad je broj dvosmislen (postene).
+Private Sub T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje()
+    Dim ok As Boolean
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-1", "GEN-ZB-1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-DUPL-2", "GEN-ZB-2"
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_DUPL, "T_Zbr", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj zbirne nose dva aktivna dokumenta"
+
+    ok = StornoZbirna_TX(FX_ZBIRNA_DUPL, "GEN-ZB-2")
+    AssertEq ok, True, "zaglavlje izabrane generacije se stornira"
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
+             "ZBI-DUPL-2", COL_STORNIRANO)))) = "DA"), True, _
+             "izabrana zbirna je stornirana"
+    AssertEq (UCase$(Trim$(NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_ID, _
+             "ZBI-DUPL-1", COL_STORNIRANO)))) = "DA"), False, _
+             "zbirna drugog vozaca istog broja OSTAJE aktivna"
+End Sub
+
+' ============================================================
+' 39. Otkup bez generacije NE SME da stornira oba otkupna mesta
+' ============================================================
+' BrojDokumenta otkupa je scoped PO OTKUPNOM MESTU (KIND_OTK, entitet je
+' stanica), pa isti broj na dva OM-a postoji legitimno. Writer je do sada bez
+' generacije skupljao SVE aktivne redove tog broja -- zatecen zapis bez
+' generacije je tako mogao da obori i tudji dokument.
+'
+' Test je na WRITERU, ne na preflight-u: preflight se moze zaobici (legacy
+' forma, kaskada), writer ne moze.
+Private Sub T_OtkupBezGeneracije_NeStorniraTudjeOM()
+    Dim ok As Boolean, greska As String
+
+    AssertEq VlasniciPoBroju(TBL_OTKUP, COL_OTK_BR_DOK, FX_OTKUP_KOLIZIJA, _
+                             "T_Otk", False, Array(COL_OTK_STANICA)).count, 2, _
+             "preduslov: isti broj na DVA otkupna mesta"
+
+    ' BEZ generacije -- mora stati, i nista ne sme da se promeni.
+    On Error Resume Next
+    ok = StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA)
+    greska = Err.description
+    On Error GoTo 0
+    AssertEq ok, False, "bez generacije dvosmislen broj otkupa se odbija"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), False, _
+             "posle odbijanja dokument A nije diran"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
+             "posle odbijanja dokument B nije diran"
+
+    ' SA generacijom -- prolazi, i dira samo svoj dokument.
+    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A", "GEN-OTK-A"
+    StampGeneraciju TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B", "GEN-OTK-B"
+    AssertEq StornoOtkupByBrDok_TX(FX_OTKUP_KOLIZIJA, "GEN-OTK-A"), True, _
+             "sa generacijom storno prolazi"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-A"), True, _
+             "storniran je izabran dokument"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-KOL-B"), False, _
+             "dokument drugog otkupnog mesta OSTAJE aktivan"
+End Sub
+
+' ============================================================
+' 40. "Jedini vlasnik" zbirne se meri DOKUMENTIMA, ne brojevima
+' ============================================================
+' Zbirna je po invarijanti zbir SVIH svojih aktivnih otpremnica, pa je vise
+' otpremnica u jednoj zbirni normalno stanje. Broj otpremnice je scoped po
+' stanici, pa dve otpremnice istog broja sa razlicitih stanica u istoj zbirni
+' daju JEDAN distinct broj -- i stara provera je tada rekla "jedini vlasnik".
+'
+' Posledica: PONISTENJE izabrane otpremnice ulazilo bi u punu kaskadu nad
+' zbirnom i oborilo i tudju otpremnicu.
+Private Sub T_SoleOwner_MeriDokumenteNeBrojeve()
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A", "GEN-OTP-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B", "GEN-OTP-B"
+
+    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA_KASK, _
+                             FX_OTPREMNICA_KOLIZIJA, "GEN-OTP-A"), False, _
+             "dve otpremnice istog broja u istoj zbirni NISU jedini vlasnik"
+
+    ' Kontrola: kad je stvarno sama, tvrdnja mora biti True -- inace bi test
+    ' prolazio i da provera uvek vraca False.
+    AssertEq modStornoFlow.OtpremnicaJeJediniVlasnik_Test(FX_ZBIRNA, "1/TEST", ""), _
+                                                          True, _
+             "jedina otpremnica svoje zbirne JESTE jedini vlasnik"
+End Sub
+
+' ============================================================
+' 41. Kaskada zbirne staje dok broj nose dva aktivna dokumenta
+' ============================================================
+' Ovaj test cilja KASKADNU kapiju (PonistiZbirnaChain_TX), a ne onu na nivou
+' moda zbirne -- do nje se ovim putem i ne stize. PONISTENJE PRIJEMNICE zove
+' kaskadu nad SVOJIM RODITELJEM, pa je to jedini put koji je dohvata.
+'
+' Svez par (ZBI-KASK-1/2), jer test 38 stornira jedno zaglavlje -- posle njega
+' bi ostao jedan aktivan vlasnik i kapija ne bi imala sta da detektuje.
+Private Sub T_ZbirnaKaskada_StajeNaDvosmislenom()
+    Dim res As Object
+
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1", "GEN-ZB-K1"
+    StampGeneraciju TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2", "GEN-ZB-K2"
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Kask", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj nose dva aktivna dokumenta"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_PRIJEMNICA, "2/150326", "", _
+                                           SV_MODE_PONISTENJE, True, False, "")
+    AssertEq (Not res Is Nothing), True, "framework je vratio rezultat"
+    AssertEq CBool(res("success")), False, _
+             "ponistenje lanca staje dok broj nose dva aktivna dokumenta"
+    ' Sama BEZBEDNOST dolazi od zatecene kapije u StornoZbirna -- kaskada bi
+    ' pala i bez moje provere. Ono sto moja provera dodaje je RAZLOG: staje
+    ' pre transakcije i kaze operateru sta je problem, umesto generickog
+    ' "nije uspelo". Bas to se ovde tvrdi.
+    AssertEq (InStr(1, CStr(res("message")), "pripadao VISE vlasnika", _
+                    vbTextCompare) > 0), True, _
+             "odbijanje imenuje dvosmislen broj, ne samo neuspeh"
+
+    ' Nista nije poniisteno -- ni zaglavlja ni deca.
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "tudja zbirna istog broja nije dirana"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B"), False, _
+             "otpremnica tudjeg dokumenta nije dirana"
+End Sub
+
+' ============================================================
+' 42. Zamena zbirne ne sme da odnese decu TUDJE zbirne
+' ============================================================
+' Ovo je najtisi kvar u celom lancu. Pocetak ISPRAVKE je tacan: zaglavlje se
+' stornira po generaciji, tudje ostaje aktivno. Ali CompleteZbirnaIspravka --
+' koja se izvrsava TEK POSLE snimanja zamene -- prevezuje otpremnice i
+' prijemnice po BrojZbirne, jer drugog kljuca u semi nema.
+'
+' Ishod bi bio: storniram tacno SVOJE zaglavlje, pa TUDJOJ zbirni odnesem decu.
+' Nista ne izgleda pokvareno u trenutku storna.
+'
+' Dok child mutacije ne budu scoped, jedina postena opcija je stati PRE nego
+' sto se ista promeni -- i to je ono sto se ovde tvrdi.
+Private Sub T_ZamenaZbirne_NeDiraDecuTudje()
+    Dim res As Object
+
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Zam", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj nose dva aktivna dokumenta"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
+             "preduslov: tudja otpremnica visi na tom broju"
+
+    Set res = modStornoFlow.RunZbirnaCorrection(FX_ZBIRNA_KASK, SV_MODE_ISPRAVKA, _
+                                                False, "GEN-ZB-K1")
+    AssertEq CBool(res("success")), False, _
+             "ISPRAVKA staje dok broj nose dva aktivna dokumenta"
+    AssertEq CBool(res("needsForm")), False, _
+             "forma za zamenu se NE otvara -- inace bi zamena stigla do relinka"
+
+    ' Nista nije dirano: ni izabrano zaglavlje, ni tudje, ni deca.
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), False, _
+             "izabrano zaglavlje nije stornirano pre nego sto se zna da relink moze"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "tudje zaglavlje nije dirano"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
+             "tudja otpremnica je OSTALA na svojoj zbirni"
+End Sub
+
+' ============================================================
+' 43. Zavrsetak ispravke: tacan OldDocID se NE degradira na broj
+' ============================================================
+' Zatecen dokument nema GeneracijaID. Completion je iz correction context-a
+' citao OldDocID, pa GeneracijaPoID vracao "" -- i onda je prazan opseg znacio
+' "izaberi po poslovnom broju". Broj otpremnice je scoped PO STANICI, pa su
+' blokovi dokumenta sa DRUGE stanice mogli da udju u relink.
+'
+' OldDocID je bio tacan sve vreme; gubio se jedan korak kasnije.
+Private Sub T_ZavrsetakIspravke_NeDegradiraOldDocID()
+    Dim cid As String, res As Object
+
+    AssertEq modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-LEG-A"), "", _
+             "preduslov: zatecen dokument NEMA generaciju"
+    AssertEq VlasniciPoBroju(TBL_OTPREMNICA, COL_OTP_BROJ, FX_OTPREMNICA_LEGACY, _
+                             "T_Zav", False, Array(COL_OTP_STANICA)).count, 2, _
+             "preduslov: isti broj na dve stanice"
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                   "OTP-LEG-A", FX_OTPREMNICA_LEGACY)
+    AssertEq (Len(cid) > 0), True, "correction context je napravljen"
+
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_ZAMENA)
+    AssertEq (Not res Is Nothing), True, "completion je vratio rezultat"
+
+    ' DVA SMERA. Sama tvrdnja "tudji blok nije pomeren" prolazi i kod verzije
+    ' koja ne preveze NIJEDAN blok, pa uz nju ide i pozitivna kontrola.
+    AssertEq CBool(res("success")), True, "zavrsetak ispravke je uspeo"
+    AssertEq OtpremnicaNaBloku("OTK-LEG-A"), "OTP-LEG-N", _
+             "MOJ blok JESTE prevezan na zamensku otpremnicu"
+    AssertEq OtpremnicaNaBloku("OTK-LEG-B"), "OTP-LEG-B", _
+             "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici"
+End Sub
+
+' ============================================================
+' 44. Storniran vlasnik nestaje iz racuna, njegova deca ne
+' ============================================================
+' StornoZbirna_TX stornira SAMO redove tblZbirna -- otpremnice, prijemnice i
+' palete ne dira. Zato je ovo dostizno stanje, ne teorija:
+'
+'   Zbirna A  STORNIRANA   ali OTP-A jos AKTIVNA
+'   Zbirna B  AKTIVNA      isti broj
+'
+' Sa brojanjem samo AKTIVNIH vlasnika, izbor B daje "broj je jednoznacan", pa
+' detach i kaskada -- koje idu PO BROJU -- odvezu i decu stornirane A.
+Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
+    Dim res As Object
+
+    ' Korak 1: storniraj SAMO zaglavlje A.
+    AssertEq StornoZbirna_TX(FX_ZBIRNA_KASK, "GEN-ZB-K1"), True, _
+             "zaglavlje A je stornirano"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), True, _
+             "A je stornirana"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "B je ostala aktivna"
+
+    ' Korak 2: dete stornirane A je i dalje AKTIVNO -- to je cela poenta.
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A"), False, _
+             "dete stornirane zbirne je i dalje aktivno"
+
+    ' Korak 3: operacija nad B koja dira DECU mora da stane, iako je sada
+    ' samo jedan AKTIVAN vlasnik tog broja.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, FX_ZBIRNA_KASK, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-ZB-K2")
+    AssertEq CBool(res("success")), False, _
+             "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima"
+    ' Ishod cuvaju DVE nezavisne kapije (na nivou moda i u detach-u), pa ga
+    ' jedna sabotaza ne moze oboriti. Zato se tvrdi i KOJA je stala: kapija
+    ' na nivou moda staje PRE transakcije i objasnjava razlog, dok bi detach
+    ' pukao iznutra i dao samo "Storno zbirne nije uspeo".
+    AssertEq (InStr(1, CStr(res("message")), "Zamena bi prevezala decu", _
+                    vbTextCompare) > 0), True, _
+             "staje kapija na nivou moda, pre transakcije, sa razlogom"
+
+    ' Nista nije odvezano ni stornirano.
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "B zaglavlje nije dirano"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "dete stornirane A nije odvezano"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
+             "dete aktivne B nije odvezano"
+End Sub
+
+' ============================================================
+' 45. Otpremnica ne sme da mutira dvosmislenu RODITELJSKU zbirnu
+' ============================================================
+' Identitet same otpremnice je bio resen, ali su ISPRAVKA/DUPLI/PONISTENJE svi
+' dirali RODITELJSKU zbirnu PO BROJU: rekalkulacija, storno prazne zbirne, i
+' relink njenih prijemnica u completion-u. Kad broj roditelja nije jednoznacan,
+' nijedno od toga ne zna cije je.
+'
+' RecalculateZbirnaFromOtpremnice_TX je posebno podmukao: sabira otpremnice po
+' broju, pa tim zbirom azurira JEDAN nadjen red -- moglo je da rekalkulise
+' zaglavlje B vrednostima koje ukljucuju otpremnice oba dokumenta.
+Private Sub T_OtpremnicaNadDvosmislenomZbirnom_Staje()
+    Dim res As Object
+
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Otp", _
+                             True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj roditeljske zbirne je pripadao dvama vlasnicima"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "preduslov: otpremnica visi na tom broju"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_OTPREMNICA, FX_OTPREMNICA_KOLIZIJA, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-OTP-A")
+    AssertEq CBool(res("success")), False, _
+             "DUPLI staje kad je broj roditeljske zbirne dvosmislen"
+    AssertEq (InStr(1, CStr(res("message")), "roditeljske zbirne", vbTextCompare) > 0), _
+             True, "razlog imenuje RODITELJSKU zbirnu, ne samo neuspeh"
+
+    ' Nijedna otpremnica nije stornirana -- staje se PRE mutacije.
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A"), False, _
+             "izabrana otpremnica nije stornirana"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B"), False, _
+             "tudja otpremnica nije dirana"
+End Sub
+
+' ============================================================
+' 46. Zatecen context ne sme da preveze prijemnice tudje zbirne
+' ============================================================
+' Kapija na startu ne pomaze za context koji je napravljen PRE nje: correction
+' context je persistentan i prezivljava upgrade. Zato completion pita ponovo.
+'
+' Bez toga bi CompleteOtpremnicaIspravka skupila prijemnice po oldZbirna BROJU
+' i prevezala i tudje na novu zbirnu.
+Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
+    Dim cid As String, res As Object
+
+    ' Scenario mora imati DVA razlicita roditelja pod istim brojem otpremnice,
+    ' inace test ne meri nista: ako oba siblinga vise na istoj zbirni, lookup po
+    ' broju slucajno daje tacan odgovor i kapija prolazi i kad je kod pogresan.
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-A"), FX_ZBIRNA_KASK, _
+             "preduslov: izabrana otpremnica visi na DVOSMISLENOJ zbirni"
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-B"), FX_ZBIRNA_STALE, _
+             "preduslov: sibling istog broja visi na JEDNOZNACNOJ zbirni"
+    AssertEq PrviRoditeljPoBroju(FX_OTPREMNICA_STALE), FX_ZBIRNA_STALE, _
+             "preduslov: prvi red po broju daje POGRESNOG roditelja"
+    ' Tvrdnja se meri nad NAMENSKOM prijemnicom. Naslanjanje na PRJ-KASK-1 je
+    ' tvrdnju cinilo vakuumskom -- do ovog testa je vec bila u drugom stanju, pa
+    ' relink nije imao sta da preveze i sabotaza je obarala samo tudju tvrdnju.
+    AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
+             "preduslov: tudja prijemnica visi na dvosmislenoj zbirni"
+    AssertEq StorniranoNaID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-STL-T"), False, _
+             "preduslov: tudja prijemnica je AKTIVNA (inace relink nema sta da uzme)"
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-N"), FX_ZBIRNA_STALE, _
+             "preduslov: cilj zamene ima NEPRAZNU zbirnu (inace relinka nema)"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-STL-1"), False, _
+             "preduslov: ciljna zbirna je aktivna"
+
+    ' Context kakav pravi produkcija: OldDocID + OldBroj + ParentBroj. Napravljen
+    ' je "pre kapije" -- persistentan je i prezivljava upgrade, pa kapija na
+    ' startu za njega nije ni postojala.
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                  "OTP-STL-A", FX_OTPREMNICA_STALE, _
+                                                  "", "", "", "", "", FX_ZBIRNA_KASK)
+    AssertEq (Len(cid) > 0), True, "zatecen context je napravljen"
+
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_STALE_NOVA)
+
+    ' POSLOVNA TVRDNJA IDE PRVA. AssertEq puca na prvom padu, pa tvrdnja koju
+    ' sabotaza navodi mora biti i prva koja pada -- inace sabotaza obori tvrdnju
+    ' o success-u, test se prekine, a ova ostane nemerena. Tako je i izgledalo
+    ' zeleno: "prijemnica nije prevezana" se nije ni izvrsavalo.
+    AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
+             "tudja prijemnica NIJE prevezana na novu zbirnu"
+    AssertEq CBool(res("success")), False, _
+             "completion staje nad zatecenim context-om dvosmislene zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje staru zbirnu"
+End Sub
+
+' ============================================================
+' 52. Prost F8 storno zbirne mora da se IZVRSI, ne samo da postoji
+' ============================================================
+' Ovaj test postoji zbog compile greske koja je zivela od v6-ui-119 i koju je
+' nasao operater rucnim Debug > Compile, a ne suite:
+'
+'   poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ")   ' Expected array
+'
+' Izlazni parametar procedure se zove "poruka", VBA je case-insensitive, pa je
+' nekvalifikovan poziv postao indeksiranje tog String parametra. Nijedna suite
+' nije zvala StornoIzvrsi, a VBA proceduru kompajlira TEK KAD SE POZOVE -- zato
+' je 51 zelen test mirno stajao nad kodom koji se ne kompajlira.
+'
+' Zato ovaj test ne meri samo poruku: on tu proceduru IZVRSAVA. To je jedini
+' nacin da compile greska u njoj postane crvena suite, a ne tek nalaz operatera.
+Private Sub T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu()
+    Dim ok As Boolean, msg As String
+
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "preduslov: aktivna prijemnica visi na toj zbirni"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-OLDU-1"), False, _
+             "preduslov: zbirna je aktivna"
+
+    ok = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, FX_ZBIRNA_OLDU, "", msg, "")
+
+    AssertEq ok, True, "prost storno zbirne je prosao"
+    ' StornoZbirna namerno NE kaskadira, pa prijemnica ostaje vezana za storniranu
+    ' zbirnu. Operater to mora da vidi, inace mu sledljivost visi bez upozorenja.
+    AssertEq (InStr(1, msg, FX_PRIJEMNICA_OLD_U, vbTextCompare) > 0), True, _
+             "poruka imenuje prijemnicu koja je ostala vezana"
+End Sub
+
+' ============================================================
+' 50. Spisak blokova za F8 je po IDENTITETU, ne po broju
+' ============================================================
+' ActiveBlocksForFlow je za otpremnicu radio GetOtpremnicaIDsByBroj(broj) bez
+' generacije -- pa je spisak sadrzao blokove SVIH dokumenata tog broja. Isti
+' BrojOtpremnice na dve stanice je legitiman, sto ostatak ovog PR-a i modeluje.
+Private Sub T_BlokoviF8_PoIdentitetu()
+    Dim po As Collection, sviRedovi As Collection
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' Scenario je stvaran samo ako broj sam po sebi daje OBA bloka.
+    Set sviRedovi = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, _
+                                                    FX_OTPREMNICA_BLOK, "", "")
+    AssertEq sviRedovi.count, 2, _
+             "preduslov: po golom broju spisak nosi blokove OBA dokumenta"
+
+    Set po = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-A")
+    AssertEq po.count, 1, "sa identitetom spisak nosi SAMO blok izabranog dokumenta"
+    AssertEq CStr(po(1)(0)), "OTK-BLK-A", "i to bas njegov blok"
+
+    ' Isti kvar je bio i u PREGLEDU: ScanOtpremnica razresi dokument po identitetu
+    ' pa blockCount racuna po broju. Operater bi video tudje blokove, a correction
+    ' dijalog bi se otvorio i nad dokumentom koji blokove nema.
+    Dim pregled As String
+    pregled = modStornoDok.StornoPregledLanca(STIP_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                              "", "GEN-BLK-A")
+    AssertEq (InStr(1, pregled, "Otkupni blokovi: 1", vbTextCompare) > 0), True, _
+             "pregled broji blokove IZABRANOG dokumenta, ne svih tog broja"
+End Sub
+
+' ============================================================
+' 51. Storniran sibling ne sme da izgubi svoj blok
+' ============================================================
+' Ovo je mutacija, ne pregled. Kapija BlockStornoDriftReason tu ne pomaze: prva
+' linija joj je "If ModeStornoBlokParent(docType, mode) Then Exit Function", a to
+' je True za svaki PONISTENJE i za OTPREMNICA+DUPLI/ISPRAVKA -- dakle za tacno
+' one modove koji jedini stizu do dodatnog storna blokova. Njena pretpostavka
+' ("roditelj umire, pa je blok-storno bezbedan") vazi samo za blokove IZABRANOG
+' dokumenta.
+'
+' Test radi ono sto radi UI posle uspesnog moda: uzme spisak blokova i stornira
+' ga. Sam StornirajBlokoveAko se ne moze zvati iz testa (MsgBox), pa se meri
+' sloj ispod -- ista dva poziva, bez dijaloga.
+Private Sub T_StorniranSibling_ZadrzavaSvojBlok()
+    Dim res As Object, redovi As Collection, ids As Collection, i As Long
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B"), True, _
+             "preduslov: sibling je STORNIRAN (pa nema zivog roditelja za kapiju)"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-BLK-B"), False, _
+             "preduslov: blok siblinga je i dalje AKTIVAN"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_OTPREMNICA, FX_OTPREMNICA_BLOK, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-BLK-A")
+    AssertEq CBool(res("success")), True, "DUPLI nad izabranom otpremnicom je prosao"
+
+    ' Dodatni storno blokova -- isto sto UI radi posle uspesnog moda.
+    Set redovi = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                                 "", "GEN-BLK-A")
+    Set ids = New Collection
+    For i = 1 To redovi.count
+        ids.Add CStr(redovi(i)(0))
+    Next i
+    If ids.count > 0 Then modStornoFlow.StornoSelectedBlocks_TX ids
+
+    ' Poslovna tvrdnja PRVA (v. zamka 6 u sabotaza.py).
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-BLK-B"), False, _
+             "blok storniranog siblinga je ostao AKTIVAN"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A"), True, _
+             "izabrana otpremnica je stornirana (mod je odradio svoje)"
+End Sub
+
+' ============================================================
+' 48. I CILJNA zbirna mora da prodje kapiju, ne samo izvorna
+' ============================================================
+' Zastita je bila nesimetricna: stara zbirna je od v6-ui-137 imala kapiju, ciljna
+' nijednu -- a nizvodne operacije nad ciljem idu PO GOLOM BROJU.
+'
+' Zatecena kapija u writeru (RequireJedanVlasnikPoBroju) ovo ne pokriva jer broji
+' samo AKTIVNE vlasnike. Ovde je owner A STORNIRAN a njegovo dete OTP-HIST je
+' AKTIVNO, pa writer vidi jednog vlasnika i pusti relink.
+'
+' Najgori deo nije kontaminacija nego to sto je SAMA VALIDACIJA potvrdi: i
+' SumOtpremniceByKlasa i ValidateZbirnaInvariant sabiraju po broju, pa zaglavlje B
+' sa zbirom dece OBA vlasnika prolazi kao konzistentno.
+Private Sub T_CiljnaZbirnaDvosmislena_Staje()
+    Dim cid As String, res As Object
+    Dim pre As Double
+
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A"), True, _
+             "preduslov: jedan vlasnik ciljnog broja je STORNIRAN"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B"), False, _
+             "preduslov: drugi vlasnik ciljnog broja je AKTIVAN"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-HIST"), False, _
+             "preduslov: dete storniranog vlasnika je AKTIVNO"
+    ' Bas ovo zatecena kapija ne vidi -- pa je i propustala.
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_TGT, "T_Cilj", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 1, _
+             "preduslov: po AKTIVNIM vlasnicima ciljni broj izgleda jednoznacan"
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "preduslov: izvorna prijemnica visi na izvornoj zbirni"
+    ' Zasto je kontaminacija tako podmukla: invarijanta je i sama po BROJU. U
+    ' zdravom stanju kaze NEISPRAVNO (sabira decu oba vlasnika, 400, protiv
+    ' jednog aktivnog zaglavlja, 100) -- a posle kontaminirane rekalkulacije bi
+    ' oba iznosa bila 400 i rekla bi ISPRAVNO. Validacija bi, dakle, potvrdila
+    ' pokvareno vlasnistvo kao konzistentno.
+    AssertEq CBool(modDokumentInvariant.ValidateZbirnaInvariant(FX_ZBIRNA_TGT)("isValid")), _
+             False, "preduslov: invarijanta je number-based, ne ownership-aware"
+
+    pre = KolicinaZbirne("ZBI-TGT-B")
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                  "OTP-OLD-U", FX_OTPREMNICA_OLD_U, _
+                                                  "", "", "", "", "", FX_ZBIRNA_OLDU)
+    AssertEq (Len(cid) > 0), True, "context je napravljen"
+
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_NEW_T)
+
+    ' Poslovni ishod PRVI (v. zamka 6 u sabotaza.py): bez kapije zaglavlje B
+    ' dobije zbir dece OBA vlasnika, pa mu se kolicina promeni.
+    AssertEq KolicinaZbirne("ZBI-TGT-B"), pre, _
+             "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece"
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "izvorna prijemnica NIJE prevezana na dvosmislen cilj"
+    AssertEq CBool(res("success")), False, "completion staje pred dvosmislenim ciljem"
+    AssertEq (InStr(1, CStr(res("message")), "ciljne zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje CILJNU zbirnu, ne staru"
+End Sub
+
+' ============================================================
+' 49. Ispravka ZBIRNE: ista kapija, obe strane
+' ============================================================
+' CompleteZbirnaIspravka je imala istu rupu kao ispravka otpremnice, samo sirju:
+' po broju idu i izvor i cilj -- RelinkOtpremniceToZbirna_TX(oldBroj, newBroj),
+' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
+' RecalculateZbirnaFromOtpremnice_TX(newBroj). Nijedna strana nije bila proverena.
+'
+' Dvosmislen CILJ znaci "cije zaglavlje dobija zbir", dvosmislen IZVOR znaci
+' "cija deca se sele". Zato test meri obe grane, jedna po jedna.
+Private Sub T_IspravkaZbirne_KapijaNaObeStrane()
+    Dim cid As String, res As Object
+    Dim preB As Double
+
+    preB = KolicinaZbirne("ZBI-TGT-B")
+
+    ' (a) DVOSMISLEN CILJ: izvor je jednoznacan, cilj je nekad imao dva vlasnika.
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
+                                                  "ZBI-OLDU-1", FX_ZBIRNA_OLDU)
+    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_TGT)
+    AssertEq KolicinaZbirne("ZBI-TGT-B"), preB, _
+             "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece"
+    AssertEq ZbirnaNaOtpremnici("OTP-OLD-U"), FX_ZBIRNA_OLDU, _
+             "dvosmislen CILJ: otpremnica izvora nije prevezana"
+    AssertEq CBool(res("success")), False, "dvosmislen CILJ zaustavlja ispravku zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "ciljne zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje CILJNU stranu"
+
+    ' (b) DVOSMISLEN IZVOR: cilj je jednoznacan, izvor je nekad imao dva vlasnika.
+    ' Bez ove grane bi se selila deca oba vlasnika izvornog broja.
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
+                                                  "ZBI-KASK-1", FX_ZBIRNA_KASK)
+    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_STALE)
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja"
+    AssertEq CBool(res("success")), False, "dvosmislen IZVOR zaustavlja ispravku zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje STARU stranu"
+End Sub
+
+Private Function KolicinaZbirne(ByVal zbrID As String) As Double
+    Dim v As Variant
+    v = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KOLICINA)
+    If IsNumeric(v) Then KolicinaZbirne = CDbl(v)
+End Function
+
+' ============================================================
+' 47. Kapija ne sme da bude fail-open na sopstvenu gresku
+' ============================================================
+' "On Error Resume Next" je davao False -- to jest "broj je jednoznacan, mutiraj"
+' -- bas kad se nista ne zna: nedostajuca owner kolona, schema drift, greska
+' resolvera. Za kapiju je "ne mogu da dokazem jednoznacnost" isto sto i
+' "ne mutiraj".
+'
+' Drift se pravi stvarno (preimenovanje kolone), ne simulira: poenta je da
+' RequireColumnIndex digne gresku unutar kapije, a da kapija to pretvori u
+' blokadu. Sema se vraca u istom testu.
+Private Sub T_KapijaZbirne_FailClosedNaSvojuGresku()
+    Dim lo As ListObject
+    Dim podDriftom As Boolean, semaVracena As Boolean
+
+    ' Pozitivna kontrola: nad zdravom semom kapija NE blokira jednoznacan broj.
+    ' Bez nje bi test prosao i kad kapija uvek vraca True (blokira sve).
+    AssertEq modStornoFlow.ZbirnaDvosmislenaIkad_Test(FX_ZBIRNA_MIRNA), False, _
+             "pozitivna kontrola: jednoznacan broj prolazi kroz kapiju"
+
+    Set lo = GetTable(TBL_ZBIRNA)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_ZBR_VOZAC).Name = COL_ZBR_VOZAC & "_DRIFT"
+    podDriftom = modStornoFlow.ZbirnaDvosmislenaIkad_Test(FX_ZBIRNA_MIRNA)
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_ZBR_VOZAC & "_DRIFT").Name = COL_ZBR_VOZAC
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC) > 0)
+
+    AssertEq podDriftom, True, _
+             "nerazresena jednoznacnost se tretira kao dvosmislena"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+
+' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.
+' Postoji samo da preduslov testa 46 bude proveren, a ne pretpostavljen.
+Private Function PrviRoditeljPoBroju(ByVal brojOtp As String) As String
+    PrviRoditeljPoBroju = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, _
+                                                     brojOtp, COL_OTP_BROJ_ZBIRNE)))
+End Function
+
+Private Function ZbirnaNaOtpremnici(ByVal otpID As String) As String
+    ZbirnaNaOtpremnici = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
+                                                    otpID, COL_OTP_BROJ_ZBIRNE)))
+End Function
+
+Private Function OtpremnicaNaBloku(ByVal otkupID As String) As String
+    OtpremnicaNaBloku = Trim$(NzToText(LookupValue(TBL_OTKUP, COL_OTK_ID, _
+                                                   otkupID, COL_OTK_OTPREMNICA_ID)))
+End Function
+
+Private Function StorniranoNaID(ByVal tbl As String, ByVal idCol As String, _
+                                ByVal id As String) As Boolean
+    StorniranoNaID = (UCase$(Trim$(NzToText(LookupValue(tbl, idCol, id, _
+                                                        COL_STORNIRANO)))) = "DA")
+End Function
+
+' OldDocID iz correction context-a po njegovom PK-u.
+Private Function OldDocIDKonteksta(ByVal correctionID As String) As String
+    OldDocIDKonteksta = Trim$(NzToText(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, _
+                                                   correctionID, COL_SV_OLD_DOCID)))
+End Function
 
 ' Gajbice vezane za JEDAN dokument (po PrijemnicaID), ne za broj. Broj je
 ' labela i dele ga dva kupca, pa zbir po broju ne moze da razlikuje ciljeve --
