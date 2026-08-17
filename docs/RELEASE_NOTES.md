@@ -2633,3 +2633,36 @@ call-site-ove, ali sam primitiv ostaje number-based.
 - `python tools\run_vba.py --all` → **12 suite-ova zeleno** (11 punog seta + SEF).
 - **Tri nove sabotaže**, svaka obara svoju tvrdnju i pokazuje štetu brojem.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.10 — `v6-ui-139` · `Err.Description` posle `LogErr`, svih deset mesta
+
+`LogErr` interno zove `LogError`, a taj ima `On Error Resume Next` i fajl I/O — pa
+briše `Err`. Svaki EH blok koji opis čita **posle** `LogErr`-a prijavljuje
+`"Greska: "` i ništa više.
+
+Prijavljeno je bilo jedno mesto (`CompleteZbirnaIspravka`). Mehaničkim skeniranjem
+`modStornoFlow` ih je **deset**: četiri `RunSimpleStorno*`, četiri `Run*Correction`,
+`CompleteZbirnaIspravka` i `CompleteReversIspravka`. Sva su ispravljena istim
+obrascem — opis se čita u prvi red EH bloka, pre `LogErr`-a.
+
+Sređivanje samo prijavljenog mesta bi ostavilo devet identičnih, a to je već tri
+puta bio problem u ovom PR-u.
+
+### Ovo NIJE pokriveno testom, i to je namerno
+
+Do tih EH blokova se iz testa ne može deterministički doći: svaki sloj ispod
+(`ZbirnaPostoji`, `RecalculateZbirnaFromOtpremnice_TX`, `ReassignPrijemnica…`) ima
+svoj `On Error` i grešku vraća kao `False`, pa operacija stane u redovnoj putanji
+sa svojom porukom. Test bi zahtevao raise-seam u produkcionom kodu — što je gore
+od same ispravke.
+
+Obrazac je **mehanički prepoznatljiv u izvoru** i tu mu je mesto: provera u
+`vba_check` („`Err.description` čitan posle `LogErr`-a u istom EH bloku") ide kao
+zaseban posao, kad se `tools/vba_check.py` oslobodi (menja ga #199).
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno, TESTS=49 FAIL=0** —
+  dokaz da ispravka ništa nije pokvarila, ne da je EH putanja izvršena.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

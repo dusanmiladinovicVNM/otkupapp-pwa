@@ -306,8 +306,9 @@ Optional ByVal docID As String = "") As Object
     MonitorSimple "Otpremnica", broj, CStr(r("message"))
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr MOD_NAME & ".RunSimpleStornoOtpremnica"
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Zbirna: storno + odvezivanje otpremnica ("ceka zbirnu") u JEDNOJ transakciji ->
@@ -331,8 +332,9 @@ Public Function RunSimpleStornoZbirna(ByVal broj As String, _
     MonitorSimple "Zbirna", broj, CStr(r("message"))
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Revers: obican storno (saldo vec iskljucuje stornirano -> auto koreguje).
@@ -350,8 +352,9 @@ Public Function RunSimpleStornoRevers(ByVal brDok As String, ByVal dokumentTip A
     r("message") = "Revers " & brDok & " storniran. Saldo azuriran (bez duple/kontra stavke)."
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr MOD_NAME & ".RunSimpleStornoRevers"
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Prijemnica: obican storno (nema paleta/fakture/blokova -> nema odluke). Reuse
@@ -370,8 +373,9 @@ Optional ByVal docID As String = "") As Object
     MonitorSimple "Prijemnica", broj, CStr(r("message"))
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr MOD_NAME & ".RunSimpleStornoPrijemnica"
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 Private Sub MonitorSimple(ByVal entityType As String, ByVal id As String, ByVal msg As String)
@@ -535,8 +539,9 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
     End Select
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Zavrsi ISPRAVKA_ODMAH otpremnice: relink blokova na novu + rekalkulacija stare
@@ -913,8 +918,9 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     End Select
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Zavrsi ISPRAVKA_ODMAH zbirne: prevezi otpremnice i prijemnicu (+palete) na novu
@@ -1009,10 +1015,11 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
     r("message") = "Ispravka zbirne zavrsena. Sve prevezano na " & newBroj & "."
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
     On Error Resume Next
-    FailCorrectionContext correctionID, "Greska u CompleteZbirnaIspravka: " & Err.description
-    r("message") = "Greska: " & Err.description
+    FailCorrectionContext correctionID, "Greska u CompleteZbirnaIspravka: " & errDescEH
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' ============================================================
@@ -1075,8 +1082,9 @@ Public Function RunReversCorrection(ByVal brDok As String, ByVal dokumentTip As 
     End Select
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' Zavrsi ISPRAVKA reversa: veze novi revers broj u context. Saldo je vec tacan
@@ -1111,8 +1119,9 @@ Public Function CompleteReversIspravka(ByVal correctionID As String, ByVal newBr
     r("message") = "Ispravka reversa zavrsena. Saldo racuna samo novi revers."
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr MOD_NAME & ".CompleteReversIspravka"
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' ============================================================
@@ -1275,8 +1284,9 @@ Public Function RunPrijemnicaCorrection(ByVal broj As String, ByVal mode As Stri
     End Select
     Exit Function
 EH:
+    Dim errDescEH As String: errDescEH = Err.description
     LogErr SRC
-    r("message") = "Greska: " & Err.description
+    r("message") = "Greska: " & errDescEH
 End Function
 
 ' ============================================================
