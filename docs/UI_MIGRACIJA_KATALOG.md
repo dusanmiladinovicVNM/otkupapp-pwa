@@ -35,6 +35,13 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
    `v6-ui-121` kako je ovde ranije pisalo: ekran je bio gotov, ali je F8 do
    tada gubio identitet izabranog reda i dokument je nizvodno biran po
    poslovnom broju.
+   **Od `v6-ui-142` storno više nije režim F8 nego SVOJ EKRAN** (`modScrStorno`,
+   grupa OPERACIJE, oblast `OBL_DOKUMENTA`) — v. §3.2. Taster F8 je ostao, ali
+   sada bira ekran, ne režim. Unosni ekran time ima **sedam** režima.
+   Nevidljiva kolona identiteta se od tada traži **argumentom**
+   (`GridCols(tip, saIdentitetom)`), a ne uslovom `ActiveMode = "F8"` — ekran
+   nema režim, pa bi taj uslov ćutke bio `False` i ceo lanac iz #198 bi pao na
+   biranje po broju. To meri test 57.
 3. **Pomoćni delovi režima** koji nisu pravila nego zaseban posao: lista
    zbirnih za izbor (F3), manjak prijemnice vs zbirna (F4). Upis F3/F4 od
    v6-ui-116 radi i bez njih — to su prikazi, ne kapije. Ostatak te tačke je
@@ -287,15 +294,24 @@ Uz njih: `LoadZbirneListbox` / `lstZbirne_Click` (izbor zbirne iz liste),
 
 ### 3.2 Storno okvir — najveći deo forme
 
+> **v6-ui-142: storno je SVOJ EKRAN, ne više režim F8.** Do tada je bio osmi
+> režim unosnog ekrana, što je imalo dve posledice: crtao je unosnu formu koju
+> ne koristi (`Scr_Save` za `STORNO` je padao u `Case Else` → **primarno dugme
+> mrtvo**), a pregled posledica je bio niz `MsgBox`-ova. #201 je prvo sakrio
+> grid-maxom; `modScrStorno` to rešava tako što forme nema, a posledice stoje u
+> zoni **pre** odluke. Redovi liste i dalje dolaze iz istog čitača koji puni
+> unosni ekran (`modScrDokumenti.RedoviZaTip`) — kopije nema.
+
 Sedam panela, svaki sa svojim `Ensure/Layout/Populate/Set*Visible`:
 
 | Panel | Šta radi | Poslovna rutina | Novi UI |
 |---|---|---|---|
-| **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | **IMA** (`modStornoDok` + F8, v6-ui-119) — **običan storno**, bez framework-a ispravke |
-| **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **IMA** (v6-ui-120) — sva četiri moda; **bez** multiselect storna otkupnih blokova (deo legacy overlay panela) |
-| **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | **IMA** — čip „Otkazane" nad svakim tipom u F8 |
+| **Storno** (`btnStorno_Click`) | storno bilo kog tipa dokumenta po broju | `StornoOtkup_TX`, `StornoOtpremnica_TX`, `StornoZbirna_TX`, `StornoPrijemnica_TX`, `StornoFaktura_TX`, `StornoNovac_TX`, `StornoIzvod_TX`, `StornoOMKoopByBrDok_TX` | **IMA** (`modStornoDok`, v6-ui-119; ekran `modScrStorno` od v6-ui-142) — **običan storno**, bez framework-a ispravke |
+| **Ispravka / dupli unos** (`TryRunCorrectionFramework`, `PromptCorrectionMode`) | posle storna nudi ispravku (prefill) ili dupli unos | `GetCorrectionField`, `ApplySelectedBlockStorno`, `StornoSelectedBlocks_TX` | **IMA** (v6-ui-120) — sva četiri moda, od v6-ui-142 kao **četiri dugmeta sa objašnjenjem** umesto dva `MsgBox` pitanja; **bez** multiselect storna otkupnih blokova (deo legacy overlay panela) |
+| **Storno pregled** (`m_btnStornoPregled_Click`) | pregled storniranih, grupisano | `GetStorniraniGrupisano` | **IMA** — čip „Otkazane" nad svakim tipom |
 | **Undo operacija** (`ShowUndoOpsPanel`) | poništavanje storna | `GetUndoableStornoOperations` | **IMA** (ekran Oporavak → lista „Vrati storno", v6-ui-121) |
-| **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | **IMA** — prekidač tipa + pretraga i filteri mreže u F8 |
+| **Nađi dokument** (`m_btnStornoFind_Click`) | pretraga „toplih" dokumenata po tipu i tekstu | `GetWarmStornoDocs` | **IMA** — od v6-ui-142 i **navigacioni čip „Svi"** preko tipova, uz prekidač tipa, pretragu i filtere mreže |
+| **Uvid pre odluke** (`m_sc_*`, `frmDokumenta.frm:4662`) | ceo lanac, palete i blokovi PRE storna | `modStornoImpact.BuildStornoImpact` | **IMA** (v6-ui-142) — zona ekrana Storno; do tada ga je renderovao **samo** legacy |
 | **Nedovršeno** (`m_btnNedovrseno_Click`) | lanci koji nisu dovršeni | `GetNedovrseno` | **IMA** (ekran Oporavak → lista „Nedovršeno", v6-ui-121) |
 | **Recovery** (`m_btnRecovery_Click`) | osirotele prijemnice i palete, prevezivanje | `GetOsirocenePrijemnice`, `GetPrijemniceSaOsirocenimPaletama`, `ReassignPaleteToPrijemnica_TX`, `ReassignPrijemnicaToZbirna_TX` | **IMA** (ekran Oporavak, četiri liste, v6-ui-121) |
 | `CheckVerwaisteDokumente` | upozorenje na siročiće pri otvaranju | `GetVerwaisteDokumente` | **NAMERNO IZOSTAVLJENO** — zamenjeno stalnom listom „Nedovršeno" i brojkom u zoni; modalni dijalog pri otvaranju se zatvara i zaboravlja, lista ne može |
@@ -365,7 +381,7 @@ poslovno znači**. Smart trigger je isti kao u legacy: pun izbor se nudi samo ka
 
 | Pravilo iz legacy | Gde je sad | Napomena |
 |---|---|---|
-| Četiri moda (ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE) | `IzborModa` → `modStornoDok.StornoIzvrsiMod` → `modStornoFlow.Run*Correction` | legacy ih nudi kao overlay panel; ovde su dva pitanja, jer četiri odgovora ne staju u jedan `MsgBox` |
+| Četiri moda (ISPRAVKA / DUPLI / PONIŠTENJE / REŠI KASNIJE) | `modScrStorno.AkcijeZaTip` → `modStornoDok.StornoIzvrsiMod` → `modStornoFlow.Run*Correction` | **odluka izmenjena u v6-ui-142.** Do tada: dva `MsgBox` pitanja, uz obrazloženje „četiri odgovora ne staju u jedan `MsgBox`" — tačno, ali je zaključak bio pogrešan. Sada su **četiri dugmeta u zoni**, svako sa objašnjenjem ispod, a iznad njih stoje posledice (lanac, palete, blokovi). Operater vidi sva četiri ishoda **istovremeno**, umesto da drugi izbor otkrije tek pošto odgovori na prvi. Prekidač „Ne diraj palete" je iz istog razloga izašao iz `MsgBox`-a (`STORNO_ASK_PALETE`) i stoji uz palete na koje se odnosi |
 | Framework važi **samo** za otpremnicu, zbirnu, prijemnicu i revers | `TipUFlowDoc` | ostalih pet tipova nema nizvodni tok — njihov storno je običan, kao i u legacy |
 | Revers: kratko pitanje storno vs ispravka | `IspravkaPreuzela` | revers je list u lancu, pa nikad ne traži pun izbor (legacy `RunReversStornoUI`) |
 | PONIŠTENJE se izvršava u **dva** poziva | `IzvrsiMod` | prvi vrati `blocked=True` i pun spisak posledica; drugi ide tek po svesnoj potvrdi, sa `forceConfirm` — spisak se tako pravi PRE nego što se išta promeni |

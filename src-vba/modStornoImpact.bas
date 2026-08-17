@@ -20,17 +20,28 @@ Option Explicit
 
 Private Const MOD_NAME As String = "modStornoImpact"
 
+' docID = KANONSKI IDENTITET izabranog dokumenta (GeneracijaID za robna
+' dokumenta). Do v6-ui-142 ga ovaj sloj nije imao, pa je ceo uvid isao po
+' BROJU -- a broj nije jedinstven (GenerateBrojPrijemnice nema proveru
+' jedinstvenosti). Posledica nije bila teorijska: pod kolizijom broja je
+' pregled pokazivao lanac i blokove TUDJEG dokumenta, a operater bi na osnovu
+' toga doneo odluku o stornu. Tri citaca ispod su vec primala docID od
+' v6-ui-136/140 -- nedostajao je samo ovaj sloj koji ih spaja.
+'
+' Prazan docID i dalje prolazi: zatecen zapis bez generacije nema identitet, i
+' tada nizvodno vazi fail-closed kapija nad jednoznacnoscu broja.
 Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String, _
-                                  Optional ByVal dokumentTip As String = "") As Object
+                                  Optional ByVal dokumentTip As String = "", _
+                                  Optional ByVal docID As String = "") As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     Set BuildStornoImpact = d
     On Error GoTo EH
     broj = Trim$(broj)
 
-    Set d("header") = ImpactHeader(docType, broj)
-    Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip)
-    Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip)
-    Set d("flags") = GetChainFlags(docType, broj, dokumentTip)
+    Set d("header") = ImpactHeader(docType, broj, docID)
+    Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID)
+    Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID)
+    Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID)
     Set d("palete") = ImpactPalete(docType, broj)
     Set d("faktura") = ImpactFaktura(docType, broj)
     Set d("summary") = ImpactSummary(d)
@@ -42,7 +53,8 @@ End Function
 ' ------------------------------------------------------------
 ' Header po tipu (samo potvrdjene kolone; partner ostaje ID -> UI resolvira ime).
 ' ------------------------------------------------------------
-Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As Object
+Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
+                              Optional ByVal docID As String = "") As Object
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
     Set ImpactHeader = h
     On Error GoTo EH
@@ -53,29 +65,35 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String) As 
     Select Case docType
         ' kolicina = SUMA aktivnih redova broja (Klasa I + II dele broj; HL bi vratio
         ' samo prvu klasu -> potceni dvoklasni dokument u uvidu). partner/datum su
-        ' isti po klasama pa ostaju obican lookup.
+        ' isti po klasama pa im je dovoljan jedan red -- ali BAS njegov, pa idu
+        ' kroz HLI, koji uz broj postuje i identitet.
         Case FLOW_DOC_OTPREMNICA
             tTbl = TBL_OTPREMNICA: tCol = COL_OTP_BROJ
-            h("partnerID") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_STANICA)
-            h("datum") = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_DATUM)
-            h("kolicina") = SumActiveNum(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_KOLICINA)
         Case FLOW_DOC_ZBIRNA
             tTbl = TBL_ZBIRNA: tCol = COL_ZBR_BROJ
-            h("partnerID") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KUPAC)
-            h("datum") = HL(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_DATUM)
-            h("kolicina") = SumActiveNum(TBL_ZBIRNA, COL_ZBR_BROJ, broj, COL_ZBR_KOLICINA)
         Case FLOW_DOC_PRIJEMNICA
             tTbl = TBL_PRIJEMNICA: tCol = COL_PRJ_BROJ
-            h("partnerID") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KUPAC)
-            h("datum") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_DATUM)
-            h("kolicina") = SumActiveNum(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_KOLICINA)
+    End Select
+    Select Case docType
+        Case FLOW_DOC_OTPREMNICA
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_OTP_STANICA, docID)
+            h("datum") = HLI(tTbl, tCol, broj, COL_OTP_DATUM, docID)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_OTP_KOLICINA, docID)
+        Case FLOW_DOC_ZBIRNA
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID)
+            h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_ZBR_KOLICINA, docID)
+        Case FLOW_DOC_PRIJEMNICA
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID)
+            h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_PRJ_KOLICINA, docID)
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
     ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
     If Len(tTbl) > 0 Then
-        h("ispravkaOd") = HL(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD)
-        h("zamenjenSa") = HL(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA)
+        h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID)
+        h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID)
     End If
     Exit Function
 EH:
@@ -176,26 +194,77 @@ Private Function HL(ByVal tbl As String, ByVal keyCol As String, _
     HL = Trim$(CStr(LookupValue(tbl, keyCol, keyVal, valCol)))
 End Function
 
-' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno
-' po dokumentu (Klasa I + II). Prazan string ako nema aktivnog reda.
-Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
-                             ByVal keyVal As String, ByVal sumCol As String) As String
+' Isto, ali uz IDENTITET. Prazan docID -> obican lookup po broju (zatecen zapis
+' bez generacije). Neprazan docID -> red koji ima i taj broj i tu generaciju;
+' ako ga nema, vraca prazno umesto tudje vrednosti.
+'
+' LookupValue vraca PRVI red po broju, pa je pod kolizijom umeo da prikaze
+' partnera i datum drugog dokumenta -- zaglavlje uvida bi opisivalo dokument
+' koji se ne stornira.
+Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
+                     ByVal keyVal As String, ByVal valCol As String, _
+                     ByVal docID As String) As String
+    If Len(Trim$(docID)) = 0 Then
+        HLI = HL(tbl, keyCol, keyVal, valCol)
+        Exit Function
+    End If
     On Error GoTo done
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then Exit Function
-    Dim cKey As Long, cSum As Long, cSt As Long
+    Dim cKey As Long, cVal As Long, cGen As Long
+    cKey = GetColumnIndex(tbl, keyCol)
+    cVal = GetColumnIndex(tbl, valCol)
+    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
+    If cKey = 0 Or cVal = 0 Then Exit Function
+    ' Tabela bez kolone generacije (zatecena instalacija) -> vrati se na broj.
+    If cGen = 0 Then
+        HLI = HL(tbl, keyCol, keyVal, valCol)
+        Exit Function
+    End If
+    Dim i As Long
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
+            If Trim$(CStr(data(i, cGen))) = Trim$(docID) Then
+                HLI = Trim$(CStr(data(i, cVal)))
+                Exit Function
+            End If
+        End If
+    Next i
+done:
+End Function
+
+' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno
+' po dokumentu (Klasa I + II). Prazan string ako nema aktivnog reda.
+'
+' docID suzava na redove IZABRANOG dokumenta. Klasa I i II iz istog upisa dele
+' generaciju, pa suzavanje ne gubi drugu klasu -- odbacuje samo tudji dokument
+' istog broja.
+Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
+                             ByVal keyVal As String, ByVal sumCol As String, _
+                             Optional ByVal docID As String = "") As String
+    On Error GoTo done
+    Dim data As Variant: data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    Dim cKey As Long, cSum As Long, cSt As Long, cGen As Long
     cKey = GetColumnIndex(tbl, keyCol)
     cSum = GetColumnIndex(tbl, sumCol)
     cSt = GetColumnIndex(tbl, COL_STORNIRANO)
+    cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
     If cKey = 0 Or cSum = 0 Then Exit Function
+    Dim uzmiID As Boolean
+    uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
     Dim i As Long, total As Double, found As Boolean
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cKey))) = Trim$(keyVal) Then
-            Dim isStor As Boolean: isStor = False
-            If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
-            If Not isStor Then
-                total = total + SafeDblZ(data(i, cSum))
-                found = True
+            Dim uzmi As Boolean: uzmi = True
+            If uzmiID Then uzmi = (Trim$(CStr(data(i, cGen))) = Trim$(docID))
+            If uzmi Then
+                Dim isStor As Boolean: isStor = False
+                If cSt > 0 Then isStor = (UCase$(Trim$(CStr(data(i, cSt)))) = "DA")
+                If Not isStor Then
+                    total = total + SafeDblZ(data(i, cSum))
+                    found = True
+                End If
             End If
         End If
     Next i

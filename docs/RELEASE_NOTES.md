@@ -2914,3 +2914,102 @@ unosnom ekranu — tok koji je upravo stabilizovan. Vizuelni ishod je isti.
 
 Testovi 53–55 mere baš ono što se ne vidi kroz vraćenu vrednost: sam keš (kroz
 seam), jer `Empty` izgleda isto i kad je neuspeh keširan i kad nije.
+
+## v2.48.0 — `v6-ui-142` · Storno dobija svoj ekran
+
+Korak 1 od dva. Storno prestaje da bude osmi režim unosnog ekrana i postaje
+zaseban ekran u navigaciji, sa pregledom posledica **pre** odluke — ekvivalent
+legacy ekrana „Storno / potvrda".
+
+### Zašto
+
+F8 je crtao unosnu formu koju ne koristi. `Scr_Save` za `STORNO` je padao u
+`Case Else` i vraćao „Nije vezano na postojeću rutinu" — dakle **primarno dugme
+je bilo mrtvo**, a forma je pozivala operatera da ukuca podatke dokumenta koji
+hoće da stornira. #201 je to sakrio grid-maxom; forma je i dalje postojala, samo
+se nije videla. Sada je nema.
+
+Drugo: pregled posledica je bio niz `MsgBox`-ova. `modStornoImpact` od
+`v6-ui-1xx` vraća **sedam sekcija** (zaglavlje, lanac, blokovi, zastavice,
+palete, faktura, sažetak) — tačno sekcije sa legacy ekrana — ali ga je do sada
+renderovao **samo legacy** (`frmDokumenta.frm:4662`). Novi UI ga nije zvao ni sa
+jednog mesta.
+
+### Odluka koja se menja
+
+Katalog (`UI_MIGRACIJA_KATALOG.md`, §3.2) je beležio: „četiri odgovora ne staju
+u jedan `MsgBox`". Zapažanje je bilo tačno, zaključak nije. Sada su to **četiri
+dugmeta** — Pogrešan unos / Duplikat / Ništa se nije desilo / Reši kasnije —
+svako sa objašnjenjem ispod, a iznad njih stoje lanac, palete i broj blokova.
+Operater vidi sva četiri ishoda **istovremeno**, umesto da drugi izbor otkrije
+tek pošto odgovori na prvi. Prekidač „Ne diraj palete" je iz istog razloga izašao
+iz `MsgBox`-a i stoji uz palete na koje se odnosi.
+
+### Najopasnija linija u migraciji
+
+```vb
+If modOtkupUI.ActiveMode = "F8" Then          ' <- do v6-ui-141
+    c.Add "OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
+```
+
+Nevidljiva kolona kanonskog identiteta dodavala se pod uslovom da je aktivan
+režim F8. **Ekran nema režim.** Da je taj uslov ostao, bio bi ćutke `False`,
+kolona bi nestala, `IdentIzReda` bi vraćao prazno i ceo lanac iz #198
+(`correctionID` / `OldDocID` / `GeneracijaID`) pao bi na fail-closed po broju.
+
+Nijedna postojeća suite to ne bi videla: testovi identiteta (35, 45, 46, 48–52)
+mere sloj **ispod** mreže, kome se `docID` prosleđuje direktno. Zato je kapija
+sada **argument** (`GridCols(tip, saIdentitetom)`), i zato test 57 meri baš taj
+spoj — u oba smera: kolona mora biti tu kad se traži, i **ne sme** biti tu za
+unosni režim.
+
+### Ostalo u ovom koraku
+
+- **`modScrStorno`** po ugovoru ekrana (`oblik=lista|upis=ne`), grupa OPERACIJE,
+  oblast `OBL_DOKUMENTA`. Deset čipova: devet tipova iz F8 plus **navigacioni
+  „Svi"**, koji legacy ima („Nađi dokument") a novi UI nije imao.
+- **„Svi" je namerno samo navigacioni.** Izvor (`GetActiveDocumentsForStorno`)
+  pokriva tri framework tipa i **nema kolonu identiteta**; radnja nad takvim
+  redom vratila bi se na biranje po broju. Klik zato prebacuje na tipiziranu
+  listu, gde identitet postoji, i odluka se donosi tamo.
+- **`RedoviZaTip`**: `RowsDokumenti` (~250 linija) je bio `Private` i čitao
+  `ActiveMode` na tri mesta. Sada prima **ključ tipa** kao argument — jedan
+  čitač i za unosni ekran i za Storno, bez kopije. `EffKey` i `mStTip` su
+  nestali s njim; `ModeTable` je sada samo `TabelaTipa(modeKey(mode))`.
+- **`BuildStornoImpact` dobija `docID`** i provlači ga do `GetStornoChainRows` /
+  `GetStornoBlockRows` / `GetChainFlags` (koji su ga primali od `v6-ui-136/140`
+  — nedostajao je samo sloj koji ih spaja). Zaglavlje uvida ide kroz nov `HLI`:
+  `LookupValue` vraća **prvi** red po broju, pa je pod kolizijom uvid opisivao
+  dokument koji se ne stornira.
+- **Predaja ISPRAVKA/DUPLI** je sada tri koraka a ne dva: `IdiNaEkran` →
+  `IdiNaRezim` → `ApplyPrefill`. Redosled je obavezan — `SelectMode` **čisti**
+  formu, pa bi prefill pre njega bio obrisan; a bez prvog koraka prefill upisuje
+  u zonu koja je sakrivena. `ActivateScreen` je ostao `Private`; nov javni ulaz
+  je `IdiNaEkran`.
+- **Ljuska**: `rezima=8` → `7`, osma kartica iz `zRight`, taster F8 sada bira
+  **ekran**, grid-max izuzetak iz #201 uklonjen (postao je bespredmetan), i nov
+  generički prolaz za kontrole iz zone ugovornog ekrana (prefiks `scr`) — do
+  sada nijedan ekran nije imao kliktaču kontrolu u zoni, pa dugme u njoj ne bi
+  radilo.
+
+### Šta NIJE u obimu (Korak 2)
+
+Ponovo upotrebljiva tabela (ljuska ima **jednu** mrežu, pa lanac i blokovi idu u
+zonu kao labele) i kolona sa checkbox-om (mreža bira **jedan** red, pa dodatni
+storno blokova ostaje sve-ili-ništa). Legacy `frmDokumenta` se ne dira.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajl)**.
+- `python tools\vba_check.py --self-test` → **29 slučajeva**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=57, FAIL=0** (bilo 55).
+- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite
+  (`RunGoogleSyncSmokeSuite`, `RunMasterSyncSmokeSuite`) crvene **zatečeno**.
+- **Četiri nove sabotaže**, svaka oborila svoju tvrdnju **po imenu**.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u
+zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
+(`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
+`git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
+pa run visi do timeout-a umesto da prijavi tvrdnju.

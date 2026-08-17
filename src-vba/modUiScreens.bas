@@ -64,10 +64,17 @@ Public Function ScrRows() As Variant
           "|OPERACIJE|" & OBL_DOKUMENTA
     c.Add "PALETE|modScrPalete|OTKUI_NAV_PALETE|" & IC_PALETE & _
           "|OPERACIJE|" & OBL_PALETE
+    ' Storno je do v6-ui-141 bio rezim F8 unosnog ekrana. Zaseban ekran zato sto
+    ' NIJE unos: forma i "Sacuvaj" mu ne pripadaju (Scr_Save je za njega padao u
+    ' Case Else), a pregled posledica pre odluke trazi svoju zonu -- cetiri moda,
+    ' lanac, palete i blokovi ne staju u MsgBox. Oblast je OBL_DOKUMENTA: ko sme
+    ' da unese dokument, sme i da ga stornira.
+    c.Add "STORNO|modScrStorno|OTKUI_NAV_STORNO|" & IC_STORNO & _
+          "|OPERACIJE|" & OBL_DOKUMENTA
     ' Oporavak stoji uz Dokumenta i po oblasti prava: sve sto radi je
     ' prevezivanje i vracanje DOKUMENATA, pa ko sme da ih unosi sme i da ih
-    ' popravi. Zaseban ekran, a ne jos jedan rezim u F8, jer ovo nisu
-    ' dokumenti nego POSAO koji ceka - i ne bira se po tipu nego po problemu.
+    ' popravi. Zaseban ekran, a ne jos jedan rezim, jer ovo nisu dokumenti nego
+    ' POSAO koji ceka - i ne bira se po tipu nego po problemu.
     c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _
           "|OPERACIJE|" & OBL_DOKUMENTA
     c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _

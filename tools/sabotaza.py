@@ -43,6 +43,14 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    NEMERENOM, i to izgleda kao uspesan dvosmerni dokaz. Redosled tvrdnji u testu
    je zato deo dokaza: NAJVAZNIJA tvrdnja ide PRVA. Simptom: izlaz prijavi drugu
    tvrdnju od one koja je u katalogu (v. zamka 5).
+
+7. ZAMENA NE SME BITI PRAZNA. `--vrati` radi obrnutu zamenu -- trazi ZAMENU u
+   fajlu i vraca sidro. Prazan string se "nalazi" na svakoj poziciji, pa tvrdnja
+   o tacno jednom pogotku ne prolazi: skripta tiho ne uradi nista i prijavi
+   "nema sta da se vrati", dok je fajl i dalje pokvaren. Kod fajla koji jos nije
+   komitovan ni `git checkout` nije mreza. Ako sabotaza treba da UKLONI red,
+   zameni ga necim ravnopravnim (duplikat susednog reda) umesto praznim.
+   Placeno jednom, na `storno-cip-svi-nestao`.
 """
 
 import argparse
@@ -587,13 +595,59 @@ SABOTAZE = {
         "T_MapaImena_KljucNosiKolone",
         "kljuc kesa nosi KOLONE -- ime+prezime nije isto sto i samo ime",
     ),
-    # Storno crta unosnu formu i mrtvo primarno dugme.
-    "storno-crta-unosnu-formu": (
-        "modOtkupUI.bas",
-        '    If k = "STORNO" Then\n',
-        "    If False Then   ' SABOTAZA: storno ostaje unosni rezim\n",
-        "T_StornoNijeUnosniRezim",
-        "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju",
+    # --- ekran Storno (v6-ui-142) --------------------------------------------
+    # NAJSKUPLJA tvrdnja migracije: nevidljiva kolona identiteta. Do v6-ui-141
+    # se dodavala pod uslovom ActiveMode = "F8"; ekran nema rezim, pa bi taj
+    # uslov cutke bio False i ceo lanac iz #198 bi pao na biranje po BROJU --
+    # bez ijedne greske i bez ijedne crvene suite, jer testovi identiteta
+    # (35, 45, 46, 48-52) mere sloj ISPOD mreze.
+    "storno-bez-kolone-identiteta": (
+        "modScrDokumenti.bas",
+        "    If saIdentitetom Then\n",
+        "    If False Then   ' SABOTAZA: kolona identiteta se ne dodaje\n",
+        "T_StornoEkran_KolonaIdentiteta",
+        "opis kolona za Storno nosi kolonu identiteta, i to POSLEDNJU",
+    ),
+    # Suprotan smer: kapija koja je uvek otvorena nije kapija. GridCols je
+    # zajednicki za rezim unosa i za Storno nad istim tipom, pa bi bezuslovno
+    # dodavanje promenilo i mrezu unosa.
+    "storno-identitet-uvek": (
+        "modScrDokumenti.bas",
+        "    If saIdentitetom Then\n",
+        "    If True Then   ' SABOTAZA: kolona identiteta ide i unosnom rezimu\n",
+        "T_StornoEkran_KolonaIdentiteta",
+        "unosni rezim NE dobija kolonu identiteta",
+    ),
+    # Storno je ekran BEZ upisa. Ako mu se vrati "upis=da", ljuska mu crta
+    # primarno dugme koje nema sta da pozove -- tacno stanje od pre v6-ui-142.
+    "storno-ekran-ima-upis": (
+        "modScrStorno.bas",
+        '               "|lista=OTKUI_SCRST_LISTA|oblik=lista|upis=ne"\n',
+        '               "|lista=OTKUI_SCRST_LISTA|oblik=lista|upis=da"\n',
+        "T_StornoJeEkranNeRezim",
+        "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
+    ),
+    # Navigacioni cip "Svi" je jedino mesto sa kog se dokument trazi kad se ne
+    # zna kog je tipa. Legacy ga ima ("Nadji dokument"); bez njega se ekran vraca
+    # na "znaj tip pre nego sto pocnes".
+    #
+    # ZAMENA NIJE PRAZNA, i to je peta zamka ovog kataloga: sabotaza koja BRISE
+    # red nema sta da vrati -- `--vrati` trazi zamenu u fajlu, a prazan string se
+    # nalazi svuda i nigde, pa tiho ne uradi nista i prijavi "nema sta da se
+    # vrati". Kod novog, jos nekomitovanog fajla ni `git checkout` nije mreza.
+    # Zato se cip ne brise nego DUPLIRA sa sledecim: broj lista ostaje deset, a
+    # pada tvrdnja o kljucevima -- ista poruka, povratan potez.
+    #
+    # Bez oznake "SABOTAZA" u redu, i to je zamka 4: oznaka bi dosla POSLE `_`,
+    # a tamo mora biti kraj reda. Placeno i to jednom -- run je visio do
+    # timeout-a, a izlaz je bio "PALO" bez imena tvrdnje. Sirina 40 (umesto 64)
+    # cini red jedinstvenim, da `--vrati` ima tacno jedan pogodak.
+    "storno-cip-svi-nestao": (
+        "modScrStorno.bas",
+        '        ST_SVI & "|OTKUI_SEG_ST_SVI|OTKUI_GRID_TITLE_ST_SVI|40", _\n',
+        '        STIP_OTKUP & "|OTKUI_SEG_ST_OTKUP|OTKUI_GRID_TITLE_OTKUP|40", _\n',
+        "T_Storno_UgovorIRadnje",
+        "redosled i kljucevi lista -- 'Svi' je prva",
     ),
     # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
     # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.

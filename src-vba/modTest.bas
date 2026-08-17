@@ -189,6 +189,8 @@ Public Sub RunAllTests()
     RunOne 53
     RunOne 54
     RunOne 55
+    RunOne 56
+    RunOne 57
 
     SetTestMode prevMode
     WriteResultFile
@@ -260,7 +262,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 17: TestName = "T_WriterGuard_OdbijaTudjBlok"
         Case 18: TestName = "T_UplataGuard_VecPlacenaFaktura"
         Case 19: TestName = "T_WriterGuard_AvansSaldoOM"
-        Case 20: TestName = "T_F8_TipBiraTabeluIKolone"
+        Case 20: TestName = "T_Storno_TipBiraTabeluIKolone"
         Case 21: TestName = "T_StornoDok_KapijePreUpisa"
         Case 22: TestName = "T_PrefillIzStorniranog_CitaSvojuTabelu"
         Case 23: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
@@ -275,7 +277,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
-        Case 55: TestName = "T_StornoNijeUnosniRezim"
+        Case 55: TestName = "T_StornoJeEkranNeRezim"
+        Case 56: TestName = "T_Storno_UgovorIRadnje"
+        Case 57: TestName = "T_StornoEkran_KolonaIdentiteta"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -323,7 +327,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 17: T_WriterGuard_OdbijaTudjBlok
         Case 18: T_UplataGuard_VecPlacenaFaktura
         Case 19: T_WriterGuard_AvansSaldoOM
-        Case 20: T_F8_TipBiraTabeluIKolone
+        Case 20: T_Storno_TipBiraTabeluIKolone
         Case 21: T_StornoDok_KapijePreUpisa
         Case 22: T_PrefillIzStorniranog_CitaSvojuTabelu
         Case 23: T_FrameworkIspravke_SamoCetiriTipa
@@ -338,7 +342,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
-        Case 55: T_StornoNijeUnosniRezim
+        Case 55: T_StornoJeEkranNeRezim
+        Case 56: T_Storno_UgovorIRadnje
+        Case 57: T_StornoEkran_KolonaIdentiteta
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -734,10 +740,11 @@ End Sub
 Private Sub T_ScrSave_RutaPoRezimu()
     Dim p As Object
 
-    ' F8 (storno) jos nema upis -- jedini preostali nepokriven rezim.
-    Set p = PoljaEkrana(modScrDokumenti.modeKey("F8"))
-    AssertEq modScrDokumenti.Scr_Save(p), Poruka("OTKUI_TODO_NEVEZANO"), _
-             "nepokriven rezim vraca OTKUI_TODO_NEVEZANO"
+    ' Do v6-ui-142 je ovde prva tvrdnja bila da F8 (storno) vraca
+    ' OTKUI_TODO_NEVEZANO -- "nepokriven rezim". Ta tvrdnja je nestala sa
+    ' rezimom: storno je svoj ekran, ciji Scr_Meta kaze "upis=ne", pa se
+    ' Scr_Save nad njim uopste ne zove. SVIH SEDAM preostalih rezima je
+    ' vezano, i test to sada i tvrdi -- nijedan ne sme da padne u Case Else.
 
     ' F3 i F4 su vezani: prazna polja ih zaustavljaju na PRVOM pravilu svog
     ' dokumenta -- a koje je to pravilo, dokazuje do kog modula je poziv stigao.
@@ -782,6 +789,16 @@ Private Sub T_ScrSave_RutaPoRezimu()
     AssertEq modScrDokumenti.Scr_Save(p), Poruka("NOVUNOS_ERR_KOL_AMB"), _
              "revers ide u modNovacUnos.ReversValidiraj"
     AssertEq CStr(p("fokus")), "kolAmb", "ekran vraca i polje na koje ide fokus"
+
+    ' F1 i F2 zatvaraju spisak: nijedan od sedam rezima ne sme da vrati
+    ' "nije vezano". Ako neka ruta nestane, ovde pada po imenu -- ranije je
+    ' isti simptom bio nevidljiv, jer je F8 legitimno vracao bas tu poruku.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F1"))
+    AssertEq (modScrDokumenti.Scr_Save(p) <> Poruka("OTKUI_TODO_NEVEZANO")), True, _
+             "otkupni list je vezan na svoju rutinu"
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F2"))
+    AssertEq (modScrDokumenti.Scr_Save(p) <> Poruka("OTKUI_TODO_NEVEZANO")), True, _
+             "otpremnica je vezana na svoju rutinu"
 End Sub
 
 ' F5 ISPLATA -- TIP NOVCA NIJE KOZMETIKA. Isti iznos knjizen pod pogresnim tipom
@@ -1127,17 +1144,21 @@ Private Function NovacRedova() As Long
     NovacRedova = UBound(d, 1)
 End Function
 
-' F8 CITA TABELU IZABRANOG TIPA, ne uvek tblOtpremnica.
+' STORNO CITA TABELU IZABRANOG TIPA, ne uvek tblOtpremnica.
 '
 ' Do v6-ui-118 je "STORNO" bio tih sinonim za "OTPREMNICA" u ModeTable i u
 ' desetak Col* funkcija, pa je storno centar mogao da pokaze samo otpremnice.
-' Pada ako se EffKey ukloni ili ako se neki tip izgubi iz TabelaTipa: tada
-' F8 opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente
-' pod pravim naslovom -- greska koju operater ne moze da vidi.
+' Pada ako se neki tip izgubi iz TabelaTipa ili iz Col* funkcija: tada storno
+' opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente pod
+' pravim naslovom -- greska koju operater ne moze da vidi.
+'
+' PRETARGETIRAN u v6-ui-142: mera je ista, ali seam vise nije rezim F8 nego
+' KLJUC TIPA. Storno je svoj ekran, pa "koja tabela" vise ne zavisi od
+' ActiveMode -- i test to sada trazi tako kako produkcija stvarno pita.
 '
 ' Kolone se proveravaju ZAJEDNO sa tabelom: tabela bez odgovarajucih kolona
 ' daje praznu mrezu, sto izgleda kao "nema dokumenata".
-Private Sub T_F8_TipBiraTabeluIKolone()
+Private Sub T_Storno_TipBiraTabeluIKolone()
     Dim tipovi As Variant, tabele As Variant, i As Long, cols As Variant
 
     tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
@@ -1146,29 +1167,28 @@ Private Sub T_F8_TipBiraTabeluIKolone()
                    TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA, TBL_FAKTURE, TBL_BANKA_IMPORT)
 
     For i = 0 To UBound(tipovi)
-        modScrDokumenti.Scr_StornoTipTestSet CStr(tipovi(i))
-        AssertEq modScrDokumenti.ModeTable("F8"), CStr(tabele(i)), _
-                 "F8 / " & CStr(tipovi(i)) & " cita svoju tabelu"
-        AssertEq modScrDokumenti.EffKey("STORNO"), CStr(tipovi(i)), _
-                 "F8 / " & CStr(tipovi(i)) & " razresava kljuc rezima u kljuc tipa"
-        cols = modScrDokumenti.GridCols("STORNO")
+        AssertEq modScrDokumenti.TabelaTipa(CStr(tipovi(i))), CStr(tabele(i)), _
+                 "Storno / " & CStr(tipovi(i)) & " cita svoju tabelu"
+        cols = modScrDokumenti.GridCols(CStr(tipovi(i)), True)
         AssertEq (IsArray(cols)), True, _
-                 "F8 / " & CStr(tipovi(i)) & " ima opis kolona"
+                 "Storno / " & CStr(tipovi(i)) & " ima opis kolona"
         AssertEq (UBound(cols) >= 3), True, _
-                 "F8 / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
+                 "Storno / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
     Next i
 
-    ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je F8 bio
+    ' Rezim i dalje mora da stigne do iste tabele -- ModeTable je od v6-ui-142
+    ' samo TabelaTipa(modeKey()), pa bi razilazenje ta dva puta znacilo da
+    ' unosni ekran i storno gledaju u razlicite tabele za isti dokument.
+    AssertEq modScrDokumenti.ModeTable("F4"), TBL_PRIJEMNICA, _
+             "rezim i tip vode u istu tabelu"
+
+    ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je storno bio
     ' otpremnica, cip "Bez zbirne" je bio ukljucen i nad novcem, gde tblNovac
     ' tu kolonu nema.
-    modScrDokumenti.Scr_StornoTipTestSet STIP_ISPLATE
-    AssertEq modScrDokumenti.ModeHasZbirna("F8"), False, _
-             "novac u F8 nema pojam zbirne"
-    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
-    AssertEq modScrDokumenti.ModeHasZbirna("F8"), True, _
-             "otkupni list u F8 ima pojam zbirne"
-
-    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
+    AssertEq modScrDokumenti.ModeHasZbirna("F5"), False, _
+             "novac nema pojam zbirne"
+    AssertEq modScrDokumenti.ModeHasZbirna("F1"), True, _
+             "otkupni list ima pojam zbirne"
 End Sub
 
 ' KAPIJA STOJI PRE UPISA, I VRACA RAZLOG.
@@ -2268,31 +2288,121 @@ Private Sub T_MapaImena_KljucNosiKolone()
 End Sub
 
 ' ============================================================
-' 55. Storno nije unosni rezim -- forma mu ne pripada
+' 55. Storno je EKRAN, ne unosni rezim
 ' ============================================================
 ' F8 je crtao celu unosnu formu i primarno dugme "Storniraj dokument", a
-' Scr_Save za STORNO pada u Case Else i vraca "Nije vezano na postojecu rutinu".
-' Dakle dugme je bilo mrtvo, a forma je pozivala operatera da ukuca podatke
-' dokumenta koji hoce da stornira.
-Private Sub T_StornoNijeUnosniRezim()
-    Dim f As frmOtkupUI, preF1 As Boolean
+' Scr_Save za STORNO je padao u Case Else i vracao "Nije vezano na postojecu
+' rutinu". Dakle dugme je bilo mrtvo, a forma je pozivala operatera da ukuca
+' podatke dokumenta koji hoce da stornira. #201 je to sakrio grid-maxom --
+' privremeno, jer je forma i dalje postojala i samo se nije videla.
+'
+' Od v6-ui-142 forme nema: storno je ekran u registru, sa "upis=ne". Ovaj test
+' zamenjuje raniji T_StornoNijeUnosniRezim, koji je merio grid-max -- meru koja
+' je sa rezimom prestala da postoji.
+Private Sub T_StornoJeEkranNeRezim()
+    ' NAJVAZNIJE PRVO (AssertEq dize gresku, pa se test prekida na prvom padu):
+    ' ekran mora da postoji u registru i da odgovara na ugovor. Ako se ime modula
+    ' u registru omakne, sidebar ga samo prikaze prigusenog -- i storno nestane
+    ' iz aplikacije bez ijedne greske.
+    AssertEq modUiScreens.ScrPostoji("STORNO"), True, _
+             "modul ekrana Storno odgovara na Scr_Meta (kasno vezivanje radi)"
+    AssertEq (InStr(modUiScreens.ScrMeta("STORNO"), "upis=ne") > 0), True, _
+             "Storno nema upis -- forma i primarno dugme mu ne pripadaju"
 
-    ' Forma MORA da se izgradi: SelectMode je radnja nad njom, a IdiNaRezim bez
-    ' izgradjene forme tiho izlazi (mFrm Is Nothing) -- prva verzija ovog testa
-    ' je zato merila no-op i padala.
-    Set f = NewOtkupUIForm()
+    ' F8 vise NIJE rezim. modeKey za nepoznat rezim pada u Case Else ("OTKUP"),
+    ' pa se odsustvo meri time da vise ne daje "STORNO".
+    AssertEq (modScrDokumenti.modeKey("F8") <> "STORNO"), True, _
+             "F8 vise ne razresava u rezim STORNO"
+    AssertEq (InStr(modUiScreens.ScrMeta("DOKUMENTI"), "rezima=7") > 0), True, _
+             "unosni ekran ima SEDAM rezima, ne osam"
 
-    modOtkupUI.SelectMode f, "F1"
-    preF1 = modOtkupUI.GridMaxAktivan()
+    ' Odluka se donosi u zoni, uz posledice -- ne dugmetom u redu mreze, koje bi
+    ' vodilo pravo u izvrsenje.
+    AssertEq modScrStorno.Scr_Radnje(), "", _
+             "Storno nema radnju nad redom -- odluka je u zoni, uz posledice"
+End Sub
 
-    modOtkupUI.SelectMode f, "F8"
-    AssertEq modOtkupUI.GridMaxAktivan(), True, _
-             "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju"
+' ============================================================
+' 56. Ugovor ekrana Storno: deset lista, prva je navigaciona
+' ============================================================
+' Isti oblik kao T_Oporavak_UgovorIRadnje. Devet tipova su preneti iz F8; deseta
+' ("Svi") je pogled preko tipova koji legacy ima kao "Nadji dokument", a novi UI
+' do v6-ui-142 nije imao.
+Private Sub T_Storno_UgovorIRadnje()
+    Dim liste As Variant, i As Long, kljucevi As String
 
-    ' Izlazak vraca stanje koje je operater imao, ne nametnuto.
-    modOtkupUI.SelectMode f, "F1"
-    AssertEq modOtkupUI.GridMaxAktivan(), preF1, _
-             "izlazak iz F8 vraca operaterov izbor, ne ostavlja nametnut grid-max"
+    AssertEq (Len(modUiScreens.ScrRowByKey("STORNO")) > 0), True, _
+             "STORNO postoji u registru ekrana"
+    AssertEq (InStr(modUiScreens.ScrMeta("STORNO"), "kljuc=STORNO") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+
+    liste = modScrStorno.Scr_Liste()
+    AssertEq (UBound(liste) + 1), 10, "ekran ima deset lista"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|SVI|OTKUP|OTPREMNICA|ZBIRNA|PRIJEMNICA|AMB_ISPLATE|" & _
+             "AMB_UPLATE|REVERSI|FAKTURA|IZVOD", _
+             "redosled i kljucevi lista -- 'Svi' je prva"
+
+    ' Kljucevi lista JESU kljucevi tipova (STIP_*), pa prevodne tabele nema.
+    ' Ako se razidju, Scr_Rows bi trazio tabelu za nepostojeci tip i tiho vratio
+    ' otkupne listove pod tudjim naslovom.
+    For i = 1 To UBound(liste)
+        AssertEq (Len(modScrDokumenti.TabelaTipa(Split(CStr(liste(i)), "|")(0))) > 0), True, _
+                 "lista " & Split(CStr(liste(i)), "|")(0) & " ima svoju tabelu"
+    Next i
+End Sub
+
+' ============================================================
+' 57. Ekran Storno isporucuje IDENTITET, ne samo broj
+' ============================================================
+' Ovo je najskuplja tvrdnja u celoj migraciji storna u svoj ekran.
+'
+' Nevidljiva kolona identiteta se do v6-ui-141 dodavala pod uslovom
+' "If modOtkupUI.ActiveMode = "F8"". Ekran nema rezim -- da je taj uslov ostao,
+' bio bi cutke False, kolona bi nestala, IdentIzReda bi vracao prazno, i ceo
+' lanac iz #198 (correctionID / OldDocID / GeneracijaID) bi pao na fail-closed
+' po broju. NIJEDNA postojeca suite to ne bi videla: testovi identiteta (35, 45,
+' 46, 48-52) mere sloj ISPOD mreze, kome se docID prosledjuje direktno.
+'
+' Zato se ovde meri bas spoj: da li opis kolona koji dobija MREZA nosi kolonu
+' identiteta, i da li je unosni ekran i dalje NE nosi.
+Private Sub T_StornoEkran_KolonaIdentiteta()
+    Dim cols As Variant, poslednja As String, i As Long, ima As Boolean
+
+    ' NAJVAZNIJE PRVO: kolona identiteta MORA biti tu kad se trazi.
+    cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, True)
+    poslednja = modScrDokumenti.ColF(CStr(cols(UBound(cols))), 1)
+    AssertEq poslednja, COL_GENERACIJA_ID, _
+             "opis kolona za Storno nosi kolonu identiteta, i to POSLEDNJU"
+
+    ' I mora biti NEVIDLJIVA: prioritet 4, dok petlja vidljivosti ide 3 -> 1.
+    AssertEq modScrDokumenti.ColF(CStr(cols(UBound(cols))), 4), "4", _
+             "kolona identiteta je prioriteta 4 -- nikad vidljiva"
+
+    ' Unosni ekran je NE sme dobiti: GridCols je zajednicki za rezim unosa i za
+    ' Storno nad istim tipom (F4 i Storno/Prijemnica daju isti kljuc), pa bi
+    ' bezuslovno dodavanje menjalo i mrezu unosa.
+    cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, False)
+    For i = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
+    Next i
+    AssertEq ima, False, "unosni rezim NE dobija kolonu identiteta"
+
+    ' Tipovi koji identitet nemaju (revers, izvod) ga i ne dobijaju -- kolona bez
+    ' izvora bi mrezi dala prazan string koji izgleda kao "zatecen zapis".
+    cols = modScrDokumenti.GridCols(STIP_REVERSI, True)
+    ima = False
+    For i = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
+    Next i
+    AssertEq ima, False, "revers nema kanonski identitet, pa ni kolonu"
+
+    ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
+    AssertEq modScrStorno.Scr_IzabranDocID(), "GEN-F8-2", _
+             "ekran nosi identitet izabranog reda, ne samo broj"
 End Sub
 
 ' ============================================================

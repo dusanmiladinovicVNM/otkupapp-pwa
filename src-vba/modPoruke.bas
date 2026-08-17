@@ -700,7 +700,36 @@ Public Sub UpsertPoruke(lo As ListObject)
               "NE = PDF je bio lo" & ChrW(353) & " ili korumpiran " & ChrW(8212) & _
               " izvod se gasi, uvezi ga PONOVO iz ispravnog PDF-a." & vbCrLf & vbCrLf & _
               "OTKAZI = odustani."
-    ' natpisi prekidaca tipova u F8 - kratki, jer ih je devet u jednom redu
+    ' --- ekran Storno (v6-ui-142) ---
+    UpsertRow lo, existing, "OTKUI_NAV_STORNO", "Storno"
+    UpsertRow lo, existing, "OTKUI_SCRST_SUB", "Pregled posledica pre odluke"
+    UpsertRow lo, existing, "OTKUI_SCRST_LISTA", "Otkupni listovi"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_SVI", "Svi"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_ST_SVI", "Svi aktivni dokumenti"
+    UpsertRow lo, existing, "OTKUI_HD_TIP", "TIP"
+    UpsertRow lo, existing, "OTKUI_SCRST_IZBOR", "IZABRAN DOKUMENT"
+    UpsertRow lo, existing, "OTKUI_SCRST_NEMA", "Izaberi red u listi da vidi" & ChrW(353) & " posledice"
+    UpsertRow lo, existing, "OTKUI_SCRST_EFEKAT", "EFEKAT STORNA PO MODU"
+    UpsertRow lo, existing, "OTKUI_SCRST_PALETE", "PALETE"
+    UpsertRow lo, existing, "OTKUI_SCRST_BEZ_PALETA", "nema vezanih paleta"
+    UpsertRow lo, existing, "OTKUI_SCRST_NEDIRAJ", "Ne diraj palete"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOKOVI", "otkupnih blokova"
+    ' cetiri moda: natpis dugmeta + objasnjenje ISPOD njega. Isti tekst koji je
+    ' do v6-ui-142 zivotario u dva MsgBox-a (STORNO_ASK_MOD_1 / _2), samo sto
+    ' se sada sva cetiri odgovora vide ISTOVREMENO, uz posledice iznad.
+    UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Pogre" & ChrW(353) & "an unos"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj " & ChrW(8212) & " storniraj pa unesi ispravan"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_DUPLI", "Duplikat"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_DUPLI", "nikad nije trebalo da postoji " & ChrW(8212) & " bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_PONISTI", "Ni" & ChrW(353) & "ta se nije desilo"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_PONISTI", "fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_KASNIJE", "Re" & ChrW(353) & "i kasnije"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_KASNIJE", "zapamti kao nedovr" & ChrW(353) & "eno"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_STORNO", "Storniraj"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_STORNO", "obi" & ChrW(269) & "an storno, bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_REV_ISPR", "Ispravka"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_REV_ISPR", "storniraj stari, unesi novi (veza staro" & ChrW(8594) & "novo)"
+    ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"
     UpsertRow lo, existing, "OTKUI_SEG_ST_ZBR", "Zbirne"
