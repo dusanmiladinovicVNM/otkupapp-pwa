@@ -2505,3 +2505,70 @@ provere. Zato završetak pita ponovo, a ne veruje da je start pitao.
 `--all`. **Nisu u punom setu** (`default: False`) i traže mrežu. Provereno na
 worktree-u nad čistim `main`-om: identični brojevi padova, bez ijedne izmene sa
 grane. Zatečeno stanje, prijavljeno kao zatečeno — ne kao zeleno.
+
+## v2.46.8 — `v6-ui-137` · jedna linija je poništavala celu prethodnu rundu
+
+Kapija iz `v6-ui-136` je proveravala **drugu zbirnu** od one koju kod mutira.
+
+### P1 — roditelj se opet tražio po poslovnom broju
+
+```
+staraZbirna = LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE)
+```
+
+To je tačno obrazac koji ceo PR uklanja: *imam identitet → odbacim ga → ponovo
+biram prvi red po poslovnom broju*. Kapija je gledala `staraZbirna`, a relink
+prijemnica, rekalkulacija i storno prazne zbirne su išli nad `oldZbirna` iz
+context-a. Dve različite promenljive — pa je kapija mogla proveriti jednoznačnu
+zbirnu **siblinga** i pustiti mutaciju nad dvosmislenom zbirnom izabranog
+dokumenta.
+
+Sada postoji **jedna** promenljiva: `ParentBroj` iz context-a → fallback
+isključivo preko tačnog `OldDocID` → inače MANUAL. Nerazrešen roditelj se
+razlikuje od **nepostojećeg**: otpremnica bez zbirne nema šta da mutira i to nije
+greška, a nestao red jeste.
+
+### P2 — kapija je bila fail-open na sopstvenu grešku
+
+`On Error Resume Next` je pod schema drift-om davao `False`, to jest „broj je
+jednoznačan, mutiraj" — baš kad se ništa ne zna. Sada `EH:` vraća `True`: za
+kapiju je „ne mogu da dokažem jednoznačnost" isto što i „ne mutiraj".
+
+### P2 — test 46 nije reprodukovao stvarni kvar
+
+Stari test 46 je pravio context bez `ParentBroj`, pa completion nije ni imao
+roditelja preko kog bi prevezao prijemnicu. Sabotaža je obarala uzgrednu tvrdnju
+o `success`-u, a poslovnu nije ni doticala.
+
+Nov scenario: dve otpremnice **istog broja** sa **različitim** roditeljima
+(`OTP-STL-A` → dvosmislena, `OTP-STL-B` → jednoznačna, i B je prvi red), namenska
+ciljna zbirna i namenska tuđa prijemnica. Sabotaža sada pokazuje **štetu**:
+
+```
+ocekivano [ZB-TEST-KASK], dobijeno [ZB-TEST-STL]
+```
+
+Prijemnica drugog dokumenta prevezana na zbirnu koja joj ne pripada.
+
+### Test 47 — kapija mora blokirati kad ne može da dokaže
+
+Drift se pravi stvarno (preimenovanje `VozacID` u `tblZbirna`), pa se meri kroz
+seam: nad zdravom šemom `False`, pod driftom `True`. Pozitivna kontrola postoji
+jer bi test inače prošao i sa kapijom koja blokira sve.
+
+### Šesta zamka sabotaže: `AssertEq` diže grešku
+
+Test se **prekida** na prvom padu, pa tvrdnje ispod ostaju neizvršene. Sabotaža
+koja obori uzgrednu tvrdnju ostavlja poslovnu **nemerenom**, a to izgleda kao
+uspešan dvosmerni dokaz. **Redosled tvrdnji je deo dokaza — najvažnija ide prva.**
+Zapisano u `tools/sabotaza.py`.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=47, FAIL=0**.
+- `python tools\run_vba.py --all` → **11 suite-ova punog seta zeleno**.
+- **Četiri sabotaže** nad ovim područjem, svaka obara **svoju** tvrdnju.
+- Dve sync suite (van punog seta, traže mrežu) padaju identično i na čistom
+  `main`-u — zatečeno.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

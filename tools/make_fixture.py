@@ -68,6 +68,19 @@ OTPREMNICA_KOLIZIJA = "8/TEST"       # isti broj otpremnice, dve stanice, ista z
 # sme degradirati u prazan opseg i zavrsiti na golom broju. Testovi koji pecate
 # generacije ne smeju da ga dodirnu, pa ima svoj broj.
 OTPREMNICA_LEGACY = "6/TEST"
+# ZATECEN ("stale") context za zavrsetak ispravke. Dve otpremnice ISTOG broja sa
+# RAZLICITIM roditeljima: prva u tabeli visi na JEDNOZNACNOJ zbirni, a izabrana
+# (ona iz context-a) na DVOSMISLENOJ. Lookup po poslovnom broju zato vraca
+# POGRESNOG roditelja -- kapija proveri jednoznacnu zbirnu siblinga, a kod mutira
+# dvosmislenu zbirnu izabranog dokumenta. Bez ovog para se ta razlika ne meri.
+OTPREMNICA_STALE = "9/TEST"
+OTPREMNICA_STALE_NOVA = "10/TEST"    # cilj zamene; mora imati NEPRAZNU zbirnu
+# Namenska zbirna i prijemnica za stale scenario. NIJEDAN drugi test ih ne
+# dira: naslanjanje na ZB-TEST-4 i PRJ-KASK-1 je poslovnu tvrdnju cinilo
+# vakuumskom -- dotle bi ih drugi testovi vec pomerili ili stornirali, pa
+# relink nije imao sta da preveze i sabotaza nije obarala svoju tvrdnju.
+ZBIRNA_STALE = "ZB-TEST-STL"         # cilj relinka; jednoznacna, mirna
+PRIJEMNICA_STALE = "12/TEST"         # TUDJA prijemnica na dvosmislenoj zbirni
 OTPREMNICA_ZAMENA = "7/TEST"
 VRSTA = "TESTVOCE"
 # Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
@@ -179,6 +192,11 @@ SEED = {
         # ISTI BrojZbirne, ISTI kupac, DVA vozaca -> u jezgru dva dokumenta.
         # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
         # smatrala samo kupca, pa operater nije mogao da izabere pravi.
+        # Mirna, jednoznacna zbirna: cilj relinka u stale scenariju.
+        {"ZbirnaID": "ZBI-STL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_STALE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
+         "Klasa": "I", "KupacID": KUPAC},
         {"ZbirnaID": "ZBI-TEST-4", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_MIRNA, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
@@ -232,6 +250,25 @@ SEED = {
          "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_KOLIZIJA, "BrojZbirne": ZBIRNA_KASK,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        # ZATECEN CONTEXT: redosled je deo scenarija. OTP-STL-B je PRVI red tog
+        # broja i visi na JEDNOZNACNOJ zbirni; izabrana OTP-STL-A je druga i visi
+        # na DVOSMISLENOJ. Ne menjati redosled -- test 46 meri bas to da kod ne
+        # sme da uzme prvog po broju.
+        {"OtpremnicaID": "OTP-STL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_STALE,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-STL-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # Cilj zamene. Zbirna mora biti NEPRAZNA i jednoznacna: relink prijemnica
+        # se radi samo kad nova zbirna postoji, pa bi prazna napravila placebo
+        # test -- tudja prijemnica se ne bi prevezala ni bez kapije.
+        {"OtpremnicaID": "OTP-STL-N", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE_NOVA, "BrojZbirne": ZBIRNA_STALE,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"OtpremnicaID": "OTP-TEST-1", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
          "VozacID": VOZAC, "BrojOtpremnice": "1/TEST", "BrojZbirne": ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 1000, "Cena": 50.0,
@@ -310,6 +347,12 @@ SEED = {
         # Prijemnica ciji je RODITELJ zbirna sa dvosmislenim brojem. Kroz nju se
         # dohvata kaskadna kapija: PONISTENJE prijemnice zove PonistiZbirnaChain_TX
         # nad roditeljem, a taj put ne prolazi kroz kapiju na nivou moda zbirne.
+        # TUDJA prijemnica na dvosmislenoj zbirni. Nijedan test je ne stornira
+        # ni ne pomera, pa relink po BROJU stare zbirne ima sta da zahvati.
+        {"PrijemnicaID": "PRJ-STL-T", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STALE, "BrojZbirne": ZBIRNA_KASK,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-KASK-1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": "2/150326", "BrojZbirne": ZBIRNA_KASK,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,

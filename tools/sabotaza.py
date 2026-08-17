@@ -36,6 +36,13 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    tako sto rutina digne gresku pa vrati False) dokazuje samo da se kod izvrsava,
    ne i da ta konkretna tvrdnja meri. Ako izlaz prijavi drugu tvrdnju od
    ocekivane, suzi sabotazu dok ne pogodi svoju.
+
+6. `AssertEq` DIZE GRESKU, pa se test PREKIDA na prvom padu. Tvrdnje posle njega
+   se ne izvrsavaju -- a to znaci da sabotaza koja obori uzgrednu tvrdnju
+   ("operacija je vratila success=False") ostavlja poslovnu tvrdnju ispod nje
+   NEMERENOM, i to izgleda kao uspesan dvosmerni dokaz. Redosled tvrdnji u testu
+   je zato deo dokaza: NAJVAZNIJA tvrdnja ide PRVA. Simptom: izlaz prijavi drugu
+   tvrdnju od one koja je u katalogu (v. zamka 5).
 """
 
 import argparse
@@ -527,10 +534,35 @@ SABOTAZE = {
     # Zatecen PENDING context iz starije verzije zaobilazi kapiju na startu.
     "zatecen-context-bez-kapije": (
         "modStornoFlow.bas",
-        "    If ZbirnaBrojJeDvosmislenIkad(staraZbirna) Then\n",
+        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
         "    If False Then   ' SABOTAZA: zatecen context prolazi bez provere\n",
         "T_ZatecenContext_NePrevezujeTudjePrijemnice",
-        "completion staje nad zatecenim context-om dvosmislene zbirne",
+        "tudja prijemnica NIJE prevezana na novu zbirnu",
+    ),
+    # Ista kapija, ali ono STO proverava: roditelj po poslovnom broju umesto iz
+    # context-a. Vraca tacno diverganciju iz pregleda -- kapija proveri
+    # jednoznacnu zbirnu SIBLINGA, a mutacije nize idu nad oldZbirna izabranog
+    # dokumenta. Guard prolazi, tudja prijemnica se preveze.
+    "stale-parent-po-broju": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then\n",
+        "    Dim sabZbirna As String   ' SABOTAZA: roditelj po broju, ne iz context-a\n"
+        "    sabZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, COL_OTP_BROJ_ZBIRNE))\n"
+        "    If ZbirnaBrojJeDvosmislenIkad(sabZbirna) Then\n",
+        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
+        "tudja prijemnica NIJE prevezana na novu zbirnu",
+    ),
+    # Kapija fail-open na sopstvenu gresku: schema drift -> "jednoznacno je".
+    "kapija-fail-open": (
+        "modStornoFlow.bas",
+        "EH:\n"
+        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
+        "    ZbirnaBrojJeDvosmislenIkad = True\n",
+        "EH:\n"
+        "    LogErr MOD_NAME & \".ZbirnaBrojJeDvosmislenIkad\"\n"
+        "    ZbirnaBrojJeDvosmislenIkad = False   ' SABOTAZA: fail-open kapija\n",
+        "T_KapijaZbirne_FailClosedNaSvojuGresku",
+        "nerazresena jednoznacnost se tretira kao dvosmislena",
     ),
     # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
     # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.

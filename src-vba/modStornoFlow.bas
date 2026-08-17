@@ -588,13 +588,15 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     ' restart Excela i ne zavisi od toga da li je neko usput prosledio docID.
     ' Bez ovoga je zavrsetak ispravke ponovo birao po poslovnom broju, pa su
     ' blokovi sibling dokumenta iste oznake mogli da udju u relink.
+    ' OldDocID se cita UVEK, ne samo kad pozivalac nije dao docID: roditeljska
+    ' zbirna se nize razresava iskljucivo preko njega.
+    Dim oldDocID As String
+    oldDocID = Trim$(NzTx(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, correctionID, _
+                                      COL_SV_OLD_DOCID)))
     Dim srcGen As String, srcStanica As String
     If Len(Trim$(docID)) > 0 Then
         srcGen = docID
     Else
-        Dim oldDocID As String
-        oldDocID = Trim$(NzTx(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, correctionID, _
-                                          COL_SV_OLD_DOCID)))
         If Len(oldDocID) > 0 Then _
             srcGen = modDokumenta.GeneracijaPoID(TBL_OTPREMNICA, COL_OTP_ID, oldDocID)
         ' ZATECEN DOKUMENT BEZ GENERACIJE: OldDocID je tacan, pa se ne sme
@@ -607,15 +609,41 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     End If
     ' ZATECEN CONTEXT. Kapija na startu ne pomaze za context napravljen PRE nje
     ' -- persistentan je i prezivljava upgrade. Zato se pita i ovde.
-    Dim staraZbirna As String
-    staraZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, _
-                                   COL_OTP_BROJ_ZBIRNE))
-    If ZbirnaBrojJeDvosmislenIkad(staraZbirna) Then
+    '
+    ' RODITELJ SE NE TRAZI PO oldBroj. Nize se mutira BAS oldZbirna (relink
+    ' prijemnica, rekalkulacija, storno prazne), pa kapija mora da proveri TU
+    ' vrednost. Lookup po poslovnom broju je vracao PRVI red tog broja -- a to
+    ' moze biti sibling sa DRUGIM roditeljem: kapija tada proveri jednoznacnu
+    ' zbirnu siblinga, a kod mutira dvosmislenu zbirnu izabranog dokumenta.
+    ' Zato: context (ParentBroj) -> tacan OldDocID -> fail-closed. Nikad broj.
+    Dim parentRazresen As Boolean
+    oldZbirna = Trim$(oldZbirna)
+    parentRazresen = (Len(oldZbirna) > 0)
+    If Not parentRazresen And Len(oldDocID) > 0 Then
+        ' Legacy context bez ParentBroj. OldDocID je PK, pa je odgovor tacan i
+        ' kad je prazan: otpremnica bez zbirne nema roditelja da se mutira.
+        ' Zato se prvo potvrdi da red postoji -- nestao red nije "nema roditelja".
+        If Len(Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _
+                                      COL_OTP_BROJ)))) > 0 Then
+            oldZbirna = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _
+                                               COL_OTP_BROJ_ZBIRNE)))
+            parentRazresen = True
+        End If
+    End If
+    If Not parentRazresen Then
+        MarkCorrectionManual correctionID, _
+                             "Prevezi prijemnicu i zbirnu rucno (Osiroceni dokumenti).", _
+                             "Roditeljska zbirna stare otpremnice nije razresena -- " & _
+                             "context nema ParentBroj a OldDocID ne pokazuje na red."
+        r("message") = "Roditeljska zbirna stare otpremnice nije razresena."
+        Exit Function
+    End If
+    If ZbirnaBrojJeDvosmislenIkad(oldZbirna) Then
         MarkCorrectionManual correctionID, _
                              "Razdvoj brojeve zbirnih pa prevezi rucno.", _
-                             "Broj stare zbirne '" & staraZbirna & "' je pripadao VISE " & _
+                             "Broj stare zbirne '" & oldZbirna & "' je pripadao VISE " & _
                              "vlasnika -- relink prijemnica bi zahvatio tudje."
-        r("message") = "Broj stare zbirne '" & staraZbirna & "' je pripadao VISE vlasnika."
+        r("message") = "Broj stare zbirne '" & oldZbirna & "' je pripadao VISE vlasnika."
         Exit Function
     End If
 
@@ -1996,6 +2024,16 @@ Public Function OtpremnicaJeJediniVlasnik_Test(ByVal parentZbirna As String, _
     OtpremnicaJeJediniVlasnik_Test = OtpremnicaIsSoleOwner(parentZbirna, oldBroj, gen)
 End Function
 
+' TEST SEAM: ZbirnaBrojJeDvosmislenIkad je Private, a njeno ponasanje NA
+' SOPSTVENU GRESKU je poslovna odluka -- fail-open kapija je gora od nikakve.
+' Kroz ponasanje se to ne moze izmeriti jednoznacno: pod schema drift-om pada i
+' sve ostalo, pa bi operacija stala iz drugog razloga i test bio placebo.
+' Tvrdo gejtovano -- van test-rezima ne radi nista.
+Public Function ZbirnaDvosmislenaIkad_Test(ByVal broj As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    ZbirnaDvosmislenaIkad_Test = ZbirnaBrojJeDvosmislenIkad(broj)
+End Function
+
 ' Je li IZABRANA otpremnica jedini aktivan izvor te zbirne?
 '
 ' Meri se brojem LOGICKIH DOKUMENATA, ne distinct poslovnih brojeva. Zbirna je
@@ -2062,12 +2100,24 @@ End Function
 '
 ' Broji i STORNIRANE vlasnike: storniran vlasnik i dalje moze imati aktivnu
 ' decu, jer StornoZbirna_TX dira samo redove tblZbirna.
+' Kapija ne sme da bude fail-open na SOPSTVENU gresku. Sa "On Error Resume Next"
+' je schema drift ili nedostajuca owner kolona davala False -- to jest "broj je
+' jednoznacan, mutiraj" -- bas u slucaju kad se nista ne zna. Za kapiju je
+' "ne mogu da dokazem jednoznacnost" isto sto i "ne mutiraj".
+'
+' True (a ne Err.Raise) je namerno: pozivaoci ovo citaju u If-u i vracaju poruku,
+' a re-raise bi trazio jos jedan sloj EH-a na cetiri mesta.
 Private Function ZbirnaBrojJeDvosmislenIkad(ByVal broj As String) As Boolean
-    On Error Resume Next
+    On Error GoTo EH
+    ' Prazan broj nije nerazresen nego "nema roditelja" -- nema sta da se mutira.
     If Len(Trim$(broj)) = 0 Then Exit Function
     ZbirnaBrojJeDvosmislenIkad = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
                                   MOD_NAME, True, _
                                   Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
+    Exit Function
+EH:
+    LogErr MOD_NAME & ".ZbirnaBrojJeDvosmislenIkad"
+    ZbirnaBrojJeDvosmislenIkad = True
 End Function
 
 ' Poslednja odbrana: i ako neki buduci pozivalac zaboravi kapiju, rekalkulacija

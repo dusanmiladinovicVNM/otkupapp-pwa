@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-136`.
+Stanje na dan `v6-ui-137`.
 
 ---
 
@@ -54,6 +54,13 @@ moglo da ažurira zaglavlje jednog dokumenta zbirom otpremnica oba. Kapija
 `ZbirnaBrojJeDvosmislenIkad` stoji na četiri mesta, uključujući **završetak
 ispravke** — jer correction context je persistentan i zatečen context preživljava
 upgrade, pa kapija samo na startu ne pokriva njega.
+
+Od `v6-ui-137` ta kapija proverava **istu vrednost koju kod mutira**: do tada je
+roditelja tražila po poslovnom broju (`LookupValue` po `BrojOtpremnice`), a
+mutacije su išle nad `ParentBroj` iz context-a — pa je proveravala zbirnu
+siblinga. Roditelj se sada uzima iz context-a, fallback ide isključivo preko
+tačnog `OldDocID`, a nerazrešen roditelj je MANUAL. Kapija je i **fail-closed na
+sopstvenu grešku**: schema drift znači „ne mutiraj", ne „jednoznačno je".
 
 ---
 

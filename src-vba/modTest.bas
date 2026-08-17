@@ -96,6 +96,10 @@ Private Const FX_ZBIRNA_KASK As String = "ZB-TEST-KASK"
 ' Zatecen par BEZ generacije + zamena, za zavrsetak ispravke.
 Private Const FX_OTPREMNICA_LEGACY As String = "6/TEST"
 Private Const FX_OTPREMNICA_ZAMENA As String = "7/TEST"
+Private Const FX_OTPREMNICA_STALE As String = "9/TEST"
+Private Const FX_OTPREMNICA_STALE_NOVA As String = "10/TEST"
+Private Const FX_ZBIRNA_STALE As String = "ZB-TEST-STL"
+Private Const FX_PRIJEMNICA_STALE As String = "12/TEST"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -170,6 +174,7 @@ Public Sub RunAllTests()
     RunOne 44
     RunOne 45
     RunOne 46
+    RunOne 47
 
     SetTestMode prevMode
     WriteResultFile
@@ -256,6 +261,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 47: TestName = "T_KapijaZbirne_FailClosedNaSvojuGresku"
         Case 46: TestName = "T_ZatecenContext_NePrevezujeTudjePrijemnice"
         Case 45: TestName = "T_OtpremnicaNadDvosmislenomZbirnom_Staje"
         Case 44: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
@@ -310,6 +316,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 47: T_KapijaZbirne_FailClosedNaSvojuGresku
         Case 46: T_ZatecenContext_NePrevezujeTudjePrijemnice
         Case 45: T_OtpremnicaNadDvosmislenomZbirnom_Staje
         Case 44: T_StorniranVlasnik_JosImaAktivnuDecu
@@ -2123,23 +2130,91 @@ End Sub
 Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
     Dim cid As String, res As Object
 
-    AssertEq ZbirnaNaPrijemnici("PRJ-KASK-1"), FX_ZBIRNA_KASK, _
-             "preduslov: prijemnica visi na dvosmislenom broju zbirne"
+    ' Scenario mora imati DVA razlicita roditelja pod istim brojem otpremnice,
+    ' inace test ne meri nista: ako oba siblinga vise na istoj zbirni, lookup po
+    ' broju slucajno daje tacan odgovor i kapija prolazi i kad je kod pogresan.
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-A"), FX_ZBIRNA_KASK, _
+             "preduslov: izabrana otpremnica visi na DVOSMISLENOJ zbirni"
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-B"), FX_ZBIRNA_STALE, _
+             "preduslov: sibling istog broja visi na JEDNOZNACNOJ zbirni"
+    AssertEq PrviRoditeljPoBroju(FX_OTPREMNICA_STALE), FX_ZBIRNA_STALE, _
+             "preduslov: prvi red po broju daje POGRESNOG roditelja"
+    ' Tvrdnja se meri nad NAMENSKOM prijemnicom. Naslanjanje na PRJ-KASK-1 je
+    ' tvrdnju cinilo vakuumskom -- do ovog testa je vec bila u drugom stanju, pa
+    ' relink nije imao sta da preveze i sabotaza je obarala samo tudju tvrdnju.
+    AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
+             "preduslov: tudja prijemnica visi na dvosmislenoj zbirni"
+    AssertEq StorniranoNaID(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-STL-T"), False, _
+             "preduslov: tudja prijemnica je AKTIVNA (inace relink nema sta da uzme)"
+    AssertEq ZbirnaNaOtpremnici("OTP-STL-N"), FX_ZBIRNA_STALE, _
+             "preduslov: cilj zamene ima NEPRAZNU zbirnu (inace relinka nema)"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-STL-1"), False, _
+             "preduslov: ciljna zbirna je aktivna"
 
+    ' Context kakav pravi produkcija: OldDocID + OldBroj + ParentBroj. Napravljen
+    ' je "pre kapije" -- persistentan je i prezivljava upgrade, pa kapija na
+    ' startu za njega nije ni postojala.
     cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
-                                                  "OTP-KOL-A", FX_OTPREMNICA_KOLIZIJA)
+                                                  "OTP-STL-A", FX_OTPREMNICA_STALE, _
+                                                  "", "", "", "", "", FX_ZBIRNA_KASK)
     AssertEq (Len(cid) > 0), True, "zatecen context je napravljen"
 
-    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_ZAMENA)
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_STALE_NOVA)
+
+    ' POSLOVNA TVRDNJA IDE PRVA. AssertEq puca na prvom padu, pa tvrdnja koju
+    ' sabotaza navodi mora biti i prva koja pada -- inace sabotaza obori tvrdnju
+    ' o success-u, test se prekine, a ova ostane nemerena. Tako je i izgledalo
+    ' zeleno: "prijemnica nije prevezana" se nije ni izvrsavalo.
+    AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
+             "tudja prijemnica NIJE prevezana na novu zbirnu"
     AssertEq CBool(res("success")), False, _
              "completion staje nad zatecenim context-om dvosmislene zbirne"
     AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
              "razlog imenuje staru zbirnu"
-
-    ' Prijemnica je ostala gde je bila.
-    AssertEq ZbirnaNaPrijemnici("PRJ-KASK-1"), FX_ZBIRNA_KASK, _
-             "prijemnica NIJE prevezana na novu zbirnu"
 End Sub
+
+' ============================================================
+' 47. Kapija ne sme da bude fail-open na sopstvenu gresku
+' ============================================================
+' "On Error Resume Next" je davao False -- to jest "broj je jednoznacan, mutiraj"
+' -- bas kad se nista ne zna: nedostajuca owner kolona, schema drift, greska
+' resolvera. Za kapiju je "ne mogu da dokazem jednoznacnost" isto sto i
+' "ne mutiraj".
+'
+' Drift se pravi stvarno (preimenovanje kolone), ne simulira: poenta je da
+' RequireColumnIndex digne gresku unutar kapije, a da kapija to pretvori u
+' blokadu. Sema se vraca u istom testu.
+Private Sub T_KapijaZbirne_FailClosedNaSvojuGresku()
+    Dim lo As ListObject
+    Dim podDriftom As Boolean, semaVracena As Boolean
+
+    ' Pozitivna kontrola: nad zdravom semom kapija NE blokira jednoznacan broj.
+    ' Bez nje bi test prosao i kad kapija uvek vraca True (blokira sve).
+    AssertEq modStornoFlow.ZbirnaDvosmislenaIkad_Test(FX_ZBIRNA_MIRNA), False, _
+             "pozitivna kontrola: jednoznacan broj prolazi kroz kapiju"
+
+    Set lo = GetTable(TBL_ZBIRNA)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_ZBR_VOZAC).Name = COL_ZBR_VOZAC & "_DRIFT"
+    podDriftom = modStornoFlow.ZbirnaDvosmislenaIkad_Test(FX_ZBIRNA_MIRNA)
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_ZBR_VOZAC & "_DRIFT").Name = COL_ZBR_VOZAC
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC) > 0)
+
+    AssertEq podDriftom, True, _
+             "nerazresena jednoznacnost se tretira kao dvosmislena"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+
+' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.
+' Postoji samo da preduslov testa 46 bude proveren, a ne pretpostavljen.
+Private Function PrviRoditeljPoBroju(ByVal brojOtp As String) As String
+    PrviRoditeljPoBroju = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, _
+                                                     brojOtp, COL_OTP_BROJ_ZBIRNE)))
+End Function
 
 Private Function ZbirnaNaOtpremnici(ByVal otpID As String) As String
     ZbirnaNaOtpremnici = Trim$(NzToText(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, _
