@@ -746,7 +746,7 @@ End Sub
 Private Sub T_ScrSave_RutaPoRezimu()
     Dim p As Object
 
-    ' Do v6-ui-142 je ovde prva tvrdnja bila da F8 (storno) vraca
+    ' Do v6-ui-143 je ovde prva tvrdnja bila da F8 (storno) vraca
     ' OTKUI_TODO_NEVEZANO -- "nepokriven rezim". Ta tvrdnja je nestala sa
     ' rezimom: storno je svoj ekran, ciji Scr_Meta kaze "upis=ne", pa se
     ' Scr_Save nad njim uopste ne zove. SVIH SEDAM preostalih rezima je
@@ -1158,7 +1158,7 @@ End Function
 ' opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente pod
 ' pravim naslovom -- greska koju operater ne moze da vidi.
 '
-' PRETARGETIRAN u v6-ui-142: mera je ista, ali seam vise nije rezim F8 nego
+' PRETARGETIRAN u v6-ui-143: mera je ista, ali seam vise nije rezim F8 nego
 ' KLJUC TIPA. Storno je svoj ekran, pa "koja tabela" vise ne zavisi od
 ' ActiveMode -- i test to sada trazi tako kako produkcija stvarno pita.
 '
@@ -1182,7 +1182,7 @@ Private Sub T_Storno_TipBiraTabeluIKolone()
                  "Storno / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
     Next i
 
-    ' Rezim i dalje mora da stigne do iste tabele -- ModeTable je od v6-ui-142
+    ' Rezim i dalje mora da stigne do iste tabele -- ModeTable je od v6-ui-143
     ' samo TabelaTipa(modeKey()), pa bi razilazenje ta dva puta znacilo da
     ' unosni ekran i storno gledaju u razlicite tabele za isti dokument.
     AssertEq modScrDokumenti.ModeTable("F4"), TBL_PRIJEMNICA, _
@@ -2302,7 +2302,7 @@ End Sub
 ' podatke dokumenta koji hoce da stornira. #201 je to sakrio grid-maxom --
 ' privremeno, jer je forma i dalje postojala i samo se nije videla.
 '
-' Od v6-ui-142 forme nema: storno je ekran u registru, sa "upis=ne". Ovaj test
+' Od v6-ui-143 forme nema: storno je ekran u registru, sa "upis=ne". Ovaj test
 ' zamenjuje raniji T_StornoNijeUnosniRezim, koji je merio grid-max -- meru koja
 ' je sa rezimom prestala da postoji.
 Private Sub T_StornoJeEkranNeRezim()
@@ -2333,7 +2333,7 @@ End Sub
 ' ============================================================
 ' Isti oblik kao T_Oporavak_UgovorIRadnje. Devet tipova su preneti iz F8; deseta
 ' ("Svi") je pogled preko tipova koji legacy ima kao "Nadji dokument", a novi UI
-' do v6-ui-142 nije imao.
+' do v6-ui-143 nije imao.
 Private Sub T_Storno_UgovorIRadnje()
     Dim liste As Variant, i As Long, kljucevi As String
 

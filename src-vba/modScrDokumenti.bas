@@ -1186,7 +1186,7 @@ Public Function GridCols(ByVal mk As String, Optional ByVal saIdentitetom As Boo
     ' jer mColN broji sve deklarisane kolone. Sirina 0 je bez znacaja dok je
     ' kolona nevidljiva, ali stoji da flex-raspodela ne bi imala sta da uzme.
     '
-    ' Kapija je ARGUMENT, ne ActiveMode. Do v6-ui-142 je ovde stajalo
+    ' Kapija je ARGUMENT, ne ActiveMode. Do v6-ui-143 je ovde stajalo
     ' "If modOtkupUI.ActiveMode = "F8"", sto je radilo dok je storno bio rezim
     ' te iste ljuske. Ekran nema rezim: ostavljena, ta provera bi cutke bila
     ' False, kolona bi nestala, IdentIzReda bi vracao prazno i ceo lanac
@@ -1563,7 +1563,7 @@ End Function
 ' lista potrebna dvama ekranima: unosni rezim pokazuje svoj tip, a Storno
 ' pokazuje tip koji je operater izabrao cipom.
 '
-' Do v6-ui-142 je ovo bilo Private i citalo ActiveMode na tri mesta (tabela,
+' Do v6-ui-143 je ovo bilo Private i citalo ActiveMode na tri mesta (tabela,
 ' kljuc tipa, recnik partnera), pa je "koji tip" dolazilo iz rezima ljuske.
 ' Kad je storno postao svoj ekran, rezim vise ne kaze nista o tipu -- a kopija
 ' ovih 250 linija u ekranski modul bi bila drugo mesto na kome se odlucuje
@@ -1624,7 +1624,7 @@ Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q 
     ' Sve odluke ispod (koje kolone, koji recnik partnera, ima li placanja)
     ' pripadaju TIPU koji je pozivalac zatrazio. Do v6-ui-118 je ovde stajao
     ' goli modeKey pa je storno mogao da cita samo tblOtpremnica; do
-    ' v6-ui-142 je stajao EffKey nad ActiveMode, pa je tip dolazio iz rezima.
+    ' v6-ui-143 je stajao EffKey nad ActiveMode, pa je tip dolazio iz rezima.
     '
     ' Nekadasnja "druga brana" (filter tvrdo na "otkazane") je uklonjena
     ' NAMERNO: Storno sada stornira, pa mu je radna lista lista AKTIVNIH

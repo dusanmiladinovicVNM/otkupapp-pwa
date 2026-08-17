@@ -700,7 +700,7 @@ Public Sub UpsertPoruke(lo As ListObject)
               "NE = PDF je bio lo" & ChrW(353) & " ili korumpiran " & ChrW(8212) & _
               " izvod se gasi, uvezi ga PONOVO iz ispravnog PDF-a." & vbCrLf & vbCrLf & _
               "OTKAZI = odustani."
-    ' --- ekran Storno (v6-ui-142) ---
+    ' --- ekran Storno (v6-ui-143) ---
     UpsertRow lo, existing, "OTKUI_NAV_STORNO", "Storno"
     UpsertRow lo, existing, "OTKUI_SCRST_SUB", "Pregled posledica pre odluke"
     UpsertRow lo, existing, "OTKUI_SCRST_LISTA", "Otkupni listovi"
@@ -716,7 +716,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRST_NEDIRAJ", "Ne diraj palete"
     UpsertRow lo, existing, "OTKUI_SCRST_BLOKOVI", "otkupnih blokova"
     ' cetiri moda: natpis dugmeta + objasnjenje ISPOD njega. Isti tekst koji je
-    ' do v6-ui-142 zivotario u dva MsgBox-a (STORNO_ASK_MOD_1 / _2), samo sto
+    ' do v6-ui-143 zivotario u dva MsgBox-a (STORNO_ASK_MOD_1 / _2), samo sto
     ' se sada sva cetiri odgovora vide ISTOVREMENO, uz posledice iznad.
     UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Pogre" & ChrW(353) & "an unos"
     UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj " & ChrW(8212) & " storniraj pa unesi ispravan"

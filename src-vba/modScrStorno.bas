@@ -1,6 +1,6 @@
 Attribute VB_Name = "modScrStorno"
 '=====================================================================
-' modScrStorno - ekran "Storno" (v6-ui-142).
+' modScrStorno - ekran "Storno" (v6-ui-143).
 '
 ' Ljuska ga ne poznaje po imenu: dobija ga preko Application.Run, da
 ' klijent kome ovaj modul nedostaje i dalje radi (zamka #19).
@@ -43,7 +43,7 @@ Attribute VB_Name = "modScrStorno"
 '=====================================================================
 Option Explicit
 
-Public Const SCRST_BUILD As String = "v6-ui-142"
+Public Const SCRST_BUILD As String = "v6-ui-143"
 
 ' Visina zone. Veca je od KPI_H jer zona nosi ceo uvid: zaglavlje dokumenta,
 ' tabelu efekta po modu, palete i red odluke.
@@ -68,7 +68,7 @@ Private mSelDocID As String
 ' Ono sto se iz broja ne vidi: smer reversa, odnosno racun izvoda.
 Private mSelOpcija As String
 
-' "Ne diraj palete" -- do v6-ui-142 MsgBox (STORNO_ASK_PALETE), sada prekidac
+' "Ne diraj palete" -- do v6-ui-143 MsgBox (STORNO_ASK_PALETE), sada prekidac
 ' koji stoji uz posledice, pa se vidi PRE odluke a ne posle nje.
 Private mNeDiraj As Boolean
 
@@ -426,7 +426,7 @@ End Sub
 
 ' "Ne diraj palete" ima smisla samo tamo gde palete vise za dokument, i samo
 ' kad dokument nestaje bez naslednika. Uz ISPRAVKU se palete prevezuju na novi
-' dokument, pa se pitanje ne postavlja -- isti uslov koji je do v6-ui-142 stajao
+' dokument, pa se pitanje ne postavlja -- isti uslov koji je do v6-ui-143 stajao
 ' u IzvrsiMod, samo sto se sada vidi kao prekidac umesto da iskoci kao MsgBox.
 Private Function PitanjeOPaletama() As Boolean
     PitanjeOPaletama = (mSelTip = STIP_PRIJEMNICA And Len(mSelBroj) > 0)
@@ -437,7 +437,7 @@ End Function
 '   "<mod>|<kljuc natpisa>|<kljuc objasnjenja>|<stil>"
 ' Prazan povratak = nema izabranog dokumenta, pa nema ni odluke.
 '
-' Tri slucaja, isti koje je do v6-ui-142 razlikovala IspravkaPreuzela:
+' Tri slucaja, isti koje je do v6-ui-143 razlikovala IspravkaPreuzela:
 '   REVERS         nema nizvodni tok, ali IMA poslovnu razliku storno vs
 '                  ispravka (isti fizicki dogadjaj, pogresno unet)
 '   framework tip  pun izbor moda, i to SAMO kad StornoTraziIzborModa kaze da

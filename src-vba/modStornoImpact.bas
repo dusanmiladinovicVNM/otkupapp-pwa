@@ -21,7 +21,7 @@ Option Explicit
 Private Const MOD_NAME As String = "modStornoImpact"
 
 ' docID = KANONSKI IDENTITET izabranog dokumenta (GeneracijaID za robna
-' dokumenta). Do v6-ui-142 ga ovaj sloj nije imao, pa je ceo uvid isao po
+' dokumenta). Do v6-ui-143 ga ovaj sloj nije imao, pa je ceo uvid isao po
 ' BROJU -- a broj nije jedinstven (GenerateBrojPrijemnice nema proveru
 ' jedinstvenosti). Posledica nije bila teorijska: pod kolizijom broja je
 ' pregled pokazivao lanac i blokove TUDJEG dokumenta, a operater bi na osnovu

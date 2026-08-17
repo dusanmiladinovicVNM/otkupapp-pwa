@@ -1064,7 +1064,7 @@ Private Sub BuildRight(frm As Object)
     ' izostavljao, pa se spisak premetao pri svakoj promeni i nije se videlo
     ' gde si. Redosled je fiksan F1..F7, kartica nosi rezim u .Tag.
     '
-    ' Osma kartica je do v6-ui-142 bila Storno, odvojena linijom jer nije
+    ' Osma kartica je do v6-ui-143 bila Storno, odvojena linijom jer nije
     ' unosni rezim. Storno je sada svoj EKRAN i stoji u sidebaru uz Dokumenta
     ' i Oporavak, pa ovde nema sta da trazi -- ostalo je sedam ravnopravnih.
     For i = 0 To 6
@@ -2883,7 +2883,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ClosePopup
     ActiveMode = key
     k = modeKey(key)
-    ' Ovde je do v6-ui-142 stajao grid-max za STORNO: F8 je crtao unosnu formu
+    ' Ovde je do v6-ui-143 stajao grid-max za STORNO: F8 je crtao unosnu formu
     ' koju ne koristi, pa mu je forma sklanjana. Od kada je storno SVOJ EKRAN,
     ' svi preostali rezimi (F1..F7) su unosni i forma im pripada -- pa izuzetka
     ' nema. Grid-max ostaje samo kao operaterov izbor kroz prekidac.
@@ -2988,7 +2988,7 @@ Private Sub RefreshModeCards(frm As Object)
     Dim mk As String, md As String, act As Boolean
     Set z = frm.Controls("zRight")
     ' redosled kartica prati brojeve tastera: F1..F7, svi unosni.
-    ' Osma kartica (Storno, "warn" bojama) je otisla sa rezimom u v6-ui-142.
+    ' Osma kartica (Storno, "warn" bojama) je otisla sa rezimom u v6-ui-143.
     m = Array("F1", "F2", "F3", "F4", "F5", "F6", "F7")
     For i = 0 To 6
         md = CStr(m(i))
@@ -3382,7 +3382,7 @@ Private Sub UiClickCore(ByVal tag As String)
     End If
     ' KONTROLE IZ ZONE UGOVORNOG EKRANA. Ljuska ih ne poznaje po imenu - prefiks
     ' "scr" je ceo dogovor, pa ekran moze da doda svoje dugme bez ijedne izmene
-    ' ovde. Do v6-ui-142 zona nije imala nijednu kliktacu kontrolu (Oporavak i
+    ' ovde. Do v6-ui-143 zona nije imala nijednu kliktacu kontrolu (Oporavak i
     ' Palete drze samo labele), pa ovaj prolaz nije ni postojao - i dugme u zoni
     ' bi tiho "ne radilo".
     '
@@ -5409,7 +5409,7 @@ Public Function HandleGlobalKey(ByVal KeyCode As Long, ByVal Shift As Long) As B
         Case vbKeyF6: SelectMode mFrm, "F6"
         Case vbKeyF7: SelectMode mFrm, "F7"
         ' F8 je jedini od osam koji vise ne bira REZIM nego EKRAN: storno je
-        ' od v6-ui-142 svoj ekran. Taster je ostao isti da operateru ne promeni
+        ' od v6-ui-143 svoj ekran. Taster je ostao isti da operateru ne promeni
         ' prst -- promenilo se samo gde vodi.
         Case vbKeyF8: IdiNaEkran "STORNO"
         ' pomoc je sa F1 presla na F9 - F1 je sada rezim "Otkupni list"

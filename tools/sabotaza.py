@@ -595,7 +595,7 @@ SABOTAZE = {
         "T_MapaImena_KljucNosiKolone",
         "kljuc kesa nosi KOLONE -- ime+prezime nije isto sto i samo ime",
     ),
-    # --- ekran Storno (v6-ui-142) --------------------------------------------
+    # --- ekran Storno (v6-ui-143) --------------------------------------------
     # NAJSKUPLJA tvrdnja migracije: nevidljiva kolona identiteta. Do v6-ui-141
     # se dodavala pod uslovom ActiveMode = "F8"; ekran nema rezim, pa bi taj
     # uslov cutke bio False i ceo lanac iz #198 bi pao na biranje po BROJU --
@@ -619,7 +619,7 @@ SABOTAZE = {
         "unosni rezim NE dobija kolonu identiteta",
     ),
     # Storno je ekran BEZ upisa. Ako mu se vrati "upis=da", ljuska mu crta
-    # primarno dugme koje nema sta da pozove -- tacno stanje od pre v6-ui-142.
+    # primarno dugme koje nema sta da pozove -- tacno stanje od pre v6-ui-143.
     "storno-ekran-ima-upis": (
         "modScrStorno.bas",
         '               "|lista=OTKUI_SCRST_LISTA|oblik=lista|upis=ne"\n',

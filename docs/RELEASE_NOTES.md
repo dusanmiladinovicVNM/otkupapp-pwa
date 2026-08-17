@@ -2915,7 +2915,8 @@ unosnom ekranu — tok koji je upravo stabilizovan. Vizuelni ishod je isti.
 Testovi 53–55 mere baš ono što se ne vidi kroz vraćenu vrednost: sam keš (kroz
 seam), jer `Empty` izgleda isto i kad je neuspeh keširan i kad nije.
 
-## v2.48.0 — `v6-ui-142` · Storno dobija svoj ekran
+
+## v2.48.0 — `v6-ui-143` · Storno dobija svoj ekran
 
 Korak 1 od dva. Storno prestaje da bude osmi režim unosnog ekrana i postaje
 zaseban ekran u navigaciji, sa pregledom posledica **pre** odluke — ekvivalent
@@ -2926,14 +2927,13 @@ legacy ekrana „Storno / potvrda".
 F8 je crtao unosnu formu koju ne koristi. `Scr_Save` za `STORNO` je padao u
 `Case Else` i vraćao „Nije vezano na postojeću rutinu" — dakle **primarno dugme
 je bilo mrtvo**, a forma je pozivala operatera da ukuca podatke dokumenta koji
-hoće da stornira. #201 je to sakrio grid-maxom; forma je i dalje postojala, samo
-se nije videla. Sada je nema.
+hoće da stornira. `v6-ui-142` je to sakrio grid-maxom; forma je i dalje
+postojala, samo se nije videla. Sada je nema.
 
-Drugo: pregled posledica je bio niz `MsgBox`-ova. `modStornoImpact` od
-`v6-ui-1xx` vraća **sedam sekcija** (zaglavlje, lanac, blokovi, zastavice,
-palete, faktura, sažetak) — tačno sekcije sa legacy ekrana — ali ga je do sada
-renderovao **samo legacy** (`frmDokumenta.frm:4662`). Novi UI ga nije zvao ni sa
-jednog mesta.
+Drugo: pregled posledica je bio niz `MsgBox`-ova. `modStornoImpact` vraća
+**sedam sekcija** (zaglavlje, lanac, blokovi, zastavice, palete, faktura,
+sažetak) — tačno sekcije sa legacy ekrana — ali ga je do sada renderovao **samo
+legacy** (`frmDokumenta.frm:4662`). Novi UI ga nije zvao ni sa jednog mesta.
 
 ### Odluka koja se menja
 
@@ -2943,12 +2943,12 @@ dugmeta** — Pogrešan unos / Duplikat / Ništa se nije desilo / Reši kasnije 
 svako sa objašnjenjem ispod, a iznad njih stoje lanac, palete i broj blokova.
 Operater vidi sva četiri ishoda **istovremeno**, umesto da drugi izbor otkrije
 tek pošto odgovori na prvi. Prekidač „Ne diraj palete" je iz istog razloga izašao
-iz `MsgBox`-a i stoji uz palete na koje se odnosi.
+iz `MsgBox`-a (`STORNO_ASK_PALETE`) i stoji uz palete na koje se odnosi.
 
 ### Najopasnija linija u migraciji
 
 ```vb
-If modOtkupUI.ActiveMode = "F8" Then          ' <- do v6-ui-141
+If modOtkupUI.ActiveMode = "F8" Then          ' <- do v6-ui-142
     c.Add "OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
 ```
 
@@ -2963,7 +2963,7 @@ sada **argument** (`GridCols(tip, saIdentitetom)`), i zato test 57 meri baš taj
 spoj — u oba smera: kolona mora biti tu kad se traži, i **ne sme** biti tu za
 unosni režim.
 
-### Ostalo u ovom koraku
+### Šta je još u ovom koraku
 
 - **`modScrStorno`** po ugovoru ekrana (`oblik=lista|upis=ne`), grupa OPERACIJE,
   oblast `OBL_DOKUMENTA`. Deset čipova: devet tipova iz F8 plus **navigacioni
@@ -2987,10 +2987,46 @@ unosni režim.
   u zonu koja je sakrivena. `ActivateScreen` je ostao `Private`; nov javni ulaz
   je `IdiNaEkran`.
 - **Ljuska**: `rezima=8` → `7`, osma kartica iz `zRight`, taster F8 sada bira
-  **ekran**, grid-max izuzetak iz #201 uklonjen (postao je bespredmetan), i nov
-  generički prolaz za kontrole iz zone ugovornog ekrana (prefiks `scr`) — do
-  sada nijedan ekran nije imao kliktaču kontrolu u zoni, pa dugme u njoj ne bi
-  radilo.
+  **ekran**, grid-max izuzetak iz `v6-ui-142` uklonjen (postao je bespredmetan),
+  i nov generički prolaz za kontrole iz zone ugovornog ekrana (prefiks `scr`) —
+  do sada nijedan ekran nije imao kliktaču kontrolu u zoni.
+
+### Šta je našao smoke test (i šta je iz toga naučeno)
+
+Pet nalaza, od kojih **tri nisu bila u Stornu nego u ljusci**. Svi imaju istu
+osobinu: kvar bez ijedne poruke.
+
+1. **`MAX_SEG = 9`, a ekran ima deset lista.** `LayoutGrid` nacrta prvih devet i
+   stane — bez greške i bez traga — pa čip „Izvodi" **nije postojao**. Granica je
+   podignuta na 10, a tvrdnja se sada meri kroz nov seam `MaxPrekidaca()`, i to
+   tako da važi za **svaki budući ekran**.
+2. **`ScrGridData` je gutao grešku iz `Scr_Rows` golim `On Error Resume Next`.**
+   Greška postaje `Empty`, `LoadGridFromScreen` na ne-niz radi `Exit Sub`, i
+   mreža ostane na **prethodnoj listi sa prethodnim naslovom**. Prekidač izgleda
+   kao da ne radi. To je isti obrazac zbog kog `ScrEvent` već ima `ScrLastErr`
+   („Po datumu"), samo u sloju redova — gušenje ostaje, trag se dodaje.
+3. **Prefill je gubio baš ono što je lista.** Novi `scr` prolaz je posle radnje
+   bezuslovno zvao `RefreshFromData`, a on radi `FillZbirneCombo` i
+   `mPartnerFor = ""` — pa briše izbor koji je prefill upravo postavio. Radnja
+   sada osvežava **samo ako je ostala na istom ekranu**.
+4. **Broj dokumenta je posle ispravke ostajao prazan.** Prefill ga namerno ne
+   donosi (stari broj pripada storniranom), ali predlog se ni **nije računao**:
+   `RefreshBrojPredlog` visi o promeni stanice ili datuma, a `ApplyPrefill` oba
+   postavlja pod `mLoading = True`. Računa se sada na kraju prefilla, i **samo**
+   kad broj nije donet. Remote provera se preskače u test-režimu (isti gard kao
+   kod `SetFocus`-a) — suite ne sme da zavisi od mreže.
+5. **Keš je stajao oko pogrešnog dela.** `BeginTableCache` je obuhvatao samo
+   `BuildStornoImpact`, a red odluke (`AkcijeZaTip` → `StornoTraziIzborModa` →
+   `CorrectionNeedsDialog`) je **još jedan prolaz kroz isti lanac** i stajao je
+   izvan keša. Baš to operater vidi kao „sporo se puni efekat po modu". Keš sada
+   obuhvata ceo izbor reda, uz `EndTableCache` i u error handleru.
+
+**Test 59 je prvo pao na PREDUSLOVU, ne na pravilu** — `ApplyPrefill` u testu
+nije mogao da izabere stanicu jer combo-i nisu bili punjeni. Bez te tvrdnje bi
+test merio prazan combo i „prošao" bi i nad neispravnim kodom.
+
+**Nije defekt:** prazan KUPAC na otpremnici. `tblOtpremnica` nema kolonu kupca —
+partner otpremnice je stanica.
 
 ### Šta NIJE u obimu (Korak 2)
 
@@ -3000,12 +3036,11 @@ storno blokova ostaje sve-ili-ništa). Legacy `frmDokumenta` se ne dira.
 
 ### Verifikacija
 
-- `python tools\vba_check.py` → **čisto (191 fajl)**.
-- `python tools\vba_check.py --self-test` → **29 slučajeva**.
-- `python tools\run_vba.py --suite RunAllTests` → **TESTS=57, FAIL=0** (bilo 55).
+- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → **29**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=59, FAIL=0** (bilo 55).
 - `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite
   (`RunGoogleSyncSmokeSuite`, `RunMasterSyncSmokeSuite`) crvene **zatečeno**.
-- **Četiri nove sabotaže**, svaka oborila svoju tvrdnju **po imenu**.
+- **Šest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u
@@ -3013,130 +3048,3 @@ zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
 (`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
 `git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
 pa run visi do timeout-a umesto da prijavi tvrdnju.
-
-## v2.48.1 — `v6-ui-143` · tri nalaza sa smoke testa ekrana Storno
-
-Operater je prijavio tri stvari. Sve tri su imale uzrok u kodu, i dve od njih
-nisu bile u Stornu nego u **ljusci**.
-
-### Čip „Izvodi" nije postojao, a „Svi" nije radio
-
-`MAX_SEG = 9` — ljuska crta **najviše devet** dugmadi prekidača. Ekran Storno ih
-prijavljuje **deset**. `LayoutGrid` nacrta prvih devet i stane: **bez greške i
-bez traga**. „Izvodi" su bili u `Scr_Liste`, ali se nisu mogli izabrati ni na
-koji način.
-
-Granica je podignuta na 10, a tvrdnja je sada merena — i to tako da važi za
-**svaki budući ekran**, ne samo za ovaj:
-
-```vb
-AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
-         "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-```
-
-### „Dugme ne radi i niko ne zna zašto" — drugi put
-
-`modUiScreens.ScrGridData` je imao go `On Error Resume Next`. Greška iz
-`Scr_Rows` se time pretvarala u `Empty`, a `LoadGridFromScreen` na ne-niz radi
-`Exit Sub` — pa mreža **ostane na prethodnoj listi, sa prethodnim naslovom**.
-Nema greške, nema toasta; prekidač izgleda kao da ne radi.
-
-To je isti obrazac zbog kog `ScrEvent` već ima `ScrLastErr` („Po datumu"), samo
-u sloju redova. Gušenje ostaje — ekran koji padne ne sme da obori aplikaciju —
-ali se sada **beleži i prikazuje**. Test 58 zove `Scr_Rows` za svaku od deset
-lista **mimo tog gutača**, pa lista koja pukne pada po imenu.
-
-### Prefill je gubio baš ono što je lista
-
-Posle ISPRAVKE su bila popunjena obična polja, a **combo-i prazni**. Krivac je
-bio nov generički prolaz za kontrole iz zone: posle radnje je bezuslovno zvao
-`RefreshFromData`, a on radi `FillZbirneCombo` i `mPartnerFor = ""` — dakle
-ponovo puni liste i time briše izbor koji je prefill upravo postavio.
-
-Radnja sada osvežava **samo ako je ostala na istom ekranu**. Predaja poslu na
-drugom ekranu (storno → ispravka → unos zamenskog) je izuzetak: tamo je forma
-već popunjena i osvežavanje je štetno.
-
-### „Mnogo sporo učitava efekat storna po modu"
-
-Dva uzroka, oba merljiva:
-
-1. `AkcijeZaTip` je zvao `StornoTraziIzborModa` → `CorrectionNeedsDialog` pri
-   **svakom** osvežavanju zone — a zona se osvežava i na izbor reda i na svaki
-   klik prekidača „Ne diraj palete". Isti skup račun je išao tri i više puta po
-   jednom dokumentu. Sada se keširа po izboru (ključ nosi i identitet, jer dva
-   dokumenta istog broja mogu imati različit nizvodni tok).
-2. `BuildStornoImpact` je sedam sekcija, a svaka ide u `GetTableData` po iste
-   tabele. Poziv je sada umotan u `BeginTableCache`/`EndTableCache` — isti
-   obrazac koji `modStornoWarm.BuildWarm` već koristi. `EndTableCache` ide i u
-   error handler: keš koji ostane otvoren zamrzava snimak tabela do kraja sesije.
-
-### Uz to
-
-Svi handleri u `modScrStorno` sada rade `Err.Clear`. Bez toga omotač
-`ScrEvent` posle povratka pročita `Err.Number` i javi „Radnja nije uspela" za
-grešku koja je **već obrađena** — pa je operater dobijao crveni toast preko
-radnje koja je prošla.
-
-### Verifikacija
-
-- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → 29.
-- `python tools\run_vba.py --suite RunAllTests` → **TESTS=58, FAIL=0**.
-- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite crvene
-  zatečeno.
-- **Peta sabotaža** (`ljuska-odseca-liste`) oborila svoju tvrdnju po imenu.
-- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
-
-## v2.48.2 — `v6-ui-144` · broj dokumenta posle ispravke, i keš oko celog izbora
-
-Dva nalaza sa drugog smoke testa.
-
-### Broj dokumenta je ostajao prazan posle ispravke
-
-Prefill **namerno** ne donosi broj — stari broj pripada storniranom dokumentu, a
-novi mora da dobije svoj. Ali predlog se ni **nije računao**:
-
-`RefreshBrojPredlog` visi o promeni **stanice** ili **datuma**, a `ApplyPrefill`
-oba postavlja pod `mLoading = True`, pa se nijedan event ne okine.
-`SelectModeCore` ga zove ranije, ali tada stanice još nema (forma je tek
-očišćena) → `EntitetZaBroj` vrati prazno → predlog se preskoči.
-
-Rezultat: dokument koji operater treba samo da potvrdi ostaje bez broja, i to
-bez ijedne poruke. Predlog se sada računa na kraju `ApplyPrefill`, kad su stanica
-i datum već u poljima — i **samo** kad prefill broj nije doneo, da izbor
-otpremnice u F1 ne izgubi broj koji je stigao uz nju.
-
-Remote provera (`SuggestNextBroj` pita Google) se preskače u test-režimu, isti
-gard koji već postoji kod `SetFocus`-a: suite ne sme da zavisi od mreže. U
-produkciji ostaje uključena — broj dokumenta je poslovni podatak i lokalni sken
-ga na drugoj mašini može predložiti dvaput.
-
-**Test 59 je prvo pao na PREDUSLOVU**, ne na pravilu: `ApplyPrefill` u testu nije
-mogao da izabere stanicu jer combo-i nisu bili punjeni (`FillCombos` u produkciji
-zove `StartApp`). Bez tog preduslova test bi merio prazan combo umesto pravila —
-i „prošao" bi i nad neispravnim kodom.
-
-### Keš je stajao oko pogrešnog dela
-
-`BeginTableCache` je u prethodnoj verziji obuhvatao samo `BuildStornoImpact`.
-Ali red odluke (`AkcijeZaTip` → `StornoTraziIzborModa` → `CorrectionNeedsDialog`)
-je **još jedan prolaz kroz isti lanac**, i stajao je **izvan** keša — pa je svoje
-skeniranje plaćao ponovo. Baš taj deo operater vidi kao „sporo se puni efekat po
-modu". Keš sada obuhvata ceo izbor reda; ugnježđivanje je bezbedno jer
-`modDataAccess` broji dubinu. `EndTableCache` ide i u error handler — otvoren keš
-zamrzava snimak tabela do kraja sesije.
-
-### Nije defekt: prazan KUPAC na otpremnici
-
-`tblOtpremnica` nema kolonu kupca — partner otpremnice je **stanica**
-(`COL_OTP_STANICA`), i `ColPartnerZaPrefill` zato za nju i ne vraća ništa. Prazno
-polje KUPAC na otpremnici je tačno stanje, ne propust prefilla.
-
-### Verifikacija
-
-- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → 29.
-- `python tools\run_vba.py --suite RunAllTests` → **TESTS=59, FAIL=0**.
-- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite crvene
-  zatečeno.
-- **Šesta sabotaža** (`prefill-bez-predloga-broja`) oborila svoju tvrdnju po imenu.
-- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
