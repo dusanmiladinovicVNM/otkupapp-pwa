@@ -81,6 +81,17 @@ OTPREMNICA_STALE_NOVA = "10/TEST"    # cilj zamene; mora imati NEPRAZNU zbirnu
 # relink nije imao sta da preveze i sabotaza nije obarala svoju tvrdnju.
 ZBIRNA_STALE = "ZB-TEST-STL"         # cilj relinka; jednoznacna, mirna
 PRIJEMNICA_STALE = "12/TEST"         # TUDJA prijemnica na dvosmislenoj zbirni
+# CILJNA zbirna sa istorijski dvosmislenim brojem: owner A je STORNIRAN a
+# njegovo dete je AKTIVNO (test 44 dokazuje da storno zaglavlja ne stornira
+# dete), owner B je aktivan i njegovo dete je zamena. Zatecena kapija u
+# writeru broji samo AKTIVNE vlasnike, pa ovde vidi jednog i pusti relink --
+# a rekalkulacija po broju onda sabere decu OBA scope-a.
+ZBIRNA_TGT = "ZB-TEST-TGT"
+ZBIRNA_OLDU = "ZB-TEST-OLDU"        # izvorna zbirna; jednoznacna, mirna
+OTPREMNICA_OLD_U = "13/TEST"        # izvorna otpremnica koja se ispravlja
+OTPREMNICA_HIST = "14/TEST"         # aktivno dete STORNIRANOG vlasnika cilja
+OTPREMNICA_NEW_T = "15/TEST"        # zamena; dete AKTIVNOG vlasnika cilja
+PRIJEMNICA_OLD_U = "16/TEST"        # izvorna prijemnica; ne sme se prevezati
 OTPREMNICA_ZAMENA = "7/TEST"
 VRSTA = "TESTVOCE"
 # Druga vrsta postoji zbog jedne tvrdnje koju ranije nije bilo cime napisati:
@@ -193,6 +204,28 @@ SEED = {
         # Ciljna lista Oporavka ih je spajala u jedan red jer je vlasnikom
         # smatrala samo kupca, pa operater nije mogao da izabere pravi.
         # Mirna, jednoznacna zbirna: cilj relinka u stale scenariju.
+        # Ciljna zbirna, dva vlasnika ISTOG broja: B aktivan, A storniran.
+        # UkupnoKolicina zaglavlja B je namerno = kolicina SAMO njegovog deteta,
+        # da kontaminacija (dete A + dete B) bude vidljiva kao promena broja.
+        #
+        # REDOSLED JE DEO SCENARIJA i ne sme se menjati. Aktivan vlasnik mora biti
+        # PRVI red tog broja: ReassignPrijemnicaToZbirna_TX bez generacije cita
+        # Stornirano PRVOG reda po broju, pa bi sa storniranim prvim slucajno
+        # odbio relink -- ne zato sto proverava vlasnistvo, nego zato sto je prvi
+        # red slucajno bio storniran. Test bi tada bio zelen bez pokrica.
+        {"ZbirnaID": "ZBI-TGT-B", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
+        {"ZbirnaID": "ZBI-TGT-A", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": ZBIRNA_TGT, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 300, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 30,
+         "Klasa": "I", "KupacID": KUPAC, "Stornirano": "Da"},
+        # Izvorna zbirna: jednoznacna, da test meri BAS cilj a ne izvor.
+        {"ZbirnaID": "ZBI-OLDU-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
+         "BrojZbirne": ZBIRNA_OLDU, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": 100, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 10,
+         "Klasa": "I", "KupacID": KUPAC},
         {"ZbirnaID": "ZBI-STL-1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
          "BrojZbirne": ZBIRNA_STALE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 200, "TipAmbalaze": AMB_12_1, "UkupnoAmbalaze": 20,
@@ -254,6 +287,19 @@ SEED = {
         # broja i visi na JEDNOZNACNOJ zbirni; izabrana OTP-STL-A je druga i visi
         # na DVOSMISLENOJ. Ne menjati redosled -- test 46 meri bas to da kod ne
         # sme da uzme prvog po broju.
+        {"OtpremnicaID": "OTP-OLD-U", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_OLD_U, "BrojZbirne": ZBIRNA_OLDU,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # AKTIVNO dete STORNIRANOG vlasnika cilja -- srce scenarija.
+        {"OtpremnicaID": "OTP-HIST", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": OTPREMNICA_HIST, "BrojZbirne": ZBIRNA_TGT,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 300, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 30, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-NEW-T", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_NEW_T, "BrojZbirne": ZBIRNA_TGT,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"OtpremnicaID": "OTP-STL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
          "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_STALE,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
@@ -349,6 +395,11 @@ SEED = {
         # nad roditeljem, a taj put ne prolazi kroz kapiju na nivou moda zbirne.
         # TUDJA prijemnica na dvosmislenoj zbirni. Nijedan test je ne stornira
         # ni ne pomera, pa relink po BROJU stare zbirne ima sta da zahvati.
+        # Izvorna prijemnica: bez kapije bi presla na ciljnu zbirnu.
+        {"PrijemnicaID": "PRJ-OLD-U", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_OLD_U, "BrojZbirne": ZBIRNA_OLDU,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         {"PrijemnicaID": "PRJ-STL-T", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_STALE, "BrojZbirne": ZBIRNA_KASK,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,

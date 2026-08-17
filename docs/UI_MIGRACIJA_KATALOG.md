@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-137`.
+Stanje na dan `v6-ui-138`.
 
 ---
 
@@ -61,6 +61,14 @@ mutacije su išle nad `ParentBroj` iz context-a — pa je proveravala zbirnu
 siblinga. Roditelj se sada uzima iz context-a, fallback ide isključivo preko
 tačnog `OldDocID`, a nerazrešen roditelj je MANUAL. Kapija je i **fail-closed na
 sopstvenu grešku**: schema drift znači „ne mutiraj", ne „jednoznačno je".
+
+Od `v6-ui-138` kapija stoji na **obe strane**: i nad ciljnom zbirnom, ne samo nad
+izvornom. Zatečena kapija u writeru (`RequireJedanVlasnikPoBroju`) to ne pokriva
+jer broji samo **aktivne** vlasnike — a storniran vlasnik i dalje ima aktivnu decu.
+Ista rupa je zatvorena i u `CompleteZbirnaIspravka`, gde po broju idu i izvor i
+cilj. Sam primitiv (`RecalculateZbirnaFromOtpremnice_TX`,
+`ReassignPrijemnicaToZbirna_TX` bez generacije) ostaje number-based — tu bi jednog
+dana trebala centralna kapija umesto zaštite po call-site-u.
 
 ---
 

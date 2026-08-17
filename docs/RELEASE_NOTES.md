@@ -2572,3 +2572,64 @@ Zapisano u `tools/sabotaza.py`.
 - Dve sync suite (van punog seta, traže mrežu) padaju identično i na čistom
   `main`-u — zatečeno.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.9 — `v6-ui-138` · zaštita je bila jednostrana: izvor da, cilj ne
+
+Kapija iz `v6-ui-137` je stajala samo nad **starom** zbirnom. Ciljna nije imala
+nijednu — a nizvodne operacije nad ciljem idu po golom broju:
+`ReassignPrijemnicaToZbirna_TX`, `RecalculateZbirnaFromOtpremnice_TX`,
+`ValidateZbirnaInvariant`.
+
+### P1 — zatečena kapija u writeru ovo ne pokriva
+
+`ReassignPrijemnicaToZbirna_TX` bez generacije zove
+`RequireJedanVlasnikPoBroju`, a taj broji **samo aktivne** vlasnike. Kad je jedan
+vlasnik broja storniran a njegovo dete aktivno (upravo ono što test 44 dokazuje),
+writer vidi jednog vlasnika i pusti relink.
+
+Posle toga `SumOtpremniceByKlasa` sabira po broju, bez ownera — pa aktivno
+zaglavlje dobije zbir dece **oba** vlasnika. Sabotaža to pokazuje kao broj:
+
+```
+ocekivano [100], dobijeno [400]
+```
+
+100 je količina njegovog jedinog deteta, 400 je 300 (dete storniranog vlasnika) +
+100. Kapija sada stoji i nad `newZbirna`, **pre relinka blokova** — inače se
+blokovi prevežu pa se tek onda otkrije da ostatak ne može bezbedno da se završi.
+
+### Ista rupa je bila i u ispravci zbirne, na obe strane
+
+`CompleteZbirnaIspravka` nije proveravala ni izvor ni cilj, a po broju ide sve:
+`RelinkOtpremniceToZbirna_TX(oldBroj, newBroj)`, `DistinctActiveValues` po
+`oldBroj`, relink prijemnica na `newBroj`, rekalkulacija `newBroj`. Dvosmislen
+cilj znači „čije zaglavlje dobija zbir", dvosmislen izvor „čija deca se sele".
+Obe grane su sada zatvorene i obe imaju sabotažu: cilj `100 → 500`, izvor —
+otpremnica tuđeg dokumenta odseljena sa dvosmislenog broja.
+
+### Zašto je ovo bilo najgore od svega
+
+Invarijanta je i sama po broju. U pokvarenom stanju bi oba iznosa bila 400 i
+`ValidateZbirnaInvariant` bi rekla **ISPRAVNO**. Test 48 to fiksira kao tvrdnju:
+u zdravom stanju invarijanta kaže *neispravno* za `ZB-TEST-TGT`, jer sabira decu
+oba vlasnika protiv jednog zaglavlja. Validacija koja potvrđuje kontaminaciju je
+gora od validacije koje nema.
+
+### Zatečena provera koja štiti slučajno, ne po pravilu
+
+Sabotaža je prvo izgledala kao da ne grize. Uzrok: `ReassignPrijemnicaToZbirna_TX`
+bez generacije čita `Stornirano` **prvog reda po broju** — a u prvoj verziji
+fixture-a je prvi red slučajno bio stornirani vlasnik, pa je relink odbijen. Ne
+zato što proverava vlasništvo, nego zato što je prvi red slučajno bio storniran.
+Redosled redova u fixture-u je zato deo scenarija i tako je i zapisan.
+
+To je i mesto gde bi jednog dana trebala **centralna** kapija: ovaj PR štiti svoje
+call-site-ove, ali sam primitiv ostaje number-based.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=49, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno** (11 punog seta + SEF).
+- **Tri nove sabotaže**, svaka obara svoju tvrdnju i pokazuje štetu brojem.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

@@ -100,6 +100,10 @@ Private Const FX_OTPREMNICA_STALE As String = "9/TEST"
 Private Const FX_OTPREMNICA_STALE_NOVA As String = "10/TEST"
 Private Const FX_ZBIRNA_STALE As String = "ZB-TEST-STL"
 Private Const FX_PRIJEMNICA_STALE As String = "12/TEST"
+Private Const FX_ZBIRNA_TGT As String = "ZB-TEST-TGT"
+Private Const FX_ZBIRNA_OLDU As String = "ZB-TEST-OLDU"
+Private Const FX_OTPREMNICA_OLD_U As String = "13/TEST"
+Private Const FX_OTPREMNICA_NEW_T As String = "15/TEST"
 ' Dve zbirne ISTOG broja i ISTOG kupca, dva vozaca. Broj zbirne se generise po
 ' vozacu, pa su to dva dokumenta -- ciljna lista mora da ponudi oba.
 Private Const FX_ZBIRNA_DUPL As String = "ZB-TEST-DUPL"
@@ -175,6 +179,8 @@ Public Sub RunAllTests()
     RunOne 45
     RunOne 46
     RunOne 47
+    RunOne 48
+    RunOne 49
 
     SetTestMode prevMode
     WriteResultFile
@@ -261,6 +267,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 49: TestName = "T_IspravkaZbirne_KapijaNaObeStrane"
+        Case 48: TestName = "T_CiljnaZbirnaDvosmislena_Staje"
         Case 47: TestName = "T_KapijaZbirne_FailClosedNaSvojuGresku"
         Case 46: TestName = "T_ZatecenContext_NePrevezujeTudjePrijemnice"
         Case 45: TestName = "T_OtpremnicaNadDvosmislenomZbirnom_Staje"
@@ -316,6 +324,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 49: T_IspravkaZbirne_KapijaNaObeStrane
+        Case 48: T_CiljnaZbirnaDvosmislena_Staje
         Case 47: T_KapijaZbirne_FailClosedNaSvojuGresku
         Case 46: T_ZatecenContext_NePrevezujeTudjePrijemnice
         Case 45: T_OtpremnicaNadDvosmislenomZbirnom_Staje
@@ -2172,6 +2182,108 @@ Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
     AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
              "razlog imenuje staru zbirnu"
 End Sub
+
+' ============================================================
+' 48. I CILJNA zbirna mora da prodje kapiju, ne samo izvorna
+' ============================================================
+' Zastita je bila nesimetricna: stara zbirna je od v6-ui-137 imala kapiju, ciljna
+' nijednu -- a nizvodne operacije nad ciljem idu PO GOLOM BROJU.
+'
+' Zatecena kapija u writeru (RequireJedanVlasnikPoBroju) ovo ne pokriva jer broji
+' samo AKTIVNE vlasnike. Ovde je owner A STORNIRAN a njegovo dete OTP-HIST je
+' AKTIVNO, pa writer vidi jednog vlasnika i pusti relink.
+'
+' Najgori deo nije kontaminacija nego to sto je SAMA VALIDACIJA potvrdi: i
+' SumOtpremniceByKlasa i ValidateZbirnaInvariant sabiraju po broju, pa zaglavlje B
+' sa zbirom dece OBA vlasnika prolazi kao konzistentno.
+Private Sub T_CiljnaZbirnaDvosmislena_Staje()
+    Dim cid As String, res As Object
+    Dim pre As Double
+
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-A"), True, _
+             "preduslov: jedan vlasnik ciljnog broja je STORNIRAN"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-TGT-B"), False, _
+             "preduslov: drugi vlasnik ciljnog broja je AKTIVAN"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-HIST"), False, _
+             "preduslov: dete storniranog vlasnika je AKTIVNO"
+    ' Bas ovo zatecena kapija ne vidi -- pa je i propustala.
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_TGT, "T_Cilj", _
+                             False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 1, _
+             "preduslov: po AKTIVNIM vlasnicima ciljni broj izgleda jednoznacan"
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "preduslov: izvorna prijemnica visi na izvornoj zbirni"
+    ' Zasto je kontaminacija tako podmukla: invarijanta je i sama po BROJU. U
+    ' zdravom stanju kaze NEISPRAVNO (sabira decu oba vlasnika, 400, protiv
+    ' jednog aktivnog zaglavlja, 100) -- a posle kontaminirane rekalkulacije bi
+    ' oba iznosa bila 400 i rekla bi ISPRAVNO. Validacija bi, dakle, potvrdila
+    ' pokvareno vlasnistvo kao konzistentno.
+    AssertEq CBool(modDokumentInvariant.ValidateZbirnaInvariant(FX_ZBIRNA_TGT)("isValid")), _
+             False, "preduslov: invarijanta je number-based, ne ownership-aware"
+
+    pre = KolicinaZbirne("ZBI-TGT-B")
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                  "OTP-OLD-U", FX_OTPREMNICA_OLD_U, _
+                                                  "", "", "", "", "", FX_ZBIRNA_OLDU)
+    AssertEq (Len(cid) > 0), True, "context je napravljen"
+
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_NEW_T)
+
+    ' Poslovni ishod PRVI (v. zamka 6 u sabotaza.py): bez kapije zaglavlje B
+    ' dobije zbir dece OBA vlasnika, pa mu se kolicina promeni.
+    AssertEq KolicinaZbirne("ZBI-TGT-B"), pre, _
+             "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece"
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "izvorna prijemnica NIJE prevezana na dvosmislen cilj"
+    AssertEq CBool(res("success")), False, "completion staje pred dvosmislenim ciljem"
+    AssertEq (InStr(1, CStr(res("message")), "ciljne zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje CILJNU zbirnu, ne staru"
+End Sub
+
+' ============================================================
+' 49. Ispravka ZBIRNE: ista kapija, obe strane
+' ============================================================
+' CompleteZbirnaIspravka je imala istu rupu kao ispravka otpremnice, samo sirju:
+' po broju idu i izvor i cilj -- RelinkOtpremniceToZbirna_TX(oldBroj, newBroj),
+' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
+' RecalculateZbirnaFromOtpremnice_TX(newBroj). Nijedna strana nije bila proverena.
+'
+' Dvosmislen CILJ znaci "cije zaglavlje dobija zbir", dvosmislen IZVOR znaci
+' "cija deca se sele". Zato test meri obe grane, jedna po jedna.
+Private Sub T_IspravkaZbirne_KapijaNaObeStrane()
+    Dim cid As String, res As Object
+    Dim preB As Double
+
+    preB = KolicinaZbirne("ZBI-TGT-B")
+
+    ' (a) DVOSMISLEN CILJ: izvor je jednoznacan, cilj je nekad imao dva vlasnika.
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
+                                                  "ZBI-OLDU-1", FX_ZBIRNA_OLDU)
+    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_TGT)
+    AssertEq KolicinaZbirne("ZBI-TGT-B"), preB, _
+             "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece"
+    AssertEq ZbirnaNaOtpremnici("OTP-OLD-U"), FX_ZBIRNA_OLDU, _
+             "dvosmislen CILJ: otpremnica izvora nije prevezana"
+    AssertEq CBool(res("success")), False, "dvosmislen CILJ zaustavlja ispravku zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "ciljne zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje CILJNU stranu"
+
+    ' (b) DVOSMISLEN IZVOR: cilj je jednoznacan, izvor je nekad imao dva vlasnika.
+    ' Bez ove grane bi se selila deca oba vlasnika izvornog broja.
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_ZBIRNA, _
+                                                  "ZBI-KASK-1", FX_ZBIRNA_KASK)
+    Set res = modStornoFlow.CompleteZbirnaIspravka(cid, FX_ZBIRNA_STALE)
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja"
+    AssertEq CBool(res("success")), False, "dvosmislen IZVOR zaustavlja ispravku zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje STARU stranu"
+End Sub
+
+Private Function KolicinaZbirne(ByVal zbrID As String) As Double
+    Dim v As Variant
+    v = LookupValue(TBL_ZBIRNA, COL_ZBR_ID, zbrID, COL_ZBR_KOLICINA)
+    If IsNumeric(v) Then KolicinaZbirne = CDbl(v)
+End Function
 
 ' ============================================================
 ' 47. Kapija ne sme da bude fail-open na sopstvenu gresku

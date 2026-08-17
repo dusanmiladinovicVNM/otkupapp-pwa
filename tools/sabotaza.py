@@ -552,6 +552,34 @@ SABOTAZE = {
         "T_ZatecenContext_NePrevezujeTudjePrijemnice",
         "tudja prijemnica NIJE prevezana na novu zbirnu",
     ),
+    # Nesimetricna zastita: izvor cuvan, CILJ nije. Nizvodne operacije nad ciljem
+    # idu po golom broju, a zatecena kapija u writeru broji samo AKTIVNE vlasnike
+    # -- pa storniran vlasnik sa aktivnom decom prolazi.
+    "cilj-bez-istorijske-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: ciljna zbirna se ne proverava\n",
+        "T_CiljnaZbirnaDvosmislena_Staje",
+        "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
+    ),
+    # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
+    "zbirna-ispravka-cilj-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(newBroj) Then\n"
+        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
+        "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n"
+        "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
+        "T_IspravkaZbirne_KapijaNaObeStrane",
+        "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece",
+    ),
+    # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
+    "zbirna-ispravka-izvor-bez-kapije": (
+        "modStornoFlow.bas",
+        "    ElseIf ZbirnaBrojJeDvosmislenIkad(oldBroj) Then\n",
+        "    ElseIf False Then   ' SABOTAZA: izvorna strana se ne proverava\n",
+        "T_IspravkaZbirne_KapijaNaObeStrane",
+        "dvosmislen IZVOR: otpremnica nije odseljena sa dvosmislenog broja",
+    ),
     # Kapija fail-open na sopstvenu gresku: schema drift -> "jednoznacno je".
     "kapija-fail-open": (
         "modStornoFlow.bas",

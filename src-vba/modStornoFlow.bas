@@ -582,6 +582,26 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     Dim newZbirna As String
     newZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, newOtpID, COL_OTP_BROJ_ZBIRNE))
 
+    ' I CILJNA zbirna mora da prodje istu kapiju kao stara. Nesimetricno je bilo
+    ' pogresno: nizvodne operacije nad ciljem idu PO GOLOM BROJU --
+    ' ReassignPrijemnicaToZbirna_TX, RecalculateZbirnaFromOtpremnice_TX i
+    ' ValidateZbirnaInvariant.
+    '
+    ' Zatecena kapija u writeru (RequireJedanVlasnikPoBroju) ovo NE pokriva: ona
+    ' broji samo AKTIVNE vlasnike, a storniran vlasnik i dalje ima aktivnu decu
+    ' (test 44). Zbir tada ide preko oba scope-a i upise se u aktivno zaglavlje --
+    ' a ValidateZbirnaInvariant poredi iste agregate po broju, pa kontaminaciju
+    ' potvrdi kao ISPRAVNU. Zato ovde, i to PRE relinka blokova: inace se blokovi
+    ' prevezu pa se tek onda otkrije da ostatak ne moze bezbedno da se zavrsi.
+    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then
+        MarkCorrectionManual correctionID, _
+                             "Razdvoj brojeve zbirnih pa prevezi rucno.", _
+                             "Broj ciljne zbirne '" & newZbirna & "' je pripadao VISE " & _
+                             "vlasnika -- relink i rekalkulacija po broju nisu bezbedni."
+        r("message") = "Broj ciljne zbirne '" & newZbirna & "' je pripadao VISE vlasnika."
+        Exit Function
+    End If
+
     ' 1) Relink otkupnih blokova: svi blokovi vezani za ID-jeve stare otpremnice.
     ' IDENTITET IZVORA DOLAZI IZ CONTEXT-a, ne od pozivaoca. Context nosi
     ' OldDocID (PK stornirane otpremnice) i persistentan je -- prezivljava
@@ -914,6 +934,26 @@ Public Function CompleteZbirnaIspravka(ByVal correctionID As String, _
         MarkCorrectionManual correctionID, "Snimi novu zbirnu pa ponovi prevezivanje.", _
             "Nova zbirna " & newBroj & " nije aktivna."
         r("message") = "Nova zbirna nije pronadjena: " & newBroj
+        Exit Function
+    End If
+
+    ' ISTA KAPIJA KAO U ISPRAVCI OTPREMNICE, i to na OBE strane. Ovde su po broju
+    ' i izvor i cilj: RelinkOtpremniceToZbirna_TX(oldBroj, newBroj),
+    ' DistinctActiveValues po oldBroj, ReassignPrijemnicaToZbirna_TX na newBroj,
+    ' RecalculateZbirnaFromOtpremnice_TX(newBroj). Dvosmislen izvor znaci "cija
+    ' deca se sele", dvosmislen cilj znaci "cije zaglavlje dobija zbir".
+    Dim dvosmislen As String, kojaStrana As String
+    If ZbirnaBrojJeDvosmislenIkad(newBroj) Then
+        dvosmislen = newBroj: kojaStrana = "ciljne"
+    ElseIf ZbirnaBrojJeDvosmislenIkad(oldBroj) Then
+        dvosmislen = oldBroj: kojaStrana = "stare"
+    End If
+    If Len(dvosmislen) > 0 Then
+        MarkCorrectionManual correctionID, _
+                             "Razdvoj brojeve zbirnih pa prevezi rucno.", _
+                             "Broj " & kojaStrana & " zbirne '" & dvosmislen & "' je pripadao " & _
+                             "VISE vlasnika -- relink i rekalkulacija po broju nisu bezbedni."
+        r("message") = "Broj " & kojaStrana & " zbirne '" & dvosmislen & "' je pripadao VISE vlasnika."
         Exit Function
     End If
 
