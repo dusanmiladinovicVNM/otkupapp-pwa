@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-135`.
+Stanje na dan `v6-ui-136`.
 
 ---
 
@@ -46,6 +46,14 @@ Faza A je pokrila **pravila unosa**. Ostalo je, po veličini:
 
 **Faza D je zatvorena** (v6-ui-130). Ostaju 3 i 4 — ostaci ranijih faza — plus
 Faze C i E, koje nisu počele.
+
+**Identitet nije bio dovoljan samo za sam dokument.** Do `v6-ui-136` je storno
+otpremnice mutirao **roditeljsku zbirnu po golom `BrojZbirne`** — rekalkulacija,
+storno prazne zbirne, relink prijemnica. Nad dvosmislenim brojem roditelja to je
+moglo da ažurira zaglavlje jednog dokumenta zbirom otpremnica oba. Kapija
+`ZbirnaBrojJeDvosmislenIkad` stoji na četiri mesta, uključujući **završetak
+ispravke** — jer correction context je persistentan i zatečen context preživljava
+upgrade, pa kapija samo na startu ne pokriva njega.
 
 ---
 

@@ -280,7 +280,15 @@ Optional ByVal docID As String = "") As Object
     If Not CBool(s("exists")) Then r("message") = "Aktivna otpremnica nije pronadjena: " & broj: Exit Function
     Dim pz As String: pz = CStr(s("brojZbirne"))
 
-    If Not StornoOtpremnicaByBroj_TX(broj) Then r("message") = "Storno otpremnice nije uspeo.": Exit Function
+    ' Roditeljska zbirna se nize rekalkulise PO BROJU, pa dvosmislen broj mora
+    ' da zaustavi operaciju PRE storna.
+    If ZbirnaBrojJeDvosmislenIkad(CStr(s("brojZbirne"))) Then
+        r("message") = "Broj zbirne '" & CStr(s("brojZbirne")) & "' je pripadao VISE " & _
+                       "vlasnika, a rekalkulacija ide PO BROJU. Razdvoj brojeve pa ponovi."
+        Exit Function
+    End If
+    ' Identitet ide i writeru -- prijemnica simple put to vec radi.
+    If Not StornoOtpremnicaByBroj_TX(broj, docID) Then r("message") = "Storno otpremnice nije uspeo.": Exit Function
 
     ' Zbirna: rekalk na preostale otpremnice; PRAZNA (jedina otpremnica) -> STORNO,
     ' NE aktivna 0/0 -> dosledno DUPLI/PONISTENJE grani (RecalcOrStornoEmptyZbirna_TX).
@@ -391,6 +399,18 @@ Public Function RunOtpremnicaCorrection(ByVal oldBroj As String, ByVal mode As S
         Exit Function
     End If
     Dim parentZbirna As String: parentZbirna = CStr(s("brojZbirne"))
+    ' ISPRAVKA/DUPLI/PONISTENJE svi diraju RODITELJSKU zbirnu PO BROJU:
+    ' rekalkulacija, storno, ili relink njenih prijemnica u completion-u. Kad je
+    ' broj roditelja dvosmislen, nijedno od toga ne moze da zna cije je.
+    ' RESI KASNIJE prolazi -- nista ne mutira.
+    If mode <> SV_MODE_RESI_KASNIJE Then
+        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then
+            r("message") = "Broj roditeljske zbirne '" & parentZbirna & "' je pripadao " & _
+                           "VISE vlasnika. Otpremnica se ne moze ispraviti bez da se " & _
+                           "dira tudja zbirna -- razdvoj brojeve pa ponovi."
+            Exit Function
+        End If
+    End If
 
     Select Case mode
         Case SV_MODE_RESI_KASNIJE
@@ -585,6 +605,20 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
             srcStanica = Trim$(NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, oldDocID, _
                                                 COL_OTP_STANICA)))
     End If
+    ' ZATECEN CONTEXT. Kapija na startu ne pomaze za context napravljen PRE nje
+    ' -- persistentan je i prezivljava upgrade. Zato se pita i ovde.
+    Dim staraZbirna As String
+    staraZbirna = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_BROJ, oldBroj, _
+                                   COL_OTP_BROJ_ZBIRNE))
+    If ZbirnaBrojJeDvosmislenIkad(staraZbirna) Then
+        MarkCorrectionManual correctionID, _
+                             "Razdvoj brojeve zbirnih pa prevezi rucno.", _
+                             "Broj stare zbirne '" & staraZbirna & "' je pripadao VISE " & _
+                             "vlasnika -- relink prijemnica bi zahvatio tudje."
+        r("message") = "Broj stare zbirne '" & staraZbirna & "' je pripadao VISE vlasnika."
+        Exit Function
+    End If
+
     Dim oldIDs As Collection
     Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)
     ' Context tvrdi da stari dokument postoji. Nula razresenih ID-eva zato
@@ -679,10 +713,14 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
         IIf(staraStornirana, ", stara zbirna " & oldZbirna & " stornirana", "") & "."
     Exit Function
 EH:
+    ' errDesc PRE LogErr-a: LogError ima On Error Resume Next i fajl I/O, pa bi
+    ' greska u logovanju prepisala Err -- i bas nova fail-closed poruka bi se
+    ' izgubila.
+    Dim errDescC As String: errDescC = Err.description
     LogErr SRC
     On Error Resume Next
-    FailCorrectionContext correctionID, "Greska u CompleteOtpremnicaIspravka: " & Err.description
-    r("message") = "Greska: " & Err.description
+    FailCorrectionContext correctionID, "Greska u CompleteOtpremnicaIspravka: " & errDescC
+    r("message") = "Greska: " & errDescC
 End Function
 
 ' ============================================================
@@ -2016,7 +2054,26 @@ End Function
 ' Rekalkulisi zbirnu iz preostalih aktivnih otpremnica; ako ih VISE NEMA -> STORNO
 ' zbirne (nikad aktivna 0/0 -> to je bio "nuliranje" bug). NE dira prijemnicu/palete
 ' (mod odlucuje: DUPLI ostavlja osiroceno; PONISTENJE kaskadira zasebno). True=uspeh.
+' Je li BROJ ZBIRNE ikada pripadao vise vlasnika (vozac + kupac)?
+'
+' Otpremnica flow mutira RODITELJSKU zbirnu -- rekalkulise je, stornira, ili
+' joj prevezuje prijemnice -- a sve to ide PO BrojZbirne. Dok child mutacije
+' nisu scoped po owneru, dvosmislen broj roditelja mora da zaustavi operaciju.
+'
+' Broji i STORNIRANE vlasnike: storniran vlasnik i dalje moze imati aktivnu
+' decu, jer StornoZbirna_TX dira samo redove tblZbirna.
+Private Function ZbirnaBrojJeDvosmislenIkad(ByVal broj As String) As Boolean
+    On Error Resume Next
+    If Len(Trim$(broj)) = 0 Then Exit Function
+    ZbirnaBrojJeDvosmislenIkad = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
+                                  MOD_NAME, True, _
+                                  Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
+End Function
+
+' Poslednja odbrana: i ako neki buduci pozivalac zaboravi kapiju, rekalkulacija
+' po dvosmislenom broju ne sme da prodje.
 Private Function RecalcOrStornoEmptyZbirna_TX(ByVal broj As String) As Boolean
+    If ZbirnaBrojJeDvosmislenIkad(broj) Then Exit Function
     On Error GoTo EH
     broj = Trim$(broj)
     If Len(broj) = 0 Then RecalcOrStornoEmptyZbirna_TX = True: Exit Function

@@ -2453,3 +2453,55 @@ izgledalo kao da sabotaža ne grize, umesto da nije ni primenjena.
 
 **Kad se menja tekst poruke koja je deo sidra, sidro se menja s njom.** Sweep
 odsad ne guta `stderr`.
+
+## v2.46.7 — `v6-ui-136` · roditeljska zbirna je bila poslednji broj u lancu
+
+Identitet je dotad bio rešen za **sam** dokument koji se stornira. Otpremnica ima
+roditelja, i taj roditelj se sve vreme mutirao **po golom `BrojZbirne`**.
+
+### P1 — mutacija roditelja po broju
+
+`RunSimpleStornoOtpremnica`, `RunOtpremnicaCorrection` i
+`CompleteOtpremnicaIspravka` sve tri dohvataju roditeljsku zbirnu po broju, pa
+nad njom rade rekalkulaciju, storno prazne zbirne i relink prijemnica.
+
+`RecalculateZbirnaFromOtpremnice_TX` je najgori slučaj: sabere otpremnice po
+broju, pa tim zbirom ažurira **jedan** nađen red. Nad dvosmislenim brojem to
+znači zaglavlje jednog dokumenta ažurirano zbirom otpremnica **oba**.
+
+Nova kapija `ZbirnaBrojJeDvosmislenIkad(broj)` stoji na četiri mesta: pred
+običnim stornom, pred svim modovima ispravke osim `RESI_KASNIJE`, u završetku
+ispravke, i kao poslednja odbrana u `RecalcOrStornoEmptyZbirna_TX`.
+
+### P2 — obična F8 putanja je i dalje ispuštala `docID`
+
+Prosti storno otpremnice je zvao `StornoOtpremnicaByBroj_TX` bez identiteta —
+isti oblik greške koji je već dva puta zatvaran na drugim tipovima.
+
+### P2 — `Err.Description` posle `LogErr`
+
+`LogErr` interno diže sopstveni EH i time briše `Err`. Novi re-raise je stizao u
+blok koji je opis čitao **posle** `LogErr` — pa bi poruka bila prazna. Opis se
+sada čita pre.
+
+### Zatečen context preživljava upgrade
+
+Kapija na startu ne pomaže za correction context napravljen **pre** nje.
+Context je persistentan; posle upgrade-a bi završetak ispravke prošao bez ijedne
+provere. Zato završetak pita ponovo, a ne veruje da je start pitao.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=46, FAIL=0**.
+- `python tools\run_vba.py --all` → **11 suite-ova punog seta zeleno**.
+- **Dve nove sabotaže** (`otpremnica-bez-kapije-nad-zbirnom`,
+  `zatecen-context-bez-kapije`), svaka obara svoju tvrdnju i samo svoj test.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+### Dve sync suite padaju, i to nije od ovoga
+
+`RunGoogleSyncSmokeSuite` (4/81) i `RunMasterSyncSmokeSuite` (9/26) padaju u
+`--all`. **Nisu u punom setu** (`default: False`) i traže mrežu. Provereno na
+worktree-u nad čistim `main`-om: identični brojevi padova, bez ijedne izmene sa
+grane. Zatečeno stanje, prijavljeno kao zatečeno — ne kao zeleno.

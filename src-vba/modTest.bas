@@ -168,6 +168,8 @@ Public Sub RunAllTests()
     RunOne 42
     RunOne 43
     RunOne 44
+    RunOne 45
+    RunOne 46
 
     SetTestMode prevMode
     WriteResultFile
@@ -254,6 +256,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 46: TestName = "T_ZatecenContext_NePrevezujeTudjePrijemnice"
+        Case 45: TestName = "T_OtpremnicaNadDvosmislenomZbirnom_Staje"
         Case 44: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
         Case 43: TestName = "T_ZavrsetakIspravke_NeDegradiraOldDocID"
         Case 42: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
@@ -306,6 +310,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 46: T_ZatecenContext_NePrevezujeTudjePrijemnice
+        Case 45: T_OtpremnicaNadDvosmislenomZbirnom_Staje
         Case 44: T_StorniranVlasnik_JosImaAktivnuDecu
         Case 43: T_ZavrsetakIspravke_NeDegradiraOldDocID
         Case 42: T_ZamenaZbirne_NeDiraDecuTudje
@@ -2070,6 +2076,69 @@ Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
              "dete stornirane A nije odvezano"
     AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
              "dete aktivne B nije odvezano"
+End Sub
+
+' ============================================================
+' 45. Otpremnica ne sme da mutira dvosmislenu RODITELJSKU zbirnu
+' ============================================================
+' Identitet same otpremnice je bio resen, ali su ISPRAVKA/DUPLI/PONISTENJE svi
+' dirali RODITELJSKU zbirnu PO BROJU: rekalkulacija, storno prazne zbirne, i
+' relink njenih prijemnica u completion-u. Kad broj roditelja nije jednoznacan,
+' nijedno od toga ne zna cije je.
+'
+' RecalculateZbirnaFromOtpremnice_TX je posebno podmukao: sabira otpremnice po
+' broju, pa tim zbirom azurira JEDAN nadjen red -- moglo je da rekalkulise
+' zaglavlje B vrednostima koje ukljucuju otpremnice oba dokumenta.
+Private Sub T_OtpremnicaNadDvosmislenomZbirnom_Staje()
+    Dim res As Object
+
+    AssertEq VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, "T_Otp", _
+                             True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count, 2, _
+             "preduslov: broj roditeljske zbirne je pripadao dvama vlasnicima"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "preduslov: otpremnica visi na tom broju"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_OTPREMNICA, FX_OTPREMNICA_KOLIZIJA, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-OTP-A")
+    AssertEq CBool(res("success")), False, _
+             "DUPLI staje kad je broj roditeljske zbirne dvosmislen"
+    AssertEq (InStr(1, CStr(res("message")), "roditeljske zbirne", vbTextCompare) > 0), _
+             True, "razlog imenuje RODITELJSKU zbirnu, ne samo neuspeh"
+
+    ' Nijedna otpremnica nije stornirana -- staje se PRE mutacije.
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A"), False, _
+             "izabrana otpremnica nije stornirana"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-B"), False, _
+             "tudja otpremnica nije dirana"
+End Sub
+
+' ============================================================
+' 46. Zatecen context ne sme da preveze prijemnice tudje zbirne
+' ============================================================
+' Kapija na startu ne pomaze za context koji je napravljen PRE nje: correction
+' context je persistentan i prezivljava upgrade. Zato completion pita ponovo.
+'
+' Bez toga bi CompleteOtpremnicaIspravka skupila prijemnice po oldZbirna BROJU
+' i prevezala i tudje na novu zbirnu.
+Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
+    Dim cid As String, res As Object
+
+    AssertEq ZbirnaNaPrijemnici("PRJ-KASK-1"), FX_ZBIRNA_KASK, _
+             "preduslov: prijemnica visi na dvosmislenom broju zbirne"
+
+    cid = modStornoContext.CreateCorrectionContext(SV_MODE_ISPRAVKA, FLOW_DOC_OTPREMNICA, _
+                                                  "OTP-KOL-A", FX_OTPREMNICA_KOLIZIJA)
+    AssertEq (Len(cid) > 0), True, "zatecen context je napravljen"
+
+    Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_ZAMENA)
+    AssertEq CBool(res("success")), False, _
+             "completion staje nad zatecenim context-om dvosmislene zbirne"
+    AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
+             "razlog imenuje staru zbirnu"
+
+    ' Prijemnica je ostala gde je bila.
+    AssertEq ZbirnaNaPrijemnici("PRJ-KASK-1"), FX_ZBIRNA_KASK, _
+             "prijemnica NIJE prevezana na novu zbirnu"
 End Sub
 
 Private Function ZbirnaNaOtpremnici(ByVal otpID As String) As String

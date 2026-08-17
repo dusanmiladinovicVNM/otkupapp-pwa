@@ -514,6 +514,24 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Otpremnica flow mutira roditeljsku zbirnu po golom broju.
+    "otpremnica-bez-kapije-nad-zbirnom": (
+        "modStornoFlow.bas",
+        "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
+        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: dvosmislena roditeljska zbirna se ignorise\n"
+        "        If ZbirnaBrojJeDvosmislenIkad(parentZbirna) Then\n",
+        "T_OtpremnicaNadDvosmislenomZbirnom_Staje",
+        "DUPLI staje kad je broj roditeljske zbirne dvosmislen",
+    ),
+    # Zatecen PENDING context iz starije verzije zaobilazi kapiju na startu.
+    "zatecen-context-bez-kapije": (
+        "modStornoFlow.bas",
+        "    If ZbirnaBrojJeDvosmislenIkad(staraZbirna) Then\n",
+        "    If False Then   ' SABOTAZA: zatecen context prolazi bez provere\n",
+        "T_ZatecenContext_NePrevezujeTudjePrijemnice",
+        "completion staje nad zatecenim context-om dvosmislene zbirne",
+    ),
     # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
     # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
     "guard-samo-aktivni-vlasnici": (
