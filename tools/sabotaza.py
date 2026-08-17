@@ -562,6 +562,23 @@ SABOTAZE = {
         "T_CiljnaZbirnaDvosmislena_Staje",
         "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
     ),
+    # Spisak blokova za F8 po golom broju: u korpu ulazi i blok drugog dokumenta,
+    # a odatle ide pravo u StornoSelectedBlocks_TX.
+    "blokovi-po-broju": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))   ' SABOTAZA\n",
+        "T_StorniranSibling_ZadrzavaSvojBlok",
+        "blok storniranog siblinga je ostao AKTIVAN",
+    ),
+    # Ista rupa u pregledu: blockCount po broju, pa dijalog nudi tudje blokove.
+    "blockcount-po-broju": (
+        "modStornoFlow.bas",
+        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj, gen)\n",
+        "    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj)   ' SABOTAZA\n",
+        "T_BlokoviF8_PoIdentitetu",
+        "pregled broji blokove IZABRANOG dokumenta, ne svih tog broja",
+    ),
     # Ispravka ZBIRNE: cilj bez kapije -- zaglavlje dobija zbir tudje dece.
     "zbirna-ispravka-cilj-bez-kapije": (
         "modStornoFlow.bas",

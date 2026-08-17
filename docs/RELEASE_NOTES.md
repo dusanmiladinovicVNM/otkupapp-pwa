@@ -2666,3 +2666,75 @@ zaseban posao, kad se `tools/vba_check.py` oslobodi (menja ga #199).
 - `python tools\run_vba.py --all` → **12 suite-ova zeleno, TESTS=49 FAIL=0** —
   dokaz da ispravka ništa nije pokvarila, ne da je EH putanja izvršena.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.11 — `v6-ui-140` · poslednja putanja koja je birala po broju: spisak blokova
+
+Identitet je stigao do svakog dokumenta i do njihovih roditelja, ali **dodatni
+storno otkupnih blokova** je i dalje birao po poslovnom broju.
+
+### P1 — spisak blokova je nosio blokove tuđeg dokumenta
+
+`ActiveBlocksForFlow` je za otpremnicu radila
+`GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))` — bez generacije. Isti
+`BrojOtpremnice` na dve stanice je legitiman, a `GetOtpremnicaIDsByBroj` namerno
+uključuje i **stornirane** otpremnice, jer njihovi blokovi još mogu pokazivati na
+njih.
+
+Taj spisak nije pregled: iz njega se pravi `ids` i ide pravo u
+`StornoSelectedBlocks_TX`.
+
+### Zašto zatečena kapija tu nije pomagala
+
+`BlockStornoDriftReason` počinje sa:
+
+```vb
+If ModeStornoBlokParent(docType, mode) Then Exit Function     ' roditelj umire -> ok
+```
+
+a `ModeStornoBlokParent` je `True` za **svaki** `PONISTENJE` i za
+`OTPREMNICA + DUPLI/ISPRAVKA` — dakle za tačno one modove koji jedini i stižu do
+dodatnog storna blokova. Kapija se ne izvršava. Njena pretpostavka („roditelj
+umire, pa je blok-storno bezbedan") važi samo za blokove **izabranog** dokumenta.
+
+Sabotaža pokazuje mutaciju, ne pregled:
+
+```
+FAIL T_StorniranSibling_ZadrzavaSvojBlok
+     blok storniranog siblinga je ostao AKTIVAN
+     ocekivano [False], dobijeno [True]
+```
+
+### Isti kvar u pregledu, na dva mesta
+
+- `ScanOtpremnica` je razrešila dokument po identitetu pa `blockCount` računala po
+  broju — pregled bi pokazao tuđe blokove i correction dijalog bi se otvorio i nad
+  dokumentom koji blokove nema.
+- `ScanPrijemnica` je imala tačan `prijID`, ali je `blockCount` išao kroz
+  `ActiveBlocksForFlow(PRIJEMNICA, broj)`, a ta je roditeljsku zbirnu izvodila iz
+  **prvog reda tog broja**. `BrojPrijemnice` nije globalno jedinstven (sekvenca po
+  kupcu), pa je to bio verovatniji ulaz od otpremnice.
+
+Sada: `StornirajBlokoveAko → GetStornoBlockRows → ActiveBlocksForFlow` nose
+`docID`, prijemnica čita roditelja iz tačnog `prijID`, a `ScanOtpremnica` broji po
+generaciji.
+
+### Šta ostaje number-based, i zašto
+
+Grana `FLOW_DOC_ZBIRNA` u `ActiveBlocksForFlow`: `tblOtkup` nosi denormalizovan
+`BrojZbirne`, ne `ZbirnaID`, pa se deca po generaciji zbirne **ne mogu** razdvojiti.
+Taj put je zaštićen uzvodno — kapije nad dvosmislenim brojem zbirne obore mode
+operaciju, a dodatni storno blokova ide samo posle uspešne. Zapisano u kodu, jer
+ako se te kapije jednog dana suze, mesto se otvara.
+
+`modStornoImpact.BuildStornoImpact` (ekran „Uvid") i dalje zove
+`GetStornoBlockRows` bez identiteta. To je read-only pregled i njegovi pozivaoci
+identitet ne nose, pa nisam dodavao parametar koji niko ne prosleđuje.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=51, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno**.
+- **Dve nove sabotaže**: `blokovi-po-broju` (mutacija) i `blockcount-po-broju`
+  (pregled), svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

@@ -100,6 +100,7 @@ Private Const FX_OTPREMNICA_STALE As String = "9/TEST"
 Private Const FX_OTPREMNICA_STALE_NOVA As String = "10/TEST"
 Private Const FX_ZBIRNA_STALE As String = "ZB-TEST-STL"
 Private Const FX_PRIJEMNICA_STALE As String = "12/TEST"
+Private Const FX_OTPREMNICA_BLOK As String = "18/TEST"
 Private Const FX_ZBIRNA_TGT As String = "ZB-TEST-TGT"
 Private Const FX_ZBIRNA_OLDU As String = "ZB-TEST-OLDU"
 Private Const FX_OTPREMNICA_OLD_U As String = "13/TEST"
@@ -181,6 +182,8 @@ Public Sub RunAllTests()
     RunOne 47
     RunOne 48
     RunOne 49
+    RunOne 50
+    RunOne 51
 
     SetTestMode prevMode
     WriteResultFile
@@ -267,6 +270,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 51: TestName = "T_StorniranSibling_ZadrzavaSvojBlok"
+        Case 50: TestName = "T_BlokoviF8_PoIdentitetu"
         Case 49: TestName = "T_IspravkaZbirne_KapijaNaObeStrane"
         Case 48: TestName = "T_CiljnaZbirnaDvosmislena_Staje"
         Case 47: TestName = "T_KapijaZbirne_FailClosedNaSvojuGresku"
@@ -324,6 +329,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 51: T_StorniranSibling_ZadrzavaSvojBlok
+        Case 50: T_BlokoviF8_PoIdentitetu
         Case 49: T_IspravkaZbirne_KapijaNaObeStrane
         Case 48: T_CiljnaZbirnaDvosmislena_Staje
         Case 47: T_KapijaZbirne_FailClosedNaSvojuGresku
@@ -2181,6 +2188,82 @@ Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
              "completion staje nad zatecenim context-om dvosmislene zbirne"
     AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
              "razlog imenuje staru zbirnu"
+End Sub
+
+' ============================================================
+' 50. Spisak blokova za F8 je po IDENTITETU, ne po broju
+' ============================================================
+' ActiveBlocksForFlow je za otpremnicu radio GetOtpremnicaIDsByBroj(broj) bez
+' generacije -- pa je spisak sadrzao blokove SVIH dokumenata tog broja. Isti
+' BrojOtpremnice na dve stanice je legitiman, sto ostatak ovog PR-a i modeluje.
+Private Sub T_BlokoviF8_PoIdentitetu()
+    Dim po As Collection, sviRedovi As Collection
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' Scenario je stvaran samo ako broj sam po sebi daje OBA bloka.
+    Set sviRedovi = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, _
+                                                    FX_OTPREMNICA_BLOK, "", "")
+    AssertEq sviRedovi.count, 2, _
+             "preduslov: po golom broju spisak nosi blokove OBA dokumenta"
+
+    Set po = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-A")
+    AssertEq po.count, 1, "sa identitetom spisak nosi SAMO blok izabranog dokumenta"
+    AssertEq CStr(po(1)(0)), "OTK-BLK-A", "i to bas njegov blok"
+
+    ' Isti kvar je bio i u PREGLEDU: ScanOtpremnica razresi dokument po identitetu
+    ' pa blockCount racuna po broju. Operater bi video tudje blokove, a correction
+    ' dijalog bi se otvorio i nad dokumentom koji blokove nema.
+    Dim pregled As String
+    pregled = modStornoDok.StornoPregledLanca(STIP_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                              "", "GEN-BLK-A")
+    AssertEq (InStr(1, pregled, "Otkupni blokovi: 1", vbTextCompare) > 0), True, _
+             "pregled broji blokove IZABRANOG dokumenta, ne svih tog broja"
+End Sub
+
+' ============================================================
+' 51. Storniran sibling ne sme da izgubi svoj blok
+' ============================================================
+' Ovo je mutacija, ne pregled. Kapija BlockStornoDriftReason tu ne pomaze: prva
+' linija joj je "If ModeStornoBlokParent(docType, mode) Then Exit Function", a to
+' je True za svaki PONISTENJE i za OTPREMNICA+DUPLI/ISPRAVKA -- dakle za tacno
+' one modove koji jedini stizu do dodatnog storna blokova. Njena pretpostavka
+' ("roditelj umire, pa je blok-storno bezbedan") vazi samo za blokove IZABRANOG
+' dokumenta.
+'
+' Test radi ono sto radi UI posle uspesnog moda: uzme spisak blokova i stornira
+' ga. Sam StornirajBlokoveAko se ne moze zvati iz testa (MsgBox), pa se meri
+' sloj ispod -- ista dva poziva, bez dijaloga.
+Private Sub T_StorniranSibling_ZadrzavaSvojBlok()
+    Dim res As Object, redovi As Collection, ids As Collection, i As Long
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-A"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B"), True, _
+             "preduslov: sibling je STORNIRAN (pa nema zivog roditelja za kapiju)"
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-BLK-B"), False, _
+             "preduslov: blok siblinga je i dalje AKTIVAN"
+
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_OTPREMNICA, FX_OTPREMNICA_BLOK, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-BLK-A")
+    AssertEq CBool(res("success")), True, "DUPLI nad izabranom otpremnicom je prosao"
+
+    ' Dodatni storno blokova -- isto sto UI radi posle uspesnog moda.
+    Set redovi = modStornoFlow.GetStornoBlockRows(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                                 "", "GEN-BLK-A")
+    Set ids = New Collection
+    For i = 1 To redovi.count
+        ids.Add CStr(redovi(i)(0))
+    Next i
+    If ids.count > 0 Then modStornoFlow.StornoSelectedBlocks_TX ids
+
+    ' Poslovna tvrdnja PRVA (v. zamka 6 u sabotaza.py).
+    AssertEq StorniranoNaID(TBL_OTKUP, COL_OTK_ID, "OTK-BLK-B"), False, _
+             "blok storniranog siblinga je ostao AKTIVAN"
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A"), True, _
+             "izabrana otpremnica je stornirana (mod je odradio svoje)"
 End Sub
 
 ' ============================================================

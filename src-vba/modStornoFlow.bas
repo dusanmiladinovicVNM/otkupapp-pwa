@@ -1360,7 +1360,9 @@ Private Function ScanPrijemnica(ByVal broj As String, _
     palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijID)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
-    d("blockCount") = ActiveBlocksForFlow(FLOW_DOC_PRIJEMNICA, broj).count
+    ' bz je vec procitan iz TACNOG prijID -- roditelj se ne trazi ponovo po
+    ' poslovnom broju prijemnice, koji nije globalno jedinstven.
+    d("blockCount") = ActiveOtkupIDsByZbirna(bz).count
     Exit Function
 EH:
     LogErr MOD_NAME & ".ScanPrijemnica"
@@ -1373,20 +1375,44 @@ End Function
 
 ' Aktivni otkup blokovi (samostalni) vezani za flow dokument. Otpremnica: preko
 ' OtpremnicaID; Zbirna/Prijemnica: preko BrojZbirne. Za multiselect dodatni storno.
+' docID (GeneracijaID izabranog dokumenta) NIJE kozmetika: rezultat ove funkcije
+' ide u dodatni storno blokova, dakle u MUTACIJU. Bez njega su blokovi svih
+' dokumenata istog poslovnog broja u istoj korpi -- a GetOtpremnicaIDsByBroj
+' namerno ukljucuje i STORNIRANE otpremnice, jer njihovi blokovi jos mogu da
+' pokazuju na njih.
+'
+' Kapija BlockStornoDriftReason ovo ne hvata: prva linija joj je
+' "If ModeStornoBlokParent(docType, mode) Then Exit Function", a to je True za
+' svaki PONISTENJE i za OTPREMNICA+DUPLI/ISPRAVKA -- to jest za tacno one modove
+' koji jedini i stizu do dodatnog storna blokova. Pretpostavka "roditelj umire,
+' pa je blok-storno bezbedan" vazi samo za blokove IZABRANOG dokumenta.
 Public Function ActiveBlocksForFlow(ByVal docType As String, ByVal broj As String, _
-                                    Optional ByVal dokumentTip As String = "") As Collection
+                                    Optional ByVal dokumentTip As String = "", _
+                                    Optional ByVal docID As String = "") As Collection
     Dim result As New Collection
     Set ActiveBlocksForFlow = result
     On Error GoTo EH
     broj = Trim$(broj)
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
-            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))
+            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))
         Case FLOW_DOC_ZBIRNA
+            ' SEMA: tblOtkup nosi denormalizovan BrojZbirne, ne ZbirnaID -- deca
+            ' se po generaciji zbirne ne mogu razdvojiti. Zato ovde nema sta da se
+            ' suzi; put je zasticen uzvodno (kapije nad dvosmislenim brojem
+            ' zbirne obore mode operaciju, a dodatni storno blokova ide samo posle
+            ' uspesne). Ako se te kapije ikad suze, ovo mesto se otvara.
             Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)
         Case FLOW_DOC_PRIJEMNICA
+            ' BrojPrijemnice NIJE globalno jedinstven (sekvenca po kupcu), pa je
+            ' roditeljska zbirna morala da se cita iz TACNOG dokumenta, ne iz
+            ' prvog reda tog broja.
+            Dim prijID As String
+            prijID = PkPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, _
+                                    docID, COL_PRJ_KUPAC)
+            If Len(prijID) = 0 Then Exit Function
             Dim bz As String
-            bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_BROJ_ZBIRNE))
+            bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
             If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)
     End Select
     Exit Function
@@ -1488,11 +1514,12 @@ End Function
 ' Otkupni blokovi za multiselect listu. Collection nizova(0..4):
 ' OtkupID | BrojDokumenta | Kolicina | Klasa | Kooperant.
 Public Function GetStornoBlockRows(ByVal docType As String, ByVal broj As String, _
-                                   Optional ByVal dokumentTip As String = "") As Collection
+                                   Optional ByVal dokumentTip As String = "", _
+                                   Optional ByVal docID As String = "") As Collection
     Dim result As New Collection
     Set GetStornoBlockRows = result
     On Error GoTo EH
-    Dim ids As Collection: Set ids = ActiveBlocksForFlow(docType, broj, dokumentTip)
+    Dim ids As Collection: Set ids = ActiveBlocksForFlow(docType, broj, dokumentTip, docID)
     If ids Is Nothing Then Exit Function
     If ids.count = 0 Then Exit Function
 
@@ -2505,7 +2532,10 @@ Private Function ScanOtpremnica(ByVal broj As String, _
     Dim bz As String: bz = NzTx(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
     d("brojZbirne") = bz
 
-    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj)
+    ' Identitet se koristio za sam dokument pa odmah gubio za njegove blokove:
+    ' pregled je mogao da prikaze blokove siblinga i time otvori correction
+    ' dijalog nad dokumentom koji blokove nema.
+    Dim allIDs As Collection: Set allIDs = GetOtpremnicaIDsByBroj(broj, gen)
     d("blockCount") = GetBlokOtkupIDs(allIDs).count
 
     d("hasZbirna") = (Len(bz) > 0 And ZbirnaPostoji(bz))

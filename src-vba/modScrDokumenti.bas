@@ -498,7 +498,7 @@ Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
         ' Blokovi se storniraju POSLE dokumenta: kapija gleda da li je
         ' roditeljska otpremnica jos aktivna, a to zavisi od toga sta je
         ' upravo odradjeno.
-        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID"))
+        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID")), docID
     Else
         MsgBox CStr(res("message")), vbExclamation, APP_NAME
     End If
@@ -587,7 +587,8 @@ End Function
 ' ZIVU otpremnicu se ne stornira, jer bi je ostavio precenjenu.
 Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
                                 ByVal opcija As String, ByVal mode As String, _
-                                ByVal correctionID As String)
+                                ByVal correctionID As String, _
+                                ByVal docID As String)
     Dim dt As String, blokovi As Collection, ids As Collection
     Dim spisak As String, i As Long, red As Variant, n As Long, razlog As String
     On Error GoTo EH
@@ -595,7 +596,9 @@ Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
     dt = modStornoDok.TipUFlowDoc(tip)
     If Len(dt) = 0 Then Exit Sub
 
-    Set blokovi = GetStornoBlockRows(dt, broj, opcija)
+    ' Identitet izabranog F8 reda ide i ovde: spisak koji operater potvrdjuje
+    ' zavrsava u StornoSelectedBlocks_TX, dakle u MUTACIJI.
+    Set blokovi = GetStornoBlockRows(dt, broj, opcija, docID)
     If blokovi Is Nothing Then Exit Sub
     If blokovi.count = 0 Then Exit Sub
 

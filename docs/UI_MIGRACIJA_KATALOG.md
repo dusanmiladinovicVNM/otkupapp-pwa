@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-139`.
+Stanje na dan `v6-ui-140`.
 
 ---
 
@@ -69,6 +69,15 @@ Ista rupa je zatvorena i u `CompleteZbirnaIspravka`, gde po broju idu i izvor i
 cilj. Sam primitiv (`RecalculateZbirnaFromOtpremnice_TX`,
 `ReassignPrijemnicaToZbirna_TX` bez generacije) ostaje number-based — tu bi jednog
 dana trebala centralna kapija umesto zaštite po call-site-u.
+
+Od `v6-ui-140` identitet nosi i **dodatni storno otkupnih blokova**
+(`StornirajBlokoveAko → GetStornoBlockRows → ActiveBlocksForFlow`), plus pregledi
+u `ScanOtpremnica` i `ScanPrijemnica`. Do tada je spisak blokova nastajao po
+poslovnom broju i mogao je da obori blok drugog dokumenta — a kapija
+`BlockStornoDriftReason` se na toj putanji ne izvršava, jer `ModeStornoBlokParent`
+vraća `True` za `PONISTENJE` i za `OTPREMNICA+DUPLI/ISPRAVKA`, to jest za jedine
+modove koji tu i dolaze. Grana `FLOW_DOC_ZBIRNA` ostaje po broju jer `tblOtkup`
+nosi `BrojZbirne`, ne `ZbirnaID`; taj put je zaštićen uzvodno.
 
 ---
 

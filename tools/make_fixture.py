@@ -81,6 +81,12 @@ OTPREMNICA_STALE_NOVA = "10/TEST"    # cilj zamene; mora imati NEPRAZNU zbirnu
 # relink nije imao sta da preveze i sabotaza nije obarala svoju tvrdnju.
 ZBIRNA_STALE = "ZB-TEST-STL"         # cilj relinka; jednoznacna, mirna
 PRIJEMNICA_STALE = "12/TEST"         # TUDJA prijemnica na dvosmislenoj zbirni
+# F8 DODATNI STORNO BLOKOVA. Isti BrojOtpremnice na dve stanice je legitiman,
+# a spisak blokova se pravio po tom broju -- pa je u korpu ulazio i blok
+# drugog dokumenta. Zato je B STORNIRANA a njen blok AKTIVAN: tacno to stanje
+# gasi kapiju BlockStornoDriftReason (nema zivog roditelja), a i inace je ona
+# na ovoj putanji preskocena za DUPLI/PONISTENJE.
+OTPREMNICA_BLOK = "18/TEST"
 # CILJNA zbirna sa istorijski dvosmislenim brojem: owner A je STORNIRAN a
 # njegovo dete je AKTIVNO (test 44 dokazuje da storno zaglavlja ne stornira
 # dete), owner B je aktivan i njegovo dete je zamena. Zatecena kapija u
@@ -300,6 +306,16 @@ SEED = {
          "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_NEW_T, "BrojZbirne": ZBIRNA_TGT,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-BLK-A", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_BLOK, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
+        # STORNIRANA, ali njen blok ostaje aktivan (recovery stanje).
+        {"OtpremnicaID": "OTP-BLK-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_BLOK, "BrojZbirne": "",
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 20, "Klasa": "I",
+         "Stornirano": "Da"},
         {"OtpremnicaID": "OTP-STL-B", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
          "VozacID": VOZAC, "BrojOtpremnice": OTPREMNICA_STALE, "BrojZbirne": ZBIRNA_STALE,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0,
@@ -351,6 +367,17 @@ SEED = {
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": OTKUP_KOLIZIJA, "Klasa": "I"},
+        # Po jedan AKTIVAN blok na svakoj od dve otpremnice istog broja.
+        {"OtkupID": "OTK-BLK-A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 10, "VozacID": VOZAC, "BrojDokumenta": "B1/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-BLK-A", "BrojOtpremnice": OTPREMNICA_BLOK},
+        {"OtkupID": "OTK-BLK-B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 200, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "B2/TEST", "Klasa": "I",
+         "OtpremnicaID": "OTP-BLK-B", "BrojOtpremnice": OTPREMNICA_BLOK},
         {"OtkupID": "OTK-TEST-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 400, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
