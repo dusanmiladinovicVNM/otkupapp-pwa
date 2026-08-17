@@ -186,6 +186,9 @@ Public Sub RunAllTests()
     RunOne 50
     RunOne 51
     RunOne 52
+    RunOne 53
+    RunOne 54
+    RunOne 55
 
     SetTestMode prevMode
     WriteResultFile
@@ -272,6 +275,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 55: TestName = "T_StornoNijeUnosniRezim"
+        Case 54: TestName = "T_MapaImena_KljucNosiKolone"
+        Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
         Case 51: TestName = "T_StorniranSibling_ZadrzavaSvojBlok"
         Case 50: TestName = "T_BlokoviF8_PoIdentitetu"
@@ -332,6 +338,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 55: T_StornoNijeUnosniRezim
+        Case 54: T_MapaImena_KljucNosiKolone
+        Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
         Case 51: T_StorniranSibling_ZadrzavaSvojBlok
         Case 50: T_BlokoviF8_PoIdentitetu
@@ -2192,6 +2201,98 @@ Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
              "completion staje nad zatecenim context-om dvosmislene zbirne"
     AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
              "razlog imenuje staru zbirnu"
+End Sub
+
+' ============================================================
+' 53. Kes tabela ne sme da memoise NEUSPEH
+' ============================================================
+' Zatecen incident sa prave instalacije: operater je gledao PRAZNE liste za svaki
+' tip dokumenta, bez ijedne greske, dok je tblOtkup bio pun. Dijagnostika:
+'
+'     IsArray(modUiData.CachedTable("tblOtkup"))  -> False
+'     IsArray(GetTableData("tblOtkup"))           -> True
+'
+' Tabela je pri PRVOM citanju bila prazna (podaci stizu posle -- sync, uvoz,
+' legacy forma), pa je Empty ostao u kesu do kraja sesije. ResetCache se zove
+' samo pri gradnji ekrana i posle upisa kroz novi UI. Potvrda: rucni
+' "modUiData.ResetCache: modOtkupUI.RefreshFromData" je vratio sve liste.
+'
+' Vraceno stanje se NE moze izmeriti kroz vracenu vrednost -- ona je Empty i kad
+' je neuspeh kesiran i kad nije. Zato test gleda SAM KES, kroz seam.
+Private Sub T_KesTabela_NeMemoiseNeuspeh()
+    modUiData.ResetCache
+
+    AssertEq IsArray(modUiData.CachedTable("tblNePostojiUopste")), False, _
+             "necitljiva tabela vraca Empty"
+    AssertEq modUiData.KesImaKljuc("tblNePostojiUopste"), False, _
+             "neuspeh se NE kesira -- inace tabela ostaje prazna do kraja sesije"
+
+    ' Pozitivna kontrola: uspeh se i dalje kesira, inace bi ispravka znacila
+    ' skeniranje tabele pri svakom crtanju mreze.
+    AssertEq IsArray(modUiData.CachedTable(TBL_OTKUP)), True, _
+             "citljiva tabela se procita"
+    AssertEq modUiData.KesImaKljuc(TBL_OTKUP), True, "uspeh se kesira"
+
+    ' Necitljiva tabela mora da se RAZLIKUJE od prazne.
+    AssertEq modUiData.TabelaCitljiva("tblNePostojiUopste"), False, _
+             "nepostojeca tabela nije citljiva"
+    AssertEq modUiData.TabelaCitljiva(TBL_OTKUP), True, "postojeca tabela je citljiva"
+End Sub
+
+' ============================================================
+' 54. Mapa imena: kljuc nosi kolone, prazna se ne kesira
+' ============================================================
+' Drugi simptom istog korena: u listi je stajalo "KOOP-00022" umesto imena.
+' PartnerMap je zvao isti kes, dobio Empty, napravio PRAZAN recnik -- i kesirao
+' ga. Posle toga je svako ime do kraja sesije padalo na goli ID.
+'
+' Uz to je kljuc kesa bio SAMO ime tabele, iako mapa zavisi i od kolona: prvi
+' pozivalac je time odlucivao sta svi ostali dobijaju.
+Private Sub T_MapaImena_KljucNosiKolone()
+    Dim samoIme As Object, imePrezime As Object
+
+    modUiData.ResetCache
+    ' Isti ID, dve razlicite kolone imena. Sa kljucem samo po tabeli drugi poziv
+    ' vraca prvi recnik, pa su vrednosti identicne -- a nisu iste stvari.
+    Set samoIme = modOtkupUI.PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "")
+    Set imePrezime = modOtkupUI.PartnerMap(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    AssertEq (samoIme.count > 0), True, "preduslov: mapa kooperanata nije prazna"
+    AssertEq (CStr(imePrezime("KOOP-TEST-1")) <> CStr(samoIme("KOOP-TEST-1"))), True, _
+             "kljuc kesa nosi KOLONE -- ime+prezime nije isto sto i samo ime"
+
+    ' Prazna mapa (nepostojeca tabela) ne sme da se kesira.
+    AssertEq modOtkupUI.PartnerMap("tblNePostojiUopste", "X", "Y", "").count, 0, _
+             "nepostojeca tabela daje praznu mapu"
+    AssertEq modOtkupUI.MapaImenaKesirana("tblNePostojiUopste|X|Y|"), False, _
+             "prazna mapa se NE kesira -- inace svako ime pada na goli ID"
+End Sub
+
+' ============================================================
+' 55. Storno nije unosni rezim -- forma mu ne pripada
+' ============================================================
+' F8 je crtao celu unosnu formu i primarno dugme "Storniraj dokument", a
+' Scr_Save za STORNO pada u Case Else i vraca "Nije vezano na postojecu rutinu".
+' Dakle dugme je bilo mrtvo, a forma je pozivala operatera da ukuca podatke
+' dokumenta koji hoce da stornira.
+Private Sub T_StornoNijeUnosniRezim()
+    Dim f As frmOtkupUI, preF1 As Boolean
+
+    ' Forma MORA da se izgradi: SelectMode je radnja nad njom, a IdiNaRezim bez
+    ' izgradjene forme tiho izlazi (mFrm Is Nothing) -- prva verzija ovog testa
+    ' je zato merila no-op i padala.
+    Set f = NewOtkupUIForm()
+
+    modOtkupUI.SelectMode f, "F1"
+    preF1 = modOtkupUI.GridMaxAktivan()
+
+    modOtkupUI.SelectMode f, "F8"
+    AssertEq modOtkupUI.GridMaxAktivan(), True, _
+             "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju"
+
+    ' Izlazak vraca stanje koje je operater imao, ne nametnuto.
+    modOtkupUI.SelectMode f, "F1"
+    AssertEq modOtkupUI.GridMaxAktivan(), preF1, _
+             "izlazak iz F8 vraca operaterov izbor, ne ostavlja nametnut grid-max"
 End Sub
 
 ' ============================================================

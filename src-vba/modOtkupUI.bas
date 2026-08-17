@@ -345,6 +345,11 @@ Private mZbirnaFill As Boolean
 ' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
 Private mPartnerFill As Boolean
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
+' Grid-max u STORNU je NAMETNUT, ne izbor operatera -- pa se njegov izbor
+' pamti i vraca pri izlasku iz F8. Bez ovoga bi F8 trajno ukljucio grid-max
+' i unosnim rezimima.
+Private mGridMaxPre As Boolean
+Private mGridMaxLocked As Boolean
 ' Izabran smer reversa (1..4); NULA znaci "operater jos nije izabrao" i tako se
 ' i predaje ekranu. Nijedan segment nije unapred obelezen namerno: legacy
 ' izricito trazi eksplicitan izbor, jer je prazan smer ranije tiho knjizio
@@ -2818,6 +2823,21 @@ End Sub
 ' Postoji zbog ispravke posle storna (Faza D/13): posle storna starog
 ' dokumenta operater mora da zavrsi u rezimu u kome se unosi zamenski, a
 ' storno se pokrece iz F8. Ekran zna KOJI je to rezim; formu drzi ljuska.
+' TEST SEAM: je li mreza razvucena (forma i kontekst sklonjeni). Postoji zato
+' sto se u testu forma ne prikazuje (.Show se ne zove), pa se vidljivost
+' kontrola ne moze meriti -- a tvrdnja "storno nije unosni rezim" je bas o
+' tom stanju.
+' TEST SEAM: je li mapa imena kesirana pod datim kljucem. Prazna mapa i mapa
+' koja nije kesirana daju isti rezultat pozivaocu, pa se razlika meri ovde.
+Public Function MapaImenaKesirana(ByVal ck As String) As Boolean
+    If mPartMap Is Nothing Then Exit Function
+    MapaImenaKesirana = mPartMap.Exists(ck)
+End Function
+
+Public Function GridMaxAktivan() As Boolean
+    GridMaxAktivan = mGridMax
+End Function
+
 Public Sub IdiNaRezim(ByVal key As String)
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
@@ -2834,6 +2854,24 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ClosePopup
     ActiveMode = key
     k = modeKey(key)
+    ' STORNO NIJE UNOSNI REZIM. Forma i kontekstni red pripadaju unosu; u stornu
+    ' se dokument BIRA IZ LISTE, a "Sacuvaj" nema sta da pozove -- Scr_Save za
+    ' STORNO pada u Case Else i vraca "Nije vezano na postojecu rutinu". Dakle
+    ' primarno dugme je bilo mrtvo, a forma je pozivala operatera da ukuca
+    ' podatke dokumenta koji hoce da stornira. Grid-max sklanja oboje i daje
+    ' mrezi ceo prostor -- isti raspored koji imaju Palete i Oporavak.
+    '
+    ' Stanje operatera se pamti: izlazak iz F8 vraca ono sto je imao pre.
+    If k = "STORNO" Then
+        If Not mGridMaxLocked Then
+            mGridMaxPre = mGridMax
+            mGridMaxLocked = True
+        End If
+        mGridMax = True
+    ElseIf mGridMaxLocked Then
+        mGridMax = mGridMaxPre
+        mGridMaxLocked = False
+    End If
     SetGridCols k                      ' pre LayoutGrid-a i pre naslova kolona
     ApplyFormFields frm, key           ' pre LayoutFields-a
 
@@ -3359,6 +3397,9 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "btnMax"
             ' mreza se razvlaci do ispod naslova dokumenta - kontekst i forma
             ' se sklanjaju, drugi klik ih vraca
+            ' U STORNU nema sta da se vrati -- forma tamo ne pripada, pa je
+            ' prekidac bez posla. Klik se tiho ignorise, ne gasi grid-max.
+            If modeKey(ActiveMode) = "STORNO" Then Exit Sub
             mGridMax = Not mGridMax
             mFrm.Controls("zGrid").Controls("btnMaxI").caption = _
                 ChrW(IIf(mGridMax, IC_MIN, IC_MAX))
@@ -4482,9 +4523,14 @@ Public Function PartnerMap(ByVal tblName As String, ByVal idCol As String, _
                             ByVal nameCol As String, ByVal nameCol2 As String) As Object
     Dim d As Object, src As Variant, iId As Long, iNm As Long, iNm2 As Long
     Dim r As Long, k As String, v As String
+    ' KLJUC KESA NOSI I KOLONE. Ranije je bio samo ime tabele, a mapa zavisi i
+    ' od toga koje se kolone citaju -- prvi pozivalac je time odlucivao sta svi
+    ' ostali dobijaju (npr. "Ime" bez "Prezime").
+    Dim ck As String
+    ck = tblName & "|" & idCol & "|" & nameCol & "|" & nameCol2
     If mPartMap Is Nothing Then Set mPartMap = CreateObject("Scripting.Dictionary")
-    If mPartMap.Exists(tblName) Then
-        Set PartnerMap = mPartMap(tblName)
+    If mPartMap.Exists(ck) Then
+        Set PartnerMap = mPartMap(ck)
         Exit Function
     End If
     Set d = CreateObject("Scripting.Dictionary")
@@ -4505,7 +4551,11 @@ Public Function PartnerMap(ByVal tblName As String, ByVal idCol As String, _
             Next r
         End If
     End If
-    Set mPartMap(tblName) = d
+    ' PRAZNA MAPA SE NE KESIRA. Nastaje kad tabela jos nije procitana ili kolone
+    ' nisu nadjene -- a kesirana bi znacila da svako ime do kraja sesije pada na
+    ' goli ID (operater je video "KOOP-00022" umesto imena). Prazna je "ne znam
+    ' jos", ne "nema imena".
+    If d.count > 0 Then Set mPartMap(ck) = d
     Set PartnerMap = d
 End Function
 

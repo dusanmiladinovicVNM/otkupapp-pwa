@@ -24,10 +24,47 @@ Public Sub ResetCache()
     Set mCache = Nothing
 End Sub
 
+' KES NE SME DA MEMOISE NEUSPEH.
+'
+' Zatecen incident: operater je gledao PRAZNE liste za svaki tip dokumenta, bez
+' ijedne greske, iako je tblOtkup pun. Dijagnostika je pokazala tacno to:
+'
+'     IsArray(CachedTable("tblOtkup"))  -> False
+'     IsArray(GetTableData("tblOtkup")) -> True
+'
+' Tabela je pri PRVOM citanju bila prazna (podaci stizu posle -- sync, uvoz,
+' legacy forma), pa je Empty ostao u kesu do kraja sesije. ResetCache se zove
+' samo pri gradnji ekrana i posle upisa KROZ NOVI UI, a nijedan od tih puteva
+' nije prosao.
+'
+' Zato: kesira se samo USPEH. Neuspeh je "ne znam jos", ne "nema nista" -- pa se
+' sledeci poziv ponovo pita. Cena je jedan promasen sken po tabeli koja je
+' zaista prazna; korist je da podaci koji stignu kasnije budu vidljivi.
 Public Function CachedTable(ByVal tblName As String) As Variant
     If mCache Is Nothing Then Set mCache = CreateObject("Scripting.Dictionary")
-    If Not mCache.Exists(tblName) Then mCache(tblName) = GetTableData(tblName)
-    CachedTable = mCache(tblName)
+    If mCache.Exists(tblName) Then
+        CachedTable = mCache(tblName)
+        Exit Function
+    End If
+    Dim src As Variant
+    src = GetTableData(tblName)
+    If IsArray(src) Then mCache(tblName) = src
+    CachedTable = src
+End Function
+
+' TEST SEAM: da li je kljuc u kesu. Postoji zato sto se "neuspeh se ne kesira"
+' ne moze izmeriti kroz vracenu vrednost -- ona je Empty u oba slucaja.
+Public Function KesImaKljuc(ByVal tblName As String) As Boolean
+    If mCache Is Nothing Then Exit Function
+    KesImaKljuc = mCache.Exists(tblName)
+End Function
+
+' Je li tabela uopste CITLJIVA (postoji kao ListObject). GetTableData vraca Empty
+' i za praznu i za nepostojecu tabelu, a to su dva razlicita ishoda: prazna je
+' normalno stanje, nepostojeca je greska koja mora da se vidi.
+Public Function TabelaCitljiva(ByVal tblName As String) As Boolean
+    On Error Resume Next
+    TabelaCitljiva = Not (GetTable(tblName) Is Nothing)
 End Function
 
 Public Function ColIdx(ByVal tblName As String, ByVal colName As String) As Long

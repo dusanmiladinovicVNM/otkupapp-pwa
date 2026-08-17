@@ -2059,7 +2059,17 @@ Private Function RowsDokumenti(ByVal filter As String, ByVal q As String) As Var
     If Len(tblName) = 0 Then Exit Function
 
     src = modUiData.CachedTable(tblName)
-    If Not IsArray(src) Then Exit Function
+    If Not IsArray(src) Then
+        ' Prazna tabela i NECITLJIVA tabela su ovde izgledale isto: tiho
+        ' "Exit Function" je crtalo praznu mrezu bez ijedne reci, pa operater
+        ' nije imao nacin da razlikuje "nema dokumenata" od "ne umem da
+        ' procitam tabelu". Prazna prolazi kao prazna; nepostojeca je greska.
+        If Not modUiData.TabelaCitljiva(tblName) Then
+            Err.Raise ERR_UI_BASE + 21, "modScrDokumenti.RowsDokumenti", _
+                      "Tabela '" & tblName & "' nije nadjena u svesci."
+        End If
+        Exit Function
+    End If
 
     mStep = "GridCols"
     ' EffKey: u F8 je "STORNO" samo ime rezima; sve odluke ispod (koje
