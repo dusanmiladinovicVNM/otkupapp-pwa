@@ -879,6 +879,10 @@ Public Const IZDATO_PROSLEDJENO As String = "PROSLEDJENO"
 ' modStornoFlow); ne preklapa se sa modStorno (2400) ni SEF (3100).
 Public Const ERR_STORNO_FW_BASE As Long = vbObjectError + 2700
 
+' Baza kodova greske za novi UI (ljuska + ekranski moduli). Ne preklapa se sa
+' storno framework-om (2700) ni SEF-om (3100).
+Public Const ERR_UI_BASE As Long = vbObjectError + 2900
+
 Public Function GetConfigValue(ByVal configKey As String) As String
 
     Dim v As Variant

@@ -562,6 +562,39 @@ SABOTAZE = {
         "T_CiljnaZbirnaDvosmislena_Staje",
         "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
     ),
+    # Kes tabela memoise NEUSPEH -- zatecen incident sa prave instalacije:
+    # prazne liste za svaki tip dokumenta, bez ijedne greske, dok je tabela puna.
+    "kes-memoise-neuspeh": (
+        "modUiData.bas",
+        "    If IsArray(src) Then mCache(tblName) = src\n",
+        "    mCache(tblName) = src   ' SABOTAZA: kesira se i Empty\n",
+        "T_KesTabela_NeMemoiseNeuspeh",
+        "neuspeh se NE kesira -- inace tabela ostaje prazna do kraja sesije",
+    ),
+    # Prazna mapa imena se kesira -> svako ime pada na goli ID (KOOP-00022).
+    "mapa-imena-kesira-prazno": (
+        "modOtkupUI.bas",
+        "    If d.count > 0 Then Set mPartMap(ck) = d\n",
+        "    Set mPartMap(ck) = d   ' SABOTAZA: kesira se i prazna mapa\n",
+        "T_MapaImena_KljucNosiKolone",
+        "prazna mapa se NE kesira -- inace svako ime pada na goli ID",
+    ),
+    # Kljuc kesa samo po imenu tabele: prvi pozivalac odlucuje za sve ostale.
+    "mapa-imena-kljuc-bez-kolona": (
+        "modOtkupUI.bas",
+        '    ck = tblName & "|" & idCol & "|" & nameCol & "|" & nameCol2\n',
+        "    ck = tblName   ' SABOTAZA: kljuc ne nosi kolone\n",
+        "T_MapaImena_KljucNosiKolone",
+        "kljuc kesa nosi KOLONE -- ime+prezime nije isto sto i samo ime",
+    ),
+    # Storno crta unosnu formu i mrtvo primarno dugme.
+    "storno-crta-unosnu-formu": (
+        "modOtkupUI.bas",
+        '    If k = "STORNO" Then\n',
+        "    If False Then   ' SABOTAZA: storno ostaje unosni rezim\n",
+        "T_StornoNijeUnosniRezim",
+        "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju",
+    ),
     # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
     # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.
     #

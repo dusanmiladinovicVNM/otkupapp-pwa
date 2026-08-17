@@ -2828,3 +2828,89 @@ nije videlo.
 - `python tools\run_vba.py --suite RunAllTests` → **TESTS=52, FAIL=0**.
 - Sweep nad `src-vba` za zaklonjena imena → **0** (bio 12).
 - `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova, dva puta.**
+
+## v2.47.0 — `v6-ui-142` · keš koji je pamtio da podataka nema
+
+Operater je prijavio dve stvari koje su izgledale nevezano: **prazne liste za
+svaki tip dokumenta** i **`KOOP-00022` umesto imena kooperanta**. Koren je jedan.
+
+### P1 — keš je memoisao neuspeh
+
+```vb
+If Not mCache.Exists(tblName) Then mCache(tblName) = GetTableData(tblName)
+```
+
+`GetTableData` vraća `Empty` i kad je tabela prazna. Ako je pri **prvom** čitanju
+bila prazna — a podaci stižu posle, kroz sync, uvoz ili legacy formu — `Empty`
+ostaje u kešu **do kraja sesije**. `ResetCache` se zove samo pri gradnji ekrana i
+posle upisa kroz novi UI, a nijedan od tih puteva nije prošao.
+
+Dijagnostika sa prave instalacije je to pokazala u jednom redu:
+
+```
+IsArray(modUiData.CachedTable("tblOtkup"))  ->  False
+IsArray(GetTableData("tblOtkup"))           ->  True
+GetColumnIndex("tblOtkup", "KooperantID")   ->  3      (nema schema drift-a)
+```
+
+Potvrda: ručni `modUiData.ResetCache: modOtkupUI.RefreshFromData` je vratio sve
+liste.
+
+**Sada se keširа samo uspeh.** Neuspeh je „ne znam još", ne „nema ništa" — pa se
+sledeći poziv ponovo pita. Cena je jedan promašen sken po tabeli koja je zaista
+prazna.
+
+### P1 — tiho `Exit Function` je krilo razliku
+
+```vb
+src = modUiData.CachedTable(tblName)
+If Not IsArray(src) Then Exit Function      ' bez ijedne reci
+```
+
+Vraćao je nedodeljen `Variant`, pa je mreža crtala praznu listu **bez greške** —
+operater nije imao način da razlikuje „nema dokumenata" od „ne umem da pročitam
+tabelu". Sada: prazna tabela prolazi kao prazna, **nepostojeća je greška sa imenom
+tabele** (`modUiData.TabelaCitljiva`).
+
+To je isti fail-open obrazac koji je devet rundi vađen iz storna, samo u sloju
+prikaza.
+
+### P2 — `KOOP-00022` umesto imena, dva razloga
+
+`PartnerMap` čita isti keš. Kad dobije `Empty`, napravi **prazan** rečnik — i
+onda ga **keširа**, pa svako ime do kraja sesije pada na goli ID. Prazna mapa se
+sada ne keširа.
+
+Uz to je ključ keša bio **samo ime tabele**, iako mapa zavisi i od kolona: prvi
+pozivalac je time odlučivao šta svi ostali dobijaju (`"Ime"` bez `"Prezime"`).
+Ključ sada nosi tabelu **i** kolone.
+
+Zašto su liste „Kooperanti" i „Izgubljeni po kg" ipak radile: one čitaju
+`GetTableData` **direktno**, mimo tog keša. Ta asimetrija je i bila trag.
+
+### Storno više ne izgleda kao unos
+
+F8 je crtao celu unosnu formu i primarno dugme „Storniraj dokument", a `Scr_Save`
+za `STORNO` pada u `Case Else` i vraća „Nije vezano na postojeću rutinu" — dakle
+**dugme je bilo mrtvo**, a forma je pozivala operatera da ukuca podatke dokumenta
+koji hoće da stornira.
+
+Ulazak u F8 sada uključuje grid-max: forma i kontekstni red se sklanjaju, mreža
+dobija ceo prostor — isti raspored koji imaju Palete i Oporavak. Operaterov izbor
+grid-maxa se pamti i vraća pri izlasku, a prekidač `⤢` je u F8 bez posla pa se
+tiho ignoriše.
+
+**Storno ostaje u F-traci**, nije izdvojen u svoj ekran. Izdvajanje je veći posao
+(~800 linija kroz pet modula) i njegova oštra ivica je predaja `ISPRAVKA`/`DUPLI`
+unosnom ekranu — tok koji je upravo stabilizovan. Vizuelni ishod je isti.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=55, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova zeleno**.
+- **Četiri nove sabotaže**, svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+Testovi 53–55 mere baš ono što se ne vidi kroz vraćenu vrednost: sam keš (kroz
+seam), jer `Empty` izgleda isto i kad je neuspeh keširan i kad nije.
