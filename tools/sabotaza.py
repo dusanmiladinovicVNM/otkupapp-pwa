@@ -514,6 +514,26 @@ SABOTAZE = {
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
         "presuda opisuje izabran dokument, ne prvi sa tim brojem",
     ),
+    # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
+    # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
+    "guard-samo-aktivni-vlasnici": (
+        "modStornoFlow.bas",
+        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
+        "                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
+        "                              MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
+        "T_StorniranVlasnik_JosImaAktivnuDecu",
+        "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
+    ),
+    # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
+    # "tudji blok nije pomeren" bez pozitivne kontrole.
+    "completion-ne-prevezuje": (
+        "modStornoFlow.bas",
+        "    Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)\n",
+        "    Set oldIDs = New Collection   ' SABOTAZA: nijedan blok se ne prevezuje\n",
+        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
+        "MOJ blok JESTE prevezan na zamensku otpremnicu",
+    ),
     # Zamena zbirne bez kapije: zaglavlje se stornira tacno, a completion posle
     # snimanja zamene odnese decu TUDJE zbirne.
     "zbirna-zamena-bez-kapije": (

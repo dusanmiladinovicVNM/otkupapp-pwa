@@ -2345,3 +2345,58 @@ roditeljskom zbirnom.
 Usput nađen i ispravljen poziv `MarkCorrectionManual` sa **četiri argumenta za
 tri parametra**. Suite je bio zelen — VBA ne kompajlira modul dok ga ne dotakne.
 Preostalih 20 poziva iste rutine je prebrojano mehanički.
+
+## v2.46.5 — `v6-ui-134` · storniran vlasnik i dalje ima aktivnu decu
+
+### P1 — kapija je brojala samo AKTIVNE vlasnike
+
+`StornoZbirna_TX` stornira **samo redove `tblZbirna`** — otpremnice, prijemnice i
+palete ne dira. Zato je ovo dostižno stanje, ne teorija:
+
+```
+Zbirna A  broj Z-10  STORNIRANA   ali OTP-A i PRJ-A još AKTIVNI
+Zbirna B  broj Z-10  AKTIVNA
+```
+
+Sa brojanjem samo aktivnih vlasnika, izbor B daje „broj je jednoznačan" — pa
+`DetachOtpremniceInline` i kaskada, koje idu **po broju**, odvežu i decu
+stornirane A. **Storniran vlasnik nestaje iz računa, njegova deca ne.**
+
+Sve tri kapije koje rade child mutaciju sada broje i stornirane vlasnike:
+guard na nivou moda, `StornoZbirnaIDetach_TX` i `PonistiZbirnaChain_TX`.
+Konzervativnije nego što je nužno — u skladu sa strategijom „fail-closed dok se
+deca ne scope-uju po owneru".
+
+### P2 — `stanicaID` opseg je bio fail-open na schema drift
+
+`Or cSta = 0` je značilo: kolone nema → **propusti sve stanice**. Tačno suprotno
+od razloga zbog kog opseg postoji. Sada diže grešku.
+
+### P2 — test 43 dobio pozitivnu kontrolu
+
+Tvrdio je samo „tuđ blok nije pomeren" — što prolazi i kod verzije koja **ne
+preveže nijedan** blok. Sada tvrdi oba smera: moj blok **jeste** prevezan na
+zamensku otpremnicu, tuđi **nije**. Sabotaža `completion-ne-prevezuje` obara
+pozitivnu polovinu.
+
+### Test 44 i jedna stvar koju je otkrio
+
+Test počinje od storniranog zaglavlja A sa aktivnim detetom, pa traži da `DUPLI`
+nad B stane.
+
+Prve tri sabotaže **nisu ugrizle**, i razlog je vredan zapisa: ishod čuvaju
+**dve nezavisne kapije** (na nivou moda i u detach-u), pa ga nijedna pojedinačna
+sabotaža ne može oboriti. To je dobra odbrana, ali test koji tvrdi samo ishod ne
+može da pokaže koja kapija radi.
+
+Zato test sada tvrdi i **koja** je stala: kapija na nivou moda staje **pre
+transakcije** i objašnjava razlog, dok bi detach pukao iznutra i dao samo „Storno
+zbirne nije uspeo". Isto rešenje kao kod testa 41.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=44, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- Sedam sabotaža iz poslednje tri runde, **svaka obara svoju tvrdnju**.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija pred merge.

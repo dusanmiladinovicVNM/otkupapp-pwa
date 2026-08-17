@@ -707,7 +707,7 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     ' Dok child mutacije ne budu scoped (VozacID/KupacID postoje, v. katalog),
     ' jedina postena opcija je stati PRE nego sto se ista promeni.
     If mode <> SV_MODE_RESI_KASNIJE Then
-        If CBool(s("brojDvosmislen")) Then
+        If CBool(s("brojDvosmislenIkad")) Then
             r("message") = "Broj zbirne '" & broj & "' nose dva aktivna dokumenta. " & _
                            "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
                            "prijemnice vezuju BROJEM. Razdvoj brojeve pa ponovi."
@@ -1890,7 +1890,8 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     ' Zaglavlje po generaciji. DetachOtpremniceInline nize ide po BROJU jer
     ' otpremnica zbirnu i nosi kao broj -- zato kapija: dva aktivna dokumenta
     ' istog broja delila bi otpremnice, pa bi se odvezale i tudje.
-    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, SRC, False, _
+    ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
+    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, SRC, True, _
                        Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
                   "Broj zbirne '" & broj & "' nose dva aktivna dokumenta -- " & _
@@ -2127,7 +2128,8 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
 
     ' FAIL-CLOSED: deca se biraju po BrojZbirne, pa dva aktivna dokumenta istog
     ' broja dele decu iz ugla ove rutine. Ponistavanje bi odvezalo i tudje.
-    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, False, _
+    ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
+    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _
                        Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
         res("message") = "Broj zbirne '" & brojZbirne & "' nose dva aktivna " & _
                          "dokumenta. Deca se u semi vezuju BROJEM, pa se lanac ne " & _
@@ -2235,12 +2237,18 @@ Private Function GetOtpremnicaIDsByBroj(ByVal broj As String, _
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     Dim cGen As Long: cGen = GetColumnIndex(TBL_OTPREMNICA, COL_GENERACIJA_ID)
     Dim cSta As Long: cSta = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_STANICA)
+    ' Zadat opseg stanice a kolone nema: tih prolaz kroz SVE stanice je tacno
+    ' suprotno od onoga zbog cega opseg postoji.
+    If Len(Trim$(stanicaID)) > 0 And cSta = 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 64, MOD_NAME & ".GetOtpremnicaIDsByBroj", _
+                  "Zadat je opseg stanice, a tabela nema kolonu " & COL_OTP_STANICA & "."
+    End If
     If cBr = 0 Or cId = 0 Then Exit Function
     Dim seen As Object: Set seen = CreateObject("Scripting.Dictionary")
     Dim i As Long, id As String
     For i = 1 To UBound(data, 1)
         If RedJeGeneracije(data, i, cBr, cGen, broj, gen) _
-           And (Len(Trim$(stanicaID)) = 0 Or cSta = 0 _
+           And (Len(Trim$(stanicaID)) = 0 _
                 Or Trim$(NzToText(data(i, cSta))) = Trim$(stanicaID)) Then
             id = Trim$(CStr(data(i, cId)))
             If Len(id) > 0 And Not seen.Exists(id) Then
@@ -2353,6 +2361,19 @@ Private Function ScanZbirna(ByVal broj As String, _
     ' bi na osnovu toga menjale decu staju (v. PonistiZbirnaChain_TX).
     d("brojDvosmislen") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
                           MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
+    ' UKLJUCUJE I STORNIRANE vlasnike, namerno.
+    '
+    ' StornoZbirna_TX stornira SAMO redove tblZbirna -- otpremnice, prijemnice i
+    ' palete ne dira. Zato je ovo potpuno legitimno stanje:
+    '
+    '   Zbirna A  broj Z-10  STORNIRANA   ali OTP-A i PRJ-A jos AKTIVNI
+    '   Zbirna B  broj Z-10  AKTIVNA
+    '
+    ' Sa brojanjem samo AKTIVNIH vlasnika, izbor B daje "broj je jednoznacan" --
+    ' pa DetachOtpremniceInline i kaskada, koje idu PO BROJU, odvezu i decu
+    ' stornirane A. Storniran vlasnik nestaje iz racuna, njegova deca ne.
+    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
+                              MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
     d("otpCount") = CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj)
     Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj)
     d("prijCount") = pc

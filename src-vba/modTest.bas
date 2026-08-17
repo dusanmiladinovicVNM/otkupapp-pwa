@@ -167,6 +167,7 @@ Public Sub RunAllTests()
     RunOne 41
     RunOne 42
     RunOne 43
+    RunOne 44
 
     SetTestMode prevMode
     WriteResultFile
@@ -253,6 +254,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 44: TestName = "T_StorniranVlasnik_JosImaAktivnuDecu"
         Case 43: TestName = "T_ZavrsetakIspravke_NeDegradiraOldDocID"
         Case 42: TestName = "T_ZamenaZbirne_NeDiraDecuTudje"
         Case 41: TestName = "T_ZbirnaKaskada_StajeNaDvosmislenom"
@@ -304,6 +306,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 44: T_StorniranVlasnik_JosImaAktivnuDecu
         Case 43: T_ZavrsetakIspravke_NeDegradiraOldDocID
         Case 42: T_ZamenaZbirne_NeDiraDecuTudje
         Case 41: T_ZbirnaKaskada_StajeNaDvosmislenom
@@ -2010,9 +2013,62 @@ Private Sub T_ZavrsetakIspravke_NeDegradiraOldDocID()
     Set res = modStornoFlow.CompleteOtpremnicaIspravka(cid, FX_OTPREMNICA_ZAMENA)
     AssertEq (Not res Is Nothing), True, "completion je vratio rezultat"
 
-    ' JEDINA prava tvrdnja: blok DRUGE stanice nije prevezan.
+    ' DVA SMERA. Sama tvrdnja "tudji blok nije pomeren" prolazi i kod verzije
+    ' koja ne preveze NIJEDAN blok, pa uz nju ide i pozitivna kontrola.
+    AssertEq CBool(res("success")), True, "zavrsetak ispravke je uspeo"
+    AssertEq OtpremnicaNaBloku("OTK-LEG-A"), "OTP-LEG-N", _
+             "MOJ blok JESTE prevezan na zamensku otpremnicu"
     AssertEq OtpremnicaNaBloku("OTK-LEG-B"), "OTP-LEG-B", _
              "blok dokumenta sa druge stanice OSTAJE na svojoj otpremnici"
+End Sub
+
+' ============================================================
+' 44. Storniran vlasnik nestaje iz racuna, njegova deca ne
+' ============================================================
+' StornoZbirna_TX stornira SAMO redove tblZbirna -- otpremnice, prijemnice i
+' palete ne dira. Zato je ovo dostizno stanje, ne teorija:
+'
+'   Zbirna A  STORNIRANA   ali OTP-A jos AKTIVNA
+'   Zbirna B  AKTIVNA      isti broj
+'
+' Sa brojanjem samo AKTIVNIH vlasnika, izbor B daje "broj je jednoznacan", pa
+' detach i kaskada -- koje idu PO BROJU -- odvezu i decu stornirane A.
+Private Sub T_StorniranVlasnik_JosImaAktivnuDecu()
+    Dim res As Object
+
+    ' Korak 1: storniraj SAMO zaglavlje A.
+    AssertEq StornoZbirna_TX(FX_ZBIRNA_KASK, "GEN-ZB-K1"), True, _
+             "zaglavlje A je stornirano"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-1"), True, _
+             "A je stornirana"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "B je ostala aktivna"
+
+    ' Korak 2: dete stornirane A je i dalje AKTIVNO -- to je cela poenta.
+    AssertEq StorniranoNaID(TBL_OTPREMNICA, COL_OTP_ID, "OTP-KOL-A"), False, _
+             "dete stornirane zbirne je i dalje aktivno"
+
+    ' Korak 3: operacija nad B koja dira DECU mora da stane, iako je sada
+    ' samo jedan AKTIVAN vlasnik tog broja.
+    Set res = modStornoDok.StornoIzvrsiMod(STIP_ZBIRNA, FX_ZBIRNA_KASK, "", _
+                                           SV_MODE_DUPLI, True, False, "GEN-ZB-K2")
+    AssertEq CBool(res("success")), False, _
+             "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima"
+    ' Ishod cuvaju DVE nezavisne kapije (na nivou moda i u detach-u), pa ga
+    ' jedna sabotaza ne moze oboriti. Zato se tvrdi i KOJA je stala: kapija
+    ' na nivou moda staje PRE transakcije i objasnjava razlog, dok bi detach
+    ' pukao iznutra i dao samo "Storno zbirne nije uspeo".
+    AssertEq (InStr(1, CStr(res("message")), "Zamena bi prevezala decu", _
+                    vbTextCompare) > 0), True, _
+             "staje kapija na nivou moda, pre transakcije, sa razlogom"
+
+    ' Nista nije odvezano ni stornirano.
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _
+             "B zaglavlje nije dirano"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-A"), FX_ZBIRNA_KASK, _
+             "dete stornirane A nije odvezano"
+    AssertEq ZbirnaNaOtpremnici("OTP-KOL-B"), FX_ZBIRNA_KASK, _
+             "dete aktivne B nije odvezano"
 End Sub
 
 Private Function ZbirnaNaOtpremnici(ByVal otpID As String) As String
