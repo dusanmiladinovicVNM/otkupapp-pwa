@@ -2738,3 +2738,62 @@ identitet ne nose, pa nisam dodavao parametar koji niko ne prosleđuje.
 - **Dve nove sabotaže**: `blokovi-po-broju` (mutacija) i `blockcount-po-broju`
   (pregled), svaka obara svoju tvrdnju.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+## v2.46.12 — `v6-ui-141` · compile greška koja je živela pet PR-ova
+
+Operater je ručnim `Debug → Compile VBAProject` našao ono što 51 zelen test nije:
+
+```
+Compile error: Expected array
+    poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
+```
+
+`StornoIzvrsi` ima izlazni parametar `ByRef poruka As String`. VBA je
+case-insensitive, pa nekvalifikovan `Poruka("KLJUC")` unutar te procedure **nije
+poziv funkcije nego indeksiranje tog String parametra**. Šest poziva u istoj
+proceduri, svi pogrešni od `v6-ui-119` (#193).
+
+### Zašto je pet PR-ova prošlo pored ovoga
+
+**VBA kompajlira proceduru tek kad se pozove.** `StornoIzvrsi` je zvao samo UI
+(`modScrDokumenti`), nijedan test — pa je ceo blok bio mrtav za suite-ove.
+Statički ga ne vidi ni `vba_check`: poziv je u **poziciji izraza**
+(`x = Foo(...)`), a to je dokumentovana rupa checkera (pokušaj proširenja je dao
+406 lažnih nalaza).
+
+Dakle: ni suite, ni checker, ni CI. Samo `Debug → Compile`.
+
+### Ispravka
+
+Svih šest poziva je sada **kvalifikovano** (`modPoruke.Poruka(...)`) i u kodu stoji
+zašto to mora ostati tako.
+
+Mehanički sweep nad celim `src-vba` (`.bas`, `.frm`, `.cls`) traži isti obrazac —
+lokalna skalarna promenljiva ili parametar čije ime zaklanja `Public Function`, pa
+se poziva sa zagradom i string literalom. Posle ispravke: **0 nalaza**. Devet
+kandidata koje sweep prijavi bez tipa su lažni — niz i objekat se legitimno zovu sa
+zagradom; compile obara samo skalar.
+
+### Test 52 — procedura mora da se IZVRŠI, ne samo da postoji
+
+`T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu` zove `StornoIzvrsi` za
+`STIP_ZBIRNA` i traži da poruka imenuje prijemnicu koja je ostala vezana za
+storniranu zbirnu (`StornoZbirna` namerno ne kaskadira).
+
+Da test radi to što treba, dokazano je **slučajno i najuverljivije**: prva verzija
+je puštena kad je bio ispravljen samo jedan od šest poziva, i suite je pao —
+`SUITE FAIL RunAllTests (91.1s)`, dijalog `Compile error`. Isti kod je do tada bio
+51/51 zelen.
+
+Sabotaža (`zbirna-poruka-bez-prijemnice`) obara tvrdnju o poruci. Sama compile
+greška se sabotažom **ne može** dokazati imenovanom tvrdnjom — takva sabotaža
+obara compile, pa izlaz bude „Exception occurred" umesto imena tvrdnje (zamka 4).
+To je i zapisano u katalogu, uz ono što test 52 stvarno dodaje: proceduru koja se
+izvršava.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=52, FAIL=0**.
+- Sweep nad `src-vba` za zaklonjena imena → **0**.
+- `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova.**

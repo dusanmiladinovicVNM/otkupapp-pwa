@@ -244,7 +244,14 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
             ok = StornoZbirna_TX(broj, docID)
             If ok Then
                 vezPrij = NzToText(LookupValue(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, COL_PRJ_BROJ))
-                If Len(vezPrij) > 0 Then poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
+                ' KVALIFIKOVANO, i mora ostati: izlazni parametar se zove "poruka",
+                ' a VBA je case-insensitive -- pa nekvalifikovan poziv te funkcije
+                ' unutar ove procedure nije poziv funkcije nego indeksiranje tog
+                ' String parametra. Compile error "Expected array", i to samo u
+                ' Debug > Compile: nijedna suite ovu proceduru nije zvala, a VBA
+                ' proceduru kompajlira tek kad se pozove.
+                If Len(vezPrij) > 0 Then _
+                    poruka = modPoruke.Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij
             End If
 
         Case STIP_PRIJEMNICA
@@ -287,25 +294,25 @@ Public Function StornoIzvrsi(ByVal tip As String, ByVal broj As String, _
                 Exit Function
             End If
             If opcija <> IZVOD_STORNO_REMAP And opcija <> IZVOD_STORNO_REIMPORT Then
-                poruka = Poruka("STORNO_ERR_NEMA_ISHODA")
+                poruka = modPoruke.Poruka("STORNO_ERR_NEMA_ISHODA")
                 Exit Function
             End If
             ok = StornoIzvod_TX(izvBroj, izvRacun, opcija, izvInfo)
             If ok Then poruka = izvInfo
 
         Case Else
-            poruka = Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip
+            poruka = modPoruke.Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip
             Exit Function
     End Select
 
     StornoIzvrsi = ok
-    If ok And Len(poruka) = 0 Then poruka = Poruka("STORNO_MSG_OK")
-    If Not ok And Len(poruka) = 0 Then poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj
+    If ok And Len(poruka) = 0 Then poruka = modPoruke.Poruka("STORNO_MSG_OK")
+    If Not ok And Len(poruka) = 0 Then poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj
     Exit Function
 EH:
     errDesc = Err.description
     LogErr "modStornoDok.StornoIzvrsi"
-    poruka = Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & errDesc
+    poruka = modPoruke.Poruka("STORNO_ERR_NEUSPEH") & " " & broj & ": " & errDesc
 End Function
 
 '=====================================================================

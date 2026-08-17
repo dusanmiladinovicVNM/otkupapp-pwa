@@ -562,6 +562,22 @@ SABOTAZE = {
         "T_CiljnaZbirnaDvosmislena_Staje",
         "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
     ),
+    # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
+    # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.
+    #
+    # NAPOMENA: compile gresku iz istog reda (nekvalifikovan poziv koji zaklanja
+    # parametar "poruka") ovaj katalog NE moze da dokaze imenovanom tvrdnjom --
+    # takva sabotaza obara COMPILE, pa izlaz bude "Exception occurred" (v. zamka
+    # 4). Ono sto test 52 dodaje je da tu proceduru IZVRSAVA: dok je nijedna
+    # suite nije zvala, VBA je nije ni kompajlirao.
+    "zbirna-poruka-bez-prijemnice": (
+        "modStornoDok.bas",
+        "                If Len(vezPrij) > 0 Then _\n"
+        '                    poruka = modPoruke.Poruka("STORNO_MSG_ZBIRNA_PRIJ") & " " & vezPrij\n',
+        "                ' SABOTAZA: poruka ne imenuje vezanu prijemnicu\n",
+        "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu",
+        "poruka imenuje prijemnicu koja je ostala vezana",
+    ),
     # Spisak blokova za F8 po golom broju: u korpu ulazi i blok drugog dokumenta,
     # a odatle ide pravo u StornoSelectedBlocks_TX.
     "blokovi-po-broju": (

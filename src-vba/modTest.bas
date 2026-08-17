@@ -101,6 +101,7 @@ Private Const FX_OTPREMNICA_STALE_NOVA As String = "10/TEST"
 Private Const FX_ZBIRNA_STALE As String = "ZB-TEST-STL"
 Private Const FX_PRIJEMNICA_STALE As String = "12/TEST"
 Private Const FX_OTPREMNICA_BLOK As String = "18/TEST"
+Private Const FX_PRIJEMNICA_OLD_U As String = "16/TEST"
 Private Const FX_ZBIRNA_TGT As String = "ZB-TEST-TGT"
 Private Const FX_ZBIRNA_OLDU As String = "ZB-TEST-OLDU"
 Private Const FX_OTPREMNICA_OLD_U As String = "13/TEST"
@@ -184,6 +185,7 @@ Public Sub RunAllTests()
     RunOne 49
     RunOne 50
     RunOne 51
+    RunOne 52
 
     SetTestMode prevMode
     WriteResultFile
@@ -270,6 +272,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
+        Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
         Case 51: TestName = "T_StorniranSibling_ZadrzavaSvojBlok"
         Case 50: TestName = "T_BlokoviF8_PoIdentitetu"
         Case 49: TestName = "T_IspravkaZbirne_KapijaNaObeStrane"
@@ -329,6 +332,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
+        Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
         Case 51: T_StorniranSibling_ZadrzavaSvojBlok
         Case 50: T_BlokoviF8_PoIdentitetu
         Case 49: T_IspravkaZbirne_KapijaNaObeStrane
@@ -2188,6 +2192,38 @@ Private Sub T_ZatecenContext_NePrevezujeTudjePrijemnice()
              "completion staje nad zatecenim context-om dvosmislene zbirne"
     AssertEq (InStr(1, CStr(res("message")), "stare zbirne", vbTextCompare) > 0), True, _
              "razlog imenuje staru zbirnu"
+End Sub
+
+' ============================================================
+' 52. Prost F8 storno zbirne mora da se IZVRSI, ne samo da postoji
+' ============================================================
+' Ovaj test postoji zbog compile greske koja je zivela od v6-ui-119 i koju je
+' nasao operater rucnim Debug > Compile, a ne suite:
+'
+'   poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ")   ' Expected array
+'
+' Izlazni parametar procedure se zove "poruka", VBA je case-insensitive, pa je
+' nekvalifikovan poziv postao indeksiranje tog String parametra. Nijedna suite
+' nije zvala StornoIzvrsi, a VBA proceduru kompajlira TEK KAD SE POZOVE -- zato
+' je 51 zelen test mirno stajao nad kodom koji se ne kompajlira.
+'
+' Zato ovaj test ne meri samo poruku: on tu proceduru IZVRSAVA. To je jedini
+' nacin da compile greska u njoj postane crvena suite, a ne tek nalaz operatera.
+Private Sub T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu()
+    Dim ok As Boolean, msg As String
+
+    AssertEq ZbirnaNaPrijemnici("PRJ-OLD-U"), FX_ZBIRNA_OLDU, _
+             "preduslov: aktivna prijemnica visi na toj zbirni"
+    AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-OLDU-1"), False, _
+             "preduslov: zbirna je aktivna"
+
+    ok = modStornoDok.StornoIzvrsi(STIP_ZBIRNA, FX_ZBIRNA_OLDU, "", msg, "")
+
+    AssertEq ok, True, "prost storno zbirne je prosao"
+    ' StornoZbirna namerno NE kaskadira, pa prijemnica ostaje vezana za storniranu
+    ' zbirnu. Operater to mora da vidi, inace mu sledljivost visi bez upozorenja.
+    AssertEq (InStr(1, msg, FX_PRIJEMNICA_OLD_U, vbTextCompare) > 0), True, _
+             "poruka imenuje prijemnicu koja je ostala vezana"
 End Sub
 
 ' ============================================================
