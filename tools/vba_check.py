@@ -26,6 +26,9 @@ Provere:
                      ("Sub or Function not defined").
   7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
                      arguments").
+  9. ZAKLONJENO   -- lokalni skalar (`Dim poruka As String`) koji se zove sa
+                     zagradom. VBA to cita kao indeksiranje -> "Expected array".
+                     Tipicno kad ime zaklanja istoimenu funkciju (`Poruka()`).
   8. DUPLIKAT_LOKALNI -- isto ime dva puta u ISTOM modulu (izuzetak: Property
                      Get/Let/Set trojka). Modul se ne kompajlira, a greska se
                      javlja kao "Cannot run the macro" na bilo kom makrou.
@@ -581,6 +584,117 @@ def check_local_dupes(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- ZAKLONJENO: skalar koji se zove sa zagradom -----------------------------
+#
+# Zatecen incident (12 poziva u dve procedure, ziveli od v6-ui-119 do v6-ui-141):
+#
+#     Public Function StornoIzvrsi(..., ByRef poruka As String, ...)
+#         ...
+#         poruka = Poruka("STORNO_MSG_ZBIRNA_PRIJ")     ' Expected array
+#
+# VBA je case-insensitive, pa lokalno ime `poruka` zaklanja funkciju `Poruka()`.
+# Poziv unutar te procedure zato NIJE poziv funkcije nego indeksiranje String
+# promenljive -- compile error "Expected array".
+#
+# Zasto to nista drugo nije videlo:
+#   - suite: VBA kompajlira proceduru TEK KAD SE POZOVE, a te dve je zvao samo UI;
+#   - ARNOST/NEDEFINISAN: poziv je u poziciji IZRAZA (x = Foo(...)), sto je namerno
+#     neproveravano (v. gore -- 406 laznih nalaza);
+#   - CI: ne pokrece Excel.
+#   Ostao je samo rucni Debug > Compile, i nasao ih je operater.
+#
+# Pravilo je uze od "ime zaklanja funkciju" i time sigurno: skalar EKSPLICITNOG
+# tipa se u VBA ne moze indeksirati NIKAKO, pa je `ime(` uz `Dim ime As String`
+# uvek greska -- nezavisno od toga da li nesto zaklanja.
+#
+# Namerno IZOSTAVLJENO, jer bi davalo lazne nalaze:
+#   Variant            -- moze da nosi niz, pa je v(1) legalno
+#   nizovi             -- Dim a(0 To 3) As String, a(1) je legalno
+#   objekti            -- Dim d As Object, d("k") je default member
+#   string literali    -- 14 od prvih 20 nalaza ovog obrasca bilo je ime unutar
+#                         teksta ("...bez OtkupID (dokument: ...")
+#   komentari          -- isto
+SKALARNI_TIP = re.compile(
+    r"^(String|Long|Integer|Double|Boolean|Date|Currency|Single|Byte|"
+    r"Vb[A-Za-z]\w*|LongLong|LongPtr)$", re.IGNORECASE)
+
+PROC_END = re.compile(r"^\s*End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+PARAM_DECL = re.compile(
+    r"(?:^|[(,])\s*(?:Optional\s+)?(?:ByVal\s+|ByRef\s+)?(\w+)\s+As\s+(\w+)",
+    re.IGNORECASE)
+LOCAL_DECL = re.compile(r"^(?:Dim|Static)\s+(.*)$", re.IGNORECASE)
+TIPIZOVANA_DEKL = re.compile(r"^(\w+)\s*(\([^)]*\))?\s+As\s+(\w+)", re.IGNORECASE)
+
+
+def _strip_strings(text: str) -> str:
+    """Isprazni string literale (sadrzaj, ne navodnike)."""
+    out, in_str = [], False
+    for ch in text:
+        if ch == '"':
+            in_str = not in_str
+            out.append(ch)
+        elif not in_str:
+            out.append(ch)
+    return "".join(out)
+
+
+def _clean(text: str) -> str:
+    return _strip_comment(_strip_strings(text))
+
+
+def _scalar_names(header: str, body: list[str]) -> dict[str, str]:
+    """ime -> tip, za parametre i lokalne skalare EKSPLICITNOG tipa."""
+    names: dict[str, str] = {}
+    inner = header[header.find("(") + 1:header.rfind(")")] if "(" in header else ""
+    for m in PARAM_DECL.finditer(inner):
+        names[m.group(1).lower()] = m.group(2)
+    for line in body:
+        m = LOCAL_DECL.match(_clean(line).strip())
+        if not m:
+            continue
+        # Jedan Dim red nosi vise deklaracija. Citanje samo PRVE je tacno ono
+        # zbog cega je drugi nalaz (StornoRedF8) prvi put promasen:
+        #     Dim razlog As String, poruka As String, odg As VbMsgBoxResult
+        for part in _split_top_level(m.group(1)):
+            d = TIPIZOVANA_DEKL.match(part)
+            if d and not d.group(2):
+                names[d.group(1).lower()] = d.group(3)
+    return {n: t for n, t in names.items() if SKALARNI_TIP.match(t)}
+
+
+def check_scalar_call(path: str, lines: list[str]) -> list[Finding]:
+    out: list[Finding] = []
+    i, n = 0, len(lines)
+    while i < n:
+        m = PROC_DEF.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        proc = m.group(1)
+        # Zaglavlje se moze lomiti kroz ` _`, a parametri su u njemu.
+        header, j = lines[i].rstrip(), i
+        while header.endswith("_") and j + 1 < n:
+            j += 1
+            header = header[:-1] + " " + lines[j].strip()
+            header = header.rstrip()
+        k = j + 1
+        while k < n and not PROC_END.match(lines[k]) and not PROC_DEF.match(lines[k]):
+            k += 1
+        body = lines[j + 1:k]
+        for name, typ in _scalar_names(_strip_strings(header), body).items():
+            hit = re.compile(r"(?<![\w.$])" + re.escape(name) + r"\s*\(", re.IGNORECASE)
+            for off, line in enumerate(body):
+                if hit.search(_clean(line)):
+                    out.append(Finding(
+                        path, j + 2 + off, "ZAKLONJENO",
+                        f"'{name} As {typ}' je skalar, a zove se sa zagradom u '{proc}' "
+                        f'-- VBA to cita kao indeksiranje: compile error "Expected array". '
+                        f"Ako je ciljana istoimena procedura, pozovi je KVALIFIKOVANO "
+                        f"(modPoruke.Poruka(...))."))
+        i = k
+    return out
+
+
 def check_poruke(files: list[str]) -> list[Finding]:
     poruke_path = os.path.join(SRC_VBA, "modPoruke.bas")
     if not os.path.exists(poruke_path):
@@ -618,6 +732,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_reserved(path, lines)
     out += check_undefined(path, lines, defined, arities)
     out += check_local_dupes(path, lines)
+    out += check_scalar_call(path, lines)
     return out
 
 
@@ -692,6 +807,90 @@ Public Enum EStatus
     Naziv = 1
 End Enum
 Public Sub Naziv()
+End Sub
+"""),
+]
+
+# --- ZAKLONJENO: skalar zvan sa zagradom ---
+# Slucajevi 1 i 2 su REKONSTRUKCIJA zatecenog incidenta, ne izmisljeni primeri:
+# oba oblika su stvarno postojala u modStornoDok.StornoIzvrsi i
+# modScrDokumenti.StornoRedF8 od v6-ui-119 do v6-ui-141.
+ZAKLONJENO_CASES = [
+    # --- mora da zapisti ---
+    ("parametar zaklanja funkciju (zatecen incident)", 1, """Option Explicit
+Public Function StornoIzvrsi(ByVal tip As String, ByRef poruka As String) As Boolean
+    poruka = Poruka("STORNO_MSG_OK")
+End Function
+"""),
+    ("druga deklaracija u Dim redu (drugi zatecen nalaz)", 1, """Option Explicit
+Private Function StornoRedF8(ByVal red As Long) As Boolean
+    Dim razlog As String, poruka As String, odg As VbMsgBoxResult
+    ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+End Function
+"""),
+    ("prelomljeno zaglavlje -- parametar u nastavku reda", 1, """Option Explicit
+Public Sub Radi(ByVal a As Long, _
+                ByRef poruka As String)
+    poruka = Poruka("KLJUC")
+End Sub
+"""),
+    ("Optional parametar", 1, """Option Explicit
+Public Sub Radi(Optional ByVal poruka As String = "")
+    poruka = Poruka("KLJUC")
+End Sub
+"""),
+
+    # --- ne sme da zapisti (ova polovina je vaznija) ---
+    ("ime unutar STRING literala", 0, """Option Explicit
+Public Sub Radi()
+    Dim otkupID As String
+    LogError "SRC", "Otvoren blok bez OtkupID (dokument: x)."
+End Sub
+"""),
+    ("ime u KOMENTARU", 0, """Option Explicit
+Public Sub Radi()
+    Dim poruka As String
+    ' ovde se poruka("KLJUC") samo opisuje
+End Sub
+"""),
+    ("niz sme da se indeksira", 0, """Option Explicit
+Public Sub Radi()
+    Dim polje(0 To 3) As String
+    polje(1) = "x"
+End Sub
+"""),
+    ("Variant moze da nosi niz", 0, """Option Explicit
+Public Sub Radi()
+    Dim v As Variant
+    v = Array(1, 2)
+    Debug.Print v(1)
+End Sub
+"""),
+    ("objekat -- default member", 0, """Option Explicit
+Public Sub Radi()
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    d("k") = 1
+End Sub
+"""),
+    ("kvalifikovan poziv uz istoimenu promenljivu", 0, """Option Explicit
+Public Function StornoIzvrsi(ByRef poruka As String) As Boolean
+    poruka = modPoruke.Poruka("STORNO_MSG_OK")
+End Function
+"""),
+    ("promenljiva se prosledjuje, ne zove", 0, """Option Explicit
+Public Sub Radi()
+    Dim poruka As String
+    If Len(poruka) = 0 Then Debug.Print InStr(1, poruka, "x")
+End Sub
+"""),
+    ("istoimena promenljiva u DRUGOJ proceduri", 0, """Option Explicit
+Public Sub Prva()
+    Dim poruka As String
+    poruka = "x"
+End Sub
+Public Sub Druga()
+    Debug.Print Poruka("KLJUC")
 End Sub
 """),
 ]
@@ -800,6 +999,15 @@ def self_test() -> int:
         if dobijeno != ocekivano:
             palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in ZAKLONJENO_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "ZAKLONJENO")
+        if dobijeno != ocekivano:
+            palo.append(f"  ZAKLONJENO/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     # I jedan slucaj kroz CEO CLI, nad pravim fajlom na disku. check_file dokazuje
     # da provera radi; ovo dokazuje da je CLI zaista zove i da vraca exit 2.
     naziv = "ceo CLI nad pravim .bas fajlom"
@@ -820,14 +1028,14 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    ukupno = len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + 2
+    ukupno = len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES) + 2
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
         print(f"\nself-test: {len(palo)} od {ukupno} slucajeva palo.", file=sys.stderr)
         return 2
     print(f"self-test: cisto ({ukupno} slucajeva: DUPLIKAT_LOKALNI, "
-          f"NEDEFINISAN/ARNOST, i jedan kroz ceo CLI).")
+          f"NEDEFINISAN/ARNOST, ZAKLONJENO, i jedan kroz ceo CLI).")
     return 0
 
 
