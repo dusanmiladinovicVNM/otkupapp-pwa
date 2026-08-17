@@ -3013,3 +3013,76 @@ zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
 (`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
 `git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
 pa run visi do timeout-a umesto da prijavi tvrdnju.
+
+## v2.48.1 — `v6-ui-143` · tri nalaza sa smoke testa ekrana Storno
+
+Operater je prijavio tri stvari. Sve tri su imale uzrok u kodu, i dve od njih
+nisu bile u Stornu nego u **ljusci**.
+
+### Čip „Izvodi" nije postojao, a „Svi" nije radio
+
+`MAX_SEG = 9` — ljuska crta **najviše devet** dugmadi prekidača. Ekran Storno ih
+prijavljuje **deset**. `LayoutGrid` nacrta prvih devet i stane: **bez greške i
+bez traga**. „Izvodi" su bili u `Scr_Liste`, ali se nisu mogli izabrati ni na
+koji način.
+
+Granica je podignuta na 10, a tvrdnja je sada merena — i to tako da važi za
+**svaki budući ekran**, ne samo za ovaj:
+
+```vb
+AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+         "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+```
+
+### „Dugme ne radi i niko ne zna zašto" — drugi put
+
+`modUiScreens.ScrGridData` je imao go `On Error Resume Next`. Greška iz
+`Scr_Rows` se time pretvarala u `Empty`, a `LoadGridFromScreen` na ne-niz radi
+`Exit Sub` — pa mreža **ostane na prethodnoj listi, sa prethodnim naslovom**.
+Nema greške, nema toasta; prekidač izgleda kao da ne radi.
+
+To je isti obrazac zbog kog `ScrEvent` već ima `ScrLastErr` („Po datumu"), samo
+u sloju redova. Gušenje ostaje — ekran koji padne ne sme da obori aplikaciju —
+ali se sada **beleži i prikazuje**. Test 58 zove `Scr_Rows` za svaku od deset
+lista **mimo tog gutača**, pa lista koja pukne pada po imenu.
+
+### Prefill je gubio baš ono što je lista
+
+Posle ISPRAVKE su bila popunjena obična polja, a **combo-i prazni**. Krivac je
+bio nov generički prolaz za kontrole iz zone: posle radnje je bezuslovno zvao
+`RefreshFromData`, a on radi `FillZbirneCombo` i `mPartnerFor = ""` — dakle
+ponovo puni liste i time briše izbor koji je prefill upravo postavio.
+
+Radnja sada osvežava **samo ako je ostala na istom ekranu**. Predaja poslu na
+drugom ekranu (storno → ispravka → unos zamenskog) je izuzetak: tamo je forma
+već popunjena i osvežavanje je štetno.
+
+### „Mnogo sporo učitava efekat storna po modu"
+
+Dva uzroka, oba merljiva:
+
+1. `AkcijeZaTip` je zvao `StornoTraziIzborModa` → `CorrectionNeedsDialog` pri
+   **svakom** osvežavanju zone — a zona se osvežava i na izbor reda i na svaki
+   klik prekidača „Ne diraj palete". Isti skup račun je išao tri i više puta po
+   jednom dokumentu. Sada se keširа po izboru (ključ nosi i identitet, jer dva
+   dokumenta istog broja mogu imati različit nizvodni tok).
+2. `BuildStornoImpact` je sedam sekcija, a svaka ide u `GetTableData` po iste
+   tabele. Poziv je sada umotan u `BeginTableCache`/`EndTableCache` — isti
+   obrazac koji `modStornoWarm.BuildWarm` već koristi. `EndTableCache` ide i u
+   error handler: keš koji ostane otvoren zamrzava snimak tabela do kraja sesije.
+
+### Uz to
+
+Svi handleri u `modScrStorno` sada rade `Err.Clear`. Bez toga omotač
+`ScrEvent` posle povratka pročita `Err.Number` i javi „Radnja nije uspela" za
+grešku koja je **već obrađena** — pa je operater dobijao crveni toast preko
+radnje koja je prošla.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → 29.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=58, FAIL=0**.
+- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite crvene
+  zatečeno.
+- **Peta sabotaža** (`ljuska-odseca-liste`) oborila svoju tvrdnju po imenu.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.

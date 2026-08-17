@@ -706,6 +706,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRST_LISTA", "Otkupni listovi"
     UpsertRow lo, existing, "OTKUI_SEG_ST_SVI", "Svi"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_ST_SVI", "Svi aktivni dokumenti"
+    UpsertRow lo, existing, "OTKUI_ERR_LISTA", "Lista se nije u" & ChrW(269) & "itala"
     UpsertRow lo, existing, "OTKUI_HD_TIP", "TIP"
     UpsertRow lo, existing, "OTKUI_SCRST_IZBOR", "IZABRAN DOKUMENT"
     UpsertRow lo, existing, "OTKUI_SCRST_NEMA", "Izaberi red u listi da vidi" & ChrW(353) & " posledice"

@@ -627,6 +627,17 @@ SABOTAZE = {
         "T_StornoJeEkranNeRezim",
         "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
     ),
+    # Ljuska crta samo prvih MAX_SEG dugmadi prekidaca. Ekran Storno ih ima
+    # deset; na devet je "Izvodi" TIHO nestajao -- bio je u Scr_Liste, ali se
+    # nije mogao izabrati ni na koji nacin, bez greske i bez traga. Operater je
+    # to prijavio kao nedostajuci cip.
+    "ljuska-odseca-liste": (
+        "modOtkupUI.bas",
+        "Private Const MAX_SEG     As Long = 10\n",
+        "Private Const MAX_SEG     As Long = 9   ' SABOTAZA\n",
+        "T_Storno_UgovorIRadnje",
+        "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho",
+    ),
     # Navigacioni cip "Svi" je jedino mesto sa kog se dokument trazi kad se ne
     # zna kog je tipa. Legacy ga ima ("Nadji dokument"); bez njega se ekran vraca
     # na "znaj tip pre nego sto pocnes".

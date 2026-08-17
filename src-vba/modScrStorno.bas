@@ -76,6 +76,15 @@ Private mNeDiraj As Boolean
 ' pri svakom crtanju: to je sedam citanja tabela.
 Private mImpact As Object
 
+' Red odluke za izabran dokument, kesiran. Bez ovoga se AkcijeZaTip racunao
+' pri SVAKOM osvezavanju zone -- a on zove StornoTraziIzborModa, dakle
+' CorrectionNeedsDialog, dakle jos jedan prolaz kroz lanac. Zona se osvezava i
+' na izbor reda i na svaki klik prekidaca "Ne diraj palete", pa je isti skup
+' racun isao tri i vise puta po jednom dokumentu. Na pravim podacima se to
+' videlo kao "mnogo sporo ucitava efekat storna po modu".
+Private mAkcije As Variant
+Private mAkcijeZa As String                 ' za koji izbor vazi mAkcije
+
 Private mStep As String                     ' korak za poruku o gresci
 
 '--------------------------------------------------------- UGOVOR EKRANA
@@ -436,29 +445,44 @@ End Function
 '                  blokovi); inace je obican storno dovoljan
 '   ostali         obican storno
 Private Function AkcijeZaTip() As Variant
+    Dim kljuc As String
+    ' Kes po IZBORU: dok je izabran isti dokument, red odluke se ne racuna
+    ' ponovo. Kljuc nosi i identitet, jer dva dokumenta istog broja mogu imati
+    ' razlicit nizvodni tok, pa i razlicit red odluke.
+    kljuc = mSelTip & "|" & mSelBroj & "|" & mSelDocID & "|" & mSelOpcija
+    If mAkcijeZa = kljuc And Len(kljuc) > 3 Then
+        AkcijeZaTip = mAkcije
+        Exit Function
+    End If
+    AkcijeZaTip = AkcijeRacun()
+    mAkcije = AkcijeZaTip
+    mAkcijeZa = kljuc
+End Function
+
+Private Function AkcijeRacun() As Variant
     Dim dt As String
     On Error GoTo EH
     If Len(mSelBroj) = 0 Then Exit Function
 
     dt = modStornoDok.TipUFlowDoc(mSelTip)
     If Len(dt) = 0 Then
-        AkcijeZaTip = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
+        AkcijeRacun = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
         Exit Function
     End If
 
     If mSelTip = STIP_REVERSI Then
-        AkcijeZaTip = Array( _
+        AkcijeRacun = Array( _
             "|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger", _
             SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_REV_ISPR|OTKUI_SCRST_H_REV_ISPR|secondary")
         Exit Function
     End If
 
     If Not modStornoDok.StornoTraziIzborModa(mSelTip, mSelBroj, mSelOpcija, mSelDocID) Then
-        AkcijeZaTip = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
+        AkcijeRacun = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
         Exit Function
     End If
 
-    AkcijeZaTip = Array( _
+    AkcijeRacun = Array( _
         SV_MODE_ISPRAVKA & "|OTKUI_SCRST_B_ISPRAVKA|OTKUI_SCRST_H_ISPRAVKA|soft", _
         SV_MODE_DUPLI & "|OTKUI_SCRST_B_DUPLI|OTKUI_SCRST_H_DUPLI|secondary", _
         SV_MODE_PONISTENJE & "|OTKUI_SCRST_B_PONISTI|OTKUI_SCRST_H_PONISTI|danger", _
@@ -468,7 +492,8 @@ EH:
     ' FAIL-CLOSED, isto kao StornoTraziIzborModa: neizvesnost vodi ka VISE
     ' pitanja, ne ka manje. Prazan red odluke znaci da se nista ne moze
     ' pokrenuti dok se ne izabere ponovo.
-    LogErr "modScrStorno.AkcijeZaTip"
+    LogErr "modScrStorno.AkcijeRacun"
+    Err.Clear
 End Function
 
 Private Sub OsveziAkcije(ByVal z As Object)
@@ -544,6 +569,11 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
 EH:
     LogErr "modScrStorno.Scr_Event"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    ' Err se BRISE posle obrade. Omotac modUiScreens.ScrEvent posle povratka
+    ' cita Err.Number i, ako nije nula, javlja "Radnja nije uspela" -- pa je
+    ' vec obradjena greska stizala operateru drugi put, kao da radnja nije
+    ' prosla iako jeste. Isto vazi za svaki handler ispod.
+    Err.Clear
 End Function
 
 Private Sub OcistiIzbor()
@@ -553,6 +583,8 @@ Private Sub OcistiIzbor()
     mSelOpcija = ""
     mNeDiraj = False
     Set mImpact = Nothing
+    mAkcije = Empty
+    mAkcijeZa = ""
     OsveziZonu
 End Sub
 
@@ -606,20 +638,34 @@ Private Function IzborReda(ByVal red As Long) As Boolean
     Exit Function
 EH:
     LogErr "modScrStorno.IzborReda"
+    Err.Clear
 End Function
 
 ' Uvid postoji samo za tipove koje modStornoImpact razume (framework tipovi).
 ' Za ostale zona pokazuje zaglavlje bez lanca -- i to je tacno, jer lanca nema.
+'
+' BATCH KES oko celog poziva: BuildStornoImpact je SEDAM sekcija, a svaka od
+' njih ide u GetTableData po iste tabele (lanac, blokovi, zastavice, palete i
+' zaglavlje svi citaju prijemnicu/otpremnicu/zbirnu). Bez ovoga se ista tabela
+' cita i po pet puta po jednom kliku na red -- isti obrazac zbog kog
+' modStornoWarm.BuildWarm vec radi BeginTableCache.
+'
+' EndTableCache MORA da se izvrsi i kad poziv pukne, inace kes ostaje otvoren
+' do kraja sesije i sve nizvodno vidi zatecen snimak tabela.
 Private Function GradiUvid() As Object
     Dim dt As String
     On Error GoTo EH
     dt = modStornoDok.TipUFlowDoc(mSelTip)
     If Len(dt) = 0 Then Exit Function
     If dt = FLOW_DOC_REVERS Then Exit Function
+    BeginTableCache
     Set GradiUvid = modStornoImpact.BuildStornoImpact(dt, mSelBroj, mSelOpcija, mSelDocID)
+    EndTableCache
     Exit Function
 EH:
+    EndTableCache
     LogErr "modScrStorno.GradiUvid"
+    Err.Clear
 End Function
 
 ' Naziv tipa iz navigacione liste -> STIP_* kljuc. Nazivi dolaze iz
@@ -705,6 +751,7 @@ Private Function PokreniAkciju(ByVal i As Long) As Boolean
 EH:
     LogErr "modScrStorno.PokreniAkciju"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    Err.Clear
 End Function
 
 ' Obican storno: bez framework-a ispravke. Posledice su vec u zoni, pa je
@@ -753,6 +800,7 @@ Private Function ObicanStorno() As Boolean
     Exit Function
 EH:
     LogErr "modScrStorno.ObicanStorno"
+    Err.Clear
 End Function
 
 ' Izvrsenje izabranog moda.
@@ -808,6 +856,7 @@ Private Function StornoPoModu(ByVal mode As String) As Boolean
 EH:
     LogErr "modScrStorno.StornoPoModu"
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    Err.Clear
 End Function
 
 ' Dodatni storno otkupnih blokova koji vise o dokumentu.
@@ -880,6 +929,7 @@ Private Sub StornirajBlokoveAko(ByVal mode As String, ByVal correctionID As Stri
     Exit Sub
 EH:
     LogErr "modScrStorno.StornirajBlokoveAko"
+    Err.Clear
 End Sub
 
 '--------------------------------------------------- PREDAJA UNOSNOM EKRANU

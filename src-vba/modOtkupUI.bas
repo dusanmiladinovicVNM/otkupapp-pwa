@@ -169,7 +169,11 @@ Private Const GRID_FOOT_H As Single = 24
 ' (sedam rezima F1..F7 + fakture + izvodi). Ostali ekrani koriste manje i
 ' visak dugmadi ostaje sakriven (LayoutGrid). Natpisi u F8 su kratki bas
 ' zato da devet komada stane levo od polja za pretragu.
-Private Const MAX_SEG     As Long = 9        ' dugmadi prekidaca lista koje se PRAVE
+' Dugmadi prekidaca lista koje se PRAVE. Ekran Storno ima DESET lista (devet
+' tipova + navigacioni "Svi"), pa je granica podignuta sa 9 -- na 9 je deseta
+' tiho nestajala: LayoutGrid crta samo prvih MAX_SEG, bez ijedne poruke, pa se
+' "Izvodi" nisu mogli izabrati ni na koji nacin.
+Private Const MAX_SEG     As Long = 10
 Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
@@ -2814,6 +2818,15 @@ Public Sub SelectMode(frm As Object, key As String)
     SelectModeCore frm, key, True
 End Sub
 
+' Koliko dugmadi prekidaca ljuska uopste crta. Ekran koji prijavi vise lista od
+' ovoga dobija TIHO odsecen rep -- LayoutGrid nacrta prvih MAX_SEG i stane, bez
+' greske i bez traga. Ekran Storno je tako ostao bez liste "Izvodi": bila je u
+' Scr_Liste, ali se nije mogla izabrati ni na koji nacin. Javno, da ta granica
+' moze da se izmeri testom umesto da se otkrije na ekranu.
+Public Function MaxPrekidaca() As Long
+    MaxPrekidaca = MAX_SEG
+End Function
+
 ' TEST SEAM: je li mapa imena kesirana pod datim kljucem. Prazna mapa i mapa
 ' koja nije kesirana daju isti rezultat pozivaocu, pa se razlika meri ovde.
 Public Function MapaImenaKesirana(ByVal ck As String) As Boolean
@@ -3374,10 +3387,21 @@ Private Sub UiClickCore(ByVal tag As String)
     ' bi tiho "ne radilo".
     '
     ' True i dalje znaci "podaci su promenjeni" -- isto kao kod radnje nad redom.
+    '
+    ' Ali SAMO ako smo jos na istom ekranu. Radnja sme da PREDA posao drugom
+    ' ekranu (storno -> ispravka -> unos zamenskog dokumenta), i tada je forma
+    ' vec popunjena prefillom. RefreshFromData nad njom ponovo puni combo-e
+    ' (FillZbirneCombo, mPartnerFor = "") -- a to obrise izbor partnera koji je
+    ' prefill upravo postavio. Operater je to video kao "nisu sve stavke
+    ' popunjene": sve sto je obicno polje ostane, a sve sto je lista se isprazni.
     If Left$(tag, 3) = "scr" Then
+        Dim preScr As String
+        preScr = mScreen
         If ScrAct(tag) Then
-            mSelRow = 0
-            RefreshFromData
+            If mScreen = preScr Then
+                mSelRow = 0
+                RefreshFromData
+            End If
         End If
         Exit Sub
     End If
@@ -4280,6 +4304,13 @@ Private Sub LoadGridFromScreen()
     mViewN = 0: mSumKg = 0: mSumVal = 0
     mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0: mCntOtvor = 0
     d = modUiScreens.ScrGridData(mScreen, mFilter, mSearch)
+    ' Ekran koji je PUKAO i ekran koji nema listu daju isti Empty. Razlika mora
+    ' da se vidi: bez ovoga mreza tiho ostaje na prethodnoj listi i prethodnom
+    ' naslovu, pa prekidac izgleda kao da ne radi (v. ScrGridData).
+    If Len(modUiScreens.ScrLastErr) > 0 Then
+        Err.Raise ERR_UI_BASE + 22, modUiScreens.ScrLastErr, _
+                  Poruka("OTKUI_ERR_LISTA")
+    End If
     If Not IsArray(d) Then Exit Sub
     If UBound(d) < 4 Then Exit Sub
     SetGridColsArr d(0)

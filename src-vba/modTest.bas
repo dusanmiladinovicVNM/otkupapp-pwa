@@ -191,6 +191,7 @@ Public Sub RunAllTests()
     RunOne 55
     RunOne 56
     RunOne 57
+    RunOne 58
 
     SetTestMode prevMode
     WriteResultFile
@@ -280,6 +281,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 55: TestName = "T_StornoJeEkranNeRezim"
         Case 56: TestName = "T_Storno_UgovorIRadnje"
         Case 57: TestName = "T_StornoEkran_KolonaIdentiteta"
+        Case 58: TestName = "T_StornoEkran_SvakaListaVracaRedove"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -345,6 +347,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 55: T_StornoJeEkranNeRezim
         Case 56: T_Storno_UgovorIRadnje
         Case 57: T_StornoEkran_KolonaIdentiteta
+        Case 58: T_StornoEkran_SvakaListaVracaRedove
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2337,6 +2340,12 @@ Private Sub T_Storno_UgovorIRadnje()
              "Scr_Meta prijavljuje svoj kljuc"
 
     liste = modScrStorno.Scr_Liste()
+    ' NAJVAZNIJE PRVO: ljuska mora da nacrta SVE liste koje ekran prijavi.
+    ' MAX_SEG je bio 9 dok ih ekran ima 10, pa je "Izvodi" tiho nestajao --
+    ' LayoutGrid nacrta prvih MAX_SEG i stane, bez greske i bez traga. Tvrdnja
+    ' vazi za svaki buduci ekran, ne samo za ovaj.
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
     AssertEq (UBound(liste) + 1), 10, "ekran ima deset lista"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
@@ -2403,6 +2412,37 @@ Private Sub T_StornoEkran_KolonaIdentiteta()
     modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
     AssertEq modScrStorno.Scr_IzabranDocID(), "GEN-F8-2", _
              "ekran nosi identitet izabranog reda, ne samo broj"
+End Sub
+
+' ============================================================
+' 58. Svaka lista ekrana Storno stvarno vraca redove
+' ============================================================
+' Operater je prijavio da cip "Svi" "nema funkciju": klik ne menja ni mrezu ni
+' naslov. Uzrok nije bio u prekidacu nego DVA sloja nize, i bio je nevidljiv:
+'
+'   modUiScreens.ScrGridData ima "On Error Resume Next", pa greska iz Scr_Rows
+'   ne stigne do ReloadGrid nego se vrati kao Empty. LoadGridFromScreen na
+'   ne-niz radi "Exit Sub" -- i mreza OSTANE na prethodnoj listi, sa prethodnim
+'   naslovom. Nema greske, nema toasta, izgleda kao da dugme ne radi.
+'
+' Zato ovaj test zove Scr_Rows za SVAKU listu direktno, mimo tog gutaca: ako
+' neka pukne, ovde pukne po imenu liste umesto da tiho ne uradi nista.
+Private Sub T_StornoEkran_SvakaListaVracaRedove()
+    Dim liste As Variant, i As Long, kljuc As String, d As Variant
+
+    liste = modScrStorno.Scr_Liste()
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrStorno.Scr_TipTestSet kljuc
+        AssertEq modScrStorno.Scr_Lista(), kljuc, "lista " & kljuc & " je izabrana"
+        d = modScrStorno.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz, ne Empty"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, val)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " vraca opis kolona"
+    Next i
+
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
 
 ' ============================================================

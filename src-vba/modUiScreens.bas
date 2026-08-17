@@ -221,12 +221,26 @@ End Function
 ' ili Empty ako ekran nema listu.
 ' NE zove se ScrRows - to ime vec nosi spisak redova REGISTRA, a dve funkcije
 ' istog imena u istom modulu su "Ambiguous name".
+'
+' GRESKA SE BELEZI, ne samo gusi. "On Error Resume Next" ovde mora da ostane --
+' ekran koji padne ne sme da obori aplikaciju -- ali gusenje BEZ TRAGA je vec
+' jednom skupo naplaceno ("Po datumu", v. ScrLastErr gore). Ponovilo se na cipu
+' "Svi": Scr_Rows pukne, ovde se pretvori u Empty, LoadGridFromScreen na ne-niz
+' radi Exit Sub -- pa mreza OSTANE na prethodnoj listi, sa prethodnim naslovom.
+' Operater vidi dugme koje "ne radi", bez ijedne poruke i bez traga u logu.
 Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
                             ByVal q As String) As Variant
     Dim m As String
+    ScrLastErr = ""
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
-    If Len(m) > 0 Then ScrGridData = Application.Run(m & ".Scr_Rows", filter, q)
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrGridData = Application.Run(m & ".Scr_Rows", filter, q)
+    If Err.Number <> 0 Then
+        ScrLastErr = m & ".Scr_Rows -> " & Err.Number & " " & Err.description
+        Err.Clear
+    End If
 End Function
 
 ' Prekidac lista ekrana. Prazno = ekran ima samo jednu listu, pa prekidaca
