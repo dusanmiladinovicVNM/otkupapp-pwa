@@ -2796,4 +2796,4 @@ izvršava.
 - `python tools\vba_check.py` → **čisto (190 fajlova)**.
 - `python tools\run_vba.py --suite RunAllTests` → **TESTS=52, FAIL=0**.
 - Sweep nad `src-vba` za zaklonjena imena → **0**.
-- `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova.**
+- `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova, dva puta.**
