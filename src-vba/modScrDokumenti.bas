@@ -370,7 +370,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
     ' prve kolone; izvod je izuzetak - vidi ispod.
     kljuc = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     If Len(kljuc) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
     End If
 
@@ -410,8 +410,8 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         ' JESTE odluka operatera o PDF-u, ne pravilo - zato je ovde, a ne u
         ' modStornoDok.
         If MsgBox(modStornoDok.StornoPregled(tip, kljuc, "") & vbCrLf & vbCrLf & _
-                  Poruka("STORNO_ASK_IZVOD"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
-        odg = MsgBox(Poruka("STORNO_ASK_IZVOD_PDF"), vbQuestion + vbYesNoCancel, APP_NAME)
+                  modPoruke.Poruka("STORNO_ASK_IZVOD"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+        odg = MsgBox(modPoruke.Poruka("STORNO_ASK_IZVOD_PDF"), vbQuestion + vbYesNoCancel, APP_NAME)
         If odg = vbCancel Then Exit Function
         opcija = IIf(odg = vbYes, IZVOD_STORNO_REMAP, IZVOD_STORNO_REIMPORT)
         If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
@@ -422,7 +422,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         ' vise nego sto toast moze da pokaze.
         MsgBox poruka, vbInformation, APP_NAME
     Else
-        If MsgBox(Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(tip, opcija) & _
+        If MsgBox(modPoruke.Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(tip, opcija) & _
                   " " & kljuc & "?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
         If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
             modOtkupUI.ShowToast poruka, True
@@ -430,7 +430,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
         End If
         ' Zbirna moze da vrati UPOZORENJE uz uspeh (aktivna prijemnica ostaje
         ' vezana za storniranu zbirnu) - toast bi ga progutao, pa ide u MsgBox.
-        If InStr(1, poruka, Poruka("STORNO_MSG_OK"), vbBinaryCompare) = 1 Then
+        If InStr(1, poruka, modPoruke.Poruka("STORNO_MSG_OK"), vbBinaryCompare) = 1 Then
             modOtkupUI.ShowToast poruka & " " & kljuc, False
         Else
             MsgBox poruka, vbExclamation, APP_NAME
@@ -442,7 +442,7 @@ Private Function StornoRedF8(ByVal red As Long) As Boolean
     Exit Function
 EH:
     LogErr "modScrDokumenti.StornoRedF8"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
 '------------------------------------------- FRAMEWORK ISPRAVKE (Faza D/13)
