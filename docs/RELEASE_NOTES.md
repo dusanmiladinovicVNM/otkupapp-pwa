@@ -2791,9 +2791,40 @@ obara compile, pa izlaz bude „Exception occurred" umesto imena tvrdnje (zamka 
 To je i zapisano u katalogu, uz ono što test 52 stvarno dodaje: proceduru koja se
 izvršava.
 
+### Drugi nalaz iz istog Compile-a: `StornoRedF8`
+
+Operater je posle prve ispravke pustio Compile ponovo i dobio **isto** u
+`modScrDokumenti.StornoRedF8` — još šest poziva, isti obrazac. Ukupno dvanaest, u
+dve procedure.
+
+Moj prvi sweep ih nije prijavio zbog svoje greške: čitao je samo **prvu**
+deklaraciju u `Dim` redu, a ovde je `poruka` druga:
+
+```vb
+Dim razlog As String, poruka As String, odg As VbMsgBoxResult
+```
+
+Ispravljen sweep je zatim dao 20 nalaza od kojih **14 lažnih** — ime unutar
+**string literala** (`"...bez OtkupID (dokument: ..."`). To je tačno ona klasa
+lažnih nalaza zbog koje je proširenje `ARNOST`-a odbijeno u #199. Posle skidanja
+literala i komentara: **6 nalaza, svih 6 stvarnih, 0 lažnih.** Svi ispravljeni,
+ponovni sweep daje **0**.
+
+### Šta ovo znači za verifikaciju
+
+Nijedan od dvanaest pogrešnih poziva nije bio dohvatljiv suite-om: `StornoIzvrsi` i
+`StornoRedF8` zove **samo UI**, a VBA kompajlira proceduru tek kad se pozove. Test
+52 pokriva prvu; `StornoRedF8` je `Private` i otvara `MsgBox`, pa se iz testa ne
+može pozvati.
+
+Zato ovaj obrazac ide u `vba_check` kao provera, kroz **zaseban process PR**.
+Uslovi su ispunjeni: mehanički je prepoznatljiv, ima **0 lažnih nalaza** kad se
+literali i komentari skinu, i dva puta je našao stvarne greške koje ništa drugo
+nije videlo.
+
 ### Verifikacija
 
 - `python tools\vba_check.py` → **čisto (190 fajlova)**.
 - `python tools\run_vba.py --suite RunAllTests` → **TESTS=52, FAIL=0**.
-- Sweep nad `src-vba` za zaklonjena imena → **0**.
+- Sweep nad `src-vba` za zaklonjena imena → **0** (bio 12).
 - `COMPILE` → i dalje `NEJASNO` iz runnera; **stvarna kapija je bila operaterova, dva puta.**
