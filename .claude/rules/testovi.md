@@ -54,6 +54,7 @@ Exit `0` = čisto, `2` = ima nalaza. **Obavezan pre commita** svake VBA izmene.
 | `PORUKA` | `Poruka("KLJUC")` bez para u `modPoruke.UpsertPoruke` |
 | `NEDEFINISAN` | poziv procedure koja nigde nije definisana |
 | `ARNOST` | poziv sa pogrešnim brojem argumenata |
+| `ZAKLONJENO` | lokalni skalar zvan sa zagradom → „Expected array" |
 
 `NEDEFINISAN`/`ARNOST` su namerno uske (samo `.bas`, samo poziv u poziciji
 naredbe) — lažan nalaz je gori od propuštenog. **Poziv u izrazu (`x = Foo(1)`)
@@ -63,6 +64,28 @@ nalaza (ime funkcije unutar string literala, između ostalog). Uzak izuzetak od 
 postoji za ugovor ekrana (`Scr_*` u `modScr*`), a od `DUPLIKAT_LOKALNI`-og za
 `Property Get/Let/Set` trojku. Ne kompajlira VBA: ne hvata tip-greške ni
 nedeklarisane promenljive, a u `.frm`/`.cls` ne radi `NEDEFINISAN`/`ARNOST`.
+
+**`ZAKLONJENO` postoji zbog rupe koju su ostale tri provere ostavile.** Lokalno
+ime koje se poklapa sa imenom funkcije **zaklanja** je unutar te procedure (VBA je
+case-insensitive), pa poziv postaje indeksiranje:
+
+```vb
+Public Function StornoIzvrsi(..., ByRef poruka As String, ...)
+    poruka = Poruka("STORNO_MSG_OK")      ' Expected array
+```
+
+Dvanaest takvih poziva je živelo u dve procedure od `v6-ui-119` do `v6-ui-141`.
+Nije ih videla **nijedna** postojeća kapija: suite ne, jer VBA kompajlira
+proceduru **tek kad se pozove** a te dve je zvao samo UI; `ARNOST`/`NEDEFINISAN`
+ne, jer je poziv u poziciji izraza; CI ne, jer ne pokreće Excel. Našao ih je
+operater ručnim `Debug → Compile`.
+
+Provera je namerno **uža** od „ime zaklanja funkciju": skalar eksplicitnog tipa se
+u VBA ne može indeksirati nikako, pa je `ime(` uz `Dim ime As String` uvek greška.
+Izostavljeni su `Variant` (može nositi niz), nizovi, objekti (default member) i —
+najvažnije — sadržaj string literala i komentara: 14 od prvih 20 nalaza ovog
+obrasca bilo je ime unutar teksta, ista klasa lažnih nalaza zbog koje je širenje
+`ARNOST`-a odbijeno.
 
 **Dve provere duplikata nisu ista provera.** `DUPLIKAT` gleda globalni imenski
 prostor (isto `Public` ime u dva modula); duplo ime unutar jednog modula mu je
