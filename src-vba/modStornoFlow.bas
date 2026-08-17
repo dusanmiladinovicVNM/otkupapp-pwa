@@ -587,6 +587,15 @@ Public Function CompleteOtpremnicaIspravka(ByVal correctionID As String, _
     End If
     Dim oldIDs As Collection
     Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)
+    ' Context tvrdi da stari dokument postoji. Nula razresenih ID-eva zato
+    ' nije prazan posao nego NERAZRESEN IZVOR -- a zavrsiti kao COMPLETED nad
+    ' neprevezanim blokovima je gore od pada. Stiti i buduce greske resolvera,
+    ' ne samo nedostajucu kolonu.
+    If oldIDs.count = 0 And Len(oldBroj) > 0 Then
+        Err.Raise ERR_STORNO_FW_BASE + 65, SRC, _
+                  "Izvorna otpremnica '" & oldBroj & "' nije razresena po " & _
+                  "identitetu -- zavrsetak ispravke je prekinut."
+    End If
     Dim blokovi As Collection: Set blokovi = GetBlokOtkupIDs(oldIDs)
     Dim k As Long
     For k = 1 To blokovi.count
@@ -708,9 +717,11 @@ Public Function RunZbirnaCorrection(ByVal broj As String, ByVal mode As String, 
     ' jedina postena opcija je stati PRE nego sto se ista promeni.
     If mode <> SV_MODE_RESI_KASNIJE Then
         If CBool(s("brojDvosmislenIkad")) Then
-            r("message") = "Broj zbirne '" & broj & "' nose dva aktivna dokumenta. " & _
-                           "Zamena bi prevezala decu OBE zbirne, jer se otpremnice i " & _
-                           "prijemnice vezuju BROJEM. Razdvoj brojeve pa ponovi."
+            r("message") = "Broj zbirne '" & broj & "' je pripadao VISE vlasnika " & _
+                           "(vozac + kupac). Zamena bi prevezala decu OBE zbirne, jer " & _
+                           "se otpremnice i prijemnice vezuju BROJEM -- a storniran " & _
+                           "vlasnik i dalje moze imati aktivnu decu. Razdvoj brojeve " & _
+                           "pa ponovi."
             Exit Function
         End If
     End If
@@ -1894,8 +1905,9 @@ Private Function StornoZbirnaIDetach_TX(ByVal broj As String, ByRef outDet As Lo
     If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, SRC, True, _
                        Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
         Err.Raise ERR_STORNO_FW_BASE + 62, SRC, _
-                  "Broj zbirne '" & broj & "' nose dva aktivna dokumenta -- " & _
-                  "otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan."
+                  "Broj zbirne '" & broj & "' je pripadao VISE vlasnika -- " & _
+                  "otpremnice se vezuju BROJEM, pa se ne mogu odvezati samo za jedan. " & _
+                  "Vazi i kad je jedan vlasnik storniran: njegova deca ostaju aktivna."
     End If
     If Not StornoZbirna(broj, gen) Then Err.Raise ERR_STORNO_FW_BASE + 60, SRC, "StornoZbirna nije uspeo."
     outDet = DetachOtpremniceInline(broj, SRC)
@@ -2131,9 +2143,10 @@ Private Function PonistiZbirnaChain_TX(ByVal brojZbirne As String, ByVal ownsCha
     ' Storniran vlasnik i dalje moze imati AKTIVNU decu -- v. ScanZbirna.
     If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _
                        Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then
-        res("message") = "Broj zbirne '" & brojZbirne & "' nose dva aktivna " & _
-                         "dokumenta. Deca se u semi vezuju BROJEM, pa se lanac ne " & _
-                         "moze ponistiti samo za jedan -- razdvoj brojeve pa ponovi."
+        res("message") = "Broj zbirne '" & brojZbirne & "' je pripadao VISE " & _
+                         "vlasnika. Deca se u semi vezuju BROJEM, pa se lanac ne " & _
+                         "moze ponistiti samo za jedan -- razdvoj brojeve pa ponovi. " & _
+                         "Vazi i za storniranog vlasnika: deca mu ostaju aktivna."
         Exit Function
     End If
     brojZbirne = Trim$(brojZbirne)
@@ -2259,7 +2272,15 @@ Private Function GetOtpremnicaIDsByBroj(ByVal broj As String, _
     Next i
     Exit Function
 EH:
+    ' PROPAGIRA, ne guta. Ova funkcija ima fail-closed kapiju nad opsegom
+    ' stanice; sa golim `LogErr` bi ta kapija digla gresku, EH bi je progutao,
+    ' pozivalac bi dobio PRAZNU kolekciju, petlja se preskoci -- i completion
+    ' zavrsi kao USPEH nad neprevezanim blokovima. Kapija koja se sama guta
+    ' nije kapija.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
     LogErr MOD_NAME & ".GetOtpremnicaIDsByBroj"
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 ' Distinktni AKTIVNI OtkupID-jevi vezani (OtpremnicaID) za dati skup otp ID-jeva.

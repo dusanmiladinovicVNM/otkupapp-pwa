@@ -539,11 +539,11 @@ SABOTAZE = {
     "zbirna-zamena-bez-kapije": (
         "modStornoFlow.bas",
         "    If mode <> SV_MODE_RESI_KASNIJE Then\n"
-        '        If CBool(s("brojDvosmislen")) Then\n',
+        '        If CBool(s("brojDvosmislenIkad")) Then\n',
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
-        '        If CBool(s("brojDvosmislen")) Then\n',
+        '        If CBool(s("brojDvosmislenIkad")) Then\n',
         "T_ZamenaZbirne_NeDiraDecuTudje",
-        "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
+        "ISPRAVKA staje dok je broj pripadao vise vlasnika",
     ),
     # Zavrsetak ispravke: tacan OldDocID degradiran u prazan opseg -> broj.
     "completion-degradira-olddocid": (
@@ -576,13 +576,13 @@ SABOTAZE = {
     # Kaskada zbirne bez fail-closed provere nad dvosmislenim brojem.
     "zbirna-kaskada-bez-kapije": (
         "modStornoFlow.bas",
-        "    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, False, _\n"
+        "    If VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, True, _\n"
         "                       Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1 Then\n"
-        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' nose dva aktivna " & _\n',
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n"
-        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' nose dva aktivna " & _\n',
+        '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
-        "ponistenje lanca staje dok broj nose dva aktivna dokumenta",
+        "ponistenje lanca staje dok je broj pripadao vise vlasnika",
     ),
     # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
     # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.

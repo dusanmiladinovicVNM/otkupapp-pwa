@@ -1940,8 +1940,9 @@ Private Sub T_ZbirnaKaskada_StajeNaDvosmislenom()
     ' pala i bez moje provere. Ono sto moja provera dodaje je RAZLOG: staje
     ' pre transakcije i kaze operateru sta je problem, umesto generickog
     ' "nije uspelo". Bas to se ovde tvrdi.
-    AssertEq (InStr(1, CStr(res("message")), "nose dva aktivna", vbTextCompare) > 0), _
-             True, "odbijanje imenuje dvosmislen broj, ne samo neuspeh"
+    AssertEq (InStr(1, CStr(res("message")), "pripadao VISE vlasnika", _
+                    vbTextCompare) > 0), True, _
+             "odbijanje imenuje dvosmislen broj, ne samo neuspeh"
 
     ' Nista nije poniisteno -- ni zaglavlja ni deca.
     AssertEq StorniranoNaID(TBL_ZBIRNA, COL_ZBR_ID, "ZBI-KASK-2"), False, _

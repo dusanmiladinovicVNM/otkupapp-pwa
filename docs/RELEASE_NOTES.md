@@ -2400,3 +2400,56 @@ zbirne nije uspeo". Isto rešenje kao kod testa 41.
 - `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
 - Sedam sabotaža iz poslednje tri runde, **svaka obara svoju tvrdnju**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija pred merge.
+
+## v2.46.6 — `v6-ui-135` · kapija koja se sama guta nije kapija
+
+### P2 blocker — `Err.Raise` u funkciji koja sve guta
+
+Prethodna runda je u `GetOtpremnicaIDsByBroj` dodala fail-closed proveru: zadat
+opseg stanice a kolone nema → greška. Ali ista funkcija završava sa:
+
+```vb
+EH:
+    LogErr MOD_NAME & ".GetOtpremnicaIDsByBroj"
+End Function
+```
+
+Dakle greška se digne, EH je proguta, pozivalac dobije **praznu kolekciju**,
+petlja se preskoči — i completion završi kao **uspeh nad neprevezanim
+blokovima**, uz `COMPLETED` context. Zaštita je postojala samo na papiru.
+
+Sada se `Err.Number` / `Description` / `Source` sačuvaju, loguju i **ponovo
+dignu**.
+
+### Invarijanta kod pozivaoca
+
+Context tvrdi da stari dokument postoji. Nula razrešenih ID-eva zato nije prazan
+posao nego **nerazrešen izvor** — i `CompleteOtpremnicaIspravka` sada tu staje.
+Štiti i buduće greške resolvera, ne samo nedostajuću kolonu.
+
+### P3 — poruka je protivrečila tabeli
+
+Kapije od `v6-ui-134` broje i **stornirane** vlasnike, a poruke su i dalje
+govorile „nose dva **aktivna** dokumenta". Test 44 upravo dokazuje suprotan
+slučaj: A stornirana, B aktivna, operacija svejedno staje. Operater bi dobio
+poruku koja protivreči tabeli koju gleda.
+
+Sve tri poruke sada kažu da je broj **pripadao više vlasnika** i da storniran
+vlasnik i dalje može imati aktivnu decu.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (190 fajlova)**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=44, FAIL=0**.
+- `python tools\run_vba.py` (pun set) → **`EXIT=0`**, 11 suite-ova zeleno.
+- **Sedam sabotaža** iz poslednje četiri runde, svaka obara svoju tvrdnju.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+### Dve sabotaže su usput bile mrtve, i to se skoro nije videlo
+
+Izmena poruka je zastarela sidra dvema sabotažama. `sabotaza.py` to prijavljuje
+glasno („sidro nadjeno 0 puta"), ali sam u sweep-u imao `2>&1 >/dev/null` — pa je
+izgledalo kao da sabotaža ne grize, umesto da nije ni primenjena.
+
+**Kad se menja tekst poruke koja je deo sidra, sidro se menja s njom.** Sweep
+odsad ne guta `stderr`.
