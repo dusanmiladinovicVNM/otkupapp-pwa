@@ -4284,6 +4284,14 @@ End Function
 ' Suzavanje iz panela "Filteri" - ekran ga cita, ljuska ga drzi.
 ' Celija prikazanog reda - ekran je cita kad korisnik izabere red. Bez ovoga
 ' bi ekran morao da drzi svoju kopiju istih podataka.
+' Koliko redova mreza trenutno drzi. Ekran to ne moze da izvede iz svojih
+' podataka: ljuska filtrira, sortira i strani, pa je njen broj jedini tacan.
+' Postoji zbog dijagnostike -- radnja nad redom koji mreza nema mora da moze
+' da kaze KOLIKO ih ima, inace se pad ne razlikuje od praznog ekrana.
+Public Function GridBrojRedova() As Long
+    GridBrojRedova = mViewN
+End Function
+
 Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
     On Error Resume Next
     If r < 1 Or r > mViewN Then Exit Function

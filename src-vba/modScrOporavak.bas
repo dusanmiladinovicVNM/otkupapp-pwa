@@ -53,6 +53,10 @@ Public Const SCROPO_BUILD As String = "v6-ui-144"
 ' mogla da procita drugu kolonu a da opis kolona i dalje izgleda ispravno.
 Public Const NED_COL_CID As Long = 6
 
+' Izvor za log. Radnje nad redom su jedino mesto na ekranu koje MENJA podatke,
+' pa im svaki ishod -- i odbijanje -- ide u log pod istim imenom.
+Private Const MOD_TRAG As String = "modScrOporavak.OpoAkcija"
+
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
 Private Const OPO_ZONA_H As Single = KPI_H
@@ -230,13 +234,23 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
     Dim p() As String, red As Long, kljuc As String
     On Error GoTo EH
     p = Split(Mid$(tag, 5), ":")
-    If UBound(p) < 1 Then Exit Function
+    If UBound(p) < 1 Then
+        ' Nem izlaz iz radnje koja MENJA podatke je najgori mogucan ishod:
+        ' operater vidi aktivno dugme koje ne radi nista, log je prazan, i
+        ' nema se sta prijaviti. Zato svaki izlaz odavde ostavlja trag.
+        LogWarn MOD_TRAG, "Radnja bez rednog broja u tagu: '" & tag & "'."
+        Exit Function
+    End If
     red = CLng(val(p(1)))
     kljuc = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     If Len(kljuc) = 0 Then
+        LogWarn MOD_TRAG, "Red " & red & " nema kljuc u koloni 1. Mreza drzi " & _
+                modOtkupUI.GridBrojRedova() & " redova, lista je '" & Scr_Lista() & "'."
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
     End If
+    LogInfo MOD_TRAG, "Radnja '" & p(0) & "' nad redom " & red & " (" & kljuc & "), lista '" & _
+            Scr_Lista() & "'."
 
     ' GENERACIJA je poslednja kolona obe izvorne liste. Ona je identitet
     ' dokumenta - broj je labela. Bez nje bi prevezivanje pogodilo i dokument
@@ -247,6 +261,7 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
         Case "odbaci":     OpoAkcija = OdbaciIspravku(red)
         Case Else
+            LogWarn MOD_TRAG, "Nepoznata radnja '" & p(0) & "' za listu '" & Scr_Lista() & "'."
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
@@ -466,14 +481,24 @@ Private Function OdbaciIspravku(ByVal red As Long) As Boolean
     On Error GoTo EH
     cid = Trim$(CStr(modOtkupUI.GridCell(red, NED_COL_CID)))
     If Len(cid) = 0 Then
+        ' Ovo je legitiman ishod za osirotele stavke -- ali i JEDINI put kojim
+        ' bi kvar u prenosu identiteta do mreze izgledao isto. Zato se zapisuje:
+        ' bez traga se 'red nije context' i 'kolona je stigla prazna' ne razlikuju.
+        LogWarn MOD_TRAG, "Red " & red & " nema CorrectionID u koloni " & NED_COL_CID & _
+                ". Mreza drzi " & modOtkupUI.GridBrojRedova() & " redova; vrsta problema: '" & _
+                Trim$(CStr(modOtkupUI.GridCell(red, 2))) & "'."
         modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_NIJE_CTX"), True
         Exit Function
     End If
+    LogInfo MOD_TRAG, "Odbacivanje ispravke " & cid & " (red " & red & ") -- ceka potvrdu."
 
     opis = Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
            Trim$(CStr(modOtkupUI.GridCell(red, 2)))
     If MsgBox(Poruka("OTKUI_OPO_ODBACI_ASK") & vbCrLf & vbCrLf & opis, _
-              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then
+        LogInfo MOD_TRAG, "Odbacivanje " & cid & " otkazano na potvrdi."
+        Exit Function
+    End If
 
     If Not OdbaciIspravkuCore(cid) Then
         modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_ERR"), True
