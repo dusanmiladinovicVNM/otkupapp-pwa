@@ -779,13 +779,22 @@ SABOTAZE = {
         "T_PrefillBezBroja_PredlaziBroj",
         "prefill bez broja predlaze broj dokumenta za svoj kontekst",
     ),
+    # Ljuska ima DVE kapije nad cipovima: MAX_SEG odlucuje da li se cip CRTA, a
+    # dispecer klika da li klik na njega ima kome da stigne. Ova sabotaza meri
+    # prvu.
+    #
+    # Druga NEMA sabotazu, i to namerno: test moze da tvrdi da SegIndeksIzTaga
+    # razresava poslednji cip, ali ne i da ga dispecer zaista zove -- klik kroz
+    # formu se u harnessu ne moze odigrati. Sabotaza nad dispecerom bi zato
+    # ostavila suite zelen i lazno tvrdila da je tvrdnja pokrivena (zamka 5).
+    # Ta kapija ostaje na smoke-u.
     # Ljuska crta samo prvih MAX_SEG dugmadi prekidaca. Ekran Storno ih ima
     # deset; na devet je "Izvodi" TIHO nestajao -- bio je u Scr_Liste, ali se
     # nije mogao izabrati ni na koji nacin, bez greske i bez traga. Operater je
     # to prijavio kao nedostajuci cip.
     "ljuska-odseca-liste": (
         "modOtkupUI.bas",
-        "Private Const MAX_SEG     As Long = 10\n",
+        "Private Const MAX_SEG     As Long = 11\n",
         "Private Const MAX_SEG     As Long = 9   ' SABOTAZA\n",
         "T_Storno_UgovorIRadnje",
         "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho",

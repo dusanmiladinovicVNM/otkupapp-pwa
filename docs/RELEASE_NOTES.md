@@ -3861,3 +3861,37 @@ u `PorukaZaDijalog` — da se može izmeriti; dijalog u headless runu visi, pa s
 Sabotaža `dijalog-nosi-oznaku` vraća oznaku u dijalog i pada po imenu:
 *„DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake — očekivano [False],
 dobijeno [True]"*.
+
+### Jedanaesti čip se crtao, ali klik na njega nije radio ništa
+
+Operater: *„čip Blokovi postoji, ali koja mu je svrha? mrtav je…"* — i bio je u pravu.
+
+Dispečer klika je glasio:
+
+```vb
+If Left$(tag, 5) = "lsSeg" And Len(tag) = 6 Then
+```
+
+`Len(tag) = 6` pokriva **samo `lsSeg0`…`lsSeg9`**. Jedanaesti čip je `lsSeg10` —
+sedam znakova — pa je propadao kroz granu i **nije radio ništa**: crta se, boji se
+na hover, a klik nema kome da stigne.
+
+Ljuska ima **dve kapije** nad čipovima, i ovo je bila druga:
+
+| Kapija | Šta odlučuje | Kad je pukla |
+|---|---|---|
+| `MAX_SEG` | da li se čip **crta** | `v6-ui-143` — „Izvodi" su nestali |
+| dispečer klika | da li klik **stigne** | sada — „Blokovi" su mrtvi |
+
+Obe daju isti simptom za operatera i obe ćute. Redni broj se sada čita kroz
+`SegIndeksIzTaga`, ne merenjem dužine taga.
+
+**Test 56** meri obe odvojeno: crtanje jednom tvrdnjom, razrešavanje klika drugom —
+i to za **poslednji** čip, jer je prvi radio i pre.
+
+Sabotaža postoji **samo za prvu** kapiju; njeno sidro je usput popravljeno (gađalo
+je `MAX_SEG = 10`, a sada je 11). Za drugu je namerno nema: test može da tvrdi da
+`SegIndeksIzTaga` razrešava poslednji čip, ali ne i da ga dispečer zaista **zove** —
+klik kroz formu se u harnessu ne može odigrati. Sabotaža nad dispečerom bi ostavila
+suite zelen i lažno tvrdila da je tvrdnja pokrivena (zamka 5). Ta kapija ostaje na
+smoke-u.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-150"
+Public Const OTKUI_BUILD   As String = "v6-ui-151"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -2447,6 +2447,19 @@ Private Function ScrAct(ByVal tag As String) As Boolean
 End Function
 
 ' Kljuc liste iza dugmeta prekidaca.
+' Redni broj cipa iz taga, ili -1 ako tag nije cip. Javna je da bi se ugovor
+' ljuske ("svaki cip koji ekran prijavi ume da se izabere") mogao TVRDITI u
+' testu -- klik kroz formu se u harnessu ne moze odigrati.
+Public Function SegIndeksIzTaga(ByVal tag As String) As Long
+    Dim rep As String
+    SegIndeksIzTaga = -1
+    If Left$(tag, 5) <> "lsSeg" Then Exit Function
+    rep = Mid$(tag, 6)
+    If Len(rep) = 0 Then Exit Function
+    If Not IsNumeric(rep) Then Exit Function
+    SegIndeksIzTaga = CLng(rep)
+End Function
+
 Private Function SegKey(ByVal i As Long) As String
     Dim seg As Variant
     seg = SegDefs()
@@ -3352,10 +3365,21 @@ Private Sub UiClickCore(ByVal tag As String)
         Exit Sub
     End If
     ' prekidac liste - ljuska zna samo REDNI BROJ dugmeta; kljuc liste je
-    ' ekranov, pa se cita iz njegove definicije i vraca mu nazad
-    If Left$(tag, 5) = "lsSeg" And Len(tag) = 6 Then
+    ' ekranov, pa se cita iz njegove definicije i vraca mu nazad.
+    '
+    ' Redni broj se cita kroz SegIndeksIzTaga, ne merenjem duzine taga. Uslov je
+    ' ranije glasio Len(tag) = 6, sto pokriva SAMO lsSeg0..lsSeg9 -- pa je
+    ' jedanaesti cip (lsSeg10) imao sedam znakova, propadao kroz ovu granu i
+    ' NIJE RADIO NISTA. Bez greske i bez traga: dugme se crta, boji se na hover,
+    ' a klik nema kome da stigne.
+    '
+    ' Isti oblik greske kao MAX_SEG = 9 (v6-ui-143), samo na drugoj kapiji:
+    ' tamo se cip nije CRTAO, ovde se crta ali ne reaguje. Zato ih meri i test
+    ' odvojeno -- crtanje jednom tvrdnjom, dispecovanje drugom.
+    Dim segI As Long: segI = SegIndeksIzTaga(tag)
+    If segI >= 0 Then
         Dim segK As String
-        segK = SegKey(CLng(Mid$(tag, 6)))
+        segK = SegKey(segI)
         If Len(segK) = 0 Then Exit Sub
         If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then
             mSelRow = 0

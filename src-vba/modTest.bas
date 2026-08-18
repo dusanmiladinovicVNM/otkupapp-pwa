@@ -2400,6 +2400,19 @@ Private Sub T_Storno_UgovorIRadnje()
     ' vazi za svaki buduci ekran, ne samo za ovaj.
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+
+    ' A CRTANJE NIJE ISTO STO I DISPECOVANJE. Klik na cip je isao kroz uslov
+    ' Len(tag) = 6, sto pokriva samo lsSeg0..lsSeg9 -- pa je jedanaesti cip
+    ' (lsSeg10) imao sedam znakova, propadao kroz granu i nije radio NISTA:
+    ' crta se, boji se na hover, a klik nema kome da stigne. Operater je to
+    ' prijavio kao 'cip postoji ali je mrtav'.
+    '
+    ' Zato se meri i druga kapija, i to za POSLEDNJI cip -- prvi je radio i pre.
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg" & UBound(liste)), UBound(liste), _
+             "ljuska razresava klik na POSLEDNJI cip, ne samo na jednocifrene"
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg0"), 0, "i na prvi, i dalje"
+    AssertEq modOtkupUI.SegIndeksIzTaga("btnAct0"), -1, "tudji tag nije cip"
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg"), -1, "cip bez rednog broja nije cip"
     AssertEq (UBound(liste) + 1), 11, "ekran ima jedanaest lista"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
