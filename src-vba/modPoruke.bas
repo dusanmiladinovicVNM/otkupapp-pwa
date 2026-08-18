@@ -756,6 +756,14 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "STEF_PAL_ODVEZ", "odvezuju se sa palete"
     UpsertRow lo, existing, "STEF_FAK_OSLOB", "osloba" & ChrW(273) & "a se; stavke ostaju osirotele"
     UpsertRow lo, existing, "STEF_BLOK_SAM", "evidentiraju se zasebno; storniraju se samo po izboru iz liste"
+    ' Red o blokovima je JEDINI u tabeli posledica koji trazi odluku operatera, a
+    ' odluka se donosi na drugom mestu (lista Blokovi). Zato taj red ne stoji kao
+    ' opis pravila nego kao STANJE: koliko ih je izabrano i gde se bira.
+    UpsertRow lo, existing, "STEF_BLOK_NEMA", "nema samostalnih otkupnih blokova"
+    UpsertRow lo, existing, "STEF_BLOK_BIRAJ_1", "nijedan nije izabran " & ChrW(8212) & " biraju se u listi " & ChrW(8222) & "Blokovi" & ChrW(8220)
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_1", "izabrano "
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_2", " od "
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_3", " " & ChrW(8212) & " storniraju se uz Dupli unos ili Poni" & ChrW(353) & "tenje prometa"
     UpsertRow lo, existing, "STEF_REVERS", "stornira se; saldo se koriguje bez kontra-stavke"
     ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"

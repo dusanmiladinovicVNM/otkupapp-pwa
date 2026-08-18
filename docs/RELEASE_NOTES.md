@@ -3908,3 +3908,29 @@ jednom kod mrtvog čipa.
 
 Uz verziju sveske u sidebaru sada stoji i `OTKUI_BUILD`. Merenja u logu istu
 oznaku nose od `v6-ui-147`; ovo zatvara i drugi kanal, bez Immediate prozora.
+
+### Red o blokovima nosi STANJE, ne pravilo
+
+Operater, pošto je čip prorad io: *„nije ni ovo rešenje loše, ali kako operater da
+vidi da u čip Blokovi treba da odluči šta da radi sa blokovima?“*
+
+Legacy je listu blokova imao **unutar** panela odluke, pa se videla sama od sebe.
+U novom UI-ju je iza čipa — što je dobro za prostor, ali ništa nije govorilo da tamo
+ima šta da se reši.
+
+Red „Otkupni blokovi" u tabeli posledica je **jedini koji traži odluku**, a odluka
+se donosi na drugom mestu. Zato taj red više ne opisuje pravilo nego **stanje**, i
+menja se pri svakom štikliranju:
+
+| Stanje | Tekst |
+|---|---|
+| nema blokova | nema samostalnih otkupnih blokova |
+| ima ih, nijedan izabran | **nijedan nije izabran — biraju se u listi „Blokovi"** |
+| izabrani | izabrano 2 od 3 — storniraju se uz Dupli unos ili Poništenje prometa |
+
+Red se prepoznaje po tome što mu je napomena baš taj ključ iz kataloga, a ne po
+nazivu dokumenta: naziv je tekst za prikaz i sme da se menja.
+
+**Test 75** tvrdi sva tri stanja; `BlokStatusTekst` je zato javna — zona se crta nad
+formom koju harness gradi bez `.Show`, pa se sam natpis ne može pročitati.
+Sabotaža `blok-status-ne-prati-izbor` pada po imenu.

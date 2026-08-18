@@ -1233,6 +1233,16 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "poruka u dijalogu ide BEZ oznake za rutiranje",
     ),
+    # Red o blokovima u zoni je jedini koji trazi odluku, a odluka se donosi u
+    # drugoj listi. Ako ne prati izbor, operater i posle stikliranja cita isti
+    # poziv na izbor -- pa ne zna da li je odluka uopste zabelezena.
+    "blok-status-ne-prati-izbor": (
+        "modScrStorno.bas",
+        "    iz = BlokOznacenihBroj()\n",
+        "    iz = 0   ' SABOTAZA: izbor se ne vidi u zoni\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "red o blokovima prijavljuje KOLIKO ih je izabrano",
+    ),
 }
 
 

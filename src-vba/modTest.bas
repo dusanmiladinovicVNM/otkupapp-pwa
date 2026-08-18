@@ -3582,6 +3582,17 @@ Private Sub T_StornoBlokovi_PodrazumevanoNijedan()
     AssertEq modScrStorno.BlokOznacenihBroj(), 0, _
              "promena izbora dokumenta ponistava oznacene blokove"
 
+    ' Red o blokovima u zoni mora da nosi STANJE, ne pravilo. Operater je prijavio
+    ' da cip Blokovi postoji, ali da nista ne kaze da tamo ima sta da se odluci --
+    ' pa taj red menja tekst prema izboru.
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) = 1), True, _
+             "bez izbora red poziva na izbor i imenuje listu"
+    modScrStorno.Scr_BlokTestSet ident
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_IZABRANO_1")) = 1), True, _
+             "sa izborom red prijavljuje KOLIKO ih je izabrano"
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) > 0), False, _
+             "i vise ne poziva na izbor koji je vec napravljen"
+
     modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
 

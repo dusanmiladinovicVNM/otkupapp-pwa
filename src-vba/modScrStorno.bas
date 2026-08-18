@@ -540,8 +540,39 @@ Private Sub OsveziEfekat(ByVal z As Object)
         For c = 0 To 2
             z.Controls("stE" & (r - 1) & "_" & c).caption = ChTxt(red, c)
         Next c
+        ' Red o blokovima je JEDINI koji trazi odluku, a odluka se donosi u drugoj
+        ' listi. Operater je prijavio da to nigde ne pise: cip Blokovi postoji, ali
+        ' nista ne kaze da tamo ima sta da se resi. Zato taj red ne pokazuje
+        ' PRAVILO nego STANJE -- koliko ih je izabrano i gde se bira -- i menja se
+        ' pri svakom stikliranju, jer OsveziZonu ide i iz IzborReda.
+        '
+        ' Red se prepoznaje po tome sto mu je napomena bas taj kljuc iz kataloga,
+        ' ne po nazivu dokumenta: naziv je tekst za prikaz i sme da se menja.
+        If ChTxt(red, 2) = Poruka("STEF_BLOK_SAM") Then _
+            z.Controls("stE" & (r - 1) & "_2").caption = BlokStatusTekst()
     Next r
 End Sub
+
+' Stanje izbora blokova, u jednoj recenici. Tri slucaja, jer tri razlicite stvari
+' operater treba da zna: da odluke nema, da je ima a nije donesena, i sta je
+' odluceno.
+' Javna je da bi se tri stanja mogla tvrditi u testu -- zona se crta nad formom
+' koju harness gradi bez .Show, pa se sam natpis ne moze procitati.
+Public Function BlokStatusTekst() As String
+    Dim bl As Collection, uk As Long, iz As Long
+    On Error Resume Next
+    If Not mImpact Is Nothing Then Set bl = mImpact("blocks")
+    If Not bl Is Nothing Then uk = bl.count
+    If uk = 0 Then BlokStatusTekst = Poruka("STEF_BLOK_NEMA"): Exit Function
+    iz = BlokOznacenihBroj()
+    If iz = 0 Then
+        BlokStatusTekst = Poruka("STEF_BLOK_BIRAJ_1")
+    Else
+        BlokStatusTekst = Poruka("STEF_BLOK_IZABRANO_1") & iz & _
+                          Poruka("STEF_BLOK_IZABRANO_2") & uk & _
+                          Poruka("STEF_BLOK_IZABRANO_3")
+    End If
+End Function
 
 ' Bezbedno citanje polja reda lanca - red moze imati manje od tri polja.
 Private Function ChTxt(ByVal red As Variant, ByVal i As Long) As String
