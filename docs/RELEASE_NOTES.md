@@ -3726,3 +3726,75 @@ lažno tvrdila da je meri test.
 
 Isti tekst vidi i **legacy panel** `frmDokumenta` — model je zajednički
 (`BuildStornoImpact`), pa se promena ne razilazi između dva ekrana.
+
+---
+
+## v2.52.0 — `v6-ui-149` · otkupni blokovi se ponovo biraju, a ne storniraju svi
+
+Operater: *„fali check lista sa otkupnim listovima pri stornu uzvodnih dokumenata.
+to postoji kod legacy, mora i ovde."* Tačno — i poređenje sa legacy-jem otkrilo je
+da nije reč samo o prikazu.
+
+| | Legacy panel | Nov ekran do sada |
+|---|---|---|
+| Podrazumevano | **nijedan blok nije čekiran** | — |
+| Na potvrdu | stornira **samo čekirane** | stornira **SVE** |
+
+Legacy: *„default oslobodjeni/netaknuti, cekiran = dodatno storniran."* Nov ekran je
+ispisivao spisak u `MsgBox`-u i na „Da" stornirao sve. Bio je dakle **destruktivniji
+od legacy-ja**, i to ne namerno nego zato što multiselect nije bio prenet — što je
+katalog migracije i beležio kao svesnu privremenu odluku („sve-ili-ništa").
+
+### Lista „Blokovi"
+
+Jedanaesti čip ekrana Storno. Nije tip dokumenta — kao ni „Lanac robe" — nego
+**pogled nad već izabranim dokumentom**:
+
+| Kolona | |
+|---|---|
+| ✓ | izbor; klik na red uključuje/isključuje |
+| Broj otkupa, Količina, Klasa, Kooperant | isto što je legacy prikazivao |
+| *(nevidljiva)* | `OtkupID` |
+
+Izbor se drži **po `OtkupID`-u, ne po broju otkupa**: broj se računa po kooperantu,
+pa dva bloka lako dele isti — a spisak završava u `StornoSelectedBlocks_TX`, dakle
+u mutaciji. Isti razlog zbog kog `GeneracijaID` postoji na ekranu Storno i
+`CorrectionID` na Oporavku.
+
+Redovi dolaze iz **već izgrađenog uvida** (`mImpact`), ne iz novog skeniranja: model
+na osnovu koga zona tvrdi posledice mora biti i izvor spiska nad kojim se bira —
+inače ekran pokazuje jedno, a stornira drugo.
+
+Prelazak na taj čip **ne poništava izbor dokumenta**, za razliku od prelaska između
+tipova. Poništio bi baš ono što lista treba da prikaže.
+
+### Dva nalaza iz istog posla
+
+**Test seam je lagao.** `Scr_IzborTestSet` je postavljao polja izbora, ali **nije
+gradio uvid** — što produkcija radi pri svakom kliku na red. Test 62 je na tome
+gradio ceo svoj slučaj: „framework dokument bez uvida ne nudi radnju" prolazilo je
+zato što uvida u testu nikad nije ni bilo, a ne zato što kapija radi.
+
+Seam sada radi ono što radi i produkcija, a test 62 neuspeh uvida pravi **stvarno** —
+zadatom generacijom koju nijedan red ne nosi — i dobio je pozitivnu kontrolu: isti
+dokument sa razrešivim identitetom radnje **ima**, pa se vidi da kapija nije
+zaglavljena na nuli.
+
+**`TabelaTipa` je fail-open.** Nepoznat ključ tiho vraća `tblOtkup` (`Case Else`), pa
+bi lista sa pogrešnim ključem prikazala otkupne listove pod svojim naslovom — tačno
+ono na šta komentar u testu 56 upozorava. Nije popravljeno u ovom PR-u (dira sve
+liste, ne samo ovu); test 56 zato meri **posledicu** — koje kolone lista vrati.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (75)** · pun set **ZELENO** · `COMPILE` `NEJASNO`.
+
+**Test 75** tvrdi da je podrazumevano stanje prazno i da označavanje pogađa baš taj
+blok, po `OtkupID`-u. Dve sabotaže, obe oborile svoju tvrdnju po imenu:
+`blokovi-svi-oznaceni` i `blokovi-oznake-prezive-izbor`.
+
+Druga je usput ponovo naplatila **zamku 8** iz `tools/sabotaza.py`: prva verzija joj
+je uklanjala red i ostavljala `mSelTip = ""`, koji postoji i u zdravom kodu — pa ga
+je `--vrati` našao tamo i dodao još jedan `Set mBlokOznaceni = Nothing`. Zamena sada
+nosi oznaku `' SABOTAZA`, pa je jedinstvena.

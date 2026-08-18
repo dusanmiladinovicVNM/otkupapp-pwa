@@ -67,6 +67,14 @@ Private Const ST_PAL_REDOVA As Long = 3     ' redova detalja paleta
 ' izvod. Kad izvor jednog dana pokrije sve tipove, preimenuje se i lista.
 Private Const ST_LANAC As String = "LANAC"
 
+' Lista otkupnih blokova IZABRANOG dokumenta. Nije tip dokumenta kao ostali
+' cipovi -- kao ni ST_LANAC -- nego pogled nad tekucim izborom.
+Private Const ST_BLOKOVI As String = "BLOKOVI"
+
+' Kolona liste blokova koja nosi OtkupID. Jedan broj deljen izmedju opisa kolona,
+' punjenja redova i radnje -- isti razlog kao NED_COL_CID na Oporavku.
+Public Const ST_BLOK_COL_ID As Long = 6
+
 ' Aktivna lista: STIP_* kljuc ili ST_LANAC.
 Private mLista As String
 
@@ -83,6 +91,13 @@ Private mSelOpcija As String
 ' "Ne diraj palete" -- do v6-ui-143 MsgBox (STORNO_ASK_PALETE), sada prekidac
 ' koji stoji uz posledice, pa se vidi PRE odluke a ne posle nje.
 Private mNeDiraj As Boolean
+
+' OZNACENI OTKUPNI BLOKOVI, po OtkupID-u. Prazno = nijedan, i to je
+' PODRAZUMEVANO stanje -- isto kao legacy panel, gde je cekiranje znacilo
+' DODATNO storniranje. Do v6-ui-149 je nov ekran na potvrdu stornirao SVE
+' blokove, sto je bilo destruktivnije od legacy-ja, i to ne namerno nego zato
+' sto multiselect nije bio prenet.
+Private mBlokOznaceni As Object
 
 ' Uvid za izabran dokument. Gradi ga BuildStornoImpact pri izboru reda, a ne
 ' pri svakom crtanju: to je sedam citanja tabela.
@@ -129,7 +144,8 @@ Public Function Scr_Liste() As Variant
         STIP_UPLATE & "|OTKUI_SEG_ST_UPL|OTKUI_GRID_TITLE_AMB_UPLATE|54", _
         STIP_REVERSI & "|OTKUI_SEG_ST_REV|OTKUI_GRID_TITLE_REVERSI|58", _
         STIP_FAKTURA & "|OTKUI_SEG_ST_FAK|OTKUI_GRID_TITLE_FAKTURA|58", _
-        STIP_IZVOD & "|OTKUI_SEG_ST_IZV|OTKUI_GRID_TITLE_IZVOD|54")
+        STIP_IZVOD & "|OTKUI_SEG_ST_IZV|OTKUI_GRID_TITLE_IZVOD|54", _
+        ST_BLOKOVI & "|OTKUI_SEG_ST_BLOK|OTKUI_GRID_TITLE_ST_BLOK|58")
 End Function
 
 ' Podrazumevan je otkupni list - najcesci dokument, pa i najcesci storno.
@@ -159,13 +175,21 @@ End Sub
 ' TEST SEAM: izbor dokumenta bez ucitane mreze. Produkcija ga bira klikom na
 ' red (Scr_Event "row:N"), sto trazi mrezu, filtere i strane -- previse za
 ' proveru pravila da identitet stize do writer-a.
+' Test seam za izbor dokumenta. Radi ono STO RADI I PRODUKCIJA posle klika na red:
+' cisti prethodni izbor (pa i oznacene blokove) i gradi uvid. Seam koji samo
+' postavi polja bio bi laziv -- test bi merio stanje koje se u aplikaciji nikad ne
+' desava, a lista blokova bi ostala prazna jer uvida nema.
 Public Sub Scr_IzborTestSet(ByVal tip As String, ByVal broj As String, _
                             ByVal docID As String, ByVal opcija As String)
     If Not IsTestMode() Then Exit Sub
+    OcistiIzbor
     mSelTip = tip
     mSelBroj = broj
     mSelDocID = docID
     mSelOpcija = opcija
+    Set mImpact = GradiUvid()
+    mAkcije = Empty
+    mAkcijeZa = ""
 End Sub
 
 ' TEST SEAM: identitet koji bi ovaj ekran poslao nizvodno. Bez njega se
@@ -202,9 +226,90 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Scr_Rows = RowsLanac(q)
         Exit Function
     End If
+    If Scr_Lista() = ST_BLOKOVI Then
+        Scr_Rows = RowsBlokovi(q)
+        Exit Function
+    End If
     Scr_Rows = modScrDokumenti.RedoviZaTip(Scr_Lista(), filter, q, True)
 End Function
 
+' OTKUPNI BLOKOVI IZABRANOG DOKUMENTA -- sa kolonom izbora.
+'
+' Prva kolona nosi kvacicu i menja se klikom na red; poslednja je NEVIDLJIVA i
+' nosi OtkupID. Izbor se drzi po ID-u, ne po broju otkupa: broj se racuna po
+' kooperantu i dva bloka lako dele isti, a ovaj spisak zavrsava u mutaciji
+' (StornoSelectedBlocks_TX).
+'
+' Redovi se citaju iz vec izgradjenog uvida (mImpact), ne ponovnim skeniranjem:
+' isti model na osnovu koga zona tvrdi posledice mora da bude i izvor spiska nad
+' kojim operater bira -- inace ekran pokazuje jedno, a stornira drugo.
+Private Function BlokGridCols() As Variant
+    BlokGridCols = Array( _
+        "OTKUI_HD_OZN||txt|36|1", _
+        "OTKUI_HD_BROJ||txt|130|1", _
+        "OTKUI_HD_KG||kg|70|1", _
+        "OTKUI_HD_KLASA||txt|56|1", _
+        "OTKUI_HD_KOOP||txt|0|1", _
+        "OTKUI_HD_IDENT||txt|0|4")
+End Function
+
+Private Function RowsBlokovi(ByVal q As String) As Variant
+    Dim bl As Collection, outA() As Variant, n As Long, i As Long
+    Dim red As Variant, hay As String, sumKg As Double, ident As String
+    On Error GoTo EH
+    mStep = "blokovi"
+    If Not mImpact Is Nothing Then Set bl = mImpact("blocks")
+    If bl Is Nothing Then
+        RowsBlokovi = Array(BlokGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+    If bl.count = 0 Then
+        RowsBlokovi = Array(BlokGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        Exit Function
+    End If
+
+    ReDim outA(1 To bl.count, 1 To ST_BLOK_COL_ID)
+    For i = 1 To bl.count
+        red = bl(i)
+        ident = Trim$(CStr(red(0)))
+        hay = CStr(red(1)) & "|" & CStr(red(3)) & "|" & CStr(red(4))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        n = n + 1
+        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), "")
+        outA(n, 2) = CStr(red(1))
+        outA(n, 3) = red(2)
+        outA(n, 4) = CStr(red(3))
+        outA(n, 5) = CStr(red(4))
+        outA(n, ST_BLOK_COL_ID) = ident
+        sumKg = sumKg + Val(CStr(red(2)))
+Sledeci:
+    Next i
+    mStep = "OK"
+    RowsBlokovi = Array(BlokGridCols(), outA, n, sumKg, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrStorno.RowsBlokovi[" & mStep & "]", Err.description
+End Function
+
+Private Function BlokOznacen(ByVal ident As String) As Boolean
+    If mBlokOznaceni Is Nothing Then Exit Function
+    BlokOznacen = mBlokOznaceni.Exists(ident)
+End Function
+
+' Koliko ih je izabrano. Zona i potvrda citaju isti broj -- da se ne razidju.
+Public Function BlokOznacenihBroj() As Long
+    If mBlokOznaceni Is Nothing Then Exit Function
+    BlokOznacenihBroj = mBlokOznaceni.count
+End Function
+
+' Test seam: izbor blokova bez mreze. Tvrdo gejtovan, kao Scr_OtpTestSet.
+Public Sub Scr_BlokTestSet(ByVal ident As String)
+    If Not IsTestMode() Then Exit Sub
+    If mBlokOznaceni Is Nothing Then Set mBlokOznaceni = CreateObject("Scripting.Dictionary")
+    If mBlokOznaceni.Exists(ident) Then mBlokOznaceni.Remove ident Else mBlokOznaceni(ident) = True
+End Sub
 Private Function LanacGridCols() As Variant
     LanacGridCols = Array( _
         "OTKUI_HD_TIP||txt|96|1", _
@@ -648,8 +753,12 @@ Private Function ObradiDogadjaj(ByVal tag As String) As Boolean
 
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = Scr_Lista() Then Exit Function
+        ' Prelazak izmedju TIPOVA ponistava izbor: dokument izabran u jednoj listi
+        ' u drugoj ne postoji. Lista blokova je izuzetak -- ona je POGLED nad vec
+        ' izabranim dokumentom, pa bi ciscenje obrisalo bas ono sto treba da
+        ' prikaze. Isto vazi i za povratak sa nje.
+        If Mid$(tag, 3) <> ST_BLOKOVI And Scr_Lista() <> ST_BLOKOVI Then OcistiIzbor
         mLista = Mid$(tag, 3)
-        OcistiIzbor
         ObradiDogadjaj = True
         Exit Function
     End If
@@ -674,6 +783,10 @@ Private Function ObradiDogadjaj(ByVal tag As String) As Boolean
 End Function
 
 Private Sub OcistiIzbor()
+    ' Oznaceni blokovi pripadaju IZABRANOM dokumentu. Kad se izbor promeni, oni
+    ' vise ne znace nista -- a ostavljeni bi na sledecem dokumentu stornirali
+    ' blokove koje operater nikad nije video.
+    Set mBlokOznaceni = Nothing
     mSelTip = ""
     mSelBroj = ""
     mSelDocID = ""
@@ -692,8 +805,25 @@ End Sub
 ' U navigacionoj listi klik prebacuje na tipiziranu listu tog dokumenta -- tamo
 ' postoji kolona identiteta, pa tamo i odluka moze da se donese.
 Private Function IzborReda(ByVal red As Long) As Boolean
-    Dim tip As String, broj As String, errDesc As String
+    Dim tip As String, broj As String, errDesc As String, ident As String
     On Error GoTo EH
+
+    ' U listi blokova klik ne bira dokument nego UKLJUCUJE ILI ISKLJUCUJE blok.
+    ' Vraca True da bi se mreza procitala ponovo -- kvacica se crta iz podataka,
+    ' pa je ponovno citanje jedini nacin da se promena vidi.
+    If Scr_Lista() = ST_BLOKOVI Then
+        ident = Trim$(CStr(modOtkupUI.GridCell(red, ST_BLOK_COL_ID)))
+        If Len(ident) = 0 Then Exit Function
+        If mBlokOznaceni Is Nothing Then Set mBlokOznaceni = CreateObject("Scripting.Dictionary")
+        If mBlokOznaceni.Exists(ident) Then
+            mBlokOznaceni.Remove ident
+        Else
+            mBlokOznaceni(ident) = True
+        End If
+        OsveziZonu
+        IzborReda = True
+        Exit Function
+    End If
 
     If Scr_Lista() = ST_LANAC Then
         tip = TipIzNaziva(Trim$(CStr(modOtkupUI.GridCell(red, 1))))
@@ -1036,23 +1166,26 @@ Private Sub StornirajBlokoveAko(ByVal mode As String, ByVal correctionID As Stri
     If blokovi Is Nothing Then Exit Sub
     If blokovi.count = 0 Then Exit Sub
 
-    For i = 1 To blokovi.count
-        red = blokovi(i)
-        spisak = spisak & vbCrLf & "  " & CStr(red(1)) & "  " & ChrW(183) & " Kl." & _
-                 CStr(red(3)) & "  " & ChrW(183) & " " & CStr(red(2)) & " kg  " & _
-                 ChrW(183) & " " & CStr(red(4))
-    Next i
-
-    If MsgBox(Poruka("STORNO_ASK_BLOKOVI_1") & " " & blokovi.count & _
-              Poruka("STORNO_ASK_BLOKOVI_2") & spisak & vbCrLf & vbCrLf & _
-              Poruka("STORNO_ASK_BLOKOVI_3"), _
-              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
-
+    ' SAMO OZNACENI. Podrazumevano nijedan nije oznacen, pa se bez izricitog izbora
+    ' u listi ne stornira nijedan blok -- isto kao legacy panel. Do v6-ui-149 je
+    ' potvrda ovde stornirala SVE, sto je bilo destruktivnije od legacy-ja.
     Set ids = New Collection
     For i = 1 To blokovi.count
         red = blokovi(i)
-        ids.Add CStr(red(0))
+        If BlokOznacen(Trim$(CStr(red(0)))) Then
+            ids.Add CStr(red(0))
+            spisak = spisak & vbCrLf & "  " & CStr(red(1)) & "  " & ChrW(183) & " Kl." & _
+                     CStr(red(3)) & "  " & ChrW(183) & " " & CStr(red(2)) & " kg  " & _
+                     ChrW(183) & " " & CStr(red(4))
+        End If
     Next i
+    If ids.count = 0 Then Exit Sub
+
+    ' Potvrda i dalje postoji: spisak je kratak (samo oznaceni), pa operater pred
+    ' mutacijom jos jednom vidi TACNO nad cim odlucuje.
+    If MsgBox(Poruka("OTKUI_SCRST_BLOK_ASK") & spisak & vbCrLf & vbCrLf & _
+              Poruka("OTKUI_SCRST_BLOK_ASK2"), _
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
 
     razlog = BlockStornoDriftReason(dt, mode, ids)
     If Len(razlog) > 0 Then

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-148"
+Public Const OTKUI_BUILD   As String = "v6-ui-149"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -176,7 +176,7 @@ Private Const TOAST_H     As Single = 26
 ' tipova + navigacioni "Svi"), pa je granica podignuta sa 9 -- na 9 je deseta
 ' tiho nestajala: LayoutGrid crta samo prvih MAX_SEG, bez ijedne poruke, pa se
 ' "Izvodi" nisu mogli izabrati ni na koji nacin.
-Private Const MAX_SEG     As Long = 10
+Private Const MAX_SEG     As Long = 11
 Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE

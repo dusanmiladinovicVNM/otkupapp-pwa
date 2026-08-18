@@ -767,6 +767,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_ST_REV", "Reversi"
     UpsertRow lo, existing, "OTKUI_SEG_ST_FAK", "Fakture"
     UpsertRow lo, existing, "OTKUI_SEG_ST_IZV", "Izvodi"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_BLOK", "Blokovi"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_ST_BLOK", "Otkupni blokovi izabranog dokumenta"
+    UpsertRow lo, existing, "OTKUI_HD_OZN", ChrW(10003)
+    UpsertRow lo, existing, "OTKUI_HD_KOOP", "KOOPERANT"
+    ' Lista blokova radi kao legacy panel: podrazumevano nijedan nije izabran, a
+    ' izabran znaci DODATNO storniran. Zato poruke govore o izboru, ne o svemu.
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_NEMA", "Izaberi dokument da vidi" & ChrW(353) & " njegove otkupne blokove"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_PRAZNO", "Izabrani dokument nema samostalnih otkupnih blokova"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK", "Storniraj i ozna" & ChrW(269) & "ene otkupne blokove?"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK2", "Neozna" & ChrW(269) & "eni ostaju AKTIVNI i osloba" & ChrW(273) & "aju se za drugi dokument."
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FAKTURA", "Postoje" & ChrW(263) & "e fakture"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZVOD", "Uvezeni bankovni izvodi"
     UpsertRow lo, existing, "OTKUI_HD_IZNOS", "IZNOS"

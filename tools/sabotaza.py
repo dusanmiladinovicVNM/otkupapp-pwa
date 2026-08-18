@@ -1190,6 +1190,29 @@ SABOTAZE = {
         "T_StornoEfekat_TekstIzKataloga",
         "razlicit efekat nosi OBA prefiksa, ne jedan spojen",
     ),
+    # Lista otkupnih blokova radi kao legacy panel: podrazumevano NIJEDAN nije
+    # oznacen, oznacen znaci DODATNO storniran. Do v6-ui-149 je nov ekran na
+    # potvrdu stornirao SVE -- destruktivnije od legacy-ja, i to slucajno.
+    "blokovi-svi-oznaceni": (
+        "modScrStorno.bas",
+        "        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), \"\")\n",
+        "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "podrazumevano nijedan blok nije oznacen",
+    ),
+    # Oznake pripadaju dokumentu nad kojim su napravljene. Ako prezive promenu
+    # izbora, sledeci storno gadja blokove koje operater nikad nije video.
+    #
+    # Zamena nosi oznaku ' SABOTAZA namerno (zamka 8): prva verzija je uklanjala
+    # red i ostavljala `mSelTip = ""`, koji postoji i u ZDRAVOM kodu -- pa ga je
+    # --vrati nasao tamo i dodao jos jedan `Set mBlokOznaceni = Nothing`.
+    "blokovi-oznake-prezive-izbor": (
+        "modScrStorno.bas",
+        "    Set mBlokOznaceni = Nothing\n",
+        "    ' SABOTAZA: oznake prezive promenu izabranog dokumenta\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "promena izabranog dokumenta ponistava oznacene blokove",
+    ),
 }
 
 
