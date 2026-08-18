@@ -201,6 +201,7 @@ Public Sub RunAllTests()
     RunOne 65
     RunOne 66
     RunOne 67
+    RunOne 68
 
     SetTestMode prevMode
     WriteResultFile
@@ -300,6 +301,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 65: TestName = "T_StornoImpact_BlokSekcijaDriftJeInvalidna"
         Case 66: TestName = "T_StornoEkran_NeCuriGreska"
         Case 67: TestName = "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan"
+        Case 68: TestName = "T_LogErr_NeVidiErrPosleResumeNext"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -375,6 +377,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 65: T_StornoImpact_BlokSekcijaDriftJeInvalidna
         Case 66: T_StornoEkran_NeCuriGreska
         Case 67: T_StornoImpact_PrijemnicaBlokDriftJeInvalidan
+        Case 68: T_LogErr_NeVidiErrPosleResumeNext
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3097,6 +3100,36 @@ VRATI:
     AssertEq validPrij, False, "necitljiva blok sekcija PRIJEMNICE obara CEO uvid"
     ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
     AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+' ============================================================
+' 68. "On Error Resume Next" resetuje Err -- pa LogErr posle njega ne pise
+' ============================================================
+' Operater je prijavio pad upisa otpremnice, a Log fajl je bio PRAZAN -- nijedna
+' ERROR linija. Uzrok nije u upisu nego u dijagnostici:
+'
+'     LogErr pise samo "If Err.Number <> 0"
+'     a EH blokovi rade:  errDesc = Err.description
+'                         On Error Resume Next      <- resetuje Err
+'                         LogErr "SaveOtpremnicaMulti_TX"   <- vidi 0, ne pise
+'
+' Ovaj test ne meri nas kod nego SEMANTIKU VBA na kojoj taj zakljucak stoji.
+' Ako VBA to jednog dana promeni, tvrdnja pada ovde, a ne kroz prazan log posle
+' incidenta.
+Private Sub T_LogErr_NeVidiErrPosleResumeNext()
+    Dim preN As Long, posleN As Long
+
+    On Error Resume Next
+    Err.Raise 5, "T_LogErr", "namerna greska"
+    preN = Err.Number
+    ' isti potez koji EH blokovi rade pre poziva LogErr-a
+    On Error Resume Next
+    posleN = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (preN <> 0), True, "preduslov: greska je stvarno podignuta"
+    AssertEq posleN, 0, _
+             "'On Error Resume Next' resetuje Err -- LogErr posle njega nema sta da vidi"
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.

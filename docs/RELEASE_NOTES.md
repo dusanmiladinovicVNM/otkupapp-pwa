@@ -3200,6 +3200,28 @@ pod `strict` išao kroz `HL`, koji ima svoj `On Error Resume Next`.
   u istom prolazu storniraju, pa bi kontrola merila redosled testova umesto
   pravila.
 
+### Nalaz van obima: log je slep na 112 mesta
+
+Smoke je otkrio da pad upisa otpremnice **ne ostavlja nijednu `ERROR` liniju** u
+`Log\OtkupApp_<datum>.log`. Uzrok nije u upisu nego u dijagnostici:
+
+```vb
+LogErr pise samo  If Err.Number <> 0
+a EH blokovi rade:  errDesc = Err.Description
+                    On Error Resume Next          ' <- resetuje Err
+                    LogErr "SaveOtpremnicaMulti_TX"   ' <- vidi 0, ne pise nista
+```
+
+Isti oblik postoji na **112 mesta** kroz ceo `src-vba`, uključujući sve `Save*_TX`
+writere. `Monitor_Error` prima opis eksplicitno, pa telemetrija ima podatak — ali
+ona ide na udaljeni endpoint i samo ako je monitoring uključen; lokalno se gubi.
+
+**Test 68** ne meri naš kod nego **semantiku VBA** na kojoj taj zaključak stoji,
+da tvrdnja padne u suite-u a ne kroz prazan log posle incidenta.
+
+Sam popravak (112 mesta, zajednički writeri koje koristi i legacy) **nije u ovom
+PR-u** — ide zasebno.
+
 - **Šesnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 
 Zapisana je i **osma zamka** u `tools/sabotaza.py`: zamena ne sme biti podniz
