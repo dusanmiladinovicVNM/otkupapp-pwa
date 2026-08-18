@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-144"
+Public Const OTKUI_BUILD   As String = "v6-ui-145"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -574,7 +574,7 @@ End Sub
 
 '---------------------------------------------------------- TITLE ----
 Private Sub BuildTitle(frm As Object)
-    Dim z As Object
+    Dim z As Object, tf As Object
     Set z = NewZone(frm, "zTitle", SIDEBAR_W, HEADER_H + KPI_H, 800, TITLE_H, C_WHITE)
     WireZone z
     NewLbl z, "titLnB", "", 0, TITLE_H - 1, 800, 1, 8, False, 0, C_BORDER
@@ -597,6 +597,16 @@ Private Sub BuildTitle(frm As Object)
     ' lenjir za merenje naslova - znacka mora da stane tacno iza teksta
     NewLbl z, "titRul", "", 0, -400, 10, 14, TS_DISPLAY, True, C_WHITE, -1, fmTextAlignLeft, mDisplayFont
     z.Controls("titRul").AutoSize = True
+
+    ' TOAST. Stoji ovde, a ne u zoni unosnog ekrana, zato sto je naslovna traka
+    ' JEDINA zona koju ShowZones ostavlja vidljivom na svim ekranima. Dok je
+    ' toast ziveo u zForm, na svakom modScr* ekranu je zForm skriven, pa je
+    ' Visible = True nad kontrolom u skrivenom roditelju prikazivalo NISTA --
+    ' bez greske, jer ShowToast pocinje sa On Error Resume Next.
+    Set tf = NewFrame(z, "tstScr", 0, 0, 320, 26, RGB(236, 245, 240))
+    tf.Visible = False
+    NewLbl tf, "tstScrBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
+    NewLbl tf, "tstScrMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
     NewLbl z, "titDatum", "-", 0, CenterY(0, TITLE_H, TS_META), 190, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignRight
 End Sub
@@ -947,12 +957,6 @@ Private Sub BuildForm(frm As Object)
     ' Natpis je kontekstualan ("Sacuvaj otkupni list"...), postavlja ga
     ' SelectModeCore - zato je dugme sire nego generickim "Sacuvaj".
     BtnV z, "btnSacuvaj", Poruka("OTKUI_BTN_SACUVAJ_OTKUP"), 0, 0, 196, 28, "primary", IC_SAVE
-
-    ' toast
-    Set fr = NewFrame(z, "tstOk", 0, 0, 320, 26, RGB(236, 245, 240))
-    fr.Visible = False
-    NewLbl fr, "tstBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
-    NewLbl fr, "tstMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
 End Sub
 
 '----------------------------------------------------------- GRID ----
@@ -1607,6 +1611,7 @@ Public Sub LayoutOtkup(frm As Object)
         .Controls("titSub").width = mainW - PAD * 2 - 200 - TIT_ICO_W - 10
         PlaceTitleBadge frm
     End With
+        PostaviToast frm, mainW
 
     ' Traka otpremnice stoji izmedju naslova i "Osnovnih podataka": opisuje
     ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
@@ -1700,7 +1705,7 @@ End Sub
 Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     Dim c As Object, colW As Single, col As Long, Y As Single, span As Long
     Dim g As Long, gk As Variant, imaPolja As Boolean
-    Dim valFr As Object, btnY As Single, btnX As Single, tw As Single
+    Dim valFr As Object, btnY As Single, btnX As Single
     colW = (zw - 2 * PAD - (cols - 1) * GAP) / cols
     Y = 6
     gk = GrpKeys()
@@ -1759,7 +1764,6 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     ' Ploca ide uz LEVU ivicu reda (kao u viziji), poruka popunjava sredinu,
     ' dugmad ostaju desno.
     Set valFr = VisibleValFrame(z)
-    tw = PAD
     If Not valFr Is Nothing Then
         valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), _
                                         GAP + 4 + VAL_CALC_W + GAP + VAL_KG_W, 0)
@@ -1769,18 +1773,9 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
         valFr.top = btnY                 ' ploca (28pt) i dugme (28pt) u istoj liniji
         valFr.Height = FIELD_H
         LayoutFieldInner valFr
-        ' Poruka pocinje POSLE racunice, ne posle kilograma: kilogrami i poruka
-        ' dele isti prostor, a poruka je prolazna (ShowToast ih sakrije dok
-        ' stoji). Tako poruka ima citljivu sirinu, a kilogrami stalno mesto.
-        tw = PAD + VAL_PLATE_W + GAP + 4 + VAL_CALC_W + GAP
-        If tw > valFr.Left + valFr.width Then tw = valFr.Left + valFr.width + GAP
+        ' Kilogrami vise ne dele prostor sa porukom: toast je preseljen u
+        ' naslovnu traku, pa ostaju stalno vidljivi.
     End If
-    z.Controls("tstOk").top = btnY
-    z.Controls("tstOk").Left = tw
-    z.Controls("tstOk").width = btnX - tw - GAP
-    If z.Controls("tstOk").width < 60 Then z.Controls("tstOk").width = 60
-    z.Controls("tstOk").Controls("tstMsg").width = z.Controls("tstOk").width - 18
-
     LayoutFields = btnY + 28 + 8
 End Function
 
@@ -4085,6 +4080,7 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
         .Controls("titName").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
         .Controls("titSub").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
     End With
+    PostaviToast frm, w
     gy = HEADER_H + h + TITLE_H
     With frm.Controls("zGrid")
         .Left = X: .top = gy: .width = w
@@ -5281,18 +5277,38 @@ Public Sub DetectDisplayFont()
     MsgBox "UI_DISPLAY_FONT = " & res, vbInformation
 End Sub
 
+' Toast se crta u NASLOVNOJ traci -- jedinoj zoni koju ShowZones drzi vidljivom
+' na svakom ekranu. Do ove izmene je ziveo u zForm, pa se van ekrana dokumenata
+' nije video NIKAD: ni poruka radnje, ni ScrLastErr kojim ljuska prijavljuje da
+' je ekran pukao. Operater je to prijavio kao "dugme je mrtvo" -- radnja je
+' odgovarala, samo nemo.
+'
+' Poravnat je desno, do datuma, i sam sebi meri sirinu prema duzini poruke, pa
+' kratka potvrda ne uzima pola trake a dug razlog se ne sece.
+Private Sub PostaviToast(frm As Object, ByVal w As Single)
+    Dim tf As Object
+    On Error Resume Next
+    Set tf = frm.Controls("zTitle").Controls("tstScr")
+    If tf Is Nothing Then Exit Sub
+    tf.width = w - PAD * 2 - 200
+    If tf.width < 120 Then tf.width = 120
+    tf.Left = w - PAD - 190 - GAP - tf.width
+    If tf.Left < PAD Then tf.Left = PAD
+    tf.top = CenterY(0, TITLE_H, TS_META) - 5
+    tf.Controls("tstScrMsg").width = tf.width - 18
+End Sub
+
 Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
-    Set fr = mFrm.Controls("zForm").Controls("tstOk")
+    Set fr = mFrm.Controls("zTitle").Controls("tstScr")
+    If fr Is Nothing Then Exit Sub
     fr.BackColor = IIf(isErr, RGB(250, 240, 235), RGB(236, 245, 240))
-    fr.Controls("tstBar").BackColor = IIf(isErr, C_RUST, C_GREEN_LT)
-    fr.Controls("tstMsg").caption = msg
-    fr.Controls("tstMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
+    fr.Controls("tstScrBar").BackColor = IIf(isErr, C_RUST, C_GREEN_LT)
+    fr.Controls("tstScrMsg").caption = msg
+    fr.Controls("tstScrMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
     fr.Visible = True
-    ' poruka i zbir kilograma dele isti prostor u akcionom redu
-    KgLineVisible False
     CancelToastTimer
     If Not isErr Then
         mToastPending = Format$(Now + TimeSerial(0, 0, 4), "yyyy-mm-dd hh:nn:ss")
@@ -5304,13 +5320,7 @@ Public Sub HideToast()
     On Error Resume Next
     mToastPending = ""
     If mFrm Is Nothing Then Exit Sub
-    mFrm.Controls("zForm").Controls("tstOk").Visible = False
-    KgLineVisible True
-End Sub
-
-Private Sub KgLineVisible(ByVal vis As Boolean)
-    On Error Resume Next
-    mFrm.Controls("zForm").Controls("fgVrednost").Controls("fgVrednostKg").Visible = vis
+    mFrm.Controls("zTitle").Controls("tstScr").Visible = False
 End Sub
 
 Private Sub CancelToastTimer()

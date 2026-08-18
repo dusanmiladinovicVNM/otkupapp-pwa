@@ -3408,6 +3408,80 @@ radnju, pa je stari pečat `v6-ui-135` lagao. `UISCR_BUILD` ostaje `v6-ui-143`:
   `oporavak-cid-kolona-drift`.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija (`Alt+F11 → Debug → Compile VBAProject`).
 
-**Nalaz zabeležen, nije popravljen:** `vba_check` prijavljuje **prazan fajl kao čist**.
-Skripta koja upiše `open(P,"wb")` pre nego što `encode` pukne ostavi `.bas` od nula
-bajtova, a provera je zelena. Ide u zaseban process PR.
+### Provera `ODSECEN` — prazan fajl više nije „čist“
+
+`vba_check` je **prazan fajl prijavljivao kao čist**: prazan fajl nema šta da prekrši,
+pa nijedna provera nije imala reč. Zelen izlaz nad izbrisanim modulom je gori od
+crvenog — `ImportAllVBA` ga uveze kao prazan i sve što je u njemu bilo nestane, bez
+ijedne poruke.
+
+Ulaz je uvek isti obrazac:
+
+```python
+io.open(P, "wb").write(s.encode("ascii"))   # open() odsece PRE nego sto encode pukne
+```
+
+U ovoj sesiji je tri puta ostavio `.bas` od nula bajtova. Bezbedno je
+`data = s.encode(...)` **pa** upis.
+
+Nova provera traži `Attribute VB_Name = "..."` — red koji nosi **svaki** izvoz iz
+VBE-a, svih 191 fajlova bez izuzetka. Ništa strožije ne prolazi nad zatečenim
+izvorom: najmanji legalan modul ima 154 bajta i **nema** `Option Explicit`
+(`modMeteo.bas`), a `.frm` nosi `VB_Name` tek posle `Begin` bloka — oba su među
+self-test slučajevima koji **ne smeju** da zapište.
+
+Self-test je sa 34 na **39 slučajeva**. Dokaz u oba smera: sa ugašenom proverom pada
+tačno tri slučaja, svaki po imenu (`prazan fajl`, `samo beline`,
+`kod bez VB_Name zaglavlja`), dok dva negativna ostaju na nuli.
+
+---
+
+## v2.50.0 — `v6-ui-145` · toast koji se nikad nije video
+
+> Nađeno smoke-testom PR-a #203, a starije je od njega: pogađa **svaki** ekran
+> novog UI-ja osim unosa dokumenata.
+
+Operater je prijavio da je dugme „Odbaci ispravku" mrtvo — aktivno, klik ne radi
+ništa, log prazan. Instrumentacija je pokazala suprotno: radnja je radila, i to
+tačno. Nevidljiv je bio **odgovor**.
+
+`ShowZones` sakriva zonu unosnog ekrana na svakom ugovornom ekranu:
+
+```vb
+' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
+nmv = Array("zKpi", "zCtx", "zForm", "zRight")
+    frm.Controls(CStr(nmv(i))).Visible = dok      ' dok = (mScreen = "DOKUMENTI")
+```
+
+a `ShowToast` je pisao baš tamo:
+
+```vb
+Set fr = mFrm.Controls("zForm").Controls("tstOk")
+fr.Visible = True          ' kontrola u SKRIVENOM roditelju -- ne prikazuje nista
+```
+
+`Visible = True` nad kontrolom u skrivenom roditelju ne prikazuje ništa, a
+`On Error Resume Next` na vrhu `ShowToast`-a guta i eventualnu grešku. Rezultat:
+na ekranima **Storno, Palete, Oporavak i Agrohemija nijedna poruka nikad nije
+stigla do operatera** — ni potvrde, ni odbijanja, ni `ScrLastErr`, kanal kojim
+ljuska prijavljuje da je ekran pukao.
+
+U logu se to lepo vidi: tri klika na „Prevezi" u četiri sekunde. Radnja je svaki
+put odgovorila, samo nemo, pa je operater kliktao dalje.
+
+**Popravka:** toast se seli u **naslovnu traku** (`zTitle`) — jedinu zonu koju
+`ShowZones` drži vidljivom na svim ekranima. Poravnat je desno, do datuma, i meri
+širinu prema dužini poruke, pa kratka potvrda ne uzima pola trake a dug razlog se
+ne seče.
+
+Time otpada i sprega sa `KgLineVisible`: toast je ranije delio prostor sa zbirom
+kilograma u akcionom redu, pa ih je sakrivao dok stoji. Sada su kilogrami stalno
+vidljivi, a `KgLineVisible` i stari `tstOk` su uklonjeni kao mrtvi.
+
+**Verifikacija:** `vba_check` čisto (191), `who_writes` ažuran,
+`RunAllTests` **ZELENO (72)**, pun set **ZELENO** (11 suite-ova). `COMPILE` →
+`NEJASNO`, ostaje ručna kapija.
+
+Automatski test ovde **ne postoji i ne može da postoji**: tvrdnja je „kontrola je
+vidljiva operateru", a forma se u harnessu gradi bez `.Show`. Ostaje smoke: poruka
+mora da se vidi na Oporavku, Storno i Paletama, i dalje da radi na unosu.
