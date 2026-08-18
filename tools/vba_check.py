@@ -26,14 +26,16 @@ Provere:
                      ("Sub or Function not defined").
   7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
                      arguments").
-  10. MRTAV_LOG   -- `LogErr` posle `On Error` koje je vec obrisalo `Err`, pa
-                     poziv ne upisuje NISTA u log.
-  9. ZAKLONJENO   -- lokalni skalar (`Dim poruka As String`) koji se zove sa
-                     zagradom. VBA to cita kao indeksiranje -> "Expected array".
-                     Tipicno kad ime zaklanja istoimenu funkciju (`Poruka()`).
   8. DUPLIKAT_LOKALNI -- isto ime dva puta u ISTOM modulu (izuzetak: Property
                      Get/Let/Set trojka). Modul se ne kompajlira, a greska se
                      javlja kao "Cannot run the macro" na bilo kom makrou.
+  9. ZAKLONJENO   -- lokalni skalar (`Dim poruka As String`) koji se zove sa
+                     zagradom. VBA to cita kao indeksiranje -> "Expected array".
+                     Tipicno kad ime zaklanja istoimenu funkciju (`Poruka()`).
+ 10. MRTAV_LOG   -- `LogErr` posle `On Error` koje je vec obrisalo `Err`, pa
+                     poziv ne upisuje NISTA u log.
+ 11. ODSECEN     -- prazan fajl ili fajl bez `Attribute VB_Name`. Nije modul
+                     nego ostatak neuspelog upisa; do sada je prolazio kao cist.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -782,6 +784,38 @@ def check_dead_log(path: str, lines: list[str]) -> list[Finding]:
             brisac = None
     return out
 
+# --- ODSECEN: izvor bez zaglavlja koje VBA export UVEK pise -------------------
+#
+# `Attribute VB_Name = "..."` nosi SVAKI izvoz iz VBE-a -- svih 191 fajlova u
+# src-vba, bez ijednog izuzetka. Fajl bez tog reda nije VBA modul nego ostatak
+# neuspelog upisa.
+#
+# Rupa nije teorijska. Obrazac
+#
+#     io.open(P, "wb").write(s.encode("ascii"))
+#
+# otvara fajl PRE nego sto `encode` pukne: `open("wb")` je vec odsekao na nula
+# bajtova kad izuzetak stigne. Tri puta je tako ostao prazan `.bas` -- i checker
+# je svaki put prijavio CISTO, jer prazan fajl nema sta da prekrsi. Zelen izlaz
+# nad izbrisanim modulom je gori od crvenog: `ImportAllVBA` ga uveze kao prazan
+# i sve sto je u njemu bilo nestane, bez ijedne poruke.
+#
+# Bezbedan upis je `data = s.encode(...)` PA `io.open(P, "wb").write(data)`.
+VB_NAME = re.compile(r'^Attribute VB_Name = "')
+
+
+def check_truncated(path: str, raw: bytes, lines: list[str]) -> list[Finding]:
+    if not raw.strip():
+        return [Finding(path, 1, "ODSECEN",
+                        "fajl je prazan. Najcesci uzrok: upis koji radi "
+                        "open(P, 'wb') PRE nego sto encode pukne -- otvaranje vec "
+                        "odsece fajl. Prvo `data = s.encode(...)`, pa upis.")]
+    if not any(VB_NAME.match(ln) for ln in lines):
+        return [Finding(path, 1, "ODSECEN",
+                        "nema reda 'Attribute VB_Name = ...'. Svaki izvoz iz VBE-a "
+                        "ga nosi, pa je ovo odsecen fajl, ne modul.")]
+    return []
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -792,6 +826,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_local_dupes(path, lines)
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
+    out += check_truncated(path, raw, lines)
     return out
 
 
@@ -1079,6 +1114,34 @@ End Sub
 ]
 
 
+# --- ODSECEN: dokaz u oba smera ---------------------------------------------
+#
+# Druga polovina (0 nalaza) drzi granicu: provera sme da zapisti SAMO na fajlu
+# bez zaglavlja. Minimalan legalan modul u ovom repou ima 154 bajta i nema
+# `Option Explicit` (v. modMeteo.bas), pa nista strozije od VB_Name ne prolazi
+# nad zatecenim izvorom.
+ODSECEN_CASES = [
+    # --- mora da zapisti ---
+    ("prazan fajl", 1, ""),
+    ("samo beline", 1, "   \r\n\r\n"),
+    ("kod bez VB_Name zaglavlja", 1, """Option Explicit
+Public Sub Radi()
+End Sub
+"""),
+    # --- NE sme da zapisti ---
+    ("minimalan modul, bez Option Explicit", 0, '''Attribute VB_Name = "modMeteo"
+' === modMeteo ===
+' TODO: Implementierung
+'''),
+    ("forma: VB_Name dolazi tek posle Begin bloka", 0, '''VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmX 
+   Caption         =   "UserForm1"
+End
+Attribute VB_Name = "frmX"
+Option Explicit
+'''),
+]
+
 def self_test() -> int:
     palo = []
 
@@ -1116,6 +1179,15 @@ def self_test() -> int:
         dobijeno = _dupli_nalazi(check_file("<self-test>", raw, lines, set(), {}))
         if dobijeno != ocekivano:
             palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
+
+    for naziv, ocekivano, izvor in ODSECEN_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "ODSECEN")
+        if dobijeno != ocekivano:
+            palo.append(f"  ODSECEN/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
 
     for naziv, ocekivano, izvor in MRTAV_LOG_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
@@ -1156,7 +1228,7 @@ def self_test() -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
-              + len(MRTAV_LOG_CASES) + 2)
+              + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + 2)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
