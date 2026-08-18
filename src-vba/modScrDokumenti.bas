@@ -1,6 +1,6 @@
 Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
-' modScrDokumenti - OPIS ekrana "Unos dokumenata" (F1..F8), faza S2b.
+' modScrDokumenti - OPIS ekrana "Unos dokumenata" (F1..F7), faza S2b.
 '
 ' Sve sto zna KOJI dokument gde zivi: tabela po rezimu (ModeTable), imena
 ' kolona po rezimu (Col*), sastav mreze (GridCols/ColumnSpec), zastavice
@@ -25,7 +25,7 @@ Attribute VB_Name = "modScrDokumenti"
 '=====================================================================
 Option Explicit
 
-Public Const SCRDOK_BUILD As String = "v6-ui-121"
+Public Const SCRDOK_BUILD As String = "v6-ui-143"
 
 ' Gde je Scr_Rows stigao - ime koraka ulazi u poruku o gresci.
 Private mStep As String
@@ -55,38 +55,9 @@ Private mOtpIds As Object
 ' broj bloka -> OtkupID, za listu izgubljenih; puni ga RowsIzgubljeni
 Private mLostIds As Object
 
-'------------------------------------------------------- STORNO CENTAR (F8)
-' F8 nije sopstveni dokument nego POGLED na tudje - i to na SVE njihove
-' tabele, ne samo na tblOtpremnica kao do sada. Izabrani tip zivi ovde, u
-' zasebnoj promenljivoj: kad bi delio mLista sa F1, prelazak F1 -> F8 -> F1
-' bi vracao operatera u drugu listu nego iz koje je izasao.
-'
-' Kljuc liste JESTE kljuc tipa (modeKey / modStornoDok.STIP_*), pa prevodne
-' tabele nema. Sudara sa kljucevima F1 nema: tamo su "SVI" / "OTPREMNICE" /
-' "BLOKOVI" / "IZGUBLJENI" / "KOOPERANTI".
-Private mStTip As String
-
 ' Prekidac lista: "KLJUC|natpis|naslov mreze|sirina". Van F1 nema prekidaca -
 ' ostali rezimi imaju jednu listu, pa se dugmad ne prikazuju.
 Public Function Scr_Liste() As Variant
-    ' F8: prekidac bira TIP DOKUMENTA. To je isti izbor koji legacy trazi
-    ' kroz cmbStornoDokument, samo sto se ovde bira lista pa red u njoj,
-    ' umesto da se broj kuca napamet. Fakture i izvodi su tu iako novi UI
-    ' nema rezim koji ih kreira - stornirati se moraju, a legacy ih ima u
-    ' istom combo-u.
-    If modeKey(ActiveMode) = "STORNO" Then
-        Scr_Liste = Array( _
-            "OTKUP|OTKUI_SEG_ST_OTKUP|OTKUI_GRID_TITLE_OTKUP|64", _
-            "OTPREMNICA|OTKUI_SEG_ST_OTP|OTKUI_GRID_TITLE_OTPREMNICA|72", _
-            "ZBIRNA|OTKUI_SEG_ST_ZBR|OTKUI_GRID_TITLE_ZBIRNA|56", _
-            "PRIJEMNICA|OTKUI_SEG_ST_PRJ|OTKUI_GRID_TITLE_PRIJEMNICA|72", _
-            "AMB_ISPLATE|OTKUI_SEG_ST_ISP|OTKUI_GRID_TITLE_AMB_ISPLATE|58", _
-            "AMB_UPLATE|OTKUI_SEG_ST_UPL|OTKUI_GRID_TITLE_AMB_UPLATE|54", _
-            "REVERSI|OTKUI_SEG_ST_REV|OTKUI_GRID_TITLE_REVERSI|58", _
-            "FAKTURA|OTKUI_SEG_ST_FAK|OTKUI_GRID_TITLE_FAKTURA|58", _
-            "IZVOD|OTKUI_SEG_ST_IZV|OTKUI_GRID_TITLE_IZVOD|54")
-        Exit Function
-    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Scr_Liste = Array( _
         "SVI|OTKUI_SEG_LS_SVI|OTKUI_GRID_TITLE_OTKUP|96", _
@@ -106,12 +77,6 @@ End Function
 ' Kljuc se vraca u Scr_Event kao "act:<kljuc>:<red>"; "mark" obradjuje sama
 ' ljuska (oznacavanje je stanje mreze).
 Public Function Scr_Radnje() As String
-    ' F8 ima tacno jednu radnju nad redom, i ona je ista za svih devet
-    ' tipova - razliku nosi modStornoDok, ne dugme.
-    If modeKey(ActiveMode) = "STORNO" Then
-        Scr_Radnje = "storno:OTKUI_BTN_RED_STORNO:88:danger:1"
-        Exit Function
-    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case Scr_Lista()
         Case "SVI", "BLOKOVI"
@@ -128,32 +93,13 @@ End Function
 
 ' Koju listu F1 trenutno pokazuje. Van F1 uvek "SVI".
 Public Function Scr_Lista() As String
-    If modeKey(ActiveMode) = "STORNO" Then
-        Scr_Lista = StornoTipKey()
-    ElseIf modeKey(ActiveMode) <> "OTKUP" Then
+    If modeKey(ActiveMode) <> "OTKUP" Then
         Scr_Lista = "SVI"
     ElseIf Len(mLista) = 0 Then
         Scr_Lista = "SVI"
     Else
         Scr_Lista = mLista
     End If
-End Function
-
-' Tip dokumenta koji F8 trenutno pokazuje. Podrazumevan je otkupni list -
-' najcesci dokument, pa i najcesci storno.
-'
-' OVA FUNKCIJA JE OSLONAC CELOG F8: sve sto pita "koja tabela" i "koje
-' kolone" mora da dobije kljuc IZABRANOG tipa, a ne "STORNO". Zato je
-' javna i zato je zovu ModeTable, GridCols i ColumnSpec.
-Public Function StornoTipKey() As String
-    If Len(mStTip) = 0 Then StornoTipKey = STIP_OTKUP Else StornoTipKey = mStTip
-End Function
-
-' "STORNO" -> kljuc izabranog tipa; svaki drugi kljuc prolazi nepromenjen.
-' Do v6-ui-118 je "STORNO" bio tih sinonim za "OTPREMNICA" u desetak Col*
-' funkcija - tako je F8 i mogao da pokazuje samo tblOtpremnica.
-Public Function EffKey(ByVal mk As String) As String
-    If mk = "STORNO" Then EffKey = StornoTipKey() Else EffKey = mk
 End Function
 
 ' Opis aktivne otpremnice za traku iznad forme. Prazno = nema izabrane.
@@ -188,13 +134,6 @@ Public Sub Scr_OtpTestSet(ByVal otpID As String, ByVal broj As String)
     If Not IsTestMode() Then Exit Sub
     mOtpID = otpID
     mOtpBroj = broj
-End Sub
-
-' Isti seam za F8: test bira tip dokumenta bez klika po prekidacu. Tvrdo je
-' gejtovan kao i gornji - van test-rezima ne radi nista.
-Public Sub Scr_StornoTipTestSet(ByVal tipKljuc As String)
-    If Not IsTestMode() Then Exit Sub
-    mStTip = tipKljuc
 End Sub
 
 Public Function Scr_OtpInfo() As String
@@ -261,7 +200,7 @@ End Function
 ' Scr_Save) dolazi u S3b, kad se stanje mreze i forme preseli ovamo iz
 ' ljuske. Do tada ljuska crta ovaj ekran po starom.
 Public Function Scr_Meta() As String
-    Scr_Meta = "kljuc=DOKUMENTI|naslov=OTKUI_NAV_UNOS|oblik=forma+mreza|rezima=8"
+    Scr_Meta = "kljuc=DOKUMENTI|naslov=OTKUI_NAV_UNOS|oblik=forma+mreza|rezima=7"
 End Function
 
 ' Radnje ovog ekrana. Ljuska ne zna nijednu - prosledjuje tag i, ako je ekran
@@ -272,10 +211,6 @@ End Function
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     Dim broj As String
     On Error Resume Next
-    If modeKey(ActiveMode) = "STORNO" Then
-        Scr_Event = EventF8(tag)
-        Exit Function
-    End If
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
 
     If Left$(tag, 2) = "ls" Then
@@ -308,404 +243,6 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         mLista = "BLOKOVI"
         Scr_Event = True
     End If
-End Function
-
-'--------------------------------------------------- STORNO CENTAR (F8)
-' Isti oblik kao Scr_Event za F1, samo sto prekidac bira TIP dokumenta a
-' ne listu istog dokumenta. Klik na red ne radi nista - u F8 red nije
-' izvor za prefill nego meta radnje.
-Private Function EventF8(ByVal tag As String) As Boolean
-    On Error GoTo EH
-    If Left$(tag, 2) = "ls" Then
-        If Mid$(tag, 3) = StornoTipKey() Then Exit Function
-        mStTip = Mid$(tag, 3)
-        EventF8 = True
-        Exit Function
-    End If
-    If Left$(tag, 11) = "act:storno:" Then
-        EventF8 = StornoRedF8(CLng(val(Mid$(tag, 12))))
-        Exit Function
-    End If
-    Exit Function
-EH:
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-' Storno reda iz F8. Ekran radi tacno tri stvari: uzme BROJ iz reda, pita
-' modStornoDok sme li se, i - ako sme - potvrdi pa izvrsi. Nijedna kapija,
-' nijedno razresavanje ID-a i nijedan upis nisu ovde.
-'
-' Dva tipa traze jos jedan podatak koji se iz broja ne vidi:
-'   REVERSI - koji je od CETIRI smera; smer se nalazi tako sto se pita
-'             koji od njih ima aktivan red pod tim brojem (isti poziv koji
-'             legacy koristi kao proveru postojanja)
-'   IZVOD   - koji racun; isti broj izvoda postoji na vise banaka, pa se
-'             salje "broj/racun" oblik koji ResolveIzvodZaStorno razume
-' Indeks nevidljive kolone identiteta: uvek POSLEDNJA koju je GridCols dodao.
-' Racuna se iz istog niza koji je mreza dobila, pa ne moze da se razidje sa njim.
-Private Function IdentKolona(ByVal tip As String) As Long
-    If Len(IdKolonaTipa(tip)) = 0 Then Exit Function
-    Dim cols As Variant: cols = GridCols(tip)
-    If Not IsArray(cols) Then Exit Function
-    IdentKolona = UBound(cols) + 1
-End Function
-
-' Kanonski identitet KLIKNUTOG reda. Prazno = tip ga nema (revers, izvod) ili
-' zatecen zapis bez generacije -- tada nizvodno vazi fail-closed kapija nad
-' jednoznacnoscu broja, ista koju koristi i prevezivanje.
-Private Function IdentIzReda(ByVal red As Long, ByVal tip As String) As String
-    Dim k As Long: k = IdentKolona(tip)
-    If k = 0 Then Exit Function
-    On Error Resume Next
-    IdentIzReda = Trim$(CStr(modOtkupUI.GridCell(red, k)))
-End Function
-
-Private Function StornoRedF8(ByVal red As Long) As Boolean
-    Dim tip As String, kljuc As String, opcija As String, docID As String
-    Dim razlog As String, poruka As String, odg As VbMsgBoxResult
-    On Error GoTo EH
-    tip = StornoTipKey()
-    ' KLJUC je ono cime se dokument identifikuje prema modStornoDok, OPCIJA
-    ' ono sto se iz kljuca ne vidi. Za osam tipova je kljuc prosto broj iz
-    ' prve kolone; izvod je izuzetak - vidi ispod.
-    kljuc = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    If Len(kljuc) = 0 Then
-        modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_NEMA_REDA"), True
-        Exit Function
-    End If
-
-    ' IDENTITET IZABRANOG REDA. Operater je kliknuo konkretan dokument; broj je
-    ' ono sto vidi, ali nizvodno se dokument bira po OVOME. Bez toga bi svaki
-    ' sloj ispod ponovo trazio po broju i mogao da nadje tudji dokument istog
-    ' broja -- a kod REZIM "RESI KASNIJE" se guarded writer uopste ne zove, pa
-    ' bi se napravio TRAJAN recovery zapis nad pogresnim dokumentom.
-    docID = IdentIzReda(red, tip)
-
-    If tip = STIP_REVERSI Then opcija = ReversSmerZaBroj(kljuc)
-    ' Izvod: broj sam nije kljuc (isti broj postoji na vise banaka), a treca
-    ' kolona liste JESTE broj racuna - odatle "broj/racun" oblik koji
-    ' ResolveIzvodZaStorno razume. Cita se iz reda, ne iz mape: mapa bi kod
-    ' dva izvoda istog broja zapamtila samo jedan racun.
-    If tip = STIP_IZVOD Then _
-        kljuc = IzvodKljuc(kljuc, Trim$(CStr(modOtkupUI.GridCell(red, 3))))
-
-    ' Kapija PRE potvrde: operater vidi razlog, a ne tih neuspeh posle "Da".
-    razlog = modStornoDok.StornoRazlog(tip, kljuc, opcija, docID)
-    If Len(razlog) > 0 Then
-        MsgBox razlog, vbExclamation, APP_NAME
-        Exit Function
-    End If
-
-    ' FRAMEWORK ISPRAVKE: za cetiri tipa sa nizvodnim tokom storno nije
-    ' Da/Ne nego izbor STA storno poslovno znaci. Ako framework preuzme
-    ' dokument, obicna potvrda ispod se preskace.
-    If IspravkaPreuzela(tip, kljuc, opcija, docID) Then
-        StornoRedF8 = True
-        Exit Function
-    End If
-
-    If tip = STIP_IZVOD Then
-        ' Izvod pada u CELOSTI, pa potvrda bez pregleda ne bi bila
-        ' informisana; posle nje se bira ishod za staging redove. Taj izbor
-        ' JESTE odluka operatera o PDF-u, ne pravilo - zato je ovde, a ne u
-        ' modStornoDok.
-        If MsgBox(modStornoDok.StornoPregled(tip, kljuc, "") & vbCrLf & vbCrLf & _
-                  modPoruke.Poruka("STORNO_ASK_IZVOD"), vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
-        odg = MsgBox(modPoruke.Poruka("STORNO_ASK_IZVOD_PDF"), vbQuestion + vbYesNoCancel, APP_NAME)
-        If odg = vbCancel Then Exit Function
-        opcija = IIf(odg = vbYes, IZVOD_STORNO_REMAP, IZVOD_STORNO_REIMPORT)
-        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
-            MsgBox poruka, vbExclamation, APP_NAME
-            Exit Function
-        End If
-        ' StornoIzvod_TX vraca izvestaj (koliko redova, koji ishod) - to je
-        ' vise nego sto toast moze da pokaze.
-        MsgBox poruka, vbInformation, APP_NAME
-    Else
-        If MsgBox(modPoruke.Poruka("STORNO_ASK") & " " & modStornoDok.TipNaziv(tip, opcija) & _
-                  " " & kljuc & "?", vbQuestion + vbYesNo, APP_NAME) = vbNo Then Exit Function
-        If Not modStornoDok.StornoIzvrsi(tip, kljuc, opcija, poruka, docID) Then
-            modOtkupUI.ShowToast poruka, True
-            Exit Function
-        End If
-        ' Zbirna moze da vrati UPOZORENJE uz uspeh (aktivna prijemnica ostaje
-        ' vezana za storniranu zbirnu) - toast bi ga progutao, pa ide u MsgBox.
-        If InStr(1, poruka, modPoruke.Poruka("STORNO_MSG_OK"), vbBinaryCompare) = 1 Then
-            modOtkupUI.ShowToast poruka & " " & kljuc, False
-        Else
-            MsgBox poruka, vbExclamation, APP_NAME
-        End If
-    End If
-
-    Scr_ResetCache
-    StornoRedF8 = True
-    Exit Function
-EH:
-    LogErr "modScrDokumenti.StornoRedF8"
-    modOtkupUI.ShowToast modPoruke.Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-'------------------------------------------- FRAMEWORK ISPRAVKE (Faza D/13)
-' Vraca True ako je framework preuzeo dokument - tada obican storno ne ide.
-'
-' Dva razlicita pitanja, jer su dva razlicita posla:
-'   REVERS   nema nizvodni tok, ali IMA poslovnu razliku storno vs ispravka
-'            (isti fizicki dogadjaj, pogresno unet) -> kratko pitanje
-'   ostali   pun izbor moda, i to SAMO kad StornoTraziIzborModa kaze da ima
-'            o cemu da se odlucuje (prijemnica, palete, faktura, blokovi)
-'
-' Sve poslovne posledice racuna modStornoFlow kroz modStornoDok; ovde je
-' samo redosled pitanja i ono sto se posle njih pokaze operateru.
-Private Function IspravkaPreuzela(ByVal tip As String, ByVal broj As String, _
-                                  ByVal opcija As String, _
-                                  Optional ByVal docID As String = "") As Boolean
-    Dim mode As String, res As Object
-    On Error GoTo EH
-    If Len(modStornoDok.TipUFlowDoc(tip)) = 0 Then Exit Function
-
-    If tip = STIP_REVERSI Then
-        Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija, docID) & vbCrLf & vbCrLf & _
-                           Poruka("STORNO_ASK_REVERS"), vbQuestion + vbYesNoCancel, APP_NAME)
-            Case vbYes:    Exit Function          ' obican storno -> pusti dalje
-            Case vbCancel: IspravkaPreuzela = True: Exit Function
-            Case Else:     mode = SV_MODE_ISPRAVKA
-        End Select
-    Else
-        If Not modStornoDok.StornoTraziIzborModa(tip, broj, opcija, docID) Then Exit Function
-        mode = IzborModa(tip, broj, opcija, docID)
-        If Len(mode) = 0 Then
-            IspravkaPreuzela = True               ' operater je odustao
-            Exit Function
-        End If
-    End If
-
-    IspravkaPreuzela = True
-    Set res = IzvrsiMod(tip, broj, opcija, mode, docID)
-    If res Is Nothing Then
-        modOtkupUI.ShowToast Poruka("STORNO_ERR_NEPOZNAT_TIP") & " " & tip, True
-        Exit Function
-    End If
-
-    If CBool(res("needsForm")) Then
-        ' ISPRAVKA: stari dokument je stigao do storna, novi se tek unosi.
-        ' Rezim se menja PRE prefilla - SelectMode cisti formu, pa bi
-        ' obrnut redosled obrisao upravo prepisane vrednosti.
-        OtvoriIspravku tip, broj, CStr(res("correctionID"))
-        MsgBox CStr(res("message")) & vbCrLf & vbCrLf & _
-               Poruka("STORNO_MSG_ISPRAVKA_DALJE"), vbInformation, APP_NAME
-    ElseIf CBool(res("success")) Then
-        MsgBox CStr(res("message")), vbInformation, APP_NAME
-        ' Blokovi se storniraju POSLE dokumenta: kapija gleda da li je
-        ' roditeljska otpremnica jos aktivna, a to zavisi od toga sta je
-        ' upravo odradjeno.
-        StornirajBlokoveAko tip, broj, opcija, mode, CStr(res("correctionID")), docID
-    Else
-        MsgBox CStr(res("message")), vbExclamation, APP_NAME
-    End If
-    Scr_ResetCache
-    Exit Function
-EH:
-    LogErr "modScrDokumenti.IspravkaPreuzela"
-    IspravkaPreuzela = True
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
-End Function
-
-' Izbor jednog od cetiri moda. Cetiri odgovora ne staju u jedan MsgBox, pa
-' idu u dva koraka: prvo ISPRAVKA (najcesci slucaj - pogresan unos), pa
-' ostala tri. Prazan povratak = operater je odustao.
-'
-' Legacy ovo pokazuje kao overlay panel preko celog ekrana, sa multiselect
-' listom otkupnih blokova i prekidacem "ne diraj palete". Panel NIJE prenet
-' (blok-multiselect je stavka 14); ovde je pitanje, ne panel, pa je i
-' blok-storno nedostupan - o tome govori i sam tekst prvog koraka.
-Private Function IzborModa(ByVal tip As String, ByVal broj As String, _
-                           ByVal opcija As String, _
-                           Optional ByVal docID As String = "") As String
-    On Error Resume Next
-    Select Case MsgBox(modStornoDok.StornoPregledLanca(tip, broj, opcija, docID) & vbCrLf & vbCrLf & _
-                       Poruka("STORNO_ASK_MOD_1"), vbQuestion + vbYesNoCancel, APP_NAME)
-        Case vbYes:    IzborModa = SV_MODE_ISPRAVKA: Exit Function
-        Case vbCancel: Exit Function
-    End Select
-    Select Case MsgBox(Poruka("STORNO_ASK_MOD_2"), vbQuestion + vbYesNoCancel, APP_NAME)
-        Case vbYes:  IzborModa = SV_MODE_DUPLI
-        Case vbNo:   IzborModa = SV_MODE_PONISTENJE
-        Case Else:   IzborModa = SV_MODE_RESI_KASNIJE
-    End Select
-End Function
-
-' Izvrsenje izabranog moda, sa dva pitanja koja pripadaju samo njemu.
-'
-' PONISTENJE se NAMERNO izvrsava u dva poziva: prvi vrati blocked=True i
-' pun spisak posledica, i tek posle svesne potvrde ide drugi sa
-' forceConfirm. Spisak se tako pravi PRE nego sto se ista promeni.
-Private Function IzvrsiMod(ByVal tip As String, ByVal broj As String, _
-                           ByVal opcija As String, ByVal mode As String, _
-                           Optional ByVal docID As String = "") As Object
-    Dim res As Object, neDiraj As Boolean
-    On Error GoTo EH
-    ' "Ne diraj palete" ima smisla samo tamo gde palete vise za dokument, i
-    ' samo kad dokument nestaje bez naslednika. Uz ISPRAVKU se palete
-    ' prevezuju na novi dokument, pa se pitanje ne postavlja.
-    If tip = STIP_PRIJEMNICA And (mode = SV_MODE_DUPLI Or mode = SV_MODE_PONISTENJE) Then
-        neDiraj = (MsgBox(Poruka("STORNO_ASK_PALETE"), vbQuestion + vbYesNo, APP_NAME) = vbYes)
-    End If
-
-    Set res = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, False, neDiraj, docID)
-    If res Is Nothing Then Exit Function
-    If Not CBool(res("blocked")) Then
-        Set IzvrsiMod = res
-        Exit Function
-    End If
-
-    If MsgBox(CStr(res("message")) & vbCrLf & vbCrLf & Poruka("STORNO_ASK_PONISTI"), _
-              vbExclamation + vbYesNo, APP_NAME) <> vbYes Then
-        Set res = Nothing
-        Set IzvrsiMod = OdustanakRes()
-        Exit Function
-    End If
-    Set IzvrsiMod = modStornoDok.StornoIzvrsiMod(tip, broj, opcija, mode, True, neDiraj, docID)
-    Exit Function
-EH:
-    LogErr "modScrDokumenti.IzvrsiMod"
-End Function
-
-' Dodatni storno otkupnih blokova koji vise o dokumentu.
-'
-' Dozvoljen je SAMO uz DUPLI/PONISTENJE - roba tada stvarno nestaje. Uz
-' ISPRAVKU blokovi ostaju: storno pa ponovni unos dokumenta je celina, a
-' blokovi se prevezuju na novi. Uz RESI KASNIJE se ne dira nista.
-'
-' RAZLIKA U ODNOSU NA LEGACY, i to je jedino sto od panela nije preneto:
-' legacy nudi multiselect - operater cekira KOJE blokove stornira, a
-' ostali se oslobadjaju. Ovde je sve-ili-nista, ali se pre pitanja ispise
-' pun spisak (broj, klasa, kilogrami, kooperant), pa operater vidi tacno
-' nad cim odlucuje. Delimican izbor ostaje na ekranu Oporavak, gde
-' izgubljeni blokovi imaju svoju listu i radnju po redu.
-'
-' Kapija BlockStornoDriftReason ostaje ista (ADR-0001): blok vezan za
-' ZIVU otpremnicu se ne stornira, jer bi je ostavio precenjenu.
-Private Sub StornirajBlokoveAko(ByVal tip As String, ByVal broj As String, _
-                                ByVal opcija As String, ByVal mode As String, _
-                                ByVal correctionID As String, _
-                                ByVal docID As String)
-    Dim dt As String, blokovi As Collection, ids As Collection
-    Dim spisak As String, i As Long, red As Variant, n As Long, razlog As String
-    On Error GoTo EH
-    If mode <> SV_MODE_DUPLI And mode <> SV_MODE_PONISTENJE Then Exit Sub
-    dt = modStornoDok.TipUFlowDoc(tip)
-    If Len(dt) = 0 Then Exit Sub
-
-    ' Identitet izabranog F8 reda ide i ovde: spisak koji operater potvrdjuje
-    ' zavrsava u StornoSelectedBlocks_TX, dakle u MUTACIJI.
-    Set blokovi = GetStornoBlockRows(dt, broj, opcija, docID)
-    If blokovi Is Nothing Then Exit Sub
-    If blokovi.count = 0 Then Exit Sub
-
-    For i = 1 To blokovi.count
-        red = blokovi(i)
-        spisak = spisak & vbCrLf & "  " & CStr(red(1)) & "  " & ChrW(183) & " Kl." & _
-                 CStr(red(3)) & "  " & ChrW(183) & " " & CStr(red(2)) & " kg  " & _
-                 ChrW(183) & " " & CStr(red(4))
-    Next i
-
-    If MsgBox(Poruka("STORNO_ASK_BLOKOVI_1") & " " & blokovi.count & _
-              Poruka("STORNO_ASK_BLOKOVI_2") & spisak & vbCrLf & vbCrLf & _
-              Poruka("STORNO_ASK_BLOKOVI_3"), _
-              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Sub
-
-    Set ids = New Collection
-    For i = 1 To blokovi.count
-        red = blokovi(i)
-        ids.Add CStr(red(0))
-    Next i
-
-    razlog = BlockStornoDriftReason(dt, mode, ids)
-    If Len(razlog) > 0 Then
-        MsgBox razlog, vbExclamation, APP_NAME
-        Exit Sub
-    End If
-
-    n = StornoSelectedBlocks_TX(ids)
-    If n > 0 Then
-        modOtkupUI.ShowToast Poruka("STORNO_MSG_BLOKOVI_OK") & " " & n, False
-        Exit Sub
-    End If
-
-    ' Storno dokumenta je vec komitovan; ako blok-storno padne, posao se ne
-    ' gubi u poruci koja prodje nego ostaje vidljiv kao MANUAL zadatak.
-    MsgBox Poruka("STORNO_ERR_BLOKOVI"), vbExclamation, APP_NAME
-    If Len(correctionID) > 0 Then
-        modStornoContext.MarkCorrectionManual correctionID, _
-            "Storniraj otkupne blokove rucno.", _
-            "Posle " & mode & " nad " & dt & " " & broj & " storno blokova nije uspeo."
-    End If
-    Exit Sub
-EH:
-    LogErr "modScrDokumenti.StornirajBlokoveAko"
-End Sub
-
-' Rezultat "operater je odustao" - isti oblik koji vraca modStornoFlow, da
-' pozivalac ne mora da razlikuje odustajanje od neuspeha.
-Private Function OdustanakRes() As Object
-    Dim r As Object
-    Set r = CreateObject("Scripting.Dictionary")
-    r("success") = False
-    r("blocked") = False
-    r("needsForm") = False
-    r("correctionID") = ""
-    r("message") = Poruka("STORNO_MSG_ODUSTANAK")
-    Set OdustanakRes = r
-End Function
-
-' Otvori unos zamenskog dokumenta: predji u njegov rezim, pa prepisi polja
-' iz stornirane. Redosled je obavezan - SelectMode cisti formu.
-'
-' Prefill polazi od PK-a stornirane (OldDocID iz correction context-a), ne
-' od broja: broj nije globalno jedinstven.
-Private Sub OtvoriIspravku(ByVal tip As String, ByVal broj As String, _
-                           ByVal correctionID As String)
-    Dim spec As String
-    On Error Resume Next
-    modOtkupUI.IdiNaRezim RezimZaTip(tip)
-    spec = modStornoDok.PrefillIzStorniranog(tip, broj, modStornoDok.StorniraniDocID(correctionID))
-    If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
-End Sub
-
-' Rezim u kome se unosi zamenski dokument. Revers ide u F7; smer operater
-' bira sam, jer prefill reversa ne postoji ni u legacy.
-Private Function RezimZaTip(ByVal tip As String) As String
-    Select Case tip
-        Case STIP_OTKUP:      RezimZaTip = "F1"
-        Case STIP_OTPREMNICA: RezimZaTip = "F2"
-        Case STIP_ZBIRNA:     RezimZaTip = "F3"
-        Case STIP_PRIJEMNICA: RezimZaTip = "F4"
-        Case STIP_REVERSI:    RezimZaTip = "F7"
-        Case Else:            RezimZaTip = ActiveMode
-    End Select
-End Function
-
-' Koji je od cetiri smera reversa aktivan pod ovim brojem. Cetiri smera
-' dele jedan brojevni niz (KIND_REV), pa broj sam ne kaze koji je red u
-' tblAmbalaza; pita se istom rutinom kojom legacy proverava postojanje.
-Private Function ReversSmerZaBroj(ByVal broj As String) As String
-    Dim smerovi As Variant, s As Variant
-    On Error Resume Next
-    smerovi = Array(DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
-                    DOK_TIP_OM_ULAZ_FIRMA, DOK_TIP_OM_IZLAZ_FIRMA)
-    For Each s In smerovi
-        If ActiveAmbalazaDokExists(broj, CStr(s)) Then
-            ReversSmerZaBroj = CStr(s)
-            Exit Function
-        End If
-    Next s
-End Function
-
-' "broj/racun" - jednoznacan kljuc izvoda. Bez racuna se salje goli broj, pa
-' ResolveIzvodZaStorno sam trazi racun (i odbije ako ih ima vise) - isto sto
-' se desi kad operater u legacy formi ukuca samo broj.
-Private Function IzvodKljuc(ByVal broj As String, ByVal racun As String) As String
-    If Len(racun) = 0 Then IzvodKljuc = broj Else IzvodKljuc = broj & "/" & racun
 End Function
 
 '---------------------------------------- HLADNJACA ISPRAVKA (Faza D/13)
@@ -1548,7 +1085,6 @@ Public Function ModeIco(ByVal mode As String) As Long
         Case "F5": ModeIco = IC_ISPLATA     ' Upload     - novac izlazi
         Case "F6": ModeIco = IC_UPLATA      ' Download   - novac ulazi
         Case "F7": ModeIco = IC_REVERS      ' privremeno - ceka izbor
-        Case "F8": ModeIco = IC_STORNO      ' Undo       - storno
         Case Else: ModeIco = IC_OTKUP
     End Select
 End Function
@@ -1574,7 +1110,7 @@ End Function
 ' Revers i izvod nisu ovde: revers vec ide uz SMER (cetiri smera dele brojevni
 ' niz), a izvod uz BROJ RACUNA -- oba su vec kompoziti koji razlucuju dokument.
 Public Function IdKolonaTipa(ByVal tk As String) As String
-    Select Case EffKey(tk)
+    Select Case tk
         Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA": IdKolonaTipa = COL_GENERACIJA_ID
         Case "FAKTURA":                                     IdKolonaTipa = COL_FAK_ID
         Case "AMB_ISPLATE", "AMB_UPLATE":                   IdKolonaTipa = COL_NOV_ID
@@ -1582,11 +1118,8 @@ Public Function IdKolonaTipa(ByVal tk As String) As String
     End Select
 End Function
 
-Public Function GridCols(ByVal mk As String) As Variant
+Public Function GridCols(ByVal mk As String, Optional ByVal saIdentitetom As Boolean = False) As Variant
     Dim c As Collection: Set c = New Collection
-    ' F8 pozajmljuje kolone tipa koji pokazuje - odatle i naslov "STORNO"
-    ' vise nije sinonim za otpremnicu (v6-ui-119).
-    mk = EffKey(mk)
     ' Izvod nije red tabele nego GRUPA redova (jedan izvod = mnogo stavki),
     ' pa mu kolone daje sopstvena rutina, kao listi otpremnica u F1.
     If mk = "IZVOD" Then
@@ -1598,7 +1131,7 @@ Public Function GridCols(ByVal mk As String) As Variant
     c.Add "OTKUI_HD_PARTNER|" & ColPartner(mk) & "|part|0|1"
 
     Select Case mk
-        Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA", "STORNO"
+        Case "OTKUP", "OTPREMNICA", "ZBIRNA", "PRIJEMNICA"
             c.Add "OTKUI_HD_VRSTA|" & ColVrsta(mk) & "|txt|72|2"
             ' 104 pt = najduza realna sorta ("Willamette teren") na TS_BODY;
             ' visak uzima fleksibilna kolona PARTNER, ostale se ne pomeraju
@@ -1640,7 +1173,7 @@ Public Function GridCols(ByVal mk As String) As Variant
 
     c.Add "OTKUI_HD_STATUS||pill|88|1"
 
-    ' KANONSKI IDENTITET izabranog reda -- samo u F8, i NEVIDLJIVO.
+    ' KANONSKI IDENTITET izabranog reda -- samo za Storno, i NEVIDLJIVO.
     '
     ' Zasto kolona a ne mapa sa strane: ljuska sortira redove POSLE Scr_Rows
     ' (SortedView), pa izlazni indeks nije indeks u mrezi -- mapa "red -> ID"
@@ -1653,10 +1186,17 @@ Public Function GridCols(ByVal mk As String) As Variant
     ' jer mColN broji sve deklarisane kolone. Sirina 0 je bez znacaja dok je
     ' kolona nevidljiva, ali stoji da flex-raspodela ne bi imala sta da uzme.
     '
-    ' Dodaje se SAMO za F8: GridCols je zajednicki za rezim unosa i za storno
-    ' centar istog tipa (F4 i F8/Prijemnica daju isti mk), pa bi bezuslovno
-    ' dodavanje menjalo i liste ostalih rezima.
-    If modOtkupUI.ActiveMode = "F8" Then
+    ' Kapija je ARGUMENT, ne ActiveMode. Do v6-ui-143 je ovde stajalo
+    ' "If modOtkupUI.ActiveMode = "F8"", sto je radilo dok je storno bio rezim
+    ' te iste ljuske. Ekran nema rezim: ostavljena, ta provera bi cutke bila
+    ' False, kolona bi nestala, IdentIzReda bi vracao prazno i ceo lanac
+    ' identiteta iz #198 bi pao na fail-closed po broju -- a nijedna suite to
+    ' ne bi videla, jer testovi identiteta mere sloj ISPOD mreze.
+    '
+    ' Kapija i dalje postoji (a ne "uvek dodaj"): GridCols je zajednicki za
+    ' rezim unosa i za Storno nad istim tipom (F4 i Storno/Prijemnica daju
+    ' isti mk), pa bi bezuslovno dodavanje menjalo i liste unosnih rezima.
+    If saIdentitetom Then
         If Len(IdKolonaTipa(mk)) > 0 Then
             c.Add "OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
         End If
@@ -1673,7 +1213,7 @@ End Function
 Public Function ColBroj(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                   ColBroj = COL_OTK_BR_DOK
-        Case "OTPREMNICA", "STORNO":    ColBroj = COL_OTP_BROJ
+        Case "OTPREMNICA":              ColBroj = COL_OTP_BROJ
         Case "ZBIRNA":                  ColBroj = COL_ZBR_BROJ
         Case "PRIJEMNICA":              ColBroj = COL_PRJ_BROJ
         Case "AMB_ISPLATE", "AMB_UPLATE": ColBroj = COL_NOV_BROJ_DOK
@@ -1685,7 +1225,7 @@ End Function
 Public Function ColDatum(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                   ColDatum = COL_OTK_DATUM
-        Case "OTPREMNICA", "STORNO":    ColDatum = COL_OTP_DATUM
+        Case "OTPREMNICA":              ColDatum = COL_OTP_DATUM
         Case "ZBIRNA":                  ColDatum = COL_ZBR_DATUM
         Case "PRIJEMNICA":              ColDatum = COL_PRJ_DATUM
         Case "AMB_ISPLATE", "AMB_UPLATE": ColDatum = COL_NOV_DATUM
@@ -1697,7 +1237,7 @@ End Function
 Public Function ColPartner(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                   ColPartner = COL_OTK_KOOPERANT
-        Case "OTPREMNICA", "STORNO":    ColPartner = COL_OTP_STANICA
+        Case "OTPREMNICA":              ColPartner = COL_OTP_STANICA
         Case "ZBIRNA":                  ColPartner = COL_ZBR_KUPAC
         Case "PRIJEMNICA":              ColPartner = COL_PRJ_KUPAC
         Case "AMB_ISPLATE", "AMB_UPLATE": ColPartner = COL_NOV_PARTNER
@@ -1709,7 +1249,7 @@ End Function
 Public Function ColVrsta(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColVrsta = COL_OTK_VRSTA
-        Case "OTPREMNICA", "STORNO": ColVrsta = COL_OTP_VRSTA
+        Case "OTPREMNICA":           ColVrsta = COL_OTP_VRSTA
         Case "ZBIRNA":               ColVrsta = COL_ZBR_VRSTA
         Case "PRIJEMNICA":           ColVrsta = COL_PRJ_VRSTA
     End Select
@@ -1718,7 +1258,7 @@ End Function
 Public Function ColSorta(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColSorta = COL_OTK_SORTA
-        Case "OTPREMNICA", "STORNO": ColSorta = COL_OTP_SORTA
+        Case "OTPREMNICA":           ColSorta = COL_OTP_SORTA
         Case "ZBIRNA":               ColSorta = COL_ZBR_SORTA
         Case "PRIJEMNICA":           ColSorta = COL_PRJ_SORTA
     End Select
@@ -1727,7 +1267,7 @@ End Function
 Public Function ColKlasa(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKlasa = COL_OTK_KLASA
-        Case "OTPREMNICA", "STORNO": ColKlasa = COL_OTP_KLASA
+        Case "OTPREMNICA":           ColKlasa = COL_OTP_KLASA
         Case "ZBIRNA":               ColKlasa = COL_ZBR_KLASA
         Case "PRIJEMNICA":           ColKlasa = COL_PRJ_KLASA
     End Select
@@ -1736,7 +1276,7 @@ End Function
 Public Function ColKolicina(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolicina = COL_OTK_KOLICINA
-        Case "OTPREMNICA", "STORNO": ColKolicina = COL_OTP_KOLICINA
+        Case "OTPREMNICA":           ColKolicina = COL_OTP_KOLICINA
         Case "ZBIRNA":               ColKolicina = COL_ZBR_KOLICINA
         Case "PRIJEMNICA":           ColKolicina = COL_PRJ_KOLICINA
     End Select
@@ -1745,7 +1285,7 @@ End Function
 Public Function ColKolAmb(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColKolAmb = COL_OTK_KOL_AMB
-        Case "OTPREMNICA", "STORNO": ColKolAmb = COL_OTP_KOL_AMB
+        Case "OTPREMNICA":           ColKolAmb = COL_OTP_KOL_AMB
         Case "ZBIRNA":               ColKolAmb = COL_ZBR_KOL_AMB
         Case "PRIJEMNICA":           ColKolAmb = COL_PRJ_KOL_AMB
     End Select
@@ -1754,7 +1294,7 @@ End Function
 Public Function ColTipAmb(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColTipAmb = COL_OTK_TIP_AMB
-        Case "OTPREMNICA", "STORNO": ColTipAmb = COL_OTP_TIP_AMB
+        Case "OTPREMNICA":           ColTipAmb = COL_OTP_TIP_AMB
         Case "ZBIRNA":               ColTipAmb = COL_ZBR_TIP_AMB
         Case "PRIJEMNICA":           ColTipAmb = COL_PRJ_TIP_AMB
     End Select
@@ -1764,7 +1304,7 @@ End Function
 Public Function ColCena(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColCena = COL_OTK_CENA
-        Case "OTPREMNICA", "STORNO": ColCena = COL_OTP_CENA
+        Case "OTPREMNICA":           ColCena = COL_OTP_CENA
         Case "PRIJEMNICA":           ColCena = COL_PRJ_CENA
     End Select
 End Function
@@ -1772,7 +1312,7 @@ End Function
 Public Function ColBrojZbirne(ByVal m As String) As String
     Select Case m
         Case "OTKUP":                ColBrojZbirne = COL_OTK_BROJ_ZBIRNE
-        Case "OTPREMNICA", "STORNO": ColBrojZbirne = COL_OTP_BROJ_ZBIRNE
+        Case "OTPREMNICA":           ColBrojZbirne = COL_OTP_BROJ_ZBIRNE
         Case "PRIJEMNICA":           ColBrojZbirne = COL_PRJ_BROJ_ZBIRNE
     End Select
 End Function
@@ -1786,13 +1326,12 @@ End Function
 
 ' 0=broj 1=datum 2=partner 3=kolicina 4=cena 5=brojZbirne 6=direktna vrednost
 Public Function ColumnSpec(ByVal mk As String) As Variant
-    mk = EffKey(mk)
     Select Case mk
         Case "OTKUP"
             ' partner na otkupu je KOOPERANT (ranije je stajao BrojOtpremnice)
             ColumnSpec = Array(COL_OTK_BR_DOK, COL_OTK_DATUM, COL_OTK_KOOPERANT, _
                                COL_OTK_KOLICINA, COL_OTK_CENA, COL_OTK_BROJ_ZBIRNE, "")
-        Case "OTPREMNICA", "STORNO"
+        Case "OTPREMNICA"
             ColumnSpec = Array(COL_OTP_BROJ, COL_OTP_DATUM, COL_OTP_STANICA, _
                                COL_OTP_KOLICINA, COL_OTP_CENA, COL_OTP_BROJ_ZBIRNE, "")
         Case "ZBIRNA"
@@ -1842,19 +1381,10 @@ End Function
 ' promet iz tblNovac (isplate kooperantu / uplate od kupca) - isti smer kao
 ' frmDokumenta frame-ovi "Ulaz OM (Novac kooperantu)" i "Izlaz Kupci
 ' (Novac od kupca)".
+' Tabela rezima. Ista tabela do koje se stize preko kljuca tipa -- rezim je
+' samo drugo ime za tip koji se u njemu unosi, pa ovde nema drugog spiska.
 Public Function ModeTable(ByVal mode As String) As String
-    Select Case mode
-        Case "F1": ModeTable = TBL_OTKUP
-        Case "F2": ModeTable = TBL_OTPREMNICA
-        Case "F3": ModeTable = TBL_ZBIRNA
-        Case "F4": ModeTable = TBL_PRIJEMNICA
-        Case "F5": ModeTable = TBL_NOVAC
-        Case "F6": ModeTable = TBL_NOVAC
-        Case "F7": ModeTable = TBL_AMBALAZA
-        ' F8 nema svoju tabelu - cita onu koja pripada IZABRANOM tipu.
-        Case "F8": ModeTable = TabelaTipa(StornoTipKey())
-        Case Else: ModeTable = TBL_OTKUP
-    End Select
+    ModeTable = TabelaTipa(modeKey(mode))
 End Function
 
 ' Tabela po kljucu tipa. Sedam tipova su rezimi F1..F7 i vec imaju svoju
@@ -1882,7 +1412,6 @@ Public Function modeKey(ByVal mode As String) As String
         Case "F5": modeKey = "AMB_ISPLATE"
         Case "F6": modeKey = "AMB_UPLATE"
         Case "F7": modeKey = "REVERSI"
-        Case "F8": modeKey = "STORNO"
         Case Else: modeKey = "OTKUP"
     End Select
 End Function
@@ -1897,14 +1426,12 @@ Public Function ColFakturaID(ByVal mk As String) As String
 End Function
 
 Public Function ModeHasFaktura(ByVal mode As String) As Boolean
-    ModeHasFaktura = (Len(ColFakturaID(EffKey(modeKey(mode)))) > 0)
+    ModeHasFaktura = (Len(ColFakturaID(modeKey(mode))) > 0)
 End Function
 
-' Pojam "bez zbirne" postoji samo tamo gde dokument NOSI broj zbirne. F8 je
-' ovde po TIPU, ne po rezimu: dok je "STORNO" bio sinonim za otpremnicu, ovo
-' je za F8 uvek vracalo True - i za novac, gde tblNovac nema BrojZbirne.
+' Pojam "bez zbirne" postoji samo tamo gde dokument NOSI broj zbirne.
 Public Function ModeHasZbirna(ByVal mode As String) As Boolean
-    Select Case EffKey(modeKey(mode))
+    Select Case modeKey(mode)
         Case "OTKUP", "OTPREMNICA", "PRIJEMNICA": ModeHasZbirna = True
         Case Else:                                ModeHasZbirna = False
     End Select
@@ -1917,9 +1444,8 @@ Public Function ModeTextCol3(ByVal mode As String) As Boolean
 End Function
 
 ' Jedinica 5. kolone i podnozja: dinar za robu i novac, komad za reverse.
-' Po TIPU, ne po rezimu - F8 nad reversima broji iste komade kao F7.
 Public Function ModeValUnit(ByVal mode As String) As String
-    If EffKey(modeKey(mode)) = "REVERSI" Then
+    If modeKey(mode) = "REVERSI" Then
         ModeValUnit = Poruka("OTKUI_UNIT_KOM")
     Else
         ModeValUnit = Poruka("OTKUI_UNIT_RSD")
@@ -1927,9 +1453,9 @@ Public Function ModeValUnit(ByVal mode As String) As String
 End Function
 
 ' Broji li podnozje komade umesto dinara. Ljuska pita ovo umesto da poredi
-' ActiveMode sa "F7" - inace bi F8 nad reversima sabirao komade a pisao RSD.
+' ActiveMode sa "F7" -- podnozje bi inace sabiralo komade a pisalo RSD.
 Public Function ModeBrojiKomade(ByVal mode As String) As Boolean
-    ModeBrojiKomade = (EffKey(modeKey(mode)) = "REVERSI")
+    ModeBrojiKomade = (modeKey(mode) = "REVERSI")
 End Function
 
 ' Svako kretanje ambalaze je DVOJNI upis - dva reda sa istim brojem i istim
@@ -2026,14 +1552,28 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case "BLOKOVI":    Scr_Rows = RowsBlokovi(q): Exit Function
         Case "IZGUBLJENI": Scr_Rows = RowsIzgubljeni(q): Exit Function
         Case "KOOPERANTI": Scr_Rows = RowsKooperanti(q): Exit Function
-        ' F8, tip "Izvod": jedan izvod je GRUPA redova tblBankaImport, pa se
-        ' ne moze prikazati kroz listu dokumenata (koja je red = dokument).
-        Case "IZVOD":      Scr_Rows = RowsIzvodi(filter, q): Exit Function
     End Select
-    Scr_Rows = RowsDokumenti(filter, q)
+    ' Tip dolazi iz rezima -- ovaj ekran pokazuje dokument koji se u njemu
+    ' unosi. Identitet ne trazi: nevidljiva kolona postoji zbog radnje storna,
+    ' a ovde radnje storna nad tudjim tipom nema.
+    Scr_Rows = RedoviZaTip(modeKey(ActiveMode), filter, q)
 End Function
 
-Private Function RowsDokumenti(ByVal filter As String, ByVal q As String) As Variant
+' Lista dokumenata JEDNOG TIPA. Javna i parametrizovana tipom, jer je ista
+' lista potrebna dvama ekranima: unosni rezim pokazuje svoj tip, a Storno
+' pokazuje tip koji je operater izabrao cipom.
+'
+' Do v6-ui-143 je ovo bilo Private i citalo ActiveMode na tri mesta (tabela,
+' kljuc tipa, recnik partnera), pa je "koji tip" dolazilo iz rezima ljuske.
+' Kad je storno postao svoj ekran, rezim vise ne kaze nista o tipu -- a kopija
+' ovih 250 linija u ekranski modul bi bila drugo mesto na kome se odlucuje
+' sta je kolona "partner". Zato tip ulazi kao argument.
+'
+' saIdentitetom dodaje NEVIDLJIVU kolonu kanonskog identiteta (v. GridCols).
+' Trazi je samo Storno: unosni rezimi je ne prikazuju i ne koriste, a
+' bezuslovno dodavanje bi menjalo sirinu mreze svima.
+Public Function RedoviZaTip(ByVal tk As String, ByVal filter As String, ByVal q As String, _
+                            Optional ByVal saIdentitetom As Boolean = False) As Variant
     Dim src As Variant, r As Long, n As Long, keep As Boolean, nRows As Long
     Dim outA() As Variant, c As Long, mk As String, tblName As String
     Dim cols As Variant, colN As Long
@@ -2047,9 +1587,18 @@ Private Function RowsDokumenti(ByVal filter As String, ByVal q As String) As Var
     Dim mKoop As Object, mStan As Object, mKup As Object
     Dim rev As Boolean, kanal As Boolean
 
+    ' Izvod nije red tabele nego GRUPA redova (jedan izvod = mnogo stavki), pa
+    ' se ne moze prikazati kroz listu dokumenata (koja je red = dokument).
+    ' Dispecer stoji OVDE, a ne kod pozivaoca: tada ekran zna samo "daj mi
+    ' redove ovog tipa" i ne mora da pamti koji je tip izuzetak.
+    If tk = "IZVOD" Then
+        RedoviZaTip = RowsIzvodi(filter, q)
+        Exit Function
+    End If
+
     On Error GoTo EH
     mStep = "start"
-    tblName = ModeTable(ActiveMode)
+    tblName = TabelaTipa(tk)
     ' suzavanje iz panela "Filteri" i danasnji datum drzi ljuska - ekran ih
     ' cita, ne pamti
     fltV = modOtkupUI.FltVrsta()
@@ -2072,17 +1621,17 @@ Private Function RowsDokumenti(ByVal filter As String, ByVal q As String) As Var
     End If
 
     mStep = "GridCols"
-    ' EffKey: u F8 je "STORNO" samo ime rezima; sve odluke ispod (koje
-    ' kolone, koji recnik partnera, ima li placanja) pripadaju IZABRANOM
-    ' tipu. Do v6-ui-118 je ovde stajao goli modeKey, pa je F8 mogao da
-    ' cita samo tblOtpremnica.
+    ' Sve odluke ispod (koje kolone, koji recnik partnera, ima li placanja)
+    ' pripadaju TIPU koji je pozivalac zatrazio. Do v6-ui-118 je ovde stajao
+    ' goli modeKey pa je storno mogao da cita samo tblOtpremnica; do
+    ' v6-ui-143 je stajao EffKey nad ActiveMode, pa je tip dolazio iz rezima.
     '
     ' Nekadasnja "druga brana" (filter tvrdo na "otkazane") je uklonjena
-    ' NAMERNO: F8 sada stornira, pa mu je radna lista lista AKTIVNIH
+    ' NAMERNO: Storno sada stornira, pa mu je radna lista lista AKTIVNIH
     ' dokumenata. Pregled storniranih ostaje - kroz cip "Otkazane", isti
     ' onaj koji rade svi ostali rezimi.
-    mk = EffKey(modeKey(ActiveMode))
-    cols = GridCols(mk)
+    mk = tk
+    cols = GridCols(mk, saIdentitetom)
     colN = UBound(cols) + 1
 
     ' indeksi izvornih kolona - JEDNOM po pozivu, ne po redu
@@ -2145,7 +1694,7 @@ Private Function RowsDokumenti(ByVal filter As String, ByVal q As String) As Var
     End If
 
     Dim pl As Variant, pmap As Object
-    pl = PartnerLookup(ActiveMode)
+    pl = PartnerLookupTip(tk)
     If Len(CStr(pl(0))) > 0 Then _
         Set pmap = PartnerMap(CStr(pl(0)), CStr(pl(1)), CStr(pl(2)), CStr(pl(3)))
 
@@ -2284,11 +1833,11 @@ NextRow:
     ' ekran. Dok je sortiranje bilo unutar ovog koda, mreza je umela da sortira
     ' samo dokumenta.
     mStep = "OK"
-    RowsDokumenti = Array(cols, outA, n, sumKg, sumVal, Array(cOtk, cBez, cNef))
+    RedoviZaTip = Array(cols, outA, n, sumKg, sumVal, Array(cOtk, cBez, cNef))
     Exit Function
 EH:
     ' greska se NE guta - ReloadGrid je prijavljuje sa imenom koraka
-    Err.Raise Err.Number, "modScrDokumenti.Scr_Rows[" & mStep & "]", Err.description
+    Err.Raise Err.Number, "modScrDokumenti.RedoviZaTip[" & mStep & "]", Err.description
 End Function
 
 Public Function MatchFilterFast(ByVal filter As String, ByVal vDatK As Double, _
@@ -2416,12 +1965,6 @@ Public Function NovacPartner(ByVal entTip As String, ByVal koopID As String, _
 End Function
 
 Public Function PartnerLookup(ByVal mode As String) As Variant
-    ' F8 pozajmljuje i recnik partnera od tipa koji pokazuje - inace bi
-    ' kooperant otkupnog lista bio trazen u tabeli stanica i ostao sirov ID.
-    If mode = "F8" Then
-        PartnerLookup = PartnerLookupTip(StornoTipKey())
-        Exit Function
-    End If
     Select Case mode
         Case "F2":        PartnerLookup = Array(TBL_STANICE, "StanicaID", "Naziv", "")
         Case "F3", "F4":  PartnerLookup = Array(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV, "")
@@ -2563,8 +2106,8 @@ EH:
     Err.Raise Err.Number, "modScrDokumenti.RowsOtpremnice[" & mStep & "]", Err.description
 End Function
 
-'----------------------------------------------------- LISTA: IZVODI (F8)
-' Bankovni izvod je jedini "dokument" u F8 koji NIJE red tabele: tblBankaImport
+'--------------------------------------------------------- LISTA: IZVODI
+' Bankovni izvod je jedini stornirljiv "dokument" koji NIJE red tabele: tblBankaImport
 ' cuva pojedinacne stavke izvoda, a stornira se ceo izvod. Zato ova lista
 ' grupise po (broj izvoda, broj racuna) - isti par koji StornoIzvod_TX trazi.
 ' Broj sam nije kljuc: dve banke mogu imati izvod istog broja.

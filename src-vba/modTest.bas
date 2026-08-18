@@ -189,6 +189,21 @@ Public Sub RunAllTests()
     RunOne 53
     RunOne 54
     RunOne 55
+    RunOne 56
+    RunOne 57
+    RunOne 58
+    RunOne 59
+    RunOne 60
+    RunOne 61
+    RunOne 62
+    RunOne 63
+    RunOne 64
+    RunOne 65
+    RunOne 66
+    RunOne 67
+    RunOne 68
+    RunOne 69
+    RunOne 70
 
     SetTestMode prevMode
     WriteResultFile
@@ -260,7 +275,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 17: TestName = "T_WriterGuard_OdbijaTudjBlok"
         Case 18: TestName = "T_UplataGuard_VecPlacenaFaktura"
         Case 19: TestName = "T_WriterGuard_AvansSaldoOM"
-        Case 20: TestName = "T_F8_TipBiraTabeluIKolone"
+        Case 20: TestName = "T_Storno_TipBiraTabeluIKolone"
         Case 21: TestName = "T_StornoDok_KapijePreUpisa"
         Case 22: TestName = "T_PrefillIzStorniranog_CitaSvojuTabelu"
         Case 23: TestName = "T_FrameworkIspravke_SamoCetiriTipa"
@@ -275,7 +290,22 @@ Private Function TestName(ByVal idx As Long) As String
         Case 32: TestName = "T_VerdiktPoIdentitetu_RelabelSeNePreskace"
         Case 33: TestName = "T_DeljenaPaleta_SuStanarPoIdentitetu"
         Case 34: TestName = "T_IstiBrojRazliciteGeneracije_NijeIstiDokument"
-        Case 55: TestName = "T_StornoNijeUnosniRezim"
+        Case 55: TestName = "T_StornoJeEkranNeRezim"
+        Case 56: TestName = "T_Storno_UgovorIRadnje"
+        Case 57: TestName = "T_StornoEkran_KolonaIdentiteta"
+        Case 58: TestName = "T_StornoEkran_SvakaListaVracaRedove"
+        Case 59: TestName = "T_PrefillBezBroja_PredlaziBroj"
+        Case 60: TestName = "T_StornoImpact_PoIdentitetu"
+        Case 61: TestName = "T_StornoAkcije_RefreshInvalidiraOdluku"
+        Case 62: TestName = "T_StornoBezUvida_NemaAkcije"
+        Case 63: TestName = "T_StornoImpact_SchemaDriftJeInvalidan"
+        Case 64: TestName = "T_StornoImpact_IdentitetNeDegradira"
+        Case 65: TestName = "T_StornoImpact_BlokSekcijaDriftJeInvalidna"
+        Case 66: TestName = "T_StornoEkran_NeCuriGreska"
+        Case 67: TestName = "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan"
+        Case 68: TestName = "T_LogErr_NeVidiErrPosleResumeNext"
+        Case 69: TestName = "T_PorukeUnosa_UpozorenjeNosiOznaku"
+        Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -323,7 +353,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 17: T_WriterGuard_OdbijaTudjBlok
         Case 18: T_UplataGuard_VecPlacenaFaktura
         Case 19: T_WriterGuard_AvansSaldoOM
-        Case 20: T_F8_TipBiraTabeluIKolone
+        Case 20: T_Storno_TipBiraTabeluIKolone
         Case 21: T_StornoDok_KapijePreUpisa
         Case 22: T_PrefillIzStorniranog_CitaSvojuTabelu
         Case 23: T_FrameworkIspravke_SamoCetiriTipa
@@ -338,7 +368,22 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 32: T_VerdiktPoIdentitetu_RelabelSeNePreskace
         Case 33: T_DeljenaPaleta_SuStanarPoIdentitetu
         Case 34: T_IstiBrojRazliciteGeneracije_NijeIstiDokument
-        Case 55: T_StornoNijeUnosniRezim
+        Case 55: T_StornoJeEkranNeRezim
+        Case 56: T_Storno_UgovorIRadnje
+        Case 57: T_StornoEkran_KolonaIdentiteta
+        Case 58: T_StornoEkran_SvakaListaVracaRedove
+        Case 59: T_PrefillBezBroja_PredlaziBroj
+        Case 60: T_StornoImpact_PoIdentitetu
+        Case 61: T_StornoAkcije_RefreshInvalidiraOdluku
+        Case 62: T_StornoBezUvida_NemaAkcije
+        Case 63: T_StornoImpact_SchemaDriftJeInvalidan
+        Case 64: T_StornoImpact_IdentitetNeDegradira
+        Case 65: T_StornoImpact_BlokSekcijaDriftJeInvalidna
+        Case 66: T_StornoEkran_NeCuriGreska
+        Case 67: T_StornoImpact_PrijemnicaBlokDriftJeInvalidan
+        Case 68: T_LogErr_NeVidiErrPosleResumeNext
+        Case 69: T_PorukeUnosa_UpozorenjeNosiOznaku
+        Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -734,10 +779,11 @@ End Sub
 Private Sub T_ScrSave_RutaPoRezimu()
     Dim p As Object
 
-    ' F8 (storno) jos nema upis -- jedini preostali nepokriven rezim.
-    Set p = PoljaEkrana(modScrDokumenti.modeKey("F8"))
-    AssertEq modScrDokumenti.Scr_Save(p), Poruka("OTKUI_TODO_NEVEZANO"), _
-             "nepokriven rezim vraca OTKUI_TODO_NEVEZANO"
+    ' Do v6-ui-143 je ovde prva tvrdnja bila da F8 (storno) vraca
+    ' OTKUI_TODO_NEVEZANO -- "nepokriven rezim". Ta tvrdnja je nestala sa
+    ' rezimom: storno je svoj ekran, ciji Scr_Meta kaze "upis=ne", pa se
+    ' Scr_Save nad njim uopste ne zove. SVIH SEDAM preostalih rezima je
+    ' vezano, i test to sada i tvrdi -- nijedan ne sme da padne u Case Else.
 
     ' F3 i F4 su vezani: prazna polja ih zaustavljaju na PRVOM pravilu svog
     ' dokumenta -- a koje je to pravilo, dokazuje do kog modula je poziv stigao.
@@ -782,6 +828,16 @@ Private Sub T_ScrSave_RutaPoRezimu()
     AssertEq modScrDokumenti.Scr_Save(p), Poruka("NOVUNOS_ERR_KOL_AMB"), _
              "revers ide u modNovacUnos.ReversValidiraj"
     AssertEq CStr(p("fokus")), "kolAmb", "ekran vraca i polje na koje ide fokus"
+
+    ' F1 i F2 zatvaraju spisak: nijedan od sedam rezima ne sme da vrati
+    ' "nije vezano". Ako neka ruta nestane, ovde pada po imenu -- ranije je
+    ' isti simptom bio nevidljiv, jer je F8 legitimno vracao bas tu poruku.
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F1"))
+    AssertEq (modScrDokumenti.Scr_Save(p) <> Poruka("OTKUI_TODO_NEVEZANO")), True, _
+             "otkupni list je vezan na svoju rutinu"
+    Set p = PoljaEkrana(modScrDokumenti.modeKey("F2"))
+    AssertEq (modScrDokumenti.Scr_Save(p) <> Poruka("OTKUI_TODO_NEVEZANO")), True, _
+             "otpremnica je vezana na svoju rutinu"
 End Sub
 
 ' F5 ISPLATA -- TIP NOVCA NIJE KOZMETIKA. Isti iznos knjizen pod pogresnim tipom
@@ -1127,17 +1183,21 @@ Private Function NovacRedova() As Long
     NovacRedova = UBound(d, 1)
 End Function
 
-' F8 CITA TABELU IZABRANOG TIPA, ne uvek tblOtpremnica.
+' STORNO CITA TABELU IZABRANOG TIPA, ne uvek tblOtpremnica.
 '
 ' Do v6-ui-118 je "STORNO" bio tih sinonim za "OTPREMNICA" u ModeTable i u
 ' desetak Col* funkcija, pa je storno centar mogao da pokaze samo otpremnice.
-' Pada ako se EffKey ukloni ili ako se neki tip izgubi iz TabelaTipa: tada
-' F8 opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente
-' pod pravim naslovom -- greska koju operater ne moze da vidi.
+' Pada ako se neki tip izgubi iz TabelaTipa ili iz Col* funkcija: tada storno
+' opet svira po jednoj tabeli, a mreza tiho pokazuje pogresne dokumente pod
+' pravim naslovom -- greska koju operater ne moze da vidi.
+'
+' PRETARGETIRAN u v6-ui-143: mera je ista, ali seam vise nije rezim F8 nego
+' KLJUC TIPA. Storno je svoj ekran, pa "koja tabela" vise ne zavisi od
+' ActiveMode -- i test to sada trazi tako kako produkcija stvarno pita.
 '
 ' Kolone se proveravaju ZAJEDNO sa tabelom: tabela bez odgovarajucih kolona
 ' daje praznu mrezu, sto izgleda kao "nema dokumenata".
-Private Sub T_F8_TipBiraTabeluIKolone()
+Private Sub T_Storno_TipBiraTabeluIKolone()
     Dim tipovi As Variant, tabele As Variant, i As Long, cols As Variant
 
     tipovi = Array(STIP_OTKUP, STIP_OTPREMNICA, STIP_ZBIRNA, STIP_PRIJEMNICA, _
@@ -1146,29 +1206,28 @@ Private Sub T_F8_TipBiraTabeluIKolone()
                    TBL_NOVAC, TBL_NOVAC, TBL_AMBALAZA, TBL_FAKTURE, TBL_BANKA_IMPORT)
 
     For i = 0 To UBound(tipovi)
-        modScrDokumenti.Scr_StornoTipTestSet CStr(tipovi(i))
-        AssertEq modScrDokumenti.ModeTable("F8"), CStr(tabele(i)), _
-                 "F8 / " & CStr(tipovi(i)) & " cita svoju tabelu"
-        AssertEq modScrDokumenti.EffKey("STORNO"), CStr(tipovi(i)), _
-                 "F8 / " & CStr(tipovi(i)) & " razresava kljuc rezima u kljuc tipa"
-        cols = modScrDokumenti.GridCols("STORNO")
+        AssertEq modScrDokumenti.TabelaTipa(CStr(tipovi(i))), CStr(tabele(i)), _
+                 "Storno / " & CStr(tipovi(i)) & " cita svoju tabelu"
+        cols = modScrDokumenti.GridCols(CStr(tipovi(i)), True)
         AssertEq (IsArray(cols)), True, _
-                 "F8 / " & CStr(tipovi(i)) & " ima opis kolona"
+                 "Storno / " & CStr(tipovi(i)) & " ima opis kolona"
         AssertEq (UBound(cols) >= 3), True, _
-                 "F8 / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
+                 "Storno / " & CStr(tipovi(i)) & " ima bar cetiri kolone"
     Next i
 
-    ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je F8 bio
+    ' Rezim i dalje mora da stigne do iste tabele -- ModeTable je od v6-ui-143
+    ' samo TabelaTipa(modeKey()), pa bi razilazenje ta dva puta znacilo da
+    ' unosni ekran i storno gledaju u razlicite tabele za isti dokument.
+    AssertEq modScrDokumenti.ModeTable("F4"), TBL_PRIJEMNICA, _
+             "rezim i tip vode u istu tabelu"
+
+    ' Broj zbirne postoji samo tamo gde ga dokument NOSI. Dok je storno bio
     ' otpremnica, cip "Bez zbirne" je bio ukljucen i nad novcem, gde tblNovac
     ' tu kolonu nema.
-    modScrDokumenti.Scr_StornoTipTestSet STIP_ISPLATE
-    AssertEq modScrDokumenti.ModeHasZbirna("F8"), False, _
-             "novac u F8 nema pojam zbirne"
-    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
-    AssertEq modScrDokumenti.ModeHasZbirna("F8"), True, _
-             "otkupni list u F8 ima pojam zbirne"
-
-    modScrDokumenti.Scr_StornoTipTestSet STIP_OTKUP
+    AssertEq modScrDokumenti.ModeHasZbirna("F5"), False, _
+             "novac nema pojam zbirne"
+    AssertEq modScrDokumenti.ModeHasZbirna("F1"), True, _
+             "otkupni list ima pojam zbirne"
 End Sub
 
 ' KAPIJA STOJI PRE UPISA, I VRACA RAZLOG.
@@ -2268,31 +2327,444 @@ Private Sub T_MapaImena_KljucNosiKolone()
 End Sub
 
 ' ============================================================
-' 55. Storno nije unosni rezim -- forma mu ne pripada
+' 55. Storno je EKRAN, ne unosni rezim
 ' ============================================================
 ' F8 je crtao celu unosnu formu i primarno dugme "Storniraj dokument", a
-' Scr_Save za STORNO pada u Case Else i vraca "Nije vezano na postojecu rutinu".
-' Dakle dugme je bilo mrtvo, a forma je pozivala operatera da ukuca podatke
-' dokumenta koji hoce da stornira.
-Private Sub T_StornoNijeUnosniRezim()
-    Dim f As frmOtkupUI, preF1 As Boolean
+' Scr_Save za STORNO je padao u Case Else i vracao "Nije vezano na postojecu
+' rutinu". Dakle dugme je bilo mrtvo, a forma je pozivala operatera da ukuca
+' podatke dokumenta koji hoce da stornira. #201 je to sakrio grid-maxom --
+' privremeno, jer je forma i dalje postojala i samo se nije videla.
+'
+' Od v6-ui-143 forme nema: storno je ekran u registru, sa "upis=ne". Ovaj test
+' zamenjuje raniji T_StornoNijeUnosniRezim, koji je merio grid-max -- meru koja
+' je sa rezimom prestala da postoji.
+Private Sub T_StornoJeEkranNeRezim()
+    ' NAJVAZNIJE PRVO (AssertEq dize gresku, pa se test prekida na prvom padu):
+    ' ekran mora da postoji u registru i da odgovara na ugovor. Ako se ime modula
+    ' u registru omakne, sidebar ga samo prikaze prigusenog -- i storno nestane
+    ' iz aplikacije bez ijedne greske.
+    AssertEq modUiScreens.ScrPostoji("STORNO"), True, _
+             "modul ekrana Storno odgovara na Scr_Meta (kasno vezivanje radi)"
+    AssertEq (InStr(modUiScreens.ScrMeta("STORNO"), "upis=ne") > 0), True, _
+             "Storno nema upis -- forma i primarno dugme mu ne pripadaju"
 
-    ' Forma MORA da se izgradi: SelectMode je radnja nad njom, a IdiNaRezim bez
-    ' izgradjene forme tiho izlazi (mFrm Is Nothing) -- prva verzija ovog testa
-    ' je zato merila no-op i padala.
+    ' F8 vise NIJE rezim. modeKey za nepoznat rezim pada u Case Else ("OTKUP"),
+    ' pa se odsustvo meri time da vise ne daje "STORNO".
+    AssertEq (modScrDokumenti.modeKey("F8") <> "STORNO"), True, _
+             "F8 vise ne razresava u rezim STORNO"
+    AssertEq (InStr(modUiScreens.ScrMeta("DOKUMENTI"), "rezima=7") > 0), True, _
+             "unosni ekran ima SEDAM rezima, ne osam"
+
+    ' Odluka se donosi u zoni, uz posledice -- ne dugmetom u redu mreze, koje bi
+    ' vodilo pravo u izvrsenje.
+    AssertEq modScrStorno.Scr_Radnje(), "", _
+             "Storno nema radnju nad redom -- odluka je u zoni, uz posledice"
+End Sub
+
+' ============================================================
+' 56. Ugovor ekrana Storno: deset lista, prva je navigaciona
+' ============================================================
+' Isti oblik kao T_Oporavak_UgovorIRadnje. Devet tipova su preneti iz F8; deseta
+' ("Svi") je pogled preko tipova koji legacy ima kao "Nadji dokument", a novi UI
+' do v6-ui-143 nije imao.
+Private Sub T_Storno_UgovorIRadnje()
+    Dim liste As Variant, i As Long, kljucevi As String
+
+    AssertEq (Len(modUiScreens.ScrRowByKey("STORNO")) > 0), True, _
+             "STORNO postoji u registru ekrana"
+    AssertEq (InStr(modUiScreens.ScrMeta("STORNO"), "kljuc=STORNO") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+
+    liste = modScrStorno.Scr_Liste()
+    ' NAJVAZNIJE PRVO: ljuska mora da nacrta SVE liste koje ekran prijavi.
+    ' MAX_SEG je bio 9 dok ih ekran ima 10, pa je "Izvodi" tiho nestajao --
+    ' LayoutGrid nacrta prvih MAX_SEG i stane, bez greske i bez traga. Tvrdnja
+    ' vazi za svaki buduci ekran, ne samo za ovaj.
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    AssertEq (UBound(liste) + 1), 10, "ekran ima deset lista"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|LANAC|OTKUP|OTPREMNICA|ZBIRNA|PRIJEMNICA|AMB_ISPLATE|" & _
+             "AMB_UPLATE|REVERSI|FAKTURA|IZVOD", _
+             "redosled i kljucevi lista -- navigaciona je prva"
+
+    ' Kljucevi lista JESU kljucevi tipova (STIP_*), pa prevodne tabele nema.
+    ' Ako se razidju, Scr_Rows bi trazio tabelu za nepostojeci tip i tiho vratio
+    ' otkupne listove pod tudjim naslovom.
+    For i = 1 To UBound(liste)
+        AssertEq (Len(modScrDokumenti.TabelaTipa(Split(CStr(liste(i)), "|")(0))) > 0), True, _
+                 "lista " & Split(CStr(liste(i)), "|")(0) & " ima svoju tabelu"
+    Next i
+End Sub
+
+' ============================================================
+' 57. Ekran Storno isporucuje IDENTITET, ne samo broj
+' ============================================================
+' Ovo je najskuplja tvrdnja u celoj migraciji storna u svoj ekran.
+'
+' Nevidljiva kolona identiteta se do v6-ui-141 dodavala pod uslovom
+' "If modOtkupUI.ActiveMode = "F8"". Ekran nema rezim -- da je taj uslov ostao,
+' bio bi cutke False, kolona bi nestala, IdentIzReda bi vracao prazno, i ceo
+' lanac iz #198 (correctionID / OldDocID / GeneracijaID) bi pao na fail-closed
+' po broju. NIJEDNA postojeca suite to ne bi videla: testovi identiteta (35, 45,
+' 46, 48-52) mere sloj ISPOD mreze, kome se docID prosledjuje direktno.
+'
+' Zato se ovde meri bas spoj: da li opis kolona koji dobija MREZA nosi kolonu
+' identiteta, i da li je unosni ekran i dalje NE nosi.
+Private Sub T_StornoEkran_KolonaIdentiteta()
+    Dim cols As Variant, poslednja As String, i As Long, ima As Boolean
+
+    ' NAJVAZNIJE PRVO: kolona identiteta MORA biti tu kad se trazi.
+    cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, True)
+    poslednja = modScrDokumenti.ColF(CStr(cols(UBound(cols))), 1)
+    AssertEq poslednja, COL_GENERACIJA_ID, _
+             "opis kolona za Storno nosi kolonu identiteta, i to POSLEDNJU"
+
+    ' I mora biti NEVIDLJIVA: prioritet 4, dok petlja vidljivosti ide 3 -> 1.
+    AssertEq modScrDokumenti.ColF(CStr(cols(UBound(cols))), 4), "4", _
+             "kolona identiteta je prioriteta 4 -- nikad vidljiva"
+
+    ' Unosni ekran je NE sme dobiti: GridCols je zajednicki za rezim unosa i za
+    ' Storno nad istim tipom (F4 i Storno/Prijemnica daju isti kljuc), pa bi
+    ' bezuslovno dodavanje menjalo i mrezu unosa.
+    cols = modScrDokumenti.GridCols(STIP_PRIJEMNICA, False)
+    For i = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
+    Next i
+    AssertEq ima, False, "unosni rezim NE dobija kolonu identiteta"
+
+    ' Tipovi koji identitet nemaju (revers, izvod) ga i ne dobijaju -- kolona bez
+    ' izvora bi mrezi dala prazan string koji izgleda kao "zatecen zapis".
+    cols = modScrDokumenti.GridCols(STIP_REVERSI, True)
+    ima = False
+    For i = 0 To UBound(cols)
+        If modScrDokumenti.ColF(CStr(cols(i)), 1) = COL_GENERACIJA_ID Then ima = True
+    Next i
+    AssertEq ima, False, "revers nema kanonski identitet, pa ni kolonu"
+
+    ' I na kraju: ono sto ekran zapamti pri izboru reda je ono sto salje nizvodno.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-F8-2", ""
+    AssertEq modScrStorno.Scr_IzabranDocID(), "GEN-F8-2", _
+             "ekran nosi identitet izabranog reda, ne samo broj"
+End Sub
+
+' ============================================================
+' 58. Svaka lista ekrana Storno stvarno vraca redove
+' ============================================================
+' Operater je prijavio da cip "Svi" "nema funkciju": klik ne menja ni mrezu ni
+' naslov. Uzrok nije bio u prekidacu nego DVA sloja nize, i bio je nevidljiv:
+'
+'   modUiScreens.ScrGridData ima "On Error Resume Next", pa greska iz Scr_Rows
+'   ne stigne do ReloadGrid nego se vrati kao Empty. LoadGridFromScreen na
+'   ne-niz radi "Exit Sub" -- i mreza OSTANE na prethodnoj listi, sa prethodnim
+'   naslovom. Nema greske, nema toasta, izgleda kao da dugme ne radi.
+'
+' Zato ovaj test zove Scr_Rows za SVAKU listu direktno, mimo tog gutaca: ako
+' neka pukne, ovde pukne po imenu liste umesto da tiho ne uradi nista.
+Private Sub T_StornoEkran_SvakaListaVracaRedove()
+    Dim liste As Variant, i As Long, kljuc As String, d As Variant
+
+    liste = modScrStorno.Scr_Liste()
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrStorno.Scr_TipTestSet kljuc
+        AssertEq modScrStorno.Scr_Lista(), kljuc, "lista " & kljuc & " je izabrana"
+        d = modScrStorno.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz, ne Empty"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, val)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " vraca opis kolona"
+    Next i
+
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
+End Sub
+
+' ============================================================
+' 59. Prefill bez broja MORA da predlozi broj
+' ============================================================
+' Posle ispravke je forma bila popunjena, a BROJ OTPREMNICE prazan. Prefill ga
+' namerno ne donosi -- stari broj pripada storniranom dokumentu, novi mora da
+' dobije svoj -- ali predlog se ni ne racuna:
+'
+'   RefreshBrojPredlog visi o promeni STANICE ili DATUMA, a prefill oba
+'   postavlja pod "mLoading = True", pa se nijedan event ne okine.
+'   SelectModeCore ga zove ranije, ali tada stanice jos nema (forma je tek
+'   ocisceno), pa EntitetZaBroj vrati prazno i predlog se preskoci.
+'
+' Rezultat: dokument koji operater treba samo da potvrdi ostaje bez broja, i to
+' bez ijedne poruke. Ovaj test meri POSLEDICU (polje je popunjeno), ne put.
+Private Sub T_PrefillBezBroja_PredlaziBroj()
+    Dim f As frmOtkupUI, zf As Object, broj As String
+
     Set f = NewOtkupUIForm()
+    ' Combo-i moraju biti PUNJENI: generator broja cita stanicu iz cbOM
+    ' (EntitetZaBroj -> GetComboID), a SetComboByID ne moze da izabere stavku u
+    ' praznoj listi. U produkciji ih puni StartApp; u testu se forma gradi bez
+    ' .Show, pa se punjenje trazi izricito.
+    modOtkupUI.FillCombos f
+    modOtkupUI.SelectMode f, "F2"
+    Set zf = f.Controls("zForm")
 
-    modOtkupUI.SelectMode f, "F1"
-    preF1 = modOtkupUI.GridMaxAktivan()
+    ' Preduslov: polje je prazno pre prefilla -- inace test meri zatecenu
+    ' vrednost umesto onoga sto prefill uradi.
+    zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = ""
 
-    modOtkupUI.SelectMode f, "F8"
-    AssertEq modOtkupUI.GridMaxAktivan(), True, _
-             "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju"
+    ' Spec BEZ "brdok", sa stanicom i datumom -- tacno ono sto ispravka salje.
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & _
+                            "|omid=" & FX_STANICA & "|vrsta=" & FX_VRSTA
 
-    ' Izlazak vraca stanje koje je operater imao, ne nametnuto.
-    modOtkupUI.SelectMode f, "F1"
-    AssertEq modOtkupUI.GridMaxAktivan(), preF1, _
-             "izlazak iz F8 vraca operaterov izbor, ne ostavlja nametnut grid-max"
+    ' PREDUSLOV: stanica je stvarno izabrana. Generator broja je cita iz combo-a
+    ' (EntitetZaBroj -> GetComboID), pa bez nje ne bi bilo predloga ni kad je
+    ' pravilo ispravno -- test bi merio prazan combo umesto pravila.
+    AssertEq (Len(Trim$(CStr(f.Controls("zCtx").Controls("cbOM").value))) > 0), True, _
+             "preduslov: prefill je izabrao otkupno mesto"
+
+    broj = Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text))
+    AssertEq (Len(broj) > 0), True, _
+             "prefill bez broja predlaze broj dokumenta za svoj kontekst"
+
+    ' Suprotan smer: kad prefill DONESE broj, predlog ga ne sme pregaziti --
+    ' inace bi izbor otpremnice u F1 gubio broj koji je stigao uz nju.
+    modOtkupUI.ApplyPrefill "datum=" & Format$(Date, "dd.mm.yyyy") & _
+                            "|omid=" & FX_STANICA & "|brdok=TEST-BR-1"
+    AssertEq Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text)), "TEST-BR-1", _
+             "broj koji prefill donese se ne pregazuje predlogom"
+End Sub
+' ============================================================
+' 60. Uvid je identity-scoped u CELOSTI, ne samo u lancu
+' ============================================================
+' Do v6-ui-143 je BuildStornoImpact provlacio docID kroz zaglavlje, lanac,
+' blokove i zastavice -- a PALETE i FAKTURU je i dalje trazio po BROJU:
+'
+'     Set d("palete")  = ImpactPalete(docType, broj)
+'     Set d("faktura") = ImpactFaktura(docType, broj)
+'
+' Pod kolizijom broja to znaci: zaglavlje, lanac i blokovi pokazuju izabran
+' dokument, a palete pokazuju palete OBA. Writer nizvodno mutira samo izabrani.
+' Ekran koji obecava "ovo su posledice" tvrdio bi posledice koje se nece desiti
+' -- tacno klasa greske koju je #198 devet rundi vadio iz poslovnog sloja.
+'
+' Fixture ima tacno taj par: PRJ-TEST-Z1 i PRJ-TEST-Z2 dele broj, imaju razlicite
+' kupce i SVOJE palete (PAL-TEST-Z1 = 10 gajbi / 100 kg, PAL-TEST-Z2 = 20 / 200).
+Private Sub T_StornoImpact_PoIdentitetu()
+    Dim m As Object, pal As Collection, sm As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' PREDUSLOV: po golom broju uvid stvarno vidi palete OBA dokumenta -- inace
+    ' test ne meri suzavanje nego prazan skup.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    Set pal = m("palete")
+    AssertEq pal.count, 2, "preduslov: po golom broju uvid nosi palete OBA dokumenta"
+
+    ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    Set pal = m("palete")
+    AssertEq pal.count, 1, "sa identitetom uvid nosi SAMO palete izabranog dokumenta"
+
+    ' I to bas njegove: Z2 nosi 20 gajbi / 200 kg, Z1 nosi 10 / 100.
+    Set sm = m("summary")
+    AssertEq CLng(sm("detachGajb")), 20, "zbir uticaja je zbir NJEGOVIH paleta"
+    AssertEq CDbl(sm("detachNeto")), 200#, "i njegovih kilograma"
+    AssertEq CLng(sm("paleteCount")), 1, "sazetak broji iste palete koje su prikazane"
+
+    ' Zaglavlje mora da opisuje isti dokument -- Z2 je kupca KUP-TEST-2.
+    AssertEq CStr(m("header")("partnerID")), "KUP-TEST-2", _
+             "zaglavlje opisuje IZABRAN dokument, ne prvi po broju"
+
+    ' Model koji je prosao mora i da se prijavi kao valjan.
+    AssertEq CBool(m("valid")), True, "kompletan uvid se prijavljuje kao valjan"
+End Sub
+
+' ============================================================
+' 61. Promena podataka ponistava vec izracunatu odluku
+' ============================================================
+' Red odluke se kesira po tip|broj|docID -- dakle po DOKUMENTU, ne po stanju
+' podataka. Dok je Scr_ResetCache brisao samo uvid, posle sync-a je ostajala
+' STARA odluka: dokument koji je u 10:00 bio bez nizvodnog toka (pa je dobio samo
+' "obican storno") zadrzao bi taj red dugmadi i posle sync-a koji mu je doneo
+' zbirnu, prijemnicu i palete. Operater bi tako preskocio ceo izbor moda.
+'
+' StornoRazlog to ne hvata: on pita sme li se dokument stornirati, ne da li sada
+' treba framework ispravke.
+Private Sub T_StornoAkcije_RefreshInvalidiraOdluku()
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+
+    ' Odluka se izracuna i kesira.
+    AssertEq (modScrStorno.Scr_BrojAkcija() > 0), True, _
+             "preduslov: izabran dokument ima red odluke"
+    AssertEq (Len(modScrStorno.Scr_OdlukaKes()) > 0), True, _
+             "preduslov: odluka je kesirana"
+
+    ' Promena podataka mora da je ponisti. NAJVAZNIJE u ovom testu.
+    modScrStorno.Scr_ResetCache
+    AssertEq modScrStorno.Scr_OdlukaKes(), "", _
+             "promena podataka ponistava kes odluke -- inace vazi odluka od pre sync-a"
+    AssertEq modScrStorno.Scr_IzabranDocID(), "", _
+             "i sam izbor, jer se nad zastarelim izborom ne sme odlucivati"
+    AssertEq modScrStorno.Scr_BrojAkcija(), 0, _
+             "bez izbora nema nijednog dugmeta za mutaciju"
+End Sub
+
+' ============================================================
+' 62. Bez uvida nema odluke (fail-closed)
+' ============================================================
+' Ceo smisao ovog ekrana je "prvo vidi posledice, pa odluci". Ako uvid ne uspe,
+' dugmad za mutaciju NE SMEJU da se ponude -- inace ekran pita isto sto je i
+' MsgBox pitao, samo bez posledica pred sobom.
+'
+' Scr_IzborTestSet postavlja izbor BEZ gradnje uvida, sto je tacno stanje posle
+' neuspelog BuildStornoImpact-a (mImpact ostaje Nothing).
+Private Sub T_StornoBezUvida_NemaAkcije()
+    ' NAJVAZNIJE PRVO: framework tip bez uvida ne nudi NIJEDNU radnju.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    AssertEq modScrStorno.Scr_BrojAkcija(), 0, _
+             "framework dokument bez uvida ne nudi nijednu radnju"
+
+    ' Tip koji uvid i NEMA (otkup nije framework tip) i dalje nudi obican storno --
+    ' inace bi kapija zakljucala i ono sto uvid nikad nije ni imalo.
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
+             "tip bez uvida i dalje nudi obican storno"
+
+    ' Revers isto: nema uvid po prirodi (list u lancu), ali ima svoja dva izbora.
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", DOK_TIP_OM_IZLAZ_KOOP
+    AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
+             "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
+
+    modScrStorno.Scr_ResetCache
+End Sub
+' ============================================================
+' 63. Necitljiva sekcija cini CEO uvid nevalidnim
+' ============================================================
+' "valid = True" je ugovor: znaci da je SVIH SEDAM sekcija pouzdano procitano.
+' Dok su citaci gutali greske, taj ugovor je bio prazan -- BuildStornoImpact bi
+' uredno stigao do kraja i postavio valid = True i kad je npr. paletna sekcija
+' vratila praznu kolekciju zato sto kolone nema:
+'
+'     ne mogu da procitam palete -> prazna Collection -> valid = True
+'                                -> ekran kaze "nema paleta" -> nudi mutaciju
+'
+' A tacan odgovor nije "nema paleta" nego "ne znam da li ih ima".
+'
+' Drift se pravi STVARNO (preimenovanje kolone), ne simulira -- isti obrazac kao
+' test 47. Sema se vraca u istom testu, jer bi inace svi testovi posle ovog merili
+' pokvarenu tabelu.
+Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
+    Dim lo As ListObject, m As Object
+    Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoPalete As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i ima palete. Bez nje
+    ' bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoPalete = (m("palete").count > 0)
+    AssertEq imaoPalete, True, "pozitivna kontrola: dokument stvarno ima paletu"
+
+    Set lo = GetTable(TBL_PALETA_STAVKA)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_PALS_PRIJEMNICA_ID).name = COL_PALS_PRIJEMNICA_ID & "_DRIFT"
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2", True)
+    validPodDriftom = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_PALS_PRIJEMNICA_ID & "_DRIFT").name = COL_PALS_PRIJEMNICA_ID
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID) > 0)
+
+    ' NAJVAZNIJE: necitljiva paletna sekcija cini CEO uvid nevalidnim.
+    AssertEq validPodDriftom, False, _
+             "necitljiva paletna sekcija cini CEO uvid nevalidnim"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+
+' ============================================================
+' 64. Zadat identitet NIKAD ne degradira na broj
+' ============================================================
+' Druga polovina istog ugovora. Kad je docID zadat a ne moze da se razresi,
+' povratak na poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar
+' modela koji se posle oznacava kao valid.
+'
+' Prazan docID je DRUGA prica i mora da nastavi da radi: zatecen zapis nema
+' generaciju, pa je broj sve sto postoji. Test meri obe strane.
+Private Sub T_StornoImpact_IdentitetNeDegradira()
+    Dim m As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' Identitet KOJI NE POSTOJI. Sema je zdrava, kolona generacije je tu -- samo
+    ' nijedan red tog broja ne nosi ovu generaciju. To je stanje u kome se sme
+    ' uraditi tacno jedna stvar: stati. Povratak na broj bi dao palete OBA
+    ' dokumenta, i to unutar modela koji se posle oznacava kao valid.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-NE-POSTOJI", True)
+    AssertEq CBool(m("valid")), False, _
+             "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj"
+
+    ' Bez identiteta uvid i dalje radi po broju -- zatecen zapis nema generaciju,
+    ' pa je broj sve sto postoji. Kapija ne sme da zakljuca ni taj slucaj.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "", True)
+    AssertEq CBool(m("valid")), True, _
+             "bez identiteta uvid i dalje radi po broju (zatecen zapis)"
+    AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
+End Sub
+' ============================================================
+' 65. Necitljiva BLOCK sekcija obara ceo uvid
+' ============================================================
+' Test 63 je pokrio paletnu sekciju, koju cita modStornoImpact. Block sekcija
+' dolazi iz modStornoFlow (GetStornoBlockRows -> ActiveBlocksForFlow), i tamo je
+' fail-open obrazac ziveo jos jednu rundu duze:
+'
+'     If cId = 0 Then Exit Function        ' nedostaje OtkupID
+'     EH: LogErr ... : End Function        ' greska -> prazan spisak
+'
+' Za operatera to znaci poruku "nema pogodjenih blokova" nad odlukom koja
+' blokove STORNIRA. Prazan spisak sme da znaci samo "uspesno sam proverio i
+' nema ih", nikad "ne umem da proverim".
+'
+' Drift se pravi STVARNO (preimenovanje kolone), i sema se vraca u istom testu.
+Private Sub T_StornoImpact_BlokSekcijaDriftJeInvalidna()
+    Dim lo As ListObject, m As Object
+    Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoBlokove As Boolean
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-B"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i blokovi POSTOJE.
+    ' Bez nje bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoBlokove = (m("blocks").count > 0)
+    AssertEq imaoBlokove, True, "pozitivna kontrola: dokument stvarno ima otkupni blok"
+
+    Set lo = GetTable(TBL_OTKUP)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_OTK_ID).name = COL_OTK_ID & "_DRIFT"
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    validPodDriftom = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_OTK_ID & "_DRIFT").name = COL_OTK_ID
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_OTKUP, COL_OTK_ID) > 0)
+
+    ' NAJVAZNIJE: necitljiva block sekcija obara CEO uvid.
+    AssertEq validPodDriftom, False, "necitljiva block sekcija obara CEO uvid"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
 End Sub
 
 ' ============================================================
@@ -2539,6 +3011,218 @@ VRATI:
              "nerazresena jednoznacnost se tretira kao dvosmislena"
     ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
     AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+' ============================================================
+' 66. Ekran ne pusta obradjenu gresku u ljusku
+' ============================================================
+' Operater je posle USPESNE ispravke dobijao crven toast:
+'
+'     X Radnja nije uspela: modScrStorno.Scr_Event scrStA0
+'
+' preko uredno popunjene forme. Uzrok nije bio pad radnje nego zivot Err-a:
+' "On Error Resume Next" PRIGUSUJE gresku, ali je NE BRISE. OtvoriIspravku ima
+' bas takav gard, pa je greska prigusena u njemu prezivela povratak kroz
+' StornoPoModu i PokreniAkciju sve do modUiScreens.ScrEvent -- a on posle
+' Application.Run cita Err.Number i, ako nije nula, javlja neuspeh.
+'
+' Dodavanje Err.Clear u EH handlere to NIJE resilo: EH se na uspesnom putu
+' uopste ne izvrsava. Zato Scr_Event sada ima JEDAN izlaz, i na njemu cisti Err.
+'
+' Test ide kroz tag koji sigurno prolazi kroz "On Error Resume Next" region
+' (OsveziZonu -> Zona -> ScreenZone, a forma u testu nije izgradjena).
+Private Sub T_StornoEkran_NeCuriGreska()
+    Dim brojPosle As Long
+
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    Err.Clear
+    modScrStorno.Scr_Event "scrStPal", "Click"
+    ' Err se cita ODMAH: svaki poziv ispod (pa i AssertEq) ume da ga promeni.
+    brojPosle = Err.Number
+    Err.Clear
+
+    AssertEq brojPosle, 0, _
+             "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla"
+
+    ' Kontrola u drugom smeru: prekidac je stvarno obradjen, nije se samo
+    ' progutao. Bez ovoga bi test prosao i kad Scr_Event ne radi nista.
+    modScrStorno.Scr_Event "lsOTPREMNICA", "Click"
+    AssertEq modScrStorno.Scr_Lista(), STIP_OTPREMNICA, _
+             "kontrola: Scr_Event i dalje obradjuje dogadjaj"
+
+    modScrStorno.Scr_ResetCache
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
+End Sub
+' ============================================================
+' 67. Blok sekcija PRIJEMNICE (preko zbirne) -- druga grana istog dispecera
+' ============================================================
+' Test 65 je pokrio OTPREMNICU, koja u ActiveBlocksForFlow ide kroz
+' GetBlokOtkupIDs. Zbirna i prijemnica idu kroz ActiveOtkupIDsByZbirna -- i tamo
+' se strict gubio jos jednu rundu:
+'
+'     tblOtkup.BrojZbirne drift -> ActiveOtkupIDsByZbirna vrati prazno
+'                                -> GetStornoBlockRows izadje na ids.count = 0
+'                                -> dakle PRE svoje kapije
+'                                -> blocks = 0, valid = True
+'
+' Isti kvar kao u 65, samo druga grana istog Select Case-a. Zato test 65 nije
+' bio dovoljan: on tu granu uopste ne dodiruje.
+'
+' PRJ-TEST-Z2 ide preko zbirne ZB-TEST-4, koja nosi otkupne blokove.
+Private Sub T_StornoImpact_PrijemnicaBlokDriftJeInvalidan()
+    Dim lo As ListObject, m As Object
+    Dim validZbirna As Boolean, validPrij As Boolean
+    Dim semaVracena As Boolean, imaoBlokove As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' POZITIVNA KONTROLA nad ZBIRNOM: ona u fixture-u pouzdano nosi aktivan
+    ' otkupni blok (OTK-TEST-1 na ZB-TEST-1). Prijemnica se za pozitivnu kontrolu
+    ' ne koristi: njene blokove raniji testovi u ovom istom prolazu storniraju,
+    ' pa bi kontrola merila redosled testova umesto pravila.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoBlokove = (m("blocks").count > 0)
+    AssertEq imaoBlokove, True, "pozitivna kontrola: zbirna stvarno nosi otkupni blok"
+
+    Set lo = GetTable(TBL_OTKUP)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_OTK_BROJ_ZBIRNE).name = COL_OTK_BROJ_ZBIRNE & "_DRIFT"
+    ' Obe grane koje idu kroz ActiveOtkupIDsByZbirna, ne samo jedna: zbirna
+    ' direktno, prijemnica preko svoje zbirne. Test 65 pokriva TRECU granu
+    ' (otpremnica -> GetBlokOtkupIDs) i ove dve ne dodiruje.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    validZbirna = CBool(m("valid"))
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2", True)
+    validPrij = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_OTK_BROJ_ZBIRNE & "_DRIFT").name = COL_OTK_BROJ_ZBIRNE
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) > 0)
+
+    ' NAJVAZNIJE: obe grane obaraju uvid, ne samo grana otpremnice iz testa 65.
+    AssertEq validZbirna, False, "necitljiva blok sekcija ZBIRNE obara CEO uvid"
+    AssertEq validPrij, False, "necitljiva blok sekcija PRIJEMNICE obara CEO uvid"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+' ============================================================
+' 68. "On Error Resume Next" resetuje Err -- pa LogErr posle njega ne pise
+' ============================================================
+' Operater je prijavio pad upisa otpremnice, a Log fajl je bio PRAZAN -- nijedna
+' ERROR linija. Uzrok nije u upisu nego u dijagnostici:
+'
+'     LogErr pise samo "If Err.Number <> 0"
+'     a EH blokovi rade:  errDesc = Err.description
+'                         On Error Resume Next      <- resetuje Err
+'                         LogErr "SaveOtpremnicaMulti_TX"   <- vidi 0, ne pise
+'
+' Ovaj test ne meri nas kod nego SEMANTIKU VBA na kojoj taj zakljucak stoji.
+' Ako VBA to jednog dana promeni, tvrdnja pada ovde, a ne kroz prazan log posle
+' incidenta.
+Private Sub T_LogErr_NeVidiErrPosleResumeNext()
+    Dim preN As Long, posleN As Long
+
+    On Error Resume Next
+    Err.Raise 5, "T_LogErr", "namerna greska"
+    preN = Err.Number
+    ' isti potez koji EH blokovi rade pre poziva LogErr-a
+    On Error Resume Next
+    posleN = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (preN <> 0), True, "preduslov: greska je stvarno podignuta"
+    AssertEq posleN, 0, _
+             "'On Error Resume Next' resetuje Err -- LogErr posle njega nema sta da vidi"
+End Sub
+' ============================================================
+' 69. Upozorenje uz uspesan upis mora da nosi svoju oznaku
+' ============================================================
+' Dokument moze da bude snimljen, a da uz njega NESTO ne prodje: prevezivanje
+' paleta, auto-zbirna, ili zavrsetak ispravke koji stane na safe-stopu ("vise
+' ispravki na cekanju"). Te poruke stizu u isti izlazni string kao i obicna
+' informacija o uspehu.
+'
+' CommitDokument ih razdvaja po OZNACI: ChrW(10007) ide i u MsgBox (operater
+' mora da vidi da mu je ostao posao), ChrW(10003) ostaje u toastu. Ako neko doda
+' novo upozorenje bez te oznake, ono ce se tiho izgubiti -- toast ga sece, a
+' uspesan toast se jos i sam sakrije posle cetiri sekunde.
+'
+' Test cuva bas tu podelu, jer se ona iz koda ne vidi -- oba su samo stringovi.
+Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
+    Dim upoz As Variant, info As Variant, i As Long, t As String
+
+    ' Katalog se PRVO osvezava iz koda: Poruka() cita tblPoruke, a fixture nosi
+    ' onaj katalog kakav je bio u donoru -- bez ovoga bi test merio zatecene
+    ' podatke umesto ugovora iz UpsertPoruke. EnsurePoruke je idempotentan i
+    ' bez MsgBox-a (isti obrazac koji vec koristi Test_PorukeKatalogPokrivaDokumenta).
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    upoz = Array("DOKUNOS_MSG_VISE_ISPRAVKI", "DOKUNOS_MSG_PALETE_NISU", _
+                 "DOKUNOS_MSG_ZBIRNA_NIJE", "DOKUNOS_MSG_ISPRAVKA_NIJE")
+    For i = 0 To UBound(upoz)
+        t = Poruka(CStr(upoz(i)))
+        AssertEq (Len(t) > 0), True, CStr(upoz(i)) & " postoji u katalogu"
+        AssertEq (InStr(1, t, ChrW(10007)) > 0), True, _
+                 CStr(upoz(i)) & " nosi oznaku upozorenja -- inace se ne vidi"
+    Next i
+
+    ' Druga strana: cista informacija NE SME da nosi oznaku upozorenja, inace bi
+    ' svaki uspesan upis otvarao dijalog bez razloga.
+    info = Array("DOKUNOS_MSG_PALETE_PREVEZANE", "DOKUNOS_MSG_ISPRAVKA_OK")
+    For i = 0 To UBound(info)
+        t = Poruka(CStr(info(i)))
+        AssertEq (Len(t) > 0), True, CStr(info(i)) & " postoji u katalogu"
+        AssertEq (InStr(1, t, ChrW(10007)) > 0), False, _
+                 CStr(info(i)) & " je informacija, ne upozorenje"
+    Next i
+End Sub
+' ============================================================
+' 70. Nestao identitet obara uvid -- i za otpremnicu i za zbirnu
+' ============================================================
+' Test 64 je pokrio PRIJEMNICU, gde identitet cuva ImpactPalete. Otpremnica i
+' zbirna idu kroz PkPoIdentitetu, koji je dobio parametar strict ali ga NIJE
+' koristio:
+'
+'     If ids.count = 0 Then Exit Function     ' komentar iznad tvrdi da je greska
+'
+' Nizvodno je to izgledalo kao "dokument ne postoji" umesto "ne mogu da ga
+' razresim" -- a model se posle svega oznacavao kao valid. Zbirna je uz to
+' prekidala propagaciju i u ScanZbirna, koji strict nije ni prosledjivao.
+'
+' Scenario je stvaran: mreza nosi broj i docID iz reda, a dokument te generacije
+' je u medjuvremenu nestao (storniran, prevezan, obrisan).
+Private Sub T_StornoImpact_NestaoIdentitetJeInvalidan()
+    Dim m As Object
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' POZITIVNA KONTROLA: postojeca generacija daje valjan uvid. Bez nje bi test
+    ' prosao i kad BuildStornoImpact uvek vraca False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: postojeca generacija daje valjan uvid"
+
+    ' NAJVAZNIJE: generacija koje NEMA obara uvid, umesto da prodje kao
+    ' "dokument ne postoji".
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-NE-POSTOJI", True)
+    AssertEq CBool(m("valid")), False, _
+             "nestao identitet OTPREMNICE obara uvid"
+
+    ' Zbirna je isla svojim putem (ScanZbirna nije prosledjivao strict), pa se
+    ' meri zasebno -- ista tvrdnja, druga grana.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, _
+                                             "", "GEN-NE-POSTOJI", True)
+    AssertEq CBool(m("valid")), False, _
+             "nestao identitet ZBIRNE obara uvid"
+
+    ' Bez identiteta oba i dalje rade po broju -- zatecen zapis nema generaciju.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    AssertEq CBool(m("valid")), True, "bez identiteta zbirna i dalje radi po broju"
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.

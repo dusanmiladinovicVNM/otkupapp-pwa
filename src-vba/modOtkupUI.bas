@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-121"
+Public Const OTKUI_BUILD   As String = "v6-ui-143"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -169,7 +169,11 @@ Private Const GRID_FOOT_H As Single = 24
 ' (sedam rezima F1..F7 + fakture + izvodi). Ostali ekrani koriste manje i
 ' visak dugmadi ostaje sakriven (LayoutGrid). Natpisi u F8 su kratki bas
 ' zato da devet komada stane levo od polja za pretragu.
-Private Const MAX_SEG     As Long = 9        ' dugmadi prekidaca lista koje se PRAVE
+' Dugmadi prekidaca lista koje se PRAVE. Ekran Storno ima DESET lista (devet
+' tipova + navigacioni "Svi"), pa je granica podignuta sa 9 -- na 9 je deseta
+' tiho nestajala: LayoutGrid crta samo prvih MAX_SEG, bez ijedne poruke, pa se
+' "Izvodi" nisu mogli izabrati ni na koji nacin.
+Private Const MAX_SEG     As Long = 10
 Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
@@ -185,7 +189,6 @@ Private Const POP_MAX     As Long = 14       ' stavki u sopstvenom dropdown-u
 Private Const POP_ITEM_H  As Single = 21
 Private Const FLT_W       As Single = 236     ' panel "Filteri"
 Private Const FLT_H       As Single = 222
-Private Const MODE_SEP_H  As Single = 11      ' razmak iznad kartice Storno
 Private Const TIT_ICO_W   As Single = 26      ' marker modula uz naslov
 ' Eyebrow red grupe polja. Sam natpis je visok ~11pt, pa 18 ostavlja 7pt do
 ' natpisa prvog polja ispod. Sa 15 je taj razmak bio 4pt - naslov grupe je bio
@@ -345,11 +348,6 @@ Private mZbirnaFill As Boolean
 ' promenu partnera - a na tu promenu visi brisanje i predlog broja prijemnice.
 Private mPartnerFill As Boolean
 Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokumenta
-' Grid-max u STORNU je NAMETNUT, ne izbor operatera -- pa se njegov izbor
-' pamti i vraca pri izlasku iz F8. Bez ovoga bi F8 trajno ukljucio grid-max
-' i unosnim rezimima.
-Private mGridMaxPre As Boolean
-Private mGridMaxLocked As Boolean
 ' Izabran smer reversa (1..4); NULA znaci "operater jos nije izabrao" i tako se
 ' i predaje ekranu. Nijedan segment nije unapred obelezen namerno: legacy
 ' izricito trazi eksplicitan izbor, jer je prazan smer ranije tiho knjizio
@@ -1061,14 +1059,16 @@ Private Sub BuildRight(frm As Object)
     NewLbl z, "rgtEdge", "", 0, 0, 1, 320, 8, False, 0, C_BORDER
     NewSectionHdr z, "rgtHdr", Poruka("OTKUI_LBL_REZIMI"), 13, 12, 150
 
-    ' OSAM kartica - sada su prikazani SVI rezimi, ukljucujuci aktivni, a
+    ' SEDAM kartica - prikazani su SVI unosni rezimi, ukljucujuci aktivni, a
     ' aktivni je obelezen (tamna ispuna + zlatna traka). Ranije se aktivni
     ' izostavljao, pa se spisak premetao pri svakoj promeni i nije se videlo
     ' gde si. Redosled je fiksan F1..F7, kartica nosi rezim u .Tag.
-    ' Storno nije unosni rezim - ide POSLEDNJI i odvojen je linijom. Reversi su
-    ' zato pomereni ispred njega (RefreshModeCards drzi isti redosled).
-    For i = 0 To 7
-        Dim cy As Single: cy = 30 + i * 40 + IIf(i = 7, MODE_SEP_H, 0)
+    '
+    ' Osma kartica je do v6-ui-143 bila Storno, odvojena linijom jer nije
+    ' unosni rezim. Storno je sada svoj EKRAN i stoji u sidebaru uz Dokumenta
+    ' i Oporavak, pa ovde nema sta da trazi -- ostalo je sedam ravnopravnih.
+    For i = 0 To 6
+        Dim cy As Single: cy = 30 + i * 40
         CardV z, "mc" & i, 13, cy, RIGHT_W - 26, 36
         NewLbl z, "mcT" & i, "-", 21, cy + 5, 108, TxtH(TS_META), TS_META, True, C_FOREST, -1
         NewLbl z, "mcKey" & i, "", 0, cy + 6, 28, TxtH(TS_MICRO), TS_MICRO, False, C_MUTED, -1, fmTextAlignRight, F_NUM
@@ -1085,7 +1085,6 @@ Private Sub BuildRight(frm As Object)
         WireBtn z.Controls("mcKey" & i), "mcT" & i, "chev"
     Next i
 
-    NewLbl z, "rgtSepM", "", 13, 30 + 7 * 40 + 5, RIGHT_W - 26, 1, 8, False, 0, C_BORDER
     NewLbl z, "rgtSep1", "", 13, 0, RIGHT_W - 26, 1, 8, False, 0, C_BORDER
     NewSectionHdr z, "rgtHdr2", Poruka("OTKUI_LBL_POSLEDNJI_UNOSI"), 13, 0, 150
     ' Tri reda crtica su izgledala kao pokvaren podatak. Dok sekcija nije
@@ -2209,11 +2208,11 @@ End Sub
 Private Sub LayoutRight(z As Object, zh As Single)
     Dim i As Long, Y As Single
     z.Controls("rgtEdge").Height = zh
-    For i = 0 To 7
+    For i = 0 To 6
         z.Controls("mcKey" & i).Left = RIGHT_W - 13 - 30
         z.Controls("mcHint" & i).width = RIGHT_W - 42
     Next i
-    Y = 30 + 8 * 40 + 12 + MODE_SEP_H
+    Y = 30 + 7 * 40 + 12
     z.Controls("rgtSep1").top = Y: Y = Y + 9
     z.Controls("rgtHdr2").top = Y: Y = Y + 17
     z.Controls("luEmpty").top = Y
@@ -2819,14 +2818,15 @@ Public Sub SelectMode(frm As Object, key As String)
     SelectModeCore frm, key, True
 End Sub
 
-' Isto, ali bez forme u argumentu - za ekran, koji formu nema.
-' Postoji zbog ispravke posle storna (Faza D/13): posle storna starog
-' dokumenta operater mora da zavrsi u rezimu u kome se unosi zamenski, a
-' storno se pokrece iz F8. Ekran zna KOJI je to rezim; formu drzi ljuska.
-' TEST SEAM: je li mreza razvucena (forma i kontekst sklonjeni). Postoji zato
-' sto se u testu forma ne prikazuje (.Show se ne zove), pa se vidljivost
-' kontrola ne moze meriti -- a tvrdnja "storno nije unosni rezim" je bas o
-' tom stanju.
+' Koliko dugmadi prekidaca ljuska uopste crta. Ekran koji prijavi vise lista od
+' ovoga dobija TIHO odsecen rep -- LayoutGrid nacrta prvih MAX_SEG i stane, bez
+' greske i bez traga. Ekran Storno je tako ostao bez liste "Izvodi": bila je u
+' Scr_Liste, ali se nije mogla izabrati ni na koji nacin. Javno, da ta granica
+' moze da se izmeri testom umesto da se otkrije na ekranu.
+Public Function MaxPrekidaca() As Long
+    MaxPrekidaca = MAX_SEG
+End Function
+
 ' TEST SEAM: je li mapa imena kesirana pod datim kljucem. Prazna mapa i mapa
 ' koja nije kesirana daju isti rezultat pozivaocu, pa se razlika meri ovde.
 Public Function MapaImenaKesirana(ByVal ck As String) As Boolean
@@ -2834,10 +2834,10 @@ Public Function MapaImenaKesirana(ByVal ck As String) As Boolean
     MapaImenaKesirana = mPartMap.Exists(ck)
 End Function
 
-Public Function GridMaxAktivan() As Boolean
-    GridMaxAktivan = mGridMax
-End Function
-
+' Prelazak na drugi REZIM bez forme u argumentu - za ekran, koji formu nema.
+' Postoji zbog ispravke posle storna (Faza D/13): posle storna starog dokumenta
+' operater mora da zavrsi u rezimu u kome se unosi zamenski. Ekran zna KOJI je
+' to rezim; formu drzi ljuska.
 Public Sub IdiNaRezim(ByVal key As String)
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
@@ -2845,6 +2845,35 @@ Public Sub IdiNaRezim(ByVal key As String)
     If key = ActiveMode Then Exit Sub
     SelectMode mFrm, key
 End Sub
+
+' Prelazak na drugi EKRAN bez forme u argumentu - par gornjem IdiNaRezim.
+'
+' Postoji zbog predaje ispravke: storno je svoj ekran, a zamenski dokument se
+' unosi na ekranu dokumenata. Ceo tok je zato prelazak EKRANA -> prelazak
+' REZIMA -> prefill, i redosled je obavezan (SelectMode cisti formu, pa bi
+' prefill pre njega bio obrisan -- v. modScrStorno.OtvoriIspravku).
+'
+' ActivateScreen je Private i ostaje Private: ovo je jedini javni ulaz, pa
+' ekran ne moze da preskoci proveru prava ni lenju gradnju zone.
+'
+' Sidebar se preboji POSLE prelaska, iz mScreen a ne iz kljuca: kad
+' ActivateScreen odbije prelazak (nema prava, modul nedostaje), mScreen je
+' ostao stari i oznaka mora da pokazuje ekran na kome zaista jesmo.
+Public Sub IdiNaEkran(ByVal kljuc As String)
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If Len(kljuc) = 0 Then Exit Sub
+    If kljuc = mScreen Then Exit Sub
+    ActivateScreen mFrm, kljuc
+    PaintNav mFrm, NavTagFor(mScreen)
+End Sub
+
+' Kljuc ekrana na kome jesmo. Javno zato sto je "storno je EKRAN, a ne rezim"
+' tvrdnja koja se drugacije ne moze izmeriti: u testu se forma ne prikazuje,
+' pa se vidljivost zona ne cita.
+Public Function AktivanEkran() As String
+    AktivanEkran = mScreen
+End Function
 
 Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As Boolean)
     Dim k As String
@@ -2854,24 +2883,10 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     ClosePopup
     ActiveMode = key
     k = modeKey(key)
-    ' STORNO NIJE UNOSNI REZIM. Forma i kontekstni red pripadaju unosu; u stornu
-    ' se dokument BIRA IZ LISTE, a "Sacuvaj" nema sta da pozove -- Scr_Save za
-    ' STORNO pada u Case Else i vraca "Nije vezano na postojecu rutinu". Dakle
-    ' primarno dugme je bilo mrtvo, a forma je pozivala operatera da ukuca
-    ' podatke dokumenta koji hoce da stornira. Grid-max sklanja oboje i daje
-    ' mrezi ceo prostor -- isti raspored koji imaju Palete i Oporavak.
-    '
-    ' Stanje operatera se pamti: izlazak iz F8 vraca ono sto je imao pre.
-    If k = "STORNO" Then
-        If Not mGridMaxLocked Then
-            mGridMaxPre = mGridMax
-            mGridMaxLocked = True
-        End If
-        mGridMax = True
-    ElseIf mGridMaxLocked Then
-        mGridMax = mGridMaxPre
-        mGridMaxLocked = False
-    End If
+    ' Ovde je do v6-ui-143 stajao grid-max za STORNO: F8 je crtao unosnu formu
+    ' koju ne koristi, pa mu je forma sklanjana. Od kada je storno SVOJ EKRAN,
+    ' svi preostali rezimi (F1..F7) su unosni i forma im pripada -- pa izuzetka
+    ' nema. Grid-max ostaje samo kao operaterov izbor kroz prekidac.
     SetGridCols k                      ' pre LayoutGrid-a i pre naslova kolona
     ApplyFormFields frm, key           ' pre LayoutFields-a
 
@@ -2915,11 +2930,7 @@ Private Sub SelectModeCore(frm As Object, ByVal key As String, ByVal doReload As
     End If
 
     ClearMarks                       ' oznake pripadaju JEDNOJ listi jednog rezima
-    ' F8 od v6-ui-119 STORNIRA, pa mu je radna lista lista AKTIVNIH dokumenata
-    ' - "otkazane" bi ga otvarao nad onima nad kojima nema sta da se radi.
-    ' "Sve" a ne "danas": dokument koji se stornira je najcesce od juce ili
-    ' pre nedelju dana, ne od danas.
-    If key = "F8" Then mFilter = "sve" Else mFilter = "danas"
+    mFilter = "danas"
     ' Lista otpremnica ima svoje cipove; "danas" bi u njoj pokazao praznu
     ' listu, a posao za koji ta lista postoji su bas neraspodeljene otpremnice.
     If ActiveLista() = "OTPREMNICE" Then mFilter = "otvorene"
@@ -2974,16 +2985,15 @@ End Sub
 
 Private Sub RefreshModeCards(frm As Object)
     Dim z As Object, i As Long, m As Variant
-    Dim mk As String, md As String, act As Boolean, warn As Boolean
+    Dim mk As String, md As String, act As Boolean
     Set z = frm.Controls("zRight")
-    ' redosled kartica: unosni rezimi, pa reversi, pa STORNO kao poslednji
-    ' brojevi tastera prate REDOSLED u koloni: reversi F7, storno F8 (poslednji)
-    m = Array("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8")
-    For i = 0 To 7
+    ' redosled kartica prati brojeve tastera: F1..F7, svi unosni.
+    ' Osma kartica (Storno, "warn" bojama) je otisla sa rezimom u v6-ui-143.
+    m = Array("F1", "F2", "F3", "F4", "F5", "F6", "F7")
+    For i = 0 To 6
         md = CStr(m(i))
         mk = modeKey(md)
         act = (md = ActiveMode)
-        warn = (md = "F8")
 
         ' na kartici stoji KRATKO ime (108pt); pun naziv nosi veliki naslov
         z.Controls("mcT" & i).caption = Poruka("OTKUI_MODE_" & mk)
@@ -2993,17 +3003,17 @@ Private Sub RefreshModeCards(frm As Object)
 
         If act Then
             ' aktivni: puna tamna ispuna + zlatna traka - vidi se iz daljine
-            z.Controls("mc" & i & "B").BackColor = IIf(warn, C_RUST, C_FOREST)
-            z.Controls("mc" & i & "F").BackColor = IIf(warn, C_RUST, C_FOREST)
+            z.Controls("mc" & i & "B").BackColor = C_FOREST
+            z.Controls("mc" & i & "F").BackColor = C_FOREST
             z.Controls("mc" & i & "A").BackColor = C_GOLD
             z.Controls("mcT" & i).ForeColor = C_CREAM
             z.Controls("mcHint" & i).ForeColor = RGB(168, 180, 160)
             z.Controls("mcKey" & i).ForeColor = C_GOLD
         Else
-            z.Controls("mc" & i & "B").BackColor = IIf(warn, C_RUST, C_BORDER_LT)
-            z.Controls("mc" & i & "F").BackColor = IIf(warn, C_PILL_ERR_BG, C_WHITE)
-            z.Controls("mc" & i & "A").BackColor = IIf(warn, C_RUST, C_GOLD)
-            z.Controls("mcT" & i).ForeColor = IIf(warn, C_RUST, C_FOREST)
+            z.Controls("mc" & i & "B").BackColor = C_BORDER_LT
+            z.Controls("mc" & i & "F").BackColor = C_WHITE
+            z.Controls("mc" & i & "A").BackColor = C_GOLD
+            z.Controls("mcT" & i).ForeColor = C_FOREST
             z.Controls("mcHint" & i).ForeColor = C_MUTED
             z.Controls("mcKey" & i).ForeColor = C_MUTED
         End If
@@ -3370,6 +3380,31 @@ Private Sub UiClickCore(ByVal tag As String)
         End If
         Exit Sub
     End If
+    ' KONTROLE IZ ZONE UGOVORNOG EKRANA. Ljuska ih ne poznaje po imenu - prefiks
+    ' "scr" je ceo dogovor, pa ekran moze da doda svoje dugme bez ijedne izmene
+    ' ovde. Do v6-ui-143 zona nije imala nijednu kliktacu kontrolu (Oporavak i
+    ' Palete drze samo labele), pa ovaj prolaz nije ni postojao - i dugme u zoni
+    ' bi tiho "ne radilo".
+    '
+    ' True i dalje znaci "podaci su promenjeni" -- isto kao kod radnje nad redom.
+    '
+    ' Ali SAMO ako smo jos na istom ekranu. Radnja sme da PREDA posao drugom
+    ' ekranu (storno -> ispravka -> unos zamenskog dokumenta), i tada je forma
+    ' vec popunjena prefillom. RefreshFromData nad njom ponovo puni combo-e
+    ' (FillZbirneCombo, mPartnerFor = "") -- a to obrise izbor partnera koji je
+    ' prefill upravo postavio. Operater je to video kao "nisu sve stavke
+    ' popunjene": sve sto je obicno polje ostane, a sve sto je lista se isprazni.
+    If Left$(tag, 3) = "scr" Then
+        Dim preScr As String
+        preScr = mScreen
+        If ScrAct(tag) Then
+            If mScreen = preScr Then
+                mSelRow = 0
+                RefreshFromData
+            End If
+        End If
+        Exit Sub
+    End If
     ' klik na strelicu "combo"-a -> nas panel (toggle)
     ' (CloseFilterPanel je vec odradjen gore)
     If Right$(tag, 1) = "D" And Len(tag) > 2 Then
@@ -3397,9 +3432,6 @@ Private Sub UiClickCore(ByVal tag As String)
         Case "btnMax"
             ' mreza se razvlaci do ispod naslova dokumenta - kontekst i forma
             ' se sklanjaju, drugi klik ih vraca
-            ' U STORNU nema sta da se vrati -- forma tamo ne pripada, pa je
-            ' prekidac bez posla. Klik se tiho ignorise, ne gasi grid-max.
-            If modeKey(ActiveMode) = "STORNO" Then Exit Sub
             mGridMax = Not mGridMax
             mFrm.Controls("zGrid").Controls("btnMaxI").caption = _
                 ChrW(IIf(mGridMax, IC_MIN, IC_MAX))
@@ -4272,6 +4304,13 @@ Private Sub LoadGridFromScreen()
     mViewN = 0: mSumKg = 0: mSumVal = 0
     mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0: mCntOtvor = 0
     d = modUiScreens.ScrGridData(mScreen, mFilter, mSearch)
+    ' Ekran koji je PUKAO i ekran koji nema listu daju isti Empty. Razlika mora
+    ' da se vidi: bez ovoga mreza tiho ostaje na prethodnoj listi i prethodnom
+    ' naslovu, pa prekidac izgleda kao da ne radi (v. ScrGridData).
+    If Len(modUiScreens.ScrLastErr) > 0 Then
+        Err.Raise ERR_UI_BASE + 22, modUiScreens.ScrLastErr, _
+                  Poruka("OTKUI_ERR_LISTA")
+    End If
     If Not IsArray(d) Then Exit Sub
     If UBound(d) < 4 Then Exit Sub
     SetGridColsArr d(0)
@@ -4561,14 +4600,13 @@ End Function
 
 ' Koje tipove partnera nudi polje. Tamo gde dokument zna ko je druga strana
 ' lista je jednorodna (samo kupci); tamo gde ne zna - isplata ide i kooperantu
-' i otkupnom mestu, revers svima, storno preko svih dokumenata - lista je
-' mesovita i natpis polja je "Partner". Redosled = najverovatniji tip prvi.
+' i otkupnom mestu, revers svima - lista je mesovita i natpis polja je
+' "Partner". Redosled = najverovatniji tip prvi.
 Private Function PartnerSrcOrder(ByVal mode As String) As Variant
     Select Case mode
         Case "F1": PartnerSrcOrder = Array("KOOP")
         Case "F5": PartnerSrcOrder = Array("KOOP", "OM")
         Case "F7": PartnerSrcOrder = Array("KOOP", "OM", "KUP")
-        Case "F8": PartnerSrcOrder = Array("OM", "KOOP", "KUP")
         Case Else: PartnerSrcOrder = Array("KUP")
     End Select
 End Function
@@ -5370,7 +5408,10 @@ Public Function HandleGlobalKey(ByVal KeyCode As Long, ByVal Shift As Long) As B
         Case vbKeyF5: SelectMode mFrm, "F5"
         Case vbKeyF6: SelectMode mFrm, "F6"
         Case vbKeyF7: SelectMode mFrm, "F7"
-        Case vbKeyF8: SelectMode mFrm, "F8"
+        ' F8 je jedini od osam koji vise ne bira REZIM nego EKRAN: storno je
+        ' od v6-ui-143 svoj ekran. Taster je ostao isti da operateru ne promeni
+        ' prst -- promenilo se samo gde vodi.
+        Case vbKeyF8: IdiNaEkran "STORNO"
         ' pomoc je sa F1 presla na F9 - F1 je sada rezim "Otkupni list"
         Case vbKeyF9: ShowToast Poruka("OTKUI_MSG_POMOC"), False
         Case vbKeyEscape
@@ -5426,6 +5467,17 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
             ShowToast greska, True
             fokus = ""
             If p.Exists("fokus") Then fokus = CStr(p("fokus"))
+            ' NEUSPEO UPIS ide I u MsgBox. Toast pise u usko polje akcionog
+            ' reda, pa se duga poruka vizuelno sece -- a bas rep nosi RAZLOG:
+            ' SaveOtpremnica lepi "poruke" iza opsteg prefiksa, pa je operater
+            ' video samo "Greska pri cuvanju otpremnice. Promene su vracene" i
+            ' nista o tome ZASTO. Isti obrazac zbog kog upozorenje zbirne vec
+            ' ide u MsgBox (v. modScrStorno.ObicanStorno).
+            '
+            ' Razlikovanje ide po FOKUSU, ne po duzini: validacija polja ga
+            ' postavlja i pokazuje na polje, pa njoj toast i pripada. Pad upisa
+            ' nema fokus -- nema polja na koje bi se pokazalo.
+            If Len(fokus) = 0 Then MsgBox greska, vbExclamation, APP_NAME
             FokusNaPolje fokus
         End If
         Exit Sub
@@ -5436,9 +5488,23 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ClearForm
     RefreshFromData
     RefreshOtpTraka mFrm
+    Dim dopuna As String
+    If p.Exists("poruke") Then dopuna = Trim$(CStr(p("poruke")))
     ShowToast PorukaUpisano(CStr(p("rezim"))) & " " & CStr(p("rezultat")) & _
-              IIf(p.Exists("poruke"), IIf(Len(CStr(p("poruke"))) > 0, _
-                  "  " & ChrW(183) & "  " & CStr(p("poruke")), ""), ""), False
+              IIf(Len(dopuna) > 0, "  " & ChrW(183) & "  " & dopuna, ""), False
+
+    ' UPOZORENJE UZ USPEH ide i u MsgBox. Dokument JESTE snimljen, ali nesto uz
+    ' njega nije: prevezivanje paleta, auto-zbirna, ili zavrsetak ispravke koji
+    ' je stao na safe-stopu ("vise ispravki na cekanju"). Toast to dvostruko
+    ' gubi -- pise u usko polje, pa se rep sece, a uspesan toast se jos i sam
+    ' sakrije posle cetiri sekunde. Operater tako propusti da mu je ostao posao.
+    '
+    ' Razlikovanje ide po OZNACI koju katalog vec nosi: ChrW(10007) = upozorenje
+    ' (DOKUNOS_MSG_VISE_ISPRAVKI, _PALETE_NISU, _ZBIRNA_NIJE, _ISPRAVKA_NIJE),
+    ' ChrW(10003) = informacija o uspehu. Cistu informaciju ne guramo u dijalog.
+    If InStr(1, dopuna, ChrW(10007)) > 0 Then
+        MsgBox dopuna, vbExclamation, APP_NAME
+    End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
@@ -5885,7 +5951,7 @@ Public Sub ApplyPrefill(ByVal spec As String)
     ' modul-level deo, pa modul ostaje "mek" za self-update).
     Dim cbOM As MSForms.ComboBox, cbVoz As MSForms.ComboBox
     Dim cbPart As MSForms.ComboBox, cbPar As MSForms.ComboBox
-    Dim fokus As String
+    Dim fokus As String, imaBroj As Boolean
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
     If Len(spec) = 0 Then Exit Sub
@@ -5910,7 +5976,11 @@ Public Sub ApplyPrefill(ByVal spec As String)
             v = CStr(kv(1))
             Select Case k
                 Case "datum":    zf.Controls("fgDatum").Controls("fgDatumT").text = v
-                Case "brdok":    If Len(v) > 0 Then zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = v
+                Case "brdok"
+                    If Len(v) > 0 Then
+                        zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text = v
+                        imaBroj = True
+                    End If
                 Case "brzbirne": zf.Controls("fgBrZbir").Controls("fgBrZbirT").text = v
                 Case "cena":     If Len(v) > 0 Then zf.Controls("fgCena").Controls("fgCena1T").text = v
                 Case "tipamb":   If Len(v) > 0 Then zf.Controls("fgTipAmb").Controls("fgTipAmbT").text = v
@@ -5948,6 +6018,25 @@ Public Sub ApplyPrefill(ByVal spec As String)
     RecalcVrednost
     mPopMute = False
     mLoading = False
+
+    ' BROJ DOKUMENTA. Prefill ga ne donosi kad novi dokument mora da dobije SVOJ
+    ' broj -- kod ispravke posle storna to je pravilo, ne propust (stari broj
+    ' pripada storniranom dokumentu). Ali predlog se do sada nije ni racunao:
+    ' RefreshBrojPredlog visi o promeni stanice ili datuma, a prefill oba
+    ' postavlja pod "mLoading = True", pa se nijedan event ne okine. Operater je
+    ' zato dobijao popunjenu formu sa PRAZNIM brojem otpremnice.
+    '
+    ' Racuna se tek OVDE, posle "mLoading = False": generator cita stanicu i
+    ' datum iz POLJA, a ona su popunjena tek na kraju petlje. SelectModeCore ga
+    ' racuna ranije (RefreshBrojPredlog False), ali tada stanice jos nema --
+    ' EntitetZaBroj vrati prazno i predlog se preskoci.
+    '
+    ' Remote provera se PRESKACE u testu: SuggestNextBroj sa checkRemote pita
+    ' Google, a suite ne sme da zavisi od mreze (isti gard kao kod SetFocus-a).
+    ' U produkciji ostaje ukljucena -- broj dokumenta je poslovni podatak, i
+    ' lokalni sken ga na drugoj masini moze predloziti dvaput.
+    If Not imaBroj Then RefreshBrojPredlog (Not IsTestMode())
+
     MarkClean
     ' Kuda fokus: kod prefilla sa otpremnice (F1) partner NIJE popunjen, pa
     ' kursor ide na njega - to je jedino sto operateru ostaje. Kod ispravke
@@ -6338,7 +6427,6 @@ Public Sub DiagOtkupUI()
     DiagCols "F5"
     DiagCols "F6"
     DiagCols "F7"
-    DiagCols "F8"
     Debug.Print String(58, "=")
 End Sub
 

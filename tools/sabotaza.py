@@ -43,6 +43,22 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    NEMERENOM, i to izgleda kao uspesan dvosmerni dokaz. Redosled tvrdnji u testu
    je zato deo dokaza: NAJVAZNIJA tvrdnja ide PRVA. Simptom: izlaz prijavi drugu
    tvrdnju od one koja je u katalogu (v. zamka 5).
+
+7. ZAMENA NE SME BITI PRAZNA. `--vrati` radi obrnutu zamenu -- trazi ZAMENU u
+   fajlu i vraca sidro. Prazan string se "nalazi" na svakoj poziciji, pa tvrdnja
+   o tacno jednom pogotku ne prolazi: skripta tiho ne uradi nista i prijavi
+   "nema sta da se vrati", dok je fajl i dalje pokvaren. Kod fajla koji jos nije
+   komitovan ni `git checkout` nije mreza. Ako sabotaza treba da UKLONI red,
+   zameni ga necim ravnopravnim (duplikat susednog reda) umesto praznim.
+   Placeno jednom, na `storno-cip-svi-nestao`.
+
+8. ZAMENA NE SME BITI PODNIZ SIDRA. `--vrati` trazi ZAMENU u fajlu; ako je ona
+   sadrzana u sidru, nadje je i u ZDRAVOM kodu i "vrati" ga -- to jest doda jos
+   jedan primerak razlike. Simptom: posle svakog `--vrati` fajl dobije red vise
+   (kod nas tri uzastopna `Err.Clear`), a git diff raste bez ijedne namerne
+   izmene. Ako se sabotaza svodi na UKLANJANJE reda, dodaj joj oznaku
+   (`   ' SABOTAZA: ...`) da zamena postane jedinstvena. Placeno jednom, na
+   `ekran-curi-greska`.
 """
 
 import argparse
@@ -587,13 +603,214 @@ SABOTAZE = {
         "T_MapaImena_KljucNosiKolone",
         "kljuc kesa nosi KOLONE -- ime+prezime nije isto sto i samo ime",
     ),
-    # Storno crta unosnu formu i mrtvo primarno dugme.
-    "storno-crta-unosnu-formu": (
+    # --- ekran Storno (v6-ui-143) --------------------------------------------
+    # NAJSKUPLJA tvrdnja migracije: nevidljiva kolona identiteta. Do v6-ui-141
+    # se dodavala pod uslovom ActiveMode = "F8"; ekran nema rezim, pa bi taj
+    # uslov cutke bio False i ceo lanac iz #198 bi pao na biranje po BROJU --
+    # bez ijedne greske i bez ijedne crvene suite, jer testovi identiteta
+    # (35, 45, 46, 48-52) mere sloj ISPOD mreze.
+    "storno-bez-kolone-identiteta": (
+        "modScrDokumenti.bas",
+        "    If saIdentitetom Then\n",
+        "    If False Then   ' SABOTAZA: kolona identiteta se ne dodaje\n",
+        "T_StornoEkran_KolonaIdentiteta",
+        "opis kolona za Storno nosi kolonu identiteta, i to POSLEDNJU",
+    ),
+    # Suprotan smer: kapija koja je uvek otvorena nije kapija. GridCols je
+    # zajednicki za rezim unosa i za Storno nad istim tipom, pa bi bezuslovno
+    # dodavanje promenilo i mrezu unosa.
+    "storno-identitet-uvek": (
+        "modScrDokumenti.bas",
+        "    If saIdentitetom Then\n",
+        "    If True Then   ' SABOTAZA: kolona identiteta ide i unosnom rezimu\n",
+        "T_StornoEkran_KolonaIdentiteta",
+        "unosni rezim NE dobija kolonu identiteta",
+    ),
+    # Storno je ekran BEZ upisa. Ako mu se vrati "upis=da", ljuska mu crta
+    # primarno dugme koje nema sta da pozove -- tacno stanje od pre v6-ui-143.
+    "storno-ekran-ima-upis": (
+        "modScrStorno.bas",
+        '               "|lista=OTKUI_SCRST_LISTA|oblik=lista|upis=ne"\n',
+        '               "|lista=OTKUI_SCRST_LISTA|oblik=lista|upis=da"\n',
+        "T_StornoJeEkranNeRezim",
+        "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
+    ),
+    # 'valid = True' mora da znaci 'svih sedam sekcija je pouzdano procitano'. Bez
+    # strict rezima citac na nedostajucu kolonu vrati PRAZNU kolekciju, uvid stigne
+    # do kraja i oznaci se kao valjan -- pa ekran kaze 'nema paleta' i ponudi
+    # mutaciju, iako je tacan odgovor 'ne znam da li ih ima'.
+    "uvid-guta-necitljivo": (
+        "modStornoImpact.bas",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, strict)\n",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids)   ' SABOTAZA\n",
+        "T_StornoImpact_SchemaDriftJeInvalidan",
+        "necitljiva paletna sekcija cini CEO uvid nevalidnim",
+    ),
+    # Zadat docID koji se ne moze razresiti mora da OBORI uvid. Tihi povratak na
+    # poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar modela koji se
+    # posle oznacava kao valid, pa nizvodno izgleda kao pouzdan pregled posledica.
+    "identitet-degradira-na-broj": (
+        "modStornoImpact.bas",
+        "                If strict And Len(Trim$(docID)) > 0 Then\n",
+        "                If False Then   ' SABOTAZA: identitet pada na broj\n",
+        "T_StornoImpact_IdentitetNeDegradira",
+        "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj",
+    ),
+    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
+    # rundu duze: bez kolone OtkupID spisak blokova ispadne prazan, sto operateru
+    # znaci 'nema pogodjenih blokova' -- nad odlukom koja blokove STORNIRA.
+    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
+    # rundu duze: bez strict-a GetBlokOtkupIDs proguta drift, vrati prazan skup,
+    # GetStornoBlockRows izadje na 'ids.count = 0' PRE svoje kapije -- i uvid
+    # zavrsi kao valid sa praznim spiskom. Operateru to znaci 'nema pogodjenih
+    # blokova', nad odlukom koja blokove STORNIRA.
+    #
+    # Sabotaza gadja bas propagaciju, ne kapiju ispod nje: kapija u
+    # GetStornoBlockRows se na ovom putu i ne dostigne, pa bi njeno gasenje bilo
+    # zeleno-bez-crvenog (zamka 5).
+    "uvid-blok-sekcija-guta": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID), strict)\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
+        "T_StornoImpact_BlokSekcijaDriftJeInvalidna",
+        "necitljiva block sekcija obara CEO uvid",
+    ),
+    # Err ziv posle uspesne radnje. "On Error Resume Next" prigusuje gresku ali je
+    # NE brise, pa prigusena greska iz OtvoriIspravku prezivi povratak i stigne do
+    # modUiScreens.ScrEvent, koji je onda prijavi kao 'Radnja nije uspela' -- preko
+    # uredno otvorene ispravke. Err.Clear u EH handlerima to ne resava: EH se na
+    # uspesnom putu i ne izvrsava.
+    "ekran-curi-greska": (
+        "modScrStorno.bas",
+        "    Scr_Event = ObradiDogadjaj(tag)\n    Err.Clear\n",
+        "    Scr_Event = ObradiDogadjaj(tag)   ' SABOTAZA: Err ostaje ziv\n",
+        "T_StornoEkran_NeCuriGreska",
+        "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla",
+    ),
+    # Druga i treca grana istog dispecera (zbirna, prijemnica) idu kroz
+    # ActiveOtkupIDsByZbirna, gde se strict gubio jos jednu rundu duze nego kod
+    # otpremnice. Bez njega drift nad tblOtkup vrati prazan skup, GetStornoBlockRows
+    # izadje na 'ids.count = 0' PRE svoje kapije, i uvid zavrsi kao valid.
+    "uvid-blok-zbirna-guta": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj, strict)\n",
+        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)   ' SABOTAZA\n",
+        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
+        "necitljiva blok sekcija ZBIRNE obara CEO uvid",
+    ),
+    # Ista rupa, grana prijemnice (preko njene zbirne).
+    "uvid-blok-prijemnica-guta": (
+        "modStornoFlow.bas",
+        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz, strict)\n",
+        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)\n",
+        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
+        "necitljiva blok sekcija PRIJEMNICE obara CEO uvid",
+    ),
+    # Upozorenje uz USPESAN upis mora da nosi oznaku ChrW(10007) -- po njoj
+    # CommitDokument odlucuje da li ide i u MsgBox. Bez oznake se tiho gubi: toast
+    # sece rep, a uspesan toast se jos i sam sakrije posle cetiri sekunde, pa
+    # operater propusti da mu je ostao posao (npr. 'vise ispravki na cekanju').
+    "upozorenje-bez-oznake": (
+        "modPoruke.bas",
+        '    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi"',
+        '    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", " Vi"',
+        "T_PorukeUnosa_UpozorenjeNosiOznaku",
+        "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
+    ),
+    # PkPoIdentitetu je dobio parametar strict, ali ga NIJE koristio: zadata
+    # generacija koje nema vracala je prazno, pa je nizvodno izgledala kao
+    # 'dokument ne postoji' umesto 'ne mogu da ga razresim' -- a model se posle
+    # svega oznacavao kao valid. Komentar iznad koda je tvrdio suprotno od koda.
+    "identitet-nestao-prolazi": (
+        "modStornoFlow.bas",
+        "        If ids.count = 0 Then\n            If strict Then\n",
+        "        If ids.count = 0 Then\n            If False Then   ' SABOTAZA\n",
+        "T_StornoImpact_NestaoIdentitetJeInvalidan",
+        "nestao identitet OTPREMNICE obara uvid",
+    ),
+    # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
+    # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
+    "zbirna-ne-prosledjuje-strict": (
+        "modStornoFlow.bas",
+        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)\n",
+        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))   ' SABOTAZA\n",
+        "T_StornoImpact_NestaoIdentitetJeInvalidan",
+        "nestao identitet ZBIRNE obara uvid",
+    ),
+    # --- uvid kao kapija (recenzija PR #202) ------------------------------------
+    # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
+    # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer
+    # nizvodno mutira samo izabrani -- dakle 'ovo su posledice' nije bilo tacno.
+    "uvid-palete-po-broju": (
+        "modStornoImpact.bas",
+        "            Set ids = PrijemniceIDPoIdentitetu(broj, docID)\n",
+        "            Set ids = Nothing   ' SABOTAZA: palete se traze po broju\n",
+        "T_StornoImpact_PoIdentitetu",
+        "sa identitetom uvid nosi SAMO palete izabranog dokumenta",
+    ),
+    # Red odluke se kesira po DOKUMENTU, ne po stanju podataka. Ako promena podataka
+    # ne ponisti kes, vazi odluka izracunata PRE sync-a -- pa dokument koji je u
+    # medjuvremenu dobio nizvodni tok i dalje nudi samo 'obican storno'.
+    "odluka-prezivi-refresh": (
+        "modScrStorno.bas",
+        "Public Sub Scr_ResetCache()\n    OcistiIzbor\n",
+        "Public Sub Scr_ResetCache()\n    Set mImpact = Nothing   ' SABOTAZA\n",
+        "T_StornoAkcije_RefreshInvalidiraOdluku",
+        "promena podataka ponistava kes odluke -- inace vazi odluka od pre sync-a",
+    ),
+    # Ceo smisao ekrana je 'prvo vidi posledice, pa odluci'. Bez ove kapije se
+    # mutaciona dugmad nude i kad uvid nije uspeo -- to jest ekran pita isto sto je
+    # i MsgBox pitao, samo bez posledica pred sobom.
+    "odluka-bez-uvida": (
+        "modScrStorno.bas",
+        "    If dt <> FLOW_DOC_REVERS Then\n",
+        "    If False Then   ' SABOTAZA: odluka se nudi i bez uvida\n",
+        "T_StornoBezUvida_NemaAkcije",
+        "framework dokument bez uvida ne nudi nijednu radnju",
+    ),
+    # Posle ispravke je forma bila popunjena a BROJ DOKUMENTA prazan: prefill ga
+    # namerno ne donosi (stari broj pripada storniranom), a predlog se nije ni
+    # racunao -- RefreshBrojPredlog visi o promeni stanice/datuma, a prefill oba
+    # postavlja pod mLoading, pa se nijedan event ne okine.
+    "prefill-bez-predloga-broja": (
         "modOtkupUI.bas",
-        '    If k = "STORNO" Then\n',
-        "    If False Then   ' SABOTAZA: storno ostaje unosni rezim\n",
-        "T_StornoNijeUnosniRezim",
-        "u STORNU je mreza razvucena -- forma i kontekstni red se sklanjaju",
+        "    If Not imaBroj Then RefreshBrojPredlog (Not IsTestMode())\n",
+        "    ' SABOTAZA: predlog broja se posle prefilla ne racuna\n",
+        "T_PrefillBezBroja_PredlaziBroj",
+        "prefill bez broja predlaze broj dokumenta za svoj kontekst",
+    ),
+    # Ljuska crta samo prvih MAX_SEG dugmadi prekidaca. Ekran Storno ih ima
+    # deset; na devet je "Izvodi" TIHO nestajao -- bio je u Scr_Liste, ali se
+    # nije mogao izabrati ni na koji nacin, bez greske i bez traga. Operater je
+    # to prijavio kao nedostajuci cip.
+    "ljuska-odseca-liste": (
+        "modOtkupUI.bas",
+        "Private Const MAX_SEG     As Long = 10\n",
+        "Private Const MAX_SEG     As Long = 9   ' SABOTAZA\n",
+        "T_Storno_UgovorIRadnje",
+        "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho",
+    ),
+    # Navigacioni cip "Svi" je jedino mesto sa kog se dokument trazi kad se ne
+    # zna kog je tipa. Legacy ga ima ("Nadji dokument"); bez njega se ekran vraca
+    # na "znaj tip pre nego sto pocnes".
+    #
+    # ZAMENA NIJE PRAZNA, i to je peta zamka ovog kataloga: sabotaza koja BRISE
+    # red nema sta da vrati -- `--vrati` trazi zamenu u fajlu, a prazan string se
+    # nalazi svuda i nigde, pa tiho ne uradi nista i prijavi "nema sta da se
+    # vrati". Kod novog, jos nekomitovanog fajla ni `git checkout` nije mreza.
+    # Zato se cip ne brise nego DUPLIRA sa sledecim: broj lista ostaje deset, a
+    # pada tvrdnja o kljucevima -- ista poruka, povratan potez.
+    #
+    # Bez oznake "SABOTAZA" u redu, i to je zamka 4: oznaka bi dosla POSLE `_`,
+    # a tamo mora biti kraj reda. Placeno i to jednom -- run je visio do
+    # timeout-a, a izlaz je bio "PALO" bez imena tvrdnje. Sirina 40 (umesto 64)
+    # cini red jedinstvenim, da `--vrati` ima tacno jedan pogodak.
+    "storno-cip-lanac-nestao": (
+        "modScrStorno.bas",
+        '        ST_LANAC & "|OTKUI_SEG_ST_LANAC|OTKUI_GRID_TITLE_ST_LANAC|76", _\n',
+        '        STIP_OTKUP & "|OTKUI_SEG_ST_OTKUP|OTKUI_GRID_TITLE_OTKUP|40", _\n',
+        "T_Storno_UgovorIRadnje",
+        "redosled i kljucevi lista -- navigaciona je prva",
     ),
     # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
     # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.

@@ -2914,3 +2914,368 @@ unosnom ekranu — tok koji je upravo stabilizovan. Vizuelni ishod je isti.
 
 Testovi 53–55 mere baš ono što se ne vidi kroz vraćenu vrednost: sam keš (kroz
 seam), jer `Empty` izgleda isto i kad je neuspeh keširan i kad nije.
+
+
+## v2.48.0 — `v6-ui-143` · Storno dobija svoj ekran
+
+Korak 1 od dva. Storno prestaje da bude osmi režim unosnog ekrana i postaje
+zaseban ekran u navigaciji, sa pregledom posledica **pre** odluke — ekvivalent
+legacy ekrana „Storno / potvrda".
+
+### Zašto
+
+F8 je crtao unosnu formu koju ne koristi. `Scr_Save` za `STORNO` je padao u
+`Case Else` i vraćao „Nije vezano na postojeću rutinu" — dakle **primarno dugme
+je bilo mrtvo**, a forma je pozivala operatera da ukuca podatke dokumenta koji
+hoće da stornira. `v6-ui-142` je to sakrio grid-maxom; forma je i dalje
+postojala, samo se nije videla. Sada je nema.
+
+Drugo: pregled posledica je bio niz `MsgBox`-ova. `modStornoImpact` vraća
+**sedam sekcija** (zaglavlje, lanac, blokovi, zastavice, palete, faktura,
+sažetak) — tačno sekcije sa legacy ekrana — ali ga je do sada renderovao **samo
+legacy** (`frmDokumenta.frm:4662`). Novi UI ga nije zvao ni sa jednog mesta.
+
+### Odluka koja se menja
+
+Katalog (`UI_MIGRACIJA_KATALOG.md`, §3.2) je beležio: „četiri odgovora ne staju
+u jedan `MsgBox`". Zapažanje je bilo tačno, zaključak nije. Sada su to **četiri
+dugmeta** — Pogrešan unos / Duplikat / Ništa se nije desilo / Reši kasnije —
+svako sa objašnjenjem ispod, a iznad njih stoje lanac, palete i broj blokova.
+Operater vidi sva četiri ishoda **istovremeno**, umesto da drugi izbor otkrije
+tek pošto odgovori na prvi. Prekidač „Ne diraj palete" je iz istog razloga izašao
+iz `MsgBox`-a (`STORNO_ASK_PALETE`) i stoji uz palete na koje se odnosi.
+
+### Najopasnija linija u migraciji
+
+```vb
+If modOtkupUI.ActiveMode = "F8" Then          ' <- do v6-ui-142
+    c.Add "OTKUI_HD_IDENT|" & IdKolonaTipa(mk) & "|txt|0|4"
+```
+
+Nevidljiva kolona kanonskog identiteta dodavala se pod uslovom da je aktivan
+režim F8. **Ekran nema režim.** Da je taj uslov ostao, bio bi ćutke `False`,
+kolona bi nestala, `IdentIzReda` bi vraćao prazno i ceo lanac iz #198
+(`correctionID` / `OldDocID` / `GeneracijaID`) pao bi na fail-closed po broju.
+
+Nijedna postojeća suite to ne bi videla: testovi identiteta (35, 45, 46, 48–52)
+mere sloj **ispod** mreže, kome se `docID` prosleđuje direktno. Zato je kapija
+sada **argument** (`GridCols(tip, saIdentitetom)`), i zato test 57 meri baš taj
+spoj — u oba smera: kolona mora biti tu kad se traži, i **ne sme** biti tu za
+unosni režim.
+
+### Šta je još u ovom koraku
+
+- **`modScrStorno`** po ugovoru ekrana (`oblik=lista|upis=ne`), grupa OPERACIJE,
+  oblast `OBL_DOKUMENTA`. Deset čipova: devet tipova iz F8 plus **navigacioni
+  „Svi"**, koji legacy ima („Nađi dokument") a novi UI nije imao.
+- **„Svi" je namerno samo navigacioni.** Izvor (`GetActiveDocumentsForStorno`)
+  pokriva tri framework tipa i **nema kolonu identiteta**; radnja nad takvim
+  redom vratila bi se na biranje po broju. Klik zato prebacuje na tipiziranu
+  listu, gde identitet postoji, i odluka se donosi tamo.
+- **`RedoviZaTip`**: `RowsDokumenti` (~250 linija) je bio `Private` i čitao
+  `ActiveMode` na tri mesta. Sada prima **ključ tipa** kao argument — jedan
+  čitač i za unosni ekran i za Storno, bez kopije. `EffKey` i `mStTip` su
+  nestali s njim; `ModeTable` je sada samo `TabelaTipa(modeKey(mode))`.
+- **`BuildStornoImpact` dobija `docID`** i provlači ga do `GetStornoChainRows` /
+  `GetStornoBlockRows` / `GetChainFlags` (koji su ga primali od `v6-ui-136/140`
+  — nedostajao je samo sloj koji ih spaja). Zaglavlje uvida ide kroz nov `HLI`:
+  `LookupValue` vraća **prvi** red po broju, pa je pod kolizijom uvid opisivao
+  dokument koji se ne stornira.
+- **Predaja ISPRAVKA/DUPLI** je sada tri koraka a ne dva: `IdiNaEkran` →
+  `IdiNaRezim` → `ApplyPrefill`. Redosled je obavezan — `SelectMode` **čisti**
+  formu, pa bi prefill pre njega bio obrisan; a bez prvog koraka prefill upisuje
+  u zonu koja je sakrivena. `ActivateScreen` je ostao `Private`; nov javni ulaz
+  je `IdiNaEkran`.
+- **Ljuska**: `rezima=8` → `7`, osma kartica iz `zRight`, taster F8 sada bira
+  **ekran**, grid-max izuzetak iz `v6-ui-142` uklonjen (postao je bespredmetan),
+  i nov generički prolaz za kontrole iz zone ugovornog ekrana (prefiks `scr`) —
+  do sada nijedan ekran nije imao kliktaču kontrolu u zoni.
+
+### Šta je našao smoke test (i šta je iz toga naučeno)
+
+Pet nalaza, od kojih **tri nisu bila u Stornu nego u ljusci**. Svi imaju istu
+osobinu: kvar bez ijedne poruke.
+
+1. **`MAX_SEG = 9`, a ekran ima deset lista.** `LayoutGrid` nacrta prvih devet i
+   stane — bez greške i bez traga — pa čip „Izvodi" **nije postojao**. Granica je
+   podignuta na 10, a tvrdnja se sada meri kroz nov seam `MaxPrekidaca()`, i to
+   tako da važi za **svaki budući ekran**.
+2. **`ScrGridData` je gutao grešku iz `Scr_Rows` golim `On Error Resume Next`.**
+   Greška postaje `Empty`, `LoadGridFromScreen` na ne-niz radi `Exit Sub`, i
+   mreža ostane na **prethodnoj listi sa prethodnim naslovom**. Prekidač izgleda
+   kao da ne radi. To je isti obrazac zbog kog `ScrEvent` već ima `ScrLastErr`
+   („Po datumu"), samo u sloju redova — gušenje ostaje, trag se dodaje.
+3. **Prefill je gubio baš ono što je lista.** Novi `scr` prolaz je posle radnje
+   bezuslovno zvao `RefreshFromData`, a on radi `FillZbirneCombo` i
+   `mPartnerFor = ""` — pa briše izbor koji je prefill upravo postavio. Radnja
+   sada osvežava **samo ako je ostala na istom ekranu**.
+4. **Broj dokumenta je posle ispravke ostajao prazan.** Prefill ga namerno ne
+   donosi (stari broj pripada storniranom), ali predlog se ni **nije računao**:
+   `RefreshBrojPredlog` visi o promeni stanice ili datuma, a `ApplyPrefill` oba
+   postavlja pod `mLoading = True`. Računa se sada na kraju prefilla, i **samo**
+   kad broj nije donet. Remote provera se preskače u test-režimu (isti gard kao
+   kod `SetFocus`-a) — suite ne sme da zavisi od mreže.
+5. **Keš je stajao oko pogrešnog dela.** `BeginTableCache` je obuhvatao samo
+   `BuildStornoImpact`, a red odluke (`AkcijeZaTip` → `StornoTraziIzborModa` →
+   `CorrectionNeedsDialog`) je **još jedan prolaz kroz isti lanac** i stajao je
+   izvan keša. Baš to operater vidi kao „sporo se puni efekat po modu". Keš sada
+   obuhvata ceo izbor reda, uz `EndTableCache` i u error handleru.
+
+**Test 59 je prvo pao na PREDUSLOVU, ne na pravilu** — `ApplyPrefill` u testu
+nije mogao da izabere stanicu jer combo-i nisu bili punjeni. Bez te tvrdnje bi
+test merio prazan combo i „prošao" bi i nad neispravnim kodom.
+
+**Nije defekt:** prazan KUPAC na otpremnici. `tblOtpremnica` nema kolonu kupca —
+partner otpremnice je stanica.
+
+### Šta NIJE u obimu (Korak 2)
+
+Ponovo upotrebljiva tabela (ljuska ima **jednu** mrežu, pa lanac i blokovi idu u
+zonu kao labele) i kolona sa checkbox-om (mreža bira **jedan** red, pa dodatni
+storno blokova ostaje sve-ili-ništa). Legacy `frmDokumenta` se ne dira.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → **29**.
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=62, FAIL=0** (bilo 55).
+- `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite
+  (`RunGoogleSyncSmokeSuite`, `RunMasterSyncSmokeSuite`) crvene **zatečeno**.
+### Šta je zatvorila recenzija PR-a
+
+Recenzija je našla tri P1 — sva tri o istome: **novi ekran još nije imao
+fail-closed standard koji je poslovni sloj već dostigao.**
+
+1. **Uvid nije bio identity-aware u celosti.** `docID` je stizao do zaglavlja,
+   lanca, blokova i zastavica, a `ImpactPalete` i `ImpactFaktura` su i dalje
+   tražili po **broju**. Pod kolizijom broja to znači: zaglavlje pokazuje
+   izabran dokument, palete pokazuju palete **oba** — a writer nizvodno mutira
+   samo izabrani. Ekran koji obećava „ovo su posledice" tvrdio bi posledice koje
+   se neće desiti.
+   Sada: prijemnica se sužava kroz `tblPaletaStavka.PrijemnicaID` (skup ID-jeva,
+   jer Klasa I i II dele generaciju a imaju različit PK), otpremnica kroz `HLI`
+   nad svojom zbirnom, faktura kroz `HLI`. **Zbirna ostaje po broju** — stavke
+   nose `BrojZbirne`, ne `ZbirnaID`; ista granica šeme kao kod `FLOW_DOC_ZBIRNA`
+   u `ActiveBlocksForFlow`. To je prijavljeno kao granica, ne pokriveno
+   pogađanjem.
+2. **Ako uvid pukne, dugmad za mutaciju su se i dalje nudila.** `BuildStornoImpact`
+   je rezultat dodeljivao **pre** nego što ga izgradi, pa je pad na pola davao
+   parcijalan rečnik koji spolja izgleda ispravno; a red odluke se računao
+   nezavisno od uvida. Model sada nosi `valid`, koji se postavlja tek na kraju, i
+   `AkcijeRacun` je fail-closed: framework dokument bez valjanog uvida ne nudi
+   **nijednu** radnju. Tip koji uvid nema po prirodi (revers, otkup, novac) time
+   nije zaključan.
+3. **Keš odluke je preživljavao promenu podataka.** Ključ je `tip|broj|docID` —
+   dakle dokument, ne stanje podataka. `Scr_ResetCache` je brisao samo uvid, pa
+   je posle sync-a važila odluka od pre njega: dokument koji je u 10:00 bio bez
+   nizvodnog toka zadržao bi „običan storno" i pošto mu je sync doneo zbirnu,
+   prijemnicu i palete. `StornoRazlog` to ne hvata — on pita sme li se dokument
+   stornirati, ne da li sada treba framework ispravke. `Scr_ResetCache` sada čisti
+   **ceo izbor**: posle promene podataka operater bira dokument ponovo.
+
+Uz to, tri P2:
+
+- **`Err.description` posle `LogErr`-a** se vratio u novi modul, iako je iz
+  desetak mesta vađen u `d60b6706`. `LogErr` ima svoj `On Error Resume Next` i
+  usput briše stanje greške, pa je poruka operateru ostajala prazna. Opis se sada
+  čita **pre** loga, u svim handlerima; `IzborReda` grešku i **prikazuje**, umesto
+  da klik na red tiho ne uradi ništa.
+- **„Svi" nije bio svi.** Izvor (`GetActiveDocumentsForStorno`) pokriva tri
+  framework tipa, a `TipIzNaziva` ume da razreši ista tri — otkup, novac, revers,
+  faktura i izvod nisu tu. Naziv je obećavao globalnu pretragu. Lista se sada zove
+  **„Lanac robe"** (`OTKUI_SEG_ST_LANAC`), što je tačno ono što pokriva.
+- **Build pečati su lagali.** `OTKUI_BUILD`, `SCRDOK_BUILD` i `UISCR_BUILD` su
+  ostali na `v6-ui-121` iako su ta tri modula najviše promenjena — a baš njih
+  `OtkupUI_SelfCheck` prijavljuje na pitanje „da li je klijentu uvezena nova
+  verzija". Podignuti su na `v6-ui-143`.
+
+**Tri nova behavioral testa** (60–62) mere baš tu granicu, koju 59 dotadašnjih
+nije diralo: nijedan nije ni pozivao `BuildStornoImpact`.
+
+- **60** — dva dokumenta istog broja, različite palete: uvid izabranog sadrži
+  isključivo njegove posledice (preduslov dokazuje da po broju vidi oba).
+- **61** — odluka izračunata pre promene podataka ne sme da preživi `Scr_ResetCache`.
+- **62** — framework dokument bez uvida ne nudi nijednu radnju; revers i otkup,
+  koji uvid nemaju po prirodi, i dalje nude svoje.
+
+### `valid=True` je sada stvaran ugovor
+
+Druga runda recenzije je pokazala da je `valid` bio flag oko spoljnog `On Error`,
+a ne ugovor: **više čitalaca je samo gutalo grešku**, kontrola bi se uredno
+vratila u `BuildStornoImpact`, i on bi postavio `valid = True`.
+
+```
+ne mogu da procitam palete  ->  prazna Collection
+                            ->  ImpactPalete misli da je sve OK
+                            ->  valid = True
+                            ->  ekran kaze "nema paleta" i nudi mutaciju
+```
+
+A tačan odgovor nije „nema paleta" nego **„ne znam da li ih ima"**.
+
+Zatvoreno na dva pravila:
+
+1. **Čitaocima uvida je gutanje zabranjeno.** `GetPaleteImpactByField` je dobio
+   `strict` (podrazumevano `False`, pa zatečenim pozivaocima ponašanje ostaje
+   isto); u strict režimu nedostajuća kolona, nečitljiva tabela i greška u
+   prolazu **dižu** grešku. `SumActiveNum` i `HLI` isto. `ImpactHeader` i
+   `ImpactFaktura` više ne gutaju — njihov `EH` **propušta** grešku dalje, jer bi
+   inače pojeli baš ono što je ispod dignuto.
+2. **Zadat identitet nikad ne degradira na broj.** Prazan `docID` i dalje sme da
+   radi po broju — zatečen zapis nema generaciju, pa je broj sve što postoji. Ali
+   `docID` koji je zadat a ne može da se razreši **obara uvid**; tihi povratak na
+   broj vratio bi tačno ono što je #198 vadio, i to unutar modela koji se posle
+   označava kao valjan.
+
+**Zbirna i dalje ostaje po broju** — `tblPaletaStavka` nosi `BrojZbirne`, ne
+`ZbirnaID`. To je granica šeme, prijavljena kao granica.
+
+Dva nova testa mere sam ugovor, a ne njegovu posledicu:
+
+- **63** — kolona `PrijemnicaID` se **stvarno** preimenuje (isti obrazac kao test
+  47), pa se traži `valid = False`. Pozitivna kontrola pre toga dokazuje da nad
+  zdravom šemom uvid jeste valjan i da paleta stvarno postoji — bez nje bi test
+  prošao i kad `BuildStornoImpact` uvek vraća `False`.
+- **64** — identitet koji ne postoji obara uvid; bez identiteta uvid i dalje radi
+  po broju i tada legitimno vidi oba dokumenta.
+
+**Strict ide do dna, ne do granice modula.** Prva verzija `valid` ugovora je
+zaustavljala gutanje u `modStornoImpact`, a tri sekcije dolaze iz `modStornoFlow`
+— i tamo je fail-open živeo još jednu rundu:
+
+```
+ScanPrijemnica pukne  ->  GetChainFlags proguta  ->  default hasDependents=False
+                      ->  BuildStornoImpact nastavi  ->  valid = True
+```
+
+Takav uvid je opasniji od praznog: većina podataka je tačna, pa nema razloga za
+sumnju. `strict` se sada provlači kroz **svih sedam putanja** — `GetChainFlags`,
+`GetStornoChainRows`, `GetStornoBlockRows`, `ScanOtpremnica`, `ScanZbirna`,
+`ScanPrijemnica`, `ActiveBlocksForFlow` i `GetBlokOtkupIDs`. Podrazumevano je
+`False`, pa legacy `frmDokumenta`, koji zove isti model za svoj panel i **ne
+čita** `valid`, ostaje netaknut; ekran Storno traži `strict = True`.
+
+- **65** — kolona `OtkupID` se stvarno preimenuje, pa se traži `valid = False`.
+  Test koristi generaciju **B**, ne A: test 51 stornira dokument generacije A
+  zajedno sa njegovim blokom, pa bi spisak za A do ovog testa bio prazan — a
+  prazan i nečitljiv spisak su baš ono što ovaj test razlikuje.
+
+### Crveni toast preko uspešne ispravke
+
+Operater je posle **uspešne** ispravke i dalje dobijao `X Radnja nije uspela:
+modScrStorno.Scr_Event scrStA0` — preko uredno popunjene forme.
+
+Uzrok nije bio pad radnje nego **život `Err`-a**: `On Error Resume Next`
+prigušuje grešku, ali je **ne briše**. `OtvoriIspravku` ima baš takav gard, pa je
+prigušena greška preživela povratak kroz `StornoPoModu` i `PokreniAkciju` sve do
+`modUiScreens.ScrEvent` — a on posle `Application.Run` čita `Err.Number` i, ako
+nije nula, javlja neuspeh.
+
+Prethodna runda je dodala `Err.Clear` u `EH` handlere i to **nije bilo dovoljno**:
+`EH` se na uspešnom putu uopšte ne izvršava. `Scr_Event` sada ima **jedan izlaz**,
+i na njemu čisti `Err`; prava greška i dalje ide kroz `EH`, koji je prijavljuje,
+pa čišćenje ne može da sakrije pad.
+
+- **66** — meri baš to curenje: posle `Scr_Event`-a `Err.Number` mora biti nula,
+  uz kontrolu u drugom smeru da je događaj stvarno obrađen. Sabotaža vraća stanje
+  i test pada sa `dobijeno [-2147024809]`.
+
+**Strict je stao na dispečeru, ne na dnu.** Prethodni commit je tvrdio „do dna",
+a `ActiveBlocksForFlow` ga je prosleđivao samo za **otpremnicu**; zbirna i
+prijemnica idu kroz `ActiveOtkupIDsByZbirna`, koji je ostao fail-open:
+
+```
+tblOtkup.BrojZbirne drift  ->  ActiveOtkupIDsByZbirna vrati prazno
+                           ->  GetStornoBlockRows izadje na ids.count = 0
+                           ->  dakle PRE svoje kapije
+                           ->  blocks = 0, valid = True
+```
+
+Isti kvar kao u testu 65, samo **druga grana istog `Select Case`-a**. Zatvoreno u
+`ActiveOtkupIDsByZbirna`, `CountActive` (koji je činio `Scan*` strict spolja a
+slep iznutra) i `PkPoIdentitetu`. Uz to i legacy rupa u `HLI`: `docID = ""` je i
+pod `strict` išao kroz `HL`, koji ima svoj `On Error Resume Next`.
+
+- **67** — pokriva **obe** grane koje idu kroz `ActiveOtkupIDsByZbirna`. Pozitivna
+  kontrola je nad **zbirnom**, ne prijemnicom: prijemnične blokove raniji testovi
+  u istom prolazu storniraju, pa bi kontrola merila redosled testova umesto
+  pravila.
+
+### Nalaz van obima: log je slep na 112 mesta
+
+Smoke je otkrio da pad upisa otpremnice **ne ostavlja nijednu `ERROR` liniju** u
+`Log\OtkupApp_<datum>.log`. Uzrok nije u upisu nego u dijagnostici:
+
+```vb
+LogErr pise samo  If Err.Number <> 0
+a EH blokovi rade:  errDesc = Err.Description
+                    On Error Resume Next          ' <- resetuje Err
+                    LogErr "SaveOtpremnicaMulti_TX"   ' <- vidi 0, ne pise nista
+```
+
+Isti oblik postoji na **112 mesta** kroz ceo `src-vba`, uključujući sve `Save*_TX`
+writere. `Monitor_Error` prima opis eksplicitno, pa telemetrija ima podatak — ali
+ona ide na udaljeni endpoint i samo ako je monitoring uključen; lokalno se gubi.
+
+**Test 68** ne meri naš kod nego **semantiku VBA** na kojoj taj zaključak stoji,
+da tvrdnja padne u suite-u a ne kroz prazan log posle incidenta.
+
+Devet writera dokumenata (Otpremnica / Zbirna / Prijemnica, sve tri varijante)
+**već je hvatalo** `errNum` i `errDesc` u lokale pre tog reda — podatak je bio tu,
+samo se bacao. Sada se predaje izričito (`LogError "X", errDesc, errNum`). To je
+najuža kriška koja operatera odblokira; preostalih ~103 mesta ostaje za zaseban
+PR. `SaveKupciIzlaz_TX` i `SaveOMUlaz_TX` opis ne hvataju u lokale, pa ih nisam
+dirao napamet.
+
+**Šta je pad zapravo bio:** `Nedostaje kolona 'GeneracijaID' u tabeli
+'tblOtpremnica'` iz `GeneracijaIDZaBroj` — schema drift na instalaciji, ne greška
+u ovoj grani. Kolonu dodaje `EnsureSledljivostSchema` kroz `EnsureRuntimeSchema`,
+a **i taj poziv je jedno od 112 mesta** sa mrtvim `LogErr`-om: ako je self-heal
+šeme ikad pao, pao je nečujno. Posle ručnog `EnsureRuntimeSchema` upis prolazi.
+
+### Upozorenje uz uspešan upis se više ne gubi
+
+Dokument može biti snimljen, a da uz njega nešto ne prođe — prevezivanje paleta,
+auto-zbirna, ili završetak ispravke koji stane na safe-stopu („više ispravki na
+čekanju"). Toast to gubi **dvostruko**: piše u usko polje pa seče rep, a uspešan
+toast se još i sam sakrije posle četiri sekunde.
+
+Razlikovanje ide po oznaci koju katalog **već nosi**: `ChrW(10007)` = upozorenje
+→ ide i u `MsgBox`; `ChrW(10003)` = informacija → ostaje u toastu. **Test 69**
+čuva baš tu podelu, jer se iz koda ne vidi — oba su samo stringovi.
+
+Sam popravak (112 mesta, zajednički writeri koje koristi i legacy) **nije u ovom
+PR-u** — ide zasebno.
+
+**Poslednja rupa u strict ugovoru: `PkPoIdentitetu`.** Dobio je parametar
+`strict`, ali ga **nije koristio** — komentar iznad koda je tvrdio jedno, kod
+radio drugo:
+
+```vb
+' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.
+If ids.count = 0 Then Exit Function     ' ...a vracalo se prazno
+```
+
+Nizvodno je to izgledalo kao „dokument ne postoji" umesto „ne mogu da ga
+razrešim" — a model se posle svega označavao kao `valid`. Uz to je **`ScanZbirna`
+prekidao propagaciju** baš na PK resolveru, pa je zbirna prolazila i kad
+otpremnica nije.
+
+Sada: zadata generacija koje nema **diže** grešku u strict režimu, a `EH` je
+re-raise. Van strict-a ostaje prazno, zbog zatečenih zapisa bez generacije.
+
+- **70** — nestao identitet obara uvid, mereno **odvojeno** za otpremnicu i za
+  zbirnu (dve grane, dve sabotaže), uz pozitivnu kontrolu i uz suprotan smer:
+  bez identiteta oba i dalje rade po broju.
+
+- **Devetnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+
+Zapisana je i **osma zamka** u `tools/sabotaza.py`: zamena ne sme biti podniz
+sidra — `--vrati` je tada nalazi i u zdravom kodu, pa umesto vraćanja dodaje još
+jedan primerak razlike (kod nas tri uzastopna `Err.Clear`).
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
+
+Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u
+zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
+(`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
+`git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
+pa run visi do timeout-a umesto da prijavi tvrdnju.
