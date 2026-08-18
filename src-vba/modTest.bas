@@ -205,6 +205,7 @@ Public Sub RunAllTests()
     RunOne 69
     RunOne 70
     RunOne 71
+    RunOne 72
 
     SetTestMode prevMode
     WriteResultFile
@@ -308,6 +309,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 69: TestName = "T_PorukeUnosa_UpozorenjeNosiOznaku"
         Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
         Case 71: TestName = "T_Oporavak_OdbaciIspravku_PoIdentitetu"
+        Case 72: TestName = "T_Oporavak_OdbaciIspravku_GasiSamoSvoj"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -387,6 +389,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 69: T_PorukeUnosa_UpozorenjeNosiOznaku
         Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
         Case 71: T_Oporavak_OdbaciIspravku_PoIdentitetu
+        Case 72: T_Oporavak_OdbaciIspravku_GasiSamoSvoj
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3258,10 +3261,10 @@ Private Sub T_Oporavak_OdbaciIspravku_PoIdentitetu()
     ' Kolona identiteta je POSLEDNJA i NEVIDLJIVA. Prioritet 4 nikad ne prolazi
     ' petlju vidljivosti (ide 3 -> 1), pa je operater ne vidi, a GridCell je cita
     ' iz mView -- sirina kolone ne dira podatak.
-    AssertEq (UBound(cols) + 1), 6, _
-             "opis kolona Nedovrsenog nosi sest kolona"
-    AssertEq Split(CStr(cols(UBound(cols))), "|")(0), "OTKUI_HDO_CID", _
-             "poslednja kolona je CorrectionID"
+    AssertEq (UBound(cols) + 1), modScrOporavak.NED_COL_CID, _
+             "opis kolona se zavrsava BAS na koloni koju radnja cita"
+    AssertEq Split(CStr(cols(modScrOporavak.NED_COL_CID - 1)), "|")(0), "OTKUI_HDO_CID", _
+             "na toj koloni stoji CorrectionID"
     AssertEq modScrDokumenti.ColF(CStr(cols(UBound(cols))), 4), "4", _
              "kolona CID je prioriteta 4 -- nikad vidljiva"
 
@@ -3276,11 +3279,11 @@ Private Sub T_Oporavak_OdbaciIspravku_PoIdentitetu()
     For i = 1 To n
         If Left$(CStr(r(i, 2)), 8) = "CONTEXT/" Then
             ctxRedova = ctxRedova + 1
-            If Len(Trim$(CStr(r(i, 6)))) > 0 Then saCID = saCID + 1
-            If CStr(r(i, 6)) = "SV-TEST-1" Then vidjen1 = True
-            If CStr(r(i, 6)) = "SV-TEST-2" Then vidjen2 = True
+            If Len(Trim$(CStr(r(i, modScrOporavak.NED_COL_CID)))) > 0 Then saCID = saCID + 1
+            If CStr(r(i, modScrOporavak.NED_COL_CID)) = "SV-TEST-1" Then vidjen1 = True
+            If CStr(r(i, modScrOporavak.NED_COL_CID)) = "SV-TEST-2" Then vidjen2 = True
         Else
-            AssertEq CStr(r(i, 6)), "", _
+            AssertEq CStr(r(i, modScrOporavak.NED_COL_CID)), "", _
                      "osirotela stavka nema CorrectionID -- resava se prevezivanjem"
         End If
     Next i
@@ -3294,6 +3297,88 @@ Private Sub T_Oporavak_OdbaciIspravku_PoIdentitetu()
     AssertEq vidjen1, True, "red za SV-TEST-1 nosi svoj identitet"
     AssertEq vidjen2, True, "red za SV-TEST-2 nosi svoj identitet"
 End Sub
+
+' ============================================================
+' 72. Odbacivanje gasi IZABRANU ispravku -- i nijednu drugu
+' ============================================================
+' Test 71 dokazuje da identitet STIGNE do reda mreze. To nije isto sto i
+' "radnja gadja bas njega": hard-kodovan `CancelCorrectionContext("SV-TEST-1")`,
+' ili `GridCell(red - 1, ...)`, prosli bi 71 netaknuti. Ovde se meri POSLEDICA.
+'
+' MsgBox u headless runu visi, pa se ne zove `OdbaciIspravku` nego njegovo
+' jezgro -- sve osim potvrde i toast-a.
+'
+' Test MUTIRA podatke i zato ih VRACA: fixture nosi tacno dve ispravke na
+' cekanju, a test 25 bas na tome meri safe-stop ("dve ili vise = ne biraj
+' naslepo"). Bez vracanja bi ovaj test menjao ishod tudjeg, zavisno od redosleda.
+Private Sub T_Oporavak_OdbaciIspravku_GasiSamoSvoj()
+    Dim d As Variant, r As Variant, i As Long, n As Long
+    Dim ostao1 As Boolean, ostao2 As Boolean
+
+    ' PREDUSLOV: oba su na cekanju. Bez ovoga bi test merio zatecen ostatak
+    ' ranijeg testa umesto posledice ove radnje.
+    AssertEq SvPolje("SV-TEST-1", COL_SV_STATUS), SV_STATUS_PENDING, _
+             "SV-TEST-1 je na cekanju PRE radnje"
+    AssertEq SvPolje("SV-TEST-2", COL_SV_STATUS), SV_STATUS_PENDING, _
+             "SV-TEST-2 je na cekanju PRE radnje"
+
+    AssertEq modScrOporavak.OdbaciIspravkuCore("SV-TEST-2"), True, _
+             "odbacivanje je proslo"
+
+    ' NAJVAZNIJE PRVO: sused je NETAKNUT. Radnja koja gadja prvi red, susedni
+    ' red ili poslovni broj pada bas ovde -- a sve tri bi prosle tvrdnju koja
+    ' meri samo da je izabrani ugasen.
+    AssertEq SvPolje("SV-TEST-1", COL_SV_STATUS), SV_STATUS_PENDING, _
+             "SV-TEST-1 ostaje netaknut"
+    AssertEq SvPolje("SV-TEST-1", COL_SV_NEEDS_RECOVERY), "Da", _
+             "SV-TEST-1 i dalje ceka zamenski dokument"
+
+    ' I tek onda: izabrani JESTE ugasen, u oba polja.
+    AssertEq SvPolje("SV-TEST-2", COL_SV_STATUS), SV_STATUS_CANCELLED, _
+             "SV-TEST-2 je otkazan"
+    AssertEq SvPolje("SV-TEST-2", COL_SV_NEEDS_RECOVERY), "Ne", _
+             "SV-TEST-2 vise ne ceka nista"
+
+    ' Posledica koju operater vidi: red nestaje iz liste, drugi ostaje.
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    d = modScrOporavak.Scr_Rows("", "")
+    n = CLng(d(2))
+    AssertEq (n > 0), True, "lista Nedovrseno nije prazna posle radnje"
+    r = d(1)
+    For i = 1 To n
+        If CStr(r(i, modScrOporavak.NED_COL_CID)) = "SV-TEST-1" Then ostao1 = True
+        If CStr(r(i, modScrOporavak.NED_COL_CID)) = "SV-TEST-2" Then ostao2 = True
+    Next i
+    AssertEq ostao1, True, "SV-TEST-1 je i dalje u listi Nedovrseno"
+    AssertEq ostao2, False, "SV-TEST-2 je nestao iz liste Nedovrseno"
+
+    ' Ciscenje se i PROVERAVA. Nevereno vracanje je isto sto i nikakvo: test
+    ' dodat ispod ovog nasledio bi tiho izmenjen fixture, a pao bi po tudjem
+    ' imenu.
+    VratiContextNaCekanje "SV-TEST-2"
+    AssertEq SvPolje("SV-TEST-2", COL_SV_STATUS), SV_STATUS_PENDING, _
+             "fixture je vracen: SV-TEST-2 je opet na cekanju"
+    AssertEq SvPolje("SV-TEST-2", COL_SV_NEEDS_RECOVERY), "Da", _
+             "fixture je vracen: SV-TEST-2 opet ceka zamenski dokument"
+End Sub
+
+' Jedno polje contexta, po CorrectionID.
+Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String
+    SvPolje = Trim$(NzToText(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, cid, kol)))
+End Function
+
+' Vrati context u stanje iz fixture-a. Ne kroz modStornoContext -- tamo nema
+' rutine koja terminalni status ponistava, i ne treba je ni biti: u produkciji
+' je CANCELLED konacan. Ovo je iskljucivo ciscenje posle testa.
+Private Sub VratiContextNaCekanje(ByVal cid As String)
+    Dim rowIdx As Long
+    rowIdx = modStornoContext.GetCorrectionRowByID(cid)
+    If rowIdx = 0 Then Exit Sub
+    UpdateCell TBL_STORNO_VEZE, rowIdx, COL_SV_STATUS, SV_STATUS_PENDING
+    UpdateCell TBL_STORNO_VEZE, rowIdx, COL_SV_NEEDS_RECOVERY, "Da"
+    UpdateCell TBL_STORNO_VEZE, rowIdx, COL_SV_COMPLETED_AT, ""
+End Sub
+
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.
 ' Postoji samo da preduslov testa 46 bude proveren, a ne pretpostavljen.

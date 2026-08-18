@@ -745,7 +745,11 @@ def check_poruke(files: list[str]) -> list[Finding]:
 # Provera gleda SAMO unutar handlera (posle labele EH:/ErrHandler:/Fin:/VRATI:).
 # Van njega je `On Error Resume Next` legitimna priprema pred poziv koji sme da
 # pukne -- tamo je Err posle poziva jos ziv i LogErr uredno pise.
-HANDLER_LABELA = re.compile(r"^(EH|ErrHandler|Fin|VRATI)\w*:\s*$")
+# IGNORECASE zato sto je VBA case-insensitive: `eh:` i `EH:` su isti program, pa
+# bi provera koja vidi samo drugi oblik cutala nad prvim -- checker zelen, a
+# citava jedna legitimna sintaksa ga zaobilazi.
+HANDLER_LABELA = re.compile(r"^(EH|ErrHandler|Fin|VRATI)\w*:\s*$",
+                            re.IGNORECASE)
 KRAJ_PROC = re.compile(r"^(Exit (Sub|Function|Property)|End (Sub|Function|Property))\b",
                        re.IGNORECASE)
 ON_ERROR_BRISE = ("on error resume next", "on error goto 0")
@@ -1040,6 +1044,15 @@ Public Sub Radi()
     Exit Sub
 EH:
     On Error GoTo 0
+    LogErr "Radi"
+End Sub
+"""),
+    ("LogErr posle Resume Next, labela malim slovima", 1, """Option Explicit
+Public Sub Radi()
+    On Error GoTo eh
+    Exit Sub
+eh:
+    On Error Resume Next
     LogErr "Radi"
 End Sub
 """),

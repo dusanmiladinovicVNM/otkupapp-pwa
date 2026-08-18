@@ -45,7 +45,13 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-135"
+Public Const SCROPO_BUILD As String = "v6-ui-144"
+
+' Kolona liste Nedovrseno koja nosi CorrectionID. JEDAN broj, deljen izmedju
+' opisa kolona, punjenja redova i radnje -- da se indeks ne moze razici. Javan
+' je zato sto test tvrdi da bas TU stoji identitet: da je privatan, radnja bi
+' mogla da procita drugu kolonu a da opis kolona i dalje izgleda ispravno.
+Public Const NED_COL_CID As Long = 6
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -410,7 +416,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         Exit Function
     End If
 
-    ReDim outA(1 To mBrNedovrseno, 1 To 6)
+    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_CID)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("ref")) & "|" & CStr(d("kind")) & "|" & CStr(d("status")) & "|" & CStr(d("opis"))
@@ -423,7 +429,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         outA(n, 3) = CStr(d("status"))
         outA(n, 4) = CStr(d("opis"))
         outA(n, 5) = CStr(d("akcija"))
-        outA(n, 6) = CStr(d("correctionID"))
+        outA(n, NED_COL_CID) = CStr(d("correctionID"))
 Sledeci:
     Next i
 
@@ -444,10 +450,21 @@ End Function
 ' Redovi koji NISU context (osirotele prijemnice, palete, izgubljeni blokovi)
 ' nemaju sta da odbace -- oni se resavaju prevezivanjem, pa se radnja nad njima
 ' ODBIJA umesto da tiho ne uradi nista.
+' JEZGRO radnje: gasi TAJ context i nista drugo. Odvojeno od reda mreze i od
+' MsgBox-a zato sto je bas ovo tvrdnja koju PR nosi -- da se gasi izabrani, a ne
+' prvi, susedni ili bilo koji koji deli poslovni broj. MsgBox u headless runu
+' visi, pa se kroz UI ne moze izmeriti.
+Public Function OdbaciIspravkuCore(ByVal cid As String) As Boolean
+    cid = Trim$(cid)
+    If Len(cid) = 0 Then Exit Function
+    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(cid, _
+            "Operater odbacio zaostalu ispravku sa ekrana Oporavak.")
+End Function
+
 Private Function OdbaciIspravku(ByVal red As Long) As Boolean
     Dim cid As String, opis As String, errDesc As String
     On Error GoTo EH
-    cid = Trim$(CStr(modOtkupUI.GridCell(red, 6)))
+    cid = Trim$(CStr(modOtkupUI.GridCell(red, NED_COL_CID)))
     If Len(cid) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_NIJE_CTX"), True
         Exit Function
@@ -458,8 +475,7 @@ Private Function OdbaciIspravku(ByVal red As Long) As Boolean
     If MsgBox(Poruka("OTKUI_OPO_ODBACI_ASK") & vbCrLf & vbCrLf & opis, _
               vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
 
-    If Not modStornoContext.CancelCorrectionContext(cid, _
-            "Operater odbacio zaostalu ispravku sa ekrana Oporavak.") Then
+    If Not OdbaciIspravkuCore(cid) Then
         modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_ERR"), True
         Exit Function
     End If

@@ -1146,6 +1146,26 @@ SABOTAZE = {
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
         "kolona CID je prioriteta 4 -- nikad vidljiva",
     ),
+    # Test 71 dokazuje da identitet STIGNE do reda mreze. Ovo je druga tvrdnja:
+    # radnja gadja BAS izabrani context. Hard-kodovan ID prolazi 71 netaknut, jer
+    # 71 meri transport a ne posledicu.
+    "oporavak-odbacuje-prvi-a-ne-izabrani": (
+        "modScrOporavak.bas",
+        "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(cid, _\n",
+        "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(\"SV-TEST-1\", _\n",
+        "T_Oporavak_OdbaciIspravku_GasiSamoSvoj",
+        "gasi se IZABRANA ispravka -- sused ostaje netaknut",
+    ),
+    # NED_COL_CID vezuje opis kolona, punjenje reda i radnju u JEDAN broj. Da je
+    # radnja imala svoj indeks, drift bi bio nevidljiv: mreza bi izgledala
+    # ispravno, a radnja bi citala tudju kolonu.
+    "oporavak-cid-kolona-drift": (
+        "modScrOporavak.bas",
+        "Public Const NED_COL_CID As Long = 6\n",
+        "Public Const NED_COL_CID As Long = 5   ' SABOTAZA\n",
+        "T_Oporavak_OdbaciIspravku_PoIdentitetu",
+        "radnja cita BAS kolonu na kojoj se opis kolona zavrsava",
+    ),
 }
 
 

@@ -3358,19 +3358,54 @@ Redovi koji **nisu** context (osirotele prijemnice, palete, izgubljeni blokovi) 
 da tiho ne uradi ništa. Potvrda je `MsgBox` sa `vbDefaultButton2` i izričitim „dokumenti
 se NE diraju"; dugme nosi `danger` stil, kao „Vrati storno".
 
+### Šta je zatvorila recenzija (9.0/10)
+
+**Test je merio transport, ne posledicu.** Test 71 dokazuje da `CorrectionID`
+stigne do reda mreže — ali nijednom ne poziva samu mutaciju. Hard-kodovan
+`CancelCorrectionContext("SV-TEST-1")`, ili `GridCell(red - 1, ...)`, prošli bi
+71/71 netaknuti, dok PR tvrdi baš suprotno: „radnja gađa `CorrectionID`“.
+
+Radnja je zato dobila jezgro bez UI-ja (`OdbaciIspravkuCore`) — sve osim potvrde i
+toast-a; `MsgBox` u headless runu visi, pa se kroz UI ne može izmeriti. **Test 72**
+meri posledicu, i najvažniju tvrdnju stavlja **prvu** (`AssertEq` prekida test na
+prvom padu): odbaci `SV-TEST-2` → **`SV-TEST-1` ostaje `PENDING` / `NeedsRecovery=Da`**.
+Tek onda da je izabrani zaista `CANCELLED` / `Ne`, pa da je nestao iz liste a sused
+ostao.
+
+Test **mutira** podatke, pa ih i **vraća** — fixture nosi tačno dve ispravke na
+čekanju, a test 25 na tome meri safe-stop. Vraćanje se i **proverava**: neprovereno
+čišćenje je isto što i nikakvo, jer bi sledeći test nasledio tiho izmenjen fixture i
+pao po tuđem imenu.
+
+**Indeks kolone više ne može da se raziđe.** `NED_COL_CID` je sada jedan broj koji
+vezuje opis kolona, punjenje reda i radnju. Da je radnja imala svoj indeks, drift bi
+bio nevidljiv: mreža bi izgledala ispravno, a radnja bi čitala tuđu kolonu.
+
+**`MRTAV_LOG` je bio case-sensitive, a VBA nije.** `EH:` je hvatao, `eh:` / `Eh:` /
+`errHandler:` nije — isti program za VBA, nevidljiv za checker. To je tačno ona
+kategorija koju je ovaj PR i trebalo da zatvori: zelen checker koji cela jedna
+legitimna sintaksa zaobilazi. Sada nosi `re.IGNORECASE` i svoj self-test slučaj
+(labela malim slovima).
+
+`SCROPO_BUILD` je podignut na `v6-ui-144` — `modScrOporavak` je dobio mutacionu
+radnju, pa je stari pečat `v6-ui-135` lagao. `UISCR_BUILD` ostaje `v6-ui-143`:
+`modUiScreens` u ovom PR-u nije menjan.
+
 ### Verifikacija
 
 - `python tools\vba_check.py` → **čisto (191 fajlova)**, exit 0.
-- `python tools\vba_check.py --self-test` → **čisto (33 slučaja)**.
-- `python tools\run_vba.py --suite RunAllTests` → **ZELENO**, 71 test.
+- `python tools\vba_check.py --self-test` → **čisto (34 slučaja)**.
+- `python tools\run_vba.py --suite RunAllTests` → **ZELENO**, 72 testa.
 - `python tools\run_vba.py` (pun set) → **ZELENO**, svi suite-ovi.
 - **Test 71** (`T_Oporavak_OdbaciIspravku_PoIdentitetu`) tvrdi da svaki context red
-  nosi **svoj** `CorrectionID` u koloni 6 — ne samo „nije prazno", nego baš oba
+  nosi **svoj** `CorrectionID` u koloni `NED_COL_CID` — ne samo „nije prazno", nego baš oba
   ID-ja iz fixture-a, jer bi test koji meri praznoću prošao i kad bi svi redovi
   nosili isti CID. **Test 26** je dopunjen: „Nedovršeno je samo pregled" više nije
   tačno.
-- **Tri nove sabotaže**, svaka oborila svoju tvrdnju **po imenu**:
-  `oporavak-nema-odbaci`, `oporavak-cid-ne-stize-u-red`, `oporavak-cid-kolona-vidljiva`.
+- **Pet novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**:
+  `oporavak-nema-odbaci`, `oporavak-cid-ne-stize-u-red`, `oporavak-cid-kolona-vidljiva`,
+  `oporavak-odbacuje-prvi-a-ne-izabrani` (pada baš na „SV-TEST-1 ostaje netaknut“),
+  `oporavak-cid-kolona-drift`.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija (`Alt+F11 → Debug → Compile VBAProject`).
 
 **Nalaz zabeležen, nije popravljen:** `vba_check` prijavljuje **prazan fajl kao čist**.
