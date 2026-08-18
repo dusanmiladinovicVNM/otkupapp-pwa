@@ -1394,6 +1394,57 @@ SABOTAZE = {
         "T_BazenLjuske_ViseNegoStoStaje",
         "visak se odseca na velicinu bazena",
     ),
+    # --- agrohemija na novom UI (v6-ui-170) ---------------------------------
+    # Ime modula u registru ekrana. Greska u njemu NE PADA: sidebar ekran samo
+    # prikaze prigusenog, pa agrohemija nestane iz aplikacije bez ijedne poruke.
+    # Isti oblik kao oporavak-modul-ime.
+    "agro-modul-ime": (
+        "modUiScreens.bas",
+        '    c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
+        '    c.Add "AGRO|modScrAgroX|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
+        "T_Agro_UgovorEkrana",
+        "ekran odgovara na Scr_Meta -- kasno vezivanje stvarno razresava modul",
+    ),
+    # Kapija stanja pri dodavanju u korpu mora da broji i ono sto je VEC u
+    # korpi. Bez toga se ista roba doda dva puta preko stanja, a upis pukne tek
+    # u petlji i vrati se rollback-om -- operater dobije 4301 umesto recenice.
+    "agro-korpa-se-ne-broji": (
+        "modAgroUnos.bas",
+        '    uKorpi = AgroKorpaKolicina(korpa, artikalID)\n',
+        '    uKorpi = 0#   \' SABOTAZA: kapija ne broji ono sto je vec u korpi\n',
+        "T_Agro_KapijaStanjaBrojiKorpu",
+        "kapija stanja sabira korpu sa novom stavkom",
+    ),
+    # Druga kapija, pred upis, mora da agregira PO ARTIKLU preko cele korpe.
+    # Poredjenje red-po-red propusta korpu koja u zbiru premasuje stanje --
+    # tacno scenario "stanje se promenilo izmedju dodavanja i upisa".
+    "agro-agregat-po-redu": (
+        "modAgroUnos.bas",
+        '        treba(artID) = CDbl(treba(artID)) + AD(korpa(i), "kolicina")\n',
+        '        treba(artID) = AD(korpa(i), "kolicina")   \' SABOTAZA: bez sabiranja\n',
+        "T_Agro_KapijaStanjaBrojiKorpu",
+        "kapija pre upisa sabira SVE stavke istog artikla, ne gleda red po red",
+    ),
+    # Smart doza se zaokruzuje NAGORE: pola pakovanja se ne izdaje. Nanize daje
+    # nula pakovanja za 3 l uz pakovanje od 5 l -- predlog bi bio "ne izdaji
+    # nista" za robu koja je potrebna.
+    # Vidljivost i raspored polja su JEDNA odluka (grana 'izl' u RasporediPolja).
+    # Ako se raziju, polje prijema ostane upaljeno u izdavanju -- i sedne tacno
+    # preko polja izdavanja, jer oba traze isti slot u redu.
+    "agro-rezim-ne-gasi-polja": (
+        "modScrAgro.bas",
+        '    PoljeVidi z, "scrAgDob", Not izl\n',
+        '    PoljeVidi z, "scrAgDob", True   \' SABOTAZA: polje prijema ostaje\n',
+        "T_ZonaAgro_PoljaPostojeIPrateRezim",
+        "polja prijema su ugasena u izdavanju (i obrnuto)",
+    ),
+    "agro-doza-nanize": (
+        "modAgroUnos.bas",
+        "    r(\"brojPak\") = CLng(-Int(-dozaKg / pak))\n",
+        "    r(\"brojPak\") = CLng(Int(dozaKg / pak))   ' SABOTAZA: nanize\n",
+        "T_Agro_SmartDozaZaokruzujeNagore",
+        "doza se zaokruzuje NAGORE na cela pakovanja",
+    ),
 }
 
 

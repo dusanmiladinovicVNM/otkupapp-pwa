@@ -150,6 +150,29 @@ PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
 PRIJEMNICA_DELJENA = "5/150326"
 # Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
 PRIJEMNICA_CILJ_V2 = "4/150326"
+# AGROHEMIJA. Magacin do sada nije imao nijedan red u fixture-u, pa je svaka
+# tvrdnja o stanju, dugu i smart dozi bila zelena bez pokrica.
+#
+# ART-TEST-1 nosi Pakovanje 5 i DozaPoHa 2. Te dve vrednosti su izabrane tako da
+# se ZAOKRUZENJE NAGORE vidi: 1.5 ha * 2 = 3 l, a pakovanje je 5 l -> jedno
+# pakovanje. Da je pakovanje 1, ceo racun bi izgledao ispravno i kad bi se
+# zaokruzivalo nanize ili matematicki.
+#
+# ART-TEST-2 je BEZ Pakovanja -- invarijanta "svaki artikal ima Pakovanje" je
+# kapija izdavanja, pa mora da postoji red nad kojim ona pada.
+#
+# ART-TEST-3 ima Pakovanje ali NEMA nijedan magacin red -> stanje 0, pa kapija
+# stanja ima nad cim da padne i kad artikal postoji.
+ARTIKAL = "ART-TEST-1"
+ARTIKAL_BEZ_PAK = "ART-TEST-2"
+ARTIKAL_BEZ_STANJA = "ART-TEST-3"
+ARTIKAL_PAKOVANJE = 5
+ARTIKAL_DOZA = 2
+ARTIKAL_CENA = 500
+# ULAZ 20 l, pa IZLAZ 5 l kooperantu KOOP-TEST-1 -> stanje 15, dug 2500.
+ARTIKAL_STANJE = 15
+AGRO_DUG_KOOP1 = 2500
+
 # Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
 # RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
@@ -560,6 +583,29 @@ SEED = {
     # MsgBox u headless runu visi. Ovako se safe-stop pravilo ("dve ili vise na
     # cekanju = ne biraj naslepo") proverava nad istom deljenom rutinom, bez
     # ijednog dijaloga.
+    "tblArtikli": [
+        {"ArtikalID": ARTIKAL, "Naziv": "Test Preparat", "Tip": "Zastita",
+         "JedinicaMere": "l", "CenaPoJedinici": ARTIKAL_CENA,
+         "DozaPoHa": ARTIKAL_DOZA, "Kultura": VRSTA,
+         "Pakovanje": ARTIKAL_PAKOVANJE, "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_BEZ_PAK, "Naziv": "Test Bez Pakovanja",
+         "Tip": "Zastita", "JedinicaMere": "kg", "CenaPoJedinici": 100,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_BEZ_STANJA, "Naziv": "Test Bez Stanja",
+         "Tip": "Zastita", "JedinicaMere": "l", "CenaPoJedinici": 200,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Pakovanje": 1,
+         "Aktivan": STATUS_AKTIVAN},
+    ],
+    "tblMagacin": [
+        {"MagacinID": "MAG-TEST-1", "Datum": FIXTURE_DATE, "ArtikalID": ARTIKAL,
+         "Tip": "Ulaz", "Kolicina": 20, "BrojDokumenta": "AGRO-ULAZ-1",
+         "CenaPoJedinici": ARTIKAL_CENA, "Vrednost": 10000,
+         "DobavljacID": "DOB-TEST"},
+        {"MagacinID": "MAG-TEST-2", "Datum": FIXTURE_DATE, "ArtikalID": ARTIKAL,
+         "Tip": "Izlaz", "Kolicina": 5, "KooperantID": "KOOP-TEST-1",
+         "ParcelaID": "PAR-TEST-1", "BrojDokumenta": "AGRO-IZLAZ-1",
+         "CenaPoJedinici": ARTIKAL_CENA, "Vrednost": AGRO_DUG_KOOP1},
+    ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
          "OldDocType": "Otpremnica", "OldDocID": "OTP-TEST-2", "OldBroj": "2/TEST",

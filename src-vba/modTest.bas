@@ -88,6 +88,15 @@ Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
 Private Const FX_NOVAC_DUPLI As String = "NOV-DUPLI-1"
 ' Dve AKTIVNE prijemnice istog broja, za ispravku pod kolizijom.
 Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
+' AGROHEMIJA (tools/make_fixture.py, SEED tblArtikli / tblMagacin).
+' ART-TEST-1: Pakovanje 5, DozaPoHa 2, cena 500. ULAZ 20 - IZLAZ 5 = STANJE 15.
+' Pakovanje 5 uz dozu 2 je izabrano tako da se ZAOKRUZENJE NAGORE vidi:
+' 1.5 ha * 2 = 3 l, a izdaje se jedno pakovanje od 5 l.
+Private Const FX_ARTIKAL As String = "ART-TEST-1"
+Private Const FX_ARTIKAL_BEZ_PAK As String = "ART-TEST-2"
+Private Const FX_ARTIKAL_BEZ_STANJA As String = "ART-TEST-3"
+Private Const FX_ART_PAKOVANJE As Double = 5
+Private Const FX_ART_STANJE As Double = 15
 ' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
 Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
 Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
@@ -215,6 +224,10 @@ Public Sub RunAllTests()
     RunOne 79
     RunOne 80
     RunOne 81
+    RunOne 82
+    RunOne 83
+    RunOne 84
+    RunOne 85
 
     SetTestMode prevMode
     WriteResultFile
@@ -328,6 +341,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
         Case 80: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
         Case 81: TestName = "T_BazenLjuske_ViseNegoStoStaje"
+        Case 82: TestName = "T_Agro_UgovorEkrana"
+        Case 83: TestName = "T_Agro_KapijaStanjaBrojiKorpu"
+        Case 84: TestName = "T_Agro_SmartDozaZaokruzujeNagore"
+        Case 85: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -417,6 +434,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 79: T_CipoviEkrana_UgovorIFilter
         Case 80: T_ZonaPrerade_SvaPoljaVidljiva
         Case 81: T_BazenLjuske_ViseNegoStoStaje
+        Case 82: T_Agro_UgovorEkrana
+        Case 83: T_Agro_KapijaStanjaBrojiKorpu
+        Case 84: T_Agro_SmartDozaZaokruzujeNagore
+        Case 85: T_ZonaAgro_PoljaPostojeIPrateRezim
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4012,9 +4033,266 @@ Private Sub T_NovaPrerada_IzborINeto()
 End Sub
 
 
+' ============================================================
+' 81. Ugovor ekrana Agrohemija: cetiri liste, radnja samo nad korpom
+' ============================================================
+' Isti oblik kao T_Storno_UgovorIRadnje. Postoji zato sto ekran koji nije u
+' registru ili ne odgovara na ugovor NE PADA -- sidebar ga samo prikaze
+' prigusenog, pa agrohemija nestane iz aplikacije bez ijedne greske.
+Private Sub T_Agro_UgovorEkrana()
+    Dim liste As Variant, i As Long, kljucevi As String, d As Variant
+    Dim kljuc As String
 
+    AssertEq (Len(modUiScreens.ScrRowByKey("AGRO")) > 0), True, _
+             "AGRO postoji u registru ekrana"
+    AssertEq modUiScreens.ScrPostoji("AGRO"), True, _
+             "modul ekrana Agrohemija odgovara na Scr_Meta (kasno vezivanje radi)"
+    AssertEq (InStr(modUiScreens.ScrMeta("AGRO"), "kljuc=AGRO") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("AGRO"), SCR_OBLAST), _
+             OBL_AGROHEMIJA, "ekran trazi pravo na oblast Agrohemija"
 
+    liste = modScrAgro.Scr_Liste()
+    ' NAJVAZNIJE PRVO: ljuska mora da nacrta SVE liste koje ekran prijavi.
+    ' LayoutGrid crta prvih MAX_SEG i stane, bez greske i bez traga.
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|KORPA|STANJE|PROMET|DUGOVI", _
+             "redosled i kljucevi lista -- korpa je prva"
 
+    ' Radnja nad redom postoji SAMO u korpi: stanje, promet i dugovi su
+    ' pregledi, a storno magacin stavke je posao ekrana Storno.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq (Len(modScrAgro.Scr_Radnje()) > 0), True, _
+             "korpa ima radnju nad redom"
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "stanje je pregled -- nema radnje nad redom"
+    modScrAgro.Scr_ListaTestSet "PROMET"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "promet je pregled -- nema radnje nad redom"
+    modScrAgro.Scr_ListaTestSet "DUGOVI"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "dugovi su pregled -- nema radnje nad redom"
+
+    ' Svaka lista mora da vrati ISPRAVAN niz. Lista koja pukne se u ljusci
+    ' pretvara u Empty, LoadGridFromScreen na ne-niz radi Exit Sub -- pa mreza
+    ' ostane na prethodnoj listi i prekidac izgleda kao da ne radi.
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrAgro.Scr_ListaTestSet kljuc
+        d = modScrAgro.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " prijavljuje svoje kolone"
+    Next i
+
+    ' Dve korpe zive istovremeno -- prekidac rezima ne prazni ni jednu.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    AssertEq modScrAgro.Scr_Rezim(), "ULAZ", "prekidac rezima menja rezim"
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    AssertEq modScrAgro.Scr_Rezim(), "IZLAZ", "povratak na izdavanje"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+End Sub
+
+' ============================================================
+' 82. Kapija stanja broji i ono sto je VEC u korpi
+' ============================================================
+' Dve tvrdnje, obe iz legacy forme:
+'   1. dodavanje u korpu sabira sa onim sto je u korpi (btnDodajIzlaz), pa se
+'      ista roba ne moze dodati dva puta preko stanja;
+'   2. pred upis se stanje proverava JOS JEDNOM, agregirano po artiklu
+'      (ValidateKorpaIzlazStanje) -- jer se stanje izmedju dodavanja i upisa
+'      moglo promeniti (drugi operater, sync).
+' Bez druge kapije bi upis krenuo pa pao na pola petlje i vratio se rollback-om,
+' a operater bi dobio 4301 umesto recenice.
+Private Sub T_Agro_KapijaStanjaBrojiKorpu()
+    Dim korpa As Collection, fokus As String, mapa As Object
+    Dim magID As String
+
+    ' PREDUSLOV: stanje je ono iz fixture-a. Bez ovoga bi test merio ostatak
+    ' ranijeg testa umesto posledice ove radnje.
+    Set mapa = modAgroUnos.AgroStanjeMapa()
+    AssertEq (mapa.Exists(FX_ARTIKAL)), True, "artikal iz fixture-a ima stanje"
+    AssertEq CDbl(mapa(FX_ARTIKAL)), FX_ART_STANJE, _
+             "PREDUSLOV: stanje artikla je " & FX_ART_STANJE
+
+    Set korpa = modAgroUnos.NovaAgroKorpa()
+
+    ' Pola pakovanja se ne izdaje -- kolicina se kuca u PAKOVANJIMA.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1.5, FX_PARCELA, fokus)) > 0), _
+             True, "pola pakovanja se ne izdaje"
+    AssertEq korpa.count, 0, "odbijena stavka ne ulazi u korpu"
+
+    ' Dva pa jos jedno pakovanje = 15 l, tacno stanje.
+    AssertEq modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 2, FX_PARCELA, fokus), "", _
+             "dva pakovanja staju u stanje"
+    AssertEq modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1, FX_PARCELA, fokus), "", _
+             "i trece pakovanje staje -- granica se ne odbija"
+    AssertEq korpa.count, 2, "korpa ima dve stavke"
+
+    ' NAJVAZNIJE: cetvrto pada BAS zbog onoga sto je vec u korpi. Kapija koja
+    ' gleda samo stanje bi ga propustila (5 < 15) i upis bi pao tek u petlji.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1, FX_PARCELA, fokus)) > 0), _
+             True, "kapija stanja broji i ono sto je vec u korpi"
+    AssertEq korpa.count, 2, "odbijena stavka ne ulazi u korpu"
+
+    ' Artikal koji nema nijedan magacin red: stanje 0, pa izdavanja nema.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL_BEZ_STANJA, 1, FX_PARCELA, fokus)) > 0), _
+             True, "artikal bez stanja se ne izdaje"
+    ' Artikal bez popunjenog Pakovanja: invarijanta, ne stanje.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL_BEZ_PAK, 1, FX_PARCELA, fokus)) > 0), _
+             True, "artikal bez Pakovanja se ne izdaje"
+    AssertEq korpa.count, 2, "nijedna odbijena stavka nije usla u korpu"
+
+    ' Agregirana kapija: korpa tacno na stanju PROLAZI.
+    AssertEq modAgroUnos.AgroProveriKorpuIzlaz(korpa), "", _
+             "korpa tacno na stanju prolazi kapiju pre upisa"
+
+    ' A sada se stanje promeni IZA ledja korpe -- tacno zbog toga druga kapija
+    ' i postoji. Ista korpa vise ne sme da prodje.
+    magID = SaveMagacinCore(Date, FX_ARTIKAL, MAG_IZLAZ, 10, FX_KOOPERANT, "", _
+                            "AGRO-TEST-TX")
+    AssertEq (Len(Trim$(magID)) > 0), True, "kontrolni izlaz je proknjizen"
+    AssertEq (Len(modAgroUnos.AgroProveriKorpuIzlaz(korpa)) > 0), True, _
+             "korpa vise ne staje u stanje -- kapija pre upisa to hvata"
+
+    ' Ciscenje se i PROVERAVA. Nevereno vracanje je isto sto i nikakvo: test
+    ' dodat ispod ovog nasledio bi tiho izmenjen fixture i pao bi po tudjem imenu.
+    StornirajMagacinRed magID
+    Set mapa = modAgroUnos.AgroStanjeMapa()
+    AssertEq CDbl(mapa(FX_ARTIKAL)), FX_ART_STANJE, _
+             "fixture je vracen: stanje je opet " & FX_ART_STANJE
+End Sub
+
+' ============================================================
+' 83. Smart doza se zaokruzuje NAGORE, na cela pakovanja
+' ============================================================
+' Doza je racun po hektaru, ali se roba izdaje u pakovanjima -- pola pakovanja
+' ne postoji. Fixture je namesten tako da se razlika vidi: doza 2 l/ha na
+' 1.5 ha = 3 l, a pakovanje je 5 l. Zaokruzenje nanize dalo bi 0 pakovanja,
+' matematicko zaokruzenje takodje 1 -- ali na 3.75 ha (7.5 l) matematicko daje
+' 2 i nanize 1, dok nagore mora dati 2.
+Private Sub T_Agro_SmartDozaZaokruzujeNagore()
+    Dim pre As Object, info As Object
+
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 1.5)
+    AssertEq CStr(pre("greska")), "", "artikal iz fixture-a nema smetnju"
+    AssertEq CDbl(pre("dozaKg")), 3#, "doza za 1.5 ha je 3 l"
+    AssertEq CDbl(pre("pakovanje")), FX_ART_PAKOVANJE, "pakovanje iz sifarnika"
+    AssertEq CLng(pre("brojPak")), 1&, "3 l trazi JEDNO pakovanje od 5 l"
+    AssertEq CDbl(pre("izdajKol")), 5#, "izdaje se celo pakovanje, ne 3 l"
+
+    ' 3.75 ha -> 7.5 l -> dva pakovanja (nagore), ne jedno.
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 3.75)
+    AssertEq CDbl(pre("dozaKg")), 7.5, "doza za 3.75 ha je 7.5 l"
+    AssertEq CLng(pre("brojPak")), 2&, "7.5 l trazi DVA pakovanja -- nagore"
+    AssertEq CDbl(pre("izdajKol")), 10#, "izdaju se dva cela pakovanja"
+
+    ' Bez izabrane parcele nema ni preporuke -- ne sme da izmisli jedno pakovanje.
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 0)
+    AssertEq CLng(pre("brojPak")), 0&, "bez hektara nema preporuke"
+
+    ' Invarijanta nad Pakovanjem je kapija, i prijavljuje se kao smetnja a ne
+    ' kao nula: nula bi izgledala kao "nema sta da se izda".
+    Set info = modAgroUnos.AgroArtikalInfo(FX_ARTIKAL_BEZ_PAK)
+    AssertEq (Len(CStr(info("greska"))) > 0), True, _
+             "artikal bez Pakovanja prijavljuje smetnju"
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL_BEZ_PAK, 1.5)
+    AssertEq (Len(CStr(pre("greska"))) > 0), True, _
+             "preporuka nad artiklom bez Pakovanja prijavljuje smetnju"
+    AssertEq CLng(pre("brojPak")), 0&, "i ne predlaze nijedno pakovanje"
+End Sub
+
+' ============================================================
+' 84. Zona agrohemije: polja postoje i prate rezim
+' ============================================================
+' Isti oblik kao T_ZonaPrerade_SvaPoljaVidljiva, i iz istog razloga: kontrolu
+' koje NEMA Scr_Layout tiho preskoci (On Error Resume Next), pa operater vidi
+' rupu na mestu polja, a log ne kaze nista.
+'
+' Ovde je jos jedna stvar pod merenjem: prekidac rezima. Izdavanje i prijem
+' dele polja (artikal, kolicina, broj dokumenta) a razlikuju se u ostalima --
+' ako se vidljivost i raspored raziju, polja se preklope jedno preko drugog.
+' Zato oba rezima imaju i svoj spisak koji MORA da bude ugasen.
+Private Sub T_ZonaAgro_PoljaPostojeIPrateRezim()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, izlNema As String, izlVisak As String
+    Dim ulzNema As String, ulzVisak As String
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaAg", True)
+    z.width = 1200: z.Height = 300
+    modScrAgro.Scr_Build z
+
+    ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
+    ' masinerija obrise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao
+    ' kao "greska bez opisa".
+    For Each nm In Array("agBg", "agCap", "agParTxt", "agHint", "agVred", "agLnB", _
+                         "agKL0", "agKV0", "agKL3", "agKV3", _
+                         "scrAgSegI", "scrAgSegU", "scrAgParAdd", "scrAgParClr", _
+                         "scrAgDodaj", "scrAgZavrsi", "scrAgPocDug", "scrAgOcisti", _
+                         "scrAgKoop", "scrAgArt", "scrAgPar", "scrAgDob", _
+                         "scrAgKol", "scrAgCena", "scrAgDok")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Kombo u zoni MORA biti polje (okvir nm + kontrola nmT): panel za izbor
+    ' (modOtkupUI.FindCombo) trazi bas taj oblik. Gola kontrola bi imala
+    ' strelicu koja "ne radi" i listu koja se ne otvara.
+    For Each nm In Array("scrAgKoop", "scrAgArt", "scrAgPar", _
+                         "scrAgKol", "scrAgCena", "scrAgDok", "scrAgDob")
+        If KontrolaPostoji(z, CStr(nm)) Then
+            If Not KontrolaPostoji(z.Controls(CStr(nm)), CStr(nm) & "T") Then _
+                nema = nema & " " & CStr(nm) & "T"
+        End If
+    Next nm
+
+    ' IZDAVANJE: kooperant i parcele postoje, dobavljac i cena ne.
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    For Each nm In Array("scrAgKoop", "scrAgArt", "scrAgKol", "scrAgDok", "scrAgPocDug")
+        If Not VidljivaKontrola(z, CStr(nm)) Then izlNema = izlNema & " " & CStr(nm)
+    Next nm
+    For Each nm In Array("scrAgDob", "scrAgCena")
+        If VidljivaKontrola(z, CStr(nm)) Then izlVisak = izlVisak & " " & CStr(nm)
+    Next nm
+
+    ' PRIJEM: obrnuto. Kooperant i parcele nemaju sta da traze u prijemu --
+    ' roba ulazi od dobavljaca, ne izlazi kooperantu.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    For Each nm In Array("scrAgArt", "scrAgDob", "scrAgCena", "scrAgKol", "scrAgDok")
+        If Not VidljivaKontrola(z, CStr(nm)) Then ulzNema = ulzNema & " " & CStr(nm)
+    Next nm
+    For Each nm In Array("scrAgKoop", "scrAgPar", "scrAgPocDug")
+        If VidljivaKontrola(z, CStr(nm)) Then ulzVisak = ulzVisak & " " & CStr(nm)
+    Next nm
+
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    Unload f
+
+    AssertEq nema, "", "zona agrohemije nema nijednu kontrolu manje"
+    AssertEq izlNema, "", "u izdavanju su upaljena sva polja izdavanja"
+    AssertEq izlVisak, "", "u izdavanju su ugasena polja prijema"
+    AssertEq ulzNema, "", "u prijemu su upaljena sva polja prijema"
+    AssertEq ulzVisak, "", "u prijemu su ugasena polja izdavanja"
+End Sub
+
+' Ugasi magacin red koji je test napravio. Vracanje fixture-a, ne poslovna
+' radnja -- zato ide kroz UpdateCell, a ne kroz storno rutinu.
+Private Sub StornirajMagacinRed(ByVal magID As String)
+    Dim redovi As Collection, i As Long
+    Set redovi = FindRows(TBL_MAGACIN, COL_MAG_ID, magID)
+    For i = 1 To redovi.count
+        UpdateCell TBL_MAGACIN, CLng(redovi(i)), COL_STORNIRANO, "Da"
+    Next i
+End Sub
 
 ' Jedno polje contexta, po CorrectionID.
 Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String

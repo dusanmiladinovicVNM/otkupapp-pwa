@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-169`.
+Stanje na dan `v6-ui-170`.
 
 ---
 
@@ -502,8 +502,9 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 **Faza D je time ZATVORENA.**
 
 ### Faza E — ostali ekrani
-15. Agrohemija, Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji,
-    Sledljivost — svaki po istom obrascu.
+15. ~~Agrohemija~~ **URAĐENO** (v6-ui-170, `modScrAgro`) — v. §7.
+    Ostaju: Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
+    svaki po istom obrascu.
 
 ---
 
@@ -515,3 +516,98 @@ pozivom postojeće rutine (`modCenovnik`, `modBrojevi`, `modOtkup`,
 `Private` i vezana za formu, prvo se **izdvaja račun** iz prikaza (kao
 `KoopRangRows` iz `LoadKoopRang`), pa je koriste i legacy forma i novi ekran.
 Duplirana logika se ne piše ni u jednom slučaju.
+
+---
+
+## 7. Agrohemija — šta je preneto (v6-ui-170)
+
+Prvi ekran **Faze E**. Zona nosi celu unosnu formu — što je moguće tek od
+`v6-ui-159`, kad je Faza C/10 (unos prerade na Paletama) otvorila polja i
+promenu teksta ugovornim ekranima.
+
+### 7.1 Gde je šta završilo
+
+| Legacy (`frmAgrohemija`) | Novo mesto |
+|---|---|
+| korpa izlaza / ulaza, `tKorpaItem` | `modAgroUnos` — korpa je `Collection` rečnika |
+| `BuildArtikalStanjeDict` | `modAgroUnos.AgroStanjeMapa` |
+| `GetKorpaIzlazKolicinaZaArtikal` | `modAgroUnos.AgroKorpaKolicina` |
+| `ValidateKorpaIzlazStanje` | `modAgroUnos.AgroProveriKorpuIzlaz` |
+| `btnDodajIzlaz_Click` provere | `modAgroUnos.AgroDodajIzlaz` |
+| `btnDodajUlaz_Click` provere (+ potvrda cene 0) | `modAgroUnos.AgroDodajUlaz` |
+| `btnZavrsiIzlaz_Click` transakcija | `modAgroUnos.AgroUpisiIzlaz` |
+| `btnZavrsiUlaz_Click` transakcija | `modAgroUnos.AgroUpisiUlaz` |
+| `UpdatePreporuka` (smart doza → pakovanja) | `modAgroUnos.AgroPreporukaInfo` |
+| tri kopije invarijante nad `Pakovanje` | `modAgroUnos.AgroArtikalInfo` (jedna) |
+| `m_btnPocetniDug_Click` | `modScrAgro.PocetniDug` → `BookPocetniDug` (nepromenjen) |
+| KPI traka (4 broja) | zona ekrana, ista četiri broja |
+
+Nove rutine za mrežu (ekran ne čita tabele sam):
+`modAgrohemija.GetMagacinPrometForGrid`, `modAgrohemija.GetAgroDugoviForGrid`,
+`modNovac.GetAgroAbzugMapa` (jednoprolazna mapa umesto `GetAgroAbzug` u petlji).
+
+### 7.2 Šta ekran uzima od ljuske
+
+Ništa od ovoga nije napravljeno za agrohemiju — sve je došlo uz **Fazu C** i
+ovde se samo koristi. To je i bila poenta: drugi korisnik istog ugovora ne sme
+da izmišlja svoju varijantu.
+
+| Potreba | Ljuskin ugovor | Otkad |
+|---|---|---|
+| polje (natpis + okvir + kontrola) | `modOtkupUI.NewFieldG` | `v6-ui-159` |
+| raspored unutar polja | `modOtkupUI.LayoutFieldInner` | `v6-ui-159` |
+| promena teksta stiže ekranu | `Scr_Event("chg:<kontrola>")` | `v6-ui-159` |
+| padajuća lista nad poljem u zoni | `FindCombo` gleda i `zScr_<ekran>` | `v6-ui-159` |
+| klik na kontrolu u zoni | `Scr_Event("<tag>")`, prefiks `scr` | `v6-ui-143` |
+
+Zbog toga kombo u zoni **mora** biti polje (okvir `nm` + kontrola `nmT`), a ne
+gola kontrola — panel za izbor traži baš taj oblik.
+
+Čipove (`Scr_Cipovi`) i brojač u meniju (`Scr_Brojac`) ovaj ekran ne prijavljuje:
+liste se sužavaju pretragom, a agrohemija nema „zaostatak" koji čeka operatera
+— za razliku od Oporavka, gde brojač i postoji.
+
+### 7.3 Šta je namerno drugačije od legacy-ja
+
+- **Dve sekcije → prekidač režima u zoni** (IZDAVANJE / PRIJEM). Ljuska ima
+  jednu mrežu i jednu zonu; dve forme jedna pored druge se ne uklapaju.
+  Obe korpe žive istovremeno — prelazak režima ne prazni ništa.
+- **Multiselect parcela → sakupljanje dugmetom „+ Parcela".** Mreža bira jedan
+  red, combo jednu stavku; zbir ha (koji smart doza računa) drži ekran uz
+  spisak. Rezultat je isti `parcelaID` niz razdvojen `;` i isti zbir ha.
+- **Četiri liste u mreži** kojih legacy nema: korpa, stanje magacina, promet i
+  dug po kooperantu. Mreža je već tu — legacy je za isto morao u Izveštaje.
+- **„Ukloni stavku" i „Isprazni korpu".** Legacy pogrešnu stavku nije umeo da
+  izbaci — jedini izlaz je bio zatvaranje forme. Ekran ostaje otvoren, pa bez
+  toga ne bi bio upotrebljiv.
+
+### 7.4 Šta NIJE preneto
+
+- `frmAgrohemija` se **ne gasi i ne menja** — isto pravilo kao za `frmOtkup` i
+  `frmDokumenta` (§5, Faza B). Legacy zadržava svoju kopiju logike; pravilo se
+  menja u `modAgroUnos` pa se **ručno preslikava** u formu.
+- **Dobavljač je slobodan tekst**, kao i u legacy-ju (`cmbDobavljac` se nigde
+  ne puni iz tabele). Šifarnik dobavljača ne postoji i ovde se ne uvodi.
+- **Storno magacin stavke** nije ovde — to je posao ekrana Storno.
+- KI-006 (`ExportMagacinKoop` ne izuzima `ART_POCETNI_DUG`) je **netaknut**:
+  PWA izvoz nije deo ovog prelaska.
+
+### 7.5 Verifikacija
+
+Testovi 81–84 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
+ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_Agro_UgovorEkrana` | registar, četiri liste, radnja samo nad korpom | `agro-modul-ime` |
+| `T_Agro_KapijaStanjaBrojiKorpu` | kapija broji korpu; kapija pred upis agregira po artiklu | `agro-korpa-se-ne-broji`, `agro-agregat-po-redu` |
+| `T_Agro_SmartDozaZaokruzujeNagore` | doza → cela pakovanja, nagore | `agro-doza-nanize` |
+| `T_ZonaAgro_PoljaPostojeIPrateRezim` | sve kontrole zone postoje; prekidač režima pali i **gasi** prava polja | `agro-rezim-ne-gasi-polja` |
+
+> **Suite nije puštena.** `run_vba.py` traži Windows + Excel; ova izmena je
+> nastala u web sesiji, pa su testovi 81–84 i pet sabotaža **napisani ali
+> neizvršeni**. Prošlo je samo ono što radi bez Excela: `vba_check` (+ self-test),
+> `who_writes --check`, `run_vba --self-test` i provera da svaka sabotaža pogađa
+> tačno jedno mesto i uredno se vraća. Compile kapija (`Alt+F11 → Debug →
+> Compile VBAProject`) i `run_vba.py --suite RunAllTests` ostaju za Windows.

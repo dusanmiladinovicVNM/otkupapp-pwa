@@ -26,12 +26,12 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblOtpremnica` | 4 | `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow` |
 | `tblPrijemnica` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
+| `tblMagacin` | 3 | `frmAgrohemija`, `modAgroUnos`, `modAgrohemija` |
 | `tblPaleta` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
 | `tblPaletaStavka` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
 | `tblSEFEventLog` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblSEFSubmission` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblKorisnici` | 2 | `modAuth`, `modSetup` |
-| `tblMagacin` | 2 | `frmAgrohemija`, `modAgrohemija` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
 | `tblPrerada` | 2 | `modPaletniList`, `modStorno` |
 | `tblPreradaStavka` | 2 | `modPaletniList`, `modStorno` |
@@ -57,11 +57,11 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
 - `tblPrijemnica`: `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
+- `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblPaleta`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPaletaStavka`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblSEFEventLog`: `modSEFTests`
 - `tblSEFSubmission`: `modSEFTests`
-- `tblMagacin`: `modAgrohemijaTests`
 - `tblParcele`: `modAgrohemijaTests`
 - `tblStornoZurnal`: `modTestStornoCentar`
 - `tblArtikli`: `modAgrohemijaTests`
