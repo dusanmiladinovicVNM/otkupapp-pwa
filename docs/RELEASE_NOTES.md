@@ -3984,7 +3984,8 @@ greške sidebar ne bi ni iscrtao — ali greška se i **čisti**, da ne procuri 
 
 ### Cena je držana pod kontrolom
 
-`Scr_Brojac` se zove iz `RefreshFromData` — dakle **na promenu podataka**, ne pri
+`Scr_Brojac` se zove iz `RefreshFromData` **i iz `EnsureGridLoaded`** — dakle na
+promenu podataka i jednom na otvaranju aplikacije, ne pri
 svakom crtanju sidebara. `GetNedovrseno` je više prolaza kroz tabele; na crtačkoj
 učestalosti bio bi to isti kvar zbog koga su dva PR-a vadila sekunde iz uvida o
 stornu.
@@ -4011,3 +4012,7 @@ Druga je usput otkrila da je moja prva verzija tvrdnje bila prazna: `On Error Re
 Next` već guta grešku i vrednost ostaje 0, pa sabotaža nad tim blokom nije obarala
 ništa. Ono što blok stvarno radi je `Err.Clear` — i tek kad je test to počeo da meri,
 sabotaža je dobila šta da obori.
+
+Prva verzija je zvala samo `RefreshFromData`, pa su značke bile **prazne do prve
+promene podataka** — a zaostatak koji se vidi tek pošto nešto uradiš ne rešava
+ništa. Ceo smisao je da se vidi čim se aplikacija otvori.
