@@ -3798,3 +3798,66 @@ Druga je usput ponovo naplatila **zamku 8** iz `tools/sabotaza.py`: prva verzija
 je uklanjala red i ostavljala `mSelTip = ""`, koji postoji i u zdravom kodu — pa ga
 je `--vrati` našao tamo i dodao još jedan `Set mBlokOznaceni = Nothing`. Zamena sada
 nosi oznaku `' SABOTAZA`, pa je jedinstvena.
+
+---
+
+## v2.52.1 — `v6-ui-150` · vodeće „?" u dijalogu i uput na ekran koji ne postoji
+
+Smoke posle upisa otpremnice pokazao je poruku:
+
+```
+? Vise ispravki na cekanju za ovaj tip -- prevezivanje NIJE uradeno.
+  Resi kroz Osiroceni dokumenti.
+```
+
+Tri greške u jednoj rečenici, i sve tri različite vrste.
+
+### 1. Oznaka je signal, ne tekst
+
+`ChrW(10007)` (✗) uz poruku znači **„ovo idi u dijalog"** — razlikovanje uvedeno u
+`v6-ui-143`, jer se upozorenje uz uspešan upis gubilo u traci. Ali `MsgBox` crta
+kroz **ANSI kodnu stranu**, u kojoj tog znaka nema, pa ga je operater video kao
+vodeće `?`.
+
+Oznaka se sada skida pred dijalogom (`PorukaZaDijalog`). U traci poruka, koja je
+Unicode, **ostaje** — tamo nosi značenje (crveno = nešto nije prošlo), dok u
+dijalogu istu ulogu već igra `vbExclamation`.
+
+Isti tekst u istoj traci se video ispravno — zato je greška i preživela: proverom
+jednog kanala izgleda tačno.
+
+### 2. Pogrešno slovo
+
+`Osiro` & `ChrW(269)` & `eni` daje **„Osiročeni"**. Ostale četiri poruke istog
+sadržaja koriste `ChrW(263)` (ć). Jedan ključ je odstupao.
+
+### 3. Uput na ekran koji u novom UI-ju ne postoji
+
+„Reši kroz **Osiroćeni dokumenti**" je naziv **legacy panela**. U novom UI-ju taj
+ekran se zove **Oporavak**, a lista **Nedovršeno**. Operater je upućivan na nešto
+što na ekranu ne piše nigde.
+
+Ispravljene su sve četiri poruke koje su vodile na legacy imena:
+
+| Pre | Sada |
+|---|---|
+| Reši kroz Osiroćeni dokumenti. | Reši na ekranu Oporavak → Nedovršeno. |
+| Reši kroz: Osiroćeni dokumenti. | Reši na ekranu Oporavak → Osiroćene prijem. |
+| uradi ručno (Osiroćeni dokumenti → Palete) | uradi ručno (Oporavak → Osiroć.palete) |
+| OTKAZI = REŠI KASNIJE … (Osiroćeni dokumenti) | OTKAZI = ODLOŽENO REŠAVANJE … (Oporavak) |
+
+Poslednja je usklađena i sa novim imenima osnova storna iz `v6-ui-148`.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (75)** · pun set **ZELENO** · `COMPILE` `NEJASNO`.
+
+**Test 69** je dobio treću tvrdnju: poruka u dijalogu ide **bez** oznake, nije
+prazna posle skidanja, i počinje slovom a ne razmakom. Skidanje je zato izdvojeno
+u `PorukaZaDijalog` — da se može izmeriti; dijalog u headless runu visi, pa se sam
+`MsgBox` ne može testirati.
+
+Sabotaža `dijalog-nosi-oznaku` vraća oznaku u dijalog i pada po imenu:
+*„DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake — očekivano [False],
+dobijeno [True]"*.

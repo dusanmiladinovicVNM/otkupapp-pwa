@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-149"
+Public Const OTKUI_BUILD   As String = "v6-ui-150"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -5527,13 +5527,29 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ' Razlikovanje ide po OZNACI koju katalog vec nosi: ChrW(10007) = upozorenje
     ' (DOKUNOS_MSG_VISE_ISPRAVKI, _PALETE_NISU, _ZBIRNA_NIJE, _ISPRAVKA_NIJE),
     ' ChrW(10003) = informacija o uspehu. Cistu informaciju ne guramo u dijalog.
+    '
+    ' Oznaka je SIGNAL ZA RUTIRANJE, ne deo poruke, pa se pred dijalog skida.
+    ' MsgBox crta kroz ANSI kodnu stranu, u kojoj ChrW(10007) ne postoji -- pa ga
+    ' je operater video kao vodece '?' ispred recenice. U traci poruka, koja je
+    ' Unicode, ista oznaka se crta ispravno i tamo OSTAJE: tamo nosi znacenje
+    ' (crveno = nesto nije proslo), a u dijalogu ga vec nosi sam vbExclamation.
     If InStr(1, dopuna, ChrW(10007)) > 0 Then
-        MsgBox dopuna, vbExclamation, APP_NAME
+        MsgBox PorukaZaDijalog(dopuna), vbExclamation, APP_NAME
     End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Sub
+
+' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
+' poruku treba pokazati u dijalogu -- nije deo recenice. MsgBox crta kroz ANSI
+' kodnu stranu u kojoj tog znaka nema, pa ga je operater video kao vodece '?'.
+'
+' Javna je da bi se moglo tvrditi u testu: skidanje oznake unutar Sub-a koji
+' otvara dijalog ne bi se moglo izmeriti, a dijalog u headless runu visi.
+Public Function PorukaZaDijalog(ByVal txt As String) As String
+    PorukaZaDijalog = Trim$(Replace(txt, ChrW(10007), ""))
+End Function
 
 ' Vrednosti forme pod LOGICKIM imenima. Ljuska zna gde koje polje stoji, ekran
 ' zna sta ono znaci - ista podela kao kod ApplyPrefill, samo u drugom smeru.

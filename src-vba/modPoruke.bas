@@ -602,7 +602,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_OTP", ChrW(10003) & " Otpremnica sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "OTKUI_MSG_UPISANO", ChrW(10003) & " Dokument sa" & ChrW(269) & "uvan:"
     UpsertRow lo, existing, "DOKUNOS_MSG_ZBIRNA_NIJE", ChrW(10007) & " Zbirna NIJE kreirana automatski " & ChrW(8212) & " unesi je ru" & ChrW(269) & "no (rezim Zbirna)."
-    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i kroz Osiro" & ChrW(269) & "eni dokumenti."
+    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_1", ChrW(268) & "eka ISPRAVKA za stornirano"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_2", "Da li je upravo snimljeni dokument ZAMENA za njega?"
     UpsertRow lo, existing, "DOKUNOS_MSG_ISPRAVKA_OK", ChrW(10003) & " Ispravka zavr" & ChrW(353) & "ena:"
@@ -796,7 +796,7 @@ Public Sub UpsertPoruke(lo As ListObject)
               "DA = DUPLIKAT: dokument nikad nije trebalo da postoji " & ChrW(8212) & _
               " skini posledice, nema zamene" & vbCrLf & vbCrLf & _
               "NE = PONI" & ChrW(352) & "TENJE: fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava, nema novog dokumenta" & vbCrLf & vbCrLf & _
-              "OTKAZI = RE" & ChrW(352) & "I KASNIJE: zapamti kao nedovr" & ChrW(353) & "eno (Osiro" & ChrW(263) & "eni dokumenti)"
+              "OTKAZI = ODLO" & ChrW(381) & "ENO RE" & ChrW(352) & "AVANJE: zapamti kao nedovr" & ChrW(353) & "eno (Oporavak)"
     UpsertRow lo, existing, "STORNO_ASK_PALETE", "Da li palete da OSTANU vezane za storniranu prijemnicu?" & vbCrLf & vbCrLf & _
               "DA = ne diraj palete (roba je fizi" & ChrW(269) & "ki tu, samo je dokument pogre" & ChrW(353) & "an)" & vbCrLf & _
               "NE = odve" & ChrW(382) & "i palete (roba nije primljena)"
@@ -817,7 +817,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' --- ispravka prijemnice (prevezivanje paleta) ---
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ", "Postoji VI" & ChrW(352) & "E ispravki prijemnice na " & ChrW(269) & "ekanju." & vbCrLf & _
               "Palete NISU automatski prevezane (da se ne pove" & ChrW(382) & "e pogre" & ChrW(353) & "na)." & vbCrLf & _
-              "Re" & ChrW(353) & "i kroz: Osiro" & ChrW(263) & "eni dokumenti."
+              "Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Osiro" & ChrW(263) & "ene prijem."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_1", ChrW(268) & "eka ISPRAVKA za storniranu prijemnicu"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_2", "Da li je OVAJ unos zamena za nju?" & vbCrLf & vbCrLf & _
               "DA = ispravka (palete se prevezuju na novu prijemnicu)" & vbCrLf & _
@@ -828,7 +828,7 @@ Public Sub UpsertPoruke(lo As ListObject)
               "OTKAZI = ne snimaj jo" & ChrW(353)
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_PREVEZANE", ChrW(10003) & " Palete prevezane:"
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Prevezivanje paleta nije uspelo " & ChrW(8212) & _
-              " uradi ru" & ChrW(269) & "no (Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Palete):"
+              " uradi ru" & ChrW(269) & "no (Oporavak " & ChrW(8594) & " Osiro" & ChrW(263) & ".palete):"
     UpsertRow lo, existing, "DOKUNOS_ERR_ISPRAVKA_NECITLJIVA", ChrW(10007) & " Ne mo" & ChrW(382) & "e se utvrditi da li ISPRAVKA " & _
               ChrW(269) & "eka na ovu prijemnicu." & vbCrLf & vbCrLf & _
               "Upis je zaustavljen namerno: da je nastavljen, nova prijemnica bi dobila SVE" & ChrW(381) & "E palete, " & _

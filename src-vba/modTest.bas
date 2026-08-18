@@ -3226,6 +3226,20 @@ Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
         AssertEq (InStr(1, t, ChrW(10007)) > 0), False, _
                  CStr(info(i)) & " je informacija, ne upozorenje"
     Next i
+
+    ' TRECA tvrdnja: oznaka je SIGNAL ZA RUTIRANJE, ne deo recenice. MsgBox crta
+    ' kroz ANSI kodnu stranu u kojoj ChrW(10007) ne postoji, pa ju je operater
+    ' video kao vodece '?' ispred teksta. Pred dijalog se zato skida -- a u traci
+    ' poruka, koja je Unicode, OSTAJE, jer tamo nosi znacenje.
+    For i = 0 To UBound(upoz)
+        t = Poruka(CStr(upoz(i)))
+        AssertEq (InStr(1, modOtkupUI.PorukaZaDijalog(t), ChrW(10007)) > 0), False, _
+                 CStr(upoz(i)) & " u dijalogu ide BEZ oznake"
+        AssertEq (Len(modOtkupUI.PorukaZaDijalog(t)) > 0), True, _
+                 CStr(upoz(i)) & " posle skidanja oznake nije prazna"
+        AssertEq Left$(modOtkupUI.PorukaZaDijalog(t), 1), UCase$(Left$(modOtkupUI.PorukaZaDijalog(t), 1)), _
+                 CStr(upoz(i)) & " u dijalogu pocinje slovom, ne razmakom"
+    Next i
 End Sub
 
 ' ============================================================

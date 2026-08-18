@@ -1213,6 +1213,17 @@ SABOTAZE = {
         "T_StornoBlokovi_PodrazumevanoNijedan",
         "promena izabranog dokumenta ponistava oznacene blokove",
     ),
+    # Oznaka upozorenja je SIGNAL ZA RUTIRANJE, ne deo recenice: kaze sloju iznad
+    # da poruku treba pokazati u dijalogu. MsgBox crta kroz ANSI kodnu stranu u
+    # kojoj ChrW(10007) ne postoji, pa ju je operater video kao vodece '?' ispred
+    # teksta. U traci poruka, koja je Unicode, ista oznaka OSTAJE.
+    "dijalog-nosi-oznaku": (
+        "modOtkupUI.bas",
+        "    PorukaZaDijalog = Trim$(Replace(txt, ChrW(10007), \"\"))\n",
+        "    PorukaZaDijalog = txt   ' SABOTAZA: oznaka ostaje u dijalogu\n",
+        "T_PorukeUnosa_UpozorenjeNosiOznaku",
+        "poruka u dijalogu ide BEZ oznake za rutiranje",
+    ),
 }
 
 
