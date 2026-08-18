@@ -267,10 +267,10 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "ImportOtkupFromPWA_Core"
     On Error Resume Next
 
     MarkPWAFatalSyncError "ImportOtkupFromPWA_Core", errDesc
-    LogErr "ImportOtkupFromPWA_Core"
 
     Monitor_MasterSyncFail _
         procedureName:="ImportOtkupFromPWA_Core", _
@@ -383,9 +383,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "ImportOtkupFromPWA_TX"
     On Error Resume Next
 
-    LogErr "ImportOtkupFromPWA_TX"
 
     Monitor_MasterSyncFail _
         procedureName:="ImportOtkupFromPWA_TX", _
@@ -729,9 +729,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -950,9 +950,9 @@ Public Function StampVozacFromStanicaForMalina_TX() As Long
 EH:
     Dim errNum As Long, errDesc As String, errSrc As String
     errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    LogErr SRC
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
     On Error GoTo 0
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
@@ -1053,9 +1053,9 @@ Public Function AutoCreateZbirnaFromOtpremnice_TX(Optional ByVal samoBrojOtp As 
 EH:
     Dim errNum As Long, errDesc As String, errSrc As String
     errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    LogErr SRC
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr SRC
     On Error GoTo 0
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
 End Function
@@ -1825,9 +1825,9 @@ Private Function ImportRowToTblOtkup_RowTX(ByVal data As Variant, _
     Exit Function
 
 EH:
+    LogErr "ImportRowToTblOtkup_RowTX", "ClientRecordID=" & clientRecordID
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr "ImportRowToTblOtkup_RowTX", "ClientRecordID=" & clientRecordID
     On Error GoTo 0
 
     ImportRowToTblOtkup_RowTX = ""
@@ -1974,8 +1974,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "ImportRowToTblOtkup", "ClientRecordID: " & clientRecordID
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, "ImportRowToTblOtkup", _
@@ -2594,10 +2594,10 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "ImportZbirneFromPWA_Core"
     On Error Resume Next
 
     MarkPWAFatalSyncError "ImportZbirneFromPWA_Core", errDesc
-    LogErr "ImportZbirneFromPWA_Core"
 
     Monitor_MasterSyncFail _
         procedureName:="ImportZbirneFromPWA_Core", _
@@ -2658,8 +2658,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     MsgBox Poruka("SYNC_MSG_GRESKA_PRI_UVOZU_2") & errDesc, vbCritical, APP_NAME
@@ -2956,11 +2956,11 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
 
-    LogErr SRC
 
     outZbirnaID = vbNullString
     outBrojZbirne = vbNullString
@@ -3928,11 +3928,11 @@ NextGeoRow:
     Exit Function
 
 EH:
+    LogErr SRC
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
-    LogErr SRC
     ImportParcelGeoFromGoogleToMaster = False
 End Function
 

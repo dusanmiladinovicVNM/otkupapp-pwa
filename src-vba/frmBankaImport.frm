@@ -1583,11 +1583,12 @@ Private Sub UpdateIzvodSummaryLabel()
     Exit Sub
 
 EH:
+    ' LogErr PRE "On Error Resume Next" -- ona resetuje Err, pa bi poziv ispod
+    ' nje upisao nista.
+    LogErr "frmBankaImport.UpdateIzvodSummaryLabel"
     On Error Resume Next
     Me.lblIzvodSummary.caption = "(gre" & ChrW(353) & "ka pri " & ChrW(269) & "itanju saldo info-a)"
     Me.lblIzvodSummary.ForeColor = RGB(128, 128, 128)
-    
-    LogErr "frmBankaImport.UpdateIzvodSummaryLabel"
 End Sub
 
 Private Sub LayoutTopKpis()

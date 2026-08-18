@@ -632,8 +632,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "SerializeUBLInvoice"
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum <> 0 Then

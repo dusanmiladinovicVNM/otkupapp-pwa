@@ -427,9 +427,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "SendInvoiceToSEF_TX"
     On Error Resume Next
 
-    LogErr "SendInvoiceToSEF_TX"
 
     Monitor_Error _
         moduleName:="modSEFService", _
@@ -463,7 +463,9 @@ EH:
 
     On Error GoTo 0
     
-    LogErr "SendInvoiceToSEF_TX"
+    ' Ovde Err brise "On Error GoTo 0" (isto kao Resume Next), pa LogErr ne bi
+    ' imao sta da vidi. Opis je vec uhvacen u lokale iznad -- salje se izricito.
+    LogError "SendInvoiceToSEF_TX", errDesc, errNum
 
     If Not tx Is Nothing Then tx.RollbackTx
     If Not txPrep Is Nothing Then txPrep.RollbackTx
@@ -645,8 +647,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "CancelInvoiceOnSEF_TX"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -696,8 +698,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "StornoInvoiceOnSEF_TX"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -898,8 +900,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "RecoverStuckSEFSendingInvoice"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1098,9 +1100,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
 
-    LogErr SRC
 
     Monitor_Error _
         moduleName:="modSEFService", _

@@ -67,7 +67,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
 - `tblPartnerMap`: `modTestBanka`
-- `tblStornoVeze`: `modTestStorno`, `modTestStornoCentar`
+- `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`
 - `tblSEFConfig`: `modTestStorno`

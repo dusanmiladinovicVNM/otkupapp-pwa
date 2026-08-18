@@ -51,9 +51,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "modSledljivost.AutoLinkOtkupOtpremnica_TX"
     On Error Resume Next
 
-    LogErr "modSledljivost.AutoLinkOtkupOtpremnica_TX"
 
     Monitor_Error _
         moduleName:="modSledljivost", _

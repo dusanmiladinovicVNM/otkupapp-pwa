@@ -174,6 +174,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "modMain.StartApp"
     On Error Resume Next
 
     Monitor_Error _
@@ -186,7 +187,6 @@ EH:
         errorDescription:=errDesc, _
         errorSource:=errSrc
 
-    LogErr "modMain.StartApp"
 
     On Error GoTo 0
     Err.Raise errNo, errSrc, errDesc

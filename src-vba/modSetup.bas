@@ -1177,23 +1177,40 @@ End Sub
 ' Bez backfill-a (skup na svakom startu): PRAZAN IzdatoStatus se tumaci kao IZDATO
 ' (konzervativno -> teski korektivni put) u read-logici kasnijih koraka.
 ' ============================================================
+' Blanket "On Error Resume Next" je ovde bio najgori gard koji postoji: prvi pad
+' je cutke preskakao OSTATAK posla, bez ijedne linije u logu. Posledica je bila
+' sveska bez kolone GeneracijaID -- a upis dokumenta koji na nju racuna padao je
+' satima kasnije, sa porukom koja o uzroku ne kaze nista.
+'
+' Sada svaka kolona ide kroz svoj gard: pad jedne se ZAPISE i ne zaustavlja
+' ostale. Otpornost je ista, trag postoji.
 Public Sub EnsureSledljivostSchema()
-    On Error Resume Next
     Dim tbls As Variant
     tbls = Array(TBL_OTKUP, TBL_OTPREMNICA, TBL_ZBIRNA, TBL_PRIJEMNICA, TBL_FAKTURE, TBL_NOVAC)
     Dim i As Long
     For i = LBound(tbls) To UBound(tbls)
         Dim t As String: t = CStr(tbls(i))
-        EnsureColumnOnTable t, COL_TRACE_ISPRAVKA_OD
-        EnsureColumnOnTable t, COL_TRACE_ZAMENJEN_SA
-        EnsureColumnOnTable t, COL_TRACE_CORRECTION_ID
-        EnsureColumnOnTable t, COL_TRACE_IZDATO_STATUS
+        EnsureKolonaSaTragom t, COL_TRACE_ISPRAVKA_OD
+        EnsureKolonaSaTragom t, COL_TRACE_ZAMENJEN_SA
+        EnsureKolonaSaTragom t, COL_TRACE_CORRECTION_ID
+        EnsureKolonaSaTragom t, COL_TRACE_IZDATO_STATUS
         ' Generacija upisa (Klasa I + II iz istog Multi_TX poziva dele vrednost).
         ' Prefill iz stornirane bira poslednju generaciju po ovoj koloni.
-        EnsureColumnOnTable t, COL_GENERACIJA_ID
+        EnsureKolonaSaTragom t, COL_GENERACIJA_ID
     Next i
     ' Faza 7 korak 5: denorm poslovni kljuc bloka -> otpremnica (stabilan kroz re-verziju).
-    EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+    EnsureKolonaSaTragom TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE
+End Sub
+
+' Jedna kolona, sa tragom. Pad se zapise i NE zaustavlja ostale kolone.
+Private Sub EnsureKolonaSaTragom(ByVal tbl As String, ByVal col As String)
+    On Error GoTo EH
+    EnsureColumnOnTable tbl, col
+    Exit Sub
+EH:
+    LogError "modSetup.EnsureSledljivostSchema", _
+             "Kolona '" & col & "' na '" & tbl & "' nije obezbedjena: " & _
+             Err.description, Err.Number
 End Sub
 
 ' ============================================================
@@ -1618,7 +1635,13 @@ End Sub
 Private Sub EnsureColumnOnTable(ByVal tblName As String, ByVal colName As String)
     Dim lo As ListObject
     Set lo = FindListObject(tblName)
-    If lo Is Nothing Then Exit Sub
+    If lo Is Nothing Then
+        ' Tabele nema -- kolona se ne moze dodati. Do sada tih izlaz; sada se vidi,
+        ' jer se bas na ovome gubila GeneracijaID.
+        LogWarn "modSetup.EnsureColumnOnTable", _
+                "Tabela '" & tblName & "' nije nadjena -- kolona '" & colName & "' preskocena."
+        Exit Sub
+    End If
 
     Dim col As ListColumn
     On Error Resume Next

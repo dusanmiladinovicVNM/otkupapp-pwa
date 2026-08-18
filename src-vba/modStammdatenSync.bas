@@ -244,9 +244,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
     
+    LogErr "SyncStammdatenToGoogle_Core"
     On Error Resume Next
     
-    LogErr "SyncStammdatenToGoogle_Core"
     
     Monitor_StammdatenSyncFail _
         errNum:=errNum, _
