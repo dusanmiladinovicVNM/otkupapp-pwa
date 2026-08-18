@@ -455,6 +455,7 @@ Private Sub OsveziPalete(ByVal z As Object)
     modUiKit.BoxShow z, "scrStPal", PitanjeOPaletama()
     modUiKit.BoxState z, "scrStPal", IIf(mNeDiraj, C_FOREST, C_WHITE), _
                       IIf(mNeDiraj, C_CREAM, C_FOREST), mNeDiraj
+    modOtkupUI.RebaseSink "scrStPal"   ' isti razlog kao u StilDugmeta
 
     If mImpact Is Nothing Then
         z.Controls("stPalZbir").caption = ChrW(8212)
@@ -594,6 +595,16 @@ End Sub
 
 ' Boje po stilu - isti recnik koji BtnV koristi pri gradnji, samo primenjen
 ' naknadno: ista kontrola nosi razlicit mod zavisno od tipa dokumenta.
+' Boje se pamte pri Bind-u kontrole. Ovo je CENTRALNI render koji ih menja posle
+' toga, pa zapamcena osnova postaje zastarela: hover oboji ispunu, a ResetVisual
+' je vrati na BELO iz Bind-a -- dok natpis ostane beo, jer njega postavlja isti
+' ovaj render. Rezultat je dugme koje posle prelaska misem ostane prazno.
+'
+' Operater je to prijavio nad "Ponistenje prometa" -- jedinim od cetiri koje ima
+' danger stil, dakle belo slovo. Ostala tri su tamna na belom, pa se kvar na
+' njima nije video, iako je bio isti.
+'
+' RebaseSink je bas za to: render koji promeni boju javlja novu osnovu.
 Private Sub StilDugmeta(ByVal z As Object, ByVal nm As String, ByVal stil As String)
     On Error Resume Next
     Select Case stil
@@ -602,6 +613,7 @@ Private Sub StilDugmeta(ByVal z As Object, ByVal nm As String, ByVal stil As Str
         Case "ghost":     modUiKit.BoxState z, nm, C_WHITE, C_MUTED, False
         Case Else:        modUiKit.BoxState z, nm, C_WHITE, C_FOREST, False
     End Select
+    modOtkupUI.RebaseSink nm
 End Sub
 
 Private Function FmtDat(ByVal v As Variant) As String
