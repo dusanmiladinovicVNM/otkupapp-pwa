@@ -396,20 +396,74 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
         End If
     Next r
 
+    ' ZAGLAVLJE PALETE SE CITA JEDNOM, NE PO PALETI.
+    '
+    ' Ranije je svaka paleta u rezultatu izazivala TRI linearna prolaza kroz
+    ' tblPaleta -- FindRowIndexByID direktno, pa jos jednom u PaletaLabel i u
+    ' IsPaletaPreradjena -- i TRI kopije cele tabele: `d = GetTableData(...)`
+    ' dodeljuje niz Variantu, a VBA tada kopira ceo niz. Batch kes sprecava
+    ' ponovno CITANJE iz Excela, ali ne i kopiranje pri svakoj dodeli.
+    '
+    ' Merenje sa terena (2026-08-18): uvid je trajao 1969 ms, od cega 1879 ms na
+    ' paletama -- 95% -- i to isto za otpremnicu i za zbirnu.
+    '
+    ' Pomocne rutine (GetPaletaAggregates / PaletaLabel / IsPaletaPreradjena)
+    ' ostaju za svoje ostale pozivaoce; ovde se citaju ista polja, iz istog reda,
+    ' samo bez ponovnog trazenja tog reda.
     Dim v As Variant
+    Dim p As Variant: p = GetTableData(TBL_PALETA)
+    Dim pIdx As Object: Set pIdx = CreateObject("Scripting.Dictionary")
+    Dim pcID As Long, pcBroj As Long, pcGod As Long, pcGaj As Long
+    Dim pcNeto As Long, pcAmb As Long, pcKap As Long, pcPrer As Long
+    Dim palRow As Long, kljucP As String
+    Dim used As Long, pNeto As Double, pAmb As Double, cap As Long
+    Dim lbl As String, prer As Boolean
+    Dim d As Object
+
+    If Not IsEmpty(p) Then
+        pcID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        pcBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+        pcGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+        pcGaj = GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)
+        pcNeto = GetColumnIndex(TBL_PALETA, COL_PAL_NETO)
+        pcAmb = GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)
+        pcKap = GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)
+        pcPrer = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+        If pcID > 0 Then
+            ' PRVI red pobedjuje, isto kao FindRowIndexByID -- da se ponasanje nad
+            ' duplim ID-jem ne promeni usput.
+            For r = 1 To UBound(p, 1)
+                kljucP = Trim$(CStr(SafeCell(p, r, pcID)))
+                If Len(kljucP) > 0 Then
+                    If Not pIdx.Exists(kljucP) Then pIdx.Add kljucP, r
+                End If
+            Next r
+        End If
+    End If
+
     For Each v In order
         pid = CStr(v)
-        Dim palRow As Long: palRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pid)
-        Dim used As Long, pNeto As Double, pAmb As Double, palk As Double, cap As Long
-        If palRow > 0 Then GetPaletaAggregates palRow, used, pNeto, pAmb, palk, cap
-        Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+        palRow = 0
+        If pIdx.Exists(pid) Then palRow = CLng(pIdx(pid))
+        used = 0: pNeto = 0: pAmb = 0: cap = 0
+        lbl = "?": prer = False
+        If palRow > 0 Then
+            used = NzL(SafeCell(p, palRow, pcGaj))
+            pNeto = NzD(SafeCell(p, palRow, pcNeto))
+            pAmb = NzD(SafeCell(p, palRow, pcAmb))
+            cap = NzL(SafeCell(p, palRow, pcKap))
+            lbl = CStr(NzL(SafeCell(p, palRow, pcBroj))) & "/" & _
+                  CStr(NzL(SafeCell(p, palRow, pcGod)))
+            prer = (UCase$(Trim$(CStr(SafeCell(p, palRow, pcPrer)))) = "DA")
+        End If
+        Set d = CreateObject("Scripting.Dictionary")
         d("paletaID") = pid
-        d("label") = PaletaLabel(pid)
+        d("label") = lbl
         d("used") = used
         d("cap") = cap
         d("neto") = pNeto
         d("amb") = pAmb
-        d("preradjena") = IsPaletaPreradjena(pid)
+        d("preradjena") = prer
         d("thisGajb") = CLng(thG(pid))
         d("thisNeto") = CDbl(thN(pid))
         d("thisAmb") = CDbl(thA(pid))

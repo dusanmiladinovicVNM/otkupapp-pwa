@@ -1166,6 +1166,17 @@ SABOTAZE = {
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
         "radnja cita BAS kolonu na kojoj se opis kolona zavrsava",
     ),
+    # Zaglavlje palete se od v6-ui-146 cita iz JEDNOG snimka tblPaleta, kroz recnik
+    # ID -> red. Ako se red uzme mimo tog recnika, uvid prijavljuje tudju
+    # popunjenost i tudju oznaku -- a operater na osnovu toga odlucuje o stornu.
+    # Postojeci testovi to ne vide: oni broje palete i sabiraju stavke.
+    "palete-zaglavlje-prvi-red": (
+        "modPaletniList.bas",
+        "        If pIdx.Exists(pid) Then palRow = CLng(pIdx(pid))\n",
+        "        If pIdx.Exists(pid) Then palRow = 1   ' SABOTAZA: uvek prvi red\n",
+        "T_ImpactPalete_ZaglavljeIzPraveVrste",
+        "zaglavlje palete dolazi iz reda BAS te palete",
+    ),
 }
 
 

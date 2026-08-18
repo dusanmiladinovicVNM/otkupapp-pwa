@@ -206,6 +206,7 @@ Public Sub RunAllTests()
     RunOne 70
     RunOne 71
     RunOne 72
+    RunOne 73
 
     SetTestMode prevMode
     WriteResultFile
@@ -310,6 +311,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
         Case 71: TestName = "T_Oporavak_OdbaciIspravku_PoIdentitetu"
         Case 72: TestName = "T_Oporavak_OdbaciIspravku_GasiSamoSvoj"
+        Case 73: TestName = "T_ImpactPalete_ZaglavljeIzPraveVrste"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -390,6 +392,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
         Case 71: T_Oporavak_OdbaciIspravku_PoIdentitetu
         Case 72: T_Oporavak_OdbaciIspravku_GasiSamoSvoj
+        Case 73: T_ImpactPalete_ZaglavljeIzPraveVrste
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3361,6 +3364,53 @@ Private Sub T_Oporavak_OdbaciIspravku_GasiSamoSvoj()
     AssertEq SvPolje("SV-TEST-2", COL_SV_NEEDS_RECOVERY), "Da", _
              "fixture je vracen: SV-TEST-2 opet ceka zamenski dokument"
 End Sub
+
+' ============================================================
+' 73. Uvid o paleti cita zaglavlje BAS te palete
+' ============================================================
+' Operater je prijavio 2-3 sekunde po kliku na red. Merenje je pokazalo da 95%
+' vremena odlazi na sekciju paleta: svaka paleta u rezultatu je izazivala TRI
+' linearna prolaza kroz tblPaleta i TRI kopije cele tabele. Tabela se sada cita
+' jednom, a red se nalazi kroz recnik.
+'
+' Zatecena suita to NE bi uhvatila: postojeci testovi tvrde samo KOLIKO paleta
+' uvid nosi i koliki im je zbir -- a zbir dolazi iz druge petlje, koju izmena ne
+' dira. Polja iz zaglavlja palete (oznaka, popunjenost, kapacitet, neto,
+' preradjenost) nije merilo nista, a bas njih izmena preracunava.
+'
+' Fixture: PAL-TEST-Z2 je paleta 12/2026, 20 gajbi od 100, 200 kg.
+Private Sub T_ImpactPalete_ZaglavljeIzPraveVrste()
+    Dim m As Object, pal As Collection, d As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    Set pal = m("palete")
+
+    ' PREDUSLOV: tacno jedna paleta, i to njegova. Bez ovoga bi tvrdnje ispod
+    ' merile pogresan red i prolazile iz pogresnog razloga.
+    AssertEq pal.count, 1, "preduslov: uvid nosi tacno paletu izabranog dokumenta"
+    Set d = pal(1)
+    AssertEq CStr(d("paletaID")), "PAL-TEST-Z2", "preduslov: i to bas PAL-TEST-Z2"
+
+    ' NAJVAZNIJE: zaglavlje dolazi iz REDA TE palete. Radnja koja bi uzela prvi
+    ' red tabele, ili susedni, pada ovde -- a prosla bi svaki postojeci test, jer
+    ' oni broje palete i sabiraju stavke, a zaglavlje ne diraju.
+    AssertEq CLng(d("used")), 20, "popunjenost je iz reda BAS te palete"
+    AssertEq CLng(d("cap")), 100, "kapacitet je iz istog reda"
+    AssertEq CDbl(d("neto")), 200#, "neto je iz istog reda"
+    AssertEq CStr(d("label")), "12/2026", "oznaka je broj/godina iz istog reda"
+    AssertEq CBool(d("preradjena")), False, "preradjenost je iz istog reda"
+
+    ' I da se zaglavlje ne pobrka sa zbirom stavki: to su dva razlicita racuna nad
+    ' istom paletom -- koliko je na njoj UKUPNO, i koliko od toga nosi OVAJ
+    ' dokument. Ovde se poklapaju, ali dolaze iz razlicitih tabela.
+    AssertEq CLng(d("thisGajb")), 20, "zbir stavki OVOG dokumenta ostaje svoj racun"
+    AssertEq CDbl(d("thisNeto")), 200#, "isto i za kilograme"
+End Sub
+
 
 ' Jedno polje contexta, po CorrectionID.
 Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String

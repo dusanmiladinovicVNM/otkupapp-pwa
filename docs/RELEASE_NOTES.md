@@ -3494,3 +3494,75 @@ vidljivi, a `KgLineVisible` i stari `tstOk` su uklonjeni kao mrtvi.
 Automatski test ovde **ne postoji i ne može da postoji**: tvrdnja je „kontrola je
 vidljiva operateru", a forma se u harnessu gradi bez `.Show`. Ostaje smoke: poruka
 mora da se vidi na Oporavku, Storno i Paletama, i dalje da radi na unosu.
+
+---
+
+## v2.50.1 — `v6-ui-146` · uvid o stornu: 1969 → merenje pa popravka
+
+Operater je prijavio zastoj od 2–3 sekunde po kliku na red na ekranu Storno.
+Ranije je ista prijava zatvorena rečenicom „nisam merio, ne znam gde odlazi" —
+ovog puta je prvo dodato **merenje po sekciji**, pa tek onda popravka.
+
+### Merenje
+
+`BuildStornoImpact` meri svih sedam sekcija i piše **jednu** liniju, i to samo kad
+ukupno pređe **400 ms** — granicu na kojoj čekanje postaje primetno. Brz put ostaje
+tih, spor sam sebe prijavi. Nije privremeni debug nego trajna kapija.
+
+Sa terena, dva različita tipa dokumenta:
+
+```
+Uvid Otpremnica 5/210726-2 trajao 1969 ms: zaglavlje 12, lanac 51, blokovi 8,
+zastavice 20, palete 1879, faktura 0, zbir 0 ms.
+
+Uvid Zbirna S1/220726 trajao 1977 ms: zaglavlje 12, lanac 27, blokovi 27,
+zastavice 16, palete 1895, faktura 0, zbir 0 ms.
+```
+
+**95% vremena u jednoj sekciji, i to istoj za oba tipa.** Jedna popravka, ne dve —
+što se bez merenja ne bi znalo.
+
+### Uzrok
+
+`GetPaleteImpactByField` je za **svaku** paletu u rezultatu radio:
+
+| Poziv | Šta radi |
+|---|---|
+| `FindRowIndexByID(TBL_PALETA, ...)` | linearni prolaz kroz `tblPaleta` |
+| `PaletaLabel(pid)` | **još jedan** isti prolaz + `GetTableData` |
+| `IsPaletaPreradjena(pid)` | **treći** isti prolaz + `GetTableData` |
+| `GetPaletaAggregates(palRow, ...)` | `GetTableData` + 5 × `GetColumnIndex` |
+
+Dakle **tri linearna prolaza i tri kopije cele tabele po paleti**. Batch keš
+(`BeginTableCache`) sprečava ponovno **čitanje** iz Excela, ali ne i kopiranje:
+`d = GetTableData(...)` dodeljuje niz `Variant`-u, a VBA tada kopira ceo niz.
+
+### Popravka
+
+Tabela se čita **jednom**, a red se nalazi kroz rečnik `PaletaID → red`. Prvi red
+pobeđuje, isto kao `FindRowIndexByID` — da se ponašanje nad duplim ID-jem ne
+promeni usput. Pomoćne rutine ostaju za svoje ostale pozivaoce; ovde se čitaju
+ista polja, iz istog reda, samo bez ponovnog traženja tog reda.
+
+### Test 73 — jer zatečena suita ovo ne bi videla
+
+Postojeći testovi tvrde samo **koliko** paleta uvid nosi i **koliki im je zbir**, a
+zbir dolazi iz druge petlje koju izmena ne dira. Polja iz zaglavlja palete —
+oznaka, popunjenost, kapacitet, neto, prerađenost — nije merilo **ništa**, a baš
+njih izmena preračunava. Zeleno posle refaktora zato ne bi značilo ništa.
+
+`T_ImpactPalete_ZaglavljeIzPraveVrste` tvrdi da zaglavlje dolazi iz reda **baš te**
+palete (`PAL-TEST-Z2` = 12/2026, 20 gajbi od 100, 200 kg), i razdvaja ta dva
+računa: koliko je na paleti **ukupno** i koliko od toga nosi **ovaj** dokument.
+
+Sabotaža `palete-zaglavlje-prvi-red` uzima prvi red tabele umesto traženog i pada
+po imenu: `popunjenost je iz reda BAS te palete — očekivano [20], dobijeno [25]`.
+
+### Verifikacija
+
+`vba_check` čisto (191), self-test čisto (39), `who_writes` ažuran,
+`RunAllTests` **ZELENO (73)**, pun set **ZELENO** (11 suite-ova).
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Ubrzanje se **ne prijavljuje kao izmereno** — merenje sa terena postoji samo za
+stanje pre popravke. Novi broj daje isti `WARN`, ili njegov izostanak.
