@@ -3895,3 +3895,16 @@ je `MAX_SEG = 10`, a sada je 11). Za drugu je namerno nema: test može da tvrdi 
 klik kroz formu se u harnessu ne može odigrati. Sabotaža nad dispečerom bi ostavila
 suite zelen i lažno tvrdila da je tvrdnja pokrivena (zamka 5). Ta kapija ostaje na
 smoke-u.
+
+### Build UI-ja se sada vidi na ekranu
+
+Sporedni nalaz iz iste runde, ali je koštao dva puna kruga: svaka nereleasovana
+sveska nosi isti `v0.0.0-dev`, pa se sa ekrana **nije moglo videti da li je posle
+`ImportAllVBA` u njoj nov ili star UI kod**.
+
+Dvaput se zbog toga merilo nad neuvezenim buildom i dvaput se nije moglo
+razlikovati *„nije pomoglo“* od *„nije uvezeno“* — jednom kod ubrzanja paleta,
+jednom kod mrtvog čipa.
+
+Uz verziju sveske u sidebaru sada stoji i `OTKUI_BUILD`. Merenja u logu istu
+oznaku nose od `v6-ui-147`; ovo zatvara i drugi kanal, bez Immediate prozora.
