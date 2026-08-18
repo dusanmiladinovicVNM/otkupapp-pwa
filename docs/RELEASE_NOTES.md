@@ -3159,7 +3159,27 @@ sumnju. `strict` se sada provlači kroz **svih sedam putanja** — `GetChainFlag
   zajedno sa njegovim blokom, pa bi spisak za A do ovog testa bio prazan — a
   prazan i nečitljiv spisak su baš ono što ovaj test razlikuje.
 
-- **Dvanaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+### Crveni toast preko uspešne ispravke
+
+Operater je posle **uspešne** ispravke i dalje dobijao `X Radnja nije uspela:
+modScrStorno.Scr_Event scrStA0` — preko uredno popunjene forme.
+
+Uzrok nije bio pad radnje nego **život `Err`-a**: `On Error Resume Next`
+prigušuje grešku, ali je **ne briše**. `OtvoriIspravku` ima baš takav gard, pa je
+prigušena greška preživela povratak kroz `StornoPoModu` i `PokreniAkciju` sve do
+`modUiScreens.ScrEvent` — a on posle `Application.Run` čita `Err.Number` i, ako
+nije nula, javlja neuspeh.
+
+Prethodna runda je dodala `Err.Clear` u `EH` handlere i to **nije bilo dovoljno**:
+`EH` se na uspešnom putu uopšte ne izvršava. `Scr_Event` sada ima **jedan izlaz**,
+i na njemu čisti `Err`; prava greška i dalje ide kroz `EH`, koji je prijavljuje,
+pa čišćenje ne može da sakrije pad.
+
+- **66** — meri baš to curenje: posle `Scr_Event`-a `Err.Number` mora biti nula,
+  uz kontrolu u drugom smeru da je događaj stvarno obrađen. Sabotaža vraća stanje
+  i test pada sa `dobijeno [-2147024809]`.
+
+- **Trinaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u

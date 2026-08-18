@@ -667,6 +667,18 @@ SABOTAZE = {
         "T_StornoImpact_BlokSekcijaDriftJeInvalidna",
         "necitljiva block sekcija obara CEO uvid",
     ),
+    # Err ziv posle uspesne radnje. "On Error Resume Next" prigusuje gresku ali je
+    # NE brise, pa prigusena greska iz OtvoriIspravku prezivi povratak i stigne do
+    # modUiScreens.ScrEvent, koji je onda prijavi kao 'Radnja nije uspela' -- preko
+    # uredno otvorene ispravke. Err.Clear u EH handlerima to ne resava: EH se na
+    # uspesnom putu i ne izvrsava.
+    "ekran-curi-greska": (
+        "modScrStorno.bas",
+        "    Scr_Event = ObradiDogadjaj(tag)\n    Err.Clear\n",
+        "    Scr_Event = ObradiDogadjaj(tag)\n",
+        "T_StornoEkran_NeCuriGreska",
+        "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla",
+    ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
     # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer

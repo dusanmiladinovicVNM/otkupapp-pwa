@@ -591,20 +591,39 @@ Private Function FmtDat(ByVal v As Variant) As String
 End Function
 
 '-------------------------------------------------------------- RADNJE
+' GRANICA PREMA LJUSCI. modUiScreens.ScrEvent posle povratka cita Err.Number i,
+' ako nije nula, javlja "Radnja nije uspela" -- bez obzira na to sto je radnja
+' prosla. A Err ovde ume da ostane ziv i kad NIJE bilo greske u ovom sloju:
+' svaka procedura sa "On Error Resume Next" (OtvoriIspravku, OsveziZonu, Zona)
+' prigusi gresku ali je NE brise, i ta greska prezivi povratak.
+'
+' Zato je izlaz jedan, i na njemu se Err cisti. Prava greska ide kroz EH, koji
+' je i prijavljuje operateru -- pa ciscenje ovde ne moze da sakrije pad.
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     Dim errDesc As String
     On Error GoTo EH
+    Scr_Event = ObradiDogadjaj(tag)
+    Err.Clear
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modScrStorno.Scr_Event"
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
+    Err.Clear
+End Function
+
+Private Function ObradiDogadjaj(ByVal tag As String) As Boolean
 
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = Scr_Lista() Then Exit Function
         mLista = Mid$(tag, 3)
         OcistiIzbor
-        Scr_Event = True
+        ObradiDogadjaj = True
         Exit Function
     End If
 
     If Left$(tag, 4) = "row:" Then
-        Scr_Event = IzborReda(CLng(val(Mid$(tag, 5))))
+        ObradiDogadjaj = IzborReda(CLng(val(Mid$(tag, 5))))
         Exit Function
     End If
 
@@ -617,22 +636,9 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     End If
 
     If Left$(tag, 6) = "scrStA" Then
-        Scr_Event = PokreniAkciju(CLng(val(Mid$(tag, 7))))
+        ObradiDogadjaj = PokreniAkciju(CLng(val(Mid$(tag, 7))))
         Exit Function
     End If
-    Exit Function
-EH:
-    ' Opis se cita PRE LogErr-a. LogErr ima svoj On Error Resume Next i usput
-    ' obrise stanje greske, pa je poruka operateru ostajala prazna -- isti nalaz
-    ' koji je u d60b6706 vadjen sa deset mesta, pa ga ovaj modul nije smeo vratiti.
-    errDesc = Err.description
-    LogErr "modScrStorno.Scr_Event"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
-    ' Err se BRISE posle obrade. Omotac modUiScreens.ScrEvent posle povratka
-    ' cita Err.Number i, ako nije nula, javlja "Radnja nije uspela" -- pa je
-    ' vec obradjena greska stizala operateru drugi put, kao da radnja nije
-    ' prosla iako jeste. Isto vazi za svaki handler ispod.
-    Err.Clear
 End Function
 
 Private Sub OcistiIzbor()
@@ -1062,6 +1068,11 @@ Private Sub OtvoriIspravku(ByVal tip As String, ByVal broj As String, _
     modOtkupUI.IdiNaRezim RezimZaTip(tip)
     spec = modStornoDok.PrefillIzStorniranog(tip, broj, modStornoDok.StorniraniDocID(correctionID))
     If Len(spec) > 0 Then modOtkupUI.ApplyPrefill spec
+    ' "On Error Resume Next" PRIGUSUJE gresku, ali je ne brise -- ona prezivi
+    ' povratak i stigne do ljuske, koja je onda prijavi kao "Radnja nije uspela"
+    ' iako je ispravka uredno otvorena. Operater je to video kao crven toast
+    ' preko popunjene forme.
+    Err.Clear
 End Sub
 
 ' Rezim u kome se unosi zamenski dokument. Revers ide u F7; smer operater bira

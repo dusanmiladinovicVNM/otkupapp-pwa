@@ -199,6 +199,7 @@ Public Sub RunAllTests()
     RunOne 63
     RunOne 64
     RunOne 65
+    RunOne 66
 
     SetTestMode prevMode
     WriteResultFile
@@ -296,6 +297,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 63: TestName = "T_StornoImpact_SchemaDriftJeInvalidan"
         Case 64: TestName = "T_StornoImpact_IdentitetNeDegradira"
         Case 65: TestName = "T_StornoImpact_BlokSekcijaDriftJeInvalidna"
+        Case 66: TestName = "T_StornoEkran_NeCuriGreska"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -369,6 +371,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 63: T_StornoImpact_SchemaDriftJeInvalidan
         Case 64: T_StornoImpact_IdentitetNeDegradira
         Case 65: T_StornoImpact_BlokSekcijaDriftJeInvalidna
+        Case 66: T_StornoEkran_NeCuriGreska
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2996,6 +2999,46 @@ VRATI:
              "nerazresena jednoznacnost se tretira kao dvosmislena"
     ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
     AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+' ============================================================
+' 66. Ekran ne pusta obradjenu gresku u ljusku
+' ============================================================
+' Operater je posle USPESNE ispravke dobijao crven toast:
+'
+'     X Radnja nije uspela: modScrStorno.Scr_Event scrStA0
+'
+' preko uredno popunjene forme. Uzrok nije bio pad radnje nego zivot Err-a:
+' "On Error Resume Next" PRIGUSUJE gresku, ali je NE BRISE. OtvoriIspravku ima
+' bas takav gard, pa je greska prigusena u njemu prezivela povratak kroz
+' StornoPoModu i PokreniAkciju sve do modUiScreens.ScrEvent -- a on posle
+' Application.Run cita Err.Number i, ako nije nula, javlja neuspeh.
+'
+' Dodavanje Err.Clear u EH handlere to NIJE resilo: EH se na uspesnom putu
+' uopste ne izvrsava. Zato Scr_Event sada ima JEDAN izlaz, i na njemu cisti Err.
+'
+' Test ide kroz tag koji sigurno prolazi kroz "On Error Resume Next" region
+' (OsveziZonu -> Zona -> ScreenZone, a forma u testu nije izgradjena).
+Private Sub T_StornoEkran_NeCuriGreska()
+    Dim brojPosle As Long
+
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    Err.Clear
+    modScrStorno.Scr_Event "scrStPal", "Click"
+    ' Err se cita ODMAH: svaki poziv ispod (pa i AssertEq) ume da ga promeni.
+    brojPosle = Err.Number
+    Err.Clear
+
+    AssertEq brojPosle, 0, _
+             "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla"
+
+    ' Kontrola u drugom smeru: prekidac je stvarno obradjen, nije se samo
+    ' progutao. Bez ovoga bi test prosao i kad Scr_Event ne radi nista.
+    modScrStorno.Scr_Event "lsOTPREMNICA", "Click"
+    AssertEq modScrStorno.Scr_Lista(), STIP_OTPREMNICA, _
+             "kontrola: Scr_Event i dalje obradjuje dogadjaj"
+
+    modScrStorno.Scr_ResetCache
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.
