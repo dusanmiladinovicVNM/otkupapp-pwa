@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-153"
+Public Const OTKUI_BUILD   As String = "v6-ui-154"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -546,7 +546,7 @@ Private Sub BuildNav(frm As Object)
 
     NewLbl z, "navFootLn", "", 0, 0, SIDEBAR_W - 1, 1, 8, False, 0, C_BORDER
     NewLbl z, "navSezona", Poruka("OTKUI_FOOT_SEZONA"), 13, 0, 70, 13, TS_MICRO, False, RGB(146, 158, 140), -1
-    NewLbl z, "navVerzija", BuildTagOrBlank(), SIDEBAR_W - 130, 0, 117, 13, TS_MICRO, False, RGB(146, 158, 140), -1, fmTextAlignRight, F_NUM
+    NewLbl z, "navVerzija", BuildTagOrBlank(), SIDEBAR_W - 68, 0, 55, 13, TS_MICRO, False, RGB(146, 158, 140), -1, fmTextAlignRight, F_NUM
 End Sub
 
 '------------------------------------------------------------ KPI ----
@@ -5287,16 +5287,24 @@ Private Function IsDebugUI() As Boolean
     IsDebugUI = (StrComp(GetLocalConfigValue("UI_DEBUG", ""), "DA", vbTextCompare) = 0)
 End Function
 
-' Uz verziju sveske stoji i BUILD UI-ja. Svaka nereleasovana sveska nosi isti
-' v0.0.0-dev, pa se iz njega ne vidi da li je posle ImportAllVBA u svesci nov ili
-' star UI kod. To je vec dva puta kostalo pune runde: kvar je bio popravljen, a
-' merilo se nad neuvezenim buildom -- i nije se moglo razlikovati 'nije pomoglo'
-' od 'nije uvezeno'. Sada se cita sa ekrana, bez Immediate prozora.
+' Na NERELEASOVANOJ svesci se prikazuje BUILD UI-ja, ne verzija sveske.
+'
+' Svaka takva sveska nosi isti v0.0.0-dev, pa iz njega nema sta da se sazna --
+' a bas se u njoj radi. Iz OTKUI_BUILD se vidi da li je posle ImportAllVBA u
+' svesci nov ili star UI kod, sto je u ovoj rundi dva puta kostalo pun krug:
+' merilo se nad neuvezenim buildom i nije se moglo razlikovati 'nije pomoglo'
+' od 'nije uvezeno'.
+'
+' Oba ne staju: raspored drzi ovu labelu na 55pt uz desnu ivicu sidebara, pa bi
+' spojen tekst bio odsecen -- sto je i bio prvi pokusaj. Na releasovanoj svesci
+' ostaje verzija sveske, jer tamo ona jeste podatak.
 Private Function BuildTagOrBlank() As String
+    Dim v As String
     On Error Resume Next
-    BuildTagOrBlank = "v" & BUILD_VERSION          ' modBuildInfo (stamp-build.sh)
-    If Len(BuildTagOrBlank) <= 1 Then BuildTagOrBlank = "-"
-    BuildTagOrBlank = BuildTagOrBlank & "  " & OTKUI_BUILD
+    v = "v" & BUILD_VERSION                        ' modBuildInfo (stamp-build.sh)
+    If InStr(1, v, "dev", vbTextCompare) > 0 Then v = OTKUI_BUILD
+    If Len(v) <= 1 Then v = "-"
+    BuildTagOrBlank = v
 End Function
 
 Public Sub DetectDisplayFont()

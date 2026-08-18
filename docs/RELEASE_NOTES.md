@@ -3906,8 +3906,13 @@ Dvaput se zbog toga merilo nad neuvezenim buildom i dvaput se nije moglo
 razlikovati *„nije pomoglo“* od *„nije uvezeno“* — jednom kod ubrzanja paleta,
 jednom kod mrtvog čipa.
 
-Uz verziju sveske u sidebaru sada stoji i `OTKUI_BUILD`. Merenja u logu istu
-oznaku nose od `v6-ui-147`; ovo zatvara i drugi kanal, bez Immediate prozora.
+Na **nereleasovanoj** svesci se u sidebaru sada prikazuje `OTKUI_BUILD` umesto
+verzije sveske. Prvi pokušaj je pisao oba, ali se odsekao: raspored drži tu labelu
+na 55pt uz desnu ivicu sidebara, pa je od `v0.0.0-dev  v6-ui-153` ostajalo
+`v0.0.0-d`. Na releasovanoj svesci ostaje verzija sveske — tamo ona jeste podatak.
+
+Merenja u logu istu oznaku nose od `v6-ui-147`; ovo zatvara i drugi kanal, bez
+Immediate prozora.
 
 ### Red o blokovima nosi STANJE, ne pravilo
 
