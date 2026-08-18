@@ -260,6 +260,25 @@ Public Function ScrLista(ByVal kljuc As String) As String
 End Function
 
 ' Radnje nad izabranim redom za trenutno aktivnu listu ekrana.
+' Koliko stavki na ovom ekranu CEKA operatera. Opciono: ekran koji nema sta da
+' broji je ne implementira i dobija nulu.
+'
+' Ljuska ovim ne saznaje NISTA o ekranu -- ne zna sta se broji ni zasto, samo
+' dobija broj koji ce nacrtati uz stavku menija. Bez ovoga bi morala da zove
+' GetNedovrseno po imenu, a to je tacno ono sto ceo ugovor izbegava.
+Public Function ScrBrojac(ByVal kljuc As String) As Long
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrBrojac = CLng(Application.Run(m & ".Scr_Brojac"))
+    If Err.Number <> 0 Then
+        ScrBrojac = 0
+        Err.Clear
+    End If
+End Function
+
 Public Function ScrRadnje(ByVal kljuc As String) As String
     Dim m As String
     On Error Resume Next

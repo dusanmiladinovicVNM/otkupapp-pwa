@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-154"
+Public Const OTKUI_BUILD   As String = "v6-ui-155"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -330,6 +330,9 @@ Private mBuildMs As Long             ' koliko je trajala gradnja ekrana (ms)
 ' nav tag ("nav01") -> kljuc ekrana iz registra. Sidebar se gradi iz
 ' modUiScreens, pa se veza tag->ekran vise ne moze citati iz rednog broja.
 Private mNavKey As Object
+' Brojaci uz stavke menija, po kljucu ekrana. Racunaju se na promenu podataka
+' (RefreshFromData), ne pri crtanju -- izvor je prolaz kroz tabele.
+Private mNavBroj As Object
 ' Aktivan ekran iz registra. "DOKUMENTI" je zatecen ekran koji ljuska jos
 ' crta po starom; svaki drugi se crta kroz ugovor, u svojoj zoni zScr_<kljuc>.
 Private mScreen As String
@@ -512,6 +515,12 @@ Private Sub BuildNav(frm As Object)
                            fmTextAlignLeft, F_ICON
                 End If
                 NewNavItem z, nm, cap, 0, Y, SIDEBAR_W - 1, NAV_H, sel
+                ' Znacka sa brojem stavki koje cekaju. Prazna dok brojac ne stigne;
+                ' ekran koji nema sta da broji je nikad ne popuni.
+                NewLbl z, nm & "B", "", SIDEBAR_W - 42, CenterY(Y, NAV_H, TS_MICRO), _
+                       30, TxtH(TS_MICRO), TS_MICRO, True, C_RUST, -1, _
+                       fmTextAlignRight, F_NUM
+                z.Controls(nm & "B").ZOrder 0
                 If Not aktivan And Not sel Then _
                     z.Controls(nm & "X").ForeColor = C_DISABLED_FG
                 ' stavka menija je neprozirna i preko pune sirine - bez ZOrder-a
@@ -4183,6 +4192,33 @@ Public Sub EnsureGridLoaded()
     ReloadGrid
 End Sub
 
+' Brojaci uz stavke menija. Pita se SVAKI ekran -- ljuska ne zna koji ih ima --
+' ali samo na promenu podataka, jer je izvor prolaz kroz tabele.
+Public Sub OsveziNavBrojace()
+    Dim r As Variant, kljuc As String, nm As Variant, z As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    If mNavKey Is Nothing Then Exit Sub
+    Set z = mFrm.Controls("zNav")
+    If z Is Nothing Then Exit Sub
+    Set mNavBroj = CreateObject("Scripting.Dictionary")
+    For Each r In modUiScreens.ScrRows()
+        kljuc = modUiScreens.ScrField(CStr(r), SCR_KLJUC)
+        mNavBroj(kljuc) = modUiScreens.ScrBrojac(kljuc)
+    Next r
+    For Each nm In mNavKey.keys
+        z.Controls(CStr(nm) & "B").caption = _
+            BrojacTekst(CLng(mNavBroj(CStr(mNavKey(CStr(nm))))))
+    Next nm
+End Sub
+
+' Nula se ne crta. Znacka postoji da bi se video ZAOSTATAK; nula uz svaku stavku
+' bi je pretvorila u ukras koji se prestane primecivati.
+Private Function BrojacTekst(ByVal n As Long) As String
+    If n <= 0 Then Exit Function
+    If n > 999 Then BrojacTekst = "999+" Else BrojacTekst = CStr(n)
+End Function
+
 Public Sub RefreshFromData()
     On Error Resume Next
     modUiData.ResetCache
@@ -4194,6 +4230,7 @@ Public Sub RefreshFromData()
     Set mColSpec = CreateObject("Scripting.Dictionary")
     mColSpec.CompareMode = 1
     RefreshKpi mFrm
+    OsveziNavBrojace
     FillZbirneCombo mFrm      ' nove zbirne u picker
     mPartnerFor = ""          ' partner lista se ponovo puni
     ReloadGrid

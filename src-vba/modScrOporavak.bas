@@ -106,6 +106,24 @@ Public Function Scr_NaslovDopuna() As String
     End Select
 End Function
 
+' Koliko stavki ceka na ovom ekranu. Ljuska ovo crta uz stavku menija, pa se broj
+' vidi i kad operater nije na ekranu -- do sada se zaostatak nije video nigde dok
+' se ekran ne otvori, a kod operatera se nakupilo 44 stavke a da nista nije reklo.
+'
+' Broji se ISTA lista koju ekran prikazuje kao 'Nedovrseno', da se broj u meniju i
+' broj na ekranu ne mogu razici.
+'
+' Zove se iz RefreshFromData, dakle na promenu podataka -- ne pri svakom crtanju
+' sidebara. GetNedovrseno je vise prolaza kroz tabele; na crtackoj ucestalosti bi
+' to bio isti kvar zbog koga su dva PR-a vadila sekunde iz uvida o stornu.
+Public Function Scr_Brojac() As Long
+    Dim c As Collection
+    On Error Resume Next
+    Set c = GetNedovrseno()
+    If c Is Nothing Then Exit Function
+    Scr_Brojac = c.count
+End Function
+
 Public Function Scr_Radnje() As String
     Select Case Scr_Lista()
         Case "NEDOVRSENO"
