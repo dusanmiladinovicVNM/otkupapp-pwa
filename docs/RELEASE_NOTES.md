@@ -3408,9 +3408,31 @@ radnju, pa je stari pečat `v6-ui-135` lagao. `UISCR_BUILD` ostaje `v6-ui-143`:
   `oporavak-cid-kolona-drift`.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija (`Alt+F11 → Debug → Compile VBAProject`).
 
-**Nalaz zabeležen, nije popravljen:** `vba_check` prijavljuje **prazan fajl kao čist**.
-Skripta koja upiše `open(P,"wb")` pre nego što `encode` pukne ostavi `.bas` od nula
-bajtova, a provera je zelena. Ide u zaseban process PR.
+### Provera `ODSECEN` — prazan fajl više nije „čist“
+
+`vba_check` je **prazan fajl prijavljivao kao čist**: prazan fajl nema šta da prekrši,
+pa nijedna provera nije imala reč. Zelen izlaz nad izbrisanim modulom je gori od
+crvenog — `ImportAllVBA` ga uveze kao prazan i sve što je u njemu bilo nestane, bez
+ijedne poruke.
+
+Ulaz je uvek isti obrazac:
+
+```python
+io.open(P, "wb").write(s.encode("ascii"))   # open() odsece PRE nego sto encode pukne
+```
+
+U ovoj sesiji je tri puta ostavio `.bas` od nula bajtova. Bezbedno je
+`data = s.encode(...)` **pa** upis.
+
+Nova provera traži `Attribute VB_Name = "..."` — red koji nosi **svaki** izvoz iz
+VBE-a, svih 191 fajlova bez izuzetka. Ništa strožije ne prolazi nad zatečenim
+izvorom: najmanji legalan modul ima 154 bajta i **nema** `Option Explicit`
+(`modMeteo.bas`), a `.frm` nosi `VB_Name` tek posle `Begin` bloka — oba su među
+self-test slučajevima koji **ne smeju** da zapište.
+
+Self-test je sa 34 na **39 slučajeva**. Dokaz u oba smera: sa ugašenom proverom pada
+tačno tri slučaja, svaki po imenu (`prazan fajl`, `samo beline`,
+`kod bez VB_Name zaglavlja`), dok dva negativna ostaju na nuli.
 
 ---
 
