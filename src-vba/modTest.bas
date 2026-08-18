@@ -206,6 +206,9 @@ Public Sub RunAllTests()
     RunOne 70
     RunOne 71
     RunOne 72
+    RunOne 73
+    RunOne 74
+    RunOne 75
 
     SetTestMode prevMode
     WriteResultFile
@@ -310,6 +313,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
         Case 71: TestName = "T_Oporavak_OdbaciIspravku_PoIdentitetu"
         Case 72: TestName = "T_Oporavak_OdbaciIspravku_GasiSamoSvoj"
+        Case 73: TestName = "T_ImpactPalete_ZaglavljeIzPraveVrste"
+        Case 74: TestName = "T_StornoEfekat_TekstIzKataloga"
+        Case 75: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -390,6 +396,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
         Case 71: T_Oporavak_OdbaciIspravku_PoIdentitetu
         Case 72: T_Oporavak_OdbaciIspravku_GasiSamoSvoj
+        Case 73: T_ImpactPalete_ZaglavljeIzPraveVrste
+        Case 74: T_StornoEfekat_TekstIzKataloga
+        Case 75: T_StornoBlokovi_PodrazumevanoNijedan
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2377,7 +2386,7 @@ End Sub
 ' ("Svi") je pogled preko tipova koji legacy ima kao "Nadji dokument", a novi UI
 ' do v6-ui-143 nije imao.
 Private Sub T_Storno_UgovorIRadnje()
-    Dim liste As Variant, i As Long, kljucevi As String
+    Dim liste As Variant, i As Long, kljucevi As String, d As Variant
 
     AssertEq (Len(modUiScreens.ScrRowByKey("STORNO")) > 0), True, _
              "STORNO postoji u registru ekrana"
@@ -2391,21 +2400,48 @@ Private Sub T_Storno_UgovorIRadnje()
     ' vazi za svaki buduci ekran, ne samo za ovaj.
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-    AssertEq (UBound(liste) + 1), 10, "ekran ima deset lista"
+
+    ' A CRTANJE NIJE ISTO STO I DISPECOVANJE. Klik na cip je isao kroz uslov
+    ' Len(tag) = 6, sto pokriva samo lsSeg0..lsSeg9 -- pa je jedanaesti cip
+    ' (lsSeg10) imao sedam znakova, propadao kroz granu i nije radio NISTA:
+    ' crta se, boji se na hover, a klik nema kome da stigne. Operater je to
+    ' prijavio kao 'cip postoji ali je mrtav'.
+    '
+    ' Zato se meri i druga kapija, i to za POSLEDNJI cip -- prvi je radio i pre.
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg" & UBound(liste)), UBound(liste), _
+             "ljuska razresava klik na POSLEDNJI cip, ne samo na jednocifrene"
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg0"), 0, "i na prvi, i dalje"
+    AssertEq modOtkupUI.SegIndeksIzTaga("btnAct0"), -1, "tudji tag nije cip"
+    AssertEq modOtkupUI.SegIndeksIzTaga("lsSeg"), -1, "cip bez rednog broja nije cip"
+    AssertEq (UBound(liste) + 1), 11, "ekran ima jedanaest lista"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
     AssertEq kljucevi, "|LANAC|OTKUP|OTPREMNICA|ZBIRNA|PRIJEMNICA|AMB_ISPLATE|" & _
-             "AMB_UPLATE|REVERSI|FAKTURA|IZVOD", _
-             "redosled i kljucevi lista -- navigaciona je prva"
+             "AMB_UPLATE|REVERSI|FAKTURA|IZVOD|BLOKOVI", _
+             "redosled i kljucevi lista -- navigaciona je prva, blokovi poslednji"
 
-    ' Kljucevi lista JESU kljucevi tipova (STIP_*), pa prevodne tabele nema.
-    ' Ako se razidju, Scr_Rows bi trazio tabelu za nepostojeci tip i tiho vratio
-    ' otkupne listove pod tudjim naslovom.
-    For i = 1 To UBound(liste)
+    ' Kljucevi TIPIZIRANIH lista JESU kljucevi tipova (STIP_*), pa prevodne tabele
+    ' nema. Ako se razidju, Scr_Rows bi trazio tabelu za nepostojeci tip i tiho
+    ' vratio otkupne listove pod tudjim naslovom.
+    '
+    ' Prva (LANAC) i poslednja (BLOKOVI) su POGLEDI, ne tipovi: prva nad svim
+    ' framework dokumentima, poslednja nad blokovima vec izabranog dokumenta.
+    For i = 1 To UBound(liste) - 1
         AssertEq (Len(modScrDokumenti.TabelaTipa(Split(CStr(liste(i)), "|")(0))) > 0), True, _
                  "lista " & Split(CStr(liste(i)), "|")(0) & " ima svoju tabelu"
     Next i
+
+    ' Pogled se NE SME provuci kroz RedoviZaTip: TabelaTipa na nepoznat kljuc
+    ' vraca tblOtkup (Case Else), pa bi lista blokova tiho prikazala otkupne
+    ' listove pod svojim naslovom. Meri se posledica -- koje kolone lista vrati.
+    modScrStorno.Scr_TipTestSet "BLOKOVI"
+    d = modScrStorno.Scr_Rows("sve", "")
+    AssertEq Split(CStr(d(0)(0)), "|")(0), "OTKUI_HD_OZN", _
+             "lista blokova pocinje kolonom izbora, ne kolonama otkupnog lista"
+    AssertEq Split(CStr(d(0)(UBound(d(0)))), "|")(0), "OTKUI_HD_IDENT", _
+             "i zavrsava nevidljivom kolonom identiteta bloka"
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
 
 ' ============================================================
@@ -2630,9 +2666,24 @@ End Sub
 ' neuspelog BuildStornoImpact-a (mImpact ostaje Nothing).
 Private Sub T_StornoBezUvida_NemaAkcije()
     ' NAJVAZNIJE PRVO: framework tip bez uvida ne nudi NIJEDNU radnju.
-    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    '
+    ' Neuspeh uvida se pravi STVARNO -- zadatom generacijom koju nijedan red ne
+    ' nosi. Pod strict rezimom to DIZE gresku, pa uvid ostane prazan, sto je bas
+    ' stanje koje kapija treba da pokrije.
+    '
+    ' Ranije je isto stanje dolazilo otud sto test seam nije gradio uvid. To je
+    ' bila greska u testu: merilo se stanje koje u aplikaciji ne postoji, jer
+    ' produkcija uvid gradi pri svakom izboru reda.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-NE-POSTOJI", ""
     AssertEq modScrStorno.Scr_BrojAkcija(), 0, _
              "framework dokument bez uvida ne nudi nijednu radnju"
+
+    ' Kontrola u suprotnom smeru: ISTI dokument sa razresivim identitetom uvid
+    ' dobija, pa radnje postoje. Bez ovoga bi tvrdnja iznad prolazila i kad bi
+    ' kapija bila zaglavljena na nuli.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    AssertEq (modScrStorno.Scr_BrojAkcija() > 0), True, _
+             "sa valjanim uvidom radnje POSTOJE -- kapija nije zaglavljena"
 
     ' Tip koji uvid i NEMA (otkup nije framework tip) i dalje nudi obican storno --
     ' inace bi kapija zakljucala i ono sto uvid nikad nije ni imalo.
@@ -3188,6 +3239,20 @@ Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
         AssertEq (InStr(1, t, ChrW(10007)) > 0), False, _
                  CStr(info(i)) & " je informacija, ne upozorenje"
     Next i
+
+    ' TRECA tvrdnja: oznaka je SIGNAL ZA RUTIRANJE, ne deo recenice. MsgBox crta
+    ' kroz ANSI kodnu stranu u kojoj ChrW(10007) ne postoji, pa ju je operater
+    ' video kao vodece '?' ispred teksta. Pred dijalog se zato skida -- a u traci
+    ' poruka, koja je Unicode, OSTAJE, jer tamo nosi znacenje.
+    For i = 0 To UBound(upoz)
+        t = Poruka(CStr(upoz(i)))
+        AssertEq (InStr(1, modOtkupUI.PorukaZaDijalog(t), ChrW(10007)) > 0), False, _
+                 CStr(upoz(i)) & " u dijalogu ide BEZ oznake"
+        AssertEq (Len(modOtkupUI.PorukaZaDijalog(t)) > 0), True, _
+                 CStr(upoz(i)) & " posle skidanja oznake nije prazna"
+        AssertEq Left$(modOtkupUI.PorukaZaDijalog(t), 1), UCase$(Left$(modOtkupUI.PorukaZaDijalog(t), 1)), _
+                 CStr(upoz(i)) & " u dijalogu pocinje slovom, ne razmakom"
+    Next i
 End Sub
 
 ' ============================================================
@@ -3361,6 +3426,178 @@ Private Sub T_Oporavak_OdbaciIspravku_GasiSamoSvoj()
     AssertEq SvPolje("SV-TEST-2", COL_SV_NEEDS_RECOVERY), "Da", _
              "fixture je vracen: SV-TEST-2 opet ceka zamenski dokument"
 End Sub
+
+' ============================================================
+' 73. Uvid o paleti cita zaglavlje BAS te palete
+' ============================================================
+' Operater je prijavio 2-3 sekunde po kliku na red. Merenje je pokazalo da 95%
+' vremena odlazi na sekciju paleta: svaka paleta u rezultatu je izazivala TRI
+' linearna prolaza kroz tblPaleta i TRI kopije cele tabele. Tabela se sada cita
+' jednom, a red se nalazi kroz recnik.
+'
+' Zatecena suita to NE bi uhvatila: postojeci testovi tvrde samo KOLIKO paleta
+' uvid nosi i koliki im je zbir -- a zbir dolazi iz druge petlje, koju izmena ne
+' dira. Polja iz zaglavlja palete (oznaka, popunjenost, kapacitet, neto,
+' preradjenost) nije merilo nista, a bas njih izmena preracunava.
+'
+' Fixture: PAL-TEST-Z2 je paleta 12/2026, 20 gajbi od 100, 200 kg.
+Private Sub T_ImpactPalete_ZaglavljeIzPraveVrste()
+    Dim m As Object, pal As Collection, d As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    Set pal = m("palete")
+
+    ' PREDUSLOV: tacno jedna paleta, i to njegova. Bez ovoga bi tvrdnje ispod
+    ' merile pogresan red i prolazile iz pogresnog razloga.
+    AssertEq pal.count, 1, "preduslov: uvid nosi tacno paletu izabranog dokumenta"
+    Set d = pal(1)
+    AssertEq CStr(d("paletaID")), "PAL-TEST-Z2", "preduslov: i to bas PAL-TEST-Z2"
+
+    ' NAJVAZNIJE: zaglavlje dolazi iz REDA TE palete. Radnja koja bi uzela prvi
+    ' red tabele, ili susedni, pada ovde -- a prosla bi svaki postojeci test, jer
+    ' oni broje palete i sabiraju stavke, a zaglavlje ne diraju.
+    AssertEq CLng(d("used")), 20, "popunjenost je iz reda BAS te palete"
+    AssertEq CLng(d("cap")), 100, "kapacitet je iz istog reda"
+    AssertEq CDbl(d("neto")), 200#, "neto je iz istog reda"
+    AssertEq CStr(d("label")), "12/2026", "oznaka je broj/godina iz istog reda"
+    AssertEq CBool(d("preradjena")), False, "preradjenost je iz istog reda"
+
+    ' I da se zaglavlje ne pobrka sa zbirom stavki: to su dva razlicita racuna nad
+    ' istom paletom -- koliko je na njoj UKUPNO, i koliko od toga nosi OVAJ
+    ' dokument. Ovde se poklapaju, ali dolaze iz razlicitih tabela.
+    AssertEq CLng(d("thisGajb")), 20, "zbir stavki OVOG dokumenta ostaje svoj racun"
+    AssertEq CDbl(d("thisNeto")), 200#, "isto i za kilograme"
+End Sub
+
+' ============================================================
+' 74. Efekat storna se sklapa IZ KATALOGA, ne iz literala
+' ============================================================
+' Tekstovi posledica su do v6-ui-148 bili ASCII literali u modStornoFlow. Zato su
+' i bili pisani telegrafski ("preracun, NE pada") -- bez dijakritike se poslovna
+' recenica ne moze napisati, a VBA izvor mora ostati ASCII.
+'
+' Selidba u katalog uvodi nov nacin da se ekran pokvari TIHO: kljuc koji katalog
+' ne zna vraca prazan string, pa najvaznija kolona ekrana ostane prazna, bez
+' greske i bez traga. vba_check hvata kljuc bez para u UpsertPoruke, ali ne i
+' katalog koji nije osvezen -- a to je bas ono sto se desava posle importa.
+Private Sub T_StornoEfekat_TekstIzKataloga()
+    Dim ch As Collection, red As Variant
+    Dim i As Long, spojenih As Long, razdvojenih As Long
+
+    ' Katalog se osvezava izricito: test meri TABELU poruka, a ne kes koji je
+    ' zatekao (isti razlog kao u testu 69).
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    ' PREDUSLOV: katalog stvarno nosi tekst. Da kljuc nedostaje, sve tvrdnje ispod
+    ' bi poredile prazno sa praznim i prosle.
+    AssertEq (Len(Poruka("STEF_STORNO_AMB")) > 10), True, _
+             "katalog nosi tekst efekta, nije prazan kljuc"
+    AssertEq (Len(Poruka("STEF_PRE_OBA")) > 5), True, _
+             "katalog nosi spojen prefiks odluke"
+
+    Set ch = modStornoFlow.GetStornoChainRows(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    AssertEq (ch.count > 0), True, "lanac ima bar jedan red"
+
+    ' NAJVAZNIJE: napomena prvog reda je sklopljena iz kataloga. Prvi red je sam
+    ' dokument, a njegov efekat je isti za oba osnova -- pa mora doci kroz SPOJEN
+    ' prefiks, ne kao dva razdvojena.
+    red = ch(1)
+    AssertEq CStr(red(2)), Poruka("STEF_PRE_OBA") & Poruka("STEF_STORNO_AMB"), _
+             "napomena se sklapa iz kataloga, sa spojenim prefiksom"
+
+
+    ' I obrnut slucaj: gde se osnovi RAZLIKUJU moraju se videti OBA prefiksa.
+    ' Bez ove tvrdnje bi ChainEff koji uvek spaja prosao neprimecen. Ne trazi se
+    ' odredjen red -- lanac otpremnice ih nosi oba, a redosled nije predmet ovog
+    ' testa.
+    Set ch = modStornoFlow.GetStornoChainRows(FLOW_DOC_OTPREMNICA, FX_BROJ_OTP)
+    For i = 1 To ch.count
+        red = ch(i)
+        If InStr(CStr(red(2)), Poruka("STEF_PRE_OBA")) = 1 Then spojenih = spojenih + 1
+        If InStr(CStr(red(2)), Poruka("STEF_PRE_DUPLI")) = 1 And _
+           InStr(CStr(red(2)), Poruka("STEF_PRE_PONIST")) > 1 Then razdvojenih = razdvojenih + 1
+    Next i
+    AssertEq (spojenih > 0), True, _
+             "isti efekat za oba osnova ide kroz JEDAN spojen prefiks"
+    AssertEq (razdvojenih > 0), True, _
+             "razlicit efekat nosi OBA prefiksa u istom redu"
+End Sub
+
+' ============================================================
+' 75. Otkupni blokovi: podrazumevano NIJEDAN, i storno gadja bas oznacene
+' ============================================================
+' Legacy panel je imao multiselect: podrazumevano nijedan blok nije cekiran, a
+' cekiran je znacio DODATNO storniran. Nov ekran je taj izbor izgubio i na
+' potvrdu stornirao SVE blokove -- dakle bio je destruktivniji od legacy-ja, i to
+' ne namerno nego zato sto multiselect nije bio prenet.
+'
+' Ovaj test meri dve stvari koje suita inace ne bi videla:
+'   1. da je podrazumevano stanje PRAZNO (nijedan oznacen),
+'   2. da oznacavanje gadja BAS taj blok, po OtkupID-u a ne po broju otkupa.
+'
+' Druga tvrdnja nije formalnost: broj otkupa se racuna po kooperantu, pa dva
+' bloka lako dele isti -- a spisak zavrsava u StornoSelectedBlocks_TX, u mutaciji.
+Private Sub T_StornoBlokovi_PodrazumevanoNijedan()
+    Dim d As Variant, r As Variant, n As Long, i As Long, ident As String
+
+    modScrStorno.Scr_IzborTestSet STIP_OTPREMNICA, FX_BROJ_OTP, "", ""
+    modScrStorno.Scr_TipTestSet "BLOKOVI"
+    d = modScrStorno.Scr_Rows("sve", "")
+    n = CLng(d(2))
+
+    ' PREDUSLOV: dokument stvarno ima blokove. Bez ovoga bi tvrdnje ispod merile
+    ' prazan skup i prolazile iz pogresnog razloga.
+    AssertEq (n > 0), True, "preduslov: izabrana otpremnica nosi otkupne blokove"
+    r = d(1)
+
+    ' NAJVAZNIJE: podrazumevano NIJEDAN nije oznacen. Kolona izbora je prazna u
+    ' svakom redu, i brojac to potvrdjuje.
+    For i = 1 To n
+        AssertEq CStr(r(i, 1)), "", "red " & i & " nije oznacen bez izricitog izbora"
+    Next i
+    AssertEq modScrStorno.BlokOznacenihBroj(), 0, "brojac oznacenih je nula"
+
+    ' Oznaci TACNO jedan, po identitetu iz nevidljive kolone.
+    ident = Trim$(CStr(r(1, modScrStorno.ST_BLOK_COL_ID)))
+    AssertEq (Len(ident) > 0), True, "red nosi OtkupID u nevidljivoj koloni"
+    modScrStorno.Scr_BlokTestSet ident
+
+    d = modScrStorno.Scr_Rows("sve", "")
+    r = d(1)
+    AssertEq modScrStorno.BlokOznacenihBroj(), 1, "oznacen je tacno jedan blok"
+    AssertEq CStr(r(1, 1)), ChrW(10003), "oznaceni red nosi kvacicu"
+    For i = 2 To CLng(d(2))
+        AssertEq CStr(r(i, 1)), "", "ostali redovi ostaju neoznaceni"
+    Next i
+
+    ' Promena izabranog dokumenta PONISTAVA izbor: oznake pripadaju dokumentu nad
+    ' kojim su napravljene. Ostavljene bi na sledecem stornirale blokove koje
+    ' operater nikad nije video.
+    modScrStorno.Scr_IzborTestSet STIP_OTPREMNICA, FX_BROJ_OTP, "", ""
+    AssertEq modScrStorno.BlokOznacenihBroj(), 0, _
+             "promena izbora dokumenta ponistava oznacene blokove"
+
+    ' Red o blokovima u zoni mora da nosi STANJE, ne pravilo. Operater je prijavio
+    ' da cip Blokovi postoji, ali da nista ne kaze da tamo ima sta da se odluci --
+    ' pa taj red menja tekst prema izboru.
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) = 1), True, _
+             "bez izbora red poziva na izbor i imenuje listu"
+    modScrStorno.Scr_BlokTestSet ident
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_IZABRANO_1")) = 1), True, _
+             "sa izborom red prijavljuje KOLIKO ih je izabrano"
+    AssertEq (InStr(modScrStorno.BlokStatusTekst(), Poruka("STEF_BLOK_BIRAJ_1")) > 0), False, _
+             "i vise ne poziva na izbor koji je vec napravljen"
+
+    modScrStorno.Scr_TipTestSet STIP_OTKUP
+End Sub
+
+
+
 
 ' Jedno polje contexta, po CorrectionID.
 Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-145"
+Public Const OTKUI_BUILD   As String = "v6-ui-154"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -176,7 +176,7 @@ Private Const TOAST_H     As Single = 26
 ' tipova + navigacioni "Svi"), pa je granica podignuta sa 9 -- na 9 je deseta
 ' tiho nestajala: LayoutGrid crta samo prvih MAX_SEG, bez ijedne poruke, pa se
 ' "Izvodi" nisu mogli izabrati ni na koji nacin.
-Private Const MAX_SEG     As Long = 10
+Private Const MAX_SEG     As Long = 11
 Private Const MAX_ACT     As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
 Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
@@ -2447,6 +2447,19 @@ Private Function ScrAct(ByVal tag As String) As Boolean
 End Function
 
 ' Kljuc liste iza dugmeta prekidaca.
+' Redni broj cipa iz taga, ili -1 ako tag nije cip. Javna je da bi se ugovor
+' ljuske ("svaki cip koji ekran prijavi ume da se izabere") mogao TVRDITI u
+' testu -- klik kroz formu se u harnessu ne moze odigrati.
+Public Function SegIndeksIzTaga(ByVal tag As String) As Long
+    Dim rep As String
+    SegIndeksIzTaga = -1
+    If Left$(tag, 5) <> "lsSeg" Then Exit Function
+    rep = Mid$(tag, 6)
+    If Len(rep) = 0 Then Exit Function
+    If Not IsNumeric(rep) Then Exit Function
+    SegIndeksIzTaga = CLng(rep)
+End Function
+
 Private Function SegKey(ByVal i As Long) As String
     Dim seg As Variant
     seg = SegDefs()
@@ -3352,10 +3365,21 @@ Private Sub UiClickCore(ByVal tag As String)
         Exit Sub
     End If
     ' prekidac liste - ljuska zna samo REDNI BROJ dugmeta; kljuc liste je
-    ' ekranov, pa se cita iz njegove definicije i vraca mu nazad
-    If Left$(tag, 5) = "lsSeg" And Len(tag) = 6 Then
+    ' ekranov, pa se cita iz njegove definicije i vraca mu nazad.
+    '
+    ' Redni broj se cita kroz SegIndeksIzTaga, ne merenjem duzine taga. Uslov je
+    ' ranije glasio Len(tag) = 6, sto pokriva SAMO lsSeg0..lsSeg9 -- pa je
+    ' jedanaesti cip (lsSeg10) imao sedam znakova, propadao kroz ovu granu i
+    ' NIJE RADIO NISTA. Bez greske i bez traga: dugme se crta, boji se na hover,
+    ' a klik nema kome da stigne.
+    '
+    ' Isti oblik greske kao MAX_SEG = 9 (v6-ui-143), samo na drugoj kapiji:
+    ' tamo se cip nije CRTAO, ovde se crta ali ne reaguje. Zato ih meri i test
+    ' odvojeno -- crtanje jednom tvrdnjom, dispecovanje drugom.
+    Dim segI As Long: segI = SegIndeksIzTaga(tag)
+    If segI >= 0 Then
         Dim segK As String
-        segK = SegKey(CLng(Mid$(tag, 6)))
+        segK = SegKey(segI)
         If Len(segK) = 0 Then Exit Sub
         If modUiScreens.ScrEvent(mScreen, "ls" & segK, "Click") Then
             mSelRow = 0
@@ -5263,10 +5287,24 @@ Private Function IsDebugUI() As Boolean
     IsDebugUI = (StrComp(GetLocalConfigValue("UI_DEBUG", ""), "DA", vbTextCompare) = 0)
 End Function
 
+' Na NERELEASOVANOJ svesci se prikazuje BUILD UI-ja, ne verzija sveske.
+'
+' Svaka takva sveska nosi isti v0.0.0-dev, pa iz njega nema sta da se sazna --
+' a bas se u njoj radi. Iz OTKUI_BUILD se vidi da li je posle ImportAllVBA u
+' svesci nov ili star UI kod, sto je u ovoj rundi dva puta kostalo pun krug:
+' merilo se nad neuvezenim buildom i nije se moglo razlikovati 'nije pomoglo'
+' od 'nije uvezeno'.
+'
+' Oba ne staju: raspored drzi ovu labelu na 55pt uz desnu ivicu sidebara, pa bi
+' spojen tekst bio odsecen -- sto je i bio prvi pokusaj. Na releasovanoj svesci
+' ostaje verzija sveske, jer tamo ona jeste podatak.
 Private Function BuildTagOrBlank() As String
+    Dim v As String
     On Error Resume Next
-    BuildTagOrBlank = "v" & BUILD_VERSION          ' modBuildInfo (stamp-build.sh)
-    If Len(BuildTagOrBlank) <= 1 Then BuildTagOrBlank = "-"
+    v = "v" & BUILD_VERSION                        ' modBuildInfo (stamp-build.sh)
+    If InStr(1, v, "dev", vbTextCompare) > 0 Then v = OTKUI_BUILD
+    If Len(v) <= 1 Then v = "-"
+    BuildTagOrBlank = v
 End Function
 
 Public Sub DetectDisplayFont()
@@ -5527,13 +5565,29 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ' Razlikovanje ide po OZNACI koju katalog vec nosi: ChrW(10007) = upozorenje
     ' (DOKUNOS_MSG_VISE_ISPRAVKI, _PALETE_NISU, _ZBIRNA_NIJE, _ISPRAVKA_NIJE),
     ' ChrW(10003) = informacija o uspehu. Cistu informaciju ne guramo u dijalog.
+    '
+    ' Oznaka je SIGNAL ZA RUTIRANJE, ne deo poruke, pa se pred dijalog skida.
+    ' MsgBox crta kroz ANSI kodnu stranu, u kojoj ChrW(10007) ne postoji -- pa ga
+    ' je operater video kao vodece '?' ispred recenice. U traci poruka, koja je
+    ' Unicode, ista oznaka se crta ispravno i tamo OSTAJE: tamo nosi znacenje
+    ' (crveno = nesto nije proslo), a u dijalogu ga vec nosi sam vbExclamation.
     If InStr(1, dopuna, ChrW(10007)) > 0 Then
-        MsgBox dopuna, vbExclamation, APP_NAME
+        MsgBox PorukaZaDijalog(dopuna), vbExclamation, APP_NAME
     End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Sub
+
+' Tekst poruke bez oznake za rutiranje. Oznaka (ChrW(10007)) kaze SLOJU IZNAD da
+' poruku treba pokazati u dijalogu -- nije deo recenice. MsgBox crta kroz ANSI
+' kodnu stranu u kojoj tog znaka nema, pa ga je operater video kao vodece '?'.
+'
+' Javna je da bi se moglo tvrditi u testu: skidanje oznake unutar Sub-a koji
+' otvara dijalog ne bi se moglo izmeriti, a dijalog u headless runu visi.
+Public Function PorukaZaDijalog(ByVal txt As String) As String
+    PorukaZaDijalog = Trim$(Replace(txt, ChrW(10007), ""))
+End Function
 
 ' Vrednosti forme pod LOGICKIM imenima. Ljuska zna gde koje polje stoji, ekran
 ' zna sta ono znaci - ista podela kao kod ApplyPrefill, samo u drugom smeru.

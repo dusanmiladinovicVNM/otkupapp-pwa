@@ -2,6 +2,10 @@ Attribute VB_Name = "modPaletniList"
 'Attribute VB_Name = "modPaletniList"
 Option Explicit
 
+' Prag ispod koga sekcija paleta ne javlja nista. Isti kao u modStornoImpact --
+' 400 ms je granica na kojoj operater pocinje da primeti cekanje.
+Private Const PAL_PRAG_MS As Long = 400
+
 ' ============================================================
 ' modPaletniList -- paletni list sveze robe + prerada (Phase 2)
 '
@@ -345,7 +349,15 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
         Exit Function
     End If
 
+    ' MERENJE UNUTAR SEKCIJE. Prva popravka je gadjala petlju po paletama i nije
+    ' pomerila nista: 1918 / 1895 / 1906 ms, isto za otpremnicu i za zbirnu, isto
+    ' za dokumente sa razlicitim brojem paleta. Konstanta bez obzira na ulaz nije
+    ' trosak PO PALETI nego fiksni -- citanje ili prolaz cele tblPaletaStavka.
+    ' Koje od to dvoje, meri se ovde: pogadjanje je vec jednom promasilo.
+    Dim tA As Double, tB As Double, tC As Double, tD As Double
+    tA = Timer
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    tB = Timer
     If IsEmpty(s) Then
         ' Prazna tabela je legitimna; NECITLJIVA nije. U strict rezimu se razlika
         ' mora videti, jer obe daju istu praznu kolekciju.
@@ -378,7 +390,8 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     Dim thN As Object: Set thN = CreateObject("Scripting.Dictionary")
     Dim thA As Object: Set thA = CreateObject("Scripting.Dictionary")
     Dim r As Long, pid As String, kv As String, pogodak As Boolean
-    For r = 1 To UBound(s, 1)
+    Dim redova As Long: redova = UBound(s, 1)
+    For r = 1 To redova
         kv = Trim$(CStr(SafeCell(s, r, cKey)))
         If dozvoljeni Is Nothing Then
             pogodak = (kv = value)
@@ -396,25 +409,82 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
         End If
     Next r
 
+    ' ZAGLAVLJE PALETE SE CITA JEDNOM, NE PO PALETI.
+    '
+    ' Ranije je svaka paleta u rezultatu izazivala TRI linearna prolaza kroz
+    ' tblPaleta -- FindRowIndexByID direktno, pa jos jednom u PaletaLabel i u
+    ' IsPaletaPreradjena -- i TRI kopije cele tabele: `d = GetTableData(...)`
+    ' dodeljuje niz Variantu, a VBA tada kopira ceo niz. Batch kes sprecava
+    ' ponovno CITANJE iz Excela, ali ne i kopiranje pri svakoj dodeli.
+    '
+    ' Merenje sa terena (2026-08-18): uvid je trajao 1969 ms, od cega 1879 ms na
+    ' paletama -- 95% -- i to isto za otpremnicu i za zbirnu.
+    '
+    ' Pomocne rutine (GetPaletaAggregates / PaletaLabel / IsPaletaPreradjena)
+    ' ostaju za svoje ostale pozivaoce; ovde se citaju ista polja, iz istog reda,
+    ' samo bez ponovnog trazenja tog reda.
+    tC = Timer
     Dim v As Variant
+    Dim p As Variant: p = GetTableData(TBL_PALETA)
+    Dim pIdx As Object: Set pIdx = CreateObject("Scripting.Dictionary")
+    Dim pcID As Long, pcBroj As Long, pcGod As Long, pcGaj As Long
+    Dim pcNeto As Long, pcAmb As Long, pcKap As Long, pcPrer As Long
+    Dim palRow As Long, kljucP As String
+    Dim used As Long, pNeto As Double, pAmb As Double, cap As Long
+    Dim lbl As String, prer As Boolean
+    Dim d As Object
+
+    If Not IsEmpty(p) Then
+        pcID = GetColumnIndex(TBL_PALETA, COL_PAL_ID)
+        pcBroj = GetColumnIndex(TBL_PALETA, COL_PAL_BROJ)
+        pcGod = GetColumnIndex(TBL_PALETA, COL_PAL_GODINA)
+        pcGaj = GetColumnIndex(TBL_PALETA, COL_PAL_BR_GAJBICA)
+        pcNeto = GetColumnIndex(TBL_PALETA, COL_PAL_NETO)
+        pcAmb = GetColumnIndex(TBL_PALETA, COL_PAL_AMBALAZA)
+        pcKap = GetColumnIndex(TBL_PALETA, COL_PAL_KAPACITET)
+        pcPrer = GetColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO)
+        If pcID > 0 Then
+            ' PRVI red pobedjuje, isto kao FindRowIndexByID -- da se ponasanje nad
+            ' duplim ID-jem ne promeni usput.
+            For r = 1 To UBound(p, 1)
+                kljucP = Trim$(CStr(SafeCell(p, r, pcID)))
+                If Len(kljucP) > 0 Then
+                    If Not pIdx.Exists(kljucP) Then pIdx.Add kljucP, r
+                End If
+            Next r
+        End If
+    End If
+
     For Each v In order
         pid = CStr(v)
-        Dim palRow As Long: palRow = FindRowIndexByID(TBL_PALETA, COL_PAL_ID, pid)
-        Dim used As Long, pNeto As Double, pAmb As Double, palk As Double, cap As Long
-        If palRow > 0 Then GetPaletaAggregates palRow, used, pNeto, pAmb, palk, cap
-        Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+        palRow = 0
+        If pIdx.Exists(pid) Then palRow = CLng(pIdx(pid))
+        used = 0: pNeto = 0: pAmb = 0: cap = 0
+        lbl = "?": prer = False
+        If palRow > 0 Then
+            used = NzL(SafeCell(p, palRow, pcGaj))
+            pNeto = NzD(SafeCell(p, palRow, pcNeto))
+            pAmb = NzD(SafeCell(p, palRow, pcAmb))
+            cap = NzL(SafeCell(p, palRow, pcKap))
+            lbl = CStr(NzL(SafeCell(p, palRow, pcBroj))) & "/" & _
+                  CStr(NzL(SafeCell(p, palRow, pcGod)))
+            prer = (UCase$(Trim$(CStr(SafeCell(p, palRow, pcPrer)))) = "DA")
+        End If
+        Set d = CreateObject("Scripting.Dictionary")
         d("paletaID") = pid
-        d("label") = PaletaLabel(pid)
+        d("label") = lbl
         d("used") = used
         d("cap") = cap
         d("neto") = pNeto
         d("amb") = pAmb
-        d("preradjena") = IsPaletaPreradjena(pid)
+        d("preradjena") = prer
         d("thisGajb") = CLng(thG(pid))
         d("thisNeto") = CDbl(thN(pid))
         d("thisAmb") = CDbl(thA(pid))
         result.Add d
     Next v
+    tD = Timer
+    PrijaviPalete redova, order.count, tA, tB, tC, tD
     Exit Function
 EH:
     ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
@@ -423,6 +493,27 @@ EH:
     LogErr SRC
     If strict Then Err.Raise errNum, SRC, errDesc
 End Function
+
+' Razlaganje sekcije paleta: citanje tabele / prolaz kroz stavke / obrada paleta.
+' Prijavljuje se SAMO kad ukupno predje prag, isto pravilo kao u modStornoImpact:
+' brz put ostaje tih, spor sam sebe prijavi.
+'
+' Broj redova i broj paleta idu uz vremena namerno -- bez njih se ne razlikuje
+' 'tabela je ogromna' od 'obrada je skupa po redu'.
+Private Sub PrijaviPalete(ByVal redova As Long, ByVal paleta As Long, _
+                          ByVal tA As Double, ByVal tB As Double, _
+                          ByVal tC As Double, ByVal tD As Double)
+    Dim ukupno As Double
+    On Error Resume Next
+    ukupno = (tD - tA) * 1000
+    If ukupno < PAL_PRAG_MS Then Exit Sub
+    LogWarn "modPaletniList.GetPaleteImpactByField", _
+            "[" & modOtkupUI.OTKUI_BUILD & "] " & redova & " stavki, " & paleta & _
+            " paleta, ukupno " & Format$(ukupno, "0") & " ms: " & _
+            "citanje tabele " & Format$((tB - tA) * 1000, "0") & _
+            ", prolaz kroz stavke " & Format$((tC - tB) * 1000, "0") & _
+            ", obrada paleta " & Format$((tD - tC) * 1000, "0") & " ms."
+End Sub
 
 ' ============================================================
 ' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
@@ -2649,7 +2740,16 @@ End Function
 
 ' Bezbedno citanje celije iz GetTableData niza: ako kolona ne postoji
 ' (idx < 1, npr. schema drift), vrati Empty umesto subscript-error.
-Public Function SafeCell(ByVal d As Variant, ByVal r As Long, _
+'
+' `d` MORA ostati ByRef. Sa ByVal je VBA kopirao CEO niz pri svakom pozivu, a
+' funkcija se zove po celiji -- dva puta po redu u prolazu kroz stavke. Merenje
+' sa terena: 1063 stavke, 1883 ms, to jest 1.8 ms po redu za citanje dva polja
+' iz niza koji je vec u memoriji (citanje tabele je bilo 0 ms -- batch kes).
+' Posle prelaska na ByRef ista petlja radi bez kopiranja.
+'
+' Funkcija `d` samo CITA, nikad ne pise, pa je ByRef ovde bez ijedne posledice
+' po ponasanje -- razlika je iskljucivo u tome sto se niz ne umnozava.
+Public Function SafeCell(ByRef d As Variant, ByVal r As Long, _
                           ByVal idx As Long) As Variant
     If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function

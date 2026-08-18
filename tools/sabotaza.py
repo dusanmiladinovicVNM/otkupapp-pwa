@@ -779,13 +779,22 @@ SABOTAZE = {
         "T_PrefillBezBroja_PredlaziBroj",
         "prefill bez broja predlaze broj dokumenta za svoj kontekst",
     ),
+    # Ljuska ima DVE kapije nad cipovima: MAX_SEG odlucuje da li se cip CRTA, a
+    # dispecer klika da li klik na njega ima kome da stigne. Ova sabotaza meri
+    # prvu.
+    #
+    # Druga NEMA sabotazu, i to namerno: test moze da tvrdi da SegIndeksIzTaga
+    # razresava poslednji cip, ali ne i da ga dispecer zaista zove -- klik kroz
+    # formu se u harnessu ne moze odigrati. Sabotaza nad dispecerom bi zato
+    # ostavila suite zelen i lazno tvrdila da je tvrdnja pokrivena (zamka 5).
+    # Ta kapija ostaje na smoke-u.
     # Ljuska crta samo prvih MAX_SEG dugmadi prekidaca. Ekran Storno ih ima
     # deset; na devet je "Izvodi" TIHO nestajao -- bio je u Scr_Liste, ali se
     # nije mogao izabrati ni na koji nacin, bez greske i bez traga. Operater je
     # to prijavio kao nedostajuci cip.
     "ljuska-odseca-liste": (
         "modOtkupUI.bas",
-        "Private Const MAX_SEG     As Long = 10\n",
+        "Private Const MAX_SEG     As Long = 11\n",
         "Private Const MAX_SEG     As Long = 9   ' SABOTAZA\n",
         "T_Storno_UgovorIRadnje",
         "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho",
@@ -1165,6 +1174,74 @@ SABOTAZE = {
         "Public Const NED_COL_CID As Long = 5   ' SABOTAZA\n",
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
         "radnja cita BAS kolonu na kojoj se opis kolona zavrsava",
+    ),
+    # Zaglavlje palete se od v6-ui-146 cita iz JEDNOG snimka tblPaleta, kroz recnik
+    # ID -> red. Ako se red uzme mimo tog recnika, uvid prijavljuje tudju
+    # popunjenost i tudju oznaku -- a operater na osnovu toga odlucuje o stornu.
+    # Postojeci testovi to ne vide: oni broje palete i sabiraju stavke.
+    "palete-zaglavlje-prvi-red": (
+        "modPaletniList.bas",
+        "        If pIdx.Exists(pid) Then palRow = CLng(pIdx(pid))\n",
+        "        If pIdx.Exists(pid) Then palRow = 1   ' SABOTAZA: uvek prvi red\n",
+        "T_ImpactPalete_ZaglavljeIzPraveVrste",
+        "zaglavlje palete dolazi iz reda BAS te palete",
+    ),
+    # Efekat posledice se od v6-ui-148 sklapa iz kataloga, sa prefiksom koji se zove
+    # ISTO kao dugme odluke. NAPOMENA: slucaj 'kljuc ne postoji u katalogu' ovde
+    # NEMA sabotazu -- hvata ga vba_check (provera PORUKA) jos pre nego sto suite
+    # krene, pa bi sabotaza pala na tudjoj kapiji i lazno tvrdila da je meri test.
+    # Ako se prefiksi spoje i kad se osnovi razlikuju, operater cita da su posledice
+    # iste -- a nisu, i bira na osnovu toga.
+    "efekat-uvek-spojen-prefiks": (
+        "modStornoFlow.bas",
+        "    If StrComp(Trim$(dup), Trim$(pon), vbTextCompare) = 0 Then\n",
+        "    If True Then   ' SABOTAZA: posledice uvek izgledaju isto\n",
+        "T_StornoEfekat_TekstIzKataloga",
+        "razlicit efekat nosi OBA prefiksa, ne jedan spojen",
+    ),
+    # Lista otkupnih blokova radi kao legacy panel: podrazumevano NIJEDAN nije
+    # oznacen, oznacen znaci DODATNO storniran. Do v6-ui-149 je nov ekran na
+    # potvrdu stornirao SVE -- destruktivnije od legacy-ja, i to slucajno.
+    "blokovi-svi-oznaceni": (
+        "modScrStorno.bas",
+        "        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), \"\")\n",
+        "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "podrazumevano nijedan blok nije oznacen",
+    ),
+    # Oznake pripadaju dokumentu nad kojim su napravljene. Ako prezive promenu
+    # izbora, sledeci storno gadja blokove koje operater nikad nije video.
+    #
+    # Zamena nosi oznaku ' SABOTAZA namerno (zamka 8): prva verzija je uklanjala
+    # red i ostavljala `mSelTip = ""`, koji postoji i u ZDRAVOM kodu -- pa ga je
+    # --vrati nasao tamo i dodao jos jedan `Set mBlokOznaceni = Nothing`.
+    "blokovi-oznake-prezive-izbor": (
+        "modScrStorno.bas",
+        "    Set mBlokOznaceni = Nothing\n",
+        "    ' SABOTAZA: oznake prezive promenu izabranog dokumenta\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "promena izabranog dokumenta ponistava oznacene blokove",
+    ),
+    # Oznaka upozorenja je SIGNAL ZA RUTIRANJE, ne deo recenice: kaze sloju iznad
+    # da poruku treba pokazati u dijalogu. MsgBox crta kroz ANSI kodnu stranu u
+    # kojoj ChrW(10007) ne postoji, pa ju je operater video kao vodece '?' ispred
+    # teksta. U traci poruka, koja je Unicode, ista oznaka OSTAJE.
+    "dijalog-nosi-oznaku": (
+        "modOtkupUI.bas",
+        "    PorukaZaDijalog = Trim$(Replace(txt, ChrW(10007), \"\"))\n",
+        "    PorukaZaDijalog = txt   ' SABOTAZA: oznaka ostaje u dijalogu\n",
+        "T_PorukeUnosa_UpozorenjeNosiOznaku",
+        "poruka u dijalogu ide BEZ oznake za rutiranje",
+    ),
+    # Red o blokovima u zoni je jedini koji trazi odluku, a odluka se donosi u
+    # drugoj listi. Ako ne prati izbor, operater i posle stikliranja cita isti
+    # poziv na izbor -- pa ne zna da li je odluka uopste zabelezena.
+    "blok-status-ne-prati-izbor": (
+        "modScrStorno.bas",
+        "    iz = BlokOznacenihBroj()\n",
+        "    iz = 0   ' SABOTAZA: izbor se ne vidi u zoni\n",
+        "T_StornoBlokovi_PodrazumevanoNijedan",
+        "red o blokovima prijavljuje KOLIKO ih je izabrano",
     ),
 }
 

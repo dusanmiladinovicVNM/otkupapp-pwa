@@ -602,7 +602,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "DOKUNOS_MSG_UPISANA_OTP", ChrW(10003) & " Otpremnica sa" & ChrW(269) & "uvana:"
     UpsertRow lo, existing, "OTKUI_MSG_UPISANO", ChrW(10003) & " Dokument sa" & ChrW(269) & "uvan:"
     UpsertRow lo, existing, "DOKUNOS_MSG_ZBIRNA_NIJE", ChrW(10007) & " Zbirna NIJE kreirana automatski " & ChrW(8212) & " unesi je ru" & ChrW(269) & "no (rezim Zbirna)."
-    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i kroz Osiro" & ChrW(269) & "eni dokumenti."
+    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi" & ChrW(353) & "e ispravki na " & ChrW(269) & "ekanju za ovaj tip " & ChrW(8212) & " prevezivanje NIJE ura" & ChrW(273) & "eno. Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Nedovr" & ChrW(353) & "eno."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_1", ChrW(268) & "eka ISPRAVKA za stornirano"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_2", "Da li je upravo snimljeni dokument ZAMENA za njega?"
     UpsertRow lo, existing, "DOKUNOS_MSG_ISPRAVKA_OK", ChrW(10003) & " Ispravka zavr" & ChrW(353) & "ena:"
@@ -712,7 +712,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRST_ERR_UVID", ChrW(10007) & " Posledice se nisu u" & ChrW(269) & _
               "itale " & ChrW(8212) & " odluka nije mogu" & ChrW(263) & "a"
     UpsertRow lo, existing, "OTKUI_SCRST_NEMA", "Izaberi red u listi da vidi" & ChrW(353) & " posledice"
-    UpsertRow lo, existing, "OTKUI_SCRST_EFEKAT", "EFEKAT STORNA PO MODU"
+    UpsertRow lo, existing, "OTKUI_SCRST_EFEKAT", "POSLEDICE PO OSNOVU STORNA"
     UpsertRow lo, existing, "OTKUI_SCRST_PALETE", "PALETE"
     UpsertRow lo, existing, "OTKUI_SCRST_BEZ_PALETA", "nema vezanih paleta"
     UpsertRow lo, existing, "OTKUI_SCRST_NEDIRAJ", "Ne diraj palete"
@@ -720,18 +720,51 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' cetiri moda: natpis dugmeta + objasnjenje ISPOD njega. Isti tekst koji je
     ' do v6-ui-143 zivotario u dva MsgBox-a (STORNO_ASK_MOD_1 / _2), samo sto
     ' se sada sva cetiri odgovora vide ISTOVREMENO, uz posledice iznad.
-    UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Pogre" & ChrW(353) & "an unos"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj " & ChrW(8212) & " storniraj pa unesi ispravan"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_DUPLI", "Duplikat"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_DUPLI", "nikad nije trebalo da postoji " & ChrW(8212) & " bez zamene"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_PONISTI", "Ni" & ChrW(353) & "ta se nije desilo"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_PONISTI", "fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_KASNIJE", "Re" & ChrW(353) & "i kasnije"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_KASNIJE", "zapamti kao nedovr" & ChrW(353) & "eno"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_STORNO", "Storniraj"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_STORNO", "obi" & ChrW(269) & "an storno, bez zamene"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_REV_ISPR", "Ispravka"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_REV_ISPR", "storniraj stari, unesi novi (veza staro" & ChrW(8594) & "novo)"
+    ' Natpis imenuje POSLOVNI OSNOV storna, ne osecaj operatera. Objasnjenje ispod
+    ' je kratko jer labela ima 168pt -- puna formulacija posledice stoji u tabeli
+    ' efekata iznad, koja sirinu ima.
+    UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Ispravka dokumenta"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj, zamenski dokument"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_DUPLI", "Dupli unos"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_DUPLI", "evidentiran dvaput, bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_PONISTI", "Poni" & ChrW(353) & "tenje prometa"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_PONISTI", "promet se nije dogodio"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_KASNIJE", "Odlo" & ChrW(382) & "eno re" & ChrW(353) & "avanje"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_KASNIJE", "evidentira se kao nedovr" & ChrW(353) & "en"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_STORNO", "Storno bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_STORNO", "stornira se, bez zamenskog dokumenta"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_REV_ISPR", "Zamena reversa"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_REV_ISPR", "veza staro" & ChrW(8594) & "novo"
+
+    ' EFEKTI PO DOKUMENTU. Do v6-ui-148 su ziveli kao ASCII literali u
+    ' modStornoFlow, pa su i pisani telegrafski -- bez dijakritike se poslovna
+    ' recenica ne moze napisati. Ovde dobijaju svoj oblik.
+    UpsertRow lo, existing, "STEF_PRE_OBA", "DUPLI UNOS i PONI" & ChrW(352) & "TENJE: "
+    UpsertRow lo, existing, "STEF_PRE_DUPLI", "DUPLI UNOS: "
+    UpsertRow lo, existing, "STEF_PRE_PONIST", "PONI" & ChrW(352) & "TENJE: "
+    UpsertRow lo, existing, "STEF_STORNO_AMB", "stornira se, sa pripadaju" & ChrW(263) & "om ambala" & ChrW(382) & "om"
+    UpsertRow lo, existing, "STEF_STORNIRA", "stornira se"
+    UpsertRow lo, existing, "STEF_STORNIRAJU", "storniraju se"
+    UpsertRow lo, existing, "STEF_ZBR_JEDINI", "prera" & ChrW(269) & "unava se; stornira se ako ostane bez otpremnica"
+    UpsertRow lo, existing, "STEF_ZBR_DELJENA", "prera" & ChrW(269) & "unava se; ostaje aktivna jer nosi i druge otpremnice"
+    UpsertRow lo, existing, "STEF_ZBR_NULA", "prera" & ChrW(269) & "unava se; stornira se ako ostane bez koli" & ChrW(269) & "ine"
+    UpsertRow lo, existing, "STEF_PRJ_SIROCE", "ostaje osirotela; prevezuje se ru" & ChrW(269) & "no"
+    UpsertRow lo, existing, "STEF_PAL_SIROCE", "ostaju osirotele; prevezuju se ru" & ChrW(269) & "no"
+    UpsertRow lo, existing, "STEF_OTP_ODVEZ", "odvezuju se od zbirne i ostaju aktivne"
+    UpsertRow lo, existing, "STEF_NEPROM", "ostaje nepromenjena"
+    UpsertRow lo, existing, "STEF_NEPROM_MN", "ostaju nepromenjene"
+    UpsertRow lo, existing, "STEF_PAL_ODVEZ", "odvezuju se sa palete"
+    UpsertRow lo, existing, "STEF_FAK_OSLOB", "osloba" & ChrW(273) & "a se; stavke ostaju osirotele"
+    UpsertRow lo, existing, "STEF_BLOK_SAM", "evidentiraju se zasebno; storniraju se samo po izboru iz liste"
+    ' Red o blokovima je JEDINI u tabeli posledica koji trazi odluku operatera, a
+    ' odluka se donosi na drugom mestu (lista Blokovi). Zato taj red ne stoji kao
+    ' opis pravila nego kao STANJE: koliko ih je izabrano i gde se bira.
+    UpsertRow lo, existing, "STEF_BLOK_NEMA", "nema samostalnih otkupnih blokova"
+    UpsertRow lo, existing, "STEF_BLOK_BIRAJ_1", "nijedan nije izabran " & ChrW(8212) & " biraju se u listi " & ChrW(8222) & "Blokovi" & ChrW(8220)
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_1", "izabrano "
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_2", " od "
+    UpsertRow lo, existing, "STEF_BLOK_IZABRANO_3", " " & ChrW(8212) & " storniraju se uz Dupli unos ili Poni" & ChrW(353) & "tenje prometa"
+    UpsertRow lo, existing, "STEF_REVERS", "stornira se; saldo se koriguje bez kontra-stavke"
     ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"
@@ -742,6 +775,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_ST_REV", "Reversi"
     UpsertRow lo, existing, "OTKUI_SEG_ST_FAK", "Fakture"
     UpsertRow lo, existing, "OTKUI_SEG_ST_IZV", "Izvodi"
+    UpsertRow lo, existing, "OTKUI_SEG_ST_BLOK", "Blokovi"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_ST_BLOK", "Otkupni blokovi izabranog dokumenta"
+    UpsertRow lo, existing, "OTKUI_HD_OZN", ChrW(10003)
+    UpsertRow lo, existing, "OTKUI_HD_KOOP", "KOOPERANT"
+    ' Lista blokova radi kao legacy panel: podrazumevano nijedan nije izabran, a
+    ' izabran znaci DODATNO storniran. Zato poruke govore o izboru, ne o svemu.
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_NEMA", "Izaberi dokument da vidi" & ChrW(353) & " njegove otkupne blokove"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_PRAZNO", "Izabrani dokument nema samostalnih otkupnih blokova"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK", "Storniraj i ozna" & ChrW(269) & "ene otkupne blokove?"
+    UpsertRow lo, existing, "OTKUI_SCRST_BLOK_ASK2", "Neozna" & ChrW(269) & "eni ostaju AKTIVNI i osloba" & ChrW(273) & "aju se za drugi dokument."
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FAKTURA", "Postoje" & ChrW(263) & "e fakture"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_IZVOD", "Uvezeni bankovni izvodi"
     UpsertRow lo, existing, "OTKUI_HD_IZNOS", "IZNOS"
@@ -761,7 +804,7 @@ Public Sub UpsertPoruke(lo As ListObject)
               "DA = DUPLIKAT: dokument nikad nije trebalo da postoji " & ChrW(8212) & _
               " skini posledice, nema zamene" & vbCrLf & vbCrLf & _
               "NE = PONI" & ChrW(352) & "TENJE: fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava, nema novog dokumenta" & vbCrLf & vbCrLf & _
-              "OTKAZI = RE" & ChrW(352) & "I KASNIJE: zapamti kao nedovr" & ChrW(353) & "eno (Osiro" & ChrW(263) & "eni dokumenti)"
+              "OTKAZI = ODLO" & ChrW(381) & "ENO RE" & ChrW(352) & "AVANJE: zapamti kao nedovr" & ChrW(353) & "eno (Oporavak)"
     UpsertRow lo, existing, "STORNO_ASK_PALETE", "Da li palete da OSTANU vezane za storniranu prijemnicu?" & vbCrLf & vbCrLf & _
               "DA = ne diraj palete (roba je fizi" & ChrW(269) & "ki tu, samo je dokument pogre" & ChrW(353) & "an)" & vbCrLf & _
               "NE = odve" & ChrW(382) & "i palete (roba nije primljena)"
@@ -782,7 +825,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' --- ispravka prijemnice (prevezivanje paleta) ---
     UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI_PRIJ", "Postoji VI" & ChrW(352) & "E ispravki prijemnice na " & ChrW(269) & "ekanju." & vbCrLf & _
               "Palete NISU automatski prevezane (da se ne pove" & ChrW(382) & "e pogre" & ChrW(353) & "na)." & vbCrLf & _
-              "Re" & ChrW(353) & "i kroz: Osiro" & ChrW(263) & "eni dokumenti."
+              "Re" & ChrW(353) & "i na ekranu Oporavak " & ChrW(8594) & " Osiro" & ChrW(263) & "ene prijem."
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_1", ChrW(268) & "eka ISPRAVKA za storniranu prijemnicu"
     UpsertRow lo, existing, "DOKUNOS_ASK_ISPRAVKA_PRIJ_2", "Da li je OVAJ unos zamena za nju?" & vbCrLf & vbCrLf & _
               "DA = ispravka (palete se prevezuju na novu prijemnicu)" & vbCrLf & _
@@ -793,7 +836,7 @@ Public Sub UpsertPoruke(lo As ListObject)
               "OTKAZI = ne snimaj jo" & ChrW(353)
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_PREVEZANE", ChrW(10003) & " Palete prevezane:"
     UpsertRow lo, existing, "DOKUNOS_MSG_PALETE_NISU", ChrW(10007) & " Prevezivanje paleta nije uspelo " & ChrW(8212) & _
-              " uradi ru" & ChrW(269) & "no (Osiro" & ChrW(263) & "eni dokumenti " & ChrW(8594) & " Palete):"
+              " uradi ru" & ChrW(269) & "no (Oporavak " & ChrW(8594) & " Osiro" & ChrW(263) & ".palete):"
     UpsertRow lo, existing, "DOKUNOS_ERR_ISPRAVKA_NECITLJIVA", ChrW(10007) & " Ne mo" & ChrW(382) & "e se utvrditi da li ISPRAVKA " & _
               ChrW(269) & "eka na ovu prijemnicu." & vbCrLf & vbCrLf & _
               "Upis je zaustavljen namerno: da je nastavljen, nova prijemnica bi dobila SVE" & ChrW(381) & "E palete, " & _

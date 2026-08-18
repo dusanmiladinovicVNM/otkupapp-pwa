@@ -3494,3 +3494,448 @@ vidljivi, a `KgLineVisible` i stari `tstOk` su uklonjeni kao mrtvi.
 Automatski test ovde **ne postoji i ne može da postoji**: tvrdnja je „kontrola je
 vidljiva operateru", a forma se u harnessu gradi bez `.Show`. Ostaje smoke: poruka
 mora da se vidi na Oporavku, Storno i Paletama, i dalje da radi na unosu.
+
+---
+
+## v2.50.1 — `v6-ui-146` · uvid o stornu: 1969 → merenje pa popravka
+
+Operater je prijavio zastoj od 2–3 sekunde po kliku na red na ekranu Storno.
+Ranije je ista prijava zatvorena rečenicom „nisam merio, ne znam gde odlazi" —
+ovog puta je prvo dodato **merenje po sekciji**, pa tek onda popravka.
+
+### Merenje
+
+`BuildStornoImpact` meri svih sedam sekcija i piše **jednu** liniju, i to samo kad
+ukupno pređe **400 ms** — granicu na kojoj čekanje postaje primetno. Brz put ostaje
+tih, spor sam sebe prijavi. Nije privremeni debug nego trajna kapija.
+
+Sa terena, dva različita tipa dokumenta:
+
+```
+Uvid Otpremnica 5/210726-2 trajao 1969 ms: zaglavlje 12, lanac 51, blokovi 8,
+zastavice 20, palete 1879, faktura 0, zbir 0 ms.
+
+Uvid Zbirna S1/220726 trajao 1977 ms: zaglavlje 12, lanac 27, blokovi 27,
+zastavice 16, palete 1895, faktura 0, zbir 0 ms.
+```
+
+**95% vremena u jednoj sekciji, i to istoj za oba tipa.** Jedna popravka, ne dve —
+što se bez merenja ne bi znalo.
+
+### Uzrok
+
+`GetPaleteImpactByField` je za **svaku** paletu u rezultatu radio:
+
+| Poziv | Šta radi |
+|---|---|
+| `FindRowIndexByID(TBL_PALETA, ...)` | linearni prolaz kroz `tblPaleta` |
+| `PaletaLabel(pid)` | **još jedan** isti prolaz + `GetTableData` |
+| `IsPaletaPreradjena(pid)` | **treći** isti prolaz + `GetTableData` |
+| `GetPaletaAggregates(palRow, ...)` | `GetTableData` + 5 × `GetColumnIndex` |
+
+Dakle **tri linearna prolaza i tri kopije cele tabele po paleti**. Batch keš
+(`BeginTableCache`) sprečava ponovno **čitanje** iz Excela, ali ne i kopiranje:
+`d = GetTableData(...)` dodeljuje niz `Variant`-u, a VBA tada kopira ceo niz.
+
+### Popravka
+
+Tabela se čita **jednom**, a red se nalazi kroz rečnik `PaletaID → red`. Prvi red
+pobeđuje, isto kao `FindRowIndexByID` — da se ponašanje nad duplim ID-jem ne
+promeni usput. Pomoćne rutine ostaju za svoje ostale pozivaoce; ovde se čitaju
+ista polja, iz istog reda, samo bez ponovnog traženja tog reda.
+
+### Test 73 — jer zatečena suita ovo ne bi videla
+
+Postojeći testovi tvrde samo **koliko** paleta uvid nosi i **koliki im je zbir**, a
+zbir dolazi iz druge petlje koju izmena ne dira. Polja iz zaglavlja palete —
+oznaka, popunjenost, kapacitet, neto, prerađenost — nije merilo **ništa**, a baš
+njih izmena preračunava. Zeleno posle refaktora zato ne bi značilo ništa.
+
+`T_ImpactPalete_ZaglavljeIzPraveVrste` tvrdi da zaglavlje dolazi iz reda **baš te**
+palete (`PAL-TEST-Z2` = 12/2026, 20 gajbi od 100, 200 kg), i razdvaja ta dva
+računa: koliko je na paleti **ukupno** i koliko od toga nosi **ovaj** dokument.
+
+Sabotaža `palete-zaglavlje-prvi-red` uzima prvi red tabele umesto traženog i pada
+po imenu: `popunjenost je iz reda BAS te palete — očekivano [20], dobijeno [25]`.
+
+### Verifikacija
+
+`vba_check` čisto (191), self-test čisto (39), `who_writes` ažuran,
+`RunAllTests` **ZELENO (73)**, pun set **ZELENO** (11 suite-ova).
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Ubrzanje se **ne prijavljuje kao izmereno** — merenje sa terena postoji samo za
+stanje pre popravke. Novi broj daje isti `WARN`, ili njegov izostanak.
+
+---
+
+## v2.50.2 — `v6-ui-147` · `ByVal` na nizu je kopirao celu tabelu, po ćeliji
+
+Nastavak prethodnog: **prva popravka nije pomogla**, i to je bio podatak. Vreme je
+ostalo isto (1918 / 1895 / 1906 ms) bez obzira na tip dokumenta i na broj paleta —
+a trošak po paleti bi morao da varira. Konstanta znači fiksni trošak.
+
+Merenje unutar sekcije je onda pokazalo tačno mesto:
+
+```
+[v6-ui-146] 1063 stavki, 1 paleta, ukupno 1918 ms:
+citanje tabele 0, prolaz kroz stavke 1883, obrada paleta 35 ms.
+```
+
+Čitanje tabele **0 ms** (batch keš radi), obrada palete **35 ms** — a prolaz kroz
+1063 reda **1883 ms**. To je **1,8 ms po redu** za čitanje dva polja iz niza koji
+je već u memoriji. Toliko ne traje pristup nizu; toliko traje kopiranje.
+
+### Uzrok
+
+```vb
+Public Function SafeCell(ByVal d As Variant, ByVal r As Long, ByVal idx As Long)
+```
+
+`ByVal` na `Variant`-u koji **sadrži niz** znači da VBA kopira ceo niz pri svakom
+pozivu. `SafeCell` je čitač **po ćeliji** — u toj petlji se zove dvaput po redu.
+Dakle 2126 poziva × kopija tabele od 1063 reda.
+
+Popravka je jedna reč: **`ByRef`**. Funkcija `d` samo čita, nikad ne piše, pa je
+razlika isključivo u tome što se niz ne umnožava. `SafeCell` ima **206 pozivalaca**
+u `modPaletniList` — ubrzanje ne pripada samo uvidu o stornu.
+
+Isti obrazac je popravljen i u `modStornoFlow.NzTxC`, koji je u istoj putanji
+(lanac i blokovi). Tamo se nije video jer su te tabele manje — ali greška je ista.
+
+### Šta je ovo ostavilo za kasnije
+
+Isti potpis — čitač po ćeliji koji prima niz `ByVal` — postoji i u
+`modDokumenta.StornoCellRaw` / `StornoCellText` i `modKarticaDetalji.CellVal`.
+Nisu mereni i nisu u ovoj putanji, pa ih ne diram napamet; zapisani su kao nalaz.
+
+### Zašto ovde nema testa
+
+Tvrdnja je „isto ponašanje, manje kopiranja". Vrednosti se ne menjaju, pa test koji
+bi ih proveravao ništa ne bi dokazao, a test koji meri **vreme** u harnessu je
+neupotrebljiv — fixture ima desetak stavki, tamo je i stara verzija brza.
+
+Kapija je **merenje ugrađeno u kod**: obe rutine se prijave same kad pređu 400 ms.
+Regresija ovog tipa ubuduće stiže kao `WARN` linija, ne kao pritužba operatera.
+
+### Verifikacija
+
+`vba_check` čisto (191), self-test čisto (39), `who_writes` ažuran,
+`RunAllTests` **ZELENO (73)**, pun set **ZELENO** (11 suite-ova).
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Ubrzanje se **ne prijavljuje kao izmereno** dok ne stigne merenje sa terena.
+
+### Napomena o efektu se više ne seče
+
+Tabela „Efekat storna po modu" ima tri kolone, a komentar iznad rasporeda je već
+opisivao pravo ponašanje: dokument fiksno, info fiksno, **napomena uzima ostatak**.
+Kod je ipak sve tri delio na trećine, pa je napomena dobijala trećinu i sekla se
+na pola rečenice:
+
+```
+DUPLIKAT i PONISTENJE: preracun, storno ako ostane prazn
+DUPLIKAT: ostaje osirocena (rucno)  |  PONISTENJE: stornir
+```
+
+Prve dve kolone nose kratak i predvidiv sadržaj — naziv dokumenta i broj ili
+brojač u zagradi — pa im fiksna širina dostaje. Trećoj je dužina neograničena i
+ona je jedina koja opisuje **posledicu**; zbog nje ekran i postoji.
+
+Automatskog testa nema: raspored se meri u pikselima nad formom koju harness
+gradi bez `.Show`. Ostaje smoke — nijedna napomena se ne sme završiti sečenjem.
+
+---
+
+## v2.51.0 — `v6-ui-148` · poslovni jezik sekcije „Posledice po osnovu storna"
+
+Operater: *„previše je laički napisano, nije uopšte poslovno."* Tačno — i uzrok
+nije bio u izboru reči nego u tome **gde su reči stajale**.
+
+Svi ti tekstovi bili su **tvrdo ukucani ASCII literali u `modStornoFlow`**. VBA
+izvor mora ostati ASCII, pa se poslovna rečenica u njemu ne može ni napisati:
+bez č/ć/š/ž/đ ostaje telegrafski zapis („preracun, NE pada", „ako ih cekiras").
+Selidba u katalog (`modPoruke` + `ChrW`) je zato preduslov, ne kozmetika.
+
+### Osnovi storna — imenovani po poslovnom događaju
+
+| Pre | Sada |
+|---|---|
+| Pogrešan unos | **Ispravka dokumenta** |
+| Duplikat | **Dupli unos** |
+| Ništa se nije desilo | **Poništenje prometa** |
+| Reši kasnije | **Odloženo rešavanje** |
+| Storniraj | **Storno bez zamene** |
+| Ispravka *(revers)* | **Zamena reversa** |
+
+Objašnjenja ispod dugmadi su **namerno kratka** — labela ima 168pt, a duga
+rečenica bi se sekla. Puna formulacija posledice stoji u tabeli iznad, koja širinu
+ima.
+
+### Posledice po dokumentu
+
+| Pre | Sada |
+|---|---|
+| `stornira se (uz ambalazu)` | stornira se, sa pripadajućom ambalažom |
+| `preracun, storno ako ostane prazna (jedini vlasnik)` | preračunava se; stornira se ako ostane bez otpremnica |
+| `preracun, NE pada (deljena - sestre ostaju)` | preračunava se; ostaje aktivna jer nosi i druge otpremnice |
+| `preracun, storno ako padne na 0` | preračunava se; stornira se ako ostane bez količine |
+| `ostaje osirocena (rucno)` | ostaje osirotela; prevezuje se ručno |
+| `odvezuju se (prezivljavaju)` | odvezuju se od zbirne i ostaju aktivne |
+| `ostaje netaknuta` | ostaje nepromenjena |
+| `skidaju se` | odvezuju se sa palete |
+| `oslobadja se (stavke osirocene)` | oslobađa se; stavke ostaju osirotele |
+| `Samostalni - storniraju se samo ako ih cekiras (svaki mod)` | evidentiraju se zasebno; storniraju se samo po izboru iz liste |
+| `Stornira se (saldo se koriguje, bez kontra-stavke)` | stornira se; saldo se koriguje bez kontra-stavke |
+
+**Prefiksi se sada zovu isto kao dugmad**: `DUPLIKAT:` / `PONISTENJE:` →
+`DUPLI UNOS:` / `PONIŠTENJE:`. Do sada se nisu poklapali — u tabeli je pisalo
+`PONISTENJE`, a dugme je glasilo „Ništa se nije desilo", pa je operater morao sam
+da poveže redak sa dugmetom na koje se odnosi.
+
+Naslov sekcije: `EFEKAT STORNA PO MODU` → **`POSLEDICE PO OSNOVU STORNA`**.
+„Mod" je programerski; četiri izbora su poslovni **osnovi**.
+
+**Zatečeni domenski termini ostaju** — „osirotela", „prevezivanje", „zbirna",
+„otkupni blok" su jezik ove aplikacije i menjati ih bilo bi štetnije od dobitka.
+
+### Test 74 — selidba u katalog uvodi nov tihi kvar
+
+Ključ koji katalog ne zna vraća **prazan string**: najvažnija kolona ekrana ostane
+prazna, bez greške i bez traga. `vba_check` (provera `PORUKA`) hvata ključ bez para
+u `UpsertPoruke` — ali ne i katalog koji nije osvežen, a to je baš ono što se
+dešava posle importa.
+
+`T_StornoEfekat_TekstIzKataloga` zato traži da katalog stvarno nosi tekst (ne
+prazan ključ), pa da se napomena sklopi iz njega, i to u **oba** oblika: jedan
+spojen prefiks kad je efekat isti za oba osnova, dva kad se razlikuju.
+
+Sabotaža `efekat-uvek-spojen-prefiks` uklanja poređenje u `ChainEff` i pada po
+imenu: *„razlicit efekat nosi OBA prefiksa u istom redu — očekivano [True],
+dobijeno [False]"*.
+
+Slučaj „ključ ne postoji u katalogu" **nema** sabotažu, i to namerno: hvata ga
+`vba_check` još pre nego što suite krene, pa bi sabotaža pala na tuđoj kapiji i
+lažno tvrdila da je meri test.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test čisto (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (74)** · pun set **ZELENO** (11 suite-ova) ·
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Isti tekst vidi i **legacy panel** `frmDokumenta` — model je zajednički
+(`BuildStornoImpact`), pa se promena ne razilazi između dva ekrana.
+
+---
+
+## v2.52.0 — `v6-ui-149` · otkupni blokovi se ponovo biraju, a ne storniraju svi
+
+Operater: *„fali check lista sa otkupnim listovima pri stornu uzvodnih dokumenata.
+to postoji kod legacy, mora i ovde."* Tačno — i poređenje sa legacy-jem otkrilo je
+da nije reč samo o prikazu.
+
+| | Legacy panel | Nov ekran do sada |
+|---|---|---|
+| Podrazumevano | **nijedan blok nije čekiran** | — |
+| Na potvrdu | stornira **samo čekirane** | stornira **SVE** |
+
+Legacy: *„default oslobodjeni/netaknuti, cekiran = dodatno storniran."* Nov ekran je
+ispisivao spisak u `MsgBox`-u i na „Da" stornirao sve. Bio je dakle **destruktivniji
+od legacy-ja**, i to ne namerno nego zato što multiselect nije bio prenet — što je
+katalog migracije i beležio kao svesnu privremenu odluku („sve-ili-ništa").
+
+### Lista „Blokovi"
+
+Jedanaesti čip ekrana Storno. Nije tip dokumenta — kao ni „Lanac robe" — nego
+**pogled nad već izabranim dokumentom**:
+
+| Kolona | |
+|---|---|
+| ✓ | izbor; klik na red uključuje/isključuje |
+| Broj otkupa, Količina, Klasa, Kooperant | isto što je legacy prikazivao |
+| *(nevidljiva)* | `OtkupID` |
+
+Izbor se drži **po `OtkupID`-u, ne po broju otkupa**: broj se računa po kooperantu,
+pa dva bloka lako dele isti — a spisak završava u `StornoSelectedBlocks_TX`, dakle
+u mutaciji. Isti razlog zbog kog `GeneracijaID` postoji na ekranu Storno i
+`CorrectionID` na Oporavku.
+
+Redovi dolaze iz **već izgrađenog uvida** (`mImpact`), ne iz novog skeniranja: model
+na osnovu koga zona tvrdi posledice mora biti i izvor spiska nad kojim se bira —
+inače ekran pokazuje jedno, a stornira drugo.
+
+Prelazak na taj čip **ne poništava izbor dokumenta**, za razliku od prelaska između
+tipova. Poništio bi baš ono što lista treba da prikaže.
+
+### Dva nalaza iz istog posla
+
+**Test seam je lagao.** `Scr_IzborTestSet` je postavljao polja izbora, ali **nije
+gradio uvid** — što produkcija radi pri svakom kliku na red. Test 62 je na tome
+gradio ceo svoj slučaj: „framework dokument bez uvida ne nudi radnju" prolazilo je
+zato što uvida u testu nikad nije ni bilo, a ne zato što kapija radi.
+
+Seam sada radi ono što radi i produkcija, a test 62 neuspeh uvida pravi **stvarno** —
+zadatom generacijom koju nijedan red ne nosi — i dobio je pozitivnu kontrolu: isti
+dokument sa razrešivim identitetom radnje **ima**, pa se vidi da kapija nije
+zaglavljena na nuli.
+
+**`TabelaTipa` je fail-open.** Nepoznat ključ tiho vraća `tblOtkup` (`Case Else`), pa
+bi lista sa pogrešnim ključem prikazala otkupne listove pod svojim naslovom — tačno
+ono na šta komentar u testu 56 upozorava. Nije popravljeno u ovom PR-u (dira sve
+liste, ne samo ovu); test 56 zato meri **posledicu** — koje kolone lista vrati.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (75)** · pun set **ZELENO** · `COMPILE` `NEJASNO`.
+
+**Test 75** tvrdi da je podrazumevano stanje prazno i da označavanje pogađa baš taj
+blok, po `OtkupID`-u. Dve sabotaže, obe oborile svoju tvrdnju po imenu:
+`blokovi-svi-oznaceni` i `blokovi-oznake-prezive-izbor`.
+
+Druga je usput ponovo naplatila **zamku 8** iz `tools/sabotaza.py`: prva verzija joj
+je uklanjala red i ostavljala `mSelTip = ""`, koji postoji i u zdravom kodu — pa ga
+je `--vrati` našao tamo i dodao još jedan `Set mBlokOznaceni = Nothing`. Zamena sada
+nosi oznaku `' SABOTAZA`, pa je jedinstvena.
+
+---
+
+## v2.52.1 — `v6-ui-150` · vodeće „?" u dijalogu i uput na ekran koji ne postoji
+
+Smoke posle upisa otpremnice pokazao je poruku:
+
+```
+? Vise ispravki na cekanju za ovaj tip -- prevezivanje NIJE uradeno.
+  Resi kroz Osiroceni dokumenti.
+```
+
+Tri greške u jednoj rečenici, i sve tri različite vrste.
+
+### 1. Oznaka je signal, ne tekst
+
+`ChrW(10007)` (✗) uz poruku znači **„ovo idi u dijalog"** — razlikovanje uvedeno u
+`v6-ui-143`, jer se upozorenje uz uspešan upis gubilo u traci. Ali `MsgBox` crta
+kroz **ANSI kodnu stranu**, u kojoj tog znaka nema, pa ga je operater video kao
+vodeće `?`.
+
+Oznaka se sada skida pred dijalogom (`PorukaZaDijalog`). U traci poruka, koja je
+Unicode, **ostaje** — tamo nosi značenje (crveno = nešto nije prošlo), dok u
+dijalogu istu ulogu već igra `vbExclamation`.
+
+Isti tekst u istoj traci se video ispravno — zato je greška i preživela: proverom
+jednog kanala izgleda tačno.
+
+### 2. Pogrešno slovo
+
+`Osiro` & `ChrW(269)` & `eni` daje **„Osiročeni"**. Ostale četiri poruke istog
+sadržaja koriste `ChrW(263)` (ć). Jedan ključ je odstupao.
+
+### 3. Uput na ekran koji u novom UI-ju ne postoji
+
+„Reši kroz **Osiroćeni dokumenti**" je naziv **legacy panela**. U novom UI-ju taj
+ekran se zove **Oporavak**, a lista **Nedovršeno**. Operater je upućivan na nešto
+što na ekranu ne piše nigde.
+
+Ispravljene su sve četiri poruke koje su vodile na legacy imena:
+
+| Pre | Sada |
+|---|---|
+| Reši kroz Osiroćeni dokumenti. | Reši na ekranu Oporavak → Nedovršeno. |
+| Reši kroz: Osiroćeni dokumenti. | Reši na ekranu Oporavak → Osiroćene prijem. |
+| uradi ručno (Osiroćeni dokumenti → Palete) | uradi ručno (Oporavak → Osiroć.palete) |
+| OTKAZI = REŠI KASNIJE … (Osiroćeni dokumenti) | OTKAZI = ODLOŽENO REŠAVANJE … (Oporavak) |
+
+Poslednja je usklađena i sa novim imenima osnova storna iz `v6-ui-148`.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (75)** · pun set **ZELENO** · `COMPILE` `NEJASNO`.
+
+**Test 69** je dobio treću tvrdnju: poruka u dijalogu ide **bez** oznake, nije
+prazna posle skidanja, i počinje slovom a ne razmakom. Skidanje je zato izdvojeno
+u `PorukaZaDijalog` — da se može izmeriti; dijalog u headless runu visi, pa se sam
+`MsgBox` ne može testirati.
+
+Sabotaža `dijalog-nosi-oznaku` vraća oznaku u dijalog i pada po imenu:
+*„DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake — očekivano [False],
+dobijeno [True]"*.
+
+### Jedanaesti čip se crtao, ali klik na njega nije radio ništa
+
+Operater: *„čip Blokovi postoji, ali koja mu je svrha? mrtav je…"* — i bio je u pravu.
+
+Dispečer klika je glasio:
+
+```vb
+If Left$(tag, 5) = "lsSeg" And Len(tag) = 6 Then
+```
+
+`Len(tag) = 6` pokriva **samo `lsSeg0`…`lsSeg9`**. Jedanaesti čip je `lsSeg10` —
+sedam znakova — pa je propadao kroz granu i **nije radio ništa**: crta se, boji se
+na hover, a klik nema kome da stigne.
+
+Ljuska ima **dve kapije** nad čipovima, i ovo je bila druga:
+
+| Kapija | Šta odlučuje | Kad je pukla |
+|---|---|---|
+| `MAX_SEG` | da li se čip **crta** | `v6-ui-143` — „Izvodi" su nestali |
+| dispečer klika | da li klik **stigne** | sada — „Blokovi" su mrtvi |
+
+Obe daju isti simptom za operatera i obe ćute. Redni broj se sada čita kroz
+`SegIndeksIzTaga`, ne merenjem dužine taga.
+
+**Test 56** meri obe odvojeno: crtanje jednom tvrdnjom, razrešavanje klika drugom —
+i to za **poslednji** čip, jer je prvi radio i pre.
+
+Sabotaža postoji **samo za prvu** kapiju; njeno sidro je usput popravljeno (gađalo
+je `MAX_SEG = 10`, a sada je 11). Za drugu je namerno nema: test može da tvrdi da
+`SegIndeksIzTaga` razrešava poslednji čip, ali ne i da ga dispečer zaista **zove** —
+klik kroz formu se u harnessu ne može odigrati. Sabotaža nad dispečerom bi ostavila
+suite zelen i lažno tvrdila da je tvrdnja pokrivena (zamka 5). Ta kapija ostaje na
+smoke-u.
+
+### Build UI-ja se sada vidi na ekranu
+
+Sporedni nalaz iz iste runde, ali je koštao dva puna kruga: svaka nereleasovana
+sveska nosi isti `v0.0.0-dev`, pa se sa ekrana **nije moglo videti da li je posle
+`ImportAllVBA` u njoj nov ili star UI kod**.
+
+Dvaput se zbog toga merilo nad neuvezenim buildom i dvaput se nije moglo
+razlikovati *„nije pomoglo“* od *„nije uvezeno“* — jednom kod ubrzanja paleta,
+jednom kod mrtvog čipa.
+
+Na **nereleasovanoj** svesci se u sidebaru sada prikazuje `OTKUI_BUILD` umesto
+verzije sveske. Prvi pokušaj je pisao oba, ali se odsekao: raspored drži tu labelu
+na 55pt uz desnu ivicu sidebara, pa je od `v0.0.0-dev  v6-ui-153` ostajalo
+`v0.0.0-d`. Na releasovanoj svesci ostaje verzija sveske — tamo ona jeste podatak.
+
+Merenja u logu istu oznaku nose od `v6-ui-147`; ovo zatvara i drugi kanal, bez
+Immediate prozora.
+
+### Red o blokovima nosi STANJE, ne pravilo
+
+Operater, pošto je čip prorad io: *„nije ni ovo rešenje loše, ali kako operater da
+vidi da u čip Blokovi treba da odluči šta da radi sa blokovima?“*
+
+Legacy je listu blokova imao **unutar** panela odluke, pa se videla sama od sebe.
+U novom UI-ju je iza čipa — što je dobro za prostor, ali ništa nije govorilo da tamo
+ima šta da se reši.
+
+Red „Otkupni blokovi" u tabeli posledica je **jedini koji traži odluku**, a odluka
+se donosi na drugom mestu. Zato taj red više ne opisuje pravilo nego **stanje**, i
+menja se pri svakom štikliranju:
+
+| Stanje | Tekst |
+|---|---|
+| nema blokova | nema samostalnih otkupnih blokova |
+| ima ih, nijedan izabran | **nijedan nije izabran — biraju se u listi „Blokovi"** |
+| izabrani | izabrano 2 od 3 — storniraju se uz Dupli unos ili Poništenje prometa |
+
+Red se prepoznaje po tome što mu je napomena baš taj ključ iz kataloga, a ne po
+nazivu dokumenta: naziv je tekst za prikaz i sme da se menja.
+
+**Test 75** tvrdi sva tri stanja; `BlokStatusTekst` je zato javna — zona se crta nad
+formom koju harness gradi bez `.Show`, pa se sam natpis ne može pročitati.
+Sabotaža `blok-status-ne-prati-izbor` pada po imenu.
