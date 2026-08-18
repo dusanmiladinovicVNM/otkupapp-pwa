@@ -818,6 +818,15 @@ Public Sub UpsertPoruke(lo As ListObject)
               "Re" & ChrW(353) & "i ru" & ChrW(269) & "no: Oporavak " & ChrW(8594) & " Palete."
     ' --- ekran Oporavak (Faza D/14) ---
     UpsertRow lo, existing, "OTKUI_NAV_OPORAVAK", "Oporavak"
+    UpsertRow lo, existing, "OTKUI_HDO_CID", "CID"
+    UpsertRow lo, existing, "OTKUI_BTN_OPO_ODBACI", "Odbaci ispravku"
+    UpsertRow lo, existing, "OTKUI_OPO_ODBACI_ASK", "Odbaciti zaostalu ispravku?" & vbCrLf & _
+              "Dokumenti se NE diraju " & ChrW(8212) & " zatvara se samo zapis koji " & _
+              ChrW(269) & "eka zamenski dokument."
+    UpsertRow lo, existing, "OTKUI_OPO_ODBACI_OK", ChrW(10003) & " Ispravka odba" & ChrW(269) & "ena"
+    UpsertRow lo, existing, "OTKUI_OPO_ODBACI_ERR", ChrW(10007) & " Odbacivanje nije uspelo"
+    UpsertRow lo, existing, "OTKUI_OPO_ODBACI_NIJE_CTX", ChrW(10007) & " Ovaj red nije zaostala ispravka " & _
+              ChrW(8212) & " re" & ChrW(353) & "ava se prevezivanjem"
     UpsertRow lo, existing, "OTKUI_SCROPO_SUB", "Nedovr" & ChrW(353) & "eno, osiro" & ChrW(263) & "eni dokumenti i vra" & ChrW(263) & "anje storna"
     UpsertRow lo, existing, "OTKUI_SCROPO_LISTA", "Nedovr" & ChrW(353) & "eno"
     UpsertRow lo, existing, "OTKUI_SEG_OPO_NED", "Nedovr" & ChrW(353) & "eno"

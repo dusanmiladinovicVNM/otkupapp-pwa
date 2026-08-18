@@ -204,6 +204,7 @@ Public Sub RunAllTests()
     RunOne 68
     RunOne 69
     RunOne 70
+    RunOne 71
 
     SetTestMode prevMode
     WriteResultFile
@@ -306,6 +307,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 68: TestName = "T_LogErr_NeVidiErrPosleResumeNext"
         Case 69: TestName = "T_PorukeUnosa_UpozorenjeNosiOznaku"
         Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
+        Case 71: TestName = "T_Oporavak_OdbaciIspravku_PoIdentitetu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -384,6 +386,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 68: T_LogErr_NeVidiErrPosleResumeNext
         Case 69: T_PorukeUnosa_UpozorenjeNosiOznaku
         Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
+        Case 71: T_Oporavak_OdbaciIspravku_PoIdentitetu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -1483,7 +1486,10 @@ Private Sub T_Oporavak_UgovorIRadnje()
 
     ' 3) Radnje po listi. Prazno = lista je samo pregled ili izbor cilja.
     modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
-    AssertEq modScrOporavak.Scr_Radnje(), "", "Nedovrseno je samo pregled"
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), "odbaci:") = 1), True, _
+             "Nedovrseno ima Odbaci ispravku"
+    AssertEq (InStr(modScrOporavak.Scr_Radnje(), ":danger:") > 0), True, _
+             "Odbaci ispravku nosi danger stil"
     modScrOporavak.Scr_OpoTestSet "ZBIRNE", "", ""
     AssertEq modScrOporavak.Scr_Radnje(), "", "ciljna lista zbirnih nema radnju"
     modScrOporavak.Scr_OpoTestSet "CILJPRIJ", "", ""
@@ -3180,6 +3186,7 @@ Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
                  CStr(info(i)) & " je informacija, ne upozorenje"
     Next i
 End Sub
+
 ' ============================================================
 ' 70. Nestao identitet obara uvid -- i za otpremnicu i za zbirnu
 ' ============================================================
@@ -3223,6 +3230,69 @@ Private Sub T_StornoImpact_NestaoIdentitetJeInvalidan()
     ' Bez identiteta oba i dalje rade po broju -- zatecen zapis nema generaciju.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
     AssertEq CBool(m("valid")), True, "bez identiteta zbirna i dalje radi po broju"
+End Sub
+
+' ============================================================
+' 71. Odbaci zaostalu ispravku -- red nosi CorrectionID, ne samo broj
+' ============================================================
+' Ekran Oporavak je listu "Nedovrseno" prikazivao kao cist pregled: operater
+' vidi da ga safe-stop blokira, a nema cime da to razresi. Jedini izlaz je bio
+' legacy frmDokumenta. CancelCorrectionContext je postojao sve vreme -- falio
+' mu je ulaz iz novog UI-ja.
+'
+' Radnja MORA da cilja CorrectionID, ne poslovni broj. Nad istim brojem moze da
+' stoji vise contexta (storno, pa opet storno istog dokumenta), pa bi izbor po
+' broju zatvorio onaj koji zatekne prvi -- a operater je gledao drugi red.
+' Zato red nosi identitet u nevidljivoj koloni, isto kao GeneracijaID na ekranu
+' Storno.
+Private Sub T_Oporavak_OdbaciIspravku_PoIdentitetu()
+    Dim d As Variant, cols As Variant, r As Variant
+    Dim i As Long, n As Long, ctxRedova As Long, saCID As Long
+    Dim vidjen1 As Boolean, vidjen2 As Boolean
+
+    modScrOporavak.Scr_OpoTestSet "NEDOVRSENO", "", ""
+    d = modScrOporavak.Scr_Rows("", "")
+    AssertEq IsArray(d), True, "Nedovrseno vraca niz"
+    cols = d(0)
+
+    ' Kolona identiteta je POSLEDNJA i NEVIDLJIVA. Prioritet 4 nikad ne prolazi
+    ' petlju vidljivosti (ide 3 -> 1), pa je operater ne vidi, a GridCell je cita
+    ' iz mView -- sirina kolone ne dira podatak.
+    AssertEq (UBound(cols) + 1), 6, _
+             "opis kolona Nedovrsenog nosi sest kolona"
+    AssertEq Split(CStr(cols(UBound(cols))), "|")(0), "OTKUI_HDO_CID", _
+             "poslednja kolona je CorrectionID"
+    AssertEq modScrDokumenti.ColF(CStr(cols(UBound(cols))), 4), "4", _
+             "kolona CID je prioriteta 4 -- nikad vidljiva"
+
+    ' PREDUSLOV: fixture stvarno ima ispravke na cekanju. Bez ovoga bi petlja
+    ' ispod prosla nad nula redova i test bi bio zelen ne merivsi nista.
+    n = CLng(d(2))
+    AssertEq (n >= 2), True, "fixture ima bar dve stavke u Nedovrsenom"
+
+    ' Svaki CONTEXT red nosi svoj CorrectionID; osirotele stavke ga nemaju --
+    ' one se ne odbacuju nego prevezuju, pa radnja nad njima mora da stane.
+    r = d(1)
+    For i = 1 To n
+        If Left$(CStr(r(i, 2)), 8) = "CONTEXT/" Then
+            ctxRedova = ctxRedova + 1
+            If Len(Trim$(CStr(r(i, 6)))) > 0 Then saCID = saCID + 1
+            If CStr(r(i, 6)) = "SV-TEST-1" Then vidjen1 = True
+            If CStr(r(i, 6)) = "SV-TEST-2" Then vidjen2 = True
+        Else
+            AssertEq CStr(r(i, 6)), "", _
+                     "osirotela stavka nema CorrectionID -- resava se prevezivanjem"
+        End If
+    Next i
+
+    AssertEq (ctxRedova >= 2), True, "fixture ima bar dva context reda"
+    AssertEq saCID, ctxRedova, _
+             "SVAKI context red nosi svoj CorrectionID u koloni 6"
+
+    ' I to bas ONE iz fixture-a: dva razlicita ID-ja, ne dva puta isti. Test koji
+    ' bi merio samo "nije prazno" prosao bi i kad bi svi redovi nosili isti CID.
+    AssertEq vidjen1, True, "red za SV-TEST-1 nosi svoj identitet"
+    AssertEq vidjen2, True, "red za SV-TEST-2 nosi svoj identitet"
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.
