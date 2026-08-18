@@ -3469,10 +3469,19 @@ ljuska prijavljuje da je ekran pukao.
 U logu se to lepo vidi: tri klika na „Prevezi" u četiri sekunde. Radnja je svaki
 put odgovorila, samo nemo, pa je operater kliktao dalje.
 
-**Popravka:** toast se seli u **naslovnu traku** (`zTitle`) — jedinu zonu koju
-`ShowZones` drži vidljivom na svim ekranima. Poravnat je desno, do datuma, i meri
-širinu prema dužini poruke, pa kratka potvrda ne uzima pola trake a dug razlog se
-ne seče.
+**Popravka:** toast se seli u **mrezu** (`zGrid`) — traka preko cele širine, tačno
+iznad podnožja (`Prikazano / Ukupno / strane`).
+
+Prva verzija ga je stavila u naslovnu traku: video se, ali je **pokrivao naslov
+ekrana**. Mreža je bolji domaćin — vidljiva je na svim ekranima isto kao i naslov,
+ali joj je dno prazno kad lista ne popuni stranu, pa poruka ništa ne zaklaňa. A i
+odgovor na radnju nad redom stoji uz same redove.
+
+Puna širina je namerna: razlog odbijanja je često duga rečenica, a poruka koja se
+seče ne vredi više od one koje nema.
+
+`grdBody` se pravi **posle** trake, pa `ShowToast` radi `ZOrder 0` — bez toga bi
+poruka stajala ispod redova i opet se ne bi videla, druga varijanta istog kvara.
 
 Time otpada i sprega sa `KgLineVisible`: toast je ranije delio prostor sa zbirom
 kilograma u akcionom redu, pa ih je sakrivao dok stoji. Sada su kilogrami stalno

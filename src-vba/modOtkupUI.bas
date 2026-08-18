@@ -165,6 +165,9 @@ Private Const GRID_ROW_H  As Single = 21
 Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
+' Traka poruke iznad podnozja mreze. Ista je na svim ekranima -- poruka nije
+' deo liste pa ne sme da se menja sa njom.
+Private Const TOAST_H     As Single = 26
 ' Devet, zbog F8: tamo prekidac bira TIP dokumenta, a tipova je devet
 ' (sedam rezima F1..F7 + fakture + izvodi). Ostali ekrani koriste manje i
 ' visak dugmadi ostaje sakriven (LayoutGrid). Natpisi u F8 su kratki bas
@@ -574,7 +577,7 @@ End Sub
 
 '---------------------------------------------------------- TITLE ----
 Private Sub BuildTitle(frm As Object)
-    Dim z As Object, tf As Object
+    Dim z As Object
     Set z = NewZone(frm, "zTitle", SIDEBAR_W, HEADER_H + KPI_H, 800, TITLE_H, C_WHITE)
     WireZone z
     NewLbl z, "titLnB", "", 0, TITLE_H - 1, 800, 1, 8, False, 0, C_BORDER
@@ -597,16 +600,6 @@ Private Sub BuildTitle(frm As Object)
     ' lenjir za merenje naslova - znacka mora da stane tacno iza teksta
     NewLbl z, "titRul", "", 0, -400, 10, 14, TS_DISPLAY, True, C_WHITE, -1, fmTextAlignLeft, mDisplayFont
     z.Controls("titRul").AutoSize = True
-
-    ' TOAST. Stoji ovde, a ne u zoni unosnog ekrana, zato sto je naslovna traka
-    ' JEDINA zona koju ShowZones ostavlja vidljivom na svim ekranima. Dok je
-    ' toast ziveo u zForm, na svakom modScr* ekranu je zForm skriven, pa je
-    ' Visible = True nad kontrolom u skrivenom roditelju prikazivalo NISTA --
-    ' bez greske, jer ShowToast pocinje sa On Error Resume Next.
-    Set tf = NewFrame(z, "tstScr", 0, 0, 320, 26, RGB(236, 245, 240))
-    tf.Visible = False
-    NewLbl tf, "tstScrBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
-    NewLbl tf, "tstScrMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
     NewLbl z, "titDatum", "-", 0, CenterY(0, TITLE_H, TS_META), 190, TxtH(TS_META), _
            TS_META, False, C_MUTED, -1, fmTextAlignRight
 End Sub
@@ -962,6 +955,7 @@ End Sub
 '----------------------------------------------------------- GRID ----
 Private Sub BuildGrid(frm As Object)
     Dim z As Object, i As Long, chip As Variant, X As Single, hd As Object, ft As Object
+    Dim tf As Object
     Set z = NewZone(frm, "zGrid", SIDEBAR_W, 0, 620, 260, C_SAND_LT)
     WireZone z
     NewLbl z, "grdLnT", "", 0, 0, 620, 1, 8, False, 0, C_BORDER
@@ -1023,6 +1017,22 @@ Private Sub BuildGrid(frm As Object)
     WireBtn z.Controls("grdEmptyA"), "grdEmptyA", "chev"
 
     Set ft = NewFrame(z, "grdFoot", 0, 0, 620, GRID_FOOT_H, C_SAND_LT)
+
+    ' TOAST -- traka preko cele sirine mreze, tacno IZNAD podnozja.
+    '
+    ' Do v6-ui-145 je ziveo u zForm, zoni unosnog ekrana, koju ShowZones gasi na
+    ' svakom ugovornom ekranu: Visible = True nad kontrolom u skrivenom roditelju
+    ' ne prikazuje nista, pa poruke sa ekrana Storno, Palete i Oporavak nisu
+    ' stizale do operatera. Prva popravka ga je stavila u naslovnu traku -- video
+    ' se, ali je pokrivao naslov ekrana.
+    '
+    ' Mreza je bolji domacin od naslova: vidljiva je na svim ekranima isto kao i
+    ' naslov, ali joj je dno PRAZNO kad lista ne popuni stranu, pa poruka nista ne
+    ' zaklanja. A i odgovor na radnju nad redom stoji uz same redove.
+    Set tf = NewFrame(z, "tstScr", 0, 0, 320, 26, C_SOFT_BG)
+    tf.Visible = False
+    NewLbl tf, "tstScrBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
+    NewLbl tf, "tstScrMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
     NewLbl ft, "ftLnT", "", 0, 0, 620, 1, 8, False, 0, C_BORDER
     NewLbl ft, "ftRange", "-", PAD, 6, 170, 14, TS_META, False, C_MUTED, -1
     ' zbirovi su brojevi - Consolas, podebljano (Consolas nema Semibold rez)
@@ -1611,7 +1621,6 @@ Public Sub LayoutOtkup(frm As Object)
         .Controls("titSub").width = mainW - PAD * 2 - 200 - TIT_ICO_W - 10
         PlaceTitleBadge frm
     End With
-        PostaviToast frm, mainW
 
     ' Traka otpremnice stoji izmedju naslova i "Osnovnih podataka": opisuje
     ' IZVOR robe, pa mora biti iznad polja koja se iz njega pretpopunjavaju.
@@ -2152,6 +2161,7 @@ SledecaAkcija:
 
     Set ft = z.Controls("grdFoot")
     ft.Left = PAD: ft.top = zh - GRID_FOOT_H: ft.width = sc: ft.Height = GRID_FOOT_H
+    PostaviToast z, sc, ft.top
     ft.Controls("ftLnT").width = sc
     ft.Controls("ftKg").Left = sc / 2 - 190
     ft.Controls("ftVal").Left = sc / 2 - 10
@@ -4080,7 +4090,6 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
         .Controls("titName").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
         .Controls("titSub").width = w - PAD * 2 - 200 - TIT_ICO_W - 10
     End With
-    PostaviToast frm, w
     gy = HEADER_H + h + TITLE_H
     With frm.Controls("zGrid")
         .Left = X: .top = gy: .width = w
@@ -5277,37 +5286,35 @@ Public Sub DetectDisplayFont()
     MsgBox "UI_DISPLAY_FONT = " & res, vbInformation
 End Sub
 
-' Toast se crta u NASLOVNOJ traci -- jedinoj zoni koju ShowZones drzi vidljivom
-' na svakom ekranu. Do ove izmene je ziveo u zForm, pa se van ekrana dokumenata
-' nije video NIKAD: ni poruka radnje, ni ScrLastErr kojim ljuska prijavljuje da
-' je ekran pukao. Operater je to prijavio kao "dugme je mrtvo" -- radnja je
-' odgovarala, samo nemo.
-'
-' Poravnat je desno, do datuma, i sam sebi meri sirinu prema duzini poruke, pa
-' kratka potvrda ne uzima pola trake a dug razlog se ne sece.
-Private Sub PostaviToast(frm As Object, ByVal w As Single)
+' Traka poruke ide preko cele sirine mreze, tacno iznad podnozja (Prikazano /
+' Ukupno / strane). Puna sirina je namerna: razlog odbijanja je cesto duga
+' recenica, a poruka koja se sece ne vredi vise od one koje nema.
+Private Sub PostaviToast(z As Object, ByVal sc As Single, ByVal footTop As Single)
     Dim tf As Object
     On Error Resume Next
-    Set tf = frm.Controls("zTitle").Controls("tstScr")
+    Set tf = z.Controls("tstScr")
     If tf Is Nothing Then Exit Sub
-    tf.width = w - PAD * 2 - 200
-    If tf.width < 120 Then tf.width = 120
-    tf.Left = w - PAD - 190 - GAP - tf.width
-    If tf.Left < PAD Then tf.Left = PAD
-    tf.top = CenterY(0, TITLE_H, TS_META) - 5
-    tf.Controls("tstScrMsg").width = tf.width - 18
+    tf.Left = PAD
+    tf.width = sc
+    tf.top = footTop - TOAST_H - 4
+    tf.Controls("tstScrBar").Height = TOAST_H
+    tf.Controls("tstScrMsg").width = sc - 18
 End Sub
 
 Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
-    Set fr = mFrm.Controls("zTitle").Controls("tstScr")
+    Set fr = mFrm.Controls("zGrid").Controls("tstScr")
     If fr Is Nothing Then Exit Sub
     fr.BackColor = IIf(isErr, RGB(250, 240, 235), RGB(236, 245, 240))
     fr.Controls("tstScrBar").BackColor = IIf(isErr, C_RUST, C_GREEN_LT)
     fr.Controls("tstScrMsg").caption = msg
     fr.Controls("tstScrMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
+    ' Telo mreze je napravljeno POSLE trake (grdBody dolazi iza tstScr u
+    ' BuildGrid), pa bi bez ovoga poruka stajala ISPOD redova i opet se ne bi
+    ' videla -- druga varijanta istog kvara od koga se krenulo.
+    fr.ZOrder 0
     fr.Visible = True
     CancelToastTimer
     If Not isErr Then
@@ -5320,7 +5327,7 @@ Public Sub HideToast()
     On Error Resume Next
     mToastPending = ""
     If mFrm Is Nothing Then Exit Sub
-    mFrm.Controls("zTitle").Controls("tstScr").Visible = False
+    mFrm.Controls("zGrid").Controls("tstScr").Visible = False
 End Sub
 
 Private Sub CancelToastTimer()
