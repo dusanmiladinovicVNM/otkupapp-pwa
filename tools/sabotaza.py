@@ -627,6 +627,27 @@ SABOTAZE = {
         "T_StornoJeEkranNeRezim",
         "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
     ),
+    # 'valid = True' mora da znaci 'svih sedam sekcija je pouzdano procitano'. Bez
+    # strict rezima citac na nedostajucu kolonu vrati PRAZNU kolekciju, uvid stigne
+    # do kraja i oznaci se kao valjan -- pa ekran kaze 'nema paleta' i ponudi
+    # mutaciju, iako je tacan odgovor 'ne znam da li ih ima'.
+    "uvid-guta-necitljivo": (
+        "modStornoImpact.bas",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, True)\n",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids)   ' SABOTAZA\n",
+        "T_StornoImpact_SchemaDriftJeInvalidan",
+        "necitljiva paletna sekcija cini CEO uvid nevalidnim",
+    ),
+    # Zadat docID koji se ne moze razresiti mora da OBORI uvid. Tihi povratak na
+    # poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar modela koji se
+    # posle oznacava kao valid, pa nizvodno izgleda kao pouzdan pregled posledica.
+    "identitet-degradira-na-broj": (
+        "modStornoImpact.bas",
+        "                If Len(Trim$(docID)) > 0 Then\n",
+        "                If False Then   ' SABOTAZA: identitet pada na broj\n",
+        "T_StornoImpact_IdentitetNeDegradira",
+        "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj",
+    ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
     # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer

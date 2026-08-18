@@ -196,6 +196,8 @@ Public Sub RunAllTests()
     RunOne 60
     RunOne 61
     RunOne 62
+    RunOne 63
+    RunOne 64
 
     SetTestMode prevMode
     WriteResultFile
@@ -290,6 +292,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 60: TestName = "T_StornoImpact_PoIdentitetu"
         Case 61: TestName = "T_StornoAkcije_RefreshInvalidiraOdluku"
         Case 62: TestName = "T_StornoBezUvida_NemaAkcije"
+        Case 63: TestName = "T_StornoImpact_SchemaDriftJeInvalidan"
+        Case 64: TestName = "T_StornoImpact_IdentitetNeDegradira"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -360,6 +364,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 60: T_StornoImpact_PoIdentitetu
         Case 61: T_StornoAkcije_RefreshInvalidiraOdluku
         Case 62: T_StornoBezUvida_NemaAkcije
+        Case 63: T_StornoImpact_SchemaDriftJeInvalidan
+        Case 64: T_StornoImpact_IdentitetNeDegradira
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2613,6 +2619,86 @@ Private Sub T_StornoBezUvida_NemaAkcije()
              "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
 
     modScrStorno.Scr_ResetCache
+End Sub
+' ============================================================
+' 63. Necitljiva sekcija cini CEO uvid nevalidnim
+' ============================================================
+' "valid = True" je ugovor: znaci da je SVIH SEDAM sekcija pouzdano procitano.
+' Dok su citaci gutali greske, taj ugovor je bio prazan -- BuildStornoImpact bi
+' uredno stigao do kraja i postavio valid = True i kad je npr. paletna sekcija
+' vratila praznu kolekciju zato sto kolone nema:
+'
+'     ne mogu da procitam palete -> prazna Collection -> valid = True
+'                                -> ekran kaze "nema paleta" -> nudi mutaciju
+'
+' A tacan odgovor nije "nema paleta" nego "ne znam da li ih ima".
+'
+' Drift se pravi STVARNO (preimenovanje kolone), ne simulira -- isti obrazac kao
+' test 47. Sema se vraca u istom testu, jer bi inace svi testovi posle ovog merili
+' pokvarenu tabelu.
+Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
+    Dim lo As ListObject, m As Object
+    Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoPalete As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i ima palete. Bez nje
+    ' bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoPalete = (m("palete").count > 0)
+    AssertEq imaoPalete, True, "pozitivna kontrola: dokument stvarno ima paletu"
+
+    Set lo = GetTable(TBL_PALETA_STAVKA)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_PALS_PRIJEMNICA_ID).name = COL_PALS_PRIJEMNICA_ID & "_DRIFT"
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    validPodDriftom = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_PALS_PRIJEMNICA_ID & "_DRIFT").name = COL_PALS_PRIJEMNICA_ID
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID) > 0)
+
+    ' NAJVAZNIJE: necitljiva paletna sekcija cini CEO uvid nevalidnim.
+    AssertEq validPodDriftom, False, _
+             "necitljiva paletna sekcija cini CEO uvid nevalidnim"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
+End Sub
+
+' ============================================================
+' 64. Zadat identitet NIKAD ne degradira na broj
+' ============================================================
+' Druga polovina istog ugovora. Kad je docID zadat a ne moze da se razresi,
+' povratak na poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar
+' modela koji se posle oznacava kao valid.
+'
+' Prazan docID je DRUGA prica i mora da nastavi da radi: zatecen zapis nema
+' generaciju, pa je broj sve sto postoji. Test meri obe strane.
+Private Sub T_StornoImpact_IdentitetNeDegradira()
+    Dim m As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' Identitet KOJI NE POSTOJI. Sema je zdrava, kolona generacije je tu -- samo
+    ' nijedan red tog broja ne nosi ovu generaciju. To je stanje u kome se sme
+    ' uraditi tacno jedna stvar: stati. Povratak na broj bi dao palete OBA
+    ' dokumenta, i to unutar modela koji se posle oznacava kao valid.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-NE-POSTOJI")
+    AssertEq CBool(m("valid")), False, _
+             "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj"
+
+    ' Bez identiteta uvid i dalje radi po broju -- zatecen zapis nema generaciju,
+    ' pa je broj sve sto postoji. Kapija ne sme da zakljuca ni taj slucaj.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    AssertEq CBool(m("valid")), True, _
+             "bez identiteta uvid i dalje radi po broju (zatecen zapis)"
+    AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
 End Sub
 
 ' ============================================================

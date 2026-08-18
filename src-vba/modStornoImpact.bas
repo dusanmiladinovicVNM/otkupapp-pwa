@@ -108,7 +108,13 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     End If
     Exit Function
 EH:
+    ' Greska se PROPUSTA dalje, ne guta. Ovaj sloj je deo modela koji se posle
+    ' oznacava kao valid -- progutana greska bi dala prazno polje koje spolja
+    ' izgleda kao "podatka nema", a znaci "ne znam".
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ImpactHeader"
+    Err.Raise errNum, MOD_NAME & ".ImpactHeader", errDesc
 End Function
 
 ' ID partnera -> citljiv naziv. Otpremnica: tblStanice (StanicaID -> Naziv);
@@ -154,16 +160,25 @@ Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
         Case FLOW_DOC_PRIJEMNICA
             Set ids = PrijemniceIDPoIdentitetu(broj, docID)
             If ids Is Nothing Then
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj)
+                ' IDENTITET SE NE ODUSTAJE. Kad je docID zadat a ne moze da se
+                ' razresi (schema drift, nema reda pod tom generacijom), povratak
+                ' na broj bi vratio tacno ono sto je #198 vadio -- i to unutar
+                ' modela koji se posle oznacava kao valid. Prazan docID je druga
+                ' prica: zatecen zapis nema identitet, pa je broj sve sto postoji.
+                If Len(Trim$(docID)) > 0 Then
+                    Err.Raise ERR_UI_BASE + 26, MOD_NAME & ".ImpactPalete", _
+                              "Identitet prijemnice se ne moze razresiti -- palete se ne mogu suziti."
+                End If
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj, Nothing, True)
             Else
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids)
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids, True)
             End If
         Case FLOW_DOC_ZBIRNA
-            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj)
+            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj, Nothing, True)
         Case FLOW_DOC_OTPREMNICA
             bz = HLI(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_BROJ_ZBIRNE, docID)
             If Len(bz) > 0 Then
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, bz)
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, bz, Nothing, True)
             Else
                 Set ImpactPalete = New Collection
             End If
@@ -228,7 +243,13 @@ Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String, _
     End If
     Exit Function
 EH:
+    ' Greska se PROPUSTA dalje, ne guta. Ovaj sloj je deo modela koji se posle
+    ' oznacava kao valid -- progutana greska bi dala prazno polje koje spolja
+    ' izgleda kao "podatka nema", a znaci "ne znam".
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ImpactFaktura"
+    Err.Raise errNum, MOD_NAME & ".ImpactFaktura", errDesc
 End Function
 
 ' ------------------------------------------------------------
@@ -279,18 +300,26 @@ Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
         HLI = HL(tbl, keyCol, keyVal, valCol)
         Exit Function
     End If
-    On Error GoTo done
     Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then Exit Function
+    If IsEmpty(data) Then
+        Err.Raise ERR_UI_BASE + 29, MOD_NAME & ".HLI", _
+                  "Tabela " & tbl & " nije citljiva."
+    End If
     Dim cKey As Long, cVal As Long, cGen As Long
     cKey = GetColumnIndex(tbl, keyCol)
     cVal = GetColumnIndex(tbl, valCol)
     cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
-    If cKey = 0 Or cVal = 0 Then Exit Function
-    ' Tabela bez kolone generacije (zatecena instalacija) -> vrati se na broj.
+    If cKey = 0 Or cVal = 0 Then
+        Err.Raise ERR_UI_BASE + 28, MOD_NAME & ".HLI", _
+                  "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
+    End If
+    ' Tabela bez kolone generacije, a identitet JE zadat -> ne moze da se sazna
+    ' o kom je dokumentu rec. Povratak na broj bi ovde bio tiha degradacija
+    ' unutar modela koji se posle oznacava kao valid, pa se umesto toga dize
+    ' greska i ceo uvid pada.
     If cGen = 0 Then
-        HLI = HL(tbl, keyCol, keyVal, valCol)
-        Exit Function
+        Err.Raise ERR_UI_BASE + 27, MOD_NAME & ".HLI", _
+                  "Tabela " & tbl & " nema kolonu " & COL_GENERACIJA_ID & "."
     End If
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -301,7 +330,6 @@ Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
             End If
         End If
     Next i
-done:
 End Function
 
 ' Suma numericke kolone preko AKTIVNIH (ne-storniranih) redova istog kljuca -> ukupno
@@ -313,15 +341,20 @@ End Function
 Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
                              ByVal keyVal As String, ByVal sumCol As String, _
                              Optional ByVal docID As String = "") As String
-    On Error GoTo done
     Dim data As Variant: data = GetTableData(tbl)
-    If IsEmpty(data) Then Exit Function
+    If IsEmpty(data) Then
+        Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".SumActiveNum", _
+                  "Tabela " & tbl & " nije citljiva."
+    End If
     Dim cKey As Long, cSum As Long, cSt As Long, cGen As Long
     cKey = GetColumnIndex(tbl, keyCol)
     cSum = GetColumnIndex(tbl, sumCol)
     cSt = GetColumnIndex(tbl, COL_STORNIRANO)
     cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
-    If cKey = 0 Or cSum = 0 Then Exit Function
+    If cKey = 0 Or cSum = 0 Then
+        Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".SumActiveNum", _
+                  "Kolona " & keyCol & " ili " & sumCol & " ne postoji u " & tbl & "."
+    End If
     Dim uzmiID As Boolean
     uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
     Dim i As Long, total As Double, found As Boolean
@@ -340,7 +373,6 @@ Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
         End If
     Next i
     If found Then SumActiveNum = Format$(total, "#,##0.##")
-done:
 End Function
 
 Private Function SafeDblZ(ByVal v As Variant) As Double

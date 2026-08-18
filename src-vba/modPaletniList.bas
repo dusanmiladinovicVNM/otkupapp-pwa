@@ -324,8 +324,16 @@ End Function
 ' GeneracijaID, ali imaju razlicit PrijemnicaID), pa se palete tog dokumenta ne
 ' mogu obuhvatiti jednom vrednoscu. Agregacija po paleti ostaje jedna -- zato
 ' skup, a ne dva poziva: paleta koja nosi obe klase bi se inace pojavila dvaput.
+' strict = citanje koje NE SME da propadne u tisini. Prazna kolekcija tada znaci
+' iskljucivo "dokument nema palete"; sve ostalo (nedostajuca kolona, necitljiva
+' tabela, greska u prolazu) DIZE gresku. Postoji zbog modStornoImpact: model
+' uvida se posle oznacava kao valid, a "ne znam da li ima paleta" ne sme da
+' prodje kao "nema paleta" -- na osnovu toga se nudi mutacija.
+'
+' Podrazumevano je False, pa zatecenim pozivaocima ponasanje ostaje isto.
 Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As String, _
-                                       Optional ByVal dozvoljeni As Object = Nothing) As Collection
+                                       Optional ByVal dozvoljeni As Object = Nothing, _
+                                       Optional ByVal strict As Boolean = False) As Collection
     Const SRC As String = "modPaletniList.GetPaleteImpactByField"
     Dim result As New Collection
     Set GetPaleteImpactByField = result
@@ -338,7 +346,17 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     End If
 
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
-    If IsEmpty(s) Then Exit Function
+    If IsEmpty(s) Then
+        ' Prazna tabela je legitimna; NECITLJIVA nije. U strict rezimu se razlika
+        ' mora videti, jer obe daju istu praznu kolekciju.
+        If strict Then
+            If Not modUiData.TabelaCitljiva(TBL_PALETA_STAVKA) Then
+                Err.Raise ERR_UI_BASE + 24, SRC, _
+                          "Tabela " & TBL_PALETA_STAVKA & " nije nadjena."
+            End If
+        End If
+        Exit Function
+    End If
     Dim cKey As Long, cPal As Long, cGa As Long, cNe As Long, cAm As Long, cSt As Long
     cKey = GetColumnIndex(TBL_PALETA_STAVKA, fieldCol)
     cPal = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID)
@@ -346,7 +364,14 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     cNe = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_NETO)
     cAm = GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_AMBALAZA)
     cSt = GetColumnIndex(TBL_PALETA_STAVKA, COL_STORNIRANO)
-    If cKey = 0 Or cPal = 0 Then Exit Function
+    If cKey = 0 Or cPal = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 25, SRC, _
+                      "Kolona " & fieldCol & " ili " & COL_PALS_PALETA_ID & _
+                      " ne postoji u " & TBL_PALETA_STAVKA & "."
+        End If
+        Exit Function
+    End If
 
     Dim order As Collection: Set order = New Collection
     Dim thG As Object: Set thG = CreateObject("Scripting.Dictionary")
@@ -392,7 +417,11 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     Next v
     Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr SRC
+    If strict Then Err.Raise errNum, SRC, errDesc
 End Function
 
 ' ============================================================

@@ -3097,7 +3097,48 @@ nije diralo: nijedan nije ni pozivao `BuildStornoImpact`.
 - **62** — framework dokument bez uvida ne nudi nijednu radnju; revers i otkup,
   koji uvid nemaju po prirodi, i dalje nude svoje.
 
-- **Devet novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+### `valid=True` je sada stvaran ugovor
+
+Druga runda recenzije je pokazala da je `valid` bio flag oko spoljnog `On Error`,
+a ne ugovor: **više čitalaca je samo gutalo grešku**, kontrola bi se uredno
+vratila u `BuildStornoImpact`, i on bi postavio `valid = True`.
+
+```
+ne mogu da procitam palete  ->  prazna Collection
+                            ->  ImpactPalete misli da je sve OK
+                            ->  valid = True
+                            ->  ekran kaze "nema paleta" i nudi mutaciju
+```
+
+A tačan odgovor nije „nema paleta" nego **„ne znam da li ih ima"**.
+
+Zatvoreno na dva pravila:
+
+1. **Čitaocima uvida je gutanje zabranjeno.** `GetPaleteImpactByField` je dobio
+   `strict` (podrazumevano `False`, pa zatečenim pozivaocima ponašanje ostaje
+   isto); u strict režimu nedostajuća kolona, nečitljiva tabela i greška u
+   prolazu **dižu** grešku. `SumActiveNum` i `HLI` isto. `ImpactHeader` i
+   `ImpactFaktura` više ne gutaju — njihov `EH` **propušta** grešku dalje, jer bi
+   inače pojeli baš ono što je ispod dignuto.
+2. **Zadat identitet nikad ne degradira na broj.** Prazan `docID` i dalje sme da
+   radi po broju — zatečen zapis nema generaciju, pa je broj sve što postoji. Ali
+   `docID` koji je zadat a ne može da se razreši **obara uvid**; tihi povratak na
+   broj vratio bi tačno ono što je #198 vadio, i to unutar modela koji se posle
+   označava kao valjan.
+
+**Zbirna i dalje ostaje po broju** — `tblPaletaStavka` nosi `BrojZbirne`, ne
+`ZbirnaID`. To je granica šeme, prijavljena kao granica.
+
+Dva nova testa mere sam ugovor, a ne njegovu posledicu:
+
+- **63** — kolona `PrijemnicaID` se **stvarno** preimenuje (isti obrazac kao test
+  47), pa se traži `valid = False`. Pozitivna kontrola pre toga dokazuje da nad
+  zdravom šemom uvid jeste valjan i da paleta stvarno postoji — bez nje bi test
+  prošao i kad `BuildStornoImpact` uvek vraća `False`.
+- **64** — identitet koji ne postoji obara uvid; bez identiteta uvid i dalje radi
+  po broju i tada legitimno vidi oba dokumenta.
+
+- **Jedanaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u
