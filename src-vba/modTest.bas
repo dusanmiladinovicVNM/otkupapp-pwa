@@ -203,6 +203,7 @@ Public Sub RunAllTests()
     RunOne 67
     RunOne 68
     RunOne 69
+    RunOne 70
 
     SetTestMode prevMode
     WriteResultFile
@@ -304,6 +305,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 67: TestName = "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan"
         Case 68: TestName = "T_LogErr_NeVidiErrPosleResumeNext"
         Case 69: TestName = "T_PorukeUnosa_UpozorenjeNosiOznaku"
+        Case 70: TestName = "T_StornoImpact_NestaoIdentitetJeInvalidan"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -381,6 +383,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 67: T_StornoImpact_PrijemnicaBlokDriftJeInvalidan
         Case 68: T_LogErr_NeVidiErrPosleResumeNext
         Case 69: T_PorukeUnosa_UpozorenjeNosiOznaku
+        Case 70: T_StornoImpact_NestaoIdentitetJeInvalidan
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3176,6 +3179,50 @@ Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
         AssertEq (InStr(1, t, ChrW(10007)) > 0), False, _
                  CStr(info(i)) & " je informacija, ne upozorenje"
     Next i
+End Sub
+' ============================================================
+' 70. Nestao identitet obara uvid -- i za otpremnicu i za zbirnu
+' ============================================================
+' Test 64 je pokrio PRIJEMNICU, gde identitet cuva ImpactPalete. Otpremnica i
+' zbirna idu kroz PkPoIdentitetu, koji je dobio parametar strict ali ga NIJE
+' koristio:
+'
+'     If ids.count = 0 Then Exit Function     ' komentar iznad tvrdi da je greska
+'
+' Nizvodno je to izgledalo kao "dokument ne postoji" umesto "ne mogu da ga
+' razresim" -- a model se posle svega oznacavao kao valid. Zbirna je uz to
+' prekidala propagaciju i u ScanZbirna, koji strict nije ni prosledjivao.
+'
+' Scenario je stvaran: mreza nosi broj i docID iz reda, a dokument te generacije
+' je u medjuvremenu nestao (storniran, prevezan, obrisan).
+Private Sub T_StornoImpact_NestaoIdentitetJeInvalidan()
+    Dim m As Object
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' POZITIVNA KONTROLA: postojeca generacija daje valjan uvid. Bez nje bi test
+    ' prosao i kad BuildStornoImpact uvek vraca False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: postojeca generacija daje valjan uvid"
+
+    ' NAJVAZNIJE: generacija koje NEMA obara uvid, umesto da prodje kao
+    ' "dokument ne postoji".
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-NE-POSTOJI", True)
+    AssertEq CBool(m("valid")), False, _
+             "nestao identitet OTPREMNICE obara uvid"
+
+    ' Zbirna je isla svojim putem (ScanZbirna nije prosledjivao strict), pa se
+    ' meri zasebno -- ista tvrdnja, druga grana.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, _
+                                             "", "GEN-NE-POSTOJI", True)
+    AssertEq CBool(m("valid")), False, _
+             "nestao identitet ZBIRNE obara uvid"
+
+    ' Bez identiteta oba i dalje rade po broju -- zatecen zapis nema generaciju.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    AssertEq CBool(m("valid")), True, "bez identiteta zbirna i dalje radi po broju"
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.

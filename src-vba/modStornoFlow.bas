@@ -1326,7 +1326,17 @@ Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String
     If Len(Trim$(gen)) > 0 Then
         Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)
         ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.
-        If ids.count = 0 Then Exit Function
+        ' Do sada je komentar to tvrdio, a kod je svejedno vracao prazno -- pa je
+        ' nizvodno izgledalo kao "dokument ne postoji" umesto "ne mogu da ga
+        ' razresim". U strict rezimu je to greska, jer se uvid posle oznacava kao
+        ' valid. Van strict-a ostaje prazno, zbog zatecenih zapisa bez generacije.
+        If ids.count = 0 Then
+            If strict Then
+                Err.Raise ERR_UI_BASE + 41, SRC, _
+                          "Identitet dokumenta se ne moze razresiti u " & tblName & "."
+            End If
+            Exit Function
+        End If
         PkPoIdentitetu = CStr(ids.Keys()(0))
         Exit Function
     End If
@@ -1342,7 +1352,10 @@ Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String
     PkPoIdentitetu = LookupActiveID(tblName, brojCol, broj, idCol)
     Exit Function
 EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr SRC
+    If strict Then Err.Raise errNum, SRC, errDesc
 End Function
 
 ' gen: kanonski identitet dokumenta koji je operater izabrao u F8. Opcion je
@@ -2692,8 +2705,10 @@ Private Function ScanZbirna(ByVal broj As String, _
     broj = Trim$(broj)
     d("broj") = broj
     ' PK izabrane zbirne -- correction context polazi od njega.
+    ' strict ide i ovde: bez njega je bas ZBIRNA prekidala propagaciju na PK
+    ' resolveru, pa je nerazresiv identitet zavrsavao kao prazan zbrID.
     d("zbrID") = PkPoIdentitetu(TBL_ZBIRNA, COL_ZBR_BROJ, COL_ZBR_ID, broj, gen, _
-                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))
+                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)
     ' Deca (otpremnice, prijemnice, palete) vezuju zbirnu KOLONOM BrojZbirne --
     ' ZbirnaID im nije strani kljuc nigde u semi. Zato se broje po broju, a kad
     ' broj nose DVE aktivne zbirne, brojke opisuju oba dokumenta. To se ne moze

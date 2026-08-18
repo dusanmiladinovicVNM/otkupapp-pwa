@@ -3246,7 +3246,28 @@ Razlikovanje ide po oznaci koju katalog **već nosi**: `ChrW(10007)` = upozorenj
 Sam popravak (112 mesta, zajednički writeri koje koristi i legacy) **nije u ovom
 PR-u** — ide zasebno.
 
-- **Sedamnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+**Poslednja rupa u strict ugovoru: `PkPoIdentitetu`.** Dobio je parametar
+`strict`, ali ga **nije koristio** — komentar iznad koda je tvrdio jedno, kod
+radio drugo:
+
+```vb
+' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.
+If ids.count = 0 Then Exit Function     ' ...a vracalo se prazno
+```
+
+Nizvodno je to izgledalo kao „dokument ne postoji" umesto „ne mogu da ga
+razrešim" — a model se posle svega označavao kao `valid`. Uz to je **`ScanZbirna`
+prekidao propagaciju** baš na PK resolveru, pa je zbirna prolazila i kad
+otpremnica nije.
+
+Sada: zadata generacija koje nema **diže** grešku u strict režimu, a `EH` je
+re-raise. Van strict-a ostaje prazno, zbog zatečenih zapisa bez generacije.
+
+- **70** — nestao identitet obara uvid, mereno **odvojeno** za otpremnicu i za
+  zbirnu (dve grane, dve sabotaže), uz pozitivnu kontrolu i uz suprotan smer:
+  bez identiteta oba i dalje rade po broju.
+
+- **Devetnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 
 Zapisana je i **osma zamka** u `tools/sabotaza.py`: zamena ne sme biti podniz
 sidra — `--vrati` je tada nalazi i u zdravom kodu, pa umesto vraćanja dodaje još

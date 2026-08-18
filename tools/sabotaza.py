@@ -717,6 +717,26 @@ SABOTAZE = {
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
         "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
     ),
+    # PkPoIdentitetu je dobio parametar strict, ali ga NIJE koristio: zadata
+    # generacija koje nema vracala je prazno, pa je nizvodno izgledala kao
+    # 'dokument ne postoji' umesto 'ne mogu da ga razresim' -- a model se posle
+    # svega oznacavao kao valid. Komentar iznad koda je tvrdio suprotno od koda.
+    "identitet-nestao-prolazi": (
+        "modStornoFlow.bas",
+        "        If ids.count = 0 Then\n            If strict Then\n",
+        "        If ids.count = 0 Then\n            If False Then   ' SABOTAZA\n",
+        "T_StornoImpact_NestaoIdentitetJeInvalidan",
+        "nestao identitet OTPREMNICE obara uvid",
+    ),
+    # Ista tvrdnja, grana zbirne: ScanZbirna je prekidao propagaciju strict-a bas
+    # na PK resolveru, pa je zbirna prolazila i kad otpremnica nije.
+    "zbirna-ne-prosledjuje-strict": (
+        "modStornoFlow.bas",
+        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), strict)\n",
+        "                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC))   ' SABOTAZA\n",
+        "T_StornoImpact_NestaoIdentitetJeInvalidan",
+        "nestao identitet ZBIRNE obara uvid",
+    ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
     # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer
