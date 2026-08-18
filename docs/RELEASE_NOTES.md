@@ -3279,3 +3279,100 @@ zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
 (`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
 `git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
 pa run visi do timeout-a umesto da prijavi tvrdnju.
+
+---
+
+## v2.49.0 — `v6-ui-144` · log koji nije pisao, i lista koja nije imala izlaz
+
+> Dva nalaza koja je ostavio smoke-test PR-a #202, oba van tadašnjeg obima. Nema
+> nove poslovne logike — jedan vraća dijagnostiku, drugi otvara izlaz iz ekrana
+> koji ga nije imao.
+
+### 1) `LogErr` koji ne može ništa da zapiše — 91 mesto
+
+Operateru je upis otpremnice pao, a `Log\OtkupApp_<datum>.log` nije imao **nijednu**
+`ERROR` liniju. Uzrok nije u upisu nego u obliku handlera:
+
+```vb
+EH:
+    errDesc = Err.Description
+    On Error Resume Next            ' <- OVA naredba resetuje Err
+    LogErr "SaveOtpremnicaMulti_TX" ' <- vidi Err.Number = 0, ne pise NISTA
+```
+
+`LogErr` piše samo kad je `Err.Number <> 0`, a **svaka** `On Error` naredba resetuje
+`Err` objekat. Podatak je u tom trenutku već u lokalnoj promenljivoj — samo se
+bacao.
+
+PR #202 je popravio devet writera dokumenata (najuža kriška koja je operatera
+odblokirala). Ostatak je ovde: **91 poziv u 24 fajla**, uključujući `modSEFPersistance`
+(15), `modMasterSync` i `modBankaImport` (po 11), `modBankaMapiranje` (10),
+`modSEFValidator` (9). Popravka je svuda ista i minimalna — `LogErr` ide **iznad**
+`On Error`, dok je `Err` još živ. Ponašanje otpornosti se ne menja, samo prestaje
+da bude nemo.
+
+**Nova statička provera `MRTAV_LOG`** u `tools/vba_check.py` čuva to stanje. Gleda
+**samo unutar handlera** (posle labele `EH:` / `ErrHandler:` / `Fin:` / `VRATI:`) —
+van njega je `On Error Resume Next` **pre** poziva koji sme da pukne legitiman i čest
+obrazac, pa bi lažan nalaz nad njim naučio da se checker ignoriše. Ta razlika je
+kodifikovana u `MRTAV_LOG_CASES`: dva slučaja koja **moraju** da zapište i dva koja
+**ne smeju**. Provera je odmah našla i tri mesta van `.bas` fajlova
+(`ThisWorkbook.doccls`, `frmBankaImport.frm`, `frmStammdaten.frm`) koja ručna pretraga
+nije obuhvatila.
+
+`ThisWorkbook` je bio najgori slučaj: njegov handler je i `Monitor_Error` zvao sa
+već resetovanim `Err`-om, pa je i **telemetrija** slala prazan opis. Sada se
+`errNum`/`errDesc`/`errSrc` hvataju prvi, pre bilo čega drugog.
+
+### 2) `EnsureSledljivostSchema` — self-heal šeme koji je ćutke odustajao
+
+Pravi uzrok operaterovog pada bio je `Nedostaje kolona 'GeneracijaID' u tabeli
+'tblOtpremnica'` — **schema drift na instalaciji**, ne greška u kodu. Kolonu dodaje
+`EnsureSledljivostSchema` na svakom startu. Ta rutina je počinjala blanket
+`On Error Resume Next`, pa je **prvi** pad ćutke preskakao ostatak posla: sveska bez
+kolone, a upis koji na nju računa pada satima kasnije, sa porukom koja o uzroku ne
+kaže ništa.
+
+Sada svaka kolona ide kroz svoj gard (`EnsureKolonaSaTragom`): pad jedne se **zapiše**
+i ne zaustavlja ostale. `EnsureColumnOnTable` uz to `LogWarn`-uje kad tabele nema —
+tihi `Exit Sub` je bio tačno mesto na kom se `GeneracijaID` gubila.
+
+Otpornost je nepromenjena; razlika je što se sada vidi.
+
+### 3) Ekran Oporavak: „Odbaci ispravku"
+
+Lista „Nedovršeno" je bila **čist pregled**. Operater vidi da ga safe-stop blokira
+(„više ispravki na čekanju" — pravilo koje odbija da nagađa **koju** od više ispravki
+novi dokument zamenjuje), a nema čime da to razreši. Jedini izlaz je bila legacy
+`frmDokumenta`. `CancelCorrectionContext` je postojao sve vreme — falio mu je ulaz iz
+novog UI-ja.
+
+Radnja gađa **`CorrectionID`, ne poslovni broj.** Nad istim brojem može da stoji više
+contexta (storno, pa opet storno istog dokumenta), pa bi izbor po broju zatvorio onaj
+koji zatekne prvi — a operater je gledao drugi red. Red zato nosi identitet u
+**nevidljivoj koloni** (prioritet 4, isti obrazac koji ekran Storno koristi za
+`GeneracijaID`; petlja vidljivosti ide 3 → 1, pa 4 nikad ne prolazi).
+
+Redovi koji **nisu** context (osirotele prijemnice, palete, izgubljeni blokovi) nemaju
+šta da odbace — oni se rešavaju prevezivanjem, pa radnja nad njima **odbija** umesto
+da tiho ne uradi ništa. Potvrda je `MsgBox` sa `vbDefaultButton2` i izričitim „dokumenti
+se NE diraju"; dugme nosi `danger` stil, kao „Vrati storno".
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajlova)**, exit 0.
+- `python tools\vba_check.py --self-test` → **čisto (33 slučaja)**.
+- `python tools\run_vba.py --suite RunAllTests` → **ZELENO**, 71 test.
+- `python tools\run_vba.py` (pun set) → **ZELENO**, svi suite-ovi.
+- **Test 71** (`T_Oporavak_OdbaciIspravku_PoIdentitetu`) tvrdi da svaki context red
+  nosi **svoj** `CorrectionID` u koloni 6 — ne samo „nije prazno", nego baš oba
+  ID-ja iz fixture-a, jer bi test koji meri praznoću prošao i kad bi svi redovi
+  nosili isti CID. **Test 26** je dopunjen: „Nedovršeno je samo pregled" više nije
+  tačno.
+- **Tri nove sabotaže**, svaka oborila svoju tvrdnju **po imenu**:
+  `oporavak-nema-odbaci`, `oporavak-cid-ne-stize-u-red`, `oporavak-cid-kolona-vidljiva`.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija (`Alt+F11 → Debug → Compile VBAProject`).
+
+**Nalaz zabeležen, nije popravljen:** `vba_check` prijavljuje **prazan fajl kao čist**.
+Skripta koja upiše `open(P,"wb")` pre nego što `encode` pukne ostavi `.bas` od nula
+bajtova, a provera je zelena. Ide u zaseban process PR.
