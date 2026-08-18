@@ -5467,6 +5467,17 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
             ShowToast greska, True
             fokus = ""
             If p.Exists("fokus") Then fokus = CStr(p("fokus"))
+            ' NEUSPEO UPIS ide I u MsgBox. Toast pise u usko polje akcionog
+            ' reda, pa se duga poruka vizuelno sece -- a bas rep nosi RAZLOG:
+            ' SaveOtpremnica lepi "poruke" iza opsteg prefiksa, pa je operater
+            ' video samo "Greska pri cuvanju otpremnice. Promene su vracene" i
+            ' nista o tome ZASTO. Isti obrazac zbog kog upozorenje zbirne vec
+            ' ide u MsgBox (v. modScrStorno.ObicanStorno).
+            '
+            ' Razlikovanje ide po FOKUSU, ne po duzini: validacija polja ga
+            ' postavlja i pokazuje na polje, pa njoj toast i pripada. Pad upisa
+            ' nema fokus -- nema polja na koje bi se pokazalo.
+            If Len(fokus) = 0 Then MsgBox greska, vbExclamation, APP_NAME
             FokusNaPolje fokus
         End If
         Exit Sub
