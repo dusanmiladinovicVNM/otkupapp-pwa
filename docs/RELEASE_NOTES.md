@@ -3179,7 +3179,32 @@ pa čišćenje ne može da sakrije pad.
   uz kontrolu u drugom smeru da je događaj stvarno obrađen. Sabotaža vraća stanje
   i test pada sa `dobijeno [-2147024809]`.
 
-- **Trinaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+**Strict je stao na dispečeru, ne na dnu.** Prethodni commit je tvrdio „do dna",
+a `ActiveBlocksForFlow` ga je prosleđivao samo za **otpremnicu**; zbirna i
+prijemnica idu kroz `ActiveOtkupIDsByZbirna`, koji je ostao fail-open:
+
+```
+tblOtkup.BrojZbirne drift  ->  ActiveOtkupIDsByZbirna vrati prazno
+                           ->  GetStornoBlockRows izadje na ids.count = 0
+                           ->  dakle PRE svoje kapije
+                           ->  blocks = 0, valid = True
+```
+
+Isti kvar kao u testu 65, samo **druga grana istog `Select Case`-a**. Zatvoreno u
+`ActiveOtkupIDsByZbirna`, `CountActive` (koji je činio `Scan*` strict spolja a
+slep iznutra) i `PkPoIdentitetu`. Uz to i legacy rupa u `HLI`: `docID = ""` je i
+pod `strict` išao kroz `HL`, koji ima svoj `On Error Resume Next`.
+
+- **67** — pokriva **obe** grane koje idu kroz `ActiveOtkupIDsByZbirna`. Pozitivna
+  kontrola je nad **zbirnom**, ne prijemnicom: prijemnične blokove raniji testovi
+  u istom prolazu storniraju, pa bi kontrola merila redosled testova umesto
+  pravila.
+
+- **Šesnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+
+Zapisana je i **osma zamka** u `tools/sabotaza.py`: zamena ne sme biti podniz
+sidra — `--vrati` je tada nalazi i u zdravom kodu, pa umesto vraćanja dodaje još
+jedan primerak razlike (kod nas tri uzastopna `Err.Clear`).
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u

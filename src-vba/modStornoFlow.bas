@@ -1314,9 +1314,12 @@ End Function
 ' inace se vraca prazno, pa pozivalac vidi exists=False i staje. To je vaznije
 ' nego sto izgleda: kod moda RESI_KASNIJE se guarded writer uopste ne zove, pa
 ' bi se inace napravio TRAJAN recovery zapis nad tudjim dokumentom.
+' strict: prazan PK tada znaci iskljucivo "nema takvog dokumenta", ne "nisam
+' umeo da ga nadjem".
 Private Function PkPoIdentitetu(ByVal tblName As String, ByVal brojCol As String, _
                                 ByVal idCol As String, ByVal broj As String, _
-                                ByVal gen As String, ByVal vlasnikCols As Variant) As String
+                                ByVal gen As String, ByVal vlasnikCols As Variant, _
+                                Optional ByVal strict As Boolean = False) As String
     Const SRC As String = "modStornoFlow.PkPoIdentitetu"
     On Error GoTo EH
 
@@ -1359,7 +1362,7 @@ Private Function ScanPrijemnica(ByVal broj As String, _
     broj = Trim$(broj)
     d("broj") = broj
     Dim prijID As String
-    prijID = PkPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, gen, COL_PRJ_KUPAC)
+    prijID = PkPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, gen, COL_PRJ_KUPAC, strict)
     d("prijID") = prijID
     d("exists") = (Len(prijID) > 0)
     If Len(prijID) = 0 Then
@@ -1370,12 +1373,12 @@ Private Function ScanPrijemnica(ByVal broj As String, _
     Dim bz As String: bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
     d("brojZbirne") = bz
     ' Otpremnice te zbirne (PONISTENJE prijemnice ih stornira; zbirna se rekalk/storno).
-    d("otpCount") = IIf(Len(bz) > 0, CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, bz), 0&)
+    d("otpCount") = IIf(Len(bz) > 0, CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, bz, strict), 0&)
     d("fakturisano") = (UCase$(NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_FAKTURISANO))) = "DA")
     ' Palete se broje po PrijemnicaID kad je dokument razresen: broj bi uracunao
     ' i palete tudjeg dokumenta iste oznake, pa bi pregled lagao operatera.
     Dim palc As Long
-    palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijID)
+    palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID, prijID, strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
     ' bz je vec procitan iz TACNOG prijID -- roditelj se ne trazi ponovo po
@@ -1431,18 +1434,18 @@ Public Function ActiveBlocksForFlow(ByVal docType As String, ByVal broj As Strin
             ' suzi; put je zasticen uzvodno (kapije nad dvosmislenim brojem
             ' zbirne obore mode operaciju, a dodatni storno blokova ide samo posle
             ' uspesne). Ako se te kapije ikad suze, ovo mesto se otvara.
-            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)
+            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj, strict)
         Case FLOW_DOC_PRIJEMNICA
             ' BrojPrijemnice NIJE globalno jedinstven (sekvenca po kupcu), pa je
             ' roditeljska zbirna morala da se cita iz TACNOG dokumenta, ne iz
             ' prvog reda tog broja.
             Dim prijID As String
             prijID = PkPoIdentitetu(TBL_PRIJEMNICA, COL_PRJ_BROJ, COL_PRJ_ID, broj, _
-                                    docID, COL_PRJ_KUPAC)
+                                    docID, COL_PRJ_KUPAC, strict)
             If Len(prijID) = 0 Then Exit Function
             Dim bz As String
             bz = NzTx(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, prijID, COL_PRJ_BROJ_ZBIRNE))
-            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)
+            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz, strict)
     End Select
     Exit Function
 EH:
@@ -1454,18 +1457,40 @@ EH:
 End Function
 
 ' Aktivni OtkupID-jevi za dati BrojZbirne (denormalizovani otkup.BrojZbirne).
-Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String) As Collection
+' strict: v. GetStornoBlockRows. Ova grana hrani spisak blokova za ZBIRNU i za
+' PRIJEMNICU (preko njene zbirne). Dok strict nije stizao dovde, drift nad
+' tblOtkup je davao prazan skup, GetStornoBlockRows bi izasao jos na
+' "ids.count = 0" -- dakle PRE svoje kapije -- i uvid bi zavrsio kao valid sa
+' praznim spiskom blokova.
+Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String, _
+                                        Optional ByVal strict As Boolean = False) As Collection
     Dim result As New Collection
     Set ActiveOtkupIDsByZbirna = result
+    On Error GoTo EH
     brojZbirne = Trim$(brojZbirne)
     If Len(brojZbirne) = 0 Then Exit Function
     Dim data As Variant: data = GetTableData(TBL_OTKUP)
-    If IsEmpty(data) Then Exit Function
+    If IsEmpty(data) Then
+        If strict Then
+            If Not modUiData.TabelaCitljiva(TBL_OTKUP) Then
+                Err.Raise ERR_UI_BASE + 36, MOD_NAME & ".ActiveOtkupIDsByZbirna", _
+                          "Tabela " & TBL_OTKUP & " nije nadjena."
+            End If
+        End If
+        Exit Function
+    End If
     Dim cZbr As Long, cId As Long, cSt As Long
     cZbr = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
     cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
-    If cZbr = 0 Or cId = 0 Then Exit Function
+    If cZbr = 0 Or cId = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 37, MOD_NAME & ".ActiveOtkupIDsByZbirna", _
+                      "Kolona " & COL_OTK_BROJ_ZBIRNE & " ili " & COL_OTK_ID & _
+                      " ne postoji u " & TBL_OTKUP & "."
+        End If
+        Exit Function
+    End If
     Dim i As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cZbr))) = brojZbirne Then
@@ -1474,6 +1499,12 @@ Private Function ActiveOtkupIDsByZbirna(ByVal brojZbirne As String) As Collectio
             End If
         End If
     Next i
+    Exit Function
+EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
+    LogErr MOD_NAME & ".ActiveOtkupIDsByZbirna"
+    If strict Then Err.Raise errNum, MOD_NAME & ".ActiveOtkupIDsByZbirna", errDesc
 End Function
 
 ' Dotaknuti dokumenti (pregled u panelu). Collection nizova(0..2): Dokument|Info|Napomena.
@@ -2615,7 +2646,7 @@ Private Function ScanOtpremnica(ByVal broj As String, _
     broj = Trim$(broj)
     d("broj") = broj
     Dim otpID As String
-    otpID = PkPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, gen, COL_OTP_STANICA)
+    otpID = PkPoIdentitetu(TBL_OTPREMNICA, COL_OTP_BROJ, COL_OTP_ID, broj, gen, COL_OTP_STANICA, strict)
     d("otpID") = otpID
     d("exists") = (Len(otpID) > 0)
     If Len(otpID) = 0 Then
@@ -2636,11 +2667,11 @@ Private Function ScanOtpremnica(ByVal broj As String, _
 
     d("hasZbirna") = (Len(bz) > 0 And ZbirnaPostoji(bz))
     Dim pc As Long: pc = 0
-    If Len(bz) > 0 Then pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, bz)
+    If Len(bz) > 0 Then pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, bz, strict)
     d("prijCount") = pc
     d("hasPrijemnica") = (pc > 0)
     Dim palc As Long: palc = 0
-    If Len(bz) > 0 Then palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, bz)
+    If Len(bz) > 0 Then palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, bz, strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
     Exit Function
@@ -2683,11 +2714,11 @@ Private Function ScanZbirna(ByVal broj As String, _
     ' stornirane A. Storniran vlasnik nestaje iz racuna, njegova deca ne.
     d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _
                               MOD_NAME, True, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)
-    d("otpCount") = CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj)
-    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj)
+    d("otpCount") = CountActive(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, broj, strict)
+    Dim pc As Long: pc = CountActive(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, broj, strict)
     d("prijCount") = pc
     d("hasPrijemnica") = (pc > 0)
-    Dim palc As Long: palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj)
+    Dim palc As Long: palc = CountActive(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, broj, strict)
     d("paleteCount") = palc
     d("hasPalete") = (palc > 0)
     Set d("invariant") = ValidateZbirnaInvariant(broj)
@@ -2743,14 +2774,34 @@ EH:
 End Function
 
 ' Broj AKTIVNIH redova gde filterCol = value.
-Private Function CountActive(ByVal tblName As String, ByVal filterCol As String, ByVal value As String) As Long
+' strict: nula tada znaci iskljucivo "prebrojao sam i nema ih". Bez toga je
+' Scan* bio strict spolja a slep iznutra: nestane tblPrijemnica.BrojZbirne ->
+' CountActive vrati 0 -> ekran kaze hasPrijemnica = False, i uvid je i dalje
+' valid.
+Private Function CountActive(ByVal tblName As String, ByVal filterCol As String, _
+                             ByVal value As String, _
+                             Optional ByVal strict As Boolean = False) As Long
     On Error GoTo EH
     Dim data As Variant: data = GetTableData(tblName)
-    If IsEmpty(data) Then Exit Function
+    If IsEmpty(data) Then
+        If strict Then
+            If Not modUiData.TabelaCitljiva(tblName) Then
+                Err.Raise ERR_UI_BASE + 38, MOD_NAME & ".CountActive", _
+                          "Tabela " & tblName & " nije nadjena."
+            End If
+        End If
+        Exit Function
+    End If
     Dim cF As Long, cSt As Long
     cF = GetColumnIndex(tblName, filterCol)
     cSt = GetColumnIndex(tblName, COL_STORNIRANO)
-    If cF = 0 Then Exit Function
+    If cF = 0 Then
+        If strict Then
+            Err.Raise ERR_UI_BASE + 39, MOD_NAME & ".CountActive", _
+                      "Kolona " & filterCol & " ne postoji u " & tblName & "."
+        End If
+        Exit Function
+    End If
     Dim i As Long, n As Long
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cF))) = value Then
@@ -2760,7 +2811,10 @@ Private Function CountActive(ByVal tblName As String, ByVal filterCol As String,
     CountActive = n
     Exit Function
 EH:
+    Dim errNum As Long, errDesc As String
+    errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".CountActive"
+    If strict Then Err.Raise errNum, MOD_NAME & ".CountActive", errDesc
 End Function
 
 ' Distinktne AKTIVNE vrednosti valueCol gde filterCol = filterVal.

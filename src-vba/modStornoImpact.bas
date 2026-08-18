@@ -312,6 +312,15 @@ Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
                      ByVal docID As String, _
                      Optional ByVal strict As Boolean = False) As String
     If Len(Trim$(docID)) = 0 Then
+        ' Bez identiteta se cita po broju -- ali u strict rezimu i to mora da
+        ' bude POUZDANO citanje. HL ima svoj "On Error Resume Next", pa bi
+        ' schema drift prosao kao "vrednost je prazna" i uvid bi ostao valid.
+        If strict Then
+            If GetColumnIndex(tbl, keyCol) = 0 Or GetColumnIndex(tbl, valCol) = 0 Then
+                Err.Raise ERR_UI_BASE + 40, MOD_NAME & ".HLI", _
+                          "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
+            End If
+        End If
         HLI = HL(tbl, keyCol, keyVal, valCol)
         Exit Function
     End If

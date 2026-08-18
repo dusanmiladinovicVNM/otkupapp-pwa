@@ -200,6 +200,7 @@ Public Sub RunAllTests()
     RunOne 64
     RunOne 65
     RunOne 66
+    RunOne 67
 
     SetTestMode prevMode
     WriteResultFile
@@ -298,6 +299,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 64: TestName = "T_StornoImpact_IdentitetNeDegradira"
         Case 65: TestName = "T_StornoImpact_BlokSekcijaDriftJeInvalidna"
         Case 66: TestName = "T_StornoEkran_NeCuriGreska"
+        Case 67: TestName = "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -372,6 +374,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 64: T_StornoImpact_IdentitetNeDegradira
         Case 65: T_StornoImpact_BlokSekcijaDriftJeInvalidna
         Case 66: T_StornoEkran_NeCuriGreska
+        Case 67: T_StornoImpact_PrijemnicaBlokDriftJeInvalidan
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3039,6 +3042,61 @@ Private Sub T_StornoEkran_NeCuriGreska()
 
     modScrStorno.Scr_ResetCache
     modScrStorno.Scr_TipTestSet STIP_OTKUP
+End Sub
+' ============================================================
+' 67. Blok sekcija PRIJEMNICE (preko zbirne) -- druga grana istog dispecera
+' ============================================================
+' Test 65 je pokrio OTPREMNICU, koja u ActiveBlocksForFlow ide kroz
+' GetBlokOtkupIDs. Zbirna i prijemnica idu kroz ActiveOtkupIDsByZbirna -- i tamo
+' se strict gubio jos jednu rundu:
+'
+'     tblOtkup.BrojZbirne drift -> ActiveOtkupIDsByZbirna vrati prazno
+'                                -> GetStornoBlockRows izadje na ids.count = 0
+'                                -> dakle PRE svoje kapije
+'                                -> blocks = 0, valid = True
+'
+' Isti kvar kao u 65, samo druga grana istog Select Case-a. Zato test 65 nije
+' bio dovoljan: on tu granu uopste ne dodiruje.
+'
+' PRJ-TEST-Z2 ide preko zbirne ZB-TEST-4, koja nosi otkupne blokove.
+Private Sub T_StornoImpact_PrijemnicaBlokDriftJeInvalidan()
+    Dim lo As ListObject, m As Object
+    Dim validZbirna As Boolean, validPrij As Boolean
+    Dim semaVracena As Boolean, imaoBlokove As Boolean
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' POZITIVNA KONTROLA nad ZBIRNOM: ona u fixture-u pouzdano nosi aktivan
+    ' otkupni blok (OTK-TEST-1 na ZB-TEST-1). Prijemnica se za pozitivnu kontrolu
+    ' ne koristi: njene blokove raniji testovi u ovom istom prolazu storniraju,
+    ' pa bi kontrola merila redosled testova umesto pravila.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoBlokove = (m("blocks").count > 0)
+    AssertEq imaoBlokove, True, "pozitivna kontrola: zbirna stvarno nosi otkupni blok"
+
+    Set lo = GetTable(TBL_OTKUP)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_OTK_BROJ_ZBIRNE).name = COL_OTK_BROJ_ZBIRNE & "_DRIFT"
+    ' Obe grane koje idu kroz ActiveOtkupIDsByZbirna, ne samo jedna: zbirna
+    ' direktno, prijemnica preko svoje zbirne. Test 65 pokriva TRECU granu
+    ' (otpremnica -> GetBlokOtkupIDs) i ove dve ne dodiruje.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_ZBIRNA, FX_ZBIRNA, "", "", True)
+    validZbirna = CBool(m("valid"))
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2", True)
+    validPrij = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_OTK_BROJ_ZBIRNE & "_DRIFT").name = COL_OTK_BROJ_ZBIRNE
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE) > 0)
+
+    ' NAJVAZNIJE: obe grane obaraju uvid, ne samo grana otpremnice iz testa 65.
+    AssertEq validZbirna, False, "necitljiva blok sekcija ZBIRNE obara CEO uvid"
+    AssertEq validPrij, False, "necitljiva blok sekcija PRIJEMNICE obara CEO uvid"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.

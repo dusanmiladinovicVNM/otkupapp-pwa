@@ -51,6 +51,14 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    komitovan ni `git checkout` nije mreza. Ako sabotaza treba da UKLONI red,
    zameni ga necim ravnopravnim (duplikat susednog reda) umesto praznim.
    Placeno jednom, na `storno-cip-svi-nestao`.
+
+8. ZAMENA NE SME BITI PODNIZ SIDRA. `--vrati` trazi ZAMENU u fajlu; ako je ona
+   sadrzana u sidru, nadje je i u ZDRAVOM kodu i "vrati" ga -- to jest doda jos
+   jedan primerak razlike. Simptom: posle svakog `--vrati` fajl dobije red vise
+   (kod nas tri uzastopna `Err.Clear`), a git diff raste bez ijedne namerne
+   izmene. Ako se sabotaza svodi na UKLANJANJE reda, dodaj joj oznaku
+   (`   ' SABOTAZA: ...`) da zamena postane jedinstvena. Placeno jednom, na
+   `ekran-curi-greska`.
 """
 
 import argparse
@@ -675,9 +683,28 @@ SABOTAZE = {
     "ekran-curi-greska": (
         "modScrStorno.bas",
         "    Scr_Event = ObradiDogadjaj(tag)\n    Err.Clear\n",
-        "    Scr_Event = ObradiDogadjaj(tag)\n",
+        "    Scr_Event = ObradiDogadjaj(tag)   ' SABOTAZA: Err ostaje ziv\n",
         "T_StornoEkran_NeCuriGreska",
         "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla",
+    ),
+    # Druga i treca grana istog dispecera (zbirna, prijemnica) idu kroz
+    # ActiveOtkupIDsByZbirna, gde se strict gubio jos jednu rundu duze nego kod
+    # otpremnice. Bez njega drift nad tblOtkup vrati prazan skup, GetStornoBlockRows
+    # izadje na 'ids.count = 0' PRE svoje kapije, i uvid zavrsi kao valid.
+    "uvid-blok-zbirna-guta": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj, strict)\n",
+        "            Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(broj)   ' SABOTAZA\n",
+        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
+        "necitljiva blok sekcija ZBIRNE obara CEO uvid",
+    ),
+    # Ista rupa, grana prijemnice (preko njene zbirne).
+    "uvid-blok-prijemnica-guta": (
+        "modStornoFlow.bas",
+        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz, strict)\n",
+        "            If Len(bz) > 0 Then Set ActiveBlocksForFlow = ActiveOtkupIDsByZbirna(bz)\n",
+        "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
+        "necitljiva blok sekcija PRIJEMNICE obara CEO uvid",
     ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
