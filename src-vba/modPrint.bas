@@ -246,12 +246,20 @@ EH:
     LogErr "modPrint.EnsureOtpremnicaSablon"
 End Sub
 
-Private Function OtpC(ByVal d As Variant, ByVal r As Long, ByVal colName As String) As Variant
+' `d` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
+' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
+' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
+' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
+'
+' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
+' niz ne umnozava.
+Private Function OtpC(ByRef d As Variant, ByVal r As Long, ByVal colName As String) As Variant
     Dim c As Long: c = GetColumnIndex(TBL_OTPREMNICA, colName)
     If c >= 1 Then OtpC = d(r, c) Else OtpC = ""
 End Function
 
-Private Function OtpN(ByVal d As Variant, ByVal r As Long, ByVal colName As String) As Double
+' ByRef iz istog razloga kao OtpC: ByVal bi kopirao ceo niz po pozivu.
+Private Function OtpN(ByRef d As Variant, ByVal r As Long, ByVal colName As String) As Double
     Dim v As Variant: v = OtpC(d, r, colName)
     If IsNumeric(v) Then OtpN = CDbl(v)
 End Function

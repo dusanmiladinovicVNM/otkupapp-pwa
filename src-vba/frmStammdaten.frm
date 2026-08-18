@@ -570,7 +570,8 @@ Private Function OblComboVal(ByVal isAdmin As Boolean, ByVal oblast As String) A
 End Function
 
 ' "DA"/"NE" za datu oblast iz reda tabele (za punjenje dropdowna pri izboru).
-Private Function OblastValueFromRow(ByVal data As Variant, ByVal rowIdx As Long, ByVal oblast As String) As String
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function OblastValueFromRow(ByRef data As Variant, ByVal rowIdx As Long, ByVal oblast As String) As String
     Dim ci As Long
     ci = GetColumnIndex(TBL_KORISNICI, oblast)
     If ci > 0 Then

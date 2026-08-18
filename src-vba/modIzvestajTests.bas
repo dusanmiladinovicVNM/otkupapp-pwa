@@ -644,7 +644,8 @@ Private Sub IzvSeed(ByVal tblName As String, ByVal cols As Variant, ByVal vals A
 End Sub
 
 ' Indeks reda ciji je `col` brojcano jednak `value` (0 = nije nadjen).
-Private Function IzvFindRowByNum(ByVal arr As Variant, ByVal col As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function IzvFindRowByNum(ByRef arr As Variant, ByVal col As Long, _
                                  ByVal value As Double) As Long
     Dim i As Long
     For i = LBound(arr, 1) To UBound(arr, 1)
@@ -657,7 +658,8 @@ Private Function IzvFindRowByNum(ByVal arr As Variant, ByVal col As Long, _
     Next i
 End Function
 
-Private Function IzvFindRowByText(ByVal arr As Variant, ByVal col As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function IzvFindRowByText(ByRef arr As Variant, ByVal col As Long, _
                                   ByVal value As String) As Long
     Dim i As Long
     For i = LBound(arr, 1) To UBound(arr, 1)

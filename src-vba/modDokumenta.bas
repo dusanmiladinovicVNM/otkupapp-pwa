@@ -1052,7 +1052,8 @@ End Sub
 
 ' Da li red tabele pripada izvornom dokumentu. Sa poznatom generacijom odlucuje
 ' iskljucivo PK; bez nje broj (pozivalac je pre toga dokazao jednoznacnost).
-Public Function PripadaIzvoru(ByVal data As Variant, ByVal rowIdx As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Public Function PripadaIzvoru(ByRef data As Variant, ByVal rowIdx As Long, _
                               ByVal cBroj As Long, ByVal cId As Long, _
                               ByVal broj As String, ByVal srcIds As Object) As Boolean
     If Not srcIds Is Nothing Then
@@ -1203,7 +1204,8 @@ Private Function FindAnchorRow(ByVal data As Variant, ByVal cBroj As Long, _
 End Function
 
 ' Rang reda: numericki sufiks ID-a (GetNextID je monoton), inace indeks reda.
-Private Function RowRank(ByVal data As Variant, ByVal rowIndex As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RowRank(ByRef data As Variant, ByVal rowIndex As Long, _
                          ByVal cId As Long) As Double
     RowRank = -1
 
@@ -1212,7 +1214,8 @@ Private Function RowRank(ByVal data As Variant, ByVal rowIndex As Long, _
 End Function
 
 ' Klasa reda je II (prazna/nepoznata klasa se tretira kao I, kao u ostatku koda).
-Private Function RowKlasaII(ByVal data As Variant, ByVal rowIndex As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RowKlasaII(ByRef data As Variant, ByVal rowIndex As Long, _
                             ByVal cKlasa As Long) As Boolean
     If cKlasa <= 0 Then Exit Function
     RowKlasaII = (UCase$(Trim$(NzToText(data(rowIndex, cKlasa)))) = "II")
@@ -3137,12 +3140,20 @@ Private Function ResolveNameFromDict(ByVal d As Object, ByVal idRaw As Variant) 
 End Function
 
 ' Sirova vrednost celije (Empty ako kolona ne postoji -> idx=0).
-Private Function StornoCellRaw(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
+' `data` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
+' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
+' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
+' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
+'
+' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
+' niz ne umnozava.
+Private Function StornoCellRaw(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As Variant
     If idx = 0 Then Exit Function
     StornoCellRaw = data(r, idx)
 End Function
 
-Private Function StornoCellText(ByVal data As Variant, ByVal r As Long, ByVal idx As Long) As String
+' ByRef iz istog razloga kao StornoCellRaw: ByVal bi kopirao ceo niz po pozivu.
+Private Function StornoCellText(ByRef data As Variant, ByVal r As Long, ByVal idx As Long) As String
     If idx = 0 Then Exit Function
     StornoCellText = Trim$(NzToText(data(r, idx)))
 End Function

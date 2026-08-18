@@ -507,7 +507,8 @@ Private Function NewSumDict() As Object
     Set NewSumDict = d
 End Function
 
-Private Sub CaptureHeader(ByRef d As Object, ByVal klasa As String, ByVal data As Variant, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Sub CaptureHeader(ByRef d As Object, ByVal klasa As String, ByRef data As Variant, _
                           ByVal rowIdx As Long, ByVal cVrsta As Long, _
                           ByVal cSorta As Long, ByVal cTipAmb As Long)
     ' Zapamti prvu ne-praznu vrednost zaglavlja po klasi (za kreiranje reda u recalc).

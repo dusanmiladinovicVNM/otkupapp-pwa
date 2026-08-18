@@ -1215,7 +1215,8 @@ End Function
 
 ' Vrednost iz kolone `col` u redu ciji je prvi stubac = label. Sentinel -99999 kad
 ' red ne postoji -> test vidljivo pada umesto da tiho poredi nulu.
-Private Function ReportCellByLabel(ByVal arr As Variant, ByVal label As String, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function ReportCellByLabel(ByRef arr As Variant, ByVal label As String, _
                                    ByVal col As Long) As Double
     If Not IsArray(arr) Then
         ReportCellByLabel = -99999
