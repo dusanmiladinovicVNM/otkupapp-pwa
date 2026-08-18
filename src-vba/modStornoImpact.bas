@@ -103,7 +103,8 @@ Private Sub PrijaviTrajanje(ByVal docType As String, ByVal broj As String, _
     ukupno = (tSum - t0) * 1000
     If ukupno < UVID_PRAG_MS Then Exit Sub
     LogWarn MOD_NAME & ".BuildStornoImpact", _
-            "Uvid " & docType & " " & broj & " trajao " & Format$(ukupno, "0") & " ms: " & _
+            "[" & modOtkupUI.OTKUI_BUILD & "] Uvid " & docType & " " & broj & _
+            " trajao " & Format$(ukupno, "0") & " ms: " & _
             "zaglavlje " & Format$((tHdr - t0) * 1000, "0") & _
             ", lanac " & Format$((tChn - tHdr) * 1000, "0") & _
             ", blokovi " & Format$((tBlk - tChn) * 1000, "0") & _

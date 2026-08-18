@@ -2,6 +2,10 @@ Attribute VB_Name = "modPaletniList"
 'Attribute VB_Name = "modPaletniList"
 Option Explicit
 
+' Prag ispod koga sekcija paleta ne javlja nista. Isti kao u modStornoImpact --
+' 400 ms je granica na kojoj operater pocinje da primeti cekanje.
+Private Const PAL_PRAG_MS As Long = 400
+
 ' ============================================================
 ' modPaletniList -- paletni list sveze robe + prerada (Phase 2)
 '
@@ -345,7 +349,15 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
         Exit Function
     End If
 
+    ' MERENJE UNUTAR SEKCIJE. Prva popravka je gadjala petlju po paletama i nije
+    ' pomerila nista: 1918 / 1895 / 1906 ms, isto za otpremnicu i za zbirnu, isto
+    ' za dokumente sa razlicitim brojem paleta. Konstanta bez obzira na ulaz nije
+    ' trosak PO PALETI nego fiksni -- citanje ili prolaz cele tblPaletaStavka.
+    ' Koje od to dvoje, meri se ovde: pogadjanje je vec jednom promasilo.
+    Dim tA As Double, tB As Double, tC As Double, tD As Double
+    tA = Timer
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
+    tB = Timer
     If IsEmpty(s) Then
         ' Prazna tabela je legitimna; NECITLJIVA nije. U strict rezimu se razlika
         ' mora videti, jer obe daju istu praznu kolekciju.
@@ -378,7 +390,8 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     Dim thN As Object: Set thN = CreateObject("Scripting.Dictionary")
     Dim thA As Object: Set thA = CreateObject("Scripting.Dictionary")
     Dim r As Long, pid As String, kv As String, pogodak As Boolean
-    For r = 1 To UBound(s, 1)
+    Dim redova As Long: redova = UBound(s, 1)
+    For r = 1 To redova
         kv = Trim$(CStr(SafeCell(s, r, cKey)))
         If dozvoljeni Is Nothing Then
             pogodak = (kv = value)
@@ -410,6 +423,7 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     ' Pomocne rutine (GetPaletaAggregates / PaletaLabel / IsPaletaPreradjena)
     ' ostaju za svoje ostale pozivaoce; ovde se citaju ista polja, iz istog reda,
     ' samo bez ponovnog trazenja tog reda.
+    tC = Timer
     Dim v As Variant
     Dim p As Variant: p = GetTableData(TBL_PALETA)
     Dim pIdx As Object: Set pIdx = CreateObject("Scripting.Dictionary")
@@ -469,6 +483,8 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
         d("thisAmb") = CDbl(thA(pid))
         result.Add d
     Next v
+    tD = Timer
+    PrijaviPalete redova, order.count, tA, tB, tC, tD
     Exit Function
 EH:
     ' Opis se cita PRE LogErr-a (LogErr usput brise stanje greske).
@@ -477,6 +493,27 @@ EH:
     LogErr SRC
     If strict Then Err.Raise errNum, SRC, errDesc
 End Function
+
+' Razlaganje sekcije paleta: citanje tabele / prolaz kroz stavke / obrada paleta.
+' Prijavljuje se SAMO kad ukupno predje prag, isto pravilo kao u modStornoImpact:
+' brz put ostaje tih, spor sam sebe prijavi.
+'
+' Broj redova i broj paleta idu uz vremena namerno -- bez njih se ne razlikuje
+' 'tabela je ogromna' od 'obrada je skupa po redu'.
+Private Sub PrijaviPalete(ByVal redova As Long, ByVal paleta As Long, _
+                          ByVal tA As Double, ByVal tB As Double, _
+                          ByVal tC As Double, ByVal tD As Double)
+    Dim ukupno As Double
+    On Error Resume Next
+    ukupno = (tD - tA) * 1000
+    If ukupno < PAL_PRAG_MS Then Exit Sub
+    LogWarn "modPaletniList.GetPaleteImpactByField", _
+            "[" & modOtkupUI.OTKUI_BUILD & "] " & redova & " stavki, " & paleta & _
+            " paleta, ukupno " & Format$(ukupno, "0") & " ms: " & _
+            "citanje tabele " & Format$((tB - tA) * 1000, "0") & _
+            ", prolaz kroz stavke " & Format$((tC - tB) * 1000, "0") & _
+            ", obrada paleta " & Format$((tD - tC) * 1000, "0") & " ms."
+End Sub
 
 ' ============================================================
 ' frmPalete (#44) read-modeli + rucno zatvaranje. Read-modeli su SAMO za
