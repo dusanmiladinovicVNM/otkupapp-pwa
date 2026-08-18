@@ -118,9 +118,9 @@ EH:
         corrId = partnerId
     End If
     
+    LogErr "SaveNovac_TX"
     On Error Resume Next
 
-    LogErr "SaveNovac_TX"
 
     Monitor_Error _
         moduleName:="modNovac", _
@@ -251,8 +251,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -546,8 +546,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "ApplyAvansToFaktura_TX"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1675,8 +1675,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "ApplyAvansToOtkup_TX"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
@@ -1759,8 +1759,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0

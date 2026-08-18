@@ -26,6 +26,8 @@ Provere:
                      ("Sub or Function not defined").
   7. ARNOST       -- poziv sa pogresnim brojem argumenata ("Wrong number of
                      arguments").
+  10. MRTAV_LOG   -- `LogErr` posle `On Error` koje je vec obrisalo `Err`, pa
+                     poziv ne upisuje NISTA u log.
   9. ZAKLONJENO   -- lokalni skalar (`Dim poruka As String`) koji se zove sa
                      zagradom. VBA to cita kao indeksiranje -> "Expected array".
                      Tipicno kad ime zaklanja istoimenu funkciju (`Poruka()`).
@@ -724,6 +726,58 @@ def check_poruke(files: list[str]) -> list[Finding]:
 # repo-run i self-test zelene, a checker prakticno iskljucen. To je ista klasa
 # greske kao placebo test: zeleno, ali nije prikljuceno na produkcionu putanju.
 
+
+# --- MRTAV_LOG: LogErr posle On Error koje je vec obrisalo Err ----------------
+#
+# `LogErr` pise SAMO kad je `Err.Number <> 0`. Svaka `On Error` naredba resetuje
+# `Err` (dokazano modTest-om 68). Zato je ovaj redosled unutar handlera nem:
+#
+#     EH:
+#         errDesc = Err.Description
+#         On Error Resume Next               <- Err vise nije postavljen
+#         LogErr "SaveOtpremnicaMulti_TX"     <- vidi 0, ne pise NISTA
+#
+# Osamdeset sedam takvih poziva je zivelo u kodu. Posledica je bila pad upisa
+# BEZ IJEDNE linije u logu, pa se pravi uzrok (schema drift) trazio satima.
+# Ispravno je pozvati LogErr PRE `On Error`, ili poslati opis izricito preko
+# LogError SRC, errDesc, errNum.
+#
+# Provera gleda SAMO unutar handlera (posle labele EH:/ErrHandler:/Fin:/VRATI:).
+# Van njega je `On Error Resume Next` legitimna priprema pred poziv koji sme da
+# pukne -- tamo je Err posle poziva jos ziv i LogErr uredno pise.
+HANDLER_LABELA = re.compile(r"^(EH|ErrHandler|Fin|VRATI)\w*:\s*$")
+KRAJ_PROC = re.compile(r"^(Exit (Sub|Function|Property)|End (Sub|Function|Property))\b",
+                       re.IGNORECASE)
+ON_ERROR_BRISE = ("on error resume next", "on error goto 0")
+
+
+def check_dead_log(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    u_handleru = False
+    brisac = None
+    for i, raw_line in enumerate(lines):
+        t = _strip_comment(raw_line).strip()
+        if not t:
+            continue
+        if HANDLER_LABELA.match(t):
+            u_handleru, brisac = True, None
+            continue
+        if KRAJ_PROC.match(t):
+            u_handleru, brisac = False, None
+            continue
+        if u_handleru and t.lower() in ON_ERROR_BRISE:
+            brisac = t
+            continue
+        if u_handleru and brisac and re.match(r"^LogErr\b", t, re.IGNORECASE):
+            out.append(Finding(
+                path, i + 1, "MRTAV_LOG",
+                "LogErr posle '%s' -- ta naredba resetuje Err, pa LogErr "
+                "(koji pise samo kad je Err.Number <> 0) ne upisuje NISTA. "
+                "Pozovi LogErr PRE nje, ili posalji opis izricito: "
+                "LogError SRC, errDesc, errNum." % brisac))
+            brisac = None
+    return out
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -733,6 +787,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_undefined(path, lines, defined, arities)
     out += check_local_dupes(path, lines)
     out += check_scalar_call(path, lines)
+    out += check_dead_log(path, lines)
     return out
 
 
@@ -961,6 +1016,56 @@ End Type
 ]
 
 
+# --- MRTAV_LOG: LogErr koji ne moze da zapise ---
+#
+# Dokaz u oba smera. Druga polovina (0 nalaza) je vaznija: `On Error Resume
+# Next` PRE poziva koji sme da pukne je legitiman obrazac i cest u kodu --
+# lazan nalaz nad njim bi naucio da se checker ignorise.
+MRTAV_LOG_CASES = [
+    # --- MRTAV_LOG: mora da zapisti ---
+    ("LogErr posle Resume Next u handleru", 1, """Option Explicit
+Public Sub Radi()
+    On Error GoTo EH
+    Exit Sub
+EH:
+    Dim errDesc As String
+    errDesc = Err.Description
+    On Error Resume Next
+    LogErr "Radi"
+End Sub
+"""),
+    ("LogErr posle On Error GoTo 0 u handleru", 1, """Option Explicit
+Public Sub Radi()
+    On Error GoTo EH
+    Exit Sub
+EH:
+    On Error GoTo 0
+    LogErr "Radi"
+End Sub
+"""),
+    # --- MRTAV_LOG: NE sme da zapisti ---
+    ("LogErr PRE Resume Next u handleru", 0, """Option Explicit
+Public Sub Radi()
+    On Error GoTo EH
+    Exit Sub
+EH:
+    LogErr "Radi"
+    On Error Resume Next
+End Sub
+"""),
+    ("Resume Next PRE poziva koji puca -- Err je posle njega ziv", 0, """Option Explicit
+Public Sub Radi()
+    On Error Resume Next
+    MozdaPukne
+    If Err.Number <> 0 Then
+        LogErr "Radi"
+        Err.Clear
+    End If
+End Sub
+"""),
+]
+
+
 def self_test() -> int:
     palo = []
 
@@ -999,6 +1104,15 @@ def self_test() -> int:
         if dobijeno != ocekivano:
             palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in MRTAV_LOG_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "MRTAV_LOG")
+        if dobijeno != ocekivano:
+            palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in ZAKLONJENO_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -1028,7 +1142,8 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    ukupno = len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES) + 2
+    ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
+              + len(MRTAV_LOG_CASES) + 2)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:

@@ -42,19 +42,25 @@ Private Sub Workbook_Open()
     Exit Sub
 
 EH:
-    On Error Resume Next
+    ' Err se cita PRVO, u lokale. Do sada je "On Error Resume Next" stajao na
+    ' vrhu handlera, pa su i Monitor_Error i LogErr videli VEC RESETOVAN Err --
+    ' telemetrija je prijavljivala gresku broj 0 sa praznim opisom, a u log nije
+    ' isla nijedna linija. Pad pri pokretanju je tako ostajao bez ijednog traga.
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
 
+    LogError "ThisWorkbook.Workbook_Open", errDesc, errNum
+
+    On Error Resume Next
     Monitor_Error _
         moduleName:="ThisWorkbook", _
         procedureName:="Workbook_Open", _
         entityType:="App", _
         entityID:="Startup", _
         correlationId:="VBA-STARTUP", _
-        errorNumber:=Err.Number, _
-        errorDescription:=Err.description, _
-        errorSource:=Err.SOURCE
-
-    LogErr "ThisWorkbook.Workbook_Open"
+        errorNumber:=errNum, _
+        errorDescription:=errDesc, _
+        errorSource:=errSrc
 
     Application.Visible = True
     MsgBox Poruka("APP_MSG_GRESKA_PRI_POKRETANJU"), vbCritical

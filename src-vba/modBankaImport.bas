@@ -82,9 +82,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
 
-    LogErr SRC
 
     If Not tx Is Nothing Then tx.RollbackTx
 
@@ -143,8 +143,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -194,8 +194,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -267,8 +267,8 @@ EH:
     errSrc = Err.SOURCE
     errCategory = ClassifyBankaImportError(errNum, errSrc, errDesc)
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
 
     fileName = GetFileNameFromPath(pdfPath)
 
@@ -339,8 +339,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     ExecutePendingBankaFileMoves errorMoves
     On Error GoTo 0
@@ -651,8 +651,8 @@ EH:
     errDescTx = Err.description
     errSrcTx = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
@@ -826,8 +826,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -919,8 +919,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -1109,8 +1109,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, _
@@ -1446,8 +1446,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
@@ -1526,6 +1526,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
 
     If Not movedOk Then
@@ -1533,7 +1534,6 @@ EH:
         If Len(localFinalPath) > 0 And Dir$(localFinalPath) <> "" Then Kill localFinalPath
     End If
 
-    LogErr SRC
     On Error GoTo 0
 
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc

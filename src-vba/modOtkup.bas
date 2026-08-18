@@ -66,8 +66,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "SaveOtkup_TX"
+    On Error Resume Next
     Monitor_Error _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkup_TX", _
@@ -327,8 +327,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "SaveOtkupMulti_TX"
+    On Error Resume Next
     Monitor_Error _
         moduleName:="modOtkup", _
         procedureName:="SaveOtkupMulti_TX", _
@@ -628,8 +628,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "SaveOtkup"
+    On Error Resume Next
     On Error GoTo 0
 
     Err.Raise errNum, "SaveOtkup", _

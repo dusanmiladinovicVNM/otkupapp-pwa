@@ -123,10 +123,10 @@ Private Sub BuildWarm()
     m_warming = False
     Exit Sub
 EH:
+    LogErr MOD_NAME & ".BuildWarm"
     On Error Resume Next
     EndTableCache
     m_warming = False
-    LogErr MOD_NAME & ".BuildWarm"
 End Sub
 
 Private Sub CancelStornoWarm()
