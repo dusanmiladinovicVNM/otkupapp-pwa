@@ -30,10 +30,19 @@ Private Const MOD_NAME As String = "modStornoImpact"
 '
 ' Prazan docID i dalje prolazi: zatecen zapis bez generacije nema identitet, i
 ' tada nizvodno vazi fail-closed kapija nad jednoznacnoscu broja.
+' "valid" JE DEO UGOVORA. Model se do v6-ui-143 vracao pozivaocu PRE nego sto je
+' izgradjen (Set BuildStornoImpact = d na pocetku), pa je pad na pola davao
+' PARCIJALAN recnik koji spolja izgleda kao ispravan uvid. Ekran na osnovu njega
+' crta posledice i nudi dugmad za mutaciju -- dakle tacno suprotno od svrhe ovog
+' ekrana ("prvo vidi posledice, pa odluci"). Sada svaka sekcija mora da se
+' izgradi, i tek onda se "valid" postavlja na True; pozivalac koji ga ne proveri
+' dobija recnik ciji je valid False.
 Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String, _
                                   Optional ByVal dokumentTip As String = "", _
                                   Optional ByVal docID As String = "") As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d("valid") = False
+    d("greska") = ""
     Set BuildStornoImpact = d
     On Error GoTo EH
     broj = Trim$(broj)
@@ -42,11 +51,13 @@ Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String,
     Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID)
     Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID)
     Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID)
-    Set d("palete") = ImpactPalete(docType, broj)
-    Set d("faktura") = ImpactFaktura(docType, broj)
+    Set d("palete") = ImpactPalete(docType, broj, docID)
+    Set d("faktura") = ImpactFaktura(docType, broj, docID)
     Set d("summary") = ImpactSummary(d)
+    d("valid") = True
     Exit Function
 EH:
+    d("greska") = Err.description
     LogErr MOD_NAME & ".BuildStornoImpact"
 End Function
 
@@ -117,18 +128,40 @@ Private Function ResolvePartnerName(ByVal docType As String, ByVal partnerID As 
 End Function
 
 ' ------------------------------------------------------------
-' Palete po tipu: prijemnica preko BrojPrij; zbirna preko BrojZbirne;
-' otpremnica preko svoje zbirne. Reuse modPaletniList.GetPaleteImpactByField.
+' Palete po tipu, SUZENO NA IZABRAN DOKUMENT gde god sema to dozvoljava.
+'
+' Do v6-ui-143 je ovde stajao goli broj, i to je bila prava rupa: zaglavlje,
+' lanac i blokovi su isli po identitetu, a palete i faktura po BROJU -- pa je
+' pod kolizijom broja uvid pokazivao palete OBA dokumenta, dok writer nizvodno
+' mutira samo jedan. Ekran je time tvrdio posledice koje ne odgovaraju radnji.
+'
+' Dokle sema dozvoljava suzavanje:
+'   PRIJEMNICA  tblPaletaStavka nosi PrijemnicaID -> puno suzavanje. Jedan
+'               logicki dokument ima VISE redova (Klasa I i II dele generaciju,
+'               a imaju razlicit PrijemnicaID), pa se salje SKUP ID-jeva.
+'   OTPREMNICA  stavke ne nose otpremnicu nego BrojZbirne; identitet se ipak
+'               koristi da se nadje zbirna BAS te otpremnice (HLI, ne HL).
+'   ZBIRNA      stavke nose BrojZbirne, ne ZbirnaID -- suzavanje po identitetu
+'               nije moguce. Ista granica sheme kao kod FLOW_DOC_ZBIRNA u
+'               ActiveBlocksForFlow (tblOtkup nosi denormalizovan BrojZbirne).
+'               Prijavljuje se kao granica, ne krpi se pogadjanjem.
 ' ------------------------------------------------------------
-Private Function ImpactPalete(ByVal docType As String, ByVal broj As String) As Collection
+Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
+                              Optional ByVal docID As String = "") As Collection
+    Dim ids As Object, bz As String
     On Error GoTo EH
     Select Case docType
         Case FLOW_DOC_PRIJEMNICA
-            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj)
+            Set ids = PrijemniceIDPoIdentitetu(broj, docID)
+            If ids Is Nothing Then
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj)
+            Else
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids)
+            End If
         Case FLOW_DOC_ZBIRNA
             Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj)
         Case FLOW_DOC_OTPREMNICA
-            Dim bz As String: bz = HL(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_BROJ_ZBIRNE)
+            bz = HLI(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_BROJ_ZBIRNE, docID)
             If Len(bz) > 0 Then
                 Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, bz)
             Else
@@ -139,21 +172,59 @@ Private Function ImpactPalete(ByVal docType As String, ByVal broj As String) As 
     End Select
     Exit Function
 EH:
+    ' Greska se PODIZE, ne guta. Prazna kolekcija je legitiman odgovor (dokument
+    ' nema palete) i ne sme da znaci isto sto i neuspelo citanje -- inace bi uvid
+    ' tvrdio da posledica nema, a operater bi na osnovu toga stornirao.
     LogErr MOD_NAME & ".ImpactPalete"
-    Set ImpactPalete = New Collection
+    Err.Raise ERR_UI_BASE + 23, MOD_NAME & ".ImpactPalete", _
+              "Palete izabranog dokumenta se ne mogu procitati."
 End Function
 
-' ------------------------------------------------------------
-' Faktura (samo prijemnica ima direktan link u ovom sloju).
-' ------------------------------------------------------------
-Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String) As Object
+' PrijemnicaID-jevi koji pripadaju IZABRANOJ generaciji. Nothing = nema identiteta
+' ili sema nema kolonu generacije -> pozivalac se vraca na broj. Fail-open je ovde
+' ispravan: zatecen zapis bez generacije nema identitet, a uvid mora nesto da
+' pokaze; nizvodne KAPIJE su te koje su fail-closed.
+Private Function PrijemniceIDPoIdentitetu(ByVal broj As String, _
+                                          ByVal docID As String) As Object
+    If Len(Trim$(docID)) = 0 Then Exit Function
+    On Error GoTo done
+    Dim data As Variant: data = GetTableData(TBL_PRIJEMNICA)
+    If IsEmpty(data) Then Exit Function
+    Dim cBr As Long, cId As Long, cGen As Long
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cGen = GetColumnIndex(TBL_PRIJEMNICA, COL_GENERACIJA_ID)
+    If cBr = 0 Or cId = 0 Or cGen = 0 Then Exit Function
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Dim i As Long, pid As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cBr))) = Trim$(broj) Then
+            If Trim$(CStr(data(i, cGen))) = Trim$(docID) Then
+                pid = Trim$(CStr(data(i, cId)))
+                If Len(pid) > 0 Then
+                    If Not d.Exists(pid) Then d.Add pid, 1
+                End If
+            End If
+        End If
+    Next i
+    ' Prazan skup NIJE "nema paleta" nego "identitet nije nadjen" -- vraca se
+    ' Nothing, da pozivalac padne na broj umesto da tvrdi da paleta nema.
+    If d.count > 0 Then Set PrijemniceIDPoIdentitetu = d
+done:
+End Function
+
+' Faktura (samo prijemnica ima direktan link u ovom sloju), po IDENTITETU.
+' HL vraca PRVI red po broju -- pod kolizijom je uvid umeo da prijavi fakturu
+' tudje prijemnice, pa i da tvrdi "fakturisano" za dokument koji to nije.
+Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String, _
+                               Optional ByVal docID As String = "") As Object
     Dim f As Object: Set f = CreateObject("Scripting.Dictionary")
     Set ImpactFaktura = f
     f("hasFaktura") = False: f("fakturaID") = ""
     On Error GoTo EH
     If docType = FLOW_DOC_PRIJEMNICA Then
-        f("hasFaktura") = (UCase$(HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURISANO)) = "DA")
-        f("fakturaID") = HL(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURA_ID)
+        f("hasFaktura") = (UCase$(HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURISANO, docID)) = "DA")
+        f("fakturaID") = HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURA_ID, docID)
     End If
     Exit Function
 EH:

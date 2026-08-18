@@ -318,13 +318,24 @@ End Function
 '   thisGajb, thisNeto, thisAmb (suma AKTIVNIH stavki za ovaj kljuc = detach delta).
 ' Reuse GetPaletaAggregates/PaletaLabel/IsPaletaPreradjena (isti modul).
 ' ============================================================
-Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As String) As Collection
+' dozvoljeni = recnik DOZVOLJENIH vrednosti kljuca; kad je zadat, red ulazi ako
+' mu je vrednost U NJEMU, a ne ako je jednaka jednoj vrednosti. Postoji zbog
+' identiteta: jedan logicki dokument moze imati VISE redova (Klasa I i II dele
+' GeneracijaID, ali imaju razlicit PrijemnicaID), pa se palete tog dokumenta ne
+' mogu obuhvatiti jednom vrednoscu. Agregacija po paleti ostaje jedna -- zato
+' skup, a ne dva poziva: paleta koja nosi obe klase bi se inace pojavila dvaput.
+Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As String, _
+                                       Optional ByVal dozvoljeni As Object = Nothing) As Collection
     Const SRC As String = "modPaletniList.GetPaleteImpactByField"
     Dim result As New Collection
     Set GetPaleteImpactByField = result
     On Error GoTo EH
     value = Trim$(value)
-    If Len(value) = 0 Then Exit Function
+    If dozvoljeni Is Nothing Then
+        If Len(value) = 0 Then Exit Function
+    ElseIf dozvoljeni.count = 0 Then
+        Exit Function
+    End If
 
     Dim s As Variant: s = GetTableData(TBL_PALETA_STAVKA)
     If IsEmpty(s) Then Exit Function
@@ -341,10 +352,15 @@ Public Function GetPaleteImpactByField(ByVal fieldCol As String, ByVal value As 
     Dim thG As Object: Set thG = CreateObject("Scripting.Dictionary")
     Dim thN As Object: Set thN = CreateObject("Scripting.Dictionary")
     Dim thA As Object: Set thA = CreateObject("Scripting.Dictionary")
-    Dim r As Long, pid As String
+    Dim r As Long, pid As String, kv As String, pogodak As Boolean
     For r = 1 To UBound(s, 1)
-        If Trim$(CStr(SafeCell(s, r, cKey))) = value _
-           And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
+        kv = Trim$(CStr(SafeCell(s, r, cKey)))
+        If dozvoljeni Is Nothing Then
+            pogodak = (kv = value)
+        Else
+            pogodak = dozvoljeni.Exists(kv)
+        End If
+        If pogodak And UCase$(Trim$(CStr(SafeCell(s, r, cSt)))) <> "DA" Then
             pid = Trim$(CStr(SafeCell(s, r, cPal)))
             If Len(pid) > 0 Then
                 If Not thG.Exists(pid) Then thG.Add pid, 0&: thN.Add pid, 0#: thA.Add pid, 0#: order.Add pid

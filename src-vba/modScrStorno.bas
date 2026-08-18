@@ -53,9 +53,15 @@ Private Const ST_PAL_REDOVA As Long = 3     ' redova detalja paleta
 
 ' Kljuc navigacione liste. Nije tip dokumenta nego pogled PREKO tipova, pa ne
 ' moze da se sudari sa STIP_* kljucevima.
-Private Const ST_SVI As String = "SVI"
+'
+' Zove se LANAC, a ne "Svi", i to je iskrenost prema onome sto lista stvarno
+' pokriva: izvor joj je GetActiveDocumentsForStorno, koji cita TRI framework
+' tipa (otpremnica, zbirna, prijemnica) -- ne svih devet. Naziv "Svi" bi
+' obecavao globalnu pretragu i tiho izostavljao otkup, novac, revers, fakturu i
+' izvod. Kad izvor jednog dana pokrije sve tipove, preimenuje se i lista.
+Private Const ST_LANAC As String = "LANAC"
 
-' Aktivna lista: STIP_* kljuc ili ST_SVI.
+' Aktivna lista: STIP_* kljuc ili ST_LANAC.
 Private mLista As String
 
 ' IZABRAN DOKUMENT. Broj je ono sto operater vidi; docID je ono po cemu se
@@ -85,6 +91,10 @@ Private mImpact As Object
 Private mAkcije As Variant
 Private mAkcijeZa As String                 ' za koji izbor vazi mAkcije
 
+' Zasto uvid nije uspeo. Prazno = uspeo je (ili tip uvid i nema).
+' Dok ovo nije prazno, mutaciona dugmad se NE prikazuju -- v. AkcijeRacun.
+Private mUvidGreska As String
+
 Private mStep As String                     ' korak za poruku o gresci
 
 '--------------------------------------------------------- UGOVOR EKRANA
@@ -98,12 +108,13 @@ End Function
 ' broj kuca napamet. Fakture i izvodi su tu iako novi UI nema rezim koji ih
 ' kreira: stornirati se moraju, a legacy ih ima u istom combo-u.
 '
-' "Svi" je NAVIGACIONA lista preko tipova, koju legacy ima ("Nadji dokument")
-' a novi UI do sada nije. Stoji PRVA jer je to pogled sa kojim se pocinje kad
-' se ne zna gde dokument zivi.
+' "Lanac robe" je NAVIGACIONA lista preko tri framework tipa, srodna legacy
+' pogledu "Nadji dokument". Stoji PRVA jer je to pogled sa kojim se pocinje kad
+' se ne zna gde dokument zivi -- ali PODRAZUMEVANA lista je Otkupni (v.
+' Scr_Lista), jer je otkupni list najcesci dokument pa i najcesci storno.
 Public Function Scr_Liste() As Variant
     Scr_Liste = Array( _
-        ST_SVI & "|OTKUI_SEG_ST_SVI|OTKUI_GRID_TITLE_ST_SVI|40", _
+        ST_LANAC & "|OTKUI_SEG_ST_LANAC|OTKUI_GRID_TITLE_ST_LANAC|76", _
         STIP_OTKUP & "|OTKUI_SEG_ST_OTKUP|OTKUI_GRID_TITLE_OTKUP|64", _
         STIP_OTPREMNICA & "|OTKUI_SEG_ST_OTP|OTKUI_GRID_TITLE_OTPREMNICA|72", _
         STIP_ZBIRNA & "|OTKUI_SEG_ST_ZBR|OTKUI_GRID_TITLE_ZBIRNA|56", _
@@ -158,19 +169,38 @@ Public Function Scr_IzabranDocID() As String
     Scr_IzabranDocID = mSelDocID
 End Function
 
+' TEST SEAM: koliko mutacionih dugmadi red odluke NUDI. Nula znaci da se nista
+' ne moze pokrenuti. Meri se ovde jer se u testu zona ne crta (forma nema .Show),
+' pa se vidljivost kontrola ne moze procitati -- a tvrdnja "bez uvida nema
+' odluke" je bas o tome sta se nudi.
+Public Function Scr_BrojAkcija() As Long
+    Dim akc As Variant
+    akc = AkcijeZaTip()
+    If Not IsArray(akc) Then Exit Function
+    Scr_BrojAkcija = UBound(akc) + 1
+End Function
+
+' TEST SEAM: kljuc pod kojim je red odluke kesiran. Prazno = kesa nema. Postoji
+' zato sto se zastarela odluka i sveza odluka spolja ne razlikuju -- obe daju
+' isti niz dugmadi, a razlika je bas u tome da li je racunata nad tekucim
+' podacima.
+Public Function Scr_OdlukaKes() As String
+    Scr_OdlukaKes = mAkcijeZa
+End Function
+
 '--------------------------------------------------------------- REDOVI
 ' Redovi za deljenu mrezu. Tipizirane liste dolaze iz istog citaca koji puni i
 ' unosni ekran -- odatle i nevidljiva kolona identiteta (True na kraju).
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
-    If Scr_Lista() = ST_SVI Then
-        Scr_Rows = RowsSvi(q)
+    If Scr_Lista() = ST_LANAC Then
+        Scr_Rows = RowsLanac(q)
         Exit Function
     End If
     Scr_Rows = modScrDokumenti.RedoviZaTip(Scr_Lista(), filter, q, True)
 End Function
 
-Private Function SviGridCols() As Variant
-    SviGridCols = Array( _
+Private Function LanacGridCols() As Variant
+    LanacGridCols = Array( _
         "OTKUI_HD_TIP||txt|96|1", _
         "OTKUI_HD_BROJ||txt|110|1", _
         "OTKUI_HD_DATUM||date|58|1", _
@@ -178,12 +208,15 @@ Private Function SviGridCols() As Variant
         "OTKUI_HD_KG||kg|60|1")
 End Function
 
-' Lista PREKO tipova. Namerno je samo NAVIGACIONA: red joj dolazi iz
-' GetActiveDocumentsForStorno, koji pokriva tri framework tipa i NEMA kolonu
-' identiteta. Radnja nad takvim redom bi se vratila na biranje po broju --
-' tacno ono sto je #198 vadio iz koda. Zato klik na red ovde samo PREBACUJE na
-' tipiziranu listu, gde identitet postoji, a odluka se donosi tamo.
-Private Function RowsSvi(ByVal q As String) As Variant
+' Lista preko TRI framework tipa. Namerno je samo NAVIGACIONA: red joj dolazi iz
+' GetActiveDocumentsForStorno, koji NEMA kolonu identiteta. Radnja nad takvim
+' redom bi se vratila na biranje po broju -- tacno ono sto je #198 vadio iz koda.
+' Zato klik na red ovde samo PREBACUJE na tipiziranu listu, gde identitet postoji,
+' a odluka se donosi tamo.
+'
+' Skup tipova ovde i u TipIzNaziva MORA biti isti: red koji lista pokaze a klik
+' ne ume da razresi je red koji "ne radi". Meri to T_Storno_UgovorIRadnje.
+Private Function RowsLanac(ByVal q As String) As Variant
     Dim src As Collection, outA() As Variant, n As Long, i As Long
     Dim red As Variant, hay As String, sumKg As Double
     On Error GoTo EH
@@ -191,7 +224,7 @@ Private Function RowsSvi(ByVal q As String) As Variant
     Set src = modStornoWarm.GetWarmStornoDocs()
     If src Is Nothing Then Exit Function
     If src.count = 0 Then
-        RowsSvi = Array(SviGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
+        RowsLanac = Array(LanacGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
@@ -207,28 +240,28 @@ Private Function RowsSvi(ByVal q As String) As Variant
             n = n + 1
             outA(n, 1) = CStr(red(0))
             outA(n, 2) = CStr(red(1))
-            outA(n, 3) = SviDatum(red(2))
-            outA(n, 4) = SviPartner(red)
+            outA(n, 3) = LanacDatum(red(2))
+            outA(n, 4) = LanacPartner(red)
             outA(n, 5) = SafeDbl(red(7))
             sumKg = sumKg + SafeDbl(red(7))
         End If
     Next i
-    RowsSvi = Array(SviGridCols(), outA, n, sumKg, 0#, Array(0, 0, 0))
+    RowsLanac = Array(LanacGridCols(), outA, n, sumKg, 0#, Array(0, 0, 0))
     Exit Function
 EH:
-    Err.Raise Err.Number, "modScrStorno.RowsSvi[" & mStep & "]", Err.description
+    Err.Raise Err.Number, "modScrStorno.RowsLanac[" & mStep & "]", Err.description
 End Function
 
 ' Kupac ako ga dokument ima, inace otkupna mesta (otpremnica nema kupca).
-Private Function SviPartner(ByVal red As Variant) As String
+Private Function LanacPartner(ByVal red As Variant) As String
     On Error Resume Next
-    SviPartner = Trim$(CStr(red(4)))
-    If Len(SviPartner) = 0 Then SviPartner = Trim$(CStr(red(6)))
+    LanacPartner = Trim$(CStr(red(4)))
+    If Len(LanacPartner) = 0 Then LanacPartner = Trim$(CStr(red(6)))
 End Function
 
-Private Function SviDatum(ByVal v As Variant) As Double
+Private Function LanacDatum(ByVal v As Variant) As Double
     On Error Resume Next
-    If IsDate(v) Then SviDatum = CDbl(CDate(v))
+    If IsDate(v) Then LanacDatum = CDbl(CDate(v))
 End Function
 
 Private Function SafeDbl(ByVal v As Variant) As Double
@@ -330,7 +363,15 @@ Private Sub OsveziZaglavlje(ByVal z As Object)
     Dim hd As Object, sm As Object, s As String
     On Error Resume Next
     If mImpact Is Nothing Then
-        z.Controls("stDok").caption = Poruka("OTKUI_SCRST_NEMA")
+        ' Neuspeo uvid i "nista nije izabrano" NISU isto stanje, i ne smeju da
+        ' izgledaju isto: prvo znaci da odluka nije moguca, drugo da je jos nije
+        ' ni bilo. Bez ove razlike operater vidi prazan panel i misli da je
+        ' promasio red.
+        If Len(mUvidGreska) > 0 Then
+            z.Controls("stDok").caption = mUvidGreska
+        Else
+            z.Controls("stDok").caption = Poruka("OTKUI_SCRST_NEMA")
+        End If
         z.Controls("stMeta").caption = ""
         Exit Sub
     End If
@@ -460,7 +501,7 @@ Private Function AkcijeZaTip() As Variant
 End Function
 
 Private Function AkcijeRacun() As Variant
-    Dim dt As String
+    Dim dt As String, errDesc As String
     On Error GoTo EH
     If Len(mSelBroj) = 0 Then Exit Function
 
@@ -468,6 +509,15 @@ Private Function AkcijeRacun() As Variant
     If Len(dt) = 0 Then
         AkcijeRacun = Array("|OTKUI_SCRST_B_STORNO|OTKUI_SCRST_H_STORNO|danger")
         Exit Function
+    End If
+
+    ' FAIL-CLOSED NAD UVIDOM. Ceo smisao ovog ekrana je "prvo vidi posledice, pa
+    ' odluci". Ako posledice nisu procitane, odluke NEMA -- dugmad se ne crtaju.
+    ' Odnosi se na tipove koji uvid uopste imaju: revers ga nema po prirodi
+    ' (list u lancu), a ne-framework tipovi ni ne stizu dovde.
+    If dt <> FLOW_DOC_REVERS Then
+        If mImpact Is Nothing Then Exit Function
+        If Not CBool(mImpact("valid")) Then Exit Function
     End If
 
     If mSelTip = STIP_REVERSI Then
@@ -489,11 +539,15 @@ Private Function AkcijeRacun() As Variant
         SV_MODE_RESI_KASNIJE & "|OTKUI_SCRST_B_KASNIJE|OTKUI_SCRST_H_KASNIJE|ghost")
     Exit Function
 EH:
-    ' FAIL-CLOSED, isto kao StornoTraziIzborModa: neizvesnost vodi ka VISE
-    ' pitanja, ne ka manje. Prazan red odluke znaci da se nista ne moze
-    ' pokrenuti dok se ne izabere ponovo.
+    ' FAIL-CLOSED: prazan red odluke znaci da se nista ne moze pokrenuti dok se
+    ' ne izabere ponovo. Ovde je to STROZE od StornoTraziIzborModa (koji na
+    ' gresku vraca "ponudi izbor"): tamo je neizvesnost vodila ka VISE pitanja,
+    ' ovde ka NIJEDNOJ mutaciji -- jer je pitanje bez posledica pred sobom
+    ' upravo ono sto ovaj ekran ukida.
+    errDesc = Err.description
     LogErr "modScrStorno.AkcijeRacun"
     Err.Clear
+    mUvidGreska = Poruka("OTKUI_SCRST_ERR_UVID") & " " & errDesc
 End Function
 
 Private Sub OsveziAkcije(ByVal z As Object)
@@ -538,6 +592,7 @@ End Function
 
 '-------------------------------------------------------------- RADNJE
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
+    Dim errDesc As String
     On Error GoTo EH
 
     If Left$(tag, 2) = "ls" Then
@@ -567,8 +622,12 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     End If
     Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a. LogErr ima svoj On Error Resume Next i usput
+    ' obrise stanje greske, pa je poruka operateru ostajala prazna -- isti nalaz
+    ' koji je u d60b6706 vadjen sa deset mesta, pa ga ovaj modul nije smeo vratiti.
+    errDesc = Err.description
     LogErr "modScrStorno.Scr_Event"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
     ' Err se BRISE posle obrade. Omotac modUiScreens.ScrEvent posle povratka
     ' cita Err.Number i, ako nije nula, javlja "Radnja nije uspela" -- pa je
     ' vec obradjena greska stizala operateru drugi put, kao da radnja nije
@@ -585,6 +644,7 @@ Private Sub OcistiIzbor()
     Set mImpact = Nothing
     mAkcije = Empty
     mAkcijeZa = ""
+    mUvidGreska = ""
     OsveziZonu
 End Sub
 
@@ -594,10 +654,10 @@ End Sub
 ' U navigacionoj listi klik prebacuje na tipiziranu listu tog dokumenta -- tamo
 ' postoji kolona identiteta, pa tamo i odluka moze da se donese.
 Private Function IzborReda(ByVal red As Long) As Boolean
-    Dim tip As String, broj As String
+    Dim tip As String, broj As String, errDesc As String
     On Error GoTo EH
 
-    If Scr_Lista() = ST_SVI Then
+    If Scr_Lista() = ST_LANAC Then
         tip = TipIzNaziva(Trim$(CStr(modOtkupUI.GridCell(red, 1))))
         If Len(tip) = 0 Then Exit Function
         mLista = tip
@@ -650,9 +710,17 @@ Private Function IzborReda(ByVal red As Long) As Boolean
 EH:
     ' Kes se zatvara i na gresci: otvoren kes zamrzava snimak tabela do kraja
     ' sesije, pa bi sve nizvodno radilo nad zatecenim podacima.
+    '
+    ' Greska se i PRIKAZUJE. Ranije je samo logovana, pa je klik na red mogao da
+    ' ne uradi nista bez ijedne reci -- tacno onaj simptom koji je ova grana
+    ' vadila iz ljuske (v. ScrGridData).
+    errDesc = Err.description
     EndTableCache
     LogErr "modScrStorno.IzborReda"
     Err.Clear
+    mUvidGreska = Poruka("OTKUI_SCRST_ERR_UVID") & " " & errDesc
+    OsveziZonu
+    modOtkupUI.ShowToast mUvidGreska, True
 End Function
 
 ' Uvid postoji samo za tipove koje modStornoImpact razume (framework tipovi).
@@ -667,19 +735,37 @@ End Function
 ' EndTableCache MORA da se izvrsi i kad poziv pukne, inace kes ostaje otvoren
 ' do kraja sesije i sve nizvodno vidi zatecen snimak tabela.
 Private Function GradiUvid() As Object
-    Dim dt As String
+    Dim dt As String, res As Object, errDesc As String
+    mUvidGreska = ""
     On Error GoTo EH
     dt = modStornoDok.TipUFlowDoc(mSelTip)
     If Len(dt) = 0 Then Exit Function
     If dt = FLOW_DOC_REVERS Then Exit Function
     BeginTableCache
-    Set GradiUvid = modStornoImpact.BuildStornoImpact(dt, mSelBroj, mSelOpcija, mSelDocID)
+    Set res = modStornoImpact.BuildStornoImpact(dt, mSelBroj, mSelOpcija, mSelDocID)
     EndTableCache
+    ' Model koji nije kompletan NE prolazi kao uvid. BuildStornoImpact vraca
+    ' recnik i kad pukne na pola (valid = False) -- bez ove provere bi ekran
+    ' crtao parcijalne posledice i nudio dugmad za mutaciju nad njima.
+    If res Is Nothing Then
+        mUvidGreska = Poruka("OTKUI_SCRST_ERR_UVID")
+        Exit Function
+    End If
+    If Not CBool(res("valid")) Then
+        mUvidGreska = Poruka("OTKUI_SCRST_ERR_UVID") & " " & CStr(res("greska"))
+        Exit Function
+    End If
+    Set GradiUvid = res
     Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a: LogErr ima svoj On Error Resume Next i usput
+    ' obrise stanje greske, pa bi poruka operateru ostala prazna (isti nalaz
+    ' kao d60b6706 -- svih deset mesta).
+    errDesc = Err.description
     EndTableCache
     LogErr "modScrStorno.GradiUvid"
     Err.Clear
+    mUvidGreska = Poruka("OTKUI_SCRST_ERR_UVID") & " " & errDesc
 End Function
 
 ' Naziv tipa iz navigacione liste -> STIP_* kljuc. Nazivi dolaze iz
@@ -738,7 +824,7 @@ End Function
 ' Klik na dugme u redu odluke. Prvi mod je prazan string za "obican storno";
 ' ostali su SV_MODE_*.
 Private Function PokreniAkciju(ByVal i As Long) As Boolean
-    Dim akc As Variant, mode As String, razlog As String
+    Dim akc As Variant, mode As String, razlog As String, errDesc As String
     On Error GoTo EH
     akc = AkcijeZaTip()
     If Not IsArray(akc) Then Exit Function
@@ -763,8 +849,12 @@ Private Function PokreniAkciju(ByVal i As Long) As Boolean
     End If
     Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a. LogErr ima svoj On Error Resume Next i usput
+    ' obrise stanje greske, pa je poruka operateru ostajala prazna -- isti nalaz
+    ' koji je u d60b6706 vadjen sa deset mesta, pa ga ovaj modul nije smeo vratiti.
+    errDesc = Err.description
     LogErr "modScrStorno.PokreniAkciju"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
     Err.Clear
 End Function
 
@@ -823,7 +913,7 @@ End Function
 ' spisak posledica, i tek posle svesne potvrde ide drugi sa forceConfirm. Spisak
 ' se tako pravi PRE nego sto se ista promeni.
 Private Function StornoPoModu(ByVal mode As String) As Boolean
-    Dim res As Object, neDiraj As Boolean
+    Dim res As Object, neDiraj As Boolean, errDesc As String
     On Error GoTo EH
     ' Prekidac vazi samo tamo gde je i ponudjen; uz ISPRAVKU se palete prevezuju
     ' na novi dokument, pa se ne postuje ni ako je ostao ukljucen.
@@ -868,8 +958,12 @@ Private Function StornoPoModu(ByVal mode As String) As Boolean
     MsgBox CStr(res("message")), vbExclamation, APP_NAME
     Exit Function
 EH:
+    ' Opis se cita PRE LogErr-a. LogErr ima svoj On Error Resume Next i usput
+    ' obrise stanje greske, pa je poruka operateru ostajala prazna -- isti nalaz
+    ' koji je u d60b6706 vadjen sa deset mesta, pa ga ovaj modul nije smeo vratiti.
+    errDesc = Err.description
     LogErr "modScrStorno.StornoPoModu"
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
     Err.Clear
 End Function
 
@@ -982,7 +1076,21 @@ Private Function RezimZaTip(ByVal tip As String) As String
 End Function
 
 '--------------------------------------------------------------- KES
+' Ljuska ovo zove kad se PODACI promene (RefreshFromData, i posle sync-a).
+'
+' Cisti se CEO izbor, ne samo uvid. Kes odluke (mAkcije) je kljucevan po
+' tip|broj|docID -- dakle po DOKUMENTU, a ne po stanju podataka. Dok se brisao
+' samo mImpact, posle sync-a bi ostala STARA odluka: dokument koji je u 10:00
+' bio bez nizvodnog toka (pa je dobio samo "obican storno") zadrzao bi taj red
+' dugmadi i posle sync-a koji mu je doneo zbirnu, prijemnicu i palete. Operater
+' bi tako preskocio ceo izbor moda (ISPRAVKA / DUPLI / PONISTENJE / RESI
+' KASNIJE) samo zato sto je odluka izracunata pre promene podataka.
+' StornoRazlog to ne hvata -- on pita sme li se dokument stornirati, ne da li
+' sada treba framework ispravke.
+'
+' Zato posle promene podataka operater bira dokument PONOVO. To je jeftinije
+' od pola zadrzanog stanja koje niko ne moze da dokaze da je jos tacno.
 Public Sub Scr_ResetCache()
-    Set mImpact = Nothing
+    OcistiIzbor
     modUiData.ResetCache
 End Sub

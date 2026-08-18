@@ -193,6 +193,9 @@ Public Sub RunAllTests()
     RunOne 57
     RunOne 58
     RunOne 59
+    RunOne 60
+    RunOne 61
+    RunOne 62
 
     SetTestMode prevMode
     WriteResultFile
@@ -284,6 +287,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 57: TestName = "T_StornoEkran_KolonaIdentiteta"
         Case 58: TestName = "T_StornoEkran_SvakaListaVracaRedove"
         Case 59: TestName = "T_PrefillBezBroja_PredlaziBroj"
+        Case 60: TestName = "T_StornoImpact_PoIdentitetu"
+        Case 61: TestName = "T_StornoAkcije_RefreshInvalidiraOdluku"
+        Case 62: TestName = "T_StornoBezUvida_NemaAkcije"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -351,6 +357,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 57: T_StornoEkran_KolonaIdentiteta
         Case 58: T_StornoEkran_SvakaListaVracaRedove
         Case 59: T_PrefillBezBroja_PredlaziBroj
+        Case 60: T_StornoImpact_PoIdentitetu
+        Case 61: T_StornoAkcije_RefreshInvalidiraOdluku
+        Case 62: T_StornoBezUvida_NemaAkcije
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2353,9 +2362,9 @@ Private Sub T_Storno_UgovorIRadnje()
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|SVI|OTKUP|OTPREMNICA|ZBIRNA|PRIJEMNICA|AMB_ISPLATE|" & _
+    AssertEq kljucevi, "|LANAC|OTKUP|OTPREMNICA|ZBIRNA|PRIJEMNICA|AMB_ISPLATE|" & _
              "AMB_UPLATE|REVERSI|FAKTURA|IZVOD", _
-             "redosled i kljucevi lista -- 'Svi' je prva"
+             "redosled i kljucevi lista -- navigaciona je prva"
 
     ' Kljucevi lista JESU kljucevi tipova (STIP_*), pa prevodne tabele nema.
     ' Ako se razidju, Scr_Rows bi trazio tabelu za nepostojeci tip i tiho vratio
@@ -2498,6 +2507,112 @@ Private Sub T_PrefillBezBroja_PredlaziBroj()
                             "|omid=" & FX_STANICA & "|brdok=TEST-BR-1"
     AssertEq Trim$(CStr(zf.Controls("fgBrOtpr").Controls("fgBrOtprT").text)), "TEST-BR-1", _
              "broj koji prefill donese se ne pregazuje predlogom"
+End Sub
+' ============================================================
+' 60. Uvid je identity-scoped u CELOSTI, ne samo u lancu
+' ============================================================
+' Do v6-ui-143 je BuildStornoImpact provlacio docID kroz zaglavlje, lanac,
+' blokove i zastavice -- a PALETE i FAKTURU je i dalje trazio po BROJU:
+'
+'     Set d("palete")  = ImpactPalete(docType, broj)
+'     Set d("faktura") = ImpactFaktura(docType, broj)
+'
+' Pod kolizijom broja to znaci: zaglavlje, lanac i blokovi pokazuju izabran
+' dokument, a palete pokazuju palete OBA. Writer nizvodno mutira samo izabrani.
+' Ekran koji obecava "ovo su posledice" tvrdio bi posledice koje se nece desiti
+' -- tacno klasa greske koju je #198 devet rundi vadio iz poslovnog sloja.
+'
+' Fixture ima tacno taj par: PRJ-TEST-Z1 i PRJ-TEST-Z2 dele broj, imaju razlicite
+' kupce i SVOJE palete (PAL-TEST-Z1 = 10 gajbi / 100 kg, PAL-TEST-Z2 = 20 / 200).
+Private Sub T_StornoImpact_PoIdentitetu()
+    Dim m As Object, pal As Collection, sm As Object
+
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z1", "GEN-IMP-1"
+    StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
+
+    ' PREDUSLOV: po golom broju uvid stvarno vidi palete OBA dokumenta -- inace
+    ' test ne meri suzavanje nego prazan skup.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    Set pal = m("palete")
+    AssertEq pal.count, 2, "preduslov: po golom broju uvid nosi palete OBA dokumenta"
+
+    ' NAJVAZNIJE: sa identitetom uvid nosi SAMO palete izabranog dokumenta.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2")
+    Set pal = m("palete")
+    AssertEq pal.count, 1, "sa identitetom uvid nosi SAMO palete izabranog dokumenta"
+
+    ' I to bas njegove: Z2 nosi 20 gajbi / 200 kg, Z1 nosi 10 / 100.
+    Set sm = m("summary")
+    AssertEq CLng(sm("detachGajb")), 20, "zbir uticaja je zbir NJEGOVIH paleta"
+    AssertEq CDbl(sm("detachNeto")), 200#, "i njegovih kilograma"
+    AssertEq CLng(sm("paleteCount")), 1, "sazetak broji iste palete koje su prikazane"
+
+    ' Zaglavlje mora da opisuje isti dokument -- Z2 je kupca KUP-TEST-2.
+    AssertEq CStr(m("header")("partnerID")), "KUP-TEST-2", _
+             "zaglavlje opisuje IZABRAN dokument, ne prvi po broju"
+
+    ' Model koji je prosao mora i da se prijavi kao valjan.
+    AssertEq CBool(m("valid")), True, "kompletan uvid se prijavljuje kao valjan"
+End Sub
+
+' ============================================================
+' 61. Promena podataka ponistava vec izracunatu odluku
+' ============================================================
+' Red odluke se kesira po tip|broj|docID -- dakle po DOKUMENTU, ne po stanju
+' podataka. Dok je Scr_ResetCache brisao samo uvid, posle sync-a je ostajala
+' STARA odluka: dokument koji je u 10:00 bio bez nizvodnog toka (pa je dobio samo
+' "obican storno") zadrzao bi taj red dugmadi i posle sync-a koji mu je doneo
+' zbirnu, prijemnicu i palete. Operater bi tako preskocio ceo izbor moda.
+'
+' StornoRazlog to ne hvata: on pita sme li se dokument stornirati, ne da li sada
+' treba framework ispravke.
+Private Sub T_StornoAkcije_RefreshInvalidiraOdluku()
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+
+    ' Odluka se izracuna i kesira.
+    AssertEq (modScrStorno.Scr_BrojAkcija() > 0), True, _
+             "preduslov: izabran dokument ima red odluke"
+    AssertEq (Len(modScrStorno.Scr_OdlukaKes()) > 0), True, _
+             "preduslov: odluka je kesirana"
+
+    ' Promena podataka mora da je ponisti. NAJVAZNIJE u ovom testu.
+    modScrStorno.Scr_ResetCache
+    AssertEq modScrStorno.Scr_OdlukaKes(), "", _
+             "promena podataka ponistava kes odluke -- inace vazi odluka od pre sync-a"
+    AssertEq modScrStorno.Scr_IzabranDocID(), "", _
+             "i sam izbor, jer se nad zastarelim izborom ne sme odlucivati"
+    AssertEq modScrStorno.Scr_BrojAkcija(), 0, _
+             "bez izbora nema nijednog dugmeta za mutaciju"
+End Sub
+
+' ============================================================
+' 62. Bez uvida nema odluke (fail-closed)
+' ============================================================
+' Ceo smisao ovog ekrana je "prvo vidi posledice, pa odluci". Ako uvid ne uspe,
+' dugmad za mutaciju NE SMEJU da se ponude -- inace ekran pita isto sto je i
+' MsgBox pitao, samo bez posledica pred sobom.
+'
+' Scr_IzborTestSet postavlja izbor BEZ gradnje uvida, sto je tacno stanje posle
+' neuspelog BuildStornoImpact-a (mImpact ostaje Nothing).
+Private Sub T_StornoBezUvida_NemaAkcije()
+    ' NAJVAZNIJE PRVO: framework tip bez uvida ne nudi NIJEDNU radnju.
+    modScrStorno.Scr_IzborTestSet STIP_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, "GEN-IMP-2", ""
+    AssertEq modScrStorno.Scr_BrojAkcija(), 0, _
+             "framework dokument bez uvida ne nudi nijednu radnju"
+
+    ' Tip koji uvid i NEMA (otkup nije framework tip) i dalje nudi obican storno --
+    ' inace bi kapija zakljucala i ono sto uvid nikad nije ni imalo.
+    modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+    AssertEq modScrStorno.Scr_BrojAkcija(), 1, _
+             "tip bez uvida i dalje nudi obican storno"
+
+    ' Revers isto: nema uvid po prirodi (list u lancu), ali ima svoja dva izbora.
+    modScrStorno.Scr_IzborTestSet STIP_REVERSI, "REV-NEMA", "", DOK_TIP_OM_IZLAZ_KOOP
+    AssertEq modScrStorno.Scr_BrojAkcija(), 2, _
+             "revers nema uvid po prirodi, pa kapija ne sme da ga zakljuca"
+
+    modScrStorno.Scr_ResetCache
 End Sub
 
 ' ============================================================

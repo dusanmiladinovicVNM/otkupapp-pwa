@@ -627,6 +627,37 @@ SABOTAZE = {
         "T_StornoJeEkranNeRezim",
         "Storno nema upis -- forma i primarno dugme mu ne pripadaju",
     ),
+    # --- uvid kao kapija (recenzija PR #202) ------------------------------------
+    # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
+    # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer
+    # nizvodno mutira samo izabrani -- dakle 'ovo su posledice' nije bilo tacno.
+    "uvid-palete-po-broju": (
+        "modStornoImpact.bas",
+        "            Set ids = PrijemniceIDPoIdentitetu(broj, docID)\n",
+        "            Set ids = Nothing   ' SABOTAZA: palete se traze po broju\n",
+        "T_StornoImpact_PoIdentitetu",
+        "sa identitetom uvid nosi SAMO palete izabranog dokumenta",
+    ),
+    # Red odluke se kesira po DOKUMENTU, ne po stanju podataka. Ako promena podataka
+    # ne ponisti kes, vazi odluka izracunata PRE sync-a -- pa dokument koji je u
+    # medjuvremenu dobio nizvodni tok i dalje nudi samo 'obican storno'.
+    "odluka-prezivi-refresh": (
+        "modScrStorno.bas",
+        "Public Sub Scr_ResetCache()\n    OcistiIzbor\n",
+        "Public Sub Scr_ResetCache()\n    Set mImpact = Nothing   ' SABOTAZA\n",
+        "T_StornoAkcije_RefreshInvalidiraOdluku",
+        "promena podataka ponistava kes odluke -- inace vazi odluka od pre sync-a",
+    ),
+    # Ceo smisao ekrana je 'prvo vidi posledice, pa odluci'. Bez ove kapije se
+    # mutaciona dugmad nude i kad uvid nije uspeo -- to jest ekran pita isto sto je
+    # i MsgBox pitao, samo bez posledica pred sobom.
+    "odluka-bez-uvida": (
+        "modScrStorno.bas",
+        "    If dt <> FLOW_DOC_REVERS Then\n",
+        "    If False Then   ' SABOTAZA: odluka se nudi i bez uvida\n",
+        "T_StornoBezUvida_NemaAkcije",
+        "framework dokument bez uvida ne nudi nijednu radnju",
+    ),
     # Posle ispravke je forma bila popunjena a BROJ DOKUMENTA prazan: prefill ga
     # namerno ne donosi (stari broj pripada storniranom), a predlog se nije ni
     # racunao -- RefreshBrojPredlog visi o promeni stanice/datuma, a prefill oba
@@ -664,12 +695,12 @@ SABOTAZE = {
     # a tamo mora biti kraj reda. Placeno i to jednom -- run je visio do
     # timeout-a, a izlaz je bio "PALO" bez imena tvrdnje. Sirina 40 (umesto 64)
     # cini red jedinstvenim, da `--vrati` ima tacno jedan pogodak.
-    "storno-cip-svi-nestao": (
+    "storno-cip-lanac-nestao": (
         "modScrStorno.bas",
-        '        ST_SVI & "|OTKUI_SEG_ST_SVI|OTKUI_GRID_TITLE_ST_SVI|40", _\n',
+        '        ST_LANAC & "|OTKUI_SEG_ST_LANAC|OTKUI_GRID_TITLE_ST_LANAC|76", _\n',
         '        STIP_OTKUP & "|OTKUI_SEG_ST_OTKUP|OTKUI_GRID_TITLE_OTKUP|40", _\n',
         "T_Storno_UgovorIRadnje",
-        "redosled i kljucevi lista -- 'Svi' je prva",
+        "redosled i kljucevi lista -- navigaciona je prva",
     ),
     # Prost storno zbirne ne kaskadira, pa prijemnica ostaje vezana za storniranu
     # zbirnu. Bez te poruke operateru sledljivost visi bez upozorenja.

@@ -3037,10 +3037,67 @@ storno blokova ostaje sve-ili-ništa). Legacy `frmDokumenta` se ne dira.
 ### Verifikacija
 
 - `python tools\vba_check.py` → **čisto (191 fajl)**; `--self-test` → **29**.
-- `python tools\run_vba.py --suite RunAllTests` → **TESTS=59, FAIL=0** (bilo 55).
+- `python tools\run_vba.py --suite RunAllTests` → **TESTS=62, FAIL=0** (bilo 55).
 - `python tools\run_vba.py --all` → **12 suite-ova OK**, dve sync suite
   (`RunGoogleSyncSmokeSuite`, `RunMasterSyncSmokeSuite`) crvene **zatečeno**.
-- **Šest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+### Šta je zatvorila recenzija PR-a
+
+Recenzija je našla tri P1 — sva tri o istome: **novi ekran još nije imao
+fail-closed standard koji je poslovni sloj već dostigao.**
+
+1. **Uvid nije bio identity-aware u celosti.** `docID` je stizao do zaglavlja,
+   lanca, blokova i zastavica, a `ImpactPalete` i `ImpactFaktura` su i dalje
+   tražili po **broju**. Pod kolizijom broja to znači: zaglavlje pokazuje
+   izabran dokument, palete pokazuju palete **oba** — a writer nizvodno mutira
+   samo izabrani. Ekran koji obećava „ovo su posledice" tvrdio bi posledice koje
+   se neće desiti.
+   Sada: prijemnica se sužava kroz `tblPaletaStavka.PrijemnicaID` (skup ID-jeva,
+   jer Klasa I i II dele generaciju a imaju različit PK), otpremnica kroz `HLI`
+   nad svojom zbirnom, faktura kroz `HLI`. **Zbirna ostaje po broju** — stavke
+   nose `BrojZbirne`, ne `ZbirnaID`; ista granica šeme kao kod `FLOW_DOC_ZBIRNA`
+   u `ActiveBlocksForFlow`. To je prijavljeno kao granica, ne pokriveno
+   pogađanjem.
+2. **Ako uvid pukne, dugmad za mutaciju su se i dalje nudila.** `BuildStornoImpact`
+   je rezultat dodeljivao **pre** nego što ga izgradi, pa je pad na pola davao
+   parcijalan rečnik koji spolja izgleda ispravno; a red odluke se računao
+   nezavisno od uvida. Model sada nosi `valid`, koji se postavlja tek na kraju, i
+   `AkcijeRacun` je fail-closed: framework dokument bez valjanog uvida ne nudi
+   **nijednu** radnju. Tip koji uvid nema po prirodi (revers, otkup, novac) time
+   nije zaključan.
+3. **Keš odluke je preživljavao promenu podataka.** Ključ je `tip|broj|docID` —
+   dakle dokument, ne stanje podataka. `Scr_ResetCache` je brisao samo uvid, pa
+   je posle sync-a važila odluka od pre njega: dokument koji je u 10:00 bio bez
+   nizvodnog toka zadržao bi „običan storno" i pošto mu je sync doneo zbirnu,
+   prijemnicu i palete. `StornoRazlog` to ne hvata — on pita sme li se dokument
+   stornirati, ne da li sada treba framework ispravke. `Scr_ResetCache` sada čisti
+   **ceo izbor**: posle promene podataka operater bira dokument ponovo.
+
+Uz to, tri P2:
+
+- **`Err.description` posle `LogErr`-a** se vratio u novi modul, iako je iz
+  desetak mesta vađen u `d60b6706`. `LogErr` ima svoj `On Error Resume Next` i
+  usput briše stanje greške, pa je poruka operateru ostajala prazna. Opis se sada
+  čita **pre** loga, u svim handlerima; `IzborReda` grešku i **prikazuje**, umesto
+  da klik na red tiho ne uradi ništa.
+- **„Svi" nije bio svi.** Izvor (`GetActiveDocumentsForStorno`) pokriva tri
+  framework tipa, a `TipIzNaziva` ume da razreši ista tri — otkup, novac, revers,
+  faktura i izvod nisu tu. Naziv je obećavao globalnu pretragu. Lista se sada zove
+  **„Lanac robe"** (`OTKUI_SEG_ST_LANAC`), što je tačno ono što pokriva.
+- **Build pečati su lagali.** `OTKUI_BUILD`, `SCRDOK_BUILD` i `UISCR_BUILD` su
+  ostali na `v6-ui-121` iako su ta tri modula najviše promenjena — a baš njih
+  `OtkupUI_SelfCheck` prijavljuje na pitanje „da li je klijentu uvezena nova
+  verzija". Podignuti su na `v6-ui-143`.
+
+**Tri nova behavioral testa** (60–62) mere baš tu granicu, koju 59 dotadašnjih
+nije diralo: nijedan nije ni pozivao `BuildStornoImpact`.
+
+- **60** — dva dokumenta istog broja, različite palete: uvid izabranog sadrži
+  isključivo njegove posledice (preduslov dokazuje da po broju vidi oba).
+- **61** — odluka izračunata pre promene podataka ne sme da preživi `Scr_ResetCache`.
+- **62** — framework dokument bez uvida ne nudi nijednu radnju; revers i otkup,
+  koji uvid nemaju po prirodi, i dalje nude svoje.
+
+- **Devet novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u
