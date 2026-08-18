@@ -49,6 +49,12 @@ Public Const SCRST_BUILD As String = "v6-ui-143"
 ' tabelu efekta po modu, palete i red odluke.
 Private Const ST_ZONA_H As Single = 196
 Private Const ST_EF_REDOVA As Long = 5      ' redova tabele "efekat po modu"
+
+' Sirine prve dve kolone tabele efekta. Fiksne su namerno: nose naziv dokumenta
+' i broj ili brojac u zagradi -- kratko i predvidivo. Sve preko toga pripada
+' napomeni, koja jedina opisuje posledicu.
+Private Const ST_EF_W_DOK  As Single = 150
+Private Const ST_EF_W_INFO As Single = 120
 Private Const ST_PAL_REDOVA As Long = 3     ' redova detalja paleta
 
 ' Kljuc navigacione liste. Nije tip dokumenta nego pogled PREKO tipova, pa ne
@@ -316,16 +322,30 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     Dim i As Long, r As Long, c As Long, x2 As Single, wl As Single
     On Error Resume Next
     ' Leva kolona uzima 58% sirine; desna pocinje odatle. Tabela efekta ima tri
-    ' kolone: dokument (fiksno), info (fiksno), napomena (uzima ostatak).
+    ' kolone: dokument (fiksno), info (fiksno), napomena (uzima OSTATAK).
+    '
+    ' Ovako je i pisalo, ali kod je sve tri delio na trecine -- pa je napomena
+    ' dobijala trecinu umesto ostatka i sekla se na pola recenice:
+    '   "DUPLIKAT i PONISTENJE: preracun, storno ako ostane prazn"
+    ' Prve dve kolone nose kratak i predvidiv sadrzaj (naziv dokumenta, broj ili
+    ' brojac u zagradi), pa im fiksna sirina dostaje; trecoj je duzina neogranicena
+    ' i ona je jedina koja opisuje POSLEDICU -- zbog nje ekran i postoji.
     wl = (w - PAD * 2) * 0.58
     x2 = PAD + wl + PAD
     z.Controls("stDok").width = wl
     z.Controls("stMeta").width = wl
+    Dim wNap As Single
+    wNap = wl - ST_EF_W_DOK - ST_EF_W_INFO - 6
+    ' Na uskom ekranu ostatak moze da ispadne negativan; tada napomena dobija
+    ' minimum i preklopi se sa susedom -- i dalje bolje nego sirina nula.
+    If wNap < 120 Then wNap = 120
     For r = 0 To ST_EF_REDOVA - 1
-        For c = 0 To 2
-            z.Controls("stE" & r & "_" & c).Left = PAD + c * (wl / 3)
-            z.Controls("stE" & r & "_" & c).width = (wl / 3) - 6
-        Next c
+        z.Controls("stE" & r & "_0").Left = PAD
+        z.Controls("stE" & r & "_0").width = ST_EF_W_DOK - 6
+        z.Controls("stE" & r & "_1").Left = PAD + ST_EF_W_DOK
+        z.Controls("stE" & r & "_1").width = ST_EF_W_INFO - 6
+        z.Controls("stE" & r & "_2").Left = PAD + ST_EF_W_DOK + ST_EF_W_INFO
+        z.Controls("stE" & r & "_2").width = wNap
     Next r
 
     z.Controls("stPalCap").Left = x2

@@ -3625,3 +3625,22 @@ Regresija ovog tipa ubuduće stiže kao `WARN` linija, ne kao pritužba operater
 `COMPILE` → `NEJASNO`, ostaje ručna kapija.
 
 Ubrzanje se **ne prijavljuje kao izmereno** dok ne stigne merenje sa terena.
+
+### Napomena o efektu se više ne seče
+
+Tabela „Efekat storna po modu" ima tri kolone, a komentar iznad rasporeda je već
+opisivao pravo ponašanje: dokument fiksno, info fiksno, **napomena uzima ostatak**.
+Kod je ipak sve tri delio na trećine, pa je napomena dobijala trećinu i sekla se
+na pola rečenice:
+
+```
+DUPLIKAT i PONISTENJE: preracun, storno ako ostane prazn
+DUPLIKAT: ostaje osirocena (rucno)  |  PONISTENJE: stornir
+```
+
+Prve dve kolone nose kratak i predvidiv sadržaj — naziv dokumenta i broj ili
+brojač u zagradi — pa im fiksna širina dostaje. Trećoj je dužina neograničena i
+ona je jedina koja opisuje **posledicu**; zbog nje ekran i postoji.
+
+Automatskog testa nema: raspored se meri u pikselima nad formom koju harness
+gradi bez `.Show`. Ostaje smoke — nijedna napomena se ne sme završiti sečenjem.
