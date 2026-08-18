@@ -207,6 +207,7 @@ Public Sub RunAllTests()
     RunOne 71
     RunOne 72
     RunOne 73
+    RunOne 74
 
     SetTestMode prevMode
     WriteResultFile
@@ -312,6 +313,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 71: TestName = "T_Oporavak_OdbaciIspravku_PoIdentitetu"
         Case 72: TestName = "T_Oporavak_OdbaciIspravku_GasiSamoSvoj"
         Case 73: TestName = "T_ImpactPalete_ZaglavljeIzPraveVrste"
+        Case 74: TestName = "T_StornoEfekat_TekstIzKataloga"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -393,6 +395,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 71: T_Oporavak_OdbaciIspravku_PoIdentitetu
         Case 72: T_Oporavak_OdbaciIspravku_GasiSamoSvoj
         Case 73: T_ImpactPalete_ZaglavljeIzPraveVrste
+        Case 74: T_StornoEfekat_TekstIzKataloga
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3410,6 +3413,62 @@ Private Sub T_ImpactPalete_ZaglavljeIzPraveVrste()
     AssertEq CLng(d("thisGajb")), 20, "zbir stavki OVOG dokumenta ostaje svoj racun"
     AssertEq CDbl(d("thisNeto")), 200#, "isto i za kilograme"
 End Sub
+
+' ============================================================
+' 74. Efekat storna se sklapa IZ KATALOGA, ne iz literala
+' ============================================================
+' Tekstovi posledica su do v6-ui-148 bili ASCII literali u modStornoFlow. Zato su
+' i bili pisani telegrafski ("preracun, NE pada") -- bez dijakritike se poslovna
+' recenica ne moze napisati, a VBA izvor mora ostati ASCII.
+'
+' Selidba u katalog uvodi nov nacin da se ekran pokvari TIHO: kljuc koji katalog
+' ne zna vraca prazan string, pa najvaznija kolona ekrana ostane prazna, bez
+' greske i bez traga. vba_check hvata kljuc bez para u UpsertPoruke, ali ne i
+' katalog koji nije osvezen -- a to je bas ono sto se desava posle importa.
+Private Sub T_StornoEfekat_TekstIzKataloga()
+    Dim ch As Collection, red As Variant
+    Dim i As Long, spojenih As Long, razdvojenih As Long
+
+    ' Katalog se osvezava izricito: test meri TABELU poruka, a ne kes koji je
+    ' zatekao (isti razlog kao u testu 69).
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    ' PREDUSLOV: katalog stvarno nosi tekst. Da kljuc nedostaje, sve tvrdnje ispod
+    ' bi poredile prazno sa praznim i prosle.
+    AssertEq (Len(Poruka("STEF_STORNO_AMB")) > 10), True, _
+             "katalog nosi tekst efekta, nije prazan kljuc"
+    AssertEq (Len(Poruka("STEF_PRE_OBA")) > 5), True, _
+             "katalog nosi spojen prefiks odluke"
+
+    Set ch = modStornoFlow.GetStornoChainRows(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    AssertEq (ch.count > 0), True, "lanac ima bar jedan red"
+
+    ' NAJVAZNIJE: napomena prvog reda je sklopljena iz kataloga. Prvi red je sam
+    ' dokument, a njegov efekat je isti za oba osnova -- pa mora doci kroz SPOJEN
+    ' prefiks, ne kao dva razdvojena.
+    red = ch(1)
+    AssertEq CStr(red(2)), Poruka("STEF_PRE_OBA") & Poruka("STEF_STORNO_AMB"), _
+             "napomena se sklapa iz kataloga, sa spojenim prefiksom"
+
+
+    ' I obrnut slucaj: gde se osnovi RAZLIKUJU moraju se videti OBA prefiksa.
+    ' Bez ove tvrdnje bi ChainEff koji uvek spaja prosao neprimecen. Ne trazi se
+    ' odredjen red -- lanac otpremnice ih nosi oba, a redosled nije predmet ovog
+    ' testa.
+    Set ch = modStornoFlow.GetStornoChainRows(FLOW_DOC_OTPREMNICA, FX_BROJ_OTP)
+    For i = 1 To ch.count
+        red = ch(i)
+        If InStr(CStr(red(2)), Poruka("STEF_PRE_OBA")) = 1 Then spojenih = spojenih + 1
+        If InStr(CStr(red(2)), Poruka("STEF_PRE_DUPLI")) = 1 And _
+           InStr(CStr(red(2)), Poruka("STEF_PRE_PONIST")) > 1 Then razdvojenih = razdvojenih + 1
+    Next i
+    AssertEq (spojenih > 0), True, _
+             "isti efekat za oba osnova ide kroz JEDAN spojen prefiks"
+    AssertEq (razdvojenih > 0), True, _
+             "razlicit efekat nosi OBA prefiksa u istom redu"
+End Sub
+
 
 
 ' Jedno polje contexta, po CorrectionID.

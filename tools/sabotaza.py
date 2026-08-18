@@ -1177,6 +1177,19 @@ SABOTAZE = {
         "T_ImpactPalete_ZaglavljeIzPraveVrste",
         "zaglavlje palete dolazi iz reda BAS te palete",
     ),
+    # Efekat posledice se od v6-ui-148 sklapa iz kataloga, sa prefiksom koji se zove
+    # ISTO kao dugme odluke. NAPOMENA: slucaj 'kljuc ne postoji u katalogu' ovde
+    # NEMA sabotazu -- hvata ga vba_check (provera PORUKA) jos pre nego sto suite
+    # krene, pa bi sabotaza pala na tudjoj kapiji i lazno tvrdila da je meri test.
+    # Ako se prefiksi spoje i kad se osnovi razlikuju, operater cita da su posledice
+    # iste -- a nisu, i bira na osnovu toga.
+    "efekat-uvek-spojen-prefiks": (
+        "modStornoFlow.bas",
+        "    If StrComp(Trim$(dup), Trim$(pon), vbTextCompare) = 0 Then\n",
+        "    If True Then   ' SABOTAZA: posledice uvek izgledaju isto\n",
+        "T_StornoEfekat_TekstIzKataloga",
+        "razlicit efekat nosi OBA prefiksa, ne jedan spojen",
+    ),
 }
 
 

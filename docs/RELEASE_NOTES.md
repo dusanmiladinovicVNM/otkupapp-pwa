@@ -3644,3 +3644,85 @@ ona je jedina koja opisuje **posledicu**; zbog nje ekran i postoji.
 
 Automatskog testa nema: raspored se meri u pikselima nad formom koju harness
 gradi bez `.Show`. Ostaje smoke — nijedna napomena se ne sme završiti sečenjem.
+
+---
+
+## v2.51.0 — `v6-ui-148` · poslovni jezik sekcije „Posledice po osnovu storna"
+
+Operater: *„previše je laički napisano, nije uopšte poslovno."* Tačno — i uzrok
+nije bio u izboru reči nego u tome **gde su reči stajale**.
+
+Svi ti tekstovi bili su **tvrdo ukucani ASCII literali u `modStornoFlow`**. VBA
+izvor mora ostati ASCII, pa se poslovna rečenica u njemu ne može ni napisati:
+bez č/ć/š/ž/đ ostaje telegrafski zapis („preracun, NE pada", „ako ih cekiras").
+Selidba u katalog (`modPoruke` + `ChrW`) je zato preduslov, ne kozmetika.
+
+### Osnovi storna — imenovani po poslovnom događaju
+
+| Pre | Sada |
+|---|---|
+| Pogrešan unos | **Ispravka dokumenta** |
+| Duplikat | **Dupli unos** |
+| Ništa se nije desilo | **Poništenje prometa** |
+| Reši kasnije | **Odloženo rešavanje** |
+| Storniraj | **Storno bez zamene** |
+| Ispravka *(revers)* | **Zamena reversa** |
+
+Objašnjenja ispod dugmadi su **namerno kratka** — labela ima 168pt, a duga
+rečenica bi se sekla. Puna formulacija posledice stoji u tabeli iznad, koja širinu
+ima.
+
+### Posledice po dokumentu
+
+| Pre | Sada |
+|---|---|
+| `stornira se (uz ambalazu)` | stornira se, sa pripadajućom ambalažom |
+| `preracun, storno ako ostane prazna (jedini vlasnik)` | preračunava se; stornira se ako ostane bez otpremnica |
+| `preracun, NE pada (deljena - sestre ostaju)` | preračunava se; ostaje aktivna jer nosi i druge otpremnice |
+| `preracun, storno ako padne na 0` | preračunava se; stornira se ako ostane bez količine |
+| `ostaje osirocena (rucno)` | ostaje osirotela; prevezuje se ručno |
+| `odvezuju se (prezivljavaju)` | odvezuju se od zbirne i ostaju aktivne |
+| `ostaje netaknuta` | ostaje nepromenjena |
+| `skidaju se` | odvezuju se sa palete |
+| `oslobadja se (stavke osirocene)` | oslobađa se; stavke ostaju osirotele |
+| `Samostalni - storniraju se samo ako ih cekiras (svaki mod)` | evidentiraju se zasebno; storniraju se samo po izboru iz liste |
+| `Stornira se (saldo se koriguje, bez kontra-stavke)` | stornira se; saldo se koriguje bez kontra-stavke |
+
+**Prefiksi se sada zovu isto kao dugmad**: `DUPLIKAT:` / `PONISTENJE:` →
+`DUPLI UNOS:` / `PONIŠTENJE:`. Do sada se nisu poklapali — u tabeli je pisalo
+`PONISTENJE`, a dugme je glasilo „Ništa se nije desilo", pa je operater morao sam
+da poveže redak sa dugmetom na koje se odnosi.
+
+Naslov sekcije: `EFEKAT STORNA PO MODU` → **`POSLEDICE PO OSNOVU STORNA`**.
+„Mod" je programerski; četiri izbora su poslovni **osnovi**.
+
+**Zatečeni domenski termini ostaju** — „osirotela", „prevezivanje", „zbirna",
+„otkupni blok" su jezik ove aplikacije i menjati ih bilo bi štetnije od dobitka.
+
+### Test 74 — selidba u katalog uvodi nov tihi kvar
+
+Ključ koji katalog ne zna vraća **prazan string**: najvažnija kolona ekrana ostane
+prazna, bez greške i bez traga. `vba_check` (provera `PORUKA`) hvata ključ bez para
+u `UpsertPoruke` — ali ne i katalog koji nije osvežen, a to je baš ono što se
+dešava posle importa.
+
+`T_StornoEfekat_TekstIzKataloga` zato traži da katalog stvarno nosi tekst (ne
+prazan ključ), pa da se napomena sklopi iz njega, i to u **oba** oblika: jedan
+spojen prefiks kad je efekat isti za oba osnova, dva kad se razlikuju.
+
+Sabotaža `efekat-uvek-spojen-prefiks` uklanja poređenje u `ChainEff` i pada po
+imenu: *„razlicit efekat nosi OBA prefiksa u istom redu — očekivano [True],
+dobijeno [False]"*.
+
+Slučaj „ključ ne postoji u katalogu" **nema** sabotažu, i to namerno: hvata ga
+`vba_check` još pre nego što suite krene, pa bi sabotaža pala na tuđoj kapiji i
+lažno tvrdila da je meri test.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test čisto (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (74)** · pun set **ZELENO** (11 suite-ova) ·
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Isti tekst vidi i **legacy panel** `frmDokumenta` — model je zajednički
+(`BuildStornoImpact`), pa se promena ne razilazi između dva ekrana.

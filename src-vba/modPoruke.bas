@@ -712,7 +712,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRST_ERR_UVID", ChrW(10007) & " Posledice se nisu u" & ChrW(269) & _
               "itale " & ChrW(8212) & " odluka nije mogu" & ChrW(263) & "a"
     UpsertRow lo, existing, "OTKUI_SCRST_NEMA", "Izaberi red u listi da vidi" & ChrW(353) & " posledice"
-    UpsertRow lo, existing, "OTKUI_SCRST_EFEKAT", "EFEKAT STORNA PO MODU"
+    UpsertRow lo, existing, "OTKUI_SCRST_EFEKAT", "POSLEDICE PO OSNOVU STORNA"
     UpsertRow lo, existing, "OTKUI_SCRST_PALETE", "PALETE"
     UpsertRow lo, existing, "OTKUI_SCRST_BEZ_PALETA", "nema vezanih paleta"
     UpsertRow lo, existing, "OTKUI_SCRST_NEDIRAJ", "Ne diraj palete"
@@ -720,18 +720,43 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' cetiri moda: natpis dugmeta + objasnjenje ISPOD njega. Isti tekst koji je
     ' do v6-ui-143 zivotario u dva MsgBox-a (STORNO_ASK_MOD_1 / _2), samo sto
     ' se sada sva cetiri odgovora vide ISTOVREMENO, uz posledice iznad.
-    UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Pogre" & ChrW(353) & "an unos"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj " & ChrW(8212) & " storniraj pa unesi ispravan"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_DUPLI", "Duplikat"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_DUPLI", "nikad nije trebalo da postoji " & ChrW(8212) & " bez zamene"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_PONISTI", "Ni" & ChrW(353) & "ta se nije desilo"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_PONISTI", "fizi" & ChrW(269) & "ki tok se poni" & ChrW(353) & "tava"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_KASNIJE", "Re" & ChrW(353) & "i kasnije"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_KASNIJE", "zapamti kao nedovr" & ChrW(353) & "eno"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_STORNO", "Storniraj"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_STORNO", "obi" & ChrW(269) & "an storno, bez zamene"
-    UpsertRow lo, existing, "OTKUI_SCRST_B_REV_ISPR", "Ispravka"
-    UpsertRow lo, existing, "OTKUI_SCRST_H_REV_ISPR", "storniraj stari, unesi novi (veza staro" & ChrW(8594) & "novo)"
+    ' Natpis imenuje POSLOVNI OSNOV storna, ne osecaj operatera. Objasnjenje ispod
+    ' je kratko jer labela ima 168pt -- puna formulacija posledice stoji u tabeli
+    ' efekata iznad, koja sirinu ima.
+    UpsertRow lo, existing, "OTKUI_SCRST_B_ISPRAVKA", "Ispravka dokumenta"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_ISPRAVKA", "isti doga" & ChrW(273) & "aj, zamenski dokument"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_DUPLI", "Dupli unos"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_DUPLI", "evidentiran dvaput, bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_PONISTI", "Poni" & ChrW(353) & "tenje prometa"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_PONISTI", "promet se nije dogodio"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_KASNIJE", "Odlo" & ChrW(382) & "eno re" & ChrW(353) & "avanje"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_KASNIJE", "evidentira se kao nedovr" & ChrW(353) & "en"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_STORNO", "Storno bez zamene"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_STORNO", "stornira se, bez zamenskog dokumenta"
+    UpsertRow lo, existing, "OTKUI_SCRST_B_REV_ISPR", "Zamena reversa"
+    UpsertRow lo, existing, "OTKUI_SCRST_H_REV_ISPR", "veza staro" & ChrW(8594) & "novo"
+
+    ' EFEKTI PO DOKUMENTU. Do v6-ui-148 su ziveli kao ASCII literali u
+    ' modStornoFlow, pa su i pisani telegrafski -- bez dijakritike se poslovna
+    ' recenica ne moze napisati. Ovde dobijaju svoj oblik.
+    UpsertRow lo, existing, "STEF_PRE_OBA", "DUPLI UNOS i PONI" & ChrW(352) & "TENJE: "
+    UpsertRow lo, existing, "STEF_PRE_DUPLI", "DUPLI UNOS: "
+    UpsertRow lo, existing, "STEF_PRE_PONIST", "PONI" & ChrW(352) & "TENJE: "
+    UpsertRow lo, existing, "STEF_STORNO_AMB", "stornira se, sa pripadaju" & ChrW(263) & "om ambala" & ChrW(382) & "om"
+    UpsertRow lo, existing, "STEF_STORNIRA", "stornira se"
+    UpsertRow lo, existing, "STEF_STORNIRAJU", "storniraju se"
+    UpsertRow lo, existing, "STEF_ZBR_JEDINI", "prera" & ChrW(269) & "unava se; stornira se ako ostane bez otpremnica"
+    UpsertRow lo, existing, "STEF_ZBR_DELJENA", "prera" & ChrW(269) & "unava se; ostaje aktivna jer nosi i druge otpremnice"
+    UpsertRow lo, existing, "STEF_ZBR_NULA", "prera" & ChrW(269) & "unava se; stornira se ako ostane bez koli" & ChrW(269) & "ine"
+    UpsertRow lo, existing, "STEF_PRJ_SIROCE", "ostaje osirotela; prevezuje se ru" & ChrW(269) & "no"
+    UpsertRow lo, existing, "STEF_PAL_SIROCE", "ostaju osirotele; prevezuju se ru" & ChrW(269) & "no"
+    UpsertRow lo, existing, "STEF_OTP_ODVEZ", "odvezuju se od zbirne i ostaju aktivne"
+    UpsertRow lo, existing, "STEF_NEPROM", "ostaje nepromenjena"
+    UpsertRow lo, existing, "STEF_NEPROM_MN", "ostaju nepromenjene"
+    UpsertRow lo, existing, "STEF_PAL_ODVEZ", "odvezuju se sa palete"
+    UpsertRow lo, existing, "STEF_FAK_OSLOB", "osloba" & ChrW(273) & "a se; stavke ostaju osirotele"
+    UpsertRow lo, existing, "STEF_BLOK_SAM", "evidentiraju se zasebno; storniraju se samo po izboru iz liste"
+    UpsertRow lo, existing, "STEF_REVERS", "stornira se; saldo se koriguje bez kontra-stavke"
     ' natpisi prekidaca tipova u Stornu - kratki, jer ih je deset u jednom redu
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTKUP", "Otkupni"
     UpsertRow lo, existing, "OTKUI_SEG_ST_OTP", "Otpremnice"
