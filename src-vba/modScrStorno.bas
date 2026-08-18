@@ -742,7 +742,9 @@ Private Function GradiUvid() As Object
     If Len(dt) = 0 Then Exit Function
     If dt = FLOW_DOC_REVERS Then Exit Function
     BeginTableCache
-    Set res = modStornoImpact.BuildStornoImpact(dt, mSelBroj, mSelOpcija, mSelDocID)
+    ' strict: ekran na osnovu ovog modela nudi MUTACIJU, pa "ne znam" ne sme da
+    ' prodje kao "nema". Legacy panel istog modela ostaje ne-strict.
+    Set res = modStornoImpact.BuildStornoImpact(dt, mSelBroj, mSelOpcija, mSelDocID, True)
     EndTableCache
     ' Model koji nije kompletan NE prolazi kao uvid. BuildStornoImpact vraca
     ' recnik i kad pukne na pola (valid = False) -- bez ove provere bi ekran

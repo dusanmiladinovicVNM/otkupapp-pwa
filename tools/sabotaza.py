@@ -633,7 +633,7 @@ SABOTAZE = {
     # mutaciju, iako je tacan odgovor 'ne znam da li ih ima'.
     "uvid-guta-necitljivo": (
         "modStornoImpact.bas",
-        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, True)\n",
+        "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, strict)\n",
         "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids)   ' SABOTAZA\n",
         "T_StornoImpact_SchemaDriftJeInvalidan",
         "necitljiva paletna sekcija cini CEO uvid nevalidnim",
@@ -643,10 +643,29 @@ SABOTAZE = {
     # posle oznacava kao valid, pa nizvodno izgleda kao pouzdan pregled posledica.
     "identitet-degradira-na-broj": (
         "modStornoImpact.bas",
-        "                If Len(Trim$(docID)) > 0 Then\n",
+        "                If strict And Len(Trim$(docID)) > 0 Then\n",
         "                If False Then   ' SABOTAZA: identitet pada na broj\n",
         "T_StornoImpact_IdentitetNeDegradira",
         "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj",
+    ),
+    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
+    # rundu duze: bez kolone OtkupID spisak blokova ispadne prazan, sto operateru
+    # znaci 'nema pogodjenih blokova' -- nad odlukom koja blokove STORNIRA.
+    # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
+    # rundu duze: bez strict-a GetBlokOtkupIDs proguta drift, vrati prazan skup,
+    # GetStornoBlockRows izadje na 'ids.count = 0' PRE svoje kapije -- i uvid
+    # zavrsi kao valid sa praznim spiskom. Operateru to znaci 'nema pogodjenih
+    # blokova', nad odlukom koja blokove STORNIRA.
+    #
+    # Sabotaza gadja bas propagaciju, ne kapiju ispod nje: kapija u
+    # GetStornoBlockRows se na ovom putu i ne dostigne, pa bi njeno gasenje bilo
+    # zeleno-bez-crvenog (zamka 5).
+    "uvid-blok-sekcija-guta": (
+        "modStornoFlow.bas",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID), strict)\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
+        "T_StornoImpact_BlokSekcijaDriftJeInvalidna",
+        "necitljiva block sekcija obara CEO uvid",
     ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.

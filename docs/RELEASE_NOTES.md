@@ -3138,7 +3138,28 @@ Dva nova testa mere sam ugovor, a ne njegovu posledicu:
 - **64** — identitet koji ne postoji obara uvid; bez identiteta uvid i dalje radi
   po broju i tada legitimno vidi oba dokumenta.
 
-- **Jedanaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+**Strict ide do dna, ne do granice modula.** Prva verzija `valid` ugovora je
+zaustavljala gutanje u `modStornoImpact`, a tri sekcije dolaze iz `modStornoFlow`
+— i tamo je fail-open živeo još jednu rundu:
+
+```
+ScanPrijemnica pukne  ->  GetChainFlags proguta  ->  default hasDependents=False
+                      ->  BuildStornoImpact nastavi  ->  valid = True
+```
+
+Takav uvid je opasniji od praznog: većina podataka je tačna, pa nema razloga za
+sumnju. `strict` se sada provlači kroz **svih sedam putanja** — `GetChainFlags`,
+`GetStornoChainRows`, `GetStornoBlockRows`, `ScanOtpremnica`, `ScanZbirna`,
+`ScanPrijemnica`, `ActiveBlocksForFlow` i `GetBlokOtkupIDs`. Podrazumevano je
+`False`, pa legacy `frmDokumenta`, koji zove isti model za svoj panel i **ne
+čita** `valid`, ostaje netaknut; ekran Storno traži `strict = True`.
+
+- **65** — kolona `OtkupID` se stvarno preimenuje, pa se traži `valid = False`.
+  Test koristi generaciju **B**, ne A: test 51 stornira dokument generacije A
+  zajedno sa njegovim blokom, pa bi spisak za A do ovog testa bio prazan — a
+  prazan i nečitljiv spisak su baš ono što ovaj test razlikuje.
+
+- **Dvanaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 - `COMPILE` → **`NEJASNO`** — ostaje ručna kapija.
 
 Dve zamke iz `tools/sabotaza.py` naplaćene su ponovo, pa su obe sada zapisane u

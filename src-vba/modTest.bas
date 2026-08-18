@@ -198,6 +198,7 @@ Public Sub RunAllTests()
     RunOne 62
     RunOne 63
     RunOne 64
+    RunOne 65
 
     SetTestMode prevMode
     WriteResultFile
@@ -294,6 +295,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 62: TestName = "T_StornoBezUvida_NemaAkcije"
         Case 63: TestName = "T_StornoImpact_SchemaDriftJeInvalidan"
         Case 64: TestName = "T_StornoImpact_IdentitetNeDegradira"
+        Case 65: TestName = "T_StornoImpact_BlokSekcijaDriftJeInvalidna"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -366,6 +368,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 62: T_StornoBezUvida_NemaAkcije
         Case 63: T_StornoImpact_SchemaDriftJeInvalidan
         Case 64: T_StornoImpact_IdentitetNeDegradira
+        Case 65: T_StornoImpact_BlokSekcijaDriftJeInvalidna
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -2645,7 +2648,7 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i ima palete. Bez nje
     ' bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2")
+                                             "", "GEN-IMP-2", True)
     AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
     imaoPalete = (m("palete").count > 0)
     AssertEq imaoPalete, True, "pozitivna kontrola: dokument stvarno ima paletu"
@@ -2654,7 +2657,7 @@ Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     On Error GoTo VRATI
     lo.ListColumns(COL_PALS_PRIJEMNICA_ID).name = COL_PALS_PRIJEMNICA_ID & "_DRIFT"
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-IMP-2")
+                                             "", "GEN-IMP-2", True)
     validPodDriftom = CBool(m("valid"))
 VRATI:
     On Error Resume Next
@@ -2689,16 +2692,64 @@ Private Sub T_StornoImpact_IdentitetNeDegradira()
     ' uraditi tacno jedna stvar: stati. Povratak na broj bi dao palete OBA
     ' dokumenta, i to unutar modela koji se posle oznacava kao valid.
     Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
-                                             "", "GEN-NE-POSTOJI")
+                                             "", "GEN-NE-POSTOJI", True)
     AssertEq CBool(m("valid")), False, _
              "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj"
 
     ' Bez identiteta uvid i dalje radi po broju -- zatecen zapis nema generaciju,
     ' pa je broj sve sto postoji. Kapija ne sme da zakljuca ni taj slucaj.
-    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA)
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "", True)
     AssertEq CBool(m("valid")), True, _
              "bez identiteta uvid i dalje radi po broju (zatecen zapis)"
     AssertEq m("palete").count, 2, "i tada legitimno vidi oba dokumenta tog broja"
+End Sub
+' ============================================================
+' 65. Necitljiva BLOCK sekcija obara ceo uvid
+' ============================================================
+' Test 63 je pokrio paletnu sekciju, koju cita modStornoImpact. Block sekcija
+' dolazi iz modStornoFlow (GetStornoBlockRows -> ActiveBlocksForFlow), i tamo je
+' fail-open obrazac ziveo jos jednu rundu duze:
+'
+'     If cId = 0 Then Exit Function        ' nedostaje OtkupID
+'     EH: LogErr ... : End Function        ' greska -> prazan spisak
+'
+' Za operatera to znaci poruku "nema pogodjenih blokova" nad odlukom koja
+' blokove STORNIRA. Prazan spisak sme da znaci samo "uspesno sam proverio i
+' nema ih", nikad "ne umem da proverim".
+'
+' Drift se pravi STVARNO (preimenovanje kolone), i sema se vraca u istom testu.
+Private Sub T_StornoImpact_BlokSekcijaDriftJeInvalidna()
+    Dim lo As ListObject, m As Object
+    Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoBlokove As Boolean
+
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-A", "GEN-BLK-B"
+    StampGeneraciju TBL_OTPREMNICA, COL_OTP_ID, "OTP-BLK-B", "GEN-BLK-B"
+
+    ' POZITIVNA KONTROLA: nad zdravom semom uvid je valjan i blokovi POSTOJE.
+    ' Bez nje bi test prosao i kad BuildStornoImpact uvek vraca valid = False.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    AssertEq CBool(m("valid")), True, "pozitivna kontrola: zdrava sema daje valjan uvid"
+    imaoBlokove = (m("blocks").count > 0)
+    AssertEq imaoBlokove, True, "pozitivna kontrola: dokument stvarno ima otkupni blok"
+
+    Set lo = GetTable(TBL_OTKUP)
+    On Error GoTo VRATI
+    lo.ListColumns(COL_OTK_ID).name = COL_OTK_ID & "_DRIFT"
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_OTPREMNICA, FX_OTPREMNICA_BLOK, _
+                                             "", "GEN-BLK-B", True)
+    validPodDriftom = CBool(m("valid"))
+VRATI:
+    On Error Resume Next
+    lo.ListColumns(COL_OTK_ID & "_DRIFT").name = COL_OTK_ID
+    On Error GoTo 0
+    semaVracena = (GetColumnIndex(TBL_OTKUP, COL_OTK_ID) > 0)
+
+    ' NAJVAZNIJE: necitljiva block sekcija obara CEO uvid.
+    AssertEq validPodDriftom, False, "necitljiva block sekcija obara CEO uvid"
+    ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
+    AssertEq semaVracena, True, "sema je vracena posle testa"
 End Sub
 
 ' ============================================================

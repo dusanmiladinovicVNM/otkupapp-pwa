@@ -37,9 +37,17 @@ Private Const MOD_NAME As String = "modStornoImpact"
 ' ekrana ("prvo vidi posledice, pa odluci"). Sada svaka sekcija mora da se
 ' izgradi, i tek onda se "valid" postavlja na True; pozivalac koji ga ne proveri
 ' dobija recnik ciji je valid False.
+' strict = "valid znaci NESTO". Kad je True, svih sedam sekcija cita se bez
+' gutanja: schema drift, necitljiva tabela i greska u prolazu obaraju ceo uvid
+' umesto da vrate prazno. Trazi ga ekran Storno, jer na osnovu ovog modela nudi
+' MUTACIJU -- "ne znam da li ima paleta" ne sme da prodje kao "nema paleta".
+'
+' Podrazumevano False: legacy frmDokumenta zove ovaj isti model za svoj panel,
+' ne cita "valid", i njegovo ponasanje se ovom granom ne dira.
 Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String, _
                                   Optional ByVal dokumentTip As String = "", _
-                                  Optional ByVal docID As String = "") As Object
+                                  Optional ByVal docID As String = "", _
+                                  Optional ByVal strict As Boolean = False) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
     d("valid") = False
     d("greska") = ""
@@ -47,12 +55,12 @@ Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String,
     On Error GoTo EH
     broj = Trim$(broj)
 
-    Set d("header") = ImpactHeader(docType, broj, docID)
-    Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID)
-    Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID)
-    Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID)
-    Set d("palete") = ImpactPalete(docType, broj, docID)
-    Set d("faktura") = ImpactFaktura(docType, broj, docID)
+    Set d("header") = ImpactHeader(docType, broj, docID, strict)
+    Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID, strict)
+    Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID, strict)
+    Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID, strict)
+    Set d("palete") = ImpactPalete(docType, broj, docID, strict)
+    Set d("faktura") = ImpactFaktura(docType, broj, docID, strict)
     Set d("summary") = ImpactSummary(d)
     d("valid") = True
     Exit Function
@@ -65,7 +73,8 @@ End Function
 ' Header po tipu (samo potvrdjene kolone; partner ostaje ID -> UI resolvira ime).
 ' ------------------------------------------------------------
 Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
-                              Optional ByVal docID As String = "") As Object
+                              Optional ByVal docID As String = "", _
+                              Optional ByVal strict As Boolean = False) As Object
     Dim h As Object: Set h = CreateObject("Scripting.Dictionary")
     Set ImpactHeader = h
     On Error GoTo EH
@@ -87,24 +96,24 @@ Private Function ImpactHeader(ByVal docType As String, ByVal broj As String, _
     End Select
     Select Case docType
         Case FLOW_DOC_OTPREMNICA
-            h("partnerID") = HLI(tTbl, tCol, broj, COL_OTP_STANICA, docID)
-            h("datum") = HLI(tTbl, tCol, broj, COL_OTP_DATUM, docID)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_OTP_KOLICINA, docID)
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_OTP_STANICA, docID, strict)
+            h("datum") = HLI(tTbl, tCol, broj, COL_OTP_DATUM, docID, strict)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_OTP_KOLICINA, docID, strict)
         Case FLOW_DOC_ZBIRNA
-            h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID)
-            h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_ZBR_KOLICINA, docID)
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_ZBR_KUPAC, docID, strict)
+            h("datum") = HLI(tTbl, tCol, broj, COL_ZBR_DATUM, docID, strict)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_ZBR_KOLICINA, docID, strict)
         Case FLOW_DOC_PRIJEMNICA
-            h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID)
-            h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID)
-            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_PRJ_KOLICINA, docID)
+            h("partnerID") = HLI(tTbl, tCol, broj, COL_PRJ_KUPAC, docID, strict)
+            h("datum") = HLI(tTbl, tCol, broj, COL_PRJ_DATUM, docID, strict)
+            h("kolicina") = SumActiveNum(tTbl, tCol, broj, COL_PRJ_KOLICINA, docID, strict)
     End Select
     ' Razresi ID -> naziv (otpremnica = stanica; zbirna/prijemnica = kupac). Fallback ID.
     h("partner") = ResolvePartnerName(docType, CStr(h("partnerID")))
     ' Sledljivost (Faza 7): da li je ovaj dokument ispravka drugog / zamenjen drugim.
     If Len(tTbl) > 0 Then
-        h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID)
-        h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID)
+        h("ispravkaOd") = HLI(tTbl, tCol, broj, COL_TRACE_ISPRAVKA_OD, docID, strict)
+        h("zamenjenSa") = HLI(tTbl, tCol, broj, COL_TRACE_ZAMENJEN_SA, docID, strict)
     End If
     Exit Function
 EH:
@@ -114,7 +123,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ImpactHeader"
-    Err.Raise errNum, MOD_NAME & ".ImpactHeader", errDesc
+    If strict Then Err.Raise errNum, MOD_NAME & ".ImpactHeader", errDesc
 End Function
 
 ' ID partnera -> citljiv naziv. Otpremnica: tblStanice (StanicaID -> Naziv);
@@ -153,7 +162,8 @@ End Function
 '               Prijavljuje se kao granica, ne krpi se pogadjanjem.
 ' ------------------------------------------------------------
 Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
-                              Optional ByVal docID As String = "") As Collection
+                              Optional ByVal docID As String = "", _
+                              Optional ByVal strict As Boolean = False) As Collection
     Dim ids As Object, bz As String
     On Error GoTo EH
     Select Case docType
@@ -165,20 +175,20 @@ Private Function ImpactPalete(ByVal docType As String, ByVal broj As String, _
                 ' na broj bi vratio tacno ono sto je #198 vadio -- i to unutar
                 ' modela koji se posle oznacava kao valid. Prazan docID je druga
                 ' prica: zatecen zapis nema identitet, pa je broj sve sto postoji.
-                If Len(Trim$(docID)) > 0 Then
+                If strict And Len(Trim$(docID)) > 0 Then
                     Err.Raise ERR_UI_BASE + 26, MOD_NAME & ".ImpactPalete", _
                               "Identitet prijemnice se ne moze razresiti -- palete se ne mogu suziti."
                 End If
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj, Nothing, True)
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_PRIJ, broj, Nothing, strict)
             Else
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids, True)
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, "", ids, strict)
             End If
         Case FLOW_DOC_ZBIRNA
-            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj, Nothing, True)
+            Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, broj, Nothing, strict)
         Case FLOW_DOC_OTPREMNICA
-            bz = HLI(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_BROJ_ZBIRNE, docID)
+            bz = HLI(TBL_OTPREMNICA, COL_OTP_BROJ, broj, COL_OTP_BROJ_ZBIRNE, docID, strict)
             If Len(bz) > 0 Then
-                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, bz, Nothing, True)
+                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_BROJ_ZBIRNE, bz, Nothing, strict)
             Else
                 Set ImpactPalete = New Collection
             End If
@@ -191,8 +201,11 @@ EH:
     ' nema palete) i ne sme da znaci isto sto i neuspelo citanje -- inace bi uvid
     ' tvrdio da posledica nema, a operater bi na osnovu toga stornirao.
     LogErr MOD_NAME & ".ImpactPalete"
-    Err.Raise ERR_UI_BASE + 23, MOD_NAME & ".ImpactPalete", _
-              "Palete izabranog dokumenta se ne mogu procitati."
+    If strict Then
+        Err.Raise ERR_UI_BASE + 23, MOD_NAME & ".ImpactPalete", _
+                  "Palete izabranog dokumenta se ne mogu procitati."
+    End If
+    Set ImpactPalete = New Collection
 End Function
 
 ' PrijemnicaID-jevi koji pripadaju IZABRANOJ generaciji. Nothing = nema identiteta
@@ -232,14 +245,15 @@ End Function
 ' HL vraca PRVI red po broju -- pod kolizijom je uvid umeo da prijavi fakturu
 ' tudje prijemnice, pa i da tvrdi "fakturisano" za dokument koji to nije.
 Private Function ImpactFaktura(ByVal docType As String, ByVal broj As String, _
-                               Optional ByVal docID As String = "") As Object
+                               Optional ByVal docID As String = "", _
+                               Optional ByVal strict As Boolean = False) As Object
     Dim f As Object: Set f = CreateObject("Scripting.Dictionary")
     Set ImpactFaktura = f
     f("hasFaktura") = False: f("fakturaID") = ""
     On Error GoTo EH
     If docType = FLOW_DOC_PRIJEMNICA Then
-        f("hasFaktura") = (UCase$(HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURISANO, docID)) = "DA")
-        f("fakturaID") = HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURA_ID, docID)
+        f("hasFaktura") = (UCase$(HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURISANO, docID, strict)) = "DA")
+        f("fakturaID") = HLI(TBL_PRIJEMNICA, COL_PRJ_BROJ, broj, COL_PRJ_FAKTURA_ID, docID, strict)
     End If
     Exit Function
 EH:
@@ -249,7 +263,7 @@ EH:
     Dim errNum As Long, errDesc As String
     errNum = Err.Number: errDesc = Err.description
     LogErr MOD_NAME & ".ImpactFaktura"
-    Err.Raise errNum, MOD_NAME & ".ImpactFaktura", errDesc
+    If strict Then Err.Raise errNum, MOD_NAME & ".ImpactFaktura", errDesc
 End Function
 
 ' ------------------------------------------------------------
@@ -295,31 +309,42 @@ End Function
 ' koji se ne stornira.
 Private Function HLI(ByVal tbl As String, ByVal keyCol As String, _
                      ByVal keyVal As String, ByVal valCol As String, _
-                     ByVal docID As String) As String
+                     ByVal docID As String, _
+                     Optional ByVal strict As Boolean = False) As String
     If Len(Trim$(docID)) = 0 Then
         HLI = HL(tbl, keyCol, keyVal, valCol)
         Exit Function
     End If
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then
-        Err.Raise ERR_UI_BASE + 29, MOD_NAME & ".HLI", _
-                  "Tabela " & tbl & " nije citljiva."
+        If strict Then
+            Err.Raise ERR_UI_BASE + 29, MOD_NAME & ".HLI", _
+                      "Tabela " & tbl & " nije citljiva."
+        End If
+        Exit Function
     End If
     Dim cKey As Long, cVal As Long, cGen As Long
     cKey = GetColumnIndex(tbl, keyCol)
     cVal = GetColumnIndex(tbl, valCol)
     cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
     If cKey = 0 Or cVal = 0 Then
-        Err.Raise ERR_UI_BASE + 28, MOD_NAME & ".HLI", _
-                  "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
+        If strict Then
+            Err.Raise ERR_UI_BASE + 28, MOD_NAME & ".HLI", _
+                      "Kolona " & keyCol & " ili " & valCol & " ne postoji u " & tbl & "."
+        End If
+        Exit Function
     End If
     ' Tabela bez kolone generacije, a identitet JE zadat -> ne moze da se sazna
     ' o kom je dokumentu rec. Povratak na broj bi ovde bio tiha degradacija
     ' unutar modela koji se posle oznacava kao valid, pa se umesto toga dize
     ' greska i ceo uvid pada.
     If cGen = 0 Then
-        Err.Raise ERR_UI_BASE + 27, MOD_NAME & ".HLI", _
-                  "Tabela " & tbl & " nema kolonu " & COL_GENERACIJA_ID & "."
+        If strict Then
+            Err.Raise ERR_UI_BASE + 27, MOD_NAME & ".HLI", _
+                      "Tabela " & tbl & " nema kolonu " & COL_GENERACIJA_ID & "."
+        End If
+        HLI = HL(tbl, keyCol, keyVal, valCol)
+        Exit Function
     End If
     Dim i As Long
     For i = 1 To UBound(data, 1)
@@ -340,11 +365,15 @@ End Function
 ' istog broja.
 Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
                              ByVal keyVal As String, ByVal sumCol As String, _
-                             Optional ByVal docID As String = "") As String
+                             Optional ByVal docID As String = "", _
+                             Optional ByVal strict As Boolean = False) As String
     Dim data As Variant: data = GetTableData(tbl)
     If IsEmpty(data) Then
-        Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".SumActiveNum", _
-                  "Tabela " & tbl & " nije citljiva."
+        If strict Then
+            Err.Raise ERR_UI_BASE + 30, MOD_NAME & ".SumActiveNum", _
+                      "Tabela " & tbl & " nije citljiva."
+        End If
+        Exit Function
     End If
     Dim cKey As Long, cSum As Long, cSt As Long, cGen As Long
     cKey = GetColumnIndex(tbl, keyCol)
@@ -352,8 +381,11 @@ Private Function SumActiveNum(ByVal tbl As String, ByVal keyCol As String, _
     cSt = GetColumnIndex(tbl, COL_STORNIRANO)
     cGen = GetColumnIndex(tbl, COL_GENERACIJA_ID)
     If cKey = 0 Or cSum = 0 Then
-        Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".SumActiveNum", _
-                  "Kolona " & keyCol & " ili " & sumCol & " ne postoji u " & tbl & "."
+        If strict Then
+            Err.Raise ERR_UI_BASE + 31, MOD_NAME & ".SumActiveNum", _
+                      "Kolona " & keyCol & " ili " & sumCol & " ne postoji u " & tbl & "."
+        End If
+        Exit Function
     End If
     Dim uzmiID As Boolean
     uzmiID = (Len(Trim$(docID)) > 0 And cGen > 0)
