@@ -1682,7 +1682,11 @@ EH:
 End Function
 
 ' Bezbedno citanje celije po indeksu kolone (0 = kolona ne postoji -> "").
-Private Function NzTxC(ByVal data As Variant, ByVal r As Long, ByVal c As Long) As String
+'
+' `data` je ByRef iz istog razloga kao modPaletniList.SafeCell: ByVal bi kopirao
+' CEO niz pri svakom pozivu, a ovo je citac PO CELIJI. Tamo je taj obrazac merio
+' 1.8 ms po redu; ovde su tabele manje pa se ne vidi, ali je greska ista.
+Private Function NzTxC(ByRef data As Variant, ByVal r As Long, ByVal c As Long) As String
     If c > 0 Then NzTxC = NzTx(data(r, c))
 End Function
 

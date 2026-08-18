@@ -3566,3 +3566,62 @@ po imenu: `popunjenost je iz reda BAS te palete — očekivano [20], dobijeno [2
 
 Ubrzanje se **ne prijavljuje kao izmereno** — merenje sa terena postoji samo za
 stanje pre popravke. Novi broj daje isti `WARN`, ili njegov izostanak.
+
+---
+
+## v2.50.2 — `v6-ui-147` · `ByVal` na nizu je kopirao celu tabelu, po ćeliji
+
+Nastavak prethodnog: **prva popravka nije pomogla**, i to je bio podatak. Vreme je
+ostalo isto (1918 / 1895 / 1906 ms) bez obzira na tip dokumenta i na broj paleta —
+a trošak po paleti bi morao da varira. Konstanta znači fiksni trošak.
+
+Merenje unutar sekcije je onda pokazalo tačno mesto:
+
+```
+[v6-ui-146] 1063 stavki, 1 paleta, ukupno 1918 ms:
+citanje tabele 0, prolaz kroz stavke 1883, obrada paleta 35 ms.
+```
+
+Čitanje tabele **0 ms** (batch keš radi), obrada palete **35 ms** — a prolaz kroz
+1063 reda **1883 ms**. To je **1,8 ms po redu** za čitanje dva polja iz niza koji
+je već u memoriji. Toliko ne traje pristup nizu; toliko traje kopiranje.
+
+### Uzrok
+
+```vb
+Public Function SafeCell(ByVal d As Variant, ByVal r As Long, ByVal idx As Long)
+```
+
+`ByVal` na `Variant`-u koji **sadrži niz** znači da VBA kopira ceo niz pri svakom
+pozivu. `SafeCell` je čitač **po ćeliji** — u toj petlji se zove dvaput po redu.
+Dakle 2126 poziva × kopija tabele od 1063 reda.
+
+Popravka je jedna reč: **`ByRef`**. Funkcija `d` samo čita, nikad ne piše, pa je
+razlika isključivo u tome što se niz ne umnožava. `SafeCell` ima **206 pozivalaca**
+u `modPaletniList` — ubrzanje ne pripada samo uvidu o stornu.
+
+Isti obrazac je popravljen i u `modStornoFlow.NzTxC`, koji je u istoj putanji
+(lanac i blokovi). Tamo se nije video jer su te tabele manje — ali greška je ista.
+
+### Šta je ovo ostavilo za kasnije
+
+Isti potpis — čitač po ćeliji koji prima niz `ByVal` — postoji i u
+`modDokumenta.StornoCellRaw` / `StornoCellText` i `modKarticaDetalji.CellVal`.
+Nisu mereni i nisu u ovoj putanji, pa ih ne diram napamet; zapisani su kao nalaz.
+
+### Zašto ovde nema testa
+
+Tvrdnja je „isto ponašanje, manje kopiranja". Vrednosti se ne menjaju, pa test koji
+bi ih proveravao ništa ne bi dokazao, a test koji meri **vreme** u harnessu je
+neupotrebljiv — fixture ima desetak stavki, tamo je i stara verzija brza.
+
+Kapija je **merenje ugrađeno u kod**: obe rutine se prijave same kad pređu 400 ms.
+Regresija ovog tipa ubuduće stiže kao `WARN` linija, ne kao pritužba operatera.
+
+### Verifikacija
+
+`vba_check` čisto (191), self-test čisto (39), `who_writes` ažuran,
+`RunAllTests` **ZELENO (73)**, pun set **ZELENO** (11 suite-ova).
+`COMPILE` → `NEJASNO`, ostaje ručna kapija.
+
+Ubrzanje se **ne prijavljuje kao izmereno** dok ne stigne merenje sa terena.

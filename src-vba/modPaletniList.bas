@@ -2740,7 +2740,16 @@ End Function
 
 ' Bezbedno citanje celije iz GetTableData niza: ako kolona ne postoji
 ' (idx < 1, npr. schema drift), vrati Empty umesto subscript-error.
-Public Function SafeCell(ByVal d As Variant, ByVal r As Long, _
+'
+' `d` MORA ostati ByRef. Sa ByVal je VBA kopirao CEO niz pri svakom pozivu, a
+' funkcija se zove po celiji -- dva puta po redu u prolazu kroz stavke. Merenje
+' sa terena: 1063 stavke, 1883 ms, to jest 1.8 ms po redu za citanje dva polja
+' iz niza koji je vec u memoriji (citanje tabele je bilo 0 ms -- batch kes).
+' Posle prelaska na ByRef ista petlja radi bez kopiranja.
+'
+' Funkcija `d` samo CITA, nikad ne pise, pa je ByRef ovde bez ijedne posledice
+' po ponasanje -- razlika je iskljucivo u tome sto se niz ne umnozava.
+Public Function SafeCell(ByRef d As Variant, ByVal r As Long, _
                           ByVal idx As Long) As Variant
     If idx >= 1 Then SafeCell = d(r, idx) Else SafeCell = Empty
 End Function
