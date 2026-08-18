@@ -111,9 +111,13 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    ' Od ovog reda Err je MRTAV: 'On Error Resume Next' ga resetuje (dokazano
+    ' testom 68). Zato se ne sme zvati LogErr, koji pise samo kad je
+    ' Err.Number <> 0 -- tako je pad upisa godinama zavrsavao u PRAZNOM logu, a
+    ' operater dobijao poruku bez razloga. Opis se predaje IZRICITO.
     On Error Resume Next
 
-    LogErr "SaveOtpremnicaMulti_TX"
+    LogError "SaveOtpremnicaMulti_TX", errDesc, errNum
 
     Monitor_Error _
         moduleName:="modDokumenta", _
@@ -189,7 +193,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtpremnica_TX"
+    LogError "SaveOtpremnica_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveOtpremnica_TX", _
@@ -279,7 +283,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveOtpremnica"
+    LogError "SaveOtpremnica", errDesc, errNum
     On Error GoTo 0
 
     Err.Raise errNum, "SaveOtpremnica", _
@@ -492,7 +496,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirnaMulti_TX"
+    LogError "SaveZbirnaMulti_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirnaMulti_TX", _
@@ -563,7 +567,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirna_TX"
+    LogError "SaveZbirna_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SaveZbirna_TX", _
@@ -650,7 +654,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SaveZbirna"
+    LogError "SaveZbirna", errDesc, errNum
     On Error GoTo 0
 
     Err.Raise errNum, "SaveZbirna", _
@@ -1371,7 +1375,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnicaMulti_TX"
+    LogError "SavePrijemnicaMulti_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnicaMulti_TX", _
@@ -1463,7 +1467,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnica_TX"
+    LogError "SavePrijemnica_TX", errDesc, errNum
     Monitor_Error _
         moduleName:="modDokumenta", _
         procedureName:="SavePrijemnica_TX", _
@@ -1569,7 +1573,7 @@ EH:
     errSrc = Err.SOURCE
 
     On Error Resume Next
-    LogErr "SavePrijemnica"
+    LogError "SavePrijemnica", errDesc, errNum
     On Error GoTo 0
 
     Err.Raise errNum, "SavePrijemnica", _
