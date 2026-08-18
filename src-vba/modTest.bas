@@ -202,6 +202,7 @@ Public Sub RunAllTests()
     RunOne 66
     RunOne 67
     RunOne 68
+    RunOne 69
 
     SetTestMode prevMode
     WriteResultFile
@@ -302,6 +303,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 66: TestName = "T_StornoEkran_NeCuriGreska"
         Case 67: TestName = "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan"
         Case 68: TestName = "T_LogErr_NeVidiErrPosleResumeNext"
+        Case 69: TestName = "T_PorukeUnosa_UpozorenjeNosiOznaku"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -378,6 +380,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 66: T_StornoEkran_NeCuriGreska
         Case 67: T_StornoImpact_PrijemnicaBlokDriftJeInvalidan
         Case 68: T_LogErr_NeVidiErrPosleResumeNext
+        Case 69: T_PorukeUnosa_UpozorenjeNosiOznaku
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3130,6 +3133,49 @@ Private Sub T_LogErr_NeVidiErrPosleResumeNext()
     AssertEq (preN <> 0), True, "preduslov: greska je stvarno podignuta"
     AssertEq posleN, 0, _
              "'On Error Resume Next' resetuje Err -- LogErr posle njega nema sta da vidi"
+End Sub
+' ============================================================
+' 69. Upozorenje uz uspesan upis mora da nosi svoju oznaku
+' ============================================================
+' Dokument moze da bude snimljen, a da uz njega NESTO ne prodje: prevezivanje
+' paleta, auto-zbirna, ili zavrsetak ispravke koji stane na safe-stopu ("vise
+' ispravki na cekanju"). Te poruke stizu u isti izlazni string kao i obicna
+' informacija o uspehu.
+'
+' CommitDokument ih razdvaja po OZNACI: ChrW(10007) ide i u MsgBox (operater
+' mora da vidi da mu je ostao posao), ChrW(10003) ostaje u toastu. Ako neko doda
+' novo upozorenje bez te oznake, ono ce se tiho izgubiti -- toast ga sece, a
+' uspesan toast se jos i sam sakrije posle cetiri sekunde.
+'
+' Test cuva bas tu podelu, jer se ona iz koda ne vidi -- oba su samo stringovi.
+Private Sub T_PorukeUnosa_UpozorenjeNosiOznaku()
+    Dim upoz As Variant, info As Variant, i As Long, t As String
+
+    ' Katalog se PRVO osvezava iz koda: Poruka() cita tblPoruke, a fixture nosi
+    ' onaj katalog kakav je bio u donoru -- bez ovoga bi test merio zatecene
+    ' podatke umesto ugovora iz UpsertPoruke. EnsurePoruke je idempotentan i
+    ' bez MsgBox-a (isti obrazac koji vec koristi Test_PorukeKatalogPokrivaDokumenta).
+    modSetup.EnsurePoruke
+    modPoruke.InvalidateCache
+
+    upoz = Array("DOKUNOS_MSG_VISE_ISPRAVKI", "DOKUNOS_MSG_PALETE_NISU", _
+                 "DOKUNOS_MSG_ZBIRNA_NIJE", "DOKUNOS_MSG_ISPRAVKA_NIJE")
+    For i = 0 To UBound(upoz)
+        t = Poruka(CStr(upoz(i)))
+        AssertEq (Len(t) > 0), True, CStr(upoz(i)) & " postoji u katalogu"
+        AssertEq (InStr(1, t, ChrW(10007)) > 0), True, _
+                 CStr(upoz(i)) & " nosi oznaku upozorenja -- inace se ne vidi"
+    Next i
+
+    ' Druga strana: cista informacija NE SME da nosi oznaku upozorenja, inace bi
+    ' svaki uspesan upis otvarao dijalog bez razloga.
+    info = Array("DOKUNOS_MSG_PALETE_PREVEZANE", "DOKUNOS_MSG_ISPRAVKA_OK")
+    For i = 0 To UBound(info)
+        t = Poruka(CStr(info(i)))
+        AssertEq (Len(t) > 0), True, CStr(info(i)) & " postoji u katalogu"
+        AssertEq (InStr(1, t, ChrW(10007)) > 0), False, _
+                 CStr(info(i)) & " je informacija, ne upozorenje"
+    Next i
 End Sub
 
 ' Roditelj koji vraca lookup po poslovnom broju -- to jest PRVI red tog broja.

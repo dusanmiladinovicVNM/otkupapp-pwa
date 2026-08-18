@@ -3219,10 +3219,34 @@ ona ide na udaljeni endpoint i samo ako je monitoring uključen; lokalno se gubi
 **Test 68** ne meri naš kod nego **semantiku VBA** na kojoj taj zaključak stoji,
 da tvrdnja padne u suite-u a ne kroz prazan log posle incidenta.
 
+Devet writera dokumenata (Otpremnica / Zbirna / Prijemnica, sve tri varijante)
+**već je hvatalo** `errNum` i `errDesc` u lokale pre tog reda — podatak je bio tu,
+samo se bacao. Sada se predaje izričito (`LogError "X", errDesc, errNum`). To je
+najuža kriška koja operatera odblokira; preostalih ~103 mesta ostaje za zaseban
+PR. `SaveKupciIzlaz_TX` i `SaveOMUlaz_TX` opis ne hvataju u lokale, pa ih nisam
+dirao napamet.
+
+**Šta je pad zapravo bio:** `Nedostaje kolona 'GeneracijaID' u tabeli
+'tblOtpremnica'` iz `GeneracijaIDZaBroj` — schema drift na instalaciji, ne greška
+u ovoj grani. Kolonu dodaje `EnsureSledljivostSchema` kroz `EnsureRuntimeSchema`,
+a **i taj poziv je jedno od 112 mesta** sa mrtvim `LogErr`-om: ako je self-heal
+šeme ikad pao, pao je nečujno. Posle ručnog `EnsureRuntimeSchema` upis prolazi.
+
+### Upozorenje uz uspešan upis se više ne gubi
+
+Dokument može biti snimljen, a da uz njega nešto ne prođe — prevezivanje paleta,
+auto-zbirna, ili završetak ispravke koji stane na safe-stopu („više ispravki na
+čekanju"). Toast to gubi **dvostruko**: piše u usko polje pa seče rep, a uspešan
+toast se još i sam sakrije posle četiri sekunde.
+
+Razlikovanje ide po oznaci koju katalog **već nosi**: `ChrW(10007)` = upozorenje
+→ ide i u `MsgBox`; `ChrW(10003)` = informacija → ostaje u toastu. **Test 69**
+čuva baš tu podelu, jer se iz koda ne vidi — oba su samo stringovi.
+
 Sam popravak (112 mesta, zajednički writeri koje koristi i legacy) **nije u ovom
 PR-u** — ide zasebno.
 
-- **Šesnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
+- **Sedamnaest novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**.
 
 Zapisana je i **osma zamka** u `tools/sabotaza.py`: zamena ne sme biti podniz
 sidra — `--vrati` je tada nalazi i u zdravom kodu, pa umesto vraćanja dodaje još

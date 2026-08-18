@@ -706,6 +706,17 @@ SABOTAZE = {
         "T_StornoImpact_PrijemnicaBlokDriftJeInvalidan",
         "necitljiva blok sekcija PRIJEMNICE obara CEO uvid",
     ),
+    # Upozorenje uz USPESAN upis mora da nosi oznaku ChrW(10007) -- po njoj
+    # CommitDokument odlucuje da li ide i u MsgBox. Bez oznake se tiho gubi: toast
+    # sece rep, a uspesan toast se jos i sam sakrije posle cetiri sekunde, pa
+    # operater propusti da mu je ostao posao (npr. 'vise ispravki na cekanju').
+    "upozorenje-bez-oznake": (
+        "modPoruke.bas",
+        '    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", ChrW(10007) & " Vi"',
+        '    UpsertRow lo, existing, "DOKUNOS_MSG_VISE_ISPRAVKI", " Vi"',
+        "T_PorukeUnosa_UpozorenjeNosiOznaku",
+        "DOKUNOS_MSG_VISE_ISPRAVKI nosi oznaku upozorenja -- inace se ne vidi",
+    ),
     # --- uvid kao kapija (recenzija PR #202) ------------------------------------
     # Uvid je isao po identitetu u zaglavlju, lancu i blokovima, a PALETE po broju.
     # Pod kolizijom broja je ekran tvrdio posledice OBA dokumenta, dok writer

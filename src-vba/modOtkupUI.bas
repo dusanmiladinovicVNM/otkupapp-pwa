@@ -5488,9 +5488,23 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     ClearForm
     RefreshFromData
     RefreshOtpTraka mFrm
+    Dim dopuna As String
+    If p.Exists("poruke") Then dopuna = Trim$(CStr(p("poruke")))
     ShowToast PorukaUpisano(CStr(p("rezim"))) & " " & CStr(p("rezultat")) & _
-              IIf(p.Exists("poruke"), IIf(Len(CStr(p("poruke"))) > 0, _
-                  "  " & ChrW(183) & "  " & CStr(p("poruke")), ""), ""), False
+              IIf(Len(dopuna) > 0, "  " & ChrW(183) & "  " & dopuna, ""), False
+
+    ' UPOZORENJE UZ USPEH ide i u MsgBox. Dokument JESTE snimljen, ali nesto uz
+    ' njega nije: prevezivanje paleta, auto-zbirna, ili zavrsetak ispravke koji
+    ' je stao na safe-stopu ("vise ispravki na cekanju"). Toast to dvostruko
+    ' gubi -- pise u usko polje, pa se rep sece, a uspesan toast se jos i sam
+    ' sakrije posle cetiri sekunde. Operater tako propusti da mu je ostao posao.
+    '
+    ' Razlikovanje ide po OZNACI koju katalog vec nosi: ChrW(10007) = upozorenje
+    ' (DOKUNOS_MSG_VISE_ISPRAVKI, _PALETE_NISU, _ZBIRNA_NIJE, _ISPRAVKA_NIJE),
+    ' ChrW(10003) = informacija o uspehu. Cistu informaciju ne guramo u dijalog.
+    If InStr(1, dopuna, ChrW(10007)) > 0 Then
+        MsgBox dopuna, vbExclamation, APP_NAME
+    End If
     Exit Sub
 EH:
     ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
