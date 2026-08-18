@@ -20,6 +20,10 @@ Option Explicit
 
 Private Const MOD_NAME As String = "modStornoImpact"
 
+' Prag ispod koga se ne javlja nista. 400 ms je granica na kojoj operater pocinje
+' da primeti cekanje; ispod nje bi linija po kliku bila cist sum u logu.
+Private Const UVID_PRAG_MS As Long = 400
+
 ' docID = KANONSKI IDENTITET izabranog dokumenta (GeneracijaID za robna
 ' dokumenta). Do v6-ui-143 ga ovaj sloj nije imao, pa je ceo uvid isao po
 ' BROJU -- a broj nije jedinstven (GenerateBrojPrijemnice nema proveru
@@ -49,25 +53,65 @@ Public Function BuildStornoImpact(ByVal docType As String, ByVal broj As String,
                                   Optional ByVal docID As String = "", _
                                   Optional ByVal strict As Boolean = False) As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    Dim t0 As Double, tHdr As Double, tChn As Double, tBlk As Double
+    Dim tFlg As Double, tPal As Double, tFak As Double, tSum As Double
     d("valid") = False
     d("greska") = ""
     Set BuildStornoImpact = d
     On Error GoTo EH
     broj = Trim$(broj)
 
+    ' MERENJE PO SEKCIJI. Operater je prijavio 2-3 sekunde po kliku na red, a
+    ' sedam sekcija cita iste tabele -- bez podatka o tome KOJA trosi vreme svaka
+    ' optimizacija je pogadjanje. Zato se meri svaka, a zapisuje se SAMO kad
+    ' ukupno predje prag: brz put ostaje tih, spor sam sebe prijavi.
+    t0 = Timer
     Set d("header") = ImpactHeader(docType, broj, docID, strict)
+    tHdr = Timer
     Set d("chain") = GetStornoChainRows(docType, broj, dokumentTip, docID, strict)
+    tChn = Timer
     Set d("blocks") = GetStornoBlockRows(docType, broj, dokumentTip, docID, strict)
+    tBlk = Timer
     Set d("flags") = GetChainFlags(docType, broj, dokumentTip, docID, strict)
+    tFlg = Timer
     Set d("palete") = ImpactPalete(docType, broj, docID, strict)
+    tPal = Timer
     Set d("faktura") = ImpactFaktura(docType, broj, docID, strict)
+    tFak = Timer
     Set d("summary") = ImpactSummary(d)
+    tSum = Timer
     d("valid") = True
+    PrijaviTrajanje docType, broj, t0, tHdr, tChn, tBlk, tFlg, tPal, tFak, tSum
     Exit Function
 EH:
     d("greska") = Err.description
     LogErr MOD_NAME & ".BuildStornoImpact"
 End Function
+
+' Trajanje po sekciji, u JEDNOJ liniji. Sedam linija po kliku bi log pretvorilo u
+' buku, a poredjenje sekcija je bas ono sto se trazi -- zato jedan red.
+'
+' Timer vraca sekunde od ponoci kao Single, sa rezolucijom oko 1/64 s na Windows-u.
+' To je grubo za jednu sekciju od 5 ms, ali sasvim dovoljno da se od tri sekunde
+' vidi ko ih trosi -- a to je jedino pitanje.
+Private Sub PrijaviTrajanje(ByVal docType As String, ByVal broj As String, _
+                            ByVal t0 As Double, ByVal tHdr As Double, ByVal tChn As Double, _
+                            ByVal tBlk As Double, ByVal tFlg As Double, ByVal tPal As Double, _
+                            ByVal tFak As Double, ByVal tSum As Double)
+    Dim ukupno As Double
+    On Error Resume Next
+    ukupno = (tSum - t0) * 1000
+    If ukupno < UVID_PRAG_MS Then Exit Sub
+    LogWarn MOD_NAME & ".BuildStornoImpact", _
+            "Uvid " & docType & " " & broj & " trajao " & Format$(ukupno, "0") & " ms: " & _
+            "zaglavlje " & Format$((tHdr - t0) * 1000, "0") & _
+            ", lanac " & Format$((tChn - tHdr) * 1000, "0") & _
+            ", blokovi " & Format$((tBlk - tChn) * 1000, "0") & _
+            ", zastavice " & Format$((tFlg - tBlk) * 1000, "0") & _
+            ", palete " & Format$((tPal - tFlg) * 1000, "0") & _
+            ", faktura " & Format$((tFak - tPal) * 1000, "0") & _
+            ", zbir " & Format$((tSum - tFak) * 1000, "0") & " ms."
+End Sub
 
 ' ------------------------------------------------------------
 ' Header po tipu (samo potvrdjene kolone; partner ostaje ID -> UI resolvira ime).
