@@ -1766,8 +1766,8 @@ Public Function CanStorno(ByVal tblName As String, _
     Exit Function
 
 EH:
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     Debug.Print SRC & " failed. Table=" & tblName & _
                 " ID=" & recordID & _
                 " Err=" & CStr(Err.Number) & _
@@ -1820,8 +1820,8 @@ Public Function LookupActiveID(ByVal tblName As String, _
     Exit Function
 
 EH:
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
     LookupActiveID = ""
 End Function

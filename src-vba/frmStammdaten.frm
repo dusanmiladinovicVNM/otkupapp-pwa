@@ -3302,11 +3302,12 @@ Private Sub btnOpenPolygonEditor_Click()
     Exit Sub
 
 EH:
+    ' LogErr PRE On Error naredbi -- one resetuju Err.
+    LogErr "frmStammdaten.btnOpenPolygonEditor_Click"
     On Error Resume Next
     Me.MousePointer = fmMousePointerDefault
     On Error GoTo 0
 
-    LogErr "frmStammdaten.btnOpenPolygonEditor_Click"
     SetGeoStatus Poruka("STM_MSG_GRESKA_PRI_OTVARANJU_3"), True
 End Sub
 Private Sub SetGeoStatus(ByVal message As String, Optional ByVal isError As Boolean = False)

@@ -3279,3 +3279,218 @@ zaglavlju tog fajla: sabotaža sa **praznom zamenom** se ne može vratiti
 (`--vrati` traži zamenu u fajlu), a kod još nekomitovanog fajla ni
 `git checkout` nije mreža; i oznaka `' SABOTAZA` **posle** `_` je syntax error,
 pa run visi do timeout-a umesto da prijavi tvrdnju.
+
+---
+
+## v2.49.0 — `v6-ui-144` · log koji nije pisao, i lista koja nije imala izlaz
+
+> Dva nalaza koja je ostavio smoke-test PR-a #202, oba van tadašnjeg obima. Nema
+> nove poslovne logike — jedan vraća dijagnostiku, drugi otvara izlaz iz ekrana
+> koji ga nije imao.
+
+### 1) `LogErr` koji ne može ništa da zapiše — 91 mesto
+
+Operateru je upis otpremnice pao, a `Log\OtkupApp_<datum>.log` nije imao **nijednu**
+`ERROR` liniju. Uzrok nije u upisu nego u obliku handlera:
+
+```vb
+EH:
+    errDesc = Err.Description
+    On Error Resume Next            ' <- OVA naredba resetuje Err
+    LogErr "SaveOtpremnicaMulti_TX" ' <- vidi Err.Number = 0, ne pise NISTA
+```
+
+`LogErr` piše samo kad je `Err.Number <> 0`, a **svaka** `On Error` naredba resetuje
+`Err` objekat. Podatak je u tom trenutku već u lokalnoj promenljivoj — samo se
+bacao.
+
+PR #202 je popravio devet writera dokumenata (najuža kriška koja je operatera
+odblokirala). Ostatak je ovde: **91 poziv u 24 fajla**, uključujući `modSEFPersistance`
+(15), `modMasterSync` i `modBankaImport` (po 11), `modBankaMapiranje` (10),
+`modSEFValidator` (9). Popravka je svuda ista i minimalna — `LogErr` ide **iznad**
+`On Error`, dok je `Err` još živ. Ponašanje otpornosti se ne menja, samo prestaje
+da bude nemo.
+
+**Nova statička provera `MRTAV_LOG`** u `tools/vba_check.py` čuva to stanje. Gleda
+**samo unutar handlera** (posle labele `EH:` / `ErrHandler:` / `Fin:` / `VRATI:`) —
+van njega je `On Error Resume Next` **pre** poziva koji sme da pukne legitiman i čest
+obrazac, pa bi lažan nalaz nad njim naučio da se checker ignoriše. Ta razlika je
+kodifikovana u `MRTAV_LOG_CASES`: dva slučaja koja **moraju** da zapište i dva koja
+**ne smeju**. Provera je odmah našla i tri mesta van `.bas` fajlova
+(`ThisWorkbook.doccls`, `frmBankaImport.frm`, `frmStammdaten.frm`) koja ručna pretraga
+nije obuhvatila.
+
+`ThisWorkbook` je bio najgori slučaj: njegov handler je i `Monitor_Error` zvao sa
+već resetovanim `Err`-om, pa je i **telemetrija** slala prazan opis. Sada se
+`errNum`/`errDesc`/`errSrc` hvataju prvi, pre bilo čega drugog.
+
+### 2) `EnsureSledljivostSchema` — self-heal šeme koji je ćutke odustajao
+
+Pravi uzrok operaterovog pada bio je `Nedostaje kolona 'GeneracijaID' u tabeli
+'tblOtpremnica'` — **schema drift na instalaciji**, ne greška u kodu. Kolonu dodaje
+`EnsureSledljivostSchema` na svakom startu. Ta rutina je počinjala blanket
+`On Error Resume Next`, pa je **prvi** pad ćutke preskakao ostatak posla: sveska bez
+kolone, a upis koji na nju računa pada satima kasnije, sa porukom koja o uzroku ne
+kaže ništa.
+
+Sada svaka kolona ide kroz svoj gard (`EnsureKolonaSaTragom`): pad jedne se **zapiše**
+i ne zaustavlja ostale. `EnsureColumnOnTable` uz to `LogWarn`-uje kad tabele nema —
+tihi `Exit Sub` je bio tačno mesto na kom se `GeneracijaID` gubila.
+
+Otpornost je nepromenjena; razlika je što se sada vidi.
+
+### 3) Ekran Oporavak: „Odbaci ispravku"
+
+Lista „Nedovršeno" je bila **čist pregled**. Operater vidi da ga safe-stop blokira
+(„više ispravki na čekanju" — pravilo koje odbija da nagađa **koju** od više ispravki
+novi dokument zamenjuje), a nema čime da to razreši. Jedini izlaz je bila legacy
+`frmDokumenta`. `CancelCorrectionContext` je postojao sve vreme — falio mu je ulaz iz
+novog UI-ja.
+
+Radnja gađa **`CorrectionID`, ne poslovni broj.** Nad istim brojem može da stoji više
+contexta (storno, pa opet storno istog dokumenta), pa bi izbor po broju zatvorio onaj
+koji zatekne prvi — a operater je gledao drugi red. Red zato nosi identitet u
+**nevidljivoj koloni** (prioritet 4, isti obrazac koji ekran Storno koristi za
+`GeneracijaID`; petlja vidljivosti ide 3 → 1, pa 4 nikad ne prolazi).
+
+Redovi koji **nisu** context (osirotele prijemnice, palete, izgubljeni blokovi) nemaju
+šta da odbace — oni se rešavaju prevezivanjem, pa radnja nad njima **odbija** umesto
+da tiho ne uradi ništa. Potvrda je `MsgBox` sa `vbDefaultButton2` i izričitim „dokumenti
+se NE diraju"; dugme nosi `danger` stil, kao „Vrati storno".
+
+### Šta je zatvorila recenzija (9.0/10)
+
+**Test je merio transport, ne posledicu.** Test 71 dokazuje da `CorrectionID`
+stigne do reda mreže — ali nijednom ne poziva samu mutaciju. Hard-kodovan
+`CancelCorrectionContext("SV-TEST-1")`, ili `GridCell(red - 1, ...)`, prošli bi
+71/71 netaknuti, dok PR tvrdi baš suprotno: „radnja gađa `CorrectionID`“.
+
+Radnja je zato dobila jezgro bez UI-ja (`OdbaciIspravkuCore`) — sve osim potvrde i
+toast-a; `MsgBox` u headless runu visi, pa se kroz UI ne može izmeriti. **Test 72**
+meri posledicu, i najvažniju tvrdnju stavlja **prvu** (`AssertEq` prekida test na
+prvom padu): odbaci `SV-TEST-2` → **`SV-TEST-1` ostaje `PENDING` / `NeedsRecovery=Da`**.
+Tek onda da je izabrani zaista `CANCELLED` / `Ne`, pa da je nestao iz liste a sused
+ostao.
+
+Test **mutira** podatke, pa ih i **vraća** — fixture nosi tačno dve ispravke na
+čekanju, a test 25 na tome meri safe-stop. Vraćanje se i **proverava**: neprovereno
+čišćenje je isto što i nikakvo, jer bi sledeći test nasledio tiho izmenjen fixture i
+pao po tuđem imenu.
+
+**Indeks kolone više ne može da se raziđe.** `NED_COL_CID` je sada jedan broj koji
+vezuje opis kolona, punjenje reda i radnju. Da je radnja imala svoj indeks, drift bi
+bio nevidljiv: mreža bi izgledala ispravno, a radnja bi čitala tuđu kolonu.
+
+**`MRTAV_LOG` je bio case-sensitive, a VBA nije.** `EH:` je hvatao, `eh:` / `Eh:` /
+`errHandler:` nije — isti program za VBA, nevidljiv za checker. To je tačno ona
+kategorija koju je ovaj PR i trebalo da zatvori: zelen checker koji cela jedna
+legitimna sintaksa zaobilazi. Sada nosi `re.IGNORECASE` i svoj self-test slučaj
+(labela malim slovima).
+
+`SCROPO_BUILD` je podignut na `v6-ui-144` — `modScrOporavak` je dobio mutacionu
+radnju, pa je stari pečat `v6-ui-135` lagao. `UISCR_BUILD` ostaje `v6-ui-143`:
+`modUiScreens` u ovom PR-u nije menjan.
+
+### Verifikacija
+
+- `python tools\vba_check.py` → **čisto (191 fajlova)**, exit 0.
+- `python tools\vba_check.py --self-test` → **čisto (34 slučaja)**.
+- `python tools\run_vba.py --suite RunAllTests` → **ZELENO**, 72 testa.
+- `python tools\run_vba.py` (pun set) → **ZELENO**, svi suite-ovi.
+- **Test 71** (`T_Oporavak_OdbaciIspravku_PoIdentitetu`) tvrdi da svaki context red
+  nosi **svoj** `CorrectionID` u koloni `NED_COL_CID` — ne samo „nije prazno", nego baš oba
+  ID-ja iz fixture-a, jer bi test koji meri praznoću prošao i kad bi svi redovi
+  nosili isti CID. **Test 26** je dopunjen: „Nedovršeno je samo pregled" više nije
+  tačno.
+- **Pet novih sabotaža**, svaka oborila svoju tvrdnju **po imenu**:
+  `oporavak-nema-odbaci`, `oporavak-cid-ne-stize-u-red`, `oporavak-cid-kolona-vidljiva`,
+  `oporavak-odbacuje-prvi-a-ne-izabrani` (pada baš na „SV-TEST-1 ostaje netaknut“),
+  `oporavak-cid-kolona-drift`.
+- `COMPILE` → **`NEJASNO`** — ostaje ručna kapija (`Alt+F11 → Debug → Compile VBAProject`).
+
+### Provera `ODSECEN` — prazan fajl više nije „čist“
+
+`vba_check` je **prazan fajl prijavljivao kao čist**: prazan fajl nema šta da prekrši,
+pa nijedna provera nije imala reč. Zelen izlaz nad izbrisanim modulom je gori od
+crvenog — `ImportAllVBA` ga uveze kao prazan i sve što je u njemu bilo nestane, bez
+ijedne poruke.
+
+Ulaz je uvek isti obrazac:
+
+```python
+io.open(P, "wb").write(s.encode("ascii"))   # open() odsece PRE nego sto encode pukne
+```
+
+U ovoj sesiji je tri puta ostavio `.bas` od nula bajtova. Bezbedno je
+`data = s.encode(...)` **pa** upis.
+
+Nova provera traži `Attribute VB_Name = "..."` — red koji nosi **svaki** izvoz iz
+VBE-a, svih 191 fajlova bez izuzetka. Ništa strožije ne prolazi nad zatečenim
+izvorom: najmanji legalan modul ima 154 bajta i **nema** `Option Explicit`
+(`modMeteo.bas`), a `.frm` nosi `VB_Name` tek posle `Begin` bloka — oba su među
+self-test slučajevima koji **ne smeju** da zapište.
+
+Self-test je sa 34 na **39 slučajeva**. Dokaz u oba smera: sa ugašenom proverom pada
+tačno tri slučaja, svaki po imenu (`prazan fajl`, `samo beline`,
+`kod bez VB_Name zaglavlja`), dok dva negativna ostaju na nuli.
+
+---
+
+## v2.50.0 — `v6-ui-145` · toast koji se nikad nije video
+
+> Nađeno smoke-testom PR-a #203, a starije je od njega: pogađa **svaki** ekran
+> novog UI-ja osim unosa dokumenata.
+
+Operater je prijavio da je dugme „Odbaci ispravku" mrtvo — aktivno, klik ne radi
+ništa, log prazan. Instrumentacija je pokazala suprotno: radnja je radila, i to
+tačno. Nevidljiv je bio **odgovor**.
+
+`ShowZones` sakriva zonu unosnog ekrana na svakom ugovornom ekranu:
+
+```vb
+' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
+nmv = Array("zKpi", "zCtx", "zForm", "zRight")
+    frm.Controls(CStr(nmv(i))).Visible = dok      ' dok = (mScreen = "DOKUMENTI")
+```
+
+a `ShowToast` je pisao baš tamo:
+
+```vb
+Set fr = mFrm.Controls("zForm").Controls("tstOk")
+fr.Visible = True          ' kontrola u SKRIVENOM roditelju -- ne prikazuje nista
+```
+
+`Visible = True` nad kontrolom u skrivenom roditelju ne prikazuje ništa, a
+`On Error Resume Next` na vrhu `ShowToast`-a guta i eventualnu grešku. Rezultat:
+na ekranima **Storno, Palete, Oporavak i Agrohemija nijedna poruka nikad nije
+stigla do operatera** — ni potvrde, ni odbijanja, ni `ScrLastErr`, kanal kojim
+ljuska prijavljuje da je ekran pukao.
+
+U logu se to lepo vidi: tri klika na „Prevezi" u četiri sekunde. Radnja je svaki
+put odgovorila, samo nemo, pa je operater kliktao dalje.
+
+**Popravka:** toast se seli u **mrezu** (`zGrid`) — traka preko cele širine, tačno
+iznad podnožja (`Prikazano / Ukupno / strane`).
+
+Prva verzija ga je stavila u naslovnu traku: video se, ali je **pokrivao naslov
+ekrana**. Mreža je bolji domaćin — vidljiva je na svim ekranima isto kao i naslov,
+ali joj je dno prazno kad lista ne popuni stranu, pa poruka ništa ne zaklaňa. A i
+odgovor na radnju nad redom stoji uz same redove.
+
+Puna širina je namerna: razlog odbijanja je često duga rečenica, a poruka koja se
+seče ne vredi više od one koje nema.
+
+`grdBody` se pravi **posle** trake, pa `ShowToast` radi `ZOrder 0` — bez toga bi
+poruka stajala ispod redova i opet se ne bi videla, druga varijanta istog kvara.
+
+Time otpada i sprega sa `KgLineVisible`: toast je ranije delio prostor sa zbirom
+kilograma u akcionom redu, pa ih je sakrivao dok stoji. Sada su kilogrami stalno
+vidljivi, a `KgLineVisible` i stari `tstOk` su uklonjeni kao mrtvi.
+
+**Verifikacija:** `vba_check` čisto (191), `who_writes` ažuran,
+`RunAllTests` **ZELENO (72)**, pun set **ZELENO** (11 suite-ova). `COMPILE` →
+`NEJASNO`, ostaje ručna kapija.
+
+Automatski test ovde **ne postoji i ne može da postoji**: tvrdnja je „kontrola je
+vidljiva operateru", a forma se u harnessu gradi bez `.Show`. Ostaje smoke: poruka
+mora da se vidi na Oporavku, Storno i Paletama, i dalje da radi na unosu.

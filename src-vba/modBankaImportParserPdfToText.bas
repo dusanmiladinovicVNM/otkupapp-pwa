@@ -91,8 +91,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     DeleteFileIfExists tempTxt
     On Error GoTo 0
 

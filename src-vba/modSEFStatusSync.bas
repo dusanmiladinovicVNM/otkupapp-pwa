@@ -592,9 +592,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "RefreshSEFStatus_TX"
     On Error Resume Next
 
-    LogErr "RefreshSEFStatus_TX"
 
     Monitor_Error _
         moduleName:="modSEFStatusSync", _
@@ -698,8 +698,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr "modSEFStatusSync.ApplySEFExternalOutcome_Row"
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -877,9 +877,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr SRC
     On Error Resume Next
 
-    LogErr SRC
 
     Monitor_Error _
         moduleName:="modSEFStatusSync", _

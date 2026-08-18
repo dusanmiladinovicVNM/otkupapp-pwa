@@ -140,8 +140,8 @@ EH:
     Dim errDesc As String
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr "modTestBanka.RunBankaImportTestSuite"
+    On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     gBankaSilentBatch = False
     RestoreJournalQuiet quietSet, wasQuiet

@@ -322,6 +322,7 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "modJournaling.BackupFileOnStart"
     On Error Resume Next
 
     Monitor_Backup _
@@ -341,7 +342,6 @@ EH:
         errorDescription:=errDesc, _
         errorSource:=errSrc
 
-    LogErr "modJournaling.BackupFileOnStart"
 
     On Error GoTo 0
     Err.Raise errNo, errSrc, errDesc

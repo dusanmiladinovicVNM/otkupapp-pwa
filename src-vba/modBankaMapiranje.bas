@@ -314,9 +314,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "AutoMapBankaImportRow_TX"
     On Error Resume Next
 
-    LogErr "AutoMapBankaImportRow_TX"
 
     Monitor_BankaMapFail _
         procedureName:="AutoMapBankaImportRow_TX", _
@@ -513,9 +513,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "MapBankaImportAsKupac_TX"
     On Error Resume Next
 
-    LogErr "MapBankaImportAsKupac_TX"
 
     Monitor_BankaMapFail _
         procedureName:="MapBankaImportAsKupac_TX", _
@@ -662,9 +662,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "MapBankaImportAsKooperant_TX"
     On Error Resume Next
 
-    LogErr "MapBankaImportAsKooperant_TX"
 
     Monitor_BankaMapFail _
         procedureName:="MapBankaImportAsKooperant_TX", _
@@ -783,9 +783,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "MapBankaImportAsOM_TX"
     On Error Resume Next
 
-    LogErr "MapBankaImportAsOM_TX"
 
     Monitor_BankaMapFail _
         procedureName:="MapBankaImportAsOM_TX", _
@@ -861,9 +861,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "MapBankaImportAsKooperantBlock_TX"
     On Error Resume Next
 
-    LogErr "MapBankaImportAsKooperantBlock_TX"
 
     Monitor_BankaMapFail _
         procedureName:="MapBankaImportAsKooperantBlock_TX", _
@@ -937,9 +937,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "MapBankaImportAsKooperantBlockManual_TX"
     On Error Resume Next
 
-    LogErr "MapBankaImportAsKooperantBlockManual_TX"
 
     Monitor_BankaMapFail _
         procedureName:="MapBankaImportAsKooperantBlockManual_TX", _
@@ -1169,9 +1169,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "SkipBankaImportRow_TX"
     On Error Resume Next
 
-    LogErr "SkipBankaImportRow_TX"
 
     Monitor_BankaMapFail _
         procedureName:="SkipBankaImportRow_TX", _
@@ -1281,9 +1281,9 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
+    LogErr "AutoMapAllBankaImport_TX"
     On Error Resume Next
 
-    LogErr "AutoMapAllBankaImport_TX"
 
     Monitor_Error _
         moduleName:="modBankaMapiranje", _
@@ -1400,8 +1400,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
     gBankaSilentBatch = False
     On Error GoTo 0
@@ -1569,8 +1569,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     CountStrongKeyReadyBankaImport = 0

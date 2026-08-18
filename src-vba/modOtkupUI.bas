@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-143"
+Public Const OTKUI_BUILD   As String = "v6-ui-145"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -165,6 +165,9 @@ Private Const GRID_ROW_H  As Single = 21
 Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
+' Traka poruke iznad podnozja mreze. Ista je na svim ekranima -- poruka nije
+' deo liste pa ne sme da se menja sa njom.
+Private Const TOAST_H     As Single = 26
 ' Devet, zbog F8: tamo prekidac bira TIP dokumenta, a tipova je devet
 ' (sedam rezima F1..F7 + fakture + izvodi). Ostali ekrani koriste manje i
 ' visak dugmadi ostaje sakriven (LayoutGrid). Natpisi u F8 su kratki bas
@@ -947,17 +950,12 @@ Private Sub BuildForm(frm As Object)
     ' Natpis je kontekstualan ("Sacuvaj otkupni list"...), postavlja ga
     ' SelectModeCore - zato je dugme sire nego generickim "Sacuvaj".
     BtnV z, "btnSacuvaj", Poruka("OTKUI_BTN_SACUVAJ_OTKUP"), 0, 0, 196, 28, "primary", IC_SAVE
-
-    ' toast
-    Set fr = NewFrame(z, "tstOk", 0, 0, 320, 26, RGB(236, 245, 240))
-    fr.Visible = False
-    NewLbl fr, "tstBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
-    NewLbl fr, "tstMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
 End Sub
 
 '----------------------------------------------------------- GRID ----
 Private Sub BuildGrid(frm As Object)
     Dim z As Object, i As Long, chip As Variant, X As Single, hd As Object, ft As Object
+    Dim tf As Object
     Set z = NewZone(frm, "zGrid", SIDEBAR_W, 0, 620, 260, C_SAND_LT)
     WireZone z
     NewLbl z, "grdLnT", "", 0, 0, 620, 1, 8, False, 0, C_BORDER
@@ -1019,6 +1017,22 @@ Private Sub BuildGrid(frm As Object)
     WireBtn z.Controls("grdEmptyA"), "grdEmptyA", "chev"
 
     Set ft = NewFrame(z, "grdFoot", 0, 0, 620, GRID_FOOT_H, C_SAND_LT)
+
+    ' TOAST -- traka preko cele sirine mreze, tacno IZNAD podnozja.
+    '
+    ' Do v6-ui-145 je ziveo u zForm, zoni unosnog ekrana, koju ShowZones gasi na
+    ' svakom ugovornom ekranu: Visible = True nad kontrolom u skrivenom roditelju
+    ' ne prikazuje nista, pa poruke sa ekrana Storno, Palete i Oporavak nisu
+    ' stizale do operatera. Prva popravka ga je stavila u naslovnu traku -- video
+    ' se, ali je pokrivao naslov ekrana.
+    '
+    ' Mreza je bolji domacin od naslova: vidljiva je na svim ekranima isto kao i
+    ' naslov, ali joj je dno PRAZNO kad lista ne popuni stranu, pa poruka nista ne
+    ' zaklanja. A i odgovor na radnju nad redom stoji uz same redove.
+    Set tf = NewFrame(z, "tstScr", 0, 0, 320, 26, C_SOFT_BG)
+    tf.Visible = False
+    NewLbl tf, "tstScrBar", "", 0, 0, 3, 26, 8, False, 0, C_GREEN_LT
+    NewLbl tf, "tstScrMsg", "", 11, 6, 300, 15, TS_META, True, C_GREEN, -1
     NewLbl ft, "ftLnT", "", 0, 0, 620, 1, 8, False, 0, C_BORDER
     NewLbl ft, "ftRange", "-", PAD, 6, 170, 14, TS_META, False, C_MUTED, -1
     ' zbirovi su brojevi - Consolas, podebljano (Consolas nema Semibold rez)
@@ -1700,7 +1714,7 @@ End Sub
 Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     Dim c As Object, colW As Single, col As Long, Y As Single, span As Long
     Dim g As Long, gk As Variant, imaPolja As Boolean
-    Dim valFr As Object, btnY As Single, btnX As Single, tw As Single
+    Dim valFr As Object, btnY As Single, btnX As Single
     colW = (zw - 2 * PAD - (cols - 1) * GAP) / cols
     Y = 6
     gk = GrpKeys()
@@ -1759,7 +1773,6 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
     ' Ploca ide uz LEVU ivicu reda (kao u viziji), poruka popunjava sredinu,
     ' dugmad ostaju desno.
     Set valFr = VisibleValFrame(z)
-    tw = PAD
     If Not valFr Is Nothing Then
         valFr.width = VAL_PLATE_W + IIf(HasCtl(valFr, valFr.name & "K1"), _
                                         GAP + 4 + VAL_CALC_W + GAP + VAL_KG_W, 0)
@@ -1769,18 +1782,9 @@ Private Function LayoutFields(z As Object, cols As Long, zw As Single) As Single
         valFr.top = btnY                 ' ploca (28pt) i dugme (28pt) u istoj liniji
         valFr.Height = FIELD_H
         LayoutFieldInner valFr
-        ' Poruka pocinje POSLE racunice, ne posle kilograma: kilogrami i poruka
-        ' dele isti prostor, a poruka je prolazna (ShowToast ih sakrije dok
-        ' stoji). Tako poruka ima citljivu sirinu, a kilogrami stalno mesto.
-        tw = PAD + VAL_PLATE_W + GAP + 4 + VAL_CALC_W + GAP
-        If tw > valFr.Left + valFr.width Then tw = valFr.Left + valFr.width + GAP
+        ' Kilogrami vise ne dele prostor sa porukom: toast je preseljen u
+        ' naslovnu traku, pa ostaju stalno vidljivi.
     End If
-    z.Controls("tstOk").top = btnY
-    z.Controls("tstOk").Left = tw
-    z.Controls("tstOk").width = btnX - tw - GAP
-    If z.Controls("tstOk").width < 60 Then z.Controls("tstOk").width = 60
-    z.Controls("tstOk").Controls("tstMsg").width = z.Controls("tstOk").width - 18
-
     LayoutFields = btnY + 28 + 8
 End Function
 
@@ -2157,6 +2161,7 @@ SledecaAkcija:
 
     Set ft = z.Controls("grdFoot")
     ft.Left = PAD: ft.top = zh - GRID_FOOT_H: ft.width = sc: ft.Height = GRID_FOOT_H
+    PostaviToast z, sc, ft.top
     ft.Controls("ftLnT").width = sc
     ft.Controls("ftKg").Left = sc / 2 - 190
     ft.Controls("ftVal").Left = sc / 2 - 10
@@ -4284,6 +4289,14 @@ End Function
 ' Suzavanje iz panela "Filteri" - ekran ga cita, ljuska ga drzi.
 ' Celija prikazanog reda - ekran je cita kad korisnik izabere red. Bez ovoga
 ' bi ekran morao da drzi svoju kopiju istih podataka.
+' Koliko redova mreza trenutno drzi. Ekran to ne moze da izvede iz svojih
+' podataka: ljuska filtrira, sortira i strani, pa je njen broj jedini tacan.
+' Postoji zbog dijagnostike -- radnja nad redom koji mreza nema mora da moze
+' da kaze KOLIKO ih ima, inace se pad ne razlikuje od praznog ekrana.
+Public Function GridBrojRedova() As Long
+    GridBrojRedova = mViewN
+End Function
+
 Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
     On Error Resume Next
     If r < 1 Or r > mViewN Then Exit Function
@@ -5273,18 +5286,36 @@ Public Sub DetectDisplayFont()
     MsgBox "UI_DISPLAY_FONT = " & res, vbInformation
 End Sub
 
+' Traka poruke ide preko cele sirine mreze, tacno iznad podnozja (Prikazano /
+' Ukupno / strane). Puna sirina je namerna: razlog odbijanja je cesto duga
+' recenica, a poruka koja se sece ne vredi vise od one koje nema.
+Private Sub PostaviToast(z As Object, ByVal sc As Single, ByVal footTop As Single)
+    Dim tf As Object
+    On Error Resume Next
+    Set tf = z.Controls("tstScr")
+    If tf Is Nothing Then Exit Sub
+    tf.Left = PAD
+    tf.width = sc
+    tf.top = footTop - TOAST_H - 4
+    tf.Controls("tstScrBar").Height = TOAST_H
+    tf.Controls("tstScrMsg").width = sc - 18
+End Sub
+
 Public Sub ShowToast(ByVal msg As String, ByVal isErr As Boolean)
     Dim fr As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Sub
-    Set fr = mFrm.Controls("zForm").Controls("tstOk")
+    Set fr = mFrm.Controls("zGrid").Controls("tstScr")
+    If fr Is Nothing Then Exit Sub
     fr.BackColor = IIf(isErr, RGB(250, 240, 235), RGB(236, 245, 240))
-    fr.Controls("tstBar").BackColor = IIf(isErr, C_RUST, C_GREEN_LT)
-    fr.Controls("tstMsg").caption = msg
-    fr.Controls("tstMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
+    fr.Controls("tstScrBar").BackColor = IIf(isErr, C_RUST, C_GREEN_LT)
+    fr.Controls("tstScrMsg").caption = msg
+    fr.Controls("tstScrMsg").ForeColor = IIf(isErr, C_RUST, C_GREEN)
+    ' Telo mreze je napravljeno POSLE trake (grdBody dolazi iza tstScr u
+    ' BuildGrid), pa bi bez ovoga poruka stajala ISPOD redova i opet se ne bi
+    ' videla -- druga varijanta istog kvara od koga se krenulo.
+    fr.ZOrder 0
     fr.Visible = True
-    ' poruka i zbir kilograma dele isti prostor u akcionom redu
-    KgLineVisible False
     CancelToastTimer
     If Not isErr Then
         mToastPending = Format$(Now + TimeSerial(0, 0, 4), "yyyy-mm-dd hh:nn:ss")
@@ -5296,13 +5327,7 @@ Public Sub HideToast()
     On Error Resume Next
     mToastPending = ""
     If mFrm Is Nothing Then Exit Sub
-    mFrm.Controls("zForm").Controls("tstOk").Visible = False
-    KgLineVisible True
-End Sub
-
-Private Sub KgLineVisible(ByVal vis As Boolean)
-    On Error Resume Next
-    mFrm.Controls("zForm").Controls("fgVrednost").Controls("fgVrednostKg").Visible = vis
+    mFrm.Controls("zGrid").Controls("tstScr").Visible = False
 End Sub
 
 Private Sub CancelToastTimer()

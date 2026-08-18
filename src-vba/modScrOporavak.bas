@@ -45,7 +45,17 @@ Attribute VB_Name = "modScrOporavak"
 '=====================================================================
 Option Explicit
 
-Public Const SCROPO_BUILD As String = "v6-ui-135"
+Public Const SCROPO_BUILD As String = "v6-ui-144"
+
+' Kolona liste Nedovrseno koja nosi CorrectionID. JEDAN broj, deljen izmedju
+' opisa kolona, punjenja redova i radnje -- da se indeks ne moze razici. Javan
+' je zato sto test tvrdi da bas TU stoji identitet: da je privatan, radnja bi
+' mogla da procita drugu kolonu a da opis kolona i dalje izgleda ispravno.
+Public Const NED_COL_CID As Long = 6
+
+' Izvor za log. Radnje nad redom su jedino mesto na ekranu koje MENJA podatke,
+' pa im svaki ishod -- i odbijanje -- ide u log pod istim imenom.
+Private Const MOD_TRAG As String = "modScrOporavak.OpoAkcija"
 
 ' Visina zone - ista kao na ekranu Palete, pa naslov ispod nje pada u isti
 ' red na oba ekrana.
@@ -98,6 +108,16 @@ End Function
 
 Public Function Scr_Radnje() As String
     Select Case Scr_Lista()
+        Case "NEDOVRSENO"
+            ' Zaostao context ispravke blokira prevezivanje za nove dokumente
+            ' tog tipa: safe-stop odbija da nagadja KOJU od vise ispravki novi
+            ' dokument zamenjuje. Do sada se to razresavalo SAMO kroz legacy
+            ' formu -- CancelCorrectionContext je postojao, ali mu nov UI nije
+            ' imao ulaz, pa je lista bila cist pregled bez izlaza.
+            '
+            ' Radnja MENJA podatke i tesko se poziva nazad -- otud danger stil,
+            ' isto kao "Vrati storno".
+            Scr_Radnje = "odbaci:OTKUI_BTN_OPO_ODBACI:150:danger:1"
         Case "PRIJEMNICE"
             Scr_Radnje = "prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1"
         Case "PALETE"
@@ -214,13 +234,23 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
     Dim p() As String, red As Long, kljuc As String
     On Error GoTo EH
     p = Split(Mid$(tag, 5), ":")
-    If UBound(p) < 1 Then Exit Function
+    If UBound(p) < 1 Then
+        ' Nem izlaz iz radnje koja MENJA podatke je najgori mogucan ishod:
+        ' operater vidi aktivno dugme koje ne radi nista, log je prazan, i
+        ' nema se sta prijaviti. Zato svaki izlaz odavde ostavlja trag.
+        LogWarn MOD_TRAG, "Radnja bez rednog broja u tagu: '" & tag & "'."
+        Exit Function
+    End If
     red = CLng(val(p(1)))
     kljuc = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
     If Len(kljuc) = 0 Then
+        LogWarn MOD_TRAG, "Red " & red & " nema kljuc u koloni 1. Mreza drzi " & _
+                modOtkupUI.GridBrojRedova() & " redova, lista je '" & Scr_Lista() & "'."
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
     End If
+    LogInfo MOD_TRAG, "Radnja '" & p(0) & "' nad redom " & red & " (" & kljuc & "), lista '" & _
+            Scr_Lista() & "'."
 
     ' GENERACIJA je poslednja kolona obe izvorne liste. Ona je identitet
     ' dokumenta - broj je labela. Bez nje bi prevezivanje pogodilo i dokument
@@ -229,7 +259,9 @@ Private Function OpoAkcija(ByVal tag As String) As Boolean
         Case "prevezipri": OpoAkcija = PreveziPrijemnicu(kljuc, GenIzReda(red, 8))
         Case "prevezipal": OpoAkcija = PreveziPalete(kljuc, GenIzReda(red, 7))
         Case "vrati":      OpoAkcija = VratiStorno(kljuc, red)
+        Case "odbaci":     OpoAkcija = OdbaciIspravku(red)
         Case Else
+            LogWarn MOD_TRAG, "Nepoznata radnja '" & p(0) & "' za listu '" & Scr_Lista() & "'."
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
     End Select
     Exit Function
@@ -371,13 +403,18 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
 End Function
 
 '--- NEDOVRSENO: jedan pregled svega sto ceka -------------------------
+' Poslednja kolona je NEVIDLJIVA (prioritet 4) i nosi CorrectionID. Isti obrazac
+' koji ekran Storno koristi za GeneracijaID: broj je ono sto operater vidi, a
+' radnja mora da pogodi TACAN zapis -- vise contexta moze da deli isti broj
+' dokumenta (storno, pa opet storno istog broja).
 Private Function NedGridCols() As Variant
     NedGridCols = Array( _
         "OTKUI_HDO_REF||txt|120|1", _
         "OTKUI_HDO_VRSTA_PROB||txt|150|2", _
         "OTKUI_HD_STATUS||txt|92|1", _
         "OTKUI_HDO_OPIS||part|0|1", _
-        "OTKUI_HDO_AKCIJA||txt|210|2")
+        "OTKUI_HDO_AKCIJA||txt|210|2", _
+        "OTKUI_HDO_CID||txt|0|4")
 End Function
 
 Private Function RowsNedovrseno(ByVal q As String) As Variant
@@ -394,7 +431,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         Exit Function
     End If
 
-    ReDim outA(1 To mBrNedovrseno, 1 To 5)
+    ReDim outA(1 To mBrNedovrseno, 1 To NED_COL_CID)
     For i = 1 To src.count
         Set d = src(i)
         hay = CStr(d("ref")) & "|" & CStr(d("kind")) & "|" & CStr(d("status")) & "|" & CStr(d("opis"))
@@ -407,6 +444,7 @@ Private Function RowsNedovrseno(ByVal q As String) As Variant
         outA(n, 3) = CStr(d("status"))
         outA(n, 4) = CStr(d("opis"))
         outA(n, 5) = CStr(d("akcija"))
+        outA(n, NED_COL_CID) = CStr(d("correctionID"))
 Sledeci:
     Next i
 
@@ -416,6 +454,64 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrOporavak.RowsNedovrseno[" & mStep & "]", Err.description
+End Function
+
+' Odbaci ZAOSTAO context ispravke. Dokumenti se NE diraju -- zatvara se samo
+' zapis koji ceka zamenski dokument, pa safe-stop prestane da blokira
+' prevezivanje za taj tip.
+'
+' Bira se po CorrectionID iz nevidljive kolone, ne po broju.
+'
+' Redovi koji NISU context (osirotele prijemnice, palete, izgubljeni blokovi)
+' nemaju sta da odbace -- oni se resavaju prevezivanjem, pa se radnja nad njima
+' ODBIJA umesto da tiho ne uradi nista.
+' JEZGRO radnje: gasi TAJ context i nista drugo. Odvojeno od reda mreze i od
+' MsgBox-a zato sto je bas ovo tvrdnja koju PR nosi -- da se gasi izabrani, a ne
+' prvi, susedni ili bilo koji koji deli poslovni broj. MsgBox u headless runu
+' visi, pa se kroz UI ne moze izmeriti.
+Public Function OdbaciIspravkuCore(ByVal cid As String) As Boolean
+    cid = Trim$(cid)
+    If Len(cid) = 0 Then Exit Function
+    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(cid, _
+            "Operater odbacio zaostalu ispravku sa ekrana Oporavak.")
+End Function
+
+Private Function OdbaciIspravku(ByVal red As Long) As Boolean
+    Dim cid As String, opis As String, errDesc As String
+    On Error GoTo EH
+    cid = Trim$(CStr(modOtkupUI.GridCell(red, NED_COL_CID)))
+    If Len(cid) = 0 Then
+        ' Ovo je legitiman ishod za osirotele stavke -- ali i JEDINI put kojim
+        ' bi kvar u prenosu identiteta do mreze izgledao isto. Zato se zapisuje:
+        ' bez traga se 'red nije context' i 'kolona je stigla prazna' ne razlikuju.
+        LogWarn MOD_TRAG, "Red " & red & " nema CorrectionID u koloni " & NED_COL_CID & _
+                ". Mreza drzi " & modOtkupUI.GridBrojRedova() & " redova; vrsta problema: '" & _
+                Trim$(CStr(modOtkupUI.GridCell(red, 2))) & "'."
+        modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_NIJE_CTX"), True
+        Exit Function
+    End If
+    LogInfo MOD_TRAG, "Odbacivanje ispravke " & cid & " (red " & red & ") -- ceka potvrdu."
+
+    opis = Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
+           Trim$(CStr(modOtkupUI.GridCell(red, 2)))
+    If MsgBox(Poruka("OTKUI_OPO_ODBACI_ASK") & vbCrLf & vbCrLf & opis, _
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then
+        LogInfo MOD_TRAG, "Odbacivanje " & cid & " otkazano na potvrdi."
+        Exit Function
+    End If
+
+    If Not OdbaciIspravkuCore(cid) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_ERR"), True
+        Exit Function
+    End If
+    modOtkupUI.ShowToast Poruka("OTKUI_OPO_ODBACI_OK"), False
+    OdbaciIspravku = True
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modScrOporavak.OdbaciIspravku"
+    Err.Clear
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
 End Function
 
 '--- OSIROTELE PRIJEMNICE --------------------------------------------

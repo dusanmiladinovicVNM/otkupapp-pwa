@@ -134,9 +134,9 @@ EH:
     Dim errDesc As String
     errDesc = Err.description
 
+    LogErr "modTestStorno.RunStornoTestSuite"
     On Error Resume Next
     If Not tx Is Nothing Then tx.RollbackTx
-    LogErr "modTestStorno.RunStornoTestSuite"
     On Error GoTo 0
 
     ' Prekid je pad, ne "nije se desilo": ubroji ga i podigni, da runner ne

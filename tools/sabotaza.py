@@ -1115,6 +1115,57 @@ SABOTAZE = {
         "T_StornoDok_KapijePreUpisa",
         "revers bez smera se odbija -- cetiri smera dele isti brojevni niz",
     ),
+    # --- "Odbaci zaostalu ispravku" na ekranu Oporavak ---------------------------
+    # Lista Nedovrseno je bila cist pregled: operater vidi da ga safe-stop blokira,
+    # a nema cime da to razresi -- jedini izlaz je bila legacy forma.
+    "oporavak-nema-odbaci": (
+        "modScrOporavak.bas",
+        "            Scr_Radnje = \"odbaci:OTKUI_BTN_OPO_ODBACI:150:danger:1\"\n",
+        "            Scr_Radnje = \"nista:OTKUI_BTN_OPO_ODBACI:150:danger:1\"   ' SABOTAZA\n",
+        "T_Oporavak_UgovorIRadnje",
+        "Nedovrseno nudi Odbaci ispravku -- inace je pregled bez izlaza",
+    ),
+    # Nad istim poslovnim brojem moze da stoji vise contexta (storno, pa opet storno
+    # istog dokumenta). Bez CorrectionID-ja u redu, radnja gadja onaj koji zatekne
+    # prvi -- a operater je gledao drugi red. Isti razlog zbog kog ekran Storno nosi
+    # GeneracijaID u nevidljivoj koloni.
+    "oporavak-cid-ne-stize-u-red": (
+        "modScrOporavak.bas",
+        "        outA(n, 6) = CStr(d(\"correctionID\"))\n",
+        "        outA(n, 6) = \"\"   ' SABOTAZA: red nosi samo poslovni broj\n",
+        "T_Oporavak_OdbaciIspravku_PoIdentitetu",
+        "svaki context red nosi svoj CorrectionID u koloni 6",
+    ),
+    # Kolona identiteta mora biti prioriteta 4: petlja vidljivosti ide 3 -> 1, pa je
+    # 4 jedina vrednost koja je NIKAD ne pokaze. Na prioritetu 1 bi operater dobio
+    # kolonu sa internim ID-jem preko pola mreze.
+    "oporavak-cid-kolona-vidljiva": (
+        "modScrOporavak.bas",
+        "        \"OTKUI_HDO_CID||txt|0|4\")\n",
+        "        \"OTKUI_HDO_CID||txt|90|1\")   ' SABOTAZA\n",
+        "T_Oporavak_OdbaciIspravku_PoIdentitetu",
+        "kolona CID je prioriteta 4 -- nikad vidljiva",
+    ),
+    # Test 71 dokazuje da identitet STIGNE do reda mreze. Ovo je druga tvrdnja:
+    # radnja gadja BAS izabrani context. Hard-kodovan ID prolazi 71 netaknut, jer
+    # 71 meri transport a ne posledicu.
+    "oporavak-odbacuje-prvi-a-ne-izabrani": (
+        "modScrOporavak.bas",
+        "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(cid, _\n",
+        "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(\"SV-TEST-1\", _\n",
+        "T_Oporavak_OdbaciIspravku_GasiSamoSvoj",
+        "gasi se IZABRANA ispravka -- sused ostaje netaknut",
+    ),
+    # NED_COL_CID vezuje opis kolona, punjenje reda i radnju u JEDAN broj. Da je
+    # radnja imala svoj indeks, drift bi bio nevidljiv: mreza bi izgledala
+    # ispravno, a radnja bi citala tudju kolonu.
+    "oporavak-cid-kolona-drift": (
+        "modScrOporavak.bas",
+        "Public Const NED_COL_CID As Long = 6\n",
+        "Public Const NED_COL_CID As Long = 5   ' SABOTAZA\n",
+        "T_Oporavak_OdbaciIspravku_PoIdentitetu",
+        "radnja cita BAS kolonu na kojoj se opis kolona zavrsava",
+    ),
 }
 
 

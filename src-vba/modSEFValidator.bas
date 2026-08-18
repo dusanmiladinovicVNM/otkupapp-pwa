@@ -261,8 +261,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -304,8 +304,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -342,8 +342,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -393,8 +393,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -442,8 +442,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -485,8 +485,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr sourceName
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -652,8 +652,8 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If errNum = 0 Then errNum = ERR_SEF_STATE
@@ -697,8 +697,8 @@ EH:
     ehErrNum = Err.Number
     ehErrDesc = Err.description
 
-    On Error Resume Next
     LogErr SRC
+    On Error Resume Next
     On Error GoTo 0
 
     If ehErrNum = 0 Then ehErrNum = ERR_SEF_STATE
@@ -737,8 +737,8 @@ EH:
     errDesc = Err.description
     errSrc = Err.SOURCE
 
-    On Error Resume Next
     LogErr "PrepareRejectedInvoiceForResubmit"
+    On Error Resume Next
 
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
