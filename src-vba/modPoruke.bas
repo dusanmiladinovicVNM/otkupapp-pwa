@@ -956,6 +956,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_PRE_NAP", "Napomena"
     UpsertRow lo, existing, "OTKUI_PRE_NETO", "NETO IZLAZ"
     UpsertRow lo, existing, "OTKUI_PRE_IZABRANO", "izabrano paleta"
+    UpsertRow lo, existing, "OTKUI_PRE_NIJEDNA", "nijedna paleta nije ozna" & ChrW(269) & "ena"
     UpsertRow lo, existing, "OTKUI_BTN_PRE_URADI", "Preradi izabrane"
     ' Nijedna od ovih provera nije nova -- sve su prenete iz legacy panela, i
     ' dalje pod prekidacem VALIDACIJA_UNOSA.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-159"
+Public Const OTKUI_BUILD   As String = "v6-ui-160"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -1511,11 +1511,19 @@ Private Sub RefreshFilterBadge()
              IIf(n > 0, C_FOREST, C_WHITE), IIf(n > 0, C_CREAM, C_MUTED), (n > 0)
 End Sub
 
+' Kombo po imenu. Trazi se u obe zone unosnog ekrana i u zoni AKTIVNOG
+' ugovornog ekrana -- bez tog treceg mesta panel izbora ne bi mogao da se otvori
+' nad poljem koje ekran sam nosi: PopKeyFor bi vratio prazno i klik na strelicu
+' ne bi radio nista. Operater je to prijavio kao 'dropdowns ne rade'.
+'
+' Ljuska i dalje ne zna nijedan ekran po imenu -- zona se trazi po mScreen.
 Private Function FindCombo(ByVal nm As String) As Object
     On Error Resume Next
     Set FindCombo = mFrm.Controls("zCtx").Controls(nm)
     If FindCombo Is Nothing Then _
         Set FindCombo = mFrm.Controls("zForm").Controls(nm).Controls(nm & "T")
+    If FindCombo Is Nothing And Len(mScreen) > 0 Then _
+        Set FindCombo = mFrm.Controls("zScr_" & mScreen).Controls(nm).Controls(nm & "T")
 End Function
 
 ' apsolutna pozicija kontrole na formi (sabira Left/Top svih Frame roditelja)
@@ -3432,6 +3440,15 @@ Private Sub UiClickCore(ByVal tag As String)
     ' (FillZbirneCombo, mPartnerFor = "") -- a to obrise izbor partnera koji je
     ' prefill upravo postavio. Operater je to video kao "nisu sve stavke
     ' popunjene": sve sto je obicno polje ostane, a sve sto je lista se isprazni.
+    ' Strelica combo-a se resava PRE grane ekrana: tag pocinje sa 'scr' kao i sve
+    ' ostalo sto ekran nosi, pa bi inace otisao ekranu -- a on o panelu izbora ne
+    ' zna nista, niti treba. Panel je ljuskin i radi isto nad svim poljima.
+    If Right$(tag, 1) = "D" And Len(tag) > 2 Then
+        If Len(PopKeyFor(Left$(tag, Len(tag) - 1))) > 0 Then
+            OpenPopupFor Left$(tag, Len(tag) - 1)
+            Exit Sub
+        End If
+    End If
     If Left$(tag, 3) = "scr" Then
         Dim preScr As String
         preScr = mScreen
@@ -3600,6 +3617,10 @@ Private Sub UiChange(ByVal tag As String)
     ' bas ono sto katalog vodi kao 'prosledjivanje dogadjaja sopstvenih
     ' kontrola ekranu' (Faza C, stavka 10).
     If Left$(tag, 3) = "scr" Then
+        ' Kucanje suzava panel i ovde -- panel je ljuskin, isto kao nad poljima
+        ' unosnog ekrana. Bez ovog reda bi kombo ekrana imao strelicu koja radi,
+        ' a kucanje koje ne otvara nista.
+        If Not mPopMute And Not mBuilding Then PopFromTyping tag
         ScrAct "chg:" & tag
         Exit Sub
     End If

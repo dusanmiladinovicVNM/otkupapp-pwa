@@ -4179,3 +4179,27 @@ ostatak ekrana već koristi — manjeg su dometa.
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
 `RunAllTests` **ZELENO (77)** · pun set **ZELENO** · `COMPILE` — **ostaje na
 operateru**, i ovog puta se videlo zašto.
+
+### Smoke: padajuće liste i „koje palete su izabrane"
+
+Dva nalaza iz prve probe, oba iz istog korena — polje u zoni ekrana nije bilo
+ravnopravno sa poljem unosnog ekrana.
+
+**1. Padajuće liste nisu radile.** Panel izbora je ljuskin i generičan (renderuje
+`.List` bilo kog kombo polja), ali `FindCombo` ga je tražio samo u `zCtx` i
+`zForm` — zonama unosnog ekrana. Kombo u zoni ugovornog ekrana nije nalazio, pa je
+`PopKeyFor` vraćao prazno i klik na strelicu nije radio ništa.
+
+Drugi uzrok je bio moj: grana `scr` u `UiClick` je gutala i klik na **strelicu**
+(`scrPreGPD` počinje sa `scr` kao i sve ostalo što ekran nosi), pa je odlazio ekranu
+— a on o panelu izbora ne zna ništa, niti treba. Strelica se sada rešava **pre**
+grane ekrana. Isto i za kucanje: `PopFromTyping` se zove i za `scr` polja, pa kombo
+ekrana ima strelicu koja radi **i** kuцanje koje sužava listu.
+
+**2. Nigde nije pisalo koje palete ulaze.** Zona je pokazivala samo brojku
+(`2 izabrano paleta`) — a baš je izbor paleta odluka koju operater donosi.
+Sada stoji i spisak **po broju palete**: `2 izabrano paleta:  185, 184`.
+
+Izbor se i dalje **drži po `PaletaID`** — broj se ponavlja kroz godine — ali zona
+ume da ga imenuje, kroz mapu `PaletaID → broj` koju punjenje redova ionako vidi.
+Dug spisak se skraćuje: zona ima jedan red, a poenta je prepoznavanje, ne inventar.

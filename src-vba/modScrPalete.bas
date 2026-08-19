@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-159"
+Public Const SCRPAL_BUILD As String = "v6-ui-160"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -58,6 +58,9 @@ Private Const PRE_GAP As Single = 10
 
 ' Oznacene palete, po PaletaID. Prazno = nijedna, i to je podrazumevano stanje.
 Private mPreOznacene As Object
+' PaletaID -> broj palete. Izbor se DRZI po identitetu (broj se ponavlja kroz
+' godine), ali operater misli u brojevima -- pa zona mora da ume da ih imenuje.
+Private mPreBrojevi As Object
 ' Kombo ponude se pune jednom, ne pri svakom rasporedu.
 Private mPreCombosFilled As Boolean
 Private mPalID As String
@@ -465,11 +468,35 @@ Private Sub OsveziNeto()
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     z.Controls("preNetoV").caption = Format$(NetoPrerade(), "#,##0.##")
-    z.Controls("preIzbor").caption = PalOznacenihBroj() & " " & Poruka("OTKUI_PRE_IZABRANO")
+    z.Controls("preIzbor").caption = SpisakIzabranih()
 End Sub
 
 ' Prazan izbor i prazna polja posle upisa. Bez ovoga bi sledeca prerada krenula
 ' sa vec potrosenim izborom -- ista lekcija kao kod oznacenih otkupnih blokova.
+' Koje su palete izabrane, po BROJU. Brojka sama ne kaze nista -- operater je
+' prijavio da nigde ne pise koje palete sveze robe ulaze u preradu, a bas to
+' je odluka koju donosi. Dugacak spisak se skracuje: zona ima jedan red, a
+' poenta je prepoznavanje, ne inventar.
+Private Function SpisakIzabranih() As String
+    Dim k As Variant, n As Long, spisak As String, broj As String
+    On Error Resume Next
+    n = PalOznacenihBroj()
+    If n = 0 Then SpisakIzabranih = Poruka("OTKUI_PRE_NIJEDNA"): Exit Function
+    For Each k In mPreOznacene.keys
+        broj = CStr(k)
+        If Not mPreBrojevi Is Nothing Then
+            If mPreBrojevi.Exists(CStr(k)) Then broj = CStr(mPreBrojevi(CStr(k)))
+        End If
+        If Len(spisak) > 46 Then
+            spisak = spisak & ChrW(8230)
+            Exit For
+        End If
+        If Len(spisak) > 0 Then spisak = spisak & ", "
+        spisak = spisak & broj
+    Next k
+    SpisakIzabranih = n & " " & Poruka("OTKUI_PRE_IZABRANO") & ":  " & spisak
+End Function
+
 Private Sub OcistiPreradu()
     Dim z As Object, nm As Variant
     On Error Resume Next
@@ -581,6 +608,7 @@ Private Function RowsNovaPrerada(ByVal q As String) As Variant
     Dim hay As String, sumNeto As Double, uk As Long, st As String, ident As String
     On Error GoTo EH
     mStep = "nova prerada"
+    If mPreBrojevi Is Nothing Then Set mPreBrojevi = CreateObject("Scripting.Dictionary")
     src = GetPaleteForGrid()
     If Not IsArray(src) Then
         RowsNovaPrerada = Array(NovaGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
@@ -592,6 +620,7 @@ Private Function RowsNovaPrerada(ByVal q As String) As Variant
     For r = 0 To UBound(src, 1)
         st = CStr(src(r, 11))
         ident = CStr(src(r, 0))
+        mPreBrojevi(ident) = CStr(src(r, 1))
         hay = CStr(src(r, 1)) & "|" & CStr(src(r, 2)) & "|" & CStr(src(r, 3)) & "|" & _
               CStr(src(r, 4)) & "|" & CStr(src(r, 5)) & "|" & CStr(src(r, 6)) & "|" & _
               st & "|" & CStr(src(r, 12))
