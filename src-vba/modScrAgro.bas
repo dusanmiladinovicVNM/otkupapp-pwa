@@ -1452,13 +1452,17 @@ End Function
 ' TEST SEAM
 ' Zona se u testu ne crta (forma se ne prikazuje), pa se stanje ekrana ne
 ' moze procitati iz kontrola. Isti razlog i isti oblik kao Scr_*TestSet u
-' modScrStorno.
+' modScrStorno -- ukljucujuci kapiju: seam koji MENJA stanje ekrana van
+' test-rezima ne radi nista. Scr_KorpaTestReset bi inace, pozvan iz liste
+' makroa, tiho bacio operateru neproknjizenu korpu.
 '=====================================================================
 Public Sub Scr_ListaTestSet(ByVal kljuc As String)
+    If Not IsTestMode() Then Exit Sub
     mLista = kljuc
 End Sub
 
 Public Sub Scr_RezimTestSet(ByVal rezim As String)
+    If Not IsTestMode() Then Exit Sub
     mMod = rezim
 End Sub
 
@@ -1480,6 +1484,7 @@ Public Function Scr_KorpaTestDodaj(ByVal artikalID As String, _
                                    ByVal brojPak As Double, _
                                    ByVal parcelaID As String) As String
     Dim fokus As String
+    If Not IsTestMode() Then Exit Function
     mMod = AG_IZLAZ
     Scr_KorpaTestDodaj = modAgroUnos.AgroDodajIzlaz(Korpa(), artikalID, _
                                                     brojPak, parcelaID, fokus)
@@ -1498,6 +1503,7 @@ Public Function Scr_ArtIdTest(ByVal prikaz As String) As String
 End Function
 
 Public Sub Scr_KorpaTestReset()
+    If Not IsTestMode() Then Exit Sub
     Set mKorpaI = modAgroUnos.NovaAgroKorpa()
     Set mKorpaU = modAgroUnos.NovaAgroKorpa()
     OcistiParcele
