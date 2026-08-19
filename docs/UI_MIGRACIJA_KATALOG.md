@@ -613,7 +613,7 @@ MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.5 Verifikacija
 
-Testovi 81–84 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+Testovi 82–87 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
 u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
 ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 
@@ -632,18 +632,29 @@ Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 
 ### 7.6 Otvoreno
 
-- **Suite nije puštena.** `run_vba.py` traži Windows + Excel; ceo rad je nastao
-  u Linux sesiji, pa su testovi 81–86 i devet sabotaža **napisani ali
-  neizvršeni**. Prošlo je samo ono što radi bez Excela: `vba_check`
-  (+ `--self-test`), `who_writes --check`, `run_vba --self-test`, i provera da
-  svaka sabotaža pogađa tačno jedno mesto i uredno se vraća. **Compile**
-  (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim podacima ostaju
-  operateru — nisu prošli nijednom.
-- **Sudar brojeva testova.** Grana `claude/bazeni-ljuske` (nemerge-ovana, 1
-  commit iznad main-a) takođe dodaje **test 81**. Numeracija ovde ide 81–86 jer
-  je to prvi slobodan broj iznad main-ovih 80; rupa nije opcija, pošto `RunOne`
-  na nepostojeći `Case` tiho prijavi **OK sa praznim imenom** — fantomski
-  prolaz. Ko merge-uje drugi, pomera za jedan.
-- **`MAX_COLS` je `Private`** na ovoj bazi, pa granicu kolona test tvrdi
-  literalom `14` uz komentar. `claude/bazeni-ljuske` ga čini javnim zajedno sa
-  `BazenStaje`; kad to uđe u main, literal se menja konstantom.
+- **Suite je puštena i zelena.** Prvo izvršavanje je bilo na rebase-u na
+  `main` (`v6-ui-171`), na mašini sa Excelom. `RunAllTests` **ZELENO (87)**,
+  pun set **ZELENO** (72 · 189 · 35 · 181 · 97 · 336 · 25), svih **devet**
+  agro sabotaža obara **imenovani** test i uredno se vraća.
+- **Prvo puštanje je oborilo dva testa** — oba pisana nad fixture-om kakav
+  nije, produkcioni kod je bio ispravan:
+  - `T_Agro_KapijaStanjaBrojiKorpu` je kontrolni izlaz upisivao sa **praznom
+    parcelom** (šesti pozicioni argument `SaveMagacinCore`), a `PRACENJE_PARCELA`
+    je u fixture-u ON → 4215. Test je padao na svom **čistaču**, ne na kapiji.
+  - `T_Agro_BrojacIDvoklikPoIdentitetu` je tražio identitet kooperanta
+    `KOOP-TEST-2`, **koga u listi dugova nije bilo** (mapu puni čitač liste, a
+    lista se gradi samo iz `MAG_IZLAZ` redova). Tvrdnja je merila **odsustvo
+    reda**. Fixture zato dobija `MAG-TEST-4`, dug preko rezervisanog
+    `ART_POCETNI_DUG` — da stanje `ART-TEST-1` ostane tačno 15.
+
+  To je i cena pisanja testa bez izvršavanja: obe greške bi pale na prvom
+  puštanju, a nijedna se ne vidi čitanjem.
+- **Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
+  podacima **ostaju operateru** — nisu prošli nijednom.
+- **Dupla implementacija odbitka.** `modNovac.GetAgroAbzugMapa` je druga kopija
+  pravila iz `GetAgroAbzug` (postoji zbog brzine: `O(n)` umesto `O(n·m)`).
+  **Nijedan test ih ne veže**, a fixture nema nijedan `AgroAbzug` red — pa bi
+  test ekvivalencije danas bio placebo. Kad se doda tip uplate ili promeni
+  izuzimanje storniranih u jednoj, lista dugova i kartica kooperanta počnu da
+  pokazuju **različit dug**, bez ijednog crvenog testa. Zatvara se sejanjem
+  `AgroAbzug` redova u fixture i tvrdnjom nad **svim** kooperantima mape.

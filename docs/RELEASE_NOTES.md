@@ -4495,13 +4495,28 @@ izdaje.
 
 Ekran je **drugi korisnik** ugovora koji je Faza C otvorila (`NewFieldG`,
 `LayoutFieldInner`, `chg:`, `FindCombo` nad zonom, `dbl:`, `Scr_Cipovi`,
-`Scr_Brojac`). Diff nad `modOtkupUI.bas` je **nula linija** — namerno: dve
+`Scr_Brojac`). Diff nad `modOtkupUI.bas` je **jedna linija** (pečat verzije) — namerno: dve
 fabrike polja znače dva izgleda istog polja.
 
-### Šta NIJE prošlo
+### Verifikacija
 
-**Suite nije puštena.** Ceo rad je nastao u Linux sesiji bez Excela, pa su
-testovi 81–86 i devet sabotaža **napisani ali neizvršeni**. Prošlo je samo ono
-što radi bez Excela: `vba_check` (+ `--self-test`), `who_writes --check`,
-`run_vba --self-test`, i provera da svaka sabotaža pogađa tačno jedno mesto i
-uredno se vraća. **Compile i smoke nisu prošli nijednom** — ostaju operateru.
+Testovi **82–87** (numeracija je pomerena za jedan: `v6-ui-170` je uzeo 81).
+Suite je **prvi put puštena na ovom rebase-u**, na mašini sa Excelom:
+
+`vba_check` čisto (193) · self-test (47) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (87)** · pun set **ZELENO** ·
+svih **devet** agro sabotaža obara **imenovani** test.
+
+**Prvo puštanje je oborilo dva testa**, oba pisana nad fixture-om kakav nije —
+produkcioni kod je bio ispravan u oba slučaja:
+
+| Test | Zašto je pao |
+|---|---|
+| `T_Agro_KapijaStanjaBrojiKorpu` | kontrolni izlaz je upisivan sa **praznom parcelom**, a `PRACENJE_PARCELA` je ON → `4215`. Test je padao na svom **čistaču**, ne na kapiji koju meri. |
+| `T_Agro_BrojacIDvoklikPoIdentitetu` | tražio je identitet kooperanta **koga u listi dugova nije bilo** — tvrdnja je merila odsustvo reda i prolazila bi samo greškom. |
+
+Obe greške bi pale na prvom puštanju, a nijedna se ne vidi čitanjem — to je
+cena testa koji je napisan bez izvršavanja.
+
+**Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
+podacima **ostaju operateru** — nisu prošli nijednom.
