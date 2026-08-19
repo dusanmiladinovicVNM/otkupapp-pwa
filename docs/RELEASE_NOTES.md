@@ -4394,3 +4394,51 @@ i `ulaz-bez-kilaze` (*neto ulaz je zbir neto izabranih paleta* — `[250]` vs `[
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
 **ZELENO (80)** · pun set **ZELENO** (336 + 97 + 25) · **COMPILE i smoke prošli kod
 operatera**.
+
+---
+
+## v2.58.0 — `v6-ui-170` · bazen ljuske više ne ćuti
+
+Ljuska ima **bazene**: segmenata prekidača (`MAX_SEG`), dugmadi radnji nad redom
+(`MAX_ACT`), čipova (`MAX_CHIP`) i kolona mreže (`MAX_COLS`). Svaki je tačno onoliko
+veliki koliko je kontrola napravljeno pri gradnji.
+
+Ekran koji zatraži više nije grešio — ali se višak gubio **bez ijedne poruke**. To se
+dogodilo **dvaput**:
+
+| Kada | Šta se videlo |
+|---|---|
+| `v6-ui-143` | jedanaesti čip se **crtao**, a klik nije imao kome da stigne |
+| `v6-ui-162` | šesta radnja nad redom je tiho izbacila „Nepotpune palete“ |
+
+Oba puta je kvar našao **operater**, ne suite. Oba puta je uzrok bio isti obrazac:
+`If i >= MAX_X Then Exit For`.
+
+### Šta se menja
+
+Odsecanje **ostaje** — višak nema gde da se nacrta. Menja se to što odsecanje sada
+dobija **ime**: koji ekran, koja lista, koja vrsta i koliko je traženo.
+
+```
+WARN modOtkupUI.BazenStaje | PALETE/PALETE/radnje: trazeno 6, bazen ima 5 -- visak se NE crta
+```
+
+Sva četiri mesta idu kroz isti čuvar (`BazenStaje`). Prijava je **jednom po**
+**(ekran, lista, vrsta)** — ovo se zove pri svakom crtanju, pa bi prijava po pozivu
+napunila log i sakrila ono što se stvarno dešava. Toast ide samo u dev buildu:
+operater od te brojke nema šta da uradi, ali trag mora da ostane uvek.
+
+### Test 81
+
+Tvrdi **oboje**: da čuvar odseca **na veličinu bazena** (ne na nulu, ne na traženo) i
+imenuje prekoračenje **jednom**, i da **nijedan današnji ekran** ne prekoračuje.
+
+Druga tvrdnja ide kroz **registar ekrana**, ne kroz spisak imena — pa pokriva i
+ekrane Faze E koji tek dolaze, bez ijedne dopune testa. To je i tvrdnja koja će pasti
+onog dana kad neko doda osmi čip.
+
+Sabotaže: `bazen-cuti-visak` (*prekoračenje se prijavljuje*) i `bazen-odseca-na-nulu`
+(*višak se odseca na veličinu bazena* — `[5]` vs `[0]`).
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
+**ZELENO (81)** · pun set **ZELENO** · `COMPILE` — **ostaje na operateru**.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-169"
+Public Const OTKUI_BUILD   As String = "v6-ui-170"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -176,13 +176,15 @@ Private Const TOAST_H     As Single = 26
 ' tipova + navigacioni "Svi"), pa je granica podignuta sa 9 -- na 9 je deseta
 ' tiho nestajala: LayoutGrid crta samo prvih MAX_SEG, bez ijedne poruke, pa se
 ' "Izvodi" nisu mogli izabrati ni na koji nacin.
-Private Const MAX_SEG     As Long = 11
+' Bazeni ljuske. JAVNI su zato sto se o njima TVRDI: ekran koji zatrazi vise
+' nego sto bazen ima izgubi visak, pa broj mora da bude dohvatljiv testu.
+Public Const MAX_SEG      As Long = 11
 ' JAVNA iz istog razloga kao MAX_CHIP: lista koja prijavi vise radnji nego sto
 ' ima dugmadi izgubi visak BEZ ijedne poruke (RefreshRowActions radi Exit For).
 ' Tako je sesta radnja na listi paleta tiho izbacila 'Nepotpune palete'.
 Public Const MAX_ACT      As Long = 5        ' dugmadi radnji nad redom koje se PRAVE
 Private Const MAX_ROWS    As Long = 22       ' redova mreze koji se PRAVE
-Private Const MAX_COLS    As Long = 14       ' kolona mreze koje se PRAVE
+Public Const MAX_COLS     As Long = 14       ' kolona mreze koje se PRAVE
 
 ' Sifre stanja placanja (odvojene od 0/1/2 koje nosi STATUS pilula).
 ' MORAJU biti u deklaracionom delu: VBA module-level Const iza prve procedure
@@ -314,6 +316,8 @@ Private Const MODE_CHIP As Long = 6
 Private mScrChipN As Long
 Private mScrChipKey(0 To 6) As String
 Private mChipW(0 To 6) As Single
+' Vec prijavljena prekoracenja bazena, po kljucu ekran/lista/vrsta.
+Private mBazenPrijave As Object
 Private mCntOtkaz As Long
 Private mCntBezZb As Long
 Private mCntNefakt As Long
@@ -778,9 +782,11 @@ Private Sub RefreshChipsForScreen(frm As Object)
         Exit Sub
     End If
 
+    Dim staje As Long
+    staje = BazenStaje(UBound(Split(spec, "|")) + 1, MAX_CHIP, "cipovi")
     For Each e In Split(spec, "|")
         p = Split(CStr(e), ":")
-        If UBound(p) >= 2 And n < MAX_CHIP Then
+        If UBound(p) >= 2 And n < staje Then
             nm = Split(CStr(ch(n)), "|")(0)
             mScrChipKey(n) = CStr(p(0))
             mChipW(n) = CSng(val(p(2)))
@@ -840,8 +846,7 @@ Private Sub RefreshListSeg(frm As Object)
     akt = ActiveLista()
     seg = SegDefs()
     If Not IsArray(seg) Then Exit Sub
-    For i = 0 To UBound(seg)
-        If i >= MAX_SEG Then Exit For
+    For i = 0 To BazenStaje(UBound(seg) + 1, MAX_SEG, "liste") - 1
         k = Split(CStr(seg(i)), "|")(0)
         BoxState z, "lsSeg" & i, _
                  IIf(akt = k, C_FOREST, C_WHITE), _
@@ -2667,8 +2672,7 @@ Private Sub RefreshRowActions()
     Set z = mFrm.Controls("zGrid")
     act = ActDefs()
     If Not IsArray(act) Then Exit Sub
-    For i = 0 To UBound(act)
-        If i >= MAX_ACT Then Exit For
+    For i = 0 To BazenStaje(UBound(act) + 1, MAX_ACT, "radnje") - 1
         p = Split(CStr(act(i)), ":")
         ' peto polje: 1 = radnja trazi izabran red, 0 = radi bez njega
         on_ = True
@@ -4462,8 +4466,7 @@ End Sub
 Private Sub SetGridColsArr(ByVal a As Variant)
     If Not IsArray(a) Then Exit Sub
     mCols = a
-    mColN = UBound(mCols) + 1
-    If mColN > MAX_COLS Then mColN = MAX_COLS
+    mColN = BazenStaje(UBound(mCols) + 1, MAX_COLS, "kolone")
 End Sub
 
 Private Function SortedView(ByRef a() As Variant, ByVal n As Long, ByVal nc As Long, _
@@ -4553,6 +4556,48 @@ Public Sub GridTestLoad(ByVal kljuc As String)
     mScreen = kljuc
     LoadGridFromScreen
 End Sub
+
+' KOLIKO SME DA SE UZME iz onoga sto je ekran zatrazio.
+'
+' Bazen ljuske je konacan: segmenata, radnji, cipova i kolona ima tacno onoliko
+' koliko je kontrola napravljeno pri gradnji. Ekran koji zatrazi vise nije
+' gresio -- ali visak se do sada gubio BEZ IJEDNE PORUKE. To se dogodilo vec
+' dvaput: jedanaesti cip se crtao a nije reagovao (v6-ui-143), a sesta radnja
+' nad redom je tiho izbacila 'Nepotpune palete' (v6-ui-162).
+'
+' Odsecanje ostaje -- visak nema gde da se nacrta. Ono sto se menja je da
+' odsecanje dobija IME: koji ekran, koja lista, koja vrsta i koliko je trazeno.
+'
+' Prijavljuje se JEDNOM po (ekran, lista, vrsta): ovo se zove pri svakom
+' crtanju, pa bi inace log rastao bez kraja. Toast ide samo u dev buildu --
+' operater od te brojke nema sta da uradi, ali trag mora da ostane uvek.
+Public Function BazenStaje(ByVal trazeno As Long, ByVal bazen As Long, _
+                           ByVal vrsta As String) As Long
+    Dim k As String
+    BazenStaje = trazeno
+    If trazeno <= bazen Then Exit Function
+    BazenStaje = bazen
+    On Error Resume Next
+    k = mScreen & "/" & ActiveLista() & "/" & vrsta
+    If mBazenPrijave Is Nothing Then _
+        Set mBazenPrijave = CreateObject("Scripting.Dictionary")
+    If mBazenPrijave.Exists(k) Then Exit Function
+    mBazenPrijave(k) = True
+    LogWarn "modOtkupUI.BazenStaje", k & ": trazeno " & trazeno & _
+            ", bazen ima " & bazen & " -- visak se NE crta"
+    If IsDebugUI() Then _
+        ShowToast Poruka("OTKUI_ERR_BAZEN") & " " & k & " " & _
+                  trazeno & "/" & bazen, True
+    Err.Clear
+End Function
+
+' Koliko je razlicitih prekoracenja prijavljeno. Postoji da bi se moglo
+' TVRDITI da se isto prekoracenje prijavljuje jednom, a ne pri svakom crtanju.
+Public Function BazenPrijavaBroj() As Long
+    On Error Resume Next
+    If mBazenPrijave Is Nothing Then Exit Function
+    BazenPrijavaBroj = mBazenPrijave.count
+End Function
 
 Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
     On Error Resume Next
