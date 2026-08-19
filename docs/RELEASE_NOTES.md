@@ -4440,3 +4440,13 @@ Pravilo za svaki budući test nad `frmOtkupUI`: **tvrdi posle `Unload`-a.**
 
 `vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (80)** ·
 `COMPILE` — **ostaje na operateru**.
+
+### `v6-ui-165` — nalaz ide i na ekran
+
+Prvi prolaz sa `v6-ui-164` nije doneo log, a zona je i dalje pokazivala samo dva
+polja — uz jednu novu informaciju: mreža je prešla sa 22 na **17 redova**, dakle
+`Scr_Layout` je odradio posao do kraja i zona je stvarno narasla.
+
+Zato spisak kontrola koje fale sada ide i u **toast**, ne samo u log: rupa u panelu
+se vidi odmah, pa i njen razlog treba da stigne tu gde operater gleda. Samo pri
+**paljenju** panela — gašenje nad listom pregleda nema kome da javlja ništa.

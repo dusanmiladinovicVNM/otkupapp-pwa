@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-164`.
+Stanje na dan `v6-ui-165`.
 
 ---
 
@@ -459,7 +459,7 @@ legacy do tada penzioniše).
     stikliranje paleta u mreži + polja u zoni. Ljuska je dobila granu za promenu
     u polju ugovornog ekrana (`chg:`), simetričnu sa `act:` i `row:`.
 11. ~~Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.~~
-    **URAĐENO** (`v6-ui-164`). Ekran prijavljuje svoje čipove kroz `Scr_Cipovi`
+    **URAĐENO** (`v6-ui-165`). Ekran prijavljuje svoje čipove kroz `Scr_Cipovi`
     (`kljuc:KATALOG:sirina`), ljuska pozajmljuje slotove svog bazena i vraća
     ključ kroz `Scr_Rows`. Time je nestalo i poslednje mesto na kom je ljuska
     znala jedan ekran po imenu (`akt = "OTPREMNICE"`). Palete su dobile pet

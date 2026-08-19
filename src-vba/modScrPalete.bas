@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-164"
+Public Const SCRPAL_BUILD As String = "v6-ui-165"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -230,6 +230,11 @@ Private Sub PoljaPrerade(ByVal z As Object, ByVal vis As Boolean)
     If Len(fale) > 0 Then
         LogWarn "modScrPalete.PoljaPrerade", _
                 "zona nema kontrole:" & fale & " | zona=" & ZonaOpis(z)
+        ' I NA EKRAN, ne samo u log: rupa u panelu se vidi odmah, pa i njen razlog
+        ' treba da stigne tu gde operater gleda. Samo pri paljenju -- gasenje panela
+        ' nad listom pregleda ne treba nikome da javlja nista.
+        If vis Then modOtkupUI.ShowToast _
+            "Zona: nema" & fale & " (" & ZonaOpis(z) & ")", True
     End If
     Err.Clear
 End Sub
