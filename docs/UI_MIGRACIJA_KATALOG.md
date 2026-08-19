@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-162`.
+Stanje na dan `v6-ui-169`.
 
 ---
 
@@ -458,7 +458,22 @@ legacy do tada penzioniše).
     **URAĐENO** (`v6-ui-159`). Četvrta lista ekrana Palete „Nova prerada":
     stikliranje paleta u mreži + polja u zoni. Ljuska je dobila granu za promenu
     u polju ugovornog ekrana (`chg:`), simetričnu sa `act:` i `row:`.
-11. Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.
+11. ~~Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.~~
+    **URAĐENO** (`v6-ui-169`). Ekran prijavljuje svoje čipove kroz `Scr_Cipovi`
+    (`kljuc:KATALOG:sirina`), ljuska pozajmljuje slotove svog bazena i vraća
+    ključ kroz `Scr_Rows`. Time je nestalo i poslednje mesto na kom je ljuska
+    znala jedan ekran po imenu (`akt = "OTPREMNICE"`). Palete su dobile pet
+    čipova: Sve · Ova godina · Otvorene · Zatvorene · Prerađene.
+
+**Uz Fazu C je došlo i:** dvoklik na red se prosleđuje ekranu (`dbl:<red>`), pa
+klik na paletu vodi pravo na njene stavke; panel za unos prerade pokazuje i **neto
+ulaz** izabranih paleta pored neto izlaza (`v6-ui-169`). Traženi **padajući redovi
+detalja ispod izabranog reda** su odloženi sa razlogom: mrežu koriste svi ekrani, a
+za detalj ispod reda ugovor bi morao da dobije **vrstu reda** i opis kolona po
+vrsti, uz renderer promenljive visine — posao reda veličine migracije jednog celog
+ekrana. Stoji kao prioritet za kasnije.
+
+**Faza C je time ZATVORENA** (uz Compile i smoke kao poslednju kapiju).
 
 **Uz Fazu C je došlo i:** dvoklik na red se prosleđuje ekranu (`dbl:<red>`), pa
 klik na paletu vodi pravo na njene stavke (`v6-ui-162`). Traženi **padajući redovi
