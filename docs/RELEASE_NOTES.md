@@ -3939,3 +3939,80 @@ nazivu dokumenta: naziv je tekst za prikaz i sme da se menja.
 **Test 75** tvrdi sva tri stanja; `BlokStatusTekst` je zato javna — zona se crta nad
 formom koju harness gradi bez `.Show`, pa se sam natpis ne može pročitati.
 Sabotaža `blok-status-ne-prati-izbor` pada po imenu.
+
+---
+
+## v2.53.0 — `v6-ui-155` · Oporavak nosi brojku, jer nije radnja nego zaostatak
+
+Operater: *„ima li poslovno i UX smisla da Oporavak i Storno stoje ravnopravno jedan
+ispod drugoga?"*
+
+Nemaju, i to se videlo u ponašanju aplikacije pre nego u teoriji:
+
+- **Storno je radnja**, Oporavak je **posledica** — spisak onoga što je ostalo
+  nedovršeno, uglavnom zato što je neki storno stao na safe-stopu.
+- **Oporavak nema svoj ulaz.** Niko ne odluči „idem da radim oporavak" — tamo ga
+  pošalje poruka. U `v6-ui-150` su četiri poruke prepravljene da glase „Reši na
+  ekranu Oporavak → Nedovršeno".
+- **Sve u njemu je broj koji bi trebalo da bude nula.** Na instalaciji se nakupilo
+  **44 / 32 / 2**, a sidebar je izgledao isto i kad je iza stavke nula.
+
+Stavka ostaje u OPERACIJE — posao u njoj **jeste** operativan (prevezivanje i
+vraćanje storna su mutacije, ne izveštaji) — ali sada nosi **brojku**:
+
+```
+Storno
+Oporavak            44
+```
+
+Nula se ne crta. Značka postoji da bi se video **zaostatak**; nula uz svaku stavku
+bi je pretvorila u ukras koji se prestane primećivati.
+
+### Ljuska i dalje ne poznaje nijedan ekran po imenu
+
+Najlakše rešenje bilo bi da sidebar pozove `GetNedovrseno`. To je tačno ono što ceo
+ugovor ekrana izbegava — sledeći ekran sa zaostatkom morao bi da se doda **u
+ljusku**, a ne u svoj modul.
+
+Zato je `Scr_Brojac` **opcion član ugovora**: ekran koji ima šta da broji ga
+implementira, ostali ga nemaju i dobijaju nulu. Ljuska pita sve redom i ne zna ko je
+odgovorio ni šta se broji.
+
+`Application.Run` na nepostojeću proceduru **diže grešku**, pa je bez gutanja te
+greške sidebar ne bi ni iscrtao — ali greška se i **čisti**, da ne procuri u ljusku
+(ista klasa nalaza kao test 66).
+
+### Cena je držana pod kontrolom
+
+`Scr_Brojac` se zove iz `RefreshFromData` **i iz `EnsureGridLoaded`** — dakle na
+promenu podataka i jednom na otvaranju aplikacije, ne pri
+svakom crtanju sidebara. `GetNedovrseno` je više prolaza kroz tabele; na crtačkoj
+učestalosti bio bi to isti kvar zbog koga su dva PR-a vadila sekunde iz uvida o
+stornu.
+
+Broji se **ista lista** koju ekran prikazuje kao „Nedovršeno", pa se broj u meniju i
+broj na ekranu ne mogu raziću.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (39) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (76)** · pun set **ZELENO** · `COMPILE` `NEJASNO`.
+
+**Test 76** tvrdi da ljuska dobija baš ono što ekran broji (bez posrednika), da je
+član ugovora opcion, i da poziv ekrana bez brojača **ne ostavlja `Err` postavljen**.
+
+Dve sabotaže, obe po imenu:
+
+| Sabotaža | Obara |
+|---|---|
+| `brojac-ekran-po-imenu` | ljuska dobija BAS ono što ekran broji (12 → 0) |
+| `brojac-nije-opcion` | poziv ekrana bez brojača ne ostavlja `Err` (0 → 1004) |
+
+Druga je usput otkrila da je moja prva verzija tvrdnje bila prazna: `On Error Resume
+Next` već guta grešku i vrednost ostaje 0, pa sabotaža nad tim blokom nije obarala
+ništa. Ono što blok stvarno radi je `Err.Clear` — i tek kad je test to počeo da meri,
+sabotaža je dobila šta da obori.
+
+Prva verzija je zvala samo `RefreshFromData`, pa su značke bile **prazne do prve
+promene podataka** — a zaostatak koji se vidi tek pošto nešto uradiš ne rešava
+ništa. Ceo smisao je da se vidi čim se aplikacija otvori.

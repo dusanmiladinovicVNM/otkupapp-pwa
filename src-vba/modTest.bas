@@ -209,6 +209,7 @@ Public Sub RunAllTests()
     RunOne 73
     RunOne 74
     RunOne 75
+    RunOne 76
 
     SetTestMode prevMode
     WriteResultFile
@@ -316,6 +317,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 73: TestName = "T_ImpactPalete_ZaglavljeIzPraveVrste"
         Case 74: TestName = "T_StornoEfekat_TekstIzKataloga"
         Case 75: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
+        Case 76: TestName = "T_NavBrojac_SamoEkranKojiBroji"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -399,6 +401,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 73: T_ImpactPalete_ZaglavljeIzPraveVrste
         Case 74: T_StornoEfekat_TekstIzKataloga
         Case 75: T_StornoBlokovi_PodrazumevanoNijedan
+        Case 76: T_NavBrojac_SamoEkranKojiBroji
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3595,6 +3598,56 @@ Private Sub T_StornoBlokovi_PodrazumevanoNijedan()
 
     modScrStorno.Scr_TipTestSet STIP_OTKUP
 End Sub
+
+' ============================================================
+' 76. Brojac uz stavku menija: opcion deo ugovora, bez imena ekrana
+' ============================================================
+' Operater je pitao ima li smisla da Storno i Oporavak stoje ravnopravno jedan
+' ispod drugog. Nemaju: Storno je RADNJA, Oporavak je POSLEDICA -- spisak onoga
+' sto je ostalo nedovrseno, uglavnom zato sto je neki storno stao na safe-stopu.
+' Kod operatera se nakupilo 44 stavke a da nista nije reklo; sidebar je izgledao
+' isto i kad je iza stavke nula i kad je 44.
+'
+' Brojac to razlikuje. Ali NE SME da uvede ljusku u poznavanje ekrana po imenu --
+' ceo ugovor postoji da bi ljuska ostala neuka. Zato je Scr_Brojac OPCION clan
+' ugovora: ekran koji nema sta da broji ga ne implementira i dobija nulu, a ljuska
+' pita sve redom i ne zna ko je odgovorio.
+Private Sub T_NavBrojac_SamoEkranKojiBroji()
+    Dim n As Long
+
+    ' NAJVAZNIJE PRVO: ekran koji broji vraca broj, i to kroz KASNO VEZIVANJE --
+    ' isto kao svaki drugi clan ugovora. Da ljuska zove GetNedovrseno direktno,
+    ' ova tvrdnja bi prolazila a ugovor bi bio probijen.
+    n = modUiScreens.ScrBrojac("OPORAVAK")
+    AssertEq (n >= 0), True, "ekran Oporavak odgovara na Scr_Brojac"
+    AssertEq n, modScrOporavak.Scr_Brojac(), _
+             "ljuska dobija BAS ono sto ekran broji, bez posrednika"
+
+    ' Isti broj koji ekran prikazuje kao Nedovrseno -- da se meni i ekran ne mogu
+    ' razici. Fixture ima bar dve ispravke na cekanju, pa nije nula.
+    AssertEq (n >= 2), True, "brojac vidi ispravke na cekanju iz fixture-a"
+
+    ' Ekran koji brojac NEMA ne sme da obori poziv niti da izmisli broj. Scr_Brojac
+    ' je opcion: Application.Run na nepostojecu proceduru DIZE gresku, pa se bez
+    ' gutanja te greske sidebar ne bi ni iscrtao.
+    AssertEq modUiScreens.ScrBrojac("DOKUMENTI"), 0, _
+             "ekran bez brojaca daje nulu, ne gresku"
+    AssertEq modUiScreens.ScrBrojac("STORNO"), 0, _
+             "ni Storno nema sta da broji -- on je radnja, ne zaostatak"
+
+    ' Nepoznat kljuc takodje mora da prodje mirno: registar se menja, a sidebar
+    ' ne sme da padne na stavku koja je u medjuvremenu izbacena.
+    AssertEq modUiScreens.ScrBrojac("NE-POSTOJI"), 0, "nepoznat ekran daje nulu"
+
+    ' I greska ne sme da PROCURI. Application.Run na nepostojecu proceduru je
+    ' podigne; On Error Resume Next je proguta, ali je ostavi POSTAVLJENU -- pa bi
+    ' prvi sledeci LogErr u ljusci zapisao tudju gresku, a prvi Err.Number <> 0
+    ' skrenuo tok. Ista klasa nalaza kao test 66.
+    Err.Clear
+    n = modUiScreens.ScrBrojac("DOKUMENTI")
+    AssertEq Err.Number, 0, "poziv ekrana bez brojaca ne ostavlja Err postavljen"
+End Sub
+
 
 
 

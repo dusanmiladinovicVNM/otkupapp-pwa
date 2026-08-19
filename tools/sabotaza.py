@@ -1243,6 +1243,27 @@ SABOTAZE = {
         "T_StornoBlokovi_PodrazumevanoNijedan",
         "red o blokovima prijavljuje KOLIKO ih je izabrano",
     ),
+    # Brojac uz stavku menija ide kroz ugovor, kasno vezano -- ljuska ne sme da
+    # sazna nijedan ekran po imenu. Poziv GetNedovrseno direktno bi radio, i to je
+    # bas ono sto ceo ugovor izbegava: sledeci ekran koji ima zaostatak morao bi
+    # da se doda u ljusku, a ne u svoj modul.
+    "brojac-ekran-po-imenu": (
+        "modUiScreens.bas",
+        "    ScrBrojac = CLng(Application.Run(m & \".Scr_Brojac\"))\n",
+        "    If kljuc = \"OPORAVAK\" Then ScrBrojac = 0   ' SABOTAZA: ljuska zna ekran po imenu\n",
+        "T_NavBrojac_SamoEkranKojiBroji",
+        "ljuska dobija BAS ono sto ekran broji, bez posrednika",
+    ),
+    # Druga strana: Scr_Brojac je OPCION. Ekran koji ga nema mora da prodje mirno,
+    # jer Application.Run na nepostojecu proceduru DIZE gresku -- bez gutanja te
+    # greske sidebar se ne bi ni iscrtao.
+    "brojac-nije-opcion": (
+        "modUiScreens.bas",
+        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n        Err.Clear\n    End If\n",
+        "    ' SABOTAZA: greska ekrana bez brojaca se ne guta\n",
+        "T_NavBrojac_SamoEkranKojiBroji",
+        "ekran bez brojaca daje nulu, ne gresku",
+    ),
 }
 
 
