@@ -4098,3 +4098,299 @@ Flow 336 · Palete 97 · Agrohemija 25).
 
 Pun set je ovde obavezan, ne formalnost: izmenjeni čitači su u putanjama štampe,
 kartice kooperanta i storno žurnala, koje `RunAllTests` ne dodiruje.
+
+---
+
+## v2.55.0 — `v6-ui-159` · unos prerade: Faza C, stavka 10
+
+Poslednja stavka koja je tražila **proširenje ugovora ekrana**, a ne samo novu rutinu.
+
+### Zašto je tražila seam
+
+`UiChange` je ceo poznavao polja **unosnog** ekrana po imenu — `fgKgIT`, `cbKupac`,
+`fgBrZbirT`. To je i tačno, jer su ta polja njegova. Ali ekran koji ima **svoja**
+polja tu nije imao šta da traži: ljuska ne zna šta ona znače, a ne sme ni da sazna.
+
+Klik je tu granu već imao (prefiks `scr` u `UiClick`); **promena teksta nije** — pa
+ekran sa poljem za unos nije mogao ni da postoji. Sada se `scr*` promena prosleđuje
+kao `chg:<tag>`, istim putem kao `act:` i `row:`.
+
+`NewFieldG` je postao javan iz istog razloga: bez toga bi svaki ekran sa unosom
+crtao svoju verziju istog polja, pa bi se razišli u izgledu i ponašanju.
+
+### Četvrta lista: „Nova prerada"
+
+Nije pregled kao ostale tri nego **radni ekran**: mreža služi da se palete označe,
+zona nosi polja.
+
+| Deo | Kako |
+|---|---|
+| Mreža | isti izvor kao lista „Palete", plus ✓ kolona napred i `PaletaID` nevidljiv pozadi |
+| Izbor | klik na red štiklira — isti obrazac koji su otkupni blokovi dobili u `v6-ui-149` |
+| Zona | **naraste** samo za ovu listu; `Scr_Layout` vraća visinu, pa je to već bilo u ugovoru |
+| Polja | bruto · težina palete · gotov proizvod · kutije + tip · kese + tip · napomena |
+| Neto | računa se **uživo**, kroz `chg:` seam |
+| Upis | `SavePrerada_TX` — isti writer koji zove i legacy panel |
+
+Izbor se drži **po `PaletaID`**, ne po broju palete: spisak završava u mutaciji.
+
+Odlazak sa liste **poništava izbor** — palete pripadaju preradi koja se sprema, a
+ostavljene bi sledeći put ušle u spisak koji operater nije video. Ista lekcija kao
+kod označenih otkupnih blokova.
+
+**Nijedna nova poslovna kapija.** Svih sedam provera je preneto iz legacy panela i i
+dalje su pod prekidačem `VALIDACIJA_UNOSA`. Lista pokazuje **sve** palete, kao i
+legacy — sužavanje ide kroz pretragu.
+
+### Račun izdvojen iz prikaza
+
+`NetoIzracun(bruto, težinaPalete, kutije, tipKutija, kese, tipKesa)` je javan i
+čist. Bez tog izdvajanja jedina poslovna formula na ekranu ne bi mogla da se izmeri:
+zona se crta nad formom koju harness gradi bez `.Show`.
+
+**Test 77** tvrdi ugovor liste, kolone, izbor po identitetu i sam račun — uključujući
+donju granicu: negativan neto nije podatak nego znak da unos nije potpun, pa je nula
+iskrenija od minusa.
+
+Dve sabotaže, obe po imenu: `prerada-sve-palete` i `prerada-neto-bez-ambalaze`
+(*neto je bruto minus težina palete — očekivano [80], dobijeno [100]*).
+
+### Compile je zaradio svoje mesto
+
+Prvi run posle ovog koda je **visio 585 sekundi** i pao sa `The remote procedure call
+failed`. Nije bio pad testa nego **projekat koji se ne kompajlira**:
+
+| Simbol | Problem |
+|---|---|
+| `GAP` | `Private` u `modOtkupUI`, korišćen iz `modScrPalete` |
+| `FmtBroj` | isto |
+| `Zona()` | postoji u `modScrStorno`, ne i u `modScrPalete` |
+
+`vba_check` nijedan ne vidi: `NEDEFINISAN` traži simbol koji **nigde** nije definisan,
+a ova dva jesu — samo ne odavde. To je granica statičke provere i tačno onaj razlog
+zbog kog `Debug → Compile VBAProject` ostaje ručna kapija.
+
+Popravka nije bila da se `GAP` i `FmtBroj` otvore: ekran nema pravo da otvara ljuskine
+konstante zbog sopstvenog rasporeda. Lokalni `PRE_GAP` i `Format$` — isti idiom koji
+ostatak ekrana već koristi — manjeg su dometa.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (77)** · pun set **ZELENO** · `COMPILE` — **ostaje na
+operateru**, i ovog puta se videlo zašto.
+
+### Smoke: padajuće liste i „koje palete su izabrane"
+
+Dva nalaza iz prve probe, oba iz istog korena — polje u zoni ekrana nije bilo
+ravnopravno sa poljem unosnog ekrana.
+
+**1. Padajuće liste nisu radile.** Panel izbora je ljuskin i generičan (renderuje
+`.List` bilo kog kombo polja), ali `FindCombo` ga je tražio samo u `zCtx` i
+`zForm` — zonama unosnog ekrana. Kombo u zoni ugovornog ekrana nije nalazio, pa je
+`PopKeyFor` vraćao prazno i klik na strelicu nije radio ništa.
+
+Drugi uzrok je bio moj: grana `scr` u `UiClick` je gutala i klik na **strelicu**
+(`scrPreGPD` počinje sa `scr` kao i sve ostalo što ekran nosi), pa je odlazio ekranu
+— a on o panelu izbora ne zna ništa, niti treba. Strelica se sada rešava **pre**
+grane ekrana. Isto i za kucanje: `PopFromTyping` se zove i za `scr` polja, pa kombo
+ekrana ima strelicu koja radi **i** kuцanje koje sužava listu.
+
+**2. Nigde nije pisalo koje palete ulaze.** Zona je pokazivala samo brojku
+(`2 izabrano paleta`) — a baš je izbor paleta odluka koju operater donosi.
+Sada stoji i spisak **po broju palete**: `2 izabrano paleta:  185, 184`.
+
+Izbor se i dalje **drži po `PaletaID`** — broj se ponavlja kroz godine — ali zona
+ume da ga imenuje, kroz mapu `PaletaID → broj` koju punjenje redova ionako vidi.
+Dug spisak se skraćuje: zona ima jedan red, a poenta je prepoznavanje, ne inventar.
+
+### Panel prerade: jedinica nasred polja i „ostrva" belog
+
+Dva izgledačka nalaza iz druge probe, i oba su bila ista greška: ekran je polje
+**napravio**, ali ga nije **rasporedio**.
+
+`NewFieldG` crta unutrašnjost prema početnih 180pt. Kad zona polje proširi na ~300pt,
+labela, ivica, jedinica i sam unos ostaju na starim merama — pa `kg` završi nasred
+polja, a unos izgleda odsečen sa leve strane. Unosni ekran to rešava
+`LayoutFieldInner`-om; bio je `Private`, pa ga ekran nije mogao pozvati.
+
+Sada je javan, iz istog razloga kao i `NewFieldG`: **ekran koji polje napravi mora i
+da ga rasporedi.**
+
+Drugi nalaz: svako polje je svoj **beli okvir**, a zona je krem — pa se između njih
+videla pozadina i panel je izgledao kao niz odvojenih ostrva. Ispod celog panela
+sada stoji jedna bela podloga, napravljena **pre** polja (u MSForms kasnija kontrola
+stoji iznad), sa malim uvlačenjem levo i desno da prva labela ne bude zalepljena za
+ivicu.
+
+---
+
+## v2.56.0 — `v6-ui-162` · dvoklik otvara stavke palete
+
+Operater je tražio **padajuće redove ispod izabranog reda**: klik na paletu otvara
+njene stavke, sa svojim zaglavljem, kao prozor ispod tog reda. UX je bolji i to
+ostaje **zapisan prioritet za kasnije** — ali traži *vrstu reda* u ugovoru ekrana i
+renderer promenljive visine, jer mrežu koriste **svi** ekrani, uključujući unos
+dokumenata. To je posao reda veličine migracije jednog celog ekrana.
+
+Do tada: **jedan potez umesto dva**, bez ijedne izmene u načinu na koji mreža crta
+redove.
+
+### Zašto dvoklik, a ne klik
+
+Klik na red **bira** paletu, a radnje nad redom — *zatvori paletu*, *storniraj*,
+*štampaj* — rade baš nad izabranom. Da klik prebacuje listu, do tih radnji se ne bi
+moglo doći: prekidač bi se pretvorio pre nego što operater stigne da pritisne dugme.
+
+Zato:
+
+| Potez | Šta radi |
+|---|---|
+| klik | bira paletu — zona pokazuje koja je, radnje nad redom rade nad njom |
+| **dvoklik** | otvara „Stavke palete", već sužene na tu paletu |
+
+Naslov liste stavki i dalje nosi broj otvorene palete, pa se sa te liste zna čije su.
+
+### Novi deo ugovora: `dbl:<red>`
+
+Ljuska je dvoklik do sada trošila sama (`LoadRowIntoForm`) — što je tačno za **unosni**
+ekran, koji jedini ima formu ispod mreže. Ugovorni ekran je ostajao bez njega.
+
+Sada `UiDblClick` prosleđuje `dbl:<red>` ekranu, istim putem kao `row:` i `act:`.
+Ljuska i dalje **ne zna nijedan ekran po imenu** — zna samo svoj početni.
+
+### Bag koji je test našao pre operatera
+
+Test je prvo pao sa **„Lista se nije učitala"**, iako se lista čitala ispravno.
+
+`ScreenZone` vraća zonu ekrana, a kad je nema — `Nothing`. Grešku je preskakao
+(`On Error Resume Next`), ali je **nije brisao**, pa je `Err` ostajao postavljen i
+posle povratka. `ScrGridData` to čita kao **pad ekrana**: prazna mreža i poruka o
+grešci nad podacima koji su potpuno ispravni.
+
+U produkciji se ne vidi dok zona postoji. Vidi se tačno onda kad je najgore — kad
+ekran **padne u gradnji**, jer tada zona nestane, a poruka o pravom uzroku se izgubi
+iza lažne. Popravka je jedan red na izvoru (`If Err.Number <> 0 Then Err.Clear`), a
+pogađa **svaki** ekran koji u `Scr_Rows` dopunjava svoju zonu.
+
+Isti obrazac kao `T_LogErr_NeVidiErrPosleResumeNext`: `On Error` ne čisti za sobom
+samo zato što je greška „obrađena".
+
+### Verifikacija
+
+**Test 78** tvrdi oba smera poteza (dvoklik otvara, klik ne), naslov otvorene palete,
+postojanje radnje i to da pročitana lista **nije** pad ekrana. Mreža se puni pravim
+podacima kroz `GridTestLoad` — tvrdo gejtovan seam koji zamenjuje samo `.Show`, ne
+i put kojim klik ide.
+
+Tri sabotaže, sve tri padaju po **svojoj** tvrdnji:
+
+| Sabotaža | Pada na |
+|---|---|
+| `paleta-dvoklik-ne-otvara` | *dvoklik na paletu otvara njene stavke* — `[STAVKE]` vs `[PALETE]` |
+| `paleta-klik-otvara` | *izbor reda ne traži ponovno čitanje mreže* — `[False]` vs `[True]` |
+| `zona-curi-gresku` | *pročitana lista se ne prijavljuje kao pad ekrana* |
+
+`vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (78)** ·
+`COMPILE` — **ostaje na operateru**.
+
+## v2.57.0 — `v6-ui-169` · čipovi po ekranu, neto ulaz, i jedan skup dan
+
+Faza C je zatvorena. Uz nju ide i najskuplja lekcija ove grane.
+
+### Čipovi pripadaju ekranu (Faza C, stavka 11)
+
+Ovo je bilo **poslednje mesto na kom je ljuska znala jedan ekran po imenu**:
+
+```vba
+ElseIf akt = "OTPREMNICE" Then
+    ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
+```
+
+Sada svaki ekran prijavi svoje čipove kroz `Scr_Cipovi()`, istim oblikom kao radnje:
+`kljuc:KATALOG:sirina`. Ljuska ključ **ne tumači** — vraća ga kroz
+`Scr_Rows(filter, q)` onakvog kakvog ga je dobila.
+
+Kontrole se ne prave iznova: ljuska ima **bazen od sedam slotova** (`ChipRow`), prvih
+šest pripada režimima unosnog ekrana, ostatak se pozajmljuje. Tri mesta su morala da
+nauče da slot može biti pozajmljen — `ChipFilter` (klik vraća *ekranov* ključ),
+`RenderChipCounts` (brojač bi pregazio tuđi natpis) i `ApplyChipVisual` (crvena boja
+pripada čipu „Otkazane", ne slotu).
+
+Palete su dobile pet: **Sve · Ova godina · Otvorene · Zatvorene · Prerađene**.
+Pravilo je izdvojeno u `PalCipProlaz` — čist račun bez mreže; nepoznat filter **pušta
+sve**, da lista ne ostane prazna.
+
+### Neto ulaz izabranih paleta
+
+Panel je pokazivao samo **izlaz**. Sada levo od njega stoji **NETO ULAZ** — zbir neto
+kilaže izabranih paleta sveže robe. Dve brojke jedna uz drugu su ceo račun prerade:
+koliko ulazi i koliko gotovog izlazi.
+
+Zbir ide iz **zapamćenih** vrednosti po `PaletaID`, ne iz mreže: mreža je filtrirana i
+straničena, pa bi zbir po njoj zavisio od toga šta je trenutno na ekranu.
+
+### Bela podloga panela je bila Frame — i to je koštalo ceo dan
+
+Operater je prijavio panel u kom rade samo **prvo i poslednje polje**, bez naslova,
+bez NETO, bez spiska izabranih i bez dugmeta.
+
+`preBg` — bela podloga uvedena u `v6-ui-161` da se između polja ne vidi krem
+pozadina — bio je **Frame**. U MSForms su Frame-ovi *prozorske* kontrole i crtaju se
+**iznad** bezprozorskih (labela i svega sklopljenog od njih), **bez obzira na
+z-order**. Komentar uz taj kod je čak tvrdio suprotno („kasnija kontrola stoji
+iznad") — što važi među istom vrstom, ne između Frame-a i labele.
+
+Podloga pokriva ceo panel, pa su ispod nje završili naslov panela, `NETO`, spisak
+izabranih paleta i dugme „Preradi". Polja su se probijala jer su i sama Frame-ovi.
+
+Popravka je **zamena vrste kontrole**, ne uklanjanje podloge: `preBg` je sada labela
+sa belom pozadinom. Labela poštuje z-order, pa napravljena prva ostaje ispod svega.
+
+**Šta je koštalo:** tri pokušaja popravke pre ovoga (`v6-ui-165` do `v6-ui-167`) — svi
+zasnovani na *pretpostavljenom* mehanizmu, nijedan na reprodukciji. Sve tri su
+oborene. Pravilo iz `CLAUDE.md` je jasno i bilo je prekršeno tri puta zaredom: kad se
+ne može reprodukovati, **to je nalaz**, a ne osnov za zakrpu. Ono što je slučaj na
+kraju rešilo bilo je operaterovo zapažanje — „radilo je dok smo sređivali vertikalni
+prostor" — dakle **raspon commit-a**, a ne još jedna teorija.
+
+### Bazen radnji: ista greška koju su čipovi imali izmerenu
+
+`MAX_ACT = 5` — ljuska pravi tačno pet dugmadi za radnje nad redom, a lista paleta ih
+je već koristila svih pet. Dodata šesta („Stavke") je tiho izbacila „Nepotpune
+palete", jer `RefreshRowActions` radi `If i >= MAX_ACT Then Exit For`.
+
+Šesta radnja se **ne vraća** — stavke se otvaraju dvoklikom. `MAX_ACT` je sada javan i
+test tvrdi da lista ne traži više radnji nego što ljuska ima dugmadi. Ista kapija koju
+su čipovi dobili kroz `MAX_CHIP` — da je postojala ujutru, greška ne bi ni nastala.
+
+### Šta se namerno nije vratilo
+
+Dve izmene rasporeda iz neuspelih pokušaja (`z.Height` pri rasporedu zone,
+`Repaint`/`RenderGrid` pri ulasku na ekran). Pravi uzrok je bio drugde, pa im nema
+osnova — a menjaju put kojim se crta **svaki** ekran.
+
+### Granica testa, izmerena
+
+Proba je namerno pozvala `Scr_Layout` nad okvirom od 10 poena i suite je ostao
+**zelen**: `.Visible` je i dalje `True` kad MSForms ne prefarba. Kapija za tu klasu
+kvara je **smoke**, ne `RunAllTests` — i to je sada zapisano u testu 80, da se ne
+pokušava ponovo.
+
+Uz to: dok `frmOtkupUI` živi, mašinerija forme briše `Err` između `Err.Raise` i
+omotnice testa, pa pad stiže kao „greška bez opisa". Test 80 zato **skuplja** nalaze u
+spisak imena i tvrdi tek **posle `Unload`-a** — pad tada kaže i koje kontrole fale.
+
+### Verifikacija
+
+**Testovi 78–80**: dvoklik u oba smera (otvara, a klik i dalje samo bira) + bazen
+radnji · ugovor čipova, veličina bazena i to da čip *stvarno* sužava
+(`Otvorene + Zatvorene = sve palete`) · zona: sve kontrole postoje, na listi za unos
+upaljene, u pregledu ugašene. Test 77 je dobio i **neto ulaz**.
+
+Osam sabotaža, svaka pada po **svojoj** tvrdnji — uključujući `radnji-vise-nego-dugmadi`
+i `ulaz-bez-kilaze` (*neto ulaz je zbir neto izabranih paleta* — `[250]` vs `[0]`).
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
+**ZELENO (80)** · pun set **ZELENO** (336 + 97 + 25) · **COMPILE i smoke prošli kod
+operatera**.

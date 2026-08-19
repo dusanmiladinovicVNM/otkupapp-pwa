@@ -112,7 +112,7 @@ PUBLIC_PROC = re.compile(
 SCR_UGOVOR = {
     "scr_meta", "scr_build", "scr_layout", "scr_rows", "scr_event",
     "scr_save", "scr_resetcache", "scr_liste", "scr_lista", "scr_radnje",
-    "scr_naslovdopuna", "scr_brojac",
+    "scr_naslovdopuna", "scr_brojac", "scr_cipovi",
 }
 
 
