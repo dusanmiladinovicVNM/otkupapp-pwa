@@ -4248,7 +4248,6 @@ Zato:
 |---|---|
 | klik | bira paletu — zona pokazuje koja je, radnje nad redom rade nad njom |
 | **dvoklik** | otvara „Stavke palete", već sužene na tu paletu |
-| radnja **Stavke** | isto što i dvoklik — dvoklik se ne vidi, dugme da |
 
 Naslov liste stavki i dalje nosi broj otvorene palete, pa se sa te liste zna čije su.
 
@@ -4295,67 +4294,32 @@ Tri sabotaže, sve tri padaju po **svojoj** tvrdnji:
 `vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (78)** ·
 `COMPILE` — **ostaje na operateru**.
 
-### `v6-ui-161` — VRAĆENO na potvrđeno stanje
+## v2.57.0 — `v6-ui-169` · čipovi po ekranu, neto ulaz, i jedan skup dan
 
-Ceo `src-vba/` i `tools/` su vraćeni na `25ef36a9` (`v6-ui-161`) — jedini build za
-koji je operater potvrdio da panel za unos prerade radi.
+Faza C je zatvorena. Uz nju ide i najskuplja lekcija ove grane.
 
-**Šta je oboreno:** dvoklik na paletu (`dbl:` seam), čipovi po ekranu
-(`Scr_Cipovi`), instrumentacija `PoljaPrerade`, izmene rasporeda zone
-(`z.Height`, `Repaint`, `RenderGrid` posle ulaska), testovi 78–80 i njihove
-sabotaže. Rad nije izgubljen — stoji u istoriji grane.
+### Čipovi pripadaju ekranu (Faza C, stavka 11)
 
-**Zašto ceo blok, a ne samo sumnjivi deo:** mehanizam kojim je panel prestao da se
-crta na klik čipa **nije dokazan**. Dve od tih izmena (`z.Height`, `Repaint`) su i
-same bile *pretpostavljene* popravke bez dokaza — greška u metodu, ne samo u kodu.
-Pravilo iz `CLAUDE.md` je jasno: kad se ne može reprodukovati, to je nalaz, a ne
-osnov za zakrpu.
+Ovo je bilo **poslednje mesto na kom je ljuska znala jedan ekran po imenu**:
 
-**Jedan nalaz je siguran i bio bi kvar i sam za sebe:** `MAX_ACT = 5` — ljuska pravi
-tačno pet dugmadi za radnje nad redom, a lista paleta ih je već koristila svih pet.
-Dodata šesta radnja (`palstavke`) je zato tiho izbacila „Nepotpune palete“:
-`RefreshRowActions` radi `If i >= MAX_ACT Then Exit For`. Kad se rad bude vraćao,
-ide prvo to — ili sa širim bazenom, ili bez šeste radnje.
+```vba
+ElseIf akt = "OTPREMNICE" Then
+    ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
+```
 
-**Kako se vraća:** jedna izmena po prolazu, sa smoke proverom panela posle svake.
-Redosled: (1) dvoklik bez šeste radnje, (2) čipovi, (3) sve ostalo.
+Sada svaki ekran prijavi svoje čipove kroz `Scr_Cipovi()`, istim oblikom kao radnje:
+`kljuc:KATALOG:sirina`. Ljuska ključ **ne tumači** — vraća ga kroz
+`Scr_Rows(filter, q)` onakvog kakvog ga je dobila.
 
-### `v6-ui-168` — bela podloga panela je bila Frame, pa je pokrivala pola panela
+Kontrole se ne prave iznova: ljuska ima **bazen od sedam slotova** (`ChipRow`), prvih
+šest pripada režimima unosnog ekrana, ostatak se pozajmljuje. Tri mesta su morala da
+nauče da slot može biti pozajmljen — `ChipFilter` (klik vraća *ekranov* ključ),
+`RenderChipCounts` (brojač bi pregazio tuđi natpis) i `ApplyChipVisual` (crvena boja
+pripada čipu „Otkazane", ne slotu).
 
-Operater je dao tačan raspon: radilo je dok smo sređivali vertikalni prostor i
-prikaz izabranih paleta (`d4ed8824`), a pokvarilo se u sledećem koraku
-(`25ef36a9`) — u kom su ušle samo **dve** stvari: `LayoutFieldInner` po polju i bela
-podloga `preBg`.
-
-`preBg` je bio **Frame**. U MSForms su Frame-ovi *prozorske* kontrole i crtaju se
-**iznad** bezprozorskih — labela i svega sklopljenog od njih — **bez obzira na
-z-order**. Podloga pokriva ceo panel, pa su ispod nje završili naslov panela
-(`preCap`), `NETO`, spisak izabranih paleta i dugme „Preradi“. Polja su se probijala
-jer su i sama Frame-ovi.
-
-To objašnjava i ono što nijedna ranija teorija nije: **desni blok nije radio nikad**,
-ni kad su se polja videla. Tražio sam uzrok u rasporedu, u visini zone i u
-prefarbavanju — a bio je u **vrsti kontrole**.
-
-Popravka nije uklanjanje podloge nego zamena vrste: `preBg` je sada **labela** sa
-belom pozadinom. Labela poštuje z-order, pa napravljena prva ostaje ispod svega.
-
-**Metod:** ovo je i dalje hipoteza dok smoke ne potvrdi — ali za razliku od
-prethodnih pokušaja, objašnjava **sva** zapažanja, uključujući i stabilni deo
-(desni blok koji nikad nije bio vidljiv).
-
-### `v6-ui-169` — vraćeno posle popravke, plus neto ulaz
-
-Panel radi, pa se vraća ono što je bilo oboreno: **dvoklik na paletu** (`dbl:` seam),
-**čipovi po ekranu** (`Scr_Cipovi`), instrumentacija `PoljaPrerade`, testovi 78–80 i
-sabotaže. **Ne vraćaju se** dve nedokazane izmene rasporeda (`z.Height`, `Repaint` /
-`RenderGrid` pri ulasku) — pravi uzrok je bio `preBg` kao Frame, pa im nema osnova.
-
-**Šesta radnja se ne vraća.** `MAX_ACT = 5`, a lista paleta ih je već imala pet;
-dodata „Stavke“ je tiho izbacila „Nepotpune palete“, jer `RefreshRowActions` radi
-`Exit For`. Stavke se otvaraju **dvoklikom**. `MAX_ACT` je sada javan i test tvrdi da
-lista ne traži više radnji nego što ljuska ima dugmadi — ista kapija koju čipovi već
-imaju kroz `MAX_CHIP`.
+Palete su dobile pet: **Sve · Ova godina · Otvorene · Zatvorene · Prerađene**.
+Pravilo je izdvojeno u `PalCipProlaz` — čist račun bez mreže; nepoznat filter **pušta
+sve**, da lista ne ostane prazna.
 
 ### Neto ulaz izabranih paleta
 
@@ -4363,12 +4327,70 @@ Panel je pokazivao samo **izlaz**. Sada levo od njega stoji **NETO ULAZ** — zb
 kilaže izabranih paleta sveže robe. Dve brojke jedna uz drugu su ceo račun prerade:
 koliko ulazi i koliko gotovog izlazi.
 
-Zbir se računa iz **zapamćenih** vrednosti po `PaletaID`, ne iz mreže: mreža je
-filtrirana i straničena, pa bi zbir po njoj zavisio od toga šta je trenutno na ekranu.
+Zbir ide iz **zapamćenih** vrednosti po `PaletaID`, ne iz mreže: mreža je filtrirana i
+straničena, pa bi zbir po njoj zavisio od toga šta je trenutno na ekranu.
 
-Sabotaže: `ulaz-bez-kilaze` (*neto ulaz je zbir neto izabranih paleta* — `[250]` vs
-`[0]`) i `radnji-vise-nego-dugmadi` (*lista ne traži više radnji nego što ljuska ima
-dugmadi*).
+### Bela podloga panela je bila Frame — i to je koštalo ceo dan
+
+Operater je prijavio panel u kom rade samo **prvo i poslednje polje**, bez naslova,
+bez NETO, bez spiska izabranih i bez dugmeta.
+
+`preBg` — bela podloga uvedena u `v6-ui-161` da se između polja ne vidi krem
+pozadina — bio je **Frame**. U MSForms su Frame-ovi *prozorske* kontrole i crtaju se
+**iznad** bezprozorskih (labela i svega sklopljenog od njih), **bez obzira na
+z-order**. Komentar uz taj kod je čak tvrdio suprotno („kasnija kontrola stoji
+iznad") — što važi među istom vrstom, ne između Frame-a i labele.
+
+Podloga pokriva ceo panel, pa su ispod nje završili naslov panela, `NETO`, spisak
+izabranih paleta i dugme „Preradi". Polja su se probijala jer su i sama Frame-ovi.
+
+Popravka je **zamena vrste kontrole**, ne uklanjanje podloge: `preBg` je sada labela
+sa belom pozadinom. Labela poštuje z-order, pa napravljena prva ostaje ispod svega.
+
+**Šta je koštalo:** tri pokušaja popravke pre ovoga (`v6-ui-165` do `v6-ui-167`) — svi
+zasnovani na *pretpostavljenom* mehanizmu, nijedan na reprodukciji. Sve tri su
+oborene. Pravilo iz `CLAUDE.md` je jasno i bilo je prekršeno tri puta zaredom: kad se
+ne može reprodukovati, **to je nalaz**, a ne osnov za zakrpu. Ono što je slučaj na
+kraju rešilo bilo je operaterovo zapažanje — „radilo je dok smo sređivali vertikalni
+prostor" — dakle **raspon commit-a**, a ne još jedna teorija.
+
+### Bazen radnji: ista greška koju su čipovi imali izmerenu
+
+`MAX_ACT = 5` — ljuska pravi tačno pet dugmadi za radnje nad redom, a lista paleta ih
+je već koristila svih pet. Dodata šesta („Stavke") je tiho izbacila „Nepotpune
+palete", jer `RefreshRowActions` radi `If i >= MAX_ACT Then Exit For`.
+
+Šesta radnja se **ne vraća** — stavke se otvaraju dvoklikom. `MAX_ACT` je sada javan i
+test tvrdi da lista ne traži više radnji nego što ljuska ima dugmadi. Ista kapija koju
+su čipovi dobili kroz `MAX_CHIP` — da je postojala ujutru, greška ne bi ni nastala.
+
+### Šta se namerno nije vratilo
+
+Dve izmene rasporeda iz neuspelih pokušaja (`z.Height` pri rasporedu zone,
+`Repaint`/`RenderGrid` pri ulasku na ekran). Pravi uzrok je bio drugde, pa im nema
+osnova — a menjaju put kojim se crta **svaki** ekran.
+
+### Granica testa, izmerena
+
+Proba je namerno pozvala `Scr_Layout` nad okvirom od 10 poena i suite je ostao
+**zelen**: `.Visible` je i dalje `True` kad MSForms ne prefarba. Kapija za tu klasu
+kvara je **smoke**, ne `RunAllTests` — i to je sada zapisano u testu 80, da se ne
+pokušava ponovo.
+
+Uz to: dok `frmOtkupUI` živi, mašinerija forme briše `Err` između `Err.Raise` i
+omotnice testa, pa pad stiže kao „greška bez opisa". Test 80 zato **skuplja** nalaze u
+spisak imena i tvrdi tek **posle `Unload`-a** — pad tada kaže i koje kontrole fale.
+
+### Verifikacija
+
+**Testovi 78–80**: dvoklik u oba smera (otvara, a klik i dalje samo bira) + bazen
+radnji · ugovor čipova, veličina bazena i to da čip *stvarno* sužava
+(`Otvorene + Zatvorene = sve palete`) · zona: sve kontrole postoje, na listi za unos
+upaljene, u pregledu ugašene. Test 77 je dobio i **neto ulaz**.
+
+Osam sabotaža, svaka pada po **svojoj** tvrdnji — uključujući `radnji-vise-nego-dugmadi`
+i `ulaz-bez-kilaze` (*neto ulaz je zbir neto izabranih paleta* — `[250]` vs `[0]`).
 
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
-**ZELENO (80)** · pun set **ZELENO** · `COMPILE` — **ostaje na operateru**.
+**ZELENO (80)** · pun set **ZELENO** (336 + 97 + 25) · **COMPILE i smoke prošli kod
+operatera**.
