@@ -4295,195 +4295,27 @@ Tri sabotaže, sve tri padaju po **svojoj** tvrdnji:
 `vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (78)** ·
 `COMPILE` — **ostaje na operateru**.
 
----
+### `v6-ui-161` — VRAĆENO na potvrđeno stanje
 
-## v2.57.0 — `v6-ui-163` · čipovi pripadaju ekranu (Faza C, stavka 11)
+Ceo `src-vba/` i `tools/` su vraćeni na `25ef36a9` (`v6-ui-161`) — jedini build za
+koji je operater potvrdio da panel za unos prerade radi.
 
-Poslednja stavka Faze C. Ujedno i **poslednje mesto na kom je ljuska znala jedan
-ekran po imenu**:
+**Šta je oboreno:** dvoklik na paletu (`dbl:` seam), čipovi po ekranu
+(`Scr_Cipovi`), instrumentacija `PoljaPrerade`, izmene rasporeda zone
+(`z.Height`, `Repaint`, `RenderGrid` posle ulaska), testovi 78–80 i njihove
+sabotaže. Rad nije izgubljen — stoji u istoriji grane.
 
-```vba
-ElseIf akt = "OTPREMNICE" Then
-    ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
-```
+**Zašto ceo blok, a ne samo sumnjivi deo:** mehanizam kojim je panel prestao da se
+crta na klik čipa **nije dokazan**. Dve od tih izmena (`z.Height`, `Repaint`) su i
+same bile *pretpostavljene* popravke bez dokaza — greška u metodu, ne samo u kodu.
+Pravilo iz `CLAUDE.md` je jasno: kad se ne može reprodukovati, to je nalaz, a ne
+osnov za zakrpu.
 
-Sada svaki ekran prijavi svoje čipove kroz `Scr_Cipovi()`, istim oblikom kao radnje:
-`kljuc:KATALOG:sirina`. Ljuska ne tumači ključ — vraća ga kroz `Scr_Rows(filter, q)`
-onakvog kakvog ga je dobila.
+**Jedan nalaz je siguran i bio bi kvar i sam za sebe:** `MAX_ACT = 5` — ljuska pravi
+tačno pet dugmadi za radnje nad redom, a lista paleta ih je već koristila svih pet.
+Dodata šesta radnja (`palstavke`) je zato tiho izbacila „Nepotpune palete“:
+`RefreshRowActions` radi `If i >= MAX_ACT Then Exit For`. Kad se rad bude vraćao,
+ide prvo to — ili sa širim bazenom, ili bez šeste radnje.
 
-### Bazen, ne novi čipovi
-
-Kontrole se ne prave iznova. Ljuska ima **bazen od sedam slotova** (`ChipRow`);
-prvih šest pripada režimima unosnog ekrana, ostatak se slobodno pozajmljuje. Ekran
-koji prijavi čipove pozajmljuje slotove redom — natpis i širina dolaze iz njegovog
-opisa, ključ se pamti u `mScrChipKey`.
-
-Tri mesta su morala da nauče da slot može biti pozajmljen:
-
-| Mesto | Zašto |
-|---|---|
-| `ChipFilter` | klik na pozajmljen slot vraća **ekranov** ključ, ne ljuskin |
-| `RenderChipCounts` | brojači pripadaju listi dokumenata; upis bi pregazio tuđi natpis |
-| `ApplyChipVisual` | crveni čip je „Otkazane"; isti slot kod drugog ekrana nema veze sa stornom |
-
-`LayoutChips` je prešao sa širina iz opisa na `mChipW` — slot koji je pozajmljen nosi
-širinu svog natpisa, pa bi opis vratio pogrešnu meru i red bi se raspao.
-
-**Bazen je konačan i to se sada tvrdi.** Ekran koji prijavi više čipova nego što
-slotova ima izgubio bi višak bez ijedne poruke, pa je `MAX_CHIP` javan i test meri
-baš kroz njega.
-
-### Palete: godina, status, prerađenost
-
-Pet čipova nad listom paleta — isti posao koji je legacy panel radio kroz tri
-odvojena kontrolna polja iznad liste: **Sve · Ova godina · Otvorene · Zatvorene ·
-Prerađene**.
-
-Pravilo je izdvojeno u `PalCipProlaz(filter, status, godina, prerađeno)`, čist račun
-bez mreže. Nepoznat filter **pušta sve** — ekran koji dobije ključ koji ne poznaje
-pokazuje punu listu, ne praznu.
-
-Čip sužava listu **pre** pretrage; zbirovi u zoni i dalje idu preko svih paleta —
-oni govore o stanju hladnjače, ne o tome šta je trenutno na ekranu.
-
-Lista otpremnica je dobila isto to (`CipoviZaListu`), a lista dokumenata **ne
-prijavljuje ništa**: njeni čipovi zavise od režima (ima li zbirnu, ima li fakturu),
-pa vidljivost ostaje kod `SelectMode`.
-
-### Tvrdnja koja nije merila ništa
-
-Prva verzija testa je proveravala da natpis čipa postoji u katalogu ovako:
-
-```vba
-AssertEq (Len(Poruka(kljuc)) > 0), True, ...
-```
-
-`Poruka` na nepostojeći ključ vraća `[KLJUC]` — dakle **nikad prazno**. Ta tvrdnja
-nije mogla da padne ni za jedan pogrešan ključ. Sad se meri da natpis nije ta
-oznaka. Našla ju je sabotaža koja je pokušala da je obori i nije uspela.
-
-### Verifikacija
-
-**Test 79** tvrdi ugovor (pet čipova, oblik `kljuc:KATALOG:sirina`, natpis iz
-kataloga, veličina bazena), pravilo čipa u oba smera, i da čip **stvarno** sužava:
-`Otvorene + Zatvorene = sve palete`, bez gubitka i bez preklapanja.
-
-| Sabotaža | Pada na |
-|---|---|
-| `cip-ne-suzava` | *Otvorene i Zatvorene zajedno daju sve palete* — `[7]` vs `[14]` |
-| `bazen-cipova-manji` | *ekran ne traži više čipova nego što bazen ljuske ima* |
-| `cip-bez-natpisa` | *natpis čipa godina postoji u katalogu* |
-
-Prva verzija treće sabotaže je stavila komentar **posle nastavka reda** (`_`) i time
-oborila kompajlaciju umesto tvrdnje — run je visio 321 s i pao sa COM greškom, isto
-kao `v6-ui-159`. Sabotaža sme da pokvari **jednu stvar**, ne prevod.
-
-`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
-`RunAllTests` **ZELENO (79)** · `COMPILE` — **ostaje na operateru**.
-
----
-
-## v2.57.1 — `v6-ui-164` · zona „Nova prerada": merenje, ne zakrpa
-
-Operater je prijavio zonu u kojoj se vide **samo prvo polje (Bruto) i poslednje
-(Tip kese)** — bez bele podloge, naslova, NETO i dugmeta. Oba vidljiva polja su
-stajala **tačno tamo gde ih `Scr_Layout` šalje**, u pravoj širini, pa kvar nije u
-merama nego u tome što ostalih jedanaest kontrola nema ili se ne pale.
-
-**Nije reprodukovano.** Zato ovde nema ispravke — ima merenja.
-
-### Šta je dokazano
-
-**Test 80** gradi zonu (`Scr_Build`) nad običnim `Frame`-om i raspoređuje je
-(`Scr_Layout`), pa tvrdi tri stvari: svih trinaest kontrola **postoji**, na listi
-za unos su **sve upaljene**, na listama pregleda **sve ugašene**. Zeleno.
-
-Dakle taj put — isti kod koji aplikacija zove — radi. Ono što ostaje nepokriveno
-je zona koju pravi **ljuska** (`zScr_PALETE`), a nju harness ne može da dobije:
-`IdiNaEkran` ide na Win32 pozive nad formom koja nije `.Show`-ovana i tamo pada
-bez opisa. To je zapisano u testu, da se ne pokušava ponovo.
-
-### Šta je instrumentirano
-
-`PoljaPrerade` je do sada palio panel pod jednim `On Error Resume Next` — kontrola
-koje nema progutala bi se **bez imena i bez broja**. Sada svaka ide kroz
-`UpaliKontrolu`, a ono što ne prođe završi u logu:
-
-```
-WARN modScrPalete.PoljaPrerade | zona nema kontrole: preBg preCap ... | zona=zScr_PALETE/34
-```
-
-Uz spisak ide i **ime zone i broj njenih kontrola** — bez toga se iz loga ne vidi
-da li je zona uopšte ona prava ili je gradnja stala na pola. Prijava je pod
-`Resume Next`: **ono što prijavljuje kvar ne sme da bude novi kvar.**
-
-### Usput: harness gubi poruku dok forma živi
-
-Prve dve sabotaže su obarale test tačno, ali je stizalo „greška bez opisa
-(Err.Number=0)". Dokazano probom: ista `AssertEq` **pre** `NewOtkupUIForm()` nosi
-svoju poruku, **posle** nje je izgubi — mašinerija forme obriše `Err` između
-`Err.Raise` i omotnice testa. `RunOne` taj oblik već pominje kao poznat.
-
-Zato test **skuplja** nalaze u spisak imena, pa tvrdi tek **posle `Unload`**. Pad
-sada kaže i koje su kontrole u pitanju:
-
-```
-FAIL ... panel za unos prerade nema nijednu kontrolu manje -- ocekivano [], dobijeno [ scrPreTezPal]
-```
-
-Pravilo za svaki budući test nad `frmOtkupUI`: **tvrdi posle `Unload`-a.**
-
-| Sabotaža | Pada na |
-|---|---|
-| `zona-se-ne-pali` | *na listi za unos je upaljen ceo panel* — spisak svih 13 |
-| `zona-polje-se-ne-pravi` | *panel za unos prerade nema nijednu kontrolu manje* — `[ scrPreTezPal]` |
-
-`vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (80)** ·
-`COMPILE` — **ostaje na operateru**.
-
-### `v6-ui-165` — nalaz ide i na ekran
-
-Prvi prolaz sa `v6-ui-164` nije doneo log, a zona je i dalje pokazivala samo dva
-polja — uz jednu novu informaciju: mreža je prešla sa 22 na **17 redova**, dakle
-`Scr_Layout` je odradio posao do kraja i zona je stvarno narasla.
-
-Zato spisak kontrola koje fale sada ide i u **toast**, ne samo u log: rupa u panelu
-se vidi odmah, pa i njen razlog treba da stigne tu gde operater gleda. Samo pri
-**paljenju** panela — gašenje nad listom pregleda nema kome da javlja ništa.
-
-### `v6-ui-166` — zona se raspoređivala u okviru visokom 10 poena
-
-Operater je dao korak koji je rešio slučaj: panel se **pojavi ako se ode na drugi
-ekran pa vrati**. Znači kontrole postoje i upaljene su — samo nisu nacrtane.
-
-`LayoutScreenZone` je zonu pred raspored sasecao na **`z.Height = 10`**, pa je ekran
-palio i pomerao svoja polja unutar okvira visokog 10 poena — dakle izvan vidljivog
-dela. MSForms takvu kontrolu **ne prefarba** kad se okvir vrati na punu visinu:
-`Visible` ostaje `True`, a na ekranu je praznina. Povratak na ekran je iznudio pun
-prefarb i panel bi se „sam popravio“.
-
-Sada zona dobija **punu raspoloživu visinu pre** rasporeda i skuplja se na zauzetu
-tek posle, uz izričit `Repaint`.
-
-**Ovo test ne može da uhvati** i to je važno reći: proba je namerno pozvala
-`Scr_Layout` nad okvirom od 10 poena i suite je ostao **zelen** — `.Visible` je i
-dalje `True`. Kapija za ovu klasu kvara je smoke, ne `RunAllTests`.
-
-### `v6-ui-167` — prvi ulazak na ekran crtao je po merama prethodnog
-
-Operater je dao presudan par slika: **prvi ulazak** na Palete — prazne kolone od
-TIP AMBALAŽE nadesno **i** panel za unos u kom rade samo prvo i poslednje polje.
-**Izlazak pa povratak** — i kolone i panel rade. Dva simptoma, jedan uzrok: raspored
-i crtanje se ne dešavaju istim redom.
-
-`ActivateScreen` radi ovako: raspored, pa `ReloadGrid`, pa raspored ponovo. Mreža se
-**crta** unutar čitanja, a širine kolona se računaju **tek u rasporedu posle njega** —
-pa je `RenderGrid` prošao sa merama PRETHODNOG ekrana. Zaglavlja su zato tačna
-(postavlja ih raspored), a ćelije prazne od prve kolone koju prethodna lista nije
-imala. Na **sledećem** ulasku je zatečeno stanje slučajno već tačno, pa se ništa ne vidi.
-Zato se javljalo samo pri prvom ulasku.
-
-Popravka: **`RenderGrid` posle poslednjeg rasporeda**, i **`frm.Repaint`** na kraju
-ulaska — kontrolu koja je tek postavljena MSForms ume da ne osveži dok se ne desi
-nešto drugo, a taj „odlazak na drugi ekran pa povratak“ i jeste bio prefarb.
-Plaća se jednom po ulasku na ekran.
+**Kako se vraća:** jedna izmena po prolazu, sa smoke proverom panela posle svake.
+Redosled: (1) dvoklik bez šeste radnje, (2) čipovi, (3) sve ostalo.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-167"
+Public Const OTKUI_BUILD   As String = "v6-ui-161"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -300,17 +300,6 @@ Private mBusyGrid As Boolean
 Private mBuilding As Boolean
 Private mColSpec As Object
 Private mLastPageSize As Long
-' Bazen cipova je ljuskin i ima MAX_CHIP slotova (ChipRow). Prvih MODE_CHIP
-' pripada rezimima unosnog ekrana; ostale slobodno pozajmljuje ekran koji
-' prijavi svoje cipove. mScrChipKey drzi KLJUC koji je ekran dao za slot --
-' ljuska ga ne tumaci, samo ga vrati kroz Scr_Rows.
-' JAVNA: ekran koji prijavi vise cipova nego sto bazen ima izgubio bi visak
-' bez ijedne poruke. Test to meri bas kroz ovu konstantu.
-Public Const MAX_CHIP   As Long = 7
-Private Const MODE_CHIP As Long = 6
-Private mScrChipN As Long
-Private mScrChipKey(0 To 6) As String
-Private mChipW(0 To 6) As Single
 Private mCntOtkaz As Long
 Private mCntBezZb As Long
 Private mCntNefakt As Long
@@ -736,88 +725,18 @@ Private Sub RefreshGridTitle(frm As Object)
         z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
     End If
 
-    RefreshChipsForScreen frm
-End Sub
-
-' Cipovi AKTIVNE liste. Ekran ih prijavljuje kroz Scr_Cipovi, istim oblikom
-' kao radnje: kljuc:KATALOG:sirina.
-'
-' Ovde je do sada stajalo 'ako je lista OTPREMNICE, pokazi chipSve i
-' chipOtvorene' -- poslednje mesto na kom je ljuska znala jedan ekran po
-' imenu. Sada zna samo svoj POCETNI, koji jedini ima cipove vezane za rezim
-' dokumenta (njihovu vidljivost postavlja SelectMode, prema tome da li rezim
-' uopste ima zbirnu i fakturu).
-Private Sub RefreshChipsForScreen(frm As Object)
-    Dim spec As String, e As Variant, p As Variant, i As Long, n As Long
-    Dim ch As Variant, nm As String, imaAktivan As Boolean
-    On Error Resume Next
-    ch = ChipRow()
-    mScrChipN = 0
-    For i = 0 To MAX_CHIP - 1
-        mScrChipKey(i) = ""
-    Next i
-    spec = ScrCipovi()
-
-    If Len(spec) = 0 Then
-        If mScreen = SCR_POCETNI Then
-            ' vidljivost cipova rezima postavlja SelectMode -- ovde se sklanjaju
-            ' samo slobodni slotovi bazena i vracaju natpisi koje je ekran menjao
-            For i = MODE_CHIP To MAX_CHIP - 1
-                ShowChip frm, Split(CStr(ch(i)), "|")(0), False
-            Next i
-            VratiNatpiseCipova frm
+    For Each ch In ChipRow()
+        k = Split(CStr(ch), "|")(0)
+        If Len(akt) = 0 Or akt = "SVI" Then
+            If k = "chipOtvorene" Then ShowChip frm, k, False
+        ElseIf akt = "OTPREMNICE" Then
+            ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
         Else
-            For i = 0 To MAX_CHIP - 1
-                ShowChip frm, Split(CStr(ch(i)), "|")(0), False
-            Next i
+            ShowChip frm, k, False
         End If
-        LayoutChips frm
-        Exit Sub
-    End If
-
-    For Each e In Split(spec, "|")
-        p = Split(CStr(e), ":")
-        If UBound(p) >= 2 And n < MAX_CHIP Then
-            nm = Split(CStr(ch(n)), "|")(0)
-            mScrChipKey(n) = CStr(p(0))
-            mChipW(n) = CSng(val(p(2)))
-            frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
-            ShowChip frm, nm, True
-            If mScrChipKey(n) = mFilter Then imaAktivan = True
-            n = n + 1
-        End If
-    Next e
-    mScrChipN = n
-    For i = n To MAX_CHIP - 1
-        ShowChip frm, Split(CStr(ch(i)), "|")(0), False
-    Next i
-    ' Filter koji izabrana lista ne poznaje ostavio bi mrezu suzenu necim sto
-    ' se ne vidi ni na jednom upaljenom cipu. Prvi cip je po dogovoru najsiri.
-    If Not imaAktivan Then mFilter = mScrChipKey(0)
+    Next ch
     LayoutChips frm
-    ApplyChipVisual frm.Controls("zGrid")
 End Sub
-
-' Natpisi i sirine bazena se vracaju na ljuskine kad ekran vise ne pozajmljuje
-' slotove -- inace bi na unosnom ekranu ostao natpis prethodnog ekrana.
-Private Sub VratiNatpiseCipova(frm As Object)
-    Dim ch As Variant, p As Variant, i As Long
-    On Error Resume Next
-    ch = ChipRow()
-    For i = 0 To MAX_CHIP - 1
-        p = Split(CStr(ch(i)), "|")
-        frm.Controls("zGrid").Controls(CStr(p(0)) & "C").caption = Poruka(CStr(p(1)))
-        mChipW(i) = CSng(val(p(2)))
-    Next i
-    RenderChipCounts frm.Controls("zGrid")
-End Sub
-
-' Opis cipova AKTIVNOG ekrana. Ekran koji ih nema vraca prazno.
-Private Function ScrCipovi() As String
-    On Error Resume Next
-    ScrCipovi = modUiScreens.ScrCipovi(mScreen)
-    Err.Clear
-End Function
 
 ' Dopuna naslova mreze (npr. broj aktivne otpremnice). Opciona - ekran koji je
 ' nema vraca prazno.
@@ -2768,11 +2687,8 @@ Public Function MarkedKeys() As String
     MarkedKeys = res
 End Function
 
-' Brojaci pripadaju cipovima liste dokumenata. Kad je slot pozajmljen ekranu,
-' upis bi pregazio natpis koji je ekran dao.
 Private Sub RenderChipCounts(z As Object)
     On Error Resume Next
-    If mScrChipN > 0 Then Exit Sub
     z.Controls("chipOtkazaneC").caption = Poruka("OTKUI_CHIP_OTKAZANE") & "  " & mCntOtkaz
     z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & mCntBezZb
     z.Controls("chipNefaktC").caption = Poruka("OTKUI_CHIP_NEFAKT") & "  " & mCntNefakt
@@ -3151,9 +3067,7 @@ Private Sub ApplyChipVisual(z As Object)
     For Each c In z.Controls
         If Left$(c.name, 4) = "chip" And Right$(c.name, 1) <> "B" And Right$(c.name, 1) <> "C" Then
             on_ = (ChipFilter(c.name) = mFilter)
-            ' Crveni cip je 'Otkazane' liste dokumenata. Isti slot pozajmljen
-            ' ekranu nema veze sa stornom, pa nosi obicnu boju.
-            If c.name = "chipOtkazane" And mScrChipN = 0 Then
+            If c.name = "chipOtkazane" Then
                 BoxState z, c.name, IIf(on_, C_RUST, C_PILL_ERR_BG), IIf(on_, C_CREAM, C_RUST), on_
             Else
                 BoxState z, c.name, IIf(on_, C_FOREST, C_WHITE), IIf(on_, C_CREAM, C_FOREST), on_
@@ -3283,7 +3197,7 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
     If mFrm Is Nothing Then Exit Sub
     Select Case ev
         Case "Click":    UiClick tag
-        Case "DblClick": UiDblClick tag
+        Case "DblClick": RowFromTag tag: LoadRowIntoForm
         Case "Change":   UiChange tag
         Case "Hover":    UiHover tag
         Case "Focus":    CloseOverlays tag: PostaviFokus tag
@@ -3697,32 +3611,6 @@ Private Function OperaterText() As String
     OperaterText = s
 End Function
 
-' Dvoklik na red. Na unosnom ekranu ucitava red u formu -- kao i do sada. Na
-' ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem kao 'row:' i 'act:'.
-'
-' Zasto ekran ne moze da otvara detalj OBICNIM klikom: klik BIRA red, a radnje
-' nad redom (zatvori paletu, storniraj, stampaj) rade bas nad izabranim. Da klik
-' prebacuje listu, do tih radnji se ne bi moglo doci.
-'
-' Ljuska i dalje ne zna nijedan ekran po imenu -- zna samo svoj POCETNI, koji
-' jedini ima formu za unos ispod mreze.
-Private Sub UiDblClick(ByVal tag As String)
-    RowFromTag tag
-    If mScreen = SCR_POCETNI Then
-        LoadRowIntoForm
-        Exit Sub
-    End If
-    If mSelRow <= 0 Then Exit Sub
-    If ScrAct("dbl:" & mSelRow) Then
-        mSelRow = 0
-        RefreshListSeg mFrm
-        RefreshGridTitle mFrm
-        ReloadGrid
-        RefreshOtpTraka mFrm
-        LayoutOtkup mFrm
-    End If
-End Sub
-
 Private Sub UiChange(ByVal tag As String)
     ' KONTROLE UGOVORNOG EKRANA IDU EKRANU. Sve ispod ovog reda poznaje polja
     ' UNOSNOG ekrana po imenu (fgKgIT, cbKupac, fgBrZbirT...) -- to je i tacno,
@@ -4000,12 +3888,9 @@ Private Sub LayoutChips(frm As Object)
     X = PAD
     For i = 0 To UBound(chip)
         p = Split(chip(i), "|")
-        ' Sirina dolazi iz mChipW, ne iz opisa: slot koji je pozajmio ekran
-        ' nosi sirinu svog natpisa, pa bi opis vratio pogresnu meru.
-        If mChipW(i) <= 0 Then mChipW(i) = CSng(p(2))
         If z.Controls(CStr(p(0))).Visible Then
-            MoveBox z, CStr(p(0)), X, 36, mChipW(i)
-            X = X + mChipW(i) + 6
+            MoveBox z, CStr(p(0)), X, 36, CSng(p(2))
+            X = X + CSng(p(2)) + 6
         End If
     Next i
 End Sub
@@ -4255,17 +4140,6 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
         ReloadGrid
     End If
     LayoutOtkup frm
-    ' Mreza se CRTA pri citanju, a sirine kolona se racunaju tek u rasporedu
-    ' iznad. Bez ovog ponovnog crtanja celije nove liste ostaju nevidljive:
-    ' RenderGrid je prosao sa merama PRETHODNOG ekrana, pa su zaglavlja tacna a
-    ' redovi prazni od prve kolone koju prethodna lista nije imala. Vidi se samo
-    ' pri PRVOM ulasku -- na sledecem je zateceno stanje slucajno vec tacno.
-    RenderGrid
-    ' I pun prefarb forme. Kontrolu koja je tek postavljena MSForms ume da ne
-    ' osvezi dok se ne desi nesto drugo; operater je to video kao panel za unos
-    ' koji se 'popravi' tek kad se ode na drugi ekran pa vrati -- taj odlazak i
-    ' povratak i jesu bili prefarb. Ovde se placa jednom po ulasku na ekran.
-    frm.Repaint
 End Sub
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
@@ -4283,23 +4157,10 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
     z.Left = X
     z.top = HEADER_H
     z.width = w
-    ' Zona dobija PUNU raspolozivu visinu pre rasporeda, pa se tek posle skuplja
-    ' na ono sto je ekran zauzeo. Ranije je ovde stajalo z.Height = 10: ekran je
-    ' onda palio i pomerao svoje kontrole unutar okvira visokog 10 poena, dakle
-    ' izvan vidljivog dela. MSForms takvu kontrolu ne prefarba kad se okvir vrati
-    ' na punu visinu -- Visible ostaje True, a na ekranu je praznina. Operater je
-    ' to video kao panel u kom rade samo prvo i poslednje polje, a koji se
-    ' 'popravi' kad se ode na drugi ekran pa vrati (to iznudi pun prefarb).
-    '
-    ' Zato ovo test ne moze da uhvati: .Visible je i dalje True. Kapija je smoke.
-    z.Height = hTot - HEADER_H - TITLE_H - STATUS_H
-    If z.Height < 10 Then z.Height = 10
+    z.Height = 10
     h = modUiScreens.ScrLayout(mScreen, z, w, hTot - HEADER_H - TITLE_H - STATUS_H)
     If h < 1 Then h = 1
     z.Height = h
-    ' I izricit prefarb: skupljanje okvira ne invalidira decu koja su tek
-    ' postavljena, pa bez ovoga panel ume da ostane prazan do sledeceg dogadjaja.
-    z.Repaint
     With frm.Controls("zTitle")
         .Left = X: .top = HEADER_H + h: .width = w: .Height = TITLE_H
         .Controls("titLnB").width = w
@@ -4320,18 +4181,10 @@ End Sub
 
 ' Zona ugovornog ekrana, da ekranski modul moze da napuni svoje kontrole a da
 ' ne pamti referencu koja preziveti rusenje forme ne bi.
-' Zona ugovornog ekrana, ili Nothing ako je nema.
-'
-' Err se BRISE pred povratak. Zona koje nema je odgovor 'Nothing', ne greska --
-' a On Error Resume Next je samo PRESKACE, ne cisti. Bez brisanja Err ostaje
-' postavljen i posle povratka, pa ga ScrGridData procita kao pad ekrana: mreza
-' se isprazni uz 'Lista se nije ucitala' iako su podaci procitani ispravno.
-' Isti put pogadja svaki ekran koji u Scr_Rows dopunjava svoju zonu.
 Public Function ScreenZone(ByVal kljuc As String) As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Function
     Set ScreenZone = mFrm.Controls("zScr_" & kljuc)
-    If Err.Number <> 0 Then Err.Clear
 End Function
 
 ' Naslovna traka za ugovorni ekran - iz Scr_Meta, ne iz rezima dokumenata.
@@ -4553,27 +4406,6 @@ End Function
 Public Function GridBrojRedova() As Long
     GridBrojRedova = mViewN
 End Function
-
-' Test seam: mreza se puni BEZ forme. Tvrdo gejtovan.
-'
-' Postoji da bi klik na red mogao da se izmeri onako kako se STVARNO desava --
-' preko GridCell nad pravim podacima ekrana. Bez ovoga bi test morao da izmisli
-' red, pa bi merio sopstvenu izmisljotinu umesto puta kojim ide operater.
-' Prazan kljuc vraca ljusku na pocetno stanje.
-Public Sub GridTestLoad(ByVal kljuc As String)
-    If Not IsTestMode() Then Exit Sub
-    mFilter = "sve"
-    mSearch = ""
-    mPage = 1
-    If Len(kljuc) = 0 Then
-        mScreen = SCR_POCETNI
-        mViewN = 0
-        mView = Empty
-        Exit Sub
-    End If
-    mScreen = kljuc
-    LoadGridFromScreen
-End Sub
 
 Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
     On Error Resume Next
@@ -6623,19 +6455,7 @@ Private Sub CopyAmbNaPraznu()
 End Sub
 
 
-' Kljuc filtera iza cipa. Slot koji je pozajmio ekran vraca EKRANOV kljuc --
-' ljuska ga ne tumaci, samo ga prosledi kroz Scr_Rows.
 Private Function ChipFilter(ByVal tag As String) As String
-    Dim ch As Variant, i As Long
-    If mScrChipN > 0 Then
-        ch = ChipRow()
-        For i = 0 To mScrChipN - 1
-            If Split(CStr(ch(i)), "|")(0) = tag Then
-                ChipFilter = mScrChipKey(i)
-                Exit Function
-            End If
-        Next i
-    End If
     Select Case tag
         Case "chipDanas":     ChipFilter = "danas"
         Case "chipNedelja":   ChipFilter = "nedelja"
