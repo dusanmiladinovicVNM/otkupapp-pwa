@@ -943,6 +943,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' panelu sa sedam polja i multiselektom; ovde su polja u zoni, a izbor ide
     ' kroz stikliranje u mrezi.
     UpsertRow lo, existing, "OTKUI_SEG_PAL_NOVA", "Nova prerada"
+    UpsertRow lo, existing, "OTKUI_BTN_PAL_STAVKE", "Stavke"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_PALNOVA", "Palete za preradu " & ChrW(8212) & " ozna" & ChrW(269) & "i koje ulaze"
     UpsertRow lo, existing, "OTKUI_HDP_OZN", ChrW(10003)
     UpsertRow lo, existing, "OTKUI_PRE_CAP", "NOVA PRERADA"

@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-161`.
+Stanje na dan `v6-ui-162`.
 
 ---
 
@@ -459,6 +459,13 @@ legacy do tada penzioniše).
     stikliranje paleta u mreži + polja u zoni. Ljuska je dobila granu za promenu
     u polju ugovornog ekrana (`chg:`), simetričnu sa `act:` i `row:`.
 11. Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.
+
+**Uz Fazu C je došlo i:** dvoklik na red se prosleđuje ekranu (`dbl:<red>`), pa
+klik na paletu vodi pravo na njene stavke (`v6-ui-162`). Traženi **padajući redovi
+detalja ispod izabranog reda** su odloženi sa razlogom: mrežu koriste svi ekrani, a
+za detalj ispod reda ugovor bi morao da dobije **vrstu reda** i opis kolona po
+vrsti, uz renderer promenljive visine — posao reda veličine migracije jednog
+celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 
 ### Faza D — storno okvir (najveći, ide poslednji)
 12. ~~Storno svih tipova dokumenata iz F8.~~ **URAĐENO** (v6-ui-119,

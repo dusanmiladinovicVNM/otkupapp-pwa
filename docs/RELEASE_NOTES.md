@@ -4222,3 +4222,75 @@ videla pozadina i panel je izgledao kao niz odvojenih ostrva. Ispod celog panela
 sada stoji jedna bela podloga, napravljena **pre** polja (u MSForms kasnija kontrola
 stoji iznad), sa malim uvlačenjem levo i desno da prva labela ne bude zalepljena za
 ivicu.
+
+---
+
+## v2.56.0 — `v6-ui-162` · dvoklik otvara stavke palete
+
+Operater je tražio **padajuće redove ispod izabranog reda**: klik na paletu otvara
+njene stavke, sa svojim zaglavljem, kao prozor ispod tog reda. UX je bolji i to
+ostaje **zapisan prioritet za kasnije** — ali traži *vrstu reda* u ugovoru ekrana i
+renderer promenljive visine, jer mrežu koriste **svi** ekrani, uključujući unos
+dokumenata. To je posao reda veličine migracije jednog celog ekrana.
+
+Do tada: **jedan potez umesto dva**, bez ijedne izmene u načinu na koji mreža crta
+redove.
+
+### Zašto dvoklik, a ne klik
+
+Klik na red **bira** paletu, a radnje nad redom — *zatvori paletu*, *storniraj*,
+*štampaj* — rade baš nad izabranom. Da klik prebacuje listu, do tih radnji se ne bi
+moglo doći: prekidač bi se pretvorio pre nego što operater stigne da pritisne dugme.
+
+Zato:
+
+| Potez | Šta radi |
+|---|---|
+| klik | bira paletu — zona pokazuje koja je, radnje nad redom rade nad njom |
+| **dvoklik** | otvara „Stavke palete", već sužene na tu paletu |
+| radnja **Stavke** | isto što i dvoklik — dvoklik se ne vidi, dugme da |
+
+Naslov liste stavki i dalje nosi broj otvorene palete, pa se sa te liste zna čije su.
+
+### Novi deo ugovora: `dbl:<red>`
+
+Ljuska je dvoklik do sada trošila sama (`LoadRowIntoForm`) — što je tačno za **unosni**
+ekran, koji jedini ima formu ispod mreže. Ugovorni ekran je ostajao bez njega.
+
+Sada `UiDblClick` prosleđuje `dbl:<red>` ekranu, istim putem kao `row:` i `act:`.
+Ljuska i dalje **ne zna nijedan ekran po imenu** — zna samo svoj početni.
+
+### Bag koji je test našao pre operatera
+
+Test je prvo pao sa **„Lista se nije učitala"**, iako se lista čitala ispravno.
+
+`ScreenZone` vraća zonu ekrana, a kad je nema — `Nothing`. Grešku je preskakao
+(`On Error Resume Next`), ali je **nije brisao**, pa je `Err` ostajao postavljen i
+posle povratka. `ScrGridData` to čita kao **pad ekrana**: prazna mreža i poruka o
+grešci nad podacima koji su potpuno ispravni.
+
+U produkciji se ne vidi dok zona postoji. Vidi se tačno onda kad je najgore — kad
+ekran **padne u gradnji**, jer tada zona nestane, a poruka o pravom uzroku se izgubi
+iza lažne. Popravka je jedan red na izvoru (`If Err.Number <> 0 Then Err.Clear`), a
+pogađa **svaki** ekran koji u `Scr_Rows` dopunjava svoju zonu.
+
+Isti obrazac kao `T_LogErr_NeVidiErrPosleResumeNext`: `On Error` ne čisti za sobom
+samo zato što je greška „obrađena".
+
+### Verifikacija
+
+**Test 78** tvrdi oba smera poteza (dvoklik otvara, klik ne), naslov otvorene palete,
+postojanje radnje i to da pročitana lista **nije** pad ekrana. Mreža se puni pravim
+podacima kroz `GridTestLoad` — tvrdo gejtovan seam koji zamenjuje samo `.Show`, ne
+i put kojim klik ide.
+
+Tri sabotaže, sve tri padaju po **svojoj** tvrdnji:
+
+| Sabotaža | Pada na |
+|---|---|
+| `paleta-dvoklik-ne-otvara` | *dvoklik na paletu otvara njene stavke* — `[STAVKE]` vs `[PALETE]` |
+| `paleta-klik-otvara` | *izbor reda ne traži ponovno čitanje mreže* — `[False]` vs `[True]` |
+| `zona-curi-gresku` | *pročitana lista se ne prijavljuje kao pad ekrana* |
+
+`vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (78)** ·
+`COMPILE` — **ostaje na operateru**.

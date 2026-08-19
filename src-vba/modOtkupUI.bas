@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-161"
+Public Const OTKUI_BUILD   As String = "v6-ui-162"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -3197,7 +3197,7 @@ Public Sub UiEvent(ByVal tag As String, ByVal ev As String, ByVal arg As Variant
     If mFrm Is Nothing Then Exit Sub
     Select Case ev
         Case "Click":    UiClick tag
-        Case "DblClick": RowFromTag tag: LoadRowIntoForm
+        Case "DblClick": UiDblClick tag
         Case "Change":   UiChange tag
         Case "Hover":    UiHover tag
         Case "Focus":    CloseOverlays tag: PostaviFokus tag
@@ -3610,6 +3610,32 @@ Private Function OperaterText() As String
     If Len(s) = 0 Then s = Poruka("OTKUI_OPERATER_NEPOZNAT")
     OperaterText = s
 End Function
+
+' Dvoklik na red. Na unosnom ekranu ucitava red u formu -- kao i do sada. Na
+' ugovornom ekranu ide EKRANU kao 'dbl:<red>', istim putem kao 'row:' i 'act:'.
+'
+' Zasto ekran ne moze da otvara detalj OBICNIM klikom: klik BIRA red, a radnje
+' nad redom (zatvori paletu, storniraj, stampaj) rade bas nad izabranim. Da klik
+' prebacuje listu, do tih radnji se ne bi moglo doci.
+'
+' Ljuska i dalje ne zna nijedan ekran po imenu -- zna samo svoj POCETNI, koji
+' jedini ima formu za unos ispod mreze.
+Private Sub UiDblClick(ByVal tag As String)
+    RowFromTag tag
+    If mScreen = SCR_POCETNI Then
+        LoadRowIntoForm
+        Exit Sub
+    End If
+    If mSelRow <= 0 Then Exit Sub
+    If ScrAct("dbl:" & mSelRow) Then
+        mSelRow = 0
+        RefreshListSeg mFrm
+        RefreshGridTitle mFrm
+        ReloadGrid
+        RefreshOtpTraka mFrm
+        LayoutOtkup mFrm
+    End If
+End Sub
 
 Private Sub UiChange(ByVal tag As String)
     ' KONTROLE UGOVORNOG EKRANA IDU EKRANU. Sve ispod ovog reda poznaje polja
@@ -4181,10 +4207,18 @@ End Sub
 
 ' Zona ugovornog ekrana, da ekranski modul moze da napuni svoje kontrole a da
 ' ne pamti referencu koja preziveti rusenje forme ne bi.
+' Zona ugovornog ekrana, ili Nothing ako je nema.
+'
+' Err se BRISE pred povratak. Zona koje nema je odgovor 'Nothing', ne greska --
+' a On Error Resume Next je samo PRESKACE, ne cisti. Bez brisanja Err ostaje
+' postavljen i posle povratka, pa ga ScrGridData procita kao pad ekrana: mreza
+' se isprazni uz 'Lista se nije ucitala' iako su podaci procitani ispravno.
+' Isti put pogadja svaki ekran koji u Scr_Rows dopunjava svoju zonu.
 Public Function ScreenZone(ByVal kljuc As String) As Object
     On Error Resume Next
     If mFrm Is Nothing Then Exit Function
     Set ScreenZone = mFrm.Controls("zScr_" & kljuc)
+    If Err.Number <> 0 Then Err.Clear
 End Function
 
 ' Naslovna traka za ugovorni ekran - iz Scr_Meta, ne iz rezima dokumenata.
@@ -4406,6 +4440,27 @@ End Function
 Public Function GridBrojRedova() As Long
     GridBrojRedova = mViewN
 End Function
+
+' Test seam: mreza se puni BEZ forme. Tvrdo gejtovan.
+'
+' Postoji da bi klik na red mogao da se izmeri onako kako se STVARNO desava --
+' preko GridCell nad pravim podacima ekrana. Bez ovoga bi test morao da izmisli
+' red, pa bi merio sopstvenu izmisljotinu umesto puta kojim ide operater.
+' Prazan kljuc vraca ljusku na pocetno stanje.
+Public Sub GridTestLoad(ByVal kljuc As String)
+    If Not IsTestMode() Then Exit Sub
+    mFilter = "sve"
+    mSearch = ""
+    mPage = 1
+    If Len(kljuc) = 0 Then
+        mScreen = SCR_POCETNI
+        mViewN = 0
+        mView = Empty
+        Exit Sub
+    End If
+    mScreen = kljuc
+    LoadGridFromScreen
+End Sub
 
 Public Function GridCell(ByVal r As Long, ByVal c As Long) As Variant
     On Error Resume Next

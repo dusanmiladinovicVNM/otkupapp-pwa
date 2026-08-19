@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-161"
+Public Const SCRPAL_BUILD As String = "v6-ui-162"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -103,7 +103,8 @@ End Function
 Public Function Scr_Radnje() As String
     Select Case Scr_Lista()
         Case "PALETE"
-            Scr_Radnje = "palprint:OTKUI_BTN_PAL_PRINT:112:ghost:1|" & _
+            Scr_Radnje = "palstavke:OTKUI_BTN_PAL_STAVKE:88:soft:1|" & _
+                         "palprint:OTKUI_BTN_PAL_PRINT:112:ghost:1|" & _
                          "palpdf:OTKUI_BTN_PAL_PDF:70:ghost:1|" & _
                          "palzatvori:OTKUI_BTN_PAL_ZATVORI:124:soft:1|" & _
                          "palstorno:OTKUI_BTN_RED_STORNO:88:danger:1|" & _
@@ -253,7 +254,6 @@ End Function
 
 '-------------------------------------------------------------- RADNJE
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
-    Dim broj As String
     On Error Resume Next
 
     If Left$(tag, 2) = "ls" Then
@@ -290,18 +290,15 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' izbor ne menja podatke, pa mreza ne sme da se prazni - radnje nad redom
     ' rade bas nad tim izabranim redom.
     If Left$(tag, 4) = "row:" And Scr_Lista() = "PALETE" Then
-        broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
-        If Len(broj) = 0 Then Exit Function
-        If mPalIds Is Nothing Then Exit Function
-        If Not mPalIds.Exists(broj) Then Exit Function
-        mPalID = CStr(mPalIds(broj))
-        mPalBroj = broj
-        ' vrsta, sorta, klasa i status stoje u redu koji je upravo izabran
-        mPalOpis = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 3))) & "  " & _
-                   ChrW(183) & "  " & Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 4))) & _
-                   "  " & ChrW(183) & "  " & _
-                   Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 11)))
-        RefreshAktivna
+        PostaviAktivnu CLng(Mid$(tag, 5))
+        Exit Function
+    End If
+
+    ' Dvoklik na paletu OTVARA njene stavke -- jedan potez umesto dva (izaberi
+    ' red, pa prebaci prekidac). Vraca True: lista se promenila, pa ljuska cita
+    ' mrezu ponovo i pretvara prekidac.
+    If Left$(tag, 4) = "dbl:" And Scr_Lista() = "PALETE" Then
+        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))
         Exit Function
     End If
 
@@ -321,6 +318,10 @@ Private Function PalAkcija(ByVal tag As String) As Boolean
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
 
     Select Case p(0)
+        Case "palstavke"
+            ' ne menja podatke, ali menja LISTU -- mreza mora da se procita ponovo
+            PalAkcija = OtvoriStavke(red)
+            Exit Function
         Case "palnepotpune"
             ' jedina radnja bez reda: stampa SVE nepotpune palete
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_PAL_NEPOTPUNE") & " " & _
@@ -412,6 +413,35 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Exit Function
     End If
     Scr_Rows = RowsPalete(q)
+End Function
+
+' Postavi AKTIVNU paletu iz reda mreze. Vraca False ako red ne nosi paletu
+' (prazna mreza, red van skupa) -- pozivalac tada ne sme nista da menja.
+Private Function PostaviAktivnu(ByVal red As Long) As Boolean
+    Dim broj As String
+    On Error Resume Next
+    broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    If Len(broj) = 0 Then Exit Function
+    If mPalIds Is Nothing Then Exit Function
+    If Not mPalIds.Exists(broj) Then Exit Function
+    mPalID = CStr(mPalIds(broj))
+    mPalBroj = broj
+    ' vrsta, sorta, klasa i status stoje u redu koji je upravo izabran
+    mPalOpis = Trim$(CStr(modOtkupUI.GridCell(red, 3))) & "  " & _
+               ChrW(183) & "  " & Trim$(CStr(modOtkupUI.GridCell(red, 4))) & _
+               "  " & ChrW(183) & "  " & _
+               Trim$(CStr(modOtkupUI.GridCell(red, 11)))
+    RefreshAktivna
+    PostaviAktivnu = True
+End Function
+
+' Otvori stavke izabrane palete: aktivna paleta pa prebacaj liste. Zona i dalje
+' pokazuje KOJA je paleta otvorena, pa se sa liste stavki zna gde se stoji.
+Private Function OtvoriStavke(ByVal red As Long) As Boolean
+    If Not PostaviAktivnu(red) Then Exit Function
+    If Scr_Lista() = ST_NOVA Then OcistiPreradu
+    mLista = "STAVKE"
+    OtvoriStavke = True
 End Function
 
 ' Kolone deljene mreze: KLJUC_KATALOGA | izvor | vrsta | sirina | prio

@@ -211,6 +211,7 @@ Public Sub RunAllTests()
     RunOne 75
     RunOne 76
     RunOne 77
+    RunOne 78
 
     SetTestMode prevMode
     WriteResultFile
@@ -320,6 +321,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 75: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
         Case 76: TestName = "T_NavBrojac_SamoEkranKojiBroji"
         Case 77: TestName = "T_NovaPrerada_IzborINeto"
+        Case 78: TestName = "T_PaletaDvoklik_OtvaraStavke"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -405,6 +407,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 75: T_StornoBlokovi_PodrazumevanoNijedan
         Case 76: T_NavBrojac_SamoEkranKojiBroji
         Case 77: T_NovaPrerada_IzborINeto
+        Case 78: T_PaletaDvoklik_OtvaraStavke
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3652,6 +3655,58 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
 End Sub
 
 ' ============================================================
+' 78. Dvoklik na paletu otvara njene stavke; obican klik i dalje samo BIRA.
+'
+' Zasto oba smera u istom testu: da klik prebacuje listu, radnje nad redom
+' (zatvori paletu, storniraj, stampaj) postale bi nedostupne -- operater ne bi
+' stigao da ih pritisne. Tvrdnja nije samo 'dvoklik radi' nego 'dvoklik radi, a
+' klik je ostao netaknut'.
+Private Sub T_PaletaDvoklik_OtvaraStavke()
+    Dim broj As String, opis As String, d As Variant
+
+    ' Mreza se puni pravim podacima ekrana, bez forme -- klik cita bas nju.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    ' Zona koje NEMA ne sme da izgleda kao pad ekrana. Ekran u Scr_Rows dopunjava
+    ' svoju zonu; kad zone nema, On Error Resume Next gresku preskoci ali je ostavi
+    ' postavljenu, pa je ScrGridData procita kao pad i isprazni mrezu. Ovo je merenje
+    ' bas tog puta -- harness nema zonu, kao ni ekran koji je pukao u gradnji.
+    d = modUiScreens.ScrGridData("PALETE", "sve", "")
+    AssertEq modUiScreens.ScrLastErr, "", _
+             "procitana lista se ne prijavljuje kao pad ekrana"
+    AssertEq IsArray(d), True, "ljuska je dobila redove"
+    modOtkupUI.GridTestLoad "PALETE"
+    broj = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
+    AssertEq (Len(broj) > 0), True, "preduslov: fixture ima paletu u prvom redu"
+
+    ' 1) OBICAN KLIK bira i nista vise: lista ostaje, mreza se ne cita ponovo.
+    AssertEq modUiScreens.ScrEvent("PALETE", "row:1", "Click"), False, _
+             "izbor reda ne trazi ponovno citanje mreze"
+    AssertEq modScrPalete.Scr_Lista(), "PALETE", _
+             "obican klik BIRA, ne otvara -- inace radnje nad redom postaju nedostupne"
+
+    ' 2) DVOKLIK otvara stavke te palete i trazi ponovno citanje.
+    AssertEq modUiScreens.ScrEvent("PALETE", "dbl:1", "Click"), True, _
+             "dvoklik menja listu, pa mreza mora da se procita ponovo"
+    AssertEq modScrPalete.Scr_Lista(), "STAVKE", _
+             "dvoklik na paletu otvara njene stavke"
+
+    ' 3) Zona i naslov i dalje pokazuju KOJA je paleta otvorena -- bez toga se sa
+    ' liste stavki ne bi znalo cije su.
+    opis = modScrPalete.Scr_NaslovDopuna()
+    AssertEq opis, broj, "naslov liste stavki nosi broj otvorene palete"
+
+    ' 4) Isti put postoji i kao RADNJA nad redom -- dvoklik se ne vidi, dugme da.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    AssertEq (InStr(modScrPalete.Scr_Radnje(), "palstavke:OTKUI_BTN_PAL_STAVKE") > 0), _
+             True, "lista paleta nudi radnju Stavke"
+    AssertEq modUiScreens.ScrEvent("PALETE", "act:palstavke:1", "Click"), True, _
+             "radnja Stavke otvara istu listu kao dvoklik"
+    AssertEq modScrPalete.Scr_Lista(), "STAVKE", "radnja Stavke otvara stavke"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    modOtkupUI.GridTestLoad ""
+End Sub
+
 ' 77. Nova prerada: cetvrta lista, izbor po identitetu, neto kao racun
 ' ============================================================
 ' Faza C, stavka 10. Legacy je unos prerade radio panelom sa sedam polja i

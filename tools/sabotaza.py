@@ -1283,6 +1283,35 @@ SABOTAZE = {
         "T_NovaPrerada_IzborINeto",
         "neto je bruto minus tezina palete",
     ),
+    # Dvoklik OTVARA stavke izabrane palete. Bez prebacaja liste operater vidi
+    # isti spisak paleta i misli da dvoklik ne radi nista.
+    "paleta-dvoklik-ne-otvara": (
+        "modScrPalete.bas",
+        "    mLista = \"STAVKE\"\n",
+        "    mLista = \"PALETE\"   ' SABOTAZA: ostaje na istoj listi\n",
+        "T_PaletaDvoklik_OtvaraStavke",
+        "dvoklik na paletu otvara njene stavke",
+    ),
+    # Obican klik samo BIRA. Da i on prebacuje listu, radnje nad redom (zatvori
+    # paletu, storniraj, stampaj) postale bi nedostupne -- operater ne bi stigao
+    # da ih pritisne.
+    "paleta-klik-otvara": (
+        "modScrPalete.bas",
+        "        PostaviAktivnu CLng(Mid$(tag, 5))\n",
+        "        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))   ' SABOTAZA: klik navigira\n",
+        "T_PaletaDvoklik_OtvaraStavke",
+        "izbor reda ne trazi ponovno citanje mreze",
+    ),
+    # Zona koje nema je odgovor, ne greska. Ako ScreenZone ostavi Err postavljen,
+    # ScrGridData ga procita kao pad ekrana i mreza se isprazni iako su podaci
+    # procitani ispravno.
+    "zona-curi-gresku": (
+        "modOtkupUI.bas",
+        "    If Err.Number <> 0 Then Err.Clear\nEnd Function\n",
+        "    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\nEnd Function\n",
+        "T_PaletaDvoklik_OtvaraStavke",
+        "procitana lista se ne prijavljuje kao pad ekrana",
+    ),
 }
 
 
