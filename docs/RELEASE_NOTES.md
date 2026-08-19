@@ -4203,3 +4203,22 @@ Sada stoji i spisak **po broju palete**: `2 izabrano paleta:  185, 184`.
 Izbor se i dalje **drži po `PaletaID`** — broj se ponavlja kroz godine — ali zona
 ume da ga imenuje, kroz mapu `PaletaID → broj` koju punjenje redova ionako vidi.
 Dug spisak se skraćuje: zona ima jedan red, a poenta je prepoznavanje, ne inventar.
+
+### Panel prerade: jedinica nasred polja i „ostrva" belog
+
+Dva izgledačka nalaza iz druge probe, i oba su bila ista greška: ekran je polje
+**napravio**, ali ga nije **rasporedio**.
+
+`NewFieldG` crta unutrašnjost prema početnih 180pt. Kad zona polje proširi na ~300pt,
+labela, ivica, jedinica i sam unos ostaju na starim merama — pa `kg` završi nasred
+polja, a unos izgleda odsečen sa leve strane. Unosni ekran to rešava
+`LayoutFieldInner`-om; bio je `Private`, pa ga ekran nije mogao pozvati.
+
+Sada je javan, iz istog razloga kao i `NewFieldG`: **ekran koji polje napravi mora i
+da ga rasporedi.**
+
+Drugi nalaz: svako polje je svoj **beli okvir**, a zona je krem — pa se između njih
+videla pozadina i panel je izgledao kao niz odvojenih ostrva. Ispod celog panela
+sada stoji jedna bela podloga, napravljena **pre** polja (u MSForms kasnija kontrola
+stoji iznad), sa malim uvlačenjem levo i desno da prva labela ne bude zalepljena za
+ivicu.

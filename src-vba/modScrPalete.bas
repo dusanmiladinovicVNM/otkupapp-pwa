@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-160"
+Public Const SCRPAL_BUILD As String = "v6-ui-161"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -134,6 +134,11 @@ Public Sub Scr_Build(ByVal z As Object)
     ' NOVA PRERADA: polja unosa. Postoje uvek, a vide se samo dok je ta lista
     ' aktivna -- Scr_Layout ih pali i gasi. Prefiks 'scr' je OBAVEZAN: bez njega
     ' promena teksta ide ljusci, koja o ovim poljima ne zna nista.
+    ' Bela podloga ispod celog panela. Bez nje se izmedju polja vidi krem
+    ' pozadina zone, pa panel izgleda kao niz odvojenih ostrva umesto kao jedna
+    ' celina -- operater je to prijavio kao 'ruzni prekidi izmedju belih polja'.
+    ' Pravi se PRE polja, jer u MSForms kasnije dodata kontrola stoji IZNAD.
+    modUiKit.NewFrame z, "preBg", 0, 0, 100, 10, C_WHITE
     modUiKit.NewLbl z, "preCap", UCase$(Poruka("OTKUI_PRE_CAP")), PAD, PAL_ZONA_H + 4, 200, 11, _
                     TS_MICRO, True, C_MUTED, -1
     modOtkupUI.NewFieldG z, "scrPreBruto", Poruka("OTKUI_PRE_BRUTO"), "txt", "kg", 1, True, False, "PRE"
@@ -186,7 +191,7 @@ Private Sub PoljaPrerade(ByVal z As Object, ByVal vis As Boolean)
                          "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
         z.Controls(CStr(nm)).Visible = vis
     Next nm
-    For Each nm In Array("preCap", "preNetoL", "preNetoV", "preIzbor")
+    For Each nm In Array("preBg", "preCap", "preNetoL", "preNetoV", "preIzbor")
         z.Controls(CStr(nm)).Visible = vis
     Next nm
     modUiKit.BoxShow z, "scrPreradi", vis
@@ -212,6 +217,12 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
 
     PoljaPrerade z, True
     PuniPreradaCombo z
+    ' Podloga ide od ivice do ivice zone, sa malim uvlacenjem levo i desno --
+    ' bez njega prva labela stoji zalepljena za belu ivicu.
+    z.Controls("preBg").Left = PAD - 10
+    z.Controls("preBg").top = PAL_ZONA_H
+    z.Controls("preBg").width = w - 2 * (PAD - 10)
+    z.Controls("preBg").Height = PAL_ZONA_NOVA_H - PAL_ZONA_H - 1
     Dim kol As Single, x0 As Single, y0 As Single, nm As Variant
     kol = (w - PAD * 2 - 3 * PRE_GAP - 200) / 4
     If kol < 120 Then kol = 120
@@ -222,6 +233,9 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
         z.Controls(CStr(nm)).Left = PAD + (i Mod 4) * (kol + PRE_GAP)
         z.Controls(CStr(nm)).top = y0 + (i \ 4) * 46
         z.Controls(CStr(nm)).width = kol
+        ' Bez ovoga unutrasnje kontrole ostaju na merama iz gradnje (180pt):
+        ' jedinica se nadje nasred polja, a unos izgleda odsecen.
+        modOtkupUI.LayoutFieldInner z.Controls(CStr(nm))
         i = i + 1
     Next nm
 
