@@ -182,6 +182,12 @@ AGRO_DUG_KOOP1 = 2500
 AGRO_ABZUG_KOOP1 = 500
 AGRO_ABZUG_KOOP2 = 100
 
+# Kolizija broja po godini -- isti broj, dve godine, dva razlicita identiteta.
+PALETA_KOLIZIJA_BROJ = 12
+PALETA_KOLIZIJA_ID = "PAL-TEST-Y25"      # 12/2025; PAL-TEST-Z2 je 12/2026
+PRERADA_KOLIZIJA_BROJ = 7
+PRERADA_NOVA_ID = "PRE-TEST-Y26"
+PRERADA_STARA_ID = "PRE-TEST-Y25"
 # Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
 # RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
@@ -576,6 +582,17 @@ SEED = {
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 20,
          "KapacitetGajbica": 100, "NetoKg": 200, "Status": "OTVORENA"},
+        # ISTI BROJ, RANIJA GODINA. Broj palete se resetuje po godini
+        # (GenerateBrojPalete racuna maxN+1 unutar Year(Date)), pa 12/2025 i
+        # 12/2026 postoje istovremeno. Dok je ekran identitet resavao preko
+        # broja, jedan od ta dva zapisa je bio NEDOSTUPAN: radnja nad starijom
+        # paletom je pogadjala noviju. Bez ovog reda tvrdnja nema nad cim da
+        # padne -- sve palete u fixture-u su bile iz iste godine.
+        {"PaletaID": PALETA_KOLIZIJA_ID, "BrojPalete": PALETA_KOLIZIJA_BROJ,
+         "Godina": 2025,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 15,
+         "KapacitetGajbica": 100, "NetoKg": 150, "Status": "OTVORENA"},
         {"PaletaID": "PAL-TEST-1", "BrojPalete": 1, "Godina": 2026,
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 40,
@@ -679,6 +696,18 @@ SEED = {
          "ArtikalID": ARTIKAL_ZALIHA, "Tip": "Ulaz", "Kolicina": 1000,
          "BrojDokumenta": "AGRO-ULAZ-Z", "CenaPoJedinici": 100,
          "Vrednost": 100000, "DobavljacID": "DOB-TEST"},
+    ],
+    # PRERADE. Do sada nijedan red -- lista prerada je bila prazna, pa se
+    # identitet reda nije mogao ni izmeriti. Isti obrazac kao palete: broj
+    # prerade se resetuje po godini (GenerateBrojPrerade), pa dva zapisa nose
+    # isti broj i razlikuju se samo po PreradaID.
+    "tblPrerada": [
+        {"PreradaID": PRERADA_NOVA_ID, "BrojPrerade": PRERADA_KOLIZIJA_BROJ,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 300,
+         "BrojKutija": 30, "BrojKesa": 60, "TipGotovogProizvoda": "Rinfuz"},
+        {"PreradaID": PRERADA_STARA_ID, "BrojPrerade": PRERADA_KOLIZIJA_BROJ,
+         "Godina": 2025, "Datum": FIXTURE_DATE, "NetoIzlazKg": 200,
+         "BrojKutija": 20, "BrojKesa": 40, "TipGotovogProizvoda": "Rinfuz"},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-171"
+Public Const OTKUI_BUILD   As String = "v6-ui-173"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -2236,7 +2236,14 @@ SledecaAkcija:
     ' Telo NE SME da naraste preko onoga sto je zoni ostalo - inace pokrije
     ' podnozje. Zato nema donje granice vece od raspolozivog: kad je usko,
     ' smanjuje se broj redova, ne visina zone.
-    bodyH = zh - (GRID_TOP + GRID_HEAD_H) - GRID_FOOT_H - 6
+    '
+    ' TOAST_H se REZERVISE. Traka poruka stoji tacno iznad podnozja
+    ' (PostaviToast: footTop - TOAST_H - 4), a telo je do sada racunato samo sa
+    ' rezervom od 6pt -- pa je poslednji red ulazio 24pt U traku. Poruka se
+    ' zato crtala PREKO reda i drzala se samo ZOrder-om (ShowToast), sto je
+    ' resenje za redosled crtanja, a ne za prostor. Sada telo staje TU gde
+    ' traka pocinje: body.Bottom <= toast.Top.
+    bodyH = zh - (GRID_TOP + GRID_HEAD_H) - GRID_FOOT_H - TOAST_H - 4
     If bodyH < GRID_ROW_H * 3 Then bodyH = GRID_ROW_H * 3
 
     mPageSize = Int(bodyH / GRID_ROW_H)
@@ -4535,6 +4542,18 @@ End Function
 Public Function GridBrojRedova() As Long
     GridBrojRedova = mViewN
 End Function
+
+' TEST SEAM: pusti raspored mreze nad zonom koju je test vec izgradio.
+' Tvrdo gejtovan.
+'
+' LayoutGrid je Private i zove se samo iz gradnje forme, pa se geometrija tela
+' i trake poruka drugacije ne moze izmeriti: test formu ne prikazuje, a bez
+' rasporeda su sve kontrole na nuli. Same kontrole test cita direktno --
+' seam vraca prostor, ne brojke, da tvrdnja ostane u testu.
+Public Sub GridLayoutTest(z As Object, ByVal zw As Single, ByVal zh As Single)
+    If Not IsTestMode() Then Exit Sub
+    LayoutGrid z, zw, zh
+End Sub
 
 ' Test seam: mreza se puni BEZ forme. Tvrdo gejtovan.
 '

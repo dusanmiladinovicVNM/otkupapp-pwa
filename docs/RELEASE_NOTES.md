@@ -4646,3 +4646,88 @@ forme obriše `Err` između `Err.Raise` i omotnice testa, pa pad stiže kao
 
 To ne popravlja uzrok ako uzrok postoji, nego **dijagnostiku**: sledeće puštanje
 je ili zeleno, ili imenuje tvrdnju i vrednost.
+
+---
+
+## v2.61.0 — `v6-ui-173` · paleta se bira po identitetu, ne po broju
+
+### Broj palete nije identitet
+
+Broj palete i broj prerade **resetuju se po godini** — `GenerateBrojPalete` i
+`GenerateBrojPrerade` računaju `maxN + 1` unutar `Year(Date)`. Zato `12/2025` i
+`12/2026` postoje istovremeno.
+
+Ekran Palete je identitet rešavao kroz rečnik `broj → ID` (`mPalIds`, `mPreIds`).
+Takav rečnik za dva zapisa istog broja ima **tačno jedan unos** — pa je radnja nad
+starijom paletom pogađala **noviju**:
+
+| Radnja | Šta se dešavalo |
+|---|---|
+| `palprint` / `palpdf` | štampa se pogrešan paletni list |
+| `palzatvori` | zatvara se tuđa paleta |
+| `palstorno` | **stornira se pogrešan zapis** |
+| `preprint` / `prestorno` | isto, nad preradom |
+
+Kvar je tih: operater vidi red koji je izabrao, a radnja ode na drugi zapis.
+
+### Šta se menja
+
+Obe liste dobijaju **nevidljivu kolonu identiteta** (`PaletaID`, `PreradaID`) —
+isti oblik koji lista za unos prerade (`PAL_NOVA_COL_ID`) i ekran Storno
+(`ST_BLOK_COL_ID`) već nose: širina `0`, prioritet `4`, uvek poslednja.
+
+`PostaviAktivnu` i sve radnje čitaju ID **iz izabranog reda**. Kolona putuje sa
+redom, pa preživi i sortiranje (`SortedView` kopira svih `mColN` kolona) i
+filtriranje — jer je deo reda, a ne pogled sa strane. Rečnici `mPalIds` /
+`mPreIds` su **obrisani**: rečnik koji izgleda kao izvor identiteta, a nije, samo
+čeka sledećeg čitaoca.
+
+### Telo mreže više ne ulazi u traku poruka
+
+Traka stoji tačno iznad podnožja (`footTop - TOAST_H - 4`), a telo je računato sa
+rezervom od **6pt** — pa je poslednji red ulazio **24pt u traku**. Poruka se
+crtala preko reda i držala se samo `ZOrder`-om, što rešava **redosled crtanja**, ne
+**prostor**: red ispod poruke je bio nečitljiv.
+
+`LayoutGrid` sada rezerviše `TOAST_H`: `body.Bottom <= toast.Top`. Ispod ~195pt
+i dalje pobeđuje pod od tri reda — mreža koja pokaže manje od tri reda nije
+upotrebljiva.
+
+### `Scr_Event` vraća čist `Err`
+
+Ista obaveza koju `modScrStorno.Scr_Event` već drži. Ovde je cela funkcija stajala
+pod `On Error Resume Next` i `Err` nikad nije čistila, pa je progutana greška
+ostajala postavljena i posle povratka — **ljuska je prijavljivala neuspeh za radnju
+koja je prošla**. Telo je izdvojeno u `ObradiDogadjaj`, omotnica loguje, javlja
+toast i čisti `Err` u oba smera.
+
+### Verifikacija
+
+Testovi **93–96**, uz fixture redove koji koliziju uopšte prave: `PAL-TEST-Y25`
+(`12/2025`, uz postojeću `12/2026`) i dve prerade istog broja u dve godine.
+`tblPrerada` do sada nije imala **nijedan** red.
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_PaleteIdentitet_PoIDNePoBroju` | svaki red daje svoj `PaletaID`; drugi ostaje netaknut | `palete-id-po-broju` |
+| `T_PreradeIdentitet_PoIDNePoBroju` | isto nad preradom, druga grana resolvera | `palete-id-po-broju` |
+| `T_GridTelo_NePokrivaToast` | `body.Bottom <= toast.Top` na šest visina | `grid-telo-preko-toasta` |
+| `T_PaleteScrEvent_NeCuriGreska` | `Err.Number = 0` i kad događaj iznutra pukne | `palete-event-curi-err` |
+
+`vba_check` čisto (193) · self-test (47) · `who_writes` ažuran ·
+sve četiri sabotaže obaraju **imenovani** test i vraćaju se bit-identično.
+
+> **Suite je puštena PRE rebase-a na `v6-ui-172`.** Tada je `RunAllTests` imao
+> **94 testa, 93 prolaze** (uz ostale suite ZELENO). Posle rebase-a ih je **96** —
+> agro rad je uzeo 91 i 92, pa su testovi Paleta prenumerisani na **93–96**.
+> **Nije ponovo puštena.** Ni renumeracija ni ta dva nova testa nisu mereni na
+> ovoj grani; to ostaje uz compile.
+
+> **Jedan test pada, i nije iz ovog rada.** `T_ZonaAgro_PrekidacRezimaZadrzavaBoju`
+> (test 89, `v6-ui-171`) pada i na čistom `main`-u, pre ovog rebase-a —
+> `neizabran rezim nije Bold: ocekivano [False], dobijeno [True]`. Došao je uz
+> `bab97df7`, zajedno sa `OsveziPrekidacRezima` koji popravlja. Baseline nad
+> `main`-om je snimljen pre rebase-a baš zato da se pad ne pripiše ovoj grani.
+
+**Compile** (`Alt+F11 → Debug → Compile VBAProject`) **ostaje operateru** —
+automatski verdikt je `NEJASNO`.
