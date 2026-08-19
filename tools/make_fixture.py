@@ -623,6 +623,17 @@ SEED = {
          "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
          "KooperantID": "KOOP-TEST-IME", "BrojDokumenta": "AGRO-POC-2",
          "CenaPoJedinici": 1, "Vrednost": 1},
+        # KOOP-TEST-2 ("Drugi Testni") -- JEDNOZNACNO ime, sa dugom. Kapija
+        # dvosmislenosti mora da odbije samo istoimene, a ne sve redom; bez
+        # ovog reda "Drugi Testni" uopste nije u listi dugova, pa je tvrdnja
+        # "jednoznacan prikaz daje svoj identitet" merila odsustvo reda.
+        #
+        # Isti rezervisani artikal kao gore, iz istog razloga: stanje
+        # ART-TEST-1 mora da ostane tacno 15.
+        {"MagacinID": "MAG-TEST-4", "Datum": FIXTURE_DATE,
+         "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
+         "KooperantID": "KOOP-TEST-2", "BrojDokumenta": "AGRO-POC-3",
+         "CenaPoJedinici": 1, "Vrednost": 1},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

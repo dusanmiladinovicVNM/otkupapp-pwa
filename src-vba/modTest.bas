@@ -4186,7 +4186,10 @@ Private Sub T_Agro_KapijaStanjaBrojiKorpu()
 
     ' A sada se stanje promeni IZA ledja korpe -- tacno zbog toga druga kapija
     ' i postoji. Ista korpa vise ne sme da prodje.
-    magID = SaveMagacinCore(Date, FX_ARTIKAL, MAG_IZLAZ, 10, FX_KOOPERANT, "", _
+    ' Parcela se PROSLEDJUJE: PRACENJE_PARCELA je u fixture-u ukljuceno, pa
+    ' bi prazna parcela ovde podigla 4215 i test bi pao na svom cistacu
+    ' umesto na tvrdnji koju meri.
+    magID = SaveMagacinCore(Date, FX_ARTIKAL, MAG_IZLAZ, 10, FX_KOOPERANT, FX_PARCELA, _
                             "AGRO-TEST-TX")
     AssertEq (Len(Trim$(magID)) > 0), True, "kontrolni izlaz je proknjizen"
     AssertEq (Len(modAgroUnos.AgroProveriKorpuIzlaz(korpa)) > 0), True, _
