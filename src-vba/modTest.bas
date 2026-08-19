@@ -214,6 +214,7 @@ Public Sub RunAllTests()
     RunOne 78
     RunOne 79
     RunOne 80
+    RunOne 81
 
     SetTestMode prevMode
     WriteResultFile
@@ -326,6 +327,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 78: TestName = "T_PaletaDvoklik_OtvaraStavke"
         Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
         Case 80: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
+        Case 81: TestName = "T_BazenLjuske_ViseNegoStoStaje"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -414,6 +416,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 78: T_PaletaDvoklik_OtvaraStavke
         Case 79: T_CipoviEkrana_UgovorIFilter
         Case 80: T_ZonaPrerade_SvaPoljaVidljiva
+        Case 81: T_BazenLjuske_ViseNegoStoStaje
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3658,6 +3661,61 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
     Err.Clear
     n = modUiScreens.ScrBrojac("DOKUMENTI")
     AssertEq Err.Number, 0, "poziv ekrana bez brojaca ne ostavlja Err postavljen"
+End Sub
+
+' 81. Bazen ljuske je konacan, i prekoracenje se PRIJAVLJUJE.
+'
+' Segmenata, radnji, cipova i kolona ima tacno onoliko koliko je kontrola
+' napravljeno. Ekran koji zatrazi vise nije gresio -- ali visak se gubio bez
+' ijedne poruke, i to se desilo dvaput: jedanaesti cip se crtao a nije reagovao,
+' a sesta radnja nad redom je tiho izbacila 'Nepotpune palete'.
+'
+' Test tvrdi oboje: da cuvar odseca i imenuje, i da nijedan DANASNJI ekran ne
+' prekoracuje -- druga tvrdnja je ta koja ce pasti kad se doda osmi cip.
+Private Sub T_BazenLjuske_ViseNegoStoStaje()
+    Dim pre As Long, r As Variant, kljuc As String, i As Long
+    Dim liste As Variant, spec As String
+
+    ' 1) Sto staje -- prolazi netaknuto. Bez ove tvrdnje bi cuvar mogao da odseca
+    ' i ono sto je u redu, pa bi ekrani tiho gubili poslednji cip.
+    AssertEq modOtkupUI.BazenStaje(3, 5, "proba"), 3, _
+             "sto staje u bazen prolazi neodseceno"
+    AssertEq modOtkupUI.BazenStaje(5, 5, "proba"), 5, _
+             "tacno pun bazen nije prekoracenje"
+
+    ' 2) Visak se odseca NA velicinu bazena, ne na nulu i ne na trazeno.
+    pre = modOtkupUI.BazenPrijavaBroj()
+    AssertEq modOtkupUI.BazenStaje(9, 5, "probaX"), 5, _
+             "visak se odseca na velicinu bazena"
+    AssertEq modOtkupUI.BazenPrijavaBroj(), pre + 1, _
+             "prekoracenje se prijavljuje"
+
+    ' 3) I to JEDNOM. Ovo se zove pri svakom crtanju mreze; prijava po pozivu bi
+    ' napunila log i sakrila ono sto se stvarno desava.
+    AssertEq modOtkupUI.BazenStaje(9, 5, "probaX"), 5, _
+             "ponovljeno prekoracenje i dalje odseca"
+    AssertEq modOtkupUI.BazenPrijavaBroj(), pre + 1, _
+             "isto prekoracenje se ne prijavljuje dvaput"
+
+    ' 4) Nijedan danasnji ekran ne trazi vise nego sto staje. Ide se kroz REGISTAR,
+    ' pa provera pokriva i ekrane koji tek dolaze -- ne treba je dopunjavati.
+    r = modUiScreens.ScrRows()
+    If Not IsArray(r) Then Exit Sub
+    For i = 0 To UBound(r)
+        kljuc = modUiScreens.ScrField(CStr(r(i)), modUiScreens.SCR_KLJUC)
+        If Len(kljuc) > 0 Then
+            liste = modUiScreens.ScrListe(kljuc)
+            If IsArray(liste) Then
+                AssertEq ((UBound(liste) + 1) <= modOtkupUI.MAX_SEG), True, _
+                         "ekran " & kljuc & ": prekidac lista staje u bazen"
+            End If
+            spec = modUiScreens.ScrCipovi(kljuc)
+            If Len(spec) > 0 Then
+                AssertEq ((UBound(Split(spec, "|")) + 1) <= modOtkupUI.MAX_CHIP), _
+                         True, "ekran " & kljuc & ": cipovi staju u bazen"
+            End If
+        End If
+    Next i
 End Sub
 
 ' ============================================================
