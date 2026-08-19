@@ -945,6 +945,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_PAL_NOVA", "Nova prerada"
     UpsertRow lo, existing, "OTKUI_BTN_PAL_STAVKE", "Stavke"
     UpsertRow lo, existing, "OTKUI_PRE_ULAZ", "Neto ulaz"
+    UpsertRow lo, existing, "OTKUI_ERR_BAZEN", "Ekran tra" & ChrW(382) & "i vi" & ChrW(353) & "e nego " & _
+                           ChrW(353) & "to staje:"
     UpsertRow lo, existing, "OTKUI_CIPP_GODINA", "Ova godina"
     UpsertRow lo, existing, "OTKUI_CIPP_OTVORENE", "Otvorene"
     UpsertRow lo, existing, "OTKUI_CIPP_ZATVORENE", "Zatvorene"

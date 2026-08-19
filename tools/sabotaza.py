@@ -1376,6 +1376,24 @@ SABOTAZE = {
         "T_PaletaDvoklik_OtvaraStavke",
         "lista ne trazi vise radnji nego sto ljuska ima dugmadi",
     ),
+    # Cuvar bazena sme da odseca, ali NE sme da cuti. Tiho odsecanje je vec
+    # dvaput proslo kroz smoke: jedanaesti cip i sesta radnja nad redom.
+    "bazen-cuti-visak": (
+        "modOtkupUI.bas",
+        "    If mBazenPrijave.Exists(k) Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: prekoracenje se ne prijavljuje\n",
+        "T_BazenLjuske_ViseNegoStoStaje",
+        "prekoracenje se prijavljuje",
+    ),
+    # Odsecanje ide NA velicinu bazena. Odsecanje na nulu bi obrisalo ceo
+    # prekidac lista ili celu traku radnji, umesto da izgubi samo visak.
+    "bazen-odseca-na-nulu": (
+        "modOtkupUI.bas",
+        "    BazenStaje = bazen\n",
+        "    BazenStaje = 0   ' SABOTAZA: odseca na nulu\n",
+        "T_BazenLjuske_ViseNegoStoStaje",
+        "visak se odseca na velicinu bazena",
+    ),
 }
 
 
