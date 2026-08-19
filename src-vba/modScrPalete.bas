@@ -209,7 +209,7 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
 
     PoljaPrerade z, True
     PuniPreradaCombo z
-    Dim kol As Single, x0 As Single, y0 As Single, i As Long, nm As Variant
+    Dim kol As Single, x0 As Single, y0 As Single, nm As Variant
     kol = (w - PAD * 2 - 3 * PRE_GAP - 200) / 4
     If kol < 120 Then kol = 120
     y0 = PAL_ZONA_H + 18
