@@ -213,6 +213,7 @@ Public Sub RunAllTests()
     RunOne 77
     RunOne 78
     RunOne 79
+    RunOne 80
 
     SetTestMode prevMode
     WriteResultFile
@@ -324,6 +325,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 77: TestName = "T_NovaPrerada_IzborINeto"
         Case 78: TestName = "T_PaletaDvoklik_OtvaraStavke"
         Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
+        Case 80: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -411,6 +413,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 77: T_NovaPrerada_IzborINeto
         Case 78: T_PaletaDvoklik_OtvaraStavke
         Case 79: T_CipoviEkrana_UgovorIFilter
+        Case 80: T_ZonaPrerade_SvaPoljaVidljiva
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -572,7 +575,7 @@ Private Sub T_ParcelaID_IzSkriveneKolone()
     fr.Visible = False
     AssertEq modOtkupUI.ParcelaID(), "", "sakriveno polje ne salje parcelu u dokument"
 
-    ReleaseOtkupUIForm f
+    Unload f
 End Sub
 
 ' UGOVOR ClearForm-a, isti kao frmOtkup.ClearOtkupFields (.claude/rules/
@@ -639,7 +642,7 @@ Private Sub T_ClearForm_Ugovor()
     AssertEq Polje(zf, "fgDatum"), danas, _
              "bez aktivne otpremnice datum se vraca na danas"
 
-    ReleaseOtkupUIForm f
+    Unload f
 End Sub
 
 ' ============================================================
@@ -3658,6 +3661,82 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
 End Sub
 
 ' ============================================================
+' 80. Zona liste 'Nova prerada' ima SVA polja, i sva su vidljiva.
+'
+' Operater je prijavio zonu u kojoj se vide samo prvo polje (Bruto) i poslednje
+' (Tip kese), bez bele podloge, naslova, NETO i dugmeta. Raspored je bio tacan --
+' oba vidljiva polja su stajala BAS gde ih Scr_Layout salje -- pa kvar nije u
+' merama nego u tome sto ostale kontrole ne postoje ili se ne pale.
+'
+' Zona se gradi nad obicnim Frame-om, pa se ceo taj put moze izmeriti bez .Show.
+Private Sub T_ZonaPrerade_SvaPoljaVidljiva()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, neupaljene As String, neugasene As String
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProba", True)
+    z.width = 1200: z.Height = 300
+    modScrPalete.Scr_Build z
+
+    ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a. Dok forma zivi, njena
+    ' masinerija obrise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao
+    ' kao 'greska bez opisa' -- test bi padao tacno, a ne bi umeo da kaze zasto.
+    ' Uz to spisak imena kaze KOJE kontrole fale, a ne samo da nesto fali.
+    For Each nm In Array("preBg", "preCap", "preNetoL", "preNetoV", "preIzbor", _
+                         "scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "NOVAPRERADA"
+    modScrPalete.Scr_Layout z, 1200, 300
+    For Each nm In Array("preBg", "preCap", "preNetoL", "preNetoV", "preIzbor", _
+                         "scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
+        If Not VidljivaKontrola(z, CStr(nm)) Then _
+            neupaljene = neupaljene & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    modScrPalete.Scr_Layout z, 1200, 300
+    For Each nm In Array("preBg", "preCap", "scrPreBruto", "scrPreTipKes")
+        If VidljivaKontrola(z, CStr(nm)) Then _
+            neugasene = neugasene & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    Unload f
+
+    ' 1) Sve kontrole panela POSTOJE. Kontrola koje nema Scr_Layout tiho
+    ' preskoci, pa operater vidi rupu na mestu polja.
+    AssertEq nema, "", "panel za unos prerade nema nijednu kontrolu manje"
+
+    ' 2) Na listi za unos su SVE upaljene -- ovo je bas ono sto je operater
+    ' prijavio kao zonu u kojoj se vide samo prvo i poslednje polje.
+    AssertEq neupaljene, "", "na listi za unos je upaljen ceo panel"
+
+    ' 3) Na listama pregleda su ugasene -- inace bi polja unosa visila nad
+    ' listom koja se samo cita.
+    AssertEq neugasene, "", "u pregledu panel ostaje ugasen"
+End Sub
+
+' Postoji li kontrola pod tim imenom. Bez ovoga bi test morao da hvata gresku
+' na svakom mestu gde pita.
+Private Function KontrolaPostoji(z As Object, ByVal nm As String) As Boolean
+    Dim c As Object
+    On Error Resume Next
+    Set c = z.Controls(nm)
+    KontrolaPostoji = Not (c Is Nothing)
+    Err.Clear
+End Function
+
+' Vidljivost kontrole; kontrola koje NEMA nije vidljiva.
+Private Function VidljivaKontrola(z As Object, ByVal nm As String) As Boolean
+    On Error Resume Next
+    VidljivaKontrola = z.Controls(nm).Visible
+    Err.Clear
+End Function
+
 ' 79. Cipovi pripadaju EKRANU, ne ljusci: ugovor, bazen i stvarno suzavanje.
 '
 ' Ljuska je do sada znala jedan ekran po imenu -- 'ako je lista OTPREMNICE,

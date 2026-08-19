@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-163"
+Public Const SCRPAL_BUILD As String = "v6-ui-164"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -211,18 +211,45 @@ Private Sub PuniPreradaCombo(ByVal z As Object)
 End Sub
 
 ' Polja postoje uvek; vide se samo u listi za unos prerade.
+' Pali i gasi panel za unos prerade.
+'
+' Kontrola koje NEMA se ovde ne moze popraviti, ali sme da bude PRIJAVLJENA:
+' bez toga `On Error Resume Next` proguta i ime i broj, pa operater vidi
+' prazninu na mestu polja, a log ne kaze nista. Prijavljuje se jednom po
+' skupu, ne po kontroli, da ne zatrpa log pri svakom prelasku liste.
 Private Sub PoljaPrerade(ByVal z As Object, ByVal vis As Boolean)
-    Dim nm As Variant
-    On Error Resume Next
+    Dim nm As Variant, fale As String
     For Each nm In Array("scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
-                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
-        z.Controls(CStr(nm)).Visible = vis
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes", _
+                         "preBg", "preCap", "preNetoL", "preNetoV", "preIzbor")
+        If Not UpaliKontrolu(z, CStr(nm), vis) Then fale = fale & " " & CStr(nm)
     Next nm
-    For Each nm In Array("preBg", "preCap", "preNetoL", "preNetoV", "preIzbor")
-        z.Controls(CStr(nm)).Visible = vis
-    Next nm
+    On Error Resume Next
     modUiKit.BoxShow z, "scrPreradi", vis
+    ' Prijava ne sme da obori ono sto prijavljuje -- zato ostaje pod Resume Next.
+    If Len(fale) > 0 Then
+        LogWarn "modScrPalete.PoljaPrerade", _
+                "zona nema kontrole:" & fale & " | zona=" & ZonaOpis(z)
+    End If
+    Err.Clear
 End Sub
+
+' True ako kontrola postoji i vidljivost je postavljena.
+Private Function UpaliKontrolu(ByVal z As Object, ByVal nm As String, _
+                               ByVal vis As Boolean) As Boolean
+    On Error Resume Next
+    z.Controls(nm).Visible = vis
+    UpaliKontrolu = (Err.Number = 0)
+    Err.Clear
+End Function
+
+' Ime i broj kontrola zone -- bez toga se iz loga ne vidi da li je zona
+' uopste ona prava, ili je gradnja stala na pola.
+Private Function ZonaOpis(ByVal z As Object) As String
+    On Error Resume Next
+    ZonaOpis = z.name & "/" & z.Controls.count
+    Err.Clear
+End Function
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
     Dim i As Long

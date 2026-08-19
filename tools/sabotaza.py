@@ -1339,6 +1339,24 @@ SABOTAZE = {
         "T_CipoviEkrana_UgovorIFilter",
         "natpis cipa godina postoji u katalogu",
     ),
+    # Panel za unos prerade mora da se UPALI kad je ta lista aktivna. Ako
+    # ostane ugasen, operater vidi praznu zonu i nema gde da unese preradu.
+    "zona-se-ne-pali": (
+        "modScrPalete.bas",
+        "    z.Controls(nm).Visible = vis\n",
+        "    z.Controls(nm).Visible = False   ' SABOTAZA: panel ostaje ugasen\n",
+        "T_ZonaPrerade_SvaPoljaVidljiva",
+        "na listi za unos je upaljen ceo panel",
+    ),
+    # Polje koje se ne NAPRAVI ne moze ni da se upali. Scr_Layout ga tada tiho
+    # preskoci (On Error Resume Next), pa je na ekranu rupa bez ijedne poruke.
+    "zona-polje-se-ne-pravi": (
+        "modScrPalete.bas",
+        "    modOtkupUI.NewFieldG z, \"scrPreTezPal\", Poruka(\"OTKUI_PRE_TEZPAL\"), \"txt\", \"kg\", 1, True, False, \"PRE\"\n",
+        "    ' SABOTAZA: polje tezine palete se ne pravi\n",
+        "T_ZonaPrerade_SvaPoljaVidljiva",
+        "panel za unos prerade nema nijednu kontrolu manje",
+    ),
 }
 
 

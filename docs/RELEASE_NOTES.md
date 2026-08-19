@@ -4380,3 +4380,63 @@ kao `v6-ui-159`. Sabotaža sme da pokvari **jednu stvar**, ne prevod.
 
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
 `RunAllTests` **ZELENO (79)** · `COMPILE` — **ostaje na operateru**.
+
+---
+
+## v2.57.1 — `v6-ui-164` · zona „Nova prerada": merenje, ne zakrpa
+
+Operater je prijavio zonu u kojoj se vide **samo prvo polje (Bruto) i poslednje
+(Tip kese)** — bez bele podloge, naslova, NETO i dugmeta. Oba vidljiva polja su
+stajala **tačno tamo gde ih `Scr_Layout` šalje**, u pravoj širini, pa kvar nije u
+merama nego u tome što ostalih jedanaest kontrola nema ili se ne pale.
+
+**Nije reprodukovano.** Zato ovde nema ispravke — ima merenja.
+
+### Šta je dokazano
+
+**Test 80** gradi zonu (`Scr_Build`) nad običnim `Frame`-om i raspoređuje je
+(`Scr_Layout`), pa tvrdi tri stvari: svih trinaest kontrola **postoji**, na listi
+za unos su **sve upaljene**, na listama pregleda **sve ugašene**. Zeleno.
+
+Dakle taj put — isti kod koji aplikacija zove — radi. Ono što ostaje nepokriveno
+je zona koju pravi **ljuska** (`zScr_PALETE`), a nju harness ne može da dobije:
+`IdiNaEkran` ide na Win32 pozive nad formom koja nije `.Show`-ovana i tamo pada
+bez opisa. To je zapisano u testu, da se ne pokušava ponovo.
+
+### Šta je instrumentirano
+
+`PoljaPrerade` je do sada palio panel pod jednim `On Error Resume Next` — kontrola
+koje nema progutala bi se **bez imena i bez broja**. Sada svaka ide kroz
+`UpaliKontrolu`, a ono što ne prođe završi u logu:
+
+```
+WARN modScrPalete.PoljaPrerade | zona nema kontrole: preBg preCap ... | zona=zScr_PALETE/34
+```
+
+Uz spisak ide i **ime zone i broj njenih kontrola** — bez toga se iz loga ne vidi
+da li je zona uopšte ona prava ili je gradnja stala na pola. Prijava je pod
+`Resume Next`: **ono što prijavljuje kvar ne sme da bude novi kvar.**
+
+### Usput: harness gubi poruku dok forma živi
+
+Prve dve sabotaže su obarale test tačno, ali je stizalo „greška bez opisa
+(Err.Number=0)". Dokazano probom: ista `AssertEq` **pre** `NewOtkupUIForm()` nosi
+svoju poruku, **posle** nje je izgubi — mašinerija forme obriše `Err` između
+`Err.Raise` i omotnice testa. `RunOne` taj oblik već pominje kao poznat.
+
+Zato test **skuplja** nalaze u spisak imena, pa tvrdi tek **posle `Unload`**. Pad
+sada kaže i koje su kontrole u pitanju:
+
+```
+FAIL ... panel za unos prerade nema nijednu kontrolu manje -- ocekivano [], dobijeno [ scrPreTezPal]
+```
+
+Pravilo za svaki budući test nad `frmOtkupUI`: **tvrdi posle `Unload`-a.**
+
+| Sabotaža | Pada na |
+|---|---|
+| `zona-se-ne-pali` | *na listi za unos je upaljen ceo panel* — spisak svih 13 |
+| `zona-polje-se-ne-pravi` | *panel za unos prerade nema nijednu kontrolu manje* — `[ scrPreTezPal]` |
+
+`vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (80)** ·
+`COMPILE` — **ostaje na operateru**.
