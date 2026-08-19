@@ -4450,3 +4450,21 @@ polja — uz jednu novu informaciju: mreža je prešla sa 22 na **17 redova**, d
 Zato spisak kontrola koje fale sada ide i u **toast**, ne samo u log: rupa u panelu
 se vidi odmah, pa i njen razlog treba da stigne tu gde operater gleda. Samo pri
 **paljenju** panela — gašenje nad listom pregleda nema kome da javlja ništa.
+
+### `v6-ui-166` — zona se raspoređivala u okviru visokom 10 poena
+
+Operater je dao korak koji je rešio slučaj: panel se **pojavi ako se ode na drugi
+ekran pa vrati**. Znači kontrole postoje i upaljene su — samo nisu nacrtane.
+
+`LayoutScreenZone` je zonu pred raspored sasecao na **`z.Height = 10`**, pa je ekran
+palio i pomerao svoja polja unutar okvira visokog 10 poena — dakle izvan vidljivog
+dela. MSForms takvu kontrolu **ne prefarba** kad se okvir vrati na punu visinu:
+`Visible` ostaje `True`, a na ekranu je praznina. Povratak na ekran je iznudio pun
+prefarb i panel bi se „sam popravio“.
+
+Sada zona dobija **punu raspoloživu visinu pre** rasporeda i skuplja se na zauzetu
+tek posle, uz izričit `Repaint`.
+
+**Ovo test ne može da uhvati** i to je važno reći: proba je namerno pozvala
+`Scr_Layout` nad okvirom od 10 poena i suite je ostao **zelen** — `.Visible` je i
+dalje `True`. Kapija za ovu klasu kvara je smoke, ne `RunAllTests`.

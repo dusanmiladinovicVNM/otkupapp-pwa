@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-165"
+Public Const OTKUI_BUILD   As String = "v6-ui-166"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4272,10 +4272,23 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
     z.Left = X
     z.top = HEADER_H
     z.width = w
-    z.Height = 10
+    ' Zona dobija PUNU raspolozivu visinu pre rasporeda, pa se tek posle skuplja
+    ' na ono sto je ekran zauzeo. Ranije je ovde stajalo z.Height = 10: ekran je
+    ' onda palio i pomerao svoje kontrole unutar okvira visokog 10 poena, dakle
+    ' izvan vidljivog dela. MSForms takvu kontrolu ne prefarba kad se okvir vrati
+    ' na punu visinu -- Visible ostaje True, a na ekranu je praznina. Operater je
+    ' to video kao panel u kom rade samo prvo i poslednje polje, a koji se
+    ' 'popravi' kad se ode na drugi ekran pa vrati (to iznudi pun prefarb).
+    '
+    ' Zato ovo test ne moze da uhvati: .Visible je i dalje True. Kapija je smoke.
+    z.Height = hTot - HEADER_H - TITLE_H - STATUS_H
+    If z.Height < 10 Then z.Height = 10
     h = modUiScreens.ScrLayout(mScreen, z, w, hTot - HEADER_H - TITLE_H - STATUS_H)
     If h < 1 Then h = 1
     z.Height = h
+    ' I izricit prefarb: skupljanje okvira ne invalidira decu koja su tek
+    ' postavljena, pa bez ovoga panel ume da ostane prazan do sledeceg dogadjaja.
+    z.Repaint
     With frm.Controls("zTitle")
         .Left = X: .top = HEADER_H + h: .width = w: .Height = TITLE_H
         .Controls("titLnB").width = w
