@@ -4468,3 +4468,22 @@ tek posle, uz izričit `Repaint`.
 **Ovo test ne može da uhvati** i to je važno reći: proba je namerno pozvala
 `Scr_Layout` nad okvirom od 10 poena i suite je ostao **zelen** — `.Visible` je i
 dalje `True`. Kapija za ovu klasu kvara je smoke, ne `RunAllTests`.
+
+### `v6-ui-167` — prvi ulazak na ekran crtao je po merama prethodnog
+
+Operater je dao presudan par slika: **prvi ulazak** na Palete — prazne kolone od
+TIP AMBALAŽE nadesno **i** panel za unos u kom rade samo prvo i poslednje polje.
+**Izlazak pa povratak** — i kolone i panel rade. Dva simptoma, jedan uzrok: raspored
+i crtanje se ne dešavaju istim redom.
+
+`ActivateScreen` radi ovako: raspored, pa `ReloadGrid`, pa raspored ponovo. Mreža se
+**crta** unutar čitanja, a širine kolona se računaju **tek u rasporedu posle njega** —
+pa je `RenderGrid` prošao sa merama PRETHODNOG ekrana. Zaglavlja su zato tačna
+(postavlja ih raspored), a ćelije prazne od prve kolone koju prethodna lista nije
+imala. Na **sledećem** ulasku je zatečeno stanje slučajno već tačno, pa se ništa ne vidi.
+Zato se javljalo samo pri prvom ulasku.
+
+Popravka: **`RenderGrid` posle poslednjeg rasporeda**, i **`frm.Repaint`** na kraju
+ulaska — kontrolu koja je tek postavljena MSForms ume da ne osveži dok se ne desi
+nešto drugo, a taj „odlazak na drugi ekran pa povratak“ i jeste bio prefarb.
+Plaća se jednom po ulasku na ekran.

@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-166"
+Public Const OTKUI_BUILD   As String = "v6-ui-167"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4255,6 +4255,17 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
         ReloadGrid
     End If
     LayoutOtkup frm
+    ' Mreza se CRTA pri citanju, a sirine kolona se racunaju tek u rasporedu
+    ' iznad. Bez ovog ponovnog crtanja celije nove liste ostaju nevidljive:
+    ' RenderGrid je prosao sa merama PRETHODNOG ekrana, pa su zaglavlja tacna a
+    ' redovi prazni od prve kolone koju prethodna lista nije imala. Vidi se samo
+    ' pri PRVOM ulasku -- na sledecem je zateceno stanje slucajno vec tacno.
+    RenderGrid
+    ' I pun prefarb forme. Kontrolu koja je tek postavljena MSForms ume da ne
+    ' osvezi dok se ne desi nesto drugo; operater je to video kao panel za unos
+    ' koji se 'popravi' tek kad se ode na drugi ekran pa vrati -- taj odlazak i
+    ' povratak i jesu bili prefarb. Ovde se placa jednom po ulasku na ekran.
+    frm.Repaint
 End Sub
 
 ' Ceo prostor desno od sidebara pripada ugovornom ekranu. Ljuska mu daje
