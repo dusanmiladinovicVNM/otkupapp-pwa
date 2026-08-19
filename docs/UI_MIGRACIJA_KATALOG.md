@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-158`.
+Stanje na dan `v6-ui-159`.
 
 ---
 
@@ -454,7 +454,10 @@ odluka koja dolazi tek kad novi UI prođe rad u pogonu (i moguće nikad, ako se
 legacy do tada penzioniše).
 
 ### Faza C — Palete P2
-10. Unos prerade (traži prosleđivanje događaja sopstvenih kontrola ekranu).
+10. ~~Unos prerade (traži prosleđivanje događaja sopstvenih kontrola ekranu).~~
+    **URAĐENO** (`v6-ui-159`). Četvrta lista ekrana Palete „Nova prerada":
+    stikliranje paleta u mreži + polja u zoni. Ljuska je dobila granu za promenu
+    u polju ugovornog ekrana (`chg:`), simetričnu sa `act:` i `row:`.
 11. Čipovi po ekranu (godina/status/prerađeno) — generalizacija čipova.
 
 ### Faza D — storno okvir (najveći, ide poslednji)

@@ -4098,3 +4098,84 @@ Flow 336 · Palete 97 · Agrohemija 25).
 
 Pun set je ovde obavezan, ne formalnost: izmenjeni čitači su u putanjama štampe,
 kartice kooperanta i storno žurnala, koje `RunAllTests` ne dodiruje.
+
+---
+
+## v2.55.0 — `v6-ui-159` · unos prerade: Faza C, stavka 10
+
+Poslednja stavka koja je tražila **proširenje ugovora ekrana**, a ne samo novu rutinu.
+
+### Zašto je tražila seam
+
+`UiChange` je ceo poznavao polja **unosnog** ekrana po imenu — `fgKgIT`, `cbKupac`,
+`fgBrZbirT`. To je i tačno, jer su ta polja njegova. Ali ekran koji ima **svoja**
+polja tu nije imao šta da traži: ljuska ne zna šta ona znače, a ne sme ni da sazna.
+
+Klik je tu granu već imao (prefiks `scr` u `UiClick`); **promena teksta nije** — pa
+ekran sa poljem za unos nije mogao ni da postoji. Sada se `scr*` promena prosleđuje
+kao `chg:<tag>`, istim putem kao `act:` i `row:`.
+
+`NewFieldG` je postao javan iz istog razloga: bez toga bi svaki ekran sa unosom
+crtao svoju verziju istog polja, pa bi se razišli u izgledu i ponašanju.
+
+### Četvrta lista: „Nova prerada"
+
+Nije pregled kao ostale tri nego **radni ekran**: mreža služi da se palete označe,
+zona nosi polja.
+
+| Deo | Kako |
+|---|---|
+| Mreža | isti izvor kao lista „Palete", plus ✓ kolona napred i `PaletaID` nevidljiv pozadi |
+| Izbor | klik na red štiklira — isti obrazac koji su otkupni blokovi dobili u `v6-ui-149` |
+| Zona | **naraste** samo za ovu listu; `Scr_Layout` vraća visinu, pa je to već bilo u ugovoru |
+| Polja | bruto · težina palete · gotov proizvod · kutije + tip · kese + tip · napomena |
+| Neto | računa se **uživo**, kroz `chg:` seam |
+| Upis | `SavePrerada_TX` — isti writer koji zove i legacy panel |
+
+Izbor se drži **po `PaletaID`**, ne po broju palete: spisak završava u mutaciji.
+
+Odlazak sa liste **poništava izbor** — palete pripadaju preradi koja se sprema, a
+ostavljene bi sledeći put ušle u spisak koji operater nije video. Ista lekcija kao
+kod označenih otkupnih blokova.
+
+**Nijedna nova poslovna kapija.** Svih sedam provera je preneto iz legacy panela i i
+dalje su pod prekidačem `VALIDACIJA_UNOSA`. Lista pokazuje **sve** palete, kao i
+legacy — sužavanje ide kroz pretragu.
+
+### Račun izdvojen iz prikaza
+
+`NetoIzracun(bruto, težinaPalete, kutije, tipKutija, kese, tipKesa)` je javan i
+čist. Bez tog izdvajanja jedina poslovna formula na ekranu ne bi mogla da se izmeri:
+zona se crta nad formom koju harness gradi bez `.Show`.
+
+**Test 77** tvrdi ugovor liste, kolone, izbor po identitetu i sam račun — uključujući
+donju granicu: negativan neto nije podatak nego znak da unos nije potpun, pa je nula
+iskrenija od minusa.
+
+Dve sabotaže, obe po imenu: `prerada-sve-palete` i `prerada-neto-bez-ambalaze`
+(*neto je bruto minus težina palete — očekivano [80], dobijeno [100]*).
+
+### Compile je zaradio svoje mesto
+
+Prvi run posle ovog koda je **visio 585 sekundi** i pao sa `The remote procedure call
+failed`. Nije bio pad testa nego **projekat koji se ne kompajlira**:
+
+| Simbol | Problem |
+|---|---|
+| `GAP` | `Private` u `modOtkupUI`, korišćen iz `modScrPalete` |
+| `FmtBroj` | isto |
+| `Zona()` | postoji u `modScrStorno`, ne i u `modScrPalete` |
+
+`vba_check` nijedan ne vidi: `NEDEFINISAN` traži simbol koji **nigde** nije definisan,
+a ova dva jesu — samo ne odavde. To je granica statičke provere i tačno onaj razlog
+zbog kog `Debug → Compile VBAProject` ostaje ručna kapija.
+
+Popravka nije bila da se `GAP` i `FmtBroj` otvore: ekran nema pravo da otvara ljuskine
+konstante zbog sopstvenog rasporeda. Lokalni `PRE_GAP` i `Format$` — isti idiom koji
+ostatak ekrana već koristi — manjeg su dometa.
+
+### Verifikacija
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (77)** · pun set **ZELENO** · `COMPILE` — **ostaje na
+operateru**, i ovog puta se videlo zašto.

@@ -1264,6 +1264,25 @@ SABOTAZE = {
         "T_NavBrojac_SamoEkranKojiBroji",
         "ekran bez brojaca daje nulu, ne gresku",
     ),
+    # Lista za unos prerade radi kao legacy panel: podrazumevano nijedna paleta
+    # nije oznacena, a oznacena znaci DA ULAZI u preradu. Spisak zavrsava u
+    # SavePrerada_TX, dakle u mutaciji.
+    "prerada-sve-palete": (
+        "modScrPalete.bas",
+        "        outA(n, 1) = IIf(PalOznacena(ident), ChrW(10003), \"\")\n",
+        "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
+        "T_NovaPrerada_IzborINeto",
+        "podrazumevano nijedna paleta nije oznacena",
+    ),
+    # Neto je racun, ne unos. Ako se ambalaza ne oduzme, prerada se knjizi sa
+    # tezinom kutija i kesa u netu -- greska koja se vidi tek na lageru.
+    "prerada-neto-bez-ambalaze": (
+        "modScrPalete.bas",
+        "    NetoIzracun = bruto - tezPal - amb\n",
+        "    NetoIzracun = bruto   ' SABOTAZA: neto je goli bruto\n",
+        "T_NovaPrerada_IzborINeto",
+        "neto je bruto minus tezina palete",
+    ),
 }
 
 

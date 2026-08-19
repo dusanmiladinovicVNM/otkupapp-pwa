@@ -939,6 +939,38 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEG_PAL_PALETE", "Palete"
     UpsertRow lo, existing, "OTKUI_SEG_PAL_STAVKE", "Stavke palete"
     UpsertRow lo, existing, "OTKUI_SEG_PAL_PRERADE", "Prerade"
+    ' NOVA PRERADA -- cetvrta lista ekrana Palete. Legacy je isti posao radio u
+    ' panelu sa sedam polja i multiselektom; ovde su polja u zoni, a izbor ide
+    ' kroz stikliranje u mrezi.
+    UpsertRow lo, existing, "OTKUI_SEG_PAL_NOVA", "Nova prerada"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_PALNOVA", "Palete za preradu " & ChrW(8212) & " ozna" & ChrW(269) & "i koje ulaze"
+    UpsertRow lo, existing, "OTKUI_HDP_OZN", ChrW(10003)
+    UpsertRow lo, existing, "OTKUI_PRE_CAP", "NOVA PRERADA"
+    UpsertRow lo, existing, "OTKUI_PRE_BRUTO", "Bruto"
+    UpsertRow lo, existing, "OTKUI_PRE_TEZPAL", "Te" & ChrW(382) & "ina palete"
+    UpsertRow lo, existing, "OTKUI_PRE_GP", "Gotov proizvod"
+    UpsertRow lo, existing, "OTKUI_PRE_KUT", "Broj kutija"
+    UpsertRow lo, existing, "OTKUI_PRE_TIPKUT", "Tip kutija"
+    UpsertRow lo, existing, "OTKUI_PRE_KES", "Broj kesa"
+    UpsertRow lo, existing, "OTKUI_PRE_TIPKES", "Tip kesa"
+    UpsertRow lo, existing, "OTKUI_PRE_NAP", "Napomena"
+    UpsertRow lo, existing, "OTKUI_PRE_NETO", "NETO IZLAZ"
+    UpsertRow lo, existing, "OTKUI_PRE_IZABRANO", "izabrano paleta"
+    UpsertRow lo, existing, "OTKUI_BTN_PRE_URADI", "Preradi izabrane"
+    ' Nijedna od ovih provera nije nova -- sve su prenete iz legacy panela, i
+    ' dalje pod prekidacem VALIDACIJA_UNOSA.
+    UpsertRow lo, existing, "OTKUI_PRE_NEMA_IZBORA", ChrW(10007) & " Nijedna paleta nije ozna" & ChrW(269) & "ena " & ChrW(8212) & " ozna" & ChrW(269) & "i ih u listi"
+    UpsertRow lo, existing, "OTKUI_PRE_ASK", "Preraditi ozna" & ChrW(269) & "ene palete?"
+    UpsertRow lo, existing, "OTKUI_PRE_ASK2", "Palete ulaze u preradu i vi" & ChrW(353) & "e nisu u lageru."
+    UpsertRow lo, existing, "OTKUI_PRE_SACUVANA", ChrW(10003) & " Prerada je sa" & ChrW(269) & "uvana"
+    UpsertRow lo, existing, "OTKUI_PRE_ERR", ChrW(10007) & " Prerada nije sa" & ChrW(269) & "uvana"
+    UpsertRow lo, existing, "OTKUI_PRE_V_BRUTO", "Unesi bruto te" & ChrW(382) & "inu."
+    UpsertRow lo, existing, "OTKUI_PRE_V_TEZPAL", "Unesi te" & ChrW(382) & "inu palete."
+    UpsertRow lo, existing, "OTKUI_PRE_V_GP", "Izaberi gotov proizvod."
+    UpsertRow lo, existing, "OTKUI_PRE_V_KUT", "Unesi broj kutija."
+    UpsertRow lo, existing, "OTKUI_PRE_V_TIPKUT", "Izaberi tip kutija."
+    UpsertRow lo, existing, "OTKUI_PRE_V_KES", "Unesi broj kesa."
+    UpsertRow lo, existing, "OTKUI_PRE_V_TIPKES", "Izaberi tip kesa."
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_PALETE", "Palete"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_PALSTAVKE", "Stavke palete"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_PRERADE", "Prera" & ChrW(273) & "ene palete"

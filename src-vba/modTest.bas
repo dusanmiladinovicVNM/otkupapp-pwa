@@ -210,6 +210,7 @@ Public Sub RunAllTests()
     RunOne 74
     RunOne 75
     RunOne 76
+    RunOne 77
 
     SetTestMode prevMode
     WriteResultFile
@@ -318,6 +319,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 74: TestName = "T_StornoEfekat_TekstIzKataloga"
         Case 75: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
         Case 76: TestName = "T_NavBrojac_SamoEkranKojiBroji"
+        Case 77: TestName = "T_NovaPrerada_IzborINeto"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -402,6 +404,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 74: T_StornoEfekat_TekstIzKataloga
         Case 75: T_StornoBlokovi_PodrazumevanoNijedan
         Case 76: T_NavBrojac_SamoEkranKojiBroji
+        Case 77: T_NovaPrerada_IzborINeto
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3647,6 +3650,77 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
     n = modUiScreens.ScrBrojac("DOKUMENTI")
     AssertEq Err.Number, 0, "poziv ekrana bez brojaca ne ostavlja Err postavljen"
 End Sub
+
+' ============================================================
+' 77. Nova prerada: cetvrta lista, izbor po identitetu, neto kao racun
+' ============================================================
+' Faza C, stavka 10. Legacy je unos prerade radio panelom sa sedam polja i
+' multiselektom liste; ovde su polja u zoni, a izbor ide stikliranjem u mrezi.
+'
+' Sto se moze izmeriti bez forme: ugovor liste, kolone, izbor po PaletaID-u i
+' sam racun neta. Sto NE moze: da se polje vidi i da kucanje osvezi brojku --
+' zona se crta nad formom koju harness gradi bez .Show. To ostaje na smoke-u.
+Private Sub T_NovaPrerada_IzborINeto()
+    Dim liste As Variant, d As Variant, r As Variant, i As Long, n As Long
+    Dim ident As String, kljucevi As String
+
+    ' 1) Ekran prijavljuje cetvrtu listu, i to POSLEDNJU -- prve tri su pregledi,
+    ' ova je radna, pa stoji na kraju prekidaca.
+    liste = modScrPalete.Scr_Liste()
+    AssertEq (UBound(liste) + 1), 4, "ekran Palete ima cetiri liste"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|PALETE|STAVKE|PRERADE|NOVAPRERADA", _
+             "redosled i kljucevi lista"
+
+    ' 2) Kolone: kvacica napred, identitet pozadi i NEVIDLJIV. Radnja gadja
+    ' PaletaID, ne broj palete -- spisak zavrsava u SavePrerada_TX.
+    modScrPalete.Scr_PalTestSet "NOVAPRERADA"
+    d = modScrPalete.Scr_Rows("sve", "")
+    AssertEq Split(CStr(d(0)(0)), "|")(0), "OTKUI_HDP_OZN", _
+             "prva kolona je izbor"
+    AssertEq (UBound(d(0)) + 1), modScrPalete.PAL_NOVA_COL_ID, _
+             "opis kolona se zavrsava BAS na koloni koju radnja cita"
+    AssertEq Split(CStr(d(0)(modScrPalete.PAL_NOVA_COL_ID - 1)), "|")(0), "OTKUI_HD_IDENT", _
+             "poslednja kolona je identitet palete"
+    AssertEq modScrDokumenti.ColF(CStr(d(0)(modScrPalete.PAL_NOVA_COL_ID - 1)), 4), "4", _
+             "kolona identiteta je prioriteta 4 -- nikad vidljiva"
+
+    ' 3) PODRAZUMEVANO NIJEDNA nije oznacena.
+    n = CLng(d(2))
+    AssertEq (n > 0), True, "preduslov: fixture ima paleta"
+    r = d(1)
+    For i = 1 To n
+        AssertEq CStr(r(i, 1)), "", "red " & i & " nije oznacen bez izricitog izbora"
+    Next i
+    AssertEq modScrPalete.PalOznacenihBroj(), 0, "brojac oznacenih je nula"
+
+    ' 4) Oznaka gadja BAS tu paletu, po identitetu iz nevidljive kolone.
+    ident = Trim$(CStr(r(1, modScrPalete.PAL_NOVA_COL_ID)))
+    AssertEq (Len(ident) > 0), True, "red nosi PaletaID u nevidljivoj koloni"
+    modScrPalete.Scr_PreTestSet ident
+    d = modScrPalete.Scr_Rows("sve", "")
+    r = d(1)
+    AssertEq modScrPalete.PalOznacenihBroj(), 1, "oznacena je tacno jedna paleta"
+    AssertEq CStr(r(1, 1)), ChrW(10003), "oznaceni red nosi kvacicu"
+    For i = 2 To CLng(d(2))
+        AssertEq CStr(r(i, 1)), "", "ostale palete ostaju neoznacene"
+    Next i
+
+    ' 5) NETO je racun, ne unos: bruto minus tezina palete minus ambalaza.
+    ' Bez ambalaze (nepoznat tip -> tezina 0) ostaje cista razlika.
+    AssertEq modScrPalete.NetoIzracun(100, 20, 0, "", 0, ""), 80#, _
+             "neto je bruto minus tezina palete"
+
+    ' I donja granica: negativan neto nije podatak nego znak da unos jos nije
+    ' potpun. Nula je iskrenija od minusa.
+    AssertEq modScrPalete.NetoIzracun(10, 40, 0, "", 0, ""), 0#, _
+             "neto se ne spusta ispod nule"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
+
 
 
 
