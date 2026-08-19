@@ -2327,7 +2327,8 @@ Private Sub RequireBimSmer(ByVal bim As Variant, _
     End Select
 End Sub
 
-Private Function RequireIzvodBroj(ByVal bim As Variant, ByVal sourceName As String) As String
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RequireIzvodBroj(ByRef bim As Variant, ByVal sourceName As String) As String
     Dim broj As String
     broj = Trim$(CStr(NzBIM(bim(1, 1), "")))
     If Len(broj) = 0 Then

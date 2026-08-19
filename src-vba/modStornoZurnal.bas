@@ -379,6 +379,13 @@ unknown:
     OpStatusFor = "?"
 End Function
 
-Private Function TxZ(ByVal data As Variant, ByVal r As Long, ByVal c As Long) As String
+' `data` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
+' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
+' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
+' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
+'
+' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
+' niz ne umnozava.
+Private Function TxZ(ByRef data As Variant, ByVal r As Long, ByVal c As Long) As String
     If c > 0 Then TxZ = Trim$(CStr(data(r, c)))
 End Function

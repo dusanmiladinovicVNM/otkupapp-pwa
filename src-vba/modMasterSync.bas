@@ -1405,7 +1405,8 @@ EH:
     ValidateOTKSheetHeader = False
 End Function
 
-Private Function RequireOTKHeaderValue(ByVal data As Variant, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RequireOTKHeaderValue(ByRef data As Variant, _
                                        ByVal sheetName As String, _
                                        ByVal colIndex As Long, _
                                        ByVal expectedHeader As String) As Boolean
@@ -3590,7 +3591,8 @@ EH:
     ValidateVOZSheetHeader = False
 End Function
 
-Private Function RequireVOZHeaderValue(ByVal data As Variant, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RequireVOZHeaderValue(ByRef data As Variant, _
                                        ByVal sheetName As String, _
                                        ByVal colIndex As Long, _
                                        ByVal expectedHeader As String) As Boolean
@@ -3980,7 +3982,8 @@ EH:
     GeoText = ""
 End Function
 
-Private Function GeoHasValue(ByVal data As Variant, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function GeoHasValue(ByRef data As Variant, _
                              ByVal rowIndex As Long, _
                              ByVal colIndex As Long) As Boolean
     On Error GoTo EH

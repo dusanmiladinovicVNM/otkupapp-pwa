@@ -1426,7 +1426,8 @@ EH:
     LogFail "Soft-storno " & tableName, Err.description
 End Sub
 
-Private Function RowHasTestMarker(ByVal data As Variant, ByVal rowIndex As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RowHasTestMarker(ByRef data As Variant, ByVal rowIndex As Long, _
                                   ByVal tableName As String, ByVal markerColumns As Variant) As Boolean
     Dim c As Variant
 
@@ -3457,7 +3458,8 @@ Private Sub MarkTestRowStornirano(ByVal tableName As String, _
     RequireUpdateCell tableName, CLng(rows(1)), COL_STORNIRANO, "Da", SRC
 End Sub
 
-Private Function ArrayContainsKeyValue(ByVal data As Variant, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function ArrayContainsKeyValue(ByRef data As Variant, _
                                        ByVal tableName As String, _
                                        ByVal keyColumn As String, _
                                        ByVal keyValue As String) As Boolean
@@ -4369,7 +4371,8 @@ EH:
     DeleteTestRowsFromTable = 0
 End Function
 
-Private Function RowHasTestPrefix(ByVal data As Variant, ByVal rowIndex As Long, _
+' ByRef: citac po celiji -- ByVal bi kopirao ceo niz po pozivu (v. KOPIJA_NIZA).
+Private Function RowHasTestPrefix(ByRef data As Variant, ByVal rowIndex As Long, _
                                    ByVal tableName As String, _
                                    ByVal markerColumns As Variant) As Boolean
     Const prefix As String = "TST-PRO"

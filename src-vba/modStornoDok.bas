@@ -712,7 +712,14 @@ Private Function ColAmbPrZaPrefill(ByVal tip As String) As String
 End Function
 
 '------------------------------------------------------ citanje celija
-Private Function KolicinaReda(ByVal d As Variant, ByVal r As Long, _
+' `d` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
+' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
+' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
+' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
+'
+' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
+' niz ne umnozava.
+Private Function KolicinaReda(ByRef d As Variant, ByVal r As Long, _
                               ByVal cKol As Long, ByVal cBruto As Long, _
                               ByVal brutoMode As Boolean) As Double
     If brutoMode And cBruto > 0 Then
@@ -724,15 +731,18 @@ Private Function KolicinaReda(ByVal d As Variant, ByVal r As Long, _
     If cKol > 0 Then KolicinaReda = NzD(d(r, cKol))
 End Function
 
-Private Function CeliBroj(ByVal d As Variant, ByVal r As Long, ByVal c As Long) As Double
+' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
+Private Function CeliBroj(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As Double
     If c > 0 Then CeliBroj = NzL(d(r, c))
 End Function
 
-Private Function CeliBrojD(ByVal d As Variant, ByVal r As Long, ByVal c As Long) As Double
+' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
+Private Function CeliBrojD(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As Double
     If c > 0 Then CeliBrojD = NzD(d(r, c))
 End Function
 
-Private Function CelijaAko(ByVal d As Variant, ByVal r As Long, ByVal c As Long) As String
+' ByRef iz istog razloga kao KolicinaReda: ByVal bi kopirao ceo niz po pozivu.
+Private Function CelijaAko(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As String
     If c > 0 Then CelijaAko = Trim$(NzToText(d(r, c)))
 End Function
 

@@ -3992,6 +3992,83 @@ stornu.
 
 Broji se **ista lista** koju ekran prikazuje kao „Nedovršeno", pa se broj u meniju i
 broj na ekranu ne mogu raziću.
+## v2.54.0 — `v6-ui-157` · svi čitači ćelije primaju niz `ByRef`
+
+Zatvara nalaz iz `v6-ui-147`: `ByVal` na `Variant`-u koji **sadrži niz** tera VBA da
+kopira ceo niz pri svakom pozivu. Kad je funkcija čitač **po ćeliji**, to je kopija
+cele tabele po pročitanom polju.
+
+Mereno na terenu, na `modPaletniList.SafeCell`:
+
+```
+1063 stavki, 1 paleta, 1918 ms: citanje tabele 0, prolaz kroz stavke 1883,
+                                obrada paleta 35 ms.
+```
+
+**1,8 ms po redu** za čitanje dva polja iz niza koji je već u memoriji. Popravka je
+jedna reč.
+
+### Tri zapisana, dvadeset šest popravljenih
+
+Zapisana su bila tri (`StornoCellRaw`, `StornoCellText`, `CellVal`). Sistematičan
+pretres po istom potpisu — funkcija koja prima niz `ByVal` i indeksira ga sa dva
+indeksa — dao je **jedanaest**, a nova statička provera još petnaest:
+
+| Modul | Čitači |
+|---|---|
+| `modDokumenta` | `StornoCellRaw` · `StornoCellText` |
+| `modKarticaDetalji` | `CellVal` |
+| `modPrint` | `OtpC` · `OtpN` |
+| `modStornoContext` | `TxCell` |
+| `modStornoDok` | `KolicinaReda` · `CeliBroj` · `CeliBrojD` · `CelijaAko` |
+| `modStornoZurnal` | `TxZ` |
+
+`OtpN` je bio dupla kazna: prosleđivao je isti niz dalje u `OtpC`, dakle druga kopija
+po pozivu.
+
+Svaki je **pojedinačno pročitan pre izmene** — svi samo indeksiraju niz, nijedan u
+njega ne piše, pa je `ByRef` bez ijedne posledice po ponašanje. Posle izmene u
+`src-vba` nema više nijednog čitača ćelije sa `ByVal` nizom.
+
+### Zašto ovde nema testa
+
+Vrednosti se **ne menjaju** — test koji bi ih proveravao ništa ne bi dokazao. Test
+koji meri **vreme** u harnessu je neupotrebljiv: fixture ima desetak redova, tamo je
+i stara verzija brza.
+
+Kapija ostaje merenje **ugrađeno u kod**: `BuildStornoImpact` i
+`GetPaleteImpactByField` se same prijave u log kad pređu 400 ms. Regresija ovog tipa
+stiže kao `WARN` linija, ne kao pritužba operatera.
+
+### Provera `KOPIJA_NIZA` — da dvanaesti ne uđe neprimećen
+
+Popravka jedanaest mesta ništa ne sprečava sutra. Zato provera, i to **namerno uska**,
+sa tri granice:
+
+| Granica | Zašto |
+|---|---|
+| samo **dvoindeksni** pristup `a(r, c)` | jednoindeksni je isti trošak, ali `Split()` rezultat, kolekcija i default-member poziv izgledaju isto |
+| telo **ne sme da piše** u niz | rutina koja u njega upisuje mora ostati `ByVal`, inače bi menjala pozivaočev niz |
+| telo **bez petlje**, do 12 naredbi | rutina koja niz sama iterira plaća **jednu** kopiju za ceo prolaz — to je zanemarljivo |
+
+Bez treće granice je provera nad zatečenim kodom dala **51 nalaz** umesto 26 — većina
+bezopasnih. Lažan nalaz uči da se checker ignoriše, pa je to bila razlika između
+upotrebljive i štetne provere.
+
+Osam self-test slučajeva: dva „mora da zapišti" i šest „ne sme". Dokaz u oba smera —
+sa ugašenom proverom padaju tačno ta dva, po imenu.
+
+**Provera je usput našla još 15 čitača** istog oblika — među njima `RowRank`, koji je
+komparator sortiranja, dakle kopija cele tabele **po poređenju**. Popravljeni su svi:
+checker ne sme da uđe crven.
+
+Ukupno **26 čitača** u ovom PR-u.
+
+Usput naplaćena i jedna zamka izvan VBA: `\b` u regexu je kroz shell heredoc postao
+**pravi backspace znak** (`0x08`), pa `PETLJA` nikad nije poklapala. Sužavanje sa 51
+na 15 je zato uradila samo granica dužine, a ne i granica petlje — i to se videlo tek
+kad je self-test slučaj „rutina koja niz sama iterira" pao. Bez tog slučaja bi provera
+ušla tiho pokvarena.
 
 ### Verifikacija
 
@@ -4016,3 +4093,8 @@ sabotaža je dobila šta da obori.
 Prva verzija je zvala samo `RefreshFromData`, pa su značke bile **prazne do prve
 promene podataka** — a zaostatak koji se vidi tek pošto nešto uradiš ne rešava
 ništa. Ceo smisao je da se vidi čim se aplikacija otvori.
+`RunAllTests` **ZELENO (76)** · pun set **ZELENO** (Banka 189 · Storno 181 ·
+Flow 336 · Palete 97 · Agrohemija 25).
+
+Pun set je ovde obavezan, ne formalnost: izmenjeni čitači su u putanjama štampe,
+kartice kooperanta i storno žurnala, koje `RunAllTests` ne dodiruje.

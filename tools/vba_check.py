@@ -34,6 +34,9 @@ Provere:
                      Tipicno kad ime zaklanja istoimenu funkciju (`Poruka()`).
  10. MRTAV_LOG   -- `LogErr` posle `On Error` koje je vec obrisalo `Err`, pa
                      poziv ne upisuje NISTA u log.
+ 12. KOPIJA_NIZA -- `ByVal` na parametru koji se cita kao 2D niz. VBA kopira CEO
+                     niz pri svakom pozivu; kod citaca po celiji to je kopija
+                     tabele po procitanom polju (mereno: 1.8 ms po redu).
  11. ODSECEN     -- prazan fajl ili fajl bez `Attribute VB_Name`. Nije modul
                      nego ostatak neuspelog upisa; do sada je prolazio kao cist.
 
@@ -816,6 +819,102 @@ def check_truncated(path: str, raw: bytes, lines: list[str]) -> list[Finding]:
                         "ga nosi, pa je ovo odsecen fajl, ne modul.")]
     return []
 
+# --- KOPIJA_NIZA: `ByVal` na parametru koji se koristi kao 2D niz ---------------
+#
+# `ByVal` na `Variant`-u koji SADRZI niz tera VBA da kopira CEO niz pri svakom
+# pozivu. Kad je procedura citac PO CELIJI -- a takve su sve pomocne rutine nad
+# `GetTableData` nizom -- to je kopija cele tabele po procitanom polju.
+#
+# Mereno na terenu (v6-ui-147), `modPaletniList.SafeCell`:
+#
+#     1063 stavki, 1918 ms: citanje tabele 0, prolaz kroz stavke 1883 ms
+#
+# to jest 1.8 ms po redu za citanje dva polja iz niza koji je VEC u memoriji.
+# Jedanaest takvih citaca je zivelo u kodu (v6-ui-157); provera postoji da
+# dvanaesti ne bi usao neprimecen.
+#
+# NAMERNO USKA, iz dva razloga:
+#
+#   1. Trazi se DVOINDEKSNI pristup (`a(r, c)`). Jednoindeksni je isti trosak, ali
+#      `Split()` rezultat, kolekcija i default-member poziv izgledaju isto, pa bi
+#      lazni nalazi bili cesci od pravih -- ista odluka kao kod ARNOST-a.
+#   2. Procedura koja u niz PISE mora ostati ByVal, inace bi menjala pozivaocev
+#      niz. Zato se preskace svako telo koje sadrzi upis (`a = `, `a(...) = `,
+#      `ReDim a`, `Erase a`). To je granica koja deli citaca od radnika.
+#   3. Trazi se telo BEZ PETLJE i kratko (do CITAC_MAX_REDOVA naredbi). Rutina koja
+#      niz primi pa ga sama iterira placa JEDNU kopiju za ceo prolaz -- to je
+#      zanemarljivo i nije predmet ove provere. Skupo je samo ono sto se zove PO
+#      CELIJI, a takva rutina nema svoju petlju i stane u nekoliko redova.
+#      Bez ovog suzavanja provera je nad zatecenim kodom dala 51 nalaz, od cega
+#      vecina bezopasnih -- a lazan nalaz uci da se checker ignorise.
+CITAC_MAX_REDOVA = 12
+PETLJA = re.compile(r"^(For|Do|While)\b", re.IGNORECASE)
+#
+# Potpis se sklapa preko nastavaka reda (`_`): visered potpis je cest bas kod ovih
+# rutina (v. modStornoDok.KolicinaReda).
+PARAM_BYVAL = re.compile(r"ByVal\s+(\w+)\s+As\s+Variant\b", re.IGNORECASE)
+
+
+def _potpis_sa_nastavcima(lines: list[str], i: int) -> tuple[str, int]:
+    """Ceo potpis od reda i, preko nastavaka `_`. Vraca (tekst, poslednji red)."""
+    tekst = _strip_comment(lines[i]).rstrip()
+    while tekst.endswith("_") and i + 1 < len(lines):
+        i += 1
+        tekst = tekst[:-1].rstrip() + " " + _strip_comment(lines[i]).strip()
+    return tekst, i
+
+
+def _telo_pise_u(ime: str, telo: list[str]) -> bool:
+    """Da li telo MENJA parametar -- tada je ByVal moguce namerno, pa se ne dira."""
+    upis = re.compile(r"^" + re.escape(ime) + r"\s*(\(.*\))?\s*=(?!=)", re.IGNORECASE)
+    redim = re.compile(r"^(ReDim|Erase)\b.*\b" + re.escape(ime) + r"\b", re.IGNORECASE)
+    for ln in telo:
+        t = _strip_comment(ln).strip()
+        if t and (upis.match(t) or redim.match(t)):
+            return True
+    return False
+
+
+def check_array_copy(path: str, lines: list[str]) -> list[Finding]:
+    out: list[Finding] = []
+    i, n = 0, len(lines)
+    while i < n:
+        if not PROC_START.match(_strip_comment(lines[i])):
+            i += 1
+            continue
+        potpis, kraj = _potpis_sa_nastavcima(lines, i)
+        imena = PARAM_BYVAL.findall(potpis)
+        if not imena:
+            i = kraj + 1
+            continue
+        j = kraj + 1
+        while j < n and not PROC_END.match(lines[j]):
+            j += 1
+        telo = lines[kraj + 1:j]
+        naredbe = [t for t in (_strip_comment(x).strip() for x in telo) if t]
+        if len(naredbe) > CITAC_MAX_REDOVA:
+            i = j + 1
+            continue
+        if any(PETLJA.match(t) for t in naredbe):
+            i = j + 1
+            continue
+        for ime in imena:
+            dvoindeksni = re.compile(
+                r"\b" + re.escape(ime) + r"\s*\([^()]*,[^()]*\)", re.IGNORECASE)
+            if not any(dvoindeksni.search(_strip_comment(ln)) for ln in telo):
+                continue
+            if _telo_pise_u(ime, telo):
+                continue
+            out.append(Finding(
+                path, i + 1, "KOPIJA_NIZA",
+                f"parametar '{ime}' je ByVal, a koristi se kao 2D niz. VBA tada kopira "
+                f"CEO niz pri SVAKOM pozivu -- kod citaca po celiji to je kopija cele "
+                f"tabele po procitanom polju (mereno: 1.8 ms po redu). Telo niz samo "
+                f"cita, pa je ByRef bez ijedne posledice po ponasanje."))
+        i = j + 1
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -827,6 +926,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_scalar_call(path, lines)
     out += check_dead_log(path, lines)
     out += check_truncated(path, raw, lines)
+    out += check_array_copy(path, lines)
     return out
 
 
@@ -1142,6 +1242,66 @@ Option Explicit
 '''),
 ]
 
+# --- KOPIJA_NIZA: dokaz u oba smera ------------------------------------------
+#
+# Druga polovina (0 nalaza) nosi celu tezinu. Provera je NAMERNO uska, a granice
+# su bas ovi slucajevi: rutina koja u niz PISE mora ostati ByVal, rutina koja niz
+# SAMA iterira placa jednu kopiju za ceo prolaz, a jednoindeksni pristup se ne
+# razlikuje od Split() rezultata ili kolekcije.
+#
+# Bez tog suzavanja je provera nad zatecenim kodom dala 51 nalaz umesto 26.
+KOPIJA_NIZA_CASES = [
+    # --- mora da zapisti ---
+    ("citac po celiji, ByVal 2D niz", 1, """Option Explicit
+Private Function Celija(ByVal d As Variant, ByVal r As Long, ByVal c As Long) As String
+    If c > 0 Then Celija = Trim$(CStr(d(r, c)))
+End Function
+"""),
+    ("isto, potpis preko dva reda", 1, """Option Explicit
+Private Function Kolicina(ByVal d As Variant, ByVal r As Long, _
+                          ByVal c As Long) As Double
+    If c > 0 Then Kolicina = NzD(d(r, c))
+End Function
+"""),
+    # --- NE sme da zapisti ---
+    ("vec je ByRef", 0, """Option Explicit
+Private Function Celija(ByRef d As Variant, ByVal r As Long, ByVal c As Long) As String
+    If c > 0 Then Celija = Trim$(CStr(d(r, c)))
+End Function
+"""),
+    ("telo PISE u niz -- ByVal je tu namerno", 0, """Option Explicit
+Private Function Ocisti(ByVal d As Variant, ByVal r As Long, ByVal c As Long) As Variant
+    d(r, c) = ""
+    Ocisti = d
+End Function
+"""),
+    ("telo PREUZIMA niz na sebe", 0, """Option Explicit
+Private Function Kopija(ByVal d As Variant) As Variant
+    ReDim Preserve d(1 To 2, 1 To 2)
+    Kopija = d(1, 1)
+End Function
+"""),
+    ("rutina koja niz SAMA iterira placa jednu kopiju", 0, """Option Explicit
+Private Sub Ispisi(ByVal d As Variant, ByVal n As Long)
+    Dim r As Long
+    For r = 1 To n
+        Debug.Print d(r, 1)
+    Next r
+End Sub
+"""),
+    ("jednoindeksni pristup se NE prijavljuje", 0, """Option Explicit
+Private Function Prvi(ByVal d As Variant) As String
+    Prvi = CStr(d(0))
+End Function
+"""),
+    ("skalarni Variant nije niz", 0, """Option Explicit
+Private Function Tekst(ByVal v As Variant) As String
+    Tekst = Trim$(CStr(v))
+End Function
+"""),
+]
+
+
 def self_test() -> int:
     palo = []
 
@@ -1179,6 +1339,15 @@ def self_test() -> int:
         dobijeno = _dupli_nalazi(check_file("<self-test>", raw, lines, set(), {}))
         if dobijeno != ocekivano:
             palo.append(f"  {naziv}: ocekivano {ocekivano} nalaza, dobijeno {dobijeno}")
+
+    for naziv, ocekivano, izvor in KOPIJA_NIZA_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "KOPIJA_NIZA")
+        if dobijeno != ocekivano:
+            palo.append(f"  KOPIJA_NIZA/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
 
     for naziv, ocekivano, izvor in ODSECEN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
@@ -1228,7 +1397,7 @@ def self_test() -> int:
         shutil.rmtree(tmp, ignore_errors=True)
 
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
-              + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + 2)
+              + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES) + 2)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:

@@ -432,7 +432,14 @@ Private Sub AddPair(ByVal labelText As String, ByVal valueText As String)
 End Sub
 
 ' Citanje celije tblOtkup po imenu kolone (schema-safe; 0 -> prazno).
-Private Function CellVal(ByVal data As Variant, ByVal r As Long, ByVal colName As String) As Variant
+' `data` je ByRef namerno. ByVal na Variantu koji SADRZI niz kopira ceo niz pri
+' svakom pozivu, a ovo je citac PO CELIJI -- u petlji se zove vise puta po redu.
+' Mereno na istom obrascu u modPaletniList.SafeCell: 1063 stavke, 1883 ms, to jest
+' 1.8 ms po redu za citanje dva polja iz niza koji je vec u memoriji.
+'
+' Funkcija niz samo CITA, nikad ne pise, pa je razlika iskljucivo u tome sto se
+' niz ne umnozava.
+Private Function CellVal(ByRef data As Variant, ByVal r As Long, ByVal colName As String) As Variant
     Dim c As Long
     c = GetColumnIndex(TBL_OTKUP, colName)
     If c >= 1 Then
