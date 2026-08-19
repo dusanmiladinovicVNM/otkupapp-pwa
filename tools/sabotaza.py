@@ -1394,7 +1394,7 @@ SABOTAZE = {
         "T_BazenLjuske_ViseNegoStoStaje",
         "visak se odseca na velicinu bazena",
     ),
-    # --- agrohemija na novom UI (v6-ui-170) ---------------------------------
+    # --- agrohemija na novom UI (v6-ui-171) ---------------------------------
     # Ime modula u registru ekrana. Greska u njemu NE PADA: sidebar ekran samo
     # prikaze prigusenog, pa agrohemija nestane iz aplikacije bez ijedne poruke.
     # Isti oblik kao oporavak-modul-ime.
@@ -1437,6 +1437,51 @@ SABOTAZE = {
         '    PoljeVidi z, "scrAgDob", True   \' SABOTAZA: polje prijema ostaje\n',
         "T_ZonaAgro_PoljaPostojeIPrateRezim",
         "polja prijema su ugasena u izdavanju (i obrnuto)",
+    ),
+    # Cip koji ne suzava izgleda kao da radi: lista je ista i pre i posle klika.
+    "agro-cip-ne-suzava": (
+        "modScrAgro.bas",
+        '        Case "ima":  AgCipStanje = (stanje > 0)\n',
+        '        Case "ima":  AgCipStanje = True   \' SABOTAZA: cip ne suzava\n',
+        "T_Agro_CipoviSuzavajuListu",
+        "cip Ima na stanju stvarno izbacuje artikle bez zaliha",
+    ),
+    # Lista dugova pokazuje IME, a dvoklik bira KOOPERANTA. Ako mapa na koliziji
+    # zapamti prvog pogodjenog umesto praznog, dvoklik izda robu pogresnom
+    # coveku -- i izgleda ispravno u svakoj drugoj tvrdnji.
+    "agro-dvosmislen-prvi-pobedjuje": (
+        "modScrAgro.bas",
+        '            If CStr(mDugIds(naziv)) <> koopID Then mDugIds(naziv) = ""\n',
+        '            If False Then mDugIds(naziv) = ""   \' SABOTAZA: prvi pobedjuje\n',
+        "T_Agro_BrojacIDvoklikPoIdentitetu",
+        "dvosmislen prikaz nosi PRAZAN identitet, ne prvog pogodjenog",
+    ),
+    # Korpa je jedino sto na ovom ekranu ceka operatera. Brojac koji je ne vidi
+    # znaci da neproknjizena korpa nestane bez ijednog traga cim se predje na
+    # drugi ekran.
+    "agro-brojac-ne-vidi-korpu": (
+        "modScrAgro.bas",
+        "    Scr_Brojac = BrojUKorpi(mKorpaI) + BrojUKorpi(mKorpaU)\n",
+        "    Scr_Brojac = 0   ' SABOTAZA: korpa koja ceka se ne vidi\n",
+        "T_Agro_BrojacIDvoklikPoIdentitetu",
+        "brojac prijavljuje stavke koje cekaju upis",
+    ),
+    # Bazen ljuske je konacan: visak se TIHO odseca (LayoutChips nacrta prvih
+    # MAX_CHIP i stane). Ekran koji trazi vise izgleda ispravno u kodu, a
+    # operateru fali dugme.
+    "agro-cipova-preko-bazena": (
+        "modScrAgro.bas",
+        '            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                         "ulaz:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "izlaz:OTKUI_CIPA_IZLAZ:52|" & _\n'
+        '                         "godina:OTKUI_CIPA_GODINA:84"\n',
+        '            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                         "u1:OTKUI_CIPA_ULAZ:52|u2:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "u3:OTKUI_CIPA_ULAZ:52|u4:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "u5:OTKUI_CIPA_ULAZ:52|izlaz:OTKUI_CIPA_IZLAZ:52|" & _\n'
+        '                         "godina:OTKUI_CIPA_GODINA:84"   \' SABOTAZA\n',
+        "T_Agro_UgovorEkrana",
+        "ekran ne trazi vise cipova nego sto bazen ljuske ima",
     ),
     "agro-doza-nanize": (
         "modAgroUnos.bas",

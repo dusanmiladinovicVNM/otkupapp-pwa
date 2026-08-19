@@ -97,6 +97,10 @@ Private Const FX_ARTIKAL_BEZ_PAK As String = "ART-TEST-2"
 Private Const FX_ARTIKAL_BEZ_STANJA As String = "ART-TEST-3"
 Private Const FX_ART_PAKOVANJE As Double = 5
 Private Const FX_ART_STANJE As Double = 15
+' Kooperant ISTOG IMENA kao FX_KOOPERANT ("Prvi Testni"), drugi identitet.
+' Postoji da bi "dvosmislen prikaz se odbija" imalo nad cim da padne.
+Private Const FX_KOOP_ISTOIME As String = "KOOP-TEST-IME"
+Private Const FX_KOOP_PRIKAZ As String = "Prvi Testni"
 ' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
 Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
 Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
@@ -228,6 +232,8 @@ Public Sub RunAllTests()
     RunOne 83
     RunOne 84
     RunOne 85
+    RunOne 86
+    RunOne 87
 
     SetTestMode prevMode
     WriteResultFile
@@ -345,6 +351,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 83: TestName = "T_Agro_KapijaStanjaBrojiKorpu"
         Case 84: TestName = "T_Agro_SmartDozaZaokruzujeNagore"
         Case 85: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
+        Case 86: TestName = "T_Agro_CipoviSuzavajuListu"
+        Case 87: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -438,6 +446,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 83: T_Agro_KapijaStanjaBrojiKorpu
         Case 84: T_Agro_SmartDozaZaokruzujeNagore
         Case 85: T_ZonaAgro_PoljaPostojeIPrateRezim
+        Case 86: T_Agro_CipoviSuzavajuListu
+        Case 87: T_Agro_BrojacIDvoklikPoIdentitetu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4034,14 +4044,14 @@ End Sub
 
 
 ' ============================================================
-' 81. Ugovor ekrana Agrohemija: cetiri liste, radnja samo nad korpom
+' 82. Ugovor ekrana Agrohemija: cetiri liste, radnja samo nad korpom
 ' ============================================================
 ' Isti oblik kao T_Storno_UgovorIRadnje. Postoji zato sto ekran koji nije u
 ' registru ili ne odgovara na ugovor NE PADA -- sidebar ga samo prikaze
 ' prigusenog, pa agrohemija nestane iz aplikacije bez ijedne greske.
 Private Sub T_Agro_UgovorEkrana()
     Dim liste As Variant, i As Long, kljucevi As String, d As Variant
-    Dim kljuc As String
+    Dim kljuc As String, spec As String
 
     AssertEq (Len(modUiScreens.ScrRowByKey("AGRO")) > 0), True, _
              "AGRO postoji u registru ekrana"
@@ -4097,11 +4107,31 @@ Private Sub T_Agro_UgovorEkrana()
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     AssertEq modScrAgro.Scr_Rezim(), "IZLAZ", "povratak na izdavanje"
 
+    ' GRANICE BAZENA LJUSKE. Visak se ne prijavljuje kao greska nego se TIHO
+    ' odseca: LayoutGrid nacrta prvih MAX_SEG i stane, RefreshRowActions prvih
+    ' MAX_ACT, bazen cipova prvih MAX_CHIP, SetGridColsArr odseca kolone na
+    ' MAX_COLS. Operater tada vidi ekran kome fali dugme, bez ijedne poruke.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq (UBound(Split(modScrAgro.Scr_Radnje(), "|")) + 1 <= modOtkupUI.MAX_ACT), _
+             True, "korpa ne trazi vise radnji nego sto ljuska ima dugmadi"
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrAgro.Scr_ListaTestSet kljuc
+        spec = modScrAgro.Scr_Cipovi()
+        If Len(spec) > 0 Then
+            AssertEq (UBound(Split(spec, "|")) + 1 <= modOtkupUI.MAX_CHIP), True, _
+                     "lista " & kljuc & " ne trazi vise cipova nego sto bazen ima"
+        End If
+        d = modScrAgro.Scr_Rows("sve", "")
+        AssertEq (UBound(d(0)) + 1 <= modOtkupUI.MAX_COLS), True, _
+                 "lista " & kljuc & " ne trazi vise kolona nego sto mreza pravi"
+    Next i
+
     modScrAgro.Scr_ListaTestSet "KORPA"
 End Sub
 
 ' ============================================================
-' 82. Kapija stanja broji i ono sto je VEC u korpi
+' 83. Kapija stanja broji i ono sto je VEC u korpi
 ' ============================================================
 ' Dve tvrdnje, obe iz legacy forme:
 '   1. dodavanje u korpu sabira sa onim sto je u korpi (btnDodajIzlaz), pa se
@@ -4171,7 +4201,7 @@ Private Sub T_Agro_KapijaStanjaBrojiKorpu()
 End Sub
 
 ' ============================================================
-' 83. Smart doza se zaokruzuje NAGORE, na cela pakovanja
+' 84. Smart doza se zaokruzuje NAGORE, na cela pakovanja
 ' ============================================================
 ' Doza je racun po hektaru, ali se roba izdaje u pakovanjima -- pola pakovanja
 ' ne postoji. Fixture je namesten tako da se razlika vidi: doza 2 l/ha na
@@ -4210,7 +4240,7 @@ Private Sub T_Agro_SmartDozaZaokruzujeNagore()
 End Sub
 
 ' ============================================================
-' 84. Zona agrohemije: polja postoje i prate rezim
+' 85. Zona agrohemije: polja postoje i prate rezim
 ' ============================================================
 ' Isti oblik kao T_ZonaPrerade_SvaPoljaVidljiva, i iz istog razloga: kontrolu
 ' koje NEMA Scr_Layout tiho preskoci (On Error Resume Next), pa operater vidi
@@ -4282,6 +4312,132 @@ Private Sub T_ZonaAgro_PoljaPostojeIPrateRezim()
     AssertEq izlVisak, "", "u izdavanju su ugasena polja prijema"
     AssertEq ulzNema, "", "u prijemu su upaljena sva polja prijema"
     AssertEq ulzVisak, "", "u prijemu su ugasena polja izdavanja"
+End Sub
+
+' ============================================================
+' 86. Cipovi agrohemije: ugovor i stvarno suzavanje
+' ============================================================
+' Dve stvari, i obe padaju tiho ako se pokvare. Ugovor: cip bez natpisa u
+' katalogu je prazno dugme, a cip bez sirine se ne vidi. Pravilo: cip koji ne
+' suzava nista izgleda kao da radi -- lista je ista i pre i posle klika.
+'
+' Pravila se mere BEZ mreze, kao PalCipProlaz na Paletama: mreza bi uvela
+' sortiranje, stranice i pretragu u tvrdnju koja je o jednom uslovu.
+Private Sub T_Agro_CipoviSuzavajuListu()
+    Dim spec As String, e As Variant, p As Variant, n As Long
+
+    ' 1) UGOVOR nad svakom listom koja cipove ima.
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    spec = modScrAgro.Scr_Cipovi()
+    AssertEq (Len(spec) > 0), True, "lista stanja prijavljuje svoje cipove"
+    For Each e In Split(spec, "|")
+        p = Split(CStr(e), ":")
+        AssertEq (UBound(p) = 2), True, "cip je oblika kljuc:KATALOG:sirina"
+        ' Katalog na nepostojeci kljuc vraca "[KLJUC]", pa bi provera duzine
+        ' uvek prolazila i ne bi merila nista.
+        AssertEq (Left$(Poruka(CStr(p(1))), 1) <> "["), True, _
+                 "natpis cipa " & CStr(p(0)) & " postoji u katalogu"
+        AssertEq (val(p(2)) > 0), True, "cip " & CStr(p(0)) & " ima sirinu"
+        n = n + 1
+    Next e
+    AssertEq n, 3, "stanje ima tri cipa"
+    AssertEq Split(CStr(Split(spec, "|")(0)), ":")(0), "sve", _
+             "prvi cip je SVE -- na njega ljuska pada kad filter ne pripada listi"
+
+    ' Korpa je nekoliko upravo unetih redova -- tu se ne trazi nego se gleda.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq modScrAgro.Scr_Cipovi(), "", "korpa nema cipove"
+
+    ' 2) PRAVILA. Prazan i nepoznat kljuc PUSTAJU sve: ekran koji dobije filter
+    ' koji ne poznaje pokazuje punu listu, ne praznu.
+    AssertEq modScrAgro.AgCipStanje("", 0), True, "prazan filter pusta sve"
+    AssertEq modScrAgro.AgCipStanje("nepoznato", 0), True, "nepoznat filter pusta sve"
+    AssertEq modScrAgro.AgCipStanje("ima", 0.5), True, "pola jedinice JESTE na stanju"
+    AssertEq modScrAgro.AgCipStanje("ima", 0), False, "nula nije na stanju"
+    AssertEq modScrAgro.AgCipStanje("nema", 0), True, "nula je bez zaliha"
+    ' Negativno stanje je greska u knjizenju, ali se MORA videti -- sakriveno bi
+    ' ostalo neispravljeno.
+    AssertEq modScrAgro.AgCipStanje("nema", -3), True, "negativno stanje je bez zaliha"
+    AssertEq modScrAgro.AgCipStanje("ima", -3), False, "negativno stanje nije na stanju"
+
+    AssertEq modScrAgro.AgCipPromet("ulaz", MAG_ULAZ, 0), True, "ulaz prolazi kroz cip Ulazi"
+    AssertEq modScrAgro.AgCipPromet("ulaz", MAG_IZLAZ, 0), False, "izlaz ne prolazi kroz Ulazi"
+    AssertEq modScrAgro.AgCipPromet("izlaz", MAG_IZLAZ, 0), True, "izlaz prolazi kroz cip Izlazi"
+    AssertEq modScrAgro.AgCipPromet("ulaz", UCase$(MAG_ULAZ), 0), True, _
+             "tip se ne poredi po velicini slova"
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, CDbl(CDate(Date))), True, _
+             "danasnji red je iz ove godine"
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, CDbl(CDate(DateSerial(Year(Date) - 1, 6, 1)))), _
+             False, "prosla godina ne prolazi kroz cip Ova godina"
+    ' Red bez citljivog datuma NE sme da prodje: propustiti ga znacilo bi
+    ' tvrditi da je iz tekuce godine, a ne zna se.
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, 0), False, _
+             "red bez datuma ne prolazi kroz cip godine"
+
+    AssertEq modScrAgro.AgCipDugovi("duguju", 1), True, "dug veci od nule duguje"
+    AssertEq modScrAgro.AgCipDugovi("duguju", 0), False, "nula ne duguje"
+    AssertEq modScrAgro.AgCipDugovi("duguju", -500), False, _
+             "pretplata nije dug -- kooperant kome je vise oduzeto ne duguje"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+End Sub
+
+' ============================================================
+' 87. Brojac ceka na korpi; dvoklik bira po IDENTITETU
+' ============================================================
+' Brojac: korpa je jedino sto na ovom ekranu ceka operatera -- sve ostalo je
+' vec u tabelama. Bez brojke operater koji predje na drugi ekran nema nijedan
+' znak da mu je ostala puna.
+'
+' Dvoklik: lista dugova pokazuje IME, a dvoklik bira KOOPERANTA. Kad dva
+' kooperanta nose isto ime, prikaz je dvosmislen i izbor se ODBIJA -- isto
+' pravilo kao "dvosmislen broj -> MANUAL" u storno okviru. Fixture zato ima
+' KOOP-TEST-1 i KOOP-TEST-IME, oba "Prvi Testni".
+Private Sub T_Agro_BrojacIDvoklikPoIdentitetu()
+    Dim d As Variant, greska As String
+
+    ' --- BROJAC ---
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_Brojac(), 0, "prazna korpa ne ceka nista"
+
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL, 1, FX_PARCELA)
+    AssertEq greska, "", "stavka je usla u korpu"
+    AssertEq modScrAgro.Scr_Brojac(), 1, "brojac vidi stavku koja ceka upis"
+
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL, 1, FX_PARCELA)
+    AssertEq greska, "", "i druga stavka je usla"
+    AssertEq modScrAgro.Scr_Brojac(), 2, "brojac broji SVE sto ceka, ne samo prvu"
+
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_Brojac(), 0, "praznjenje korpe gasi brojac"
+
+    ' --- DVOKLIK: mapa identiteta ---
+    ' Mapu puni citac liste, pa se lista mora procitati pre nego sto se tvrdi.
+    modScrAgro.Scr_ListaTestSet "DUGOVI"
+    d = modScrAgro.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "preduslov: lista dugova je procitana"
+
+    ' NAJVAZNIJE PRVO: dvosmislen prikaz nosi PRAZAN identitet. Mapa koja bi
+    ' zapamtila prvog pogodjenog izgledala bi ispravno u svakoj drugoj tvrdnji,
+    ' a dvoklik bi izdao robu pogresnom coveku.
+    AssertEq modScrAgro.Scr_DugIdTest(FX_KOOP_PRIKAZ), "", _
+             "dva kooperanta istog imena daju DVOSMISLEN prikaz, ne prvog"
+
+    ' Jednoznacan prikaz i dalje daje svoj identitet -- kapija ne sme da obori
+    ' sve redom.
+    AssertEq modScrAgro.Scr_DugIdTest("Drugi Testni"), FX_KOOPERANT2, _
+             "jednoznacan prikaz daje svoj KooperantID"
+    AssertEq modScrAgro.Scr_DugIdTest("Ne Postoji"), "", _
+             "nepoznat prikaz nema identitet"
+
+    ' Ista kapija nad listom stanja: naziv artikla -> ArtikalID.
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    d = modScrAgro.Scr_Rows("sve", "")
+    AssertEq modScrAgro.Scr_ArtIdTest("Test Preparat"), FX_ARTIKAL, _
+             "jednoznacan naziv artikla daje svoj ArtikalID"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    modScrAgro.Scr_KorpaTestReset
 End Sub
 
 ' Ugasi magacin red koji je test napravio. Vracanje fixture-a, ne poslovna

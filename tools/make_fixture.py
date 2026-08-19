@@ -207,6 +207,13 @@ SEED = {
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
         {"KooperantID": "KOOP-TEST-3", "Ime": "Treci", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
+        # ISTO IME kao KOOP-TEST-1, drugi identitet. Postoji zbog jednog pravila
+        # koje se drugacije ne moze napisati: lista dugova pokazuje IME, a
+        # dvoklik bira KOOPERANTA. Dok u fixture-u nije bilo dva istoimena,
+        # tvrdnja "dvosmislen prikaz se odbija" nije imala nad cim da padne, a
+        # pogadjanje bi izdalo robu pogresnom coveku.
+        {"KooperantID": "KOOP-TEST-IME", "Ime": "Prvi", "Prezime": "Testni",
+         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblParcele": [
         {"ParcelaID": "PAR-TEST-1", "KooperantID": "KOOP-TEST-1", "KatBroj": "1001",
@@ -605,6 +612,17 @@ SEED = {
          "Tip": "Izlaz", "Kolicina": 5, "KooperantID": "KOOP-TEST-1",
          "ParcelaID": "PAR-TEST-1", "BrojDokumenta": "AGRO-IZLAZ-1",
          "CenaPoJedinici": ARTIKAL_CENA, "Vrednost": AGRO_DUG_KOOP1},
+        # Istoimeni kooperant takodje ima dug -- inace se ne bi ni pojavio u
+        # listi dugova, pa kolizije prikaza ne bi ni bilo.
+        #
+        # Dug mu ide preko REZERVISANOG virtuelnog artikla (pocetni dug), ne
+        # preko prave robe: GetMagacinStanje ga izuzima, pa stanje ART-TEST-1
+        # ostaje tacno 15 i preduslov testa kapije stanja se ne pomera. Da je
+        # ovde stajao ART-TEST-1, dva testa bi se tiho vezala jedan za drugi.
+        {"MagacinID": "MAG-TEST-3", "Datum": FIXTURE_DATE,
+         "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
+         "KooperantID": "KOOP-TEST-IME", "BrojDokumenta": "AGRO-POC-2",
+         "CenaPoJedinici": 1, "Vrednost": 1},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

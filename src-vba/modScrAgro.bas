@@ -1,6 +1,6 @@
 Attribute VB_Name = "modScrAgro"
 '=====================================================================
-' modScrAgro - ekran "Agrohemija" (v6-ui-170). Faza E, stavka 15.
+' modScrAgro - ekran "Agrohemija" (v6-ui-171). Faza E, stavka 15.
 '
 ' Ljuska ga ne poznaje po imenu: dobija ga preko Application.Run, da klijent
 ' kome ovaj modul nedostaje i dalje radi (zamka #19).
@@ -42,7 +42,7 @@ Attribute VB_Name = "modScrAgro"
 '=====================================================================
 Option Explicit
 
-Public Const SCRAG_BUILD As String = "v6-ui-170"
+Public Const SCRAG_BUILD As String = "v6-ui-171"
 
 ' Visina zone. Veca je od KPI_H jer zona nosi ceo unos: prekidac rezima, dva
 ' reda polja, dva reda objasnjenja i red dugmadi.
@@ -105,6 +105,14 @@ Private mArtKes As Object
 ' ljuska ga zove posle svakog upisa (RefreshFromData).
 Private mDugKes As Object
 
+' Prikaz -> identitet, za dvoklik. Mreza je SORTIRANA, pa redni broj reda nije
+' redni broj u izvoru; jedino sto red pouzdano nosi je ono sto se u njemu vidi.
+' KOLIZIJA SE PAMTI KAO PRAZNO: dva kooperanta istog imena (ili dva artikla
+' istog naziva) daju dvosmislen prikaz, i tada dvoklik ODBIJA da bira umesto da
+' pogodi -- isto pravilo kao "dvosmislen broj -> MANUAL" u storno okviru.
+Private mDugIds As Object           ' "Ime Prezime" -> KooperantID ("" = dvosmisleno)
+Private mArtIds As Object           ' naziv artikla  -> ArtikalID   ("" = dvosmisleno)
+
 Private mStep As String             ' korak za poruku o gresci
 
 '--------------------------------------------------------- UGOVOR EKRANA
@@ -138,6 +146,70 @@ Public Function Scr_NaslovDopuna() As String
             Scr_NaslovDopuna = ChrW(8212) & " " & Poruka("OTKUI_SEG_AG_IZDAVANJE")
         End If
     End If
+End Function
+
+' Cipovi AKTIVNE liste. Korpa ih nema: to je nekoliko redova koje je operater
+' upravo uneo, tu se ne trazi nego se gleda. Ostale tri liste su pregledi preko
+' cele istorije, pa im suzavanje treba.
+'
+' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne pripada
+' listi na koju se upravo preslo (RefreshChipsForScreen).
+Public Function Scr_Cipovi() As String
+    Select Case Scr_Lista()
+        Case AG_STANJE
+            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _
+                         "ima:OTKUI_CIPA_IMA:78|" & _
+                         "nema:OTKUI_CIPA_NEMA:88"
+        Case AG_PROMET
+            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _
+                         "ulaz:OTKUI_CIPA_ULAZ:52|" & _
+                         "izlaz:OTKUI_CIPA_IZLAZ:52|" & _
+                         "godina:OTKUI_CIPA_GODINA:84"
+        Case AG_DUGOVI
+            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _
+                         "duguju:OTKUI_CIPA_DUGUJU:78"
+    End Select
+End Function
+
+' PRAVILA CIPOVA, odvojena od mreze da bi mogla da se izmere bez nje. Kljuc je
+' EKRANOV -- ljuska ga je samo vratila onakvog kakvog ga je dobila iz Scr_Cipovi.
+' Nepoznat i prazan kljuc PUSTAJU sve: ekran koji dobije filter koji ne poznaje
+' pokazuje punu listu, ne praznu.
+Public Function AgCipStanje(ByVal filter As String, ByVal stanje As Double) As Boolean
+    Select Case filter
+        Case "ima":  AgCipStanje = (stanje > 0)
+        Case "nema": AgCipStanje = (stanje <= 0)
+        Case Else:   AgCipStanje = True
+    End Select
+End Function
+
+Public Function AgCipPromet(ByVal filter As String, ByVal tip As String, _
+                            ByVal datum As Double) As Boolean
+    Select Case filter
+        Case "ulaz":   AgCipPromet = (StrComp(Trim$(tip), MAG_ULAZ, vbTextCompare) = 0)
+        Case "izlaz":  AgCipPromet = (StrComp(Trim$(tip), MAG_IZLAZ, vbTextCompare) = 0)
+        Case "godina"
+            ' Red bez citljivog datuma NE prolazi kroz cip godine: propustiti ga
+            ' znacilo bi tvrditi da je iz tekuce godine, a ne zna se.
+            If datum <= 0 Then Exit Function
+            AgCipPromet = (Year(CDate(datum)) = Year(Date))
+        Case Else:     AgCipPromet = True
+    End Select
+End Function
+
+Public Function AgCipDugovi(ByVal filter As String, ByVal dug As Double) As Boolean
+    Select Case filter
+        Case "duguju": AgCipDugovi = (dug > 0)
+        Case Else:     AgCipDugovi = True
+    End Select
+End Function
+
+' Koliko stavki CEKA operatera. Na ovom ekranu to je korpa: redovi koje je uneo
+' a nije proknjizio. Jedino su one prolazne -- sve ostalo na ekranu je vec u
+' tabelama. Bez ove brojke operater koji predje na drugi ekran nema nijedan
+' znak da mu je korpa ostala puna.
+Public Function Scr_Brojac() As Long
+    Scr_Brojac = BrojUKorpi(mKorpaI) + BrojUKorpi(mKorpaU)
 End Function
 
 ' Radnja nad redom postoji samo u korpi: red koji jos nije upisan sme da se
@@ -374,6 +446,8 @@ End Function
 Public Sub Scr_ResetCache()
     Set mArtKes = Nothing
     Set mDugKes = Nothing
+    Set mArtIds = Nothing
+    Set mDugIds = Nothing
 End Sub
 
 ' Dug kooperanta = zaduzenje iz magacina minus odbitak iz tblNovac. Ista
@@ -583,6 +657,15 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
         Exit Function
     End If
 
+    ' Dvoklik na red PREUZIMA red u unos: iz dugova kooperanta, iz stanja
+    ' artikal. To je jedan potez umesto tri (zapamti ime, predji na korpu,
+    ' nadji ga u padajucoj listi). Vraca False -- lista se nije promenila,
+    ' promenila se zona.
+    If Left$(tag, 4) = "dbl:" Then
+        DvoklikNaRed CLng(val(Mid$(tag, 5)))
+        Exit Function
+    End If
+
     If Left$(tag, 4) = "act:" Then
         ObradiKlik = RadnjaNadRedom(tag)
         Exit Function
@@ -649,6 +732,67 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
     ' bez toga bi klik na "Ukloni" nad sortiranom listom obrisao drugu stavku.
     RadnjaNadRedom = UkloniPoPrikazu(red)
 End Function
+
+' Dvoklik: preuzmi red u unos. Bira se po IDENTITETU iz mape koju je napunio
+' citac liste, ne po tekstu reda -- a kad je prikaz dvosmislen (dva kooperanta
+' istog imena), mapa nosi prazno i dvoklik ODBIJA da bira. Pogadjanje bi ovde
+' izdalo robu pogresnom coveku.
+Private Sub DvoklikNaRed(ByVal red As Long)
+    Dim prikaz As String, iD As String
+
+    If red < 1 Then Exit Sub
+    prikaz = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    If Len(prikaz) = 0 Then Exit Sub
+
+    Select Case Scr_Lista()
+        Case AG_DUGOVI
+            If mDugIds Is Nothing Then Exit Sub
+            If Not mDugIds.Exists(prikaz) Then Exit Sub
+            iD = CStr(mDugIds(prikaz))
+            If Len(iD) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_AG_DVOSMISLEN"), True
+                Exit Sub
+            End If
+            ' Dug se izdaje, ne prima -- dvoklik zato i prebacuje u IZDAVANJE.
+            mMod = AG_IZLAZ
+            IzaberiUComboPoId "scrAgKoop", iD
+            PuniParcele
+            OsveziZonu
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_UZET_KOOP") & " " & prikaz, False
+
+        Case AG_STANJE
+            If mArtIds Is Nothing Then Exit Sub
+            If Not mArtIds.Exists(prikaz) Then Exit Sub
+            iD = CStr(mArtIds(prikaz))
+            If Len(iD) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_AG_DVOSMISLEN"), True
+                Exit Sub
+            End If
+            IzaberiUComboPoId "scrAgArt", iD
+            If Rezim() = AG_ULAZ Then PredloziCenu
+            PredloziKolicinu
+            OsveziZonu
+            modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_UZET_ART") & " " & prikaz, False
+    End Select
+End Sub
+
+' Postavi combo na stavku sa datim ID-em. ID je u SKRIVENOJ koloni (kolona 1),
+' pa se bira red a ne tekst -- upis teksta bi kod dva ista naziva izabrao prvi.
+Private Sub IzaberiUComboPoId(ByVal nm As String, ByVal iD As String)
+    Dim c As Object, i As Long, pre As Boolean
+    On Error Resume Next
+    Set c = Kontrola(nm)
+    If c Is Nothing Then Exit Sub
+    pre = mFill
+    mFill = True
+    For i = 0 To c.ListCount - 1
+        If Trim$(CStr(c.List(i, 1))) = Trim$(iD) Then
+            c.ListIndex = i
+            Exit For
+        End If
+    Next i
+    mFill = pre
+End Sub
 
 ' Izbaci red korpe koji odgovara prikazanom redu mreze (artikal + kolicina).
 Private Function UkloniPoPrikazu(ByVal red As Long) As Boolean
@@ -1048,10 +1192,11 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
     ' za nju postoje tek kad se lista cita.
     OsveziZonu
     Select Case Scr_Lista()
-        Case AG_STANJE: Scr_Rows = RedoviStanje(q): Exit Function
-        Case AG_PROMET: Scr_Rows = RedoviPromet(q): Exit Function
-        Case AG_DUGOVI: Scr_Rows = RedoviDugovi(q): Exit Function
+        Case AG_STANJE: Scr_Rows = RedoviStanje(filter, q): Exit Function
+        Case AG_PROMET: Scr_Rows = RedoviPromet(filter, q): Exit Function
+        Case AG_DUGOVI: Scr_Rows = RedoviDugovi(filter, q): Exit Function
     End Select
+    ' Korpa nema cipove, pa filter ne gleda -- v. Scr_Cipovi.
     Scr_Rows = RedoviKorpa(q)
 End Function
 
@@ -1125,11 +1270,14 @@ End Function
 
 ' GetMagacinStanje je 1-bazirano i vec izuzima ART_POCETNI_DUG:
 '   1 ArtikalID | 2 Naziv | 3 Tip | 4 JM | 5 Ulaz | 6 Izlaz | 7 Stanje
-Private Function RedoviStanje(ByVal q As String) As Variant
+Private Function RedoviStanje(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, i As Long, n As Long, outA() As Variant, hay As String
+    Dim naziv As String, artID As String
     On Error GoTo EH
     mStep = "stanje"
 
+    Set mArtIds = CreateObject("Scripting.Dictionary")
+    mArtIds.CompareMode = vbTextCompare
     src = GetMagacinStanje()
     If Not IsArray(src) Then
         RedoviStanje = PrazanRezultat(StanjeKolone())
@@ -1138,12 +1286,21 @@ Private Function RedoviStanje(ByVal q As String) As Variant
 
     ReDim outA(1 To UBound(src, 1), 1 To 6)
     For i = 1 To UBound(src, 1)
-        hay = CStr(src(i, 1)) & "|" & CStr(src(i, 2)) & "|" & CStr(src(i, 3))
+        artID = Trim$(CStr(src(i, 1)))
+        naziv = CStr(src(i, 2))
+        ' Prikaz -> ID; isti naziv na dva artikla znaci DVOSMISLENO (prazno).
+        If mArtIds.Exists(naziv) Then
+            If CStr(mArtIds(naziv)) <> artID Then mArtIds(naziv) = ""
+        Else
+            mArtIds(naziv) = artID
+        End If
+        If Not AgCipStanje(filter, AgD(src(i, 7))) Then GoTo Sledeci
+        hay = artID & "|" & naziv & "|" & CStr(src(i, 3))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
-        outA(n, 1) = CStr(src(i, 2))
+        outA(n, 1) = naziv
         outA(n, 2) = CStr(src(i, 3))
         outA(n, 3) = CStr(src(i, 4))
         outA(n, 4) = AgD(src(i, 5))
@@ -1174,7 +1331,7 @@ Private Function PrometKolone() As Variant
 End Function
 
 ' GetMagacinPrometForGrid je 0-bazirano, 12 kolona (v. modAgrohemija).
-Private Function RedoviPromet(ByVal q As String) As Variant
+Private Function RedoviPromet(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim hay As String, zbir As Double
     On Error GoTo EH
@@ -1188,6 +1345,7 @@ Private Function RedoviPromet(ByVal q As String) As Variant
 
     ReDim outA(1 To UBound(src, 1) + 1, 1 To 9)
     For r = 0 To UBound(src, 1)
+        If Not AgCipPromet(filter, CStr(src(r, 2)), AgDatum(src(r, 1))) Then GoTo Sledeci
         hay = CStr(src(r, 2)) & "|" & CStr(src(r, 4)) & "|" & _
               CStr(src(r, 9)) & "|" & CStr(src(r, 10))
         If Len(q) > 0 Then
@@ -1225,12 +1383,14 @@ End Function
 
 ' GetAgroDugoviForGrid je 0-bazirano:
 '   0 KooperantID | 1 Kooperant | 2 Zaduzenje | 3 Odbitak | 4 Dug
-Private Function RedoviDugovi(ByVal q As String) As Variant
+Private Function RedoviDugovi(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
-    Dim hay As String, zbir As Double
+    Dim hay As String, zbir As Double, naziv As String, koopID As String
     On Error GoTo EH
     mStep = "dugovi"
 
+    Set mDugIds = CreateObject("Scripting.Dictionary")
+    mDugIds.CompareMode = vbTextCompare
     src = GetAgroDugoviForGrid()
     If Not IsArray(src) Then
         RedoviDugovi = PrazanRezultat(DugoviKolone())
@@ -1239,12 +1399,20 @@ Private Function RedoviDugovi(ByVal q As String) As Variant
 
     ReDim outA(1 To UBound(src, 1) + 1, 1 To 4)
     For r = 0 To UBound(src, 1)
-        hay = CStr(src(r, 0)) & "|" & CStr(src(r, 1))
+        koopID = Trim$(CStr(src(r, 0)))
+        naziv = CStr(src(r, 1))
+        If mDugIds.Exists(naziv) Then
+            If CStr(mDugIds(naziv)) <> koopID Then mDugIds(naziv) = ""
+        Else
+            mDugIds(naziv) = koopID
+        End If
+        If Not AgCipDugovi(filter, AgD(src(r, 4))) Then GoTo Sledeci
+        hay = koopID & "|" & naziv
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
-        outA(n, 1) = CStr(src(r, 1))
+        outA(n, 1) = naziv
         outA(n, 2) = AgD(src(r, 2))
         outA(n, 3) = AgD(src(r, 3))
         outA(n, 4) = AgD(src(r, 4))
@@ -1304,6 +1472,29 @@ End Function
 
 Public Function Scr_KorpaZbir() As Double
     Scr_KorpaZbir = modAgroUnos.AgroZbirKorpe(Korpa())
+End Function
+
+' Dodaj u korpu izdavanja bez zone. Zona u testu ne postoji, a korpa jeste
+' stanje EKRANA (Scr_Brojac je cita), pa se do nje mora nekako doci.
+Public Function Scr_KorpaTestDodaj(ByVal artikalID As String, _
+                                   ByVal brojPak As Double, _
+                                   ByVal parcelaID As String) As String
+    Dim fokus As String
+    mMod = AG_IZLAZ
+    Scr_KorpaTestDodaj = modAgroUnos.AgroDodajIzlaz(Korpa(), artikalID, _
+                                                    brojPak, parcelaID, fokus)
+End Function
+
+' Identitet iza prikazanog reda. Prazno znaci DVOSMISLENO ili nepoznato -- i to
+' je bas ono sto se meri: dvoklik na dvosmislen red ne sme da bira.
+Public Function Scr_DugIdTest(ByVal prikaz As String) As String
+    If mDugIds Is Nothing Then Exit Function
+    If mDugIds.Exists(prikaz) Then Scr_DugIdTest = CStr(mDugIds(prikaz))
+End Function
+
+Public Function Scr_ArtIdTest(ByVal prikaz As String) As String
+    If mArtIds Is Nothing Then Exit Function
+    If mArtIds.Exists(prikaz) Then Scr_ArtIdTest = CStr(mArtIds(prikaz))
 End Function
 
 Public Sub Scr_KorpaTestReset()

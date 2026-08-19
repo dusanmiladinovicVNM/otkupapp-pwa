@@ -64,7 +64,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "AGRO_MSG_PRIJEM_ZAVRSEN", "Prijem zavr" & ChrW(353) & "en:"
     UpsertRow lo, existing, "AGRO_MSG_POTVRDI_BESPLATAN_ULAZ", "Cena je 0. Proknjiziti besplatan/korektivni prijem (vrednost 0)?"
     UpsertRow lo, existing, "AGRO_MSG_GRESKA_PRI_CUVANJU_2", "Gre" & ChrW(353) & "ka pri " & ChrW(269) & "uvanju prijema, promene vra" & ChrW(263) & "ene:"
-    ' --- agrohemija: zajednicki unos (modAgroUnos, v6-ui-170) ---
+    ' --- agrohemija: zajednicki unos (modAgroUnos, v6-ui-171) ---
     UpsertRow lo, existing, "AGROU_ERR_NEMA_ARTIKLA", ChrW(10007) & " Izaberi artikal"
     UpsertRow lo, existing, "AGROU_ERR_PAKOVANJE", ChrW(10007) & " Artikal nema definisano Pakovanje. " & _
               "Popuni 'Pakovanje' u tblArtikli pre kori" & ChrW(353) & ChrW(263) & "enja."
@@ -1057,7 +1057,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDK_IZNOS", "IZNOS RSD"
     UpsertRow lo, existing, "OTKUI_HD_OM", "OTKUPNO MESTO"
     UpsertRow lo, existing, "OTKUI_HDL_STARA", "STARA OTPREMNICA"
-    ' --- ekran Agrohemija (Faza E/15, v6-ui-170) ---
+    ' --- ekran Agrohemija (Faza E/15, v6-ui-171) ---
     UpsertRow lo, existing, "OTKUI_SCRAG_SUB", "Magacin " & ChrW(8212) & " izdavanje kooperantu i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "OTKUI_SCRAG_LISTA", "Korpa"
     UpsertRow lo, existing, "OTKUI_SCRAG_CAP", "Agrohemija"
@@ -1088,6 +1088,15 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_AG_POC_DUG", "Po" & ChrW(269) & "etni dug"
     UpsertRow lo, existing, "OTKUI_BTN_AG_OCISTI", "Isprazni korpu"
     UpsertRow lo, existing, "OTKUI_BTN_AG_UKLONI", "Ukloni stavku"
+    UpsertRow lo, existing, "OTKUI_CIPA_IMA", "Ima na stanju"
+    UpsertRow lo, existing, "OTKUI_CIPA_NEMA", "Bez zaliha"
+    UpsertRow lo, existing, "OTKUI_CIPA_ULAZ", "Ulazi"
+    UpsertRow lo, existing, "OTKUI_CIPA_IZLAZ", "Izlazi"
+    UpsertRow lo, existing, "OTKUI_CIPA_GODINA", "Ova godina"
+    UpsertRow lo, existing, "OTKUI_CIPA_DUGUJU", "Duguju"
+    UpsertRow lo, existing, "OTKUI_ERR_AG_DVOSMISLEN", ChrW(10007) & " Dva reda nose isti naziv " & ChrW(8212) & " izaberi ga u listi, ne dvoklikom"
+    UpsertRow lo, existing, "OTKUI_MSG_AG_UZET_KOOP", ChrW(10003) & " Izdavanje za:"
+    UpsertRow lo, existing, "OTKUI_MSG_AG_UZET_ART", ChrW(10003) & " Izabran artikal:"
     UpsertRow lo, existing, "OTKUI_MSG_AG_U_KORPI", ChrW(10003) & " Stavka u korpi. Ukupno:"
     UpsertRow lo, existing, "OTKUI_MSG_AG_UKLONJENO", ChrW(10003) & " Stavka uklonjena iz korpe"
     UpsertRow lo, existing, "OTKUI_MSG_AG_UPISANO", ChrW(10003) & " Upisano:"

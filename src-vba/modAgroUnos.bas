@@ -42,7 +42,7 @@ Attribute VB_Name = "modAgroUnos"
 '=====================================================================
 Option Explicit
 
-Public Const AGROUNOS_BUILD As String = "v6-ui-170"
+Public Const AGROUNOS_BUILD As String = "v6-ui-171"
 
 ' Odustajanje operatera. Ista konvencija kao Scr_Save u ljusci: jedan razmak
 ' znaci "nista se nije desilo, ne prikazuj gresku".

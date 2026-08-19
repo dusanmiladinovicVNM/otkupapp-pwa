@@ -744,7 +744,7 @@ Private Function GetArtikalStanje(ByVal artikalID As String) As Double
 End Function
 
 '=====================================================================
-' CITACI ZA MREZU NOVOG UI-JA (v6-ui-170)
+' CITACI ZA MREZU NOVOG UI-JA (v6-ui-171)
 '
 ' Ekran ne cita tabele sam -- isti dogovor po kome modScrPalete uzima redove
 ' iz modPaletniList.GetPaleteForGrid. Nizovi su 0-BAZIRANI, kao i ostali

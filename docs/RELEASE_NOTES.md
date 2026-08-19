@@ -4442,3 +4442,66 @@ Sabotaže: `bazen-cuti-visak` (*prekoračenje se prijavljuje*) i `bazen-odseca-n
 
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
 **ZELENO (81)** · pun set **ZELENO** · `COMPILE` — **ostaje na operateru**.
+
+---
+
+## v2.59.0 — `v6-ui-171` · Agrohemija na novom UI-ju (Faza E, stavka 15)
+
+Prvi ekran **Faze E**. `frmAgrohemija` ostaje operativna i **nepromenjena** —
+dve kopije poslovne logike postoje namerno, kao kod `frmOtkup` i `frmDokumenta`.
+
+### Šta je operater dobio
+
+Dve legacy sekcije (izlaz i ulaz) bile su dve forme jedna pored druge. Ljuska ima
+jednu zonu i jednu mrežu, pa su postale **prekidač režima**: IZDAVANJE / PRIJEM.
+Obe korpe žive istovremeno — prelazak režima ne prazni ništa.
+
+Mreža je dobila **četiri liste kojih legacy nema**: Korpa · Stanje magacina ·
+Promet · Dug po kooperantu. Legacy je za isto morao u Izveštaje.
+
+- **Čipovi**: Stanje (Ima na stanju · Bez zaliha), Promet (Ulazi · Izlazi · Ova
+  godina), Dugovi (Duguju).
+- **Brojač u meniju** broji korpu — jedino što na ovom ekranu čeka operatera.
+  Bez njega neproknjižena korpa nestane bez traga čim se pređe na drugi ekran.
+- **Dvoklik** preuzima red u unos: iz Dugova kooperanta (i prebacuje u
+  IZDAVANJE), iz Stanja artikal.
+- **„Ukloni stavku" i „Isprazni korpu"** — legacy pogrešnu stavku nije umeo da
+  izbaci, jedini izlaz je bio zatvaranje forme.
+
+### Dvoklik bira po identitetu, ne po tekstu reda
+
+Lista pokazuje **ime**, a bira se **kooperant**. Dva kooperanta istog imena daju
+dvosmislen prikaz i tada dvoklik **odbija** da bira umesto da pogodi — isto
+pravilo kao „dvosmislen broj → MANUAL" u storno okviru. Pogađanje bi ovde izdalo
+robu pogrešnom čoveku. Fixture je dobio par istoimenih baš da ta tvrdnja ima nad
+čim da padne.
+
+### Poslovna logika je izašla iz forme
+
+`modAgroUnos` (novo) drži korpu, obe kapije stanja i transakciju — isti oblik kao
+`modOtkupUnos` (F1), `modDokUnos` (F2–F4), `modNovacUnos` (F5–F7):
+
+- kapija pri dodavanju **broji i ono što je već u korpi** — ista roba se ne može
+  dodati dva puta preko stanja;
+- kapija pred upis **agregira po artiklu preko cele korpe** — stanje se moglo
+  promeniti između dodavanja i upisa (drugi operater, sync). Bez nje upis pukne
+  na pola petlje i vrati se rollback-om, a operater dobije `4301` umesto rečenice;
+- invarijanta nad `Pakovanje` svedena je iz **tri kopije u formi** na jednu.
+
+Smart doza se zaokružuje **nagore**, na cela pakovanja — pola pakovanja se ne
+izdaje.
+
+### Ljuska se ovim ne menja
+
+Ekran je **drugi korisnik** ugovora koji je Faza C otvorila (`NewFieldG`,
+`LayoutFieldInner`, `chg:`, `FindCombo` nad zonom, `dbl:`, `Scr_Cipovi`,
+`Scr_Brojac`). Diff nad `modOtkupUI.bas` je **nula linija** — namerno: dve
+fabrike polja znače dva izgleda istog polja.
+
+### Šta NIJE prošlo
+
+**Suite nije puštena.** Ceo rad je nastao u Linux sesiji bez Excela, pa su
+testovi 81–86 i devet sabotaža **napisani ali neizvršeni**. Prošlo je samo ono
+što radi bez Excela: `vba_check` (+ `--self-test`), `who_writes --check`,
+`run_vba --self-test`, i provera da svaka sabotaža pogađa tačno jedno mesto i
+uredno se vraća. **Compile i smoke nisu prošli nijednom** — ostaju operateru.

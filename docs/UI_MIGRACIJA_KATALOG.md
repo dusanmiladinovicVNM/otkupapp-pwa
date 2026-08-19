@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-170`.
+Stanje na dan `v6-ui-171`.
 
 ---
 
@@ -502,7 +502,7 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 **Faza D je time ZATVORENA.**
 
 ### Faza E — ostali ekrani
-15. ~~Agrohemija~~ **URAĐENO** (v6-ui-170, `modScrAgro`) — v. §7.
+15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, `modScrAgro`) — v. §7.
     Ostaju: Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
     svaki po istom obrascu.
 
@@ -519,7 +519,7 @@ Duplirana logika se ne piše ni u jednom slučaju.
 
 ---
 
-## 7. Agrohemija — šta je preneto (v6-ui-170)
+## 7. Agrohemija — šta je preneto (v6-ui-171)
 
 Prvi ekran **Faze E**. Zona nosi celu unosnu formu — što je moguće tek od
 `v6-ui-159`, kad je Faza C/10 (unos prerade na Paletama) otvorila polja i
@@ -563,9 +563,28 @@ da izmišlja svoju varijantu.
 Zbog toga kombo u zoni **mora** biti polje (okvir `nm` + kontrola `nmT`), a ne
 gola kontrola — panel za izbor traži baš taj oblik.
 
-Čipove (`Scr_Cipovi`) i brojač u meniju (`Scr_Brojac`) ovaj ekran ne prijavljuje:
-liste se sužavaju pretragom, a agrohemija nema „zaostatak" koji čeka operatera
-— za razliku od Oporavka, gde brojač i postoji.
+Ekran prijavljuje i **čipove**, **brojač** i **dvoklik** — sve tri kuke koje je
+ugovor dobio uz Fazu C:
+
+| Lista | Čipovi (`Scr_Cipovi`) |
+|---|---|
+| Korpa | — (nekoliko upravo unetih redova; tu se ne traži nego se gleda) |
+| Stanje | Sve · Ima na stanju · Bez zaliha |
+| Promet | Sve · Ulazi · Izlazi · Ova godina |
+| Dugovi | Sve · Duguju |
+
+`Scr_Brojac` broji **korpu** — jedino što na ovom ekranu čeka operatera; sve
+ostalo je već u tabelama. Bez te brojke neproknjižena korpa nestane bez traga
+čim se pređe na drugi ekran.
+
+`dbl:<red>` preuzima red u unos: iz **Dugova** kooperanta (i prebacuje u
+IZDAVANJE — dug se izdaje, ne prima), iz **Stanja** artikal. Jedan potez umesto
+tri (zapamti ime → pređi na korpu → nađi ga u padajućoj listi).
+
+**Dvoklik bira po identitetu, ne po tekstu reda.** Lista pokazuje ime, a bira se
+kooperant; dva kooperanta istog imena daju dvosmislen prikaz i tada dvoklik
+**odbija** da bira umesto da pogodi — isto pravilo kao „dvosmislen broj →
+MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.3 Šta je namerno drugačije od legacy-ja
 
@@ -604,10 +623,27 @@ ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 | `T_Agro_KapijaStanjaBrojiKorpu` | kapija broji korpu; kapija pred upis agregira po artiklu | `agro-korpa-se-ne-broji`, `agro-agregat-po-redu` |
 | `T_Agro_SmartDozaZaokruzujeNagore` | doza → cela pakovanja, nagore | `agro-doza-nanize` |
 | `T_ZonaAgro_PoljaPostojeIPrateRezim` | sve kontrole zone postoje; prekidač režima pali i **gasi** prava polja | `agro-rezim-ne-gasi-polja` |
+| `T_Agro_CipoviSuzavajuListu` | ugovor čipa (`kljuc:KATALOG:sirina`) i pravilo svakog | `agro-cip-ne-suzava` |
+| `T_Agro_BrojacIDvoklikPoIdentitetu` | brojač vidi korpu; dvosmislen prikaz nosi **prazan** identitet | `agro-brojac-ne-vidi-korpu`, `agro-dvosmislen-prvi-pobedjuje` |
 
-> **Suite nije puštena.** `run_vba.py` traži Windows + Excel; ova izmena je
-> nastala u web sesiji, pa su testovi 81–84 i pet sabotaža **napisani ali
-> neizvršeni**. Prošlo je samo ono što radi bez Excela: `vba_check` (+ self-test),
-> `who_writes --check`, `run_vba --self-test` i provera da svaka sabotaža pogađa
-> tačno jedno mesto i uredno se vraća. Compile kapija (`Alt+F11 → Debug →
-> Compile VBAProject`) i `run_vba.py --suite RunAllTests` ostaju za Windows.
+Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
+`T_Agro_UgovorEkrana`, sa sabotažom `agro-cipova-preko-bazena`. Višak se inače
+**tiho odseca** — operater vidi ekran kome fali dugme, bez ijedne poruke.
+
+### 7.6 Otvoreno
+
+- **Suite nije puštena.** `run_vba.py` traži Windows + Excel; ceo rad je nastao
+  u Linux sesiji, pa su testovi 81–86 i devet sabotaža **napisani ali
+  neizvršeni**. Prošlo je samo ono što radi bez Excela: `vba_check`
+  (+ `--self-test`), `who_writes --check`, `run_vba --self-test`, i provera da
+  svaka sabotaža pogađa tačno jedno mesto i uredno se vraća. **Compile**
+  (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim podacima ostaju
+  operateru — nisu prošli nijednom.
+- **Sudar brojeva testova.** Grana `claude/bazeni-ljuske` (nemerge-ovana, 1
+  commit iznad main-a) takođe dodaje **test 81**. Numeracija ovde ide 81–86 jer
+  je to prvi slobodan broj iznad main-ovih 80; rupa nije opcija, pošto `RunOne`
+  na nepostojeći `Case` tiho prijavi **OK sa praznim imenom** — fantomski
+  prolaz. Ko merge-uje drugi, pomera za jedan.
+- **`MAX_COLS` je `Private`** na ovoj bazi, pa granicu kolona test tvrdi
+  literalom `14` uz komentar. `claude/bazeni-ljuske` ga čini javnim zajedno sa
+  `BazenStaje`; kad to uđe u main, literal se menja konstantom.
