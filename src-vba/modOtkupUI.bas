@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-157"
+Public Const OTKUI_BUILD   As String = "v6-ui-158"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -3590,6 +3590,19 @@ Private Function OperaterText() As String
 End Function
 
 Private Sub UiChange(ByVal tag As String)
+    ' KONTROLE UGOVORNOG EKRANA IDU EKRANU. Sve ispod ovog reda poznaje polja
+    ' UNOSNOG ekrana po imenu (fgKgIT, cbKupac, fgBrZbirT...) -- to je i tacno,
+    ' jer su ta polja njegova. Ali ekran koji ima SVOJA polja tu nema sta da
+    ' trazi: ljuska ne zna sta ona znace, a ne sme ni da sazna.
+    '
+    ' Klik je ovaj put vec resio (grana 'scr' u UiClick); promena teksta nije
+    ' imala svoju, pa ekran sa poljem za unos nije mogao ni da postoji. To je
+    ' bas ono sto katalog vodi kao 'prosledjivanje dogadjaja sopstvenih
+    ' kontrola ekranu' (Faza C, stavka 10).
+    If Left$(tag, 3) = "scr" Then
+        ScrAct "chg:" & tag
+        Exit Sub
+    End If
     ' Promene koje pravi FillZbirneCombo (Clear + vracanje teksta) nisu unos
     ' operatera - ne diraju ni zapamcenu zbirnu ni "dokument je menjan".
     If mZbirnaFill And tag = "fgBrZbirT" Then Exit Sub
@@ -3857,7 +3870,13 @@ Private Sub LayoutChips(frm As Object)
 End Sub
 
 ' polje: label + shell + kontrola uvucena za INPUT_PAD (+ jedinica / strelica)
-Private Sub NewFieldG(parent As Object, nm As String, cap As String, kind As String, _
+' Polje unosa (naslov + okvir + TextBox ili ComboBox + jedinica). JAVNO je da bi
+' ga ugovorni ekran mogao koristiti u svojoj zoni: bez toga bi svaki ekran sa
+' unosom crtao svoju verziju istog polja, pa bi se razisli u izgledu i ponasanju.
+'
+' Kontrole se OZICAVAJU ovde (WireInput), pa promena stize kroz UiChange. Ekran
+' im daje imena sa prefiksom 'scr' da bi ta promena dosla NJEMU, a ne ljusci.
+Public Sub NewFieldG(parent As Object, nm As String, cap As String, kind As String, _
                       unit As String, span As Long, isNum As Boolean, isFocus As Boolean, _
                       ByVal grp As String)
     Dim fr As Object
