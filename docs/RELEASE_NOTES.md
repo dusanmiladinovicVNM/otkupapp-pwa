@@ -4500,12 +4500,12 @@ fabrike polja znače dva izgleda istog polja.
 
 ### Verifikacija
 
-Testovi **82–87** (numeracija je pomerena za jedan: `v6-ui-170` je uzeo 81).
+Testovi **82–88** (numeracija je pomerena za jedan: `v6-ui-170` je uzeo 81).
 Suite je **prvi put puštena na ovom rebase-u**, na mašini sa Excelom:
 
 `vba_check` čisto (193) · self-test (47) · `who_writes` ažuran ·
-`RunAllTests` **ZELENO (87)** · pun set **ZELENO** ·
-svih **devet** agro sabotaža obara **imenovani** test.
+`RunAllTests` **ZELENO (88)** · pun set **ZELENO** ·
+svih **deset** agro sabotaža obara **imenovani** test.
 
 **Prvo puštanje je oborilo dva testa**, oba pisana nad fixture-om kakav nije —
 produkcioni kod je bio ispravan u oba slučaja:
@@ -4517,6 +4517,18 @@ produkcioni kod je bio ispravan u oba slučaja:
 
 Obe greške bi pale na prvom puštanju, a nijedna se ne vidi čitanjem — to je
 cena testa koji je napisan bez izvršavanja.
+
+### Odbitak duga se računa na dva mesta, pa se sada i poredi
+
+`GetAgroAbzugMapa` je brza kopija pravila iz `GetAgroAbzug` — jedan prolaz
+umesto `O(n·m)`. Obe su **žive u istoj funkciji**: mapu zove lista dugova,
+pojedinačnu keš ekrana. Dve kopije istog pravila se tiho raziđu, i ista
+aplikacija na dva mesta pokaže **različit dug istom čoveku**.
+
+Fixture je zato dobio `AgroAbzug` redove (dva za istog kooperanta, jedan
+**storniran**, jedan **drugog tipa**), a `T_Agro_AbzugMapaPratiPojedinacni`
+tvrdi slaganje nad **svakim** kooperantom koga mapa zna — uz tačne zbirove, da
+ih ne obori isti kvar na obe strane.
 
 **Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
 podacima **ostaju operateru** — nisu prošli nijednom.

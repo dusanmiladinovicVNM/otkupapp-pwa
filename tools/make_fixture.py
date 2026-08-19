@@ -172,6 +172,9 @@ ARTIKAL_CENA = 500
 # ULAZ 20 l, pa IZLAZ 5 l kooperantu KOOP-TEST-1 -> stanje 15, dug 2500.
 ARTIKAL_STANJE = 15
 AGRO_DUG_KOOP1 = 2500
+# Odbitak duga: 300 + 200 (storniranih 999 i tudji tip 777 se NE broje).
+AGRO_ABZUG_KOOP1 = 500
+AGRO_ABZUG_KOOP2 = 100
 
 # Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
 # RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
@@ -436,6 +439,33 @@ SEED = {
         {"NovacID": "NOV-TEST-D2", "BrojDokumenta": NOVAC_DUPLI_BROJ,
          "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 2000,
          "KooperantID": "KOOP-TEST-2"},
+        # ODBITAK AGRO DUGA. Pravilo zivi u DVE implementacije: GetAgroAbzug
+        # (po kooperantu, zove ga kes ekrana) i GetAgroAbzugMapa (jednim
+        # prolazom, zove je lista dugova). Dok u fixture-u nije bilo nijednog
+        # AgroAbzug reda, obe su vracale nulu i tvrdnja da se slazu nije imala
+        # nad cim da padne.
+        #
+        # DVA reda za KOOP-TEST-1 (300 + 200 = 500) -- da se vidi da se
+        # SABIRA, a ne da pobedjuje poslednji.
+        {"NovacID": "NOV-TEST-AB1", "BrojDokumenta": "AB-1",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 300,
+         "KooperantID": "KOOP-TEST-1"},
+        {"NovacID": "NOV-TEST-AB2", "BrojDokumenta": "AB-2",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 200,
+         "KooperantID": "KOOP-TEST-1"},
+        # Drugi kooperant -- mapa mora da razdvaja, ne da sve slije u jedan zbir.
+        {"NovacID": "NOV-TEST-AB3", "BrojDokumenta": "AB-3",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 100,
+         "KooperantID": "KOOP-TEST-2"},
+        # STORNIRAN odbitak: obe implementacije ga izuzimaju (ExcludeStornirano).
+        # Da jedna prestane, zbir KOOP-TEST-1 postaje 1499 i test pukne.
+        {"NovacID": "NOV-TEST-AB4", "BrojDokumenta": "AB-4",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 999,
+         "KooperantID": "KOOP-TEST-1", "Stornirano": "Da"},
+        # Uplata DRUGOG tipa istom kooperantu -- ni jedna ni druga je ne broje.
+        {"NovacID": "NOV-TEST-AB5", "BrojDokumenta": "AB-5",
+         "Datum": FIXTURE_DATE, "Tip": "UplataKoop", "Uplata": 777,
+         "KooperantID": "KOOP-TEST-1"},
     ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},

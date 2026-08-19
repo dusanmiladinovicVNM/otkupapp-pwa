@@ -613,7 +613,7 @@ MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.5 Verifikacija
 
-Testovi 82–87 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+Testovi 82–88 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
 u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
 ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 
@@ -625,6 +625,7 @@ ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 | `T_ZonaAgro_PoljaPostojeIPrateRezim` | sve kontrole zone postoje; prekidač režima pali i **gasi** prava polja | `agro-rezim-ne-gasi-polja` |
 | `T_Agro_CipoviSuzavajuListu` | ugovor čipa (`kljuc:KATALOG:sirina`) i pravilo svakog | `agro-cip-ne-suzava` |
 | `T_Agro_BrojacIDvoklikPoIdentitetu` | brojač vidi korpu; dvosmislen prikaz nosi **prazan** identitet | `agro-brojac-ne-vidi-korpu`, `agro-dvosmislen-prvi-pobedjuje` |
+| `T_Agro_AbzugMapaPratiPojedinacni` | mapa odbitaka i pojedinačni račun daju **isto**, nad svim kooperantima | `agro-abzug-mapa-ne-sabira` |
 
 Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 `T_Agro_UgovorEkrana`, sa sabotažom `agro-cipova-preko-bazena`. Višak se inače
@@ -633,9 +634,9 @@ Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 ### 7.6 Otvoreno
 
 - **Suite je puštena i zelena.** Prvo izvršavanje je bilo na rebase-u na
-  `main` (`v6-ui-171`), na mašini sa Excelom. `RunAllTests` **ZELENO (87)**,
+  `main` (`v6-ui-171`), na mašini sa Excelom. `RunAllTests` **ZELENO (88)**,
   pun set **ZELENO** (72 · 189 · 35 · 181 · 97 · 336 · 25), svih **devet**
-  agro sabotaža obara **imenovani** test i uredno se vraća.
+  agro sabotaža (sada **deset**) obara **imenovani** test i uredno se vraća.
 - **Prvo puštanje je oborilo dva testa** — oba pisana nad fixture-om kakav
   nije, produkcioni kod je bio ispravan:
   - `T_Agro_KapijaStanjaBrojiKorpu` je kontrolni izlaz upisivao sa **praznom
@@ -651,10 +652,10 @@ Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
   puštanju, a nijedna se ne vidi čitanjem.
 - **Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
   podacima **ostaju operateru** — nisu prošli nijednom.
-- **Dupla implementacija odbitka.** `modNovac.GetAgroAbzugMapa` je druga kopija
-  pravila iz `GetAgroAbzug` (postoji zbog brzine: `O(n)` umesto `O(n·m)`).
-  **Nijedan test ih ne veže**, a fixture nema nijedan `AgroAbzug` red — pa bi
-  test ekvivalencije danas bio placebo. Kad se doda tip uplate ili promeni
-  izuzimanje storniranih u jednoj, lista dugova i kartica kooperanta počnu da
-  pokazuju **različit dug**, bez ijednog crvenog testa. Zatvara se sejanjem
-  `AgroAbzug` redova u fixture i tvrdnjom nad **svim** kooperantima mape.
+- **Dupla implementacija odbitka je ZATVORENA.** `GetAgroAbzugMapa` ostaje
+  brza kopija pravila iz `GetAgroAbzug` — obe su žive u istoj funkciji (mapu
+  zove lista dugova, pojedinačnu keš ekrana), pa se mogu razići. Fixture je
+  dobio pet `AgroAbzug` redova (dva za istog kooperanta, jedan storniran, jedan
+  drugog tipa), a `T_Agro_AbzugMapaPratiPojedinacni` tvrdi slaganje nad **svakim**
+  kooperantom koga mapa zna — i tačne zbirove, da ih ne obori isti kvar na obe
+  strane. Sabotaža `agro-abzug-mapa-ne-sabira` (500 → 200).

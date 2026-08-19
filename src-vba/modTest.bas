@@ -41,6 +41,9 @@ Private Const FX_ZBIRNA_MIRNA As String = "ZB-TEST-4"
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
+Private Const FX_KOOPERANT3 As String = "KOOP-TEST-3"   ' bez agro odbitka
+Private Const FX_ABZUG_KOOP1 As Double = 500   ' 300 + 200; 999 je storniran
+Private Const FX_ABZUG_KOOP2 As Double = 100
 Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
 Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
 Private Const FX_VOZAC As String = "VOZ-TEST-1"
@@ -234,6 +237,7 @@ Public Sub RunAllTests()
     RunOne 85
     RunOne 86
     RunOne 87
+    RunOne 88
 
     SetTestMode prevMode
     WriteResultFile
@@ -353,6 +357,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 85: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
         Case 86: TestName = "T_Agro_CipoviSuzavajuListu"
         Case 87: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
+        Case 88: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -448,6 +453,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 85: T_ZonaAgro_PoljaPostojeIPrateRezim
         Case 86: T_Agro_CipoviSuzavajuListu
         Case 87: T_Agro_BrojacIDvoklikPoIdentitetu
+        Case 88: T_Agro_AbzugMapaPratiPojedinacni
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4441,6 +4447,57 @@ Private Sub T_Agro_BrojacIDvoklikPoIdentitetu()
 
     modScrAgro.Scr_ListaTestSet "KORPA"
     modScrAgro.Scr_KorpaTestReset
+End Sub
+
+' ============================================================
+' 88. Mapa odbitaka i pojedinacni racun daju ISTO
+' ============================================================
+' GetAgroAbzugMapa je DRUGA implementacija pravila koje vec zivi u
+' GetAgroAbzug. Postoji samo zbog brzine (lista dugova bi inace citala celu
+' tblNovac po redu liste), ali obe su ZIVE u istoj funkciji: mapu zove lista
+' dugova (GetAgroDugoviForGrid), a pojedinacnu kes ekrana (modScrAgro).
+'
+' Dve kopije istog pravila se tiho razilaze. Dodas tip uplate u jednu ili
+' promenis izuzimanje storniranih, i ista aplikacija na dva mesta pokazuje
+' RAZLICIT dug istom coveku -- bez ijednog crvenog testa.
+Private Sub T_Agro_AbzugMapaPratiPojedinacni()
+    Dim mapa As Object, k As Variant, n As Long
+
+    Set mapa = modNovac.GetAgroAbzugMapa()
+    AssertEq (mapa Is Nothing), False, "mapa odbitaka postoji"
+
+    ' PREDUSLOV: mapa NIJE prazna. Bez ovoga bi petlja ispod prosla nula puta
+    ' i test bi bio zelen ne merivsi nista -- tacno oblik placeba.
+    AssertEq (mapa.count >= 2), True, _
+             "PREDUSLOV: fixture ima odbitke za bar dva kooperanta"
+
+    ' Tacne brojke, ne samo slaganje: 300 + 200 = 500. Storniranih 999 i
+    ' uplata drugog tipa (777) se NE broje. Da se dve implementacije slome
+    ' na ISTI nacin, puko poredjenje bi i dalje bilo zeleno.
+    AssertEq CDbl(mapa(FX_KOOPERANT)), FX_ABZUG_KOOP1, _
+             "mapa SABIRA odbitke i izuzima stornirane"
+    AssertEq modNovac.GetAgroAbzug(FX_KOOPERANT), FX_ABZUG_KOOP1, _
+             "pojedinacni racun daje isti zbir"
+    AssertEq CDbl(mapa(FX_KOOPERANT2)), FX_ABZUG_KOOP2, _
+             "mapa razdvaja kooperante -- ne slije sve u jedan zbir"
+
+    ' NAJVAZNIJE: slaganje nad SVAKIM kooperantom koga mapa zna, ne samo nad
+    ' dva imenovana. Kad neko sutra doda tip uplate u jednu implementaciju,
+    ' ovo je tvrdnja koja pukne.
+    For Each k In mapa.keys
+        AssertEq CDbl(mapa(CStr(k))), modNovac.GetAgroAbzug(CStr(k)), _
+                 "odbitak za " & CStr(k) & " isti u mapi i pojedinacno"
+        n = n + 1
+    Next k
+    AssertEq (n >= 2), True, "petlja je stvarno prosla kroz kooperante"
+
+    ' Kooperant BEZ ijednog odbitka: mapa ga ne zna, pojedinacni daje nulu.
+    ' Odsustvo kljuca i nula moraju da znace isto, inace lista dugova za
+    ' njega prikaze prazno umesto 0.
+    AssertEq mapa.Exists(FX_KOOPERANT3), False, _
+             "kooperant bez odbitka nije u mapi"
+    AssertEq modNovac.GetAgroAbzug(FX_KOOPERANT3), 0, _
+             "pojedinacni racun mu daje nulu -- isto znacenje"
 End Sub
 
 ' Ugasi magacin red koji je test napravio. Vracanje fixture-a, ne poslovna

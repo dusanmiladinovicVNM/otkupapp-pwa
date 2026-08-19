@@ -1483,6 +1483,17 @@ SABOTAZE = {
         "T_Agro_UgovorEkrana",
         "ekran ne trazi vise cipova nego sto bazen ljuske ima",
     ),
+    # Mapa odbitaka sme da bude BRZA kopija GetAgroAbzug, ali ne i DRUGACIJA.
+    # Ovde prestaje da SABIRA i pamti poslednji red -- tako se dve kopije
+    # istog pravila i razilaze u praksi: lista dugova i kes ekrana pocnu da
+    # pokazuju razlicit dug istom coveku.
+    "agro-abzug-mapa-ne-sabira": (
+        "modNovac.bas",
+        "                    d(koopID) = CDbl(d(koopID)) + CDbl(data(i, colUplata))\n",
+        "                    d(koopID) = CDbl(data(i, colUplata))   ' SABOTAZA: poslednji pobedjuje\n",
+        "T_Agro_AbzugMapaPratiPojedinacni",
+        "mapa odbitaka SABIRA redove, isto kao pojedinacni racun",
+    ),
     "agro-doza-nanize": (
         "modAgroUnos.bas",
         "    r(\"brojPak\") = CLng(-Int(-dozaKg / pak))\n",
