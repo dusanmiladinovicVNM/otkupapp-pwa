@@ -211,6 +211,9 @@ Public Sub RunAllTests()
     RunOne 75
     RunOne 76
     RunOne 77
+    RunOne 78
+    RunOne 79
+    RunOne 80
 
     SetTestMode prevMode
     WriteResultFile
@@ -320,6 +323,9 @@ Private Function TestName(ByVal idx As Long) As String
         Case 75: TestName = "T_StornoBlokovi_PodrazumevanoNijedan"
         Case 76: TestName = "T_NavBrojac_SamoEkranKojiBroji"
         Case 77: TestName = "T_NovaPrerada_IzborINeto"
+        Case 78: TestName = "T_PaletaDvoklik_OtvaraStavke"
+        Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
+        Case 80: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -405,6 +411,9 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 75: T_StornoBlokovi_PodrazumevanoNijedan
         Case 76: T_NavBrojac_SamoEkranKojiBroji
         Case 77: T_NovaPrerada_IzborINeto
+        Case 78: T_PaletaDvoklik_OtvaraStavke
+        Case 79: T_CipoviEkrana_UgovorIFilter
+        Case 80: T_ZonaPrerade_SvaPoljaVidljiva
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -566,7 +575,7 @@ Private Sub T_ParcelaID_IzSkriveneKolone()
     fr.Visible = False
     AssertEq modOtkupUI.ParcelaID(), "", "sakriveno polje ne salje parcelu u dokument"
 
-    ReleaseOtkupUIForm f
+    Unload f
 End Sub
 
 ' UGOVOR ClearForm-a, isti kao frmOtkup.ClearOtkupFields (.claude/rules/
@@ -633,7 +642,7 @@ Private Sub T_ClearForm_Ugovor()
     AssertEq Polje(zf, "fgDatum"), danas, _
              "bez aktivne otpremnice datum se vraca na danas"
 
-    ReleaseOtkupUIForm f
+    Unload f
 End Sub
 
 ' ============================================================
@@ -3652,6 +3661,225 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
 End Sub
 
 ' ============================================================
+' 80. Zona liste 'Nova prerada' ima SVA polja, i sva su vidljiva.
+'
+' Operater je prijavio zonu u kojoj se vide samo prvo polje (Bruto) i poslednje
+' (Tip kese), bez bele podloge, naslova, NETO i dugmeta. Raspored je bio tacan --
+' oba vidljiva polja su stajala BAS gde ih Scr_Layout salje -- pa kvar nije u
+' merama nego u tome sto ostale kontrole ne postoje ili se ne pale.
+'
+' Zona se gradi nad obicnim Frame-om, pa se ceo taj put moze izmeriti bez .Show.
+Private Sub T_ZonaPrerade_SvaPoljaVidljiva()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, neupaljene As String, neugasene As String
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProba", True)
+    z.width = 1200: z.Height = 300
+    modScrPalete.Scr_Build z
+
+    ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a. Dok forma zivi, njena
+    ' masinerija obrise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao
+    ' kao 'greska bez opisa' -- test bi padao tacno, a ne bi umeo da kaze zasto.
+    ' Uz to spisak imena kaze KOJE kontrole fale, a ne samo da nesto fali.
+    For Each nm In Array("preBg", "preCap", "preUlazL", "preUlazV", _
+                         "preNetoL", "preNetoV", "preIzbor", _
+                         "scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "NOVAPRERADA"
+    modScrPalete.Scr_Layout z, 1200, 300
+    For Each nm In Array("preBg", "preCap", "preUlazL", "preUlazV", _
+                         "preNetoL", "preNetoV", "preIzbor", _
+                         "scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
+        If Not VidljivaKontrola(z, CStr(nm)) Then _
+            neupaljene = neupaljene & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    modScrPalete.Scr_Layout z, 1200, 300
+    For Each nm In Array("preBg", "preCap", "scrPreBruto", "scrPreTipKes")
+        If VidljivaKontrola(z, CStr(nm)) Then _
+            neugasene = neugasene & " " & CStr(nm)
+    Next nm
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    Unload f
+
+    ' 1) Sve kontrole panela POSTOJE. Kontrola koje nema Scr_Layout tiho
+    ' preskoci, pa operater vidi rupu na mestu polja.
+    AssertEq nema, "", "panel za unos prerade nema nijednu kontrolu manje"
+
+    ' 2) Na listi za unos su SVE upaljene -- ovo je bas ono sto je operater
+    ' prijavio kao zonu u kojoj se vide samo prvo i poslednje polje.
+    AssertEq neupaljene, "", "na listi za unos je upaljen ceo panel"
+
+    ' 3) Na listama pregleda su ugasene -- inace bi polja unosa visila nad
+    ' listom koja se samo cita.
+    AssertEq neugasene, "", "u pregledu panel ostaje ugasen"
+End Sub
+
+' Postoji li kontrola pod tim imenom. Bez ovoga bi test morao da hvata gresku
+' na svakom mestu gde pita.
+Private Function KontrolaPostoji(z As Object, ByVal nm As String) As Boolean
+    Dim c As Object
+    On Error Resume Next
+    Set c = z.Controls(nm)
+    KontrolaPostoji = Not (c Is Nothing)
+    Err.Clear
+End Function
+
+' Vidljivost kontrole; kontrola koje NEMA nije vidljiva.
+Private Function VidljivaKontrola(z As Object, ByVal nm As String) As Boolean
+    On Error Resume Next
+    VidljivaKontrola = z.Controls(nm).Visible
+    Err.Clear
+End Function
+
+' 79. Cipovi pripadaju EKRANU, ne ljusci: ugovor, bazen i stvarno suzavanje.
+'
+' Ljuska je do sada znala jedan ekran po imenu -- 'ako je lista OTPREMNICE,
+' pokazi chipSve i chipOtvorene'. Sada svaki ekran prijavi svoje cipove, a
+' ljuska pozajmljuje slotove svog bazena. Test meri obe strane: opis koji ekran
+' daje i pravilo po kom se lista suzava.
+Private Sub T_CipoviEkrana_UgovorIFilter()
+    Dim spec As String, e As Variant, p As Variant, n As Long
+    Dim d As Variant, uk As Long, otv As Long, zat As Long, i As Long
+
+    ' 1) UGOVOR: pet cipova nad listom paleta, svaki kljuc:KATALOG:sirina, i
+    ' svaki natpis postoji u katalogu -- cip bez natpisa je prazno dugme.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    spec = modScrPalete.Scr_Cipovi()
+    AssertEq (Len(spec) > 0), True, "lista paleta prijavljuje svoje cipove"
+    For Each e In Split(spec, "|")
+        p = Split(CStr(e), ":")
+        AssertEq (UBound(p) = 2), True, "cip je oblika kljuc:KATALOG:sirina"
+        ' Katalog na nepostojeci kljuc vraca "[KLJUC]", pa bi provera duzine
+        ' uvek prolazila i ne bi merila nista. Meri se da natpis NIJE ta oznaka.
+        AssertEq (Left$(Poruka(CStr(p(1))), 1) <> "["), True, _
+                 "natpis cipa " & CStr(p(0)) & " postoji u katalogu"
+        AssertEq (val(p(2)) > 0), True, "cip ima sirinu"
+        n = n + 1
+    Next e
+    AssertEq n, 5, "lista paleta ima pet cipova"
+    ' Bazen ljuske je konacan: visak bi se izgubio bez ijedne poruke.
+    AssertEq (n <= modOtkupUI.MAX_CHIP), True, _
+             "ekran ne trazi vise cipova nego sto bazen ljuske ima"
+    AssertEq Split(CStr(Split(spec, "|")(0)), ":")(0), "sve", _
+             "prvi cip je SVE -- na njega se pada kad filter ne pripada listi"
+
+    ' 2) Ostale liste istog ekrana nemaju sta da suze.
+    modScrPalete.Scr_PalTestSet "STAVKE"
+    AssertEq modScrPalete.Scr_Cipovi(), "", "lista stavki nema cipove"
+    modScrPalete.Scr_PalTestSet "PRERADE"
+    AssertEq modScrPalete.Scr_Cipovi(), "", "lista prerada nema cipove"
+
+    ' 3) PRAVILO cipa, bez mreze. Prazan i nepoznat kljuc puste sve -- ekran koji
+    ' dobije filter koji ne poznaje pokazuje punu listu, ne praznu.
+    AssertEq modScrPalete.PalCipProlaz("otvorene", "Otvorena", "2026", ""), True, _
+             "otvorena paleta prolazi kroz cip Otvorene"
+    AssertEq modScrPalete.PalCipProlaz("otvorene", "ZATVORENA", "2026", ""), False, _
+             "zatvorena paleta ne prolazi kroz cip Otvorene"
+    AssertEq modScrPalete.PalCipProlaz("zatvorene", "Zatvorena", "2026", ""), True, _
+             "cip Zatvorene ne gleda velika i mala slova"
+    AssertEq modScrPalete.PalCipProlaz("preradjene", "Otvorena", "2026", "DA"), True, _
+             "preradjena paleta prolazi kroz cip Preradjene"
+    AssertEq modScrPalete.PalCipProlaz("preradjene", "Otvorena", "2026", ""), False, _
+             "nepreradjena paleta ne prolazi kroz cip Preradjene"
+    AssertEq modScrPalete.PalCipProlaz("godina", "Otvorena", CStr(Year(Date)), ""), _
+             True, "paleta ove godine prolazi kroz cip Ova godina"
+    AssertEq modScrPalete.PalCipProlaz("godina", "Otvorena", "1999", ""), False, _
+             "paleta iz ranije godine ne prolazi kroz cip Ova godina"
+    AssertEq modScrPalete.PalCipProlaz("nepoznat", "Otvorena", "1999", ""), True, _
+             "nepoznat filter pusta sve, da lista ne ostane prazna"
+
+    ' 4) Cip STVARNO suzava mrezu, i to bez gubitka: svaka paleta je ili otvorena
+    ' ili zatvorena, pa dva cipa moraju da daju tacno ono sto daje 'sve'.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    d = modScrPalete.Scr_Rows("sve", "")
+    uk = CLng(d(2))
+    AssertEq (uk > 0), True, "preduslov: fixture ima paleta"
+    d = modScrPalete.Scr_Rows("otvorene", "")
+    otv = CLng(d(2))
+    d = modScrPalete.Scr_Rows("zatvorene", "")
+    zat = CLng(d(2))
+    AssertEq otv + zat, uk, "Otvorene i Zatvorene zajedno daju sve palete"
+    AssertEq (otv < uk Or zat < uk), True, "cip stvarno suzava, ne vraca sve"
+
+    ' 5) Unosni ekran: lista otpremnica nosi svoje cipove, lista dokumenata NE --
+    ' njeni cipovi zavise od rezima (zbirna, faktura) pa ostaju ljuskini.
+    ' Lista otpremnica postoji samo u rezimu OTKUP, pa se sam ugovor ne moze
+    ' dovesti u to stanje bez forme -- meri se pravilo, koje je zato izdvojeno.
+    spec = modScrDokumenti.CipoviZaListu("OTPREMNICE")
+    AssertEq (InStr(spec, "otvorene:") > 0), True, _
+             "lista otpremnica prijavljuje svoj cip Neraspodeljene"
+    AssertEq modScrDokumenti.CipoviZaListu("SVI"), "", _
+             "lista dokumenata prepusta cipove ljusci -- oni zavise od rezima"
+    ' i ugovor stvarno ide kroz to pravilo, a ne pored njega
+    AssertEq modScrDokumenti.Scr_Cipovi(), _
+             modScrDokumenti.CipoviZaListu(modScrDokumenti.Scr_Lista()), _
+             "Scr_Cipovi vraca bas ono sto pravilo kaze za aktivnu listu"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
+
+' 78. Dvoklik na paletu otvara njene stavke; obican klik i dalje samo BIRA.
+'
+' Zasto oba smera u istom testu: da klik prebacuje listu, radnje nad redom
+' (zatvori paletu, storniraj, stampaj) postale bi nedostupne -- operater ne bi
+' stigao da ih pritisne. Tvrdnja nije samo 'dvoklik radi' nego 'dvoklik radi, a
+' klik je ostao netaknut'.
+Private Sub T_PaletaDvoklik_OtvaraStavke()
+    Dim broj As String, opis As String, d As Variant
+
+    ' Mreza se puni pravim podacima ekrana, bez forme -- klik cita bas nju.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    ' Zona koje NEMA ne sme da izgleda kao pad ekrana. Ekran u Scr_Rows dopunjava
+    ' svoju zonu; kad zone nema, On Error Resume Next gresku preskoci ali je ostavi
+    ' postavljenu, pa je ScrGridData procita kao pad i isprazni mrezu. Ovo je merenje
+    ' bas tog puta -- harness nema zonu, kao ni ekran koji je pukao u gradnji.
+    d = modUiScreens.ScrGridData("PALETE", "sve", "")
+    AssertEq modUiScreens.ScrLastErr, "", _
+             "procitana lista se ne prijavljuje kao pad ekrana"
+    AssertEq IsArray(d), True, "ljuska je dobila redove"
+    modOtkupUI.GridTestLoad "PALETE"
+    broj = Trim$(CStr(modOtkupUI.GridCell(1, 1)))
+    AssertEq (Len(broj) > 0), True, "preduslov: fixture ima paletu u prvom redu"
+
+    ' 1) OBICAN KLIK bira i nista vise: lista ostaje, mreza se ne cita ponovo.
+    AssertEq modUiScreens.ScrEvent("PALETE", "row:1", "Click"), False, _
+             "izbor reda ne trazi ponovno citanje mreze"
+    AssertEq modScrPalete.Scr_Lista(), "PALETE", _
+             "obican klik BIRA, ne otvara -- inace radnje nad redom postaju nedostupne"
+
+    ' 2) DVOKLIK otvara stavke te palete i trazi ponovno citanje.
+    AssertEq modUiScreens.ScrEvent("PALETE", "dbl:1", "Click"), True, _
+             "dvoklik menja listu, pa mreza mora da se procita ponovo"
+    AssertEq modScrPalete.Scr_Lista(), "STAVKE", _
+             "dvoklik na paletu otvara njene stavke"
+
+    ' 3) Zona i naslov i dalje pokazuju KOJA je paleta otvorena -- bez toga se sa
+    ' liste stavki ne bi znalo cije su.
+    opis = modScrPalete.Scr_NaslovDopuna()
+    AssertEq opis, broj, "naslov liste stavki nosi broj otvorene palete"
+
+    ' 4) Stavke se otvaraju SAMO dvoklikom -- ne i sestom radnjom nad redom.
+    ' Bazen dugmadi je MAX_ACT i lista paleta ga vec puni do vrha; sesta radnja bi
+    ' tiho ostala bez dugmeta, jer RefreshRowActions radi Exit For. Tako je jednom
+    ' vec izbacila 'Nepotpune palete'.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    Dim r As Variant
+    r = Split(modScrPalete.Scr_Radnje(), "|")
+    AssertEq ((UBound(r) + 1) <= modOtkupUI.MAX_ACT), True, _
+             "lista ne trazi vise radnji nego sto ljuska ima dugmadi"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+    modOtkupUI.GridTestLoad ""
+End Sub
+
 ' 77. Nova prerada: cetvrta lista, izbor po identitetu, neto kao racun
 ' ============================================================
 ' Faza C, stavka 10. Legacy je unos prerade radio panelom sa sedam polja i
@@ -3704,6 +3932,10 @@ Private Sub T_NovaPrerada_IzborINeto()
     r = d(1)
     AssertEq modScrPalete.PalOznacenihBroj(), 1, "oznacena je tacno jedna paleta"
     AssertEq CStr(r(1, 1)), ChrW(10003), "oznaceni red nosi kvacicu"
+    ' Neto ULAZ je zbir neto kilaze izabranih paleta -- operater po njemu vidi sa
+    ' koliko sveze robe ulazi u preradu, pre nego sto unese izlaz.
+    AssertEq modScrPalete.NetoUlazIzabranih(), CDbl(r(1, 10)), _
+             "neto ulaz je zbir neto izabranih paleta"
     For i = 2 To CLng(d(2))
         AssertEq CStr(r(i, 1)), "", "ostale palete ostaju neoznacene"
     Next i

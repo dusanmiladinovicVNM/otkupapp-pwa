@@ -4343,3 +4343,32 @@ belom pozadinom. Labela poštuje z-order, pa napravljena prva ostaje ispod svega
 **Metod:** ovo je i dalje hipoteza dok smoke ne potvrdi — ali za razliku od
 prethodnih pokušaja, objašnjava **sva** zapažanja, uključujući i stabilni deo
 (desni blok koji nikad nije bio vidljiv).
+
+### `v6-ui-169` — vraćeno posle popravke, plus neto ulaz
+
+Panel radi, pa se vraća ono što je bilo oboreno: **dvoklik na paletu** (`dbl:` seam),
+**čipovi po ekranu** (`Scr_Cipovi`), instrumentacija `PoljaPrerade`, testovi 78–80 i
+sabotaže. **Ne vraćaju se** dve nedokazane izmene rasporeda (`z.Height`, `Repaint` /
+`RenderGrid` pri ulasku) — pravi uzrok je bio `preBg` kao Frame, pa im nema osnova.
+
+**Šesta radnja se ne vraća.** `MAX_ACT = 5`, a lista paleta ih je već imala pet;
+dodata „Stavke“ je tiho izbacila „Nepotpune palete“, jer `RefreshRowActions` radi
+`Exit For`. Stavke se otvaraju **dvoklikom**. `MAX_ACT` je sada javan i test tvrdi da
+lista ne traži više radnji nego što ljuska ima dugmadi — ista kapija koju čipovi već
+imaju kroz `MAX_CHIP`.
+
+### Neto ulaz izabranih paleta
+
+Panel je pokazivao samo **izlaz**. Sada levo od njega stoji **NETO ULAZ** — zbir neto
+kilaže izabranih paleta sveže robe. Dve brojke jedna uz drugu su ceo račun prerade:
+koliko ulazi i koliko gotovog izlazi.
+
+Zbir se računa iz **zapamćenih** vrednosti po `PaletaID`, ne iz mreže: mreža je
+filtrirana i straničena, pa bi zbir po njoj zavisio od toga šta je trenutno na ekranu.
+
+Sabotaže: `ulaz-bez-kilaze` (*neto ulaz je zbir neto izabranih paleta* — `[250]` vs
+`[0]`) i `radnji-vise-nego-dugmadi` (*lista ne traži više radnji nego što ljuska ima
+dugmadi*).
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
+**ZELENO (80)** · pun set **ZELENO** · `COMPILE` — **ostaje na operateru**.

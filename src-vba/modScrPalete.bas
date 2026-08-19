@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-168"
+Public Const SCRPAL_BUILD As String = "v6-ui-164"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -55,12 +55,18 @@ Private Const PAL_ZONA_NOVA_H As Single = PAL_ZONA_H + 2 * 46 + 40
 ' Razmak izmedju polja. Ljuskin GAP je Private, a ekran nema pravo da ga
 ' otvara zbog sopstvenog rasporeda -- isti broj, manji domet.
 Private Const PRE_GAP As Single = 10
+' Desna kolona panela: dve brojke jedna uz drugu (ulaz i izlaz), spisak
+' izabranih ispod njih i dugme na dnu.
+Private Const PRE_DESNO As Single = 240
 
 ' Oznacene palete, po PaletaID. Prazno = nijedna, i to je podrazumevano stanje.
 Private mPreOznacene As Object
 ' PaletaID -> broj palete. Izbor se DRZI po identitetu (broj se ponavlja kroz
 ' godine), ali operater misli u brojevima -- pa zona mora da ume da ih imenuje.
 Private mPreBrojevi As Object
+' PaletaID -> neto te palete. Zbir izabranih je ULAZ prerade: operater po
+' njemu vidi sa koliko sveze robe ulazi, pre nego sto unese izlaz.
+Private mPreNeto As Object
 ' Kombo ponude se pune jednom, ne pri svakom rasporedu.
 Private mPreCombosFilled As Boolean
 Private mPalID As String
@@ -99,10 +105,39 @@ Public Function Scr_NaslovDopuna() As String
     If Scr_Lista() = "STAVKE" Then Scr_NaslovDopuna = mPalBroj
 End Function
 
+' Cipovi liste paleta: godina, status, preradjenost. Isti posao koji je legacy
+' panel radio kroz tri odvojena kontrolna polja iznad liste.
+Public Function Scr_Cipovi() As String
+    If Scr_Lista() <> "PALETE" Then Exit Function
+    Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _
+                 "godina:OTKUI_CIPP_GODINA:84|" & _
+                 "otvorene:OTKUI_CIPP_OTVORENE:76|" & _
+                 "zatvorene:OTKUI_CIPP_ZATVORENE:84|" & _
+                 "preradjene:OTKUI_CIPP_PRERADJENE:88"
+End Function
+
+' Da li paleta prolazi kroz izabrani cip. Kljuc je EKRANOV -- ljuska ga je
+' samo vratila onakvog kakvog ga je dobila iz Scr_Cipovi. Javna je da bi
+' pravilo moglo da se izmeri bez mreze.
+Public Function PalCipProlaz(ByVal filter As String, ByVal status As String, _
+                             ByVal godina As String, _
+                             ByVal preradjeno As String) As Boolean
+    Select Case filter
+        Case "godina":     PalCipProlaz = (val(godina) = Year(Date))
+        Case "otvorene":   PalCipProlaz = (UCase$(Trim$(status)) <> "ZATVORENA")
+        Case "zatvorene":  PalCipProlaz = (UCase$(Trim$(status)) = "ZATVORENA")
+        Case "preradjene": PalCipProlaz = (UCase$(Trim$(preradjeno)) = "DA")
+        Case Else:         PalCipProlaz = True
+    End Select
+End Function
+
 ' Radnje nad redom za aktivnu listu: kljuc:natpis:sirina:stil:trebaRed
 Public Function Scr_Radnje() As String
     Select Case Scr_Lista()
         Case "PALETE"
+            ' Nema radnje 'Stavke': MAX_ACT je 5, a ova lista ih je vec imala pet.
+            ' Sesta bi tiho ostala bez dugmeta (RefreshRowActions radi Exit For),
+            ' pa bi izbacila 'Nepotpune palete'. Stavke se otvaraju dvoklikom.
             Scr_Radnje = "palprint:OTKUI_BTN_PAL_PRINT:112:ghost:1|" & _
                          "palpdf:OTKUI_BTN_PAL_PDF:70:ghost:1|" & _
                          "palzatvori:OTKUI_BTN_PAL_ZATVORI:124:soft:1|" & _
@@ -158,6 +193,12 @@ Public Sub Scr_Build(ByVal z As Object)
 
     ' Neto se ne unosi nego RACUNA, pa stoji kao brojka a ne kao polje: bruto
     ' minus tezina palete minus ambalaza. Menja se pri svakom kucanju.
+    ' Ulaz stoji LEVO od izlaza, istim materijalom -- dve brojke jedna uz drugu
+    ' su ceo racun prerade: koliko sveze robe ulazi i koliko gotovog izlazi.
+    modUiKit.NewLbl z, "preUlazL", UCase$(Poruka("OTKUI_PRE_ULAZ")), 0, 0, 104, 11, _
+                    TS_MICRO, True, C_MUTED, -1
+    modUiKit.NewLbl z, "preUlazV", ChrW(8212), 0, 0, 104, 20, TS_KPI, True, C_FOREST, -1, _
+                    fmTextAlignLeft, F_NUM
     modUiKit.NewLbl z, "preNetoL", UCase$(Poruka("OTKUI_PRE_NETO")), 0, 0, 130, 11, _
                     TS_MICRO, True, C_MUTED, -1
     modUiKit.NewLbl z, "preNetoV", ChrW(8212), 0, 0, 130, 20, TS_KPI, True, C_FOREST, -1, _
@@ -190,18 +231,46 @@ Private Sub PuniPreradaCombo(ByVal z As Object)
 End Sub
 
 ' Polja postoje uvek; vide se samo u listi za unos prerade.
+' Pali i gasi panel za unos prerade.
+'
+' Kontrola koje NEMA se ovde ne moze popraviti, ali sme da bude PRIJAVLJENA:
+' bez toga `On Error Resume Next` proguta i ime i broj, pa operater vidi
+' prazninu na mestu polja, a log ne kaze nista. Prijavljuje se jednom po
+' skupu, ne po kontroli, da ne zatrpa log pri svakom prelasku liste.
 Private Sub PoljaPrerade(ByVal z As Object, ByVal vis As Boolean)
-    Dim nm As Variant
-    On Error Resume Next
+    Dim nm As Variant, fale As String
     For Each nm In Array("scrPreBruto", "scrPreTezPal", "scrPreGP", "scrPreNap", _
-                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes")
-        z.Controls(CStr(nm)).Visible = vis
+                         "scrPreKut", "scrPreTipKut", "scrPreKes", "scrPreTipKes", _
+                         "preBg", "preCap", "preUlazL", "preUlazV", _
+                         "preNetoL", "preNetoV", "preIzbor")
+        If Not UpaliKontrolu(z, CStr(nm), vis) Then fale = fale & " " & CStr(nm)
     Next nm
-    For Each nm In Array("preBg", "preCap", "preNetoL", "preNetoV", "preIzbor")
-        z.Controls(CStr(nm)).Visible = vis
-    Next nm
+    On Error Resume Next
     modUiKit.BoxShow z, "scrPreradi", vis
+    ' Prijava ne sme da obori ono sto prijavljuje -- zato ostaje pod Resume Next.
+    If Len(fale) > 0 Then
+        LogWarn "modScrPalete.PoljaPrerade", _
+                "zona nema kontrole:" & fale & " | zona=" & ZonaOpis(z)
+    End If
+    Err.Clear
 End Sub
+
+' True ako kontrola postoji i vidljivost je postavljena.
+Private Function UpaliKontrolu(ByVal z As Object, ByVal nm As String, _
+                               ByVal vis As Boolean) As Boolean
+    On Error Resume Next
+    z.Controls(nm).Visible = vis
+    UpaliKontrolu = (Err.Number = 0)
+    Err.Clear
+End Function
+
+' Ime i broj kontrola zone -- bez toga se iz loga ne vidi da li je zona
+' uopste ona prava, ili je gradnja stala na pola.
+Private Function ZonaOpis(ByVal z As Object) As String
+    On Error Resume Next
+    ZonaOpis = z.name & "/" & z.Controls.count
+    Err.Clear
+End Function
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
     Dim i As Long
@@ -230,7 +299,7 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     z.Controls("preBg").width = w - 2 * (PAD - 10)
     z.Controls("preBg").Height = PAL_ZONA_NOVA_H - PAL_ZONA_H - 1
     Dim kol As Single, x0 As Single, y0 As Single, nm As Variant
-    kol = (w - PAD * 2 - 3 * PRE_GAP - 200) / 4
+    kol = (w - PAD * 2 - 3 * PRE_GAP - PRE_DESNO) / 4
     If kol < 120 Then kol = 120
     y0 = PAL_ZONA_H + 18
     i = 0
@@ -246,9 +315,13 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
     Next nm
 
     x0 = PAD + 4 * (kol + PRE_GAP)
-    z.Controls("preNetoL").Left = x0
+    z.Controls("preUlazL").Left = x0
+    z.Controls("preUlazL").top = y0
+    z.Controls("preUlazV").Left = x0
+    z.Controls("preUlazV").top = y0 + 12
+    z.Controls("preNetoL").Left = x0 + 112
     z.Controls("preNetoL").top = y0
-    z.Controls("preNetoV").Left = x0
+    z.Controls("preNetoV").Left = x0 + 112
     z.Controls("preNetoV").top = y0 + 12
     z.Controls("preIzbor").Left = x0
     z.Controls("preIzbor").top = y0 + 36
@@ -259,7 +332,6 @@ End Function
 
 '-------------------------------------------------------------- RADNJE
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
-    Dim broj As String
     On Error Resume Next
 
     If Left$(tag, 2) = "ls" Then
@@ -296,18 +368,15 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' izbor ne menja podatke, pa mreza ne sme da se prazni - radnje nad redom
     ' rade bas nad tim izabranim redom.
     If Left$(tag, 4) = "row:" And Scr_Lista() = "PALETE" Then
-        broj = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 1)))
-        If Len(broj) = 0 Then Exit Function
-        If mPalIds Is Nothing Then Exit Function
-        If Not mPalIds.Exists(broj) Then Exit Function
-        mPalID = CStr(mPalIds(broj))
-        mPalBroj = broj
-        ' vrsta, sorta, klasa i status stoje u redu koji je upravo izabran
-        mPalOpis = Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 3))) & "  " & _
-                   ChrW(183) & "  " & Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 4))) & _
-                   "  " & ChrW(183) & "  " & _
-                   Trim$(CStr(modOtkupUI.GridCell(CLng(Mid$(tag, 5)), 11)))
-        RefreshAktivna
+        PostaviAktivnu CLng(Mid$(tag, 5))
+        Exit Function
+    End If
+
+    ' Dvoklik na paletu OTVARA njene stavke -- jedan potez umesto dva (izaberi
+    ' red, pa prebaci prekidac). Vraca True: lista se promenila, pa ljuska cita
+    ' mrezu ponovo i pretvara prekidac.
+    If Left$(tag, 4) = "dbl:" And Scr_Lista() = "PALETE" Then
+        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))
         Exit Function
     End If
 
@@ -327,6 +396,10 @@ Private Function PalAkcija(ByVal tag As String) As Boolean
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
 
     Select Case p(0)
+        Case "palstavke"
+            ' ne menja podatke, ali menja LISTU -- mreza mora da se procita ponovo
+            PalAkcija = OtvoriStavke(red)
+            Exit Function
         Case "palnepotpune"
             ' jedina radnja bez reda: stampa SVE nepotpune palete
             modOtkupUI.ShowToast Poruka("OTKUI_MSG_PAL_NEPOTPUNE") & " " & _
@@ -417,7 +490,36 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Scr_Rows = RowsNovaPrerada(q)
         Exit Function
     End If
-    Scr_Rows = RowsPalete(q)
+    Scr_Rows = RowsPalete(filter, q)
+End Function
+
+' Postavi AKTIVNU paletu iz reda mreze. Vraca False ako red ne nosi paletu
+' (prazna mreza, red van skupa) -- pozivalac tada ne sme nista da menja.
+Private Function PostaviAktivnu(ByVal red As Long) As Boolean
+    Dim broj As String
+    On Error Resume Next
+    broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    If Len(broj) = 0 Then Exit Function
+    If mPalIds Is Nothing Then Exit Function
+    If Not mPalIds.Exists(broj) Then Exit Function
+    mPalID = CStr(mPalIds(broj))
+    mPalBroj = broj
+    ' vrsta, sorta, klasa i status stoje u redu koji je upravo izabran
+    mPalOpis = Trim$(CStr(modOtkupUI.GridCell(red, 3))) & "  " & _
+               ChrW(183) & "  " & Trim$(CStr(modOtkupUI.GridCell(red, 4))) & _
+               "  " & ChrW(183) & "  " & _
+               Trim$(CStr(modOtkupUI.GridCell(red, 11)))
+    RefreshAktivna
+    PostaviAktivnu = True
+End Function
+
+' Otvori stavke izabrane palete: aktivna paleta pa prebacaj liste. Zona i dalje
+' pokazuje KOJA je paleta otvorena, pa se sa liste stavki zna gde se stoji.
+Private Function OtvoriStavke(ByVal red As Long) As Boolean
+    If Not PostaviAktivnu(red) Then Exit Function
+    If Scr_Lista() = ST_NOVA Then OcistiPreradu
+    mLista = "STAVKE"
+    OtvoriStavke = True
 End Function
 
 ' Kolone deljene mreze: KLJUC_KATALOGA | izvor | vrsta | sirina | prio
@@ -488,11 +590,25 @@ Private Sub OsveziNeto()
     Set z = Zona()
     If z Is Nothing Then Exit Sub
     z.Controls("preNetoV").caption = Format$(NetoPrerade(), "#,##0.##")
+    z.Controls("preUlazV").caption = Format$(NetoUlazIzabranih(), "#,##0.##")
     z.Controls("preIzbor").caption = SpisakIzabranih()
 End Sub
 
 ' Prazan izbor i prazna polja posle upisa. Bez ovoga bi sledeca prerada krenula
 ' sa vec potrosenim izborom -- ista lekcija kao kod oznacenih otkupnih blokova.
+' Neto ULAZ: zbir neto kilaze izabranih paleta sveze robe. Racuna se iz
+' zapamcenih vrednosti, ne iz mreze -- mreza je filtrirana i stranicena, pa bi
+' zbir po njoj zavisio od toga sta je trenutno na ekranu.
+Public Function NetoUlazIzabranih() As Double
+    Dim k As Variant
+    On Error Resume Next
+    If mPreOznacene Is Nothing Or mPreNeto Is Nothing Then Exit Function
+    For Each k In mPreOznacene.keys
+        If mPreNeto.Exists(CStr(k)) Then _
+            NetoUlazIzabranih = NetoUlazIzabranih + CDbl(mPreNeto(CStr(k)))
+    Next k
+End Function
+
 ' Koje su palete izabrane, po BROJU. Brojka sama ne kaze nista -- operater je
 ' prijavio da nigde ne pise koje palete sveze robe ulaze u preradu, a bas to
 ' je odluka koju donosi. Dugacak spisak se skracuje: zona ima jedan red, a
@@ -629,6 +745,7 @@ Private Function RowsNovaPrerada(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "nova prerada"
     If mPreBrojevi Is Nothing Then Set mPreBrojevi = CreateObject("Scripting.Dictionary")
+    If mPreNeto Is Nothing Then Set mPreNeto = CreateObject("Scripting.Dictionary")
     src = GetPaleteForGrid()
     If Not IsArray(src) Then
         RowsNovaPrerada = Array(NovaGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
@@ -641,6 +758,7 @@ Private Function RowsNovaPrerada(ByVal q As String) As Variant
         st = CStr(src(r, 11))
         ident = CStr(src(r, 0))
         mPreBrojevi(ident) = CStr(src(r, 1))
+        mPreNeto(ident) = PalD(src(r, 9))
         hay = CStr(src(r, 1)) & "|" & CStr(src(r, 2)) & "|" & CStr(src(r, 3)) & "|" & _
               CStr(src(r, 4)) & "|" & CStr(src(r, 5)) & "|" & CStr(src(r, 6)) & "|" & _
               st & "|" & CStr(src(r, 12))
@@ -720,7 +838,7 @@ End Function
 ' Filteri legacy forme (godina, vrsta, sorta, status, preradjeno) ovde rade
 ' kroz JEDNU pretragu: sve te vrednosti su kolone, pa se kucanjem "OTVORENA"
 ' ili "Willamette" dobija isti rez, a kolone se uz to mogu i sortirati.
-Private Function RowsPalete(ByVal q As String) As Variant
+Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim hay As String, sumNeto As Double, gajbi As Double, otvorene As Long
     Dim uk As Long, st As String
@@ -742,6 +860,11 @@ Private Function RowsPalete(ByVal q As String) As Variant
         ' zbirovi u zoni idu preko SVIH paleta, ne preko filtrirane liste
         gajbi = gajbi + Val(CStr(src(r, 7)))
         If UCase$(st) <> "ZATVORENA" Then otvorene = otvorene + 1
+
+        ' Cip suzava listu PRE pretrage. Zbirovi u zoni ostaju preko svih
+        ' paleta -- oni govore o stanju hladnjace, ne o tome sta je na ekranu.
+        If Not PalCipProlaz(filter, st, CStr(src(r, 2)), CStr(src(r, 12))) _
+            Then GoTo Sledeci
 
         hay = CStr(src(r, 1)) & "|" & CStr(src(r, 2)) & "|" & CStr(src(r, 3)) & "|" & _
               CStr(src(r, 4)) & "|" & CStr(src(r, 5)) & "|" & CStr(src(r, 6)) & "|" & _
