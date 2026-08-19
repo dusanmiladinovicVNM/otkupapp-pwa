@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-162"
+Public Const SCRPAL_BUILD As String = "v6-ui-163"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -97,6 +97,32 @@ End Function
 ' U listi stavki naslov nosi broj palete cije su to stavke.
 Public Function Scr_NaslovDopuna() As String
     If Scr_Lista() = "STAVKE" Then Scr_NaslovDopuna = mPalBroj
+End Function
+
+' Cipovi liste paleta: godina, status, preradjenost. Isti posao koji je legacy
+' panel radio kroz tri odvojena kontrolna polja iznad liste.
+Public Function Scr_Cipovi() As String
+    If Scr_Lista() <> "PALETE" Then Exit Function
+    Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _
+                 "godina:OTKUI_CIPP_GODINA:84|" & _
+                 "otvorene:OTKUI_CIPP_OTVORENE:76|" & _
+                 "zatvorene:OTKUI_CIPP_ZATVORENE:84|" & _
+                 "preradjene:OTKUI_CIPP_PRERADJENE:88"
+End Function
+
+' Da li paleta prolazi kroz izabrani cip. Kljuc je EKRANOV -- ljuska ga je
+' samo vratila onakvog kakvog ga je dobila iz Scr_Cipovi. Javna je da bi
+' pravilo moglo da se izmeri bez mreze.
+Public Function PalCipProlaz(ByVal filter As String, ByVal status As String, _
+                             ByVal godina As String, _
+                             ByVal preradjeno As String) As Boolean
+    Select Case filter
+        Case "godina":     PalCipProlaz = (val(godina) = Year(Date))
+        Case "otvorene":   PalCipProlaz = (UCase$(Trim$(status)) <> "ZATVORENA")
+        Case "zatvorene":  PalCipProlaz = (UCase$(Trim$(status)) = "ZATVORENA")
+        Case "preradjene": PalCipProlaz = (UCase$(Trim$(preradjeno)) = "DA")
+        Case Else:         PalCipProlaz = True
+    End Select
 End Function
 
 ' Radnje nad redom za aktivnu listu: kljuc:natpis:sirina:stil:trebaRed
@@ -412,7 +438,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Scr_Rows = RowsNovaPrerada(q)
         Exit Function
     End If
-    Scr_Rows = RowsPalete(q)
+    Scr_Rows = RowsPalete(filter, q)
 End Function
 
 ' Postavi AKTIVNU paletu iz reda mreze. Vraca False ako red ne nosi paletu
@@ -744,7 +770,7 @@ End Function
 ' Filteri legacy forme (godina, vrsta, sorta, status, preradjeno) ovde rade
 ' kroz JEDNU pretragu: sve te vrednosti su kolone, pa se kucanjem "OTVORENA"
 ' ili "Willamette" dobija isti rez, a kolone se uz to mogu i sortirati.
-Private Function RowsPalete(ByVal q As String) As Variant
+Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, r As Long, n As Long, outA() As Variant
     Dim hay As String, sumNeto As Double, gajbi As Double, otvorene As Long
     Dim uk As Long, st As String
@@ -766,6 +792,11 @@ Private Function RowsPalete(ByVal q As String) As Variant
         ' zbirovi u zoni idu preko SVIH paleta, ne preko filtrirane liste
         gajbi = gajbi + Val(CStr(src(r, 7)))
         If UCase$(st) <> "ZATVORENA" Then otvorene = otvorene + 1
+
+        ' Cip suzava listu PRE pretrage. Zbirovi u zoni ostaju preko svih
+        ' paleta -- oni govore o stanju hladnjace, ne o tome sta je na ekranu.
+        If Not PalCipProlaz(filter, st, CStr(src(r, 2)), CStr(src(r, 12))) _
+            Then GoTo Sledeci
 
         hay = CStr(src(r, 1)) & "|" & CStr(src(r, 2)) & "|" & CStr(src(r, 3)) & "|" & _
               CStr(src(r, 4)) & "|" & CStr(src(r, 5)) & "|" & CStr(src(r, 6)) & "|" & _

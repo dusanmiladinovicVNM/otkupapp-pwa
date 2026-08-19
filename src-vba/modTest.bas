@@ -212,6 +212,7 @@ Public Sub RunAllTests()
     RunOne 76
     RunOne 77
     RunOne 78
+    RunOne 79
 
     SetTestMode prevMode
     WriteResultFile
@@ -322,6 +323,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 76: TestName = "T_NavBrojac_SamoEkranKojiBroji"
         Case 77: TestName = "T_NovaPrerada_IzborINeto"
         Case 78: TestName = "T_PaletaDvoklik_OtvaraStavke"
+        Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -408,6 +410,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 76: T_NavBrojac_SamoEkranKojiBroji
         Case 77: T_NovaPrerada_IzborINeto
         Case 78: T_PaletaDvoklik_OtvaraStavke
+        Case 79: T_CipoviEkrana_UgovorIFilter
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -3655,6 +3658,93 @@ Private Sub T_NavBrojac_SamoEkranKojiBroji()
 End Sub
 
 ' ============================================================
+' 79. Cipovi pripadaju EKRANU, ne ljusci: ugovor, bazen i stvarno suzavanje.
+'
+' Ljuska je do sada znala jedan ekran po imenu -- 'ako je lista OTPREMNICE,
+' pokazi chipSve i chipOtvorene'. Sada svaki ekran prijavi svoje cipove, a
+' ljuska pozajmljuje slotove svog bazena. Test meri obe strane: opis koji ekran
+' daje i pravilo po kom se lista suzava.
+Private Sub T_CipoviEkrana_UgovorIFilter()
+    Dim spec As String, e As Variant, p As Variant, n As Long
+    Dim d As Variant, uk As Long, otv As Long, zat As Long, i As Long
+
+    ' 1) UGOVOR: pet cipova nad listom paleta, svaki kljuc:KATALOG:sirina, i
+    ' svaki natpis postoji u katalogu -- cip bez natpisa je prazno dugme.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    spec = modScrPalete.Scr_Cipovi()
+    AssertEq (Len(spec) > 0), True, "lista paleta prijavljuje svoje cipove"
+    For Each e In Split(spec, "|")
+        p = Split(CStr(e), ":")
+        AssertEq (UBound(p) = 2), True, "cip je oblika kljuc:KATALOG:sirina"
+        ' Katalog na nepostojeci kljuc vraca "[KLJUC]", pa bi provera duzine
+        ' uvek prolazila i ne bi merila nista. Meri se da natpis NIJE ta oznaka.
+        AssertEq (Left$(Poruka(CStr(p(1))), 1) <> "["), True, _
+                 "natpis cipa " & CStr(p(0)) & " postoji u katalogu"
+        AssertEq (val(p(2)) > 0), True, "cip ima sirinu"
+        n = n + 1
+    Next e
+    AssertEq n, 5, "lista paleta ima pet cipova"
+    ' Bazen ljuske je konacan: visak bi se izgubio bez ijedne poruke.
+    AssertEq (n <= modOtkupUI.MAX_CHIP), True, _
+             "ekran ne trazi vise cipova nego sto bazen ljuske ima"
+    AssertEq Split(CStr(Split(spec, "|")(0)), ":")(0), "sve", _
+             "prvi cip je SVE -- na njega se pada kad filter ne pripada listi"
+
+    ' 2) Ostale liste istog ekrana nemaju sta da suze.
+    modScrPalete.Scr_PalTestSet "STAVKE"
+    AssertEq modScrPalete.Scr_Cipovi(), "", "lista stavki nema cipove"
+    modScrPalete.Scr_PalTestSet "PRERADE"
+    AssertEq modScrPalete.Scr_Cipovi(), "", "lista prerada nema cipove"
+
+    ' 3) PRAVILO cipa, bez mreze. Prazan i nepoznat kljuc puste sve -- ekran koji
+    ' dobije filter koji ne poznaje pokazuje punu listu, ne praznu.
+    AssertEq modScrPalete.PalCipProlaz("otvorene", "Otvorena", "2026", ""), True, _
+             "otvorena paleta prolazi kroz cip Otvorene"
+    AssertEq modScrPalete.PalCipProlaz("otvorene", "ZATVORENA", "2026", ""), False, _
+             "zatvorena paleta ne prolazi kroz cip Otvorene"
+    AssertEq modScrPalete.PalCipProlaz("zatvorene", "Zatvorena", "2026", ""), True, _
+             "cip Zatvorene ne gleda velika i mala slova"
+    AssertEq modScrPalete.PalCipProlaz("preradjene", "Otvorena", "2026", "DA"), True, _
+             "preradjena paleta prolazi kroz cip Preradjene"
+    AssertEq modScrPalete.PalCipProlaz("preradjene", "Otvorena", "2026", ""), False, _
+             "nepreradjena paleta ne prolazi kroz cip Preradjene"
+    AssertEq modScrPalete.PalCipProlaz("godina", "Otvorena", CStr(Year(Date)), ""), _
+             True, "paleta ove godine prolazi kroz cip Ova godina"
+    AssertEq modScrPalete.PalCipProlaz("godina", "Otvorena", "1999", ""), False, _
+             "paleta iz ranije godine ne prolazi kroz cip Ova godina"
+    AssertEq modScrPalete.PalCipProlaz("nepoznat", "Otvorena", "1999", ""), True, _
+             "nepoznat filter pusta sve, da lista ne ostane prazna"
+
+    ' 4) Cip STVARNO suzava mrezu, i to bez gubitka: svaka paleta je ili otvorena
+    ' ili zatvorena, pa dva cipa moraju da daju tacno ono sto daje 'sve'.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    d = modScrPalete.Scr_Rows("sve", "")
+    uk = CLng(d(2))
+    AssertEq (uk > 0), True, "preduslov: fixture ima paleta"
+    d = modScrPalete.Scr_Rows("otvorene", "")
+    otv = CLng(d(2))
+    d = modScrPalete.Scr_Rows("zatvorene", "")
+    zat = CLng(d(2))
+    AssertEq otv + zat, uk, "Otvorene i Zatvorene zajedno daju sve palete"
+    AssertEq (otv < uk Or zat < uk), True, "cip stvarno suzava, ne vraca sve"
+
+    ' 5) Unosni ekran: lista otpremnica nosi svoje cipove, lista dokumenata NE --
+    ' njeni cipovi zavise od rezima (zbirna, faktura) pa ostaju ljuskini.
+    ' Lista otpremnica postoji samo u rezimu OTKUP, pa se sam ugovor ne moze
+    ' dovesti u to stanje bez forme -- meri se pravilo, koje je zato izdvojeno.
+    spec = modScrDokumenti.CipoviZaListu("OTPREMNICE")
+    AssertEq (InStr(spec, "otvorene:") > 0), True, _
+             "lista otpremnica prijavljuje svoj cip Neraspodeljene"
+    AssertEq modScrDokumenti.CipoviZaListu("SVI"), "", _
+             "lista dokumenata prepusta cipove ljusci -- oni zavise od rezima"
+    ' i ugovor stvarno ide kroz to pravilo, a ne pored njega
+    AssertEq modScrDokumenti.Scr_Cipovi(), _
+             modScrDokumenti.CipoviZaListu(modScrDokumenti.Scr_Lista()), _
+             "Scr_Cipovi vraca bas ono sto pravilo kaze za aktivnu listu"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
+
 ' 78. Dvoklik na paletu otvara njene stavke; obican klik i dalje samo BIRA.
 '
 ' Zasto oba smera u istom testu: da klik prebacuje listu, radnje nad redom

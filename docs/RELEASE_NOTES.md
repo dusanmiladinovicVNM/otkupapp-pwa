@@ -4294,3 +4294,89 @@ Tri sabotaže, sve tri padaju po **svojoj** tvrdnji:
 
 `vba_check` čisto (191) · `who_writes` ažuran · `RunAllTests` **ZELENO (78)** ·
 `COMPILE` — **ostaje na operateru**.
+
+---
+
+## v2.57.0 — `v6-ui-163` · čipovi pripadaju ekranu (Faza C, stavka 11)
+
+Poslednja stavka Faze C. Ujedno i **poslednje mesto na kom je ljuska znala jedan
+ekran po imenu**:
+
+```vba
+ElseIf akt = "OTPREMNICE" Then
+    ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
+```
+
+Sada svaki ekran prijavi svoje čipove kroz `Scr_Cipovi()`, istim oblikom kao radnje:
+`kljuc:KATALOG:sirina`. Ljuska ne tumači ključ — vraća ga kroz `Scr_Rows(filter, q)`
+onakvog kakvog ga je dobila.
+
+### Bazen, ne novi čipovi
+
+Kontrole se ne prave iznova. Ljuska ima **bazen od sedam slotova** (`ChipRow`);
+prvih šest pripada režimima unosnog ekrana, ostatak se slobodno pozajmljuje. Ekran
+koji prijavi čipove pozajmljuje slotove redom — natpis i širina dolaze iz njegovog
+opisa, ključ se pamti u `mScrChipKey`.
+
+Tri mesta su morala da nauče da slot može biti pozajmljen:
+
+| Mesto | Zašto |
+|---|---|
+| `ChipFilter` | klik na pozajmljen slot vraća **ekranov** ključ, ne ljuskin |
+| `RenderChipCounts` | brojači pripadaju listi dokumenata; upis bi pregazio tuđi natpis |
+| `ApplyChipVisual` | crveni čip je „Otkazane"; isti slot kod drugog ekrana nema veze sa stornom |
+
+`LayoutChips` je prešao sa širina iz opisa na `mChipW` — slot koji je pozajmljen nosi
+širinu svog natpisa, pa bi opis vratio pogrešnu meru i red bi se raspao.
+
+**Bazen je konačan i to se sada tvrdi.** Ekran koji prijavi više čipova nego što
+slotova ima izgubio bi višak bez ijedne poruke, pa je `MAX_CHIP` javan i test meri
+baš kroz njega.
+
+### Palete: godina, status, prerađenost
+
+Pet čipova nad listom paleta — isti posao koji je legacy panel radio kroz tri
+odvojena kontrolna polja iznad liste: **Sve · Ova godina · Otvorene · Zatvorene ·
+Prerađene**.
+
+Pravilo je izdvojeno u `PalCipProlaz(filter, status, godina, prerađeno)`, čist račun
+bez mreže. Nepoznat filter **pušta sve** — ekran koji dobije ključ koji ne poznaje
+pokazuje punu listu, ne praznu.
+
+Čip sužava listu **pre** pretrage; zbirovi u zoni i dalje idu preko svih paleta —
+oni govore o stanju hladnjače, ne o tome šta je trenutno na ekranu.
+
+Lista otpremnica je dobila isto to (`CipoviZaListu`), a lista dokumenata **ne
+prijavljuje ništa**: njeni čipovi zavise od režima (ima li zbirnu, ima li fakturu),
+pa vidljivost ostaje kod `SelectMode`.
+
+### Tvrdnja koja nije merila ništa
+
+Prva verzija testa je proveravala da natpis čipa postoji u katalogu ovako:
+
+```vba
+AssertEq (Len(Poruka(kljuc)) > 0), True, ...
+```
+
+`Poruka` na nepostojeći ključ vraća `[KLJUC]` — dakle **nikad prazno**. Ta tvrdnja
+nije mogla da padne ni za jedan pogrešan ključ. Sad se meri da natpis nije ta
+oznaka. Našla ju je sabotaža koja je pokušala da je obori i nije uspela.
+
+### Verifikacija
+
+**Test 79** tvrdi ugovor (pet čipova, oblik `kljuc:KATALOG:sirina`, natpis iz
+kataloga, veličina bazena), pravilo čipa u oba smera, i da čip **stvarno** sužava:
+`Otvorene + Zatvorene = sve palete`, bez gubitka i bez preklapanja.
+
+| Sabotaža | Pada na |
+|---|---|
+| `cip-ne-suzava` | *Otvorene i Zatvorene zajedno daju sve palete* — `[7]` vs `[14]` |
+| `bazen-cipova-manji` | *ekran ne traži više čipova nego što bazen ljuske ima* |
+| `cip-bez-natpisa` | *natpis čipa godina postoji u katalogu* |
+
+Prva verzija treće sabotaže je stavila komentar **posle nastavka reda** (`_`) i time
+oborila kompajlaciju umesto tvrdnje — run je visio 321 s i pao sa COM greškom, isto
+kao `v6-ui-159`. Sabotaža sme da pokvari **jednu stvar**, ne prevod.
+
+`vba_check` čisto (191) · self-test (47) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (79)** · `COMPILE` — **ostaje na operateru**.

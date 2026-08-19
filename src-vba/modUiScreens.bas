@@ -243,6 +243,19 @@ Public Function ScrGridData(ByVal kljuc As String, ByVal filter As String, _
     End If
 End Function
 
+' Cipovi AKTIVNE liste, oblika 'kljuc:KATALOG:sirina|...'. Opciono -- ekran
+' koji ih nema vraca prazno i mreza se ne suzava nicim osim pretragom.
+' Kljuc se vraca ljusci samo kao mFilter i putuje nazad u Scr_Rows; ljuska ga
+' ne tumaci.
+Public Function ScrCipovi(ByVal kljuc As String) As String
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    ScrCipovi = CStr(Application.Run(m & ".Scr_Cipovi"))
+    Err.Clear
+End Function
+
 ' Prekidac lista ekrana. Prazno = ekran ima samo jednu listu, pa prekidaca
 ' nema. Ljuska ne zna nijedan kljuc unapred - ni "OTPREMNICE" ni "PRERADE".
 Public Function ScrListe(ByVal kljuc As String) As Variant

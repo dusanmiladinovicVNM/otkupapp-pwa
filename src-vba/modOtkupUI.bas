@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-162"
+Public Const OTKUI_BUILD   As String = "v6-ui-163"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -300,6 +300,17 @@ Private mBusyGrid As Boolean
 Private mBuilding As Boolean
 Private mColSpec As Object
 Private mLastPageSize As Long
+' Bazen cipova je ljuskin i ima MAX_CHIP slotova (ChipRow). Prvih MODE_CHIP
+' pripada rezimima unosnog ekrana; ostale slobodno pozajmljuje ekran koji
+' prijavi svoje cipove. mScrChipKey drzi KLJUC koji je ekran dao za slot --
+' ljuska ga ne tumaci, samo ga vrati kroz Scr_Rows.
+' JAVNA: ekran koji prijavi vise cipova nego sto bazen ima izgubio bi visak
+' bez ijedne poruke. Test to meri bas kroz ovu konstantu.
+Public Const MAX_CHIP   As Long = 7
+Private Const MODE_CHIP As Long = 6
+Private mScrChipN As Long
+Private mScrChipKey(0 To 6) As String
+Private mChipW(0 To 6) As Single
 Private mCntOtkaz As Long
 Private mCntBezZb As Long
 Private mCntNefakt As Long
@@ -725,18 +736,88 @@ Private Sub RefreshGridTitle(frm As Object)
         z.Controls("grdTitle").caption = Poruka("OTKUI_GRID_TITLE_" & modeKey(ActiveMode))
     End If
 
-    For Each ch In ChipRow()
-        k = Split(CStr(ch), "|")(0)
-        If Len(akt) = 0 Or akt = "SVI" Then
-            If k = "chipOtvorene" Then ShowChip frm, k, False
-        ElseIf akt = "OTPREMNICE" Then
-            ShowChip frm, k, (k = "chipSve" Or k = "chipOtvorene")
-        Else
-            ShowChip frm, k, False
-        End If
-    Next ch
-    LayoutChips frm
+    RefreshChipsForScreen frm
 End Sub
+
+' Cipovi AKTIVNE liste. Ekran ih prijavljuje kroz Scr_Cipovi, istim oblikom
+' kao radnje: kljuc:KATALOG:sirina.
+'
+' Ovde je do sada stajalo 'ako je lista OTPREMNICE, pokazi chipSve i
+' chipOtvorene' -- poslednje mesto na kom je ljuska znala jedan ekran po
+' imenu. Sada zna samo svoj POCETNI, koji jedini ima cipove vezane za rezim
+' dokumenta (njihovu vidljivost postavlja SelectMode, prema tome da li rezim
+' uopste ima zbirnu i fakturu).
+Private Sub RefreshChipsForScreen(frm As Object)
+    Dim spec As String, e As Variant, p As Variant, i As Long, n As Long
+    Dim ch As Variant, nm As String, imaAktivan As Boolean
+    On Error Resume Next
+    ch = ChipRow()
+    mScrChipN = 0
+    For i = 0 To MAX_CHIP - 1
+        mScrChipKey(i) = ""
+    Next i
+    spec = ScrCipovi()
+
+    If Len(spec) = 0 Then
+        If mScreen = SCR_POCETNI Then
+            ' vidljivost cipova rezima postavlja SelectMode -- ovde se sklanjaju
+            ' samo slobodni slotovi bazena i vracaju natpisi koje je ekran menjao
+            For i = MODE_CHIP To MAX_CHIP - 1
+                ShowChip frm, Split(CStr(ch(i)), "|")(0), False
+            Next i
+            VratiNatpiseCipova frm
+        Else
+            For i = 0 To MAX_CHIP - 1
+                ShowChip frm, Split(CStr(ch(i)), "|")(0), False
+            Next i
+        End If
+        LayoutChips frm
+        Exit Sub
+    End If
+
+    For Each e In Split(spec, "|")
+        p = Split(CStr(e), ":")
+        If UBound(p) >= 2 And n < MAX_CHIP Then
+            nm = Split(CStr(ch(n)), "|")(0)
+            mScrChipKey(n) = CStr(p(0))
+            mChipW(n) = CSng(val(p(2)))
+            frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
+            ShowChip frm, nm, True
+            If mScrChipKey(n) = mFilter Then imaAktivan = True
+            n = n + 1
+        End If
+    Next e
+    mScrChipN = n
+    For i = n To MAX_CHIP - 1
+        ShowChip frm, Split(CStr(ch(i)), "|")(0), False
+    Next i
+    ' Filter koji izabrana lista ne poznaje ostavio bi mrezu suzenu necim sto
+    ' se ne vidi ni na jednom upaljenom cipu. Prvi cip je po dogovoru najsiri.
+    If Not imaAktivan Then mFilter = mScrChipKey(0)
+    LayoutChips frm
+    ApplyChipVisual frm.Controls("zGrid")
+End Sub
+
+' Natpisi i sirine bazena se vracaju na ljuskine kad ekran vise ne pozajmljuje
+' slotove -- inace bi na unosnom ekranu ostao natpis prethodnog ekrana.
+Private Sub VratiNatpiseCipova(frm As Object)
+    Dim ch As Variant, p As Variant, i As Long
+    On Error Resume Next
+    ch = ChipRow()
+    For i = 0 To MAX_CHIP - 1
+        p = Split(CStr(ch(i)), "|")
+        frm.Controls("zGrid").Controls(CStr(p(0)) & "C").caption = Poruka(CStr(p(1)))
+        mChipW(i) = CSng(val(p(2)))
+    Next i
+    RenderChipCounts frm.Controls("zGrid")
+End Sub
+
+' Opis cipova AKTIVNOG ekrana. Ekran koji ih nema vraca prazno.
+Private Function ScrCipovi() As String
+    On Error Resume Next
+    ScrCipovi = modUiScreens.ScrCipovi(mScreen)
+    Err.Clear
+End Function
 
 ' Dopuna naslova mreze (npr. broj aktivne otpremnice). Opciona - ekran koji je
 ' nema vraca prazno.
@@ -2687,8 +2768,11 @@ Public Function MarkedKeys() As String
     MarkedKeys = res
 End Function
 
+' Brojaci pripadaju cipovima liste dokumenata. Kad je slot pozajmljen ekranu,
+' upis bi pregazio natpis koji je ekran dao.
 Private Sub RenderChipCounts(z As Object)
     On Error Resume Next
+    If mScrChipN > 0 Then Exit Sub
     z.Controls("chipOtkazaneC").caption = Poruka("OTKUI_CHIP_OTKAZANE") & "  " & mCntOtkaz
     z.Controls("chipBezZbirneC").caption = Poruka("OTKUI_CHIP_BEZZBIRNE") & "  " & mCntBezZb
     z.Controls("chipNefaktC").caption = Poruka("OTKUI_CHIP_NEFAKT") & "  " & mCntNefakt
@@ -3067,7 +3151,9 @@ Private Sub ApplyChipVisual(z As Object)
     For Each c In z.Controls
         If Left$(c.name, 4) = "chip" And Right$(c.name, 1) <> "B" And Right$(c.name, 1) <> "C" Then
             on_ = (ChipFilter(c.name) = mFilter)
-            If c.name = "chipOtkazane" Then
+            ' Crveni cip je 'Otkazane' liste dokumenata. Isti slot pozajmljen
+            ' ekranu nema veze sa stornom, pa nosi obicnu boju.
+            If c.name = "chipOtkazane" And mScrChipN = 0 Then
                 BoxState z, c.name, IIf(on_, C_RUST, C_PILL_ERR_BG), IIf(on_, C_CREAM, C_RUST), on_
             Else
                 BoxState z, c.name, IIf(on_, C_FOREST, C_WHITE), IIf(on_, C_CREAM, C_FOREST), on_
@@ -3914,9 +4000,12 @@ Private Sub LayoutChips(frm As Object)
     X = PAD
     For i = 0 To UBound(chip)
         p = Split(chip(i), "|")
+        ' Sirina dolazi iz mChipW, ne iz opisa: slot koji je pozajmio ekran
+        ' nosi sirinu svog natpisa, pa bi opis vratio pogresnu meru.
+        If mChipW(i) <= 0 Then mChipW(i) = CSng(p(2))
         If z.Controls(CStr(p(0))).Visible Then
-            MoveBox z, CStr(p(0)), X, 36, CSng(p(2))
-            X = X + CSng(p(2)) + 6
+            MoveBox z, CStr(p(0)), X, 36, mChipW(i)
+            X = X + mChipW(i) + 6
         End If
     Next i
 End Sub
@@ -6510,7 +6599,19 @@ Private Sub CopyAmbNaPraznu()
 End Sub
 
 
+' Kljuc filtera iza cipa. Slot koji je pozajmio ekran vraca EKRANOV kljuc --
+' ljuska ga ne tumaci, samo ga prosledi kroz Scr_Rows.
 Private Function ChipFilter(ByVal tag As String) As String
+    Dim ch As Variant, i As Long
+    If mScrChipN > 0 Then
+        ch = ChipRow()
+        For i = 0 To mScrChipN - 1
+            If Split(CStr(ch(i)), "|")(0) = tag Then
+                ChipFilter = mScrChipKey(i)
+                Exit Function
+            End If
+        Next i
+    End If
     Select Case tag
         Case "chipDanas":     ChipFilter = "danas"
         Case "chipNedelja":   ChipFilter = "nedelja"

@@ -1312,6 +1312,33 @@ SABOTAZE = {
         "T_PaletaDvoklik_OtvaraStavke",
         "procitana lista se ne prijavljuje kao pad ekrana",
     ),
+    # Cip mora STVARNO da suzava listu. Ako filter ne stigne do reda, svi cipovi
+    # daju istu punu listu -- operater bira 'Zatvorene' i gleda sve palete.
+    "cip-ne-suzava": (
+        "modScrPalete.bas",
+        "        If Not PalCipProlaz(filter, st, CStr(src(r, 2)), CStr(src(r, 12))) _\n            Then GoTo Sledeci\n",
+        "        If False Then GoTo Sledeci   ' SABOTAZA: cip ne suzava\n",
+        "T_CipoviEkrana_UgovorIFilter",
+        "Otvorene i Zatvorene zajedno daju sve palete",
+    ),
+    # Bazen cipova je konacan. Ekran koji prijavi vise nego sto bazen ima izgubio
+    # bi visak bez ijedne poruke -- cip koji se nikad ne nacrta.
+    "bazen-cipova-manji": (
+        "modOtkupUI.bas",
+        "Public Const MAX_CHIP   As Long = 7\n",
+        "Public Const MAX_CHIP   As Long = 4   ' SABOTAZA: bazen manji od opisa\n",
+        "T_CipoviEkrana_UgovorIFilter",
+        "ekran ne trazi vise cipova nego sto bazen ljuske ima",
+    ),
+    # Natpis cipa dolazi iz kataloga. Nepostojeci kljuc ne pada nego se ispise
+    # kao [KLJUC] -- cip koji operateru nista ne znaci.
+    "cip-bez-natpisa": (
+        "modScrPalete.bas",
+        "                 \"godina:OTKUI_CIPP_GODINA:84|\" & _\n",
+        "                 \"godina:OTKUI_CIP_SABOTAZA:84|\" & _\n",
+        "T_CipoviEkrana_UgovorIFilter",
+        "natpis cipa godina postoji u katalogu",
+    ),
 }
 
 

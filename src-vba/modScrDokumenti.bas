@@ -76,6 +76,22 @@ End Function
 '   kljuc : natpis : sirina : stil : trebaRed
 ' Kljuc se vraca u Scr_Event kao "act:<kljuc>:<red>"; "mark" obradjuje sama
 ' ljuska (oznacavanje je stanje mreze).
+Public Function Scr_Cipovi() As String
+    Scr_Cipovi = CipoviZaListu(Scr_Lista())
+End Function
+
+' Cipovi po listi. Izdvojeno iz Scr_Cipovi da bi pravilo moglo da se izmeri:
+' lista otpremnica postoji samo u rezimu OTKUP, pa je Scr_Lista() van tog
+' rezima uvek 'SVI' i sam ugovor ne bi mogao da se dovede u to stanje.
+'
+' Lista dokumenata ('SVI') NE prijavljuje cipove: njeni zavise od rezima
+' (ima li zbirnu, ima li fakturu), pa ostaju ljuskini -- vidljivost im
+' postavlja SelectMode.
+Public Function CipoviZaListu(ByVal lista As String) As String
+    If lista = "OTPREMNICE" Then _
+        CipoviZaListu = "sve:OTKUI_CHIP_SVE:40|otvorene:OTKUI_CHIP_OTVORENE:132"
+End Function
+
 Public Function Scr_Radnje() As String
     If modeKey(ActiveMode) <> "OTKUP" Then Exit Function
     Select Case Scr_Lista()
