@@ -4319,3 +4319,27 @@ ide prvo to — ili sa širim bazenom, ili bez šeste radnje.
 
 **Kako se vraća:** jedna izmena po prolazu, sa smoke proverom panela posle svake.
 Redosled: (1) dvoklik bez šeste radnje, (2) čipovi, (3) sve ostalo.
+
+### `v6-ui-168` — bela podloga panela je bila Frame, pa je pokrivala pola panela
+
+Operater je dao tačan raspon: radilo je dok smo sređivali vertikalni prostor i
+prikaz izabranih paleta (`d4ed8824`), a pokvarilo se u sledećem koraku
+(`25ef36a9`) — u kom su ušle samo **dve** stvari: `LayoutFieldInner` po polju i bela
+podloga `preBg`.
+
+`preBg` je bio **Frame**. U MSForms su Frame-ovi *prozorske* kontrole i crtaju se
+**iznad** bezprozorskih — labela i svega sklopljenog od njih — **bez obzira na
+z-order**. Podloga pokriva ceo panel, pa su ispod nje završili naslov panela
+(`preCap`), `NETO`, spisak izabranih paleta i dugme „Preradi“. Polja su se probijala
+jer su i sama Frame-ovi.
+
+To objašnjava i ono što nijedna ranija teorija nije: **desni blok nije radio nikad**,
+ni kad su se polja videla. Tražio sam uzrok u rasporedu, u visini zone i u
+prefarbavanju — a bio je u **vrsti kontrole**.
+
+Popravka nije uklanjanje podloge nego zamena vrste: `preBg` je sada **labela** sa
+belom pozadinom. Labela poštuje z-order, pa napravljena prva ostaje ispod svega.
+
+**Metod:** ovo je i dalje hipoteza dok smoke ne potvrdi — ali za razliku od
+prethodnih pokušaja, objašnjava **sva** zapažanja, uključujući i stabilni deo
+(desni blok koji nikad nije bio vidljiv).

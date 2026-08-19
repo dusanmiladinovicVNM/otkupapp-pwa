@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-161"
+Public Const SCRPAL_BUILD As String = "v6-ui-168"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -137,8 +137,14 @@ Public Sub Scr_Build(ByVal z As Object)
     ' Bela podloga ispod celog panela. Bez nje se izmedju polja vidi krem
     ' pozadina zone, pa panel izgleda kao niz odvojenih ostrva umesto kao jedna
     ' celina -- operater je to prijavio kao 'ruzni prekidi izmedju belih polja'.
-    ' Pravi se PRE polja, jer u MSForms kasnije dodata kontrola stoji IZNAD.
-    modUiKit.NewFrame z, "preBg", 0, 0, 100, 10, C_WHITE
+    '
+    ' MORA da bude LABELA, ne Frame. Frame je u MSForms prozorska kontrola i crta
+    ' se IZNAD bezprozorskih (labele i sve sklopljeno od njih) bez obzira na
+    ' z-order. Kao Frame je ova podloga pokrivala ceo panel: naslov, NETO, spisak
+    ' izabranih i dugme 'Preradi' nestali su ispod nje, a polja su se probijala
+    ' jer su i sama Frame-ovi. Labela postuje z-order, pa napravljena PRVA ostaje
+    ' ispod svega.
+    modUiKit.NewLbl z, "preBg", "", 0, 0, 100, 10, 8, False, 0, C_WHITE
     modUiKit.NewLbl z, "preCap", UCase$(Poruka("OTKUI_PRE_CAP")), PAD, PAL_ZONA_H + 4, 200, 11, _
                     TS_MICRO, True, C_MUTED, -1
     modOtkupUI.NewFieldG z, "scrPreBruto", Poruka("OTKUI_PRE_BRUTO"), "txt", "kg", 1, True, False, "PRE"
