@@ -4551,28 +4551,41 @@ End Sub
 ' Test ne trazi mis: ResetVisual se zove direktno nad sink-om, sto je tacno ono
 ' sto se desi kad pokazivac napusti dugme. Boja se cita PRE i POSLE.
 Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
-    Dim f As frmOtkupUI, z As Object
-    Dim izlI As Long, izlU As Long, izlBoldI As Boolean, izlBoldU As Boolean
-    Dim izlRstI As Long, izlRstU As Long
+    Dim f As frmOtkupUI, z As Object, snimak As String, rez As String
+    Dim izlI As Long, izlU As Long, izlRstI As Long, izlRstU As Long
     Dim ulzI As Long, ulzU As Long, ulzRstI As Long, ulzRstU As Long
+    Dim gI As Long, gU As Long, gIC As Long, gUC As Long
+    Dim rI As Long, rU As Long, rIC As Long, rUC As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
-    ' obrise Err izmedju Err.Raise i omotnice testa, pa pad stize kao "greska
-    ' bez opisa" i ne kaze KOJA tvrdnja je pala. Do v6-ui-171 su tvrdnje ovde
-    ' stajale izmedju koraka i pad je bio neupotrebljiv za dijagnozu.
+    ' obrise Err izmedju Err.Raise i omotnice testa.
+    '
+    ' REZ SE MERI PREKO Font.Weight (400 normalan, 700 bold), ne preko
+    ' Font.Bold. Font.Bold je iz tezine izveden i sam po sebi ume da prevari --
+    ' sonda je kroz sest krugova pokazala i upis koji se izgubi i upis koji
+    ' vrati staru vrednost. Tezina je broj i ne moze da bude "skoro tacna".
     Set f = NewOtkupUIForm()
     Set z = f.Controls.Add("Forms.Frame.1", "zProbaAgSeg", True)
     z.width = 1200: z.Height = 300
     modScrAgro.Scr_Build z
 
+    ' stanje ODMAH posle gradnje -- ispuna i natpis oba segmenta
+    gI = z.Controls("scrAgSegI").Font.Weight
+    gU = z.Controls("scrAgSegU").Font.Weight
+    gIC = z.Controls("scrAgSegIC").Font.Weight
+    gUC = z.Controls("scrAgSegUC").Font.Weight
+
     ' --- IZDAVANJE je izabrano ---
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     modScrAgro.Scr_Layout z, 1200, 300
+    rez = modScrAgro.Scr_Rezim()
+    rI = z.Controls("scrAgSegI").Font.Weight
+    rU = z.Controls("scrAgSegU").Font.Weight
+    rIC = z.Controls("scrAgSegIC").Font.Weight
+    rUC = z.Controls("scrAgSegUC").Font.Weight
     izlI = z.Controls("scrAgSegI").BackColor
     izlU = z.Controls("scrAgSegU").BackColor
-    izlBoldI = z.Controls("scrAgSegI").Font.bold
-    izlBoldU = z.Controls("scrAgSegU").Font.bold
     ' Posle izlaska pokazivaca boja mora da OSTANE.
     ResetSinkVizual "scrAgSegI"
     ResetSinkVizual "scrAgSegU"
@@ -4592,14 +4605,22 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     ReleaseOtkupUIForm f
 
+    ' REZ, u jednoj tvrdnji. AssertEq staje na prvoj razlici, pa bi osam
+    ' zasebnih tvrdnji pokazalo samo prvu vrednost -- a bas se meri da li se
+    ' gradnja i raspored SLAZU. Natpis (IC/UC) ide uz ispunu (I/U) jer im
+    ' BoxState pise isti rez: razlika izmedju njih dvoje je sama po sebi kvar.
+    snimak = "gradnja I=" & gI & " U=" & gU & " IC=" & gIC & " UC=" & gUC & _
+             " | raspored rez=" & rez & _
+             " I=" & rI & " U=" & rU & " IC=" & rIC & " UC=" & rUC
+    AssertEq snimak, _
+             "gradnja I=700 U=400 IC=700 UC=400" & _
+             " | raspored rez=IZLAZ I=700 U=400 IC=700 UC=400", _
+             "rez prekidaca rezima (Font.Weight: 400 normalan, 700 bold)"
+
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
     ' dugmetom koje nikad nije ni pozelenelo.
     AssertEq izlI, CLng(modOtkupUI.C_FOREST), "preduslov: izabran rezim je obojen"
     AssertEq izlU, CLng(modOtkupUI.C_WHITE), "preduslov: neizabran rezim je beo"
-    ' Bold NIJE kozmetika: clsFlatBtn.IsSelected bas po njemu prepoznaje
-    ' izabrano stanje i preskace hover. Ako se izgubi, dugme opet postaje obicno.
-    AssertEq izlBoldI, True, "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
-    AssertEq izlBoldU, False, "neizabran rezim nije Bold"
 
     ' NAJVAZNIJE: posle izlaska pokazivaca boja OSTAJE. Ovo je jedina tvrdnja
     ' koja pada kad se izgubi RebaseSink -- sve ostalo izgleda ispravno.

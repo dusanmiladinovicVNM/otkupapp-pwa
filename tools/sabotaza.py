@@ -1476,6 +1476,19 @@ SABOTAZE = {
     # izlazak pokazivaca je vraca; izabran rezim tada pobeli, a natpis ostane
     # krem -- dugme postane necitljivo. Operater je to prijavio na prvom smoke-u.
     # Isti kvar je vec jednom placen u modScrStorno (StilDugmeta).
+    # Rez fonta se ne pise unutar "With .Font" -- tamo upis ne hvata i kontrola
+    # izlazi bold bez obzira na trazenu vrednost. Kvar je UNIFORMAN, pa se ne
+    # vidi golim okom: sve je bold, i izgleda kao odluka dizajna.
+    "ljuska-rez-bez-potvrde": (
+        "modUiKit.bas",
+        "    For i = 1 To 3\n"
+        "        If (ctl.Font.Weight >= 700) = bold Then Exit Sub\n"
+        "        ctl.Font.bold = bold\n"
+        "    Next i\n",
+        "    ctl.Font.bold = bold   ' SABOTAZA: rez se upisuje jednom, bez potvrde\n",
+        "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
+        "kontrola gradjena bez bold-a stvarno nije bold (Font.Weight 400)",
+    ),
     "agro-prekidac-bez-rebase": (
         "modScrAgro.bas",
         '    modOtkupUI.RebaseSink "scrAgSegI"\n'

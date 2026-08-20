@@ -811,3 +811,68 @@ kodu (nigde na tim mestima nije ostao goli `OsveziZonu`) i mereno je sabotažom.
 
 **Neverifikovano:** `RunAllTests` nije puštan (nema Excela) — testovi 91 i 92 i
 sve četiri nove sabotaže **nisu izvršeni**. Compile nije prošao.
+
+> **Naknadno pušteno i zeleno.** `RunAllTests` **96 testova**, testovi 91 i 92
+> prolaze, sve četiri sabotaže obaraju imenovani test. Numeracija je pomerena:
+> Palete su posle rebase-a uzele 93–96.
+
+### 7.10 Rez fonta: nalaz iz testa 89 (`v6-ui-175`)
+
+Test 89 je bio jedini crveni test kroz tri release-a. Uzrok nije bio u
+Agrohemiji nego u **ljusci** — samo se video prvi put tek kad je jedna tvrdnja
+zatražila da **neizabran** segment **nije** bold.
+
+`modUiKit.NewLbl` je ignorisao traženi rez: kontrola građena sa `bold=False`
+izlazila je sa `Font.Weight = 700`. Kvar je **uniforman** — svaka runtime
+kontrola je bila bold — pa se nije ni primetio. Izgledao je kao odluka dizajna.
+
+#### Šta je merenje isključilo
+
+Sonda u testu 89, šest krugova nad živom formom. Svaki krug je gasio po jedno
+objašnjenje, i nijedno nije preživelo:
+
+| Kandidat | Merenje | Presuda |
+|---|---|---|
+| raspored / `RebaseSink` / test-seam | `gradnja U=1`, `rez=IZLAZ`, `bgU=B` | kontrola **nastaje** bold |
+| osobina segmenta | `nova0=1` — i gola `NewLbl` je bold | univerzalno za sve runtime kontrole |
+| artefakt čitanja `Font.Bold` | `tezinaU=700` | rez je **stvarno** bold |
+| font forme (nasleđivanje) | `forma=0` | ne |
+| ožičenje (`clsFlatBtn`) | `ozicen=400` | ne |
+| povratna vrednost (`Set x = NewLbl(...)`) | `ivicaB=700`, a nije povratna | ne |
+| redosled upisa | `r1=r2=r3=700` | ni pozadina pre fonta, ni ponovni lookup, ni dvostruki upis |
+| `BackColor` obara font | `s2=400` | ne |
+
+Poslednje merenje je pokazalo i zašto ništa od toga nije radilo:
+
+```
+s1=400   upis rez=False nad izgrađenom kontrolom  -> PROLAZI
+s2=400   upis BackColor nad istom kontrolom       -> font nedirnut
+s3=700   JOŠ JEDAN isti takav upis rez=False      -> vrati 700
+```
+
+Upis `Font.Bold` **nije ni pouzdan ni idempotentan**.
+
+#### Popravka: tvrdi se ishod, ne mehanizam
+
+`modUiKit.PostaviRez(ctl, bold)` — upiši, pročitaj, i ako nije ono što je
+traženo, upiši opet; najviše tri puta. Merilo je **`Font.Weight`** (400
+normalan, 700 bold), jer je `Font.Bold` iz nje izveden i sam ume da prevari.
+Petlja je ograničena: ekran koji se zavrti je gori kvar od pogrešnog reza.
+
+Koriste ga `NewLbl`, `NewTxt` i `BoxState` — sva tri mesta na kojima se rez
+uopšte postavlja.
+
+Test 89 od tada čita `Font.Weight`, ne `Font.Bold`, i tvrdi ga za ispunu **i**
+natpis oba segmenta, u gradnji **i** u rasporedu, jednom tvrdnjom. Sonde su
+uklonjene — ostavljene bi tvrdile zatečena ponašanja MSForms-a kao da su ugovor.
+
+#### Dve posledice kroz ceo UI
+
+1. **Izgled.** Bold sada nosi samo ono što ga i traži: naslovi, izabrani
+   segmenti, čipovi, brojčana polja, zbirovi. Ostalo prelazi u normalan rez.
+2. **Ponašanje.** `clsFlatBtn.IsSelected` čita baš taj rez i za `"nav"`,
+   `"chip"` i `"seg"` je do sada bio **uvek True**, pa hover nije prefarbavao
+   nijedno od njih. Sada razlikuje izabrano od neizabranog, kako je i
+   projektovano.
+
+Sabotaža `ljuska-rez-bez-potvrde` vraća upis na jedan pokušaj bez čitanja.
