@@ -122,6 +122,15 @@ FAKTURA = "FAK-TEST-1"
 FAKTURA_IZNOS = 10000
 # Iznos = 0 -> kapija nad uplatom se na nju ne primenjuje (v. tblFakture dole).
 FAKTURA_BEZ_IZNOSA = "FAK-TEST-0"
+# EKRAN FAKTURISANJE (Faza E/16). Do sada su tblFakture imale dva reda BEZ
+# broja, datuma i statusa, i nijedna uplata nije bila vezana za fakturu, pa je
+# svaka tvrdnja o listi faktura, cipovima i slaganju sa GetOpenFakture bila
+# zelena bez pokrica -- svi filteri su radili nad praznim skupom.
+FAKTURA_NEPL = "FAK-TEST-N"      # KUPAC2, 5000, Neplaceno, bez uplate
+FAKTURA_PLAC = "FAK-TEST-P"      # KUPAC, 4000, Placeno, uplata pokriva ceo iznos
+FAKTURA_STORNO = "FAK-TEST-X"    # KUPAC, 7000, STORNIRANA -- ne sme u listu
+FAKTURA_NEPL_IZNOS = 5000
+FAKTURA_PLAC_IZNOS = 4000
 # Dva AKTIVNA reda tblNovac pod ISTIM brojem -- avans raspodela to radi
 # svakodnevno. Bez NovacID-a je broj dvosmislen i storno se odbija; sa njim se
 # stornira bas izabran red. Preflight je do sada odbijao i kad ID postoji.
@@ -478,10 +487,29 @@ SEED = {
         {"NovacID": "NOV-TEST-AB5", "BrojDokumenta": "AB-5",
          "Datum": FIXTURE_DATE, "Tip": "UplataKoop", "Uplata": 777,
          "KooperantID": "KOOP-TEST-1"},
+        # UPLATA PO FAKTURI. Jedina u fixture-u koja nosi FakturaID, pa je i
+        # jedina koju BuildUplataDictByFaktura ima sta da sabere. Zatvara
+        # FAKTURA_PLAC tacno na iznos -- ni dinar vise, da se "placeno" i
+        # "preplaceno" ne mesaju.
+        {"NovacID": "NOV-TEST-UF1", "BrojDokumenta": "UF-1",
+         "Datum": FIXTURE_DATE, "Tip": "KupciUplata", "Uplata": FAKTURA_PLAC_IZNOS,
+         "PartnerID": KUPAC, "Partner": KUPAC, "FakturaID": FAKTURA_PLAC},
     ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
         {"FakturaID": FAKTURA_BEZ_IZNOSA, "KupacID": KUPAC, "Iznos": 0},
+        # Neplacena faktura DRUGOG kupca: bez nje bi tvrdnja "cip neplacenih se
+        # slaze sa GetOpenFakture" merila slaganje dva prazna skupa.
+        {"FakturaID": FAKTURA_NEPL, "BrojFakture": "2/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": FAKTURA_NEPL_IZNOS, "Status": "Neplaceno"},
+        # Placena u celosti (uplata je u tblNovac). Cip "placene" i znak u redu
+        # (paypill) moraju da je vide isto.
+        {"FakturaID": FAKTURA_PLAC, "BrojFakture": "3/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC, "Iznos": FAKTURA_PLAC_IZNOS, "Status": "Placeno"},
+        # STORNIRANA: citac je izbacuje (ExcludeStornirano). Da prestane, pojavila
+        # bi se u listi i operater bi joj nudio stampu i SEF.
+        {"FakturaID": FAKTURA_STORNO, "BrojFakture": "4/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC, "Iznos": 7000, "Status": "Neplaceno", "Stornirano": "Da"},
     ],
     # Tri prijemnice, sve tri sa razlogom:
     #   PRJ-TEST-A i PRJ-TEST-B  ISTI broj, RAZLICIT kupac -> kolizija identiteta
@@ -524,6 +552,31 @@ SEED = {
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_DELJENA, "BrojZbirne": ZBIRNA_MIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 150, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 15, "Klasa": "I", "Stornirano": "Da"},
+        # EKRAN FAKTURISANJE. Tri reda istog kupca, svaki nosi po jedno stanje
+        # koje citac mora da razlikuje -- bez njih lista prijemnica ima samo
+        # slobodne redove, pa se kolona "dostupna" nikad ne razlikuje od prazne
+        # kolone broja fakture i tvrdnja o njoj nema nad cim da padne.
+        #
+        # 1) VEC FAKTURISANA -- uredno obelezena: i oznaka i FakturaID.
+        {"PrijemnicaID": "PRJ-FAK-1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": "20/150326", "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 40.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I",
+         "Fakturisano": "Da", "FakturaID": FAKTURA_PLAC},
+        # 2) NEPOTPUNO OBELEZENA: Fakturisano="Da", a FakturaID PRAZAN. Iz prikaza
+        #    (kolona broja fakture je prazna) izgleda slobodna, a
+        #    IsPrijemnicaAvailableForFaktura je odbija. Tacno taj raskorak deli
+        #    "citam pravilo" od "citam ono sto se vidi".
+        {"PrijemnicaID": "PRJ-FAK-2", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": "21/150326", "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 40.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I",
+         "Fakturisano": "Da"},
+        # 3) SLOBODNA -- referentna tacka; jedina od tri sme u korpu.
+        {"PrijemnicaID": "PRJ-FAK-3", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
+         "VozacID": VOZAC, "BrojPrijemnice": "22/150326", "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100, "Cena": 40.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 10, "Klasa": "I"},
         # Cilj druge vrste -- jedinstven broj, bez kolizije.
         {"PrijemnicaID": "PRJ-TEST-T2", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC, "BrojPrijemnice": PRIJEMNICA_CILJ_V2, "BrojZbirne": ZBIRNA_MIRNA,

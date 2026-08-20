@@ -1623,6 +1623,142 @@ SABOTAZE = {
         "T_Agro_SmartDozaZaokruzujeNagore",
         "doza se zaokruzuje NAGORE na cela pakovanja",
     ),
+    # --- EKRAN FAKTURISANJE (Faza E/16) -------------------------------------
+    # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
+    # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
+    # dobije ekran kome fali dugme, bez ijedne poruke.
+    "fakture-sef-sesta-radnja": (
+        "modScrFakture.bas",
+        '                         "sfrecov:OTKUI_BTN_FK_SEF_OPORAVI:88:ghost:1"\n',
+        '                         "sfrecov:OTKUI_BTN_FK_SEF_OPORAVI:88:ghost:1|" & _\n'
+        '                         "sfvisak:OTKUI_BTN_FK_SEF_STATUS:88:ghost:1"\n',
+        "T_Fak_UgovorEkrana",
+        "SEF lista ne trazi vise radnji nego sto ljuska ima dugmadi",
+    ),
+    # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada listi
+    # (RefreshChipsForScreen). Ako nije najsiri, povratak na njega tiho sakrije
+    # redove -- operater vidi kracu listu i ne zna zasto.
+    "fakture-cip-sve-nije-prvi": (
+        "modScrFakture.bas",
+        '            FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                                "nepl:OTKUI_CIPF_NEPLACENE:88|" & _\n',
+        '            FkCipoviZaListu = "nepl:OTKUI_CIPF_NEPLACENE:88|" & _\n'
+        '                                "sve:OTKUI_CHIP_SVE:40|" & _\n',
+        "T_Fak_UgovorEkrana",
+        "prvi cip svake liste je najsiri ('sve')",
+    ),
+    # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u listi
+    # faktura gleda internu sifru umesto broja.
+    "fakture-identitet-vidljiv": (
+        "modScrFakture.bas",
+        '        "OTKUI_HD_STATUS||paypill|92|1", _\n'
+        '        "OTKUI_HDF_FAKID||txt|1|4")\n',
+        '        "OTKUI_HD_STATUS||paypill|92|1", _\n'
+        '        "OTKUI_HDF_FAKID||txt|90|3")   \' SABOTAZA: identitet se crta\n',
+        "T_Fak_IdentitetURedu_NeCrtaSe",
+        "kolona identiteta ostaje van prikaza (prioritet 4)",
+    ),
+    # Dvosmislen ID je ID koji u tabeli postoji dvaput. Ako prvi pobedi, radnja
+    # se izvrsi nad redom koji operater NIJE pokazao -- tiho.
+    "fakture-dvosmislen-prvi-pobedjuje": (
+        "modFaktura.bas",
+        "    If CLng(brojac(iD)) <> 1 Then Exit Function\n",
+        "    ' SABOTAZA: duplikat prolazi kao identitet\n",
+        "T_Fak_IdentitetURedu_NeCrtaSe",
+        "ID koji postoji dvaput NIJE identitet",
+    ),
+    # Dostupnost se cita iz onoga sto RED NOSI, ne iz onoga sto se u njemu VIDI.
+    # Prijemnica obelezena kao fakturisana a bez FakturaID ima praznu kolonu
+    # fakture -- iz prikaza izgleda slobodna, a CreateFaktura je odbija.
+    "fakture-dostupnost-iz-prikaza": (
+        "modScrFakture.bas",
+        '        outA(n, 11) = IIf(dostupna, "1", "")\n',
+        '        outA(n, 11) = IIf(Len(CStr(src(i, 10))) = 0, "1", "")   \' SABOTAZA\n',
+        "T_Fak_DostupnostSePrenosiURedu",
+        "red mreze prenosi PRAVILO dostupnosti, ne prikaz",
+    ),
+    # Pravilo zivi na jednom mestu i deli ga kapija IsPrijemnicaAvailableForFaktura
+    # sa citacem mreze. Ovde gubi jedan uslov -- i dve strane pocnu da se razilaze.
+    "fakture-dostupnost-bez-oznake": (
+        "modFaktura.bas",
+        '    If Trim$(fakturisano) = "Da" Then Exit Function\n',
+        "    ' SABOTAZA: oznaka 'fakturisano' se vise ne gleda\n",
+        "T_Fak_DostupnostSePrenosiURedu",
+        "obelezena kao fakturisana ne sme u fakturu ni kad FakturaID nedostaje",
+    ),
+    # Korpa NIJE podatak u tabeli. Ljuska brojace pita samo kroz RefreshFromData,
+    # a nju zove tek na "podaci su promenjeni" -- pa bez svog kanala znacka pise
+    # nulu dok operater gleda listu faktura i puni korpu.
+    "fakture-znacka-ne-prati-korpu": (
+        "modScrFakture.bas",
+        "    mZnacka = Scr_Brojac()\n"
+        "    OsveziZonu\n"
+        "    modOtkupUI.OsveziNavBrojace\n",
+        "    OsveziZonu   ' SABOTAZA: promena korpe ne stize do znacke\n",
+        "T_Fak_KorpaZnackaITraka",
+        "promena korpe sama zove OsveziNavBrojace",
+    ),
+    # "Ukloni" bira po IDENTITETU. Dve stavke istog prikaza (isti broj, ista
+    # kolicina, ista cena) su inace nerazlucive, pa nestane pogresna -- tiho,
+    # jer red koji nestane izgleda isto kao onaj koji je trebalo da nestane.
+    "fakture-korpa-uklanja-prvu": (
+        "modScrFakture.bas",
+        "    i = UKorpi(prijemnicaID)\n",
+        "    i = IIf(Korpa().count > 0, 1, 0)   ' SABOTAZA: uklanja prvu\n",
+        "T_Fak_KorpaZnackaITraka",
+        "iz korpe se uklanja stavka koju je operater pokazao",
+    ),
+    # Operater upravo nesto doda, pa mu je potvrda ono sto trazi. Obrnut
+    # redosled izgleda ispravno dok se korpa ne napuni preko cetiri reda.
+    "fakture-traka-najstarije-prvo": (
+        "modScrFakture.bas",
+        "    If i < FK_KORPA_N - 1 Then\n"
+        "        TrakaRed = KorpaRedPrikaz(n - i)\n",
+        "    If i < FK_KORPA_N - 1 Then\n"
+        "        TrakaRed = KorpaRedPrikaz(i + 1)   ' SABOTAZA: najstarije prvo\n",
+        "T_Fak_KorpaZnackaITraka",
+        "traka korpe pokazuje NAJNOVIJE prvo",
+    ),
+    # Lista koja se tiho odseca izgleda kao cela -- isto pravilo koje ljuska nad
+    # sobom vec ima (BazenStaje).
+    "fakture-traka-bez-preliva": (
+        "modScrFakture.bas",
+        '    TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno\n',
+        '    TrakaRed = KorpaRedPrikaz(n - i)   \' SABOTAZA: preliv se precutkuje\n',
+        "T_Fak_KorpaZnackaITraka",
+        "traka korpe PRIJAVLJUJE koliko stavki ne staje",
+    ),
+    # Faktura iznosa nula nije placena nego prazna. Da je "placena", cip i znak
+    # u istom redu bi tvrdili suprotno jedno od drugog.
+    "fakture-prazna-je-placena": (
+        "modScrFakture.bas",
+        "    If iznos > 0 And uplaceno >= iznos Then\n",
+        "    If uplaceno >= iznos Then   ' SABOTAZA: i faktura bez iznosa je placena\n",
+        "T_Fak_CipoviPrateStatusFakture",
+        "faktura bez iznosa NIJE placena",
+    ),
+    # Cip "neplacene" mora da primeni ISTA dva uslova kao GetOpenFakture.
+    # Bez zapisanog statusa cip pokupi i fakture koje read-model ne vidi, pa se
+    # dve implementacije istog pravila raziju.
+    "fakture-nepl-ignorise-status": (
+        "modScrFakture.bas",
+        "            FkCipFaktura = (StrComp(Trim$(status), STATUS_NEPLACENO, vbTextCompare) = 0) _\n"
+        "                           And (iznos - uplaceno > 0)\n",
+        "            FkCipFaktura = (iznos - uplaceno > 0)   ' SABOTAZA: status se ne gleda\n",
+        "T_Fak_CipoviPrateStatusFakture",
+        "cip neplacenih se slaze sa modNovac.GetOpenFakture",
+    ),
+    # Stornirana faktura u listi znaci da joj operater nudi stampu i slanje na SEF.
+    "fakture-stornirana-u-listi": (
+        "modFaktura.bas",
+        "    data = ExcludeStornirano(data, TBL_FAKTURE)\n"
+        "    If IsEmpty(data) Then\n"
+        "        GetFaktureForGrid = Empty\n",
+        "    If IsEmpty(data) Then   ' SABOTAZA: stornirane ostaju u listi\n"
+        "        GetFaktureForGrid = Empty\n",
+        "T_Fak_CipoviPrateStatusFakture",
+        "stornirana faktura ne ulazi u listu",
+    ),
 }
 
 
