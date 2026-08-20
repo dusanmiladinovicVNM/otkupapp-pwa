@@ -4555,6 +4555,9 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim izlI As Long, izlU As Long, izlBoldI As Boolean, izlBoldU As Boolean
     Dim izlRstI As Long, izlRstU As Long
     Dim ulzI As Long, ulzU As Long, ulzRstI As Long, ulzRstU As Long
+    Dim snimak As String, rez As String
+    Dim bldI As Boolean, bldU As Boolean, bldIC As Boolean, bldUC As Boolean
+    Dim layIC As Boolean, layUC As Boolean
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4566,13 +4569,30 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     z.width = 1200: z.Height = 300
     modScrAgro.Scr_Build z
 
+    ' SONDA -- ne meri ugovor nego GDE se gubi. Neizabran segment se u pogonu
+    ' zatice sa Bold=True uz BELU ispunu, a taj par ne pravi nijedan pisac koji
+    ' se u izvoru vidi: BoxState uvek pari (belo, False) ili (zeleno, True), a
+    ' NewLbl ga gradi sa sel=False. Zato se stanje cita na DVA mesta -- odmah
+    ' posle gradnje i posle rasporeda -- i tvrdi kao JEDAN string: AssertEq
+    ' staje na prvoj razlici, pa bi zasebne tvrdnje pokazale samo prvu vrednost.
+    '
+    ' Uz ispunu (<nm>) ide i natpis (<nm>C). BoxState im pise ISTI bold, pa
+    ' razlika izmedju njih dvoje iskljucuje BoxState kao izvor.
+    bldI = z.Controls("scrAgSegI").Font.bold
+    bldU = z.Controls("scrAgSegU").Font.bold
+    bldIC = z.Controls("scrAgSegIC").Font.bold
+    bldUC = z.Controls("scrAgSegUC").Font.bold
+
     ' --- IZDAVANJE je izabrano ---
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     modScrAgro.Scr_Layout z, 1200, 300
+    rez = modScrAgro.Scr_Rezim()
     izlI = z.Controls("scrAgSegI").BackColor
     izlU = z.Controls("scrAgSegU").BackColor
     izlBoldI = z.Controls("scrAgSegI").Font.bold
     izlBoldU = z.Controls("scrAgSegU").Font.bold
+    layIC = z.Controls("scrAgSegIC").Font.bold
+    layUC = z.Controls("scrAgSegUC").Font.bold
     ' Posle izlaska pokazivaca boja mora da OSTANE.
     ResetSinkVizual "scrAgSegI"
     ResetSinkVizual "scrAgSegU"
@@ -4591,6 +4611,19 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
 
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     ReleaseOtkupUIForm f
+
+    ' SONDA prva: kad padne, pad nosi CEO snimak umesto jedne vrednosti.
+    ' Zdravo stanje je jedno jedino, pa se poredi sa doslovnim stringom.
+    snimak = "gradnja I=" & Bit(bldI) & " U=" & Bit(bldU) & _
+             " IC=" & Bit(bldIC) & " UC=" & Bit(bldUC) & _
+             " | raspored rez=" & rez & _
+             " I=" & Bit(izlBoldI) & " U=" & Bit(izlBoldU) & _
+             " IC=" & Bit(layIC) & " UC=" & Bit(layUC) & _
+             " bgI=" & BojaZnak(izlI) & " bgU=" & BojaZnak(izlU)
+    AssertEq snimak, _
+             "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
+             "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B", _
+             "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
     ' dugmetom koje nikad nije ni pozelenelo.
@@ -4804,6 +4837,23 @@ Private Sub T_Agro_ZnackaPratiKorpuVanKorpeListe()
 
     modScrAgro.Scr_ListaTestSet "KORPA"
 End Sub
+
+' Snimak sonde se cita kao red teksta, pa Bold ide kao 1/0, a boja kao slovo.
+' CStr(True) bi dao "True"/"False" i red bi se razvukao preko sirine izvestaja.
+Private Function Bit(ByVal b As Boolean) As String
+    Bit = IIf(b, "1", "0")
+End Function
+
+' Nepoznata boja se ispisuje BROJEM -- tada se iz izvestaja vidi koja je, a ne
+' samo da nije ocekivana.
+Private Function BojaZnak(ByVal c As Long) As String
+    Select Case c
+        Case CLng(modOtkupUI.C_FOREST): BojaZnak = "Z"
+        Case CLng(modOtkupUI.C_WHITE):  BojaZnak = "B"
+        Case CLng(modOtkupUI.C_CREAM):  BojaZnak = "K"
+        Case Else:                      BojaZnak = CStr(c)
+    End Select
+End Function
 
 ' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn
 ' uradi kad pokazivac napusti dugme. Isti tag nose i ispuna i natpis, pa se
