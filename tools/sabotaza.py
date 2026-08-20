@@ -1439,6 +1439,18 @@ SABOTAZE = {
         "polja prijema su ugasena u izdavanju (i obrnuto)",
     ),
     # Cip koji ne suzava izgleda kao da radi: lista je ista i pre i posle klika.
+    # Bojenje bez javljanja nove osnove. clsFlatBtn pamti boju pri Bind-u i na
+    # izlazak pokazivaca je vraca; izabran rezim tada pobeli, a natpis ostane
+    # krem -- dugme postane necitljivo. Operater je to prijavio na prvom smoke-u.
+    # Isti kvar je vec jednom placen u modScrStorno (StilDugmeta).
+    "agro-prekidac-bez-rebase": (
+        "modScrAgro.bas",
+        '    modOtkupUI.RebaseSink "scrAgSegI"\n'
+        '    modOtkupUI.RebaseSink "scrAgSegU"\n',
+        "    ' SABOTAZA: nova osnova se ne javlja sink-u\n",
+        "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
+        "izabran rezim zadrzava boju i kad pokazivac ode",
+    ),
     "agro-cip-ne-suzava": (
         "modScrAgro.bas",
         '        Case "ima":  AgCipStanje = (stanje > 0)\n',

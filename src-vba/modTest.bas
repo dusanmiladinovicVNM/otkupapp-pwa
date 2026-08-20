@@ -238,6 +238,7 @@ Public Sub RunAllTests()
     RunOne 86
     RunOne 87
     RunOne 88
+    RunOne 89
 
     SetTestMode prevMode
     WriteResultFile
@@ -358,6 +359,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 86: TestName = "T_Agro_CipoviSuzavajuListu"
         Case 87: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
         Case 88: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
+        Case 89: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -454,6 +456,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 86: T_Agro_CipoviSuzavajuListu
         Case 87: T_Agro_BrojacIDvoklikPoIdentitetu
         Case 88: T_Agro_AbzugMapaPratiPojedinacni
+        Case 89: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4498,6 +4501,88 @@ Private Sub T_Agro_AbzugMapaPratiPojedinacni()
              "kooperant bez odbitka nije u mapi"
     AssertEq modNovac.GetAgroAbzug(FX_KOOPERANT3), 0, _
              "pojedinacni racun mu daje nulu -- isto znacenje"
+End Sub
+
+' ============================================================
+' 89. Prekidac rezima ZADRZAVA boju posle izlaska pokazivaca
+' ============================================================
+' Kvar koji je prijavio operater na prvom smoke-u: izabran rezim je bio zelen
+' samo dok je pokazivac nad njim, a cim predje dalje ispuna se vrati na BELU --
+' natpis ostane krem (njegova labela je vezana kao "chev", nju reset ne dira),
+' pa aktivno dugme postane skoro necitljivo.
+'
+' Uzrok nije bojenje nego PAMCENJE: clsFlatBtn zapamti osnovnu boju pri Bind-u i
+' vraca je u ResetVisual kad pokazivac ode. BoxState menja kontrolu, ali ne i tu
+' zapamcenu osnovu -- zato render koji promeni boju mora da javi novu kroz
+' RebaseSink. Isti kvar je vec jednom placen u modScrStorno (StilDugmeta).
+'
+' Test ne trazi mis: ResetVisual se zove direktno nad sink-om, sto je tacno ono
+' sto se desi kad pokazivac napusti dugme. Boja se cita PRE i POSLE.
+Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
+    Dim f As frmOtkupUI, z As Object
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaAgSeg", True)
+    z.width = 1200: z.Height = 300
+    modScrAgro.Scr_Build z
+
+    ' --- IZDAVANJE je izabrano ---
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+
+    ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
+    ' dugmetom koje nikad nije ni pozelenelo.
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "preduslov: izabran rezim je obojen"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "preduslov: neizabran rezim je beo"
+    ' Bold NIJE kozmetika: clsFlatBtn.IsSelected bas po njemu prepoznaje
+    ' izabrano stanje i preskace hover. Ako se izgubi, dugme opet postaje obicno.
+    AssertEq z.Controls("scrAgSegI").Font.bold, True, _
+             "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
+    AssertEq z.Controls("scrAgSegU").Font.bold, False, _
+             "neizabran rezim nije Bold"
+
+    ' NAJVAZNIJE: posle izlaska pokazivaca boja OSTAJE. Ovo je jedina tvrdnja
+    ' koja pada kad se izgubi RebaseSink -- sve ostalo izgleda ispravno.
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "izabran rezim ostaje zelen i kad pokazivac ode"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "neizabran rezim ostaje beo i kad pokazivac ode"
+
+    ' --- PRIJEM: boje se zamene, i opet prezive ---
+    ' Bez ove polovine bi sabotaza koja zamrzne boje na prvoj vrednosti prosla:
+    ' prvi rezim bi i dalje bio tacan.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "prekidac je presao na prijem"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "izdavanje je prestalo da bude izabrano"
+
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "prijem ostaje zelen i kad pokazivac ode"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "izdavanje ostaje belo i kad pokazivac ode"
+
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    Unload f
+End Sub
+
+' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn
+' uradi kad pokazivac napusti dugme. Isti tag nose i ispuna i natpis, pa se
+' resetuju oba; za natpis ("chev") ResetVisual sam izlazi.
+Private Sub ResetSinkVizual(ByVal tag As String)
+    Dim b As clsFlatBtn
+    On Error Resume Next
+    If modOtkupUI.Btns Is Nothing Then Exit Sub
+    For Each b In modOtkupUI.Btns
+        If b.SinkTag = tag Then b.ResetVisual
+    Next b
 End Sub
 
 ' Ugasi magacin red koji je test napravio. Vracanje fixture-a, ne poslovna

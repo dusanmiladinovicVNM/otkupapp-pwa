@@ -4532,3 +4532,17 @@ ih ne obori isti kvar na obe strane.
 
 **Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
 podacima **ostaju operateru** — nisu prošli nijednom.
+
+### Prvi smoke: prekidač režima je belio
+
+Izabran režim je bio zelen **samo dok je pokazivač nad njim**. Uzrok nije bojenje
+nego pamćenje: `clsFlatBtn` zapamti osnovnu boju pri `Bind`-u i vraća je kad
+pokazivač ode, a `BoxState` tu osnovu ne dira. Lek je dvostruk — `RebaseSink`
+posle bojenja (isto kao `StilDugmeta` u Stornu, gde je već jednom plaćeno) i
+vrsta `"seg"` umesto `"btn"`, jer prekidač režima jeste segmentni prekidač kao
+onaj nad mrežom. Čipovi i prekidač lista su bili zaštićeni od početka — zato su
+na istom ekranu radili ispravno.
+
+Test 89 reprodukuje kvar bez miša: `ResetVisual` se zove direktno nad sink-om.
+**Nije izvršen** — pisan je u sesiji bez Excela, pa traži još jedno puštanje
+suite i smoke (vrsta `"seg"` menja hover-in, što headless ne vidi).

@@ -613,7 +613,7 @@ MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.5 Verifikacija
 
-Testovi 82–88 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+Testovi 82–89 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
 u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
 ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 
@@ -626,6 +626,7 @@ ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 | `T_Agro_CipoviSuzavajuListu` | ugovor čipa (`kljuc:KATALOG:sirina`) i pravilo svakog | `agro-cip-ne-suzava` |
 | `T_Agro_BrojacIDvoklikPoIdentitetu` | brojač vidi korpu; dvosmislen prikaz nosi **prazan** identitet | `agro-brojac-ne-vidi-korpu`, `agro-dvosmislen-prvi-pobedjuje` |
 | `T_Agro_AbzugMapaPratiPojedinacni` | mapa odbitaka i pojedinačni račun daju **isto**, nad svim kooperantima | `agro-abzug-mapa-ne-sabira` |
+| `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` | izabran režim ostaje zelen i kad pokazivač ode | `agro-prekidac-bez-rebase` |
 
 Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 `T_Agro_UgovorEkrana`, sa sabotažom `agro-cipova-preko-bazena`. Višak se inače
@@ -636,7 +637,7 @@ Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 - **Suite je puštena i zelena.** Prvo izvršavanje je bilo na rebase-u na
   `main` (`v6-ui-171`), na mašini sa Excelom. `RunAllTests` **ZELENO (88)**,
   pun set **ZELENO** (72 · 189 · 35 · 181 · 97 · 336 · 25), svih **devet**
-  agro sabotaža (sada **deset**) obara **imenovani** test i uredno se vraća.
+  agro sabotaža (sada ih je **jedanaest**) obara **imenovani** test i uredno se vraća.
 - **Prvo puštanje je oborilo dva testa** — oba pisana nad fixture-om kakav
   nije, produkcioni kod je bio ispravan:
   - `T_Agro_KapijaStanjaBrojiKorpu` je kontrolni izlaz upisivao sa **praznom
@@ -650,8 +651,45 @@ Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 
   To je i cena pisanja testa bez izvršavanja: obe greške bi pale na prvom
   puštanju, a nijedna se ne vidi čitanjem.
-- **Compile** (`Alt+F11 → Debug → Compile VBAProject`) i smoke nad pravim
-  podacima **ostaju operateru** — nisu prošli nijednom.
+- **Compile** (`Alt+F11 → Debug → Compile VBAProject`) ostaje operateru.
+
+### 7.7 Prvi smoke: prekidač režima je belio
+
+Smoke je našao kvar koji suite tada nije mogao da vidi: izabran režim je bio
+zelen **samo dok je pokazivač nad njim**; čim pređe dalje, ispuna se vrati na
+belu, a natpis ostane krem — pa aktivno dugme postane skoro nečitljivo.
+
+Uzrok nije bojenje nego **pamćenje**. `clsFlatBtn` zapamti osnovnu boju pri
+`Bind`-u i vraća je u `ResetVisual` kad pokazivač ode. `BoxState` menja kontrolu,
+ali ne i tu zapamćenu osnovu. Dva su leka, i trebala su oba:
+
+1. **`RebaseSink`** posle svakog `BoxState` — render koji promeni boju javlja novu
+   osnovu. Isti kvar i ista popravka kao `StilDugmeta` u `modScrStorno`, gde se
+   videlo samo na jednom od četiri dugmeta jer su ostala tri ionako tamna na belom.
+2. **Vrsta `"seg"`** umesto `"btn"` — prekidač režima *jeste* segmentni prekidač,
+   isti kao onaj nad mrežom, pa se i pravi istom fabrikom (`NewSegBtn`).
+   `clsFlatBtn.IsSelected` priznaje izabrano stanje (`Font.Bold`) samo za
+   `"nav"`, `"chip"` i `"seg"`. Kao `"btn"` je izabran režim bio obično dugme.
+
+Bojenje prekidača time seli iz osvežavanja zone u `RasporediPolja`, uz vidljivost
+polja: koji je režim izabran je **jedna** odluka, pa boja i raspored ne mogu da
+se raziđu — i `Scr_Layout` dobija zonu argumentom, pa se može izmeriti u testu.
+
+Čipovi (`ChipV`, vrsta `"chip"`) i prekidač lista (`NewSegBtn`) su bili zaštićeni
+od početka — zato su na istom ekranu radili ispravno. Ostali ugovorni ekrani
+nemaju ovaj kvar: `modScrPalete`, `modScrDokumenti` i `modScrOporavak` uopšte ne
+prefarbavaju kontrole, a `modScrStorno` pokriva sva svoja mesta.
+
+Test `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` reprodukuje kvar **bez miša**:
+`ResetVisual` se zove direktno nad sink-om, što je tačno ono što se desi kad
+pokazivač napusti dugme, pa se boja čita pre i posle — u **oba** režima, da
+sabotaža koja zamrzne boje na prvoj vrednosti ne prođe.
+
+> Deo popravke se ne može izmeriti headless: prelazak na vrstu `"seg"` menja
+> **hover-in** ponašanje (izabrano dugme se više ne zatamnjuje pod pokazivačem,
+> kao ni prekidač lista ispod njega). To ostaje na smoke listi, uz ponovno
+> puštanje suite — test 89 i sabotaža `agro-prekidac-bez-rebase` **nisu
+> izvršeni**, pisani su u sesiji bez Excela.
 - **Dupla implementacija odbitka je ZATVORENA.** `GetAgroAbzugMapa` ostaje
   brza kopija pravila iz `GetAgroAbzug` — obe su žive u istoj funkciji (mapu
   zove lista dugova, pojedinačnu keš ekrana), pa se mogu razići. Fixture je

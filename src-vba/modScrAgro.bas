@@ -239,11 +239,15 @@ Public Sub Scr_Build(ByVal z As Object)
     modUiKit.NewLbl z, "agCap", UCase$(Poruka("OTKUI_SCRAG_CAP")), PAD, 6, 260, 11, _
                     TS_MICRO, True, C_MUTED, -1
 
-    ' prekidac rezima -- boju stanja postavlja OsveziZonu (kao cipovi u mrezi)
-    modUiKit.BtnV z, "scrAgSegI", Poruka("OTKUI_SEG_AG_IZDAVANJE"), PAD, AG_Y_SEG, _
-                  112, 22, "secondary"
-    modUiKit.BtnV z, "scrAgSegU", Poruka("OTKUI_SEG_AG_PRIJEM"), PAD + 116, AG_Y_SEG, _
-                  112, 22, "secondary"
+    ' PREKIDAC REZIMA je segmentni prekidac, isti kao onaj nad mrezom -- pa se i
+    ' pravi istom fabrikom (NewSegBtn, vrsta "seg"), ne kao obicno dugme.
+    ' Vrsta nije kozmetika: clsFlatBtn.IsSelected priznaje izabrano stanje
+    ' (Font.Bold) samo za "nav", "chip" i "seg". Kao "btn" je izabran rezim bio
+    ' obicno dugme kome hover-out vrati zapamcenu belu -- v. OsveziPrekidacRezima.
+    modUiKit.NewSegBtn z, "scrAgSegI", Poruka("OTKUI_SEG_AG_IZDAVANJE"), _
+                       PAD, AG_Y_SEG, 112, 22, True
+    modUiKit.NewSegBtn z, "scrAgSegU", Poruka("OTKUI_SEG_AG_PRIJEM"), _
+                       PAD + 116, AG_Y_SEG, 112, 22, False
 
     ' cetiri brojke desno -- iste one koje legacy drzi u KPI traci iznad forme
     For i = 0 To 3
@@ -308,6 +312,7 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     If z Is Nothing Then Exit Sub
     If w < 200 Then Exit Sub
     izl = (Rezim() <> AG_ULAZ)
+    OsveziPrekidacRezima z, izl
 
     ' Podloga ide od ivice do ivice, sa malim uvlacenjem -- bez njega prvi
     ' natpis stoji zalepljen za belu ivicu. Pokriva oba reda polja i dva reda
@@ -1051,14 +1056,40 @@ Private Sub OsveziZonu()
 End Sub
 
 ' Koja polja i koja dugmad postoje u ovom rezimu, i kako se zovu.
-Private Sub OsveziRezim(ByVal z As Object)
-    Dim izl As Boolean
-    izl = (Rezim() <> AG_ULAZ)
-
+' IZABRAN REZIM SE MORA I JAVITI SINK-U, ne samo obojiti.
+'
+' clsFlatBtn pamti osnovnu boju pri Bind-u i na izlazak pokazivaca je VRACA
+' (ResetVisual). BoxState menja kontrolu, ali ne i tu zapamcenu osnovu -- pa je
+' izabran rezim bio zelen tek dok je pokazivac nad njim: cim predje dalje,
+' ispuna se vrati na belu, a natpis ostane krem (labela natpisa je vezana kao
+' "chev" i nju reset ne dira), pa aktivno dugme postane skoro necitljivo.
+' Tacno to je operater prijavio na prvom smoke-u.
+'
+' RebaseSink je bas za to: render koji promeni boju javlja novu osnovu. Isti
+' kvar i ista popravka kao StilDugmeta u modScrStorno, gde se videlo samo na
+' jednom od cetiri dugmeta jer su ostala tri ionako tamna na belom.
+'
+' Vrsta "seg" (v. Scr_Build) resava drugu polovinu: izabrano dugme hover uopste
+' ne prefarbava, isto kao prekidac lista nad mrezom. RebaseSink i dalje treba --
+' bez njega bi dugme koje je PRESTALO da bude izabrano vratilo zelenu osnovu
+' zapamcenu pri gradnji. Zato oba, tacno kao RefreshListSeg u ljusci.
+'
+' Stoji uz RASPORED, a ne uz osvezavanje zone, iz istog razloga kao vidljivost
+' polja: koji je rezim izabran je JEDNA odluka, pa boja i raspored ne mogu da se
+' raziju -- i Scr_Layout dobija zonu argumentom, pa se moze izmeriti u testu.
+Private Sub OsveziPrekidacRezima(ByVal z As Object, ByVal izl As Boolean)
+    On Error Resume Next
     modUiKit.BoxState z, "scrAgSegI", IIf(izl, C_FOREST, C_WHITE), _
                       IIf(izl, C_CREAM, C_FOREST), izl
     modUiKit.BoxState z, "scrAgSegU", IIf(izl, C_WHITE, C_FOREST), _
                       IIf(izl, C_FOREST, C_CREAM), Not izl
+    modOtkupUI.RebaseSink "scrAgSegI"
+    modOtkupUI.RebaseSink "scrAgSegU"
+End Sub
+
+Private Sub OsveziRezim(ByVal z As Object)
+    Dim izl As Boolean
+    izl = (Rezim() <> AG_ULAZ)
 
     z.Controls("scrAgKol").Controls("scrAgKolL").caption = UCase$(Poruka(IIf(izl, _
         "OTKUI_FLD_AG_PAKOVANJA", "OTKUI_FLD_AG_KOLICINA")))
