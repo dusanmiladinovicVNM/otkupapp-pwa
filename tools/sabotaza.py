@@ -1378,6 +1378,39 @@ SABOTAZE = {
     ),
     # Cuvar bazena sme da odseca, ali NE sme da cuti. Tiho odsecanje je vec
     # dvaput proslo kroz smoke: jedanaesti cip i sesta radnja nad redom.
+    # --- Faza C hardening: identitet, prostor trake, Err ugovor ---------
+    # Broj palete i broj prerade se RESETUJU po godini, pa je recnik
+    # broj->ID za 12/2025 i 12/2026 imao tacno jedan unos. Ova sabotaza
+    # vraca bas to: identitet se trazi po broju, prvi pogodak pobedjuje.
+    # Obara OBA testa identiteta -- i palete i prerade.
+    "palete-id-po-broju": (
+        "modScrPalete.bas",
+        "    IdZaRed = Trim$(CStr(modOtkupUI.GridCell(red, kol)))\n",
+        "    Dim i As Long, br As String   ' SABOTAZA: lookup samo po broju\n    br = Trim$(CStr(modOtkupUI.GridCell(red, 1)))\n    For i = 1 To modOtkupUI.GridBrojRedova()\n        If Trim$(CStr(modOtkupUI.GridCell(i, 1))) = br Then\n            IdZaRed = Trim$(CStr(modOtkupUI.GridCell(i, kol)))\n            Exit Function\n        End If\n    Next i\n",
+        "T_PaleteIdentitet_PoIDNePoBroju",
+        "radnja gadja izabrani RED, ne prvi red istog broja",
+    ),
+    # Telo mreze bez rezerve za traku poruka: poslednji red ulazi 24pt u
+    # traku, pa poruka stoji PREKO njega.
+    "grid-telo-preko-toasta": (
+        "modOtkupUI.bas",
+        "    bodyH = zh - (GRID_TOP + GRID_HEAD_H) - GRID_FOOT_H - TOAST_H - 4\n",
+        "    bodyH = zh - (GRID_TOP + GRID_HEAD_H) - GRID_FOOT_H - 6   ' SABOTAZA: bez rezerve\n",
+        "T_GridTelo_NePokrivaToast",
+        "telo mreze staje pre trake poruka",
+    ),
+    # Vraca BAS zatecen mehanizam: cela funkcija pod Resume Next, bez
+    # ciscenja. Greska iznutra se proguta, izvrsavanje se nastavi i Err
+    # ostane postavljen -- ljuska tada javlja neuspeh za radnju koja je
+    # prosla. (Skidanje samo zavrsnog Err.Clear NE meri nista: ShowToast
+    # ima svoj On Error Resume Next, a svaka On Error naredba cisti Err.)
+    "palete-event-curi-err": (
+        "modScrPalete.bas",
+        "    On Error GoTo EH\n    Scr_Event = ObradiDogadjaj(tag)\n    Err.Clear\n",
+        "    On Error Resume Next   ' SABOTAZA: greska se guta, Err ostaje\n    Scr_Event = ObradiDogadjaj(tag)\n",
+        "T_PaleteScrEvent_NeCuriGreska",
+        "Scr_Event ostavlja cist Err i kad je greska obradjena",
+    ),
     "bazen-cuti-visak": (
         "modOtkupUI.bas",
         "    If mBazenPrijave.Exists(k) Then Exit Function\n",

@@ -28,7 +28,7 @@ Attribute VB_Name = "modScrPalete"
 '=====================================================================
 Option Explicit
 
-Public Const SCRPAL_BUILD As String = "v6-ui-170"
+Public Const SCRPAL_BUILD As String = "v6-ui-173"
 
 ' Visina zone = visina KPI trake na ekranu dokumenata. Zona ugovornog ekrana
 ' stoji na istom mestu i iste je visine, pa naslov ispod nje pada u isti red
@@ -71,8 +71,6 @@ Private mPreNeto As Object
 Private mPreCombosFilled As Boolean
 Private mPalID As String
 Private mPalBroj As String
-Private mPalIds As Object         ' broj palete -> PaletaID
-Private mPreIds As Object         ' broj prerade -> PreradaID
 Private mStep As String           ' korak za poruku o gresci
 ' Kratak opis aktivne palete (vrsta, sorta, klasa, status). Pamti se pri izboru
 ' reda da bi prezivelo prelazak na listu stavki, gde tih kolona nema.
@@ -80,6 +78,16 @@ Private mPalOpis As String
 
 ' Kolona "PRERADJENO" u mrezi paleta - radnja storna je gleda pre poziva.
 Private Const PAL_KOL_PRERADJENO As Long = 12
+' Nevidljive kolone identiteta. Isti oblik kao PAL_NOVA_COL_ID iznad i kao
+' ST_BLOK_COL_ID u modScrStorno: prioritet 4, sirina 0, uvek POSLEDNJA.
+'
+' Postoje jer broj palete i broj prerade RESETUJU po godini
+' (GenerateBrojPalete / GenerateBrojPrerade racunaju maxN+1 unutar Year(Date)),
+' pa 12/2025 i 12/2026 nose ISTI broj. Dok je identitet isao preko broja,
+' radnja nad starijom paletom je pogadjala noviju -- stampa, zatvaranje i
+' storno nad pogresnim zapisom, bez ijedne poruke.
+Public Const PAL_KOL_ID  As Long = 13
+Public Const PRE_KOL_ID  As Long = 7
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -331,8 +339,30 @@ Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Sing
 End Function
 
 '-------------------------------------------------------------- RADNJE
+' Ugovor je isti kao modScrStorno.Scr_Event: na USPESNOM izlazu Err.Number
+' mora biti 0.
+'
+' Do sada je cela funkcija stajala pod On Error Resume Next i Err nikad nije
+' cistila. Svaka progutana greska iznutra (PostaviAktivnu cita GridCell nad
+' praznom mrezom, malformiran tag u CLng) ostajala je u Err i posle povratka,
+' pa je ljuska prijavljivala neuspeh za radnju koja je PROSLA.
+'
+' Telo je zato izdvojeno u ObradiDogadjaj, a ovde ostaje samo omotnica:
+' greska ide u log i u toast, Err se cisti u OBA smera.
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
-    On Error Resume Next
+    Dim errDesc As String
+    On Error GoTo EH
+    Scr_Event = ObradiDogadjaj(tag)
+    Err.Clear
+    Exit Function
+EH:
+    errDesc = Err.description
+    LogErr "modScrPalete.Scr_Event"
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
+    Err.Clear
+End Function
+
+Private Function ObradiDogadjaj(ByVal tag As String) As Boolean
 
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = Scr_Lista() Then Exit Function
@@ -341,14 +371,14 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
         ' spisak koji operater nije video.
         If Scr_Lista() = ST_NOVA Then OcistiPreradu
         mLista = Mid$(tag, 3)
-        Scr_Event = True
+        ObradiDogadjaj = True
         Exit Function
     End If
 
     ' Klik na red u listi za unos UKLJUCUJE ILI ISKLJUCUJE paletu. Vraca True da
     ' bi se mreza procitala ponovo -- kvacica se crta iz podataka.
     If Left$(tag, 4) = "row:" And Scr_Lista() = ST_NOVA Then
-        Scr_Event = OznaciPaletu(CLng(Mid$(tag, 5)))
+        ObradiDogadjaj = OznaciPaletu(CLng(Mid$(tag, 5)))
         Exit Function
     End If
 
@@ -360,7 +390,7 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     End If
 
     If tag = "scrPreradi" Then
-        Scr_Event = PreradiIzabrane()
+        ObradiDogadjaj = PreradiIzabrane()
         Exit Function
     End If
 
@@ -376,12 +406,12 @@ Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
     ' red, pa prebaci prekidac). Vraca True: lista se promenila, pa ljuska cita
     ' mrezu ponovo i pretvara prekidac.
     If Left$(tag, 4) = "dbl:" And Scr_Lista() = "PALETE" Then
-        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))
+        ObradiDogadjaj = OtvoriStavke(CLng(Mid$(tag, 5)))
         Exit Function
     End If
 
     If Left$(tag, 4) = "act:" Then
-        Scr_Event = PalAkcija(tag)
+        ObradiDogadjaj = PalAkcija(tag)
         Exit Function
     End If
 End Function
@@ -407,7 +437,7 @@ Private Function PalAkcija(ByVal tag As String) As Boolean
             Exit Function
     End Select
 
-    iD = IdZaRed(p(0), broj)
+    iD = IdZaRed(p(0), red)
     If Len(iD) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
@@ -468,16 +498,17 @@ EH:
     modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & Err.description, True
 End Function
 
-' Broj iz prve kolone -> ID, po tome kojoj listi radnja pripada.
-Private Function IdZaRed(ByVal akcija As String, ByVal broj As String) As String
-    If Len(broj) = 0 Then Exit Function
-    If Left$(akcija, 3) = "pre" Then
-        If mPreIds Is Nothing Then Exit Function
-        If mPreIds.Exists(broj) Then IdZaRed = CStr(mPreIds(broj))
-    Else
-        If mPalIds Is Nothing Then Exit Function
-        If mPalIds.Exists(broj) Then IdZaRed = CStr(mPalIds(broj))
-    End If
+' Identitet IZ IZABRANOG REDA, po tome kojoj listi radnja pripada.
+'
+' Ne preko broja: broj palete i broj prerade se resetuju po godini, pa
+' 12/2025 i 12/2026 nose isti broj. Recnik broj->ID je zato imao tacno jedan
+' unos za oba, i radnja nad starijom je pogadjala noviju. Kolona putuje SA
+' redom -- prezivi i sortiranje (SortedView kopira svih mColN kolona) i
+' filtriranje, jer je deo reda a ne pogled sa strane.
+Private Function IdZaRed(ByVal akcija As String, ByVal red As Long) As String
+    Dim kol As Long
+    If Left$(akcija, 3) = "pre" Then kol = PRE_KOL_ID Else kol = PAL_KOL_ID
+    IdZaRed = Trim$(CStr(modOtkupUI.GridCell(red, kol)))
 End Function
 
 '--------------------------------------------------------------- REDOVI
@@ -496,13 +527,14 @@ End Function
 ' Postavi AKTIVNU paletu iz reda mreze. Vraca False ako red ne nosi paletu
 ' (prazna mreza, red van skupa) -- pozivalac tada ne sme nista da menja.
 Private Function PostaviAktivnu(ByVal red As Long) As Boolean
-    Dim broj As String
+    Dim broj As String, iD As String
     On Error Resume Next
     broj = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    If Len(broj) = 0 Then Exit Function
-    If mPalIds Is Nothing Then Exit Function
-    If Not mPalIds.Exists(broj) Then Exit Function
-    mPalID = CStr(mPalIds(broj))
+    ' Identitet iz reda. Prazan znaci da red ne nosi paletu (prazna mreza, red
+    ' van skupa) -- ne da broj nije nadjen u recniku.
+    iD = Trim$(CStr(modOtkupUI.GridCell(red, PAL_KOL_ID)))
+    If Len(iD) = 0 Then Exit Function
+    mPalID = iD
     mPalBroj = broj
     ' vrsta, sorta, klasa i status stoje u redu koji je upravo izabran
     mPalOpis = Trim$(CStr(modOtkupUI.GridCell(red, 3))) & "  " & _
@@ -808,6 +840,22 @@ Public Sub Scr_PalTestSet(ByVal kljuc As String)
     mLista = kljuc
 End Sub
 
+' TEST SEAM: identitet koji bi mutation path razresio za dati red. Isti
+' razlog kao Scr_IzabranDocID u modScrStorno -- bez njega se "radnja gadja
+' TAJ red" ne moze izmeriti, jer stampa i storno idu nizvodno u writer.
+' Tvrdo gejtovan.
+Public Function Scr_IdZaRedTest(ByVal akcija As String, ByVal red As Long) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_IdZaRedTest = IdZaRed(akcija, red)
+End Function
+
+' TEST SEAM: aktivna paleta posle izbora reda. Tvrdo gejtovan.
+Public Function Scr_AktivnaPaletaTest(ByVal red As Long) As String
+    If Not IsTestMode() Then Exit Function
+    If Not PostaviAktivnu(red) Then Exit Function
+    Scr_AktivnaPaletaTest = mPalID
+End Function
+
 ' Test seam: izbor palete bez mreze. Tvrdo gejtovan, kao Scr_OtpTestSet.
 Public Sub Scr_PreTestSet(ByVal ident As String)
     If Not IsTestMode() Then Exit Sub
@@ -828,7 +876,8 @@ Private Function PalGridCols() As Variant
         "OTKUI_HDP_NETO||kg|72|1", _
         "OTKUI_HDP_BRUTO||kg|72|2", _
         "OTKUI_HD_STATUS||txt|78|1", _
-        "OTKUI_HDP_PRERADJENO||txt|76|2")
+        "OTKUI_HDP_PRERADJENO||txt|76|2", _
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 ' Palete iz modPaletniList.GetPaleteForGrid (0-bazirano, 13 kolona):
@@ -845,7 +894,6 @@ Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Varian
     On Error GoTo EH
     mStep = "palete"
 
-    Set mPalIds = CreateObject("Scripting.Dictionary")
     src = GetPaleteForGrid()
     If Not IsArray(src) Then
         RefreshBrojke 0, 0, 0
@@ -854,7 +902,7 @@ Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Varian
     End If
 
     uk = UBound(src, 1) + 1
-    ReDim outA(1 To uk, 1 To 12)
+    ReDim outA(1 To uk, 1 To PAL_KOL_ID)
     For r = 0 To UBound(src, 1)
         st = CStr(src(r, 11))
         ' zbirovi u zoni idu preko SVIH paleta, ne preko filtrirane liste
@@ -875,7 +923,6 @@ Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Varian
 
         n = n + 1
         outA(n, 1) = CStr(src(r, 1))
-        mPalIds(CStr(outA(n, 1))) = CStr(src(r, 0))
         outA(n, 2) = CStr(src(r, 2))
         outA(n, 3) = CStr(src(r, 3))
         outA(n, 4) = CStr(src(r, 4))
@@ -887,6 +934,7 @@ Private Function RowsPalete(ByVal filter As String, ByVal q As String) As Varian
         outA(n, 10) = PalD(src(r, 10))
         outA(n, 11) = st
         outA(n, 12) = CStr(src(r, 12))
+        outA(n, PAL_KOL_ID) = CStr(src(r, 0))
         sumNeto = sumNeto + PalD(src(r, 9))
 Sledeci:
     Next r
@@ -957,7 +1005,8 @@ Private Function PreGridCols() As Variant
         "OTKUI_HDR_TIPGP||part|0|1", _
         "OTKUI_HDR_KUTIJE||num|66|2", _
         "OTKUI_HDR_KESE||num|66|2", _
-        "OTKUI_HDP_NETO||kg|86|1")
+        "OTKUI_HDP_NETO||kg|86|1", _
+        "OTKUI_HD_IDENT||txt|0|4")
 End Function
 
 ' Prerade (0-bazirano): 0 PreradaID | 1 Broj | 2 Datum | 3 Neto | 4 Kutije
@@ -968,14 +1017,13 @@ Private Function RowsPrerade(ByVal q As String) As Variant
     On Error GoTo EH
     mStep = "prerade"
 
-    Set mPreIds = CreateObject("Scripting.Dictionary")
     src = GetPreradeForGrid()
     If Not IsArray(src) Then
         RowsPrerade = Array(PreGridCols(), Empty, 0, 0#, 0#, Array(0, 0, 0))
         Exit Function
     End If
 
-    ReDim outA(1 To UBound(src, 1) + 1, 1 To 6)
+    ReDim outA(1 To UBound(src, 1) + 1, 1 To PRE_KOL_ID)
     For r = 0 To UBound(src, 1)
         hay = CStr(src(r, 1)) & "|" & CStr(src(r, 2)) & "|" & CStr(src(r, 6))
         If Len(q) > 0 Then
@@ -983,12 +1031,12 @@ Private Function RowsPrerade(ByVal q As String) As Variant
         End If
         n = n + 1
         outA(n, 1) = CStr(src(r, 1))
-        mPreIds(CStr(outA(n, 1))) = CStr(src(r, 0))
         outA(n, 2) = PalDatum(src(r, 2))
         outA(n, 3) = CStr(src(r, 6))
         outA(n, 4) = Val(CStr(src(r, 4)))
         outA(n, 5) = Val(CStr(src(r, 5)))
         outA(n, 6) = PalD(src(r, 3))
+        outA(n, PRE_KOL_ID) = CStr(src(r, 0))
         sumNeto = sumNeto + PalD(src(r, 3))
 Sledeci:
     Next r
@@ -1036,8 +1084,6 @@ Private Sub RefreshAktivna()
 End Sub
 
 Public Sub Scr_ResetCache()
-    Set mPalIds = Nothing
-    Set mPreIds = Nothing
 End Sub
 
 '-------------------------------------------------------------- CELIJE

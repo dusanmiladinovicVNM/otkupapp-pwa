@@ -44,6 +44,13 @@ Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
 Private Const FX_KOOPERANT3 As String = "KOOP-TEST-3"   ' bez agro odbitka
 Private Const FX_ABZUG_KOOP1 As Double = 500   ' 300 + 200; 999 je storniran
 Private Const FX_ABZUG_KOOP2 As Double = 100
+' Kolizija broja po godini: isti broj, dve godine, dva identiteta.
+Private Const FX_PAL_KOL_BROJ As String = "12"
+Private Const FX_PAL_KOL_STARA As String = "PAL-TEST-Y25"   ' 12/2025
+Private Const FX_PAL_KOL_NOVA As String = "PAL-TEST-Z2"     ' 12/2026
+Private Const FX_PRE_KOL_BROJ As String = "7"
+Private Const FX_PRE_KOL_STARA As String = "PRE-TEST-Y25"   ' neto 200
+Private Const FX_PRE_KOL_NOVA As String = "PRE-TEST-Y26"    ' neto 300
 Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
 Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
 Private Const FX_VOZAC As String = "VOZ-TEST-1"
@@ -246,6 +253,10 @@ Public Sub RunAllTests()
     RunOne 90
     RunOne 91
     RunOne 92
+    RunOne 93
+    RunOne 94
+    RunOne 95
+    RunOne 96
 
     SetTestMode prevMode
     WriteResultFile
@@ -370,6 +381,10 @@ Private Function TestName(ByVal idx As Long) As String
         Case 90: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
         Case 91: TestName = "T_Agro_KorpaUklanjaPoIdentitetu"
         Case 92: TestName = "T_Agro_ZnackaPratiKorpuVanKorpeListe"
+        Case 93: TestName = "T_PaleteIdentitet_PoIDNePoBroju"
+        Case 94: TestName = "T_PreradeIdentitet_PoIDNePoBroju"
+        Case 95: TestName = "T_GridTelo_NePokrivaToast"
+        Case 96: TestName = "T_PaleteScrEvent_NeCuriGreska"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -470,6 +485,10 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 90: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
         Case 91: T_Agro_KorpaUklanjaPoIdentitetu
         Case 92: T_Agro_ZnackaPratiKorpuVanKorpeListe
+        Case 93: T_PaleteIdentitet_PoIDNePoBroju
+        Case 94: T_PreradeIdentitet_PoIDNePoBroju
+        Case 95: T_GridTelo_NePokrivaToast
+        Case 96: T_PaleteScrEvent_NeCuriGreska
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4809,6 +4828,215 @@ Private Sub StornirajMagacinRed(ByVal magID As String)
 End Sub
 
 ' Jedno polje contexta, po CorrectionID.
+
+' ============================================================
+' 93. Radnja nad paletom gadja RED, ne broj
+' ============================================================
+' Broj palete se RESETUJE po godini: GenerateBrojPalete racuna maxN+1 unutar
+' Year(Date), pa 12/2025 i 12/2026 postoje istovremeno. Dok je ekran identitet
+' resavao preko recnika broj->ID, taj recnik je za oba imao TACNO JEDAN unos --
+' pa je stampa, zatvaranje i storno nad starijom paletom pogadjalo noviju.
+'
+' Kvar je tih: operater vidi red koji je izabrao, a radnja ode na drugi zapis.
+'
+' Test ide kroz PRAVI put: GridTestLoad puni mrezu (uz sortiranje), a
+' Scr_IdZaRedTest vraca bas ono sto bi mutation path poslao nizvodno.
+Private Sub T_PaleteIdentitet_PoIDNePoBroju()
+    Dim d As Variant, i As Long, n As Long
+    Dim redStara As Long, redNova As Long
+    Dim idStara As String, idNova As String
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+
+    ' 1) UGOVOR: lista se zavrsava kolonom identiteta, i ta kolona je
+    ' NEVIDLJIVA. Vidljiva bi operateru prikazala internu sifru.
+    d = modScrPalete.Scr_Rows("sve", "")
+    AssertEq (UBound(d(0)) + 1), modScrPalete.PAL_KOL_ID, _
+             "opis kolona se zavrsava BAS na koloni koju radnja cita"
+    AssertEq Split(CStr(d(0)(modScrPalete.PAL_KOL_ID - 1)), "|")(0), "OTKUI_HD_IDENT", _
+             "poslednja kolona je identitet palete"
+    AssertEq modScrDokumenti.ColF(CStr(d(0)(modScrPalete.PAL_KOL_ID - 1)), 4), "4", _
+             "kolona identiteta je prioriteta 4 -- nikad vidljiva"
+
+    ' 2) Mreza se puni kao u ljusci -- preko nje radnja i cita red.
+    modOtkupUI.GridTestLoad "PALETE"
+    n = modOtkupUI.GridBrojRedova()
+    AssertEq (n > 0), True, "preduslov: mreza je napunjena"
+
+    ' PREDUSLOV koji nosi ceo test: fixture STVARNO ima dve palete istog
+    ' broja u dve godine. Bez njega bi sve ispod prolazilo nad jednim redom
+    ' i ne bi merilo nista.
+    For i = 1 To n
+        If Trim$(CStr(modOtkupUI.GridCell(i, 1))) = FX_PAL_KOL_BROJ Then
+            If Trim$(CStr(modOtkupUI.GridCell(i, 2))) = "2025" Then redStara = i
+            If Trim$(CStr(modOtkupUI.GridCell(i, 2))) = "2026" Then redNova = i
+        End If
+    Next i
+    AssertEq (redStara > 0 And redNova > 0), True, _
+             "PREDUSLOV: fixture ima paletu " & FX_PAL_KOL_BROJ & " i u 2025 i u 2026"
+
+    ' 3) NAJVAZNIJE: svaki red daje SVOJ identitet.
+    idStara = modScrPalete.Scr_IdZaRedTest("palprint", redStara)
+    idNova = modScrPalete.Scr_IdZaRedTest("palprint", redNova)
+    AssertEq idStara, FX_PAL_KOL_STARA, "stariji red daje SVOJ PaletaID"
+    AssertEq idNova, FX_PAL_KOL_NOVA, "noviji red ostaje netaknut -- svoj PaletaID"
+    AssertEq (idStara <> idNova), True, _
+             "dva reda istog broja NE smeju da daju isti identitet"
+
+    ' 4) Isti identitet vidi i izbor reda (aktivna paleta), ne samo radnje.
+    AssertEq modScrPalete.Scr_AktivnaPaletaTest(redStara), FX_PAL_KOL_STARA, _
+             "izbor reda postavlja aktivnu paletu po identitetu reda"
+    AssertEq modScrPalete.Scr_AktivnaPaletaTest(redNova), FX_PAL_KOL_NOVA, _
+             "izbor drugog reda ne vuce identitet prethodnog"
+
+    ' 5) Red van skupa nema identitet -- pozivalac tada ne sme nista da menja.
+    AssertEq modScrPalete.Scr_IdZaRedTest("palprint", n + 5), "", _
+             "red van mreze nema identitet"
+
+    modOtkupUI.GridTestLoad ""
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
+
+' ============================================================
+' 94. Radnja nad preradom gadja RED, ne broj
+' ============================================================
+' Isti kvar, druga lista: GenerateBrojPrerade takodje racuna maxN+1 unutar
+' Year(Date). Zaseban test jer je i resolver imao zasebnu granu ("pre").
+'
+' Lista prerada NEMA kolonu godine, pa se dva reda istog broja razlikuju po
+' netu (300 / 200) -- i bas zato je identitet iz reda jedini nacin da se
+' pogodi pravi zapis.
+Private Sub T_PreradeIdentitet_PoIDNePoBroju()
+    Dim d As Variant, i As Long, n As Long
+    Dim redStara As Long, redNova As Long
+    Dim idStara As String, idNova As String
+
+    modScrPalete.Scr_PalTestSet "PRERADE"
+
+    d = modScrPalete.Scr_Rows("sve", "")
+    AssertEq (UBound(d(0)) + 1), modScrPalete.PRE_KOL_ID, _
+             "opis kolona se zavrsava BAS na koloni koju radnja cita"
+    AssertEq Split(CStr(d(0)(modScrPalete.PRE_KOL_ID - 1)), "|")(0), "OTKUI_HD_IDENT", _
+             "poslednja kolona je identitet prerade"
+    AssertEq modScrDokumenti.ColF(CStr(d(0)(modScrPalete.PRE_KOL_ID - 1)), 4), "4", _
+             "kolona identiteta je prioriteta 4 -- nikad vidljiva"
+
+    modOtkupUI.GridTestLoad "PALETE"
+    n = modOtkupUI.GridBrojRedova()
+    AssertEq (n > 0), True, "preduslov: mreza prerada je napunjena"
+
+    For i = 1 To n
+        If Trim$(CStr(modOtkupUI.GridCell(i, 1))) = FX_PRE_KOL_BROJ Then
+            If CDbl(val(CStr(modOtkupUI.GridCell(i, 6)))) = 200 Then redStara = i
+            If CDbl(val(CStr(modOtkupUI.GridCell(i, 6)))) = 300 Then redNova = i
+        End If
+    Next i
+    AssertEq (redStara > 0 And redNova > 0), True, _
+             "PREDUSLOV: fixture ima preradu " & FX_PRE_KOL_BROJ & " u dve godine"
+
+    idStara = modScrPalete.Scr_IdZaRedTest("prestorno", redStara)
+    idNova = modScrPalete.Scr_IdZaRedTest("prestorno", redNova)
+    AssertEq idStara, FX_PRE_KOL_STARA, "stariji red daje SVOJ PreradaID"
+    AssertEq idNova, FX_PRE_KOL_NOVA, "noviji red ostaje netaknut -- svoj PreradaID"
+    AssertEq (idStara <> idNova), True, _
+             "dva reda istog broja NE smeju da daju isti identitet"
+
+    ' Grana resolvera se bira po PREFIKSU radnje: 'pre' cita kolonu prerade,
+    ' sve ostalo kolonu palete. Da grane nema, storno prerade bi citao praznu
+    ' kolonu 13 i tiho odbio radnju.
+    AssertEq modScrPalete.Scr_IdZaRedTest("preprint", redStara), FX_PRE_KOL_STARA, _
+             "i preprint ide kroz istu granu resolvera"
+
+    modOtkupUI.GridTestLoad ""
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
+
+' ============================================================
+' 95. Telo mreze ne ulazi u traku poruka
+' ============================================================
+' Traka poruka stoji tacno iznad podnozja (PostaviToast: footTop - TOAST_H - 4),
+' a telo mreze je racunato sa rezervom od svega 6pt -- pa je poslednji red
+' ulazio 24pt U traku. Poruka se crtala PREKO reda i drzala se samo ZOrder-om,
+' sto resava redosled crtanja, ne prostor: red ispod poruke je bio necitljiv.
+'
+' Meri se na VISE visina, jer je racun linearan po zh i greska bi se na jednoj
+' visini mogla slucajno poklopiti.
+'
+' Ispod ~195pt pobedjuje pod od tri reda (bodyH < GRID_ROW_H * 3) -- svesno:
+' mreza koja pokaze manje od tri reda nije upotrebljiva. Zato se meri od 200.
+Private Sub T_GridTelo_NePokrivaToast()
+    Dim f As frmOtkupUI, z As Object, body As Object, toast As Object
+    Dim h As Variant, nalaz As String, dodir As Long
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls("zGrid")
+
+    ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
+    ' masinerija obrise Err izmedju Err.Raise i omotnice testa.
+    For Each h In Array(200, 260, 300, 420, 560, 700)
+        modOtkupUI.GridLayoutTest z, 1200, CSng(h)
+        Set body = z.Controls("grdBody")
+        Set toast = z.Controls("tstScr")
+        If body.top + body.Height > toast.top Then
+            nalaz = nalaz & " zh=" & CStr(h) & "[telo do " & _
+                    CStr(body.top + body.Height) & ", traka od " & _
+                    CStr(toast.top) & "]"
+        End If
+        If body.top + body.Height = toast.top Then dodir = dodir + 1
+    Next h
+    Unload f
+
+    AssertEq nalaz, "", _
+             "telo mreze staje pre trake poruka -- body.Bottom <= toast.Top"
+    ' Kontrola u drugom smeru: rezervacija ne sme da bude i prevelika. Bar
+    ' jedna visina mora telo da dovede TACNO do trake -- inace bi test prolazio
+    ' i kad bi mreza bila proizvoljno niska i gubila redove bez razloga.
+    AssertEq (dodir > 0), True, _
+             "rezervacija je tacno TOAST_H -- telo bar jednom stigne do trake"
+End Sub
+
+' ============================================================
+' 96. Scr_Event ekrana Palete vraca cist Err
+' ============================================================
+' Isti ugovor koji modScrStorno.Scr_Event vec drzi (test 66): na USPESNOM
+' izlazu Err.Number mora biti 0.
+'
+' Ovde je cela funkcija stajala pod On Error Resume Next i Err nikad nije
+' cistila, pa je progutana greska iznutra ostajala u Err i posle povratka --
+' ljuska je prijavljivala neuspeh za radnju koja je PROSLA.
+Private Sub T_PaleteScrEvent_NeCuriGreska()
+    Dim brojPosle As Long, brojLos As Long
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+
+    ' 1) Obicna, uspesna radnja.
+    Err.Clear
+    modScrPalete.Scr_Event "lsPRERADE", "Click"
+    ' Err se cita ODMAH: svaki poziv ispod (pa i AssertEq) ume da ga promeni.
+    brojPosle = Err.Number
+    Err.Clear
+
+    ' 2) Dogadjaj koji IZNUTRA puca: CLng nad ne-brojem. Ovo je oblik koji je
+    ' i curio -- Resume Next ga proguta, a Err ostane postavljen.
+    modScrPalete.Scr_PalTestSet "PALETE"
+    Err.Clear
+    modScrPalete.Scr_Event "row:xyz", "Click"
+    brojLos = Err.Number
+    Err.Clear
+
+    AssertEq brojPosle, 0, _
+             "Scr_Event vraca cist Err -- inace ljuska javi neuspeh za radnju koja je prosla"
+    AssertEq brojLos, 0, _
+             "i kad dogadjaj iznutra pukne, Err ne curi kroz Scr_Event"
+
+    ' Kontrola u drugom smeru: prekidac je stvarno obradjen, nije se samo
+    ' progutao. Bez ovoga bi test prosao i kad Scr_Event ne radi nista.
+    modScrPalete.Scr_Event "lsPRERADE", "Click"
+    AssertEq modScrPalete.Scr_Lista(), "PRERADE", _
+             "kontrola: Scr_Event i dalje obradjuje dogadjaj"
+
+    modScrPalete.Scr_PalTestSet "PALETE"
+End Sub
 Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String
     SvPolje = Trim$(NzToText(LookupValue(TBL_STORNO_VEZE, COL_SV_ID, cid, kol)))
 End Function
