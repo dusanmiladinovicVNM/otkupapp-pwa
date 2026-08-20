@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-174"
+Public Const UIKIT_BUILD As String = "v6-ui-175"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -138,14 +138,39 @@ Public Function BoxText(parent As Object, nm As String, cap As String, _
     Set BoxText = fill
 End Function
 
+' REZ SE POTVRDJUJE, NE VERUJE MU SE.
+'
+' MSForms ume da izgubi upis Font.Bold: kontrola gradjena sa bold=False izlazi
+' sa Font.Weight = 700. Mereno sondom u testu 89, sest krugova, i nijedno
+' objasnjenje nije izdrzalo -- ni redosled (rez pre pozadine, rez posle
+' pozadine, rez kroz ponovni lookup, rez dva puta), ni ozicenje, ni povratna
+' vrednost, ni nasledjivanje fonta forme. Poslednje merenje je pokazalo i da
+' PRVI upis nad izgradjenom kontrolom prolazi (400), a DRUGI isti takav upis
+' vrati 700 -- dakle upis nije ni pouzdan ni idempotentan.
+'
+' Zato se ovde ne tvrdi ZASTO nego se tvrdi ISHOD: upisi, procitaj, i ako nije
+' ono sto je trazeno -- upisi opet. Merilo je Font.Weight (400 normalan, 700
+' bold), jer je Font.Bold iz nje izveden i sam po sebi ume da prevari.
+'
+' Petlja je ogranicena na tri pokusaja: kad ni to ne uhvati, kontrola ostaje
+' kakva jeste. Ekran koji se zavrti u petlji je gori kvar od pogresnog reza.
+Public Sub PostaviRez(ByVal ctl As Object, ByVal bold As Boolean)
+    Dim i As Long
+    On Error Resume Next
+    For i = 1 To 3
+        If (ctl.Font.Weight >= 700) = bold Then Exit Sub
+        ctl.Font.bold = bold
+    Next i
+End Sub
+
 ' promena boja kutije: ispuna nosi pozadinu, <nm>C tekst
 Public Sub BoxState(parent As Object, ByVal nm As String, ByVal bg As Long, _
                      ByVal fc As Long, ByVal bold As Boolean)
     On Error Resume Next
     parent.Controls(nm).BackColor = bg
-    parent.Controls(nm).Font.bold = bold
+    PostaviRez parent.Controls(nm), bold
     parent.Controls(nm & "C").ForeColor = fc
-    parent.Controls(nm & "C").Font.bold = bold
+    PostaviRez parent.Controls(nm & "C"), bold
 End Sub
 
 Public Sub BoxShow(parent As Object, ByVal nm As String, ByVal vis As Boolean)
@@ -379,16 +404,13 @@ Public Function NewLbl(parent As Object, nm As String, cap As String, X As Singl
         End If
         .WordWrap = False
     End With
-    ' REZ SE PISE ODVOJENO, direktno nad kontrolom -- ne unutar "With .Font".
-    ' Unutar tog bloka upis NE HVATA: kontrola gradjena sa bold=False izlazi sa
-    ' Font.Weight = 700, a isti upis kao zasebna naredba nad njom daje 400.
-    ' Mereno sondom u testu 89 (nova0=1/700 pre, posleFalse=0/400 posle).
-    '
-    ' Posledica je bila da je SVAKA runtime kontrola bold. Uniformno, pa se nije
-    ' ni primetilo -- izaslo je tek kad je jedna tvrdnja trazila da NEIZABRAN
-    ' segment NIJE bold. Uz to clsFlatBtn.IsSelected cita bas taj Font.Bold, pa
-    ' je za "nav", "chip" i "seg" bio uvek True i hover nije prefarbavao nista.
-    L.Font.bold = bold
+    ' Rez ide POSLE pozadine i kroz potvrdu -- vidi PostaviRez. Do v6-ui-174 je
+    ' stajao unutar "With .Font" i tiho se gubio, pa je SVAKA runtime kontrola
+    ' bila bold. Uniformno, pa se nije ni primetilo -- izaslo je tek kad je jedna
+    ' tvrdnja trazila da NEIZABRAN segment NIJE bold. Uz to clsFlatBtn.IsSelected
+    ' cita bas taj Font.Bold, pa je za "nav", "chip" i "seg" bio uvek True i
+    ' hover nije prefarbavao nista.
+    PostaviRez L, bold
     Set NewLbl = L
 End Function
 
@@ -411,8 +433,8 @@ Public Function NewTxt(parent As Object, nm As String, val As String, X As Singl
         End With
         .TextAlign = IIf(isNum, fmTextAlignRight, fmTextAlignLeft)
     End With
-    ' isti razlog kao u NewLbl -- unutar "With .Font" rez ne hvata
-    t.Font.bold = isNum
+    ' isti razlog kao u NewLbl -- vidi PostaviRez
+    PostaviRez t, isNum
     WireInput t, nm
     ' upis u spisak brojcanih polja - odavde zna FilterKeyPress koga da cuva
     If isNum Then

@@ -4551,149 +4551,41 @@ End Sub
 ' Test ne trazi mis: ResetVisual se zove direktno nad sink-om, sto je tacno ono
 ' sto se desi kad pokazivac napusti dugme. Boja se cita PRE i POSLE.
 Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
-    Dim f As frmOtkupUI, z As Object
-    Dim izlI As Long, izlU As Long, izlBoldI As Boolean, izlBoldU As Boolean
-    Dim izlRstI As Long, izlRstU As Long
+    Dim f As frmOtkupUI, z As Object, snimak As String, rez As String
+    Dim izlI As Long, izlU As Long, izlRstI As Long, izlRstU As Long
     Dim ulzI As Long, ulzU As Long, ulzRstI As Long, ulzRstU As Long
-    Dim snimak As String, rez As String
-    Dim bldI As Boolean, bldU As Boolean, bldIC As Boolean, bldUC As Boolean
-    Dim layIC As Boolean, layUC As Boolean
-    Dim nova0 As Boolean, nova1 As Boolean, posleFalse As Boolean
-    Dim tezina As Long, tezinaPosle As Long, formaBold As Boolean
-    Dim tez0 As Long, tez1 As Long, tezB As Long, tez2 As Long, tez3 As Long
-    Dim r1 As Long, r2 As Long, r3 As Long
-    Dim s1 As Long, s2 As Long, s3 As Long
+    Dim gI As Long, gU As Long, gIC As Long, gUC As Long
+    Dim rI As Long, rU As Long, rIC As Long, rUC As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
-    ' obrise Err izmedju Err.Raise i omotnice testa, pa pad stize kao "greska
-    ' bez opisa" i ne kaze KOJA tvrdnja je pala. Do v6-ui-171 su tvrdnje ovde
-    ' stajale izmedju koraka i pad je bio neupotrebljiv za dijagnozu.
+    ' obrise Err izmedju Err.Raise i omotnice testa.
+    '
+    ' REZ SE MERI PREKO Font.Weight (400 normalan, 700 bold), ne preko
+    ' Font.Bold. Font.Bold je iz tezine izveden i sam po sebi ume da prevari --
+    ' sonda je kroz sest krugova pokazala i upis koji se izgubi i upis koji
+    ' vrati staru vrednost. Tezina je broj i ne moze da bude "skoro tacna".
     Set f = NewOtkupUIForm()
     Set z = f.Controls.Add("Forms.Frame.1", "zProbaAgSeg", True)
     z.width = 1200: z.Height = 300
     modScrAgro.Scr_Build z
 
-    ' SONDA -- ne meri ugovor nego GDE se gubi. Neizabran segment se u pogonu
-    ' zatice sa Bold=True uz BELU ispunu, a taj par ne pravi nijedan pisac koji
-    ' se u izvoru vidi: BoxState uvek pari (belo, False) ili (zeleno, True), a
-    ' NewLbl ga gradi sa sel=False. Zato se stanje cita na DVA mesta -- odmah
-    ' posle gradnje i posle rasporeda -- i tvrdi kao JEDAN string: AssertEq
-    ' staje na prvoj razlici, pa bi zasebne tvrdnje pokazale samo prvu vrednost.
-    '
-    ' Uz ispunu (<nm>) ide i natpis (<nm>C). BoxState im pise ISTI bold, pa
-    ' razlika izmedju njih dvoje iskljucuje BoxState kao izvor.
-    bldI = z.Controls("scrAgSegI").Font.bold
-    bldU = z.Controls("scrAgSegU").Font.bold
-    bldIC = z.Controls("scrAgSegIC").Font.bold
-    bldUC = z.Controls("scrAgSegUC").Font.bold
-
-    ' SONDA 2 -- MEHANIZAM. Prvi krug je pokazao da kontrola NASTAJE bold iako
-    ' je fabrika zvana sa sel=False, i da je BoxState posle ne ocisti. Ostaje
-    ' pitanje sta tacno ne hvata, a to se ne pogadja nego meri:
-    '
-    '   nova0/nova1 -- gola NewLbl sa False i sa True, ovde i sada. Ako je i
-    '                  nova0 bold, onda je bold UNIVERZALAN za runtime kontrole
-    '                  (ambijent forme), a ne osobina segmenta.
-    '   posleFalse  -- eksplicitan Font.Bold = False nad zatecenom kontrolom.
-    '                  Ako ni to ne ocisti, Bold se nad njom ne moze skinuti.
-    '   tezina      -- Font.Weight ZATECENE kontrole, PRE ijednog upisa sonde.
-    '                  400 = normalan rez, 700 = bold. To je jedini podatak koji
-    '                  razlikuje dva suprotna zakljucka:
-    '                    700 -> natpis se stvarno crta bold; kriva je fabrika
-    '                    400 -> rez je normalan a Font.Bold samo LAZE pri
-    '                           citanju; tada je kriva TVRDNJA, ne ekran, i
-    '                           clsFlatBtn.IsSelected (cita isti Bold) je uz to
-    '                           uvek True za nav/chip/seg.
-    '                  Prvi krug ju je citao POSLE prisilnog False, pa je vratio
-    '                  400 koje nije govorilo nista -- greska u sondi, ne nalaz.
-    '   formaBold   -- font same forme. Kontrole ga naslede pri Controls.Add.
-    modUiKit.NewLbl z, "probaB0", "", 0, 260, 40, 12, 8, False, 0
-    modUiKit.NewLbl z, "probaB1", "", 44, 260, 40, 12, 8, True, 0
-    nova0 = z.Controls("probaB0").Font.bold
-    nova1 = z.Controls("probaB1").Font.bold
-    tez0 = z.Controls("probaB0").Font.Weight
-    tez1 = z.Controls("probaB1").Font.Weight
-
-    ' SONDA 4 -- ISTA POPRAVKA, RAZLICIT ISHOD. Posle popravke NewLbl-a natpis
-    ' segmenta (scrAgSegUC) poslusa, a ISPUNA (scrAgSegU) ostane na 700. Obe
-    ' su Label, obe idu kroz istu fabriku, obe su gradjene sa bold=False.
-    ' Razlikuju se u TRI stvari, i sve tri vaze samo za ispunu:
-    '
-    '   1. NEPROZIRNA je   (bg <> -1 -> BackStyle = Opaque + BackColor)
-    '   2. OZICENA je kao "seg"  (natpis je "chev", probaB0 nije ozicen)
-    '   3. uzeta je kao POVRATNA VREDNOST (Set fill = NewLbl(...)), ostale su
-    '      pozvane kao naredba
-    '
-    ' Tri kontrole razdvajaju te tri mogucnosti:
-    '   scrAgSegUB  ivica segmenta -- neprozirna, NEozicena, poziv kao naredba.
-    '               700 -> kriva je NEPROZIRNOST; 400 -> nije.
-    '   probaB2     neprozirna, neozicena, naredba -- kontrola za scrAgSegUB.
-    '   probaB3     prozirna, ali OZICENA kao "seg". 700 -> krivo je ozicenje.
-    ' Ako sve tri daju 400, ostaje samo povratna vrednost.
-    tezB = z.Controls("scrAgSegUB").Font.Weight
-    modUiKit.NewLbl z, "probaB2", "", 88, 260, 40, 12, 8, False, 0, modOtkupUI.C_WHITE
-    tez2 = z.Controls("probaB2").Font.Weight
-    modUiKit.NewLbl z, "probaB3", "", 132, 260, 40, 12, 8, False, 0
-    modOtkupUI.WireBtn z.Controls("probaB3"), "probaB3", "seg"
-    tez3 = z.Controls("probaB3").Font.Weight
-
-    ' SONDA 5 -- KOJI REDOSLED PREZIVI NAD NEPROZIRNOM KONTROLOM.
-    ' Sonda 4 je pokazala 100% poklapanje sa NEPROZIRNOSCU: prozirne poslusaju,
-    ' neprozirne ne (ivicaB=700, neproz=700, ozicen=400). Uz to je poznato da
-    ' isti upis KASNIJE, iz testa, nad istom neprozirnom kontrolom radi
-    ' (posleFalse=0/400) -- dakle kontrola nije "zakljucana", nego se upis gubi
-    ' u odredjenom redosledu.
-    '
-    ' Kandidati se ne biraju nego mere. Sva tri prave neprozirnu kontrolu i
-    ' traze rez 400; koji vrati 400, taj ide u NewLbl.
-    r1 = TezinaPoRedosledu(z, "probaR1", 1)
-    r2 = TezinaPoRedosledu(z, "probaR2", 2)
-    r3 = TezinaPoRedosledu(z, "probaR3", 3)
-
-    ' SONDA 6 -- DA LI BackColor OBARA FONT. Ovo je poslednja racva.
-    '
-    ' Zna se: nad kontrolom u gradnji nijedan redosled ne prezivi (r1..r3=700),
-    ' a nad VEC IZGRADJENOM kontrolom isti upis radi (posleFalse=0/400). Dva
-    ' objasnjenja preostaju, i razlikuje ih jedno merenje nad izgradjenom
-    ' neprozirnom kontrolom (scrAgSegUB, ivica segmenta):
-    '
-    '   s1  posle upisa rez=False
-    '   s2  posle upisa BackColor NAD ISTOM kontrolom
-    '   s3  posle jos jednog upisa rez=False
-    '
-    '   s1=400 s2=700  -> BackColor OBARA font. Tada popravka nije redosled u
-    '                     NewLbl-u nego pravilo: rez se pise POSLE svake
-    '                     promene pozadine (BoxState prvo bas to i radi
-    '                     obrnuto, pa mu se bold gubi).
-    '   s1=400 s2=400  -> BackColor ne dira font; kvar je iskljucivo u trenutku
-    '                     GRADNJE, i popravka je odlozen prolaz kroz fontove
-    '                     posle sto je zona sagradjena.
-    '   s3             -> da li se stanje uopste da vratiti posle pada.
-    z.Controls("scrAgSegUB").Font.bold = False
-    s1 = z.Controls("scrAgSegUB").Font.Weight
-    z.Controls("scrAgSegUB").BackColor = modOtkupUI.C_WHITE
-    s2 = z.Controls("scrAgSegUB").Font.Weight
-    z.Controls("scrAgSegUB").Font.bold = False
-    s3 = z.Controls("scrAgSegUB").Font.Weight
-    tezina = z.Controls("scrAgSegU").Font.Weight
-    formaBold = f.Font.bold
-    z.Controls("scrAgSegU").Font.bold = False
-    posleFalse = z.Controls("scrAgSegU").Font.bold
-    tezinaPosle = z.Controls("scrAgSegU").Font.Weight
-    ' vrati stanje kakvo je bilo, da ostatak testa meri ekran a ne sondu
-    z.Controls("scrAgSegU").Font.bold = bldU
+    ' stanje ODMAH posle gradnje -- ispuna i natpis oba segmenta
+    gI = z.Controls("scrAgSegI").Font.Weight
+    gU = z.Controls("scrAgSegU").Font.Weight
+    gIC = z.Controls("scrAgSegIC").Font.Weight
+    gUC = z.Controls("scrAgSegUC").Font.Weight
 
     ' --- IZDAVANJE je izabrano ---
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     modScrAgro.Scr_Layout z, 1200, 300
     rez = modScrAgro.Scr_Rezim()
+    rI = z.Controls("scrAgSegI").Font.Weight
+    rU = z.Controls("scrAgSegU").Font.Weight
+    rIC = z.Controls("scrAgSegIC").Font.Weight
+    rUC = z.Controls("scrAgSegUC").Font.Weight
     izlI = z.Controls("scrAgSegI").BackColor
     izlU = z.Controls("scrAgSegU").BackColor
-    izlBoldI = z.Controls("scrAgSegI").Font.bold
-    izlBoldU = z.Controls("scrAgSegU").Font.bold
-    layIC = z.Controls("scrAgSegIC").Font.bold
-    layUC = z.Controls("scrAgSegUC").Font.bold
     ' Posle izlaska pokazivaca boja mora da OSTANE.
     ResetSinkVizual "scrAgSegI"
     ResetSinkVizual "scrAgSegU"
@@ -4713,40 +4605,22 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     ReleaseOtkupUIForm f
 
-    ' SONDA prva: kad padne, pad nosi CEO snimak umesto jedne vrednosti.
-    ' Zdravo stanje je jedno jedino, pa se poredi sa doslovnim stringom.
-    snimak = "gradnja I=" & Bit(bldI) & " U=" & Bit(bldU) & _
-             " IC=" & Bit(bldIC) & " UC=" & Bit(bldUC) & _
+    ' REZ, u jednoj tvrdnji. AssertEq staje na prvoj razlici, pa bi osam
+    ' zasebnih tvrdnji pokazalo samo prvu vrednost -- a bas se meri da li se
+    ' gradnja i raspored SLAZU. Natpis (IC/UC) ide uz ispunu (I/U) jer im
+    ' BoxState pise isti rez: razlika izmedju njih dvoje je sama po sebi kvar.
+    snimak = "gradnja I=" & gI & " U=" & gU & " IC=" & gIC & " UC=" & gUC & _
              " | raspored rez=" & rez & _
-             " I=" & Bit(izlBoldI) & " U=" & Bit(izlBoldU) & _
-             " IC=" & Bit(layIC) & " UC=" & Bit(layUC) & _
-             " bgI=" & BojaZnak(izlI) & " bgU=" & BojaZnak(izlU)
-    ' Mehanizam i ugovor idu u ISTU tvrdnju: AssertEq staje na prvoj razlici,
-    ' pa bi dve tvrdnje dale samo prvu polovinu odgovora.
-    snimak = snimak & " | nova0=" & Bit(nova0) & "/" & tez0 & _
-             " nova1=" & Bit(nova1) & "/" & tez1 & _
-             " tezinaU=" & tezina & " posleFalse=" & Bit(posleFalse) & _
-             "/" & tezinaPosle & " forma=" & Bit(formaBold) & _
-             " | ivicaB=" & tezB & " neproz=" & tez2 & " ozicen=" & tez3 & _
-             " | r1=" & r1 & " r2=" & r2 & " r3=" & r3 & _
-             " | s1=" & s1 & " s2=" & s2 & " s3=" & s3
+             " I=" & rI & " U=" & rU & " IC=" & rIC & " UC=" & rUC
     AssertEq snimak, _
-             "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
-             "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
-             " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0" & _
-             " | ivicaB=400 neproz=400 ozicen=400" & _
-             " | r1=400 r2=400 r3=400" & _
-             " | s1=400 s2=400 s3=400", _
-             "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo, /=Font.Weight)"
+             "gradnja I=700 U=400 IC=700 UC=400" & _
+             " | raspored rez=IZLAZ I=700 U=400 IC=700 UC=400", _
+             "rez prekidaca rezima (Font.Weight: 400 normalan, 700 bold)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
     ' dugmetom koje nikad nije ni pozelenelo.
     AssertEq izlI, CLng(modOtkupUI.C_FOREST), "preduslov: izabran rezim je obojen"
     AssertEq izlU, CLng(modOtkupUI.C_WHITE), "preduslov: neizabran rezim je beo"
-    ' Bold NIJE kozmetika: clsFlatBtn.IsSelected bas po njemu prepoznaje
-    ' izabrano stanje i preskace hover. Ako se izgubi, dugme opet postaje obicno.
-    AssertEq izlBoldI, True, "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
-    AssertEq izlBoldU, False, "neizabran rezim nije Bold"
 
     ' NAJVAZNIJE: posle izlaska pokazivaca boja OSTAJE. Ovo je jedina tvrdnja
     ' koja pada kad se izgubi RebaseSink -- sve ostalo izgleda ispravno.
@@ -4951,64 +4825,6 @@ Private Sub T_Agro_ZnackaPratiKorpuVanKorpeListe()
 
     modScrAgro.Scr_ListaTestSet "KORPA"
 End Sub
-
-' Tri redosleda upisa nad NEPROZIRNOM kontrolom. Vraca Font.Weight, pa se vidi
-' koji od njih prezivi -- 400 je trazeni (normalan) rez, 700 je bold.
-'
-' Kontrola se pravi ovde, a ne kroz modUiKit.NewLbl: bas se meri REDOSLED koji
-' NewLbl treba da dobije, pa bi merenje kroz njega merilo zatecen redosled.
-Private Function TezinaPoRedosledu(z As Object, ByVal nm As String, _
-                                   ByVal r As Long) As Long
-    Dim L As Object
-    Set L = z.Controls.Add("Forms.Label.1", nm, True)
-    L.Left = 200: L.top = 260: L.width = 36: L.Height = 12
-    L.caption = "": L.ForeColor = 0: L.BorderStyle = fmBorderStyleNone
-
-    Select Case r
-        Case 1
-            ' pozadina PRE fonta, font kroz zatecenu referencu
-            L.BackStyle = fmBackStyleOpaque
-            L.BackColor = modOtkupUI.C_WHITE
-            L.Font.name = modOtkupUI.F_UI
-            L.Font.Size = 8
-            L.Font.bold = False
-        Case 2
-            ' pozadina PRE fonta, font kroz PONOVNI lookup iz kolekcije --
-            ' tako pise i upis koji je izmeren kao ispravan (posleFalse)
-            L.BackStyle = fmBackStyleOpaque
-            L.BackColor = modOtkupUI.C_WHITE
-            z.Controls(nm).Font.name = modOtkupUI.F_UI
-            z.Controls(nm).Font.Size = 8
-            z.Controls(nm).Font.bold = False
-        Case 3
-            ' zatecen redosled (font pa pozadina), pa rez JOS JEDNOM na kraju
-            L.Font.name = modOtkupUI.F_UI
-            L.Font.Size = 8
-            L.Font.bold = False
-            L.BackStyle = fmBackStyleOpaque
-            L.BackColor = modOtkupUI.C_WHITE
-            L.Font.bold = False
-    End Select
-
-    TezinaPoRedosledu = z.Controls(nm).Font.Weight
-End Function
-
-' Snimak sonde se cita kao red teksta, pa Bold ide kao 1/0, a boja kao slovo.
-' CStr(True) bi dao "True"/"False" i red bi se razvukao preko sirine izvestaja.
-Private Function Bit(ByVal b As Boolean) As String
-    Bit = IIf(b, "1", "0")
-End Function
-
-' Nepoznata boja se ispisuje BROJEM -- tada se iz izvestaja vidi koja je, a ne
-' samo da nije ocekivana.
-Private Function BojaZnak(ByVal c As Long) As String
-    Select Case c
-        Case CLng(modOtkupUI.C_FOREST): BojaZnak = "Z"
-        Case CLng(modOtkupUI.C_WHITE):  BojaZnak = "B"
-        Case CLng(modOtkupUI.C_CREAM):  BojaZnak = "K"
-        Case Else:                      BojaZnak = CStr(c)
-    End Select
-End Function
 
 ' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn
 ' uradi kad pokazivac napusti dugme. Isti tag nose i ispuna i natpis, pa se

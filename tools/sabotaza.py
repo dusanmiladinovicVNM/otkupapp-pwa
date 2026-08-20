@@ -1479,10 +1479,13 @@ SABOTAZE = {
     # Rez fonta se ne pise unutar "With .Font" -- tamo upis ne hvata i kontrola
     # izlazi bold bez obzira na trazenu vrednost. Kvar je UNIFORMAN, pa se ne
     # vidi golim okom: sve je bold, i izgleda kao odluka dizajna.
-    "ljuska-rez-unutar-with": (
+    "ljuska-rez-bez-potvrde": (
         "modUiKit.bas",
-        "    L.Font.bold = bold\n",
-        "    ' SABOTAZA: rez se ne pise odvojeno\n",
+        "    For i = 1 To 3\n"
+        "        If (ctl.Font.Weight >= 700) = bold Then Exit Sub\n"
+        "        ctl.Font.bold = bold\n"
+        "    Next i\n",
+        "    ctl.Font.bold = bold   ' SABOTAZA: rez se upisuje jednom, bez potvrde\n",
         "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
         "kontrola gradjena bez bold-a stvarno nije bold (Font.Weight 400)",
     ),
