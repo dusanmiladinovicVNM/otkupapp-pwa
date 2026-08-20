@@ -4560,7 +4560,7 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim layIC As Boolean, layUC As Boolean
     Dim nova0 As Boolean, nova1 As Boolean, posleFalse As Boolean
     Dim tezina As Long, tezinaPosle As Long, formaBold As Boolean
-    Dim tez0 As Long, tez1 As Long
+    Dim tez0 As Long, tez1 As Long, tezB As Long, tez2 As Long, tez3 As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4612,6 +4612,29 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     nova1 = z.Controls("probaB1").Font.bold
     tez0 = z.Controls("probaB0").Font.Weight
     tez1 = z.Controls("probaB1").Font.Weight
+
+    ' SONDA 4 -- ISTA POPRAVKA, RAZLICIT ISHOD. Posle popravke NewLbl-a natpis
+    ' segmenta (scrAgSegUC) poslusa, a ISPUNA (scrAgSegU) ostane na 700. Obe
+    ' su Label, obe idu kroz istu fabriku, obe su gradjene sa bold=False.
+    ' Razlikuju se u TRI stvari, i sve tri vaze samo za ispunu:
+    '
+    '   1. NEPROZIRNA je   (bg <> -1 -> BackStyle = Opaque + BackColor)
+    '   2. OZICENA je kao "seg"  (natpis je "chev", probaB0 nije ozicen)
+    '   3. uzeta je kao POVRATNA VREDNOST (Set fill = NewLbl(...)), ostale su
+    '      pozvane kao naredba
+    '
+    ' Tri kontrole razdvajaju te tri mogucnosti:
+    '   scrAgSegUB  ivica segmenta -- neprozirna, NEozicena, poziv kao naredba.
+    '               700 -> kriva je NEPROZIRNOST; 400 -> nije.
+    '   probaB2     neprozirna, neozicena, naredba -- kontrola za scrAgSegUB.
+    '   probaB3     prozirna, ali OZICENA kao "seg". 700 -> krivo je ozicenje.
+    ' Ako sve tri daju 400, ostaje samo povratna vrednost.
+    tezB = z.Controls("scrAgSegUB").Font.Weight
+    modUiKit.NewLbl z, "probaB2", "", 88, 260, 40, 12, 8, False, 0, modOtkupUI.C_WHITE
+    tez2 = z.Controls("probaB2").Font.Weight
+    modUiKit.NewLbl z, "probaB3", "", 132, 260, 40, 12, 8, False, 0
+    modOtkupUI.WireBtn z.Controls("probaB3"), "probaB3", "seg"
+    tez3 = z.Controls("probaB3").Font.Weight
     tezina = z.Controls("scrAgSegU").Font.Weight
     formaBold = f.Font.bold
     z.Controls("scrAgSegU").Font.bold = False
@@ -4662,11 +4685,13 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     snimak = snimak & " | nova0=" & Bit(nova0) & "/" & tez0 & _
              " nova1=" & Bit(nova1) & "/" & tez1 & _
              " tezinaU=" & tezina & " posleFalse=" & Bit(posleFalse) & _
-             "/" & tezinaPosle & " forma=" & Bit(formaBold)
+             "/" & tezinaPosle & " forma=" & Bit(formaBold) & _
+             " | ivicaB=" & tezB & " neproz=" & tez2 & " ozicen=" & tez3
     AssertEq snimak, _
              "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
              "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
-             " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0", _
+             " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0" & _
+             " | ivicaB=400 neproz=400 ozicen=400", _
              "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo, /=Font.Weight)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
