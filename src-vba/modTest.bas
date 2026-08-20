@@ -4558,6 +4558,8 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim snimak As String, rez As String
     Dim bldI As Boolean, bldU As Boolean, bldIC As Boolean, bldUC As Boolean
     Dim layIC As Boolean, layUC As Boolean
+    Dim nova0 As Boolean, nova1 As Boolean, posleFalse As Boolean
+    Dim tezina As Long, formaBold As Boolean
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4582,6 +4584,29 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     bldU = z.Controls("scrAgSegU").Font.bold
     bldIC = z.Controls("scrAgSegIC").Font.bold
     bldUC = z.Controls("scrAgSegUC").Font.bold
+
+    ' SONDA 2 -- MEHANIZAM. Prvi krug je pokazao da kontrola NASTAJE bold iako
+    ' je fabrika zvana sa sel=False, i da je BoxState posle ne ocisti. Ostaje
+    ' pitanje sta tacno ne hvata, a to se ne pogadja nego meri:
+    '
+    '   nova0/nova1 -- gola NewLbl sa False i sa True, ovde i sada. Ako je i
+    '                  nova0 bold, onda je bold UNIVERZALAN za runtime kontrole
+    '                  (ambijent forme), a ne osobina segmenta.
+    '   posleFalse  -- eksplicitan Font.Bold = False nad zatecenom kontrolom.
+    '                  Ako ni to ne ocisti, Bold se nad njom ne moze skinuti.
+    '   tezina      -- Font.Weight u brojkama: 400 = normalan, 700 = bold. Bold
+    '                  je izveden iz nje, pa je ona pravi podatak.
+    '   formaBold   -- font same forme. Kontrole ga naslede pri Controls.Add.
+    modUiKit.NewLbl z, "probaB0", "", 0, 260, 40, 12, 8, False, 0
+    modUiKit.NewLbl z, "probaB1", "", 44, 260, 40, 12, 8, True, 0
+    nova0 = z.Controls("probaB0").Font.bold
+    nova1 = z.Controls("probaB1").Font.bold
+    z.Controls("scrAgSegU").Font.bold = False
+    posleFalse = z.Controls("scrAgSegU").Font.bold
+    tezina = z.Controls("scrAgSegU").Font.Weight
+    formaBold = f.Font.bold
+    ' vrati stanje kakvo je bilo, da ostatak testa meri ekran a ne sondu
+    z.Controls("scrAgSegU").Font.bold = bldU
 
     ' --- IZDAVANJE je izabrano ---
     modScrAgro.Scr_RezimTestSet "IZLAZ"
@@ -4620,9 +4645,15 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
              " I=" & Bit(izlBoldI) & " U=" & Bit(izlBoldU) & _
              " IC=" & Bit(layIC) & " UC=" & Bit(layUC) & _
              " bgI=" & BojaZnak(izlI) & " bgU=" & BojaZnak(izlU)
+    ' Mehanizam i ugovor idu u ISTU tvrdnju: AssertEq staje na prvoj razlici,
+    ' pa bi dve tvrdnje dale samo prvu polovinu odgovora.
+    snimak = snimak & " | nova0=" & Bit(nova0) & " nova1=" & Bit(nova1) & _
+             " posleFalse=" & Bit(posleFalse) & " tezina=" & tezina & _
+             " forma=" & Bit(formaBold)
     AssertEq snimak, _
              "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
-             "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B", _
+             "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
+             " | nova0=0 nova1=1 posleFalse=0 tezina=400 forma=0", _
              "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
