@@ -23,7 +23,7 @@ Attribute VB_Name = "modUiKit"
 '=====================================================================
 Option Explicit
 
-Public Const UIKIT_BUILD As String = "v6-ui-107"
+Public Const UIKIT_BUILD As String = "v6-ui-174"
 
 ' Brojcana polja (NewTxt isNum:=True) -> kontrola. Filter unosa mora da zna
 ' i KOJE je polje i sta u njemu vec stoji, pa se cuva sama kontrola, ne
@@ -370,7 +370,6 @@ Public Function NewLbl(parent As Object, nm As String, cap As String, X As Singl
         With .Font
             .name = IIf(fnt = "", F_UI, fnt)
             .Size = fs
-            .bold = bold
         End With
         .BorderStyle = fmBorderStyleNone
         If bg = -1 Then
@@ -380,6 +379,16 @@ Public Function NewLbl(parent As Object, nm As String, cap As String, X As Singl
         End If
         .WordWrap = False
     End With
+    ' REZ SE PISE ODVOJENO, direktno nad kontrolom -- ne unutar "With .Font".
+    ' Unutar tog bloka upis NE HVATA: kontrola gradjena sa bold=False izlazi sa
+    ' Font.Weight = 700, a isti upis kao zasebna naredba nad njom daje 400.
+    ' Mereno sondom u testu 89 (nova0=1/700 pre, posleFalse=0/400 posle).
+    '
+    ' Posledica je bila da je SVAKA runtime kontrola bold. Uniformno, pa se nije
+    ' ni primetilo -- izaslo je tek kad je jedna tvrdnja trazila da NEIZABRAN
+    ' segment NIJE bold. Uz to clsFlatBtn.IsSelected cita bas taj Font.Bold, pa
+    ' je za "nav", "chip" i "seg" bio uvek True i hover nije prefarbavao nista.
+    L.Font.bold = bold
     Set NewLbl = L
 End Function
 
@@ -399,10 +408,11 @@ Public Function NewTxt(parent As Object, nm As String, val As String, X As Singl
         With .Font
             .name = IIf(isNum, F_NUM, F_UI)
             .Size = TS_BODY
-            .bold = isNum
         End With
         .TextAlign = IIf(isNum, fmTextAlignRight, fmTextAlignLeft)
     End With
+    ' isti razlog kao u NewLbl -- unutar "With .Font" rez ne hvata
+    t.Font.bold = isNum
     WireInput t, nm
     ' upis u spisak brojcanih polja - odavde zna FilterKeyPress koga da cuva
     If isNum Then
