@@ -2856,7 +2856,7 @@ GetColumnIndex("tblOtkup", "KooperantID")   ->  3      (nema schema drift-a)
 Potvrda: ručni `modUiData.ResetCache: modOtkupUI.RefreshFromData` je vratio sve
 liste.
 
-**Sada se keširа samo uspeh.** Neuspeh je „ne znam još", ne „nema ništa" — pa se
+**Sada se kešira samo uspeh.** Neuspeh je „ne znam još", ne „nema ništa" — pa se
 sledeći poziv ponovo pita. Cena je jedan promašen sken po tabeli koja je zaista
 prazna.
 
@@ -2878,8 +2878,8 @@ prikaza.
 ### P2 — `KOOP-00022` umesto imena, dva razloga
 
 `PartnerMap` čita isti keš. Kad dobije `Empty`, napravi **prazan** rečnik — i
-onda ga **keširа**, pa svako ime do kraja sesije pada na goli ID. Prazna mapa se
-sada ne keširа.
+onda ga **kešira**, pa svako ime do kraja sesije pada na goli ID. Prazna mapa se
+sada ne kešira.
 
 Uz to je ključ keša bio **samo ime tabele**, iako mapa zavisi i od kolona: prvi
 pozivalac je time odlučivao šta svi ostali dobijaju (`"Ime"` bez `"Prezime"`).
@@ -4194,7 +4194,7 @@ Drugi uzrok je bio moj: grana `scr` u `UiClick` je gutala i klik na **strelicu**
 (`scrPreGPD` počinje sa `scr` kao i sve ostalo što ekran nosi), pa je odlazio ekranu
 — a on o panelu izbora ne zna ništa, niti treba. Strelica se sada rešava **pre**
 grane ekrana. Isto i za kucanje: `PopFromTyping` se zove i za `scr` polja, pa kombo
-ekrana ima strelicu koja radi **i** kuцanje koje sužava listu.
+ekrana ima strelicu koja radi **i** kucanje koje sužava listu.
 
 **2. Nigde nije pisalo koje palete ulaze.** Zona je pokazivala samo brojku
 (`2 izabrano paleta`) — a baš je izbor paleta odluka koju operater donosi.
@@ -4731,3 +4731,82 @@ sve četiri sabotaže obaraju **imenovani** test i vraćaju se bit-identično.
 
 **Compile** (`Alt+F11 → Debug → Compile VBAProject`) **ostaje operateru** —
 automatski verdikt je `NEJASNO`.
+
+---
+
+## v2.62.0 — `v6-ui-175` · rez fonta se potvrđuje, ne veruje mu se
+
+Jedan kvar u ljusci koji je tri release-a držao jedan test crvenim — i sve vreme
+menjao izgled **celog** novog UI-ja, a da se nije video.
+
+### Šta je bilo
+
+`modUiKit.NewLbl` je ignorisao traženi rez: kontrola građena sa `bold=False`
+izlazila je sa `Font.Weight = 700`. Kvar je **uniforman** — svaka runtime
+kontrola je bila bold — pa se nije ni primetio; izgledao je kao odluka dizajna.
+
+Izašao je tek kad je jedna tvrdnja zatražila da **neizabran** segment
+Agrohemije **nije** bold.
+
+### Kako je nađen
+
+Sonda u testu 89, šest krugova merenja nad živom formom. Svaki krug je gasio po
+jedno objašnjenje: raspored, ožičenje, povratnu vrednost, nasleđivanje fonta
+forme, artefakt čitanja, redosled upisa, `BackColor`. Nijedno nije preživelo.
+
+Poslednje merenje je pokazalo zašto:
+
+```
+s1=400   upis rez=False nad izgrađenom kontrolom  -> PROLAZI
+s2=400   upis BackColor nad istom kontrolom       -> font nedirnut
+s3=700   JOŠ JEDAN isti takav upis rez=False      -> vrati 700
+```
+
+Upis `Font.Bold` **nije ni pouzdan ni idempotentan**.
+
+### Popravka
+
+`modUiKit.PostaviRez` — upiši, pročitaj, i ako nije ono što je traženo, upiši
+opet; najviše tri puta. Merilo je `Font.Weight` (400 normalan, 700 bold), jer je
+`Font.Bold` iz nje izveden i sam ume da prevari. Petlja je ograničena: ekran koji
+se zavrti je gori kvar od pogrešnog reza.
+
+Koriste ga `NewLbl`, `NewTxt` i `BoxState` — sva tri mesta na kojima se rez
+uopšte postavlja.
+
+### Šta operater vidi
+
+- **Izgled.** Bold sada nosi samo ono što ga i traži: naslovi, izabrani segmenti,
+  čipovi, brojčana polja, zbirovi. Ostalo prelazi u normalan rez. Vidljivo je
+  kroz **ceo** novi UI.
+- **Ponašanje.** `clsFlatBtn.IsSelected` čita baš taj rez i za `"nav"`, `"chip"`
+  i `"seg"` je do sada bio **uvek True**, pa hover nije prefarbavao nijedno od
+  njih. Sada razlikuje izabrano od neizabranog, kako je i projektovano.
+
+### Verifikacija
+
+`RunAllTests` **96 testova**, `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` **prolazi**
+prvi put otkad postoji. Test od sada čita `Font.Weight`, ne `Font.Bold`, i tvrdi
+ga za ispunu **i** natpis oba segmenta, u gradnji **i** u rasporedu, jednom
+tvrdnjom. Sonde su uklonjene — ostavljene bi tvrdile zatečena ponašanja
+MSForms-a kao da su ugovor.
+
+Sabotaža `ljuska-rez-bez-potvrde` vraća upis na jedan pokušaj bez čitanja i
+obara test po imenu.
+
+```
+vba_check  cisto (193)  ·  self-test (47)  ·  who_writes azuran
+RunAllTests 96 testova, 2 pala -- oba na PODACIMA DONORA, ne na kodu
+```
+
+> **Dva preostala pada nisu kod.** `make_fixture.py` u `KEEP_ROWS` ne briše
+> `tblConfig`, pa fixture nasleđuje podešavanja donora:
+> `T_PosleSnimanja_ZadrzavaKontekstOtpremnice` pada na `DEFAULT_SORTA_VOCA`
+> (donor ima `Willamette`, golden je snimljen bez njega), a
+> `T_IsplataValidiraj_TipNovcaPoIzboru` na `KES_ISPLATE` — isključen kod donora,
+> pa grana `If B(p, "izAvansa") And IsKesIsplate()` ne uđe i validator vrati
+> prazno. Oba padaju identično i pre ovih izmena.
+
+> **Compile** (`Alt+F11 → Debug → Compile VBAProject`) ostaje operateru, i
+> **smoke** nad novim rezom kroz sve ekrane — to je promena koju headless ne
+> vidi.
