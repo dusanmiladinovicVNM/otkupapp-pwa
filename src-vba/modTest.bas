@@ -4561,6 +4561,7 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim nova0 As Boolean, nova1 As Boolean, posleFalse As Boolean
     Dim tezina As Long, tezinaPosle As Long, formaBold As Boolean
     Dim tez0 As Long, tez1 As Long, tezB As Long, tez2 As Long, tez3 As Long
+    Dim r1 As Long, r2 As Long, r3 As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4635,6 +4636,19 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     modUiKit.NewLbl z, "probaB3", "", 132, 260, 40, 12, 8, False, 0
     modOtkupUI.WireBtn z.Controls("probaB3"), "probaB3", "seg"
     tez3 = z.Controls("probaB3").Font.Weight
+
+    ' SONDA 5 -- KOJI REDOSLED PREZIVI NAD NEPROZIRNOM KONTROLOM.
+    ' Sonda 4 je pokazala 100% poklapanje sa NEPROZIRNOSCU: prozirne poslusaju,
+    ' neprozirne ne (ivicaB=700, neproz=700, ozicen=400). Uz to je poznato da
+    ' isti upis KASNIJE, iz testa, nad istom neprozirnom kontrolom radi
+    ' (posleFalse=0/400) -- dakle kontrola nije "zakljucana", nego se upis gubi
+    ' u odredjenom redosledu.
+    '
+    ' Kandidati se ne biraju nego mere. Sva tri prave neprozirnu kontrolu i
+    ' traze rez 400; koji vrati 400, taj ide u NewLbl.
+    r1 = TezinaPoRedosledu(z, "probaR1", 1)
+    r2 = TezinaPoRedosledu(z, "probaR2", 2)
+    r3 = TezinaPoRedosledu(z, "probaR3", 3)
     tezina = z.Controls("scrAgSegU").Font.Weight
     formaBold = f.Font.bold
     z.Controls("scrAgSegU").Font.bold = False
@@ -4686,12 +4700,14 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
              " nova1=" & Bit(nova1) & "/" & tez1 & _
              " tezinaU=" & tezina & " posleFalse=" & Bit(posleFalse) & _
              "/" & tezinaPosle & " forma=" & Bit(formaBold) & _
-             " | ivicaB=" & tezB & " neproz=" & tez2 & " ozicen=" & tez3
+             " | ivicaB=" & tezB & " neproz=" & tez2 & " ozicen=" & tez3 & _
+             " | r1=" & r1 & " r2=" & r2 & " r3=" & r3
     AssertEq snimak, _
              "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
              "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
              " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0" & _
-             " | ivicaB=400 neproz=400 ozicen=400", _
+             " | ivicaB=400 neproz=400 ozicen=400" & _
+             " | r1=400 r2=400 r3=400", _
              "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo, /=Font.Weight)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
@@ -4906,6 +4922,47 @@ Private Sub T_Agro_ZnackaPratiKorpuVanKorpeListe()
 
     modScrAgro.Scr_ListaTestSet "KORPA"
 End Sub
+
+' Tri redosleda upisa nad NEPROZIRNOM kontrolom. Vraca Font.Weight, pa se vidi
+' koji od njih prezivi -- 400 je trazeni (normalan) rez, 700 je bold.
+'
+' Kontrola se pravi ovde, a ne kroz modUiKit.NewLbl: bas se meri REDOSLED koji
+' NewLbl treba da dobije, pa bi merenje kroz njega merilo zatecen redosled.
+Private Function TezinaPoRedosledu(z As Object, ByVal nm As String, _
+                                   ByVal r As Long) As Long
+    Dim L As Object
+    Set L = z.Controls.Add("Forms.Label.1", nm, True)
+    L.Left = 200: L.top = 260: L.width = 36: L.Height = 12
+    L.caption = "": L.ForeColor = 0: L.BorderStyle = fmBorderStyleNone
+
+    Select Case r
+        Case 1
+            ' pozadina PRE fonta, font kroz zatecenu referencu
+            L.BackStyle = fmBackStyleOpaque
+            L.BackColor = modOtkupUI.C_WHITE
+            L.Font.name = modOtkupUI.F_UI
+            L.Font.Size = 8
+            L.Font.bold = False
+        Case 2
+            ' pozadina PRE fonta, font kroz PONOVNI lookup iz kolekcije --
+            ' tako pise i upis koji je izmeren kao ispravan (posleFalse)
+            L.BackStyle = fmBackStyleOpaque
+            L.BackColor = modOtkupUI.C_WHITE
+            z.Controls(nm).Font.name = modOtkupUI.F_UI
+            z.Controls(nm).Font.Size = 8
+            z.Controls(nm).Font.bold = False
+        Case 3
+            ' zatecen redosled (font pa pozadina), pa rez JOS JEDNOM na kraju
+            L.Font.name = modOtkupUI.F_UI
+            L.Font.Size = 8
+            L.Font.bold = False
+            L.BackStyle = fmBackStyleOpaque
+            L.BackColor = modOtkupUI.C_WHITE
+            L.Font.bold = False
+    End Select
+
+    TezinaPoRedosledu = z.Controls(nm).Font.Weight
+End Function
 
 ' Snimak sonde se cita kao red teksta, pa Bold ide kao 1/0, a boja kao slovo.
 ' CStr(True) bi dao "True"/"False" i red bi se razvukao preko sirine izvestaja.
