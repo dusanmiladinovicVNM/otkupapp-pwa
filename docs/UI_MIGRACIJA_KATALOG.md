@@ -502,7 +502,7 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 **Faza D je time ZATVORENA.**
 
 ### Faza E — ostali ekrani
-15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, `modScrAgro`) — v. §7.
+15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, dorada `v6-ui-172`, `modScrAgro`) — v. §7.
     Ostaju: Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
     svaki po istom obrascu.
 
@@ -519,7 +519,7 @@ Duplirana logika se ne piše ni u jednom slučaju.
 
 ---
 
-## 7. Agrohemija — šta je preneto (v6-ui-171)
+## 7. Agrohemija — šta je preneto (v6-ui-171, dorada `v6-ui-172`)
 
 Prvi ekran **Faze E**. Zona nosi celu unosnu formu — što je moguće tek od
 `v6-ui-159`, kad je Faza C/10 (unos prerade na Paletama) otvorila polja i
@@ -722,3 +722,92 @@ pakovanja.
   drugog tipa), a `T_Agro_AbzugMapaPratiPojedinacni` tvrdi slaganje nad **svakim**
   kooperantom koga mapa zna — i tačne zbirove, da ih ne obori isti kvar na obe
   strane. Sabotaža `agro-abzug-mapa-ne-sabira` (500 → 200).
+
+### 7.9 Review PR #213: identitet stavke i kanal za značku (`v6-ui-172`)
+
+Dva nalaza iz review-a merged PR-a #213. Oba su ista klasa greške — **stanje koje
+se čita iz onoga što se vidi, umesto iz onoga što jeste**.
+
+#### P1 — „Ukloni stavku" je birao po prikazu
+
+Stavka korpe je tražena po **nazivu artikla i količini** iz prikazanog reda.
+Dve iste stavke su tada nerazlučive, a to nije izmišljen slučaj: *„dva pakovanja
+sada, dva kasnije"* daje dva reda iste robe i iste količine. Klik na drugi red je
+izbacivao **prvi** — tiho, jer red koji nestane izgleda isto kao onaj koji je
+trebalo da nestane.
+
+Isto pravilo kao „dvosmislen broj → MANUAL" u storno okviru, samo što se ovde
+dvosmislenost može **sprečiti** umesto prijaviti:
+
+- `modAgroUnos.NoviRed` svakoj stavci daje `stavkaID` (`NovaStavkaId`). ID je
+  **prolazan** — živi koliko i korpa, nikad ne ide u tabelu. Brojač je
+  modul-level jer dve korpe (izdavanje i prijem) žive istovremeno.
+- Grid korpe dobija **osmu kolonu** sa tim ID-jem, prioriteta **4**. Mreža crta
+  do prioriteta 3 (`LayoutGrid`), pa vrednost postoji u modelu a ćelija se nikad
+  ne pravi — `GridCell(red, 8)` je čita, operater je ne vidi. **Ljuska se ovim ne
+  menja**: mehanizam je već postojao.
+- Identitet ide **u red**, ne pored njega: mreža redove sortira i deli na strane,
+  pa bi svaka mapa „prikaz → stavka" koju ekran drži sa strane zastarela na prvi
+  klik po zaglavlju.
+- `UkloniPoId` zamenjuje `UkloniPoPrikazu`; uklanjanje je u
+  `modAgroUnos.AgroUkloniStavku`, jer je korpa struktura tog modula. Prazan ili
+  nepoznat ID **ne uklanja ništa** i javlja se porukom — ne pogađa se.
+
+#### P2 — značka je ćutala dok korpa nije prikazana lista
+
+Ljuska brojače uz stavke menija pita **samo** kroz `RefreshFromData`, a nju zove
+tek kad ekran na klik javi `True` = „podaci su promenjeni". Ekran to javlja samo
+kad je korpa **prikazana** lista — inače bi terao ponovno čitanje stanja ili
+prometa koje se nije menjalo.
+
+Posledica u pogonu: operater gleda Stanje, doda tri stavke, a značka i dalje piše
+nulu — pa pređe na drugi ekran misleći da nema šta da proknjiži. Korpa **nije**
+podatak u tabeli, pa „podaci su promenjeni" i „korpa je promenjena" nisu ista
+stvar i ne smeju da dele isti kanal.
+
+Ekran zato dobija `KorpaPromenjena` — jedno mesto za obe posledice promene korpe
+(zona + `modOtkupUI.OsveziNavBrojace`, koji je već `Public`). Zove se sa **sva
+četiri** mesta gde se korpa menja: dodavanje, uklanjanje, pražnjenje, upis.
+Prekidač režima tu **ne spada**: značka sabira obe korpe, pa prelazak ne menja
+broj — menja samo koja se korpa vidi u traci.
+
+> Cena: `OsveziNavBrojace` pita svaki ekran, a većina brojača je prolaz kroz
+> tabele. Zato ovo ide na **klik** (Dodaj / Ukloni / Završi), a nikad iz
+> `OsveziZonu` — zonu osvežava i svaki otkucaj u polju.
+
+#### Test 89 — nalaz, ne zakrpa
+
+Review javlja `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` kao jedini crveni test.
+**Nije reprodukovan** — u ovoj sesiji nema Excela (`run_vba.py` odbija, `pywin32`
+nema), pa se ne zna koja je tvrdnja pala.
+
+Ono što se **može** utvrditi čitanjem: test je tvrdnje postavljao **dok forma
+živi**, a `T_ZonaAgro_PoljaPostojeIPrateRezim` u istom fajlu dokumentuje zašto to
+ne valja — dok forma živi, njena mašinerija briše `Err` između `Err.Raise` i
+omotnice testa, pa pad stiže kao **`greska bez opisa`** i ne kaže koja tvrdnja je
+pala. Test je zato prestrojen na isti oblik: forma se prvo **izmeri**, pa se tvrdi
+**posle `ReleaseOtkupUIForm`**. (Usput je dobio i uredno otpuštanje forme — do
+sada je zvao goli `Unload`, pa je `mFrm` ostajao na oborenoj formi.)
+
+To ne popravlja uzrok ako uzrok postoji — **popravlja dijagnostiku**: sledeće
+puštanje ili je zeleno, ili imenuje tvrdnju i vrednost (`AssertEq` već ispisuje
+`ocekivano [X], dobijeno [Y]`).
+
+#### Verifikacija
+
+Testovi **91** (`T_Agro_KorpaUklanjaPoIdentitetu`) i **92**
+(`T_Agro_ZnackaPratiKorpuVanKorpeListe`); četiri nove sabotaže
+(`agro-korpa-bez-identiteta`, `agro-identitet-ne-stize-do-mreze`,
+`agro-identitet-vidljiv`, `agro-znacka-ne-prati-korpu`) — ukupno **sedamnaest**
+agro sabotaža.
+
+Test 91 meri **bez mreže**: mreža bi uvela sortiranje i stranice u tvrdnju koja
+je o identitetu. Ono što mreža mora da uradi — da identitet **prenese** i da ga
+**ne nacrta** — tvrdi se nad opisom kolona i nad redovima koje `Scr_Rows` vraća.
+
+Test 92 ne pokriva da baš `DodajUKorpu` / `IsprazniKorpu` / `ZavrsiUnos` zovu
+`KorpaPromenjena` — te tri rutine čitaju zonu, a zone u testu nema. To stoji u
+kodu (nigde na tim mestima nije ostao goli `OsveziZonu`) i mereno je sabotažom.
+
+**Neverifikovano:** `RunAllTests` nije puštan (nema Excela) — testovi 91 i 92 i
+sve četiri nove sabotaže **nisu izvršeni**. Compile nije prošao.
