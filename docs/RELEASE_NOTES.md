@@ -4442,3 +4442,140 @@ Sabotaže: `bazen-cuti-visak` (*prekoračenje se prijavljuje*) i `bazen-odseca-n
 
 `vba_check` čisto (191) · self-test (47) · `who_writes` ažuran · `RunAllTests`
 **ZELENO (81)** · pun set **ZELENO** · `COMPILE` — **ostaje na operateru**.
+
+---
+
+## v2.59.0 — `v6-ui-171` · Agrohemija na novom UI-ju (Faza E, stavka 15)
+
+Prvi ekran **Faze E**. `frmAgrohemija` ostaje operativna i **nepromenjena** — dve
+kopije poslovne logike postoje namerno, kao kod `frmOtkup` i `frmDokumenta`.
+
+### Šta je operater dobio
+
+Dve legacy sekcije (izlaz i ulaz) bile su dve forme jedna pored druge. Ljuska ima
+jednu zonu i jednu mrežu, pa su postale **prekidač režima**: IZDAVANJE / PRIJEM.
+Obe korpe žive istovremeno — prelazak režima ne prazni ništa.
+
+Mreža je dobila **četiri liste kojih legacy nema**: Korpa · Stanje magacina ·
+Promet · Dug po kooperantu. Legacy je za isto morao u Izveštaje.
+
+- **Traka korpe** uz desnu ivicu zone: naslov, poslednje stavke, zbir. Korpa se
+  inače vidi samo dok je izabrana lista „Korpa" — operater koji gleda stanje ili
+  dugove nema nijedan znak šta je upravo dodao. Polja uzimaju **ostatak** širine,
+  isti raspored kao `PRE_DESNO` na Paletama; na uskom ekranu traka nestaje i polja
+  uzimaju celu zonu.
+- **Čipovi** — Stanje: Ima na stanju · Bez zaliha. Promet: Ulazi · Izlazi · Ova
+  godina. Dugovi: Duguju. Negativno stanje **prolazi** kroz „Bez zaliha": greška u
+  knjiženju koja se ne vidi ostaje neispravljena.
+- **Brojač u meniju** broji korpu — jedino što na ovom ekranu čeka operatera.
+- **Dvoklik** preuzima red u unos: iz Dugova kooperanta (i prebacuje u IZDAVANJE
+  — dug se izdaje, ne prima), iz Stanja artikal.
+- **„Ukloni stavku" / „Isprazni korpu"** — legacy pogrešnu stavku nije umeo da
+  izbaci; jedini izlaz je bio zatvaranje forme.
+- **Multiselect parcela** zamenjen sakupljanjem dugmetom „+ Parcela"; zbir ha koji
+  smart doza računa je isti, kao i `parcelaID` niz razdvojen `;`.
+
+Dva mesta u ovom ekranu poštuju isto pravilo: **lista koja se tiho odseca izgleda
+kao cela.** Traka korpe kaže `… još N` kad stavke ne stanu, a granice bazena ljuske
+(`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) sada tvrdi i ovaj ekran.
+
+### Dvoklik bira po identitetu, ne po tekstu reda
+
+Lista pokazuje **ime**, a bira se **kooperant**. Čitač liste gradi mapu
+`prikaz → ID` i na koliziji pamti **prazno**; dvoklik na dvosmislen red tada
+**odbija** da bira umesto da pogodi — isto pravilo kao „dvosmislen broj → MANUAL"
+u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
+
+Fixture je zato dobio par istoimenih (`KOOP-TEST-1` i `KOOP-TEST-IME`, oba „Prvi
+Testni"). Dug blizanca ide preko rezervisanog virtuelnog artikla, koji
+`GetMagacinStanje` izuzima — pa se stanje `ART-TEST-1` ne pomera i dva testa se ne
+vezuju jedan za drugi.
+
+### Poslovna logika je izašla iz forme
+
+`modAgroUnos` (novo) drži korpu, obe kapije stanja i transakciju — isti oblik kao
+`modOtkupUnos` (F1), `modDokUnos` (F2–F4), `modNovacUnos` (F5–F7):
+
+- kapija pri dodavanju **broji i ono što je već u korpi** — ista roba se ne može
+  dodati dva puta preko stanja;
+- kapija pred upis **agregira po artiklu preko cele korpe** — stanje se moglo
+  promeniti između dodavanja i upisa (drugi operater, sync). Bez nje upis pukne na
+  pola petlje i vrati se rollback-om, a operater dobije `4301` umesto rečenice;
+- invarijanta nad `Pakovanje` svedena iz **tri kopije u formi** na jednu
+  (`AgroArtikalInfo`);
+- smart doza se zaokružuje **nagore**, na cela pakovanja — pola pakovanja se ne
+  izdaje.
+
+Čitači za mrežu su u domenskim modulima, ne u ekranu: `GetMagacinPrometForGrid`,
+`GetAgroDugoviForGrid`, `modNovac.GetAgroAbzugMapa`.
+
+### Odbitak duga se računa na dva mesta, pa se sada i poredi
+
+`GetAgroAbzugMapa` je brza kopija pravila iz `GetAgroAbzug` — jedan prolaz umesto
+`O(n·m)`. Obe su **žive u istoj funkciji**: mapu zove lista dugova, pojedinačnu keš
+ekrana. Dve kopije istog pravila se tiho raziđu, i ista aplikacija na dva mesta
+pokaže **različit dug istom čoveku**.
+
+Fixture je zato dobio `AgroAbzug` redove (dva za istog kooperanta, jedan
+**storniran**, jedan **drugog tipa**), a `T_Agro_AbzugMapaPratiPojedinacni` tvrdi
+slaganje nad **svakim** kooperantom koga mapa zna — uz tačne zbirove, da ih ne
+obori isti kvar na obe strane.
+
+### Ljuska se ovim ne menja
+
+Diff nad `src-vba/modOtkupUI.bas` je **jedna linija** — pečat verzije. Ekran je
+*drugi korisnik* ugovora koji je Faza C otvorila (`NewFieldG`, `LayoutFieldInner`,
+`chg:`, `FindCombo` nad zonom, `dbl:`, `Scr_Cipovi`, `Scr_Brojac`). Namerno: dve
+fabrike polja znače dva izgleda istog polja.
+
+### Šta je smoke našao
+
+Dva kvara, oba uhvaćena **pre** nego što je išta isporučeno:
+
+**Prekidač režima je belio.** Izabran režim je bio zelen samo dok je pokazivač nad
+njim. Uzrok nije bojenje nego **pamćenje**: `clsFlatBtn` zapamti osnovnu boju pri
+`Bind`-u i vraća je u `ResetVisual` kad pokazivač ode, a `BoxState` tu osnovu ne
+dira. Lek je dvostruk — `RebaseSink` posle bojenja (isto kao `StilDugmeta` u
+Stornu, gde je već jednom plaćeno) i vrsta `"seg"` umesto `"btn"`, jer prekidač
+režima jeste segmentni prekidač kao onaj nad mrežom. Čipovi i prekidač lista su
+bili zaštićeni od početka — zato su na istom ekranu radili ispravno.
+
+**Korpa se nije videla.** Vidi „Traka korpe" gore. Desna polovina reda polja je
+svejedno stajala prazna — parcele su često isključene, pa slotovi 3 i 4 nikad
+ništa ne nose.
+
+Nijedan od dva se ne vidi čitanjem koda, i nijedan suite tada nije mogao da uhvati.
+Oba sada imaju test koji ih reprodukuje **bez miša**.
+
+### Verifikacija
+
+Testovi **82–90** (numeracija pomerena za jedan: `v6-ui-170` je uzeo 81), **trinaest**
+agro sabotaža.
+
+Pušteno na mašini sa Excelom, **zaključno sa testom 88**:
+
+`vba_check` čisto (193) · self-test (47) · `who_writes` ažuran ·
+`RunAllTests` **ZELENO (88)** · pun set **ZELENO** · deset agro sabotaža obara
+**imenovani** test.
+
+**Prvo puštanje je oborilo dva testa**, oba pisana nad fixture-om kakav nije —
+produkcioni kod je bio ispravan u oba slučaja:
+
+| Test | Zašto je pao |
+|---|---|
+| `T_Agro_KapijaStanjaBrojiKorpu` | kontrolni izlaz je upisivan sa **praznom parcelom**, a `PRACENJE_PARCELA` je ON → `4215`. Test je padao na svom **čistaču**, ne na kapiji koju meri. |
+| `T_Agro_BrojacIDvoklikPoIdentitetu` | tražio je identitet kooperanta **koga u listi dugova nije bilo** — tvrdnja je merila odsustvo reda i prolazila bi samo greškom. |
+
+Obe greške bi pale na prvom puštanju, a nijedna se ne vidi čitanjem — to je cena
+testa koji je napisan bez izvršavanja.
+
+> **Nije prošlo.** Testovi **89** i **90** (prekidač režima, traka korpe) i njihove
+> **tri** sabotaže su pisani u sesiji bez Excela i **nisu izvršeni**. Fixture se
+> mora **regenerisati** (`make_fixture.py`) — dobio je `ART-TEST-Z` sa velikom
+> zalihom, bez ijednog izlaza, jer se preliv trake preko `ART-TEST-1` ne može
+> izmeriti (kapija stanja propušta najviše tri pakovanja).
+>
+> **Compile** (`Alt+F11 → Debug → Compile VBAProject`) nije prošao nijednom.
+> Na smoke listi ostaje i jedna stvar koju headless ne vidi ni u principu: vrsta
+> `"seg"` menja **hover-in** — izabrano dugme se više ne zatamnjuje pod
+> pokazivačem, kao ni prekidač lista ispod njega.

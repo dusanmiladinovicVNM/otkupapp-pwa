@@ -1807,6 +1807,50 @@ Public Function GetAgroAbzug(ByVal kooperantID As String) As Double
     Next i
 End Function
 
+' Isti racun kao GetAgroAbzug, samo JEDNIM prolazom za SVE kooperante:
+' kooperantID -> zbir AgroAbzug uplata. Postoji zbog liste dugova u novom UI
+' (modAgrohemija.GetAgroDugoviForGrid) -- GetAgroAbzug u petlji po kooperantu
+' cita celu tblNovac po redu liste, sto je O(n*m).
+'
+' Citanje ostaje u modNovac: tblNovac je njegova tabela (docs/DOMEN/WHO_WRITES).
+Public Function GetAgroAbzugMapa() As Object
+    Const SRC As String = "GetAgroAbzugMapa"
+
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+    Set GetAgroAbzugMapa = d
+
+    Dim data As Variant
+    data = GetTableData(TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_NOVAC)
+    If IsEmpty(data) Then Exit Function
+
+    Dim colKoop As Long
+    Dim colTip As Long
+    Dim colUplata As Long
+
+    colKoop = RequireColumnIndex(TBL_NOVAC, COL_NOV_KOOP_ID, SRC)
+    colTip = RequireColumnIndex(TBL_NOVAC, COL_NOV_TIP, SRC)
+    colUplata = RequireColumnIndex(TBL_NOVAC, COL_NOV_UPLATA, SRC)
+
+    Dim i As Long
+    Dim koopID As String
+
+    For i = 1 To UBound(data, 1)
+        If CStr(data(i, colTip)) = "AgroAbzug" Then
+            koopID = Trim$(CStr(data(i, colKoop)))
+            If Len(koopID) > 0 Then
+                If Not d.Exists(koopID) Then d.Add koopID, 0#
+                If IsNumeric(data(i, colUplata)) Then
+                    d(koopID) = CDbl(d(koopID)) + CDbl(data(i, colUplata))
+                End If
+            End If
+        End If
+    Next i
+End Function
+
 Private Sub ValidateNovacInput(ByVal brojDok As String, _
                                ByVal datum As Date, _
                                ByVal partner As String, _

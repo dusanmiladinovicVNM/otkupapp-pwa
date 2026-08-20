@@ -742,3 +742,152 @@ Private Function GetArtikalStanje(ByVal artikalID As String) As Double
         End If
     Next i
 End Function
+
+'=====================================================================
+' CITACI ZA MREZU NOVOG UI-JA (v6-ui-171)
+'
+' Ekran ne cita tabele sam -- isti dogovor po kome modScrPalete uzima redove
+' iz modPaletniList.GetPaleteForGrid. Nizovi su 0-BAZIRANI, kao i ostali
+' *ForGrid citaci, pa ekran samo prepisuje kolone i formatira.
+'
+' Storno se svuda gura kroz ExcludeStornirano -- stornirana stavka magacina
+' ne sme da se pojavi ni u prometu ni u dugu.
+'=====================================================================
+
+' Promet magacina (ledger). 0-bazirano, 12 kolona:
+'   0 MagacinID | 1 Datum | 2 Tip | 3 ArtikalID | 4 Naziv | 5 JM
+'   6 Kolicina | 7 Cena | 8 Vrednost | 9 Partner | 10 BrojDokumenta
+'   11 ParcelaID
+'
+' "Partner" je kooperant kod IZLAZA, a dobavljac kod ULAZA -- u mrezi je to
+' jedna kolona jer se nikad ne popunjavaju obe (v. SaveMagacinCore).
+' Imena se citaju kroz BuildLookupDict, ne kroz LookupValue u petlji: drugo je
+' O(n*m) i na pravim podacima se vidi kao "lista se dugo ucitava".
+Public Function GetMagacinPrometForGrid() As Variant
+    Const SRC As String = "GetMagacinPrometForGrid"
+    Dim data As Variant, art As Object, koop As Object
+    Dim colID As Long, colDat As Long, colArt As Long, colTip As Long
+    Dim colKol As Long, colKoop As Long, colPar As Long, colDok As Long
+    Dim colCena As Long, colVred As Long, colDob As Long
+    Dim jm As Object, i As Long, n As Long, res() As Variant
+    Dim artID As String, tip As String, partner As String
+
+    data = GetTableData(TBL_MAGACIN)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_MAGACIN)
+    If IsEmpty(data) Then Exit Function
+
+    colID = RequireColumnIndex(TBL_MAGACIN, COL_MAG_ID, SRC)
+    colDat = RequireColumnIndex(TBL_MAGACIN, COL_MAG_DATUM, SRC)
+    colArt = RequireColumnIndex(TBL_MAGACIN, COL_MAG_ARTIKAL, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colKol = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOLICINA, SRC)
+    colKoop = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOOP, SRC)
+    colPar = RequireColumnIndex(TBL_MAGACIN, COL_MAG_PARCELA, SRC)
+    colDok = RequireColumnIndex(TBL_MAGACIN, COL_MAG_BR_DOK, SRC)
+    colCena = RequireColumnIndex(TBL_MAGACIN, COL_MAG_CENA, SRC)
+    colVred = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, SRC)
+    colDob = RequireColumnIndex(TBL_MAGACIN, COL_MAG_DOBAVLJAC, SRC)
+
+    Set art = BuildLookupDict(TBL_ARTIKLI, COL_ART_ID, COL_ART_NAZIV)
+    Set jm = BuildLookupDict(TBL_ARTIKLI, COL_ART_ID, COL_ART_JM)
+    Set koop = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+
+    n = UBound(data, 1)
+    If n < 1 Then Exit Function
+    ReDim res(0 To n - 1, 0 To 11)
+
+    For i = 1 To n
+        artID = Trim$(CStr(data(i, colArt)))
+        tip = CStr(data(i, colTip))
+        If tip = MAG_ULAZ Then
+            partner = Trim$(CStr(data(i, colDob)))
+        Else
+            partner = Trim$(CStr(data(i, colKoop)))
+            If koop.Exists(partner) Then partner = CStr(koop(partner))
+        End If
+
+        res(i - 1, 0) = CStr(data(i, colID))
+        res(i - 1, 1) = data(i, colDat)
+        res(i - 1, 2) = tip
+        res(i - 1, 3) = artID
+        If art.Exists(artID) Then
+            res(i - 1, 4) = CStr(art(artID))
+        Else
+            res(i - 1, 4) = artID
+        End If
+        If jm.Exists(artID) Then res(i - 1, 5) = CStr(jm(artID)) Else res(i - 1, 5) = ""
+        res(i - 1, 6) = data(i, colKol)
+        res(i - 1, 7) = data(i, colCena)
+        res(i - 1, 8) = data(i, colVred)
+        res(i - 1, 9) = partner
+        res(i - 1, 10) = CStr(data(i, colDok))
+        res(i - 1, 11) = CStr(data(i, colPar))
+    Next i
+
+    GetMagacinPrometForGrid = res
+End Function
+
+' Dug po kooperantu. 0-bazirano, 5 kolona:
+'   0 KooperantID | 1 Kooperant | 2 Zaduzenje | 3 Odbitak | 4 Dug
+'
+' Zaduzenje je zbir vrednosti IZLAZA (isti racun kao GetAgrohemijaDug, samo
+' za sve kooperante u jednom prolazu), odbitak dolazi iz tblNovac tipa
+' "AgroAbzug" (GetAgroAbzugMapa), a dug je razlika -- ista formula koju
+' frmAgrohemija pokazuje uz izabranog kooperanta.
+'
+' ART_POCETNI_DUG se OVDE NE izuzima, za razliku od GetMagacinStanje: pocetni
+' dug migracije JESTE dug, samo nije roba na stanju.
+Public Function GetAgroDugoviForGrid() As Variant
+    Const SRC As String = "GetAgroDugoviForGrid"
+    Dim data As Variant, koop As Object, dict As Object, abz As Object
+    Dim colKoop As Long, colTip As Long, colVred As Long
+    Dim i As Long, koopID As String, res() As Variant
+    Dim kljucevi As Variant, zad As Double, odb As Double
+
+    data = GetTableData(TBL_MAGACIN)
+    If IsEmpty(data) Then Exit Function
+    data = ExcludeStornirano(data, TBL_MAGACIN)
+    If IsEmpty(data) Then Exit Function
+
+    colKoop = RequireColumnIndex(TBL_MAGACIN, COL_MAG_KOOP, SRC)
+    colTip = RequireColumnIndex(TBL_MAGACIN, COL_MAG_TIP, SRC)
+    colVred = RequireColumnIndex(TBL_MAGACIN, COL_MAG_VREDNOST, SRC)
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(data, 1)
+        If CStr(data(i, colTip)) = MAG_IZLAZ Then
+            koopID = Trim$(CStr(data(i, colKoop)))
+            If Len(koopID) > 0 Then
+                If Not dict.Exists(koopID) Then dict.Add koopID, 0#
+                If IsNumeric(data(i, colVred)) Then
+                    dict(koopID) = CDbl(dict(koopID)) + CDbl(data(i, colVred))
+                End If
+            End If
+        End If
+    Next i
+    If dict.count = 0 Then Exit Function
+
+    Set koop = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Set abz = GetAgroAbzugMapa()
+
+    kljucevi = dict.keys
+    ReDim res(0 To dict.count - 1, 0 To 4)
+    For i = 0 To dict.count - 1
+        koopID = CStr(kljucevi(i))
+        zad = CDbl(dict(koopID))
+        odb = 0#
+        If abz.Exists(koopID) Then odb = CDbl(abz(koopID))
+        res(i, 0) = koopID
+        If koop.Exists(koopID) Then
+            res(i, 1) = CStr(koop(koopID))
+        Else
+            res(i, 1) = koopID
+        End If
+        res(i, 2) = zad
+        res(i, 3) = odb
+        res(i, 4) = zad - odb
+    Next i
+
+    GetAgroDugoviForGrid = res
+End Function

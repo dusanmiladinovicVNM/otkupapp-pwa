@@ -7,7 +7,7 @@
 > forme je ovde popisana, sa oznakom da li je u novom UI-ju već obezbeđena,
 > delimično obezbeđena ili nije. Plan na kraju radi samo po ovom spisku.
 
-Stanje na dan `v6-ui-169`.
+Stanje na dan `v6-ui-171`.
 
 ---
 
@@ -502,8 +502,9 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 **Faza D je time ZATVORENA.**
 
 ### Faza E — ostali ekrani
-15. Agrohemija, Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji,
-    Sledljivost — svaki po istom obrascu.
+15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, `modScrAgro`) — v. §7.
+    Ostaju: Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
+    svaki po istom obrascu.
 
 ---
 
@@ -515,3 +516,209 @@ pozivom postojeće rutine (`modCenovnik`, `modBrojevi`, `modOtkup`,
 `Private` i vezana za formu, prvo se **izdvaja račun** iz prikaza (kao
 `KoopRangRows` iz `LoadKoopRang`), pa je koriste i legacy forma i novi ekran.
 Duplirana logika se ne piše ni u jednom slučaju.
+
+---
+
+## 7. Agrohemija — šta je preneto (v6-ui-171)
+
+Prvi ekran **Faze E**. Zona nosi celu unosnu formu — što je moguće tek od
+`v6-ui-159`, kad je Faza C/10 (unos prerade na Paletama) otvorila polja i
+promenu teksta ugovornim ekranima.
+
+### 7.1 Gde je šta završilo
+
+| Legacy (`frmAgrohemija`) | Novo mesto |
+|---|---|
+| korpa izlaza / ulaza, `tKorpaItem` | `modAgroUnos` — korpa je `Collection` rečnika |
+| `BuildArtikalStanjeDict` | `modAgroUnos.AgroStanjeMapa` |
+| `GetKorpaIzlazKolicinaZaArtikal` | `modAgroUnos.AgroKorpaKolicina` |
+| `ValidateKorpaIzlazStanje` | `modAgroUnos.AgroProveriKorpuIzlaz` |
+| `btnDodajIzlaz_Click` provere | `modAgroUnos.AgroDodajIzlaz` |
+| `btnDodajUlaz_Click` provere (+ potvrda cene 0) | `modAgroUnos.AgroDodajUlaz` |
+| `btnZavrsiIzlaz_Click` transakcija | `modAgroUnos.AgroUpisiIzlaz` |
+| `btnZavrsiUlaz_Click` transakcija | `modAgroUnos.AgroUpisiUlaz` |
+| `UpdatePreporuka` (smart doza → pakovanja) | `modAgroUnos.AgroPreporukaInfo` |
+| tri kopije invarijante nad `Pakovanje` | `modAgroUnos.AgroArtikalInfo` (jedna) |
+| `m_btnPocetniDug_Click` | `modScrAgro.PocetniDug` → `BookPocetniDug` (nepromenjen) |
+| KPI traka (4 broja) | zona ekrana, ista četiri broja |
+
+Nove rutine za mrežu (ekran ne čita tabele sam):
+`modAgrohemija.GetMagacinPrometForGrid`, `modAgrohemija.GetAgroDugoviForGrid`,
+`modNovac.GetAgroAbzugMapa` (jednoprolazna mapa umesto `GetAgroAbzug` u petlji).
+
+### 7.2 Šta ekran uzima od ljuske
+
+Ništa od ovoga nije napravljeno za agrohemiju — sve je došlo uz **Fazu C** i
+ovde se samo koristi. To je i bila poenta: drugi korisnik istog ugovora ne sme
+da izmišlja svoju varijantu.
+
+| Potreba | Ljuskin ugovor | Otkad |
+|---|---|---|
+| polje (natpis + okvir + kontrola) | `modOtkupUI.NewFieldG` | `v6-ui-159` |
+| raspored unutar polja | `modOtkupUI.LayoutFieldInner` | `v6-ui-159` |
+| promena teksta stiže ekranu | `Scr_Event("chg:<kontrola>")` | `v6-ui-159` |
+| padajuća lista nad poljem u zoni | `FindCombo` gleda i `zScr_<ekran>` | `v6-ui-159` |
+| klik na kontrolu u zoni | `Scr_Event("<tag>")`, prefiks `scr` | `v6-ui-143` |
+
+Zbog toga kombo u zoni **mora** biti polje (okvir `nm` + kontrola `nmT`), a ne
+gola kontrola — panel za izbor traži baš taj oblik.
+
+Ekran prijavljuje i **čipove**, **brojač** i **dvoklik** — sve tri kuke koje je
+ugovor dobio uz Fazu C:
+
+| Lista | Čipovi (`Scr_Cipovi`) |
+|---|---|
+| Korpa | — (nekoliko upravo unetih redova; tu se ne traži nego se gleda) |
+| Stanje | Sve · Ima na stanju · Bez zaliha |
+| Promet | Sve · Ulazi · Izlazi · Ova godina |
+| Dugovi | Sve · Duguju |
+
+`Scr_Brojac` broji **korpu** — jedino što na ovom ekranu čeka operatera; sve
+ostalo je već u tabelama. Bez te brojke neproknjižena korpa nestane bez traga
+čim se pređe na drugi ekran.
+
+`dbl:<red>` preuzima red u unos: iz **Dugova** kooperanta (i prebacuje u
+IZDAVANJE — dug se izdaje, ne prima), iz **Stanja** artikal. Jedan potez umesto
+tri (zapamti ime → pređi na korpu → nađi ga u padajućoj listi).
+
+**Dvoklik bira po identitetu, ne po tekstu reda.** Lista pokazuje ime, a bira se
+kooperant; dva kooperanta istog imena daju dvosmislen prikaz i tada dvoklik
+**odbija** da bira umesto da pogodi — isto pravilo kao „dvosmislen broj →
+MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
+
+### 7.3 Šta je namerno drugačije od legacy-ja
+
+- **Dve sekcije → prekidač režima u zoni** (IZDAVANJE / PRIJEM). Ljuska ima
+  jednu mrežu i jednu zonu; dve forme jedna pored druge se ne uklapaju.
+  Obe korpe žive istovremeno — prelazak režima ne prazni ništa.
+- **Multiselect parcela → sakupljanje dugmetom „+ Parcela".** Mreža bira jedan
+  red, combo jednu stavku; zbir ha (koji smart doza računa) drži ekran uz
+  spisak. Rezultat je isti `parcelaID` niz razdvojen `;` i isti zbir ha.
+- **Četiri liste u mreži** kojih legacy nema: korpa, stanje magacina, promet i
+  dug po kooperantu. Mreža je već tu — legacy je za isto morao u Izveštaje.
+- **„Ukloni stavku" i „Isprazni korpu".** Legacy pogrešnu stavku nije umeo da
+  izbaci — jedini izlaz je bio zatvaranje forme. Ekran ostaje otvoren, pa bez
+  toga ne bi bio upotrebljiv.
+
+### 7.4 Šta NIJE preneto
+
+- `frmAgrohemija` se **ne gasi i ne menja** — isto pravilo kao za `frmOtkup` i
+  `frmDokumenta` (§5, Faza B). Legacy zadržava svoju kopiju logike; pravilo se
+  menja u `modAgroUnos` pa se **ručno preslikava** u formu.
+- **Dobavljač je slobodan tekst**, kao i u legacy-ju (`cmbDobavljac` se nigde
+  ne puni iz tabele). Šifarnik dobavljača ne postoji i ovde se ne uvodi.
+- **Storno magacin stavke** nije ovde — to je posao ekrana Storno.
+- KI-006 (`ExportMagacinKoop` ne izuzima `ART_POCETNI_DUG`) je **netaknut**:
+  PWA izvoz nije deo ovog prelaska.
+
+### 7.5 Verifikacija
+
+Testovi 82–90 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
+ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_Agro_UgovorEkrana` | registar, četiri liste, radnja samo nad korpom | `agro-modul-ime` |
+| `T_Agro_KapijaStanjaBrojiKorpu` | kapija broji korpu; kapija pred upis agregira po artiklu | `agro-korpa-se-ne-broji`, `agro-agregat-po-redu` |
+| `T_Agro_SmartDozaZaokruzujeNagore` | doza → cela pakovanja, nagore | `agro-doza-nanize` |
+| `T_ZonaAgro_PoljaPostojeIPrateRezim` | sve kontrole zone postoje; prekidač režima pali i **gasi** prava polja | `agro-rezim-ne-gasi-polja` |
+| `T_Agro_CipoviSuzavajuListu` | ugovor čipa (`kljuc:KATALOG:sirina`) i pravilo svakog | `agro-cip-ne-suzava` |
+| `T_Agro_BrojacIDvoklikPoIdentitetu` | brojač vidi korpu; dvosmislen prikaz nosi **prazan** identitet | `agro-brojac-ne-vidi-korpu`, `agro-dvosmislen-prvi-pobedjuje` |
+| `T_Agro_AbzugMapaPratiPojedinacni` | mapa odbitaka i pojedinačni račun daju **isto**, nad svim kooperantima | `agro-abzug-mapa-ne-sabira` |
+| `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` | izabran režim ostaje zelen i kad pokazivač ode | `agro-prekidac-bez-rebase` |
+| `T_Agro_TrakaKorpe_NajnovijePrvoIPreliv` | traka korpe: najnovije prvo, preliv se **prijavljuje** | `agro-traka-najstarije-prvo`, `agro-traka-bez-preliva` |
+
+Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
+`T_Agro_UgovorEkrana`, sa sabotažom `agro-cipova-preko-bazena`. Višak se inače
+**tiho odseca** — operater vidi ekran kome fali dugme, bez ijedne poruke.
+
+### 7.6 Otvoreno
+
+- **Suite je puštena i zelena.** Prvo izvršavanje je bilo na rebase-u na
+  `main` (`v6-ui-171`), na mašini sa Excelom. `RunAllTests` **ZELENO (88)**,
+  pun set **ZELENO** (72 · 189 · 35 · 181 · 97 · 336 · 25), svih **devet**
+  agro sabotaža (sada ih je **jedanaest**) obara **imenovani** test i uredno se vraća.
+- **Prvo puštanje je oborilo dva testa** — oba pisana nad fixture-om kakav
+  nije, produkcioni kod je bio ispravan:
+  - `T_Agro_KapijaStanjaBrojiKorpu` je kontrolni izlaz upisivao sa **praznom
+    parcelom** (šesti pozicioni argument `SaveMagacinCore`), a `PRACENJE_PARCELA`
+    je u fixture-u ON → 4215. Test je padao na svom **čistaču**, ne na kapiji.
+  - `T_Agro_BrojacIDvoklikPoIdentitetu` je tražio identitet kooperanta
+    `KOOP-TEST-2`, **koga u listi dugova nije bilo** (mapu puni čitač liste, a
+    lista se gradi samo iz `MAG_IZLAZ` redova). Tvrdnja je merila **odsustvo
+    reda**. Fixture zato dobija `MAG-TEST-4`, dug preko rezervisanog
+    `ART_POCETNI_DUG` — da stanje `ART-TEST-1` ostane tačno 15.
+
+  To je i cena pisanja testa bez izvršavanja: obe greške bi pale na prvom
+  puštanju, a nijedna se ne vidi čitanjem.
+- **Compile** (`Alt+F11 → Debug → Compile VBAProject`) ostaje operateru.
+
+### 7.7 Prvi smoke: prekidač režima je belio
+
+Smoke je našao kvar koji suite tada nije mogao da vidi: izabran režim je bio
+zelen **samo dok je pokazivač nad njim**; čim pređe dalje, ispuna se vrati na
+belu, a natpis ostane krem — pa aktivno dugme postane skoro nečitljivo.
+
+Uzrok nije bojenje nego **pamćenje**. `clsFlatBtn` zapamti osnovnu boju pri
+`Bind`-u i vraća je u `ResetVisual` kad pokazivač ode. `BoxState` menja kontrolu,
+ali ne i tu zapamćenu osnovu. Dva su leka, i trebala su oba:
+
+1. **`RebaseSink`** posle svakog `BoxState` — render koji promeni boju javlja novu
+   osnovu. Isti kvar i ista popravka kao `StilDugmeta` u `modScrStorno`, gde se
+   videlo samo na jednom od četiri dugmeta jer su ostala tri ionako tamna na belom.
+2. **Vrsta `"seg"`** umesto `"btn"` — prekidač režima *jeste* segmentni prekidač,
+   isti kao onaj nad mrežom, pa se i pravi istom fabrikom (`NewSegBtn`).
+   `clsFlatBtn.IsSelected` priznaje izabrano stanje (`Font.Bold`) samo za
+   `"nav"`, `"chip"` i `"seg"`. Kao `"btn"` je izabran režim bio obično dugme.
+
+Bojenje prekidača time seli iz osvežavanja zone u `RasporediPolja`, uz vidljivost
+polja: koji je režim izabran je **jedna** odluka, pa boja i raspored ne mogu da
+se raziđu — i `Scr_Layout` dobija zonu argumentom, pa se može izmeriti u testu.
+
+Čipovi (`ChipV`, vrsta `"chip"`) i prekidač lista (`NewSegBtn`) su bili zaštićeni
+od početka — zato su na istom ekranu radili ispravno. Ostali ugovorni ekrani
+nemaju ovaj kvar: `modScrPalete`, `modScrDokumenti` i `modScrOporavak` uopšte ne
+prefarbavaju kontrole, a `modScrStorno` pokriva sva svoja mesta.
+
+Test `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` reprodukuje kvar **bez miša**:
+`ResetVisual` se zove direktno nad sink-om, što je tačno ono što se desi kad
+pokazivač napusti dugme, pa se boja čita pre i posle — u **oba** režima, da
+sabotaža koja zamrzne boje na prvoj vrednosti ne prođe.
+
+> Deo popravke se ne može izmeriti headless: prelazak na vrstu `"seg"` menja
+> **hover-in** ponašanje (izabrano dugme se više ne zatamnjuje pod pokazivačem,
+> kao ni prekidač lista ispod njega). To ostaje na smoke listi, uz ponovno
+> puštanje suite — test 89 i sabotaža `agro-prekidac-bez-rebase` **nisu
+> izvršeni**, pisani su u sesiji bez Excela.
+
+### 7.8 Drugi smoke: korpa se nije videla
+
+Korpa se videla **samo dok je izabrana lista „Korpa"**. Operater koji gleda
+stanje, promet ili dugove nema nijedan znak šta je upravo dodao — a desna
+polovina reda polja svejedno stoji prazna (parcele su često isključene, pa
+slotovi 3 i 4 nikad ništa ne nose).
+
+Zona je zato dobila **traku korpe** uz desnu ivicu: naslov, poslednje stavke i
+zbir. Polja uzimaju **ostatak** širine — isti raspored kao `PRE_DESNO` na ekranu
+Palete. Na uskom ekranu traka nestaje i polja uzimaju celu zonu, isto pravilo
+kao KPI brojke koje bi nalegle na prekidač režima.
+
+Dva pravila, oba se tiho kvare:
+
+- **Najnovije prvo.** Operater upravo nešto doda, pa mu je potvrda ono što traži.
+  Obrnut redosled izgleda ispravno dok se korpa ne napuni preko četiri reda.
+- **Preliv se prijavljuje** (`… još N`). Lista koja se tiho odseca izgleda kao
+  cela — isto pravilo koje ljuska nad sobom već ima (`BazenStaje`).
+
+Račun (`TrakaRed`) je odvojen od crtanja, pa se meri bez forme. Fixture je dobio
+`ART-TEST-Z` sa velikom zalihom i pakovanjem od 1: preko `ART-TEST-1` se preliv
+ne može izmeriti jer mu kapija stanja (15 kg, pakovanje 5) propušta najviše tri
+pakovanja.
+- **Dupla implementacija odbitka je ZATVORENA.** `GetAgroAbzugMapa` ostaje
+  brza kopija pravila iz `GetAgroAbzug` — obe su žive u istoj funkciji (mapu
+  zove lista dugova, pojedinačnu keš ekrana), pa se mogu razići. Fixture je
+  dobio pet `AgroAbzug` redova (dva za istog kooperanta, jedan storniran, jedan
+  drugog tipa), a `T_Agro_AbzugMapaPratiPojedinacni` tvrdi slaganje nad **svakim**
+  kooperantom koga mapa zna — i tačne zbirove, da ih ne obori isti kvar na obe
+  strane. Sabotaža `agro-abzug-mapa-ne-sabira` (500 → 200).

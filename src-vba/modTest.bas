@@ -41,6 +41,9 @@ Private Const FX_ZBIRNA_MIRNA As String = "ZB-TEST-4"
 Private Const FX_BROJ_OTP As String = "1/TEST"      ' BrojOtpremnice OTP-TEST-1
 Private Const FX_KOOPERANT As String = "KOOP-TEST-1"
 Private Const FX_KOOPERANT2 As String = "KOOP-TEST-2"
+Private Const FX_KOOPERANT3 As String = "KOOP-TEST-3"   ' bez agro odbitka
+Private Const FX_ABZUG_KOOP1 As Double = 500   ' 300 + 200; 999 je storniran
+Private Const FX_ABZUG_KOOP2 As Double = 100
 Private Const FX_OTP_ID As String = "OTP-TEST-1"    ' otpremnica koja nosi FX_BROJ_OTP
 Private Const FX_PARCELA As String = "PAR-TEST-1"   ' parcela kooperanta KOOP-TEST-1
 Private Const FX_VOZAC As String = "VOZ-TEST-1"
@@ -88,6 +91,23 @@ Private Const FX_PRIJ_CILJ_V2 As String = "4/150326"
 Private Const FX_NOVAC_DUPLI As String = "NOV-DUPLI-1"
 ' Dve AKTIVNE prijemnice istog broja, za ispravku pod kolizijom.
 Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
+' AGROHEMIJA (tools/make_fixture.py, SEED tblArtikli / tblMagacin).
+' ART-TEST-1: Pakovanje 5, DozaPoHa 2, cena 500. ULAZ 20 - IZLAZ 5 = STANJE 15.
+' Pakovanje 5 uz dozu 2 je izabrano tako da se ZAOKRUZENJE NAGORE vidi:
+' 1.5 ha * 2 = 3 l, a izdaje se jedno pakovanje od 5 l.
+Private Const FX_ARTIKAL As String = "ART-TEST-1"
+Private Const FX_ARTIKAL_BEZ_PAK As String = "ART-TEST-2"
+Private Const FX_ARTIKAL_BEZ_STANJA As String = "ART-TEST-3"
+' Artikal sa velikom zalihom i pakovanjem od 1. Traka korpe se drugacije ne moze
+' izmeriti: ART-TEST-1 kroz kapiju stanja pusta najvise TRI pakovanja, a za
+' preliv trake mora da udje vise stavki nego sto ona ima redova.
+Private Const FX_ARTIKAL_ZALIHA As String = "ART-TEST-Z"
+Private Const FX_ART_PAKOVANJE As Double = 5
+Private Const FX_ART_STANJE As Double = 15
+' Kooperant ISTOG IMENA kao FX_KOOPERANT ("Prvi Testni"), drugi identitet.
+' Postoji da bi "dvosmislen prikaz se odbija" imalo nad cim da padne.
+Private Const FX_KOOP_ISTOIME As String = "KOOP-TEST-IME"
+Private Const FX_KOOP_PRIKAZ As String = "Prvi Testni"
 ' Isti broj na dva otkupna mesta / dve stanice -- oba niza su scoped po stanici.
 Private Const FX_OTKUP_KOLIZIJA As String = "7/150326"
 Private Const FX_OTPREMNICA_KOLIZIJA As String = "8/TEST"
@@ -215,6 +235,15 @@ Public Sub RunAllTests()
     RunOne 79
     RunOne 80
     RunOne 81
+    RunOne 82
+    RunOne 83
+    RunOne 84
+    RunOne 85
+    RunOne 86
+    RunOne 87
+    RunOne 88
+    RunOne 89
+    RunOne 90
 
     SetTestMode prevMode
     WriteResultFile
@@ -328,6 +357,15 @@ Private Function TestName(ByVal idx As Long) As String
         Case 79: TestName = "T_CipoviEkrana_UgovorIFilter"
         Case 80: TestName = "T_ZonaPrerade_SvaPoljaVidljiva"
         Case 81: TestName = "T_BazenLjuske_ViseNegoStoStaje"
+        Case 82: TestName = "T_Agro_UgovorEkrana"
+        Case 83: TestName = "T_Agro_KapijaStanjaBrojiKorpu"
+        Case 84: TestName = "T_Agro_SmartDozaZaokruzujeNagore"
+        Case 85: TestName = "T_ZonaAgro_PoljaPostojeIPrateRezim"
+        Case 86: TestName = "T_Agro_CipoviSuzavajuListu"
+        Case 87: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
+        Case 88: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
+        Case 89: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
+        Case 90: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -417,6 +455,15 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 79: T_CipoviEkrana_UgovorIFilter
         Case 80: T_ZonaPrerade_SvaPoljaVidljiva
         Case 81: T_BazenLjuske_ViseNegoStoStaje
+        Case 82: T_Agro_UgovorEkrana
+        Case 83: T_Agro_KapijaStanjaBrojiKorpu
+        Case 84: T_Agro_SmartDozaZaokruzujeNagore
+        Case 85: T_ZonaAgro_PoljaPostojeIPrateRezim
+        Case 86: T_Agro_CipoviSuzavajuListu
+        Case 87: T_Agro_BrojacIDvoklikPoIdentitetu
+        Case 88: T_Agro_AbzugMapaPratiPojedinacni
+        Case 89: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
+        Case 90: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4012,9 +4059,616 @@ Private Sub T_NovaPrerada_IzborINeto()
 End Sub
 
 
+' ============================================================
+' 82. Ugovor ekrana Agrohemija: cetiri liste, radnja samo nad korpom
+' ============================================================
+' Isti oblik kao T_Storno_UgovorIRadnje. Postoji zato sto ekran koji nije u
+' registru ili ne odgovara na ugovor NE PADA -- sidebar ga samo prikaze
+' prigusenog, pa agrohemija nestane iz aplikacije bez ijedne greske.
+Private Sub T_Agro_UgovorEkrana()
+    Dim liste As Variant, i As Long, kljucevi As String, d As Variant
+    Dim kljuc As String, spec As String
 
+    AssertEq (Len(modUiScreens.ScrRowByKey("AGRO")) > 0), True, _
+             "AGRO postoji u registru ekrana"
+    AssertEq modUiScreens.ScrPostoji("AGRO"), True, _
+             "modul ekrana Agrohemija odgovara na Scr_Meta (kasno vezivanje radi)"
+    AssertEq (InStr(modUiScreens.ScrMeta("AGRO"), "kljuc=AGRO") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("AGRO"), SCR_OBLAST), _
+             OBL_AGROHEMIJA, "ekran trazi pravo na oblast Agrohemija"
 
+    liste = modScrAgro.Scr_Liste()
+    ' NAJVAZNIJE PRVO: ljuska mora da nacrta SVE liste koje ekran prijavi.
+    ' LayoutGrid crta prvih MAX_SEG i stane, bez greske i bez traga.
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|KORPA|STANJE|PROMET|DUGOVI", _
+             "redosled i kljucevi lista -- korpa je prva"
 
+    ' Radnja nad redom postoji SAMO u korpi: stanje, promet i dugovi su
+    ' pregledi, a storno magacin stavke je posao ekrana Storno.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq (Len(modScrAgro.Scr_Radnje()) > 0), True, _
+             "korpa ima radnju nad redom"
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "stanje je pregled -- nema radnje nad redom"
+    modScrAgro.Scr_ListaTestSet "PROMET"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "promet je pregled -- nema radnje nad redom"
+    modScrAgro.Scr_ListaTestSet "DUGOVI"
+    AssertEq modScrAgro.Scr_Radnje(), "", _
+             "dugovi su pregled -- nema radnje nad redom"
+
+    ' Svaka lista mora da vrati ISPRAVAN niz. Lista koja pukne se u ljusci
+    ' pretvara u Empty, LoadGridFromScreen na ne-niz radi Exit Sub -- pa mreza
+    ' ostane na prethodnoj listi i prekidac izgleda kao da ne radi.
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrAgro.Scr_ListaTestSet kljuc
+        d = modScrAgro.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " prijavljuje svoje kolone"
+    Next i
+
+    ' Dve korpe zive istovremeno -- prekidac rezima ne prazni ni jednu.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    AssertEq modScrAgro.Scr_Rezim(), "ULAZ", "prekidac rezima menja rezim"
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    AssertEq modScrAgro.Scr_Rezim(), "IZLAZ", "povratak na izdavanje"
+
+    ' GRANICE BAZENA LJUSKE. Visak se ne prijavljuje kao greska nego se TIHO
+    ' odseca: LayoutGrid nacrta prvih MAX_SEG i stane, RefreshRowActions prvih
+    ' MAX_ACT, bazen cipova prvih MAX_CHIP, SetGridColsArr odseca kolone na
+    ' MAX_COLS. Operater tada vidi ekran kome fali dugme, bez ijedne poruke.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq (UBound(Split(modScrAgro.Scr_Radnje(), "|")) + 1 <= modOtkupUI.MAX_ACT), _
+             True, "korpa ne trazi vise radnji nego sto ljuska ima dugmadi"
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrAgro.Scr_ListaTestSet kljuc
+        spec = modScrAgro.Scr_Cipovi()
+        If Len(spec) > 0 Then
+            AssertEq (UBound(Split(spec, "|")) + 1 <= modOtkupUI.MAX_CHIP), True, _
+                     "lista " & kljuc & " ne trazi vise cipova nego sto bazen ima"
+        End If
+        d = modScrAgro.Scr_Rows("sve", "")
+        AssertEq (UBound(d(0)) + 1 <= modOtkupUI.MAX_COLS), True, _
+                 "lista " & kljuc & " ne trazi vise kolona nego sto mreza pravi"
+    Next i
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+End Sub
+
+' ============================================================
+' 83. Kapija stanja broji i ono sto je VEC u korpi
+' ============================================================
+' Dve tvrdnje, obe iz legacy forme:
+'   1. dodavanje u korpu sabira sa onim sto je u korpi (btnDodajIzlaz), pa se
+'      ista roba ne moze dodati dva puta preko stanja;
+'   2. pred upis se stanje proverava JOS JEDNOM, agregirano po artiklu
+'      (ValidateKorpaIzlazStanje) -- jer se stanje izmedju dodavanja i upisa
+'      moglo promeniti (drugi operater, sync).
+' Bez druge kapije bi upis krenuo pa pao na pola petlje i vratio se rollback-om,
+' a operater bi dobio 4301 umesto recenice.
+Private Sub T_Agro_KapijaStanjaBrojiKorpu()
+    Dim korpa As Collection, fokus As String, mapa As Object
+    Dim magID As String
+
+    ' PREDUSLOV: stanje je ono iz fixture-a. Bez ovoga bi test merio ostatak
+    ' ranijeg testa umesto posledice ove radnje.
+    Set mapa = modAgroUnos.AgroStanjeMapa()
+    AssertEq (mapa.Exists(FX_ARTIKAL)), True, "artikal iz fixture-a ima stanje"
+    AssertEq CDbl(mapa(FX_ARTIKAL)), FX_ART_STANJE, _
+             "PREDUSLOV: stanje artikla je " & FX_ART_STANJE
+
+    Set korpa = modAgroUnos.NovaAgroKorpa()
+
+    ' Pola pakovanja se ne izdaje -- kolicina se kuca u PAKOVANJIMA.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1.5, FX_PARCELA, fokus)) > 0), _
+             True, "pola pakovanja se ne izdaje"
+    AssertEq korpa.count, 0, "odbijena stavka ne ulazi u korpu"
+
+    ' Dva pa jos jedno pakovanje = 15 l, tacno stanje.
+    AssertEq modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 2, FX_PARCELA, fokus), "", _
+             "dva pakovanja staju u stanje"
+    AssertEq modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1, FX_PARCELA, fokus), "", _
+             "i trece pakovanje staje -- granica se ne odbija"
+    AssertEq korpa.count, 2, "korpa ima dve stavke"
+
+    ' NAJVAZNIJE: cetvrto pada BAS zbog onoga sto je vec u korpi. Kapija koja
+    ' gleda samo stanje bi ga propustila (5 < 15) i upis bi pao tek u petlji.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL, 1, FX_PARCELA, fokus)) > 0), _
+             True, "kapija stanja broji i ono sto je vec u korpi"
+    AssertEq korpa.count, 2, "odbijena stavka ne ulazi u korpu"
+
+    ' Artikal koji nema nijedan magacin red: stanje 0, pa izdavanja nema.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL_BEZ_STANJA, 1, FX_PARCELA, fokus)) > 0), _
+             True, "artikal bez stanja se ne izdaje"
+    ' Artikal bez popunjenog Pakovanja: invarijanta, ne stanje.
+    AssertEq (Len(modAgroUnos.AgroDodajIzlaz(korpa, FX_ARTIKAL_BEZ_PAK, 1, FX_PARCELA, fokus)) > 0), _
+             True, "artikal bez Pakovanja se ne izdaje"
+    AssertEq korpa.count, 2, "nijedna odbijena stavka nije usla u korpu"
+
+    ' Agregirana kapija: korpa tacno na stanju PROLAZI.
+    AssertEq modAgroUnos.AgroProveriKorpuIzlaz(korpa), "", _
+             "korpa tacno na stanju prolazi kapiju pre upisa"
+
+    ' A sada se stanje promeni IZA ledja korpe -- tacno zbog toga druga kapija
+    ' i postoji. Ista korpa vise ne sme da prodje.
+    ' Parcela se PROSLEDJUJE: PRACENJE_PARCELA je u fixture-u ukljuceno, pa
+    ' bi prazna parcela ovde podigla 4215 i test bi pao na svom cistacu
+    ' umesto na tvrdnji koju meri.
+    magID = SaveMagacinCore(Date, FX_ARTIKAL, MAG_IZLAZ, 10, FX_KOOPERANT, FX_PARCELA, _
+                            "AGRO-TEST-TX")
+    AssertEq (Len(Trim$(magID)) > 0), True, "kontrolni izlaz je proknjizen"
+    AssertEq (Len(modAgroUnos.AgroProveriKorpuIzlaz(korpa)) > 0), True, _
+             "korpa vise ne staje u stanje -- kapija pre upisa to hvata"
+
+    ' Ciscenje se i PROVERAVA. Nevereno vracanje je isto sto i nikakvo: test
+    ' dodat ispod ovog nasledio bi tiho izmenjen fixture i pao bi po tudjem imenu.
+    StornirajMagacinRed magID
+    Set mapa = modAgroUnos.AgroStanjeMapa()
+    AssertEq CDbl(mapa(FX_ARTIKAL)), FX_ART_STANJE, _
+             "fixture je vracen: stanje je opet " & FX_ART_STANJE
+End Sub
+
+' ============================================================
+' 84. Smart doza se zaokruzuje NAGORE, na cela pakovanja
+' ============================================================
+' Doza je racun po hektaru, ali se roba izdaje u pakovanjima -- pola pakovanja
+' ne postoji. Fixture je namesten tako da se razlika vidi: doza 2 l/ha na
+' 1.5 ha = 3 l, a pakovanje je 5 l. Zaokruzenje nanize dalo bi 0 pakovanja,
+' matematicko zaokruzenje takodje 1 -- ali na 3.75 ha (7.5 l) matematicko daje
+' 2 i nanize 1, dok nagore mora dati 2.
+Private Sub T_Agro_SmartDozaZaokruzujeNagore()
+    Dim pre As Object, info As Object
+
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 1.5)
+    AssertEq CStr(pre("greska")), "", "artikal iz fixture-a nema smetnju"
+    AssertEq CDbl(pre("dozaKg")), 3#, "doza za 1.5 ha je 3 l"
+    AssertEq CDbl(pre("pakovanje")), FX_ART_PAKOVANJE, "pakovanje iz sifarnika"
+    AssertEq CLng(pre("brojPak")), 1&, "3 l trazi JEDNO pakovanje od 5 l"
+    AssertEq CDbl(pre("izdajKol")), 5#, "izdaje se celo pakovanje, ne 3 l"
+
+    ' 3.75 ha -> 7.5 l -> dva pakovanja (nagore), ne jedno.
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 3.75)
+    AssertEq CDbl(pre("dozaKg")), 7.5, "doza za 3.75 ha je 7.5 l"
+    AssertEq CLng(pre("brojPak")), 2&, "7.5 l trazi DVA pakovanja -- nagore"
+    AssertEq CDbl(pre("izdajKol")), 10#, "izdaju se dva cela pakovanja"
+
+    ' Bez izabrane parcele nema ni preporuke -- ne sme da izmisli jedno pakovanje.
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL, 0)
+    AssertEq CLng(pre("brojPak")), 0&, "bez hektara nema preporuke"
+
+    ' Invarijanta nad Pakovanjem je kapija, i prijavljuje se kao smetnja a ne
+    ' kao nula: nula bi izgledala kao "nema sta da se izda".
+    Set info = modAgroUnos.AgroArtikalInfo(FX_ARTIKAL_BEZ_PAK)
+    AssertEq (Len(CStr(info("greska"))) > 0), True, _
+             "artikal bez Pakovanja prijavljuje smetnju"
+    Set pre = modAgroUnos.AgroPreporukaInfo(FX_ARTIKAL_BEZ_PAK, 1.5)
+    AssertEq (Len(CStr(pre("greska"))) > 0), True, _
+             "preporuka nad artiklom bez Pakovanja prijavljuje smetnju"
+    AssertEq CLng(pre("brojPak")), 0&, "i ne predlaze nijedno pakovanje"
+End Sub
+
+' ============================================================
+' 85. Zona agrohemije: polja postoje i prate rezim
+' ============================================================
+' Isti oblik kao T_ZonaPrerade_SvaPoljaVidljiva, i iz istog razloga: kontrolu
+' koje NEMA Scr_Layout tiho preskoci (On Error Resume Next), pa operater vidi
+' rupu na mestu polja, a log ne kaze nista.
+'
+' Ovde je jos jedna stvar pod merenjem: prekidac rezima. Izdavanje i prijem
+' dele polja (artikal, kolicina, broj dokumenta) a razlikuju se u ostalima --
+' ako se vidljivost i raspored raziju, polja se preklope jedno preko drugog.
+' Zato oba rezima imaju i svoj spisak koji MORA da bude ugasen.
+Private Sub T_ZonaAgro_PoljaPostojeIPrateRezim()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, izlNema As String, izlVisak As String
+    Dim ulzNema As String, ulzVisak As String
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaAg", True)
+    z.width = 1200: z.Height = 300
+    modScrAgro.Scr_Build z
+
+    ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
+    ' masinerija obrise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao
+    ' kao "greska bez opisa".
+    For Each nm In Array("agBg", "agCap", "agParTxt", "agHint", "agVred", "agLnB", _
+                         "agKL0", "agKV0", "agKL3", "agKV3", _
+                         "scrAgSegI", "scrAgSegU", "scrAgParAdd", "scrAgParClr", _
+                         "scrAgDodaj", "scrAgZavrsi", "scrAgPocDug", "scrAgOcisti", _
+                         "scrAgKoop", "scrAgArt", "scrAgPar", "scrAgDob", _
+                         "scrAgKol", "scrAgCena", "scrAgDok")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Kombo u zoni MORA biti polje (okvir nm + kontrola nmT): panel za izbor
+    ' (modOtkupUI.FindCombo) trazi bas taj oblik. Gola kontrola bi imala
+    ' strelicu koja "ne radi" i listu koja se ne otvara.
+    For Each nm In Array("scrAgKoop", "scrAgArt", "scrAgPar", _
+                         "scrAgKol", "scrAgCena", "scrAgDok", "scrAgDob")
+        If KontrolaPostoji(z, CStr(nm)) Then
+            If Not KontrolaPostoji(z.Controls(CStr(nm)), CStr(nm) & "T") Then _
+                nema = nema & " " & CStr(nm) & "T"
+        End If
+    Next nm
+
+    ' IZDAVANJE: kooperant i parcele postoje, dobavljac i cena ne.
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    For Each nm In Array("scrAgKoop", "scrAgArt", "scrAgKol", "scrAgDok", "scrAgPocDug")
+        If Not VidljivaKontrola(z, CStr(nm)) Then izlNema = izlNema & " " & CStr(nm)
+    Next nm
+    For Each nm In Array("scrAgDob", "scrAgCena")
+        If VidljivaKontrola(z, CStr(nm)) Then izlVisak = izlVisak & " " & CStr(nm)
+    Next nm
+
+    ' PRIJEM: obrnuto. Kooperant i parcele nemaju sta da traze u prijemu --
+    ' roba ulazi od dobavljaca, ne izlazi kooperantu.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    For Each nm In Array("scrAgArt", "scrAgDob", "scrAgCena", "scrAgKol", "scrAgDok")
+        If Not VidljivaKontrola(z, CStr(nm)) Then ulzNema = ulzNema & " " & CStr(nm)
+    Next nm
+    For Each nm In Array("scrAgKoop", "scrAgPar", "scrAgPocDug")
+        If VidljivaKontrola(z, CStr(nm)) Then ulzVisak = ulzVisak & " " & CStr(nm)
+    Next nm
+
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    Unload f
+
+    AssertEq nema, "", "zona agrohemije nema nijednu kontrolu manje"
+    AssertEq izlNema, "", "u izdavanju su upaljena sva polja izdavanja"
+    AssertEq izlVisak, "", "u izdavanju su ugasena polja prijema"
+    AssertEq ulzNema, "", "u prijemu su upaljena sva polja prijema"
+    AssertEq ulzVisak, "", "u prijemu su ugasena polja izdavanja"
+End Sub
+
+' ============================================================
+' 86. Cipovi agrohemije: ugovor i stvarno suzavanje
+' ============================================================
+' Dve stvari, i obe padaju tiho ako se pokvare. Ugovor: cip bez natpisa u
+' katalogu je prazno dugme, a cip bez sirine se ne vidi. Pravilo: cip koji ne
+' suzava nista izgleda kao da radi -- lista je ista i pre i posle klika.
+'
+' Pravila se mere BEZ mreze, kao PalCipProlaz na Paletama: mreza bi uvela
+' sortiranje, stranice i pretragu u tvrdnju koja je o jednom uslovu.
+Private Sub T_Agro_CipoviSuzavajuListu()
+    Dim spec As String, e As Variant, p As Variant, n As Long
+
+    ' 1) UGOVOR nad svakom listom koja cipove ima.
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    spec = modScrAgro.Scr_Cipovi()
+    AssertEq (Len(spec) > 0), True, "lista stanja prijavljuje svoje cipove"
+    For Each e In Split(spec, "|")
+        p = Split(CStr(e), ":")
+        AssertEq (UBound(p) = 2), True, "cip je oblika kljuc:KATALOG:sirina"
+        ' Katalog na nepostojeci kljuc vraca "[KLJUC]", pa bi provera duzine
+        ' uvek prolazila i ne bi merila nista.
+        AssertEq (Left$(Poruka(CStr(p(1))), 1) <> "["), True, _
+                 "natpis cipa " & CStr(p(0)) & " postoji u katalogu"
+        AssertEq (val(p(2)) > 0), True, "cip " & CStr(p(0)) & " ima sirinu"
+        n = n + 1
+    Next e
+    AssertEq n, 3, "stanje ima tri cipa"
+    AssertEq Split(CStr(Split(spec, "|")(0)), ":")(0), "sve", _
+             "prvi cip je SVE -- na njega ljuska pada kad filter ne pripada listi"
+
+    ' Korpa je nekoliko upravo unetih redova -- tu se ne trazi nego se gleda.
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    AssertEq modScrAgro.Scr_Cipovi(), "", "korpa nema cipove"
+
+    ' 2) PRAVILA. Prazan i nepoznat kljuc PUSTAJU sve: ekran koji dobije filter
+    ' koji ne poznaje pokazuje punu listu, ne praznu.
+    AssertEq modScrAgro.AgCipStanje("", 0), True, "prazan filter pusta sve"
+    AssertEq modScrAgro.AgCipStanje("nepoznato", 0), True, "nepoznat filter pusta sve"
+    AssertEq modScrAgro.AgCipStanje("ima", 0.5), True, "pola jedinice JESTE na stanju"
+    AssertEq modScrAgro.AgCipStanje("ima", 0), False, "nula nije na stanju"
+    AssertEq modScrAgro.AgCipStanje("nema", 0), True, "nula je bez zaliha"
+    ' Negativno stanje je greska u knjizenju, ali se MORA videti -- sakriveno bi
+    ' ostalo neispravljeno.
+    AssertEq modScrAgro.AgCipStanje("nema", -3), True, "negativno stanje je bez zaliha"
+    AssertEq modScrAgro.AgCipStanje("ima", -3), False, "negativno stanje nije na stanju"
+
+    AssertEq modScrAgro.AgCipPromet("ulaz", MAG_ULAZ, 0), True, "ulaz prolazi kroz cip Ulazi"
+    AssertEq modScrAgro.AgCipPromet("ulaz", MAG_IZLAZ, 0), False, "izlaz ne prolazi kroz Ulazi"
+    AssertEq modScrAgro.AgCipPromet("izlaz", MAG_IZLAZ, 0), True, "izlaz prolazi kroz cip Izlazi"
+    AssertEq modScrAgro.AgCipPromet("ulaz", UCase$(MAG_ULAZ), 0), True, _
+             "tip se ne poredi po velicini slova"
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, CDbl(CDate(Date))), True, _
+             "danasnji red je iz ove godine"
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, CDbl(CDate(DateSerial(Year(Date) - 1, 6, 1)))), _
+             False, "prosla godina ne prolazi kroz cip Ova godina"
+    ' Red bez citljivog datuma NE sme da prodje: propustiti ga znacilo bi
+    ' tvrditi da je iz tekuce godine, a ne zna se.
+    AssertEq modScrAgro.AgCipPromet("godina", MAG_ULAZ, 0), False, _
+             "red bez datuma ne prolazi kroz cip godine"
+
+    AssertEq modScrAgro.AgCipDugovi("duguju", 1), True, "dug veci od nule duguje"
+    AssertEq modScrAgro.AgCipDugovi("duguju", 0), False, "nula ne duguje"
+    AssertEq modScrAgro.AgCipDugovi("duguju", -500), False, _
+             "pretplata nije dug -- kooperant kome je vise oduzeto ne duguje"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+End Sub
+
+' ============================================================
+' 87. Brojac ceka na korpi; dvoklik bira po IDENTITETU
+' ============================================================
+' Brojac: korpa je jedino sto na ovom ekranu ceka operatera -- sve ostalo je
+' vec u tabelama. Bez brojke operater koji predje na drugi ekran nema nijedan
+' znak da mu je ostala puna.
+'
+' Dvoklik: lista dugova pokazuje IME, a dvoklik bira KOOPERANTA. Kad dva
+' kooperanta nose isto ime, prikaz je dvosmislen i izbor se ODBIJA -- isto
+' pravilo kao "dvosmislen broj -> MANUAL" u storno okviru. Fixture zato ima
+' KOOP-TEST-1 i KOOP-TEST-IME, oba "Prvi Testni".
+Private Sub T_Agro_BrojacIDvoklikPoIdentitetu()
+    Dim d As Variant, greska As String
+
+    ' --- BROJAC ---
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_Brojac(), 0, "prazna korpa ne ceka nista"
+
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL, 1, FX_PARCELA)
+    AssertEq greska, "", "stavka je usla u korpu"
+    AssertEq modScrAgro.Scr_Brojac(), 1, "brojac vidi stavku koja ceka upis"
+
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL, 1, FX_PARCELA)
+    AssertEq greska, "", "i druga stavka je usla"
+    AssertEq modScrAgro.Scr_Brojac(), 2, "brojac broji SVE sto ceka, ne samo prvu"
+
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_Brojac(), 0, "praznjenje korpe gasi brojac"
+
+    ' --- DVOKLIK: mapa identiteta ---
+    ' Mapu puni citac liste, pa se lista mora procitati pre nego sto se tvrdi.
+    modScrAgro.Scr_ListaTestSet "DUGOVI"
+    d = modScrAgro.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "preduslov: lista dugova je procitana"
+
+    ' NAJVAZNIJE PRVO: dvosmislen prikaz nosi PRAZAN identitet. Mapa koja bi
+    ' zapamtila prvog pogodjenog izgledala bi ispravno u svakoj drugoj tvrdnji,
+    ' a dvoklik bi izdao robu pogresnom coveku.
+    AssertEq modScrAgro.Scr_DugIdTest(FX_KOOP_PRIKAZ), "", _
+             "dva kooperanta istog imena daju DVOSMISLEN prikaz, ne prvog"
+
+    ' Jednoznacan prikaz i dalje daje svoj identitet -- kapija ne sme da obori
+    ' sve redom.
+    AssertEq modScrAgro.Scr_DugIdTest("Drugi Testni"), FX_KOOPERANT2, _
+             "jednoznacan prikaz daje svoj KooperantID"
+    AssertEq modScrAgro.Scr_DugIdTest("Ne Postoji"), "", _
+             "nepoznat prikaz nema identitet"
+
+    ' Ista kapija nad listom stanja: naziv artikla -> ArtikalID.
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    d = modScrAgro.Scr_Rows("sve", "")
+    AssertEq modScrAgro.Scr_ArtIdTest("Test Preparat"), FX_ARTIKAL, _
+             "jednoznacan naziv artikla daje svoj ArtikalID"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
+    modScrAgro.Scr_KorpaTestReset
+End Sub
+
+' ============================================================
+' 88. Mapa odbitaka i pojedinacni racun daju ISTO
+' ============================================================
+' GetAgroAbzugMapa je DRUGA implementacija pravila koje vec zivi u
+' GetAgroAbzug. Postoji samo zbog brzine (lista dugova bi inace citala celu
+' tblNovac po redu liste), ali obe su ZIVE u istoj funkciji: mapu zove lista
+' dugova (GetAgroDugoviForGrid), a pojedinacnu kes ekrana (modScrAgro).
+'
+' Dve kopije istog pravila se tiho razilaze. Dodas tip uplate u jednu ili
+' promenis izuzimanje storniranih, i ista aplikacija na dva mesta pokazuje
+' RAZLICIT dug istom coveku -- bez ijednog crvenog testa.
+Private Sub T_Agro_AbzugMapaPratiPojedinacni()
+    Dim mapa As Object, k As Variant, n As Long
+
+    Set mapa = modNovac.GetAgroAbzugMapa()
+    AssertEq (mapa Is Nothing), False, "mapa odbitaka postoji"
+
+    ' PREDUSLOV: mapa NIJE prazna. Bez ovoga bi petlja ispod prosla nula puta
+    ' i test bi bio zelen ne merivsi nista -- tacno oblik placeba.
+    AssertEq (mapa.count >= 2), True, _
+             "PREDUSLOV: fixture ima odbitke za bar dva kooperanta"
+
+    ' Tacne brojke, ne samo slaganje: 300 + 200 = 500. Storniranih 999 i
+    ' uplata drugog tipa (777) se NE broje. Da se dve implementacije slome
+    ' na ISTI nacin, puko poredjenje bi i dalje bilo zeleno.
+    AssertEq CDbl(mapa(FX_KOOPERANT)), FX_ABZUG_KOOP1, _
+             "mapa SABIRA odbitke i izuzima stornirane"
+    AssertEq modNovac.GetAgroAbzug(FX_KOOPERANT), FX_ABZUG_KOOP1, _
+             "pojedinacni racun daje isti zbir"
+    AssertEq CDbl(mapa(FX_KOOPERANT2)), FX_ABZUG_KOOP2, _
+             "mapa razdvaja kooperante -- ne slije sve u jedan zbir"
+
+    ' NAJVAZNIJE: slaganje nad SVAKIM kooperantom koga mapa zna, ne samo nad
+    ' dva imenovana. Kad neko sutra doda tip uplate u jednu implementaciju,
+    ' ovo je tvrdnja koja pukne.
+    For Each k In mapa.keys
+        AssertEq CDbl(mapa(CStr(k))), modNovac.GetAgroAbzug(CStr(k)), _
+                 "odbitak za " & CStr(k) & " isti u mapi i pojedinacno"
+        n = n + 1
+    Next k
+    AssertEq (n >= 2), True, "petlja je stvarno prosla kroz kooperante"
+
+    ' Kooperant BEZ ijednog odbitka: mapa ga ne zna, pojedinacni daje nulu.
+    ' Odsustvo kljuca i nula moraju da znace isto, inace lista dugova za
+    ' njega prikaze prazno umesto 0.
+    AssertEq mapa.Exists(FX_KOOPERANT3), False, _
+             "kooperant bez odbitka nije u mapi"
+    AssertEq modNovac.GetAgroAbzug(FX_KOOPERANT3), 0, _
+             "pojedinacni racun mu daje nulu -- isto znacenje"
+End Sub
+
+' ============================================================
+' 89. Prekidac rezima ZADRZAVA boju posle izlaska pokazivaca
+' ============================================================
+' Kvar koji je prijavio operater na prvom smoke-u: izabran rezim je bio zelen
+' samo dok je pokazivac nad njim, a cim predje dalje ispuna se vrati na BELU --
+' natpis ostane krem (njegova labela je vezana kao "chev", nju reset ne dira),
+' pa aktivno dugme postane skoro necitljivo.
+'
+' Uzrok nije bojenje nego PAMCENJE: clsFlatBtn zapamti osnovnu boju pri Bind-u i
+' vraca je u ResetVisual kad pokazivac ode. BoxState menja kontrolu, ali ne i tu
+' zapamcenu osnovu -- zato render koji promeni boju mora da javi novu kroz
+' RebaseSink. Isti kvar je vec jednom placen u modScrStorno (StilDugmeta).
+'
+' Test ne trazi mis: ResetVisual se zove direktno nad sink-om, sto je tacno ono
+' sto se desi kad pokazivac napusti dugme. Boja se cita PRE i POSLE.
+Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
+    Dim f As frmOtkupUI, z As Object
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaAgSeg", True)
+    z.width = 1200: z.Height = 300
+    modScrAgro.Scr_Build z
+
+    ' --- IZDAVANJE je izabrano ---
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+
+    ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
+    ' dugmetom koje nikad nije ni pozelenelo.
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "preduslov: izabran rezim je obojen"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "preduslov: neizabran rezim je beo"
+    ' Bold NIJE kozmetika: clsFlatBtn.IsSelected bas po njemu prepoznaje
+    ' izabrano stanje i preskace hover. Ako se izgubi, dugme opet postaje obicno.
+    AssertEq z.Controls("scrAgSegI").Font.bold, True, _
+             "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
+    AssertEq z.Controls("scrAgSegU").Font.bold, False, _
+             "neizabran rezim nije Bold"
+
+    ' NAJVAZNIJE: posle izlaska pokazivaca boja OSTAJE. Ovo je jedina tvrdnja
+    ' koja pada kad se izgubi RebaseSink -- sve ostalo izgleda ispravno.
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "izabran rezim ostaje zelen i kad pokazivac ode"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "neizabran rezim ostaje beo i kad pokazivac ode"
+
+    ' --- PRIJEM: boje se zamene, i opet prezive ---
+    ' Bez ove polovine bi sabotaza koja zamrzne boje na prvoj vrednosti prosla:
+    ' prvi rezim bi i dalje bio tacan.
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "prekidac je presao na prijem"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "izdavanje je prestalo da bude izabrano"
+
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
+             "prijem ostaje zelen i kad pokazivac ode"
+    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
+             "izdavanje ostaje belo i kad pokazivac ode"
+
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    Unload f
+End Sub
+
+' ============================================================
+' 90. Traka korpe: najnovije prvo, i preliv se PRIJAVLJUJE
+' ============================================================
+' Nalaz sa smoke-a: korpa se videla samo dok je izabrana lista "Korpa", pa
+' operater koji gleda stanje ili dugove nije imao nijedan znak sta je upravo
+' dodao. Zona je zato dobila traku sa korpom.
+'
+' Dva pravila, oba se tiho kvare:
+'   1. NAJNOVIJE PRVO -- operater upravo nesto doda, pa mu je potvrda ono sto
+'      trazi. Traka koja pokazuje najstarije izgleda ispravno dok se korpa ne
+'      napuni preko cetiri reda.
+'   2. PRELIV SE PRIJAVLJUJE -- lista koja se tiho odseca izgleda kao cela.
+'      Bas to je pravilo koje ljuska nad sobom vec ima (BazenStaje).
+'
+' Racun je odvojen od crtanja, pa se meri bez forme.
+Private Sub T_Agro_TrakaKorpe_NajnovijePrvoIPreliv()
+    Dim i As Long, greska As String, r0 As String
+
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_TrakaRedTest(0), "", "prazna korpa ne pise nista u traku"
+
+    ' Jedna stavka: stoji u prvom redu, ostali su prazni.
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA)
+    AssertEq greska, "", "preduslov: prva stavka je usla"
+    r0 = modScrAgro.Scr_TrakaRedTest(0)
+    AssertEq (Len(r0) > 0), True, "prva stavka se vidi u traci"
+    ' Izdavanje se meri PAKOVANJIMA, pa red mora da nosi broj pakovanja.
+    AssertEq (InStr(1, r0, "1 " & ChrW(215), vbTextCompare) > 0), True, _
+             "red trake nosi broj pakovanja (1 x)"
+    AssertEq (InStr(1, r0, "Test Zaliha", vbTextCompare) > 0), True, _
+             "red trake nosi naziv artikla"
+    AssertEq modScrAgro.Scr_TrakaRedTest(1), "", "drugi red je prazan dok ima jedna stavka"
+
+    ' Cetiri stavke: sve staju, ali OBRNUTO -- poslednja dodata je prva.
+    ' Svaka je razlicitog broja pakovanja da bi se redosled uopste video.
+    modScrAgro.Scr_KorpaTestReset
+    For i = 1 To 3
+        AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, i, FX_PARCELA), "", _
+                 "preduslov: stavka " & i & " je usla"
+    Next i
+    ' NAJVAZNIJE: prvi red trake je POSLEDNJA dodata (3 pakovanja), ne prva.
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(0), "3 " & ChrW(215), vbTextCompare) > 0), _
+             True, "prvi red trake je POSLEDNJA dodata stavka"
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(2), "1 " & ChrW(215), vbTextCompare) > 0), _
+             True, "poslednji red trake je PRVA dodata stavka"
+    AssertEq modScrAgro.Scr_TrakaRedTest(3), "", "cetvrti red je prazan dok ih ima tri"
+
+    ' Vise nego sto staje: poslednji red kaze KOLIKO ih je sakriveno.
+    ' Korpa ima sest stavki, traka nosi cetiri reda -> tri stavke + preliv "2".
+    modScrAgro.Scr_KorpaTestReset
+    For i = 1 To 6
+        AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA), "", _
+                 "preduslov: stavka " & i & " od sest je usla"
+    Next i
+    AssertEq (Len(modScrAgro.Scr_TrakaRedTest(2)) > 0), True, _
+             "treci red jos nosi stavku"
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(3), ChrW(8230), vbTextCompare) > 0), _
+             True, "poslednji red je prelivni, ne cetvrta stavka"
+    ' Sest stavki, tri prikazane -> sakriveno ih je TRI, i to mora da pise.
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(3), "3", vbTextCompare) > 0), True, _
+             "prelivni red kaze KOLIKO stavki je sakriveno"
+
+    ' Traka ne izmislja redove preko svoje visine.
+    AssertEq modScrAgro.Scr_TrakaRedTest(4), "", "traka nema peti red"
+
+    modScrAgro.Scr_KorpaTestReset
+End Sub
+
+' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn
+' uradi kad pokazivac napusti dugme. Isti tag nose i ispuna i natpis, pa se
+' resetuju oba; za natpis ("chev") ResetVisual sam izlazi.
+Private Sub ResetSinkVizual(ByVal tag As String)
+    Dim b As clsFlatBtn
+    On Error Resume Next
+    If modOtkupUI.Btns Is Nothing Then Exit Sub
+    For Each b In modOtkupUI.Btns
+        If b.SinkTag = tag Then b.ResetVisual
+    Next b
+End Sub
+
+' Ugasi magacin red koji je test napravio. Vracanje fixture-a, ne poslovna
+' radnja -- zato ide kroz UpdateCell, a ne kroz storno rutinu.
+Private Sub StornirajMagacinRed(ByVal magID As String)
+    Dim redovi As Collection, i As Long
+    Set redovi = FindRows(TBL_MAGACIN, COL_MAG_ID, magID)
+    For i = 1 To redovi.count
+        UpdateCell TBL_MAGACIN, CLng(redovi(i)), COL_STORNIRANO, "Da"
+    Next i
+End Sub
 
 ' Jedno polje contexta, po CorrectionID.
 Private Function SvPolje(ByVal cid As String, ByVal kol As String) As String

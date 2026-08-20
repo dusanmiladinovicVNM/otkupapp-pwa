@@ -1394,6 +1394,148 @@ SABOTAZE = {
         "T_BazenLjuske_ViseNegoStoStaje",
         "visak se odseca na velicinu bazena",
     ),
+    # --- agrohemija na novom UI (v6-ui-171) ---------------------------------
+    # Ime modula u registru ekrana. Greska u njemu NE PADA: sidebar ekran samo
+    # prikaze prigusenog, pa agrohemija nestane iz aplikacije bez ijedne poruke.
+    # Isti oblik kao oporavak-modul-ime.
+    "agro-modul-ime": (
+        "modUiScreens.bas",
+        '    c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
+        '    c.Add "AGRO|modScrAgroX|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
+        "T_Agro_UgovorEkrana",
+        "ekran odgovara na Scr_Meta -- kasno vezivanje stvarno razresava modul",
+    ),
+    # Kapija stanja pri dodavanju u korpu mora da broji i ono sto je VEC u
+    # korpi. Bez toga se ista roba doda dva puta preko stanja, a upis pukne tek
+    # u petlji i vrati se rollback-om -- operater dobije 4301 umesto recenice.
+    "agro-korpa-se-ne-broji": (
+        "modAgroUnos.bas",
+        '    uKorpi = AgroKorpaKolicina(korpa, artikalID)\n',
+        '    uKorpi = 0#   \' SABOTAZA: kapija ne broji ono sto je vec u korpi\n',
+        "T_Agro_KapijaStanjaBrojiKorpu",
+        "kapija stanja sabira korpu sa novom stavkom",
+    ),
+    # Druga kapija, pred upis, mora da agregira PO ARTIKLU preko cele korpe.
+    # Poredjenje red-po-red propusta korpu koja u zbiru premasuje stanje --
+    # tacno scenario "stanje se promenilo izmedju dodavanja i upisa".
+    "agro-agregat-po-redu": (
+        "modAgroUnos.bas",
+        '        treba(artID) = CDbl(treba(artID)) + AD(korpa(i), "kolicina")\n',
+        '        treba(artID) = AD(korpa(i), "kolicina")   \' SABOTAZA: bez sabiranja\n',
+        "T_Agro_KapijaStanjaBrojiKorpu",
+        "kapija pre upisa sabira SVE stavke istog artikla, ne gleda red po red",
+    ),
+    # Smart doza se zaokruzuje NAGORE: pola pakovanja se ne izdaje. Nanize daje
+    # nula pakovanja za 3 l uz pakovanje od 5 l -- predlog bi bio "ne izdaji
+    # nista" za robu koja je potrebna.
+    # Vidljivost i raspored polja su JEDNA odluka (grana 'izl' u RasporediPolja).
+    # Ako se raziju, polje prijema ostane upaljeno u izdavanju -- i sedne tacno
+    # preko polja izdavanja, jer oba traze isti slot u redu.
+    "agro-rezim-ne-gasi-polja": (
+        "modScrAgro.bas",
+        '    PoljeVidi z, "scrAgDob", Not izl\n',
+        '    PoljeVidi z, "scrAgDob", True   \' SABOTAZA: polje prijema ostaje\n',
+        "T_ZonaAgro_PoljaPostojeIPrateRezim",
+        "polja prijema su ugasena u izdavanju (i obrnuto)",
+    ),
+    # Cip koji ne suzava izgleda kao da radi: lista je ista i pre i posle klika.
+    # Bojenje bez javljanja nove osnove. clsFlatBtn pamti boju pri Bind-u i na
+    # izlazak pokazivaca je vraca; izabran rezim tada pobeli, a natpis ostane
+    # krem -- dugme postane necitljivo. Operater je to prijavio na prvom smoke-u.
+    # Isti kvar je vec jednom placen u modScrStorno (StilDugmeta).
+    "agro-prekidac-bez-rebase": (
+        "modScrAgro.bas",
+        '    modOtkupUI.RebaseSink "scrAgSegI"\n'
+        '    modOtkupUI.RebaseSink "scrAgSegU"\n',
+        "    ' SABOTAZA: nova osnova se ne javlja sink-u\n",
+        "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
+        "izabran rezim zadrzava boju i kad pokazivac ode",
+    ),
+    # Traka korpe pokazuje NAJNOVIJE prvo: operater upravo nesto doda, pa mu je
+    # potvrda ono sto trazi. Obrnut redosled izgleda ispravno dok se korpa ne
+    # napuni preko cetiri reda.
+    "agro-traka-najstarije-prvo": (
+        "modScrAgro.bas",
+        "        If i > n - 1 Then Exit Function\n"
+        "        TrakaRed = KorpaRedPrikaz(k(n - i))\n",
+        "        If i > n - 1 Then Exit Function\n"
+        "        TrakaRed = KorpaRedPrikaz(k(i + 1))   ' SABOTAZA: najstarije prvo\n",
+        "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
+        "traka pokazuje poslednju dodatu stavku prvu",
+    ),
+    # Lista koja se tiho odseca izgleda kao cela. Isto pravilo koje ljuska nad
+    # sobom vec ima (BazenStaje) -- samo je ovde traka ta koja ne staje.
+    "agro-traka-bez-preliva": (
+        "modScrAgro.bas",
+        '    sakriveno = n - (AG_KORPA_N - 1)\n'
+        '    TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno\n',
+        "    sakriveno = n - (AG_KORPA_N - 1)\n"
+        "    TrakaRed = KorpaRedPrikaz(k(n - i))   ' SABOTAZA: preliv se ne prijavljuje\n",
+        "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
+        "traka PRIJAVLJUJE koliko stavki nije stalo",
+    ),
+    "agro-cip-ne-suzava": (
+        "modScrAgro.bas",
+        '        Case "ima":  AgCipStanje = (stanje > 0)\n',
+        '        Case "ima":  AgCipStanje = True   \' SABOTAZA: cip ne suzava\n',
+        "T_Agro_CipoviSuzavajuListu",
+        "cip Ima na stanju stvarno izbacuje artikle bez zaliha",
+    ),
+    # Lista dugova pokazuje IME, a dvoklik bira KOOPERANTA. Ako mapa na koliziji
+    # zapamti prvog pogodjenog umesto praznog, dvoklik izda robu pogresnom
+    # coveku -- i izgleda ispravno u svakoj drugoj tvrdnji.
+    "agro-dvosmislen-prvi-pobedjuje": (
+        "modScrAgro.bas",
+        '            If CStr(mDugIds(naziv)) <> koopID Then mDugIds(naziv) = ""\n',
+        '            If False Then mDugIds(naziv) = ""   \' SABOTAZA: prvi pobedjuje\n',
+        "T_Agro_BrojacIDvoklikPoIdentitetu",
+        "dvosmislen prikaz nosi PRAZAN identitet, ne prvog pogodjenog",
+    ),
+    # Korpa je jedino sto na ovom ekranu ceka operatera. Brojac koji je ne vidi
+    # znaci da neproknjizena korpa nestane bez ijednog traga cim se predje na
+    # drugi ekran.
+    "agro-brojac-ne-vidi-korpu": (
+        "modScrAgro.bas",
+        "    Scr_Brojac = BrojUKorpi(mKorpaI) + BrojUKorpi(mKorpaU)\n",
+        "    Scr_Brojac = 0   ' SABOTAZA: korpa koja ceka se ne vidi\n",
+        "T_Agro_BrojacIDvoklikPoIdentitetu",
+        "brojac prijavljuje stavke koje cekaju upis",
+    ),
+    # Bazen ljuske je konacan: visak se TIHO odseca (LayoutChips nacrta prvih
+    # MAX_CHIP i stane). Ekran koji trazi vise izgleda ispravno u kodu, a
+    # operateru fali dugme.
+    "agro-cipova-preko-bazena": (
+        "modScrAgro.bas",
+        '            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                         "ulaz:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "izlaz:OTKUI_CIPA_IZLAZ:52|" & _\n'
+        '                         "godina:OTKUI_CIPA_GODINA:84"\n',
+        '            Scr_Cipovi = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                         "u1:OTKUI_CIPA_ULAZ:52|u2:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "u3:OTKUI_CIPA_ULAZ:52|u4:OTKUI_CIPA_ULAZ:52|" & _\n'
+        '                         "u5:OTKUI_CIPA_ULAZ:52|izlaz:OTKUI_CIPA_IZLAZ:52|" & _\n'
+        '                         "godina:OTKUI_CIPA_GODINA:84"   \' SABOTAZA\n',
+        "T_Agro_UgovorEkrana",
+        "ekran ne trazi vise cipova nego sto bazen ljuske ima",
+    ),
+    # Mapa odbitaka sme da bude BRZA kopija GetAgroAbzug, ali ne i DRUGACIJA.
+    # Ovde prestaje da SABIRA i pamti poslednji red -- tako se dve kopije
+    # istog pravila i razilaze u praksi: lista dugova i kes ekrana pocnu da
+    # pokazuju razlicit dug istom coveku.
+    "agro-abzug-mapa-ne-sabira": (
+        "modNovac.bas",
+        "                    d(koopID) = CDbl(d(koopID)) + CDbl(data(i, colUplata))\n",
+        "                    d(koopID) = CDbl(data(i, colUplata))   ' SABOTAZA: poslednji pobedjuje\n",
+        "T_Agro_AbzugMapaPratiPojedinacni",
+        "mapa odbitaka SABIRA redove, isto kao pojedinacni racun",
+    ),
+    "agro-doza-nanize": (
+        "modAgroUnos.bas",
+        "    r(\"brojPak\") = CLng(-Int(-dozaKg / pak))\n",
+        "    r(\"brojPak\") = CLng(Int(dozaKg / pak))   ' SABOTAZA: nanize\n",
+        "T_Agro_SmartDozaZaokruzujeNagore",
+        "doza se zaokruzuje NAGORE na cela pakovanja",
+    ),
 }
 
 

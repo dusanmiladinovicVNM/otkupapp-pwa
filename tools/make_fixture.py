@@ -150,6 +150,38 @@ PRIJEMNICA_ZBR_KOLIZIJA = "6/150326"
 PRIJEMNICA_DELJENA = "5/150326"
 # Aktivan cilj DRUGE vrste -- da prevezivanje uopste bude RELABEL.
 PRIJEMNICA_CILJ_V2 = "4/150326"
+# AGROHEMIJA. Magacin do sada nije imao nijedan red u fixture-u, pa je svaka
+# tvrdnja o stanju, dugu i smart dozi bila zelena bez pokrica.
+#
+# ART-TEST-1 nosi Pakovanje 5 i DozaPoHa 2. Te dve vrednosti su izabrane tako da
+# se ZAOKRUZENJE NAGORE vidi: 1.5 ha * 2 = 3 l, a pakovanje je 5 l -> jedno
+# pakovanje. Da je pakovanje 1, ceo racun bi izgledao ispravno i kad bi se
+# zaokruzivalo nanize ili matematicki.
+#
+# ART-TEST-2 je BEZ Pakovanja -- invarijanta "svaki artikal ima Pakovanje" je
+# kapija izdavanja, pa mora da postoji red nad kojim ona pada.
+#
+# ART-TEST-3 ima Pakovanje ali NEMA nijedan magacin red -> stanje 0, pa kapija
+# stanja ima nad cim da padne i kad artikal postoji.
+ARTIKAL = "ART-TEST-1"
+ARTIKAL_BEZ_PAK = "ART-TEST-2"
+ARTIKAL_BEZ_STANJA = "ART-TEST-3"
+# Artikal sa VELIKOM zalihom i pakovanjem od 1. Postoji zbog trake korpe: da bi
+# se izmerio preliv ("i jos N"), u korpu mora da udje vise stavki nego sto traka
+# ima redova -- a ART-TEST-1 to ne dozvoljava, jer mu kapija stanja (15 kg,
+# pakovanje 5) propusta najvise tri pakovanja. Nema nijedan IZLAZ, pa ne ulazi
+# ni u jedan dug.
+ARTIKAL_ZALIHA = "ART-TEST-Z"
+ARTIKAL_PAKOVANJE = 5
+ARTIKAL_DOZA = 2
+ARTIKAL_CENA = 500
+# ULAZ 20 l, pa IZLAZ 5 l kooperantu KOOP-TEST-1 -> stanje 15, dug 2500.
+ARTIKAL_STANJE = 15
+AGRO_DUG_KOOP1 = 2500
+# Odbitak duga: 300 + 200 (storniranih 999 i tudji tip 777 se NE broje).
+AGRO_ABZUG_KOOP1 = 500
+AGRO_ABZUG_KOOP2 = 100
+
 # Dve AKTIVNE prijemnice istog broja za ISPRAVKU. Zaseban broj: test 35 pravi
 # RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
@@ -183,6 +215,13 @@ SEED = {
         {"KooperantID": "KOOP-TEST-2", "Ime": "Drugi", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
         {"KooperantID": "KOOP-TEST-3", "Ime": "Treci", "Prezime": "Testni",
+         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
+        # ISTO IME kao KOOP-TEST-1, drugi identitet. Postoji zbog jednog pravila
+        # koje se drugacije ne moze napisati: lista dugova pokazuje IME, a
+        # dvoklik bira KOOPERANTA. Dok u fixture-u nije bilo dva istoimena,
+        # tvrdnja "dvosmislen prikaz se odbija" nije imala nad cim da padne, a
+        # pogadjanje bi izdalo robu pogresnom coveku.
+        {"KooperantID": "KOOP-TEST-IME", "Ime": "Prvi", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblParcele": [
@@ -406,6 +445,33 @@ SEED = {
         {"NovacID": "NOV-TEST-D2", "BrojDokumenta": NOVAC_DUPLI_BROJ,
          "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 2000,
          "KooperantID": "KOOP-TEST-2"},
+        # ODBITAK AGRO DUGA. Pravilo zivi u DVE implementacije: GetAgroAbzug
+        # (po kooperantu, zove ga kes ekrana) i GetAgroAbzugMapa (jednim
+        # prolazom, zove je lista dugova). Dok u fixture-u nije bilo nijednog
+        # AgroAbzug reda, obe su vracale nulu i tvrdnja da se slazu nije imala
+        # nad cim da padne.
+        #
+        # DVA reda za KOOP-TEST-1 (300 + 200 = 500) -- da se vidi da se
+        # SABIRA, a ne da pobedjuje poslednji.
+        {"NovacID": "NOV-TEST-AB1", "BrojDokumenta": "AB-1",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 300,
+         "KooperantID": "KOOP-TEST-1"},
+        {"NovacID": "NOV-TEST-AB2", "BrojDokumenta": "AB-2",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 200,
+         "KooperantID": "KOOP-TEST-1"},
+        # Drugi kooperant -- mapa mora da razdvaja, ne da sve slije u jedan zbir.
+        {"NovacID": "NOV-TEST-AB3", "BrojDokumenta": "AB-3",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 100,
+         "KooperantID": "KOOP-TEST-2"},
+        # STORNIRAN odbitak: obe implementacije ga izuzimaju (ExcludeStornirano).
+        # Da jedna prestane, zbir KOOP-TEST-1 postaje 1499 i test pukne.
+        {"NovacID": "NOV-TEST-AB4", "BrojDokumenta": "AB-4",
+         "Datum": FIXTURE_DATE, "Tip": "AgroAbzug", "Uplata": 999,
+         "KooperantID": "KOOP-TEST-1", "Stornirano": "Da"},
+        # Uplata DRUGOG tipa istom kooperantu -- ni jedna ni druga je ne broje.
+        {"NovacID": "NOV-TEST-AB5", "BrojDokumenta": "AB-5",
+         "Datum": FIXTURE_DATE, "Tip": "UplataKoop", "Uplata": 777,
+         "KooperantID": "KOOP-TEST-1"},
     ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
@@ -560,6 +626,60 @@ SEED = {
     # MsgBox u headless runu visi. Ovako se safe-stop pravilo ("dve ili vise na
     # cekanju = ne biraj naslepo") proverava nad istom deljenom rutinom, bez
     # ijednog dijaloga.
+    "tblArtikli": [
+        {"ArtikalID": ARTIKAL, "Naziv": "Test Preparat", "Tip": "Zastita",
+         "JedinicaMere": "l", "CenaPoJedinici": ARTIKAL_CENA,
+         "DozaPoHa": ARTIKAL_DOZA, "Kultura": VRSTA,
+         "Pakovanje": ARTIKAL_PAKOVANJE, "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_BEZ_PAK, "Naziv": "Test Bez Pakovanja",
+         "Tip": "Zastita", "JedinicaMere": "kg", "CenaPoJedinici": 100,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_BEZ_STANJA, "Naziv": "Test Bez Stanja",
+         "Tip": "Zastita", "JedinicaMere": "l", "CenaPoJedinici": 200,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Pakovanje": 1,
+         "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_ZALIHA, "Naziv": "Test Zaliha",
+         "Tip": "Zastita", "JedinicaMere": "kg", "CenaPoJedinici": 100,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Pakovanje": 1,
+         "Aktivan": STATUS_AKTIVAN},
+    ],
+    "tblMagacin": [
+        {"MagacinID": "MAG-TEST-1", "Datum": FIXTURE_DATE, "ArtikalID": ARTIKAL,
+         "Tip": "Ulaz", "Kolicina": 20, "BrojDokumenta": "AGRO-ULAZ-1",
+         "CenaPoJedinici": ARTIKAL_CENA, "Vrednost": 10000,
+         "DobavljacID": "DOB-TEST"},
+        {"MagacinID": "MAG-TEST-2", "Datum": FIXTURE_DATE, "ArtikalID": ARTIKAL,
+         "Tip": "Izlaz", "Kolicina": 5, "KooperantID": "KOOP-TEST-1",
+         "ParcelaID": "PAR-TEST-1", "BrojDokumenta": "AGRO-IZLAZ-1",
+         "CenaPoJedinici": ARTIKAL_CENA, "Vrednost": AGRO_DUG_KOOP1},
+        # Istoimeni kooperant takodje ima dug -- inace se ne bi ni pojavio u
+        # listi dugova, pa kolizije prikaza ne bi ni bilo.
+        #
+        # Dug mu ide preko REZERVISANOG virtuelnog artikla (pocetni dug), ne
+        # preko prave robe: GetMagacinStanje ga izuzima, pa stanje ART-TEST-1
+        # ostaje tacno 15 i preduslov testa kapije stanja se ne pomera. Da je
+        # ovde stajao ART-TEST-1, dva testa bi se tiho vezala jedan za drugi.
+        {"MagacinID": "MAG-TEST-3", "Datum": FIXTURE_DATE,
+         "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
+         "KooperantID": "KOOP-TEST-IME", "BrojDokumenta": "AGRO-POC-2",
+         "CenaPoJedinici": 1, "Vrednost": 1},
+        # KOOP-TEST-2 ("Drugi Testni") -- JEDNOZNACNO ime, sa dugom. Kapija
+        # dvosmislenosti mora da odbije samo istoimene, a ne sve redom; bez
+        # ovog reda "Drugi Testni" uopste nije u listi dugova, pa je tvrdnja
+        # "jednoznacan prikaz daje svoj identitet" merila odsustvo reda.
+        #
+        # Isti rezervisani artikal kao gore, iz istog razloga: stanje
+        # ART-TEST-1 mora da ostane tacno 15.
+        {"MagacinID": "MAG-TEST-4", "Datum": FIXTURE_DATE,
+         "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
+         "KooperantID": "KOOP-TEST-2", "BrojDokumenta": "AGRO-POC-3",
+         "CenaPoJedinici": 1, "Vrednost": 1},
+        # Zaliha za traku korpe. Samo ULAZ -- ne ulazi ni u jedan dug.
+        {"MagacinID": "MAG-TEST-5", "Datum": FIXTURE_DATE,
+         "ArtikalID": ARTIKAL_ZALIHA, "Tip": "Ulaz", "Kolicina": 1000,
+         "BrojDokumenta": "AGRO-ULAZ-Z", "CenaPoJedinici": 100,
+         "Vrednost": 100000, "DobavljacID": "DOB-TEST"},
+    ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
          "OldDocType": "Otpremnica", "OldDocID": "OTP-TEST-2", "OldBroj": "2/TEST",
