@@ -1474,6 +1474,47 @@ SABOTAZE = {
         "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
         "traka PRIJAVLJUJE koliko stavki nije stalo",
     ),
+    # Stavka korpe jos nije u tabeli, pa nema ID iz baze. Ako se trazi po onome
+    # sto se u redu VIDI, dve iste stavke ("dva pakovanja sada, dva kasnije")
+    # postaju nerazlucive i "Ukloni" izbaci prvu koju nadje -- tiho, jer red koji
+    # nestane izgleda isto kao onaj koji je trebalo da nestane.
+    "agro-korpa-bez-identiteta": (
+        "modAgroUnos.bas",
+        '    red("stavkaID") = NovaStavkaId()\n',
+        '    red("stavkaID") = "K"   \' SABOTAZA: sve stavke isti identitet\n',
+        "T_Agro_KorpaUklanjaPoIdentitetu",
+        "svaka stavka korpe nosi SVOJ identitet",
+    ),
+    # Identitet koji ne stigne do mreze je isto sto i identitet kog nema: ekran
+    # ga u trenutku klika nema odakle da procita.
+    "agro-identitet-ne-stize-do-mreze": (
+        "modScrAgro.bas",
+        '        outA(n, 8) = CStr(k(i)("stavkaID"))\n',
+        '        outA(n, 8) = ""   \' SABOTAZA: red mreze ne nosi identitet\n',
+        "T_Agro_KorpaUklanjaPoIdentitetu",
+        "red mreze PRENOSI identitet stavke",
+    ),
+    # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u korpi
+    # gleda sifru koja mu ne znaci nista.
+    "agro-identitet-vidljiv": (
+        "modScrAgro.bas",
+        '        "OTKUI_HDA_STAVKA||txt|1|4")\n',
+        '        "OTKUI_HDA_STAVKA||txt|60|3")   \' SABOTAZA: identitet se crta\n',
+        "T_Agro_KorpaUklanjaPoIdentitetu",
+        "kolona identiteta ostaje van prikaza",
+    ),
+    # Ljuska brojace pita samo kroz RefreshFromData, a nju zove tek na "podaci su
+    # promenjeni". Korpa nije podatak u tabeli, pa bez sopstvenog kanala znacka
+    # stoji na nuli dok operater gleda stanje ili dugove i puni korpu.
+    "agro-znacka-ne-prati-korpu": (
+        "modScrAgro.bas",
+        "    mZnacka = Scr_Brojac()\n"
+        "    OsveziZonu\n"
+        "    modOtkupUI.OsveziNavBrojace\n",
+        "    OsveziZonu   ' SABOTAZA: znacka ostaje na staroj vrednosti\n",
+        "T_Agro_ZnackaPratiKorpuVanKorpeListe",
+        "znacka menija prati korpu i van liste korpe",
+    ),
     "agro-cip-ne-suzava": (
         "modScrAgro.bas",
         '        Case "ima":  AgCipStanje = (stanje > 0)\n',

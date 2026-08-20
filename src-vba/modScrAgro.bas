@@ -42,7 +42,7 @@ Attribute VB_Name = "modScrAgro"
 '=====================================================================
 Option Explicit
 
-Public Const SCRAG_BUILD As String = "v6-ui-171"
+Public Const SCRAG_BUILD As String = "v6-ui-172"
 
 ' Visina zone. Veca je od KPI_H jer zona nosi ceo unos: prekidac rezima, dva
 ' reda polja, dva reda objasnjenja i red dugmadi.
@@ -125,6 +125,11 @@ Private mDugIds As Object           ' "Ime Prezime" -> KooperantID ("" = dvosmis
 Private mArtIds As Object           ' naziv artikla  -> ArtikalID   ("" = dvosmisleno)
 
 Private mStep As String             ' korak za poruku o gresci
+
+' Poslednji broj koji je znacka uz stavku menija dobila. Zona se u testu ne
+' crta i zNav ne postoji, pa je ovo jedini nacin da se pravilo "znacka prati
+' korpu i kad korpa NIJE prikazana lista" izmeri bez forme.
+Private mZnacka As Long
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -770,9 +775,9 @@ Private Function RadnjaNadRedom(ByVal tag As String) As Boolean
         Exit Function
     End If
     ' Mreza je SORTIRANA, pa red u prikazu nije red u korpi. Stavka se zato
-    ' trazi po vrednostima iz prikazanog reda, ne po njegovom rednom broju --
-    ' bez toga bi klik na "Ukloni" nad sortiranom listom obrisao drugu stavku.
-    RadnjaNadRedom = UkloniPoPrikazu(red)
+    ' trazi po IDENTITETU koji red nosi, ne po njegovom rednom broju -- bez toga
+    ' bi klik na "Ukloni" nad sortiranom listom obrisao drugu stavku.
+    RadnjaNadRedom = UkloniPoId(red)
 End Function
 
 ' Dvoklik: preuzmi red u unos. Bira se po IDENTITETU iz mape koju je napunio
@@ -836,25 +841,29 @@ Private Sub IzaberiUComboPoId(ByVal nm As String, ByVal iD As String)
     mFill = pre
 End Sub
 
-' Izbaci red korpe koji odgovara prikazanom redu mreze (artikal + kolicina).
-Private Function UkloniPoPrikazu(ByVal red As Long) As Boolean
-    Dim k As Collection, i As Long, artNaziv As String, kol As Double
-    Set k = Korpa()
-    If k Is Nothing Then Exit Function
-    artNaziv = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-    kol = AgD(modOtkupUI.GridCell(red, 4))
-    For i = 1 To k.count
-        If Trim$(CStr(k(i)("naziv"))) = artNaziv Then
-            If Abs(CDbl(k(i)("kolicina")) - kol) < 0.0000001 Then
-                k.Remove i
-                OsveziZonu
-                modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_UKLONJENO"), False
-                UkloniPoPrikazu = True
-                Exit Function
-            End If
-        End If
-    Next i
-    modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+' Izbaci stavku korpe koju je operater pokazao -- po IDENTITETU koji red nosi
+' u skrivenoj koloni, ne po onome sto se u njemu vidi.
+'
+' Do v6-ui-171 se stavka trazila po nazivu artikla i kolicini. Dve iste stavke
+' su tada nerazlucive, a to nije izmisljen slucaj: "dva pakovanja sada, dva
+' kasnije" daje dva reda iste robe i iste kolicine. "Ukloni" je u tom slucaju
+' izbacivao PRVI takav red, ne onaj koji je operater pokazao -- tiho, jer red
+' koji nestane izgleda isto kao onaj koji je trebalo da nestane.
+Private Function UkloniPoId(ByVal red As Long) As Boolean
+    Dim stavkaID As String
+
+    stavkaID = Trim$(CStr(modOtkupUI.GridCell(red, 8)))
+    If Len(stavkaID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    If Not modAgroUnos.AgroUkloniStavku(Korpa(), stavkaID) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    KorpaPromenjena
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_UKLONJENO"), False
+    UkloniPoId = True
 End Function
 
 '=====================================================================
@@ -952,7 +961,7 @@ Private Function DodajUKorpu() As Boolean
     ' gleda -- pa isti unos ode dva puta.
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_U_KORPI") & " " & _
                          BrojUKorpi(Korpa()), False
-    OsveziZonu
+    KorpaPromenjena
     ' korpa je lista -- ako je prikazana, mora da se procita ponovo
     DodajUKorpu = (Scr_Lista() = AG_KORPA)
 End Function
@@ -982,7 +991,7 @@ Private Function IsprazniKorpu() As Boolean
     Else
         Set mKorpaI = modAgroUnos.NovaAgroKorpa()
     End If
-    OsveziZonu
+    KorpaPromenjena
     IsprazniKorpu = (Scr_Lista() = AG_KORPA)
 End Function
 
@@ -1028,7 +1037,7 @@ Private Function ZavrsiUnos() As Boolean
     Set mDugKes = Nothing            ' izdavanje je promenilo dug
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_AG_UPISANO") & " " & brDok & _
                          " (" & upisano & ")", False
-    OsveziZonu
+    KorpaPromenjena
     ZavrsiUnos = True
 End Function
 
@@ -1080,6 +1089,32 @@ End Function
 '=====================================================================
 ' OSVEZAVANJE ZONE
 '=====================================================================
+' KORPA SE PROMENILA. Dve posledice, i obe moraju da se dese i kad korpa NIJE
+' prikazana lista:
+'   1. zona (traka korpe + brojke)
+'   2. ZNACKA uz stavku menija -- broj stavki koje cekaju upis.
+'
+' Znacka je razlog sto ovo postoji kao zasebna rutina. Ljuska brojace pita samo
+' kroz RefreshFromData, a nju zove tek kad ekran na klik javi True = "podaci su
+' promenjeni". Ekran to javlja samo kad je korpa PRIKAZANA lista, jer bi inace
+' terao ponovno citanje stanja ili prometa koje se nije menjalo. Posledica je
+' bila: operater gleda STANJE, doda tri stavke, a znacka i dalje pise nulu.
+'
+' Korpa nije podatak u tabeli, pa "podaci su promenjeni" i "korpa je promenjena"
+' nisu ista stvar i ne smeju da dele isti kanal.
+'
+' Cena: OsveziNavBrojace pita SVAKI ekran, a vecina brojaca je prolaz kroz
+' tabele. Zato ovo ide na promenu korpe (klik na "Dodaj", "Ukloni", "Zavrsi"),
+' a nikad iz OsveziZonu -- zonu osvezava i svaki otkucaj u polju.
+'
+' Prekidac rezima ovde NE spada: znacka sabira obe korpe, pa prelazak sa
+' izdavanja na prijem ne menja broj -- menja samo koja se korpa vidi u traci.
+Private Sub KorpaPromenjena()
+    mZnacka = Scr_Brojac()
+    OsveziZonu
+    modOtkupUI.OsveziNavBrojace
+End Sub
+
 Private Sub OsveziZonu()
     Dim z As Object
     On Error Resume Next
@@ -1369,7 +1404,8 @@ Private Function KorpaKolone() As Variant
         "OTKUI_HDA_KOLICINA||num|86|1", _
         "OTKUI_HD_CENA||rsd|80|1", _
         "OTKUI_HDA_VREDNOST||rsd|94|1", _
-        "OTKUI_HDA_PARCELA||txt|130|3")
+        "OTKUI_HDA_PARCELA||txt|130|3", _
+        "OTKUI_HDA_STAVKA||txt|1|4")
 End Function
 
 Private Function RedoviKorpa(ByVal q As String) As Variant
@@ -1388,7 +1424,7 @@ Private Function RedoviKorpa(ByVal q As String) As Variant
         Exit Function
     End If
 
-    ReDim outA(1 To k.count, 1 To 7)
+    ReDim outA(1 To k.count, 1 To 8)
     For i = 1 To k.count
         hay = CStr(k(i)("naziv")) & "|" & CStr(k(i)("parcelaID"))
         If Len(q) > 0 Then
@@ -1402,6 +1438,11 @@ Private Function RedoviKorpa(ByVal q As String) As Variant
         outA(n, 5) = CDbl(k(i)("cena"))
         outA(n, 6) = CDbl(k(i)("vrednost"))
         outA(n, 7) = CStr(k(i)("parcelaID"))
+        ' Identitet ide U RED, ne pored njega: mreza redove sortira i deli na strane,
+        ' pa bi svaka mapa "prikaz -> stavka" koju ekran drzi sa strane zastarela
+        ' na prvi klik po zaglavlju. Kolona je prioriteta 4, a mreza crta do 3 --
+        ' vrednost postoji u modelu, celija se nikad ne pravi.
+        outA(n, 8) = CStr(k(i)("stavkaID"))
         zbir = zbir + CDbl(k(i)("vrednost"))
 Sledeci:
     Next i
@@ -1644,6 +1685,29 @@ Public Function Scr_KorpaTestDodaj(ByVal artikalID As String, _
     mMod = AG_IZLAZ
     Scr_KorpaTestDodaj = modAgroUnos.AgroDodajIzlaz(Korpa(), artikalID, _
                                                     brojPak, parcelaID, fokus)
+    ' Ide kroz ISTU rutinu kao DodajUKorpu -- inace bi seam merio put koji u
+    ' pogonu ne postoji. Sta seam NE pokriva: da je bas DodajUKorpu ta koja je
+    ' zove. To se vidi u kodu (na svim mestima gde se korpa menja stoji
+    ' KorpaPromenjena, nigde goli OsveziZonu) i mereno je sabotazom.
+    If Len(Scr_KorpaTestDodaj) = 0 Then KorpaPromenjena
+End Function
+
+' Ukloni stavku po identitetu -- isti put kojim ide "Ukloni" nad redom mreze,
+' bez mreze. Vraca True ako je nesto uklonjeno.
+Public Function Scr_UkloniStavkuTest(ByVal stavkaID As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_UkloniStavkuTest = modAgroUnos.AgroUkloniStavku(Korpa(), stavkaID)
+    If Scr_UkloniStavkuTest Then KorpaPromenjena
+End Function
+
+' Identitet i-te stavke aktivne korpe (1-bazirano).
+Public Function Scr_StavkaIdTest(ByVal i As Long) As String
+    Scr_StavkaIdTest = modAgroUnos.AgroStavkaId(Korpa(), i)
+End Function
+
+' Poslednji broj koji je znacka dobila. Vidi KorpaPromenjena.
+Public Function Scr_ZnackaTest() As Long
+    Scr_ZnackaTest = mZnacka
 End Function
 
 ' Identitet iza prikazanog reda. Prazno znaci DVOSMISLENO ili nepoznato -- i to
@@ -1670,4 +1734,5 @@ Public Sub Scr_KorpaTestReset()
     Set mKorpaI = modAgroUnos.NovaAgroKorpa()
     Set mKorpaU = modAgroUnos.NovaAgroKorpa()
     OcistiParcele
+    KorpaPromenjena
 End Sub

@@ -16,6 +16,8 @@ Attribute VB_Name = "modAgroUnos"
 '   AgroPreporukaInfo(id, ha)        smart doza -> broj pakovanja
 '   AgroStanjeMapa()                 artikalID -> stanje magacina
 '   AgroKorpaKolicina(korpa, id)     koliko je tog artikla vec u korpi
+'   AgroUkloniStavku(korpa, id)      izbaci stavku po IDENTITETU
+'   AgroStavkaId(korpa, i)           identitet i-te stavke
 '   AgroDodajIzlaz(...)              provere + red u korpu; "" = proslo
 '   AgroDodajUlaz(...)               isto za prijem
 '   AgroProveriKorpuIzlaz(korpa)     kapija stanja AGREGIRANO po artiklu
@@ -24,8 +26,9 @@ Attribute VB_Name = "modAgroUnos"
 '   AgroZbirKorpe(korpa)             zbir vrednosti
 '
 ' Red korpe je RECNIK (Scripting.Dictionary) sa logickim kljucevima:
-'   artikalID, naziv, jm, cena, pakovanje, brojPak, kolicina, vrednost,
-'   parcelaID, nula
+'   stavkaID, artikalID, naziv, jm, cena, pakovanje, brojPak, kolicina,
+'   vrednost, parcelaID, nula
+' "stavkaID" je IDENTITET prolazne stavke - vidi NovaStavkaId.
 ' "kolicina" je uvek u JM artikla (kg/l) - to je ono sto ide u tblMagacin.
 ' "brojPak" je ono sto operater kuca kod IZLAZA; kod ULAZA je 0.
 '
@@ -42,11 +45,16 @@ Attribute VB_Name = "modAgroUnos"
 '=====================================================================
 Option Explicit
 
-Public Const AGROUNOS_BUILD As String = "v6-ui-171"
+Public Const AGROUNOS_BUILD As String = "v6-ui-172"
 
 ' Odustajanje operatera. Ista konvencija kao Scr_Save u ljusci: jedan razmak
 ' znaci "nista se nije desilo, ne prikazuj gresku".
 Public Const AGRO_ODUSTAO As String = " "
+
+' Brojac identiteta prolaznih stavki korpe. Modul-level i raste kroz celu
+' sesiju: dve korpe (izdavanje i prijem) zive istovremeno, pa bi brojac po
+' korpi dao iste ID-jeve u obe.
+Private mStavkaSeq As Long
 
 '=====================================================================
 ' KORPA
@@ -74,6 +82,33 @@ Public Function AgroKorpaKolicina(ByVal korpa As Collection, _
             AgroKorpaKolicina = AgroKorpaKolicina + AD(korpa(i), "kolicina")
         End If
     Next i
+End Function
+
+' Ukloni stavku po IDENTITETU. True = nesto je uklonjeno.
+'
+' Ovde, a ne u ekranu: korpa je struktura ovog modula, pa i njeno menjanje
+' pripada njemu. Ekran zna samo KOJI je red operater pokazao; sta taj red jeste
+' cita iz identiteta koji je red poneo sa sobom.
+Public Function AgroUkloniStavku(ByVal korpa As Collection, _
+                                 ByVal stavkaID As String) As Boolean
+    Dim i As Long
+    If korpa Is Nothing Then Exit Function
+    If Len(Trim$(stavkaID)) = 0 Then Exit Function
+    For i = 1 To korpa.count
+        If AS_(korpa(i), "stavkaID") = Trim$(stavkaID) Then
+            korpa.Remove i
+            AgroUkloniStavku = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Identitet i-te stavke korpe (1-bazirano). Prazno = nema te stavke.
+Public Function AgroStavkaId(ByVal korpa As Collection, ByVal i As Long) As String
+    On Error Resume Next
+    If korpa Is Nothing Then Exit Function
+    If i < 1 Or i > korpa.count Then Exit Function
+    AgroStavkaId = AS_(korpa(i), "stavkaID")
 End Function
 
 '=====================================================================
@@ -341,10 +376,25 @@ Public Function AgroDodajUlaz(ByVal korpa As Collection, _
     korpa.Add red
 End Function
 
+' IDENTITET PROLAZNE STAVKE. Stavka korpe jos nije u tabeli, pa nema ID iz baze
+' -- a mora da ima NEKI, jer se nad njom radi (uklanjanje). Bez njega se red
+' trazi po onome sto se u njemu VIDI, pa dve iste stavke (isti artikal, ista
+' kolicina, ista parcela -- sasvim legitiman unos: dva pakovanja na dve rate)
+' postaju nerazlucive i "Ukloni" izbaci prvu koju nadje, ne onu koju je
+' operater pokazao. Isto pravilo kao "dvosmislen broj -> MANUAL" u storno
+' okviru, samo sto se ovde dvosmislenost moze SPRECITI umesto prijaviti.
+'
+' ID je prolazan: zivi koliko i korpa, nikad ne ide u tabelu.
+Private Function NovaStavkaId() As String
+    mStavkaSeq = mStavkaSeq + 1
+    NovaStavkaId = "K" & CStr(mStavkaSeq)
+End Function
+
 Private Function NoviRed(ByVal artikalID As String, ByVal info As Object) As Object
     Dim red As Object
     Set red = CreateObject("Scripting.Dictionary")
     red.CompareMode = vbTextCompare
+    red("stavkaID") = NovaStavkaId()
     red("artikalID") = Trim$(artikalID)
     red("naziv") = CStr(info("naziv"))
     red("jm") = CStr(info("jm"))

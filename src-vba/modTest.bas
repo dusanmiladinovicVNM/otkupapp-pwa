@@ -244,6 +244,8 @@ Public Sub RunAllTests()
     RunOne 88
     RunOne 89
     RunOne 90
+    RunOne 91
+    RunOne 92
 
     SetTestMode prevMode
     WriteResultFile
@@ -366,6 +368,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 88: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
         Case 89: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
         Case 90: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
+        Case 91: TestName = "T_Agro_KorpaUklanjaPoIdentitetu"
+        Case 92: TestName = "T_Agro_ZnackaPratiKorpuVanKorpeListe"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -464,6 +468,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 88: T_Agro_AbzugMapaPratiPojedinacni
         Case 89: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
         Case 90: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
+        Case 91: T_Agro_KorpaUklanjaPoIdentitetu
+        Case 92: T_Agro_ZnackaPratiKorpuVanKorpeListe
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4527,7 +4533,15 @@ End Sub
 ' sto se desi kad pokazivac napusti dugme. Boja se cita PRE i POSLE.
 Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim f As frmOtkupUI, z As Object
+    Dim izlI As Long, izlU As Long, izlBoldI As Boolean, izlBoldU As Boolean
+    Dim izlRstI As Long, izlRstU As Long
+    Dim ulzI As Long, ulzU As Long, ulzRstI As Long, ulzRstU As Long
 
+    ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
+    ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
+    ' obrise Err izmedju Err.Raise i omotnice testa, pa pad stize kao "greska
+    ' bez opisa" i ne kaze KOJA tvrdnja je pala. Do v6-ui-171 su tvrdnje ovde
+    ' stajale izmedju koraka i pad je bio neupotrebljiv za dijagnozu.
     Set f = NewOtkupUIForm()
     Set z = f.Controls.Add("Forms.Frame.1", "zProbaAgSeg", True)
     z.width = 1200: z.Height = 300
@@ -4536,48 +4550,53 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     ' --- IZDAVANJE je izabrano ---
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     modScrAgro.Scr_Layout z, 1200, 300
+    izlI = z.Controls("scrAgSegI").BackColor
+    izlU = z.Controls("scrAgSegU").BackColor
+    izlBoldI = z.Controls("scrAgSegI").Font.bold
+    izlBoldU = z.Controls("scrAgSegU").Font.bold
+    ' Posle izlaska pokazivaca boja mora da OSTANE.
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    izlRstI = z.Controls("scrAgSegI").BackColor
+    izlRstU = z.Controls("scrAgSegU").BackColor
+
+    ' --- PRIJEM: boje se zamene, i opet prezive ---
+    modScrAgro.Scr_RezimTestSet "ULAZ"
+    modScrAgro.Scr_Layout z, 1200, 300
+    ulzI = z.Controls("scrAgSegI").BackColor
+    ulzU = z.Controls("scrAgSegU").BackColor
+    ResetSinkVizual "scrAgSegI"
+    ResetSinkVizual "scrAgSegU"
+    ulzRstI = z.Controls("scrAgSegI").BackColor
+    ulzRstU = z.Controls("scrAgSegU").BackColor
+
+    modScrAgro.Scr_RezimTestSet "IZLAZ"
+    ReleaseOtkupUIForm f
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
     ' dugmetom koje nikad nije ni pozelenelo.
-    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
-             "preduslov: izabran rezim je obojen"
-    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
-             "preduslov: neizabran rezim je beo"
+    AssertEq izlI, CLng(modOtkupUI.C_FOREST), "preduslov: izabran rezim je obojen"
+    AssertEq izlU, CLng(modOtkupUI.C_WHITE), "preduslov: neizabran rezim je beo"
     ' Bold NIJE kozmetika: clsFlatBtn.IsSelected bas po njemu prepoznaje
     ' izabrano stanje i preskace hover. Ako se izgubi, dugme opet postaje obicno.
-    AssertEq z.Controls("scrAgSegI").Font.bold, True, _
-             "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
-    AssertEq z.Controls("scrAgSegU").Font.bold, False, _
-             "neizabran rezim nije Bold"
+    AssertEq izlBoldI, True, "izabran rezim nosi Bold -- po njemu ga klasa prepoznaje"
+    AssertEq izlBoldU, False, "neizabran rezim nije Bold"
 
     ' NAJVAZNIJE: posle izlaska pokazivaca boja OSTAJE. Ovo je jedina tvrdnja
     ' koja pada kad se izgubi RebaseSink -- sve ostalo izgleda ispravno.
-    ResetSinkVizual "scrAgSegI"
-    ResetSinkVizual "scrAgSegU"
-    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_FOREST), _
+    AssertEq izlRstI, CLng(modOtkupUI.C_FOREST), _
              "izabran rezim ostaje zelen i kad pokazivac ode"
-    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_WHITE), _
+    AssertEq izlRstU, CLng(modOtkupUI.C_WHITE), _
              "neizabran rezim ostaje beo i kad pokazivac ode"
 
-    ' --- PRIJEM: boje se zamene, i opet prezive ---
     ' Bez ove polovine bi sabotaza koja zamrzne boje na prvoj vrednosti prosla:
     ' prvi rezim bi i dalje bio tacan.
-    modScrAgro.Scr_RezimTestSet "ULAZ"
-    modScrAgro.Scr_Layout z, 1200, 300
-    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
-             "prekidac je presao na prijem"
-    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
-             "izdavanje je prestalo da bude izabrano"
-
-    ResetSinkVizual "scrAgSegI"
-    ResetSinkVizual "scrAgSegU"
-    AssertEq z.Controls("scrAgSegU").BackColor, CLng(modOtkupUI.C_FOREST), _
+    AssertEq ulzU, CLng(modOtkupUI.C_FOREST), "prekidac je presao na prijem"
+    AssertEq ulzI, CLng(modOtkupUI.C_WHITE), "izdavanje je prestalo da bude izabrano"
+    AssertEq ulzRstU, CLng(modOtkupUI.C_FOREST), _
              "prijem ostaje zelen i kad pokazivac ode"
-    AssertEq z.Controls("scrAgSegI").BackColor, CLng(modOtkupUI.C_WHITE), _
+    AssertEq ulzRstI, CLng(modOtkupUI.C_WHITE), _
              "izdavanje ostaje belo i kad pokazivac ode"
-
-    modScrAgro.Scr_RezimTestSet "IZLAZ"
-    Unload f
 End Sub
 
 ' ============================================================
@@ -4646,6 +4665,125 @@ Private Sub T_Agro_TrakaKorpe_NajnovijePrvoIPreliv()
     AssertEq modScrAgro.Scr_TrakaRedTest(4), "", "traka nema peti red"
 
     modScrAgro.Scr_KorpaTestReset
+End Sub
+
+' ============================================================
+' 91. Korpa se uklanja po IDENTITETU, ne po prikazu
+' ============================================================
+' Nalaz iz review-a PR #213: "Ukloni stavku" je stavku trazio po nazivu artikla
+' i kolicini iz PRIKAZANOG reda. Dve iste stavke su tada nerazlucive, a to nije
+' izmisljen slucaj -- "dva pakovanja sada, dva kasnije" daje dva reda iste robe
+' i iste kolicine. Klik na drugi red je tada izbacivao PRVI, tiho: red koji
+' nestane izgleda isto kao onaj koji je trebalo da nestane.
+'
+' Isto pravilo kao "dvosmislen broj -> MANUAL" u storno okviru, samo sto se
+' ovde dvosmislenost moze SPRECITI umesto prijaviti: stavka nosi svoj identitet.
+'
+' Mereno bez mreze: mreza bi uvela sortiranje i stranice u tvrdnju koja je o
+' identitetu. Ono sto mreza mora da uradi -- da identitet PRENESE i da ga ne
+' nacrta -- tvrdi se nad opisom kolona i nad redovima koje Scr_Rows vraca.
+Private Sub T_Agro_KorpaUklanjaPoIdentitetu()
+    Dim id1 As String, id2 As String, d As Variant
+    Dim kolone As Variant, redovi As Variant, n As Long
+
+    modScrAgro.Scr_KorpaTestReset
+    modScrAgro.Scr_ListaTestSet "KORPA"
+
+    AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 2, FX_PARCELA), "", _
+             "preduslov: prva stavka je usla"
+    AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 2, FX_PARCELA), "", _
+             "preduslov: druga -- u prikazu identicna -- stavka je usla"
+    AssertEq modScrAgro.Scr_KorpaBroj(), 2, "preduslov: u korpi su dve stavke"
+
+    id1 = modScrAgro.Scr_StavkaIdTest(1)
+    id2 = modScrAgro.Scr_StavkaIdTest(2)
+    AssertEq (Len(id1) > 0), True, "prva stavka nosi identitet"
+    AssertEq (Len(id2) > 0), True, "druga stavka nosi identitet"
+    ' NAJVAZNIJE: prikaz je isti, identitet NIJE.
+    AssertEq (id1 <> id2), True, "dve stavke istog prikaza imaju RAZLICIT identitet"
+
+    ' Identitet mora da stigne do mreze -- inace ga "Ukloni" nema odakle da cita.
+    d = modScrAgro.Scr_Rows("sve", "")
+    kolone = d(0): redovi = d(1): n = CLng(d(2))
+    AssertEq n, 2, "mreza korpe ima dva reda"
+    AssertEq UBound(kolone), 7, "korpa ima osam kolona -- osma nosi identitet"
+    ' Prioritet 4, a mreza crta do 3: vrednost postoji u modelu, celija se nikad
+    ' ne pravi. Bez toga bi operater u korpi gledao internu sifru.
+    AssertEq Split(CStr(kolone(7)), "|")(4), "4", _
+             "kolona identiteta je prioriteta 4 -- mreza je ne crta"
+    AssertEq (CStr(redovi(1, 8)) <> CStr(redovi(2, 8))), True, _
+             "redovi mreze nose razlicite identitete"
+
+    ' Uklanjanje DRUGE stavke ostavlja PRVU. To je tvrdnja koju pretraga po
+    ' nazivu i kolicini ne moze da zadovolji -- ona bi izbacila prvi red koji lici.
+    AssertEq modScrAgro.Scr_UkloniStavkuTest(id2), True, _
+             "uklanjanje po identitetu je proslo"
+    AssertEq modScrAgro.Scr_KorpaBroj(), 1, "u korpi je ostala jedna stavka"
+    AssertEq modScrAgro.Scr_StavkaIdTest(1), id1, _
+             "ostala je bas ona stavka koja NIJE pokazana"
+
+    ' Identitet kog nema ne sme nista da izbaci -- ni prazan, ni nepostojeci.
+    ' Prazan stize sa reda mreze koji identitet nije poneo; tada se ne pogadja.
+    AssertEq modScrAgro.Scr_UkloniStavkuTest("K-NEMA-OVAKVE"), False, _
+             "nepoznat identitet ne uklanja nista"
+    AssertEq modScrAgro.Scr_UkloniStavkuTest(""), False, _
+             "prazan identitet ne uklanja nista"
+    AssertEq modScrAgro.Scr_KorpaBroj(), 1, "korpa je posle promasaja nedirnuta"
+
+    modScrAgro.Scr_KorpaTestReset
+    modScrAgro.Scr_ListaTestSet "KORPA"
+End Sub
+
+' ============================================================
+' 92. Znacka prati korpu i kad korpa NIJE prikazana lista
+' ============================================================
+' Nalaz iz review-a PR #213: ljuska brojace uz stavke menija pita samo kroz
+' RefreshFromData, a nju zove tek kad ekran na klik javi True = "podaci su
+' promenjeni". Ekran to javlja samo kad je korpa PRIKAZANA lista, jer bi inace
+' terao ponovno citanje stanja ili prometa koje se nije menjalo.
+'
+' Posledica u pogonu: operater gleda STANJE, doda tri stavke, a znacka i dalje
+' pise nulu -- pa predje na drugi ekran misleci da nema sta da proknjizi.
+' Korpa nije podatak u tabeli, pa "podaci su promenjeni" i "korpa je promenjena"
+' nisu ista stvar i ne smeju da dele isti kanal.
+'
+' Sta ovaj test NE pokriva: da bas DodajUKorpu / IsprazniKorpu / ZavrsiUnos zovu
+' KorpaPromenjena. Te tri rutine citaju zonu, a zone u testu nema. Pokriveno je
+' u kodu (nigde na tim mestima ne stoji goli OsveziZonu) i sabotazom
+' agro-znacka-ne-prati-korpu.
+Private Sub T_Agro_ZnackaPratiKorpuVanKorpeListe()
+    Dim iD As String
+
+    modScrAgro.Scr_KorpaTestReset
+    ' LISTA NIJE KORPA -- to je ceo smisao testa.
+    modScrAgro.Scr_ListaTestSet "STANJE"
+    AssertEq modScrAgro.Scr_Lista(), "STANJE", "preduslov: prikazana lista nije korpa"
+    AssertEq modScrAgro.Scr_ZnackaTest(), 0, "prazna korpa -> znacka je nula"
+
+    AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA), "", _
+             "preduslov: stavka je usla"
+    AssertEq modScrAgro.Scr_KorpaBroj(), 1, "preduslov: korpa ima jednu stavku"
+    AssertEq modScrAgro.Scr_ZnackaTest(), 1, _
+             "znacka prati korpu i kad korpa NIJE prikazana lista"
+    ' Znacka mora da dobije BAS ono sto ljuska cita iz ugovora ekrana -- inace
+    ' bi ekran osvezavao neku svoju brojku koja sa sidebarom nema veze.
+    AssertEq modScrAgro.Scr_ZnackaTest(), modScrAgro.Scr_Brojac(), _
+             "znacka je dobila ono sto ljuska cita iz Scr_Brojac"
+
+    AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA), "", _
+             "preduslov: druga stavka je usla"
+    AssertEq modScrAgro.Scr_ZnackaTest(), 2, "znacka prati i drugu stavku"
+
+    ' I uklanjanje je promena korpe.
+    iD = modScrAgro.Scr_StavkaIdTest(1)
+    AssertEq modScrAgro.Scr_UkloniStavkuTest(iD), True, "preduslov: stavka je uklonjena"
+    AssertEq modScrAgro.Scr_ZnackaTest(), 1, "znacka prati uklanjanje"
+
+    ' I praznjenje korpe.
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_ZnackaTest(), 0, "znacka prati praznjenje korpe"
+
+    modScrAgro.Scr_ListaTestSet "KORPA"
 End Sub
 
 ' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn
