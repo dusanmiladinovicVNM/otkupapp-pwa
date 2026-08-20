@@ -4562,6 +4562,7 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim tezina As Long, tezinaPosle As Long, formaBold As Boolean
     Dim tez0 As Long, tez1 As Long, tezB As Long, tez2 As Long, tez3 As Long
     Dim r1 As Long, r2 As Long, r3 As Long
+    Dim s1 As Long, s2 As Long, s3 As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4649,6 +4650,32 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     r1 = TezinaPoRedosledu(z, "probaR1", 1)
     r2 = TezinaPoRedosledu(z, "probaR2", 2)
     r3 = TezinaPoRedosledu(z, "probaR3", 3)
+
+    ' SONDA 6 -- DA LI BackColor OBARA FONT. Ovo je poslednja racva.
+    '
+    ' Zna se: nad kontrolom u gradnji nijedan redosled ne prezivi (r1..r3=700),
+    ' a nad VEC IZGRADJENOM kontrolom isti upis radi (posleFalse=0/400). Dva
+    ' objasnjenja preostaju, i razlikuje ih jedno merenje nad izgradjenom
+    ' neprozirnom kontrolom (scrAgSegUB, ivica segmenta):
+    '
+    '   s1  posle upisa rez=False
+    '   s2  posle upisa BackColor NAD ISTOM kontrolom
+    '   s3  posle jos jednog upisa rez=False
+    '
+    '   s1=400 s2=700  -> BackColor OBARA font. Tada popravka nije redosled u
+    '                     NewLbl-u nego pravilo: rez se pise POSLE svake
+    '                     promene pozadine (BoxState prvo bas to i radi
+    '                     obrnuto, pa mu se bold gubi).
+    '   s1=400 s2=400  -> BackColor ne dira font; kvar je iskljucivo u trenutku
+    '                     GRADNJE, i popravka je odlozen prolaz kroz fontove
+    '                     posle sto je zona sagradjena.
+    '   s3             -> da li se stanje uopste da vratiti posle pada.
+    z.Controls("scrAgSegUB").Font.bold = False
+    s1 = z.Controls("scrAgSegUB").Font.Weight
+    z.Controls("scrAgSegUB").BackColor = modOtkupUI.C_WHITE
+    s2 = z.Controls("scrAgSegUB").Font.Weight
+    z.Controls("scrAgSegUB").Font.bold = False
+    s3 = z.Controls("scrAgSegUB").Font.Weight
     tezina = z.Controls("scrAgSegU").Font.Weight
     formaBold = f.Font.bold
     z.Controls("scrAgSegU").Font.bold = False
@@ -4701,13 +4728,15 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
              " tezinaU=" & tezina & " posleFalse=" & Bit(posleFalse) & _
              "/" & tezinaPosle & " forma=" & Bit(formaBold) & _
              " | ivicaB=" & tezB & " neproz=" & tez2 & " ozicen=" & tez3 & _
-             " | r1=" & r1 & " r2=" & r2 & " r3=" & r3
+             " | r1=" & r1 & " r2=" & r2 & " r3=" & r3 & _
+             " | s1=" & s1 & " s2=" & s2 & " s3=" & s3
     AssertEq snimak, _
              "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
              "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
              " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0" & _
              " | ivicaB=400 neproz=400 ozicen=400" & _
-             " | r1=400 r2=400 r3=400", _
+             " | r1=400 r2=400 r3=400" & _
+             " | s1=400 s2=400 s3=400", _
              "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo, /=Font.Weight)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
