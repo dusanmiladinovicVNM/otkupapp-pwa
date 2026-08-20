@@ -4559,7 +4559,8 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     Dim bldI As Boolean, bldU As Boolean, bldIC As Boolean, bldUC As Boolean
     Dim layIC As Boolean, layUC As Boolean
     Dim nova0 As Boolean, nova1 As Boolean, posleFalse As Boolean
-    Dim tezina As Long, formaBold As Boolean
+    Dim tezina As Long, tezinaPosle As Long, formaBold As Boolean
+    Dim tez0 As Long, tez1 As Long
 
     ' MERI SE DOK FORMA ZIVI, TVRDI SE POSLE Unload-a -- isti razlog kao u
     ' T_ZonaAgro_PoljaPostojeIPrateRezim: dok forma zivi, njena masinerija
@@ -4594,17 +4595,28 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
     '                  (ambijent forme), a ne osobina segmenta.
     '   posleFalse  -- eksplicitan Font.Bold = False nad zatecenom kontrolom.
     '                  Ako ni to ne ocisti, Bold se nad njom ne moze skinuti.
-    '   tezina      -- Font.Weight u brojkama: 400 = normalan, 700 = bold. Bold
-    '                  je izveden iz nje, pa je ona pravi podatak.
+    '   tezina      -- Font.Weight ZATECENE kontrole, PRE ijednog upisa sonde.
+    '                  400 = normalan rez, 700 = bold. To je jedini podatak koji
+    '                  razlikuje dva suprotna zakljucka:
+    '                    700 -> natpis se stvarno crta bold; kriva je fabrika
+    '                    400 -> rez je normalan a Font.Bold samo LAZE pri
+    '                           citanju; tada je kriva TVRDNJA, ne ekran, i
+    '                           clsFlatBtn.IsSelected (cita isti Bold) je uz to
+    '                           uvek True za nav/chip/seg.
+    '                  Prvi krug ju je citao POSLE prisilnog False, pa je vratio
+    '                  400 koje nije govorilo nista -- greska u sondi, ne nalaz.
     '   formaBold   -- font same forme. Kontrole ga naslede pri Controls.Add.
     modUiKit.NewLbl z, "probaB0", "", 0, 260, 40, 12, 8, False, 0
     modUiKit.NewLbl z, "probaB1", "", 44, 260, 40, 12, 8, True, 0
     nova0 = z.Controls("probaB0").Font.bold
     nova1 = z.Controls("probaB1").Font.bold
-    z.Controls("scrAgSegU").Font.bold = False
-    posleFalse = z.Controls("scrAgSegU").Font.bold
+    tez0 = z.Controls("probaB0").Font.Weight
+    tez1 = z.Controls("probaB1").Font.Weight
     tezina = z.Controls("scrAgSegU").Font.Weight
     formaBold = f.Font.bold
+    z.Controls("scrAgSegU").Font.bold = False
+    posleFalse = z.Controls("scrAgSegU").Font.bold
+    tezinaPosle = z.Controls("scrAgSegU").Font.Weight
     ' vrati stanje kakvo je bilo, da ostatak testa meri ekran a ne sondu
     z.Controls("scrAgSegU").Font.bold = bldU
 
@@ -4647,14 +4659,15 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
              " bgI=" & BojaZnak(izlI) & " bgU=" & BojaZnak(izlU)
     ' Mehanizam i ugovor idu u ISTU tvrdnju: AssertEq staje na prvoj razlici,
     ' pa bi dve tvrdnje dale samo prvu polovinu odgovora.
-    snimak = snimak & " | nova0=" & Bit(nova0) & " nova1=" & Bit(nova1) & _
-             " posleFalse=" & Bit(posleFalse) & " tezina=" & tezina & _
-             " forma=" & Bit(formaBold)
+    snimak = snimak & " | nova0=" & Bit(nova0) & "/" & tez0 & _
+             " nova1=" & Bit(nova1) & "/" & tez1 & _
+             " tezinaU=" & tezina & " posleFalse=" & Bit(posleFalse) & _
+             "/" & tezinaPosle & " forma=" & Bit(formaBold)
     AssertEq snimak, _
              "gradnja I=1 U=0 IC=1 UC=0 | raspored rez=IZLAZ " & _
              "I=1 U=0 IC=1 UC=0 bgI=Z bgU=B" & _
-             " | nova0=0 nova1=1 posleFalse=0 tezina=400 forma=0", _
-             "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo)"
+             " | nova0=0/400 nova1=1/700 tezinaU=400 posleFalse=0/400 forma=0", _
+             "SONDA prekidaca rezima (1=Bold, Z=zeleno, B=belo, /=Font.Weight)"
 
     ' PREDUSLOV: bojenje uopste radi. Bez ovoga bi tvrdnja ispod prolazila i nad
     ' dugmetom koje nikad nije ni pozelenelo.
