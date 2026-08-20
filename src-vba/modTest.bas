@@ -98,6 +98,10 @@ Private Const FX_PRIJ_ISPRAVKA As String = "3/150326"
 Private Const FX_ARTIKAL As String = "ART-TEST-1"
 Private Const FX_ARTIKAL_BEZ_PAK As String = "ART-TEST-2"
 Private Const FX_ARTIKAL_BEZ_STANJA As String = "ART-TEST-3"
+' Artikal sa velikom zalihom i pakovanjem od 1. Traka korpe se drugacije ne moze
+' izmeriti: ART-TEST-1 kroz kapiju stanja pusta najvise TRI pakovanja, a za
+' preliv trake mora da udje vise stavki nego sto ona ima redova.
+Private Const FX_ARTIKAL_ZALIHA As String = "ART-TEST-Z"
 Private Const FX_ART_PAKOVANJE As Double = 5
 Private Const FX_ART_STANJE As Double = 15
 ' Kooperant ISTOG IMENA kao FX_KOOPERANT ("Prvi Testni"), drugi identitet.
@@ -239,6 +243,7 @@ Public Sub RunAllTests()
     RunOne 87
     RunOne 88
     RunOne 89
+    RunOne 90
 
     SetTestMode prevMode
     WriteResultFile
@@ -360,6 +365,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 87: TestName = "T_Agro_BrojacIDvoklikPoIdentitetu"
         Case 88: TestName = "T_Agro_AbzugMapaPratiPojedinacni"
         Case 89: TestName = "T_ZonaAgro_PrekidacRezimaZadrzavaBoju"
+        Case 90: TestName = "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -457,6 +463,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 87: T_Agro_BrojacIDvoklikPoIdentitetu
         Case 88: T_Agro_AbzugMapaPratiPojedinacni
         Case 89: T_ZonaAgro_PrekidacRezimaZadrzavaBoju
+        Case 90: T_Agro_TrakaKorpe_NajnovijePrvoIPreliv
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -4571,6 +4578,74 @@ Private Sub T_ZonaAgro_PrekidacRezimaZadrzavaBoju()
 
     modScrAgro.Scr_RezimTestSet "IZLAZ"
     Unload f
+End Sub
+
+' ============================================================
+' 90. Traka korpe: najnovije prvo, i preliv se PRIJAVLJUJE
+' ============================================================
+' Nalaz sa smoke-a: korpa se videla samo dok je izabrana lista "Korpa", pa
+' operater koji gleda stanje ili dugove nije imao nijedan znak sta je upravo
+' dodao. Zona je zato dobila traku sa korpom.
+'
+' Dva pravila, oba se tiho kvare:
+'   1. NAJNOVIJE PRVO -- operater upravo nesto doda, pa mu je potvrda ono sto
+'      trazi. Traka koja pokazuje najstarije izgleda ispravno dok se korpa ne
+'      napuni preko cetiri reda.
+'   2. PRELIV SE PRIJAVLJUJE -- lista koja se tiho odseca izgleda kao cela.
+'      Bas to je pravilo koje ljuska nad sobom vec ima (BazenStaje).
+'
+' Racun je odvojen od crtanja, pa se meri bez forme.
+Private Sub T_Agro_TrakaKorpe_NajnovijePrvoIPreliv()
+    Dim i As Long, greska As String, r0 As String
+
+    modScrAgro.Scr_KorpaTestReset
+    AssertEq modScrAgro.Scr_TrakaRedTest(0), "", "prazna korpa ne pise nista u traku"
+
+    ' Jedna stavka: stoji u prvom redu, ostali su prazni.
+    greska = modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA)
+    AssertEq greska, "", "preduslov: prva stavka je usla"
+    r0 = modScrAgro.Scr_TrakaRedTest(0)
+    AssertEq (Len(r0) > 0), True, "prva stavka se vidi u traci"
+    ' Izdavanje se meri PAKOVANJIMA, pa red mora da nosi broj pakovanja.
+    AssertEq (InStr(1, r0, "1 " & ChrW(215), vbTextCompare) > 0), True, _
+             "red trake nosi broj pakovanja (1 x)"
+    AssertEq (InStr(1, r0, "Test Zaliha", vbTextCompare) > 0), True, _
+             "red trake nosi naziv artikla"
+    AssertEq modScrAgro.Scr_TrakaRedTest(1), "", "drugi red je prazan dok ima jedna stavka"
+
+    ' Cetiri stavke: sve staju, ali OBRNUTO -- poslednja dodata je prva.
+    ' Svaka je razlicitog broja pakovanja da bi se redosled uopste video.
+    modScrAgro.Scr_KorpaTestReset
+    For i = 1 To 3
+        AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, i, FX_PARCELA), "", _
+                 "preduslov: stavka " & i & " je usla"
+    Next i
+    ' NAJVAZNIJE: prvi red trake je POSLEDNJA dodata (3 pakovanja), ne prva.
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(0), "3 " & ChrW(215), vbTextCompare) > 0), _
+             True, "prvi red trake je POSLEDNJA dodata stavka"
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(2), "1 " & ChrW(215), vbTextCompare) > 0), _
+             True, "poslednji red trake je PRVA dodata stavka"
+    AssertEq modScrAgro.Scr_TrakaRedTest(3), "", "cetvrti red je prazan dok ih ima tri"
+
+    ' Vise nego sto staje: poslednji red kaze KOLIKO ih je sakriveno.
+    ' Korpa ima sest stavki, traka nosi cetiri reda -> tri stavke + preliv "2".
+    modScrAgro.Scr_KorpaTestReset
+    For i = 1 To 6
+        AssertEq modScrAgro.Scr_KorpaTestDodaj(FX_ARTIKAL_ZALIHA, 1, FX_PARCELA), "", _
+                 "preduslov: stavka " & i & " od sest je usla"
+    Next i
+    AssertEq (Len(modScrAgro.Scr_TrakaRedTest(2)) > 0), True, _
+             "treci red jos nosi stavku"
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(3), ChrW(8230), vbTextCompare) > 0), _
+             True, "poslednji red je prelivni, ne cetvrta stavka"
+    ' Sest stavki, tri prikazane -> sakriveno ih je TRI, i to mora da pise.
+    AssertEq (InStr(1, modScrAgro.Scr_TrakaRedTest(3), "3", vbTextCompare) > 0), True, _
+             "prelivni red kaze KOLIKO stavki je sakriveno"
+
+    ' Traka ne izmislja redove preko svoje visine.
+    AssertEq modScrAgro.Scr_TrakaRedTest(4), "", "traka nema peti red"
+
+    modScrAgro.Scr_KorpaTestReset
 End Sub
 
 ' Vrati kontrolu u "nije pod pokazivacem" stanje -- tacno ono sto clsFlatBtn

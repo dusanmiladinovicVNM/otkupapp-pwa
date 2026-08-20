@@ -66,6 +66,17 @@ Private Const AG_Y_BTN   As Single = 172
 Private Const AG_BTN_H   As Single = 24
 Private Const AG_KPI_W   As Single = 140
 
+' DESNA TRAKA ZONE NOSI KORPU. Postoji zato sto se korpa inace vidi samo dok je
+' izabrana lista "Korpa": operater koji gleda stanje, promet ili dugove nema
+' nijedan znak sta je upravo dodao, a desna polovina reda polja svejedno stoji
+' prazna (parcele su cesto iskljucene, pa slotovi 3 i 4 nikad nista ne nose).
+' Isti raspored kao PRE_DESNO na ekranu Palete: polja uzimaju OSTATAK sirine.
+Private Const AG_KORPA_W As Single = 330
+Private Const AG_KORPA_N As Long = 4       ' redova korpe koji staju u traku
+' Ispod ove sirine bi polja ostala pretesna, pa traka nestaje i polja uzimaju
+' celu zonu -- isto pravilo kao brojke koje bi nalegle na prekidac rezima.
+Private Const AG_POLJA_MIN As Single = 520
+
 ' Rezimi. Nisu F-tasteri: ekran ih nema, ovo je prekidac unutar zone.
 Private Const AG_IZLAZ As String = "IZLAZ"
 Private Const AG_ULAZ  As String = "ULAZ"
@@ -139,13 +150,8 @@ End Function
 
 ' U listi korpe naslov nosi rezim -- inace se dve korpe ne razlikuju.
 Public Function Scr_NaslovDopuna() As String
-    If Scr_Lista() = AG_KORPA Then
-        If Rezim() = AG_ULAZ Then
-            Scr_NaslovDopuna = ChrW(8212) & " " & Poruka("OTKUI_SEG_AG_PRIJEM")
-        Else
-            Scr_NaslovDopuna = ChrW(8212) & " " & Poruka("OTKUI_SEG_AG_IZDAVANJE")
-        End If
-    End If
+    If Scr_Lista() = AG_KORPA Then _
+        Scr_NaslovDopuna = ChrW(8212) & " " & Scr_NaslovRezima()
 End Function
 
 ' Cipovi AKTIVNE liste. Korpa ih nema: to je nekoliko redova koje je operater
@@ -256,6 +262,17 @@ Public Sub Scr_Build(ByVal z As Object)
                         TS_KPI, True, C_FOREST, -1, fmTextAlignLeft, F_NUM
     Next i
 
+    ' KORPA U ZONI. Naslov, nekoliko redova i zbir -- sadrzaj puni
+    ' OsveziKorpuPanel, mesto daje RasporediPolja.
+    modUiKit.NewLbl z, "agKorpaCap", "", 0, AG_Y_LBL_A, AG_KORPA_W, 11, _
+                    TS_MICRO, True, C_MUTED, -1
+    For i = 0 To AG_KORPA_N - 1
+        modUiKit.NewLbl z, "agKorpaR" & i, "", 0, AG_Y_LBL_A + 16 + i * 13, _
+                        AG_KORPA_W, 12, TS_META, False, C_FOREST, -1
+    Next i
+    modUiKit.NewLbl z, "agKorpaZ", "", 0, AG_Y_LBL_A + 18 + AG_KORPA_N * 13, _
+                    AG_KORPA_W, 13, TS_META, True, C_GREEN, -1
+
     ' POLJA. Pravi ih ljuska (NewFieldG), ekran im samo kaze gde stoje -- v.
     ' zaglavlje. Prefiks "scr" je OBAVEZAN: bez njega promena teksta ide ljusci,
     ' koja o ovim poljima ne zna nista. Grupa "AG" je samo oznaka pripadnosti;
@@ -308,6 +325,7 @@ End Function
 Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     Dim i As Long, fw As Single, kx As Single, segDesno As Single
     Dim slot3 As Single, izl As Boolean
+    Dim wPolja As Single, kxK As Single, korpaVidi As Boolean
     On Error Resume Next
     If z Is Nothing Then Exit Sub
     If w < 200 Then Exit Sub
@@ -322,10 +340,27 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     z.Controls("agBg").width = w - 2 * (PAD - 10)
     z.Controls("agBg").Height = AG_Y_BTN - AG_Y_LBL_A + 2
 
+    ' Desna traka (korpa) uzima svoje, polja dele OSTATAK. Na uskom ekranu
+    ' traka nestaje i polja uzimaju celu zonu -- bolje bez trake nego sa
+    ' poljima u koja se broj dokumenta ne vidi.
+    wPolja = w - AG_KORPA_W - PAD
+    korpaVidi = (wPolja >= AG_POLJA_MIN)
+    If Not korpaVidi Then wPolja = w
+    kxK = w - AG_KORPA_W
+
     ' Cetiri jednaka polja u redu; parcele u redu A dele slot sa dva dugmeta.
-    fw = (w - PAD * 2 - AG_GAP * 3) / 4
+    fw = (wPolja - PAD * 2 - AG_GAP * 3) / 4
     If fw < 90 Then fw = 90
     slot3 = PAD + (fw + AG_GAP) * 3
+
+    z.Controls("agKorpaCap").Left = kxK
+    z.Controls("agKorpaCap").Visible = korpaVidi
+    z.Controls("agKorpaZ").Left = kxK
+    z.Controls("agKorpaZ").Visible = korpaVidi
+    For i = 0 To AG_KORPA_N - 1
+        z.Controls("agKorpaR" & i).Left = kxK
+        z.Controls("agKorpaR" & i).Visible = korpaVidi
+    Next i
 
     ' brojke idu uz desnu ivicu; sakriva se ona koja bi nalegla na prekidac
     segDesno = PAD + 232
@@ -379,8 +414,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
         PoljeX z, "scrAgDok", PAD + (fw + AG_GAP) * 2, fw, AG_Y_LBL_B
     End If
 
-    z.Controls("agHint").width = w - PAD * 2
-    z.Controls("agVred").width = w - PAD * 2
+    ' Objasnjenja se zaustavljaju pred trakom, inace bi dugacka recenica o dozi
+    ' prosla ispod nje (Label ne prelama, samo isteca).
+    z.Controls("agHint").width = wPolja - PAD * 2
+    z.Controls("agVred").width = wPolja - PAD * 2
 
     ' RED DUGMADI. "Isprazni korpu" ide uz DESNU ivicu, a ne u niz sa ostalima:
     ' razdvaja radnju koja pravi dokument od one koja baca rad. Ostala tri
@@ -1051,9 +1088,97 @@ Private Sub OsveziZonu()
     PuniCombos
     OsveziRezim z
     RasporediPolja z, z.width
+    OsveziKorpuPanel z
     OsveziObjasnjenje z
     OsveziBrojke z
 End Sub
+
+'---------------------------------------------------------- KORPA U ZONI
+' Traka pokazuje NAJNOVIJE stavke prvo: operater upravo nesto doda, pa mu je
+' potvrda ono sto trazi. Kad ih ima vise nego sto staje, poslednji red kaze
+' KOLIKO ih je sakriveno -- lista koja se tiho odseca izgleda kao cela.
+'
+' Racun je odvojen od crtanja (TrakaRed) da bi mogao da se izmeri bez forme.
+Private Function TrakaRed(ByVal k As Collection, ByVal i As Long) As String
+    Dim n As Long, sakriveno As Long
+    If k Is Nothing Then Exit Function
+    n = k.count
+    If n = 0 Then Exit Function
+    If i < 0 Or i > AG_KORPA_N - 1 Then Exit Function
+
+    ' Sve staje: samo obrni redosled.
+    If n <= AG_KORPA_N Then
+        If i > n - 1 Then Exit Function
+        TrakaRed = KorpaRedPrikaz(k(n - i))
+        Exit Function
+    End If
+
+    ' Ne staje: poslednji red je prelivni.
+    If i < AG_KORPA_N - 1 Then
+        TrakaRed = KorpaRedPrikaz(k(n - i))
+        Exit Function
+    End If
+    sakriveno = n - (AG_KORPA_N - 1)
+    TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno
+End Function
+
+' Jedan red korpe u jednoj recenici. Izdavanje se meri PAKOVANJIMA, prijem
+' kolicinom -- pa se i pisu razlicito. Naziv se skracuje: traka je uska, a red
+' koji istece ispod ivice izgleda kao da je prazan.
+Private Function KorpaRedPrikaz(ByVal red As Object) As String
+    Dim naziv As String, kol As String
+    On Error Resume Next
+    naziv = Trim$(CStr(red("naziv")))
+    If Len(naziv) > 24 Then naziv = Left$(naziv, 23) & ChrW(8230)
+    If CDbl(red("brojPak")) > 0 Then
+        kol = CStr(CLng(red("brojPak"))) & " " & ChrW(215) & " "
+    Else
+        kol = modAgroUnos.AgroFmtKol(CDbl(red("kolicina"))) & " " & _
+              Trim$(CStr(red("jm"))) & "  "
+    End If
+    KorpaRedPrikaz = kol & naziv & "  " & ChrW(8212) & "  " & _
+                     Format$(CDbl(red("vrednost")), "#,##0")
+End Function
+
+Private Sub OsveziKorpuPanel(ByVal z As Object)
+    Dim k As Collection, i As Long, t As String
+    On Error Resume Next
+    Set k = Korpa()
+
+    z.Controls("agKorpaCap").caption = UCase$(Poruka("OTKUI_LBL_AG_KORPA_CAP") & _
+        " " & ChrW(8212) & " " & Scr_NaslovRezima())
+
+    For i = 0 To AG_KORPA_N - 1
+        t = TrakaRed(k, i)
+        z.Controls("agKorpaR" & i).caption = t
+        ' Prelivni red je prigusen: nije stavka nego napomena o ostatku.
+        If Left$(t, 1) = ChrW(8230) Then
+            z.Controls("agKorpaR" & i).ForeColor = C_MUTED
+        Else
+            z.Controls("agKorpaR" & i).ForeColor = C_FOREST
+        End If
+    Next i
+
+    If BrojUKorpi(k) = 0 Then
+        z.Controls("agKorpaZ").caption = Poruka("OTKUI_LBL_AG_KORPA_PRAZNA")
+        z.Controls("agKorpaZ").ForeColor = C_MUTED
+    Else
+        z.Controls("agKorpaZ").caption = BrojUKorpi(k) & " " & _
+            Poruka("OTKUI_LBL_AG_KORPA_STAVKI") & "  " & ChrW(183) & "  " & _
+            Format$(modAgroUnos.AgroZbirKorpe(k), "#,##0") & " RSD"
+        z.Controls("agKorpaZ").ForeColor = C_GREEN
+    End If
+End Sub
+
+' Natpis rezima; koristi ga i naslov mreze i traka korpe, pa stoji na jednom
+' mestu -- inace bi "Izdavanje" i "Prijem" postojali u dva prevoda.
+Private Function Scr_NaslovRezima() As String
+    If Rezim() = AG_ULAZ Then
+        Scr_NaslovRezima = Poruka("OTKUI_SEG_AG_PRIJEM")
+    Else
+        Scr_NaslovRezima = Poruka("OTKUI_SEG_AG_IZDAVANJE")
+    End If
+End Function
 
 ' Koja polja i koja dugmad postoje u ovom rezimu, i kako se zovu.
 ' IZABRAN REZIM SE MORA I JAVITI SINK-U, ne samo obojiti.
@@ -1531,6 +1656,13 @@ End Function
 Public Function Scr_ArtIdTest(ByVal prikaz As String) As String
     If mArtIds Is Nothing Then Exit Function
     If mArtIds.Exists(prikaz) Then Scr_ArtIdTest = CStr(mArtIds(prikaz))
+End Function
+
+' Tekst reda TRAKE korpe. Seam postoji jer se traka u testu ne crta, a pravilo
+' koje se meri (najnovije prvo, preliv na kraju) je racun, ne crtanje.
+Public Function Scr_TrakaRedTest(ByVal i As Long) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_TrakaRedTest = TrakaRed(Korpa(), i)
 End Function
 
 Public Sub Scr_KorpaTestReset()

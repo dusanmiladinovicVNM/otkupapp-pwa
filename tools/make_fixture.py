@@ -166,6 +166,12 @@ PRIJEMNICA_CILJ_V2 = "4/150326"
 ARTIKAL = "ART-TEST-1"
 ARTIKAL_BEZ_PAK = "ART-TEST-2"
 ARTIKAL_BEZ_STANJA = "ART-TEST-3"
+# Artikal sa VELIKOM zalihom i pakovanjem od 1. Postoji zbog trake korpe: da bi
+# se izmerio preliv ("i jos N"), u korpu mora da udje vise stavki nego sto traka
+# ima redova -- a ART-TEST-1 to ne dozvoljava, jer mu kapija stanja (15 kg,
+# pakovanje 5) propusta najvise tri pakovanja. Nema nijedan IZLAZ, pa ne ulazi
+# ni u jedan dug.
+ARTIKAL_ZALIHA = "ART-TEST-Z"
 ARTIKAL_PAKOVANJE = 5
 ARTIKAL_DOZA = 2
 ARTIKAL_CENA = 500
@@ -632,6 +638,10 @@ SEED = {
          "Tip": "Zastita", "JedinicaMere": "l", "CenaPoJedinici": 200,
          "DozaPoHa": 1, "Kultura": VRSTA, "Pakovanje": 1,
          "Aktivan": STATUS_AKTIVAN},
+        {"ArtikalID": ARTIKAL_ZALIHA, "Naziv": "Test Zaliha",
+         "Tip": "Zastita", "JedinicaMere": "kg", "CenaPoJedinici": 100,
+         "DozaPoHa": 1, "Kultura": VRSTA, "Pakovanje": 1,
+         "Aktivan": STATUS_AKTIVAN},
     ],
     "tblMagacin": [
         {"MagacinID": "MAG-TEST-1", "Datum": FIXTURE_DATE, "ArtikalID": ARTIKAL,
@@ -664,6 +674,11 @@ SEED = {
          "ArtikalID": "ART-POC-DUG", "Tip": "Izlaz", "Kolicina": 1,
          "KooperantID": "KOOP-TEST-2", "BrojDokumenta": "AGRO-POC-3",
          "CenaPoJedinici": 1, "Vrednost": 1},
+        # Zaliha za traku korpe. Samo ULAZ -- ne ulazi ni u jedan dug.
+        {"MagacinID": "MAG-TEST-5", "Datum": FIXTURE_DATE,
+         "ArtikalID": ARTIKAL_ZALIHA, "Tip": "Ulaz", "Kolicina": 1000,
+         "BrojDokumenta": "AGRO-ULAZ-Z", "CenaPoJedinici": 100,
+         "Vrednost": 100000, "DobavljacID": "DOB-TEST"},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

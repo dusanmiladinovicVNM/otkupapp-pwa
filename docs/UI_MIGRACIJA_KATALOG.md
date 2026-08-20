@@ -613,7 +613,7 @@ MANUAL" u storno okviru. Pogađanje bi ovde izdalo robu pogrešnom čoveku.
 
 ### 7.5 Verifikacija
 
-Testovi 82–89 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
+Testovi 82–90 u `modTest`, uz nove fixture redove `tblArtikli` / `tblMagacin`
 u `tools/make_fixture.py`. Fixture je namešten tako da zaokruženje **nagore**
 ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 
@@ -627,6 +627,7 @@ ima gde da padne: doza 2 l/ha, pakovanje 5 l, stanje 15 l.
 | `T_Agro_BrojacIDvoklikPoIdentitetu` | brojač vidi korpu; dvosmislen prikaz nosi **prazan** identitet | `agro-brojac-ne-vidi-korpu`, `agro-dvosmislen-prvi-pobedjuje` |
 | `T_Agro_AbzugMapaPratiPojedinacni` | mapa odbitaka i pojedinačni račun daju **isto**, nad svim kooperantima | `agro-abzug-mapa-ne-sabira` |
 | `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` | izabran režim ostaje zelen i kad pokazivač ode | `agro-prekidac-bez-rebase` |
+| `T_Agro_TrakaKorpe_NajnovijePrvoIPreliv` | traka korpe: najnovije prvo, preliv se **prijavljuje** | `agro-traka-najstarije-prvo`, `agro-traka-bez-preliva` |
 
 Granice bazena ljuske (`MaxPrekidaca`, `MAX_ACT`, `MAX_CHIP`, kolone) tvrdi
 `T_Agro_UgovorEkrana`, sa sabotažom `agro-cipova-preko-bazena`. Višak se inače
@@ -690,6 +691,30 @@ sabotaža koja zamrzne boje na prvoj vrednosti ne prođe.
 > kao ni prekidač lista ispod njega). To ostaje na smoke listi, uz ponovno
 > puštanje suite — test 89 i sabotaža `agro-prekidac-bez-rebase` **nisu
 > izvršeni**, pisani su u sesiji bez Excela.
+
+### 7.8 Drugi smoke: korpa se nije videla
+
+Korpa se videla **samo dok je izabrana lista „Korpa"**. Operater koji gleda
+stanje, promet ili dugove nema nijedan znak šta je upravo dodao — a desna
+polovina reda polja svejedno stoji prazna (parcele su često isključene, pa
+slotovi 3 i 4 nikad ništa ne nose).
+
+Zona je zato dobila **traku korpe** uz desnu ivicu: naslov, poslednje stavke i
+zbir. Polja uzimaju **ostatak** širine — isti raspored kao `PRE_DESNO` na ekranu
+Palete. Na uskom ekranu traka nestaje i polja uzimaju celu zonu, isto pravilo
+kao KPI brojke koje bi nalegle na prekidač režima.
+
+Dva pravila, oba se tiho kvare:
+
+- **Najnovije prvo.** Operater upravo nešto doda, pa mu je potvrda ono što traži.
+  Obrnut redosled izgleda ispravno dok se korpa ne napuni preko četiri reda.
+- **Preliv se prijavljuje** (`… još N`). Lista koja se tiho odseca izgleda kao
+  cela — isto pravilo koje ljuska nad sobom već ima (`BazenStaje`).
+
+Račun (`TrakaRed`) je odvojen od crtanja, pa se meri bez forme. Fixture je dobio
+`ART-TEST-Z` sa velikom zalihom i pakovanjem od 1: preko `ART-TEST-1` se preliv
+ne može izmeriti jer mu kapija stanja (15 kg, pakovanje 5) propušta najviše tri
+pakovanja.
 - **Dupla implementacija odbitka je ZATVORENA.** `GetAgroAbzugMapa` ostaje
   brza kopija pravila iz `GetAgroAbzug` — obe su žive u istoj funkciji (mapu
   zove lista dugova, pojedinačnu keš ekrana), pa se mogu razići. Fixture je

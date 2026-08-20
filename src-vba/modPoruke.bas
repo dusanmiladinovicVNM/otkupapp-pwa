@@ -1111,6 +1111,10 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ASK_AG_POC_BRDOK", "Broj dokumenta (opciono):"
     UpsertRow lo, existing, "OTKUI_ASK_AG_POC_POTVRDA", "Proknji" & ChrW(382) & "iti po" & ChrW(269) & "etni dug"
     UpsertRow lo, existing, "OTKUI_LBL_AG_DUG", "Trenutni dug:"
+    UpsertRow lo, existing, "OTKUI_LBL_AG_KORPA_CAP", "Korpa"
+    UpsertRow lo, existing, "OTKUI_LBL_AG_KORPA_PRAZNA", "Prazna " & ChrW(8212) & " dodaj stavku"
+    UpsertRow lo, existing, "OTKUI_LBL_AG_KORPA_STAVKI", "stavki"
+    UpsertRow lo, existing, "OTKUI_LBL_AG_KORPA_JOS", "jo" & ChrW(353)
     UpsertRow lo, existing, "OTKUI_LBL_AG_PAR_NEMA", "Nema izabranih parcela"
     UpsertRow lo, existing, "OTKUI_LBL_AG_PAR_IZAB", "parcela " & ChrW(8212)
     UpsertRow lo, existing, "OTKUI_HINT_AG_IZABERI", "Izaberi artikal"

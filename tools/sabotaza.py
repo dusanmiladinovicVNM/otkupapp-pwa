@@ -1451,6 +1451,29 @@ SABOTAZE = {
         "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
         "izabran rezim zadrzava boju i kad pokazivac ode",
     ),
+    # Traka korpe pokazuje NAJNOVIJE prvo: operater upravo nesto doda, pa mu je
+    # potvrda ono sto trazi. Obrnut redosled izgleda ispravno dok se korpa ne
+    # napuni preko cetiri reda.
+    "agro-traka-najstarije-prvo": (
+        "modScrAgro.bas",
+        "        If i > n - 1 Then Exit Function\n"
+        "        TrakaRed = KorpaRedPrikaz(k(n - i))\n",
+        "        If i > n - 1 Then Exit Function\n"
+        "        TrakaRed = KorpaRedPrikaz(k(i + 1))   ' SABOTAZA: najstarije prvo\n",
+        "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
+        "traka pokazuje poslednju dodatu stavku prvu",
+    ),
+    # Lista koja se tiho odseca izgleda kao cela. Isto pravilo koje ljuska nad
+    # sobom vec ima (BazenStaje) -- samo je ovde traka ta koja ne staje.
+    "agro-traka-bez-preliva": (
+        "modScrAgro.bas",
+        '    sakriveno = n - (AG_KORPA_N - 1)\n'
+        '    TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno\n',
+        "    sakriveno = n - (AG_KORPA_N - 1)\n"
+        "    TrakaRed = KorpaRedPrikaz(k(n - i))   ' SABOTAZA: preliv se ne prijavljuje\n",
+        "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
+        "traka PRIJAVLJUJE koliko stavki nije stalo",
+    ),
     "agro-cip-ne-suzava": (
         "modScrAgro.bas",
         '        Case "ima":  AgCipStanje = (stanje > 0)\n',

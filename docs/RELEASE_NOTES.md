@@ -4546,3 +4546,15 @@ na istom ekranu radili ispravno.
 Test 89 reprodukuje kvar bez miša: `ResetVisual` se zove direktno nad sink-om.
 **Nije izvršen** — pisan je u sesiji bez Excela, pa traži još jedno puštanje
 suite i smoke (vrsta `"seg"` menja hover-in, što headless ne vidi).
+
+### Drugi smoke: korpa se nije videla
+
+Korpa se videla samo dok je izabrana lista „Korpa" — operater koji gleda stanje
+ili dugove nije imao nijedan znak šta je upravo dodao, a desna polovina reda
+polja je svejedno stajala prazna. Zona je dobila **traku korpe** uz desnu ivicu
+(naslov, poslednje stavke, zbir); polja uzimaju ostatak širine, kao `PRE_DESNO`
+na Paletama. Najnovija stavka je prva, a kad ih ima više nego što staje, traka
+**kaže koliko ih je sakriveno** — lista koja se tiho odseca izgleda kao cela.
+
+Testovi 89 i 90 i njihove tri sabotaže **nisu izvršeni** — pisani su u sesiji
+bez Excela, pa traže još jedno puštanje suite.
