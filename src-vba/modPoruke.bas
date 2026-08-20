@@ -1133,6 +1133,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDA_KOLICINA", "KOLI" & ChrW(268) & "INA"
     UpsertRow lo, existing, "OTKUI_HDA_VREDNOST", "VREDNOST"
     UpsertRow lo, existing, "OTKUI_HDA_PARCELA", "PARCELA"
+    ' Skrivena kolona (prioritet 4): nosi identitet stavke korpe, ne crta se.
+    ' Natpis postoji jer ga opis kolone trazi, ne zato sto ga iko vidi.
+    UpsertRow lo, existing, "OTKUI_HDA_STAVKA", "STAVKA"
     UpsertRow lo, existing, "OTKUI_HDA_TIP", "TIP"
     UpsertRow lo, existing, "OTKUI_HDA_ULAZ", "ULAZ"
     UpsertRow lo, existing, "OTKUI_HDA_IZLAZ", "IZLAZ"

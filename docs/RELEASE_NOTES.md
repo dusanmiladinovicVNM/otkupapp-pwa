@@ -4579,3 +4579,70 @@ testa koji je napisan bez izvršavanja.
 > Na smoke listi ostaje i jedna stvar koju headless ne vidi ni u principu: vrsta
 > `"seg"` menja **hover-in** — izabrano dugme se više ne zatamnjuje pod
 > pokazivačem, kao ni prekidač lista ispod njega.
+
+---
+
+## v2.60.0 — `v6-ui-172` · Agrohemija: identitet stavke korpe i značka koja ne ćuti
+
+Dorada ekrana iz `v6-ui-171` po nalazima review-a merged PR-a #213. Ljuska se ovim
+ne menja — diff nad `src-vba/modOtkupUI.bas` je **prazan**.
+
+### „Ukloni stavku" je izbacivao pogrešan red
+
+Stavka korpe je tražena po **nazivu artikla i količini** iz prikazanog reda. Dve
+iste stavke su tada nerazlučive, a to nije izmišljen slučaj: *„dva pakovanja sada,
+dva kasnije"* daje dva reda iste robe i iste količine. Klik na drugi red je
+izbacivao **prvi** — tiho, jer red koji nestane izgleda isto kao onaj koji je
+trebalo da nestane.
+
+Svaka stavka sada nosi **svoj identitet** (`stavkaID`), prolazan — živi koliko i
+korpa, nikad ne ide u tabelu. Identitet putuje **u redu mreže**, u koloni
+prioriteta 4 koju mreža nikad ne crta: sortiranje i stranice ga ne mogu razdvojiti
+od stavke. Prazan ili nepoznat identitet **ne uklanja ništa** i javlja se porukom
+— ne pogađa se.
+
+Isto pravilo kao „dvosmislen broj → MANUAL" u storno okviru, samo što se ovde
+dvosmislenost može **sprečiti** umesto prijaviti.
+
+### Značka u meniju prati korpu i kad korpa nije prikazana lista
+
+Operater gleda Stanje, doda tri stavke, a značka uz „Agrohemija" i dalje piše nulu
+— pa pređe na drugi ekran misleći da nema šta da proknjiži.
+
+Uzrok: ljuska brojače pita samo kad ekran javi „podaci su promenjeni", a ekran to
+javlja samo kad je korpa prikazana lista (inače bi terao ponovno čitanje Stanja ili
+Prometa koje se nije menjalo). **Korpa nije podatak u tabeli**, pa te dve stvari ne
+smeju da dele isti kanal. Promena korpe sada ima svoj: dodavanje, uklanjanje,
+pražnjenje i upis osvežavaju značku bez obzira na to koja je lista u mreži.
+
+Prekidač režima tu ne spada — značka sabira obe korpe, pa prelazak sa izdavanja na
+prijem ne menja broj.
+
+### Verifikacija
+
+Testovi **91** (`T_Agro_KorpaUklanjaPoIdentitetu`) i **92**
+(`T_Agro_ZnackaPratiKorpuVanKorpeListe`); četiri nove sabotaže — ukupno
+**sedamnaest** agro sabotaža.
+
+Urađeno i prijavljeno kao zeleno: `vba_check` čisto (193) · self-test (47) ·
+`who_writes` ažuran · sve četiri nove sabotaže se primenjuju i **uredno vraćaju**,
+a izvor posle vraćanja ostaje bit-identičan.
+
+> **Neverifikovano.** `RunAllTests` **nije puštan** — u sesiji nema Excela.
+> Testovi 91 i 92 i sve četiri nove sabotaže **nisu izvršeni**. **Compile** nije
+> prošao. Ništa od ovoga se ne prijavljuje kao zeleno.
+
+### Test 89 — nalaz, ne zakrpa
+
+Review javlja `T_ZonaAgro_PrekidacRezimaZadrzavaBoju` kao jedini crveni test.
+**Nije reprodukovan** — nema Excela u ovoj sesiji, pa se ne zna koja je tvrdnja
+pala i uzrok nije pogađan.
+
+Ono što se **može** utvrditi čitanjem: test je tvrdnje postavljao **dok forma
+živi**, a susedni test u istom fajlu dokumentuje zašto to ne valja — tada mašinerija
+forme obriše `Err` između `Err.Raise` i omotnice testa, pa pad stiže kao
+`greska bez opisa`. Test je zato prestrojen: forma se prvo **izmeri**, pa se tvrdi
+**posle** njenog otpuštanja (koje je usput i dobio — do sada je zvao goli `Unload`).
+
+To ne popravlja uzrok ako uzrok postoji, nego **dijagnostiku**: sledeće puštanje
+je ili zeleno, ili imenuje tvrdnju i vrednost.
