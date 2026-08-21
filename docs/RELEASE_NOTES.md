@@ -5000,4 +5000,10 @@ Druga je traka „Nema izabrane otpremnice…", koja se videla i tamo gde ne pri
 — ostajala je upaljena sa ekrana Unos dokumenata. Sada se gasi kao i ostali
 delovi tog ekrana.
 
+Treći smoke je našao još jednu: na listi izvoda je kolona sa brojem otvorenih
+stavki bila prazna, iako je vrednost tačna — mreža je crtala sa širinama
+prethodne liste. Broj otvorenih i ukupan broj stavki sada stoje u **jednoj**
+koloni (`10 / 16`), isto kao brojka „Mapirano" iznad mreže. Uzrok u ljusci je
+prijavljen kao zaseban posao, jer pogađa i druge ekrane.
+
 `RunAllTests` je sada **110 testova, 0 palih**, uz **dvadeset jednu** sabotažu.

@@ -92,7 +92,7 @@ Private Const BU_STV_KOL_OTV As Long = 11
 ' Smer se NE izvodi iz toga koja je kolona iznosa popunjena: red sa I uplatom I
 ' isplatom izgleda kao uplata, a writer ga odbija (RequireBimSmer). Red ga NOSI.
 Private Const BU_STV_KOL_SMER As Long = 12
-Private Const BU_IZV_KOL_ID As Long = 11
+Private Const BU_IZV_KOL_ID As Long = 10
 
 Private mLista As String            ' BU_STAVKE | BU_IZVODI
 
@@ -895,6 +895,19 @@ Public Function BuPredlogTekst(ByVal smer As String, ByVal ciljTip As String, _
 End Function
 
 '------------------------------------------------------- LISTA: IZVODI
+' DEVET VIDLJIVIH KOLONA, koliko ih ima i lista stavki. To nije kozmetika.
+'
+' Ljuska pri promeni liste NE preracunava sirine: LayoutGrid se zove iz
+' rasporeda ekrana, a ReloadGrid samo ucita i nacrta. RenderGrid zato crta sa
+' sirinama PRETHODNE liste -- a kolona koja je tamo bila skrivena (prioritet 4)
+' ima sirinu 0, pa se u novoj listi ne nacrta ni kad joj je vrednost tacna.
+' Merenjem potvrdjeno: vrednost je stizala do mreze (GridCell ju je vracao),
+' a celija je ostajala prazna.
+'
+' Dok se to ne popravi u ljusci (zaseban posao), broj otvorenih i broj stavki
+' stoje u JEDNOJ koloni -- "10 / 16", isti zapis koji traka iznad mreze vec
+' koristi za "MAPIRANO 11 / 40". Time obe liste ovog ekrana imaju isti broj
+' vidljivih kolona, pa nasledjena sirina ne moze da zataji.
 Private Function IzvodiKolone() As Variant
     IzvodiKolone = Array( _
         "OTKUI_HDB_IZVOD||txt|96|1", _
@@ -905,8 +918,7 @@ Private Function IzvodiKolone() As Variant
         "OTKUI_HDB_ISPLATA||rsd|104|1", _
         "OTKUI_HDB_ZAVRSNO||rsd|104|1", _
         "OTKUI_HDB_SLAGANJE||txt|132|1", _
-        "OTKUI_HDB_STAVKI||num|58|2", _
-        "OTKUI_HDB_OTVORENIH||num|72|2", _
+        "OTKUI_HDB_STAVKI||txt|118|2", _
         "OTKUI_HDB_IZVKEY||txt|1|4")
 End Function
 
@@ -928,7 +940,7 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
         Exit Function
     End If
 
-    ReDim outA(1 To UBound(src, 1), 1 To 11)
+    ReDim outA(1 To UBound(src, 1), 1 To 10)
     For i = 1 To UBound(src, 1)
         If Not BuCipIzvod(filter, CLng(src(i, 10)), CLng(src(i, 12))) Then GoTo Sledeci
         zbirU = zbirU + CDbl(src(i, 6))
@@ -947,9 +959,8 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
         outA(n, 6) = CDbl(src(i, 7))
         outA(n, 7) = CDbl(src(i, 8))
         outA(n, 8) = BuSlaganjeTekst(CLng(src(i, 10)), CDbl(src(i, 9)))
-        outA(n, 9) = CLng(src(i, 11))
-        outA(n, 10) = CLng(src(i, 12))
-        outA(n, 11) = CStr(src(i, 1))
+        outA(n, 9) = BuStavkiTekst(CLng(src(i, 12)), CLng(src(i, 11)))
+        outA(n, 10) = CStr(src(i, 1))
 Sledeci:
     Next i
 
@@ -962,6 +973,12 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     Err.Raise errNum, "modScrBankaUvoz.RedoviIzvodi", errDesc
+End Function
+
+' Koliko je od stavki izvoda jos otvoreno. Jedna kolona umesto dve -- v.
+' IzvodiKolone. Odvojeno od mreze da bi se moglo izmeriti bez nje.
+Public Function BuStavkiTekst(ByVal otvorenih As Long, ByVal stavki As Long) As String
+    BuStavkiTekst = CStr(otvorenih) & " / " & CStr(stavki)
 End Function
 
 ' Tekst kolone "Slaganje". Odluku je vec doneo modBankaImport.BimSaldoStatus --

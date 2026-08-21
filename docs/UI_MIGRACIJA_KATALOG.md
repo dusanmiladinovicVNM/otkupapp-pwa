@@ -1694,6 +1694,45 @@ tvrdi direktno, a nalaz je otišao u zaseban posao. Prava kapija verovatno ne
 pripada ekranu nego `modUiData.CellDate` (vraća bilo koji broj kao „datum") ili
 `FmtDatumKratko` (čuva samo donju granicu) — to je odluka, ne pretpostavka.
 
+#### Treći smoke: mreža crta sa širinama PRETHODNE liste
+
+Na listi IZVODI je kolona „OTVORENIH" (deseta vidljiva) bila **prazna u svakom
+redu**. `FmtBroj(0, 0)` vraća `"0"`, ne prazno — dakle opet **preskočen upis**,
+ne nula. Susedna kolona istog tipa (`num`) crtala se uredno.
+
+Merenje (`Diag_BuRedovi`, proširen da ispisuje ceo red):
+
+```
+EKRAN red 1 kol10: tip=Long vred=[10]
+MREZA red 1 kol10: tip=Long vred=[10]
+```
+
+Vrednost stiže do `mView` i `GridCell` je vraća — **samo se ne nacrta**. Time su
+i čitač i ekran isključeni; ostaje crtanje.
+
+**Uzrok je u ljusci.** `LayoutGrid` (koji puni `mColX` / `mColW`) zove se iz
+**rasporeda** ekrana — `LayoutScreenZone`, odnosno `LayoutAll`. `ReloadGrid`
+(promena liste, čipa, pretrage) zove samo `LoadGridFromScreen` + `RenderGrid`.
+Posle promene liste `RenderGrid` zato crta sa `mColW` **prethodne** liste, a na
+`mColW(k) = 0` radi `.Visible = False` i preskače upis.
+
+Lista STAVKE ima 9 vidljivih kolona i tri skrivene (prioritet 4), pa je
+`mColW(9) = 0`. Lista IZVODI je imala **10** vidljivih — i njena deseta kolona
+je nasleđivala tu nulu. Zaglavlje je pri tom bilo vidljivo, jer ga osvežava
+zaseban prolaz (`RefreshGridHeaders`) koji se pokreće kasnije, kad je `mColW`
+već preračunat: otud najgori mogući izgled — **zaglavlje stoji, ćelije prazne**.
+
+**Ovde je zaobiđeno, ne popravljeno.** Broj otvorenih i broj stavki spojeni su u
+**jednu** kolonu (`„10 / 16"`, isti zapis koji traka iznad mreže već koristi za
+`MAPIRANO 11 / 40`), pa obe liste ovog ekrana imaju **isti broj vidljivih
+kolona** i nasleđena širina ne može da zataji. Spajanje je uz to čitljivije od
+dve susedne brojke bez konteksta.
+
+Sama ispravka ljuske je zaseban posao. **Pogađa i druge ekrane:** liste
+Fakturisanja imaju 9 / 7 / 7 vidljivih kolona, pa bi prelazak sa uže na širu
+listu trebalo da izgubi osmu i devetu — to **nije** potvrđeno smoke-om i stoji
+kao pretpostavka koju treba proveriti pre ispravke.
+
 #### Traka „Nema izabrane otpremnice…" — moja prva dijagnoza je bila pogrešna
 
 Prvo sam je pripisao `modOtkupUI:1735` (`modeKey(ActiveMode) = "OTKUP"`, uslov

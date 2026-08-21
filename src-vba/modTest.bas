@@ -6774,21 +6774,25 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     AssertEq istihBrojeva, 2, _
              "isti broj izvoda na dva racuna daje DVA reda -- grupa je (broj + racun)"
     AssertEq (r1 > 0 And r2 > 0), True, "oba racuna su u listi"
-    AssertEq (Trim$(CStr(redovi(r1, 11))) <> Trim$(CStr(redovi(r2, 11)))), True, _
+    AssertEq (Trim$(CStr(redovi(r1, 10))) <> Trim$(CStr(redovi(r2, 10)))), True, _
              "identiteti dva izvoda istog broja su RAZLICITI"
 
     ' Zbirovi izvoda se NE SABIRAJU po redovima -- parser ih pise na SVAKI red
     ' grupe, pa bi sabiranje dalo iznos pomnozen brojem stavki.
     AssertEq CDbl(redovi(r1, 4)), 10000, "pocetno stanje se uzima sa reda, ne sabira"
     AssertEq CDbl(redovi(r1, 7)), 9500, "zavrsno stanje se uzima sa reda"
-    AssertEq CLng(redovi(r1, 9)), 3, "izvod 1 / racun 1 ima tri stavke"
-    AssertEq CLng(redovi(r1, 10)), 3, "sve tri su jos otvorene"
+    ' Broj otvorenih i broj stavki stoje u JEDNOJ koloni -- v. IzvodiKolone.
+    AssertEq CStr(redovi(r1, 9)), "3 / 3", _
+             "izvod 1 / racun 1 ima tri stavke i sve tri su otvorene"
+    AssertEq modScrBankaUvoz.BuStavkiTekst(10, 16), "10 / 16", _
+             "zapis je isti kao u traci iznad mreze"
 
     ' Storniran red ne ulazi ni u grupu ni u brojace: izvod 2 ima pet redova, a
     ' jedan od njih je storniran.
     For i = 1 To n
         If Trim$(CStr(redovi(i, 1))) = FX_BIM_IZVOD2 Then
-            AssertEq CLng(redovi(i, 9)), 4, "storniran red se ne broji u stavke izvoda"
+            AssertEq CStr(redovi(i, 9)), "2 / 4", _
+                     "storniran red se ne broji u stavke izvoda"
         End If
     Next i
 
