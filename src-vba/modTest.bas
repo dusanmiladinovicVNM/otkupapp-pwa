@@ -5937,7 +5937,6 @@ End Function
 Private Sub T_Fak_UgovorEkrana()
     Dim liste As Variant, i As Long, kljucevi As String
     Dim kljuc As String, spec As String, d As Variant, kolone As Variant
-    Dim ocekLista As Long
     ' For Each trazi Variant ili Object -- String iterator je "Type mismatch".
     Dim kv As Variant
 
@@ -5952,20 +5951,24 @@ Private Sub T_Fak_UgovorEkrana()
     AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("FAKTURE"), SCR_OBLAST), _
              OBL_FAKTURISANJE, "ekran trazi pravo na oblast Fakturisanje"
 
-    ' SEF je lista TACNO kad je SEF podesen. Instalacija bez baze i kljuca bi
-    ' inace dobila listu i pet dugmadi koji mogu samo da padnu.
+    ' SEF LISTA POSTOJI UVEK. Citanje stanja su kolone tblFakture i ne trazi
+    ' nikakvu vezu; kapiju trazi samo RADNJA, i ona je ima. Uslovna lista je
+    ' novi UI cinila uzim od legacy-ja, koji frmSEF otvara bezuslovno.
     liste = modScrFakture.Scr_Liste()
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-    ocekLista = 2
-    If modFaktura.SEFKonfigurisan() Then ocekLista = 3
-    AssertEq UBound(liste) + 1, ocekLista, _
-             "SEF je lista tacno kad je SEF podesen u tblConfig"
+    AssertEq UBound(liste) + 1, 3, _
+             "tri liste, i kad SEF nije podesen"
+    ' Ekran koji stoji na SEF listi tu i ostaje -- nema uslovnog vracanja.
+    modScrFakture.Scr_FkListaTestSet "SEF"
+    AssertEq modScrFakture.Scr_Lista(), "SEF", _
+             "SEF lista se ne napusta zbog konfiguracije"
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq Left$(kljucevi, 15), "|ZAFAKT|FAKTURE", _
-             "redosled lista -- prijemnice su prve, one su posao"
+    AssertEq kljucevi, "|ZAFAKT|FAKTURE|SEF", _
+             "redosled i kljucevi lista -- prijemnice su prve, one su posao"
 
     ' RADNJE PO LISTI. Citaju se po KLJUCU, ne kroz Scr_Lista: Scr_Lista je
     ' gate-ovana SEF konfiguracijom, a fixture je donor-zavisan (tblConfig se

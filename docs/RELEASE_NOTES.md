@@ -4829,7 +4829,7 @@ stoji pod prekidačem iznad mreže. Nema više „vrati se pa otvori drugu formu
 |---|---|
 | **Za fakturisanje** | prijemnice izabranog kupca; kvačica označava šta je već ubačeno u fakturu, poslednja kolona pokazuje broj fakture ako je prijemnica već fakturisana |
 | **Fakture** | izdate fakture: broj, datum, kupac, iznos, **uplaćeno**, **ostatak** i status u boji |
-| **SEF** | stanje elektronskih faktura — pojavljuje se samo ako je SEF podešen |
+| **SEF** | stanje elektronskih faktura: šta je poslato, šta je odbijeno, šta je zaglavljeno |
 
 **Sakupljanje umesto obeležavanja.** Stara forma je tražila da se u listi
 označi više redova pa se pritisne „Izradi fakturu". Mreža bira jedan red, pa se
@@ -4867,6 +4867,9 @@ neplaćenim fakturama.
 - **SEF moduli nisu dirani.** Ekran zove postojeće funkcije; `frmSEF` i dalje
   drži ono što ekran ne nosi — istoriju događaja po fakturi, pripremu ponovnog
   slanja i grupne radnje nad svim zaglavljenim fakturama.
+- **Lista SEF se vidi i bez SEF naloga.** Stanje faktura je zapisano u samoj
+  tabeli, pa se čita i bez veze; tek radnja (Pošalji, Otkaži…) traži upisane
+  `SEF_BASE_URL` i `SEF_API_KEY` u `tblSEFConfig` i to kaže porukom.
 
 ### Sitnice koje se primete tek u pogonu
 
@@ -4886,7 +4889,7 @@ neplaćenim fakturama.
 
 ### Verifikacija
 
-Testovi **97–101** u `modTest` i **trinaest** novih sabotaža. `RunAllTests`
+Testovi **97–101** u `modTest` i **četrnaest** novih sabotaža. `RunAllTests`
 **101 test, 2 pala** — oba pada su zatečena: `T_PosleSnimanja_...` (golden vs.
 `DEFAULT_SORTA_VOCA` u donoru) i `T_IsplataValidiraj_...` (OM avans po configu).
 Oba padaju **identično i na netaknutom `main`-u**, provereno nad fixture-om pre

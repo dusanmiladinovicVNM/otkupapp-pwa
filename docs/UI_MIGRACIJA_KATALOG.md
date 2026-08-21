@@ -957,11 +957,32 @@ event log po fakturi, `PrepareResubmit`, i batch radnje
 (`RecoverAllStuckSEFSendingInvoices`, refresh pending) — nijedna od njih nije
 radnja nad jednim redom. Nijedan `modSEF*` modul nije diran.
 
-**Lista SEF postoji samo kad je SEF podešen** (`SEF_BASE_URL` + `SEF_API_KEY`
-u `tblConfig`). Bez baze i ključa svaka SEF radnja može samo da padne, pa se
-ne nudi. `SegDefs` zove `Scr_Liste` pri svakom crtanju, pa uslovna lista radi
-bez posebnog osvežavanja; `Scr_Lista` uz to vraća ekran sa SEF liste ako se
-SEF u međuvremenu ugasi.
+#### Kapija na radnji, ne na listi — ispravka posle prvog smoke-a
+
+Prva verzija je listu SEF-a **krila** kad `SEF_BASE_URL` / `SEF_API_KEY` nisu
+upisani u `tblSEFConfig`. Smoke je pokazao zašto to ne valja: na radnoj svesci
+sa fakturama a bez SEF naloga segmenta jednostavno **nema**, bez ijednog
+objašnjenja.
+
+Greška u proceni je bila u tome što lista ima **dva dela, a kapiju traži samo
+jedan**:
+
+| Deo liste | Traži podešen SEF? |
+|---|---|
+| čitanje stanja (`SEFWorkflowState`, SEF ID, poslato, greška) | **ne** — to su kolone `tblFakture` |
+| radnje (pošalji, osveži, otkaži, storno, oporavi) | **da** |
+
+Skrivanje cele liste zbog drugog dela je novi UI činilo **užim od legacy-ja**:
+`frmFakturisanje.btnSEF_Click` otvara `frmSEF` **bezuslovno**, bez ijedne
+provere configa. Operater je i pre ovoga mogao da vidi stanje bez naloga.
+
+Sada: **lista postoji uvek**, a kapija stoji na jednom mestu kroz koje prolazi
+svih pet radnji (`SefID` → `OTKUI_ERR_FK_SEF_OFF`, uz poruku koja kaže i **gde**
+se podešava). `SEFKonfigurisan` je ostao — samo se više ne pita za listu.
+
+Sporedna dobit: test 97 je time postao **jači**. Uslovna lista se mogla tvrditi
+samo granom po `SEFKonfigurisan()`, a fixture je donor-zavisan — pa je ta grana
+bila lutrija. Bezuslovna lista se tvrdi jednom brojkom.
 
 ### 8.4 Šta je namerno drugačije od legacy-ja
 
@@ -1050,7 +1071,8 @@ ona korpu prazni, pa i ona ide kroz isti kanal.
 
 ### 8.8 Verifikacija
 
-Testovi **97–101** u `modTest`, uz nove fixture redove u `tools/make_fixture.py`:
+Testovi **97–101** u `modTest` i **četrnaest** sabotaža, uz nove fixture redove
+u `tools/make_fixture.py`:
 tri fakture (`FAK-TEST-N` neplaćena drugog kupca, `FAK-TEST-P` plaćena u
 celosti, `FAK-TEST-X` stornirana), jedna uplata po fakturi (jedina u fixture-u
 koja nosi `FakturaID`), i tri prijemnice (`PRJ-FAK-1` uredno fakturisana,
@@ -1062,7 +1084,7 @@ radila nad praznim skupom i bila zelena bez pokrića.
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
-| `T_Fak_UgovorEkrana` | registar, uslovna SEF lista, granice bazena (`MAX_ACT` tačno 5 na SEF-u, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi | `fakture-sef-sesta-radnja`, `fakture-cip-sve-nije-prvi` |
+| `T_Fak_UgovorEkrana` | registar, **tri liste bezuslovno**, granice bazena (`MAX_ACT` tačno 5 na SEF-u, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi | `fakture-sef-lista-uslovna`, `fakture-sef-sesta-radnja`, `fakture-cip-sve-nije-prvi` |
 | `T_Fak_IdentitetURedu_NeCrtaSe` | identitet u poslednjoj koloni prioriteta 4; dvosmislen ID → prazno | `fakture-identitet-vidljiv`, `fakture-dvosmislen-prvi-pobedjuje` |
 | `T_Fak_DostupnostSePrenosiURedu` | pravilo `PrijemnicaDostupna`; red **prenosi** dostupnost umesto da je izvodi iz prikaza | `fakture-dostupnost-iz-prikaza`, `fakture-dostupnost-bez-oznake` |
 | `T_Fak_KorpaZnackaITraka` | uklanjanje po identitetu, značka van korpe-liste, traka: najnovije prvo + preliv se prijavljuje | `fakture-korpa-uklanja-prvu`, `fakture-znacka-ne-prati-korpu`, `fakture-traka-najstarije-prvo`, `fakture-traka-bez-preliva` |

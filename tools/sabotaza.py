@@ -1624,6 +1624,21 @@ SABOTAZE = {
         "doza se zaokruzuje NAGORE na cela pakovanja",
     ),
     # --- EKRAN FAKTURISANJE (Faza E/16) -------------------------------------
+    # SEF lista se do prvog smoke-a KRILA kad SEF nije podesen. Citanje stanja su
+    # kolone tblFakture i ne trazi nikakvu vezu -- kapiju trazi samo RADNJA, i ona
+    # je vec ima. Uslovna lista je novi UI cinila UZIM od legacy-ja, koji frmSEF
+    # otvara bezuslovno. Ovo vraca tu gresku.
+    "fakture-sef-lista-uslovna": (
+        "modScrFakture.bas",
+        "    Scr_Liste = Array( _\n",
+        "    If Not modFaktura.SEFKonfigurisan() Then   ' SABOTAZA: lista se krije\n"
+        "        Scr_Liste = Array(FK_ZAFAKT & \"|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108\")\n"
+        "        Exit Function\n"
+        "    End If\n"
+        "    Scr_Liste = Array( _\n",
+        "T_Fak_UgovorEkrana",
+        "SEF lista postoji i kad SEF nije podesen",
+    ),
     # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
     # dobije ekran kome fali dugme, bez ijedne poruke.

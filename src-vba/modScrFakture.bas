@@ -133,29 +133,26 @@ Public Function Scr_Meta() As String
                "|lista=OTKUI_SCRFK_LISTA|oblik=zona+mreza|upis=zona"
 End Function
 
-' Lista SEF-a postoji SAMO na instalaciji koja je na SEF povezana. Bez baze i
-' kljuca svaka SEF radnja moze samo da padne, pa se ne nudi. SegDefs zove ovo
-' pri svakom crtanju, pa uslovna lista radi bez posebnog osvezavanja.
+' SEF LISTA POSTOJI UVEK, i na instalaciji koja na SEF nije povezana.
+'
+' Do prvog smoke-a je bila uslovna (SEFKonfigurisan), i to je bila pogresna
+' procena: lista ima dva dela, a kapija je potrebna samo jednom. CITANJE
+' stanja (SEFWorkflowState, SEF ID, poslato, greska) su kolone tblFakture --
+' ne trebaju im ni baza ni kljuc, i operateru je to legitiman pregled
+' ('sta je od mojih faktura poslato'). RADNJE jesu te koje traze podesen SEF,
+' i one kapiju vec imaju (SefID -> OTKUI_ERR_FK_SEF_OFF).
+'
+' Skrivanje cele liste je novi UI cinilo UZIM od legacy-ja: frmFakturisanje
+' otvara frmSEF bezuslovno, bez ijedne provere configa.
 Public Function Scr_Liste() As Variant
-    If modFaktura.SEFKonfigurisan() Then
-        Scr_Liste = Array( _
-            FK_ZAFAKT & "|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108", _
-            FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64", _
-            FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44")
-    Else
-        Scr_Liste = Array( _
-            FK_ZAFAKT & "|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108", _
-            FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64")
-    End If
+    Scr_Liste = Array( _
+        FK_ZAFAKT & "|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108", _
+        FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64", _
+        FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44")
 End Function
 
 Public Function Scr_Lista() As String
     If Len(mLista) = 0 Then mLista = FK_ZAFAKT
-    ' Gasenje SEF-a u konfiguraciji ne sme da ostavi ekran na listi koje vise
-    ' nema -- prekidac bi tada pokazivao dva dugmeta, a mreza trecu listu.
-    If mLista = FK_SEF Then
-        If Not modFaktura.SEFKonfigurisan() Then mLista = FK_ZAFAKT
-    End If
     Scr_Lista = mLista
 End Function
 
@@ -651,6 +648,8 @@ End Function
 ' isto kao u frmSEF: to je jedini slobodan tekst koji ove radnje traze, a polje
 ' u zoni bi imalo smisla za dve od pet radnji.
 '=====================================================================
+' Lista se vidi uvek, ali se nad njom RADI samo kad je SEF podesen. Ovde je
+' jedina kapija -- svih pet radnji prolazi kroz nju.
 Private Function SefID(ByVal red As Long) As String
     If Not modFaktura.SEFKonfigurisan() Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_SEF_OFF"), True

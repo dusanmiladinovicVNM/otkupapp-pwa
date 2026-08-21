@@ -1199,7 +1199,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_FK_NIJE_U_KORPI", ChrW(10007) & " Prijemnica nije u korpi"
     UpsertRow lo, existing, "OTKUI_ERR_FK_NIJE_DOSTUPNA", ChrW(10007) & " Prijemnica je ve" & ChrW(263) & " fakturisana ili stornirana"
     UpsertRow lo, existing, "OTKUI_ERR_FK_IZRADA", ChrW(10007) & " Faktura nije izra" & ChrW(273) & "ena " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano"
-    UpsertRow lo, existing, "OTKUI_ERR_FK_SEF_OFF", ChrW(10007) & " SEF nije pode" & ChrW(353) & "en na ovoj instalaciji"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_SEF_OFF", ChrW(10007) & " SEF nije pode" & ChrW(353) & "en " & ChrW(8212) & " upi" & ChrW(353) & "i SEF_BASE_URL i SEF_API_KEY u tblSEFConfig"
     UpsertRow lo, existing, "OTKUI_MSG_FK_DODATO", ChrW(10003) & " Prijemnica je dodata u fakturu"
     UpsertRow lo, existing, "OTKUI_MSG_FK_UKLONJENO", ChrW(10003) & " Prijemnica je vra" & ChrW(263) & "ena iz fakture"
     UpsertRow lo, existing, "OTKUI_MSG_FK_KORPA_OCISCENA", ChrW(10003) & " Korpa je ispra" & ChrW(382) & "njena"
