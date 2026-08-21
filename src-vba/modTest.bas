@@ -6470,7 +6470,7 @@ Private Sub T_BankaUvoz_UgovorEkrana()
     Dim kljuc As String, spec As String, d As Variant, kolone As Variant
     ' For Each trazi Variant ili Object -- String iterator je "Type mismatch".
     Dim kv As Variant
-    Dim redovi As Variant, j As Long
+    Dim redovi As Variant, j As Long, r2 As Long
 
     AssertEq (Len(modUiScreens.ScrRowByKey("BANKA_UVOZ")) > 0), True, _
              "BANKA_UVOZ postoji u registru ekrana"
@@ -6538,12 +6538,34 @@ Private Sub T_BankaUvoz_UgovorEkrana()
         redovi = d(1)
         For j = 0 To UBound(kolone)
             If Split(CStr(kolone(j)), "|")(2) = "date" Then
-                AssertEq IsNumeric(redovi(1, j + 1)), True, _
-                         "lista " & kljuc & ", kolona " & CStr(j + 1) & _
-                         ": datum je BROJ -- inace ga mreza ne crta"
+                ' Svaki red, ne samo prvi: dovoljna je JEDNA losa vrednost da
+                ' celija ostane sa natpisom od ranijeg crtanja.
+                For r2 = 1 To CLng(d(2))
+                    AssertEq IsNumeric(redovi(r2, j + 1)), True, _
+                             "lista " & kljuc & ", red " & CStr(r2) & ", kolona " & _
+                             CStr(j + 1) & ": datum je BROJ -- inace ga mreza ne crta"
+                    ' ...i broj mora biti takav da ga CDate SME da primi. Van
+                    ' opsega CDate puca, RenderGrid to proguta (On Error Resume
+                    ' Next) i u celiji ostane TUDJI tekst -- bez greske i bez
+                    ' traga u logu. Nadjeno merenjem nad pravim podacima.
+                    AssertEq (CDbl(redovi(r2, j + 1)) = 0) Or _
+                             modScrBankaUvoz.BuDatumUOpsegu(CDbl(redovi(r2, j + 1))), True, _
+                             "lista " & kljuc & ", red " & CStr(r2) & ", kolona " & _
+                             CStr(j + 1) & ": datum je 0 ili u opsegu koji CDate prima"
+                Next r2
             End If
         Next j
     Next i
+
+    ' PRAVILO OPSEGA, izmereno bez mreze. 26062026 je ddmmyyyy upisan kao broj
+    ' -- tacno ono sto je zatecena sveska imala u DatumTransakcije.
+    AssertEq modScrBankaUvoz.BuDatumUOpsegu(26062026#), False, _
+             "ddmmyyyy kao broj NIJE datum"
+    AssertEq modScrBankaUvoz.BuDatumUOpsegu(0), False, "nula nije datum"
+    AssertEq modScrBankaUvoz.BuDatumUOpsegu(2958466#), False, _
+             "preko 31.12.9999 CDate puca"
+    AssertEq modScrBankaUvoz.BuDatumUOpsegu(CDbl(DateSerial(2026, 8, 21))), True, _
+             "stvaran datum prolazi"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub

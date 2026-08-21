@@ -1295,12 +1295,16 @@ brojač i čitač dele, i test to tvrdi jednom brojkom.
 
 ### 9.2 Šta ekran uzima od ljuske
 
-Ništa nije napravljeno za ovaj ekran. **Jedina linija diffa u `modOtkupUI` je
-pečat verzije**, `OTKUI_BUILD` → `v6-ui-177`, i razlog joj nije „ekran Uvoz
-izvoda" nego isti kao u §8.10/R3: pečat postoji da bi se u smoke-u odmah videlo
-**da li je pravi kod uopšte uvezen**. Sa `v6-ui-176` u sidebaru, a `v6-ui-177` u
-ekranskom modulu, tvrdio bi treću stvar. `StaraKomponenta` poredi sa
-`OTKUI_MIN_BUILD`, ne sa `OTKUI_BUILD`, pa promena ništa ne pomera.
+Ništa nije napravljeno za ovaj ekran. Diff u `modOtkupUI` su **dve linije**, i
+nijedna nije nova mogućnost:
+
+1. **Pečat verzije**, `OTKUI_BUILD` → `v6-ui-177`. Razlog nije „ekran Uvoz
+   izvoda" nego isti kao u §8.10/R3: pečat postoji da bi se u smoke-u odmah
+   videlo **da li je pravi kod uopšte uvezen**. Sa `v6-ui-176` u sidebaru, a
+   `v6-ui-177` u ekranskom modulu, tvrdio bi treću stvar. `StaraKomponenta`
+   poredi sa `OTKUI_MIN_BUILD`, pa promena ništa ne pomera.
+2. **`zOtp` dopisan u spisak zona koje pripadaju samo ekranu Dokumenta**
+   (`ShowZones`) — v. §9.10.
 
 | Potreba | Ljuskin ugovor | Otkad |
 |---|---|---|
@@ -1477,7 +1481,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–110** u `modTest` i **dvadeset** sabotaža, uz nove fixture redove
+Testovi **104–110** u `modTest` i **dvadeset jedna** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **jedanaest** stavki izvoda u **četiri** grupe
 `(broj + račun)` i tri otkupne stavke istog bloka.
 
@@ -1519,8 +1523,8 @@ ovo je jedino što bi to primetilo.
 `BuRadnjeZaListu`, `BuKoloneZaListu`), ne kroz `Scr_Lista` — isti razlog kao
 §8.8: ugovor svake liste mora da se meri bez prebacivanja stanja ekrana.
 
-**Dvosmerni dokaz je pušten za svih dvadeset**: svaka sabotaža obara **tačno
-jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
+**Dvosmerni dokaz je pušten za svih dvadeset jednu**: svaka sabotaža obara
+**tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **110 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
 
@@ -1651,9 +1655,66 @@ scratchpad-u, ne u repou): posle ispravke **nula** identifikatora koje modul
 koristi a koji su `Private` drugde. Proširenje `vba_check`-a na tu proveru je
 zaseban posao, sa svojim dvosmernim dokazom.
 
-**Jedan nalaz nije ovog ekrana** i ide u zaseban PR: traka „Nema izabrane
-otpremnice…" vidi se na svakom ekranu, jer `modOtkupUI:1735` odlučuje po
-`modeKey(ActiveMode) = "OTKUP"` i **uopšte ne gleda koji je ekran aktivan**.
-Ista klasa važi za `ModeBrojiKomade(ActiveMode)` u podnožju. Za poređenje,
-`ModeHasValCol()` i `ModeHasKgCol()` su **ispravne** — izvode se iz `mCols`,
-dakle iz opisa kolona aktivnog ekrana.
+#### Drugi smoke: dve stvari koje je razrešilo tek MERENJE
+
+Posle prve runde ispravki kolona DATUM je bila **gora**: umesto prazne, u njoj
+je pisalo `OSIROCENE_PAL` — što je `OSIROCENE_PALETE`, **vrsta reda sa ekrana
+Oporavak**, odsečena na širinu kolone. Ostale kolone su bile tačne.
+
+Čitanje koda nije moglo da razreši: opis kolone je identičan onome koji koristi
+`modScrDokumenti` (`"OTKUI_HD_DATUM||date|NN|1"`, druga kolona), vrednost ide
+kroz isti `modUiData.CellDate`, `LayoutGrid` koloni daje širinu, a test nad
+fixture-om tvrdi `IsNumeric` — i prolazi. Zato je u modul dodata dijagnostika
+**`Diag_BuRedovi`** (presedan: `modBankaImport.Diag_DumpPdfTextAroundStanje`),
+koja ispisuje šta ekran **predaje** mreži i šta mreža **drži**.
+
+Merenje nad pravom sveskom:
+
+```
+EKRAN red 1 kol2: tip=Double vred=[26062026] IsNumeric=True
+```
+
+**`26062026` nije serijski broj datuma nego `ddmmyyyy` upisan kao BROJ.**
+Ljuska nad kolonom tipa `date` radi `CDate` (`FmtDatumKratko`), `CDate` van
+opsega **pukne**, `RenderGrid` radi pod `On Error Resume Next` — pa upis ćelije
+bude preskočen i u njoj **ostane natpis od ranijeg crtanja**. Bez greške, bez
+traga u logu, sa tuđim tekstom u koloni.
+
+Ekran zato dobija kapiju **`BuDatumUOpsegu`**: u kolonu datuma ulazi samo ono
+što `CDate` sme da primi; sve ostalo je 0, tj. prazna ćelija. Vrednost se
+**ne tumači** — `ddmmyyyy` nije oblik koji `modParse.TryParseDateValue` poznaje,
+pa bi tumačenje bilo izmišljanje pravila koje domen nema.
+
+**Nalaz veći od ovog ekrana:** takav red je posejan u fixture da bi tvrdnja imala
+nad čim da padne — i oborio je **sedam** testova sa `Overflow`, među njima i
+`T_StornoEkran_SvakaListaVracaRedove`. Dakle tu vrstu podatka **ne podnosi samo
+ovaj ekran**. Sejanje je vraćeno (potpis fixture-a je posle vraćanja
+bit-identičan, što dokazuje da je uzrok bila isključivo ta vrednost), pravilo se
+tvrdi direktno, a nalaz je otišao u zaseban posao. Prava kapija verovatno ne
+pripada ekranu nego `modUiData.CellDate` (vraća bilo koji broj kao „datum") ili
+`FmtDatumKratko` (čuva samo donju granicu) — to je odluka, ne pretpostavka.
+
+#### Traka „Nema izabrane otpremnice…" — moja prva dijagnoza je bila pogrešna
+
+Prvo sam je pripisao `modOtkupUI:1735` (`modeKey(ActiveMode) = "OTKUP"`, uslov
+koji ne gleda aktivan ekran) i predložio zaseban PR. Operater je onda javio
+podatak koji to obara: traka se vidi **samo** na Uvozu izvoda i na Dokumentima,
+ne i na Agrohemiji ili Fakturisanju.
+
+Pravi uzrok je jednostavniji: `ShowZones` gasi `zKpi`, `zCtx`, `zForm` i
+`zRight` za ne-Dokumenta ekrane, a **`zOtp` je iz tog spiska ispao**. Njegovu
+vidljivost postavlja samo `LayoutAll` (grana ekrana dokumenata), pa na ugovornim
+ekranima ostaje onakav kakav ga je Dokumenta ostavila — a **vidi se ili ne vidi
+zavisno od toga da li ga zona tog ekrana slučajno pokriva**. Agro i
+Fakturisanje imaju više zone; Uvoz izvoda ima najnižu (104pt), pa je ostao
+otkriven.
+
+Ispravka je dopisivanje `zOtp` u već postojeći spisak — jedna reč. **Nije
+pokrivena testom:** `ShowZones` je `Private`, a da bi se izvršila treba pokrenuti
+prebacivanje ekrana kroz celu ljusku; test bi bio veći i krhkiji od same
+ispravke. To se ovde beleži kao neizmereno, ne prećutkuje.
+
+**U zaseban PR ide ono što je ostalo:** `ModeBrojiKomade(ActiveMode)` u podnožju
+(ista klasa kao pogrešna dijagnoza gore — za poređenje, `ModeHasValCol()` i
+`ModeHasKgCol()` su **ispravne**, jer se izvode iz `mCols`), i podnožje sa samo
+jednim slotom za novčani zbir.

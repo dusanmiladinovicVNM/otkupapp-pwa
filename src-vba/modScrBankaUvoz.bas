@@ -71,6 +71,9 @@ Private Const BU_FLD_GAP  As Single = 10
 ' Ispod ove sirine objasnjenje nema gde -- bolje bez njega nego preko brojki.
 Private Const BU_HINT_MIN As Single = 100
 
+' Najveci serijski broj koji CDate sme da primi (31.12.9999).
+Private Const BU_DATUM_MAX As Double = 2958465#
+
 ' Kljucevi lista
 Private Const BU_STAVKE As String = "STAVKE"
 Private Const BU_IZVODI As String = "IZVODI"
@@ -789,11 +792,9 @@ Private Function RedoviStavke(ByVal filter As String, ByVal q As String) As Vari
         n = n + 1
         iD = Trim$(CStr(src(i, 1)))
         outA(n, 1) = CStr(src(i, 2))
-        ' DATUM IDE KAO SERIJSKI BROJ, ne kao Date. Ljuskin FmtDatumKratko
-        ' odbija sve sto nije IsNumeric, a IsNumeric je nad Date-om FALSE --
-        ' kolona bi ostala PRAZNA, i to bez ijedne greske. Isto rade i ostali
-        ' ekrani (modScrDokumenti.DatSerijski / modUiData.CellDate).
-        outA(n, 2) = modUiData.CellDate(src, i, 4)
+        ' DATUM IDE KAO SERIJSKI BROJ, ne kao Date, i SAMO ako je u opsegu --
+        ' v. BuDatumUOpsegu.
+        outA(n, 2) = DatumZaMrezu(src, i, 4)
         outA(n, 3) = CStr(src(i, 5))
         outA(n, 4) = CStr(src(i, 6))
         outA(n, 5) = CDbl(src(i, 7))
@@ -823,6 +824,34 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     Err.Raise errNum, "modScrBankaUvoz.RedoviStavke", errDesc
+End Function
+
+' SME LI BROJ U KOLONU DATUMA.
+'
+' Mreza nad vrednoscu kolone tipa "date" radi CDate (modOtkupUI.FmtDatumKratko),
+' a CDate van opsega datuma PUKNE. RenderGrid radi pod "On Error Resume Next",
+' pa upis celije bude preskocen i u njoj OSTANE natpis od ranijeg crtanja --
+' operater u koloni datuma vidi tudji tekst, bez ijedne greske i bez traga u
+' logu. Zato kroz ovu kapiju prolazi samo ono sto CDate sme da primi.
+'
+' NADJENO MERENJEM, ne citanjem: na zatecenoj svesci tblBankaImport ima
+' DatumTransakcije upisan kao BROJ oblika ddmmyyyy (26062026), a ne kao datum.
+' To je podatak, ne prikaz. Ekran ga NE TUMACI -- ddmmyyyy nije oblik koji
+' modParse.TryParseDateValue poznaje, pa bi svako tumacenje bilo izmisljanje
+' pravila koje domen nema. Umesto toga odbija da od njega pravi datum, i celija
+' ostane prazna.
+Public Function BuDatumUOpsegu(ByVal serijski As Double) As Boolean
+    BuDatumUOpsegu = (serijski >= 1) And (serijski <= BU_DATUM_MAX)
+End Function
+
+' Serijski broj datuma za mrezu, ili 0. Sam racun radi modUiData.CellDate --
+' isti koji koriste i ostali ekrani; ovde je samo kapija opsega.
+Private Function DatumZaMrezu(ByRef izvor As Variant, ByVal red As Long, _
+                              ByVal kol As Long) As Double
+    Dim d As Double
+    d = modUiData.CellDate(izvor, red, kol)
+    If Not BuDatumUOpsegu(d) Then Exit Function
+    DatumZaMrezu = d
 End Function
 
 ' Status stavke kao tekst. Prazan status je NOV red -- prikazuje se kao crtica,
@@ -908,8 +937,8 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
         n = n + 1
         outA(n, 1) = CStr(src(i, 2))
         outA(n, 2) = CStr(src(i, 3))
-        ' v. RedoviStavke: datum se mrezi predaje kao serijski broj.
-        outA(n, 3) = modUiData.CellDate(src, i, 4)
+        ' v. RedoviStavke: datum se mrezi predaje kao serijski broj u opsegu.
+        outA(n, 3) = DatumZaMrezu(src, i, 4)
         outA(n, 4) = CDbl(src(i, 5))
         outA(n, 5) = CDbl(src(i, 6))
         outA(n, 6) = CDbl(src(i, 7))

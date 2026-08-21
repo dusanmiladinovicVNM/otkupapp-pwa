@@ -635,6 +635,14 @@ SEED = {
          "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
          "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
          "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        # NALAZ, NE SEJEMO GA: na zatecenim svescima tblBankaImport ume da nosi
+        # DatumTransakcije kao BROJ oblika ddmmyyyy (26.06.2026 -> 26062026).
+        # Takav red je ovde bio posejan da tvrdnja o opsegu datuma ima nad cim
+        # da padne -- i oborio je SEDAM testova, ukljucujuci tudje
+        # (T_StornoEkran_SvakaListaVracaRedove), sa "Overflow". Znaci da tu
+        # vrstu podatka ne podnosi samo ovaj ekran nego vise njih.
+        # Sejanje je zato vraceno; pravilo se tvrdi direktno (BuDatumUOpsegu),
+        # a nalaz je prijavljen kao zaseban posao.
         {"BankaImportID": "BIM-FIX-SK", "BrojDokumenta": BIM_IZVOD_2,
          "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
          "DatumTransakcije": BIM_DATUM_2, "Partner": "Preskoceni Platilac",

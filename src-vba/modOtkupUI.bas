@@ -4194,8 +4194,16 @@ Private Sub ShowZones(frm As Object)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = True
     Next i
-    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
-    nmv = Array("zKpi", "zCtx", "zForm", "zRight")
+    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice
+    ' i traka aktivne otpremnice.
+    '
+    ' zOtp je iz ovog spiska bio ISPAO. Njegovu vidljivost postavlja samo
+    ' LayoutAll (grana ekrana dokumenata), pa je na ugovornim ekranima ostajao
+    ' onakav kakav ga je Dokumenta ostavila -- a vidi se ili ne vidi zavisno od
+    ' toga da li ga zona tog ekrana slucajno pokriva. Na ekranu Uvoz izvoda
+    ' (najniza zona) se video, sa porukom "Nema izabrane otpremnice", koja tamo
+    ' ne znaci nista.
+    nmv = Array("zKpi", "zCtx", "zForm", "zRight", "zOtp")
     For i = 0 To UBound(nmv)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = dok

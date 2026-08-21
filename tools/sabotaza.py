@@ -1801,6 +1801,20 @@ SABOTAZE = {
         "stornirana faktura ne ulazi u listu",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
+    # Broj van opsega datuma obara CDate u mrezi, a RenderGrid to proguta
+    # (On Error Resume Next) -- celija ostane sa natpisom od ranijeg crtanja.
+    #
+    # Gadja PRAVILO, ne njegovu primenu. Red sa takvim datumom se u fixture
+    # NE seje: posejan je oborio SEDAM testova, ukljucujuci tudje, sa
+    # "Overflow" -- tu vrstu podatka ne podnosi samo ovaj ekran nego vise
+    # njih. Vidi komentar u make_fixture.py i par. 9.10 kataloga.
+    "banka-uvoz-datum-van-opsega": (
+        "modScrBankaUvoz.bas",
+        "    BuDatumUOpsegu = (serijski >= 1) And (serijski <= BU_DATUM_MAX)\n",
+        "    BuDatumUOpsegu = (serijski >= 1)\n",
+        "T_BankaUvoz_UgovorEkrana",
+        "u kolonu datuma ulazi samo broj koji CDate sme da primi",
+    ),
     # Za OM se ne bira ni faktura ni blok, pa se polje cilja GASI: polje koje
     # ne radi nista poziva operatera da u njega nesto upise. Ovo je uz to
     # jedina sabotaza koja PROLAZI kroz gradnju i raspored zone -- put na kom
@@ -1820,7 +1834,7 @@ SABOTAZE = {
     # greske i bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
     "banka-uvoz-datum-nije-broj": (
         "modScrBankaUvoz.bas",
-        "        outA(n, 2) = modUiData.CellDate(src, i, 4)\n",
+        "        outA(n, 2) = DatumZaMrezu(src, i, 4)\n",
         "        outA(n, 2) = src(i, 4)\n",
         "T_BankaUvoz_UgovorEkrana",
         "datum stize mrezi kao serijski broj, ne kao Date",

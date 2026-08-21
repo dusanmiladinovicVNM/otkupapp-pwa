@@ -4987,5 +4987,17 @@ i pečat verzije koji je pokazivao stariji build nego što je uvezen.
 Sedmi nalaz je došao sa compile kapije: raspored zone koristio je konstantu koja
 je u ljusci privatna. Uz ispravku je dodat test koji zonu **stvarno gradi i
 raspoređuje**, pa je taj put od sada pokriven — do tada ga nijedan test nije
-prolazio. `RunAllTests` je sada **110 testova, 0 palih**, uz **dvadeset**
-sabotaža.
+prolazio.
+
+Drugi smoke je našao još dve stvari. Kolona datuma je ostajala sa **tuđim
+tekstom** (natpisom sa prethodnog ekrana): na zatečenim sveskama datum
+transakcije ume da bude upisan kao broj oblika `ddmmyyyy`, a ne kao datum — takav
+red je rušio ispis ćelije, tiho. Ekran ga sada odbija i ostavlja polje prazno
+umesto da prikaže nešto tuđe. **Isti podatak ruši i druge ekrane**, pa je to
+prijavljeno kao zaseban posao.
+
+Druga je traka „Nema izabrane otpremnice…", koja se videla i tamo gde ne pripada
+— ostajala je upaljena sa ekrana Unos dokumenata. Sada se gasi kao i ostali
+delovi tog ekrana.
+
+`RunAllTests` je sada **110 testova, 0 palih**, uz **dvadeset jednu** sabotažu.
