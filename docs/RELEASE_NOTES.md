@@ -4913,3 +4913,67 @@ vidi zatvorena — ovaj unos nema nijednu otvorenu stavku.
 > Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
 > `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
 > kojih u headless runu nema i padaju identično na netaknutom `main`-u.
+
+---
+
+## v2.64.0 — `v6-ui-177` · Uvoz izvoda na novom UI-ju (Faza E, stavka 17)
+
+Stavka menija **„Uvoz izvoda"** se više ne crta prigušena — otvara se kao pun
+ekran novog UI-ja, sa dve liste umesto jednog spiska.
+
+**Šta operater dobija**
+
+- **Red za mapiranje u mreži.** Stavke izvoda se sortiraju klikom na zaglavlje,
+  pretražuju (partner, poziv na broj, broj izvoda, broj računa) i sužavaju
+  čipovima: *Sve · Za obradu · Jaki ključevi · Za ručno · Obrađeno ·
+  Preskočeno*. „Za ručno" su stavke koje je automatika probala i vratila —
+  do sada su se od netaknutih razlikovale samo po slovu u koloni statusa.
+- **Kolona „Predlog" na svakom redu.** Šta bi automatika uradila sa tom
+  stavkom — *faktura 2/2026*, *blok 1/TEST*, *avans kupca X*, *nema jakog
+  ključa*, *nejasan smer* — vidi se za **sve** redove odjednom. Stara forma je
+  isto to pokazivala samo za izabranu stavku, u panelu ispod liste.
+- **Nova lista „Izvodi".** Po svakom uvezenom izvodu: početno stanje, uplate,
+  isplate, završno stanje, koliko stavki nosi i koliko ih je još otvoreno, i
+  **da li se slaže**. Stara forma je isti račun radila u jednom redu teksta i
+  samo za **najnoviji** izvod — izvod od pre dve nedelje koji ne štima nije se
+  video nigde.
+- **Pet radnji nad redom:** automatski mapiraj red, ručno mapiraj, preskoči,
+  mapiraj jake ključeve, automatski mapiraj sve.
+- **Ručno mapiranje u zoni:** tip (Kupac / Kooperant / OM), partner i cilj
+  (faktura ili blok). Izbor tipa se **predlaže sam** iz smera stavke — uplata
+  predlaže kupca, isplata kooperanta — kao i u staroj formi.
+- **Značka uz stavku menija** pokazuje koliko stavki još čeka, pa se to vidi i
+  sa drugog ekrana.
+
+**Šta je zaštićeno**
+
+- Stavka pogrešnog **smera** se odbija **pre** klika, sa objašnjenjem, a ne kao
+  greška pri knjiženju.
+- Blok sa više otvorenih otkupnih stavki nego što automatika sme da podeli i
+  dalje traži **izričitu potvrdu**: prikaže se tačna podela koja bi bila
+  proknjižena, uz izbor DA / avans / odustani.
+- **Ručno knjiženje uplate kupca se zaustavlja ako lista faktura nije
+  učitana.** Prazna lista i neuspelo čitanje izgledaju isto, a prazan izbor
+  fakture znači **avans** umesto zatvaranja duga.
+- Stavka čiji se interni broj u tabeli pojavljuje dvaput **vidi se u listi**,
+  ali radnja nad njom odbija da pogađa koju od dve misli.
+- Isti **broj izvoda** sa **dva različita računa** firme se vodi kao dva
+  izvoda, ne kao jedan — banke te brojeve dodeljuju po računu.
+
+**Šta se nije promenilo**
+
+- **Uvoz izvoda (povlačenje PDF-ova i parsiranje) ostaje gde je bio.** Novi
+  ekran radi sa onim što je već uvezeno.
+- **Stara forma `frmBankaImport` radi kao i do sada** i nije menjana — kao i
+  sve druge stare forme tokom prelaska na novi UI.
+- Nalozi za isplatu (`Banka izveštaj`) nisu dirani.
+
+**Verifikacija**
+
+`RunAllTests` **109 testova, 0 palih** (baseline je bio 103). Šest novih
+testova i **osamnaest** sabotaža, uz jedanaest novih redova u test-svesci —
+`tblBankaImport` je do sada bio potpuno prazan, pa su sve tvrdnje o listama i
+čipovima radile nad praznim skupom.
+
+`RunBankaImportTestSuite` (tvrd fail-gate nad ovim područjem) ostaje zelena:
+**PASS=189, FAIL=0**.

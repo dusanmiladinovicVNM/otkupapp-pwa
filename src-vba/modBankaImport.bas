@@ -43,6 +43,11 @@ Private Const BIM_STATUS_SCHEMA_ERROR As String = "schema error"
 Private Const BIM_STATUS_EXTRACT_ERROR As String = "extract error"
 Private Const BIM_STATUS_UNKNOWN_ERROR As String = "unknown error"
 
+' Slaganje izvoda -- v. BimSaldoStatus. Public jer ih cita ekran Uvoz izvoda.
+Public Const BIM_SALDO_NEMA As Long = 0      ' legacy red, bez saldo metapodataka
+Public Const BIM_SALDO_OK As Long = 1
+Public Const BIM_SALDO_RAZLIKA As Long = 2
+
 Private Const ERR_BIM_IMPORT_BASE As Long = vbObjectError + 2700
 Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
 
@@ -1218,6 +1223,154 @@ Private Function GetBankaErrorPath() As String
     GetBankaErrorPath = GetLocalConfigValue("BANKA_ERROR_PATH", APP_BANKA_ERROR)
 End Function
 
+
+' ============================================================
+' INTEGRITET IZVODA -- pravilo i citac (Faza E/17)
+'
+' Cetvoronivoski integritet upisuje parser: PocetnoStanje, UkupanPotrazuje,
+' UkupanDuguje i ZavrsnoStanje idu na SVAKI red istog izvoda ("saldo metadata
+' copied to every row from same izvod" u SaveBankaImportRowsCore).
+'
+' Sam racun je do sada zivio samo unutar frmBankaImport.UpdateIzvodSummaryLabel,
+' i to nad JEDNIM izvodom -- onim sa najvecim DatumIzvoda. Izdvojen je ovde da
+' bi ga forma i mreza mogli deliti i da bi se mogao izmeriti bez forme.
+' ============================================================
+
+' Koliko izvodu fali (ili preteze) da bi se slozio. Pozitivno = zavrsno stanje
+' je MANJE od izracunatog.
+Public Function BimSaldoRazlika(ByVal pocetno As Double, ByVal zavrsno As Double, _
+                                ByVal duguje As Double, ByVal potrazuje As Double) As Double
+    BimSaldoRazlika = (pocetno + potrazuje - duguje) - zavrsno
+End Function
+
+' BIM_SALDO_NEMA / _OK / _RAZLIKA. Sva cetiri broja nula znaci LEGACY red
+' (uvoz pre v6.18, bez saldo metapodataka) -- to nije neslaganje nego odsustvo
+' podatka, i ne sme da se prikaze kao greska. Prag je 0.01, isti koji forma vec
+' koristi.
+Public Function BimSaldoStatus(ByVal pocetno As Double, ByVal zavrsno As Double, _
+                               ByVal duguje As Double, ByVal potrazuje As Double) As Long
+    If pocetno = 0 And zavrsno = 0 And duguje = 0 And potrazuje = 0 Then
+        BimSaldoStatus = BIM_SALDO_NEMA
+        Exit Function
+    End If
+
+    If Abs(BimSaldoRazlika(pocetno, zavrsno, duguje, potrazuje)) <= 0.01 Then
+        BimSaldoStatus = BIM_SALDO_OK
+    Else
+        BimSaldoStatus = BIM_SALDO_RAZLIKA
+    End If
+End Function
+
+' Kljuc grupe. BROJ IZVODA NIJE IDENTITET -- dedupe kljuc pocinje od BROJA
+' RACUNA ("Drugi racun = druga transakcija, bez obzira na broj izvoda i iznos"),
+' pa dva racuna firme legitimno nose izvod istog broja.
+Public Function BimIzvodKljuc(ByVal brojDokumenta As String, _
+                              ByVal brojRacuna As String) As String
+    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna)
+End Function
+
+' IZVODI za mrezu -- agregat po (BrojDokumenta + BrojRacuna).
+'
+' Vraca 1-bazirano (1 To n, 1 To 12):
+'    1 Kljuc (BimIzvodKljuc)   2 BrojDokumenta   3 BrojRacuna
+'    4 DatumIzvoda             5 PocetnoStanje   6 UkupanPotrazuje
+'    7 UkupanDuguje            8 ZavrsnoStanje   9 Razlika
+'   10 Status (BIM_SALDO_*)   11 Stavki         12 Otvorenih
+'
+' Storniran red ne ulazi ni u grupu ni u brojace -- isto pravilo kao svuda.
+Public Function GetBankaIzvodiForGrid() As Variant
+    Const SRC As String = "GetBankaIzvodiForGrid"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cBrDok As Long, cRac As Long, cDatIzv As Long, cObr As Long
+    Dim cPoc As Long, cZav As Long, cDug As Long, cPot As Long
+
+    cBrDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    cRac = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
+    cDatIzv = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_IZVODA, SRC)
+    cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    cPoc = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POCETNO_STANJE, SRC)
+    cZav = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ZAVRSNO_STANJE, SRC)
+    cDug = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_DUGUJE, SRC)
+    cPot = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UKUPAN_POTRAZUJE, SRC)
+
+    Dim idx As Object
+    Set idx = CreateObject("Scripting.Dictionary")
+
+    Dim buf() As Variant
+    ReDim buf(1 To UBound(data, 1), 1 To 12)
+
+    Dim i As Long, n As Long, r As Long
+    Dim kljuc As String
+
+    For i = 1 To UBound(data, 1)
+        kljuc = BimIzvodKljuc(CStr(NzBIM(data(i, cBrDok), "")), _
+                              CStr(NzBIM(data(i, cRac), "")))
+
+        If idx.Exists(kljuc) Then
+            r = CLng(idx(kljuc))
+        Else
+            n = n + 1
+            r = n
+            idx.Add kljuc, r
+            buf(r, 1) = kljuc
+            buf(r, 2) = CStr(NzBIM(data(i, cBrDok), ""))
+            buf(r, 3) = CStr(NzBIM(data(i, cRac), ""))
+            buf(r, 4) = data(i, cDatIzv)
+            ' Zbirovi izvoda su isti na svakom redu grupe, pa se uzimaju sa PRVOG
+            ' i ne sabiraju -- sabiranje bi ih pomnozilo brojem stavki.
+            buf(r, 5) = CDbl(NzBIM(data(i, cPoc), 0#))
+            buf(r, 6) = CDbl(NzBIM(data(i, cPot), 0#))
+            buf(r, 7) = CDbl(NzBIM(data(i, cDug), 0#))
+            buf(r, 8) = CDbl(NzBIM(data(i, cZav), 0#))
+            buf(r, 11) = 0
+            buf(r, 12) = 0
+        End If
+
+        buf(r, 11) = CLng(buf(r, 11)) + 1
+        If BimOtvoren(CStr(NzBIM(data(i, cObr), ""))) Then
+            buf(r, 12) = CLng(buf(r, 12)) + 1
+        End If
+    Next i
+
+    If n = 0 Then Exit Function
+
+    Dim outA() As Variant
+    Dim c As Long
+    ReDim outA(1 To n, 1 To 12)
+
+    For r = 1 To n
+        For c = 1 To 12
+            outA(r, c) = buf(r, c)
+        Next c
+        outA(r, 9) = BimSaldoRazlika(CDbl(buf(r, 5)), CDbl(buf(r, 8)), _
+                                     CDbl(buf(r, 7)), CDbl(buf(r, 6)))
+        outA(r, 10) = BimSaldoStatus(CDbl(buf(r, 5)), CDbl(buf(r, 8)), _
+                                     CDbl(buf(r, 7)), CDbl(buf(r, 6)))
+    Next r
+
+    GetBankaIzvodiForGrid = outA
+    Exit Function
+
+EH:
+    ' Err se cita PRE LogErr-a (LogError pocinje sa On Error Resume Next, a
+    ' svaka On Error naredba brise Err) -- inace bi pad seme stigao do ekrana
+    ' kao "nema redova".
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
 
 Public Sub Diag_DumpPdfTextAroundStanje()
     Dim pdfPath As String

@@ -84,6 +84,35 @@ Private Const FX_FAK_STORNO As String = "FAK-TEST-X"   ' ne sme da se pojavi u l
 Private Const FX_PRJ_FAK1 As String = "PRJ-FAK-1"
 Private Const FX_PRJ_FAK2 As String = "PRJ-FAK-2"
 Private Const FX_PRJ_FAK3 As String = "PRJ-FAK-3"
+
+' BANKA UVOZ (Faza E/17). tblBankaImport je do ovog fixture-a bio PRAZAN, pa je
+' svaka tvrdnja o listi stavki, cipovima i integritetu izvoda radila nad praznim
+' skupom.
+Private Const FX_BIM_JAKI_FAK As String = "BIM-FIX-1"    ' poziv = broj fakture 2/2026
+Private Const FX_BIM_JAKI_BLOK As String = "BIM-FIX-2"   ' poziv = BrojDokumenta 1/TEST
+Private Const FX_BIM_BEZ_KLJUCA As String = "BIM-FIX-3"  ' bez poziva i bez konta
+Private Const FX_BIM_KOLIZIJA As String = "BIM-FIX-K"    ' DRUGI racun, ISTI broj izvoda
+Private Const FX_BIM_BLOK3 As String = "BIM-FIX-3K"      ' blok sa 3 otvorene stavke
+Private Const FX_BIM_ERROR As String = "BIM-FIX-ER"      ' auto pokusao pa vratio
+Private Const FX_BIM_DA As String = "BIM-FIX-DA"
+Private Const FX_BIM_SKIP As String = "BIM-FIX-SK"
+Private Const FX_BIM_STORNO As String = "BIM-FIX-ST"
+Private Const FX_BIM_IZVOD1 As String = "IZV-FIX-1"
+Private Const FX_BIM_IZVOD2 As String = "IZV-FIX-2"
+Private Const FX_BIM_IZVOD3 As String = "IZV-FIX-3"
+' DVA reda pod ISTIM BankaImportID-em. Bez njih bi tvrdnja "dvosmislen ID
+' nosi PRAZAN identitet" merila odsustvo reda.
+Private Const FX_BIM_DUP As String = "BIM-FIX-DUP"
+Private Const FX_BIM_RACUN1 As String = "160-0000000111111-11"
+Private Const FX_BIM_RACUN2 As String = "265-0000000222222-22"
+' Blok kooperanta KOOP-TEST-3 sa TRI otvorene stavke -- preko granice koju
+' automatska raspodela sme da podeli.
+Private Const FX_BIM_BLOK3_BR As String = "BLK-BIM-3"
+' Blok kooperanta KOOP-TEST-1 sa jednom otvorenom stavkom (OTK-TEST-1).
+Private Const FX_BIM_BLOK1_BR As String = "1/TEST"
+Private Const FX_BIM_SVE As Long = 10       ' 11 redova minus jedan storniran
+Private Const FX_BIM_OTVORENIH As Long = 6  ' status "" ili "Error"
+Private Const FX_BIM_OBRADJENIH As Long = 3 ' BIM-FIX-DA + dva dvojnika
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -277,6 +306,12 @@ Public Sub RunAllTests()
     RunOne 101
     RunOne 102
     RunOne 103
+    RunOne 104
+    RunOne 105
+    RunOne 106
+    RunOne 107
+    RunOne 108
+    RunOne 109
 
     SetTestMode prevMode
     WriteResultFile
@@ -412,6 +447,12 @@ Private Function TestName(ByVal idx As Long) As String
         Case 101: TestName = "T_Fak_CipoviPrateStatusFakture"
         Case 102: TestName = "T_Fak_NerazresenKupacNeDiraKorpu"
         Case 103: TestName = "T_Fak_GreskaNePreziviLogErr"
+        Case 104: TestName = "T_BankaUvoz_UgovorEkrana"
+        Case 105: TestName = "T_BankaUvoz_IdentitetURedu_NeCrtaSe"
+        Case 106: TestName = "T_BankaUvoz_RedNosiSmerIOtvorenost"
+        Case 107: TestName = "T_BankaUvoz_CipJakihPratiBrojac"
+        Case 108: TestName = "T_BankaUvoz_IzvodiSuAgregatPoRacunu"
+        Case 109: TestName = "T_BankaUvoz_RucnoMapiranjePravila"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -523,6 +564,12 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 101: T_Fak_CipoviPrateStatusFakture
         Case 102: T_Fak_NerazresenKupacNeDiraKorpu
         Case 103: T_Fak_GreskaNePreziviLogErr
+        Case 104: T_BankaUvoz_UgovorEkrana
+        Case 105: T_BankaUvoz_IdentitetURedu_NeCrtaSe
+        Case 106: T_BankaUvoz_RedNosiSmerIOtvorenost
+        Case 107: T_BankaUvoz_CipJakihPratiBrojac
+        Case 108: T_BankaUvoz_IzvodiSuAgregatPoRacunu
+        Case 109: T_BankaUvoz_RucnoMapiranjePravila
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6387,4 +6434,443 @@ Private Sub T_Fak_GreskaNePreziviLogErr()
              "opis greske NIJE prazan -- Err je citan PRE LogErr-a"
     AssertEq (InStr(d3, "FAK-NE-POSTOJI") > 0), True, _
              "opis imenuje fakturu koje nema, ne neku drugu gresku"
+End Sub
+
+
+'=====================================================================
+' EKRAN UVOZ IZVODA (Faza E/17, v6-ui-177)
+'=====================================================================
+
+' Koliko redova cip propusta na TEKUCOJ listi ekrana. Odvojeno, jer je
+' `Scr_Rows(...)(2)` nad Variant-om koji sadrzi niz nepouzdan zapis.
+Private Function BuBrojRedova(ByVal filter As String) As Long
+    Dim d As Variant
+    d = modScrBankaUvoz.Scr_Rows(filter, "")
+    If Not IsArray(d) Then Exit Function
+    BuBrojRedova = CLng(d(2))
+End Function
+
+' UGOVOR EKRANA i GRANICE BAZENA LJUSKE. Visak se ne prijavljuje kao greska
+' nego se TIHO odseca -- operater vidi ekran kome fali dugme, bez ijedne
+' poruke. Lista stavki stoji TACNO na granici MAX_ACT, pa je ovo jedino mesto
+' koje bi sestu radnju primetilo pre nego sto nestane.
+Private Sub T_BankaUvoz_UgovorEkrana()
+    Dim liste As Variant, i As Long, kljucevi As String
+    Dim kljuc As String, spec As String, d As Variant, kolone As Variant
+    ' For Each trazi Variant ili Object -- String iterator je "Type mismatch".
+    Dim kv As Variant
+
+    AssertEq (Len(modUiScreens.ScrRowByKey("BANKA_UVOZ")) > 0), True, _
+             "BANKA_UVOZ postoji u registru ekrana"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("BANKA_UVOZ"), SCR_MODUL), _
+             "modScrBankaUvoz", "registar vodi ekran na modScrBankaUvoz"
+    AssertEq modUiScreens.ScrPostoji("BANKA_UVOZ"), True, _
+             "modul ekrana odgovara na Scr_Meta -- stavka menija vise nije prigusena"
+    AssertEq (InStr(modUiScreens.ScrMeta("BANKA_UVOZ"), "kljuc=BANKA_UVOZ") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("BANKA_UVOZ"), SCR_OBLAST), _
+             OBL_BANKA, "ekran trazi pravo na oblast Banka"
+
+    liste = modScrBankaUvoz.Scr_Liste()
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    AssertEq UBound(liste) + 1, 2, "dve liste: stavke i izvodi"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|STAVKE|IZVODI", _
+             "redosled lista -- stavke su prve, one su posao"
+
+    ' RADNJE PO KLJUCU LISTE, ne kroz Scr_Lista: ugovor svake liste mora da se
+    ' meri bez prebacivanja stanja ekrana.
+    AssertEq BrojStavkiOpisa(modScrBankaUvoz.BuRadnjeZaListu("STAVKE")), _
+             modOtkupUI.MAX_ACT, _
+             "stavke nose TACNO MAX_ACT radnji -- sesta bi se tiho odsekla"
+    AssertEq BrojStavkiOpisa(modScrBankaUvoz.BuRadnjeZaListu("IZVODI")), 0, _
+             "izvodi su pregled -- nijedna radnja nad redom"
+
+    ' Prvi cip je svuda 'sve' -- ljuska na njega pada kad zatecen filter ne
+    ' pripada listi (RefreshChipsForScreen), pa prvi mora da bude NAJSIRI;
+    ' povratak na uzi cip bi tiho sakrio redove.
+    For Each kv In Array("STAVKE", "IZVODI")
+        spec = modScrBankaUvoz.BuCipoviZaListu(CStr(kv))
+        AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _
+                 "lista " & kv & " ne trazi vise cipova nego sto bazen ima"
+        AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", _
+                 "prvi cip liste " & kv & " je najsiri ('sve')"
+        kolone = modScrBankaUvoz.BuKoloneZaListu(CStr(kv))
+        AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
+                 "lista " & kv & " ne trazi vise kolona nego sto mreza pravi"
+    Next kv
+
+    ' Svaka lista mora da vrati ispravan niz. Lista koja pukne se u ljusci
+    ' pretvara u Empty, LoadGridFromScreen na ne-niz radi Exit Sub -- pa mreza
+    ' ostane na prethodnoj listi i prekidac izgleda kao da ne radi.
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrBankaUvoz.Scr_BuListaTestSet kljuc
+        AssertEq modScrBankaUvoz.Scr_Lista(), kljuc, "lista " & kljuc & " je prihvacena"
+        d = modScrBankaUvoz.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " prijavljuje svoje kolone"
+        AssertEq (CLng(d(2)) > 0), True, _
+                 "lista " & kljuc & " ima redove u fixture-u -- tvrdnje nisu prazne"
+    Next i
+
+    modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+' IDENTITET IDE U RED I NE CRTA SE. Mreza redove sortira i deli na strane, pa
+' bi svaka mapa "prikaz -> ID" koju ekran drzi sa strane zastarela na prvi klik
+' po zaglavlju.
+'
+' BROJ IZVODA NIJE IDENTITET: dedupe kljuc (IsDuplicateBankaImport) pocinje od
+' BROJA RACUNA -- "Drugi racun = druga transakcija, bez obzira na broj izvoda i
+' iznos" -- pa dva racuna firme legitimno nose izvod istog broja.
+Private Sub T_BankaUvoz_IdentitetURedu_NeCrtaSe()
+    Dim kolone As Variant, spec() As String, d As Variant, redovi As Variant
+    Dim r As Long, i As Long
+
+    ' Identitet stavke je kolona koju radnja cita kroz GridCell (BU_STV_KOL_ID),
+    ' a to NIJE poslednja kolona: iza nje stoje jos dve koje red takodje samo
+    ' PRENOSI (otvorenost i smer). Tvrdnja mora da gadja BAS TU kolonu --
+    ' tvrdnja o "poslednjoj" meri susedovu i propusta pomeren prioritet
+    ' identiteta. (Nadjeno sabotazom banka-uvoz-identitet-vidljiv, koja je nad
+    ' prvom verzijom ovog testa prolazila neprimeceno.)
+    kolone = modScrBankaUvoz.BuKoloneZaListu("STAVKE")
+    spec = Split(CStr(kolone(10)), "|")
+    AssertEq spec(0), "OTKUI_HDB_BIMKEY", "jedanaesta kolona stavke je identitet"
+    AssertEq spec(4), "4", "identitet stavke je prioriteta 4 -- ne crta se"
+    ' Sve tri prenosne kolone moraju ostati van prikaza: mreza crta do 3.
+    For i = 10 To UBound(kolone)
+        AssertEq Split(CStr(kolone(i)), "|")(4), "4", _
+                 "prenosna kolona " & CStr(i + 1) & " se ne crta"
+    Next i
+
+    kolone = modScrBankaUvoz.BuKoloneZaListu("IZVODI")
+    spec = Split(CStr(kolone(UBound(kolone))), "|")
+    AssertEq spec(0), "OTKUI_HDB_IZVKEY", "poslednja kolona izvoda je identitet"
+    AssertEq spec(4), "4", "identitet izvoda je prioriteta 4 -- ne crta se"
+
+    modScrBankaUvoz.Scr_BuListaTestSet "STAVKE"
+    d = modScrBankaUvoz.Scr_Rows("sve", "")
+    redovi = d(1)
+
+    r = RedSaVrednoscu(redovi, 1, FX_BIM_JAKI_FAK)
+    AssertEq (r > 0), True, "stavka " & FX_BIM_JAKI_FAK & " je u listi"
+    AssertEq Trim$(CStr(redovi(r, 11))), FX_BIM_JAKI_FAK, _
+             "skrivena kolona nosi identitet stavke"
+    ' PRIKAZ i IDENTITET su DVE kolone: prikaz pokazuje ono sto u tabeli pise,
+    ' identitet ono sto je citac PROVERIO. Da su ista kolona, dvosmislen red bi
+    ' u listi ostao bez ijedne oznake i operater ne bi znao ni koji je.
+    AssertEq Trim$(CStr(redovi(r, 1))), FX_BIM_JAKI_FAK, _
+             "prva kolona PRIKAZUJE BankaImportID"
+
+    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_IZVOD1, "red nosi broj izvoda"
+    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_RACUN1, "red nosi broj racuna"
+
+    r = RedSaVrednoscu(redovi, 1, FX_BIM_KOLIZIJA)
+    AssertEq (r > 0), True, "kolizioni red je u listi"
+    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_IZVOD1, _
+             "kolizioni red nosi ISTI broj izvoda"
+    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_RACUN2, _
+             "ali DRUGI broj racuna -- zato broj izvoda ne moze biti identitet"
+    AssertEq Trim$(CStr(redovi(r, 11))), FX_BIM_KOLIZIJA, _
+             "identitet je BankaImportID i razlikuje ta dva reda"
+
+    ' DVOSMISLEN ID NOSI PRAZAN IDENTITET, a red se i dalje VIDI. Radnja tada
+    ' odbija da bira umesto da pogodi -- bez toga bi svakako pukla
+    ' (RequireSingleRow fail-close-uje na duplikat), ali kao greska transakcije
+    ' umesto kao poruka operateru.
+    r = RedSaVrednoscu(redovi, 1, FX_BIM_DUP)
+    AssertEq (r > 0), True, "dvosmislena stavka se i dalje VIDI u listi"
+    AssertEq Trim$(CStr(redovi(r, 11))), "", _
+             "dvosmislen ID nosi PRAZAN identitet -- radnja odbija da bira"
+
+    AssertEq RedSaVrednoscu(redovi, 1, FX_BIM_STORNO), 0, _
+             "storniran red nije u listi stavki"
+
+    modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+' STO RADNJA MORA DA ZNA A IZ PRIKAZA SE NE VIDI JEDNOZNACNO -- to red NOSI.
+'
+' Smer: red sa I uplatom I isplatom u mrezi izgleda kao uplata (kolona uplate je
+' popunjena), a writer ga odbija. Otvorenost: nov red ima PRAZAN status, pa se u
+' prikazu ne razlikuje od reda kome status nije upisan.
+Private Sub T_BankaUvoz_RedNosiSmerIOtvorenost()
+    Dim d As Variant, redovi As Variant, r As Long
+
+    AssertEq modBankaMapiranje.ClassifyBimSmer(100, 100), BIM_SMER_NEJASAN, _
+             "i uplata i isplata = NEJASAN smer, iako izgleda kao uplata"
+    AssertEq modBankaMapiranje.ClassifyBimSmer(0, 0), BIM_SMER_NEJASAN, _
+             "ni uplata ni isplata = nejasan smer"
+    AssertEq modBankaMapiranje.ClassifyBimSmer(100, 0), BIM_SMER_UPLATA, "cista uplata"
+    AssertEq modBankaMapiranje.ClassifyBimSmer(0, 100), BIM_SMER_ISPLATA, "cista isplata"
+
+    AssertEq modBankaMapiranje.BimOtvoren(""), True, "nov red je otvoren"
+    AssertEq modBankaMapiranje.BimOtvoren(BIM_OBR_ERROR), True, _
+             "red oznacen za rucno je JOS UVEK otvoren -- auto ga nije zatvorio"
+    AssertEq modBankaMapiranje.BimOtvoren(BIM_OBR_DA), False, "obradjen nije otvoren"
+    AssertEq modBankaMapiranje.BimOtvoren(BIM_OBR_SKIP), False, "preskocen nije otvoren"
+
+    modScrBankaUvoz.Scr_BuListaTestSet "STAVKE"
+    d = modScrBankaUvoz.Scr_Rows("sve", "")
+    redovi = d(1)
+
+    r = RedSaVrednoscu(redovi, 1, FX_BIM_JAKI_BLOK)
+    AssertEq (r > 0), True, "red isplate je u listi"
+    AssertEq Trim$(CStr(redovi(r, 13))), BIM_SMER_ISPLATA, "red NOSI svoj smer"
+    AssertEq Trim$(CStr(redovi(r, 12))), "1", "otvoren red NOSI otvorenost"
+
+    r = RedSaVrednoscu(redovi, 1, FX_BIM_DA)
+    AssertEq (r > 0), True, "obradjen red je u listi pod cipom 'sve'"
+    AssertEq Trim$(CStr(redovi(r, 12))), "", _
+             "obradjen red NE nosi otvorenost -- radnja ga odbija"
+
+    ' Zatvorena stavka nema sta da predlozi: predlog racuna resolvere, a nad
+    ' zatvorenim redom nema sta da se mapira.
+    AssertEq modScrBankaUvoz.BuPredlogTekst(BIM_SMER_UPLATA, BIM_CILJ_FAKTURA, _
+                                            "2/2026", False), "", _
+             "zatvorena stavka nema predlog"
+    AssertEq (Len(modScrBankaUvoz.BuPredlogTekst(BIM_SMER_NEJASAN, "", "", True)) > 0), True, _
+             "nejasan smer se PRIJAVLJUJE u predlogu, ne cuti"
+
+    modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+' CIP 'JAKI KLJUCEVI' I BROJAC MORAJU DA VIDE ISTI SKUP.
+'
+' Pravilo "da li bi jak kljuc zavrsio ovaj red" zivi na dva mesta -- u citacu
+' mreze i u CountStrongKeyReadyBankaImport (koji stoji u natpisu dugmeta) -- i
+' moze da se razidje. Ovo je jedino sto bi to primetilo. Isti oblik kao
+' T_Fak_CipoviPrateStatusFakture naspram GetOpenFakture.
+Private Sub T_BankaUvoz_CipJakihPratiBrojac()
+    Dim nSve As Long, nZa As Long, nJaki As Long, nRucno As Long
+    Dim nObr As Long, nPre As Long
+    Dim otvorene As Variant
+
+    modScrBankaUvoz.Scr_BuListaTestSet "STAVKE"
+    nSve = BuBrojRedova("sve")
+    nZa = BuBrojRedova("zaobradu")
+    nJaki = BuBrojRedova("jaki")
+    nRucno = BuBrojRedova("rucno")
+    nObr = BuBrojRedova("obradjeno")
+    nPre = BuBrojRedova("preskoceno")
+
+    AssertEq nSve, FX_BIM_SVE, "cip 'sve' vidi sve nestornirane stavke"
+    AssertEq nSve, nZa + nObr + nPre, _
+             "'sve' je tacno unija tri stanja -- nijedan red ne ispada iz svih cipova"
+    AssertEq nZa, FX_BIM_OTVORENIH, "sest stavki ceka operatera"
+    AssertEq nRucno, 1, "tacno jedan red je auto pokusao pa vratio operateru"
+    ' 'Za rucno' je PODSKUP otvorenih, ne suprotnost: red sa statusom "Error"
+    ' je i dalje otvoren.
+    AssertEq (nRucno <= nZa), True, "'za rucno' je podskup otvorenih"
+    AssertEq nObr, FX_BIM_OBRADJENIH, "tri obradjena reda (jedan + dva dvojnika)"
+    AssertEq nPre, 1, "tacno jedan preskocen"
+
+    AssertEq (nJaki > 0), True, "fixture ima bar jedan jak kljuc -- tvrdnja nije prazna"
+    AssertEq (nJaki <= nZa), True, "jaki kljucevi su podskup otvorenih"
+    AssertEq nJaki, modBankaMapiranje.CountStrongKeyReadyBankaImport(), _
+             "cip 'jaki kljucevi' i BROJAC vide ISTI skup"
+
+    ' Cip 'za obradu' je tacno ono sto GetBankaImportOpen vraca...
+    otvorene = modBankaMapiranje.GetBankaImportOpen()
+    AssertEq IsArray(otvorene), True, "GetBankaImportOpen vraca redove"
+    AssertEq nZa, UBound(otvorene, 1), _
+             "cip 'za obradu' je tacno skup GetBankaImportOpen"
+
+    ' ...i to je isti broj koji nosi znacka uz stavku menija. Znacka NEMA svoj
+    ' kanal: red za mapiranje je podatak u tabeli, pa ga ljuska osvezi kroz
+    ' RefreshFromData posle svakog upisa.
+    modScrBankaUvoz.Scr_ResetCache
+    AssertEq modScrBankaUvoz.Scr_Brojac(), nZa, _
+             "znacka broji ISTI skup kao cip 'za obradu'"
+
+    modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+' IZVODI SU AGREGAT PO (BROJ IZVODA + BROJ RACUNA), i to je jedino mesto na kom
+' se vidi da li se izvod slaze. Legacy je isti racun imao u JEDNOJ labeli i samo
+' za najnoviji izvod (UpdateIzvodSummaryLabel).
+Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
+    Dim d As Variant, redovi As Variant, i As Long, n As Long
+    Dim r1 As Long, r2 As Long, istihBrojeva As Long
+
+    ' PRAVILO SLAGANJA, izmereno bez mreze.
+    AssertEq modBankaImport.BimSaldoStatus(0, 0, 0, 0), BIM_SALDO_NEMA, _
+             "legacy red bez saldo metapodataka NIJE neslaganje nego odsustvo podatka"
+    AssertEq modBankaImport.BimSaldoStatus(1000, 1200, 300, 500), BIM_SALDO_OK, _
+             "1000 + 500 - 300 = 1200 se slaze"
+    AssertEq modBankaImport.BimSaldoStatus(1000, 1300, 300, 500), BIM_SALDO_RAZLIKA, _
+             "sto dinara razlike je neslaganje"
+    AssertEq modBankaImport.BimSaldoRazlika(1000, 1300, 300, 500), -100, _
+             "razlika nosi znak -- zavrsno je VECE od izracunatog"
+
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    d = modScrBankaUvoz.Scr_Rows("sve", "")
+    redovi = d(1)
+    n = CLng(d(2))
+
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, 1))) = FX_BIM_IZVOD1 Then
+            istihBrojeva = istihBrojeva + 1
+            If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN1 Then r1 = i
+            If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN2 Then r2 = i
+        End If
+    Next i
+
+    AssertEq istihBrojeva, 2, _
+             "isti broj izvoda na dva racuna daje DVA reda -- grupa je (broj + racun)"
+    AssertEq (r1 > 0 And r2 > 0), True, "oba racuna su u listi"
+    AssertEq (Trim$(CStr(redovi(r1, 11))) <> Trim$(CStr(redovi(r2, 11)))), True, _
+             "identiteti dva izvoda istog broja su RAZLICITI"
+
+    ' Zbirovi izvoda se NE SABIRAJU po redovima -- parser ih pise na SVAKI red
+    ' grupe, pa bi sabiranje dalo iznos pomnozen brojem stavki.
+    AssertEq CDbl(redovi(r1, 4)), 10000, "pocetno stanje se uzima sa reda, ne sabira"
+    AssertEq CDbl(redovi(r1, 7)), 9500, "zavrsno stanje se uzima sa reda"
+    AssertEq CLng(redovi(r1, 9)), 3, "izvod 1 / racun 1 ima tri stavke"
+    AssertEq CLng(redovi(r1, 10)), 3, "sve tri su jos otvorene"
+
+    ' Storniran red ne ulazi ni u grupu ni u brojace: izvod 2 ima pet redova, a
+    ' jedan od njih je storniran.
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, 1))) = FX_BIM_IZVOD2 Then
+            AssertEq CLng(redovi(i, 9)), 4, "storniran red se ne broji u stavke izvoda"
+        End If
+    Next i
+
+    AssertEq BuBrojRedova("razlika"), 1, "tacno jedan izvod se ne slaze"
+    AssertEq BuBrojRedova("sve"), 4, "cetiri grupe: dva racuna pod istim brojem, pa jos dva"
+    ' Izvod 3 je ceo obradjen, pa cip "sa otvorenim" ima sta da iskljuci --
+    ' inace bi propustao sve i bio prazna tvrdnja.
+    AssertEq BuBrojRedova("otvoreni"), 3, "tri izvoda jos imaju otvorenih stavki"
+
+    modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+' RUCNO MAPIRANJE -- pravila koja su do sada zivela Private u frmBankaImport.
+'
+' Najskuplje od njih je FAIL-CLOSED nad listom faktura: prazna lista i PAD
+' ucitavanja izgledaju isto, a znace suprotno -- prazan izbor fakture knjizi
+' AVANS umesto zatvaranja duga.
+Private Sub T_BankaUvoz_RucnoMapiranjePravila()
+    Dim ok As Boolean, greska As String, razlog As String
+    Dim src As Variant, i As Long
+    Dim nasao As Boolean
+
+    ' SMER-KAPIJA PRE KLIKA -- ista koju RequireBimSmer sprovodi u writeru
+    ' (Kupac -> UPLATA, Kooperant -> ISPLATA, OM -> bilo koji CIST smer).
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_UPLATA, BIM_TIP_KUPAC), True, _
+             "kupac prima UPLATU"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_ISPLATA, BIM_TIP_KUPAC), False, _
+             "kupac NE prima isplatu"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_ISPLATA, BIM_TIP_KOOPERANT), True, _
+             "kooperant prima ISPLATU"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_UPLATA, BIM_TIP_KOOPERANT), False, _
+             "kooperant NE prima uplatu"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_UPLATA, BIM_TIP_OM), True, _
+             "OM prima uplatu"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_ISPLATA, BIM_TIP_OM), True, _
+             "OM prima i isplatu"
+    AssertEq modBankaMapiranje.BimSmerOdgovaraTipu(BIM_SMER_NEJASAN, BIM_TIP_OM), False, _
+             "nejasan smer ne prolazi ni za OM"
+
+    ' NERAZRESEN UNOS NIJE TIP. Ljuska Change salje na svaki otkucaj.
+    AssertEq modScrBankaUvoz.BuTipIliPrazno("Koo"), "", _
+             "poluukucan tip nije tip"
+    AssertEq modScrBankaUvoz.BuTipIliPrazno(BIM_TIP_KOOPERANT), BIM_TIP_KOOPERANT, _
+             "razresen tip prolazi"
+
+    ' EFEKTIVNI BLOK: prazan izbor NIJE "nema bloka" nego "uzmi poziv na broj iz
+    ' izvoda". U formi je prazan combo bio DEFAULT slucaj, pa je blok sa 3+
+    ' stavki bez ovog pravila zavrsavao generickom greskom.
+    AssertEq modBankaMapiranje.BimEfektivniBlok(FX_BIM_JAKI_BLOK, ""), FX_BIM_BLOK1_BR, _
+             "prazan izbor uzima poziv na broj iz izvoda"
+    AssertEq modBankaMapiranje.BimEfektivniBlok(FX_BIM_JAKI_BLOK, "BLOK-RUCNO"), "BLOK-RUCNO", _
+             "izbor operatera pobedjuje poziv na broj"
+
+    ' BLOK PREKO GRANICE trazi izricitu potvrdu podele; blok u granicama ne pita.
+    AssertEq modBankaMapiranje.BimBlokTraziPotvrdu(FX_KOOPERANT3, FX_BIM_BLOK3_BR, razlog), _
+             True, "blok sa tri otvorene stavke trazi potvrdu podele"
+    AssertEq (Len(razlog) > 0), True, "razlog imenuje blok -- operater vidi zasto"
+    AssertEq modBankaMapiranje.BimBlokTraziPotvrdu(FX_KOOPERANT, FX_BIM_BLOK1_BR, razlog), _
+             False, "blok sa jednom otvorenom stavkom ne pita nista"
+    AssertEq razlog, "", "kad se ne pita, razloga nema"
+
+    ' PODELA se racuna ISTIM planerom po kome se knjizi, pa operater pre klika
+    ' vidi TACNO onu podelu koja ce biti proknjizena.
+    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
+              FX_KOOPERANT3, FX_BIM_BLOK3_BR, True)
+    AssertEq IsArray(src), True, "blok preko granice ipak vraca kandidate uz allowOverMax"
+    AssertEq UBound(src, 1), 3, "blok ima tri otvorena kandidata"
+    AssertEq (Len(modScrBankaUvoz.TekstPodele(src, 3000)) > 0), True, _
+             "predlog podele nije prazan"
+
+    ' FAKTURE ZA RUCNO MAPIRANJE: samo one sa otvorenim saldom, a "otvoreno" u
+    ' listi mora da bude ISTO ono koje writer racuna -- prikaz i knjizenje jedan
+    ' izvor.
+    '
+    ' Kupac se bira PAZLJIVO: FX_KUPAC do ovog testa vise nema nijednu otvorenu
+    ' fakturu, jer je raniji test (uplata na fakturu) zatvorio FX_FAKTURA u
+    ' celosti. Tvrdnja vezana za njega bi merila posledicu REDOSLEDA testova,
+    ' ne pravilo. FX_KUPAC2 i njegova FAK-TEST-N se ne diraju ni u jednom testu.
+    src = modBankaMapiranje.GetFaktureZaBimMapiranje(FX_KUPAC2, ok, greska)
+    AssertEq ok, True, "citanje faktura je uspelo"
+    AssertEq greska, "", "uspesno citanje ne prijavljuje gresku"
+    AssertEq IsArray(src), True, "kupac sa neplacenom fakturom je dobija u listi"
+    AssertEq (RedSaVrednoscu(src, 1, FX_FAK_NEPL) > 0), True, _
+             "neplacena faktura je ponudjena za rucno mapiranje"
+    AssertEq RedSaVrednoscu(src, 1, FX_FAKTURA), 0, _
+             "faktura DRUGOG kupca nije u listi"
+    AssertEq RedSaVrednoscu(src, 1, FX_FAK_STORNO), 0, _
+             "stornirana faktura nije u listi za mapiranje"
+    For i = 1 To UBound(src, 1)
+        AssertEq CDbl(src(i, 3)), _
+                 modBankaMapiranje.GetOtvorenoNaFakturi(CStr(src(i, 1))), _
+                 "otvoreno u listi = otvoreno koje racuna writer (" & CStr(src(i, 1)) & ")"
+    Next i
+
+    ' ZATVORENA FAKTURA NE ULAZI. FAK-TEST-P je placena u samom fixture-u
+    ' (jedina uplata koja nosi FakturaID), pa ovo ne zavisi od redosleda.
+    AssertEq modBankaMapiranje.GetOtvorenoNaFakturi(FX_FAK_PLAC), 0, _
+             "preduslov: placena faktura nema otvoreno"
+    src = modBankaMapiranje.GetFaktureZaBimMapiranje(FX_KUPAC, ok, greska)
+    AssertEq ok, True, "citanje faktura drugog kupca je proslo"
+    AssertEq RedSaVrednoscu(src, 1, FX_FAK_PLAC), 0, _
+             "placena faktura nije u listi za mapiranje"
+    If IsArray(src) Then
+        For i = 1 To UBound(src, 1)
+            AssertEq (CDbl(src(i, 3)) > 0), True, _
+                     "svaka ponudjena faktura ima otvoreno (" & CStr(src(i, 1)) & ")"
+        Next i
+    End If
+
+    ' PRAZNA LISTA UZ USPESNO CITANJE je druga polovina fail-closed pravila:
+    ' prazno sme da znaci "nema faktura" SAMO kad je citanje proslo.
+    src = modBankaMapiranje.GetFaktureZaBimMapiranje("KUP-NE-POSTOJI", ok, greska)
+    AssertEq ok, True, "citanje je proslo i za kupca kog nema"
+    AssertEq IsArray(src), False, "kupac bez faktura dobija praznu listu, bez greske"
+
+    ' FAIL-CLOSED. Pad ucitavanja se u testu ne moze izazvati bez lomljenja
+    ' seme, pa se meri kroz seam -- ali meri se BAS ODLUKA koju RucnoKupac cita.
+    AssertEq modScrBankaUvoz.Scr_BuFaktureStanjeTest(False), False, _
+             "pad ucitavanja ZAUSTAVLJA rucno mapiranje kupca -- prazan izbor bi bio avans"
+    AssertEq modScrBankaUvoz.Scr_BuFaktureStanjeTest(True), True, _
+             "uredno procitana lista pusta mapiranje"
+
+    ' BLOKOVI kooperanta -- bez ponavljanja, iako blok ima tri otkupne stavke.
+    src = modBankaMapiranje.GetBlokoviZaBimMapiranje(FX_KOOPERANT3)
+    AssertEq IsArray(src), True, "kooperant ima blokove"
+    For i = LBound(src) To UBound(src)
+        If CStr(src(i)) = FX_BIM_BLOK3_BR Then nasao = True
+    Next i
+    AssertEq nasao, True, "blok sa tri stavke je u listi"
+    AssertEq UBound(src) - LBound(src) + 1, 1, _
+             "tri otkupne stavke istog bloka daju JEDAN broj bloka"
+
+    modScrBankaUvoz.Scr_BuTestReset
 End Sub

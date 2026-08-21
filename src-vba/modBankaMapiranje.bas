@@ -69,6 +69,30 @@ Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
 ' MapBankaImportAsKooperantBlockManual_TX allowManyCandidates).
 Public Const MAX_BLOK_KANDIDATA As Long = 2
 
+' Vrednosti kolone Obradjeno (v. zaglavlje modula). Do sada su bile literali na
+' desetak mesta u ovom modulu; nova mesta ih citaju odavde, da ekran (koji je
+' UI, a ne domen) ne bi nosio "Da" / "Skip" kao svoj podatak. Postojeci pisci se
+' NE diraju -- to je zaseban, mehanicki posao.
+Public Const BIM_OBR_NOV As String = ""
+Public Const BIM_OBR_DA As String = "Da"
+Public Const BIM_OBR_SKIP As String = "Skip"
+Public Const BIM_OBR_ERROR As String = "Error"
+
+' TIP RUCNOG MAPIRANJA -- bira KOJI writer se zove.
+'
+' Vrednosti su one koje frmBankaImport.cmbMapTip stvarno koristi. BIM_MAPTIP_*
+' iz modConfig se NE uzimaju: oznaceni su komentarom "MapTip values suggested"
+' i ne koristi ih nijedan modul -- mrtve su. (Nalaz, ne ispravka: brisanje
+' mrtvih konstanti je zaseban posao.)
+Public Const BIM_TIP_KUPAC As String = "Kupac"
+Public Const BIM_TIP_KOOPERANT As String = "Kooperant"
+Public Const BIM_TIP_OM As String = "OM"
+
+' Sta bi jak kljuc zatvorio -- v. BimJakiKljucInfo.
+Public Const BIM_CILJ_FAKTURA As String = "FAKTURA"
+Public Const BIM_CILJ_AVANS As String = "AVANS"
+Public Const BIM_CILJ_BLOK As String = "BLOK"
+
 ' Smer stavke izvoda - JEDAN klasifikator za citaoce (preview u formi) i pisce
 ' (RequireBimSmer). Bez zajednickog koda su preview i writer imali razlicit
 ' ugovor: preview je gledao samo "ima li uplate/isplate", pa je red sa OBA iznosa
@@ -1529,7 +1553,6 @@ Public Function CountStrongKeyReadyBankaImport() As Long
     Dim isplata As Double
     Dim konto As String
     Dim poziv As String
-    Dim fakturaID As String
 
     data = GetBankaImportOpen()
     If IsEmpty(data) Then Exit Function
@@ -1547,14 +1570,11 @@ Public Function CountStrongKeyReadyBankaImport() As Long
         konto = CStr(NzBIM(data(i, colKonto), ""))
         poziv = CStr(NzBIM(data(i, colPoziv), ""))
 
-        If uplata > 0 And isplata = 0 Then
-            If ResolveStrongKupacByKeys(konto, poziv, fakturaID) <> "" Then
-                CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
-            End If
-        ElseIf isplata > 0 And uplata = 0 Then
-            If ResolveStrongKooperantByKeys(konto, poziv) <> "" Then
-                CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
-            End If
+        ' Odluka je izdvojena u BimJakKljucSpreman -- isto pravilo koje po redu
+        ' primenjuje i citac mreze. Dve grane koje su ovde stajale su bile
+        ' jedini opis tog pravila, pa bi ga citac morao prepisati.
+        If BimJakKljucSpreman(uplata, isplata, konto, poziv) Then
+            CountStrongKeyReadyBankaImport = CountStrongKeyReadyBankaImport + 1
         End If
     Next i
 
@@ -1575,6 +1595,485 @@ EH:
 
     CountStrongKeyReadyBankaImport = 0
     Err.Raise errNum, SRC, "Source=" & errSrc & " | " & errDesc
+End Function
+
+' ============================================================
+' JAKI KLJUC PO REDU -- JEDNO PRAVILO ZA BROJAC I ZA MREZU
+'
+' Odluka "da li bi jaki kljucevi zavrsili ovaj red" je do sada zivela SAMO kao
+' dve grane u petlji CountStrongKeyReadyBankaImport. Citac mreze (ekran Uvoz
+' izvoda) trazi istu odluku po redu, pa bi je morao prepisati -- a prepisana
+' kopija se razidje. Isti obrazac kao PrijemnicaDostupna izdvojena iz
+' IsPrijemnicaAvailableForFaktura.
+'
+' Vraca 0-bazirano:
+'   0 smer      BIM_SMER_UPLATA | BIM_SMER_ISPLATA | BIM_SMER_NEJASAN
+'   1 partnerID KupacID / KooperantID; "" = jak kljuc NIJE razresen
+'   2 fakturaID samo za uplatu razresenu preko poziva na broj, inace ""
+'   3 ciljTip   BIM_CILJ_* ili ""
+'
+' PAZNJA: "spreman po jakom kljucu" NIJE isto sto i "auto ce uspeti". Blok sa
+' 3+ otvorenih stavki ima jednoznacnog kooperanta (pa jeste spreman), a
+' raspodela ga svejedno odbija sa ERR_BMAP_MANUAL_REQUIRED. Brojac je oduvek
+' takav; mreza se mora slagati SA BROJACEM, ne sa ishodom knjizenja.
+Public Function BimJakiKljucInfo(ByVal uplata As Double, ByVal isplata As Double, _
+                                 ByVal partnerKonto As String, _
+                                 ByVal pozivNaBroj As String) As Variant
+    Dim smer As String
+    Dim partnerID As String
+    Dim fakturaID As String
+    Dim ciljTip As String
+
+    smer = ClassifyBimSmer(uplata, isplata)
+
+    Select Case smer
+        Case BIM_SMER_UPLATA
+            partnerID = ResolveStrongKupacByKeys(partnerKonto, pozivNaBroj, fakturaID)
+            If Len(partnerID) > 0 Then
+                If Len(fakturaID) > 0 Then
+                    ciljTip = BIM_CILJ_FAKTURA
+                Else
+                    ciljTip = BIM_CILJ_AVANS
+                End If
+            End If
+
+        Case BIM_SMER_ISPLATA
+            partnerID = ResolveStrongKooperantByKeys(partnerKonto, pozivNaBroj)
+            If Len(partnerID) > 0 Then ciljTip = BIM_CILJ_BLOK
+    End Select
+
+    BimJakiKljucInfo = Array(smer, partnerID, fakturaID, ciljTip)
+End Function
+
+' Kratka forma iste odluke -- ovo je ono sto brojac pita.
+Public Function BimJakKljucSpreman(ByVal uplata As Double, ByVal isplata As Double, _
+                                   ByVal partnerKonto As String, _
+                                   ByVal pozivNaBroj As String) As Boolean
+    Dim info As Variant
+    info = BimJakiKljucInfo(uplata, isplata, partnerKonto, pozivNaBroj)
+    BimJakKljucSpreman = (Len(CStr(info(1))) > 0)
+End Function
+
+' Je li stavka jos u redu za mapiranje. ISTO pravilo koje primenjuje
+' GetBankaImportOpen (sve sto nije "Da" ni "Skip"), izdvojeno da ga cip ekrana
+' i brojac znacke ne bi prepisivali.
+Public Function BimOtvoren(ByVal obradjeno As String) As Boolean
+    Dim s As String
+    s = Trim$(obradjeno)
+    BimOtvoren = (s <> BIM_OBR_DA) And (s <> BIM_OBR_SKIP)
+End Function
+
+' Slaze li se smer stavke sa izabranim tipom mapiranja.
+'
+' ISTO pravilo koje RequireBimSmer sprovodi u writeru (Kupac -> UPLATA,
+' Kooperant -> ISPLATA, OM -> bilo koji CIST smer). Ovde stoji da bi ekran mogao
+' da odbije PRE klika, kao sto je legacy preview odbijao pre klika -- writer
+' svoju kapiju zadrzava, ovo je nadopuna, ne zamena.
+Public Function BimSmerOdgovaraTipu(ByVal smer As String, ByVal tip As String) As Boolean
+    Select Case Trim$(tip)
+        Case BIM_TIP_KUPAC
+            BimSmerOdgovaraTipu = (smer = BIM_SMER_UPLATA)
+        Case BIM_TIP_KOOPERANT
+            BimSmerOdgovaraTipu = (smer = BIM_SMER_ISPLATA)
+        Case BIM_TIP_OM
+            ' OM prima i uplatu i isplatu; odbija se samo nejasan smer.
+            BimSmerOdgovaraTipu = (smer <> BIM_SMER_NEJASAN)
+    End Select
+End Function
+
+' CETIRI BROJKE ZA ZONU -- ono sto legacy forma drzi u RefreshTopKpis i
+' ComputeBankaMapState: dva odvojena Private prolaza kroz istu tabelu. Ovde je
+' jedan prolaz i bez ijednog resolvera, jer ovo zove i brojac znacke.
+'
+' Vraca 0-bazirano:
+'   0 otvorenih   1 mapiranih ("Da")   2 ukupno nestorniranih
+'   3 zbir uplata OTVORENIH   4 zbir isplata OTVORENIH
+'
+' Uplate i isplate se sabiraju nad OTVORENIM redovima -- isto kao legacy, koji
+' ih racuna nad m_Data (rezultat GetBankaImportOpen). To je "koliko novca jos
+' ceka da bude proknjizeno", ne promet izvoda.
+Public Function GetBankaImportKpi() As Variant
+    Const SRC As String = "GetBankaImportKpi"
+
+    On Error GoTo EH
+
+    Dim otvorenih As Long, mapiranih As Long, ukupno As Long
+    Dim zbirU As Double, zbirI As Double
+
+    GetBankaImportKpi = Array(0, 0, 0, 0#, 0#)
+
+    Dim data As Variant
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cObr As Long, cUpl As Long, cIspl As Long
+    cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+    cUpl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    cIspl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+
+    Dim i As Long
+    Dim obr As String
+
+    For i = 1 To UBound(data, 1)
+        ukupno = ukupno + 1
+        obr = Trim$(CStr(NzBIM(data(i, cObr), "")))
+
+        If obr = BIM_OBR_DA Then mapiranih = mapiranih + 1
+
+        If BimOtvoren(obr) Then
+            otvorenih = otvorenih + 1
+            zbirU = zbirU + CDbl(NzBIM(data(i, cUpl), 0#))
+            zbirI = zbirI + CDbl(NzBIM(data(i, cIspl), 0#))
+        End If
+    Next i
+
+    GetBankaImportKpi = Array(otvorenih, mapiranih, ukupno, zbirU, zbirI)
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' ============================================================
+' REDOVI MREZE -- ekran Uvoz izvoda (Faza E/17)
+'
+' Ekran ne cita tabele sam. Ovde se ne odlucuje NISTA novo: smer racuna
+' ClassifyBimSmer, jak kljuc BimJakiKljucInfo, otvorenost BimOtvoren.
+'
+' Vraca 1-bazirano (1 To n, 1 To 14):
+'    1 BankaImportID  PRAZNO kad je ID dvosmislen (v. IdIliPrazno)
+'    2 BrojDokumenta      3 BrojRacuna        4 DatumTransakcije
+'    5 Partner            6 PozivNaBroj       7 Uplata
+'    8 Isplata            9 Obradjeno        10 Otvoren (Boolean)
+'   11 Smer              12 JakKljuc (Boolean)
+'   13 CiljTip           14 CiljOpis
+'   15 BankaImportID SIROV -- ono sto u tabeli PISE.
+'      Kolona 1 je PROVEREN identitet (prazan kad je dvosmislen), a mreza
+'      mora da prikaze i dvosmislen ID; da prikaz cita kolonu 1, takav red
+'      bi u listi ostao BEZ oznake i operater ne bi znao ni koji je.
+'
+' CENA: jak kljuc se racuna SAMO za otvorene redove, i to istim resolverima
+' koje frmBankaImport vec zove po redu pri svakom osvezavanju liste
+' (CountStrongKeyReadyBankaImport). Obradjeni i preskoceni redovi ne placu
+' nista -- njih vise nema sta da se mapira.
+Public Function GetBankaImportForGrid() As Variant
+    Const SRC As String = "GetBankaImportForGrid"
+
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    ' Brojac ide nad SIROVOM tabelom: i storniran red cini ID dvosmislenim, jer
+    ' ga RequireSingleRow -- koja na kraju odlucuje -- takodje vidi.
+    Dim brojac As Object
+    Set brojac = modFaktura.BrojacIdova(TBL_BANKA_IMPORT, COL_BIM_ID)
+
+    data = ExcludeStornirano(data, TBL_BANKA_IMPORT)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cID As Long, cBrDok As Long, cRac As Long, cDatTx As Long
+    Dim cPart As Long, cKonto As Long, cPoziv As Long
+    Dim cUpl As Long, cIspl As Long, cObr As Long
+
+    cID = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ID, SRC)
+    cBrDok = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_DOKUMENTA, SRC)
+    cRac = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_BROJ_RACUNA, SRC)
+    cDatTx = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_DATUM_TRANSAKCIJE, SRC)
+    cPart = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER, SRC)
+    cKonto = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_PARTNER_KONTO, SRC)
+    cPoziv = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_POZIV_NA_BROJ, SRC)
+    cUpl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_UPLATA, SRC)
+    cIspl = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_ISPLATA, SRC)
+    cObr = RequireColumnIndex(TBL_BANKA_IMPORT, COL_BIM_OBRADJENO, SRC)
+
+    ' Nazivi za predlog. Jednoprolazne mape -- alternativa je LookupValue po redu.
+    Dim fakture As Object
+    Dim kupci As Object
+    Set fakture = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_FAK_BROJ)
+    Set kupci = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+
+    Dim outA() As Variant
+    Dim i As Long, n As Long
+    Dim uplata As Double, isplata As Double
+    Dim poziv As String, obr As String
+    Dim otvoren As Boolean
+    Dim info As Variant
+    Dim ciljTip As String, ciljOpis As String, partnerID As String, fakturaID As String
+
+    ReDim outA(1 To UBound(data, 1), 1 To 15)
+
+    For i = 1 To UBound(data, 1)
+        uplata = CDbl(NzBIM(data(i, cUpl), 0#))
+        isplata = CDbl(NzBIM(data(i, cIspl), 0#))
+        poziv = CStr(NzBIM(data(i, cPoziv), ""))
+        obr = Trim$(CStr(NzBIM(data(i, cObr), "")))
+        otvoren = BimOtvoren(obr)
+
+        ciljTip = ""
+        ciljOpis = ""
+
+        If otvoren Then
+            info = BimJakiKljucInfo(uplata, isplata, _
+                                    CStr(NzBIM(data(i, cKonto), "")), poziv)
+            partnerID = CStr(info(1))
+            fakturaID = CStr(info(2))
+            ciljTip = CStr(info(3))
+
+            Select Case ciljTip
+                Case BIM_CILJ_FAKTURA
+                    ciljOpis = fakturaID
+                    If Not fakture Is Nothing Then
+                        If fakture.Exists(fakturaID) Then ciljOpis = CStr(fakture(fakturaID))
+                    End If
+
+                Case BIM_CILJ_AVANS
+                    ciljOpis = partnerID
+                    If Not kupci Is Nothing Then
+                        If kupci.Exists(partnerID) Then ciljOpis = CStr(kupci(partnerID))
+                    End If
+
+                Case BIM_CILJ_BLOK
+                    ' Blok JESTE poziv na broj iz izvoda (AutoBlockNoForBim), pa
+                    ' se ne trazi jos jednom -- vec je u redu.
+                    ciljOpis = Trim$(poziv)
+            End Select
+        Else
+            info = Array(ClassifyBimSmer(uplata, isplata), "", "", "")
+        End If
+
+        n = n + 1
+        outA(n, 1) = modFaktura.IdIliPrazno(brojac, Trim$(CStr(data(i, cID))))
+        outA(n, 2) = CStr(NzBIM(data(i, cBrDok), ""))
+        outA(n, 3) = CStr(NzBIM(data(i, cRac), ""))
+        outA(n, 4) = data(i, cDatTx)
+        outA(n, 5) = CStr(NzBIM(data(i, cPart), ""))
+        outA(n, 6) = poziv
+        outA(n, 7) = uplata
+        outA(n, 8) = isplata
+        outA(n, 9) = obr
+        outA(n, 10) = otvoren
+        outA(n, 11) = CStr(info(0))
+        outA(n, 12) = (Len(CStr(info(1))) > 0)
+        outA(n, 13) = ciljTip
+        outA(n, 14) = ciljOpis
+        outA(n, 15) = Trim$(CStr(data(i, cID)))
+    Next i
+
+    If n = 0 Then Exit Function
+    GetBankaImportForGrid = outA
+    Exit Function
+
+EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`, a
+    ' svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao "nema redova".
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' ============================================================
+' RUCNO MAPIRANJE -- pravila izdvojena iz frmBankaImport
+'
+' Forma ih cita iz svojih combo-a, ekran iz polja zone. Pravilo je isto, pa
+' zivi ovde. frmBankaImport se NE dira (zadrzava svoju kopiju, kao frmOtkup i
+' frmAgrohemija -- katalog par. 5 / 7.4).
+' ============================================================
+
+' Blok koji ce rucno mapiranje stvarno upotrebiti: izbor operatera ako postoji,
+' inace poziv na broj iz izvoda. Prazan izbor NIJE "nema bloka" nego "uzmi ono
+' sto pise u izvodu" -- forma je to naucila tako sto je prazan combo bio DEFAULT
+' slucaj, pa je blok sa 3+ stavki zavrsavao generickom greskom.
+Public Function BimEfektivniBlok(ByVal bankaImportID As String, _
+                                 ByVal izabranBlok As String) As String
+    If Len(Trim$(izabranBlok)) > 0 Then
+        BimEfektivniBlok = Trim$(izabranBlok)
+    Else
+        BimEfektivniBlok = AutoBlockNoForBim(bankaImportID)
+    End If
+End Function
+
+' Trazi li blok izricitu potvrdu podele (3+ otvorenih stavki). Svaka DRUGA
+' greska se PROPAGIRA: "previse kandidata" se ne sme pomesati sa padom seme ili
+' nedostajucom kolonom -- prvo je odluka operatera, drugo je kvar.
+Public Function BimBlokTraziPotvrdu(ByVal kooperantID As String, _
+                                    ByVal brojBloka As String, _
+                                    ByRef outPoruka As String) As Boolean
+    Dim errNum As Long
+    Dim errDesc As String
+    Dim errSrc As String
+    Dim probni As Variant
+
+    outPoruka = ""
+
+    On Error Resume Next
+    probni = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka)
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    If errNum <> 0 Then Err.Clear
+    On Error GoTo 0
+
+    If errNum = 0 Then Exit Function
+
+    If errNum = ERR_BMAP_MANUAL_REQUIRED Then
+        outPoruka = errDesc
+        BimBlokTraziPotvrdu = True
+        Exit Function
+    End If
+
+    Err.Raise errNum, errSrc, errDesc
+End Function
+
+' Otvorene fakture kupca za rucno mapiranje uplate -- sa FAIL-CLOSED zastavicom.
+'
+' Prazna lista i PAD ucitavanja izgledaju isto, a znace suprotno: prazan izbor
+' fakture znaci "knjizi kao AVANS". Zato outOK mora da stigne do pozivaoca --
+' operater ne sme da potvrdi avans na osnovu liste koja nije procitana.
+' Otvoreni iznos racuna GetOtvorenoNaFakturi, isti koji koristi i pisac pri
+' raspodeli uplate -- prikaz i knjizenje jedan izvor.
+'
+' Vraca (1 To n, 1 To 3): FakturaID | BrojFakture | Otvoreno
+Public Function GetFaktureZaBimMapiranje(ByVal kupacID As String, _
+                                         ByRef outOK As Boolean, _
+                                         ByRef outGreska As String) As Variant
+    Const SRC As String = "GetFaktureZaBimMapiranje"
+
+    Dim errNum As Long
+    Dim errDesc As String
+
+    outOK = True
+    outGreska = ""
+
+    On Error GoTo EH
+
+    If Len(Trim$(kupacID)) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cFID As Long, cBroj As Long, cKup As Long
+    cFID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, SRC)
+    cKup = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+
+    Dim buf() As Variant
+    Dim i As Long, n As Long
+    Dim fid As String
+    Dim otvoreno As Double
+
+    ReDim buf(1 To UBound(data, 1), 1 To 3)
+
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKup))) = Trim$(kupacID) Then
+            fid = CStr(data(i, cFID))
+            otvoreno = GetOtvorenoNaFakturi(fid)
+            If otvoreno > 0.009 Then
+                n = n + 1
+                buf(n, 1) = fid
+                buf(n, 2) = CStr(NzBIM(data(i, cBroj), ""))
+                buf(n, 3) = otvoreno
+            End If
+        End If
+    Next i
+
+    If n = 0 Then Exit Function
+
+    Dim outA() As Variant
+    Dim r As Long, c As Long
+    ReDim outA(1 To n, 1 To 3)
+    For r = 1 To n
+        For c = 1 To 3
+            outA(r, c) = buf(r, c)
+        Next c
+    Next r
+
+    GetFaktureZaBimMapiranje = outA
+    Exit Function
+
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    ' NE dize se dalje: pozivalac treba da nastavi da radi, ali sa zastavicom
+    ' koja kaze da praznoj listi NE sme da veruje.
+    outOK = False
+    outGreska = "[" & CStr(errNum) & "] " & errDesc
+    GetFaktureZaBimMapiranje = Empty
+End Function
+
+' Brojevi otkupnih blokova kooperanta, bez ponavljanja i bez storniranih.
+' Vraca 1-bazirani niz stringova ili Empty.
+Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
+    Const SRC As String = "GetBlokoviZaBimMapiranje"
+
+    On Error GoTo EH
+
+    If Len(Trim$(kooperantID)) = 0 Then Exit Function
+
+    Dim data As Variant
+    data = GetTableData(TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    data = ExcludeStornirano(data, TBL_OTKUP)
+    If IsEmpty(data) Then Exit Function
+
+    Dim cKoop As Long, cBrDok As Long
+    cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+
+    Dim d As Object
+    Set d = CreateObject("Scripting.Dictionary")
+
+    Dim i As Long
+    Dim broj As String
+    For i = 1 To UBound(data, 1)
+        If Trim$(CStr(data(i, cKoop))) = Trim$(kooperantID) Then
+            broj = Trim$(CStr(NzBIM(data(i, cBrDok), "")))
+            If Len(broj) > 0 Then
+                If Not d.Exists(broj) Then d.Add broj, True
+            End If
+        End If
+    Next i
+
+    If d.count = 0 Then Exit Function
+
+    Dim outA() As Variant
+    Dim k As Variant
+    Dim n As Long
+    ReDim outA(1 To d.count)
+    For Each k In d.keys
+        n = n + 1
+        outA(n) = CStr(k)
+    Next k
+
+    GetBlokoviZaBimMapiranje = outA
+    Exit Function
+
+EH:
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 Private Function AutoMapIncomingKupac(ByVal bankaImportID As String, Optional ByVal strongOnly As Boolean = False) As String
