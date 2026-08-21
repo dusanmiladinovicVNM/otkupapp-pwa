@@ -320,6 +320,7 @@ Public Sub RunAllTests()
     RunOne 107
     RunOne 108
     RunOne 109
+    RunOne 110
 
     SetTestMode prevMode
     WriteResultFile
@@ -461,6 +462,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 107: TestName = "T_BankaUvoz_CipJakihPratiBrojac"
         Case 108: TestName = "T_BankaUvoz_IzvodiSuAgregatPoRacunu"
         Case 109: TestName = "T_BankaUvoz_RucnoMapiranjePravila"
+        Case 110: TestName = "T_ZonaBankaUvoz_PoljaIRaspored"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -578,6 +580,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 107: T_BankaUvoz_CipJakihPratiBrojac
         Case 108: T_BankaUvoz_IzvodiSuAgregatPoRacunu
         Case 109: T_BankaUvoz_RucnoMapiranjePravila
+        Case 110: T_ZonaBankaUvoz_PoljaIRaspored
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6897,4 +6900,65 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
              "tri otkupne stavke istog bloka daju JEDAN broj bloka"
 
     modScrBankaUvoz.Scr_BuTestReset
+End Sub
+
+
+' ZONA SE STVARNO GRADI I RASPOREDJUJE.
+'
+' Ovaj test postoji zbog jednog compile kvara koji nijedan drugi nije mogao da
+' vidi: RasporediPolja je koristila GAP, koja je u modOtkupUI PRIVATE. VBA takvu
+' gresku prijavljuje tek kad se procedura PRVI PUT IZVRSI -- a nijedan test do
+' tada nije crtao zonu ovog ekrana, pa je suite bila zelena, a Excel je na uvozu
+' javio "Variable not defined". Sve ostale tvrdnje o ekranu rade nad citacima i
+' pravilima, gde zone nema.
+'
+' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
+' masinerija obrise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao kao
+' "greska bez opisa".
+Private Sub T_ZonaBankaUvoz_PoljaIRaspored()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String, koopNema As String, omVisak As String
+    Dim visina As Single
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaBu", True)
+    z.width = 1200: z.Height = 300
+    modScrBankaUvoz.Scr_Build z
+
+    For Each nm In Array("buBg", "buCap", "buHint", "buLnB", _
+                         "buKL0", "buKV0", "buKL3", "buKV3", _
+                         "scrBuTip", "scrBuPartner", "scrBuCilj")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Kombo u zoni MORA biti polje (okvir nm + kontrola nmT): panel za izbor
+    ' (modOtkupUI.FindCombo) trazi bas taj oblik. Gola kontrola bi imala
+    ' strelicu koja "ne radi" i listu koja se ne otvara.
+    For Each nm In Array("scrBuTip", "scrBuPartner", "scrBuCilj")
+        If KontrolaPostoji(z, CStr(nm)) Then
+            If Not KontrolaPostoji(z.Controls(CStr(nm)), CStr(nm) & "T") Then _
+                nema = nema & " " & CStr(nm) & "T"
+        End If
+    Next nm
+
+    ' KOOPERANT: cilj je blok otkupa, pa sva tri polja rade.
+    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, "", ""
+    visina = modScrBankaUvoz.Scr_Layout(z, 1200, 300)
+    For Each nm In Array("scrBuTip", "scrBuPartner", "scrBuCilj")
+        If Not VidljivaKontrola(z, CStr(nm)) Then koopNema = koopNema & " " & CStr(nm)
+    Next nm
+
+    ' OM: ni faktura ni blok se ne biraju, pa se polje cilja GASI. Polje koje ne
+    ' radi nista poziva da se u njega nesto upise.
+    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_OM, "", ""
+    modScrBankaUvoz.Scr_Layout z, 1200, 300
+    If VidljivaKontrola(z, "scrBuCilj") Then omVisak = "scrBuCilj"
+
+    modScrBankaUvoz.Scr_BuTestReset
+    Unload f
+
+    AssertEq nema, "", "zona uvoza izvoda nema nijednu kontrolu manje"
+    AssertEq (visina > 0), True, "Scr_Layout prijavljuje visinu zone"
+    AssertEq koopNema, "", "za kooperanta su upaljena sva tri polja"
+    AssertEq omVisak, "", "za OM je polje cilja UGASENO"
 End Sub

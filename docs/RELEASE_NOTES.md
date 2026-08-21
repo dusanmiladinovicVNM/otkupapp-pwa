@@ -4983,3 +4983,9 @@ headless testovi nisu mogli da vide: prazna kolona datuma, odsečen naslov
 mreže, negativan zbir u podnožju, objašnjenje koje je naleglo na traku ispod
 zone, interna šifra stavke u prvoj koloni (izbačena — tu je sada broj izvoda),
 i pečat verzije koji je pokazivao stariji build nego što je uvezen.
+
+Sedmi nalaz je došao sa compile kapije: raspored zone koristio je konstantu koja
+je u ljusci privatna. Uz ispravku je dodat test koji zonu **stvarno gradi i
+raspoređuje**, pa je taj put od sada pokriven — do tada ga nijedan test nije
+prolazio. `RunAllTests` je sada **110 testova, 0 palih**, uz **dvadeset**
+sabotaža.

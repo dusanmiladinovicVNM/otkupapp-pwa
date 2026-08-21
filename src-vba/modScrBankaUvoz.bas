@@ -1026,8 +1026,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     ' ljuska crta odmah po zavrsetku zone. Staje u prostor izmedju poslednjeg
     ' polja i brojki; kad tog prostora nema, sklanja se -- Label ne prelama, pa
     ' bi inace istekao preko brojki.
-    hintX = x3 + BU_FLD_W + GAP
-    hintW = kpiX - GAP - hintX
+    ' Razmak je EKRANOV (BU_FLD_GAP). modOtkupUI.GAP je Private Const -- ovaj
+    ' modul ga ne vidi, a VBA to javi tek kad se procedura prvi put izvrsi.
+    hintX = x3 + BU_FLD_W + BU_FLD_GAP
+    hintW = kpiX - BU_FLD_GAP - hintX
     z.Controls("buHint").Left = hintX
     z.Controls("buHint").top = BU_Y_HINT
     z.Controls("buHint").Visible = (hintW >= BU_HINT_MIN)

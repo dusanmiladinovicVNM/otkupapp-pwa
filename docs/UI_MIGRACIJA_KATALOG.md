@@ -1477,7 +1477,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–109** u `modTest` i **devetnaest** sabotaža, uz nove fixture redove
+Testovi **104–110** u `modTest` i **dvadeset** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **jedanaest** stavki izvoda u **četiri** grupe
 `(broj + račun)` i tri otkupne stavke istog bloka.
 
@@ -1507,6 +1507,7 @@ Svaki fixture red ima razlog:
 | `T_BankaUvoz_CipJakihPratiBrojac` | čip „jaki ključevi" i `CountStrongKeyReadyBankaImport` vide **isti** skup; „sve" je unija tri stanja; značka = čip „za obradu" = `GetBankaImportOpen` | `banka-uvoz-cip-jaki-prolazi-sve`, `banka-uvoz-znacka-broji-mapirane`, `banka-uvoz-obradjeno-guta-preskoceno` |
 | `T_BankaUvoz_IzvodiSuAgregatPoRacunu` | grupa je `(broj + račun)`; zbirovi se **uzimaju sa reda, ne sabiraju**; legacy red bez saldo podataka nije neslaganje | `banka-uvoz-izvod-kljuc-bez-racuna`, `banka-uvoz-saldo-se-sabira`, `banka-uvoz-legacy-red-je-razlika` |
 | `T_BankaUvoz_RucnoMapiranjePravila` | smer-kapija se slaže sa writerom; prazan izbor bloka uzima poziv na broj; blok preko granice traži potvrdu; fail-closed nad listom faktura | `banka-uvoz-om-prima-nejasan-smer`, `banka-uvoz-prazan-blok-ostaje-prazan`, `banka-uvoz-fakture-fail-open`, `banka-uvoz-fakture-i-zatvorene` |
+| `T_ZonaBankaUvoz_PoljaIRaspored` | zona se STVARNO gradi i raspoređuje; sve kontrole postoje; kombo je polje (`nm` + `nmT`); polje cilja je ugašeno za OM | `banka-uvoz-om-polje-cilja-radi` |
 
 Tvrdnja koja nosi najviše: **broj redova koje propušta čip „jaki ključevi" mora
 biti identičan onome što vraća `CountStrongKeyReadyBankaImport`** — isti oblik
@@ -1518,9 +1519,9 @@ ovo je jedino što bi to primetilo.
 `BuRadnjeZaListu`, `BuKoloneZaListu`), ne kroz `Scr_Lista` — isti razlog kao
 §8.8: ugovor svake liste mora da se meri bez prebacivanja stanja ekrana.
 
-**Dvosmerni dokaz je pušten za svih devetnaest**: svaka sabotaža obara **tačno
+**Dvosmerni dokaz je pušten za svih dvadeset**: svaka sabotaža obara **tačno
 jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
-`RunAllTests` **109 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
+`RunAllTests` **110 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
 
 ### 9.10 Nalazi iz sesije
@@ -1623,6 +1624,32 @@ je sada broj izvoda.
 **Pečat je opet lagao.** Sidebar je pisao `v6-ui-176` dok je ekranski modul bio
 `v6-ui-177`, pa se iz smoke-a nije moglo videti da li je nov kod uopšte uvezen —
 tačno ono što je §8.10/R3 zatvarao. `OTKUI_BUILD` je podignut.
+
+#### Sedmi nalaz: `Private Const` iz tuđeg modula, i rupa koju je otvorio
+
+Posle prve runde ispravki compile je pukao na uvozu: **`Variable not defined`**
+nad `GAP` u `RasporediPolja`. `modOtkupUI.GAP` je **`Private Const`** — susedni
+`PAD` je `Public`, pa je propust bio lak. Ispravka je jedna reč (ekran ima svoj
+`BU_FLD_GAP`), ali zanimljivo je **zašto je prošlo kroz sve kapije**:
+
+- `vba_check` zna da ime `GAP` u repou postoji, ali **ne prati vidljivost** —
+  nema pojam „`Private` u drugom modulu".
+- `RunAllTests` je bio **zelen**. VBA „`Variable not defined`" prijavljuje tek
+  kad se procedura **prvi put izvrši**, a ovo je greška u telu `RasporediPolja`
+  — procedure koju **nijedan test nije zvao**, jer sve ostale tvrdnje o ekranu
+  rade nad čitačima i pravilima, gde zone nema. (Za razliku od dupliranog
+  `Const SRC`, koji je greška na nivou modula i obara ga odmah.)
+
+Zato uz ispravku ide **test 110**, koji zonu stvarno gradi (`Scr_Build`) i
+raspoređuje (`Scr_Layout`) nad pravom formom — isti obrazac kao
+`T_ZonaAgro_PoljaPostojeIPrateRezim`. Time je taj put od sada pokriven, a uz
+njega se tvrdi i pravilo koje se drugačije ne može izmeriti: **polje cilja je
+ugašeno za OM**.
+
+Provera vidljivosti je puštena i nad celim ekranskim modulom (skripta u
+scratchpad-u, ne u repou): posle ispravke **nula** identifikatora koje modul
+koristi a koji su `Private` drugde. Proširenje `vba_check`-a na tu proveru je
+zaseban posao, sa svojim dvosmernim dokazom.
 
 **Jedan nalaz nije ovog ekrana** i ide u zaseban PR: traka „Nema izabrane
 otpremnice…" vidi se na svakom ekranu, jer `modOtkupUI:1735` odlučuje po

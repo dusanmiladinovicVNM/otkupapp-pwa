@@ -1801,6 +1801,17 @@ SABOTAZE = {
         "stornirana faktura ne ulazi u listu",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
+    # Za OM se ne bira ni faktura ni blok, pa se polje cilja GASI: polje koje
+    # ne radi nista poziva operatera da u njega nesto upise. Ovo je uz to
+    # jedina sabotaza koja PROLAZI kroz gradnju i raspored zone -- put na kom
+    # se compile greske u RasporediPolja uopste i vide.
+    "banka-uvoz-om-polje-cilja-radi": (
+        "modScrBankaUvoz.bas",
+        "    z.Controls(\"scrBuCilj\").Visible = (IzabraniTip() <> BIM_TIP_OM)\n",
+        "    z.Controls(\"scrBuCilj\").Visible = True\n",
+        "T_ZonaBankaUvoz_PoljaIRaspored",
+        "polje cilja je ugaseno za OM",
+    ),
     # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
     # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
     # greske, bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
