@@ -788,12 +788,29 @@ SEF_CONFIG = {
     "LICENSE_NEXT_CHECK": "",
     "LICENSE_STATUS": "",
     "LICENSE_HWM": "",
+    # TEST-KRITICAN CONFIG SE PINUJE, ne nasledjuje se od donora.
+    #
+    # tblSEFConfig je u KEEP_ROWS (brise se sve osim kataloga), pa je do sada
+    # svaki kljuc koji fixture NE postavi ostajao onakav kakav je bio u donoru.
+    # Ista suite je zato davala razlicit rezultat na dve sveske, i to je vise
+    # PR-ova nosio kao 'dva crvena ali nisu moja':
+    #   DEFAULT_SORTA_VOCA -> ApplyDefaultProizvod popuni combo, golden ocekuje prazan
+    #   KES_ISPLATE        -> IsKesIsplate gasi granu 'isplata iz OM avansa'
+    # Prazan string je i dalje 'nije postavljeno' za ApplyDefaultProizvod, ali je
+    # sada ZAPISANO prazno, pa donorska vrednost ne moze da procuri.
+    "DEFAULT_VRSTA_VOCA": "",
+    "DEFAULT_SORTA_VOCA": "",
+    "KES_ISPLATE": "YES",
 }
 
-# DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se NAMERNO ne postavljaju: bez njih
-# ApplyDefaultProizvod ostavlja combo-e prazne (frmOtkup ga zove pod
+# DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):
+# ApplyDefaultProizvod tada ostavlja combo-e prazne (frmOtkup ga zove pod
 # On Error Resume Next), pa Initialize ne okida auto-cenu i stanje forme je
 # deterministicno za golden snapshot.
+#
+# Do sada su bili samo IZOSTAVLJENI, a to nije isto: tblSEFConfig je u
+# KEEP_ROWS, pa je donorova vrednost prezivljavala i golden je padao na
+# svesci gde je sorta bila podesena.
 
 EXCEL_EPOCH = datetime.date(1899, 12, 30)
 

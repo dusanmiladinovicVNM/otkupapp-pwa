@@ -1071,7 +1071,7 @@ ona korpu prazni, pa i ona ide kroz isti kanal.
 
 ### 8.8 Verifikacija
 
-Testovi **97–101** u `modTest` i **četrnaest** sabotaža, uz nove fixture redove
+Testovi **97–103** u `modTest` i **šesnaest** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`:
 tri fakture (`FAK-TEST-N` neplaćena drugog kupca, `FAK-TEST-P` plaćena u
 celosti, `FAK-TEST-X` stornirana), jedna uplata po fakturi (jedina u fixture-u
@@ -1125,3 +1125,108 @@ posao sa svojim dvosmernim dokazom, a ne prilog uz ekran.
 **Pouka za patch-skripte nad `src-vba/`:** svaka zamena mora da tvrdi broj
 pogodaka. Nezaštićen `replace` je isti razred greške kao `sed -i` nad CRLF —
 tiho pogodi više nego što je traženo.
+
+### 8.10 Review PR #217: tri ispravke (`v6-ui-176`)
+
+Tri nalaza iz review-a. Prva dva su moja regresija, treći je nasleđen i ovim se
+konačno zatvara.
+
+#### R1 — `LogErr` briše `Err`, pa se greška mora čitati **pre** njega
+
+Tri nova čitača su završavala sa:
+
+```vb
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
+```
+
+`modLogError.LogError` počinje sa `On Error Resume Next`, a **svaka `On Error`
+naredba u VBA briše `Err`**. Posle `LogErr` je `Err.Number = 0` i opis prazan, pa
+gornje postane `Err.Raise 0, SRC, ""` — originalna greška prestane da postoji.
+
+Posledica nije rušenje nego **tihi gubitak**: `RequireColumnIndex` uredno digne
+grešku zbog nedostajuće kolone, čitač je proguta u prazno, i `LoadGridFromScreen`
+to vidi kao „nema redova" umesto kao pad šeme. To ruši fail-closed read model
+koji je Storno već dobio.
+
+Ispravan oblik je **već bio u istom fajlu** (`CreateFaktura`, `CreateFaktura_TX`,
+`UpdateFakturaStatus`) — čitači ga nisu ponovili.
+
+Uz tri čitača popravljen je i **`PrintFaktura`**, koji je isti kvar nosio od
+ranije. Ulazi u istu ispravku jer ga sada zove radnja ekrana `fkprint`, pa bi
+operater na pad štampe dobio poruku bez razloga.
+
+#### R2 — kucanje po polju kupca je praznilo celu korpu
+
+Ljuska `Change` šalje ekranu **na svaki znak**, a `GetComboID` daje stabilan ID
+samo dok je stavka stvarno izabrana (`ListIndex >= 0`). Čim operater krene da
+kuca, `ListIndex` padne na `-1` i fallback iz parcijalnog teksta vrati `""`.
+
+Uslov je bio `If nov = mKorpaKupac Then Exit Function` — a `"" <> "KUP-A"`, pa je
+**prvo otkucano slovo bacilo celu neproknjiženu korpu**, i to a da drugi kupac
+nije ni izabran. Komentar iznad koda je opisivao pravilo koje kod nije sprovodio.
+
+Pravilo je izdvojeno u `FkKupacPromenjen(nov, stari)`: **prazan ID nije „drugi
+kupac" nego nerazrešen unos**. Ako operater obriše tekst do praznog, korpa ostaje
+vezana za prethodnog kupca — bezbedno, jer `IzradiFakturu` ionako odbija rad bez
+razrešenog `KupacID`-a, a kad se stvarno izabere drugi kupac korpa se tada uredno
+prazni.
+
+#### R3 — pečat verzije je konačno podignut
+
+`OTKUI_BUILD` je stajao na `v6-ui-173` dok je `modUiKit` bio `v6-ui-175`, a ovaj
+ekran `v6-ui-176`. Pečat postoji da bi se u smoke-u odmah videlo **da li je pravi
+kod uopšte uvezen** — a takav je tvrdio treću stvar. Podignut je na `v6-ui-176`.
+
+To je **jedina linija diffa u `modOtkupUI`** u ovom PR-u, i razlog joj nije
+„ekran Fakture" nego „pečat mora da govori istinu". `StaraKomponenta` poredi sa
+`OTKUI_MIN_BUILD`, ne sa `OTKUI_BUILD`, pa promena ništa ne pomera.
+
+#### Fixture više ne nasleđuje test-kritičan config
+
+`make_fixture` čuva `tblSEFConfig` (`KEEP_ROWS`), pa je svaki ključ koji fixture
+ne postavi ostajao **donorov**. Ista suite je zato davala različit rezultat na
+dve sveske, i to je nekoliko PR-ova nosilo kao „dva crvena ali nisu moja":
+
+| Ključ | Šta je kvario |
+|---|---|
+| `DEFAULT_SORTA_VOCA` | `ApplyDefaultProizvod` napuni combo, a golden očekuje prazan |
+| `KES_ISPLATE` | `IsKesIsplate` gasi granu „isplata iz OM avansa", pa kapija ćuti |
+
+Oba se sada **pinuju** (prazno, odnosno `YES`). Prazan string je i dalje „nije
+postavljeno" za `ApplyDefaultProizvod`, ali je sada **zapisano** prazno, pa
+donorova vrednost ne može da procuri.
+
+Rezultat: `RunAllTests` **103 testa, 0 palih** — prvi put bez zatečenih crvenih.
+
+Pušten je i **pun set** (`run_vba.py --all`), jer ovaj PR dira i `modOtkupUI`
+(pečat) i putanje grešaka u `modFaktura`: **15 suite-ova OK**, tri `BLIND`
+(bez fail-gate-a, po katalogu), i dve crvene — `RunGoogleSyncSmokeSuite` i
+`RunMasterSyncSmokeSuite`. Obe padaju **identično sa izmenama sklonjenim**
+(`git stash`), traže Google kredencijale kojih u headless runu nema, i ne
+dodiruju nijedan fajl iz ovog PR-a.
+
+#### Zašto static provera za R1 **nije** ušla
+
+Review je predložio i usku static proveru: `LogErr` pa čitanje `Err.*` u istom
+`EH` bloku = nalaz. Napisana je i **puštena nad celim repoom: 135 nalaza.**
+
+Uzorak pokazuje da su i stvarni i lažni:
+
+- `modStorno.bas:1149`, `modScrOporavak.bas:288` — **stvarni**; opis greške ide u
+  poruku operateru i biće prazan.
+- `modSetup.bas:1213` — **lažan**; `Err.Description` je tamo *argument* samog
+  `LogError` poziva, samo u nastavku reda (`_`), pa se izračunava **pre** poziva.
+
+135 nalaza sa nepoznatim udelom lažnih ne sme u feature PR — `vba_check` bi
+postao crven za sve, a CI bi pao na `main`-u. To je isti precedent kao „406
+lažnih nalaza" pri pokušaju širenja `ARNOST`-a (`.claude/rules/testovi.md`).
+
+Provera je zato **vraćena**, a nalaz ostaje zapisan: traži spajanje nastavaka reda
+pre skeniranja i trijažu ~135 mesta, sa svojim `--self-test` slučajevima. To je
+zaseban PR.
+
+Umesto nje, R1 čuva **test 103** (`T_Fak_GreskaNePreziviLogErr`), koji meri pravi
+put: štampa nepostojeće fakture mora da stigne do pozivaoca sa brojem i opisom
+koji imenuje fakturu, ne kao nula i prazan string.

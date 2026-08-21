@@ -533,8 +533,15 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' Isti razlog kao kod citaca: LogErr brise Err. Zateceno, ali ulazi u
+    ' popravku jer stampu sada zove radnja ekrana (fkprint), koja operateru
+    ' prikazuje bas ovaj opis -- prazan opis ne kaze nista.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr "PrintFaktura"
-    Err.Raise Err.Number, "PrintFaktura", Err.description
+    Err.Raise errNum, "PrintFaktura", errDesc
 End Sub
 
 Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
@@ -863,8 +870,15 @@ Public Function GetPrijemniceZaFakturisanjeForGrid(ByVal kupacID As String) As V
     Exit Function
 
 EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' IZDATE FAKTURE. Stornirane izbacuje ExcludeStornirano, uplate sabira
@@ -948,8 +962,15 @@ Public Function GetFaktureForGrid() As Variant
     Exit Function
 
 EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function
 
 ' Je li OVA instalacija uopste povezana na SEF. Bez baze i kljuca svaka SEF
@@ -1046,6 +1067,13 @@ Public Function GetFaktureSEFForGrid() As Variant
     Exit Function
 
 EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr SRC
-    Err.Raise Err.Number, SRC, Err.description
+    Err.Raise errNum, SRC, errDesc
 End Function

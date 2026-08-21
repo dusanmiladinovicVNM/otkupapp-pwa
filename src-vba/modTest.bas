@@ -275,6 +275,8 @@ Public Sub RunAllTests()
     RunOne 99
     RunOne 100
     RunOne 101
+    RunOne 102
+    RunOne 103
 
     SetTestMode prevMode
     WriteResultFile
@@ -408,6 +410,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 99: TestName = "T_Fak_DostupnostSePrenosiURedu"
         Case 100: TestName = "T_Fak_KorpaZnackaITraka"
         Case 101: TestName = "T_Fak_CipoviPrateStatusFakture"
+        Case 102: TestName = "T_Fak_NerazresenKupacNeDiraKorpu"
+        Case 103: TestName = "T_Fak_GreskaNePreziviLogErr"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -517,6 +521,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 99: T_Fak_DostupnostSePrenosiURedu
         Case 100: T_Fak_KorpaZnackaITraka
         Case 101: T_Fak_CipoviPrateStatusFakture
+        Case 102: T_Fak_NerazresenKupacNeDiraKorpu
+        Case 103: T_Fak_GreskaNePreziviLogErr
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6281,4 +6287,104 @@ Private Sub T_Fak_CipoviPrateStatusFakture()
                      True, "cip 'neplacene' propusta otvorenu fakturu " & iD
         Next j
     Next kup
+End Sub
+
+' NERAZRESEN UNOS NIJE PROMENA KUPCA. Ljuska Change salje ekranu na SVAKI
+' znak, a GetComboID daje stabilan ID samo dok je stavka stvarno izabrana
+' (ListIndex >= 0); cim operater krene da kuca, fallback iz parcijalnog teksta
+' vrati "". Bez ove razlike bi prvo otkucano slovo bacilo celu neproknjizenu
+' korpu -- a da drugi kupac nije ni izabran.
+'
+' Ovo je gubitak operaterskog rada, ne pokvaren podatak, ali je jedina stvar
+' na ovom ekranu koja bez traga unistava ono sto je covek vec uradio.
+' Znacka se ovde NE tvrdi iako je operater i nju gubio: to je posao testa
+' 100. Prepisana tvrdnja bi znacila da sabotaza znacke obara DVA testa, pa
+' dvosmerni dokaz vise ne bi pokazivao 'tacno jedan test, po imenu'.
+Private Sub T_Fak_NerazresenKupacNeDiraKorpu()
+    ' PRAVILO, samo po sebi.
+    AssertEq modScrFakture.FkKupacPromenjen("", FX_KUPAC), False, _
+             "prazan ID nije promena kupca -- to je nerazresen unos"
+    AssertEq modScrFakture.FkKupacPromenjen("   ", FX_KUPAC), False, _
+             "ni sam razmak nije promena kupca"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC2, FX_KUPAC), True, _
+             "razresen DRUGI kupac jeste promena"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC, FX_KUPAC), False, _
+             "isti kupac nije promena"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC, ""), True, _
+             "prvi izbor kupca jeste promena"
+
+    ' NAD PRAVOM KORPOM, istim putem kojim ide Change dogadjaj.
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(FX_KUPAC), True, _
+             "preduslov: kupac je izabran"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), "", _
+             "preduslov: prva stavka je usla u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK1, "20/150326", 100, 40, True), "", _
+             "preduslov: druga stavka je usla u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, "preduslov: u korpi su dve stavke"
+
+    ' KUCANJE: nerazresen unos NE SME nista da dirne.
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(""), False, _
+             "nerazresen unos se ne tretira kao promena kupca"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, _
+             "korpa prezivljava kucanje po polju kupca"
+
+    ' STVARAN IZBOR DRUGOG KUPCA: tek tada se korpa prazni.
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(FX_KUPAC2), True, _
+             "razresen drugi kupac JESTE promena"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, _
+             "korpa se prazni tek kad je drugi kupac stvarno izabran"
+
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' GRESKA SE CITA PRE LogErr-a, INACE JE VISE NEMA.
+'
+' modLogError.LogError pocinje sa `On Error Resume Next`, a svaka On Error
+' naredba u VBA BRISE Err objekat. Zato `Err.Raise Err.Number, SRC,
+' Err.Description` POSLE LogErr-a postane `Err.Raise 0, SRC, ""` -- pozivalac
+' dobije prazan opis, a citac mreze koji je trebalo da propagira pad seme
+' stigne do ekrana kao 'nema redova'.
+'
+' Test ima dva dela: prvo dokazuje da je opasnost STVARNA (LogErr brise Err),
+' pa onda meri PRAVI put -- modFaktura.PrintFaktura nad fakturom koje nema.
+' Bas tu funkciju zove radnja ekrana 'Stampaj', pa je ovo i tvrdnja o tome
+' sta operater vidi kad stampa padne.
+Private Sub T_Fak_GreskaNePreziviLogErr()
+    Dim n1 As Long, d1 As String, n2 As Long
+    Dim n3 As Long, d3 As String
+
+    ' --- 1) opasnost je stvarna: LogErr BRISE Err ---
+    On Error Resume Next
+    Err.Raise vbObjectError + 9911, "T_Fak", "kontrolna greska"
+    n1 = Err.Number
+    d1 = Err.description
+    AssertEq (n1 <> 0), True, "preduslov: kontrolna greska je podignuta"
+    AssertEq (Len(d1) > 0), True, "preduslov: kontrolna greska ima opis"
+    LogErr "T_Fak_GreskaNePreziviLogErr"
+    n2 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    AssertEq n2, 0, _
+             "LogErr BRISE Err -- zato se greska mora citati PRE njega"
+
+    ' --- 2) pravi put: stampa fakture koje nema ---
+    ' RequireSingleFakturaRow digne gresku PRE ijednog upisa, pa je ovo
+    ' bezbedno; PrintFaktura je jedan od cetiri EH bloka koji su popravljeni.
+    On Error Resume Next
+    modFaktura.PrintFaktura "FAK-NE-POSTOJI"
+    n3 = Err.Number
+    d3 = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (n3 <> 0), True, "greska je uopste stigla do pozivaoca"
+    ' NAJVAZNIJE: opis prezivljava. Prazan opis znaci da je Err citan POSLE
+    ' LogErr-a -- tada operater na ekranu vidi radnju koja 'ne radi', bez razloga.
+    AssertEq (Len(d3) > 0), True, _
+             "opis greske NIJE prazan -- Err je citan PRE LogErr-a"
+    AssertEq (InStr(d3, "FAK-NE-POSTOJI") > 0), True, _
+             "opis imenuje fakturu koje nema, ne neku drugu gresku"
 End Sub

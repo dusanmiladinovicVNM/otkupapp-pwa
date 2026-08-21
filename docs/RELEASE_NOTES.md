@@ -4878,7 +4878,8 @@ neplaćenim fakturama.
   a upiše drugi.
 - **Korpa se prazni kad se promeni kupac**, uz poruku. Faktura ne sme da meša
   prijemnice dva kupca, pa bi takva korpa svakako pukla pri upisu — bolje odmah
-  i glasno.
+  i glasno. **Kucanje po polju kupca korpu ne dira** — tek stvarno izabran drugi
+  kupac je promena; dok se pretražuje, sve što je sakupljeno ostaje.
 - **Prijemnica koja je već fakturisana se odbija sa porukom**, i onda kad joj
   kolona sa brojem fakture izgleda prazna. Takvi redovi postoje u podacima i iz
   liste izgledaju slobodni.
@@ -4889,11 +4890,15 @@ neplaćenim fakturama.
 
 ### Verifikacija
 
-Testovi **97–101** u `modTest` i **četrnaest** novih sabotaža. `RunAllTests`
-**101 test, 2 pala** — oba pada su zatečena: `T_PosleSnimanja_...` (golden vs.
-`DEFAULT_SORTA_VOCA` u donoru) i `T_IsplataValidiraj_...` (OM avans po configu).
-Oba padaju **identično i na netaknutom `main`-u**, provereno nad fixture-om pre
-i posle izmene.
+Testovi **97–103** u `modTest` i **šesnaest** novih sabotaža. `RunAllTests`
+**103 testa, 0 palih.**
+
+Dva pada koja su ranije stajala uz svaki PR (`T_PosleSnimanja_...` i
+`T_IsplataValidiraj_...`) nisu bila ničija regresija nego **donorov config
+koji je curio u fixture**: `make_fixture` čuva `tblSEFConfig`, pa je svaki
+ključ koji fixture ne postavi ostajao onakav kakav je u svesci od koje se
+polazi. `DEFAULT_SORTA_VOCA` i `KES_ISPLATE` se sada **pinuju**, pa ista suite
+daje isti rezultat na svakoj svesci.
 
 Fixture je dobio ono što do sada nije imao: fakture sa brojem, datumom i
 statusom, uplatu vezanu za fakturu, storniranu fakturu i prijemnicu obeleženu

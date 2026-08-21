@@ -350,9 +350,8 @@ Private Function ObradiPromenu(ByVal tag As String) As Boolean
         Case "scrFkKupT"
             nov = IzabraniKupacID()
             ' "chg:" stize na SVAKI otkucaj u polju. Posla ima samo kad se
-            ' ukucano razresilo u DRUGOG kupca -- inace bi svaki znak povukao
-            ' pun prolaz kroz tabele.
-            If nov = mKorpaKupac Then Exit Function
+            ' ukucano RAZRESILO u drugog kupca -- v. FkKupacPromenjen.
+            If Not FkKupacPromenjen(nov, mKorpaKupac) Then Exit Function
             PromeniKupca nov
             ' LJUSKA POVRATNU VREDNOST 'chg:' NE GLEDA -- UiClick zove ScrAct
             ' pa odmah Exit Sub. Ekranu cija lista zavisi od polja zone
@@ -362,6 +361,22 @@ Private Function ObradiPromenu(ByVal tag As String) As Boolean
             ' nema jer nijedna njena lista ne zavisi od polja zone.
             modOtkupUI.RefreshFromData
     End Select
+End Function
+
+' Sme li promena teksta u polju kupca da dirne korpu.
+'
+' PRAZAN ID NIJE 'drugi kupac' NEGO NERAZRESEN UNOS. GetComboID daje stabilan
+' ID samo dok je stavka stvarno izabrana (ListIndex >= 0); cim operater krene
+' da kuca, ListIndex padne na -1 i fallback iz parcijalnog teksta izvuce "".
+' Ljuska Change salje na SVAKI znak, pa bi bez ove provere prvo otkucano slovo
+' bacilo celu neproknjizenu korpu -- i to a da drugi kupac nije ni izabran.
+'
+' Ako operater obrise tekst do praznog, korpa ostaje vezana za prethodnog
+' kupca. To je bezbedno: IzradiFakturu ionako odbija rad bez razresenog
+' KupacID-a, a kad se stvarno izabere drugi kupac korpa se tada uredno prazni.
+Public Function FkKupacPromenjen(ByVal nov As String, ByVal stari As String) As Boolean
+    If Len(Trim$(nov)) = 0 Then Exit Function
+    FkKupacPromenjen = (Trim$(nov) <> Trim$(stari))
 End Function
 
 ' Korpa ne prezivljava promenu kupca. CreateFaktura odbija prijemnicu drugog
@@ -1309,6 +1324,16 @@ Public Sub Scr_FkKupacTestSet(ByVal kupacID As String)
     mKupacTest = kupacID
     Scr_ResetCache
 End Sub
+
+' Promena u polju kupca, bez ljuske i bez comboa. Ide kroz ISTU odluku
+' (FkKupacPromenjen) i isti PromeniKupca kao pravi Change dogadjaj.
+' Sta seam NE pokriva: da posle toga ide modOtkupUI.RefreshFromData -- forme
+' u testu nema. To stoji u kodu, na jednom mestu, odmah ispod ove odluke.
+Public Function Scr_FkKupacUnosTest(ByVal nov As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_FkKupacUnosTest = FkKupacPromenjen(nov, mKorpaKupac)
+    If Scr_FkKupacUnosTest Then PromeniKupca nov
+End Function
 
 Public Function Scr_FkKorpaBroj() As Long
     Scr_FkKorpaBroj = Scr_Brojac()

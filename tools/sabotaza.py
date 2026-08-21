@@ -1624,6 +1624,32 @@ SABOTAZE = {
         "doza se zaokruzuje NAGORE na cela pakovanja",
     ),
     # --- EKRAN FAKTURISANJE (Faza E/16) -------------------------------------
+    # Ljuska Change salje ekranu na SVAKI znak, a GetComboID dok se kuca vraca "".
+    # Bez razlike "nerazresen unos" vs "drugi kupac", prvo otkucano slovo baca
+    # celu neproknjizenu korpu -- i to a da drugi kupac nije ni izabran.
+    "fakture-nerazresen-kupac-brise-korpu": (
+        "modScrFakture.bas",
+        "    If Len(Trim$(nov)) = 0 Then Exit Function\n",
+        "    ' SABOTAZA: prazan ID prolazi kao drugi kupac\n",
+        "T_Fak_NerazresenKupacNeDiraKorpu",
+        "nerazresen unos u polju kupca ne dira korpu",
+    ),
+    # LogError pocinje sa `On Error Resume Next`, a svaka On Error naredba brise
+    # Err. Citanje Err-a POSLE LogErr-a daje nulu i prazan opis: pozivalac dobije
+    # gresku bez razloga, a citac mreze pad seme pretvori u "nema redova".
+    # Gadja PrintFaktura, jedan od cetiri popravljena EH bloka -- bas onaj koji
+    # zove radnja ekrana "Stampaj".
+    "fakture-citac-gubi-gresku": (
+        "modFaktura.bas",
+        "    errNum = Err.Number\n"
+        "    errDesc = Err.description\n"
+        "    LogErr \"PrintFaktura\"\n",
+        "    LogErr \"PrintFaktura\"   ' SABOTAZA: Err se cita POSLE loga\n"
+        "    errNum = Err.Number\n"
+        "    errDesc = Err.description\n",
+        "T_Fak_GreskaNePreziviLogErr",
+        "greska se cita PRE LogErr-a, pa opis prezivi do pozivaoca",
+    ),
     # SEF lista se do prvog smoke-a KRILA kad SEF nije podesen. Citanje stanja su
     # kolone tblFakture i ne trazi nikakvu vezu -- kapiju trazi samo RADNJA, i ona
     # je vec ima. Uslovna lista je novi UI cinila UZIM od legacy-ja, koji frmSEF
