@@ -503,7 +503,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 
 ### Faza E — ostali ekrani
 15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, dorada `v6-ui-172`, `modScrAgro`) — v. §7.
-    Ostaju: Fakture, Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
+16. ~~Fakture~~ **URAĐENO** (`v6-ui-176`, `modScrFakture`) — v. §8.
+    Ostaju: Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
     svaki po istom obrascu.
 
 ---
@@ -876,3 +877,370 @@ uklonjene — ostavljene bi tvrdile zatečena ponašanja MSForms-a kao da su ugo
    projektovano.
 
 Sabotaža `ljuska-rez-bez-potvrde` vraća upis na jedan pokušaj bez čitanja.
+
+---
+
+## 8. Fakture — šta je preneto (`v6-ui-176`)
+
+Drugi ekran **Faze E**, stavka 16. Red u registru (`modUiScreens.ScrRows`)
+je postojao od `S3a` — stavka menija se do sada crtala prigušena jer modula
+nije bilo. Ovim se piše modul koji taj red već očekuje; **registar se ne dira**.
+
+### 8.1 Gde je šta završilo
+
+| Legacy (`frmFakturisanje`) | Novo mesto |
+|---|---|
+| `cmbKupac` + `FillComboDisplayID` | polje zone `scrFkKup` (`NewFieldG`) |
+| `btnUnesi_Click` (punjenje `lstPrijemnice`) | lista **ZAFAKT**, čitač `modFaktura.GetPrijemniceZaFakturisanjeForGrid` |
+| `lstPrijemnice` MultiSelect | **korpa** ekrana + kolona oznake + traka u zoni |
+| `chkPrikaziFakturisane` | čip **Fakturisane** na listi ZAFAKT |
+| `btnIzradiFakturu_Click` provere | `modFaktura.CreateFaktura_TX` (nepromenjen) |
+| `CalculateTotal` | `modScrFakture.FkZbirKorpe` (samo prikaz — iznos računa transakcija) |
+| `cmbFaktura` + `FillFaktureZaKupca` | lista **FAKTURE**, čitač `modFaktura.GetFaktureForGrid` |
+| `btnStampaj_Click` | radnja nad redom `fkprint` → `modFaktura.PrintFaktura` |
+| `btnSEF_Click` (otvara `frmSEF`) | lista **SEF** sa pet radnji nad redom |
+| status plaćanja (nigde u legacy-ju) | radnja `fkstat` → `modFaktura.UpdateFakturaStatus` |
+
+Nove rutine za mrežu (ekran ne čita tabele sam):
+`modFaktura.GetPrijemniceZaFakturisanjeForGrid`, `GetFaktureForGrid`,
+`GetFaktureSEFForGrid`, `SEFKonfigurisan`.
+
+Uz njih je iz `IsPrijemnicaAvailableForFaktura` izdvojeno pravilo
+**`modFaktura.PrijemnicaDostupna`** — jedno mesto koje sada dele kapija
+transakcije i čitač mreže. Do sada je stajalo samo u kapiji, pa bi ga čitač
+morao prepisati, a prepisana kopija se razilazi (isti obrazac kao
+`GetAgroAbzugMapa` u §7.8).
+
+### 8.2 Šta ekran uzima od ljuske
+
+Ništa nije napravljeno za ovaj ekran — sve postoji od Faze C i Agrohemije.
+**Diff u `modOtkupUI` je NULA.**
+
+| Potreba | Ljuskin ugovor | Otkad |
+|---|---|---|
+| polje (natpis + okvir + kontrola) | `modOtkupUI.NewFieldG` | `v6-ui-159` |
+| raspored unutar polja | `modOtkupUI.LayoutFieldInner` | `v6-ui-159` |
+| identitet iz reda mreže | `modOtkupUI.GridCell` | `v6-ui-143` |
+| značka uz stavku menija | `modOtkupUI.OsveziNavBrojace` | `v6-ui-172` |
+| skrivena kolona (prioritet 4) | `LayoutGrid` crta do 3 | postoji od početka |
+| status kao znak u redu | kolona vrste `paypill` | `v6-ui-113` |
+| prijava prekoračenja bazena | `modOtkupUI.BazenStaje` | `v6-ui-170` |
+| osvežavanje mreže na zahtev ekrana | `modOtkupUI.RefreshFromData` | `S4b` |
+
+**Jedno mesto gde ugovor ne daje ono što bi se očekivalo:** ljuska **ne gleda**
+povratnu vrednost `chg:` događaja — `UiClick` zove `ScrAct "chg:" & tag` pa
+odmah `Exit Sub`. Za Agrohemiju to ne smeta: nijedna njena lista ne zavisi od
+polja zone. Ovde lista prijemnica **jeste** lista jednog kupca, pa bi bez
+reakcije ostala na prethodnom kupcu do sledećeg klika bilo gde — što izgleda
+kao da izbor kupca ne radi.
+
+Ekran to rešava **kod sebe**: kad se ukucano razreši u *drugog* kupca, sam
+zove `modOtkupUI.RefreshFromData` (javnu od `S4b`). Provera „drugi kupac
+nego prošli put" je bitna — `chg:` stiže na **svaki otkucaj**, pa bi bez nje
+svaki znak povukao pun prolaz kroz tabele. **Ugovor ljuske se ovim ne menja.**
+
+### 8.3 Odluka o SEF-u: radnje nad redom, ne ekran
+
+SEF **ne postaje svoj ekran**. Četiri operacije koje operater radi nad
+**jednom** fakturom (`SendInvoiceToSEF_TX`, `RefreshSEFStatus_TX`,
+`CancelInvoiceOnSEF_TX`, `StornoInvoiceOnSEF_TX`,
+`RecoverStuckSEFSendingInvoice`) su po obliku radnje nad redom, pa tu i idu.
+
+Ali **ne na listu FAKTURE** — nego na **svoju listu**. `MAX_ACT` je 5, a
+lista faktura već nosi dve radnje; pet SEF operacija bi dalo sedam ukupno i
+**višak bi se tiho odsekao** (`RefreshRowActions` radi `Exit For`). Isti kvar
+je već plaćen na listi paleta (`v6-ui-162`). Zasebna lista drži pet radnji
+**tačno na granici bazena**, i to tvrdi test.
+
+`frmSEF` ostaje **operativan i nepromenjen**, i nosi ono što lista ne može:
+event log po fakturi, `PrepareResubmit`, i batch radnje
+(`RecoverAllStuckSEFSendingInvoices`, refresh pending) — nijedna od njih nije
+radnja nad jednim redom. Nijedan `modSEF*` modul nije diran.
+
+#### Kapija na radnji, ne na listi — ispravka posle prvog smoke-a
+
+Prva verzija je listu SEF-a **krila** kad `SEF_BASE_URL` / `SEF_API_KEY` nisu
+upisani u `tblSEFConfig`. Smoke je pokazao zašto to ne valja: na radnoj svesci
+sa fakturama a bez SEF naloga segmenta jednostavno **nema**, bez ijednog
+objašnjenja.
+
+Greška u proceni je bila u tome što lista ima **dva dela, a kapiju traži samo
+jedan**:
+
+| Deo liste | Traži podešen SEF? |
+|---|---|
+| čitanje stanja (`SEFWorkflowState`, SEF ID, poslato, greška) | **ne** — to su kolone `tblFakture` |
+| radnje (pošalji, osveži, otkaži, storno, oporavi) | **da** |
+
+Skrivanje cele liste zbog drugog dela je novi UI činilo **užim od legacy-ja**:
+`frmFakturisanje.btnSEF_Click` otvara `frmSEF` **bezuslovno**, bez ijedne
+provere configa. Operater je i pre ovoga mogao da vidi stanje bez naloga.
+
+Sada: **lista postoji uvek**, a kapija stoji na jednom mestu kroz koje prolazi
+svih pet radnji (`SefID` → `OTKUI_ERR_FK_SEF_OFF`, uz poruku koja kaže i **gde**
+se podešava). `SEFKonfigurisan` je ostao — samo se više ne pita za listu.
+
+Sporedna dobit: test 97 je time postao **jači**. Uslovna lista se mogla tvrditi
+samo granom po `SEFKonfigurisan()`, a fixture je donor-zavisan — pa je ta grana
+bila lutrija. Bezuslovna lista se tvrdi jednom brojkom.
+
+### 8.4 Šta je namerno drugačije od legacy-ja
+
+- **Multiselect → korpa.** Mreža bira jedan red, pa se prijemnice sakupljaju
+  dugmetom. Korpa se vidi na tri mesta: kolona sa kvačicom u samoj listi,
+  traka uz desnu ivicu zone, i značka uz stavku menija. Dvoklik na red
+  prebacuje red u korpu i iz nje — najbliži parnjak klikanju po listi.
+- **`NEPLACENE` je ČIP, ne lista.** To je lista FAKTURE sa filterom po
+  statusu — iste kolone, isti čitač, isti identitet, iste radnje. Zasebna
+  lista bi bila druga kopija istog čitača koja može da se raziđe.
+  (`modNovac.GetOpenFakture` je uz to **po kupcu**, pa ni nije čitač za
+  listu preko svih kupaca — koristi se tamo gde jeste po kupcu: KPI brojka
+  „Neplaćeno" izabranog kupca.)
+- **Nema polja za broj fakture.** Broj dodeljuje transakcija
+  (`CreateFaktura` sam zove `GenerateBrojFakture`, koji je `Private`),
+  operater ga ne bira. Polje sa „predlogom" koji transakcija ignoriše bio bi
+  prikaz koji se garantovano razilazi sa upisanim. Broj stiže u poruci posle
+  upisa i u listi faktura. (`modBrojevi.SuggestNextBroj` fakture ne poznaje —
+  zna `OTK/OTP/ZBR/REV`, i format mu je `N/ddmmyy` po stanici, drugi niz.)
+- **Stavka korpe nosi SAMO `PrijemnicaID`.** `CreateFaktura` svaku drugu
+  vrednost iznova izvodi iz `tblPrijemnica` i eksplicitno veruje samo
+  `stavka(0)`; dodatna polja bi bila mrtav teret koji navodi da se u njih
+  veruje. Legacy prosleđuje pet polja, od kojih se četiri ignorišu.
+- **Korpa se prazni pri promeni kupca**, uz poruku. `CreateFaktura` odbija
+  prijemnicu drugog kupca (greška 1721), pa korpa koja preživi promenu kupca
+  može samo da padne u transakciji.
+- **Status plaćanja se može osvežiti iz ekrana** (`UpdateFakturaStatus`).
+  Legacy tu funkciju ima u modulu, ali je nijedno dugme ne zove.
+- **Kolona „Fakturisano" pokazuje samo broj fakture.** Legacy je u istu
+  kolonu pakovao i `uplaćeno/iznos`; ta dva broja sada imaju svoje kolone u
+  listi FAKTURE, gde im je mesto.
+
+### 8.5 Identitet — pravilo koje je već dvaput plaćeno
+
+Svaka od tri liste nosi identitet u **poslednjoj koloni, prioriteta 4**;
+`LayoutGrid` crta do 3, pa vrednost postoji u modelu a ćelija se nikad ne
+pravi. Radnja je čita kroz `GridCell`. Mape „prikaz → ID" sa strane nema:
+mreža sortira i deli na strane, pa bi svaka takva mapa zastarela na prvi
+klik po zaglavlju.
+
+**Broj fakture se NE resetuje po godini** — za razliku od broja palete.
+`GenerateBrojPalete` vraća goli `Long`, a godina živi u zasebnoj koloni
+`Godina`, pa broj `1` stvarno postoji dvaput. `GenerateBrojFakture` vraća
+`"N/YYYY"` — godina je **u stringu**, pa kolizije po godini nema.
+
+Identitet je svejedno `FakturaID`, iz drugih razloga: ništa u kodu ne brani
+dva reda istog `BrojFakture` (`RequireSingleFakturaRow` čuva **FakturaID**,
+ne broj), a redove bez `/` (uvoz, ručni unos) skener maksimuma tiho
+preskače, pa se broj može ponoviti sa ručno unetim.
+
+**Dvosmislen ID nosi PRAZAN identitet.** `modFaktura.BrojacIdova` broji
+pojave svakog ID-a nad **sirovom** tabelom (i stornirani red čini ID
+dvosmislenim — `FindRows`, koji na kraju odlučuje, i njega vidi), a
+`IdIliPrazno` vraća prazno za sve što nije tačno jedno. Radnja tada
+**odbija** da bira i javlja porukom. Bez toga bi radnja svakako pukla —
+`RequireSingleFakturaRow` i `CreateFaktura` fail-close-uju na duplikat — ali
+kao greška transakcije umesto kao poruka operateru.
+
+**Dostupnost se takođe PRENOSI u redu** (kolona 11, prioritet 4), ne izvodi
+iz prikaza. Prijemnica obeležena kao fakturisana a **bez** `FakturaID` ima
+praznu kolonu fakture: iz prikaza izgleda slobodna, a kapija je odbija. Ko
+dostupnost čita iz onoga što se vidi, ponudi je operateru pa padne u
+transakciji.
+
+### 8.6 Prolazno stanje ima svoj kanal
+
+Korpa **nije** podatak u tabeli, pa „podaci su promenjeni" i „korpa je
+promenjena" nisu ista stvar i ne dele isti kanal — isto pravilo kao §7.9/P2.
+`KorpaPromenjena` je jedno mesto za obe posledice (zona +
+`modOtkupUI.OsveziNavBrojace`) i zove se sa **sva četiri** mesta gde se korpa
+menja: dodavanje, uklanjanje, pražnjenje, upis. Promena kupca je peto —
+ona korpu prazni, pa i ona ide kroz isti kanal.
+
+### 8.7 Šta NIJE preneto
+
+- `frmFakturisanje` i `frmSEF` se **ne gase i ne menjaju** — isto pravilo kao
+  za `frmOtkup`, `frmDokumenta` i `frmAgrohemija` (§5, Faza B; §7.4).
+  Dve kopije poslovne logike postoje namerno.
+- **Avans se i dalje obračunava sam**, unutar `CreateFaktura`
+  (`ApplyAvansToFaktura`). Ekran o tome ne zna ništa i ne prikazuje ga —
+  isto kao legacy.
+- **`PrepareResubmit` i batch SEF radnje** ostaju u `frmSEF` (v. §8.3).
+- **SEF event log** nije prenet: to je istorija po fakturi, a mreža ljuske
+  ima jedan nivo. `frmSEF` ga i dalje pokazuje.
+- **Storno fakture** nije ovde — to je posao ekrana Storno.
+
+### 8.8 Verifikacija
+
+Testovi **97–103** u `modTest` i **šesnaest** sabotaža, uz nove fixture redove
+u `tools/make_fixture.py`:
+tri fakture (`FAK-TEST-N` neplaćena drugog kupca, `FAK-TEST-P` plaćena u
+celosti, `FAK-TEST-X` stornirana), jedna uplata po fakturi (jedina u fixture-u
+koja nosi `FakturaID`), i tri prijemnice (`PRJ-FAK-1` uredno fakturisana,
+`PRJ-FAK-2` obeležena **bez** `FakturaID`, `PRJ-FAK-3` slobodna).
+
+Do sada `tblFakture` nije imao ni broj, ni datum, ni status, a nijedna uplata
+nije bila vezana za fakturu — pa je svaka tvrdnja o listi faktura i čipovima
+radila nad praznim skupom i bila zelena bez pokrića.
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_Fak_UgovorEkrana` | registar, **tri liste bezuslovno**, granice bazena (`MAX_ACT` tačno 5 na SEF-u, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi | `fakture-sef-lista-uslovna`, `fakture-sef-sesta-radnja`, `fakture-cip-sve-nije-prvi` |
+| `T_Fak_IdentitetURedu_NeCrtaSe` | identitet u poslednjoj koloni prioriteta 4; dvosmislen ID → prazno | `fakture-identitet-vidljiv`, `fakture-dvosmislen-prvi-pobedjuje` |
+| `T_Fak_DostupnostSePrenosiURedu` | pravilo `PrijemnicaDostupna`; red **prenosi** dostupnost umesto da je izvodi iz prikaza | `fakture-dostupnost-iz-prikaza`, `fakture-dostupnost-bez-oznake` |
+| `T_Fak_KorpaZnackaITraka` | uklanjanje po identitetu, značka van korpe-liste, traka: najnovije prvo + preliv se prijavljuje | `fakture-korpa-uklanja-prvu`, `fakture-znacka-ne-prati-korpu`, `fakture-traka-najstarije-prvo`, `fakture-traka-bez-preliva` |
+| `T_Fak_CipoviPrateStatusFakture` | `paypill` šifre, čip „plaćene" se slaže sa znakom u redu, čip „neplaćene" se slaže sa `GetOpenFakture` **po svakom kupcu**, stornirana nije u listi | `fakture-prazna-je-placena`, `fakture-nepl-ignorise-status`, `fakture-stornirana-u-listi` |
+
+Tvrdnja koja nosi najviše: **skup faktura koje čip „neplaćene" propušta za
+datog kupca mora biti identičan onome što `modNovac.GetOpenFakture` vraća** —
+isti oblik kao `T_Agro_AbzugMapaPratiPojedinacni`. Pravilo „otvorena faktura"
+živi na dva mesta i može da se raziđe; ovo je jedino što bi to primetilo.
+
+**Čipovi i radnje se čitaju po KLJUČU liste** (`FkCipoviZaListu`,
+`FkRadnjeZaListu`, `FkKoloneZaListu`), ne kroz `Scr_Lista`. Razlog:
+`Scr_Lista` je gate-ovana SEF konfiguracijom, a fixture je **donor-zavisan**
+(`make_fixture` u `KEEP_ROWS` ne briše `tblConfig`), pa bi test vezan za nju
+bio lutrija — zelen na jednom donoru, neizvršen na drugom.
+
+### 8.9 Nalaz iz sesije: `vba_check` ne vidi nedeklarisanu promenljivu
+
+Tokom rada je jedna python patch-skripta nezaštićenim `str.replace` pogodila
+i **tuđu** proceduru (`T_Agro_UgovorEkrana`) i tamo uvela `kv`, koje u njoj
+nije deklarisano. `modTest` ima `Option Explicit`, pa se modul više nije
+kompajlirao.
+
+Simptom nije ličio na uzrok: `vba_check` **zelen**, a `run_vba` visi ~230s pa
+vrati `Exception occurred`, uz Excel zaostao u `[break]`. Isto što
+`sabotaza.py` opisuje kao zamku 4 (komentar posle `_`), samo iz drugog izvora.
+
+Merenje koje je to razrešilo: pokretanje testova **pojedinačno** kroz
+`Application.Run` (svi prolaze) naspram **jednog dugog poziva** (staje na 82).
+Razlika nije bila u testu 82 nego u tome da modul uopšte ne kompajlira, a
+compile dijalog u nevidljivom Excelu nema ko da zatvori.
+
+`vba_check` ovo **ne hvata i ne tvrdi da hvata** — `.claude/rules/testovi.md`
+izričito kaže „ne kompajlira VBA: ne hvata tip-greške ni nedeklarisane
+promenljive". Nalaz se ovde beleži, ne krpi: proširenje checkera je zaseban
+posao sa svojim dvosmernim dokazom, a ne prilog uz ekran.
+
+**Pouka za patch-skripte nad `src-vba/`:** svaka zamena mora da tvrdi broj
+pogodaka. Nezaštićen `replace` je isti razred greške kao `sed -i` nad CRLF —
+tiho pogodi više nego što je traženo.
+
+### 8.10 Review PR #217: tri ispravke (`v6-ui-176`)
+
+Tri nalaza iz review-a. Prva dva su moja regresija, treći je nasleđen i ovim se
+konačno zatvara.
+
+#### R1 — `LogErr` briše `Err`, pa se greška mora čitati **pre** njega
+
+Tri nova čitača su završavala sa:
+
+```vb
+EH:
+    LogErr SRC
+    Err.Raise Err.Number, SRC, Err.Description
+```
+
+`modLogError.LogError` počinje sa `On Error Resume Next`, a **svaka `On Error`
+naredba u VBA briše `Err`**. Posle `LogErr` je `Err.Number = 0` i opis prazan, pa
+gornje postane `Err.Raise 0, SRC, ""` — originalna greška prestane da postoji.
+
+Posledica nije rušenje nego **tihi gubitak**: `RequireColumnIndex` uredno digne
+grešku zbog nedostajuće kolone, čitač je proguta u prazno, i `LoadGridFromScreen`
+to vidi kao „nema redova" umesto kao pad šeme. To ruši fail-closed read model
+koji je Storno već dobio.
+
+Ispravan oblik je **već bio u istom fajlu** (`CreateFaktura`, `CreateFaktura_TX`,
+`UpdateFakturaStatus`) — čitači ga nisu ponovili.
+
+Uz tri čitača popravljen je i **`PrintFaktura`**, koji je isti kvar nosio od
+ranije. Ulazi u istu ispravku jer ga sada zove radnja ekrana `fkprint`, pa bi
+operater na pad štampe dobio poruku bez razloga.
+
+#### R2 — kucanje po polju kupca je praznilo celu korpu
+
+Ljuska `Change` šalje ekranu **na svaki znak**, a `GetComboID` daje stabilan ID
+samo dok je stavka stvarno izabrana (`ListIndex >= 0`). Čim operater krene da
+kuca, `ListIndex` padne na `-1` i fallback iz parcijalnog teksta vrati `""`.
+
+Uslov je bio `If nov = mKorpaKupac Then Exit Function` — a `"" <> "KUP-A"`, pa je
+**prvo otkucano slovo bacilo celu neproknjiženu korpu**, i to a da drugi kupac
+nije ni izabran. Komentar iznad koda je opisivao pravilo koje kod nije sprovodio.
+
+Pravilo je izdvojeno u `FkKupacPromenjen(nov, stari)`: **prazan ID nije „drugi
+kupac" nego nerazrešen unos**. Ako operater obriše tekst do praznog, korpa ostaje
+vezana za prethodnog kupca — bezbedno, jer `IzradiFakturu` ionako odbija rad bez
+razrešenog `KupacID`-a, a kad se stvarno izabere drugi kupac korpa se tada uredno
+prazni.
+
+#### R3 — pečat verzije je konačno podignut
+
+`OTKUI_BUILD` je stajao na `v6-ui-173` dok je `modUiKit` bio `v6-ui-175`, a ovaj
+ekran `v6-ui-176`. Pečat postoji da bi se u smoke-u odmah videlo **da li je pravi
+kod uopšte uvezen** — a takav je tvrdio treću stvar. Podignut je na `v6-ui-176`.
+
+To je **jedina linija diffa u `modOtkupUI`** u ovom PR-u, i razlog joj nije
+„ekran Fakture" nego „pečat mora da govori istinu". `StaraKomponenta` poredi sa
+`OTKUI_MIN_BUILD`, ne sa `OTKUI_BUILD`, pa promena ništa ne pomera.
+
+#### Fixture više ne nasleđuje test-kritičan config
+
+`make_fixture` čuva `tblSEFConfig` (`KEEP_ROWS`), pa je svaki ključ koji fixture
+ne postavi ostajao **donorov**. Ista suite je zato davala različit rezultat na
+dve sveske, i to je nekoliko PR-ova nosilo kao „dva crvena ali nisu moja":
+
+| Ključ | Šta je kvario |
+|---|---|
+| `DEFAULT_SORTA_VOCA` | `ApplyDefaultProizvod` napuni combo, a golden očekuje prazan |
+| `KES_ISPLATE` | `IsKesIsplate` gasi granu „isplata iz OM avansa", pa kapija ćuti |
+
+Oba se sada **pinuju** (prazno, odnosno `YES`). Prazan string je i dalje „nije
+postavljeno" za `ApplyDefaultProizvod`, ali je sada **zapisano** prazno, pa
+donorova vrednost ne može da procuri.
+
+Rezultat: `RunAllTests` **103 testa, 0 palih** — prvi put bez zatečenih crvenih.
+
+Pušten je i **pun set** (`run_vba.py --all`), jer ovaj PR dira i `modOtkupUI`
+(pečat) i putanje grešaka u `modFaktura`: **15 suite-ova OK**, tri `BLIND`
+(bez fail-gate-a, po katalogu), i dve crvene — `RunGoogleSyncSmokeSuite` i
+`RunMasterSyncSmokeSuite`. Obe padaju **identično sa izmenama sklonjenim**
+(`git stash`), traže Google kredencijale kojih u headless runu nema, i ne
+dodiruju nijedan fajl iz ovog PR-a.
+
+#### Zašto static provera za R1 **nije** ušla
+
+Review je predložio i usku static proveru: `LogErr` pa čitanje `Err.*` u istom
+`EH` bloku = nalaz. Napisana je i **puštena nad celim repoom: 135 nalaza.**
+
+Uzorak pokazuje da su i stvarni i lažni:
+
+- `modStorno.bas:1149`, `modScrOporavak.bas:288` — **stvarni**; opis greške ide u
+  poruku operateru i biće prazan.
+- `modSetup.bas:1213` — **lažan**; `Err.Description` je tamo *argument* samog
+  `LogError` poziva, samo u nastavku reda (`_`), pa se izračunava **pre** poziva.
+
+135 nalaza sa nepoznatim udelom lažnih ne sme u feature PR — `vba_check` bi
+postao crven za sve, a CI bi pao na `main`-u. To je isti precedent kao „406
+lažnih nalaza" pri pokušaju širenja `ARNOST`-a (`.claude/rules/testovi.md`).
+
+Provera je zato **vraćena**, a nalaz ostaje zapisan: traži spajanje nastavaka reda
+pre skeniranja i trijažu ~135 mesta, sa svojim `--self-test` slučajevima. To je
+zaseban PR.
+
+Umesto nje, R1 čuva **test 103** (`T_Fak_GreskaNePreziviLogErr`), koji meri pravi
+put: štampa nepostojeće fakture mora da stigne do pozivaoca sa brojem i opisom
+koji imenuje fakturu, ne kao nula i prazan string.
+
+#### 8.11 Kapija operatera: prošla
+
+`Alt+F11 → Debug → Compile VBAProject` je **čist**, i smoke nad pravim podacima
+je prošao: izbor kupca, sakupljanje u fakturu, izrada, lista faktura i SEF lista.
+
+Time je stavka 16 Faze E zatvorena u oba smera — i u onome što headless meri i
+u onome što ne vidi. Automatski verdikt compile-a je i ovaj put bio `NEJASNO`
+(`run_vba` ga preko SendKeys ne ume da pročita), pa je ručna kapija bila jedini
+izvor istine — kao i uvek.
+
+Otvoreno ostaje samo ono što se ovog ekrana ne tiče: `RunGoogleSyncSmokeSuite` i
+`RunMasterSyncSmokeSuite` u punom setu, koje traže Google kredencijale i padaju
+identično na netaknutom `main`-u.

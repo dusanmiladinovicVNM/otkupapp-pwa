@@ -533,8 +533,15 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     Exit Sub
 
 EH:
+    ' Isti razlog kao kod citaca: LogErr brise Err. Zateceno, ali ulazi u
+    ' popravku jer stampu sada zove radnja ekrana (fkprint), koja operateru
+    ' prikazuje bas ovaj opis -- prazan opis ne kaze nista.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
     LogErr "PrintFaktura"
-    Err.Raise Err.Number, "PrintFaktura", Err.description
+    Err.Raise errNum, "PrintFaktura", errDesc
 End Sub
 
 Public Sub UpdateFakturaStatus(ByVal fakturaID As String)
@@ -688,11 +695,13 @@ Private Function IsPrijemnicaAvailableForFaktura(ByVal rowIndex As Long, _
 
     If rowIndex <= 0 Or rowIndex > UBound(data, 1) Then Exit Function
 
-    If Trim$(CStr(data(rowIndex, colStorno))) = "Da" Then Exit Function
-    If Trim$(CStr(data(rowIndex, colFakturisano))) = "Da" Then Exit Function
-    If Trim$(CStr(data(rowIndex, colFakturaID))) <> "" Then Exit Function
-
-    IsPrijemnicaAvailableForFaktura = True
+    ' Pravilo je JEDNO i zivi u PrijemnicaDostupna. Do v6-ui-175 je stajalo
+    ' samo ovde, pa ga citac mreze novog UI-ja nije imao odakle da uzme -- a
+    ' prepisana kopija u ekranu bi se razisla sa kapijom koja stvarno odlucuje.
+    IsPrijemnicaAvailableForFaktura = PrijemnicaDostupna( _
+        CStr(data(rowIndex, colStorno)), _
+        CStr(data(rowIndex, colFakturisano)), _
+        CStr(data(rowIndex, colFakturaID)))
     Exit Function
 
 EH:
@@ -718,3 +727,353 @@ EH:
               "Neispravan oblik stavke fakture. Ocekuje se da stavka(0) bude PrijemnicaID."
 End Function
 
+' ============================================================
+' CITACI ZA MREZU NOVOG UI-JA (v6-ui-176, Faza E/16)
+'
+' Ekran modScrFakture ne cita tabele sam -- isto pravilo i isti oblik kao
+' modAgrohemija.GetMagacinPrometForGrid / GetAgroDugoviForGrid.
+'
+' IDENTITET IDE U RED. Svaki citac vraca ID u PRVOJ koloni; ekran ga stavlja u
+' skrivenu kolonu mreze (prioritet 4, mreza crta do 3). Prazan ID znaci
+' DVOSMISLENO -- dva reda istog ID-a u tabeli -- i tada radnja ODBIJA da bira.
+' To nije teorija: RequireSingleFakturaRow i CreateFaktura vec fail-close-uju
+' na duplikat, pa bi radnja nad takvim redom svakako pukla; ovako pukne sa
+' porukom operateru umesto sa greskom transakcije.
+' ============================================================
+
+' Pravilo "sme li ova prijemnica u fakturu", izdvojeno iz
+' IsPrijemnicaAvailableForFaktura da bi ga imao i citac mreze. Prima VREDNOSTI
+' celija, ne red -- pa ne mora da cita tabelu po redu (citac je vec ima).
+Public Function PrijemnicaDostupna(ByVal stornirano As String, _
+                                   ByVal fakturisano As String, _
+                                   ByVal fakturaID As String) As Boolean
+    If Trim$(stornirano) = "Da" Then Exit Function
+    If Trim$(fakturisano) = "Da" Then Exit Function
+    If Trim$(fakturaID) <> "" Then Exit Function
+    PrijemnicaDostupna = True
+End Function
+
+' Koliko puta se svaki ID pojavljuje u koloni. Duplikat = dvosmislen identitet.
+' JAVNA je zato sto je pravilo, ne pomocna rutina: bez ulaza se "dvosmislen
+' prikaz nosi prazan identitet" moze izmeriti samo tako sto se u fixture
+' namerno ubaci duplikat -- a duplikat PrijemnicaID obara kapije koje o njemu
+' nista ne znaju (RequireSingleFakturaRow, CreateFaktura), pa bi jedan test
+' kupio crvenilo tuceti drugih.
+' Broji se nad SIROVOM tabelom, ne nad filtriranom: FindRows (koji na kraju
+' odlucuje) gleda ceo list, pa i storniran red istog ID-a cini ID dvosmislenim.
+Public Function BrojacIdova(ByVal tbl As String, ByVal colName As String) As Object
+    Dim d As Object, data As Variant, c As Long, i As Long, k As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set BrojacIdova = d
+    data = GetTableData(tbl)
+    If IsEmpty(data) Then Exit Function
+    c = GetColumnIndex(tbl, colName)
+    If c <= 0 Then Exit Function
+    For i = 1 To UBound(data, 1)
+        k = Trim$(CStr(data(i, c)))
+        If Len(k) > 0 Then
+            If d.Exists(k) Then
+                d(k) = CLng(d(k)) + 1
+            Else
+                d(k) = 1
+            End If
+        End If
+    Next i
+End Function
+
+' Identitet reda: prazan kad se ID ponavlja u tabeli.
+Public Function IdIliPrazno(ByVal brojac As Object, ByVal iD As String) As String
+    If Len(iD) = 0 Then Exit Function
+    If brojac Is Nothing Then Exit Function
+    If Not brojac.Exists(iD) Then Exit Function
+    If CLng(brojac(iD)) <> 1 Then Exit Function
+    IdIliPrazno = iD
+End Function
+
+Private Function FakD(ByVal v As Variant) As Double
+    If IsNumeric(v) Then FakD = CDbl(v)
+End Function
+
+' NEFAKTURISANE PRIJEMNICE JEDNOG KUPCA -- korpa ovog ekrana.
+' Filter po kupcu radi POSTOJECI modDokumenta.GetPrijemniceByKupac (on vec
+' izbacuje stornirane); ovde se samo prevodi u redove mreze.
+'
+'   1 PrijemnicaID (identitet) | 2 BrojPrijemnice | 3 BrojZbirne | 4 Datum
+'   5 Klasa | 6 Kolicina | 7 Cena | 8 Vrednost | 9 Dostupna (Boolean)
+'   10 BrojFakture (prazno kad nije fakturisana)
+Public Function GetPrijemniceZaFakturisanjeForGrid(ByVal kupacID As String) As Variant
+    On Error GoTo EH
+
+    If Len(Trim$(kupacID)) = 0 Then
+        GetPrijemniceZaFakturisanjeForGrid = Empty
+        Exit Function
+    End If
+
+    Dim data As Variant
+    data = modDokumenta.GetPrijemniceByKupac(kupacID)
+    If Not IsArray(data) Then
+        GetPrijemniceZaFakturisanjeForGrid = Empty
+        Exit Function
+    End If
+
+    Const SRC As String = "GetPrijemniceZaFakturisanjeForGrid"
+
+    Dim cID As Long, cBroj As Long, cZb As Long, cDat As Long, cKlasa As Long
+    Dim cKol As Long, cCena As Long, cFakt As Long, cFakID As Long, cStorno As Long
+    cID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    cDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
+    cKlasa = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+    cCena = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
+    cFakt = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
+    cFakID = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
+    cStorno = RequireColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO, SRC)
+
+    Dim brojac As Object
+    Set brojac = BrojacIdova(TBL_PRIJEMNICA, COL_PRJ_ID)
+
+    Dim brFak As Object
+    Set brFak = BuildLookupDict(TBL_FAKTURE, COL_FAK_ID, COL_FAK_BROJ)
+
+    Dim outA() As Variant, i As Long, n As Long, iD As String, fakID As String
+    ReDim outA(1 To UBound(data, 1), 1 To 10)
+
+    For i = 1 To UBound(data, 1)
+        iD = Trim$(CStr(data(i, cID)))
+        fakID = Trim$(CStr(data(i, cFakID)))
+        n = n + 1
+        outA(n, 1) = IdIliPrazno(brojac, iD)
+        outA(n, 2) = CStr(data(i, cBroj))
+        outA(n, 3) = CStr(data(i, cZb))
+        outA(n, 4) = data(i, cDat)
+        outA(n, 5) = CStr(data(i, cKlasa))
+        outA(n, 6) = FakD(data(i, cKol))
+        outA(n, 7) = FakD(data(i, cCena))
+        outA(n, 8) = FakD(data(i, cKol)) * FakD(data(i, cCena))
+        outA(n, 9) = PrijemnicaDostupna(CStr(data(i, cStorno)), _
+                                        CStr(data(i, cFakt)), fakID)
+        outA(n, 10) = ""
+        If Len(fakID) > 0 Then
+            If Not brFak Is Nothing Then
+                If brFak.Exists(fakID) Then outA(n, 10) = CStr(brFak(fakID))
+            End If
+        End If
+    Next i
+
+    If n = 0 Then
+        GetPrijemniceZaFakturisanjeForGrid = Empty
+    Else
+        GetPrijemniceZaFakturisanjeForGrid = outA
+    End If
+    Exit Function
+
+EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' IZDATE FAKTURE. Stornirane izbacuje ExcludeStornirano, uplate sabira
+' modNovac.BuildUplataDictByFaktura -- isti primitiv koji koristi i
+' GetOpenFakture, pa se "uplaceno" na dva mesta ne moze razici.
+'
+'   1 FakturaID (identitet) | 2 BrojFakture | 3 Datum | 4 KupacNaziv
+'   5 Iznos | 6 Uplaceno | 7 Preostalo | 8 Status | 9 KupacID
+'
+' Kupac ide i kao NAZIV i kao ID: prikaz trazi naziv, a svako poredjenje
+' (npr. slaganje sa GetOpenFakture, koji radi po kupcu) trazi identitet.
+' Naziv nije identitet -- dva kupca smeju da se zovu isto.
+Public Function GetFaktureForGrid() As Variant
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+    If IsEmpty(data) Then
+        GetFaktureForGrid = Empty
+        Exit Function
+    End If
+
+    Dim brojac As Object
+    Set brojac = BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
+
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+    If IsEmpty(data) Then
+        GetFaktureForGrid = Empty
+        Exit Function
+    End If
+
+    Const SRC As String = "GetFaktureForGrid"
+
+    Dim cID As Long, cBroj As Long, cDat As Long, cKup As Long
+    Dim cIznos As Long, cStatus As Long
+    cID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, SRC)
+    cDat = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM, SRC)
+    cKup = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+    cIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
+    cStatus = RequireColumnIndex(TBL_FAKTURE, COL_FAK_STATUS, SRC)
+
+    Dim uplate As Object
+    Set uplate = BuildUplataDictByFaktura()
+
+    Dim kupci As Object
+    Set kupci = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+
+    Dim outA() As Variant, i As Long, n As Long
+    Dim iD As String, kupID As String, iznos As Double, upl As Double
+    ReDim outA(1 To UBound(data, 1), 1 To 9)
+
+    For i = 1 To UBound(data, 1)
+        iD = Trim$(CStr(data(i, cID)))
+        kupID = Trim$(CStr(data(i, cKup)))
+        iznos = FakD(data(i, cIznos))
+        upl = 0
+        If Not uplate Is Nothing Then
+            If uplate.Exists(iD) Then upl = FakD(uplate(iD))
+        End If
+        n = n + 1
+        outA(n, 1) = IdIliPrazno(brojac, iD)
+        outA(n, 2) = CStr(data(i, cBroj))
+        outA(n, 3) = data(i, cDat)
+        outA(n, 4) = kupID
+        If Not kupci Is Nothing Then
+            If kupci.Exists(kupID) Then outA(n, 4) = CStr(kupci(kupID))
+        End If
+        outA(n, 5) = iznos
+        outA(n, 6) = upl
+        outA(n, 7) = iznos - upl
+        outA(n, 8) = CStr(data(i, cStatus))
+        outA(n, 9) = kupID
+    Next i
+
+    If n = 0 Then
+        GetFaktureForGrid = Empty
+    Else
+        GetFaktureForGrid = outA
+    End If
+    Exit Function
+
+EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+' Je li OVA instalacija uopste povezana na SEF. Bez baze i kljuca svaka SEF
+' radnja moze samo da padne, pa ekran listu SEF-a tada i ne nudi. Config je
+' izvor istine, ne prisustvo modula -- moduli su u svakom buildu.
+Public Function SEFKonfigurisan() As Boolean
+    On Error Resume Next
+    SEFKonfigurisan = (Len(Trim$(GetConfigValue("SEF_BASE_URL"))) > 0) And _
+                      (Len(Trim$(GetConfigValue("SEF_API_KEY"))) > 0)
+    Err.Clear
+End Function
+
+' STANJE ELEKTRONSKIH FAKTURA. SEF kolone se citaju MEKO (GetColumnIndex, ne
+' RequireColumnIndex): sema je izvor istine, a instalacija bez SEF kolona sme
+' da vidi prazan SEF a ne rusenje ekrana. Nazivi su isti literali koje koristi
+' modSEFPersistance -- taj modul se po zadatku ne dira, pa se ni konstante
+' odatle ne mogu uvesti.
+'
+'   1 FakturaID (identitet) | 2 BrojFakture | 3 KupacNaziv | 4 Iznos
+'   5 SEFWorkflowState | 6 SEFDocumentId | 7 SEFSentAt | 8 SEFLastErrorMessage
+Public Function GetFaktureSEFForGrid() As Variant
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetTableData(TBL_FAKTURE)
+    If IsEmpty(data) Then
+        GetFaktureSEFForGrid = Empty
+        Exit Function
+    End If
+
+    Dim brojac As Object
+    Set brojac = BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
+
+    data = ExcludeStornirano(data, TBL_FAKTURE)
+    If IsEmpty(data) Then
+        GetFaktureSEFForGrid = Empty
+        Exit Function
+    End If
+
+    Const SRC As String = "GetFaktureSEFForGrid"
+
+    Dim cID As Long, cBroj As Long, cKup As Long, cIznos As Long
+    cID = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    cBroj = RequireColumnIndex(TBL_FAKTURE, COL_FAK_BROJ, SRC)
+    cKup = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+    cIznos = RequireColumnIndex(TBL_FAKTURE, COL_FAK_IZNOS, SRC)
+
+    Dim cWf As Long, cDoc As Long, cSent As Long, cErr As Long
+    cWf = GetColumnIndex(TBL_FAKTURE, "SEFWorkflowState")
+    cDoc = GetColumnIndex(TBL_FAKTURE, "SEFDocumentId")
+    cSent = GetColumnIndex(TBL_FAKTURE, "SEFSentAt")
+    cErr = GetColumnIndex(TBL_FAKTURE, "SEFLastErrorMessage")
+
+    ' Bez kolone stanja lista nema sta da pokaze -- prazno, ne izmisljeno.
+    If cWf <= 0 Then
+        GetFaktureSEFForGrid = Empty
+        Exit Function
+    End If
+
+    Dim kupci As Object
+    Set kupci = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+
+    Dim outA() As Variant, i As Long, n As Long, iD As String, kupID As String
+    ReDim outA(1 To UBound(data, 1), 1 To 8)
+
+    For i = 1 To UBound(data, 1)
+        iD = Trim$(CStr(data(i, cID)))
+        kupID = Trim$(CStr(data(i, cKup)))
+        n = n + 1
+        outA(n, 1) = IdIliPrazno(brojac, iD)
+        outA(n, 2) = CStr(data(i, cBroj))
+        outA(n, 3) = kupID
+        If Not kupci Is Nothing Then
+            If kupci.Exists(kupID) Then outA(n, 3) = CStr(kupci(kupID))
+        End If
+        outA(n, 4) = FakD(data(i, cIznos))
+        outA(n, 5) = Trim$(CStr(data(i, cWf)))
+        outA(n, 6) = ""
+        outA(n, 7) = ""
+        outA(n, 8) = ""
+        If cDoc > 0 Then outA(n, 6) = Trim$(CStr(data(i, cDoc)))
+        If cSent > 0 Then outA(n, 7) = data(i, cSent)
+        If cErr > 0 Then outA(n, 8) = Trim$(CStr(data(i, cErr)))
+        ' Faktura koja jos nije ni pripremljena za SEF nosi lokalno stanje;
+        ' prazno polje se prikazuje kao ono sto jeste -- neposlata.
+        If Len(CStr(outA(n, 5))) = 0 Then outA(n, 5) = WF_LOCAL_FINALIZED
+    Next i
+
+    If n = 0 Then
+        GetFaktureSEFForGrid = Empty
+    Else
+        GetFaktureSEFForGrid = outA
+    End If
+    Exit Function
+
+EH:
+    ' Err se cita PRE LogErr-a: LogError pocinje sa `On Error Resume Next`,
+    ' a svaka On Error naredba brise Err. Bez ovoga bi Err.Raise dobio nulu i
+    ' prazan opis, pa bi pad seme stigao do ekrana kao 'nema redova'.
+    Dim errNum As Long
+    Dim errDesc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function

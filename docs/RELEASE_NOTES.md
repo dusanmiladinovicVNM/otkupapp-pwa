@@ -4810,3 +4810,106 @@ RunAllTests 96 testova, 2 pala -- oba na PODACIMA DONORA, ne na kodu
 > **Compile** (`Alt+F11 → Debug → Compile VBAProject`) ostaje operateru, i
 > **smoke** nad novim rezom kroz sve ekrane — to je promena koju headless ne
 > vidi.
+
+---
+
+## v2.63.0 — `v6-ui-176` · Fakturisanje na novom UI-ju (Faza E, stavka 16)
+
+Drugi ekran Faze E. Stavka **Fakturisanje** u meniju više nije prigušena.
+
+### Šta operater dobija
+
+**Jedan ekran umesto forme i njenog SEF-a.** Levo se bira kupac, u mreži se vide
+njegove prijemnice, a sve ostalo — izdate fakture i stanje elektronskih faktura —
+stoji pod prekidačem iznad mreže. Nema više „vrati se pa otvori drugu formu".
+
+**Tri liste:**
+
+| Lista | Šta pokazuje |
+|---|---|
+| **Za fakturisanje** | prijemnice izabranog kupca; kvačica označava šta je već ubačeno u fakturu, poslednja kolona pokazuje broj fakture ako je prijemnica već fakturisana |
+| **Fakture** | izdate fakture: broj, datum, kupac, iznos, **uplaćeno**, **ostatak** i status u boji |
+| **SEF** | stanje elektronskih faktura: šta je poslato, šta je odbijeno, šta je zaglavljeno |
+
+**Sakupljanje umesto obeležavanja.** Stara forma je tražila da se u listi
+označi više redova pa se pritisne „Izradi fakturu". Mreža bira jedan red, pa se
+prijemnice sada **skupljaju**: dugme „Dodaj u fakturu", ili prosto **dvoklik na
+red** — isti potez i za dodavanje i za vraćanje.
+
+Šta je u fakturi vidi se na **tri mesta** istovremeno: kvačica u samoj listi,
+traka „Stavke fakture" uz desnu ivicu (poslednje dodato je gore, sa zbirom
+ispod), i **broj uz stavku menija** — pa se neproknjižena faktura ne može
+zaboraviti prelaskom na drugi ekran.
+
+**Četiri brojke uz naslov:** koliko prijemnica čeka fakturu, koliko ih je u
+korpi, koliki je iznos korpe i koliko izabrani kupac ukupno duguje po
+neplaćenim fakturama.
+
+**Radnje nad izabranim redom:**
+
+- lista *Za fakturisanje* — **Dodaj u fakturu**, **Ukloni iz fakture**
+- lista *Fakture* — **Štampaj**, **Osveži status** (proverava uplate i prevodi
+  fakturu u „plaćeno" kad je pokrivena; stara forma to nikad nije nudila)
+- lista *SEF* — **Pošalji**, **Osveži SEF**, **Otkaži**, **Storno**, **Oporavi**
+
+**Filteri (čipovi) po listi:** prijemnice se sužavaju na *Za fakturisanje* ili
+*Fakturisane* (zamena za staru kućicu „Prikaži fakturisane"), fakture na
+*Neplaćene* / *Plaćene* / *Ova godina*, SEF na *Za slanje* / *U slanju* /
+*Odbijeno* / *Greška*.
+
+### Šta se nije promenilo
+
+- **Stara forma `frmFakturisanje` i `frmSEF` rade i dalje, netaknute.** Kao i kod
+  otkupa i dokumenata, dve kopije postoje namerno.
+- **Račun fakture je isti** — `Prijemnica.Količina × Prijemnica.Cena`, i radi ga
+  ista transakcija (`CreateFaktura_TX`), sa istim proverama: vlasništvo
+  prijemnice, storno, dupli izbor, avans. Ekran ne računa ništa sam.
+- **SEF moduli nisu dirani.** Ekran zove postojeće funkcije; `frmSEF` i dalje
+  drži ono što ekran ne nosi — istoriju događaja po fakturi, pripremu ponovnog
+  slanja i grupne radnje nad svim zaglavljenim fakturama.
+- **Lista SEF se vidi i bez SEF naloga.** Stanje faktura je zapisano u samoj
+  tabeli, pa se čita i bez veze; tek radnja (Pošalji, Otkaži…) traži upisane
+  `SEF_BASE_URL` i `SEF_API_KEY` u `tblSEFConfig` i to kaže porukom.
+
+### Sitnice koje se primete tek u pogonu
+
+- **Broj fakture se ne unosi.** Dodeljuje ga upis; stiže u poruci čim faktura
+  nastane i vidi se u listi. Polje sa „predlogom" bi umelo da pokaže jedan broj
+  a upiše drugi.
+- **Korpa se prazni kad se promeni kupac**, uz poruku. Faktura ne sme da meša
+  prijemnice dva kupca, pa bi takva korpa svakako pukla pri upisu — bolje odmah
+  i glasno. **Kucanje po polju kupca korpu ne dira** — tek stvarno izabran drugi
+  kupac je promena; dok se pretražuje, sve što je sakupljeno ostaje.
+- **Prijemnica koja je već fakturisana se odbija sa porukom**, i onda kad joj
+  kolona sa brojem fakture izgleda prazna. Takvi redovi postoje u podacima i iz
+  liste izgledaju slobodni.
+- **Stornirana faktura se ne prikazuje** — pa joj se ne može ni ponuditi štampa
+  ni slanje na SEF.
+- **Faktura iznosa nula nije „plaćena"**, nego neplaćena. Prazna faktura i
+  namirena faktura nisu isto stanje.
+
+### Verifikacija
+
+Testovi **97–103** u `modTest` i **šesnaest** novih sabotaža. `RunAllTests`
+**103 testa, 0 palih.**
+
+Dva pada koja su ranije stajala uz svaki PR (`T_PosleSnimanja_...` i
+`T_IsplataValidiraj_...`) nisu bila ničija regresija nego **donorov config
+koji je curio u fixture**: `make_fixture` čuva `tblSEFConfig`, pa je svaki
+ključ koji fixture ne postavi ostajao onakav kakav je u svesci od koje se
+polazi. `DEFAULT_SORTA_VOCA` i `KES_ISPLATE` se sada **pinuju**, pa ista suite
+daje isti rezultat na svakoj svesci.
+
+Fixture je dobio ono što do sada nije imao: fakture sa brojem, datumom i
+statusom, uplatu vezanu za fakturu, storniranu fakturu i prijemnicu obeleženu
+kao fakturisanu **bez** broja fakture. Bez tih redova su filteri radili nad
+praznim skupom i bili zeleni bez pokrića.
+
+**Compile i smoke su prošli.** `Alt+F11 → Debug → Compile VBAProject` je čist,
+a ekran je proveren nad pravim podacima: izbor kupca, sakupljanje u fakturu,
+izrada, lista faktura i SEF lista. Time je i poslednja kapija koju headless ne
+vidi zatvorena — ovaj unos nema nijednu otvorenu stavku.
+
+> Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
+> `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
+> kojih u headless runu nema i padaju identično na netaknutom `main`-u.

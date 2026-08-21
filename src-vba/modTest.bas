@@ -71,6 +71,19 @@ Private Const FX_FAKTURA_IZNOS As Double = 10000
 ' Faktura BEZ evidentiranog iznosa: kapija nad uplatom se na nju ne primenjuje,
 ' i to pravilo mora da prezivi popravku te kapije.
 Private Const FX_FAKTURA_BEZ_IZNOSA As String = "FAK-TEST-0"
+' Fakture ekrana Fakturisanje. FAK-TEST-1 i FAK-TEST-0 nemaju broj, datum ni
+' status (i jedan raniji test FAK-TEST-1 u toku suite-a PLATI), pa se tvrdnje
+' o listi i cipovima oslanjaju iskljucivo na ove tri.
+Private Const FX_FAK_NEPL As String = "FAK-TEST-N"     ' KUPAC2, bez uplate
+Private Const FX_FAK_NEPL_IZNOS As Double = 5000
+Private Const FX_FAK_PLAC As String = "FAK-TEST-P"     ' KUPAC, uplacena u celosti
+Private Const FX_FAK_PLAC_IZNOS As Double = 4000
+Private Const FX_FAK_STORNO As String = "FAK-TEST-X"   ' ne sme da se pojavi u listi
+' Prijemnice ekrana Fakturisanje, sve tri kupca FX_KUPAC:
+'   FAK1 uredno fakturisana | FAK2 obelezena ali BEZ FakturaID | FAK3 slobodna
+Private Const FX_PRJ_FAK1 As String = "PRJ-FAK-1"
+Private Const FX_PRJ_FAK2 As String = "PRJ-FAK-2"
+Private Const FX_PRJ_FAK3 As String = "PRJ-FAK-3"
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -257,6 +270,13 @@ Public Sub RunAllTests()
     RunOne 94
     RunOne 95
     RunOne 96
+    RunOne 97
+    RunOne 98
+    RunOne 99
+    RunOne 100
+    RunOne 101
+    RunOne 102
+    RunOne 103
 
     SetTestMode prevMode
     WriteResultFile
@@ -385,6 +405,13 @@ Private Function TestName(ByVal idx As Long) As String
         Case 94: TestName = "T_PreradeIdentitet_PoIDNePoBroju"
         Case 95: TestName = "T_GridTelo_NePokrivaToast"
         Case 96: TestName = "T_PaleteScrEvent_NeCuriGreska"
+        Case 97: TestName = "T_Fak_UgovorEkrana"
+        Case 98: TestName = "T_Fak_IdentitetURedu_NeCrtaSe"
+        Case 99: TestName = "T_Fak_DostupnostSePrenosiURedu"
+        Case 100: TestName = "T_Fak_KorpaZnackaITraka"
+        Case 101: TestName = "T_Fak_CipoviPrateStatusFakture"
+        Case 102: TestName = "T_Fak_NerazresenKupacNeDiraKorpu"
+        Case 103: TestName = "T_Fak_GreskaNePreziviLogErr"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -489,6 +516,13 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 94: T_PreradeIdentitet_PoIDNePoBroju
         Case 95: T_GridTelo_NePokrivaToast
         Case 96: T_PaleteScrEvent_NeCuriGreska
+        Case 97: T_Fak_UgovorEkrana
+        Case 98: T_Fak_IdentitetURedu_NeCrtaSe
+        Case 99: T_Fak_DostupnostSePrenosiURedu
+        Case 100: T_Fak_KorpaZnackaITraka
+        Case 101: T_Fak_CipoviPrateStatusFakture
+        Case 102: T_Fak_NerazresenKupacNeDiraKorpu
+        Case 103: T_Fak_GreskaNePreziviLogErr
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -5876,4 +5910,481 @@ Private Sub WriteResultFile()
     Dim path As String
     path = ThisWorkbook.path & Application.PathSeparator & "last_run.txt"
     WriteTextFile path, "TESTS=" & m_Total & " FAIL=" & m_Failed & vbLf & m_Report
+End Sub
+
+'=====================================================================
+' EKRAN FAKTURISANJE (Faza E, stavka 16 -- v6-ui-176)
+'=====================================================================
+
+' Koliko stavki ima opis oblika "a|b|c". Prazan opis nosi NULA stavki, ne
+' jednu -- Split("", "|") vraca niz od jednog praznog clana.
+Private Function BrojStavkiOpisa(ByVal spec As String) As Long
+    If Len(spec) = 0 Then Exit Function
+    BrojStavkiOpisa = UBound(Split(spec, "|")) + 1
+End Function
+
+' Red citaca ciji je i-ti clan jednak trazenom. Vraca 0 kad ga nema.
+Private Function RedSaVrednoscu(ByVal src As Variant, ByVal kol As Long, _
+                                ByVal trazeno As String) As Long
+    Dim i As Long
+    If Not IsArray(src) Then Exit Function
+    For i = 1 To UBound(src, 1)
+        If Trim$(CStr(src(i, kol))) = trazeno Then
+            RedSaVrednoscu = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' UGOVOR EKRANA i GRANICE BAZENA LJUSKE. Visak se ne prijavljuje kao greska
+' nego se TIHO odseca -- operater vidi ekran kome fali dugme, bez ijedne
+' poruke (v6-ui-162, v6-ui-170). Lista SEF-a stoji TACNO na granici, pa je
+' ovo jedino mesto koje primeti sestu radnju pre nego sto nestane.
+Private Sub T_Fak_UgovorEkrana()
+    Dim liste As Variant, i As Long, kljucevi As String
+    Dim kljuc As String, spec As String, d As Variant, kolone As Variant
+    ' For Each trazi Variant ili Object -- String iterator je "Type mismatch".
+    Dim kv As Variant
+
+    AssertEq (Len(modUiScreens.ScrRowByKey("FAKTURE")) > 0), True, _
+             "FAKTURE postoji u registru ekrana"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("FAKTURE"), SCR_MODUL), _
+             "modScrFakture", "registar vodi ekran na modScrFakture"
+    AssertEq modUiScreens.ScrPostoji("FAKTURE"), True, _
+             "modul ekrana odgovara na Scr_Meta -- stavka menija vise nije prigusena"
+    AssertEq (InStr(modUiScreens.ScrMeta("FAKTURE"), "kljuc=FAKTURE") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("FAKTURE"), SCR_OBLAST), _
+             OBL_FAKTURISANJE, "ekran trazi pravo na oblast Fakturisanje"
+
+    ' SEF LISTA POSTOJI UVEK. Citanje stanja su kolone tblFakture i ne trazi
+    ' nikakvu vezu; kapiju trazi samo RADNJA, i ona je ima. Uslovna lista je
+    ' novi UI cinila uzim od legacy-ja, koji frmSEF otvara bezuslovno.
+    liste = modScrFakture.Scr_Liste()
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    AssertEq UBound(liste) + 1, 3, _
+             "tri liste, i kad SEF nije podesen"
+    ' Ekran koji stoji na SEF listi tu i ostaje -- nema uslovnog vracanja.
+    modScrFakture.Scr_FkListaTestSet "SEF"
+    AssertEq modScrFakture.Scr_Lista(), "SEF", _
+             "SEF lista se ne napusta zbog konfiguracije"
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+    For i = 0 To UBound(liste)
+        kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
+    Next i
+    AssertEq kljucevi, "|ZAFAKT|FAKTURE|SEF", _
+             "redosled i kljucevi lista -- prijemnice su prve, one su posao"
+
+    ' RADNJE PO LISTI. Citaju se po KLJUCU, ne kroz Scr_Lista: Scr_Lista je
+    ' gate-ovana SEF konfiguracijom, a fixture je donor-zavisan (tblConfig se
+    ' u make_fixture ne brise), pa bi test vezan za nju bio lutrija.
+    AssertEq BrojStavkiOpisa(modScrFakture.FkRadnjeZaListu("ZAFAKT")), 2, _
+             "prijemnice: dodaj i ukloni"
+    AssertEq BrojStavkiOpisa(modScrFakture.FkRadnjeZaListu("FAKTURE")), 2, _
+             "fakture: stampaj i osvezi status"
+    AssertEq BrojStavkiOpisa(modScrFakture.FkRadnjeZaListu("SEF")), modOtkupUI.MAX_ACT, _
+             "SEF ima TACNO MAX_ACT radnji -- sesta bi se tiho odsekla"
+
+    ' CIPOVI. Prvi je svuda 'sve' -- ljuska na njega pada kad zatecen filter ne
+    ' pripada listi (RefreshChipsForScreen), pa prvi mora da bude NAJSIRI;
+    ' povratak na uzi cip bi tiho sakrio redove.
+    For Each kv In Array("ZAFAKT", "FAKTURE", "SEF")
+        spec = modScrFakture.FkCipoviZaListu(CStr(kv))
+        AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _
+                 "lista " & kv & " ne trazi vise cipova nego sto bazen ima"
+        AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", _
+                 "prvi cip liste " & kv & " je najsiri ('sve')"
+        kolone = modScrFakture.FkKoloneZaListu(CStr(kv))
+        AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
+                 "lista " & kv & " ne trazi vise kolona nego sto mreza pravi"
+    Next kv
+
+    ' Svaka DOSTUPNA lista mora da vrati ispravan niz. Lista koja pukne se u
+    ' ljusci pretvara u Empty, LoadGridFromScreen na ne-niz radi Exit Sub -- pa
+    ' mreza ostane na prethodnoj listi i prekidac izgleda kao da ne radi.
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    For i = 0 To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        modScrFakture.Scr_FkListaTestSet kljuc
+        AssertEq modScrFakture.Scr_Lista(), kljuc, "lista " & kljuc & " je prihvacena"
+        d = modScrFakture.Scr_Rows("sve", "")
+        AssertEq IsArray(d), True, "lista " & kljuc & " vraca niz"
+        AssertEq (UBound(d) >= 4), True, _
+                 "lista " & kljuc & " vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+        AssertEq IsArray(d(0)), True, "lista " & kljuc & " prijavljuje svoje kolone"
+    Next i
+
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' IDENTITET IDE U RED I NE CRTA SE. Mreza redove sortira i deli na strane, pa
+' bi svaka mapa "prikaz -> ID" koju ekran drzi sa strane zastarela na prvi
+' klik po zaglavlju. Kolona je prioriteta 4, a LayoutGrid crta do 3.
+Private Sub T_Fak_IdentitetURedu_NeCrtaSe()
+    Dim kljuc As Variant, kolone As Variant, poslednja As String
+    Dim src As Variant, r As Long, d As Variant, redovi As Variant
+    Dim dupli As Object
+
+    ' Svaka lista nosi identitet u POSLEDNJOJ koloni, prioriteta 4.
+    For Each kljuc In Array("ZAFAKT", "FAKTURE", "SEF")
+        kolone = modScrFakture.FkKoloneZaListu(CStr(kljuc))
+        poslednja = CStr(kolone(UBound(kolone)))
+        AssertEq Split(poslednja, "|")(4), "4", _
+                 "lista " & kljuc & ": kolona identiteta je prioriteta 4"
+        AssertEq Split(poslednja, "|")(3), "1", _
+                 "lista " & kljuc & ": kolona identiteta ne trazi sirinu"
+    Next kljuc
+
+    ' PRAVILO DVOSMISLENOSTI, mereno direktno. Duplikat ID-a se u fixture ne
+    ' moze posejati a da ne obori kapije koje o njemu nista ne znaju
+    ' (RequireSingleFakturaRow, CreateFaktura), pa se meri sam racun.
+    Set dupli = CreateObject("Scripting.Dictionary")
+    dupli("JEDAN") = 1
+    dupli("DVA") = 2
+    AssertEq modFaktura.IdIliPrazno(dupli, "JEDAN"), "JEDAN", _
+             "jedinstven ID prolazi kao identitet"
+    AssertEq modFaktura.IdIliPrazno(dupli, "DVA"), "", _
+             "ID koji postoji dvaput NIJE identitet -- radnja ne sme da pogadja"
+    AssertEq modFaktura.IdIliPrazno(dupli, "NEMA"), "", "nepoznat ID nije identitet"
+    AssertEq modFaktura.IdIliPrazno(dupli, ""), "", "prazan ID nije identitet"
+
+    ' Brojac gleda SIROVU tabelu -- i stornirani red istog ID-a cini ID
+    ' dvosmislenim, jer ga FindRows (koji na kraju odlucuje) i dalje vidi.
+    Set dupli = modFaktura.BrojacIdova(TBL_FAKTURE, COL_FAK_ID)
+    AssertEq CLng(dupli(FX_FAK_STORNO)), 1, _
+             "brojac vidi i storniranu fakturu -- njen ID nije slobodan"
+
+    ' Identitet stize iz citaca u red mreze i tamo ostaje citljiv radnji.
+    src = modFaktura.GetFaktureForGrid()
+    r = RedSaVrednoscu(src, 1, FX_FAK_PLAC)
+    AssertEq (r > 0), True, "citac faktura vraca placenu fakturu iz fixture-a"
+
+    modScrFakture.Scr_FkListaTestSet "FAKTURE"
+    d = modScrFakture.Scr_Rows("sve", "")
+    redovi = d(1)
+    AssertEq (CLng(d(2)) > 0), True, "lista faktura ima redova"
+    r = RedSaVrednoscu(redovi, 8, FX_FAK_PLAC)
+    AssertEq (r > 0), True, "red mreze NOSI FakturaID u skrivenoj koloni 8"
+    AssertEq CStr(redovi(r, 1)), "3/2026", "isti red pokazuje broj fakture"
+
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' DOSTUPNOST SE PRENOSI U REDU, ne izvodi se iz prikaza. Prijemnica
+' obelezena kao fakturisana a BEZ FakturaID iz prikaza izgleda slobodna
+' (kolona broja fakture je prazna), a CreateFaktura je odbija. Ko dostupnost
+' cita iz onoga sto se vidi, ponudi je operateru pa padne u transakciji.
+Private Sub T_Fak_DostupnostSePrenosiURedu()
+    Dim src As Variant, r As Long, d As Variant, redovi As Variant, i As Long
+    Dim greska As String
+
+    ' PRAVILO, samo po sebi. Jedno mesto -- deli ga i kapija
+    ' IsPrijemnicaAvailableForFaktura i citac mreze.
+    AssertEq modFaktura.PrijemnicaDostupna("", "", ""), True, _
+             "neobelezena prijemnica sme u fakturu"
+    AssertEq modFaktura.PrijemnicaDostupna("Da", "", ""), False, _
+             "stornirana ne sme"
+    AssertEq modFaktura.PrijemnicaDostupna("", "Da", ""), False, _
+             "obelezena kao fakturisana ne sme -- i kad FakturaID nedostaje"
+    AssertEq modFaktura.PrijemnicaDostupna("", "", "FAK-1"), False, _
+             "vezana za fakturu ne sme -- i kad oznaka nedostaje"
+
+    ' NAD PRAVIM REDOVIMA. FAK2 je red zbog koga ovaj test postoji.
+    src = modFaktura.GetPrijemniceZaFakturisanjeForGrid(FX_KUPAC)
+    AssertEq IsArray(src), True, "citac vraca prijemnice kupca"
+
+    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK1)
+    AssertEq (r > 0), True, "preduslov: uredno fakturisana prijemnica je u listi"
+    AssertEq CBool(src(r, 9)), False, "uredno fakturisana nije dostupna"
+    AssertEq CStr(src(r, 10)), "3/2026", "uredno fakturisana pokazuje svoj broj fakture"
+
+    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK2)
+    AssertEq (r > 0), True, "preduslov: nepotpuno obelezena prijemnica je u listi"
+    AssertEq CStr(src(r, 10)), "", "PRIKAZ je prazan -- iz njega izgleda slobodna"
+    AssertEq CBool(src(r, 9)), False, "PRAVILO kaze da nije slobodna"
+
+    r = RedSaVrednoscu(src, 1, FX_PRJ_FAK3)
+    AssertEq (r > 0), True, "preduslov: slobodna prijemnica je u listi"
+    AssertEq CBool(src(r, 9)), True, "slobodna prijemnica je dostupna"
+
+    ' Red mreze mora da PRENESE dostupnost -- inace je ekran u trenutku klika
+    ' nema odakle da procita.
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+    d = modScrFakture.Scr_Rows("sve", "")
+    redovi = d(1)
+    r = RedSaVrednoscu(redovi, 10, FX_PRJ_FAK2)
+    AssertEq (r > 0), True, "red nepotpuno obelezene prijemnice je u mrezi"
+    AssertEq CStr(redovi(r, 11)), "", "red NOSI 'nije dostupna' u koloni 11"
+    r = RedSaVrednoscu(redovi, 10, FX_PRJ_FAK3)
+    AssertEq CStr(redovi(r, 11)), "1", "red slobodne prijemnice nosi '1'"
+
+    ' Cip 'ceka' propusta tacno one koje pravilo pusta.
+    d = modScrFakture.Scr_Rows("ceka", "")
+    redovi = d(1)
+    AssertEq RedSaVrednoscu(redovi, 10, FX_PRJ_FAK2), 0, _
+             "cip 'za fakturisanje' ne pokazuje nepotpuno obelezenu"
+    AssertEq (RedSaVrednoscu(redovi, 10, FX_PRJ_FAK3) > 0), True, _
+             "cip 'za fakturisanje' pokazuje slobodnu"
+
+    ' I kapija korpe. Nedostupna prijemnica se ODBIJA porukom, ne tiho.
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    greska = modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK2, "21/150326", 100, 40, False)
+    AssertEq (Len(greska) > 0), True, "nedostupna prijemnica ne ulazi u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "korpa je posle odbijanja prazna"
+
+    modScrFakture.Scr_FkKorpaTestReset
+End Sub
+
+' KORPA, ZNACKA I TRAKA. Korpa NIJE podatak u tabeli, pa "podaci su promenjeni"
+' i "korpa je promenjena" nisu ista stvar i ne smeju da dele isti kanal:
+' ljuska brojace pita samo kroz RefreshFromData, a nju zove tek kad ekran na
+' klik javi True. Bez sopstvenog kanala operater koji gleda listu faktura doda
+' stavke, a znacka i dalje pise nulu.
+Private Sub T_Fak_KorpaZnackaITraka()
+    Dim i As Long
+
+    modScrFakture.Scr_FkKorpaTestReset
+    ' LISTA NIJE KORPA -- to je ceo smisao prve polovine testa.
+    modScrFakture.Scr_FkListaTestSet "FAKTURE"
+    AssertEq modScrFakture.Scr_Lista(), "FAKTURE", "preduslov: prikazana lista nije korpa"
+    AssertEq modScrFakture.Scr_FkZnackaTest(), 0, "prazna korpa -> znacka je nula"
+
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), "", _
+             "preduslov: slobodna prijemnica je usla u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "korpa ima jednu stavku"
+    AssertEq modScrFakture.Scr_FkZnackaTest(), 1, _
+             "znacka prati korpu i kad korpa NIJE prikazana lista"
+    AssertEq modScrFakture.Scr_FkZnackaTest(), modScrFakture.Scr_Brojac(), _
+             "znacka je dobila ono sto ljuska cita iz Scr_Brojac"
+
+    ' Ista prijemnica dvaput je ista prijemnica -- fakturisala bi se dvaput.
+    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True)) > 0), _
+             True, "ista prijemnica ne moze dvaput u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "odbijeno dodavanje ne menja korpu"
+
+    ' Druga stavka, pa uklanjanje PO IDENTITETU. Prikaz je namerno isti
+    ' (isti broj, ista kolicina, ista cena): po prikazu se ova dva reda ne bi
+    ' razlikovala, a to je bas greska koju je Agrohemija vec platila (P1, 7.9).
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK1, "22/150326", 100, 40, True), "", _
+             "preduslov: druga -- u prikazu identicna -- stavka je usla"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, "u korpi su dve stavke"
+    AssertEq modScrFakture.Scr_FkZnackaTest(), 2, "znacka prati i drugu stavku"
+
+    AssertEq modScrFakture.Scr_FkUkloniStavkuTest(FX_PRJ_FAK1), True, _
+             "uklanjanje po identitetu je proslo"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "ostala je jedna stavka"
+    AssertEq modScrFakture.Scr_FkStavkaIdTest(1), FX_PRJ_FAK3, _
+             "ostala je bas ona koja NIJE pokazana"
+    AssertEq modScrFakture.Scr_FkZnackaTest(), 1, "znacka prati uklanjanje"
+
+    AssertEq modScrFakture.Scr_FkUkloniStavkuTest("PRJ-NEMA-OVAKVE"), False, _
+             "nepoznat identitet ne uklanja nista"
+    AssertEq modScrFakture.Scr_FkUkloniStavkuTest(""), False, _
+             "prazan identitet ne uklanja nista"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "korpa je posle promasaja nedirnuta"
+
+    modScrFakture.Scr_FkKorpaTestReset
+    AssertEq modScrFakture.Scr_FkZnackaTest(), 0, "znacka prati praznjenje korpe"
+
+    ' TRAKA KORPE. Dva pravila, oba se tiho kvare: NAJNOVIJE PRVO (operater
+    ' upravo nesto doda, pa mu je potvrda ono sto trazi) i PRELIV SE PRIJAVLJUJE
+    ' (lista koja se tiho odseca izgleda kao cela). Traka prima cetiri reda, pa
+    ' se pet stavki koristi da se preliv uopste pojavi.
+    For i = 1 To 5
+        AssertEq modScrFakture.Scr_FkKorpaTestDodaj("PRJ-T" & i, i & "/T", 1, 100 * i, True), "", _
+                 "preduslov: stavka " & i & " je usla u korpu"
+    Next i
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 5, "preduslov: pet stavki u korpi"
+    AssertEq (InStr(modScrFakture.Scr_FkTrakaRedTest(0), "5/T") > 0), True, _
+             "prvi red trake je POSLEDNJA dodata stavka"
+    AssertEq (InStr(modScrFakture.Scr_FkTrakaRedTest(1), "4/T") > 0), True, _
+             "drugi red trake je pretposlednja"
+    AssertEq (InStr(modScrFakture.Scr_FkTrakaRedTest(3), ChrW(8230)) > 0), True, _
+             "poslednji red trake PRIJAVLJUJE preliv, ne cuti o njemu"
+    AssertEq (InStr(modScrFakture.Scr_FkTrakaRedTest(3), "2") > 0), True, _
+             "preliv kaze KOLIKO ih se ne vidi (5 stavki, 3 reda + preliv)"
+
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' CIPOVI LISTE FAKTURA I ZNAK U REDU MORAJU DA SE SLAZU -- medjusobno i sa
+' modNovac.GetOpenFakture, jedinim read-modelom otvorenih faktura kupca.
+' Pravilo 'otvorena faktura' zivi na dva mesta, pa moze da se razidje; ovo je
+' isti oblik tvrdnje kao T_Agro_AbzugMapaPratiPojedinacni.
+Private Sub T_Fak_CipoviPrateStatusFakture()
+    Dim src As Variant, r As Long, i As Long, kup As Variant
+    Dim otvorene As Variant, j As Long, iD As String
+    Dim izCitaca As Long, izOpen As Long
+
+    ' SIFRA ZNAKA U REDU (paypill). Ljuska crta iz sifre, ne iz teksta.
+    AssertEq modScrFakture.FkPayKod(4000, 4000), PAY_PLACENO, "pun iznos -> placeno"
+    AssertEq modScrFakture.FkPayKod(4000, 5000), PAY_PLACENO, "preplaceno je i dalje placeno"
+    AssertEq modScrFakture.FkPayKod(5000, 2000), PAY_DELIM, "delimicna uplata -> delimicno"
+    AssertEq modScrFakture.FkPayKod(5000, 0), PAY_NEPLAC, "bez uplate -> neplaceno"
+    ' Faktura iznosa 0 nije placena nego PRAZNA. Da je 'placena', cip i znak u
+    ' istom redu bi tvrdili suprotno.
+    AssertEq modScrFakture.FkPayKod(0, 0), PAY_NEPLAC, "faktura bez iznosa nije placena"
+    AssertEq modScrFakture.FkCipFaktura("plac", "Placeno", 0, 0, FX_DATUM), False, _
+             "cip 'placene' ne uzima fakturu bez iznosa -- slaze se sa znakom u redu"
+    AssertEq modScrFakture.FkCipFaktura("plac", "", 4000, 4000, FX_DATUM), True, _
+             "cip 'placene' gleda uplatu, ne zapisan status"
+
+    ' Cip 'neplacene' ima ISTA dva uslova kao GetOpenFakture: zapisan status
+    ' Neplaceno I nesto stvarno preostalo.
+    AssertEq modScrFakture.FkCipFaktura("nepl", STATUS_NEPLACENO, 5000, 0, FX_DATUM), True, _
+             "neplacena sa ostatkom prolazi"
+    AssertEq modScrFakture.FkCipFaktura("nepl", STATUS_NEPLACENO, 5000, 5000, FX_DATUM), False, _
+             "bez ostatka ne prolazi ni sa statusom Neplaceno"
+    AssertEq modScrFakture.FkCipFaktura("nepl", STATUS_PLACENO, 5000, 0, FX_DATUM), False, _
+             "sa statusom Placeno ne prolazi ni sa ostatkom"
+    AssertEq modScrFakture.FkCipFaktura("nepoznat", STATUS_PLACENO, 5000, 0, FX_DATUM), True, _
+             "nepoznat filter pusta sve -- ekran ne pokazuje praznu listu"
+
+    ' NAD PRAVIM REDOVIMA. Stornirana faktura ne sme da se pojavi -- inace bi
+    ' joj operater nudio stampu i slanje na SEF.
+    src = modFaktura.GetFaktureForGrid()
+    AssertEq IsArray(src), True, "citac faktura vraca redove"
+    AssertEq RedSaVrednoscu(src, 1, FX_FAK_STORNO), 0, _
+             "stornirana faktura NIJE u listi"
+
+    r = RedSaVrednoscu(src, 1, FX_FAK_PLAC)
+    AssertEq CDbl(src(r, 6)), FX_FAK_PLAC_IZNOS, "uplata je sabrana po fakturi"
+    AssertEq CDbl(src(r, 7)), 0, "placena faktura nema ostatak"
+    r = RedSaVrednoscu(src, 1, FX_FAK_NEPL)
+    AssertEq CDbl(src(r, 6)), 0, "neplacena faktura nema uplate"
+    AssertEq CDbl(src(r, 7)), FX_FAK_NEPL_IZNOS, "ceo iznos je preostao"
+    AssertEq CStr(src(r, 9)), FX_KUPAC2, "citac vraca i IDENTITET kupca, ne samo naziv"
+
+    ' SLAGANJE SA GetOpenFakture, po SVAKOM kupcu. Da se dve implementacije
+    ' istog pravila raziju, ovde bi se brojevi razisli.
+    For Each kup In Array(FX_KUPAC, FX_KUPAC2)
+        izCitaca = 0
+        For i = 1 To UBound(src, 1)
+            If CStr(src(i, 9)) = CStr(kup) Then
+                If modScrFakture.FkCipFaktura("nepl", CStr(src(i, 8)), _
+                                              CDbl(src(i, 5)), CDbl(src(i, 6)), src(i, 3)) Then
+                    izCitaca = izCitaca + 1
+                End If
+            End If
+        Next i
+        otvorene = GetOpenFakture(CStr(kup))
+        izOpen = 0
+        If IsArray(otvorene) Then izOpen = UBound(otvorene, 1)
+        AssertEq izCitaca, izOpen, _
+                 "cip 'neplacene' i GetOpenFakture vide isto za " & kup
+        ' I to bas iste fakture, ne samo isti broj.
+        For j = 1 To izOpen
+            iD = Trim$(CStr(otvorene(j, 2)))
+            r = RedSaVrednoscu(src, 1, iD)
+            AssertEq (r > 0), True, "otvorena faktura " & iD & " je u listi ekrana"
+            AssertEq modScrFakture.FkCipFaktura("nepl", CStr(src(r, 8)), _
+                                                CDbl(src(r, 5)), CDbl(src(r, 6)), src(r, 3)), _
+                     True, "cip 'neplacene' propusta otvorenu fakturu " & iD
+        Next j
+    Next kup
+End Sub
+
+' NERAZRESEN UNOS NIJE PROMENA KUPCA. Ljuska Change salje ekranu na SVAKI
+' znak, a GetComboID daje stabilan ID samo dok je stavka stvarno izabrana
+' (ListIndex >= 0); cim operater krene da kuca, fallback iz parcijalnog teksta
+' vrati "". Bez ove razlike bi prvo otkucano slovo bacilo celu neproknjizenu
+' korpu -- a da drugi kupac nije ni izabran.
+'
+' Ovo je gubitak operaterskog rada, ne pokvaren podatak, ali je jedina stvar
+' na ovom ekranu koja bez traga unistava ono sto je covek vec uradio.
+' Znacka se ovde NE tvrdi iako je operater i nju gubio: to je posao testa
+' 100. Prepisana tvrdnja bi znacila da sabotaza znacke obara DVA testa, pa
+' dvosmerni dokaz vise ne bi pokazivao 'tacno jedan test, po imenu'.
+Private Sub T_Fak_NerazresenKupacNeDiraKorpu()
+    ' PRAVILO, samo po sebi.
+    AssertEq modScrFakture.FkKupacPromenjen("", FX_KUPAC), False, _
+             "prazan ID nije promena kupca -- to je nerazresen unos"
+    AssertEq modScrFakture.FkKupacPromenjen("   ", FX_KUPAC), False, _
+             "ni sam razmak nije promena kupca"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC2, FX_KUPAC), True, _
+             "razresen DRUGI kupac jeste promena"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC, FX_KUPAC), False, _
+             "isti kupac nije promena"
+    AssertEq modScrFakture.FkKupacPromenjen(FX_KUPAC, ""), True, _
+             "prvi izbor kupca jeste promena"
+
+    ' NAD PRAVOM KORPOM, istim putem kojim ide Change dogadjaj.
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkKupacTestSet FX_KUPAC
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(FX_KUPAC), True, _
+             "preduslov: kupac je izabran"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), "", _
+             "preduslov: prva stavka je usla u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK1, "20/150326", 100, 40, True), "", _
+             "preduslov: druga stavka je usla u korpu"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, "preduslov: u korpi su dve stavke"
+
+    ' KUCANJE: nerazresen unos NE SME nista da dirne.
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(""), False, _
+             "nerazresen unos se ne tretira kao promena kupca"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 2, _
+             "korpa prezivljava kucanje po polju kupca"
+
+    ' STVARAN IZBOR DRUGOG KUPCA: tek tada se korpa prazni.
+    AssertEq modScrFakture.Scr_FkKupacUnosTest(FX_KUPAC2), True, _
+             "razresen drugi kupac JESTE promena"
+    AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, _
+             "korpa se prazni tek kad je drugi kupac stvarno izabran"
+
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+End Sub
+
+' GRESKA SE CITA PRE LogErr-a, INACE JE VISE NEMA.
+'
+' modLogError.LogError pocinje sa `On Error Resume Next`, a svaka On Error
+' naredba u VBA BRISE Err objekat. Zato `Err.Raise Err.Number, SRC,
+' Err.Description` POSLE LogErr-a postane `Err.Raise 0, SRC, ""` -- pozivalac
+' dobije prazan opis, a citac mreze koji je trebalo da propagira pad seme
+' stigne do ekrana kao 'nema redova'.
+'
+' Test ima dva dela: prvo dokazuje da je opasnost STVARNA (LogErr brise Err),
+' pa onda meri PRAVI put -- modFaktura.PrintFaktura nad fakturom koje nema.
+' Bas tu funkciju zove radnja ekrana 'Stampaj', pa je ovo i tvrdnja o tome
+' sta operater vidi kad stampa padne.
+Private Sub T_Fak_GreskaNePreziviLogErr()
+    Dim n1 As Long, d1 As String, n2 As Long
+    Dim n3 As Long, d3 As String
+
+    ' --- 1) opasnost je stvarna: LogErr BRISE Err ---
+    On Error Resume Next
+    Err.Raise vbObjectError + 9911, "T_Fak", "kontrolna greska"
+    n1 = Err.Number
+    d1 = Err.description
+    AssertEq (n1 <> 0), True, "preduslov: kontrolna greska je podignuta"
+    AssertEq (Len(d1) > 0), True, "preduslov: kontrolna greska ima opis"
+    LogErr "T_Fak_GreskaNePreziviLogErr"
+    n2 = Err.Number
+    Err.Clear
+    On Error GoTo 0
+    AssertEq n2, 0, _
+             "LogErr BRISE Err -- zato se greska mora citati PRE njega"
+
+    ' --- 2) pravi put: stampa fakture koje nema ---
+    ' RequireSingleFakturaRow digne gresku PRE ijednog upisa, pa je ovo
+    ' bezbedno; PrintFaktura je jedan od cetiri EH bloka koji su popravljeni.
+    On Error Resume Next
+    modFaktura.PrintFaktura "FAK-NE-POSTOJI"
+    n3 = Err.Number
+    d3 = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (n3 <> 0), True, "greska je uopste stigla do pozivaoca"
+    ' NAJVAZNIJE: opis prezivljava. Prazan opis znaci da je Err citan POSLE
+    ' LogErr-a -- tada operater na ekranu vidi radnju koja 'ne radi', bez razloga.
+    AssertEq (Len(d3) > 0), True, _
+             "opis greske NIJE prazan -- Err je citan PRE LogErr-a"
+    AssertEq (InStr(d3, "FAK-NE-POSTOJI") > 0), True, _
+             "opis imenuje fakturu koje nema, ne neku drugu gresku"
 End Sub
