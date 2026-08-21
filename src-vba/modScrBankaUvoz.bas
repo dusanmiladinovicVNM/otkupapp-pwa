@@ -1326,6 +1326,56 @@ End Function
 
 
 '=====================================================================
+' DIJAGNOSTIKA
+'
+' Alt+F8 -> Diag_BuRedovi, pa Ctrl+G (Immediate). Ne menja nista.
+'
+' Postoji zbog jedne klase kvara koju ni suite ni citanje koda ne razresavaju:
+' celija mreze koja se vidi PRAZNA ili sa TUDJIM sadrzajem. modOtkupUI.RenderGrid
+' radi pod "On Error Resume Next", pa upis koji pukne ne ostavlja trag -- natpis
+' od ranijeg crtanja ostane, i to izgleda kao da ekran ispisuje tudje podatke.
+' Ispisuje se ono sto ekran PREDAJE mrezi i ono sto mreza od toga DRZI.
+'=====================================================================
+Public Sub Diag_BuRedovi()
+    Dim d As Variant, redovi As Variant, kolone As Variant, i As Long, n As Long
+    On Error Resume Next
+
+    Debug.Print "--- Diag_BuRedovi (" & SCRBU_BUILD & ") lista=" & Scr_Lista() & " ---"
+
+    d = Scr_Rows("sve", "")
+    If Not IsArray(d) Then
+        Debug.Print "  Scr_Rows NIJE vratio niz"
+        Exit Sub
+    End If
+
+    kolone = d(0)
+    redovi = d(1)
+    n = CLng(d(2))
+    Debug.Print "  kolona=" & CStr(UBound(kolone) + 1) & "  redova=" & CStr(n)
+
+    For i = 0 To UBound(kolone)
+        Debug.Print "  spec " & CStr(i + 1) & ": " & CStr(kolone(i))
+    Next i
+
+    If IsArray(redovi) Then
+        For i = 1 To 3
+            If i > n Then Exit For
+            Debug.Print "  EKRAN red " & CStr(i) & " kol2: tip=" & TypeName(redovi(i, 2)) & _
+                        " vred=[" & CStr(redovi(i, 2)) & "] IsNumeric=" & _
+                        CStr(IsNumeric(redovi(i, 2)))
+        Next i
+    End If
+
+    For i = 1 To 3
+        Debug.Print "  MREZA red " & CStr(i) & " kol2: tip=" & _
+                    TypeName(modOtkupUI.GridCell(i, 2)) & _
+                    " vred=[" & CStr(modOtkupUI.GridCell(i, 2)) & "]"
+    Next i
+
+    Err.Clear
+End Sub
+
+'=====================================================================
 ' TEST SEAM
 ' Zona se u testu ne crta (forma se ne prikazuje), pa se stanje ekrana ne moze
 ' procitati iz kontrola. Ista kapija kao Scr_*Test u modScrAgro i modScrFakture:
