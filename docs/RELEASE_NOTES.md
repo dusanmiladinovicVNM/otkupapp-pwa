@@ -4905,6 +4905,11 @@ statusom, uplatu vezanu za fakturu, storniranu fakturu i prijemnicu obeleženu
 kao fakturisanu **bez** broja fakture. Bez tih redova su filteri radili nad
 praznim skupom i bili zeleni bez pokrića.
 
-> **Compile** (`Alt+F11 → Debug → Compile VBAProject`) ostaje operateru, kao i
-> smoke po ekranu: izbor kupca, sakupljanje u fakturu, izrada, štampa i — na
-> instalaciji sa SEF-om — slanje.
+**Compile i smoke su prošli.** `Alt+F11 → Debug → Compile VBAProject` je čist,
+a ekran je proveren nad pravim podacima: izbor kupca, sakupljanje u fakturu,
+izrada, lista faktura i SEF lista. Time je i poslednja kapija koju headless ne
+vidi zatvorena — ovaj unos nema nijednu otvorenu stavku.
+
+> Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
+> `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
+> kojih u headless runu nema i padaju identično na netaknutom `main`-u.

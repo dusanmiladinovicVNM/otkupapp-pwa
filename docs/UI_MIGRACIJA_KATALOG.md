@@ -1230,3 +1230,17 @@ zaseban PR.
 Umesto nje, R1 čuva **test 103** (`T_Fak_GreskaNePreziviLogErr`), koji meri pravi
 put: štampa nepostojeće fakture mora da stigne do pozivaoca sa brojem i opisom
 koji imenuje fakturu, ne kao nula i prazan string.
+
+#### 8.11 Kapija operatera: prošla
+
+`Alt+F11 → Debug → Compile VBAProject` je **čist**, i smoke nad pravim podacima
+je prošao: izbor kupca, sakupljanje u fakturu, izrada, lista faktura i SEF lista.
+
+Time je stavka 16 Faze E zatvorena u oba smera — i u onome što headless meri i
+u onome što ne vidi. Automatski verdikt compile-a je i ovaj put bio `NEJASNO`
+(`run_vba` ga preko SendKeys ne ume da pročita), pa je ručna kapija bila jedini
+izvor istine — kao i uvek.
+
+Otvoreno ostaje samo ono što se ovog ekrana ne tiče: `RunGoogleSyncSmokeSuite` i
+`RunMasterSyncSmokeSuite` u punom setu, koje traže Google kredencijale i padaju
+identično na netaknutom `main`-u.
