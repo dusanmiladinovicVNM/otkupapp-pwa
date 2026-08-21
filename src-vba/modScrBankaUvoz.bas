@@ -917,6 +917,7 @@ End Function
 Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, i As Long, n As Long, outA() As Variant
     Dim hay As String
+    Dim zbirU As Double, zbirI As Double
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -930,6 +931,8 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
     ReDim outA(1 To UBound(src, 1), 1 To 11)
     For i = 1 To UBound(src, 1)
         If Not BuCipIzvod(filter, CLng(src(i, 10)), CLng(src(i, 12))) Then GoTo Sledeci
+        zbirU = zbirU + CDbl(src(i, 6))
+        zbirI = zbirI + CDbl(src(i, 7))
         hay = CStr(src(i, 2)) & "|" & CStr(src(i, 3))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
@@ -950,7 +953,10 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
 Sledeci:
     Next i
 
-    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, 0#, Array(0, 0, 0))
+    ' Isto merilo kao na listi stavki: PROMET prikazanih izvoda (uplate +
+    ' isplate). Nula bi u podnozju pisala "Vrednost 0,00 RSD", sto je tacno
+    ' onoliko korisno koliko izgleda.
+    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))
     Exit Function
 EH:
     errNum = Err.Number
@@ -1386,19 +1392,23 @@ Public Sub Diag_BuRedovi()
         Debug.Print "  spec " & CStr(i + 1) & ": " & CStr(kolone(i))
     Next i
 
+    Dim k As Long
     If IsArray(redovi) Then
-        For i = 1 To 3
+        For i = 1 To 2
             If i > n Then Exit For
-            Debug.Print "  EKRAN red " & CStr(i) & " kol2: tip=" & TypeName(redovi(i, 2)) & _
-                        " vred=[" & CStr(redovi(i, 2)) & "] IsNumeric=" & _
-                        CStr(IsNumeric(redovi(i, 2)))
+            For k = 1 To UBound(kolone) + 1
+                Debug.Print "  EKRAN red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                            TypeName(redovi(i, k)) & " vred=[" & CStr(redovi(i, k)) & "]"
+            Next k
         Next i
     End If
 
-    For i = 1 To 3
-        Debug.Print "  MREZA red " & CStr(i) & " kol2: tip=" & _
-                    TypeName(modOtkupUI.GridCell(i, 2)) & _
-                    " vred=[" & CStr(modOtkupUI.GridCell(i, 2)) & "]"
+    For i = 1 To 2
+        For k = 1 To UBound(kolone) + 1
+            Debug.Print "  MREZA red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                        TypeName(modOtkupUI.GridCell(i, k)) & _
+                        " vred=[" & CStr(modOtkupUI.GridCell(i, k)) & "]"
+        Next k
     Next i
 
     Err.Clear
