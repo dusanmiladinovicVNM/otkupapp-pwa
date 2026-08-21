@@ -53,17 +53,23 @@ Option Explicit
 
 Public Const SCRBU_BUILD As String = "v6-ui-177"
 
-' Visina zone: jedan red polja (tri combo-a) + objasnjenje. Dugmadi u zoni nema
-' -- sve radnje ovog ekrana su radnje NAD REDOM i zive u redu radnji mreze.
-Private Const BU_ZONA_H   As Single = 124
+' Visina zone: JEDAN red -- tri combo-a i objasnjenje uz njih. Dugmadi u zoni
+' nema: sve radnje ovog ekrana su radnje NAD REDOM i zive u redu radnji mreze.
+'
+' Objasnjenje je u ISTOJ liniji sa poljima, desno od njih. Ispod njih je stajalo
+' preko trake koju ljuska crta odmah ispod zone.
+Private Const BU_ZONA_H   As Single = 104
 
 Private Const BU_Y_CAP    As Single = 6
 Private Const BU_Y_KPI_V  As Single = 18
 Private Const BU_Y_LBL    As Single = 48
-Private Const BU_Y_HINT   As Single = 100
-Private Const BU_KPI_W    As Single = 130
-Private Const BU_FLD_W    As Single = 224
+' Poravnato sa unosnim kutijama polja (NewFieldG ih stavlja na +16, visine 28).
+Private Const BU_Y_HINT   As Single = 72
+Private Const BU_KPI_W    As Single = 116
+Private Const BU_FLD_W    As Single = 190
 Private Const BU_FLD_GAP  As Single = 10
+' Ispod ove sirine objasnjenje nema gde -- bolje bez njega nego preko brojki.
+Private Const BU_HINT_MIN As Single = 100
 
 ' Kljucevi lista
 Private Const BU_STAVKE As String = "STAVKE"
@@ -76,13 +82,13 @@ Private Const BU_IZVODI As String = "IZVODI"
 ' bi svaka mapa "prikaz -> ID" koju ekran drzi sa strane zastarela na prvi klik
 ' po zaglavlju. Prazan identitet znaci DVOSMISLEN (isti BankaImportID postoji
 ' dvaput) i radnja tada ODBIJA da bira.
-Private Const BU_STV_KOL_ID As Long = 11
+Private Const BU_STV_KOL_ID As Long = 10
 ' Otvorenost se NE cita iz prikazanog statusa: nov red ima PRAZAN status, pa se
 ' iz prikaza ne razlikuje od reda kome status nije upisan. Red je NOSI.
-Private Const BU_STV_KOL_OTV As Long = 12
+Private Const BU_STV_KOL_OTV As Long = 11
 ' Smer se NE izvodi iz toga koja je kolona iznosa popunjena: red sa I uplatom I
 ' isplatom izgleda kao uplata, a writer ga odbija (RequireBimSmer). Red ga NOSI.
-Private Const BU_STV_KOL_SMER As Long = 13
+Private Const BU_STV_KOL_SMER As Long = 12
 Private Const BU_IZV_KOL_ID As Long = 11
 
 Private mLista As String            ' BU_STAVKE | BU_IZVODI
@@ -129,16 +135,10 @@ Public Function Scr_Lista() As String
     Scr_Lista = mLista
 End Function
 
-' Koliko stavki jos ceka -- broj koji nosi i znacka uz stavku menija. Isti skup
-' koji GetBankaImportOpen vraca, pa se cip "za obradu" i znacka ne mogu razici.
-Public Function Scr_NaslovDopuna() As String
-    Dim k As Variant
-    If Scr_Lista() <> BU_STAVKE Then Exit Function
-    k = Kpi()
-    If CLng(k(0)) = 0 Then Exit Function
-    Scr_NaslovDopuna = ChrW(8212) & " " & CStr(CLng(k(0))) & " " & _
-                       Poruka("OTKUI_LBL_BU_NASLOV_ZA")
-End Function
+' Scr_NaslovDopuna NAMERNO NE POSTOJI. Naslov mreze je labela fiksne sirine
+' (grdTitle, 180pt), pa se dopuna odsecala usred reci ("-- 29 z"), a broj koji
+' je nosila vec stoji u brojci OTVORENO iznad mreze i u cipu "za obradu".
+' Odsecen tekst je gori od nikakvog.
 
 ' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne pripada
 ' listi na koju se upravo preslo (RefreshChipsForScreen). Zato prvi mora da
@@ -734,11 +734,16 @@ End Function
 '------------------------------------------------------- LISTA: STAVKE
 Private Function StavkeKolone() As Variant
     ' Prva kolona se uvek crta kao BROJ dokumenta (StyleGridCell, isBroj) -- tu
-    ' stoji BankaImportID, isto sto legacy pokazuje u koloni "BIM". Poslednje
-    ' tri nose ono sto radnja mora da zna a iz prikaza se ne vidi jednoznacno;
-    ' prioritet 4, pa se ne crtaju.
+    ' stoji BROJ IZVODA, jedini POSLOVNI broj koji stavka nosi.
+    '
+    ' BankaImportID se NE PRIKAZUJE. Legacy ga je imao u koloni "BIM", ali to je
+    ' interna sifra: operater ne zna cemu sluzi i ne moze nista sa njom. Identitet
+    ' i dalje ide U RED -- u skrivenu kolonu, gde mu je i mesto.
+    '
+    ' Poslednje tri nose ono sto radnja mora da zna a iz prikaza se ne vidi
+    ' jednoznacno; prioritet 4, pa se ne crtaju.
     StavkeKolone = Array( _
-        "OTKUI_HDB_BIMID||txt|92|1", _
+        "OTKUI_HDB_IZVOD||txt|88|1", _
         "OTKUI_HD_DATUM||date|74|1", _
         "OTKUI_HD_PARTNER||part|0|1", _
         "OTKUI_HDB_POZIV||txt|104|2", _
@@ -746,7 +751,6 @@ Private Function StavkeKolone() As Variant
         "OTKUI_HDB_ISPLATA||rsd|96|1", _
         "OTKUI_HDB_STATUS||txt|72|1", _
         "OTKUI_HDB_PREDLOG||txt|160|2", _
-        "OTKUI_HDB_IZVOD||txt|88|3", _
         "OTKUI_HDB_RACUN||txt|132|3", _
         "OTKUI_HDB_BIMKEY||txt|1|4", _
         "OTKUI_HDB_OTVOREN||txt|1|4", _
@@ -771,22 +775,25 @@ Private Function RedoviStavke(ByVal filter As String, ByVal q As String) As Vari
         Exit Function
     End If
 
-    ReDim outA(1 To UBound(src, 1), 1 To 13)
+    ReDim outA(1 To UBound(src, 1), 1 To 12)
     For i = 1 To UBound(src, 1)
         obr = CStr(src(i, 9))
         If Not BuCipStavka(filter, obr, CBool(src(i, 12))) Then GoTo Sledeci
-        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 3)) & "|" & CStr(src(i, 5)) & "|" & _
-              CStr(src(i, 6)) & "|" & CStr(src(i, 14))
+        ' BankaImportID se ne PRIKAZUJE, ali ostaje u pretrazi: ko ga ima iz
+        ' loga ili poruke o gresci mora moci da nadje red.
+        hay = CStr(src(i, 15)) & "|" & CStr(src(i, 2)) & "|" & CStr(src(i, 3)) & "|" & _
+              CStr(src(i, 5)) & "|" & CStr(src(i, 6)) & "|" & CStr(src(i, 14))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
         iD = Trim$(CStr(src(i, 1)))
-        ' Prva kolona je PRIKAZ identiteta i uvek pokazuje ono sto u tabeli
-        ' pise; skrivena kolona nosi identitet koji je citac PROVERIO. Dvosmislen
-        ' ID se zato i dalje vidi u listi, a radnja ga odbija.
-        outA(n, 1) = CStr(src(i, 15))
-        outA(n, 2) = src(i, 4)
+        outA(n, 1) = CStr(src(i, 2))
+        ' DATUM IDE KAO SERIJSKI BROJ, ne kao Date. Ljuskin FmtDatumKratko
+        ' odbija sve sto nije IsNumeric, a IsNumeric je nad Date-om FALSE --
+        ' kolona bi ostala PRAZNA, i to bez ijedne greske. Isto rade i ostali
+        ' ekrani (modScrDokumenti.DatSerijski / modUiData.CellDate).
+        outA(n, 2) = modUiData.CellDate(src, i, 4)
         outA(n, 3) = CStr(src(i, 5))
         outA(n, 4) = CStr(src(i, 6))
         outA(n, 5) = CDbl(src(i, 7))
@@ -794,19 +801,23 @@ Private Function RedoviStavke(ByVal filter As String, ByVal q As String) As Vari
         outA(n, 7) = BuStatusTekst(obr)
         outA(n, 8) = BuPredlogTekst(CStr(src(i, 11)), CStr(src(i, 13)), CStr(src(i, 14)), _
                                     CBool(src(i, 10)))
-        outA(n, 9) = CStr(src(i, 2))
-        outA(n, 10) = CStr(src(i, 3))
-        outA(n, 11) = iD
-        outA(n, 12) = IIf(CBool(src(i, 10)), "1", "")
-        outA(n, 13) = CStr(src(i, 11))
+        outA(n, 9) = CStr(src(i, 3))
+        ' Identitet koji je citac PROVERIO (prazan = dvosmislen). Ne crta se.
+        outA(n, 10) = iD
+        outA(n, 11) = IIf(CBool(src(i, 10)), "1", "")
+        outA(n, 12) = CStr(src(i, 11))
         zbirU = zbirU + CDbl(src(i, 7))
         zbirI = zbirI + CDbl(src(i, 8))
 Sledeci:
     Next i
 
-    ' Zbir kolicine nema smisla na izvodu, pa je nula; zbir vrednosti je NETO
-    ' (uplate minus isplate) prikazanih redova.
-    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU - zbirI, Array(0, 0, 0))
+    ' Zbir kolicine nema smisla na izvodu, pa je nula.
+    '
+    ' Vrednost je PROMET prikazanih stavki (uplate + isplate), ne neto. Neto je
+    ' na cipu "obradjeno" davao NEGATIVAN broj, koji nad izvodom ne znaci nista.
+    ' Razdvojene brojke -- koliko uplata, koliko isplata -- stoje u traci iznad
+    ' mreze; podnozje ljuske ima samo JEDAN slot (grdFoot.ftVal).
+    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))
     Exit Function
 EH:
     errNum = Err.Number
@@ -897,7 +908,8 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
         n = n + 1
         outA(n, 1) = CStr(src(i, 2))
         outA(n, 2) = CStr(src(i, 3))
-        outA(n, 3) = src(i, 4)
+        ' v. RedoviStavke: datum se mrezi predaje kao serijski broj.
+        outA(n, 3) = modUiData.CellDate(src, i, 4)
         outA(n, 4) = CDbl(src(i, 5))
         outA(n, 5) = CDbl(src(i, 6))
         outA(n, 6) = CDbl(src(i, 7))
@@ -966,7 +978,8 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrBuCilj", Poruka("OTKUI_FLD_BU_CILJ"), "cmb", "", _
                          1, False, False, "BU"
 
-    modUiKit.NewLbl z, "buHint", "", PAD, BU_Y_HINT, 400, 12, TS_META, False, C_MUTED, -1
+    ' Mesto mu daje RasporediPolja -- stoji UZ polja, ne ispod njih.
+    modUiKit.NewLbl z, "buHint", "", PAD, BU_Y_HINT, 200, 12, TS_META, False, C_MUTED, -1
 
     modUiKit.NewLbl z, "buLnB", "", 0, BU_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
@@ -978,15 +991,16 @@ End Function
 
 Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     Dim i As Long, kx As Single, capDesno As Single
-    Dim x3 As Single
+    Dim x3 As Single, hintX As Single, hintW As Single, kpiX As Single
     On Error Resume Next
     If z Is Nothing Then Exit Sub
     If w < 200 Then Exit Sub
 
+    ' Bela podloga pokriva CEO red polja, ukljucujuci i objasnjenje uz njih.
     z.Controls("buBg").Left = PAD - 10
     z.Controls("buBg").top = BU_Y_LBL - 8
     z.Controls("buBg").width = w - 2 * (PAD - 10)
-    z.Controls("buBg").Height = BU_Y_HINT - BU_Y_LBL - 2
+    z.Controls("buBg").Height = BU_ZONA_H - BU_Y_LBL - 2
 
     PoljeX z, "scrBuTip", PAD, BU_FLD_W, BU_Y_LBL
     PoljeX z, "scrBuPartner", PAD + BU_FLD_W + BU_FLD_GAP, BU_FLD_W, BU_Y_LBL
@@ -999,6 +1013,7 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
 
     ' Brojke idu uz desnu ivicu; sakriva se ona koja bi nalegla na naslov zone.
     capDesno = PAD + 180
+    kpiX = w - PAD - 4 * BU_KPI_W
     For i = 0 To 3
         kx = w - PAD - (4 - i) * BU_KPI_W
         z.Controls("buKL" & i).Left = kx
@@ -1007,8 +1022,16 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
         z.Controls("buKV" & i).Visible = (kx > capDesno)
     Next i
 
-    ' Objasnjenje ne prelama -- Label samo istece, pa se sirina ogranicava.
-    z.Controls("buHint").width = w - PAD * 2
+    ' OBJASNJENJE STOJI UZ POLJA, ne ispod njih: ispod je nalegalo na traku koju
+    ' ljuska crta odmah po zavrsetku zone. Staje u prostor izmedju poslednjeg
+    ' polja i brojki; kad tog prostora nema, sklanja se -- Label ne prelama, pa
+    ' bi inace istekao preko brojki.
+    hintX = x3 + BU_FLD_W + GAP
+    hintW = kpiX - GAP - hintX
+    z.Controls("buHint").Left = hintX
+    z.Controls("buHint").top = BU_Y_HINT
+    z.Controls("buHint").Visible = (hintW >= BU_HINT_MIN)
+    If hintW >= BU_HINT_MIN Then z.Controls("buHint").width = hintW
 
     z.Controls("buLnB").width = w
 End Sub

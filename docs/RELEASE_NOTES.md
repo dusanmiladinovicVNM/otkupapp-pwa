@@ -4977,3 +4977,9 @@ testova i **osamnaest** sabotaža, uz jedanaest novih redova u test-svesci —
 
 `RunBankaImportTestSuite` (tvrd fail-gate nad ovim područjem) ostaje zelena:
 **PASS=189, FAIL=0**.
+
+**Posle prvog smoke-a nad pravim podacima** ispravljeno je šest stvari koje
+headless testovi nisu mogli da vide: prazna kolona datuma, odsečen naslov
+mreže, negativan zbir u podnožju, objašnjenje koje je naleglo na traku ispod
+zone, interna šifra stavke u prvoj koloni (izbačena — tu je sada broj izvoda),
+i pečat verzije koji je pokazivao stariji build nego što je uvezen.

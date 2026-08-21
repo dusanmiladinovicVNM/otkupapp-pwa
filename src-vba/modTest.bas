@@ -110,6 +110,14 @@ Private Const FX_BIM_RACUN2 As String = "265-0000000222222-22"
 Private Const FX_BIM_BLOK3_BR As String = "BLK-BIM-3"
 ' Blok kooperanta KOOP-TEST-1 sa jednom otvorenom stavkom (OTK-TEST-1).
 Private Const FX_BIM_BLOK1_BR As String = "1/TEST"
+' Red se u mrezi nalazi PO PARTNERU, jer BankaImportID vise nije prikazan --
+' interna sifra ne ide operateru pred oci (nalaz iz smoke-a).
+Private Const FX_BIM_P_JAKI_FAK As String = "Kupac Prvi doo"
+Private Const FX_BIM_P_JAKI_BLOK As String = "Prvi Testni"
+Private Const FX_BIM_P_KOLIZIJA As String = "Drugi Platilac"
+Private Const FX_BIM_P_DA As String = "Obradjeni Platilac"
+Private Const FX_BIM_P_DUP As String = "Dvojnik Prvi"
+Private Const FX_BIM_P_STORNO As String = "Stornirani Platilac"
 Private Const FX_BIM_SVE As Long = 10       ' 11 redova minus jedan storniran
 Private Const FX_BIM_OTVORENIH As Long = 6  ' status "" ili "Error"
 Private Const FX_BIM_OBRADJENIH As Long = 3 ' BIM-FIX-DA + dva dvojnika
@@ -6459,6 +6467,7 @@ Private Sub T_BankaUvoz_UgovorEkrana()
     Dim kljuc As String, spec As String, d As Variant, kolone As Variant
     ' For Each trazi Variant ili Object -- String iterator je "Type mismatch".
     Dim kv As Variant
+    Dim redovi As Variant, j As Long
 
     AssertEq (Len(modUiScreens.ScrRowByKey("BANKA_UVOZ")) > 0), True, _
              "BANKA_UVOZ postoji u registru ekrana"
@@ -6517,6 +6526,20 @@ Private Sub T_BankaUvoz_UgovorEkrana()
         AssertEq IsArray(d(0)), True, "lista " & kljuc & " prijavljuje svoje kolone"
         AssertEq (CLng(d(2)) > 0), True, _
                  "lista " & kljuc & " ima redove u fixture-u -- tvrdnje nisu prazne"
+
+        ' DATUM MORA DA STIGNE MREZI KAO SERIJSKI BROJ. Ljuskin FmtDatumKratko
+        ' odbija sve sto nije IsNumeric, a IsNumeric je nad Date-om FALSE -- pa
+        ' celija ostane PRAZNA, bez ijedne greske. To je naslo tek pustanje nad
+        ' pravim podacima; suite nije video jer nijedna tvrdnja nije citala datum.
+        kolone = d(0)
+        redovi = d(1)
+        For j = 0 To UBound(kolone)
+            If Split(CStr(kolone(j)), "|")(2) = "date" Then
+                AssertEq IsNumeric(redovi(1, j + 1)), True, _
+                         "lista " & kljuc & ", kolona " & CStr(j + 1) & _
+                         ": datum je BROJ -- inace ga mreza ne crta"
+            End If
+        Next j
     Next i
 
     modScrBankaUvoz.Scr_BuTestReset
@@ -6540,13 +6563,19 @@ Private Sub T_BankaUvoz_IdentitetURedu_NeCrtaSe()
     ' identiteta. (Nadjeno sabotazom banka-uvoz-identitet-vidljiv, koja je nad
     ' prvom verzijom ovog testa prolazila neprimeceno.)
     kolone = modScrBankaUvoz.BuKoloneZaListu("STAVKE")
-    spec = Split(CStr(kolone(10)), "|")
-    AssertEq spec(0), "OTKUI_HDB_BIMKEY", "jedanaesta kolona stavke je identitet"
+    spec = Split(CStr(kolone(9)), "|")
+    AssertEq spec(0), "OTKUI_HDB_BIMKEY", "deseta kolona stavke je identitet"
     AssertEq spec(4), "4", "identitet stavke je prioriteta 4 -- ne crta se"
     ' Sve tri prenosne kolone moraju ostati van prikaza: mreza crta do 3.
-    For i = 10 To UBound(kolone)
+    For i = 9 To UBound(kolone)
         AssertEq Split(CStr(kolone(i)), "|")(4), "4", _
                  "prenosna kolona " & CStr(i + 1) & " se ne crta"
+    Next i
+    ' INTERNA SIFRA NE IDE OPERATERU PRED OCI. BankaImportID sme da postoji samo
+    ' u prenosnoj koloni; medju vidljivima ga nema.
+    For i = 0 To 8
+        AssertEq (Split(CStr(kolone(i)), "|")(0) <> "OTKUI_HDB_BIMKEY"), True, _
+                 "vidljiva kolona " & CStr(i + 1) & " nije interna sifra"
     Next i
 
     kolone = modScrBankaUvoz.BuKoloneZaListu("IZVODI")
@@ -6558,38 +6587,33 @@ Private Sub T_BankaUvoz_IdentitetURedu_NeCrtaSe()
     d = modScrBankaUvoz.Scr_Rows("sve", "")
     redovi = d(1)
 
-    r = RedSaVrednoscu(redovi, 1, FX_BIM_JAKI_FAK)
-    AssertEq (r > 0), True, "stavka " & FX_BIM_JAKI_FAK & " je u listi"
-    AssertEq Trim$(CStr(redovi(r, 11))), FX_BIM_JAKI_FAK, _
+    r = RedSaVrednoscu(redovi, 3, FX_BIM_P_JAKI_FAK)
+    AssertEq (r > 0), True, "stavka partnera " & FX_BIM_P_JAKI_FAK & " je u listi"
+    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_JAKI_FAK, _
              "skrivena kolona nosi identitet stavke"
-    ' PRIKAZ i IDENTITET su DVE kolone: prikaz pokazuje ono sto u tabeli pise,
-    ' identitet ono sto je citac PROVERIO. Da su ista kolona, dvosmislen red bi
-    ' u listi ostao bez ijedne oznake i operater ne bi znao ni koji je.
-    AssertEq Trim$(CStr(redovi(r, 1))), FX_BIM_JAKI_FAK, _
-             "prva kolona PRIKAZUJE BankaImportID"
+    ' Prva kolona je BROJ IZVODA -- jedini POSLOVNI broj koji stavka nosi.
+    AssertEq Trim$(CStr(redovi(r, 1))), FX_BIM_IZVOD1, "prva kolona je broj izvoda"
+    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_RACUN1, "red nosi broj racuna"
 
-    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_IZVOD1, "red nosi broj izvoda"
-    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_RACUN1, "red nosi broj racuna"
-
-    r = RedSaVrednoscu(redovi, 1, FX_BIM_KOLIZIJA)
+    r = RedSaVrednoscu(redovi, 3, FX_BIM_P_KOLIZIJA)
     AssertEq (r > 0), True, "kolizioni red je u listi"
-    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_IZVOD1, _
+    AssertEq Trim$(CStr(redovi(r, 1))), FX_BIM_IZVOD1, _
              "kolizioni red nosi ISTI broj izvoda"
-    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_RACUN2, _
+    AssertEq Trim$(CStr(redovi(r, 9))), FX_BIM_RACUN2, _
              "ali DRUGI broj racuna -- zato broj izvoda ne moze biti identitet"
-    AssertEq Trim$(CStr(redovi(r, 11))), FX_BIM_KOLIZIJA, _
+    AssertEq Trim$(CStr(redovi(r, 10))), FX_BIM_KOLIZIJA, _
              "identitet je BankaImportID i razlikuje ta dva reda"
 
     ' DVOSMISLEN ID NOSI PRAZAN IDENTITET, a red se i dalje VIDI. Radnja tada
     ' odbija da bira umesto da pogodi -- bez toga bi svakako pukla
     ' (RequireSingleRow fail-close-uje na duplikat), ali kao greska transakcije
     ' umesto kao poruka operateru.
-    r = RedSaVrednoscu(redovi, 1, FX_BIM_DUP)
+    r = RedSaVrednoscu(redovi, 3, FX_BIM_P_DUP)
     AssertEq (r > 0), True, "dvosmislena stavka se i dalje VIDI u listi"
-    AssertEq Trim$(CStr(redovi(r, 11))), "", _
+    AssertEq Trim$(CStr(redovi(r, 10))), "", _
              "dvosmislen ID nosi PRAZAN identitet -- radnja odbija da bira"
 
-    AssertEq RedSaVrednoscu(redovi, 1, FX_BIM_STORNO), 0, _
+    AssertEq RedSaVrednoscu(redovi, 3, FX_BIM_P_STORNO), 0, _
              "storniran red nije u listi stavki"
 
     modScrBankaUvoz.Scr_BuTestReset
@@ -6620,14 +6644,14 @@ Private Sub T_BankaUvoz_RedNosiSmerIOtvorenost()
     d = modScrBankaUvoz.Scr_Rows("sve", "")
     redovi = d(1)
 
-    r = RedSaVrednoscu(redovi, 1, FX_BIM_JAKI_BLOK)
+    r = RedSaVrednoscu(redovi, 3, FX_BIM_P_JAKI_BLOK)
     AssertEq (r > 0), True, "red isplate je u listi"
-    AssertEq Trim$(CStr(redovi(r, 13))), BIM_SMER_ISPLATA, "red NOSI svoj smer"
-    AssertEq Trim$(CStr(redovi(r, 12))), "1", "otvoren red NOSI otvorenost"
+    AssertEq Trim$(CStr(redovi(r, 12))), BIM_SMER_ISPLATA, "red NOSI svoj smer"
+    AssertEq Trim$(CStr(redovi(r, 11))), "1", "otvoren red NOSI otvorenost"
 
-    r = RedSaVrednoscu(redovi, 1, FX_BIM_DA)
+    r = RedSaVrednoscu(redovi, 3, FX_BIM_P_DA)
     AssertEq (r > 0), True, "obradjen red je u listi pod cipom 'sve'"
-    AssertEq Trim$(CStr(redovi(r, 12))), "", _
+    AssertEq Trim$(CStr(redovi(r, 11))), "", _
              "obradjen red NE nosi otvorenost -- radnja ga odbija"
 
     ' Zatvorena stavka nema sta da predlozi: predlog racuna resolvere, a nad

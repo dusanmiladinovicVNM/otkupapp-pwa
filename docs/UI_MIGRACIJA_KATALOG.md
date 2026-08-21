@@ -1259,6 +1259,7 @@ bilo. Ovim se piše modul koji taj red već očekuje; **registar se ne dira**.
 | Legacy (`frmBankaImport`) | Novo mesto |
 |---|---|
 | `lstBanka` + `LoadBankaRows` | lista **STAVKE**, čitač `modBankaMapiranje.GetBankaImportForGrid` |
+| kolona `BIM` u `lstBanka` | **ne prikazuje se** — interna šifra (v. §9.5) |
 | `lblIzvodSummary` (jedan, najnoviji izvod) | lista **IZVODI**, čitač `modBankaImport.GetBankaIzvodiForGrid` |
 | KPI traka (`RefreshTopKpis` + `ComputeBankaMapState`) | `modBankaMapiranje.GetBankaImportKpi` (jedan prolaz umesto dva) |
 | `btnAutoJedan_Click` | radnja nad redom `bmauto` → `AutoMapBankaImportRow_TX` |
@@ -1294,9 +1295,12 @@ brojač i čitač dele, i test to tvrdi jednom brojkom.
 
 ### 9.2 Šta ekran uzima od ljuske
 
-Ništa nije napravljeno za ovaj ekran. **Diff u `modOtkupUI` je NULA** — pečat
-`OTKUI_BUILD` je već na `v6-ui-176` i za ovaj PR se ne pomera, jer ljuska nije
-dirana.
+Ništa nije napravljeno za ovaj ekran. **Jedina linija diffa u `modOtkupUI` je
+pečat verzije**, `OTKUI_BUILD` → `v6-ui-177`, i razlog joj nije „ekran Uvoz
+izvoda" nego isti kao u §8.10/R3: pečat postoji da bi se u smoke-u odmah videlo
+**da li je pravi kod uopšte uvezen**. Sa `v6-ui-176` u sidebaru, a `v6-ui-177` u
+ekranskom modulu, tvrdio bi treću stvar. `StaraKomponenta` poredi sa
+`OTKUI_MIN_BUILD`, ne sa `OTKUI_BUILD`, pa promena ništa ne pomera.
 
 | Potreba | Ljuskin ugovor | Otkad |
 |---|---|---|
@@ -1396,6 +1400,25 @@ zastavicu `outOK`, a `BuSmeMapiranjeKupca` je imenovana odluka koju radnja čita
 - **Partner combo svuda prikazuje i ID** (`ShowIDInComboDisplay`). Dva partnera
   istog naziva su u ovim šifarnicima obična pojava (fixture ima dva istoimena
   kooperanta), a izbor pogrešnog šalje novac pogrešnom čoveku (FM-0024 #7).
+- **`BankaImportID` se NE prikazuje.** Legacy ga ima kao prvu kolonu (`BIM`), ali
+  to je interna šifra: operater ne zna čemu služi i ne može ništa s njom. Prva
+  kolona je **broj izvoda** — jedini poslovni broj koji stavka nosi, i ono što
+  `StyleGridCell` u prvoj koloni ionako crta kao broj dokumenta. Šifra ostaje u
+  **pretrazi** (ko je ima iz loga ili poruke o grešci mora moći da nađe red) i u
+  skrivenoj koloni identiteta.
+- **Podnožje mreže pokazuje PROMET, ne neto.** Neto (uplate − isplate) je na
+  čipu „obrađeno" davao **negativan** broj, koji nad izvodom ne znači ništa.
+  Razdvojene brojke — koliko uplata, koliko isplata — stoje u traci iznad mreže;
+  podnožje ljuske ima samo **jedan** slot (`grdFoot.ftVal`), pa dva broja u njemu
+  traže dopunu ugovora ljuske i idu u zaseban PR.
+- **Nema `Scr_NaslovDopuna`.** Naslov mreže je labela fiksne širine (`grdTitle`,
+  180pt), pa se dopuna odsecala usred reči („— 29 z"). Broj koji je nosila već
+  stoji u brojci OTVORENO iznad mreže i u čipu „za obradu"; odsečen tekst je
+  gori od nikakvog.
+- **Objašnjenje stoji UZ polja, ne ispod njih.** Ispod je nalegalo na traku koju
+  ljuska crta odmah po završetku zone. Staje u prostor između poslednjeg polja i
+  brojki; kad tog prostora nema, sklanja se — `Label` ne prelama, pa bi inače
+  istekao preko brojki.
 
 ### 9.6 Identitet — pravilo koje je već triput plaćeno
 
@@ -1409,13 +1432,15 @@ izvoda i iznos" — pa dva računa firme legitimno nose izvod **istog broja**.
 Identitet stavke je `BankaImportID`; identitet izvoda je
 `BimIzvodKljuc(BrojDokumenta, BrojRacuna)`.
 
-**Prikaz i identitet su DVE kolone.** Prva kolona pokazuje `BankaImportID`
-onakav kakav u tabeli piše (kao legacy kolona „BIM"), a skrivena nosi ono što je
-čitač **proverio** (`modFaktura.IdIliPrazno` nad sirovom tabelom). Da su ista
-kolona, dvosmislen red bi u listi ostao **bez ijedne oznake** i operater ne bi
-znao ni koji je. Dvosmislen ID nosi **prazno**, i radnja tada odbija da bira —
-bez toga bi svakako pukla (`RequireSingleRow` fail-close-uje na duplikat), ali
-kao greška transakcije umesto kao poruka.
+**Identitet nije ni u jednoj vidljivoj koloni.** `BankaImportID` je interna
+šifra i iz prikaza je izbačen (§9.5); u redu postoji samo u skrivenoj koloni, i
+to onakav kakav ga je čitač **proverio** (`modFaktura.IdIliPrazno` nad sirovom
+tabelom). Dvosmislen ID nosi **prazno**, i radnja tada odbija da bira — bez toga
+bi svakako pukla (`RequireSingleRow` fail-close-uje na duplikat), ali kao greška
+transakcije umesto kao poruka.
+
+Red sa dvosmislenim ID-em se pri tom **i dalje vidi u listi** — po datumu,
+partneru i iznosu — pa operater zna koji je red odbijen. To i tvrdi test.
 
 **Isto važi za sve što red PRENOSI a ne prikazuje jednoznačno:**
 
@@ -1452,7 +1477,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–109** u `modTest` i **osamnaest** sabotaža, uz nove fixture redove
+Testovi **104–109** u `modTest` i **devetnaest** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **jedanaest** stavki izvoda u **četiri** grupe
 `(broj + račun)` i tri otkupne stavke istog bloka.
 
@@ -1476,8 +1501,8 @@ Svaki fixture red ima razlog:
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
-| `T_BankaUvoz_UgovorEkrana` | registar, dve liste, granice bazena (`MAX_ACT` tačno 5 na stavkama, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi, izvodi bez radnji | `banka-uvoz-sesta-radnja`, `banka-uvoz-cip-sve-nije-prvi`, `banka-uvoz-izvodi-imaju-radnju` |
-| `T_BankaUvoz_IdentitetURedu_NeCrtaSe` | identitet u poslednjoj koloni prioriteta 4; prikaz i identitet su dve kolone; dvosmislen ID → prazno; kolizija broja izvoda | `banka-uvoz-identitet-vidljiv`, `banka-uvoz-dvosmislen-prvi-pobedjuje` |
+| `T_BankaUvoz_UgovorEkrana` | registar, dve liste, granice bazena (`MAX_ACT` tačno 5 na stavkama, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi, izvodi bez radnji, **datum stiže kao broj** | `banka-uvoz-sesta-radnja`, `banka-uvoz-cip-sve-nije-prvi`, `banka-uvoz-izvodi-imaju-radnju`, `banka-uvoz-datum-nije-broj` |
+| `T_BankaUvoz_IdentitetURedu_NeCrtaSe` | identitet u prenosnoj koloni prioriteta 4; **interne šifre nema među vidljivim kolonama**; dvosmislen ID → prazno, a red se i dalje vidi; kolizija broja izvoda | `banka-uvoz-identitet-vidljiv`, `banka-uvoz-dvosmislen-prvi-pobedjuje` |
 | `T_BankaUvoz_RedNosiSmerIOtvorenost` | red **prenosi** smer i otvorenost umesto da ih izvodi iz prikaza; `"Error"` je i dalje otvoren | `banka-uvoz-red-ne-nosi-otvorenost`, `banka-uvoz-red-ne-nosi-smer`, `banka-uvoz-predlog-i-za-zatvorene` |
 | `T_BankaUvoz_CipJakihPratiBrojac` | čip „jaki ključevi" i `CountStrongKeyReadyBankaImport` vide **isti** skup; „sve" je unija tri stanja; značka = čip „za obradu" = `GetBankaImportOpen` | `banka-uvoz-cip-jaki-prolazi-sve`, `banka-uvoz-znacka-broji-mapirane`, `banka-uvoz-obradjeno-guta-preskoceno` |
 | `T_BankaUvoz_IzvodiSuAgregatPoRacunu` | grupa je `(broj + račun)`; zbirovi se **uzimaju sa reda, ne sabiraju**; legacy red bez saldo podataka nije neslaganje | `banka-uvoz-izvod-kljuc-bez-racuna`, `banka-uvoz-saldo-se-sabira`, `banka-uvoz-legacy-red-je-razlika` |
@@ -1493,7 +1518,7 @@ ovo je jedino što bi to primetilo.
 `BuRadnjeZaListu`, `BuKoloneZaListu`), ne kroz `Scr_Lista` — isti razlog kao
 §8.8: ugovor svake liste mora da se meri bez prebacivanja stanja ekrana.
 
-**Dvosmerni dokaz je pušten za svih osamnaest**: svaka sabotaža obara **tačno
+**Dvosmerni dokaz je pušten za svih devetnaest**: svaka sabotaža obara **tačno
 jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **109 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -1569,4 +1594,39 @@ greška u kodu; obe su bile greška **u dokazu**, i svaka je otkrila po nešto:
    „sabiranje" nije menjalo ništa. Premeštena je uz brojač stavki, koji radi za
    svaki red grupe.
 
-Posle ispravki: **18 / 18**.
+Posle ispravki: **18 / 18** (sa kasnije dodatom `banka-uvoz-datum-nije-broj`
+ukupno **19 / 19**).
+
+#### Smoke nad pravim podacima: šest nalaza koje suite nije mogao da vidi
+
+Prvi smoke je oborio šest stvari. Vredi ih razdvojiti po tome **zašto** ih
+headless nije uhvatio:
+
+**Nijedna tvrdnja nije čitala datum.** Kolona DATUM je bila prazna u svakom
+redu. Ekran je mreži predavao vrednost ćelije kakva jeste — `Date` — a ljuskin
+`FmtDatumKratko` počinje sa `If Not IsNumeric(v) Then Exit Function`, a
+**`IsNumeric` je nad `Date`-om `False`**. Ćelija ostane prazna, bez ijedne
+greške i bez traga u logu. Ostali ekrani datum konvertuju u serijski broj
+(`modScrDokumenti.DatSerijski`, `modUiData.CellDate`) — ovaj sada takođe.
+Test 104 od sada prolazi kroz opis kolona, nalazi svaku `date` kolonu i tvrdi da
+je vrednost `IsNumeric`; sabotaža `banka-uvoz-datum-nije-broj` to obara.
+
+**Prikaz se ne meri tvrdnjom nego okom.** Objašnjenje ispod polja naleglo je na
+traku koju ljuska crta odmah po završetku zone; naslov mreže se odsekao usred
+reči („— 29 z") jer je `grdTitle` fiksnih 180pt; podnožje je na čipu „obrađeno"
+pokazivalo **negativan** zbir. Sve tri su popravljene (§9.5).
+
+**Šta je operateru korisno nije stvar koda.** `BankaImportID` u prvoj koloni je
+interna šifra — operater ne zna čemu služi. Izbačena je iz prikaza; prva kolona
+je sada broj izvoda.
+
+**Pečat je opet lagao.** Sidebar je pisao `v6-ui-176` dok je ekranski modul bio
+`v6-ui-177`, pa se iz smoke-a nije moglo videti da li je nov kod uopšte uvezen —
+tačno ono što je §8.10/R3 zatvarao. `OTKUI_BUILD` je podignut.
+
+**Jedan nalaz nije ovog ekrana** i ide u zaseban PR: traka „Nema izabrane
+otpremnice…" vidi se na svakom ekranu, jer `modOtkupUI:1735` odlučuje po
+`modeKey(ActiveMode) = "OTKUP"` i **uopšte ne gleda koji je ekran aktivan**.
+Ista klasa važi za `ModeBrojiKomade(ActiveMode)` u podnožju. Za poređenje,
+`ModeHasValCol()` i `ModeHasKgCol()` su **ispravne** — izvode se iz `mCols`,
+dakle iz opisa kolona aktivnog ekrana.

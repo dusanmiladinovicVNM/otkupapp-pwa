@@ -1801,6 +1801,19 @@ SABOTAZE = {
         "stornirana faktura ne ulazi u listu",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
+    # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
+    # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
+    # greske, bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
+    # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
+    # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
+    # greske i bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
+    "banka-uvoz-datum-nije-broj": (
+        "modScrBankaUvoz.bas",
+        "        outA(n, 2) = modUiData.CellDate(src, i, 4)\n",
+        "        outA(n, 2) = src(i, 4)\n",
+        "T_BankaUvoz_UgovorEkrana",
+        "datum stize mrezi kao serijski broj, ne kao Date",
+    ),
     # Lista stavki stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
     # dobije ekran kome fali dugme, bez ijedne poruke.
@@ -1859,8 +1872,8 @@ SABOTAZE = {
     # iz prikaza ne razlikuje od reda kome status nije upisan.
     "banka-uvoz-red-ne-nosi-otvorenost": (
         "modScrBankaUvoz.bas",
-        '        outA(n, 12) = IIf(CBool(src(i, 10)), "1", "")\n',
-        '        outA(n, 12) = "1"   \' SABOTAZA: svaki red izgleda otvoren\n',
+        '        outA(n, 11) = IIf(CBool(src(i, 10)), "1", "")\n',
+        '        outA(n, 11) = "1"   \' SABOTAZA: svaki red izgleda otvoren\n',
         "T_BankaUvoz_RedNosiSmerIOtvorenost",
         "red prenosi otvorenost, radnja je ne izvodi iz prikaza",
     ),
@@ -1868,8 +1881,8 @@ SABOTAZE = {
     # uplatom I isplatom izgleda kao uplata, a writer ga odbija.
     "banka-uvoz-red-ne-nosi-smer": (
         "modScrBankaUvoz.bas",
-        "        outA(n, 13) = CStr(src(i, 11))\n",
-        '        outA(n, 13) = ""   \' SABOTAZA: smer se gubi iz reda\n',
+        "        outA(n, 12) = CStr(src(i, 11))\n",
+        '        outA(n, 12) = ""   \' SABOTAZA: smer se gubi iz reda\n',
         "T_BankaUvoz_RedNosiSmerIOtvorenost",
         "red prenosi smer stavke",
     ),
