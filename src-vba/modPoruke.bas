@@ -1285,7 +1285,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BU_NEMA_TIPA", ChrW(10007) & " Izaberi tip mapiranja (Kupac / Kooperant / OM)"
     UpsertRow lo, existing, "OTKUI_ERR_BU_NEMA_PARTNERA", ChrW(10007) & " Izaberi partnera"
     UpsertRow lo, existing, "OTKUI_ERR_BU_SMER", ChrW(10007) & " Smer stavke se ne sla" & ChrW(382) & "e sa izabranim tipom mapiranja"
-    UpsertRow lo, existing, "OTKUI_ERR_BU_FAKTURE", ChrW(10007) & " Lista faktura NIJE u" & ChrW(269) & "itana " & ChrW(8212) & " prazan izbor bi zna" & ChrW(269) & "io avans:"
+    UpsertRow lo, existing, "OTKUI_ERR_BU_CILJ", ChrW(10007) & " Lista za izbor NIJE u" & ChrW(269) & "itana " & ChrW(8212) & " prazan izbor bi zna" & ChrW(269) & "io avans ili poziv na broj:"
     UpsertRow lo, existing, "OTKUI_ERR_BU_RUCNO", ChrW(10007) & " Ru" & ChrW(269) & "no mapiranje NIJE izvr" & ChrW(353) & "eno"
     UpsertRow lo, existing, "OTKUI_ERR_BU_AUTO", ChrW(10007) & " Automatsko mapiranje nije na" & ChrW(353) & "lo jednozna" & ChrW(269) & "an cilj " & ChrW(8212) & " mapiraj ru" & ChrW(269) & "no"
     UpsertRow lo, existing, "OTKUI_ERR_BU_SKIP", ChrW(10007) & " Stavka nije presko" & ChrW(269) & "ena"

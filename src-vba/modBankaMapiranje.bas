@@ -1969,6 +1969,11 @@ Public Function GetFaktureZaBimMapiranje(ByVal kupacID As String, _
 
     If Len(Trim$(kupacID)) = 0 Then Exit Function
 
+    ' Nedostajuca tabela NIJE "kupac nema faktura": prazan izbor fakture znaci
+    ' AVANS, pa bi kvar postao drugi poslovni ishod. RequireColumnIndex ispod to
+    ' ne pokriva -- do njega se ne bi ni stiglo.
+    RequireTable TBL_FAKTURE, SRC
+
     Dim data As Variant
     data = GetTableData(TBL_FAKTURE)
     If IsEmpty(data) Then Exit Function
@@ -2040,6 +2045,10 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     On Error GoTo EH
 
     If Len(Trim$(kooperantID)) = 0 Then Exit Function
+
+    ' Isto kao kod faktura: prazna lista blokova znaci "uzmi poziv na broj", pa
+    ' nedostajuca tabela ne sme da se pretvori u tu granu.
+    RequireTable TBL_OTKUP, SRC
 
     Dim data As Variant
     data = GetTableData(TBL_OTKUP)

@@ -6867,6 +6867,8 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     Dim nasao As Boolean
     Dim omBlokova As Long, omBezStanice As Long
     Dim errBezKolone As Long, errBezScope As Long
+    Dim errNemaTabele As Long, errImaTabele As Long
+    Dim punjenoPre As Long
 
     ' SMER-KAPIJA PRE KLIKA -- ista koju RequireBimSmer sprovodi u writeru
     ' (Kupac -> UPLATA, Kooperant -> ISPLATA, OM -> bilo koji CIST smer).
@@ -6961,12 +6963,47 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq ok, True, "citanje je proslo i za kupca kog nema"
     AssertEq IsArray(src), False, "kupac bez faktura dobija praznu listu, bez greske"
 
+    ' NEDOSTAJUCA TABELA NIJE PRAZNA TABELA. GetTableData vraca Empty za oba, pa
+    ' bi citac koji gleda samo IsEmpty tumacio kvar kao "kupac nema faktura" --
+    ' a prazan izbor fakture znaci AVANS. RequireColumnIndex ovo ne pokriva: do
+    ' provere kolona se ne bi ni stiglo.
+    On Error Resume Next
+    Err.Clear
+    modSchemaGuard.RequireTable "tblNePostojiNikako", "T_BankaUvoz"
+    errNemaTabele = Err.Number
+    Err.Clear
+    modSchemaGuard.RequireTable TBL_FAKTURE, "T_BankaUvoz"
+    errImaTabele = Err.Number
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (errNemaTabele <> 0), True, _
+             "nedostajuca tabela PUCA -- ne prolazi kao prazna lista"
+    AssertEq errImaTabele, 0, "postojeca tabela prolazi"
+
     ' FAIL-CLOSED. Pad ucitavanja se u testu ne moze izazvati bez lomljenja
-    ' seme, pa se meri kroz seam -- ali meri se BAS ODLUKA koju RucnoKupac cita.
-    AssertEq modScrBankaUvoz.Scr_BuFaktureStanjeTest(False), False, _
-             "pad ucitavanja ZAUSTAVLJA rucno mapiranje kupca -- prazan izbor bi bio avans"
-    AssertEq modScrBankaUvoz.Scr_BuFaktureStanjeTest(True), True, _
+    ' seme, pa se meri kroz seam -- ali seam ide kroz ISTU kapiju (CiljUcitan)
+    ' kroz koju idu i obe rucne rute.
+    '
+    ' Kapija je ZAJEDNICKA namerno. Prvo je stajala samo kod kupca, pa je pad
+    ' punjenja liste blokova ostajao neprimecen: prazan combo je izgledao kao
+    ' "operater nije birao blok", odatle fallback na poziv na broj sa PRAZNIM
+    ' scope-om, a ako kandidata nema -- ceo iznos se knjizi kao avans kooperanta
+    ' i stavka se oznacava obradjenom. Kvar bi postao uspesno knjizenje drugog
+    ' poslovnog ishoda.
+    AssertEq modScrBankaUvoz.Scr_BuCiljStanjeTest(False), False, _
+             "pad ucitavanja ZAUSTAVLJA rucno mapiranje -- prazan izbor bi bio avans ili poziv na broj"
+    AssertEq modScrBankaUvoz.Scr_BuCiljStanjeTest(True), True, _
              "uredno procitana lista pusta mapiranje"
+
+    ' KAPIJA MORA DA PUNI LISTU pre nego sto presudi -- inace zastavica opisuje
+    ' PRETHODNI izbor, a odluka se donosi nad ovim. Bez forme se to ne vidi ni
+    ' po cemu drugom (PuniCiljCombo bez kontrole izlazi odmah), pa se meri
+    ' brojacem poziva.
+    punjenoPre = modScrBankaUvoz.Scr_BuCiljPunjenoTest()
+    modScrBankaUvoz.Scr_BuCiljStanjeTest True
+    AssertEq (modScrBankaUvoz.Scr_BuCiljPunjenoTest() > punjenoPre), True, _
+             "kapija PUNI listu cilja pre nego sto presudi"
 
     ' SCOPE SE NE SME TIHO IZGUBITI KAD KOLONE NEMA.
     ' Ovo je najtisi moguci kvar: zadat scope, kolona nedokaziva, filtriranje

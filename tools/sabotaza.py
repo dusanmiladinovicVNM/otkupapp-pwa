@@ -2086,12 +2086,37 @@ SABOTAZE = {
     ),
     # FAIL-CLOSED. Prazna lista faktura i PAD ucitavanja izgledaju isto, a znace
     # suprotno: prazan izbor fakture knjizi AVANS umesto zatvaranja duga.
-    "banka-uvoz-fakture-fail-open": (
+    # Kapija je ZAJEDNICKA za kupca i kooperanta: prazna lista na obe rute nosi
+    # poslovno znacenje (avans, odnosno poziv na broj), pa pad punjenja ne sme da
+    # se pretvori ni u jedno od to dvoje.
+    "banka-uvoz-cilj-fail-open": (
         "modScrBankaUvoz.bas",
-        "    BuSmeMapiranjeKupca = mFaktureOK\n",
-        "    BuSmeMapiranjeKupca = True   ' SABOTAZA: pad citanja prolazi\n",
+        "    BuSmeMapiranjeCilja = mCiljOK\n",
+        "    BuSmeMapiranjeCilja = True   ' SABOTAZA: pad citanja prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "pad ucitavanja faktura zaustavlja rucno mapiranje kupca",
+        "pad ucitavanja liste cilja zaustavlja rucno mapiranje",
+    ),
+    # Zajednicka kapija mora STVARNO da puni listu pre nego sto presudi.
+    # Bez punjenja bi zastavica opisivala PRETHODNI izbor -- "ucitano" za tudji
+    # combo, a odluka se donosi nad ovim.
+    "banka-uvoz-cilj-kapija-ne-puni": (
+        "modScrBankaUvoz.bas",
+        "Private Function CiljUcitan(ByRef outPoruka As String) As Boolean\n"
+        "    PuniCiljCombo\n",
+        "Private Function CiljUcitan(ByRef outPoruka As String) As Boolean\n"
+        "    outPoruka = outPoruka   ' SABOTAZA: lista se vise ne puni\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "kapija puni listu cilja pre nego sto presudi",
+    ),
+    # Prazna tabela i NEPOSTOJECA tabela nisu isti ishod. GetTableData vraca
+    # Empty za oba, pa bi citac koji gleda samo IsEmpty tumacio kvar kao "nema
+    # redova" -- a prazan izbor fakture je AVANS.
+    "banka-uvoz-nema-tabele-je-prazna": (
+        "modSchemaGuard.bas",
+        "    If GetTable(tableName) Is Nothing Then\n",
+        "    If Len(tableName) < 0 Then   ' SABOTAZA: nema tabele prolazi\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "nedostajuca tabela puca umesto da prodje kao prazna lista",
     ),
     # Lista za rucno mapiranje nudi samo fakture sa OTVORENIM saldom. Zatvorena
     # faktura u toj listi vodi u preplatu.

@@ -1487,7 +1487,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–112** u `modTest` i **dvadeset osam** sabotaža, uz nove fixture redove
+Testovi **104–112** u `modTest` i **trideset** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
 `(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
 postoji na **tri** otkupna mesta — od kojih jedno **nije upisano**.
@@ -1537,7 +1537,7 @@ Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
 (`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
 iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
 
-**Dvosmerni dokaz je pušten za svih dvadeset osam**: svaka sabotaža obara
+**Dvosmerni dokaz je pušten za svih trideset**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -1945,3 +1945,71 @@ kao i geometrija mreže i granica datuma pre nje.
   Trenutno su usklađeni — 112/112/112, bez rupa i bez razlike — pa je ovo
   preventiva, ne živ bug. Uzak checker sa svojim `--self-test` slučajevima,
   **zaseban PR.**
+
+#### Treći krug: ista greška, jedan nivo iznad
+
+Prva dva kruga su zatvorila scope **unutar** ručnog mapiranja. Treći je pokazao
+da je ista klasa ostala **iznad** njega — u trenutku kad se lista uopšte puni.
+
+`PuniCiljCombo` puni obe liste cilja i ima jedan `On Error GoTo EH`, koji je
+postavljao zastavicu `mFaktureOK = False`. Ime nije bilo slučajno: kapiju je
+čitao **samo** `RucnoKupac`. `RucnoKooperant` je odmah išao na
+`BimEfektivniBlok`, pa je pad učitavanja blokova izgledao ovako:
+
+```
+GetBlokoviZaBimMapiranje  ->  greška (schema drift, nedostupna tabela...)
+PuniCiljCombo EH          ->  zastavica postavljena, ali je niko ne čita
+prazan combo              ->  "operater nije birao blok"
+BimEfektivniBlok          ->  fallback na PozivNaBroj
+ScopeIzbora               ->  scope = "", stani = False
+GetOtkupCandidates        ->  BEZ scope-a
+```
+
+To je tačno ono što je `c8b7a32b` zabranio, samo dosegnuto drugim putem.
+
+**A ako iz poziva na broj ne ispadne nijedan kandidat, ishod je gori od
+pogrešne raspodele.** `MapBankaImportAsKooperantBlockCore` na
+`If IsEmpty(kandidati)` **ne prijavljuje grešku** — ceo iznos knjiži kao
+`NOV_VIRMAN_AVANS_KOOP` i stavku označava obrađenom
+(`UpdateBankaImportStatus ... "Da"`). Neuspeh čitanja tako postaje **uspešno
+knjiženje drugog poslovnog ishoda**.
+
+Kapija je zato sada **zajednička** (`CiljUcitan`), a zastavica se zove `mCiljOK`
+— jer prazna lista na **obe** rute nosi poslovno značenje: prazan izbor fakture
+je avans, prazan izbor bloka je poziv na broj.
+
+#### Prazna tabela i nepostojeća tabela nisu isti ishod
+
+`GetTableData` vraća `Empty` za oba. Čitač koji gleda samo `IsEmpty(data)` zato
+nedostajuću tabelu tumači kao „nema redova" — a tamo gde prazna lista nosi
+poslovno značenje to je fail-open. `RequireColumnIndex` to **ne pokriva**: do
+provere kolona se ne bi ni stiglo, jer čitač izađe ranije.
+
+Novi `modSchemaGuard.RequireTable` stoji **pre** `GetTableData` u
+`GetFaktureZaBimMapiranje` i `GetBlokoviZaBimMapiranje`. Isti odnos kao
+`TabelaCitljiva` u `modUiData`, samo na domenskoj strani i kao greška umesto
+zastavice.
+
+#### Sabotaža koja nije oborila ništa — i šta je tražila
+
+`banka-uvoz-cilj-kapija-ne-puni` uklanja poziv `PuniCiljCombo` iz kapije. Prvi
+put je vratila **112 / 0**.
+
+Uzrok nije bio u sabotaži nego u tome da se pravilo **ne može videti**: bez forme
+`PuniCiljCombo` izađe na `If c Is Nothing Then Exit Sub`, pa uklonjen poziv ne
+menja nijedan merljiv ishod. A baš taj nedostajući poziv je bio kvar — kapija bi
+sudila po zastavici **prethodnog** izbora.
+
+Zato modul dobija `mCiljPunjenja`: broji se **poziv**, ne uspeh. To je jedina
+stvar koju je posle uklonjenog poziva moguće opaziti bez forme, i sada sabotaža
+obara svoju tvrdnju. Isti obrazac kao test 110 (zona se stvarno gradi) — kad se
+pravilo ne vidi, ne izmišlja se tvrdnja koja prolazi, nego se napravi vidljivim.
+
+#### Zastareli komentari
+
+Dva komentara su zaostala iza koda i oba bi za tri meseca proizvela pogrešan
+mentalni model: zaglavlje modula je i dalje tvrdilo da su IZVODI agregat po
+`(broj + račun)` bez datuma, a `IzvodiKolone` je opisivao spojenu kolonu kao
+privremeni zaobilazak „dok se to ne popravi u ljusci" — a popravljeno je **u
+ovom istom PR-u**. Spojena kolona ostaje, ali sada kao **izbor**: dve susedne
+brojke bez konteksta čitaju se gore od jedne sa kosom crtom.

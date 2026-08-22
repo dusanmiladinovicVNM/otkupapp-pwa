@@ -5049,4 +5049,16 @@ Uz isti krug ide i prvi pad čitanja brojki, koji je do tada davao praznu značk
 Uz svaku ispravku ide test nad novim fixture redom i sabotaža koja baš tu tvrdnju
 obara.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset osam** sabotaža.
+Treći krug je našao istu grešku **jedan nivo iznad**: ako učitavanje liste
+blokova ne uspe, prazna lista je izgledala kao „operater nije birao blok" — pa bi
+se uzeo poziv na broj, bez otkupnog mesta. A kad iz njega ne ispadne nijedna
+otkupna stavka, ceo iznos se knjižio kao **avans kooperanta** i stavka se
+označavala obrađenom: neuspelo čitanje postajalo je uspešno knjiženje nečeg
+drugog. Provera „lista je stvarno učitana" sada stoji na **obe** ručne rute, ne
+samo na kupčevoj.
+
+Uz to: **nedostajuća tabela više ne prolazi kao prazna.** Excel na oba slučaja
+vraća isto, pa je nedostupna tabela faktura ili otkupa izgledala kao „nema
+redova" — a prazan izbor tu znači avans, odnosno poziv na broj.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset** sabotaža.

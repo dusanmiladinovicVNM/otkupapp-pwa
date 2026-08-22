@@ -27,7 +27,8 @@ Attribute VB_Name = "modScrBankaUvoz"
 '
 ' DVE LISTE u deljenoj mrezi (prekidac iznad nje):
 '   STAVKE   red za mapiranje; pet radnji nad redom
-'   IZVODI   agregat po (broj izvoda + broj racuna): pocetno, uplate, isplate,
+'   IZVODI   agregat po BimIzvodKljuc (broj + racun + datum): pocetno, uplate,
+'            isplate,
 '            zavrsno i da li se slaze. Legacy je isto to imao u JEDNOJ labeli i
 '            samo za NAJNOVIJI izvod (UpdateIzvodSummaryLabel).
 '
@@ -103,8 +104,17 @@ Private mFill As Boolean            ' punjenje comboa okida Change - v. mPopMute
 ' izbor znaci "knjizi kao AVANS". Zato se pad pamti i knjizenje kupca se
 ' blokira dok se ne osvezi. Isto pravilo koje frmBankaImport nosi u
 ' m_FaktureLoadOk; sam citac je izdvojen u modBankaMapiranje.
-Private mFaktureOK As Boolean
-Private mFaktureErr As String
+' UCITANOST LISTE CILJA -- vazi za OBE rucne rute, ne samo za fakture.
+' Prazna lista nosi poslovno znacenje na obe: prazan izbor fakture je AVANS,
+' prazan izbor bloka je "uzmi poziv na broj". Pad punjenja zato ne sme da se
+' pretvori ni u jedno od to dvoje. v. CiljUcitan.
+Private mCiljOK As Boolean
+Private mCiljErr As String
+' Koliko je puta punjenje liste POZVANO. Postoji zato sto se bez forme ne moze
+' videti da li ga je kapija stvarno zvala: bez kontrole PuniCiljCombo izlazi
+' odmah, pa uklonjen poziv ne menja nijedan drugi merljiv ishod -- a bas taj
+' nedostajuci poziv je bio kvar (kapija je sudila po zastavici tudjeg izbora).
+Private mCiljPunjenja As Long
 
 ' Kes cetiri brojke zone. Svaka je pun prolaz kroz tabelu, a OsveziZonu se zove
 ' pri svakom citanju mreze. Cisti ga Scr_ResetCache, koju ljuska zove posle
@@ -569,13 +579,13 @@ End Function
 
 Private Function RucnoKupac(ByVal bimID As String, ByVal kupacID As String) As Boolean
     Dim fakturaID As String
+    Dim greska As String
 
     ' AKO LISTA FAKTURA NIJE UCITANA, prazan izbor NE znaci "nema fakture" nego
     ' "ne znamo" -- a knjizenje avansa na osnovu takve liste je pogadjanje.
     ' Citac vraca zastavicu bas zbog ovoga (GetFaktureZaBimMapiranje).
-    PuniCiljCombo
-    If Not BuSmeMapiranjeKupca() Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_FAKTURE") & " " & mFaktureErr, True
+    If Not CiljUcitan(greska) Then
+        modOtkupUI.ShowToast greska, True
         Exit Function
     End If
 
@@ -600,8 +610,25 @@ End Function
 ' izgledaju isto, a znace suprotno: prazan izbor fakture knjizi AVANS. Odluka
 ' "smem li uopste da radim" je zato imenovana i odvojena od crtanja -- inace se
 ' ne moze izmeriti, a brisanje jednog If-a se ne bi videlo ni u jednom testu.
-Private Function BuSmeMapiranjeKupca() As Boolean
-    BuSmeMapiranjeKupca = mFaktureOK
+' SME LI RUCNO MAPIRANJE UOPSTE DA POCNE.
+'
+' Zajednicka za kupca i kooperanta, jer je opasnost ista: prazna lista cilja na
+' obe rute znaci nesto konkretno -- prazan izbor fakture je AVANS, prazan izbor
+' bloka je "uzmi poziv na broj" -- pa neuspelo punjenje ne sme da se pretvori u
+' to. Kod kooperanta je posledica i grublja: ako iz poziva na broj ne ispadne
+' nijedan kandidat, MapBankaImportAsKooperantBlockCore ceo iznos knjizi kao
+' avans kooperanta i stavku oznaci obradjenom. Kvar tako postane USPESNO
+' knjizenje drugog poslovnog ishoda.
+Private Function BuSmeMapiranjeCilja() As Boolean
+    BuSmeMapiranjeCilja = mCiljOK
+End Function
+
+' Puni listu cilja i kaze sme li se dalje. Obe rucne rute prolaze kroz OVO --
+' dve kopije istog uslova bi se razisle, a prva je vec bila samo kod kupca.
+Private Function CiljUcitan(ByRef outPoruka As String) As Boolean
+    PuniCiljCombo
+    CiljUcitan = BuSmeMapiranjeCilja()
+    If Not CiljUcitan Then outPoruka = Poruka("OTKUI_ERR_BU_CILJ") & " " & mCiljErr
 End Function
 
 Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As String) As Boolean
@@ -609,8 +636,19 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     Dim potvrdjeno As Boolean
     Dim scope As String
     Dim stani As Boolean
+    Dim greska As String
 
-    ' Prazan izbor bloka nije "nema bloka" nego "uzmi poziv na broj iz izvoda".
+    ' AKO LISTA BLOKOVA NIJE UCITANA, prazan izbor NE znaci "operater nije birao
+    ' blok". Fallback na poziv na broj bi tada bio pogadjanje, a scope bi ispao
+    ' prazan -- pa bi raspodela zahvatila sva otkupna mesta sa tim brojem. Ako
+    ' kandidata uopste nema, ceo iznos se knjizi kao avans kooperanta i stavka
+    ' se oznacava obradjenom: kvar postaje uspesno knjizenje drugog ishoda.
+    If Not CiljUcitan(greska) Then
+        modOtkupUI.ShowToast greska, True
+        Exit Function
+    End If
+
+    ' Tek sad prazan izbor legitimno znaci "uzmi poziv na broj iz izvoda".
     blok = modBankaMapiranje.BimEfektivniBlok(bimID, IzabraniCiljID())
 
     ' Scope i odluka o zaustavljanju racunaju se na JEDNOM mestu -- v.
@@ -884,17 +922,17 @@ End Function
 '------------------------------------------------------- LISTA: IZVODI
 ' DEVET VIDLJIVIH KOLONA, koliko ih ima i lista stavki. To nije kozmetika.
 '
-' Ljuska pri promeni liste NE preracunava sirine: LayoutGrid se zove iz
-' rasporeda ekrana, a ReloadGrid samo ucita i nacrta. RenderGrid zato crta sa
-' sirinama PRETHODNE liste -- a kolona koja je tamo bila skrivena (prioritet 4)
-' ima sirinu 0, pa se u novoj listi ne nacrta ni kad joj je vrednost tacna.
-' Merenjem potvrdjeno: vrednost je stizala do mreze (GridCell ju je vracao),
-' a celija je ostajala prazna.
+' Broj otvorenih i broj stavki stoje u JEDNOJ koloni -- "10 / 16", isti zapis
+' koji traka iznad mreze vec koristi za "MAPIRANO 11 / 40".
 '
-' Dok se to ne popravi u ljusci (zaseban posao), broj otvorenih i broj stavki
-' stoje u JEDNOJ koloni -- "10 / 16", isti zapis koji traka iznad mreze vec
-' koristi za "MAPIRANO 11 / 40". Time obe liste ovog ekrana imaju isti broj
-' vidljivih kolona, pa nasledjena sirina ne moze da zataji.
+' To je POCELO kao zaobilazak: ljuska pri promeni liste nije preracunavala
+' sirine, pa je deseta kolona ove liste nasledjivala nulu od devete (skrivene)
+' kolone liste STAVKE i ostajala prazna i kad joj je vrednost tacna. TAJ KVAR JE
+' U MEDJUVREMENU POPRAVLJEN U LJUSCI (mGeomStara / OsveziGeometriju), pa
+' zaobilazak vise nije potreban.
+'
+' Spojena kolona ipak OSTAJE, i to kao izbor a ne kao ostatak: dve susedne
+' brojke bez konteksta citaju se gore od jedne sa kosom crtom.
 Private Function IzvodiKolone() As Variant
     IzvodiKolone = Array( _
         "OTKUI_HDB_IZVOD||txt|96|1", _
@@ -1191,11 +1229,14 @@ EH:
 End Sub
 
 ' Cilj se puni PO TIPU I PARTNERU: fakture za kupca, blokovi za kooperanta, za
-' OM nista. Fakture nose zastavicu ucitanosti -- v. mFaktureOK.
+' OM nista. Obe liste nose zastavicu ucitanosti -- v. mCiljOK.
 Private Sub PuniCiljCombo()
     Dim c As Object, tip As String, partnerID As String, kljuc As String
     Dim src As Variant, i As Long
     On Error GoTo EH
+
+    ' Broji se POZIV, ne uspeh -- v. mCiljPunjenja.
+    mCiljPunjenja = mCiljPunjenja + 1
 
     tip = IzabraniTip()
     partnerID = IzabraniPartnerID()
@@ -1213,13 +1254,13 @@ Private Sub PuniCiljCombo()
     c.TextColumn = 1
 
     ' Zastavica se resetuje na svako punjenje: "ucitano" vazi za TEKUCI izbor.
-    mFaktureOK = True
-    mFaktureErr = ""
+    mCiljOK = True
+    mCiljErr = ""
 
     Select Case tip
         Case BIM_TIP_KUPAC
             PostaviNatpisCilja Poruka("OTKUI_FLD_BU_FAKTURA")
-            src = modBankaMapiranje.GetFaktureZaBimMapiranje(partnerID, mFaktureOK, mFaktureErr)
+            src = modBankaMapiranje.GetFaktureZaBimMapiranje(partnerID, mCiljOK, mCiljErr)
             If IsArray(src) Then
                 For i = 1 To UBound(src, 1)
                     c.AddItem CStr(src(i, 2)) & "  " & ChrW(183) & "  " & _
@@ -1267,10 +1308,12 @@ Private Sub PuniCiljCombo()
     Exit Sub
 EH:
     mFill = False
-    ' Pad punjenja NE sme da izgleda kao "kupac nema otvorenih faktura": prazan
-    ' izbor fakture znaci AVANS.
-    mFaktureOK = False
-    mFaktureErr = "[" & CStr(Err.Number) & "] " & Err.description
+    ' Pad punjenja NE sme da izgleda kao prazna lista. Na obe rute prazna lista
+    ' znaci nesto konkretno -- avans, odnosno poziv na broj -- pa bi kvar postao
+    ' drugi poslovni ishod. GetBlokoviZaBimMapiranje gresku DIZE (za razliku od
+    ' faktura, koje je vracaju kroz zastavicu), pa oba puta zavrsavaju ovde.
+    mCiljOK = False
+    mCiljErr = "[" & CStr(Err.Number) & "] " & Err.description
     mCiljPunjen = ""
 End Sub
 
@@ -1592,11 +1635,21 @@ End Function
 ' Pad ucitavanja faktura se u testu ne moze izazvati bez lomljenja seme, a
 ' fail-closed grana je najskuplja stvar na ovom ekranu (avans umesto zatvaranja
 ' duga). Seam postavlja bas to stanje i vraca odluku koju RucnoKupac cita.
-Public Function Scr_BuFaktureStanjeTest(ByVal ucitane As Boolean) As Boolean
+' Koliko je puta kapija zvala punjenje liste. Jedini nacin da se bez forme
+' izmeri da poziv POSTOJI.
+Public Function Scr_BuCiljPunjenoTest() As Long
     If Not IsTestMode() Then Exit Function
-    mFaktureOK = ucitane
-    mFaktureErr = "test"
-    Scr_BuFaktureStanjeTest = BuSmeMapiranjeKupca()
+    Scr_BuCiljPunjenoTest = mCiljPunjenja
+End Function
+
+Public Function Scr_BuCiljStanjeTest(ByVal ucitane As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim greska As String
+    mCiljOK = ucitane
+    mCiljErr = "test"
+    ' Ide kroz ISTU kapiju kroz koju idu i obe rucne rute. Dok je seam racunao
+    ' svoj izraz, sabotaza je obarala kopiju u testu.
+    Scr_BuCiljStanjeTest = CiljUcitan(greska)
 End Function
 
 Public Sub Scr_BuTestReset()
@@ -1606,7 +1659,8 @@ Public Sub Scr_BuTestReset()
     mPartnerTest = ""
     mCiljTest = ""
     mStanicaTest = ""
-    mFaktureOK = True
-    mFaktureErr = ""
+    mCiljOK = True
+    mCiljErr = ""
+    mCiljPunjenja = 0
     Scr_ResetCache
 End Sub
