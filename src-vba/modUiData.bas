@@ -18,6 +18,10 @@ Option Explicit
 
 Public Const UIDATA_BUILD As String = "v6-ui-107"
 
+' Najveci serijski broj koji CDate sme da primi (31.12.9999). Preko toga baca
+' Overflow -- v. CellDate.
+Public Const DATUM_SERIJSKI_MAX As Double = 2958465#
+
 Private mCache As Object
 
 Public Sub ResetCache()
@@ -86,12 +90,32 @@ Public Function CellD(ByRef src As Variant, ByVal r As Long, ByVal c As Long) As
     If IsNumeric(v) Then CellD = CDbl(v)
 End Function
 
+' BROJ KOJI NIJE DATUM SE ODBIJA, ne prosledjuje.
+'
+' Do v6-ui-177 je svaki broj prolazio kao "datum". Na zatecenim svescima
+' tblBankaImport.DatumTransakcije ume da bude BROJ oblika ddmmyyyy (26062026), a
+' ne datum -- i takav broj je stizao do mreze. Ljuska nad kolonom tipa "date"
+' radi CDate, CDate van opsega baca Overflow, a RenderGrid radi pod
+' "On Error Resume Next": upis celije bude preskocen i u njoj OSTANE natpis od
+' ranijeg crtanja. Bez greske, bez traga u logu, sa tudjim tekstom u koloni.
+'
+' Vrednost se NE TUMACI (ddmmyyyy nije oblik koji modParse.TryParseDateValue
+' poznaje, pa bi tumacenje bilo izmisljanje pravila koje domen nema) -- nego se
+' odbija. Prazna celija je istina; tudji tekst nije.
 Public Function CellDate(ByRef src As Variant, ByVal r As Long, ByVal c As Long) As Double
+    Dim d As Double
     If c < 1 Then Exit Function
     Dim v As Variant: v = src(r, c)
     If IsNumeric(v) Then
-        CellDate = Int(CDbl(v))
+        d = Int(CDbl(v))
     ElseIf IsDate(v) Then
-        CellDate = Int(CDbl(CDate(v)))
+        d = Int(CDbl(CDate(v)))
     End If
+    If Not DatumSerijskiValidan(d) Then Exit Function
+    CellDate = d
+End Function
+
+' Sme li broj u kolonu datuma -- tj. sme li CDate da ga primi.
+Public Function DatumSerijskiValidan(ByVal serijski As Double) As Boolean
+    DatumSerijskiValidan = (serijski >= 1) And (serijski <= DATUM_SERIJSKI_MAX)
 End Function

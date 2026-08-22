@@ -225,6 +225,26 @@ PRERADA_STARA_ID = "PRE-TEST-Y25"
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
 PRIJEMNICA_ISPRAVKA = "3/150326"
 
+class Sirovo:
+    """Vrednost koja se upisuje BEZ formata koji bi red nasledio od kolone.
+
+    Nov `ListRows.Add` nasledi format prethodnog reda. Za broj koji stoji u
+    datumskoj koloni to znaci da ga Excel pri citanju pokusa da vrati kao
+    `Date` -- a broj van opsega datuma tada obara CELO citanje tabele
+    (`GetTableData` -> Overflow), sto NIJE ono sto se desava na zatecenim
+    svescima: tamo takva celija ima obican format i cita se kao broj.
+    """
+
+    def __init__(self, v):
+        self.v = v
+
+    def __repr__(self):
+        # POTPIS FIXTURE-a hashira repr() posejanih vrednosti. Podrazumevani
+        # repr objekta nosi adresu iz memorije, pa bi hash bio drugaciji u
+        # svakom prolazu i run_vba bi svaki put javljao "USTAJAO FIXTURE".
+        return "Sirovo(%r)" % (self.v,)
+
+
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
 SEED = {
@@ -635,17 +655,21 @@ SEED = {
          "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
          "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
          "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
-        # NALAZ, NE SEJEMO GA: na zatecenim svescima tblBankaImport ume da nosi
-        # DatumTransakcije kao BROJ oblika ddmmyyyy (26.06.2026 -> 26062026).
-        # Takav red je ovde bio posejan da tvrdnja o opsegu datuma ima nad cim
-        # da padne -- i oborio je SEDAM testova, ukljucujuci tudje
-        # (T_StornoEkran_SvakaListaVracaRedove), sa "Overflow". Znaci da tu
-        # vrstu podatka ne podnosi samo ovaj ekran nego vise njih.
-        # Sejanje je zato vraceno; pravilo se tvrdi direktno (BuDatumUOpsegu),
-        # a nalaz je prijavljen kao zaseban posao.
+        # DATUM KOJI NIJE DATUM -- regresioni red.
+        #
+        # Na zatecenim svescima tblBankaImport nosi DatumTransakcije kao BROJ
+        # oblika ddmmyyyy (26.06.2026 -> 26062026), a ne kao datum. Mreza nad
+        # kolonom tipa "date" radi CDate, koji van opsega baca Overflow, a
+        # RenderGrid to guta (On Error Resume Next) -- pa u celiji ostane natpis
+        # od RANIJEG crtanja.
+        #
+        # Kad je ovaj red prvi put posejan, oborio je SEDAM testova, ukljucujuci
+        # tudje (T_StornoEkran_SvakaListaVracaRedove). Posle ispravke u ljusci
+        # (modUiData.CellDate odbija broj van opsega) suite je opet zelena, pa
+        # red OSTAJE -- on je jedino sto bi povratak te greske primetilo.
         {"BankaImportID": "BIM-FIX-SK", "BrojDokumenta": BIM_IZVOD_2,
          "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
-         "DatumTransakcije": BIM_DATUM_2, "Partner": "Preskoceni Platilac",
+         "DatumTransakcije": Sirovo(26062026), "Partner": "Preskoceni Platilac",
          "PartnerKonto": "", "Opis": "Operater preskocio", "Uplata": 300, "Isplata": 0,
          "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
          "BankaReferenz": "REF-FIX-SK", "IzvorFajl": "fixture3.pdf",
@@ -1144,6 +1168,9 @@ def add_row(lo, values: dict, table_name: str) -> None:
         if isinstance(val, datetime.date):
             cell.NumberFormat = "dd.mm.yyyy"
             cell.Value = xl_serial(val)
+        elif isinstance(val, Sirovo):
+            cell.NumberFormat = "General"
+            cell.Value = val.v
         else:
             cell.Value = val
 

@@ -1295,16 +1295,22 @@ brojač i čitač dele, i test to tvrdi jednom brojkom.
 
 ### 9.2 Šta ekran uzima od ljuske
 
-Ništa nije napravljeno za ovaj ekran. Diff u `modOtkupUI` su **dve linije**, i
-nijedna nije nova mogućnost:
+Ništa **novo** nije napravljeno za ovaj ekran: sve što mu treba postoji od Faze
+C i Fakturisanja. Ali za razliku od §8.2, diff u `modOtkupUI` ovde **nije nula** —
+smoke je našao četiri kvara u samoj ljusci, i oni su popravljeni **u ljusci**, ne
+zaobiđeni u ekranu:
 
 1. **Pečat verzije**, `OTKUI_BUILD` → `v6-ui-177`. Razlog nije „ekran Uvoz
    izvoda" nego isti kao u §8.10/R3: pečat postoji da bi se u smoke-u odmah
-   videlo **da li je pravi kod uopšte uvezen**. Sa `v6-ui-176` u sidebaru, a
-   `v6-ui-177` u ekranskom modulu, tvrdio bi treću stvar. `StaraKomponenta`
-   poredi sa `OTKUI_MIN_BUILD`, pa promena ništa ne pomera.
+   videlo **da li je pravi kod uopšte uvezen**.
 2. **`zOtp` dopisan u spisak zona koje pripadaju samo ekranu Dokumenta**
-   (`ShowZones`) — v. §9.10.
+   (`ShowZones`).
+3. **Geometrija kolona prati opis kolona** (`SetGridColsArr` →
+   `OsveziGeometriju` na početku `RenderGrid`-a).
+4. **`FmtDatumKratko` čuva i gornju granicu** datuma.
+
+Uz njih, pravilo „broj koji nije datum" živi u `modUiData.CellDate`. Sve četiri
+su opisane u §9.10; nijedna nije stvar ovog ekrana i sve pogađaju i ostale.
 
 | Potreba | Ljuskin ugovor | Otkad |
 |---|---|---|
@@ -1481,7 +1487,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–110** u `modTest` i **dvadeset jedna** sabotaža, uz nove fixture redove
+Testovi **104–112** u `modTest` i **dvadeset dve** sabotaže, uz nove fixture redove
 u `tools/make_fixture.py`: **jedanaest** stavki izvoda u **četiri** grupe
 `(broj + račun)` i tri otkupne stavke istog bloka.
 
@@ -1523,9 +1529,13 @@ ovo je jedino što bi to primetilo.
 `BuRadnjeZaListu`, `BuKoloneZaListu`), ne kroz `Scr_Lista` — isti razlog kao
 §8.8: ugovor svake liste mora da se meri bez prebacivanja stanja ekrana.
 
-**Dvosmerni dokaz je pušten za svih dvadeset jednu**: svaka sabotaža obara
+Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
+(`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
+iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
+
+**Dvosmerni dokaz je pušten za svih dvadeset dve**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
-`RunAllTests` **110 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
+`RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
 
 ### 9.10 Nalazi iz sesije
@@ -1680,19 +1690,28 @@ opsega **pukne**, `RenderGrid` radi pod `On Error Resume Next` — pa upis ćeli
 bude preskočen i u njoj **ostane natpis od ranijeg crtanja**. Bez greške, bez
 traga u logu, sa tuđim tekstom u koloni.
 
-Ekran zato dobija kapiju **`BuDatumUOpsegu`**: u kolonu datuma ulazi samo ono
-što `CDate` sme da primi; sve ostalo je 0, tj. prazna ćelija. Vrednost se
-**ne tumači** — `ddmmyyyy` nije oblik koji `modParse.TryParseDateValue` poznaje,
-pa bi tumačenje bilo izmišljanje pravila koje domen nema.
+**Pravilo je LJUSKINO, ne ekranovo.** `modUiData.CellDate` je do sada svaki broj
+propuštao kao „datum"; sada odbija sve što `CDate` ne sme da primi
+(`DatumSerijskiValidan`, gornja granica 31.12.9999). `FmtDatumKratko` dobija isti
+štitnik na samom mestu crtanja, jer tamo stiže i ono što nije prošlo kroz
+`CellDate`. Ekran **ne drži svoju kopiju** tog pravila.
 
-**Nalaz veći od ovog ekrana:** takav red je posejan u fixture da bi tvrdnja imala
-nad čim da padne — i oborio je **sedam** testova sa `Overflow`, među njima i
-`T_StornoEkran_SvakaListaVracaRedove`. Dakle tu vrstu podatka **ne podnosi samo
-ovaj ekran**. Sejanje je vraćeno (potpis fixture-a je posle vraćanja
-bit-identičan, što dokazuje da je uzrok bila isključivo ta vrednost), pravilo se
-tvrdi direktno, a nalaz je otišao u zaseban posao. Prava kapija verovatno ne
-pripada ekranu nego `modUiData.CellDate` (vraća bilo koji broj kao „datum") ili
-`FmtDatumKratko` (čuva samo donju granicu) — to je odluka, ne pretpostavka.
+Vrednost se **ne tumači** — `ddmmyyyy` nije oblik koji `modParse.TryParseDateValue`
+poznaje, pa bi tumačenje bilo izmišljanje pravila koje domen nema. Prazna ćelija
+je istina; tuđi tekst nije.
+
+**Nalaz je bio veći od ovog ekrana**, i to se videlo na fixture-u: takav red
+posejan u `tblBankaImport` oborio je **sedam** testova sa `Overflow`, među njima i
+`T_StornoEkran_SvakaListaVracaRedove`.
+
+Prvo sejanje je pri tom promašilo metu: vrednost je upisana u ćeliju koja je
+**nasledila datumski format** od reda iznad, pa je Excel pri čitanju pokušavao da
+je vrati kao `Date` i obarao **celo** čitanje tabele (`GetTableData` → Overflow) —
+grublji kvar od onog koji zatečene sveske imaju. Merenje na pravoj svesci
+(`Diag_BuRedovi`) pokazuje `tip=Double`, dakle tamo ćelija ima običan format.
+`make_fixture` zato dobija `Sirovo(...)`: vrednost koja se upisuje **bez**
+nasleđenog formata. Red od tada **ostaje u fixture-u** — on je jedino što bi
+povratak ove greške primetilo.
 
 #### Treći smoke: mreža crta sa širinama PRETHODNE liste
 
@@ -1722,16 +1741,44 @@ je nasleđivala tu nulu. Zaglavlje je pri tom bilo vidljivo, jer ga osvežava
 zaseban prolaz (`RefreshGridHeaders`) koji se pokreće kasnije, kad je `mColW`
 već preračunat: otud najgori mogući izgled — **zaglavlje stoji, ćelije prazne**.
 
-**Ovde je zaobiđeno, ne popravljeno.** Broj otvorenih i broj stavki spojeni su u
-**jednu** kolonu (`„10 / 16"`, isti zapis koji traka iznad mreže već koristi za
-`MAPIRANO 11 / 40`), pa obe liste ovog ekrana imaju **isti broj vidljivih
-kolona** i nasleđena širina ne može da zataji. Spajanje je uz to čitljivije od
-dve susedne brojke bez konteksta.
+**Popravljeno u ljusci.** `SetGridColsArr` poredi **sadržaj** opisa kolona
+(`ColsPotpis` — ekran vraća nov niz pri svakom čitanju, pa poređenje referenci ne
+bi valjalo) i na promenu diže `mGeomStara`. `RenderGrid` na samom početku zove
+`OsveziGeometriju`, koja preračuna raspored **samo ako** je opis stvarno drugi —
+pa promena čipa ili strane ne plaća raspored. `LayoutGrid` na kraju briše
+zastavicu, jer je upravo preračunao.
 
-Sama ispravka ljuske je zaseban posao. **Pogađa i druge ekrane:** liste
-Fakturisanja imaju 9 / 7 / 7 vidljivih kolona, pa bi prelazak sa uže na širu
-listu trebalo da izgubi osmu i devetu — to **nije** potvrđeno smoke-om i stoji
-kao pretpostavka koju treba proveriti pre ispravke.
+Mereno **na Fakturisanju**, ne na ovom ekranu: njegove liste su različite širine
+(FAKTURE ima sedam vidljivih kolona, ZAFAKT devet), pa je prelazak sa uže na širu
+baš onaj smer u kom su se kolone gubile. Time je i potvrđeno da nalaz nije bio
+samo ovdašnji.
+
+Broj otvorenih i broj stavki na listi izvoda ipak **ostaju spojeni** u jednu
+kolonu (`„10 / 16"`, isti zapis koji traka iznad mreže već koristi za
+`MAPIRANO 11 / 40`). To više nije zaobilazak nego izbor: dve susedne brojke bez
+konteksta čitaju se gore od jedne sa kosom crtom.
+
+#### Sabotaža koja je RASLA: zamena ne sme biti podniz sidra
+
+Prva verzija sabotaže `mreza-geometrija-ne-prati-kolone` uklanjala je red
+`mGeomStara = True` tako što je trolinijsko sidro menjala **prve dve** njegove
+linije. `sabotaza.py --vrati` traži **zamenu** u fajlu i vraća sidro — a pošto je
+zamena bila **podniz sidra**, nalazio ju je i u zdravom kodu. Svaki ciklus
+apply→revert je zato dodavao još jedan primerak reda: posle proverâ ih je u
+`modOtkupUI.bas` bilo **dvadeset četiri**.
+
+To je zamka 8, opisana **u docstring-u same `sabotaza.py`** — i svejedno
+pokupljena. Utoliko gore što je simptom nem: duplirano `mGeomStara = True` je
+idempotentno, pa je kod radio, suite je bila zelena, a izvor je tiho rastao.
+
+Ispravno: sabotaža gađa **jednu** liniju i zamenjuje je nečim **jedinstvenim**
+(`mGeomStara = mGeomStara` uz oznaku), pa ni sidro ni zamena nisu podniz jedno
+drugog. Dokazano tako što tri uzastopna ciklusa apply→revert ostavljaju fajl
+bit-identičnim.
+
+Uz to: prva verzija **nije obarala ništa** (21/22), i to je bio jedini znak da
+nešto nije u redu. Sabotaža koja ne obara svoj test uvek je nalaz — ovog puta o
+sebi samoj.
 
 #### Traka „Nema izabrane otpremnice…" — moja prva dijagnoza je bila pogrešna
 

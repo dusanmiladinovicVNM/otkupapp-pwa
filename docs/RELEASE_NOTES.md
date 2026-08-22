@@ -5003,7 +5003,19 @@ delovi tog ekrana.
 Treći smoke je našao još jednu: na listi izvoda je kolona sa brojem otvorenih
 stavki bila prazna, iako je vrednost tačna — mreža je crtala sa širinama
 prethodne liste. Broj otvorenih i ukupan broj stavki sada stoje u **jednoj**
-koloni (`10 / 16`), isto kao brojka „Mapirano" iznad mreže. Uzrok u ljusci je
-prijavljen kao zaseban posao, jer pogađa i druge ekrane.
+koloni (`10 / 16`), isto kao brojka „Mapirano" iznad mreže.
 
-`RunAllTests` je sada **110 testova, 0 palih**, uz **dvadeset jednu** sabotažu.
+**Dva kvara su na kraju popravljena u samoj mreži, ne samo na ovom ekranu**, jer
+pogađaju sve:
+
+- **Kolone više ne kasne jednu listu.** Do sada je mreža posle prebacivanja
+  liste crtala sa širinama prethodne, pa je kolona koja je tamo bila skrivena
+  ostajala prazna i kad joj je vrednost tačna. Vidi se na svakom ekranu čije se
+  liste razlikuju po broju kolona — na primer na Fakturisanju, pri povratku sa
+  SEF-a na „Za fakturisanje".
+- **Datum koji nije datum više ne kvari prikaz.** Na zatečenim sveskama datum
+  transakcije ume da bude upisan kao broj (`26062026` umesto 26.06.2026). Takva
+  vrednost je rušila ispis ćelije, tiho, i u njoj je ostajao tekst sa prethodnog
+  ekrana. Sada se odbija i polje ostaje prazno.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset dve** sabotaže.

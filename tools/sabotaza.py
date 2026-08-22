@@ -1803,17 +1803,25 @@ SABOTAZE = {
     # ---------------------------------------------------------------- BANKA UVOZ
     # Broj van opsega datuma obara CDate u mrezi, a RenderGrid to proguta
     # (On Error Resume Next) -- celija ostane sa natpisom od ranijeg crtanja.
-    #
-    # Gadja PRAVILO, ne njegovu primenu. Red sa takvim datumom se u fixture
-    # NE seje: posejan je oborio SEDAM testova, ukljucujuci tudje, sa
-    # "Overflow" -- tu vrstu podatka ne podnosi samo ovaj ekran nego vise
-    # njih. Vidi komentar u make_fixture.py i par. 9.10 kataloga.
-    "banka-uvoz-datum-van-opsega": (
-        "modScrBankaUvoz.bas",
-        "    BuDatumUOpsegu = (serijski >= 1) And (serijski <= BU_DATUM_MAX)\n",
-        "    BuDatumUOpsegu = (serijski >= 1)\n",
-        "T_BankaUvoz_UgovorEkrana",
+    # Pravilo je LJUSKINO (modUiData), pa ga i sabotaza gadja tamo. Fixture
+    # nosi red sa DatumTransakcije = 26062026, ddmmyyyy kao broj, posejan
+    # bez datumskog formata -- tacno kako ga zatecene sveske nose.
+    "mreza-datum-van-opsega": (
+        "modUiData.bas",
+        "    DatumSerijskiValidan = (serijski >= 1) And (serijski <= DATUM_SERIJSKI_MAX)\n",
+        "    DatumSerijskiValidan = (serijski >= 1)\n",
+        "T_MrezaDatum_BrojKojiNijeDatum",
         "u kolonu datuma ulazi samo broj koji CDate sme da primi",
+    ),
+    # Geometrija kolona mora da prati OPIS kolona. Bez zastavice RenderGrid
+    # crta sa sirinama prethodne liste, pa kolona koja je tamo bila skrivena
+    # ostaje nevidljiva i kad joj je vrednost tacna.
+    "mreza-geometrija-ne-prati-kolone": (
+        "modOtkupUI.bas",
+        "        mGeomStara = True\n",
+        "        mGeomStara = mGeomStara   \' SABOTAZA: zastavica se ne dize\n",
+        "T_MrezaGeometrija_PratiOpisKolona",
+        "promena opisa kolona proglasava geometriju zastarelom",
     ),
     # Za OM se ne bira ni faktura ni blok, pa se polje cilja GASI: polje koje
     # ne radi nista poziva operatera da u njega nesto upise. Ovo je uz to
@@ -1834,7 +1842,7 @@ SABOTAZE = {
     # greske i bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
     "banka-uvoz-datum-nije-broj": (
         "modScrBankaUvoz.bas",
-        "        outA(n, 2) = DatumZaMrezu(src, i, 4)\n",
+        "        outA(n, 2) = modUiData.CellDate(src, i, 4)\n",
         "        outA(n, 2) = src(i, 4)\n",
         "T_BankaUvoz_UgovorEkrana",
         "datum stize mrezi kao serijski broj, ne kao Date",

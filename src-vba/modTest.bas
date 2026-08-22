@@ -321,6 +321,8 @@ Public Sub RunAllTests()
     RunOne 108
     RunOne 109
     RunOne 110
+    RunOne 111
+    RunOne 112
 
     SetTestMode prevMode
     WriteResultFile
@@ -463,6 +465,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 108: TestName = "T_BankaUvoz_IzvodiSuAgregatPoRacunu"
         Case 109: TestName = "T_BankaUvoz_RucnoMapiranjePravila"
         Case 110: TestName = "T_ZonaBankaUvoz_PoljaIRaspored"
+        Case 111: TestName = "T_MrezaDatum_BrojKojiNijeDatum"
+        Case 112: TestName = "T_MrezaGeometrija_PratiOpisKolona"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -581,6 +585,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 108: T_BankaUvoz_IzvodiSuAgregatPoRacunu
         Case 109: T_BankaUvoz_RucnoMapiranjePravila
         Case 110: T_ZonaBankaUvoz_PoljaIRaspored
+        Case 111: T_MrezaDatum_BrojKojiNijeDatum
+        Case 112: T_MrezaGeometrija_PratiOpisKolona
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -6544,28 +6550,13 @@ Private Sub T_BankaUvoz_UgovorEkrana()
                     AssertEq IsNumeric(redovi(r2, j + 1)), True, _
                              "lista " & kljuc & ", red " & CStr(r2) & ", kolona " & _
                              CStr(j + 1) & ": datum je BROJ -- inace ga mreza ne crta"
-                    ' ...i broj mora biti takav da ga CDate SME da primi. Van
-                    ' opsega CDate puca, RenderGrid to proguta (On Error Resume
-                    ' Next) i u celiji ostane TUDJI tekst -- bez greske i bez
-                    ' traga u logu. Nadjeno merenjem nad pravim podacima.
-                    AssertEq (CDbl(redovi(r2, j + 1)) = 0) Or _
-                             modScrBankaUvoz.BuDatumUOpsegu(CDbl(redovi(r2, j + 1))), True, _
-                             "lista " & kljuc & ", red " & CStr(r2) & ", kolona " & _
-                             CStr(j + 1) & ": datum je 0 ili u opsegu koji CDate prima"
+                    ' Opseg (da CDate sme da primi broj) NIJE ovde: to je
+                    ' pravilo ljuske i ima svoj test -- T_MrezaDatum_BrojKojiNijeDatum.
+                    ' Da se tvrdi i ovde, jedna sabotaza bi obarala dva testa.
                 Next r2
             End If
         Next j
     Next i
-
-    ' PRAVILO OPSEGA, izmereno bez mreze. 26062026 je ddmmyyyy upisan kao broj
-    ' -- tacno ono sto je zatecena sveska imala u DatumTransakcije.
-    AssertEq modScrBankaUvoz.BuDatumUOpsegu(26062026#), False, _
-             "ddmmyyyy kao broj NIJE datum"
-    AssertEq modScrBankaUvoz.BuDatumUOpsegu(0), False, "nula nije datum"
-    AssertEq modScrBankaUvoz.BuDatumUOpsegu(2958466#), False, _
-             "preko 31.12.9999 CDate puca"
-    AssertEq modScrBankaUvoz.BuDatumUOpsegu(CDbl(DateSerial(2026, 8, 21))), True, _
-             "stvaran datum prolazi"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub
@@ -6987,4 +6978,96 @@ Private Sub T_ZonaBankaUvoz_PoljaIRaspored()
     AssertEq (visina > 0), True, "Scr_Layout prijavljuje visinu zone"
     AssertEq koopNema, "", "za kooperanta su upaljena sva tri polja"
     AssertEq omVisak, "", "za OM je polje cilja UGASENO"
+End Sub
+
+
+' ============================================================
+' 111. Broj koji NIJE datum ne sme u kolonu datuma
+' ============================================================
+' Mreza nad kolonom tipa "date" radi CDate, a CDate van opsega baca Overflow.
+' RenderGrid radi pod "On Error Resume Next", pa upis celije bude PRESKOCEN i u
+' njoj ostane natpis od RANIJEG crtanja -- operater vidi tudji tekst, bez ijedne
+' greske i bez traga u logu.
+'
+' Nadjeno merenjem nad pravom sveskom (Diag_BuRedovi): tblBankaImport ume da
+' nosi DatumTransakcije kao BROJ oblika ddmmyyyy. Isti podatak je, posejan u
+' fixture, obarao SEDAM testova sa "Overflow" -- dakle ne pogadja jedan ekran
+' nego citavu mrezu.
+Private Sub T_MrezaDatum_BrojKojiNijeDatum()
+    Dim a(1 To 1, 1 To 1) As Variant
+
+    ' PRAVILO, izmereno bez mreze.
+    AssertEq modUiData.DatumSerijskiValidan(26062026#), False, _
+             "ddmmyyyy kao broj NIJE datum"
+    AssertEq modUiData.DatumSerijskiValidan(0), False, "nula nije datum"
+    AssertEq modUiData.DatumSerijskiValidan(modUiData.DATUM_SERIJSKI_MAX + 1), False, _
+             "preko 31.12.9999 CDate baca Overflow"
+    AssertEq modUiData.DatumSerijskiValidan(CDbl(DateSerial(2026, 8, 21))), True, _
+             "stvaran datum prolazi"
+
+    ' CITAC ODBIJA, ne prosledjuje. Da prosledi, mreza bi pukla pri crtanju --
+    ' tiho, jer RenderGrid gresku guta.
+    a(1, 1) = 26062026#
+    AssertEq modUiData.CellDate(a, 1, 1), 0, _
+             "broj van opsega se NE prosledjuje mrezi"
+
+    a(1, 1) = DateSerial(2026, 8, 21)
+    AssertEq modUiData.CellDate(a, 1, 1), CDbl(DateSerial(2026, 8, 21)), _
+             "pravi datum prolazi kao serijski broj"
+
+    ' Kontrola u drugom smeru: kapija ne sme da bude presiroka i pojede validne.
+    a(1, 1) = 1#
+    AssertEq modUiData.CellDate(a, 1, 1), 1, "prvi dan Excel kalendara prolazi"
+End Sub
+
+' ============================================================
+' 112. Geometrija kolona prati OPIS kolona
+' ============================================================
+' LayoutGrid (koji puni mColX / mColW) zove se iz RASPOREDA ekrana. ReloadGrid --
+' promena liste, cipa, pretrage -- zove samo LoadGridFromScreen i RenderGrid.
+' Bez zastavice je RenderGrid crtao sa sirinama PRETHODNE liste: kolona koja je
+' tamo bila skrivena (prioritet 4 -> sirina 0) ostajala je nevidljiva i u novoj
+' listi, ma koliko joj vrednost bila ispravna. Zaglavlje je pri tom umelo da
+' bude vidljivo, pa je izgled bio najgori moguci: naslov stoji, celije prazne.
+'
+' Mereno na Fakturisanju, jer su mu liste razlicite sirine (FAKTURE ima sedam
+' vidljivih kolona, ZAFAKT devet) -- dakle prelazak sa uze na siru je bas onaj
+' smer u kom se kolone gube.
+'
+' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
+' masinerija obrise Err izmedju Err.Raise i omotnice testa.
+Private Sub T_MrezaGeometrija_PratiOpisKolona()
+    Dim f As frmOtkupUI, z As Object
+    Dim stara As Boolean, posle As Boolean
+    Dim s7 As Single, s8 As Single
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls("zGrid")
+
+    ' Uza lista prvo.
+    modScrFakture.Scr_FkListaTestSet "FAKTURE"
+    modOtkupUI.GridTestLoad "FAKTURE"
+    modOtkupUI.GridLayoutTest z, 1200, 600
+
+    ' Pa sira: opis kolona se promenio.
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+    modOtkupUI.GridTestLoad "FAKTURE"
+    stara = modOtkupUI.GridGeomStaraTest()
+
+    ' Ovo je ono sto RenderGrid uradi pre crtanja.
+    modOtkupUI.GridOsveziGeomTest z
+    s7 = modOtkupUI.GridSirinaKoloneTest(7)
+    s8 = modOtkupUI.GridSirinaKoloneTest(8)
+    posle = modOtkupUI.GridGeomStaraTest()
+
+    modScrFakture.Scr_FkKorpaTestReset
+    modScrFakture.Scr_FkListaTestSet "ZAFAKT"
+    modOtkupUI.GridTestLoad ""
+    Unload f
+
+    AssertEq stara, True, _
+             "promena opisa kolona proglasava geometriju ZASTARELOM"
+    AssertEq (s7 > 0), True, "osma kolona sire liste dobija sirinu"
+    AssertEq (s8 > 0), True, "deveta kolona sire liste dobija sirinu"
+    AssertEq posle, False, "posle osvezavanja geometrija vise nije zastarela"
 End Sub
