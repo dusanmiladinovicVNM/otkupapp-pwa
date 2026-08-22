@@ -1303,7 +1303,12 @@ Private Function IzvodDatumKljuc(ByVal v As Variant) As String
     End If
 End Function
 
-' IZVODI za mrezu -- agregat po (BrojDokumenta + BrojRacuna).
+' IZVODI za mrezu -- agregat po BimIzvodKljuc, dakle po
+' (BrojDokumenta + BrojRacuna + DatumIzvoda).
+'
+' Definicija se OVDE NE PONAVLJA brojanjem polja: ovo je identitet finansijskog
+' agregata i vec je jednom zastario u komentaru dok je kod bio tacan. Kljuc ima
+' jedno mesto -- BimIzvodKljuc -- i cita se tamo.
 '
 ' Vraca 1-bazirano (1 To n, 1 To 12):
 '    1 Kljuc (BimIzvodKljuc)   2 BrojDokumenta   3 BrojRacuna

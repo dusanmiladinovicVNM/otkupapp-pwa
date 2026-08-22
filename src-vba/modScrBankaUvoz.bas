@@ -608,16 +608,19 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     Dim blok As String, razlog As String, n As Long
     Dim potvrdjeno As Boolean
     Dim scope As String
+    Dim stani As Boolean
 
     ' Prazan izbor bloka nije "nema bloka" nego "uzmi poziv na broj iz izvoda".
     blok = modBankaMapiranje.BimEfektivniBlok(bimID, IzabraniCiljID())
 
-    ' SCOPE OTKUPNOG MESTA. Kad je operater izabrao blok iz liste, zna se i sa
-    ' kog je otkupnog mesta -- i to mora do writera, jer isti broj postoji na
-    ' vise mesta. Kad blok dolazi iz poziva na broj, scope-a NEMA (poziv ga ne
-    ' nosi) i ponasanje ostaje kao kod automatskog mapiranja.
-    scope = IzabranaStanicaCilja()
-    If Len(IzabraniCiljID()) = 0 Then scope = ""
+    ' Scope i odluka o zaustavljanju racunaju se na JEDNOM mestu -- v.
+    ' ScopeIzbora. Izabran blok bez otkupnog mesta staje PRE ijednog citanja
+    ' kandidata.
+    scope = ScopeIzbora(stani)
+    If stani Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_BEZ_OM"), True
+        Exit Function
+    End If
 
     If modBankaMapiranje.BimBlokTraziPotvrdu(kooperantID, blok, razlog, scope) Then
         Select Case PitajZaPodelu(bimID, kooperantID, blok, scope)
@@ -1239,7 +1242,17 @@ Private Sub PuniCiljCombo()
             src = modBankaMapiranje.GetBlokoviZaBimMapiranje(partnerID)
             If IsArray(src) Then
                 For i = 1 To UBound(src, 1)
-                    c.AddItem CStr(src(i, 3))
+                    ' Blok bez upisanog otkupnog mesta OSTAJE u listi -- postoji
+                    ' u podacima i precutati ga znacilo bi lagati o tome sta je
+                    ' u tabeli. Ali se OZNACAVA, jer bi inace izgledao samo kao
+                    ' "12" pored "12 . OM Naziv" i operater ne bi imao nacina da
+                    ' zna zasto ga radnja odbija (v. BuScopeNedostaje).
+                    If Len(Trim$(CStr(src(i, 2)))) = 0 Then
+                        c.AddItem CStr(src(i, 1)) & "  " & ChrW(183) & "  " & _
+                                  Poruka("OTKUI_LBL_BU_BLOK_BEZ_OM")
+                    Else
+                        c.AddItem CStr(src(i, 3))
+                    End If
                     c.List(c.ListCount - 1, 1) = CStr(src(i, 1))
                     c.List(c.ListCount - 1, 2) = CStr(src(i, 2))
                 Next i
@@ -1280,17 +1293,31 @@ Private Sub OsveziObjasnjenje(ByVal z As Object)
 End Sub
 
 Private Sub OsveziBrojke(ByVal z As Object)
-    Dim k As Variant
+    Dim k As Variant, nepoznato As Boolean, crta As String
     On Error Resume Next
     k = Kpi()
+    nepoznato = BuKpiNepoznat(k)
+    crta = ChrW(8212)
 
     z.Controls("buKL0").caption = UCase$(Poruka("OTKUI_KPI_BU_OTVORENO"))
-    z.Controls("buKV0").caption = CStr(CLng(k(0)))
     z.Controls("buKL1").caption = UCase$(Poruka("OTKUI_KPI_BU_MAPIRANO"))
-    z.Controls("buKV1").caption = CStr(CLng(k(1))) & " / " & CStr(CLng(k(2)))
     z.Controls("buKL2").caption = UCase$(Poruka("OTKUI_KPI_BU_UPLATE"))
-    z.Controls("buKV2").caption = Format$(CDbl(k(3)), "#,##0")
     z.Controls("buKL3").caption = UCase$(Poruka("OTKUI_KPI_BU_ISPLATE"))
+
+    ' Nula i "ne znam" nisu ista brojka. Kad citanje nije uspelo, sve cetiri
+    ' plocice pokazuju crtu -- pola tacnih brojki uz dve nule bilo bi gore od
+    ' iskrenog "nemam podatak".
+    If nepoznato Then
+        z.Controls("buKV0").caption = crta
+        z.Controls("buKV1").caption = crta
+        z.Controls("buKV2").caption = crta
+        z.Controls("buKV3").caption = crta
+        Exit Sub
+    End If
+
+    z.Controls("buKV0").caption = CStr(CLng(k(0)))
+    z.Controls("buKV1").caption = CStr(CLng(k(1))) & " / " & CStr(CLng(k(2)))
+    z.Controls("buKV2").caption = Format$(CDbl(k(3)), "#,##0")
     z.Controls("buKV3").caption = Format$(CDbl(k(4)), "#,##0")
 End Sub
 
@@ -1328,11 +1355,36 @@ End Function
 ' Sta brojac vraca kad citanje pukne: POSLEDNJU POZNATU vrednost, ne nule.
 ' Odvojeno od Kpi da bi se pravilo moglo izmeriti -- pad citanja se u testu ne
 ' moze izazvati bez lomljenja seme.
+'
+' A kad poslednje poznate vrednosti JOS NEMA (prvi pad u sesiji), brojka je
+' NEPOZNATA -- i to se kaze. Ranije je tu stajala nula, uz obrazlozenje da "tada
+' ni znacke nema, pa nema ni cega laznog". To je bilo naopako: u ovom UI-ju
+' ODSUSTVO znacke jeste poruka, i glasi "nema sta da ceka". Prvi pad citanja bi
+' tako i dalje bio fail-open, samo tise.
+'
+' Nepoznato se nosi kao NEGATIVAN broj: ugovor je Scr_Brojac() As Long i nema
+' treci kanal, a negativan broj brojac ne moze legitimno da bude. Ljuska ga crta
+' kao "!" (modOtkupUI.BrojacTekst), ekran kao crtu.
 Public Function BuKpiPosleGreske(ByVal poslednja As Variant) As Variant
     If IsArray(poslednja) Then
         BuKpiPosleGreske = poslednja
     Else
-        BuKpiPosleGreske = Array(0, 0, 0, 0#, 0#)
+        BuKpiPosleGreske = BuKpiNepoznato()
+    End If
+End Function
+
+' Brojke koje znace "ne znam". Novac ostaje nula -- crta se ionako ne prikazuje
+' kao iznos, a znak nepoznatog nosi prva brojka.
+Public Function BuKpiNepoznato() As Variant
+    BuKpiNepoznato = Array(-1, -1, -1, 0#, 0#)
+End Function
+
+' Da li skup brojki uopste nosi podatak.
+Public Function BuKpiNepoznat(ByVal k As Variant) As Boolean
+    If Not IsArray(k) Then
+        BuKpiNepoznat = True
+    Else
+        BuKpiNepoznat = (CLng(k(0)) < 0)
     End If
 End Function
 
@@ -1377,6 +1429,26 @@ Private Function IzabraniPartnerID() As String
 End Function
 
 ' Vrednost ciljnog polja kao ID (FakturaID) ili kao tekst (broj bloka).
+' RUCNO IZABRAN BLOK MORA DA NOSI OTKUPNO MESTO.
+'
+' Tri stanja danas izgledaju isto -- prazan string -- a znace tri razlicite
+' stvari:
+'   1) scope nije ni trazen  (blok dolazi iz poziva na broj; legitimno bez
+'      scope-a, isto kao automatsko mapiranje),
+'   2) scope je trazen, ali red nema upisanu stanicu  (legacy/uvezen podatak),
+'   3) scope je trazen, ali kolone nema  (schema drift -- resolver to sam
+'      podigne kao gresku, v. GetOtkupCandidatesForKooperantBlock).
+'
+' Drugo stanje je opasno bas zato sto lici na prvo: operater je BIRAO blok, a
+' writer bi dobio prazan scope i raspodelio novac preko svih otkupnih mesta sa
+' tim brojem. Zato ovde stoji STOP, a ne tiho spustanje na nescope-ovan upis.
+'
+' Pravilo je izdvojeno da bi se moglo izmeriti bez forme. Njegovo VEZIVANJE u
+' RucnoKooperant je jedan red i proveren je citanjem, ne testom.
+Public Function BuScopeNedostaje(ByVal ciljID As String, ByVal stanica As String) As Boolean
+    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)
+End Function
+
 ' OTKUPNO MESTO izabranog bloka. Cita se iz TRECE kolone combo-a, ne iz prikaza:
 ' prikaz je za coveka i sme da se menja, a scope je podatak.
 Private Function IzabranaStanicaCilja() As String
@@ -1485,12 +1557,36 @@ Public Sub Scr_BuIzborTestSet(ByVal tip As String, ByVal partnerID As String, _
     mStanicaTest = stanicaCilja
 End Sub
 
-' Scope koji bi rucno mapiranje kooperanta poslalo writeru. Bez ovoga se pravilo
-' "prazan izbor bloka nema scope" ne moze izmeriti bez forme.
+' SCOPE TRENUTNOG IZBORA, i odluka da li radnja sme da ide dalje.
+'
+' Kad je operater izabrao blok iz liste, zna se i sa kog je otkupnog mesta -- i
+' to mora do writera, jer isti broj postoji na vise mesta. Kad blok dolazi iz
+' poziva na broj, scope-a NEMA (poziv ga ne nosi) i ponasanje ostaje kao kod
+' automatskog mapiranja.
+'
+' Racuna se na JEDNOM mestu, koje zovu i radnja i test. Dok je test ponavljao
+' isti izraz, razilazenje to dvoje bi proslo neprimeceno -- sabotaza bi obarala
+' kopiju u testu, a radnja bi i dalje slala prazan scope.
+Private Function ScopeIzbora(ByRef stani As Boolean) As String
+    ScopeIzbora = IzabranaStanicaCilja()
+    If Len(IzabraniCiljID()) = 0 Then ScopeIzbora = ""
+    stani = BuScopeNedostaje(IzabraniCiljID(), ScopeIzbora)
+End Function
+
+' Scope koji bi rucno mapiranje kooperanta poslalo writeru.
 Public Function Scr_BuScopeBlokaTest() As String
+    Dim stani As Boolean
     If Not IsTestMode() Then Exit Function
-    If Len(IzabraniCiljID()) = 0 Then Exit Function
-    Scr_BuScopeBlokaTest = IzabranaStanicaCilja()
+    Scr_BuScopeBlokaTest = ScopeIzbora(stani)
+End Function
+
+' Da li bi rucno mapiranje kooperanta STALO nad trenutnim izborom.
+Public Function Scr_BuStopBezOmTest() As Boolean
+    Dim stani As Boolean
+    Dim scope As String
+    If Not IsTestMode() Then Exit Function
+    scope = ScopeIzbora(stani)
+    Scr_BuStopBezOmTest = stani
 End Function
 
 ' Pad ucitavanja faktura se u testu ne moze izazvati bez lomljenja seme, a

@@ -1487,10 +1487,10 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–112** u `modTest` i **dvadeset pet** sabotaža, uz nove fixture redove
+Testovi **104–112** u `modTest` i **dvadeset osam** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
 `(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
-postoji na **dva otkupna mesta**.
+postoji na **tri** otkupna mesta — od kojih jedno **nije upisano**.
 
 Do sada `tblBankaImport` nije imao **nijedan** red, pa je svaka tvrdnja o listi,
 čipovima, jakim ključevima i integritetu izvoda radila nad praznim skupom.
@@ -1511,6 +1511,7 @@ Svaki fixture red ima razlog:
 | `IZV-FIX-1` / `IZV-FIX-2` | izvod koji se slaže i izvod kome fali 100 |
 | `BIM-FIX-PY` | **isti broj izvoda i isti račun, prethodni ciklus** — banke numeraciju ponavljaju po godini |
 | `OTK-BIM-OMA` / `OTK-BIM-OMB` | **isti broj bloka na dva otkupna mesta** — broj otkupa je jedinstven po stanici |
+| `OTK-BIM-OMX` | isti blok **bez upisanog `StanicaID`** — legacy oblik koji današnji pisci odbijaju, a zatečene sveske ga imaju |
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
@@ -1536,7 +1537,7 @@ Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
 (`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
 iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
 
-**Dvosmerni dokaz je pušten za svih dvadeset pet**: svaka sabotaža obara
+**Dvosmerni dokaz je pušten za svih dvadeset osam**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -1861,3 +1862,86 @@ broja redova u mreži — zamka 5 iz `sabotaza.py`. Test zato sada meri
 `BimIzvodKljuc` **direktno**, jednom tvrdnjom po polovini ključa; agregat ispod
 ostaje kao integracioni dokaz. Sa tim, svaka od četiri nove sabotaže obara tačno
 svoju imenovanu tvrdnju.
+
+#### Drugi krug review-a: tri stanja koja su izgledala isto
+
+Prvi krug je zatvorio „ručni blok ne nosi otkupno mesto". Drugi je pokazao da
+**samo uvođenje scope-a nije dovoljno** — jer prazan `stanicaID` do sada znači
+tri različite stvari, a izgleda kao jedna:
+
+| Stanje | Šta znači | Šta sme |
+|---|---|---|
+| scope nije ni tražen | blok dolazi iz **poziva na broj** — automatsko mapiranje | prolazi bez scope-a, kao i pre |
+| scope tražen, red nema stanicu | legacy/uvezen red bez `StanicaID` | **STOP** |
+| scope tražen, kolone nema | schema drift | **greška**, nikad tihi nastavak |
+
+**Drugo stanje je opasno baš zato što liči na prvo.** Operater je *birao* blok iz
+liste; da je prazan scope prošao, writer bi raspodelio novac preko **svih**
+otkupnih mesta sa tim brojem. `GetBlokoviZaBimMapiranje` takav red uredno nudi
+(ključ je `broj & "|" & sta`, prazan `sta` prolazi), a prikaz mu je pao nazad na
+goli broj — pa bi operater u listi video „12" i „12 · OM B" bez ijednog traga
+zašto se razlikuju.
+
+Red **ostaje u listi** — postoji u podacima i prećutati ga značilo bi lagati o
+tome šta je u tabeli — ali se **označava** (`bez otkupnog mesta`), a radnja nad
+njim staje uz objašnjenje. Pravilo je jedna funkcija (`BuScopeNedostaje`), pa
+oznaka i kapija ne mogu da se raziđu.
+
+**Test seam je pri tom morao da prestane da PONAVLJA izraz.** Prva verzija
+`Scr_BuStopBezOmTest`-a je sama računala `BuScopeNedostaje(IzabraniCiljID(),
+IzabranaStanicaCilja())` — isti izraz koji stoji u `RucnoKooperant`. Dok je tako,
+sabotaža obara **kopiju u testu**, a radnja bi i dalje slala prazan scope; test
+bi bio zelen nad kodom koji je pokvaren. Sada oboje zovu `ScopeIzbora`, koji
+scope i odluku računa na jednom mestu. Ono što ostaje neizmereno je **jedan red**
+vezivanja u `RucnoKooperant` (`If stani Then ... Exit Function`) — provereno
+čitanjem, i tako se i beleži.
+
+**Treće stanje je najtiši mogući kvar.** Filtar je glasio
+`If Len(Trim$(stanicaID)) > 0 And colSta > 0` — dakle scope je zadat, kolona se
+zbog drifta ne nađe, uslov otpadne, i resolver vrati kandidate sa **svih**
+otkupnih mesta. Bez ijedne poruke, u listi koja izgleda savršeno ispravno. Sada
+je pravilo u `BimScopeKolona`: zadat scope traži kolonu kroz `RequireColumnIndex`
+i puca ako je nema; bez scope-a kolona ostaje opciona kao i pre.
+
+**Ime kolone je argument te funkcije, a ne konstanta u telu** — to je jedini
+način da se grana „kolone nema" izmeri a da se ne razbije šema fixture-a. Test
+zove `BimScopeKolona(STA, "NemaOvakveKoloneUOtkupu")` i tvrdi da **puca**, pa
+istu nedokazivu kolonu bez scope-a i tvrdi da **prolazi**.
+
+#### Značka koja ume da kaže „ne znam"
+
+Prvi krug je popravio *drugi* pad čitanja (zadrži poslednju poznatu brojku), ali
+ne i **prvi u sesiji**: tada poslednje vrednosti nema, pa je vraćana nula.
+Obrazloženje je bilo „tada ni značke nema, pa nema ni čega lažnog" — i bilo je
+naopako. `BrojacTekst` za `n <= 0` vraća prazno, a **prazna značka u ovom UI-ju
+nije odsustvo poruke nego poruka**, i glasi „nema šta da čeka". Prvi pad je zato
+i dalje bio fail-open, samo tiši.
+
+Ugovor `Scr_Brojac() As Long` nema treći kanal, a **brojač ne može legitimno da
+bude negativan** — pa je to slobodan kanal koji ne traži izmenu ugovora:
+`BuKpiNepoznato` vraća `-1`, ljuska ga crta kao `!`, a četiri KPI pločice ekrana
+pokazuju crtu umesto brojki. Pola tačnih brojki uz dve nule bilo bi gore od
+iskrenog „nemam podatak".
+
+Izmena je **u ljusci** (`BrojacTekst`), pa važi za svaki ekran koji je poželi —
+kao i geometrija mreže i granica datuma pre nje.
+
+#### Šta je iz review-a svesno ODLOŽENO, i zašto
+
+- **Invarijanta metapodataka izvoda.** `GetBankaIzvodiForGrid` uzima saldo grupe
+  sa **prvog** reda i pretpostavlja da su ostali isti. Nalaz je tačan, ali
+  današnji parser to fizički ne može da prekrši — kopira `saldo.*` na svaki red.
+  Brani od budućeg parsera i ručno editovanih podataka; traži **novu vrednost
+  statusa u finansijskom prikazu**, poruku, fixture, test i sabotažu. Ubaciti to
+  u PR koji se zatvara bilo bi tačno ona scope drift greška koju isti review
+  kritikuje. **Zaseban PR.**
+- **`RenderGrid` stale-safe.** Popravka datuma je zatvorila **jedan ulaz**, ne
+  klasu: `CDbl` u `kg`/`num`/`rsd`/`mult` i `CLng` u `pill`/`paypill` nad
+  neispravnom vrednošću imaju identičan ishod — greška se proguta, ćelija zadrži
+  natpis prethodnog ekrana. Ispravno je prazniti ćeliju **pre** upisa, pa je pad
+  rendera prazna ćelija i jedan log. **Zaseban PR**, i vredniji od svega
+  odloženog jer zatvara klasu.
+- **Checker tri registra testova** (`RunOne` / `TestName` / `InvokeTest`).
+  Trenutno su usklađeni — 112/112/112, bez rupa i bez razlike — pa je ovo
+  preventiva, ne živ bug. Uzak checker sa svojim `--self-test` slučajevima,
+  **zaseban PR.**

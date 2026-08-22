@@ -524,6 +524,15 @@ SEED = {
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 10, "Cena": 60.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        # ISTI blok, ali BEZ upisanog otkupnog mesta. Danasnji pisci ovo odbijaju
+        # (SaveOtkup / SaveOtkupMulti_TX traze StanicaID), pa je red legacy oblik
+        # -- a zatecene sveske takve redove imaju (v. datum 26062026). Bez njega
+        # se ne moze izmeriti da rucno mapiranje STAJE umesto da posalje prazan
+        # scope i raspodeli novac preko sva tri otkupna mesta.
+        {"OtkupID": "OTK-BIM-OMX", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": "", "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 70.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i

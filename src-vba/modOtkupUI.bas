@@ -4419,7 +4419,16 @@ End Sub
 
 ' Nula se ne crta. Znacka postoji da bi se video ZAOSTATAK; nula uz svaku stavku
 ' bi je pretvorila u ukras koji se prestane primecivati.
+'
+' NEGATIVNO ZNACI "NE ZNAM", i crta se. Prazna znacka u ovom UI-ju nije odsustvo
+' poruke nego poruka "nema sta da ceka"; ekran koji nije uspeo da procita svoje
+' brojke ne sme da je posalje. Brojac ne moze legitimno da bude negativan, pa je
+' to slobodan kanal koji ne trazi izmenu ugovora Scr_Brojac() As Long.
 Private Function BrojacTekst(ByVal n As Long) As String
+    If n < 0 Then
+        BrojacTekst = "!"
+        Exit Function
+    End If
     If n <= 0 Then Exit Function
     If n > 999 Then BrojacTekst = "999+" Else BrojacTekst = CStr(n)
 End Function

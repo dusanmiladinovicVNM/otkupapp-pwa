@@ -4965,9 +4965,16 @@ ekran novog UI-ja, sa dve liste umesto jednog spiska.
   jedinstven po stanici, pa isti broj bloka može da postoji na dva otkupna mesta;
   lista blokova ih zato prikazuje odvojeno (`12 · OM Naziv`), a raspodela ide
   samo na stavke izabranog mesta.
+- **Blok kome otkupno mesto nije upisano se vidi, ali se ne knjiži.** U listi
+  stoji označen (`12 · bez otkupnog mesta`), a ručno mapiranje ga odbija sa
+  objašnjenjem — jer bi inače raspodela zahvatila sva mesta sa tim brojem.
+  Takvih redova današnji unos ne pravi; nalaze se u starijim podacima.
 - **Značka koja ne može da pročita podatak ne pokazuje nulu.** Do sada bi
   neuspelo čitanje ispalo kao „nema posla"; sada ostaje poslednja poznata
-  brojka, a greška se upisuje u log.
+  brojka, a greška se upisuje u log. Ako poznate brojke još nema — prvi pokušaj
+  u sesiji — uz stavku menija stoji **`!`**, a brojke na ekranu su crte. Prazna
+  značka znači „nema šta da čeka" i ne sme da se pojavi zato što čitanje nije
+  uspelo.
 
 **Šta se nije promenilo**
 
@@ -5027,11 +5034,19 @@ pogađaju sve:
   vrednost je rušila ispis ćelije, tiho, i u njoj je ostajao tekst sa prethodnog
   ekrana. Sada se odbija i polje ostaje prazno.
 
-**Code review pred merge** je otvorio još tri stvari, sve tri ispravljene u
-istoj grani: ručno mapiranje bloka nije nosilo otkupno mesto (pa bi u jednu
+**Code review pred merge** je otvorio još stvari, sve ispravljene u istoj grani.
+Prvi krug: ručno mapiranje bloka nije nosilo otkupno mesto (pa bi u jednu
 raspodelu ušle stavke sa dva otkupna mesta), identitet izvoda nije nosio datum
 (pa bi se isti broj iz dva ciklusa spojio u jedan red), i pad čitanja brojki je
-postajao legitimna nula. Uz svaku ispravku ide test nad novim fixture redom i
-sabotaža koja baš tu tvrdnju obara.
+postajao legitimna nula.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset pet** sabotaža.
+Drugi krug je pokazao da samo uvođenje otkupnog mesta nije dovoljno: prazno
+otkupno mesto do tada je značilo tri različite stvari a izgledalo kao jedna —
+„nije ni traženo" (poziv na broj, ispravno), „traženo, ali red nema stanicu"
+(mora da stane) i „traženo, ali kolone nema" (mora da pukne). Sada su razdvojena.
+Uz isti krug ide i prvi pad čitanja brojki, koji je do tada davao praznu značku.
+
+Uz svaku ispravku ide test nad novim fixture redom i sabotaža koja baš tu tvrdnju
+obara.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset osam** sabotaža.

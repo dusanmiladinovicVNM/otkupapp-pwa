@@ -1801,13 +1801,43 @@ SABOTAZE = {
         "stornirana faktura ne ulazi u listu",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
+    # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
+    # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja
+    # izgleda savrseno ispravno. Ime kolone je zato argument BimScopeKolona, da
+    # bi se ta grana mogla izmeriti bez razbijanja seme fixture-a.
+    "banka-uvoz-scope-bez-kolone-stanice": (
+        "modBankaMapiranje.bas",
+        '        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")\n',
+        "        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)   ' SABOTAZA: scope tiho otpada\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "zadat scope nad nedokazivom kolonom puca umesto da vrati sve",
+    ),
+    # Prazan scope izgleda isto kao "scope nije ni trazen", a znaci nesto sasvim
+    # drugo: operater JESTE birao blok, samo taj red nema upisano otkupno mesto.
+    # Propusten prazan scope raspodeli novac preko svih mesta sa istim brojem.
+    "banka-uvoz-blok-bez-om-prolazi": (
+        "modScrBankaUvoz.bas",
+        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)\n",
+        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) < 0)\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "izabran blok bez otkupnog mesta zaustavlja rucno mapiranje",
+    ),
+    # Prvi pad citanja u sesiji. Nula bi kroz BrojacTekst dala PRAZNU znacku, a
+    # prazna znacka u ovom UI-ju znaci "nema sta da ceka" -- fail-open, samo tisi.
+    "banka-uvoz-znacka-nepoznato-je-nula": (
+        "modScrBankaUvoz.bas",
+        "    BuKpiNepoznato = Array(-1, -1, -1, 0#, 0#)\n",
+        "    BuKpiNepoznato = Array(0, 0, 0, 0#, 0#)   ' SABOTAZA: ne znam postaje nula\n",
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "prvi pad citanja daje NEPOZNATO, ne nulu",
+    ),
     # Broj otkupa je jedinstven PO STANICI, pa isti broj bloka pripada dvama
     # razlicitim blokovima. Bez scope-a u jednu raspodelu ulaze kandidati sa OBA
     # otkupna mesta -- novac na dva razlicita poslovna lanca.
     "banka-uvoz-blok-bez-om-scope": (
         "modBankaMapiranje.bas",
-        "        If Len(Trim$(stanicaID)) > 0 And colSta > 0 Then\n",
-        "        If False And colSta > 0 Then   ' SABOTAZA: scope se ne primenjuje\n",
+        "        If Len(Trim$(stanicaID)) > 0 Then\n",
+        "        If Trim$(stanicaID) = Chr$(0) Then   ' SABOTAZA: scope se ne primenjuje\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
         "rucno mapiranje bloka nosi i otkupno mesto",
     ),

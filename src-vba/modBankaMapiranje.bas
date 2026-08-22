@@ -2340,6 +2340,29 @@ End Function
 ' Prazno = bez scope-a, tj. ponasanje kakvo je bilo. AUTO putanja stanicu nema
 ' odakle da zna (poziv na broj je nosi samo posredno), pa ostaje nepromenjena;
 ' RUCNI put je bira i mora je proslediti.
+' KOLONA OTKUPNOG MESTA ZA SCOPE -- i pravilo sta znaci kad je nema.
+'
+' Kad je scope ZADAT, kolona MORA da postoji. Schema drift bi je inace ostavio
+' na nuli, uslov filtriranja bi otpao, i resolver bi vratio kandidate sa SVIH
+' otkupnih mesta -- tacno ono protiv cega scope postoji. Taj kvar ne bi imao
+' nijedan simptom: pozivalac dobija listu koja izgleda ispravno, a raspodela
+' zahvati dva poslovna lanca. "Ne mogu da dokazem scope" zato znaci STOP, ne
+' "nastavi bez njega". Schema drift je ovde vec bio stvaran uzrok, ne teorija.
+'
+' Kad scope NIJE zadat (automatsko mapiranje, poziv na broj), kolona je opciona
+' kao i pre -- ta grana se ne menja.
+'
+' Ime kolone je argument, a ne konstanta u telu, iz jednog razloga: bez toga se
+' grana "kolone nema" ne moze izmeriti a da se ne razbije sema fixture-a.
+Public Function BimScopeKolona(ByVal stanicaID As String, _
+                               ByVal kolona As String) As Long
+    If Len(Trim$(stanicaID)) > 0 Then
+        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")
+    Else
+        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)
+    End If
+End Function
+
 Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
                                                      ByVal brojBloka As String, _
                                                      Optional ByVal allowOverMax As Boolean = False, _
@@ -2371,7 +2394,9 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
-    colSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+
+    ' Zadat scope + nedokaziva kolona = STOP. Pravilo je u BimScopeKolona.
+    colSta = BimScopeKolona(stanicaID, COL_OTK_STANICA)
     
     ' AUD-025: bafer je velicine ulaza, ne fiksnih 2. Raniji `ReDim result(1 To 2)`
     ' + `If count > 2 Then Exit For` je ostavljao count=3 uz bafer od 2 reda, pa je
@@ -2385,8 +2410,10 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
         If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
 
         ' SCOPE otkupnog mesta -- v. zaglavlje. Kad je zadat, kandidat sa druge
-        ' stanice NE ulazi u raspodelu, ma koliko broj bloka bio isti.
-        If Len(Trim$(stanicaID)) > 0 And colSta > 0 Then
+        ' stanice NE ulazi u raspodelu, ma koliko broj bloka bio isti. Uslov
+        ' NEMA "And colSta > 0": kolona je gore vec dokazana, pa bi dodatna
+        ' provera samo vratila tihi izlaz koji je upravo zatvoren.
+        If Len(Trim$(stanicaID)) > 0 Then
             If Trim$(CStr(NzBIM(data(i, colSta), ""))) <> Trim$(stanicaID) Then GoTo NextI
         End If
 
