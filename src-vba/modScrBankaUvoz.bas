@@ -117,6 +117,7 @@ Private mKpiOK As Boolean
 Private mTipTest As String
 Private mPartnerTest As String
 Private mCiljTest As String
+Private mStanicaTest As String
 
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
@@ -243,8 +244,10 @@ Public Function Scr_Brojac() As Long
 End Function
 
 Public Sub Scr_ResetCache()
+    ' mKpi se NE brise, samo proglasava zastarelim. Ako sledece citanje pukne,
+    ' bolje je zadrzati poslednju poznatu brojku nego je zameniti nulom --
+    ' v. Kpi i BuKpiPosleGreske.
     mKpiOK = False
-    mKpi = Empty
     mCiljPunjen = ""
 End Sub
 
@@ -604,12 +607,20 @@ End Function
 Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As String) As Boolean
     Dim blok As String, razlog As String, n As Long
     Dim potvrdjeno As Boolean
+    Dim scope As String
 
     ' Prazan izbor bloka nije "nema bloka" nego "uzmi poziv na broj iz izvoda".
     blok = modBankaMapiranje.BimEfektivniBlok(bimID, IzabraniCiljID())
 
-    If modBankaMapiranje.BimBlokTraziPotvrdu(kooperantID, blok, razlog) Then
-        Select Case PitajZaPodelu(bimID, kooperantID, blok)
+    ' SCOPE OTKUPNOG MESTA. Kad je operater izabrao blok iz liste, zna se i sa
+    ' kog je otkupnog mesta -- i to mora do writera, jer isti broj postoji na
+    ' vise mesta. Kad blok dolazi iz poziva na broj, scope-a NEMA (poziv ga ne
+    ' nosi) i ponasanje ostaje kao kod automatskog mapiranja.
+    scope = IzabranaStanicaCilja()
+    If Len(IzabraniCiljID()) = 0 Then scope = ""
+
+    If modBankaMapiranje.BimBlokTraziPotvrdu(kooperantID, blok, razlog, scope) Then
+        Select Case PitajZaPodelu(bimID, kooperantID, blok, scope)
             Case vbCancel
                 Exit Function
             Case vbNo
@@ -630,7 +641,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     End If
 
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
-            bimID, kooperantID, blok, True, potvrdjeno)
+            bimID, kooperantID, blok, True, potvrdjeno, scope)
 
     If n <= 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True
@@ -655,12 +666,15 @@ End Function
 ' ishoda. Ostaje MsgBox, kao u legacy-ju: tri ishoda nad izracunatim tekstom
 ' nisu forma nego pitanje.
 Private Function PitajZaPodelu(ByVal bimID As String, ByVal kooperantID As String, _
-                               ByVal blok As String) As VbMsgBoxResult
+                               ByVal blok As String, ByVal scope As String) As VbMsgBoxResult
     Dim kandidati As Variant, iznos As Double
 
     PitajZaPodelu = vbCancel
 
-    kandidati = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock(kooperantID, blok, True)
+    ' ISTI scope kao kod knjizenja -- inace bi operater potvrdio jednu podelu, a
+    ' knjizila bi se druga.
+    kandidati = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
+                    kooperantID, blok, True, scope)
     ' Kandidata nema, a granica je malopre bila prekoracena -- podaci su se
     ' promenili izmedju dva citanja. Tiho odustajanje bi izgledalo kao dugme
     ' koje ne radi, pa se prijavljuje.
@@ -1213,13 +1227,21 @@ Private Sub PuniCiljCombo()
 
         Case BIM_TIP_KOOPERANT
             PostaviNatpisCilja Poruka("OTKUI_FLD_BU_BLOK")
+            ' TRI kolone: prikaz, broj bloka, OTKUPNO MESTO.
+            '
+            ' Broj otkupa je jedinstven PO STANICI, pa isti broj legitimno
+            ' pripada dvama razlicitim blokovima. Kad bi combo nosio samo broj,
+            ' posle izbora se ne bi znalo KOJI je -- a od toga zavisi na koji
+            ' otkupni lanac ide novac. Scope zato ide u SVOJU kolonu; prikaz se
+            ' NE parsira (v. IzabranaStanicaCilja).
+            c.ColumnCount = 3
+            c.ColumnWidths = "180 pt;0 pt;0 pt"
             src = modBankaMapiranje.GetBlokoviZaBimMapiranje(partnerID)
             If IsArray(src) Then
-                For i = LBound(src) To UBound(src)
-                    ' Blok NEMA zaseban ID -- broj bloka JESTE ono sto writer
-                    ' prima, pa su obe kolone isti tekst.
-                    c.AddItem CStr(src(i))
-                    c.List(c.ListCount - 1, 1) = CStr(src(i))
+                For i = 1 To UBound(src, 1)
+                    c.AddItem CStr(src(i, 3))
+                    c.List(c.ListCount - 1, 1) = CStr(src(i, 1))
+                    c.List(c.ListCount - 1, 2) = CStr(src(i, 2))
                 Next i
             End If
 
@@ -1274,7 +1296,17 @@ End Sub
 
 ' Cetiri brojke iz JEDNOG prolaza kroz tabelu, kesirane do sledeceg upisa.
 ' Racun je u modBankaMapiranje.GetBankaImportKpi -- ekran ga ne ponavlja.
+'
+' NEUSPEH CITANJA NIJE NULA. Znacka uz stavku menija odgovara na pitanje "ima li
+' finansijskih stavki koje cekaju coveka". Ako citanje pukne a mi vratimo nule,
+' operater dobija "nema posla" umesto "ne znam" -- i to bas kad je nesto sa
+' semom ili kesom poslo naopako. Isti fail-open je jednom vec placen u Stornu.
+'
+' Greska se zato LOGUJE, kes se NE proglasava vazecim (sledeci poziv pokusava
+' ponovo), a vraca se POSLEDNJA POZNATA vrednost. Nula ide samo dok validne
+' vrednosti jos nije ni bilo -- tada ni znacke nema, pa nema ni cega laznog.
 Private Function Kpi() As Variant
+    Dim errDesc As String
     On Error GoTo EH
     If mKpiOK Then
         Kpi = mKpi
@@ -1286,8 +1318,22 @@ Private Function Kpi() As Variant
     Exit Function
 EH:
     ' Brojac ne sme da obori ljusku: OsveziNavBrojace pita SVAKI ekran, pa bi
-    ' greska ovde ugasila i tudje znacke.
-    Kpi = Array(0, 0, 0, 0#, 0#)
+    ' greska ovde ugasila i tudje znacke. Ali gusenje BEZ TRAGA je zaseban kvar.
+    errDesc = Err.description
+    LogErr "modScrBankaUvoz.Kpi"
+    Kpi = BuKpiPosleGreske(mKpi)
+    Err.Clear
+End Function
+
+' Sta brojac vraca kad citanje pukne: POSLEDNJU POZNATU vrednost, ne nule.
+' Odvojeno od Kpi da bi se pravilo moglo izmeriti -- pad citanja se u testu ne
+' moze izazvati bez lomljenja seme.
+Public Function BuKpiPosleGreske(ByVal poslednja As Variant) As Variant
+    If IsArray(poslednja) Then
+        BuKpiPosleGreske = poslednja
+    Else
+        BuKpiPosleGreske = Array(0, 0, 0, 0#, 0#)
+    End If
 End Function
 
 '------------------------------------------------------- IZBORI U ZONI
@@ -1331,6 +1377,23 @@ Private Function IzabraniPartnerID() As String
 End Function
 
 ' Vrednost ciljnog polja kao ID (FakturaID) ili kao tekst (broj bloka).
+' OTKUPNO MESTO izabranog bloka. Cita se iz TRECE kolone combo-a, ne iz prikaza:
+' prikaz je za coveka i sme da se menja, a scope je podatak.
+Private Function IzabranaStanicaCilja() As String
+    Dim c As Object
+    If IsTestMode() Then
+        IzabranaStanicaCilja = mStanicaTest
+        Exit Function
+    End If
+    On Error Resume Next
+    Set c = Kontrola("scrBuCilj")
+    If c Is Nothing Then Exit Function
+    If c.ColumnCount < 3 Then Exit Function
+    If c.ListIndex < 0 Then Exit Function
+    IzabranaStanicaCilja = Trim$(CStr(c.List(c.ListIndex, 2)))
+    Err.Clear
+End Function
+
 Private Function IzabraniCiljID() As String
     Dim c As Object
     If IsTestMode() Then
@@ -1413,12 +1476,22 @@ Public Sub Scr_BuListaTestSet(ByVal kljuc As String)
 End Sub
 
 Public Sub Scr_BuIzborTestSet(ByVal tip As String, ByVal partnerID As String, _
-                              ByVal cilj As String)
+                              ByVal cilj As String, _
+                              Optional ByVal stanicaCilja As String = "")
     If Not IsTestMode() Then Exit Sub
     mTipTest = BuTipIliPrazno(tip)
     mPartnerTest = partnerID
     mCiljTest = cilj
+    mStanicaTest = stanicaCilja
 End Sub
+
+' Scope koji bi rucno mapiranje kooperanta poslalo writeru. Bez ovoga se pravilo
+' "prazan izbor bloka nema scope" ne moze izmeriti bez forme.
+Public Function Scr_BuScopeBlokaTest() As String
+    If Not IsTestMode() Then Exit Function
+    If Len(IzabraniCiljID()) = 0 Then Exit Function
+    Scr_BuScopeBlokaTest = IzabranaStanicaCilja()
+End Function
 
 ' Pad ucitavanja faktura se u testu ne moze izazvati bez lomljenja seme, a
 ' fail-closed grana je najskuplja stvar na ovom ekranu (avans umesto zatvaranja
@@ -1436,6 +1509,7 @@ Public Sub Scr_BuTestReset()
     mTipTest = ""
     mPartnerTest = ""
     mCiljTest = ""
+    mStanicaTest = ""
     mFaktureOK = True
     mFaktureErr = ""
     Scr_ResetCache

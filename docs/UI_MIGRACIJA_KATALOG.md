@@ -1487,9 +1487,10 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–112** u `modTest` i **dvadeset dve** sabotaže, uz nove fixture redove
-u `tools/make_fixture.py`: **jedanaest** stavki izvoda u **četiri** grupe
-`(broj + račun)` i tri otkupne stavke istog bloka.
+Testovi **104–112** u `modTest` i **dvadeset pet** sabotaža, uz nove fixture redove
+u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
+`(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
+postoji na **dva otkupna mesta**.
 
 Do sada `tblBankaImport` nije imao **nijedan** red, pa je svaka tvrdnja o listi,
 čipovima, jakim ključevima i integritetu izvoda radila nad praznim skupom.
@@ -1508,15 +1509,17 @@ Svaki fixture red ima razlog:
 | `BIM-FIX-ST` | storniran — ne sme ni u jednu listu |
 | `BIM-FIX-DUP` ×2 | **isti `BankaImportID` dvaput** — bez njih bi „dvosmislen ID nosi prazan identitet" merilo odsustvo reda |
 | `IZV-FIX-1` / `IZV-FIX-2` | izvod koji se slaže i izvod kome fali 100 |
+| `BIM-FIX-PY` | **isti broj izvoda i isti račun, prethodni ciklus** — banke numeraciju ponavljaju po godini |
+| `OTK-BIM-OMA` / `OTK-BIM-OMB` | **isti broj bloka na dva otkupna mesta** — broj otkupa je jedinstven po stanici |
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
 | `T_BankaUvoz_UgovorEkrana` | registar, dve liste, granice bazena (`MAX_ACT` tačno 5 na stavkama, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi, izvodi bez radnji, **datum stiže kao broj** | `banka-uvoz-sesta-radnja`, `banka-uvoz-cip-sve-nije-prvi`, `banka-uvoz-izvodi-imaju-radnju`, `banka-uvoz-datum-nije-broj` |
 | `T_BankaUvoz_IdentitetURedu_NeCrtaSe` | identitet u prenosnoj koloni prioriteta 4; **interne šifre nema među vidljivim kolonama**; dvosmislen ID → prazno, a red se i dalje vidi; kolizija broja izvoda | `banka-uvoz-identitet-vidljiv`, `banka-uvoz-dvosmislen-prvi-pobedjuje` |
 | `T_BankaUvoz_RedNosiSmerIOtvorenost` | red **prenosi** smer i otvorenost umesto da ih izvodi iz prikaza; `"Error"` je i dalje otvoren | `banka-uvoz-red-ne-nosi-otvorenost`, `banka-uvoz-red-ne-nosi-smer`, `banka-uvoz-predlog-i-za-zatvorene` |
-| `T_BankaUvoz_CipJakihPratiBrojac` | čip „jaki ključevi" i `CountStrongKeyReadyBankaImport` vide **isti** skup; „sve" je unija tri stanja; značka = čip „za obradu" = `GetBankaImportOpen` | `banka-uvoz-cip-jaki-prolazi-sve`, `banka-uvoz-znacka-broji-mapirane`, `banka-uvoz-obradjeno-guta-preskoceno` |
-| `T_BankaUvoz_IzvodiSuAgregatPoRacunu` | grupa je `(broj + račun)`; zbirovi se **uzimaju sa reda, ne sabiraju**; legacy red bez saldo podataka nije neslaganje | `banka-uvoz-izvod-kljuc-bez-racuna`, `banka-uvoz-saldo-se-sabira`, `banka-uvoz-legacy-red-je-razlika` |
-| `T_BankaUvoz_RucnoMapiranjePravila` | smer-kapija se slaže sa writerom; prazan izbor bloka uzima poziv na broj; blok preko granice traži potvrdu; fail-closed nad listom faktura | `banka-uvoz-om-prima-nejasan-smer`, `banka-uvoz-prazan-blok-ostaje-prazan`, `banka-uvoz-fakture-fail-open`, `banka-uvoz-fakture-i-zatvorene` |
+| `T_BankaUvoz_CipJakihPratiBrojac` | čip „jaki ključevi" i `CountStrongKeyReadyBankaImport` vide **isti** skup; „sve" je unija tri stanja; značka = čip „za obradu" = `GetBankaImportOpen`; **neuspeh čitanja zadržava poslednju poznatu brojku** | `banka-uvoz-cip-jaki-prolazi-sve`, `banka-uvoz-znacka-broji-mapirane`, `banka-uvoz-obradjeno-guta-preskoceno`, `banka-uvoz-kpi-greska-je-nula` |
+| `T_BankaUvoz_IzvodiSuAgregatPoRacunu` | grupa je `(broj + račun + datum)`, mereno **direktno nad `BimIzvodKljuc`**; isti dan kao broj i kao `Date` je isti izvod; zbirovi se **uzimaju sa reda, ne sabiraju**; legacy red bez saldo podataka nije neslaganje | `banka-uvoz-izvod-kljuc-bez-racuna`, `banka-uvoz-izvod-kljuc-bez-datuma`, `banka-uvoz-saldo-se-sabira`, `banka-uvoz-legacy-red-je-razlika` |
+| `T_BankaUvoz_RucnoMapiranjePravila` | smer-kapija se slaže sa writerom; prazan izbor bloka uzima poziv na broj; blok preko granice traži potvrdu; fail-closed nad listom faktura; **izabran blok nosi svoje otkupno mesto do writera**, a scope sužava kandidate u oba smera | `banka-uvoz-om-prima-nejasan-smer`, `banka-uvoz-prazan-blok-ostaje-prazan`, `banka-uvoz-fakture-fail-open`, `banka-uvoz-fakture-i-zatvorene`, `banka-uvoz-blok-bez-om-scope` |
 | `T_ZonaBankaUvoz_PoljaIRaspored` | zona se STVARNO gradi i raspoređuje; sve kontrole postoje; kombo je polje (`nm` + `nmT`); polje cilja je ugašeno za OM | `banka-uvoz-om-polje-cilja-radi` |
 
 Tvrdnja koja nosi najviše: **broj redova koje propušta čip „jaki ključevi" mora
@@ -1533,7 +1536,7 @@ Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
 (`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
 iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
 
-**Dvosmerni dokaz je pušten za svih dvadeset dve**: svaka sabotaža obara
+**Dvosmerni dokaz je pušten za svih dvadeset pet**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -1804,3 +1807,57 @@ ispravke. To se ovde beleži kao neizmereno, ne prećutkuje.
 (ista klasa kao pogrešna dijagnoza gore — za poređenje, `ModeHasValCol()` i
 `ModeHasKgCol()` su **ispravne**, jer se izvode iz `mCols`), i podnožje sa samo
 jednim slotom za novčani zbir.
+
+#### Code review: tri nalaza koja su ušla PRE merge-a
+
+Review je dao `REQUEST CHANGES` sa tri nalaza o kojima suite nije imala šta da
+kaže — ne zato što su tvrdnje bile slabe, nego zato što **fixture nije imao
+podatak nad kojim bi se videli**. Sva tri su zatvorena u istoj grani.
+
+**P1 — ručni kooperantski blok nije nosio otkupno mesto.** Broj otkupa je
+jedinstven **po stanici**, pa isti broj bloka legitimno pripada dvama različitim
+blokovima. `GetOtkupCandidatesForKooperantBlock` je filtrirao samo po
+`KooperantID + BrojDokumenta`, pa bi u jednu raspodelu ušle stavke sa **oba**
+otkupna mesta — novac na dva različita poslovna lanca, bez ijedne poruke.
+
+Scope ide kroz ceo lanac kao **opcioni** argument (`stanicaID` →
+`MapBankaImportAsKooperantBlockCore` / `Manual` / `_TX`, `BimBlokTraziPotvrdu`),
+pa automatsko mapiranje — koje otkupno mesto nema odakle da zna — ostaje
+nepromenjeno. `GetBlokoviZaBimMapiranje` zato više ne vraća niz brojeva nego
+tabelu `BrojBloka | StanicaID | prikaz`, a kombo cilja dobija **treću, skrivenu**
+kolonu. Prikaz (`12 · OM Naziv`) se **ne parsira** — isto pravilo kao identitet u
+redu (§9.6): ono što čovek čita sme da se menja, podatak ne.
+
+Kad blok dolazi iz **poziva na broj** (prazan izbor u kombou), scope-a nema i
+ponašanje ostaje kao kod automatskog mapiranja. To je zaseban slučaj i meri se
+zasebnom tvrdnjom (`Scr_BuScopeBlokaTest`).
+
+**P2 — identitet izvoda nije nosio datum.** `BimIzvodKljuc` je bio
+`(broj + račun)`. Banke numeraciju izvoda ponavljaju po ciklusu, pa izvod 15 na
+istom računu postoji i 2025. i 2026 — i spajali bi se u jedan red, i to na
+najgori način: saldo i datum sa **prvog** reda, a broj stavki **sabran preko
+oba**. Sintetički izvod koji nikad nije postojao, i to na jedinom mestu gde se
+vidi da li se izvod slaže.
+
+Datum se u ključu normalizuje u serijski broj kad god može (`IzvodDatumKljuc`),
+da isti dan zapisan kao `Date` i kao broj ne bi dao dve grupe; neispravna
+vrednost ide kao tekst — ne sme da **spoji** dva izvoda, nego da ostane svoja.
+
+**P2 — pad čitanja je postajao legitimna nula.** `Kpi()` je na grešku vraćao
+`Array(0, 0, 0, 0#, 0#)`. Značka uz stavku menija odgovara na pitanje „ima li
+finansijskih stavki koje čekaju čoveka" — pa je operater dobijao **„nema posla"
+umesto „ne znam"**, i to baš kad je nešto sa šemom ili kesom pošlo naopako. Isti
+fail-open je jednom već plaćen u Stornu.
+
+Greška se sada **loguje** (`LogErr`), kes se **ne** proglašava važećim (sledeći
+poziv pokušava ponovo), a vraća se **poslednja poznata** vrednost. Nula ide samo
+dok validne vrednosti još nije ni bilo — tada ni značke nema, pa nema ni čega
+lažnog. `Scr_ResetCache` zato više ne briše `mKpi`, samo ga proglašava
+zastarelim.
+
+**Zamka pri pisanju dokaza.** Prve dve sabotaže ključa izvoda obarale su
+**istu** tvrdnju („isti broj daje tri reda"), jer se pravilo merilo samo preko
+broja redova u mreži — zamka 5 iz `sabotaza.py`. Test zato sada meri
+`BimIzvodKljuc` **direktno**, jednom tvrdnjom po polovini ključa; agregat ispod
+ostaje kao integracioni dokaz. Sa tim, svaka od četiri nove sabotaže obara tačno
+svoju imenovanu tvrdnju.

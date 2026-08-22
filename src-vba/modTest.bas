@@ -110,6 +110,16 @@ Private Const FX_BIM_RACUN2 As String = "265-0000000222222-22"
 Private Const FX_BIM_BLOK3_BR As String = "BLK-BIM-3"
 ' Blok kooperanta KOOP-TEST-1 sa jednom otvorenom stavkom (OTK-TEST-1).
 Private Const FX_BIM_BLOK1_BR As String = "1/TEST"
+' ISTI kooperant, ISTI broj bloka, DVE stanice. Broj otkupa je jedinstven PO
+' STANICI, pa je ovo legitiman podatak -- i jedini nacin da se izmeri da rucno
+' mapiranje nosi scope otkupnog mesta, a ne samo broj.
+Private Const FX_BIM_BLOK_OM As String = "BLK-BIM-OM"
+Private Const FX_OTK_OM_A As String = "OTK-BIM-OMA"   ' STANICA
+Private Const FX_OTK_OM_B As String = "OTK-BIM-OMB"   ' druga stanica
+' FX_STANICA2 je namerno NEPOSTOJECA ("tudje OM"); scope trazi pravu drugu.
+Private Const FX_STANICA_B As String = "STA-TEST-2"
+' Isti broj izvoda i isti racun, DRUGI ciklus.
+Private Const FX_BIM_PY As String = "BIM-FIX-PY"
 ' Red se u mrezi nalazi PO PARTNERU, jer BankaImportID vise nije prikazan --
 ' interna sifra ne ide operateru pred oci (nalaz iz smoke-a).
 Private Const FX_BIM_P_JAKI_FAK As String = "Kupac Prvi doo"
@@ -118,9 +128,9 @@ Private Const FX_BIM_P_KOLIZIJA As String = "Drugi Platilac"
 Private Const FX_BIM_P_DA As String = "Obradjeni Platilac"
 Private Const FX_BIM_P_DUP As String = "Dvojnik Prvi"
 Private Const FX_BIM_P_STORNO As String = "Stornirani Platilac"
-Private Const FX_BIM_SVE As Long = 10       ' 11 redova minus jedan storniran
+Private Const FX_BIM_SVE As Long = 11       ' 12 redova minus jedan storniran
 Private Const FX_BIM_OTVORENIH As Long = 6  ' status "" ili "Error"
-Private Const FX_BIM_OBRADJENIH As Long = 3 ' BIM-FIX-DA + dva dvojnika
+Private Const FX_BIM_OBRADJENIH As Long = 4 ' DA + dva dvojnika + prosli ciklus
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -6708,7 +6718,15 @@ Private Sub T_BankaUvoz_CipJakihPratiBrojac()
     ' 'Za rucno' je PODSKUP otvorenih, ne suprotnost: red sa statusom "Error"
     ' je i dalje otvoren.
     AssertEq (nRucno <= nZa), True, "'za rucno' je podskup otvorenih"
-    AssertEq nObr, FX_BIM_OBRADJENIH, "tri obradjena reda (jedan + dva dvojnika)"
+    AssertEq nObr, FX_BIM_OBRADJENIH, _
+             "cetiri obradjena reda (jedan + dva dvojnika + prosli ciklus)"
+
+    ' NEUSPEH CITANJA NIJE NULA. Znacka odgovara na "ima li posla"; ako citanje
+    ' pukne a vratimo nule, operater dobija "nema posla" umesto "ne znam".
+    AssertEq CLng(modScrBankaUvoz.BuKpiPosleGreske(Array(7, 1, 8, 0#, 0#))(0)), 7, _
+             "posle greske se zadrzava POSLEDNJA POZNATA brojka"
+    AssertEq CLng(modScrBankaUvoz.BuKpiPosleGreske(Empty)(0)), 0, _
+             "bez ijedne poznate brojke ostaje nula -- tada ni znacke nema"
     AssertEq nPre, 1, "tacno jedan preskocen"
 
     AssertEq (nJaki > 0), True, "fixture ima bar jedan jak kljuc -- tvrdnja nije prazna"
@@ -6737,7 +6755,7 @@ End Sub
 ' za najnoviji izvod (UpdateIzvodSummaryLabel).
 Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     Dim d As Variant, redovi As Variant, i As Long, n As Long
-    Dim r1 As Long, r2 As Long, istihBrojeva As Long
+    Dim r1 As Long, r2 As Long, rPY As Long, istihBrojeva As Long
 
     ' PRAVILO SLAGANJA, izmereno bez mreze.
     AssertEq modBankaImport.BimSaldoStatus(0, 0, 0, 0), BIM_SALDO_NEMA, _
@@ -6749,6 +6767,19 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     AssertEq modBankaImport.BimSaldoRazlika(1000, 1300, 300, 500), -100, _
              "razlika nosi znak -- zavrsno je VECE od izracunatog"
 
+    ' KLJUC GRUPE, izmeren direktno. Agregat ispod je posledica; da se pravilo
+    ' meri samo preko broja redova, obe polovine kljuca bi obarale ISTU tvrdnju
+    ' i sabotaza ne bi umela da ih razlikuje.
+    AssertEq (modBankaImport.BimIzvodKljuc("15", "111", DateSerial(2026, 3, 16)) <> _
+              modBankaImport.BimIzvodKljuc("15", "222", DateSerial(2026, 3, 16))), True, _
+             "isti broj izvoda na DVA RACUNA daje dva kljuca"
+    AssertEq (modBankaImport.BimIzvodKljuc("15", "111", DateSerial(2026, 3, 16)) <> _
+              modBankaImport.BimIzvodKljuc("15", "111", DateSerial(2025, 3, 16))), True, _
+             "isti broj i isti racun iz DVA CIKLUSA daju dva kljuca"
+    AssertEq (modBankaImport.BimIzvodKljuc("15", "111", CDbl(DateSerial(2026, 3, 16))) = _
+              modBankaImport.BimIzvodKljuc("15", "111", DateSerial(2026, 3, 16))), True, _
+             "isti dan zapisan kao broj i kao datum je ISTI izvod"
+
     modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
     d = modScrBankaUvoz.Scr_Rows("sve", "")
     redovi = d(1)
@@ -6757,13 +6788,28 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     For i = 1 To n
         If Trim$(CStr(redovi(i, 1))) = FX_BIM_IZVOD1 Then
             istihBrojeva = istihBrojeva + 1
-            If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN1 Then r1 = i
+            ' Isti broj I isti racun postoje DVAPUT -- u dva ciklusa. Red se zato
+            ' bira i po datumu; da se bira samo po broju i racunu, tvrdnja bi
+            ' merila onaj koji je slucajno poslednji.
+            If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN1 _
+               And CDbl(redovi(i, 3)) = CDbl(DateSerial(2026, 3, 16)) Then r1 = i
             If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN2 Then r2 = i
+            If Trim$(CStr(redovi(i, 2))) = FX_BIM_RACUN1 _
+               And CDbl(redovi(i, 3)) = CDbl(DateSerial(2025, 3, 16)) Then rPY = i
         End If
     Next i
 
-    AssertEq istihBrojeva, 2, _
-             "isti broj izvoda na dva racuna daje DVA reda -- grupa je (broj + racun)"
+    AssertEq istihBrojeva, 3, _
+             "isti broj izvoda daje TRI reda: dva racuna i dva ciklusa"
+    ' DRUGA POLOVINA IDENTITETA. Isti broj i isti racun, ali drugi datum, NISU
+    ' isti izvod. Da jesu, saldo i datum bi se uzeli sa prvog reda a broj stavki
+    ' sabrao preko oba -- sinteticki izvod koji nikad nije postojao.
+    AssertEq (rPY > 0), True, "izvod iz proslog ciklusa ima SVOJ red"
+    AssertEq (rPY <> r1), True, _
+             "isti broj + isti racun + drugi datum su DVA izvoda"
+    AssertEq CStr(redovi(rPY, 9)), "0 / 1", _
+             "stavke se NE sabiraju preko dva ciklusa"
+    AssertEq CDbl(redovi(rPY, 4)), 1000, "saldo se ne uzima sa tudjeg reda"
     AssertEq (r1 > 0 And r2 > 0), True, "oba racuna su u listi"
     AssertEq (Trim$(CStr(redovi(r1, 10))) <> Trim$(CStr(redovi(r2, 10)))), True, _
              "identiteti dva izvoda istog broja su RAZLICITI"
@@ -6788,7 +6834,8 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     Next i
 
     AssertEq BuBrojRedova("razlika"), 1, "tacno jedan izvod se ne slaze"
-    AssertEq BuBrojRedova("sve"), 4, "cetiri grupe: dva racuna pod istim brojem, pa jos dva"
+    AssertEq BuBrojRedova("sve"), 5, _
+             "pet grupa: dva racuna i dva ciklusa pod istim brojem, pa jos dve"
     ' Izvod 3 je ceo obradjen, pa cip "sa otvorenim" ima sta da iskljuci --
     ' inace bi propustao sve i bio prazna tvrdnja.
     AssertEq BuBrojRedova("otvoreni"), 3, "tri izvoda jos imaju otvorenih stavki"
@@ -6805,6 +6852,7 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     Dim ok As Boolean, greska As String, razlog As String
     Dim src As Variant, i As Long
     Dim nasao As Boolean
+    Dim omBlokova As Long, omBezStanice As Long
 
     ' SMER-KAPIJA PRE KLIKA -- ista koju RequireBimSmer sprovodi u writeru
     ' (Kupac -> UPLATA, Kooperant -> ISPLATA, OM -> bilo koji CIST smer).
@@ -6906,15 +6954,51 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq modScrBankaUvoz.Scr_BuFaktureStanjeTest(True), True, _
              "uredno procitana lista pusta mapiranje"
 
-    ' BLOKOVI kooperanta -- bez ponavljanja, iako blok ima tri otkupne stavke.
+    ' BLOKOVI kooperanta. Kljuc je (broj + OTKUPNO MESTO), ne samo broj: broj
+    ' otkupa je jedinstven po stanici, pa isti broj pripada dvama razlicitim
+    ' blokovima. Ko ponudi samo broj, posle izbora ne zna KOJI je -- a od toga
+    ' zavisi na koji otkupni lanac ide novac.
     src = modBankaMapiranje.GetBlokoviZaBimMapiranje(FX_KOOPERANT3)
     AssertEq IsArray(src), True, "kooperant ima blokove"
-    For i = LBound(src) To UBound(src)
-        If CStr(src(i)) = FX_BIM_BLOK3_BR Then nasao = True
+    For i = 1 To UBound(src, 1)
+        If CStr(src(i, 1)) = FX_BIM_BLOK3_BR Then nasao = True
+        If CStr(src(i, 1)) = FX_BIM_BLOK_OM Then
+            omBlokova = omBlokova + 1
+            If Len(Trim$(CStr(src(i, 2)))) = 0 Then omBezStanice = omBezStanice + 1
+        End If
     Next i
     AssertEq nasao, True, "blok sa tri stavke je u listi"
-    AssertEq UBound(src) - LBound(src) + 1, 1, _
-             "tri otkupne stavke istog bloka daju JEDAN broj bloka"
+    AssertEq UBound(src, 1), 3, _
+             "tri otkupne stavke istog bloka daju jedan red; blok na dve stanice daje DVA"
+    AssertEq omBlokova, 2, "isti broj bloka na dve stanice daje DVA reda"
+    AssertEq omBezStanice, 0, "svaki red nosi svoje otkupno mesto"
+
+    ' SCOPE STVARNO SUZAVA. Bez njega su kandidati oba otkupna mesta -- a to je
+    ' novac na dva razlicita poslovna lanca u JEDNOJ raspodeli.
+    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
+              FX_KOOPERANT3, FX_BIM_BLOK_OM, True)
+    AssertEq UBound(src, 1), 2, "bez scope-a ulaze kandidati sa OBA otkupna mesta"
+
+    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
+              FX_KOOPERANT3, FX_BIM_BLOK_OM, True, FX_STANICA)
+    AssertEq UBound(src, 1), 1, "sa scope-om ulazi samo jedno otkupno mesto"
+    AssertEq CStr(src(1, 1)), FX_OTK_OM_A, "i to bas ono koje je izabrano"
+
+    ' Kontrola u drugom smeru: druga stanica daje DRUGI otkup, ne prazno.
+    src = modBankaMapiranje.GetOtkupCandidatesForKooperantBlock( _
+              FX_KOOPERANT3, FX_BIM_BLOK_OM, True, FX_STANICA_B)
+    AssertEq IsArray(src), True, "druga stanica ima svoje kandidate"
+    AssertEq CStr(src(1, 1)), FX_OTK_OM_B, "scope B nikad ne vraca otkup iz scope-a A"
+
+    ' PRAZAN IZBOR BLOKA NEMA SCOPE. Blok tada dolazi iz poziva na broj, koji
+    ' otkupno mesto ne nosi -- pa se ekran ponasa kao automatsko mapiranje.
+    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, FX_KOOPERANT3, "", FX_STANICA
+    AssertEq modScrBankaUvoz.Scr_BuScopeBlokaTest(), "", _
+             "bez izabranog bloka nema ni scope-a"
+    modScrBankaUvoz.Scr_BuIzborTestSet BIM_TIP_KOOPERANT, FX_KOOPERANT3, _
+                                       FX_BIM_BLOK_OM, FX_STANICA
+    AssertEq modScrBankaUvoz.Scr_BuScopeBlokaTest(), FX_STANICA, _
+             "izabran blok nosi svoje otkupno mesto do writera"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub

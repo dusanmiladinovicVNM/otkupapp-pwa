@@ -1801,6 +1801,25 @@ SABOTAZE = {
         "stornirana faktura ne ulazi u listu",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
+    # Broj otkupa je jedinstven PO STANICI, pa isti broj bloka pripada dvama
+    # razlicitim blokovima. Bez scope-a u jednu raspodelu ulaze kandidati sa OBA
+    # otkupna mesta -- novac na dva razlicita poslovna lanca.
+    "banka-uvoz-blok-bez-om-scope": (
+        "modBankaMapiranje.bas",
+        "        If Len(Trim$(stanicaID)) > 0 And colSta > 0 Then\n",
+        "        If False And colSta > 0 Then   ' SABOTAZA: scope se ne primenjuje\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "rucno mapiranje bloka nosi i otkupno mesto",
+    ),
+    # Znacka odgovara na pitanje "ima li posla". Kvar citanja pretvoren u nulu
+    # kaze "nema posla" -- fail-open koji je Storno vec jednom platio.
+    "banka-uvoz-kpi-greska-je-nula": (
+        "modScrBankaUvoz.bas",
+        "    If IsArray(poslednja) Then\n",
+        "    If False Then   ' SABOTAZA: kvar citanja postaje nula\n",
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "neuspeh citanja zadrzava poslednju poznatu brojku",
+    ),
     # Broj van opsega datuma obara CDate u mrezi, a RenderGrid to proguta
     # (On Error Resume Next) -- celija ostane sa natpisom od ranijeg crtanja.
     # Pravilo je LJUSKINO (modUiData), pa ga i sabotaza gadja tamo. Fixture
@@ -1958,12 +1977,30 @@ SABOTAZE = {
     # BROJ IZVODA NIJE IDENTITET: dedupe kljuc pocinje od BROJA RACUNA, pa dva
     # racuna firme legitimno nose izvod istog broja. Grupa bez racuna ih spaja u
     # jedan red i saldo dva razlicita racuna izgleda kao jedan.
+    # Kljuc grupe izvoda ima DVE polovine (racun i ciklus), pa i dve sabotaze.
+    # Test ih meri odvojenim tvrdnjama nad samim BimIzvodKljuc -- da bi svaka
+    # sabotaza oborila BAS SVOJU (zamka 5); preko broja redova bi obe obarale
+    # istu tvrdnju "isti broj daje tri reda".
     "banka-uvoz-izvod-kljuc-bez-racuna": (
         "modBankaImport.bas",
-        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna)\n',
-        "    BimIzvodKljuc = Trim$(brojDokumenta)   ' SABOTAZA: racun ispada iz kljuca\n",
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna) & _\n'
+        '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & IzvodDatumKljuc(datumIzvoda)\n',
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "izvod se grupise po (broj + racun), ne samo po broju",
+        "izvod se grupise i po broju racuna",
+    ),
+    # Banke numeraciju izvoda ponavljaju po ciklusu: izvod 15 na istom racunu
+    # postoji i 2025. i 2026. Bez datuma u kljucu se spajaju u jedan sinteticki
+    # red -- saldo i datum sa prvog, stavke sabrane preko oba.
+    # Zamena je NAMERNO obrnutog redosleda: da nije, bila bi podniz sidra i
+    # `--vrati` bi je nasao i u zdravom kodu (zamka 8).
+    "banka-uvoz-izvod-kljuc-bez-datuma": (
+        "modBankaImport.bas",
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna) & _\n'
+        '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
+        '    BimIzvodKljuc = Trim$(brojRacuna) & "|" & Trim$(brojDokumenta)\n',
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod se grupise i po datumu izvoda",
     ),
     # Zbirovi izvoda su isti na SVAKOM redu grupe (parser ih tako upisuje), pa
     # sabiranje daje iznos pomnozen brojem stavki -- i svaki izvod odjednom

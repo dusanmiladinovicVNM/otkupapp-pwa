@@ -4958,7 +4958,16 @@ ekran novog UI-ja, sa dve liste umesto jednog spiska.
 - Stavka čiji se interni broj u tabeli pojavljuje dvaput **vidi se u listi**,
   ali radnja nad njom odbija da pogađa koju od dve misli.
 - Isti **broj izvoda** sa **dva različita računa** firme se vodi kao dva
-  izvoda, ne kao jedan — banke te brojeve dodeljuju po računu.
+  izvoda, ne kao jedan — banke te brojeve dodeljuju po računu. Isto važi i za
+  **isti broj na istom računu iz drugog ciklusa**: banke numeraciju ponavljaju
+  po godini, pa bi se dva izvoda spojila u jedan sa zbirom stavki preko oba.
+- **Ručno mapiranje na kooperantski blok pamti i otkupno mesto.** Broj otkupa je
+  jedinstven po stanici, pa isti broj bloka može da postoji na dva otkupna mesta;
+  lista blokova ih zato prikazuje odvojeno (`12 · OM Naziv`), a raspodela ide
+  samo na stavke izabranog mesta.
+- **Značka koja ne može da pročita podatak ne pokazuje nulu.** Do sada bi
+  neuspelo čitanje ispalo kao „nema posla"; sada ostaje poslednja poznata
+  brojka, a greška se upisuje u log.
 
 **Šta se nije promenilo**
 
@@ -5018,4 +5027,11 @@ pogađaju sve:
   vrednost je rušila ispis ćelije, tiho, i u njoj je ostajao tekst sa prethodnog
   ekrana. Sada se odbija i polje ostaje prazno.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset dve** sabotaže.
+**Code review pred merge** je otvorio još tri stvari, sve tri ispravljene u
+istoj grani: ručno mapiranje bloka nije nosilo otkupno mesto (pa bi u jednu
+raspodelu ušle stavke sa dva otkupna mesta), identitet izvoda nije nosio datum
+(pa bi se isti broj iz dva ciklusa spojio u jedan red), i pad čitanja brojki je
+postajao legitimna nula. Uz svaku ispravku ide test nad novim fixture redom i
+sabotaža koja baš tu tvrdnju obara.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **dvadeset pet** sabotaža.

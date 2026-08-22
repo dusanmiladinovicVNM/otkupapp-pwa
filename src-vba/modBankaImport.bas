@@ -1247,6 +1247,12 @@ End Function
 ' (uvoz pre v6.18, bez saldo metapodataka) -- to nije neslaganje nego odsustvo
 ' podatka, i ne sme da se prikaze kao greska. Prag je 0.01, isti koji forma vec
 ' koristi.
+'
+' Nula se NE razlikuje od "nema podatka", i to je svesno. Izvod cija su sva
+' cetiri polja stvarno nula morao bi da nema nijednu transakciju -- a lista se
+' gradi IZ transakcija, pa takav izvod u njoj i ne postoji. Razlikovanje bi
+' trazilo peto polje (npr. "parser je popunio saldo") koje sema nema; dok ga
+' nema, "nema podatka" je tacniji odgovor od "slaze se".
 Public Function BimSaldoStatus(ByVal pocetno As Double, ByVal zavrsno As Double, _
                                ByVal duguje As Double, ByVal potrazuje As Double) As Long
     If pocetno = 0 And zavrsno = 0 And duguje = 0 And potrazuje = 0 Then
@@ -1261,12 +1267,40 @@ Public Function BimSaldoStatus(ByVal pocetno As Double, ByVal zavrsno As Double,
     End If
 End Function
 
-' Kljuc grupe. BROJ IZVODA NIJE IDENTITET -- dedupe kljuc pocinje od BROJA
-' RACUNA ("Drugi racun = druga transakcija, bez obzira na broj izvoda i iznos"),
-' pa dva racuna firme legitimno nose izvod istog broja.
+' Kljuc grupe. BROJ IZVODA NIJE IDENTITET, i to iz DVA razloga.
+'
+' 1) Dedupe kljuc pocinje od BROJA RACUNA ("Drugi racun = druga transakcija, bez
+'    obzira na broj izvoda i iznos"), pa dva racuna firme legitimno nose izvod
+'    istog broja.
+' 2) Banke numeraciju izvoda ponavljaju po ciklusu -- izvod 15 na istom racunu
+'    postoji i 2025. i 2026. Bez datuma u kljucu bi se ta dva spojila u jedan
+'    red, i to na najgori nacin: saldo i datum bi se uzeli sa PRVOG reda, a broj
+'    stavki sabrao preko oba. Dobio bi se sinteticki izvod koji nikad nije
+'    postojao.
 Public Function BimIzvodKljuc(ByVal brojDokumenta As String, _
-                              ByVal brojRacuna As String) As String
-    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna)
+                              ByVal brojRacuna As String, _
+                              ByVal datumIzvoda As Variant) As String
+    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna) & _
+                    "|" & IzvodDatumKljuc(datumIzvoda)
+End Function
+
+' Datum izvoda kao deo kljuca. Normalizuje se u serijski broj kad god moze, da
+' isti dan zapisan kao Date i kao broj ne bi dao dve grupe. Sve ostalo ide kao
+' tekst -- neispravna vrednost ne sme da spoji dva izvoda, nego da ostane svoja.
+Private Function IzvodDatumKljuc(ByVal v As Variant) As String
+    Dim d As Double
+    On Error Resume Next
+    If IsNumeric(v) Then
+        d = Int(CDbl(v))
+    ElseIf IsDate(v) Then
+        d = Int(CDbl(CDate(v)))
+    End If
+    Err.Clear
+    If d <> 0 Then
+        IzvodDatumKljuc = CStr(d)
+    Else
+        IzvodDatumKljuc = Trim$(CStr(v))
+    End If
 End Function
 
 ' IZVODI za mrezu -- agregat po (BrojDokumenta + BrojRacuna).
@@ -1313,7 +1347,8 @@ Public Function GetBankaIzvodiForGrid() As Variant
 
     For i = 1 To UBound(data, 1)
         kljuc = BimIzvodKljuc(CStr(NzBIM(data(i, cBrDok), "")), _
-                              CStr(NzBIM(data(i, cRac), "")))
+                              CStr(NzBIM(data(i, cRac), "")), _
+                              data(i, cDatIzv))
 
         If idx.Exists(kljuc) Then
             r = CLng(idx(kljuc))

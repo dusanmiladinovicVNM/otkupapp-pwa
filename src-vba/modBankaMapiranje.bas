@@ -914,16 +914,19 @@ Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As Str
                                                      ByVal kooperantID As String, _
                                                      ByVal brojBloka As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                     Optional ByVal allowManyCandidates As Boolean = False) As Long
+                                                     Optional ByVal allowManyCandidates As Boolean = False, _
+                                                     Optional ByVal stanicaScope As String = "") As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates)
+        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
+        stanicaScope)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
                                                         ByVal kooperantID As String, _
                                                         ByVal brojBloka As String, _
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                        Optional ByVal allowManyCandidates As Boolean = False) As Long
+                                                        Optional ByVal allowManyCandidates As Boolean = False, _
+                                                        Optional ByVal stanicaScope As String = "") As Long
     Dim tx As clsTransaction
     
     On Error GoTo EH
@@ -936,7 +939,8 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     tx.AddTableSnapshot TBL_PARTNER_MAP
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
-        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates)
+        bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
+        stanicaScope)
     
     tx.CommitTx
 
@@ -988,7 +992,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
                                                     ByVal kooperantID As String, _
                                                     ByVal blockNo As String, _
                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
-                                                    Optional ByVal allowManyCandidates As Boolean = False) As Long
+                                                    Optional ByVal allowManyCandidates As Boolean = False, _
+                                                    Optional ByVal stanicaScope As String = "") As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
@@ -1027,7 +1032,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
 
     isplataUkupno = CDbl(NzBIM(bim(1, 6), 0#))
     
-    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo, allowManyCandidates)
+    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo, _
+                                                    allowManyCandidates, stanicaScope)
     preostaloZaRaspodelu = isplataUkupno
 
     If IsEmpty(kandidati) Then
@@ -1911,7 +1917,8 @@ End Function
 ' nedostajucom kolonom -- prvo je odluka operatera, drugo je kvar.
 Public Function BimBlokTraziPotvrdu(ByVal kooperantID As String, _
                                     ByVal brojBloka As String, _
-                                    ByRef outPoruka As String) As Boolean
+                                    ByRef outPoruka As String, _
+                                    Optional ByVal stanicaScope As String = "") As Boolean
     Dim errNum As Long
     Dim errDesc As String
     Dim errSrc As String
@@ -1920,7 +1927,7 @@ Public Function BimBlokTraziPotvrdu(ByVal kooperantID As String, _
     outPoruka = ""
 
     On Error Resume Next
-    probni = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka)
+    probni = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, False, stanicaScope)
     errNum = Err.Number
     errDesc = Err.description
     errSrc = Err.SOURCE
@@ -2019,8 +2026,14 @@ EH:
     GetFaktureZaBimMapiranje = Empty
 End Function
 
-' Brojevi otkupnih blokova kooperanta, bez ponavljanja i bez storniranih.
-' Vraca 1-bazirani niz stringova ili Empty.
+' Blokovi kooperanta za rucno mapiranje, bez storniranih.
+'
+' Kljuc je (BrojDokumenta + StanicaID), NE samo broj: broj otkupa je jedinstven
+' po otkupnom mestu, pa isti broj moze pripadati dvama razlicitim blokovima. Ko
+' ponudi samo broj, posle izbora vise ne zna KOJI je -- a od toga zavisi na koji
+' otkupni lanac ide novac.
+'
+' Vraca (1 To n, 1 To 3): BrojBloka | StanicaID | prikaz za operatera.
 Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     Const SRC As String = "GetBlokoviZaBimMapiranje"
 
@@ -2035,20 +2048,26 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     data = ExcludeStornirano(data, TBL_OTKUP)
     If IsEmpty(data) Then Exit Function
 
-    Dim cKoop As Long, cBrDok As Long
+    Dim cKoop As Long, cBrDok As Long, cSta As Long
     cKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
     cBrDok = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cSta = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
 
     Dim d As Object
     Set d = CreateObject("Scripting.Dictionary")
 
+    Dim stanice As Object
+    Set stanice = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+
     Dim i As Long
-    Dim broj As String
+    Dim broj As String, sta As String, kljuc As String
     For i = 1 To UBound(data, 1)
         If Trim$(CStr(data(i, cKoop))) = Trim$(kooperantID) Then
             broj = Trim$(CStr(NzBIM(data(i, cBrDok), "")))
+            sta = Trim$(CStr(NzBIM(data(i, cSta), "")))
             If Len(broj) > 0 Then
-                If Not d.Exists(broj) Then d.Add broj, True
+                kljuc = broj & "|" & sta
+                If Not d.Exists(kljuc) Then d.Add kljuc, Array(broj, sta)
             End If
         End If
     Next i
@@ -2058,10 +2077,23 @@ Public Function GetBlokoviZaBimMapiranje(ByVal kooperantID As String) As Variant
     Dim outA() As Variant
     Dim k As Variant
     Dim n As Long
-    ReDim outA(1 To d.count)
+    Dim par As Variant, naziv As String
+    ReDim outA(1 To d.count, 1 To 3)
     For Each k In d.keys
         n = n + 1
-        outA(n) = CStr(k)
+        par = d(k)
+        outA(n, 1) = CStr(par(0))
+        outA(n, 2) = CStr(par(1))
+        naziv = CStr(par(1))
+        If Not stanice Is Nothing Then
+            If stanice.Exists(CStr(par(1))) Then naziv = CStr(stanice(CStr(par(1))))
+        End If
+        ' Prikaz nosi i otkupno mesto, jer broj sam po sebi ne razlikuje blokove.
+        If Len(Trim$(naziv)) = 0 Then
+            outA(n, 3) = CStr(par(0))
+        Else
+            outA(n, 3) = CStr(par(0)) & "  " & ChrW(183) & "  " & naziv
+        End If
     Next k
 
     GetBlokoviZaBimMapiranje = outA
@@ -2300,9 +2332,18 @@ NextI:
     End If
 End Function
 
+' stanicaID je SCOPE, ne filter po ukusu: BrojDokumenta otkupa je jedinstven PO
+' OTKUPNOM MESTU, pa isti broj legitimno postoji na dve stanice -- i za istog
+' kooperanta, ako predaje na dva mesta. Bez scope-a bi kandidati iz dva razlicita
+' poslovna bloka usli u JEDNU raspodelu i novac bi otisao na pogresan lanac.
+'
+' Prazno = bez scope-a, tj. ponasanje kakvo je bilo. AUTO putanja stanicu nema
+' odakle da zna (poziv na broj je nosi samo posredno), pa ostaje nepromenjena;
+' RUCNI put je bira i mora je proslediti.
 Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String, _
                                                      ByVal brojBloka As String, _
-                                                     Optional ByVal allowOverMax As Boolean = False) As Variant
+                                                     Optional ByVal allowOverMax As Boolean = False, _
+                                                     Optional ByVal stanicaID As String = "") As Variant
     Dim data As Variant
     Dim result() As Variant
     Dim colOtkID As Long
@@ -2311,6 +2352,7 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     Dim colKol As Long
     Dim colCena As Long
     Dim colVrsta As Long
+    Dim colSta As Long
     Dim i As Long
     Dim count As Long
     
@@ -2329,6 +2371,7 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     colKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     colCena = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     colVrsta = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    colSta = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
     
     ' AUD-025: bafer je velicine ulaza, ne fiksnih 2. Raniji `ReDim result(1 To 2)`
     ' + `If count > 2 Then Exit For` je ostavljao count=3 uz bafer od 2 reda, pa je
@@ -2340,6 +2383,12 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
 
     For i = 1 To UBound(data, 1)
         If CStr(data(i, colKoop)) <> kooperantID Then GoTo NextI
+
+        ' SCOPE otkupnog mesta -- v. zaglavlje. Kad je zadat, kandidat sa druge
+        ' stanice NE ulazi u raspodelu, ma koliko broj bloka bio isti.
+        If Len(Trim$(stanicaID)) > 0 And colSta > 0 Then
+            If Trim$(CStr(NzBIM(data(i, colSta), ""))) <> Trim$(stanicaID) Then GoTo NextI
+        End If
 
         If NormalizePozivKey(CStr(data(i, colBrDok))) = NormalizePozivKey(brojBloka) Then
             Dim vrednost As Double

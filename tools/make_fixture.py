@@ -155,6 +155,16 @@ BIM_DATUM_2 = datetime.date(2026, 3, 17)
 # Blok sa TRI otvorene otkupne stavke -- preko MAX_BLOK_KANDIDATA (2), pa
 # automatska raspodela dize ERR_BMAP_MANUAL_REQUIRED i red ide na rucno.
 BIM_BLOK_3 = "BLK-BIM-3"
+# ISTI kooperant, ISTI broj bloka, DVA otkupna mesta. Broj otkupa je
+# jedinstven PO STANICI, pa je ovo legitiman podatak -- i jedini nacin da
+# se izmeri da rucno mapiranje nosi scope otkupnog mesta, a ne samo broj.
+# Bez ovog para bi novac mogao da ode na pogresan otkupni lanac, a nijedna
+# tvrdnja to ne bi primetila.
+BIM_BLOK_OM = "BLK-BIM-OM"
+# Isti broj izvoda i isti racun, ali DRUGI ciklus. Banke numeraciju
+# ponavljaju po godini; bez datuma u kljucu bi se dva izvoda spojila u
+# jedan sinteticki red koji nikad nije postojao.
+BIM_DATUM_PY = datetime.date(2025, 3, 16)
 # Saldo izvoda 2 je NAMERNO za 100 veci od tacnog (8000 + 950 - 3000 = 5950).
 # Bez reda koji se ne slaze, provera integriteta bi u fixture-u bila uvek OK.
 BIM_IZVOD_2_ZAVRSNO = 6050
@@ -505,6 +515,15 @@ SEED = {
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 20, "Cena": 30.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_3, "Klasa": "I"},
+        # ISTI kooperant, ISTI broj bloka, DVE stanice -- v. BIM_BLOK_OM.
+        {"OtkupID": "OTK-BIM-OMA", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        {"OtkupID": "OTK-BIM-OMB", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 60.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -676,6 +695,19 @@ SEED = {
          "ImportVreme": BIM_DATUM_2, "Obradjeno": "Skip",
          "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
          "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        # ISTI broj izvoda i ISTI racun kao izvod 1, ali PRETHODNI ciklus.
+        # Bez datuma u kljucu grupe, ova dva izvoda bi se spojila: saldo i datum
+        # bi se uzeli sa prvog reda, a broj stavki sabrao preko oba.
+        # Obradjeno="Da" da ne pomera brojku otvorenih.
+        {"BankaImportID": "BIM-FIX-PY", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_PY, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_PY, "Partner": "Prosla Godina doo",
+         "PartnerKonto": "", "Opis": "Izvod iz proslog ciklusa", "Uplata": 100, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-PY", "IzvorFajl": "fixture0.pdf",
+         "ImportVreme": BIM_DATUM_PY, "Obradjeno": "Da",
+         "PocetnoStanje": 1000, "ZavrsnoStanje": 1100,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 100},
         # Storniran red nosi ISTE zbirove izvoda kao ostali -- da agregat ne
         # zavisi od toga koji je red grupe procitan.
         {"BankaImportID": "BIM-FIX-ST", "BrojDokumenta": BIM_IZVOD_2,
