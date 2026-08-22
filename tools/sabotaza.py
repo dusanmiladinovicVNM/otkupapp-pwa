@@ -59,6 +59,16 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    izmene. Ako se sabotaza svodi na UKLANJANJE reda, dodaj joj oznaku
    (`   ' SABOTAZA: ...`) da zamena postane jedinstvena. Placeno jednom, na
    `ekran-curi-greska`.
+
+9. SIDRO ZASTAREVA KAD SE POPRAVI KOD KOJI GADJA. Ispravka po review-u je
+   promenila bas onaj uslov na koji je sabotaza bila zakacena, pa je sidro
+   prestalo da se nalazi -- a sa njim i dokaz. Sabotaza tada NE javlja
+   "test je prosao": javlja da sidro nije nadjeno. To je jedini signal, i
+   vidi se samo ako ga gledas: u petlji koja vrti ceo katalog izlaz lako
+   prodje kao "sve zeleno". Posle svake izmene koda koji sabotaze gadjaju
+   pusti ceo dvosmerni dokaz i tvrdi da je broj CRVENIH jednak broju
+   sabotaza -- ne samo da nema neocekivanih padova. Placeno jednom, na
+   `banka-uvoz-blok-bez-om-scope`.
 """
 
 import argparse
