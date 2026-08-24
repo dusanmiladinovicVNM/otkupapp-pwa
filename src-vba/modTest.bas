@@ -340,6 +340,7 @@ Public Sub RunAllTests()
     RunOne 111
     RunOne 112
     RunOne 113
+    RunOne 114
 
     SetTestMode prevMode
     WriteResultFile
@@ -485,6 +486,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 111: TestName = "T_MrezaDatum_BrojKojiNijeDatum"
         Case 112: TestName = "T_MrezaGeometrija_PratiOpisKolona"
         Case 113: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
+        Case 114: TestName = "T_LegacyBanka_PadUcitavanjaNijePraznaLista"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -606,6 +608,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 111: T_MrezaDatum_BrojKojiNijeDatum
         Case 112: T_MrezaGeometrija_PratiOpisKolona
         Case 113: T_MrezaCelija_NeostavljaTudjiTekst
+        Case 114: T_LegacyBanka_PadUcitavanjaNijePraznaLista
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7259,6 +7262,51 @@ End Sub
 '
 ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
 ' masinerija obrise Err izmedju Err.Raise i omotnice testa.
+
+' LEGACY FORMA: PAD UCITAVANJA LISTE NIJE PRAZNA LISTA.
+'
+' Ova pravila su do sada bila proverljiva samo rukom -- stajala su u click
+' handleru i nad Private stanjem forme. Ista klasa greske ("prazna lista je
+' protumacena kao izbor") nadjena je TRI PUTA u poslednja tri PR-a, svaki put u
+' review-u a ne u suite.
+'
+' Forma se NE prikazuje: frmBankaImport nema UserForm_Initialize, a
+' UserForm_Activate (koji cita tabele) ide tek na .Show. Zato je "New" jeftin i
+' bez ijednog upisa.
+Private Sub T_LegacyBanka_PadUcitavanjaNijePraznaLista()
+    Dim f As frmBankaImport
+
+    Set f = New frmBankaImport
+
+    ' PAD UCITAVANJA -> STOP. Prazan combo bi inace znacio "operater nije birao
+    ' blok", odatle poziv na broj, a ako iz njega ne ispadne nijedna otkupna
+    ' stavka -- ceo iznos se knjizi kao AVANS kooperanta.
+    f.BiTestSetUcitanost False, "test greska"
+    AssertEq f.BiTestKooperantSme(), False, _
+             "pad ucitavanja liste blokova ZAUSTAVLJA rucno mapiranje"
+    AssertEq (InStr(1, f.BiTestKooperantPoruka(), "NIJE") > 0), True, _
+             "...i operater dobija objasnjenje, ne cutanje"
+
+    ' Uredno ucitana lista pusta dalje -- kapija ne sme da bude siroka.
+    f.BiTestSetUcitanost True, ""
+    AssertEq f.BiTestKooperantSme(), True, "uredno ucitana lista pusta mapiranje"
+    AssertEq f.BiTestKooperantPoruka(), "", "...bez poruke"
+
+    ' "BLOK JE IZABRAN" se cita iz combo-a, i to je podatak koji ide writeru:
+    ' od njega zavisi sme li prazan skup kandidata da postane avans.
+    f.BiTestSetIzbor BIM_TIP_KOOPERANT, "1/TEST"
+    AssertEq f.BiTestBlokIzabran(), True, "izabran blok se prijavljuje writeru kao izabran"
+
+    f.BiTestSetIzbor BIM_TIP_KOOPERANT, ""
+    AssertEq f.BiTestBlokIzabran(), False, _
+             "prazan combo NIJE izbor -- tada blok dolazi iz poziva na broj"
+
+    ' Drugi tip mapiranja nema blok, pa ne sme da ga ni prijavi.
+    f.BiTestSetIzbor BIM_TIP_KUPAC, "1/TEST"
+    AssertEq f.BiTestBlokIzabran(), False, "kod kupca se blok ne prijavljuje uopste"
+
+    Unload f
+End Sub
 
 ' CELIJA MREZE NIKAD NE OSTAVLJA TUDJI TEKST.
 '

@@ -1877,6 +1877,27 @@ SABOTAZE = {
         "T_MrezaCelija_NeostavljaTudjiTekst",
         "kvar prikaza se broji, pa ostaje trag u logu",
     ),
+    # ------------------------------------------- BANKA: LEGACY FORMA
+    # Prva sabotaza nad .frm fajlom. Pravila ove forme odlucuju hoce li uplata
+    # postati avans, a do sada su bila proverljiva samo rukom -- pa je ista greska
+    # tri puta prosla kroz review umesto kroz suite.
+    "banka-legacy-pad-liste-prolazi": (
+        "frmBankaImport.frm",
+        "    If Not m_BlokoviLoadOk Then\n",
+        "    If Not m_BlokoviLoadOk And False Then   ' SABOTAZA: pad ucitavanja prolazi\n",
+        "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
+        "pad ucitavanja liste blokova zaustavlja rucno mapiranje",
+    ),
+    # Prazan combo NIJE izbor: tada blok dolazi iz poziva na broj, gde je avans
+    # legitiman. Ko to izjednaci, ili ugasi legitimnu granu ili prijavi writeru
+    # izbor kog nije bilo.
+    "banka-legacy-prazan-combo-je-izbor": (
+        "frmBankaImport.frm",
+        '    ManualBlokIzabran = (Trim$(nz(cmbOtkupBlok.value, "")) <> "")\n',
+        '    ManualBlokIzabran = True   \' SABOTAZA: prazan combo je izbor\n',
+        "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
+        "prazan combo nije izbor bloka",
+    ),
     # ---------------------------------------------------- BANKA: WRITER
     # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
     # obradjenom. Za AUTOMATSKO mapiranje je to namerno; za IZABRAN blok je

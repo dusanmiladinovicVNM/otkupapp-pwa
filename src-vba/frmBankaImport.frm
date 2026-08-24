@@ -728,11 +728,9 @@ Private Sub btnSacuvajRucno_Click()
             ' a ako iz njega ne ispadne nijedna otkupna stavka, ceo iznos se
             ' knjizi kao AVANS kooperanta i stavka se oznaci obradjenom.
             ' Isto pravilo koje ova forma vec ima za fakture (m_FaktureLoadOk).
-            If Not m_BlokoviLoadOk Then
-                MsgBox "Lista blokova NIJE u" & ChrW(269) & "itana (" & _
-                       m_BlokoviLoadErr & ")." & vbCrLf & _
-                       "Prazna lista NE zna" & ChrW(269) & "i poziv na broj.", _
-                       vbExclamation, APP_NAME
+            Dim rucnoPoruka As String
+            If Not KooperantRucnoSme(rucnoPoruka) Then
+                MsgBox rucnoPoruka, vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -979,6 +977,80 @@ End Sub
 '
 ' Kad je ovo bila JEDNA funkcija za oba preview-a, rucni izbor bloka je menjao i
 ' AUTO prikaz: preview je pokazivao blok B, a "Automatski mapiraj red" knjizio A.
+' SME LI RUCNO MAPIRANJE KOOPERANTA UOPSTE DA POCNE.
+'
+' Izdvojeno iz btnSacuvajRucno_Click da bi se moglo IZMERITI. Dok je uslov stajao
+' u samom handleru, jedini nacin da se proveri bio je da neko rukom otvori formu:
+' kapija je bila tacna, ali "provereno citanjem" -- a bas tu klasu gresaka
+' (prazna lista tumacena kao izbor) su poslednja tri PR-a nalazila tri puta.
+'
+' Poruka se vraca pozivaocu umesto da se prikaze ovde, da funkcija ostane bez
+' dijaloga i time pozivljiva iz testa.
+Private Function KooperantRucnoSme(ByRef outPoruka As String) As Boolean
+    outPoruka = ""
+
+    If Not m_BlokoviLoadOk Then
+        outPoruka = "Lista blokova NIJE u" & ChrW(269) & "itana (" & _
+                    m_BlokoviLoadErr & ")." & vbCrLf & _
+                    "Prazna lista NE zna" & ChrW(269) & "i poziv na broj."
+        Exit Function
+    End If
+
+    KooperantRucnoSme = True
+End Function
+
+' ============================================================
+' TEST SEAM-OVI
+'
+' Postoje samo za test i TVRDO su gejtovani -- van test rezima ne rade nista.
+' Isti obrazac kao modScrDokumenti.Scr_OtpTestSet.
+'
+' Zasto uopste: pravila ove forme (ucitanost liste, "blok je izabran") odlucuju
+' hoce li uplata postati avans. Do sada su bila proverljiva samo rukom, pa su
+' ista greska i njena ispravka dva puta prosle kroz review umesto kroz suite.
+' Forma se u testu NE prikazuje -- UserForm_Activate (koji cita tabele) se zato
+' nikad ne izvrsava.
+' ============================================================
+Public Sub BiTestSetUcitanost(ByVal blokoviOk As Boolean, ByVal greska As String)
+    If Not IsTestMode() Then Exit Sub
+    m_BlokoviLoadOk = blokoviOk
+    m_BlokoviLoadErr = greska
+End Sub
+
+Public Sub BiTestSetFaktureUcitanost(ByVal faktureOk As Boolean, ByVal greska As String)
+    If Not IsTestMode() Then Exit Sub
+    m_FaktureLoadOk = faktureOk
+    m_FaktureLoadErr = greska
+End Sub
+
+' Odluka koju handler stvarno cita, ne njena kopija.
+Public Function BiTestKooperantSme() As Boolean
+    Dim poruka As String
+    If Not IsTestMode() Then Exit Function
+    BiTestKooperantSme = KooperantRucnoSme(poruka)
+End Function
+
+Public Function BiTestKooperantPoruka() As String
+    Dim poruka As String
+    If Not IsTestMode() Then Exit Function
+    KooperantRucnoSme poruka
+    BiTestKooperantPoruka = poruka
+End Function
+
+' Izbor u combo-ima se postavlja OVDE, a ne iz testa: kontrole su Private clanovi
+' forme, a i sam upis mora da prodje kroz istu formu kroz koju prolazi operater.
+Public Sub BiTestSetIzbor(ByVal tip As String, ByVal blok As String)
+    If Not IsTestMode() Then Exit Sub
+    On Error Resume Next
+    cmbMapTip.value = tip
+    cmbOtkupBlok.value = blok
+End Sub
+
+Public Function BiTestBlokIzabran() As Boolean
+    If Not IsTestMode() Then Exit Function
+    BiTestBlokIzabran = ManualBlokIzabran()
+End Function
+
 ' Da li je blok IZABRAN iz liste, ili je izveden iz poziva na broj.
 '
 ' Ista razlika koju vec pravi EffectiveManualBlockNo, samo imenovana: writer na
