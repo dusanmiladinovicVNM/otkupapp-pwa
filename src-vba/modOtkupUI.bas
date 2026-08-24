@@ -2440,24 +2440,16 @@ Public Sub RenderGrid()
                         ' funkciju koja ne moze da pukne, pa preskocen upis (i sa
                         ' njim natpis prethodnog ekrana) vise nije moguc.
                         Select Case ColKind(k)
-                            Case "pill"
+                            Case "pill", "paypill"
                                 n = CelijaBroj(mView(r, k + 1), celijaOK)
-                                If celijaOK Then
+                                If Not celijaOK Then
+                                    OcistiPilulu body.Controls("c" & i & "_" & k), mColW(k)
+                                ElseIf ColKind(k) = "pill" Then
                                     PaintPill body.Controls("c" & i & "_" & k), n
                                 Else
-                                    CelijaObicna body.Controls("c" & i & "_" & k), fmTextAlignLeft
-                                    .caption = vbNullString
-                                End If
-                            Case "paypill"
-                                n = CelijaBroj(mView(r, k + 1), celijaOK)
-                                If celijaOK Then
                                     PaintPayPill body.Controls("c" & i & "_" & k), n
-                                Else
-                                    CelijaObicna body.Controls("c" & i & "_" & k), fmTextAlignLeft
-                                    .caption = vbNullString
                                 End If
                             Case Else
-                                CelijaObicna body.Controls("c" & i & "_" & k), fmTextAlignLeft
                                 txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)
                                 .caption = txt
                         End Select
@@ -2580,14 +2572,28 @@ EH:
     CelijaBroj = 0
 End Function
 
-' Celija se vraca u OBICNO stanje. PaintPill i PaintPayPill ostavljaju bold i
-' levo poravnanje, a PaintRow vraca samo pozadinu -- pa je celija koja je u
-' prethodnoj listi bila pilula ostajala podebljana i kad je postala obican broj.
-' Ista klasa kao stale caption, samo sporija da se primeti.
-Private Sub CelijaObicna(lbl As Object, ByVal poravnanje As Long)
+' PILULA KOJA SE NE MOZE NASLIKATI SE BRISE CELA, ne samo natpis.
+'
+' PaintPill i PaintPayPill menjaju BackColor, ForeColor, TextAlign, width,
+' BackStyle i bold -- a PaintRow pri vracanju pozadine reda pill kolone NAMERNO
+' preskace. Zato bi celija kojoj je obrisan samo natpis ostala kao PRAZNA
+' OBOJENA KUTIJA: vise nije tudji tekst, ali jeste stanje prethodnog crtanja,
+' dakle ista klasa greske.
+'
+' Providna pozadina bez natpisa pusta boju reda da se vidi. Napomena iz PaintRow
+' o mesanju providnih i neprozirnih kontrola tice se ISCRTAVANJA TEKSTA, a ovde
+' teksta nema.
+'
+' Stil ostalih celija se ovde NE dira. Kanonski stil kolone postavlja
+' StyleGridCell iz LayoutGrid-a (font, velicina, bold, boja, visina), a
+' poravnanje LayoutGrid sam -- i to se preracuna cim se opis kolona promeni
+' (mGeomStara). Crtanje koje bi ga "resetovalo" na neutralno samo bi ga
+' pokvarilo: brojevi bi presli levo, a rsd/mult i prva kolona bi izgubili bold.
+Private Sub OcistiPilulu(lbl As Object, ByVal sirina As Single)
     On Error Resume Next
-    lbl.Font.bold = False
-    lbl.TextAlign = poravnanje
+    lbl.caption = vbNullString
+    lbl.BackStyle = fmBackStyleTransparent
+    lbl.width = sirina
 End Sub
 
 Private Sub PaintPill(lbl As Object, ByVal code As Long)
@@ -4757,6 +4763,16 @@ Public Sub GridTestVrednost(ByVal red As Long, ByVal kol As Long, ByVal v As Var
     If red < 1 Or red > mViewN Then Exit Sub
     If kol < 1 Or kol > MAX_COLS Then Exit Sub
     mView(red, kol) = v
+End Sub
+
+' TEST SEAM: pusti ljusku sa test-forme. Tvrdo gejtovan.
+'
+' GridRenderTest veze mFrm za formu koju je test napravio. Bez ovoga bi posle
+' suite ostala ziva referenca na formu koja je Unload-ovana, pa bi svaki sledeci
+' RenderGrid radio nad njom.
+Public Sub GridOtkaciFormuTest()
+    If Not IsTestMode() Then Exit Sub
+    Set mFrm = Nothing
 End Sub
 
 ' TEST SEAM: vrsta i-te kolone (0-bazirano). Tvrdo gejtovan. Test bez ovoga ne

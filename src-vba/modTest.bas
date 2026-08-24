@@ -7274,7 +7274,9 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
     Dim f As frmOtkupUI, body As Object
     Dim ok As Boolean
     Dim pre As String, posle As String
-    Dim i As Long, kol As Long
+    Dim i As Long, kol As Long, kolPil As Long
+    Dim poravnanjePre As Long, boldPre As Boolean
+    Dim pilPre As String
 
     ' --- PRAVILO, bez forme -----------------------------------------------
     AssertEq modOtkupUI.CelijaTekst("num", "nije broj", ok), "", _
@@ -7355,8 +7357,33 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
              "preduslov: bar jedna brojcana celija prvog reda je nacrtana"
     pre = CStr(body.Controls("c0_" & kol).caption)
 
-    ' Ista mreza, ista kolona -- samo vrednost koja se ne moze prikazati.
+    ' STIL KOLONE JE LAYOUT-OV POSAO, NE CRTANJEV.
+    ' LayoutGrid brojcane kolone poravnava DESNO, a StyleGridCell prvoj koloni i
+    ' kolonama novca daje bold. Crtanje koje bi celiju "vracalo u neutralno"
+    ' pre upisa pokvarilo bi oboje -- na SVAKOM ekranu, a nijedna tvrdnja o
+    ' natpisu to ne bi primetila. Zato se stil meri PRE i POSLE crtanja.
+    poravnanjePre = body.Controls("c0_" & kol).TextAlign
+    AssertEq poravnanjePre, fmTextAlignRight, _
+             "preduslov: brojcana kolona je poravnata DESNO"
+    boldPre = (body.Controls("c0_0").Font.bold = True)
+    AssertEq boldPre, True, "preduslov: prva kolona je podebljana"
+
+    ' Kolona pilule -- njen neuspeh se ne cisti isto kao obicna celija.
+    kolPil = -1
+    For i = 0 To MAX_COLS - 1
+        If modOtkupUI.GridSirinaKoloneTest(i) > 0 Then
+            Select Case modOtkupUI.GridKindKoloneTest(i)
+                Case "pill", "paypill": kolPil = i: Exit For
+            End Select
+        End If
+    Next i
+    AssertEq (kolPil >= 0), True, "preduslov: lista ima kolonu sa statusnom oznakom"
+    pilPre = CStr(body.Controls("c0_" & kolPil).caption)
+    AssertEq (Len(pilPre) > 0), True, "preduslov: statusna oznaka je naslikana"
+
+    ' Ista mreza, iste kolone -- samo vrednosti koje se ne mogu prikazati.
     modOtkupUI.GridTestVrednost 1, kol + 1, "NIJE-BROJ"
+    modOtkupUI.GridTestVrednost 1, kolPil + 1, "NIJE-BROJ"
     modOtkupUI.GridRenderTest f, 1200, 600
     posle = CStr(body.Controls("c0_" & kol).caption)
 
@@ -7366,7 +7393,27 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
     AssertEq (modOtkupUI.GridKvarCelijaTest() > 0), True, _
              "kvar prikaza se broji, pa ostaje trag u logu"
 
+    ' CRTANJE NE SME DA POKVARI STIL. Ovo je tvrdnja o REGRESIJI, ne o kvaru:
+    ' celija koja nije mogla da se prikaze i dalje pripada svojoj koloni.
+    AssertEq body.Controls("c0_" & kol).TextAlign, poravnanjePre, _
+             "crtanje NE menja poravnanje kolone"
+    AssertEq (body.Controls("c0_0").Font.bold = True), True, _
+             "crtanje NE skida bold koji je layout postavio"
+
+    ' PILULA SE BRISE CELA. PaintPill menja i pozadinu, boju, sirinu i BackStyle,
+    ' a PaintRow pill kolone pri vracanju pozadine NAMERNO preskace -- pa bi
+    ' celija kojoj je obrisan samo natpis ostala kao PRAZNA OBOJENA KUTIJA.
+    AssertEq CStr(body.Controls("c0_" & kolPil).caption), "", _
+             "statusna oznaka koja se ne moze naslikati NESTAJE"
+    ' Pozadina se OVDE ne tvrdi. Jedina lista koja se ucitava bez forme a ima
+    ' kolonu statusne oznake je FAKTURE, a njena je "paypill" -- PaintPayPill
+    ' pozadinu ne dira, pa bi tvrdnja o njoj prolazila i bez ispravke. Ciscenje
+    ' pozadine i sirine vazi za "pill" kolone (Dokumenta) i zapisano je kao
+    ' NEIZMERENO, ne kao pokriveno -- v. katalog paragraf 10.4.
+
     modOtkupUI.GridTestLoad ""
+    modOtkupUI.GridOtkaciFormuTest
+    Unload f
 End Sub
 
 Private Sub T_MrezaGeometrija_PratiOpisKolona()

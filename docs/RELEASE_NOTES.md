@@ -5100,9 +5100,8 @@ Sada se datum prima i kao datum i kao broj.
 
 ### Sitnica koja se primeti tek u pogonu
 
-Ćelija koja je u jednoj listi bila **statusna oznaka** (podebljana pilula), a u
-drugoj postane običan broj, ostajala je podebljana. Sada se vraća u obično
-stanje.
+Statusna oznaka (pilula) koja se ne može naslikati sada **nestaje** umesto da
+ostane kao prazna obojena oznaka nad novim podatkom.
 
 ### Verifikacija
 

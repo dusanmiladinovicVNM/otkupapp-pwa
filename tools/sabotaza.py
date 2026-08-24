@@ -1826,6 +1826,29 @@ SABOTAZE = {
     # tabeli jeste dobijao je praznu celiju -- lista FAKTURA je tako imala prazan
     # datum u SVAKOM redu, i to se nije videlo jer nijedan test nije citao
     # NACRTAN datum.
+    # STIL KOLONE JE LAYOUT-OV POSAO. Prva verzija ovog PR-a je pred svaki upis
+    # 'vracala celiju u neutralno' (levo poravnanje, bez bold-a) -- i time na SVAKOM
+    # ekranu obarala ono sto je LayoutGrid upravo postavio: brojevi bi presli levo,
+    # a prva kolona i kolone novca izgubile bold. Nijedna tvrdnja o natpisu to ne bi
+    # primetila, pa suite ostaje zelena. Sabotaza vraca tacno taj oblik.
+    "mreza-crtanje-kvari-stil": (
+        "modOtkupUI.bas",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)\n",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK): .TextAlign = fmTextAlignLeft   ' SABOTAZA: crtanje kvari stil\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "crtanje ne menja poravnanje koje je layout postavio",
+    ),
+    # Pilula koja se ne moze naslikati mora da NESTANE. PaintPill menja i pozadinu,
+    # boju, sirinu i BackStyle, a PaintRow pill kolone pri vracanju pozadine reda
+    # NAMERNO preskace -- pa bi celija kojoj natpis nije obrisan ostala kao stara
+    # obojena oznaka nad novim podatkom.
+    "mreza-pilula-ostaje": (
+        "modOtkupUI.bas",
+        "    lbl.caption = vbNullString\n",
+        "    If False Then lbl.caption = vbNullString   ' SABOTAZA: stara oznaka ostaje\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "statusna oznaka koja se ne moze naslikati nestaje",
+    ),
     "mreza-datum-nije-date": (
         "modOtkupUI.bas",
         "    If IsDate(v) Then\n",
