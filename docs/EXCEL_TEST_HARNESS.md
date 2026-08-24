@@ -202,6 +202,31 @@ tek kao `[break]` u naslovu VBE prozora na Windows mašini.
 - **Nov test:** `RunOne n` u `RunAllTests`, plus grana u `TestName` i `InvokeTest`.
   Poziv je direktan (ne `Application.Run`) da bi VBA morao da kompajlira i test i
   sve što on referencira — odatle stiže compile signal.
+- **Ta tri spiska proverava `vba_check` (`REGISTAR`)** — održavaju se rukom i već
+  su se razišli pri rebase-u. Svaki razlaz je nem:
+
+  | Nedostaje u | Šta se desi |
+  |---|---|
+  | `InvokeTest` | `RunOne` broji test, ništa se ne izvrši, **suite je zelena** |
+  | `TestName` | pad se prijavi kao `T_Nepoznat_114` |
+  | `RunAllTests` | test postoji i prolazi, ali se **nikad ne pušta** |
+  | — (ime se ne slaže) | `Case 114` zove telo testa 113; oba „prolaze", jedno se ne izvrši |
+
+  Provera traži i **rupu u numeraciji** i **dupli indeks** (`Select Case` uzima
+  prvi, drugi se tiho gubi). Okida se **strukturom** — postojanjem sve tri
+  procedure; posle toga spiskovi smeju biti prazni, i tada se i prijavljuje.
+- **Registri se porede i sa stvarnim telima.** Tri saglasna registra ne znače da
+  je test u suite: `Private Sub T_Novi()` koji nije upisan **nigde** ostavlja ih
+  savršeno saglasnim, a nikad se ne izvrši. Zato:
+
+  | Pravilo | Šta hvata |
+  |---|---|
+  | telo nije registrovano | test napisan, zaboravljen u sva tri registra |
+  | isti cilj pod dva indeksa | jedan test se izvrši dvaput, drugi nikad |
+
+  Telom se smatra `Private Sub T_Ime()` **bez parametara** — helper sa `T_`
+  prefiksom i argumentom nije test. Obrnut smer („`Case` zove proceduru koje
+  nema") se ne proverava ovde: to već hvata `NEDEFINISAN`.
 - **Forma bez prikaza:** `Set f = New frmOtkup`, pa odmah `f.Controls.Count` (bez
   toga se `Initialize` ne okine). Bez `.Show`. `modTestMode.SetTestMode True` gasi
   sve što čeka operatera; kad naiđeš na `MsgBox`/`InputBox` na testiranoj putanji,

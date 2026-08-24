@@ -5205,3 +5205,78 @@ samu formu, a ne modul.
 Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §11.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+
+---
+
+## v2.68.0 — provera registra testova
+
+Bez promene ponašanja aplikacije. Ovo je posao na **alatu za proveru koda**.
+
+### Šta je bio rizik
+
+Svaki test je upisan na **tri** mesta u `modTest`: šta se pušta, pod kojim se
+imenom prijavljuje pad, i šta se stvarno zove. Ta tri spiska se održavaju rukom i
+već su se razišla pri spajanju grana — a nijedan razlaz se ne vidi:
+
+- test se broji, ali se **ne izvršava** — suite ostaje zelena;
+- pad se prijavi pod imenom `T_Nepoznat_114`;
+- test postoji i prolazi, ali se nikad ne pušta;
+- `Case 114` zove telo testa 113 — oba „prolaze", jedan se ne izvrši.
+
+### Šta se sada proverava
+
+`vba_check` (isti alat koji već brani od ne-ASCII znakova i duplih imena) traži
+da sva tri spiska nose **isti skup**, bez rupa u numeraciji i bez dupliranog
+indeksa, i da se **ime slaže sa pozivom**.
+
+Provera se okida sadržajem, ne imenom fajla, pa modul koji takav registar nema
+ostaje netaknut.
+
+### Verifikacija
+
+Devet novih slučajeva u `--self-test` (56 ukupno, bilo 47), i **svaki je dokazan
+u oba smera**: kad se pravilo namerno isključi, self-test pocrveni po imenu tog
+slučaja. Uz to je provera puštena i nad **pravim** `modTest.bas` — uklonjen
+`RunOne` i zamenjen poziv u `Case` grani oba puta prijavljeni sa tačnim brojem
+linije.
+
+
+---
+
+## v2.69.0 — provera registra testova, drugi deo
+
+Nastavak `v2.68.0`. Bez promene ponašanja aplikacije.
+
+### Šta prvi deo nije video
+
+Prva verzija je poredila **tri spiska međusobno**. Ali test koji je napisan a nije
+upisan **nigde** ostavlja sva tri savršeno saglasna — i nikad se ne izvrši. Suite
+ostane „114 testova, 0 palih", a testa u njoj nema.
+
+To je poslednja klasa greške iz ove porodice: *zeleno, a nije ni pušteno.*
+
+### Šta se sada proverava
+
+| Pravilo | Šta hvata |
+|---|---|
+| telo nije registrovano | test napisan, zaboravljen u sva tri spiska |
+| isti cilj pod dva indeksa | jedan test se izvrši dvaput, drugi nikad |
+
+Drugo pravilo postoji jer provera duplog **indeksa** to ne vidi — indeksi su
+različiti, a telo isto.
+
+### Šta se namerno NE proverava
+
+Da `Case` grana zove proceduru koje nema — to već hvata postojeća provera
+`NEDEFINISAN`. Dva nalaza za isti kvar bi bila šum, a šum uči da se alat
+ignoriše.
+
+### Verifikacija
+
+Četiri nova slučaja u `--self-test` (**64** ukupno, bilo 60), svaki izoluje tačno
+jedno pravilo, i tri sabotaže nad samim alatom — od kojih jedna proverava da se
+**ne javi** lažan nalaz nad pomoćnom procedurom.
+
+Provera je puštena i nad pravim `modTest`: test uklonjen iz sva tri spiska i test
+registrovan pod dva broja — oba prijavljena, sa tačnim brojem linije.
