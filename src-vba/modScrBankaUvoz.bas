@@ -610,6 +610,18 @@ End Function
 ' izgledaju isto, a znace suprotno: prazan izbor fakture knjizi AVANS. Odluka
 ' "smem li uopste da radim" je zato imenovana i odvojena od crtanja -- inace se
 ' ne moze izmeriti, a brisanje jednog If-a se ne bi videlo ni u jednom testu.
+' Sme li se rucni izbor bloka knjiziti. Odvojeno od RucnoKooperant da bi se
+' moglo izmeriti bez forme, i da bi se videlo da se kapija primenjuje SAMO na
+' rucni izbor: kad blok dolazi iz poziva na broj, izabranBlok je prazan i
+' odgovor je False bez ijednog citanja tabele.
+Public Function BuBlokZatvoren(ByVal kooperantID As String, _
+                               ByVal izabranBlok As String, _
+                               ByVal efektivniBlok As String, _
+                               ByVal scope As String) As Boolean
+    If Len(Trim$(izabranBlok)) = 0 Then Exit Function
+    BuBlokZatvoren = modBankaMapiranje.BimBlokBezOtvorenih(kooperantID, efektivniBlok, scope)
+End Function
+
 ' KESIRA SE SAMO USPESNO PUNJENJE.
 '
 ' Dve grane greske javljaju razlicito: blokovi je DIZU (pa se ide u EH, koji kes
@@ -651,6 +663,7 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     Dim scope As String
     Dim stani As Boolean
     Dim greska As String
+    Dim izabranBlok As String
 
     ' AKO LISTA BLOKOVA NIJE UCITANA, prazan izbor NE znaci "operater nije birao
     ' blok". Fallback na poziv na broj bi tada bio pogadjanje, a scope bi ispao
@@ -663,7 +676,8 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     End If
 
     ' Tek sad prazan izbor legitimno znaci "uzmi poziv na broj iz izvoda".
-    blok = modBankaMapiranje.BimEfektivniBlok(bimID, IzabraniCiljID())
+    izabranBlok = IzabraniCiljID()
+    blok = modBankaMapiranje.BimEfektivniBlok(bimID, izabranBlok)
 
     ' Scope i odluka o zaustavljanju racunaju se na JEDNOM mestu -- v.
     ' ScopeIzbora. Izabran blok bez otkupnog mesta staje PRE ijednog citanja
@@ -671,6 +685,17 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
     scope = ScopeIzbora(stani)
     If stani Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_BEZ_OM"), True
+        Exit Function
+    End If
+
+    ' RUCNO IZABRAN BLOK BEZ OTVORENIH STAVKI -- STOP.
+    ' Lista nudi i potpuno placene blokove, a writer bi takav izbor tiho preveo
+    ' u avans kooperanta i stavku oznacio obradjenom. Operater je rekao KOJI dug
+    ' placa; "nema sta da se plati" nije bezbedan ishod nego protivrecnost.
+    ' Prazan izbor (poziv na broj) NE prolazi kroz ovu kapiju -- tamo avans i
+    ' dalje jeste namerno ponasanje.
+    If BuBlokZatvoren(kooperantID, izabranBlok, blok, scope) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_BLOK_ZATVOREN"), True
         Exit Function
     End If
 

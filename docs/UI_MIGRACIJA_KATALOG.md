@@ -1487,7 +1487,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–112** u `modTest` i **trideset jedna** sabotaža, uz nove fixture redove
+Testovi **104–112** u `modTest` i **trideset tri** sabotaže, uz nove fixture redove
 u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
 `(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
 postoji na **tri** otkupna mesta — od kojih jedno **nije upisano**.
@@ -1512,6 +1512,7 @@ Svaki fixture red ima razlog:
 | `BIM-FIX-PY` | **isti broj izvoda i isti račun, prethodni ciklus** — banke numeraciju ponavljaju po godini |
 | `OTK-BIM-OMA` / `OTK-BIM-OMB` | **isti broj bloka na dva otkupna mesta** — broj otkupa je jedinstven po stanici |
 | `OTK-BIM-OMX` | isti blok **bez upisanog `StanicaID`** — legacy oblik koji današnji pisci odbijaju, a zatečene sveske ga imaju |
+| `OTK-BIM-PLAC` + `NOV-BIM-PLAC` | blok **u celosti plaćen** — lista ga i dalje nudi, a kandidata nema; bez ovog para ručni izbor takvog bloka ne bi imao nad čim da se izmeri |
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
@@ -1537,7 +1538,7 @@ Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
 (`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
 iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
 
-**Dvosmerni dokaz je pušten za svih trideset jednu**: svaka sabotaža obara
+**Dvosmerni dokaz je pušten za svih trideset tri**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -2059,3 +2060,48 @@ Da se ne pročita kao „sve je pokriveno":
   `MapBankaImportAsKooperantBlockManual` samo prosleđuje argumente u `Core` bez
   ijedne oznake da je poziv ručan. Razdvajanje toga je **zaseban PR**, i dira
   legacy formu.
+
+#### Peti krug: ručno izabran plaćen blok tiho postaje avans
+
+Ovo je bilo u prethodnom krugu zapisano kao „writer je fail-open, zaseban PR".
+Prigovor je bio da **novi ekran uvodi novu dostupnu putanju do tog writera**, pa
+mora sam da je zatvori — i taj prigovor je tačan. Legacy dug ne opravdava novu
+rutu do njega.
+
+Putanja je u celosti dostupna sa ovog ekrana:
+
+```
+GetBlokoviZaBimMapiranje   ->  nudi SVAKI nestorniran broj otkupa
+                               (ne proverava da li blok jos duguje)
+operater bira blok 125     ->  koji je u celosti placen
+GetOtkupCandidates...      ->  bira samo "otvoreno > 0.009"  ->  Empty
+MapBanka...BlockCore       ->  IsEmpty(kandidati)
+                               -> SaveNovac NOV_VIRMAN_AVANS_KOOP
+                               -> UpdateBankaImportStatus "Da"
+```
+
+Operater je rekao **koji dug plaća**; sistem je knjižio **avans** i stavku
+označio obrađenom, bez pitanja. Transakcija uspeva, a semantika je druga od
+izabrane.
+
+**Razlika koja pravilo čini tačnim je ručno vs. automatsko.** Za automatsko
+mapiranje avans **jeste** namerno i dokumentovano ponašanje — bezbedan izlaz dok
+je poreklo dvosmisleno. Za izričito izabran blok „nema šta da se plati" nije
+bezbedan ishod nego **protivrečnost**. Writer to danas ne može da razlikuje
+(`MapBankaImportAsKooperantBlockManual` samo prosleđuje argumente u `Core`), pa
+odluku donosi pozivalac koji **zna** da je izbor bio ručan:
+`BimBlokBezOtvorenih` je domensko pravilo, `BuBlokZatvoren` je ekranska kapija
+koja se primenjuje **samo** kad `izabranBlok` nije prazan.
+
+Blok **ostaje u listi** — postoji u podacima — po istom pravilu kao blok bez
+otkupnog mesta.
+
+Dve sabotaže, jer su dva pravila: `banka-uvoz-placen-blok-postaje-avans` (kapija
+uopšte ne vidi da je blok zatvoren) i `banka-uvoz-kapija-bloka-i-za-poziv`
+(kapija se proširi i na poziv na broj i ugasi legitimnu granu). Druga postoji
+zato što je „popravka" koja gasi namerno ponašanje takođe regresija.
+
+**Writer i dalje ostaje fail-open za svoje ostale pozivaoce** — `frmBankaImport`
+i automatsko mapiranje ulaze u istu granu. Razdvajanje ručnog od automatskog
+*unutar* writera je zaseban PR i dira legacy formu; ovaj PR zatvara samo putanju
+koju sam uvodi.

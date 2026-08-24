@@ -121,6 +121,9 @@ Private Const FX_OTK_OM_B As String = "OTK-BIM-OMB"   ' druga stanica
 Private Const FX_OTK_OM_X As String = "OTK-BIM-OMX"
 ' FX_STANICA2 je namerno NEPOSTOJECA ("tudje OM"); scope trazi pravu drugu.
 Private Const FX_STANICA_B As String = "STA-TEST-2"
+' Blok koji je u CELOSTI placen. Lista blokova ga i dalje nudi (ne proverava dug),
+' a kandidata za placanje nema -- writer bi takav izbor tiho preveo u avans.
+Private Const FX_BIM_BLOK_PLACEN As String = "BLK-BIM-PLAC"
 ' Isti broj izvoda i isti racun, DRUGI ciklus.
 Private Const FX_BIM_PY As String = "BIM-FIX-PY"
 ' Red se u mrezi nalazi PO PARTNERU, jer BankaImportID vise nije prikazan --
@@ -6866,6 +6869,7 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     Dim src As Variant, i As Long
     Dim nasao As Boolean
     Dim omBlokova As Long, omBezStanice As Long
+    Dim placenUListi As Boolean
     Dim errBezKolone As Long, errBezScope As Long
     Dim errNemaTabele As Long, errImaTabele As Long
     Dim punjenoPre As Long
@@ -7046,14 +7050,15 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq IsArray(src), True, "kooperant ima blokove"
     For i = 1 To UBound(src, 1)
         If CStr(src(i, 1)) = FX_BIM_BLOK3_BR Then nasao = True
+        If CStr(src(i, 1)) = FX_BIM_BLOK_PLACEN Then placenUListi = True
         If CStr(src(i, 1)) = FX_BIM_BLOK_OM Then
             omBlokova = omBlokova + 1
             If Len(Trim$(CStr(src(i, 2)))) = 0 Then omBezStanice = omBezStanice + 1
         End If
     Next i
     AssertEq nasao, True, "blok sa tri stavke je u listi"
-    AssertEq UBound(src, 1), 4, _
-             "tri otkupne stavke istog bloka daju jedan red; blok na tri mesta daje TRI"
+    AssertEq UBound(src, 1), 5, _
+             "tri stavke istog bloka daju jedan red; blok na tri mesta TRI; placen blok JOS jedan"
     AssertEq omBlokova, 3, "isti broj bloka na tri otkupna mesta daje TRI reda"
     ' Red BEZ otkupnog mesta se NE precutkuje -- postoji u podacima, pa se nudi;
     ' ono sto se menja je da radnja nad njim STAJE (v. nize).
@@ -7075,6 +7080,36 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
               FX_KOOPERANT3, FX_BIM_BLOK_OM, True, FX_STANICA_B)
     AssertEq IsArray(src), True, "druga stanica ima svoje kandidate"
     AssertEq CStr(src(1, 1)), FX_OTK_OM_B, "scope B nikad ne vraca otkup iz scope-a A"
+
+    ' IZABRAN BLOK BEZ OTVORENIH STAVKI -- STOP, ne tihi AVANS.
+    '
+    ' Lista blokova nudi SVAKI nestorniran broj otkupa i ne proverava da li blok
+    ' jos duguje; kandidati se biraju samo ako je "otvoreno > 0.009". Placen blok
+    ' zato legitimno stoji u listi a daje NULA kandidata -- a writer na
+    ' IsEmpty(kandidati) ceo iznos knjizi kao avans kooperanta i stavku oznacava
+    ' obradjenom. Operater je rekao KOJI dug placa; tiha promena u avans je druga
+    ' finansijska semantika od one koju je izabrao.
+    AssertEq modBankaMapiranje.BimBlokBezOtvorenih(FX_KOOPERANT3, FX_BIM_BLOK_PLACEN), _
+             True, "potpuno placen blok NEMA otvorenih stavki"
+    AssertEq modBankaMapiranje.BimBlokBezOtvorenih(FX_KOOPERANT3, FX_BIM_BLOK3_BR), _
+             False, "blok sa tri otvorene stavke ima sta da plati"
+
+    ' Blok JE u listi -- ne precutkuje se, jer postoji u podacima. Ono sto se
+    ' menja je da radnja nad njim staje.
+    AssertEq placenUListi, True, "placen blok je i dalje u listi blokova"
+
+    ' KAPIJA VAZI SAMO ZA RUCNI IZBOR. Kad blok dolazi iz poziva na broj,
+    ' izabranBlok je prazan i avans i dalje JESTE namerno ponasanje -- to je
+    ' bezbedan izlaz dok je poreklo dvosmisleno.
+    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, FX_BIM_BLOK_PLACEN, _
+                                            FX_BIM_BLOK_PLACEN, ""), True, _
+             "rucno izabran placen blok ZAUSTAVLJA knjizenje"
+    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, "", _
+                                            FX_BIM_BLOK_PLACEN, ""), False, _
+             "isti blok iz POZIVA NA BROJ ne prolazi kroz kapiju -- avans ostaje namerno ponasanje"
+    AssertEq modScrBankaUvoz.BuBlokZatvoren(FX_KOOPERANT3, FX_BIM_BLOK3_BR, _
+                                            FX_BIM_BLOK3_BR, ""), False, _
+             "blok sa otvorenim stavkama prolazi"
 
     ' IZABRAN BLOK BEZ OTKUPNOG MESTA -- STOP, ne nescope-ovan upis.
     ' Ovo je najvaznija tvrdnja ovog dela: prazan scope izgleda isto kao "scope

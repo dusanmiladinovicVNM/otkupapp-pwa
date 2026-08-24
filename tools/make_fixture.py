@@ -161,6 +161,16 @@ BIM_BLOK_3 = "BLK-BIM-3"
 # Bez ovog para bi novac mogao da ode na pogresan otkupni lanac, a nijedna
 # tvrdnja to ne bi primetila.
 BIM_BLOK_OM = "BLK-BIM-OM"
+# POTPUNO PLACEN blok. Lista blokova nudi SVAKI nestorniran broj otkupa i ne
+# proverava da li blok jos duguje, a kandidati za placanje se biraju samo ako
+# je "otvoreno > 0.009" -- pa placen blok legitimno postoji u listi a daje
+# NULA kandidata. Writer to ne prijavljuje kao gresku nego knjizi AVANS i
+# stavku oznaci obradjenom. Bez ovog para redova (otkup + uplata koja ga
+# zatvara) nijedna tvrdnja ne bi mogla da vidi da rucni izbor takvog bloka
+# mora da STANE.
+BIM_BLOK_PLACEN = "BLK-BIM-PLAC"
+BIM_OTK_PLACEN = "OTK-BIM-PLAC"
+BIM_OTK_PLACEN_IZNOS = 500.0      # 10 * 50
 # Isti broj izvoda i isti racun, ali DRUGI ciklus. Banke numeraciju
 # ponavljaju po godini; bez datuma u kljucu bi se dva izvoda spojila u
 # jedan sinteticki red koji nikad nije postojao.
@@ -533,6 +543,11 @@ SEED = {
          "StanicaID": "", "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 10, "Cena": 70.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        # Blok koji je u CELOSTI placen -- v. BIM_BLOK_PLACEN i red u tblNovac.
+        {"OtkupID": BIM_OTK_PLACEN, "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_PLACEN, "Klasa": "I"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -543,6 +558,12 @@ SEED = {
     # To je razlog zbog koga je kapija u UplataFakturaProblem uopste uslovna;
     # bez ovog reda popravka te kapije mogla bi tiho da ukine i to pravilo.
     "tblNovac": [
+        # Zatvara BIM_OTK_PLACEN u celosti: GetUplataForOtkup sabira Isplata po
+        # OtkupID-u, pa je "otvoreno" tacno nula i kandidata nema.
+        {"NovacID": "NOV-BIM-PLAC", "BrojDokumenta": "BIM-PLAC-1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop",
+         "Isplata": BIM_OTK_PLACEN_IZNOS, "KooperantID": "KOOP-TEST-3",
+         "OtkupID": BIM_OTK_PLACEN},
         {"NovacID": "NOV-TEST-D1", "BrojDokumenta": NOVAC_DUPLI_BROJ,
          "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 1000,
          "KooperantID": "KOOP-TEST-1"},

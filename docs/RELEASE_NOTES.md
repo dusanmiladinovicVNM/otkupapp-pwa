@@ -5066,4 +5066,12 @@ faktura prolazno ne uspe, ekran je to **pamtio**, pa sledeći klik na isti izbor
 nije ni pokušavao ponovo. Knjiženje je i dalje bilo bezbedno blokirano, ali je
 izbor ostajao zaključan do osvežavanja. Neuspelo čitanje se više ne pamti.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset jednu** sabotažu.
+Peti krug je zatvorio finansijski edge-case: **blok koji je već u celosti
+plaćen** i dalje se pojavljuje u listi blokova, a ako bi ga operater izabrao, ceo
+iznos bi se knjižio kao **avans kooperanta** i stavka bi bila označena obrađenom —
+bez pitanja. Operater je rekao *koji* dug plaća, pa „nema šta da se plati" nije
+bezbedan ishod. Takav izbor se sada odbija uz objašnjenje i ništa se ne knjiži.
+Kad blok dolazi iz **poziva na broj** (operater nije birao), avans i dalje ostaje
+namerno ponašanje.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset tri** sabotaže.

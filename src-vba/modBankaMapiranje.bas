@@ -1912,6 +1912,37 @@ Public Function BimEfektivniBlok(ByVal bankaImportID As String, _
     End If
 End Function
 
+' IMA LI IZABRANI BLOK IJEDNU OTVORENU STAVKU.
+'
+' Lista blokova (GetBlokoviZaBimMapiranje) nudi SVAKI nestorniran broj otkupa
+' kooperanta -- ne proverava da li je blok jos duzan. Kandidati za placanje se
+' pak biraju samo ako je "otvoreno > 0.009", pa potpuno placen blok legitimno
+' postoji u listi a daje NULA kandidata.
+'
+' Sto se u writeru ne prijavljuje kao greska: MapBankaImportAsKooperantBlockCore
+' na IsEmpty(kandidati) ceo iznos knjizi kao avans kooperanta i stavku oznacava
+' obradjenom. Za AUTOMATSKO mapiranje je to namerno -- dok je poreklo dvosmisleno,
+' avans je bezbedan izlaz. Ali kad je operater RUCNO izabrao konkretan blok, on
+' je rekao KOJI dug placa; "nijedna otvorena stavka" tada nije bezbedan ishod
+' nego protivrecnost, a tiha promena u avans je druga finansijska semantika od
+' one koju je izabrao.
+'
+' Writer to danas ne moze da razlikuje (Manual samo prosledjuje argumente u
+' Core), pa odluku donosi pozivalac koji ZNA da je izbor bio rucan.
+Public Function BimBlokBezOtvorenih(ByVal kooperantID As String, _
+                                    ByVal brojBloka As String, _
+                                    Optional ByVal stanicaScope As String = "") As Boolean
+    Dim kandidati As Variant
+
+    If Len(Trim$(kooperantID)) = 0 Then Exit Function
+    If Len(Trim$(brojBloka)) = 0 Then Exit Function
+
+    ' allowManyCandidates = True: ovde se pita SAMO ima li ih, a 3+ kandidata je
+    ' odluka operatera koju resava BimBlokTraziPotvrdu -- ne sme da pukne ovde.
+    kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, brojBloka, True, stanicaScope)
+    BimBlokBezOtvorenih = IsEmpty(kandidati)
+End Function
+
 ' Trazi li blok izricitu potvrdu podele (3+ otvorenih stavki). Svaka DRUGA
 ' greska se PROPAGIRA: "previse kandidata" se ne sme pomesati sa padom seme ili
 ' nedostajucom kolonom -- prvo je odluka operatera, drugo je kvar.

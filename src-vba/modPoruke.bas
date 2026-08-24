@@ -1290,6 +1290,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BU_AUTO", ChrW(10007) & " Automatsko mapiranje nije na" & ChrW(353) & "lo jednozna" & ChrW(269) & "an cilj " & ChrW(8212) & " mapiraj ru" & ChrW(269) & "no"
     UpsertRow lo, existing, "OTKUI_ERR_BU_SKIP", ChrW(10007) & " Stavka nije presko" & ChrW(269) & "ena"
     UpsertRow lo, existing, "OTKUI_ERR_BU_BATCH", ChrW(10007) & " Mapiranje NIJE izvr" & ChrW(353) & "eno, promene su vra" & ChrW(263) & "ene:"
+    UpsertRow lo, existing, "OTKUI_ERR_BU_BLOK_ZATVOREN", ChrW(10007) & " Izabrani blok nema otvorenih stavki " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. Proveri da li je blok ve" & ChrW(263) & " pla" & ChrW(263) & "en."
     UpsertRow lo, existing, "OTKUI_ERR_BU_BLOK_BEZ_OM", "Blok nema upisano otkupno mesto, pa se ne mo" & ChrW(382) & "e ru" & ChrW(269) & "no mapirati. Isti broj bloka mo" & ChrW(382) & "e da postoji na dva otkupna mesta, pa bi raspodela zahvatila oba. Ispravi StanicaID na otkupnim stavkama tog bloka."
     UpsertRow lo, existing, "OTKUI_MSG_BU_AUTO", ChrW(10003) & " Stavka je automatski mapirana"
     UpsertRow lo, existing, "OTKUI_MSG_BU_RUCNO", ChrW(10003) & " Stavka je ru" & ChrW(269) & "no mapirana"

@@ -1825,6 +1825,28 @@ SABOTAZE = {
     # Prazan scope izgleda isto kao "scope nije ni trazen", a znaci nesto sasvim
     # drugo: operater JESTE birao blok, samo taj red nema upisano otkupno mesto.
     # Propusten prazan scope raspodeli novac preko svih mesta sa istim brojem.
+    # Lista blokova nudi SVAKI nestorniran broj otkupa i ne proverava dug, a
+    # kandidati se biraju samo ako je "otvoreno > 0.009". Placen blok zato stoji
+    # u listi a daje NULA kandidata -- i writer to ne prijavljuje kao gresku nego
+    # knjizi AVANS i stavku oznaci obradjenom. Rucni izbor takvog bloka mora da
+    # stane: operater je rekao KOJI dug placa.
+    "banka-uvoz-placen-blok-postaje-avans": (
+        "modBankaMapiranje.bas",
+        "    BimBlokBezOtvorenih = IsEmpty(kandidati)\n",
+        "    BimBlokBezOtvorenih = Not IsEmpty(kandidati)   ' SABOTAZA: placen blok prolazi\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "rucno izabran placen blok se odbija umesto da postane avans",
+    ),
+    # Kapija sme da vazi SAMO za rucni izbor. Kad blok dolazi iz poziva na broj,
+    # avans je namerno i dokumentovano ponasanje -- bezbedan izlaz dok je poreklo
+    # dvosmisleno. Sabotaza uklanja tu razliku i gasi legitimnu granu.
+    "banka-uvoz-kapija-bloka-i-za-poziv": (
+        "modScrBankaUvoz.bas",
+        "    If Len(Trim$(izabranBlok)) = 0 Then Exit Function\n",
+        "    If Len(Trim$(efektivniBlok)) < 0 Then Exit Function   ' SABOTAZA: kapija i za poziv na broj\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "kapija placenog bloka vazi samo za RUCNI izbor",
+    ),
     "banka-uvoz-blok-bez-om-prolazi": (
         "modScrBankaUvoz.bas",
         "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)\n",
