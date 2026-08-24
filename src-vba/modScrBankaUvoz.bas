@@ -198,8 +198,13 @@ Public Function BuCipStavka(ByVal filter As String, ByVal obradjeno As String, _
     End Select
 End Function
 
-' PRAVILO CIPA IZVODA. "Ne slaze se" je BIM_SALDO_RAZLIKA i samo ona: legacy
-' red bez saldo metapodataka (sva cetiri broja nula) NIJE neslaganje nego
+' PRAVILO CIPA IZVODA. "Ne slaze se" je BIM_SALDO_RAZLIKA i samo ona -- i
+' NESAGLASAN izvod tu NE ulazi, iako i on trazi coveka. Razlog: cip nosi jedno
+' tvrdjenje ("ne slaze se"), a nesaglasan izvod to tvrdjenje ne podnosi -- o
+' njegovim brojkama se ne zna nista. Spajanje dva stanja pod jedan broj bi
+' brojku ucinilo neupotrebljivom za oba. Nesaglasnost se vidi u koloni.
+'
+' Legacy red bez saldo metapodataka (sva cetiri broja nula) NIJE neslaganje nego
 ' odsustvo podatka, i ne sme da se prikaze kao greska.
 Public Function BuCipIzvod(ByVal filter As String, ByVal status As Long, _
                            ByVal otvorenih As Long) As Boolean
@@ -1052,8 +1057,15 @@ End Function
 
 ' Tekst kolone "Slaganje". Odluku je vec doneo modBankaImport.BimSaldoStatus --
 ' ovde je samo formulacija, i zato Public (meri se bez mreze).
+'
+' NESAGLASNO nije "ne slaze se". "Ne slaze se" znaci da se ZNA sta pise pa se ne
+' slaze; nesaglasno znaci da se ne zna ni sta pise -- redovi istog izvoda nose
+' razlicite zbirove, pa nijedna brojka nije istina o celom izvodu. Zato ni
+' RAZLIKA ne bi bila tacna formulacija, a ni iznos nema sta da se prikaze.
 Public Function BuSlaganjeTekst(ByVal status As Long, ByVal razlika As Double) As String
     Select Case status
+        Case BIM_SALDO_NEKONZISTENTAN
+            BuSlaganjeTekst = Poruka("OTKUI_LBL_BU_SALDO_NESAGLASAN")
         Case BIM_SALDO_OK
             BuSlaganjeTekst = Poruka("OTKUI_LBL_BU_SALDO_OK")
         Case BIM_SALDO_RAZLIKA

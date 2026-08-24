@@ -1929,13 +1929,7 @@ kao i geometrija mreže i granica datuma pre nje.
 
 #### Šta je iz review-a svesno ODLOŽENO, i zašto
 
-- **Invarijanta metapodataka izvoda.** `GetBankaIzvodiForGrid` uzima saldo grupe
-  sa **prvog** reda i pretpostavlja da su ostali isti. Nalaz je tačan, ali
-  današnji parser to fizički ne može da prekrši — kopira `saldo.*` na svaki red.
-  Brani od budućeg parsera i ručno editovanih podataka; traži **novu vrednost
-  statusa u finansijskom prikazu**, poruku, fixture, test i sabotažu. Ubaciti to
-  u PR koji se zatvara bilo bi tačno ona scope drift greška koju isti review
-  kritikuje. **Zaseban PR.**
+- ~~**Invarijanta metapodataka izvoda.**~~ **URAĐENO** — v. §12.
 - **`RenderGrid` stale-safe.** Popravka datuma je zatvorila **jedan ulaz**, ne
   klasu: `CDbl` u `kg`/`num`/`rsd`/`mult` i `CLng` u `pill`/`paypill` nad
   neispravnom vrednošću imaju identičan ishod — greška se proguta, ćelija zadrži
@@ -2411,3 +2405,104 @@ i redosled poziva ostaju smoke.
 
 `frmDokumenta` nije diran. Ista tehnika bi radila i tamo, ali to je znatno veća
 forma i zaseban posao.
+
+
+---
+
+## 12. Saldo izvoda: prvi red nije istina o celom izvodu (`v6-ui-181`)
+
+Nalaz iz review-a #218, tada svesno odložen: `GetBankaIzvodiForGrid` uzima saldo
+grupe sa **prvog** reda i pretpostavlja da su ostali isti.
+
+### 12.1 Zašto je pretpostavka uopšte tu
+
+Parser upisuje saldo izvoda na **svaki** red grupe. Agregat ih zato **uzima**, ne
+sabira — sabiranje bi ih pomnožilo brojem stavki. To je ispravno **dok su svi
+redovi saglasni**, a to niko nije proveravao.
+
+Današnji parser ih ne može razići — kopira isti `saldo` u petlji
+(`modBankaImport:614`). Ali ručno editovan red, delimičan re-import ili budući
+parser mogu. Tada bi mreža prikazala brojku **prvog** reda kao istinu o celom
+izvodu, bez ijednog traga.
+
+### 12.2 Novo stanje, ne novo neslaganje
+
+`BIM_SALDO_NEKONZISTENTAN` je **treće** stanje, ne varijanta „ne slaže se":
+
+| Stanje | Šta znači |
+|---|---|
+| `_OK` | zna se šta piše, i slaže se |
+| `_RAZLIKA` | zna se šta piše, i **ne** slaže se |
+| `_NEMA` | legacy red, saldo metapodataka nema |
+| `_NEKONZISTENTAN` | **ne zna se ni šta piše** — redovi nose različite zbirove |
+
+**Nesaglasnost nadjačava i „slaže se".** To nije formalnost: prvi red fixture
+para (`4500 + 500 − 0 = 5000`) **sam za sebe daje slaganje**, pa bi bez pravila u
+koloni stajalo „slaže se" — tvrdnja o tačnosti brojki kojih zapravo nema.
+Sabotaža `banka-izvod-saldo-prvi-red-pobedjuje` to i pokazuje:
+`očekivano [3], dobijeno [1]`.
+
+### 12.3 Zašto NE ulazi u čip „ne slaže se"
+
+Čip nosi **jedno** tvrđenje. Nesaglasan izvod to tvrđenje ne podnosi — o
+njegovim brojkama se ne zna ništa. Spajanje dva stanja pod jedan broj učinilo bi
+brojku neupotrebljivom za oba. Nesaglasnost se vidi **u koloni**.
+
+To je svestan izbor, ne previd: takav izvod i dalje traži čoveka, ali ga ne
+traži iz istog razloga.
+
+### 12.4 Prag je isti kao kod slaganja
+
+`0.01`, isti koji koristi `BimSaldoStatus`. Uže poređenje bi zaokruženja
+proglašavalo nesaglasnošću i brojka bi postala neupotrebljiva — sabotaža
+`banka-izvod-saldo-prag-preuzak` meri baš to (`polovina centa nije`).
+
+### 12.5 Dve stvari koje je dokaz našao na testu
+
+**Tautološka tvrdnja.** Prva verzija je poredila `BuSlaganjeTekst` **samu sa
+sobom** (`NEKONZISTENTAN <> RAZLIKA`). Pod sabotažom se obe strane menjaju isto,
+pa je prolazila. Sada se poredi sa **katalogom poruka**.
+
+**Pogrešan izvor statusa.** Prva verzija je status čitala iz reda **ekrana**, gde
+je deseta kolona identitet — `CLng` nad njim daje `Type mismatch`. Status se čita
+iz **čitača** (`GetBankaIzvodiForGrid`), a red ekrana se koristi za ono što on
+zaista nosi: **tekst** kolone „Slaganje".
+
+### 12.6 Verifikacija
+
+Fixture dobija par redova istog izvoda sa različitim `ZavrsnoStanje`
+(`BIM-FIX-NS1` / `NS2`). Tri sabotaže:
+`banka-izvod-saldo-prvi-red-pobedjuje`, `banka-izvod-saldo-prag-preuzak`,
+`banka-izvod-nesaglasno-je-razlika`.
+
+Poruka je namerno kratka (`zbirovi se razlikuju`) — kolona je 132pt, a ostale
+vrednosti u njoj su kratke i malim slovom. Prva verzija je bila rečenica od
+trideset osam znakova, što je u toj koloni odsečen tekst.
+
+### 12.7 Fixture koji izjednači dve brojke ubija tuđu sabotažu
+
+Nova dva reda su prvo oba nosila `Obradjeno = "Da"`. Suite je bila zelena, ali je
+dvosmerni dokaz prijavio **43 crvene od 44**: `banka-uvoz-znacka-broji-mapirane`
+prestala je da obara išta.
+
+Uzrok nije bio ni u sabotaži ni u kodu koji ona gađa. Ta sabotaža znački podmeće
+`k(1)` (mapirane) umesto `k(0)` (otvorene) — a nova dva reda su te brojke
+**izjednačila na 6 i 6**. Zamena tada ne menja ništa.
+
+Najgore je što je to *tiho*: čovek koji doda fixture red uredno ažurira
+`FX_BIM_OTVORENIH` i `FX_BIM_OBRADJENIH` na nove vrednosti (upravo to sam i
+uradio), sve prođe, a jedan dokaz je nestao.
+
+Zato jedan od novih redova ostaje **otvoren**, a test dobija tvrdnju koja čuva
+**sam dokaz**, ne ponašanje:
+
+```vb
+AssertEq (nZa <> nObr), True, _
+         "otvorenih i mapiranih MORA biti razlicito -- inace sabotaza znacke ne meri nista"
+```
+
+Provereno simulacijom cele greške — red vraćen na `"Da"` **i** sve konstante
+usklađene: pada tačno jedna tvrdnja, ova.
+
+To je nova vrsta nalaza u ovom projektu: do sada je zamka 9 hvatala sabotažu koja
+je ostala bez sidra, a ovde je sidro bilo ispravno — **podatak** ju je obesmislio.

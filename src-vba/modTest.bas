@@ -124,6 +124,8 @@ Private Const FX_STANICA_B As String = "STA-TEST-2"
 ' Blok koji je u CELOSTI placen. Lista blokova ga i dalje nudi (ne proverava dug),
 ' a kandidata za placanje nema -- writer bi takav izbor tiho preveo u avans.
 Private Const FX_BIM_BLOK_PLACEN As String = "BLK-BIM-PLAC"
+' Izvod cija DVA REDA nose RAZLICITE zbirove.
+Private Const FX_BIM_IZVOD_NES As String = "IZV-FIX-NES"
 ' Isti broj izvoda i isti racun, DRUGI ciklus.
 Private Const FX_BIM_PY As String = "BIM-FIX-PY"
 ' Red se u mrezi nalazi PO PARTNERU, jer BankaImportID vise nije prikazan --
@@ -134,9 +136,9 @@ Private Const FX_BIM_P_KOLIZIJA As String = "Drugi Platilac"
 Private Const FX_BIM_P_DA As String = "Obradjeni Platilac"
 Private Const FX_BIM_P_DUP As String = "Dvojnik Prvi"
 Private Const FX_BIM_P_STORNO As String = "Stornirani Platilac"
-Private Const FX_BIM_SVE As Long = 11       ' 12 redova minus jedan storniran
-Private Const FX_BIM_OTVORENIH As Long = 6  ' status "" ili "Error"
-Private Const FX_BIM_OBRADJENIH As Long = 4 ' DA + dva dvojnika + prosli ciklus
+Private Const FX_BIM_SVE As Long = 13       ' 14 redova minus jedan storniran
+Private Const FX_BIM_OTVORENIH As Long = 7  ' status "" ili "Error"
+Private Const FX_BIM_OBRADJENIH As Long = 5 ' DA + dva dvojnika + prosli ciklus + jedan nesaglasan
 ' Broj dokumenta za novac/ambalazu koji NE postoji ni u tblAmbalaza ni u
 ' tblNovac -- provera duplikata mora da ga propusti.
 Private Const FX_BROJ_NOVAC As String = "NOVUNOS-TEST-1"
@@ -6725,7 +6727,15 @@ Private Sub T_BankaUvoz_CipJakihPratiBrojac()
     AssertEq nSve, FX_BIM_SVE, "cip 'sve' vidi sve nestornirane stavke"
     AssertEq nSve, nZa + nObr + nPre, _
              "'sve' je tacno unija tri stanja -- nijedan red ne ispada iz svih cipova"
-    AssertEq nZa, FX_BIM_OTVORENIH, "sest stavki ceka operatera"
+    AssertEq nZa, FX_BIM_OTVORENIH, "sedam stavki ceka operatera"
+
+    ' PREDUSLOV ZA DOKAZ, ne za ponasanje. Znacka broji OTVORENE, a sabotaza
+    ' banka-uvoz-znacka-broji-mapirane joj podmece MAPIRANE. Ako fixture ikad
+    ' izjednaci te dve brojke, sabotaza prestaje da obara bilo sta -- suite
+    ' ostaje zelena, a dokaz tiho nestane. To se vec desilo: dva nova reda sa
+    ' "Da" dala su 6 i 6.
+    AssertEq (nZa <> nObr), True, _
+             "otvorenih i mapiranih MORA biti razlicito -- inace sabotaza znacke ne meri nista"
     AssertEq nRucno, 1, "tacno jedan red je auto pokusao pa vratio operateru"
     ' 'Za rucno' je PODSKUP otvorenih, ne suprotnost: red sa statusom "Error"
     ' je i dalje otvoren.
@@ -6778,6 +6788,8 @@ End Sub
 Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     Dim d As Variant, redovi As Variant, i As Long, n As Long
     Dim r1 As Long, r2 As Long, rPY As Long, istihBrojeva As Long
+    Dim nes As Long, nesEkran As Long
+    Dim sirovi As Variant
 
     ' PRAVILO SLAGANJA, izmereno bez mreze.
     AssertEq modBankaImport.BimSaldoStatus(0, 0, 0, 0), BIM_SALDO_NEMA, _
@@ -6855,12 +6867,68 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
         End If
     Next i
 
+    ' NESAGLASAN IZVOD: redovi istog izvoda nose razlicite zbirove.
+    '
+    ' Agregat brojke UZIMA sa prvog reda umesto da ih sabira (sabiranje bi ih
+    ' pomnozilo brojem stavki) -- a to vazi samo dok su svi redovi saglasni.
+    ' Kad nisu, brojka prvog reda nije istina o izvodu, i to se mora reci.
+    ' STATUS se cita iz CITACA, ne iz reda ekrana: red ekrana nosi TEKST kolone
+    ' "Slaganje" (v. IzvodiKolone), a deseta kolona mu je identitet. Ovde se meri
+    ' odluka, a nize i to da se ta odluka vidi u prikazu.
+    sirovi = modBankaImport.GetBankaIzvodiForGrid()
+    nes = 0
+    For i = 1 To UBound(sirovi, 1)
+        If Trim$(CStr(sirovi(i, 2))) = FX_BIM_IZVOD_NES Then nes = i
+    Next i
+    AssertEq (nes > 0), True, "preduslov: nesaglasan izvod je u citacu"
+    AssertEq CLng(sirovi(nes, 10)), BIM_SALDO_NEKONZISTENTAN, _
+             "izvod cija se dva reda razlikuju je NESAGLASAN"
+    AssertEq CLng(sirovi(nes, 11)), 2, "obe stavke su u istoj grupi"
+    ' NESAGLASNO NADJACAVA i "slaze se" i "ne slaze se". Prvi red ovog izvoda
+    ' sam za sebe DAJE slaganje (4500 + 500 - 0 = 5000), pa bi bez pravila stajalo
+    ' "slaze se" -- najgori moguci ishod, jer tvrdi tacnost o brojkama kojih nema.
+    AssertEq modBankaImport.BimSaldoStatus(4500, 5000, 0, 500), BIM_SALDO_OK, _
+             "kontrola: prvi red sam za sebe se SLAZE"
+
+    ' Pravilo poredjenja, izmereno direktno.
+    AssertEq modBankaImport.BimSaldoIsti(1, 2, 3, 4, 1, 2, 3, 4), True, _
+             "isti zbirovi su saglasni"
+    AssertEq modBankaImport.BimSaldoIsti(1, 2, 3, 4, 1, 2, 3, 4.02), False, _
+             "razlika veca od centa je nesaglasnost"
+    AssertEq modBankaImport.BimSaldoIsti(1, 2, 3, 4, 1, 2, 3, 4.005), True, _
+             "polovina centa nije -- prag je isti kao kod slaganja"
+
+    ' Cip "ne slaze se" NE broji nesaglasne: on nosi jedno tvrdjenje, a o
+    ' nesaglasnom izvodu se ne zna nista. Da ih broji, brojka bi bila
+    ' neupotrebljiva za oba stanja.
+    AssertEq modScrBankaUvoz.BuCipIzvod("razlika", BIM_SALDO_NEKONZISTENTAN, 0), False, _
+             "nesaglasan izvod nije 'ne slaze se'"
+    AssertEq modScrBankaUvoz.BuCipIzvod("sve", BIM_SALDO_NEKONZISTENTAN, 0), True, _
+             "...ali se vidi u 'sve'"
+    ' Poredi se sa KATALOGOM, ne sa samom funkcijom: tvrdnja koja obe strane
+    ' racuna istom funkcijom prolazi i kad funkcija vrati pogresnu poruku.
+    AssertEq modScrBankaUvoz.BuSlaganjeTekst(BIM_SALDO_NEKONZISTENTAN, 0), _
+             Poruka("OTKUI_LBL_BU_SALDO_NESAGLASAN"), _
+             "nesaglasan izvod dobija SVOJU poruku"
+    AssertEq (InStr(1, modScrBankaUvoz.BuSlaganjeTekst(BIM_SALDO_NEKONZISTENTAN, 0), _
+                    Poruka("OTKUI_LBL_BU_SALDO_RAZLIKA")) = 0), True, _
+             "...i u njoj NE stoji 'ne slaze se'"
+
+    ' I to stvarno stigne u red mreze -- osma kolona je SLAGANJE (IzvodiKolone).
+    nesEkran = 0
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, 1))) = FX_BIM_IZVOD_NES Then nesEkran = i
+    Next i
+    AssertEq (nesEkran > 0), True, "nesaglasan izvod je i u listi ekrana"
+    AssertEq CStr(redovi(nesEkran, 8)), Poruka("OTKUI_LBL_BU_SALDO_NESAGLASAN"), _
+             "kolona Slaganje nosi bas taj tekst"
+
     AssertEq BuBrojRedova("razlika"), 1, "tacno jedan izvod se ne slaze"
-    AssertEq BuBrojRedova("sve"), 5, _
-             "pet grupa: dva racuna i dva ciklusa pod istim brojem, pa jos dve"
+    AssertEq BuBrojRedova("sve"), 6, _
+             "sest grupa: dva racuna i dva ciklusa pod istim brojem, pa jos tri"
     ' Izvod 3 je ceo obradjen, pa cip "sa otvorenim" ima sta da iskljuci --
     ' inace bi propustao sve i bio prazna tvrdnja.
-    AssertEq BuBrojRedova("otvoreni"), 3, "tri izvoda jos imaju otvorenih stavki"
+    AssertEq BuBrojRedova("otvoreni"), 4, "cetiri izvoda jos imaju otvorenih stavki"
 
     modScrBankaUvoz.Scr_BuTestReset
 End Sub

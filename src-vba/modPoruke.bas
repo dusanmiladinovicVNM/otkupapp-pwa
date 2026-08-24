@@ -1237,6 +1237,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_CIPB_OBRADJENO", "Obra" & ChrW(273) & "eno"
     UpsertRow lo, existing, "OTKUI_CIPB_PRESKOCENO", "Presko" & ChrW(269) & "eno"
     UpsertRow lo, existing, "OTKUI_CIPB_OTVORENI", "Sa otvorenim"
+    UpsertRow lo, existing, "OTKUI_LBL_BU_SALDO_NESAGLASAN", "zbirovi se razlikuju"
     UpsertRow lo, existing, "OTKUI_CIPB_RAZLIKA", "Ne sla" & ChrW(382) & "e se"
     UpsertRow lo, existing, "OTKUI_HDB_IZVOD", "IZVOD"
     UpsertRow lo, existing, "OTKUI_HDB_RACUN", "RA" & ChrW(268) & "UN"

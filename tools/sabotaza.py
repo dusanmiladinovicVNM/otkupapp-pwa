@@ -1898,6 +1898,38 @@ SABOTAZE = {
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
         "prazan combo nije izbor bloka",
     ),
+    # ---------------------------------------- BANKA: SALDO IZVODA
+    # Parser upisuje saldo na SVAKI red grupe, pa ga agregat UZIMA sa prvog reda
+    # umesto da sabira. To vazi dok su svi redovi saglasni -- a to niko nije
+    # proveravao. Rucno editovan red bi prosao kao istina o celom izvodu.
+    "banka-izvod-saldo-prvi-red-pobedjuje": (
+        "modBankaImport.bas",
+        "        If nesaglasan(r) Then outA(r, 10) = BIM_SALDO_NEKONZISTENTAN\n",
+        "        If False Then outA(r, 10) = BIM_SALDO_NEKONZISTENTAN   ' SABOTAZA: prvi red pobedjuje\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod cija se dva reda razlikuju je nesaglasan",
+    ),
+    # Prag mora da bude isti kao kod slaganja (0.01). Sire poredjenje bi
+    # zaokruzenja proglasavalo nesaglasnoscu i brojka bi postala neupotrebljiva.
+    "banka-izvod-saldo-prag-preuzak": (
+        "modBankaImport.bas",
+        "    If Abs(potrazujeA - potrazujeB) > 0.01 Then Exit Function\n",
+        "    If Abs(potrazujeA - potrazujeB) > 0.001 Then Exit Function\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "prag saglasnosti je isti kao prag slaganja",
+    ),
+    # Nesaglasnost mora da NADJACA i "slaze se": prvi red ovog izvoda sam za sebe
+    # daje slaganje, pa bi bez toga stajalo "slaze se" -- tvrdnja o brojkama
+    # kojih nema.
+    "banka-izvod-nesaglasno-je-razlika": (
+        "modScrBankaUvoz.bas",
+        "        Case BIM_SALDO_NEKONZISTENTAN\n"
+        "            BuSlaganjeTekst = Poruka(\"OTKUI_LBL_BU_SALDO_NESAGLASAN\")\n",
+        "        Case BIM_SALDO_NEKONZISTENTAN\n"
+        "            BuSlaganjeTekst = Poruka(\"OTKUI_LBL_BU_SALDO_RAZLIKA\")\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "nesaglasan izvod se u koloni ne predstavlja kao neslaganje",
+    ),
     # ---------------------------------------------------- BANKA: WRITER
     # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
     # obradjenom. Za AUTOMATSKO mapiranje je to namerno; za IZABRAN blok je

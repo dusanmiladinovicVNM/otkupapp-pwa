@@ -5280,3 +5280,39 @@ jedno pravilo, i tri sabotaže nad samim alatom — od kojih jedna proverava da 
 
 Provera je puštena i nad pravim `modTest`: test uklonjen iz sva tri spiska i test
 registrovan pod dva broja — oba prijavljena, sa tačnim brojem linije.
+
+
+---
+
+## v2.70.0 — `v6-ui-181` · zbirovi izvoda se proveravaju po redovima
+
+### Šta se moglo desiti
+
+Podaci o izvodu — početno stanje, uplate, isplate, završno — upisani su na
+**svaki** red tog izvoda. Lista ih zato **uzima** sa prvog reda, a ne sabira
+(sabiranje bi ih pomnožilo brojem stavki).
+
+To važi dok su svi redovi isti. Ako nisu — ručno ispravljen red, delimično
+ponovljen uvoz — lista bi prikazala brojku **prvog** reda kao istinu o celom
+izvodu. Bez ikakvog znaka.
+
+### Šta se sada vidi
+
+Takav izvod dobija svoj status: **`zbirovi se razlikuju`**. To nije isto što i
+„ne slaže se" — tamo se zna šta piše pa se ne slaže, ovde se ne zna ni šta piše.
+
+Zato taj izvod **ne ulazi** u čip „Ne slaže se": čip nosi jedno tvrđenje, a o
+takvom izvodu se ne zna ništa. Vidi se u koloni.
+
+Vredi znati koliko je to podmuklo: u primeru iz testa **prvi red sam za sebe se
+slaže** — pa bi bez ove provere u koloni stajalo „slaže se", a to je tvrdnja o
+brojkama kojih zapravo nema.
+
+### Verifikacija
+
+`RunAllTests` **114 testova, 0 palih**, tri nove sabotaže, i par redova u
+test-svesci koji nose različite zbirove istog izvoda.
+
+Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §12.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
