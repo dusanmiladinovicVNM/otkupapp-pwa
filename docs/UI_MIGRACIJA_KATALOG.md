@@ -2141,7 +2141,8 @@ istina, tuđi tekst nije.
 |---|---|
 | `ok` je zasebna zastavica, ne „prazan rezultat" | Kolona `rest` namerno ne crta `0,00`; prazno je tu istina o podatku. Da se to broji kao kvar, log bi bio pun poruka o urednim redovima i prestao bi da se čita. |
 | Pilula na neuspeh **ne dobija nulu** | Nula je kod `PaintPill` „Sačuvana", a kod `PaintPayPill` „Neplaćeno" — dakle **određen status**. To je svoja vrsta laži; ćelija se zato prazni. |
-| Pilula na neuspeh se **briše cela** | `PaintPill` menja i `BackColor`, `BackStyle` i `width`, a `PaintRow` pri vraćanju pozadine reda `pill` kolone **namerno preskače**. Ćelija kojoj je obrisan samo natpis ostala bi kao **prazna obojena kutija** — više nije tuđi tekst, ali jeste stanje prethodnog crtanja. |
+| Prava pilula (`pill`) na neuspeh se **briše cela** | `PaintPill` menja i `BackColor`, `BackStyle` i `width`, a `PaintRow` pri vraćanju pozadine reda `pill` kolone **namerno preskače**. Ćelija kojoj je obrisan samo natpis ostala bi kao **prazna obojena kutija**. |
+| `paypill` na neuspeh gubi **samo natpis** | v. §10.4 — dve vrste, dva ugovora |
 | Stil ostalih ćelija se **ne dira** | v. §10.3 |
 | Broji se i prijavljuje **jednom po crtanju** | Prazna ćelija je istina, ali **tiha** prazna ćelija je bila pola problema: prvi nalaz ove vrste tražio je zasebnu dijagnostiku (`Diag_BuRedovi`) da bi se uopšte video. |
 
@@ -2170,7 +2171,36 @@ Uz to: `Font.bold = False` je mehanizam koji je `v6-ui-175` već izmerio kao
 `Font.Weight` i ponavlja upis. Rešenje u kom render bold uopšte ne dira to
 pitanje zaobilazi u celosti.
 
-### 10.4 Nalaz koji je brojač odmah izbacio
+### 10.4 Dve vrste pilule su dva ugovora
+
+Prva verzija ispravke je obe vrste čistila istim helperom. To je za `paypill`
+pogrešno, i to je greška napravljena **baš u PR-u koji tu klasu zatvara**:
+
+| | ko drži širinu | ko drži pozadinu |
+|---|---|---|
+| `pill` | `PaintPill` (računa je po tekstu, `PillW`); `LayoutGrid` je **preskače** | `PaintPill`; `PaintRow` je **preskače** |
+| `paypill` | `LayoutGrid` (`mColW - 16`) | `PaintRow` |
+
+`PaintPayPill` menja **samo** natpis, boju teksta, poravnanje i bold. Čišćenje
+koje bi `paypill` tretiralo kao pravu pilulu postavilo bi joj **punu** širinu
+kolone — i ona bi takva ostala, jer `PaintPayPill` širinu ne vraća, a
+`LayoutGrid` se ponovo pušta tek kad se promeni opis kolona:
+
+```
+paypill validan      -> width = mColW - 16
+sledeci render, kvar -> "ciscenje" postavi width = mColW
+sledeci render, opet
+validna vrednost     -> PaintPayPill sirinu NE vraca  ->  celija ostaje 16pt sira
+```
+
+Zato render `paypill` koloni briše **samo natpis**.
+
+**Ovo je izmereno round-trip-om**, ne samo „valid → invalid": zaostalo stanje se
+vidi tek kad se posle kvara opet crta uredan podatak. Sabotaža
+`mreza-paypill-kao-pill` vraća staro ponašanje i obara test sa
+`očekivano [76], dobijeno [92]` — tačno 16pt.
+
+### 10.5 Nalaz koji je brojač odmah izbacio
 
 Čim je crtanje počelo da broji ćelije koje ne ume da prikaže, test nad **urednim
 fixture podacima** prijavio je dva kvara:
@@ -2191,7 +2221,7 @@ vidi — do sada nijedan nije čitao *nacrtan* datum.
 `FmtDatumKratko` sada prima `Date` direktno; serijski broj ide istim putem, sa
 istom gornjom granicom.
 
-### 10.5 Verifikacija
+### 10.6 Verifikacija
 
 Test **113** (`T_MrezaCelija_NeostavljaTudjiTekst`) meri **oba nivoa**:
 
@@ -2214,14 +2244,17 @@ ide operater.
 Test tvrdi i **stil pre i posle crtanja** — da render ne pokvari poravnanje i
 bold koje je layout postavio. Bez toga je regresija iz §10.3 prolazila zeleno.
 
-Pet sabotaža: `mreza-celija-prazno-ne-prepisuje` (vraća tačno stari oblik — prazan
+Šest sabotaža: `mreza-celija-prazno-ne-prepisuje` (vraća tačno stari oblik — prazan
 rezultat ne prepisuje staru vrednost), `mreza-crtanje-kvari-stil` (vraća reset iz
 §10.3; obori se sa `očekivano [3], dobijeno [1]` — desno vs. levo),
-`mreza-pilula-ostaje`, `mreza-datum-nije-date`, `mreza-kvar-celije-se-ne-broji`.
+`mreza-pilula-ostaje`, `mreza-paypill-kao-pill`, `mreza-datum-nije-date`,
+`mreza-kvar-celije-se-ne-broji`.
 
-**Šta OSTAJE neizmereno:** čišćenje **pozadine i širine** pilule. Jedina lista
-koja se učitava bez forme a ima kolonu statusne oznake je FAKTURE, a njena je
-`paypill` — `PaintPayPill` pozadinu ne dira, pa bi tvrdnja o njoj prolazila i
+**Šta OSTAJE neizmereno:** čišćenje **pozadine** prave `pill` ćelije. Jedina
+lista koja se učitava bez forme a ima kolonu statusne oznake je FAKTURE, a njena
+je `paypill` — `PaintPayPill` pozadinu ne dira, pa bi tvrdnja o njoj prolazila i
 bez ispravke, dakle bila bi placebo. Prava `pill` kolona živi na Dokumentima,
-čija se lista bez izabranog režima ne puni. Mereno je ono što se moglo:
-**natpis** pilule nestaje, i to sabotaža dokazuje.
+čija se lista bez izabranog režima ne puni.
+
+**Širina jeste izmerena** (§10.4) — ona se na `paypill` koloni vidi. Ostaje samo
+pozadina prave pilule, i to se ovde beleži kao neizmereno, ne kao pokriveno.

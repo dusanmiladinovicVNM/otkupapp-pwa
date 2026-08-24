@@ -1842,10 +1842,22 @@ SABOTAZE = {
     # boju, sirinu i BackStyle, a PaintRow pill kolone pri vracanju pozadine reda
     # NAMERNO preskace -- pa bi celija kojoj natpis nije obrisan ostala kao stara
     # obojena oznaka nad novim podatkom.
+    # DVE VRSTE PILULE, DVA UGOVORA. Pravoj ("pill") sirinu racuna PaintPill i
+    # LayoutGrid je preskace; "paypill" sirinu drzi LayoutGrid (mColW - 16), a
+    # PaintPayPill je ne vraca. Ko "paypill" ocisti kao pravu pilulu, postavi joj
+    # PUNU sirinu kolone -- i ona takva ostane, jer se LayoutGrid ponovo pusta tek
+    # kad se promeni opis kolona. Tacno ta greska je jednom vec napravljena ovde.
+    "mreza-paypill-kao-pill": (
+        "modOtkupUI.bas",
+        "                                    .caption = vbNullString\n",
+        "                                    OcistiPilulu body.Controls(\"c\" & i & \"_\" & k), mColW(k)   ' SABOTAZA: paypill se cisti kao pill\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "ciscenje statusne oznake ne menja sirinu celije",
+    ),
     "mreza-pilula-ostaje": (
         "modOtkupUI.bas",
-        "    lbl.caption = vbNullString\n",
-        "    If False Then lbl.caption = vbNullString   ' SABOTAZA: stara oznaka ostaje\n",
+        "                                    .caption = vbNullString\n",
+        "                                    n = n   ' SABOTAZA: stara oznaka ostaje\n",
         "T_MrezaCelija_NeostavljaTudjiTekst",
         "statusna oznaka koja se ne moze naslikati nestaje",
     ),

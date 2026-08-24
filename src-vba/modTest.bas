@@ -7276,7 +7276,7 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
     Dim pre As String, posle As String
     Dim i As Long, kol As Long, kolPil As Long
     Dim poravnanjePre As Long, boldPre As Boolean
-    Dim pilPre As String
+    Dim pilPre As String, pilSirinaPre As Single, pilNazad As String
 
     ' --- PRAVILO, bez forme -----------------------------------------------
     AssertEq modOtkupUI.CelijaTekst("num", "nije broj", ok), "", _
@@ -7380,6 +7380,7 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
     AssertEq (kolPil >= 0), True, "preduslov: lista ima kolonu sa statusnom oznakom"
     pilPre = CStr(body.Controls("c0_" & kolPil).caption)
     AssertEq (Len(pilPre) > 0), True, "preduslov: statusna oznaka je naslikana"
+    pilSirinaPre = body.Controls("c0_" & kolPil).width
 
     ' Ista mreza, iste kolone -- samo vrednosti koje se ne mogu prikazati.
     modOtkupUI.GridTestVrednost 1, kol + 1, "NIJE-BROJ"
@@ -7405,11 +7406,30 @@ Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
     ' celija kojoj je obrisan samo natpis ostala kao PRAZNA OBOJENA KUTIJA.
     AssertEq CStr(body.Controls("c0_" & kolPil).caption), "", _
              "statusna oznaka koja se ne moze naslikati NESTAJE"
-    ' Pozadina se OVDE ne tvrdi. Jedina lista koja se ucitava bez forme a ima
-    ' kolonu statusne oznake je FAKTURE, a njena je "paypill" -- PaintPayPill
-    ' pozadinu ne dira, pa bi tvrdnja o njoj prolazila i bez ispravke. Ciscenje
-    ' pozadine i sirine vazi za "pill" kolone (Dokumenta) i zapisano je kao
-    ' NEIZMERENO, ne kao pokriveno -- v. katalog paragraf 10.4.
+    ' SIRINA SE NE SME POMERITI. Dve vrste pilule imaju dva ugovora: pravoj
+    ' ("pill") sirinu racuna PaintPill, a ovoj ("paypill") je drzi LayoutGrid
+    ' (mColW - 16). Ciscenje koje bi je tretiralo kao pravu pilulu postavilo bi
+    ' PUNU sirinu kolone -- i ona bi takva ostala, jer PaintPayPill sirinu ne
+    ' vraca, a LayoutGrid se ponovo pusta tek kad se promeni opis kolona.
+    AssertEq body.Controls("c0_" & kolPil).width, pilSirinaPre, _
+             "ciscenje statusne oznake NE menja sirinu celije"
+
+    ' ROUND-TRIP: vrednost se popravlja i oznaka mora da se VRATI kakva je bila.
+    ' Samo "valid -> invalid" ne bi video zaostalo stanje -- ono se vidi tek kad
+    ' se posle kvara opet crta uredan podatak.
+    modOtkupUI.GridTestVrednost 1, kolPil + 1, 0
+    modOtkupUI.GridRenderTest f, 1200, 600
+    pilNazad = CStr(body.Controls("c0_" & kolPil).caption)
+
+    AssertEq (Len(pilNazad) > 0), True, "ispravna vrednost opet daje statusnu oznaku"
+    AssertEq body.Controls("c0_" & kolPil).width, pilSirinaPre, _
+             "...i celija je iste sirine kao pre kvara"
+
+    ' Pozadina se OVDE ne tvrdi: FAKTURE nose "paypill", a PaintPayPill pozadinu
+    ' ne dira -- vraca je PaintRow, pa bi tvrdnja o njoj prolazila i bez
+    ' ispravke. Ciscenje POZADINE vazi za prave "pill" kolone (Dokumenta), cija
+    ' se lista bez izabranog rezima ne puni. Zapisano kao NEIZMERENO, ne kao
+    ' pokriveno -- v. katalog paragraf 10.5.
 
     modOtkupUI.GridTestLoad ""
     modOtkupUI.GridOtkaciFormuTest

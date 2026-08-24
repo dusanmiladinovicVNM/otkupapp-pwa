@@ -5101,7 +5101,8 @@ Sada se datum prima i kao datum i kao broj.
 ### Sitnica koja se primeti tek u pogonu
 
 Statusna oznaka (pilula) koja se ne može naslikati sada **nestaje** umesto da
-ostane kao prazna obojena oznaka nad novim podatkom.
+ostane kao prazna obojena oznaka nad novim podatkom — i kad se podatak popravi,
+vraća se tačno onakva kakva je bila, iste širine.
 
 ### Verifikacija
 

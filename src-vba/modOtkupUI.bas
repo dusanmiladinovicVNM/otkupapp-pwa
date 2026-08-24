@@ -2440,14 +2440,23 @@ Public Sub RenderGrid()
                         ' funkciju koja ne moze da pukne, pa preskocen upis (i sa
                         ' njim natpis prethodnog ekrana) vise nije moguc.
                         Select Case ColKind(k)
-                            Case "pill", "paypill"
+                            Case "pill"
                                 n = CelijaBroj(mView(r, k + 1), celijaOK)
-                                If Not celijaOK Then
-                                    OcistiPilulu body.Controls("c" & i & "_" & k), mColW(k)
-                                ElseIf ColKind(k) = "pill" Then
+                                If celijaOK Then
                                     PaintPill body.Controls("c" & i & "_" & k), n
                                 Else
+                                    OcistiPilulu body.Controls("c" & i & "_" & k), mColW(k)
+                                End If
+                            Case "paypill"
+                                n = CelijaBroj(mView(r, k + 1), celijaOK)
+                                If celijaOK Then
                                     PaintPayPill body.Controls("c" & i & "_" & k), n
+                                Else
+                                    ' SAMO NATPIS. Ovo NIJE ista celija kao "pill" --
+                                    ' v. OcistiPilulu: pozadinu joj vraca PaintRow, a
+                                    ' sirinu drzi LayoutGrid. Ko je ovde ocisti kao
+                                    ' pravu pilulu, ostavi je 16pt siru zauvek.
+                                    .caption = vbNullString
                                 End If
                             Case Else
                                 txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)
@@ -2572,13 +2581,23 @@ EH:
     CelijaBroj = 0
 End Function
 
-' PILULA KOJA SE NE MOZE NASLIKATI SE BRISE CELA, ne samo natpis.
+' PRAVA PILULA ("pill") KOJA SE NE MOZE NASLIKATI SE BRISE CELA, ne samo natpis.
 '
-' PaintPill i PaintPayPill menjaju BackColor, ForeColor, TextAlign, width,
-' BackStyle i bold -- a PaintRow pri vracanju pozadine reda pill kolone NAMERNO
-' preskace. Zato bi celija kojoj je obrisan samo natpis ostala kao PRAZNA
-' OBOJENA KUTIJA: vise nije tudji tekst, ali jeste stanje prethodnog crtanja,
-' dakle ista klasa greske.
+' Vazi SAMO za "pill". Dve vrste imaju dva ugovora, i mesanje to dvoje je greska
+' koja je jednom vec napravljena bas ovde:
+'
+'   "pill"     PaintPill sam racuna sirinu po tekstu (PillW) i sam postavlja
+'              BackColor i BackStyle. LayoutGrid tu kolonu NAMERNO preskace pri
+'              dodeli sirine, a PaintRow je preskace pri vracanju pozadine reda.
+'              Sve sto naslika, mora i da se ocisti -- inace ostane PRAZNA
+'              OBOJENA KUTIJA nad novim podatkom.
+'
+'   "paypill"  PaintPayPill menja samo natpis, boju teksta, poravnanje i bold.
+'              Sirinu drzi LayoutGrid (mColW - 16), a pozadinu vraca PaintRow.
+'              Ko je ocisti kao pravu pilulu, postavi joj sirinu na PUNU sirinu
+'              kolone -- i ona takva ostane, jer PaintPayPill sirinu ne vraca a
+'              LayoutGrid se ponovo pusta tek kad se promeni opis kolona. Zato
+'              se toj koloni brise SAMO natpis.
 '
 ' Providna pozadina bez natpisa pusta boju reda da se vidi. Napomena iz PaintRow
 ' o mesanju providnih i neprozirnih kontrola tice se ISCRTAVANJA TEKSTA, a ovde
