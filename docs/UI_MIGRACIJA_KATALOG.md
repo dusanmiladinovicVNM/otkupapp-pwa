@@ -2181,10 +2181,8 @@ jednog bankarskog reda nego kvar instalacije.
 | domen (`GetOtkupCandidates…`) | nedostupna tabela → **greška**, za sve pozivaoce |
 | writer (`blokIzabran`) | izabran blok bez otvorenih stavki → **greška** |
 
-**Šta ostaje neizmereno:** kapija u `frmBankaImport` i `ManualBlokIzabran()`.
-`m_BlokoviLoadOk` je `Private` u `.frm`, a kapija stoji u click handleru — test
-bi morao da vozi formu. Provereno **čitanjem**, i tako se i beleži. Domenski i
-writer sloj **jesu** izmereni (`T21`, `RequireTable` sabotaža).
+**To je bilo zapisano kao neizmereno — i onda izmereno.** Kapija u
+`frmBankaImport` i `ManualBlokIzabran()` sada imaju test; v. §11.
 
 > Seed je pri tom morao da bude prava uplata, ne status kolona:
 > `SeedOtkupIsplacen` piše `Isplaceno`, a resolver računa
@@ -2344,3 +2342,72 @@ bez ispravke, dakle bila bi placebo. Prava `pill` kolona živi na Dokumentima,
 
 **Širina jeste izmerena** (§10.4) — ona se na `paypill` koloni vidi. Ostaje samo
 pozadina prave pilule, i to se ovde beleži kao neizmereno, ne kao pokriveno.
+
+
+---
+
+## 11. Legacy forme dobijaju test seam-ove (`v6-ui-180`)
+
+Tri uzastopna PR-a našla su **istu klasu greške** — „prazna lista je protumačena
+kao izbor" — i svaki put ju je našao **review, ne suite**. Razlog nije bio u
+tvrdnjama nego u tome gde pravila žive: u `Private` stanju forme i u click
+handleru, dakle proverljivo samo rukom.
+
+Ovo to menja za `frmBankaImport`.
+
+### 11.1 Zašto je uopšte izvodljivo
+
+`frmBankaImport` **nema `UserForm_Initialize`** — ima samo `UserForm_Activate`,
+koji ide tek na `.Show`. `New frmBankaImport` je zato jeftin i **ne čita nijednu
+tabelu**: test dobija formu, a težak posao se nikad ne pokrene.
+
+To je razlika u odnosu na `frmOtkupUI`, gde `UserForm_Initialize` gradi ceo UI
+(zato ga `NewOtkupUIForm` namerno okida čitanjem `.Controls.Count`).
+
+### 11.2 Pravilo izlazi iz handlera
+
+Kapija je stajala inline u `btnSacuvajRucno_Click`. Izdvojena je u
+`KooperantRucnoSme(ByRef outPoruka)`, koji **vraća** poruku umesto da je prikaže
+— time funkcija ostaje bez dijaloga i postaje pozivljiva iz testa. Handler zove
+istu funkciju, pa se odluka i njena provera ne mogu razići.
+
+Isti obrazac kao `ScopeIzbora` i `CiljUcitan` na novom ekranu.
+
+### 11.3 Seam-ovi
+
+Tvrdo gejtovani (`If Not IsTestMode() Then Exit`), po ugledu na
+`modScrDokumenti.Scr_OtpTestSet`:
+
+| Seam | Čemu služi |
+|---|---|
+| `BiTestSetUcitanost` | postavi `m_BlokoviLoadOk` / `_Err` — pad učitavanja se drugačije ne može izazvati bez lomljenja šeme |
+| `BiTestSetFaktureUcitanost` | isto za fakture |
+| `BiTestKooperantSme` / `BiTestKooperantPoruka` | **odluka koju handler stvarno čita**, ne njena kopija |
+| `BiTestSetIzbor` | upis u kombo ide **kroz formu**, ne iz testa — kontrole su `Private`, a i operater prolazi tim putem |
+| `BiTestBlokIzabran` | šta bi forma prijavila writeru kao „blok je izabran" |
+
+### 11.4 Šta test tvrdi
+
+`T_LegacyBanka_PadUcitavanjaNijePraznaLista` (114):
+
+- pad učitavanja liste blokova **zaustavlja** ručno mapiranje, i operater dobija
+  objašnjenje — ne ćutanje;
+- uredno učitana lista **pušta** dalje (kapija ne sme da bude preširoka);
+- izabran blok se writeru prijavljuje kao izabran;
+- **prazan kombo nije izbor** — tada blok dolazi iz poziva na broj, gde je avans
+  legitiman;
+- kod kupca se blok **uopšte** ne prijavljuje.
+
+Dve sabotaže, i to su **prve nad `.frm` fajlom**:
+`banka-legacy-pad-liste-prolazi` i `banka-legacy-prazan-combo-je-izbor`. Druga
+postoji zato što bi se pravilo moglo „ispraviti" tako što se prazan kombo
+proglasi izborom — čime bi se ugasila legitimna grana.
+
+### 11.5 Šta ovo ne pokriva
+
+Sam `btnSacuvajRucno_Click` se i dalje ne izvršava u testu — pokriveno je
+**pravilo** i to da ga handler zove (jedan red, proveren čitanjem). Klik, dijalozi
+i redosled poziva ostaju smoke.
+
+`frmDokumenta` nije diran. Ista tehnika bi radila i tamo, ali to je znatno veća
+forma i zaseban posao.
