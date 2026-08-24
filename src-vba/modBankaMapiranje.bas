@@ -933,8 +933,11 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                         Optional ByVal allowManyCandidates As Boolean = False, _
                                                         Optional ByVal stanicaScope As String = "", _
-                                                        Optional ByVal blokIzabran As Boolean = False) As Long
+                                                        Optional ByVal blokIzabran As Boolean = False, _
+                                                        Optional ByRef outPrijavljeno As Boolean) As Long
     Dim tx As clsTransaction
+
+    outPrijavljeno = False
     
     On Error GoTo EH
     
@@ -990,6 +993,10 @@ EH:
 
     If Not gBankaSilentBatch Then
         MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        ' Pozivalac je vec obavesten, i to KONKRETNO. Bez ovoga forma povrh toga
+        ' pokaze jos i genericko "NIJE izvrseno", pa operater za jednu ocekivanu
+        ' validacionu situaciju dobija DVA dijaloga.
+        outPrijavljeno = True
     End If
 
     MapBankaImportAsKooperantBlockManual_TX = 0
@@ -2449,6 +2456,14 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     
     If Trim$(kooperantID) = "" Then Exit Function
     If Trim$(brojBloka) = "" Then Exit Function
+    
+    ' NEDOSTAJUCA TABELA NIJE "NEMA KANDIDATA". GetTableData vraca Empty za oba,
+    ' a prazan skup kandidata writer knjizi kao AVANS i stavku oznacava
+    ' obradjenom. Kvar bi tako postao drugi poslovni ishod -- i to za SVE
+    ' pozivaoce, ne samo za rucni put: automatsko mapiranje ovamo ulazi bez
+    ' ijedne UI provere. Sa ovim, takav red zavrsi kao "Error" (batch gresku
+    ' hvata po redu), sto jeste istina.
+    RequireTable TBL_OTKUP, "GetOtkupCandidatesForKooperantBlock"
     
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function

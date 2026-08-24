@@ -2150,6 +2150,37 @@ Druga polovina postoji zato što bi se pravilo moglo „ispraviti" gašenjem
 legitimne grane. Sabotaža `banka-writer-placen-blok-je-avans` obara **tri**
 provere tog testa.
 
+**Ali sama zaštita u writeru nije bila dovoljna za legacy formu.** Writer radi
+sa informacijom koju dobije, a `frmBankaImport` ju je davao pogrešno u jednom
+slučaju: njen učitavač blokova nije razlikovao „kooperant nema blokova" od
+„nisam uspeo da pročitam blokove". Prazan kombo → `ManualBlokIzabran = False` →
+poziv na broj → prazan skup kandidata → **avans**, uz stavku označenu obrađenom.
+
+Ista klasa, i forma je za nju **već imala rešenje jednu funkciju dalje**:
+`m_FaktureLoadOk` / `m_FaktureLoadErr` postoje od ranije, ali samo za fakture.
+Blokovi su ih sada dobili, sa istim `EH` obrascem i istom kapijom pre knjiženja.
+
+Uz to su **oba** učitavača dobila `RequireTable`: i za fakture je nedostajuća
+tabela do sada prolazila kao „nema faktura" (zastavica bi ostala `True`), što je
+isti fail-open samo na drugoj listi.
+
+**A pravu granicu drži domen.** `GetOtkupCandidatesForKooperantBlock` je i sam
+na `IsEmpty(data)` izlazio praznim skupom, pa bi nedostupna `tblOtkup` završila
+kao avans **za svakog pozivaoca**, uključujući automatsko mapiranje koje UI
+proveru i nema. Sada i on ide kroz `RequireTable`, pa takav red završi kao
+`Error` — batch grešku hvata po redu — što jeste istina o njemu.
+
+| Sloj | Šta hvata |
+|---|---|
+| forma / ekran | pad učitavanja liste → **STOP**, sa objašnjenjem |
+| domen (`GetOtkupCandidates…`) | nedostupna tabela → **greška**, za sve pozivaoce |
+| writer (`blokIzabran`) | izabran blok bez otvorenih stavki → **greška** |
+
+**Šta ostaje neizmereno:** kapija u `frmBankaImport` i `ManualBlokIzabran()`.
+`m_BlokoviLoadOk` je `Private` u `.frm`, a kapija stoji u click handleru — test
+bi morao da vozi formu. Provereno **čitanjem**, i tako se i beleži. Domenski i
+writer sloj **jesu** izmereni (`T21`, `RequireTable` sabotaža).
+
 > Seed je pri tom morao da bude prava uplata, ne status kolona:
 > `SeedOtkupIsplacen` piše `Isplaceno`, a resolver računa
 > `vrednost − GetUplataForOtkup(OtkupID)` — dakle sabira `Isplata` iz `tblNovac`.

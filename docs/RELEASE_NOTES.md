@@ -5146,6 +5146,19 @@ namerno ponašanje — to je bezbedan izlaz dok je poreklo uplate dvosmisleno.
 Novi ekran je ovo već odbijao od `v2.64.0`; sada isto važi i za **staru formu**
 `frmBankaImport`, koja je do sada ulazila u tu granu bez ikakve provere.
 
+### I kad se lista uopšte ne učita
+
+Stara forma je do sada imala i tiši oblik istog problema: ako **učitavanje liste
+blokova ne uspe**, prazan spisak je izgledao kao „kooperant nema blokova" — pa bi
+se uzeo poziv na broj, a odatle bi ceo iznos opet završio kao avans.
+
+Sada se to zaustavlja uz poruku. Forma je isto pravilo već imala za fakture;
+blokovi su ga dobili. Uz to, **nedostupna tabela više ne prolazi kao prazna
+lista** — ni za fakture ni za blokove, ni u samom knjiženju.
+
+Pri odbijanju se sada dobija **jedna** poruka umesto dve: konkretna iz knjiženja,
+bez generičke „nije izvršeno" preko nje.
+
 ### Verifikacija
 
 `T21_IzabranPlacenBlokNijeAvans` u `RunBankaImportTestSuite` — suita koja piše
