@@ -708,7 +708,12 @@ Private Sub btnSacuvajRucno_Click()
 
             If Not ConfirmManyCandidatesSplit(bimID, kooperantID, brojBloka, potvrdjenaPodela) Then Exit Sub
 
-            n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True, potvrdjenaPodela)
+            ' Poslednji argument: blok je IZABRAN iz liste, ne izveden iz poziva
+            ' na broj. Bez njega bi izabran a vec placen blok tiho postao avans
+            ' kooperanta, a stavka bila oznacena obradjenom.
+            n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, _
+                                                       True, potvrdjenaPodela, "", _
+                                                       ManualBlokIzabran())
 
             ReportManualResult (n > 0), "Kooperant"
 
@@ -925,6 +930,16 @@ End Sub
 '
 ' Kad je ovo bila JEDNA funkcija za oba preview-a, rucni izbor bloka je menjao i
 ' AUTO prikaz: preview je pokazivao blok B, a "Automatski mapiraj red" knjizio A.
+' Da li je blok IZABRAN iz liste, ili je izveden iz poziva na broj.
+'
+' Ista razlika koju vec pravi EffectiveManualBlockNo, samo imenovana: writer na
+' osnovu nje odlucuje sme li prazan skup kandidata da postane avans. Izabran blok
+' bez otvorenih stavki je protivrecnost -- operater je rekao KOJI dug placa.
+Private Function ManualBlokIzabran() As Boolean
+    If Trim$(nz(cmbMapTip.value, "")) <> "Kooperant" Then Exit Function
+    ManualBlokIzabran = (Trim$(nz(cmbOtkupBlok.value, "")) <> "")
+End Function
+
 Private Function EffectiveManualBlockNo(ByVal bankaImportID As String) As String
     Dim manualBlok As String
 

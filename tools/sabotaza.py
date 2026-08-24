@@ -1877,6 +1877,22 @@ SABOTAZE = {
         "T_MrezaCelija_NeostavljaTudjiTekst",
         "kvar prikaza se broji, pa ostaje trag u logu",
     ),
+    # ---------------------------------------------------- BANKA: WRITER
+    # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
+    # obradjenom. Za AUTOMATSKO mapiranje je to namerno; za IZABRAN blok je
+    # protivrecnost -- operater je rekao KOJI dug placa.
+    #
+    # PROVERA IDE NAD DRUGOM SUITOM: writer pise, pa tvrdnja zivi u
+    # RunBankaImportTestSuite (transakciona, rollback). Dokaz:
+    #   python tools/sabotaza.py banka-writer-placen-blok-je-avans
+    #   python tools/run_vba.py --suite RunBankaImportTestSuite   # ocekuj FAIL
+    "banka-writer-placen-blok-je-avans": (
+        "modBankaMapiranje.bas",
+        "    If IsEmpty(kandidati) And blokIzabran Then\n",
+        "    If IsEmpty(kandidati) And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
+        "T21_IzabranPlacenBlokNijeAvans",
+        "izabran blok bez otvorenih stavki se odbija umesto da postane avans",
+    ),
     # ---------------------------------------------------------------- BANKA UVOZ
     # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
     # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja

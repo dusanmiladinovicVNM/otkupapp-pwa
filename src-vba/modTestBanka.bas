@@ -119,6 +119,7 @@ Public Sub RunBankaImportTestSuite()
     T18_NepotpunIdentitetNeNestajeTiho
     T19_OtvorenBlokBezKooperantaPada
     T20_DupliKooperantIDNeBiraRacun
+    T21_IzabranPlacenBlokNijeAvans
 
     tx.RollbackTx
     Set tx = Nothing
@@ -755,6 +756,65 @@ Private Sub T11_RucniKooperantBezIzboraBloka()
     Chk n >= 3, S & "potvrdjena podela knjizi sve stavke [n=" & CStr(n) & "]"
     ChkEq BimObradjeno(P & "BIM-Q"), "Da", S & "stavka je zatvorena"
     ChkEqD IsplataZaBim(P & "BIM-Q"), 3000, S & "ukupno knjizeno = iznos iz izvoda"
+End Sub
+
+' ============================================================
+' T21 - IZABRAN BLOK BEZ OTVORENIH STAVKI NIJE AVANS.
+'
+' MapBankaImportAsKooperantBlockCore na prazan skup kandidata knjizi CEO IZNOS
+' kao avans kooperanta i stavku oznacava obradjenom. Za AUTOMATSKO mapiranje je
+' to namerno: dok je poreklo dvosmisleno, avans je bezbedan izlaz.
+'
+' Ali blok koji je vec u celosti placen i dalje stoji u listi blokova (ona ne
+' proverava dug), pa ga operater moze IZABRATI. Tada "nema sta da se plati" nije
+' bezbedan ishod nego protivrecnost -- rekao je KOJI dug placa. Do sada je taj
+' izbor tiho postajao avans, uz uspesnu transakciju.
+'
+' Ovaj test meri OBA ishoda nad ISTIM podacima; razlikuje ih samo poslednji
+' argument. Bez oba smera bi se moglo "popraviti" tako sto se ugasi i legitimna
+' grana poziva na broj.
+' ============================================================
+Private Sub T21_IzabranPlacenBlokNijeAvans()
+    Const S As String = "T21 izabran placen blok: "
+
+    Dim n As Long
+
+    SeedStanica P & "OM-9", P & "Stanica 9"
+    SeedKooperant P & "K-9", "Test", "Placen", P & "OM-9"
+
+    ' Blok koji je U CELOSTI placen -> GetOtkupCandidatesForKooperantBlock ga ne
+    ' vraca, jer bira samo stavke sa "otvoreno > 0.009". Status kolona za to nije
+    ' dovoljna: racuna se vrednost minus zbir Isplata po OtkupID-u.
+    SeedOtkup P & "OTK-P1", P & "K-9", P & "BLOK-P", 100, 10, "Malina"
+    SeedIsplataZaOtkup P & "NOV-P1", P & "K-9", P & "OTK-P1", 1000
+
+    SeedBim P & "BIM-P1", P & "IZV-21", P & "RAC-1", P & "PARTNER-P", 0, 1000, "", "", ""
+    SeedBim P & "BIM-P2", P & "IZV-21", P & "RAC-1", P & "PARTNER-P", 0, 1000, "", "", ""
+
+    ChkEq IsEmpty(GetOtkupCandidatesForKooperantBlock(P & "K-9", P & "BLOK-P", True)), True, _
+          S & "preduslov: placen blok nema nijednog kandidata"
+
+    ' IZABRAN blok -> STOP. Nista se ne knjizi i stavka ostaje otvorena.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P1", P & "K-9", P & "BLOK-P", _
+                                                False, True, "", True)
+    gBankaSilentBatch = False
+
+    ChkEq n, 0, S & "izabran placen blok NE knjizi nista"
+    ChkEq NovacZaBim(P & "BIM-P1"), 0, S & "tblNovac nema nijedan red za tu stavku"
+    ChkEq BimObradjeno(P & "BIM-P1"), "", S & "stavka ostaje OTVORENA -- ne ispada iz posla"
+
+    ' ISTI podaci, ali blok dolazi iz poziva na broj (operater nije birao) ->
+    ' avans i dalje JESTE namerno ponasanje. Bez ove polovine bi se pravilo moglo
+    ' "ispraviti" gasenjem legitimne grane.
+    gBankaSilentBatch = True
+    n = MapBankaImportAsKooperantBlockManual_TX(P & "BIM-P2", P & "K-9", P & "BLOK-P", _
+                                                False, True, "", False)
+    gBankaSilentBatch = False
+
+    ChkEq n, 1, S & "isti blok iz poziva na broj i dalje knjizi avans"
+    ChkEq BimObradjeno(P & "BIM-P2"), "Da", S & "...i stavka je zatvorena"
+    ChkEqD IsplataZaBim(P & "BIM-P2"), 1000, S & "...celim iznosom"
 End Sub
 
 ' ============================================================
@@ -1469,6 +1529,18 @@ Private Sub SeedOtkupIsplacen(ByVal otkID As String, ByVal koopID As String, _
         Array(COL_OTK_ID, COL_OTK_BR_DOK, COL_OTK_KOOPERANT, COL_OTK_KOLICINA, _
               COL_OTK_CENA, COL_OTK_VRSTA, COL_OTK_DATUM, COL_OTK_ISPLACENO), _
         Array(otkID, brDok, koopID, kolicina, cena, vrsta, Date, STATUS_ISPLACENO)
+End Sub
+
+' Isplata VEZANA za konkretan otkup. Kolona Isplaceno NIJE dovoljna: kandidate
+' za blok bira GetOtkupCandidatesForKooperantBlock po racunu
+' "vrednost - GetUplataForOtkup(OtkupID)", a to sabira Isplata po OtkupID-u iz
+' tblNovac. Blok bez ovog reda ostaje otvoren ma sta pisalo u statusu.
+Private Sub SeedIsplataZaOtkup(ByVal novacID As String, ByVal koopID As String, _
+                               ByVal otkupID As String, ByVal iznos As Double)
+    BitAppend TBL_NOVAC, _
+        Array(COL_NOV_ID, COL_NOV_DATUM, COL_NOV_KOOP_ID, COL_NOV_PARTNER_ID, _
+              COL_NOV_ENTITET_TIP, COL_NOV_TIP, COL_NOV_ISPLATA, COL_NOV_OTKUP_ID), _
+        Array(novacID, Date, koopID, koopID, "Kooperant", NOV_VIRMAN_FIRMA_KOOP, iznos, otkupID)
 End Sub
 
 ' Slobodan (nevezan) virman avans kooperanta -- ulaz za ApplyAvansToOtkup.

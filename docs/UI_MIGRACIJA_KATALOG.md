@@ -2109,6 +2109,56 @@ koju sam uvodi.
 
 ---
 
+
+#### Writer je zatvoren i za svoje ostale pozivaoce (`v6-ui-179`)
+
+PR ekrana je ovo ostavio zapisano kao **ublažavanje, ne ispravku**: zatvorene su
+putanje kojima se do fail-open grane dolazilo *sa novog ekrana*, ali
+`frmBankaImport` i automatsko mapiranje su i dalje ulazili u istu granu.
+
+`MapBankaImportAsKooperantBlockCore` na `IsEmpty(kandidati)` knjiži ceo iznos kao
+`NOV_VIRMAN_AVANS_KOOP` i radi `UpdateBankaImportStatus … "Da"`. Za **automatsko**
+mapiranje je to namerno i dokumentovano — bezbedan izlaz dok je poreklo
+dvosmisleno. Za **izabran** blok nije.
+
+Writer to nije mogao da razlikuje: `MapBankaImportAsKooperantBlockManual` je samo
+prosleđivao argumente. Sada nosi `blokIzabran`, a `Core` na
+`IsEmpty(kandidati) And blokIzabran` diže `ERR_BMAP_BLOK_PRAZAN` umesto da knjiži.
+
+**Isti uslov postoji i na ekranu** (`BuBlokZatvoren`), i to nije duplikat nego
+pravilo iz `.claude/rules/testovi.md` §5: modul unosa sudi po **snimku iz
+trenutka kad je lista punjena**, a writer po stanju **u trenutku upisa** — i
+legacy forma ovamo ulazi bez ijedne UI provere. Isti obrazac kao
+`ApplyAvansToOtkup` i `UplataFakturaProblem`.
+
+`frmBankaImport` dobija jedan `Private Function ManualBlokIzabran()` koji čita
+**iste kontrole** iz kojih već čita `EffectiveManualBlockNo`, i prosleđuje ga.
+Razlika koju forma već pravi samo je dobila ime.
+
+**Tvrdnja živi u `RunBankaImportTestSuite`, ne u `RunAllTests`** — writer piše, a
+`RunAllTests` je nemutirajuća suite (mutirajući test tamo obara CI kapiju
+`who_writes`). `T21_IzabranPlacenBlokNijeAvans` seje sopstveni blok plaćen do
+nule i meri **oba** ishoda nad istim podacima, razlikujući ih samo poslednjim
+argumentom:
+
+| Ulaz | Ishod |
+|---|---|
+| `blokIzabran = True` | ništa se ne knjiži, `tblNovac` prazan, stavka **ostaje otvorena** |
+| `blokIzabran = False` (poziv na broj) | avans, stavka zatvorena, celim iznosom |
+
+Druga polovina postoji zato što bi se pravilo moglo „ispraviti" gašenjem
+legitimne grane. Sabotaža `banka-writer-placen-blok-je-avans` obara **tri**
+provere tog testa.
+
+> Seed je pri tom morao da bude prava uplata, ne status kolona:
+> `SeedOtkupIsplacen` piše `Isplaceno`, a resolver računa
+> `vrednost − GetUplataForOtkup(OtkupID)` — dakle sabira `Isplata` iz `tblNovac`.
+> Prvi pokušaj je zato pao na sopstvenom preduslovu, što je i bila poenta
+> preduslova.
+
+
+---
+
 ## 10. Mreža: ćelija koja ne ume da se prikaže (`v6-ui-178`)
 
 Ovo nije ekran nego **ljuska**, i nastalo je iz nalaza Banka uvoza (§9.10): datum
