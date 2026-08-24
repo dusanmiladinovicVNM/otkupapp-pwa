@@ -1487,7 +1487,7 @@ Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu
 
 ### 9.9 Verifikacija
 
-Testovi **104–112** u `modTest` i **trideset** sabotaža, uz nove fixture redove
+Testovi **104–112** u `modTest` i **trideset jedna** sabotaža, uz nove fixture redove
 u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
 `(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
 postoji na **tri** otkupna mesta — od kojih jedno **nije upisano**.
@@ -1537,7 +1537,7 @@ Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
 (`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
 iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
 
-**Dvosmerni dokaz je pušten za svih trideset**: svaka sabotaža obara
+**Dvosmerni dokaz je pušten za svih trideset jednu**: svaka sabotaža obara
 **tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
 `RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
 područjem) **PASS=189, FAIL=0**.
@@ -2013,3 +2013,49 @@ mentalni model: zaglavlje modula je i dalje tvrdilo da su IZVODI agregat po
 privremeni zaobilazak „dok se to ne popravi u ljusci" — a popravljeno je **u
 ovom istom PR-u**. Spojena kolona ostaje, ali sada kao **izbor**: dve susedne
 brojke bez konteksta čitaju se gore od jedne sa kosom crtom.
+
+#### Četvrti krug: neuspeh se ne pamti
+
+Dve grane punjenja liste cilja **greške javljaju različito**, i to je pravilo
+jedne od njih prećutno prekršilo:
+
+| Grana | Kako javlja pad | Gde završi |
+|---|---|---|
+| blokovi (`GetBlokoviZaBimMapiranje`) | **diže** grešku | `EH` → `mCiljPunjen = ""` |
+| fakture (`GetFaktureZaBimMapiranje`) | vraća **zastavicu** `outOK = False` | procedura mirno stigne do kraja |
+
+Za fakture je punjenje zato stizalo do `mCiljPunjen = kljuc` i **kеširalo
+neuspeh**. Kapija je radnju tačno blokirala — fail-closed je držao, nijedno
+pogrešno knjiženje nije bilo moguće — ali sledeći klik na *isti* izbor izlazio je
+odmah na `If mCiljPunjen = kljuc Then Exit Sub` i **nije ni pokušavao ponovo**.
+Prolazan kvar bi tako zaključao izbor do `ResetCache`: fail-closed koji izgleda
+kao pokvaren ekran.
+
+Kešira se sada samo uspešno čitanje (`CiljKesKljuc`) — isto pravilo koje `mKpiOK`
+u istom modulu već ima. Sabotaža: `banka-uvoz-kes-pamti-neuspeh`.
+
+#### Šta je i posle četiri kruga OSTALO neizmereno — i jedno nezatvoreno
+
+Da se ne pročita kao „sve je pokriveno":
+
+- **Vezivanje kapije u dve rute.** `RucnoKupac` i `RucnoKooperant` zovu
+  `CiljUcitan` sa po jednim redom. Test dokazuje *pravilo* i da kapija zove
+  punjenje (`mCiljPunjenja`), ali ne i da ta dva reda postoje — to je provereno
+  čitanjem.
+- **Samo punjenje kombo-a nikad se ne izvršava headless.** Bez kontrole
+  `PuniCiljCombo` izađe odmah, pa tri kolone, skrivena kolona scope-a i oznaka
+  „bez otkupnog mesta" postoje samo u kodu i u smoke-u. Test 110 dokazuje da se
+  zona **gradi i raspoređuje**, ne i da se lista puni.
+- **`MapBankaImportAsKooperantBlockCore` je i dalje fail-open — u writeru.** Na
+  `IsEmpty(kandidati)` knjiži ceo iznos kao avans kooperanta i stavku označava
+  obrađenom. Ovaj PR je zatvorio **putanje kojima se do tog stanja pogrešno
+  dolazilo sa ovog ekrana**, ali to je ublažavanje, ne ispravka: `frmBankaImport`
+  i automatsko mapiranje i dalje ulaze u istu granu.
+
+  Za **automatsko** mapiranje je avans namerno i dokumentovano ponašanje
+  („bezbedan izlaz" dok je poreklo dvosmisleno). Za **ručno izabran blok** to je
+  nešto drugo: operater je rekao *koji* blok, pa „nijedna otkupna stavka" nije
+  bezbedan ishod nego protivrečnost. Writer to danas **ne može da razlikuje** —
+  `MapBankaImportAsKooperantBlockManual` samo prosleđuje argumente u `Core` bez
+  ijedne oznake da je poziv ručan. Razdvajanje toga je **zaseban PR**, i dira
+  legacy formu.

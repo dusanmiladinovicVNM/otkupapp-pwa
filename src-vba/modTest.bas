@@ -6996,6 +6996,15 @@ Private Sub T_BankaUvoz_RucnoMapiranjePravila()
     AssertEq modScrBankaUvoz.Scr_BuCiljStanjeTest(True), True, _
              "uredno procitana lista pusta mapiranje"
 
+    ' NEUSPEH SE NE PAMTI. Dve grane greske javljaju razlicito: blokovi je dizu
+    ' (pa EH obrise kes), a fakture je vracaju kroz zastavicu i punjenje mirno
+    ' stigne do kraja. Da se i tada kesira, radnja bi ostala tacno blokirana --
+    ' ali sledeci klik ne bi ni pokusao ponovo, pa bi izbor ostao zakljucan.
+    AssertEq modScrBankaUvoz.Scr_BuCiljKesTest("Kupac|K1", True), "Kupac|K1", _
+             "uspesno punjenje se pamti"
+    AssertEq modScrBankaUvoz.Scr_BuCiljKesTest("Kupac|K1", False), "", _
+             "neuspelo punjenje se NE pamti -- sledeci klik pokusava ponovo"
+
     ' KAPIJA MORA DA PUNI LISTU pre nego sto presudi -- inace zastavica opisuje
     ' PRETHODNI izbor, a odluka se donosi nad ovim. Bez forme se to ne vidi ni
     ' po cemu drugom (PuniCiljCombo bez kontrole izlazi odmah), pa se meri

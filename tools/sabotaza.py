@@ -2099,6 +2099,16 @@ SABOTAZE = {
     # Zajednicka kapija mora STVARNO da puni listu pre nego sto presudi.
     # Bez punjenja bi zastavica opisivala PRETHODNI izbor -- "ucitano" za tudji
     # combo, a odluka se donosi nad ovim.
+    # Fakture gresku vracaju kroz ZASTAVICU, ne dizu je -- pa punjenje mirno
+    # stigne do kesiranja. Zapamcen neuspeh drzi radnju blokiranom (fail-closed
+    # radi), ali sledeci klik ne pokusava ponovo: izbor ostaje zakljucan.
+    "banka-uvoz-kes-pamti-neuspeh": (
+        "modScrBankaUvoz.bas",
+        "    If ok Then CiljKesKljuc = kljuc\n",
+        "    CiljKesKljuc = kljuc   ' SABOTAZA: neuspeh se pamti\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "neuspelo punjenje liste cilja se ne kesira",
+    ),
     "banka-uvoz-cilj-kapija-ne-puni": (
         "modScrBankaUvoz.bas",
         "Private Function CiljUcitan(ByRef outPoruka As String) As Boolean\n"

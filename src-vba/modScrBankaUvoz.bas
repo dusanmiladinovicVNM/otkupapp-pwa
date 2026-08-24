@@ -610,6 +610,20 @@ End Function
 ' izgledaju isto, a znace suprotno: prazan izbor fakture knjizi AVANS. Odluka
 ' "smem li uopste da radim" je zato imenovana i odvojena od crtanja -- inace se
 ' ne moze izmeriti, a brisanje jednog If-a se ne bi videlo ni u jednom testu.
+' KESIRA SE SAMO USPESNO PUNJENJE.
+'
+' Dve grane greske javljaju razlicito: blokovi je DIZU (pa se ide u EH, koji kes
+' brise), a fakture je vracaju kroz ZASTAVICU i procedura mirno stigne do kraja.
+' Bez ovoga bi neuspelo punjenje faktura ostalo zapamceno kao "vec napunjeno za
+' ovaj izbor": kapija bi radnju tacno blokirala, ali sledeci klik ne bi ni
+' pokusao ponovo -- isti izbor bi ostao zakljucan do ResetCache. Fail-closed bi
+' drzao, ali bi izgledao kao pokvaren ekran.
+'
+' Isto pravilo koje mKpiOK vec ima: neuspeh se NE pamti.
+Private Function CiljKesKljuc(ByVal kljuc As String, ByVal ok As Boolean) As String
+    If ok Then CiljKesKljuc = kljuc
+End Function
+
 ' SME LI RUCNO MAPIRANJE UOPSTE DA POCNE.
 '
 ' Zajednicka za kupca i kooperanta, jer je opasnost ista: prazna lista cilja na
@@ -1303,7 +1317,7 @@ Private Sub PuniCiljCombo()
             PostaviNatpisCilja Poruka("OTKUI_FLD_BU_CILJ")
     End Select
 
-    mCiljPunjen = kljuc
+    mCiljPunjen = CiljKesKljuc(kljuc, mCiljOK)
     mFill = False
     Exit Sub
 EH:
@@ -1635,6 +1649,12 @@ End Function
 ' Pad ucitavanja faktura se u testu ne moze izazvati bez lomljenja seme, a
 ' fail-closed grana je najskuplja stvar na ovom ekranu (avans umesto zatvaranja
 ' duga). Seam postavlja bas to stanje i vraca odluku koju RucnoKupac cita.
+' Kes kljuc koji bi punjenje ostavilo za dati ishod citanja.
+Public Function Scr_BuCiljKesTest(ByVal kljuc As String, ByVal ok As Boolean) As String
+    If Not IsTestMode() Then Exit Function
+    Scr_BuCiljKesTest = CiljKesKljuc(kljuc, ok)
+End Function
+
 ' Koliko je puta kapija zvala punjenje liste. Jedini nacin da se bez forme
 ' izmeri da poziv POSTOJI.
 Public Function Scr_BuCiljPunjenoTest() As Long

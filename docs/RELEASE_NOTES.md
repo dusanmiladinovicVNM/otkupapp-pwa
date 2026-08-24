@@ -5061,4 +5061,9 @@ Uz to: **nedostajuća tabela više ne prolazi kao prazna.** Excel na oba slučaj
 vraća isto, pa je nedostupna tabela faktura ili otkupa izgledala kao „nema
 redova" — a prazan izbor tu znači avans, odnosno poziv na broj.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset** sabotaža.
+Četvrti krug je zatvorio jednu sitnicu sa posledicom: kad učitavanje liste
+faktura prolazno ne uspe, ekran je to **pamtio**, pa sledeći klik na isti izbor
+nije ni pokušavao ponovo. Knjiženje je i dalje bilo bezbedno blokirano, ali je
+izbor ostajao zaključan do osvežavanja. Neuspelo čitanje se više ne pamti.
+
+`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset jednu** sabotažu.
