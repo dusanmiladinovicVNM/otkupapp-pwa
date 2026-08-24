@@ -504,8 +504,9 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 ### Faza E — ostali ekrani
 15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, dorada `v6-ui-172`, `modScrAgro`) — v. §7.
 16. ~~Fakture~~ **URAĐENO** (`v6-ui-176`, `modScrFakture`) — v. §8.
-    Ostaju: Banka uvoz, Banka nalozi, Marža, Izveštaji, Sledljivost —
-    svaki po istom obrascu.
+17. ~~Banka uvoz~~ **URAĐENO** (`v6-ui-177`, `modScrBankaUvoz`) — v. §9.
+    Ostaju: Banka nalozi, Marža, Izveštaji, Sledljivost — svaki po istom
+    obrascu.
 
 ---
 
@@ -1244,3 +1245,863 @@ izvor istine — kao i uvek.
 Otvoreno ostaje samo ono što se ovog ekrana ne tiče: `RunGoogleSyncSmokeSuite` i
 `RunMasterSyncSmokeSuite` u punom setu, koje traže Google kredencijale i padaju
 identično na netaknutom `main`-u.
+
+---
+
+## 9. Banka uvoz — šta je preneto (`v6-ui-177`)
+
+Treći ekran **Faze E**, stavka 17. Red u registru (`modUiScreens.ScrRows`) je
+postojao od `S3a` — stavka menija se do sada crtala prigušena jer modula nije
+bilo. Ovim se piše modul koji taj red već očekuje; **registar se ne dira**.
+
+### 9.1 Gde je šta završilo
+
+| Legacy (`frmBankaImport`) | Novo mesto |
+|---|---|
+| `lstBanka` + `LoadBankaRows` | lista **STAVKE**, čitač `modBankaMapiranje.GetBankaImportForGrid` |
+| kolona `BIM` u `lstBanka` | **ne prikazuje se** — interna šifra (v. §9.5) |
+| `lblIzvodSummary` (jedan, najnoviji izvod) | lista **IZVODI**, čitač `modBankaImport.GetBankaIzvodiForGrid` |
+| KPI traka (`RefreshTopKpis` + `ComputeBankaMapState`) | `modBankaMapiranje.GetBankaImportKpi` (jedan prolaz umesto dva) |
+| `btnAutoJedan_Click` | radnja nad redom `bmauto` → `AutoMapBankaImportRow_TX` |
+| `btnAutoSve_Click` | radnja `bmsve` → `AutoMapAllBankaImport_TX` |
+| runtime dugme „Mapiraj jake ključeve (N)" | radnja `bmjaki` → `AutoMapStrongKeysBankaImport_TX` |
+| `btnSkip_Click` | radnja `bmskip` → `SkipBankaImportRow_TX` |
+| `btnSacuvajRucno_Click` (tri grane) | radnja `bmrucno` + tri polja zone |
+| `cmbMapTip` / `cmbPartner` / `cmbFaktura` / `cmbOtkupBlok` | polja zone `scrBuTip` / `scrBuPartner` / `scrBuCilj` |
+| `ConfirmManyCandidatesSplit` + `SplitPreviewText` | `modScrBankaUvoz.PitajZaPodelu` + `TekstPodele` (isti `PlanBlokRaspodela`) |
+| `ShowSelectedRow` (uplata → Kupac, isplata → Kooperant) | `PredloziTipZaRed` na `row:` događaj |
+| `btnOsvezi_Click` | posao ljuske (`RefreshFromData`) |
+
+Nove rutine za mrežu (ekran ne čita tabele sam):
+`modBankaMapiranje.GetBankaImportForGrid`, `GetBankaImportKpi`,
+`GetFaktureZaBimMapiranje`, `GetBlokoviZaBimMapiranje`;
+`modBankaImport.GetBankaIzvodiForGrid`.
+
+Uz njih su **izdvojena četiri pravila** koja su do sada bila zaključana:
+
+| Pravilo | Bilo | Sada |
+|---|---|---|
+| „da li bi jak ključ zatvorio ovaj red" | dve grane u petlji `CountStrongKeyReadyBankaImport` | `modBankaMapiranje.BimJakiKljucInfo` / `BimJakKljucSpreman` |
+| „stavka je još u redu za mapiranje" | uslov unutar `GetBankaImportOpen` | `BimOtvoren` |
+| „koji blok ručno mapiranje stvarno uzima" | `frmBankaImport.EffectiveManualBlockNo` (Private) | `BimEfektivniBlok` |
+| „traži li blok potvrdu podele" | `frmBankaImport.SafeBlockCandidates` (Private) | `BimBlokTraziPotvrdu` |
+| „smer stavke odgovara tipu mapiranja" | samo u writeru (`RequireBimSmer`) | `BimSmerOdgovaraTipu` (uz writera, ne umesto njega) |
+| integritet izvoda (`početno + potražuje − duguje`) | inline u `UpdateIzvodSummaryLabel` | `modBankaImport.BimSaldoStatus` / `BimSaldoRazlika` |
+
+Prvo od njih je isti obrazac kao `PrijemnicaDostupna` izdvojena iz
+`IsPrijemnicaAvailableForFaktura` (§8.1): dok je pravilo stajalo samo u brojaču,
+čitač mreže bi ga morao **prepisati**, a prepisana kopija se razilazi. Sada ga
+brojač i čitač dele, i test to tvrdi jednom brojkom.
+
+### 9.2 Šta ekran uzima od ljuske
+
+Ništa **novo** nije napravljeno za ovaj ekran: sve što mu treba postoji od Faze
+C i Fakturisanja. Ali za razliku od §8.2, diff u `modOtkupUI` ovde **nije nula** —
+smoke je našao četiri kvara u samoj ljusci, i oni su popravljeni **u ljusci**, ne
+zaobiđeni u ekranu:
+
+1. **Pečat verzije**, `OTKUI_BUILD` → `v6-ui-177`. Razlog nije „ekran Uvoz
+   izvoda" nego isti kao u §8.10/R3: pečat postoji da bi se u smoke-u odmah
+   videlo **da li je pravi kod uopšte uvezen**.
+2. **`zOtp` dopisan u spisak zona koje pripadaju samo ekranu Dokumenta**
+   (`ShowZones`).
+3. **Geometrija kolona prati opis kolona** (`SetGridColsArr` →
+   `OsveziGeometriju` na početku `RenderGrid`-a).
+4. **`FmtDatumKratko` čuva i gornju granicu** datuma.
+
+Uz njih, pravilo „broj koji nije datum" živi u `modUiData.CellDate`. Sve četiri
+su opisane u §9.10; nijedna nije stvar ovog ekrana i sve pogađaju i ostale.
+
+| Potreba | Ljuskin ugovor | Otkad |
+|---|---|---|
+| polje (natpis + okvir + kontrola) | `modOtkupUI.NewFieldG` | `v6-ui-159` |
+| raspored unutar polja | `modOtkupUI.LayoutFieldInner` | `v6-ui-159` |
+| promena teksta stiže ekranu | `Scr_Event("chg:<kontrola>")` | `v6-ui-159` |
+| identitet iz reda mreže | `modOtkupUI.GridCell` | `v6-ui-143` |
+| skrivena kolona (prioritet 4) | `LayoutGrid` crta do 3 | postoji od početka |
+| značka uz stavku menija | `ScrBrojac` → `Scr_Brojac` | `S4b` |
+| lista bez ijedne radnje | `ActDefs` vrati `Empty`, raspored **sakrije** zaostalu dugmad | postoji od početka |
+
+**Ono što ovaj ekran NE koristi, a Fakturisanje mora:** `RefreshFromData` iz
+`chg:` grane. Ljuska ne gleda povratnu vrednost `chg:` događaja (§8.2), pa ekran
+čija lista zavisi od polja zone mora sam da zatraži osvežavanje. Ovde nijedna
+lista ne zavisi od polja — polja biraju **cilj** ručnog mapiranja, ne skup
+redova — pa se `RefreshFromData` iz `chg:` grane **namerno ne zove**.
+
+### 9.3 Odluka: UVOZ ne ulazi u ekran
+
+Povlačenje PDF-ova, parsiranje i staging (`ImportBankaInbox_TX`,
+`PullBankPdfsFromDriveProduction`) **ostaju van ekrana**. Razlog nije dužina
+posla nego **ishod**:
+
+- `ImportBankaInbox_TX` je `Sub` koji **ne vraća ništa**. `SaveBankaImportRowsCore`
+  prebroji i upisane (`savedCount`) i duplikate (`duplicateCount`), ali
+  `duplicateCount` završi u `Debug.Print`, a wrapper odbaci i `savedCount`.
+  Dugme koje ne može da kaže „uvezeno N, duplikata M" bilo bi **tiho knjiženje**;
+  da bi moglo, morao bi se menjati javni potpis jezgra uvoza — a to nije izmena
+  koja pripada PR-u o UI-ju.
+- Uvoz uz to **pomera fajlove po disku** (`ExecutePendingBankaFileMoves`:
+  Inbox → Processed/Error) i zavisi od `pdftotext`/Poppler. Mreža ljuske nema ni
+  progres ni otkazivanje.
+- I najvažnije za pravilo „ne praviti novi UI užim od legacy-ja" (§8.3):
+  **`frmBankaImport` uvozno dugme nema.** Uvoz se oduvek pokreće zasebnom
+  komandom (`ImportBankaInbox` / `_WithDrivePull`), a forma samo mapira. Ekran
+  bez uvoza je **tačno širine legacy forme**, ne uži.
+
+### 9.4 Odluka: RUČNO mapiranje ulazi u ekran
+
+Suprotna odluka, i razlog joj nije „može da stane" nego **značka**. Auto i jaki
+ključevi obrade lako; ono što ostane je po definiciji ono što traži ručno.
+Ekran koji taj ostatak vidi a ne može da ga zatvori ima brojku koja iz njega
+**nikad ne pada na nulu**, i šalje operatera u legacy formu baš za slučajeve
+zbog kojih je red i napravljen vidljivim. To je isti kvar kao „Ukloni stavku"
+koje Agrohemija nije imala (§7.3), samo skuplji.
+
+Ručno mapiranje traži **tri spregnuta polja**, ne četiri: TIP, PARTNER i CILJ
+(faktura za kupca, blok za kooperanta; za OM cilja nema, pa se polje gasi).
+**Vrsta voća se NE bira** — ona je izlaz `PlanBlokRaspodela` (kolona 3) i vidi
+se u predlogu podele; operater je nikad ne unosi.
+
+Dve granice su postavljene namerno:
+
+1. **Potvrda podele ostaje `MsgBox` sa ista tri ishoda** (DA = knjiži podelu,
+   NE = ceo iznos kao avans kooperanta, OTKAZI = ne diraj stavku). Tri ishoda
+   nad izračunatim tekstom nisu forma nego pitanje, a podelu računa **isti**
+   `PlanBlokRaspodela` po kome se i knjiži.
+2. **Ekran ne drži nijedno pravilo.** Sve što je bilo `Private` u formi je
+   izdvojeno u `modBankaMapiranje` (tabela u §9.1). `frmBankaImport` zadržava
+   svoju kopiju i **ne dira se** — isto pravilo kao za `frmOtkup`,
+   `frmDokumenta`, `frmAgrohemija` i `frmFakturisanje`.
+
+Najosetljivije od izdvojenog je **fail-closed nad listom faktura**: prazna lista
+i **pad** učitavanja izgledaju isto, a znače suprotno — prazan izbor fakture
+knjiži **AVANS** umesto zatvaranja duga. Zato `GetFaktureZaBimMapiranje` vraća
+zastavicu `outOK`, a `BuSmeMapiranjeKupca` je imenovana odluka koju radnja čita
+(inače bi brisanje jednog `If`-a prošlo neprimećeno).
+
+### 9.5 Šta je namerno drugačije od legacy-ja
+
+- **IZVODI su lista, a ne jedna labela.** `UpdateIzvodSummaryLabel` pokazuje
+  **jedan** izvod — onaj sa najvećim `DatumIzvoda` — i nad njim radi proveru
+  `početno + potražuje − duguje = završno`. Ekran to radi nad **svim** izvodima,
+  grupisanim po `(BrojDokumenta + BrojRacuna)`. To je jedino mesto na kom se
+  vidi da li se izvod slaže, i ovde je **šire** od legacy-ja.
+- **„Obrađeno" i „preskočeno" su ČIPOVI, ne liste** — ista lista sa filterom po
+  statusu, isti čitač, isti identitet, iste radnje. Zasebna lista bi bila druga
+  kopija istog čitača koja može da se raziđe (§8.4).
+- **„Za obradu" i „za ručno" nisu isto.** `GetBankaImportOpen` izbacuje samo
+  `"Da"` i `"Skip"`, pa je red sa statusom `"Error"` (auto pokušao i odbio) i
+  dalje **otvoren**. Bez oba čipa se ne vidi razlika između „još nije probano" i
+  „probano pa vraćeno operateru".
+- **Kolona „Predlog" umesto preview panela.** Legacy za IZABRANU stavku gradi
+  višeredni tekst (`BuildAutoPreviewText`/`BuildManualPreviewText` i dve grane
+  ispod njih, oko 350 linija). Ekran umesto toga nosi **jednu ćeliju po redu** —
+  „faktura 2/2026", „blok 1/TEST", „avans kupca X", „nema jakog ključa",
+  „nejasan smer" — pa se predlog vidi za **sve** redove odjednom, ne samo za
+  izabrani. Cilj i njegovu oznaku računa čitač; ekran samo formuliše tekst.
+- **Smer-kapija se vidi PRE klika.** `RequireBimSmer` u writeru ostaje, ali bi je
+  operater osetio tek kao grešku transakcije. Ekran istu odluku
+  (`BimSmerOdgovaraTipu`) postavlja pre poziva — isto što je legacy preview
+  radio (AUD-025).
+- **Dvoklik namerno ne radi ništa.** Na Fakturisanju i Agrohemiji dvoklik
+  prebacuje red u korpu i iz nje — povratna radnja nad prolaznim stanjem. Ovde
+  bi svaka radnja nad redom bila **knjiženje u `tblNovac`**, a knjiženje se ne
+  pokreće promašenim dvoklikom.
+- **Partner combo svuda prikazuje i ID** (`ShowIDInComboDisplay`). Dva partnera
+  istog naziva su u ovim šifarnicima obična pojava (fixture ima dva istoimena
+  kooperanta), a izbor pogrešnog šalje novac pogrešnom čoveku (FM-0024 #7).
+- **`BankaImportID` se NE prikazuje.** Legacy ga ima kao prvu kolonu (`BIM`), ali
+  to je interna šifra: operater ne zna čemu služi i ne može ništa s njom. Prva
+  kolona je **broj izvoda** — jedini poslovni broj koji stavka nosi, i ono što
+  `StyleGridCell` u prvoj koloni ionako crta kao broj dokumenta. Šifra ostaje u
+  **pretrazi** (ko je ima iz loga ili poruke o grešci mora moći da nađe red) i u
+  skrivenoj koloni identiteta.
+- **Podnožje mreže pokazuje PROMET, ne neto.** Neto (uplate − isplate) je na
+  čipu „obrađeno" davao **negativan** broj, koji nad izvodom ne znači ništa.
+  Razdvojene brojke — koliko uplata, koliko isplata — stoje u traci iznad mreže;
+  podnožje ljuske ima samo **jedan** slot (`grdFoot.ftVal`), pa dva broja u njemu
+  traže dopunu ugovora ljuske i idu u zaseban PR.
+- **Nema `Scr_NaslovDopuna`.** Naslov mreže je labela fiksne širine (`grdTitle`,
+  180pt), pa se dopuna odsecala usred reči („— 29 z"). Broj koji je nosila već
+  stoji u brojci OTVORENO iznad mreže i u čipu „za obradu"; odsečen tekst je
+  gori od nikakvog.
+- **Objašnjenje stoji UZ polja, ne ispod njih.** Ispod je nalegalo na traku koju
+  ljuska crta odmah po završetku zone. Staje u prostor između poslednjeg polja i
+  brojki; kad tog prostora nema, sklanja se — `Label` ne prelama, pa bi inače
+  istekao preko brojki.
+
+### 9.6 Identitet — pravilo koje je već triput plaćeno
+
+Obe liste nose identitet u **poslednjoj koloni, prioriteta 4**; `LayoutGrid`
+crta do 3, pa vrednost postoji u modelu a ćelija se nikad ne pravi. Radnja je
+čita kroz `GridCell`. Mape „prikaz → ID" sa strane nema.
+
+**Broj izvoda NIJE identitet.** Dedupe ključ (`IsDuplicateBankaImport`) počinje
+od **broja računa** — „Drugi racun = druga transakcija, bez obzira na broj
+izvoda i iznos" — pa dva računa firme legitimno nose izvod **istog broja**.
+Identitet stavke je `BankaImportID`; identitet izvoda je
+`BimIzvodKljuc(BrojDokumenta, BrojRacuna)`.
+
+**Identitet nije ni u jednoj vidljivoj koloni.** `BankaImportID` je interna
+šifra i iz prikaza je izbačen (§9.5); u redu postoji samo u skrivenoj koloni, i
+to onakav kakav ga je čitač **proverio** (`modFaktura.IdIliPrazno` nad sirovom
+tabelom). Dvosmislen ID nosi **prazno**, i radnja tada odbija da bira — bez toga
+bi svakako pukla (`RequireSingleRow` fail-close-uje na duplikat), ali kao greška
+transakcije umesto kao poruka.
+
+Red sa dvosmislenim ID-em se pri tom **i dalje vidi u listi** — po datumu,
+partneru i iznosu — pa operater zna koji je red odbijen. To i tvrdi test.
+
+**Isto važi za sve što red PRENOSI a ne prikazuje jednoznačno:**
+
+| Kolona (prio 4) | Zašto se ne izvodi iz prikaza |
+|---|---|
+| `OTVOREN` | nov red ima **prazan** status, pa se u mreži ne razlikuje od reda kome status nije upisan |
+| `SMER` | red sa **i** uplatom **i** isplatom izgleda kao uplata (kolona uplate je popunjena), a writer ga odbija kao `NEJASAN` |
+
+### 9.7 Značka ide kroz ljusku, bez privatnog kanala
+
+Ovde je **obrnuto** od Agrohemije i Fakturisanja. Tamo je korpa prolazno stanje
+van tabele, pa je morala sama da zove `OsveziNavBrojace` (§8.6). Ovde je red za
+mapiranje **podatak u tabeli**: svaka radnja ga menja upisom, ljuska posle upisa
+ionako zove `RefreshFromData`, i brojač je time već pokriven. Privatan kanal se
+ne uvodi jer ne treba.
+
+Broj koji značka nosi čita se iz **iste brojke** koju vidi i čip „za obradu"
+(`GetBankaImportKpi`), ne iz zasebnog prolaza koji bi se s njim mogao razići.
+
+### 9.8 Šta NIJE preneto
+
+- **Uvoz** (v. §9.3). `frmBankaImport` i put `ImportBankaInbox` ostaju jedini
+  način da se izvod uveze.
+- **`frmBankaImport` i `frmBankaExportPregled` se ne gase i ne menjaju.** Dve
+  kopije poslovne logike postoje namerno; pravilo se menja u `modBankaMapiranje`
+  pa se ručno preslikava u formu.
+- **Parseri** (`modBankaImportParserPdfToText`, `modBankaProCredit`,
+  `modBankaHalk`, `modBankaAlta`) nisu dirani.
+- **Veliki preview panel** — zamenjen kolonom „Predlog" (§9.5).
+- **Nalozi za isplatu** (`frmBankaExportPregled`, CSV, specifikacija) nisu ovde —
+  to je zaseban ekran (`BANKA_NALOZI`), sledeći na redu u Fazi E.
+- **Storno stavke izvoda** nije ovde — to je posao ekrana Storno
+  (`modStorno.StornoIzvod_TX`).
+
+### 9.9 Verifikacija
+
+Testovi **104–112** u `modTest` i **trideset tri** sabotaže, uz nove fixture redove
+u `tools/make_fixture.py`: **dvanaest** stavki izvoda u **pet** grupa
+`(broj + račun + datum)`, tri otkupne stavke istog bloka i jedan broj bloka koji
+postoji na **tri** otkupna mesta — od kojih jedno **nije upisano**.
+
+Do sada `tblBankaImport` nije imao **nijedan** red, pa je svaka tvrdnja o listi,
+čipovima, jakim ključevima i integritetu izvoda radila nad praznim skupom.
+
+Svaki fixture red ima razlog:
+
+| Red | Zašto postoji |
+|---|---|
+| `BIM-FIX-1` | jak ključ preko **fakture** (poziv na broj = broj fakture `2/2026`) |
+| `BIM-FIX-2` | jak ključ preko **bloka** (poziv na broj = `BrojDokumenta` `1/TEST`) |
+| `BIM-FIX-3` | bez ijednog jakog ključa → traži ručno |
+| `BIM-FIX-K` | **drugi račun pod istim brojem izvoda** — kolizija koja dokazuje da broj izvoda nije identitet |
+| `BIM-FIX-3K` | blok sa **tri** otvorene stavke → `ERR_BMAP_MANUAL_REQUIRED` |
+| `BIM-FIX-ER` | `Obradjeno = "Error"` — auto pokušao i vratio operateru |
+| `BIM-FIX-DA` / `BIM-FIX-SK` | obrađen i preskočen |
+| `BIM-FIX-ST` | storniran — ne sme ni u jednu listu |
+| `BIM-FIX-DUP` ×2 | **isti `BankaImportID` dvaput** — bez njih bi „dvosmislen ID nosi prazan identitet" merilo odsustvo reda |
+| `IZV-FIX-1` / `IZV-FIX-2` | izvod koji se slaže i izvod kome fali 100 |
+| `BIM-FIX-PY` | **isti broj izvoda i isti račun, prethodni ciklus** — banke numeraciju ponavljaju po godini |
+| `OTK-BIM-OMA` / `OTK-BIM-OMB` | **isti broj bloka na dva otkupna mesta** — broj otkupa je jedinstven po stanici |
+| `OTK-BIM-OMX` | isti blok **bez upisanog `StanicaID`** — legacy oblik koji današnji pisci odbijaju, a zatečene sveske ga imaju |
+| `OTK-BIM-PLAC` + `NOV-BIM-PLAC` | blok **u celosti plaćen** — lista ga i dalje nudi, a kandidata nema; bez ovog para ručni izbor takvog bloka ne bi imao nad čim da se izmeri |
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_BankaUvoz_UgovorEkrana` | registar, dve liste, granice bazena (`MAX_ACT` tačno 5 na stavkama, `MAX_CHIP`, `MAX_COLS`, `MaxPrekidaca`), prvi čip je najširi, izvodi bez radnji, **datum stiže kao broj** | `banka-uvoz-sesta-radnja`, `banka-uvoz-cip-sve-nije-prvi`, `banka-uvoz-izvodi-imaju-radnju`, `banka-uvoz-datum-nije-broj` |
+| `T_BankaUvoz_IdentitetURedu_NeCrtaSe` | identitet u prenosnoj koloni prioriteta 4; **interne šifre nema među vidljivim kolonama**; dvosmislen ID → prazno, a red se i dalje vidi; kolizija broja izvoda | `banka-uvoz-identitet-vidljiv`, `banka-uvoz-dvosmislen-prvi-pobedjuje` |
+| `T_BankaUvoz_RedNosiSmerIOtvorenost` | red **prenosi** smer i otvorenost umesto da ih izvodi iz prikaza; `"Error"` je i dalje otvoren | `banka-uvoz-red-ne-nosi-otvorenost`, `banka-uvoz-red-ne-nosi-smer`, `banka-uvoz-predlog-i-za-zatvorene` |
+| `T_BankaUvoz_CipJakihPratiBrojac` | čip „jaki ključevi" i `CountStrongKeyReadyBankaImport` vide **isti** skup; „sve" je unija tri stanja; značka = čip „za obradu" = `GetBankaImportOpen`; **neuspeh čitanja zadržava poslednju poznatu brojku** | `banka-uvoz-cip-jaki-prolazi-sve`, `banka-uvoz-znacka-broji-mapirane`, `banka-uvoz-obradjeno-guta-preskoceno`, `banka-uvoz-kpi-greska-je-nula` |
+| `T_BankaUvoz_IzvodiSuAgregatPoRacunu` | grupa je `(broj + račun + datum)`, mereno **direktno nad `BimIzvodKljuc`**; isti dan kao broj i kao `Date` je isti izvod; zbirovi se **uzimaju sa reda, ne sabiraju**; legacy red bez saldo podataka nije neslaganje | `banka-uvoz-izvod-kljuc-bez-racuna`, `banka-uvoz-izvod-kljuc-bez-datuma`, `banka-uvoz-saldo-se-sabira`, `banka-uvoz-legacy-red-je-razlika` |
+| `T_BankaUvoz_RucnoMapiranjePravila` | smer-kapija se slaže sa writerom; prazan izbor bloka uzima poziv na broj; blok preko granice traži potvrdu; fail-closed nad listom faktura; **izabran blok nosi svoje otkupno mesto do writera**, a scope sužava kandidate u oba smera | `banka-uvoz-om-prima-nejasan-smer`, `banka-uvoz-prazan-blok-ostaje-prazan`, `banka-uvoz-fakture-fail-open`, `banka-uvoz-fakture-i-zatvorene`, `banka-uvoz-blok-bez-om-scope` |
+| `T_ZonaBankaUvoz_PoljaIRaspored` | zona se STVARNO gradi i raspoređuje; sve kontrole postoje; kombo je polje (`nm` + `nmT`); polje cilja je ugašeno za OM | `banka-uvoz-om-polje-cilja-radi` |
+
+Tvrdnja koja nosi najviše: **broj redova koje propušta čip „jaki ključevi" mora
+biti identičan onome što vraća `CountStrongKeyReadyBankaImport`** — isti oblik
+kao `T_Agro_AbzugMapaPratiPojedinacni` i `T_Fak_CipoviPrateStatusFakture`.
+Pravilo živi na dva mesta (čitač mreže i natpis dugmeta) i može da se raziđe;
+ovo je jedino što bi to primetilo.
+
+**Čipovi, radnje i kolone se čitaju po KLJUČU liste** (`BuCipoviZaListu`,
+`BuRadnjeZaListu`, `BuKoloneZaListu`), ne kroz `Scr_Lista` — isti razlog kao
+§8.8: ugovor svake liste mora da se meri bez prebacivanja stanja ekrana.
+
+Testovi **111** (`T_MrezaDatum_BrojKojiNijeDatum`) i **112**
+(`T_MrezaGeometrija_PratiOpisKolona`) mere **ljusku**, ne ovaj ekran — nastali su
+iz njegovog smoke-a, ali pravilo koje tvrde deli ceo UI.
+
+**Dvosmerni dokaz je pušten za svih trideset tri**: svaka sabotaža obara
+**tačno jedan** imenovani test i vraća se bit-identično. Bazna vrednost pre i posle je
+`RunAllTests` **112 / 0**, a `RunBankaImportTestSuite` (tvrd fail-gate nad ovim
+područjem) **PASS=189, FAIL=0**.
+
+### 9.10 Nalazi iz sesije
+
+#### `Dim src` i `Const SRC` su ISTO IME
+
+Prvi run je pao ovako: `vba_check` **zelen**, `run_vba` visi **225 s** pa vrati
+`Exception occurred`, a Excel ostane u `[break]` sa dijalogom
+**„Duplicate declaration in current scope"**.
+
+Uzrok: u `RedoviStavke` i `RedoviIzvodi` su stajali i `Dim src As Variant` i
+`Const SRC As String`. **VBA je case-insensitive**, pa su to dva imena istog
+identifikatora u istom opsegu — modul se ne kompajlira, a modul koji se ne
+kompajlira obara **ceo projekat**.
+
+To je isti simptom kao §8.9, iz trećeg izvora. `vba_check` ga **ne hvata i ne
+tvrdi da hvata**: `DUPLIKAT_LOKALNI` izričito ne gleda `Const`/`Dim` **unutar**
+procedure. Pokušaj uske statičke provere je puštan nad celim repoom i dao
+**302 nalaza**, praktično sve lažne (hvata i argumente, i brojeve, i imena
+konstanti u pozivima) — dakle isti razred kao „135 nalaza" za `LogErr` (§8.10) i
+„406 lažnih" za `ARNOST`. **Nije ušla.** Nalaz se beleži: prava provera traži
+parsiranje deklaracione liste, ne regex, i zaseban PR sa svojim `--self-test`.
+
+Ispravka je bila da izvor greške ide kao literal u `Err.Raise`, kao u
+`modScrFakture`.
+
+#### `BIM_MAPTIP_*` konstante su mrtve
+
+`modConfig` nosi `BIM_MAPTIP_FAKTURA` / `_KOOPERANT` / `_NEP` / `_PROVIZIJA` uz
+komentar „MapTip values suggested". **Ne koristi ih nijedan modul.** Operativne
+vrednosti su literali `"Kupac"` / `"Kooperant"` / `"OM"` iz
+`frmBankaImport.cmbMapTip`, koji biraju koji se writer zove. Ekran zato uvodi
+`BIM_TIP_*` u `modBankaMapiranje` sa **operativnim** vrednostima; mrtve
+konstante se **ne diraju** (brisanje je zaseban, mehanički posao).
+
+#### Test pisan nad fixture-om kakav nije
+
+Prvo puštanje je oborilo `T_BankaUvoz_RucnoMapiranjePravila` na tvrdnji „kupac
+ima bar jednu otvorenu fakturu". Produkcioni kod je bio ispravan: **raniji test
+u istoj suite** (uplata na fakturu) zatvori `FAK-TEST-1` u celosti, pa
+`FX_KUPAC` do testa 109 nema nijednu otvorenu fakturu. Tvrdnja je merila
+**posledicu redosleda testova**, ne pravilo.
+
+Ispravljeno tako da test koristi `FX_KUPAC2` i njegovu `FAK-TEST-N`, koju
+nijedan test ne dira, a „zatvorena faktura ne ulazi u listu" se tvrdi nad
+`FAK-TEST-P` — koja je plaćena **u samom fixture-u**, pa ne zavisi od redosleda.
+Ista klasa greške kao dva pada u §7.6.
+
+#### Dve sabotaže koje nisu oborile ništa — i šta su otkrile
+
+Prvi prolaz dvosmernog dokaza dao je **16 / 18**. Nijedna od dve nije bila
+greška u kodu; obe su bile greška **u dokazu**, i svaka je otkrila po nešto:
+
+1. **`banka-uvoz-identitet-vidljiv` je otkrila grešku u samom testu.** Sabotaža
+   pomera prioritet kolone identiteta sa 4 na 3, a test je proveravao
+   **poslednju** kolonu liste. Identitet stavke **nije poslednji** — iza njega
+   stoje još dve kolone koje red takođe samo *prenosi* (`OTVOREN`, `SMER`) — pa
+   je tvrdnja merila **susednu** kolonu i pomeren prioritet identiteta bi prošao
+   neprimećeno. Test sada gađa baš tu kolonu (po ključu `OTKUI_HDB_BIMKEY`) i uz
+   to tvrdi da **sve tri** prenosne kolone ostaju van prikaza. Ovo je tačno ono
+   zbog čega dvosmerni dokaz postoji: zelena tvrdnja koja nikad nije pokazana
+   crvena ne dokazuje da išta meri.
+
+   Ista sabotaža je uz to bila napisana sa **komentarom posle `_`**, što je
+   syntax error, pa je obarala **compile** umesto testa (run visi, izlaz je
+   `Exception occurred`). To je zamka 4 koju `sabotaza.py` opisuje **u svom
+   docstring-u** — i svejedno je pokupljena.
+
+2. **`banka-uvoz-saldo-se-sabira` je sabirala nulu.** Stajala je u grani koja se
+   izvršava samo za **prvi** red grupe, gde je akumulator još prazan, pa
+   „sabiranje" nije menjalo ništa. Premeštena je uz brojač stavki, koji radi za
+   svaki red grupe.
+
+Posle ispravki: **18 / 18** (sa kasnije dodatom `banka-uvoz-datum-nije-broj`
+ukupno **19 / 19**).
+
+#### Smoke nad pravim podacima: šest nalaza koje suite nije mogao da vidi
+
+Prvi smoke je oborio šest stvari. Vredi ih razdvojiti po tome **zašto** ih
+headless nije uhvatio:
+
+**Nijedna tvrdnja nije čitala datum.** Kolona DATUM je bila prazna u svakom
+redu. Ekran je mreži predavao vrednost ćelije kakva jeste — `Date` — a ljuskin
+`FmtDatumKratko` počinje sa `If Not IsNumeric(v) Then Exit Function`, a
+**`IsNumeric` je nad `Date`-om `False`**. Ćelija ostane prazna, bez ijedne
+greške i bez traga u logu. Ostali ekrani datum konvertuju u serijski broj
+(`modScrDokumenti.DatSerijski`, `modUiData.CellDate`) — ovaj sada takođe.
+Test 104 od sada prolazi kroz opis kolona, nalazi svaku `date` kolonu i tvrdi da
+je vrednost `IsNumeric`; sabotaža `banka-uvoz-datum-nije-broj` to obara.
+
+**Prikaz se ne meri tvrdnjom nego okom.** Objašnjenje ispod polja naleglo je na
+traku koju ljuska crta odmah po završetku zone; naslov mreže se odsekao usred
+reči („— 29 z") jer je `grdTitle` fiksnih 180pt; podnožje je na čipu „obrađeno"
+pokazivalo **negativan** zbir. Sve tri su popravljene (§9.5).
+
+**Šta je operateru korisno nije stvar koda.** `BankaImportID` u prvoj koloni je
+interna šifra — operater ne zna čemu služi. Izbačena je iz prikaza; prva kolona
+je sada broj izvoda.
+
+**Pečat je opet lagao.** Sidebar je pisao `v6-ui-176` dok je ekranski modul bio
+`v6-ui-177`, pa se iz smoke-a nije moglo videti da li je nov kod uopšte uvezen —
+tačno ono što je §8.10/R3 zatvarao. `OTKUI_BUILD` je podignut.
+
+#### Sedmi nalaz: `Private Const` iz tuđeg modula, i rupa koju je otvorio
+
+Posle prve runde ispravki compile je pukao na uvozu: **`Variable not defined`**
+nad `GAP` u `RasporediPolja`. `modOtkupUI.GAP` je **`Private Const`** — susedni
+`PAD` je `Public`, pa je propust bio lak. Ispravka je jedna reč (ekran ima svoj
+`BU_FLD_GAP`), ali zanimljivo je **zašto je prošlo kroz sve kapije**:
+
+- `vba_check` zna da ime `GAP` u repou postoji, ali **ne prati vidljivost** —
+  nema pojam „`Private` u drugom modulu".
+- `RunAllTests` je bio **zelen**. VBA „`Variable not defined`" prijavljuje tek
+  kad se procedura **prvi put izvrši**, a ovo je greška u telu `RasporediPolja`
+  — procedure koju **nijedan test nije zvao**, jer sve ostale tvrdnje o ekranu
+  rade nad čitačima i pravilima, gde zone nema. (Za razliku od dupliranog
+  `Const SRC`, koji je greška na nivou modula i obara ga odmah.)
+
+Zato uz ispravku ide **test 110**, koji zonu stvarno gradi (`Scr_Build`) i
+raspoređuje (`Scr_Layout`) nad pravom formom — isti obrazac kao
+`T_ZonaAgro_PoljaPostojeIPrateRezim`. Time je taj put od sada pokriven, a uz
+njega se tvrdi i pravilo koje se drugačije ne može izmeriti: **polje cilja je
+ugašeno za OM**.
+
+Provera vidljivosti je puštena i nad celim ekranskim modulom (skripta u
+scratchpad-u, ne u repou): posle ispravke **nula** identifikatora koje modul
+koristi a koji su `Private` drugde. Proširenje `vba_check`-a na tu proveru je
+zaseban posao, sa svojim dvosmernim dokazom.
+
+#### Drugi smoke: dve stvari koje je razrešilo tek MERENJE
+
+Posle prve runde ispravki kolona DATUM je bila **gora**: umesto prazne, u njoj
+je pisalo `OSIROCENE_PAL` — što je `OSIROCENE_PALETE`, **vrsta reda sa ekrana
+Oporavak**, odsečena na širinu kolone. Ostale kolone su bile tačne.
+
+Čitanje koda nije moglo da razreši: opis kolone je identičan onome koji koristi
+`modScrDokumenti` (`"OTKUI_HD_DATUM||date|NN|1"`, druga kolona), vrednost ide
+kroz isti `modUiData.CellDate`, `LayoutGrid` koloni daje širinu, a test nad
+fixture-om tvrdi `IsNumeric` — i prolazi. Zato je u modul dodata dijagnostika
+**`Diag_BuRedovi`** (presedan: `modBankaImport.Diag_DumpPdfTextAroundStanje`),
+koja ispisuje šta ekran **predaje** mreži i šta mreža **drži**.
+
+Merenje nad pravom sveskom:
+
+```
+EKRAN red 1 kol2: tip=Double vred=[26062026] IsNumeric=True
+```
+
+**`26062026` nije serijski broj datuma nego `ddmmyyyy` upisan kao BROJ.**
+Ljuska nad kolonom tipa `date` radi `CDate` (`FmtDatumKratko`), `CDate` van
+opsega **pukne**, `RenderGrid` radi pod `On Error Resume Next` — pa upis ćelije
+bude preskočen i u njoj **ostane natpis od ranijeg crtanja**. Bez greške, bez
+traga u logu, sa tuđim tekstom u koloni.
+
+**Pravilo je LJUSKINO, ne ekranovo.** `modUiData.CellDate` je do sada svaki broj
+propuštao kao „datum"; sada odbija sve što `CDate` ne sme da primi
+(`DatumSerijskiValidan`, gornja granica 31.12.9999). `FmtDatumKratko` dobija isti
+štitnik na samom mestu crtanja, jer tamo stiže i ono što nije prošlo kroz
+`CellDate`. Ekran **ne drži svoju kopiju** tog pravila.
+
+Vrednost se **ne tumači** — `ddmmyyyy` nije oblik koji `modParse.TryParseDateValue`
+poznaje, pa bi tumačenje bilo izmišljanje pravila koje domen nema. Prazna ćelija
+je istina; tuđi tekst nije.
+
+**Nalaz je bio veći od ovog ekrana**, i to se videlo na fixture-u: takav red
+posejan u `tblBankaImport` oborio je **sedam** testova sa `Overflow`, među njima i
+`T_StornoEkran_SvakaListaVracaRedove`.
+
+Prvo sejanje je pri tom promašilo metu: vrednost je upisana u ćeliju koja je
+**nasledila datumski format** od reda iznad, pa je Excel pri čitanju pokušavao da
+je vrati kao `Date` i obarao **celo** čitanje tabele (`GetTableData` → Overflow) —
+grublji kvar od onog koji zatečene sveske imaju. Merenje na pravoj svesci
+(`Diag_BuRedovi`) pokazuje `tip=Double`, dakle tamo ćelija ima običan format.
+`make_fixture` zato dobija `Sirovo(...)`: vrednost koja se upisuje **bez**
+nasleđenog formata. Red od tada **ostaje u fixture-u** — on je jedino što bi
+povratak ove greške primetilo.
+
+#### Treći smoke: mreža crta sa širinama PRETHODNE liste
+
+Na listi IZVODI je kolona „OTVORENIH" (deseta vidljiva) bila **prazna u svakom
+redu**. `FmtBroj(0, 0)` vraća `"0"`, ne prazno — dakle opet **preskočen upis**,
+ne nula. Susedna kolona istog tipa (`num`) crtala se uredno.
+
+Merenje (`Diag_BuRedovi`, proširen da ispisuje ceo red):
+
+```
+EKRAN red 1 kol10: tip=Long vred=[10]
+MREZA red 1 kol10: tip=Long vred=[10]
+```
+
+Vrednost stiže do `mView` i `GridCell` je vraća — **samo se ne nacrta**. Time su
+i čitač i ekran isključeni; ostaje crtanje.
+
+**Uzrok je u ljusci.** `LayoutGrid` (koji puni `mColX` / `mColW`) zove se iz
+**rasporeda** ekrana — `LayoutScreenZone`, odnosno `LayoutAll`. `ReloadGrid`
+(promena liste, čipa, pretrage) zove samo `LoadGridFromScreen` + `RenderGrid`.
+Posle promene liste `RenderGrid` zato crta sa `mColW` **prethodne** liste, a na
+`mColW(k) = 0` radi `.Visible = False` i preskače upis.
+
+Lista STAVKE ima 9 vidljivih kolona i tri skrivene (prioritet 4), pa je
+`mColW(9) = 0`. Lista IZVODI je imala **10** vidljivih — i njena deseta kolona
+je nasleđivala tu nulu. Zaglavlje je pri tom bilo vidljivo, jer ga osvežava
+zaseban prolaz (`RefreshGridHeaders`) koji se pokreće kasnije, kad je `mColW`
+već preračunat: otud najgori mogući izgled — **zaglavlje stoji, ćelije prazne**.
+
+**Popravljeno u ljusci.** `SetGridColsArr` poredi **sadržaj** opisa kolona
+(`ColsPotpis` — ekran vraća nov niz pri svakom čitanju, pa poređenje referenci ne
+bi valjalo) i na promenu diže `mGeomStara`. `RenderGrid` na samom početku zove
+`OsveziGeometriju`, koja preračuna raspored **samo ako** je opis stvarno drugi —
+pa promena čipa ili strane ne plaća raspored. `LayoutGrid` na kraju briše
+zastavicu, jer je upravo preračunao.
+
+Mereno **na Fakturisanju**, ne na ovom ekranu: njegove liste su različite širine
+(FAKTURE ima sedam vidljivih kolona, ZAFAKT devet), pa je prelazak sa uže na širu
+baš onaj smer u kom su se kolone gubile. Time je i potvrđeno da nalaz nije bio
+samo ovdašnji.
+
+Broj otvorenih i broj stavki na listi izvoda ipak **ostaju spojeni** u jednu
+kolonu (`„10 / 16"`, isti zapis koji traka iznad mreže već koristi za
+`MAPIRANO 11 / 40`). To više nije zaobilazak nego izbor: dve susedne brojke bez
+konteksta čitaju se gore od jedne sa kosom crtom.
+
+#### Sabotaža koja je RASLA: zamena ne sme biti podniz sidra
+
+Prva verzija sabotaže `mreza-geometrija-ne-prati-kolone` uklanjala je red
+`mGeomStara = True` tako što je trolinijsko sidro menjala **prve dve** njegove
+linije. `sabotaza.py --vrati` traži **zamenu** u fajlu i vraća sidro — a pošto je
+zamena bila **podniz sidra**, nalazio ju je i u zdravom kodu. Svaki ciklus
+apply→revert je zato dodavao još jedan primerak reda: posle proverâ ih je u
+`modOtkupUI.bas` bilo **dvadeset četiri**.
+
+To je zamka 8, opisana **u docstring-u same `sabotaza.py`** — i svejedno
+pokupljena. Utoliko gore što je simptom nem: duplirano `mGeomStara = True` je
+idempotentno, pa je kod radio, suite je bila zelena, a izvor je tiho rastao.
+
+Ispravno: sabotaža gađa **jednu** liniju i zamenjuje je nečim **jedinstvenim**
+(`mGeomStara = mGeomStara` uz oznaku), pa ni sidro ni zamena nisu podniz jedno
+drugog. Dokazano tako što tri uzastopna ciklusa apply→revert ostavljaju fajl
+bit-identičnim.
+
+Uz to: prva verzija **nije obarala ništa** (21/22), i to je bio jedini znak da
+nešto nije u redu. Sabotaža koja ne obara svoj test uvek je nalaz — ovog puta o
+sebi samoj.
+
+#### Traka „Nema izabrane otpremnice…" — moja prva dijagnoza je bila pogrešna
+
+Prvo sam je pripisao `modOtkupUI:1735` (`modeKey(ActiveMode) = "OTKUP"`, uslov
+koji ne gleda aktivan ekran) i predložio zaseban PR. Operater je onda javio
+podatak koji to obara: traka se vidi **samo** na Uvozu izvoda i na Dokumentima,
+ne i na Agrohemiji ili Fakturisanju.
+
+Pravi uzrok je jednostavniji: `ShowZones` gasi `zKpi`, `zCtx`, `zForm` i
+`zRight` za ne-Dokumenta ekrane, a **`zOtp` je iz tog spiska ispao**. Njegovu
+vidljivost postavlja samo `LayoutAll` (grana ekrana dokumenata), pa na ugovornim
+ekranima ostaje onakav kakav ga je Dokumenta ostavila — a **vidi se ili ne vidi
+zavisno od toga da li ga zona tog ekrana slučajno pokriva**. Agro i
+Fakturisanje imaju više zone; Uvoz izvoda ima najnižu (104pt), pa je ostao
+otkriven.
+
+Ispravka je dopisivanje `zOtp` u već postojeći spisak — jedna reč. **Nije
+pokrivena testom:** `ShowZones` je `Private`, a da bi se izvršila treba pokrenuti
+prebacivanje ekrana kroz celu ljusku; test bi bio veći i krhkiji od same
+ispravke. To se ovde beleži kao neizmereno, ne prećutkuje.
+
+**U zaseban PR ide ono što je ostalo:** `ModeBrojiKomade(ActiveMode)` u podnožju
+(ista klasa kao pogrešna dijagnoza gore — za poređenje, `ModeHasValCol()` i
+`ModeHasKgCol()` su **ispravne**, jer se izvode iz `mCols`), i podnožje sa samo
+jednim slotom za novčani zbir.
+
+#### Code review: tri nalaza koja su ušla PRE merge-a
+
+Review je dao `REQUEST CHANGES` sa tri nalaza o kojima suite nije imala šta da
+kaže — ne zato što su tvrdnje bile slabe, nego zato što **fixture nije imao
+podatak nad kojim bi se videli**. Sva tri su zatvorena u istoj grani.
+
+**P1 — ručni kooperantski blok nije nosio otkupno mesto.** Broj otkupa je
+jedinstven **po stanici**, pa isti broj bloka legitimno pripada dvama različitim
+blokovima. `GetOtkupCandidatesForKooperantBlock` je filtrirao samo po
+`KooperantID + BrojDokumenta`, pa bi u jednu raspodelu ušle stavke sa **oba**
+otkupna mesta — novac na dva različita poslovna lanca, bez ijedne poruke.
+
+Scope ide kroz ceo lanac kao **opcioni** argument (`stanicaID` →
+`MapBankaImportAsKooperantBlockCore` / `Manual` / `_TX`, `BimBlokTraziPotvrdu`),
+pa automatsko mapiranje — koje otkupno mesto nema odakle da zna — ostaje
+nepromenjeno. `GetBlokoviZaBimMapiranje` zato više ne vraća niz brojeva nego
+tabelu `BrojBloka | StanicaID | prikaz`, a kombo cilja dobija **treću, skrivenu**
+kolonu. Prikaz (`12 · OM Naziv`) se **ne parsira** — isto pravilo kao identitet u
+redu (§9.6): ono što čovek čita sme da se menja, podatak ne.
+
+Kad blok dolazi iz **poziva na broj** (prazan izbor u kombou), scope-a nema i
+ponašanje ostaje kao kod automatskog mapiranja. To je zaseban slučaj i meri se
+zasebnom tvrdnjom (`Scr_BuScopeBlokaTest`).
+
+**P2 — identitet izvoda nije nosio datum.** `BimIzvodKljuc` je bio
+`(broj + račun)`. Banke numeraciju izvoda ponavljaju po ciklusu, pa izvod 15 na
+istom računu postoji i 2025. i 2026 — i spajali bi se u jedan red, i to na
+najgori način: saldo i datum sa **prvog** reda, a broj stavki **sabran preko
+oba**. Sintetički izvod koji nikad nije postojao, i to na jedinom mestu gde se
+vidi da li se izvod slaže.
+
+Datum se u ključu normalizuje u serijski broj kad god može (`IzvodDatumKljuc`),
+da isti dan zapisan kao `Date` i kao broj ne bi dao dve grupe; neispravna
+vrednost ide kao tekst — ne sme da **spoji** dva izvoda, nego da ostane svoja.
+
+**P2 — pad čitanja je postajao legitimna nula.** `Kpi()` je na grešku vraćao
+`Array(0, 0, 0, 0#, 0#)`. Značka uz stavku menija odgovara na pitanje „ima li
+finansijskih stavki koje čekaju čoveka" — pa je operater dobijao **„nema posla"
+umesto „ne znam"**, i to baš kad je nešto sa šemom ili kesom pošlo naopako. Isti
+fail-open je jednom već plaćen u Stornu.
+
+Greška se sada **loguje** (`LogErr`), kes se **ne** proglašava važećim (sledeći
+poziv pokušava ponovo), a vraća se **poslednja poznata** vrednost. Nula ide samo
+dok validne vrednosti još nije ni bilo — tada ni značke nema, pa nema ni čega
+lažnog. `Scr_ResetCache` zato više ne briše `mKpi`, samo ga proglašava
+zastarelim.
+
+**Zamka pri pisanju dokaza.** Prve dve sabotaže ključa izvoda obarale su
+**istu** tvrdnju („isti broj daje tri reda"), jer se pravilo merilo samo preko
+broja redova u mreži — zamka 5 iz `sabotaza.py`. Test zato sada meri
+`BimIzvodKljuc` **direktno**, jednom tvrdnjom po polovini ključa; agregat ispod
+ostaje kao integracioni dokaz. Sa tim, svaka od četiri nove sabotaže obara tačno
+svoju imenovanu tvrdnju.
+
+#### Drugi krug review-a: tri stanja koja su izgledala isto
+
+Prvi krug je zatvorio „ručni blok ne nosi otkupno mesto". Drugi je pokazao da
+**samo uvođenje scope-a nije dovoljno** — jer prazan `stanicaID` do sada znači
+tri različite stvari, a izgleda kao jedna:
+
+| Stanje | Šta znači | Šta sme |
+|---|---|---|
+| scope nije ni tražen | blok dolazi iz **poziva na broj** — automatsko mapiranje | prolazi bez scope-a, kao i pre |
+| scope tražen, red nema stanicu | legacy/uvezen red bez `StanicaID` | **STOP** |
+| scope tražen, kolone nema | schema drift | **greška**, nikad tihi nastavak |
+
+**Drugo stanje je opasno baš zato što liči na prvo.** Operater je *birao* blok iz
+liste; da je prazan scope prošao, writer bi raspodelio novac preko **svih**
+otkupnih mesta sa tim brojem. `GetBlokoviZaBimMapiranje` takav red uredno nudi
+(ključ je `broj & "|" & sta`, prazan `sta` prolazi), a prikaz mu je pao nazad na
+goli broj — pa bi operater u listi video „12" i „12 · OM B" bez ijednog traga
+zašto se razlikuju.
+
+Red **ostaje u listi** — postoji u podacima i prećutati ga značilo bi lagati o
+tome šta je u tabeli — ali se **označava** (`bez otkupnog mesta`), a radnja nad
+njim staje uz objašnjenje. Pravilo je jedna funkcija (`BuScopeNedostaje`), pa
+oznaka i kapija ne mogu da se raziđu.
+
+**Test seam je pri tom morao da prestane da PONAVLJA izraz.** Prva verzija
+`Scr_BuStopBezOmTest`-a je sama računala `BuScopeNedostaje(IzabraniCiljID(),
+IzabranaStanicaCilja())` — isti izraz koji stoji u `RucnoKooperant`. Dok je tako,
+sabotaža obara **kopiju u testu**, a radnja bi i dalje slala prazan scope; test
+bi bio zelen nad kodom koji je pokvaren. Sada oboje zovu `ScopeIzbora`, koji
+scope i odluku računa na jednom mestu. Ono što ostaje neizmereno je **jedan red**
+vezivanja u `RucnoKooperant` (`If stani Then ... Exit Function`) — provereno
+čitanjem, i tako se i beleži.
+
+**Treće stanje je najtiši mogući kvar.** Filtar je glasio
+`If Len(Trim$(stanicaID)) > 0 And colSta > 0` — dakle scope je zadat, kolona se
+zbog drifta ne nađe, uslov otpadne, i resolver vrati kandidate sa **svih**
+otkupnih mesta. Bez ijedne poruke, u listi koja izgleda savršeno ispravno. Sada
+je pravilo u `BimScopeKolona`: zadat scope traži kolonu kroz `RequireColumnIndex`
+i puca ako je nema; bez scope-a kolona ostaje opciona kao i pre.
+
+**Ime kolone je argument te funkcije, a ne konstanta u telu** — to je jedini
+način da se grana „kolone nema" izmeri a da se ne razbije šema fixture-a. Test
+zove `BimScopeKolona(STA, "NemaOvakveKoloneUOtkupu")` i tvrdi da **puca**, pa
+istu nedokazivu kolonu bez scope-a i tvrdi da **prolazi**.
+
+#### Značka koja ume da kaže „ne znam"
+
+Prvi krug je popravio *drugi* pad čitanja (zadrži poslednju poznatu brojku), ali
+ne i **prvi u sesiji**: tada poslednje vrednosti nema, pa je vraćana nula.
+Obrazloženje je bilo „tada ni značke nema, pa nema ni čega lažnog" — i bilo je
+naopako. `BrojacTekst` za `n <= 0` vraća prazno, a **prazna značka u ovom UI-ju
+nije odsustvo poruke nego poruka**, i glasi „nema šta da čeka". Prvi pad je zato
+i dalje bio fail-open, samo tiši.
+
+Ugovor `Scr_Brojac() As Long` nema treći kanal, a **brojač ne može legitimno da
+bude negativan** — pa je to slobodan kanal koji ne traži izmenu ugovora:
+`BuKpiNepoznato` vraća `-1`, ljuska ga crta kao `!`, a četiri KPI pločice ekrana
+pokazuju crtu umesto brojki. Pola tačnih brojki uz dve nule bilo bi gore od
+iskrenog „nemam podatak".
+
+Izmena je **u ljusci** (`BrojacTekst`), pa važi za svaki ekran koji je poželi —
+kao i geometrija mreže i granica datuma pre nje.
+
+#### Šta je iz review-a svesno ODLOŽENO, i zašto
+
+- **Invarijanta metapodataka izvoda.** `GetBankaIzvodiForGrid` uzima saldo grupe
+  sa **prvog** reda i pretpostavlja da su ostali isti. Nalaz je tačan, ali
+  današnji parser to fizički ne može da prekrši — kopira `saldo.*` na svaki red.
+  Brani od budućeg parsera i ručno editovanih podataka; traži **novu vrednost
+  statusa u finansijskom prikazu**, poruku, fixture, test i sabotažu. Ubaciti to
+  u PR koji se zatvara bilo bi tačno ona scope drift greška koju isti review
+  kritikuje. **Zaseban PR.**
+- **`RenderGrid` stale-safe.** Popravka datuma je zatvorila **jedan ulaz**, ne
+  klasu: `CDbl` u `kg`/`num`/`rsd`/`mult` i `CLng` u `pill`/`paypill` nad
+  neispravnom vrednošću imaju identičan ishod — greška se proguta, ćelija zadrži
+  natpis prethodnog ekrana. Ispravno je prazniti ćeliju **pre** upisa, pa je pad
+  rendera prazna ćelija i jedan log. **Zaseban PR**, i vredniji od svega
+  odloženog jer zatvara klasu.
+- **Checker tri registra testova** (`RunOne` / `TestName` / `InvokeTest`).
+  Trenutno su usklađeni — 112/112/112, bez rupa i bez razlike — pa je ovo
+  preventiva, ne živ bug. Uzak checker sa svojim `--self-test` slučajevima,
+  **zaseban PR.**
+
+#### Treći krug: ista greška, jedan nivo iznad
+
+Prva dva kruga su zatvorila scope **unutar** ručnog mapiranja. Treći je pokazao
+da je ista klasa ostala **iznad** njega — u trenutku kad se lista uopšte puni.
+
+`PuniCiljCombo` puni obe liste cilja i ima jedan `On Error GoTo EH`, koji je
+postavljao zastavicu `mFaktureOK = False`. Ime nije bilo slučajno: kapiju je
+čitao **samo** `RucnoKupac`. `RucnoKooperant` je odmah išao na
+`BimEfektivniBlok`, pa je pad učitavanja blokova izgledao ovako:
+
+```
+GetBlokoviZaBimMapiranje  ->  greška (schema drift, nedostupna tabela...)
+PuniCiljCombo EH          ->  zastavica postavljena, ali je niko ne čita
+prazan combo              ->  "operater nije birao blok"
+BimEfektivniBlok          ->  fallback na PozivNaBroj
+ScopeIzbora               ->  scope = "", stani = False
+GetOtkupCandidates        ->  BEZ scope-a
+```
+
+To je tačno ono što je `c8b7a32b` zabranio, samo dosegnuto drugim putem.
+
+**A ako iz poziva na broj ne ispadne nijedan kandidat, ishod je gori od
+pogrešne raspodele.** `MapBankaImportAsKooperantBlockCore` na
+`If IsEmpty(kandidati)` **ne prijavljuje grešku** — ceo iznos knjiži kao
+`NOV_VIRMAN_AVANS_KOOP` i stavku označava obrađenom
+(`UpdateBankaImportStatus ... "Da"`). Neuspeh čitanja tako postaje **uspešno
+knjiženje drugog poslovnog ishoda**.
+
+Kapija je zato sada **zajednička** (`CiljUcitan`), a zastavica se zove `mCiljOK`
+— jer prazna lista na **obe** rute nosi poslovno značenje: prazan izbor fakture
+je avans, prazan izbor bloka je poziv na broj.
+
+#### Prazna tabela i nepostojeća tabela nisu isti ishod
+
+`GetTableData` vraća `Empty` za oba. Čitač koji gleda samo `IsEmpty(data)` zato
+nedostajuću tabelu tumači kao „nema redova" — a tamo gde prazna lista nosi
+poslovno značenje to je fail-open. `RequireColumnIndex` to **ne pokriva**: do
+provere kolona se ne bi ni stiglo, jer čitač izađe ranije.
+
+Novi `modSchemaGuard.RequireTable` stoji **pre** `GetTableData` u
+`GetFaktureZaBimMapiranje` i `GetBlokoviZaBimMapiranje`. Isti odnos kao
+`TabelaCitljiva` u `modUiData`, samo na domenskoj strani i kao greška umesto
+zastavice.
+
+#### Sabotaža koja nije oborila ništa — i šta je tražila
+
+`banka-uvoz-cilj-kapija-ne-puni` uklanja poziv `PuniCiljCombo` iz kapije. Prvi
+put je vratila **112 / 0**.
+
+Uzrok nije bio u sabotaži nego u tome da se pravilo **ne može videti**: bez forme
+`PuniCiljCombo` izađe na `If c Is Nothing Then Exit Sub`, pa uklonjen poziv ne
+menja nijedan merljiv ishod. A baš taj nedostajući poziv je bio kvar — kapija bi
+sudila po zastavici **prethodnog** izbora.
+
+Zato modul dobija `mCiljPunjenja`: broji se **poziv**, ne uspeh. To je jedina
+stvar koju je posle uklonjenog poziva moguće opaziti bez forme, i sada sabotaža
+obara svoju tvrdnju. Isti obrazac kao test 110 (zona se stvarno gradi) — kad se
+pravilo ne vidi, ne izmišlja se tvrdnja koja prolazi, nego se napravi vidljivim.
+
+#### Zastareli komentari
+
+Dva komentara su zaostala iza koda i oba bi za tri meseca proizvela pogrešan
+mentalni model: zaglavlje modula je i dalje tvrdilo da su IZVODI agregat po
+`(broj + račun)` bez datuma, a `IzvodiKolone` je opisivao spojenu kolonu kao
+privremeni zaobilazak „dok se to ne popravi u ljusci" — a popravljeno je **u
+ovom istom PR-u**. Spojena kolona ostaje, ali sada kao **izbor**: dve susedne
+brojke bez konteksta čitaju se gore od jedne sa kosom crtom.
+
+#### Četvrti krug: neuspeh se ne pamti
+
+Dve grane punjenja liste cilja **greške javljaju različito**, i to je pravilo
+jedne od njih prećutno prekršilo:
+
+| Grana | Kako javlja pad | Gde završi |
+|---|---|---|
+| blokovi (`GetBlokoviZaBimMapiranje`) | **diže** grešku | `EH` → `mCiljPunjen = ""` |
+| fakture (`GetFaktureZaBimMapiranje`) | vraća **zastavicu** `outOK = False` | procedura mirno stigne do kraja |
+
+Za fakture je punjenje zato stizalo do `mCiljPunjen = kljuc` i **kеširalo
+neuspeh**. Kapija je radnju tačno blokirala — fail-closed je držao, nijedno
+pogrešno knjiženje nije bilo moguće — ali sledeći klik na *isti* izbor izlazio je
+odmah na `If mCiljPunjen = kljuc Then Exit Sub` i **nije ni pokušavao ponovo**.
+Prolazan kvar bi tako zaključao izbor do `ResetCache`: fail-closed koji izgleda
+kao pokvaren ekran.
+
+Kešira se sada samo uspešno čitanje (`CiljKesKljuc`) — isto pravilo koje `mKpiOK`
+u istom modulu već ima. Sabotaža: `banka-uvoz-kes-pamti-neuspeh`.
+
+#### Šta je i posle četiri kruga OSTALO neizmereno — i jedno nezatvoreno
+
+Da se ne pročita kao „sve je pokriveno":
+
+- **Vezivanje kapije u dve rute.** `RucnoKupac` i `RucnoKooperant` zovu
+  `CiljUcitan` sa po jednim redom. Test dokazuje *pravilo* i da kapija zove
+  punjenje (`mCiljPunjenja`), ali ne i da ta dva reda postoje — to je provereno
+  čitanjem.
+- **Samo punjenje kombo-a nikad se ne izvršava headless.** Bez kontrole
+  `PuniCiljCombo` izađe odmah, pa tri kolone, skrivena kolona scope-a i oznaka
+  „bez otkupnog mesta" postoje samo u kodu i u smoke-u. Test 110 dokazuje da se
+  zona **gradi i raspoređuje**, ne i da se lista puni.
+- **`MapBankaImportAsKooperantBlockCore` je i dalje fail-open — u writeru.** Na
+  `IsEmpty(kandidati)` knjiži ceo iznos kao avans kooperanta i stavku označava
+  obrađenom. Ovaj PR je zatvorio **putanje kojima se do tog stanja pogrešno
+  dolazilo sa ovog ekrana**, ali to je ublažavanje, ne ispravka: `frmBankaImport`
+  i automatsko mapiranje i dalje ulaze u istu granu.
+
+  Za **automatsko** mapiranje je avans namerno i dokumentovano ponašanje
+  („bezbedan izlaz" dok je poreklo dvosmisleno). Za **ručno izabran blok** to je
+  nešto drugo: operater je rekao *koji* blok, pa „nijedna otkupna stavka" nije
+  bezbedan ishod nego protivrečnost. Writer to danas **ne može da razlikuje** —
+  `MapBankaImportAsKooperantBlockManual` samo prosleđuje argumente u `Core` bez
+  ijedne oznake da je poziv ručan. Razdvajanje toga je **zaseban PR**, i dira
+  legacy formu.
+
+#### Peti krug: ručno izabran plaćen blok tiho postaje avans
+
+Ovo je bilo u prethodnom krugu zapisano kao „writer je fail-open, zaseban PR".
+Prigovor je bio da **novi ekran uvodi novu dostupnu putanju do tog writera**, pa
+mora sam da je zatvori — i taj prigovor je tačan. Legacy dug ne opravdava novu
+rutu do njega.
+
+Putanja je u celosti dostupna sa ovog ekrana:
+
+```
+GetBlokoviZaBimMapiranje   ->  nudi SVAKI nestorniran broj otkupa
+                               (ne proverava da li blok jos duguje)
+operater bira blok 125     ->  koji je u celosti placen
+GetOtkupCandidates...      ->  bira samo "otvoreno > 0.009"  ->  Empty
+MapBanka...BlockCore       ->  IsEmpty(kandidati)
+                               -> SaveNovac NOV_VIRMAN_AVANS_KOOP
+                               -> UpdateBankaImportStatus "Da"
+```
+
+Operater je rekao **koji dug plaća**; sistem je knjižio **avans** i stavku
+označio obrađenom, bez pitanja. Transakcija uspeva, a semantika je druga od
+izabrane.
+
+**Razlika koja pravilo čini tačnim je ručno vs. automatsko.** Za automatsko
+mapiranje avans **jeste** namerno i dokumentovano ponašanje — bezbedan izlaz dok
+je poreklo dvosmisleno. Za izričito izabran blok „nema šta da se plati" nije
+bezbedan ishod nego **protivrečnost**. Writer to danas ne može da razlikuje
+(`MapBankaImportAsKooperantBlockManual` samo prosleđuje argumente u `Core`), pa
+odluku donosi pozivalac koji **zna** da je izbor bio ručan:
+`BimBlokBezOtvorenih` je domensko pravilo, `BuBlokZatvoren` je ekranska kapija
+koja se primenjuje **samo** kad `izabranBlok` nije prazan.
+
+Blok **ostaje u listi** — postoji u podacima — po istom pravilu kao blok bez
+otkupnog mesta.
+
+Dve sabotaže, jer su dva pravila: `banka-uvoz-placen-blok-postaje-avans` (kapija
+uopšte ne vidi da je blok zatvoren) i `banka-uvoz-kapija-bloka-i-za-poziv`
+(kapija se proširi i na poziv na broj i ugasi legitimnu granu). Druga postoji
+zato što je „popravka" koja gasi namerno ponašanje takođe regresija.
+
+**Writer i dalje ostaje fail-open za svoje ostale pozivaoce** — `frmBankaImport`
+i automatsko mapiranje ulaze u istu granu. Razdvajanje ručnog od automatskog
+*unutar* writera je zaseban PR i dira legacy formu; ovaj PR zatvara samo putanju
+koju sam uvodi.

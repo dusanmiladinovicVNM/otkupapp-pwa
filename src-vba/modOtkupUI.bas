@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-176"
+Public Const OTKUI_BUILD   As String = "v6-ui-177"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -359,6 +359,10 @@ Private mColX(0 To MAX_COLS - 1) As Single   ' x i sirina kolona mreze; postavlj
 Private mColW(0 To MAX_COLS - 1) As Single   ' LayoutGrid, RenderGrid samo puni
 Private mCols As Variant             ' opis kolona AKTIVNOG rezima (GridCols)
 Private mColN As Long                ' koliko ih je stvarno vidljivo
+' Da li mColX / mColW jos odgovaraju mCols. Postavlja se kad se OPIS kolona
+' promeni, brise kad ga LayoutGrid preracuna. V. OsveziGeometriju.
+Private mGeomStara As Boolean
+Private mColsPotpis As String        ' po cemu se zna da je opis DRUGI
 ' Poslednja zbirna sa kojom se radilo. Preuzeto iz frmDokumenta: tamo je
 ' RefreshBrojZbirneSuggestion upisivala isti broj u sekciju Zbirne I u sekciju
 ' Otpremnice, a btnUnosZbr ga je posle snimanja gurao u Prijemnicu. Ovde je to
@@ -2295,6 +2299,9 @@ SledecaAkcija:
     ' postaje tacan tek ovde. Pri prvom otvaranju je RefreshSortGlyphs isao
     ' PRE rasporeda, pa je zaglavlje ostajalo prazno dok korisnik ne klikne.
     RefreshSortGlyphs
+
+    ' Geometrija je upravo preracunata nad tekucim mCols.
+    mGeomStara = False
 End Sub
 
 ' Tipografija celije po vrsti kolone. Pravilo: sve sto je BROJ, SIFRA ili DATUM
@@ -2386,6 +2393,10 @@ Public Sub RenderGrid()
     If mFrm Is Nothing Then Exit Sub
     kanal = Not ModeHasKgCol()                ' rezim bez kilograma nema ni zbir kg
     Set z = mFrm.Controls("zGrid")
+    ' Nikad ne crtaj sa sirinama koje ne odgovaraju opisu kolona -- v.
+    ' SetGridColsArr. Preracunava se SAMO kad se opis stvarno promenio, pa
+    ' promena cipa ili strane ne placa raspored.
+    OsveziGeometriju z
     Set body = z.Controls("grdBody")
     Set ft = z.Controls("grdFoot")
 
@@ -4194,8 +4205,16 @@ Private Sub ShowZones(frm As Object)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = True
     Next i
-    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice.
-    nmv = Array("zKpi", "zCtx", "zForm", "zRight")
+    ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice
+    ' i traka aktivne otpremnice.
+    '
+    ' zOtp je iz ovog spiska bio ISPAO. Njegovu vidljivost postavlja samo
+    ' LayoutAll (grana ekrana dokumenata), pa je na ugovornim ekranima ostajao
+    ' onakav kakav ga je Dokumenta ostavila -- a vidi se ili ne vidi zavisno od
+    ' toga da li ga zona tog ekrana slucajno pokriva. Na ekranu Uvoz izvoda
+    ' (najniza zona) se video, sa porukom "Nema izabrane otpremnice", koja tamo
+    ' ne znaci nista.
+    nmv = Array("zKpi", "zCtx", "zForm", "zRight", "zOtp")
     For i = 0 To UBound(nmv)
         On Error Resume Next
         frm.Controls(CStr(nmv(i))).Visible = dok
@@ -4400,7 +4419,16 @@ End Sub
 
 ' Nula se ne crta. Znacka postoji da bi se video ZAOSTATAK; nula uz svaku stavku
 ' bi je pretvorila u ukras koji se prestane primecivati.
+'
+' NEGATIVNO ZNACI "NE ZNAM", i crta se. Prazna znacka u ovom UI-ju nije odsustvo
+' poruke nego poruka "nema sta da ceka"; ekran koji nije uspeo da procita svoje
+' brojke ne sme da je posalje. Brojac ne moze legitimno da bude negativan, pa je
+' to slobodan kanal koji ne trazi izmenu ugovora Scr_Brojac() As Long.
 Private Function BrojacTekst(ByVal n As Long) As String
+    If n < 0 Then
+        BrojacTekst = "!"
+        Exit Function
+    End If
     If n <= 0 Then Exit Function
     If n > 999 Then BrojacTekst = "999+" Else BrojacTekst = CStr(n)
 End Function
@@ -4471,9 +4499,50 @@ End Sub
 ' Isto, ali iz niza koji je dao EKRAN. Mreza od S4a ne pita ekran dokumenata
 ' kako izgledaju kolone - pita AKTIVAN ekran.
 Private Sub SetGridColsArr(ByVal a As Variant)
+    Dim potpis As String
     If Not IsArray(a) Then Exit Sub
+
+    ' PROMENA OPISA KOLONA CINI GEOMETRIJU ZASTARELOM.
+    '
+    ' mColX / mColW racuna LayoutGrid, a on se zove iz RASPOREDA ekrana.
+    ' ReloadGrid (promena liste, cipa, pretrage) zove samo LoadGridFromScreen i
+    ' RenderGrid. Bez ove zastavice je RenderGrid crtao sa sirinama PRETHODNE
+    ' liste: kolona koja je tamo bila skrivena (prioritet 4 -> sirina 0) ostajala
+    ' je nevidljiva i u novoj listi, ma koliko joj vrednost bila ispravna.
+    '
+    ' Zaglavlje je pri tom umelo da bude vidljivo, jer ga osvezava RefreshSortGlyphs
+    ' na kraju sledeceg rasporeda -- pa je izgled bio najgori moguci: naslov
+    ' kolone stoji, celije prazne. Nadjeno merenjem na listi izvoda ekrana Uvoz
+    ' izvoda (v6-ui-177); pogadja svaki ekran cije se liste razlikuju po broju
+    ' vidljivih kolona.
+    potpis = ColsPotpis(a)
+    If potpis <> mColsPotpis Then
+        mColsPotpis = potpis
+        mGeomStara = True
+    End If
+
     mCols = a
     mColN = BazenStaje(UBound(mCols) + 1, MAX_COLS, "kolone")
+End Sub
+
+' Potpis opisa kolona. Poredi se SADRZAJ, ne referenca: ekran vraca nov niz pri
+' svakom citanju, pa bi poredjenje objekata uvek javljalo promenu.
+Private Function ColsPotpis(ByVal a As Variant) As String
+    Dim i As Long, s As String
+    If Not IsArray(a) Then Exit Function
+    For i = LBound(a) To UBound(a)
+        s = s & CStr(a(i)) & vbLf
+    Next i
+    ColsPotpis = s
+End Function
+
+' Preracunaj geometriju ako je opis kolona u medjuvremenu promenjen. Zove se sa
+' JEDNOG mesta -- s pocetka RenderGrid-a -- da bi svaki put kad se crta vazilo
+' da mColW odgovara mCols.
+Private Sub OsveziGeometriju(z As Object)
+    If Not mGeomStara Then Exit Sub
+    If z Is Nothing Then Exit Sub
+    LayoutGrid z, z.width, z.Height
 End Sub
 
 Private Function SortedView(ByRef a() As Variant, ByVal n As Long, ByVal nc As Long, _
@@ -4553,6 +4622,27 @@ End Function
 Public Sub GridLayoutTest(z As Object, ByVal zw As Single, ByVal zh As Single)
     If Not IsTestMode() Then Exit Sub
     LayoutGrid z, zw, zh
+End Sub
+
+' TEST SEAM: da li geometrija kolona zaostaje za opisom. Tvrdo gejtovan.
+' Bez ovoga se pravilo "promena opisa kolona cini geometriju zastarelom" ne moze
+' izmeriti: mColW je Private, a RenderGrid trazi pravu formu.
+Public Function GridGeomStaraTest() As Boolean
+    If Not IsTestMode() Then Exit Function
+    GridGeomStaraTest = mGeomStara
+End Function
+
+' TEST SEAM: sirina i-te kolone (0-bazirano). Tvrdo gejtovan.
+Public Function GridSirinaKoloneTest(ByVal i As Long) As Single
+    If Not IsTestMode() Then Exit Function
+    If i < 0 Or i > MAX_COLS - 1 Then Exit Function
+    GridSirinaKoloneTest = mColW(i)
+End Function
+
+' TEST SEAM: isto sto RenderGrid radi pre crtanja. Tvrdo gejtovan.
+Public Sub GridOsveziGeomTest(z As Object)
+    If Not IsTestMode() Then Exit Sub
+    OsveziGeometriju z
 End Sub
 
 ' Test seam: mreza se puni BEZ forme. Tvrdo gejtovan.
@@ -5471,6 +5561,11 @@ End Function
 Private Function FmtDatumKratko(ByVal v As Variant) As String
     If Not IsNumeric(v) Then Exit Function
     If CDbl(v) <= 0 Then Exit Function
+    ' GORNJA GRANICA. CDate van opsega baca Overflow, a RenderGrid radi pod
+    ' "On Error Resume Next" -- pa bi upis celije bio preskocen i u njoj bi ostao
+    ' natpis od RANIJEG crtanja. Pravilo zivi u modUiData; ovde je stitnik na
+    ' samom mestu crtanja, jer ovamo stize i ono sto nije proslo kroz CellDate.
+    If Not modUiData.DatumSerijskiValidan(CDbl(v)) Then Exit Function
     FmtDatumKratko = Format$(CDate(CDbl(v)), "dd.mm.")
 End Function
 

@@ -59,6 +59,16 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
    izmene. Ako se sabotaza svodi na UKLANJANJE reda, dodaj joj oznaku
    (`   ' SABOTAZA: ...`) da zamena postane jedinstvena. Placeno jednom, na
    `ekran-curi-greska`.
+
+9. SIDRO ZASTAREVA KAD SE POPRAVI KOD KOJI GADJA. Ispravka po review-u je
+   promenila bas onaj uslov na koji je sabotaza bila zakacena, pa je sidro
+   prestalo da se nalazi -- a sa njim i dokaz. Sabotaza tada NE javlja
+   "test je prosao": javlja da sidro nije nadjeno. To je jedini signal, i
+   vidi se samo ako ga gledas: u petlji koja vrti ceo katalog izlaz lako
+   prodje kao "sve zeleno". Posle svake izmene koda koji sabotaze gadjaju
+   pusti ceo dvosmerni dokaz i tvrdi da je broj CRVENIH jednak broju
+   sabotaza -- ne samo da nema neocekivanih padova. Placeno jednom, na
+   `banka-uvoz-blok-bez-om-scope`.
 """
 
 import argparse
@@ -1799,6 +1809,357 @@ SABOTAZE = {
         "        GetFaktureForGrid = Empty\n",
         "T_Fak_CipoviPrateStatusFakture",
         "stornirana faktura ne ulazi u listu",
+    ),
+    # ---------------------------------------------------------------- BANKA UVOZ
+    # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
+    # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja
+    # izgleda savrseno ispravno. Ime kolone je zato argument BimScopeKolona, da
+    # bi se ta grana mogla izmeriti bez razbijanja seme fixture-a.
+    "banka-uvoz-scope-bez-kolone-stanice": (
+        "modBankaMapiranje.bas",
+        '        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")\n',
+        "        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)   ' SABOTAZA: scope tiho otpada\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "zadat scope nad nedokazivom kolonom puca umesto da vrati sve",
+    ),
+    # Prazan scope izgleda isto kao "scope nije ni trazen", a znaci nesto sasvim
+    # drugo: operater JESTE birao blok, samo taj red nema upisano otkupno mesto.
+    # Propusten prazan scope raspodeli novac preko svih mesta sa istim brojem.
+    # Lista blokova nudi SVAKI nestorniran broj otkupa i ne proverava dug, a
+    # kandidati se biraju samo ako je "otvoreno > 0.009". Placen blok zato stoji
+    # u listi a daje NULA kandidata -- i writer to ne prijavljuje kao gresku nego
+    # knjizi AVANS i stavku oznaci obradjenom. Rucni izbor takvog bloka mora da
+    # stane: operater je rekao KOJI dug placa.
+    "banka-uvoz-placen-blok-postaje-avans": (
+        "modBankaMapiranje.bas",
+        "    BimBlokBezOtvorenih = IsEmpty(kandidati)\n",
+        "    BimBlokBezOtvorenih = Not IsEmpty(kandidati)   ' SABOTAZA: placen blok prolazi\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "rucno izabran placen blok se odbija umesto da postane avans",
+    ),
+    # Kapija sme da vazi SAMO za rucni izbor. Kad blok dolazi iz poziva na broj,
+    # avans je namerno i dokumentovano ponasanje -- bezbedan izlaz dok je poreklo
+    # dvosmisleno. Sabotaza uklanja tu razliku i gasi legitimnu granu.
+    "banka-uvoz-kapija-bloka-i-za-poziv": (
+        "modScrBankaUvoz.bas",
+        "    If Len(Trim$(izabranBlok)) = 0 Then Exit Function\n",
+        "    If Len(Trim$(efektivniBlok)) < 0 Then Exit Function   ' SABOTAZA: kapija i za poziv na broj\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "kapija placenog bloka vazi samo za RUCNI izbor",
+    ),
+    "banka-uvoz-blok-bez-om-prolazi": (
+        "modScrBankaUvoz.bas",
+        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) = 0)\n",
+        "    BuScopeNedostaje = (Len(Trim$(ciljID)) > 0 And Len(Trim$(stanica)) < 0)\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "izabran blok bez otkupnog mesta zaustavlja rucno mapiranje",
+    ),
+    # Prvi pad citanja u sesiji. Nula bi kroz BrojacTekst dala PRAZNU znacku, a
+    # prazna znacka u ovom UI-ju znaci "nema sta da ceka" -- fail-open, samo tisi.
+    "banka-uvoz-znacka-nepoznato-je-nula": (
+        "modScrBankaUvoz.bas",
+        "    BuKpiNepoznato = Array(-1, -1, -1, 0#, 0#)\n",
+        "    BuKpiNepoznato = Array(0, 0, 0, 0#, 0#)   ' SABOTAZA: ne znam postaje nula\n",
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "prvi pad citanja daje NEPOZNATO, ne nulu",
+    ),
+    # Broj otkupa je jedinstven PO STANICI, pa isti broj bloka pripada dvama
+    # razlicitim blokovima. Bez scope-a u jednu raspodelu ulaze kandidati sa OBA
+    # otkupna mesta -- novac na dva razlicita poslovna lanca.
+    "banka-uvoz-blok-bez-om-scope": (
+        "modBankaMapiranje.bas",
+        "        If Len(Trim$(stanicaID)) > 0 Then\n",
+        "        If Trim$(stanicaID) = Chr$(0) Then   ' SABOTAZA: scope se ne primenjuje\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "rucno mapiranje bloka nosi i otkupno mesto",
+    ),
+    # Znacka odgovara na pitanje "ima li posla". Kvar citanja pretvoren u nulu
+    # kaze "nema posla" -- fail-open koji je Storno vec jednom platio.
+    "banka-uvoz-kpi-greska-je-nula": (
+        "modScrBankaUvoz.bas",
+        "    If IsArray(poslednja) Then\n",
+        "    If False Then   ' SABOTAZA: kvar citanja postaje nula\n",
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "neuspeh citanja zadrzava poslednju poznatu brojku",
+    ),
+    # Broj van opsega datuma obara CDate u mrezi, a RenderGrid to proguta
+    # (On Error Resume Next) -- celija ostane sa natpisom od ranijeg crtanja.
+    # Pravilo je LJUSKINO (modUiData), pa ga i sabotaza gadja tamo. Fixture
+    # nosi red sa DatumTransakcije = 26062026, ddmmyyyy kao broj, posejan
+    # bez datumskog formata -- tacno kako ga zatecene sveske nose.
+    "mreza-datum-van-opsega": (
+        "modUiData.bas",
+        "    DatumSerijskiValidan = (serijski >= 1) And (serijski <= DATUM_SERIJSKI_MAX)\n",
+        "    DatumSerijskiValidan = (serijski >= 1)\n",
+        "T_MrezaDatum_BrojKojiNijeDatum",
+        "u kolonu datuma ulazi samo broj koji CDate sme da primi",
+    ),
+    # Geometrija kolona mora da prati OPIS kolona. Bez zastavice RenderGrid
+    # crta sa sirinama prethodne liste, pa kolona koja je tamo bila skrivena
+    # ostaje nevidljiva i kad joj je vrednost tacna.
+    "mreza-geometrija-ne-prati-kolone": (
+        "modOtkupUI.bas",
+        "        mGeomStara = True\n",
+        "        mGeomStara = mGeomStara   \' SABOTAZA: zastavica se ne dize\n",
+        "T_MrezaGeometrija_PratiOpisKolona",
+        "promena opisa kolona proglasava geometriju zastarelom",
+    ),
+    # Za OM se ne bira ni faktura ni blok, pa se polje cilja GASI: polje koje
+    # ne radi nista poziva operatera da u njega nesto upise. Ovo je uz to
+    # jedina sabotaza koja PROLAZI kroz gradnju i raspored zone -- put na kom
+    # se compile greske u RasporediPolja uopste i vide.
+    "banka-uvoz-om-polje-cilja-radi": (
+        "modScrBankaUvoz.bas",
+        "    z.Controls(\"scrBuCilj\").Visible = (IzabraniTip() <> BIM_TIP_OM)\n",
+        "    z.Controls(\"scrBuCilj\").Visible = True\n",
+        "T_ZonaBankaUvoz_PoljaIRaspored",
+        "polje cilja je ugaseno za OM",
+    ),
+    # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
+    # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
+    # greske, bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
+    # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
+    # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
+    # greske i bez traga u logu. Nasao ga je tek smoke nad pravim podacima.
+    "banka-uvoz-datum-nije-broj": (
+        "modScrBankaUvoz.bas",
+        "        outA(n, 2) = modUiData.CellDate(src, i, 4)\n",
+        "        outA(n, 2) = src(i, 4)\n",
+        "T_BankaUvoz_UgovorEkrana",
+        "datum stize mrezi kao serijski broj, ne kao Date",
+    ),
+    # Lista stavki stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
+    # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
+    # dobije ekran kome fali dugme, bez ijedne poruke.
+    "banka-uvoz-sesta-radnja": (
+        "modScrBankaUvoz.bas",
+        '                              "bmsve:OTKUI_BTN_BU_SVE:116:ghost:0"\n',
+        '                              "bmsve:OTKUI_BTN_BU_SVE:116:ghost:0|" & _\n'
+        '                              "bmvisak:OTKUI_BTN_BU_SKIP:80:ghost:1"\n',
+        "T_BankaUvoz_UgovorEkrana",
+        "lista stavki ne trazi vise radnji nego sto ljuska ima dugmadi",
+    ),
+    # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada listi
+    # (RefreshChipsForScreen). Ako nije najsiri, povratak na njega tiho sakrije
+    # redove -- operater vidi kracu listu i ne zna zasto.
+    "banka-uvoz-cip-sve-nije-prvi": (
+        "modScrBankaUvoz.bas",
+        '            BuCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                              "zaobradu:OTKUI_CIPB_ZAOBRADU:80|" & _\n',
+        '            BuCipoviZaListu = "zaobradu:OTKUI_CIPB_ZAOBRADU:80|" & _\n'
+        '                              "sve:OTKUI_CHIP_SVE:40|" & _\n',
+        "T_BankaUvoz_UgovorEkrana",
+        "prvi cip svake liste je najsiri ('sve')",
+    ),
+    # IZVODI su pregled: nijedna operacija se ne radi nad izvodom kao celinom.
+    # Radnja koja se tu pojavi trazila bi identitet grupe kao cilj upisa.
+    "banka-uvoz-izvodi-imaju-radnju": (
+        "modScrBankaUvoz.bas",
+        '                              "bmsve:OTKUI_BTN_BU_SVE:116:ghost:0"\n'
+        "    End Select\n",
+        '                              "bmsve:OTKUI_BTN_BU_SVE:116:ghost:0"\n'
+        "        Case BU_IZVODI\n"
+        '            BuRadnjeZaListu = "bmauto:OTKUI_BTN_BU_AUTO:112:primary:1"\n'
+        "    End Select\n",
+        "T_BankaUvoz_UgovorEkrana",
+        "lista izvoda nema radnji nad redom",
+    ),
+    # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u listi
+    # stavki gleda internu sifru u dve kolone.
+    "banka-uvoz-identitet-vidljiv": (
+        "modScrBankaUvoz.bas",
+        '        "OTKUI_HDB_BIMKEY||txt|1|4", _\n',
+        '        "OTKUI_HDB_BIMKEY||txt|90|3", _\n',
+        "T_BankaUvoz_IdentitetURedu_NeCrtaSe",
+        "kolona identiteta ostaje van prikaza (prioritet 4)",
+    ),
+    # Dvosmislen ID je ID koji u tabeli postoji dvaput. Ako prvi pobedi, radnja
+    # se izvrsi nad redom koji operater NIJE pokazao -- tiho.
+    "banka-uvoz-dvosmislen-prvi-pobedjuje": (
+        "modBankaMapiranje.bas",
+        "        outA(n, 1) = modFaktura.IdIliPrazno(brojac, Trim$(CStr(data(i, cID))))\n",
+        "        outA(n, 1) = Trim$(CStr(data(i, cID)))   ' SABOTAZA: duplikat prolazi\n",
+        "T_BankaUvoz_IdentitetURedu_NeCrtaSe",
+        "ID koji postoji dvaput NIJE identitet",
+    ),
+    # Otvorenost se cita iz onoga sto RED NOSI. Nov red ima PRAZAN status, pa se
+    # iz prikaza ne razlikuje od reda kome status nije upisan.
+    "banka-uvoz-red-ne-nosi-otvorenost": (
+        "modScrBankaUvoz.bas",
+        '        outA(n, 11) = IIf(CBool(src(i, 10)), "1", "")\n',
+        '        outA(n, 11) = "1"   \' SABOTAZA: svaki red izgleda otvoren\n',
+        "T_BankaUvoz_RedNosiSmerIOtvorenost",
+        "red prenosi otvorenost, radnja je ne izvodi iz prikaza",
+    ),
+    # Smer se ne izvodi iz toga koja je kolona iznosa popunjena: red sa I
+    # uplatom I isplatom izgleda kao uplata, a writer ga odbija.
+    "banka-uvoz-red-ne-nosi-smer": (
+        "modScrBankaUvoz.bas",
+        "        outA(n, 12) = CStr(src(i, 11))\n",
+        '        outA(n, 12) = ""   \' SABOTAZA: smer se gubi iz reda\n',
+        "T_BankaUvoz_RedNosiSmerIOtvorenost",
+        "red prenosi smer stavke",
+    ),
+    # Zatvorena stavka nema sta da predlozi -- predlog nad njom navodi operatera
+    # da pokusa radnju koja ce biti odbijena.
+    "banka-uvoz-predlog-i-za-zatvorene": (
+        "modScrBankaUvoz.bas",
+        "    If Not otvoren Then Exit Function\n",
+        "    ' SABOTAZA: predlog se racuna i za zatvorene stavke\n",
+        "T_BankaUvoz_RedNosiSmerIOtvorenost",
+        "predlog postoji samo za stavke nad kojima jos ima sta da se uradi",
+    ),
+    # Cip 'jaki kljucevi' i CountStrongKeyReadyBankaImport (koji stoji u natpisu
+    # dugmeta) moraju da vide ISTI skup. Pravilo zivi na dva mesta.
+    "banka-uvoz-cip-jaki-prolazi-sve": (
+        "modScrBankaUvoz.bas",
+        '        Case "jaki":       BuCipStavka = modBankaMapiranje.BimOtvoren(s) And jaki\n',
+        '        Case "jaki":       BuCipStavka = modBankaMapiranje.BimOtvoren(s)\n',
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "cip jakih kljuceva se slaze sa brojacem",
+    ),
+    # Znacka uz stavku menija broji ono sto CEKA operatera. Bilo koji drugi broj
+    # tu izgleda kao posao kog nema (ili sakrije posao koji ima).
+    "banka-uvoz-znacka-broji-mapirane": (
+        "modScrBankaUvoz.bas",
+        "    Scr_Brojac = CLng(k(0))\n",
+        "    Scr_Brojac = CLng(k(1))   ' SABOTAZA: znacka broji mapirane\n",
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "znacka broji isti skup kao cip 'za obradu'",
+    ),
+    # 'Obradjeno' i 'preskoceno' su dva razlicita ishoda: prvo je proknjizeno,
+    # drugo je svesno ostavljeno. Spojeni cip krije da posao nije zavrsen.
+    "banka-uvoz-obradjeno-guta-preskoceno": (
+        "modScrBankaUvoz.bas",
+        '        Case "obradjeno":  BuCipStavka = (s = BIM_OBR_DA)\n',
+        '        Case "obradjeno":  BuCipStavka = (s = BIM_OBR_DA) Or (s = BIM_OBR_SKIP)\n',
+        "T_BankaUvoz_CipJakihPratiBrojac",
+        "cipovi stanja su razdvojeni i zajedno pokrivaju sve redove",
+    ),
+    # BROJ IZVODA NIJE IDENTITET: dedupe kljuc pocinje od BROJA RACUNA, pa dva
+    # racuna firme legitimno nose izvod istog broja. Grupa bez racuna ih spaja u
+    # jedan red i saldo dva razlicita racuna izgleda kao jedan.
+    # Kljuc grupe izvoda ima DVE polovine (racun i ciklus), pa i dve sabotaze.
+    # Test ih meri odvojenim tvrdnjama nad samim BimIzvodKljuc -- da bi svaka
+    # sabotaza oborila BAS SVOJU (zamka 5); preko broja redova bi obe obarale
+    # istu tvrdnju "isti broj daje tri reda".
+    "banka-uvoz-izvod-kljuc-bez-racuna": (
+        "modBankaImport.bas",
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna) & _\n'
+        '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & IzvodDatumKljuc(datumIzvoda)\n',
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod se grupise i po broju racuna",
+    ),
+    # Banke numeraciju izvoda ponavljaju po ciklusu: izvod 15 na istom racunu
+    # postoji i 2025. i 2026. Bez datuma u kljucu se spajaju u jedan sinteticki
+    # red -- saldo i datum sa prvog, stavke sabrane preko oba.
+    # Zamena je NAMERNO obrnutog redosleda: da nije, bila bi podniz sidra i
+    # `--vrati` bi je nasao i u zdravom kodu (zamka 8).
+    "banka-uvoz-izvod-kljuc-bez-datuma": (
+        "modBankaImport.bas",
+        '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & Trim$(brojRacuna) & _\n'
+        '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
+        '    BimIzvodKljuc = Trim$(brojRacuna) & "|" & Trim$(brojDokumenta)\n',
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod se grupise i po datumu izvoda",
+    ),
+    # Zbirovi izvoda su isti na SVAKOM redu grupe (parser ih tako upisuje), pa
+    # sabiranje daje iznos pomnozen brojem stavki -- i svaki izvod odjednom
+    # "ne slaze se".
+    "banka-uvoz-saldo-se-sabira": (
+        "modBankaImport.bas",
+        "        buf(r, 11) = CLng(buf(r, 11)) + 1\n",
+        "        buf(r, 5) = CDbl(NzBIM(buf(r, 5), 0#)) + CDbl(NzBIM(data(i, cPoc), 0#))\n"
+        "        buf(r, 11) = CLng(buf(r, 11)) + 1\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "zbirovi izvoda se uzimaju sa reda, ne sabiraju",
+    ),
+    # Legacy red (uvoz pre v6.18) nema saldo metapodatke -- sva cetiri broja su
+    # nula. To NIJE neslaganje nego odsustvo podatka; prikazano kao greska,
+    # posalje operatera da trazi kvar kog nema.
+    "banka-uvoz-legacy-red-je-razlika": (
+        "modBankaImport.bas",
+        "        BimSaldoStatus = BIM_SALDO_NEMA\n"
+        "        Exit Function\n",
+        "        BimSaldoStatus = BIM_SALDO_RAZLIKA   ' SABOTAZA\n"
+        "        Exit Function\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod bez saldo metapodataka nije neslaganje",
+    ),
+    # Smer-kapija je ista koju RequireBimSmer sprovodi u writeru. OM prima i
+    # uplatu i isplatu, ali NE i nejasan smer -- red sa oba iznosa writer odbija.
+    "banka-uvoz-om-prima-nejasan-smer": (
+        "modBankaMapiranje.bas",
+        "            BimSmerOdgovaraTipu = (smer <> BIM_SMER_NEJASAN)\n",
+        "            BimSmerOdgovaraTipu = True   ' SABOTAZA: OM prima sve\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "smer-kapija ekrana se slaze sa kapijom writera",
+    ),
+    # Prazan izbor bloka NIJE "nema bloka" nego "uzmi poziv na broj iz izvoda".
+    # U formi je prazan combo bio DEFAULT slucaj, pa je blok sa 3+ stavki bez
+    # ovog pravila zavrsavao generickom greskom umesto ponudjenom podelom.
+    "banka-uvoz-prazan-blok-ostaje-prazan": (
+        "modBankaMapiranje.bas",
+        "        BimEfektivniBlok = AutoBlockNoForBim(bankaImportID)\n",
+        '        BimEfektivniBlok = ""   \' SABOTAZA: poziv na broj se ne koristi\n',
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "prazan izbor bloka uzima poziv na broj iz izvoda",
+    ),
+    # FAIL-CLOSED. Prazna lista faktura i PAD ucitavanja izgledaju isto, a znace
+    # suprotno: prazan izbor fakture knjizi AVANS umesto zatvaranja duga.
+    # Kapija je ZAJEDNICKA za kupca i kooperanta: prazna lista na obe rute nosi
+    # poslovno znacenje (avans, odnosno poziv na broj), pa pad punjenja ne sme da
+    # se pretvori ni u jedno od to dvoje.
+    "banka-uvoz-cilj-fail-open": (
+        "modScrBankaUvoz.bas",
+        "    BuSmeMapiranjeCilja = mCiljOK\n",
+        "    BuSmeMapiranjeCilja = True   ' SABOTAZA: pad citanja prolazi\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "pad ucitavanja liste cilja zaustavlja rucno mapiranje",
+    ),
+    # Zajednicka kapija mora STVARNO da puni listu pre nego sto presudi.
+    # Bez punjenja bi zastavica opisivala PRETHODNI izbor -- "ucitano" za tudji
+    # combo, a odluka se donosi nad ovim.
+    # Fakture gresku vracaju kroz ZASTAVICU, ne dizu je -- pa punjenje mirno
+    # stigne do kesiranja. Zapamcen neuspeh drzi radnju blokiranom (fail-closed
+    # radi), ali sledeci klik ne pokusava ponovo: izbor ostaje zakljucan.
+    "banka-uvoz-kes-pamti-neuspeh": (
+        "modScrBankaUvoz.bas",
+        "    If ok Then CiljKesKljuc = kljuc\n",
+        "    CiljKesKljuc = kljuc   ' SABOTAZA: neuspeh se pamti\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "neuspelo punjenje liste cilja se ne kesira",
+    ),
+    "banka-uvoz-cilj-kapija-ne-puni": (
+        "modScrBankaUvoz.bas",
+        "Private Function CiljUcitan(ByRef outPoruka As String) As Boolean\n"
+        "    PuniCiljCombo\n",
+        "Private Function CiljUcitan(ByRef outPoruka As String) As Boolean\n"
+        "    outPoruka = outPoruka   ' SABOTAZA: lista se vise ne puni\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "kapija puni listu cilja pre nego sto presudi",
+    ),
+    # Prazna tabela i NEPOSTOJECA tabela nisu isti ishod. GetTableData vraca
+    # Empty za oba, pa bi citac koji gleda samo IsEmpty tumacio kvar kao "nema
+    # redova" -- a prazan izbor fakture je AVANS.
+    "banka-uvoz-nema-tabele-je-prazna": (
+        "modSchemaGuard.bas",
+        "    If GetTable(tableName) Is Nothing Then\n",
+        "    If Len(tableName) < 0 Then   ' SABOTAZA: nema tabele prolazi\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "nedostajuca tabela puca umesto da prodje kao prazna lista",
+    ),
+    # Lista za rucno mapiranje nudi samo fakture sa OTVORENIM saldom. Zatvorena
+    # faktura u toj listi vodi u preplatu.
+    "banka-uvoz-fakture-i-zatvorene": (
+        "modBankaMapiranje.bas",
+        "            otvoreno = GetOtvorenoNaFakturi(fid)\n"
+        "            If otvoreno > 0.009 Then\n",
+        "            otvoreno = GetOtvorenoNaFakturi(fid)\n"
+        "            If otvoreno > -1 Then   ' SABOTAZA: i zatvorene ulaze\n",
+        "T_BankaUvoz_RucnoMapiranjePravila",
+        "za rucno mapiranje se nude samo fakture sa otvorenim saldom",
     ),
 }
 

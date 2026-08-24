@@ -136,6 +136,49 @@ FAKTURA_PLAC_IZNOS = 4000
 # stornira bas izabran red. Preflight je do sada odbijao i kad ID postoji.
 NOVAC_DUPLI_BROJ = "NOV-DUPLI-1"
 
+# BANKA UVOZ (Faza E/17). tblBankaImport je do sada bio PRAZAN, pa je svaka
+# tvrdnja o listi stavki, cipovima, jakim kljucevima i integritetu izvoda radila
+# nad praznim skupom -- zelena bez pokrica.
+#
+# BROJ IZVODA NIJE IDENTITET. Dedupe kljuc (IsDuplicateBankaImport) pocinje od
+# BROJA RACUNA: "Drugi racun = druga transakcija, bez obzira na broj izvoda i
+# iznos". Dva racuna firme zato legitimno nose izvod ISTOG broja, i bez takvog
+# para u fixture-u tvrdnja "identitet je BankaImportID, ne BrojDokumenta" nema
+# nad cim da padne.
+BIM_IZVOD_1 = "IZV-FIX-1"                 # isti broj na dva racuna -> kolizija
+BIM_IZVOD_2 = "IZV-FIX-2"                 # izvod kome se saldo NE slaze
+BIM_IZVOD_3 = "IZV-FIX-3"                 # nosi DVOSMISLEN BankaImportID
+BIM_RACUN_1 = "160-0000000111111-11"
+BIM_RACUN_2 = "265-0000000222222-22"
+BIM_DATUM_1 = datetime.date(2026, 3, 16)
+BIM_DATUM_2 = datetime.date(2026, 3, 17)
+# Blok sa TRI otvorene otkupne stavke -- preko MAX_BLOK_KANDIDATA (2), pa
+# automatska raspodela dize ERR_BMAP_MANUAL_REQUIRED i red ide na rucno.
+BIM_BLOK_3 = "BLK-BIM-3"
+# ISTI kooperant, ISTI broj bloka, DVA otkupna mesta. Broj otkupa je
+# jedinstven PO STANICI, pa je ovo legitiman podatak -- i jedini nacin da
+# se izmeri da rucno mapiranje nosi scope otkupnog mesta, a ne samo broj.
+# Bez ovog para bi novac mogao da ode na pogresan otkupni lanac, a nijedna
+# tvrdnja to ne bi primetila.
+BIM_BLOK_OM = "BLK-BIM-OM"
+# POTPUNO PLACEN blok. Lista blokova nudi SVAKI nestorniran broj otkupa i ne
+# proverava da li blok jos duguje, a kandidati za placanje se biraju samo ako
+# je "otvoreno > 0.009" -- pa placen blok legitimno postoji u listi a daje
+# NULA kandidata. Writer to ne prijavljuje kao gresku nego knjizi AVANS i
+# stavku oznaci obradjenom. Bez ovog para redova (otkup + uplata koja ga
+# zatvara) nijedna tvrdnja ne bi mogla da vidi da rucni izbor takvog bloka
+# mora da STANE.
+BIM_BLOK_PLACEN = "BLK-BIM-PLAC"
+BIM_OTK_PLACEN = "OTK-BIM-PLAC"
+BIM_OTK_PLACEN_IZNOS = 500.0      # 10 * 50
+# Isti broj izvoda i isti racun, ali DRUGI ciklus. Banke numeraciju
+# ponavljaju po godini; bez datuma u kljucu bi se dva izvoda spojila u
+# jedan sinteticki red koji nikad nije postojao.
+BIM_DATUM_PY = datetime.date(2025, 3, 16)
+# Saldo izvoda 2 je NAMERNO za 100 veci od tacnog (8000 + 950 - 3000 = 5950).
+# Bez reda koji se ne slaze, provera integriteta bi u fixture-u bila uvek OK.
+BIM_IZVOD_2_ZAVRSNO = 6050
+
 # KOLIZIJA BROJEVA -- srce ovog fixture-a.
 #
 # BrojPrijemnice NIJE globalno jedinstven: GenerateBrojPrijemnice racuna
@@ -201,6 +244,26 @@ PRERADA_STARA_ID = "PRE-TEST-Y25"
 # RESI KASNIJE context nad 6/150326, a pending ispravka nad istim brojem bi
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
 PRIJEMNICA_ISPRAVKA = "3/150326"
+
+class Sirovo:
+    """Vrednost koja se upisuje BEZ formata koji bi red nasledio od kolone.
+
+    Nov `ListRows.Add` nasledi format prethodnog reda. Za broj koji stoji u
+    datumskoj koloni to znaci da ga Excel pri citanju pokusa da vrati kao
+    `Date` -- a broj van opsega datuma tada obara CELO citanje tabele
+    (`GetTableData` -> Overflow), sto NIJE ono sto se desava na zatecenim
+    svescima: tamo takva celija ima obican format i cita se kao broj.
+    """
+
+    def __init__(self, v):
+        self.v = v
+
+    def __repr__(self):
+        # POTPIS FIXTURE-a hashira repr() posejanih vrednosti. Podrazumevani
+        # repr objekta nosi adresu iz memorije, pa bi hash bio drugaciji u
+        # svakom prolazu i run_vba bi svaki put javljao "USTAJAO FIXTURE".
+        return "Sirovo(%r)" % (self.v,)
+
 
 # Sejanje ide PO IMENU KOLONE -- ako donor nema neku od ovih kolona, skripta
 # pukne glasno umesto da tiho napravi fixture nad kojim testovi lazu.
@@ -444,6 +507,47 @@ SEED = {
          "KolAmbalaze": 20, "VozacID": VOZAC, "BrojDokumenta": "3/TEST",
          "Klasa": "I", "BrojZbirne": ZBIRNA_U_BLOKU, "OtpremnicaID": "OTP-TEST-3",
          "BrojOtpremnice": "3/TEST", "ParcelaID": "PAR-TEST-2"},
+        # TRI otvorene stavke ISTOG bloka, isti kooperant. Poziv na broj iz
+        # izvoda ga razresava jednoznacno (jedan kooperant = jedan pogodak), ali
+        # GetOtkupCandidatesForKooperantBlock preko MAX_BLOK_KANDIDATA dize
+        # ERR_BMAP_MANUAL_REQUIRED -- red koji je "spreman po jakom kljucu" a
+        # automatski se ipak NE moze zavrsiti. Bez ovog para stanja se cip
+        # "jaki kljucevi" i stvarni ishod auto-mapiranja ne mogu razlikovati.
+        {"OtkupID": "OTK-BIM-3A", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 20, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_3, "Klasa": "I"},
+        {"OtkupID": "OTK-BIM-3B", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 20, "Cena": 40.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_3, "Klasa": "II"},
+        {"OtkupID": "OTK-BIM-3C", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 20, "Cena": 30.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_3, "Klasa": "I"},
+        # ISTI kooperant, ISTI broj bloka, DVE stanice -- v. BIM_BLOK_OM.
+        {"OtkupID": "OTK-BIM-OMA", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        {"OtkupID": "OTK-BIM-OMB", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 60.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        # ISTI blok, ali BEZ upisanog otkupnog mesta. Danasnji pisci ovo odbijaju
+        # (SaveOtkup / SaveOtkupMulti_TX traze StanicaID), pa je red legacy oblik
+        # -- a zatecene sveske takve redove imaju (v. datum 26062026). Bez njega
+        # se ne moze izmeriti da rucno mapiranje STAJE umesto da posalje prazan
+        # scope i raspodeli novac preko sva tri otkupna mesta.
+        {"OtkupID": "OTK-BIM-OMX", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": "", "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 70.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_OM, "Klasa": "I"},
+        # Blok koji je u CELOSTI placen -- v. BIM_BLOK_PLACEN i red u tblNovac.
+        {"OtkupID": BIM_OTK_PLACEN, "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-3",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_PLACEN, "Klasa": "I"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -454,6 +558,12 @@ SEED = {
     # To je razlog zbog koga je kapija u UplataFakturaProblem uopste uslovna;
     # bez ovog reda popravka te kapije mogla bi tiho da ukine i to pravilo.
     "tblNovac": [
+        # Zatvara BIM_OTK_PLACEN u celosti: GetUplataForOtkup sabira Isplata po
+        # OtkupID-u, pa je "otvoreno" tacno nula i kandidata nema.
+        {"NovacID": "NOV-BIM-PLAC", "BrojDokumenta": "BIM-PLAC-1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop",
+         "Isplata": BIM_OTK_PLACEN_IZNOS, "KooperantID": "KOOP-TEST-3",
+         "OtkupID": BIM_OTK_PLACEN},
         {"NovacID": "NOV-TEST-D1", "BrojDokumenta": NOVAC_DUPLI_BROJ,
          "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 1000,
          "KooperantID": "KOOP-TEST-1"},
@@ -510,6 +620,164 @@ SEED = {
         # bi se u listi i operater bi joj nudio stampu i SEF.
         {"FakturaID": FAKTURA_STORNO, "BrojFakture": "4/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC, "Iznos": 7000, "Status": "Neplaceno", "Stornirano": "Da"},
+    ],
+    # STAVKE IZVODA -- devet redova u TRI izvoda, svaki sa svojim razlogom:
+    #   BIM-FIX-1   jak kljuc preko FAKTURE (poziv na broj = broj fakture 2/2026)
+    #   BIM-FIX-2   jak kljuc preko BLOKA   (poziv na broj = BrojDokumenta 1/TEST)
+    #   BIM-FIX-3   bez ijednog jakog kljuca -> trazi rucno mapiranje
+    #   BIM-FIX-K   DRUGI racun pod ISTIM brojem izvoda -> kolizija broja izvoda
+    #   BIM-FIX-3K  blok sa 3 otvorene stavke -> ERR_BMAP_MANUAL_REQUIRED
+    #   BIM-FIX-ER  Obradjeno="Error" -- auto pokusao i odbio (cip "za rucno")
+    #   BIM-FIX-DA  Obradjeno="Da"    -- obradjen, van reda za mapiranje
+    #   BIM-FIX-SK  Obradjeno="Skip"  -- preskocen
+    #   BIM-FIX-ST  Stornirano="Da"   -- ne sme ni u jednu listu
+    #
+    # PartnerKonto je svuda prazan namerno: fixture nema tekuce racune u
+    # sifarnicima, pa bi grana "jak kljuc preko racuna" bila lazno zelena.
+    # Zbirovi izvoda (UkupanDuguje / UkupanPotrazuje) se slazu sa zbirom
+    # NESTORNIRANIH redova tog izvoda -- tako ih parser i upisuje.
+    "tblBankaImport": [
+        # --- Izvod 1, racun 1: pocetno 10000 + 1500 - 2000 = 9500 (SLAZE SE)
+        {"BankaImportID": "BIM-FIX-1", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Kupac Prvi doo",
+         "PartnerKonto": "", "Opis": "Uplata po fakturi", "Uplata": 1000, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "2/2026", "SvrhaPlacanja": "Uplata po fakturi",
+         "BankaReferenz": "REF-FIX-1", "IzvorFajl": "fixture.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 10000, "ZavrsnoStanje": 9500,
+         "UkupanDuguje": 2000, "UkupanPotrazuje": 1500},
+        {"BankaImportID": "BIM-FIX-2", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Prvi Testni",
+         "PartnerKonto": "", "Opis": "Isplata po bloku", "Uplata": 0, "Isplata": 2000,
+         "Valuta": "RSD", "PozivNaBroj": "1/TEST", "SvrhaPlacanja": "Isplata kooperantu",
+         "BankaReferenz": "REF-FIX-2", "IzvorFajl": "fixture.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 10000, "ZavrsnoStanje": 9500,
+         "UkupanDuguje": 2000, "UkupanPotrazuje": 1500},
+        {"BankaImportID": "BIM-FIX-3", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Nepoznat Platilac",
+         "PartnerKonto": "", "Opis": "Bez poziva na broj", "Uplata": 500, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-3", "IzvorFajl": "fixture.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 10000, "ZavrsnoStanje": 9500,
+         "UkupanDuguje": 2000, "UkupanPotrazuje": 1500},
+        # --- Izvod 1, racun 2: ISTI broj izvoda, drugi racun. Pocetno 5000 + 700 = 5700
+        {"BankaImportID": "BIM-FIX-K", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_2,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Drugi Platilac",
+         "PartnerKonto": "", "Opis": "Uplata na drugi racun", "Uplata": 700, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-K", "IzvorFajl": "fixture2.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 5000, "ZavrsnoStanje": 5700,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 700},
+        # --- Izvod 2, racun 1: 8000 + 950 - 3000 = 5950, a upisano je 6050 -> RAZLIKA 100
+        {"BankaImportID": "BIM-FIX-3K", "BrojDokumenta": BIM_IZVOD_2,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Treci Testni",
+         "PartnerKonto": "", "Opis": "Isplata po bloku sa 3 stavke",
+         "Uplata": 0, "Isplata": 3000,
+         "Valuta": "RSD", "PozivNaBroj": BIM_BLOK_3, "SvrhaPlacanja": "Isplata kooperantu",
+         "BankaReferenz": "REF-FIX-3K", "IzvorFajl": "fixture3.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "",
+         "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
+         "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        {"BankaImportID": "BIM-FIX-ER", "BrojDokumenta": BIM_IZVOD_2,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Sporni Platilac",
+         "PartnerKonto": "", "Opis": "Auto odbio", "Uplata": 250, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-ER", "IzvorFajl": "fixture3.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "Error",
+         "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
+         "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        {"BankaImportID": "BIM-FIX-DA", "BrojDokumenta": BIM_IZVOD_2,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Obradjeni Platilac",
+         "PartnerKonto": "", "Opis": "Vec proknjizeno", "Uplata": 400, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-DA", "IzvorFajl": "fixture3.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
+         "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
+         "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        # DATUM KOJI NIJE DATUM -- regresioni red.
+        #
+        # Na zatecenim svescima tblBankaImport nosi DatumTransakcije kao BROJ
+        # oblika ddmmyyyy (26.06.2026 -> 26062026), a ne kao datum. Mreza nad
+        # kolonom tipa "date" radi CDate, koji van opsega baca Overflow, a
+        # RenderGrid to guta (On Error Resume Next) -- pa u celiji ostane natpis
+        # od RANIJEG crtanja.
+        #
+        # Kad je ovaj red prvi put posejan, oborio je SEDAM testova, ukljucujuci
+        # tudje (T_StornoEkran_SvakaListaVracaRedove). Posle ispravke u ljusci
+        # (modUiData.CellDate odbija broj van opsega) suite je opet zelena, pa
+        # red OSTAJE -- on je jedino sto bi povratak te greske primetilo.
+        {"BankaImportID": "BIM-FIX-SK", "BrojDokumenta": BIM_IZVOD_2,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": Sirovo(26062026), "Partner": "Preskoceni Platilac",
+         "PartnerKonto": "", "Opis": "Operater preskocio", "Uplata": 300, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-SK", "IzvorFajl": "fixture3.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "Skip",
+         "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
+         "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        # ISTI broj izvoda i ISTI racun kao izvod 1, ali PRETHODNI ciklus.
+        # Bez datuma u kljucu grupe, ova dva izvoda bi se spojila: saldo i datum
+        # bi se uzeli sa prvog reda, a broj stavki sabrao preko oba.
+        # Obradjeno="Da" da ne pomera brojku otvorenih.
+        {"BankaImportID": "BIM-FIX-PY", "BrojDokumenta": BIM_IZVOD_1,
+         "DatumIzvoda": BIM_DATUM_PY, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_PY, "Partner": "Prosla Godina doo",
+         "PartnerKonto": "", "Opis": "Izvod iz proslog ciklusa", "Uplata": 100, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-PY", "IzvorFajl": "fixture0.pdf",
+         "ImportVreme": BIM_DATUM_PY, "Obradjeno": "Da",
+         "PocetnoStanje": 1000, "ZavrsnoStanje": 1100,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 100},
+        # Storniran red nosi ISTE zbirove izvoda kao ostali -- da agregat ne
+        # zavisi od toga koji je red grupe procitan.
+        {"BankaImportID": "BIM-FIX-ST", "BrojDokumenta": BIM_IZVOD_2,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Stornirani Platilac",
+         "PartnerKonto": "", "Opis": "Storniran uvoz", "Uplata": 900, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-ST", "IzvorFajl": "fixture3.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "", "Stornirano": "Da",
+         "PocetnoStanje": 8000, "ZavrsnoStanje": BIM_IZVOD_2_ZAVRSNO,
+         "UkupanDuguje": 3000, "UkupanPotrazuje": 950},
+        # --- Izvod 3, racun 1: DVA reda pod ISTIM BankaImportID-em.
+        #
+        # Nista u kodu ne brani duplikat, a RequireSingleRow (koja na kraju
+        # odlucuje) fail-close-uje na njega. Bez ovog para bi tvrdnja
+        # "dvosmislen ID nosi PRAZAN identitet" merila odsustvo reda -- bila bi
+        # zelena i kad bi radnja pogadjala prvi pogodak.
+        #
+        # Oba su Obradjeno="Da": ostaju vidljivi pod cipom "sve" (gde ih
+        # identitetska tvrdnja i trazi), a ne ulaze u red za mapiranje, pa je
+        # izvod 3 jedini BEZ otvorenih stavki i cip "sa otvorenim" ima sta da
+        # iskljuci. Saldo se slaze: 2000 + 200 - 0 = 2200.
+        {"BankaImportID": "BIM-FIX-DUP", "BrojDokumenta": BIM_IZVOD_3,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Dvojnik Prvi",
+         "PartnerKonto": "", "Opis": "Dvosmislen ID (1)", "Uplata": 100, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-D1", "IzvorFajl": "fixture4.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
+         "PocetnoStanje": 2000, "ZavrsnoStanje": 2200,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 200},
+        {"BankaImportID": "BIM-FIX-DUP", "BrojDokumenta": BIM_IZVOD_3,
+         "DatumIzvoda": BIM_DATUM_2, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_2, "Partner": "Dvojnik Drugi",
+         "PartnerKonto": "", "Opis": "Dvosmislen ID (2)", "Uplata": 100, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-FIX-D2", "IzvorFajl": "fixture4.pdf",
+         "ImportVreme": BIM_DATUM_2, "Obradjeno": "Da",
+         "PocetnoStanje": 2000, "ZavrsnoStanje": 2200,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 200},
     ],
     # Tri prijemnice, sve tri sa razlogom:
     #   PRJ-TEST-A i PRJ-TEST-B  ISTI broj, RAZLICIT kupac -> kolizija identiteta
@@ -962,6 +1230,9 @@ def add_row(lo, values: dict, table_name: str) -> None:
         if isinstance(val, datetime.date):
             cell.NumberFormat = "dd.mm.yyyy"
             cell.Value = xl_serial(val)
+        elif isinstance(val, Sirovo):
+            cell.NumberFormat = "General"
+            cell.Value = val.v
         else:
             cell.Value = val
 

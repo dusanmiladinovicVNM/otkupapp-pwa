@@ -2,6 +2,23 @@ Attribute VB_Name = "modSchemaGuard"
 
 Option Explicit
 
+' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
+'
+' GetTableData vraca Empty za oba, pa citac koji radi samo
+' "If IsEmpty(data) Then Exit Function" tumaci nedostajucu tabelu kao "nema
+' redova". Tamo gde prazna lista nosi POSLOVNO ZNACENJE -- prazan izbor fakture
+' je avans, prazan izbor bloka je poziv na broj -- to je fail-open: kvar postane
+' legitiman drugi ishod.
+'
+' RequireColumnIndex ovo NE pokriva: kad tabele nema, citac izadje pre nego sto
+' do provere kolona uopste dodje.
+Public Sub RequireTable(ByVal tableName As String, ByVal sourceName As String)
+    If GetTable(tableName) Is Nothing Then
+        Err.Raise vbObjectError + 7301, sourceName, _
+                  "Tabela '" & tableName & "' nije dostupna."
+    End If
+End Sub
+
 Public Function RequireColumnIndex(ByVal tableName As String, _
                                    ByVal columnName As String, _
                                    ByVal sourceName As String) As Long
