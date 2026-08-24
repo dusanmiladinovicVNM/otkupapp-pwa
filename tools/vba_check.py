@@ -936,6 +936,11 @@ def check_array_copy(path: str, lines: list[str]) -> list[Finding]:
 _REG_RUNONE = re.compile(r"^\s*RunOne\s+(\d+)\s*$")
 _REG_IME = re.compile(r"^\s*Case\s+(\d+)\s*:\s*TestName\s*=\s*\"([^\"]+)\"")
 _REG_POZIV = re.compile(r"^\s*Case\s+(\d+)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$")
+# Telo testa: `Private Sub T_Ime()`, BEZ parametara. Uzak namerno -- test se u
+# ovom projektu uvek zove bez argumenata, pa bi siri obrazac pokupio i pomocne
+# procedure i pravio lazne nalaze.
+_REG_TELO = re.compile(r"^\s*(?:Public|Private)\s+Sub\s+(T_[A-Za-z0-9_]*)\s*\(\s*\)\s*$",
+                       re.I)
 
 
 _Reg = dict[int, tuple[int, str]]
@@ -1063,6 +1068,46 @@ def check_test_registry(path: str, lines: list[str]) -> list[Finding]:
             out.append(Finding(path, 1, "REGISTAR",
                                f"Rupa u numeraciji testova: {rupe}. Registar ide "
                                f"1..{max(svi)} bez preskakanja."))
+
+    # --- registri vs STVARNA TELA -------------------------------------------
+    #
+    # Sve dosad poredi tri registra MEDJUSOBNO. Ali test koji je napisan a nije
+    # upisan NIGDE ostavlja sva tri registra savrseno saglasna -- i nikad se ne
+    # izvrsi. Suite ostaje zelena, a testa u njoj nema.
+    #
+    # Obrnut smer ("Case zove proceduru koje nema") se OVDE ne proverava: to vec
+    # hvata NEDEFINISAN, koji poziv iza `Case N:` cita kao svaki drugi poziv.
+    # Dva nalaza za isti kvar su sum.
+    # Kljuc je malim slovima (VBA je case-insensitive), ali se PRIJAVLJUJE ime
+    # onako kako stoji u izvoru -- poruku cita covek koji ga trazi u fajlu.
+    telesa: dict[str, tuple[int, str]] = {}
+    for i, ln in enumerate(lines, 1):
+        m = _REG_TELO.match(_strip_comment(ln))
+        if m:
+            telesa.setdefault(m.group(1).lower(), (i, m.group(1)))
+
+    if telesa:
+        registrovana = {v[1].lower() for v in pozivi.values()}
+        for ime_l, (ln, ime) in sorted(telesa.items(), key=lambda kv: kv[1][0]):
+            if ime_l not in registrovana:
+                out.append(Finding(path, ln, "REGISTAR",
+                                   f"Test '{ime}' postoji kao procedura, ali ga "
+                                   f"InvokeTest ne zove -- nikad se ne izvrsava, a "
+                                   f"sva tri registra su saglasna."))
+
+    # Isti cilj pod DVA indeksa: jedan test se izvrsi dvaput, drugi nikad. Dupli
+    # INDEKS to ne hvata, jer su indeksi razliciti.
+    po_cilju: dict[str, tuple[list[int], str]] = {}
+    for n, (ln, cilj) in pozivi.items():
+        stavka = po_cilju.setdefault(cilj.lower(), ([], cilj))
+        stavka[0].append(n)
+    for _, (indeksi, cilj) in sorted(po_cilju.items()):
+        if len(indeksi) > 1:
+            ln = pozivi[sorted(indeksi)[1]][0]
+            out.append(Finding(path, ln, "REGISTAR",
+                               f"'{cilj}' je registrovan pod indeksima "
+                               f"{sorted(indeksi)}. Jedan test se izvrsava dvaput, "
+                               f"a onaj kome indeks pripada nikad."))
 
     # Najtisi razlaz: Case N zove telo TUDJEG testa. Oba "prolaze", a jedan se
     # nikad ne izvrsi -- ime u izvestaju pripada jednom, telo drugom.
@@ -1257,6 +1302,126 @@ End Sub
 # pa slucaj koji nije registar mora da prodje bez nalaza -- ta polovina je
 # vaznija: lazan nalaz u PostToolUse hook-u uci da se checker ignorise.
 REGISTAR_CASES = [
+    # Pomocna procedura sa T_ prefiksom ALI sa parametrom nije test -- test se u
+    # ovom projektu uvek zove bez argumenata. Bez ovog suzenja bi svaki takav
+    # helper bio prijavljen kao "neregistrovan test".
+    ('T_ helper sa parametrom nije test', 0, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+    End Select
+End Sub
+
+Private Sub T_Test1()
+End Sub
+
+Private Sub T_Pomocna(ByVal koji As Long)
+End Sub
+"""),
+    ('telo postoji ali nije registrovano', 1, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test2"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test2
+        Case 3: T_Test3
+    End Select
+End Sub
+
+Private Sub T_Test1()
+End Sub
+
+Private Sub T_Test2()
+End Sub
+
+Private Sub T_Test3()
+End Sub
+
+Private Sub T_Test4()
+End Sub
+"""),
+    ('isti cilj pod dva indeksa', 1, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test1"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test1
+        Case 3: T_Test3
+    End Select
+End Sub
+"""),
+    ('sva tela registrovana', 0, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test2"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test2
+        Case 3: T_Test3
+    End Select
+End Sub
+
+Private Sub T_Test1()
+End Sub
+
+Private Sub T_Test2()
+End Sub
+
+Private Sub T_Test3()
+End Sub
+"""),
     ('CEO InvokeTest prazan', 3, """Option Explicit
 Public Sub RunAllTests()
     RunOne 1
@@ -1509,7 +1674,7 @@ End Function
 Private Sub InvokeTest(ByVal idx As Long)
     Select Case idx
         Case 1: T_Test1
-        Case 2: T_Test1
+        Case 2: T_Drugo
         Case 3: T_Test3
     End Select
 End Sub
