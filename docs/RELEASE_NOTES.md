@@ -4919,159 +4919,147 @@ vidi zatvorena — ovaj unos nema nijednu otvorenu stavku.
 ## v2.64.0 — `v6-ui-177` · Uvoz izvoda na novom UI-ju (Faza E, stavka 17)
 
 Stavka menija **„Uvoz izvoda"** se više ne crta prigušena — otvara se kao pun
-ekran novog UI-ja, sa dve liste umesto jednog spiska.
+ekran novog UI-ja, sa dve liste umesto jednog spiska. Uz njega su ispravljena i
+**tri kvara u samoj mreži**, koji pogađaju svaki ekran novog UI-ja.
 
-**Šta operater dobija**
+### Šta operater dobija
 
-- **Red za mapiranje u mreži.** Stavke izvoda se sortiraju klikom na zaglavlje,
-  pretražuju (partner, poziv na broj, broj izvoda, broj računa) i sužavaju
-  čipovima: *Sve · Za obradu · Jaki ključevi · Za ručno · Obrađeno ·
-  Preskočeno*. „Za ručno" su stavke koje je automatika probala i vratila —
-  do sada su se od netaknutih razlikovale samo po slovu u koloni statusa.
-- **Kolona „Predlog" na svakom redu.** Šta bi automatika uradila sa tom
-  stavkom — *faktura 2/2026*, *blok 1/TEST*, *avans kupca X*, *nema jakog
-  ključa*, *nejasan smer* — vidi se za **sve** redove odjednom. Stara forma je
-  isto to pokazivala samo za izabranu stavku, u panelu ispod liste.
-- **Nova lista „Izvodi".** Po svakom uvezenom izvodu: početno stanje, uplate,
-  isplate, završno stanje, koliko stavki nosi i koliko ih je još otvoreno, i
-  **da li se slaže**. Stara forma je isti račun radila u jednom redu teksta i
-  samo za **najnoviji** izvod — izvod od pre dve nedelje koji ne štima nije se
-  video nigde.
-- **Pet radnji nad redom:** automatski mapiraj red, ručno mapiraj, preskoči,
-  mapiraj jake ključeve, automatski mapiraj sve.
-- **Ručno mapiranje u zoni:** tip (Kupac / Kooperant / OM), partner i cilj
-  (faktura ili blok). Izbor tipa se **predlaže sam** iz smera stavke — uplata
-  predlaže kupca, isplata kooperanta — kao i u staroj formi.
-- **Značka uz stavku menija** pokazuje koliko stavki još čeka, pa se to vidi i
-  sa drugog ekrana.
+**Red za mapiranje u mreži.** Stavke izvoda se sortiraju klikom na zaglavlje,
+pretražuju (partner, poziv na broj, broj izvoda, broj računa) i sužavaju
+čipovima: *Sve · Za obradu · Jaki ključevi · Za ručno · Obrađeno · Preskočeno*.
+„Za ručno" su stavke koje je automatika probala i vratila — do sada su se od
+netaknutih razlikovale samo po slovu u koloni statusa.
 
-**Šta je zaštićeno**
+**Kolona „Predlog" na svakom redu.** Šta bi automatika uradila sa tom stavkom —
+*faktura 2/2026*, *blok 1/TEST*, *avans kupca X*, *nema jakog ključa*, *nejasan
+smer* — vidi se za **sve** redove odjednom. Stara forma je isto to pokazivala
+samo za izabranu stavku, u panelu ispod liste.
 
-- Stavka pogrešnog **smera** se odbija **pre** klika, sa objašnjenjem, a ne kao
+**Nova lista „Izvodi".** Po svakom uvezenom izvodu: početno stanje, uplate,
+isplate, završno stanje, koliko stavki nosi i koliko ih je još otvoreno, i **da
+li se slaže**. Stara forma je isti račun radila u jednom redu teksta i samo za
+**najnoviji** izvod — izvod od pre dve nedelje koji ne štima nije se video
+nigde.
+
+**Pet radnji nad redom:** automatski mapiraj red, ručno mapiraj, preskoči,
+mapiraj jake ključeve, automatski mapiraj sve.
+
+**Ručno mapiranje u zoni:** tip (Kupac / Kooperant / OM), partner i cilj
+(faktura ili blok). Izbor tipa se **predlaže sam** iz smera stavke — uplata
+predlaže kupca, isplata kooperanta — kao i u staroj formi.
+
+**Značka uz stavku menija** pokazuje koliko stavki još čeka, pa se to vidi i sa
+drugog ekrana.
+
+### Šta je zaštićeno
+
+Ovo je ekran na kom se novac vezuje za dugove, pa je najveći deo posla otišao na
+to da **nijedan kvar ne može tiho da postane drugo knjiženje**.
+
+- **Stavka pogrešnog smera se odbija pre klika**, sa objašnjenjem, a ne kao
   greška pri knjiženju.
-- Blok sa više otvorenih otkupnih stavki nego što automatika sme da podeli i
-  dalje traži **izričitu potvrdu**: prikaže se tačna podela koja bi bila
-  proknjižena, uz izbor DA / avans / odustani.
-- **Ručno knjiženje uplate kupca se zaustavlja ako lista faktura nije
-  učitana.** Prazna lista i neuspelo čitanje izgledaju isto, a prazan izbor
-  fakture znači **avans** umesto zatvaranja duga.
-- Stavka čiji se interni broj u tabeli pojavljuje dvaput **vidi se u listi**,
-  ali radnja nad njom odbija da pogađa koju od dve misli.
-- Isti **broj izvoda** sa **dva različita računa** firme se vodi kao dva
-  izvoda, ne kao jedan — banke te brojeve dodeljuju po računu. Isto važi i za
-  **isti broj na istom računu iz drugog ciklusa**: banke numeraciju ponavljaju
-  po godini, pa bi se dva izvoda spojila u jedan sa zbirom stavki preko oba.
-- **Ručno mapiranje na kooperantski blok pamti i otkupno mesto.** Broj otkupa je
-  jedinstven po stanici, pa isti broj bloka može da postoji na dva otkupna mesta;
-  lista blokova ih zato prikazuje odvojeno (`12 · OM Naziv`), a raspodela ide
-  samo na stavke izabranog mesta.
+- **Blok sa više otvorenih stavki nego što automatika sme da podeli traži
+  izričitu potvrdu:** prikaže se tačna podela koja bi bila proknjižena, uz izbor
+  DA / avans / odustani.
+- **Ručno mapiranje se zaustavlja ako lista za izbor nije učitana.** Prazna
+  lista i neuspelo čitanje izgledaju isto, a prazan izbor nosi značenje: kod
+  kupca je to **avans**, kod kooperanta **poziv na broj iz izvoda**. Važi za obe
+  ručne rute.
+- **Nedostupna tabela više ne prolazi kao prazna.** Excel na oba slučaja vraća
+  isto, pa je nedostupna tabela faktura ili otkupa izgledala kao „nema redova".
+- **Ručno mapiranje na blok pamti i otkupno mesto.** Broj otkupa je jedinstven
+  po stanici, pa isti broj bloka može da postoji na dva otkupna mesta; lista ih
+  prikazuje odvojeno (`12 · OM Naziv`), a raspodela ide samo na stavke izabranog
+  mesta.
 - **Blok kome otkupno mesto nije upisano se vidi, ali se ne knjiži.** U listi
-  stoji označen (`12 · bez otkupnog mesta`), a ručno mapiranje ga odbija sa
-  objašnjenjem — jer bi inače raspodela zahvatila sva mesta sa tim brojem.
-  Takvih redova današnji unos ne pravi; nalaze se u starijim podacima.
-- **Značka koja ne može da pročita podatak ne pokazuje nulu.** Do sada bi
-  neuspelo čitanje ispalo kao „nema posla"; sada ostaje poslednja poznata
-  brojka, a greška se upisuje u log. Ako poznate brojke još nema — prvi pokušaj
-  u sesiji — uz stavku menija stoji **`!`**, a brojke na ekranu su crte. Prazna
-  značka znači „nema šta da čeka" i ne sme da se pojavi zato što čitanje nije
-  uspelo.
+  stoji označen (`12 · bez otkupnog mesta`), a ručno mapiranje ga odbija — inače
+  bi raspodela zahvatila sva mesta sa tim brojem. Takve redove današnji unos ne
+  pravi; nalaze se u starijim podacima.
+- **Blok koji je već u celosti plaćen se odbija.** I dalje se vidi u listi, ali
+  ako bi ga operater izabrao, ceo iznos bi se proknjižio kao **avans
+  kooperanta** i stavka bi bila označena obrađenom — bez pitanja. Operater je
+  rekao *koji* dug plaća, pa „nema šta da se plati" nije bezbedan ishod.
+  Kad blok dolazi iz **poziva na broj** (operater nije birao), avans ostaje
+  namerno ponašanje.
+- **Stavka čiji se interni broj u tabeli pojavljuje dvaput vidi se u listi**,
+  ali radnja nad njom odbija da pogađa koju od dve misli.
+- **Isti broj izvoda sa dva različita računa firme su dva izvoda**, ne jedan —
+  banke te brojeve dodeljuju po računu. Isto važi i za **isti broj na istom
+  računu iz drugog ciklusa**: numeracija se ponavlja po godini, pa bi se dva
+  izvoda spojila u jedan sa zbirom stavki preko oba.
+- **Značka koja ne može da pročita podatak ne pokazuje nulu.** Ostaje poslednja
+  poznata brojka, a greška se upisuje u log. Ako poznate brojke još nema — prvi
+  pokušaj u sesiji — uz stavku menija stoji **`!`**, a brojke na ekranu su crte.
+  Prazna značka znači „nema šta da čeka" i ne sme da se pojavi zato što čitanje
+  nije uspelo.
+- **Neuspelo čitanje se ne pamti.** Prolazan kvar je ranije mogao da zaključa
+  isti izbor: knjiženje je bilo bezbedno blokirano, ali sledeći klik nije ni
+  pokušavao ponovo.
 
-**Šta se nije promenilo**
+### Tri ispravke u mreži — vide se na svakom ekranu
 
-- **Uvoz izvoda (povlačenje PDF-ova i parsiranje) ostaje gde je bio.** Novi
-  ekran radi sa onim što je već uvezeno.
-- **Stara forma `frmBankaImport` radi kao i do sada** i nije menjana — kao i
-  sve druge stare forme tokom prelaska na novi UI.
-- Nalozi za isplatu (`Banka izveštaj`) nisu dirani.
-
-**Verifikacija**
-
-`RunAllTests` **109 testova, 0 palih** (baseline je bio 103). Šest novih
-testova i **osamnaest** sabotaža, uz jedanaest novih redova u test-svesci —
-`tblBankaImport` je do sada bio potpuno prazan, pa su sve tvrdnje o listama i
-čipovima radile nad praznim skupom.
-
-`RunBankaImportTestSuite` (tvrd fail-gate nad ovim područjem) ostaje zelena:
-**PASS=189, FAIL=0**.
-
-**Posle prvog smoke-a nad pravim podacima** ispravljeno je šest stvari koje
-headless testovi nisu mogli da vide: prazna kolona datuma, odsečen naslov
-mreže, negativan zbir u podnožju, objašnjenje koje je naleglo na traku ispod
-zone, interna šifra stavke u prvoj koloni (izbačena — tu je sada broj izvoda),
-i pečat verzije koji je pokazivao stariji build nego što je uvezen.
-
-Sedmi nalaz je došao sa compile kapije: raspored zone koristio je konstantu koja
-je u ljusci privatna. Uz ispravku je dodat test koji zonu **stvarno gradi i
-raspoređuje**, pa je taj put od sada pokriven — do tada ga nijedan test nije
-prolazio.
-
-Drugi smoke je našao još dve stvari. Kolona datuma je ostajala sa **tuđim
-tekstom** (natpisom sa prethodnog ekrana): na zatečenim sveskama datum
-transakcije ume da bude upisan kao broj oblika `ddmmyyyy`, a ne kao datum — takav
-red je rušio ispis ćelije, tiho. Ekran ga sada odbija i ostavlja polje prazno
-umesto da prikaže nešto tuđe. **Isti podatak ruši i druge ekrane**, pa je to
-prijavljeno kao zaseban posao.
-
-Druga je traka „Nema izabrane otpremnice…", koja se videla i tamo gde ne pripada
-— ostajala je upaljena sa ekrana Unos dokumenata. Sada se gasi kao i ostali
-delovi tog ekrana.
-
-Treći smoke je našao još jednu: na listi izvoda je kolona sa brojem otvorenih
-stavki bila prazna, iako je vrednost tačna — mreža je crtala sa širinama
-prethodne liste. Broj otvorenih i ukupan broj stavki sada stoje u **jednoj**
-koloni (`10 / 16`), isto kao brojka „Mapirano" iznad mreže.
-
-**Dva kvara su na kraju popravljena u samoj mreži, ne samo na ovom ekranu**, jer
-pogađaju sve:
-
-- **Kolone više ne kasne jednu listu.** Do sada je mreža posle prebacivanja
-  liste crtala sa širinama prethodne, pa je kolona koja je tamo bila skrivena
-  ostajala prazna i kad joj je vrednost tačna. Vidi se na svakom ekranu čije se
-  liste razlikuju po broju kolona — na primer na Fakturisanju, pri povratku sa
-  SEF-a na „Za fakturisanje".
+- **Kolone više ne kasne jednu listu.** Mreža je posle prebacivanja liste crtala
+  sa širinama prethodne, pa je kolona koja je tamo bila skrivena ostajala prazna
+  i kad joj je vrednost tačna — zaglavlje vidljivo, ćelije prazne. Vidi se na
+  svakom ekranu čije se liste razlikuju po broju kolona, na primer na
+  Fakturisanju pri povratku sa SEF-a na „Za fakturisanje".
 - **Datum koji nije datum više ne kvari prikaz.** Na zatečenim sveskama datum
   transakcije ume da bude upisan kao broj (`26062026` umesto 26.06.2026). Takva
-  vrednost je rušila ispis ćelije, tiho, i u njoj je ostajao tekst sa prethodnog
-  ekrana. Sada se odbija i polje ostaje prazno.
+  vrednost je rušila ispis ćelije, tiho, i u njoj je ostajao tekst sa
+  **prethodnog ekrana**. Sada se odbija i polje ostaje prazno.
+- **Traka „Nema izabrane otpremnice…"** se više ne vidi tamo gde ne pripada —
+  ostajala je upaljena sa ekrana Unos dokumenata.
 
-**Code review pred merge** je otvorio još stvari, sve ispravljene u istoj grani.
-Prvi krug: ručno mapiranje bloka nije nosilo otkupno mesto (pa bi u jednu
-raspodelu ušle stavke sa dva otkupna mesta), identitet izvoda nije nosio datum
-(pa bi se isti broj iz dva ciklusa spojio u jedan red), i pad čitanja brojki je
-postajao legitimna nula.
+### Šta se nije promenilo
 
-Drugi krug je pokazao da samo uvođenje otkupnog mesta nije dovoljno: prazno
-otkupno mesto do tada je značilo tri različite stvari a izgledalo kao jedna —
-„nije ni traženo" (poziv na broj, ispravno), „traženo, ali red nema stanicu"
-(mora da stane) i „traženo, ali kolone nema" (mora da pukne). Sada su razdvojena.
-Uz isti krug ide i prvi pad čitanja brojki, koji je do tada davao praznu značku.
+- **Uvoz izvoda (povlačenje PDF-ova i parsiranje) ostaje gde je bio.** Novi ekran
+  radi sa onim što je već uvezeno. Razlog nije dužina posla nego ishod:
+  `ImportBankaInbox_TX` ne vraća broj uvezenih ni broj duplikata, pa bi dugme
+  koje to ne može da kaže bilo tiho knjiženje. Ni stara forma uvozno dugme nema.
+- **Stara forma `frmBankaImport` radi kao i do sada** i nije menjana — kao i sve
+  druge stare forme tokom prelaska na novi UI.
+- **Nalozi za isplatu (`Banka izveštaj`) nisu dirani.**
+- **Račun se ne menja.** Ekran zove postojeće writer-e; podela po bloku i dalje
+  ide kroz `PlanBlokRaspodela`, istu koju koristi i prikaz, pa se prikaz i
+  knjiženje ne mogu razići.
 
-Uz svaku ispravku ide test nad novim fixture redom i sabotaža koja baš tu tvrdnju
-obara.
+### Sitnice koje se primete tek u pogonu
 
-Treći krug je našao istu grešku **jedan nivo iznad**: ako učitavanje liste
-blokova ne uspe, prazna lista je izgledala kao „operater nije birao blok" — pa bi
-se uzeo poziv na broj, bez otkupnog mesta. A kad iz njega ne ispadne nijedna
-otkupna stavka, ceo iznos se knjižio kao **avans kooperanta** i stavka se
-označavala obrađenom: neuspelo čitanje postajalo je uspešno knjiženje nečeg
-drugog. Provera „lista je stvarno učitana" sada stoji na **obe** ručne rute, ne
-samo na kupčevoj.
+- **Interne šifre nema u prikazu.** Prva kolona je broj izvoda; `BankaImportID`
+  operateru ne znači ništa. Identitet reda i dalje postoji, samo se ne crta.
+- **Broj otvorenih i ukupan broj stavki stoje u jednoj koloni** (`10 / 16`),
+  isto kao brojka „Mapirano" iznad mreže. Dve susedne brojke bez konteksta
+  čitaju se gore od jedne sa kosom crtom.
+- **„Obrađeno" i „preskočeno" su čipovi, ne liste.**
+- **Izvod bez saldo podataka nije neslaganje nego odsustvo podatka.** Uvozi
+  stariji od v6.18 te brojke nemaju, pa se ne prikazuju kao greška.
 
-Uz to: **nedostajuća tabela više ne prolazi kao prazna.** Excel na oba slučaja
-vraća isto, pa je nedostupna tabela faktura ili otkupa izgledala kao „nema
-redova" — a prazan izbor tu znači avans, odnosno poziv na broj.
+### Verifikacija
 
-Četvrti krug je zatvorio jednu sitnicu sa posledicom: kad učitavanje liste
-faktura prolazno ne uspe, ekran je to **pamtio**, pa sledeći klik na isti izbor
-nije ni pokušavao ponovo. Knjiženje je i dalje bilo bezbedno blokirano, ali je
-izbor ostajao zaključan do osvežavanja. Neuspelo čitanje se više ne pamti.
+Testovi **104–112** u `modTest`, `RunAllTests` **112 testova, 0 palih**
+(baseline je bio 103). **Trideset tri** sabotaže; svaka obara **tačno jedan**
+imenovani test, a izvor se posle vraćanja vraća bit-identično.
 
-Peti krug je zatvorio finansijski edge-case: **blok koji je već u celosti
-plaćen** i dalje se pojavljuje u listi blokova, a ako bi ga operater izabrao, ceo
-iznos bi se knjižio kao **avans kooperanta** i stavka bi bila označena obrađenom —
-bez pitanja. Operater je rekao *koji* dug plaća, pa „nema šta da se plati" nije
-bezbedan ishod. Takav izbor se sada odbija uz objašnjenje i ništa se ne knjiži.
-Kad blok dolazi iz **poziva na broj** (operater nije birao), avans i dalje ostaje
-namerno ponašanje.
+`RunBankaImportTestSuite` (tvrd fail-gate nad ovim područjem) ostaje zelena:
+**PASS=189, FAIL=0**. Pun podrazumevani set je zelen.
 
-`RunAllTests` je sada **112 testova, 0 palih**, uz **trideset tri** sabotaže.
+Fixture je dobio ono što do sada nije imao: **`tblBankaImport` je bio potpuno
+prazan**, pa su sve tvrdnje o listama, čipovima i jakim ključevima radile nad
+praznim skupom. Sada nosi dvanaest stavki izvoda u pet grupa, blok koji postoji
+na tri otkupna mesta (od kojih jedno nije upisano), blok koji je u celosti
+plaćen, i red čiji je datum transakcije upisan kao `ddmmyyyy` broj.
+
+**Sedam nalaza je došlo iz smoke-a nad pravim podacima, a pet iz code
+review-a** — među njima i tri koja bi svako moglo da završi kao pogrešno
+knjiženje. Ceo tok, sa uzrocima i merenjima, zapisan je u
+`docs/UI_MIGRACIJA_KATALOG.md` §9.10.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.** To je jedina otvorena
+> stavka ovog unosa i namerno se ne prećutkuje: u ovom istom radu je ručni
+> `Debug → Compile VBAProject` već jednom našao grešku (`Variable not defined`)
+> **posle potpuno zelenog `RunAllTests`** — u telu procedure koju nijedan test
+> nije zvao.
+
+> Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
+> `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
+> kojih u headless runu nema i padaju identično na netaknutom `main`-u.
