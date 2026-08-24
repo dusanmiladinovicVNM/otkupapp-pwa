@@ -720,8 +720,13 @@ Private Function RucnoKooperant(ByVal bimID As String, ByVal kooperantID As Stri
         End Select
     End If
 
+    ' Poslednji argument kaze writeru da je blok IZABRAN, ne izveden iz poziva
+    ' na broj. Ekran isti uslov proverava i gore (BuBlokZatvoren), i to nije
+    ' duplikat nego namera: modul unosa sudi po listi kakva je bila kad je
+    ' punjena, a writer po stanju u trenutku upisa.
     n = modBankaMapiranje.MapBankaImportAsKooperantBlockManual_TX( _
-            bimID, kooperantID, blok, True, potvrdjeno, scope)
+            bimID, kooperantID, blok, True, potvrdjeno, scope, _
+            (Len(Trim$(izabranBlok)) > 0))
 
     If n <= 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BU_RUCNO"), True

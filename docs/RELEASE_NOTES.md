@@ -5121,3 +5121,53 @@ Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §10.
 > Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
 > `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
 > kojih u headless runu nema i padaju identično na netaknutom `main`-u.
+
+
+---
+
+## v2.66.0 — `v6-ui-179` · izabran blok koji nema šta da plati se odbija svuda
+
+Ispravka u **knjiženju**, pa važi i za novi ekran i za staru formu.
+
+### Šta se moglo desiti
+
+Blok koji je već u celosti plaćen i dalje stoji u listi blokova — ona ne
+proverava dug. Ako bi ga operater izabrao, ceo iznos bi se proknjižio kao
+**avans kooperanta**, a stavka izvoda bila označena obrađenom. Bez pitanja, uz
+uspešnu transakciju.
+
+Operater je rekao *koji* dug plaća; „nema šta da se plati" tu nije bezbedan
+ishod nego protivrečnost. Takav izbor se sada odbija uz objašnjenje i **ništa se
+ne knjiži** — stavka ostaje otvorena.
+
+**Kad blok dolazi iz poziva na broj** (operater ga nije birao), avans ostaje
+namerno ponašanje — to je bezbedan izlaz dok je poreklo uplate dvosmisleno.
+
+Novi ekran je ovo već odbijao od `v2.64.0`; sada isto važi i za **staru formu**
+`frmBankaImport`, koja je do sada ulazila u tu granu bez ikakve provere.
+
+### I kad se lista uopšte ne učita
+
+Stara forma je do sada imala i tiši oblik istog problema: ako **učitavanje liste
+blokova ne uspe**, prazan spisak je izgledao kao „kooperant nema blokova" — pa bi
+se uzeo poziv na broj, a odatle bi ceo iznos opet završio kao avans.
+
+Sada se to zaustavlja uz poruku. Forma je isto pravilo već imala za fakture;
+blokovi su ga dobili. Uz to, **nedostupna tabela više ne prolazi kao prazna
+lista** — ni za fakture ni za blokove, ni u samom knjiženju.
+
+Pri odbijanju se sada dobija **jedna** poruka umesto dve: konkretna iz knjiženja,
+bez generičke „nije izvršeno" preko nje.
+
+### Verifikacija
+
+`T21_IzabranPlacenBlokNijeAvans` u `RunBankaImportTestSuite` — suita koja piše
+kroz transakciju sa rollback-om, pa se meri **stvarno knjiženje**, ne samo
+odluka. `PASS=196, FAIL=0` (bilo 189). `RunAllTests` **113 testova, 0 palih.**
+
+Test meri oba ishoda nad istim podacima: izabran blok → ništa se ne knjiži i
+stavka ostaje otvorena; isti blok iz poziva na broj → avans, celim iznosom.
+
+Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §9.10.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**

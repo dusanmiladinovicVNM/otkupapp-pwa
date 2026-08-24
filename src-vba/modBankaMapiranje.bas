@@ -61,6 +61,11 @@ Private Const ERR_BMAP_BASE As Long = vbObjectError + 2900
 ' parcijalno stanje. Public je da ga test suite moze proveriti po broju.
 ' Vrednost = ERR_BMAP_BASE + 50 (ERR_BMAP_BASE je Private, pa se pise razvijeno).
 Public Const ERR_BMAP_MANUAL_REQUIRED As Long = vbObjectError + 2950
+' IZABRAN BLOK BEZ OTVORENIH STAVKI. Nije isto sto i "nema kandidata": kad blok
+' dolazi iz poziva na broj, avans JESTE namerno ponasanje -- bezbedan izlaz dok
+' je poreklo dvosmisleno. Kad je operater IZABRAO konkretan blok, "nema sta da
+' se plati" nije bezbedan ishod nego protivrecnost. v. MapBankaImportAsKooperantBlockCore.
+Public Const ERR_BMAP_BLOK_PRAZAN As Long = vbObjectError + 2951
 
 ' Blok otkupa po modelu ima najvise 2 otvorene klase (vrste voca). Treci kandidat
 ' je anomalija podataka (recikliran broj bloka, duplirani unos) - AUTOMATSKA
@@ -915,10 +920,11 @@ Private Function MapBankaImportAsKooperantBlockManual(ByVal bankaImportID As Str
                                                      ByVal brojBloka As String, _
                                                      Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                      Optional ByVal allowManyCandidates As Boolean = False, _
-                                                     Optional ByVal stanicaScope As String = "") As Long
+                                                     Optional ByVal stanicaScope As String = "", _
+                                                     Optional ByVal blokIzabran As Boolean = False) As Long
     MapBankaImportAsKooperantBlockManual = MapBankaImportAsKooperantBlockCore( _
         bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
-        stanicaScope)
+        stanicaScope, blokIzabran)
 End Function
 
 Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As String, _
@@ -926,8 +932,12 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
                                                         ByVal brojBloka As String, _
                                                         Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                         Optional ByVal allowManyCandidates As Boolean = False, _
-                                                        Optional ByVal stanicaScope As String = "") As Long
+                                                        Optional ByVal stanicaScope As String = "", _
+                                                        Optional ByVal blokIzabran As Boolean = False, _
+                                                        Optional ByRef outPrijavljeno As Boolean) As Long
     Dim tx As clsTransaction
+
+    outPrijavljeno = False
     
     On Error GoTo EH
     
@@ -940,7 +950,7 @@ Public Function MapBankaImportAsKooperantBlockManual_TX(ByVal bankaImportID As S
     
     MapBankaImportAsKooperantBlockManual_TX = MapBankaImportAsKooperantBlockManual( _
         bankaImportID, kooperantID, brojBloka, savePartnerMapFlag, allowManyCandidates, _
-        stanicaScope)
+        stanicaScope, blokIzabran)
     
     tx.CommitTx
 
@@ -983,6 +993,10 @@ EH:
 
     If Not gBankaSilentBatch Then
         MsgBox "Gre" & ChrW(353) & "ka pri rucnom mapiranju kooperanta po bloku, promene vra" & ChrW(263) & "ene: " & errDesc, vbCritical, APP_NAME
+        ' Pozivalac je vec obavesten, i to KONKRETNO. Bez ovoga forma povrh toga
+        ' pokaze jos i genericko "NIJE izvrseno", pa operater za jednu ocekivanu
+        ' validacionu situaciju dobija DVA dijaloga.
+        outPrijavljeno = True
     End If
 
     MapBankaImportAsKooperantBlockManual_TX = 0
@@ -993,7 +1007,8 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
                                                     ByVal blockNo As String, _
                                                     Optional ByVal savePartnerMapFlag As Boolean = True, _
                                                     Optional ByVal allowManyCandidates As Boolean = False, _
-                                                    Optional ByVal stanicaScope As String = "") As Long
+                                                    Optional ByVal stanicaScope As String = "", _
+                                                    Optional ByVal blokIzabran As Boolean = False) As Long
     Dim bim As Variant
     Dim omID As String
     Dim omNaziv As String
@@ -1035,6 +1050,26 @@ Private Function MapBankaImportAsKooperantBlockCore(ByVal bankaImportID As Strin
     kandidati = GetOtkupCandidatesForKooperantBlock(kooperantID, blockNo, _
                                                     allowManyCandidates, stanicaScope)
     preostaloZaRaspodelu = isplataUkupno
+
+    ' IZABRAN BLOK BEZ OTVORENIH STAVKI JE PROTIVRECNOST, NE AVANS.
+    '
+    ' Grana ispod ceo iznos knjizi kao avans kooperanta i stavku oznacava
+    ' obradjenom. Za AUTOMATSKO mapiranje je to namerno: dok je poreklo
+    ' dvosmisleno, avans je bezbedan izlaz. Ali kad je operater izabrao KONKRETAN
+    ' blok, on je rekao KOJI dug placa -- pa tiha promena u avans nije bezbedan
+    ' ishod nego DRUGA finansijska semantika od one koju je izabrao, uz uspesnu
+    ' transakciju i stavku koja ispada iz posla.
+    '
+    ' Ekran to zaustavlja i pre poziva (modScrBankaUvoz.BuBlokZatvoren), ali
+    ' kapija mora i OVDE: modul unosa proverava nad snimkom iz trenutka kad je
+    ' lista punjena, a izmedju punjenja i potvrde se stanje moze promeniti --
+    ' i legacy frmBankaImport ovamo ulazi bez ijedne UI provere. Isti obrazac kao
+    ' ApplyAvansToOtkup i UplataFakturaProblem (.claude/rules/testovi.md).
+    If IsEmpty(kandidati) And blokIzabran Then
+        Err.Raise ERR_BMAP_BLOK_PRAZAN, "MapBankaImportAsKooperantBlockCore", _
+                  "Izabrani blok nema otvorenih stavki " & ChrW(8212) & " ni" & ChrW(353) & "ta nije knji" & ChrW(382) & "eno. " & _
+                  "Proveri da li je blok ve" & ChrW(263) & " pla" & ChrW(263) & "en."
+    End If
 
     If IsEmpty(kandidati) Then
         If SaveNovac( _
@@ -2421,6 +2456,19 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     
     If Trim$(kooperantID) = "" Then Exit Function
     If Trim$(brojBloka) = "" Then Exit Function
+    
+    ' NEDOSTAJUCA TABELA NIJE "NEMA KANDIDATA". GetTableData vraca Empty za oba,
+    ' a prazan skup kandidata writer knjizi kao AVANS i stavku oznacava
+    ' obradjenom. Kvar bi tako postao drugi poslovni ishod -- i to za SVE
+    ' pozivaoce, ne samo za rucni put: automatsko mapiranje ovamo ulazi bez
+    ' ijedne UI provere.
+    '
+    ' Greska se PROPAGIRA, ne pretvara u "Error" na tom redu:
+    ' AutoMapBankaImportRowBatch guta samo "ovaj red mora rucno"
+    ' (IsManualRequiredBankaError), pa nedostupna tabela obara i rollback-uje CEO
+    ' batch. Tako i treba -- nedostupna tblOtkup nije svojstvo jednog bankarskog
+    ' reda nego kvar instalacije, i nema smisla oznaciti jedan red a nastaviti.
+    RequireTable TBL_OTKUP, "GetOtkupCandidatesForKooperantBlock"
     
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Function

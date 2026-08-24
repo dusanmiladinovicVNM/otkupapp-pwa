@@ -2109,6 +2109,92 @@ koju sam uvodi.
 
 ---
 
+
+#### Writer je zatvoren i za svoje ostale pozivaoce (`v6-ui-179`)
+
+PR ekrana je ovo ostavio zapisano kao **ublažavanje, ne ispravku**: zatvorene su
+putanje kojima se do fail-open grane dolazilo *sa novog ekrana*, ali
+`frmBankaImport` i automatsko mapiranje su i dalje ulazili u istu granu.
+
+`MapBankaImportAsKooperantBlockCore` na `IsEmpty(kandidati)` knjiži ceo iznos kao
+`NOV_VIRMAN_AVANS_KOOP` i radi `UpdateBankaImportStatus … "Da"`. Za **automatsko**
+mapiranje je to namerno i dokumentovano — bezbedan izlaz dok je poreklo
+dvosmisleno. Za **izabran** blok nije.
+
+Writer to nije mogao da razlikuje: `MapBankaImportAsKooperantBlockManual` je samo
+prosleđivao argumente. Sada nosi `blokIzabran`, a `Core` na
+`IsEmpty(kandidati) And blokIzabran` diže `ERR_BMAP_BLOK_PRAZAN` umesto da knjiži.
+
+**Isti uslov postoji i na ekranu** (`BuBlokZatvoren`), i to nije duplikat nego
+pravilo iz `.claude/rules/testovi.md` §5: modul unosa sudi po **snimku iz
+trenutka kad je lista punjena**, a writer po stanju **u trenutku upisa** — i
+legacy forma ovamo ulazi bez ijedne UI provere. Isti obrazac kao
+`ApplyAvansToOtkup` i `UplataFakturaProblem`.
+
+`frmBankaImport` dobija jedan `Private Function ManualBlokIzabran()` koji čita
+**iste kontrole** iz kojih već čita `EffectiveManualBlockNo`, i prosleđuje ga.
+Razlika koju forma već pravi samo je dobila ime.
+
+**Tvrdnja živi u `RunBankaImportTestSuite`, ne u `RunAllTests`** — writer piše, a
+`RunAllTests` je nemutirajuća suite (mutirajući test tamo obara CI kapiju
+`who_writes`). `T21_IzabranPlacenBlokNijeAvans` seje sopstveni blok plaćen do
+nule i meri **oba** ishoda nad istim podacima, razlikujući ih samo poslednjim
+argumentom:
+
+| Ulaz | Ishod |
+|---|---|
+| `blokIzabran = True` | ništa se ne knjiži, `tblNovac` prazan, stavka **ostaje otvorena** |
+| `blokIzabran = False` (poziv na broj) | avans, stavka zatvorena, celim iznosom |
+
+Druga polovina postoji zato što bi se pravilo moglo „ispraviti" gašenjem
+legitimne grane. Sabotaža `banka-writer-placen-blok-je-avans` obara **tri**
+provere tog testa.
+
+**Ali sama zaštita u writeru nije bila dovoljna za legacy formu.** Writer radi
+sa informacijom koju dobije, a `frmBankaImport` ju je davao pogrešno u jednom
+slučaju: njen učitavač blokova nije razlikovao „kooperant nema blokova" od
+„nisam uspeo da pročitam blokove". Prazan kombo → `ManualBlokIzabran = False` →
+poziv na broj → prazan skup kandidata → **avans**, uz stavku označenu obrađenom.
+
+Ista klasa, i forma je za nju **već imala rešenje jednu funkciju dalje**:
+`m_FaktureLoadOk` / `m_FaktureLoadErr` postoje od ranije, ali samo za fakture.
+Blokovi su ih sada dobili, sa istim `EH` obrascem i istom kapijom pre knjiženja.
+
+Uz to su **oba** učitavača dobila `RequireTable`: i za fakture je nedostajuća
+tabela do sada prolazila kao „nema faktura" (zastavica bi ostala `True`), što je
+isti fail-open samo na drugoj listi.
+
+**A pravu granicu drži domen.** `GetOtkupCandidatesForKooperantBlock` je i sam
+na `IsEmpty(data)` izlazio praznim skupom, pa bi nedostupna `tblOtkup` završila
+kao avans **za svakog pozivaoca**, uključujući automatsko mapiranje koje UI
+proveru i nema. Sada i on ide kroz `RequireTable`.
+
+Greška se pri tom **propagira**, ne pretvara u `Error` na tom redu:
+`AutoMapBankaImportRowBatch` guta **samo** „ovaj red mora ručno"
+(`IsManualRequiredBankaError` pokriva četiri broja), pa nedostupna tabela obara i
+rollback-uje **ceo** batch. Tako i treba — nedostupna `tblOtkup` nije svojstvo
+jednog bankarskog reda nego kvar instalacije.
+
+| Sloj | Šta hvata |
+|---|---|
+| forma / ekran | pad učitavanja liste → **STOP**, sa objašnjenjem |
+| domen (`GetOtkupCandidates…`) | nedostupna tabela → **greška**, za sve pozivaoce |
+| writer (`blokIzabran`) | izabran blok bez otvorenih stavki → **greška** |
+
+**Šta ostaje neizmereno:** kapija u `frmBankaImport` i `ManualBlokIzabran()`.
+`m_BlokoviLoadOk` je `Private` u `.frm`, a kapija stoji u click handleru — test
+bi morao da vozi formu. Provereno **čitanjem**, i tako se i beleži. Domenski i
+writer sloj **jesu** izmereni (`T21`, `RequireTable` sabotaža).
+
+> Seed je pri tom morao da bude prava uplata, ne status kolona:
+> `SeedOtkupIsplacen` piše `Isplaceno`, a resolver računa
+> `vrednost − GetUplataForOtkup(OtkupID)` — dakle sabira `Isplata` iz `tblNovac`.
+> Prvi pokušaj je zato pao na sopstvenom preduslovu, što je i bila poenta
+> preduslova.
+
+
+---
+
 ## 10. Mreža: ćelija koja ne ume da se prikaže (`v6-ui-178`)
 
 Ovo nije ekran nego **ljuska**, i nastalo je iz nalaza Banka uvoza (§9.10): datum

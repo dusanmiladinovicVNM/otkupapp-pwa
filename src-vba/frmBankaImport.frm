@@ -32,6 +32,12 @@ Private Const STRONG_MAP_CAPTION As String = "Mapiraj jake kljuceve"
 ' liste. Zato se pad pamti i knjizenje kupca se blokira dok se ne osvezi.
 Private m_FaktureLoadOk As Boolean
 Private m_FaktureLoadErr As String
+' ISTO ZA BLOKOVE. Prazna lista blokova znaci "uzmi poziv na broj iz izvoda", a
+' odatle prazan skup kandidata zavrsi kao AVANS kooperanta uz stavku oznacenu
+' obradjenom. Pad ucitavanja zato ne sme da izgleda kao prazna lista -- ista
+' klasa zbog koje m_FaktureLoadOk vec postoji.
+Private m_BlokoviLoadOk As Boolean
+Private m_BlokoviLoadErr As String
 
 Private Sub UserForm_Activate()
     On Error GoTo EH
@@ -503,6 +509,10 @@ Private Sub LoadFaktureForSelectedKupac()
     kupacID = SelectedPartnerID()
     If Trim$(kupacID) = "" Then Exit Sub
 
+    ' Nedostajuca tabela NIJE "nema faktura": GetTableData vraca Empty za oba, a
+    ' prazan izbor fakture znaci AVANS. Zastavica ispod bi ostala True.
+    RequireTable TBL_FAKTURE, "frmBankaImport.LoadFaktureForSelectedKupac"
+
     data = GetTableData(TBL_FAKTURE)
     If IsEmpty(data) Then Exit Sub
 
@@ -550,10 +560,18 @@ Private Sub LoadOtkupBlokoviForSelectedKooperant()
     Dim i As Long
     
     cmbOtkupBlok.Clear
+    m_BlokoviLoadOk = True
+    m_BlokoviLoadErr = ""
+    
+    On Error GoTo EH
     
     If cmbPartner.value = "" Then Exit Sub
     
     kooperantID = SelectedPartnerID()
+    
+    ' Nedostajuca tabela NIJE "kooperant nema blokova": prazna lista vodi na
+    ' poziv na broj, a odatle prazan skup kandidata zavrsi kao AVANS.
+    RequireTable TBL_OTKUP, "frmBankaImport.LoadOtkupBlokoviForSelectedKooperant"
     
     data = GetTableData(TBL_OTKUP)
     If IsEmpty(data) Then Exit Sub
@@ -580,6 +598,20 @@ Private Sub LoadOtkupBlokoviForSelectedKooperant()
     For Each k In dict.keys
         cmbOtkupBlok.AddItem CStr(k)
     Next k
+
+    Exit Sub
+
+EH:
+    ' Pad ucitavanja NE sme da izgleda kao "kooperant nema blokova". Prazna lista
+    ' vodi na poziv na broj, a odatle prazan skup kandidata zavrsi kao AVANS uz
+    ' stavku oznacenu obradjenom -- ista klasa zbog koje postoji m_FaktureLoadOk.
+    m_BlokoviLoadOk = False
+    m_BlokoviLoadErr = Err.description
+
+    LogErr "frmBankaImport.LoadOtkupBlokoviForSelectedKooperant"
+
+    On Error Resume Next
+    cmbOtkupBlok.Clear
 End Sub
 
 Private Sub btnAutoJedan_Click()
@@ -691,6 +723,19 @@ Private Sub btnSacuvajRucno_Click()
                 Exit Sub
             End If
 
+            ' AKO LISTA BLOKOVA NIJE UCITANA, prazan combo NE znaci "operater
+            ' nije birao blok". Fallback na poziv na broj bi tada bio pogadjanje,
+            ' a ako iz njega ne ispadne nijedna otkupna stavka, ceo iznos se
+            ' knjizi kao AVANS kooperanta i stavka se oznaci obradjenom.
+            ' Isto pravilo koje ova forma vec ima za fakture (m_FaktureLoadOk).
+            If Not m_BlokoviLoadOk Then
+                MsgBox "Lista blokova NIJE u" & ChrW(269) & "itana (" & _
+                       m_BlokoviLoadErr & ")." & vbCrLf & _
+                       "Prazna lista NE zna" & ChrW(269) & "i poziv na broj.", _
+                       vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
             ' ISTI blok koji pokazuje RUCNI preview: izbor iz liste ako postoji,
             ' inace poziv na broj iz izvoda. Ranije je prazan combo isao u zasebnu
             ' granu (`MapBankaImportAsKooperantBlock_TX`, bez potvrde podele), pa
@@ -708,9 +753,18 @@ Private Sub btnSacuvajRucno_Click()
 
             If Not ConfirmManyCandidatesSplit(bimID, kooperantID, brojBloka, potvrdjenaPodela) Then Exit Sub
 
-            n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, True, potvrdjenaPodela)
+            ' Poslednji argument: blok je IZABRAN iz liste, ne izveden iz poziva
+            ' na broj. Bez njega bi izabran a vec placen blok tiho postao avans
+            ' kooperanta, a stavka bila oznacena obradjenom.
+            ' Poslednji argument vraca da li je writer VEC prijavio gresku --
+            ' inace operater za jednu ocekivanu validacionu situaciju dobija DVA
+            ' dijaloga: konkretan iz writera i genericki odavde.
+            Dim vecPrijavljeno As Boolean
+            n = MapBankaImportAsKooperantBlockManual_TX(bimID, kooperantID, brojBloka, _
+                                                       True, potvrdjenaPodela, "", _
+                                                       ManualBlokIzabran(), vecPrijavljeno)
 
-            ReportManualResult (n > 0), "Kooperant"
+            If n > 0 Or Not vecPrijavljeno Then ReportManualResult (n > 0), "Kooperant"
 
         Case "OM"
             Dim omID As String
@@ -925,6 +979,16 @@ End Sub
 '
 ' Kad je ovo bila JEDNA funkcija za oba preview-a, rucni izbor bloka je menjao i
 ' AUTO prikaz: preview je pokazivao blok B, a "Automatski mapiraj red" knjizio A.
+' Da li je blok IZABRAN iz liste, ili je izveden iz poziva na broj.
+'
+' Ista razlika koju vec pravi EffectiveManualBlockNo, samo imenovana: writer na
+' osnovu nje odlucuje sme li prazan skup kandidata da postane avans. Izabran blok
+' bez otvorenih stavki je protivrecnost -- operater je rekao KOJI dug placa.
+Private Function ManualBlokIzabran() As Boolean
+    If Trim$(nz(cmbMapTip.value, "")) <> "Kooperant" Then Exit Function
+    ManualBlokIzabran = (Trim$(nz(cmbOtkupBlok.value, "")) <> "")
+End Function
+
 Private Function EffectiveManualBlockNo(ByVal bankaImportID As String) As String
     Dim manualBlok As String
 
