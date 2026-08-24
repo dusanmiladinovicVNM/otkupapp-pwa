@@ -2167,8 +2167,13 @@ isti fail-open samo na drugoj listi.
 **A pravu granicu drži domen.** `GetOtkupCandidatesForKooperantBlock` je i sam
 na `IsEmpty(data)` izlazio praznim skupom, pa bi nedostupna `tblOtkup` završila
 kao avans **za svakog pozivaoca**, uključujući automatsko mapiranje koje UI
-proveru i nema. Sada i on ide kroz `RequireTable`, pa takav red završi kao
-`Error` — batch grešku hvata po redu — što jeste istina o njemu.
+proveru i nema. Sada i on ide kroz `RequireTable`.
+
+Greška se pri tom **propagira**, ne pretvara u `Error` na tom redu:
+`AutoMapBankaImportRowBatch` guta **samo** „ovaj red mora ručno"
+(`IsManualRequiredBankaError` pokriva četiri broja), pa nedostupna tabela obara i
+rollback-uje **ceo** batch. Tako i treba — nedostupna `tblOtkup` nije svojstvo
+jednog bankarskog reda nego kvar instalacije.
 
 | Sloj | Šta hvata |
 |---|---|

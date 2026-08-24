@@ -2461,8 +2461,13 @@ Public Function GetOtkupCandidatesForKooperantBlock(ByVal kooperantID As String,
     ' a prazan skup kandidata writer knjizi kao AVANS i stavku oznacava
     ' obradjenom. Kvar bi tako postao drugi poslovni ishod -- i to za SVE
     ' pozivaoce, ne samo za rucni put: automatsko mapiranje ovamo ulazi bez
-    ' ijedne UI provere. Sa ovim, takav red zavrsi kao "Error" (batch gresku
-    ' hvata po redu), sto jeste istina.
+    ' ijedne UI provere.
+    '
+    ' Greska se PROPAGIRA, ne pretvara u "Error" na tom redu:
+    ' AutoMapBankaImportRowBatch guta samo "ovaj red mora rucno"
+    ' (IsManualRequiredBankaError), pa nedostupna tabela obara i rollback-uje CEO
+    ' batch. Tako i treba -- nedostupna tblOtkup nije svojstvo jednog bankarskog
+    ' reda nego kvar instalacije, i nema smisla oznaciti jedan red a nastaviti.
     RequireTable TBL_OTKUP, "GetOtkupCandidatesForKooperantBlock"
     
     data = GetTableData(TBL_OTKUP)
