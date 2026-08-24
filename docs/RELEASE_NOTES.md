@@ -5205,3 +5205,38 @@ samu formu, a ne modul.
 Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §11.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+
+---
+
+## v2.68.0 — provera registra testova
+
+Bez promene ponašanja aplikacije. Ovo je posao na **alatu za proveru koda**.
+
+### Šta je bio rizik
+
+Svaki test je upisan na **tri** mesta u `modTest`: šta se pušta, pod kojim se
+imenom prijavljuje pad, i šta se stvarno zove. Ta tri spiska se održavaju rukom i
+već su se razišla pri spajanju grana — a nijedan razlaz se ne vidi:
+
+- test se broji, ali se **ne izvršava** — suite ostaje zelena;
+- pad se prijavi pod imenom `T_Nepoznat_114`;
+- test postoji i prolazi, ali se nikad ne pušta;
+- `Case 114` zove telo testa 113 — oba „prolaze", jedan se ne izvrši.
+
+### Šta se sada proverava
+
+`vba_check` (isti alat koji već brani od ne-ASCII znakova i duplih imena) traži
+da sva tri spiska nose **isti skup**, bez rupa u numeraciji i bez dupliranog
+indeksa, i da se **ime slaže sa pozivom**.
+
+Provera se okida sadržajem, ne imenom fajla, pa modul koji takav registar nema
+ostaje netaknut.
+
+### Verifikacija
+
+Devet novih slučajeva u `--self-test` (56 ukupno, bilo 47), i **svaki je dokazan
+u oba smera**: kad se pravilo namerno isključi, self-test pocrveni po imenu tog
+slučaja. Uz to je provera puštena i nad **pravim** `modTest.bas` — uklonjen
+`RunOne` i zamenjen poziv u `Case` grani oba puta prijavljeni sa tačnim brojem
+linije.
