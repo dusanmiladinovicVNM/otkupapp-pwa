@@ -938,41 +938,67 @@ _REG_IME = re.compile(r"^\s*Case\s+(\d+)\s*:\s*TestName\s*=\s*\"([^\"]+)\"")
 _REG_POZIV = re.compile(r"^\s*Case\s+(\d+)\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*$")
 
 
-def _registar_blokovi(lines: list[str]) -> tuple[dict, dict, dict]:
-    """(RunOne, TestName, InvokeTest) -> {indeks: (linija, vrednost)}.
+_Reg = dict[int, tuple[int, str]]
+
+
+def _registar_blokovi(lines: list[str]) -> tuple[_Reg, _Reg, _Reg,
+                                                 list[tuple[str, int, int]], bool]:
+    """(RunOne, TestName, InvokeTest, duplikati, je_registar).
 
     Duplikat se NE gubi: prvo vidjenje ostaje, a duplikati se skupljaju posebno.
+
+    `je_registar` prati STRUKTURU -- postojanje sve tri procedure -- a NE broj
+    parsiranih unosa. Razlika je bila propust: dok se okidalo na "sva tri
+    recnika su neprazna", registar kome je CEO InvokeTest ostao bez ijedne Case
+    grane prolazio je kao "ovo nije registar" i provera se gasila. Dakle bas
+    najgori slucaj -- 114 testova se broji, nijedan se ne izvrsi -- nije bio
+    pokriven.
     """
-    runone: dict[int, tuple[int, str]] = {}
-    imena: dict[int, tuple[int, str]] = {}
-    pozivi: dict[int, tuple[int, str]] = {}
+    runone: _Reg = {}
+    imena: _Reg = {}
+    pozivi: _Reg = {}
     dupli: list[tuple[str, int, int]] = []
 
+    ima_runall = False
+    ima_imena = False
+    ima_pozivi = False
+
+    u_runall = False
     u_imenu = False
     u_pozivu = False
 
     for i, ln in enumerate(lines, 1):
         gol = _strip_comment(ln)
 
+        if re.match(r"^\s*(Public|Private)?\s*Sub\s+RunAllTests\s*\(", gol, re.I):
+            ima_runall = True
+            u_runall = True
+            continue
         if re.match(r"^\s*Private\s+Function\s+TestName\s*\(", gol, re.I):
+            ima_imena = True
             u_imenu = True
             continue
         if re.match(r"^\s*Private\s+Sub\s+InvokeTest\s*\(", gol, re.I):
+            ima_pozivi = True
             u_pozivu = True
             continue
         if re.match(r"^\s*End\s+(Function|Sub)\s*$", gol, re.I):
+            u_runall = False
             u_imenu = False
             u_pozivu = False
             continue
 
-        m = _REG_RUNONE.match(gol)
-        if m:
-            n = int(m.group(1))
-            if n in runone:
-                dupli.append(("RunOne", n, i))
-            else:
-                runone[n] = (i, "")
-            continue
+        # RunOne se broji SAMO u RunAllTests. Van njega bi helper koji negde
+        # drugde zove "RunOne 17" izgledao kao dupli unos registra.
+        if u_runall:
+            m = _REG_RUNONE.match(gol)
+            if m:
+                n = int(m.group(1))
+                if n in runone:
+                    dupli.append(("RunOne", n, i))
+                else:
+                    runone[n] = (i, "")
+                continue
 
         if u_imenu:
             m = _REG_IME.match(gol)
@@ -993,14 +1019,16 @@ def _registar_blokovi(lines: list[str]) -> tuple[dict, dict, dict]:
                 else:
                     pozivi[n] = (i, m.group(2))
 
-    return runone, imena, pozivi, dupli
+    return runone, imena, pozivi, dupli, (ima_runall and ima_imena and ima_pozivi)
 
 
 def check_test_registry(path: str, lines: list[str]) -> list[Finding]:
-    runone, imena, pozivi, dupli = _registar_blokovi(lines)
+    runone, imena, pozivi, dupli, je_registar = _registar_blokovi(lines)
 
-    # Registar postoji tek kad su sva tri spiska tu. Bez toga fajl nije modTest.
-    if not (runone and imena and pozivi):
+    # Okida se na STRUKTURU, ne na broj unosa: fajl koji ima sve tri procedure
+    # JESTE registar, pa i onda kad je neki od spiskova ostao prazan -- to je
+    # bas slucaj koji se najvise isplati prijaviti.
+    if not je_registar:
         return []
 
     out = []
@@ -1229,6 +1257,97 @@ End Sub
 # pa slucaj koji nije registar mora da prodje bez nalaza -- ta polovina je
 # vaznija: lazan nalaz u PostToolUse hook-u uci da se checker ignorise.
 REGISTAR_CASES = [
+    ('CEO InvokeTest prazan', 3, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test2"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+    End Select
+End Sub
+"""),
+    ('CEO TestName prazan', 3, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test2
+        Case 3: T_Test3
+    End Select
+End Sub
+"""),
+    ('RunAllTests bez ijednog RunOne', 3, """Option Explicit
+Public Sub RunAllTests()
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test2"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test2
+        Case 3: T_Test3
+    End Select
+End Sub
+"""),
+    ('RunOne van RunAllTests nije registar', 0, """Option Explicit
+Public Sub RunAllTests()
+    RunOne 1
+    RunOne 2
+    RunOne 3
+End Sub
+
+Private Function TestName(ByVal idx As Long) As String
+    Select Case idx
+        Case 1: TestName = "T_Test1"
+        Case 2: TestName = "T_Test2"
+        Case 3: TestName = "T_Test3"
+        Case Else: TestName = "T_Nepoznat_" & idx
+    End Select
+End Function
+
+Private Sub InvokeTest(ByVal idx As Long)
+    Select Case idx
+        Case 1: T_Test1
+        Case 2: T_Test2
+        Case 3: T_Test3
+    End Select
+End Sub
+
+Private Sub Pomocna()
+    RunOne 2
+End Sub
+"""),
     ('zdrav registar', 0, """Option Explicit
 Public Sub RunAllTests()
     RunOne 1
