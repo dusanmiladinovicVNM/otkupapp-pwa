@@ -2105,3 +2105,86 @@ zato što je „popravka" koja gasi namerno ponašanje takođe regresija.
 i automatsko mapiranje ulaze u istu granu. Razdvajanje ručnog od automatskog
 *unutar* writera je zaseban PR i dira legacy formu; ovaj PR zatvara samo putanju
 koju sam uvodi.
+
+
+---
+
+## 10. Mreža: ćelija koja ne ume da se prikaže (`v6-ui-178`)
+
+Ovo nije ekran nego **ljuska**, i nastalo je iz nalaza Banka uvoza (§9.10): datum
+oblika `26062026` je u ćeliji ostavljao **tuđi tekst** — natpis sa prethodnog
+ekrana. Tada je zatvoren taj jedan ulaz. Ovo zatvara **klasu**.
+
+### 10.1 Zašto je preskočen upis, a ne samo račun
+
+`RenderGrid` radi pod `On Error Resume Next`, i to je namerno: pad jedne ćelije
+ne sme da obori crtanje cele mreže. Ali tekst se računao **u samom upisu**:
+
+```vb
+.caption = FmtBroj(CDbl(mView(r, k + 1)), 0)
+```
+
+Kad `CDbl` pukne, ne preskače se samo račun nego **i dodela**. U kontroli ostaje
+natpis od ranijeg crtanja — vrednost sa prethodnog ekrana, bez greške i bez
+traga.
+
+Datum je bio samo prvi ulaz. Isti ishod daju `CDbl` nad tekstom u
+`kg`/`num`/`sum0`/`rsd`/`mult` i `CLng` u `pill`/`paypill` kolonama.
+
+### 10.2 Šta je promenjeno
+
+Konverzija je izvučena u **funkciju koja ne može da pukne** (`CelijaTekst`,
+`CelijaBroj`), a upis se radi **uvek**. Neuspeh je **prazna** ćelija — prazno je
+istina, tuđi tekst nije.
+
+| Pravilo | Zašto baš tako |
+|---|---|
+| `ok` je zasebna zastavica, ne „prazan rezultat" | Kolona `rest` namerno ne crta `0,00`; prazno je tu istina o podatku. Da se to broji kao kvar, log bi bio pun poruka o urednim redovima i prestao bi da se čita. |
+| Pilula na neuspeh **ne dobija nulu** | Nula je kod `PaintPill` „Sačuvana", a kod `PaintPayPill` „Neplaćeno" — dakle **određen status**. To je svoja vrsta laži; ćelija se zato prazni. |
+| `CelijaObicna` vraća bold i poravnanje | `PaintPill` ostavlja `Font.bold = True`, a `PaintRow` vraća samo pozadinu — pa je ćelija koja je u prethodnoj listi bila pilula ostajala **podebljana** i kad postane običan broj. Ista klasa, samo sporija da se primeti. |
+| Broji se i prijavljuje **jednom po crtanju** | Prazna ćelija je istina, ali **tiha** prazna ćelija je bila pola problema: prvi nalaz ove vrste tražio je zasebnu dijagnostiku (`Diag_BuRedovi`) da bi se uopšte video. |
+
+### 10.3 Nalaz koji je brojač odmah izbacio
+
+Čim je crtanje počelo da broji ćelije koje ne ume da prikaže, test nad **urednim
+fixture podacima** prijavio je dva kvara:
+
+```
+date/1 tip=Date vred=[15.3.2026.]
+```
+
+**`IsNumeric` nad `Date`-om je `False`**, a `FmtDatumKratko` je počinjao baš tom
+proverom. Ekran koji vrednost preda onakvu kakva u tabeli jeste — dakle kao
+`Date` — dobijao je **praznu** ćeliju.
+
+Banka uvoz je to zaobišao tako što svoj datum konvertuje u serijski broj
+(`modUiData.CellDate`). **Lista FAKTURA to nije radila: njena kolona DATUM je
+bila prazna u svakom redu.** Niko to nije prijavio, a nijedan test nije mogao da
+vidi — do sada nijedan nije čitao *nacrtan* datum.
+
+`FmtDatumKratko` sada prima `Date` direktno; serijski broj ide istim putem, sa
+istom gornjom granicom.
+
+### 10.4 Verifikacija
+
+Test **113** (`T_MrezaCelija_NeostavljaTudjiTekst`) meri **oba nivoa**:
+
+- **pravilo**, bez forme — `CelijaTekst` / `CelijaBroj` nad neispravnim
+  vrednostima, uz razliku „prazno zbog nule" (nije kvar) i „prazno zbog
+  neuspeha" (jeste);
+- **crtanje**, nad pravom formom — `GridRenderTest` pušta `LayoutGrid` i
+  `RenderGrid` koje ljuska i inače zove, pa se čita **caption same kontrole**.
+
+To je bilo potrebno jer je pravilo tačno i kad se upis preskoči — a ceo kvar je
+bio baš u tome. Kolona nad kojom se meri se **ne pretpostavlja** nego se traži
+(`GridKindKoloneTest`): nad `txt` kolonom svaka vrednost prolazi, pa bi tvrdnja
+tamo merila ništa.
+
+Vrednost koja se ne može prikazati ubacuje se **posle učitavanja**
+(`GridTestVrednost`), ne u tabelu: takav red je jednom već oborio **sedam** tuđih
+testova sa `Overflow`, a izmišljen niz bi merio izmišljotinu umesto puta kojim
+ide operater.
+
+Tri sabotaže: `mreza-celija-prazno-ne-prepisuje` (vraća tačno stari oblik — prazan
+rezultat ne prepisuje staru vrednost), `mreza-datum-nije-date`,
+`mreza-kvar-celije-se-ne-broji`.

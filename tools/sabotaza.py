@@ -1810,6 +1810,38 @@ SABOTAZE = {
         "T_Fak_CipoviPrateStatusFakture",
         "stornirana faktura ne ulazi u listu",
     ),
+    # ------------------------------------------------------------ MREZA: CELIJA
+    # RenderGrid radi pod 'On Error Resume Next'. Dok se tekst racunao U SAMOM
+    # UPISU, pad konverzije je preskakao UPIS -- pa je u celiji ostajao natpis od
+    # ranijeg crtanja, vrednost sa PRETHODNOG EKRANA. Ova sabotaza vraca tacno
+    # taj oblik: prazan rezultat ne prepisuje staru vrednost.
+    "mreza-celija-prazno-ne-prepisuje": (
+        "modOtkupUI.bas",
+        "                                .caption = txt\n",
+        "                                If Len(txt) > 0 Then .caption = txt   ' SABOTAZA: prazno ne prepisuje\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "celija koja se ne moze prikazati ostaje prazna, ne zadrzi tudji tekst",
+    ),
+    # 'IsNumeric' nad Date-om je FALSE. Ekran koji vrednost preda onakvu kakva u
+    # tabeli jeste dobijao je praznu celiju -- lista FAKTURA je tako imala prazan
+    # datum u SVAKOM redu, i to se nije videlo jer nijedan test nije citao
+    # NACRTAN datum.
+    "mreza-datum-nije-date": (
+        "modOtkupUI.bas",
+        "    If IsDate(v) Then\n",
+        "    If IsDate(v) And False Then   ' SABOTAZA: Date se vise ne prima\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "prava Date vrednost se crta, ne samo serijski broj",
+    ),
+    # Prazna celija je istina, ali TIHA prazna celija je bila pola problema:
+    # prvi nalaz ove vrste trazio je zasebnu dijagnostiku da bi se uopste video.
+    "mreza-kvar-celije-se-ne-broji": (
+        "modOtkupUI.bas",
+        "                            mKvarCelija = mKvarCelija + 1\n",
+        "                            mKvarCelija = mKvarCelija + 0   ' SABOTAZA: kvar se ne broji\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "kvar prikaza se broji, pa ostaje trag u logu",
+    ),
     # ---------------------------------------------------------------- BANKA UVOZ
     # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
     # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja
