@@ -1810,6 +1810,73 @@ SABOTAZE = {
         "T_Fak_CipoviPrateStatusFakture",
         "stornirana faktura ne ulazi u listu",
     ),
+    # ------------------------------------------------------------ MREZA: CELIJA
+    # RenderGrid radi pod 'On Error Resume Next'. Dok se tekst racunao U SAMOM
+    # UPISU, pad konverzije je preskakao UPIS -- pa je u celiji ostajao natpis od
+    # ranijeg crtanja, vrednost sa PRETHODNOG EKRANA. Ova sabotaza vraca tacno
+    # taj oblik: prazan rezultat ne prepisuje staru vrednost.
+    "mreza-celija-prazno-ne-prepisuje": (
+        "modOtkupUI.bas",
+        "                                .caption = txt\n",
+        "                                If Len(txt) > 0 Then .caption = txt   ' SABOTAZA: prazno ne prepisuje\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "celija koja se ne moze prikazati ostaje prazna, ne zadrzi tudji tekst",
+    ),
+    # 'IsNumeric' nad Date-om je FALSE. Ekran koji vrednost preda onakvu kakva u
+    # tabeli jeste dobijao je praznu celiju -- lista FAKTURA je tako imala prazan
+    # datum u SVAKOM redu, i to se nije videlo jer nijedan test nije citao
+    # NACRTAN datum.
+    # STIL KOLONE JE LAYOUT-OV POSAO. Prva verzija ovog PR-a je pred svaki upis
+    # 'vracala celiju u neutralno' (levo poravnanje, bez bold-a) -- i time na SVAKOM
+    # ekranu obarala ono sto je LayoutGrid upravo postavio: brojevi bi presli levo,
+    # a prva kolona i kolone novca izgubile bold. Nijedna tvrdnja o natpisu to ne bi
+    # primetila, pa suite ostaje zelena. Sabotaza vraca tacno taj oblik.
+    "mreza-crtanje-kvari-stil": (
+        "modOtkupUI.bas",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)\n",
+        "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK): .TextAlign = fmTextAlignLeft   ' SABOTAZA: crtanje kvari stil\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "crtanje ne menja poravnanje koje je layout postavio",
+    ),
+    # Pilula koja se ne moze naslikati mora da NESTANE. PaintPill menja i pozadinu,
+    # boju, sirinu i BackStyle, a PaintRow pill kolone pri vracanju pozadine reda
+    # NAMERNO preskace -- pa bi celija kojoj natpis nije obrisan ostala kao stara
+    # obojena oznaka nad novim podatkom.
+    # DVE VRSTE PILULE, DVA UGOVORA. Pravoj ("pill") sirinu racuna PaintPill i
+    # LayoutGrid je preskace; "paypill" sirinu drzi LayoutGrid (mColW - 16), a
+    # PaintPayPill je ne vraca. Ko "paypill" ocisti kao pravu pilulu, postavi joj
+    # PUNU sirinu kolone -- i ona takva ostane, jer se LayoutGrid ponovo pusta tek
+    # kad se promeni opis kolona. Tacno ta greska je jednom vec napravljena ovde.
+    "mreza-paypill-kao-pill": (
+        "modOtkupUI.bas",
+        "                                    .caption = vbNullString\n",
+        "                                    OcistiPilulu body.Controls(\"c\" & i & \"_\" & k), mColW(k)   ' SABOTAZA: paypill se cisti kao pill\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "ciscenje statusne oznake ne menja sirinu celije",
+    ),
+    "mreza-pilula-ostaje": (
+        "modOtkupUI.bas",
+        "                                    .caption = vbNullString\n",
+        "                                    n = n   ' SABOTAZA: stara oznaka ostaje\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "statusna oznaka koja se ne moze naslikati nestaje",
+    ),
+    "mreza-datum-nije-date": (
+        "modOtkupUI.bas",
+        "    If IsDate(v) Then\n",
+        "    If IsDate(v) And False Then   ' SABOTAZA: Date se vise ne prima\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "prava Date vrednost se crta, ne samo serijski broj",
+    ),
+    # Prazna celija je istina, ali TIHA prazna celija je bila pola problema:
+    # prvi nalaz ove vrste trazio je zasebnu dijagnostiku da bi se uopste video.
+    "mreza-kvar-celije-se-ne-broji": (
+        "modOtkupUI.bas",
+        "                            mKvarCelija = mKvarCelija + 1\n",
+        "                            mKvarCelija = mKvarCelija + 0   ' SABOTAZA: kvar se ne broji\n",
+        "T_MrezaCelija_NeostavljaTudjiTekst",
+        "kvar prikaza se broji, pa ostaje trag u logu",
+    ),
     # ---------------------------------------------------------------- BANKA UVOZ
     # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
     # otpadne i pozivalac dobije kandidate sa SVIH otkupnih mesta -- u listi koja

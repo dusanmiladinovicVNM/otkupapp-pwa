@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-177"
+Public Const OTKUI_BUILD   As String = "v6-ui-178"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -362,6 +362,12 @@ Private mColN As Long                ' koliko ih je stvarno vidljivo
 ' Da li mColX / mColW jos odgovaraju mCols. Postavlja se kad se OPIS kolona
 ' promeni, brise kad ga LayoutGrid preracuna. V. OsveziGeometriju.
 Private mGeomStara As Boolean
+' Koliko celija u POSLEDNJEM crtanju nije moglo da se prikaze. Prijavljuje se
+' jednom po crtanju, ne po celiji: pokvarena kolona bi inace dala red po redu
+' istih poruka. v. CelijaTekst i GridKvarCelijaTest.
+Private mKvarCelija As Long
+' Prva kolona koja u poslednjem crtanju nije mogla da se prikaze -- "vrsta/indeks".
+Private mKvarKind As String
 Private mColsPotpis As String        ' po cemu se zna da je opis DRUGI
 ' Poslednja zbirna sa kojom se radilo. Preuzeto iz frmDokumenta: tamo je
 ' RefreshBrojZbirneSuggestion upisivala isti broj u sekciju Zbirne I u sekciju
@@ -2389,7 +2395,11 @@ Public Sub RenderGrid()
     Dim z As Object, body As Object, ft As Object
     Dim i As Long, r As Long, k As Long, from_ As Long, to_ As Long, shown As Long
     Dim kanal As Boolean
+    Dim n As Long, celijaOK As Boolean, txt As String
     On Error Resume Next
+    ' Brojac vazi za OVO crtanje. Prijavljuje se jednom, na kraju.
+    mKvarCelija = 0
+    mKvarKind = ""
     If mFrm Is Nothing Then Exit Sub
     kanal = Not ModeHasKgCol()                ' rezim bez kilograma nema ni zbir kg
     Set z = mFrm.Controls("zGrid")
@@ -2426,22 +2436,38 @@ Public Sub RenderGrid()
                         .Visible = False
                     Else
                         .Visible = True
+                        ' UPIS SE RADI UVEK -- v. CelijaTekst. Racun je izvucen u
+                        ' funkciju koja ne moze da pukne, pa preskocen upis (i sa
+                        ' njim natpis prethodnog ekrana) vise nije moguc.
                         Select Case ColKind(k)
-                            Case "date":               .caption = FmtDatumKratko(mView(r, k + 1))
-                            Case "kg":                 .caption = FmtKg(CDbl(mView(r, k + 1)))
-                            Case "num", "sum0":        .caption = FmtBroj(CDbl(mView(r, k + 1)), 0)
-                            Case "rsd", "mult":        .caption = FmtBroj(CDbl(mView(r, k + 1)), 2)
-                            Case "pill":               PaintPill body.Controls("c" & i & "_" & k), CLng(mView(r, k + 1))
-                            Case "paypill":            PaintPayPill body.Controls("c" & i & "_" & k), CLng(mView(r, k + 1))
-                            Case "rest"
-                                ' nula znaci "nema duga" - prazna celija je citljivija od 0,00
-                                If CDbl(mView(r, k + 1)) = 0 Then
-                                    .caption = ""
+                            Case "pill"
+                                n = CelijaBroj(mView(r, k + 1), celijaOK)
+                                If celijaOK Then
+                                    PaintPill body.Controls("c" & i & "_" & k), n
                                 Else
-                                    .caption = FmtBroj(CDbl(mView(r, k + 1)), 2)
+                                    OcistiPilulu body.Controls("c" & i & "_" & k), mColW(k)
                                 End If
-                            Case Else:                 .caption = CStr(mView(r, k + 1))
+                            Case "paypill"
+                                n = CelijaBroj(mView(r, k + 1), celijaOK)
+                                If celijaOK Then
+                                    PaintPayPill body.Controls("c" & i & "_" & k), n
+                                Else
+                                    ' SAMO NATPIS. Ovo NIJE ista celija kao "pill" --
+                                    ' v. OcistiPilulu: pozadinu joj vraca PaintRow, a
+                                    ' sirinu drzi LayoutGrid. Ko je ovde ocisti kao
+                                    ' pravu pilulu, ostavi je 16pt siru zauvek.
+                                    .caption = vbNullString
+                                End If
+                            Case Else
+                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)
+                                .caption = txt
                         End Select
+                        If Not celijaOK Then
+                            mKvarCelija = mKvarCelija + 1
+                            If Len(mKvarKind) = 0 Then mKvarKind = ColKind(k) & "/" & k & _
+                                " tip=" & TypeName(mView(r, k + 1)) & _
+                                " vred=[" & CStr(mView(r, k + 1)) & "]"
+                        End If
                     End If
                 End With
             Next k
@@ -2454,6 +2480,15 @@ Public Sub RenderGrid()
             Next k
         End If
     Next i
+
+    ' JEDNA prijava po crtanju. Prazna celija je istina, ali TIHA prazna celija
+    ' je bila pola problema: prvi nalaz ove vrste (datum) trazio je zasebnu
+    ' dijagnostiku da bi se uopste video. Od sada ostaje trag u logu.
+    If mKvarCelija > 0 Then
+        LogWarn "modOtkupUI.RenderGrid", _
+                "Celija bez prikaza: " & mKvarCelija & _
+                " (ekran=" & mScreen & ", prva=" & mKvarKind & ")"
+    End If
 
     If mViewN > 0 Then
         ft.Controls("ftRange").caption = Poruka("OTKUI_FT_PRIKAZANO") & " " & from_ & ChrW(8211) & to_ & _
@@ -2484,6 +2519,102 @@ End Sub
 ' Sirina se racuna PO TEKSTU: preko cele kolone tinta (#EDF0F5 i sl.) je na
 ' belom redu prakticno nevidljiva, pa se pilula cita kao oblik tek kad
 ' pripije uz tekst. Zato LayoutGrid namerno NE postavlja sirinu kolone 5.
+' TEKST CELIJE, i pravilo sta se desava kad vrednost NIJE ono sto kolona tvrdi.
+'
+' RenderGrid radi pod "On Error Resume Next", i to je namerno: pad jedne celije
+' ne sme da obori crtanje cele mreze. Ali dok se tekst racunao U SAMOM UPISU
+' (".caption = FmtBroj(CDbl(v), 0)"), pad konverzije nije preskakao samo racun
+' nego i UPIS -- pa je u celiji OSTAJAO natpis od ranijeg crtanja. Vrednost sa
+' PRETHODNOG EKRANA, bez ijedne poruke i bez ijednog traga.
+'
+' Tako je "26062026" (ddmmyyyy kao broj) u koloni datuma dalo "OSIROCENE_PAL" --
+' vrstu reda sa ekrana Oporavak. Datum je zatvoren posebno (DatumSerijskiValidan),
+' ali to je bio JEDAN ULAZ, ne klasa: isti ishod daju CDbl nad tekstom u
+' kg/num/rsd/mult i CLng u pill/paypill kolonama.
+'
+' Zato konverzija ide OVDE, u funkciju koja NE MOZE da pukne, a upis se radi
+' UVEK. Neuspeh je PRAZNA celija -- prazno je istina, tudji tekst nije.
+Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
+                            ByRef ok As Boolean) As String
+    Dim d As Double
+
+    ok = True
+    On Error GoTo EH
+
+    Select Case kind
+        Case "date"
+            CelijaTekst = FmtDatumKratko(v)
+            ' Datum koji se NE MOZE prikazati je kvar prikaza, ne prazna celija.
+            ' FmtDatumKratko sam odbija vrednosti van opsega (26062026 kao
+            ' ddmmyyyy), pa bi bez ovoga bas PRVI nalaz ove vrste ostao
+            ' neprebrojan i nevidljiv u logu. Prazna celija koja je prazna zato
+            ' sto podatka nema i dalje je uredna.
+            If Len(CelijaTekst) = 0 Then
+                If Trim$(CStr(v)) <> "" And Trim$(CStr(v)) <> "0" Then ok = False
+            End If
+        Case "kg":           CelijaTekst = FmtKg(CDbl(v))
+        Case "num", "sum0":  CelijaTekst = FmtBroj(CDbl(v), 0)
+        Case "rsd", "mult":  CelijaTekst = FmtBroj(CDbl(v), 2)
+        Case "rest"
+            ' nula znaci "nema duga" - prazna celija je citljivija od 0,00
+            d = CDbl(v)
+            If d <> 0 Then CelijaTekst = FmtBroj(d, 2)
+        Case Else:           CelijaTekst = CStr(v)
+    End Select
+    Exit Function
+EH:
+    ok = False
+    CelijaTekst = vbNullString
+End Function
+
+' Isto pravilo za kolone koje se crtaju kao pilula. Neuspeh NE sme da postane
+' nula: nula je kod PaintPill "Sacuvana", a kod PaintPayPill "Neplaceno" --
+' dakle odredjen status, sto je svoja vrsta lazi. Zato se vraca i zastavica, a
+' pozivalac na neuspeh celiju PRAZNI umesto da naslika bilo koji status.
+Public Function CelijaBroj(ByVal v As Variant, ByRef ok As Boolean) As Long
+    ok = True
+    On Error GoTo EH
+    CelijaBroj = CLng(v)
+    Exit Function
+EH:
+    ok = False
+    CelijaBroj = 0
+End Function
+
+' PRAVA PILULA ("pill") KOJA SE NE MOZE NASLIKATI SE BRISE CELA, ne samo natpis.
+'
+' Vazi SAMO za "pill". Dve vrste imaju dva ugovora, i mesanje to dvoje je greska
+' koja je jednom vec napravljena bas ovde:
+'
+'   "pill"     PaintPill sam racuna sirinu po tekstu (PillW) i sam postavlja
+'              BackColor i BackStyle. LayoutGrid tu kolonu NAMERNO preskace pri
+'              dodeli sirine, a PaintRow je preskace pri vracanju pozadine reda.
+'              Sve sto naslika, mora i da se ocisti -- inace ostane PRAZNA
+'              OBOJENA KUTIJA nad novim podatkom.
+'
+'   "paypill"  PaintPayPill menja samo natpis, boju teksta, poravnanje i bold.
+'              Sirinu drzi LayoutGrid (mColW - 16), a pozadinu vraca PaintRow.
+'              Ko je ocisti kao pravu pilulu, postavi joj sirinu na PUNU sirinu
+'              kolone -- i ona takva ostane, jer PaintPayPill sirinu ne vraca a
+'              LayoutGrid se ponovo pusta tek kad se promeni opis kolona. Zato
+'              se toj koloni brise SAMO natpis.
+'
+' Providna pozadina bez natpisa pusta boju reda da se vidi. Napomena iz PaintRow
+' o mesanju providnih i neprozirnih kontrola tice se ISCRTAVANJA TEKSTA, a ovde
+' teksta nema.
+'
+' Stil ostalih celija se ovde NE dira. Kanonski stil kolone postavlja
+' StyleGridCell iz LayoutGrid-a (font, velicina, bold, boja, visina), a
+' poravnanje LayoutGrid sam -- i to se preracuna cim se opis kolona promeni
+' (mGeomStara). Crtanje koje bi ga "resetovalo" na neutralno samo bi ga
+' pokvarilo: brojevi bi presli levo, a rsd/mult i prva kolona bi izgubili bold.
+Private Sub OcistiPilulu(lbl As Object, ByVal sirina As Single)
+    On Error Resume Next
+    lbl.caption = vbNullString
+    lbl.BackStyle = fmBackStyleTransparent
+    lbl.width = sirina
+End Sub
+
 Private Sub PaintPill(lbl As Object, ByVal code As Long)
     Dim cap As String
     On Error Resume Next
@@ -4624,6 +4755,75 @@ Public Sub GridLayoutTest(z As Object, ByVal zw As Single, ByVal zh As Single)
     LayoutGrid z, zw, zh
 End Sub
 
+' TEST SEAM: sagradi mrezu nad datom formom i NACRTAJ je. Tvrdo gejtovan.
+'
+' Bez ovoga se pravilo "upis se radi uvek" moze izmeriti samo na CelijaTekst --
+' dakle nad pravilom, ne nad crtanjem. A ceo kvar je bio bas u crtanju: racun je
+' bio U UPISU, pa je pad preskakao upis.
+'
+' Mrezu NE gradi -- forma je vec nosi (UserForm_Initialize). Seam samo veze
+' ljusku za tu formu i pusti isti raspored i isto crtanje koje ide u pogonu.
+Public Sub GridRenderTest(frm As Object, ByVal zw As Single, ByVal zh As Single)
+    If Not IsTestMode() Then Exit Sub
+    Set mFrm = frm
+    LayoutGrid frm.Controls("zGrid"), zw, zh
+    RenderGrid
+End Sub
+
+' TEST SEAM: upisi vrednost u ucitanu mrezu. Tvrdo gejtovan.
+'
+' Fixture nosi ISPRAVNE vrednosti -- takav je i treba da bude. Vrednost koja se
+' ne moze prikazati zato mora da se ubaci ovde, posle ucitavanja: sejanje takvog
+' reda u tabelu bi obaralo tudje testove (jednom vec sedam, sa Overflow), a
+' izmisljanje sopstvenog niza bi merilo izmisljotinu umesto puta kojim ide
+' operater.
+Public Sub GridTestVrednost(ByVal red As Long, ByVal kol As Long, ByVal v As Variant)
+    If Not IsTestMode() Then Exit Sub
+    If red < 1 Or red > mViewN Then Exit Sub
+    If kol < 1 Or kol > MAX_COLS Then Exit Sub
+    mView(red, kol) = v
+End Sub
+
+' TEST SEAM: pusti ljusku sa test-forme. Tvrdo gejtovan.
+'
+' GridRenderTest veze mFrm za formu koju je test napravio. Bez ovoga bi posle
+' suite ostala ziva referenca na formu koja je Unload-ovana, pa bi svaki sledeci
+' RenderGrid radio nad njom.
+Public Sub GridOtkaciFormuTest()
+    If Not IsTestMode() Then Exit Sub
+    Set mFrm = Nothing
+End Sub
+
+' TEST SEAM: vrsta i-te kolone (0-bazirano). Tvrdo gejtovan. Test bez ovoga ne
+' moze da nadje kolonu nad kojom konverzija UOPSTE moze da pukne -- nad txt
+' kolonom svaka vrednost prolazi, pa bi tvrdnja merila nista.
+Public Function GridKindKoloneTest(ByVal i As Long) As String
+    If Not IsTestMode() Then Exit Function
+    If i < 0 Or i > MAX_COLS - 1 Then Exit Function
+    GridKindKoloneTest = ColKind(i)
+End Function
+
+' TEST SEAM: koliko redova mreza drzi. Tvrdo gejtovan. Bez ovoga se "celija je
+' prazna" ne razlikuje od "nema sta da se crta".
+Public Function GridRedovaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    GridRedovaTest = mViewN
+End Function
+
+' TEST SEAM: koliko celija poslednje crtanje nije umelo da prikaze. Tvrdo
+' gejtovan. Bez ovoga se "upis se radi UVEK" ne moze razlikovati od "vrednost je
+' slucajno bila ispravna".
+Public Function GridKvarCelijaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    GridKvarCelijaTest = mKvarCelija
+End Function
+
+' TEST SEAM: koja je kolona prva zatajila. Tvrdo gejtovan.
+Public Function GridKvarKindTest() As String
+    If Not IsTestMode() Then Exit Function
+    GridKvarKindTest = mKvarKind
+End Function
+
 ' TEST SEAM: da li geometrija kolona zaostaje za opisom. Tvrdo gejtovan.
 ' Bez ovoga se pravilo "promena opisa kolona cini geometriju zastarelom" ne moze
 ' izmeriti: mColW je Private, a RenderGrid trazi pravu formu.
@@ -5558,15 +5758,44 @@ Private Function ProfilPodnaslov(ByVal om As String) As String
         ProfilPodnaslov = ProfilPodnaslov & " " & ChrW(183) & " " & om
 End Function
 
+' KRATAK DATUM ZA CELIJU MREZE.
+'
+' "IsNumeric" NAD Date-om JE FALSE. To nije sitnica nego cela klasa kvara: ekran
+' koji vrednost preda onakvu kakva u tabeli jeste -- dakle kao Date -- dobijao je
+' PRAZNU celiju, bez greske i bez traga. Zbog toga je Banka uvoz svoj datum
+' konvertovao u serijski broj (modUiData.CellDate), ali lista FAKTURA to nije
+' radila: njena kolona DATUM je bila prazna u svakom redu, i to se nije videlo
+' jer nijedan test nije citao NACRTAN datum.
+'
+' Nadjeno je tek kad je crtanje pocelo da broji celije koje ne ume da prikaze
+' (v. CelijaTekst): "date/1 tip=Date vred=[15.3.2026.]".
+'
+' Zato se Date prima direktno. Serijski broj i dalje prolazi istim putem, sa
+' istom gornjom granicom.
 Private Function FmtDatumKratko(ByVal v As Variant) As String
-    If Not IsNumeric(v) Then Exit Function
-    If CDbl(v) <= 0 Then Exit Function
+    Dim d As Double
+
+    If IsDate(v) Then
+        On Error Resume Next
+        d = CDbl(CDate(v))
+        If Err.Number <> 0 Then
+            Err.Clear
+            Exit Function
+        End If
+        On Error GoTo 0
+    ElseIf IsNumeric(v) Then
+        d = CDbl(v)
+    Else
+        Exit Function
+    End If
+
+    If d <= 0 Then Exit Function
     ' GORNJA GRANICA. CDate van opsega baca Overflow, a RenderGrid radi pod
     ' "On Error Resume Next" -- pa bi upis celije bio preskocen i u njoj bi ostao
     ' natpis od RANIJEG crtanja. Pravilo zivi u modUiData; ovde je stitnik na
     ' samom mestu crtanja, jer ovamo stize i ono sto nije proslo kroz CellDate.
-    If Not modUiData.DatumSerijskiValidan(CDbl(v)) Then Exit Function
-    FmtDatumKratko = Format$(CDate(CDbl(v)), "dd.mm.")
+    If Not modUiData.DatumSerijskiValidan(d) Then Exit Function
+    FmtDatumKratko = Format$(CDate(d), "dd.mm.")
 End Function
 
 Private Function FmtDatumPun(ByVal v As Variant) As String

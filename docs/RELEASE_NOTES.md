@@ -5063,3 +5063,61 @@ knjiženje. Ceo tok, sa uzrocima i merenjima, zapisan je u
 > Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
 > `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
 > kojih u headless runu nema i padaju identično na netaknutom `main`-u.
+
+
+---
+
+## v2.65.0 — `v6-ui-178` · ćelija mreže ne ostavlja tuđi tekst
+
+Ispravka u **samoj mreži**, pa se vidi na svakom ekranu novog UI-ja.
+
+### Šta se moglo videti
+
+Ćelija koja iz bilo kog razloga nije mogla da se ispiše **zadržavala je natpis od
+ranijeg crtanja** — najčešće vrednost sa *prethodnog ekrana*. U koloni datuma je
+tako umeo da stoji naziv vrste reda, u koloni iznosa broj iz druge liste.
+
+Prazna ćelija je istina; tuđi tekst nije. Sada, kad se vrednost ne može
+prikazati, ćelija **ostaje prazna**, a u dnevnik se upisuje jedan red sa
+ekranom i kolonom.
+
+Ranije je isto popravljeno samo za jedan slučaj (datum oblika `26062026` na
+Uvozu izvoda). Ovim je zatvoren ceo razred: isto se dešavalo i sa kilogramima,
+iznosima i statusnim oznakama kad vrednost nije bila onakva kakvu kolona
+očekuje.
+
+### Kolona DATUM na Fakturisanju je bila prazna
+
+Nalaz je došao iz same ispravke, čim je crtanje počelo da broji ćelije koje ne
+ume da prikaže: **lista faktura je imala prazan datum u svakom redu.**
+
+Uzrok je Excel-ova sitnica sa dalekim posledicama — provera „da li je vrednost
+broj" nad pravim datumom vraća **ne**. Uvoz izvoda je to zaobilazio pretvarajući
+datum u broj; Fakturisanje nije, pa je kolona ostajala prazna. Nije bilo prijave
+jer ništa nije pucalo, a nijedan test do sada nije čitao **nacrtan** datum.
+
+Sada se datum prima i kao datum i kao broj.
+
+### Sitnica koja se primeti tek u pogonu
+
+Statusna oznaka (pilula) koja se ne može naslikati sada **nestaje** umesto da
+ostane kao prazna obojena oznaka nad novim podatkom — i kad se podatak popravi,
+vraća se tačno onakva kakva je bila, iste širine.
+
+### Verifikacija
+
+Test **113** (`T_MrezaCelija_NeostavljaTudjiTekst`) i tri nove sabotaže.
+`RunAllTests` **113 testova, 0 palih.**
+
+Test meri **oba nivoa**: pravilo (bez forme) i **samo crtanje** — nad pravom
+formom, kroz isti raspored i isto iscrtavanje koje ide u pogonu, pa se čita
+natpis same kontrole. To je bilo potrebno jer je pravilo tačno i kad se upis
+preskoči, a ceo kvar je bio baš u tome.
+
+Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §10.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+> Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
+> `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
+> kojih u headless runu nema i padaju identično na netaknutom `main`-u.

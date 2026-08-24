@@ -339,6 +339,7 @@ Public Sub RunAllTests()
     RunOne 110
     RunOne 111
     RunOne 112
+    RunOne 113
 
     SetTestMode prevMode
     WriteResultFile
@@ -483,6 +484,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 110: TestName = "T_ZonaBankaUvoz_PoljaIRaspored"
         Case 111: TestName = "T_MrezaDatum_BrojKojiNijeDatum"
         Case 112: TestName = "T_MrezaGeometrija_PratiOpisKolona"
+        Case 113: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -603,6 +605,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 110: T_ZonaBankaUvoz_PoljaIRaspored
         Case 111: T_MrezaDatum_BrojKojiNijeDatum
         Case 112: T_MrezaGeometrija_PratiOpisKolona
+        Case 113: T_MrezaCelija_NeostavljaTudjiTekst
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7256,6 +7259,183 @@ End Sub
 '
 ' Nalazi se SKUPLJAJU, a tvrde tek posle Unload-a: dok forma zivi, njena
 ' masinerija obrise Err izmedju Err.Raise i omotnice testa.
+
+' CELIJA MREZE NIKAD NE OSTAVLJA TUDJI TEKST.
+'
+' RenderGrid radi pod "On Error Resume Next" -- namerno, da pad jedne celije ne
+' obori crtanje cele mreze. Ali dok se tekst racunao U SAMOM UPISU
+' (".caption = FmtBroj(CDbl(v), 0)"), pad konverzije nije preskakao samo racun
+' nego i UPIS: u celiji je OSTAJAO natpis od ranijeg crtanja. Tako je 26062026
+' u koloni datuma dalo "OSIROCENE_PAL" -- vrstu reda sa ekrana Oporavak.
+'
+' Datum je zatvoren zasebno (DatumSerijskiValidan), ali to je bio JEDAN ULAZ, ne
+' klasa: isti ishod daju CDbl nad tekstom u kg/num/rsd i CLng u pill kolonama.
+Private Sub T_MrezaCelija_NeostavljaTudjiTekst()
+    Dim f As frmOtkupUI, body As Object
+    Dim ok As Boolean
+    Dim pre As String, posle As String
+    Dim i As Long, kol As Long, kolPil As Long
+    Dim poravnanjePre As Long, boldPre As Boolean
+    Dim pilPre As String, pilSirinaPre As Single, pilNazad As String
+
+    ' --- PRAVILO, bez forme -----------------------------------------------
+    AssertEq modOtkupUI.CelijaTekst("num", "nije broj", ok), "", _
+             "vrednost koja nije broj daje PRAZNU celiju"
+    AssertEq ok, False, "...i to se prijavljuje kao kvar prikaza"
+
+    AssertEq modOtkupUI.CelijaTekst("num", 5, ok), "5", "ispravan broj se crta"
+    AssertEq ok, True, "ispravan broj nije kvar"
+
+    modOtkupUI.CelijaTekst "kg", "nije broj", ok
+    AssertEq ok, False, "isto vazi za kilograme"
+    modOtkupUI.CelijaTekst "rsd", "nije broj", ok
+    AssertEq ok, False, "isto vazi za dinare"
+
+    ' PRAZNO ZBOG NULE NIJE KVAR. Kolona "rest" namerno ne crta 0,00 -- prazno
+    ' je tu istina o podatku, ne neuspeh prikaza. Da se to broji kao kvar, log
+    ' bi bio pun poruka o urednim redovima i prestao bi da se cita.
+    AssertEq modOtkupUI.CelijaTekst("rest", 0, ok), "", "nula u koloni duga se ne crta"
+    AssertEq ok, True, "...ali to NIJE kvar prikaza"
+
+    ' DATUM VAN OPSEGA JESTE KVAR. FmtDatumKratko ga sam odbija, pa bi bez ove
+    ' grane bas prvi nalaz ove vrste ostao neprebrojan i nevidljiv u logu.
+    AssertEq modOtkupUI.CelijaTekst("date", 26062026#, ok), "", _
+             "ddmmyyyy kao broj nije datum -- celija ostaje prazna"
+    AssertEq ok, False, "...i to se prijavljuje"
+    AssertEq modOtkupUI.CelijaTekst("date", 0, ok), "", "prazan datum je prazna celija"
+    AssertEq ok, True, "...i nije kvar"
+
+    ' Date SE PRIMA DIREKTNO. "IsNumeric" nad Date-om je False, pa je ekran koji
+    ' vrednost preda onakvu kakva u tabeli jeste dobijao PRAZNU celiju -- bez
+    ' greske i bez traga. Lista FAKTURA je tako imala prazan datum u SVAKOM redu,
+    ' i to se nije videlo jer nijedan test nije citao NACRTAN datum.
+    AssertEq modOtkupUI.CelijaTekst("date", DateSerial(2026, 3, 15), ok), "15.03.", _
+             "prava Date vrednost se crta -- IsNumeric je nad njom False"
+    AssertEq ok, True, "...i nije kvar"
+    AssertEq modOtkupUI.CelijaTekst("date", CDbl(DateSerial(2026, 3, 15)), ok), "15.03.", _
+             "serijski broj istog dana daje isti tekst"
+
+    ' Pilula: neuspeh NE sme da postane nula, jer je nula ODREDJEN status
+    ' ("Sacuvana" / "Neplaceno") -- to je svoja vrsta lazi.
+    modOtkupUI.CelijaBroj "nije broj", ok
+    AssertEq ok, False, "pilula nad nebrojem je kvar, ne status"
+    AssertEq modOtkupUI.CelijaBroj(2, ok), 2, "ispravan kod pilule prolazi"
+    AssertEq ok, True, "...i nije kvar"
+
+    ' --- CRTANJE, nad pravom formom ---------------------------------------
+    ' Pravilo iznad je tacno i kad se upis preskoci; ceo kvar je bio bas u tome.
+    ' Zato se meri i sam RenderGrid.
+    Set f = NewOtkupUIForm()
+    modScrFakture.Scr_FkListaTestSet "FAKTURE"
+    modOtkupUI.GridTestLoad "FAKTURE"
+    modOtkupUI.GridRenderTest f, 1200, 600
+
+    Set body = f.Controls("zGrid").Controls("grdBody")
+    AssertEq (modOtkupUI.GridRedovaTest() > 0), True, _
+             "preduslov: mreza ima sta da nacrta"
+    AssertEq modOtkupUI.GridKvarCelijaTest(), 0, _
+             "uredni podaci ne daju nijedan kvar (prva: " & _
+             modOtkupUI.GridKvarKindTest() & ")"
+
+    ' Kolona nad kojom konverzija UOPSTE moze da pukne. Nad txt kolonom svaka
+    ' vrednost prolazi (CStr), pa bi tvrdnja tamo merila nista -- raspored tudjeg
+    ' ekrana se ne pretpostavlja nego se pita.
+    kol = -1
+    For i = 0 To MAX_COLS - 1
+        If modOtkupUI.GridSirinaKoloneTest(i) > 0 Then
+            Select Case modOtkupUI.GridKindKoloneTest(i)
+                Case "num", "sum0", "rsd", "mult", "kg"
+                    If Len(CStr(body.Controls("c0_" & i).caption)) > 0 Then
+                        kol = i
+                        Exit For
+                    End If
+            End Select
+        End If
+    Next i
+
+    AssertEq (kol >= 0), True, _
+             "preduslov: bar jedna brojcana celija prvog reda je nacrtana"
+    pre = CStr(body.Controls("c0_" & kol).caption)
+
+    ' STIL KOLONE JE LAYOUT-OV POSAO, NE CRTANJEV.
+    ' LayoutGrid brojcane kolone poravnava DESNO, a StyleGridCell prvoj koloni i
+    ' kolonama novca daje bold. Crtanje koje bi celiju "vracalo u neutralno"
+    ' pre upisa pokvarilo bi oboje -- na SVAKOM ekranu, a nijedna tvrdnja o
+    ' natpisu to ne bi primetila. Zato se stil meri PRE i POSLE crtanja.
+    poravnanjePre = body.Controls("c0_" & kol).TextAlign
+    AssertEq poravnanjePre, fmTextAlignRight, _
+             "preduslov: brojcana kolona je poravnata DESNO"
+    boldPre = (body.Controls("c0_0").Font.bold = True)
+    AssertEq boldPre, True, "preduslov: prva kolona je podebljana"
+
+    ' Kolona pilule -- njen neuspeh se ne cisti isto kao obicna celija.
+    kolPil = -1
+    For i = 0 To MAX_COLS - 1
+        If modOtkupUI.GridSirinaKoloneTest(i) > 0 Then
+            Select Case modOtkupUI.GridKindKoloneTest(i)
+                Case "pill", "paypill": kolPil = i: Exit For
+            End Select
+        End If
+    Next i
+    AssertEq (kolPil >= 0), True, "preduslov: lista ima kolonu sa statusnom oznakom"
+    pilPre = CStr(body.Controls("c0_" & kolPil).caption)
+    AssertEq (Len(pilPre) > 0), True, "preduslov: statusna oznaka je naslikana"
+    pilSirinaPre = body.Controls("c0_" & kolPil).width
+
+    ' Ista mreza, iste kolone -- samo vrednosti koje se ne mogu prikazati.
+    modOtkupUI.GridTestVrednost 1, kol + 1, "NIJE-BROJ"
+    modOtkupUI.GridTestVrednost 1, kolPil + 1, "NIJE-BROJ"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    posle = CStr(body.Controls("c0_" & kol).caption)
+
+    AssertEq posle, "", _
+             "celija koja se ne moze prikazati OSTAJE PRAZNA -- ne zadrzava tudji tekst"
+    AssertEq (posle <> pre), True, "stara vrednost je stvarno prepisana"
+    AssertEq (modOtkupUI.GridKvarCelijaTest() > 0), True, _
+             "kvar prikaza se broji, pa ostaje trag u logu"
+
+    ' CRTANJE NE SME DA POKVARI STIL. Ovo je tvrdnja o REGRESIJI, ne o kvaru:
+    ' celija koja nije mogla da se prikaze i dalje pripada svojoj koloni.
+    AssertEq body.Controls("c0_" & kol).TextAlign, poravnanjePre, _
+             "crtanje NE menja poravnanje kolone"
+    AssertEq (body.Controls("c0_0").Font.bold = True), True, _
+             "crtanje NE skida bold koji je layout postavio"
+
+    ' PILULA SE BRISE CELA. PaintPill menja i pozadinu, boju, sirinu i BackStyle,
+    ' a PaintRow pill kolone pri vracanju pozadine NAMERNO preskace -- pa bi
+    ' celija kojoj je obrisan samo natpis ostala kao PRAZNA OBOJENA KUTIJA.
+    AssertEq CStr(body.Controls("c0_" & kolPil).caption), "", _
+             "statusna oznaka koja se ne moze naslikati NESTAJE"
+    ' SIRINA SE NE SME POMERITI. Dve vrste pilule imaju dva ugovora: pravoj
+    ' ("pill") sirinu racuna PaintPill, a ovoj ("paypill") je drzi LayoutGrid
+    ' (mColW - 16). Ciscenje koje bi je tretiralo kao pravu pilulu postavilo bi
+    ' PUNU sirinu kolone -- i ona bi takva ostala, jer PaintPayPill sirinu ne
+    ' vraca, a LayoutGrid se ponovo pusta tek kad se promeni opis kolona.
+    AssertEq body.Controls("c0_" & kolPil).width, pilSirinaPre, _
+             "ciscenje statusne oznake NE menja sirinu celije"
+
+    ' ROUND-TRIP: vrednost se popravlja i oznaka mora da se VRATI kakva je bila.
+    ' Samo "valid -> invalid" ne bi video zaostalo stanje -- ono se vidi tek kad
+    ' se posle kvara opet crta uredan podatak.
+    modOtkupUI.GridTestVrednost 1, kolPil + 1, 0
+    modOtkupUI.GridRenderTest f, 1200, 600
+    pilNazad = CStr(body.Controls("c0_" & kolPil).caption)
+
+    AssertEq (Len(pilNazad) > 0), True, "ispravna vrednost opet daje statusnu oznaku"
+    AssertEq body.Controls("c0_" & kolPil).width, pilSirinaPre, _
+             "...i celija je iste sirine kao pre kvara"
+
+    ' Pozadina se OVDE ne tvrdi: FAKTURE nose "paypill", a PaintPayPill pozadinu
+    ' ne dira -- vraca je PaintRow, pa bi tvrdnja o njoj prolazila i bez
+    ' ispravke. Ciscenje POZADINE vazi za prave "pill" kolone (Dokumenta), cija
+    ' se lista bez izabranog rezima ne puni. Zapisano kao NEIZMERENO, ne kao
+    ' pokriveno -- v. katalog paragraf 10.5.
+
+    modOtkupUI.GridTestLoad ""
+    modOtkupUI.GridOtkaciFormuTest
+    Unload f
+End Sub
+
 Private Sub T_MrezaGeometrija_PratiOpisKolona()
     Dim f As frmOtkupUI, z As Object
     Dim stara As Boolean, posle As Boolean
