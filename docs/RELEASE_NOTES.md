@@ -5171,3 +5171,37 @@ stavka ostaje otvorena; isti blok iz poziva na broj → avans, celim iznosom.
 Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §9.10.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+
+---
+
+## v2.67.0 — `v6-ui-180` · pravila stare forme se sada proveravaju automatski
+
+Bez promene ponašanja za operatera. Ovo je posao na **proverama**.
+
+### Zašto
+
+Tri uzastopne ispravke u uvozu izvoda ticale su se iste stvari: **prazna lista je
+bila protumačena kao izbor** — pa je uplata umela da postane avans. Sva tri puta
+je to našao pregled koda, a ne automatski testovi, jer su ta pravila živela u
+staroj formi, gde ih ništa osim čoveka nije moglo proveriti.
+
+Sada mogu. Stara forma `frmBankaImport` dobila je uske provere koje rade **samo u
+test režimu** i u radu ne postoje.
+
+### Šta se sada proverava samo
+
+- pad učitavanja liste blokova **zaustavlja** ručno mapiranje, uz objašnjenje;
+- uredno učitana lista i dalje prolazi;
+- **prazan izbor bloka nije izbor** — tada se koristi poziv na broj, gde je avans
+  legitiman;
+- kod kupca se blok uopšte ne prijavljuje knjiženju.
+
+### Verifikacija
+
+`RunAllTests` **114 testova, 0 palih.** Dve nove sabotaže — prve koje diraju
+samu formu, a ne modul.
+
+Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §11.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
