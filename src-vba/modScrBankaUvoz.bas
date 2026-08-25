@@ -920,7 +920,11 @@ Sledeci:
     ' na cipu "obradjeno" davao NEGATIVAN broj, koji nad izvodom ne znaci nista.
     ' Razdvojene brojke -- koliko uplata, koliko isplata -- stoje u traci iznad
     ' mreze; podnozje ljuske ima samo JEDAN slot (grdFoot.ftVal).
-    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))
+    ' Isto kao na listi izvoda: dva broja koja operater ume da uporedi, umesto
+    ' jednog zbira koji se ne moze rastaviti.
+    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _
+                         Array(Array("OTKUI_FT_UPLATE", zbirU), _
+                               Array("OTKUI_FT_ISPLATE", zbirI)))
     Exit Function
 EH:
     errNum = Err.Number
@@ -1071,10 +1075,18 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
 Sledeci:
     Next i
 
-    ' Isto merilo kao na listi stavki: PROMET prikazanih izvoda (uplate +
-    ' isplate). Nula bi u podnozju pisala "Vrednost 0,00 RSD", sto je tacno
-    ' onoliko korisno koliko izgleda.
-    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))
+    ' PODNOZJE NOSI DVA BROJA, ne njihov zbir.
+    '
+    ' Promet (uplate + isplate) je jedan broj koji operater ne moze da uporedi ni
+    ' sa cim: izvod u ruci ima uplate i isplate odvojeno. Zato ekran salje oba
+    ' kroz sedmi clan ugovora -- izbrojana pod ISTIM filterima pod kojima su i
+    ' redovi, jer racunanje sa strane bi se razislo sa prikazanom listom.
+    '
+    ' Peti clan (zbir vrednosti) ostaje promet: ekran koji slotove ne bi slao i
+    ' dalje mora da ima smislen zbir.
+    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _
+                         Array(Array("OTKUI_FT_UPLATE", zbirU), _
+                               Array("OTKUI_FT_ISPLATE", zbirI)))
     Exit Function
 EH:
     errNum = Err.Number

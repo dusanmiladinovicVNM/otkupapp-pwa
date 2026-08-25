@@ -1960,6 +1960,86 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- MREZA: DVA NOVCANA SLOTA
+    # Ekran opet salje samo zbir vrednosti: sedmog clana nema, pa dva broja
+    # koja operater trazi nemaju kuda da stignu.
+    "mreza-podnozje-slot-nema-ugovora": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n"
+        "                               Array(\"OTKUI_FT_ISPLATE\", zbirI)))\n",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))   ' SABOTAZA: nema sedmog clana\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "ugovor nosi sedmi clan",
+    ),
+    # Slot koji ne prati filtere je gori od jednog zbira koji ih prati: dva
+    # broja izgledaju preciznije, a opisuju drugu listu.
+    "mreza-podnozje-slot-mimo-filtera": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n",
+        "    ' SABOTAZA: slot broji mimo liste\n"
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU + zbirI), _\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "zbir slotova je promet",
+    ),
+    # Ekran salje slotove, ljuska ih ne cita -- podnozje ostaje na jednom
+    # zbiru, a niko nista ne prijavi.
+    "mreza-podnozje-ljuska-ne-uzima-slotove": (
+        "modOtkupUI.bas",
+        "    If UBound(d) >= 6 Then\n"
+        "        If IsArray(d(6)) Then\n",
+        "    If False Then   ' SABOTAZA: ljuska ne cita slotove\n"
+        "        If IsArray(d(6)) Then\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "ljuska je preuzela oba slota",
+    ),
+    # Goli broj bez natpisa: dva iznosa jedan pored drugog, a ne pise koji je
+    # koji -- operater bira napamet.
+    "mreza-podnozje-slot-bez-natpisa": (
+        "modOtkupUI.bas",
+        "    PodnozjeSlotTekst = Poruka(kljuc) & \" \" & FmtBroj(iznos, 2) & \" \" & _\n"
+        "                        Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "    PodnozjeSlotTekst = FmtBroj(iznos, 2) & \" \" & _\n"
+        "                        Poruka(\"OTKUI_UNIT_RSD\")   ' SABOTAZA: slot bez natpisa\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "prvi slot nosi natpis Uplate",
+    ),
+    # Oba slota crtaju PRVI iznos: podnozje pokazuje dva broja, a to je jedan
+    # isti -- najtise moguce, jer izgleda tacno onako kako treba.
+    "mreza-podnozje-oba-slota-isti": (
+        "modOtkupUI.bas",
+        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n",
+        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "slotovi ne nose isti IZNOS",
+    ),
+    # Ekran ima DVA citaca, i oba su dobila sedmi clan. Bez ove sabotaze bi
+    # lista stavki bila samo tvrdnja u opisu PR-a, bez ijednog dokaza.
+    "mreza-podnozje-stavke-nema-slotova": (
+        "modScrBankaUvoz.bas",
+        "    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n"
+        "                               Array(\"OTKUI_FT_ISPLATE\", zbirI)))\n",
+        "    ' SABOTAZA: stavke opet salju samo zbir\n"
+        "    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "i lista stavki nosi sedmi clan",
+    ),
+    # Slot koji je TACAN nad punom listom a pogresan nad suzenom -- najtezi
+    # oblik, jer prva provera prolazi. Promet se namerno ne dira: da je
+    # diran, pao bi test prometa iznad i ova sabotaza ne bi merila svoje.
+    "mreza-podnozje-slot-ignorise-pretragu": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n",
+        "    ' SABOTAZA: slot ne prati pretragu\n"
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU + IIf(Len(q) > 0, 1000000, 0)), _\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "pretraga smanjuje i slotove, ne samo redove",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog
@@ -2672,7 +2752,15 @@ def proveri_sidra(tiho: bool = False) -> int:
 # Katalog je izmisljen, ali fajlovi su pravi: sidro se i dalje trazi u src-vba,
 # jer se bas to poredjenje proverava.
 _ST_PRAVI = "    On Error Resume Next" + ESCN
-_ST_JEDINSTVEN = "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6"
+# Fixture stoji na redu koji se NE menja sa izdanjem. Prva verzija je stajala
+# na OTKUI_BUILD, pa je prvo podizanje builda (v6-ui-183) prijavilo ZDRAV unos
+# kao nalaz -- self-test je pao na sopstvenom fixture-u.
+_ST_ZDRAVO = "Option Explicit"
+# Za viseredni slucaj trebaju STVARNO susedni redovi: izmedju Option Explicit
+# i palete stoji prazan red, pa je fixture pored ciljanog nalaza davao i visak
+# ("sidro ZASTARELO"). Ova dva su susedna.
+_ST_PAR1 = "'--- paleta ----------------------------------------------------------"
+_ST_PAR2 = "' PAZI: VBA Long boja je &HBBGGRR, obrnuto od CSS-a. Ovde je stajalo &H140D1E"
 
 _SELF_TEST = [
     ("sidro zastarelo",
@@ -2705,8 +2793,8 @@ def _self_test() -> int:
     imena = {"T_Postoji"}
     # zdrav unos: sidro koje postoji tacno jednom, zamena koja nije podniz
     zdravo = ("modOtkupUI.bas",
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "SABOTAZA" + DQ34 + ESCN,
+              _ST_ZDRAVO + ESCN,
+              "    Nesto = 1" + ESCN,
               "T_Postoji", "zdrava tvrdnja")
 
     lose = 0
@@ -2751,9 +2839,8 @@ def _self_test() -> int:
 
     # zamena koja je TACNO jedan red viseredog sidra
     dvored = ("modOtkupUI.bas",
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN +
-              "Public Const OTKUI_MIN_W   As Long = 660" + ESCN,
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
+              _ST_PAR1 + ESCN + _ST_PAR2 + ESCN,
+              _ST_PAR1 + ESCN,
               "T_Postoji", "tvrdnja H")
     n += 1
     if not any("podniz sidra" in sta for _, sta in _nalazi({"probni": dvored}, imena)):
