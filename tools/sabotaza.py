@@ -1942,6 +1942,24 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "novac u podnozju ide sa parama",
     ),
+    # Storno prikazuje osam tipova, medju njima i REVERSE, i to preko ISTOG
+    # citaca kao ekran dokumenata -- pa mu u podnozje stize zbir komada. Dve
+    # sabotaze, jer su i dve greske moguce: da ne prijavi komade (fail-closed ga
+    # onda proglasi dinarima), i da ih prijavi UVEK (fakture postanu komadi).
+    "mreza-podnozje-storno-ne-prijavljuje-komade": (
+        "modScrStorno.bas",
+        "    Scr_BrojiKomade = modScrDokumenti.TipBrojiKomade(Scr_Lista())\n",
+        "    Scr_BrojiKomade = False   ' SABOTAZA: Storno cuti o komadima\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "Storno lista Reversi broji komade",
+    ),
+    "mreza-podnozje-storno-uvek-komadi": (
+        "modScrStorno.bas",
+        "    Scr_BrojiKomade = modScrDokumenti.TipBrojiKomade(Scr_Lista())\n",
+        "    Scr_BrojiKomade = True   ' SABOTAZA: Storno uvek broji komade\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "ostali tipovi na Stornu ne broje komade",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog

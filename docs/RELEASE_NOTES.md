@@ -5380,6 +5380,13 @@ Traka pita **ekran** šta broji, umesto da gleda u zajedničku promenljivu.
 Reversi i dalje broje komade, sve ostalo dinare — a ekran koji o tome ne kaže
 ništa dobija **dinare**, ne komade.
 
+### Isto je važilo i za Storno
+
+Ekran **Storno** ume da prikaže listu reversa, i tada mu u podnožju stoji broj
+komada — a i on je do sada zavisio od zatečenog režima. Sada i on kaže šta broji,
+pa `125` reversa više ne može da se prikaže kao `Vrednost 125,00 RSD`. Na ostalim
+tipovima (fakture, izvodi, otkup) ostaje dinar.
+
 ### I jedna sitnica u sidebaru
 
 Dole levo se opet vidi **verzija programa**. Tu je privremeno stajala oznaka UI
@@ -5394,7 +5401,7 @@ dinari" bi prošlo prvu proveru, a tiho pokvarilo drugu.
 
 Dvosmerni dokaz je pušten nad **39** sabotaža koje gađaju izmenjene fajlove.
 Četiri nove obaraju tačno svoju tvrdnju; tri zatečene rupe u katalogu sabotaža
-(nastale ranije, na `main`-u) zapisane su u `docs/UI_MIGRACIJA_KATALOG.md` §13.10
+(nastale ranije, na `main`-u) zapisane su u `docs/UI_MIGRACIJA_KATALOG.md` §13.11
 i idu kao zaseban posao.
 
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §13.

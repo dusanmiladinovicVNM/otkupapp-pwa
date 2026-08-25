@@ -160,6 +160,22 @@ End Function
 Public Function Scr_Radnje() As String
 End Function
 
+' UGOVOR EKRANA: broji li tekuca lista komade.
+'
+' Storno nema jednu semantiku -- prikazuje osam tipova dokumenata, i medju njima
+' REVERSE, cija je peta kolona "sum0" nad COL_AMB_KOLICINA, dakle KOMADI. Redove
+' ne pravi sam nego ih uzima od modScrDokumenti.RedoviZaTip, istog citaca koji
+' puni i ekran dokumenata, pa mu u podnozje stize isti zbir komada.
+'
+' Bez ovog odgovora bi ljuska (fail-closed) zakljucila "dinari" i za 125 reversa
+' napisala "Vrednost 125,00 RSD" -- ista klasa greske koju je uvodjenje ugovora i
+' trebalo da ukloni, samo deterministicki umesto povremeno.
+'
+' Pita se SOPSTVENA aktivna lista, nikakav globalni ActiveMode.
+Public Function Scr_BrojiKomade() As Boolean
+    Scr_BrojiKomade = modScrDokumenti.TipBrojiKomade(Scr_Lista())
+End Function
+
 ' U zaglavlju liste stoji izabran dokument, da se vidi na sta se odnosi zona.
 Public Function Scr_NaslovDopuna() As String
     Scr_NaslovDopuna = mSelBroj

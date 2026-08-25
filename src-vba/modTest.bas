@@ -7660,9 +7660,10 @@ End Sub
 ' kad se komadi ugase svima -- Dokumenta bi tiho izgubila svoju jedinicu, a
 ' suite bi ostala zelena. Zato se tvrdi i da Dokumenta i dalje broje komade.
 Private Sub T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana()
-    Dim staraMode As String
+    Dim staraMode As String, staraLista As String
     Dim natpis As String, saParama As String
     Dim dokF7 As Boolean, dokF5 As Boolean, bankaF7 As Boolean
+    Dim stornoRev As Boolean, stornoFak As Boolean
 
     staraMode = modOtkupUI.ActiveMode
 
@@ -7673,6 +7674,18 @@ Private Sub T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana()
 
     modOtkupUI.ActiveMode = "F5"
     dokF5 = modUiScreens.ScrBrojiKomade("DOKUMENTI")
+
+    ' STORNO nema JEDNU semantiku: prikazuje osam tipova dokumenata, medju njima
+    ' i REVERSE -- i to preko ISTOG citaca (RedoviZaTip), pa mu u podnozje stize
+    ' zbir komada. Ekran koji ne odgovori dobija dinare, sto je dobar podrazumevan
+    ' odgovor za Banku i Fakture, ali bi ovde 125 reversa prikazalo kao
+    ' "Vrednost 125,00 RSD". Zato se pita SVAKI korisnik reversa, ne samo prvi.
+    staraLista = modScrStorno.Scr_Lista()
+    modScrStorno.Scr_TipTestSet STIP_REVERSI
+    stornoRev = modUiScreens.ScrBrojiKomade("STORNO")
+    modScrStorno.Scr_TipTestSet STIP_FAKTURA
+    stornoFak = modUiScreens.ScrBrojiKomade("STORNO")
+    modScrStorno.Scr_TipTestSet staraLista
 
     ' LJUSKA. Natpis se cita sa ekrana koji je STVARNO ucitan, sa istim
     ' zatrovanim rezimom -- bas onako kako je operater dosao.
@@ -7690,6 +7703,11 @@ Private Sub T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana()
     AssertEq dokF5, False, "...a na ambalazi ne -- ekran prati SVOJ rezim"
     AssertEq bankaF7, False, _
              "ugovorni ekran ne nasledjuje rezim unosa dokumenata"
+
+    ' Dve tvrdnje, ne jedna: "Storno broji komade" bi prosla i da ekran uvek
+    ' odgovara True, cime bi fakture i izvodi na njemu postali komadi.
+    AssertEq stornoRev, True, "Storno lista Reversi broji komade"
+    AssertEq stornoFak, False, "...a ostali tipovi na Stornu ne broje komade"
 
     AssertEq (InStr(1, natpis, Poruka("OTKUI_UNIT_KOM")) = 0), True, _
              "podnozje ugovornog ekrana ne pominje komade"
