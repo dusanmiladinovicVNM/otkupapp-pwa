@@ -187,11 +187,20 @@ skripta iz scratchpada, pa se i nije puštao ceo.
 izmena to i radi. Ne sme da ne obori **svoj**. Tekst tvrdnje u katalogu je
 dokumentacija (često parafraza) i ne obara dokaz; ime testa je obavezno tačno.
 
-**5. Priznati nalaz ima ime.** `POZNATI_NALAZI` u `sabotaza.py` drži nalaze koji
+**5. Priznati nalaz ima ime — i to ime baš tog pada.** `POZNATI_NALAZI` u
+`sabotaza.py` drži nalaze koji
 imaju vlasnika a ne mogu se zatvoriti bez izmene testa. Ispisuju se kao
 upozorenje i ne obaraju gejt — crvena provera koju svi nauče da preskoče ne čuva
 ništa. Upis koji više ništa ne pokriva je **isto nalaz**, pa spisak ne može tiho
 da raste.
+
+Vrednost upisa je **početak baš te poruke**, ne njena vrsta. Prva verzija je za
+pun dokaz upisivala golo `PALA DRUGA TVRDNJA` — a to je cela *kategorija*: svaka
+buduća, sasvim druga pogrešna tvrdnja u istom testu bila bi tiho progutana kao
+poznata i dokaz bi završio zeleno. Prefiks zato nosi i ime tvrdnje koja stvarno
+pada, prepisano iz izmerenog izlaza. Provereno u oba smera: tačan prefiks →
+`POZNATO`; bilo koja druga poruka → `PROBLEM` (i, uz to, upis se prijavi kao
+mrtav).
 
 ### Četiri rupe u samom alatu, nađene u review-u
 

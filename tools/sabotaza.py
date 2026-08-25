@@ -2527,6 +2527,11 @@ POZNATI_NALAZI = {
 # nalaze: staticka provera ne moze da zna koja je tvrdnja pala, a dokaz ne moze da
 # zna da li je sidro dvosmisleno. Jedan zajednicki bi svakom alatu prijavljivao
 # tudje upise kao mrtve.
+#
+# PREFIKS MORA DA IMENUJE BAS TAJ PAD, ne njegovu vrstu. Goli "PALA DRUGA TVRDNJA"
+# je cela KATEGORIJA greske: svaka buduca, sasvim druga tvrdnja u istom testu bila
+# bi tiho progutana kao poznata, a dokaz bi zavrsio zeleno. Zato prefiks nosi i ime
+# tvrdnje koja stvarno pada -- prepisano iz izmerenog izlaza, ne formulisano.
 POZNATI_NALAZI_DOKAZ = {
     # Obara PREDUSLOV ("sa identitetom se recovery zapis pravi"): gasi celu
     # identitetsku granu, pa zapis ne nastane i ciljana tvrdnja ne dodje na
@@ -2535,7 +2540,7 @@ POZNATI_NALAZI_DOKAZ = {
     # broja, pa LookupActiveID vrati isti PK. Razdvajanje trazi ili drugi
     # fixture red ili novu tvrdnju u T_F8_IzabranRedOstajeIzabran.
     "f8-identitet-po-broju":
-        "PALA DRUGA TVRDNJA",
+        "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
 
     # Obara PREDUSLOV ("prevezivanje po generaciji je proslo"), ne svoju poslovnu
     # tvrdnju: bez generacije izvora ceo relink stane, pa ciljana tvrdnja ne dodje
@@ -2544,7 +2549,7 @@ POZNATI_NALAZI_DOKAZ = {
     # relink-izvor-po-broju -- dakle zamka 5. Razdvajanje trazi novu tvrdnju u
     # T_RelinkPoGeneraciji_NeDiraTudjDokument.
     "relink-ignorise-generaciju":
-        "PALA DRUGA TVRDNJA",
+        "PALA DRUGA TVRDNJA: prevezivanje po generaciji je proslo",
 }
 
 
@@ -2729,6 +2734,20 @@ def _self_test() -> int:
     if not any("deli tvrdnju" in sta for _, sta in _nalazi(par, imena)):
         print("SELF-TEST: deljena tvrdnja nije prijavljena", file=sys.stderr)
         lose += 1
+
+    # WHITELIST mora da identifikuje konkretan pad, ne njegovu klasu.
+    spisak = {"poznato-ime": "PALA DRUGA TVRDNJA: bas ova tvrdnja"}
+    for opis, ime2, poruka, ocekivano in (
+            ("poznato ime + poznata poruka", "poznato-ime",
+             "PALA DRUGA TVRDNJA: bas ova tvrdnja -- ocekivano [True]", True),
+            ("poznato ime + DRUGA poruka", "poznato-ime",
+             "PALA DRUGA TVRDNJA: neka sasvim druga tvrdnja", False),
+            ("nepoznato ime + poznata poruka", "drugo-ime",
+             "PALA DRUGA TVRDNJA: bas ova tvrdnja", False)):
+        n += 1
+        if poznat_nalaz(ime2, poruka, spisak) != ocekivano:
+            print("SELF-TEST: whitelist -- %s" % opis, file=sys.stderr)
+            lose += 1
 
     # zamena koja je TACNO jedan red viseredog sidra
     dvored = ("modOtkupUI.bas",
