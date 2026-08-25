@@ -2844,3 +2844,113 @@ Podnožje i dalje nosi **jedan** novčani podatak. Lista izvoda ima dva koja
 operater traži (uplate i isplate), ali drugi slot je **promena ugovora**
 (`Scr_Rows` bi vraćao par natpis/vrednost, plus nova kontrola `ftVal2`) i ide
 zasebno.
+---
+
+## 14. Podnožje nosi dva novčana broja (`v6-ui-183`)
+
+Zbir vrednosti u podnožju je **jedan** broj. Lista izvoda ima dva koja operater
+traži: **uplate** i **isplate**. Do sada je videla samo njihov zbir — promet.
+
+### 14.1 Zašto zbir nije dovoljan
+
+Promet se ne može rastaviti unazad. Operater koji drži izvod u ruci ima na njemu
+uplate i isplate odvojeno, i to su brojke koje poredi. `Promet 12.400,00 RSD` mu
+ne kaže ništa o tome da li se izvod slaže — a upravo je zbog toga i otvorio tu
+listu.
+
+### 14.2 Sedmi član ugovora
+
+`Scr_Rows` je vraćao šest članova; sedmi je **neobavezan** i nosi parove
+`Array(kljucPoruke, iznos)`:
+
+```vb
+RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _
+                     Array(Array("OTKUI_FT_UPLATE", zbirU), _
+                           Array("OTKUI_FT_ISPLATE", zbirI)))
+```
+
+**Zašto od ekrana, a ne računanje u ljusci:** brojke moraju biti izbrojane pod
+**istim** filterima pod kojima su i redovi. Ljuska filtere ne primenjuje — čip i
+pretragu razrešava ekran — pa bi svaki račun sa strane opisivao drugu listu od
+one koja se vidi. Peti član (zbir vrednosti) ostaje promet, da ekran koji slotove
+ne šalje i dalje ima smislen broj.
+
+Ekran koji sedmi član ne pošalje ponaša se tačno kao pre. `LoadGridFromScreen` ga
+čita odbranjeno (`If UBound(d) >= 6`), istim oblikom kojim već čita šesti.
+
+### 14.3 Bazen, kao i svuda u ljusci
+
+`MAX_FT_VAL = 2`. Ekran koji zatraži više ne greši, ali se višak **ne crta** i
+`BazenStaje` to prijavi — isti mehanizam kao za čipove, radnje, liste i kolone.
+Tiho odsecanje je već dvaput koštalo pun krug (jedanaesti čip, šesta radnja).
+
+**Geometrija:** desna ivica novčanog dela je fiksna, drugi slot se dodaje
+**ulevo** — da se jedan slot ne pomeri kad se pojavi drugi. Taj prostor deli sa
+zbirom kilograma; ako su oba tu, crta se samo prvi, i to opet kroz `BazenStaje`
+(`podnozje-uz-kg`), ne prećutno. Danas se ne dešava: obe liste koje traže slotove
+nemaju kilograme.
+
+### 14.4 Šta test tvrdi
+
+`T_Mreza_PodnozjeDvaNovcanaSlota` (116), redom:
+
+| Nivo | Tvrdnja |
+|---|---|
+| ugovor | sedmi član postoji i nosi **dva** slota, sa svojim ključevima |
+| ugovor | **zbir slotova je promet** — dakle brojani su pod istim filterima |
+| ugovor | pretraga smanjuje i slotove, ne samo broj redova |
+| ljuska | ljuska je preuzela **oba** |
+| ljuska | svaki nosi svoj natpis (Uplate / Isplate) i dinare |
+| ljuska | **slotovi ne nose isti broj** |
+| ljuska | ekran bez slotova ostaje na zbiru vrednosti |
+
+Najvažnija je treća: **dva broja koja ne prate filtere gora su od jednog koji ih
+prati**, jer izgledaju preciznije. Zato se ne tvrdi „slotovi postoje" nego da im
+je zbir tačno onaj promet koji lista i prikazuje.
+
+Poslednja postoji zbog najtišeg mogućeg kvara: oba slota crtaju **prvi** iznos.
+Podnožje tada pokazuje dva broja, izgleda savršeno ispravno, a to je jedan isti.
+
+**Prva verzija te tvrdnje nije merila ništa.** Poredila je cele natpise
+(`t0 <> t1`) — a oni se razlikuju već po natpisu (`Uplate` vs `Isplate`), pa bi
+prošla i kad oba slota nose isti iznos. Nađeno tako što je sabotaža oborila
+**drugu** tvrdnju od očekivane: strogo pravilo iz #227 traži da padne baš ona
+imenovana, pa se razmimoilaženje vidi umesto da prođe kao zeleno.
+
+Sada se poredi ono što ostane kad se natpis skine, uz preduslov da se uplate i
+isplate u test-svesci uopšte razlikuju — bez njega bi i oštra tvrdnja bila prazna.
+
+### 14.5 Verifikacija
+
+| Šta | Ishod |
+|---|---|
+| `RunAllTests` | **116 testova, 0 palih** |
+| Pet novih sabotaža | po jedna na svako svojstvo, svaka obara **svoju** tvrdnju |
+| `vba_check` | čisto (195 fajlova) |
+
+### 14.6 Zamka 4 uživo: sabotaža koja ne pada nego VISI
+
+Prva verzija sabotaže `mreza-podnozje-slot-mimo-filtera` nosila je oznaku na
+kraju reda koji se **nastavlja**:
+
+```vb
+Array(Array("OTKUI_FT_UPLATE", zbirU + zbirI), _   ' SABOTAZA: slot broji mimo liste
+```
+
+U VBA `_` mora biti **poslednji** znak u redu. Ovo je zato syntax error, a
+posledica nije pao test nego **compile** — run visi do timeout-a, Excel ostaje u
+`[break]`, a dokaz stoji na drugoj sabotaži i ne javlja ništa.
+
+To je zamka 4 iz `tools/sabotaza.py`, zapisana odavno — i svejedno pokupljena
+ponovo, jer je ništa nije proveravalo. Statička provera koja je hvata (`sabotaza.py
+--proveri-sidra`) stiže tek u #227; do tada je jedini znak bio taj što run stoji.
+
+Oznaka je premeštena u red **iznad**. Provereno mašinski da nijedna od 227 zamena
+u katalogu nema komentar posle `_`.
+
+### 14.7 Šta OSTAJE
+
+**Bazen nije izmeren.** Da se višak preko `MAX_FT_VAL` stvarno odseca vidi se
+samo ako neki ekran zatraži tri slota — a nijedan ne traži. Sabotaža koja spusti
+konstantu obara istu tvrdnju kao ona koja ljusci oduzme čitanje slotova (zamka
+5), pa nije dodata. Ostaje kao poznata rupa, ne kao prećutana.

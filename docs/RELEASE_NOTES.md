@@ -5442,3 +5442,32 @@ Zelena provera koja nikad nije pokazana crvenom ne dokazuje ništa. Deset takvih
 je stajalo u projektu i izgledalo kao pokrivenost.
 
 Ceo tok je zapisan u `docs/engineering/postmortems/2026-08-verifikacija.md` §10.
+## v2.73.0 — `v6-ui-183` · podnožje liste izvoda pokazuje uplate i isplate
+
+Traka ispod liste **Izvodi** je do sada imala jedan novčani podatak — **promet**,
+dakle uplate i isplate sabrane u jedan broj.
+
+### Šta je bio problem
+
+Taj zbir se ne može rastaviti unazad. Izvod koji operater drži u ruci ima uplate
+i isplate odvojeno, i to su brojke koje poredi. `Promet 12.400,00 RSD` ne govori
+ništa o tome da li se izvod slaže — a zbog toga se ta lista i otvara.
+
+### Šta je sada
+
+Podnožje pokazuje **oba broja**:
+
+> `Uplate 9.100,00 RSD     Isplate 3.300,00 RSD`
+
+Isto važi i za listu **Stavke**. Brojke prate čip i pretragu isto kao i redovi —
+kad se lista suzi, suze se i one.
+
+### Verifikacija
+
+`RunAllTests` **116 testova, 0 palih**, uz pet novih sabotaža. Jedna od njih
+namerno crta **isti** broj u oba slota — najtiši mogući kvar, jer podnožje tada
+izgleda savršeno ispravno.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §14.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
