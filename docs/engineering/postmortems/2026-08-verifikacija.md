@@ -135,3 +135,66 @@ su birala **mrtav** interpreter:
 > Isti obrazac kao permission pravila pisana u Bash/Linux obliku za PowerShell
 > mašinu: **infrastruktura pisana bez smoke testa u stvarnom okruženju.** Kad se
 > piše hook, prvi test je da li uopšte pukne nad namerno pokvarenim fajlom.
+## 10) Sam dvosmerni dokaz je istrunuo — deset mrtvih sidara (25.08.2026)
+
+Pravilo iz §4 traži da se posle izmene pusti **ceo** dvosmerni dokaz i tvrdi da je
+broj crvenih jednak broju sabotaža. Nad 222 sabotaže to traje oko dva i po sata,
+pa se u praksi puštao podskup — obično onaj koji dira tekući posao.
+
+Kad je prvi put pušten preko svega što tekuća izmena dira (PR #226), ispalo je da
+**deset sabotaža ne može ni da se primeni**: kod ispod njihovog sidra je odavno
+popravljen, pa se sidro više ne nalazi. Za tih deset tvrdnji dokaza više nije ni
+bilo.
+
+Zašto je prošlo neprimećeno: sabotaža sa zastarelim sidrom **ne javlja** „test je
+prošao" — javlja „nisam našla sidro", i to na `stderr`, usred izlaza koji traje
+pola sata. U petlji to izgleda isto kao zeleno.
+
+| Nalaz | Koliko |
+|---|---|
+| sidro zastarelo ili dvosmisleno | **10 od 222** |
+| sabotaža koja ne obara ništa | 1 (`ekran-curi-greska`) |
+| očekivano ime testa ne postoji | 1 (test preimenovan) |
+| dve sabotaže dele tvrdnju (zamka 5) | 1 par |
+
+### Jedna „mrtva" sabotaža to nije bila — izveštaj je pucao
+
+`parcela-tekst` je dva puta prijavljena kao „ne obara ništa". Zapravo je uredno
+obarala svoju tvrdnju, ali je `run_vba.py` **pucao pri ispisu**: poruka o padu
+nosi ono što je test video, a to je bio `ChrW(183)` iz prikaznog teksta parcele —
+znak koji cp1252 konzola ne ume da ispiše. Run bi završio `Traceback`-om **umesto**
+linijom `FAIL <test> -- <tvrdnja>`, pa je petlja videla nula padova.
+
+**Pravilo:** izveštaj o rezultatu ne sme da pukne zbog jednog znaka. Ispis je sada
+otporan (`errors="replace"`), jer je alternativa da crven test izgleda kao mrtva
+provera.
+
+### Šta je promenjeno
+
+**1. Jeftina polovina pravila je sada statička.** `python tools/sabotaza.py
+--proveri-sidra` proverava, bez Excela i za sekundu: da se svako sidro nalazi
+**tačno jednom** (istim poređenjem od početka reda koje koristi i sam alat), da
+očekivani test postoji, i zamke 4, 5, 7 i 8 iz kataloga.
+
+**2. Vezano za `vba_check`.** Provera ide kroz `PostToolUse` hook posle svake VBA
+izmene — a baš VBA izmena je ono što obara sidro. Ko popravi kod, odmah vidi koju
+je sabotažu time obesmislio.
+
+**3. Pun dokaz je dobio alat:** `python tools/dokaz.py [filter]`. Do sada je bio
+skripta iz scratchpada, pa se i nije puštao ceo.
+
+**4. Kriterijum je izoštren.** Sabotaža **sme** da obori više testova — široka
+izmena to i radi. Ne sme da ne obori **svoj**. Tekst tvrdnje u katalogu je
+dokumentacija (često parafraza) i ne obara dokaz; ime testa je obavezno tačno.
+
+**5. Priznati nalaz ima ime.** `POZNATI_NALAZI` u `sabotaza.py` drži nalaze koji
+imaju vlasnika a ne mogu se zatvoriti bez izmene testa. Ispisuju se kao
+upozorenje i ne obaraju gejt — crvena provera koju svi nauče da preskoče ne čuva
+ništa. Upis koji više ništa ne pokriva je **isto nalaz**, pa spisak ne može tiho
+da raste.
+
+### Šta ovo ne rešava
+
+Da li sabotaža stvarno nešto obara zna **samo** pun dokaz. Statička provera hvata
+mrtvo sidro, ne mrtvu tvrdnju: `ekran-curi-greska` je imala ispravno sidro i
+uredno se primenjivala — a suite je ostajala zelena.
