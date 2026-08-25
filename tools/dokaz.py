@@ -24,9 +24,12 @@ TRI STVARI KOJE OVAJ ALAT TVRDI, a ne samo gleda:
    celog `src-vba` -- ako se ne poklopi, dokaz STAJE odmah, jer bi sve merene
    posle toga islo nad pokvarenim kodom.
 
-3. PAO JE BAS NJEN TEST. Sabotaza sme da obori i vise testova -- siroka izmena
-   to i radi. Ne sme da ne obori svoj. Tekst tvrdnje u katalogu je dokumentacija,
-   cesto parafraza, pa se razlika prijavljuje ali ne obara dokaz.
+3. PALA JE BAS NJENA TVRDNJA, ne samo njen test. Ime testa nije dovoljno:
+   AssertEq puca na PRVOM padu, pa sabotaza koja usput obori raniju, uzgrednu
+   tvrdnju ostavlja ciljanu NEIZVRSENOM -- a izlaz i dalje nosi ime pravog testa
+   (zamka 6). Zato peti clan n-torke mora da se nadje u poruci koja je pala.
+   To ga cini merenom vrednoscu, a ne komentarom: tekst koji vise ne opisuje
+   ono sto pada je nalaz, ne sitnica.
 
 Banka-suite ne ispisuje ime testa uz pad, ali svaka njena tvrdnja nosi stabilan
 prefiks ("T21 izabran placen blok: ..."), pa se identitet vadi iz njega. Bez toga
@@ -52,12 +55,12 @@ SUITE_BANKA = "RunBankaImportTestSuite"
 SUITE_ALL = "RunAllTests"
 
 
-def _katalog() -> dict:
+def _modul_sabotaza():
     put = os.path.join(ROOT, "tools", "sabotaza.py")
     spec = importlib.util.spec_from_file_location("_sab_za_dokaz", put)
     modul = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(modul)
-    return modul.SABOTAZE
+    return modul
 
 
 def _otisak() -> str:
@@ -117,17 +120,11 @@ def _baza_zelena(suite: str) -> tuple:
         return False, f"{suite}: timeout"
     izlaz = r.stdout + r.stderr
 
-    if suite == SUITE_ALL:
-        m = re.search(r"TESTS\s+(\d+) ukupno, (\d+) palo", izlaz)
-        if not m:
-            return False, f"{suite}: nema reda TESTS u izlazu"
-        if int(m.group(2)) != 0:
-            return False, f"{suite}: {m.group(0)}"
-        return True, m.group(0)
-
-    m = re.search(r"PASS=(\d+)\s+FAIL=(\d+)", izlaz)
+    # Red je oznacen imenom suite-a, pa se dve suite u istom run-u ne mesaju.
+    m = re.search(r"TESTS\s+" + re.escape(suite) + r": (\d+) ukupno, (\d+) palo",
+                  izlaz)
     if not m:
-        return False, f"{suite}: nema PASS/FAIL u izlazu"
+        return False, f"{suite}: nema oznacenog reda TESTS u izlazu"
     if int(m.group(2)) != 0:
         return False, f"{suite}: {m.group(0)}"
     return True, m.group(0)
@@ -139,7 +136,9 @@ def main(argv: list) -> int:
                     help="ime fajla (modX.bas) ili prefiks imena sabotaze")
     args = ap.parse_args(argv)
 
-    katalog = _katalog()
+    sab = _modul_sabotaza()
+    katalog = sab.SABOTAZE
+    poznati_spisak = getattr(sab, "POZNATI_NALAZI_DOKAZ", {})
     stavke = []
     for ime, (fajl, _staro, _novo, test, tvrdnja) in katalog.items():
         if args.filter and not (fajl in args.filter or
@@ -166,7 +165,7 @@ def main(argv: list) -> int:
     pre = _otisak()
     print("potpis izvora: %s" % pre, flush=True)
 
-    crvenih, lose = 0, []
+    crvenih, lose, poznati = 0, [], []
     for ime, fajl, ocekTest, ocekTvrdnja in stavke:
         p = _pusti(sys.executable, "tools/sabotaza.py", ime)
         if p.returncode != 0:
@@ -210,22 +209,49 @@ def main(argv: list) -> int:
             crvenih += 1
             kljuc = _kljuc_testa(ocekTest, suite)
             imena = sorted({p0 for p0, _ in pali})
-            poruke = " | ".join(p1 for _, p1 in pali)
+            # Poredi se SAMO ono sto je palo u njenom testu. Siroka
+            # sabotaza obori i druge testove, pa bi tvrdnja iz TUDJEG
+            # testa inace mogla da je "potvrdi".
+            poruke = " | ".join(p1 for p0, p1 in pali if p0 == kljuc)
             if kljuc not in imena:
                 stanje = "NE OBARA SVOJ TEST, nego: " + ", ".join(imena)
                 lose.append((ime, stanje))
-            elif ocekTvrdnja and ocekTvrdnja.lower() not in poruke.lower():
-                stanje = "OK (tekst tvrdnje u katalogu je parafraza)"
+            elif not ocekTvrdnja:
+                stanje = "KATALOG NEMA TVRDNJU -- nema sta da se poredi"
+                lose.append((ime, stanje))
+            elif ocekTvrdnja.lower() not in poruke.lower():
+                # Pravi test a pogresna tvrdnja NIJE dokaz: ciljana tvrdnja
+                # mozda nije ni izvrsena (AssertEq puca na prvom padu).
+                stanje = ("PALA DRUGA TVRDNJA: " + poruke[:120])
+                lose.append((ime, stanje))
             elif len(imena) > 1:
                 stanje = "OK (uz jos %d testa)" % (len(imena) - 1)
             else:
                 stanje = "OK"
         print("%-46s %s" % (ime, stanje), flush=True)
 
+    # Priznat, zapisan nalaz sa vlasnikom ne obara gejt -- crven alat koji svi
+    # nauce da preskoce ne cuva nista. Upis koji nista ne pokriva je isto nalaz.
+    ostali = []
+    pokriveni = set()
+    for ime, sta in lose:
+        if sab.poznat_nalaz(ime, sta, poznati_spisak):
+            poznati.append((ime, sta))
+            pokriveni.add(ime)
+        else:
+            ostali.append((ime, sta))
+    izabrana_imena = {i for i, _, _, _ in stavke}
+    for ime in sorted(set(poznati_spisak) & izabrana_imena - pokriveni):
+        ostali.append((ime, "POZNATI_NALAZI_DOKAZ['%s'] ne pokriva nijedan "
+                            "nalaz -- obrisi ga ili ispravi ime" % ime))
+    lose = ostali
+
     posle = _otisak()
     print("\ncrvenih: %d / sabotaza: %d" % (crvenih, len(stavke)))
     print("izvor pre/posle: %s / %s -> %s"
           % (pre, posle, "IDENTICAN" if pre == posle else "RAZLIKA!"))
+    for ime, sta in poznati:
+        print(" POZNATO: %s -> %s" % (ime, sta))
     for ime, sta in lose:
         print(" PROBLEM: %s -> %s" % (ime, sta))
     ok = not lose and pre == posle and crvenih == len(stavke)

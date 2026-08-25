@@ -104,16 +104,24 @@ def _copy_golden(src: str, dst: str) -> None:
 
 
 def _read_test_results(wbdir: str, report: dict,
-                       fname: str = "last_run.txt") -> int:
+                       fname: str = "last_run.txt",
+                       suite: str = "RunAllTests") -> int:
     """Verdikt iz fajla koji je suite upisala pored sveske.
 
     Nema fajla = pad, ne prolaz: to znaci da suite nije stigla do kraja
     (compile error, visenje, ubijen proces) -- ishod koji nije eksplicitno OK.
+
+    Rezultat ide u SLOT PO SUITE-U. Dok je postojao jedan globalni
+    report["tests"], druga suite sa rezultat-fajlom prepisivala je prvu: full run
+    je umeo da zavrsi sa "SUITE FAIL RunAllTests" i "TESTS 196 ukupno, 0 palo",
+    a ime palog testa je nestajalo. Izlaz koji sakriva crveno je tacno ono protiv
+    cega je ceo ovaj alat.
     """
+    slotovi = report.setdefault("suite_results", {})
     path = os.path.join(wbdir, fname)
     if not os.path.exists(path):
-        report["tests"] = {"error": f"suite nije upisala {fname} "
-                                    "(nije stigla do kraja)"}
+        slotovi[suite] = {"error": f"suite nije upisala {fname} "
+                                   "(nije stigla do kraja)"}
         return 2
 
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -129,10 +137,10 @@ def _read_test_results(wbdir: str, report: dict,
             failed = int(token[5:] or -1)
 
     detail = [ln for ln in lines[1:] if ln.strip()]
-    report["tests"] = {"total": total, "failed": failed, "detail": detail}
+    slotovi[suite] = {"total": total, "failed": failed, "detail": detail}
 
     if total < 0 or failed < 0:
-        report["tests"]["error"] = f"neocekivan prvi red: {head!r}"
+        slotovi[suite]["error"] = f"neocekivan prvi red: {head!r}"
         return 2
     return 2 if failed else 0
 
@@ -865,12 +873,12 @@ def main(argv: list[str]) -> int:
                     # ostane samo "Exception occurred" -- pa se ne vidi KOJA
                     # provera je pala, nego samo da jeste.
                     if meta.get("result_file"):
-                        _read_test_results(tmp, report, meta["result_file"])
+                        _read_test_results(tmp, report, meta["result_file"], suite)
                 else:
                     if meta.get("result_file"):
                         # Verdikt iz fajla suite, ne iz "Run() nije pukao".
-                        if _read_test_results(tmp, report,
-                                              meta["result_file"]) == 0:
+                        if _read_test_results(tmp, report, meta["result_file"],
+                                              suite) == 0:
                             entry["status"] = "OK"
                         else:
                             entry["status"] = "FAIL"
@@ -971,16 +979,20 @@ def _write_report(report: dict, rc: int) -> None:
     if schema:
         lines.append(f"SCHEMA  {schema}")
 
+    # Rezultat svake suite ide UZ NJU i nosi njeno ime. Jedan zajednicki blok
+    # je znacio da poslednja suite prepise prethodnu.
+    slotovi = report.get("suite_results", {})
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
                      + (f"  {s.get('error', '')}" if s["status"] == "FAIL" else ""))
-
-    t = report.get("tests")
-    if t:
+        t = slotovi.get(s["name"])
+        if not t:
+            continue
         if t.get("error"):
-            lines.append(f"TESTS   {t['error']}")
+            lines.append(f"TESTS   {s['name']}: {t['error']}")
         else:
-            lines.append(f"TESTS   {t['total']} ukupno, {t['failed']} palo")
+            lines.append(f"TESTS   {s['name']}: {t['total']} ukupno, "
+                         f"{t['failed']} palo")
         # Ime bas tog testa mora da se vidi u ispisu -- to je razlika izmedju
         # "nesto je palo" i upotrebljivog nalaza.
         for ln in t.get("detail", []):

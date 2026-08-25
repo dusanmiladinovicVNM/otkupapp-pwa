@@ -258,7 +258,7 @@ SABOTAZE = {
         "        UplataFakturaProblem = Poruka(\"NOVUNOS_ERR_VECI_OD_FAKTURE\") & \" \" & _\n"
         "                               Format$(preostalo, \"#,##0.00\")\n",
         "T_UplataValidiraj_FakturaOdlucujeTip",
-        "preko preostalog iznosa fakture se ne uplacuje",
+        "preostalog iznosa fakture se ne uplacuje",
     ),
     # --- upis reversa (F7) --------------------------------------------------
     "revers-smer": (
@@ -440,7 +440,7 @@ SABOTAZE = {
         "            ' SABOTAZA: nepostojeci otkup prolazi kapiju\n"
         "            If False Then StornoRazlog = NijePronadjen(broj)\n",
         "T_StornoDok_KapijePreUpisa",
-        "kapija zaustavlja nepostojeci dokument PRE poziva Storno*_TX",
+        "kapija zaustavlja nepostojeci dokument",
     ),
     # --- prefill posle storna (Z10) -----------------------------------------
     "prefill-zbirna-kolona": (
@@ -497,7 +497,7 @@ SABOTAZE = {
         "            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then\n",
         "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "prevezivanje dira SAMO svoj dokument, i kad dva dele broj",
+        "tudji dokument istog broja OSTAJE na svom mestu",
     ),
     "relink-ignorise-generaciju": (
         "modPaletniList.bas",
@@ -527,7 +527,7 @@ SABOTAZE = {
         "                                     Array(COL_PRJ_KUPAC)).count > 1)\n",
         "    tgtDvosmislen = False   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "bez generacije cilja dvosmislen broj se odbija (fail-closed)",
+        "bez generacije CILJA dvosmislen broj se odbija",
     ),
     # Propagacija BrojZbirne u paletne stavke. Izbor redova prijemnice je bio
     # tacan, pa je ovaj drugi upis po BROJU ponistavao ceo taj izbor.
@@ -1012,7 +1012,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: identitet se ignorise -- ide se po broju\n"
         "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n",
         "T_F8_IzabranRedOstajeIzabran",
-        "recovery zapis pokazuje na IZABRAN dokument, ne na prvi tog broja",
+        "recovery zapis pokazuje na IZABRAN dokument",
     ),
     # Kljuc grupisanja u ciljnoj listi kad generacije NEMA (zatecen zapis).
     # Komplementarno sa zbirna-vlasnik-samo-kupac: ta sabotaza dira KOJE kolone
@@ -2062,7 +2062,7 @@ SABOTAZE = {
         "    If IsEmpty(kandidati) And blokIzabran Then\n",
         "    If IsEmpty(kandidati) And False Then   ' SABOTAZA: izabran placen blok postaje avans\n",
         "T21_IzabranPlacenBlokNijeAvans",
-        "izabran blok bez otvorenih stavki se odbija umesto da postane avans",
+        "izabran placen blok NE knjizi nista",
     ),
     # ---------------------------------------------------------------- BANKA UVOZ
     # Najtisi moguci kvar scope-a: zadat je, ali kolona nije dokaziva, pa filtar
@@ -2511,14 +2511,40 @@ _KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
 # obaveza, ne izuzetak: brise se cim nalaz nestane, a provera odmah javi ako ga
 # neko obrise a nalaz je jos tu.
 #
-# Vrednost je POCETAK poruke, ne ime -- nov, drugaciji nalaz nad istom sabotazom
-# i dalje obara gejt.
+# Vrednost je POCETAK poruke (ili vise njih), ne ime -- nov, drugaciji nalaz nad
+# istom sabotazom i dalje obara gejt. Spisak citaju i --proveri-sidra i
+# tools/dokaz.py, jer je isti pojam: nalaz koji je priznat, zapisan i ima vlasnika.
 POZNATI_NALAZI = {
     "stale-parent-po-broju":
         "deli tvrdnju",   # razdvajanje trazi novu tvrdnju u
                           # T_ZatecenContext_NePrevezujeTudjePrijemnice: obe
                           # sabotaze proizvedu isti vidljiv ishod, pa ih test
                           # bez seam-a nad kapijom ne moze razlikovati.
+}
+
+
+# Isto, ali za PUN DOKAZ (tools/dokaz.py). Dva recnika, jer svaki alat vidi svoje
+# nalaze: staticka provera ne moze da zna koja je tvrdnja pala, a dokaz ne moze da
+# zna da li je sidro dvosmisleno. Jedan zajednicki bi svakom alatu prijavljivao
+# tudje upise kao mrtve.
+POZNATI_NALAZI_DOKAZ = {
+    # Obara PREDUSLOV ("sa identitetom se recovery zapis pravi"): gasi celu
+    # identitetsku granu, pa zapis ne nastane i ciljana tvrdnja ne dodje na
+    # red. Uza varijanta (razresi po broju umesto po generaciji) ne obara
+    # NISTA -- mereno: u fixture-u je izabran dokument bas prvi aktivan tog
+    # broja, pa LookupActiveID vrati isti PK. Razdvajanje trazi ili drugi
+    # fixture red ili novu tvrdnju u T_F8_IzabranRedOstajeIzabran.
+    "f8-identitet-po-broju":
+        "PALA DRUGA TVRDNJA",
+
+    # Obara PREDUSLOV ("prevezivanje po generaciji je proslo"), ne svoju poslovnu
+    # tvrdnju: bez generacije izvora ceo relink stane, pa ciljana tvrdnja ne dodje
+    # na red (zamka 6). Uza sabotaza koja bi pustila operaciju da prodje a
+    # generaciju ignorisala obarala bi TACNO ono sto vec obara
+    # relink-izvor-po-broju -- dakle zamka 5. Razdvajanje trazi novu tvrdnju u
+    # T_RelinkPoGeneraciji_NeDiraTudjDokument.
+    "relink-ignorise-generaciju":
+        "PALA DRUGA TVRDNJA",
 }
 
 
@@ -2586,6 +2612,16 @@ def _nalazi(katalog: dict, imena: set) -> list:
     return nalazi
 
 
+def poznat_nalaz(ime: str, poruka: str, spisak: dict = None) -> bool:
+    """Da li je bas ovaj nalaz priznat i zapisan (v. POZNATI_NALAZI*)."""
+    p = (POZNATI_NALAZI if spisak is None else spisak).get(ime)
+    if not p:
+        return False
+    if isinstance(p, str):
+        p = (p,)
+    return any(poruka.startswith(x) for x in p)
+
+
 def proveri_sidra(tiho: bool = False) -> int:
     """Sve o katalogu sto se vidi bez pokretanja Excela.
 
@@ -2596,8 +2632,7 @@ def proveri_sidra(tiho: bool = False) -> int:
 
     tvrdi, poznati, mrtvi_upisi = [], [], set(POZNATI_NALAZI)
     for ime, sta in nalazi:
-        pocetak = POZNATI_NALAZI.get(ime)
-        if pocetak and sta.startswith(pocetak):
+        if poznat_nalaz(ime, sta):
             poznati.append((ime, sta))
             mrtvi_upisi.discard(ime)
         else:

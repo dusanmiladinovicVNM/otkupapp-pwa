@@ -233,6 +233,44 @@ Sada i ta suite piše `last_run_banka.txt` (isti format kao `modTest`), rezultat
 tvrdnje (`T21 izabran placen blok: ...`). Provereno da nije prazno: kad se unos
 namerno usmeri na drugi test, alat kaže `NE OBARA SVOJ TEST, nego: T21`.
 
+### Još dva, iz drugog kruga review-a
+
+**5. Dve suite sa rezultat-fajlom prepisivale su jedna drugu.** Rezultat je išao u
+jedan zajednički `report["tests"]`, pa je banka (koja ide kasnije) prepisivala
+`RunAllTests`. Full run je umeo da završi ovako:
+
+```
+SUITE   FAIL   RunAllTests
+SUITE   OK     RunBankaImportTestSuite
+TESTS   196 ukupno, 0 palo
+```
+
+— izlaz koji **sam sebi protivreči**, a ime palog testa je nestalo. Izlazni kod je
+i dalje bio crven, ali dijagnostika je lagala. Sada svaka suite ima svoj slot i
+svoj označeni red (`TESTS   RunAllTests: 115 ukupno, 1 palo`).
+
+**6. Dokaz je prihvatao pogrešnu tvrdnju u pravom testu.** Alat je proveravao da
+je pao **njen test**, a razliku u tekstu tvrdnje prijavljivao kao „parafraza — u
+redu". To vraća zamku 6: `AssertEq` puca na **prvom** padu, pa sabotaža koja usput
+obori raniju, uzgrednu tvrdnju ostavlja ciljanu **neizvršenom** — a izlaz i dalje
+nosi ime pravog testa.
+
+> Pravi test + pogrešna tvrdnja = **crven** dokaz, ne zelen.
+
+Peti član n-torke je time prestao da bude komentar i postao **merena vrednost**:
+mora se naći u poruci koja je pala, i to **samo među porukama njenog testa**.
+
+Čim je pravilo postalo strogo, izmerilo je **sedam** neusklađenih od trinaest.
+Pet je bila razlika u rečima. Dva su bila prava nalaza — sabotaža obara
+**preduslov**, pa ciljana tvrdnja ne dođe na red: `relink-ignorise-generaciju` i
+`f8-identitet-po-broju`. Ni jedan se ne može zatvoriti bez izmene testa ili
+fikstуre (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
+mereno — ne obara ništa). Zapisani su u `POZNATI_NALAZI_DOKAZ`, sa razlogom.
+
+Cena je poštena: tekstovi za sabotaže koje nisu skoro puštane nisu usklađeni sa
+onim što stvarno pada, pa će ih alat prijaviti čim se puste. To nije regresija
+nego prvi put da se ta razlika uopšte meri.
+
 ### Šta ovo ne rešava
 
 Da li sabotaža stvarno nešto obara zna **samo** pun dokaz. Statička provera hvata
