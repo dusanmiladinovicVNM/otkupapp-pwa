@@ -135,3 +135,153 @@ su birala **mrtav** interpreter:
 > Isti obrazac kao permission pravila pisana u Bash/Linux obliku za PowerShell
 > mašinu: **infrastruktura pisana bez smoke testa u stvarnom okruženju.** Kad se
 > piše hook, prvi test je da li uopšte pukne nad namerno pokvarenim fajlom.
+## 10) Sam dvosmerni dokaz je istrunuo — deset mrtvih sidara (25.08.2026)
+
+Pravilo iz §4 traži da se posle izmene pusti **ceo** dvosmerni dokaz i tvrdi da je
+broj crvenih jednak broju sabotaža. Nad 222 sabotaže to traje oko dva i po sata,
+pa se u praksi puštao podskup — obično onaj koji dira tekući posao.
+
+Kad je prvi put pušten preko svega što tekuća izmena dira (PR #226), ispalo je da
+**deset sabotaža ne može ni da se primeni**: kod ispod njihovog sidra je odavno
+popravljen, pa se sidro više ne nalazi. Za tih deset tvrdnji dokaza više nije ni
+bilo.
+
+Zašto je prošlo neprimećeno: sabotaža sa zastarelim sidrom **ne javlja** „test je
+prošao" — javlja „nisam našla sidro", i to na `stderr`, usred izlaza koji traje
+pola sata. U petlji to izgleda isto kao zeleno.
+
+| Nalaz | Koliko |
+|---|---|
+| sidro zastarelo ili dvosmisleno | **10 od 222** |
+| sabotaža koja ne obara ništa | 1 (`ekran-curi-greska`) |
+| očekivano ime testa ne postoji | 1 (test preimenovan) |
+| dve sabotaže dele tvrdnju (zamka 5) | 1 par |
+
+### Jedna „mrtva" sabotaža to nije bila — izveštaj je pucao
+
+`parcela-tekst` je dva puta prijavljena kao „ne obara ništa". Zapravo je uredno
+obarala svoju tvrdnju, ali je `run_vba.py` **pucao pri ispisu**: poruka o padu
+nosi ono što je test video, a to je bio `ChrW(183)` iz prikaznog teksta parcele —
+znak koji cp1252 konzola ne ume da ispiše. Run bi završio `Traceback`-om **umesto**
+linijom `FAIL <test> -- <tvrdnja>`, pa je petlja videla nula padova.
+
+**Pravilo:** izveštaj o rezultatu ne sme da pukne zbog jednog znaka. Ispis je sada
+otporan (`errors="replace"`), jer je alternativa da crven test izgleda kao mrtva
+provera.
+
+### Šta je promenjeno
+
+**1. Jeftina polovina pravila je sada statička.** `python tools/sabotaza.py
+--proveri-sidra` proverava, bez Excela i za sekundu: da se svako sidro nalazi
+**tačno jednom** (istim poređenjem od početka reda koje koristi i sam alat), da
+očekivani test postoji, i zamke 4, 5, 7 i 8 iz kataloga.
+
+**2. Vezano za `vba_check`.** Provera ide kroz `PostToolUse` hook posle svake VBA
+izmene — a baš VBA izmena je ono što obara sidro. Ko popravi kod, odmah vidi koju
+je sabotažu time obesmislio.
+
+**3. Pun dokaz je dobio alat:** `python tools/dokaz.py [filter]`. Do sada je bio
+skripta iz scratchpada, pa se i nije puštao ceo.
+
+**4. Kriterijum je izoštren.** Sabotaža **sme** da obori više testova — široka
+izmena to i radi. Ne sme da ne obori **svoj**. Tekst tvrdnje u katalogu je
+dokumentacija (često parafraza) i ne obara dokaz; ime testa je obavezno tačno.
+
+**5. Priznati nalaz ima ime — i to ime baš tog pada.** `POZNATI_NALAZI` u
+`sabotaza.py` drži nalaze koji
+imaju vlasnika a ne mogu se zatvoriti bez izmene testa. Ispisuju se kao
+upozorenje i ne obaraju gejt — crvena provera koju svi nauče da preskoče ne čuva
+ništa. Upis koji više ništa ne pokriva je **isto nalaz**, pa spisak ne može tiho
+da raste.
+
+Vrednost upisa je **početak baš te poruke**, ne njena vrsta. Prva verzija je za
+pun dokaz upisivala golo `PALA DRUGA TVRDNJA` — a to je cela *kategorija*: svaka
+buduća, sasvim druga pogrešna tvrdnja u istom testu bila bi tiho progutana kao
+poznata i dokaz bi završio zeleno. Prefiks zato nosi i ime tvrdnje koja stvarno
+pada, prepisano iz izmerenog izlaza. Provereno u oba smera: tačan prefiks →
+`POZNATO`; bilo koja druga poruka → `PROBLEM` (i, uz to, upis se prijavi kao
+mrtav).
+
+### Četiri rupe u samom alatu, nađene u review-u
+
+Prva verzija ove mašinerije imala je četiri problema — i sva četiri su bila u
+delu koji **treba da dokazuje** da su testovi živi:
+
+**1. Provera nije išla kroz hook, iako je to bila cela poenta.** Bila je vezana
+za `not args.paths`, a `PostToolUse` hook zove baš `vba_check.py --hook <fajl>` —
+dakle sa putanjom. Katalog se kroz hook nikad nije proveravao; video bi ga tek
+CI, posle dvadeset izmena. Katalog nema veze sa tim koji je fajl dat: sidra
+pokrivaju ceo `src-vba`, pa se sada proverava uvek (0,14 s, tiho kad je čisto).
+
+**2. Dokaz je mogao da bude lažno pozitivan nad crvenom bazom.** Alat je ispisivao
+baseline ali ga nije **tvrdio**. Test koji već pada iz trećeg razloga proglasio bi
+svaku sabotažu nad sobom dokazanom — uključujući onu koja ne radi ništa. Sada je
+zelena baza **kapija**: nije zelena → `rc=2`, bez ijedne mutacije.
+
+> Razlika je suštinska: „posle mutacije postoji crveno" nije isto što i „mutacija
+> je izazvala crveno".
+
+**3. Čišćenje nije bilo fail-safe.** Mutacija se vraćala tek posle uspešnog run-a;
+timeout Excela ili `Ctrl+C` usred prolaza od dva i po sata ostavljao je **namerno
+pokvaren** radni izvor. Sada ide kroz `finally`, uz poređenje potpisa celog
+`src-vba` posle svakog vraćanja — ako se ne poklopi, dokaz staje odmah, jer bi sve
+mereno posle toga išlo nad pokvarenim kodom.
+
+**4. Banka-suite se nije mogla ni izmeriti.** Njeni detalji idu u Immediate
+prozor, a opis podignute greške ne preživi COM granicu — `pywin32` vidi golo
+`Exception occurred`. Alat je zato video samo „3 provere palo", pa je za te
+sabotaže tvrdnja bila „nešto je palo".
+
+Mereno, ispalo je gore nego što je izgledalo: `run_vba` je detalje čitao **samo**
+kad `Run()` ne pukne, a ta suite pad prijavljuje **greškom** — pa se rezultat
+nikad nije ni čitao. Svaka sabotaža nad njom čitala bi se kao „ne obara ništa",
+što je lažni negativ.
+
+Sada i ta suite piše `last_run_banka.txt` (isti format kao `modTest`), rezultat se
+čita **i kad suite pukne greškom**, a identitet se vadi iz stabilnog prefiksa
+tvrdnje (`T21 izabran placen blok: ...`). Provereno da nije prazno: kad se unos
+namerno usmeri na drugi test, alat kaže `NE OBARA SVOJ TEST, nego: T21`.
+
+### Još dva, iz drugog kruga review-a
+
+**5. Dve suite sa rezultat-fajlom prepisivale su jedna drugu.** Rezultat je išao u
+jedan zajednički `report["tests"]`, pa je banka (koja ide kasnije) prepisivala
+`RunAllTests`. Full run je umeo da završi ovako:
+
+```
+SUITE   FAIL   RunAllTests
+SUITE   OK     RunBankaImportTestSuite
+TESTS   196 ukupno, 0 palo
+```
+
+— izlaz koji **sam sebi protivreči**, a ime palog testa je nestalo. Izlazni kod je
+i dalje bio crven, ali dijagnostika je lagala. Sada svaka suite ima svoj slot i
+svoj označeni red (`TESTS   RunAllTests: 115 ukupno, 1 palo`).
+
+**6. Dokaz je prihvatao pogrešnu tvrdnju u pravom testu.** Alat je proveravao da
+je pao **njen test**, a razliku u tekstu tvrdnje prijavljivao kao „parafraza — u
+redu". To vraća zamku 6: `AssertEq` puca na **prvom** padu, pa sabotaža koja usput
+obori raniju, uzgrednu tvrdnju ostavlja ciljanu **neizvršenom** — a izlaz i dalje
+nosi ime pravog testa.
+
+> Pravi test + pogrešna tvrdnja = **crven** dokaz, ne zelen.
+
+Peti član n-torke je time prestao da bude komentar i postao **merena vrednost**:
+mora se naći u poruci koja je pala, i to **samo među porukama njenog testa**.
+
+Čim je pravilo postalo strogo, izmerilo je **sedam** neusklađenih od trinaest.
+Pet je bila razlika u rečima. Dva su bila prava nalaza — sabotaža obara
+**preduslov**, pa ciljana tvrdnja ne dođe na red: `relink-ignorise-generaciju` i
+`f8-identitet-po-broju`. Ni jedan se ne može zatvoriti bez izmene testa ili
+fikstуre (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
+mereno — ne obara ništa). Zapisani su u `POZNATI_NALAZI_DOKAZ`, sa razlogom.
+
+Cena je poštena: tekstovi za sabotaže koje nisu skoro puštane nisu usklađeni sa
+onim što stvarno pada, pa će ih alat prijaviti čim se puste. To nije regresija
+nego prvi put da se ta razlika uopšte meri.
+
+### Šta ovo ne rešava
+
+Da li sabotaža stvarno nešto obara zna **samo** pun dokaz. Statička provera hvata
+mrtvo sidro, ne mrtvu tvrdnju: `ekran-curi-greska` je imala ispravno sidro i
+uredno se primenjivala — a suite je ostajala zelena.

@@ -2827,11 +2827,16 @@ razlikuje.
 deljena" važilo je za podskup koji se tada vrteo, ne za katalog.
 
 **Šta iz ovoga sledi.** Pravilo iz `CLAUDE.md` — „posle izmene pusti ceo dvosmerni
-dokaz i tvrdi `crvenih == sabotaža`" — nad 220 sabotaža traje oko dva i po sata,
+dokaz i tvrdi `crvenih == sabotaža`" — nad 222 sabotaže traje oko dva i po sata,
 pa se u praksi nije puštalo celo. Jeftina polovina tog pravila je **statička**:
 proveriti da se svako sidro nalazi tačno jednom, istim poređenjem koje koristi
-`sabotaza.py`. To traje sekundu i uhvatilo bi svih deset. Ide kao zaseban posao,
-zajedno sa popravkom nađenih rupa.
+`sabotaza.py`. To traje sekundu i uhvatilo bi svih deset.
+
+**Zatvoreno:** `python tools/sabotaza.py --proveri-sidra` (ide i kroz `vba_check`,
+dakle posle svake VBA izmene) i `python tools/dokaz.py [filter]` za pun dokaz.
+Svih deset sidara je popravljeno i dokazano ponovo. Ceo tok, sa jednom „mrtvom"
+sabotažom koja to nije bila, zapisan je u
+`docs/engineering/postmortems/2026-08-verifikacija.md` §10.
 
 ### 13.12 Šta OSTAJE
 

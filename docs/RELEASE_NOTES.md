@@ -5407,3 +5407,38 @@ i idu kao zaseban posao.
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §13.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+## v2.72.0 — dokazni aparat: deset mrtvih sidara
+
+Nema izmene u programu — ovo je izdanje o **proverama**.
+
+### Šta je bilo pokvareno
+
+Uz svaku automatsku proveru u projektu ide i „sabotaža": namerno pokvaren kod
+koji **mora** da obori baš tu proveru. To je jedini dokaz da provera nešto meri.
+
+Ispostavilo se da je **deset od 222** sabotaža prestalo da radi: kod koji su
+gađale je u međuvremenu popravljen, pa se sabotaža više nije mogla ni primeniti.
+Za tih deset provera dokaza više nije bilo — a to se nije videlo, jer takva
+sabotaža ne javlja „prošlo je" nego „ne nalazim mesto", usred izlaza koji traje
+pola sata.
+
+Uz to: jedna sabotaža koja stvarno ništa nije obarala, jedno zastarelo ime testa,
+i jedna provera koja je bila **ispravna** ali je izgledala mrtva jer je izveštaj
+pucao na jednom slovu sa kvačicom.
+
+### Šta je urađeno
+
+Svih deset je popravljeno i dokazano ponovo. Dodata je provera koja ovo ubuduće
+hvata **za sekundu** umesto za dva i po sata, i vezana je za istu proveru koja se
+ionako pušta posle svake izmene koda — pa mrtvo sidro više ne može da prođe
+neprimećeno.
+
+Izveštaj o rezultatu više ne puca zbog znaka koji konzola ne ume da ispiše.
+
+### Zašto je ovo vredelo
+
+Zelena provera koja nikad nije pokazana crvenom ne dokazuje ništa. Deset takvih
+je stajalo u projektu i izgledalo kao pokrivenost.
+
+Ceo tok je zapisan u `docs/engineering/postmortems/2026-08-verifikacija.md` §10.

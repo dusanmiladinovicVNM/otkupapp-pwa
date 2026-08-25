@@ -1918,9 +1918,37 @@ Private Sub Fail(ByVal nm As String)
     mReport = mReport & "PAO   " & nm & vbCrLf
 End Sub
 
+' Rezultat ide i NA DISK, ne samo u Immediate prozor i MsgBox.
+'
+' Debug.Print ne izlazi iz Excela, a opis podignute greske ne prezivi COM granicu
+' (pywin32 vidi golo "Exception occurred"). Alat koji cita izlaz je zato video
+' samo "3 provera palo" i nije mogao da tvrdi koja je pala -- pa je dvosmerni
+' dokaz nad ovom suite-om bio slep: sabotaza koja obori tri provere i sabotaza
+' koja ne obori nista izgledale su isto.
+'
+' Format je isti kao modTest.WriteResultFile, pa ga run_vba cita istim putem.
+Private Sub WriteResultFileBanka()
+    Dim path As String
+    path = ThisWorkbook.path & Application.PathSeparator & "last_run_banka.txt"
+    WriteTextFileBanka path, "TESTS=" & (mPass + mFail) & " FAIL=" & mFail & _
+                             vbLf & mReport
+End Sub
+
+Private Sub WriteTextFileBanka(ByVal path As String, ByVal content As String)
+    Dim fnum As Integer
+    fnum = FreeFile
+    Open path For Output As #fnum
+    Print #fnum, content;
+    Close #fnum
+End Sub
+
 Private Sub ReportResults()
     Dim hdr As String
     hdr = "BANKA TEST SUITE (RF-09 + RF-10)  ->  PASS=" & mPass & "  FAIL=" & mFail
+
+    On Error Resume Next
+    WriteResultFileBanka
+    On Error GoTo 0
 
     Debug.Print String(60, "=")
     Debug.Print hdr

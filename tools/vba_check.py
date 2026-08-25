@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import importlib.util
 import os
 import re
 import shutil
@@ -2023,6 +2024,29 @@ def self_test() -> int:
     return 0
 
 
+# --- katalog sabotaza ------------------------------------------------------
+#
+# Sidro sabotaze zastari cim se popravi kod koji gadja -- i to TIHO: sabotaza se
+# posle toga ne moze ni primeniti, pa tvrdnja koja je nekad bila pokazana crvenom
+# vise nije. Nad 222 sabotaze pun dvosmerni dokaz traje oko dva i po sata, pa se
+# u praksi vrteo podskup i deset sidara je istrunulo neprimeceno.
+#
+# Zato ista provera ide OVDE: `vba_check` se pusta posle svake VBA izmene (hook),
+# a bas VBA izmena je ono sto sidro obara. Traje sekundu.
+def check_katalog_sabotaza(tiho: bool = False) -> int:
+    put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sabotaza.py")
+    if not os.path.exists(put):
+        return 0
+    spec = importlib.util.spec_from_file_location("_sab_za_check", put)
+    modul = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(modul)
+    except Exception as e:                       # pokvaren katalog je isto nalaz
+        print(f"KATALOG: tools/sabotaza.py se ne ucitava -- {e}", file=sys.stderr)
+        return 2
+    return 2 if modul.proveri_sidra(tiho) else 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Staticke provere nad src-vba")
     ap.add_argument("paths", nargs="*", help="konkretni fajlovi (podrazumevano ceo src-vba/)")
@@ -2073,10 +2097,23 @@ def main(argv: list[str]) -> int:
 
     findings += check_poruke(files)
 
+    # Katalog se proverava UVEK, i kad je dat jedan fajl.
+    #
+    # Prva verzija je ovo vezala za `not args.paths` -- a PostToolUse hook zove
+    # bas `vba_check.py --hook <fajl>`, pa se katalog kroz hook nikad nije
+    # proveravao. Time je i cela poenta promasena: sidro obara VBA izmena, i
+    # treba da se vidi u toj sekundi, a ne tek u CI-ju posle dvadeset izmena.
+    # Katalog nema veze sa tim koji je fajl dat -- sidra pokrivaju ceo src-vba.
+    rc_kat = check_katalog_sabotaza(args.hook)
+
     if not findings:
         if not args.hook:
-            print(f"vba_check: cisto ({len(files)} fajlova).")
-        return 0
+            if rc_kat:
+                print(f"vba_check: izvor cist ({len(files)} fajlova), ali "
+                      f"KATALOG SABOTAZA nije.", file=sys.stderr)
+            else:
+                print(f"vba_check: cisto ({len(files)} fajlova).")
+        return rc_kat
 
     by_code: dict[str, int] = defaultdict(int)
     for f in sorted(findings, key=lambda f: (f.path, f.line)):

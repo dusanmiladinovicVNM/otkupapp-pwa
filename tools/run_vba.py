@@ -59,10 +59,13 @@ SUITES = {
     # Verdikt NE dolazi iz toga da li Run() pukne (modTest hvata gresku po testu
     # da jedan pad ne obori ostale), nego iz last_run.txt pored sveske.
     "RunAllTests":              {"gate": True,  "dialogs": False, "default": True,
-                                 "result_file": True},
+                                 "result_file": "last_run.txt"},
     "RunIzvestajTests":         {"gate": True,  "dialogs": False, "default": True},
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
-    "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    # Detalji pada ove suite ne prezive COM granicu (opis greske stigne kao golo
+    # "Exception occurred"), pa i ona pise rezultat pored sveske.
+    "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True,
+                                 "result_file": "last_run_banka.txt"},
     "RunFakturaSmokeSuite":     {"gate": True,  "dialogs": True,  "default": True},
     "Test_StornoCentar_All":    {"gate": True,  "dialogs": False, "default": True},
     "TestLicense_All":          {"gate": True,  "dialogs": False, "default": True},
@@ -100,16 +103,25 @@ def _copy_golden(src: str, dst: str) -> None:
             shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
 
 
-def _read_test_results(wbdir: str, report: dict) -> int:
-    """Verdikt iz last_run.txt koji je upisao modTest.RunAllTests.
+def _read_test_results(wbdir: str, report: dict,
+                       fname: str = "last_run.txt",
+                       suite: str = "RunAllTests") -> int:
+    """Verdikt iz fajla koji je suite upisala pored sveske.
 
-    Nema fajla = pad, ne prolaz: to znaci da RunAllTests nije stigao do kraja
+    Nema fajla = pad, ne prolaz: to znaci da suite nije stigla do kraja
     (compile error, visenje, ubijen proces) -- ishod koji nije eksplicitno OK.
+
+    Rezultat ide u SLOT PO SUITE-U. Dok je postojao jedan globalni
+    report["tests"], druga suite sa rezultat-fajlom prepisivala je prvu: full run
+    je umeo da zavrsi sa "SUITE FAIL RunAllTests" i "TESTS 196 ukupno, 0 palo",
+    a ime palog testa je nestajalo. Izlaz koji sakriva crveno je tacno ono protiv
+    cega je ceo ovaj alat.
     """
-    path = os.path.join(wbdir, "last_run.txt")
+    slotovi = report.setdefault("suite_results", {})
+    path = os.path.join(wbdir, fname)
     if not os.path.exists(path):
-        report["tests"] = {"error": "modTest nije upisao last_run.txt "
-                                    "(RunAllTests nije stigao do kraja)"}
+        slotovi[suite] = {"error": f"suite nije upisala {fname} "
+                                   "(nije stigla do kraja)"}
         return 2
 
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -125,10 +137,10 @@ def _read_test_results(wbdir: str, report: dict) -> int:
             failed = int(token[5:] or -1)
 
     detail = [ln for ln in lines[1:] if ln.strip()]
-    report["tests"] = {"total": total, "failed": failed, "detail": detail}
+    slotovi[suite] = {"total": total, "failed": failed, "detail": detail}
 
     if total < 0 or failed < 0:
-        report["tests"]["error"] = f"neocekivan prvi red: {head!r}"
+        slotovi[suite]["error"] = f"neocekivan prvi red: {head!r}"
         return 2
     return 2 if failed else 0
 
@@ -856,10 +868,17 @@ def main(argv: list[str]) -> int:
                     entry["status"] = "FAIL"
                     entry["error"] = str(exc)
                     failed += 1
+                    # Suite koja pad prijavljuje GRESKOM (banka) svejedno je
+                    # upisala detalje pored sveske. Bez ovoga od celog pada
+                    # ostane samo "Exception occurred" -- pa se ne vidi KOJA
+                    # provera je pala, nego samo da jeste.
+                    if meta.get("result_file"):
+                        _read_test_results(tmp, report, meta["result_file"], suite)
                 else:
                     if meta.get("result_file"):
-                        # Verdikt iz last_run.txt, ne iz "Run() nije pukao".
-                        if _read_test_results(tmp, report) == 0:
+                        # Verdikt iz fajla suite, ne iz "Run() nije pukao".
+                        if _read_test_results(tmp, report, meta["result_file"],
+                                              suite) == 0:
                             entry["status"] = "OK"
                         else:
                             entry["status"] = "FAIL"
@@ -960,16 +979,20 @@ def _write_report(report: dict, rc: int) -> None:
     if schema:
         lines.append(f"SCHEMA  {schema}")
 
+    # Rezultat svake suite ide UZ NJU i nosi njeno ime. Jedan zajednicki blok
+    # je znacio da poslednja suite prepise prethodnu.
+    slotovi = report.get("suite_results", {})
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:6} {s['name']} ({s['seconds']}s)"
                      + (f"  {s.get('error', '')}" if s["status"] == "FAIL" else ""))
-
-    t = report.get("tests")
-    if t:
+        t = slotovi.get(s["name"])
+        if not t:
+            continue
         if t.get("error"):
-            lines.append(f"TESTS   {t['error']}")
+            lines.append(f"TESTS   {s['name']}: {t['error']}")
         else:
-            lines.append(f"TESTS   {t['total']} ukupno, {t['failed']} palo")
+            lines.append(f"TESTS   {s['name']}: {t['total']} ukupno, "
+                         f"{t['failed']} palo")
         # Ime bas tog testa mora da se vidi u ispisu -- to je razlika izmedju
         # "nesto je palo" i upotrebljivog nalaza.
         for ln in t.get("detail", []):
@@ -991,7 +1014,17 @@ def _write_report(report: dict, rc: int) -> None:
     text = "\n".join(lines)
     with open(os.path.join(outdir, "last_run.txt"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
-    print(text)
+    # Ispis ne sme da PUKNE zbog jednog znaka. Konzola je cp1252, a poruka o
+    # padu nosi ono sto je test video -- pa je jedan ChrW(183) iz prikaznog
+    # teksta parcele rusio ceo izvestaj: run bi zavrsio Traceback-om UMESTO
+    # linijom "FAIL <test> -- <tvrdnja>". U petlji dvosmernog dokaza to izgleda
+    # kao "sabotaza nije oborila nista", pa je jedna ispravna sabotaza
+    # (parcela-tekst) bila prijavljena kao mrtva.
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc, errors="replace"))
 
 
 if __name__ == "__main__":
