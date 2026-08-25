@@ -2898,11 +2898,23 @@ nemaju kilograme.
 |---|---|
 | ugovor | sedmi član postoji i nosi **dva** slota, sa svojim ključevima |
 | ugovor | **zbir slotova je promet** — dakle brojani su pod istim filterima |
-| ugovor | pretraga smanjuje i slotove, ne samo broj redova |
+| ugovor | pretraga smanjuje slotove, i to **oba**, ne samo prvi |
+| ugovor | i u suženoj listi je zbir slotova **njen** promet |
+| ugovor | **lista Stavke** nosi isti ugovor — ekran ima dva čitača |
 | ljuska | ljuska je preuzela **oba** |
 | ljuska | svaki nosi svoj natpis (Uplate / Isplate) i dinare |
-| ljuska | **slotovi ne nose isti broj** |
+| ljuska | **slotovi ne nose isti IZNOS** |
 | ljuska | ekran bez slotova ostaje na zbiru vrednosti |
+| crtanje | drugi slot je **stvarno nacrtan** (`ftVal2.Visible`), uz prvi |
+| crtanje | na ekranu bez slotova se **gasi** — ne ostaje tuđa brojka |
+
+Test **izričito** postavlja listu (`Scr_BuListaTestSet "IZVODI"`) pre prvog
+čitanja. Prva verzija je merila ono što je prethodni test ostavio — zelen dok se
+ne promeni redosled, a zove se po izvodima.
+
+Crtanje se meri nad **pravom formom** (`GridRenderTest`), jer model i natpis nisu
+isto što i nacrtan slot: kod ove iste liste je već jednom bio tačan zbir uz
+nevidljivu kontrolu (prelazak novčanih kolona na `rest`, `v6-ui-181`).
 
 Najvažnija je treća: **dva broja koja ne prate filtere gora su od jednog koji ih
 prati**, jer izgledaju preciznije. Zato se ne tvrdi „slotovi postoje" nego da im
@@ -2925,8 +2937,19 @@ isplate u test-svesci uopšte razlikuju — bez njega bi i oštra tvrdnja bila p
 | Šta | Ishod |
 |---|---|
 | `RunAllTests` | **116 testova, 0 palih** |
-| Pet novih sabotaža | po jedna na svako svojstvo, svaka obara **svoju** tvrdnju |
-| `vba_check` | čisto (195 fajlova) |
+| `tools/dokaz.py mreza-podnozje` | svaka obara **svoju** tvrdnju, izvor bit-identičan |
+| `sabotaza.py --proveri-sidra` | čisto (229 sabotaža) |
+| `vba_check` · `--self-test` | čisto (195) · 64 |
+
+Sedam novih sabotaža. Dve od njih postoje zato što je review pokazao da bez njih
+PR tvrdi više nego što dokazuje:
+
+- `mreza-podnozje-stavke-nema-slotova` — lista **Stavke** je imala nov ugovor a
+  nijedan dokaz;
+- `mreza-podnozje-slot-ignorise-pretragu` — slot koji je **tačan nad punom** a
+  pogrešan nad **suženom** listom. Najteži oblik, jer prva provera prolazi.
+  Promet se namerno ne dira: da je diran, pao bi test prometa iznad i sabotaža ne
+  bi merila svoje (zamka 5).
 
 ### 14.6 Zamka 4 uživo: sabotaža koja ne pada nego VISI
 

@@ -7740,10 +7740,17 @@ End Sub
 ' NAJVAZNIJE JE DA SU TO NJEGOVI BROJEVI: dva broja koja ne prate filtere gora su
 ' od jednog koji ih prati, jer izgledaju preciznije.
 Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
-    Dim d As Variant, d2 As Variant, sl As Variant
+    Dim d As Variant, d2 As Variant, ds As Variant, sl As Variant
     Dim n As Long, nPal As Long
     Dim t0 As String, t1 As String
+    Dim f As frmOtkupUI, ft As Object
+    Dim vid1 As Boolean, vid2 As Boolean, vid2Pal As Boolean
+    Dim capA As String, capB As String
 
+    ' Lista se postavlja IZRICITO. Bez ovoga test meri ono sto je prethodni
+    ' ostavio, a zove se po IZVODIMA -- state-dependent test je zelen dok se ne
+    ' promeni redosled.
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
     d = modScrBankaUvoz.Scr_Rows("sve", "")
     AssertEq (UBound(d) >= 6), True, "ugovor nosi sedmi clan -- novcane slotove"
     sl = d(6)
@@ -7767,6 +7774,23 @@ Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
     AssertEq (CLng(d2(2)) < CLng(d(2))), True, "preduslov: pretraga suzava listu"
     AssertEq (CDbl(d2(6)(0)(1)) < CDbl(sl(0)(1))), True, _
              "pretraga smanjuje i slotove, ne samo redove"
+    ' Oba, ne samo prvi: implementacija koja filtrira uplate a isplate ostavi
+    ' globalne prosla bi tvrdnju iznad.
+    AssertEq (CDbl(d2(6)(1)(1)) < CDbl(sl(1)(1))), True, _
+             "...i to OBA slota, ne samo prvi"
+    ' I nad suzenom listom zbir mora da se poklopi sa njenim prometom.
+    AssertEq (CDbl(d2(6)(0)(1)) + CDbl(d2(6)(1)(1))), CDbl(d2(4)), _
+             "i u suzenoj listi je zbir slotova njen promet"
+
+    ' STAVKE nose ISTI ugovor -- ekran ima dva citaca, i oba su izmenjena.
+    modScrBankaUvoz.Scr_BuListaTestSet "STAVKE"
+    ds = modScrBankaUvoz.Scr_Rows("sve", "")
+    AssertEq (UBound(ds) >= 6), True, "i lista stavki nosi sedmi clan"
+    AssertEq (UBound(ds(6)) + 1), 2, "lista stavki salje DVA novcana slota"
+    AssertEq CStr(ds(6)(0)(0)), "OTKUI_FT_UPLATE", "stavke: prvi slot su uplate"
+    AssertEq CStr(ds(6)(1)(0)), "OTKUI_FT_ISPLATE", "stavke: drugi slot su isplate"
+    AssertEq (CDbl(ds(6)(0)(1)) + CDbl(ds(6)(1)(1))), CDbl(ds(4)), _
+             "stavke: zbir slotova je promet"
 
     ' LJUSKA. Da li je uopste preuzela oba, i sa svojim natpisima.
     modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
@@ -7779,8 +7803,29 @@ Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
     modOtkupUI.GridTestLoad "PALETE"
     nPal = modOtkupUI.GridPodnozjeSlotBrojTest()
 
+    ' CRTANJE, nad pravom formom. Model i natpis nisu isto sto i NACRTAN slot:
+    ' kod ove iste liste je vec jednom bio tacan zbir uz nevidljivu kontrolu
+    ' (prelazak novcanih kolona na "rest", v6-ui-181).
+    Set f = NewOtkupUIForm()
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    modOtkupUI.GridTestLoad "BANKA_UVOZ"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    Set ft = f.Controls("zGrid").Controls("grdFoot")
+    vid1 = ft.Controls("ftVal").Visible
+    vid2 = ft.Controls("ftVal2").Visible
+    capA = CStr(ft.Controls("ftVal").caption)
+    capB = CStr(ft.Controls("ftVal2").caption)
+
+    ' Ekran bez slotova mora da drugi slot UGASI -- inace tudja brojka ostaje
+    ' na ekranu, kao nekad traka otpremnice.
+    modOtkupUI.GridTestLoad "PALETE"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    vid2Pal = ft.Controls("ftVal2").Visible
+
     modOtkupUI.GridTestLoad ""
     modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    Unload f
+    modOtkupUI.GridOtkaciFormuTest
 
     AssertEq n, 2, "ljuska je preuzela oba slota"
     AssertEq (InStr(1, t0, Poruka("OTKUI_FT_UPLATE")) = 1), True, _
@@ -7795,4 +7840,10 @@ Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
               Mid$(t1, Len(Poruka("OTKUI_FT_ISPLATE")) + 1)), True, _
              "slotovi ne nose isti IZNOS"
     AssertEq nPal, 0, "ekran bez slotova ostaje na zbiru vrednosti"
+
+    AssertEq vid2, True, "drugi slot je STVARNO nacrtan, ne samo izracunat"
+    AssertEq vid1, True, "...uz prvi, oba u isto vreme"
+    AssertEq (capA <> capB), True, "nacrtani slotovi nose razlicite natpise"
+    AssertEq vid2Pal, False, _
+             "na ekranu bez slotova drugi slot se GASI -- ne ostaje tudja brojka"
 End Sub

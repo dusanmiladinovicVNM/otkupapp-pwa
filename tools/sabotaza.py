@@ -2015,6 +2015,31 @@ SABOTAZE = {
         "T_Mreza_PodnozjeDvaNovcanaSlota",
         "slotovi ne nose isti IZNOS",
     ),
+    # Ekran ima DVA citaca, i oba su dobila sedmi clan. Bez ove sabotaze bi
+    # lista stavki bila samo tvrdnja u opisu PR-a, bez ijednog dokaza.
+    "mreza-podnozje-stavke-nema-slotova": (
+        "modScrBankaUvoz.bas",
+        "    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n"
+        "                               Array(\"OTKUI_FT_ISPLATE\", zbirI)))\n",
+        "    ' SABOTAZA: stavke opet salju samo zbir\n"
+        "    RedoviStavke = Array(StavkeKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "i lista stavki nosi sedmi clan",
+    ),
+    # Slot koji je TACAN nad punom listom a pogresan nad suzenom -- najtezi
+    # oblik, jer prva provera prolazi. Promet se namerno ne dira: da je
+    # diran, pao bi test prometa iznad i ova sabotaza ne bi merila svoje.
+    "mreza-podnozje-slot-ignorise-pretragu": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n",
+        "    ' SABOTAZA: slot ne prati pretragu\n"
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU + IIf(Len(q) > 0, 1000000, 0)), _\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "pretraga smanjuje i slotove, ne samo redove",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog
