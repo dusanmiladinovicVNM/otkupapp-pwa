@@ -345,6 +345,7 @@ Public Sub RunAllTests()
     RunOne 114
     RunOne 115
     RunOne 116
+    RunOne 117
 
     SetTestMode prevMode
     WriteResultFile
@@ -493,6 +494,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 114: TestName = "T_LegacyBanka_PadUcitavanjaNijePraznaLista"
         Case 115: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
         Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
+        Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -617,6 +619,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 114: T_LegacyBanka_PadUcitavanjaNijePraznaLista
         Case 115: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
         Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
+        Case 117: T_Kolona_TrazenjeNeGutaGresku
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7846,4 +7849,58 @@ Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
     AssertEq (capA <> capB), True, "nacrtani slotovi nose razlicite natpise"
     AssertEq vid2Pal, False, _
              "na ekranu bez slotova drugi slot se GASI -- ne ostaje tudja brojka"
+End Sub
+
+
+' TEST 117: poruka o nedostajucoj koloni imenuje ZAGLAVLJE koje je videla.
+'
+' Povod: u logu nad radnom sveskom stoji "Nedostaje kolona 'VozacID' u tabeli
+' 'tblZbirna'" -- a ta kolona u toj svesci POSTOJI (provereno dump_schema-om).
+' Poruka ne razlikuje tri razlicita stanja: kolone stvarno nema, tabele nema, i
+' zaglavlje je drugacije od ocekivanog. Zato sada nosi i ono STO JE VIDELA.
+'
+' Sam uzrok nije reprodukovan i ovde se ne popravlja naslepo. Zabelezeno je sta
+' se zna: nula iz GetColumnIndex se KESIRA za ceo BeginTableCache prozor, pa bi
+' jedan trenutan neuspeh postao trajan, a kapije koje su fail-closed (npr.
+' ZbirnaBrojJeDvosmislenIkad) na to staju. Dijagnostika ispod je da sledeci put
+' ne gadjamo.
+Private Sub T_Kolona_TrazenjeNeGutaGresku()
+    Dim iPostoji As Long, iMalim As Long, iNema As Long
+    Dim errPosle As Long
+    Dim poruka As String
+
+    iPostoji = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    AssertEq (iPostoji > 0), True, "preduslov: postojeca kolona se nalazi"
+
+    ' Zateceno ponasanje, ovde samo zapisano da se ne izgubi: nepostojeca kolona
+    ' daje nulu, a Err ostaje cist (On Error GoTo 0 u VBA cisti Err).
+    '
+    ' Ni jedna od te dve tvrdnje NEMA svoju sabotazu i to je namerno: proverio
+    ' sam merenjem da ih zatecen kod vec zadovoljava, pa bi sabotaza koja ih
+    ' obara morala da izmisli kvar koji se u ovom kodu ne moze desiti.
+    Err.Clear
+    iNema = GetColumnIndex(TBL_OTKUP, "NemaOvakveKoloneNigde")
+    errPosle = Err.Number
+    Err.Clear
+
+    AssertEq iNema, 0, "nepostojeca kolona daje nulu"
+    AssertEq errPosle, 0, "...i ne ostavlja Err ziv"
+
+    iMalim = GetColumnIndex(TBL_OTKUP, LCase$(COL_OTK_ID))
+    AssertEq iMalim, iPostoji, "ime kolone se poredi bez obzira na velicinu slova"
+
+    ' DIJAGNOSTIKA: poruka mora da imenuje zaglavlje koje je stvarno videla.
+    ' Bez toga se "nedostaje kolona" ne razlikuje od "tabele nema" ni od
+    ' "zaglavlje je drugacije", pa isti tekst opisuje tri razlicita stanja.
+    On Error Resume Next
+    Err.Clear
+    RequireColumnIndex TBL_OTKUP, "NemaOvakveKoloneNigde", "T_Kolona"
+    poruka = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (InStr(1, poruka, "NemaOvakveKoloneNigde") > 0), True, _
+             "poruka imenuje kolonu koja nedostaje"
+    AssertEq (InStr(1, poruka, COL_OTK_ID) > 0), True, _
+             "...i zaglavlje koje je stvarno videla"
 End Sub

@@ -19,6 +19,35 @@ Public Sub RequireTable(ByVal tableName As String, ByVal sourceName As String)
     End If
 End Sub
 
+' Zaglavlje tabele kao kratak spisak, za poruku o gresci. Nikad ne puca: ovo je
+' dijagnostika, i ne sme da zameni gresku koju opisuje.
+Private Function ZaglavljeZaPoruku(ByVal tableName As String) As String
+    Const MAX_IMENA As Long = 12
+    Dim lo As ListObject, i As Long, n As Long, s As String
+
+    On Error Resume Next
+    Set lo = GetTable(tableName)
+    If lo Is Nothing Then
+        ZaglavljeZaPoruku = "tabela nije nadjena"
+        Err.Clear
+        Exit Function
+    End If
+
+    n = lo.ListColumns.count
+    For i = 1 To n
+        If i > MAX_IMENA Then
+            s = s & ", ... (+" & (n - MAX_IMENA) & ")"
+            Exit For
+        End If
+        If Len(s) > 0 Then s = s & ", "
+        s = s & lo.ListColumns(i).name
+    Next i
+
+    If Len(s) = 0 Then s = "prazno"
+    ZaglavljeZaPoruku = s
+    Err.Clear
+End Function
+
 Public Function RequireColumnIndex(ByVal tableName As String, _
                                    ByVal columnName As String, _
                                    ByVal sourceName As String) As Long
@@ -27,8 +56,15 @@ Public Function RequireColumnIndex(ByVal tableName As String, _
     idx = GetColumnIndex(tableName, columnName)
 
     If idx = 0 Then
+        ' Poruka nosi i ZAGLAVLJE koje je stvarno videla.
+        '
+        ' Bez toga se "nedostaje kolona" ne moze razlikovati od "tabele nema",
+        ' "zaglavlje je drugacije" ili "citanje je puklo" -- a bas to je jednom
+        ' kostalo pola dana nad sveskom u kojoj je kolona postojala. Spisak je
+        ' ogranicen, jer poruka ide u log i u dijalog.
         Err.Raise vbObjectError + 7300, sourceName, _
-                  "Nedostaje kolona '" & columnName & "' u tabeli '" & tableName & "'."
+                  "Nedostaje kolona '" & columnName & "' u tabeli '" & tableName & _
+                  "'. Vidjeno zaglavlje: " & ZaglavljeZaPoruku(tableName) & "."
     End If
 
     RequireColumnIndex = idx

@@ -1960,6 +1960,20 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- SEMA: TRAZENJE KOLONE
+    # Vraca zatecen oblik: ListColumns(ime) DIZE gresku 9 za nepostojecu
+    # Zatecено ponasanje je poredjenje BEZ obzira na velicinu slova.
+    # Poruka bez zaglavlja opisuje tri razlicita stanja istim tekstom:
+    # kolone nema, tabele nema, zaglavlje je drugacije.
+    "kolona-poruka-bez-zaglavlja": (
+        "modSchemaGuard.bas",
+        "                  \"Nedostaje kolona '\" & columnName & \"' u tabeli '\" & tableName & _\n"
+        "                  \"'. Vidjeno zaglavlje: \" & ZaglavljeZaPoruku(tableName) & \".\"\n",
+        "                  \"Nedostaje kolona '\" & columnName & \"' u tabeli '\" & tableName & _\n"
+        "                  \"'.\"   ' SABOTAZA: poruka bez zaglavlja\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "zaglavlje koje je stvarno videla",
+    ),
     # ---------------------------------------- MREZA: DVA NOVCANA SLOTA
     # Ekran opet salje samo zbir vrednosti: sedmog clana nema, pa dva broja
     # koja operater trazi nemaju kuda da stignu.
