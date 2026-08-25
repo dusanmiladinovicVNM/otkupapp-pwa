@@ -991,7 +991,17 @@ def _write_report(report: dict, rc: int) -> None:
     text = "\n".join(lines)
     with open(os.path.join(outdir, "last_run.txt"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
-    print(text)
+    # Ispis ne sme da PUKNE zbog jednog znaka. Konzola je cp1252, a poruka o
+    # padu nosi ono sto je test video -- pa je jedan ChrW(183) iz prikaznog
+    # teksta parcele rusio ceo izvestaj: run bi zavrsio Traceback-om UMESTO
+    # linijom "FAIL <test> -- <tvrdnja>". U petlji dvosmernog dokaza to izgleda
+    # kao "sabotaza nije oborila nista", pa je jedna ispravna sabotaza
+    # (parcela-tekst) bila prijavljena kao mrtva.
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        enc = sys.stdout.encoding or "utf-8"
+        print(text.encode(enc, errors="replace").decode(enc, errors="replace"))
 
 
 if __name__ == "__main__":

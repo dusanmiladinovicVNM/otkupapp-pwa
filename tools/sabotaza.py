@@ -73,9 +73,12 @@ TRI ZAMKE koje su ovde vec pokupljene, da ih ne pokupi operater:
 
 import argparse
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ESCN = "\n"
+DQ34 = chr(34)
 SRC_VBA = os.path.join(ROOT, "src-vba")
 
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
@@ -247,15 +250,13 @@ SABOTAZE = {
         "uz izabranu fakturu uplata zatvara fakturu, nije avans",
     ),
     "uplata-preko-fakture": (
-        "modNovacUnos.bas",
-        '        ostatak = D(p, "fakturaOstatak")\n'
-        "        If ostatak > 0 And novac > ostatak Then\n"
-        '            fokus = "novac"\n'
-        '            UplataValidiraj = Poruka("NOVUNOS_ERR_VECI_OD_FAKTURE") & " " & _\n'
-        '                              Format$(ostatak, "#,##0.00")\n'
-        "            Exit Function\n"
-        "        End If\n",
-        "        ' SABOTAZA: uplata preko preostalog iznosa fakture vise ne staje\n",
+        "modNovac.bas",
+        "    ElseIf ZaokruziNovac(iznos) > preostalo Then\n"
+        "        UplataFakturaProblem = Poruka(\"NOVUNOS_ERR_VECI_OD_FAKTURE\") & \" \" & _\n"
+        "                               Format$(preostalo, \"#,##0.00\")\n",
+        "    ElseIf False Then   ' SABOTAZA: uplata preko preostalog iznosa fakture ne staje\n"
+        "        UplataFakturaProblem = Poruka(\"NOVUNOS_ERR_VECI_OD_FAKTURE\") & \" \" & _\n"
+        "                               Format$(preostalo, \"#,##0.00\")\n",
         "T_UplataValidiraj_FakturaOdlucujeTip",
         "preko preostalog iznosa fakture se ne uplacuje",
     ),
@@ -415,24 +416,29 @@ SABOTAZE = {
     # --- F8 storno centar ---------------------------------------------------
     "f8-jedna-tabela": (
         "modScrDokumenti.bas",
-        "    If mk = \"STORNO\" Then EffKey = StornoTipKey() Else EffKey = mk\n",
-        "    EffKey = mk   ' SABOTAZA: F8 opet svira po jednoj tabeli\n",
-        "T_F8_TipBiraTabeluIKolone",
-        "F8 cita tabelu IZABRANOG tipa, ne uvek tblOtpremnica",
+        "Public Function TabelaTipa(ByVal tk As String) As String\n"
+        "    Select Case tk\n",
+        "Public Function TabelaTipa(ByVal tk As String) As String\n"
+        "    Select Case \"OTPREMNICA\"   ' SABOTAZA: F8 opet svira po jednoj tabeli\n",
+        "T_Storno_TipBiraTabeluIKolone",
+        "Storno / OTKUP cita svoju tabelu",
     ),
     "f8-tabela-tipa": (
         "modScrDokumenti.bas",
         "        Case \"FAKTURA\":     TabelaTipa = TBL_FAKTURE\n",
         "        ' SABOTAZA: tip fakture ispao iz mape tabela\n",
-        "T_F8_TipBiraTabeluIKolone",
+        "T_Storno_TipBiraTabeluIKolone",
         "svaki od devet tipova F8 ima svoju tabelu",
     ),
     # --- kapije storna ------------------------------------------------------
     "storno-nema-dok": (
         "modStornoDok.bas",
-        "            If Len(LookupActiveID(TBL_OTKUP, COL_OTK_BR_DOK, broj, COL_OTK_ID)) = 0 Then _\n"
+        "        Case STIP_OTKUP\n"
+        "            If Not AktivanPoIdentitetu(TBL_OTKUP, COL_OTK_BR_DOK, COL_OTK_ID, broj, docID) Then _\n"
         "                StornoRazlog = NijePronadjen(broj)\n",
-        "            ' SABOTAZA: nepostojeci otkup prolazi kapiju\n",
+        "        Case STIP_OTKUP\n"
+        "            ' SABOTAZA: nepostojeci otkup prolazi kapiju\n"
+        "            If False Then StornoRazlog = NijePronadjen(broj)\n",
         "T_StornoDok_KapijePreUpisa",
         "kapija zaustavlja nepostojeci dokument PRE poziva Storno*_TX",
     ),
@@ -488,15 +494,17 @@ SABOTAZE = {
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
     "relink-izvor-po-broju": (
         "modPaletniList.bas",
-        "            ElseIf JeIzvornaStavka(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds) Then\n",
+        "            ElseIf PripadaDokumentu(bp, oldBroj, Trim$(CStr(ps(i, sPid))), srcIds, srcDvosmislen) Then\n",
         "            ElseIf bp = oldBroj Then   ' SABOTAZA: izvor se opet bira po broju\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "prevezivanje dira SAMO svoj dokument, i kad dva dele broj",
     ),
     "relink-ignorise-generaciju": (
         "modPaletniList.bas",
-        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)\n",
-        '    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, "")   \' SABOTAZA\n',
+        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, oldGeneracijaID)\n"
+        "    Dim srcDvosmislen As Boolean\n",
+        "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
+        "    Dim srcDvosmislen As Boolean\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "generacija izvora se stvarno koristi, ne samo prosledjuje",
     ),
@@ -515,9 +523,9 @@ SABOTAZE = {
     ),
     "relink-cilj-bez-kapije": (
         "modPaletniList.bas",
-        "        If VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
-        "                           Array(COL_PRJ_KUPAC)).count > 1 Then\n",
-        "        If False Then   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
+        "    tgtDvosmislen = (VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, newBroj, SRC, False, _\n"
+        "                                     Array(COL_PRJ_KUPAC)).count > 1)\n",
+        "    tgtDvosmislen = False   ' SABOTAZA: dvosmislen cilj vise ne zaustavlja\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
         "bez generacije cilja dvosmislen broj se odbija (fail-closed)",
     ),
@@ -804,8 +812,8 @@ SABOTAZE = {
     # to prijavio kao nedostajuci cip.
     "ljuska-odseca-liste": (
         "modOtkupUI.bas",
-        "Private Const MAX_SEG     As Long = 11\n",
-        "Private Const MAX_SEG     As Long = 9   ' SABOTAZA\n",
+        "Public Const MAX_SEG      As Long = 11\n",
+        "Public Const MAX_SEG      As Long = 9   ' SABOTAZA\n",
         "T_Storno_UgovorIRadnje",
         "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho",
     ),
@@ -851,8 +859,8 @@ SABOTAZE = {
     # a odatle ide pravo u StornoSelectedBlocks_TX.
     "blokovi-po-broju": (
         "modStornoFlow.bas",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID))\n",
-        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj))   ' SABOTAZA\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj, docID), strict)\n",
+        "            Set ActiveBlocksForFlow = GetBlokOtkupIDs(GetOtpremnicaIDsByBroj(broj), strict)   ' SABOTAZA\n",
         "T_StorniranSibling_ZadrzavaSvojBlok",
         "blok storniranog siblinga je ostao AKTIVAN",
     ),
@@ -1000,17 +1008,9 @@ SABOTAZE = {
     "f8-identitet-po-broju": (
         "modStornoFlow.bas",
         "    If Len(Trim$(gen)) > 0 Then\n"
-        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n"
-        "        ' ZADATA generacija koja se ne razresava je greska, ne poziv na fallback.\n"
-        "        If ids.count = 0 Then Exit Function\n"
-        "        PkPoIdentitetu = CStr(ids.Keys()(0))\n"
-        "        Exit Function\n"
-        "    End If\n"
-        "\n"
-        "    If VlasniciPoBroju(tblName, brojCol, broj, SRC, False, Array(vlasnikCol)).count > 1 Then\n"
-        "        Exit Function\n"
-        "    End If\n",
-        "    ' SABOTAZA: identitet se ignorise -- prvi aktivan red tog broja\n",
+        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n",
+        "    If False Then   ' SABOTAZA: identitet se ignorise -- ide se po broju\n"
+        "        Dim ids As Object: Set ids = IdoviGeneracije(tblName, idCol, gen)\n",
         "T_F8_IzabranRedOstajeIzabran",
         "recovery zapis pokazuje na IZABRAN dokument, ne na prvi tog broja",
     ),
@@ -1150,8 +1150,8 @@ SABOTAZE = {
     # GeneracijaID u nevidljivoj koloni.
     "oporavak-cid-ne-stize-u-red": (
         "modScrOporavak.bas",
-        "        outA(n, 6) = CStr(d(\"correctionID\"))\n",
-        "        outA(n, 6) = \"\"   ' SABOTAZA: red nosi samo poslovni broj\n",
+        "        outA(n, NED_COL_CID) = CStr(d(\"correctionID\"))\n",
+        "        outA(n, NED_COL_CID) = \"\"      ' SABOTAZA: red nosi samo poslovni broj\n",
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
         "svaki context red nosi svoj CorrectionID u koloni 6",
     ),
@@ -2478,6 +2478,232 @@ def vrati() -> int:
     return 0
 
 
+# --- staticka provera kataloga --------------------------------------------
+#
+# Zamka 9 kaze: posle izmene koda pusti CEO dvosmerni dokaz i tvrdi da je broj
+# crvenih jednak broju sabotaza. Nad 220 sabotaza to traje oko dva i po sata, pa
+# se u praksi vrteo podskup -- i zastarela sidra su prolazila neprimeceno. Kad je
+# dokaz prvi put pusten ceo (PR #226), deset sabotaza se vise nije moglo ni
+# primeniti: kod ispod njih je odavno popravljen, a sa njim je nestao i dokaz.
+#
+# Ovo je jeftina polovina istog pravila: sve sto se o katalogu moze utvrditi BEZ
+# Excela. Traje sekundu i vrti se uz vba_check, pa sidro ne moze da zastari
+# neprimeceno ni izmedju dva puna dokaza.
+#
+# Sta se NE proverava ovde: da sabotaza stvarno obara svoju tvrdnju. To zna samo
+# pun dokaz -- v. tools/dokaz.py.
+
+_TEST_SUB = re.compile(
+    r"^(?:Public |Private )?Sub (T\w+)\(\s*\)\s*$", re.M)
+
+# Komentar posle line-continuation `_` je syntax error (zamka 4): sabotaza tada
+# ne obara test nego COMPILE, run visi do timeout-a, a izlaz je "Exception
+# occurred" umesto imena tvrdnje.
+_KOMENTAR_POSLE_PODVLAKE = re.compile(r"\s_\s+'")
+
+
+# Nalazi koji su PRIZNATI, zapisani i imaju svog vlasnika, a ne mogu se zatvoriti
+# bez izmene testa. Ispisuju se kao UPOZORENJE i ne obaraju gejt.
+#
+# Zasto uopste postoji spisak: crvena provera koju svi nauce da preskoce ne cuva
+# nista -- a upravo tako je i nastao ovaj dug (dvosmerni dokaz se pustao nad
+# podskupom, pa se "36 od 39" godinu dana citalo kao zeleno). Ime u spisku je
+# obaveza, ne izuzetak: brise se cim nalaz nestane, a provera odmah javi ako ga
+# neko obrise a nalaz je jos tu.
+#
+# Vrednost je POCETAK poruke, ne ime -- nov, drugaciji nalaz nad istom sabotazom
+# i dalje obara gejt.
+POZNATI_NALAZI = {
+    "stale-parent-po-broju":
+        "deli tvrdnju",   # razdvajanje trazi novu tvrdnju u
+                          # T_ZatecenContext_NePrevezujeTudjePrijemnice: obe
+                          # sabotaze proizvedu isti vidljiv ishod, pa ih test
+                          # bez seam-a nad kapijom ne moze razlikovati.
+}
+
+
+def _imena_testova() -> set:
+    imena = set()
+    for f in ("modTest.bas", "modTestBanka.bas"):
+        put = os.path.join(SRC_VBA, f)
+        if not os.path.exists(put):
+            continue
+        tekst, _ = _procitaj(put)
+        imena.update(_TEST_SUB.findall(tekst))
+    return imena
+
+
+def _nalazi(katalog: dict, imena: set) -> list:
+    """Nalazi nad DATIM katalogom. Izdvojeno da bi --self-test mogao da mu
+    podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
+    nalazi = []
+    videne_tvrdnje = {}
+
+    for ime, (fajl, staro, novo, test, tvrdnja) in katalog.items():
+        put = os.path.join(SRC_VBA, fajl)
+        if not os.path.exists(put):
+            nalazi.append((ime, f"nema fajla src-vba/{fajl}"))
+            continue
+
+        tekst, _ = _procitaj(put)
+        pogodaka = tekst.count("\n" + staro)
+        if pogodaka != 1:
+            razlog = ("sidro ZASTARELO -- kod ispod njega je popravljen"
+                      if pogodaka == 0 else "sidro nije jednoznacno")
+            nalazi.append((ime, f"{razlog} ({pogodaka} pogodaka u {fajl})"))
+
+        if test not in imena:
+            nalazi.append((ime, f"test '{test}' ne postoji u modTest/modTestBanka"))
+
+        # zamka 7: prazna zamena se "nalazi" svuda, pa --vrati tiho ne uradi nista
+        if not novo.strip():
+            nalazi.append((ime, "zamena je prazna -- --vrati je nikad nece naci"))
+        elif novo == staro:
+            nalazi.append((ime, "zamena je jednaka sidru -- sabotaza ne menja nista"))
+        # zamka 8: zamena sadrzana u sidru se nalazi i u ZDRAVOM kodu.
+        #
+        # Poredi se ISTIM pravilom kojim radi _zameni -- od pocetka reda. Golo
+        # `novo in staro` daje lazne uzbune: zamena koja uklanja `If ... Then _`
+        # jeste podniz sidra kao tekst, ali joj se uvlacenje razlikuje, pa je
+        # --vrati u zdravom kodu ne nalazi (primer: kapija-i-uz-identitet).
+        elif ("\n" + novo) in ("\n" + staro):
+            nalazi.append((ime, "zamena je podniz sidra -- --vrati bi dirao zdrav kod"))
+
+        if _KOMENTAR_POSLE_PODVLAKE.search(novo):
+            nalazi.append((ime, "komentar posle line-continuation '_' -- syntax error"))
+
+        # zamka 5: dve sabotaze koje test ne razlikuje
+        kljuc = (test, tvrdnja)
+        if tvrdnja and kljuc in videne_tvrdnje:
+            nalazi.append((ime, "deli tvrdnju sa '%s' -- test ih ne razlikuje"
+                                % videne_tvrdnje[kljuc]))
+        else:
+            videne_tvrdnje[kljuc] = ime
+
+    return nalazi
+
+
+def proveri_sidra() -> int:
+    """Sve o katalogu sto se vidi bez pokretanja Excela."""
+    nalazi = _nalazi(SABOTAZE, _imena_testova())
+
+    tvrdi, poznati, mrtvi_upisi = [], [], set(POZNATI_NALAZI)
+    for ime, sta in nalazi:
+        pocetak = POZNATI_NALAZI.get(ime)
+        if pocetak and sta.startswith(pocetak):
+            poznati.append((ime, sta))
+            mrtvi_upisi.discard(ime)
+        else:
+            tvrdi.append((ime, sta))
+
+    for ime, sta in poznati:
+        print(f"KATALOG-POZNATO: {ime}: {sta}")
+    for ime, sta in tvrdi:
+        print(f"KATALOG: {ime}: {sta}", file=sys.stderr)
+
+    # Upis koji vise nista ne pokriva je isto nalaz: ili je nalaz zatvoren pa
+    # spisak treba skratiti, ili se sabotaza zove drugacije pa upis ne stiti nista.
+    for ime in sorted(mrtvi_upisi):
+        print(f"KATALOG: POZNATI_NALAZI['{ime}'] ne pokriva nijedan nalaz -- "
+              f"obrisi ga ili ispravi ime", file=sys.stderr)
+        tvrdi.append((ime, "mrtav upis"))
+
+    print(f"provereno {len(SABOTAZE)} sabotaza, nalaza {len(tvrdi)}"
+          f" (+{len(poznati)} poznatih)")
+    return 1 if tvrdi else 0
+
+
+# --- dokaz nad samom proverom ---------------------------------------------
+#
+# Provera koja nikad nije pokazana crvena ne dokazuje da ista meri -- a bas je
+# takva provera i trebalo da spreci dug koji je zatekao katalog (deset mrtvih
+# sidara). Zato se za SVAKO pravilo podmetne izmisljen unos i tvrdi se da nalaz
+# stigne BAS po tom pravilu.
+#
+# Katalog je izmisljen, ali fajlovi su pravi: sidro se i dalje trazi u src-vba,
+# jer se bas to poredjenje proverava.
+_ST_PRAVI = "    On Error Resume Next" + ESCN
+_ST_JEDINSTVEN = "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6"
+
+_SELF_TEST = [
+    ("sidro zastarelo",
+     ("modOtkupUI.bas", "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
+      "    Nesto = 2" + ESCN, None, "tvrdnja A"),
+     "sidro ZASTARELO"),
+    ("sidro dvosmisleno",
+     ("modOtkupUI.bas", _ST_PRAVI, "    Nesto = 2" + ESCN, None, "tvrdnja B"),
+     "sidro nije jednoznacno"),
+    ("nema fajla",
+     ("modOvogaNema.bas", _ST_PRAVI, "x" + ESCN, None, "tvrdnja C"),
+     "nema fajla"),
+    ("test ne postoji",
+     (None, None, None, "T_OvakavTestNePostoji", "tvrdnja D"),
+     "ne postoji u modTest"),
+    ("zamena prazna",
+     (None, None, "" , None, "tvrdnja E"),
+     "zamena je prazna"),
+    ("zamena ista kao sidro",
+     (None, None, "SIDRO", None, "tvrdnja F"),
+     "zamena je jednaka sidru"),
+    ("komentar posle podvlake",
+     (None, None, "    a = Sastavi(b, _   ' SABOTAZA" + ESCN, None, "tvrdnja G"),
+     "komentar posle line-continuation"),
+]
+
+
+def _self_test() -> int:
+    """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
+    imena = {"T_Postoji"}
+    # zdrav unos: sidro koje postoji tacno jednom, zamena koja nije podniz
+    zdravo = ("modOtkupUI.bas",
+              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
+              "Public Const OTKUI_BUILD   As String = " + DQ34 + "SABOTAZA" + DQ34 + ESCN,
+              "T_Postoji", "zdrava tvrdnja")
+
+    lose = 0
+    n = 0
+    # 0) zdrav katalog ne sme da da nijedan nalaz
+    if _nalazi({"zdrav": zdravo}, imena):
+        print("SELF-TEST: zdrav unos je prijavljen kao nalaz", file=sys.stderr)
+        lose += 1
+    n += 1
+
+    for opis, polja, ocekivano in _SELF_TEST:
+        unos = tuple(z if p is None else p for p, z in zip(polja, zdravo))
+        if unos[2] == "SIDRO":
+            unos = (unos[0], unos[1], unos[1], unos[3], unos[4])
+        nalazi = _nalazi({"probni": unos}, imena)
+        n += 1
+        if not any(ocekivano in sta for _, sta in nalazi):
+            print("SELF-TEST: '%s' nije prijavljeno (%s)" % (opis, nalazi),
+                  file=sys.stderr)
+            lose += 1
+
+    # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
+    par = {"prvi": zdravo, "drugi": zdravo}
+    n += 1
+    if not any("deli tvrdnju" in sta for _, sta in _nalazi(par, imena)):
+        print("SELF-TEST: deljena tvrdnja nije prijavljena", file=sys.stderr)
+        lose += 1
+
+    # zamena koja je TACNO jedan red viseredog sidra
+    dvored = ("modOtkupUI.bas",
+              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN +
+              "Public Const OTKUI_MIN_W   As Long = 660" + ESCN,
+              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
+              "T_Postoji", "tvrdnja H")
+    n += 1
+    if not any("podniz sidra" in sta for _, sta in _nalazi({"probni": dvored}, imena)):
+        print("SELF-TEST: zamena kao podniz sidra nije prijavljena", file=sys.stderr)
+        lose += 1
+
+    if lose:
+        print("self-test: %d od %d slucajeva NE MERI" % (lose, n), file=sys.stderr)
+        return 1
+    print("self-test: cisto (%d slucajeva)" % n)
+    return 0
+
+
 def lista() -> int:
     print("Sabotaze (svaka obara TACNO jedan test, po imenu):\n")
     sirina = max(len(k) for k in SABOTAZE)
@@ -2492,8 +2718,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("ime", nargs="?", help="koju sabotazu primeniti")
     ap.add_argument("--lista", action="store_true", help="ispisi sve sabotaze")
     ap.add_argument("--vrati", action="store_true", help="vrati sve zatecene sabotaze")
+    ap.add_argument("--proveri-sidra", action="store_true",
+                    help="staticka provera kataloga (sidra, imena testova, zamke)")
+    ap.add_argument("--self-test", action="store_true",
+                    help="dokazi da svako pravilo provere stvarno meri")
     args = ap.parse_args(argv)
 
+    if args.self_test:
+        return _self_test()
+    if args.proveri_sidra:
+        return proveri_sidra()
     if args.lista:
         return lista()
     if args.vrati:
