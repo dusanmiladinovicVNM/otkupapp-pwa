@@ -2501,7 +2501,38 @@ važe. Cena je **bold**: `StyleGridCell` ga daje `rsd` koloni, `rest` ne.
 Prihvaćeno — četiri podebljane novčane kolone u istom redu ionako nisu davale
 hijerarhiju. Poravnanje ostaje desno (`ColIsNum` poznaje `rest`).
 
-### 12.8 Zbir podnožja nije poštovao pretragu
+### 12.8 `rest` je ugasio podnožje — promena vrste kolone je promena ugovora
+
+Prelazak na `rest` je imao posledicu koju nisam predvideo: ljuska odlučuje da li
+uopšte **crta** zbir vrednosti preko `ModeHasValCol()`, a taj spisak je znao samo
+`rsd`, `mult` i `sum0`.
+
+```
+Scr_Rows(...)(4)  ->  promet uredno izračunat
+ModeHasValCol()   ->  False
+ftVal.Visible     ->  False
+                  ->  operater ne vidi promet
+```
+
+Test je bio zelen jer je tvrdio **podatak ekrana**, a ne **odluku ljuske**.
+
+**`rest` jeste novčana kolona**, pa je dopisan na spisak. Pre toga je urađen
+audit, jer se time menja ugovor ljuske i za druge ekrane: jedina druga `rest`
+kolona u repou je `OTKUI_HD_OSTATAK` na Dokumentima, a ona stoji **uz `mult`
+kolonu** — tamo je `ModeHasValCol` već bio `True`. Proširenje je dakle **no-op**
+za sve postojeće ekrane i menja samo listu izvoda.
+
+Uz to je uveden seam `GridImaValKolonuTest`, pa test od sada tvrdi i **da ljuska
+prikazuje** zbir, ne samo da ga ekran izračuna. Sabotaža
+`mreza-rest-nije-novcana-kolona` skida `rest` sa spiska i obara baš tu tvrdnju.
+
+**Cena koju `rest` nosi, i koja ostaje:** nula se u te četiri kolone ne
+razlikuje od „nema podatka" — uredan izvod sa `Isplate = 0` prikazuje **prazno**,
+ne `0,00`. Na izvodu je to gotovo uvek isto značenje; jedini slučaj u kom nije je
+nov račun sa nultim početnim stanjem. Prihvaćeno svesno i stavljeno u smoke
+listu, jer je to stvar oka a ne tvrdnje.
+
+### 12.9 Zbir podnožja nije poštovao pretragu
 
 Nađeno uz isti nalaz, i **starije** od njega: akumulacija je stajala **između**
 čipa i pretrage. Izvod koji pretraga sakrije i dalje je ulazio u promet — traka
@@ -2515,7 +2546,7 @@ bilo zamućeno i obarala je tuđu tvrdnju (zamka 5). Uz to je redosled tvrdnji u
 testu izmenjen: provera pretrage ide **pre** provere nesaglasnog izvoda, jer bi
 inače obe sabotaže padale na istoj tvrdnji.
 
-### 12.9 Fixture koji izjednači dve brojke ubija tuđu sabotažu
+### 12.10 Fixture koji izjednači dve brojke ubija tuđu sabotažu
 
 Nova dva reda su prvo oba nosila `Obradjeno = "Da"`. Suite je bila zelena, ali je
 dvosmerni dokaz prijavio **43 crvene od 44**: `banka-uvoz-znacka-broji-mapirane`

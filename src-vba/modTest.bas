@@ -6942,6 +6942,25 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     prometSve = CDbl(d(4))
     AssertEq (prometSve > 0), True, "preduslov: podnozje uopste racuna promet"
 
+    ' PODNOZJE MORA I DA SE VIDI, ne samo da se izracuna.
+    '
+    ' Scr_Rows vraca zbir, ali ljuska odlucuje hoce li ga NACRTATI --
+    ' ModeHasValCol gleda vrste kolona. Kad su novcane kolone izvoda presle na
+    ' "rest", ta odluka je postala False i podnozje se sakrilo, dok je zbir bio
+    ' savrseno tacan i test zelen. Zato se tvrdi i ODLUKA LJUSKE.
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    modOtkupUI.GridTestLoad "BANKA_UVOZ"
+    AssertEq modOtkupUI.GridImaValKolonuTest(), True, _
+             "ljuska za listu IZVODA crta zbir vrednosti u podnozju"
+
+    modScrBankaUvoz.Scr_BuListaTestSet "STAVKE"
+    modOtkupUI.GridTestLoad "BANKA_UVOZ"
+    AssertEq modOtkupUI.GridImaValKolonuTest(), True, _
+             "...i za listu STAVKI"
+
+    modOtkupUI.GridTestLoad ""
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+
     ' PRETRAGA I PODNOZJE ide PRVO, i to namerno (zamka 5): zbir koji ne postuje
     ' pretragu obara i tvrdnju o nesaglasnom izvodu ispod, pa bi dve sabotaze
     ' padale na istoj tvrdnji i ne bi se razlikovale. Meri se na izvodu koji

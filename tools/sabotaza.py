@@ -1898,6 +1898,17 @@ SABOTAZE = {
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
         "prazan combo nije izbor bloka",
     ),
+    # ------------------------------------------------- MREZA: PODNOZJE
+    # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
+    # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu
+    # suite -- tacno to se desilo listi izvoda.
+    "mreza-rest-nije-novcana-kolona": (
+        "modOtkupUI.bas",
+        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": ModeHasValCol = True: Exit Function\n",
+        "            Case \"rsd\", \"mult\", \"sum0\": ModeHasValCol = True: Exit Function   ' SABOTAZA: rest nije novac\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "ljuska za listu izvoda crta zbir vrednosti u podnozju",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog

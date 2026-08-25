@@ -5315,6 +5315,9 @@ kolone prazne** — početno, uplate, isplate, završno — i **ne ulazi u prome
 podnožju. Prikazati vrednost jednog od dva neslažuća reda značilo bi ponuditi
 tuđi podatak kao saldo.
 
+U tim kolonama se od sada **nula ne ispisuje** — uredan izvod bez isplata
+pokazuje praznu ćeliju umesto `0,00`. Na izvodu su to gotovo uvek ista stvar.
+
 ### Uz to: zbir u podnožju sada poštuje i pretragu
 
 Ranije je izvod koji pretraga sakrije i dalje ulazio u promet, pa je traka
