@@ -2479,7 +2479,43 @@ Poruka je namerno kratka (`zbirovi se razlikuju`) — kolona je 132pt, a ostale
 vrednosti u njoj su kratke i malim slovom. Prva verzija je bila rečenica od
 trideset osam znakova, što je u toj koloni odsečen tekst.
 
-### 12.7 Fixture koji izjednači dve brojke ubija tuđu sabotažu
+### 12.7 Status bez posledice je pola posla
+
+Prva verzija je menjala **samo status**. Četiri novčane ćelije i podnožje su i
+dalje koristile vrednost **prvog** reda — dakle kod je pisao „ne zna se koji
+zbirovi važe", a pored toga prikazivao `5.000` kao uredan saldo i **sabirao ga u
+promet**. To je ista klasa koju §10 zove „tuđi podatak koji izgleda kao svoj".
+
+Sada nesaglasan izvod nema brojke **nigde**:
+
+| Gde | Pre | Sada |
+|---|---|---|
+| četiri novčane ćelije | vrednost prvog reda | **prazno** |
+| promet u podnožju | ulazi | **ne ulazi** |
+| kolona Slaganje | — | `zbirovi se razlikuju` |
+
+**Kolone su zato `rest`, ne `rsd`.** `rest` prazni ćeliju kad je vrednost nula,
+`rsd` bi napisao `0,00`. Ovde nula znači „nema podatka", ne „nula dinara" —
+legacy uvoz saldo metapodatke nema, a nesaglasan izvod ih ima ali se ne zna koji
+važe. Cena je **bold**: `StyleGridCell` ga daje `rsd` koloni, `rest` ne.
+Prihvaćeno — četiri podebljane novčane kolone u istom redu ionako nisu davale
+hijerarhiju. Poravnanje ostaje desno (`ColIsNum` poznaje `rest`).
+
+### 12.8 Zbir podnožja nije poštovao pretragu
+
+Nađeno uz isti nalaz, i **starije** od njega: akumulacija je stajala **između**
+čipa i pretrage. Izvod koji pretraga sakrije i dalje je ulazio u promet — traka
+je tvrdila promet redova kojih na ekranu nema.
+
+Zbir sada ide **posle oba filtera**.
+
+Sabotaža `banka-izvod-promet-ne-postuje-pretragu` vraća stari redosled. Prva
+verzija te sabotaže je zbir **duplirala** umesto da ga premesti, pa je merenje
+bilo zamućeno i obarala je tuđu tvrdnju (zamka 5). Uz to je redosled tvrdnji u
+testu izmenjen: provera pretrage ide **pre** provere nesaglasnog izvoda, jer bi
+inače obe sabotaže padale na istoj tvrdnji.
+
+### 12.9 Fixture koji izjednači dve brojke ubija tuđu sabotažu
 
 Nova dva reda su prvo oba nosila `Obradjeno = "Da"`. Suite je bila zelena, ali je
 dvosmerni dokaz prijavio **43 crvene od 44**: `banka-uvoz-znacka-broji-mapirane`

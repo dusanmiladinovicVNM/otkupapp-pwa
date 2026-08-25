@@ -768,7 +768,8 @@ SEED = {
          # dokaz bi tiho nestao. v. tvrdnja "otvorenih <> mapiranih" u modTest.
          "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
          "PocetnoStanje": 4500, "ZavrsnoStanje": 9999,
-         "UkupanDuguje": 0, "UkupanPotrazuje": 500},
+         # i PROMET se razlikuje, ne samo stanje -- inace podnozje nema sta da meri
+         "UkupanDuguje": 0, "UkupanPotrazuje": 700},
         # Storniran red nosi ISTE zbirove izvoda kao ostali -- da agregat ne
         # zavisi od toga koji je red grupe procitan.
         {"BankaImportID": "BIM-FIX-ST", "BrojDokumenta": BIM_IZVOD_2,

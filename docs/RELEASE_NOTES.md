@@ -5308,10 +5308,23 @@ Vredi znati koliko je to podmuklo: u primeru iz testa **prvi red sam za sebe se
 slaže** — pa bi bez ove provere u koloni stajalo „slaže se", a to je tvrdnja o
 brojkama kojih zapravo nema.
 
+### Takav izvod nema brojke nigde
+
+Nije dovoljno da piše da nešto ne valja. Kod takvog izvoda su **četiri novčane
+kolone prazne** — početno, uplate, isplate, završno — i **ne ulazi u promet** u
+podnožju. Prikazati vrednost jednog od dva neslažuća reda značilo bi ponuditi
+tuđi podatak kao saldo.
+
+### Uz to: zbir u podnožju sada poštuje i pretragu
+
+Ranije je izvod koji pretraga sakrije i dalje ulazio u promet, pa je traka
+tvrdila promet redova kojih na ekranu nema. To je bio stariji propust, nađen uz
+ovaj rad.
+
 ### Verifikacija
 
-`RunAllTests` **114 testova, 0 palih**, tri nove sabotaže, i par redova u
-test-svesci koji nose različite zbirove istog izvoda.
+`RunAllTests` **114 testova, 0 palih**, šest novih sabotaža, i par redova u
+test-svesci koji nose različite zbirove istog izvoda — i po stanju i po prometu.
 
 Detaljno: `docs/UI_MIGRACIJA_KATALOG.md` §12.
 

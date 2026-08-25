@@ -6789,6 +6789,7 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     Dim d As Variant, redovi As Variant, i As Long, n As Long
     Dim r1 As Long, r2 As Long, rPY As Long, istihBrojeva As Long
     Dim nes As Long, nesEkran As Long
+    Dim okC As Boolean, prometSve As Double
     Dim sirovi As Variant
 
     ' PRAVILO SLAGANJA, izmereno bez mreze.
@@ -6922,6 +6923,41 @@ Private Sub T_BankaUvoz_IzvodiSuAgregatPoRacunu()
     AssertEq (nesEkran > 0), True, "nesaglasan izvod je i u listi ekrana"
     AssertEq CStr(redovi(nesEkran, 8)), Poruka("OTKUI_LBL_BU_SALDO_NESAGLASAN"), _
              "kolona Slaganje nosi bas taj tekst"
+
+    ' STATUS I BROJKE MORAJU DA SE SLAZU. Reci "ne zna se koji zbirovi vaze" a
+    ' pored toga prikazati brojku PRVOG reda znaci ponuditi tudji podatak kao
+    ' saldo -- ista klasa kao natpis prethodnog ekrana u koloni datuma.
+    ' Kolone su "rest", pa nula znaci PRAZNA celija.
+    AssertEq CDbl(redovi(nesEkran, 4)), 0, "nesaglasan izvod nema pocetno stanje"
+    AssertEq CDbl(redovi(nesEkran, 5)), 0, "...ni uplate"
+    AssertEq CDbl(redovi(nesEkran, 6)), 0, "...ni isplate"
+    AssertEq CDbl(redovi(nesEkran, 7)), 0, "...ni zavrsno stanje"
+    AssertEq modOtkupUI.CelijaTekst("rest", 0, okC), "", _
+             "...a nula u 'rest' koloni je PRAZNO, ne 0,00"
+
+    ' PODNOZJE. Nesaglasan izvod ne sme da ulazi u promet: njegov UkupanPotrazuje
+    ' je 500 na prvom redu i 700 na drugom, pa bi zbir tvrdio promet koji nikad
+    ' nije izracunat.
+    d = modScrBankaUvoz.Scr_Rows("sve", "")
+    prometSve = CDbl(d(4))
+    AssertEq (prometSve > 0), True, "preduslov: podnozje uopste racuna promet"
+
+    ' PRETRAGA I PODNOZJE ide PRVO, i to namerno (zamka 5): zbir koji ne postuje
+    ' pretragu obara i tvrdnju o nesaglasnom izvodu ispod, pa bi dve sabotaze
+    ' padale na istoj tvrdnji i ne bi se razlikovale. Meri se na izvodu koji
+    ' JESTE saglasan, pa mu promet nije nula.
+    d = modScrBankaUvoz.Scr_Rows("sve", FX_BIM_IZVOD2)
+    AssertEq (CDbl(d(4)) > 0), True, "preduslov: izolovan izvod ima svoj promet"
+    AssertEq (CDbl(d(4)) < prometSve), True, _
+             "pretraga smanjuje i PROMET, ne samo broj redova"
+
+    ' SAM NESAGLASAN IZVOD, izolovan pretragom. Tvrdnja je ostra: njegov promet
+    ' mora biti TACNO nula. Poredjenje "manje od ukupnog" ne bi merilo nista --
+    ' i da ulazi u zbir, ukupno bi samo bilo vece.
+    d = modScrBankaUvoz.Scr_Rows("sve", FX_BIM_IZVOD_NES)
+    AssertEq CLng(d(2)), 1, "preduslov: pretraga izoluje bas taj izvod"
+    AssertEq CDbl(d(4)), 0, _
+             "nesaglasan izvod ne donosi NISTA u promet -- ne zna se koji zbirovi vaze"
 
     AssertEq BuBrojRedova("razlika"), 1, "tacno jedan izvod se ne slaze"
     AssertEq BuBrojRedova("sve"), 6, _
