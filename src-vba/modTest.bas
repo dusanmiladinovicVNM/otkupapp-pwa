@@ -3309,6 +3309,11 @@ Private Sub T_StornoEkran_NeCuriGreska()
     Dim brojPosle As Long
 
     modScrStorno.Scr_IzborTestSet STIP_OTKUP, FX_BLOK, "", ""
+
+    ' Handler koji je gresku PROGUTAO -- bez toga se Err.Clear u Scr_Event ne
+    ' moze izmeriti: nijedna danasnja grana ne ostavlja Err ziv, pa je tvrdnja
+    ' bila zelena i kad tog Err.Clear nema.
+    modScrStorno.Scr_ErrTestPrljav
     Err.Clear
     modScrStorno.Scr_Event "scrStPal", "Click"
     ' Err se cita ODMAH: svaki poziv ispod (pa i AssertEq) ume da ga promeni.

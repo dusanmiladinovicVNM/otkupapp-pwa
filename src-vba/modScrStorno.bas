@@ -118,6 +118,10 @@ Private mUvidGreska As String
 
 Private mStep As String                     ' korak za poruku o gresci
 
+' TEST: sledeci ObradiDogadjaj glumi handler koji je gresku PROGUTAO. Postavlja
+' se samo kroz Scr_ErrTestPrljav, koji je tvrdo gejtovan.
+Private mErrTestPrljav As Boolean
+
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
     Scr_Meta = "kljuc=STORNO|naslov=OTKUI_NAV_STORNO|sub=OTKUI_SCRST_SUB" & _
@@ -175,6 +179,21 @@ End Function
 Public Function Scr_BrojiKomade() As Boolean
     Scr_BrojiKomade = modScrDokumenti.TipBrojiKomade(Scr_Lista())
 End Function
+
+' TEST SEAM: neka sledeci dogadjaj ostavi PRLJAV Err. Tvrdo gejtovan, jednokratan.
+'
+' Scr_Event posle ObradiDogadjaj radi Err.Clear zato sto ljuska (modUiScreens.
+' ScrEvent) cita Err ODMAH po povratku: prljav Err znaci da operater dobije
+' "radnja nije uspela" za radnju koja je prosla.
+'
+' Danas nijedna prava grana ne ostavlja Err ziv -- pomocne rutine ga same ciste.
+' Zato je sabotaza koja uklanja taj Err.Clear prestala da obara ista, i invarijanta
+' je tiho ostala NEMERENA. Ovo vraca merljivost: seam glumi ono sto svaki BUDUCI
+' handler sa "On Error Resume Next" moze da uradi.
+Public Sub Scr_ErrTestPrljav()
+    If Not IsTestMode() Then Exit Sub
+    mErrTestPrljav = True
+End Sub
 
 ' U zaglavlju liste stoji izabran dokument, da se vidi na sta se odnosi zona.
 Public Function Scr_NaslovDopuna() As String
@@ -797,6 +816,15 @@ EH:
 End Function
 
 Private Function ObradiDogadjaj(ByVal tag As String) As Boolean
+    ' TEST: handler koji je gresku progutao (v. Scr_ErrTestPrljav). Jednokratno,
+    ' i samo ako je seam upaljen -- u produkciji je mErrTestPrljav uvek False.
+    If mErrTestPrljav Then
+        mErrTestPrljav = False
+        Dim nemaGa As Object
+        On Error Resume Next
+        nemaGa.Bilo                      ' 91 -- progutano, Err ostaje ziv
+        Exit Function
+    End If
 
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = Scr_Lista() Then Exit Function
