@@ -5280,3 +5280,74 @@ jedno pravilo, i tri sabotaže nad samim alatom — od kojih jedna proverava da 
 
 Provera je puštena i nad pravim `modTest`: test uklonjen iz sva tri spiska i test
 registrovan pod dva broja — oba prijavljena, sa tačnim brojem linije.
+
+
+---
+
+## v2.70.0 — `v6-ui-181` · zbirovi izvoda se proveravaju po redovima
+
+Lista **Izvodi** je jedino mesto na kom se vidi da li se izvod slaže. Ovo izdanje
+zatvara slučaj u kom je ta lista mogla da pokaže brojku koja ne važi za ceo
+izvod, i sređuje dve stvari oko podnožja.
+
+### Šta se moglo desiti
+
+Podaci o izvodu — početno stanje, uplate, isplate, završno — upisani su na
+**svaki** red tog izvoda. Lista ih zato **uzima** sa prvog reda, a ne sabira
+(sabiranje bi ih pomnožilo brojem stavki).
+
+To važi dok su svi redovi isti. Ako nisu — ručno ispravljen red, delimično
+ponovljen uvoz — lista bi prikazala brojku **prvog** reda kao istinu o celom
+izvodu. Bez ikakvog znaka.
+
+Vredi znati koliko je podmuklo: u primeru iz testa **prvi red se sam za sebe
+slaže** (4.500 + 500 − 0 = 5.000). Bez ove provere bi u koloni stajalo „slaže
+se" — dakle tvrdnja o tačnosti brojki kojih zapravo nema.
+
+### Šta se sada vidi
+
+Takav izvod dobija svoj status: **`zbirovi se razlikuju`**.
+
+To **nije** isto što i „ne slaže se" — tamo se zna šta piše pa se ne slaže, ovde
+se ne zna ni šta piše. Zato takav izvod **ne ulazi** u čip „Ne slaže se": čip
+nosi jedno tvrđenje, a o njemu se ne zna ništa. Vidi se u koloni.
+
+**I nema brojke nigde.** Četiri novčane kolone su prazne, i **ne ulazi u promet**
+u podnožju. Prikazati vrednost jednog od dva neslažuća reda značilo bi ponuditi
+tuđi podatak kao saldo.
+
+### Dve stvari oko podnožja
+
+- **Zbir sada poštuje i pretragu.** Ranije je izvod koji pretraga sakrije i dalje
+  ulazio u promet, pa je traka tvrdila promet redova kojih na ekranu nema. Stariji
+  propust, nađen uz ovaj rad.
+- **Nula se u te četiri kolone više ne ispisuje.** Uredan izvod bez isplata
+  pokazuje praznu ćeliju umesto `0,00`. Na izvodu su to gotovo uvek ista stvar;
+  jedini izuzetak je nov račun sa nultim početnim stanjem.
+
+### Sitnica koja se primeti tek u pogonu
+
+Te četiri kolone više nisu podebljane. Cena je toga što sada umeju da ostanu
+prazne; četiri podebljane novčane kolone u istom redu ionako nisu davale
+hijerarhiju. Poravnanje ostaje desno.
+
+### Verifikacija
+
+`RunAllTests` **114 testova, 0 palih**, uz **48** sabotaža u dvosmernom dokazu —
+svaka obara **tačno jednu** imenovanu tvrdnju, i mašinski je provereno da nijedna
+tvrdnja nije deljena između dve sabotaže.
+
+`RunBankaImportTestSuite` ostaje **PASS=196, FAIL=0**; pun podrazumevani set je
+zelen.
+
+Test-sveska je dobila par redova istog izvoda koji nose različite zbirove — i po
+stanju i po prometu, jer bez ovog drugog podnožje ne bi imalo šta da meri.
+
+Ceo tok, sa tri greške koje je dokaz našao na samom testu, zapisan je u
+`docs/UI_MIGRACIJA_KATALOG.md` §12.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+> Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
+> `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
+> kojih u headless runu nema i padaju identično na netaknutom `main`-u.

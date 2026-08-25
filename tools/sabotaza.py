@@ -1898,6 +1898,105 @@ SABOTAZE = {
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
         "prazan combo nije izbor bloka",
     ),
+    # ------------------------------------------------- MREZA: PODNOZJE
+    # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
+    # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu
+    # suite -- tacno to se desilo listi izvoda.
+    "mreza-rest-nije-novcana-kolona": (
+        "modOtkupUI.bas",
+        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": ModeHasValCol = True: Exit Function\n",
+        "            Case \"rsd\", \"mult\", \"sum0\": ModeHasValCol = True: Exit Function   ' SABOTAZA: rest nije novac\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "ljuska za listu izvoda crta zbir vrednosti u podnozju",
+    ),
+    # ---------------------------------------- BANKA: PODNOZJE IZVODA
+    # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
+    # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog
+    # natpisa znaci ponuditi tudji podatak kao saldo.
+    "banka-izvod-nesaglasan-prikazuje-brojke": (
+        "modScrBankaUvoz.bas",
+        "        If nesagl Then\n"
+        "            outA(n, 4) = 0#\n",
+        "        If False Then   ' SABOTAZA: nesaglasan izvod prikazuje brojke\n"
+        "            outA(n, 4) = 0#\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "nesaglasan izvod ne prikazuje brojke prvog reda",
+    ),
+    "banka-izvod-nesaglasan-ulazi-u-promet": (
+        "modScrBankaUvoz.bas",
+        "        If Not nesagl Then\n"
+        "            zbirU = zbirU + CDbl(src(i, 6))\n",
+        "        If True Then   ' SABOTAZA: nesaglasan ulazi u promet\n"
+        "            zbirU = zbirU + CDbl(src(i, 6))\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "nesaglasan izvod ne ulazi u promet podnozja",
+    ),
+    # Zbir je stajao IZMEDJU cipa i pretrage, pa je izvod koji pretraga sakrije
+    # i dalje ulazio u promet -- traka je tvrdila promet redova kojih nema.
+    "banka-izvod-promet-ne-postuje-pretragu": (
+        "modScrBankaUvoz.bas",
+        "        hay = CStr(src(i, 2)) & \"|\" & CStr(src(i, 3))\n"
+        "        If Len(q) > 0 Then\n"
+        "            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci\n"
+        "        End If\n"
+        "\n"
+        "        ' ZBIR IDE POSLE OBA FILTERA. Ranije je stajao izmedju cipa i pretrage,\n"
+        "        ' pa je izvod koji pretraga sakrije i dalje ulazio u podnozje -- traka je\n"
+        "        ' tvrdila promet redova kojih na ekranu nema.\n"
+        "        '\n"
+        "        ' Nesaglasan izvod NE ULAZI uopste: njegovi zbirovi su vrednost PRVOG\n"
+        "        ' reda, a upravo se ne zna koji red vazi. Sabrati ih znacilo bi tvrditi\n"
+        "        ' promet koji nikad nije izracunat.\n"
+        "        nesagl = (CLng(src(i, 10)) = BIM_SALDO_NEKONZISTENTAN)\n"
+        "        If Not nesagl Then\n"
+        "            zbirU = zbirU + CDbl(src(i, 6))\n"
+        "            zbirI = zbirI + CDbl(src(i, 7))\n"
+        "        End If\n",
+        "        ' SABOTAZA: zbir se racuna PRE pretrage\n"
+        "        hay = CStr(src(i, 2)) & \"|\" & CStr(src(i, 3))\n"
+        "        nesagl = (CLng(src(i, 10)) = BIM_SALDO_NEKONZISTENTAN)\n"
+        "        If Not nesagl Then\n"
+        "            zbirU = zbirU + CDbl(src(i, 6))\n"
+        "            zbirI = zbirI + CDbl(src(i, 7))\n"
+        "        End If\n"
+        "        If Len(q) > 0 Then\n"
+        "            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci\n"
+        "        End If\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "pretraga smanjuje i promet, ne samo broj redova",
+    ),
+    # ---------------------------------------- BANKA: SALDO IZVODA
+    # Parser upisuje saldo na SVAKI red grupe, pa ga agregat UZIMA sa prvog reda
+    # umesto da sabira. To vazi dok su svi redovi saglasni -- a to niko nije
+    # proveravao. Rucno editovan red bi prosao kao istina o celom izvodu.
+    "banka-izvod-saldo-prvi-red-pobedjuje": (
+        "modBankaImport.bas",
+        "        If nesaglasan(r) Then outA(r, 10) = BIM_SALDO_NEKONZISTENTAN\n",
+        "        If False Then outA(r, 10) = BIM_SALDO_NEKONZISTENTAN   ' SABOTAZA: prvi red pobedjuje\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "izvod cija se dva reda razlikuju je nesaglasan",
+    ),
+    # Prag mora da bude isti kao kod slaganja (0.01). Sire poredjenje bi
+    # zaokruzenja proglasavalo nesaglasnoscu i brojka bi postala neupotrebljiva.
+    "banka-izvod-saldo-prag-preuzak": (
+        "modBankaImport.bas",
+        "    If Abs(potrazujeA - potrazujeB) > 0.01 Then Exit Function\n",
+        "    If Abs(potrazujeA - potrazujeB) > 0.001 Then Exit Function\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "prag saglasnosti je isti kao prag slaganja",
+    ),
+    # Nesaglasnost mora da NADJACA i "slaze se": prvi red ovog izvoda sam za sebe
+    # daje slaganje, pa bi bez toga stajalo "slaze se" -- tvrdnja o brojkama
+    # kojih nema.
+    "banka-izvod-nesaglasno-je-razlika": (
+        "modScrBankaUvoz.bas",
+        "        Case BIM_SALDO_NEKONZISTENTAN\n"
+        "            BuSlaganjeTekst = Poruka(\"OTKUI_LBL_BU_SALDO_NESAGLASAN\")\n",
+        "        Case BIM_SALDO_NEKONZISTENTAN\n"
+        "            BuSlaganjeTekst = Poruka(\"OTKUI_LBL_BU_SALDO_RAZLIKA\")\n",
+        "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
+        "nesaglasan izvod se u koloni ne predstavlja kao neslaganje",
+    ),
     # ---------------------------------------------------- BANKA: WRITER
     # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
     # obradjenom. Za AUTOMATSKO mapiranje je to namerno; za IZABRAN blok je

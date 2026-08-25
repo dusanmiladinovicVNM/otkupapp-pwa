@@ -47,6 +47,9 @@ Private Const BIM_STATUS_UNKNOWN_ERROR As String = "unknown error"
 Public Const BIM_SALDO_NEMA As Long = 0      ' legacy red, bez saldo metapodataka
 Public Const BIM_SALDO_OK As Long = 1
 Public Const BIM_SALDO_RAZLIKA As Long = 2
+' Redovi ISTOG izvoda ne nose iste zbirove. Nije isto sto i "ne slaze se":
+' tamo se zna sta pise pa se ne slaze, ovde se ne zna ni sta pise.
+Public Const BIM_SALDO_NEKONZISTENTAN As Long = 3
 
 Private Const ERR_BIM_IMPORT_BASE As Long = vbObjectError + 2700
 Private Const ERR_BIM_SAVE_BASE As Long = vbObjectError + 2800
@@ -1267,6 +1270,27 @@ Public Function BimSaldoStatus(ByVal pocetno As Double, ByVal zavrsno As Double,
     End If
 End Function
 
+' DA LI DVA REDA ISTOG IZVODA NOSE ISTE ZBIROVE.
+'
+' Parser upisuje saldo izvoda na SVAKI red grupe, pa agregat te brojke UZIMA sa
+' prvog reda umesto da ih sabira (sabiranje bi ih pomnozilo brojem stavki).
+' To vazi dok su svi redovi saglasni -- a to niko nije proveravao.
+'
+' Danasnji parser ih ne moze razici: kopira isti `saldo` u petlji. Ali rucno
+' editovan red, delimican re-import ili buduci parser mogu -- i tada bi mreza
+' prikazala brojku PRVOG reda kao da je istina o celom izvodu, bez ijednog
+' traga. Prag je 0.01, isti koji koristi i BimSaldoStatus.
+Public Function BimSaldoIsti(ByVal pocetnoA As Double, ByVal zavrsnoA As Double, _
+                             ByVal dugujeA As Double, ByVal potrazujeA As Double, _
+                             ByVal pocetnoB As Double, ByVal zavrsnoB As Double, _
+                             ByVal dugujeB As Double, ByVal potrazujeB As Double) As Boolean
+    If Abs(pocetnoA - pocetnoB) > 0.01 Then Exit Function
+    If Abs(zavrsnoA - zavrsnoB) > 0.01 Then Exit Function
+    If Abs(dugujeA - dugujeB) > 0.01 Then Exit Function
+    If Abs(potrazujeA - potrazujeB) > 0.01 Then Exit Function
+    BimSaldoIsti = True
+End Function
+
 ' Kljuc grupe. BROJ IZVODA NIJE IDENTITET, i to iz DVA razloga.
 '
 ' 1) Dedupe kljuc pocinje od BROJA RACUNA ("Drugi racun = druga transakcija, bez
@@ -1316,6 +1340,9 @@ End Function
 '    7 UkupanDuguje            8 ZavrsnoStanje   9 Razlika
 '   10 Status (BIM_SALDO_*)   11 Stavki         12 Otvorenih
 '
+' Status moze biti i BIM_SALDO_NEKONZISTENTAN: redovi istog izvoda ne nose iste
+' zbirove, pa se brojka prvog reda NE sme prikazati kao istina o celom izvodu.
+'
 ' Storniran red ne ulazi ni u grupu ni u brojace -- isto pravilo kao svuda.
 Public Function GetBankaIzvodiForGrid() As Variant
     Const SRC As String = "GetBankaIzvodiForGrid"
@@ -1347,6 +1374,10 @@ Public Function GetBankaIzvodiForGrid() As Variant
     Dim buf() As Variant
     ReDim buf(1 To UBound(data, 1), 1 To 12)
 
+    ' Prati se PO GRUPI, ne po redu: jedna nesaglasna stavka kvari ceo izvod.
+    Dim nesaglasan() As Boolean
+    ReDim nesaglasan(1 To UBound(data, 1))
+
     Dim i As Long, n As Long, r As Long
     Dim kljuc As String
 
@@ -1357,6 +1388,15 @@ Public Function GetBankaIzvodiForGrid() As Variant
 
         If idx.Exists(kljuc) Then
             r = CLng(idx(kljuc))
+
+            ' SVAKI SLEDECI red grupe mora da nosi ISTE zbirove kao prvi. Ako ne
+            ' nosi, brojka prvog reda vise nije istina o izvodu -- v. BimSaldoIsti.
+            If Not nesaglasan(r) Then
+                nesaglasan(r) = Not BimSaldoIsti( _
+                    CDbl(buf(r, 5)), CDbl(buf(r, 8)), CDbl(buf(r, 7)), CDbl(buf(r, 6)), _
+                    CDbl(NzBIM(data(i, cPoc), 0#)), CDbl(NzBIM(data(i, cZav), 0#)), _
+                    CDbl(NzBIM(data(i, cDug), 0#)), CDbl(NzBIM(data(i, cPot), 0#)))
+            End If
         Else
             n = n + 1
             r = n
@@ -1395,6 +1435,9 @@ Public Function GetBankaIzvodiForGrid() As Variant
                                      CDbl(buf(r, 7)), CDbl(buf(r, 6)))
         outA(r, 10) = BimSaldoStatus(CDbl(buf(r, 5)), CDbl(buf(r, 8)), _
                                      CDbl(buf(r, 7)), CDbl(buf(r, 6)))
+        ' Nesaglasnost NADJACAVA i "slaze se" i "ne slaze se": oba tvrde nesto o
+        ' brojkama koje ovde nisu jednoznacne.
+        If nesaglasan(r) Then outA(r, 10) = BIM_SALDO_NEKONZISTENTAN
     Next r
 
     GetBankaIzvodiForGrid = outA

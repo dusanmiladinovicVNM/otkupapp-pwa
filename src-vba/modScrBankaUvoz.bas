@@ -198,8 +198,13 @@ Public Function BuCipStavka(ByVal filter As String, ByVal obradjeno As String, _
     End Select
 End Function
 
-' PRAVILO CIPA IZVODA. "Ne slaze se" je BIM_SALDO_RAZLIKA i samo ona: legacy
-' red bez saldo metapodataka (sva cetiri broja nula) NIJE neslaganje nego
+' PRAVILO CIPA IZVODA. "Ne slaze se" je BIM_SALDO_RAZLIKA i samo ona -- i
+' NESAGLASAN izvod tu NE ulazi, iako i on trazi coveka. Razlog: cip nosi jedno
+' tvrdjenje ("ne slaze se"), a nesaglasan izvod to tvrdjenje ne podnosi -- o
+' njegovim brojkama se ne zna nista. Spajanje dva stanja pod jedan broj bi
+' brojku ucinilo neupotrebljivom za oba. Nesaglasnost se vidi u koloni.
+'
+' Legacy red bez saldo metapodataka (sva cetiri broja nula) NIJE neslaganje nego
 ' odsustvo podatka, i ne sme da se prikaze kao greska.
 Public Function BuCipIzvod(ByVal filter As String, ByVal status As Long, _
                            ByVal otvorenih As Long) As Boolean
@@ -977,15 +982,25 @@ End Function
 '
 ' Spojena kolona ipak OSTAJE, i to kao izbor a ne kao ostatak: dve susedne
 ' brojke bez konteksta citaju se gore od jedne sa kosom crtom.
+' Cetiri novcane kolone su "rest", ne "rsd", i to je odluka a ne previd.
+'
+' "rest" prazni celiju kad je vrednost nula, "rsd" bi napisao "0,00". Ovde nula
+' znaci "nema podatka", a ne "nula dinara": legacy uvoz saldo metapodatke nema, a
+' nesaglasan izvod ih ima ali se ne zna koji vaze. Prazna celija je istina; broj
+' pored natpisa "zbirovi se razlikuju" je tudji podatak koji izgleda kao saldo.
+'
+' Cena je bold: StyleGridCell ga daje "rsd" koloni, "rest" ne. Prihvaceno --
+' cetiri podebljane novcane kolone u istom redu ionako nisu davale hijerarhiju.
+' Poravnanje ostaje DESNO (ColIsNum poznaje "rest").
 Private Function IzvodiKolone() As Variant
     IzvodiKolone = Array( _
         "OTKUI_HDB_IZVOD||txt|96|1", _
         "OTKUI_HDB_RACUN||txt|0|1", _
         "OTKUI_HD_DATUM||date|74|1", _
-        "OTKUI_HDB_POCETNO||rsd|104|2", _
-        "OTKUI_HDB_UPLATA||rsd|104|1", _
-        "OTKUI_HDB_ISPLATA||rsd|104|1", _
-        "OTKUI_HDB_ZAVRSNO||rsd|104|1", _
+        "OTKUI_HDB_POCETNO||rest|104|2", _
+        "OTKUI_HDB_UPLATA||rest|104|1", _
+        "OTKUI_HDB_ISPLATA||rest|104|1", _
+        "OTKUI_HDB_ZAVRSNO||rest|104|1", _
         "OTKUI_HDB_SLAGANJE||txt|132|1", _
         "OTKUI_HDB_STAVKI||txt|118|2", _
         "OTKUI_HDB_IZVKEY||txt|1|4")
@@ -999,6 +1014,7 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
     Dim src As Variant, i As Long, n As Long, outA() As Variant
     Dim hay As String
     Dim zbirU As Double, zbirI As Double
+    Dim nesagl As Boolean
     Dim errNum As Long, errDesc As String
 
     On Error GoTo EH
@@ -1012,21 +1028,43 @@ Private Function RedoviIzvodi(ByVal filter As String, ByVal q As String) As Vari
     ReDim outA(1 To UBound(src, 1), 1 To 10)
     For i = 1 To UBound(src, 1)
         If Not BuCipIzvod(filter, CLng(src(i, 10)), CLng(src(i, 12))) Then GoTo Sledeci
-        zbirU = zbirU + CDbl(src(i, 6))
-        zbirI = zbirI + CDbl(src(i, 7))
         hay = CStr(src(i, 2)) & "|" & CStr(src(i, 3))
         If Len(q) > 0 Then
             If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
         End If
+
+        ' ZBIR IDE POSLE OBA FILTERA. Ranije je stajao izmedju cipa i pretrage,
+        ' pa je izvod koji pretraga sakrije i dalje ulazio u podnozje -- traka je
+        ' tvrdila promet redova kojih na ekranu nema.
+        '
+        ' Nesaglasan izvod NE ULAZI uopste: njegovi zbirovi su vrednost PRVOG
+        ' reda, a upravo se ne zna koji red vazi. Sabrati ih znacilo bi tvrditi
+        ' promet koji nikad nije izracunat.
+        nesagl = (CLng(src(i, 10)) = BIM_SALDO_NEKONZISTENTAN)
+        If Not nesagl Then
+            zbirU = zbirU + CDbl(src(i, 6))
+            zbirI = zbirI + CDbl(src(i, 7))
+        End If
+
         n = n + 1
         outA(n, 1) = CStr(src(i, 2))
         outA(n, 2) = CStr(src(i, 3))
         ' v. RedoviStavke: datum se mrezi predaje kao serijski broj u opsegu.
         outA(n, 3) = modUiData.CellDate(src, i, 4)
-        outA(n, 4) = CDbl(src(i, 5))
-        outA(n, 5) = CDbl(src(i, 6))
-        outA(n, 6) = CDbl(src(i, 7))
-        outA(n, 7) = CDbl(src(i, 8))
+        ' Nesaglasnom izvodu se cetiri novcane celije OSTAVLJAJU PRAZNE (nula u
+        ' "rest" koloni). Prikazati brojku prvog reda pored natpisa "zbirovi se
+        ' razlikuju" znacilo bi ponuditi tudji podatak kao saldo.
+        If nesagl Then
+            outA(n, 4) = 0#
+            outA(n, 5) = 0#
+            outA(n, 6) = 0#
+            outA(n, 7) = 0#
+        Else
+            outA(n, 4) = CDbl(src(i, 5))
+            outA(n, 5) = CDbl(src(i, 6))
+            outA(n, 6) = CDbl(src(i, 7))
+            outA(n, 7) = CDbl(src(i, 8))
+        End If
         outA(n, 8) = BuSlaganjeTekst(CLng(src(i, 10)), CDbl(src(i, 9)))
         outA(n, 9) = BuStavkiTekst(CLng(src(i, 12)), CLng(src(i, 11)))
         outA(n, 10) = CStr(src(i, 1))
@@ -1052,8 +1090,15 @@ End Function
 
 ' Tekst kolone "Slaganje". Odluku je vec doneo modBankaImport.BimSaldoStatus --
 ' ovde je samo formulacija, i zato Public (meri se bez mreze).
+'
+' NESAGLASNO nije "ne slaze se". "Ne slaze se" znaci da se ZNA sta pise pa se ne
+' slaze; nesaglasno znaci da se ne zna ni sta pise -- redovi istog izvoda nose
+' razlicite zbirove, pa nijedna brojka nije istina o celom izvodu. Zato ni
+' RAZLIKA ne bi bila tacna formulacija, a ni iznos nema sta da se prikaze.
 Public Function BuSlaganjeTekst(ByVal status As Long, ByVal razlika As Double) As String
     Select Case status
+        Case BIM_SALDO_NEKONZISTENTAN
+            BuSlaganjeTekst = Poruka("OTKUI_LBL_BU_SALDO_NESAGLASAN")
         Case BIM_SALDO_OK
             BuSlaganjeTekst = Poruka("OTKUI_LBL_BU_SALDO_OK")
         Case BIM_SALDO_RAZLIKA

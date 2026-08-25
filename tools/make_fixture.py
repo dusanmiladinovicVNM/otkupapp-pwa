@@ -175,6 +175,11 @@ BIM_OTK_PLACEN_IZNOS = 500.0      # 10 * 50
 # ponavljaju po godini; bez datuma u kljucu bi se dva izvoda spojila u
 # jedan sinteticki red koji nikad nije postojao.
 BIM_DATUM_PY = datetime.date(2025, 3, 16)
+# Izvod cija DVA REDA nose RAZLICITE zbirove. Danasnji parser to ne moze da
+# napravi -- kopira isti saldo u petlji -- ali rucno editovan red, delimican
+# re-import ili buduci parser mogu. Bez ovog para agregat bi brojku PRVOG
+# reda prikazao kao istinu o celom izvodu, a nijedna tvrdnja to ne bi videla.
+BIM_IZVOD_NES = "IZV-FIX-NES"
 # Saldo izvoda 2 je NAMERNO za 100 veci od tacnog (8000 + 950 - 3000 = 5950).
 # Bez reda koji se ne slaze, provera integriteta bi u fixture-u bila uvek OK.
 BIM_IZVOD_2_ZAVRSNO = 6050
@@ -738,6 +743,33 @@ SEED = {
          "ImportVreme": BIM_DATUM_PY, "Obradjeno": "Da",
          "PocetnoStanje": 1000, "ZavrsnoStanje": 1100,
          "UkupanDuguje": 0, "UkupanPotrazuje": 100},
+        # DVA reda istog izvoda sa RAZLICITIM zbirovima -- v. BIM_IZVOD_NES.
+        # Prvi kaze zavrsno 5000, drugi 9999. Ko uzme "prvi red pobedjuje",
+        # prikazace 5000 kao istinu o celom izvodu.
+        {"BankaImportID": "BIM-FIX-NS1", "BrojDokumenta": BIM_IZVOD_NES,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Nesaglasan doo",
+         "PartnerKonto": "", "Opis": "Prvi red", "Uplata": 500, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-NS1", "IzvorFajl": "fixture9.pdf",
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "Da",
+         "PocetnoStanje": 4500, "ZavrsnoStanje": 5000,
+         "UkupanDuguje": 0, "UkupanPotrazuje": 500},
+        {"BankaImportID": "BIM-FIX-NS2", "BrojDokumenta": BIM_IZVOD_NES,
+         "DatumIzvoda": BIM_DATUM_1, "BrojRacuna": BIM_RACUN_1,
+         "DatumTransakcije": BIM_DATUM_1, "Partner": "Nesaglasan doo",
+         "PartnerKonto": "", "Opis": "Drugi red, drugi zbirovi",
+         "Uplata": 500, "Isplata": 0,
+         "Valuta": "RSD", "PozivNaBroj": "", "SvrhaPlacanja": "",
+         "BankaReferenz": "REF-NS2", "IzvorFajl": "fixture9.pdf",
+         # OTVOREN namerno: da oba nova reda ne budu "Da". Sa oba mapirana bi
+         # broj otvorenih i broj mapiranih ispali JEDNAKI (6 i 6), pa sabotaza
+         # koja znacki podmetne mapirane umesto otvorenih ne bi obarala nista --
+         # dokaz bi tiho nestao. v. tvrdnja "otvorenih <> mapiranih" u modTest.
+         "ImportVreme": BIM_DATUM_1, "Obradjeno": "",
+         "PocetnoStanje": 4500, "ZavrsnoStanje": 9999,
+         # i PROMET se razlikuje, ne samo stanje -- inace podnozje nema sta da meri
+         "UkupanDuguje": 0, "UkupanPotrazuje": 700},
         # Storniran red nosi ISTE zbirove izvoda kao ostali -- da agregat ne
         # zavisi od toga koji je red grupe procitan.
         {"BankaImportID": "BIM-FIX-ST", "BrojDokumenta": BIM_IZVOD_2,

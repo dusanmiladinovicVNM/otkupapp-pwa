@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-180"
+Public Const OTKUI_BUILD   As String = "v6-ui-181"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -4794,6 +4794,17 @@ Public Sub GridOtkaciFormuTest()
     Set mFrm = Nothing
 End Sub
 
+' TEST SEAM: da li ljuska za tekucu listu crta zbir vrednosti u podnozju.
+' Tvrdo gejtovan.
+'
+' Bez ovoga se moze tvrditi samo da EKRAN vraca ispravan zbir (Scr_Rows), a ne i
+' da ga ljuska PRIKAZUJE -- a upravo je ta razlika jednom vec sakrila podnozje
+' liste izvoda uz zelenu suite.
+Public Function GridImaValKolonuTest() As Boolean
+    If Not IsTestMode() Then Exit Function
+    GridImaValKolonuTest = ModeHasValCol()
+End Function
+
 ' TEST SEAM: vrsta i-te kolone (0-bazirano). Tvrdo gejtovan. Test bez ovoga ne
 ' moze da nadje kolonu nad kojom konverzija UOPSTE moze da pukne -- nad txt
 ' kolonom svaka vrednost prolazi, pa bi tvrdnja merila nista.
@@ -5029,12 +5040,23 @@ Private Function ModeHasKgCol() As Boolean
     Next i
 End Function
 
+' Da li lista uopste ima novcanu kolonu -- od toga zavisi da li se u podnozju
+' crta zbir vrednosti.
+'
+' "rest" JE novcana kolona. Nije bila na spisku, pa je lista cije su sve novcane
+' kolone "rest" ostajala bez podnozja: zbir se uredno racunao (Scr_Rows ga vraca),
+' a ftVal.Visible bi bio False -- operater ne vidi promet. Nadjeno na listi
+' IZVODA cim su joj kolone presle na "rest".
+'
+' Provereno da je prosirenje bezbedno: jedina druga "rest" kolona u repou je
+' OTKUI_HD_OSTATAK na Dokumentima, koja stoji UZ "mult" kolonu -- tamo je
+' ModeHasValCol vec bio True, pa se nista ne menja.
 Private Function ModeHasValCol() As Boolean
     Dim i As Long
     If Not IsArray(mCols) Then Exit Function
     For i = 0 To UBound(mCols)
         Select Case ColF(CStr(mCols(i)), 2)
-            Case "rsd", "mult", "sum0": ModeHasValCol = True: Exit Function
+            Case "rsd", "mult", "sum0", "rest": ModeHasValCol = True: Exit Function
         End Select
     Next i
 End Function
