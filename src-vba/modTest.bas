@@ -7852,7 +7852,8 @@ Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
 End Sub
 
 
-' TEST 117: poruka o nedostajucoj koloni imenuje ZAGLAVLJE koje je videla.
+' TEST 117: poruka o nedostajucoj koloni razlikuje TRI stanja, i kaze da li je
+' bas trazena kolona vidjena u svezem prolazu.
 '
 ' Povod: u logu nad radnom sveskom stoji "Nedostaje kolona 'VozacID' u tabeli
 ' 'tblZbirna'" -- a ta kolona u toj svesci POSTOJI (provereno dump_schema-om).
@@ -7865,9 +7866,9 @@ End Sub
 ' ZbirnaBrojJeDvosmislenIkad) na to staju. Dijagnostika ispod je da sledeci put
 ' ne gadjamo.
 Private Sub T_Kolona_TrazenjeNeGutaGresku()
-    Dim iPostoji As Long, iMalim As Long, iNema As Long
+    Dim iPostoji As Long, iMalim As Long, iNema As Long, iKes As Long
     Dim errPosle As Long
-    Dim poruka As String
+    Dim poruka As String, porukaKes As String, porukaTbl As String
 
     iPostoji = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     AssertEq (iPostoji > 0), True, "preduslov: postojeca kolona se nalazi"
@@ -7889,9 +7890,32 @@ Private Sub T_Kolona_TrazenjeNeGutaGresku()
     iMalim = GetColumnIndex(TBL_OTKUP, LCase$(COL_OTK_ID))
     AssertEq iMalim, iPostoji, "ime kolone se poredi bez obzira na velicinu slova"
 
-    ' DIJAGNOSTIKA: poruka mora da imenuje zaglavlje koje je stvarno videla.
-    ' Bez toga se "nedostaje kolona" ne razlikuje od "tabele nema" ni od
-    ' "zaglavlje je drugacije", pa isti tekst opisuje tri razlicita stanja.
+    ' SIMPTOM IZ POGONA, izmeren. Trazenje kaze NULA za kolonu koja u zaglavlju
+    ' POSTOJI -- tacno ono sto je stajalo u logu nad radnom sveskom.
+    '
+    ' Izaziva se kroz kes: nula se pamti za ceo BeginTableCache prozor. Time se
+    ' NE tvrdi da je kes uzrok prvog neuspeha (nije reprodukovan) -- tvrdi se da
+    ' jednom zapamcena nula prezivi prozor, i da poruka to sada ume da razlikuje
+    ' od stvarnog nedostatka kolone.
+    BeginTableCache
+    modDataAccess.KesKoloneTestSet TBL_OTKUP, COL_OTK_ID, 0
+    iKes = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    On Error Resume Next
+    Err.Clear
+    RequireColumnIndex TBL_OTKUP, COL_OTK_ID, "T_Kolona"
+    porukaKes = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+
+    AssertEq iKes, 0, "kesirana nula prezivi prozor -- simptom iz loga se ponavlja"
+    AssertEq (InStr(1, porukaKes, "VIDJENA") > 0), True, _
+             "poruka kaze da je trazena kolona VIDJENA u svezem prolazu"
+    AssertEq (InStr(1, porukaKes, "pozicija") > 0), True, _
+             "...i na kojoj je poziciji"
+
+    ' DIJAGNOSTIKA nad stvarno nedostajucom kolonom. Bez zaglavlja bi isti tekst
+    ' opisivao tri razlicita stanja: kolone nema, tabele nema, citanje je puklo.
     On Error Resume Next
     Err.Clear
     RequireColumnIndex TBL_OTKUP, "NemaOvakveKoloneNigde", "T_Kolona"
@@ -7903,4 +7927,17 @@ Private Sub T_Kolona_TrazenjeNeGutaGresku()
              "poruka imenuje kolonu koja nedostaje"
     AssertEq (InStr(1, poruka, COL_OTK_ID) > 0), True, _
              "...i zaglavlje koje je stvarno videla"
+    AssertEq (InStr(1, poruka, "NIJE vidjena") > 0), True, _
+             "...i da trazene kolone u zaglavlju stvarno nema"
+
+    ' Trece stanje: tabele uopste nema. Mora da se razlikuje od prva dva.
+    On Error Resume Next
+    Err.Clear
+    RequireColumnIndex "tblNePostojiNikako", "BiloSta", "T_Kolona"
+    porukaTbl = Err.description
+    Err.Clear
+    On Error GoTo 0
+
+    AssertEq (InStr(1, porukaTbl, "tabela nije nadjena") > 0), True, _
+             "za nepostojecu tabelu poruka kaze da TABELE nema"
 End Sub

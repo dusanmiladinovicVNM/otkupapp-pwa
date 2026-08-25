@@ -340,6 +340,36 @@ Time isti tekst prestaje da opisuje tri različita stanja — „kolone nema",
 „tabele nema" i „zaglavlje je drugačije" sada se razlikuju **iz same poruke**,
 bez ponovnog pokretanja.
 
+### Treći put ista bolest — u samoj dijagnostici
+
+Prva verzija pomoćne funkcije držala je **sve** pod jednim `On Error Resume Next`.
+Pad čitanja tabele bi zato prijavila kao „tabela nije nadjena", a pad čitanja
+zaglavlja kao „prazno" — dakle **opet** bi grešku predstavila kao stanje šeme,
+samo jedan nivo niže, i to u funkciji čiji je ceo smisao da ta dva razlikuje.
+
+Nađeno u review-u. Sada se posle svakog rizičnog koraka `Err` **čita** i, ako je
+postavljen, poruka kaže da čitanje nije uspelo, uz broj greške.
+
+### Poruka odgovara na pitanje koje se iz nje traži
+
+Spisak imena je ograničen na 12 (poruka ide u log i u dijalog), pa bi kolona iza
+te granice ostala nevidljiva baš u poruci koja treba da kaže da li postoji. Zato
+se **tražena** kolona traži kroz celo zaglavlje i poruka to kaže izričito:
+
+```
+Vidjeno zaglavlje: ZbirnaID, Datum, VozacID, ... (+21).
+Trazena kolona VIDJENA, pozicija 3.
+```
+
+Ako traženje kaže nula, a svež prolaz je vidi — uzrok nije šema nego put do nje.
+
+### Simptom je sada merljiv
+
+Test 117 ga izaziva kroz keš (`KesKoloneTestSet`, tvrdo gejtovan): nula se podmetne
+za kolonu koja **postoji**, i tvrdi se da preživi ceo prozor i da poruka to ume da
+razlikuje od stvarnog nedostatka. Time se **ne** tvrdi da je keš uzrok prvog
+neuspeha — samo da jednom zapamćena nula ostaje do kraja prozora.
+
 ### Šta ostaje otvoreno, i zašto se ne popravlja naslepo
 
 Nula iz `GetColumnIndex` se **kešira** za ceo `BeginTableCache` prozor

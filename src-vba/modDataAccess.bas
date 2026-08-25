@@ -124,6 +124,22 @@ Public Function GetTableHeaders(ByVal tblName As String) As Variant
     GetTableHeaders = headers
 End Function
 
+' TEST SEAM: podmetni vrednost u kes indeksa kolone. Tvrdo gejtovan.
+'
+' Postoji da bi se mogao izmeriti BAS onaj simptom zbog kojeg je poruka i
+' prosirena: trazenje vrati nulu za kolonu koja u zaglavlju POSTOJI. Kes se u
+' pogonu puni sam (BeginTableCache prozor), pa se to stanje bez seam-a ne moze
+' izazvati -- a upravo se ono videlo u logu nad radnom sveskom.
+'
+' Ovo NE tvrdi da je kes uzrok prvog neuspeha. Tvrdi samo da nula, jednom
+' zapamcena, prezivi ceo prozor -- i da poruka to sada ume da razlikuje.
+Public Sub KesKoloneTestSet(ByVal tblName As String, ByVal colName As String, _
+                            ByVal vrednost As Long)
+    If Not IsTestMode() Then Exit Sub
+    If mColCache Is Nothing Then Exit Sub
+    mColCache(tblName & "|" & colName) = vrednost
+End Sub
+
 Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long
     ' Gibt den Spaltenindex innerhalb der Tabelle zurueck (1-basiert)
     ' Request-scoped kes: u jednom "Prikazi" prozoru kolone se ne menjaju, pa

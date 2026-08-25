@@ -5489,6 +5489,10 @@ Uz poruku ide i zaglavlje koje je program **stvarno pročitao**:
 
 > `Nedostaje kolona 'VozacID' u tabeli 'tblZbirna'.`
 > `Vidjeno zaglavlje: ZbirnaID, Datum, VozacID, BrojZbirne, ... (+21).`
+> `Trazena kolona VIDJENA, pozicija 3.`
+
+Poslednji red je onaj koji zapravo odgovara: ako program kaže da kolone nema,
+a sveže čitanje je **vidi**, problem nije u tabeli nego u putu do nje.
 
 Kad se sledeći put pojavi, iz same poruke se vidi da li je problem u šemi ili u
 čitanju — bez ponovnog pokretanja i pogađanja.

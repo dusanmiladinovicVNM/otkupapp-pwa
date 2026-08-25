@@ -1967,12 +1967,33 @@ SABOTAZE = {
     # kolone nema, tabele nema, zaglavlje je drugacije.
     "kolona-poruka-bez-zaglavlja": (
         "modSchemaGuard.bas",
-        "                  \"Nedostaje kolona '\" & columnName & \"' u tabeli '\" & tableName & _\n"
-        "                  \"'. Vidjeno zaglavlje: \" & ZaglavljeZaPoruku(tableName) & \".\"\n",
-        "                  \"Nedostaje kolona '\" & columnName & \"' u tabeli '\" & tableName & _\n"
-        "                  \"'.\"   ' SABOTAZA: poruka bez zaglavlja\n",
+        "    If n > MAX_IMENA Then s = s & \", ... (+\" & (n - MAX_IMENA) & \")\"\n"
+        "    If Len(s) = 0 Then s = \"prazno\"\n",
+        "    s = \"prazno\"   ' SABOTAZA: poruka bez zaglavlja\n",
         "T_Kolona_TrazenjeNeGutaGresku",
         "zaglavlje koje je stvarno videla",
+    ),
+    # Bez ovoga poruka daje spisak imena, a ne odgovor na jedino pitanje
+    # koje se iz nje trazi: da li BAS ta kolona postoji u zaglavlju.
+    "kolona-poruka-ne-kaze-da-je-vidjena": (
+        "modSchemaGuard.bas",
+        "    If poz > 0 Then\n"
+        "        ZaglavljeZaPoruku = s & \". Trazena kolona VIDJENA, pozicija \" & poz\n",
+        "    If False Then   ' SABOTAZA: poruka cuti o trazenoj koloni\n"
+        "        ZaglavljeZaPoruku = s & \". Trazena kolona VIDJENA, pozicija \" & poz\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "poruka kaze da je trazena kolona VIDJENA u svezem prolazu",
+    ),
+    # Tabele nema i zaglavlje je prazno su dva razlicita stanja; jedan tekst
+    # za oba vraca upravo onu neodredjenost zbog koje je poruka i prosirena.
+    "kolona-nema-tabele-kao-prazno": (
+        "modSchemaGuard.bas",
+        "    If lo Is Nothing Then\n"
+        "        ZaglavljeZaPoruku = \"tabela nije nadjena\"\n",
+        "    If lo Is Nothing Then\n"
+        "        ZaglavljeZaPoruku = \"prazno\"   ' SABOTAZA: nema tabele = prazno\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "za nepostojecu tabelu poruka kaze da TABELE nema",
     ),
     # ---------------------------------------- MREZA: DVA NOVCANA SLOTA
     # Ekran opet salje samo zbir vrednosti: sedmog clana nema, pa dva broja
