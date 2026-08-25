@@ -2752,7 +2752,11 @@ def proveri_sidra(tiho: bool = False) -> int:
 # Katalog je izmisljen, ali fajlovi su pravi: sidro se i dalje trazi u src-vba,
 # jer se bas to poredjenje proverava.
 _ST_PRAVI = "    On Error Resume Next" + ESCN
-_ST_JEDINSTVEN = "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6"
+# Fixture stoji na redu koji se NE menja sa izdanjem. Prva verzija je stajala
+# na OTKUI_BUILD, pa je prvo podizanje builda (v6-ui-183) prijavilo ZDRAV unos
+# kao nalaz -- self-test je pao na sopstvenom fixture-u.
+_ST_ZDRAVO = "Option Explicit"
+_ST_ZDRAVO2 = "'--- paleta ----------------------------------------------------------"
 
 _SELF_TEST = [
     ("sidro zastarelo",
@@ -2785,8 +2789,8 @@ def _self_test() -> int:
     imena = {"T_Postoji"}
     # zdrav unos: sidro koje postoji tacno jednom, zamena koja nije podniz
     zdravo = ("modOtkupUI.bas",
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "SABOTAZA" + DQ34 + ESCN,
+              _ST_ZDRAVO + ESCN,
+              "    Nesto = 1" + ESCN,
               "T_Postoji", "zdrava tvrdnja")
 
     lose = 0
@@ -2831,9 +2835,8 @@ def _self_test() -> int:
 
     # zamena koja je TACNO jedan red viseredog sidra
     dvored = ("modOtkupUI.bas",
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN +
-              "Public Const OTKUI_MIN_W   As Long = 660" + ESCN,
-              "Public Const OTKUI_BUILD   As String = " + DQ34 + "v6-ui-182" + DQ34 + ESCN,
+              _ST_ZDRAVO + ESCN + _ST_ZDRAVO2 + ESCN,
+              _ST_ZDRAVO + ESCN,
               "T_Postoji", "tvrdnja H")
     n += 1
     if not any("podniz sidra" in sta for _, sta in _nalazi({"probni": dvored}, imena)):

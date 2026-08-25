@@ -2971,7 +2971,27 @@ ponovo, jer je ništa nije proveravalo. Statička provera koja je hvata (`sabota
 Oznaka je premeštena u red **iznad**. Provereno mašinski da nijedna od 227 zamena
 u katalogu nema komentar posle `_`.
 
-### 14.7 Šta OSTAJE
+### 14.7 Self-test iz #227 pao je na sopstvenom fixture-u
+
+Podizanje builda na `v6-ui-183` oborilo je `sabotaza.py --self-test`:
+
+```
+SELF-TEST: zdrav unos je prijavljen kao nalaz
+```
+
+Njegov „zdrav" fixture je stajao na redu `Public Const OTKUI_BUILD ... "v6-ui-182"` —
+**vrednosti koja se menja sa svakim izdanjem**. Čim se build podigao, sidro se više
+nije nalazilo, pa je provera ispravno prijavila ono što joj je podmetnuto.
+
+Fixture je premešten na `Option Explicit` i prvi red ispod njega — redove koji se
+ne menjaju. Provereno da izmena nije oslabila proveru: gašenje četiri pravila
+redom i dalje obara self-test **po imenu**.
+
+Pouka je ista kao za sidra sabotaža: **fixture koji stoji na promenljivoj
+vrednosti zastareva isto kao i sidro**, samo tiše — jer ga niko ne gleda dok ne
+pukne.
+
+### 14.8 Šta OSTAJE
 
 **Bazen nije izmeren.** Da se višak preko `MAX_FT_VAL` stvarno odseca vidi se
 samo ako neki ekran zatraži tri slota — a nijedan ne traži. Sabotaža koja spusti
