@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-182"
+Public Const OTKUI_BUILD   As String = "v6-ui-183"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -165,6 +165,15 @@ Private Const GRID_ROW_H  As Single = 21
 Private Const GRID_TOP    As Single = 57     ' naslov + pretraga + cipovi
 Private Const GRID_HEAD_H As Single = 21
 Private Const GRID_FOOT_H As Single = 24
+
+' Koliko NOVCANIH SLOTOVA podnozje ume da nacrta. Lista izvoda trazi dva
+' (uplate i isplate), jer je njihov zbir -- promet -- operateru manje koristan
+' od dve brojke koje ume da uporedi sa izvodom u ruci.
+'
+' Bazen je konacan kao i svaki drugi u ljusci: ekran koji zatrazi vise ne gresi,
+' ali se visak NE crta i BazenStaje to prijavi. Tiho odsecanje je vec dvaput
+' kostalo pun krug (jedanaesti cip, sesta radnja).
+Private Const MAX_FT_VAL  As Long = 2
 ' Traka poruke iznad podnozja mreze. Ista je na svim ekranima -- poruka nije
 ' deo liste pa ne sme da se menja sa njom.
 Private Const TOAST_H     As Single = 26
@@ -357,6 +366,12 @@ Private mScreen As String
 Private mPopFor As String            ' combo za koji je otvoren nas dropdown ("" = zatvoren)
 Private mColX(0 To MAX_COLS - 1) As Single   ' x i sirina kolona mreze; postavlja
 Private mColW(0 To MAX_COLS - 1) As Single   ' LayoutGrid, RenderGrid samo puni
+
+' Novcani slotovi podnozja, onako kako ih je vratio ekran: parovi
+' Array(kljucPoruke, iznos). Prazno = ekran ih ne salje, pa podnozje crta zbir
+' vrednosti kao i pre.
+Private mFtSlot As Variant
+Private mFtSlotN As Long
 Private mCols As Variant             ' opis kolona AKTIVNOG rezima (GridCols)
 Private mColN As Long                ' koliko ih je stvarno vidljivo
 ' Da li mColX / mColW jos odgovaraju mCols. Postavlja se kad se OPIS kolona
@@ -1146,6 +1161,7 @@ Private Sub BuildGrid(frm As Object)
     ' zbirovi su brojevi - Consolas, podebljano (Consolas nema Semibold rez)
     NewLbl ft, "ftKg", "-", 0, 6, 170, 14, TS_CELL_LG, True, C_FOREST, -1, fmTextAlignRight, F_NUM
     NewLbl ft, "ftVal", "-", 0, 6, 190, 14, TS_CELL_LG, True, C_FOREST, -1, fmTextAlignRight, F_NUM
+    NewLbl ft, "ftVal2", "-", 0, 6, 190, 14, TS_CELL_LG, True, C_FOREST, -1, fmTextAlignRight, F_NUM
     ' visina 20 (ne 15): TxtH(TS_META) = 16, pa u 15pt dugme tekst nije stao
     BtnV ft, "pgPrev", ChrW(8249), 0, 2, 21, 20, "page"
     For i = 1 To 5
@@ -2292,7 +2308,10 @@ SledecaAkcija:
     PostaviToast z, sc, ft.top
     ft.Controls("ftLnT").width = sc
     ft.Controls("ftKg").Left = sc / 2 - 190
+    ' Desna ivica novcanog dela je fiksna; drugi slot se dodaje ULEVO, da se
+    ' jedan slot ne pomera kad se pojavi drugi.
     ft.Controls("ftVal").Left = sc / 2 - 10
+    ft.Controls("ftVal2").Left = sc / 2 - 10
     X = sc - 21
     MoveBtn ft, "pgNext", X, 2
     For i = 5 To 1 Step -1
@@ -2501,13 +2520,20 @@ Public Sub RenderGrid()
     ft.Controls("ftKg").caption = Poruka("OTKUI_FT_UKUPNO") & " " & FmtKg(mSumKg) & " " & Poruka("OTKUI_UNIT_KG")
     ' rezim bez kolone vrednosti (Zbirna) nema ni zbir
     ft.Controls("ftVal").Visible = ModeHasValCol()
-    ' Reversi se broje u komadima, sve ostalo u dinarima (i bez decimala).
-    '
-    ' Pitanje ide EKRANU, a ne globalnom ActiveMode: taj rezim pripada
-    ' Dokumentima i na ugovornom ekranu ostaje onakav kakav ga je Dokumenta
-    ' ostavila. Ko je bio na F7 pa presao na Uvoz izvoda video je "Ukupno 8.950
-    ' kom" umesto "Vrednost 8.950,00 RSD" -- novac izbrojan kao komadi.
-    ft.Controls("ftVal").caption = PodnozjeValTekst(mSumVal)
+    ft.Controls("ftVal2").Visible = False
+    If mFtSlotN > 0 Then
+        ' Ekran je poslao svoje novcane slotove -- zbir vrednosti tada nema sta
+        ' da kaze preko njih.
+        CrtajSlotovePodnozja ft
+    Else
+        ' Reversi se broje u komadima, sve ostalo u dinarima (i bez decimala).
+        '
+        ' Pitanje ide EKRANU, a ne globalnom ActiveMode: taj rezim pripada
+        ' Dokumentima i na ugovornom ekranu ostaje onakav kakav ga je Dokumenta
+        ' ostavila. Ko je bio na F7 pa presao na Uvoz izvoda video je "Ukupno
+        ' 8.950 kom" umesto "Vrednost 8.950,00 RSD" -- novac izbrojan kao komadi.
+        ft.Controls("ftVal").caption = PodnozjeValTekst(mSumVal)
+    End If
     RenderPager ft
     RenderChipCounts z
     RefreshRowActions
@@ -4792,6 +4818,60 @@ Public Sub GridOtkaciFormuTest()
     Set mFrm = Nothing
 End Sub
 
+' NATPIS JEDNOG NOVCANOG SLOTA, na jednom mestu (v. PodnozjeValTekst).
+'
+' Slot uvek nosi novac: pojam postoji zato sto jedan zbir nije dovoljan, a ne
+' zato sto se broji nesto drugo. Zato ovde nema pitanja o komadima -- ekran koji
+' broji komade nema sta da trazi od dva novcana slota.
+Private Function PodnozjeSlotTekst(ByVal kljuc As String, ByVal iznos As Double) As String
+    PodnozjeSlotTekst = Poruka(kljuc) & " " & FmtBroj(iznos, 2) & " " & _
+                        Poruka("OTKUI_UNIT_RSD")
+End Function
+
+' Dva novcana slota u podnozju.
+'
+' Desna ivica je fiksna, drugi slot se dodaje ULEVO -- da se jedan slot ne pomeri
+' kad se pojavi drugi. Taj prostor levo od sredine deli sa zbirom kilograma: ako
+' su oba tu, crta se samo prvi, i to se PRIJAVLJUJE kroz BazenStaje. Tiho
+' odsecanje je klasa greske koju ljuska vise ne pravi.
+Private Sub CrtajSlotovePodnozja(ft As Object)
+    Dim n As Long, w As Single
+    n = mFtSlotN
+    If n > 1 Then
+        If ft.Controls("ftKg").Visible Then n = BazenStaje(n, 1, "podnozje-uz-kg")
+    End If
+
+    w = ft.width
+    ft.Controls("ftVal").Left = w / 2 - 10 - IIf(n > 1, 200, 0)
+    ft.Controls("ftVal2").Left = w / 2 - 10
+
+    ft.Controls("ftVal").Visible = True
+    ft.Controls("ftVal").caption = SlotTekstIz(0)
+    ft.Controls("ftVal2").Visible = (n > 1)
+    If n > 1 Then ft.Controls("ftVal2").caption = SlotTekstIz(1)
+End Sub
+
+' Natpis i-tog slota iz onoga sto je ekran vratio. Van opsega daje prazno.
+Private Function SlotTekstIz(ByVal i As Long) As String
+    On Error Resume Next
+    If i < 0 Or i >= mFtSlotN Then Exit Function
+    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))
+End Function
+
+' TEST SEAM: natpis i-tog novcanog slota i njihov broj. Tvrdo gejtovani.
+'
+' Crtanje trazi pravu formu, a bas se u natpisu vidi da li je slot dobio SVOJ
+' iznos i svoju jedinicu -- razlika izmedju "dva broja" i "dva TACNA broja".
+Public Function GridPodnozjeSlotTest(ByVal i As Long) As String
+    If Not IsTestMode() Then Exit Function
+    GridPodnozjeSlotTest = SlotTekstIz(i)
+End Function
+
+Public Function GridPodnozjeSlotBrojTest() As Long
+    If Not IsTestMode() Then Exit Function
+    GridPodnozjeSlotBrojTest = mFtSlotN
+End Function
+
 ' NATPIS ZBIRA VREDNOSTI U PODNOZJU, na jednom mestu.
 '
 ' Reversi se broje u komadima, sve ostalo u dinarima (i bez decimala). Pitanje
@@ -4966,6 +5046,7 @@ End Function
 Private Sub LoadGridFromScreen()
     Dim d As Variant
     mViewN = 0: mSumKg = 0: mSumVal = 0
+    mFtSlot = Empty: mFtSlotN = 0
     mCntOtkaz = 0: mCntBezZb = 0: mCntNefakt = 0: mCntOtvor = 0
     d = modUiScreens.ScrGridData(mScreen, mFilter, mSearch)
     ' Ekran koji je PUKAO i ekran koji nema listu daju isti Empty. Razlika mora
@@ -4992,6 +5073,20 @@ Private Sub LoadGridFromScreen()
     End If
     mSumKg = CDbl(d(3))
     mSumVal = CDbl(d(4))
+    ' NOVCANI SLOTOVI PODNOZJA -- sedmi clan, neobavezan.
+    '
+    ' Zbir vrednosti je JEDAN broj, a lista izvoda ima dva koja operater trazi:
+    ' uplate i isplate. Njihov zbir (promet) se ne moze rastaviti nazad, pa
+    ' podatak mora da stigne od ekrana, uz iste filtere pod kojima su i redovi
+    ' izbrojani -- racunanje sa strane bi se razislo sa prikazanom listom.
+    '
+    ' Ekran koji ih ne salje se ponasa kao pre: podnozje crta zbir vrednosti.
+    If UBound(d) >= 6 Then
+        If IsArray(d(6)) Then
+            mFtSlot = d(6)
+            mFtSlotN = BazenStaje(UBound(mFtSlot) + 1, MAX_FT_VAL, "podnozje")
+        End If
+    End If
     ' Ekran bez ijednog reda vraca Empty umesto niza - tako to radi lista
     ' blokova dok otpremnica nije izabrana. Dodela Empty u tipizirani niz
     ' obara "Type mismatch", pa je mreza javljala gresku za stanje koje je

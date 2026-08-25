@@ -344,6 +344,7 @@ Public Sub RunAllTests()
     RunOne 113
     RunOne 114
     RunOne 115
+    RunOne 116
 
     SetTestMode prevMode
     WriteResultFile
@@ -491,6 +492,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 113: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
         Case 114: TestName = "T_LegacyBanka_PadUcitavanjaNijePraznaLista"
         Case 115: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
+        Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -614,6 +616,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 113: T_MrezaCelija_NeostavljaTudjiTekst
         Case 114: T_LegacyBanka_PadUcitavanjaNijePraznaLista
         Case 115: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
+        Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7725,4 +7728,71 @@ Private Sub T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana()
     ' pare, a 1234.56 bez para nema "56" nigde u natpisu.
     AssertEq (InStr(1, saParama, "56") > 0), True, _
              "novac u podnozju ide sa parama"
+End Sub
+
+
+' TEST 116: podnozje nosi DVA novcana broja, ne njihov zbir.
+'
+' Promet (uplate + isplate) je jedan broj koji operater ne moze da uporedi ni sa
+' cim -- izvod u ruci ima uplate i isplate odvojeno, i ne moze se rastaviti
+' unazad. Ekran ih zato salje kroz sedmi clan ugovora Scr_Rows.
+'
+' NAJVAZNIJE JE DA SU TO NJEGOVI BROJEVI: dva broja koja ne prate filtere gora su
+' od jednog koji ih prati, jer izgledaju preciznije.
+Private Sub T_Mreza_PodnozjeDvaNovcanaSlota()
+    Dim d As Variant, d2 As Variant, sl As Variant
+    Dim n As Long, nPal As Long
+    Dim t0 As String, t1 As String
+
+    d = modScrBankaUvoz.Scr_Rows("sve", "")
+    AssertEq (UBound(d) >= 6), True, "ugovor nosi sedmi clan -- novcane slotove"
+    sl = d(6)
+    AssertEq (UBound(sl) + 1), 2, "lista izvoda salje DVA novcana slota"
+    AssertEq CStr(sl(0)(0)), "OTKUI_FT_UPLATE", "prvi slot su uplate"
+    AssertEq CStr(sl(1)(0)), "OTKUI_FT_ISPLATE", "drugi slot su isplate"
+
+    ' Preduslovi: bez njih bi tvrdnje ispod prolazile i nad praznim brojkama.
+    AssertEq (CDbl(sl(0)(1)) > 0), True, "preduslov: test-sveska ima uplata"
+    AssertEq (CDbl(sl(1)(1)) > 0), True, "preduslov: test-sveska ima isplata"
+    AssertEq (CDbl(sl(0)(1)) <> CDbl(sl(1)(1))), True, _
+             "preduslov: uplate i isplate se RAZLIKUJU -- inace tvrdnja ispod ne meri"
+
+    ' ISTI FILTERI KAO REDOVI. Zbir oba slota mora biti bas promet iz petog
+    ' clana -- inace su brojani po drugom pravilu od onoga sto se vidi u listi.
+    AssertEq (CDbl(sl(0)(1)) + CDbl(sl(1)(1))), CDbl(d(4)), _
+             "zbir slotova je promet -- brojani su pod istim filterima"
+
+    ' I pretraga mora da ih smanji, ne samo broj redova.
+    d2 = modScrBankaUvoz.Scr_Rows("sve", FX_BIM_IZVOD2)
+    AssertEq (CLng(d2(2)) < CLng(d(2))), True, "preduslov: pretraga suzava listu"
+    AssertEq (CDbl(d2(6)(0)(1)) < CDbl(sl(0)(1))), True, _
+             "pretraga smanjuje i slotove, ne samo redove"
+
+    ' LJUSKA. Da li je uopste preuzela oba, i sa svojim natpisima.
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    modOtkupUI.GridTestLoad "BANKA_UVOZ"
+    n = modOtkupUI.GridPodnozjeSlotBrojTest()
+    t0 = modOtkupUI.GridPodnozjeSlotTest(0)
+    t1 = modOtkupUI.GridPodnozjeSlotTest(1)
+
+    ' Ekran koji slotove ne salje mora da ostane na starom putu.
+    modOtkupUI.GridTestLoad "PALETE"
+    nPal = modOtkupUI.GridPodnozjeSlotBrojTest()
+
+    modOtkupUI.GridTestLoad ""
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+
+    AssertEq n, 2, "ljuska je preuzela oba slota"
+    AssertEq (InStr(1, t0, Poruka("OTKUI_FT_UPLATE")) = 1), True, _
+             "prvi slot nosi natpis Uplate"
+    AssertEq (InStr(1, t1, Poruka("OTKUI_FT_ISPLATE")) = 1), True, _
+             "drugi slot nosi natpis Isplate"
+    AssertEq (Right$(t0, Len(Poruka("OTKUI_UNIT_RSD"))) = Poruka("OTKUI_UNIT_RSD")), _
+             True, "slot je u dinarima"
+    ' Ceo natpis se razlikuje vec po natpisu, pa se poredi ono STO OSTANE kad
+    ' se natpis skine -- inace tvrdnja prolazi i kad oba slota crtaju isti iznos.
+    AssertEq (Mid$(t0, Len(Poruka("OTKUI_FT_UPLATE")) + 1) <> _
+              Mid$(t1, Len(Poruka("OTKUI_FT_ISPLATE")) + 1)), True, _
+             "slotovi ne nose isti IZNOS"
+    AssertEq nPal, 0, "ekran bez slotova ostaje na zbiru vrednosti"
 End Sub

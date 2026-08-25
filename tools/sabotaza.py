@@ -1960,6 +1960,61 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- MREZA: DVA NOVCANA SLOTA
+    # Ekran opet salje samo zbir vrednosti: sedmog clana nema, pa dva broja
+    # koja operater trazi nemaju kuda da stignu.
+    "mreza-podnozje-slot-nema-ugovora": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n"
+        "                               Array(\"OTKUI_FT_ISPLATE\", zbirI)))\n",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0))   ' SABOTAZA: nema sedmog clana\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "ugovor nosi sedmi clan",
+    ),
+    # Slot koji ne prati filtere je gori od jednog zbira koji ih prati: dva
+    # broja izgledaju preciznije, a opisuju drugu listu.
+    "mreza-podnozje-slot-mimo-filtera": (
+        "modScrBankaUvoz.bas",
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU), _\n",
+        "    ' SABOTAZA: slot broji mimo liste\n"
+        "    RedoviIzvodi = Array(IzvodiKolone(), outA, n, 0#, zbirU + zbirI, Array(0, 0, 0), _\n"
+        "                         Array(Array(\"OTKUI_FT_UPLATE\", zbirU + zbirI), _\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "zbir slotova je promet",
+    ),
+    # Ekran salje slotove, ljuska ih ne cita -- podnozje ostaje na jednom
+    # zbiru, a niko nista ne prijavi.
+    "mreza-podnozje-ljuska-ne-uzima-slotove": (
+        "modOtkupUI.bas",
+        "    If UBound(d) >= 6 Then\n"
+        "        If IsArray(d(6)) Then\n",
+        "    If False Then   ' SABOTAZA: ljuska ne cita slotove\n"
+        "        If IsArray(d(6)) Then\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "ljuska je preuzela oba slota",
+    ),
+    # Goli broj bez natpisa: dva iznosa jedan pored drugog, a ne pise koji je
+    # koji -- operater bira napamet.
+    "mreza-podnozje-slot-bez-natpisa": (
+        "modOtkupUI.bas",
+        "    PodnozjeSlotTekst = Poruka(kljuc) & \" \" & FmtBroj(iznos, 2) & \" \" & _\n"
+        "                        Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "    PodnozjeSlotTekst = FmtBroj(iznos, 2) & \" \" & _\n"
+        "                        Poruka(\"OTKUI_UNIT_RSD\")   ' SABOTAZA: slot bez natpisa\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "prvi slot nosi natpis Uplate",
+    ),
+    # Oba slota crtaju PRVI iznos: podnozje pokazuje dva broja, a to je jedan
+    # isti -- najtise moguce, jer izgleda tacno onako kako treba.
+    "mreza-podnozje-oba-slota-isti": (
+        "modOtkupUI.bas",
+        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n",
+        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n",
+        "T_Mreza_PodnozjeDvaNovcanaSlota",
+        "slotovi ne nose isti IZNOS",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog
