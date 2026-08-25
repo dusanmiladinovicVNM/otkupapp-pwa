@@ -2033,7 +2033,7 @@ def self_test() -> int:
 #
 # Zato ista provera ide OVDE: `vba_check` se pusta posle svake VBA izmene (hook),
 # a bas VBA izmena je ono sto sidro obara. Traje sekundu.
-def check_katalog_sabotaza() -> int:
+def check_katalog_sabotaza(tiho: bool = False) -> int:
     put = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sabotaza.py")
     if not os.path.exists(put):
         return 0
@@ -2044,7 +2044,7 @@ def check_katalog_sabotaza() -> int:
     except Exception as e:                       # pokvaren katalog je isto nalaz
         print(f"KATALOG: tools/sabotaza.py se ne ucitava -- {e}", file=sys.stderr)
         return 2
-    return 2 if modul.proveri_sidra() else 0
+    return 2 if modul.proveri_sidra(tiho) else 0
 
 
 def main(argv: list[str]) -> int:
@@ -2097,9 +2097,14 @@ def main(argv: list[str]) -> int:
 
     findings += check_poruke(files)
 
-    # Katalog sabotaza se proverava samo nad celim src-vba (hook nad jednim
-    # fajlom ne bi imao sta da tvrdi o ostalima).
-    rc_kat = 0 if args.paths else check_katalog_sabotaza()
+    # Katalog se proverava UVEK, i kad je dat jedan fajl.
+    #
+    # Prva verzija je ovo vezala za `not args.paths` -- a PostToolUse hook zove
+    # bas `vba_check.py --hook <fajl>`, pa se katalog kroz hook nikad nije
+    # proveravao. Time je i cela poenta promasena: sidro obara VBA izmena, i
+    # treba da se vidi u toj sekundi, a ne tek u CI-ju posle dvadeset izmena.
+    # Katalog nema veze sa tim koji je fajl dat -- sidra pokrivaju ceo src-vba.
+    rc_kat = check_katalog_sabotaza(args.hook)
 
     if not findings:
         if not args.hook:

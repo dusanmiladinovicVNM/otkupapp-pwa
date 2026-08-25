@@ -193,6 +193,46 @@ upozorenje i ne obaraju gejt — crvena provera koju svi nauče da preskoče ne 
 ništa. Upis koji više ništa ne pokriva je **isto nalaz**, pa spisak ne može tiho
 da raste.
 
+### Četiri rupe u samom alatu, nađene u review-u
+
+Prva verzija ove mašinerije imala je četiri problema — i sva četiri su bila u
+delu koji **treba da dokazuje** da su testovi živi:
+
+**1. Provera nije išla kroz hook, iako je to bila cela poenta.** Bila je vezana
+za `not args.paths`, a `PostToolUse` hook zove baš `vba_check.py --hook <fajl>` —
+dakle sa putanjom. Katalog se kroz hook nikad nije proveravao; video bi ga tek
+CI, posle dvadeset izmena. Katalog nema veze sa tim koji je fajl dat: sidra
+pokrivaju ceo `src-vba`, pa se sada proverava uvek (0,14 s, tiho kad je čisto).
+
+**2. Dokaz je mogao da bude lažno pozitivan nad crvenom bazom.** Alat je ispisivao
+baseline ali ga nije **tvrdio**. Test koji već pada iz trećeg razloga proglasio bi
+svaku sabotažu nad sobom dokazanom — uključujući onu koja ne radi ništa. Sada je
+zelena baza **kapija**: nije zelena → `rc=2`, bez ijedne mutacije.
+
+> Razlika je suštinska: „posle mutacije postoji crveno" nije isto što i „mutacija
+> je izazvala crveno".
+
+**3. Čišćenje nije bilo fail-safe.** Mutacija se vraćala tek posle uspešnog run-a;
+timeout Excela ili `Ctrl+C` usred prolaza od dva i po sata ostavljao je **namerno
+pokvaren** radni izvor. Sada ide kroz `finally`, uz poređenje potpisa celog
+`src-vba` posle svakog vraćanja — ako se ne poklopi, dokaz staje odmah, jer bi sve
+mereno posle toga išlo nad pokvarenim kodom.
+
+**4. Banka-suite se nije mogla ni izmeriti.** Njeni detalji idu u Immediate
+prozor, a opis podignute greške ne preživi COM granicu — `pywin32` vidi golo
+`Exception occurred`. Alat je zato video samo „3 provere palo", pa je za te
+sabotaže tvrdnja bila „nešto je palo".
+
+Mereno, ispalo je gore nego što je izgledalo: `run_vba` je detalje čitao **samo**
+kad `Run()` ne pukne, a ta suite pad prijavljuje **greškom** — pa se rezultat
+nikad nije ni čitao. Svaka sabotaža nad njom čitala bi se kao „ne obara ništa",
+što je lažni negativ.
+
+Sada i ta suite piše `last_run_banka.txt` (isti format kao `modTest`), rezultat se
+čita **i kad suite pukne greškom**, a identitet se vadi iz stabilnog prefiksa
+tvrdnje (`T21 izabran placen blok: ...`). Provereno da nije prazno: kad se unos
+namerno usmeri na drugi test, alat kaže `NE OBARA SVOJ TEST, nego: T21`.
+
 ### Šta ovo ne rešava
 
 Da li sabotaža stvarno nešto obara zna **samo** pun dokaz. Statička provera hvata

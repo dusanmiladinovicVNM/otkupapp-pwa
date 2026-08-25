@@ -59,10 +59,13 @@ SUITES = {
     # Verdikt NE dolazi iz toga da li Run() pukne (modTest hvata gresku po testu
     # da jedan pad ne obori ostale), nego iz last_run.txt pored sveske.
     "RunAllTests":              {"gate": True,  "dialogs": False, "default": True,
-                                 "result_file": True},
+                                 "result_file": "last_run.txt"},
     "RunIzvestajTests":         {"gate": True,  "dialogs": False, "default": True},
     "RunSheetsJsonParserTests": {"gate": True,  "dialogs": True,  "default": True},
-    "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True},
+    # Detalji pada ove suite ne prezive COM granicu (opis greske stigne kao golo
+    # "Exception occurred"), pa i ona pise rezultat pored sveske.
+    "RunBankaImportTestSuite":  {"gate": True,  "dialogs": True,  "default": True,
+                                 "result_file": "last_run_banka.txt"},
     "RunFakturaSmokeSuite":     {"gate": True,  "dialogs": True,  "default": True},
     "Test_StornoCentar_All":    {"gate": True,  "dialogs": False, "default": True},
     "TestLicense_All":          {"gate": True,  "dialogs": False, "default": True},
@@ -100,16 +103,17 @@ def _copy_golden(src: str, dst: str) -> None:
             shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
 
 
-def _read_test_results(wbdir: str, report: dict) -> int:
-    """Verdikt iz last_run.txt koji je upisao modTest.RunAllTests.
+def _read_test_results(wbdir: str, report: dict,
+                       fname: str = "last_run.txt") -> int:
+    """Verdikt iz fajla koji je suite upisala pored sveske.
 
-    Nema fajla = pad, ne prolaz: to znaci da RunAllTests nije stigao do kraja
+    Nema fajla = pad, ne prolaz: to znaci da suite nije stigla do kraja
     (compile error, visenje, ubijen proces) -- ishod koji nije eksplicitno OK.
     """
-    path = os.path.join(wbdir, "last_run.txt")
+    path = os.path.join(wbdir, fname)
     if not os.path.exists(path):
-        report["tests"] = {"error": "modTest nije upisao last_run.txt "
-                                    "(RunAllTests nije stigao do kraja)"}
+        report["tests"] = {"error": f"suite nije upisala {fname} "
+                                    "(nije stigla do kraja)"}
         return 2
 
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -856,10 +860,17 @@ def main(argv: list[str]) -> int:
                     entry["status"] = "FAIL"
                     entry["error"] = str(exc)
                     failed += 1
+                    # Suite koja pad prijavljuje GRESKOM (banka) svejedno je
+                    # upisala detalje pored sveske. Bez ovoga od celog pada
+                    # ostane samo "Exception occurred" -- pa se ne vidi KOJA
+                    # provera je pala, nego samo da jeste.
+                    if meta.get("result_file"):
+                        _read_test_results(tmp, report, meta["result_file"])
                 else:
                     if meta.get("result_file"):
-                        # Verdikt iz last_run.txt, ne iz "Run() nije pukao".
-                        if _read_test_results(tmp, report) == 0:
+                        # Verdikt iz fajla suite, ne iz "Run() nije pukao".
+                        if _read_test_results(tmp, report,
+                                              meta["result_file"]) == 0:
                             entry["status"] = "OK"
                         else:
                             entry["status"] = "FAIL"

@@ -2538,6 +2538,7 @@ def _nalazi(katalog: dict, imena: set) -> list:
     podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
     nalazi = []
     videne_tvrdnje = {}
+    kes = {}                 # fajl se cita jednom, ne 222 puta (ovo ide u hook)
 
     for ime, (fajl, staro, novo, test, tvrdnja) in katalog.items():
         put = os.path.join(SRC_VBA, fajl)
@@ -2545,7 +2546,9 @@ def _nalazi(katalog: dict, imena: set) -> list:
             nalazi.append((ime, f"nema fajla src-vba/{fajl}"))
             continue
 
-        tekst, _ = _procitaj(put)
+        if fajl not in kes:
+            kes[fajl] = _procitaj(put)[0]
+        tekst = kes[fajl]
         pogodaka = tekst.count("\n" + staro)
         if pogodaka != 1:
             razlog = ("sidro ZASTARELO -- kod ispod njega je popravljen"
@@ -2583,8 +2586,12 @@ def _nalazi(katalog: dict, imena: set) -> list:
     return nalazi
 
 
-def proveri_sidra() -> int:
-    """Sve o katalogu sto se vidi bez pokretanja Excela."""
+def proveri_sidra(tiho: bool = False) -> int:
+    """Sve o katalogu sto se vidi bez pokretanja Excela.
+
+    `tiho` je za hook: cist katalog ne pise nista, jer se hook vrti posle svake
+    izmene i njegov izlaz se cita samo kad nesto pukne.
+    """
     nalazi = _nalazi(SABOTAZE, _imena_testova())
 
     tvrdi, poznati, mrtvi_upisi = [], [], set(POZNATI_NALAZI)
@@ -2597,7 +2604,8 @@ def proveri_sidra() -> int:
             tvrdi.append((ime, sta))
 
     for ime, sta in poznati:
-        print(f"KATALOG-POZNATO: {ime}: {sta}")
+        if not tiho:
+            print(f"KATALOG-POZNATO: {ime}: {sta}")
     for ime, sta in tvrdi:
         print(f"KATALOG: {ime}: {sta}", file=sys.stderr)
 
@@ -2608,8 +2616,9 @@ def proveri_sidra() -> int:
               f"obrisi ga ili ispravi ime", file=sys.stderr)
         tvrdi.append((ime, "mrtav upis"))
 
-    print(f"provereno {len(SABOTAZE)} sabotaza, nalaza {len(tvrdi)}"
-          f" (+{len(poznati)} poznatih)")
+    if not tiho or tvrdi:
+        print(f"provereno {len(SABOTAZE)} sabotaza, nalaza {len(tvrdi)}"
+              f" (+{len(poznati)} poznatih)")
     return 1 if tvrdi else 0
 
 
