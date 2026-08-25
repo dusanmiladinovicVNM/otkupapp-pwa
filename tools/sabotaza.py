@@ -2756,7 +2756,11 @@ _ST_PRAVI = "    On Error Resume Next" + ESCN
 # na OTKUI_BUILD, pa je prvo podizanje builda (v6-ui-183) prijavilo ZDRAV unos
 # kao nalaz -- self-test je pao na sopstvenom fixture-u.
 _ST_ZDRAVO = "Option Explicit"
-_ST_ZDRAVO2 = "'--- paleta ----------------------------------------------------------"
+# Za viseredni slucaj trebaju STVARNO susedni redovi: izmedju Option Explicit
+# i palete stoji prazan red, pa je fixture pored ciljanog nalaza davao i visak
+# ("sidro ZASTARELO"). Ova dva su susedna.
+_ST_PAR1 = "'--- paleta ----------------------------------------------------------"
+_ST_PAR2 = "' PAZI: VBA Long boja je &HBBGGRR, obrnuto od CSS-a. Ovde je stajalo &H140D1E"
 
 _SELF_TEST = [
     ("sidro zastarelo",
@@ -2835,8 +2839,8 @@ def _self_test() -> int:
 
     # zamena koja je TACNO jedan red viseredog sidra
     dvored = ("modOtkupUI.bas",
-              _ST_ZDRAVO + ESCN + _ST_ZDRAVO2 + ESCN,
-              _ST_ZDRAVO + ESCN,
+              _ST_PAR1 + ESCN + _ST_PAR2 + ESCN,
+              _ST_PAR1 + ESCN,
               "T_Postoji", "tvrdnja H")
     n += 1
     if not any("podniz sidra" in sta for _, sta in _nalazi({"probni": dvored}, imena)):
