@@ -1909,6 +1909,39 @@ SABOTAZE = {
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
         "ljuska za listu izvoda crta zbir vrednosti u podnozju",
     ),
+    # ---------------------------------------- MREZA: JEDINICA PODNOZJA
+    # Jedinica i broj decimala u podnozju zavise od EKRANA, ne od globalnog
+    # ActiveMode (rezim unosa dokumenata). Cetiri svojstva -> cetiri sabotaze:
+    # da ljuska uopste pita, da ekran bez ugovora dobije DINARE (fail-closed),
+    # da pitanje ne ode opet globalnom rezimu, i da dinari nose pare.
+    "mreza-podnozje-ljuska-ne-pita-ekran": (
+        "modUiScreens.bas",
+        "    ScrBrojiKomade = CBool(Application.Run(m & \".Scr_BrojiKomade\"))\n",
+        "    ScrBrojiKomade = False   ' SABOTAZA: ljuska ne pita ekran\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "Dokumenta na reversima i dalje broje komade",
+    ),
+    "mreza-podnozje-ugovor-fail-open": (
+        "modUiScreens.bas",
+        "        ScrBrojiKomade = False\n",
+        "        ScrBrojiKomade = True   ' SABOTAZA: ekran bez ugovora nasledjuje komade\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "ugovorni ekran ne nasledjuje rezim unosa dokumenata",
+    ),
+    "mreza-podnozje-jedinica-iz-globalnog-rezima": (
+        "modOtkupUI.bas",
+        "    If modUiScreens.ScrBrojiKomade(mScreen) Then\n",
+        "    If ModeBrojiKomade(ActiveMode) Then   ' SABOTAZA: jedinica iz tudjeg rezima\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "podnozje ugovornog ekrana ne pominje komade",
+    ),
+    "mreza-podnozje-novac-bez-para": (
+        "modOtkupUI.bas",
+        "                           FmtBroj(iznos, 2) & \" \" & Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "                           FmtBroj(iznos, 0) & \" \" & Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
+        "novac u podnozju ide sa parama",
+    ),
     # ---------------------------------------- BANKA: PODNOZJE IZVODA
     # Status kaze "ne zna se koji zbirovi vaze", pa brojke ne smeju ni da se
     # prikazu ni da udju u promet. Prikazati vrednost PRVOG reda pored tog

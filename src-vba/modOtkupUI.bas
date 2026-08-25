@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-181"
+Public Const OTKUI_BUILD   As String = "v6-ui-182"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -2501,15 +2501,13 @@ Public Sub RenderGrid()
     ft.Controls("ftKg").caption = Poruka("OTKUI_FT_UKUPNO") & " " & FmtKg(mSumKg) & " " & Poruka("OTKUI_UNIT_KG")
     ' rezim bez kolone vrednosti (Zbirna) nema ni zbir
     ft.Controls("ftVal").Visible = ModeHasValCol()
-    ' reversi se broje u komadima, sve ostalo u dinarima (i bez decimala);
-    ' pitanje ide ekranu, jer reversi mogu biti i sadrzaj F8 (storno centar)
-    If ModeBrojiKomade(ActiveMode) Then
-        ft.Controls("ftVal").caption = Poruka("OTKUI_FT_UKUPNO") & " " & _
-                                       FmtBroj(mSumVal, 0) & " " & ModeValUnit(ActiveMode)
-    Else
-        ft.Controls("ftVal").caption = Poruka("OTKUI_FT_VREDNOST") & " " & _
-                                       FmtBroj(mSumVal, 2) & " " & ModeValUnit(ActiveMode)
-    End If
+    ' Reversi se broje u komadima, sve ostalo u dinarima (i bez decimala).
+    '
+    ' Pitanje ide EKRANU, a ne globalnom ActiveMode: taj rezim pripada
+    ' Dokumentima i na ugovornom ekranu ostaje onakav kakav ga je Dokumenta
+    ' ostavila. Ko je bio na F7 pa presao na Uvoz izvoda video je "Ukupno 8.950
+    ' kom" umesto "Vrednost 8.950,00 RSD" -- novac izbrojan kao komadi.
+    ft.Controls("ftVal").caption = PodnozjeValTekst(mSumVal)
     RenderPager ft
     RenderChipCounts z
     RefreshRowActions
@@ -4794,6 +4792,37 @@ Public Sub GridOtkaciFormuTest()
     Set mFrm = Nothing
 End Sub
 
+' NATPIS ZBIRA VREDNOSTI U PODNOZJU, na jednom mestu.
+'
+' Reversi se broje u komadima, sve ostalo u dinarima (i bez decimala). Pitanje
+' ide EKRANU, a ne globalnom ActiveMode: taj rezim pripada Dokumentima i na
+' ugovornom ekranu ostaje onakav kakav ga je Dokumenta ostavila. Ko je bio na F7
+' pa presao na Uvoz izvoda video je "Ukupno 8.950 kom" umesto
+' "Vrednost 8.950,00 RSD" -- novac izbrojan kao komadi, bez decimala.
+'
+' Izdvojeno iz RenderGrid da bi se moglo IZMERITI: crtanje trazi pravu formu, a
+' jedinica i broj decimala vide se samo u gotovom natpisu. Seam ispod zove BAS
+' ovu funkciju -- kopija bi se razisla sa njom i tvrdnja bi merila kopiju.
+Private Function PodnozjeValTekst(ByVal iznos As Double) As String
+    If modUiScreens.ScrBrojiKomade(mScreen) Then
+        PodnozjeValTekst = Poruka("OTKUI_FT_UKUPNO") & " " & _
+                           FmtBroj(iznos, 0) & " " & Poruka("OTKUI_UNIT_KOM")
+    Else
+        PodnozjeValTekst = Poruka("OTKUI_FT_VREDNOST") & " " & _
+                           FmtBroj(iznos, 2) & " " & Poruka("OTKUI_UNIT_RSD")
+    End If
+End Function
+
+' TEST SEAM: natpis koji bi podnozje napisalo za tekuci ekran. Tvrdo gejtovan.
+'
+' Bez ovoga se "podnozje ne sme da broji novac u komadima" ne moze izmeriti:
+' RenderGrid trazi pravu formu, a jedinica i broj decimala vide se samo u
+' gotovom natpisu.
+Public Function GridPodnozjeValTest(ByVal iznos As Double) As String
+    If Not IsTestMode() Then Exit Function
+    GridPodnozjeValTest = PodnozjeValTekst(iznos)
+End Function
+
 ' TEST SEAM: da li ljuska za tekucu listu crta zbir vrednosti u podnozju.
 ' Tvrdo gejtovan.
 '
@@ -5930,22 +5959,26 @@ Private Function IsDebugUI() As Boolean
     IsDebugUI = (StrComp(GetLocalConfigValue("UI_DEBUG", ""), "DA", vbTextCompare) = 0)
 End Function
 
-' Na NERELEASOVANOJ svesci se prikazuje BUILD UI-ja, ne verzija sveske.
+' U sidebaru stoji VERZIJA PROGRAMA. Build UI-ja se prikazuje samo uz
+' UI_DEBUG=DA.
 '
-' Svaka takva sveska nosi isti v0.0.0-dev, pa iz njega nema sta da se sazna --
-' a bas se u njoj radi. Iz OTKUI_BUILD se vidi da li je posle ImportAllVBA u
-' svesci nov ili star UI kod, sto je u ovoj rundi dva puta kostalo pun krug:
-' merilo se nad neuvezenim buildom i nije se moglo razlikovati 'nije pomoglo'
-' od 'nije uvezeno'.
+' Od v6-ui-154 je na nereleasovanoj svesci na to mesto isao OTKUI_BUILD, jer
+' svaka takva sveska nosi isti v0.0.0-dev: sa ekrana se nije videlo da li je
+' posle ImportAllVBA u svesci nov ili star UI kod (dva puta je merenje islo nad
+' neuvezenim buildom, pa se 'nije pomoglo' nije razlikovalo od 'nije uvezeno').
+' Bilo je izricito PRIVREMENO, do kraja rada na storno ekranu -- a taj je
+' zavrsen jos u Fazi D.
 '
-' Oba ne staju: raspored drzi ovu labelu na 55pt uz desnu ivicu sidebara, pa bi
-' spojen tekst bio odsecen -- sto je i bio prvi pokusaj. Na releasovanoj svesci
-' ostaje verzija sveske, jer tamo ona jeste podatak.
+' Dijagnostika se ne gubi nego se vezuje za postojeci prekidac: UI_DEBUG=DA u
+' tblLocalConfig. Ko meri, upali ga; ko radi, vidi verziju programa.
+'
+' Oba ne staju zajedno: raspored drzi ovu labelu na 55pt uz desnu ivicu
+' sidebara, pa bi spojen tekst bio odsecen -- sto je i bio prvi pokusaj.
 Private Function BuildTagOrBlank() As String
     Dim v As String
     On Error Resume Next
     v = "v" & BUILD_VERSION                        ' modBuildInfo (stamp-build.sh)
-    If InStr(1, v, "dev", vbTextCompare) > 0 Then v = OTKUI_BUILD
+    If IsDebugUI() Then v = OTKUI_BUILD
     If Len(v) <= 1 Then v = "-"
     BuildTagOrBlank = v
 End Function

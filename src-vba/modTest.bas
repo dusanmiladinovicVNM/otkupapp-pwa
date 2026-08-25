@@ -343,6 +343,7 @@ Public Sub RunAllTests()
     RunOne 112
     RunOne 113
     RunOne 114
+    RunOne 115
 
     SetTestMode prevMode
     WriteResultFile
@@ -489,6 +490,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 112: TestName = "T_MrezaGeometrija_PratiOpisKolona"
         Case 113: TestName = "T_MrezaCelija_NeostavljaTudjiTekst"
         Case 114: TestName = "T_LegacyBanka_PadUcitavanjaNijePraznaLista"
+        Case 115: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -611,6 +613,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 112: T_MrezaGeometrija_PratiOpisKolona
         Case 113: T_MrezaCelija_NeostavljaTudjiTekst
         Case 114: T_LegacyBanka_PadUcitavanjaNijePraznaLista
+        Case 115: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7641,4 +7644,62 @@ Private Sub T_MrezaGeometrija_PratiOpisKolona()
     AssertEq (s7 > 0), True, "osma kolona sire liste dobija sirinu"
     AssertEq (s8 > 0), True, "deveta kolona sire liste dobija sirinu"
     AssertEq posle, False, "posle osvezavanja geometrija vise nije zastarela"
+End Sub
+
+
+' TEST 115: podnozje ne sme da broji novac u komadima.
+'
+' Ljuska je jedinicu i broj decimala citala iz `ActiveMode` -- a to je rezim
+' UNOSA DOKUMENATA. Na ugovornom ekranu taj rezim ostaje onakav kakav ga je
+' Dokumenta ostavila, pa je operater koji je bio na F7 (Reversi) pa presao na
+' Uvoz izvoda video promet kao "Ukupno 8.950 kom" umesto "Vrednost 8.950,00
+' RSD": novac izbrojan u komadima, i jos bez para. Ista klasa kao traka `zOtp`
+' koja je na tudjem ekranu ostajala upaljena.
+'
+' Meri se na DVA nivoa. Sama tvrdnja "na ugovornom ekranu su dinari" prolazi i
+' kad se komadi ugase svima -- Dokumenta bi tiho izgubila svoju jedinicu, a
+' suite bi ostala zelena. Zato se tvrdi i da Dokumenta i dalje broje komade.
+Private Sub T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana()
+    Dim staraMode As String
+    Dim natpis As String, saParama As String
+    Dim dokF7 As Boolean, dokF5 As Boolean, bankaF7 As Boolean
+
+    staraMode = modOtkupUI.ActiveMode
+
+    ' UGOVOR. Zatrovan globalni rezim: operater je ostao na reversima.
+    modOtkupUI.ActiveMode = "F7"
+    dokF7 = modUiScreens.ScrBrojiKomade("DOKUMENTI")
+    bankaF7 = modUiScreens.ScrBrojiKomade("BANKA_UVOZ")
+
+    modOtkupUI.ActiveMode = "F5"
+    dokF5 = modUiScreens.ScrBrojiKomade("DOKUMENTI")
+
+    ' LJUSKA. Natpis se cita sa ekrana koji je STVARNO ucitan, sa istim
+    ' zatrovanim rezimom -- bas onako kako je operater dosao.
+    modOtkupUI.ActiveMode = "F7"
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    modOtkupUI.GridTestLoad "BANKA_UVOZ"
+    natpis = modOtkupUI.GridPodnozjeValTest(8950)
+    saParama = modOtkupUI.GridPodnozjeValTest(1234.56)
+
+    modOtkupUI.GridTestLoad ""
+    modScrBankaUvoz.Scr_BuListaTestSet "IZVODI"
+    modOtkupUI.ActiveMode = staraMode
+
+    AssertEq dokF7, True, "Dokumenta na reversima i dalje broje komade"
+    AssertEq dokF5, False, "...a na ambalazi ne -- ekran prati SVOJ rezim"
+    AssertEq bankaF7, False, _
+             "ugovorni ekran ne nasledjuje rezim unosa dokumenata"
+
+    AssertEq (InStr(1, natpis, Poruka("OTKUI_UNIT_KOM")) = 0), True, _
+             "podnozje ugovornog ekrana ne pominje komade"
+    AssertEq (Right$(natpis, Len(Poruka("OTKUI_UNIT_RSD"))) = Poruka("OTKUI_UNIT_RSD")), _
+             True, "...nego dinare"
+    AssertEq (Left$(natpis, Len(Poruka("OTKUI_FT_VREDNOST"))) = Poruka("OTKUI_FT_VREDNOST")), _
+             True, "...i zove se Vrednost, ne Ukupno"
+
+    ' Jedinica i decimale su ISTA odluka, pa se i tvrde odvojeno: komadi seku
+    ' pare, a 1234.56 bez para nema "56" nigde u natpisu.
+    AssertEq (InStr(1, saParama, "56") > 0), True, _
+             "novac u podnozju ide sa parama"
 End Sub
