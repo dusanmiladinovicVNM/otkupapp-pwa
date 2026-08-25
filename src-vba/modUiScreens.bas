@@ -292,6 +292,29 @@ Public Function ScrBrojac(ByVal kljuc As String) As Long
     End If
 End Function
 
+' Broji li podnozje KOMADE umesto dinara na ovom ekranu.
+'
+' Ljuska je do sada pitala `ModeBrojiKomade(ActiveMode)` -- a ActiveMode je rezim
+' UNOSA DOKUMENATA i na ugovornom ekranu ostaje onakav kakav ga je Dokumenta
+' ostavila. Ko je bio na F7 (Reversi) pa presao na Uvoz izvoda, u podnozju je
+' video "Ukupno 8.950 kom" umesto "Vrednost 8.950,00 RSD": novac izbrojan kao
+' komadi, bez decimala. Ista klasa kao traka `zOtp` koja je ostajala upaljena.
+'
+' Ekran koji ovo ne implementira dobija False -- dinari. Ljuska ovim ne saznaje
+' NISTA o ekranu, isto kao kod ScrBrojac.
+Public Function ScrBrojiKomade(ByVal kljuc As String) As Boolean
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrBrojiKomade = CBool(Application.Run(m & ".Scr_BrojiKomade"))
+    If Err.Number <> 0 Then
+        ScrBrojiKomade = False
+        Err.Clear
+    End If
+End Function
+
 Public Function ScrRadnje(ByVal kljuc As String) As String
     Dim m As String
     On Error Resume Next

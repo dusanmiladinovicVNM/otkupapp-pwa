@@ -5351,3 +5351,59 @@ Ceo tok, sa tri greške koje je dokaz našao na samom testu, zapisan je u
 > Iz punog seta ostaju crvene `RunGoogleSyncSmokeSuite` i
 > `RunMasterSyncSmokeSuite`. Ne tiču se ovog rada: traže Google kredencijale
 > kojih u headless runu nema i padaju identično na netaknutom `main`-u.
+
+## v2.71.0 — `v6-ui-182` · podnožje mreže više ne broji novac u komadima
+
+Traka ispod liste je jedinicu birala prema režimu **unosa dokumenata** — a taj
+režim ugovorni ekrani (Uvoz izvoda, Fakturisanje, Palete…) nemaju.
+
+### Šta se videlo
+
+Ko je radio reverse (`F7`) pa otvorio **Uvoz izvoda**, u podnožju je pisalo:
+
+> `Ukupno 8.950 kom`
+
+umesto
+
+> `Vrednost 8.950,00 RSD`
+
+Zbir je bio **tačan** — promet izvoda — ali sa tuđom jedinicom i bez para. Traka
+se popravljala sama od sebe čim se uđe u neki od dokumentnih režima koji broji
+dinare, pa je izgledala kao nasumična.
+
+Isto je nekad radila i traka otpremnice koja je ostajala upaljena na tuđem
+ekranu: stanje jednog ekrana koje se vidi na drugom.
+
+### Šta je sada
+
+Traka pita **ekran** šta broji, umesto da gleda u zajedničku promenljivu.
+Reversi i dalje broje komade, sve ostalo dinare — a ekran koji o tome ne kaže
+ništa dobija **dinare**, ne komade.
+
+### Isto je važilo i za Storno
+
+Ekran **Storno** ume da prikaže listu reversa, i tada mu u podnožju stoji broj
+komada — a i on je do sada zavisio od zatečenog režima. Sada i on kaže šta broji,
+pa `125` reversa više ne može da se prikaže kao `Vrednost 125,00 RSD`. Na ostalim
+tipovima (fakture, izvodi, otkup) ostaje dinar.
+
+### I jedna sitnica u sidebaru
+
+Dole levo se opet vidi **verzija programa**. Tu je privremeno stajala oznaka UI
+builda, dok je trajao rad na storno ekranu; taj je odavno gotov. Kome oznaka
+builda treba za merenje, dobija je uz `UI_DEBUG=DA` u `tblLocalConfig`.
+
+### Verifikacija
+
+`RunAllTests` **115 testova, 0 palih**. Novi test meri obe strane: da ugovorni
+ekran ne nasledi tuđu jedinicu, i da reversi svoju ne izgube — jer „svuda
+dinari" bi prošlo prvu proveru, a tiho pokvarilo drugu.
+
+Dvosmerni dokaz je pušten nad **39** sabotaža koje gađaju izmenjene fajlove.
+Četiri nove obaraju tačno svoju tvrdnju; tri zatečene rupe u katalogu sabotaža
+(nastale ranije, na `main`-u) zapisane su u `docs/UI_MIGRACIJA_KATALOG.md` §13.11
+i idu kao zaseban posao.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §13.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**

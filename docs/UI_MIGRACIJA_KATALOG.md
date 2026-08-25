@@ -2573,3 +2573,269 @@ usklađene: pada tačno jedna tvrdnja, ova.
 
 To je nova vrsta nalaza u ovom projektu: do sada je zamka 9 hvatala sabotažu koja
 je ostala bez sidra, a ovde je sidro bilo ispravno — **podatak** ju je obesmislio.
+---
+
+## 13. Podnožje mreže je brojalo tuđim režimom (`v6-ui-182`)
+
+Mreža je zajednička: nose je i ekran dokumenata i svaki ugovorni ekran. Njeno
+podnožje je jedinicu i broj decimala biralo iz **`ActiveMode`** — a to je režim
+**unosa dokumenata** (`F1`…`F7`), koji ugovorni ekran nema.
+
+### 13.1 Šta je operater video
+
+Ko je bio na **F7 (Reversi)** pa prešao na **Uvoz izvoda**, u podnožju je dobio:
+
+| | |
+|---|---|
+| pisalo je | `Ukupno 8.950 kom` |
+| trebalo je | `Vrednost 8.950,00 RSD` |
+
+Dakle **novac izbrojan kao komadi**, i još bez para. Broj je bio tačan — zbir
+prometa — ali je nosio tuđu jedinicu, pa je čitanje bilo pogrešno u oba smera:
+ni „8.950 komada" nije istina, ni „8.950 dinara" (bilo je `8.950,00`).
+
+Ista klasa kao traka `zOtp` koja je na tuđem ekranu ostajala upaljena sa
+porukom „Nema izabrane otpremnice": stanje ekrana dokumenata koje curi na ekran
+koji o njemu ne zna ništa.
+
+### 13.2 Zašto je `ActiveMode` uopšte bio tu
+
+Ljuska je počela **kao ekran dokumenata** — mreža je tada imala tačno jednog
+korisnika, pa je „režim" bio isto što i „ekran". Ugovorni ekrani su došli
+kasnije i nasledili mrežu, ali ne i to pitanje.
+
+Zato ovo nije previd u jednom redu nego **poslednji ostatak** pretpostavke da
+mreža pripada dokumentima.
+
+### 13.3 Ugovor umesto globala
+
+Ljuska više ne čita `ActiveMode` — **pita ekran**:
+
+```vb
+Public Function ScrBrojiKomade(ByVal kljuc As String) As Boolean
+```
+
+Isti oblik kao `ScrBrojac`: kasno vezano preko `Application.Run`, greška se guta,
+a ekran koji `Scr_BrojiKomade` **ne implementira** dobija `False` — dinare.
+
+**Fail-closed je ovde bitniji nego što izgleda.** Da nepoznat odgovor znači
+„komadi", svaki budući ekran bi novac prikazivao u komadima dok se neko ne seti
+da doda ugovor. Ovako novi ekran ćuti i dobija ispravno; komade traži samo onaj
+ko ih stvarno broji.
+
+Dokumenta odgovaraju iz **svog** stanja:
+
+```vb
+Public Function Scr_BrojiKomade() As Boolean
+    Scr_BrojiKomade = ModeBrojiKomade(ActiveMode)
+End Function
+```
+
+`ActiveMode` time nije nestao — **preselio se tamo gde znači nešto**.
+
+### 13.4 Storno je drugi korisnik reversa — nađeno u review-u
+
+Prva verzija ovog rada je „ekran koji ne odgovori dobija dinare" tretirala kao
+bezbedan podrazumevan odgovor. Za Banku i Fakture jeste. Za **Storno nije**, i to
+determinističi:
+
+- storno ekran bira **tip dokumenta**, i među osam tipova je i `STIP_REVERSI`;
+- redove ne pravi sam nego ih uzima od **`modScrDokumenti.RedoviZaTip`** — istog
+  čitača koji puni ekran dokumenata;
+- kolone za `REVERSI` nose `OTKUI_HD_KOMADA|COL_AMB_KOLICINA|sum0`, dakle peta
+  kolona je **broj komada**, i taj broj stiže u `mSumVal`.
+
+`modScrStorno` ugovor nije implementirao, pa bi za 125 reversa u podnožju stajalo
+`Vrednost 125,00 RSD`. Pre ove izmene je isti ekran zavisio od zatečenog
+`ActiveMode` i mogao **slučajno** biti tačan (ako je iza operatera ostao `F7`);
+fail-closed ga je učinio **uvek** pogrešnim. Popravka jedne klase greške je
+otvorila drugu na istom mestu — zato ugovor mora da pokrije **svakog** korisnika
+liste, ne samo prvog.
+
+**Audit se zatvara:** `RedoviZaTip` u celom repou zovu tačno dva ekrana —
+`modScrDokumenti` i `modScrStorno`. Trećeg nema.
+
+Storno odgovara iz **svoje** aktivne liste:
+
+```vb
+Public Function Scr_BrojiKomade() As Boolean
+    Scr_BrojiKomade = modScrDokumenti.TipBrojiKomade(Scr_Lista())
+End Function
+```
+
+**Zašto novi primitiv `TipBrojiKomade`, a ne poziv `ModeBrojiKomade(Scr_Lista())`:**
+`ModeBrojiKomade` prima **F-ključ** i vrti ga kroz `modeKey`, a `modeKey`
+nepoznat ključ svodi na `"OTKUP"` (`Case Else`). Poziv sa tip-ključem
+(`"REVERSI"`) zato izgleda ispravno a **tiho vraća `False`**. Poređenje je
+izdvojeno u `TipBrojiKomade(tk)` da literal `"REVERSI"` ostane na jednom mestu i
+da oba pozivaoca pitaju istu stvar; `ModeBrojiKomade` je sada tanak omotač nad
+njim.
+
+**`vba_check` je odmah tražio svoje:** drugi `Public Scr_BrojiKomade` je pao kao
+`DUPLIKAT` („Ambiguous name detected"), jer ime nije bilo u `SCR_UGOVOR` — spisku
+procedura ugovora ekrana koje smeju da postoje u više `modScr*` modula. Time je
+dodavanje druge implementacije i formalno pretvorilo `Scr_BrojiKomade` u član
+ugovora, a ne u „još jednu funkciju".
+
+### 13.5 Natpis na jednom mestu
+
+Crtanje traži pravu formu, a jedinica i decimale se vide tek u **gotovom
+natpisu**. Zato je natpis izdvojen iz `RenderGrid` u `PodnozjeValTekst(iznos)`,
+a test seam `GridPodnozjeValTest` zove **baš tu funkciju**.
+
+Prva verzija seam-a je logiku **prepisala** — što je greška koju je review na
+ovom projektu već dvaput hvatao: kopija se s vremenom raziđe sa originalom, i
+tvrdnja tiho počne da meri kopiju.
+
+### 13.6 Šta test tvrdi
+
+`T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana` (115) meri na **dva nivoa**:
+
+| Nivo | Tvrdnja |
+|---|---|
+| ugovor | Dokumenta na reversima **i dalje** broje komade |
+| ugovor | ...a na ambalaži (`F5`) ne — ekran prati **svoj** režim |
+| ugovor | ugovorni ekran **ne nasleđuje** režim unosa dokumenata |
+| ugovor | **Storno** kad prikazuje reverse broji komade |
+| ugovor | ...a na ostalim tipovima na Stornu ne broji |
+| ljuska | podnožje ugovornog ekrana ne pominje komade |
+| ljuska | ...nego dinare |
+| ljuska | ...i zove se „Vrednost", ne „Ukupno" |
+| ljuska | novac ide **sa parama** |
+
+**Zašto sam nivo ljuske nije dovoljan:** tvrdnja „na ugovornom ekranu su dinari"
+prolazi i kad se komadi ugase **svima**. Reversi bi tiho izgubili svoju jedinicu,
+a suite bi ostala zelena. Zato prve tri tvrdnje čuvaju **postojeće** ponašanje.
+
+Jedinica i decimale se tvrde **odvojeno** iako su ista `If` grana: `1234.56` bez
+para nema `56` nigde u natpisu, pa ta tvrdnja pada sama za sebe.
+
+Dve tvrdnje o Stornu, ne jedna: „Storno broji komade" prošlo bi i da ekran
+odgovara `True` **uvek**, čime bi fakture i izvodi na njemu postali komadi. Ista
+simetrija kao kod Dokumenata.
+
+Test se izvršava sa **zatrovanim** `ActiveMode = "F7"` i vraća ga na zatečenu
+vrednost pre nego što išta tvrdi — pad tvrdnje ne sme da ostavi ljusku u tuđem
+režimu. Isto važi i za aktivnu listu Storna (`Scr_TipTestSet`).
+
+### 13.7 `ModeValUnit` je ostao bez posla
+
+Jedinicu je do sada davao `modScrDokumenti.ModeValUnit(mode)`. Posle izmene je
+`PodnozjeValTekst` uzima iz kataloga poruka, pa je ta funkcija ostala bez
+ijednog pozivaoca — i **obrisana** je.
+
+Nije kozmetika: `Public` funkcija koja jedinicu računa iz globalnog režima je
+tačno ona zamka koja je i napravila ovaj kvar. Sledeći koji bi je našao pomislio
+bi da je to živi put.
+
+### 13.8 Ostala čitanja `ActiveMode` u ljusci — pregledana
+
+Pošto je kvar bio klasa, a ne red, pregledana su **sva** čitanja `ActiveMode` u
+`modOtkupUI`:
+
+| Mesto | Presuda |
+|---|---|
+| `RefreshGridTitle` (naslov mreže) | ograđeno sa `ElseIf mScreen = "DOKUMENTI"` |
+| `LayoutOtkup` (traka `zOtp`, visina) | nedostižno — `LayoutOtkup` za ugovorni ekran izlazi ranije (`Exit Sub`) |
+| `LoadRowIntoForm` (dupli klik) | ograđeno sa `If mScreen = SCR_POCETNI` |
+| `LayoutGrid`: `If Not IsArray(mCols) Then SetGridCols modeKey(ActiveMode)` | **jedino preostalo** — v. ispod |
+
+`LayoutGrid` se **zove i na ugovornom ekranu** (iz `LayoutScreenZone`), pa je taj
+red dostupan. Pali se samo ako opis kolona nikad nije postavljen, a punjenje
+odmah zatim ga prepiše. **Nije mereno** i nije dirano u ovom PR-u — promena tog
+reda traži odgovor na pitanje šta uopšte znači raspored mreže pre prvog punjenja.
+
+### 13.9 Uz to: u sidebar se vraća verzija programa
+
+Od `v6-ui-154` je na nereleasovanoj svesci na tom mestu stajao `OTKUI_BUILD`,
+**izričito privremeno** — do kraja rada na storno ekranu, koji je završen još u
+Fazi D. Razlog je bio dobar: svaka nereleasovana sveska nosi isti `v0.0.0-dev`,
+pa se sa ekrana nije videlo da li je posle `ImportAllVBA` u njoj nov ili star UI
+kod.
+
+Dijagnostika se ne gubi nego se veže za **postojeći** prekidač: `UI_DEBUG=DA` u
+`tblLocalConfig` (`IsDebugUI`). Ko meri — upali ga; ko radi — vidi verziju
+programa.
+
+**Nije pokriveno testom, i to namerno:** provera bi tražila upis u
+`tblLocalConfig`, a `RunAllTests` je nemutirajuća suite (mutirajući test obara
+`who_writes` kapiju u CI-ju). Ide u smoke listu.
+
+### 13.10 Verifikacija
+
+| Šta | Ishod |
+|---|---|
+| `RunAllTests` | **115 testova, 0 palih** |
+| Šest novih sabotaža | **6 / 6** — svaka obara svoj test i **svoju** tvrdnju |
+| Dvosmerni dokaz nad izmenjenim fajlovima (39 + 16 sabotaža) | **rupe samo tamo gde su i zatečene na `main`-u** (§13.11) |
+| Sva 222 sidra posle izmena | ni jedno **novo** zastarelo |
+| `vba_check` · `--self-test` | čisto (195 fajlova) · 64 slučaja |
+| izvor posle svih vraćanja | bit-identičan |
+
+Nove sabotaže, po jedna na svako svojstvo:
+`mreza-podnozje-ljuska-ne-pita-ekran`, `mreza-podnozje-ugovor-fail-open`,
+`mreza-podnozje-jedinica-iz-globalnog-rezima`, `mreza-podnozje-novac-bez-para`,
+`mreza-podnozje-storno-ne-prijavljuje-komade`, `mreza-podnozje-storno-uvek-komadi`.
+
+Izmena u `tools/vba_check.py` (`scr_brojikomade` u `SCR_UGOVOR`) dokazana je u
+oba smera: bez tog imena `vba_check` prijavi `DUPLIKAT` **po imenu** za
+`modScrDokumenti.bas` i `modScrStorno.bas`, sa njim je čisto.
+
+### 13.11 Šta je pun prolaz našao o samom dokazu
+
+Dvosmerni dokaz je do sada vrćen nad **podskupom** kataloga (banka/mreža, 48 od
+220). Prvi put je pušten nad svim sabotažama koje gađaju izmenjene fajlove — i
+odmah je pokazao tri vrste rupe. **Sve su zatečene:** provereno tako što su ista
+sidra i isti ciljni kod uzeti iz `origin/main`.
+
+**1) Sidra koja su zastarela — 10 od 220.** Kod ispod njih je u međuvremenu
+popravljen, pa se sidro više ne nalazi. Sabotaža tada ne javlja „test je prošao"
+nego „nisam našao sidro" — a to u petlji od pola sata lako prođe kao zeleno. To
+je zamka 9, i sada se vidi da nije bila jedan slučaj nego klasa:
+
+`uplata-preko-fakture`, `f8-jedna-tabela`, `storno-nema-dok`,
+`relink-izvor-po-broju`, `relink-ignorise-generaciju` (2 pogotka, dvosmisleno),
+`relink-cilj-bez-kapije`, `ljuska-odseca-liste`, `blokovi-po-broju`,
+`f8-identitet-po-broju`, `oporavak-cid-ne-stize-u-red`.
+
+Za tih deset **dokaza trenutno nema**: tvrdnje koje su nekad bile pokazane
+crvenim danas nisu.
+
+**2) Sabotaža koja ne obara ništa.** `parcela-tekst` se uredno primeni, a suite
+ostane zelena — dakle `T_ParcelaID_IzSkriveneKolone` ne meri baš ono što ta
+sabotaža kvari. Ciljni kod i telo testa su bajt-identični `main`-u.
+
+**3) Polje „očekivana tvrdnja" je parafraza, ne merena vrednost.** Katalog uz
+svaku sabotažu nosi tekst tvrdnje, ali ga niko nije poredio sa onim što stvarno
+padne. Poređenje sada pokazuje da se u većini slučajeva radi o prepričavanju iste
+tvrdnje, ali u dva slučaja pada **druga**:
+
+| Sabotaža | katalog kaže | stvarno padne |
+|---|---|---|
+| `parse-cdate` | „godina van poslovnog opsega" | „mesec 13 se odbija, ne preliva u sledeću godinu" |
+| `mreza-crtanje-kvari-stil` | „crtanje ne menja poravnanje koje je layout postavio" | **„preduslov:** brojčana kolona je poravnata DESNO" |
+
+Drugi red je zamka 6 u čistom obliku: pada **preduslov**, pa poslovna tvrdnja
+ispod njega uopšte i ne dođe na red.
+
+**4) Dve sabotaže dele tvrdnju.** `zatecen-context-bez-kapije` i
+`stale-parent-po-broju` gađaju isti red u `modStornoFlow.bas` i oslanjaju se na
+istu tvrdnju testa `T_ZatecenContext_NePrevezujeTudjePrijemnice`. Test ih ne
+razlikuje.
+
+**Ispravka mog ranijeg izveštaja:** „mašinski provereno da nijedna tvrdnja nije
+deljena" važilo je za podskup koji se tada vrteo, ne za katalog.
+
+**Šta iz ovoga sledi.** Pravilo iz `CLAUDE.md` — „posle izmene pusti ceo dvosmerni
+dokaz i tvrdi `crvenih == sabotaža`" — nad 220 sabotaža traje oko dva i po sata,
+pa se u praksi nije puštalo celo. Jeftina polovina tog pravila je **statička**:
+proveriti da se svako sidro nalazi tačno jednom, istim poređenjem koje koristi
+`sabotaza.py`. To traje sekundu i uhvatilo bi svih deset. Ide kao zaseban posao,
+zajedno sa popravkom nađenih rupa.
+
+### 13.12 Šta OSTAJE
+
+Podnožje i dalje nosi **jedan** novčani podatak. Lista izvoda ima dva koja
+operater traži (uplate i isplate), ali drugi slot je **promena ugovora**
+(`Scr_Rows` bi vraćao par natpis/vrednost, plus nova kontrola `ftVal2`) i ide
+zasebno.

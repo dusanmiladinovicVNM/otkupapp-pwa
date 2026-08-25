@@ -1459,19 +1459,31 @@ Public Function ModeTextCol3(ByVal mode As String) As Boolean
     End Select
 End Function
 
-' Jedinica 5. kolone i podnozja: dinar za robu i novac, komad za reverse.
-Public Function ModeValUnit(ByVal mode As String) As String
-    If modeKey(mode) = "REVERSI" Then
-        ModeValUnit = Poruka("OTKUI_UNIT_KOM")
-    Else
-        ModeValUnit = Poruka("OTKUI_UNIT_RSD")
-    End If
+' Broji li lista TOG TIPA komade umesto dinara.
+'
+' Pitanje pripada TIPU LISTE ("REVERSI"), ne rezimu unosa ("F7"): istu listu
+' prikazuje i storno ekran, koji rezime uopste nema nego bira tip. Dok je
+' poredjenje stajalo samo unutar ModeBrojiKomade, drugi pozivalac ga nije mogao
+' upotrebiti a da ne prepise literal -- pa bi se dva mesta vremenom razisla.
+'
+' Zamka za onoga ko ovo dira: ModeBrojiKomade prima F-KLJUC. Pozvati ga sa
+' tip-kljucem ("REVERSI") izgleda ispravno a tiho vraca False, jer modeKey
+' nepoznat kljuc svodi na "OTKUP".
+Public Function TipBrojiKomade(ByVal tk As String) As Boolean
+    TipBrojiKomade = (tk = "REVERSI")
 End Function
 
-' Broji li podnozje komade umesto dinara. Ljuska pita ovo umesto da poredi
-' ActiveMode sa "F7" -- podnozje bi inace sabiralo komade a pisalo RSD.
+' Broji li podnozje komade umesto dinara u rezimu unosa dokumenata.
 Public Function ModeBrojiKomade(ByVal mode As String) As Boolean
-    ModeBrojiKomade = (modeKey(mode) = "REVERSI")
+    ModeBrojiKomade = TipBrojiKomade(modeKey(mode))
+End Function
+
+' UGOVOR EKRANA. Ljuska vise ne cita ActiveMode sama: taj rezim pripada OVOM
+' ekranu, pa na Uvozu izvoda ili Fakturisanju nema nikakvo znacenje. Ovde se
+' odgovara iz sopstvenog stanja, a ekrani koji komade ne broje ovo ne
+' implementiraju i dobijaju dinare.
+Public Function Scr_BrojiKomade() As Boolean
+    Scr_BrojiKomade = ModeBrojiKomade(ActiveMode)
 End Function
 
 ' Svako kretanje ambalaze je DVOJNI upis - dva reda sa istim brojem i istim
