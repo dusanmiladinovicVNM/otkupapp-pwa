@@ -2991,6 +2991,13 @@ Pouka je ista kao za sidra sabotaža: **fixture koji stoji na promenljivoj
 vrednosti zastareva isto kao i sidro**, samo tiše — jer ga niko ne gleda dok ne
 pukne.
 
+Iz review-a je stigla još jedna sitnica istog reda: višeredni sintetički slučaj
+stajao je na `Option Explicit` i prvom redu palete, između kojih u fajlu stoji
+**prazan red**. Pored ciljanog nalaza davao je i višak (zastarelo sidro).
+Self-test je prolazio jer traži baš ciljani, ali fixture koji uz tačan nalaz
+nosi i netačan meri manje nego što izgleda. Sada stoji na dva stvarno susedna
+reda i daje **tačno jedan** nalaz.
+
 ### 14.8 Šta OSTAJE
 
 **Bazen nije izmeren.** Da se višak preko `MAX_FT_VAL` stvarno odseca vidi se
