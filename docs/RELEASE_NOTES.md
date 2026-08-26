@@ -5758,6 +5758,10 @@ puštena i zapisano je ime provere koje je stvarno palo.
 Dodata je provera koja ovo ubuduće hvata **za sekundu** umesto za dva i po sata,
 i vezana je za onu koja se ionako pušta posle svake izmene koda.
 
+Ta provera je u prvom obliku bila preširoka — primala bi i tekst koji u testu
+postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci. To je
+nađeno u pregledu i suženo, uz dokaz da suženje stvarno hvata oba slučaja.
+
 ### Dva nalaza koja nisu zataškana
 
 - dve sabotaže obaraju **istu** proveru, pa se ne može reći koja je pala;

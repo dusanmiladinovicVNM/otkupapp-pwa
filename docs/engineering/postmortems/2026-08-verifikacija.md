@@ -273,7 +273,7 @@ mora se naći u poruci koja je pala, i to **samo među porukama njenog testa**.
 Pet je bila razlika u rečima. Dva su bila prava nalaza — sabotaža obara
 **preduslov**, pa ciljana tvrdnja ne dođe na red: `relink-ignorise-generaciju` i
 `f8-identitet-po-broju`. Ni jedan se ne može zatvoriti bez izmene testa ili
-fikstуre (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
+fiksture (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
 mereno — ne obara ništa). Zapisani su u `POZNATI_NALAZI_DOKAZ`, sa razlogom.
 
 Cena je poštena: tekstovi za sabotaže koje nisu skoro puštane nisu usklađeni sa
@@ -462,6 +462,42 @@ svoje tvrdnje, pa bi pao kroz prag od 60% — a isti prag bi primio slučajno
 poklapanje kratkog literala u dugačkoj tuđoj tvrdnji. Broj reči modeluje ono što
 se stvarno dešava: na tom mestu je bila **jedna vrednost**.
 
+### Provera je prvo obećavala više nego što meri (iz review-a)
+
+Prva verzija je za „doslovni" slučaj tražila tekst u **celom telu procedure**.
+Telo sadrži i kod i komentare, pa bi kroz nju prošlo i:
+
+```
+tvrdnja = "AssertEq nosiDok, True"          ' komad KODA
+tvrdnja = "recenica iz komentara ..."       ' komentar
+```
+
+`dokaz.py` poredi sa **porukom koja je pala**, a poruka može biti samo string
+literal — pa bi ishod bio zeleno statički, `PALA DRUGA TVRDNJA` u prolazu. Tačno
+rupa koju je posao trebalo da zatvori.
+
+Gore od same rupe: `_literali` je **već vraćao** literale, a `_tela_testova` ih
+je bacao i čuvao celo telo. Podatak je postojao; put do njega nije.
+
+### ...a prvi dokaz te ispravke ništa nije dokazivao
+
+Ovo je deo koji vredi najviše. Kad su dodata dva slučaja („tekst postoji samo kao
+kod", „tekst postoji samo u komentaru"), oni su **prošli i sa vraćenim starim
+ponašanjem** — dakle nisu merili ništa.
+
+Razlog: self-test je svoje „telo" sklapao **sam**, pa je zaobilazio baš
+`_tela_testova`, funkciju u kojoj je rupa i bila. Dokazivao je da
+`_tvrdnja_pripada` pretražuje ono što **dobije**, a pitanje je bilo **šta
+dobija**.
+
+Lek je struktura, ne još jedan slučaj: izdvojen je `_telo_podaci(telo)`, koji
+sada koriste **i** pravi put **i** self-test. Sabotaža te jedne funkcije odmah
+obara oba slučaja, po imenu.
+
+To je ista pouka koju `vba_check` već nosi u komentaru — self-test mora da ide
+**kroz** produkcionu putanju, a ne pored nje. Ovde se pokazalo da važi i za
+podatak koji putanja proizvodi, ne samo za funkciju koja ga troši.
+
 ### Gde provera živi, i zašto baš tu
 
 U `_nalazi` — jedinoj putanji kroz koju prolaze sva statička pravila kataloga,
@@ -470,8 +506,9 @@ kojoj `--self-test` podmeće izmišljene unose i koju `vba_check` zove posle
 neko mora da se seti da pusti, a baš VBA izmena je ono što tvrdnju čini
 zastarelom.
 
-Tri nova self-test slučaja: zastarela tvrdnja, tvrdnja koja pripada **drugom**
-testu, i prazna tvrdnja.
+Pet novih self-test slučajeva: zastarela tvrdnja, tvrdnja koja pripada
+**drugom** testu, prazna tvrdnja, tekst koji postoji samo kao **kod**, i tekst
+koji postoji samo u **komentaru**.
 
 ### Dva nalaza koja NISU zataškana
 

@@ -2945,8 +2945,27 @@ def _literali(tekst: str):
     return lit, sabloni
 
 
+def _telo_podaci(telo: str):
+    """(string-literali u malim slovima, sabloni) za JEDNO telo procedure.
+
+    Izdvojeno da bi self-test isao KROZ ovu funkciju, a ne pored nje: dok je
+    self-test sam sklapao svoje "telo", dokazivao je samo da _tvrdnja_pripada
+    pretrazuje ono sto DOBIJE -- a rupa je bila u tome STA dobija (celo telo, sa
+    kodom i komentarima). Sabotaza ove funkcije sada obara oba slucaja.
+    """
+    lit, sabloni = _literali(telo)
+    return [x.lower() for x in lit], sabloni
+
+
 def _tela_testova() -> dict:
-    """ime testa -> (sklopljeno telo u malim slovima, sabloni tvrdnji)."""
+    """ime testa -> (string-literali u malim slovima, sabloni tvrdnji).
+
+    CUVAJU SE LITERALI, NE CELO TELO. Telo sadrzi i kod i komentare, pa bi
+    "AssertEq nosiDok, True" ili recenica iz komentara prosli kao tvrdnja -- a
+    dokaz.py poredi sa PORUKOM koja je pala, koja moze da bude samo literal.
+    Provera bi tako davala jace obecanje nego sto meri: zeleno ovde, PALA DRUGA
+    TVRDNJA u prolazu.
+    """
     tela = {}
     for f in ("modTest.bas", "modTestBanka.bas"):
         put = os.path.join(SRC_VBA, f)
@@ -2957,9 +2976,7 @@ def _tela_testova() -> dict:
                              tekst, re.M):
             k = re.search(r"^End (?:Sub|Function)\b", tekst[m.start():], re.M)
             telo = tekst[m.start(): m.start() + (k.end() if k else len(tekst))]
-            _lit, sabloni = _literali(telo)
-            sklop = _NASTAVAK.sub(" ", _STR_SPOJ.sub("", telo)).lower()
-            tela[m.group(1)] = (sklop, sabloni)
+            tela[m.group(1)] = _telo_podaci(telo)
     return tela
 
 
@@ -2967,7 +2984,7 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     """Da li je tvrdnja tvrdnja BAS ovog testa.
 
     Dva oblika prolaze:
-      1) doslovno je u telu -- obican string-literal;
+      1) doslovno je u nekom STRING-LITERALU tog testa;
       2) tvrdnja je sklopljena U RADU ("Storno / " & tip & " cita svoju tabelu"):
          literali tog izraza se u njoj nalaze REDOM, a ono sto ostane izmedju
          njih mora da lici na VREDNOST -- najvise tri reci po rupi.
@@ -2979,9 +2996,11 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     Pun tekst se cuva namerno -- skracivanje na zajednicki literal bi dve
     razlicite tvrdnje spojilo u jednu (zamka 5).
     """
-    sklop, sabloni = podaci
+    literali, sabloni = podaci
     t = tvrdnja.lower()
-    if t in sklop:
+    # Podniz je dovoljan, jer dokaz.py isto radi proveru podniza: katalog sme da
+    # nosi prepoznatljiv deo duge tvrdnje. Ali samo unutar LITERALA.
+    if any(t in l for l in literali):
         return True
     for izraz in sabloni:
         poz, pokriveno, rupe_ok = 0, 0, True
@@ -3170,6 +3189,15 @@ _SELF_TEST = [
     ("prazna tvrdnja",
      (None, None, None, None, "   "),
      "katalog nema tvrdnju"),
+    # Tekst koji u telu POSTOJI, ali kao KOD -- dokaz.py ga nikad nece videti u
+    # poruci, pa bi zelena staticka provera obecavala vise nego sto meri.
+    ("tvrdnja postoji samo kao VBA kod",
+     (None, None, None, None, "AssertEq nosiDok, True"),
+     "tvrdnja ZASTARELA"),
+    # Isto za komentar: recenica iz njega nikad ne stigne u poruku testa.
+    ("tvrdnja postoji samo u komentaru",
+     (None, None, None, None, "recenica iz komentara koja nije tvrdnja"),
+     "tvrdnja ZASTARELA"),
 ]
 
 
@@ -3177,13 +3205,24 @@ def _self_test() -> int:
     """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
     imena = {"T_Postoji"}
     # Telo se podmece kao i imena -- inace bi se pravilo o tvrdnji merilo nad
-    # PRAVIM modTest-om, pa bi self-test zavisio od tudjeg fajla. Pokriva i
-    # tvrdnje ostalih slucajeva, da svaki i dalje meri TACNO svoje pravilo.
-    _tp = ("sub t_postoji  asserteq a, b, \"zdrava tvrdnja\"  "
-           "tvrdnja a tvrdnja b tvrdnja c tvrdnja d tvrdnja e tvrdnja f "
-           "tvrdnja g  end sub")
-    tela = {"T_Postoji": (_tp, []),
-            "T_Drugi": ("sub t_drugi asserteq a, b, \"tudja tvrdnja\" end sub", [])}
+    # PRAVIM modTest-om, pa bi self-test zavisio od tudjeg fajla.
+    #
+    # I PARSIRA se, ne pise rucno: tako se dokazuje da _literali stvarno izbacuje
+    # kod i komentare. Recenica iz komentara i komad koda ispod moraju da PADNU
+    # kao zastarela tvrdnja, i za to postoje dva slucaja.
+    _VBA = ("Private Sub T_Postoji()\n"
+            "    ' recenica iz komentara koja nije tvrdnja\n"
+            "    AssertEq nosiDok, True, \"zdrava tvrdnja\"\n"
+            "    AssertEq a, b, \"tvrdnja A\"\n"
+            "    AssertEq a, b, \"tvrdnja B\"\n"
+            "    AssertEq a, b, \"tvrdnja C\"\n"
+            "    AssertEq a, b, \"tvrdnja D\"\n"
+            "    AssertEq a, b, \"tvrdnja E\"\n"
+            "    AssertEq a, b, \"tvrdnja F\"\n"
+            "    AssertEq a, b, \"tvrdnja G\"\n"
+            "End Sub\n")
+    tela = {"T_Postoji": _telo_podaci(_VBA),
+            "T_Drugi": (["tudja tvrdnja"], [])}
     # zdrav unos: sidro koje postoji tacno jednom, zamena koja nije podniz
     zdravo = ("modOtkupUI.bas",
               _ST_ZDRAVO + ESCN,
