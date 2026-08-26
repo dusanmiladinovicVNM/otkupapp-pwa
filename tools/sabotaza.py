@@ -1986,6 +1986,62 @@ SABOTAZE = {
     ),
     # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
     # napunjen kombo posle pada ucitavanja ima izbor, pa bi prosao.
+    # ---- filter storniranih: nula je imala dva znacenja ----
+    # Registar mora da PREPOZNA dokument tabelu; prazan registar vraca stari
+    # fail-open na sva 183 poziva.
+    "storno-registar-prazan": (
+        "modSchemaGuard.bas",
+        "    TabelaNosiStorno = _\n"
+        '        (InStr(1, STORNO_TABELE, "|" & Trim$(tableName) & "|", vbTextCompare) > 0)\n',
+        "    TabelaNosiStorno = False   ' SABOTAZA: registar je prazan\n",
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "dokument tabela je u registru storna",
+    ),
+    # ...ali ne sme da hvata maticne podatke, koji storno pojam stvarno nemaju.
+    "storno-registar-hvata-i-maticne": (
+        "modSchemaGuard.bas",
+        "    TabelaNosiStorno = _\n"
+        '        (InStr(1, STORNO_TABELE, "|" & Trim$(tableName) & "|", vbTextCompare) > 0)\n',
+        "    TabelaNosiStorno = True   ' SABOTAZA: registar hvata i maticne podatke\n",
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "maticni podaci nisu u registru storna",
+    ),
+    # Sama kapija u ExcludeStornirano: kad SVE prodje kao "nema storno pojam",
+    # nedostajuca kolona opet cuti.
+    "storno-filter-nedostajuca-kolona-prolazi": (
+        "modHelpers.bas",
+        "    If Not modSchemaGuard.TabelaNosiStorno(tblName) Then\n",
+        "    If True Then   ' SABOTAZA: sve prolazi kao tabela bez storna\n",
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "nedostajuca kolona storna PADA i imenuje kolonu, ne propusta tiho",
+    ),
+    # Uzina kapije je tvrdnja: tabela bez storno pojma mora da PRODJE.
+    "storno-filter-hvata-i-tabele-bez-storna": (
+        "modHelpers.bas",
+        "    If Not modSchemaGuard.TabelaNosiStorno(tblName) Then\n",
+        "    If False Then   ' SABOTAZA: kapija hvata i tabele bez storna\n",
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "tabela bez storno pojma prolazi bez greske",
+    ),
+    # Prazna tabela iz registra bez kolone je I DALJE drift. Dok je IsEmpty
+    # izlazio prvi, kapija se nad njom nikad nije ni pitala.
+    "storno-filter-prazna-tabela-preskace-kapiju": (
+        "modHelpers.bas",
+        '    RequireStornoKlasifikaciju tblName, "modHelpers.ExcludeStornirano"\n',
+        "    If IsEmpty(data) Then Exit Function   ' SABOTAZA: prazno preskace kapiju\n"
+        '    RequireStornoKlasifikaciju tblName, "modHelpers.ExcludeStornirano"\n',
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "...i kad je tabela PRAZNA -- drift ne ceka da bude redova",
+    ),
+    # Neklasifikovana tabela nije isto sto i BEZ_STORNA. Bez ove kapije se dva
+    # stanja opet spajaju -- ista bolest zbog koje je posao i nastao.
+    "storno-nepoznata-tabela-prolazi": (
+        "modSchemaGuard.bas",
+        "    If StornoRegistarZna(tableName) Then Exit Sub\n",
+        "    Exit Sub   ' SABOTAZA: neklasifikovana tabela tiho prolazi\n",
+        "T_StornoFilter_NedostajucaKolonaNijeTisina",
+        "tabela koju registar ne poznaje PADA, ne prolazi kao da nema storno",
+    ),
     # ---- ista klasa na strani KUPCA (legacy F6) i u LJUSCI (F5/F6) ----
     # Pad ucitavanja liste faktura mora da zaustavi uplatu -- inace tiho postaje
     # avans kupca, isto kao sto je pad liste blokova postajao avans kooperanta.

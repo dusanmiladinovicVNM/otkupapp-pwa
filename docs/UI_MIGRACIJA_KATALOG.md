@@ -3388,3 +3388,205 @@ Provereno da je zatečeno: isti nalaz daje i `origin/main`, a ovaj PR ne dira ni
 `modUiKit.bas` ni taj test. Ostavljeno kao zaseban posao — ista klasa koju je
 #227 čistio.
 
+---
+
+## 18. Filter storniranih je znao ŠTA filtrira samo napola (`v2.78.0`)
+
+Nastavak iste klase iz §16 i §17, ali izvan UI-ja i sa najširim dometom u
+projektu: **183 poziva**, 21 tabela.
+
+```vb
+colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
+If colStorno = 0 Then
+    ExcludeStornirano = data      ' vraca SVE, i stornirane
+    Exit Function
+End If
+```
+
+### 18.1 Zašto je ovo gore od §16 i §17
+
+Tamo je novac dobijao **pogrešan tip** (avans umesto razduženja). Ovde storniran
+dokument dobija **pogrešno postojanje**: `GetOpenFakture` bi otkazanu fakturu
+vratio kao otvorenu, pa bi uplata otišla na dokument koji više ne važi. Isto za
+`GetOpenOtkupi` i otkupne blokove.
+
+Domenska invarijanta koju to krši stoji zapisana u `docs/DOMEN/README.md`:
+*„storniran red ostaje u tabeli i izlazi iz svih agregata"*. Fail-open je značio
+da iz agregata **ne** izlazi, i to ćutke.
+
+### 18.2 Nula je imala dva značenja
+
+Isti oblik kao §16.2.1, samo jedan nivo niže:
+
+| `colStorno = 0` znači | Ispravan ishod |
+|---|---|
+| tabela storno pojam **nema** (matični podaci) | prolaz — filtrirati se nema šta |
+| kolona **nije nađena** (drift) | pad — filter se NIJE izvršio |
+
+Kod tu razliku nije znao, pa je uzimao blažu. Izmerio sam šemu
+(`tools/dump_schema.py` nad `tests/fixtures/otkup_test.xlsm`): od 38 tabela
+**17 nosi** `Stornirano`, 21 ne. Od 21 tabele koja stvarno prolazi kroz
+`ExcludeStornirano`, **15 mora** imati kolonu, a šest su matični podaci.
+
+### 18.3 Registar je deklaracija, ne snimak
+
+`modSchemaGuard` drži `STORNO_TABELE` i `BEZ_STORNA`. Ključna razlika: to **nije**
+snimak zatečene sveske. Šema je izvor istine po instalaciji (CLAUDE.md §3), pa
+tabela iz prvog spiska koja nema kolonu znači **drift** — i tada se pada, umesto
+da se tiho ne filtrira.
+
+Pad ide kroz postojeći `RequireColumnIndex`, bez novog koda za grešku: njegova
+poruka od #229 već razlikuje *„kolone nema"*, *„tabele nema"* i *„čitanje je
+puklo"*, i kaže da li je traženu kolonu **videla** u svežem prolazu. Za drift je
+baš to razlika koja se traži.
+
+**Dve deklaracije šeme ne smeju da se raziđu.** `modProductionHealthCheck` je za
+`tblFakturaStavke` tražio sve kolone osim `Stornirano`, dok registar tu kolonu od
+sada zahteva — pa bi health check javljao zdravo stanje za svesku nad kojom
+`ExcludeStornirano` pada. Kolona je dodata i tamo: bolje da se vidi pre rada nego
+u radu.
+
+### 18.4 Treće stanje: tabela koju registar ne poznaje
+
+Za nju **nema tačnog odgovora** — ni pad ni prolaz nisu opravdani — pa mora da
+padne, i to na **dva** mesta.
+
+**Statički**, gde je najjeftinije: novo `vba_check` pravilo `STORNO_REGISTAR` traži
+da svaki `ExcludeStornirano(..., TBL_X)` imenuje tabelu iz jednog od dva spiska.
+
+**I u izvršavanju**, jer statička provera namerno preskače pozive sa promenljivim
+imenom tabele — a takvih stvarno ima (`modIntegritet.CollectBrojZbirne`,
+`modDokumenta.SumByBroj` i slični, koji `tbl` primaju kao argument). Bez runtime
+kapije bi `TabelaNosiStorno = False` opet značilo **dve stvari**: „eksplicitno
+`BEZ_STORNA`" i „niko je nije klasifikovao". To je ista bolest zbog koje je ceo
+posao i nastao, samo pomerena jedan nivo dalje — i prva verzija ovog PR-a je baš
+tu grešku ponovila: `StornoRegistarZna` je bio **dodat, pa nekorišćen**.
+
+`RequireStornoKlasifikaciju` sada stoji kao prva naredba u `ExcludeStornirano`.
+
+**Preostala granica:** statička provera i dalje ne vidi promenljivo ime tabele —
+ali runtime ga sada hvata, pa fail-closed ugovor ne zavisi od nje.
+
+### 18.4.1 Kapiju je jedan red IZNAD nje mogao da poništi
+
+Najozbiljniji nalaz iz review-a, i nije bio teorijski. `modKarticaDetalji`:
+
+```vb
+Private Function PrijemnicaBrojZaOtpremnicu(ByVal otpID As String) As String
+    On Error Resume Next
+    ...
+    d = ExcludeStornirano(d, TBL_PRIJEMNICA)   ' <- pukne
+    If Not IsArray(d) Then Exit Function       ' <- d je jos ORIGINALNI niz
+```
+
+Kad kapija padne, greška se proguta, **dodela se ne izvrši**, i `d` ostaje
+nefiltriran — pa stornirana prijemnica ide dalje kao živa. Fail-closed primitiv
+koji pozivalac proguta nije fail-closed.
+
+Revizija svih 183 poziva dala je **jedan** takav produkcioni pozivalac (plus dva
+namerna hvatanja u testu 122). Prepravljen je na `On Error GoTo EH`: nema broja je
+bolje nego pogrešan broj.
+
+Da revizija ne bi zavisila od toga da se neko seti da je ponovi, uvedeno je i
+pravilo `STORNO_PROGUTAN`: u **produkcionom** modulu je `ExcludeStornirano` pod
+aktivnim `On Error Resume Next` uvek nalaz.
+
+**Prva verzija tog pravila merila je pogrešnu stvar**, i to je nalaz iz review-a
+koji vredi zapisati. Izuzetak je bio „sledeća naredba pominje `Err.`" — što ne
+dokazuje da je greška **obrađena**. Kroz njega je prolazio baš kvar koji pravilo
+sprečava:
+
+```vb
+On Error Resume Next
+d = ExcludeStornirano(d, TBL_PRIJEMNICA)   ' pukne, dodela se ne izvrsi
+Err.Clear                                  ' obrise DOKAZ, checker zelen
+If IsArray(d) Then ...                     ' d je jos NEFILTRIRAN
+```
+
+`Debug.Print Err.Number` je prolazio isto. Dokazivati statički da je `Err` stvarno
+obrađen znači pisati mini analizu toka — a nije potrebno: revizija je pokazala da
+u produkciji **nema nijednog** legitimnog takvog poziva. Zato pravilo nema
+heuristiku, a namerno hvatanje sme samo u **test modulu**, gde je test sam sebi
+dokaz (pao bi da greške nema).
+
+Predikat testnog modula ima svoju zamku: `modTestMode.bas` **nije** test nego
+produkcijski `IsTestMode()`, uprkos imenu. I to ima svoj slučaj u self-testu.
+
+Pravilo je pušteno nad **`origin/main` verzijom** `modKarticaDetalji.bas` i
+prijavilo je tačno taj poziv, na liniji 316. To je jači dokaz od fixture-a: hvata
+kod koji je stvarno bio u repou.
+
+**Granica:** hvata se samo **direktan** poziv pod aktivnim `Resume Next`. Ako `A`
+zove `ExcludeStornirano` bez rukovaoca, a `B` zove `A` pod `Resume Next`, greška
+se penje do `B` — to traži analizu celog grafa poziva i ne pokušava se.
+
+### 18.5 Dvosmerni dokaz checkera
+
+Pravilo menja **checker**, pa po CLAUDE.md §5 nosi dokaz u oba smera. Dva
+sabotiranja razdvajaju dva različita kvara:
+
+| Sabotaža | Šta padne |
+|---|---|
+| `check_storno_registar` vraća `[]` | **3** slučaja + CLI slučaj |
+| `main()` je više ne zove | **samo** CLI slučaj |
+| `check_storno_progutan` isključen iz `check_file` | **5** slučajeva |
+| izuzetak za test modul uklonjen | **samo** slučaj „isti kod u TEST modulu" |
+
+Poslednji red je bitan: i sam **izuzetak** ima crveni dokaz, ne samo pravilo.
+Izuzetak koji nikad nije pokazan kao potreban je isto što i pravilo koje nikad
+nije pokazano kao crveno.
+
+Druga je ona koju self-test bez CLI prolaza ne bi video — „provera grize, ali nije
+priključena". To je ista klasa greške koju komentar u `vba_check` već opisuje kao
+placebo test.
+
+### 18.6 Self-test je pao na MOM fixture-u, i to je bio prvi nalaz
+
+Slučaj „prelomljen poziv se i dalje vidi" je pao pre nego što je bilo šta
+sabotirano. Uzrok nije bio parser nego fixture: pisao sam `\r\n` u string koji se
+na disk piše sa `newline="\r\n"`, pa je svaki red dobio prazan red iza sebe — a
+nastavak reda (` _`) se onda spajao **sa prazninom**.
+
+Vredi zapisati jer je isti oblik kao zamka iz §14: fixture koji preskače prazan
+red menja ono što se meri, a da testu ništa ne izgleda sumnjivo.
+
+### 18.7 Šta testira test 122
+
+| Tvrdnja | Sabotaža |
+|---|---|
+| dokument tabela **je** u registru | `storno-registar-prazan` |
+| matični podaci **nisu** | `storno-registar-hvata-i-maticne` |
+| nedostajuća kolona **pada** i imenuje kolonu | `storno-filter-nedostajuca-kolona-prolazi` |
+| ...i kad je tabela **prazna** | `storno-filter-prazna-tabela-preskace-kapiju` |
+| **neklasifikovana** tabela pada | `storno-nepoznata-tabela-prolazi` |
+| tabela bez storno pojma **prolazi** | `storno-filter-hvata-i-tabele-bez-storna` |
+
+Nula se izaziva kroz keš kolona (`KesKoloneTestSet`), istim putem kao test 117.
+Time se **ne tvrdi** da je keš uzrok ijednog pada iz pogona — tvrdi se da
+`ExcludeStornirano` na nulu više ne propušta nefiltrirano.
+
+### 18.8 Šta ovo NE pokriva
+
+**Da spisak od 15 tabela odgovara PRODUKCIJI nije izmereno.** Izmeren je fixture;
+produkciona sveska može imati drugu šemu. Ako u njoj neka od tih 15 nema kolonu,
+ovaj PR pretvara tihu grešku u **glasan zastoj** — što je namera, ali je i razlog
+zašto smoke nad kopijom prave sveske ovde nije formalnost.
+
+**Promenljivo ime tabele** i dalje izmiče **statičkoj** proveri (§18.4), ali ga
+runtime kapija hvata, pa ugovor od nje ne zavisi.
+
+**Transitivni `Resume Next`** — v. §18.4.1: pozivalac pozivaoca se ne prati.
+
+**Prazna tabela više ne preskače kapiju** (to je bio nalaz iz review-a):
+klasifikacija i provera kolone stoje **iznad** `If IsEmpty(data)`. Ugovor je
+„tabela iz `STORNO_TABELE` bez kolone znači drift", a ne „drift se prijavljuje
+samo dok tabela ima redova". Fixture ima redove, pa tu granu prva verzija testa
+nije ni takla.
+
+**`mColCache` i dalje pamti nulu.** Jedna neuspela pretraga kolone ostaje
+zapamćena za ceo `BeginTableCache` prozor, pa bi se nova kapija posle nje držala
+zatvorenom do kraja prozora. To je i dalje bolje od tihog prolaza, ali nije
+rešeno — a razlikovanje „kolone stvarno nema" od „čitanje je puklo" traži oslonac
+na broj greške koji **nisam izmerio**, pa ga ne uvodim na pretpostavku. Ostaje
+otvoreno, kao i pre ovog posla.
+

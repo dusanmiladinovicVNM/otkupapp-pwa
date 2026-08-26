@@ -307,7 +307,16 @@ End Sub
 
 ' Poslovni broj(evi) prijemnice za zbirnu kojoj pripada otpremnica (spojeni zarezom).
 Private Function PrijemnicaBrojZaOtpremnicu(ByVal otpID As String) As String
-    On Error Resume Next
+    ' KAPIJA STORNA NE SME DA SE PROGUTA.
+    '
+    ' Ceo posao je stajao pod On Error Resume Next. Kad ExcludeStornirano padne
+    ' (tabela iz registra bez kolone Stornirano), dodela `d = ExcludeStornirano(d,
+    ' ...)` se NE izvrsi, `d` ostaje NEFILTRIRAN niz, i petlja ispod pokaze
+    ' storniranu prijemnicu kao zivu -- dakle bas ono sto kapija sprecava, samo
+    ' jedan nivo iznad nje.
+    '
+    ' Nema broja je bolje nego POGRESAN broj: greska se belezi i vraca se prazno.
+    On Error GoTo EH
     Dim brZb As String
     brZb = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, otpID, COL_OTP_BROJ_ZBIRNE))
     If Len(Trim$(brZb)) = 0 Then Exit Function
@@ -330,6 +339,10 @@ Private Function PrijemnicaBrojZaOtpremnicu(ByVal otpID As String) As String
         End If
     Next i
     PrijemnicaBrojZaOtpremnicu = res
+    Exit Function
+
+EH:
+    LogErr "modKarticaDetalji.PrijemnicaBrojZaOtpremnicu"
 End Function
 
 ' Ambalaza red (dokument): prikazi kolone reda + zapamti DokumentID/Tip za stampu.

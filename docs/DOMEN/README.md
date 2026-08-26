@@ -46,6 +46,13 @@ ostaje u tabeli i izlazi iz svih agregata. Zato „aktivan" nije isto što i
 „postoji". Kaskade (šta storno jednog dokumenta povlači nizvodno) su opisane u
 `docs/STORNO_BACKLOG.md` i release notes za `v2.4.0`.
 
+**Koje tabele nose storno je DEKLARISANO, ne pogađa se.** `modSchemaGuard` drži dva
+spiska: `STORNO_TABELE` (moraju imati kolonu) i `BEZ_STORNA` (matični podaci, koji
+je nemaju). `ExcludeStornirano` je do `v2.78.0` na nenađenu kolonu tiho vraćao
+**nefiltrirane** podatke — pa je storniran dokument izlazio kao živ, iz 183 poziva.
+Sada se za tabelu iz prvog spiska pada glasno, a `vba_check` pravilom
+`STORNO_REGISTAR` ne pušta poziv nad tabelom koju registar ne poznaje.
+
 **Ambalaža je ledger, ne saldo-polje.** `tblAmbalaza` čuva kretanja
 (`Smer` = Ulaz/Izlaz, `EntitetID`/`EntitetTip`), a saldo se **izvodi pri čitanju**.
 Ne dodavati kolonu sa saldom. Puni model: `docs/AMBALAZA_MODEL.md`.

@@ -5651,3 +5651,79 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §17.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca u dve
 > forme, pa smoke ide na kopiji sveske i uključuje slučaj sa nedostajućom tabelom.
+
+## v2.78.0 — otkazan dokument više ne može da se pojavi kao živ
+
+### Šta se moglo desiti
+
+Storniranje ne briše dokument — red ostaje u tabeli, obeležen kao storniran, i
+program ga izbacuje iz svih pregleda i zbirova. To izbacivanje radi **jedno
+mesto**, kroz koje prolazi skoro svako čitanje u programu.
+
+To mesto je prvo tražilo kolonu „Stornirano". Ako je nije našlo, tiho je vraćalo
+**sve redove, zajedno sa storniranim** — kao da nema šta da se izbaci.
+
+Posledica: otkazana faktura mogla je da se pojavi u listi otvorenih faktura, pa da
+uplata ode na dokument koji više ne važi. Isto za otkazan otkupni blok.
+
+Ovo je šire od prethodne dve verzije. Tamo je novac dobijao **pogrešnu vrstu**;
+ovde otkazan dokument dobija **pogrešno postojanje**.
+
+### Šta je sada
+
+Program zna **koje tabele moraju** da nose kolonu „Stornirano", a koje je nemaju
+uopšte:
+
+| Vrsta tabele | Kad kolona nedostaje |
+|---|---|
+| dokumenti (otkup, novac, otpremnice, fakture, palete…) | **staje uz grešku** |
+| matični podaci (kooperanti, kupci, vozači, stanice…) | prolazi — nikad je i nisu imali |
+
+Za prvu grupu poruka kaže i **da li je kolonu videla** u svežem pogledu, pa se
+razlikuje „kolone stvarno nema" od „šema se razišla".
+
+Provera radi i kad je tabela **prazna**: nedostatak kolone je isti problem bez
+obzira na to ima li trenutno redova.
+
+### Jedno mesto je i dalje moglo da progura storniran red
+
+Provera je bila na pravom mestu, ali je jedan ekran (detalji kartice) bio napisan
+tako da **prećutkuje svaku grešku** — pa bi prećutao i ovu, i nastavio sa
+nefiltriranim spiskom. Prepravljen je: radije bez podatka nego sa pogrešnim.
+
+Pregledani su **svi** ostali pozivi te provere; drugih takvih nije bilo. Uz to je
+dodata kontrola koja ne dozvoljava da se isti propust ponovo napiše neprimećeno.
+
+### Provera zdravlja sveske to sada vidi unapred
+
+„Provera zdravlja" je za stavke faktura tražila sve kolone osim „Stornirano" — pa
+je mogla da javi zdravo stanje za svesku nad kojom program sada staje. Sada traži
+i nju: bolje da se razilaženje vidi **pre** rada nego usred njega.
+
+### Šta uraditi ako program stane
+
+Poruka imenuje **tabelu i kolonu**, i kaže da li je kolonu videla. Dva slučaja:
+
+- **kolona stvarno nedostaje** — vratiti je u tabelu (ili vratiti svesku iz
+  rezervne kopije); dok je nema, ti pregledi ne rade;
+- **kolona postoji, a poruka kaže da je viđena** — to je razilaženje šeme; javiti
+  uz tekst poruke, jer ona nosi celo zaglavlje koje je program pročitao.
+
+Prećutan rad sa netačnim podacima više nije opcija — to je i bila poenta ove
+verzije.
+
+### Verifikacija
+
+`RunAllTests` **122 testa, 0 palih**, uz šest sabotaža — svaka obara tačno svoju
+tvrdnju.
+
+Uz to su i alati dobili dva nova pravila: jedno ne pušta čitanje nad tabelom koju
+program nije klasifikovao, drugo ne dozvoljava da se pad ove provere prećuti. Oba
+su dokazana i u „crvenom" smeru, uključujući i njihove izuzetke.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §18. Domen: `docs/DOMEN/README.md`.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.** Ova verzija menja
+> ponašanje čitanja kroz koje prolazi skoro sve, pa smoke ide na **kopiji**
+> sveske, i prvi korak je običan rad — on dokazuje da vaša šema ima kolonu tamo
+> gde je program očekuje.
