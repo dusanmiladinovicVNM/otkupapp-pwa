@@ -5810,3 +5810,38 @@ nikad nije pokazana crvenom ne dokazuje ništa.
 `v2.72.0` je zatvorio sabotaže koje se više nisu mogle ni primeniti. Ovo zatvara
 one koje se primenjuju uredno, ali je alat prestao da ume da kaže **šta** su
 oborile. Ista bolest, drugo mesto — i oba puta se videla tek kad se izmerila.
+
+## v2.80.0 — greška koja je umela da zaustavi Excel sada se vidi odmah
+
+Nema izmene u programu — izdanje o **proverama**.
+
+### Šta se dešavalo
+
+Kad se pri izmeni koda izgubi jedan red — deklaracija promenljive — program se
+više ne prevodi. To se do sada videlo tek kad Excel **stane i ostane da stoji**,
+bez ijedne poruke, jer provera koda pre toga kaže da je sve u redu.
+
+Tako je i bilo: alat je rekao „čisto", a onda je pokretanje testova visilo dok se
+ne prekine ručno.
+
+### Šta je sada
+
+Provera to hvata **odmah po izmeni**, i imenuje promenljivu koja nedostaje.
+
+### Zašto baš ovako, a ne šire
+
+Šira provera bi zapištala i nad sasvim ispravnim kodom — nad kontrolama forme,
+nad ugrađenim Excel imenima — a lažna uzbuna je gora od propusta: nauči čoveka da
+alat preskače. Zato je vezana za način na koji se u ovom projektu imenuju takve
+promenljive; njih ima 585 u 68 fajlova.
+
+Nad celim zatečenim kodom daje **nula** primedbi. Do te nule se stiglo kroz dve
+greške u samoj proveri, obe nađene tim istim merenjem — jedna je prijavljivala 54
+mesta koja su sasvim ispravna.
+
+### Kako je dokazano
+
+Uzet je pravi fajl iz istorije i iz njega je uklonjen **baš onaj jedan red** koji
+je tada nedostajao. Zdrav fajl: nula primedbi. Bez tog reda: jedna, sa imenom
+promenljive.
+

@@ -626,3 +626,85 @@ je popravljen **iz merenja**, ali nije ponovo izmeren.
 JESTE tvrdnja tog testa. Da je to i tvrdnja koju ta sabotaža obara i dalje zna
 jedino `dokaz.py`.
 
+---
+
+## 13) `vba_check` nije video nedeklarisanu modul-promenljivu (27.08.2026)
+
+Zapisano kao nalaz sa strane u `UI_MIGRACIJA_KATALOG` §16.6, zatvoreno ovde.
+
+### Šta je bilo
+
+Patch skripta piše fajl tek kad **svi** parovi zamena prođu, pa je pad na drugom
+paru otkotrljao i prvi. Drugi patch je zatim upisao kod koji koristi
+`m_BlokoviOk`, a deklaracije nije bilo.
+
+`Option Explicit` to hvata — ali **tek pri compile-u**, a compile je ručna kapija
+pred release. U međuvremenu:
+
+```
+vba_check: cisto        <- zeleno
+run_vba:   visi         <- Excel stoji u [break], bez ijedne poruke
+```
+
+Najskuplji mogući kanal za grešku koja se vidi statički.
+
+### Zašto ne pun undefined-variable checker
+
+Zato što bi nad Excel objektnim modelom, kontrolama forme i `Enum` članovima
+davao lavinu lažnih uzbuna — a lažna uzbuna u hook-u je **gora** od propuštenog
+nalaza, jer uči da se checker preskače. To pravilo `vba_check` već nosi zapisano.
+
+Provera je zato vezana za **konvenciju imenovanja** (`mFoo`, `m_Foo`), kojom se u
+ovom projektu zovu modul-promenljive. Izmereno pre pisanja: **585** takvih
+deklaracija u **68** fajlova, i nijedna se ne deli između modula.
+
+### Nula lažnih uzbuna, i to mereno
+
+Nad celim zatečenim kodom (195 fajlova) pravilo daje **0** nalaza. Do te nule se
+stiglo kroz dve moje greške, obe uhvaćene istim merenjem:
+
+| Greška | Posledica | Lek |
+|---|---|---|
+| `DEKL_POCETAK` je gutao `Private **Sub**` | ime procedure se nikad ne zapamti, pa je **svaki** poziv event handlera bio „nalaz" — 54 lažne uzbune | potpis se proverava **pre** deklaracije, uz negativan lookahead |
+| komentar je trošio i prelom reda | brojevi redova su klizili za jedan po komentaru — nalaz pokazuje na tuđi red | prelom reda prepisuje spoljna petlja |
+
+Prva je našla i sama sebe: 54 nalaza nad kodom koji se uredno kompajlira ne mogu
+biti ništa drugo nego mana provere.
+
+### Dokaz je rekonstrukcija stvarnog incidenta
+
+Ne sintetički fixture: uzet je `frmDokumenta.frm` sa `origin/main` i uklonjen je
+**taj jedan red**.
+
+| Fajl | Nalaza |
+|---|---|
+| zdrav | **0** |
+| bez `Private m_BlokoviOk As Boolean` | **1**, imenuje `m_BlokoviOk` |
+
+Uz to jedanaest self-test slučajeva (93 ukupno, bilo 82), od kojih je **deset
+nula** — svaki legalan oblik koji bi mogao da zapišti: ime procedure po istoj
+konvenciji, parametar, parametri prelomljeni preko više redova, višestruka
+deklaracija u jednom `Dim`-u, `Const`, `WithEvents`, kvalifikovano ime, ime u
+komentaru, ime u tekstu.
+
+### Dvosmerni dokaz
+
+| Sabotaža | Šta padne |
+|---|---|
+| pravilo nije priključeno na `check_file` | slučaj „koriscena a nedeklarisana" |
+| `Private Sub` opet prolazi kao deklaracija | **tri** slučaja: ime procedure i **oba** parametarska |
+
+Drugi red je pošten po cenu urednosti: ime procedure i lista parametara dolaze iz
+**iste** grane, pa vraćanje starog oblika gasi obe. Prvi pokušaj dokaza je zbog
+toga prijavio „palo je i nešto drugo" — i to je bila greška u očekivanju, ne u
+pravilu.
+
+### Šta ovo NE pokriva
+
+**Promenljiva van konvencije** (`blokoviOk` umesto `mBlokoviOk`) se ne hvata.
+Pravilo je namerno usko: pokriva oblik koji je u ovom projektu standard za
+modul-stanje, a to je i oblik koji je incident i proizveo.
+
+**Lokalna promenljiva bez `Dim`** se ne hvata iz istog razloga — osim ako slučajno
+nosi `m` prefiks.
+
