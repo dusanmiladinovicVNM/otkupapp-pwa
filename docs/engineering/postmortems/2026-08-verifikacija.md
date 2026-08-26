@@ -285,3 +285,100 @@ nego prvi put da se ta razlika uopšte meri.
 Da li sabotaža stvarno nešto obara zna **samo** pun dokaz. Statička provera hvata
 mrtvo sidro, ne mrtvu tvrdnju: `ekran-curi-greska` je imala ispravno sidro i
 uredno se primenjivala — a suite je ostajala zelena.
+## 11) „Nedostaje kolona" nad sveskom u kojoj kolona postoji (25.08.2026)
+
+U logu radne sveske:
+
+```
+ERROR | modStornoFlow.ZbirnaBrojJeDvos | Nedostaje kolona 'VozacID' u tabeli 'tblZbirna'.
+```
+
+`tools/dump_schema.py` nad **tom istom** sveskom pokazuje da `VozacID` u
+`tblZbirna` **postoji**. Poruka je, dakle, opisivala stanje koje nije tačno.
+
+Nije reprodukovano. Ovaj zapis postoji zato što su na putu do toga **dve moje
+dijagnoze redom oborene merenjem**, i to je korisniji nalaz od same poruke.
+
+### Prva dijagnoza: schema drift — oborena čitanjem sveske
+
+Prvo objašnjenje je bilo „ta sveska nema kolonu". Otpalo za minut, čim je
+puštena šema. Pouka je banalna i skupa: **kad poruka govori o šemi, pročitaj
+šemu** pre nego što se krene u kod.
+
+### Druga dijagnoza: progutana greška ostaje živa — oborena sabotažom
+
+`GetColumnIndex` je tražio kolonu ovako:
+
+```vb
+On Error Resume Next
+GetColumnIndex = lo.ListColumns(colName).index
+On Error GoTo 0
+```
+
+`ListColumns(ime)` za nepostojeću kolonu **diže grešku 9**, ne vraća nulu — pa
+sam zaključio da `Err` posle toga ostaje živ i curi pozivaocu. Napisao sam
+zamenu (prolazak kroz zaglavlje), test i sabotažu koja vraća zatečeni oblik.
+
+**Sabotaža nije oborila ništa.** Razlog je u jeziku: u VBA **svaki** `On Error`
+iskaz — uključujući `On Error GoTo 0` — resetuje `Err`. Curenja nije bilo.
+
+Izmena je zato **povučena**: ostala bi kao popravka bez reprodukcije i bez
+merljive razlike, tačno ono što `CLAUDE.md` §2 zabranjuje. Dve tvrdnje o
+zatečenom ponašanju su ostale u testu, izričito označene kao **bez sabotaže**,
+jer ih zatečeni kod već zadovoljava.
+
+### Šta je stvarno urađeno
+
+Poruka sada nosi i **zaglavlje koje je videla**:
+
+```
+Nedostaje kolona 'VozacID' u tabeli 'tblZbirna'.
+Vidjeno zaglavlje: ZbirnaID, Datum, VozacID, BrojZbirne, ... (+21).
+```
+
+Time isti tekst prestaje da opisuje tri različita stanja — „kolone nema",
+„tabele nema" i „zaglavlje je drugačije" sada se razlikuju **iz same poruke**,
+bez ponovnog pokretanja.
+
+### Treći put ista bolest — u samoj dijagnostici
+
+Prva verzija pomoćne funkcije držala je **sve** pod jednim `On Error Resume Next`.
+Pad čitanja tabele bi zato prijavila kao „tabela nije nadjena", a pad čitanja
+zaglavlja kao „prazno" — dakle **opet** bi grešku predstavila kao stanje šeme,
+samo jedan nivo niže, i to u funkciji čiji je ceo smisao da ta dva razlikuje.
+
+Nađeno u review-u. Sada se posle svakog rizičnog koraka `Err` **čita** i, ako je
+postavljen, poruka kaže da čitanje nije uspelo, uz broj greške.
+
+### Poruka odgovara na pitanje koje se iz nje traži
+
+Spisak imena je ograničen na 12 (poruka ide u log i u dijalog), pa bi kolona iza
+te granice ostala nevidljiva baš u poruci koja treba da kaže da li postoji. Zato
+se **tražena** kolona traži kroz celo zaglavlje i poruka to kaže izričito:
+
+```
+Vidjeno zaglavlje: ZbirnaID, Datum, VozacID, ... (+21).
+Trazena kolona VIDJENA, pozicija 3.
+```
+
+Ako traženje kaže nula, a svež prolaz je vidi — uzrok nije šema nego put do nje.
+
+### Simptom je sada merljiv
+
+Test 117 ga izaziva kroz keš (`KesKoloneTestSet`, tvrdo gejtovan): nula se podmetne
+za kolonu koja **postoji**, i tvrdi se da preživi ceo prozor i da poruka to ume da
+razlikuje od stvarnog nedostatka. Time se **ne** tvrdi da je keš uzrok prvog
+neuspeha — samo da jednom zapamćena nula ostaje do kraja prozora.
+
+### Šta ostaje otvoreno, i zašto se ne popravlja naslepo
+
+Nula iz `GetColumnIndex` se **kešira** za ceo `BeginTableCache` prozor
+([modDataAccess.bas:148](../../../src-vba/modDataAccess.bas)), a
+`InvalidateTableCache` čisti `mTableCache` i `mExclCache` — **`mColCache` ne**.
+Jedan trenutan neuspeh bi tako postao trajan za ceo prozor, a kapije koje su
+fail-closed (`ZbirnaBrojJeDvosmislenIkad` na grešci vraća `True`) na to staju:
+storno nad zbirnom se zaustavlja uz „broj je dvosmislen".
+
+To je **pojačivač**, ne uzrok — i dalje ne znam zašto je prvo traženje palo. Kad
+se poruka sledeći put pojavi, nosiće zaglavlje i time reći da li je uzrok u
+šemi, u tabeli ili u samom čitanju.

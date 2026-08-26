@@ -5471,3 +5471,34 @@ izgleda savršeno ispravno.
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §14.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.**
+
+## v2.74.0 — poruka o nedostajućoj koloni kaže i šta je videla
+
+Nema izmene u radu programa — ovo je o **poruci koja se pojavi kad nešto pođe po zlu**.
+
+### Šta je bilo
+
+U logu se javilo `Nedostaje kolona 'VozacID' u tabeli 'tblZbirna'` — nad sveskom u
+kojoj ta kolona **postoji**. Ista rečenica opisuje tri različita stanja: kolone
+stvarno nema, tabele nema, ili je zaglavlje drugačije od očekivanog. Iz nje se ne
+može znati koje je od ta tri.
+
+### Šta je sada
+
+Uz poruku ide i zaglavlje koje je program **stvarno pročitao**:
+
+> `Nedostaje kolona 'VozacID' u tabeli 'tblZbirna'.`
+> `Vidjeno zaglavlje: ZbirnaID, Datum, VozacID, BrojZbirne, ... (+21).`
+> `Trazena kolona VIDJENA, pozicija 3.`
+
+Poslednji red je onaj koji zapravo odgovara: ako program kaže da kolone nema,
+a sveže čitanje je **vidi**, problem nije u tabeli nego u putu do nje.
+
+Kad se sledeći put pojavi, iz same poruke se vidi da li je problem u šemi ili u
+čitanju — bez ponovnog pokretanja i pogađanja.
+
+### Šta NIJE urađeno
+
+Uzrok nije reprodukovan i nije popravljan naslepo. Zapisan je ceo tok, sa dve
+dijagnoze koje su merenjem oborene, u
+`docs/engineering/postmortems/2026-08-verifikacija.md` §11.

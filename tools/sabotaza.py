@@ -1960,6 +1960,41 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- SEMA: TRAZENJE KOLONE
+    # Vraca zatecen oblik: ListColumns(ime) DIZE gresku 9 za nepostojecu
+    # Zatecено ponasanje je poredjenje BEZ obzira na velicinu slova.
+    # Poruka bez zaglavlja opisuje tri razlicita stanja istim tekstom:
+    # kolone nema, tabele nema, zaglavlje je drugacije.
+    "kolona-poruka-bez-zaglavlja": (
+        "modSchemaGuard.bas",
+        "    If n > MAX_IMENA Then s = s & \", ... (+\" & (n - MAX_IMENA) & \")\"\n"
+        "    If Len(s) = 0 Then s = \"prazno\"\n",
+        "    s = \"prazno\"   ' SABOTAZA: poruka bez zaglavlja\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "zaglavlje koje je stvarno videla",
+    ),
+    # Bez ovoga poruka daje spisak imena, a ne odgovor na jedino pitanje
+    # koje se iz nje trazi: da li BAS ta kolona postoji u zaglavlju.
+    "kolona-poruka-ne-kaze-da-je-vidjena": (
+        "modSchemaGuard.bas",
+        "    If poz > 0 Then\n"
+        "        ZaglavljeZaPoruku = s & \". Trazena kolona VIDJENA, pozicija \" & poz\n",
+        "    If False Then   ' SABOTAZA: poruka cuti o trazenoj koloni\n"
+        "        ZaglavljeZaPoruku = s & \". Trazena kolona VIDJENA, pozicija \" & poz\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "poruka kaze da je trazena kolona VIDJENA u svezem prolazu",
+    ),
+    # Tabele nema i zaglavlje je prazno su dva razlicita stanja; jedan tekst
+    # za oba vraca upravo onu neodredjenost zbog koje je poruka i prosirena.
+    "kolona-nema-tabele-kao-prazno": (
+        "modSchemaGuard.bas",
+        "    If lo Is Nothing Then\n"
+        "        ZaglavljeZaPoruku = \"tabela nije nadjena\"\n",
+        "    If lo Is Nothing Then\n"
+        "        ZaglavljeZaPoruku = \"prazno\"   ' SABOTAZA: nema tabele = prazno\n",
+        "T_Kolona_TrazenjeNeGutaGresku",
+        "za nepostojecu tabelu poruka kaze da TABELE nema",
+    ),
     # ---------------------------------------- MREZA: DVA NOVCANA SLOTA
     # Ekran opet salje samo zbir vrednosti: sedmog clana nema, pa dva broja
     # koja operater trazi nemaju kuda da stignu.
