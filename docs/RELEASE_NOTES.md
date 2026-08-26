@@ -5531,28 +5531,55 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §15.
 
 ### Šta se moglo desiti
 
-Na unosu ambalaže/novca za kooperanta (`Izlaz OM`), ako lista **otkupnih blokova**
-nije uspela da se učita, ostajala je prazna — isto kao kad kooperant stvarno nema
-otvorenih blokova. Program je tu prazninu čitao kao „nema bloka" i novac knjižio
-kao **avans kooperanta**, umesto na blok.
+Na unosu ambalaže i novca za kooperanta (`Izlaz OM`), program bira gde novac ide
+ovako: ako je iz liste izabran **otkupni blok**, knjiži na njega; ako nije,
+knjiži kao **avans kooperanta**.
 
-Bez ijedne poruke. Razlika se videla tek kasnije, u saldu.
+Ta lista je ostajala prazna i onda kad se **nije uspela učitati** — a prazna lista
+je čitana kao „nema bloka". Novac je tada tiho odlazio u avans, bez ijedne poruke.
+Razlika se videla tek kasnije, u saldu.
+
+Tri različita stanja završavala su isto:
+
+| Stanje | Šta je značilo | Šta bi trebalo |
+|---|---|---|
+| kooperant nema otvorenih blokova | avans | avans ✔ |
+| lista se nije učitala | **avans** | stop |
+| **tabela otkupa nedostaje** | **avans** | stop |
+
+Poslednje je bilo najtiše: kad tabele nema, program dobija **istu praznu listu**
+kao kad blokova stvarno nema — nijedna greška se ne javi.
 
 ### Šta je sada
 
-Ako učitavanje liste zakaže, unos **staje** i operater dobija objašnjenje — sa
-razlogom zbog kojeg lista nije učitana. To važi i kad sama tabela otkupa
-nedostaje: ranije se i to čitalo kao „nema blokova", jer program u tom slučaju
-dobija istu praznu listu kao kad blokova stvarno nema.
+Ako učitavanje zakaže, unos **staje** i operater dobija objašnjenje, sa razlogom
+zbog kojeg lista nije učitana. To važi i kad tabela otkupa nedostaje.
 
 Kad je lista uredno učitana a prazna, ništa se ne menja: to stvarno znači da
 kooperant nema otvorenih blokova, pa je avans ispravan.
 
+### I kad je učitavanje palo na pola
+
+Ako punjenje liste pukne **usred posla**, u njoj bi ostalo nekoliko blokova — pa
+bi izgledala kao potpuna. Operater bi izabrao jedan od njih, a pošto izbor
+postoji, provera se ranije uopšte ne bi ni postavila.
+
+Sada je obrnuto: prvo se pita da li je lista uopšte u redu, pa tek onda da li je
+nešto izabrano. Nepotpuna lista se uz to **prazni**, da ne bi glumila potpunu.
+
 ### Odakle je došlo
 
 Ista greška je ranije nađena i zatvorena na uvozu izvoda (`v6-ui-180`), uz belešku
-da isto važi i za ovaj ekran. Kad se pogledalo, greška je tamo stvarno stajala.
+da isto važi i za ovaj ekran. Kad se pogledalo, tamo je stvarno stajala — i to nad
+novcem.
+
+### Verifikacija
+
+`RunAllTests` **119 testova, 0 palih**, uz tri sabotaže koje svaka obara svoju
+tvrdnju: pad učitavanja mora da zaustavi, uredna lista mora da prođe, i **izabran
+blok ne sme da zaobiđe proveru**.
 
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §16.
 
-> **Compile i smoke još nisu izvršeni na finalnom SHA.**
+> **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca, pa
+> smoke uključuje i slučaj sa nedostajućom tabelom.
