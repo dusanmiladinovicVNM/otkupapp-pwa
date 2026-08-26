@@ -5727,3 +5727,49 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §18. Domen: `docs/DOMEN/README.md`.
 > ponašanje čitanja kroz koje prolazi skoro sve, pa smoke ide na **kopiji**
 > sveske, i prvi korak je običan rad — on dokazuje da vaša šema ima kolonu tamo
 > gde je program očekuje.
+
+## v2.79.0 — dokazni aparat: alat koji je lajao na ispravne provere
+
+Nema izmene u programu — ovo je izdanje o **proverama**, nastavak `v2.72.0`.
+
+### Šta je bilo pokvareno
+
+Uz svaku sabotažu stoji i **ime provere** koju ona mora da obori. Tako se zna ne
+samo da je nešto palo, nego da je palo baš ono što treba.
+
+Ime provere se u testu menja pri svakoj doradi. Katalog o tome nije znao ništa,
+pa je zastarevao ćutke — i to na **119 od 251** mesta.
+
+Posledica je gora nego što zvuči, jer alat time laže u oba smera:
+
+- javlja grešku nad sabotažom koja radi **savršeno**;
+- a sabotažu koja stvarno obara **pogrešnu** proveru niko više ne pročita, jer se
+  na alat prestalo obraćati pažnju.
+
+Praktično: pun dokaz nije mogao da prođe ni za jednu veću oblast, pa se u
+poslednja dva posla vrteo samo uzak isečak — a baš u uskom isečku se nova mrtva
+sabotaža ne vidi.
+
+### Šta je urađeno
+
+Svih 119 je ispravljeno **iz merenja**, ne po sličnosti: svaka sabotaža je
+puštena i zapisano je ime provere koje je stvarno palo.
+
+Dodata je provera koja ovo ubuduće hvata **za sekundu** umesto za dva i po sata,
+i vezana je za onu koja se ionako pušta posle svake izmene koda.
+
+### Dva nalaza koja nisu zataškana
+
+- dve sabotaže obaraju **istu** proveru, pa se ne može reći koja je pala;
+- jedna sabotaža ne obara **ništa** — proverava da se izgled kontrole upisuje uz
+  potvrdu, a to se u testu ne vidi jer tamo prvi upis uvek uspe.
+
+Oba su upisana sa razlogom i vlasnikom, umesto da budu prećutana da bi izveštaj
+bio zelen.
+
+### Zašto je ovo vredelo
+
+`v2.72.0` je zatvorio sabotaže koje se više nisu mogle ni primeniti. Ovo zatvara
+one koje se primenjuju uredno, ali je alat prestao da ume da kaže **šta** su
+oborile. Ista bolest, drugo mesto — i oba puta se videla tek kad se izmerila.
+

@@ -247,14 +247,26 @@ def main(argv: list) -> int:
     lose = ostali
 
     posle = _otisak()
-    print("\ncrvenih: %d / sabotaza: %d" % (crvenih, len(stavke)))
+    # PRIZNAT NALAZ SE VADI I IZ IMENIOCA, ne samo iz spiska problema.
+    #
+    # Bez toga priznanje radi samo za polovinu vrsta nalaza: "PALA DRUGA TVRDNJA"
+    # jeste crvena pa se broji, a "NE OBARA NISTA" po definiciji nikad nije -- pa
+    # je crvenih uvek manje od ukupno i verdikt ostaje NIJE DOKAZANO ma sta pisalo
+    # u POZNATI_NALAZI_DOKAZ. Zapisan nalaz sa vlasnikom je tako i dalje drzao
+    # alat crvenim -- tacno ono sto komentar iznad zabranjuje.
+    #
+    # Zloupotreba je pokrivena: upis koji ne pokriva nijedan nalaz je i sam nalaz
+    # (v. gore), pa priznanje ne moze da prezivi popravku koju opisuje.
+    print("\ncrvenih: %d / sabotaza: %d%s"
+          % (crvenih, len(stavke),
+             " (priznatih: %d)" % len(pokriveni) if pokriveni else ""))
     print("izvor pre/posle: %s / %s -> %s"
           % (pre, posle, "IDENTICAN" if pre == posle else "RAZLIKA!"))
     for ime, sta in poznati:
         print(" POZNATO: %s -> %s" % (ime, sta))
     for ime, sta in lose:
         print(" PROBLEM: %s -> %s" % (ime, sta))
-    ok = not lose and pre == posle and crvenih == len(stavke)
+    ok = not lose and pre == posle and crvenih >= len(stavke) - len(pokriveni)
     print("=== %s ===" % ("DOKAZANO" if ok else "NIJE DOKAZANO"))
     return 0 if ok else 1
 

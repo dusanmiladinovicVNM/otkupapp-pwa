@@ -216,7 +216,7 @@ SABOTAZE = {
         '                p("tipNovca") = NOV_VIRMAN_FIRMA_KOOP\n',
         '                p("tipNovca") = NOV_VIRMAN_AVANS_KOOP   \' SABOTAZA\n',
         "T_IsplataValidiraj_TipNovcaPoIzboru",
-        "uz blok bez prekidaca isplata je virman firme, ne avans",
+        "uz blok bez prekidaca isplata je virman firme",
     ),
     "isplata-avans-saldo": (
         "modNovacUnos.bas",
@@ -239,7 +239,7 @@ SABOTAZE = {
         "        End If\n",
         "        ' SABOTAZA: izabrano otkupno mesto vise nije entitet novca\n",
         "T_IsplataValidiraj_TipNovcaPoIzboru",
-        "primalac otkupno mesto JESTE entitet novca, ne kontekst forme",
+        "izabrano otkupno mesto JESTE entitet novca",
     ),
     # --- upis uplate (F6) ---------------------------------------------------
     "uplata-tip-faktura": (
@@ -247,7 +247,7 @@ SABOTAZE = {
         '        p("tipNovca") = NOV_KUPCI_UPLATA\n',
         '        p("tipNovca") = NOV_KUPCI_AVANS   \' SABOTAZA\n',
         "T_UplataValidiraj_FakturaOdlucujeTip",
-        "uz izabranu fakturu uplata zatvara fakturu, nije avans",
+        "uz fakturu uplata zatvara fakturu",
     ),
     "uplata-preko-fakture": (
         "modNovac.bas",
@@ -276,7 +276,7 @@ SABOTAZE = {
         '        If Len(S(p, "partnerID")) = 0 Or partTip <> "KOOP" Then\n',
         '        If Len(S(p, "partnerID")) = 0 Then   \' SABOTAZA: tip partnera se ne gleda\n',
         "T_ReversValidiraj_SmerJeObavezan",
-        "kooperantski smer reversa ne prima kupca",
+        "kooperantski smer ne prima kupca",
     ),
     # --- ukucan a nerazresen izbor (F5/F6/F7) -------------------------------
     # Najopasnija klasa greske u ovom rezimu: dokument se knjizi kao ISPRAVAN,
@@ -289,7 +289,7 @@ SABOTAZE = {
         "    End If\n",
         "    ' SABOTAZA: ukucan partner bez izbora opet prolazi\n",
         "T_NerazresenIzbor_NeProlaziKaoPrazno",
-        "ukucano ime partnera bez izbora iz liste se ne knjizi",
+        "ukucan partner bez izbora ne prolazi kao isplata otkupnom mestu",
     ),
     "nerazresen-faktura": (
         "modNovacUnos.bas",
@@ -298,7 +298,7 @@ SABOTAZE = {
         "    End If\n",
         "    ' SABOTAZA: ukucana faktura bez izbora opet prolazi kao avans\n",
         "T_NerazresenIzbor_NeProlaziKaoPrazno",
-        "ukucana faktura bez izbora iz liste ne postaje avans kupca",
+        "ukucana faktura bez izbora ne prolazi kao avans kupca",
     ),
     # --- kapija vlasnistva i trenutnog ostatka ------------------------------
     "blok-tudj-koop": (
@@ -310,7 +310,7 @@ SABOTAZE = {
         "    End If\n",
         "    ' SABOTAZA: vlasnik bloka se vise ne proverava\n",
         "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
-        "isplata se ne vezuje za blok drugog kooperanta",
+        "blok drugog kooperanta se odbija",
     ),
     "blok-tudj-om": (
         "modNovac.bas",
@@ -320,7 +320,7 @@ SABOTAZE = {
         "            End If\n",
         "            ' SABOTAZA: otkupno mesto bloka se vise ne proverava\n",
         "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
-        "blok sa drugog otkupnog mesta se ne razduzuje na aktivnom",
+        "blok sa drugog otkupnog mesta se odbija",
     ),
     # Podmukliji oblik: kapija ostaje, ali umesto trenutnog stanja veruje
     # vrednosti koju je poslao ekran. Obara TRI testa i to je tacan nalaz --
@@ -330,7 +330,7 @@ SABOTAZE = {
         "    preostalo = vrednost - GetUplataForOtkup(otkupID)\n",
         "    preostalo = vrednost + 1000000   ' SABOTAZA: ostatak se ne cita iz podataka\n",
         "T_IsplataBlokGuard_VlasnistvoITrenutniOstatak",
-        "neisplaceni ostatak se cita iz podataka, ne iz snimka ekrana",
+        "iznos preko trenutnog ostatka se odbija",
     ),
     "faktura-tudj-kupac": (
         "modNovac.bas",
@@ -355,7 +355,7 @@ SABOTAZE = {
         "        End If\n",
         "        ' SABOTAZA: writer opet veruje parametrima\n",
         "T_WriterGuard_OdbijaTudjBlok",
-        "SaveOMUlaz_TX sam odbija nemogucu kombinaciju bloka i otkupnog mesta",
+        "writer odbija blok sa drugog otkupnog mesta i bez UI provere",
     ),
     # --- ruta ekrana --------------------------------------------------------
     # --- kapije nad novcem (hotfix posle pregleda #190) ---------------------
@@ -371,7 +371,7 @@ SABOTAZE = {
         '        UplataFakturaProblem = Poruka("NOVAC_ERR_FAK_VEC_PLACENA") & " " & fakturaID\n'
         "    ElseIf preostalo > 0 And ZaokruziNovac(iznos) > preostalo Then\n",
         "T_UplataGuard_VecPlacenaFaktura",
-        "potpuno placena faktura ne prima jos jednu uplatu",
+        "vec placena faktura se odbija (preostalo = 0)",
     ),
     # Obrnut smer istog pravila: kapija se prosiruje i na fakturu BEZ iznosa,
     # koju nikad nije ni smela da blokira.
@@ -393,7 +393,7 @@ SABOTAZE = {
         "            avansSaldo = ZaokruziNovac(GetOMAvansSaldo(stanicaID))\n"
         "            If ZaokruziNovac(novac) > avansSaldo Then\n",
         "T_WriterGuard_AvansSaldoOM",
-        "isplata iz OM avansa preko salda se odbija u WRITER-u, ne samo u UI",
+        "writer odbija kes isplatu preko avans salda OM",
     ),
     "ruta-zbirna": (
         "modScrDokumenti.bas",
@@ -428,7 +428,7 @@ SABOTAZE = {
         "        Case \"FAKTURA\":     TabelaTipa = TBL_FAKTURE\n",
         "        ' SABOTAZA: tip fakture ispao iz mape tabela\n",
         "T_Storno_TipBiraTabeluIKolone",
-        "svaki od devet tipova F8 ima svoju tabelu",
+        "Storno / FAKTURA cita svoju tabelu",
     ),
     # --- kapije storna ------------------------------------------------------
     "storno-nema-dok": (
@@ -448,28 +448,28 @@ SABOTAZE = {
         "        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = COL_ZBR_KOLICINA\n",
         '        Case STIP_ZBIRNA:     ColKolicinaZaPrefill = "Kolicina"   \' SABOTAZA\n',
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
-        "zbirna cita UkupnoKolicina -- literal 'Kolicina' tiho vraca nulu",
+        "zbirna cita UkupnoKolicina, ne Kolicina",
     ),
     "prefill-tabela": (
         "modStornoDok.bas",
         "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTKUP\n",
         "        Case STIP_OTKUP:      TabelaZaPrefill = TBL_OTPREMNICA   ' SABOTAZA\n",
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
-        "prefill cita tabelu SVOG tipa (otkup i otpremnica dele broj 1/TEST)",
+        "prefill otkupa nije prazan",
     ),
     "prefill-broj": (
         "modStornoDok.bas",
         '    res = Spoji(res, "fokus", "kolicina")\n',
         '    res = Spoji(res, "brdok", NzToText(d(base, cBroj)))   \' SABOTAZA\n',
         "T_PrefillIzStorniranog_CitaSvojuTabelu",
-        "broj dokumenta se NE preuzima -- ispravka je nov dokument, nov broj",
+        "broj dokumenta se NE preuzima",
     ),
     "framework-otkup": (
         "modStornoDok.bas",
         "        Case STIP_OTPREMNICA: TipUFlowDoc = FLOW_DOC_OTPREMNICA\n",
         "        Case STIP_OTPREMNICA, STIP_OTKUP: TipUFlowDoc = FLOW_DOC_OTPREMNICA   ' SABOTAZA\n",
         "T_FrameworkIspravke_SamoCetiriTipa",
-        "framework ispravke vazi SAMO za cetiri tipa sa nizvodnim tokom",
+        "obican storno, bez framework-a: OTKUP",
     ),
     # --- identitet dokumenta i fail-closed grane (hardening posle review-a) ---
     "prefill-fallback-po-broju": (
@@ -478,7 +478,7 @@ SABOTAZE = {
         "        Exit Function\n",
         "        ' SABOTAZA: nepostojeci PK opet pada nazad na broj\n",
         "T_Prefill_PoIdentitetuNePoBroju",
-        "zadat a nepostojeci PK NE sme da prefiluje tudji dokument istog broja",
+        "nepoznat PK ne pogadja tudji dokument istog broja",
     ),
     "prefill-anchor-broj": (
         "modDokumenta.bas",
@@ -489,7 +489,7 @@ SABOTAZE = {
         "        For r = 1 To UBound(data, 1)\n"
         "            If Trim$(NzToText(data(r, cId))) = Trim$(oldDocID) Then\n",
         "T_Prefill_PoIdentitetuNePoBroju",
-        "prefill bira dokument po PK-u, ne po broju (dva kupca dele broj)",
+        "PK A daje SVOJU kolicinu",
     ),
     # --- identitet dokumenta na granici prevezivanja (zavrsnica Faze D) -----
     "relink-izvor-po-broju": (
@@ -506,7 +506,7 @@ SABOTAZE = {
         "    Dim srcIds As Object: Set srcIds = IdoviGeneracije(TBL_PRIJEMNICA, COL_PRJ_ID, \"\")      ' SABOTAZA\n"
         "    Dim srcDvosmislen As Boolean\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "generacija izvora se stvarno koristi, ne samo prosledjuje",
+        "prevezivanje po generaciji je proslo",
     ),
     # Cilj prevezivanja. Izvor po identitetu a cilj po labeli i dalje moze da
     # odnese palete pogresnom kupcu -- samo na drugom kraju.
@@ -519,7 +519,7 @@ SABOTAZE = {
         "        End If\n",
         "        ciljni = (Trim$(CStr(prj(r, pcBr))) = newBroj)   ' SABOTAZA\n",
         "T_RelinkPoGeneraciji_NeDiraTudjDokument",
-        "cilj se bira po identitetu, ne po broju koji dele dva kupca",
+        "roba je stigla na dokument kupca 1 (40 gajbica)",
     ),
     "relink-cilj-bez-kapije": (
         "modPaletniList.bas",
@@ -536,7 +536,7 @@ SABOTAZE = {
         "                        pripada = docIds.Exists(pidS)\n",
         "                        pripada = (Trim$(CStr(ps(r2, pBr))) = brPrijemnice)   ' SABOTAZA\n",
         "T_PrevezivanjeNaZbirnu_PaletaIdePoIdentitetu",
-        "paletna stavka tudjeg dokumenta istog broja se NE pomera",
+        "tudja paleta OSTAJE na staroj zbirni",
     ),
     # Zadata generacija koje nema nije poziv na fallback po broju.
     "generacija-nema-pa-po-broju": (
@@ -544,7 +544,7 @@ SABOTAZE = {
         "        If srcIds.count = 0 Then Exit Function\n",
         "        If False Then Exit Function   ' SABOTAZA: pada na broj\n",
         "T_ZadataGeneracijaKojeNema_Staje",
-        "zadata generacija koje nema zaustavlja upis, ne prelazi na broj",
+        "zadata generacija prijemnice koje nema zaustavlja upis",
     ),
     # Presuda o relabelu. Writer bira dokument po generaciji; ako presuda opet
     # trazi dokument po broju, opisuje tudji -- i relabel se tiho preskoci.
@@ -553,7 +553,7 @@ SABOTAZE = {
         "    verdict = PresudiPaletaReassign(oVrS, oSoS, oTaS, nVr, nSo, nTa, oldGajbByKl, newGajb)\n",
         "    verdict = EvaluatePaletaReassign(oldBroj, newBroj)   ' SABOTAZA\n",
         "T_VerdiktPoIdentitetu_RelabelSeNePreskace",
-        "presuda opisuje izabran dokument, ne prvi sa tim brojem",
+        "stavka je prelabelirana na vrstu ciljnog dokumenta",
     ),
     # Otpremnica flow mutira roditeljsku zbirnu po golom broju.
     "otpremnica-bez-kapije-nad-zbirnom": (
@@ -931,7 +931,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: zamena ide i nad dvosmislenim brojem\n"
         '        If CBool(s("brojDvosmislenIkad")) Then\n',
         "T_ZamenaZbirne_NeDiraDecuTudje",
-        "ISPRAVKA staje dok je broj pripadao vise vlasnika",
+        "ISPRAVKA staje dok broj nose dva aktivna dokumenta",
     ),
     # Zavrsetak ispravke: tacan OldDocID degradiran u prazan opseg -> broj.
     "completion-degradira-olddocid": (
@@ -970,7 +970,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: kaskada ide i nad dvosmislenim brojem\n"
         '        res("message") = "Broj zbirne \'" & brojZbirne & "\' je pripadao VISE " & _\n',
         "T_ZbirnaKaskada_StajeNaDvosmislenom",
-        "ponistenje lanca staje dok je broj pripadao vise vlasnika",
+        "odbijanje imenuje dvosmislen broj, ne samo neuspeh",
     ),
     # Preflight koji primi identitet pa ga ignorise. StornoIzvrsi nize je bio
     # ispravan, ali se do njega nije stizalo -- kapija iznad je odbijala.
@@ -1000,7 +1000,7 @@ SABOTAZE = {
         "                                   generacijaID, SRC) Then\n",
         "        If Trim$(CStr(data(i, colBroj))) = Trim$(brojZbirne) Then   ' SABOTAZA\n",
         "T_Zbirna_ZaglavljePoGeneracijiKaskadaStaje",
-        "stornira se SAMO zbirna izabrane generacije",
+        "zbirna drugog vozaca istog broja OSTAJE aktivna",
     ),
     # F8: identitet kliknutog reda. Bez njega correction context pokazuje na
     # prvi dokument tog broja -- a kod RESI KASNIJE se guarded writer uopste ne
@@ -1022,7 +1022,7 @@ SABOTAZE = {
         "            kljuc = broj & Chr$(1) & vlasnik\n",
         "            kljuc = broj   ' SABOTAZA: dva vlasnika istog broja postaju jedan cilj\n",
         "T_Oporavak_CiljneListe",
-        "cilj je DOKUMENT (broj + vlasnik), ne sam broj",
+        "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta",
     ),
     # Su-stanar na deljenoj paleti. Dva kupca istog broja i iste robe smeju da
     # dele paletu; poredjenje po broju ih vidi kao istu prijemnicu, pa kapija ne
@@ -1034,7 +1034,7 @@ SABOTAZE = {
         "                    jeIzvor = (bpg = oldBroj)   ' SABOTAZA\n"
         "                    jeCilj = (bpg = newBroj)\n",
         "T_DeljenaPaleta_SuStanarPoIdentitetu",
-        "su-stanar deljene palete je drugi DOKUMENT, ne drugi broj",
+        "relabel deljene palete se odbija i uz potvrdu",
     ),
     # Kapija "isti broj" na ulazu u writer, pre razresavanja generacija.
     "writer-isti-broj-odbija": (
@@ -1044,7 +1044,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: opet se gleda samo broj\n"
         "        If StrComp(Trim$(oldGeneracijaID), Trim$(newGeneracijaID), vbTextCompare) = 0 Then\n",
         "T_IstiBrojRazliciteGeneracije_NijeIstiDokument",
-        "isti broj a razlicite generacije su dva dokumenta i prolaze",
+        "isti broj a razlicite generacije PROLAZI",
     ),
     # Ciljna lista zbirnih: vlasnistvo je vozac + kupac, ne samo kupac.
     "zbirna-vlasnik-samo-kupac": (
@@ -1052,7 +1052,7 @@ SABOTAZE = {
         "                                    Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC), _\n",
         "                                    Array(COL_ZBR_KUPAC), _\n",
         "T_Oporavak_CiljneListe",
-        "dve zbirne istog broja a razlicitih vozaca ostaju DVA reda",
+        "isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta",
     ),
     "vlasnik-broji-stornirane": (
         "modStorno.bas",
@@ -1069,14 +1069,14 @@ SABOTAZE = {
         "    ispravka = (Len(S(p, \"ispravkaID\")) > 0)\n"
         "    ' SABOTAZA: sveza paletizacija se vise ne preskace\n",
         "T_IspravkaPrijemnice_SkipIRelink",
-        "ispravka preskace svezu paletizaciju (inace ista roba ide na dve palete)",
+        "nema paletizacije-pa-storna: nijedna stavka nije nastala uzalud",
     ),
     "ispravka-bez-relinka": (
         "modDokUnos.bas",
         "    If ispravka Then PreveziPaleteIspravke p, res, poruke\n",
         "    ' SABOTAZA: palete stare prijemnice se vise ne prevezuju\n",
         "T_IspravkaPrijemnice_SkipIRelink",
-        "palete stare prijemnice prelaze na novu",
+        "ispravka nosi prevezenu paletnu stavku",
     ),
     "ispravka-context-ostaje": (
         "modDokUnos.bas",
@@ -1084,7 +1084,7 @@ SABOTAZE = {
         "                \"Ispravka prijemnice: palete prevezane na \" & noviBroj & \".\"\n",
         "            ' SABOTAZA: correction ostaje PENDING posle uspesnog prevezivanja\n",
         "T_IspravkaPrijemnice_SkipIRelink",
-        "correction se zatvara -- inace sledeci unos opet bude ponudjen kao zamena",
+        "correction context je zatvoren posle uspesnog prevezivanja",
     ),
     "ispravka-fail-open": (
         "modDokUnos.bas",
@@ -1093,7 +1093,7 @@ SABOTAZE = {
         '        razlog = ""   \' SABOTAZA: vise ispravki vise ne zaustavlja upis\n'
         "        NadjiIspravku = 0\n",
         "T_IspravkaDetekcija_FailClosed",
-        "dve ispravke na cekanju zaustavljaju upis (safe-stop)",
+        "dve ispravke na cekanju zaustavljaju upis",
     ),
     # --- ekran Oporavak -----------------------------------------------------
     "oporavak-registar": (
@@ -1101,7 +1101,7 @@ SABOTAZE = {
         '    c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
         '    c.Add "OPORAVAK|modScrOporavakX|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _\n',
         "T_Oporavak_UgovorIRadnje",
-        "ime modula u registru mora da pogadja stvaran modul (kasno vezivanje)",
+        "modul ekrana odgovara na Scr_Meta (kasno vezivanje radi)",
     ),
     "oporavak-cilj-radnja": (
         "modScrOporavak.bas",
@@ -1110,7 +1110,7 @@ SABOTAZE = {
         "        Case \"PRIJEMNICE\", \"ZBIRNE\"   ' SABOTAZA: i ciljna lista dobija dugme\n"
         "            Scr_Radnje = \"prevezipri:OTKUI_BTN_OPO_PREVEZI:96:soft:1\"\n",
         "T_Oporavak_UgovorIRadnje",
-        "ciljna lista nema radnju -- dugme bi prevezivalo cilj na samog sebe",
+        "ciljna lista zbirnih nema radnju",
     ),
     "oporavak-stornirani-cilj": (
         "modScrOporavak.bas",
@@ -1121,7 +1121,7 @@ SABOTAZE = {
         "        ' SABOTAZA: stornirani dokumenti ulaze u listu ciljeva\n"
         "        broj = modUiData.CellS(src, r, iBr)\n",
         "T_Oporavak_CiljneListe",
-        "lista ciljeva nudi SAMO aktivne dokumente",
+        "stornirana zbirna se NE nudi kao cilj",
     ),
     "storno-revers-smer": (
         "modStornoDok.bas",
@@ -1132,7 +1132,7 @@ SABOTAZE = {
         "                StornoRazlog = \"\"   ' SABOTAZA: smer reversa vise nije obavezan\n"
         "            ElseIf Not ActiveAmbalazaDokExists(broj, opcija) Then\n",
         "T_StornoDok_KapijePreUpisa",
-        "revers bez smera se odbija -- cetiri smera dele isti brojevni niz",
+        "revers bez smera se odbija PRE trazenja dokumenta",
     ),
     # --- "Odbaci zaostalu ispravku" na ekranu Oporavak ---------------------------
     # Lista Nedovrseno je bila cist pregled: operater vidi da ga safe-stop blokira,
@@ -1142,7 +1142,7 @@ SABOTAZE = {
         "            Scr_Radnje = \"odbaci:OTKUI_BTN_OPO_ODBACI:150:danger:1\"\n",
         "            Scr_Radnje = \"nista:OTKUI_BTN_OPO_ODBACI:150:danger:1\"   ' SABOTAZA\n",
         "T_Oporavak_UgovorIRadnje",
-        "Nedovrseno nudi Odbaci ispravku -- inace je pregled bez izlaza",
+        "Nedovrseno ima Odbaci ispravku",
     ),
     # Nad istim poslovnim brojem moze da stoji vise contexta (storno, pa opet storno
     # istog dokumenta). Bez CorrectionID-ja u redu, radnja gadja onaj koji zatekne
@@ -1173,7 +1173,7 @@ SABOTAZE = {
         "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(cid, _\n",
         "    OdbaciIspravkuCore = modStornoContext.CancelCorrectionContext(\"SV-TEST-1\", _\n",
         "T_Oporavak_OdbaciIspravku_GasiSamoSvoj",
-        "gasi se IZABRANA ispravka -- sused ostaje netaknut",
+        "SV-TEST-1 ostaje netaknut",
     ),
     # NED_COL_CID vezuje opis kolona, punjenje reda i radnju u JEDAN broj. Da je
     # radnja imala svoj indeks, drift bi bio nevidljiv: mreza bi izgledala
@@ -1183,7 +1183,7 @@ SABOTAZE = {
         "Public Const NED_COL_CID As Long = 6\n",
         "Public Const NED_COL_CID As Long = 5   ' SABOTAZA\n",
         "T_Oporavak_OdbaciIspravku_PoIdentitetu",
-        "radnja cita BAS kolonu na kojoj se opis kolona zavrsava",
+        "opis kolona se zavrsava BAS na koloni koju radnja cita",
     ),
     # Zaglavlje palete se od v6-ui-146 cita iz JEDNOG snimka tblPaleta, kroz recnik
     # ID -> red. Ako se red uzme mimo tog recnika, uvid prijavljuje tudju
@@ -1194,7 +1194,7 @@ SABOTAZE = {
         "        If pIdx.Exists(pid) Then palRow = CLng(pIdx(pid))\n",
         "        If pIdx.Exists(pid) Then palRow = 1   ' SABOTAZA: uvek prvi red\n",
         "T_ImpactPalete_ZaglavljeIzPraveVrste",
-        "zaglavlje palete dolazi iz reda BAS te palete",
+        "popunjenost je iz reda BAS te palete",
     ),
     # Efekat posledice se od v6-ui-148 sklapa iz kataloga, sa prefiksom koji se zove
     # ISTO kao dugme odluke. NAPOMENA: slucaj 'kljuc ne postoji u katalogu' ovde
@@ -1207,7 +1207,7 @@ SABOTAZE = {
         "    If StrComp(Trim$(dup), Trim$(pon), vbTextCompare) = 0 Then\n",
         "    If True Then   ' SABOTAZA: posledice uvek izgledaju isto\n",
         "T_StornoEfekat_TekstIzKataloga",
-        "razlicit efekat nosi OBA prefiksa, ne jedan spojen",
+        "razlicit efekat nosi OBA prefiksa u istom redu",
     ),
     # Lista otkupnih blokova radi kao legacy panel: podrazumevano NIJEDAN nije
     # oznacen, oznacen znaci DODATNO storniran. Do v6-ui-149 je nov ekran na
@@ -1217,7 +1217,7 @@ SABOTAZE = {
         "        outA(n, 1) = IIf(BlokOznacen(ident), ChrW(10003), \"\")\n",
         "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
         "T_StornoBlokovi_PodrazumevanoNijedan",
-        "podrazumevano nijedan blok nije oznacen",
+        "red 1 nije oznacen bez izricitog izbora",
     ),
     # Oznake pripadaju dokumentu nad kojim su napravljene. Ako prezive promenu
     # izbora, sledeci storno gadja blokove koje operater nikad nije video.
@@ -1230,7 +1230,7 @@ SABOTAZE = {
         "    Set mBlokOznaceni = Nothing\n",
         "    ' SABOTAZA: oznake prezive promenu izabranog dokumenta\n",
         "T_StornoBlokovi_PodrazumevanoNijedan",
-        "promena izabranog dokumenta ponistava oznacene blokove",
+        "promena izbora dokumenta ponistava oznacene blokove",
     ),
     # Oznaka upozorenja je SIGNAL ZA RUTIRANJE, ne deo recenice: kaze sloju iznad
     # da poruku treba pokazati u dijalogu. MsgBox crta kroz ANSI kodnu stranu u
@@ -1241,7 +1241,7 @@ SABOTAZE = {
         "    PorukaZaDijalog = Trim$(Replace(txt, ChrW(10007), \"\"))\n",
         "    PorukaZaDijalog = txt   ' SABOTAZA: oznaka ostaje u dijalogu\n",
         "T_PorukeUnosa_UpozorenjeNosiOznaku",
-        "poruka u dijalogu ide BEZ oznake za rutiranje",
+        "DOKUNOS_MSG_VISE_ISPRAVKI u dijalogu ide BEZ oznake",
     ),
     # Red o blokovima u zoni je jedini koji trazi odluku, a odluka se donosi u
     # drugoj listi. Ako ne prati izbor, operater i posle stikliranja cita isti
@@ -1251,7 +1251,7 @@ SABOTAZE = {
         "    iz = BlokOznacenihBroj()\n",
         "    iz = 0   ' SABOTAZA: izbor se ne vidi u zoni\n",
         "T_StornoBlokovi_PodrazumevanoNijedan",
-        "red o blokovima prijavljuje KOLIKO ih je izabrano",
+        "sa izborom red prijavljuje KOLIKO ih je izabrano",
     ),
     # Brojac uz stavku menija ide kroz ugovor, kasno vezano -- ljuska ne sme da
     # sazna nijedan ekran po imenu. Poziv GetNedovrseno direktno bi radio, i to je
@@ -1282,7 +1282,7 @@ SABOTAZE = {
         "        outA(n, 1) = IIf(PalOznacena(ident), ChrW(10003), \"\")\n",
         "        outA(n, 1) = ChrW(10003)   ' SABOTAZA: sve izgleda oznaceno\n",
         "T_NovaPrerada_IzborINeto",
-        "podrazumevano nijedna paleta nije oznacena",
+        "red 1 nije oznacen bez izricitog izbora",
     ),
     # Neto je racun, ne unos. Ako se ambalaza ne oduzme, prerada se knjizi sa
     # tezinom kutija i kesa u netu -- greska koja se vidi tek na lageru.
@@ -1398,7 +1398,7 @@ SABOTAZE = {
         "    IdZaRed = Trim$(CStr(modOtkupUI.GridCell(red, kol)))\n",
         "    Dim i As Long, br As String   ' SABOTAZA: lookup samo po broju\n    br = Trim$(CStr(modOtkupUI.GridCell(red, 1)))\n    For i = 1 To modOtkupUI.GridBrojRedova()\n        If Trim$(CStr(modOtkupUI.GridCell(i, 1))) = br Then\n            IdZaRed = Trim$(CStr(modOtkupUI.GridCell(i, kol)))\n            Exit Function\n        End If\n    Next i\n",
         "T_PaleteIdentitet_PoIDNePoBroju",
-        "radnja gadja izabrani RED, ne prvi red istog broja",
+        "stariji red daje SVOJ PaletaID",
     ),
     # Telo mreze bez rezerve za traku poruka: poslednji red ulazi 24pt u
     # traku, pa poruka stoji PREKO njega.
@@ -1419,7 +1419,7 @@ SABOTAZE = {
         "    On Error GoTo EH\n    Scr_Event = ObradiDogadjaj(tag)\n    Err.Clear\n",
         "    On Error Resume Next   ' SABOTAZA: greska se guta, Err ostaje\n    Scr_Event = ObradiDogadjaj(tag)\n",
         "T_PaleteScrEvent_NeCuriGreska",
-        "Scr_Event ostavlja cist Err i kad je greska obradjena",
+        "i kad dogadjaj iznutra pukne, Err ne curi kroz Scr_Event",
     ),
     "bazen-cuti-visak": (
         "modOtkupUI.bas",
@@ -1446,7 +1446,7 @@ SABOTAZE = {
         '    c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
         '    c.Add "AGRO|modScrAgroX|OTKUI_NAV_AGRO|" & IC_AGRO & _\n',
         "T_Agro_UgovorEkrana",
-        "ekran odgovara na Scr_Meta -- kasno vezivanje stvarno razresava modul",
+        "modul ekrana Agrohemija odgovara na Scr_Meta (kasno vezivanje radi)",
     ),
     # Kapija stanja pri dodavanju u korpu mora da broji i ono sto je VEC u
     # korpi. Bez toga se ista roba doda dva puta preko stanja, a upis pukne tek
@@ -1456,7 +1456,7 @@ SABOTAZE = {
         '    uKorpi = AgroKorpaKolicina(korpa, artikalID)\n',
         '    uKorpi = 0#   \' SABOTAZA: kapija ne broji ono sto je vec u korpi\n',
         "T_Agro_KapijaStanjaBrojiKorpu",
-        "kapija stanja sabira korpu sa novom stavkom",
+        "kapija stanja broji i ono sto je vec u korpi",
     ),
     # Druga kapija, pred upis, mora da agregira PO ARTIKLU preko cele korpe.
     # Poredjenje red-po-red propusta korpu koja u zbiru premasuje stanje --
@@ -1466,7 +1466,7 @@ SABOTAZE = {
         '        treba(artID) = CDbl(treba(artID)) + AD(korpa(i), "kolicina")\n',
         '        treba(artID) = AD(korpa(i), "kolicina")   \' SABOTAZA: bez sabiranja\n',
         "T_Agro_KapijaStanjaBrojiKorpu",
-        "kapija pre upisa sabira SVE stavke istog artikla, ne gleda red po red",
+        "korpa vise ne staje u stanje -- kapija pre upisa to hvata",
     ),
     # Smart doza se zaokruzuje NAGORE: pola pakovanja se ne izdaje. Nanize daje
     # nula pakovanja za 3 l uz pakovanje od 5 l -- predlog bi bio "ne izdaji
@@ -1479,7 +1479,7 @@ SABOTAZE = {
         '    PoljeVidi z, "scrAgDob", Not izl\n',
         '    PoljeVidi z, "scrAgDob", True   \' SABOTAZA: polje prijema ostaje\n',
         "T_ZonaAgro_PoljaPostojeIPrateRezim",
-        "polja prijema su ugasena u izdavanju (i obrnuto)",
+        "u izdavanju su ugasena polja prijema",
     ),
     # Cip koji ne suzava izgleda kao da radi: lista je ista i pre i posle klika.
     # Bojenje bez javljanja nove osnove. clsFlatBtn pamti boju pri Bind-u i na
@@ -1505,7 +1505,7 @@ SABOTAZE = {
         '    modOtkupUI.RebaseSink "scrAgSegU"\n',
         "    ' SABOTAZA: nova osnova se ne javlja sink-u\n",
         "T_ZonaAgro_PrekidacRezimaZadrzavaBoju",
-        "izabran rezim zadrzava boju i kad pokazivac ode",
+        "izdavanje ostaje belo i kad pokazivac ode",
     ),
     # Traka korpe pokazuje NAJNOVIJE prvo: operater upravo nesto doda, pa mu je
     # potvrda ono sto trazi. Obrnut redosled izgleda ispravno dok se korpa ne
@@ -1517,7 +1517,7 @@ SABOTAZE = {
         "        If i > n - 1 Then Exit Function\n"
         "        TrakaRed = KorpaRedPrikaz(k(i + 1))   ' SABOTAZA: najstarije prvo\n",
         "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
-        "traka pokazuje poslednju dodatu stavku prvu",
+        "prvi red trake je POSLEDNJA dodata stavka",
     ),
     # Lista koja se tiho odseca izgleda kao cela. Isto pravilo koje ljuska nad
     # sobom vec ima (BazenStaje) -- samo je ovde traka ta koja ne staje.
@@ -1528,7 +1528,7 @@ SABOTAZE = {
         "    sakriveno = n - (AG_KORPA_N - 1)\n"
         "    TrakaRed = KorpaRedPrikaz(k(n - i))   ' SABOTAZA: preliv se ne prijavljuje\n",
         "T_Agro_TrakaKorpe_NajnovijePrvoIPreliv",
-        "traka PRIJAVLJUJE koliko stavki nije stalo",
+        "poslednji red je prelivni, ne cetvrta stavka",
     ),
     # Stavka korpe jos nije u tabeli, pa nema ID iz baze. Ako se trazi po onome
     # sto se u redu VIDI, dve iste stavke ("dva pakovanja sada, dva kasnije")
@@ -1539,7 +1539,7 @@ SABOTAZE = {
         '    red("stavkaID") = NovaStavkaId()\n',
         '    red("stavkaID") = "K"   \' SABOTAZA: sve stavke isti identitet\n',
         "T_Agro_KorpaUklanjaPoIdentitetu",
-        "svaka stavka korpe nosi SVOJ identitet",
+        "dve stavke istog prikaza imaju RAZLICIT identitet",
     ),
     # Identitet koji ne stigne do mreze je isto sto i identitet kog nema: ekran
     # ga u trenutku klika nema odakle da procita.
@@ -1548,7 +1548,7 @@ SABOTAZE = {
         '        outA(n, 8) = CStr(k(i)("stavkaID"))\n',
         '        outA(n, 8) = ""   \' SABOTAZA: red mreze ne nosi identitet\n',
         "T_Agro_KorpaUklanjaPoIdentitetu",
-        "red mreze PRENOSI identitet stavke",
+        "redovi mreze nose razlicite identitete",
     ),
     # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u korpi
     # gleda sifru koja mu ne znaci nista.
@@ -1557,7 +1557,7 @@ SABOTAZE = {
         '        "OTKUI_HDA_STAVKA||txt|1|4")\n',
         '        "OTKUI_HDA_STAVKA||txt|60|3")   \' SABOTAZA: identitet se crta\n',
         "T_Agro_KorpaUklanjaPoIdentitetu",
-        "kolona identiteta ostaje van prikaza",
+        "kolona identiteta je prioriteta 4 -- mreza je ne crta",
     ),
     # Ljuska brojace pita samo kroz RefreshFromData, a nju zove tek na "podaci su
     # promenjeni". Korpa nije podatak u tabeli, pa bez sopstvenog kanala znacka
@@ -1569,14 +1569,14 @@ SABOTAZE = {
         "    modOtkupUI.OsveziNavBrojace\n",
         "    OsveziZonu   ' SABOTAZA: znacka ostaje na staroj vrednosti\n",
         "T_Agro_ZnackaPratiKorpuVanKorpeListe",
-        "znacka menija prati korpu i van liste korpe",
+        "znacka prati korpu i kad korpa NIJE prikazana lista",
     ),
     "agro-cip-ne-suzava": (
         "modScrAgro.bas",
         '        Case "ima":  AgCipStanje = (stanje > 0)\n',
         '        Case "ima":  AgCipStanje = True   \' SABOTAZA: cip ne suzava\n',
         "T_Agro_CipoviSuzavajuListu",
-        "cip Ima na stanju stvarno izbacuje artikle bez zaliha",
+        "nula nije na stanju",
     ),
     # Lista dugova pokazuje IME, a dvoklik bira KOOPERANTA. Ako mapa na koliziji
     # zapamti prvog pogodjenog umesto praznog, dvoklik izda robu pogresnom
@@ -1586,7 +1586,7 @@ SABOTAZE = {
         '            If CStr(mDugIds(naziv)) <> koopID Then mDugIds(naziv) = ""\n',
         '            If False Then mDugIds(naziv) = ""   \' SABOTAZA: prvi pobedjuje\n',
         "T_Agro_BrojacIDvoklikPoIdentitetu",
-        "dvosmislen prikaz nosi PRAZAN identitet, ne prvog pogodjenog",
+        "dva kooperanta istog imena daju DVOSMISLEN prikaz, ne prvog",
     ),
     # Korpa je jedino sto na ovom ekranu ceka operatera. Brojac koji je ne vidi
     # znaci da neproknjizena korpa nestane bez ijednog traga cim se predje na
@@ -1596,7 +1596,7 @@ SABOTAZE = {
         "    Scr_Brojac = BrojUKorpi(mKorpaI) + BrojUKorpi(mKorpaU)\n",
         "    Scr_Brojac = 0   ' SABOTAZA: korpa koja ceka se ne vidi\n",
         "T_Agro_BrojacIDvoklikPoIdentitetu",
-        "brojac prijavljuje stavke koje cekaju upis",
+        "brojac vidi stavku koja ceka upis",
     ),
     # Bazen ljuske je konacan: visak se TIHO odseca (LayoutChips nacrta prvih
     # MAX_CHIP i stane). Ekran koji trazi vise izgleda ispravno u kodu, a
@@ -1613,7 +1613,7 @@ SABOTAZE = {
         '                         "u5:OTKUI_CIPA_ULAZ:52|izlaz:OTKUI_CIPA_IZLAZ:52|" & _\n'
         '                         "godina:OTKUI_CIPA_GODINA:84"   \' SABOTAZA\n',
         "T_Agro_UgovorEkrana",
-        "ekran ne trazi vise cipova nego sto bazen ljuske ima",
+        "lista PROMET ne trazi vise cipova nego sto bazen ima",
     ),
     # Mapa odbitaka sme da bude BRZA kopija GetAgroAbzug, ali ne i DRUGACIJA.
     # Ovde prestaje da SABIRA i pamti poslednji red -- tako se dve kopije
@@ -1624,14 +1624,14 @@ SABOTAZE = {
         "                    d(koopID) = CDbl(d(koopID)) + CDbl(data(i, colUplata))\n",
         "                    d(koopID) = CDbl(data(i, colUplata))   ' SABOTAZA: poslednji pobedjuje\n",
         "T_Agro_AbzugMapaPratiPojedinacni",
-        "mapa odbitaka SABIRA redove, isto kao pojedinacni racun",
+        "mapa SABIRA odbitke i izuzima stornirane",
     ),
     "agro-doza-nanize": (
         "modAgroUnos.bas",
         "    r(\"brojPak\") = CLng(-Int(-dozaKg / pak))\n",
         "    r(\"brojPak\") = CLng(Int(dozaKg / pak))   ' SABOTAZA: nanize\n",
         "T_Agro_SmartDozaZaokruzujeNagore",
-        "doza se zaokruzuje NAGORE na cela pakovanja",
+        "3 l trazi JEDNO pakovanje od 5 l",
     ),
     # --- EKRAN FAKTURISANJE (Faza E/16) -------------------------------------
     # Ljuska Change salje ekranu na SVAKI znak, a GetComboID dok se kuca vraca "".
@@ -1642,7 +1642,7 @@ SABOTAZE = {
         "    If Len(Trim$(nov)) = 0 Then Exit Function\n",
         "    ' SABOTAZA: prazan ID prolazi kao drugi kupac\n",
         "T_Fak_NerazresenKupacNeDiraKorpu",
-        "nerazresen unos u polju kupca ne dira korpu",
+        "prazan ID nije promena kupca -- to je nerazresen unos",
     ),
     # LogError pocinje sa `On Error Resume Next`, a svaka On Error naredba brise
     # Err. Citanje Err-a POSLE LogErr-a daje nulu i prazan opis: pozivalac dobije
@@ -1658,7 +1658,7 @@ SABOTAZE = {
         "    errNum = Err.Number\n"
         "    errDesc = Err.description\n",
         "T_Fak_GreskaNePreziviLogErr",
-        "greska se cita PRE LogErr-a, pa opis prezivi do pozivaoca",
+        "opis imenuje fakturu koje nema, ne neku drugu gresku",
     ),
     # SEF lista se do prvog smoke-a KRILA kad SEF nije podesen. Citanje stanja su
     # kolone tblFakture i ne trazi nikakvu vezu -- kapiju trazi samo RADNJA, i ona
@@ -1673,7 +1673,7 @@ SABOTAZE = {
         "    End If\n"
         "    Scr_Liste = Array( _\n",
         "T_Fak_UgovorEkrana",
-        "SEF lista postoji i kad SEF nije podesen",
+        "tri liste, i kad SEF nije podesen",
     ),
     # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
@@ -1684,7 +1684,7 @@ SABOTAZE = {
         '                         "sfrecov:OTKUI_BTN_FK_SEF_OPORAVI:88:ghost:1|" & _\n'
         '                         "sfvisak:OTKUI_BTN_FK_SEF_STATUS:88:ghost:1"\n',
         "T_Fak_UgovorEkrana",
-        "SEF lista ne trazi vise radnji nego sto ljuska ima dugmadi",
+        "SEF ima TACNO MAX_ACT radnji -- sesta bi se tiho odsekla",
     ),
     # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada listi
     # (RefreshChipsForScreen). Ako nije najsiri, povratak na njega tiho sakrije
@@ -1696,7 +1696,7 @@ SABOTAZE = {
         '            FkCipoviZaListu = "nepl:OTKUI_CIPF_NEPLACENE:88|" & _\n'
         '                                "sve:OTKUI_CHIP_SVE:40|" & _\n',
         "T_Fak_UgovorEkrana",
-        "prvi cip svake liste je najsiri ('sve')",
+        "prvi cip liste FAKTURE je najsiri ('sve')",
     ),
     # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u listi
     # faktura gleda internu sifru umesto broja.
@@ -1707,7 +1707,7 @@ SABOTAZE = {
         '        "OTKUI_HD_STATUS||paypill|92|1", _\n'
         '        "OTKUI_HDF_FAKID||txt|90|3")   \' SABOTAZA: identitet se crta\n',
         "T_Fak_IdentitetURedu_NeCrtaSe",
-        "kolona identiteta ostaje van prikaza (prioritet 4)",
+        "lista FAKTURE: kolona identiteta je prioriteta 4",
     ),
     # Dvosmislen ID je ID koji u tabeli postoji dvaput. Ako prvi pobedi, radnja
     # se izvrsi nad redom koji operater NIJE pokazao -- tiho.
@@ -1726,7 +1726,7 @@ SABOTAZE = {
         '        outA(n, 11) = IIf(dostupna, "1", "")\n',
         '        outA(n, 11) = IIf(Len(CStr(src(i, 10))) = 0, "1", "")   \' SABOTAZA\n',
         "T_Fak_DostupnostSePrenosiURedu",
-        "red mreze prenosi PRAVILO dostupnosti, ne prikaz",
+        "red NOSI 'nije dostupna' u koloni 11",
     ),
     # Pravilo zivi na jednom mestu i deli ga kapija IsPrijemnicaAvailableForFaktura
     # sa citacem mreze. Ovde gubi jedan uslov -- i dve strane pocnu da se razilaze.
@@ -1735,7 +1735,7 @@ SABOTAZE = {
         '    If Trim$(fakturisano) = "Da" Then Exit Function\n',
         "    ' SABOTAZA: oznaka 'fakturisano' se vise ne gleda\n",
         "T_Fak_DostupnostSePrenosiURedu",
-        "obelezena kao fakturisana ne sme u fakturu ni kad FakturaID nedostaje",
+        "obelezena kao fakturisana ne sme -- i kad FakturaID nedostaje",
     ),
     # Korpa NIJE podatak u tabeli. Ljuska brojace pita samo kroz RefreshFromData,
     # a nju zove tek na "podaci su promenjeni" -- pa bez svog kanala znacka pise
@@ -1747,7 +1747,7 @@ SABOTAZE = {
         "    modOtkupUI.OsveziNavBrojace\n",
         "    OsveziZonu   ' SABOTAZA: promena korpe ne stize do znacke\n",
         "T_Fak_KorpaZnackaITraka",
-        "promena korpe sama zove OsveziNavBrojace",
+        "znacka prati korpu i kad korpa NIJE prikazana lista",
     ),
     # "Ukloni" bira po IDENTITETU. Dve stavke istog prikaza (isti broj, ista
     # kolicina, ista cena) su inace nerazlucive, pa nestane pogresna -- tiho,
@@ -1757,7 +1757,7 @@ SABOTAZE = {
         "    i = UKorpi(prijemnicaID)\n",
         "    i = IIf(Korpa().count > 0, 1, 0)   ' SABOTAZA: uklanja prvu\n",
         "T_Fak_KorpaZnackaITraka",
-        "iz korpe se uklanja stavka koju je operater pokazao",
+        "ostala je bas ona koja NIJE pokazana",
     ),
     # Operater upravo nesto doda, pa mu je potvrda ono sto trazi. Obrnut
     # redosled izgleda ispravno dok se korpa ne napuni preko cetiri reda.
@@ -1768,7 +1768,7 @@ SABOTAZE = {
         "    If i < FK_KORPA_N - 1 Then\n"
         "        TrakaRed = KorpaRedPrikaz(i + 1)   ' SABOTAZA: najstarije prvo\n",
         "T_Fak_KorpaZnackaITraka",
-        "traka korpe pokazuje NAJNOVIJE prvo",
+        "prvi red trake je POSLEDNJA dodata stavka",
     ),
     # Lista koja se tiho odseca izgleda kao cela -- isto pravilo koje ljuska nad
     # sobom vec ima (BazenStaje).
@@ -1777,7 +1777,7 @@ SABOTAZE = {
         '    TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno\n',
         '    TrakaRed = KorpaRedPrikaz(n - i)   \' SABOTAZA: preliv se precutkuje\n',
         "T_Fak_KorpaZnackaITraka",
-        "traka korpe PRIJAVLJUJE koliko stavki ne staje",
+        "poslednji red trake PRIJAVLJUJE preliv, ne cuti o njemu",
     ),
     # Faktura iznosa nula nije placena nego prazna. Da je "placena", cip i znak
     # u istom redu bi tvrdili suprotno jedno od drugog.
@@ -1797,7 +1797,7 @@ SABOTAZE = {
         "                           And (iznos - uplaceno > 0)\n",
         "            FkCipFaktura = (iznos - uplaceno > 0)   ' SABOTAZA: status se ne gleda\n",
         "T_Fak_CipoviPrateStatusFakture",
-        "cip neplacenih se slaze sa modNovac.GetOpenFakture",
+        "sa statusom Placeno ne prolazi ni sa ostatkom",
     ),
     # Stornirana faktura u listi znaci da joj operater nudi stampu i slanje na SEF.
     "fakture-stornirana-u-listi": (
@@ -1808,7 +1808,7 @@ SABOTAZE = {
         "    If IsEmpty(data) Then   ' SABOTAZA: stornirane ostaju u listi\n"
         "        GetFaktureForGrid = Empty\n",
         "T_Fak_CipoviPrateStatusFakture",
-        "stornirana faktura ne ulazi u listu",
+        "stornirana faktura NIJE u listi",
     ),
     # ------------------------------------------------------------ MREZA: CELIJA
     # RenderGrid radi pod 'On Error Resume Next'. Dok se tekst racunao U SAMOM
@@ -1820,7 +1820,7 @@ SABOTAZE = {
         "                                .caption = txt\n",
         "                                If Len(txt) > 0 Then .caption = txt   ' SABOTAZA: prazno ne prepisuje\n",
         "T_MrezaCelija_NeostavljaTudjiTekst",
-        "celija koja se ne moze prikazati ostaje prazna, ne zadrzi tudji tekst",
+        "celija koja se ne moze prikazati OSTAJE PRAZNA -- ne zadrzava tudji tekst",
     ),
     # 'IsNumeric' nad Date-om je FALSE. Ekran koji vrednost preda onakvu kakva u
     # tabeli jeste dobijao je praznu celiju -- lista FAKTURA je tako imala prazan
@@ -1836,7 +1836,7 @@ SABOTAZE = {
         "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK)\n",
         "                                txt = CelijaTekst(ColKind(k), mView(r, k + 1), celijaOK): .TextAlign = fmTextAlignLeft   ' SABOTAZA: crtanje kvari stil\n",
         "T_MrezaCelija_NeostavljaTudjiTekst",
-        "crtanje ne menja poravnanje koje je layout postavio",
+        "preduslov: brojcana kolona je poravnata DESNO",
     ),
     # Pilula koja se ne moze naslikati mora da NESTANE. PaintPill menja i pozadinu,
     # boju, sirinu i BackStyle, a PaintRow pill kolone pri vracanju pozadine reda
@@ -1866,7 +1866,7 @@ SABOTAZE = {
         "    If IsDate(v) Then\n",
         "    If IsDate(v) And False Then   ' SABOTAZA: Date se vise ne prima\n",
         "T_MrezaCelija_NeostavljaTudjiTekst",
-        "prava Date vrednost se crta, ne samo serijski broj",
+        "prava Date vrednost se crta -- IsNumeric je nad njom False",
     ),
     # Prazna celija je istina, ali TIHA prazna celija je bila pola problema:
     # prvi nalaz ove vrste trazio je zasebnu dijagnostiku da bi se uopste video.
@@ -1896,7 +1896,7 @@ SABOTAZE = {
         '    ManualBlokIzabran = (Trim$(nz(cmbOtkupBlok.value, "")) <> "")\n',
         '    ManualBlokIzabran = True   \' SABOTAZA: prazan combo je izbor\n',
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
-        "prazan combo nije izbor bloka",
+        "prazan combo NIJE izbor -- tada blok dolazi iz poziva na broj",
     ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
@@ -2273,7 +2273,7 @@ SABOTAZE = {
         "        If False Then   ' SABOTAZA: nesaglasan izvod prikazuje brojke\n"
         "            outA(n, 4) = 0#\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "nesaglasan izvod ne prikazuje brojke prvog reda",
+        "nesaglasan izvod nema pocetno stanje",
     ),
     "banka-izvod-nesaglasan-ulazi-u-promet": (
         "modScrBankaUvoz.bas",
@@ -2282,7 +2282,7 @@ SABOTAZE = {
         "        If True Then   ' SABOTAZA: nesaglasan ulazi u promet\n"
         "            zbirU = zbirU + CDbl(src(i, 6))\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "nesaglasan izvod ne ulazi u promet podnozja",
+        "nesaglasan izvod ne donosi NISTA u promet -- ne zna se koji zbirovi vaze",
     ),
     # Zbir je stajao IZMEDJU cipa i pretrage, pa je izvod koji pretraga sakrije
     # i dalje ulazio u promet -- traka je tvrdila promet redova kojih nema.
@@ -2336,7 +2336,7 @@ SABOTAZE = {
         "    If Abs(potrazujeA - potrazujeB) > 0.01 Then Exit Function\n",
         "    If Abs(potrazujeA - potrazujeB) > 0.001 Then Exit Function\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "prag saglasnosti je isti kao prag slaganja",
+        "polovina centa nije -- prag je isti kao kod slaganja",
     ),
     # Nesaglasnost mora da NADJACA i "slaze se": prvi red ovog izvoda sam za sebe
     # daje slaganje, pa bi bez toga stajalo "slaze se" -- tvrdnja o brojkama
@@ -2348,7 +2348,7 @@ SABOTAZE = {
         "        Case BIM_SALDO_NEKONZISTENTAN\n"
         "            BuSlaganjeTekst = Poruka(\"OTKUI_LBL_BU_SALDO_RAZLIKA\")\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "nesaglasan izvod se u koloni ne predstavlja kao neslaganje",
+        "nesaglasan izvod dobija SVOJU poruku",
     ),
     # ---------------------------------------------------- BANKA: WRITER
     # Prazan skup kandidata writer knjizi kao avans kooperanta i stavku oznaci
@@ -2376,7 +2376,7 @@ SABOTAZE = {
         '        BimScopeKolona = RequireColumnIndex(TBL_OTKUP, kolona, "BimScopeKolona")\n',
         "        BimScopeKolona = GetColumnIndex(TBL_OTKUP, kolona)   ' SABOTAZA: scope tiho otpada\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "zadat scope nad nedokazivom kolonom puca umesto da vrati sve",
+        "zadat scope nad nedokazivom kolonom PUCA -- ne vraca nescope-ovane kandidate",
     ),
     # Prazan scope izgleda isto kao "scope nije ni trazen", a znaci nesto sasvim
     # drugo: operater JESTE birao blok, samo taj red nema upisano otkupno mesto.
@@ -2391,7 +2391,7 @@ SABOTAZE = {
         "    BimBlokBezOtvorenih = IsEmpty(kandidati)\n",
         "    BimBlokBezOtvorenih = Not IsEmpty(kandidati)   ' SABOTAZA: placen blok prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "rucno izabran placen blok se odbija umesto da postane avans",
+        "potpuno placen blok NEMA otvorenih stavki",
     ),
     # Kapija sme da vazi SAMO za rucni izbor. Kad blok dolazi iz poziva na broj,
     # avans je namerno i dokumentovano ponasanje -- bezbedan izlaz dok je poreklo
@@ -2401,7 +2401,7 @@ SABOTAZE = {
         "    If Len(Trim$(izabranBlok)) = 0 Then Exit Function\n",
         "    If Len(Trim$(efektivniBlok)) < 0 Then Exit Function   ' SABOTAZA: kapija i za poziv na broj\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "kapija placenog bloka vazi samo za RUCNI izbor",
+        "isti blok iz POZIVA NA BROJ ne prolazi kroz kapiju -- avans ostaje namerno ponasanje",
     ),
     "banka-uvoz-blok-bez-om-prolazi": (
         "modScrBankaUvoz.bas",
@@ -2417,7 +2417,7 @@ SABOTAZE = {
         "    BuKpiNepoznato = Array(-1, -1, -1, 0#, 0#)\n",
         "    BuKpiNepoznato = Array(0, 0, 0, 0#, 0#)   ' SABOTAZA: ne znam postaje nula\n",
         "T_BankaUvoz_CipJakihPratiBrojac",
-        "prvi pad citanja daje NEPOZNATO, ne nulu",
+        "bez ijedne poznate brojke stanje je NEPOZNATO",
     ),
     # Broj otkupa je jedinstven PO STANICI, pa isti broj bloka pripada dvama
     # razlicitim blokovima. Bez scope-a u jednu raspodelu ulaze kandidati sa OBA
@@ -2427,7 +2427,7 @@ SABOTAZE = {
         "        If Len(Trim$(stanicaID)) > 0 Then\n",
         "        If Trim$(stanicaID) = Chr$(0) Then   ' SABOTAZA: scope se ne primenjuje\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "rucno mapiranje bloka nosi i otkupno mesto",
+        "sa scope-om ulazi samo jedno otkupno mesto",
     ),
     # Znacka odgovara na pitanje "ima li posla". Kvar citanja pretvoren u nulu
     # kaze "nema posla" -- fail-open koji je Storno vec jednom platio.
@@ -2436,7 +2436,7 @@ SABOTAZE = {
         "    If IsArray(poslednja) Then\n",
         "    If False Then   ' SABOTAZA: kvar citanja postaje nula\n",
         "T_BankaUvoz_CipJakihPratiBrojac",
-        "neuspeh citanja zadrzava poslednju poznatu brojku",
+        "posle greske se zadrzava POSLEDNJA POZNATA brojka",
     ),
     # Broj van opsega datuma obara CDate u mrezi, a RenderGrid to proguta
     # (On Error Resume Next) -- celija ostane sa natpisom od ranijeg crtanja.
@@ -2448,7 +2448,7 @@ SABOTAZE = {
         "    DatumSerijskiValidan = (serijski >= 1) And (serijski <= DATUM_SERIJSKI_MAX)\n",
         "    DatumSerijskiValidan = (serijski >= 1)\n",
         "T_MrezaDatum_BrojKojiNijeDatum",
-        "u kolonu datuma ulazi samo broj koji CDate sme da primi",
+        "ddmmyyyy kao broj NIJE datum",
     ),
     # Geometrija kolona mora da prati OPIS kolona. Bez zastavice RenderGrid
     # crta sa sirinama prethodne liste, pa kolona koja je tamo bila skrivena
@@ -2469,7 +2469,7 @@ SABOTAZE = {
         "    z.Controls(\"scrBuCilj\").Visible = (IzabraniTip() <> BIM_TIP_OM)\n",
         "    z.Controls(\"scrBuCilj\").Visible = True\n",
         "T_ZonaBankaUvoz_PoljaIRaspored",
-        "polje cilja je ugaseno za OM",
+        "za OM je polje cilja UGASENO",
     ),
     # Ljuskin FmtDatumKratko odbija sve sto nije IsNumeric, a IsNumeric je nad
     # Date-om FALSE. Datum predat kao Date daje PRAZNU celiju -- bez ijedne
@@ -2482,7 +2482,7 @@ SABOTAZE = {
         "        outA(n, 2) = modUiData.CellDate(src, i, 4)\n",
         "        outA(n, 2) = src(i, 4)\n",
         "T_BankaUvoz_UgovorEkrana",
-        "datum stize mrezi kao serijski broj, ne kao Date",
+        "lista STAVKE, red 1, kolona 2: datum je BROJ -- inace ga mreza ne crta",
     ),
     # Lista stavki stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
@@ -2493,7 +2493,7 @@ SABOTAZE = {
         '                              "bmsve:OTKUI_BTN_BU_SVE:116:ghost:0|" & _\n'
         '                              "bmvisak:OTKUI_BTN_BU_SKIP:80:ghost:1"\n',
         "T_BankaUvoz_UgovorEkrana",
-        "lista stavki ne trazi vise radnji nego sto ljuska ima dugmadi",
+        "stavke nose TACNO MAX_ACT radnji -- sesta bi se tiho odsekla",
     ),
     # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada listi
     # (RefreshChipsForScreen). Ako nije najsiri, povratak na njega tiho sakrije
@@ -2505,7 +2505,7 @@ SABOTAZE = {
         '            BuCipoviZaListu = "zaobradu:OTKUI_CIPB_ZAOBRADU:80|" & _\n'
         '                              "sve:OTKUI_CHIP_SVE:40|" & _\n',
         "T_BankaUvoz_UgovorEkrana",
-        "prvi cip svake liste je najsiri ('sve')",
+        "prvi cip liste STAVKE je najsiri ('sve')",
     ),
     # IZVODI su pregled: nijedna operacija se ne radi nad izvodom kao celinom.
     # Radnja koja se tu pojavi trazila bi identitet grupe kao cilj upisa.
@@ -2518,7 +2518,7 @@ SABOTAZE = {
         '            BuRadnjeZaListu = "bmauto:OTKUI_BTN_BU_AUTO:112:primary:1"\n'
         "    End Select\n",
         "T_BankaUvoz_UgovorEkrana",
-        "lista izvoda nema radnji nad redom",
+        "izvodi su pregled -- nijedna radnja nad redom",
     ),
     # Kolona identiteta je interna. Prioritet 3 je crta, pa operater u listi
     # stavki gleda internu sifru u dve kolone.
@@ -2527,7 +2527,7 @@ SABOTAZE = {
         '        "OTKUI_HDB_BIMKEY||txt|1|4", _\n',
         '        "OTKUI_HDB_BIMKEY||txt|90|3", _\n',
         "T_BankaUvoz_IdentitetURedu_NeCrtaSe",
-        "kolona identiteta ostaje van prikaza (prioritet 4)",
+        "identitet stavke je prioriteta 4 -- ne crta se",
     ),
     # Dvosmislen ID je ID koji u tabeli postoji dvaput. Ako prvi pobedi, radnja
     # se izvrsi nad redom koji operater NIJE pokazao -- tiho.
@@ -2536,7 +2536,7 @@ SABOTAZE = {
         "        outA(n, 1) = modFaktura.IdIliPrazno(brojac, Trim$(CStr(data(i, cID))))\n",
         "        outA(n, 1) = Trim$(CStr(data(i, cID)))   ' SABOTAZA: duplikat prolazi\n",
         "T_BankaUvoz_IdentitetURedu_NeCrtaSe",
-        "ID koji postoji dvaput NIJE identitet",
+        "dvosmislen ID nosi PRAZAN identitet -- radnja odbija da bira",
     ),
     # Otvorenost se cita iz onoga sto RED NOSI. Nov red ima PRAZAN status, pa se
     # iz prikaza ne razlikuje od reda kome status nije upisan.
@@ -2545,7 +2545,7 @@ SABOTAZE = {
         '        outA(n, 11) = IIf(CBool(src(i, 10)), "1", "")\n',
         '        outA(n, 11) = "1"   \' SABOTAZA: svaki red izgleda otvoren\n',
         "T_BankaUvoz_RedNosiSmerIOtvorenost",
-        "red prenosi otvorenost, radnja je ne izvodi iz prikaza",
+        "obradjen red NE nosi otvorenost -- radnja ga odbija",
     ),
     # Smer se ne izvodi iz toga koja je kolona iznosa popunjena: red sa I
     # uplatom I isplatom izgleda kao uplata, a writer ga odbija.
@@ -2554,7 +2554,7 @@ SABOTAZE = {
         "        outA(n, 12) = CStr(src(i, 11))\n",
         '        outA(n, 12) = ""   \' SABOTAZA: smer se gubi iz reda\n',
         "T_BankaUvoz_RedNosiSmerIOtvorenost",
-        "red prenosi smer stavke",
+        "red NOSI svoj smer",
     ),
     # Zatvorena stavka nema sta da predlozi -- predlog nad njom navodi operatera
     # da pokusa radnju koja ce biti odbijena.
@@ -2563,7 +2563,7 @@ SABOTAZE = {
         "    If Not otvoren Then Exit Function\n",
         "    ' SABOTAZA: predlog se racuna i za zatvorene stavke\n",
         "T_BankaUvoz_RedNosiSmerIOtvorenost",
-        "predlog postoji samo za stavke nad kojima jos ima sta da se uradi",
+        "zatvorena stavka nema predlog",
     ),
     # Cip 'jaki kljucevi' i CountStrongKeyReadyBankaImport (koji stoji u natpisu
     # dugmeta) moraju da vide ISTI skup. Pravilo zivi na dva mesta.
@@ -2572,7 +2572,7 @@ SABOTAZE = {
         '        Case "jaki":       BuCipStavka = modBankaMapiranje.BimOtvoren(s) And jaki\n',
         '        Case "jaki":       BuCipStavka = modBankaMapiranje.BimOtvoren(s)\n',
         "T_BankaUvoz_CipJakihPratiBrojac",
-        "cip jakih kljuceva se slaze sa brojacem",
+        "cip 'jaki kljucevi' i BROJAC vide ISTI skup",
     ),
     # Znacka uz stavku menija broji ono sto CEKA operatera. Bilo koji drugi broj
     # tu izgleda kao posao kog nema (ili sakrije posao koji ima).
@@ -2590,7 +2590,7 @@ SABOTAZE = {
         '        Case "obradjeno":  BuCipStavka = (s = BIM_OBR_DA)\n',
         '        Case "obradjeno":  BuCipStavka = (s = BIM_OBR_DA) Or (s = BIM_OBR_SKIP)\n',
         "T_BankaUvoz_CipJakihPratiBrojac",
-        "cipovi stanja su razdvojeni i zajedno pokrivaju sve redove",
+        "'sve' je tacno unija tri stanja -- nijedan red ne ispada iz svih cipova",
     ),
     # BROJ IZVODA NIJE IDENTITET: dedupe kljuc pocinje od BROJA RACUNA, pa dva
     # racuna firme legitimno nose izvod istog broja. Grupa bez racuna ih spaja u
@@ -2605,7 +2605,7 @@ SABOTAZE = {
         '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
         '    BimIzvodKljuc = Trim$(brojDokumenta) & "|" & IzvodDatumKljuc(datumIzvoda)\n',
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "izvod se grupise i po broju racuna",
+        "isti broj izvoda na DVA RACUNA daje dva kljuca",
     ),
     # Banke numeraciju izvoda ponavljaju po ciklusu: izvod 15 na istom racunu
     # postoji i 2025. i 2026. Bez datuma u kljucu se spajaju u jedan sinteticki
@@ -2618,7 +2618,7 @@ SABOTAZE = {
         '                    "|" & IzvodDatumKljuc(datumIzvoda)\n',
         '    BimIzvodKljuc = Trim$(brojRacuna) & "|" & Trim$(brojDokumenta)\n',
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "izvod se grupise i po datumu izvoda",
+        "isti broj i isti racun iz DVA CIKLUSA daju dva kljuca",
     ),
     # Zbirovi izvoda su isti na SVAKOM redu grupe (parser ih tako upisuje), pa
     # sabiranje daje iznos pomnozen brojem stavki -- i svaki izvod odjednom
@@ -2629,7 +2629,7 @@ SABOTAZE = {
         "        buf(r, 5) = CDbl(NzBIM(buf(r, 5), 0#)) + CDbl(NzBIM(data(i, cPoc), 0#))\n"
         "        buf(r, 11) = CLng(buf(r, 11)) + 1\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "zbirovi izvoda se uzimaju sa reda, ne sabiraju",
+        "saldo se ne uzima sa tudjeg reda",
     ),
     # Legacy red (uvoz pre v6.18) nema saldo metapodatke -- sva cetiri broja su
     # nula. To NIJE neslaganje nego odsustvo podatka; prikazano kao greska,
@@ -2641,7 +2641,7 @@ SABOTAZE = {
         "        BimSaldoStatus = BIM_SALDO_RAZLIKA   ' SABOTAZA\n"
         "        Exit Function\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
-        "izvod bez saldo metapodataka nije neslaganje",
+        "legacy red bez saldo metapodataka NIJE neslaganje nego odsustvo podatka",
     ),
     # Smer-kapija je ista koju RequireBimSmer sprovodi u writeru. OM prima i
     # uplatu i isplatu, ali NE i nejasan smer -- red sa oba iznosa writer odbija.
@@ -2650,7 +2650,7 @@ SABOTAZE = {
         "            BimSmerOdgovaraTipu = (smer <> BIM_SMER_NEJASAN)\n",
         "            BimSmerOdgovaraTipu = True   ' SABOTAZA: OM prima sve\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "smer-kapija ekrana se slaze sa kapijom writera",
+        "nejasan smer ne prolazi ni za OM",
     ),
     # Prazan izbor bloka NIJE "nema bloka" nego "uzmi poziv na broj iz izvoda".
     # U formi je prazan combo bio DEFAULT slucaj, pa je blok sa 3+ stavki bez
@@ -2660,7 +2660,7 @@ SABOTAZE = {
         "        BimEfektivniBlok = AutoBlockNoForBim(bankaImportID)\n",
         '        BimEfektivniBlok = ""   \' SABOTAZA: poziv na broj se ne koristi\n',
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "prazan izbor bloka uzima poziv na broj iz izvoda",
+        "prazan izbor uzima poziv na broj iz izvoda",
     ),
     # FAIL-CLOSED. Prazna lista faktura i PAD ucitavanja izgledaju isto, a znace
     # suprotno: prazan izbor fakture knjizi AVANS umesto zatvaranja duga.
@@ -2672,7 +2672,7 @@ SABOTAZE = {
         "    BuSmeMapiranjeCilja = mCiljOK\n",
         "    BuSmeMapiranjeCilja = True   ' SABOTAZA: pad citanja prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "pad ucitavanja liste cilja zaustavlja rucno mapiranje",
+        "pad ucitavanja ZAUSTAVLJA rucno mapiranje -- prazan izbor bi bio avans ili poziv na broj",
     ),
     # Zajednicka kapija mora STVARNO da puni listu pre nego sto presudi.
     # Bez punjenja bi zastavica opisivala PRETHODNI izbor -- "ucitano" za tudji
@@ -2685,7 +2685,7 @@ SABOTAZE = {
         "    If ok Then CiljKesKljuc = kljuc\n",
         "    CiljKesKljuc = kljuc   ' SABOTAZA: neuspeh se pamti\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "neuspelo punjenje liste cilja se ne kesira",
+        "neuspelo punjenje se NE pamti -- sledeci klik pokusava ponovo",
     ),
     "banka-uvoz-cilj-kapija-ne-puni": (
         "modScrBankaUvoz.bas",
@@ -2704,7 +2704,7 @@ SABOTAZE = {
         "    If GetTable(tableName) Is Nothing Then\n",
         "    If Len(tableName) < 0 Then   ' SABOTAZA: nema tabele prolazi\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "nedostajuca tabela puca umesto da prodje kao prazna lista",
+        "nedostajuca tabela PUCA -- ne prolazi kao prazna lista",
     ),
     # Lista za rucno mapiranje nudi samo fakture sa OTVORENIM saldom. Zatvorena
     # faktura u toj listi vodi u preplatu.
@@ -2715,7 +2715,7 @@ SABOTAZE = {
         "            otvoreno = GetOtvorenoNaFakturi(fid)\n"
         "            If otvoreno > -1 Then   ' SABOTAZA: i zatvorene ulaze\n",
         "T_BankaUvoz_RucnoMapiranjePravila",
-        "za rucno mapiranje se nude samo fakture sa otvorenim saldom",
+        "placena faktura nije u listi za mapiranje",
     ),
 }
 
@@ -2822,6 +2822,23 @@ POZNATI_NALAZI = {
                           # T_ZatecenContext_NePrevezujeTudjePrijemnice: obe
                           # sabotaze proizvedu isti vidljiv ishod, pa ih test
                           # bez seam-a nad kapijom ne moze razlikovati.
+
+    # Ista klasa, nadjena zetvom tvrdnji: OBE sabotaze obore BAS istu poruku
+    # ("isti broj zbirne kod dva vozaca daje DVA ciljna dokumenta"), pa test
+    # ne moze da kaze koja je od njih pala. Razdvajanje trazi novu tvrdnju u
+    # T_Oporavak_CiljneListe -- jedna nad ciljem (broj + vlasnik), druga nad
+    # brojem redova. Nije deo ovog posla: ovde se popravlja KATALOG, ne testovi.
+    "zbirna-vlasnik-samo-kupac":
+        "deli tvrdnju sa 'oporavak-cilj-po-broju'",
+
+    # Mrtva sabotaza, ne zastareo tekst: PostaviRez pise pa CITA NAZAD do tri
+    # puta, a sabotaza svodi na jedan upis -- sto se u testu ne vidi, jer tamo
+    # prvi upis uvek uspe. Invarijanta je otporna na FLAKY upis, pa je merljiva
+    # samo nad laznom kontrolom koja prvi upis odbija. Zato ovde nema "tacnog"
+    # teksta koji bi se upisao -- sabotazu treba ili opremiti takvim testom ili
+    # obrisati uz obrazlozenje.
+    "ljuska-rez-bez-potvrde":
+        "tvrdnja ZASTARELA -- 'T_ZonaAgro_PrekidacRezimaZadrzavaBoju'",
 }
 
 
@@ -2835,6 +2852,11 @@ POZNATI_NALAZI = {
 # bi tiho progutana kao poznata, a dokaz bi zavrsio zeleno. Zato prefiks nosi i ime
 # tvrdnje koja stvarno pada -- prepisano iz izmerenog izlaza, ne formulisano.
 POZNATI_NALAZI_DOKAZ = {
+    # Ista mrtva sabotaza koju vidi i staticka provera (v. POZNATI_NALAZI):
+    # tamo kao zastareo tekst, ovde kao pad koji ne obara nista. Dva alata, dva
+    # lica istog nalaza.
+    "ljuska-rez-bez-potvrde": "NE OBARA NISTA",
+
     # Obara PREDUSLOV ("sa identitetom se recovery zapis pravi"): gasi celu
     # identitetsku granu, pa zapis ne nastane i ciljana tvrdnja ne dodje na
     # red. Uza varijanta (razresi po broju umesto po generaciji) ne obara
@@ -2866,12 +2888,128 @@ def _imena_testova() -> set:
     return imena
 
 
-def _nalazi(katalog: dict, imena: set) -> list:
+# Tvrdnja iz kataloga mora da bude tvrdnja BAS TOG testa.
+#
+# dokaz.py trazi da se deklarisan tekst nadje u poruci koja je pala; ako se ne
+# nadje, javlja "PALA DRUGA TVRDNJA". Kad se tekst tvrdnje u testu promeni -- a
+# menja se pri svakoj doradi -- katalog zastari TIHO, i dokaz.py pocne da laze u
+# oba smera: javlja gresku nad sabotazom koja radi savrseno, a sabotazu koja
+# stvarno obara tudju tvrdnju niko vise ne cita, jer je alat naucio da laje.
+#
+# Nadjeno merenjem: 119 od 251 unosa je nosilo zastareo tekst, pa dokaz.py nije
+# mogao da vrati DOKAZANO ni nad jednim sirim prefiksom. Isto truljenje dokaza
+# zbog kog je nastao --proveri-sidra, samo u drugom polju istog unosa.
+_STR_SPOJ = re.compile(r'"\s*&\s*_?\s*\n?\s*"')
+_NASTAVAK = re.compile(r"_\s*\n\s*")
+
+
+def _literali(tekst: str):
+    """(svi literali, sabloni). Sablon = literali jednog izraza, spojeni sa '&'.
+
+    Tokenizuje se, ne regex-uje: `pre("brojPak")` ima navodnike, pa naivan
+    '"([^"]*)"' spaja zatvoreni navodnik jednog stringa sa otvorenim sledeceg i
+    vraca komade KODA kao da su tekst.
+    """
+    t = _NASTAVAK.sub(" ", _STR_SPOJ.sub("", tekst))
+    lit, sabloni, tek = [], [], []
+    i, n, kraj = 0, len(t), 0
+    while i < n:
+        c = t[i]
+        if c == '"':
+            j, buf = i + 1, []
+            while j < n:
+                if t[j] == '"':
+                    if j + 1 < n and t[j + 1] == '"':      # "" = navodnik u tekstu
+                        buf.append('"'); j += 2; continue
+                    break
+                buf.append(t[j]); j += 1
+            s = "".join(buf)
+            medju = t[kraj:i]
+            if tek and "&" in medju and "," not in medju:
+                tek.append(s)                              # isti izraz
+            else:
+                if tek:
+                    sabloni.append(tek)
+                tek = [s]
+            lit.append(s)
+            i = j + 1
+            kraj = i
+        elif c == "'":                                     # komentar do kraja reda
+            while i < n and t[i] != "\n":
+                i += 1
+            kraj = i
+        else:
+            i += 1
+    if tek:
+        sabloni.append(tek)
+    return lit, sabloni
+
+
+def _tela_testova() -> dict:
+    """ime testa -> (sklopljeno telo u malim slovima, sabloni tvrdnji)."""
+    tela = {}
+    for f in ("modTest.bas", "modTestBanka.bas"):
+        put = os.path.join(SRC_VBA, f)
+        if not os.path.exists(put):
+            continue
+        tekst = _procitaj(put)[0].replace("\r\n", "\n")
+        for m in re.finditer(r"^(?:Public |Private )?(?:Sub|Function) (\w+)",
+                             tekst, re.M):
+            k = re.search(r"^End (?:Sub|Function)\b", tekst[m.start():], re.M)
+            telo = tekst[m.start(): m.start() + (k.end() if k else len(tekst))]
+            _lit, sabloni = _literali(telo)
+            sklop = _NASTAVAK.sub(" ", _STR_SPOJ.sub("", telo)).lower()
+            tela[m.group(1)] = (sklop, sabloni)
+    return tela
+
+
+def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
+    """Da li je tvrdnja tvrdnja BAS ovog testa.
+
+    Dva oblika prolaze:
+      1) doslovno je u telu -- obican string-literal;
+      2) tvrdnja je sklopljena U RADU ("Storno / " & tip & " cita svoju tabelu"):
+         literali tog izraza se u njoj nalaze REDOM, a ono sto ostane izmedju
+         njih mora da lici na VREDNOST -- najvise tri reci po rupi.
+
+    Rupa se meri brojem reci, ne procentom teksta: procenat je propustao kratke
+    tvrdnje ("... u dijalogu ide BEZ oznake" je 51% svoje tvrdnje) a primao bi
+    slucajno poklapanje kratkog literala u dugackoj tudjoj tvrdnji.
+
+    Pun tekst se cuva namerno -- skracivanje na zajednicki literal bi dve
+    razlicite tvrdnje spojilo u jednu (zamka 5).
+    """
+    sklop, sabloni = podaci
+    t = tvrdnja.lower()
+    if t in sklop:
+        return True
+    for izraz in sabloni:
+        poz, pokriveno, rupe_ok = 0, 0, True
+        for f in izraz:
+            k = t.find(f.lower(), poz)
+            if k < 0:
+                rupe_ok = False
+                break
+            if len(t[poz:k].split()) > 3:      # rupa mora da lici na vrednost
+                rupe_ok = False
+                break
+            poz = k + len(f)
+            pokriveno += len(f)
+        if rupe_ok and len(t[poz:].split()) > 3:
+            rupe_ok = False
+        if rupe_ok and pokriveno >= 8:
+            return True
+    return False
+
+
+def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     """Nalazi nad DATIM katalogom. Izdvojeno da bi --self-test mogao da mu
     podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
     nalazi = []
     videne_tvrdnje = {}
     kes = {}                 # fajl se cita jednom, ne 222 puta (ovo ide u hook)
+    if tela is None:
+        tela = _tela_testova()
 
     for ime, (fajl, staro, novo, test, tvrdnja) in katalog.items():
         put = os.path.join(SRC_VBA, fajl)
@@ -2907,6 +3045,19 @@ def _nalazi(katalog: dict, imena: set) -> list:
 
         if _KOMENTAR_POSLE_PODVLAKE.search(novo):
             nalazi.append((ime, "komentar posle line-continuation '_' -- syntax error"))
+
+        # zamka 9: tvrdnja koja nije tvrdnja SVOG testa
+        if not tvrdnja.strip():
+            nalazi.append((ime, "katalog nema tvrdnju -- dokaz.py nema sta da poredi"))
+        elif test in tela and not _tvrdnja_pripada(tvrdnja, tela[test]):
+            drugde = sorted(t for t, p in tela.items()
+                            if t != test and _tvrdnja_pripada(tvrdnja, p))
+            if drugde:
+                nalazi.append((ime, "tvrdnja pripada testu '%s', a deklarisan je "
+                                    "'%s'" % (drugde[0], test)))
+            else:
+                nalazi.append((ime, "tvrdnja ZASTARELA -- '%s' nema takvu tvrdnju "
+                                    "(dokaz.py bi javio PALA DRUGA TVRDNJA)" % test))
 
         # zamka 5: dve sabotaze koje test ne razlikuje
         kljuc = (test, tvrdnja)
@@ -3007,12 +3158,32 @@ _SELF_TEST = [
     ("komentar posle podvlake",
      (None, None, "    a = Sastavi(b, _   ' SABOTAZA" + ESCN, None, "tvrdnja G"),
      "komentar posle line-continuation"),
+    # zamka 9: tekst tvrdnje se menja pri doradi testa, a katalog zastari TIHO
+    ("tvrdnja zastarela",
+     (None, None, None, None, "ovakve tvrdnje nema u testu"),
+     "tvrdnja ZASTARELA"),
+    # ostrija varijanta: tekst POSTOJI, ali pripada drugom testu
+    ("tvrdnja pripada drugom testu",
+     (None, None, None, None, "tudja tvrdnja"),
+     "tvrdnja pripada testu"),
+    # bez tvrdnje dokaz.py nema sta da poredi -- rupa, ne izuzetak
+    ("prazna tvrdnja",
+     (None, None, None, None, "   "),
+     "katalog nema tvrdnju"),
 ]
 
 
 def _self_test() -> int:
     """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
     imena = {"T_Postoji"}
+    # Telo se podmece kao i imena -- inace bi se pravilo o tvrdnji merilo nad
+    # PRAVIM modTest-om, pa bi self-test zavisio od tudjeg fajla. Pokriva i
+    # tvrdnje ostalih slucajeva, da svaki i dalje meri TACNO svoje pravilo.
+    _tp = ("sub t_postoji  asserteq a, b, \"zdrava tvrdnja\"  "
+           "tvrdnja a tvrdnja b tvrdnja c tvrdnja d tvrdnja e tvrdnja f "
+           "tvrdnja g  end sub")
+    tela = {"T_Postoji": (_tp, []),
+            "T_Drugi": ("sub t_drugi asserteq a, b, \"tudja tvrdnja\" end sub", [])}
     # zdrav unos: sidro koje postoji tacno jednom, zamena koja nije podniz
     zdravo = ("modOtkupUI.bas",
               _ST_ZDRAVO + ESCN,
@@ -3022,7 +3193,7 @@ def _self_test() -> int:
     lose = 0
     n = 0
     # 0) zdrav katalog ne sme da da nijedan nalaz
-    if _nalazi({"zdrav": zdravo}, imena):
+    if _nalazi({"zdrav": zdravo}, imena, tela):
         print("SELF-TEST: zdrav unos je prijavljen kao nalaz", file=sys.stderr)
         lose += 1
     n += 1
@@ -3031,7 +3202,7 @@ def _self_test() -> int:
         unos = tuple(z if p is None else p for p, z in zip(polja, zdravo))
         if unos[2] == "SIDRO":
             unos = (unos[0], unos[1], unos[1], unos[3], unos[4])
-        nalazi = _nalazi({"probni": unos}, imena)
+        nalazi = _nalazi({"probni": unos}, imena, tela)
         n += 1
         if not any(ocekivano in sta for _, sta in nalazi):
             print("SELF-TEST: '%s' nije prijavljeno (%s)" % (opis, nalazi),
@@ -3041,7 +3212,7 @@ def _self_test() -> int:
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
     par = {"prvi": zdravo, "drugi": zdravo}
     n += 1
-    if not any("deli tvrdnju" in sta for _, sta in _nalazi(par, imena)):
+    if not any("deli tvrdnju" in sta for _, sta in _nalazi(par, imena, tela)):
         print("SELF-TEST: deljena tvrdnja nije prijavljena", file=sys.stderr)
         lose += 1
 
