@@ -724,6 +724,89 @@ def check_poruke(files: list[str]) -> list[Finding]:
     return out
 
 
+# --- STORNO_REGISTAR: filter storniranih mora da zna sta filtrira ------------
+#
+# ExcludeStornirano na nenadjenu kolonu Stornirano vraca NEFILTRIRANE podatke.
+# Za maticne podatke je to tacno -- oni storno pojam nemaju. Za dokument tabelu
+# je to fail-open: storniran dokument izlazi kao ziv. Razliku zna registar u
+# modSchemaGuard (STORNO_TABELE / BEZ_STORNA), i u izvrsavanju se za tabelu iz
+# prvog spiska pada glasno.
+#
+# Runtime to resava samo za tabele koje registar POZNAJE. Nova tabela koja se ne
+# nadje ni u jednom spisku nema tacan odgovor u izvrsavanju -- pa je ovde, gde
+# je jos jeftino: poziv sa nepoznatom TBL_ konstantom je nalaz.
+#
+# Pozivi sa PROMENLJIVOM umesto konstante se preskacu: ime tabele je tada poznato
+# tek u izvrsavanju. To je poznata granica ove provere, ne previd.
+STORNO_POZIV = re.compile(r"\bExcludeStornirano\s*\(", re.IGNORECASE)
+STORNO_CONST = re.compile(r"^\s*(?:Public|Private)\s+Const\s+"
+                          r"(?:STORNO_TABELE|BEZ_STORNA)\b", re.IGNORECASE)
+TBL_IME = re.compile(r"\bTBL_[A-Z0-9_]+\b")
+
+
+def registar_storna(guard_path: str) -> set[str]:
+    """TBL_ konstante iz oba spiska registra u modSchemaGuard."""
+    if not os.path.exists(guard_path):
+        return set()
+    with open(guard_path, "r", encoding="ascii", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    poznate: set[str] = set()
+    for tekst, _ln in _logical_lines(lines):
+        if STORNO_CONST.match(tekst):
+            poznate.update(TBL_IME.findall(tekst))
+    return poznate
+
+
+def _poslednji_argument(tekst: str, start: int) -> str | None:
+    """Poslednji argument poziva koji pocinje na `start` (posle '(')."""
+    depth, in_str = 0, False
+    for i in range(start, len(tekst)):
+        ch = tekst[i]
+        if ch == '"':
+            in_str = not in_str
+        elif not in_str and ch == "(":
+            depth += 1
+        elif not in_str and ch == ")":
+            if depth == 0:
+                delovi = _split_top_level(tekst[start:i])
+                return delovi[-1] if delovi else None
+            depth -= 1
+    return None
+
+
+def check_storno_registar(files: list[str],
+                          guard_path: str | None = None) -> list[Finding]:
+    if guard_path is None:
+        guard_path = os.path.join(SRC_VBA, "modSchemaGuard.bas")
+    poznate = registar_storna(guard_path)
+    if not poznate:
+        return []
+
+    out = []
+    for path in files:
+        if os.path.basename(path) in ("modSchemaGuard.bas", "modHelpers.bas"):
+            continue
+        with open(path, "r", encoding="ascii", errors="replace") as fh:
+            lines = fh.read().replace("\r\n", "\n").split("\n")
+        for tekst, ln in _logical_lines(lines):
+            golo = _strip_comment(tekst)
+            for m in STORNO_POZIV.finditer(golo):
+                arg = _poslednji_argument(golo, m.end())
+                if arg is None:
+                    continue
+                arg = arg.strip()
+                if not TBL_IME.fullmatch(arg):
+                    continue          # promenljiva -- ime je poznato tek u radu
+                if arg not in poznate:
+                    out.append(Finding(
+                        path, ln, "STORNO_REGISTAR",
+                        f"ExcludeStornirano nad '{arg}', a te tabele nema ni u "
+                        f"STORNO_TABELE ni u BEZ_STORNA (modSchemaGuard). "
+                        f"Nedostajuca kolona Stornirano bi tada tiho prosla "
+                        f"kao 'nema sta da se filtrira'."))
+    return out
+
+
 # --- jedna putanja za sve provere nad jednim fajlom ---------------------------
 #
 # Postoji da bi self-test isao KROZ NJU, a ne pored nje. Da self-test zove
@@ -1218,6 +1301,53 @@ End Sub
 # Slucajevi 1 i 2 su REKONSTRUKCIJA zatecenog incidenta, ne izmisljeni primeri:
 # oba oblika su stvarno postojala u modStornoDok.StornoIzvrsi i
 # modScrDokumenti.StornoRedF8 od v6-ui-119 do v6-ui-141.
+# STORNO_REGISTAR: poziv mora da imenuje tabelu koju registar poznaje.
+# Lazni registar u self-testu zna TBL_OTKUP, TBL_NOVAC i TBL_KUPCI.
+STORNO_REGISTAR_CASES = [
+    ("tabela iz spiska sa stornom -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "End Sub\n"),
+    ("tabela iz spiska BEZ storna -- takodje cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_KUPCI)\n"
+     "End Sub\n"),
+    ("nepoznata tabela -- nalaz", 1,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_NEPOZNATA)\n"
+     "End Sub\n"),
+    ("prvi argument sa zagradama ne zbunjuje parser", 1,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(GetTableData(TBL_OTKUP), TBL_NEPOZNATA)\n"
+     "End Sub\n"),
+    ("promenljivo ime tabele se preskace", 0,
+     "Option Explicit\n"
+     "Public Sub P(ByVal tbl As String)\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, tbl)\n"
+     "End Sub\n"),
+    ("prelomljen poziv se i dalje vidi", 1,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, _\n"
+     "                          TBL_NEPOZNATA)\n"
+     "End Sub\n"),
+    ("zakomentarisan poziv se ne broji", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    ' d = ExcludeStornirano(d, TBL_NEPOZNATA)\n"
+     "End Sub\n"),
+]
+
 ZAKLONJENO_CASES = [
     # --- mora da zapisti ---
     ("parametar zaklanja funkciju (zatecen incident)", 1, """Option Explicit
@@ -1982,6 +2112,27 @@ def self_test() -> int:
             palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
                         f"dobijeno {dobijeno}")
 
+    # STORNO_REGISTAR je cross-file (trazi registar u modSchemaGuard), pa ne ide
+    # kroz check_file nego kroz svoju funkciju, sa laznim registrom na disku.
+    tmp2 = tempfile.mkdtemp(prefix="vbacheck_st_")
+    try:
+        guard = os.path.join(tmp2, "modSchemaGuard.bas")
+        with open(guard, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write('Option Explicit\n'
+                     'Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & _\n'
+                     '    "|" & TBL_NOVAC & "|"\n'
+                     'Private Const BEZ_STORNA As String = "|" & TBL_KUPCI & "|"\n')
+        for naziv, ocekivano, telo in STORNO_REGISTAR_CASES:
+            put = os.path.join(tmp2, "modPozivalac.bas")
+            with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+                fh.write(telo)
+            dobijeno = len(check_storno_registar([put], guard))
+            if dobijeno != ocekivano:
+                palo.append(f"  STORNO_REGISTAR/{naziv}: ocekivano {ocekivano} "
+                            f"nalaza, dobijeno {dobijeno}")
+    finally:
+        shutil.rmtree(tmp2, ignore_errors=True)
+
     for naziv, ocekivano, izvor in ZAKLONJENO_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2011,9 +2162,33 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # Isti razlog, za STORNO_REGISTAR: check_storno_registar dokazuje da provera
+    # grize, ovo dokazuje da je CLI zaista zove nad PRAVIM registrom iz src-vba.
+    naziv = "ceo CLI: STORNO_REGISTAR nad pravim registrom"
+    tmp3 = tempfile.mkdtemp(prefix="vbacheck_stcli_")
+    try:
+        put = os.path.join(tmp3, "modStornoPozivalac.bas")
+        with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write("Option Explicit\n"
+                     "Public Sub P()\n"
+                     "    Dim d As Variant\n"
+                     "    d = ExcludeStornirano(d, TBL_NEMA_ME_U_REGISTRU)\n"
+                     "End Sub\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            rc = main([put])
+        izlaz = buf.getvalue()
+        if rc != 2:
+            palo.append(f"  {naziv}: ocekivan exit 2, dobijen {rc}")
+        elif "STORNO_REGISTAR" not in izlaz:
+            palo.append(f"  {naziv}: exit 2 je stigao, ali ne od STORNO_REGISTAR "
+                        f"-- CLI mozda vise ne zove tu proveru")
+    finally:
+        shutil.rmtree(tmp3, ignore_errors=True)
+
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
-              + len(REGISTAR_CASES) + 2)
+              + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -2096,6 +2271,7 @@ def main(argv: list[str]) -> int:
                                         f'-- VBA "Ambiguous name detected".'))
 
     findings += check_poruke(files)
+    findings += check_storno_registar(files)
 
     # Katalog se proverava UVEK, i kad je dat jedan fajl.
     #

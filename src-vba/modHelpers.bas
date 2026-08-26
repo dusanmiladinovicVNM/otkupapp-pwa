@@ -166,11 +166,23 @@ Public Function ExcludeStornirano(ByVal data As Variant, _
         End If
     End If
 
+    ' NULA IMA DVA ZNACENJA, i dok se nisu razlikovala ovo je bio fail-open nad
+    ' 183 poziva: kolona koja nije nadjena znacila je "nema sta da se filtrira",
+    ' pa je storniran dokument izlazio kao ziv. Za tabelu iz registra se sada
+    ' pada glasno -- RequireColumnIndex uz to kaze i da li je kolonu VIDEO u
+    ' svezem prolazu, cime se drift razlikuje od stvarnog nedostatka.
     Dim colStorno As Long
     colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
     If colStorno = 0 Then
-        ExcludeStornirano = data
-        Exit Function
+        If modSchemaGuard.TabelaNosiStorno(tblName) Then
+            colStorno = RequireColumnIndex(tblName, COL_STORNIRANO, _
+                                           "modHelpers.ExcludeStornirano")
+        Else
+            ' Maticni podaci storno pojam nemaju -- prolaz je TACAN ishod.
+            ' Kapija sme da bude siroka tacno koliko i kvar.
+            ExcludeStornirano = data
+            Exit Function
+        End If
     End If
 
     Dim filters As New Collection

@@ -350,6 +350,7 @@ Public Sub RunAllTests()
     RunOne 119
     RunOne 120
     RunOne 121
+    RunOne 122
 
     SetTestMode prevMode
     WriteResultFile
@@ -503,6 +504,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 119: TestName = "T_LegacyDok_PadListeBlokovaNijeAvans"
         Case 120: TestName = "T_LegacyDok_PadListeFakturaNijeAvans"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
+        Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -632,6 +634,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 119: T_LegacyDok_PadListeBlokovaNijeAvans
         Case 120: T_LegacyDok_PadListeFakturaNijeAvans
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
+        Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8215,4 +8218,67 @@ Private Sub T_Ljuska_PadListeNovcaNijeAvans()
     AssertEq okF5, True, "uredno ucitana lista blokova pusta isplatu"
     AssertEq okF6, True, "uredno ucitana lista faktura pusta uplatu"
     AssertEq porukaOk, "", "...bez poruke"
+End Sub
+
+' ============================================================
+' 122: FILTER STORNIRANIH NA NEDOSTAJUCU KOLONU VISE NE CUTI.
+'
+' ExcludeStornirano je pitao GetColumnIndex za kolonu Stornirano i na NULU tiho
+' vracao NEFILTRIRANE podatke -- iz 183 poziva, ukljucujuci read-modele
+' otvorenih faktura i otkupnih blokova. Posledica je gora od pogresne
+' klasifikacije novca iz testova 119-121: tamo je novac dobijao pogresan TIP,
+' ovde storniran dokument dobija pogresno POSTOJANJE, pa uplata moze da ode na
+' otkazanu fakturu.
+'
+' Nula je imala dva znacenja i to je bilo celo pitanje: "ova tabela storno pojam
+' nema" (maticni podaci -- prolaz je tacan) i "kolona nije nadjena" (drift).
+' Registar u modSchemaGuard ih razdvaja, i obe strane se ovde mere.
+' ============================================================
+Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
+    Dim nosiDok As Boolean, nosiMat As Boolean
+    Dim poruka As String, greskaMat As String
+    Dim dataDok As Variant, dataMat As Variant, prosloMat As Variant
+    Dim redovaPre As Long, redovaPosle As Long
+
+    nosiDok = modSchemaGuard.TabelaNosiStorno(TBL_OTKUP)
+    nosiMat = modSchemaGuard.TabelaNosiStorno(TBL_KOOPERANTI)
+
+    ' (1) TABELA IZ REGISTRA BEZ KOLONE -> GLASAN PAD.
+    '
+    ' Nula se izaziva kroz kes, istim putem kao u testu 117. Time se NE tvrdi da
+    ' je kes uzrok ijednog pada iz pogona -- tvrdi se da ExcludeStornirano na
+    ' nulu vise ne propusta nefiltrirane podatke.
+    BeginTableCache
+    dataDok = GetTableData(TBL_OTKUP)
+    modDataAccess.KesKoloneTestSet TBL_OTKUP, COL_STORNIRANO, 0
+    On Error Resume Next
+    Err.Clear
+    dataDok = ExcludeStornirano(dataDok, TBL_OTKUP)
+    poruka = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+
+    ' (2) MATICNI PODACI STORNO POJAM NEMAJU -- prolaz je TACAN ishod.
+    ' Kapija sme da bude siroka tacno koliko i kvar; bez ove tvrdnje bi
+    ' fail-closed zaustavio i citanje kooperanata, koje nikad nije bilo u pitanju.
+    BeginTableCache
+    dataMat = GetTableData(TBL_KOOPERANTI)
+    If IsArray(dataMat) Then redovaPre = UBound(dataMat, 1)
+    On Error Resume Next
+    Err.Clear
+    prosloMat = ExcludeStornirano(dataMat, TBL_KOOPERANTI)
+    greskaMat = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+    If IsArray(prosloMat) Then redovaPosle = UBound(prosloMat, 1)
+
+    AssertEq nosiDok, True, "dokument tabela je u registru storna"
+    AssertEq nosiMat, False, "maticni podaci nisu u registru storna"
+    AssertEq (InStr(1, poruka, COL_STORNIRANO) > 0), True, _
+             "nedostajuca kolona storna PADA i imenuje kolonu, ne propusta tiho"
+    AssertEq greskaMat, "", "tabela bez storno pojma prolazi bez greske"
+    AssertEq (redovaPre > 0), True, "...nad tabelom koja stvarno ima redove"
+    AssertEq redovaPosle, redovaPre, "...i vraca sve svoje redove"
 End Sub

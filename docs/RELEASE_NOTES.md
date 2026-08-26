@@ -5651,3 +5651,50 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §17.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca u dve
 > forme, pa smoke ide na kopiji sveske i uključuje slučaj sa nedostajućom tabelom.
+
+## v2.78.0 — otkazan dokument više ne može da se pojavi kao živ
+
+### Šta se moglo desiti
+
+Storniranje ne briše dokument — red ostaje u tabeli, obeležen kao storniran, i
+program ga izbacuje iz svih pregleda i zbirova. To izbacivanje radi jedno mesto,
+kroz koje prolazi **skoro svako čitanje u programu**.
+
+To mesto je prvo pitalo gde je kolona „Stornirano". Ako je nije našlo, tiho je
+vraćalo **sve redove, zajedno sa storniranim** — kao da nema šta da se izbaci.
+
+Posledica: otkazana faktura mogla je da se pojavi u listi otvorenih faktura, pa da
+uplata ode na dokument koji više ne važi. Isto za otkazan otkupni blok.
+
+Ovo je šire od prethodne dve verzije: tamo je novac dobijao pogrešnu vrstu, ovde
+otkazan dokument dobija **pogrešno postojanje**.
+
+### Šta je sada
+
+Program sada zna **koje tabele moraju** da nose kolonu „Stornirano", a koje je
+nemaju uopšte:
+
+| Vrsta tabele | Kolona nedostaje |
+|---|---|
+| dokumenti (otkup, novac, otpremnice, fakture, palete…) | **staje uz grešku** |
+| matični podaci (kooperanti, kupci, vozači, stanice…) | prolazi — nikad je i nisu imali |
+
+Za prvu grupu poruka kaže i **da li je kolonu videla** u svežem pogledu, pa se
+razlikuje „kolone stvarno nema" od „šema se razišla".
+
+### Šta ovo znači u praksi
+
+Ako u vašoj svesci nekoj od dokument-tabela **stvarno** nedostaje ta kolona,
+program će sada **stati** tamo gde je ranije tiho radio sa netačnim podacima. To
+je namera — ali zato smoke ove verzije ide na kopiji sveske, ne na radnoj.
+
+### Verifikacija
+
+`RunAllTests` **122 testa, 0 palih**, uz četiri sabotaže. Uz to je i sam checker
+dobio pravilo koje ne pušta novo čitanje nad tabelom koju registar ne poznaje, sa
+dokazom u oba smera.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §18. Domen: `docs/DOMEN/README.md`.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**
+

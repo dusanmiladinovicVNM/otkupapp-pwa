@@ -2,6 +2,35 @@ Attribute VB_Name = "modSchemaGuard"
 
 Option Explicit
 
+' REGISTAR STORNA: koje tabele MORAJU nositi kolonu Stornirano.
+'
+' ExcludeStornirano je pitao GetColumnIndex za tu kolonu i na nulu tiho vracao
+' NEFILTRIRANE podatke. Nula tamo ima dva znacenja: "ova tabela storno pojam
+' nema" (tacno za maticne podatke) i "kolona nije nadjena" (kvar). Bez ove
+' razlike je storniran dokument izlazio kao ziv -- iz 183 poziva, ukljucujuci
+' read-modele otvorenih faktura i otkupnih blokova. To je gore od pogresne
+' klasifikacije novca: otkazan dokument dobija pogresno POSTOJANJE.
+'
+' Spisak je DEKLARACIJA OCEKIVANJA, ne snimak zatecene sveske: sema je izvor
+' istine po instalaciji, pa tabela iz ovog spiska koja nema kolonu znaci DRIFT,
+' i tada se pada glasno umesto da se tiho ne filtrira.
+'
+' Statickim putem se cuva vba_check pravilom STORNO_REGISTAR: svaki
+' ExcludeStornirano(..., TBL_X) mora da imenuje tabelu iz jednog od dva spiska.
+Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
+    "|" & TBL_OTPREMNICA & "|" & TBL_ZBIRNA & "|" & TBL_PRIJEMNICA & _
+    "|" & TBL_FAKTURE & "|" & TBL_FAKTURA_STAVKE & "|" & TBL_MAGACIN & _
+    "|" & TBL_BANKA_IMPORT & "|" & TBL_AMBALAZA & "|" & TBL_CENOVNIK & _
+    "|" & TBL_PALETA & "|" & TBL_PALETA_STAVKA & "|" & TBL_PRERADA & _
+    "|" & TBL_PRERADA_STAVKA & "|"
+
+' Tabele koje storno pojam NEMAJU -- maticni podaci. Prolaz kroz filter je za
+' njih tacan ishod, ne propust, i navedene su izricito da se "nije u spisku"
+' ne bi moglo procitati kao "zaboravljeno".
+Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
+    "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
+    "|" & TBL_ARTIKLI & "|"
+
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
 '
 ' GetTableData vraca Empty za oba, pa citac koji radi samo
@@ -121,6 +150,22 @@ Public Function RequireColumnIndex(ByVal tableName As String, _
     End If
 
     RequireColumnIndex = idx
+End Function
+
+' Mora li ova tabela da nosi kolonu Stornirano.
+Public Function TabelaNosiStorno(ByVal tableName As String) As Boolean
+    TabelaNosiStorno = _
+        (InStr(1, STORNO_TABELE, "|" & Trim$(tableName) & "|", vbTextCompare) > 0)
+End Function
+
+' Da li registar uopste ZNA za ovu tabelu -- u bilo kom od dva spiska.
+' Nepoznata tabela nije ni jedno ni drugo: nju hvata staticka provera, jer u
+' izvrsavanju ne postoji odgovor koji bi bio tacan.
+Public Function StornoRegistarZna(ByVal tableName As String) As Boolean
+    Dim k As String
+    k = "|" & Trim$(tableName) & "|"
+    StornoRegistarZna = (InStr(1, STORNO_TABELE, k, vbTextCompare) > 0) Or _
+                        (InStr(1, BEZ_STORNA, k, vbTextCompare) > 0)
 End Function
 
 Public Sub RequireColumns(ByVal tableName As String, _
