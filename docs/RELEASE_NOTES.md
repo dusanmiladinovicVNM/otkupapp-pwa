@@ -5526,3 +5526,31 @@ natpisa i dalje tvrdi stanje koje nema pokriće.
 Provereno je i da se posle ispravke vrednosti podloga **vrati**.
 
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §15.
+
+## v2.76.0 — novac više ne postaje avans kad lista blokova zakaže
+
+### Šta se moglo desiti
+
+Na unosu ambalaže/novca za kooperanta (`Izlaz OM`), ako lista **otkupnih blokova**
+nije uspela da se učita, ostajala je prazna — isto kao kad kooperant stvarno nema
+otvorenih blokova. Program je tu prazninu čitao kao „nema bloka" i novac knjižio
+kao **avans kooperanta**, umesto na blok.
+
+Bez ijedne poruke. Razlika se videla tek kasnije, u saldu.
+
+### Šta je sada
+
+Ako učitavanje liste zakaže, unos **staje** i operater dobija objašnjenje — sa
+razlogom zbog kojeg lista nije učitana.
+
+Kad je lista uredno učitana a prazna, ništa se ne menja: to stvarno znači da
+kooperant nema otvorenih blokova, pa je avans ispravan.
+
+### Odakle je došlo
+
+Ista greška je ranije nađena i zatvorena na uvozu izvoda (`v6-ui-180`), uz belešku
+da isto važi i za ovaj ekran. Kad se pogledalo, greška je tamo stvarno stajala.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §16.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.**

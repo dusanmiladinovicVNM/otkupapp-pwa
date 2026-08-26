@@ -2406,6 +2406,9 @@ i redosled poziva ostaju smoke.
 `frmDokumenta` nije diran. Ista tehnika bi radila i tamo, ali to je znatno veća
 forma i zaseban posao.
 
+> **Dopuna:** taj posao je urađen — v. §16. Ista greška je tamo i **nađena**, ne
+> samo testabilnost.
+
 
 ---
 
@@ -3079,3 +3082,96 @@ slova.
 
 `frmDokumenta` **nije diran**. Ovo je zatvorilo rupu u mreži, ne u legacy formi;
 seam-ovi za nju (po ugledu na `frmBankaImport`, §11) ostaju zaseban posao.
+---
+
+## 16. `frmDokumenta`: prazna lista blokova je bila avans
+
+§11 je istu klasu greške zatvorio u `frmBankaImport` i zapisao da `frmDokumenta`
+„nije diran, ista tehnika bi radila i tamo". Kad se tamo pogledalo, greška nije
+bila samo mogućа — bila je **prisutna**.
+
+### 16.1 Šta je bilo
+
+`btnUnosOMUlaz_Click`, grana koja odlučuje **na šta ide novac**:
+
+```vb
+If cmbOtkupBlok.ListIndex >= 0 Then
+    ...                                  ' knjizi na izabran blok
+Else
+    tipNovca = NOV_VIRMAN_AVANS_KOOP     ' AVANS
+End If
+```
+
+`ListIndex = -1` znači dve različite stvari:
+
+| Stanje | Da li je avans tačan |
+|---|---|
+| kooperant nema otvorenih blokova | **da** |
+| lista blokova se **nije učitala** | **ne** |
+
+A `FillOpenOtkupi` je pad čitanja gubio bez traga: prvo `cmbOtkupBlok.Clear`, pa
+`GetOpenOtkupi` — bez `On Error`. Pozivalac (`cmbPrimalacOMUlaz_Change`) **takođe
+nema rukovaoca**, pa se od celog neuspeha vidi samo prazan kombo.
+
+Ishod: novac tiho postaje **avans kooperanta** umesto da se knjiži na blok.
+
+### 16.2 Šta je urađeno
+
+Isti oblik kao u §11.2, jer je i greška ista:
+
+- `FillOpenOtkupi` beleži ishod (`m_BlokoviOk` / `m_BlokoviErr`) i više ne guta pad;
+- pravilo je izdvojeno u `BlokIzborSme(ByRef outPoruka)`, koje **vraća** poruku
+  umesto da je prikaže — time ostaje bez dijaloga i pozivljivo iz testa;
+- handler ga pita **baš u toj grani**, pre nego što izabere avans.
+
+„Prazno je istina" ostaje: posle **uspešnog** čitanja prazna lista stvarno znači
+da kooperant nema otvorenih blokova, i avans je tada ispravan. Kapija je uska
+koliko i kvar.
+
+### 16.3 Seam-ovi
+
+Tvrdo gejtovani, po ugledu na `frmBankaImport.BiTest*`:
+
+| Seam | Čemu služi |
+|---|---|
+| `DokTestSetBlokUcitanost` | postavi ishod učitavanja — pad se drugačije ne može izazvati bez lomljenja šeme |
+| `DokTestBlokSme` | **odluka koju handler stvarno čita**, ne njena kopija |
+| `DokTestBlokPoruka` | šta bi operater video |
+
+Forma se u testu **ne prikazuje**: `frmDokumenta` nema `UserForm_Initialize`, pa je
+`New frmDokumenta` jeftin i ne čita nijednu tabelu — isti razlog kao §11.1. Težak
+posao je u `UserForm_Activate`, koji ide tek na `.Show`.
+
+### 16.4 Šta test tvrdi
+
+`T_LegacyDok_PadListeBlokovaNijeAvans` (119):
+
+- pad učitavanja **zaustavlja** knjiženje avansa, i operater dobija objašnjenje;
+- u poruci stoji i **šta** je puklo;
+- uredno učitana lista **pušta** avans, bez poruke.
+
+Dve sabotaže: `dok-pad-liste-blokova-prolazi` i `dok-kapija-blokova-presiroka` —
+druga postoji jer je kapija šira od kvara isto tako greška.
+
+### 16.5 Šta ovo NE pokriva
+
+**Sam `btnUnosOMUlaz_Click` se u testu ne izvršava** — pokriveno je *pravilo* i to
+da ga handler zove (jedan red, proveren čitanjem). Isto ograničenje kao §11.5.
+
+**Da `FillOpenOtkupi` stvarno beleži pad nije mereno**: test postavlja stanje kroz
+seam, pa zaobilazi samu funkciju. Izazvati pravi pad čitanja iz testa značilo bi
+lomiti šemu.
+
+### 16.6 Nalaz sa strane: `vba_check` ne vidi nedeklarisanu modul-promenljivu
+
+Prvi patch je pao na drugom paru zamena, a skripta piše fajl tek kad **svi**
+prođu — pa je i prvi deo otkotrljan. Drugi patch je zatim upisao kod koji koristi
+`m_BlokoviOk`, dok deklaracije nije bilo.
+
+`vba_check` je na to rekao **`cisto`** (`rc=0`), iako `.frm` ima `Option Explicit`.
+Pad se video tek kao `run_vba` koji visi, sa Excelom u `[break]` — dakle kroz
+najskuplji mogući kanal.
+
+Provereno namerno: uklanjanje `Private m_BlokoviOk As Boolean` iz forme i dalje
+daje `vba_check: cisto`. To je rupa u checkeru, zapisana ovde i ostavljena kao
+zaseban posao — nije deo ovog PR-a.
