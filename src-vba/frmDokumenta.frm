@@ -30,6 +30,17 @@ Private m_uiSinks As Object          ' tag -> clsUiSink
 Private m_SetupDone As Boolean
 Private m_OtkupIDs() As String
 
+' UCITANOST LISTE BLOKOVA (cmbOtkupBlok).
+'
+' Prazna lista i NEUSPELO ucitavanje izgledaju isto: kombo je prazan, pa je
+' ListIndex = -1. A od te iste nule zavisi da li novac ide na BLOK ili postaje
+' AVANS -- dakle dva razlicita stanja odlucuju istu poslovnu stvar.
+'
+' Ista greska je u frmBankaImport nadjena TRI puta kroz review i zatvorena u
+' PR #220 (m_BlokoviLoadOk). Ovde je stajala nedirnuta.
+Private m_BlokoviOk As Boolean
+Private m_BlokoviErr As String
+
 ' Ispravka storniranog dokumenta: kad operater posle storna PALETIZOVANE prijemnice
 ' izabere "Uneti ispravku", zapamti se broj stornirane prijemnice + njena BrojZbirne.
 ' Sledeci snimljeni unos prijemnice automatski prevezuje osirocene palete na sebe
@@ -1568,6 +1579,7 @@ End Sub
 
 Private Sub btnUnosOMUlaz_Click()
     On Error GoTo EH
+    Dim blokPoruka As String
 
     If cmbOtkupnoMesto.value = "" Then
         MsgBox "Izaberite otkupno mesto!", vbExclamation, APP_NAME
@@ -1729,6 +1741,18 @@ Private Sub btnUnosOMUlaz_Click()
 
             If kooperantID = "" Then
                 MsgBox "Nije prona" & ChrW(273) & "en ID primaoca.", vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
+            ' UCITANOST SE PROVERAVA PRE GRANANJA, ne u AVANS grani.
+            '
+            ' Kapija je prvo stajala nize, pa je vazila samo kad izbora NEMA.
+            ' Ako ucitavanje padne usred petlje, kombo ostane delimicno
+            ' napunjen; operater izabere jedan od tih redova, ListIndex je
+            ' >= 0 -- i kapija se nikad ne pita. Obecanje 'ako ucitavanje
+            ' zakaze, unos staje' tada vazi samo za pola slucajeva.
+            If Not KnjizenjeSme(cmbOtkupBlok.ListIndex >= 0, blokPoruka) Then
+                MsgBox blokPoruka, vbExclamation, APP_NAME
                 Exit Sub
             End If
 
@@ -6061,21 +6085,40 @@ Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
 End Sub
 
 
+' Puni listu otvorenih blokova i BELEZI da li je to uspelo.
+'
+' Do sada je pad citanja ostavljao prazan kombo i nista vise: pozivalac
+' (cmbPrimalacOMUlaz_Change) nema rukovaoca, pa se greska nije ni videla kao
+' stanje forme. Prazan kombo je zatim u btnUnosOMUlaz_Click znacio AVANS.
 Private Sub FillOpenOtkupi()
+    On Error GoTo EH
     cmbOtkupBlok.Clear
     Erase m_OtkupIDs
-    
+    m_BlokoviOk = True
+    m_BlokoviErr = ""
+
     If cmbPrimalacOMUlaz.value = "" Then Exit Sub
-    
+
     Dim kooperantID As String
     kooperantID = GetComboID(cmbPrimalacOMUlaz)
-    
+
+    ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
+    '
+    ' GetOpenOtkupi cita kroz GetTableData, koji vraca isti Empty i kad tabele
+    ' NEMA i kad je prazna -- bez greske. Bez ove kapije bi nedostajuca tblOtkup
+    ' prosla kao 'uspesno ucitana prazna lista', m_BlokoviOk bi ostao True, i
+    ' novac bi opet zavrsio kao AVANS. Isto radi i frmBankaImport pre svog
+    ' citanja (LoadOtkupBlokoviForSelectedKooperant).
+    RequireTable TBL_OTKUP, "frmDokumenta.FillOpenOtkupi"
+
     Dim otkupi As Variant
     otkupi = GetOpenOtkupi(kooperantID)
+    ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI:
+    ' kooperant nema otvorenih blokova, pa je avans ispravan.
     If IsEmpty(otkupi) Then Exit Sub
-    
+
     ReDim m_OtkupIDs(0 To UBound(otkupi, 1) - 1)
-    
+
     Dim i As Long
     For i = 1 To UBound(otkupi, 1)
         m_OtkupIDs(i - 1) = CStr(otkupi(i, 2))
@@ -6083,7 +6126,92 @@ Private Sub FillOpenOtkupi()
             Format$(CDbl(otkupi(i, 5)), "#,##0.00") & " od " & _
             Format$(CDbl(otkupi(i, 3)), "#,##0.00") & " RSD"
     Next i
+    Exit Sub
+
+EH:
+    m_BlokoviOk = False
+    m_BlokoviErr = Err.description
+    ' LogErr ide PRE ciscenja: svaka On Error naredba resetuje Err, pa bi posle
+    ' njih upisao prazno.
+    LogErr "frmDokumenta.FillOpenOtkupi"
+    ' Delimicno napunjena lista je gora od prazne: izgleda kao potpuna, pa
+    ' operater bira red iz nje ne znajuci da ostatak nedostaje. Pad usred petlje
+    ' (npr. na CDbl jednog reda) je zato isto sto i pad na pocetku.
+    On Error Resume Next
+    cmbOtkupBlok.Clear
+    Erase m_OtkupIDs
 End Sub
+
+' Sme li se PRAZNA lista blokova protumaciti kao "nema bloka", dakle avans.
+'
+' Sme samo ako je ucitavanje USPELO -- tada prazno stvarno znaci da kooperant
+' nema otvorenih blokova. Ako je ucitavanje palo, prazno ne znaci nista, a novac
+' bi bez ove kapije tiho postao avans.
+'
+' Poruka se VRACA pozivaocu umesto da se prikaze ovde, da funkcija ostane bez
+' dijaloga i time pozivljiva iz testa (isti obrazac kao
+' frmBankaImport.KooperantRucnoSme).
+' Sme li se blokovski tok uopste knjiziti -- BEZ OBZIRA da li je red izabran.
+'
+' Kapija je prvo stajala samo u AVANS grani, dakle vazila je samo kad izbora NEMA.
+' Ako ucitavanje padne usred petlje, kombo ostane delimicno napunjen, operater
+' izabere jedan od tih redova, ListIndex je >= 0 -- i kapija se nikad ne pita.
+' Obecanje "ako ucitavanje zakaze, unos staje" tada vazi samo za pola slucajeva.
+'
+' `blokIzabran` se prima namerno iako se ne koristi: ono sto se ovde tvrdi jeste
+' da odluka od njega NE SME da zavisi. Test to i meri, za obe vrednosti.
+Private Function KnjizenjeSme(ByVal blokIzabran As Boolean, _
+                              ByRef outPoruka As String) As Boolean
+    KnjizenjeSme = BlokIzborSme(outPoruka)
+End Function
+
+Private Function BlokIzborSme(ByRef outPoruka As String) As Boolean
+    outPoruka = ""
+
+    If Not m_BlokoviOk Then
+        outPoruka = "Lista otkupnih blokova NIJE u" & ChrW(269) & "itana (" & _
+                    m_BlokoviErr & ")." & vbCrLf & _
+                    "Prazna lista NE zna" & ChrW(269) & "i da bloka nema."
+        Exit Function
+    End If
+
+    BlokIzborSme = True
+End Function
+
+' ============================================================
+' TEST SEAM-OVI
+'
+' Postoje samo za test i TVRDO su gejtovani -- van test rezima ne rade nista.
+' Isti obrazac kao frmBankaImport.BiTest* i modScrDokumenti.Scr_OtpTestSet.
+'
+' Forma se u testu NE prikazuje: frmDokumenta nema UserForm_Initialize, pa je
+' New frmDokumenta jeftin i ne cita nijednu tabelu. Tezak posao je u
+' UserForm_Activate, koji ide tek na .Show.
+' ============================================================
+Public Sub DokTestSetBlokUcitanost(ByVal blokoviOk As Boolean, ByVal greska As String)
+    If Not IsTestMode() Then Exit Sub
+    m_BlokoviOk = blokoviOk
+    m_BlokoviErr = greska
+End Sub
+
+Public Function DokTestKnjizenjeSme(ByVal blokIzabran As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    DokTestKnjizenjeSme = KnjizenjeSme(blokIzabran, p)
+End Function
+
+Public Function DokTestBlokSme() As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    DokTestBlokSme = BlokIzborSme(p)
+End Function
+
+Public Function DokTestBlokPoruka() As String
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    BlokIzborSme p
+    DokTestBlokPoruka = p
+End Function
 
 ' ============================================================
 ' v6.11 UI: FOCUS BORDER (gold accent on active input)

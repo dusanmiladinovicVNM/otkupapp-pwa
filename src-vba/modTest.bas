@@ -347,6 +347,7 @@ Public Sub RunAllTests()
     RunOne 116
     RunOne 117
     RunOne 118
+    RunOne 119
 
     SetTestMode prevMode
     WriteResultFile
@@ -497,6 +498,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
         Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
+        Case 119: TestName = "T_LegacyDok_PadListeBlokovaNijeAvans"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -623,6 +625,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
         Case 117: T_Kolona_TrazenjeNeGutaGresku
         Case 118: T_MrezaPilula_PozadinaSeCisti
+        Case 119: T_LegacyDok_PadListeBlokovaNijeAvans
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8028,4 +8031,67 @@ Private Sub T_MrezaPilula_PozadinaSeCisti()
     AssertEq (Len(capPre) > 0), True, "kontrola: pre kvara je natpis postojao"
     AssertEq stilNazad, CLng(fmBackStyleOpaque), _
              "uredna vrednost VRACA pozadinu -- ciscenje ne ostaje zauvek"
+End Sub
+
+
+' TEST 119: u frmDokumenta prazna lista blokova NIJE izbor.
+'
+' Ista klasa greske koju je frmBankaImport imao i koja je tamo zatvorena u PR
+' #220. Ovde je stajala nedirnuta:
+'
+'   btnUnosOMUlaz_Click:  If cmbOtkupBlok.ListIndex >= 0 Then ... Else AVANS
+'
+' Prazan kombo i NEUSPELO ucitavanje izgledaju isto -- ListIndex je -1 u oba
+' slucaja. Punjenje (FillOpenOtkupi) je do sada padalo bez traga u stanju forme,
+' a pozivalac (cmbPrimalacOMUlaz_Change) nema rukovaoca -- pa je novac tiho
+' postajao AVANS kooperanta umesto da se knjizi na blok.
+'
+' Forma se u testu NE prikazuje: frmDokumenta nema UserForm_Initialize, pa je
+' New frmDokumenta jeftin i ne cita nijednu tabelu (isti razlog kao 11.1).
+Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
+    Dim f As frmDokumenta
+    Dim smePad As Boolean, smeOk As Boolean
+    Dim porukaPad As String, porukaOk As String
+    Dim padSaIzborom As Boolean, padBezIzbora As Boolean, okSaIzborom As Boolean
+
+    Set f = New frmDokumenta
+
+    ' PAD UCITAVANJA -> STOP. Nalazi se skupljaju pa tvrde POSLE Unload-a: pad
+    ' tvrdnje nad zivom formom ostavlja formu u memoriji i poruka se ne vidi.
+    f.DokTestSetBlokUcitanost False, "test greska"
+    smePad = f.DokTestBlokSme()
+    porukaPad = f.DokTestBlokPoruka()
+
+    ' Uredno ucitana lista pusta dalje -- kapija ne sme da bude sira od kvara.
+    ' Prazna lista posle USPESNOG citanja stvarno znaci "nema otvorenih blokova",
+    ' i avans je tada ispravan.
+    ' IZBOR NE SME DA ZAOBIDJE KAPIJU.
+    '
+    ' Pad usred punjenja ostavlja kombo DELIMICNO napunjen: operater tada bira
+    ' red iz nepotpune liste, ListIndex je >= 0, i kapija koja stoji samo u AVANS
+    ' grani se nikad ne pita. Odluka zato ne sme da zavisi od toga da li je red
+    ' izabran -- i to se ovde tvrdi za obe vrednosti.
+    padSaIzborom = f.DokTestKnjizenjeSme(True)
+    padBezIzbora = f.DokTestKnjizenjeSme(False)
+
+    f.DokTestSetBlokUcitanost True, ""
+    smeOk = f.DokTestBlokSme()
+    porukaOk = f.DokTestBlokPoruka()
+    okSaIzborom = f.DokTestKnjizenjeSme(True)
+
+    Unload f
+
+    AssertEq smePad, False, _
+             "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa"
+    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
+             "...i operater dobija objasnjenje, ne cutanje"
+    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
+             "...u kojem stoji i sta je puklo"
+    AssertEq padSaIzborom, False, _
+             "ni IZABRAN blok ne prolazi kad je ucitavanje palo"
+    AssertEq padBezIzbora, False, "...ni prazan izbor"
+
+    AssertEq smeOk, True, "uredno ucitana lista pusta avans"
+    AssertEq porukaOk, "", "...bez poruke"
+    AssertEq okSaIzborom, True, "...i pusta izabran blok"
 End Sub

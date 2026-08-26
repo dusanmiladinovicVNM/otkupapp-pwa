@@ -1960,6 +1960,35 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- LEGACY: frmDokumenta, blok/avans
+    # Prazna lista posle PADA ucitavanja opet postaje 'nema bloka', pa novac
+    # tiho ode kao avans kooperanta. Ista klasa koju je frmBankaImport imao
+    # tri puta (PR #220).
+    "dok-pad-liste-blokova-prolazi": (
+        "frmDokumenta.frm",
+        "    If Not m_BlokoviOk Then\n",
+        "    If False Then   ' SABOTAZA: pad ucitavanja prolazi\n",
+        "T_LegacyDok_PadListeBlokovaNijeAvans",
+        "pad ucitavanja liste blokova ZAUSTAVLJA knjizenje avansa",
+    ),
+    # Kapija sira od kvara je isto greska: prazna lista posle USPESNOG
+    # citanja stvarno znaci 'nema otvorenih blokova', i avans je tada tacan.
+    "dok-kapija-blokova-presiroka": (
+        "frmDokumenta.frm",
+        "    BlokIzborSme = True\n",
+        "    BlokIzborSme = False   ' SABOTAZA: kapija ne pusta ni urednu listu\n",
+        "T_LegacyDok_PadListeBlokovaNijeAvans",
+        "uredno ucitana lista pusta avans",
+    ),
+    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
+    # napunjen kombo posle pada ucitavanja ima izbor, pa bi prosao.
+    "dok-izbor-zaobilazi-kapiju": (
+        "frmDokumenta.frm",
+        "    KnjizenjeSme = BlokIzborSme(outPoruka)\n",
+        "    If blokIzabran Then KnjizenjeSme = True: Exit Function   ' SABOTAZA\n",
+        "T_LegacyDok_PadListeBlokovaNijeAvans",
+        "ni IZABRAN blok ne prolazi kad je ucitavanje palo",
+    ),
     # ---------------------------------------- MREZA: POZADINA PILULE
     # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila
     # obojen pravougaonik koji tvrdi stanje -- samo bez slova. Ovo je bila
