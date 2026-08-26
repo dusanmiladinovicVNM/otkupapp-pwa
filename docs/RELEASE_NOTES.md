@@ -5782,7 +5782,9 @@ bio zelen.
 
 Nova provera je u prvom obliku bila **preširoka** — primala bi i tekst koji u
 testu postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci.
-Nađeno u pregledu i suženo.
+Nađeno u pregledu i suženo. Pa se pokazalo da je i to suženje još uvek široko:
+prolazio bi i tekst koji je u testu samo očekivana vrednost ili obična dodela.
+Sada se gleda **samo poruka same provere**, ništa drugo.
 
 Zatim: prvi dokaz **tog** suženja ništa nije dokazivao. Slučajevi su prolazili i
 kad se suženje vrati unazad, jer su proveravali pogrešnu stranu — kako se tekst

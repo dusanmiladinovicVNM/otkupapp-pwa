@@ -498,6 +498,37 @@ To je ista pouka koju `vba_check` već nosi u komentaru — self-test mora da id
 **kroz** produkcionu putanju, a ne pored nje. Ovde se pokazalo da važi i za
 podatak koji putanja proizvodi, ne samo za funkciju koja ga troši.
 
+### ...pa je i suženje bilo preširoko: literal nije isto što i poruka
+
+Drugi krug review-a je pokazao da „tekst je u nekom string-literalu tog testa"
+još uvek nije isto što i „tekst je poruka koju `dokaz.py` može da vidi".
+Literal može da bude i **očekivana vrednost** ili obična dodela:
+
+```vb
+status = "blok drugog kooperanta se odbija"
+AssertEq rezultat, "Placeno", "status fakture je ispravan"
+```
+
+Katalog sa `"Placeno"` bi statički prošao, a u prolazu dao `PALA DRUGA TVRDNJA`.
+
+Provera zato ne gleda literale procedure nego **poslednji argument** assertion
+poziva. Skup je uzak i pravilan — u sve četiri primitive oba harness-a poruka je
+poslednji argument:
+
+| Primitiva | Gde | Poziva |
+|---|---|---|
+| `AssertEq actual, expected, poruka` | `modTest` | 1176 |
+| `ChkEq act, exp, nm` | `modTestBanka` | 88 |
+| `Chk cond, nm` | `modTestBanka` | 82 |
+| `ChkEqD act, exp, nm` | `modTestBanka` | 26 |
+
+**Nezavisna potvrda popravke:** sužavanje sa „bilo koji literal" na „poruka
+tvrdnje" nije oborilo **nijedan** od 251 unosa. Da je neki od 119 prepisanih
+tekstova bio slučajno poklapanje sa nekim drugim literalom, ovde bi ispao.
+
+Test koji nema nijednu prepoznatu poruku ne prolazi tiho — njegova tvrdnja pada
+kao zastarela, pa nova assert primitiva ne može da otvori rupu neprimećeno.
+
 ### Gde provera živi, i zašto baš tu
 
 U `_nalazi` — jedinoj putanji kroz koju prolaze sva statička pravila kataloga,
@@ -506,9 +537,10 @@ kojoj `--self-test` podmeće izmišljene unose i koju `vba_check` zove posle
 neko mora da se seti da pusti, a baš VBA izmena je ono što tvrdnju čini
 zastarelom.
 
-Pet novih self-test slučajeva: zastarela tvrdnja, tvrdnja koja pripada
-**drugom** testu, prazna tvrdnja, tekst koji postoji samo kao **kod**, i tekst
-koji postoji samo u **komentaru**.
+Sedam novih self-test slučajeva: zastarela tvrdnja, tvrdnja koja pripada
+**drugom** testu, prazna tvrdnja, tekst koji postoji samo kao **kod**, samo u
+**komentaru**, samo u **string promenljivoj**, i tekst koji je **očekivana
+vrednost** `AssertEq`-a umesto poruke.
 
 ### Dva nalaza koja NISU zataškana
 

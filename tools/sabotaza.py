@@ -2925,7 +2925,10 @@ def _literali(tekst: str):
                 buf.append(t[j]); j += 1
             s = "".join(buf)
             medju = t[kraj:i]
-            if tek and "&" in medju and "," not in medju:
+            # Zarez se vise ne gleda: _literali od sada dobija JEDAN argument
+            # (poruku tvrdnje), pa u njemu zareza na vrhu nema -- a zarez unutar
+            # poziva (Format$(x, "0.00")) je nekad pogresno delio jedan izraz.
+            if tek and "&" in medju:
                 tek.append(s)                              # isti izraz
             else:
                 if tek:
@@ -2945,15 +2948,82 @@ def _literali(tekst: str):
     return lit, sabloni
 
 
+# Poruka tvrdnje je POSLEDNJI argument assertion poziva. Cetiri primitive
+# pokrivaju oba harness-a:
+#
+#   AssertEq actual, expected, poruka        (modTest, 1176 poziva)
+#   ChkEq    act, exp, nm                    (modTestBanka, 88)
+#   ChkEqD   act, exp, nm                    (modTestBanka, 26)
+#   Chk      cond, nm                        (modTestBanka, 82)
+#
+# Zasto ne "bilo koji literal u testu": literal moze da bude i OCEKIVANA VREDNOST
+# ili obicna dodela --
+#
+#     status = "blok drugog kooperanta se odbija"
+#     AssertEq rezultat, "Placeno", "status fakture je ispravan"
+#
+# -- a dokaz.py vidi samo PORUKU koja je pala. Katalog koji nosi "Placeno" bi
+# staticki prosao, a u prolazu dao PALA DRUGA TVRDNJA. Provera bi opet obecavala
+# vise nego sto meri, samo uze nego pre.
+_ASSERT_IMENA = ("asserteq", "chkeqd", "chkeq", "chk")
+
+
+def _podeli_vrh(tekst: str) -> list:
+    """Podeli po zarezima koji NISU u zagradama ni u navodnicima."""
+    delovi, dubina, u_str, tek = [], 0, False, ""
+    for c in tekst:
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c in "([":
+            dubina += 1
+        elif not u_str and c in ")]":
+            dubina -= 1
+        elif not u_str and c == "," and dubina == 0:
+            delovi.append(tek.strip())
+            tek = ""
+            continue
+        tek += c
+    if tek.strip():
+        delovi.append(tek.strip())
+    return delovi
+
+
+def _poruke_tvrdnji(telo: str) -> list:
+    """Izrazi koji su PORUKA assertion poziva, po jedan po pozivu."""
+    out = []
+    for red in _NASTAVAK.sub(" ", telo).split("\n"):
+        r = red.strip()
+        low = r.lower()
+        for ime in _ASSERT_IMENA:
+            if not low.startswith(ime):
+                continue
+            ostatak = r[len(ime):]
+            # granica imena: Chk ne sme da pojede ChkEq, ni AssertEq AssertEqX
+            if ostatak[:1].isalnum() or ostatak[:1] == "_":
+                continue
+            arg = ostatak.strip()
+            if arg.startswith("(") and arg.endswith(")"):
+                arg = arg[1:-1]
+            delovi = _podeli_vrh(arg)
+            if delovi:
+                out.append(delovi[-1])
+            break
+    return out
+
+
 def _telo_podaci(telo: str):
-    """(string-literali u malim slovima, sabloni) za JEDNO telo procedure.
+    """(literali PORUKA tvrdnji, njihovi sabloni) za JEDNO telo procedure.
 
     Izdvojeno da bi self-test isao KROZ ovu funkciju, a ne pored nje: dok je
     self-test sam sklapao svoje "telo", dokazivao je samo da _tvrdnja_pripada
-    pretrazuje ono sto DOBIJE -- a rupa je bila u tome STA dobija (celo telo, sa
-    kodom i komentarima). Sabotaza ove funkcije sada obara oba slucaja.
+    pretrazuje ono sto DOBIJE -- a rupa je bila u tome STA dobija. Sabotaza ove
+    funkcije sada obara sve slucajeve koji to mere.
     """
-    lit, sabloni = _literali(telo)
+    lit, sabloni = [], []
+    for izraz in _poruke_tvrdnji(telo):
+        l, sab = _literali(izraz)
+        lit.extend(l)
+        sabloni.extend(sab)
     return [x.lower() for x in lit], sabloni
 
 
@@ -3198,6 +3268,15 @@ _SELF_TEST = [
     ("tvrdnja postoji samo u komentaru",
      (None, None, None, None, "recenica iz komentara koja nije tvrdnja"),
      "tvrdnja ZASTARELA"),
+    # Literal JESTE u testu, ali kao obicna dodela -- nikad ne stigne u poruku.
+    ("tvrdnja postoji samo u string promenljivoj",
+     (None, None, None, None, "tekst iz obicne promenljive"),
+     "tvrdnja ZASTARELA"),
+    # Literal je OCEKIVANA VREDNOST AssertEq-a, ne poruka. dokaz.py bi ga video
+    # samo u "ocekivano [...]" delu, a poredi se sa porukom.
+    ("tvrdnja je ocekivana vrednost, ne poruka",
+     (None, None, None, None, "ocekivana vrednost"),
+     "tvrdnja ZASTARELA"),
 ]
 
 
@@ -3212,6 +3291,9 @@ def _self_test() -> int:
     # kao zastarela tvrdnja, i za to postoje dva slucaja.
     _VBA = ("Private Sub T_Postoji()\n"
             "    ' recenica iz komentara koja nije tvrdnja\n"
+            "    Dim status As String\n"
+            "    status = \"tekst iz obicne promenljive\"\n"
+            "    AssertEq rezultat, \"ocekivana vrednost\", \"tvrdnja uz vrednost\"\n"
             "    AssertEq nosiDok, True, \"zdrava tvrdnja\"\n"
             "    AssertEq a, b, \"tvrdnja A\"\n"
             "    AssertEq a, b, \"tvrdnja B\"\n"
