@@ -8237,7 +8237,9 @@ End Sub
 Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     Dim nosiDok As Boolean, nosiMat As Boolean
     Dim poruka As String, greskaMat As String
+    Dim porukaPrazno As String, porukaNepoznata As String
     Dim dataDok As Variant, dataMat As Variant, prosloMat As Variant
+    Dim prazno As Variant, nepoznato As Variant
     Dim redovaPre As Long, redovaPosle As Long
 
     nosiDok = modSchemaGuard.TabelaNosiStorno(TBL_OTKUP)
@@ -8259,7 +8261,39 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     On Error GoTo 0
     EndTableCache
 
-    ' (2) MATICNI PODACI STORNO POJAM NEMAJU -- prolaz je TACAN ishod.
+    ' (2) PRAZNA TABELA IZ REGISTRA BEZ KOLONE -- TAKODJE PAD.
+    '
+    ' Ugovor je "tabela iz STORNO_TABELE bez kolone znaci drift", a ne "drift se
+    ' prijavljuje samo dok tabela ima redova". Dok je IsEmpty izlazio prvi, prazna
+    ' tabela je kapiju preskakala i tvrdnja iznad to nije videla -- fixture ima
+    ' redove, pa se ta grana nikad nije ni takla.
+    BeginTableCache
+    modDataAccess.KesKoloneTestSet TBL_OTKUP, COL_STORNIRANO, 0
+    On Error Resume Next
+    Err.Clear
+    prazno = ExcludeStornirano(Empty, TBL_OTKUP)
+    porukaPrazno = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+
+    ' (3) TABELA KOJU REGISTAR NE POZNAJE -- PAD, ne tihi prolaz.
+    '
+    ' Bez ove kapije "TabelaNosiStorno = False" opet znaci dve stvari: eksplicitno
+    ' BEZ_STORNA i "niko je nije klasifikovao". Staticka provera to ne zatvara,
+    ' jer namerno preskace pozive sa promenljivim imenom tabele -- a takvih ima
+    ' (modIntegritet.CollectBrojZbirne, modDokumenta.SumByBroj).
+    BeginTableCache
+    dataDok = GetTableData(TBL_OTKUP)
+    On Error Resume Next
+    Err.Clear
+    nepoznato = ExcludeStornirano(dataDok, "tblNijeURegistru")
+    porukaNepoznata = Err.description
+    Err.Clear
+    On Error GoTo 0
+    EndTableCache
+
+    ' (4) MATICNI PODACI STORNO POJAM NEMAJU -- prolaz je TACAN ishod.
     ' Kapija sme da bude siroka tacno koliko i kvar; bez ove tvrdnje bi
     ' fail-closed zaustavio i citanje kooperanata, koje nikad nije bilo u pitanju.
     BeginTableCache
@@ -8278,6 +8312,11 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     AssertEq nosiMat, False, "maticni podaci nisu u registru storna"
     AssertEq (InStr(1, poruka, COL_STORNIRANO) > 0), True, _
              "nedostajuca kolona storna PADA i imenuje kolonu, ne propusta tiho"
+    AssertEq (InStr(1, porukaPrazno, COL_STORNIRANO) > 0), True, _
+             "...i kad je tabela PRAZNA -- drift ne ceka da bude redova"
+    AssertEq (InStr(1, porukaNepoznata, "registru") > 0), True, _
+             "tabela koju registar ne poznaje PADA, ne prolazi kao da nema storno"
+
     AssertEq greskaMat, "", "tabela bez storno pojma prolazi bez greske"
     AssertEq (redovaPre > 0), True, "...nad tabelom koja stvarno ima redove"
     AssertEq redovaPosle, redovaPre, "...i vraca sve svoje redove"

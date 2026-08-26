@@ -144,6 +144,30 @@ End Sub
 Public Function ExcludeStornirano(ByVal data As Variant, _
                                   ByVal tblName As String) As Variant
     ' Filtert Stornirano="Da" Zeilen raus, gibt bereinigtes Array zur?ck
+    '
+    ' KLASIFIKACIJA I OBAVEZNA KOLONA IDU PRE SVEGA -- i pre IsEmpty.
+    '
+    ' Prazna tabela iz registra kojoj nedostaje kolona je i dalje DRIFT, pa mora
+    ' da padne: ugovor je "tabela iz STORNO_TABELE bez kolone znaci drift", a ne
+    ' "drift se prijavljuje samo dok tabela ima redova". Ranije je IsEmpty izlazio
+    ' prvi, pa se schema guard nad praznom tabelom nikad nije ni pitao.
+    RequireStornoKlasifikaciju tblName, "modHelpers.ExcludeStornirano"
+
+    If Not modSchemaGuard.TabelaNosiStorno(tblName) Then
+        ' EKSPLICITNO BEZ_STORNA -- maticni podaci. Prolaz je TACAN ishod, a ne
+        ' posledica toga sto tabela nije prepoznata: to je kapija iznad vec
+        ' razdvojila.
+        ExcludeStornirano = data
+        Exit Function
+    End If
+
+    ' Tabela JESTE iz registra: kolona mora da postoji, bez obzira na broj redova.
+    ' Trazi se JEDNOM, ovde, pa se indeks nosi dalje -- nula ispod vise nije
+    ' moguca, jer RequireColumnIndex pada umesto da je vrati.
+    Dim colStorno As Long
+    colStorno = RequireColumnIndex(tblName, COL_STORNIRANO, _
+                                   "modHelpers.ExcludeStornirano")
+
     If IsEmpty(data) Then
         ExcludeStornirano = data
         Exit Function
@@ -162,25 +186,6 @@ Public Function ExcludeStornirano(ByVal data As Variant, _
         Dim cached As Variant
         If ExclCacheTryGet(tblName, cached) Then
             ExcludeStornirano = cached
-            Exit Function
-        End If
-    End If
-
-    ' NULA IMA DVA ZNACENJA, i dok se nisu razlikovala ovo je bio fail-open nad
-    ' 183 poziva: kolona koja nije nadjena znacila je "nema sta da se filtrira",
-    ' pa je storniran dokument izlazio kao ziv. Za tabelu iz registra se sada
-    ' pada glasno -- RequireColumnIndex uz to kaze i da li je kolonu VIDEO u
-    ' svezem prolazu, cime se drift razlikuje od stvarnog nedostatka.
-    Dim colStorno As Long
-    colStorno = GetColumnIndex(tblName, COL_STORNIRANO)
-    If colStorno = 0 Then
-        If modSchemaGuard.TabelaNosiStorno(tblName) Then
-            colStorno = RequireColumnIndex(tblName, COL_STORNIRANO, _
-                                           "modHelpers.ExcludeStornirano")
-        Else
-            ' Maticni podaci storno pojam nemaju -- prolaz je TACAN ishod.
-            ' Kapija sme da bude siroka tacno koliko i kvar.
-            ExcludeStornirano = data
             Exit Function
         End If
     End If

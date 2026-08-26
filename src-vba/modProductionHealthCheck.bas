@@ -93,9 +93,13 @@ Private Sub Check_CoreTablesAndColumns()
         "FakturaID", "BrojFakture", "Datum", "KupacID", "Iznos", _
         "Status", "DatumPlacanja", "Stornirano")
 
+    ' Stornirano je dodato da se dve deklaracije seme ne bi razisle:
+    ' modSchemaGuard.STORNO_TABELE od sada TRAZI tu kolonu nad ovom tabelom, pa
+    ' bi health check bez nje javljao zdravo stanje za svesku nad kojom
+    ' ExcludeStornirano pada. Bolje da se to vidi ovde, pre rada, nego u radu.
     HealthRequireColumns TBL_FAKTURA_STAVKE, Array( _
         "StavkaID", "FakturaID", "PrijemnicaID", "Kolicina", "Cena", _
-        "Klasa", "BrojPrijemnice")
+        "Klasa", "BrojPrijemnice", "Stornirano")
 
     HealthRequireColumns TBL_NOVAC, Array( _
         "NovacID", "Datum", "Partner", "PartnerID", "EntitetTip", _

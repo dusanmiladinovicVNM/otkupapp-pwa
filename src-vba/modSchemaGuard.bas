@@ -159,14 +159,32 @@ Public Function TabelaNosiStorno(ByVal tableName As String) As Boolean
 End Function
 
 ' Da li registar uopste ZNA za ovu tabelu -- u bilo kom od dva spiska.
-' Nepoznata tabela nije ni jedno ni drugo: nju hvata staticka provera, jer u
-' izvrsavanju ne postoji odgovor koji bi bio tacan.
+'
+' Nepoznata tabela nije ni jedno ni drugo, i tu razliku mora da pravi IZVRSAVANJE,
+' ne samo staticka provera: ona namerno preskace pozive sa promenljivim imenom
+' tabele (modIntegritet.CollectBrojZbirne, modDokumenta.SumByBroj i slicni), pa
+' bi bez ove kapije "TabelaNosiStorno = False" opet znacilo dve stvari --
+' "eksplicitno BEZ_STORNA" i "niko je nije klasifikovao". To je ista bolest zbog
+' koje je ceo ovaj posao i nastao, samo jedan nivo dalje.
 Public Function StornoRegistarZna(ByVal tableName As String) As Boolean
     Dim k As String
     k = "|" & Trim$(tableName) & "|"
     StornoRegistarZna = (InStr(1, STORNO_TABELE, k, vbTextCompare) > 0) Or _
                         (InStr(1, BEZ_STORNA, k, vbTextCompare) > 0)
 End Function
+
+' Tabela mora da bude KLASIFIKOVANA pre nego sto se nad njom filtrira storno.
+' Bez klasifikacije nema tacnog ishoda: ni pad ni prolaz nisu opravdani, jer se
+' nenadjena kolona ne moze razlikovati od tabele koja storno pojam nema.
+Public Sub RequireStornoKlasifikaciju(ByVal tableName As String, _
+                                      ByVal sourceName As String)
+    If StornoRegistarZna(tableName) Then Exit Sub
+    Err.Raise vbObjectError + 7302, sourceName, _
+              "Tabela '" & tableName & "' nije klasifikovana u registru storna " & _
+              "(modSchemaGuard: STORNO_TABELE ili BEZ_STORNA). Dok nije, " & _
+              "nenadjena kolona '" & COL_STORNIRANO & "' se ne moze razlikovati " & _
+              "od tabele koja storno pojam nema."
+End Sub
 
 Public Sub RequireColumns(ByVal tableName As String, _
                           ByVal sourceName As String, _

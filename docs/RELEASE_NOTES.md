@@ -5688,11 +5688,18 @@ Ako u vašoj svesci nekoj od dokument-tabela **stvarno** nedostaje ta kolona,
 program će sada **stati** tamo gde je ranije tiho radio sa netačnim podacima. To
 je namera — ali zato smoke ove verzije ide na kopiji sveske, ne na radnoj.
 
+### Jedno mesto je i dalje moglo da progura storniran red
+
+Provera je bila na pravom mestu, ali je jedan raniji ekran (detalji kartice) bio
+napisan tako da **prećutkuje svaku grešku** — pa bi i ovu, i nastavio sa
+nefiltriranim spiskom. Prepravljen je: radije bez podatka nego sa pogrešnim. Uz
+to je dodata provera koja ne dozvoljava da se takav propust ponovi neprimećeno.
+
 ### Verifikacija
 
-`RunAllTests` **122 testa, 0 palih**, uz četiri sabotaže. Uz to je i sam checker
-dobio pravilo koje ne pušta novo čitanje nad tabelom koju registar ne poznaje, sa
-dokazom u oba smera.
+`RunAllTests` **122 testa, 0 palih**, uz šest sabotaža. Uz to su i alati dobili
+dva nova pravila — jedno ne pušta čitanje nad tabelom koju registar ne poznaje,
+drugo ne dozvoljava da se pad ove provere prećuti — oba sa dokazom u oba smera.
 
 Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §18. Domen: `docs/DOMEN/README.md`.
 

@@ -1206,6 +1206,67 @@ def check_test_registry(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- STORNO_PROGUTAN: fail-closed koji pozivalac proguta nije fail-closed ----
+#
+# ExcludeStornirano od v2.78.0 PADA kad tabeli iz registra nedostaje kolona
+# Stornirano. Ali pozivalac koji drzi `On Error Resume Next` tu gresku proguta --
+# i, sto je gore od samog gutanja, dodela se ne izvrsi:
+#
+#     On Error Resume Next
+#     d = ExcludeStornirano(d, TBL_PRIJEMNICA)   <- pukne
+#     If Not IsArray(d) Then Exit Function       <- d je jos ORIGINALNI niz
+#
+# `d` ostaje NEFILTRIRAN, pa storniran dokument ide dalje kao ziv. Kapija je time
+# neutralisana jednim redom IZNAD nje.
+#
+# Izuzetak je NAMERNO hvatanje: poziv pod Resume Next je u redu ako se odmah
+# sledecom naredbom cita `Err.` (Number ili Description) -- to je idiom kojim
+# test tvrdi da je greska podignuta. Sve ostalo je gutanje.
+#
+# GRANICA: hvata se samo DIREKTAN poziv pod aktivnim Resume Next. Ako A zove
+# ExcludeStornirano bez rukovaoca, a B zove A pod Resume Next, greska se penje do
+# B -- to trazi analizu celog grafa poziva i ovde se ne pokusava.
+STORNO_ERR_CITA = re.compile(r"\bErr\s*\.", re.IGNORECASE)
+PROC_POCETAK = re.compile(
+    r"^\s*(?:(?:Public|Private|Friend)\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\b", re.IGNORECASE)
+PROC_KRAJ = re.compile(r"^\s*End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+
+
+def check_storno_progutan(path: str, lines: list[str]) -> list[Finding]:
+    logicke = _logical_lines(lines)
+    ocisceno = [(_strip_comment(t).strip(), ln) for t, ln in logicke]
+
+    def sledeca_naredba(k: int) -> str:
+        for t, _ln in ocisceno[k + 1:]:
+            if t:
+                return t
+        return ""
+
+    out = []
+    resume = False
+    for k, (t, ln) in enumerate(ocisceno):
+        if not t:
+            continue
+        low = t.lower()
+        if PROC_POCETAK.match(t) or PROC_KRAJ.match(t):
+            resume = False
+        if low.startswith("on error resume next"):
+            resume = True
+        elif low.startswith("on error goto"):
+            resume = False
+        if resume and "excludestornirano(" in low:
+            if STORNO_ERR_CITA.search(sledeca_naredba(k)):
+                continue        # namerno hvatanje, ne gutanje
+            out.append(Finding(
+                path, ln, "STORNO_PROGUTAN",
+                "ExcludeStornirano pod aktivnim 'On Error Resume Next': pad "
+                "kapije storna se guta, dodela se ne izvrsi, i promenljiva "
+                "ostaje NEFILTRIRANA. Koristi 'On Error GoTo EH', ili odmah "
+                "posle poziva procitaj Err ako gresku hvatas namerno."))
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -1219,6 +1280,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_truncated(path, raw, lines)
     out += check_array_copy(path, lines)
     out += check_test_registry(path, lines)
+    out += check_storno_progutan(path, lines)
     return out
 
 
@@ -1301,6 +1363,61 @@ End Sub
 # Slucajevi 1 i 2 su REKONSTRUKCIJA zatecenog incidenta, ne izmisljeni primeri:
 # oba oblika su stvarno postojala u modStornoDok.StornoIzvrsi i
 # modScrDokumenti.StornoRedF8 od v6-ui-119 do v6-ui-141.
+# STORNO_PROGUTAN: pozivalac ne sme da proguta pad kapije storna.
+STORNO_PROGUTAN_CASES = [
+    ("gutanje pod Resume Next -- nalaz", 1,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    If Not IsArray(d) Then Exit Sub\n"
+     "End Sub\n"),
+    ("On Error GoTo EH -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error GoTo EH\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    Exit Sub\n"
+     "EH:\n"
+     "    LogErr \"P\"\n"
+     "End Sub\n"),
+    ("namerno hvatanje (Err se cita odmah) -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant, poruka As String\n"
+     "    On Error Resume Next\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    poruka = Err.Description\n"
+     "    On Error GoTo 0\n"
+     "End Sub\n"),
+    ("Resume Next ugasen pre poziva -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim x As Long: x = 1\n"
+     "    On Error GoTo 0\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "End Sub\n"),
+    ("Resume Next iz PRETHODNE procedure ne curi", 0,
+     "Option Explicit\n"
+     "Public Sub A()\n"
+     "    On Error Resume Next\n"
+     "End Sub\n"
+     "Public Sub B()\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "End Sub\n"),
+    ("zakomentarisan poziv se ne broji", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    ' d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "End Sub\n"),
+]
+
 # STORNO_REGISTAR: poziv mora da imenuje tabelu koju registar poznaje.
 # Lazni registar u self-testu zna TBL_OTKUP, TBL_NOVAC i TBL_KUPCI.
 STORNO_REGISTAR_CASES = [
@@ -2112,6 +2229,15 @@ def self_test() -> int:
             palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in STORNO_PROGUTAN_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "STORNO_PROGUTAN")
+        if dobijeno != ocekivano:
+            palo.append(f"  STORNO_PROGUTAN/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     # STORNO_REGISTAR je cross-file (trazi registar u modSchemaGuard), pa ne ide
     # kroz check_file nego kroz svoju funkciju, sa laznim registrom na disku.
     tmp2 = tempfile.mkdtemp(prefix="vbacheck_st_")
@@ -2188,7 +2314,8 @@ def self_test() -> int:
 
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
-              + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES) + 3)
+              + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
+              + len(STORNO_PROGUTAN_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
