@@ -5784,9 +5784,14 @@ End Sub
 '   - u rezimima koji ove liste nemaju (F1-F4, F7) kapija cuti.
 '
 ' Recnik je isti onaj koji ide u modNovacUnos, pa se pravilo proverava bez forme.
-' Rezim se cita iz p("rezim") -- iste vrednosti po kojima modScrDokumenti bira
-' Save rutinu -- a ne iz ActiveMode: odluka se veze za ono sto ce se STVARNO
-' izvrsiti.
+'
+' Rezim se cita iz p("rezim") zato sto kapija treba da odlucuje nad ISTIM
+' payload-om koji ide Save putu (modScrDokumenti po toj vrednosti bira rutinu).
+' To NIJE nezavisan izvor istine: SkupiPolja ga pravi kao p("rezim") =
+' modeKey(ActiveMode), dakle snimak istog ActiveMode po kome FillOpenBlokovi /
+' FillOpenFakture odlucuju da li ce listu uopste citati. Njihova medjusobna
+' uskladjenost ostaje INTEGRACIONA PRETPOSTAVKA sinhronog toka, a ne nesto sto
+' ova kapija dokazuje.
 Private Function NovacListaSme(ByVal p As Object, ByRef outPoruka As String) As Boolean
     outPoruka = ""
     NovacListaSme = True

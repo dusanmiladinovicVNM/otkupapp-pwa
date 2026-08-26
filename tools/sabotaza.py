@@ -2052,6 +2052,17 @@ SABOTAZE = {
         "T_Ljuska_PadListeNovcaNijeAvans",
         "isplata otkupnom mestu ne zavisi od liste blokova",
     ),
+    # Bez novca nema odluke blok/faktura, pa unos same ambalaze ne sme da stane
+    # zbog liste koja ga se ne tice. Legacy kopija ovog pravila ima svoju
+    # sabotazu (dok-uplata-kapija-siri-se-na-ambalazu); posto PR namerno drzi
+    # dve odvojene kopije po domacinu, legacy sabotaza NE dokazuje ovu.
+    "ljuska-kapija-hvata-i-bez-novca": (
+        "modOtkupUI.bas",
+        '    If CDbl(p("novac")) <= 0 Then Exit Function\n',
+        "    ' SABOTAZA: kapija hvata i unos bez novca\n",
+        "T_Ljuska_PadListeNovcaNijeAvans",
+        "unos bez novca ne staje zbog liste",
+    ),
     # Rezimi bez tih listi (F1-F4, F7) kapiju ne smeju da osete.
     "ljuska-kapija-hvata-sve-rezime": (
         "modOtkupUI.bas",

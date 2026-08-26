@@ -3319,10 +3319,17 @@ pravila i nijedno ne bi bilo izmereno posebno.
 2. režim se čita iz `p("rezim")`, dakle iz vrednosti po kojoj se **stvarno** bira
    `Save` rutina, a ne iz `ActiveMode`.
 
-Druga tačka je namerna: `ActiveMode` je isti ključ po kome `Fill*` odlučuje da li
-uopšte puni listu, pa bi njegov pogrešan odgovor tiho isključio i punjenje i
-kapiju — dve greške koje se poništavaju. `p("rezim")` je ono što odlučuje šta se
-upisuje.
+Druga tačka traži preciznost, jer je prva verzija ovog teksta tvrdila više nego
+što stoji. `p("rezim")` **nije** nezavisan izvor istine — `SkupiPolja` ga pravi kao
+`modeKey(ActiveMode)`, dakle kao snimak istog `ActiveMode` po kome `Fill*` odlučuje
+da li će listu uopšte čitati.
+
+Razlog za `p("rezim")` je uži i tačan: kapija treba da odlučuje nad **istim
+payload-om** koji se predaje `Save` putu, a ne nad stanjem koje se do tada moglo
+promeniti. Njihova međusobna usklađenost ostaje **integraciona pretpostavka**
+sinhronog toka. Test pravi sintetički `p("rezim")` nezavisno od `ActiveMode`, pa
+meri `NovacListaSme` izolovano — ali tu nezavisnost u stvarnom UI putu **ne meri**,
+i ne treba je ni čitati kao dokazanu.
 
 ### 17.6 Šta testovi tvrde
 
@@ -3343,6 +3350,7 @@ upisuje.
 | pad liste blokova zaustavlja isplatu kooperantu | `ljuska-pad-liste-blokova-prolazi` |
 | isplata **otkupnom mestu** ne zavisi od te liste | `ljuska-kapija-hvata-i-otkupno-mesto` |
 | režim bez tih listi kapiju **ne oseća** | `ljuska-kapija-hvata-sve-rezime` |
+| unos **bez novca** NE staje zbog liste | `ljuska-kapija-hvata-i-bez-novca` |
 | pad liste faktura zaustavlja uplatu kupca | `ljuska-pad-liste-faktura-prolazi` |
 
 **Redosled tvrdnji je deo konstrukcije.** `AssertEq` staje na prvoj paloj, pa
