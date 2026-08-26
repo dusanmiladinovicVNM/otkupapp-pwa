@@ -5778,21 +5778,32 @@ spreči. Ispravljeno.
 Oba su upisana sa razlogom i vlasnikom, umesto da budu prećutana da bi izveštaj
 bio zelen.
 
-### Dve greške u samom ovom poslu, i obe su nađene
+### Nova provera je tri puta obećavala više nego što meri
 
-Nova provera je u prvom obliku bila **preširoka** — primala bi i tekst koji u
-testu postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci.
-Nađeno u pregledu i suženo. Pa se pokazalo da je i to suženje još uvek široko:
-prolazio bi i tekst koji je u testu samo očekivana vrednost ili obična dodela.
-Suženo opet — a onda i treći put, jer je i način na koji se poruka izdvaja imao
-dve rupe, obe pokazane na postojećem kodu. Sada se gleda **samo poruka same
-provere**, i to samo oni njeni delovi koji se stvarno ispisuju.
+Ovo je deo koji najviše govori o samoj vrsti posla. Ista greška se ponovila tri
+puta, svaki put jedan nivo dublje, i svaki put ju je našao **pregled**, ne alat:
 
-Zatim: prvi dokaz **tog** suženja ništa nije dokazivao. Slučajevi su prolazili i
-kad se suženje vrati unazad, jer su proveravali pogrešnu stranu — kako se tekst
-pretražuje, umesto šta se uopšte pretražuje. Rešeno tako što provera i njena
-proba sada idu **istim putem**, pa se jedno ne može pokvariti a da drugo ostane
-zeleno.
+| Krug | Provera je primala i… | Sada |
+|---|---|---|
+| 1 | tekst koji u testu postoji samo kao **kod** ili u **komentaru** | samo tekst poruka |
+| 2 | tekst koji je samo **očekivana vrednost** ili obična dodela | samo poruka same provere |
+| 3 | delove poruke koji se **nikad ne ispisuju** (npr. razdvajač unutar poziva) | samo delovi koji se stvarno vide |
+
+Poslednja dva su pokazana na **postojećem** kodu, ne izmišljenim primerom.
+
+### Dva puta je i sam dokaz bio pogrešan
+
+Prvo: proba prvog suženja ništa nije dokazivala. Prolazila je i kad se suženje
+vrati unazad, jer je proveravala pogrešnu stranu — kako se tekst pretražuje,
+umesto **šta** se uopšte pretražuje. Rešeno tako što provera i njena proba sada
+idu istim putem, pa se jedno ne može pokvariti a da drugo ostane zeleno.
+
+Drugo: proba trećeg suženja je pala jer je gađala granu koja se za taj oblik i ne
+izvršava. Ispostavilo se da taj oblik nastaje iz **dve** stare greške zajedno, pa
+ga nijedna sama ne proizvodi — i tek proba sa obe ga pokazuje.
+
+Obe su vredne zapisa iz istog razloga zbog kog i ceo posao postoji: proba koja
+nikad nije pokazana crvenom ne dokazuje ništa.
 
 ### Zašto je ovo vredelo
 
