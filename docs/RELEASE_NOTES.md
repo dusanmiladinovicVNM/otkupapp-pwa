@@ -5583,3 +5583,48 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §16.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca, pa
 > smoke uključuje i slučaj sa nedostajućom tabelom.
+
+## v2.77.0 — ista provera i na strani kupca, i u novom ekranu
+
+### Šta se moglo desiti
+
+Prošla verzija je zaustavila jedan slučaj: novac koji postaje **avans kooperanta**
+kad se lista otkupnih blokova ne učita. Ista stvar je stajala na još tri mesta.
+
+| Gde | Šta je postajalo |
+|---|---|
+| Izlaz kupcu, stara forma | **avans kupca** umesto uplate po fakturi |
+| Isplate (F5), novi ekran | **avans kooperanta** umesto razduženja bloka |
+| Uplate (F6), novi ekran | **avans kupca** umesto uplate po fakturi |
+
+U novom ekranu je bilo i tiše nego u staroj formi: pad učitavanja se tamo nije
+upisivao ni u dnevnik grešaka. Operater bi video praznu listu, a razlika bi se
+pokazala tek u saldu.
+
+### Šta je sada
+
+Ako se lista ne učita, unos **staje** i operater dobija objašnjenje sa razlogom —
+na sva tri mesta, i u staroj formi i u novom ekranu. Pad se od sada i **upisuje u
+dnevnik**. Isto važi kad odgovarajuća tabela nedostaje.
+
+### Provera je uska koliko i kvar
+
+Namerno **ne** staje:
+
+- unos same ambalaže, bez novca — tu nema odluke faktura/avans;
+- isplata otkupnom mestu — ona blokove ne dodiruje;
+- režimi koji te liste uopšte nemaju.
+
+Bez tih ograničenja bi jedan pad čitanja zaustavio i posao koji nikad ne bi bio
+pogrešno proknjižen. Svako od njih ima svoju proveru.
+
+### Verifikacija
+
+`RunAllTests` **121 test, 0 palih**, uz jedanaest sabotaža — svaka obara tačno
+svoju tvrdnju.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §17.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca u dve
+> forme, pa smoke ide na kopiji sveske.
+

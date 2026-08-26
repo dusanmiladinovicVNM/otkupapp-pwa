@@ -3244,3 +3244,139 @@ najskuplji mogući kanal.
 Provereno namerno: uklanjanje `Private m_BlokoviOk As Boolean` iz forme i dalje
 daje `vba_check: cisto`. To je rupa u checkeru, zapisana ovde i ostavljena kao
 zaseban posao — nije deo ovog PR-a.
+
+---
+
+## 17. Ista greška je stajala na još tri mesta (`v6-ui-184`)
+
+§16 je zatvorio **jednu instancu**, ne klasu. Oblik je uvek isti:
+
+```
+Fill*  guta pad  ->  prazna lista  ->  grana bira AVANS
+```
+
+Traženje ostalih instanci polazi od pitanja „ko još iz **praznog** polja
+zaključuje **tip novca**". Odgovor su bila tri mesta, sva tri nad novcem:
+
+| Gde | Šta je postajalo | Kako se pad video |
+|---|---|---|
+| `frmDokumenta.FillOpenFakture` (F6) | `NOV_KUPCI_AVANS` | `LogErr` + `Clear` |
+| `modOtkupUI.FillOpenBlokovi` (F5) | `NOV_VIRMAN_AVANS_KOOP` | **`Debug.Print`** |
+| `modOtkupUI.FillOpenFakture` (F6) | `NOV_KUPCI_AVANS` | **`Debug.Print`** |
+
+### 17.1 Nova ljuska je bila tiša od legacy-ja
+
+`modOtkupUI` je imao **osam** `Debug.Print ... PAO` rukovalaca i **jedan**
+`LogErr`. Immediate prozor u pogonu niko ne gleda, pa pad koji menja **tip
+knjiženja** nije ostavljao ni trag u logu — legacy je bar pisao `LogErr`.
+
+Dva od tih osam stoje tačno ispred novčane grane i ovim poslom su prešla na
+`LogErr`. Preostalih šest nisu dirana: nisu deo ove klase, i menjati ih usput
+značilo bi izmenu koju ništa ne meri.
+
+### 17.2 Nedostajuća tabela je prolazila i ovde
+
+`GetOpenFakture` vraća `Empty` i kad `tblFakture` nema — isto što i
+`GetOpenOtkupi` za `tblOtkup` (§16.2.1). Sva tri mesta su zato dobila
+`RequireTable` **pre** čitanja.
+
+### 17.3 Kapija je široka tačno koliko i kvar
+
+Ovo je deo koji nosi najviše tvrdnji, jer je i najlakše preterati. Kapija se
+**ne pita**:
+
+- kad je iznos nula — unos same ambalaže nema odluku faktura/avans, pa lista
+  koja ga se ne tiče ne sme da ga zaustavi;
+- kad je primalac otkupno mesto (F5) — blok se bira samo kooperantu, isplata OM-u
+  ide drugim tipom novca i listu blokova ne dodiruje;
+- u režimima koji te liste nemaju (F1–F4, F7).
+
+Svako od ta tri ograničenja ima svoju sabotažu, jer je svako **tvrdnja**, a ne
+izuzetak. Bez njih bi jedan pad čitanja zaustavio i posao koji nikad ne bi bio
+pogrešno proknjižen.
+
+### 17.4 Zašto pravilo NIJE izvučeno u zajednički modul
+
+Legacy forma i ljuska drže **svoje kopije** — `frmDokumenta.ListaSme` i
+`modOtkupUI.LjuskaListaSme`. To je namerno, po pravilu iz §5: dok novi UI ne ume
+sve, obe kopije poslovne logike postoje, a legacy se ne vezuje za nove module.
+
+Unutar **svakog** domaćina rule je izvučeno jednom: `BlokIzborSme` i
+`FakturaIzborSme` zovu isti `ListaSme`, a u ljusci obe grane zovu isti
+`LjuskaListaSme`. Podeljen je i **oblik poruke**, da operater u obe forme vidi
+istu rečenicu.
+
+Cena: dve kopije umesto jedne. Dobitak: sabotaža po mestu, pa svaka obara **svoju**
+tvrdnju — kad bi tekst bio jedan zajednički, jedna sabotaža bi obarala četiri
+pravila i nijedno ne bi bilo izmereno posebno.
+
+### 17.5 Kapija ljuske stoji nad REČNIKOM, ne nad formom
+
+`modOtkupUI.NovacListaSme(p, outPoruka)` čita isti rečnik koji ide u
+`modScrDokumenti` → `modNovacUnos`. Dve posledice:
+
+1. test ga zove bez forme — nema `.Show`, nema čitanja tabela;
+2. režim se čita iz `p("rezim")`, dakle iz vrednosti po kojoj se **stvarno** bira
+   `Save` rutina, a ne iz `ActiveMode`.
+
+Druga tačka je namerna: `ActiveMode` je isti ključ po kome `Fill*` odlučuje da li
+uopšte puni listu, pa bi njegov pogrešan odgovor tiho isključio i punjenje i
+kapiju — dve greške koje se poništavaju. `p("rezim")` je ono što odlučuje šta se
+upisuje.
+
+### 17.6 Šta testovi tvrde
+
+`T_LegacyDok_PadListeFakturaNijeAvans` (120):
+
+| Tvrdnja | Sabotaža |
+|---|---|
+| pad učitavanja **zaustavlja** avans kupca | `dok-pad-liste-faktura-prolazi` |
+| ...uz poruku u kojoj stoji šta je puklo | — |
+| **ni izabrana faktura** ne prolazi kad je pad | `dok-faktura-izbor-zaobilazi` |
+| unos **bez novca** NE staje zbog te liste | `dok-uplata-kapija-siri-se-na-ambalazu` |
+| uredna lista **pušta** uplatu | `dok-kapija-faktura-presiroka` |
+
+`T_Ljuska_PadListeNovcaNijeAvans` (121):
+
+| Tvrdnja | Sabotaža |
+|---|---|
+| pad liste blokova zaustavlja isplatu kooperantu | `ljuska-pad-liste-blokova-prolazi` |
+| isplata **otkupnom mestu** ne zavisi od te liste | `ljuska-kapija-hvata-i-otkupno-mesto` |
+| režim bez tih listi kapiju **ne oseća** | `ljuska-kapija-hvata-sve-rezime` |
+| pad liste faktura zaustavlja uplatu kupca | `ljuska-pad-liste-faktura-prolazi` |
+
+**Redosled tvrdnji je deo konstrukcije.** `AssertEq` staje na prvoj paloj, pa
+sabotaža koja kapiju širi na sve režime usput obara i `padF6` — zato `drugiRezim`
+mora doći **pre** njega. Bez toga bi test pao po imenu tuđe tvrdnje (zamka 6).
+
+Iz istog razloga `DokTestUplataPoruka` zove `FakturaIzborSme` **direktno**, a ne
+kroz `UplataSme`: inače bi sabotaža kapije oborila i tvrdnju o poruci, pa bi prva
+pala tvrdnja bila pogrešna (zamka 5). Isti oblik kao `DokTestBlokPoruka`.
+
+### 17.7 Šta ovo NE pokriva
+
+**Nijedan od dva handlera se u testu ne izvršava** — ni `btnUnosIzlaz_Click` ni
+`CommitDokument`. Pokriveno je *pravilo* i to da ga handler zove iznad grananja
+(po jedan red, proveren čitanjem). Isto ograničenje kao §11.5 i §16.5.
+
+**Da `Fill*` stvarno beleži pad nije mereno** ni na jednom od tri mesta: test
+postavlja stanje kroz seam. Isti razlog zbog kog je rupa iz §16.2.1 preživela.
+
+**Ni tri nova `RequireTable` poziva nisu izmerena** — sabotaža koja ih ukloni bila
+bi mrtva u katalogu.
+
+**Da liste u ljusci uvek budu napunjene pre potvrde** nije mereno. Kapija se
+oslanja na to što `FillOpenBlokovi` / `FillOpenFakture` idu na svaku promenu
+režima i partnera, pa je „nikad učitano" nedostižno pre nego što partner postoji —
+a bez partnera se ni jedna od dve grane ne bira. Pročitano, ne izmereno.
+
+### 17.8 Nalaz sa strane: mrtva sabotaža `ljuska-rez-bez-potvrde`
+
+`dokaz.py` je prijavio da `ljuska-rez-bez-potvrde` (`modUiKit.bas`, potvrda
+`Font.bold` u tri pokušaja) **ne obara ništa** — sidro se i dalje nalazi, ali
+`T_ZonaAgro_PrekidacRezimaZadrzavaBoju` tu invarijantu ne meri.
+
+Provereno da je zatečeno: isti nalaz daje i `origin/main`, a ovaj PR ne dira ni
+`modUiKit.bas` ni taj test. Ostavljeno kao zaseban posao — ista klasa koju je
+#227 čistio.
+

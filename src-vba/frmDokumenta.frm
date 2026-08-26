@@ -40,6 +40,8 @@ Private m_OtkupIDs() As String
 ' PR #220 (m_BlokoviLoadOk). Ovde je stajala nedirnuta.
 Private m_BlokoviOk As Boolean
 Private m_BlokoviErr As String
+Private m_FaktureOk As Boolean
+Private m_FaktureErr As String
 
 ' Ispravka storniranog dokumenta: kad operater posle storna PALETIZOVANE prijemnice
 ' izabere "Uneti ispravku", zapamti se broj stornirane prijemnice + njena BrojZbirne.
@@ -3178,6 +3180,16 @@ Private Sub btnUnosIzlaz_Click()
     Dim fakturaID As String
     Dim tipNovca As String
     Dim napomena As String
+    Dim fakPoruka As String
+
+    ' UCITANOST LISTE SE PROVERAVA PRE GRANANJA, ne u AVANS grani -- ista pouka
+    ' kao kod otkupnih blokova. Pad usred punjenja ostavlja kombo delimicno
+    ' napunjen; operater izabere red iz nepotpune liste, vrednost nije prazna, i
+    ' kapija koja bi stajala samo u AVANS grani se nikad ne pita.
+    If Not UplataSme(novac, cmbFakturaIzlaz.value <> "", fakPoruka) Then
+        MsgBox fakPoruka, vbExclamation, APP_NAME
+        Exit Sub
+    End If
 
     If novac > 0 Then
         If cmbFakturaIzlaz.value <> "" Then
@@ -3256,6 +3268,8 @@ Private Sub FillOpenFakture()
     cmbFakturaIzlaz.ColumnWidths = "300 pt;0 pt"
     cmbFakturaIzlaz.BoundColumn = 1
     cmbFakturaIzlaz.TextColumn = 1
+    m_FaktureOk = True
+    m_FaktureErr = ""
 
     If cmbKupac.value = "" Then Exit Sub
 
@@ -3268,9 +3282,17 @@ Private Sub FillOpenFakture()
     ' modNovac.GetOpenFakture (izbacuje stornirane, status Neplaceno, preostalo > 0).
     ' Forma vise ne duplira filter -- ranija lokalna petlja je propustala stornirane.
     ' Kolone: 1=BrojFakture 2=FakturaID 3=Iznos 4=Uplaceno 5=Preostalo 6=Datum.
+    ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD -- ista kapija kao u
+    ' FillOpenOtkupi. GetOpenFakture cita kroz GetTableData, koji vraca isti
+    ' Empty i kad tblFakture NEMA i kad je prazna, bez greske. Bez ovoga bi
+    ' nedostajuca tabela prosla kao "kupac nema otvorenih faktura", pa bi uplata
+    ' tiho postala AVANS KUPCA.
+    RequireTable TBL_FAKTURE, "frmDokumenta.FillOpenFakture"
+
     Dim fakture As Variant
     fakture = GetOpenFakture(kupacID)
 
+    ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI.
     If Not IsArray(fakture) Then Exit Sub
 
     Dim i As Long
@@ -3294,7 +3316,12 @@ Private Sub FillOpenFakture()
     Exit Sub
 
 EH:
+    m_FaktureOk = False
+    m_FaktureErr = Err.description
+    ' LogErr ide PRE ciscenja: svaka On Error naredba resetuje Err.
     LogErr "frmDokumenta.FillOpenFakture"
+    ' Delimicno napunjena lista je gora od prazne: izgleda kao potpuna.
+    On Error Resume Next
     cmbFakturaIzlaz.Clear
 End Sub
 
@@ -6166,16 +6193,50 @@ Private Function KnjizenjeSme(ByVal blokIzabran As Boolean, _
 End Function
 
 Private Function BlokIzborSme(ByRef outPoruka As String) As Boolean
+    BlokIzborSme = ListaSme(m_BlokoviOk, m_BlokoviErr, _
+                            "otkupnih blokova", "da bloka nema", outPoruka)
+End Function
+
+' Isto pravilo nad listom OTVORENIH FAKTURA (F6 / "Izlaz"): prazna lista sme da
+' znaci "kupac nema otvorenih faktura" -- i time avans kupca -- samo posle
+' USPESNOG citanja. Ako je citanje palo, prazno ne znaci nista.
+Private Function FakturaIzborSme(ByRef outPoruka As String) As Boolean
+    FakturaIzborSme = ListaSme(m_FaktureOk, m_FaktureErr, _
+                               "otvorenih faktura", "da fakture nema", outPoruka)
+End Function
+
+' Sme li se uplata kupca uopste knjiziti -- BEZ OBZIRA da li je faktura izabrana.
+'
+' Kapija je NAMERNO uza od dokumenta: bez novca nema ni odluke faktura/avans, pa
+' unos same ambalaze ne sme da stane zbog liste koja ga se ne tice. Kapija sme da
+' bude siroka tacno koliko i kvar.
+Private Function UplataSme(ByVal novac As Double, _
+                           ByVal fakturaIzabrana As Boolean, _
+                           ByRef outPoruka As String) As Boolean
+    outPoruka = ""
+    If novac <= 0 Then
+        UplataSme = True
+        Exit Function
+    End If
+    UplataSme = FakturaIzborSme(outPoruka)
+End Function
+
+' Zajednicki tekst za obe liste -- jedan oblik poruke, dva pozivaoca. Poruka se
+' VRACA pozivaocu umesto da se prikaze ovde, da funkcija ostane bez dijaloga i
+' time pozivljiva iz testa.
+Private Function ListaSme(ByVal ucitanoOk As Boolean, ByVal greska As String, _
+                          ByVal imeListe As String, ByVal praznoNeZnaci As String, _
+                          ByRef outPoruka As String) As Boolean
     outPoruka = ""
 
-    If Not m_BlokoviOk Then
-        outPoruka = "Lista otkupnih blokova NIJE u" & ChrW(269) & "itana (" & _
-                    m_BlokoviErr & ")." & vbCrLf & _
-                    "Prazna lista NE zna" & ChrW(269) & "i da bloka nema."
+    If Not ucitanoOk Then
+        outPoruka = "Lista " & imeListe & " NIJE u" & ChrW(269) & "itana (" & _
+                    greska & ")." & vbCrLf & _
+                    "Prazna lista NE zna" & ChrW(269) & "i " & praznoNeZnaci & "."
         Exit Function
     End If
 
-    BlokIzborSme = True
+    ListaSme = True
 End Function
 
 ' ============================================================
@@ -6211,6 +6272,26 @@ Public Function DokTestBlokPoruka() As String
     Dim p As String
     BlokIzborSme p
     DokTestBlokPoruka = p
+End Function
+
+Public Sub DokTestSetFaktUcitanost(ByVal faktureOk As Boolean, ByVal greska As String)
+    If Not IsTestMode() Then Exit Sub
+    m_FaktureOk = faktureOk
+    m_FaktureErr = greska
+End Sub
+
+Public Function DokTestUplataSme(ByVal novac As Double, _
+                                 ByVal fakturaIzabrana As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    DokTestUplataSme = UplataSme(novac, fakturaIzabrana, p)
+End Function
+
+Public Function DokTestUplataPoruka() As String
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    FakturaIzborSme p
+    DokTestUplataPoruka = p
 End Function
 
 ' ============================================================
