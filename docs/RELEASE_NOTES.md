@@ -5502,3 +5502,27 @@ Kad se sledeći put pojavi, iz same poruke se vidi da li je problem u šemi ili 
 Uzrok nije reprodukovan i nije popravljan naslepo. Zapisan je ceo tok, sa dve
 dijagnoze koje su merenjem oborene, u
 `docs/engineering/postmortems/2026-08-verifikacija.md` §11.
+
+## v2.75.0 — statusna oznaka se briše cela, i to je sada provereno
+
+Nema izmene u radu programa — provera je ta koja je dopunjena.
+
+### Šta je bilo zapisano
+
+Statusna oznaka („pilula") u listi se, kad se vrednost ne može prikazati, briše
+**cela** — i natpis i podloga. Da podloga stvarno nestaje **nije bilo provereno**;
+u zapisu je stajalo da se ta lista ne može otvoriti bez ekrana, pa da se ne može
+ni izmeriti.
+
+To nije bilo tačno. Lista se otvara, samo je trebalo izabrati je onako kako je
+bira i operater.
+
+### Šta je sada
+
+Provera radi nad **pravom listom dokumenata**: pilula se naslika, vrednost se
+pokvari, i traži se da nestane i podloga — ne samo slova. Obojena podloga bez
+natpisa i dalje tvrdi stanje koje nema pokriće.
+
+Provereno je i da se posle ispravke vrednosti podloga **vrati**.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §15.

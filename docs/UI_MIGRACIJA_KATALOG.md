@@ -2328,14 +2328,14 @@ rezultat ne prepisuje staru vrednost), `mreza-crtanje-kvari-stil` (vraća reset 
 `mreza-pilula-ostaje`, `mreza-paypill-kao-pill`, `mreza-datum-nije-date`,
 `mreza-kvar-celije-se-ne-broji`.
 
-**Šta OSTAJE neizmereno:** čišćenje **pozadine** prave `pill` ćelije. Jedina
-lista koja se učitava bez forme a ima kolonu statusne oznake je FAKTURE, a njena
-je `paypill` — `PaintPayPill` pozadinu ne dira, pa bi tvrdnja o njoj prolazila i
-bez ispravke, dakle bila bi placebo. Prava `pill` kolona živi na Dokumentima,
-čija se lista bez izabranog režima ne puni.
+**Bilo je neizmereno:** čišćenje **pozadine** prave `pill` ćelije. Tada je ovde
+pisalo da se lista Dokumenata „bez izabranog režima ne puni", pa da se ta ćelija
+ne može doseći bez forme.
 
-**Širina jeste izmerena** (§10.4) — ona se na `paypill` koloni vidi. Ostaje samo
-pozadina prave pilule, i to se ovde beleži kao neizmereno, ne kao pokriveno.
+**Taj zaključak je bio netačan — v. §15.** Lista se puni i bez forme; rupa je
+zatvorena testom 118.
+
+**Širina jeste izmerena** (§10.4) — ona se na `paypill` koloni vidi.
 
 
 ---
@@ -3004,3 +3004,78 @@ reda i daje **tačno jedan** nalaz.
 samo ako neki ekran zatraži tri slota — a nijedan ne traži. Sabotaža koja spusti
 konstantu obara istu tvrdnju kao ona koja ljusci oduzme čitanje slotova (zamka
 5), pa nije dodata. Ostaje kao poznata rupa, ne kao prećutana.
+---
+
+## 15. Rupa iz §10.6 nije ni postojala
+
+§10.6 je čišćenje pozadine prave `pill` ćelije zapisalo kao **neizmereno**, uz
+obrazloženje: jedina lista koja se puni bez forme a ima statusnu oznaku je
+FAKTURE, a njena je `paypill`; prava `pill` kolona živi na Dokumentima, „čija se
+lista bez izabranog režima ne puni".
+
+Drugi deo te rečenice nije tačan.
+
+### 15.1 Šta je stvarno stajalo na putu
+
+`modScrDokumenti.Scr_Rows` prvo gleda **podlistu** (`Scr_Lista()`), jer režim F1
+ima tri svoje liste (otpremnice, blokovi, izgubljeni, kooperanti) pored zatečene
+liste dokumenata. Podrazumevano je `"SVI"` — dakle **lista dokumenata**.
+
+Prva sonda je svejedno dobila otpremnice, jer je `mLista` ostao od ranijeg testa.
+To je izgledalo kao „lista se ne puni", a bilo je „puni se druga lista".
+
+Ništa novo nije trebalo: podlista se bira **produkcionim putem**, klikom na čip
+(`Scr_Event "lsSVI"`), isto kako je bira operater. Mereno: **14 redova, 13 kolona,
+trinaesta je baš `pill`**.
+
+### 15.2 Zašto sonda nije odmah rekla istinu
+
+Prva verzija je čitala vrste kolona i zaključivala iz njih. To je dalo devet
+kolona bez `pill`-a i izgledalo kao potvrda da lista nema statusnu oznaku — a
+zapravo je opisivalo **drugu listu**. Tek kad je sonda počela da poredi
+`GridCols("OTKUP")` (13 kolona, poslednja `pill`) sa onim što je učitano, razlika
+se videla.
+
+Pouka je ista kao kod poruke o koloni (§11 postmortema): **kad zaključak zavisi od
+stanja, izmeri i stanje**, ne samo ishod.
+
+### 15.3 Šta test 118 tvrdi
+
+`T_MrezaPilula_PozadinaSeCisti` radi nad **pravom formom** (`GridRenderTest`), nad
+listom Dokumenata:
+
+| Tvrdnja | |
+|---|---|
+| preduslov | lista se puni bez forme i ima `pill` kolonu |
+| preduslov | uredna pilula je **naslikana** (neprozirna pozadina) |
+| **glavna** | pilula koja se ne može prikazati gubi i **pozadinu**, ne samo natpis |
+| | ...i natpis |
+| kontrola | pre kvara je natpis postojao |
+| round-trip | uredna vrednost **vraća** pozadinu |
+
+Kolona se **traži** (`GridKindKoloneTest`), ne pretpostavlja. Neispravna vrednost
+ide **posle** učitavanja (`GridTestVrednost`), ne u tabelu — takav red je jednom
+već oborio sedam tuđih testova sa `Overflow`.
+
+**Round-trip tvrdnja nema svoju sabotažu**, i to je izmereno, ne pretpostavljeno:
+pozadinu i prvi put i posle popravke slika **ista** rutina (`PaintPill`), pa svaka
+sabotaža nad njom obara **preduslov** umesto te tvrdnje (zamka 6). Prvi pokušaj je
+to i pokazao, pa je sabotaža uklonjena umesto da joj se tekst „namesti".
+
+### 15.4 Verifikacija
+
+| Šta | Ishod |
+|---|---|
+| `RunAllTests` | **118 testova, 0 palih** |
+| `tools/dokaz.py mreza-pilula` | **2 / 2**, izvor bit-identičan, `DOKAZANO` |
+| `sabotaza --proveri-sidra` | čisto |
+| `vba_check` | čisto (195 fajlova) |
+
+Nova sabotaža: `mreza-pilula-pozadina-ostaje` — vraća stanje u kom se briše natpis
+a pozadina ostaje, dakle obojen pravougaonik koji i dalje tvrdi stanje, samo bez
+slova.
+
+### 15.5 Šta i dalje NIJE urađeno
+
+`frmDokumenta` **nije diran**. Ovo je zatvorilo rupu u mreži, ne u legacy formi;
+seam-ovi za nju (po ugledu na `frmBankaImport`, §11) ostaju zaseban posao.

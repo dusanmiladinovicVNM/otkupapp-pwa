@@ -346,6 +346,7 @@ Public Sub RunAllTests()
     RunOne 115
     RunOne 116
     RunOne 117
+    RunOne 118
 
     SetTestMode prevMode
     WriteResultFile
@@ -495,6 +496,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 115: TestName = "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana"
         Case 116: TestName = "T_Mreza_PodnozjeDvaNovcanaSlota"
         Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
+        Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -620,6 +622,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 115: T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana
         Case 116: T_Mreza_PodnozjeDvaNovcanaSlota
         Case 117: T_Kolona_TrazenjeNeGutaGresku
+        Case 118: T_MrezaPilula_PozadinaSeCisti
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7940,4 +7943,89 @@ Private Sub T_Kolona_TrazenjeNeGutaGresku()
 
     AssertEq (InStr(1, porukaTbl, "tabela nije nadjena") > 0), True, _
              "za nepostojecu tabelu poruka kaze da TABELE nema"
+End Sub
+
+
+' TEST 118: pozadina PRAVE pilule se cisti kad se vrednost ne moze prikazati.
+'
+' Ovo je rupa zapisana u katalogu 10.6 kao NEIZMERENA. Razlog je tada bio: jedina
+' lista koja se puni bez forme a ima statusnu oznaku je FAKTURE, a njena je
+' "paypill" -- PaintPayPill pozadinu ne dira, pa bi tvrdnja o njoj prolazila i bez
+' ispravke. Prava "pill" kolona zivi na Dokumentima, "cija se lista bez izabranog
+' rezima ne puni".
+'
+' TAJ ZAKLJUCAK JE BIO NETACAN. Lista Dokumenata se puni i bez forme -- treba joj
+' samo rezim (ActiveMode) i podlista, a podlista se bira PRODUKCIONIM putem
+' (Scr_Event "lsSVI"), bez ijednog novog seam-a. Izmereno: 14 redova, 13 kolona,
+' trinaesta je bas "pill".
+'
+' Dve vrste pilule su dva ugovora (10.4): "pill" se brise CELA -- natpis, pozadina
+' i sirina -- jer je pilula bez natpisa i dalje obojen pravougaonik koji tvrdi
+' stanje. "paypill" menja samo natpis. Ovaj test meri onu prvu.
+Private Sub T_MrezaPilula_PozadinaSeCisti()
+    Dim f As frmOtkupUI, body As Object
+    Dim staraMode As String, staraLista As String
+    Dim k As Long, kPil As Long
+    Dim stilPre As Long, stilPosle As Long, stilNazad As Long
+    Dim capPre As String, capPosle As String
+
+    staraMode = modOtkupUI.ActiveMode
+    staraLista = modScrDokumenti.Scr_Lista()
+
+    Set f = NewOtkupUIForm()
+    modOtkupUI.ActiveMode = "F1"
+    ' Lista dokumenata, istim putem kojim je bira operater (klik na cip).
+    modScrDokumenti.Scr_Event "lsSVI", "Click"
+    modOtkupUI.GridTestLoad "DOKUMENTI"
+    modOtkupUI.GridRenderTest f, 1200, 600
+    Set body = f.Controls("zGrid").Controls("grdBody")
+
+    ' Kolona se TRAZI, ne pretpostavlja: nad "txt" kolonom bi svaka vrednost
+    ' prolazila, pa bi tvrdnja tamo merila nista.
+    kPil = -1
+    For k = 0 To 13
+        If modOtkupUI.GridKindKoloneTest(k) = "pill" Then kPil = k: Exit For
+    Next k
+
+    If kPil >= 0 Then
+        stilPre = CLng(body.Controls("c0_" & kPil).BackStyle)
+        capPre = CStr(body.Controls("c0_" & kPil).caption)
+
+        ' Vrednost koja se ne moze prikazati ide POSLE ucitavanja -- takav red u
+        ' tabeli je jednom vec oborio sedam tudjih testova sa Overflow.
+        modOtkupUI.GridTestVrednost 1, kPil + 1, "NIJE-BROJ"
+        modOtkupUI.GridRenderTest f, 1200, 600
+        stilPosle = CLng(body.Controls("c0_" & kPil).BackStyle)
+        capPosle = CStr(body.Controls("c0_" & kPil).caption)
+
+        ' ROUND-TRIP: uredna vrednost mora da vrati i pozadinu, ne samo natpis.
+    '
+    ' Ova tvrdnja NEMA svoju sabotazu, i to je namerno: pozadinu i prvi put i
+    ' posle popravke slika ISTA rutina (PaintPill), pa svaka sabotaza nad njom
+    ' obara preduslov iznad umesto ove tvrdnje (zamka 6). Izmereno, ne
+    ' pretpostavljeno.
+        modOtkupUI.GridTestVrednost 1, kPil + 1, 0
+        modOtkupUI.GridRenderTest f, 1200, 600
+        stilNazad = CLng(body.Controls("c0_" & kPil).BackStyle)
+    End If
+
+    modOtkupUI.GridTestLoad ""
+    modScrDokumenti.Scr_Event "ls" & staraLista, "Click"
+    modOtkupUI.ActiveMode = staraMode
+    Unload f
+    modOtkupUI.GridOtkaciFormuTest
+
+    AssertEq (kPil >= 0), True, _
+             "preduslov: lista Dokumenata se puni bez forme i ima 'pill' kolonu"
+    AssertEq stilPre, CLng(fmBackStyleOpaque), _
+             "preduslov: uredna pilula je NASLIKANA (neprozirna pozadina)"
+
+    ' OVO JE TVRDNJA ZBOG KOJE TEST POSTOJI. Natpis se brisao i pre; pozadina je
+    ' ostajala, pa je celija tvrdila stanje koje nema pokrice.
+    AssertEq stilPosle, CLng(fmBackStyleTransparent), _
+             "pilula koja se ne moze prikazati gubi i POZADINU, ne samo natpis"
+    AssertEq capPosle, "", "...i natpis"
+    AssertEq (Len(capPre) > 0), True, "kontrola: pre kvara je natpis postojao"
+    AssertEq stilNazad, CLng(fmBackStyleOpaque), _
+             "uredna vrednost VRACA pozadinu -- ciscenje ne ostaje zauvek"
 End Sub
