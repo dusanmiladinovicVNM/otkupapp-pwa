@@ -5727,3 +5727,86 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §18. Domen: `docs/DOMEN/README.md`.
 > ponašanje čitanja kroz koje prolazi skoro sve, pa smoke ide na **kopiji**
 > sveske, i prvi korak je običan rad — on dokazuje da vaša šema ima kolonu tamo
 > gde je program očekuje.
+
+## v2.79.0 — dokazni aparat: alat koji je lajao na ispravne provere
+
+Nema izmene u programu — ovo je izdanje o **proverama**, nastavak `v2.72.0`.
+
+### Šta je bilo pokvareno
+
+Uz svaku sabotažu stoji i **ime provere** koju ona mora da obori. Tako se zna ne
+samo da je nešto palo, nego da je palo baš ono što treba.
+
+Ime provere se u testu menja pri svakoj doradi. Katalog o tome nije znao ništa,
+pa je zastarevao ćutke — i to na **119 od 251** mesta.
+
+Posledica je gora nego što zvuči, jer alat time laže u oba smera:
+
+- javlja grešku nad sabotažom koja radi **savršeno**;
+- a sabotažu koja stvarno obara **pogrešnu** proveru niko više ne pročita, jer se
+  na alat prestalo obraćati pažnju.
+
+Praktično: pun dokaz nije mogao da prođe ni za jednu veću oblast, pa se u
+poslednja dva posla vrteo samo uzak isečak — a baš u uskom isečku se nova mrtva
+sabotaža ne vidi.
+
+### Šta je urađeno
+
+Svih 119 je ispravljeno **iz merenja**, ne po sličnosti: svaka sabotaža je
+puštena i zapisano je ime provere koje je stvarno palo.
+
+Dodata je provera koja ovo ubuduće hvata **za sekundu** umesto za dva i po sata,
+i vezana je za onu koja se ionako pušta posle svake izmene koda.
+
+### I jedna stvar koja je držala alat crvenim bez potrebe
+
+Kad se za neki nalaz zna da stoji i zna se čiji je, upisuje se u spisak priznatih
+— da izveštaj ne bi bio trajno crven zbog nečega što je već zapisano.
+
+Ispostavilo se da je to radilo samo za **pola** vrsta nalaza. Sabotaža koja obori
+pogrešnu proveru i dalje se broji kao „nešto je palo", pa je priznanje pomagalo;
+sabotaža koja ne obori **ništa** se ne broji, pa priznanje nije menjalo ishod.
+Zapisan nalaz je tako i dalje držao alat crvenim — tačno ono što spisak treba da
+spreči. Ispravljeno.
+
+### Dva nalaza koja nisu zataškana
+
+- dve sabotaže obaraju **istu** proveru, pa se ne može reći koja je pala;
+- jedna sabotaža ne obara **ništa** — proverava da se izgled kontrole upisuje uz
+  potvrdu, a to se u testu ne vidi jer tamo prvi upis uvek uspe.
+
+Oba su upisana sa razlogom i vlasnikom, umesto da budu prećutana da bi izveštaj
+bio zelen.
+
+### Nova provera je tri puta obećavala više nego što meri
+
+Ovo je deo koji najviše govori o samoj vrsti posla. Ista greška se ponovila tri
+puta, svaki put jedan nivo dublje, i svaki put ju je našao **pregled**, ne alat:
+
+| Krug | Provera je primala i… | Sada |
+|---|---|---|
+| 1 | tekst koji u testu postoji samo kao **kod** ili u **komentaru** | samo tekst poruka |
+| 2 | tekst koji je samo **očekivana vrednost** ili obična dodela | samo poruka same provere |
+| 3 | delove poruke koji se **nikad ne ispisuju** (npr. razdvajač unutar poziva) | samo delovi koji se stvarno vide |
+
+Poslednja dva su pokazana na **postojećem** kodu, ne izmišljenim primerom.
+
+### Dva puta je i sam dokaz bio pogrešan
+
+Prvo: proba prvog suženja ništa nije dokazivala. Prolazila je i kad se suženje
+vrati unazad, jer je proveravala pogrešnu stranu — kako se tekst pretražuje,
+umesto **šta** se uopšte pretražuje. Rešeno tako što provera i njena proba sada
+idu istim putem, pa se jedno ne može pokvariti a da drugo ostane zeleno.
+
+Drugo: proba trećeg suženja je pala jer je gađala granu koja se za taj oblik i ne
+izvršava. Ispostavilo se da taj oblik nastaje iz **dve** stare greške zajedno, pa
+ga nijedna sama ne proizvodi — i tek proba sa obe ga pokazuje.
+
+Obe su vredne zapisa iz istog razloga zbog kog i ceo posao postoji: proba koja
+nikad nije pokazana crvenom ne dokazuje ništa.
+
+### Zašto je ovo vredelo
+
+`v2.72.0` je zatvorio sabotaže koje se više nisu mogle ni primeniti. Ovo zatvara
+one koje se primenjuju uredno, ali je alat prestao da ume da kaže **šta** su
+oborile. Ista bolest, drugo mesto — i oba puta se videla tek kad se izmerila.

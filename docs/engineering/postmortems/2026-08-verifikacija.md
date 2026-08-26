@@ -273,7 +273,7 @@ mora se naći u poruci koja je pala, i to **samo među porukama njenog testa**.
 Pet je bila razlika u rečima. Dva su bila prava nalaza — sabotaža obara
 **preduslov**, pa ciljana tvrdnja ne dođe na red: `relink-ignorise-generaciju` i
 `f8-identitet-po-broju`. Ni jedan se ne može zatvoriti bez izmene testa ili
-fikstуre (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
+fiksture (uža sabotaža bi u prvom slučaju obarala tuđu tvrdnju, a u drugom —
 mereno — ne obara ništa). Zapisani su u `POZNATI_NALAZI_DOKAZ`, sa razlogom.
 
 Cena je poštena: tekstovi za sabotaže koje nisu skoro puštane nisu usklađeni sa
@@ -382,3 +382,247 @@ storno nad zbirnom se zaustavlja uz „broj je dvosmislen".
 To je **pojačivač**, ne uzrok — i dalje ne znam zašto je prvo traženje palo. Kad
 se poruka sledeći put pojavi, nosiće zaglavlje i time reći da li je uzrok u
 šemi, u tabeli ili u samom čitanju.
+
+---
+
+## 12) Isto truljenje, drugo polje — 119 zastarelih tvrdnji (26.08.2026)
+
+§10 je zatvorio **sidra**: unos u katalogu čije je sidro zastarelo hvata se sada
+za sekundu (`--proveri-sidra`), umesto posle dva i po sata punog prolaza. Isti
+unos ima još jedno polje koje zastareva na isti način — **tvrdnju** — i ono nije
+imalo nikakvu proveru.
+
+### Šta je bilo
+
+`dokaz.py` traži da se deklarisan tekst nađe u poruci koja je pala; ako se ne
+nađe, javlja `PALA DRUGA TVRDNJA`. Tekst tvrdnje se u testu menja pri svakoj
+doradi, a katalog o tome ne zna ništa — pa zastari **tiho**.
+
+Alat time laže u **oba** smera:
+
+- javlja grešku nad sabotažom koja radi savršeno;
+- a sabotažu koja stvarno obara **tuđu** tvrdnju niko više ne čita, jer je alat
+  naučio da laje.
+
+Druga polovina je gora. `--proveri-sidra` postoji baš zato što provera koja
+nikad nije pokazana crvenom ne dokazuje ništa; ovde je provera bila crvena
+**stalno**, što je isti ishod drugim putem.
+
+### Kako je izmereno, a ne procenjeno
+
+| Korak | Nalaz |
+|---|---|
+| statički: tekst se ne nalazi u izvoru | 133 od 251 |
+| ...neosetljivo na veličinu slova | **120** |
+| ...vezano za telo **svog** testa | 123 (120 nigde + 3 u tuđem testu) |
+| uzorak od 8 pušten kroz `dokaz.py` | **6** javilo `PALA DRUGA TVRDNJA` |
+| puna žetva svih 123 | **119** zastarelih · 3 lažna pozitiva · 1 mrtva |
+
+Prvi broj (133) je bio **pogrešan i nije prijavljen kao nalaz** — razlika je bila
+samo u veličini slova, a `dokaz.py` poredi neosetljivo. Isto važi za tri unosa
+koja se statički ne nalaze a u radu se poklapaju: tvrdnja im je sklopljena u radu.
+
+### Popravka: mereno, ne pogađano
+
+Katalog ne sme da dobije tekst „koji najviše liči". Zato:
+
+- **žetva je izvor istine za to KOJA tvrdnja pada** — 123 prolaza `dokaz.py`-ja,
+  svaki ispisuje poruku koja je stvarno pala;
+- kad poruka **nije odsečena** (`dokaz.py` seče na 120 znakova), prefiks je pun
+  tekst tvrdnje i upisuje se **doslovno**;
+- tek kad jeste odsečena, pun tekst se traži u izvoru testa.
+
+Doslovan upis je bitan zbog tvrdnji sklopljenih u radu:
+`"Storno / " & tip & " cita svoju tabelu"` daje **različite** poruke za `OTKUP` i
+`FAKTURA`. Skraćivanje na zajednički literal bi dve različite tvrdnje spojilo u
+jednu — i to sam u prvom pokušaju i uradio (v. niže).
+
+### Dve moje greške usput, obe poučne
+
+**1. Naivan regex nad literalima.** `"([^"]{8,})"` u telu testa spaja zatvoreni
+navodnik jednog stringa sa otvorenim sledećeg, pa nad
+`AssertEq CLng(pre("brojPak")), 1&, "3 l trazi..."` vraća `)), 1&, ` kao da je
+tekst. Rezultat: 50 „nema kandidata" koji su zapravo postojali. Lek je
+tokenizator, ne bolji regex.
+
+**2. Skraćivanje je spojilo dve tvrdnje u jednu.** Prvi prolaz je za tri para
+upisao zajednički literal (`"Storno / "`), pa je `--proveri-sidra` odmah javio
+**zamka 5** — „dve sabotaže koje test ne razlikuje". Provera je uhvatila grešku
+koju je napravila popravka, u istom potezu. Da je nije bilo, katalog bi ostao
+zeleno pokvaren.
+
+### Pravilo: rupa se meri rečima, ne procentom
+
+Provera prihvata dva oblika: tekst je doslovno u telu, ili su literali jednog
+izraza u njemu **redom**, a između njih stoji nešto što liči na vrednost —
+najviše tri reči po rupi.
+
+Procenat pokrivenosti je probao pa odbačen: `" u dijalogu ide BEZ oznake"` je 51%
+svoje tvrdnje, pa bi pao kroz prag od 60% — a isti prag bi primio slučajno
+poklapanje kratkog literala u dugačkoj tuđoj tvrdnji. Broj reči modeluje ono što
+se stvarno dešava: na tom mestu je bila **jedna vrednost**.
+
+### Provera je prvo obećavala više nego što meri (iz review-a)
+
+Prva verzija je za „doslovni" slučaj tražila tekst u **celom telu procedure**.
+Telo sadrži i kod i komentare, pa bi kroz nju prošlo i:
+
+```
+tvrdnja = "AssertEq nosiDok, True"          ' komad KODA
+tvrdnja = "recenica iz komentara ..."       ' komentar
+```
+
+`dokaz.py` poredi sa **porukom koja je pala**, a poruka može biti samo string
+literal — pa bi ishod bio zeleno statički, `PALA DRUGA TVRDNJA` u prolazu. Tačno
+rupa koju je posao trebalo da zatvori.
+
+Gore od same rupe: `_literali` je **već vraćao** literale, a `_tela_testova` ih
+je bacao i čuvao celo telo. Podatak je postojao; put do njega nije.
+
+### ...a prvi dokaz te ispravke ništa nije dokazivao
+
+Ovo je deo koji vredi najviše. Kad su dodata dva slučaja („tekst postoji samo kao
+kod", „tekst postoji samo u komentaru"), oni su **prošli i sa vraćenim starim
+ponašanjem** — dakle nisu merili ništa.
+
+Razlog: self-test je svoje „telo" sklapao **sam**, pa je zaobilazio baš
+`_tela_testova`, funkciju u kojoj je rupa i bila. Dokazivao je da
+`_tvrdnja_pripada` pretražuje ono što **dobije**, a pitanje je bilo **šta
+dobija**.
+
+Lek je struktura, ne još jedan slučaj: izdvojen je `_telo_podaci(telo)`, koji
+sada koriste **i** pravi put **i** self-test. Sabotaža te jedne funkcije odmah
+obara oba slučaja, po imenu.
+
+To je ista pouka koju `vba_check` već nosi u komentaru — self-test mora da ide
+**kroz** produkcionu putanju, a ne pored nje. Ovde se pokazalo da važi i za
+podatak koji putanja proizvodi, ne samo za funkciju koja ga troši.
+
+### ...pa je i suženje bilo preširoko: literal nije isto što i poruka
+
+Drugi krug review-a je pokazao da „tekst je u nekom string-literalu tog testa"
+još uvek nije isto što i „tekst je poruka koju `dokaz.py` može da vidi".
+Literal može da bude i **očekivana vrednost** ili obična dodela:
+
+```vb
+status = "blok drugog kooperanta se odbija"
+AssertEq rezultat, "Placeno", "status fakture je ispravan"
+```
+
+Katalog sa `"Placeno"` bi statički prošao, a u prolazu dao `PALA DRUGA TVRDNJA`.
+
+Provera zato ne gleda literale procedure nego **poslednji argument** assertion
+poziva. Skup je uzak i pravilan — u sve četiri primitive oba harness-a poruka je
+poslednji argument:
+
+| Primitiva | Gde | Poziva |
+|---|---|---|
+| `AssertEq actual, expected, poruka` | `modTest` | 1176 |
+| `ChkEq act, exp, nm` | `modTestBanka` | 88 |
+| `Chk cond, nm` | `modTestBanka` | 82 |
+| `ChkEqD act, exp, nm` | `modTestBanka` | 26 |
+
+**Nezavisna potvrda popravke:** sužavanje sa „bilo koji literal" na „poruka
+tvrdnje" nije oborilo **nijedan** od 251 unosa. Da je neki od 119 prepisanih
+tekstova bio slučajno poklapanje sa nekim drugim literalom, ovde bi ispao.
+
+Test koji nema nijednu prepoznatu poruku ne prolazi tiho — njegova tvrdnja pada
+kao zastarela, pa nova assert primitiva ne može da otvori rupu neprimećeno.
+
+### ...i to je bio treći krug: parser je imao dve rupe
+
+„Poslednji argument assertion poziva" nije dovoljno ako se taj argument pogrešno
+izdvoji. Obe rupe su reprodukovane na **postojećem** `modTest.bas`, ne sintetički.
+
+**1. Lažne spoljne zagrade.** Skidale su se čim ostatak počne `(` i završi `)`:
+
+```vb
+AssertEq (modStornoDok.StornoIzvrsiMod(CStr(nisu(i)), "1/TEST", "", _
+          SV_MODE_ISPRAVKA, False, False) Is Nothing), True, _
+         "framework ne izvrsava nista nad: " & CStr(nisu(i))
+```
+
+To **nisu iste** zagrade. Posle skidanja dubina padne na −1, zarezi više nisu na
+vrhu, argumenti se ne razdvoje — i ceo poziv prođe kao „poruka". Mereno:
+`_tvrdnja_pripada("1/TEST", …)` je vraćalo **`True`**.
+
+**2. Literali unutar ugnježdenih poziva.** `"|"` u `Split(x, "|")` i `"0.00"` u
+`Format$(x, "0.00")` jesu literali, ali se **nikad ne ispisuju**. Mereno:
+`_tvrdnja_pripada("|", T_Storno_UgovorIRadnje)` je vraćalo **`True`**.
+
+Model koji to rešava je jednostavniji od pokušaja da se razumeju `Split`,
+`Format$` i ostali: poruka se deli po **`&` na vrhu**, i statični su samo
+operandi koji su **sami ceo literal**. Sve ostalo je rupa.
+
+```
+"Storno / " & tip & " cita svoju tabelu"   ->  literal · rupa · literal
+"lista " & Split(x, "|")(0) & " ima ..."   ->  literal · rupa · literal
+```
+
+Spoljne zagrade se sada skidaju samo uz izričito `Call Ime(...)`, i to tek kad se
+prva `(` stvarno zatvara na kraju.
+
+### I jedan lažni pozitiv koji sam sam napravio
+
+Posle sužavanja je iskočio `storno-nema-dok`. Nije bio stvaran: deklarisano je
+`"kapija zaustavlja nepostojeci dokument"`, a poruka je
+`"kapija zaustavlja nepostojeci dokument, tip " & CStr(tip)` — dakle deklarisan
+tekst je **prefiks fragmenta**, i `dokaz.py` ga nalazi kao podniz poruke (žetva
+mu je i dala `OK`).
+
+Brzi put zato gleda i **pojedinačne fragmente** poruke, ne samo pune poruke.
+Katalog sme da nosi prepoznatljiv deo, kao i do sada.
+
+### Kako je dokazano da suženja grizu
+
+| Sabotaža | Šta padne |
+|---|---|
+| bezuslovno skidanje spoljnih zagrada | **pozitivan** slučaj: ispravna poruka iza lažnih zagrada više nije prepoznata |
+| svi literali izraza, ne samo operandi | slučajevi `Split` i `Format$` |
+| **obe zajedno** | oblik iz review-a: literal iz prvog argumenta postaje tvrdnja |
+
+Prva je pozitivan slučaj namerno: pod novim pravilom operanda naivno skidanje
+više ne pravi lažno zeleno nego **gubi poruku** — a lažna uzbuna u hook-u je
+skuplja od propusta, jer uči da se checker preskače.
+
+Treći red je oblik koji je review reprodukovao: nastaje iz **obe** stare grane
+zajedno, pa ga nijedna sabotaža sama ne proizvodi.
+
+### Gde provera živi, i zašto baš tu
+
+U `_nalazi` — jedinoj putanji kroz koju prolaze sva statička pravila kataloga,
+kojoj `--self-test` podmeće izmišljene unose i koju `vba_check` zove posle
+**svake** VBA izmene. Zaseban `--proveri-tvrdnje` bi bio još jedna putanja koju
+neko mora da se seti da pusti, a baš VBA izmena je ono što tvrdnju čini
+zastarelom.
+
+Jedanaest novih self-test slučajeva (24 ukupno, bilo 13): zastarela tvrdnja,
+tvrdnja koja pripada **drugom** testu, prazna tvrdnja, i tekst koji u testu
+postoji samo kao **kod**, samo u **komentaru**, samo u **string promenljivoj**,
+kao **očekivana vrednost** `AssertEq`-a, kao **literal iz prvog argumenta**, kao
+**separator** u `Split`-u i kao **format-spec** u `Format$`-u — plus jedan
+**pozitivan**: ispravna poruka iza lažnih spoljnih zagrada mora da se prepozna.
+
+### Dva nalaza koja NISU zataškana
+
+| Nalaz | Zašto stoji |
+|---|---|
+| `zbirna-vlasnik-samo-kupac` deli tvrdnju sa `oporavak-cilj-po-broju` | žetva pokazuje da obe obore **istu** poruku — test ih stvarno ne razlikuje |
+| `ljuska-rez-bez-potvrde` ne obara ništa | `PostaviRez` piše pa **čita nazad** do tri puta; sabotaža svodi na jedan upis, što se u testu ne vidi jer prvi upis tamo uvek uspe |
+
+Oba su upisana u `POZNATI_NALAZI` sa razlogom i vlasnikom, kao i zatečeni
+`stale-parent-po-broju`. Druga nema „tačan tekst" koji bi se upisao: invarijanta
+je otporna na *flaky* upis, pa je merljiva samo nad lažnom kontrolom koja prvi
+upis odbija.
+
+### Šta ostaje otvoreno
+
+**Pun prolaz nad svih 251 nije izvršen** posle popravke — traje oko dva i po
+sata. Izvršena su dva prefiksa koja su ranije bila blokirana (`ljuska-`,
+`storno-`), i puna žetva je pre popravke prošla kroz 123 unosa. Ostatak kataloga
+je popravljen **iz merenja**, ali nije ponovo izmeren.
+
+**Provera ne zna šta sabotaža stvarno obara.** Ona tvrdi samo da deklarisan tekst
+JESTE tvrdnja tog testa. Da je to i tvrdnja koju ta sabotaža obara i dalje zna
+jedino `dokaz.py`.
+
