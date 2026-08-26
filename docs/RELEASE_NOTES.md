@@ -5541,7 +5541,9 @@ Bez ijedne poruke. Razlika se videla tek kasnije, u saldu.
 ### Šta je sada
 
 Ako učitavanje liste zakaže, unos **staje** i operater dobija objašnjenje — sa
-razlogom zbog kojeg lista nije učitana.
+razlogom zbog kojeg lista nije učitana. To važi i kad sama tabela otkupa
+nedostaje: ranije se i to čitalo kao „nema blokova", jer program u tom slučaju
+dobija istu praznu listu kao kad blokova stvarno nema.
 
 Kad je lista uredno učitana a prazna, ništa se ne menja: to stvarno znači da
 kooperant nema otvorenih blokova, pa je avans ispravan.

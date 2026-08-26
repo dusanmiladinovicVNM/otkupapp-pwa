@@ -3128,6 +3128,37 @@ Isti oblik kao u §11.2, jer je i greška ista:
 da kooperant nema otvorenih blokova, i avans je tada ispravan. Kapija je uska
 koliko i kvar.
 
+### 16.2.1 Prva verzija je propuštala nedostajuću tabelu — nađeno u review-u
+
+Beleženje pada hvata samo ono što **pukne**. `GetOpenOtkupi` čita kroz
+`GetTableData`, a on vraća **isti `Empty`** i kad tabele nema i kad je prazna —
+bez ijedne greške:
+
+```
+tblOtkup NEDOSTAJE -> GetTableData = Empty -> GetOpenOtkupi = Empty
+                   -> nema Err -> m_BlokoviOk ostaje True -> AVANS
+```
+
+Dakle baš poslovna greška koju ovaj posao zatvara ostajala je otvorena kroz jedan
+poznat put. To nije nijansa: `RequireTable` je i napravljen zbog te klase
+(„prazna tabela i nepostojeća tabela nisu isti ishod"), a `frmBankaImport` — koji
+je ovde naveden kao uzor — to **već radi** pre svog čitanja. Prekopiran je oblik,
+ali ne i ta linija.
+
+`FillOpenOtkupi` sada traži tabelu pre čitanja:
+
+```vb
+RequireTable TBL_OTKUP, "frmDokumenta.FillOpenOtkupi"
+```
+
+Time se tri stanja razdvajaju kako treba:
+
+| Stanje | Ishod |
+|---|---|
+| tabela postoji, nema redova | `m_BlokoviOk = True` → avans je **legitiman** |
+| tabela ne postoji | `RequireTable` diže → `EH` → `m_BlokoviOk = False` → **STOP** |
+| čitanje pukne iz drugog razloga | `EH` → `m_BlokoviOk = False` → **STOP** |
+
 ### 16.3 Seam-ovi
 
 Tvrdo gejtovani, po ugledu na `frmBankaImport.BiTest*`:
@@ -3161,6 +3192,18 @@ da ga handler zove (jedan red, proveren čitanjem). Isto ograničenje kao §11.5
 **Da `FillOpenOtkupi` stvarno beleži pad nije mereno**: test postavlja stanje kroz
 seam, pa zaobilazi samu funkciju. Izazvati pravi pad čitanja iz testa značilo bi
 lomiti šemu.
+
+To je i razlog zašto je rupa iz §16.2.1 preživela prvu verziju: `2 / 2 DOKAZANO`
+je dokazivalo **„ako je `m_BlokoviOk = False`, kapija radi"** — a ne „svaki stvarni
+put neuspeha zaista postavlja `False`". Razlika je tiha i skupa.
+
+Ni `RequireTable` u `FillOpenOtkupi` **nije izmeren** iz istog razloga. Ono što
+jeste: samo pravilo `RequireTable` ima svoje testove i sabotažu
+(`banka-uvoz-nema-tabele-je-prazna`), pa je nemereno ostalo **da ga ova funkcija
+zove** — jedan red, proveren čitanjem. Isti oblik kao §11.5.
+
+Zato je scenario „tabela nedostaje" u smoke listi ovog posla **obavezan**, ne
+opcion.
 
 ### 16.6 Nalaz sa strane: `vba_check` ne vidi nedeklarisanu modul-promenljivu
 

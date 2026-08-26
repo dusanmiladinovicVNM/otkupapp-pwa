@@ -6100,9 +6100,19 @@ Private Sub FillOpenOtkupi()
     Dim kooperantID As String
     kooperantID = GetComboID(cmbPrimalacOMUlaz)
 
+    ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
+    '
+    ' GetOpenOtkupi cita kroz GetTableData, koji vraca isti Empty i kad tabele
+    ' NEMA i kad je prazna -- bez greske. Bez ove kapije bi nedostajuca tblOtkup
+    ' prosla kao 'uspesno ucitana prazna lista', m_BlokoviOk bi ostao True, i
+    ' novac bi opet zavrsio kao AVANS. Isto radi i frmBankaImport pre svog
+    ' citanja (LoadOtkupBlokoviForSelectedKooperant).
+    RequireTable TBL_OTKUP, "frmDokumenta.FillOpenOtkupi"
+
     Dim otkupi As Variant
     otkupi = GetOpenOtkupi(kooperantID)
-    ' Prazno je ISTINA: kooperant nema otvorenih blokova, pa je avans ispravan.
+    ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI:
+    ' kooperant nema otvorenih blokova, pa je avans ispravan.
     If IsEmpty(otkupi) Then Exit Sub
 
     ReDim m_OtkupIDs(0 To UBound(otkupi, 1) - 1)
