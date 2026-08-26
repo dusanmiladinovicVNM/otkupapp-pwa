@@ -5758,9 +5758,16 @@ puštena i zapisano je ime provere koje je stvarno palo.
 Dodata je provera koja ovo ubuduće hvata **za sekundu** umesto za dva i po sata,
 i vezana je za onu koja se ionako pušta posle svake izmene koda.
 
-Ta provera je u prvom obliku bila preširoka — primala bi i tekst koji u testu
-postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci. To je
-nađeno u pregledu i suženo, uz dokaz da suženje stvarno hvata oba slučaja.
+### I jedna stvar koja je držala alat crvenim bez potrebe
+
+Kad se za neki nalaz zna da stoji i zna se čiji je, upisuje se u spisak priznatih
+— da izveštaj ne bi bio trajno crven zbog nečega što je već zapisano.
+
+Ispostavilo se da je to radilo samo za **pola** vrsta nalaza. Sabotaža koja obori
+pogrešnu proveru i dalje se broji kao „nešto je palo", pa je priznanje pomagalo;
+sabotaža koja ne obori **ništa** se ne broji, pa priznanje nije menjalo ishod.
+Zapisan nalaz je tako i dalje držao alat crvenim — tačno ono što spisak treba da
+spreči. Ispravljeno.
 
 ### Dva nalaza koja nisu zataškana
 
@@ -5771,9 +5778,20 @@ nađeno u pregledu i suženo, uz dokaz da suženje stvarno hvata oba slučaja.
 Oba su upisana sa razlogom i vlasnikom, umesto da budu prećutana da bi izveštaj
 bio zelen.
 
+### Dve greške u samom ovom poslu, i obe su nađene
+
+Nova provera je u prvom obliku bila **preširoka** — primala bi i tekst koji u
+testu postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci.
+Nađeno u pregledu i suženo.
+
+Zatim: prvi dokaz **tog** suženja ništa nije dokazivao. Slučajevi su prolazili i
+kad se suženje vrati unazad, jer su proveravali pogrešnu stranu — kako se tekst
+pretražuje, umesto šta se uopšte pretražuje. Rešeno tako što provera i njena
+proba sada idu **istim putem**, pa se jedno ne može pokvariti a da drugo ostane
+zeleno.
+
 ### Zašto je ovo vredelo
 
 `v2.72.0` je zatvorio sabotaže koje se više nisu mogle ni primeniti. Ovo zatvara
 one koje se primenjuju uredno, ali je alat prestao da ume da kaže **šta** su
 oborile. Ista bolest, drugo mesto — i oba puta se videla tek kad se izmerila.
-
