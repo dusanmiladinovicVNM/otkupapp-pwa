@@ -529,6 +529,65 @@ tekstova bio slučajno poklapanje sa nekim drugim literalom, ovde bi ispao.
 Test koji nema nijednu prepoznatu poruku ne prolazi tiho — njegova tvrdnja pada
 kao zastarela, pa nova assert primitiva ne može da otvori rupu neprimećeno.
 
+### ...i to je bio treći krug: parser je imao dve rupe
+
+„Poslednji argument assertion poziva" nije dovoljno ako se taj argument pogrešno
+izdvoji. Obe rupe su reprodukovane na **postojećem** `modTest.bas`, ne sintetički.
+
+**1. Lažne spoljne zagrade.** Skidale su se čim ostatak počne `(` i završi `)`:
+
+```vb
+AssertEq (modStornoDok.StornoIzvrsiMod(CStr(nisu(i)), "1/TEST", "", _
+          SV_MODE_ISPRAVKA, False, False) Is Nothing), True, _
+         "framework ne izvrsava nista nad: " & CStr(nisu(i))
+```
+
+To **nisu iste** zagrade. Posle skidanja dubina padne na −1, zarezi više nisu na
+vrhu, argumenti se ne razdvoje — i ceo poziv prođe kao „poruka". Mereno:
+`_tvrdnja_pripada("1/TEST", …)` je vraćalo **`True`**.
+
+**2. Literali unutar ugnježdenih poziva.** `"|"` u `Split(x, "|")` i `"0.00"` u
+`Format$(x, "0.00")` jesu literali, ali se **nikad ne ispisuju**. Mereno:
+`_tvrdnja_pripada("|", T_Storno_UgovorIRadnje)` je vraćalo **`True`**.
+
+Model koji to rešava je jednostavniji od pokušaja da se razumeju `Split`,
+`Format$` i ostali: poruka se deli po **`&` na vrhu**, i statični su samo
+operandi koji su **sami ceo literal**. Sve ostalo je rupa.
+
+```
+"Storno / " & tip & " cita svoju tabelu"   ->  literal · rupa · literal
+"lista " & Split(x, "|")(0) & " ima ..."   ->  literal · rupa · literal
+```
+
+Spoljne zagrade se sada skidaju samo uz izričito `Call Ime(...)`, i to tek kad se
+prva `(` stvarno zatvara na kraju.
+
+### I jedan lažni pozitiv koji sam sam napravio
+
+Posle sužavanja je iskočio `storno-nema-dok`. Nije bio stvaran: deklarisano je
+`"kapija zaustavlja nepostojeci dokument"`, a poruka je
+`"kapija zaustavlja nepostojeci dokument, tip " & CStr(tip)` — dakle deklarisan
+tekst je **prefiks fragmenta**, i `dokaz.py` ga nalazi kao podniz poruke (žetva
+mu je i dala `OK`).
+
+Brzi put zato gleda i **pojedinačne fragmente** poruke, ne samo pune poruke.
+Katalog sme da nosi prepoznatljiv deo, kao i do sada.
+
+### Kako je dokazano da suženja grizu
+
+| Sabotaža | Šta padne |
+|---|---|
+| bezuslovno skidanje spoljnih zagrada | **pozitivan** slučaj: ispravna poruka iza lažnih zagrada više nije prepoznata |
+| svi literali izraza, ne samo operandi | slučajevi `Split` i `Format$` |
+| **obe zajedno** | oblik iz review-a: literal iz prvog argumenta postaje tvrdnja |
+
+Prva je pozitivan slučaj namerno: pod novim pravilom operanda naivno skidanje
+više ne pravi lažno zeleno nego **gubi poruku** — a lažna uzbuna u hook-u je
+skuplja od propusta, jer uči da se checker preskače.
+
+Treći red je oblik koji je review reprodukovao: nastaje iz **obe** stare grane
+zajedno, pa ga nijedna sabotaža sama ne proizvodi.
+
 ### Gde provera živi, i zašto baš tu
 
 U `_nalazi` — jedinoj putanji kroz koju prolaze sva statička pravila kataloga,
@@ -537,10 +596,12 @@ kojoj `--self-test` podmeće izmišljene unose i koju `vba_check` zove posle
 neko mora da se seti da pusti, a baš VBA izmena je ono što tvrdnju čini
 zastarelom.
 
-Sedam novih self-test slučajeva: zastarela tvrdnja, tvrdnja koja pripada
-**drugom** testu, prazna tvrdnja, tekst koji postoji samo kao **kod**, samo u
-**komentaru**, samo u **string promenljivoj**, i tekst koji je **očekivana
-vrednost** `AssertEq`-a umesto poruke.
+Jedanaest novih self-test slučajeva (24 ukupno, bilo 13): zastarela tvrdnja,
+tvrdnja koja pripada **drugom** testu, prazna tvrdnja, i tekst koji u testu
+postoji samo kao **kod**, samo u **komentaru**, samo u **string promenljivoj**,
+kao **očekivana vrednost** `AssertEq`-a, kao **literal iz prvog argumenta**, kao
+**separator** u `Split`-u i kao **format-spec** u `Format$`-u — plus jedan
+**pozitivan**: ispravna poruka iza lažnih spoljnih zagrada mora da se prepozna.
 
 ### Dva nalaza koja NISU zataškana
 

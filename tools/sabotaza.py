@@ -2903,49 +2903,78 @@ _STR_SPOJ = re.compile(r'"\s*&\s*_?\s*\n?\s*"')
 _NASTAVAK = re.compile(r"_\s*\n\s*")
 
 
-def _literali(tekst: str):
-    """(svi literali, sabloni). Sablon = literali jednog izraza, spojeni sa '&'.
-
-    Tokenizuje se, ne regex-uje: `pre("brojPak")` ima navodnike, pa naivan
-    '"([^"]*)"' spaja zatvoreni navodnik jednog stringa sa otvorenim sledeceg i
-    vraca komade KODA kao da su tekst.
-    """
-    t = _NASTAVAK.sub(" ", _STR_SPOJ.sub("", tekst))
-    lit, sabloni, tek = [], [], []
-    i, n, kraj = 0, len(t), 0
+def _podeli_amp(izraz: str) -> list:
+    """Podeli izraz po '&' koji nisu u zagradama ni u navodnicima."""
+    delovi, dubina, u_str, tek = [], 0, False, ""
+    i, n = 0, len(izraz)
     while i < n:
-        c = t[i]
+        c = izraz[i]
         if c == '"':
-            j, buf = i + 1, []
-            while j < n:
-                if t[j] == '"':
-                    if j + 1 < n and t[j + 1] == '"':      # "" = navodnik u tekstu
-                        buf.append('"'); j += 2; continue
-                    break
-                buf.append(t[j]); j += 1
-            s = "".join(buf)
-            medju = t[kraj:i]
-            # Zarez se vise ne gleda: _literali od sada dobija JEDAN argument
-            # (poruku tvrdnje), pa u njemu zareza na vrhu nema -- a zarez unutar
-            # poziva (Format$(x, "0.00")) je nekad pogresno delio jedan izraz.
-            if tek and "&" in medju:
-                tek.append(s)                              # isti izraz
-            else:
-                if tek:
-                    sabloni.append(tek)
-                tek = [s]
-            lit.append(s)
-            i = j + 1
-            kraj = i
-        elif c == "'":                                     # komentar do kraja reda
-            while i < n and t[i] != "\n":
-                i += 1
-            kraj = i
-        else:
+            if u_str and i + 1 < n and izraz[i + 1] == '"':
+                tek += '""'
+                i += 2
+                continue
+            u_str = not u_str
+        elif not u_str and c in "([":
+            dubina += 1
+        elif not u_str and c in ")]":
+            dubina -= 1
+        elif not u_str and c == "&" and dubina == 0:
+            delovi.append(tek.strip())
+            tek = ""
             i += 1
-    if tek:
-        sabloni.append(tek)
-    return lit, sabloni
+            continue
+        tek += c
+        i += 1
+    if tek.strip():
+        delovi.append(tek.strip())
+    return delovi
+
+
+def _kao_literal(op: str):
+    """Tekst -- ako je operand CEO string literal. Inace None.
+
+    "0.00" u Format$(x, "0.00") i "|" u Split(x, "|") jesu literali, ali NISU
+    deo ispisane poruke: oni su argumenti ugnjezdenog poziva. Zato se ne gleda
+    "ima li literala unutra" nego "da li je ceo operand jedan literal".
+    """
+    op = op.strip()
+    if len(op) < 2 or not op.startswith('"'):
+        return None
+    buf, i, n = [], 1, len(op)
+    while i < n:
+        c = op[i]
+        if c == '"':
+            if i + 1 < n and op[i + 1] == '"':      # "" = navodnik u tekstu
+                buf.append('"')
+                i += 2
+                continue
+            return "".join(buf) if i == n - 1 else None
+        buf.append(c)
+        i += 1
+    return None
+
+
+def _poruka_delovi(izraz: str):
+    """(pun tekst poruke ili None, staticki fragmenti).
+
+    Operand koji nije sam literal je RUPA -- vrednost poznata tek u radu. Time
+    "Storno / " & tip & " cita svoju tabelu" daje fragmente
+    ["Storno / ", " cita svoju tabelu"], a "lista " & Split(x, "|")(0) & " ..."
+    NE uvlaci "|" medju njih.
+    """
+    frag, rupa = [], False
+    for op in _podeli_amp(izraz):
+        t = _kao_literal(op)
+        if t is None:
+            rupa = True
+        else:
+            frag.append(t)
+    if not frag:
+        return None, []
+    if rupa:
+        return None, frag
+    return "".join(frag), frag
 
 
 # Poruka tvrdnje je POSLEDNJI argument assertion poziva. Cetiri primitive
@@ -2962,9 +2991,7 @@ def _literali(tekst: str):
 #     status = "blok drugog kooperanta se odbija"
 #     AssertEq rezultat, "Placeno", "status fakture je ispravan"
 #
-# -- a dokaz.py vidi samo PORUKU koja je pala. Katalog koji nosi "Placeno" bi
-# staticki prosao, a u prolazu dao PALA DRUGA TVRDNJA. Provera bi opet obecavala
-# vise nego sto meri, samo uze nego pre.
+# -- a dokaz.py vidi samo PORUKU koja je pala.
 _ASSERT_IMENA = ("asserteq", "chkeqd", "chkeq", "chk")
 
 
@@ -2988,11 +3015,41 @@ def _podeli_vrh(tekst: str) -> list:
     return delovi
 
 
+def _unutar_zagrada(arg: str):
+    """Sadrzaj zagrada -- samo ako se PRVA '(' zatvara bas na kraju."""
+    if not arg.startswith("("):
+        return None
+    dubina, u_str = 0, False
+    for i, c in enumerate(arg):
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c == "(":
+            dubina += 1
+        elif not u_str and c == ")":
+            dubina -= 1
+            if dubina == 0:
+                return arg[1:i] if i == len(arg) - 1 else None
+    return None
+
+
 def _poruke_tvrdnji(telo: str) -> list:
     """Izrazi koji su PORUKA assertion poziva, po jedan po pozivu."""
     out = []
     for red in _NASTAVAK.sub(" ", telo).split("\n"):
         r = red.strip()
+        # `Call AssertEq(a, b, "x")` -- jedini oblik u kome su spoljne zagrade
+        # deo poziva. Bez `Call` je ovo VBA Sub-call: `AssertEq a, b, "x"`, i
+        # tada zagrade na krajevima pripadaju ARGUMENTIMA, ne pozivu.
+        #
+        # Ranija verzija ih je skidala cim ostatak pocinje '(' i zavrsava ')',
+        # sto nad stvarnim
+        #     AssertEq (X(...) Is Nothing), True, "..." & CStr(i)
+        # razbija dubinu, pa se argumenti vise ne razdvajaju i ceo poziv prodje
+        # kao "poruka" -- literal iz PRVOG argumenta postane lazna tvrdnja.
+        sa_zagradama = False
+        if r.lower().startswith("call "):
+            r = r[5:].strip()
+            sa_zagradama = True
         low = r.lower()
         for ime in _ASSERT_IMENA:
             if not low.startswith(ime):
@@ -3002,8 +3059,10 @@ def _poruke_tvrdnji(telo: str) -> list:
             if ostatak[:1].isalnum() or ostatak[:1] == "_":
                 continue
             arg = ostatak.strip()
-            if arg.startswith("(") and arg.endswith(")"):
-                arg = arg[1:-1]
+            if sa_zagradama:
+                arg = _unutar_zagrada(arg)
+                if arg is None:
+                    break
             delovi = _podeli_vrh(arg)
             if delovi:
                 out.append(delovi[-1])
@@ -3012,19 +3071,27 @@ def _poruke_tvrdnji(telo: str) -> list:
 
 
 def _telo_podaci(telo: str):
-    """(literali PORUKA tvrdnji, njihovi sabloni) za JEDNO telo procedure.
+    """(pune poruke u malim slovima, njihovi staticki fragmenti).
 
     Izdvojeno da bi self-test isao KROZ ovu funkciju, a ne pored nje: dok je
     self-test sam sklapao svoje "telo", dokazivao je samo da _tvrdnja_pripada
     pretrazuje ono sto DOBIJE -- a rupa je bila u tome STA dobija. Sabotaza ove
     funkcije sada obara sve slucajeve koji to mere.
     """
-    lit, sabloni = [], []
+    literali, sabloni = [], []
     for izraz in _poruke_tvrdnji(telo):
-        l, sab = _literali(izraz)
-        lit.extend(l)
-        sabloni.extend(sab)
-    return [x.lower() for x in lit], sabloni
+        pun, frag = _poruka_delovi(izraz)
+        if pun is not None:
+            literali.append(pun.lower())
+        if frag:
+            sabloni.append(frag)
+            # I POJEDINACAN FRAGMENT je deo ispisane poruke, pa katalog sme da
+            # nosi njegov deo: "kapija zaustavlja nepostojeci dokument" je
+            # prefiks fragmenta "...dokument, tip " & CStr(tip). dokaz.py to
+            # nalazi kao podniz poruke; bez ovoga bi staticka provera lazno
+            # prijavila zastarelost.
+            literali.extend(f.lower() for f in frag)
+    return literali, sabloni
 
 
 def _tela_testova() -> dict:
@@ -3277,6 +3344,21 @@ _SELF_TEST = [
     ("tvrdnja je ocekivana vrednost, ne poruka",
      (None, None, None, None, "ocekivana vrednost"),
      "tvrdnja ZASTARELA"),
+    # Literal iz PRVOG argumenta, kad poziv izgleda kao da je ceo u zagradama:
+    #     AssertEq (Len("LAZNA_TVRDNJA") > 0), True, "prava poruka " & CStr(i)
+    # Naivno skidanje spoljnih zagrada razbija dubinu, argumenti se ne razdvoje,
+    # i ceo poziv prodje kao "poruka". Reprodukovano na pravom modTest.bas.
+    ("tvrdnja je literal iz prvog argumenta u zagradi",
+     (None, None, None, None, "LAZNA_TVRDNJA"),
+     "tvrdnja ZASTARELA"),
+    # Literal koji je argument ugnjezdene funkcije -- nikad se ne ispisuje.
+    ("tvrdnja je separator unutar Split-a",
+     (None, None, None, None, "|"),
+     "tvrdnja ZASTARELA"),
+    # Isto za format-spec: Format$(x, "0.00") oblikuje broj, ne pise "0.00".
+    ("tvrdnja je format-spec unutar Format$",
+     (None, None, None, None, "0.00"),
+     "tvrdnja ZASTARELA"),
 ]
 
 
@@ -3294,6 +3376,13 @@ def _self_test() -> int:
             "    Dim status As String\n"
             "    status = \"tekst iz obicne promenljive\"\n"
             "    AssertEq rezultat, \"ocekivana vrednost\", \"tvrdnja uz vrednost\"\n"
+            # prvi argument u zagradi + poruka koja se zavrsava pozivom:
+            # spoljne zagrade NISU par, pa naivno skidanje razbija argumente
+            "    AssertEq (Len(\"LAZNA_TVRDNJA\") > 0), True, _\n"
+            "             \"prava poruka \" & CStr(i)\n"
+            # literali unutar ugnjezdenih poziva nikad ne stignu u ispis
+            "    AssertEq a, b, \"lista \" & Split(CStr(x), \"|\")(0) & \" ima tabelu\"\n"
+            "    AssertEq a, b, \"iznos \" & Format$(x, \"0.00\")\n"
             "    AssertEq nosiDok, True, \"zdrava tvrdnja\"\n"
             "    AssertEq a, b, \"tvrdnja A\"\n"
             "    AssertEq a, b, \"tvrdnja B\"\n"
@@ -3329,6 +3418,21 @@ def _self_test() -> int:
             print("SELF-TEST: '%s' nije prijavljeno (%s)" % (opis, nalazi),
                   file=sys.stderr)
             lose += 1
+
+    # PORUKA IZA LAZNIH SPOLJNIH ZAGRADA mora da se prepozna.
+    #
+    #     AssertEq (Len("X") > 0), True, "prava poruka " & CStr(i)
+    #
+    # Ostatak pocinje '(' i zavrsava ')', ali to NISU iste zagrade. Ko ih skine
+    # bezuslovno, razbije dubinu, argumenti se ne razdvoje i poruka se izgubi --
+    # pa ispravna tvrdnja bude prijavljena kao zastarela. Lazna uzbuna u hook-u
+    # je skuplja od propusta, jer uci da se checker preskace.
+    n += 1
+    iza_zagrada = tuple(zdravo[:4]) + ("prava poruka ",)
+    if _nalazi({"iza-zagrada": iza_zagrada}, imena, tela):
+        print("SELF-TEST: poruka iza laznih spoljnih zagrada nije prepoznata",
+              file=sys.stderr)
+        lose += 1
 
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
     par = {"prvi": zdravo, "drugi": zdravo}

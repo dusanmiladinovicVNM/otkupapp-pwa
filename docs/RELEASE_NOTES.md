@@ -5784,7 +5784,9 @@ Nova provera je u prvom obliku bila **preširoka** — primala bi i tekst koji u
 testu postoji samo kao kod ili u komentaru, a takav se nikad ne pojavi u poruci.
 Nađeno u pregledu i suženo. Pa se pokazalo da je i to suženje još uvek široko:
 prolazio bi i tekst koji je u testu samo očekivana vrednost ili obična dodela.
-Sada se gleda **samo poruka same provere**, ništa drugo.
+Suženo opet — a onda i treći put, jer je i način na koji se poruka izdvaja imao
+dve rupe, obe pokazane na postojećem kodu. Sada se gleda **samo poruka same
+provere**, i to samo oni njeni delovi koji se stvarno ispisuju.
 
 Zatim: prvi dokaz **tog** suženja ništa nije dokazivao. Slučajevi su prolazili i
 kad se suženje vrati unazad, jer su proveravali pogrešnu stranu — kako se tekst
