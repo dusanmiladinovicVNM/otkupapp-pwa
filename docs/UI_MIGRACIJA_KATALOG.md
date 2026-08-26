@@ -3488,9 +3488,29 @@ namerna hvatanja u testu 122). Prepravljen je na `On Error GoTo EH`: nema broja 
 bolje nego pogrešan broj.
 
 Da revizija ne bi zavisila od toga da se neko seti da je ponovi, uvedeno je i
-pravilo `STORNO_PROGUTAN`: `ExcludeStornirano` pod aktivnim `On Error Resume Next`
-je nalaz — osim ako se **odmah sledećom naredbom** čita `Err.`, što je idiom
-namernog hvatanja (test 117 i 122).
+pravilo `STORNO_PROGUTAN`: u **produkcionom** modulu je `ExcludeStornirano` pod
+aktivnim `On Error Resume Next` uvek nalaz.
+
+**Prva verzija tog pravila merila je pogrešnu stvar**, i to je nalaz iz review-a
+koji vredi zapisati. Izuzetak je bio „sledeća naredba pominje `Err.`" — što ne
+dokazuje da je greška **obrađena**. Kroz njega je prolazio baš kvar koji pravilo
+sprečava:
+
+```vb
+On Error Resume Next
+d = ExcludeStornirano(d, TBL_PRIJEMNICA)   ' pukne, dodela se ne izvrsi
+Err.Clear                                  ' obrise DOKAZ, checker zelen
+If IsArray(d) Then ...                     ' d je jos NEFILTRIRAN
+```
+
+`Debug.Print Err.Number` je prolazio isto. Dokazivati statički da je `Err` stvarno
+obrađen znači pisati mini analizu toka — a nije potrebno: revizija je pokazala da
+u produkciji **nema nijednog** legitimnog takvog poziva. Zato pravilo nema
+heuristiku, a namerno hvatanje sme samo u **test modulu**, gde je test sam sebi
+dokaz (pao bi da greške nema).
+
+Predikat testnog modula ima svoju zamku: `modTestMode.bas` **nije** test nego
+produkcijski `IsTestMode()`, uprkos imenu. I to ima svoj slučaj u self-testu.
 
 Pravilo je pušteno nad **`origin/main` verzijom** `modKarticaDetalji.bas` i
 prijavilo je tačno taj poziv, na liniji 316. To je jači dokaz od fixture-a: hvata
@@ -3509,6 +3529,12 @@ sabotiranja razdvajaju dva različita kvara:
 |---|---|
 | `check_storno_registar` vraća `[]` | **3** slučaja + CLI slučaj |
 | `main()` je više ne zove | **samo** CLI slučaj |
+| `check_storno_progutan` isključen iz `check_file` | **5** slučajeva |
+| izuzetak za test modul uklonjen | **samo** slučaj „isti kod u TEST modulu" |
+
+Poslednji red je bitan: i sam **izuzetak** ima crveni dokaz, ne samo pravilo.
+Izuzetak koji nikad nije pokazan kao potreban je isto što i pravilo koje nikad
+nije pokazano kao crveno.
 
 Druga je ona koju self-test bez CLI prolaza ne bi video — „provera grize, ali nije
 priključena". To je ista klasa greške koju komentar u `vba_check` već opisuje kao

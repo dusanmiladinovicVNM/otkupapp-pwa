@@ -1219,14 +1219,39 @@ def check_test_registry(path: str, lines: list[str]) -> list[Finding]:
 # `d` ostaje NEFILTRIRAN, pa storniran dokument ide dalje kao ziv. Kapija je time
 # neutralisana jednim redom IZNAD nje.
 #
-# Izuzetak je NAMERNO hvatanje: poziv pod Resume Next je u redu ako se odmah
-# sledecom naredbom cita `Err.` (Number ili Description) -- to je idiom kojim
-# test tvrdi da je greska podignuta. Sve ostalo je gutanje.
+# PRVA VERZIJA OVOG PRAVILA JE MERILA POGRESNU STVAR. Izuzetak je bio "sledeca
+# naredba pominje `Err.`", sto ne dokazuje da je greska OBRADJENA -- dokazuje samo
+# da se `Err` negde spominje. Kroz to prolazi bas onaj kvar koji pravilo sprecava:
+#
+#     On Error Resume Next
+#     d = ExcludeStornirano(d, TBL_PRIJEMNICA)   <- pukne, dodela se ne izvrsi
+#     Err.Clear                                  <- obrise DOKAZ, checker zelen
+#     If IsArray(d) Then ...                     <- d je jos NEFILTRIRAN
+#
+# Isto prolazi `Debug.Print Err.Number`. Dokazivati staticki da je Err stvarno
+# obradjen znaci pisati mini analizu toka -- a ne treba: revizija svih 183 poziva
+# pokazala je da u PRODUKCIJI nema nijednog legitimnog takvog poziva.
+#
+# Zato je pravilo bez heuristike: u produkcionom modulu je poziv pod aktivnim
+# Resume Next UVEK nalaz. Namerno hvatanje ima smisla samo u testu, koji greskom
+# i tvrdi -- i tamo je test sam sebi dokaz, jer bi pao da greske nema.
 #
 # GRANICA: hvata se samo DIREKTAN poziv pod aktivnim Resume Next. Ako A zove
 # ExcludeStornirano bez rukovaoca, a B zove A pod Resume Next, greska se penje do
 # B -- to trazi analizu celog grafa poziva i ovde se ne pokusava.
-STORNO_ERR_CITA = re.compile(r"\bErr\s*\.", re.IGNORECASE)
+#
+# modTestMode.bas NIJE test modul uprkos imenu: to je produkcijski IsTestMode().
+TEST_MODUL = re.compile(r"^(modTest|.*Tests)\.(bas|cls)$", re.IGNORECASE)
+
+
+def je_test_modul(path: str) -> bool:
+    ime = os.path.basename(path)
+    if ime.lower() == "modtestmode.bas":
+        return False
+    if TEST_MODUL.match(ime):
+        return True
+    # modTestBanka, modTestStorno, modTestPalete, modTestStornoCentar...
+    return bool(re.match(r"^modTest[A-Z]", ime))
 PROC_POCETAK = re.compile(
     r"^\s*(?:(?:Public|Private|Friend)\s+)?(?:Static\s+)?"
     r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\b", re.IGNORECASE)
@@ -1234,18 +1259,14 @@ PROC_KRAJ = re.compile(r"^\s*End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
 
 
 def check_storno_progutan(path: str, lines: list[str]) -> list[Finding]:
-    logicke = _logical_lines(lines)
-    ocisceno = [(_strip_comment(t).strip(), ln) for t, ln in logicke]
+    if je_test_modul(path):
+        return []
 
-    def sledeca_naredba(k: int) -> str:
-        for t, _ln in ocisceno[k + 1:]:
-            if t:
-                return t
-        return ""
+    ocisceno = [(_strip_comment(t).strip(), ln) for t, ln in _logical_lines(lines)]
 
     out = []
     resume = False
-    for k, (t, ln) in enumerate(ocisceno):
+    for t, ln in ocisceno:
         if not t:
             continue
         low = t.lower()
@@ -1256,14 +1277,12 @@ def check_storno_progutan(path: str, lines: list[str]) -> list[Finding]:
         elif low.startswith("on error goto"):
             resume = False
         if resume and "excludestornirano(" in low:
-            if STORNO_ERR_CITA.search(sledeca_naredba(k)):
-                continue        # namerno hvatanje, ne gutanje
             out.append(Finding(
                 path, ln, "STORNO_PROGUTAN",
                 "ExcludeStornirano pod aktivnim 'On Error Resume Next': pad "
                 "kapije storna se guta, dodela se ne izvrsi, i promenljiva "
-                "ostaje NEFILTRIRANA. Koristi 'On Error GoTo EH', ili odmah "
-                "posle poziva procitaj Err ako gresku hvatas namerno."))
+                "ostaje NEFILTRIRANA. Koristi 'On Error GoTo EH'. Namerno "
+                "hvatanje greske je dozvoljeno samo u test modulu."))
     return out
 
 
@@ -1364,8 +1383,10 @@ End Sub
 # oba oblika su stvarno postojala u modStornoDok.StornoIzvrsi i
 # modScrDokumenti.StornoRedF8 od v6-ui-119 do v6-ui-141.
 # STORNO_PROGUTAN: pozivalac ne sme da proguta pad kapije storna.
+# (naziv, ocekivan broj nalaza, ime fajla, izvor) -- ime fajla je deo slucaja,
+# jer izuzetak zavisi od toga da li je modul testni.
 STORNO_PROGUTAN_CASES = [
-    ("gutanje pod Resume Next -- nalaz", 1,
+    ("gutanje pod Resume Next -- nalaz", 1, "modProdukcija.bas",
      "Option Explicit\n"
      "Public Sub P()\n"
      "    On Error Resume Next\n"
@@ -1373,7 +1394,37 @@ STORNO_PROGUTAN_CASES = [
      "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
      "    If Not IsArray(d) Then Exit Sub\n"
      "End Sub\n"),
-    ("On Error GoTo EH -- cisto", 0,
+    # Err.Clear BRISE dokaz i ostavlja d nefiltriran -- najgori oblik, a prva
+    # verzija pravila ga je pustala jer "sledeci red pominje Err.".
+    ("Err.Clear posle poziva -- I DALJE nalaz", 1, "modProdukcija.bas",
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    Err.Clear\n"
+     "    If IsArray(d) Then Exit Sub\n"
+     "End Sub\n"),
+    # Greska je "procitana", ali nije obradjena -- kod nastavlja sa istim d.
+    ("Debug.Print Err.Number -- I DALJE nalaz", 1, "modProdukcija.bas",
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    Debug.Print Err.Number\n"
+     "    If IsArray(d) Then Exit Sub\n"
+     "End Sub\n"),
+    ("citanje Err.Description u produkciji -- I DALJE nalaz", 1, "modProdukcija.bas",
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim d As Variant, poruka As String\n"
+     "    On Error Resume Next\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    poruka = Err.Description\n"
+     "    On Error GoTo 0\n"
+     "End Sub\n"),
+    ("On Error GoTo EH -- cisto", 0, "modProdukcija.bas",
      "Option Explicit\n"
      "Public Sub P()\n"
      "    On Error GoTo EH\n"
@@ -1383,16 +1434,7 @@ STORNO_PROGUTAN_CASES = [
      "EH:\n"
      "    LogErr \"P\"\n"
      "End Sub\n"),
-    ("namerno hvatanje (Err se cita odmah) -- cisto", 0,
-     "Option Explicit\n"
-     "Public Sub P()\n"
-     "    Dim d As Variant, poruka As String\n"
-     "    On Error Resume Next\n"
-     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
-     "    poruka = Err.Description\n"
-     "    On Error GoTo 0\n"
-     "End Sub\n"),
-    ("Resume Next ugasen pre poziva -- cisto", 0,
+    ("Resume Next ugasen pre poziva -- cisto", 0, "modProdukcija.bas",
      "Option Explicit\n"
      "Public Sub P()\n"
      "    On Error Resume Next\n"
@@ -1401,7 +1443,7 @@ STORNO_PROGUTAN_CASES = [
      "    Dim d As Variant\n"
      "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
      "End Sub\n"),
-    ("Resume Next iz PRETHODNE procedure ne curi", 0,
+    ("Resume Next iz PRETHODNE procedure ne curi", 0, "modProdukcija.bas",
      "Option Explicit\n"
      "Public Sub A()\n"
      "    On Error Resume Next\n"
@@ -1410,11 +1452,28 @@ STORNO_PROGUTAN_CASES = [
      "    Dim d As Variant\n"
      "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
      "End Sub\n"),
-    ("zakomentarisan poziv se ne broji", 0,
+    ("zakomentarisan poziv se ne broji", 0, "modProdukcija.bas",
      "Option Explicit\n"
      "Public Sub P()\n"
      "    On Error Resume Next\n"
      "    ' d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "End Sub\n"),
+    # Test modul sme: tamo je greska ono STO SE TVRDI, pa je test sam sebi dokaz.
+    ("isti kod u TEST modulu -- cisto", 0, "modTest.bas",
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
+     "    If Not IsArray(d) Then Exit Sub\n"
+     "End Sub\n"),
+    # ...ali modTestMode je produkcijski IsTestMode(), uprkos imenu.
+    ("modTestMode NIJE test modul -- nalaz", 1, "modTestMode.bas",
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    On Error Resume Next\n"
+     "    Dim d As Variant\n"
+     "    d = ExcludeStornirano(d, TBL_OTKUP)\n"
      "End Sub\n"),
 ]
 
@@ -2229,10 +2288,10 @@ def self_test() -> int:
             palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
                         f"dobijeno {dobijeno}")
 
-    for naziv, ocekivano, izvor in STORNO_PROGUTAN_CASES:
+    for naziv, ocekivano, ime, izvor in STORNO_PROGUTAN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
-        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        nalazi = check_file(ime, raw, lines, set(), {})
         dobijeno = sum(1 for f in nalazi if f.code == "STORNO_PROGUTAN")
         if dobijeno != ocekivano:
             palo.append(f"  STORNO_PROGUTAN/{naziv}: ocekivano {ocekivano} nalaza, "
