@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-183"
+Public Const OTKUI_BUILD   As String = "v6-ui-184"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -404,6 +404,13 @@ Private mGridMax As Boolean          ' mreza razvucena do ispod naslova dokument
 Private mSmerRev As Long
 Private mIzAvansa As Boolean         ' F5: isplata ide iz OM avansa, ne virmanom
 Private mPartnerFor As String        ' za koji rezim je partner lista vec napunjena
+' Da li je lista USPESNO ucitana. Prazna lista sme da znaci "nema otvorenih"
+' -- i time avans -- samo posle uspesnog citanja; pad ucitavanja ostavlja isti
+' prazan combo, a odluka o novcu je suprotna. v. NovacListaSme.
+Private mBlokListaOk As Boolean      ' lista otvorenih blokova (F5) ucitana
+Private mBlokListaErr As String
+Private mFakListaOk As Boolean       ' lista otvorenih faktura (F6) ucitana
+Private mFakListaErr As String
 Private mBlokIDs As Variant          ' OtkupID po indeksu combo-a otvorenih blokova
 Private mBlokRest As Variant         ' neisplaceni ostatak po istom indeksu
 Private mFakIDs As Variant           ' FakturaID po indeksu combo-a otvorenih faktura
@@ -5619,11 +5626,18 @@ Private Sub FillOpenBlokovi(frm As Object)
     CB.Clear
     mBlokIDs = Empty
     mBlokRest = Empty
+    mBlokListaOk = True
+    mBlokListaErr = ""
     SetOstatak 0
     If ActiveMode <> "F5" Then Exit Sub
     koopID = PartnerID(frm)
     If Len(koopID) = 0 Then Exit Sub
+    ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD: GetTableData vraca isti
+    ' Empty za oba, bez greske. Bez ove kapije bi nedostajuca tblOtkup prosla kao
+    ' "kooperant nema otvorenih blokova" i isplata bi tiho postala AVANS.
+    RequireTable TBL_OTKUP, "modOtkupUI.FillOpenBlokovi"
     o = GetOpenOtkupi(koopID)
+    ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI.
     If IsEmpty(o) Then Exit Sub
     ' BLOKOVI SE SUZAVAJU NA AKTIVNO OTKUPNO MESTO. GetOpenOtkupi vraca StanicaID
     ' u sedmoj koloni, a red novca se knjizi na aktivno OM (SaveNovac omID) - bez
@@ -5654,7 +5668,17 @@ Private Sub FillOpenBlokovi(frm As Object)
     End If
     Exit Sub
 EH:
-    Debug.Print "modOtkupUI.FillOpenBlokovi PAO: " & Err.Number & " " & Err.description
+    mBlokListaOk = False
+    mBlokListaErr = Err.description
+    ' LogErr, ne Debug.Print: Immediate prozor u pogonu niko ne gleda, a ovaj pad
+    ' menja TIP KNJIZENJA. Ide PRE ciscenja -- svaka On Error naredba resetuje Err.
+    LogErr "modOtkupUI.FillOpenBlokovi"
+    ' Delimicno napunjena lista je gora od prazne: izgleda kao potpuna.
+    On Error Resume Next
+    CB.Clear
+    mBlokIDs = Empty
+    mBlokRest = Empty
+    SetOstatak 0
 End Sub
 
 ' Izbor bloka puni plocu NEISPLACENO - iznos koji jos moze da se isplati.
@@ -5710,10 +5734,16 @@ Private Sub FillOpenFakture(frm As Object)
     CB.Clear
     mFakIDs = Empty
     mFakRest = Empty
+    mFakListaOk = True
+    mFakListaErr = ""
     If ActiveMode <> "F6" Then Exit Sub
     kupID = PartnerID(frm)
     If Len(kupID) = 0 Then Exit Sub
+    ' Isti razlog kao kod blokova: bez ovoga bi nedostajuca tblFakture prosla kao
+    ' "kupac nema otvorenih faktura" i uplata bi tiho postala AVANS KUPCA.
+    RequireTable TBL_FAKTURE, "modOtkupUI.FillOpenFakture"
     f = GetOpenFakture(kupID)
+    ' Prazno je ISTINA -- ali samo zato sto smo iznad utvrdili da tabela POSTOJI.
     If Not IsArray(f) Then Exit Sub
     CB.ColumnCount = 2
     CB.ColumnWidths = "268 pt;0 pt"
@@ -5737,8 +5767,94 @@ Private Sub FillOpenFakture(frm As Object)
     Next i
     Exit Sub
 EH:
-    Debug.Print "modOtkupUI.FillOpenFakture PAO: " & Err.Number & " " & Err.description
+    mFakListaOk = False
+    mFakListaErr = Err.description
+    LogErr "modOtkupUI.FillOpenFakture"
+    On Error Resume Next
+    CB.Clear
+    mFakIDs = Empty
+    mFakRest = Empty
 End Sub
+
+' Sme li se gotovinski dokument uopste knjiziti sa OVAKVOM listom.
+'
+' Kapija je siroka TACNO koliko i kvar, i to je merljivi deo:
+'   - bez novca nema odluke faktura/blok, pa unos same ambalaze ne sme da stane;
+'   - isplata otkupnom mestu ne dodiruje blokove, pa ni nju lista ne zaustavlja;
+'   - u rezimima koji ove liste nemaju (F1-F4, F7) kapija cuti.
+'
+' Recnik je isti onaj koji ide u modNovacUnos, pa se pravilo proverava bez forme.
+'
+' Rezim se cita iz p("rezim") zato sto kapija treba da odlucuje nad ISTIM
+' payload-om koji ide Save putu (modScrDokumenti po toj vrednosti bira rutinu).
+' To NIJE nezavisan izvor istine: SkupiPolja ga pravi kao p("rezim") =
+' modeKey(ActiveMode), dakle snimak istog ActiveMode po kome FillOpenBlokovi /
+' FillOpenFakture odlucuju da li ce listu uopste citati. Njihova medjusobna
+' uskladjenost ostaje INTEGRACIONA PRETPOSTAVKA sinhronog toka, a ne nesto sto
+' ova kapija dokazuje.
+Private Function NovacListaSme(ByVal p As Object, ByRef outPoruka As String) As Boolean
+    outPoruka = ""
+    NovacListaSme = True
+    If Not p.Exists("rezim") Then Exit Function
+    If Not p.Exists("novac") Then Exit Function
+    If CDbl(p("novac")) <= 0 Then Exit Function
+
+    Select Case CStr(p("rezim"))
+        Case "AMB_ISPLATE"
+            ' Blok se bira samo kooperantu; isplata OM-u ide drugim tipom novca.
+            If UCase$(Trim$(CStr(p("partnerTip")))) <> "KOOP" Then Exit Function
+            If Len(Trim$(CStr(p("kooperantID")))) = 0 Then Exit Function
+            NovacListaSme = LjuskaListaSme(mBlokListaOk, mBlokListaErr, _
+                                           "otkupnih blokova", "da bloka nema", outPoruka)
+        Case "AMB_UPLATE"
+            If Len(Trim$(CStr(p("kooperantID")))) = 0 Then Exit Function
+            NovacListaSme = LjuskaListaSme(mFakListaOk, mFakListaErr, _
+                                           "otvorenih faktura", "da fakture nema", outPoruka)
+    End Select
+End Function
+
+' Tekst je isti kao u frmDokumenta.ListaSme -- legacy forma i ljuska namerno drze
+' svoje kopije pravila unosa (v. UI_MIGRACIJA_KATALOG 5), pa se ni ovo ne deli
+' kroz modul; deli se OBLIK poruke, da operater u obe forme vidi istu recenicu.
+Private Function LjuskaListaSme(ByVal ucitanoOk As Boolean, ByVal greska As String, _
+                                ByVal imeListe As String, ByVal praznoNeZnaci As String, _
+                                ByRef outPoruka As String) As Boolean
+    outPoruka = ""
+
+    If Not ucitanoOk Then
+        outPoruka = "Lista " & imeListe & " NIJE u" & ChrW(269) & "itana (" & _
+                    greska & ")." & vbCrLf & _
+                    "Prazna lista NE zna" & ChrW(269) & "i " & praznoNeZnaci & "."
+        Exit Function
+    End If
+
+    LjuskaListaSme = True
+End Function
+
+' TEST SEAM: stanje ucitanosti obe liste. Tvrdo gejtovan.
+Public Sub UiTestSetListaUcitanost(ByVal blokOk As Boolean, ByVal blokErr As String, _
+                                   ByVal fakOk As Boolean, ByVal fakErr As String)
+    If Not IsTestMode() Then Exit Sub
+    mBlokListaOk = blokOk
+    mBlokListaErr = blokErr
+    mFakListaOk = fakOk
+    mFakListaErr = fakErr
+End Sub
+
+' TEST SEAM: sme li se recnik knjiziti sa zatecenim stanjem listi.
+Public Function UiTestNovacListaSme(ByVal p As Object) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim s As String
+    UiTestNovacListaSme = NovacListaSme(p, s)
+End Function
+
+' TEST SEAM: poruka koju bi operater dobio (prazna kad kapija pusta).
+Public Function UiTestNovacListaPoruka(ByVal p As Object) As String
+    If Not IsTestMode() Then Exit Function
+    Dim s As String
+    NovacListaSme p, s
+    UiTestNovacListaPoruka = s
+End Function
 
 Private Function FakturaID() As String
     Dim i As Long
@@ -6276,6 +6392,7 @@ End Sub
 
 Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     Dim p As Object, greska As String, fokus As String, dat As Double
+    Dim listaPoruka As String
     On Error GoTo EH
 
     ' Datum se proverava OVDE jer je jedini podatak koji ljuska ume da procita
@@ -6287,6 +6404,19 @@ Private Sub CommitDokument(ByVal alsoPrint As Boolean)
     End If
 
     Set p = SkupiPolja(dat, alsoPrint)
+
+    ' UCITANOST LISTE SE PROVERAVA PRE UPISA, i pre grananja u modNovacUnos.
+    ' Tamo prazan otkupID / fakturaID vec znaci AVANS -- modul ne moze da razlikuje
+    ' "nema otvorenih" od "lista nije ucitana", jer tu razliku zna samo onaj ko je
+    ' listu punio.
+    If Not NovacListaSme(p, listaPoruka) Then
+        ShowToast listaPoruka, True
+        ' I u MsgBox: toast pise u usko polje akcionog reda, a bas rep poruke nosi
+        ' RAZLOG -- isti obrazac kao kod neuspelog upisa nize.
+        MsgBox listaPoruka, vbExclamation, APP_NAME
+        Exit Sub
+    End If
+
     greska = modUiScreens.ScrSave(mScreen, p)
     If Len(modUiScreens.ScrLastErr) > 0 Then
         Debug.Print "modOtkupUI.CommitDokument: " & modUiScreens.ScrLastErr

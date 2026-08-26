@@ -5583,3 +5583,71 @@ Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §16.
 
 > **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca, pa
 > smoke uključuje i slučaj sa nedostajućom tabelom.
+
+## v2.77.0 — ista provera i na strani kupca, i u novom ekranu
+
+### Šta se moglo desiti
+
+Prošla verzija je zaustavila jedan slučaj: novac koji postaje **avans kooperanta**
+kad se lista otkupnih blokova ne učita. Ista stvar je stajala na još tri mesta —
+i sva tri su nad novcem.
+
+| Gde | Šta je postajalo |
+|---|---|
+| Izlaz kupcu, stara forma | **avans kupca** umesto uplate po fakturi |
+| Isplate (F5), novi ekran | **avans kooperanta** umesto razduženja bloka |
+| Uplate (F6), novi ekran | **avans kupca** umesto uplate po fakturi |
+
+Svuda isti niz: lista se ne učita → ostane prazna → prazno se pročita kao „nema
+fakture" ili „nema bloka" → novac ode u avans. Bez ijedne poruke; razlika se vidi
+tek u saldu partnera.
+
+**U novom ekranu je bilo i tiše nego u staroj formi.** Tamo se pad učitavanja nije
+upisivao ni u dnevnik grešaka, pa nije ostajao nikakav trag — ni na ekranu, ni
+kasnije u logu.
+
+**Tri stanja su i dalje završavala isto**, kao i prošli put:
+
+| Stanje | Šta je značilo | Šta bi trebalo |
+|---|---|---|
+| partner nema otvorenih stavki | avans | avans ✔ |
+| lista se nije učitala | **avans** | stop |
+| tabela nedostaje | **avans** | stop |
+
+### Šta je sada
+
+Ako se lista ne učita, unos **staje** i operater dobija objašnjenje sa razlogom —
+na sva tri mesta, i u staroj formi i u novom ekranu. Pad se od sada i **upisuje u
+dnevnik**, pa postoji i posle zatvaranja programa. Isto važi kad odgovarajuća
+tabela nedostaje.
+
+Kad je lista uredno učitana a prazna, ništa se ne menja: to stvarno znači da
+partner nema otvorenih stavki, pa je avans ispravan.
+
+### Provera je uska koliko i kvar
+
+Namerno **ne** staje:
+
+- unos same ambalaže, bez novca — tu nema odluke faktura/avans;
+- isplata otkupnom mestu — ona otkupne blokove ne dodiruje;
+- režimi koji te liste uopšte nemaju.
+
+Bez tih ograničenja bi jedan pad čitanja zaustavio i posao koji nikad ne bi bio
+pogrešno proknjižen. Svako od tih ograničenja ima svoju proveru — i to je ono što
+je review na ovom poslu i našao: jedno od njih je bilo tvrdnja bez provere, pa je
+provera dopisana.
+
+### Odakle je došlo
+
+Prošla verzija je zatvorila jedno mesto. Ovo je bilo pitanje **ko još iz praznog
+polja zaključuje tip novca** — i odgovor su bila preostala tri.
+
+### Verifikacija
+
+`RunAllTests` **121 test, 0 palih**, uz dvanaest sabotaža — svaka obara tačno
+svoju tvrdnju, i ni jednu tuđu.
+
+Detalji: `docs/UI_MIGRACIJA_KATALOG.md` §17.
+
+> **Compile i smoke još nisu izvršeni na finalnom SHA.** Ovo dira tok novca u dve
+> forme, pa smoke ide na kopiji sveske i uključuje slučaj sa nedostajućom tabelom.

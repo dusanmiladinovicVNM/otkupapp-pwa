@@ -348,6 +348,8 @@ Public Sub RunAllTests()
     RunOne 117
     RunOne 118
     RunOne 119
+    RunOne 120
+    RunOne 121
 
     SetTestMode prevMode
     WriteResultFile
@@ -499,6 +501,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 117: TestName = "T_Kolona_TrazenjeNeGutaGresku"
         Case 118: TestName = "T_MrezaPilula_PozadinaSeCisti"
         Case 119: TestName = "T_LegacyDok_PadListeBlokovaNijeAvans"
+        Case 120: TestName = "T_LegacyDok_PadListeFakturaNijeAvans"
+        Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -626,6 +630,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 117: T_Kolona_TrazenjeNeGutaGresku
         Case 118: T_MrezaPilula_PozadinaSeCisti
         Case 119: T_LegacyDok_PadListeBlokovaNijeAvans
+        Case 120: T_LegacyDok_PadListeFakturaNijeAvans
+        Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8094,4 +8100,119 @@ Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
     AssertEq smeOk, True, "uredno ucitana lista pusta avans"
     AssertEq porukaOk, "", "...bez poruke"
     AssertEq okSaIzborom, True, "...i pusta izabran blok"
+End Sub
+
+' ============================================================
+' 120: ISTA GRESKA NA STRANI KUPCA (F6 / "Izlaz").
+'
+' FillOpenFakture je pad citanja gubio isto kao FillOpenOtkupi: kombo ostane
+' prazan, a btnUnosIzlaz_Click iz praznog polja zakljucuje "nema fakture" i
+' knjizi NOV_KUPCI_AVANS. Razlika se vidi tek u saldu kupca.
+'
+' Kapija je ovde NAMERNO uza nego kod blokova: rezim pusta i unos same ambalaze
+' bez novca, a tada odluke faktura/avans nema -- pa lista ne sme da ga zaustavi.
+' Ta uzina je tvrdnja, ne izuzetak, i ima svoju sabotazu.
+' ============================================================
+Private Sub T_LegacyDok_PadListeFakturaNijeAvans()
+    Dim f As frmDokumenta
+    Dim smePad As Boolean, smeOk As Boolean
+    Dim porukaPad As String, porukaOk As String
+    Dim padSaIzborom As Boolean, bezNovca As Boolean, okSaIzborom As Boolean
+
+    Set f = New frmDokumenta
+
+    ' Nalazi se skupljaju pa tvrde POSLE Unload-a -- pad tvrdnje nad zivom formom
+    ' ostavlja formu u memoriji i poruka se ne vidi.
+    f.DokTestSetFaktUcitanost False, "test greska"
+    smePad = f.DokTestUplataSme(1000#, False)
+    porukaPad = f.DokTestUplataPoruka()
+    ' Izbor ne sme da zaobidje kapiju: delimicno napunjena lista IMA izbor.
+    padSaIzborom = f.DokTestUplataSme(1000#, True)
+    ' ...ali unos bez novca kapija ne dira.
+    bezNovca = f.DokTestUplataSme(0#, False)
+
+    f.DokTestSetFaktUcitanost True, ""
+    smeOk = f.DokTestUplataSme(1000#, False)
+    porukaOk = f.DokTestUplataPoruka()
+    okSaIzborom = f.DokTestUplataSme(1000#, True)
+
+    Unload f
+
+    AssertEq smePad, False, _
+             "pad ucitavanja liste faktura ZAUSTAVLJA knjizenje avansa kupca"
+    AssertEq (InStr(1, porukaPad, "NIJE") > 0), True, _
+             "...i operater dobija objasnjenje, ne cutanje"
+    AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
+             "...u kojem stoji i sta je puklo"
+    AssertEq padSaIzborom, False, _
+             "ni IZABRANA faktura ne prolazi kad je ucitavanje palo"
+    AssertEq bezNovca, True, _
+             "unos bez novca NE staje zbog liste faktura"
+
+    AssertEq smeOk, True, "uredno ucitana lista pusta uplatu"
+    AssertEq porukaOk, "", "...bez poruke"
+    AssertEq okSaIzborom, True, "...i pusta izabranu fakturu"
+End Sub
+
+' Recnik kakav modOtkupUI.SkupiPolja salje ekranu -- samo kljucevi od kojih
+' zavisi kapija ucitanosti.
+Private Function LjuskaNovacPolja(ByVal rezim As String, ByVal novac As Double, _
+                                  ByVal partnerTip As String) As Object
+    Dim p As Object
+    Set p = CreateObject("Scripting.Dictionary")
+    p.CompareMode = vbTextCompare
+    p("rezim") = rezim
+    p("novac") = novac
+    p("partnerTip") = partnerTip
+    p("kooperantID") = "P-1"
+    Set LjuskaNovacPolja = p
+End Function
+
+' ============================================================
+' 121: ISTA GRESKA U NOVOJ LJUSCI (F5 i F6).
+'
+' modOtkupUI.FillOpenBlokovi / FillOpenFakture su pad prijavljivali u Debug.Print
+' -- prozor koji u pogonu niko ne gleda -- pa je prazan combo isao dalje kao
+' "nema otvorenih". modNovacUnos iz praznog otkupID/fakturaID bira AVANS i ne
+' moze da zna razliku: nju zna samo onaj ko je listu punio.
+'
+' Kapija se meri nad RECNIKOM, bez forme, jer se odluka i donosi nad njim.
+' ============================================================
+Private Sub T_Ljuska_PadListeNovcaNijeAvans()
+    Dim padF5 As Boolean, padF6 As Boolean, poruka As String
+    Dim omIsplata As Boolean, bezNovca As Boolean, drugiRezim As Boolean
+    Dim okF5 As Boolean, okF6 As Boolean, porukaOk As String
+
+    modOtkupUI.UiTestSetListaUcitanost False, "test greska", False, "test greska"
+
+    padF5 = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_ISPLATE", 1000#, "KOOP"))
+    poruka = modOtkupUI.UiTestNovacListaPoruka(LjuskaNovacPolja("AMB_ISPLATE", 1000#, "KOOP"))
+    padF6 = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_UPLATE", 1000#, "KUP"))
+
+    ' Kapija ne sme da bude sira od kvara -- tri slucaja koje NE dodiruje:
+    omIsplata = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_ISPLATE", 1000#, "OM"))
+    bezNovca = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_ISPLATE", 0#, "KOOP"))
+    drugiRezim = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("OTKUP", 1000#, "KOOP"))
+
+    modOtkupUI.UiTestSetListaUcitanost True, "", True, ""
+    okF5 = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_ISPLATE", 1000#, "KOOP"))
+    okF6 = modOtkupUI.UiTestNovacListaSme(LjuskaNovacPolja("AMB_UPLATE", 1000#, "KUP"))
+    porukaOk = modOtkupUI.UiTestNovacListaPoruka(LjuskaNovacPolja("AMB_ISPLATE", 1000#, "KOOP"))
+
+    ' REDOSLED JE DEO KONSTRUKCIJE. AssertEq staje na prvoj palo tvrdnji, pa
+    ' svaka sabotaza mora prva da sretne BAS svoju: sabotaza koja kapiju siri na
+    ' sve rezime usput obara i padF6, pa 'drugiRezim' mora doci pre njega.
+    AssertEq padF5, False, "pad liste blokova ZAUSTAVLJA isplatu kooperantu u ljusci"
+    AssertEq (InStr(1, poruka, "test greska") > 0), True, _
+             "...uz poruku u kojoj stoji sta je puklo"
+
+    AssertEq omIsplata, True, "isplata otkupnom mestu ne zavisi od liste blokova"
+    AssertEq bezNovca, True, "unos bez novca ne staje zbog liste"
+    AssertEq drugiRezim, True, "rezim bez tih listi kapiju ne oseca"
+
+    AssertEq padF6, False, "pad liste faktura ZAUSTAVLJA uplatu kupca u ljusci"
+
+    AssertEq okF5, True, "uredno ucitana lista blokova pusta isplatu"
+    AssertEq okF6, True, "uredno ucitana lista faktura pusta uplatu"
+    AssertEq porukaOk, "", "...bez poruke"
 End Sub
