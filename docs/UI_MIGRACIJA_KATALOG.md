@@ -3159,6 +3159,32 @@ Time se tri stanja razdvajaju kako treba:
 | tabela ne postoji | `RequireTable` diže → `EH` → `m_BlokoviOk = False` → **STOP** |
 | čitanje pukne iz drugog razloga | `EH` → `m_BlokoviOk = False` → **STOP** |
 
+### 16.2.2 Kapija je vazila samo kad izbora nema — takođe iz review-a
+
+Beleženje pada rešava **stanje**, ali ne i **mesto** provere. Kapija je prvo
+stajala u `Else` grani, dakle pitala se samo kad `ListIndex = -1`:
+
+```
+pad usred petlje -> kombo ostane DELIMICNO napunjen
+                 -> operater izabere red iz nepotpune liste
+                 -> ListIndex >= 0 -> kapija se NIKAD ne pita -> knjizenje ide dalje
+```
+
+Obećanje „ako učitavanje zakaže, unos staje" tada važi **samo za pola slučajeva**.
+
+Dve izmene:
+
+1. **Kapija ide iznad grananja** — `KnjizenjeSme(blokIzabran, outPoruka)` se pita
+   pre nego što se uopšte gleda ima li izbora. Parametar se prima namerno iako se
+   ne koristi: tvrdi se da odluka od njega **ne sme** da zavisi, i test to meri za
+   obe vrednosti (sabotaža `dok-izbor-zaobilazi-kapiju`).
+2. **`EH` prazni kombo i niz ID-jeva** — delimično napunjena lista je gora od
+   prazne, jer izgleda kao potpuna.
+
+Usput je `vba_check` uhvatio grešku u prvoj verziji tog čišćenja: `LogErr` je
+stajao posle `On Error GoTo 0`, koji **resetuje `Err`**, pa ne bi upisao ništa
+(`MRTAV_LOG`). Log sada ide pre čišćenja.
+
 ### 16.3 Seam-ovi
 
 Tvrdo gejtovani, po ugledu na `frmBankaImport.BiTest*`:

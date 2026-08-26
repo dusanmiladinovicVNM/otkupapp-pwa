@@ -8052,6 +8052,7 @@ Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
     Dim f As frmDokumenta
     Dim smePad As Boolean, smeOk As Boolean
     Dim porukaPad As String, porukaOk As String
+    Dim padSaIzborom As Boolean, padBezIzbora As Boolean, okSaIzborom As Boolean
 
     Set f = New frmDokumenta
 
@@ -8064,9 +8065,19 @@ Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
     ' Uredno ucitana lista pusta dalje -- kapija ne sme da bude sira od kvara.
     ' Prazna lista posle USPESNOG citanja stvarno znaci "nema otvorenih blokova",
     ' i avans je tada ispravan.
+    ' IZBOR NE SME DA ZAOBIDJE KAPIJU.
+    '
+    ' Pad usred punjenja ostavlja kombo DELIMICNO napunjen: operater tada bira
+    ' red iz nepotpune liste, ListIndex je >= 0, i kapija koja stoji samo u AVANS
+    ' grani se nikad ne pita. Odluka zato ne sme da zavisi od toga da li je red
+    ' izabran -- i to se ovde tvrdi za obe vrednosti.
+    padSaIzborom = f.DokTestKnjizenjeSme(True)
+    padBezIzbora = f.DokTestKnjizenjeSme(False)
+
     f.DokTestSetBlokUcitanost True, ""
     smeOk = f.DokTestBlokSme()
     porukaOk = f.DokTestBlokPoruka()
+    okSaIzborom = f.DokTestKnjizenjeSme(True)
 
     Unload f
 
@@ -8076,6 +8087,11 @@ Private Sub T_LegacyDok_PadListeBlokovaNijeAvans()
              "...i operater dobija objasnjenje, ne cutanje"
     AssertEq (InStr(1, porukaPad, "test greska") > 0), True, _
              "...u kojem stoji i sta je puklo"
+    AssertEq padSaIzborom, False, _
+             "ni IZABRAN blok ne prolazi kad je ucitavanje palo"
+    AssertEq padBezIzbora, False, "...ni prazan izbor"
+
     AssertEq smeOk, True, "uredno ucitana lista pusta avans"
     AssertEq porukaOk, "", "...bez poruke"
+    AssertEq okSaIzborom, True, "...i pusta izabran blok"
 End Sub

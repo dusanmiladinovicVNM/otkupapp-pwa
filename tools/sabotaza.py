@@ -1980,6 +1980,15 @@ SABOTAZE = {
         "T_LegacyDok_PadListeBlokovaNijeAvans",
         "uredno ucitana lista pusta avans",
     ),
+    # Kapija koja zavisi od izbora vazi samo za pola slucajeva: delimicno
+    # napunjen kombo posle pada ucitavanja ima izbor, pa bi prosao.
+    "dok-izbor-zaobilazi-kapiju": (
+        "frmDokumenta.frm",
+        "    KnjizenjeSme = BlokIzborSme(outPoruka)\n",
+        "    If blokIzabran Then KnjizenjeSme = True: Exit Function   ' SABOTAZA\n",
+        "T_LegacyDok_PadListeBlokovaNijeAvans",
+        "ni IZABRAN blok ne prolazi kad je ucitavanje palo",
+    ),
     # ---------------------------------------- MREZA: POZADINA PILULE
     # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila
     # obojen pravougaonik koji tvrdi stanje -- samo bez slova. Ovo je bila

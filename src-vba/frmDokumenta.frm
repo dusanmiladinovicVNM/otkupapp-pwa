@@ -1744,6 +1744,18 @@ Private Sub btnUnosOMUlaz_Click()
                 Exit Sub
             End If
 
+            ' UCITANOST SE PROVERAVA PRE GRANANJA, ne u AVANS grani.
+            '
+            ' Kapija je prvo stajala nize, pa je vazila samo kad izbora NEMA.
+            ' Ako ucitavanje padne usred petlje, kombo ostane delimicno
+            ' napunjen; operater izabere jedan od tih redova, ListIndex je
+            ' >= 0 -- i kapija se nikad ne pita. Obecanje 'ako ucitavanje
+            ' zakaze, unos staje' tada vazi samo za pola slucajeva.
+            If Not KnjizenjeSme(cmbOtkupBlok.ListIndex >= 0, blokPoruka) Then
+                MsgBox blokPoruka, vbExclamation, APP_NAME
+                Exit Sub
+            End If
+
             If cmbOtkupBlok.ListIndex >= 0 Then
                 otkupID = m_OtkupIDs(cmbOtkupBlok.ListIndex)
 
@@ -1779,16 +1791,6 @@ Private Sub btnUnosOMUlaz_Click()
                     tipNovca = NOV_VIRMAN_FIRMA_KOOP
                 End If
             Else
-                ' PRAZNA LISTA NIJE IZBOR.
-                '
-                ' Bez ovoga se avans bira i kad lista blokova NIJE ucitana:
-                ' pad citanja ostavi kombo prazan, ListIndex je -1, i novac
-                ' tiho postane avans. Ista greska je u frmBankaImport nadjena
-                ' tri puta kroz review (PR #220).
-                If Not BlokIzborSme(blokPoruka) Then
-                    MsgBox blokPoruka, vbExclamation, APP_NAME
-                    Exit Sub
-                End If
                 tipNovca = NOV_VIRMAN_AVANS_KOOP
             End If
         Else
@@ -6129,7 +6131,15 @@ Private Sub FillOpenOtkupi()
 EH:
     m_BlokoviOk = False
     m_BlokoviErr = Err.description
+    ' LogErr ide PRE ciscenja: svaka On Error naredba resetuje Err, pa bi posle
+    ' njih upisao prazno.
     LogErr "frmDokumenta.FillOpenOtkupi"
+    ' Delimicno napunjena lista je gora od prazne: izgleda kao potpuna, pa
+    ' operater bira red iz nje ne znajuci da ostatak nedostaje. Pad usred petlje
+    ' (npr. na CDbl jednog reda) je zato isto sto i pad na pocetku.
+    On Error Resume Next
+    cmbOtkupBlok.Clear
+    Erase m_OtkupIDs
 End Sub
 
 ' Sme li se PRAZNA lista blokova protumaciti kao "nema bloka", dakle avans.
@@ -6141,6 +6151,20 @@ End Sub
 ' Poruka se VRACA pozivaocu umesto da se prikaze ovde, da funkcija ostane bez
 ' dijaloga i time pozivljiva iz testa (isti obrazac kao
 ' frmBankaImport.KooperantRucnoSme).
+' Sme li se blokovski tok uopste knjiziti -- BEZ OBZIRA da li je red izabran.
+'
+' Kapija je prvo stajala samo u AVANS grani, dakle vazila je samo kad izbora NEMA.
+' Ako ucitavanje padne usred petlje, kombo ostane delimicno napunjen, operater
+' izabere jedan od tih redova, ListIndex je >= 0 -- i kapija se nikad ne pita.
+' Obecanje "ako ucitavanje zakaze, unos staje" tada vazi samo za pola slucajeva.
+'
+' `blokIzabran` se prima namerno iako se ne koristi: ono sto se ovde tvrdi jeste
+' da odluka od njega NE SME da zavisi. Test to i meri, za obe vrednosti.
+Private Function KnjizenjeSme(ByVal blokIzabran As Boolean, _
+                              ByRef outPoruka As String) As Boolean
+    KnjizenjeSme = BlokIzborSme(outPoruka)
+End Function
+
 Private Function BlokIzborSme(ByRef outPoruka As String) As Boolean
     outPoruka = ""
 
@@ -6169,6 +6193,12 @@ Public Sub DokTestSetBlokUcitanost(ByVal blokoviOk As Boolean, ByVal greska As S
     m_BlokoviOk = blokoviOk
     m_BlokoviErr = greska
 End Sub
+
+Public Function DokTestKnjizenjeSme(ByVal blokIzabran As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Dim p As String
+    DokTestKnjizenjeSme = KnjizenjeSme(blokIzabran, p)
+End Function
 
 Public Function DokTestBlokSme() As Boolean
     If Not IsTestMode() Then Exit Function
