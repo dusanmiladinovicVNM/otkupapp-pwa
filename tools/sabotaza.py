@@ -1960,6 +1960,18 @@ SABOTAZE = {
         "T_Mreza_PodnozjeJedinicaIdeIzUgovoraEkrana",
         "ostali tipovi na Stornu ne broje komade",
     ),
+    # ---------------------------------------- MREZA: POZADINA PILULE
+    # Natpis se brisao i pre; POZADINA je ostajala, pa je celija i dalje bila
+    # obojen pravougaonik koji tvrdi stanje -- samo bez slova. Ovo je bila
+    # rupa zapisana u katalogu 10.6 kao neizmerena.
+    "mreza-pilula-pozadina-ostaje": (
+        "modOtkupUI.bas",
+        "    lbl.BackStyle = fmBackStyleTransparent\n",
+        "    ' SABOTAZA: pozadina pilule ostaje\n",
+        "T_MrezaPilula_PozadinaSeCisti",
+        "pilula koja se ne moze prikazati gubi i POZADINU, ne samo natpis",
+    ),
+    # Ciscenje koje se ne moze ponistiti je druga polovina istog ugovora:
     # ---------------------------------------- SEMA: TRAZENJE KOLONE
     # Vraca zatecen oblik: ListColumns(ime) DIZE gresku 9 za nepostojecu
     # Zatecено ponasanje je poredjenje BEZ obzira na velicinu slova.
