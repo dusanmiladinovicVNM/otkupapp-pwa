@@ -84,18 +84,25 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
-    # Izvorna prijemnica bez IKAD kapije. Bez generacije se redovi biraju PO
-    # BROJU, pa broj koji je IKAD pripadao dvama kupcima znaci da se pomera i
-    # tudji red. Kapija po AKTIVNIMA to ne vidi -- posle storna jednog kupca
-    # ostane jedan aktivan i broj IZGLEDA jednoznacan.
-    "prijemnica-kapija-samo-aktivni": (
+    # Izbor izvora bez filtera po storniranom. Broj prijemnice je numerisan PO
+    # KUPCU, pa isti broj nose dokumenta dva kupca; ono sto storniran tudji
+    # dokument drzi na mestu jeste bas taj filter, a ne kapija na ulazu.
+    #
+    # Ranija verzija ovog unosa je merila SIRU ZABRANU (IKAD kapija na ulazu),
+    # a ne pogresnu mutaciju -- i to nad ciljem na kome dokument vec stoji, pa
+    # je dokaz bio kruzan. Sada se obara tvrdnja o tome sta se STVARNO pomeri.
+    "prijemnica-izvor-i-stornirani": (
         "modDokumenta.bas",
-        "        RequireJedanVlasnikIkadPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _\n"
-        "                                       SRC, COL_PRJ_KUPAC\n",
-        "        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _\n"
-        "                                   SRC, COL_PRJ_KUPAC   ' SABOTAZA\n",
-        "T_Prijemnica_IstorijaVlasnistvaKapija",
-        "istorijski dvosmislena prijemnica ne prolazi bez generacije",
+        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
+        "            If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> \"DA\" Then\n"
+        "                targetRows.Add i\n"
+        "            End If\n"
+        "        End If\n",
+        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
+        "            targetRows.Add i   ' SABOTAZA: i storniran tudji dokument ulazi\n"
+        "        End If\n",
+        "T_Prijemnica_PomeraSamoAktivan",
+        "storniran dokument DRUGOG kupca nije pomeren",
     ),
     # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
     # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa

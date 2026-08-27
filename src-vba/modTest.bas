@@ -512,7 +512,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
         Case 124: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
         Case 125: TestName = "T_CiljZbirna_NePoPrvomRedu"
-        Case 126: TestName = "T_Prijemnica_IstorijaVlasnistvaKapija"
+        Case 126: TestName = "T_Prijemnica_PomeraSamoAktivan"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -646,7 +646,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 123: T_KesKolone_NeMemoiseNulu
         Case 124: T_RekalkZbirne_KapijaJeUPrimitivu
         Case 125: T_CiljZbirna_NePoPrvomRedu
-        Case 126: T_Prijemnica_IstorijaVlasnistvaKapija
+        Case 126: T_Prijemnica_PomeraSamoAktivan
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8517,48 +8517,52 @@ Private Sub T_CiljZbirna_NePoPrvomRedu()
              "u prijemnici je ostala KANONSKA labela iz tabele"
 End Sub
 
-' TEST 126: i IZVORNA prijemnica mora biti istorijski jednoznacna.
+' TEST 126: prevezivanje pomera AKTIVAN dokument, a storniran tudji NE.
 '
-' Druga polovina rupe iz UI_MIGRACIJA_KATALOG par 19. Test 125 zatvorio je
-' stranu CILJA (zbirna); ovde je strana IZVORA. Kad generacija nije zadata,
-' ReassignPrijemnicaToZbirna_TX bira redove PO BROJU prijemnice, pa broj koji
-' je IKAD pripadao dvama kupcima znaci da se pomera i tudji red.
+' Broj prijemnice je numerisan PO KUPCU, pa isti broj mogu nositi dokumenta
+' dva kupca. Bez generacije se izvor bira po broju -- ali u targetRows ulaze
+' samo AKTIVNI redovi, pa storniran dokument drugog kupca ostaje gde jeste.
 '
-' Kapija tu broji samo AKTIVNE vlasnike -- a posle storna jednog kupca ostane
-' jedan aktivan, pa broj IZGLEDA jednoznacan. Isti oblik greske kao na strani
-' cilja, i isti razlog: storniran vlasnik ne prestaje da je postojao.
+' Ovo je tvrdnja o BEZBEDNOSTI, ne o zabrani. Prva verzija ovog testa je
+' trazila da ceo poziv bude odbijen kad je broj IKAD imao dva kupca -- a to
+' je bila sira politika bez dokaza pogresne mutacije, i uz to KRUZAN dokaz:
+' cilj je bila zbirna na kojoj dokument vec stoji, pa je "True" bio uspesan
+' no-op, ne pogresna izmena. Sada se meri sta se STVARNO pomeri.
 '
-' Merene vrednosti fixture-a na ovom mestu u nizu:
-'   3/150326 (FX_PRIJ_ISPRAVKA)  ikad=2  akt=1
+' Mereno stanje fixture-a pod brojem 3/150326:
+'   PRJ-TEST-I1  storniran  ZB-TEST-4  KUP-TEST-1
+'   PRJ-TEST-I2  aktivan    ZB-TEST-4  KUP-TEST-2
 '
-' Cilj je zbirna na kojoj prijemnica VEC stoji, pa poziv prolazi celu putanju
-' a ne pomera nista semanticki -- i strana cilja ne moze da zamagli merenje.
-Private Sub T_Prijemnica_IstorijaVlasnistvaKapija()
-    Dim ikad As Long, akt As Long, ciljIkad As Long, ciljAkt As Long
+' Sta ovaj test NE pokriva: paletne stavke. Pod tim brojem ih u fixture-u
+' NEMA nijedne, pa se zastita po PrijemnicaID i fail-closed grana za legacy
+' stavku bez ID-a ovde ne mere. To je receno, ne precutano.
+'
+' Stoji POSLEDNJI u nizu: ovaj test stvarno pomera dokument.
+Private Sub T_Prijemnica_PomeraSamoAktivan()
+    Dim ikad As Long, akt As Long, ciljIkad As Long
     Dim ok As Boolean
 
     ikad = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
                            "T_Prij", True, Array(COL_PRJ_KUPAC)).count
     akt = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
                           "T_Prij", False, Array(COL_PRJ_KUPAC)).count
-    ciljIkad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, _
+    ciljIkad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA, _
                                "T_Prij", True, _
                                Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
-    ciljAkt = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, _
-                              "T_Prij", False, _
-                              Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
 
-    AssertEq ikad, 2, _
-             "preduslov: broj prijemnice je IKAD pripadao dvama kupcima"
-    AssertEq akt, 1, _
-             "preduslov: aktivan je jedan -- broj IZGLEDA jednoznacan"
-    AssertEq ciljIkad, 1, _
-             "preduslov: ciljna zbirna je jednoznacna, pa ona ne odlucuje"
-    AssertEq ciljAkt, 1, _
-             "preduslov: ciljna zbirna je aktivna"
+    AssertEq ikad, 2, "preduslov: broj su IKAD nosila dva kupca"
+    AssertEq akt, 1, "preduslov: aktivan je tacno jedan"
+    AssertEq ciljIkad, 1, "preduslov: ciljna zbirna je jednoznacna"
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I2"), FX_ZBIRNA_MIRNA, _
+             "preduslov: aktivan dokument stoji na staroj zbirnoj"
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I1"), FX_ZBIRNA_MIRNA, _
+             "preduslov: i storniran tudji dokument stoji na istoj"
 
-    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ISPRAVKA, _
-                                                    FX_ZBIRNA_MIRNA)
-    AssertEq ok, False, _
-             "istorijski dvosmislena prijemnica ne prolazi bez generacije"
+    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ISPRAVKA, FX_ZBIRNA)
+
+    AssertEq ok, True, "legitiman oporavak po broju PROLAZI"
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I2"), FX_ZBIRNA, _
+             "aktivan dokument JESTE prevezan na novu zbirnu"
+    AssertEq ZbirnaNaPrijemnici("PRJ-TEST-I1"), FX_ZBIRNA_MIRNA, _
+             "storniran dokument DRUGOG kupca nije pomeren"
 End Sub

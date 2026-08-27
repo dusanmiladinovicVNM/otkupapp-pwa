@@ -3830,16 +3830,23 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         ' (legacy zapis) i za njega fallback ostaje.
         If srcIds.count = 0 Then Exit Function
     Else
-        ' IZVOR MORA BITI ISTORIJSKI JEDNOZNACAN, isto kao cilj iznad.
+        ' AKTIVNI vlasnik mora biti jedan. NAMERNO nije IKAD -- probano pa
+        ' povuceno, jer je bila sira zabrana bez dokaza pogresne mutacije.
         '
-        ' Bez generacije se redovi biraju PO BROJU prijemnice, pa broj koji je
-        ' IKAD pripadao dvama kupcima znaci da se pomera i tudji red. Kapija po
-        ' AKTIVNIMA to ne vidi: posle storna jednog kupca ostane jedan aktivan i
-        ' broj IZGLEDA jednoznacan. Storniran vlasnik ne prestaje da je postojao.
+        ' Zastita ovde nije jedna kapija nego SLOJEVI, i svaki radi svoj posao:
+        '   zaglavlje prijemnice  -> u targetRows ulaze samo AKTIVNI redovi,
+        '                            pa storniran dokument drugog kupca ne
+        '                            moze da se pomeri (test 126);
+        '   paletna stavka sa ID  -> odlucuje IDENTITET (docIds.Exists);
+        '   legacy stavka bez ID  -> brojDvosmislen racuna IKAD i puca, uz
+        '                            rollback cele transakcije.
         '
-        ' Druga polovina rupe iz UI_MIGRACIJA_KATALOG par 19. Test 126.
-        RequireJedanVlasnikIkadPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _
-                                       SRC, COL_PRJ_KUPAC
+        ' IKAD kapija ovde bi zabranila i potpuno resiv legacy oporavak: broj
+        ' prijemnice je numerisan PO KUPCU, pa je kolizija ocekivana, a writer
+        ' vec ume da razdvoji aktivan dokument. Sira zabrana bi operatera
+        ' terala na rucni rad bez ijedne izmerene koristi.
+        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
+                                   COL_PRJ_KUPAC
     End If
     Dim cPrjId As Long: cPrjId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
 
