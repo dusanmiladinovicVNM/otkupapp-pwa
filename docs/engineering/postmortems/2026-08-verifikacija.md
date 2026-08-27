@@ -1226,3 +1226,69 @@ kolonu dodaju u runtime-u (`modSetup`, `modPaletniList.EnsurePreradaCol`) dodaju
 je **na kraj**, pa se postojeći indeksi ne pomeraju. Jedini stari problem u tom
 kešu bila je zapamćena nula, a nje više nema — kolona dodata usred prozora sada
 biva nađena, jer nema šta ustajalo da se vrati.
+
+---
+
+## 17) Nova kapija zastareva tuđe dokaze (28.08.2026)
+
+Pun prolaz nad svih 261 sabotažom, prvi posle `v2.82.0`:
+
+```
+crvenih: 260 / sabotaza: 261 (priznatih: 2)
+izvor pre/posle: e5c21721b5a30809 / e5c21721b5a30809 -> IDENTICAN
+=== NIJE DOKAZANO ===
+```
+
+Naspram prošlog prolaza (247/251, **osam** nalaza) ovo je 260/261 sa **četiri** —
+dva priznata od ranije i **dva nova**. Ali brojka nije poenta; poenta je **odakle**
+su ta dva došla.
+
+### Nijedan nije bio nalaz prošli put
+
+`cilj-bez-istorijske-kapije` i `zbirna-ispravka-cilj-bez-kapije` bili su među
+unosima koji su se **poklapali** u prolazu od 27.08. Regresirali su u
+međuvremenu — u izdanjima `v2.84.0`–`v2.86.0`, koja su uvela **centralne kapije**.
+
+Obe sabotaže gase kapiju po **call-site-u** (`ZbirnaBrojJeDvosmislenIkad`), a
+deklarisale su **poslovni ishod**: „ciljno zaglavlje nije rekalkulisano preko tuđe
+dece". Otkad `RecalculateZbirnaFromOtpremnice_TX` nosi kapiju **u sebi**, gašenje
+one po call-site-u taj ishod više ne menja — centralna je zaustavi.
+
+> Dodavanje odbrane u dubinu **zastareva postojeće dokaze**. Ne ruši ih — čini ih
+> netačnim: tvrdnja koju sabotaža deklariše prestaje da bude ona koja pada.
+
+To niko ne bi predvideo dok piše kapiju. Vidi se **samo** kroz pun prolaz, jer
+statička provera i dalje tvrdi da tekst jeste tvrdnja tog testa — a jeste.
+
+### Dva ista simptoma, dva različita uzroka
+
+| Unos | Šta se promenilo | Nova deklaracija |
+|---|---|---|
+| `cilj-bez-istorijske-kapije` | ishod sada čuvaju **dve** kapije, pa ga jedna sabotaža ne može oboriti; razlika je samo u **poruci** | „razlog imenuje CILJNU zbirnu, ne staru" |
+| `zbirna-ispravka-cilj-bez-kapije` | centralna kapija štiti **rekalkulaciju**, ali **ne** prevezivanje otpremnice — pa otpremnica izvora **stvarno** završi na dvosmislenom cilju | „dvosmislen CILJ: otpremnica izvora nije prevezana" |
+
+Prvi je isti oblik kao `guard-samo-aktivni-vlasnici` iz `v2.82.0`. Drugi je
+**jači** nego što je bio: nova tvrdnja opisuje **pogrešnu mutaciju**
+(`ocekivano [ZB-TEST-OLDU], dobijeno [ZB-TEST-TGT]`), a stara je opisivala samo
+izostanak jedne izmene.
+
+### Otvoreno: asimetrija centralnih kapija
+
+Drugi nalaz je usput izmerio nešto što nije bilo poznato: **rekalkulacija** zbirne
+ima centralnu kapiju, a **prevezivanje otpremnice** na zbirnu je nema. Za njega i
+dalje odgovara samo kapija po call-site-u.
+
+Nije popravljeno ovde — popravka bi bila nova centralna kapija, a to je tačno onaj
+potez koji je upravo pokazao da zastareva tuđe dokaze. Radi se zasebno, uz pun
+prolaz posle.
+
+### Šta ovo govori o samom prolazu
+
+Prošli prolaz je opravdan rečenicom da statička provera ne vidi razliku između
+„tekst jeste tvrdnja" i „tu tvrdnju baš ova sabotaža obara". Ovaj prolaz dodaje
+drugu: **ta razlika se pomera sa svakom izmenom u kodu**, i to izmenom koja je
+sama po sebi ispravna.
+
+Pun prolaz zato nije jednokratna potvrda nego **periodična** — cena joj je nekoliko
+sati zauzetog Excela, a nalaz je ovoga puta bio dvostruk: dve zastarele deklaracije
+i jedna neizmerena asimetrija.
