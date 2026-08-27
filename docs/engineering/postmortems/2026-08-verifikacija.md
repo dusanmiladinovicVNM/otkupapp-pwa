@@ -615,14 +615,159 @@ Oba su upisana u `POZNATI_NALAZI` sa razlogom i vlasnikom, kao i zatečeni
 je otporna na *flaky* upis, pa je merljiva samo nad lažnom kontrolom koja prvi
 upis odbija.
 
+### Pun prolaz je izvršen — i našao je ono što statička provera ne može
+
+Pušten je posle popravke, nad svih 251 sabotažom (27.08.2026):
+
+```
+crvenih: 247 / sabotaza: 251 (priznatih: 2)
+izvor pre/posle: 2c1ee801fc99fe2a / 2c1ee801fc99fe2a -> IDENTICAN
+```
+
+Migracija je time potvrđena — **nijedan** od 119 prepisanih tekstova nije pao. Ali
+prolaz je našao **osam** unosa koje statička provera **provereno ne vidi**, i
+nijedan od njih nije bio u žetvi (svi su bili među 128 koji su se već poklapali):
+
+| Klasa | Koliko | Zašto statička provera ne pomaže |
+|---|---|---|
+| `PALA DRUGA TVRDNJA` | 5 | tekst **jeste** tvrdnja tog testa, ali sabotaža obara **drugu** — obično preduslov koji pukne pre nje (zamka 6) |
+| `NE OBARA NISTA` | 3 | sabotaža se uredno primeni, a nijedna tvrdnja ne padne |
+
+Imena: `parse-cdate`, `bruto-prijemnica`, `guard-samo-aktivni-vlasnici`,
+`completion-ne-prevezuje`, `brojac-nije-opcion` (prva klasa); `uvid-guta-necitljivo`,
+`identitet-degradira-na-broj`, `paleta-klik-otvara` (druga). Uz njih i jedan
+**zastareo priznat nalaz** — `POZNATI_NALAZI_DOKAZ['relink-ignorise-generaciju']`
+više ne pokriva ništa, što znači da je nalaz koji opisuje u međuvremenu zatvoren.
+
+To je **potvrda ograničenja**, ne iznenađenje: §12 je i pisao da provera tvrdi
+samo da je tekst tvrdnja tog testa, a ne da je to tvrdnja koju ta sabotaža obara.
+Sada se zna i **koliko** to ograničenje košta: osam od 251, oko tri odsto.
+
 ### Šta ostaje otvoreno
 
-**Pun prolaz nad svih 251 nije izvršen** posle popravke — traje oko dva i po
-sata. Izvršena su dva prefiksa koja su ranije bila blokirana (`ljuska-`,
-`storno-`), i puna žetva je pre popravke prošla kroz 123 unosa. Ostatak kataloga
-je popravljen **iz merenja**, ali nije ponovo izmeren.
+**Tih osam unosa nije popravljeno.** Svaki traži svoje merenje — pet ih traži ili
+novu tvrdnju ili užu sabotažu koja ne obara preduslov, tri traže odgovor na
+pitanje da li invarijanta uopšte može da se meri. To je zaseban posao, ne dodatak
+ovom.
 
-**Provera ne zna šta sabotaža stvarno obara.** Ona tvrdi samo da deklarisan tekst
-JESTE tvrdnja tog testa. Da je to i tvrdnja koju ta sabotaža obara i dalje zna
-jedino `dokaz.py`.
+**Provera i dalje ne zna šta sabotaža stvarno obara.** To zna jedino `dokaz.py`, i
+sada je izmereno da ta razlika nije teorijska.
+
+---
+
+## 13) `vba_check` nije video nedeklarisanu modul-promenljivu (27.08.2026)
+
+Zapisano kao nalaz sa strane u `UI_MIGRACIJA_KATALOG` §16.6, zatvoreno ovde.
+
+### Šta je bilo
+
+Patch skripta piše fajl tek kad **svi** parovi zamena prođu, pa je pad na drugom
+paru otkotrljao i prvi. Drugi patch je zatim upisao kod koji koristi
+`m_BlokoviOk`, a deklaracije nije bilo.
+
+`Option Explicit` to hvata — ali **tek pri compile-u**, a compile je ručna kapija
+pred release. U međuvremenu:
+
+```
+vba_check: cisto        <- zeleno
+run_vba:   visi         <- Excel stoji u [break], bez ijedne poruke
+```
+
+Najskuplji mogući kanal za grešku koja se vidi statički.
+
+### Zašto ne pun undefined-variable checker
+
+Zato što bi nad Excel objektnim modelom, kontrolama forme i `Enum` članovima
+davao lavinu lažnih uzbuna — a lažna uzbuna u hook-u je **gora** od propuštenog
+nalaza, jer uči da se checker preskače. To pravilo `vba_check` već nosi zapisano.
+
+Provera je zato vezana za **konvenciju imenovanja** (`mFoo`, `m_Foo`), kojom se u
+ovom projektu zovu modul-promenljive. Izmereno pre pisanja: **585** takvih
+deklaracija u **68** fajlova, i nijedna se ne deli između modula.
+
+### Nula lažnih uzbuna, i to mereno
+
+Nad celim zatečenim kodom (195 fajlova) pravilo daje **0** nalaza. Do te nule se
+stiglo kroz dve moje greške, obe uhvaćene istim merenjem:
+
+| Greška | Posledica | Lek |
+|---|---|---|
+| `DEKL_POCETAK` je gutao `Private **Sub**` | ime procedure se nikad ne zapamti, pa je **svaki** poziv event handlera bio „nalaz" — 54 lažne uzbune | potpis se proverava **pre** deklaracije, uz negativan lookahead |
+| komentar je trošio i prelom reda | brojevi redova su klizili za jedan po komentaru — nalaz pokazuje na tuđi red | prelom reda prepisuje spoljna petlja |
+
+Prva je našla i sama sebe: 54 nalaza nad kodom koji se uredno kompajlira ne mogu
+biti ništa drugo nego mana provere.
+
+### Treća greška: doseg je bio izgubljen (iz review-a)
+
+Prve dve su nađene merenjem. Treću je našao pregled, i bila je najozbiljnija —
+jer je vraćala baš onu klasu zbog koje pravilo postoji.
+
+Imena su se skupljala u **jedan ravan skup za ceo fajl**. Zato je ovo prolazilo
+kao čisto:
+
+```vb
+Private Sub A()
+    Dim mState As Boolean       ' lokalno u A
+End Sub
+
+Private Sub B()
+    mState = True               ' NIJE deklarisano -- VBA nece prevesti
+End Sub
+```
+
+Lokalni `Dim` u `A` legalizovao je `mState` kroz ceo modul. Isto je važilo za
+**parametar** procedure `A`. Oba oblika su izmerena pre popravke i oba su davala
+**0 nalaza** nad kodom koji se ne kompajlira.
+
+To nije egzotičan slučaj: sam PR je proglasio legalnim da `m` prefiks nosi i
+parametar, i lokalni `Dim`, i `Static` — pa se ne može reći „to ionako ne radimo".
+
+Doseg se sada poštuje na dva nivoa, koliko i VBA traži:
+
+| Nivo | Šta ulazi |
+|---|---|
+| **globalno** | deklaraciona sekcija (`Dim`/`Private`/`Public`/`Const`/`WithEvents`) + imena **svih** procedura |
+| **po proceduri** | njeni parametri + njeni `Dim`/`Static`/`Const` |
+
+**Suženje nije ništa pokvarilo:** i posle njega je **0** nalaza nad svih 195
+fajlova, a rekonstrukcija incidenta i dalje daje 1.
+
+### Dokaz je rekonstrukcija stvarnog incidenta
+
+Ne sintetički fixture: uzet je `frmDokumenta.frm` sa `origin/main` i uklonjen je
+**taj jedan red**.
+
+| Fajl | Nalaza |
+|---|---|
+| zdrav | **0** |
+| bez `Private m_BlokoviOk As Boolean` | **1**, imenuje `m_BlokoviOk` |
+
+Uz to četrnaest self-test slučajeva (96 ukupno, bilo 82), od kojih je **jedanaest
+nula** — svaki legalan oblik koji bi mogao da zapišti: ime procedure po istoj
+konvenciji, parametar, parametri prelomljeni preko više redova, višestruka
+deklaracija u jednom `Dim`-u, `Const`, `WithEvents`, kvalifikovano ime, ime u
+komentaru, ime u tekstu.
+
+### Dvosmerni dokaz
+
+| Sabotaža | Šta padne |
+|---|---|
+| pravilo nije priključeno na `check_file` | **tri** slučaja koja traže nalaz |
+| `Private Sub` opet prolazi kao deklaracija | **tri** slučaja: ime procedure i **oba** parametarska |
+| doseg se gubi — lokalno postaje globalno | **oba** scope slučaja, a kontrolni „modul-nivo pokriva obe" ostaje zelen |
+
+Drugi red je pošten po cenu urednosti: ime procedure i lista parametara dolaze iz
+**iste** grane, pa vraćanje starog oblika gasi obe. Prvi pokušaj dokaza je zbog
+toga prijavio „palo je i nešto drugo" — i to je bila greška u očekivanju, ne u
+pravilu.
+
+### Šta ovo NE pokriva
+
+**Promenljiva van konvencije** (`blokoviOk` umesto `mBlokoviOk`) se ne hvata.
+Pravilo je namerno usko: pokriva oblik koji je u ovom projektu standard za
+modul-stanje, a to je i oblik koji je incident i proizveo.
+
+**Lokalna promenljiva bez `Dim`** se ne hvata iz istog razloga — osim ako slučajno
+nosi `m` prefiks.
 

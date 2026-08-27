@@ -1286,6 +1286,177 @@ def check_storno_progutan(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- NEDEKLARISAN: modul-promenljiva koja se koristi a nigde nije deklarisana --
+#
+# `Option Explicit` ovo hvata, ali TEK PRI COMPILE-u -- a compile je rucna kapija
+# pred release. U medjuvremenu je moguce:
+#
+#     vba_check: cisto        <- zeleno
+#     run_vba:   visi         <- Excel stoji u [break], bez ijedne poruke
+#
+# Tako je i proslo: patch skripta pise fajl tek kad SVI parovi zamena prodju, pa
+# je pad na drugom paru otkotrljao i prvi -- kod koji koristi m_BlokoviOk je
+# ostao, a deklaracija ne. Najskuplji moguci kanal za gresku koja se vidi
+# staticki.
+#
+# Provera je namerno vezana za KONVENCIJU imenovanja (`mFoo`, `m_Foo`): tim
+# imenima se u ovom projektu zovu modul-promenljive, ima ih 585 u 68 fajlova, i
+# nijedno se ne deli izmedju modula. Time se izbegava pun undefined-variable
+# checker, koji bi nad Excel objektnim modelom i kontrolama forme davao lazne
+# uzbune -- a lazna uzbuna u hook-u je gora od propustenog nalaza.
+MODUL_IME = re.compile(r"(?<![.\w])(m[_A-Z]\w*)")
+DEKL_POCETAK = re.compile(
+    r"^\s*(?:Public|Private|Global|Dim|Static)\s+(?:WithEvents\s+)?"
+    r"(?!Sub\b|Function\b|Property\b|Const\b|Type\b|Enum\b|Declare\b)"
+    r"(?=[A-Za-z_])",
+    re.IGNORECASE)
+CONST_POCETAK = re.compile(r"^\s*(?:Public\s+|Private\s+)?Const\s+", re.IGNORECASE)
+PARAM_UKRAS = re.compile(r"^(?:ByVal|ByRef|Optional|ParamArray)\s+", re.IGNORECASE)
+POTPIS_IME = re.compile(
+    r"^(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+(\w+)\s*\(",
+    re.IGNORECASE)
+
+
+def _bez_teksta(t: str) -> str:
+    """Kod bez sadrzaja stringova i bez komentara -- imena se traze samo u kodu."""
+    out, i, n, u_str = [], 0, len(t), False
+    while i < n:
+        c = t[i]
+        if c == '"':
+            u_str = not u_str
+            out.append(" ")
+        elif c == "'" and not u_str:
+            # Prelom reda se NE trosi ovde: spoljna petlja ga prepisuje. Ranije
+            # je dodavan i ovde i tamo, pa je svaki komentar pomerao brojeve
+            # redova za jedan -- nalaz bi pokazivao na tudji red.
+            while i < n and t[i] != "\n":
+                i += 1
+            continue
+        else:
+            out.append(" " if u_str else c)
+        i += 1
+    return "".join(out)
+
+
+def _imena_iz_liste(tekst: str) -> list[str]:
+    """Imena iz `a As X, b(1 To 3) As Y, c` -- i iz liste parametara."""
+    imena = []
+    for deo in _split_top_level(tekst):
+        deo = PARAM_UKRAS.sub("", deo.strip())
+        while PARAM_UKRAS.match(deo):
+            deo = PARAM_UKRAS.sub("", deo)
+        m = re.match(r"([A-Za-z_]\w*)", deo)
+        if m:
+            imena.append(m.group(1))
+    return imena
+
+
+KRAJ_PROCEDURE = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+
+
+def _deklaracije_iz_reda(t: str):
+    """Imena deklarisana u JEDNOM redu, ili None ako red nije deklaracija."""
+    m = CONST_POCETAK.match(t)
+    if m:
+        return _imena_iz_liste(t[m.end():])
+    m = DEKL_POCETAK.match(t)
+    if m:
+        return _imena_iz_liste(t[m.end():])
+    return None
+
+
+def _segmenti(logicke):
+    """[(ime_procedure ili None, [(tekst, red), ...])] -- deklaraciona sekcija
+    i po jedan segment po proceduri."""
+    out, tek, ime = [], [], None
+    for tekst, ln in logicke:
+        t = tekst.strip()
+        m = POTPIS_IME.match(t)
+        if m:
+            if tek:
+                out.append((ime, tek))
+            ime, tek = m.group(1), [(tekst, ln)]
+            continue
+        tek.append((tekst, ln))
+        if KRAJ_PROCEDURE.match(t):
+            out.append((ime, tek))
+            ime, tek = None, []
+    if tek:
+        out.append((ime, tek))
+    return out
+
+
+def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
+    """DOSEG SE POSTUJE NA DVA NIVOA, jer ga i VBA postuje.
+
+    Ravan skup imena za ceo fajl je propustao compile-hard gresku:
+
+        Private Sub A()
+            Dim mState As Boolean       <- lokalno u A
+        End Sub
+        Private Sub B()
+            mState = True               <- NIJE deklarisano; VBA nece prevesti
+        End Sub
+
+    Lokalni `Dim` u A je legalizovao `mState` kroz ceo modul, pa je bas ona
+    klasa zbog koje pravilo postoji mogla ponovo da prodje kao zelena. Isto je
+    vazilo za parametar procedure A.
+
+    Zato:
+      globalno = deklaraciona sekcija + imena procedura
+      lokalno  = parametri TE procedure + njeni Dim/Static/Const
+    """
+    kod = _bez_teksta("\n".join(lines))
+    segmenti = _segmenti(_logical_lines(kod.split("\n")))
+
+    # --- globalno: deklaraciona sekcija + imena SVIH procedura ---------------
+    globalno: set[str] = set()
+    for ime_proc, blok in segmenti:
+        for tekst, _ln in blok:
+            t = tekst.strip()
+            m = POTPIS_IME.match(t)
+            if m:
+                globalno.add(m.group(1))    # procedura je vidljiva celom modulu
+                continue
+            if ime_proc is None:
+                imena = _deklaracije_iz_reda(t)
+                if imena:
+                    globalno.update(imena)
+
+    # --- po proceduri: parametri + njene lokalne deklaracije -----------------
+    prijavljeno: set[str] = set()
+    out = []
+    for ime_proc, blok in segmenti:
+        lokalno: set[str] = set()
+        for tekst, _ln in blok:
+            t = tekst.strip()
+            m = POTPIS_IME.match(t)
+            if m:
+                zagrada = t[t.index("(") + 1:]
+                z = zagrada.rfind(")")
+                lokalno.update(_imena_iz_liste(zagrada[:z] if z >= 0 else zagrada))
+                continue
+            if ime_proc is not None:
+                imena = _deklaracije_iz_reda(t)
+                if imena:
+                    lokalno.update(imena)
+
+        dozvoljeno = {x.lower() for x in globalno | lokalno}
+        for tekst, ln in blok:
+            for ime in MODUL_IME.findall(tekst):
+                if ime.lower() in dozvoljeno or ime.lower() in prijavljeno:
+                    continue
+                prijavljeno.add(ime.lower())
+                out.append(Finding(
+                    path, ln, "NEDEKLARISAN",
+                    f"'{ime}' se koristi, a nije deklarisan ni na nivou modula "
+                    f"ni u toj proceduri. Option Explicit ovo prijavljuje tek "
+                    f"pri compile-u -- do tada run_vba samo VISI, sa Excelom u "
+                    f"[break]."))
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -1300,6 +1471,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_array_copy(path, lines)
     out += check_test_registry(path, lines)
     out += check_storno_progutan(path, lines)
+    out += check_nedeklarisan(path, lines)
     return out
 
 
@@ -1382,6 +1554,112 @@ End Sub
 # Slucajevi 1 i 2 su REKONSTRUKCIJA zatecenog incidenta, ne izmisljeni primeri:
 # oba oblika su stvarno postojala u modStornoDok.StornoIzvrsi i
 # modScrDokumenti.StornoRedF8 od v6-ui-119 do v6-ui-141.
+# NEDEKLARISAN: modul-promenljiva koja se koristi a nigde nije deklarisana.
+#
+# Polovina slucajeva su NULE. Ta polovina je vaznija: pravilo je vezano za
+# konvenciju imenovanja, pa svaki legalan oblik koji bi zapistio (ime procedure,
+# parametar, visestruka deklaracija, Const, kvalifikovano ime) mora ovde da
+# stoji kao dokaz da NE pisti. Lazna uzbuna u hook-u uci da se checker preskace.
+NEDEKLARISAN_CASES = [
+    ("koriscena a nedeklarisana -- nalaz", 1,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    m_Blokovi = True\n"
+     "End Sub\n"),
+    ("deklarisana na nivou modula -- cisto", 0,
+     "Option Explicit\n"
+     "Private m_Blokovi As Boolean\n"
+     "Public Sub P()\n"
+     "    m_Blokovi = True\n"
+     "End Sub\n"),
+    # `Dim a As X, b As Y` -- prva analiza je hvatala samo prvo ime
+    ("visestruka deklaracija u jednom Dim-u -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    Dim mKoop As Object, mStan As Object, mKup As Object\n"
+     "    Set mKoop = Nothing: Set mStan = Nothing: Set mKup = Nothing\n"
+     "End Sub\n"),
+    ("parametar procedure -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P(ByVal mVoz As String, mOK As Boolean)\n"
+     "    If mOK Then Debug.Print mVoz\n"
+     "End Sub\n"),
+    ("parametri prelomljeni preko vise redova -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P(ByVal mVoz As String, _\n"
+     "             ByRef mKup As Object)\n"
+     "    Set mKup = Nothing\n"
+     "End Sub\n"),
+    # Ime procedure pocinje konvencijom jer je kontrola modul-promenljiva:
+    # `Private WithEvents m_btnX` + `Private Sub m_btnX_Click()`. Prva verzija
+    # pravila je `Private Sub` citala kao deklaraciju, pa je svaki poziv takvog
+    # handlera prijavljivala -- 54 lazne uzbune nad zatecenim kodom.
+    ("ime procedure po istoj konvenciji -- cisto", 0,
+     "Option Explicit\n"
+     "Private Sub m_btnX_Click()\n"
+     "End Sub\n"
+     "Public Sub P()\n"
+     "    m_btnX_Click\n"
+     "End Sub\n"),
+    ("Const na nivou modula -- cisto", 0,
+     "Option Explicit\n"
+     "Private Const mMax As Long = 3\n"
+     "Public Sub P()\n"
+     "    Debug.Print mMax\n"
+     "End Sub\n"),
+    ("kvalifikovano ime nije modul-promenljiva -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P(ByVal o As Object)\n"
+     "    Debug.Print o.mNesto\n"
+     "End Sub\n"),
+    ("ime samo u komentaru -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    ' m_Blokovi je ranije stajao ovde\n"
+     "End Sub\n"),
+    ("ime samo u tekstu -- cisto", 0,
+     "Option Explicit\n"
+     "Public Sub P()\n"
+     "    LogErr \"frmX.m_Blokovi\"\n"
+     "End Sub\n"),
+    ("WithEvents deklaracija -- cisto", 0,
+     "Option Explicit\n"
+     "Private WithEvents mBtn As MSForms.CommandButton\n"
+     "Public Sub P()\n"
+     "    Set mBtn = Nothing\n"
+     "End Sub\n"),
+    # DOSEG. Ravan skup imena za ceo fajl je propustao compile-hard gresku:
+    # lokalna deklaracija u jednoj proceduri legalizovala je isto ime u drugoj.
+    ("lokalni Dim iz druge procedure NE pokriva -- nalaz", 1,
+     "Option Explicit\n"
+     "Private Sub A()\n"
+     "    Dim mState As Boolean\n"
+     "    mState = True\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = False\n"
+     "End Sub\n"),
+    ("parametar druge procedure NE pokriva -- nalaz", 1,
+     "Option Explicit\n"
+     "Private Sub A(ByVal mState As Boolean)\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = True\n"
+     "End Sub\n"),
+    # Kontrolni uz prethodna dva: na nivou modula isto ime pokriva OBE procedure.
+    # Bez njega bi se suzenje moglo "postici" i time da se prestane priznavati
+    # modul-nivo, sto bi bila druga greska istog oblika.
+    ("modul-nivo pokriva obe procedure -- cisto", 0,
+     "Option Explicit\n"
+     "Private mState As Boolean\n"
+     "Private Sub A()\n"
+     "    mState = True\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = False\n"
+     "End Sub\n"),
+]
+
 # STORNO_PROGUTAN: pozivalac ne sme da proguta pad kapije storna.
 # (naziv, ocekivan broj nalaza, ime fajla, izvor) -- ime fajla je deo slucaja,
 # jer izuzetak zavisi od toga da li je modul testni.
@@ -2288,6 +2566,15 @@ def self_test() -> int:
             palo.append(f"  {naziv}: ocekivano {ocekivano} MRTAV_LOG, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, izvor in NEDEKLARISAN_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("modProdukcija.bas", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "NEDEKLARISAN")
+        if dobijeno != ocekivano:
+            palo.append(f"  NEDEKLARISAN/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, ime, izvor in STORNO_PROGUTAN_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2374,7 +2661,7 @@ def self_test() -> int:
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
-              + len(STORNO_PROGUTAN_CASES) + 3)
+              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:

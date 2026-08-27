@@ -2019,7 +2019,7 @@ jedne od njih prećutno prekršilo:
 | blokovi (`GetBlokoviZaBimMapiranje`) | **diže** grešku | `EH` → `mCiljPunjen = ""` |
 | fakture (`GetFaktureZaBimMapiranje`) | vraća **zastavicu** `outOK = False` | procedura mirno stigne do kraja |
 
-Za fakture je punjenje zato stizalo do `mCiljPunjen = kljuc` i **kеširalo
+Za fakture je punjenje zato stizalo do `mCiljPunjen = kljuc` i **keširalo
 neuspeh**. Kapija je radnju tačno blokirala — fail-closed je držao, nijedno
 pogrešno knjiženje nije bilo moguće — ali sledeći klik na *isti* izbor izlazio je
 odmah na `If mCiljPunjen = kljuc Then Exit Sub` i **nije ni pokušavao ponovo**.
@@ -3088,7 +3088,7 @@ seam-ovi za nju (po ugledu na `frmBankaImport`, §11) ostaju zaseban posao.
 
 §11 je istu klasu greške zatvorio u `frmBankaImport` i zapisao da `frmDokumenta`
 „nije diran, ista tehnika bi radila i tamo". Kad se tamo pogledalo, greška nije
-bila samo mogućа — bila je **prisutna**.
+bila samo moguća — bila je **prisutna**.
 
 ### 16.1 Šta je bilo
 
@@ -3244,6 +3244,11 @@ najskuplji mogući kanal.
 Provereno namerno: uklanjanje `Private m_BlokoviOk As Boolean` iz forme i dalje
 daje `vba_check: cisto`. To je rupa u checkeru, zapisana ovde i ostavljena kao
 zaseban posao — nije deo ovog PR-a.
+
+> **ZATVORENO** u `v2.80.0`, pravilom `NEDEKLARISAN`. Isti test je i dokaz:
+> nad zdravim `frmDokumenta.frm` daje **0** nalaza, a čim se ta jedna
+> deklaracija ukloni — **1**, i imenuje `m_BlokoviOk`. Detaljno:
+> `docs/engineering/postmortems/2026-08-verifikacija.md` §13.
 
 ---
 
