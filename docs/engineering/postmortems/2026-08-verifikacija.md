@@ -1093,15 +1093,52 @@ KATALOG: uvid-guta-necitljivo: izvor je ZATECEN SABOTIRAN -- pokreni
 vba_check: pravila nad fajlovima cista (195 fajlova), ali KATALOG SABOTAZA nije.
 ```
 
-Dokazano u oba smera, jer bez toga grana ne dokazuje ništa:
+### I taj guard je u prvoj verziji tvrdio više nego što meri
 
-| Sabotaža grane | Pada, po imenu |
+Ovo je najkorisniji deo celog izdanja, jer se ponovilo **unutar popravke za tu
+istu grešku**.
+
+Prva verzija je pisala „izvor je sabotiran" čim se zamena **bar jednom** nađe u
+fajlu. Ali `--vrati` ide kroz `_zameni`, koji traži **tačno jedan** pogodak i nad
+bilo čim drugim odbija posao. Savet u poruci je zato vodio u komandu koja nema
+šta da uradi.
+
+Self-test to nije video zato što je fixture birao **ja**:
+
+```python
+_ST_PRAVI = "    On Error Resume Next\n"     # 151 pogodak u modOtkupUI.bas
+```
+
+Slučaj je, dakle, bio zelen nad stanjem koje `--vrati` **odbija**. Provera je
+tvrdila „ovo je vratljivo", a nije merila ništa takvo — reč u reč ono protiv čega
+postoji. Našla je to recenzija, ne moj dokaz: dvosmerni dokaz pokazuje da grana
+**bira**, ne i da bira po **pravom** pravilu.
+
+Popravka je da pravilo postane jedno, a ne dva ista:
+
+```python
+def _pogodaka(tekst, blok):
+    return tekst.count("\n" + blok)      # dele ga _zameni (--vrati) i _nalazi
+```
+
+Uz to i treće stanje, koje ranije niko nije gledao: sidro **zdravo**, ali zamena
+već stoji u izvoru. Posle sabotaže bi je bilo dve, pa `--vrati` više ne bi umeo
+da je vrati. Mereno nad zatečenim katalogom: **0 od 255** unosa to krši, pa
+pravilo ne zatvara postojeću rupu nego drži buduće unose.
+
+Dokaz sada ima četiri crvena smera, i jedan od njih je baš prijavljena greška:
+
+| Sabotaža | Pada, po imenu |
 |---|---|
-| uslov nikad ne okine | `izvor zatecen sabotiran` |
-| uslov okida bez provere zamene | `sidro zastarelo` |
+| grana ne postoji | `izvor zatecen sabotiran` |
+| grana okida bez ijedne provere zamene | `zamena visestruka` + `sidro zastarelo` |
+| **`zamene >= 1` umesto `== 1`** (greška iz recenzije) | `zamena visestruka` |
+| `_zameni` prihvata više pogodaka | `_zameni prihvata stanje` |
 
-Traži se **istim** pravilom kojim radi `--vrati` — od početka reda. Da nije tako,
-provera bi tvrdila da je izvor sabotiran tamo gde `--vrati` nema šta da vrati.
+Poslednji red je poenta: slučaj zove **baš** `_zameni`, istu funkciju koju zove
+`--vrati`, i to nad kopijom pravog fajla — pa self-test ni u jednom ishodu ne može
+da upiše u `src-vba`. Bez njega bi se dva pravila opet mogla razići, a poruka bi
+i dalje zvučala tačno.
 
 ### Šta je zajedničko
 

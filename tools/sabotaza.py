@@ -2831,14 +2831,26 @@ def _upisi(path: str, tekst: str, nl: str) -> None:
         fh.write(tekst.replace("\n", nl))
 
 
+def _pogodaka(tekst: str, blok: str) -> int:
+    """Broj pogodaka VEZANIH ZA POCETAK REDA (zamka 2).
+
+    Jedino pravilo po kome se blok trazi u izvoru, i dele ga primena
+    (`_zameni`, dakle i `--vrati`) i staticka provera (`_nalazi`).
+
+    Izdvojeno posto su se ta dva vec razisla: provera je proglasavala izvor
+    "ZATECEN SABOTIRAN" cim se zamena negde pojavi, a `--vrati` trazi TACNO
+    jedan pogodak -- pa je savet vodio u komandu koja nema sta da uradi.
+    """
+    return tekst.count("\n" + blok)
+
+
 def _zameni(path: str, staro: str, novo: str) -> tuple[bool, int]:
     """Zameni sidro vezano za pocetak reda. Vraca (uspeh, broj pogodaka)."""
     tekst, nl = _procitaj(path)
-    staro, novo = "\n" + staro, "\n" + novo      # zamka 2: sidro od pocetka reda
-    pogodaka = tekst.count(staro)
+    pogodaka = _pogodaka(tekst, staro)
     if pogodaka != 1:
         return False, pogodaka
-    _upisi(path, tekst.replace(staro, novo), nl)
+    _upisi(path, tekst.replace("\n" + staro, "\n" + novo), nl)
     return True, 1
 
 
@@ -3455,22 +3467,41 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
         if fajl not in kes:
             kes[fajl] = _procitaj(put)[0]
         tekst = kes[fajl]
-        pogodaka = tekst.count("\n" + staro)
+        pogodaka = _pogodaka(tekst, staro)
+        zamene = _pogodaka(tekst, novo)
         if pogodaka != 1:
             # Sidra nema, ali je ZAMENA tu -- izvor nije popravljen nego je
             # jos SABOTIRAN. dokaz.py ciscenje radi kroz `finally`, sto ne
             # stigne kad se proces ubije spolja (taskkill, zatvoren terminal).
             # Bez ovog razdvajanja poruka glasi 'kod ispod sidra je popravljen',
             # a odgovor na nju je da se sidro uskladi sa zatecenim kodom --
-            # sto sabotazu zacementira kao novu istinu. Trazi se istim
-            # pravilom kojim radi --vrati, od pocetka reda.
-            if pogodaka == 0 and ("\n" + novo) in tekst:
+            # sto sabotazu zacementira kao novu istinu.
+            #
+            # TACNO JEDNA zamena, ne 'bar jedna': `--vrati` ide kroz _zameni,
+            # koji nad vise pogodaka odbija posao. Prva verzija ovog pravila
+            # je tvrdila sabotazu na puko prisustvo, pa je savet 'pokreni
+            # --vrati' vodio u komandu koja nema sta da uradi -- ista klasa
+            # greske koju ovo pravilo treba da hvata.
+            if pogodaka == 0 and zamene == 1:
                 razlog = ("izvor je ZATECEN SABOTIRAN -- pokreni "
                           "`python tools/sabotaza.py --vrati`")
+            elif pogodaka == 0 and zamene > 1:
+                razlog = ("sidra nema, a zamena se nalazi %d puta -- --vrati "
+                          "trazi TACNO jedan pogodak, pa ne bi vratio nista; "
+                          "ne tvrdi se ni sabotaza ni popravljen kod" % zamene)
             else:
                 razlog = ("sidro ZASTARELO -- kod ispod njega je popravljen"
                           if pogodaka == 0 else "sidro nije jednoznacno")
             nalazi.append((ime, f"{razlog} ({pogodaka} pogodaka u {fajl})"))
+        elif zamene:
+            # Sidro je zdravo, ali zamena vec postoji u izvoru. Posle sabotaze
+            # bi je bilo zamene+1, pa `--vrati` (koji trazi tacno jednu) ne bi
+            # umeo da je vrati -- sabotaza bi ostala u radnom stablu. Mereno
+            # nad zatecenim katalogom: nijedan unos ovo ne krsi, pa pravilo
+            # ne zatvara nista postojece nego drzi buduce unose.
+            nalazi.append((ime, "zamena vec postoji u ZDRAVOM izvoru (%d puta) "
+                                "-- posle sabotaze bi je bilo %d, a --vrati "
+                                "trazi tacno jednu" % (zamene, zamene + 1)))
 
         if test not in imena:
             nalazi.append((ime, f"test '{test}' ne postoji u modTest/modTestBanka"))
@@ -3596,10 +3627,26 @@ _SELF_TEST = [
     # Sidra nema, ali ZAMENA jeste u fajlu -- zatecena sabotaza, ne zastarelo
     # sidro. Merena razlika: prekinut dokaz.py ostavi pokvaren src-vba, a stara
     # poruka je tvrdila da je "kod ispod sidra popravljen".
+    #
+    # Fixture mora imati TACNO jedan pogodak. Prva verzija je koristila
+    # _ST_PRAVI (`On Error Resume Next`, 151 pogodak u modOtkupUI.bas), pa je
+    # self-test bio zelen nad stanjem koje `--vrati` odbija -- provera je
+    # tvrdila vise nego sto meri, bas ono protiv cega postoji.
     ("izvor zatecen sabotiran",
      ("modOtkupUI.bas", "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
-      _ST_PRAVI, None, "tvrdnja A"),
+      _ST_PAR2 + ESCN, None, "tvrdnja A"),
      "ZATECEN SABOTIRAN"),
+    # Druga strana istog pravila: zamene ima VISE, pa --vrati ne bi vratio
+    # nista. Ne sme se tvrditi ni sabotaza ni popravljen kod.
+    ("zamena visestruka -- sabotaza se NE tvrdi",
+     ("modOtkupUI.bas", "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
+      _ST_PRAVI, None, "tvrdnja A"),
+     "trazi TACNO jedan pogodak"),
+    # Zdravo sidro, ali zamena vec stoji u izvoru: posle sabotaze bi je bilo
+    # dve, pa --vrati vise ne bi umeo da je vrati.
+    ("zamena vec postoji u zdravom izvoru",
+     (None, None, _ST_PAR2 + ESCN, None, None),
+     "zamena vec postoji u ZDRAVOM izvoru"),
     ("sidro dvosmisleno",
      ("modOtkupUI.bas", _ST_PRAVI, "    Nesto = 2" + ESCN, None, "tvrdnja B"),
      "sidro nije jednoznacno"),
@@ -3810,6 +3857,31 @@ def _self_test() -> int:
             print("SELF-TEST: dodela/%s: ocekivano %r, dobijeno %r"
                   % (naziv, ocekivano, dobijeno), file=sys.stderr)
             lose += 1
+
+    # ISTO STANJE MORA DA ODBIJE I `--vrati`, ne samo provera.
+    #
+    # Bez ovoga se dva pravila mogu opet razici: provera bi cutala o stanju
+    # koje `--vrati` ne ume da vrati. Zove se BAS _zameni, ista funkcija koju
+    # zove --vrati, i to nad KOPIJOM pravog fajla -- da self-test ni u jednom
+    # ishodu ne moze da upise u src-vba.
+    n += 1
+    izvor = os.path.join(SRC_VBA, "modOtkupUI.bas")
+    tekst_kopije, nl_kopije = _procitaj(izvor)
+    kopija = izvor + ".selftest.tmp"
+    _upisi(kopija, tekst_kopije, nl_kopije)
+    try:
+        ok_vise, k_vise = _zameni(kopija, _ST_PRAVI, "    Nesto = 2" + ESCN)
+        ok_nema, k_nema = _zameni(kopija,
+                                  "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
+                                  "    Nesto = 2" + ESCN)
+        dirnuto = _procitaj(kopija)[0] != tekst_kopije
+    finally:
+        os.remove(kopija)
+    if ok_vise or k_vise < 2 or ok_nema or k_nema != 0 or dirnuto:
+        print("SELF-TEST: _zameni prihvata stanje koje provera ne priznaje "
+              "(visestruko=%r, nema=%r, upisano=%r)"
+              % ((ok_vise, k_vise), (ok_nema, k_nema), dirnuto), file=sys.stderr)
+        lose += 1
 
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
     par = {"prvi": zdravo, "drugi": zdravo}
