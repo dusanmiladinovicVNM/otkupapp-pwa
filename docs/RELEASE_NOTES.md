@@ -6000,3 +6000,52 @@ Provera koja padne iz pogrešnog razloga izgleda isto kao provera koja radi. Pet
 ih je stajalo u projektu i izgledalo kao pokrivenost — a jedno od pravila koje
 niko nije merio jeste da se u količinu upiše **neto** težina — bruto umanjen za
 ambalažu.
+
+## v2.83.0 — jedan promašaj u čitanju više ne zaključa ceo posao
+
+Prvo izdanje posle nekoliko koje **menja program**, ne samo provere.
+
+### Šta je korisnik mogao da vidi
+
+Storno nad zbirnom staje uz poruku da je broj dvosmislen, a u logu piše da
+nedostaje kolona `VozacID` u tabeli `tblZbirna` — u svesci u kojoj ta kolona
+**postoji**.
+
+### Zašto se to dešavalo
+
+Program pri jednom prikazu zapamti gde se koja kolona nalazi, da ne bi istu
+tabelu pretraživao osamdesetak puta. Problem je bio što je pamtio i **neuspeh**:
+ako traženje jednom ne uspe, zapamćena je nula — „te kolone nema" — i to je
+važilo do kraja prikaza. Svaki naredni pokušaj dobijao je isti odgovor, bez
+ijednog novog traženja.
+
+Kolone koje čuvaju ispravnost su namerno stroge: ako kolone nema, posao **staje**
+umesto da radi sa pola podataka. Zato je jedan trenutni promašaj zaključavao ceo
+posao.
+
+### Šta je urađeno
+
+Nula se više ne pamti. Uspešan nalaz — da, i dalje, jer zbog toga pamćenje i
+postoji. Neuspeh ne, jer neuspeh nije znanje nego njegov izostanak.
+
+Isto pravilo je već važilo za pamćenje **tabela**, sa svojom proverom, još
+odranije. Ova rupa je bila samo kod **kolona** — dakle nije uvedeno novo pravilo
+nego je zakrpljeno mesto koje ga je zaobilazilo.
+
+### Kako se zna da radi
+
+Provera je napisana i puštena **pre** popravke, i pala je — tačno na onome što
+tvrdi, dok su kontrole pre nje prošle. Posle popravke ceo skup je zelen: 123
+provere u glavnom setu i 196 u bankarskom, ništa nije palo.
+
+Dodata je i namerno pokvarena verzija koja vraća staro ponašanje, da bi se videlo
+da provera stvarno grize.
+
+### Šta ovo ne rešava
+
+**Ne zna se i dalje zašto prvo traženje uopšte padne.** To nije reprodukovano i
+nije popravljano naslepo. Poruka i dalje može da se pojavi **jednom** — ono što
+više ne može jeste da važi do kraja prikaza.
+
+Brzina je proverena, ne pretpostavljena: vreme celog skupa provera je isto pre i
+posle (12,0 s u oba slučaja).
