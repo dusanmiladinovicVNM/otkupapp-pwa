@@ -119,6 +119,22 @@ normalizuju na LF pre hesiranja; `.frx` je binaran i ide sirov.
 ta izmena se ne commit-uje. Da je u hešu, stamp bi obarao zelen marker baš u
 trenutku release-a — a modul ne nosi nikakvo ponašanje, samo tri konstante.
 
+### Ustajao fixture — druga polovina istog pitanja
+
+Last-green marker odgovara na „da li je OVAJ izvor testiran". Postoji i obrnuto
+pitanje: **da li je ovo onaj fixture nad kojim su testovi pisani.** Fixture je
+gitignored, pa ga `git checkout` NE menja — posle prelaska na drugu granu na disku
+ostaje sveska prethodne, testovi padaju *na podacima*, a pad izgleda kao regresija
+koda (jednom je pojeo pola sata trijaže).
+
+`make_fixture` zato pored sveske piše `otkup_test.sig` sa hash-om posejanih
+podataka, a `run_vba` ga poredi **pre podizanja Excela**. Neslaganje ili
+nedostajući potpis zaustavljaju run uz komandu za regeneraciju; jedini izlaz je
+svestan `--ignore-fixture-sig`.
+
+**Crveno posle prelaska grane — prvo regeneriši fixture, pa tek onda traži krivca
+u kodu.**
+
 ### Last-green marker
 
 Posle zelenog punog run-a upisuje se `.git/agrix-vba-last-green`:
@@ -335,6 +351,22 @@ detektor regresije u performansama, ne samo correctness gate.
 
 ## 9. Mašinski čitljiv izveštaj
 
+**Pored sveske** (u temp folderu run-a) suite pišu tri različite stvari, i ne
+preklapaju se:
+
+| Fajl | Ko piše | Šta nosi | Ko čita |
+|---|---|---|---|
+| `last_run.txt` | `modTest` | ime palog testa | `run_vba` (`result_file`), `dokaz.py` |
+| `last_run_banka.txt` | `modTestBanka` | ime palog testa | isto |
+| `last_run_<suite>.txt` | `modTestRunner.TR_EndSuite` | ime palog testa | isto |
+| `suite_results.txt` | `modTestRunner.TR_Report` | **broj** provera | `run_vba` (COUNTS) |
+
+Detalj pada ne preživi COM granicu — `xl.Run` vrati golo „Exception occurred" —
+pa svaka suite koja hoće da se vidi **koja** provera je pala mora da ga napiše u
+fajl. Broj provera je zaseban zapis jer ga čita druga kapija.
+
+**U repou** (`tests/`, svi gitignored):
+
 | Fajl | Šta je | Ide u git |
 |---|---|---|
 | `tests/last_run.txt` | ljudski ispis + VERDIKT blok | ne |
@@ -417,6 +449,17 @@ pokaže:
   provera — proveriti da li se poklapa sa izmerenim;
 - `CLEANUP` je sada blokirajuć u `pr`/`release` a nikad nije pokrenut nad Excelom;
   ako da lažan nalaz, izlaz je `--no-enforce-cleanup` dok se ne popravi.
+
+Framework-sabotaže su u istom katalogu kao poslovne (`tools/sabotaza.py`) i idu
+kroz istu mašineriju: `--proveri-sidra` (statički, ide i kroz `vba_check`) i
+`tools/dokaz.py` (pušta suite i traži da padne **baš ta tvrdnja**). Zato
+`TR_EndSuite` piše `last_run_<suite>.txt` u formatu koji `dokaz.py` već čita, a
+katalog framework-sabotažu imenuje **suite-om** umesto `T_` testom.
+
+Izuzetak je `counts-pad`: on ne obara nijednu *tvrdnju* nego *kapiju* (suite i
+dalje prolazi, samo prijavi manje provera). `dokaz.py` po konstrukciji to ne vidi,
+pa je zapisan u `POZNATI_NALAZI_DOKAZ` sa razlogom; crveno se dobija sa
+`run_vba.py --gate pr`, red `ASSERTS TestLicense_All: ...`.
 
 **Redosled dokaza koji se traži pre merge-a** (`tools/sabotaza.py --lista` nosi
 prve tri):

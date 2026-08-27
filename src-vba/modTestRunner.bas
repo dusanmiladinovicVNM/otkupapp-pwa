@@ -84,6 +84,7 @@ Public Sub TR_EndSuite()
                 IIf(mFail = 0, "  (SVE PROSLO)", "  (IMA PADOVA)")
     Debug.Print String(60, "-")
     WriteResult res
+    WriteRunFile mSuiteId, mPass + mFail, mFail, mFails
 
     If mFail > 0 Then
         Err.Raise ERR_TR_SUITE_FAILED, "modTestRunner." & mSuiteId, _
@@ -126,10 +127,23 @@ End Sub
 Public Sub TR_Fail(ByVal label As String)
     mFail = mFail + 1
     mReport = mReport & "PAO   " & Prefixed(label) & vbLf
+
+    ' Oblik "<ime testa> -- <tvrdnja>" nije kozmetika: tools/dokaz.py iz njega
+    ' cita KOJA je tvrdnja pala, da bi razlikovao "pao je taj test" od "pala je
+    ' bas ta tvrdnja". Isti oblik pise i modTest u last_run.txt.
     If Len(mFails) > 0 Then mFails = mFails & vbCrLf
-    mFails = mFails & "- " & Prefixed(label)
+    mFails = mFails & FailLine(label)
+
     Debug.Print "  FAIL  " & Prefixed(label)
 End Sub
+
+' Ime u redu je IME SUITE, ne unutrasnjeg testa: katalog sabotaza
+' (tools/sabotaza.py) framework-sabotaze imenuje suite-om, pa se to mora
+' poklopiti sa onim sto tools/dokaz.py procita. Ime unutrasnjeg testa nije
+' izgubljeno -- stoji na pocetku poruke, kroz Prefixed.
+Private Function FailLine(ByVal label As String) As String
+    FailLine = "FAIL " & mSuiteId & " -- " & Prefixed(label)
+End Function
 
 Public Function TR_CurrentSuite() As String
     TR_CurrentSuite = mSuiteId
@@ -172,6 +186,30 @@ Private Function NewResult(ByVal suiteId As String, ByVal passCount As Long, _
     If mStarted > 0 Then r.Seconds = Timer - mStarted
     Set NewResult = r
 End Function
+
+' Ime palog testa mora da prezivi COM granicu. `xl.Run` vraca opis greske koji
+' se preko COM-a cesto svede na golo "Exception occurred", pa od celog pada
+' ostane samo "nesto je palo". Zato suite pise i fajl PORED SVESKE, u formatu
+' koji modTest vec koristi (`TESTS=n FAIL=m`, pa red po padu) -- isti razlog
+' zbog kog ga pise i modTestBanka, i isti citaoci: run_vba.py (result_file u
+' manifestu) i tools/dokaz.py.
+Private Sub WriteRunFile(ByVal suiteId As String, ByVal total As Long, _
+                         ByVal failed As Long, ByVal fails As String)
+    On Error Resume Next
+
+    Dim path As String
+    path = ThisWorkbook.path & Application.PathSeparator & _
+           "last_run_" & suiteId & ".txt"
+
+    Dim fnum As Integer
+    fnum = FreeFile
+    Open path For Output As #fnum
+    Print #fnum, "TESTS=" & CStr(total) & " FAIL=" & CStr(failed)
+    If Len(fails) > 0 Then Print #fnum, fails
+    Close #fnum
+
+    On Error GoTo 0
+End Sub
 
 ' Upis ne sme da obori suite: izvestaj je dijagnostika, a ne provera. Ako fajl
 ' ne moze da se otvori (read-only folder), suite i dalje daje svoj verdikt kroz

@@ -208,7 +208,7 @@
       "uses_workbook": false,
       "mutates": false,
       "external": false,
-      "result_file": "",
+      "result_file": "last_run_TestLicense_All.txt",
       "note": "Kanarinac migracije: prvi suite prebacen na modTestAssert/modTestRunner/clsTestContext. 23 poslovne provere + 1 koja DOKAZUJE da je stanje Excela vraceno (ctx.Drift)."
     },
     {

@@ -4319,7 +4319,7 @@ SABOTAZE = {
         '    AssertEqual LicPartsMatch("A|B|C", "A|B|C"), 3, "identicno = 3"\n',
         '    AssertEqual LicPartsMatch("A|B|C", "A|B|C"), 4, "identicno = 3"   \' SABOTAZA\n',
         "TestLicense_All",
-        "modTestAssert.AssertEqual stvarno poredi i broji kroz modTestRunner",
+        "identicno = 3",
     ),
     "license-cleanup": (
         "modLicenseTests.bas",
@@ -4327,7 +4327,7 @@ SABOTAZE = {
         "    Application.Calculation = xlCalculationManual   ' SABOTAZA: stanje ostaje\n"
         '    AssertEmpty ctx.Drift(), "stanje Excela vraceno na ulazno"\n',
         "TestLicense_All",
-        "clsTestContext.Drift hvata nevraceno stanje Excela",
+        "stanje Excela vraceno na ulazno",
     ),
     # Tih pad pokrivenosti: suite i dalje PROLAZI, ali prijavljuje manje provera.
     # Obara COUNTS kapiju (min_asserts u tests/suite_manifest.json), ne test.
@@ -4510,6 +4510,11 @@ POZNATI_NALAZI_DOKAZ = {
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
 
+    # Ne obara nijednu TVRDNJU nego KAPIJU: suite i dalje prolazi, samo prijavi
+    # manje provera, pa COUNTS padne na min_asserts iz manifesta. dokaz.py meri
+    # pale tvrdnje i po konstrukciji to ne moze da vidi -- crveno se dobija sa
+    # `python tools/run_vba.py --gate pr` (red "ASSERTS TestLicense_All: ...").
+    "counts-pad": "NE OBARA NISTA (obara COUNTS kapiju, ne tvrdnju)",
 }
 
 

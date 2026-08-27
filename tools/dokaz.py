@@ -43,6 +43,7 @@ dirala.
 """
 import argparse
 import hashlib
+import json
 import importlib.util
 import os
 import re
@@ -79,9 +80,24 @@ def _pusti(*a, timeout=1200):
 
 
 def _suite_za(test: str) -> str:
+    # Sabotaza koja u katalogu imenuje CELU SUITE (framework sabotaze -- tamo ne
+    # pada jedan T_ test nego suite prijavi FAIL) vrti bas tu suite.
+    if test in _imena_suita():
+        return test
     # Pisac ide u banka-suite: RunAllTests je nemutirajuca, pa tvrdnji o upisu
     # u njoj nema.
     return SUITE_ALL if test.startswith("T_") else SUITE_BANKA
+
+
+def _imena_suita() -> set:
+    put = os.path.join(ROOT, "tests", "suite_manifest.json")
+    if not os.path.exists(put):
+        return set()
+    try:
+        with open(put, "r", encoding="utf-8") as fh:
+            return {x["id"] for x in json.load(fh).get("suites", [])}
+    except Exception:                       # noqa: BLE001
+        return set()
 
 
 def _tokeni_banke(izlaz: str) -> list:
@@ -99,14 +115,17 @@ def _tokeni_banke(izlaz: str) -> list:
 
 
 def _pali(izlaz: str, suite: str) -> list:
-    if suite == SUITE_ALL:
-        return re.findall(r"^\s*FAIL (\S+) -- (.*)$", izlaz, re.M)
-    return _tokeni_banke(izlaz)
+    # Banka je jedini poseban format (ime testa se ne ispisuje, vadi se iz
+    # prefiksa tvrdnje). Sve ostalo -- modTest i suite na modTestRunner-u --
+    # pise "FAIL <test> -- <tvrdnja>" u svoj rezultat-fajl.
+    if suite == SUITE_BANKA:
+        return _tokeni_banke(izlaz)
+    return re.findall(r"^\s*FAIL (\S+) -- (.*)$", izlaz, re.M)
 
 
 def _kljuc_testa(test: str, suite: str) -> str:
     """Sta se poredi sa onim sto je palo."""
-    if suite == SUITE_ALL:
+    if suite != SUITE_BANKA:
         return test
     m = re.match(r"(T\d+)_", test)          # T21_IzabranPlacenBlok... -> T21
     return m.group(1) if m else test
