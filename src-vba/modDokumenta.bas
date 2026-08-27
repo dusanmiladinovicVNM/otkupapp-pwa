@@ -3770,10 +3770,24 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         ' ("ima li aktivnog cilja pod ovim brojem") zamenjuje dva pogresna
         ' ("postoji li ijedan red" + "da li je PRVI storniran"). Test 125.
         '
-        ' Uz to poredi bez obzira na velicinu slova (StrComp vbTextCompare),
-        ' dok je LookupValue poredio tacno -- broj dokumenta se ne razlikuje
-        ' po velicini slova, pa je to ispravka a ne prosirenje.
-        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function
+        ' RAZRESAVA SE ISTIM POREDJENJEM KOJIM RADI KAPIJA ISPOD.
+        '
+        ' ZbirnaPostoji ovde NE valja iako pita pravu stvar: on poredi bez
+        ' obzira na velicinu slova (StrComp vbTextCompare), a VlasniciPoBroju
+        ' -- koji stoji iza kapije -- poredi TACNO. Sa "zb-test-kask" bi
+        ' postojanje reklo DA, kapija bi videla NULA vlasnika (a ona hvata samo
+        ' n > 1, pa bi propustila), i u tblPrijemnica i tblPaletaStavka bi se
+        ' upisala labela POZIVAOCA umesto one iz tabele. Postojanje i
+        ' vlasnistvo bi govorili o dve razlicite stvari.
+        '
+        ' Jedan poziv daje oba odgovora: broj AKTIVNIH vlasnika pod tim brojem.
+        ' Nula znaci "nema aktivnog cilja", a vise od jedan hvata kapija ispod
+        ' -- koja ostaje zbog svoje poruke. Test 125.
+        Dim aktivniVlasnici As Long
+        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _
+                                          targetBrZbirne, SRC, False, _
+                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+        If aktivniVlasnici = 0 Then Exit Function
 
         ' Bez generacije CILJ MORA BITI JEDNOZNACAN. Vlasnistvo zbirne je vozac +
         ' kupac, isti par koji koriste StornoZbirna i ApplyGeneracijaID.

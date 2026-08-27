@@ -90,11 +90,28 @@ SABOTAZE = {
     # prevezivanje TIHO stane. Zamena vraca tacno taj oblik.
     "cilj-zbirna-po-prvom-redu": (
         "modDokumenta.bas",
-        "        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function\n",
+        "        If aktivniVlasnici = 0 Then Exit Function\n",
         "        If UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
         "                        COL_STORNIRANO) & \"\")) = \"DA\" Then Exit Function   ' SABOTAZA\n",
         "T_CiljZbirna_NePoPrvomRedu",
         "prevezivanje ne staje zbog reda koji je slucajno prvi",
+    ),
+    # Postojanje cilja pitano DRUGACIJIM poredjenjem nego kapija ispod:
+    # ZbirnaPostoji ide kroz StrComp vbTextCompare, a VlasniciPoBroju poredi
+    # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
+    # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
+    # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
+    "cilj-zbirna-case-mesano": (
+        "modDokumenta.bas",
+        "        Dim aktivniVlasnici As Long\n"
+        "        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _\n"
+        "                                          targetBrZbirne, SRC, False, _\n"
+        "                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count\n"
+        "        If aktivniVlasnici = 0 Then Exit Function\n",
+        "        ' SABOTAZA: postojanje poredi drugacije nego kapija ispod\n"
+        "        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "broj sa drugom velicinom slova nije isti broj",
     ),
     # Primitiv koji mutira SVE zbirna redove sa datim brojem, bez kapije u sebi.
     # Zastita je stajala samo po call-site-u (ZbirnaBrojJeDvosmislenIkad, sest

@@ -3698,16 +3698,45 @@ Kod je hazard i sam opisivao („LookupValue po broju uzima prvi pogodak"), ali
 ### Popravka
 
 Dva pogrešna pitanja („postoji li ijedan red" + „da li je **prvi** storniran")
-zamenjena su jednim tačnim:
+zamenjena su jednim tačnim — **brojem aktivnih vlasnika pod tim brojem**:
 
 ```vb
-If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function
+Dim aktivniVlasnici As Long
+aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _
+                                  SRC, False, _
+                                  Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+If aktivniVlasnici = 0 Then Exit Function
 ```
 
-`ZbirnaPostoji` filtrira kroz `ExcludeStornirano`, dakle pita **ima li aktivnog
-cilja pod ovim brojem**. Usput poredi i bez obzira na veličinu slova, dok je
-`LookupValue` poredio tačno — broj dokumenta se ne razlikuje po veličini slova, pa
-je to ispravka a ne proširenje.
+Nula znači „nema aktivnog cilja", a više od jedan hvata kapija ispod — koja ostaje
+zbog svoje poruke.
+
+### Prva verzija popravke je uvela novu grešku
+
+Prvo sam napisao `If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function`. Pita
+pravu stvar, ali **drugim poređenjem**:
+
+| | poređenje |
+|---|---|
+| `ZbirnaPostoji` | `StrComp(..., vbTextCompare)` — bez obzira na veličinu slova |
+| `VlasniciPoBroju` (iza kapije) | `Trim$(...) = Trim$(broj)` — **tačno** |
+
+Sa `zb-test-kask` umesto `ZB-TEST-KASK` postojanje bi reklo **da**, kapija bi
+videla **nula** vlasnika — a ona hvata samo `n > 1`, pa bi propustila — i u
+`tblPrijemnica` i `tblPaletaStavka` bi se upisala **labela pozivaoca** umesto one
+iz tabele. Stari kod to nije dopuštao, jer je `LookupValue` poredio tačno; dakle
+regresija koju je uvela **sama popravka**.
+
+Našla je recenzija. Popravljeno tako što postojanje i vlasništvo idu kroz **isti**
+račun, pa ne mogu da govore o dve različite stvari — isti obrazac kao
+`BrojVlasnikaPoBroju` u §19 i `_pogodaka` u `v2.82.0`.
+
+Uz to ide i regresija u testu 125: poziv sa `LCase$(FX_ZBIRNA_KASK)` mora da vrati
+`False`, a u prijemnici mora da ostane kanonska labela. Sabotaža
+`cilj-zbirna-case-mesano` vraća baš prvu verziju i obara tu tvrdnju po imenu.
+
+> Ovo je bio **drugi** put u istom PR-u da merenje obori moju procenu — prvi put
+> vozilo testa, drugi put semantika poređenja.
 
 ### Merenje je oborilo prvu dijagnozu — i to je glavni nalaz
 

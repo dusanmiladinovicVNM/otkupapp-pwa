@@ -8463,7 +8463,7 @@ End Sub
 ' fixture, pa iza njega ne sme da ide test koji na taj fixture racuna.
 Private Sub T_CiljZbirna_NePoPrvomRedu()
     Dim aktivnaPostoji As Boolean, prviJeStorniran As Boolean
-    Dim ok As Boolean
+    Dim ok As Boolean, okMala As Boolean
 
     aktivnaPostoji = modDokumenta.ZbirnaPostoji(FX_ZBIRNA_KASK)
     prviJeStorniran = (UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, _
@@ -8482,4 +8482,21 @@ Private Sub T_CiljZbirna_NePoPrvomRedu()
                                                     FX_ZBIRNA_KASK)
     AssertEq ok, True, _
              "prevezivanje ne staje zbog reda koji je slucajno prvi"
+
+    ' BROJ DOKUMENTA JE CASE-SENSITIVE KROZ CELU PUTANJU.
+    '
+    ' Prva verzija ove popravke je postojanje pitala kroz ZbirnaPostoji, koji
+    ' poredi bez obzira na velicinu slova, dok kapija ispod poredi TACNO. Tada
+    ' bi mala slova prosla kao "postoji", kapija bi videla nula vlasnika pa ne
+    ' bi okinula, i u tblPrijemnica i tblPaletaStavka bi se upisala labela
+    ' POZIVAOCA umesto one iz tabele.
+    okMala = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJEMNICA_STALE, _
+                                                        LCase$(FX_ZBIRNA_KASK))
+    AssertEq okMala, False, _
+             "broj sa drugom velicinom slova nije isti broj"
+
+    ' Bez sopstvene sabotaze, namerno: obara je ista zamena koja obara tvrdnju
+    ' iznad, samo kasnije. Stoji kao pozitivna kontrola da nista nije upisano.
+    AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
+             "u prijemnici je ostala KANONSKA labela iz tabele"
 End Sub
