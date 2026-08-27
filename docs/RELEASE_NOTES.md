@@ -5874,39 +5874,48 @@ Nema izmene u programu — izdanje o **proverama**.
 ### Šta je bilo
 
 Uz svaku automatsku proveru ide i namerno pokvaren kod koji **mora** da je obori.
-Pun prolaz kroz sve provere našao je tri takva mesta gde se kod pokvari, a ništa
-ne padne. Za te tri provere dokaza nije bilo.
+Pun prolaz kroz sve provere našao je tri mesta gde se kod pokvari, a ništa ne
+padne. Za te tri provere dokaza nije bilo.
 
-Ispostavilo se da su tri različita razloga, i da samo jedan liči na ono što se
+Ispostavilo se da su to tri različita razloga, i da samo jedan liči na ono što se
 očekivalo:
 
-- **dve** su merile **tuđu** proveru — kvar bi oborila druga, ranija provera, pa
-  se nije ni videlo da ciljana ne radi;
-- **jedna** se uopšte **nije prevodila** — Excel bi stao i ostao da stoji, ništa
-  se ne bi izvršilo, a izveštaj bi to prikazao isto kao „ništa nije palo".
+| Šta je stvarno bilo | Koliko |
+|---|---|
+| provera je merila **tuđu** proveru — kvar bi oborila druga, ranija, pa se nije ni videlo da ciljana ne radi | 2 |
+| pokvaren kod se uopšte **nije prevodio** — Excel bi stao, ništa se ne bi izvršilo, a izveštaj bi to prikazao isto kao „ništa nije palo" | 1 |
 
 ### Šta je urađeno
 
-Za prve dve nađeno je stanje u kome baš ta provera odlučuje — i to je dodato kao
-nova tvrdnja. Jedna od njih čuva pravilo koje je ovaj projekat već skupo platio:
-**dokument se bira po identitetu, nikad po broju**, jer isti broj mogu nositi dva
-dokumenta.
+Za prve dve nađeno je stanje u kome **baš ta** provera odlučuje, i to je dodato
+kao nova tvrdnja. Jedna od njih čuva pravilo koje je ovaj projekat već skupo
+platio: **dokument se bira po identitetu, nikad po broju**, jer isti broj mogu
+nositi dva dokumenta.
 
-Treća je popravljena u jednom redu. Uz nju je dodata i provera koja taj oblik
-greške ubuduće hvata **odmah**, umesto da se vidi tek kroz Excel koji stoji.
+Treća je popravljena u jednom redu. Uz nju je dodata i nova provera, da se taj
+oblik greške ubuduće vidi **odmah** umesto kroz Excel koji stoji.
 
-Ta provera je u prvom obliku bila istovremeno preširoka i preuska: propuštala je
-grešku napisanu malim slovima, a prijavljivala bi **pet** sasvim ispravnih oblika
-koda. Sve troje je nađeno u pregledu i suženo — provera sada zna o kakvoj je
-vrsti potprograma reč i poštuje pravilo da lokalno ime sme da zakloni ime
-potprograma.
+### Nova provera je ispravljana četiri puta
 
-Poslednja ispravka je bila najvažnija: provera je gledala **zdrav** kod, a sudila
-o **izmenjenom**. Sada gleda baš ono što će se izvršavati.
+Ovo je deo koji najviše govori o vrsti posla. Svaki put je nalaz bio iste vrste:
+**provera je sudila o nečemu drugom nego što tvrdi**.
+
+| Krug | Šta je bilo pogrešno |
+|---|---|
+| 1 | nije razlikovala vrste potprograma, a greška napisana malim slovima joj je promakla |
+| 2 | nije znala da lokalna promenljiva sme da nosi isto ime kao potprogram |
+| 3 | konstanta nije mesto na koje se sme upisati, a prelomljen potpis nije umela da pročita |
+| 4 | gledala je **zdrav** kod, a sudila o **izmenjenom** |
+
+Zbir: propuštala je **tri** oblika prave greške, a prijavljivala **pet** sasvim
+ispravnih. Poslednji krug je bio najvažniji, jer je grešila u **oba** smera
+odjednom — sad gleda baš ono što će se izvršavati.
 
 ### Zašto je ovo vredelo
 
 Provera koja se pokvari a ništa ne padne izgleda isto kao provera koja radi. Tri
-takve su stajale u projektu i izgledale kao pokrivenost — a jedna od njih je
-čuvala baš pravilo o identitetu dokumenta.
+takve su stajale u projektu i izgledale kao pokrivenost — a jedna je čuvala baš
+pravilo o identitetu dokumenta.
 
+Isto važi i za novu proveru: da nije četiri puta pokazana kao pogrešna, i ona bi
+danas izgledala kao zaštita.
