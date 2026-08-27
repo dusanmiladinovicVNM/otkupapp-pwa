@@ -3210,6 +3210,68 @@ def _procedure_po_redu(tekst: str) -> list:
     return out
 
 
+_LOKAL_DEKL = re.compile(r"^\s*(?:Dim|Static|Const)\s+", re.IGNORECASE)
+_PARAM_UKRAS = re.compile(r"^(?:ByVal|ByRef|Optional|ParamArray)\s+", re.IGNORECASE)
+
+
+def _po_zarezu_vrh(tekst: str) -> list:
+    """Podeli po zarezima koji nisu u zagradama ni u navodnicima."""
+    delovi, dubina, u_str, tek = [], 0, False, ""
+    for c in tekst:
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c in "([":
+            dubina += 1
+        elif not u_str and c in ")]":
+            dubina -= 1
+        elif not u_str and c == "," and dubina == 0:
+            delovi.append(tek.strip())
+            tek = ""
+            continue
+        tek += c
+    if tek.strip():
+        delovi.append(tek.strip())
+    return delovi
+
+
+def _prva_imena(tekst: str) -> list:
+    """Imena iz `a As X, b(1 To 3) As Y, ByVal c As Z`."""
+    out = []
+    for deo in _po_zarezu_vrh(tekst):
+        deo = deo.strip()
+        while _PARAM_UKRAS.match(deo):
+            deo = _PARAM_UKRAS.sub("", deo, count=1).strip()
+        m = re.match(r"([A-Za-z_]\w*)", deo)
+        if m:
+            out.append(m.group(1).lower())
+    return out
+
+
+def _lokalna_imena(redovi: list, a: int, b: int) -> set:
+    """Parametri + Dim/Static/Const unutar procedure [a..b].
+
+    VBA DOZVOLJAVA da lokalno ime ZAKLONI proceduru: `Dim Foo As Boolean` u P()
+    znaci da je `Foo = True` dodela promenljivoj, ne pokusaj dodele Sub-u. Repo
+    to vec zna -- vba_check ima pravilo ZAKLONJENO nad istom pojavom. Bez ovoga
+    bi pravilo prijavljivalo legalan VBA, a lazan nalaz u hook-u je gori od
+    propustenog.
+    """
+    imena = set()
+    for i in range(a, min(b, len(redovi) - 1) + 1):
+        t = redovi[i].strip()
+        m = _PROC_OTVARA.match(t)
+        if m and i == a:
+            if "(" in t:
+                zagrada = t[t.index("(") + 1:]
+                k = zagrada.rfind(")")
+                imena.update(_prva_imena(zagrada[:k] if k >= 0 else zagrada))
+            continue
+        m = _LOKAL_DEKL.match(t)
+        if m:
+            imena.update(_prva_imena(t[m.end():]))
+    return imena
+
+
 def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
     """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
 
@@ -3237,10 +3299,12 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
         return None
     red = tekst[:idx + 1].count("\n")
 
-    unutar = None
+    redovi = tekst.split("\n")
+    unutar, lokalna = None, set()
     for pime, _v, a, b in procs:
         if a <= red <= b:
             unutar = pime.lower()
+            lokalna = _lokalna_imena(redovi, a, b)
             break
 
     # Property se NE skuplja -- time je i izuzeta. Zasebna `if n in props` provera
@@ -3253,6 +3317,8 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
         if not m:
             continue
         n = m.group(1).lower()
+        if n in lokalna:
+            continue                       # lokalno ime ZAKLANJA proceduru
         if n in subovi:
             return m.group(1)              # Sub nema povratnu vrednost
         if n in funkcije and n != unutar:
@@ -3501,6 +3567,18 @@ _DODELA_CASES = [
     ("Sub nema povratnu vrednost", "Foo",
      "Option Explicit\nSub Foo()\n    SIDRO\nEnd Sub\n",
      "    Foo = 1\n"),
+    # VBA dozvoljava da LOKALNO ime zakloni proceduru: tada je `Foo = True`
+    # dodela promenljivoj, ne pokusaj dodele Sub-u. Repo to vec zna -- vba_check
+    # ima pravilo ZAKLONJENO nad istom pojavom.
+    ("lokalni Dim zaklanja Sub", None,
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Dim Foo As Boolean\n    SIDRO\nEnd Sub\n",
+     "    Foo = True\n"),
+    # Isto vazi za parametar -- dodela ide parametru, ne funkciji.
+    ("parametar zaklanja Function", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P(ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
+     "    Foo = True\n"),
 ]
 
 

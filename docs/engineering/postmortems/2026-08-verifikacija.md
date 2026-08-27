@@ -870,6 +870,31 @@ verzija je imala i `if n in props: continue` — i dvosmerni dokaz je pokazao da
 to **mrtva grana**: njeno uklanjanje nije oborilo nijedan slučaj, jer property ime
 ionako nije ni u `subovi` ni u `funkcije`. Uklonjena.
 
+### Treća rupa: lokalno ime sme da zakloni proceduru
+
+Ni to nije bilo dovoljno. VBA dozvoljava da **lokalna promenljiva ili parametar
+zakloni ime procedure**:
+
+```vb
+Private Sub Foo()
+End Sub
+
+Private Sub P()
+    Dim Foo As Boolean
+    Foo = True        ' dodela PROMENLJIVOJ, ne pokusaj dodele Sub-u
+End Sub
+```
+
+Repo to već zna — `vba_check` ima pravilo `ZAKLONJENO` nad istom pojavom. Bez toga
+je novo pravilo prijavljivalo **legalan VBA**, dakle tačno ono od čega se čuva.
+
+Izmereno pre popravke: oba oblika (lokalni `Dim` i parametar) vraćala su nalaz.
+
+Pravilo sada, za proceduru u kojoj je sidro, skuplja **parametre i lokalne
+`Dim`/`Static`/`Const`**, i takvo ime preskače pre nego što uopšte pita za vrstu
+procedure. `Sub Foo() : Foo = 1` **ostaje** nalaz — tamo nema lokalnog imena koje
+bi zaklonilo.
+
 ### Prvi dokaz suženja nije izolovao ništa
 
 Vredi zapisa iz istog razloga kao §12: sabotaža mora da menja **jednu** stvar.
@@ -880,7 +905,9 @@ i dalje bili u malim slovima). Prava sabotaža skida `.lower()` sa **obe** stran
 
 Ista greška u drugom smeru je i otkrila mrtvu granu iznad.
 
-Konačno, svaka od četiri sabotaže obara **tačno jedan** slučaj, po imenu.
+Konačno: pet sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
+pošteno obara **tri** — neosetljivost na veličinu slova koriste sva tri poređenja
+imena, pa je to jedna osobina, a ne tri.
 
 ### Šta ovo NE pokriva
 
