@@ -5895,6 +5895,11 @@ dokumenta.
 Treća je popravljena u jednom redu. Uz nju je dodata i provera koja taj oblik
 greške ubuduće hvata **odmah**, umesto da se vidi tek kroz Excel koji stoji.
 
+Ta provera je u prvom obliku bila istovremeno preširoka i preuska: propuštala je
+grešku napisanu malim slovima, a prijavljivala bi jedan sasvim ispravan oblik
+koda. Nađeno u pregledu i suženo tako da provera zna o kakvoj je vrsti
+potprograma reč.
+
 ### Zašto je ovo vredelo
 
 Provera koja se pokvari a ništa ne padne izgleda isto kao provera koja radi. Tri

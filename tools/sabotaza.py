@@ -3192,45 +3192,71 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
 _ZAMENA_DODELA = re.compile(r"^\s*(?:Set\s+)?([A-Za-z_]\w*)\s*=(?!=)")
 _PROC_OTVARA = re.compile(
     r"^(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
-    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+(\w+)", re.IGNORECASE)
+    r"(Sub|Function|Property)\s+(?:(?:Get|Let|Set)\s+)?(\w+)", re.IGNORECASE)
 _PROC_ZATVARA = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
 
 
 def _procedure_po_redu(tekst: str) -> list:
-    """[(ime, prvi_red, poslednji_red)] -- redovi 0-bazno."""
-    out, ime, poc = [], None, 0
+    """[(ime, vrsta, prvi_red, poslednji_red)] -- vrsta je sub/function/property."""
+    out, ime, vrsta, poc = [], None, None, 0
     for i, red in enumerate(tekst.split("\n")):
         t = red.strip()
         m = _PROC_OTVARA.match(t)
         if m:
-            ime, poc = m.group(1), i
+            vrsta, ime, poc = m.group(1).lower(), m.group(2), i
         elif ime and _PROC_ZATVARA.match(t):
-            out.append((ime, poc, i))
-            ime = None
+            out.append((ime, vrsta, poc, i))
+            ime, vrsta = None, None
     return out
 
 
 def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
-    """Ime tudje procedure kojoj zamena dodeljuje, ili None."""
-    fajl_id = id(tekst)
-    if fajl_id not in proc_kes:
-        proc_kes[fajl_id] = _procedure_po_redu(tekst)
-    procs = proc_kes[fajl_id]
+    """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
+
+    VRSTA ODLUCUJE, i pravilo je namerno UZE nego sto ime sugerise:
+
+      Function  dodela SVOM imenu je povratna vrednost -- dozvoljena.
+                Dodela TUDJEM imenu funkcije je compile error.
+      Sub       nema povratnu vrednost, pa je dodela njenom imenu greska i
+                iznutra i spolja.
+      Property  IZUZETA. `X = v` je tamo poziv Property Let, dakle legalan VBA;
+                bez uparivanja Get/Let/Set se ne moze reci da je greska, a lazan
+                nalaz u hook-u je gori od propustenog.
+
+    Poredi se NEOSETLJIVO NA VELICINU SLOVA, jer je VBA takav: `scr_event = ...`
+    je isti compile error kao `Scr_Event = ...`, a poredjenje po tacnom zapisu
+    bi ga pustilo -- trivijalan zaobilazak bas ovog pravila.
+    """
+    kljuc = id(tekst)
+    if kljuc not in proc_kes:
+        proc_kes[kljuc] = _procedure_po_redu(tekst)
+    procs = proc_kes[kljuc]
 
     idx = tekst.find("\n" + staro)
     if idx < 0:
         return None
     red = tekst[:idx + 1].count("\n")
+
     unutar = None
-    for pime, a, b in procs:
+    for pime, _v, a, b in procs:
         if a <= red <= b:
-            unutar = pime
+            unutar = pime.lower()
             break
-    svi = {p for p, _a, _b in procs}
+
+    # Property se NE skuplja -- time je i izuzeta. Zasebna `if n in props` provera
+    # je bila mrtva grana: property ime ionako nije ni u subovi ni u funkcije.
+    subovi = {p.lower() for p, v, _a, _b in procs if v == "sub"}
+    funkcije = {p.lower() for p, v, _a, _b in procs if v == "function"}
+
     for linija in novo.split("\n"):
         m = _ZAMENA_DODELA.match(linija)
-        if m and m.group(1) in svi and m.group(1) != unutar:
-            return m.group(1)
+        if not m:
+            continue
+        n = m.group(1).lower()
+        if n in subovi:
+            return m.group(1)              # Sub nema povratnu vrednost
+        if n in funkcije and n != unutar:
+            return m.group(1)              # tudja funkcija
     return None
 
 
@@ -3451,6 +3477,33 @@ _SELF_TEST = [
 ]
 
 
+# Granica pravila o dodeli imenu procedure. Polovina su NULE, i ta polovina je
+# vaznija: pravilo sme da bude usko, ali ne sme da prijavi legalan VBA.
+# (naziv, ocekivano ime ili None, izvor, zamena)
+_DODELA_CASES = [
+    # VBA je case-insensitive: `foo = ` je isti compile error kao `Foo = `.
+    # Poredjenje po tacnom zapisu bi bilo trivijalan zaobilazak bas ovog pravila.
+    ("casing ne spasava", "foo",
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    foo = True\n"),
+    # Dodela SVOM imenu je povratna vrednost funkcije -- legalno.
+    ("Function dodeljuje svom imenu", None,
+     "Option Explicit\nFunction Foo() As Boolean\n    SIDRO\nEnd Function\n",
+     "    Foo = True\n"),
+    # `Foo = 1` uz Property Let je POZIV, ne greska. Bez uparivanja Get/Let/Set
+    # se ne moze tvrditi suprotno, pa je Property izuzeta iz pravila.
+    ("Property Let se ne prijavljuje", None,
+     "Option Explicit\nProperty Let Foo(ByVal v As Long)\nEnd Property\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    Foo = 1\n"),
+    # Sub nema povratnu vrednost, pa je dodela njenom imenu greska i IZNUTRA.
+    ("Sub nema povratnu vrednost", "Foo",
+     "Option Explicit\nSub Foo()\n    SIDRO\nEnd Sub\n",
+     "    Foo = 1\n"),
+]
+
+
 def _self_test() -> int:
     """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
     imena = {"T_Postoji"}
@@ -3522,6 +3575,17 @@ def _self_test() -> int:
         print("SELF-TEST: poruka iza laznih spoljnih zagrada nije prepoznata",
               file=sys.stderr)
         lose += 1
+
+    # Granica pravila o dodeli imenu procedure -- ide kroz _dodela_tudjoj_proceduri,
+    # istu funkciju koju zove _nalazi. Da je unos u katalogu stvarno provuce kroz
+    # nju, dokazuje zaseban slucaj "dodela imenu tudje procedure" iznad.
+    for naziv, ocekivano, izvor, zamena in _DODELA_CASES:
+        n += 1
+        dobijeno = _dodela_tudjoj_proceduri(izvor, "    SIDRO\n", zamena, {})
+        if dobijeno != ocekivano:
+            print("SELF-TEST: dodela/%s: ocekivano %r, dobijeno %r"
+                  % (naziv, ocekivano, dobijeno), file=sys.stderr)
+            lose += 1
 
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
     par = {"prvi": zdravo, "drugi": zdravo}

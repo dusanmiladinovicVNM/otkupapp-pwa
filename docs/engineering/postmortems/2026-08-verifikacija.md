@@ -843,6 +843,45 @@ KATALOG: paleta-klik-otvara: zamena dodeljuje imenu tudje procedure 'Scr_Event'
 
 Od 251 zamene, njih 112 nečemu dodeljuje — i nijedna druga nije pogrešna.
 
+### Prvo pravilo je bilo i preširoko i preusko (iz review-a)
+
+Ime pravila je govorilo „dodela imenu tuđe procedure = compile error", a
+implementacija je **propuštala** pravi compile error i **prijavljivala** legalan
+VBA:
+
+| Rupa | Posledica |
+|---|---|
+| poređenje po tačnom zapisu | `scr_event = …` prolazi, iako je VBA case-insensitive — trivijalan zaobilazak baš tog pravila |
+| sve vrste procedura u jednoj kanti | `Foo = 1` uz `Property Let Foo` je **poziv**, ne greška — lažan nalaz nad ispravnim kodom |
+| `Sub` tretiran kao `Function` | `Sub Foo() : Foo = 1` je greška, a pravilo ju je puštalo kao „dodeljuje sebi" |
+
+Prva je izmerena, ne pretpostavljena: ista zamena malim slovima vraćala je `None`.
+
+Pravilo sada pamti **vrstu**:
+
+| Vrsta | Dodela svom imenu | Dodela tuđem |
+|---|---|---|
+| `Function` | povratna vrednost — dozvoljena | nalaz |
+| `Sub` | **nalaz** (nema povratnu vrednost) | nalaz |
+| `Property` | izuzeta — `X = v` je poziv `Property Let` | izuzeta |
+
+`Property` je izuzeta **time što se ne skuplja**, ne zasebnom proverom. Prva
+verzija je imala i `if n in props: continue` — i dvosmerni dokaz je pokazao da je
+to **mrtva grana**: njeno uklanjanje nije oborilo nijedan slučaj, jer property ime
+ionako nije ni u `subovi` ni u `funkcije`. Uklonjena.
+
+### Prvi dokaz suženja nije izolovao ništa
+
+Vredi zapisa iz istog razloga kao §12: sabotaža mora da menja **jednu** stvar.
+
+Prva verzija je uklanjala `.lower()` samo sa jedne strane poređenja — pa je
+oborila i tuđe slučajeve, a pravu case-osetljivost nije ni proizvela (skupovi su
+i dalje bili u malim slovima). Prava sabotaža skida `.lower()` sa **obe** strane.
+
+Ista greška u drugom smeru je i otkrila mrtvu granu iznad.
+
+Konačno, svaka od četiri sabotaže obara **tačno jedan** slučaj, po imenu.
+
 ### Šta ovo NE pokriva
 
 **Druge vrste compile grešaka u zamenama** se i dalje vide tek kroz Excel u
@@ -851,4 +890,8 @@ Pravilo pokriva jedan oblik — onaj koji se stvarno dogodio.
 
 **Zamena koja dodeljuje imenu procedure iz DRUGOG modula** se ne hvata; traži se
 samo u fajlu koji se sabotira.
+
+**`Property Get` bez `Let`/`Set`** je izuzeta zajedno sa ostalim property-jima,
+iako bi dodela njenom imenu spolja bila greška. Uparivanje `Get`/`Let`/`Set` bi
+tražilo više analize nego što ovaj oblik zaslužuje, a lažan nalaz je skuplji.
 
