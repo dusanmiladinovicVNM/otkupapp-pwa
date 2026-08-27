@@ -6049,3 +6049,55 @@ više ne može jeste da važi do kraja prikaza.
 
 Brzina je proverena, ne pretpostavljena: vreme celog skupa provera je isto pre i
 posle (12,0 s u oba slučaja).
+
+## v2.84.0 — zaštita je ušla u samu radnju, umesto da stoji oko nje
+
+### Šta je bilo
+
+Kada se zbirna preračunava iz otpremnica, program to radi **po broju zbirne**. A
+broj nije jedinstven: dva različita vlasnika mogu imati zbirnu pod istim brojem.
+Preračun po broju bi tada prepisao **oba** dokumenta — tuđe kilograme i ambalažu
+pomešao sa svojima.
+
+Zaštita od toga je postojala, ali je stajala **oko** te radnje: na šest mesta
+odakle se poziva. Sama radnja nije imala nijednu. To znači da je bila bezbedna
+samo dok se svaki novi pozivalac seti da je uključi.
+
+### Zašto to nije teorijsko
+
+Izmereno na pripremljenim podacima: broj koji su **ikada** nosila dva vlasnika, a
+aktivan je ostao jedan (drugi je storniran). Preračun je u tom stanju **prošao** i
+prepisao redove.
+
+Bitno je i **zašto** baš to stanje: zaštita koja broji samo **aktivne** vlasnike
+tu ne bi reagovala — aktivan je jedan, pa broj izgleda jednoznačan. A storniran
+vlasnik i dalje ima žive dokumente ispod sebe. Zato se broje i stornirani.
+
+### Šta je urađeno
+
+Zaštita je ušla **u** samu radnju i broji vlasnike **ikada**, ne samo aktivne.
+
+Uz to je račun „koliko vlasnika nosi ovaj broj" sveden na **jedno** mesto koje
+koriste obe varijante zaštite — da se s vremenom ne raziđu. Isti potez je urađen i
+u prošlom izdanju, iz istog razloga.
+
+### Kako se zna da radi
+
+Provera je napisana i puštena **pre** popravke i pala je, tačno na onome što
+tvrdi. Posle popravke ceo skup je zelen: 124 provere u glavnom setu, 196 u
+bankarskom, i svih jedanaest grupa prolazi.
+
+To zelenilo odgovara i na jedini stvarni rizik ove izmene — da stroža zaštita
+počne da zaustavlja **ispravan** posao. Ne zaustavlja.
+
+### Šta ovo ne rešava
+
+**Druga slična radnja — prevezivanje prijemnice na zbirnu — nije dirana.** Probao
+sam i izmerio: pooštravanje njene zaštite ne menja ishod nijedne provere, dakle
+niko tu razliku ne meri. Menjati ponašanje bez provere koja to vidi je upravo ono
+što ova pravila zabranjuju, pa je ostavljeno otvoreno umesto da se prikaže kao
+rešeno.
+
+**Šest starih zaštita je ostalo na svom mestu.** One staju **ranije** i kažu
+razlog razumljivom rečenicom; nova staje iznutra i može da kaže samo „nije
+uspelo". Nova je zato **mreža ispod**, a ne zamena za njih.
