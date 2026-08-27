@@ -84,6 +84,22 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
+    # Kes indeksa kolone je pamtio i NULU, pa je jedan trenutan neuspeh vazio
+    # za ceo BeginTableCache prozor -- svaki sledeci poziv nad istom kolonom
+    # dobijao je istu nulu bez novog pokusaja, a RequireColumnIndex na to staje.
+    # Odatle "Nedostaje kolona 'VozacID'" nad sveskom u kojoj ta kolona postoji
+    # (postmortem par 11). Isto pravilo vec drzi kes TABELA.
+    "kes-kolone-pamti-nulu": (
+        "modDataAccess.bas",
+        "    If Not mColCache Is Nothing Then\n"
+        "        If GetColumnIndex > 0 Then mColCache(ck) = GetColumnIndex\n"
+        "    End If\n",
+        "    If Not mColCache Is Nothing Then\n"
+        "        mColCache(ck) = GetColumnIndex   ' SABOTAZA: nula se opet pamti\n"
+        "    End If\n",
+        "T_KesKolone_NeMemoiseNulu",
+        "nula se NE pamti -- trenutan neuspeh ne postaje trajan",
+    ),
     # --- ParseDatum ---------------------------------------------------------
     "parse-tacka": (
         "modOtkupUI.bas",

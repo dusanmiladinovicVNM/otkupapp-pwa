@@ -351,6 +351,7 @@ Public Sub RunAllTests()
     RunOne 120
     RunOne 121
     RunOne 122
+    RunOne 123
 
     SetTestMode prevMode
     WriteResultFile
@@ -505,6 +506,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 120: TestName = "T_LegacyDok_PadListeFakturaNijeAvans"
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
+        Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -635,6 +637,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 120: T_LegacyDok_PadListeFakturaNijeAvans
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
+        Case 123: T_KesKolone_NeMemoiseNulu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8001,6 +8004,43 @@ Private Sub T_Kolona_TrazenjeNeGutaGresku()
              "za nepostojecu tabelu poruka kaze da TABELE nema"
 End Sub
 
+
+' TEST 123: nula iz trazenja kolone se NE pamti.
+'
+' Nastavak testa 117, koji je isti simptom samo ZAPISAO. Kes indeksa kolone je
+' pamtio i nulu, pa je jedan trenutan neuspeh vazio za ceo BeginTableCache
+' prozor: svaki sledeci poziv nad istom kolonom dobijao je istu nulu bez ijednog
+' novog pokusaja, a fail-closed kapije (RequireColumnIndex) na to staju.
+'
+' Isto pravilo vec vazi za kes TABELA -- test 53, modUiData.CachedTable kesira
+' samo uspeh. Rupa je bila u kesu KOLONA, na istom mestu i iz istog razloga.
+'
+' Sta ovo NE tvrdi: da je uzrok PRVOG neuspeha popravljen. On nije reprodukovan
+' (postmortem par 11) i ovde se ne dira naslepo. Skinuta mu je TRAJNOST.
+Private Sub T_KesKolone_NeMemoiseNulu()
+    Dim iPostoji As Long, iNema As Long
+    Dim imaUspeh As Boolean, imaNulu As Boolean
+    Const KOL_KOJE_NEMA As String = "NemaOvakveKoloneNigde"
+
+    ' MERI se unutar prozora, TVRDI posle EndTableCache. AssertEq puca na prvom
+    ' padu, pa bi tvrdnja unutar prozora ostavila kes otvoren svim narednim
+    ' testovima -- a ovaj test je pisan da bude i crven. Isto kao u testu 117.
+    BeginTableCache
+    iPostoji = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    imaUspeh = modDataAccess.KesKoloneImaKljuc(TBL_OTKUP, COL_OTK_ID)
+    iNema = GetColumnIndex(TBL_OTKUP, KOL_KOJE_NEMA)
+    imaNulu = modDataAccess.KesKoloneImaKljuc(TBL_OTKUP, KOL_KOJE_NEMA)
+    EndTableCache
+
+    ' POZITIVNA KONTROLA PRVA: bez nje bi test prosao i nad verzijom koja kes
+    ' prosto ugasi -- a kes postoji da bi se izbeglo ~80 skenova po prozoru.
+    AssertEq (iPostoji > 0), True, "preduslov: postojeca kolona se nalazi"
+    AssertEq imaUspeh, True, "uspesan indeks se i dalje pamti"
+
+    AssertEq iNema, 0, "nepostojeca kolona daje nulu"
+    AssertEq imaNulu, False, _
+             "nula se NE pamti -- trenutan neuspeh ne postaje trajan"
+End Sub
 
 ' TEST 118: pozadina PRAVE pilule se cisti kad se vrednost ne moze prikazati.
 '

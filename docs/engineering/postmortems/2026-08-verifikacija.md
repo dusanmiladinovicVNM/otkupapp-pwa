@@ -383,6 +383,9 @@ To je **pojačivač**, ne uzrok — i dalje ne znam zašto je prvo traženje pal
 se poruka sledeći put pojavi, nosiće zaglavlje i time reći da li je uzrok u
 šemi, u tabeli ili u samom čitanju.
 
+> **Pojačivač je zatvoren u `v2.83.0` — v. §16.** Nula se više ne pamti, pa
+> trenutan neuspeh ostaje trenutan. Uzrok prvog neuspeha i dalje stoji otvoren.
+
 ---
 
 ## 12) Isto truljenje, drugo polje — 119 zastarelih tvrdnji (26.08.2026)
@@ -1150,3 +1153,76 @@ ne dolazi.
 Zato je svaka od pet zahtevala da se **pročita test**, ne samo katalog. Peti član
 n-torke je merena vrednost od `v2.79.0`, ali merenje kaže samo *da* se ne slaže —
 *zašto* i dalje kaže jedino kod.
+
+---
+
+## 16) Nula nije znanje — keš kolona je pamtio i neuspeh (27.08.2026)
+
+Zatvara **pojačivač** imenovan u §11, ne uzrok. Razlika je bitna i zapisana je i
+u kodu.
+
+### Šta je bilo
+
+`GetColumnIndex` je pamtio svaki ishod, uključujući nulu:
+
+```vb
+If Not mColCache Is Nothing Then mColCache(ck) = GetColumnIndex
+```
+
+Keš živi ceo `BeginTableCache` prozor. Jedan trenutan neuspeh je zato postajao
+**trajan**: svaki sledeći poziv nad istom kolonom dobijao je istu nulu bez
+ijednog novog pokušaja. A `RequireColumnIndex` je fail-closed — na nulu diže
+grešku. Tako jedno promašeno čitanje zaustavi ceo storno nad zbirnom.
+
+### Pravilo je već postojalo — samo ne ovde
+
+Ovo nije nova doktrina nego **rupa u postojećoj**. Keš tabela je isto pravilo
+držao odavno:
+
+```vb
+If IsArray(src) Then mCache(tblName) = src      ' modUiData.CachedTable
+```
+
+i imao svoj test (53, `T_KesTabela_NeMemoiseNeuspeh`) i svoj čitač ključa
+(`KesImaKljuc`), napisan baš zato što se „neuspeh se ne kešira" ne može izmeriti
+kroz vraćenu vrednost. Keš **kolona** je jedini ostao bez toga.
+
+Popravka je zato prepisana 1:1 sa presedana, uključujući i čitač
+(`KesKoloneImaKljuc`) — bez njega se pravilo ne vidi spolja, jer `GetColumnIndex`
+daje nulu i kad je zapamtio i kad nije.
+
+### Prvo crveno, pa zakrpa
+
+Test 123 je napisan i pušten **pre** izmene:
+
+```
+FAIL T_KesKolone_NeMemoiseNulu -- nula se NE pamti -- trenutan neuspeh ne
+     postaje trajan -- ocekivano [False], dobijeno [True]
+```
+
+Pada baš ciljana tvrdnja, a pozitivne kontrole pre nje prolaze — dakle keš radi i
+kolona postoji. Posle izmene: `RunAllTests 123 ukupno, 0 palo`, pun set svih
+deset suite-ova OK.
+
+Pozitivna kontrola stoji **prva** namerno: bez nje bi test prošao i nad verzijom
+koja keš prosto ugasi, a keš postoji da bi se izbeglo ~80 skenova po prozoru.
+
+### Cena je izmerena, ne procenjena
+
+Ne keširati nulu znači da se odsutna kolona traži iznova pri svakom pozivu.
+Prebrojano: 49 poziva `GetColumnIndex` unutar petlji van testova — svi nad
+kolonama koje **postoje**, dakle i dalje keširanim. Vreme `RunAllTests`: 12.0s sa
+bagom, 12.0s posle popravke, isti broj testova.
+
+### Šta ovo NE popravlja
+
+**Uzrok prvog neuspeha.** On nije reprodukovan i ovde se ne dira naslepo —
+`CLAUDE.md` §2. Poruka i dalje može da se pojavi jednom; ono što više ne može
+jeste da važi do kraja prozora.
+
+**Asimetrija koju §11 pominje** — `InvalidateTableCache` čisti `mTableCache` i
+`mExclCache`, a `mColCache` ne — ostaje, i mereno je bezopasna: obe tačke koje
+kolonu dodaju u runtime-u (`modSetup`, `modPaletniList.EnsurePreradaCol`) dodaju
+je **na kraj**, pa se postojeći indeksi ne pomeraju. Jedini stari problem u tom
+kešu bila je zapamćena nula, a nje više nema — kolona dodata usred prozora sada
+biva nađena, jer nema šta ustajalo da se vrati.
