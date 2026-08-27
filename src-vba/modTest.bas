@@ -353,6 +353,7 @@ Public Sub RunAllTests()
     RunOne 122
     RunOne 123
     RunOne 124
+    RunOne 125
 
     SetTestMode prevMode
     WriteResultFile
@@ -509,6 +510,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
         Case 124: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
+        Case 125: TestName = "T_CiljZbirna_NePoPrvomRedu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -641,6 +643,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
         Case 124: T_RekalkZbirne_KapijaJeUPrimitivu
+        Case 125: T_CiljZbirna_NePoPrvomRedu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8443,4 +8446,40 @@ Private Sub T_RekalkZbirne_KapijaJeUPrimitivu()
                                                                  "", "test 124")
     AssertEq ok, False, _
              "rekalkulacija po dvosmislenom broju ne prolazi kroz sam primitiv"
+End Sub
+
+' TEST 125: cilj-zbirna se ne razresava po redu koji je SLUCAJNO prvi.
+'
+' ReassignPrijemnicaToZbirna_TX bez generacije bira cilj kroz LookupValue po
+' broju, a LookupValue vraca PRVI pogodak -- ne gleda ni identitet ni storno.
+' Posle storna jednog vlasnika prvi red sa tim brojem moze biti storniran dok
+' pod istim brojem stoji AKTIVNA zbirna. Tada prevezivanje TIHO stane: bez
+' poruke, bez loga, samo False.
+'
+' Kod je hazard i sam opisivao ("LookupValue po broju uzima prvi pogodak"),
+' ali samo za granu SA generacijom. Fallback grana je ostala po broju.
+'
+' Stoji POSLEDNJI u nizu: kad prodje, prevezivanje se stvarno izvrsi i pomera
+' fixture, pa iza njega ne sme da ide test koji na taj fixture racuna.
+Private Sub T_CiljZbirna_NePoPrvomRedu()
+    Dim aktivnaPostoji As Boolean, prviJeStorniran As Boolean
+    Dim ok As Boolean
+
+    aktivnaPostoji = modDokumenta.ZbirnaPostoji(FX_ZBIRNA_KASK)
+    prviJeStorniran = (UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, _
+                              FX_ZBIRNA_KASK, COL_STORNIRANO) & "")) = "DA")
+
+    AssertEq aktivnaPostoji, True, _
+             "preduslov: pod tim brojem POSTOJI aktivna zbirna"
+    AssertEq prviJeStorniran, True, _
+             "preduslov: a PRVI red sa tim brojem je storniran"
+
+    ' FX_PRIJEMNICA_STALE ima TACNO JEDNOG vlasnika i vec stoji na toj zbirnoj,
+    ' pa poziv prolazi kroz razresenje cilja a ne pomera nista semanticki.
+    ' FX_PRIJ_BROJ ovde NE valja: mereno, on ima dva aktivna reda i DVA vlasnika,
+    ' pa poziv obara kapija na strani prijemnice -- a to nije ono sto se meri.
+    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJEMNICA_STALE, _
+                                                    FX_ZBIRNA_KASK)
+    AssertEq ok, True, _
+             "prevezivanje ne staje zbog reda koji je slucajno prvi"
 End Sub

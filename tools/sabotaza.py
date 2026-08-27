@@ -84,6 +84,18 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
+    # Cilj-zbirna razresena po PRVOM redu sa tim brojem: LookupValue ne gleda
+    # ni identitet ni storno. Posle storna jednog vlasnika prvi red moze biti
+    # storniran dok pod istim brojem stoji AKTIVNA zbirna -- pa legitimno
+    # prevezivanje TIHO stane. Zamena vraca tacno taj oblik.
+    "cilj-zbirna-po-prvom-redu": (
+        "modDokumenta.bas",
+        "        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function\n",
+        "        If UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
+        "                        COL_STORNIRANO) & \"\")) = \"DA\" Then Exit Function   ' SABOTAZA\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "prevezivanje ne staje zbog reda koji je slucajno prvi",
+    ),
     # Primitiv koji mutira SVE zbirna redove sa datim brojem, bez kapije u sebi.
     # Zastita je stajala samo po call-site-u (ZbirnaBrojJeDvosmislenIkad, sest
     # mesta u modStornoFlow), pa je nov pozivalac bio bezbedan tek ako se autor

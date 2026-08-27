@@ -3659,6 +3659,10 @@ aktivne. Probano je i izmereno: prebacivanje na IKAD ostavlja **ceo set zelen** 
 bez generacije na dvosmislen cilj već vraća `False`, ali **nije izolovano zbog
 čega** (moguće raniji uslov, ne kapija).
 
+> **Izolovano u `v2.85.0` — v. §20.** Bila su **dva** razloga, ne jedan, i moja
+> prva dijagnoza je pokrila pogrešan. Razrešenje cilja po prvom redu je
+> popravljeno; kapija po aktivnima ostaje otvorena.
+
 Izmena ponašanja bez testa koji je meri je tačno ono što `CLAUDE.md` §2 zabranjuje,
 pa je ostavljena otvorena umesto da se progura kao „i to je popravljeno".
 
@@ -3667,3 +3671,71 @@ uklanjanje bilo **nazadovanje u dijagnostici**: te kapije staju pre transakcije 
 kažu razlog („Zamena bi prevezala decu"), a centralna staje iznutra i pozivaocu
 daje samo neuspeh. Zato je centralna **mreža ispod**, a ne zamena — i katalog je
 gore ispravljen da to više ne obećava.
+
+---
+
+## 20. Cilj-zbirna se birala po redu koji je slučajno prvi (`v2.85.0`)
+
+### Šta je bilo
+
+`ReassignPrijemnicaToZbirna_TX` bez generacije bira cilj ovako:
+
+```vb
+tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
+If IsEmpty(tId) Then Exit Function                    ' zbirna ne postoji
+tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
+If UCase$(Trim$(tStor)) = "DA" Then Exit Function     ' cilj-zbirna stornirana
+```
+
+`LookupValue` vraća **prvi** pogodak i ne gleda ni identitet ni storno. Posle
+storna jednog vlasnika prvi red sa tim brojem može biti storniran dok pod istim
+brojem stoji **aktivna** zbirna — a tada prevezivanje **tiho** stane: bez poruke,
+bez loga, samo `False`.
+
+Kod je hazard i sam opisivao („LookupValue po broju uzima prvi pogodak"), ali
+**samo za granu sa generacijom**. Fallback grana je ostala po broju.
+
+### Popravka
+
+Dva pogrešna pitanja („postoji li ijedan red" + „da li je **prvi** storniran")
+zamenjena su jednim tačnim:
+
+```vb
+If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function
+```
+
+`ZbirnaPostoji` filtrira kroz `ExcludeStornirano`, dakle pita **ima li aktivnog
+cilja pod ovim brojem**. Usput poredi i bez obzira na veličinu slova, dok je
+`LookupValue` poredio tačno — broj dokumenta se ne razlikuje po veličini slova, pa
+je to ispravka a ne proširenje.
+
+### Merenje je oborilo prvu dijagnozu — i to je glavni nalaz
+
+Test 125 je napisan i pušten pre izmene, i pao je. Popravka je primenjena — i
+**test je i dalje padao, isto**.
+
+Uzrok: za vozilo sam uzeo `FX_PRIJ_BROJ`, a sonda je pokazala da taj broj ima
+**dva aktivna reda i dva vlasnika**, pa poziv obara kapija na strani **prijemnice**
+(`RequireJedanVlasnikPoBroju`) — pre nego što razrešenje cilja uopšte dođe do
+izražaja. Prvobitno „tiho odbijanje" koje sam pripisao prvom redu bilo je, u tom
+pozivu, nešto sasvim drugo.
+
+| | |
+|---|---|
+| moja dijagnoza | razrešenje cilja po prvom redu |
+| šta je stvarno blokiralo taj poziv | kapija po vlasnicima prijemnice |
+| koliko razloga je bilo | **dva**, a pokrio sam pogrešan |
+
+Tek posle treće sonde — koja traži prijemnicu sa **tačno jednim** vlasnikom —
+nađeno je vozilo (`FX_PRIJEMNICA_STALE`, već na toj zbirnoj, pa poziv prolazi
+putanju a ne pomera ništa semantički). Sa njim sabotaža `cilj-zbirna-po-prvom-redu`
+obara test po imenu, a bez nje je ceo set zelen.
+
+Pouka je stara i skupa: **zelena popravka nad pogrešnim vozilom ne dokazuje
+ništa, a crvena isto tako ne optužuje ono što misliš.**
+
+### Šta ostaje otvoreno
+
+`RequireJedanVlasnikPoBroju` na obe strane te funkcije (cilj-zbirna i prijemnica)
+i dalje broji **samo aktivne**. To je i dalje ista rupa opisana u §19 i nije
+zatvorena — samo se sada zna da je iza nje stajao još jedan, zaseban kvar.

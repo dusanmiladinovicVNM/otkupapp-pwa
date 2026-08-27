@@ -3759,11 +3759,21 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                                                     COL_ZBR_BROJ)))
         If Len(targetBrZbirne) = 0 Then Exit Function
     Else
-        tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
-        If IsEmpty(tId) Then Exit Function                      ' zbirna ne postoji
-        Dim tStor As String
-        tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
-        If UCase$(Trim$(tStor)) = "DA" Then Exit Function       ' cilj-zbirna stornirana
+        ' CILJ SE NE RAZRESAVA PO REDU KOJI JE SLUCAJNO PRVI.
+        '
+        ' LookupValue po broju vraca PRVI pogodak i ne gleda storno. Posle
+        ' storna jednog vlasnika prvi red sa tim brojem moze biti storniran
+        ' dok pod istim brojem stoji AKTIVNA zbirna -- a tada je legitimno
+        ' prevezivanje TIHO stajalo: bez poruke, bez loga, samo False.
+        '
+        ' ZbirnaPostoji gleda samo AKTIVNE redove, pa jedno tacno pitanje
+        ' ("ima li aktivnog cilja pod ovim brojem") zamenjuje dva pogresna
+        ' ("postoji li ijedan red" + "da li je PRVI storniran"). Test 125.
+        '
+        ' Uz to poredi bez obzira na velicinu slova (StrComp vbTextCompare),
+        ' dok je LookupValue poredio tacno -- broj dokumenta se ne razlikuje
+        ' po velicini slova, pa je to ispravka a ne prosirenje.
+        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function
 
         ' Bez generacije CILJ MORA BITI JEDNOZNACAN. Vlasnistvo zbirne je vozac +
         ' kupac, isti par koji koriste StornoZbirna i ApplyGeneracijaID.
