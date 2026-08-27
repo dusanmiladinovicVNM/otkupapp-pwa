@@ -3830,8 +3830,16 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
         ' (legacy zapis) i za njega fallback ostaje.
         If srcIds.count = 0 Then Exit Function
     Else
-        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
-                                   COL_PRJ_KUPAC
+        ' IZVOR MORA BITI ISTORIJSKI JEDNOZNACAN, isto kao cilj iznad.
+        '
+        ' Bez generacije se redovi biraju PO BROJU prijemnice, pa broj koji je
+        ' IKAD pripadao dvama kupcima znaci da se pomera i tudji red. Kapija po
+        ' AKTIVNIMA to ne vidi: posle storna jednog kupca ostane jedan aktivan i
+        ' broj IZGLEDA jednoznacan. Storniran vlasnik ne prestaje da je postojao.
+        '
+        ' Druga polovina rupe iz UI_MIGRACIJA_KATALOG par 19. Test 126.
+        RequireJedanVlasnikIkadPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _
+                                       SRC, COL_PRJ_KUPAC
     End If
     Dim cPrjId As Long: cPrjId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
 

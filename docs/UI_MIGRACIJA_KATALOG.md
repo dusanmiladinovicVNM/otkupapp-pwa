@@ -3659,9 +3659,8 @@ aktivne. Probano je i izmereno: prebacivanje na IKAD ostavlja **ceo set zelen** 
 bez generacije na dvosmislen cilj već vraća `False`, ali **nije izolovano zbog
 čega** (moguće raniji uslov, ne kapija).
 
-> **Zatvoreno na strani CILJA u `v2.85.0` — v. §20.** Ta putanja sada nosi
-> `RequireJedanVlasnikIkadPoBroju`. Na strani **prijemnice** kapija i dalje broji
-> samo aktivne — i dalje otvoreno.
+> **Zatvoreno na obe strane.** Cilj u `v2.85.0` (§20), izvorna prijemnica u
+> `v2.86.0` (§21). Obe putanje sada nose `RequireJedanVlasnikIkadPoBroju`.
 
 Izmena ponašanja bez testa koji je meri je tačno ono što `CLAUDE.md` §2 zabranjuje,
 pa je ostavljena otvorena umesto da se progura kao „i to je popravljeno".
@@ -3824,5 +3823,79 @@ su ga zamenile**, svaka svojom sabotažom:
 `RequireJedanVlasnikPoBroju` na strani **prijemnice** (drugi poziv u istoj
 funkciji) i dalje broji **samo aktivne**. Ciljna strana je zatvorena; ta nije.
 
+> **Zatvoreno u `v2.86.0` — v. §21.**
+
 **Order-dependency testova 124 i 125** ostaje test-dug: oba moraju biti poslednja
 u nizu jer diraju fixture. Nije rešeno ovde, da se diff ne širi.
+
+---
+
+## 21. I izvorna prijemnica mora biti istorijski jednoznačna (`v2.86.0`)
+
+Druga i poslednja polovina rupe iz §19. Ista funkcija, ista greška, druga strana.
+
+### Šta je bilo
+
+Kad generacija nije zadata, `ReassignPrijemnicaToZbirna_TX` bira redove **po broju
+prijemnice**. Kapija iznad toga je brojala samo **aktivne** kupce:
+
+```vb
+RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, SRC, _
+                           COL_PRJ_KUPAC
+```
+
+Posle storna jednog kupca ostane jedan aktivan i broj **izgleda** jednoznačan — a
+pod njim i dalje stoji tuđi, stornirani red čija deca mogu biti živa. Isti oblik i
+isti razlog kao na strani cilja: **storniran vlasnik ne prestaje da je postojao.**
+
+### Vozilo je ovog puta postojalo, i to je izmereno pre izmene
+
+Prošli krug (§20) je pao na tome što sam izmenu predložio bez vozila koje je meri.
+Zato je ovde prvo pušten popis `tblPrijemnica`:
+
+| broj | IKAD | aktivnih |
+|---|---|---|
+| `3/150326` (`FX_PRIJ_ISPRAVKA`) | **2** | **1** |
+| `5/150326`, `8/150326` | 2 | 0 |
+| `9/150326` | 1 | 0 |
+
+Prvi red je tačno traženo stanje. Za cilj je uzeta zbirna na kojoj ta prijemnica
+**već stoji** (`ZB-TEST-4`, `ikad = 1`, `aktivnih = 1`), pa strana cilja ne može
+da zamagli merenje, a poziv ne pomera ništa semantički.
+
+Test 126 pušten **pre** izmene:
+
+```
+FAIL T_Prijemnica_IstorijaVlasnistvaKapija -- istorijski dvosmislena prijemnica
+     ne prolazi bez generacije -- ocekivano [False], dobijeno [True]
+```
+
+Sva četiri preduslova su prošla, dakle pao je baš ciljani uslov.
+
+### Posle izmene
+
+Pun set: `RunAllTests 126/0`, Banka 196/0, svih dvanaest suite-ova OK — što je i
+odgovor na jedini rizik, da stroža kapija zaustavi ispravan posao.
+
+Sabotaža `prijemnica-kapija-samo-aktivni` vraća kapiju po aktivnima i obara test
+po imenu; katalog 260 → **261**, izvor pre/posle identičan.
+
+### Time je §19 zatvoren
+
+Rečenica iz §19 — „tu bi jednog dana trebala centralna kapija umesto zaštite po
+call-site-u" — sada je odrađena u tri koraka, ali **ne** onako kako je napisana:
+
+| Izdanje | Šta je ušlo |
+|---|---|
+| `v2.84.0` | kapija u `RecalculateZbirnaFromOtpremnice_TX`, koji je nije imao |
+| `v2.85.0` | cilj u `ReassignPrijemnicaToZbirna_TX` — aktivan, jednoznačan, ista semantika poređenja |
+| `v2.86.0` | izvorna prijemnica u istoj funkciji |
+
+„Umesto zaštite po call-site-u" se i dalje **ne** izvršava, i to ostaje namerno:
+kapije po call-site-u staju pre transakcije i kažu razlog, centralne staju iznutra
+i daju samo neuspeh. Centralne su mreža **ispod**, ne zamena.
+
+### Šta ostaje
+
+**Order-dependency testova 124–126**: sva tri diraju fixture i moraju biti
+poslednja u nizu. Test-dug, nije rešen ovde.

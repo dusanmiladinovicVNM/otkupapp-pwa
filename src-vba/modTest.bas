@@ -354,6 +354,7 @@ Public Sub RunAllTests()
     RunOne 123
     RunOne 124
     RunOne 125
+    RunOne 126
 
     SetTestMode prevMode
     WriteResultFile
@@ -511,6 +512,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
         Case 124: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
         Case 125: TestName = "T_CiljZbirna_NePoPrvomRedu"
+        Case 126: TestName = "T_Prijemnica_IstorijaVlasnistvaKapija"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -644,6 +646,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 123: T_KesKolone_NeMemoiseNulu
         Case 124: T_RekalkZbirne_KapijaJeUPrimitivu
         Case 125: T_CiljZbirna_NePoPrvomRedu
+        Case 126: T_Prijemnica_IstorijaVlasnistvaKapija
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8512,4 +8515,50 @@ Private Sub T_CiljZbirna_NePoPrvomRedu()
     ' tvrdnju. Stoji kao pozitivna kontrola da nijedan poziv nije nista upisao.
     AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
              "u prijemnici je ostala KANONSKA labela iz tabele"
+End Sub
+
+' TEST 126: i IZVORNA prijemnica mora biti istorijski jednoznacna.
+'
+' Druga polovina rupe iz UI_MIGRACIJA_KATALOG par 19. Test 125 zatvorio je
+' stranu CILJA (zbirna); ovde je strana IZVORA. Kad generacija nije zadata,
+' ReassignPrijemnicaToZbirna_TX bira redove PO BROJU prijemnice, pa broj koji
+' je IKAD pripadao dvama kupcima znaci da se pomera i tudji red.
+'
+' Kapija tu broji samo AKTIVNE vlasnike -- a posle storna jednog kupca ostane
+' jedan aktivan, pa broj IZGLEDA jednoznacan. Isti oblik greske kao na strani
+' cilja, i isti razlog: storniran vlasnik ne prestaje da je postojao.
+'
+' Merene vrednosti fixture-a na ovom mestu u nizu:
+'   3/150326 (FX_PRIJ_ISPRAVKA)  ikad=2  akt=1
+'
+' Cilj je zbirna na kojoj prijemnica VEC stoji, pa poziv prolazi celu putanju
+' a ne pomera nista semanticki -- i strana cilja ne moze da zamagli merenje.
+Private Sub T_Prijemnica_IstorijaVlasnistvaKapija()
+    Dim ikad As Long, akt As Long, ciljIkad As Long, ciljAkt As Long
+    Dim ok As Boolean
+
+    ikad = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
+                           "T_Prij", True, Array(COL_PRJ_KUPAC)).count
+    akt = VlasniciPoBroju(TBL_PRIJEMNICA, COL_PRJ_BROJ, FX_PRIJ_ISPRAVKA, _
+                          "T_Prij", False, Array(COL_PRJ_KUPAC)).count
+    ciljIkad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, _
+                               "T_Prij", True, _
+                               Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    ciljAkt = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_MIRNA, _
+                              "T_Prij", False, _
+                              Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+
+    AssertEq ikad, 2, _
+             "preduslov: broj prijemnice je IKAD pripadao dvama kupcima"
+    AssertEq akt, 1, _
+             "preduslov: aktivan je jedan -- broj IZGLEDA jednoznacan"
+    AssertEq ciljIkad, 1, _
+             "preduslov: ciljna zbirna je jednoznacna, pa ona ne odlucuje"
+    AssertEq ciljAkt, 1, _
+             "preduslov: ciljna zbirna je aktivna"
+
+    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJ_ISPRAVKA, _
+                                                    FX_ZBIRNA_MIRNA)
+    AssertEq ok, False, _
+             "istorijski dvosmislena prijemnica ne prolazi bez generacije"
 End Sub

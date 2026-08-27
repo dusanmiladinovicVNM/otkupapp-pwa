@@ -84,6 +84,19 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
+    # Izvorna prijemnica bez IKAD kapije. Bez generacije se redovi biraju PO
+    # BROJU, pa broj koji je IKAD pripadao dvama kupcima znaci da se pomera i
+    # tudji red. Kapija po AKTIVNIMA to ne vidi -- posle storna jednog kupca
+    # ostane jedan aktivan i broj IZGLEDA jednoznacan.
+    "prijemnica-kapija-samo-aktivni": (
+        "modDokumenta.bas",
+        "        RequireJedanVlasnikIkadPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _\n"
+        "                                       SRC, COL_PRJ_KUPAC\n",
+        "        RequireJedanVlasnikPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _\n"
+        "                                   SRC, COL_PRJ_KUPAC   ' SABOTAZA\n",
+        "T_Prijemnica_IstorijaVlasnistvaKapija",
+        "istorijski dvosmislena prijemnica ne prolazi bez generacije",
+    ),
     # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
     # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa
     # prijemnica zavrsi vezana GOLOM LABELOM za broj koji nose dva vlasnicka
