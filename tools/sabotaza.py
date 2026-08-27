@@ -84,6 +84,48 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
+    # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
+    # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa
+    # prijemnica zavrsi vezana GOLOM LABELOM za broj koji nose dva vlasnicka
+    # toka. Recovery panel u frmDokumenta zove bas ovu putanju, bez ijedne
+    # spoljne kapije.
+    "cilj-zbirna-kapija-samo-aktivni": (
+        "modDokumenta.bas",
+        "        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
+        "                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC\n",
+        "        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
+        "                                   SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC   ' SABOTAZA\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "istorijski dvosmislen broj ne prolazi bez generacije",
+    ),
+    # Bez provere da AKTIVAN cilj postoji, prevezivanje ide i na broj pod kojim
+    # su svi redovi stornirani -- IKAD kapija ga ne zaustavlja jer je vlasnik
+    # jedan. Ovo je ono sto je zatecena provera prvog reda pokusavala da radi,
+    # samo je gledala red koji je SLUCAJNO prvi.
+    "cilj-zbirna-bez-provere-postojanja": (
+        "modDokumenta.bas",
+        "        If aktivniVlasnici = 0 Then Exit Function\n",
+        "        ' SABOTAZA: nema provere da aktivan cilj uopste postoji\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "prevezivanje na broj bez ijedne aktivne zbirne ne prolazi",
+    ),
+    # Postojanje cilja pitano DRUGACIJIM poredjenjem nego kapija ispod:
+    # ZbirnaPostoji ide kroz StrComp vbTextCompare, a VlasniciPoBroju poredi
+    # tacno. Mala slova bi tada prosla kao "postoji", kapija bi videla NULA
+    # vlasnika (hvata samo n > 1), i u prijemnicu bi se upisala labela
+    # pozivaoca. To je bila prva verzija ove popravke -- nasla je recenzija.
+    "cilj-zbirna-case-mesano": (
+        "modDokumenta.bas",
+        "        Dim aktivniVlasnici As Long\n"
+        "        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _\n"
+        "                                          targetBrZbirne, SRC, False, _\n"
+        "                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count\n"
+        "        If aktivniVlasnici = 0 Then Exit Function\n",
+        "        ' SABOTAZA: postojanje poredi drugacije nego kapija ispod\n"
+        "        If Not ZbirnaPostoji(targetBrZbirne) Then Exit Function\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "broj sa drugom velicinom slova nije isti broj",
+    ),
     # Primitiv koji mutira SVE zbirna redove sa datim brojem, bez kapije u sebi.
     # Zastita je stajala samo po call-site-u (ZbirnaBrojJeDvosmislenIkad, sest
     # mesta u modStornoFlow), pa je nov pozivalac bio bezbedan tek ako se autor

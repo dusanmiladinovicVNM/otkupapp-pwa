@@ -3759,16 +3759,53 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                                                     COL_ZBR_BROJ)))
         If Len(targetBrZbirne) = 0 Then Exit Function
     Else
-        tId = LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_ZBR_ID)
-        If IsEmpty(tId) Then Exit Function                      ' zbirna ne postoji
-        Dim tStor As String
-        tStor = NzToText(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, COL_STORNIRANO))
-        If UCase$(Trim$(tStor)) = "DA" Then Exit Function       ' cilj-zbirna stornirana
+        ' CILJ SE NE RAZRESAVA PO REDU KOJI JE SLUCAJNO PRVI.
+        '
+        ' LookupValue po broju vraca PRVI pogodak i ne gleda storno. Posle
+        ' storna jednog vlasnika prvi red sa tim brojem moze biti storniran
+        ' dok pod istim brojem stoji AKTIVNA zbirna -- a tada je legitimno
+        ' prevezivanje TIHO stajalo: bez poruke, bez loga, samo False.
+        '
+        ' ZbirnaPostoji gleda samo AKTIVNE redove, pa jedno tacno pitanje
+        ' ("ima li aktivnog cilja pod ovim brojem") zamenjuje dva pogresna
+        ' ("postoji li ijedan red" + "da li je PRVI storniran"). Test 125.
+        '
+        ' RAZRESAVA SE ISTIM POREDJENJEM KOJIM RADI KAPIJA ISPOD.
+        '
+        ' ZbirnaPostoji ovde NE valja iako pita pravu stvar: on poredi bez
+        ' obzira na velicinu slova (StrComp vbTextCompare), a VlasniciPoBroju
+        ' -- koji stoji iza kapije -- poredi TACNO. Sa "zb-test-kask" bi
+        ' postojanje reklo DA, kapija bi videla NULA vlasnika (a ona hvata samo
+        ' n > 1, pa bi propustila), i u tblPrijemnica i tblPaletaStavka bi se
+        ' upisala labela POZIVAOCA umesto one iz tabele. Postojanje i
+        ' vlasnistvo bi govorili o dve razlicite stvari.
+        '
+        ' Jedan poziv daje oba odgovora: broj AKTIVNIH vlasnika pod tim brojem.
+        ' Nula znaci "nema aktivnog cilja", a vise od jedan hvata kapija ispod
+        ' -- koja ostaje zbog svoje poruke. Test 125.
+        Dim aktivniVlasnici As Long
+        aktivniVlasnici = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, _
+                                          targetBrZbirne, SRC, False, _
+                                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+        If aktivniVlasnici = 0 Then Exit Function
 
-        ' Bez generacije CILJ MORA BITI JEDNOZNACAN. Vlasnistvo zbirne je vozac +
-        ' kupac, isti par koji koriste StornoZbirna i ApplyGeneracijaID.
-        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, SRC, _
-                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
+        ' Bez generacije CILJ MORA BITI JEDNOZNACAN, i to ISTORIJSKI.
+        '
+        ' Vlasnistvo zbirne je vozac + kupac, isti par koji koriste
+        ' StornoZbirna i ApplyGeneracijaID. Broji se IKAD, ne samo aktivni:
+        ' storniran vlasnik i dalje ima AKTIVNU decu, pa posle njegovog storna
+        ' ostane jedan aktivan i broj IZGLEDA jednoznacan -- a nije.
+        '
+        ' Ovde je to obavezno, ne opciono: recovery panel u frmDokumenta zove
+        ' ovu funkciju sa DVA argumenta (bez generacije) i BEZ ijedne spoljne
+        ' kapije, pa se funkcija mora braniti sama. Putanje iz modStornoFlow
+        ' imaju ZbirnaBrojJeDvosmislenIkad iznad sebe; ta nema nista.
+        '
+        ' Veza koja se upisuje je gola labela (COL_PRJ_BROJ_ZBIRNE,
+        ' COL_PALS_BROJ_ZBIRNE), pa bi dete zavrsilo vezano za broj koji
+        ' pripada dvama vlasnickim tokovima. Test 125.
+        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _
+                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC
     End If
 
     Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
