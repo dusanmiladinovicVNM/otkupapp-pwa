@@ -615,16 +615,43 @@ Oba su upisana u `POZNATI_NALAZI` sa razlogom i vlasnikom, kao i zatečeni
 je otporna na *flaky* upis, pa je merljiva samo nad lažnom kontrolom koja prvi
 upis odbija.
 
+### Pun prolaz je izvršen — i našao je ono što statička provera ne može
+
+Pušten je posle popravke, nad svih 251 sabotažom (27.08.2026):
+
+```
+crvenih: 247 / sabotaza: 251 (priznatih: 2)
+izvor pre/posle: 2c1ee801fc99fe2a / 2c1ee801fc99fe2a -> IDENTICAN
+```
+
+Migracija je time potvrđena — **nijedan** od 119 prepisanih tekstova nije pao. Ali
+prolaz je našao **osam** unosa koje statička provera **provereno ne vidi**, i
+nijedan od njih nije bio u žetvi (svi su bili među 128 koji su se već poklapali):
+
+| Klasa | Koliko | Zašto statička provera ne pomaže |
+|---|---|---|
+| `PALA DRUGA TVRDNJA` | 5 | tekst **jeste** tvrdnja tog testa, ali sabotaža obara **drugu** — obično preduslov koji pukne pre nje (zamka 6) |
+| `NE OBARA NISTA` | 3 | sabotaža se uredno primeni, a nijedna tvrdnja ne padne |
+
+Imena: `parse-cdate`, `bruto-prijemnica`, `guard-samo-aktivni-vlasnici`,
+`completion-ne-prevezuje`, `brojac-nije-opcion` (prva klasa); `uvid-guta-necitljivo`,
+`identitet-degradira-na-broj`, `paleta-klik-otvara` (druga). Uz njih i jedan
+**zastareo priznat nalaz** — `POZNATI_NALAZI_DOKAZ['relink-ignorise-generaciju']`
+više ne pokriva ništa, što znači da je nalaz koji opisuje u međuvremenu zatvoren.
+
+To je **potvrda ograničenja**, ne iznenađenje: §12 je i pisao da provera tvrdi
+samo da je tekst tvrdnja tog testa, a ne da je to tvrdnja koju ta sabotaža obara.
+Sada se zna i **koliko** to ograničenje košta: osam od 251, oko tri odsto.
+
 ### Šta ostaje otvoreno
 
-**Pun prolaz nad svih 251 nije izvršen** posle popravke — traje oko dva i po
-sata. Izvršena su dva prefiksa koja su ranije bila blokirana (`ljuska-`,
-`storno-`), i puna žetva je pre popravke prošla kroz 123 unosa. Ostatak kataloga
-je popravljen **iz merenja**, ali nije ponovo izmeren.
+**Tih osam unosa nije popravljeno.** Svaki traži svoje merenje — pet ih traži ili
+novu tvrdnju ili užu sabotažu koja ne obara preduslov, tri traže odgovor na
+pitanje da li invarijanta uopšte može da se meri. To je zaseban posao, ne dodatak
+ovom.
 
-**Provera ne zna šta sabotaža stvarno obara.** Ona tvrdi samo da deklarisan tekst
-JESTE tvrdnja tog testa. Da je to i tvrdnja koju ta sabotaža obara i dalje zna
-jedino `dokaz.py`.
+**Provera i dalje ne zna šta sabotaža stvarno obara.** To zna jedino `dokaz.py`, i
+sada je izmereno da ta razlika nije teorijska.
 
 ---
 
