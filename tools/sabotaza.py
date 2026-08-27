@@ -3266,7 +3266,9 @@ def _spoji_nastavke(redovi: list) -> list:
     for red in redovi:
         t = red.rstrip()
         tek = (tek + " " + t.strip()) if tek else t
-        if tek.rstrip().endswith("_"):
+        # VBA trazi RAZMAK pa `_`. Golo endswith("_") bi identifikator koji se
+        # zavrsava podvlakom progutalo kao nastavak reda.
+        if re.search(r"\s_$", tek.rstrip() + ""):
             tek = tek.rstrip()[:-1].rstrip()
             continue
         out.append(tek)
@@ -3277,7 +3279,10 @@ def _spoji_nastavke(redovi: list) -> list:
 
 
 def _lokalna_imena(redovi: list, a: int, b: int) -> set:
-    """Parametri + Dim/Static/Const unutar procedure [a..b].
+    """Parametri + lokalni Dim/Static unutar procedure [a..b].
+
+    `Const` NIJE ovde: on zaklanja proceduru, ali dodela konstanti je i dalje
+    compile error -- v. _LOKAL_DODELJIV.
 
     VBA DOZVOLJAVA da lokalno ime ZAKLONI proceduru: `Dim Foo As Boolean` u P()
     znaci da je `Foo = True` dodela promenljivoj, ne pokusaj dodele Sub-u. Repo
@@ -3301,7 +3306,7 @@ def _lokalna_imena(redovi: list, a: int, b: int) -> set:
     return imena
 
 
-def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
+def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
     """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
 
     VRSTA ODLUCUJE, i pravilo je namerno UZE nego sto ime sugerise:
@@ -3318,17 +3323,25 @@ def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
     je isti compile error kao `Scr_Event = ...`, a poredjenje po tacnom zapisu
     bi ga pustilo -- trivijalan zaobilazak bas ovog pravila.
     """
-    kljuc = id(tekst)
-    if kljuc not in proc_kes:
-        proc_kes[kljuc] = _procedure_po_redu(tekst)
-    procs = proc_kes[kljuc]
-
     idx = tekst.find("\n" + staro)
     if idx < 0:
         return None
     red = tekst[:idx + 1].count("\n")
 
-    redovi = tekst.split("\n")
+    # SIMBOLI SE CITAJU IZ MUTIRANOG KODA, ne iz zdravog.
+    #
+    # Kompajlira se ono sto sabotaza NAPRAVI, pa se i pita o njemu. Racun nad
+    # zdravim tekstom gresi u oba smera:
+    #   - zamena koja UKLONI `Dim Foo` ostavlja dodelu tudjoj funkciji, a checker
+    #     bi jos video stari Dim i pustio je (propusten compile error);
+    #   - zamena koja UVEDE `Dim Foo` daje legalan VBA, a checker bi ga prijavio
+    #     (lazna uzbuna nad ispravnim kodom).
+    #
+    # Kes nad originalnim tekstom je time otpao. 251 unos je premalo da bi
+    # ustedu vredelo platiti netacnoscu.
+    mutirani = tekst.replace("\n" + staro, "\n" + novo, 1)
+    procs = _procedure_po_redu(mutirani)
+    redovi = mutirani.split("\n")
     unutar, lokalna = None, set()
     for pime, _v, a, b in procs:
         if a <= red <= b:
@@ -3363,7 +3376,6 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     kes = {}                 # fajl se cita jednom, ne 222 puta (ovo ide u hook)
     if tela is None:
         tela = _tela_testova()
-    proc_kes: dict = {}
 
     for ime, (fajl, staro, novo, test, tvrdnja) in katalog.items():
         put = os.path.join(SRC_VBA, fajl)
@@ -3398,7 +3410,7 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
             nalazi.append((ime, "zamena je podniz sidra -- --vrati bi dirao zdrav kod"))
 
         # zamka 10: dodela imenu tudje procedure -- compile error, ne pad testa
-        tudja = _dodela_tudjoj_proceduri(tekst, staro, novo, proc_kes)
+        tudja = _dodela_tudjoj_proceduri(tekst, staro, novo)
         if tudja:
             nalazi.append((ime, "zamena dodeljuje imenu tudje procedure '%s' -- "
                                 "to je compile error, pa Excel stane u [break] a "
@@ -3577,55 +3589,57 @@ _SELF_TEST = [
 # (naziv, ocekivano ime ili None, izvor, zamena)
 _DODELA_CASES = [
     # VBA je case-insensitive: `foo = ` je isti compile error kao `Foo = `.
-    # Poredjenje po tacnom zapisu bi bilo trivijalan zaobilazak bas ovog pravila.
     ("casing ne spasava", "foo",
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P()\n    SIDRO\nEnd Sub\n",
-     "    foo = True\n"),
+     "    SIDRO\n", "    foo = True\n"),
     # Dodela SVOM imenu je povratna vrednost funkcije -- legalno.
     ("Function dodeljuje svom imenu", None,
      "Option Explicit\nFunction Foo() As Boolean\n    SIDRO\nEnd Function\n",
-     "    Foo = True\n"),
-    # `Foo = 1` uz Property Let je POZIV, ne greska. Bez uparivanja Get/Let/Set
-    # se ne moze tvrditi suprotno, pa je Property izuzeta iz pravila.
+     "    SIDRO\n", "    Foo = True\n"),
+    # `Foo = 1` uz Property Let je POZIV, ne greska.
     ("Property Let se ne prijavljuje", None,
      "Option Explicit\nProperty Let Foo(ByVal v As Long)\nEnd Property\n"
      "Sub P()\n    SIDRO\nEnd Sub\n",
-     "    Foo = 1\n"),
+     "    SIDRO\n", "    Foo = 1\n"),
     # Sub nema povratnu vrednost, pa je dodela njenom imenu greska i IZNUTRA.
     ("Sub nema povratnu vrednost", "Foo",
      "Option Explicit\nSub Foo()\n    SIDRO\nEnd Sub\n",
-     "    Foo = 1\n"),
-    # VBA dozvoljava da LOKALNO ime zakloni proceduru: tada je `Foo = True`
-    # dodela promenljivoj, ne pokusaj dodele Sub-u. Repo to vec zna -- vba_check
-    # ima pravilo ZAKLONJENO nad istom pojavom.
+     "    SIDRO\n", "    Foo = 1\n"),
+    # VBA dozvoljava da LOKALNO ime zakloni proceduru.
     ("lokalni Dim zaklanja Sub", None,
      "Option Explicit\nSub Foo()\nEnd Sub\n"
      "Sub P()\n    Dim Foo As Boolean\n    SIDRO\nEnd Sub\n",
-     "    Foo = True\n"),
-    # Isto vazi za parametar -- dodela ide parametru, ne funkciji.
+     "    SIDRO\n", "    Foo = True\n"),
     ("parametar zaklanja Function", None,
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P(ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
-     "    Foo = True\n"),
-    # Const ZAKLANJA proceduru, ali dodela konstanti je i dalje compile error --
-    # skup opisuje mesta na koja se SME dodeliti, ne sva lokalna imena.
+     "    SIDRO\n", "    Foo = True\n"),
+    # Const ZAKLANJA, ali dodela konstanti je i dalje compile error.
     ("Const nije dodeljiv", "Foo",
      "Option Explicit\nSub Foo()\nEnd Sub\n"
      "Sub P()\n    Const Foo As Long = 1\n    SIDRO\nEnd Sub\n",
-     "    Foo = 2\n"),
-    # Prelomljen potpis je u ovom repou uobicajen; citanje po fizickim redovima
-    # vidi samo prvi parametar, pa bi dodela drugom bila lazan nalaz.
+     "    SIDRO\n", "    Foo = 2\n"),
+    # Prelomljen potpis je u ovom repou uobicajen.
     ("multiline parametar zaklanja", None,
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P(ByVal x As Long, _\n      ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
-     "    Foo = True\n"),
+     "    SIDRO\n", "    Foo = True\n"),
     ("multiline Dim zaklanja", None,
      "Option Explicit\nSub Foo()\nEnd Sub\n"
      "Sub P()\n    Dim x As Long, _\n        Foo As Boolean\n    SIDRO\nEnd Sub\n",
-     "    Foo = True\n"),
+     "    SIDRO\n", "    Foo = True\n"),
+    # SIMBOLI SE CITAJU IZ MUTIRANOG KODA. Ova dva to i dokazuju: prvi brise
+    # deklaraciju koju zdrav kod ima, drugi je uvodi tamo gde je nema.
+    ("zamena UKLANJA deklaraciju", "Foo",
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    Dim Foo As Boolean\n    SIDRO\nEnd Sub\n",
+     "    Dim Foo As Boolean\n    SIDRO\n", "    Foo = True\n"),
+    ("zamena UVODI deklaraciju", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Dim Foo As Boolean\n    Foo = True\n"),
 ]
-
 
 def _self_test() -> int:
     """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
@@ -3702,9 +3716,9 @@ def _self_test() -> int:
     # Granica pravila o dodeli imenu procedure -- ide kroz _dodela_tudjoj_proceduri,
     # istu funkciju koju zove _nalazi. Da je unos u katalogu stvarno provuce kroz
     # nju, dokazuje zaseban slucaj "dodela imenu tudje procedure" iznad.
-    for naziv, ocekivano, izvor, zamena in _DODELA_CASES:
+    for naziv, ocekivano, izvor, sidro, zamena in _DODELA_CASES:
         n += 1
-        dobijeno = _dodela_tudjoj_proceduri(izvor, "    SIDRO\n", zamena, {})
+        dobijeno = _dodela_tudjoj_proceduri(izvor, sidro, zamena)
         if dobijeno != ocekivano:
             print("SELF-TEST: dodela/%s: ocekivano %r, dobijeno %r"
                   % (naziv, ocekivano, dobijeno), file=sys.stderr)

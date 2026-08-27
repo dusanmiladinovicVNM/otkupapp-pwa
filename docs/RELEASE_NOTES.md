@@ -5901,6 +5901,9 @@ koda. Sve troje je nađeno u pregledu i suženo — provera sada zna o kakvoj je
 vrsti potprograma reč i poštuje pravilo da lokalno ime sme da zakloni ime
 potprograma.
 
+Poslednja ispravka je bila najvažnija: provera je gledala **zdrav** kod, a sudila
+o **izmenjenom**. Sada gleda baš ono što će se izvršavati.
+
 ### Zašto je ovo vredelo
 
 Provera koja se pokvari a ništa ne padne izgleda isto kao provera koja radi. Tri

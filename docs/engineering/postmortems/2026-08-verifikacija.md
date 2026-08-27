@@ -912,6 +912,22 @@ Sub P(ByVal x As Long, _
 pa bi dodela drugom parametru bila lažan nalaz. Isto za prelomljen `Dim`.
 Prelomljeni potpisi su u ovom repou uobičajeni, pa ovo nije ivica nego pravilo.
 
+### I poslednja, najstrukturnija: simboli su čitani PRE mutacije
+
+Provera je scope računala iz **zdravog** fajla, a proveravala **zamenu**. Kompajlira
+se ono što sabotaža napravi — pa se i pita o njemu. Greška je išla u oba smera, i
+oba su izmerena:
+
+| Zamena | Mutirani VBA | Provera je govorila |
+|---|---|---|
+| **uklanja** `Dim Foo` | dodela tuđoj funkciji — compile error | čisto |
+| **uvodi** `Dim Foo` | legalan (lokalno zaklanja) | nalaz |
+
+Rešenje nije još jedna heuristika nad `staro`/`novo` nego da se tekst posle
+zamene stvarno sastavi, pa da se nad **njim** čitaju procedure, njihove vrste i
+lokalna imena. Keš nad originalnim tekstom je time otpao — 251 unos je premalo
+da bi se ušteda platila netačnošću.
+
 ### Prvi dokaz suženja nije izolovao ništa
 
 Vredi zapisa iz istog razloga kao §12: sabotaža mora da menja **jednu** stvar.
@@ -922,7 +938,7 @@ i dalje bili u malim slovima). Prava sabotaža skida `.lower()` sa **obe** stran
 
 Ista greška u drugom smeru je i otkrila mrtvu granu iznad.
 
-Konačno: sedam sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
+Konačno: osam sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
 pošteno obara **tri** — neosetljivost na veličinu slova koriste sva tri poređenja
 imena, pa je to jedna osobina, a ne tri.
 
