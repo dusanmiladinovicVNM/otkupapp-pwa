@@ -5822,27 +5822,39 @@ više ne prevodi. To se do sada videlo tek kad Excel **stane i ostane da stoji**
 bez ijedne poruke, jer provera koda pre toga kaže da je sve u redu.
 
 Tako je i bilo: alat je rekao „čisto", a onda je pokretanje testova visilo dok se
-ne prekine ručno.
+ne prekine ručno. Najskuplji mogući način da se sazna nešto što se vidi odmah.
 
 ### Šta je sada
 
 Provera to hvata **odmah po izmeni**, i imenuje promenljivu koja nedostaje.
 
-### Zašto baš ovako, a ne šire
+### Zašto usko, a ne šire
 
 Šira provera bi zapištala i nad sasvim ispravnim kodom — nad kontrolama forme,
 nad ugrađenim Excel imenima — a lažna uzbuna je gora od propusta: nauči čoveka da
 alat preskače. Zato je vezana za način na koji se u ovom projektu imenuju takve
-promenljive; njih ima 585 u 68 fajlova.
+promenljive; njih ima **585 u 68 fajlova**, i nijedna se ne deli između delova
+programa.
 
-Nad celim zatečenim kodom daje **nula** primedbi. Do te nule se stiglo kroz dve
-greške u samoj proveri, obe nađene tim istim merenjem — jedna je prijavljivala 54
-mesta koja su sasvim ispravna.
+Nad celim zatečenim kodom daje **nula** primedbi.
 
-Treću je našao pregled, i bila je ozbiljnija: provera je gledala imena kroz ceo
-fajl umesto po delovima, pa je promenljiva prijavljena u jednom delu „pokrivala"
-isto ime u drugom — tamo gde ga zapravo nema. Sada se poštuje isto pravilo koje
-važi i u samom Excelu.
+### Tri greške u samoj proveri, i kako je koja nađena
+
+Do te nule se nije stiglo iz prve. Vredi zapisati redom, jer se vidi da svaka
+vrsta greške traži svoju vrstu provere:
+
+| Greška | Kako se pokazala | Ko ju je našao |
+|---|---|---|
+| ime procedure je čitano kao deklaracija | **54** primedbe nad kodom koji se uredno prevodi | merenje |
+| brojevi redova su klizili kod komentara | primedba pokazuje na pogrešan red | merenje |
+| imena su gledana kroz **ceo fajl** umesto po delovima | promenljiva prijavljena u jednom delu „pokrivala" isto ime u drugom — tamo gde ga nema | **pregled** |
+
+Prve dve su se prijavile same: 54 primedbe nad ispravnim kodom ne mogu biti ništa
+drugo nego mana provere.
+
+Treća je bila najozbiljnija, jer je vraćala tačno onu grešku zbog koje provera i
+postoji — i nijedno merenje je nije moglo pokazati, jer je nad zatečenim kodom
+davala uredno „nula". Videla se tek kad je neko pitao **šta bi bilo kad bi**.
 
 ### Kako je dokazano
 
@@ -5850,3 +5862,7 @@ Uzet je pravi fajl iz istorije i iz njega je uklonjen **baš onaj jedan red** ko
 je tada nedostajao. Zdrav fajl: nula primedbi. Bez tog reda: jedna, sa imenom
 promenljive.
 
+Uz to, za svaki oblik koji **sme** da prođe postoji zaseban slučaj — jedanaest
+njih. Među njima i jedan koji čuva da se provera ne „popravi" tako što prestane
+da priznaje ispravne deklaracije: to bi bila druga greška istog oblika, a izveštaj
+bi ostao zelen.
