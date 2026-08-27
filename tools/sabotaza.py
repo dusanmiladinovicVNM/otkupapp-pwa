@@ -84,17 +84,30 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
-    # Cilj-zbirna razresena po PRVOM redu sa tim brojem: LookupValue ne gleda
-    # ni identitet ni storno. Posle storna jednog vlasnika prvi red moze biti
-    # storniran dok pod istim brojem stoji AKTIVNA zbirna -- pa legitimno
-    # prevezivanje TIHO stane. Zamena vraca tacno taj oblik.
-    "cilj-zbirna-po-prvom-redu": (
+    # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
+    # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa
+    # prijemnica zavrsi vezana GOLOM LABELOM za broj koji nose dva vlasnicka
+    # toka. Recovery panel u frmDokumenta zove bas ovu putanju, bez ijedne
+    # spoljne kapije.
+    "cilj-zbirna-kapija-samo-aktivni": (
+        "modDokumenta.bas",
+        "        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
+        "                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC\n",
+        "        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
+        "                                   SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC   ' SABOTAZA\n",
+        "T_CiljZbirna_NePoPrvomRedu",
+        "istorijski dvosmislen broj ne prolazi bez generacije",
+    ),
+    # Bez provere da AKTIVAN cilj postoji, prevezivanje ide i na broj pod kojim
+    # su svi redovi stornirani -- IKAD kapija ga ne zaustavlja jer je vlasnik
+    # jedan. Ovo je ono sto je zatecena provera prvog reda pokusavala da radi,
+    # samo je gledala red koji je SLUCAJNO prvi.
+    "cilj-zbirna-bez-provere-postojanja": (
         "modDokumenta.bas",
         "        If aktivniVlasnici = 0 Then Exit Function\n",
-        "        If UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _\n"
-        "                        COL_STORNIRANO) & \"\")) = \"DA\" Then Exit Function   ' SABOTAZA\n",
+        "        ' SABOTAZA: nema provere da aktivan cilj uopste postoji\n",
         "T_CiljZbirna_NePoPrvomRedu",
-        "prevezivanje ne staje zbog reda koji je slucajno prvi",
+        "prevezivanje na broj bez ijedne aktivne zbirne ne prolazi",
     ),
     # Postojanje cilja pitano DRUGACIJIM poredjenjem nego kapija ispod:
     # ZbirnaPostoji ide kroz StrComp vbTextCompare, a VlasniciPoBroju poredi

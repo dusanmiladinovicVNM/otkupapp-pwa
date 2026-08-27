@@ -8448,55 +8448,68 @@ Private Sub T_RekalkZbirne_KapijaJeUPrimitivu()
              "rekalkulacija po dvosmislenom broju ne prolazi kroz sam primitiv"
 End Sub
 
-' TEST 125: cilj-zbirna se ne razresava po redu koji je SLUCAJNO prvi.
+' TEST 125: cilj bez generacije mora biti AKTIVAN i ISTORIJSKI jednoznacan.
 '
-' ReassignPrijemnicaToZbirna_TX bez generacije bira cilj kroz LookupValue po
-' broju, a LookupValue vraca PRVI pogodak -- ne gleda ni identitet ni storno.
-' Posle storna jednog vlasnika prvi red sa tim brojem moze biti storniran dok
-' pod istim brojem stoji AKTIVNA zbirna. Tada prevezivanje TIHO stane: bez
-' poruke, bez loga, samo False.
+' Recovery panel u frmDokumenta zove ReassignPrijemnicaToZbirna_TX sa DVA
+' argumenta -- bez generacije i bez ijedne spoljne kapije -- pa se funkcija
+' brani sama. Veza koju upisuje je GOLA LABELA (COL_PRJ_BROJ_ZBIRNE,
+' COL_PALS_BROJ_ZBIRNE), dakle broj, ne identitet.
 '
-' Kod je hazard i sam opisivao ("LookupValue po broju uzima prvi pogodak"),
-' ali samo za granu SA generacijom. Fallback grana je ostala po broju.
+' Zatecen kod je cilj birao kroz LookupValue po broju, sto vraca PRVI red i ne
+' gleda ni identitet ni storno. Taj oblik je ovde subsumiran: pitanje vise
+' nije "da li je prvi red storniran" nego "ima li AKTIVNOG cilja" i "da li je
+' broj IKAD pripadao dvama vlasnicima".
 '
-' Stoji POSLEDNJI u nizu: kad prodje, prevezivanje se stvarno izvrsi i pomera
-' fixture, pa iza njega ne sme da ide test koji na taj fixture racuna.
+' Merene vrednosti fixture-a na ovom mestu u nizu:
+'   ZB-TEST-KASK  ikad=2 akt=1  (prvi red storniran)
+'   ZB-TEST-OLDU  ikad=1 akt=0  (prvi red storniran, aktivnog nema)
+'
+' Stoji POSLEDNJI u nizu: kad bi neka tvrdnja popustila, poziv bi stvarno
+' prevezao i pomerio fixture.
 Private Sub T_CiljZbirna_NePoPrvomRedu()
-    Dim aktivnaPostoji As Boolean, prviJeStorniran As Boolean
-    Dim ok As Boolean, okMala As Boolean
+    Dim ikad As Long, akt As Long
+    Dim okDvosmislen As Boolean, okBezAktivnog As Boolean, okMala As Boolean
 
-    aktivnaPostoji = modDokumenta.ZbirnaPostoji(FX_ZBIRNA_KASK)
-    prviJeStorniran = (UCase$(Trim$(LookupValue(TBL_ZBIRNA, COL_ZBR_BROJ, _
-                              FX_ZBIRNA_KASK, COL_STORNIRANO) & "")) = "DA")
+    ikad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
+                           "T_Cilj", True, _
+                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    akt = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
+                          "T_Cilj", False, _
+                          Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    AssertEq ikad, 2, "preduslov: broj je IKAD pripadao dvama vlasnicima"
+    AssertEq akt, 1, _
+             "preduslov: aktivan je jedan -- broj IZGLEDA jednoznacan"
 
-    AssertEq aktivnaPostoji, True, _
-             "preduslov: pod tim brojem POSTOJI aktivna zbirna"
-    AssertEq prviJeStorniran, True, _
-             "preduslov: a PRVI red sa tim brojem je storniran"
+    ' ISTORIJSKA DVOSMISLENOST. Kapija po AKTIVNIMA ovde vidi jedan vlasnik i
+    ' pusta -- a storniran vlasnik i dalje ima aktivnu decu, pa bi prijemnica
+    ' zavrsila vezana golom labelom za broj koji nose dva vlasnicka toka.
+    okDvosmislen = modDokumenta.ReassignPrijemnicaToZbirna_TX( _
+                       FX_PRIJEMNICA_STALE, FX_ZBIRNA_KASK)
+    AssertEq okDvosmislen, False, _
+             "istorijski dvosmislen broj ne prolazi bez generacije"
 
-    ' FX_PRIJEMNICA_STALE ima TACNO JEDNOG vlasnika i vec stoji na toj zbirnoj,
-    ' pa poziv prolazi kroz razresenje cilja a ne pomera nista semanticki.
-    ' FX_PRIJ_BROJ ovde NE valja: mereno, on ima dva aktivna reda i DVA vlasnika,
-    ' pa poziv obara kapija na strani prijemnice -- a to nije ono sto se meri.
-    ok = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJEMNICA_STALE, _
-                                                    FX_ZBIRNA_KASK)
-    AssertEq ok, True, _
-             "prevezivanje ne staje zbog reda koji je slucajno prvi"
+    ' NEMA AKTIVNOG CILJA. Pod tim brojem postoje samo stornirani redovi, pa
+    ' prevezivanje nema na sta da veze -- a IKAD kapija ga ne bi zaustavila
+    ' (vlasnik je jedan).
+    okBezAktivnog = modDokumenta.ReassignPrijemnicaToZbirna_TX( _
+                        FX_PRIJEMNICA_STALE, FX_ZBIRNA_OLDU)
+    AssertEq okBezAktivnog, False, _
+             "prevezivanje na broj bez ijedne aktivne zbirne ne prolazi"
 
     ' BROJ DOKUMENTA JE CASE-SENSITIVE KROZ CELU PUTANJU.
     '
     ' Prva verzija ove popravke je postojanje pitala kroz ZbirnaPostoji, koji
-    ' poredi bez obzira na velicinu slova, dok kapija ispod poredi TACNO. Tada
-    ' bi mala slova prosla kao "postoji", kapija bi videla nula vlasnika pa ne
-    ' bi okinula, i u tblPrijemnica i tblPaletaStavka bi se upisala labela
+    ' poredi bez obzira na velicinu slova, dok kapije ispod porede TACNO. Tada
+    ' bi mala slova prosla kao "postoji", kapije bi videle nula vlasnika pa ne
+    ' bi okinule, i u tblPrijemnica i tblPaletaStavka bi se upisala labela
     ' POZIVAOCA umesto one iz tabele.
     okMala = modDokumenta.ReassignPrijemnicaToZbirna_TX(FX_PRIJEMNICA_STALE, _
                                                         LCase$(FX_ZBIRNA_KASK))
     AssertEq okMala, False, _
              "broj sa drugom velicinom slova nije isti broj"
 
-    ' Bez sopstvene sabotaze, namerno: obara je ista zamena koja obara tvrdnju
-    ' iznad, samo kasnije. Stoji kao pozitivna kontrola da nista nije upisano.
+    ' Bez sopstvene sabotaze, namerno: svaka od zamena iznad obara neku raniju
+    ' tvrdnju. Stoji kao pozitivna kontrola da nijedan poziv nije nista upisao.
     AssertEq ZbirnaNaPrijemnici("PRJ-STL-T"), FX_ZBIRNA_KASK, _
              "u prijemnici je ostala KANONSKA labela iz tabele"
 End Sub

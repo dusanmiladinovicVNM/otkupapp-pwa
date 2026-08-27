@@ -3659,9 +3659,9 @@ aktivne. Probano je i izmereno: prebacivanje na IKAD ostavlja **ceo set zelen** 
 bez generacije na dvosmislen cilj već vraća `False`, ali **nije izolovano zbog
 čega** (moguće raniji uslov, ne kapija).
 
-> **Izolovano u `v2.85.0` — v. §20.** Bila su **dva** razloga, ne jedan, i moja
-> prva dijagnoza je pokrila pogrešan. Razrešenje cilja po prvom redu je
-> popravljeno; kapija po aktivnima ostaje otvorena.
+> **Zatvoreno na strani CILJA u `v2.85.0` — v. §20.** Ta putanja sada nosi
+> `RequireJedanVlasnikIkadPoBroju`. Na strani **prijemnice** kapija i dalje broji
+> samo aktivne — i dalje otvoreno.
 
 Izmena ponašanja bez testa koji je meri je tačno ono što `CLAUDE.md` §2 zabranjuje,
 pa je ostavljena otvorena umesto da se progura kao „i to je popravljeno".
@@ -3763,8 +3763,66 @@ obara test po imenu, a bez nje je ceo set zelen.
 Pouka je stara i skupa: **zelena popravka nad pogrešnim vozilom ne dokazuje
 ništa, a crvena isto tako ne optužuje ono što misliš.**
 
+### Druga runda recenzije: test je cementirao ono što §19 zabranjuje
+
+Prvi popravljeni test je nad `ZB-TEST-KASK` tvrdio da prevezivanje **prolazi** —
+a to je isti broj za koji test 124, neposredno pre njega, dokazuje `ikad = 2`,
+`aktivnih = 1`. Testom bi time bilo ozvaničeno tačno ono što je `v2.84.0` uveo
+kao zabranu: mutacija po golom broju nad istorijski dvosmislenim ciljem.
+
+Nije bio teorijski dug. Recovery panel poziva baš tu putanju:
+
+```vb
+' frmDokumenta.frm:5603
+If ReassignPrijemnicaToZbirna_TX(brp, brz) Then
+```
+
+Dva argumenta — bez generacije, bez `ZbirnaBrojJeDvosmislenIkad` iznad, bez ičega.
+Putanje iz `modStornoFlow` imaju kapiju iznad sebe; **ova nema**. A veza koja se
+upisuje je gola labela (`COL_PRJ_BROJ_ZBIRNE`, `COL_PALS_BROJ_ZBIRNE`), pa bi dete
+završilo vezano za broj koji nose dva vlasnička toka.
+
+Zato je u tu granu dodat `RequireJedanVlasnikIkadPoBroju`, a test 125 sada tvrdi
+**suprotno**: `ikad = 2 / aktivnih = 1` → prevezivanje bez generacije **ne
+prolazi**. Time ovaj PR zatvara **ciljnu polovinu** rupe iz §19 umesto da je
+cementira.
+
+### Prvobitni kvar je subsumiran, i to se ne može izmeriti zasebno
+
+Pitanje više nije „da li je **prvi** red storniran" nego „ima li **aktivnog**
+cilja" i „da li je broj **ikad** pripadao dvama vlasnicima". Stari oblik time
+nestaje kao zasebna grana — i njegova sabotaža bi bila **mrtva**, pa je uklonjena.
+
+Da bi se prvobitni kvar dokazao zasebno, trebalo bi vozilo sa:
+
+```
+prvi red = storniran, aktivan red = postoji, IKAD vlasnika = 1
+```
+
+Izmereno nad fixture-om — takvog nema:
+
+| broj | prvi red | IKAD | aktivnih |
+|---|---|---|---|
+| `ZB-TEST-KASK` | storniran | 2 | 1 |
+| `ZB-TEST-OLDU` | storniran | 1 | **0** |
+| `ZB-TEST-STORNO` | storniran | 1 | **0** |
+
+A napraviti ga ne mogu iz izvora: redovi fixture-a žive u `.xlsm`, ne u repou —
+`src-vba/` te redove samo **žigoše** generacijom, ne kreira ih.
+
+Zato se ne tvrdi da je taj oblik izmeren. Umesto njega mere se **dve kapije koje
+su ga zamenile**, svaka svojom sabotažom:
+
+| Sabotaža | Pada, po imenu |
+|---|---|
+| `cilj-zbirna-kapija-samo-aktivni` | `istorijski dvosmislen broj ne prolazi bez generacije` |
+| `cilj-zbirna-bez-provere-postojanja` | `prevezivanje na broj bez ijedne aktivne zbirne ne prolazi` |
+| `cilj-zbirna-case-mesano` | `broj sa drugom velicinom slova nije isti broj` |
+
 ### Šta ostaje otvoreno
 
-`RequireJedanVlasnikPoBroju` na obe strane te funkcije (cilj-zbirna i prijemnica)
-i dalje broji **samo aktivne**. To je i dalje ista rupa opisana u §19 i nije
-zatvorena — samo se sada zna da je iza nje stajao još jedan, zaseban kvar.
+`RequireJedanVlasnikPoBroju` na strani **prijemnice** (drugi poziv u istoj
+funkciji) i dalje broji **samo aktivne**. Ciljna strana je zatvorena; ta nije.
+
+**Order-dependency testova 124 i 125** ostaje test-dug: oba moraju biti poslednja
+u nizu jer diraju fixture. Nije rešeno ovde, da se diff ne širi.

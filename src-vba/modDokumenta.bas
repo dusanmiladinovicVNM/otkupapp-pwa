@@ -3789,10 +3789,23 @@ Public Function ReassignPrijemnicaToZbirna_TX(ByVal brPrijemnice As String, _
                                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
         If aktivniVlasnici = 0 Then Exit Function
 
-        ' Bez generacije CILJ MORA BITI JEDNOZNACAN. Vlasnistvo zbirne je vozac +
-        ' kupac, isti par koji koriste StornoZbirna i ApplyGeneracijaID.
-        RequireJedanVlasnikPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, SRC, _
-                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
+        ' Bez generacije CILJ MORA BITI JEDNOZNACAN, i to ISTORIJSKI.
+        '
+        ' Vlasnistvo zbirne je vozac + kupac, isti par koji koriste
+        ' StornoZbirna i ApplyGeneracijaID. Broji se IKAD, ne samo aktivni:
+        ' storniran vlasnik i dalje ima AKTIVNU decu, pa posle njegovog storna
+        ' ostane jedan aktivan i broj IZGLEDA jednoznacan -- a nije.
+        '
+        ' Ovde je to obavezno, ne opciono: recovery panel u frmDokumenta zove
+        ' ovu funkciju sa DVA argumenta (bez generacije) i BEZ ijedne spoljne
+        ' kapije, pa se funkcija mora braniti sama. Putanje iz modStornoFlow
+        ' imaju ZbirnaBrojJeDvosmislenIkad iznad sebe; ta nema nista.
+        '
+        ' Veza koja se upisuje je gola labela (COL_PRJ_BROJ_ZBIRNE,
+        ' COL_PALS_BROJ_ZBIRNE), pa bi dete zavrsilo vezano za broj koji
+        ' pripada dvama vlasnickim tokovima. Test 125.
+        RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, targetBrZbirne, _
+                                       SRC, COL_ZBR_VOZAC, COL_ZBR_KUPAC
     End If
 
     Dim cBrPrij As Long, cBrZbr As Long, cStorno As Long
