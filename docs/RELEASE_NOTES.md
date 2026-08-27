@@ -5896,7 +5896,7 @@ Treća je popravljena u jednom redu. Uz nju je dodata i provera koja taj oblik
 greške ubuduće hvata **odmah**, umesto da se vidi tek kroz Excel koji stoji.
 
 Ta provera je u prvom obliku bila istovremeno preširoka i preuska: propuštala je
-grešku napisanu malim slovima, a prijavljivala bi **tri** sasvim ispravna oblika
+grešku napisanu malim slovima, a prijavljivala bi **pet** sasvim ispravnih oblika
 koda. Sve troje je nađeno u pregledu i suženo — provera sada zna o kakvoj je
 vrsti potprograma reč i poštuje pravilo da lokalno ime sme da zakloni ime
 potprograma.

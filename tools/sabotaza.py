@@ -3210,7 +3210,10 @@ def _procedure_po_redu(tekst: str) -> list:
     return out
 
 
-_LOKAL_DEKL = re.compile(r"^\s*(?:Dim|Static|Const)\s+", re.IGNORECASE)
+# `Const` NIJE u ovom skupu: lokalni `Const Foo` jeste zaklonio proceduru, ali
+# `Foo = 2` je dodela konstanti -- i dalje compile error. Skup opisuje mesta na
+# koja se SME dodeliti, ne sva lokalna imena.
+_LOKAL_DODELJIV = re.compile(r"^\s*(?:Dim|Static)\s+", re.IGNORECASE)
 _PARAM_UKRAS = re.compile(r"^(?:ByVal|ByRef|Optional|ParamArray)\s+", re.IGNORECASE)
 
 
@@ -3247,6 +3250,32 @@ def _prva_imena(tekst: str) -> list:
     return out
 
 
+def _spoji_nastavke(redovi: list) -> list:
+    """Fizicki redovi -> logicki, po VBA nastavku ` _`.
+
+    Potrebno je jer su prelomljeni potpisi u ovom repou uobicajeni:
+
+        Sub P(ByVal x As Long, _
+              ByVal Foo As Boolean)
+
+    Citanje po fizickim redovima vidi samo `x`, pa bi `Foo = True` -- dodela
+    PARAMETRU -- bilo prijavljeno kao dodela istoimenoj funkciji. Isto vazi za
+    prelomljen `Dim`.
+    """
+    out, tek = [], ""
+    for red in redovi:
+        t = red.rstrip()
+        tek = (tek + " " + t.strip()) if tek else t
+        if tek.rstrip().endswith("_"):
+            tek = tek.rstrip()[:-1].rstrip()
+            continue
+        out.append(tek)
+        tek = ""
+    if tek:
+        out.append(tek)
+    return out
+
+
 def _lokalna_imena(redovi: list, a: int, b: int) -> set:
     """Parametri + Dim/Static/Const unutar procedure [a..b].
 
@@ -3257,16 +3286,16 @@ def _lokalna_imena(redovi: list, a: int, b: int) -> set:
     propustenog.
     """
     imena = set()
-    for i in range(a, min(b, len(redovi) - 1) + 1):
-        t = redovi[i].strip()
-        m = _PROC_OTVARA.match(t)
-        if m and i == a:
+    segment = _spoji_nastavke(redovi[a:min(b, len(redovi) - 1) + 1])
+    for i, red in enumerate(segment):
+        t = red.strip()
+        if i == 0 and _PROC_OTVARA.match(t):
             if "(" in t:
                 zagrada = t[t.index("(") + 1:]
                 k = zagrada.rfind(")")
                 imena.update(_prva_imena(zagrada[:k] if k >= 0 else zagrada))
             continue
-        m = _LOKAL_DEKL.match(t)
+        m = _LOKAL_DODELJIV.match(t)
         if m:
             imena.update(_prva_imena(t[m.end():]))
     return imena
@@ -3578,6 +3607,22 @@ _DODELA_CASES = [
     ("parametar zaklanja Function", None,
      "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
      "Sub P(ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
+     "    Foo = True\n"),
+    # Const ZAKLANJA proceduru, ali dodela konstanti je i dalje compile error --
+    # skup opisuje mesta na koja se SME dodeliti, ne sva lokalna imena.
+    ("Const nije dodeljiv", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Const Foo As Long = 1\n    SIDRO\nEnd Sub\n",
+     "    Foo = 2\n"),
+    # Prelomljen potpis je u ovom repou uobicajen; citanje po fizickim redovima
+    # vidi samo prvi parametar, pa bi dodela drugom bila lazan nalaz.
+    ("multiline parametar zaklanja", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P(ByVal x As Long, _\n      ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
+     "    Foo = True\n"),
+    ("multiline Dim zaklanja", None,
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Dim x As Long, _\n        Foo As Boolean\n    SIDRO\nEnd Sub\n",
      "    Foo = True\n"),
 ]
 

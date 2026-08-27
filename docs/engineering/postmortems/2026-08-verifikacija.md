@@ -891,9 +891,26 @@ je novo pravilo prijavljivalo **legalan VBA**, dakle tačno ono od čega se čuv
 Izmereno pre popravke: oba oblika (lokalni `Dim` i parametar) vraćala su nalaz.
 
 Pravilo sada, za proceduru u kojoj je sidro, skuplja **parametre i lokalne
-`Dim`/`Static`/`Const`**, i takvo ime preskače pre nego što uopšte pita za vrstu
+`Dim`/`Static`**, i takvo ime preskače pre nego što uopšte pita za vrstu
 procedure. `Sub Foo() : Foo = 1` **ostaje** nalaz — tamo nema lokalnog imena koje
 bi zaklonilo.
+
+Dve ivice te iste ispravke stigle su u sledećem krugu, i obe su izmerene:
+
+**`Const` nije mesto na koje se sme dodeliti.** `Const Foo` jeste zaklonio
+proceduru, ali `Foo = 2` je dodela konstanti — i dalje compile error. Skup
+opisuje mesta na koja se **sme** dodeliti, ne sva lokalna imena.
+
+**Prelomljen potpis se mora čitati kao jedna naredba.** Čitanje po fizičkim
+redovima vidi samo prvi parametar:
+
+```vb
+Sub P(ByVal x As Long, _
+      ByVal Foo As Boolean)   ' ovaj se gubio
+```
+
+pa bi dodela drugom parametru bila lažan nalaz. Isto za prelomljen `Dim`.
+Prelomljeni potpisi su u ovom repou uobičajeni, pa ovo nije ivica nego pravilo.
 
 ### Prvi dokaz suženja nije izolovao ništa
 
@@ -905,7 +922,7 @@ i dalje bili u malim slovima). Prava sabotaža skida `.lower()` sa **obe** stran
 
 Ista greška u drugom smeru je i otkrila mrtvu granu iznad.
 
-Konačno: pet sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
+Konačno: sedam sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
 pošteno obara **tri** — neosetljivost na veličinu slova koriste sva tri poređenja
 imena, pa je to jedna osobina, a ne tri.
 
