@@ -94,10 +94,26 @@ SABOTAZE = {
         "T_ParseDatum_Ugovor",
         "trailing tacka se skida, ne obara unos",
     ),
+    # DVA PRAVILA, DVE SABOTAZE.
+    #
+    # Ranija zamena je gadjala CEO poziv TryParseDateValue u ParseDatum, pa je
+    # rusila i locale-pravilo i opseg godine odjednom. Padao je prvi po redu
+    # (mesec 13), a katalog je deklarisao drugi -- otud PALA DRUGA TVRDNJA.
+    #
+    # Sada svaka sabotaza gadja svoju kapiju u modParse:
+    #   LooksLikeDmyTriple  -- CDate ne sme da "spasava" d.m.y zapis;
+    #   opseg godine u DMY  -- 1899 nije poslovni datum.
     "parse-cdate": (
-        "modOtkupUI.bas",
-        "    If TryParseDateValue(t, d) Then ParseDatum = CDbl(d)\n",
-        "    If IsDate(t) Then ParseDatum = CDbl(CDate(t))   ' SABOTAZA\n",
+        "modParse.bas",
+        "    If LooksLikeDmyTriple(s) Then Exit Function\n",
+        "    ' SABOTAZA: CDate opet sme da spasava d.m.y zapis\n",
+        "T_ParseDatum_Ugovor",
+        "mesec 13 se odbija, ne preliva u sledecu godinu",
+    ),
+    "parse-godina-opseg": (
+        "modParse.bas",
+        "    If Y < MIN_POSLOVNA_GODINA Or Y > MAX_POSLOVNA_GODINA Then Exit Function\n",
+        "    ' SABOTAZA: godina van poslovnog opsega prolazi\n",
         "T_ParseDatum_Ugovor",
         "godina van poslovnog opsega",
     ),
@@ -182,6 +198,11 @@ SABOTAZE = {
         "T_PrijemnicaValidiraj_TraziKupca",
         "prijemnica bez kupca se odbija",
     ),
+    # DVA PRAVILA, DVE ZAMENE nad istim sidrom.
+    #
+    # Ranija zamena je brisala SVA TRI reda, pa je rusila i zamrzavanje bruta
+    # i racun neta. Padalo je zamrzavanje -- prvo po redu -- a katalog je
+    # deklarisao racun; otud PALA DRUGA TVRDNJA. Sada svaka gasi jedan red.
     "bruto-prijemnica": (
         "modDokUnos.bas",
         '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
@@ -195,7 +216,28 @@ SABOTAZE = {
         '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
         "            Exit Function\n"
         "        End If\n"
-        "        ' SABOTAZA: uneti bruto ostaje u Kolicini, tara se ne oduzima\n",
+        "        ' SABOTAZA: bruto se ne zamrzava\n"
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        "T_BrutoNeto_PoRezimu",
+        "uneti bruto Kl.I se zamrzava u BrutoKg",
+    ),
+    "bruto-prijemnica-neto": (
+        "modDokUnos.bas",
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        kolI = kolI - tara\n"
+        '        p("kolicinaI") = kolI\n',
+        '            PrijemnicaValidiraj = Poruka("DOK_MSG_TEZINA_AMBALAZE") & Format$(tara, "#,##0.00") & _\n'
+        '                                  " kg) " & Poruka("OTKUNOS_ERR_TARA_VECA")\n'
+        "            Exit Function\n"
+        "        End If\n"
+        '        p("brutoKgI") = kolI\n'
+        "        ' SABOTAZA: tara se ne oduzima\n"
+        '        p("kolicinaI") = kolI\n',
         "T_BrutoNeto_PoRezimu",
         "u Kolicinu Kl.I ide neto (bruto - tara)",
     ),
@@ -918,6 +960,12 @@ SABOTAZE = {
     ),
     # Guard koji broji samo AKTIVNE vlasnike. Storniran vlasnik nestaje iz
     # racuna, a njegova aktivna deca ostaju -- pa ih mutacija po broju odvezuje.
+    #
+    # Ne deklarise se success ("DUPLI staje..."), nego KOJA kapija je stala.
+    # Ishod cuvaju DVE nezavisne kapije -- na nivou moda i u detach-u -- pa
+    # success ostaje False i kad ova otkaze; jedna sabotaza ga po konstrukciji
+    # ne moze oboriti. Razlika se vidi samo u poruci: kapija na nivou moda
+    # staje PRE transakcije i kaze razlog, dok bi detach pukao iznutra.
     "guard-samo-aktivni-vlasnici": (
         "modStornoFlow.bas",
         '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
@@ -925,14 +973,26 @@ SABOTAZE = {
         '    d("brojDvosmislenIkad") = (VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, broj, _\n'
         "                              MOD_NAME, False, Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count > 1)\n",
         "T_StorniranVlasnik_JosImaAktivnuDecu",
-        "DUPLI staje jer broj je IKAD pripadao dvama vlasnicima",
+        "staje kapija na nivou moda, pre transakcije, sa razlogom",
     ),
     # Zavrsetak ispravke koji ne preveze nijedan blok -- prolazio bi tvrdnju
     # "tudji blok nije pomeren" bez pozitivne kontrole.
-    "completion-ne-prevezuje": (
+    #
+    # DVE RAZLICITE TACKE, DVE SABOTAZE. Prazan izvor ID-eva ne stigne do
+    # prevezivanja: kapija ga digne kao NERAZRESEN IZVOR, pa completion ne
+    # uspe -- otud pada preduslov, a ne poslovna tvrdnja (zamka 6). Zato
+    # izvor i prevezivanje imaju svaki svoju sabotazu i svoju tvrdnju.
+    "completion-izvor-nerazresen": (
         "modStornoFlow.bas",
         "    Set oldIDs = GetOtpremnicaIDsByBroj(oldBroj, srcGen, srcStanica)\n",
-        "    Set oldIDs = New Collection   ' SABOTAZA: nijedan blok se ne prevezuje\n",
+        "    Set oldIDs = New Collection   ' SABOTAZA: izvor se ne razresi\n",
+        "T_ZavrsetakIspravke_NeDegradiraOldDocID",
+        "zavrsetak ispravke je uspeo",
+    ),
+    "completion-ne-prevezuje": (
+        "modStornoFlow.bas",
+        "    Dim blokovi As Collection: Set blokovi = GetBlokOtkupIDs(oldIDs)\n",
+        "    Dim blokovi As Collection: Set blokovi = New Collection   ' SABOTAZA: nijedan blok se ne prevezuje\n",
         "T_ZavrsetakIspravke_NeDegradiraOldDocID",
         "MOJ blok JESTE prevezan na zamensku otpremnicu",
     ),
@@ -1281,10 +1341,27 @@ SABOTAZE = {
     # Druga strana: Scr_Brojac je OPCION. Ekran koji ga nema mora da prodje mirno,
     # jer Application.Run na nepostojecu proceduru DIZE gresku -- bez gutanja te
     # greske sidebar se ne bi ni iscrtao.
+    #
+    # DVA PRAVILA U ISTOM BLOKU, DVE ZAMENE nad istim sidrom. Ranija zamena
+    # je brisala ceo blok, pa je gasila i normalizaciju na nulu i Err.Clear;
+    # padalo je curenje Err-a (poslednja tvrdnja), a katalog je deklarisao
+    # povratnu vrednost -- otud PALA DRUGA TVRDNJA. Sada svaka gasi jedno.
     "brojac-nije-opcion": (
         "modUiScreens.bas",
         "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n        Err.Clear\n    End If\n",
-        "    ' SABOTAZA: greska ekrana bez brojaca se ne guta\n",
+        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n"
+        "        ' SABOTAZA: greska se guta, ali ostaje POSTAVLJENA\n    End If\n",
+        "T_NavBrojac_SamoEkranKojiBroji",
+        "poziv ekrana bez brojaca ne ostavlja Err postavljen",
+    ),
+    # Nula nije slucajna posledica nego deklarisan ugovor: sentinel bi ljuska
+    # prikazala kao zaostatak koji ne postoji.
+    "brojac-sentinel-umesto-nule": (
+        "modUiScreens.bas",
+        "    If Err.Number <> 0 Then\n        ScrBrojac = 0\n        Err.Clear\n    End If\n",
+        "    If Err.Number <> 0 Then\n"
+        "        ScrBrojac = -1   ' SABOTAZA: sentinel umesto nule\n"
+        "        Err.Clear\n    End If\n",
         "T_NavBrojac_SamoEkranKojiBroji",
         "ekran bez brojaca daje nulu, ne gresku",
     ),
@@ -2887,14 +2964,6 @@ POZNATI_NALAZI_DOKAZ = {
     "f8-identitet-po-broju":
         "PALA DRUGA TVRDNJA: sa identitetom se recovery zapis pravi",
 
-    # Obara PREDUSLOV ("prevezivanje po generaciji je proslo"), ne svoju poslovnu
-    # tvrdnju: bez generacije izvora ceo relink stane, pa ciljana tvrdnja ne dodje
-    # na red (zamka 6). Uza sabotaza koja bi pustila operaciju da prodje a
-    # generaciju ignorisala obarala bi TACNO ono sto vec obara
-    # relink-izvor-po-broju -- dakle zamka 5. Razdvajanje trazi novu tvrdnju u
-    # T_RelinkPoGeneraciji_NeDiraTudjDokument.
-    "relink-ignorise-generaciju":
-        "PALA DRUGA TVRDNJA: prevezivanje po generaciji je proslo",
 }
 
 
@@ -3388,8 +3457,19 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
         tekst = kes[fajl]
         pogodaka = tekst.count("\n" + staro)
         if pogodaka != 1:
-            razlog = ("sidro ZASTARELO -- kod ispod njega je popravljen"
-                      if pogodaka == 0 else "sidro nije jednoznacno")
+            # Sidra nema, ali je ZAMENA tu -- izvor nije popravljen nego je
+            # jos SABOTIRAN. dokaz.py ciscenje radi kroz `finally`, sto ne
+            # stigne kad se proces ubije spolja (taskkill, zatvoren terminal).
+            # Bez ovog razdvajanja poruka glasi 'kod ispod sidra je popravljen',
+            # a odgovor na nju je da se sidro uskladi sa zatecenim kodom --
+            # sto sabotazu zacementira kao novu istinu. Trazi se istim
+            # pravilom kojim radi --vrati, od pocetka reda.
+            if pogodaka == 0 and ("\n" + novo) in tekst:
+                razlog = ("izvor je ZATECEN SABOTIRAN -- pokreni "
+                          "`python tools/sabotaza.py --vrati`")
+            else:
+                razlog = ("sidro ZASTARELO -- kod ispod njega je popravljen"
+                          if pogodaka == 0 else "sidro nije jednoznacno")
             nalazi.append((ime, f"{razlog} ({pogodaka} pogodaka u {fajl})"))
 
         if test not in imena:
@@ -3513,6 +3593,13 @@ _SELF_TEST = [
      ("modOtkupUI.bas", "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
       "    Nesto = 2" + ESCN, None, "tvrdnja A"),
      "sidro ZASTARELO"),
+    # Sidra nema, ali ZAMENA jeste u fajlu -- zatecena sabotaza, ne zastarelo
+    # sidro. Merena razlika: prekinut dokaz.py ostavi pokvaren src-vba, a stara
+    # poruka je tvrdila da je "kod ispod sidra popravljen".
+    ("izvor zatecen sabotiran",
+     ("modOtkupUI.bas", "    OvogaRedaNemaNigdeUProjektu = 1" + ESCN,
+      _ST_PRAVI, None, "tvrdnja A"),
+     "ZATECEN SABOTIRAN"),
     ("sidro dvosmisleno",
      ("modOtkupUI.bas", _ST_PRAVI, "    Nesto = 2" + ESCN, None, "tvrdnja B"),
      "sidro nije jednoznacno"),

@@ -2758,8 +2758,12 @@ def main(argv: list[str]) -> int:
     if not findings:
         if not args.hook:
             if rc_kat:
-                print(f"vba_check: izvor cist ({len(files)} fajlova), ali "
-                      f"KATALOG SABOTAZA nije.", file=sys.stderr)
+                # NE 'izvor cist': jedan od nalaza kataloga je bas to da je
+                # izvor zatecen sabotiran. Tvrdi se samo ono sto je mereno --
+                # da pravila nad fajlovima nisu nasla nista.
+                print(f"vba_check: pravila nad fajlovima cista "
+                      f"({len(files)} fajlova), ali KATALOG SABOTAZA nije.",
+                      file=sys.stderr)
             else:
                 print(f"vba_check: cisto ({len(files)} fajlova).")
         return rc_kat
