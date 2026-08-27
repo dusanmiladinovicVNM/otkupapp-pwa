@@ -2953,6 +2953,7 @@ End Sub
 Private Sub T_StornoImpact_SchemaDriftJeInvalidan()
     Dim lo As ListObject, m As Object
     Dim validPodDriftom As Boolean, semaVracena As Boolean, imaoPalete As Boolean
+    Dim validPodPalDriftom As Boolean, palSemaVracena As Boolean
 
     StampGeneraciju TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-TEST-Z2", "GEN-IMP-2"
 
@@ -2976,9 +2977,34 @@ VRATI:
     On Error GoTo 0
     semaVracena = (GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PRIJEMNICA_ID) > 0)
 
+    ' DRIFT KOLONE KOJU CITA SAMO PALETNA SEKCIJA.
+    '
+    ' Prethodni drift gasi PrijemnicaID -- ali po BAS toj koloni filtrira i
+    ' GetChainFlags (kroz CountActive), a on ide RANIJE u BuildStornoImpact. Uvid
+    ' zato padne pre nego sto se do paleta uopste stigne, pa tvrdnja iznad meri
+    ' tudju kapiju. Mereno: poruka je bila "Kolona PrijemnicaID ne postoji u
+    ' tblPaletaStavka" iz modStornoFlow.CountActive.
+    '
+    ' PaletaID u BuildStornoImpact cita JEDINO GetPaleteImpactByField, pa je ovo
+    ' jedina tvrdnja koja meri strogost same paletne sekcije.
+    Set lo = GetTable(TBL_PALETA_STAVKA)
+    On Error GoTo VRATI_PAL
+    lo.ListColumns(COL_PALS_PALETA_ID).name = COL_PALS_PALETA_ID & "_DRIFT"
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_ZBR_KOLIZIJA, _
+                                             "", "GEN-IMP-2", True)
+    validPodPalDriftom = CBool(m("valid"))
+VRATI_PAL:
+    On Error Resume Next
+    lo.ListColumns(COL_PALS_PALETA_ID & "_DRIFT").name = COL_PALS_PALETA_ID
+    On Error GoTo 0
+    palSemaVracena = (GetColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID) > 0)
+
     ' NAJVAZNIJE: necitljiva paletna sekcija cini CEO uvid nevalidnim.
     AssertEq validPodDriftom, False, _
              "necitljiva paletna sekcija cini CEO uvid nevalidnim"
+    AssertEq validPodPalDriftom, False, _
+             "...i kad nedostaje kolona koju cita SAMO paletna sekcija"
+    AssertEq palSemaVracena, True, "i ta sema je vracena posle testa"
     ' Ako sema nije vracena, svi testovi posle ovog mere pokvarenu tabelu.
     AssertEq semaVracena, True, "sema je vracena posle testa"
 End Sub
@@ -3006,6 +3032,24 @@ Private Sub T_StornoImpact_IdentitetNeDegradira()
                                              "", "GEN-NE-POSTOJI", True)
     AssertEq CBool(m("valid")), False, _
              "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj"
+
+    ' GENERACIJA KOJA PRIPADA DRUGOM BROJU.
+    '
+    ' Prethodna tvrdnja meri kapiju u modStornoFlow.PkPoIdentitetu: generacija
+    ' koje NEMA nigde. Ova meri kapiju u modStornoImpact.ImpactPalete, i to je
+    ' druga kapija -- jer se dva trazenja razlikuju:
+    '
+    '   IdoviGeneracije          trazi generaciju kroz CELU tabelu
+    '   PrijemniceIDPoIdentitetu trazi broj I generaciju
+    '
+    ' GEN-IMP-1 postoji (na PRJ-TEST-Z1, broj 6/150326), pa ga prvo trazenje
+    ' razresi i uvid ide dalje. Drugo ga ne nadje pod brojem 1/150326 -- i bez
+    ' kapije bi palete bile procitane PO BROJU, dakle tudje, unutar modela koji
+    ' se posle oznacava kao valid. Tacno degradacija zbog koje je nastao 198.
+    Set m = modStornoImpact.BuildStornoImpact(FLOW_DOC_PRIJEMNICA, FX_PRIJ_BROJ, _
+                                             "", "GEN-IMP-1", True)
+    AssertEq CBool(m("valid")), False, _
+             "generacija koja pripada DRUGOM broju ne tumaci ovaj dokument"
 
     ' Bez identiteta uvid i dalje radi po broju -- zatecen zapis nema generaciju,
     ' pa je broj sve sto postoji. Kapija ne sme da zakljuca ni taj slucaj.

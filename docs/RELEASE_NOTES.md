@@ -5866,3 +5866,56 @@ Uz to, za svaki oblik koji **sme** da prođe postoji zaseban slučaj — jedanae
 njih. Među njima i jedan koji čuva da se provera ne „popravi" tako što prestane
 da priznaje ispravne deklaracije: to bi bila druga greška istog oblika, a izveštaj
 bi ostao zelen.
+
+## v2.81.0 — tri provere koje su izgledale kao da rade, a nisu ništa merile
+
+Nema izmene u programu — izdanje o **proverama**.
+
+### Šta je bilo
+
+Uz svaku automatsku proveru ide i namerno pokvaren kod koji **mora** da je obori.
+Pun prolaz kroz sve provere našao je tri mesta gde se kod pokvari, a ništa ne
+padne. Za te tri provere dokaza nije bilo.
+
+Ispostavilo se da su to tri različita razloga, i da samo jedan liči na ono što se
+očekivalo:
+
+| Šta je stvarno bilo | Koliko |
+|---|---|
+| provera je merila **tuđu** proveru — kvar bi oborila druga, ranija, pa se nije ni videlo da ciljana ne radi | 2 |
+| pokvaren kod se uopšte **nije prevodio** — Excel bi stao, ništa se ne bi izvršilo, a izveštaj bi to prikazao isto kao „ništa nije palo" | 1 |
+
+### Šta je urađeno
+
+Za prve dve nađeno je stanje u kome **baš ta** provera odlučuje, i to je dodato
+kao nova tvrdnja. Jedna od njih čuva pravilo koje je ovaj projekat već skupo
+platio: **dokument se bira po identitetu, nikad po broju**, jer isti broj mogu
+nositi dva dokumenta.
+
+Treća je popravljena u jednom redu. Uz nju je dodata i nova provera, da se taj
+oblik greške ubuduće vidi **odmah** umesto kroz Excel koji stoji.
+
+### Nova provera je ispravljana četiri puta
+
+Ovo je deo koji najviše govori o vrsti posla. Svaki put je nalaz bio iste vrste:
+**provera je sudila o nečemu drugom nego što tvrdi**.
+
+| Krug | Šta je bilo pogrešno |
+|---|---|
+| 1 | nije razlikovala vrste potprograma, a greška napisana malim slovima joj je promakla |
+| 2 | nije znala da lokalna promenljiva sme da nosi isto ime kao potprogram |
+| 3 | konstanta nije mesto na koje se sme upisati, a prelomljen potpis nije umela da pročita |
+| 4 | gledala je **zdrav** kod, a sudila o **izmenjenom** |
+
+Zbir: propuštala je **tri** oblika prave greške, a prijavljivala **pet** sasvim
+ispravnih. Poslednji krug je bio najvažniji, jer je grešila u **oba** smera
+odjednom — sad gleda baš ono što će se izvršavati.
+
+### Zašto je ovo vredelo
+
+Provera koja se pokvari a ništa ne padne izgleda isto kao provera koja radi. Tri
+takve su stajale u projektu i izgledale kao pokrivenost — a jedna je čuvala baš
+pravilo o identitetu dokumenta.
+
+Isto važi i za novu proveru: da nije četiri puta pokazana kao pogrešna, i ona bi
+danas izgledala kao zaštita.

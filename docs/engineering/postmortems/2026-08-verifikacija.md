@@ -635,7 +635,10 @@ nijedan od njih nije bio u žetvi (svi su bili među 128 koji su se već poklapa
 
 Imena: `parse-cdate`, `bruto-prijemnica`, `guard-samo-aktivni-vlasnici`,
 `completion-ne-prevezuje`, `brojac-nije-opcion` (prva klasa); `uvid-guta-necitljivo`,
-`identitet-degradira-na-broj`, `paleta-klik-otvara` (druga). Uz njih i jedan
+`identitet-degradira-na-broj`, `paleta-klik-otvara` (druga).
+
+> **Druga klasa je zatvorena** u `v2.81.0` — v. §14. Ostaje pet iz prve i jedan
+> zastareo priznat upis. Uz njih i jedan
 **zastareo priznat nalaz** — `POZNATI_NALAZI_DOKAZ['relink-ignorise-generaciju']`
 više ne pokriva ništa, što znači da je nalaz koji opisuje u međuvremenu zatvoren.
 
@@ -770,4 +773,185 @@ modul-stanje, a to je i oblik koji je incident i proizveo.
 
 **Lokalna promenljiva bez `Dim`** se ne hvata iz istog razloga — osim ako slučajno
 nosi `m` prefiks.
+
+---
+
+## 14) Tri sabotaže koje ništa nisu obarale — tri različita razloga (27.08.2026)
+
+Pun prolaz iz §12 našao je tri sabotaže koje se uredno primene a ništa ne padne.
+Ispostavilo se da su to **tri različite bolesti**, i da je samo jedna od njih ono
+što ime „mrtva sabotaža" sugeriše.
+
+### Dve su merile tuđu kapiju
+
+`identitet-degradira-na-broj` i `uvid-guta-necitljivo` gađaju kapije u
+`modStornoImpact`. Obe su bile deklarisane nad tvrdnjom koju obara **ranija
+sekcija** `BuildStornoImpact`-a, pa uklanjanje ciljane kapije nije menjalo ništa.
+
+Ovo nije zaključeno čitanjem nego **mereno**: testu je privremeno dodata tvrdnja
+`AssertEq m("greska"), ""`, pa je pad ispisao ko stvarno obara uvid.
+
+| Sabotaža | Ko je stvarno obarao | Sekcija |
+|---|---|---|
+| `identitet-degradira-na-broj` | `modStornoFlow.PkPoIdentitetu` | `chain` / `blocks` / `flags` |
+| `uvid-guta-necitljivo` | `modStornoFlow.CountActive` | `flags` |
+
+Obe kapije već imaju svoje sabotaže drugde, pa nisu bile nepokrivene — nepokrivena
+je bila **ciljana** kapija.
+
+**Lek nije bio prepisati tvrdnju nego naći stanje u kome ciljana kapija JESTE
+jedina koja odlučuje.** Oba postoje, i oba su poučna:
+
+*Identitet.* `IdoviGeneracije` traži generaciju kroz **celu tabelu**, a
+`PrijemniceIDPoIdentitetu` traži **broj i generaciju**. Zato postoji stanje u kome
+prva prođe a druga ne — **generacija koja pripada drugom broju**. Tu se meri baš
+kapija u `ImpactPalete`, i bez nje bi palete bile pročitane po broju, dakle tuđe,
+unutar modela koji se posle označava kao valid.
+
+*Drift šeme.* Raniji test gasi `PrijemnicaID` — ali po **baš toj** koloni filtrira
+i `CountActive`. `PaletaID` u `BuildStornoImpact` čita **jedino**
+`GetPaleteImpactByField`, pa tek njen drift meri strogost paletne sekcije.
+
+### Treća uopšte nije bila mrtva — nije se kompajlirala
+
+`paleta-klik-otvara` je pisala `Scr_Event = OtvoriStavke(...)` iz tela
+`ObradiDogadjaj`. To je dodela imenu **tuđe** procedure, dakle compile error.
+
+Posledica: Excel stane u `[break]`, suite se ne pokrene, `dokaz.py` ne vidi nijednu
+palu tvrdnju — i prijavi **`NE OBARA NISTA`**. Isto što i mrtva sabotaža.
+
+```
+SUITE FAIL RunAllTests (67.7s)  (-2147352567, 'Exception occurred.', ...)
+TESTS RunAllTests: suite nije upisala last_run.txt (nije stigla do kraja)
+```
+
+Ispravka je jedan red — dodela ide u `ObradiDogadjaj`. Ali razlika je velika:
+prva vrsta se popravlja u jednom redu, druga traži rad nad testom, a **izveštaj ih
+ne razlikuje**.
+
+### Zato provera, a ne samo popravka
+
+Novo statičko pravilo: zamena koja dodeljuje imenu procedure iz istog fajla, a
+sidro joj **nije** u toj proceduri, je nalaz. Uže je nego što zvuči — pokriva tačno
+oblik koji ne može da se prevede, a ne pokušava da bude kompajler.
+
+Pušteno nad **originalnim** zapisom iz kataloga, ne nad izmišljenim:
+
+```
+KATALOG: paleta-klik-otvara: zamena dodeljuje imenu tudje procedure 'Scr_Event'
+```
+
+Od 251 zamene, njih 112 nečemu dodeljuje — i nijedna druga nije pogrešna.
+
+### Prvo pravilo je bilo i preširoko i preusko (iz review-a)
+
+Ime pravila je govorilo „dodela imenu tuđe procedure = compile error", a
+implementacija je **propuštala** pravi compile error i **prijavljivala** legalan
+VBA:
+
+| Rupa | Posledica |
+|---|---|
+| poređenje po tačnom zapisu | `scr_event = …` prolazi, iako je VBA case-insensitive — trivijalan zaobilazak baš tog pravila |
+| sve vrste procedura u jednoj kanti | `Foo = 1` uz `Property Let Foo` je **poziv**, ne greška — lažan nalaz nad ispravnim kodom |
+| `Sub` tretiran kao `Function` | `Sub Foo() : Foo = 1` je greška, a pravilo ju je puštalo kao „dodeljuje sebi" |
+
+Prva je izmerena, ne pretpostavljena: ista zamena malim slovima vraćala je `None`.
+
+Pravilo sada pamti **vrstu**:
+
+| Vrsta | Dodela svom imenu | Dodela tuđem |
+|---|---|---|
+| `Function` | povratna vrednost — dozvoljena | nalaz |
+| `Sub` | **nalaz** (nema povratnu vrednost) | nalaz |
+| `Property` | izuzeta — `X = v` je poziv `Property Let` | izuzeta |
+
+`Property` je izuzeta **time što se ne skuplja**, ne zasebnom proverom. Prva
+verzija je imala i `if n in props: continue` — i dvosmerni dokaz je pokazao da je
+to **mrtva grana**: njeno uklanjanje nije oborilo nijedan slučaj, jer property ime
+ionako nije ni u `subovi` ni u `funkcije`. Uklonjena.
+
+### Treća rupa: lokalno ime sme da zakloni proceduru
+
+Ni to nije bilo dovoljno. VBA dozvoljava da **lokalna promenljiva ili parametar
+zakloni ime procedure**:
+
+```vb
+Private Sub Foo()
+End Sub
+
+Private Sub P()
+    Dim Foo As Boolean
+    Foo = True        ' dodela PROMENLJIVOJ, ne pokusaj dodele Sub-u
+End Sub
+```
+
+Repo to već zna — `vba_check` ima pravilo `ZAKLONJENO` nad istom pojavom. Bez toga
+je novo pravilo prijavljivalo **legalan VBA**, dakle tačno ono od čega se čuva.
+
+Izmereno pre popravke: oba oblika (lokalni `Dim` i parametar) vraćala su nalaz.
+
+Pravilo sada, za proceduru u kojoj je sidro, skuplja **parametre i lokalne
+`Dim`/`Static`**, i takvo ime preskače pre nego što uopšte pita za vrstu
+procedure. `Sub Foo() : Foo = 1` **ostaje** nalaz — tamo nema lokalnog imena koje
+bi zaklonilo.
+
+Dve ivice te iste ispravke stigle su u sledećem krugu, i obe su izmerene:
+
+**`Const` nije mesto na koje se sme dodeliti.** `Const Foo` jeste zaklonio
+proceduru, ali `Foo = 2` je dodela konstanti — i dalje compile error. Skup
+opisuje mesta na koja se **sme** dodeliti, ne sva lokalna imena.
+
+**Prelomljen potpis se mora čitati kao jedna naredba.** Čitanje po fizičkim
+redovima vidi samo prvi parametar:
+
+```vb
+Sub P(ByVal x As Long, _
+      ByVal Foo As Boolean)   ' ovaj se gubio
+```
+
+pa bi dodela drugom parametru bila lažan nalaz. Isto za prelomljen `Dim`.
+Prelomljeni potpisi su u ovom repou uobičajeni, pa ovo nije ivica nego pravilo.
+
+### I poslednja, najstrukturnija: simboli su čitani PRE mutacije
+
+Provera je scope računala iz **zdravog** fajla, a proveravala **zamenu**. Kompajlira
+se ono što sabotaža napravi — pa se i pita o njemu. Greška je išla u oba smera, i
+oba su izmerena:
+
+| Zamena | Mutirani VBA | Provera je govorila |
+|---|---|---|
+| **uklanja** `Dim Foo` | dodela tuđoj funkciji — compile error | čisto |
+| **uvodi** `Dim Foo` | legalan (lokalno zaklanja) | nalaz |
+
+Rešenje nije još jedna heuristika nad `staro`/`novo` nego da se tekst posle
+zamene stvarno sastavi, pa da se nad **njim** čitaju procedure, njihove vrste i
+lokalna imena. Keš nad originalnim tekstom je time otpao — 251 unos je premalo
+da bi se ušteda platila netačnošću.
+
+### Prvi dokaz suženja nije izolovao ništa
+
+Vredi zapisa iz istog razloga kao §12: sabotaža mora da menja **jednu** stvar.
+
+Prva verzija je uklanjala `.lower()` samo sa jedne strane poređenja — pa je
+oborila i tuđe slučajeve, a pravu case-osetljivost nije ni proizvela (skupovi su
+i dalje bili u malim slovima). Prava sabotaža skida `.lower()` sa **obe** strane.
+
+Ista greška u drugom smeru je i otkrila mrtvu granu iznad.
+
+Konačno: osam sabotaža, svaka obara **tačno svoj** skup slučajeva. Jedna od njih
+pošteno obara **tri** — neosetljivost na veličinu slova koriste sva tri poređenja
+imena, pa je to jedna osobina, a ne tri.
+
+### Šta ovo NE pokriva
+
+**Druge vrste compile grešaka u zamenama** se i dalje vide tek kroz Excel u
+`[break]`: nedostajuća zagrada, pogrešan broj argumenata, tip koji se ne slaže.
+Pravilo pokriva jedan oblik — onaj koji se stvarno dogodio.
+
+**Zamena koja dodeljuje imenu procedure iz DRUGOG modula** se ne hvata; traži se
+samo u fajlu koji se sabotira.
+
+**`Property Get` bez `Let`/`Set`** je izuzeta zajedno sa ostalim property-jima,
+iako bi dodela njenom imenu spolja bila greška. Uparivanje `Get`/`Let`/`Set` bi
+tražilo više analize nego što ovaj oblik zaslužuje, a lažan nalaz je skuplji.
 

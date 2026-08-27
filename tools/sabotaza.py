@@ -662,17 +662,31 @@ SABOTAZE = {
         "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, strict)\n",
         "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids)   ' SABOTAZA\n",
         "T_StornoImpact_SchemaDriftJeInvalidan",
-        "necitljiva paletna sekcija cini CEO uvid nevalidnim",
+        # Prethodna tvrdnja (drift PrijemnicaID) meri modStornoFlow.CountActive,
+        # koji ide ranije i pukne prvi -- zato je ova sabotaza bila MRTVA. Drift
+        # PaletaID cita jedino paletna sekcija, pa se tek tu meri njena strogost.
+        "...i kad nedostaje kolona koju cita SAMO paletna sekcija",
     ),
     # Zadat docID koji se ne moze razresiti mora da OBORI uvid. Tihi povratak na
     # poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar modela koji se
     # posle oznacava kao valid, pa nizvodno izgleda kao pouzdan pregled posledica.
+    # DVE KAPIJE, DVE TVRDNJE. Ova sabotaza gadja kapiju u ImpactPalete, a ne onu
+    # u modStornoFlow.PkPoIdentitetu -- tu vec cuva 'identitet-nestao-prolazi'.
+    #
+    # Do sada je bila deklarisana nad PRVOM tvrdnjom testa (generacija koje nema
+    # nigde), koju obara BAS PkPoIdentitetu, i to ranije u BuildStornoImpact --
+    # pa uklanjanje kapije paleta nije menjalo nista i sabotaza je bila MRTVA.
+    #
+    # Razlika izmedju dve kapije je stvarna: IdoviGeneracije trazi generaciju
+    # kroz celu tabelu, a PrijemniceIDPoIdentitetu trazi broj I generaciju. Zato
+    # postoji stanje u kome prva prodje a druga ne -- generacija koja pripada
+    # DRUGOM broju -- i tu se meri bas ova kapija.
     "identitet-degradira-na-broj": (
         "modStornoImpact.bas",
         "                If strict And Len(Trim$(docID)) > 0 Then\n",
         "                If False Then   ' SABOTAZA: identitet pada na broj\n",
         "T_StornoImpact_IdentitetNeDegradira",
-        "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj",
+        "generacija koja pripada DRUGOM broju ne tumaci ovaj dokument",
     ),
     # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
     # rundu duze: bez kolone OtkupID spisak blokova ispadne prazan, sto operateru
@@ -1305,10 +1319,17 @@ SABOTAZE = {
     # Obican klik samo BIRA. Da i on prebacuje listu, radnje nad redom (zatvori
     # paletu, storniraj, stampaj) postale bi nedostupne -- operater ne bi stigao
     # da ih pritisne.
+    # DODELA IDE U OBRADIDOGADJAJ, ne u Scr_Event.
+    #
+    # Zamena je do sada pisala `Scr_Event = ...` iz tela ObradiDogadjaj -- a to je
+    # dodela imenu TUDJE procedure, dakle compile error. Excel bi stao u [break],
+    # suite se ne bi ni pokrenuo, i dokaz.py bi to prijavio kao "NE OBARA NISTA":
+    # isto sto i mrtva sabotaza. Sabotaza koja ne kompajlira i sabotaza koja nista
+    # ne meri izgledaju identicno, a razlika je velika.
     "paleta-klik-otvara": (
         "modScrPalete.bas",
         "        PostaviAktivnu CLng(Mid$(tag, 5))\n",
-        "        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))   ' SABOTAZA: klik navigira\n",
+        "        ObradiDogadjaj = OtvoriStavke(CLng(Mid$(tag, 5)))   ' SABOTAZA: klik navigira\n",
         "T_PaletaDvoklik_OtvaraStavke",
         "izbor reda ne trazi ponovno citanje mreze",
     ),
@@ -3158,6 +3179,195 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     return False
 
 
+# ZAMENA KOJA DODELJUJE IMENU TUDJE PROCEDURE NE KOMPAJLIRA.
+#
+# `ObradiDogadjaj` sme da dodeli sebi; `Scr_Event = ...` iz njenog tela je dodela
+# imenu druge procedure -- compile error. Posledica nije pao test nego Excel u
+# [break]: suite se ne pokrene, dokaz.py ne vidi nijednu palu tvrdnju i prijavi
+# "NE OBARA NISTA". Sabotaza koja ne kompajlira i sabotaza koja nista ne meri
+# izgledaju IDENTICNO, a razlika je velika -- prva se popravlja u jednom redu,
+# druga trazi rad nad testom.
+#
+# Mereno na paleta-klik-otvara: 68 s po prolazu, Excel ostaje otvoren u break-u.
+_ZAMENA_DODELA = re.compile(r"^\s*(?:Set\s+)?([A-Za-z_]\w*)\s*=(?!=)")
+_PROC_OTVARA = re.compile(
+    r"^(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
+    r"(Sub|Function|Property)\s+(?:(?:Get|Let|Set)\s+)?(\w+)", re.IGNORECASE)
+_PROC_ZATVARA = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+
+
+def _procedure_po_redu(tekst: str) -> list:
+    """[(ime, vrsta, prvi_red, poslednji_red)] -- vrsta je sub/function/property."""
+    out, ime, vrsta, poc = [], None, None, 0
+    for i, red in enumerate(tekst.split("\n")):
+        t = red.strip()
+        m = _PROC_OTVARA.match(t)
+        if m:
+            vrsta, ime, poc = m.group(1).lower(), m.group(2), i
+        elif ime and _PROC_ZATVARA.match(t):
+            out.append((ime, vrsta, poc, i))
+            ime, vrsta = None, None
+    return out
+
+
+# `Const` NIJE u ovom skupu: lokalni `Const Foo` jeste zaklonio proceduru, ali
+# `Foo = 2` je dodela konstanti -- i dalje compile error. Skup opisuje mesta na
+# koja se SME dodeliti, ne sva lokalna imena.
+_LOKAL_DODELJIV = re.compile(r"^\s*(?:Dim|Static)\s+", re.IGNORECASE)
+_PARAM_UKRAS = re.compile(r"^(?:ByVal|ByRef|Optional|ParamArray)\s+", re.IGNORECASE)
+
+
+def _po_zarezu_vrh(tekst: str) -> list:
+    """Podeli po zarezima koji nisu u zagradama ni u navodnicima."""
+    delovi, dubina, u_str, tek = [], 0, False, ""
+    for c in tekst:
+        if c == '"':
+            u_str = not u_str
+        elif not u_str and c in "([":
+            dubina += 1
+        elif not u_str and c in ")]":
+            dubina -= 1
+        elif not u_str and c == "," and dubina == 0:
+            delovi.append(tek.strip())
+            tek = ""
+            continue
+        tek += c
+    if tek.strip():
+        delovi.append(tek.strip())
+    return delovi
+
+
+def _prva_imena(tekst: str) -> list:
+    """Imena iz `a As X, b(1 To 3) As Y, ByVal c As Z`."""
+    out = []
+    for deo in _po_zarezu_vrh(tekst):
+        deo = deo.strip()
+        while _PARAM_UKRAS.match(deo):
+            deo = _PARAM_UKRAS.sub("", deo, count=1).strip()
+        m = re.match(r"([A-Za-z_]\w*)", deo)
+        if m:
+            out.append(m.group(1).lower())
+    return out
+
+
+def _spoji_nastavke(redovi: list) -> list:
+    """Fizicki redovi -> logicki, po VBA nastavku ` _`.
+
+    Potrebno je jer su prelomljeni potpisi u ovom repou uobicajeni:
+
+        Sub P(ByVal x As Long, _
+              ByVal Foo As Boolean)
+
+    Citanje po fizickim redovima vidi samo `x`, pa bi `Foo = True` -- dodela
+    PARAMETRU -- bilo prijavljeno kao dodela istoimenoj funkciji. Isto vazi za
+    prelomljen `Dim`.
+    """
+    out, tek = [], ""
+    for red in redovi:
+        t = red.rstrip()
+        tek = (tek + " " + t.strip()) if tek else t
+        # VBA trazi RAZMAK pa `_`. Golo endswith("_") bi identifikator koji se
+        # zavrsava podvlakom progutalo kao nastavak reda.
+        if re.search(r"\s_$", tek.rstrip() + ""):
+            tek = tek.rstrip()[:-1].rstrip()
+            continue
+        out.append(tek)
+        tek = ""
+    if tek:
+        out.append(tek)
+    return out
+
+
+def _lokalna_imena(redovi: list, a: int, b: int) -> set:
+    """Parametri + lokalni Dim/Static unutar procedure [a..b].
+
+    `Const` NIJE ovde: on zaklanja proceduru, ali dodela konstanti je i dalje
+    compile error -- v. _LOKAL_DODELJIV.
+
+    VBA DOZVOLJAVA da lokalno ime ZAKLONI proceduru: `Dim Foo As Boolean` u P()
+    znaci da je `Foo = True` dodela promenljivoj, ne pokusaj dodele Sub-u. Repo
+    to vec zna -- vba_check ima pravilo ZAKLONJENO nad istom pojavom. Bez ovoga
+    bi pravilo prijavljivalo legalan VBA, a lazan nalaz u hook-u je gori od
+    propustenog.
+    """
+    imena = set()
+    segment = _spoji_nastavke(redovi[a:min(b, len(redovi) - 1) + 1])
+    for i, red in enumerate(segment):
+        t = red.strip()
+        if i == 0 and _PROC_OTVARA.match(t):
+            if "(" in t:
+                zagrada = t[t.index("(") + 1:]
+                k = zagrada.rfind(")")
+                imena.update(_prva_imena(zagrada[:k] if k >= 0 else zagrada))
+            continue
+        m = _LOKAL_DODELJIV.match(t)
+        if m:
+            imena.update(_prva_imena(t[m.end():]))
+    return imena
+
+
+def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str):
+    """Ime procedure kojoj zamena dodeljuje a ne sme, ili None.
+
+    VRSTA ODLUCUJE, i pravilo je namerno UZE nego sto ime sugerise:
+
+      Function  dodela SVOM imenu je povratna vrednost -- dozvoljena.
+                Dodela TUDJEM imenu funkcije je compile error.
+      Sub       nema povratnu vrednost, pa je dodela njenom imenu greska i
+                iznutra i spolja.
+      Property  IZUZETA. `X = v` je tamo poziv Property Let, dakle legalan VBA;
+                bez uparivanja Get/Let/Set se ne moze reci da je greska, a lazan
+                nalaz u hook-u je gori od propustenog.
+
+    Poredi se NEOSETLJIVO NA VELICINU SLOVA, jer je VBA takav: `scr_event = ...`
+    je isti compile error kao `Scr_Event = ...`, a poredjenje po tacnom zapisu
+    bi ga pustilo -- trivijalan zaobilazak bas ovog pravila.
+    """
+    idx = tekst.find("\n" + staro)
+    if idx < 0:
+        return None
+    red = tekst[:idx + 1].count("\n")
+
+    # SIMBOLI SE CITAJU IZ MUTIRANOG KODA, ne iz zdravog.
+    #
+    # Kompajlira se ono sto sabotaza NAPRAVI, pa se i pita o njemu. Racun nad
+    # zdravim tekstom gresi u oba smera:
+    #   - zamena koja UKLONI `Dim Foo` ostavlja dodelu tudjoj funkciji, a checker
+    #     bi jos video stari Dim i pustio je (propusten compile error);
+    #   - zamena koja UVEDE `Dim Foo` daje legalan VBA, a checker bi ga prijavio
+    #     (lazna uzbuna nad ispravnim kodom).
+    #
+    # Kes nad originalnim tekstom je time otpao. 251 unos je premalo da bi
+    # ustedu vredelo platiti netacnoscu.
+    mutirani = tekst.replace("\n" + staro, "\n" + novo, 1)
+    procs = _procedure_po_redu(mutirani)
+    redovi = mutirani.split("\n")
+    unutar, lokalna = None, set()
+    for pime, _v, a, b in procs:
+        if a <= red <= b:
+            unutar = pime.lower()
+            lokalna = _lokalna_imena(redovi, a, b)
+            break
+
+    # Property se NE skuplja -- time je i izuzeta. Zasebna `if n in props` provera
+    # je bila mrtva grana: property ime ionako nije ni u subovi ni u funkcije.
+    subovi = {p.lower() for p, v, _a, _b in procs if v == "sub"}
+    funkcije = {p.lower() for p, v, _a, _b in procs if v == "function"}
+
+    for linija in novo.split("\n"):
+        m = _ZAMENA_DODELA.match(linija)
+        if not m:
+            continue
+        n = m.group(1).lower()
+        if n in lokalna:
+            continue                       # lokalno ime ZAKLANJA proceduru
+        if n in subovi:
+            return m.group(1)              # Sub nema povratnu vrednost
+        if n in funkcije and n != unutar:
+            return m.group(1)              # tudja funkcija
+    return None
+
+
 def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     """Nalazi nad DATIM katalogom. Izdvojeno da bi --self-test mogao da mu
     podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
@@ -3198,6 +3408,13 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
         # --vrati u zdravom kodu ne nalazi (primer: kapija-i-uz-identitet).
         elif ("\n" + novo) in ("\n" + staro):
             nalazi.append((ime, "zamena je podniz sidra -- --vrati bi dirao zdrav kod"))
+
+        # zamka 10: dodela imenu tudje procedure -- compile error, ne pad testa
+        tudja = _dodela_tudjoj_proceduri(tekst, staro, novo)
+        if tudja:
+            nalazi.append((ime, "zamena dodeljuje imenu tudje procedure '%s' -- "
+                                "to je compile error, pa Excel stane u [break] a "
+                                "dokaz.py prijavi 'NE OBARA NISTA'" % tudja))
 
         if _KOMENTAR_POSLE_PODVLAKE.search(novo):
             nalazi.append((ime, "komentar posle line-continuation '_' -- syntax error"))
@@ -3311,6 +3528,11 @@ _SELF_TEST = [
     ("zamena ista kao sidro",
      (None, None, "SIDRO", None, "tvrdnja F"),
      "zamena je jednaka sidru"),
+    # Sidro self-testa je Option Explicit -- deklaraciona sekcija, dakle NIJEDNA
+    # procedura. Dodela bilo kom imenu procedure tog fajla je tu compile error.
+    ("dodela imenu tudje procedure",
+     (None, None, "    ParcelaID = 1" + ESCN, None, "tvrdnja H"),
+     "dodeljuje imenu tudje procedure"),
     ("komentar posle podvlake",
      (None, None, "    a = Sastavi(b, _   ' SABOTAZA" + ESCN, None, "tvrdnja G"),
      "komentar posle line-continuation"),
@@ -3361,6 +3583,63 @@ _SELF_TEST = [
      "tvrdnja ZASTARELA"),
 ]
 
+
+# Granica pravila o dodeli imenu procedure. Polovina su NULE, i ta polovina je
+# vaznija: pravilo sme da bude usko, ali ne sme da prijavi legalan VBA.
+# (naziv, ocekivano ime ili None, izvor, zamena)
+_DODELA_CASES = [
+    # VBA je case-insensitive: `foo = ` je isti compile error kao `Foo = `.
+    ("casing ne spasava", "foo",
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    foo = True\n"),
+    # Dodela SVOM imenu je povratna vrednost funkcije -- legalno.
+    ("Function dodeljuje svom imenu", None,
+     "Option Explicit\nFunction Foo() As Boolean\n    SIDRO\nEnd Function\n",
+     "    SIDRO\n", "    Foo = True\n"),
+    # `Foo = 1` uz Property Let je POZIV, ne greska.
+    ("Property Let se ne prijavljuje", None,
+     "Option Explicit\nProperty Let Foo(ByVal v As Long)\nEnd Property\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = 1\n"),
+    # Sub nema povratnu vrednost, pa je dodela njenom imenu greska i IZNUTRA.
+    ("Sub nema povratnu vrednost", "Foo",
+     "Option Explicit\nSub Foo()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = 1\n"),
+    # VBA dozvoljava da LOKALNO ime zakloni proceduru.
+    ("lokalni Dim zaklanja Sub", None,
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Dim Foo As Boolean\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = True\n"),
+    ("parametar zaklanja Function", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P(ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = True\n"),
+    # Const ZAKLANJA, ali dodela konstanti je i dalje compile error.
+    ("Const nije dodeljiv", "Foo",
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Const Foo As Long = 1\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = 2\n"),
+    # Prelomljen potpis je u ovom repou uobicajen.
+    ("multiline parametar zaklanja", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P(ByVal x As Long, _\n      ByVal Foo As Boolean)\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = True\n"),
+    ("multiline Dim zaklanja", None,
+     "Option Explicit\nSub Foo()\nEnd Sub\n"
+     "Sub P()\n    Dim x As Long, _\n        Foo As Boolean\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Foo = True\n"),
+    # SIMBOLI SE CITAJU IZ MUTIRANOG KODA. Ova dva to i dokazuju: prvi brise
+    # deklaraciju koju zdrav kod ima, drugi je uvodi tamo gde je nema.
+    ("zamena UKLANJA deklaraciju", "Foo",
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    Dim Foo As Boolean\n    SIDRO\nEnd Sub\n",
+     "    Dim Foo As Boolean\n    SIDRO\n", "    Foo = True\n"),
+    ("zamena UVODI deklaraciju", None,
+     "Option Explicit\nFunction Foo() As Boolean\nEnd Function\n"
+     "Sub P()\n    SIDRO\nEnd Sub\n",
+     "    SIDRO\n", "    Dim Foo As Boolean\n    Foo = True\n"),
+]
 
 def _self_test() -> int:
     """Svako pravilo mora da pukne nad izmisljenim unosom -- i samo ono."""
@@ -3433,6 +3712,17 @@ def _self_test() -> int:
         print("SELF-TEST: poruka iza laznih spoljnih zagrada nije prepoznata",
               file=sys.stderr)
         lose += 1
+
+    # Granica pravila o dodeli imenu procedure -- ide kroz _dodela_tudjoj_proceduri,
+    # istu funkciju koju zove _nalazi. Da je unos u katalogu stvarno provuce kroz
+    # nju, dokazuje zaseban slucaj "dodela imenu tudje procedure" iznad.
+    for naziv, ocekivano, izvor, sidro, zamena in _DODELA_CASES:
+        n += 1
+        dobijeno = _dodela_tudjoj_proceduri(izvor, sidro, zamena)
+        if dobijeno != ocekivano:
+            print("SELF-TEST: dodela/%s: ocekivano %r, dobijeno %r"
+                  % (naziv, ocekivano, dobijeno), file=sys.stderr)
+            lose += 1
 
     # deljena tvrdnja: dva unosa sa istim (test, tvrdnja)
     par = {"prvi": zdravo, "drugi": zdravo}
