@@ -67,6 +67,7 @@ JEDNA RAZLIKA U ODNOSU NA `ImportAllVBA`: modVbaTools SE UVOZI.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import random
@@ -107,16 +108,28 @@ def _copy_golden(src: str, dst: str) -> None:
             shutil.copy2(os.path.join(src, name), os.path.join(dst, name))
 
 
-def _read_test_results(wbdir: str, report: dict) -> int:
-    """Verdikt iz last_run.txt koji je upisao modTest.RunAllTests.
+def _read_test_results(wbdir: str, report: dict,
+                       fname: str = "last_run.txt",
+                       suite: str = "RunAllTests") -> int:
+    """Verdikt iz fajla koji je suite upisala pored sveske.
 
-    Nema fajla = pad, ne prolaz: to znaci da RunAllTests nije stigao do kraja
+    Nema fajla = pad, ne prolaz: to znaci da suite nije stigla do kraja
     (compile error, visenje, ubijen proces) -- ishod koji nije eksplicitno OK.
+
+    Rezultat ide u SLOT PO SUITE-U. Dok je postojao jedan globalni
+    report["tests"], druga suite sa rezultat-fajlom prepisivala je prvu: full run
+    je umeo da zavrsi sa "SUITE FAIL RunAllTests" i "TESTS 196 ukupno, 0 palo",
+    a ime palog testa je nestajalo. Izlaz koji sakriva crveno je tacno ono protiv
+    cega je ceo ovaj alat.
+
+    NE MESATI sa `suite_results.txt` (SUITE_RESULTS): ovaj fajl nosi IME PALOG
+    TESTA, onaj nosi BROJ provera za COUNTS kapiju. Dva citaoca, dva zapisa.
     """
-    path = os.path.join(wbdir, "last_run.txt")
+    slotovi = report.setdefault("suite_results", {})
+    path = os.path.join(wbdir, fname)
     if not os.path.exists(path):
-        report["tests"] = {"error": "modTest nije upisao last_run.txt "
-                                    "(RunAllTests nije stigao do kraja)"}
+        slotovi[suite] = {"error": f"suite nije upisala {fname} "
+                                   "(nije stigla do kraja)"}
         return 2
 
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
@@ -132,10 +145,10 @@ def _read_test_results(wbdir: str, report: dict) -> int:
             failed = int(token[5:] or -1)
 
     detail = [ln for ln in lines[1:] if ln.strip()]
-    report["tests"] = {"total": total, "failed": failed, "detail": detail}
+    slotovi[suite] = {"total": total, "failed": failed, "detail": detail}
 
     if total < 0 or failed < 0:
-        report["tests"]["error"] = f"neocekivan prvi red: {head!r}"
+        slotovi[suite]["error"] = f"neocekivan prvi red: {head!r}"
         return 2
     return 2 if failed else 0
 
@@ -653,6 +666,42 @@ def _self_test_pure() -> int:
                  enforce_cleanup=False)
     chk(v["BEHAVIOR"] == "FAIL" and rc_from(v) == 2,
         "NOT_RUN red daje BEHAVIOR FAIL, ne 'nista se nije desilo'")
+
+    # --- rezultat PO SUITE-U (main #227): jedan globalni slot je sakrivao crveno
+    # Ovo je ovde zato sto je regresija stvarno nastala: pri rebase-u na main je
+    # ovaj port nestao, a nijedna provera ga nije cuvala. Sada ga cuva.
+    with _tf.TemporaryDirectory() as d:
+        with open(os.path.join(d, "last_run.txt"), "w", encoding="utf-8") as fh:
+            fh.write("TESTS=17 FAIL=1\nFAIL T_ClearForm_Ugovor -- datum ostaje\n")
+        with open(os.path.join(d, "last_run_banka.txt"), "w", encoding="utf-8") as fh:
+            fh.write("TESTS=189 FAIL=0\n")
+        rep = {}
+        rc1 = _read_test_results(d, rep, "last_run.txt", "RunAllTests")
+        rc2 = _read_test_results(d, rep, "last_run_banka.txt", "RunBankaImportTestSuite")
+        chk(rc1 == 2 and rc2 == 0, "rezultat se cita iz fajla koji manifest imenuje")
+        chk(set(rep.get("suite_results", {})) == {"RunAllTests", "RunBankaImportTestSuite"},
+            "dve suite -> dva slota, druga NE prepisuje prvu")
+        chk(rep["suite_results"]["RunAllTests"]["failed"] == 1
+            and rep["suite_results"]["RunBankaImportTestSuite"]["failed"] == 0,
+            "svaki slot nosi svoj broj palih")
+
+        rep.update({"static": "PASS", "compile": {"ok": True}, "schema": "OK",
+                    "mode": "suites", "counts_status": "PASS", "import": [], "dialogs": [],
+                    "suites": [{"name": "RunAllTests", "status": "FAIL", "gate": True,
+                                "seconds": 1.0},
+                               {"name": "RunBankaImportTestSuite", "status": "OK",
+                                "gate": True, "seconds": 2.0}]})
+        _write_report(rep, verdicts(rep, False), 2, "t", out_dir=d)
+        ispis = io.open(os.path.join(d, "t.txt"), encoding="utf-8").read()
+        chk("TESTS   RunAllTests: 17 ukupno, 1 palo" in ispis,
+            "ispis imenuje suite uz njen rezultat")
+        chk("T_ClearForm_Ugovor" in ispis, "ime palog testa prezivi do ispisa")
+        chk("TESTS   RunBankaImportTestSuite: 189 ukupno, 0 palo" in ispis,
+            "zelena suite ne gura crvenu iz ispisa")
+
+    manifest_rf = {x["id"]: x["result_file"] for x in man["suites"] if x["result_file"]}
+    chk(manifest_rf.get("RunBankaImportTestSuite") == "last_run_banka.txt",
+        "manifest nosi ime banka rezultat-fajla (detalj pada ne prezivi COM)")
 
     # --- P0: --no-import ne sme da vodi u last-green -------------------------
     def marks_green(argv: list[str]) -> bool:
@@ -1476,10 +1525,17 @@ def main(argv: list[str]) -> int:
                 except Exception as exc:    # noqa: BLE001
                     entry["status"] = "TIMEOUT" if hard_stop["fired"] else "FAIL"
                     entry["error"] = str(exc)
+                    # Suite koja pad prijavljuje GRESKOM (banka, i svaka na
+                    # modTestRunner-u) svejedno je upisala detalje pored sveske.
+                    # Bez ovoga od celog pada ostane samo "Exception occurred" --
+                    # pa se ne vidi KOJA provera je pala, nego samo da jeste.
+                    if meta.get("result_file"):
+                        _read_test_results(tmp, report, meta["result_file"], suite)
                 else:
                     if meta.get("result_file"):
-                        # Verdikt iz last_run.txt, ne iz "Run() nije pukao".
-                        entry["status"] = "OK" if _read_test_results(tmp, report) == 0 else "FAIL"
+                        # Verdikt iz fajla suite, ne iz "Run() nije pukao".
+                        entry["status"] = "OK" if _read_test_results(
+                            tmp, report, meta["result_file"], suite) == 0 else "FAIL"
                     else:
                         entry["status"] = "OK" if meta.get("raises") else "BLIND"
                 finally:
@@ -1616,13 +1672,15 @@ def _write_junit(report: dict, path: str) -> None:
     ET.ElementTree(suites_el).write(path, encoding="utf-8", xml_declaration=True)
 
 
-def _write_report(report: dict, v: dict, rc: int, name: str = "last_run") -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
+def _write_report(report: dict, v: dict, rc: int, name: str = "last_run",
+                  out_dir: str = None) -> None:
+    OUT_DIR_ = out_dir or OUT_DIR
+    os.makedirs(OUT_DIR_, exist_ok=True)
     report["verdicts"] = {k: val for k, val in v.items() if not k.startswith("_")}
-    with open(os.path.join(OUT_DIR, f"{name}.json"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(OUT_DIR_, f"{name}.json"), "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
     try:
-        _write_junit(report, os.path.join(OUT_DIR, f"{name}.xml"))
+        _write_junit(report, os.path.join(OUT_DIR_, f"{name}.xml"))
     except Exception as exc:                # noqa: BLE001
         report.setdefault("import", []).append(f"JUnit XML nije upisan: {exc}")
 
@@ -1659,9 +1717,23 @@ def _write_report(report: dict, v: dict, rc: int, name: str = "last_run") -> Non
     if schema:
         lines.append(f"SCHEMA  {schema}")
 
+    # Rezultat svake suite ide UZ NJU i nosi njeno ime. Jedan zajednicki blok je
+    # znacio da poslednja suite sa rezultat-fajlom prepise prethodnu.
+    slotovi = report.get("suite_results", {})
     for s in report["suites"]:
         lines.append(f"SUITE   {s['status']:7} {s['name']} ({s.get('seconds', 0)}s)"
                      + (f"  {s.get('error', '')}" if s["status"] in ("FAIL", "TIMEOUT") else ""))
+        t = slotovi.get(s["name"])
+        if not t:
+            continue
+        if t.get("error"):
+            lines.append(f"TESTS   {s['name']}: {t['error']}")
+        else:
+            lines.append(f"TESTS   {s['name']}: {t['total']} ukupno, {t['failed']} palo")
+        # Ime bas tog testa mora da se vidi u ispisu -- to je razlika izmedju
+        # "nesto je palo" i upotrebljivog nalaza.
+        for ln in t.get("detail", []):
+            lines.append(f"        {ln}")
 
     for ln in report.get("counts_detail") or []:
         lines.append(f"ASSERTS {ln}")
@@ -1670,17 +1742,6 @@ def _write_report(report: dict, v: dict, rc: int, name: str = "last_run") -> Non
     if cleanup:
         for ln in cleanup.get("detail") or []:
             lines.append(f"CLEANUP {ln}")
-
-    t = report.get("tests")
-    if t:
-        if t.get("error"):
-            lines.append(f"TESTS   {t['error']}")
-        else:
-            lines.append(f"TESTS   {t['total']} ukupno, {t['failed']} palo")
-        # Ime bas tog testa mora da se vidi u ispisu -- to je razlika izmedju
-        # "nesto je palo" i upotrebljivog nalaza.
-        for ln in t.get("detail", []):
-            lines.append(f"        {ln}")
 
     for d in report.get("dialogs", []):
         lines.append(f"DIALOG  {d}")
@@ -1714,7 +1775,7 @@ def _write_report(report: dict, v: dict, rc: int, name: str = "last_run") -> Non
                      f"kapija={report.get('gate')} (vba_gate.py --status)")
 
     text = "\n".join(lines)
-    with open(os.path.join(OUT_DIR, f"{name}.txt"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(OUT_DIR_, f"{name}.txt"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     # Ispis ne sme da PUKNE zbog jednog znaka. Konzola je cp1252, a poruka o
     # padu nosi ono sto je test video -- pa je jedan ChrW(183) iz prikaznog
