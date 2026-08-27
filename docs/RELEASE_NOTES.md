@@ -5919,3 +5919,84 @@ pravilo o identitetu dokumenta.
 
 Isto važi i za novu proveru: da nije četiri puta pokazana kao pogrešna, i ona bi
 danas izgledala kao zaštita.
+
+## v2.82.0 — pet provera koje su padale, ali ne zbog onoga što tvrde
+
+Nema izmene u programu — izdanje o **proverama**, nastavak prethodnog.
+
+### Šta je bilo
+
+Uz svaku proveru ide namerno pokvaren kod koji mora da je obori, i uz njega
+zapisano **šta** tačno treba da padne. Pun prolaz je našao pet mesta gde nešto
+padne — ali ne ono što piše.
+
+To nije sitnica u evidenciji. Ako provera pada iz drugog razloga, onda pravilo
+koje je zapisano **niko ne meri**, a izveštaj i dalje izgleda zeleno.
+
+Očekivao sam jedan razlog za svih pet. Bila su tri.
+
+| Razlog | Koliko |
+|---|---|
+| pokvaren kod gasi **dva** pravila odjednom, pa padne ono koje se proverava prvo | 3 |
+| ishod čuvaju **dve nezavisne zaštite**, pa ga jedan kvar ne može oboriti — zapisano je pogrešno, ne pokvareno | 1 |
+| pokvaren kod **ne stigne** do mesta koje cilja, jer ga ranija zaštita zaustavi | 1 |
+
+### Jedan slučaj je ispao suprotno od očekivanog
+
+Brojač zaostalih stavki u meniju. Očekivao sam da se pokvari ranije pravilo —
+mereno, ono uopšte **ne padne**. Razlog je u tome kako Excel radi: kad upis
+vrednosti pukne, rezultat ostaje na nuli **sam od sebe**. Red koji je tu nulu
+navodno postavljao nikad je nije ni proizvodio.
+
+Znači to pravilo nije bilo „preskočeno" nego **nikad mereno**. Popravka nije bila
+da se kvar suzi, nego da se izmisli sasvim drugi — takav koji vraća pogrešan broj
+umesto nule.
+
+### Šta je urađeno
+
+Tamo gde je kvar gasio dva pravila, razdvojen je na dva kvara — svaki gasi po
+jedno. Tamo gde se ne može razdvojiti, zapisano je ono što se **stvarno** meri.
+Provera koja je bila zavedena kao „poznat problem" obrisana je jer problem više
+ne postoji — a zapis koji ništa ne pokriva sam je problem.
+
+Ukupno: 251 → **255** pokvarenih verzija koda, svaka sa svojim proverenim
+ishodom. Svih deset dodirnutih je pušteno i sve su pale kako piše, a kod je posle
+prolaza bio slovo u slovo isti kao pre.
+
+### Uzgred: prekinut prolaz ostavlja pokvaren kod u projektu
+
+Pun prolaz sam prekinuo na pola. Čišćenje se izvršava na izlasku — što ubijen
+proces ne stigne — pa je jedan pokvaren fajl ostao u radnoj kopiji.
+
+Zaštita je postojala i **jeste** ga uhvatila. Ali je razlog objasnila naopako:
+rekla je da je kod ispod **popravljen**, i da je projekat čist. Oboje netačno. A
+savet koji iz toga sledi — uskladi zapis sa zatečenim kodom — upisao bi kvar kao
+novu istinu.
+
+Razdvojeno je jednim uslovom, i sada poruka kaže šta jeste i koju komandu treba
+pokrenuti.
+
+### I ta nova zaštita je u prvoj verziji tvrdila više nego što meri
+
+Ovo je najkorisniji deo izdanja, jer se ponovilo **unutar popravke za tu istu
+grešku**.
+
+Nova zaštita je govorila „ovo se može vratiti" čim pokvaren kod negde postoji.
+Komanda za vraćanje, međutim, radi samo kad postoji **tačno jedno** takvo mesto.
+Provera za sebe je bila zelena zato što sam joj primer birao ja — a primer je
+imao **151** takvo mesto umesto jednog.
+
+Uhvaćeno je u recenziji, ne mojim dokazom. Moj dokaz pokazuje da zaštita **bira**
+između dva ishoda; ne pokazuje da bira po **pravom** merilu.
+
+Popravljeno tako da postoji samo jedno merilo, koje koriste i provera i komanda
+za vraćanje — pa se više ne mogu razići. Uz to je uvedeno i pravilo za treće
+stanje, koje niko dosad nije gledao; provereno je da ga nijedan od 255 zapisa ne
+krši, dakle drži buduće.
+
+### Zašto je ovo vredelo
+
+Provera koja padne iz pogrešnog razloga izgleda isto kao provera koja radi. Pet
+ih je stajalo u projektu i izgledalo kao pokrivenost — a jedno od pravila koje
+niko nije merio jeste da se u količinu upiše **neto** težina — bruto umanjen za
+ambalažu.
