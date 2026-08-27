@@ -6161,3 +6161,75 @@ postavlja je drugačije od starog, pa stara greška više nema svoju granu. Da b
 dokazala odvojeno, trebali bi pripremljeni podaci kakvih nema — i koje ne mogu da
 napravim, jer žive u samoj radnoj svesci, a ne u izvornom kodu. Rečeno je kao
 neizmereno, a ne prećutano.
+
+## v2.86.0 — zabrana koja je predložena kao popravka, pa povučena
+
+**Program radi isto kao pre.** Ovo izdanje nema nijednu izmenu u izvršnom kodu —
+i to je njegova poenta.
+
+### Šta je bilo predloženo
+
+Panel za oporavak prevezuje prijemnicu bez zbirne na aktivnu zbirnu. Predložio sam
+da taj panel **odbije** posao kad je isti broj prijemnice nekada pripadao **dvama
+kupcima** — po uzoru na zaštitu koju je prošlo izdanje uvelo za zbirnu.
+
+Zvučalo je kao ista stvar. Nije bila.
+
+### Zašto je povučeno
+
+Program to mesto već štiti, i to na **tri** nivoa, svaki tamo gde treba:
+
+| Šta se prevezuje | Šta ga čuva |
+|---|---|
+| samo zaglavlje prijemnice | u izbor ulaze **samo aktivni** dokumenti — stornirani tuđi ne može ni da uđe |
+| paletna stavka koja zna svoju prijemnicu | odlučuje **identitet** dokumenta, ne broj |
+| stara paletna stavka bez te oznake | posao **puca i poništava se u celini** ako broj nose dokumenti više kupaca |
+
+Zaštita od istorijske dvosmislenosti, dakle, **već postoji** — tačno tamo gde je
+nužna, i samo tamo. Moja bi je ponovila na ulazu i time zabranila slučajeve koje
+program već ume bezbedno da razdvoji.
+
+A cena ne bi bila teorijska: **brojevi prijemnica se dodeljuju po kupcu**, pa je
+poklapanje brojeva očekivano, ne izuzetak. Panel bi posle te izmene odbio potpuno
+rešiv oporavak čim je isti broj nekad nosio storniran dokument drugog kupca — i
+poslao operatera na ručni rad.
+
+### Provera koja je dokazivala samu sebe
+
+Ovo je deo koji najviše vredi zapisati.
+
+Uz predlog je išla provera koja je tražila da posao **bude odbijen**. Ali za cilj
+je uzeta zbirna na kojoj dokument **već stoji** — pa zatečeno „prošlo je" nije
+bio dokaz da se nešto pogrešno menja, nego da se **ništa** nije promenilo.
+
+Namerno pokvarena verzija je onda vraćala staro stanje i provera je postajala
+crvena — čime je dokazano samo da je *nova zabrana potrebna novoj proveri*. Ne i
+da bez nje nešto stvarno strada.
+
+> Provera koja meri sopstveno novo pravilo umesto stvarne greške zelena je iz
+> pogrešnog razloga.
+
+### Šta je stvarno ušlo
+
+Provera prepisana tako da meri **posledicu**, nad pripremljenim podacima gde isti
+broj nose dva dokumenta — jedan storniran, jednog kupca, i jedan aktivan, drugog:
+
+1. oporavak **prolazi** — legitiman posao se ne odbija;
+2. **aktivan** dokument se prevezuje;
+3. **storniran tuđi** ostaje netaknut.
+
+Uz nju ide i namerno pokvarena verzija koja uklanja filter po storniranom — i
+tuđi dokument se tada **stvarno** pomeri. To je dokaz greške, a ne prekršaja
+pravila.
+
+Ceo skup je zelen: 126 provera u glavnom setu, 196 u bankarskom, svih dvanaest
+grupa.
+
+### Šta ostaje neizmereno
+
+**Paletne stavke** — pod tim brojem ih u pripremljenim podacima nema nijedne, pa
+se druga dva nivoa zaštite ovom proverom ne mere.
+
+**Broj vlasnika nije broj dokumenata** — isti kupac sa dva aktivna dokumenta pod
+istim brojem i dalje se broji kao jedan vlasnik. Nijedna zaštita na tom mestu taj
+slučaj ne hvata. Zapisano kao otvoreno.

@@ -3659,9 +3659,9 @@ aktivne. Probano je i izmereno: prebacivanje na IKAD ostavlja **ceo set zelen** 
 bez generacije na dvosmislen cilj već vraća `False`, ali **nije izolovano zbog
 čega** (moguće raniji uslov, ne kapija).
 
-> **Zatvoreno na strani CILJA u `v2.85.0` — v. §20.** Ta putanja sada nosi
-> `RequireJedanVlasnikIkadPoBroju`. Na strani **prijemnice** kapija i dalje broji
-> samo aktivne — i dalje otvoreno.
+> **Zatvoreno na strani CILJA u `v2.85.0`** (§20). Na strani **izvorne
+> prijemnice** kapija ostaje po AKTIVNIMA, i to **namerno** — §21 objašnjava
+> zašto šira zabrana tamo nije popravka nego šteta.
 
 Izmena ponašanja bez testa koji je meri je tačno ono što `CLAUDE.md` §2 zabranjuje,
 pa je ostavljena otvorena umesto da se progura kao „i to je popravljeno".
@@ -3824,5 +3824,88 @@ su ga zamenile**, svaka svojom sabotažom:
 `RequireJedanVlasnikPoBroju` na strani **prijemnice** (drugi poziv u istoj
 funkciji) i dalje broji **samo aktivne**. Ciljna strana je zatvorena; ta nije.
 
+> **Ne zatvara se.** `v2.86.0` (§21) je izmerio da je zaštita tamo **slojevita**
+> i da bi jedna šira kapija na ulazu odbila legitiman oporavak.
+
 **Order-dependency testova 124 i 125** ostaje test-dug: oba moraju biti poslednja
 u nizu jer diraju fixture. Nije rešeno ovde, da se diff ne širi.
+
+---
+
+## 21. Šira zabrana koja je bila predložena kao popravka (`v2.86.0`)
+
+Ovo izdanje je **povuklo** izmenu koju je isti PR prvo uveo. Zapis postoji zato
+što je nalaz opšti: *konzervativnija* provera nije automatski bolja provera.
+
+### Šta sam predložio
+
+Kapija na ulazu u `ReassignPrijemnicaToZbirna_TX`, po uzoru na stranu cilja:
+
+```vb
+RequireJedanVlasnikIkadPoBroju TBL_PRIJEMNICA, COL_PRJ_BROJ, brPrijemnice, _
+                               SRC, COL_PRJ_KUPAC
+```
+
+Obrazloženje je bilo simetrija: ako je broj **ikad** pripadao dvama kupcima,
+izbor po broju pomera i tuđi red.
+
+### Zašto je to bilo pogrešno
+
+Kod ispod toga **to ne radi**. Izmereno čitanjem, red po red:
+
+| Sloj | Šta ga štiti |
+|---|---|
+| zaglavlje prijemnice | u `targetRows` ulaze **samo aktivni** redovi — storniran tuđi dokument ne može ni da uđe u izbor |
+| paletna stavka sa `PrijemnicaID` | odlučuje **identitet**: `pripada = docIds.Exists(pidS)` |
+| legacy stavka **bez** `PrijemnicaID` | `brojDvosmislen` računa **IKAD** i puca uz `Err.Raise`, a cela transakcija se povlači |
+
+Istorijska kapija, dakle, **već postoji** — tačno tamo gde je nužna, i samo tamo.
+Moja bi je duplirala na ulazu i time zabranila slučajeve koje kod već bezbedno
+razdvaja.
+
+Poslovna cena nije teorijska: broj prijemnice je numerisan **po kupcu**, pa je
+kolizija očekivana, a ne egzotika. Legacy panel u `frmDokumenta` (bez generacije)
+bi posle te izmene odbio **potpuno rešiv** oporavak čim je isti broj nekad nosio
+storniran dokument drugog kupca — i oterao operatera na ručni rad.
+
+### Prvi test je bio kružan
+
+Vredi zapisa isto koliko i sama izmena.
+
+Test je tražio da poziv vrati `False`, a za cilj je uzeta zbirna na kojoj
+dokument **već stoji**. Zatečeno „`True`" zato nije bio dokaz pogrešne mutacije
+nego uspešan **no-op**. Sabotaža je onda vraćala kapiju i test je postajao crven —
+čime je dokazano samo da je *nova politika potrebna novoj tvrdnji*, ne da bez nje
+nešto pogrešno mutira.
+
+> Mutacioni dokaz koji meri sopstvenu politiku umesto poslovne greške je zelen iz
+> pogrešnog razloga — ista klasa kao §12, samo na nivou tvrdnje a ne teksta.
+
+### Šta je stvarno urađeno
+
+Kapija vraćena na aktivne, a test prepisan da meri **posledicu**:
+
+```
+3/150326:  PRJ-TEST-I1 storniran (KUP-TEST-1)   PRJ-TEST-I2 aktivan (KUP-TEST-2)
+           obe na ZB-TEST-4
+```
+
+Prevezivanje na drugu, jednoznačnu aktivnu zbirnu mora da:
+
+1. **prođe** — legitiman oporavak se ne odbija;
+2. pomeri **aktivan** dokument;
+3. **ne** dirne storniran dokument drugog kupca.
+
+Sabotaža `prijemnica-izvor-i-stornirani` uklanja filter po storniranom, pa tuđi
+dokument **stvarno** biva pomeren — i obara treću tvrdnju po imenu. To je dokaz
+pogrešne mutacije, a ne prekršaja politike.
+
+### Šta ovo ne pokriva
+
+**Paletne stavke.** Pod tim brojem ih u fixture-u **nema nijedne**, pa se zaštita
+po `PrijemnicaID` i fail-closed grana za legacy stavku bez ID-a **ne mere** ovim
+testom. Rečeno kao neizmereno.
+
+**Broj vlasnika nije broj dokumenata.** `VlasniciPoBroju` broji **vlasnike**, pa
+isti kupac sa dva aktivna dokumenta pod istim brojem i dalje daje `1`. Nijedna od
+kapija u ovoj funkciji taj slučaj ne hvata. Nalaz stoji otvoren.

@@ -84,6 +84,26 @@ SRC_VBA = os.path.join(ROOT, "src-vba")
 # ime -> (fajl, sidro, zamena, test koji MORA da padne, sta tvrdnja kaze)
 # Sidro i zamena se porede od POCETKA REDA (v. zamka 2) -- ne pisati vodece \n.
 SABOTAZE = {
+    # Izbor izvora bez filtera po storniranom. Broj prijemnice je numerisan PO
+    # KUPCU, pa isti broj nose dokumenta dva kupca; ono sto storniran tudji
+    # dokument drzi na mestu jeste bas taj filter, a ne kapija na ulazu.
+    #
+    # Ranija verzija ovog unosa je merila SIRU ZABRANU (IKAD kapija na ulazu),
+    # a ne pogresnu mutaciju -- i to nad ciljem na kome dokument vec stoji, pa
+    # je dokaz bio kruzan. Sada se obara tvrdnja o tome sta se STVARNO pomeri.
+    "prijemnica-izvor-i-stornirani": (
+        "modDokumenta.bas",
+        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
+        "            If cStorno = 0 Or UCase$(Trim$(CStr(data(i, cStorno)))) <> \"DA\" Then\n"
+        "                targetRows.Add i\n"
+        "            End If\n"
+        "        End If\n",
+        "        If PripadaIzvoru(data, i, cBrPrij, cPrjId, brPrijemnice, srcIds) Then\n"
+        "            targetRows.Add i   ' SABOTAZA: i storniran tudji dokument ulazi\n"
+        "        End If\n",
+        "T_Prijemnica_PomeraSamoAktivan",
+        "storniran dokument DRUGOG kupca nije pomeren",
+    ),
     # Number-only cilj bez IKAD kapije. Kapija po AKTIVNIMA vidi jednog
     # vlasnika i pusta, a storniran vlasnik i dalje ima aktivnu decu -- pa
     # prijemnica zavrsi vezana GOLOM LABELOM za broj koji nose dva vlasnicka
