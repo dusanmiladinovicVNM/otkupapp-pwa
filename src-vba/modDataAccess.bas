@@ -140,6 +140,15 @@ Public Sub KesKoloneTestSet(ByVal tblName As String, ByVal colName As String, _
     mColCache(tblName & "|" & colName) = vrednost
 End Sub
 
+' TEST SEAM: da li je kljuc u kesu indeksa kolone. Isti razlog kao
+' modUiData.KesImaKljuc: pravilo "nula se ne pamti" se ne moze izmeriti kroz
+' vracenu vrednost, jer GetColumnIndex daje nulu i kad je zapamtio i kad nije.
+Public Function KesKoloneImaKljuc(ByVal tblName As String, _
+                                  ByVal colName As String) As Boolean
+    If mColCache Is Nothing Then Exit Function
+    KesKoloneImaKljuc = mColCache.Exists(tblName & "|" & colName)
+End Function
+
 Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long
     ' Gibt den Spaltenindex innerhalb der Tabelle zurueck (1-basiert)
     ' Request-scoped kes: u jednom "Prikazi" prozoru kolone se ne menjaju, pa
@@ -161,7 +170,22 @@ Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String)
     On Error Resume Next
     GetColumnIndex = lo.ListColumns(colName).index
     On Error GoTo 0
-    If Not mColCache Is Nothing Then mColCache(ck) = GetColumnIndex
+    ' NULA NIJE ZNANJE, pa se ne pamti.
+    '
+    ' Jedan trenutan neuspeh je inace postajao TRAJAN: zapamcena nula vazi za
+    ' ceo BeginTableCache prozor, pa svaki sledeci poziv nad istom kolonom
+    ' dobija istu nulu bez ijednog novog pokusaja -- a fail-closed kapije
+    ' (RequireColumnIndex) na to staju. Tako je nastalo "Nedostaje kolona
+    ' 'VozacID' u tabeli 'tblZbirna'" nad sveskom u kojoj ta kolona POSTOJI.
+    '
+    ' Isto pravilo vec drzi kes TABELA (modUiData.CachedTable kesira samo kad
+    ' je citanje uspelo). Ovde je bila rupa, na istom mestu i iz istog razloga.
+    '
+    ' Ovo NE popravlja uzrok PRVOG neuspeha -- on nije reprodukovan (postmortem
+    ' par 11) -- nego mu skida trajnost. Test 123.
+    If Not mColCache Is Nothing Then
+        If GetColumnIndex > 0 Then mColCache(ck) = GetColumnIndex
+    End If
 End Function
 
 Public Function GetColumnData(ByVal tblName As String, ByVal colName As String) As Variant
