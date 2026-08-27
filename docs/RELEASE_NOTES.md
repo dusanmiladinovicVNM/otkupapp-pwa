@@ -6101,3 +6101,63 @@ rešeno.
 **Šest starih zaštita je ostalo na svom mestu.** One staju **ranije** i kažu
 razlog razumljivom rečenicom; nova staje iznutra i može da kaže samo „nije
 uspelo". Nova je zato **mreža ispod**, a ne zamena za njih.
+
+## v2.85.0 — prevezivanje osirotele prijemnice više ne gleda pogrešan red
+
+Menja program. Tiče se **panela za oporavak** u Dokumentima — onog gde se
+prijemnica bez zbirne ručno prevezuje na aktivnu zbirnu.
+
+### Dva problema, oba u istom potezu
+
+**Prvi: prevezivanje je znalo da odbije bez reči.** Cilj se tražio po broju
+zbirne, a program je uzimao **prvi** red koji nosi taj broj — bez obzira da li je
+storniran. Ako je prvi red storniran, a pod istim brojem stoji **aktivna** zbirna,
+prevezivanje bi jednostavno stalo. Bez poruke, bez zapisa u logu. Sa strane
+operatera: kliknuo si, i ništa se nije desilo.
+
+**Drugi, ozbiljniji: nije bilo nikakve zaštite od dvosmislenog broja.** Isti broj
+zbirne mogu — kroz istoriju — nositi **dva različita vlasnika**. Prošlo izdanje je
+baš to zabranilo za preračun, ali ovaj panel nije imao nijednu takvu proveru.
+A veza koja se upisuje je **sam broj**, ne identitet dokumenta — pa bi prijemnica
+završila zakačena za broj koji pripada dvama tokovima odjednom, i dalje se više ne
+bi znalo čije je šta.
+
+### Šta je urađeno
+
+Cilj sada mora da zadovolji dva uslova, oba proverena u samoj radnji:
+
+1. pod tim brojem mora postojati **aktivna** zbirna;
+2. taj broj sme da je **ikada** pripadao samo **jednom** vlasniku.
+
+Drugi uslov je isti onaj koji je uveden u prošlom izdanju — sad važi i ovde, jer
+panel za oporavak nema nijednu zaštitu iznad sebe.
+
+### Kako se zna da radi
+
+Provere su pisane pre popravke. Uz njih idu tri namerno pokvarene verzije, i svaka
+obara **tačno svoju** tvrdnju: dvosmislen broj, broj bez ijedne aktivne zbirne, i
+broj napisan drugom veličinom slova. Pun skup je zelen: 125 provera u glavnom setu,
+196 u bankarskom, svih dvanaest grupa prolazi.
+
+### Recenzija je dva puta oborila moju popravku
+
+Vredi zapisati, jer se ne vidi iz rezultata.
+
+| Krug | Šta je bilo pogrešno |
+|---|---|
+| 1 | popravka je **uvela** novu grešku — postojanje cilja se proveravalo drugačije nego vlasništvo, pa bi broj napisan malim slovima prošao kao postojeći, zaštita bi videla nula vlasnika i propustila, a u dokument bi se upisalo ono što je poslao pozivalac |
+| 2 | provera koju sam napisao je **ozvaničavala** ono što je prošlo izdanje zabranilo — tvrdila je da prevezivanje na istorijski dvosmislen broj sme da prođe |
+
+Drugi krug je bio važniji: greška nije bila u kodu nego u tome **šta sam proglasio
+ispravnim ponašanjem**.
+
+### Šta ovo ne rešava
+
+**Ista radnja ima još jednu zaštitu, na strani prijemnice, koja i dalje broji samo
+aktivne vlasnike.** Nije dirana; ostaje otvoreno.
+
+**Prvobitni kvar se ne može izmeriti zasebno.** Pitanje koje program sada
+postavlja je drugačije od starog, pa stara greška više nema svoju granu. Da bi se
+dokazala odvojeno, trebali bi pripremljeni podaci kakvih nema — i koje ne mogu da
+napravim, jer žive u samoj radnoj svesci, a ne u izvornom kodu. Rečeno je kao
+neizmereno, a ne prećutano.
