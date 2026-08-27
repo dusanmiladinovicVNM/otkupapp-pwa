@@ -698,6 +698,41 @@ stiglo kroz dve moje greške, obe uhvaćene istim merenjem:
 Prva je našla i sama sebe: 54 nalaza nad kodom koji se uredno kompajlira ne mogu
 biti ništa drugo nego mana provere.
 
+### Treća greška: doseg je bio izgubljen (iz review-a)
+
+Prve dve su nađene merenjem. Treću je našao pregled, i bila je najozbiljnija —
+jer je vraćala baš onu klasu zbog koje pravilo postoji.
+
+Imena su se skupljala u **jedan ravan skup za ceo fajl**. Zato je ovo prolazilo
+kao čisto:
+
+```vb
+Private Sub A()
+    Dim mState As Boolean       ' lokalno u A
+End Sub
+
+Private Sub B()
+    mState = True               ' NIJE deklarisano -- VBA nece prevesti
+End Sub
+```
+
+Lokalni `Dim` u `A` legalizovao je `mState` kroz ceo modul. Isto je važilo za
+**parametar** procedure `A`. Oba oblika su izmerena pre popravke i oba su davala
+**0 nalaza** nad kodom koji se ne kompajlira.
+
+To nije egzotičan slučaj: sam PR je proglasio legalnim da `m` prefiks nosi i
+parametar, i lokalni `Dim`, i `Static` — pa se ne može reći „to ionako ne radimo".
+
+Doseg se sada poštuje na dva nivoa, koliko i VBA traži:
+
+| Nivo | Šta ulazi |
+|---|---|
+| **globalno** | deklaraciona sekcija (`Dim`/`Private`/`Public`/`Const`/`WithEvents`) + imena **svih** procedura |
+| **po proceduri** | njeni parametri + njeni `Dim`/`Static`/`Const` |
+
+**Suženje nije ništa pokvarilo:** i posle njega je **0** nalaza nad svih 195
+fajlova, a rekonstrukcija incidenta i dalje daje 1.
+
 ### Dokaz je rekonstrukcija stvarnog incidenta
 
 Ne sintetički fixture: uzet je `frmDokumenta.frm` sa `origin/main` i uklonjen je
@@ -708,7 +743,7 @@ Ne sintetički fixture: uzet je `frmDokumenta.frm` sa `origin/main` i uklonjen j
 | zdrav | **0** |
 | bez `Private m_BlokoviOk As Boolean` | **1**, imenuje `m_BlokoviOk` |
 
-Uz to jedanaest self-test slučajeva (93 ukupno, bilo 82), od kojih je **deset
+Uz to četrnaest self-test slučajeva (96 ukupno, bilo 82), od kojih je **jedanaest
 nula** — svaki legalan oblik koji bi mogao da zapišti: ime procedure po istoj
 konvenciji, parametar, parametri prelomljeni preko više redova, višestruka
 deklaracija u jednom `Dim`-u, `Const`, `WithEvents`, kvalifikovano ime, ime u
@@ -718,8 +753,9 @@ komentaru, ime u tekstu.
 
 | Sabotaža | Šta padne |
 |---|---|
-| pravilo nije priključeno na `check_file` | slučaj „koriscena a nedeklarisana" |
+| pravilo nije priključeno na `check_file` | **tri** slučaja koja traže nalaz |
 | `Private Sub` opet prolazi kao deklaracija | **tri** slučaja: ime procedure i **oba** parametarska |
+| doseg se gubi — lokalno postaje globalno | **oba** scope slučaja, a kontrolni „modul-nivo pokriva obe" ostaje zelen |
 
 Drugi red je pošten po cenu urednosti: ime procedure i lista parametara dolaze iz
 **iste** grane, pa vraćanje starog oblika gasi obe. Prvi pokušaj dokaza je zbog

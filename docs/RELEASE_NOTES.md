@@ -5839,6 +5839,11 @@ Nad celim zatečenim kodom daje **nula** primedbi. Do te nule se stiglo kroz dve
 greške u samoj proveri, obe nađene tim istim merenjem — jedna je prijavljivala 54
 mesta koja su sasvim ispravna.
 
+Treću je našao pregled, i bila je ozbiljnija: provera je gledala imena kroz ceo
+fajl umesto po delovima, pa je promenljiva prijavljena u jednom delu „pokrivala"
+isto ime u drugom — tamo gde ga zapravo nema. Sada se poštuje isto pravilo koje
+važi i u samom Excelu.
+
 ### Kako je dokazano
 
 Uzet je pravi fajl iz istorije i iz njega je uklonjen **baš onaj jedan red** koji

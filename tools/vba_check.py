@@ -1352,41 +1352,108 @@ def _imena_iz_liste(tekst: str) -> list[str]:
     return imena
 
 
-def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
-    kod = _bez_teksta("\n".join(lines))
-    logicke = _logical_lines(kod.split("\n"))
+KRAJ_PROCEDURE = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
 
-    deklarisano: set[str] = set()
-    for tekst, _ln in logicke:
+
+def _deklaracije_iz_reda(t: str):
+    """Imena deklarisana u JEDNOM redu, ili None ako red nije deklaracija."""
+    m = CONST_POCETAK.match(t)
+    if m:
+        return _imena_iz_liste(t[m.end():])
+    m = DEKL_POCETAK.match(t)
+    if m:
+        return _imena_iz_liste(t[m.end():])
+    return None
+
+
+def _segmenti(logicke):
+    """[(ime_procedure ili None, [(tekst, red), ...])] -- deklaraciona sekcija
+    i po jedan segment po proceduri."""
+    out, tek, ime = [], [], None
+    for tekst, ln in logicke:
         t = tekst.strip()
         m = POTPIS_IME.match(t)
         if m:
-            deklarisano.add(m.group(1))
-            zagrada = t[t.index("(") + 1:]
-            kraj = zagrada.rfind(")")
-            deklarisano.update(_imena_iz_liste(zagrada[:kraj] if kraj >= 0 else zagrada))
+            if tek:
+                out.append((ime, tek))
+            ime, tek = m.group(1), [(tekst, ln)]
             continue
-        m = CONST_POCETAK.match(t)
-        if m:
-            deklarisano.update(_imena_iz_liste(t[m.end():]))
-            continue
-        m = DEKL_POCETAK.match(t)
-        if m:
-            deklarisano.update(_imena_iz_liste(t[m.end():]))
+        tek.append((tekst, ln))
+        if KRAJ_PROCEDURE.match(t):
+            out.append((ime, tek))
+            ime, tek = None, []
+    if tek:
+        out.append((ime, tek))
+    return out
 
-    niska = {x.lower() for x in deklarisano}
+
+def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
+    """DOSEG SE POSTUJE NA DVA NIVOA, jer ga i VBA postuje.
+
+    Ravan skup imena za ceo fajl je propustao compile-hard gresku:
+
+        Private Sub A()
+            Dim mState As Boolean       <- lokalno u A
+        End Sub
+        Private Sub B()
+            mState = True               <- NIJE deklarisano; VBA nece prevesti
+        End Sub
+
+    Lokalni `Dim` u A je legalizovao `mState` kroz ceo modul, pa je bas ona
+    klasa zbog koje pravilo postoji mogla ponovo da prodje kao zelena. Isto je
+    vazilo za parametar procedure A.
+
+    Zato:
+      globalno = deklaraciona sekcija + imena procedura
+      lokalno  = parametri TE procedure + njeni Dim/Static/Const
+    """
+    kod = _bez_teksta("\n".join(lines))
+    segmenti = _segmenti(_logical_lines(kod.split("\n")))
+
+    # --- globalno: deklaraciona sekcija + imena SVIH procedura ---------------
+    globalno: set[str] = set()
+    for ime_proc, blok in segmenti:
+        for tekst, _ln in blok:
+            t = tekst.strip()
+            m = POTPIS_IME.match(t)
+            if m:
+                globalno.add(m.group(1))    # procedura je vidljiva celom modulu
+                continue
+            if ime_proc is None:
+                imena = _deklaracije_iz_reda(t)
+                if imena:
+                    globalno.update(imena)
+
+    # --- po proceduri: parametri + njene lokalne deklaracije -----------------
     prijavljeno: set[str] = set()
     out = []
-    for tekst, ln in logicke:
-        for ime in MODUL_IME.findall(tekst):
-            if ime.lower() in niska or ime.lower() in prijavljeno:
+    for ime_proc, blok in segmenti:
+        lokalno: set[str] = set()
+        for tekst, _ln in blok:
+            t = tekst.strip()
+            m = POTPIS_IME.match(t)
+            if m:
+                zagrada = t[t.index("(") + 1:]
+                z = zagrada.rfind(")")
+                lokalno.update(_imena_iz_liste(zagrada[:z] if z >= 0 else zagrada))
                 continue
-            prijavljeno.add(ime.lower())
-            out.append(Finding(
-                path, ln, "NEDEKLARISAN",
-                f"'{ime}' se koristi, a nigde u fajlu nije deklarisan. "
-                f"Option Explicit ovo prijavljuje tek pri compile-u -- do tada "
-                f"run_vba samo VISI, sa Excelom u [break]."))
+            if ime_proc is not None:
+                imena = _deklaracije_iz_reda(t)
+                if imena:
+                    lokalno.update(imena)
+
+        dozvoljeno = {x.lower() for x in globalno | lokalno}
+        for tekst, ln in blok:
+            for ime in MODUL_IME.findall(tekst):
+                if ime.lower() in dozvoljeno or ime.lower() in prijavljeno:
+                    continue
+                prijavljeno.add(ime.lower())
+                out.append(Finding(
+                    path, ln, "NEDEKLARISAN",
+                    f"'{ime}' se koristi, a nije deklarisan ni na nivou modula "
+                    f"ni u toj proceduri. Option Explicit ovo prijavljuje tek "
+                    f"pri compile-u -- do tada run_vba samo VISI, sa Excelom u "
+                    f"[break]."))
     return out
 
 
@@ -1560,6 +1627,36 @@ NEDEKLARISAN_CASES = [
      "Private WithEvents mBtn As MSForms.CommandButton\n"
      "Public Sub P()\n"
      "    Set mBtn = Nothing\n"
+     "End Sub\n"),
+    # DOSEG. Ravan skup imena za ceo fajl je propustao compile-hard gresku:
+    # lokalna deklaracija u jednoj proceduri legalizovala je isto ime u drugoj.
+    ("lokalni Dim iz druge procedure NE pokriva -- nalaz", 1,
+     "Option Explicit\n"
+     "Private Sub A()\n"
+     "    Dim mState As Boolean\n"
+     "    mState = True\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = False\n"
+     "End Sub\n"),
+    ("parametar druge procedure NE pokriva -- nalaz", 1,
+     "Option Explicit\n"
+     "Private Sub A(ByVal mState As Boolean)\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = True\n"
+     "End Sub\n"),
+    # Kontrolni uz prethodna dva: na nivou modula isto ime pokriva OBE procedure.
+    # Bez njega bi se suzenje moglo "postici" i time da se prestane priznavati
+    # modul-nivo, sto bi bila druga greska istog oblika.
+    ("modul-nivo pokriva obe procedure -- cisto", 0,
+     "Option Explicit\n"
+     "Private mState As Boolean\n"
+     "Private Sub A()\n"
+     "    mState = True\n"
+     "End Sub\n"
+     "Private Sub B()\n"
+     "    mState = False\n"
      "End Sub\n"),
 ]
 
