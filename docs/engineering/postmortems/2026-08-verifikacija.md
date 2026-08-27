@@ -648,10 +648,13 @@ Sada se zna i **koliko** to ograničenje košta: osam od 251, oko tri odsto.
 
 ### Šta ostaje otvoreno
 
-**Tih osam unosa nije popravljeno.** Svaki traži svoje merenje — pet ih traži ili
-novu tvrdnju ili užu sabotažu koja ne obara preduslov, tri traže odgovor na
-pitanje da li invarijanta uopšte može da se meri. To je zaseban posao, ne dodatak
-ovom.
+**Tih osam unosa nije popravljeno u ovom prolazu.** Svaki traži svoje merenje —
+pet ih traži ili novu tvrdnju ili užu sabotažu koja ne obara preduslov, tri traže
+odgovor na pitanje da li invarijanta uopšte može da se meri. To je zaseban posao,
+ne dodatak ovom.
+
+> Tri iz druge klase zatvorena su u `v2.81.0` (§14), pet iz prve i zastareo
+> priznat upis u `v2.82.0` (§15). Ograničenje koje ih je propustilo ostaje.
 
 **Provera i dalje ne zna šta sabotaža stvarno obara.** To zna jedino `dokaz.py`, i
 sada je izmereno da ta razlika nije teorijska.
@@ -955,3 +958,195 @@ samo u fajlu koji se sabotira.
 iako bi dodela njenom imenu spolja bila greška. Uparivanje `Get`/`Let`/`Set` bi
 tražilo više analize nego što ovaj oblik zaslužuje, a lažan nalaz je skuplji.
 
+---
+
+## 15) Pet sabotaža koje su obarale tuđu tvrdnju (27.08.2026)
+
+Zatvara prvu klasu iz §12: pet unosa gde tekst **jeste** tvrdnja tog testa, ali
+sabotaža obara **drugu**. Statička provera ih po konstrukciji ne vidi — otkrio ih
+je pun prolaz.
+
+Očekivao sam jedan uzrok. Bila su tri, i samo prvi se popravlja sužavanjem.
+
+### Uzrok A: jedna sabotaža gasi dva pravila (3 od 5)
+
+`parse-cdate`, `bruto-prijemnica`, `brojac-nije-opcion`. Zamena je gađala blok
+ili poziv u kome žive **dva** nezavisna pravila.
+
+Kod prva dva ishod je onaj koji sam očekivao: pada ona tvrdnja koja se u testu
+proverava **ranije**, a katalog je deklarisao onu kasniju. `AssertEq` staje na
+prvom padu, pa deklarisana nikad ne dođe na red — zamka 6.
+
+`brojac-nije-opcion` je ispao drugačiji, i to se videlo tek merenjem:
+
+```vb
+If Err.Number <> 0 Then
+    ScrBrojac = 0      ' pravilo 1: ekran bez brojaca daje NULU
+    Err.Clear          ' pravilo 2: greska ne SME da procuri dalje
+End If
+```
+
+Zamena je brisala **ceo** blok. Očekivao sam da onda padne ranija tvrdnja
+(„daje nulu"). Mereno — ne pada:
+
+```
+FAIL T_NavBrojac_SamoEkranKojiBroji -- poziv ekrana bez brojaca ne ostavlja
+     Err postavljen -- ocekivano [0], dobijeno [1004]
+```
+
+Pada **poslednja** tvrdnja u testu, a ona ranija prolazi. Razlog je VBA: kad
+`ScrBrojac = CLng(Application.Run(...))` pukne, dodela se **ne izvrši**, pa
+rezultat funkcije ostaje na podrazumevanoj nuli. Nula dolazi sama od sebe;
+`ScrBrojac = 0` je nikad nije proizvodio.
+
+To znači da deklarisana tvrdnja nije bila „preskočena" nego **nemerena** — ni
+jedna sabotaža u katalogu je nije obarala. Popravka zato ovde nije sužavanje
+nego **nova** sabotaža: `ScrBrojac = -1`, sentinel umesto nule.
+
+| Unos | Šta je bilo | Popravka |
+|---|---|---|
+| `parse-cdate`, `bruto-prijemnica` | pada ranija tvrdnja | suziti: dve zamene nad istim sidrom, svaka gasi jedan red |
+| `brojac-nije-opcion` | deklarisana tvrdnja **ne pada uopšte** | izmisliti sabotažu koja je stvarno obara |
+
+Katalog je narastao 251 → 255.
+
+| Unos | Bio deklarisan | Sada obara | Nova braća |
+|---|---|---|---|
+| `parse-cdate` | godina van poslovnog opsega | mesec 13 se odbija | `parse-godina-opseg` |
+| `bruto-prijemnica` | u Količinu ide neto | bruto se zamrzava u `BrutoKg` | `bruto-prijemnica-neto` |
+| `brojac-nije-opcion` | ekran bez brojača daje nulu | `Err` ne ostaje postavljen | `brojac-sentinel-umesto-nule` |
+
+Uz `parse-cdate` ide i pomeranje sidra: zamena je gađala **poziv** u
+`modOtkupUI.ParseDatum`, dakle mesto gde se obe kapije zaobilaze odjednom. Nova
+dva sidra su u `modParse`, svako na svojoj kapiji.
+
+### Uzrok B: sabotaža je tačna, deklaracija je bila pogrešna (1 od 5)
+
+`guard-samo-aktivni-vlasnici`. Sužavanje ovde **ne pomaže** — i to je zapisano u
+samom testu, godinama pre nego što je alat to izmerio:
+
+> Ishod čuvaju DVE nezavisne kapije (na nivou moda i u detach-u), pa ga jedna
+> sabotaža ne može oboriti. Zato se tvrdi i KOJA je stala.
+
+`success = False` drži i kapija na nivou moda i detach. Kad prva otkaže, druga
+i dalje zaustavi operaciju — razlika se vidi **samo u poruci**. Deklarisan je bio
+ishod; sada je deklarisana poruka, jer je ona jedino što ta sabotaža pomera.
+
+Test je znao. Katalog nije slušao.
+
+### Uzrok C: sabotaža ne stigne do mesta koje cilja (1 od 5)
+
+`completion-ne-prevezuje` je gasila **izvor** ID-eva:
+
+```vb
+Set oldIDs = New Collection   ' SABOTAZA
+```
+
+Ali prazan izvor ne prođe do prevezivanja — kapija ga digne kao **nerazrešen
+izvor**, pa završetak ispravke uopšte ne uspe. Padne preduslov, ne poslovna
+tvrdnja. Ovo je zamka 6 u čistom obliku.
+
+Razdvojeno na dve tačke:
+
+- `completion-izvor-nerazresen` — ostaje na starom sidru i pošteno deklariše
+  preduslov („završetak ispravke je uspeo"). Kapija je vredna merenja: završiti
+  kao `COMPLETED` nad neprevezanim blokovima gore je od pada.
+- `completion-ne-prevezuje` — pomereno na sam red prevezivanja, gde prazan spisak
+  blokova **prođe** kroz operaciju koja uspe, a moj blok ostane neprevezan.
+
+### Zastareo priznat nalaz
+
+`POZNATI_NALAZI_DOKAZ['relink-ignorise-generaciju']` je tvrdio `PALA DRUGA
+TVRDNJA`. Mereno sada: `OK (uz još 3 testa)`. Nalaz koji opisuje zatvoren je u
+međuvremenu, a upis je nastavio da ćuti o sabotaži koja radi.
+
+Upis je obrisan. Priznat nalaz koji ništa ne pokriva **sam je nalaz** — to je
+pravilo od `v2.80.0` i ovo mu je prva primena.
+
+### Uzgredan nalaz: prekinut `dokaz.py` ostavlja sabotažu u izvoru
+
+Pun prolaz je usred rada prekinut spolja. `dokaz.py` čisti kroz `finally` — to
+pokriva `Ctrl+C` i timeout Excela, ali ne i ubijen proces. U radnom stablu je
+ostala sabotirana `modOtkupUI.bas`.
+
+Zaštita je postojala i **uhvatila** je to: `vba_check` je vratio izlazni kod 2.
+Ali dijagnoza je bila pogrešna:
+
+```
+KATALOG: uvid-guta-necitljivo: sidro ZASTARELO -- kod ispod njega je popravljen
+vba_check: izvor cist (195 fajlova), ali KATALOG SABOTAZA nije.
+```
+
+Dve netačnosti u tri reda. Kod ispod sidra **nije popravljen** nego pokvaren, i
+izvor **nije čist**. Poruka je pritom savet: uskladi sidro sa zatečenim kodom —
+a to bi sabotažu upisalo u katalog kao novu istinu.
+
+Ista klasa kao sve ostalo u ovom izdanju: **provera sudi o nečemu drugom nego
+što tvrdi**. Razlika je što je ovde bila u pravu za nalaz, a pogrešna za razlog.
+
+Razdvajanje je jedan uslov — ako sidra nema, a **zamena** jeste u fajlu, izvor je
+sabotiran, ne popravljen:
+
+```
+KATALOG: uvid-guta-necitljivo: izvor je ZATECEN SABOTIRAN -- pokreni
+         `python tools/sabotaza.py --vrati` (0 pogodaka u modStornoImpact.bas)
+vba_check: pravila nad fajlovima cista (195 fajlova), ali KATALOG SABOTAZA nije.
+```
+
+### I taj guard je u prvoj verziji tvrdio više nego što meri
+
+Ovo je najkorisniji deo celog izdanja, jer se ponovilo **unutar popravke za tu
+istu grešku**.
+
+Prva verzija je pisala „izvor je sabotiran" čim se zamena **bar jednom** nađe u
+fajlu. Ali `--vrati` ide kroz `_zameni`, koji traži **tačno jedan** pogodak i nad
+bilo čim drugim odbija posao. Savet u poruci je zato vodio u komandu koja nema
+šta da uradi.
+
+Self-test to nije video zato što je fixture birao **ja**:
+
+```python
+_ST_PRAVI = "    On Error Resume Next\n"     # 151 pogodak u modOtkupUI.bas
+```
+
+Slučaj je, dakle, bio zelen nad stanjem koje `--vrati` **odbija**. Provera je
+tvrdila „ovo je vratljivo", a nije merila ništa takvo — reč u reč ono protiv čega
+postoji. Našla je to recenzija, ne moj dokaz: dvosmerni dokaz pokazuje da grana
+**bira**, ne i da bira po **pravom** pravilu.
+
+Popravka je da pravilo postane jedno, a ne dva ista:
+
+```python
+def _pogodaka(tekst, blok):
+    return tekst.count("\n" + blok)      # dele ga _zameni (--vrati) i _nalazi
+```
+
+Uz to i treće stanje, koje ranije niko nije gledao: sidro **zdravo**, ali zamena
+već stoji u izvoru. Posle sabotaže bi je bilo dve, pa `--vrati` više ne bi umeo
+da je vrati. Mereno nad zatečenim katalogom: **0 od 255** unosa to krši, pa
+pravilo ne zatvara postojeću rupu nego drži buduće unose.
+
+Dokaz sada ima četiri crvena smera, i jedan od njih je baš prijavljena greška:
+
+| Sabotaža | Pada, po imenu |
+|---|---|
+| grana ne postoji | `izvor zatecen sabotiran` |
+| grana okida bez ijedne provere zamene | `zamena visestruka` + `sidro zastarelo` |
+| **`zamene >= 1` umesto `== 1`** (greška iz recenzije) | `zamena visestruka` |
+| `_zameni` prihvata više pogodaka | `_zameni prihvata stanje` |
+
+Poslednji red je poenta: slučaj zove **baš** `_zameni`, istu funkciju koju zove
+`--vrati`, i to nad kopijom pravog fajla — pa self-test ni u jednom ishodu ne može
+da upiše u `src-vba`. Bez njega bi se dva pravila opet mogla razići, a poruka bi
+i dalje zvučala tačno.
+
+### Šta je zajedničko
+
+Tri od pet su bila „jedna zamena, dva pravila". Da je to bio jedini uzrok,
+popravka bi bila mehanička. Nije bila: jedan slučaj se **ne može** suziti, jer
+invarijantu čuvaju dve nezavisne kapije, a drugi je gađao mesto do koga izvršenje
+ne dolazi.
+
+Zato je svaka od pet zahtevala da se **pročita test**, ne samo katalog. Peti član
+n-torke je merena vrednost od `v2.79.0`, ali merenje kaže samo *da* se ne slaže —
+*zašto* i dalje kaže jedino kod.
