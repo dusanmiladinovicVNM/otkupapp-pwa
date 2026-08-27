@@ -77,6 +77,16 @@ cilj. Sam primitiv (`RecalculateZbirnaFromOtpremnice_TX`,
 `ReassignPrijemnicaToZbirna_TX` bez generacije) ostaje number-based — tu bi jednog
 dana trebala centralna kapija umesto zaštite po call-site-u.
 
+> **Pola je urađeno u `v2.84.0` — v. §19.** `RecalculateZbirnaFromOtpremnice_TX`
+> sada nosi kapiju **u sebi** (broji vlasnike IKAD). Za
+> `ReassignPrijemnicaToZbirna_TX` je izmereno da nijedan test ne razlikuje
+> aktivne od IKAD na toj putanji, pa nije dirana — neizmerena izmena ponašanja
+> je gora od otvorenog nalaza.
+>
+> „Umesto zaštite po call-site-u" se **ne izvršava** i to je namerno: kapije po
+> call-site-u staju **pre transakcije** i kažu razlog, dok centralna staje
+> iznutra i daje samo „nije uspelo". Centralna je **mreža ispod**, ne zamena.
+
 Od `v6-ui-140` identitet nosi i **dodatni storno otkupnih blokova**
 (`StornirajBlokoveAko → GetStornoBlockRows → ActiveBlocksForFlow`), plus pregledi
 u `ScanOtpremnica` i `ScanPrijemnica`. Do tada je spisak blokova nastajao po
@@ -3595,3 +3605,65 @@ rešeno — a razlikovanje „kolone stvarno nema" od „čitanje je puklo" tra�
 na broj greške koji **nisam izmerio**, pa ga ne uvodim na pretpostavku. Ostaje
 otvoreno, kao i pre ovog posla.
 
+---
+
+## 19. Kapija je ušla u primitiv (`v2.84.0`)
+
+Katalog je ovo tražio rečima „tu bi jednog dana trebala centralna kapija umesto
+zaštite po call-site-u". Urađena je **polovina**, i to je merena polovina.
+
+### Šta je bilo
+
+`RecalculateZbirnaFromOtpremnice_TX` mutira **sve** `tblZbirna` redove sa datim
+brojem. Broj nije identitet — dva vlasnika mogu nositi isti. Zaštita je stajala
+isključivo po call-site-u: `ZbirnaBrojJeDvosmislenIkad` na **šest** mesta u
+`modStornoFlow`, dok sam primitiv nije imao **nijednu**. Nov pozivalac je bio
+bezbedan tek ako se autor kapije seti.
+
+### Mereno stanje pre izmene
+
+Sonda na kraju niza testova, nad `ZB-TEST-KASK`:
+
+| | |
+|---|---|
+| vlasnika **IKAD** | 2 |
+| vlasnika **aktivnih** | 1 |
+| `RecalculateZbirnaFromOtpremnice_TX` vraća | **True** — prolazi i mutira |
+
+Drugi red je ono što ovaj slučaj čini vrednim: aktivan je **jedan**, pa kapija
+koja broji samo aktivne ovde **ne bi okinula**. Test time dokazuje i da se mora
+brojati IKAD, bez posebne sabotaže za tu zastavicu.
+
+### Šta je urađeno
+
+Kapija je ušla u primitiv i broji IKAD. Uz nju je u `modStorno` izdvojen **jedan
+račun** za obe kapije (`BrojVlasnikaPoBroju`), pa se aktivna i IKAD varijanta ne
+mogu razići — isti potez kao `_pogodaka` u `v2.82.0`, i iz istog razloga.
+
+Redosled po `CLAUDE.md` §2 — test 124 pisan i pušten **pre** izmene:
+
+```
+FAIL T_RekalkZbirne_KapijaJeUPrimitivu -- rekalkulacija po dvosmislenom broju
+     ne prolazi kroz sam primitiv -- ocekivano [False], dobijeno [True]
+```
+
+Posle izmene pun set: `RunAllTests 124/0`, Banka 196/0, svih jedanaest suite-ova
+OK. To je i odgovor na jedini pravi rizik — stroža kapija ne obara nijedan
+postojeći tok.
+
+### Šta NIJE urađeno, i zašto
+
+**`ReassignPrijemnicaToZbirna_TX` nije dirana.** Njena kapija i dalje broji samo
+aktivne. Probano je i izmereno: prebacivanje na IKAD ostavlja **ceo set zelen** —
+što znači da nijedan test tu razliku ne vidi. Druga sonda je pokazala i da poziv
+bez generacije na dvosmislen cilj već vraća `False`, ali **nije izolovano zbog
+čega** (moguće raniji uslov, ne kapija).
+
+Izmena ponašanja bez testa koji je meri je tačno ono što `CLAUDE.md` §2 zabranjuje,
+pa je ostavljena otvorena umesto da se progura kao „i to je popravljeno".
+
+**Šest kapija po call-site-u je ostalo.** Katalog je pisao „umesto", ali bi
+uklanjanje bilo **nazadovanje u dijagnostici**: te kapije staju pre transakcije i
+kažu razlog („Zamena bi prevezala decu"), a centralna staje iznutra i pozivaocu
+daje samo neuspeh. Zato je centralna **mreža ispod**, a ne zamena — i katalog je
+gore ispravljen da to više ne obećava.

@@ -248,6 +248,22 @@ Public Function RecalculateZbirnaFromOtpremnice_TX(ByVal brojZbirne As String, _
     brojZbirne = Trim$(brojZbirne)
     If Len(brojZbirne) = 0 Then Exit Function
 
+    ' CENTRALNA KAPIJA -- U primitivu, ne oko njega.
+    '
+    ' Ova rutina mutira SVE zbirna redove sa datim brojem, a broj nije
+    ' identitet: dva vlasnika mogu nositi isti. Do sada je zastita stajala po
+    ' call-site-u -- ZbirnaBrojJeDvosmislenIkad na sest mesta u modStornoFlow --
+    ' pa je nov pozivalac bio bezbedan samo ako se autor kapije seti. Katalog
+    ' je to i trazio: centralna kapija umesto zastite po call-site-u.
+    '
+    ' Broji se IKAD, ne samo aktivni: storniran vlasnik i dalje ima aktivnu
+    ' decu, a posle storna je aktivan jedan pa broj izgleda jednoznacan.
+    '
+    ' Kapija dize gresku; EH je hvata i vraca False, sto pozivaoci vec
+    ' obradjuju kao neuspeh (MANUAL_REQUIRED). Test 124.
+    RequireJedanVlasnikIkadPoBroju TBL_ZBIRNA, COL_ZBR_BROJ, brojZbirne, SRC, _
+                                   COL_ZBR_VOZAC, COL_ZBR_KUPAC
+
     Dim o As Object
     Set o = SumOtpremniceByKlasa(brojZbirne)
 

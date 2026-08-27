@@ -2228,25 +2228,62 @@ End Sub
 ' Poziva se iz SVAKE putanje koja mutira po broju (wrapperi u modStorno + core
 ' StornoZbirna + atomic varijante u modStornoFlow). Puni identitetski storno
 ' (po PK/GeneracijaID) je zaseban paket -- ovo je zastita od tihe destrukcije.
+' Broj razlicitih vlasnika pod istim brojem. JEDAN racun za obe kapije ispod.
+'
+' Izdvojen zato sto se dve kopije istog brojanja neizbezno razidju, a razlika
+' izmedju kapija je tacno JEDNA zastavica -- da li se stornirani broje.
+Private Function BrojVlasnikaPoBroju(ByVal tblName As String, _
+                                     ByVal brojCol As String, _
+                                     ByVal broj As String, _
+                                     ByVal sourceName As String, _
+                                     ByVal ikad As Boolean, _
+                                     ByVal vlasnikCols As Variant) As Long
+    If UBound(vlasnikCols) < LBound(vlasnikCols) Then
+        Err.Raise ERR_STORNO_BASE + 12, sourceName, _
+                  "RequireJedanVlasnikPoBroju: nije zadata nijedna vlasnik kolona."
+    End If
+    BrojVlasnikaPoBroju = VlasniciPoBroju(tblName, brojCol, broj, sourceName, _
+                                          ikad, vlasnikCols).count
+End Function
+
 Public Sub RequireJedanVlasnikPoBroju(ByVal tblName As String, _
                                       ByVal brojCol As String, _
                                       ByVal broj As String, _
                                       ByVal sourceName As String, _
                                       ParamArray vlasnikCols() As Variant)
-    If UBound(vlasnikCols) < LBound(vlasnikCols) Then
-        Err.Raise ERR_STORNO_BASE + 12, sourceName, _
-                  "RequireJedanVlasnikPoBroju: nije zadata nijedna vlasnik kolona."
-    End If
-
-    Dim vlasnici As Object
-    Set vlasnici = VlasniciPoBroju(tblName, brojCol, broj, sourceName, False, _
-                                   ScopeColsToArray(vlasnikCols))
-
-    If vlasnici.count > 1 Then
+    Dim n As Long
+    n = BrojVlasnikaPoBroju(tblName, brojCol, broj, sourceName, False, _
+                            ScopeColsToArray(vlasnikCols))
+    If n > 1 Then
         Err.Raise ERR_STORNO_BASE + 11, sourceName, _
                   "Broj '" & broj & "' nije jedinstven: aktivni dokumenti pripadaju " & _
-                  CStr(vlasnici.count) & " razlicita vlasnika. Storno po broju bi " & _
+                  CStr(n) & " razlicita vlasnika. Storno po broju bi " & _
                   "zahvatio i tudji dokument. Storniraj pojedinacno (po ID-u dokumenta) " & _
+                  "ili razdvoj brojeve."
+    End If
+End Sub
+
+' ISTA kapija, jedna jedina razlika: STORNIRAN vlasnik se BROJI.
+'
+' Storniran vlasnik i dalje ima AKTIVNU decu, pa mutacija po broju zahvati i
+' njih. Kapija koja broji samo aktivne to NE vidi: posle storna je aktivan
+' jedan, pa broj izgleda jednoznacan. To je zapisana cena iz v6-ui-138.
+'
+' Ovo je kapija za MUTACIJU PO BROJU. Kad se radi po ID-u dokumenta, ne treba.
+Public Sub RequireJedanVlasnikIkadPoBroju(ByVal tblName As String, _
+                                          ByVal brojCol As String, _
+                                          ByVal broj As String, _
+                                          ByVal sourceName As String, _
+                                          ParamArray vlasnikCols() As Variant)
+    Dim n As Long
+    n = BrojVlasnikaPoBroju(tblName, brojCol, broj, sourceName, True, _
+                            ScopeColsToArray(vlasnikCols))
+    If n > 1 Then
+        Err.Raise ERR_STORNO_BASE + 14, sourceName, _
+                  "Broj '" & broj & "' nije jedinstven: dokumenti pod njim su IKAD " & _
+                  "pripadali " & CStr(n) & " razlicita vlasnika. Racunaju se i " & _
+                  "stornirani, jer storniran vlasnik i dalje ima AKTIVNU decu -- " & _
+                  "mutacija po broju bi zahvatila i tudje. Radi po ID-u dokumenta " & _
                   "ili razdvoj brojeve."
     End If
 End Sub

@@ -352,6 +352,7 @@ Public Sub RunAllTests()
     RunOne 121
     RunOne 122
     RunOne 123
+    RunOne 124
 
     SetTestMode prevMode
     WriteResultFile
@@ -507,6 +508,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 121: TestName = "T_Ljuska_PadListeNovcaNijeAvans"
         Case 122: TestName = "T_StornoFilter_NedostajucaKolonaNijeTisina"
         Case 123: TestName = "T_KesKolone_NeMemoiseNulu"
+        Case 124: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -638,6 +640,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 121: T_Ljuska_PadListeNovcaNijeAvans
         Case 122: T_StornoFilter_NedostajucaKolonaNijeTisina
         Case 123: T_KesKolone_NeMemoiseNulu
+        Case 124: T_RekalkZbirne_KapijaJeUPrimitivu
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8404,4 +8407,40 @@ Private Sub T_StornoFilter_NedostajucaKolonaNijeTisina()
     AssertEq greskaMat, "", "tabela bez storno pojma prolazi bez greske"
     AssertEq (redovaPre > 0), True, "...nad tabelom koja stvarno ima redove"
     AssertEq redovaPosle, redovaPre, "...i vraca sve svoje redove"
+End Sub
+
+' TEST 124: kapija je U PRIMITIVU, a ne oko njega.
+'
+' RecalculateZbirnaFromOtpremnice_TX mutira SVE zbirna redove sa datim brojem,
+' a broj nije identitet -- dva vlasnika mogu nositi isti. Zastita je stajala
+' iskljucivo po call-site-u: ZbirnaBrojJeDvosmislenIkad na sest mesta u
+' modStornoFlow, dok sam primitiv nije imao nijednu. Nov pozivalac je zato bio
+' bezbedan samo ako se autor kapije seti. Katalog je bas to i trazio.
+'
+' MERENO stanje fixture-a na ovom mestu u nizu (sonda, pre izmene):
+'   ikad = 2, aktivnih = 1, primitiv vraca True
+' Zato ovaj test usput dokazuje i da kapija mora da broji IKAD: kapija koja
+' broji samo AKTIVNE ovde ne bi okinula, jer je posle storna aktivan jedan.
+'
+' Stoji POSLEDNJI u nizu namerno: dok je crven, primitiv jos mutira fixture,
+' pa iza njega ne sme da ide test koji na taj fixture racuna.
+Private Sub T_RekalkZbirne_KapijaJeUPrimitivu()
+    Dim ikad As Long, aktivnih As Long
+    Dim ok As Boolean
+
+    ikad = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
+                           "T_Rekalk", True, _
+                           Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    aktivnih = VlasniciPoBroju(TBL_ZBIRNA, COL_ZBR_BROJ, FX_ZBIRNA_KASK, _
+                               "T_Rekalk", False, _
+                               Array(COL_ZBR_VOZAC, COL_ZBR_KUPAC)).count
+    AssertEq ikad, 2, "preduslov: broj je IKAD pripadao dvama vlasnicima"
+    AssertEq aktivnih, 1, _
+             "preduslov: AKTIVAN je jedan -- kapija po aktivnima ne bi okinula"
+
+    ' Primitiv se zove DIREKTNO, bez ijedne kapije oko njega. To je cela poenta.
+    ok = modDokumentInvariant.RecalculateZbirnaFromOtpremnice_TX(FX_ZBIRNA_KASK, _
+                                                                 "", "test 124")
+    AssertEq ok, False, _
+             "rekalkulacija po dvosmislenom broju ne prolazi kroz sam primitiv"
 End Sub
