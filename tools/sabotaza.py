@@ -662,17 +662,31 @@ SABOTAZE = {
         "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids, strict)\n",
         "                Set ImpactPalete = GetPaleteImpactByField(COL_PALS_PRIJEMNICA_ID, \"\", ids)   ' SABOTAZA\n",
         "T_StornoImpact_SchemaDriftJeInvalidan",
-        "necitljiva paletna sekcija cini CEO uvid nevalidnim",
+        # Prethodna tvrdnja (drift PrijemnicaID) meri modStornoFlow.CountActive,
+        # koji ide ranije i pukne prvi -- zato je ova sabotaza bila MRTVA. Drift
+        # PaletaID cita jedino paletna sekcija, pa se tek tu meri njena strogost.
+        "...i kad nedostaje kolona koju cita SAMO paletna sekcija",
     ),
     # Zadat docID koji se ne moze razresiti mora da OBORI uvid. Tihi povratak na
     # poslovni broj vraca tacno ono sto je #198 vadio -- i to unutar modela koji se
     # posle oznacava kao valid, pa nizvodno izgleda kao pouzdan pregled posledica.
+    # DVE KAPIJE, DVE TVRDNJE. Ova sabotaza gadja kapiju u ImpactPalete, a ne onu
+    # u modStornoFlow.PkPoIdentitetu -- tu vec cuva 'identitet-nestao-prolazi'.
+    #
+    # Do sada je bila deklarisana nad PRVOM tvrdnjom testa (generacija koje nema
+    # nigde), koju obara BAS PkPoIdentitetu, i to ranije u BuildStornoImpact --
+    # pa uklanjanje kapije paleta nije menjalo nista i sabotaza je bila MRTVA.
+    #
+    # Razlika izmedju dve kapije je stvarna: IdoviGeneracije trazi generaciju
+    # kroz celu tabelu, a PrijemniceIDPoIdentitetu trazi broj I generaciju. Zato
+    # postoji stanje u kome prva prodje a druga ne -- generacija koja pripada
+    # DRUGOM broju -- i tu se meri bas ova kapija.
     "identitet-degradira-na-broj": (
         "modStornoImpact.bas",
         "                If strict And Len(Trim$(docID)) > 0 Then\n",
         "                If False Then   ' SABOTAZA: identitet pada na broj\n",
         "T_StornoImpact_IdentitetNeDegradira",
-        "zadat identitet koji se ne moze razresiti obara uvid, ne pada na broj",
+        "generacija koja pripada DRUGOM broju ne tumaci ovaj dokument",
     ),
     # Block sekcija dolazi iz modStornoFlow i tamo je fail-open ziveo jos jednu
     # rundu duze: bez kolone OtkupID spisak blokova ispadne prazan, sto operateru
@@ -1305,10 +1319,17 @@ SABOTAZE = {
     # Obican klik samo BIRA. Da i on prebacuje listu, radnje nad redom (zatvori
     # paletu, storniraj, stampaj) postale bi nedostupne -- operater ne bi stigao
     # da ih pritisne.
+    # DODELA IDE U OBRADIDOGADJAJ, ne u Scr_Event.
+    #
+    # Zamena je do sada pisala `Scr_Event = ...` iz tela ObradiDogadjaj -- a to je
+    # dodela imenu TUDJE procedure, dakle compile error. Excel bi stao u [break],
+    # suite se ne bi ni pokrenuo, i dokaz.py bi to prijavio kao "NE OBARA NISTA":
+    # isto sto i mrtva sabotaza. Sabotaza koja ne kompajlira i sabotaza koja nista
+    # ne meri izgledaju identicno, a razlika je velika.
     "paleta-klik-otvara": (
         "modScrPalete.bas",
         "        PostaviAktivnu CLng(Mid$(tag, 5))\n",
-        "        Scr_Event = OtvoriStavke(CLng(Mid$(tag, 5)))   ' SABOTAZA: klik navigira\n",
+        "        ObradiDogadjaj = OtvoriStavke(CLng(Mid$(tag, 5)))   ' SABOTAZA: klik navigira\n",
         "T_PaletaDvoklik_OtvaraStavke",
         "izbor reda ne trazi ponovno citanje mreze",
     ),
@@ -3158,6 +3179,61 @@ def _tvrdnja_pripada(tvrdnja: str, podaci) -> bool:
     return False
 
 
+# ZAMENA KOJA DODELJUJE IMENU TUDJE PROCEDURE NE KOMPAJLIRA.
+#
+# `ObradiDogadjaj` sme da dodeli sebi; `Scr_Event = ...` iz njenog tela je dodela
+# imenu druge procedure -- compile error. Posledica nije pao test nego Excel u
+# [break]: suite se ne pokrene, dokaz.py ne vidi nijednu palu tvrdnju i prijavi
+# "NE OBARA NISTA". Sabotaza koja ne kompajlira i sabotaza koja nista ne meri
+# izgledaju IDENTICNO, a razlika je velika -- prva se popravlja u jednom redu,
+# druga trazi rad nad testom.
+#
+# Mereno na paleta-klik-otvara: 68 s po prolazu, Excel ostaje otvoren u break-u.
+_ZAMENA_DODELA = re.compile(r"^\s*(?:Set\s+)?([A-Za-z_]\w*)\s*=(?!=)")
+_PROC_OTVARA = re.compile(
+    r"^(?:Public\s+|Private\s+|Friend\s+)?(?:Static\s+)?"
+    r"(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+(\w+)", re.IGNORECASE)
+_PROC_ZATVARA = re.compile(r"^End\s+(?:Sub|Function|Property)\b", re.IGNORECASE)
+
+
+def _procedure_po_redu(tekst: str) -> list:
+    """[(ime, prvi_red, poslednji_red)] -- redovi 0-bazno."""
+    out, ime, poc = [], None, 0
+    for i, red in enumerate(tekst.split("\n")):
+        t = red.strip()
+        m = _PROC_OTVARA.match(t)
+        if m:
+            ime, poc = m.group(1), i
+        elif ime and _PROC_ZATVARA.match(t):
+            out.append((ime, poc, i))
+            ime = None
+    return out
+
+
+def _dodela_tudjoj_proceduri(tekst: str, staro: str, novo: str, proc_kes: dict):
+    """Ime tudje procedure kojoj zamena dodeljuje, ili None."""
+    fajl_id = id(tekst)
+    if fajl_id not in proc_kes:
+        proc_kes[fajl_id] = _procedure_po_redu(tekst)
+    procs = proc_kes[fajl_id]
+
+    idx = tekst.find("\n" + staro)
+    if idx < 0:
+        return None
+    red = tekst[:idx + 1].count("\n")
+    unutar = None
+    for pime, a, b in procs:
+        if a <= red <= b:
+            unutar = pime
+            break
+    svi = {p for p, _a, _b in procs}
+    for linija in novo.split("\n"):
+        m = _ZAMENA_DODELA.match(linija)
+        if m and m.group(1) in svi and m.group(1) != unutar:
+            return m.group(1)
+    return None
+
+
 def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     """Nalazi nad DATIM katalogom. Izdvojeno da bi --self-test mogao da mu
     podmetne izmisljene unose, umesto da alat prepisuje sopstveni fajl."""
@@ -3166,6 +3242,7 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
     kes = {}                 # fajl se cita jednom, ne 222 puta (ovo ide u hook)
     if tela is None:
         tela = _tela_testova()
+    proc_kes: dict = {}
 
     for ime, (fajl, staro, novo, test, tvrdnja) in katalog.items():
         put = os.path.join(SRC_VBA, fajl)
@@ -3198,6 +3275,13 @@ def _nalazi(katalog: dict, imena: set, tela: dict = None) -> list:
         # --vrati u zdravom kodu ne nalazi (primer: kapija-i-uz-identitet).
         elif ("\n" + novo) in ("\n" + staro):
             nalazi.append((ime, "zamena je podniz sidra -- --vrati bi dirao zdrav kod"))
+
+        # zamka 10: dodela imenu tudje procedure -- compile error, ne pad testa
+        tudja = _dodela_tudjoj_proceduri(tekst, staro, novo, proc_kes)
+        if tudja:
+            nalazi.append((ime, "zamena dodeljuje imenu tudje procedure '%s' -- "
+                                "to je compile error, pa Excel stane u [break] a "
+                                "dokaz.py prijavi 'NE OBARA NISTA'" % tudja))
 
         if _KOMENTAR_POSLE_PODVLAKE.search(novo):
             nalazi.append((ime, "komentar posle line-continuation '_' -- syntax error"))
@@ -3311,6 +3395,11 @@ _SELF_TEST = [
     ("zamena ista kao sidro",
      (None, None, "SIDRO", None, "tvrdnja F"),
      "zamena je jednaka sidru"),
+    # Sidro self-testa je Option Explicit -- deklaraciona sekcija, dakle NIJEDNA
+    # procedura. Dodela bilo kom imenu procedure tog fajla je tu compile error.
+    ("dodela imenu tudje procedure",
+     (None, None, "    ParcelaID = 1" + ESCN, None, "tvrdnja H"),
+     "dodeljuje imenu tudje procedure"),
     ("komentar posle podvlake",
      (None, None, "    a = Sastavi(b, _   ' SABOTAZA" + ESCN, None, "tvrdnja G"),
      "komentar posle line-continuation"),

@@ -5866,3 +5866,38 @@ Uz to, za svaki oblik koji **sme** da prođe postoji zaseban slučaj — jedanae
 njih. Među njima i jedan koji čuva da se provera ne „popravi" tako što prestane
 da priznaje ispravne deklaracije: to bi bila druga greška istog oblika, a izveštaj
 bi ostao zelen.
+
+## v2.81.0 — tri provere koje su izgledale kao da rade, a nisu ništa merile
+
+Nema izmene u programu — izdanje o **proverama**.
+
+### Šta je bilo
+
+Uz svaku automatsku proveru ide i namerno pokvaren kod koji **mora** da je obori.
+Pun prolaz kroz sve provere našao je tri takva mesta gde se kod pokvari, a ništa
+ne padne. Za te tri provere dokaza nije bilo.
+
+Ispostavilo se da su tri različita razloga, i da samo jedan liči na ono što se
+očekivalo:
+
+- **dve** su merile **tuđu** proveru — kvar bi oborila druga, ranija provera, pa
+  se nije ni videlo da ciljana ne radi;
+- **jedna** se uopšte **nije prevodila** — Excel bi stao i ostao da stoji, ništa
+  se ne bi izvršilo, a izveštaj bi to prikazao isto kao „ništa nije palo".
+
+### Šta je urađeno
+
+Za prve dve nađeno je stanje u kome baš ta provera odlučuje — i to je dodato kao
+nova tvrdnja. Jedna od njih čuva pravilo koje je ovaj projekat već skupo platio:
+**dokument se bira po identitetu, nikad po broju**, jer isti broj mogu nositi dva
+dokumenta.
+
+Treća je popravljena u jednom redu. Uz nju je dodata i provera koja taj oblik
+greške ubuduće hvata **odmah**, umesto da se vidi tek kroz Excel koji stoji.
+
+### Zašto je ovo vredelo
+
+Provera koja se pokvari a ništa ne padne izgleda isto kao provera koja radi. Tri
+takve su stajale u projektu i izgledale kao pokrivenost — a jedna od njih je
+čuvala baš pravilo o identitetu dokumenta.
+
