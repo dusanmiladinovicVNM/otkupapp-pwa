@@ -516,7 +516,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 16. ~~Fakture~~ **URAĐENO** (`v6-ui-176`, `modScrFakture`) — v. §8.
 17. ~~Banka uvoz~~ **URAĐENO** (`v6-ui-177`, `modScrBankaUvoz`) — v. §9.
 18. ~~Banka nalozi~~ **URAĐENO** (`v6-ui-185`, `modScrBankaNalozi`) — v. §22.
-    Ostaju: Marža, Izveštaji, Sledljivost — svaki po istom obrascu.
+19. ~~Izveštaji~~ **URAĐENO** (`v6-ui-186`, `modScrIzvestaji`) — v. §23.
+    Ostaju: Marža, Sledljivost — svaki po istom obrascu.
 
 ---
 
@@ -4304,3 +4305,252 @@ tuđa = preskočen upis pod `On Error Resume Next`" iz §9.10, za koju postoji
 presedan-alat: ekran dobija **`Diag_BnRedovi`** (Alt+F8, ispisuje šta ekran
 predaje i šta mreža drži). Ako se na pravoj svesci potvrdi — merenje kaže
 gde.
+
+---
+
+## 23. Izveštaji — šta je preneto (`v6-ui-186`)
+
+Peti ekran **Faze E**, stavka 19. Red u registru (`modUiScreens.ScrRows`) je
+postojao od `S3a` — stavka menija se do sada crtala prigušena jer modula nije
+bilo. Ovim se piše modul koji taj red već očekuje; **registar se ne dira**.
+
+Ovo je poslovno najvidljiviji ekran do sada: izveštaji se pokazuju
+knjigovođi, banci i vlasniku, pa je merilo prelaska **SLAGANJE, ne izgled** —
+svaka lista ima test koji njen sadržaj veže za nezavisan read-model (v.
+§23.6). Kao i kod Banka naloga, najskuplji deo migracije je već bio odrađen:
+`modIzvestaj` od RF-06/RF-07 nosi čist API `Report*(entitet, opseg) → 2D niz`
+sa dokumentovanim kolonama, matricu dostupnosti i deljene seam-ove — ekran je
+zato **prikaz nad postojećim računima**; nijedan `Report*`, matrica ni
+štampa se ne menjaju.
+
+### 23.1 Gde je šta završilo
+
+| Legacy (`frmIzvestaj`) | Novo mesto |
+|---|---|
+| 9 statičkih tabova `mpReports` + 2 runtime taba | **10 lista** deljene mreže (v. odluku A u §23.2) |
+| `tglOM/tglKupci/tglVozaci/tglKooperanti` | 4 seg prekidača zone (`NewSegBtn`, vrsta `"seg"` — §7.7) |
+| `tglPojedinacni/tglZbirni` | 2 seg prekidača režima |
+| `cmbEntitet` + `LoadEntiteti` (po tipu) | polje zone `scrIzEnt` (obrazac `PuniPartnerCombo` iz §9: 2 kolone, čist ID u drugoj, prikaz sa ID-jem; kooperanti samo aktivni, kao legacy) |
+| `txtDatumOd/Do` (default 1.1. — danas) | polja zone `scrIzOd`/`scrIzDo`; parsiranje = `DatGranica` pravilo iz `modScrDokumenta` (nepotpun unos = „još nema granice") |
+| `AutoRefresh` + lazy `m_genTabs` po tabu | keš snimka po ključu konteksta (§23.5) + `RefreshFromData` koju ekran sam zove (§8.2 — sve liste zavise od polja zone) |
+| matrica `UpdateReportMode` → `IzvestajTabDostupan` | `IzListaDostupna` — pita **istu matricu**; runtime tabovi preslikan legacy uslov (§23.3) |
+| `btnStampaj` (tabelarni PDF aktivnog taba) | dugme zone „Štampaj izveštaj" → `PrintIzvestaj` (nepromenjen) |
+| `btnStampajKarticu` (tab-aware) | dugme zone „Štampaj karticu (PDF)", vidljivo samo na listama kartica → `PrintKarticaPDF` / `PrintKarticaAmbalazePDF` (nepromenjeni) |
+| `m_btnStampajOtk` / `m_btnStampajOtkRoba` / `m_btnStampajAmb` | **jedna radnja nad redom** `izprint` („Štampaj dokument") na 4 liste, ruta po listi i tipu dokumenta |
+| `StampajReversAmbDok` + `AmbRedStorniran` (račun u formi!) | **izdvojeno** u `modIzvestaj.StampajReversAmbalaze` (+ `IzvAmbRedStorniran`); forma zadržava svoju kopiju i ne menja se (§5/Faza B) |
+| headers po tabu u `btnStampaj_Click` | `IzHeaderiZaListu` (izvedeno iz opisa kolona ekrana) |
+| `lblStatus` (4 stanja) | hint zone: „izveštaj ne postoji za kombinaciju" ≠ „izaberi entitet" ≠ opis prikazanog konteksta |
+| specijalni redovi lista (v. §23.4) | **brojke zone** (OM avans / agro nerasp.; primljeno / kod otkupca) |
+| detail panel „Detalji otkupa" (`modKarticaDetalji`) | **NIJE preneto** — v. §23.7 |
+
+### 23.2 Odluke
+
+**(A) 10 lista, ne 9+2 ni 11.** Legacy tabovi SALDO OM (0) i SALDO KUPCI (1)
+postaju **jedna lista SALDO** sa dispatch-om po tipu — tačno ono što legacy
+`GenerateSaldoReport` već radi, a matrica garantuje da operater **nikad ne
+vidi oba** (tab 0 samo OM, tab 1 samo Kupac). Kolone-po-kontekstu su
+presedan iz samog legacy-ja (tab ROBA menja kolone po tipu), a mreža
+geometriju prati iz opisa kolona pri svakom crtanju (§9.2/3). Dva runtime
+taba („Otkupni listovi", „Pregled ambalaže") su pune liste: lista BLOKOVI na
+Dokumentima **nije** isto (blokovi jedne otpremnice, ne cele stanice u
+periodu — §8.4 prolazi u oba smera). Bazen `MAX_SEG` (11) zadržava jedan
+slobodan slot; test to tvrdi.
+
+**(B) Matrica → prazna lista sa objašnjenjem** (opcija i). Čipovi ne mogu da
+nose entitet-tip (tip je polje zone deljeno svim listama; čip pada na „Sve"
+pri promeni liste, a „Sve" za tip ne znači ništa), a dinamičko sklanjanje
+segmenata je tiho nestajanje liste. Svih 10 segmenata postoji uvek;
+`IzListaDostupna` pita `IzvestajTabDostupan` (matrica se ne širi i ne
+„popravlja" — prazan tab kooperanta u zbirnom je nepostojeći izveštaj);
+nedostupna kombinacija = 0 redova + hint koji imenuje razlog, **različit** od
+„izaberi entitet" i od „nema podataka" (FM-0029 merilo: ni pun naslov nad
+trajno praznom listom, ni tiho nestajanje).
+
+**(C) Štampe: dva dugmeta zone + jedna radnja nad redom.** „Štampaj
+izveštaj" štampa tačno ono što operater vidi (čip + pretraga — `PrintSpecDat`
+presedan), sa naslovom iz **konteksta snimka** (AUD-024: naslov opisuje
+prikazano, ne trenutno stanje polja) i vidljivom napomenom kad je filter
+aktivan — papir bez nje izgleda kao ceo izveštaj. „Štampaj karticu (PDF)" je
+tab-aware kao legacy `btnStampajKarticu`. Radnja `izprint` živi samo na 4
+liste čiji red ima dokument (OTK_LISTE, ROBA/OM, AMBALAZA, KARTICA); ruta po
+tipu dokumenta je legacy `m_btnStampajAmb_Click` pravilo, revers kroz
+izdvojeni račun. Agregatne liste nemaju nijednu radnju (ljuska krije dugmad
+— IZVODI presedan, §9.2).
+
+**(D) Dvoklik namerno ne radi ništa; detail panel se odlaže.** Jedina radnja
+je štampa — promašen dvoklik koji pokrene PDF je gori od nikakvog (§9.5
+princip). Pregled stavki bloka na klik (detail panel) čeka padajuće redove
+(§5/Faza C — poznat odložen posao); bitno iz legacy-ja (štampa dokumenta iz
+reda) jeste preneto.
+
+**(E) Keš od prvog dana** — v. §23.5.
+
+### 23.3 Matrica dostupnosti — ekran je ne prepisuje
+
+`IzListaTab(lista, tip)` mapira listu na legacy `IZV_TAB_*` indeks (SALDO
+bira tab 0/1 po tipu); `IzListaDostupna` za 8 statičkih lista **zove**
+`IzvestajTabDostupan`, za 2 runtime liste preslikava uslov iz
+`UpdateReportMode` (Otkupni listovi samo OM-pojedinačno, Pregled ambalaže
+samo Kooperant-pojedinačno). Test tvrdi poslovne činjenice matrice
+(kooperant+zbirno nema ništa; vozač pojedinačno tačno AMBALAZA i MANJAK;
+ISPLATA samo OM; ROBA za vozača **ne postoji kao tab** iako
+`ReportOtkupRobaVozac` postoji — matrica prati dispatch, ekran matricu), pa
+refactor koji bi je zaobišao pada po imenu.
+
+### 23.4 Identitet po listi — i šta je izdvojeno u zonu
+
+Identitet u poslednjoj koloni **prioriteta 4** (mreža crta do 3), čitan kroz
+`GridCell`; mapa „prikaz → ID" ne postoji. Red bez identiteta nosi prazno i
+radnja **odbija** porukom.
+
+| Lista | Identitet reda |
+|---|---|
+| OTK_LISTE | `OTK\|<OtkupID>` (štampa celog bloka, obe klase) |
+| ROBA (OM oblik) | `OTP\|<OtpremnicaID>`; Kupac/Vozac oblik: **prazno** (agregat po vrsti) |
+| AMBALAZA | `DokumentTip` + `DokumentID` u dve prenosne kolone (ključ reversa traži oba; tip ambalaže je vidljiva kolona istog reda) |
+| KARTICA | legacy ref-ključ: `OTK\|<id>` ima dokument; `NOV`/`MAG`/`AMB` nemaju → radnja odbija (legacy `Case Else` poruka) |
+| SALDO / ISPLATA / ZBIRNI / CENA / MANJAK / AMB_KARTICA | **prazno** — agregati; `Report*` povratci ne nose ID (i legacy nije imao radnju nad tim redovima) |
+
+**Dva pravila prikaza istine** (odstupanja od legacy-ja, namerna):
+
+1. **Specijalni redovi ne idu u mrežu nego u brojke zone**: „OM AVANS
+   (nerasporedjen)" i „AGROHEMIJA (nerasporedjena, van UKUPNO)" iz
+   `ReportSaldoOM`, tri kontrolna reda iz `ReportIsplata`. U tipiziranim
+   kolonama mreže njihove prazne ćelije bi postale „0,00" — FM-0028 #5 klasa
+   laži. Izdvajanje i prikaz dele isto mesto (`VrstaReda`), a testovi tvrde i
+   da brojka u zoni nosi vrednost i da reda u mreži **nema**.
+2. **UKUPNO (i POČETNO STANJE) žive samo u nefiltriranom prikazu**: pod
+   čipom/pretragom legacy UKUPNO red bi tvrdio zbir koji ne odgovara
+   vidljivim redovima; zbir prikazanih uvek daje podnožje mreže (računat pod
+   istim filterima kao redovi — §13). Za štampu isto pravilo.
+
+Uz to: **Manjak kg i % su razdvojene kolone** (legacy ih je spajao zbog
+ListBox limita 10; `MAX_COLS` je 14); kolone kod kojih je „prazno poruka"
+(prijemnica/manjak bez prijema) idu kao tekst koji formatira ekran — nikad
+„0,00" umesto oznake; ćelije gajbi prikazuju prazno umesto nule (legacy
+pregled). **Running saldo kartice je semantika reda, ne prikaza**: pretraga
+seče redove, ali saldo kolona ostaje „saldo posle tog dokumenta u punoj
+kartici" — zato KARTICA **nema čipove** (filter po vrsti reda bi trajno
+pokazivao isečen saldo uz kumulativnu kolonu). Čipovi postoje samo gde je
+filter prirodan podatak reda: MANJAK (`sve · bez prijema`) i AMBALAZA
+(`sve · ulaz · izlaz`); prvi je uvek najširi.
+
+### 23.5 Keš snimka (N7 pravilo od prvog dana)
+
+Sirov `Report*` povratak se kešira po **ključu konteksta**
+(`lista|tip|režim|entitet|od|do`). Pretraga i čipovi su re-filter nad
+snimkom — **nula čitanja tabela po otkucaju** (§22.9/N7: pun prolaz po
+otkucaju je plaćen kvar); promena entiteta/opsega/liste/režima legitimno
+čita ponovo — to su dva svesno razdvojena slučaja. `Scr_ResetCache`
+(ljuska ga zove posle svakog upisa) snimak proglašava zastarelim. Broj
+stvarnih čitanja meri `mSnimakPunjenja` (test: tri pretrage + čip = jedno
+punjenje; posle reset-a novo), a `Diag_IzRedovi` (Alt+F8) od prvog dana
+pamti poslednji `(filter, q, n)` + ključ snimka — obrazac `Diag_BnRedovi`.
+
+Datumska polja koriste **postojeće pravilo** `DatGranica` (nepotpun unos
+„21." = još nema granice — ne prazni listu i ne čita tabele; potpuno prazno
+polje = pun opseg, jer `Report*` primaju `Date`). Ljuskina `specOd/specDo`
+polja **nisu** upotrebljena: `SpecDatLista` ih tvrdo veže za
+DOKUMENTI/OTPREMNICE, a diff ljuske je pečat i ništa više.
+
+### 23.6 Slaganja — srce zadatka
+
+Sve tvrdnje su **relacije** (golden brojke zabranjene), nad nezavisnim
+read-modelima; testovi **133–141** u `modTest` (izvršavaju se pre
+mutirajućih 124–126):
+
+| Lista | Tvrdnja | Nezavisan read-model |
+|---|---|---|
+| ZBIRNI (OM) | kg/vrednost po (stanica, vrsta) | `ReportProsecnaCena("OM", S)` po svakoj stanici — dva različita čitača |
+| ZBIRNI (Kupac) | UKUPNO = Σ pojedinačnih po **svakom** kupcu | `ReportOtkupRoba("Kupac", K)` + ručni prolaz kroz `tblPrijemnica` |
+| ZBIRNI (Vozac) | amb izlaz po vozaču | ručni zbir `tblZbirna` po vozaču |
+| CENA | cena × kg = vrednost po redu; sume ↔ `ReportSaldoKupci` | **dva određenja vrste** (kolona prijemnice vs. vrsta zbirne) |
+| SALDO (OM) | po redu saldo = vrednost − isplaćeno − agro; isplaćeno ↔ ručni zbir sa `NovacRedPripadaStanici`; ambalaža ↔ `GetAmbalazeStanje` | ručni prolazi + kanonski saldo |
+| SALDO (Kupac) | novac ↔ ručni zbir uplata; saldo = vrednost − novac | ručni prolaz |
+| ISPLATA | po redu ukupno = keš + virman firma + virman avans (sva tri kanala pod naponom); UKUPNO ↔ ručni zbir tri tipa; zona primljeno/kod ↔ ručni zbir Firma→Otkupac | ručni prolazi kroz `tblNovac` |
+| ROBA (OM) | UKUPNO otpremljeno ↔ `tblOtpremnica`; blokovi ↔ `tblOtkup` vezan za te otpremnice | ručni prolazi |
+| MANJAK | red ↔ `ManjakStavka` aritmetika; UKUPNO samo nad redovima **sa prijemom**; red bez prijema nosi oznaku, ne nulu | čist seam + vlasnike čuvaju postojeći E2E u `modIzvestajTests` |
+| AMBALAZA | **zbirni režim = Σ pojedinačnih po tipu** (dva agregatna puta iste funkcije); UKUPNO ↔ ručni prolaz kroz ledger; ≥2 tipa ambalaže kao vozilo | ručni prolaz |
+| KARTICA | running red-po-red; UKUPNO = početno + promet; Σ zaduženja ↔ ručni kg×cena; rekap ↔ ručni Σ kg; amb saldo ↔ `GetAmbalazeStanje`; **komplementarne granice**: završni saldo (1.1–31.3) = početno stanje (od 1.4), za novac i ambalažu | ručni prolazi + kanonski saldo + sama kartica preko granica |
+| AMB_KARTICA | running; završni saldo ↔ `GetAmbalazeStanje` | kanonski saldo |
+| OTK_LISTE | broj redova + Σ kg/vrednost ↔ ručni prolaz kroz `tblOtkup` | ručni prolaz |
+
+**Tri nalaza iz crvenih krugova** (testovi i dokaz su radili pre nego što su
+postali zeleni):
+
+1. **Fixture je bio domenski nekonzistentan**: otkupi sa `KolAmbalaze` bez
+   uz-otkup ledger parova koje `SaveOtkup` piše — kartica (kolone
+   `tblOtkup` + samostalna kretanja) i kanonski saldo (`GetAmbalazeStanje`)
+   su se legitimno razilazili (−47 vs 25). Parovi su dodati u
+   `make_fixture.py` za sve nestornirane otkupe KOOP-TEST-1; tri puta
+   (finansijska kartica, amb kartica, kanonski saldo) sada mere isto.
+2. **Tvrdnja o početnom stanju mora biti vremenski robusna**: raniji test u
+   nizu (`T_WriterGuard_AvansSaldoOM`) legitimno upisuje virman sa
+   *današnjim* datumom, pa „početno stanje od 1.4 = završni saldo punog
+   opsega" ne stoji. Prepravljena na komplementarne granice (gore) — što je
+   ujedno i jača formulacija FM-0028 #1.
+3. **Prvi dokaz je vratio `NE OBARA NISTA` za `izvestaji-ukupno-prezivi-
+   filter`** — i bio je u pravu: pod *pretragom* je UKUPNO red dvostruko
+   zaštićen (haystack „UKUPNO" ionako ne sadrži upit), pa uklanjanje
+   vrsta-filtera ništa ne menja; pod **čipom** je taj filter jedina brana
+   (čip „ulaz" bi UKUPNO red ambalaže propustio — zbirni ulaz > 0), a baš
+   taj slučaj tvrdnja nije merila. Test je dobio čip-granu, sabotaža sada
+   obara nju. Placebo tvrdnju je otkrio dokaz, ne čitanje.
+
+Tvrdnje slaganja nad samim `Report*` funkcijama **nemaju zasebnu sabotažu**:
+mutacija `modIzvestaj` bi obarala i `RunIzvestajTests` (tuđu, postojeću
+suite) — isto pravilo kao „storniran nije u listi" u §22.8. Sabotaže (16,
+prefiks `izvestaji-`) gađaju ekransku polovinu: izdvajanje u zonu, keš,
+matricu, identitet, prikaz istine, zonu.
+
+### 23.7 Šta NIJE preneto, i zašto
+
+- **`frmIzvestaj` se ne gasi i ne menja** — dve kopije žive namerno (§5,
+  Faza B). `Report*`, `PrintIzvestaj`, `PrintKartica*PDF`,
+  `IzvestajTabDostupan` — nijedno pravilo nije dirano.
+- **Detail panel „Detalji otkupa"** (klik na red → sve stavke bloka) — čeka
+  padajuće redove (§5/Faza C). Štampa dokumenta iz reda jeste preneta.
+- **Rang kooperanata** već živi na Dokumentima (`KoopRangRows`) — ne
+  duplira se.
+- **Zbirni oblik ambalažnog pregleda kroz ekran**: matrica tab 3 nudi samo
+  pojedinačno (i u legacy-ju), pa lista AMBALAZA uvek koristi pojedinačni
+  oblik; zbirna grana `ReportAmbalazeZbirni` ostaje pokrivena testom
+  slaganja kao API.
+- **Agro (nerasporedjena) brojka** nema fixture vozilo (nema magacin izlaza
+  bez kooperanta) — izdvajanje postoji i testira se kroz OM avans polovinu
+  istog mehanizma; tvrdnja nad agro brojkom bi merila prazan skup.
+- **Marža i Sledljivost** su zasebni ekrani (stavke §5).
+
+### 23.8 Poznati nalazi van ovog PR-a
+
+- **`PrintIzvestaj`/`OutputToSheet` upisuju sirove stringove u ćelije**
+  print sheeta — string koji Excel ume da protumači (npr. tip ambalaže
+  `12/1` kao datum) menja oblik u štampanom PDF-u. Isti kvar ima i legacy
+  putanja (deli isti `OutputToSheet`); nije regresija ovog ekrana. Golih
+  nizova >15 cifara u izveštajima nema (provereno po listama — nijedna ne
+  nosi račun), pa N1 klasa ne nastaje. Popravka (`NumberFormat="@"`)
+  pripada `modPrint`-u i zajedničkom prolazu, ne ovom PR-u.
+- **Kursor preko placeholder-a pretrage** — poznat estetski backlog svih
+  ekrana, ne dira se (§22.9).
+
+### 23.9 Verifikacija
+
+- `RunAllTests` **141 / 0** (devet novih testova; prva dva runa su bila
+  crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0** (bit-identičan
+  BN ekran posle fixture izmena — nova vozila su vezana za **zatvoren**
+  blok i kooperanta bez blokova, pa KPI/čipovi/korpa Platnih naloga ne vide
+  ništa novo); `vba_check` + `--self-test`, `sabotaza --self-test`,
+  `who_writes --check` čisti.
+- Fixture: `tblAmbalaza` prvi put ima redove (do sada bi svaka ambalažna
+  tvrdnja merila prazan skup); `tblNovac` prvi put ima OMID, sva tri
+  kanala isplate i Firma→Otkupac avans — **na STA-TEST-2**, jer
+  `T_WriterGuard_AvansSaldoOM` traži da STA-TEST-1 ima avans saldo tačno 0;
+  pin `MALINA_MODE=NO` + `KARTICA*_PRINT_MODE=OFF` u `SEF_CONFIG` (ista
+  klasa kao `KES_ISPLATE` u §8.10).
+- Dvosmerni dokaz: `python tools/dokaz.py izvestaji` — 16 sabotaža, svaka
+  obara tačno jedan imenovani test i vraća se bit-identično.
+- **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug →
+  Compile VBAProject`, pa smoke nad pravim podacima u više krugova
+  (checklista u PR-u): izgled zone i prekidača, sve četiri kombinacije
+  tip×režim, štampe (tabelarna, kartica, dokument iz reda, revers),
+  ponašanje datumskih polja, pretraga na velikoj svesci.

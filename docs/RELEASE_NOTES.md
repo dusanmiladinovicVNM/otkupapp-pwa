@@ -6388,3 +6388,75 @@ tri stvarna kvara — sve zatvoreno u istom izdanju:
   kruga na pravoj svesci**; otvoren ostaje samo nalaz o naizgled praznoj
   ćeliji „Isplatiti" na jednom redu (dijagnostika `Diag_BnRedovi` stoji u
   ekranu ako se ponovi).
+
+---
+
+## vba-v2.89.0 — 2026-08-28
+
+### Novi ekran: Izveštaji (novi UI)
+
+Stavka „Izveštaji" u meniju novog UI-ja više nije prigušena. Svih devet
+izveštaja stare forme + dva njena skrivena taba („Otkupni listovi",
+„Pregled ambalaže") sada su **deset lista** nad istom mrežom, sa istim
+brojkama — računa ih isti kod kao i do sada (`modIzvestaj`), ekran ništa ne
+računa sam.
+
+- **Entitet i period u zoni**: četiri prekidača tipa (OM / Kupci / Vozači /
+  Kooperanti), prekidač Pojedinačno/Zbirno, izbor konkretnog entiteta (sa
+  šifrom — dva ista imena se razlikuju) i opseg Od–Do (podrazumevano od
+  1. januara). Lista se osvežava sama; nepotpun datum u kucanju ne prazni
+  prikaz.
+- **Kombinacija koja nema izveštaj kaže to otvoreno** („Ovaj izveštaj ne
+  postoji za izabranu kombinaciju") — umesto praznog naslova; koja
+  kombinacija postoji odlučuje ista matrica kao u staroj formi.
+- **Pretraga i čipovi su trenutni i na velikoj svesci** — lista se učita
+  jednom pa se filtrira u mestu (lekcija sa Platnih naloga ugrađena od
+  prvog dana), a nalazi i imena sa kvakama kad se kucaju bez njih.
+- **Štampa**: „Štampaj izveštaj" (tabelarni PDF onoga što se vidi — ako je
+  filter aktivan, piše i to na papiru), „Štampaj karticu (PDF)" na listama
+  kartica, i „Štampaj dokument" nad redom (otkupni list, otpremnica,
+  prijemnica, revers ambalaže — po vrsti reda).
+- **Zbir koji ne odgovara prikazu se ne prikazuje**: red UKUPNO postoji
+  samo u nefiltriranom pregledu (filtriran zbir daje podnožje mreže), a
+  redovi „OM AVANS" / „Kod otkupca" su brojke iznad mreže umesto redova sa
+  izmišljenim nulama.
+
+### Slaganje sa izvorom istine (merilo ovog izdanja)
+
+Svaka lista ima test koji je vezuje za nezavisan račun: zbirni ↔ zbir
+pojedinačnih po svakom entitetu, prosečna cena ↔ saldo kupca (dva različita
+određenja vrste), isplata ↔ ručni zbir sva tri kanala iz tblNovac, kartica ↔
+running saldo red-po-red + kanonski ambalažni saldo + slaganje same sa sobom
+preko komplementarnih perioda, manjak ↔ pravilo ManjakStavka, ambalaža ↔
+zbirni = zbir pojedinačnih po tipu. Bez golden brojki — samo relacije.
+
+Prva dva puštanja su bila crvena, i oba su nešto naučila: test-sveska nije
+imala ambalažne ledger parove uz otkupe (pa su se kartica i kanonski saldo
+legitimno razilazili — sveska dopunjena kako je upis inače piše), a tvrdnja
+o početnom stanju kartice je prepravljena na oblik nezavisan od kasnijih
+upisa (završni saldo do 31.3. = početno stanje od 1.4.).
+
+### Šta NIJE urađeno, i zašto
+
+- **Panel „Detalji otkupa"** (klik na red kartice → sve stavke bloka) čeka
+  padajuće redove mreže (poznat odložen posao svih ekrana); štampa
+  dokumenta iz reda jeste tu.
+- **Stara forma Izveštaja ostaje operativna i nepromenjena** — iz nje nije
+  obrisano ništa; revers ambalaže je dobio deljeni račun u `modIzvestaj`, a
+  forma zadržava svoju kopiju.
+- **Rang kooperanata** se ne duplira — već živi na ekranu Dokumenti.
+- Tip ambalaže „12/1" u ćeliji štampanog tabelarnog PDF-a Excel ume da
+  protumači kao datum — **isti nalaz važi i za staru formu** (deli isti
+  ispis) i zapisan je za zajednički prolaz kroz štampu, ne za ovaj ekran.
+- Kursor u polju pretrage i dalje treperi preko placeholder teksta —
+  estetski backlog svih ekrana.
+
+### Verifikacija
+
+- Glavni set **141 / 0** (devet novih testova ekrana i slaganja);
+  banka set **205 / 0** (Platni nalozi bit-identični — nova test-vozila su
+  namerno vezana za zatvoren blok); statičke provere čiste.
+- **Šesnaest** novih namernih kvarova obara po tačno jedan imenovani test i
+  vraća se bit-identično (dvosmerni dokaz).
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
+  smoke nad pravim podacima u više krugova (checklista u PR-u).
