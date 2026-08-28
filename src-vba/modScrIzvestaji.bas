@@ -113,6 +113,10 @@ Private mSnimci As Object
 Private mSnimakKljuc As String      ' kljuc POSLEDNJEG prikaza (kontekst stampe)
 Private mSnimakPunjenja As Long
 Private Const IZ_SNIMAK_KAPA As Long = 16
+' Generacija podataka pod kojom je mapa punjena: upis sa DRUGOG ekrana ne
+' prolazi kroz nas Scr_ResetCache, ali podize modUiData.DataGeneracija --
+' kes starije generacije se odbacuje (recenzija PR #245, blocker 1).
+Private mSnimakGen As Long
 
 ' Kontekst STVARNO ucitanih podataka -- naslov stampe i hint se grade iz njega
 ' (AUD-024 / FM-0029 #1: naslov opisuje ono sto je prikazano, ne trenutno
@@ -214,12 +218,24 @@ Public Function IzCipAmb(ByVal filter As String, ByVal ulaz As Double, _
     End Select
 End Function
 
-' Radnja nad redom postoji SAMO na listama ciji red ima dokument iza sebe:
+' Radnja nad redom postoji SAMO tamo gde red STVARNO ima dokument iza sebe:
 ' "Stampaj dokument" cita identitet iz skrivene kolone. Agregatne liste
 ' nemaju nijednu radnju (ljuska tada krije dugmad -- obrazac IZVODI,
 ' par. 9.2): agregatni red bez radnje nije greska, radnja koja pogadja jeste.
+' Radnja je KONTEKSTNA, ne samo po listi (recenzija PR #245, nalaz 3): ROBA
+' za kupca/vozaca je agregat po vrsti bez ref-kolone, a nedostupna
+' kombinacija nema ni redove -- dugme tamo ne sme ni da se nudi.
 Public Function Scr_Radnje() As String
-    Scr_Radnje = IzRadnjeZaListu(Scr_Lista())
+    Scr_Radnje = IzRadnjeZaKontekst(Scr_Lista(), TrenutniTip(), mZbirni)
+End Function
+
+Public Function IzRadnjeZaKontekst(ByVal kljuc As String, ByVal tip As String, _
+                                   ByVal zbirni As Boolean) As String
+    If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function
+    ' ROBA nosi dokument-identitet (OTP|) samo u OM obliku; kupac/vozac
+    ' oblik je agregat po vrsti.
+    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function
+    IzRadnjeZaKontekst = IzRadnjeZaListu(kljuc)
 End Function
 
 Public Function IzRadnjeZaListu(ByVal kljuc As String) As String
@@ -648,6 +664,12 @@ End Function
 Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As String, _
                         ByVal zbirni As Boolean, ByVal iD As String, _
                         ByVal odN As Double, ByVal doN As Double) As Variant
+    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija podataka
+    ' je deljeni signal da je snimljeno stanje mozda staro (blocker 1).
+    If mSnimakGen <> modUiData.DataGeneracija() Then
+        Set mSnimci = Nothing
+        mSnimakGen = modUiData.DataGeneracija()
+    End If
     If mSnimci Is Nothing Then Set mSnimci = CreateObject("Scripting.Dictionary")
 
     If Not mSnimci.Exists(k) Then
@@ -1006,6 +1028,9 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
             outA(n, 6) = NzD(src(i, 7))
             outA(n, 7) = NzD(src(i, 8))
             outA(n, 8) = NzS(src(i, 9))            ' "OTK|<id>" / "NOV" / "MAG" / "AMB"
+            ' Podnozje: neto promet prikazanih redova (zaduzenja - razduzenja)
+            ' -- "Vrednost 0,00" uz punu karticu je izgledalo kao kvar.
+            sumVal = sumVal + NzD(src(i, 5)) - NzD(src(i, 6))
         Case IZ_AMBK
             outA(n, 1) = IzDatCell(src(i, 1))
             outA(n, 2) = NzS(src(i, 2))
@@ -1516,6 +1541,43 @@ End Function
 ' STAMPE. Ne verifikuju se automatski -- smoke checklista.
 '=====================================================================
 
+' KOJE se kolone SABIRAJU u stampanom UKUPNO redu -- po listi, 1-based
+' indeksi VIDLJIVIH kolona. Tip kolone (kg/rsd/rest) opisuje PRIKAZ, ne
+' aditivnost: prosecna cena, prosek gajbi i RUNNING SALDO su numericki a
+' zbir im ne znaci nista (recenzija PR #245, blocker 2 -- generic suma je
+' na kartici davala "UKUPNO SALDO" kao zbir medjustanja). Politika prati
+' legacy UKUPNO redove: sabira se promet, nikad prosek i nikad stanje.
+Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String) As Variant
+    Select Case kljuc
+        Case IZ_SALDO
+            If tip = "Kupac" Then
+                IzSabirljive = Array(2, 4, 5, 6, 7)    ' bez 3 = cena
+            Else
+                IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+            End If
+        Case IZ_ROBA
+            If tip = "OM" Then
+                IzSabirljive = Array(6, 7, 8, 9, 10)   ' bez 11 = manjak %
+            Else
+                IzSabirljive = Array(3, 4)
+            End If
+        Case IZ_AMB:    IzSabirljive = Array(5, 6)     ' ulaz/izlaz (txt, ali promet)
+        Case IZ_ISPL:   IzSabirljive = Array(2, 3, 4, 5)
+        Case IZ_ZBIR
+            If tip = "Vozac" Then
+                IzSabirljive = Array(2, 3, 4)          ' bez 5 = manjak %
+            Else
+                IzSabirljive = Array(3, 4)             ' bez 5 = prosek
+            End If
+        Case IZ_CENA:   IzSabirljive = Array(2, 3)     ' bez 4 = prosecna cena
+        Case IZ_MANJAK: IzSabirljive = Array(2, 3, 4)  ' bez % i proseka gajbi
+        Case IZ_KART:   IzSabirljive = Array(4, 5)     ' promet; NIKAD saldo (6, 7)
+        Case IZ_AMBK:   IzSabirljive = Array(4, 5)     ' ulaz/izlaz; NIKAD saldo (6)
+        Case IZ_OTKL:   IzSabirljive = Array(6, 7)
+        Case Else:      IzSabirljive = Array()
+    End Select
+End Function
+
 ' Zaglavlja stampe po listi -- isti opis kolona kao mreza (vidljive kolone),
 ' natpisi iz kataloga. Javno da bi ga stampa i test delili.
 Public Function IzHeaderiZaListu(ByVal kljuc As String, ByVal tip As String) As Variant
@@ -1563,20 +1625,27 @@ Private Sub StampajIzvestaj()
 
     ' +1 red: UKUPNO se racuna NAD STAMPANIM redovima (mreza ga ne nosi --
     ' sort bi ga pomerao; a zbir filtriranog izvoda mora da odgovara bas
-    ' onome sto je na papiru). Sabiraju se numericke kolone po tipu.
+    ' onome sto je na papiru). Sabiraju se SAMO kolone koje politika liste
+    ' proglasi sabirljivim (IzSabirljive) -- tip kolone opisuje prikaz, ne
+    ' aditivnost, pa bi generic suma sabirala prosecne cene i running salda.
     ReDim dataS(1 To n + 1, 1 To vidljivih)
     Dim kind As String, tot() As Double, imaTot() As Boolean
+    Dim sabir As Variant, s As Long
     ReDim tot(1 To vidljivih)
     ReDim imaTot(1 To vidljivih)
+    sabir = IzSabirljive(Scr_Lista(), mCtxTip)
+    If IsArray(sabir) Then
+        For s = LBound(sabir) To UBound(sabir)
+            If CLng(sabir(s)) >= 1 And CLng(sabir(s)) <= vidljivih Then _
+                imaTot(CLng(sabir(s))) = True
+        Next s
+    End If
     For i = 1 To n
         For j = 1 To vidljivih
             dataS(i, j) = CelijaZaStampu(CStr(kolone(j - 1)), redovi(i, j))
-            kind = Split(CStr(kolone(j - 1)), "|")(2)
-            Select Case kind
-                Case "kg", "rsd", "num", "rest"
-                    tot(j) = tot(j) + NzD(redovi(i, j))
-                    imaTot(j) = True
-            End Select
+            ' Sabirljive txt kolone (gajbe, prijemnica kg) nose formatiran
+            ' string istog sistemskog oblika -- NzD ih cita; prazno je 0.
+            If imaTot(j) Then tot(j) = tot(j) + NzD(redovi(i, j))
         Next j
     Next i
     dataS(n + 1, 1) = "UKUPNO"
@@ -1587,6 +1656,8 @@ Private Sub StampajIzvestaj()
                 dataS(n + 1, j) = FmtKolicina(tot(j))
             ElseIf kind = "num" Then
                 dataS(n + 1, j) = Format$(tot(j), "#,##0")
+            ElseIf kind = "txt" Then
+                dataS(n + 1, j) = Format$(tot(j), "#,##0.##")
             Else
                 dataS(n + 1, j) = Format$(tot(j), "#,##0.00")
             End If

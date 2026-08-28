@@ -134,6 +134,12 @@ Private mSnimakOK As Boolean
 ' Broj stvarnih citanja tabela -- bez njega se kes ne moze izmeriti (isti
 ' razlog kao mCiljPunjenja na Uvozu izvoda: broji se POZIV, ne uspeh).
 Private mSnimakPunjenja As Long
+' Generacija podataka pod kojom su snimak i KPI punjeni: upis sa DRUGOG
+' ekrana ne prolazi kroz nas Scr_ResetCache (RefreshFromData resetuje samo
+' aktivan ekran), pa su snimak liste i znacka menija prezivljavali tudji
+' upis (recenzija PR #245, blocker 1 -- isti ugovor kao Izvestaji).
+Private mSnimakGen As Long
+Private mKpiGen As Long
 
 ' Izbor koji je postavio TEST. Zone u testu nema (forma se ne prikazuje), pa
 ' se combo ne moze procitati. Vazi SAMO u test rezimu.
@@ -1024,6 +1030,12 @@ End Function
 ' Pretraga i cipovi time postaju re-filter nad snimkom -- trenutni, kao u
 ' legacy formi. Greska citanja se NE kesira (isti obrazac kao Kpi).
 Private Function Snimak() As Variant
+    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija
+    ' podataka je deljeni signal da je snimak mozda star (PR #245).
+    If mSnimakGen <> modUiData.DataGeneracija() Then
+        mSnimakOK = False
+        mSnimakGen = modUiData.DataGeneracija()
+    End If
     If Not mSnimakOK Then
         mSnimakPunjenja = mSnimakPunjenja + 1
         mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()
@@ -1371,6 +1383,12 @@ End Sub
 Private Function Kpi() As Variant
     Dim errDesc As String
     On Error GoTo EH
+    ' Znacka menija se pita i dok je AKTIVAN drugi ekran (OsveziNavBrojace)
+    ' -- bez generacije bi posle tudjeg upisa nosila staru brojku (PR #245).
+    If mKpiGen <> modUiData.DataGeneracija() Then
+        mKpiOK = False
+        mKpiGen = modUiData.DataGeneracija()
+    End If
     If mKpiOK Then
         Kpi = mKpi
         Exit Function

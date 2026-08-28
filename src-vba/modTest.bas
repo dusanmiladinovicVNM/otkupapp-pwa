@@ -381,6 +381,7 @@ Public Sub RunAllTests()
     RunOne 139
     RunOne 140
     RunOne 141
+    RunOne 142
     RunOne 124
     RunOne 125
     RunOne 126
@@ -559,6 +560,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 139: TestName = "T_Izv_SlaganjeIsplataManjakAmb"
         Case 140: TestName = "T_Izv_KesPretragaIHint"
         Case 141: TestName = "T_ZonaIzv_PoljaIRaspored"
+        Case 142: TestName = "T_KesGeneracija_UpisInvalidira"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -708,6 +710,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 139: T_Izv_SlaganjeIsplataManjakAmb
         Case 140: T_Izv_KesPretragaIHint
         Case 141: T_ZonaIzv_PoljaIRaspored
+        Case 142: T_KesGeneracija_UpisInvalidira
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -9286,6 +9289,38 @@ Private Sub T_Izv_UgovorEkrana()
     AssertEq saRadnjom, 4, _
              "'Stampaj dokument' nose tacno cetiri liste sa dokument-identitetom"
 
+    ' Radnja je KONTEKSTNA: ROBA nosi dokument-identitet samo u OM obliku,
+    ' a nedostupna kombinacija nema ni redove -- dugme se tamo ne nudi.
+    AssertEq (Len(modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "OM", False)) > 0), True, _
+             "roba za OM ima radnju stampe dokumenta"
+    AssertEq modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Kupac", False), "", _
+             "roba za kupca nema radnju -- agregat po vrsti bez dokumenta"
+    AssertEq modScrIzvestaji.IzRadnjeZaKontekst("KARTICA", "OM", False), "", _
+             "nedostupna kombinacija nema radnju"
+
+    ' Stampani UKUPNO sabira SAMO ono sto je aditivno: tip kolone opisuje
+    ' prikaz, ne aditivnost -- prosecna cena i RUNNING SALDO se ne sabiraju.
+    Dim sab As Variant, s2 As Long, imaSaldo As Boolean, imaUlaz As Boolean
+    sab = modScrIzvestaji.IzSabirljive("KARTICA", "Kooperant")
+    imaSaldo = False
+    For s2 = LBound(sab) To UBound(sab)
+        If CLng(sab(s2)) = 6 Or CLng(sab(s2)) = 7 Then imaSaldo = True
+    Next s2
+    AssertEq imaSaldo, False, "stampani UKUPNO kartice ne sabira saldo"
+    sab = modScrIzvestaji.IzSabirljive("CENA", "OM")
+    imaSaldo = False
+    For s2 = LBound(sab) To UBound(sab)
+        If CLng(sab(s2)) = 4 Then imaSaldo = True
+    Next s2
+    AssertEq imaSaldo, False, "stampani UKUPNO ne sabira prosecne cene"
+    sab = modScrIzvestaji.IzSabirljive("AMBALAZA", "OM")
+    imaUlaz = False
+    For s2 = LBound(sab) To UBound(sab)
+        If CLng(sab(s2)) = 5 Then imaUlaz = True
+    Next s2
+    AssertEq imaUlaz, True, _
+             "stampani UKUPNO ambalaze sabira ulaz (promet jeste aditivan)"
+
     spec = modScrIzvestaji.IzCipoviZaListu("MANJAK")
     AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", "prvi cip MANJKA je najsiri ('sve')"
     spec = modScrIzvestaji.IzCipoviZaListu("AMBALAZA")
@@ -10208,4 +10243,50 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
     AssertEq kartNaKartici, True, "dugme kartice postoji na listi kartica"
     AssertEq entVidljivPojed, True, "polje entiteta postoji u pojedinacnom rezimu"
     AssertEq entVidljivZbirno, False, "zbirni rezim gasi polje entiteta"
+End Sub
+
+' ============================================================
+' 142. Deljeni ugovor invalidacije: upis sa DRUGOG ekrana obara izvedene
+' kesve (recenzija PR #245, blocker 1)
+' ============================================================
+' RefreshFromData resetuje kes SAMO aktivnog ekrana, pa je snimak neaktivnog
+' (Izvestaji, Platni nalozi) prezivljavao tudji upis i po povratku pokazivao
+' stare brojke. Deljeni signal je modUiData.DataGeneracija: svaki ResetCache
+' (jedina tacka kroz koju prolaze svi upisi novog UI-ja) podize generaciju,
+' a ekran pri citanju odbacuje kes starije generacije. Test upis simulira
+' TACNO onim pozivom koji RefreshFromData radi -- bez ekranovog
+' Scr_ResetCache.
+Private Sub T_KesGeneracija_UpisInvalidira()
+    Dim d As Variant, p0 As Long, pb As Long
+
+    ' IZVESTAJI: kes drzi svoj kontekst, ali NE prezivljava tudji upis.
+    ' Opseg od 3.1 je jedinstven za ovaj test (kljucevi drugih testova ga
+    ' ne pune -- ista lekcija kao u T_Izv_KesPretragaIHint).
+    modScrIzvestaji.Scr_IzTestReset
+    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_STANICA, _
+                                  CDbl(DateSerial(2026, 1, 3)), IzvDoS()
+    p0 = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    AssertEq modScrIzvestaji.Scr_IzSnimakPunjenjaTest() - p0, 1, _
+             "izvestaji: bez upisa drugi prolaz ide iz kesa"
+    modUiData.ResetCache
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    AssertEq modScrIzvestaji.Scr_IzSnimakPunjenjaTest() - p0, 2, _
+             "izvestaji: posle tudjeg upisa snimak se puni ponovo (generacija)"
+    modScrIzvestaji.Scr_IzTestReset
+
+    ' PLATNI NALOZI: isti ugovor za snimak liste (znacka/KPI dele istu
+    ' generacijsku proveru u Kpi -- ista mehanika, v. modScrBankaNalozi).
+    modScrBankaNalozi.Scr_BnTestReset
+    pb = modScrBankaNalozi.Scr_BnSnimakPunjenjaTest()
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq modScrBankaNalozi.Scr_BnSnimakPunjenjaTest() - pb, 1, _
+             "nalozi: bez upisa drugi prolaz ide iz kesa"
+    modUiData.ResetCache
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq modScrBankaNalozi.Scr_BnSnimakPunjenjaTest() - pb, 2, _
+             "nalozi: posle tudjeg upisa snimak se puni ponovo (generacija)"
+    modScrBankaNalozi.Scr_BnTestReset
 End Sub

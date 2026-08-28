@@ -6458,6 +6458,21 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   stoji u podnožju, a štampani izveštaj dobija svoj red UKUPNO izračunat
   tačno nad onim što je na papiru.
 
+### Ugrađena recenzija (krug 3)
+
+- **Izveštaj se osvežava i posle upisa sa drugog ekrana.** Do sada je
+  povratak na već pogledan izveštaj mogao da pokaže brojke od pre upisa
+  (keš ekrana nije znao za tuđi upis) — isti propust je imala i lista
+  Platnih naloga i njena značka u meniju. Sada svaki upis „ostari" sve
+  takve kešve (zajednički brojač generacije podataka), a povratak bez
+  upisa ostaje trenutan.
+- **Štampani red UKUPNO sabira samo ono što ima smisla sabirati**: promet
+  (kg, iznosi, ulaz/izlaz gajbi) da, prosečne cene i tekući saldo ne —
+  zbir međustanja kartice nije nikakva poslovna vrednost. Podnožje kartice
+  sada pokazuje neto promet prikazanih redova umesto „0,00".
+- **„Štampaj dokument" se ne nudi tamo gde red nema dokument** (agregat
+  robe po vrsti, nedostupne kombinacije).
+
 ### Šta NIJE urađeno, i zašto
 
 - **Panel „Detalji otkupa"** (klik na red kartice → sve stavke bloka) čeka

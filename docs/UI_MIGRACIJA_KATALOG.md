@@ -4576,7 +4576,43 @@ podataka (živi u punom prikazu, nestaje pod filterom). Time je pravilo
 „UKUPNO samo u nefiltriranom prikazu" iz §23.4 postalo strože: „UKUPNO
 nikad u mreži" — testovi i sabotaža su prepravljeni na taj oblik.
 
-### 23.10 Verifikacija
+### 23.10 Recenzija PR-a #245: tri nalaza (krug 3)
+
+Recenzija posle drugog kruga — dva blocker-a i jedan manji, sva tri
+prihvaćena i zatvorena u istom PR-u:
+
+**R1 (blocker) — izvedeni keš je preživljavao upis sa DRUGOG ekrana.**
+`RefreshFromData` resetuje keš samo **aktivnog** ekrana, a `ActivateScreen`
+pri povratku ne resetuje ništa — pa je sekvenca „Izveštaji → drugi ekran →
+upis → nazad" pogađala stari snimak pod istim ključem i pokazivala **stare
+brojke**. Isti kvar je od `v6-ui-185` nosio i snimak liste (i značka) na
+Platnim nalozima. Rešeno **deljenim ugovorom invalidacije**, bez TTL-a i
+bez imena ekrana u ljusci: `modUiData.ResetCache` (jedina tačka kroz koju
+prolaze svi upisi novog UI-ja) podiže **generaciju podataka**
+(`DataGeneracija`), a ekran uz svoj keš pamti generaciju punjenja i pri
+čitanju odbacuje stariju — Izveštaji (mapa snimaka), Platni nalozi (snimak
++ KPI značke). Povratak na ekran **bez** upisa i dalje ide iz keša (S2
+dobit ostaje). Test 142 upis simulira tačno onim pozivom koji
+`RefreshFromData` radi; diff ljuske je `modUiData` (+generacija, pečat) —
+`modOtkupUI` i dalje netaknut.
+
+**R2 (blocker) — štampani UKUPNO je sabirao i nesabirljivo.** Generička
+suma „svaka numerička kolona" je sabirala prosečne cene, prosek gajbi i
+**running saldo kartice** (zbir međustanja nije poslovna vrednost) — tip
+kolone opisuje prikaz, ne aditivnost. Uvedena je **politika sabirljivosti
+po listi** (`IzSabirljive`, 1-based indeksi vidljivih kolona, verna legacy
+UKUPNO redovima): sabira se promet, nikad prosek i nikad stanje; time se
+sabiraju i txt kolone koje **jesu** promet (ulaz/izlaz gajbi — generička
+suma ih je preskakala). Podnožje kartice uz to dobija neto promet
+prikazanih redova umesto „Vrednost 0,00".
+
+**R3 — „Štampaj dokument" se nudio i gde red nema dokument.** Radnja je
+bila po listi; ROBA u kupac/vozač obliku je agregat po vrsti bez
+ref-kolone, a nedostupna kombinacija nema ni redove. `Scr_Radnje` sada ide
+kroz `IzRadnjeZaKontekst(lista, tip, režim)`: bez radnje kad je kombinacija
+nedostupna ili kad oblik nema dokument-grain.
+
+### 23.11 Verifikacija
 
 - `RunAllTests` **141 / 0** (devet novih testova; prva dva runa su bila
   crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0** (bit-identičan

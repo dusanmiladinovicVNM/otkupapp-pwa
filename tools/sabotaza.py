@@ -3387,6 +3387,56 @@ SABOTAZE = {
         "T_ZonaIzv_PoljaIRaspored",
         "dugme kartice se ne nudi na saldo listi",
     ),
+    # ------------------------------------------------------------------
+    # Recenzija PR #245 (krug 3): deljeni ugovor invalidacije + politika
+    # sabirljivosti stampe + kontekstna radnja.
+    # ------------------------------------------------------------------
+    # Upis sa DRUGOG ekrana ne zove nas Scr_ResetCache -- bez generacijske
+    # provere bi povratak na Izvestaje pokazivao STARE brojke (blocker 1).
+    "izvestaji-kes-ignorise-generaciju": (
+        "modScrIzvestaji.bas",
+        "    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija podataka\n"
+        "    ' je deljeni signal da je snimljeno stanje mozda staro (blocker 1).\n"
+        "    If mSnimakGen <> modUiData.DataGeneracija() Then\n"
+        "        Set mSnimci = Nothing\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "    ' SABOTAZA: kes ignorise generaciju podataka\n",
+        "T_KesGeneracija_UpisInvalidira",
+        "izvestaji: posle tudjeg upisa snimak se puni ponovo (generacija)",
+    ),
+    # Isti ugovor na Platnim nalozima -- snimak liste je prezivljavao upis
+    # sa drugog ekrana.
+    "banka-nalozi-kes-ignorise-generaciju": (
+        "modScrBankaNalozi.bas",
+        "    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija\n"
+        "    ' podataka je deljeni signal da je snimak mozda star (PR #245).\n"
+        "    If mSnimakGen <> modUiData.DataGeneracija() Then\n"
+        "        mSnimakOK = False\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "    ' SABOTAZA: snimak ignorise generaciju podataka\n",
+        "T_KesGeneracija_UpisInvalidira",
+        "nalozi: posle tudjeg upisa snimak se puni ponovo (generacija)",
+    ),
+    # Tip kolone opisuje PRIKAZ, ne aditivnost: zbir running salda kartice
+    # nije poslovna vrednost (blocker 2 -- "UKUPNO SALDO = zbir medjustanja").
+    "izvestaji-ukupno-sabira-saldo": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_KART:   IzSabirljive = Array(4, 5)     ' promet; NIKAD saldo (6, 7)\n",
+        "        Case IZ_KART:   IzSabirljive = Array(4, 5, 6, 7)   ' SABOTAZA: sabira i salda\n",
+        "T_Izv_UgovorEkrana",
+        "stampani UKUPNO kartice ne sabira saldo",
+    ),
+    # Radnja je kontekstna: ROBA za kupca je agregat po vrsti BEZ ref-kolone
+    # -- dugme "Stampaj dokument" tamo ne sme ni da se nudi (nalaz 3).
+    "izvestaji-radnja-na-agregatu": (
+        "modScrIzvestaji.bas",
+        '    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function\n',
+        "    ' SABOTAZA: radnja i na agregatnom obliku robe\n",
+        "T_Izv_UgovorEkrana",
+        "roba za kupca nema radnju -- agregat po vrsti bez dokumenta",
+    ),
 }
 
 
