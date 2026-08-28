@@ -4419,10 +4419,12 @@ radnja **odbija** porukom.
    kolonama mreže njihove prazne ćelije bi postale „0,00" — FM-0028 #5 klasa
    laži. Izdvajanje i prikaz dele isto mesto (`VrstaReda`), a testovi tvrde i
    da brojka u zoni nosi vrednost i da reda u mreži **nema**.
-2. **UKUPNO (i POČETNO STANJE) žive samo u nefiltriranom prikazu**: pod
-   čipom/pretragom legacy UKUPNO red bi tvrdio zbir koji ne odgovara
-   vidljivim redovima; zbir prikazanih uvek daje podnožje mreže (računat pod
-   istim filterima kao redovi — §13). Za štampu isto pravilo.
+2. **UKUPNO red nikad ne ide u mrežu, POČETNO STANJE živi samo u
+   nefiltriranom prikazu**: mreža sortira po koloni pa UKUPNO pluta (prvi
+   smoke — v. §23.9/S4), a pod filterom bi tvrdio zbir koji ne odgovara
+   vidljivim redovima. Zbir prikazanih uvek daje podnožje mreže (računat pod
+   istim filterima kao redovi — §13); tabelarna štampa dodaje svoj izračunat
+   UKUPNO nad tačno štampanim redovima.
 
 Uz to: **Manjak kg i % su razdvojene kolone** (legacy ih je spajao zbog
 ListBox limita 10; `MAX_COLS` je 14); kolone kod kojih je „prazno poruka"
@@ -4533,7 +4535,48 @@ matricu, identitet, prikaz istine, zonu.
 - **Kursor preko placeholder-a pretrage** — poznat estetski backlog svih
   ekrana, ne dira se (§22.9).
 
-### 23.9 Verifikacija
+### 23.9 Prvi smoke: tri prijave, četiri nalaza (ispravke u istom PR-u)
+
+Compile je prošao, ekran radi na pravoj svesci — i doneo nalaze koje suite
+nije mogla da vidi:
+
+**S1 — „dropdown prikazuje samo prvu stavku."** Ljuskin panel izbora
+filtrira stavke po **tekućem tekstu comba** (`PopIndex`: sužavanje po
+podnizu — to je i smisao kucanja). Ekran je, kao legacy, auto-birao prvu
+stavku (`ListIndex = 0`) → combo od prvog trenutka drži pun tekst → panel
+zauvek nudi samo tu stavku. Banka uvoz nema auto-izbor, pa se tamo nije
+videlo. Ispravka je **ekranska** (ljuska netaknuta): podrazumevani entitet
+živi u stanju ekrana (`mDefaultId` = prvi entitet tipa; `IzabraniEntitet`
+ga vraća dok izbora nema), combo ostaje prazan sa placeholder-om, a hint
+ispod polja kaže koji je entitet **stvarno** prikazan. Izbor operatera i
+dalje preživljava refill. Legacy „odmah vidiš podatke" ponašanje je
+zadržano — bez trovanja panela.
+
+**S2 — „sve je sporo."** Dva pojačivača u ekranu: (1) `chg:` stiže i tokom
+**programskog** punjenja comba, a handler nije imao `mFill` guard — refill
+usred `Scr_Rows` je okidao ugnežđen `RefreshFromData` i dupli `Report*`
+prolaz; (2) keš je držao **jedan** snimak, pa je svaki klik na drugu listu
+plaćao pun prolaz ispočetka — a šetnja po 10 lista je osnovni tok ekrana.
+Sada: guard u oba `chg:` handlera + **mapa snimaka po ključu konteksta**
+(kapa 16; `Scr_ResetCache` prazni sve) — povratak na viđenu listu je
+trenutan, upis i dalje invalidira sve.
+
+**S3 — „na kartici nema gde da se izabere kooperant."** Posledica S1
+(combo je delovao mrtav) + hint je govorio samo zašto, ne i kuda. Hint na
+listama kartica sada kaže: „Kartica postoji samo za kooperante — klikni
+'Kooperanti' pa izaberi kooperanta."
+
+**S4 — UKUPNO red je plutao po mreži** (vidljivo na screenshotu Isplate:
+UKUPNO usred liste). Mreža sortira po koloni, a legacy UKUPNO je „poslednji
+red" samo u ListBox-u bez sortiranja. UKUPNO red zato **nikad ne ide u
+mrežu**: zbir prikazanih daje podnožje (računat pod istim filterima), a
+tabelarna štampa dodaje **svoj izračunat UKUPNO red** — nad tačno onim
+redovima koji su na papiru, po tipu kolone. POČETNO STANJE ostaje red
+podataka (živi u punom prikazu, nestaje pod filterom). Time je pravilo
+„UKUPNO samo u nefiltriranom prikazu" iz §23.4 postalo strože: „UKUPNO
+nikad u mreži" — testovi i sabotaža su prepravljeni na taj oblik.
+
+### 23.10 Verifikacija
 
 - `RunAllTests` **141 / 0** (devet novih testova; prva dva runa su bila
   crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0** (bit-identičan

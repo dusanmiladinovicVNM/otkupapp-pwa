@@ -95,12 +95,24 @@ Private mZbirni As Boolean
 Private mFill As Boolean            ' punjenje comboa okida Change
 Private mComboTip As String         ' za koji tip je combo entiteta napunjen
 
-' KES SNIMKA LISTE -- v. zaglavlje. Sirov Report* povratak + kljuc konteksta
-' za koji vazi. mSnimakPunjenja broji POZIVE Report*-a, ne uspehe.
-Private mSnimak As Variant
-Private mSnimakOK As Boolean
-Private mSnimakKljuc As String
+' PODRAZUMEVAN ENTITET zivi u STANJU EKRANA, ne u tekstu comba. Ljuskin panel
+' izbora filtrira stavke po TEKUCEM TEKSTU comba (PopIndex), pa bi legacy
+' auto-izbor (ListIndex = 0) ostavio pun tekst u polju i panel bi zauvek
+' nudio samo tu jednu stavku -- prvi smoke (28.08.2026) je to prijavio kao
+' "dropdown ne radi". Combo zato ostaje PRAZAN dok operater ne izabere, a
+' prikaz od prvog trenutka nosi prvi entitet tipa (legacy AutoRefresh
+' ponasanje); hint ispod polja kaze KOJI je entitet stvarno prikazan.
+Private mDefaultId As String
+
+' KES SNIMAKA -- v. zaglavlje. MAPA kljuc konteksta -> sirov Report*
+' povratak: setnja po listama (10 segmenata) ne placa pun prolaz ispocetka
+' pri svakom povratku na vec vidjenu listu (prvi smoke: "sve je sporo").
+' Kapa cuva memoriju; ResetCache prazni sve. mSnimakPunjenja broji POZIVE
+' Report*-a, ne uspehe.
+Private mSnimci As Object
+Private mSnimakKljuc As String      ' kljuc POSLEDNJEG prikaza (kontekst stampe)
 Private mSnimakPunjenja As Long
+Private Const IZ_SNIMAK_KAPA As Long = 16
 
 ' Kontekst STVARNO ucitanih podataka -- naslov stampe i hint se grade iz njega
 ' (AUD-024 / FM-0029 #1: naslov opisuje ono sto je prikazano, ne trenutno
@@ -225,8 +237,8 @@ Public Function Scr_Brojac() As Long
 End Function
 
 Public Sub Scr_ResetCache()
-    ' Snimak zastareva na svaki upis -- sledece citanje ide u Report*.
-    mSnimakOK = False
+    ' Snimci zastarevaju na svaki upis -- sledece citanje ide u Report*.
+    Set mSnimci = Nothing
     ' Sifarnici entiteta su se mogli promeniti (upis ide kroz
     ' RefreshFromData -> ResetCache) -- combo se puni ponovo, uz cuvanje
     ' izbora (v. PuniEntitetCombo).
@@ -356,14 +368,16 @@ Private Function PostaviRezim(ByVal zbirni As Boolean) As Boolean
 End Function
 
 ' Entitet iz comboa: PRAZAN ID je nerazresen unos, ne "drugi entitet"
-' (par. 8.10/R2 -- prvo otkucano slovo ne sme da isprazni prikaz).
+' (par. 8.10/R2 -- prvo otkucano slovo ne sme da isprazni prikaz). Programsko
+' punjenje comboa (mFill) nije unos operatera -- bez guarda bi refill usred
+' Scr_Rows okinuo UGNEZDJEN RefreshFromData i dupli Report* prolaz (prvi
+' smoke: "sve je sporo").
 Private Sub EntitetPromenjen()
     Dim iD As String
-    iD = IzabraniEntitet()
+    If mFill Then Exit Sub
+    iD = SiroviEntitet()
     If Len(iD) = 0 Then Exit Sub
-    If iD = mCtxId And mSnimakOK Then Exit Sub
-    If iD = mCtxId And Len(mSnimakKljuc) > 0 Then Exit Sub
-    If iD <> mCtxId Or Len(mSnimakKljuc) = 0 Then modOtkupUI.RefreshFromData
+    If iD <> mCtxId Then modOtkupUI.RefreshFromData
 End Sub
 
 ' Opseg: refresh SAMO kad se RAZRESENA granica promeni. Nepotpun datum tokom
@@ -374,6 +388,7 @@ End Sub
 Private Sub OpsegPromenjen()
     Dim odN As Double, doN As Double
     Dim odTxt As String, doTxt As String
+    If mFill Then Exit Sub
     OpsegPolja odTxt, doTxt
     odN = IzDatGranica(odTxt)
     doN = IzDatGranica(doTxt)
@@ -626,23 +641,25 @@ EH:
     Err.Raise errNum, "modScrIzvestaji.RedoviZaListu", errDesc
 End Function
 
-' Snimak konteksta: iz Report*-a SAMO kad je kljuc nov ili je kes zastareo
-' (posle upisa); inace iz kesa. Pretraga i cipovi time postaju re-filter nad
-' snimkom -- trenutni (N7). Greska citanja se NE kesira.
+' Snimak konteksta: iz Report*-a SAMO kad kljuc jos nije u mapi (ili je kes
+' ispraznjen posle upisa); inace iz mape. Pretraga i cipovi su re-filter nad
+' snimkom (N7), a povratak na vec vidjenu listu je trenutan. Greska citanja
+' se NE kesira (Err prekida pre upisa u mapu).
 Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As String, _
                         ByVal zbirni As Boolean, ByVal iD As String, _
                         ByVal odN As Double, ByVal doN As Double) As Variant
-    If mSnimakOK And mSnimakKljuc = k Then
-        Snimak = mSnimak
-        Exit Function
+    If mSnimci Is Nothing Then Set mSnimci = CreateObject("Scripting.Dictionary")
+
+    If Not mSnimci.Exists(k) Then
+        ' Kapa drzi memoriju: preko granice se krece ispocetka (najprostije
+        ' ispravno; ResetCache ionako prazni sve posle svakog upisa).
+        If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll
+        mSnimakPunjenja = mSnimakPunjenja + 1
+        mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)
     End If
 
-    mSnimakPunjenja = mSnimakPunjenja + 1
-    mSnimak = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)
+    ' Kontekst STVARNO prikazanih podataka -- za naslov stampe i hint.
     mSnimakKljuc = k
-    mSnimakOK = True
-
-    ' Kontekst STVARNO ucitanih podataka -- za naslov stampe i hint.
     mCtxTip = tip
     mCtxZbirni = zbirni
     mCtxId = iD
@@ -650,7 +667,7 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
     mCtxDo = doN
     mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)
 
-    Snimak = mSnimak
+    Snimak = mSnimci(k)
 End Function
 
 ' Jedan Report* poziv po listi -- ekran ne cita tabele sam. Prazna granica
@@ -723,7 +740,12 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
     For i = 1 To nSrc
         vrsta = VrstaReda(kljuc, tip, src, i)
         If vrsta = 3 Then GoTo Sledeci             ' izdvojen u zonu (VrstaReda)
-        If filtrira And vrsta > 0 Then GoTo Sledeci
+        ' UKUPNO red NIKAD ne ide u mrezu: mreza sortira po koloni, pa bi
+        ' legacy poslednji red PLUTAO usred liste (prvi smoke, lista Isplata).
+        ' Zbir prikazanih daje podnozje; stampa dobija svoj izracunat UKUPNO.
+        If vrsta = 1 Then GoTo Sledeci
+        ' POCETNO STANJE je red konteksta -- pod filterom bi lagao.
+        If filtrira And vrsta = 2 Then GoTo Sledeci
 
         If Not CipPropusta(kljuc, filter, src, i) Then GoTo Sledeci
 
@@ -1057,21 +1079,36 @@ Private Function TrenutniTip() As String
     TrenutniTip = mTip
 End Function
 
+' Da li POSLEDNJI prikazani kontekst jos ima snimak (za guard stampe i hint).
+Private Function SnimakPostoji() As Boolean
+    If mSnimci Is Nothing Then Exit Function
+    If Len(mSnimakKljuc) = 0 Then Exit Function
+    SnimakPostoji = mSnimci.Exists(mSnimakKljuc)
+End Function
+
 ' Cist ID entiteta iz comboa (druga kolona). NERAZRESEN UNOS NIJE ENTITET:
 ' GetComboID daje stabilnu vrednost samo dok je stavka stvarno izabrana.
-Private Function IzabraniEntitet() As String
+Private Function SiroviEntitet() As String
     Dim c As Object
     If IsTestMode() Then
         If Len(mTestId) > 0 Then
-            IzabraniEntitet = mTestId
+            SiroviEntitet = mTestId
             Exit Function
         End If
     End If
     On Error Resume Next
     Set c = Kontrola("scrIzEnt")
     If c Is Nothing Then Exit Function
-    IzabraniEntitet = GetComboID(c)
+    SiroviEntitet = GetComboID(c)
     Err.Clear
+End Function
+
+' Entitet za CITANJE: izbor operatera, a dok ga nema -- podrazumevani (prvi
+' entitet tipa; v. mDefaultId). Tako prikaz od prvog trenutka nosi podatke
+' (legacy AutoRefresh), a combo ostaje prazan i panel izbora zdrav.
+Private Function IzabraniEntitet() As String
+    IzabraniEntitet = SiroviEntitet()
+    If Len(IzabraniEntitet) = 0 Then IzabraniEntitet = mDefaultId
 End Function
 
 ' Tekst iz datumskih polja zone; u testu polja nema.
@@ -1322,10 +1359,15 @@ Private Sub OsveziHint(ByVal z As Object)
             s = Poruka("OTKUI_IZ_HINT_NEDOSTUPNO") & "  " & ChrW(183) & "  " & _
                 TipLabela(TrenutniTip()) & ", " & _
                 Poruka(IIf(mZbirni, "OTKUI_SEGIZ_ZBI", "OTKUI_SEGIZ_POJ"))
+            ' Kartice postoje samo za kooperanta -- hint kaze i KUDA, ne samo
+            ' zasto (prvi smoke: "nema gde da se izabere kooperant").
+            If Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK Then
+                s = s & "  " & ChrW(183) & "  " & Poruka("OTKUI_IZ_HINT_KART_KOOP")
+            End If
         Case "OTKUI_IZ_HINT_IZABERI"
             s = Poruka("OTKUI_IZ_HINT_IZABERI")
         Case Else
-            If mSnimakOK Then
+            If SnimakPostoji() Then
                 s = TipLabela(mCtxTip) & ": " & mCtxEntNaziv & "  " & _
                     ChrW(183) & "  " & OpsegLabela()
             Else
@@ -1409,24 +1451,28 @@ Private Sub PuniEntitetCombo()
             Set mapa = AktivniKooperanti()
     End Select
 
+    mDefaultId = ""
     If Not mapa Is Nothing Then
         For Each k In mapa.keys
             c.AddItem Trim$(CStr(mapa(k)))
             c.List(c.ListCount - 1, 1) = CStr(k)
+            If Len(mDefaultId) = 0 Then mDefaultId = CStr(k)
         Next k
     End If
 
     ShowIDInComboDisplay c
 
-    ' Izbor operatera preziviva refill; inace prvi (legacy ListIndex = 0).
-    If c.ListCount > 0 Then
-        idx = 0
-        If Len(cur) > 0 Then
-            For i = 0 To c.ListCount - 1
-                If CStr(c.List(i, 1)) = cur Then idx = i: Exit For
-            Next i
-        End If
-        c.ListIndex = idx
+    ' BEZ auto-izbora: pun tekst u combu bi FILTRIRAO ljuskin panel na tu
+    ' jednu stavku (PopIndex ide po tekstu) -- prvi smoke je to video kao
+    ' "dropdown ne radi". Podrazumevani entitet zato zivi u mDefaultId
+    ' (IzabraniEntitet ga vraca dok izbora nema), a combo drzi tekst SAMO
+    ' kad ga je operater sam postavio: njegov izbor preziviva refill.
+    If c.ListCount > 0 And Len(cur) > 0 Then
+        idx = -1
+        For i = 0 To c.ListCount - 1
+            If CStr(c.List(i, 1)) = cur Then idx = i: Exit For
+        Next i
+        If idx >= 0 Then c.ListIndex = idx
     End If
 
     mComboTip = tip
@@ -1498,7 +1544,7 @@ Private Sub StampajIzvestaj()
     Dim i As Long, j As Long, vidljivih As Long
     Dim naslov As String
 
-    If Not mSnimakOK Then
+    If Not SnimakPostoji() Then
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
         Exit Sub
     End If
@@ -1515,12 +1561,37 @@ Private Sub StampajIzvestaj()
     headers = IzHeaderiZaListu(Scr_Lista(), mCtxTip)
     vidljivih = UBound(headers) + 1
 
-    ReDim dataS(1 To n, 1 To vidljivih)
+    ' +1 red: UKUPNO se racuna NAD STAMPANIM redovima (mreza ga ne nosi --
+    ' sort bi ga pomerao; a zbir filtriranog izvoda mora da odgovara bas
+    ' onome sto je na papiru). Sabiraju se numericke kolone po tipu.
+    ReDim dataS(1 To n + 1, 1 To vidljivih)
+    Dim kind As String, tot() As Double, imaTot() As Boolean
+    ReDim tot(1 To vidljivih)
+    ReDim imaTot(1 To vidljivih)
     For i = 1 To n
         For j = 1 To vidljivih
             dataS(i, j) = CelijaZaStampu(CStr(kolone(j - 1)), redovi(i, j))
+            kind = Split(CStr(kolone(j - 1)), "|")(2)
+            Select Case kind
+                Case "kg", "rsd", "num", "rest"
+                    tot(j) = tot(j) + NzD(redovi(i, j))
+                    imaTot(j) = True
+            End Select
         Next j
     Next i
+    dataS(n + 1, 1) = "UKUPNO"
+    For j = 2 To vidljivih
+        If imaTot(j) Then
+            kind = Split(CStr(kolone(j - 1)), "|")(2)
+            If kind = "kg" Then
+                dataS(n + 1, j) = FmtKolicina(tot(j))
+            ElseIf kind = "num" Then
+                dataS(n + 1, j) = Format$(tot(j), "#,##0")
+            Else
+                dataS(n + 1, j) = Format$(tot(j), "#,##0.00")
+            End If
+        End If
+    Next j
 
     naslov = Poruka(NaslovKljucListe(Scr_Lista())) & " - " & TipLabela(mCtxTip) & _
              ": " & mCtxEntNaziv & " (" & OpsegLabela() & ")"
@@ -1580,7 +1651,7 @@ End Function
 ' ambalaze). Postojece rutine, nepromenjene.
 Private Sub StampajKarticu()
     Dim dOd As Date, dDo As Date
-    If Not mSnimakOK Or mCtxTip <> "Kooperant" Or Len(mCtxId) = 0 Then
+    If Not SnimakPostoji() Or mCtxTip <> "Kooperant" Or Len(mCtxId) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
         Exit Sub
     End If
@@ -1673,7 +1744,7 @@ Public Sub Diag_IzRedovi()
     Debug.Print "--- Diag_IzRedovi (" & SCRIZ_BUILD & ") ---"
     Debug.Print "  POSLEDNJI POZIV: filter=[" & mDiagFilter & "] q=[" & mDiagQ & _
                 "] vraceno redova=" & CStr(mDiagN)
-    Debug.Print "  SNIMAK: kljuc=[" & mSnimakKljuc & "] ok=" & mSnimakOK & _
+    Debug.Print "  SNIMAK: kljuc=[" & mSnimakKljuc & "] ok=" & SnimakPostoji() & _
                 " punjenja=" & CStr(mSnimakPunjenja)
 
     d = Scr_Rows("sve", "")

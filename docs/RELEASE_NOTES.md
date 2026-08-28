@@ -6436,11 +6436,38 @@ legitimno razilazili — sveska dopunjena kako je upis inače piše), a tvrdnja
 o početnom stanju kartice je prepravljena na oblik nezavisan od kasnijih
 upisa (završni saldo do 31.3. = početno stanje od 1.4.).
 
+### Doterano posle prvog smoke-a nad pravim podacima
+
+Prvi krug na pravoj svesci (1.596 ambalažnih redova, 595 otpremnica) doneo
+je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
+
+- **Padajuće liste sada nude sve stavke.** Auto-izbor prvog entiteta je
+  punio polje tekstom, a panel za izbor sužava po tekstu — pa je nudio
+  samo tu jednu stavku. Podrazumevani entitet sada živi „ispod" polja
+  (prikaz od prvog trenutka nosi prvi entitet, red ispod polja kaže koji),
+  polje ostaje prazno dok operater ne izabere, i lista na strelicu nudi
+  sve.
+- **Brže:** ekran više ne čita podatke dvaput pri promeni tipa/entiteta, a
+  povratak na već pogledanu listu je trenutan (snimci po listi ostaju u
+  memoriji do prvog upisa).
+- **Kartica kaže kuda:** na listi Kartica sa pogrešnim tipom sada piše i
+  „klikni 'Kooperanti' pa izaberi kooperanta", ne samo da izveštaj ne
+  postoji.
+- **Red UKUPNO više nije u mreži** — mreža sortira po kolonama pa je
+  plutao usred liste (viđeno na Isplati). Zbir prikazanih redova uvek
+  stoji u podnožju, a štampani izveštaj dobija svoj red UKUPNO izračunat
+  tačno nad onim što je na papiru.
+
 ### Šta NIJE urađeno, i zašto
 
 - **Panel „Detalji otkupa"** (klik na red kartice → sve stavke bloka) čeka
   padajuće redove mreže (poznat odložen posao svih ekrana); štampa
   dokumenta iz reda jeste tu.
+- **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
+  panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
+  pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu
+  pokaže tesno, širenje panela je dopuna ugovora ljuske i ide kao zaseban
+  razgovor.
 - **Stara forma Izveštaja ostaje operativna i nepromenjena** — iz nje nije
   obrisano ništa; revers ambalaže je dobio deljeni račun u `modIzvestaj`, a
   forma zadržava svoju kopiju.

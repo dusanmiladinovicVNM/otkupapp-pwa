@@ -1430,6 +1430,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_IZ_HINT", "Izaberi entitet i period " & ChrW(8212) & " lista se osve" & ChrW(382) & "ava sama."
     UpsertRow lo, existing, "OTKUI_IZ_HINT_NEDOSTUPNO", "Ovaj izve" & ChrW(353) & "taj ne postoji za izabranu kombinaciju"
     UpsertRow lo, existing, "OTKUI_IZ_HINT_IZABERI", "Izaberi entitet u polju iznad " & ChrW(8212) & " pojedina" & ChrW(269) & "ni izve" & ChrW(353) & "taj tra" & ChrW(382) & "i konkretan izbor."
+    UpsertRow lo, existing, "OTKUI_IZ_HINT_KART_KOOP", "Kartica postoji samo za kooperante " & ChrW(8212) & " klikni 'Kooperanti' pa izaberi kooperanta."
     UpsertRow lo, existing, "OTKUI_IZ_BEZ_GRANICE", "po" & ChrW(269) & "etak"
     UpsertRow lo, existing, "OTKUI_IZ_PRETRAGA", "pretraga:"
     UpsertRow lo, existing, "OTKUI_IZ_FILTER", "filter:"

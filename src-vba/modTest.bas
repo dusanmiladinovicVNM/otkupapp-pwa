@@ -9421,64 +9421,61 @@ Private Sub T_Izv_IdentitetURedu_NeCrtaSe()
                  "red " & i & " otkupnih listova nosi OTK| identitet"
     Next i
 
-    ' ROBA/OM: dokumentni redovi nose OTP|, UKUPNO red nosi PRAZNO -- agregat
-    ' bez identiteta nije greska, radnja nad njim ODBIJA.
+    ' ROBA/OM: svaki red nosi OTP| identitet; UKUPNO reda u mrezi NEMA --
+    ' mreza sortira po koloni, pa bi legacy poslednji red PLUTAO usred liste
+    ' (prvi smoke, lista Isplata). Zbir prikazanih daje podnozje, stampa
+    ' svoj izracunat UKUPNO.
     modScrIzvestaji.Scr_IzTestSet "ROBA", "OM", False, FX_STANICA, IzvOdS(), IzvDoS()
     d = modScrIzvestaji.Scr_Rows("sve", "")
     n = CLng(d(2)): redovi = d(1): nK = UBound(d(0)) + 1
-    imaUkupno = False
+    AssertEq (n > 0), True, "roba OM ima redove"
     Dim imaBezPrij As Boolean
     For i = 1 To n
-        If CStr(redovi(i, 2)) = "UKUPNO" Then
-            imaUkupno = True
-            AssertEq CStr(redovi(i, nK)), "", "UKUPNO red nosi PRAZAN identitet"
-        Else
-            AssertEq Left$(CStr(redovi(i, nK)), 4), "OTP|", _
-                     "dokumentni red robe nosi OTP| identitet"
-            ' FM-0028 #5, ekranska polovina: red bez prijema nosi OZNAKU u
-            ' koloni manjka i PRAZNO u koloni prijema -- nikad "0,00".
-            ' Oznaka se poredi sa JAVNIM konstantama core-a (IsNumeric nad
-            ' "x,xx%" je locale-zavisno i ne razdvaja pouzdano).
-            If CStr(redovi(i, 11)) = IZV_NEMA_PRIJEMA Or _
-               CStr(redovi(i, 11)) = IZV_VLASNIK_NEJASAN Then
-                imaBezPrij = True
-                AssertEq CStr(redovi(i, 9)), "", _
-                         "red bez prijema ima PRAZNU celiju prijema, ne nulu"
-            End If
+        AssertEq (CStr(redovi(i, 2)) = "UKUPNO"), False, _
+                 "UKUPNO red se nikad ne crta u mrezi"
+        AssertEq Left$(CStr(redovi(i, nK)), 4), "OTP|", _
+                 "dokumentni red robe nosi OTP| identitet"
+        ' FM-0028 #5, ekranska polovina: red bez prijema nosi OZNAKU u
+        ' koloni manjka i PRAZNO u koloni prijema -- nikad "0,00".
+        ' Oznaka se poredi sa JAVNIM konstantama core-a (IsNumeric nad
+        ' "x,xx%" je locale-zavisno i ne razdvaja pouzdano).
+        If CStr(redovi(i, 11)) = IZV_NEMA_PRIJEMA Or _
+           CStr(redovi(i, 11)) = IZV_VLASNIK_NEJASAN Then
+            imaBezPrij = True
+            AssertEq CStr(redovi(i, 9)), "", _
+                     "red bez prijema ima PRAZNU celiju prijema, ne nulu"
         End If
     Next i
-    AssertEq imaUkupno, True, "pun prikaz robe sadrzi UKUPNO red"
     AssertEq imaBezPrij, True, "vozilo: bar jedna otpremnica bez prijema"
 
-    ' UKUPNO POD FILTEROM NESTAJE: filtriran skup sa legacy UKUPNO redom bi
-    ' tvrdio zbir koji ne odgovara vidljivim redovima.
+    ' Pretraga radi i bez UKUPNO reda; isto vazi pod cipom (AMBALAZA "ulaz"
+    ' bi legacy UKUPNO red propustio -- zbirni ulaz > 0; prvi dokaz je nasao
+    ' tacno tu rupu u tvrdnji).
     d = modScrIzvestaji.Scr_Rows("sve", FX_BROJ_OTP)
-    n = CLng(d(2)): redovi = d(1)
+    n = CLng(d(2))
     AssertEq (n > 0), True, "pretraga po broju otpremnice nalazi red"
-    For i = 1 To n
-        AssertEq (CStr(redovi(i, 2)) = "UKUPNO"), False, _
-                 "pod pretragom nema UKUPNO reda"
-    Next i
-
-    ' Isto pravilo pod CIPOM -- i to je jedina brana koja ga tu drzi: pod
-    ' pretragom UKUPNO otpada i na haystack-u (ne sadrzi upit), ali cip
-    ' "ulaz" bi ga PROPUSTIO (UKUPNO red ambalaze ima zbirni ulaz > 0).
-    ' Prvi dokaz sabotaze je nasao tacno tu rupu u tvrdnji.
     modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", False, FX_STANICA, IzvOdS(), IzvDoS()
-    d = modScrIzvestaji.Scr_Rows("sve", "")
-    n = CLng(d(2)): redovi = d(1)
-    imaUkupno = False
-    For i = 1 To n
-        If CStr(redovi(i, 2)) = "UKUPNO" Then imaUkupno = True
-    Next i
-    AssertEq imaUkupno, True, "pun prikaz ambalaze sadrzi UKUPNO red"
     d = modScrIzvestaji.Scr_Rows("ulaz", "")
     n = CLng(d(2)): redovi = d(1)
     AssertEq (n > 0), True, "cip 'ulaz' ima redove"
     For i = 1 To n
         AssertEq (CStr(redovi(i, 2)) = "UKUPNO"), False, _
-                 "pod cipom nema UKUPNO reda"
+                 "UKUPNO red se nikad ne crta u mrezi (ni pod cipom)"
     Next i
+
+    ' POCETNO STANJE je red konteksta: zivi u punom prikazu (opseg koji
+    ' pocinje posle prometa), a pod pretragom bi lagao -- nestaje.
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, _
+                                  CDbl(DateSerial(2026, 4, 1)), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("sve", "")
+    n = CLng(d(2)): redovi = d(1)
+    imaUkupno = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 3)), IZV_POCETNO_STANJE, vbTextCompare) > 0 Then imaUkupno = True
+    Next i
+    AssertEq imaUkupno, True, "pun prikaz kartice nosi red POCETNO STANJE"
+    d = modScrIzvestaji.Scr_Rows("sve", "xyz-nema-pogotka")
+    AssertEq CLng(d(2)), 0, "pod pretragom ni POCETNO ne prezivljava"
 
     ' KARTICA: ref-kljuc po VRSTI reda (OTK| ima dokument; NOV/MAG/AMB nemaju).
     modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, IzvOdS(), IzvDoS()
@@ -10093,7 +10090,12 @@ Private Sub T_Izv_KesPretragaIHint()
     ' legitimno cita ponovo; posle ResetCache (upis) sledece citanje ide u
     ' tabele.
     modScrIzvestaji.Scr_IzTestReset
-    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_STANICA, IzvOdS(), IzvDoS()
+    ' Opseg od 2.1 je JEDINSTVEN za ovaj test: raniji testovi pune mapu
+    ' snimaka kljucevima sa 1.1, pa bi sabotaza "kes ne stari" (reset ne
+    ' prazni mapu) ovde pogodila TUDJ snimak i oborila pogresnu tvrdnju --
+    ' prvi dokaz kruga 2 je pao tacno tako.
+    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_STANICA, _
+                                  CDbl(DateSerial(2026, 1, 2)), IzvDoS()
     p0 = modScrIzvestaji.Scr_IzSnimakPunjenjaTest()
 
     d = modScrIzvestaji.Scr_Rows("sve", "")
@@ -10107,7 +10109,8 @@ Private Sub T_Izv_KesPretragaIHint()
     AssertEq modScrIzvestaji.Scr_IzSnimakPunjenjaTest() - p0, 1, _
              "tri citanja mreze = JEDNO punjenje snimka (pretraga ne placa pun prolaz)"
 
-    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_IZV_STANICA2, IzvOdS(), IzvDoS()
+    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_IZV_STANICA2, _
+                                  CDbl(DateSerial(2026, 1, 2)), IzvDoS()
     d = modScrIzvestaji.Scr_Rows("sve", "")
     AssertEq modScrIzvestaji.Scr_IzSnimakPunjenjaTest() - p0, 2, _
              "promena entiteta legitimno cita ponovo"

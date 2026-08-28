@@ -3249,28 +3249,29 @@ SABOTAZE = {
     # UKUPNO red pod filterom tvrdi zbir koji ne odgovara vidljivim
     # redovima -- filtriran skup sa legacy UKUPNO redom je pogresna brojka
     # na najvidljivijem ekranu.
-    # Pod PRETRAGOM je UKUPNO dvostruko zasticen (haystack ga ionako ne
-    # matchuje), ali pod CIPOM je vrsta-filter JEDINA brana: cip "ulaz" bi
-    # UKUPNO red ambalaze propustio (zbirni ulaz > 0). Prvi dokaz je nasao
-    # tacno tu rupu -- sabotaza zato obara cip-tvrdnju.
+    # UKUPNO red NIKAD ne ide u mrezu: mreza sortira po koloni, pa je legacy
+    # poslednji red PLUTAO usred liste (prvi smoke, lista Isplata); zbir
+    # prikazanih daje podnozje, a stampa svoj izracunat UKUPNO.
     "izvestaji-ukupno-prezivi-filter": (
         "modScrIzvestaji.bas",
-        "        If filtrira And vrsta > 0 Then GoTo Sledeci\n",
-        "        ' SABOTAZA: UKUPNO i POCETNO prezive filter\n",
+        "        If vrsta = 1 Then GoTo Sledeci\n",
+        "        ' SABOTAZA: UKUPNO ulazi u mrezu\n",
         "T_Izv_IdentitetURedu_NeCrtaSe",
-        "pod cipom nema UKUPNO reda",
+        "UKUPNO red se nikad ne crta u mrezi",
     ),
     # Snimak se cita JEDNOM po kontekstu -- pun Report* prolaz po otkucaju
     # pretrage je placen kvar (par. 22.9/N7: ~10 s po slovu na 1.595 blokova).
     "izvestaji-pretraga-puni-iznova": (
         "modScrIzvestaji.bas",
-        "    If mSnimakOK And mSnimakKljuc = k Then\n"
-        "        Snimak = mSnimak\n"
-        "        Exit Function\n"
-        "    End If\n"
-        "\n"
-        "    mSnimakPunjenja = mSnimakPunjenja + 1\n",
-        "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n",
+        "    If Not mSnimci.Exists(k) Then\n"
+        "        ' Kapa drzi memoriju: preko granice se krece ispocetka (najprostije\n"
+        "        ' ispravno; ResetCache ionako prazni sve posle svakog upisa).\n"
+        "        If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll\n"
+        "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
+        "        mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "    End If\n",
+        "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
+        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n",
         "T_Izv_KesPretragaIHint",
         "tri citanja mreze = JEDNO punjenje snimka (pretraga ne placa pun prolaz)",
     ),
@@ -3340,9 +3341,9 @@ SABOTAZE = {
     # pre upisa dok ljuska misli da je osvezila.
     "izvestaji-kes-ne-stari": (
         "modScrIzvestaji.bas",
-        "    ' Snimak zastareva na svaki upis -- sledece citanje ide u Report*.\n"
-        "    mSnimakOK = False\n",
-        "    ' SABOTAZA: snimak prezivi upis\n",
+        "    ' Snimci zastarevaju na svaki upis -- sledece citanje ide u Report*.\n"
+        "    Set mSnimci = Nothing\n",
+        "    ' SABOTAZA: snimci prezive upis\n",
         "T_Izv_KesPretragaIHint",
         "posle upisa (ResetCache) snimak se puni ponovo",
     ),
