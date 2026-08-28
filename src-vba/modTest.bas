@@ -10234,12 +10234,17 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
     wOM = z.Controls("scrIzTipOMC").Font.Weight
     wKup = z.Controls("scrIzTipKupC").Font.Weight
 
-    ' Dugme kartice je vidljivo SAMO na listama kartica.
+    ' Dugmad stampe su KOMPLEMENTARNA po listi (krug 7): kartice imaju SAMO
+    ' legacy karticu (rekapitulacija + potpisi), ostale liste SAMO tabelarni
+    ' izvestaj -- dve konkurentske kartice se ne nude.
+    Dim printNaSaldo As Boolean, printNaKartici As Boolean
     kartNaSaldo = VidljivaKontrola(z, "scrIzKartPdfB")
+    printNaSaldo = VidljivaKontrola(z, "scrIzPrintB")
     entVidljivPojed = z.Controls("scrIzEnt").Visible
     modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, "", 0, 0
     visina = modScrIzvestaji.Scr_Layout(z, 1200, 300)
     kartNaKartici = VidljivaKontrola(z, "scrIzKartPdfB")
+    printNaKartici = VidljivaKontrola(z, "scrIzPrintB")
 
     ' Zbirni rezim gasi polje entiteta (legacy: cmbEntitet.enabled = pojed).
     modScrIzvestaji.Scr_IzTestSet "ZBIRNI", "OM", True, "", 0, 0
@@ -10259,6 +10264,9 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
     AssertEq (wKup < 700), True, "neizabran tip NIJE bold"
     AssertEq kartNaSaldo, False, "dugme kartice se ne nudi na saldo listi"
     AssertEq kartNaKartici, True, "dugme kartice postoji na listi kartica"
+    AssertEq printNaSaldo, True, "tabelarni izvestaj postoji van kartica"
+    AssertEq printNaKartici, False, _
+             "na kartici se ne nudi tabelarni izvestaj -- jedna kartica, legacy sablon"
     AssertEq entVidljivPojed, True, "polje entiteta postoji u pojedinacnom rezimu"
     AssertEq entVidljivZbirno, False, "zbirni rezim gasi polje entiteta"
 End Sub

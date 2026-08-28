@@ -4740,6 +4740,26 @@ smoke-a, obe u istom principu „samo ono što red ne kaže":
   samo kao ID na fakturi), pa `EntitetNaziv` pada na ID; na pravoj svesci
   ista linija nosi naziv firme.
 
+**Krug 7 (dopune po odluci posle petog smoke-a):**
+
+- **Jedna kartica, legacy šablon.** Odluka operatera: kartica sa
+  rekapitulacijom robe, BPG-om i potpisima („Štampaj karticu (PDF)") je
+  „ono što je ispravno i potrebno" — na listama kartica se generički
+  tabelarni PDF više ne nudi (`scrIzPrint` sakriven, `scrIzKartPdf` na
+  njegovom mestu). Dugmad štampe su sada **komplementarna po listi**:
+  kartice → samo legacy kartica; sve ostale liste → samo tabelarni house
+  izveštaj. Legacy `PrintKartica*PDF` i dalje netaknut.
+- **Širine kolona house štampe po sadržaju.** `EntireColumn.AutoFit` je
+  merio i zaglavlje firme / kontekst-liniju u koloni A, pa je prva kolona
+  (Datum) dobijala širinu najdužeg teksta strane. Sada se AutoFit radi
+  SAMO nad opsegom tabele (header + podaci), a header više nije WrapText
+  (AutoFit wrap ćelije ignoriše i lomio je reč — „OTPREMNIC/A"): kolona
+  je tačno max(naslov, sadržaj).
+- Radno stablo vraćeno na granu Izveštaja; zatečeni polu-gotov rad
+  paralelne sesije (Sledljivost) sačuvan je kao WIP commit na
+  `claude/sledljivost-ekran` i tamo se nastavlja — jedna sesija po
+  radnom stablu.
+
 ### 23.14 Verifikacija
 
 - `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su

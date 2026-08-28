@@ -6533,15 +6533,19 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   i na kartici kooperanta. Deo koji na listu ne postoji se preskače,
   ništa se ne izmišlja.
 
+- **Jedna kartica kooperanta** — odlučeno: kartica sa rekapitulacijom
+  robe, BPG-om i potpisima je prava kartica. Na listama kartica stoji
+  samo „Štampaj karticu (PDF)"; tabelarni „Štampaj izveštaj" ostaje na
+  svim ostalim listama.
+- **Kolone štampanog PDF-a više nisu razvučene** — širina kolone prati
+  sadržaj i naslov kolone (datum je uzak, naslovi se ne lome usred reči);
+  zaglavlje firme više ne razvlači prvu kolonu.
+
 ### Šta NIJE urađeno, i zašto
 
 - **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i
   dalje čekaju vrstu reda u ugovoru ljuske — detalj traka u zoni je
   namerno uži oblik.
-- **Dve štampe kartice postoje uporedo** („Štampaj izveštaj" u kućnom
-  stilu i „Štampaj karticu (PDF)" sa rekapitulacijom robe, BPG-om i
-  potpisima) — koja ostaje i da li se spajaju u jednu odlučuje se posle
-  smoke kruga 6, zapisano kao otvoreno pitanje.
 - **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
   panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
   pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu

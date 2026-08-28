@@ -1460,9 +1460,14 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
 
     z.Controls("izHint").width = wPolja - 2 * PAD
 
-    modUiKit.MoveBtn z, "scrIzPrint", PAD, IZ_Y_BTN
-    modUiKit.MoveBtn z, "scrIzKartPdf", PAD + 164, IZ_Y_BTN
+    ' Kartice imaju JEDNU stampu -- legacy sablon sa rekapitulacijom robe,
+    ' BPG-om i potpisima je "ono sto je ispravno i potrebno" (odluka posle
+    ' smoke kruga 5). Generic tabelarni PDF se na karticama NE nudi: dve
+    ' konkurentske kartice su zbunjivost, ne izbor.
     naKartici = (Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK)
+    modUiKit.MoveBtn z, "scrIzPrint", PAD, IZ_Y_BTN
+    modUiKit.MoveBtn z, "scrIzKartPdf", PAD, IZ_Y_BTN
+    modUiKit.BoxShow z, "scrIzPrint", Not naKartici
     modUiKit.BoxShow z, "scrIzKartPdf", naKartici
 
     z.Controls("izLnB").width = w

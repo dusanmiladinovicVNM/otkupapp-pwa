@@ -107,12 +107,15 @@ Public Sub PrintIzvestajHouse(ByVal data As Variant, ByVal nRows As Long, _
     For c = 1 To nCols
         ws.cells(hdr, c).value = headers(c - 1)
     Next c
+    ' Bez WrapText: AutoFit dole meri i header, pa kolona dobija tacno
+    ' max(header, sadrzaj) -- sa wrap-om bi AutoFit header ignorisao i
+    ' lomio rec ("OTPREMNIC/A"), a kolone bi dobijale sirinu od necega
+    ' treceg (smoke krug 5: "smesno siroka kolona za datum").
     With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, nCols))
         .Font.Bold = True
         .Interior.Color = DocColHeaderFill()
         .HorizontalAlignment = xlCenter
         .VerticalAlignment = xlCenter
-        .WrapText = True
         .Borders.LineStyle = xlContinuous
         .Borders.Weight = xlThin
     End With
@@ -142,7 +145,10 @@ Public Sub PrintIzvestajHouse(ByVal data As Variant, ByVal nRows As Long, _
         .LineStyle = xlContinuous
         .Weight = xlThin
     End With
-    ws.columns("A").Resize(, nCols).EntireColumn.AutoFit
+    ' AutoFit SAMO nad tabelom (header + podaci). EntireColumn bi merio i
+    ' zaglavlje firme / kontekst-liniju u koloni A, pa je prva kolona
+    ' dobijala sirinu najduzeg teksta strane umesto sirine datuma.
+    ws.Range(ws.cells(hdr, 1), ws.cells(endRow, nCols)).columns.AutoFit
 
     On Error Resume Next
     Application.PrintCommunication = False
