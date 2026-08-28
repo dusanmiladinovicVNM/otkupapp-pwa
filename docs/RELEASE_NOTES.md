@@ -6335,30 +6335,28 @@ u staru formu za standardni tok.
 - Brojka u meniju pokazuje koliko blokova čeka isplatu; posle greške čitanja
   pokazuje „!" umesto lažne nule.
 
-### Ispravke iz smoke-a: pretraga, broj računa, traka izbora
+### Doterano kroz tri kruga smoke-a nad pravim podacima
 
-- **Pretraga i čipovi su sada trenutni i na velikoj svesci.** Na 1.500+
-  otvorenih blokova je svaki otkucaj iznova čitao cele tabele, pa se ekran
-  smrzavao po ~10 sekundi i filter je delovao mrtav — a plaćanje na terenu
-  ide baš po izboru operatera, ne redom. Lista se sada učita jednom pa se
-  filtrira u mestu (isti princip kao u staroj formi); svaki upis podataka
-  je i dalje odmah osvežava, a fajl za banku i dalje čita sveže stanje.
-- **Pretraga sada nalazi imena sa kvakama i kad se kucaju bez njih**:
-  „petrovic" nalazi Petrovića, „djeric" Đerića — bitno na tastaturama koje
-  naša slova nemaju (DE/EN). Ranije je pretraga na ovom ekranu delovala
-  mrtvo čim se ime kuca bez dijakritike.
+Smoke nad svescom sa 1.595 otvorenih blokova je oborio i jednu UX odluku i
+tri stvarna kvara — sve zatvoreno u istom izdanju:
+
+- **Broj računa u fajlovima.** Račun unet kao golih 18 cifara je u Excelu
+  izgledao kao „2,059E+17" — Excel takav niz čita kao broj i čuva samo 15
+  cifara, pa bi snimanje iz Excela **uništilo račun primaoca** pre uvoza u
+  banku. Nalozi (obe kolone računa) i kolona „Tekući račun" u PDF
+  specifikaciji sada uvek nose standardni oblik sa crticama (3-13-2), koji
+  ostaje tekst; računi već uneti sa crticama prolaze neizmenjeni. Ispravku
+  dobija i stara forma (isti generator).
+- **Pretraga i čipovi su trenutni i na velikoj svesci.** Svaki otkucaj je
+  iznova čitao cele tabele, pa se ekran smrzavao po ~10 sekundi i filter je
+  delovao mrtav — a plaćanje na terenu ide baš po izboru operatera, ne
+  redom. Lista se sada učita jednom pa se filtrira u mestu (isti princip
+  kao u staroj formi); svaki upis je odmah osvežava, a fajl za banku i
+  dalje čita sveže stanje.
+- **Pretraga nalazi imena sa kvakama i kad se kucaju bez njih** („djeric"
+  nalazi Đerića) — bitno na tastaturama bez naših slova (DE/EN).
 - **Red u traci „U NALOZIMA" pokazuje iznos koji se stvarno plaća** (zadati,
   ne pun otvoreni) — isti broj kao zbir ispod njega.
-
-### Ispravka iz prvog smoke-a: broj računa u CSV-u
-
-U generisanom fajlu su računi uneti kao golih 18 cifara u Excelu izgledali
-kao „2,059E+17" — Excel takav niz čita kao broj i čuva samo 15 cifara, pa bi
-snimanje iz Excela račun primaoca uništilo pre uvoza u banku. Nalozi sada u
-kolonama računa uvek nose standardni oblik sa crticama (3-13-2), koji Excel
-drži kao tekst; računi već uneti sa crticama prolaze neizmenjeni. Isto važi
-i za kolonu „Tekući račun" u **PDF specifikaciji** (šablon je Excel list, pa
-je imao istu grešku). Ispravku dobija i stara forma (isti generator).
 
 ### Šta NIJE urađeno, i zašto
 
@@ -6367,6 +6365,9 @@ je imao istu grešku). Ispravku dobija i stara forma (isti generator).
   staje u jednu poruku novog ekrana.
 - Stara forma **ostaje operativna i nepromenjena** — ništa iz nje nije
   obrisano niti izmenjeno.
+- **Estetika za kasniji prolaz kroz sve ekrane:** kursor u polju pretrage
+  treperi preko placeholder teksta umesto ispred njega (ljuskin detalj,
+  važi svuda — zabeleženo, ne dira se u ovom izdanju).
 
 ### Verifikacija
 
@@ -6375,11 +6376,15 @@ je imao istu grešku). Ispravku dobija i stara forma (isti generator).
   čišćenje izbora kad blok izgubi račun.
 - Glavni set **132 / 0** (šest novih testova ekrana), banka set **205 / 0**
   (novi test formata računa je prvo pušten crven nad zatečenim ponašanjem,
-  pa zelen posle ispravke); statičke provere čiste; sedamnaest novih
-  namernih kvarova obara po tačno jedan imenovani test i vraća se
-  bit-identično (dvosmerni dokaz).
+  pa zelen posle ispravke); statičke provere čiste; **dvadeset tri** nova
+  namerna kvara obaraju po tačno jedan imenovani test i vraćaju se
+  bit-identično (dvosmerni dokaz, pušten iznova posle svakog kruga);
+  pun set svih suita zelen.
 - Fixture je dobio slučajeve bez kojih bi tvrdnje merile prazan skup:
-  kooperant sa žiro računom, delimično isplaćen blok, storniran blok.
+  kooperant sa žiro računom (i jedan sa kvakama u imenu), delimično
+  isplaćen blok, storniran blok.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
-  smoke nad pravim podacima (checklista u PR-u). Bez toga se ekran ne
-  prijavljuje kao spreman.
+  smoke nad pravim podacima (checklista u PR-u) — **odrađeno kroz četiri
+  kruga na pravoj svesci**; otvoren ostaje samo nalaz o naizgled praznoj
+  ćeliji „Isplatiti" na jednom redu (dijagnostika `Diag_BnRedovi` stoji u
+  ekranu ako se ponovi).
