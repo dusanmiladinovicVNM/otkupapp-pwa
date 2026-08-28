@@ -312,6 +312,14 @@ SEED = {
         # pogadjanje bi izdalo robu pogresnom coveku.
         {"KooperantID": "KOOP-TEST-IME", "Ime": "Prvi", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
+        # IME SA DIJAKRITIKOM (smoke 28.08.2026, Platni nalozi): prava imena
+        # nose kvake, a operater na DE/EN tastaturi kuca bez njih -- pretraga
+        # je "ne radila". Svi ostali fixture kooperanti su ASCII, pa tvrdnja
+        # "ASCII upit nalazi dijakriticno ime" bez ovog reda nema nad cim da
+        # padne. Ima i tekuci racun + blok (OTK-NAL-DJ), da red bude u listi.
+        {"KooperantID": "KOOP-NAL-DJ", "Ime": "Đorđe", "Prezime": "Šarčević",
+         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN,
+         "TekuciRacun": "205-0000000999888-77"},
     ],
     "tblParcele": [
         {"ParcelaID": "PAR-TEST-1", "KooperantID": "KOOP-TEST-1", "KatBroj": "1001",
@@ -567,6 +575,11 @@ SEED = {
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 20, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": "NAL1/TEST", "Klasa": "I"},
+        # Blok kooperanta sa dijakriticnim imenom -- v. KOOP-NAL-DJ.
+        {"OtkupID": "OTK-NAL-DJ", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-NAL-DJ",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "NAL2/TEST", "Klasa": "I"},
         # STORNIRAN blok sa "otvorenim" iznosom: ne sme ni u listu ni u naloge
         # (ExcludeStornirano u GetOpenOtkupi). Bez njega bi tvrdnja "storniran
         # nije u listi" merila odsustvo reda, ne filter.

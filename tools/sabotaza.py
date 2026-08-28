@@ -3057,10 +3057,10 @@ SABOTAZE = {
         "    usklIznosa = BnUskladiIznose(zivi)\n"
         "    If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa\n"
         "\n"
-        "    ReDim outA(1 To UBound(src, 1), 1 To 14)\n",
+        "    ' Upit se normalizuje JEDNOM, haystack po redu -- v. TekstZaPretragu:\n",
         "    usklIznosa = 0   ' SABOTAZA: zaostali iznosi se ne klampuju\n"
         "\n"
-        "    ReDim outA(1 To UBound(src, 1), 1 To 14)\n",
+        "    ' Upit se normalizuje JEDNOM, haystack po redu -- v. TekstZaPretragu:\n",
         "T_BankaNalozi_IznosPoBloku",
         "zaostali iznos se pri citanju spusta na otvoreno",
     ),
@@ -3085,6 +3085,29 @@ SABOTAZE = {
         "    Exit Function   ' SABOTAZA: goli broj ostaje u fajlu\n",
         "T22_RacunUCsvJeExcelSafe",
         "18 golih cifara se kanonizuje u NBS oblik 3-13-2",
+    ),
+    # Imena u podacima nose kvake; operater na DE/EN tastaturi kuca bez njih.
+    # Haystack bez normalizacije = pretraga koja "ne radi" (smoke 28.08).
+    "banka-nalozi-pretraga-sa-kvakama": (
+        "modScrBankaNalozi.bas",
+        '        hay = modUiData.TekstZaPretragu(CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _\n'
+        '              CStr(src(i, 6)) & "|" & CStr(src(i, 10)) & "|" & iD)\n',
+        '        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _\n'
+        "              CStr(src(i, 6)) & \"|\" & CStr(src(i, 10)) & \"|\" & iD   ' SABOTAZA: kvake ostaju\n",
+        "T_BankaNalozi_UgovorEkrana",
+        "ASCII upit nalazi red sa dijakriticnim imenom",
+    ),
+    # Red trake i zbir ispod njega moraju da nose ISTI iznos -- onaj koji bi
+    # se izvezao. Smoke 28.08: red je pokazivao otvoreno (21.798) uz zbir
+    # zadatih (10.000), dva broja jedan ispod drugog koja se ne slazu.
+    "banka-nalozi-traka-nosi-otvoreno": (
+        "modScrBankaNalozi.bas",
+        '    KorpaRedPrikaz = CStr(red("broj")) & "   " & ChrW(183) & "   " & _\n'
+        '                     Format$(BnIznosZa(CStr(red("otkupID")), CDbl(red("otvoreno"))), "#,##0")\n',
+        '    KorpaRedPrikaz = CStr(red("broj")) & "   " & ChrW(183) & "   " & _\n'
+        '                     Format$(CDbl(red("otvoreno")), "#,##0")   \' SABOTAZA: red nosi otvoreno\n',
+        "T_BankaNalozi_IznosPoBloku",
+        "red trake nosi zadati iznos -- isti broj kao zbir ispod njega",
     ),
     # Zona koja se ne gradi cela: dugme koje fali se ne vidi ni u jednom
     # testu nad citacima -- zato test zonu STVARNO gradi.

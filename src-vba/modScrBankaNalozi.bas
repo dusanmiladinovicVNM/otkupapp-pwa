@@ -810,7 +810,7 @@ Private Function NaloziKolone() As Variant
         "OTKUI_HD_OZN||txt|32|1", _
         "OTKUI_HD_DATUM||date|74|1", _
         "OTKUI_HD_PARTNER||part|0|1", _
-        "OTKUI_HD_OM||txt|64|3", _
+        "OTKUI_HD_OM||txt|86|3", _
         "OTKUI_HDN_UKUPNO||rsd|96|3", _
         "OTKUI_HDN_ISPLACENO||rsd|96|3", _
         "OTKUI_HDN_OTVORENO||rsd|104|1", _
@@ -861,16 +861,21 @@ Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Vari
     usklIznosa = BnUskladiIznose(zivi)
     If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa
 
+    ' Upit se normalizuje JEDNOM, haystack po redu -- v. TekstZaPretragu:
+    ' imena nose kvake, operater ih (DE/EN tastatura) ne kuca.
+    Dim qN As String
+    qN = modUiData.TekstZaPretragu(q)
+
     ReDim outA(1 To UBound(src, 1), 1 To 14)
     For i = 1 To UBound(src, 1)
         iD = Trim$(CStr(src(i, 1)))
         imaTR = CBool(src(i, 11))
         avans = CDbl(src(i, 12))
         If Not BnCipNalog(filter, imaTR, avans) Then GoTo Sledeci
-        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & CStr(src(i, 6)) & "|" & _
-              CStr(src(i, 10)) & "|" & iD
-        If Len(q) > 0 Then
-            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        hay = modUiData.TekstZaPretragu(CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _
+              CStr(src(i, 6)) & "|" & CStr(src(i, 10)) & "|" & iD)
+        If Len(qN) > 0 Then
+            If InStr(1, hay, qN, vbTextCompare) = 0 Then GoTo Sledeci
         End If
         n = n + 1
         outA(n, 1) = CStr(src(i, 2))
@@ -1173,6 +1178,10 @@ Public Function TrakaRed(ByVal i As Long) As String
     TrakaRed = ChrW(8230) & " " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & sakriveno
 End Function
 
+' Red trake nosi iznos koji bi se STVARNO izvezao (zadati ili otvoreno) --
+' isti racun kao zbir ispod njega. Smoke 28.08: red je pokazivao otvoreno
+' (21.798) dok je zbir pokazivao zadatih 10.000 -- dva broja jedan ispod
+' drugog koja se ne slazu.
 Private Function KorpaRedPrikaz(ByVal i As Long) As String
     Dim red As Object
     On Error Resume Next
@@ -1180,7 +1189,7 @@ Private Function KorpaRedPrikaz(ByVal i As Long) As String
     If i < 1 Or i > mKorpa.count Then Exit Function
     Set red = mKorpa(i)
     KorpaRedPrikaz = CStr(red("broj")) & "   " & ChrW(183) & "   " & _
-                     Format$(CDbl(red("otvoreno")), "#,##0")
+                     Format$(BnIznosZa(CStr(red("otkupID")), CDbl(red("otvoreno"))), "#,##0")
 End Function
 
 '---------------------------------------------------------- BROJKE I HINT
@@ -1300,6 +1309,61 @@ Private Function IzabraniRacun() As String
     IzabraniRacun = GetComboID(c)
     Err.Clear
 End Function
+
+'=====================================================================
+' DIJAGNOSTIKA
+'
+' Alt+F8 -> Diag_BnRedovi, pa Ctrl+G (Immediate). Ne menja nista.
+'
+' Isti razlog kao Diag_BuRedovi (katalog par. 9.10): celija mreze koja se
+' vidi PRAZNA ili sa tudjim sadrzajem se ne razresava ni citanjem koda ni
+' suite-om -- RenderGrid radi pod "On Error Resume Next", pa upis koji pukne
+' ne ostavlja trag. Ispisuje se ono sto ekran PREDAJE mrezi i ono sto mreza
+' od toga DRZI. Otvoren povod: smoke 28.08.2026, red bez racuna sa naizgled
+' praznom celijom ISPLATITI (kolona 9).
+'=====================================================================
+Public Sub Diag_BnRedovi()
+    Dim d As Variant, redovi As Variant, kolone As Variant, i As Long, n As Long
+    Dim k As Long
+    On Error Resume Next
+
+    Debug.Print "--- Diag_BnRedovi (" & SCRBN_BUILD & ") ---"
+
+    d = Scr_Rows("sve", "")
+    If Not IsArray(d) Then
+        Debug.Print "  Scr_Rows NIJE vratio niz"
+        Exit Sub
+    End If
+
+    kolone = d(0)
+    redovi = d(1)
+    n = CLng(d(2))
+    Debug.Print "  kolona=" & CStr(UBound(kolone) + 1) & "  redova=" & CStr(n)
+
+    For i = 0 To UBound(kolone)
+        Debug.Print "  spec " & CStr(i + 1) & ": " & CStr(kolone(i))
+    Next i
+
+    If IsArray(redovi) Then
+        For i = 1 To 3
+            If i > n Then Exit For
+            For k = 1 To UBound(kolone) + 1
+                Debug.Print "  EKRAN red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                            TypeName(redovi(i, k)) & " vred=[" & CStr(redovi(i, k)) & "]"
+            Next k
+        Next i
+    End If
+
+    For i = 1 To 3
+        For k = 1 To UBound(kolone) + 1
+            Debug.Print "  MREZA red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                        TypeName(modOtkupUI.GridCell(i, k)) & _
+                        " vred=[" & CStr(modOtkupUI.GridCell(i, k)) & "]"
+        Next k
+    Next i
+
+    Err.Clear
+End Sub
 
 '=====================================================================
 ' TEST SEAM

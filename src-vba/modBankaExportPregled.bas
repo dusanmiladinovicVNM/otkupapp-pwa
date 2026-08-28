@@ -395,7 +395,10 @@ Public Sub PrintIsplataSpecifikacija(ByVal blokovi As Collection, _
         spec(i, 2) = Format$(blk.datum, "d.m.yyyy")
         spec(i, 3) = blk.brojDokumenta
         spec(i, 4) = blk.kooperantNaziv
-        spec(i, 5) = blk.TekuciRacun
+        ' Isti oblik racuna kao u CSV kolonama (FormatRacunZaNalog): sablon
+        ' specifikacije je Excel sheet, pa golih 18 cifara u celiji postaje
+        ' "3,4E+17" u PDF-u -- ista klasa kvara kao CSV (smoke 28.08.2026).
+        spec(i, 5) = FormatRacunZaNalog(blk.TekuciRacun)
         spec(i, 6) = blk.UkupanIznos
         spec(i, 7) = blk.VecIsplaceno
         spec(i, 8) = blk.OtvorenIznos

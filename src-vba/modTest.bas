@@ -8630,6 +8630,31 @@ Private Sub T_BankaNalozi_UgovorEkrana()
         End If
     Next j
 
+    ' PRETRAGA NE SME DA ZAVISI OD KVAKA (smoke 28.08.2026): imena u podacima
+    ' nose dijakritiku, operater na DE/EN tastaturi kuca bez nje. Pravilo je
+    ' u modUiData.TekstZaPretragu (dele ga ekrani), a fixture ima kooperanta
+    ' sa kvakama u imenu (KOOP-NAL-DJ) -- bez njega bi tvrdnja merila prazan
+    ' skup, jer su ostala fixture imena ASCII.
+    AssertEq modUiData.TekstZaPretragu(ChrW(352) & ChrW(353) & ChrW(381) & _
+             ChrW(382) & ChrW(268) & ChrW(269) & ChrW(262) & ChrW(263)), _
+             "SsZzCcCc", "kvake se svode na ASCII parove"
+    AssertEq modUiData.TekstZaPretragu(ChrW(272) & ChrW(273)), "Djdj", _
+             "dj ide kao u SanitizeFileNamePart -- ista transliteracija repoa"
+    AssertEq modUiData.TekstZaPretragu("NAL2/TEST"), "NAL2/TEST", _
+             "ASCII tekst prolazi netaknut"
+
+    d = modScrBankaNalozi.Scr_Rows("sve", "sarcevic")
+    AssertEq (CLng(d(2)) >= 1), True, _
+             "ASCII upit nalazi red sa dijakriticnim imenom"
+    redovi = d(1)
+    AssertEq Trim$(CStr(redovi(1, 11))), "OTK-NAL-DJ", _
+             "pretraga je nasla bas blok kooperanta sa kvakama"
+    d = modScrBankaNalozi.Scr_Rows("sve", "djordje")
+    AssertEq (CLng(d(2)) >= 1), True, _
+             "i upit po imenu sa dj radi"
+    d = modScrBankaNalozi.Scr_Rows("sve", "xyzupitkoginema")
+    AssertEq CLng(d(2)), 0, "besmislen upit i dalje daje prazan skup"
+
     modScrBankaNalozi.Scr_BnTestReset
 End Sub
 
@@ -8981,12 +9006,17 @@ Private Sub T_BankaNalozi_IznosPoBloku()
     Set blk = izabrani(1)
     AssertEq blk.IsplatitiIznos, 600#, "bez zadatog iznosa ide pun otvoren"
 
-    ' 5) Zbir korpe je ono sto bi se STVARNO izvezlo; izbacivanje iz korpe
-    '    brise i zadati iznos.
+    ' 5) Zbir korpe je ono sto bi se STVARNO izvezlo; RED trake nosi isti
+    '    iznos kao zbir (smoke: red je pokazivao otvoreno uz zbir zadatog);
+    '    izbacivanje iz korpe brise i zadati iznos.
     AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True), _
              "", "blok ulazi u naloge"
     AssertEq modScrBankaNalozi.BnKorpaZbir(), 250#, _
              "zbir u traci je zadati iznos, ne otvoreno"
+    AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(0), "250") > 0), True, _
+             "red trake nosi zadati iznos -- isti broj kao zbir ispod njega"
+    AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(0), "600") > 0), False, _
+             "red trake ne pokazuje otvoreno kad je iznos zadat"
     AssertEq modScrBankaNalozi.BnUkloni("OTK-NAL-DELIM"), True, ""
     AssertEq modScrBankaNalozi.Scr_BnIznosPostojiTest("OTK-NAL-DELIM"), False, _
              "izbacivanje iz naloga brise i zadati iznos"
