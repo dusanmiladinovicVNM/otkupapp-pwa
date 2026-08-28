@@ -4288,7 +4288,10 @@ izvor menja, a kooperant-filter je „LAGANI re-filter nad već učitanom
 `m_FullBlokovi`, bez čitanja tabela". Taj obrazac je sada prenet: **snimak
 liste se kešira u ekranu** (`Snimak()`), pretraga i čipovi filtriraju nad
 njim trenutno, a invalidira ga `Scr_ResetCache` — koji ljuska ionako zove
-posle svakog upisa. **Izvoz keš ne koristi**: `BlokoviZaIzvoz` i finalna
+posle svakog upisa. *(Dopuna `v6-ui-186`: `Scr_ResetCache` stiže samo
+AKTIVNOM ekranu, pa su snimak i KPI preživljavali upis sa drugog ekrana —
+od recenzije PR #245 oba proveravaju i generaciju podataka,
+`modUiData.DataGeneracija` — v. §23.10/R1.)* **Izvoz keš ne koristi**: `BlokoviZaIzvoz` i finalna
 kapija čitaju svež saldo, kao i do sada. Merljivo brojačem stvarnih čitanja
 (`mSnimakPunjenja`, obrazac `mCiljPunjenja` iz §9): tri uzastopne pretrage
 i promena čipa = **jedno** čitanje tabela; posle `Scr_ResetCache` sledeće
