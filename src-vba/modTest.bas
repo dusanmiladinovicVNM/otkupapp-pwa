@@ -352,6 +352,15 @@ Public Sub RunAllTests()
     RunOne 121
     RunOne 122
     RunOne 123
+    ' 127-131 (Platni nalozi) idu PRE 124-126: ta tri testa DIRAJU fixture
+    ' (zbirne/prijemnice) i moraju ostati POSLEDNJA u nizu izvrsavanja.
+    ' Redosled izvrsavanja ne mora da prati brojeve -- brojevi su identitet
+    ' testa, ne raspored.
+    RunOne 127
+    RunOne 128
+    RunOne 129
+    RunOne 130
+    RunOne 131
     RunOne 124
     RunOne 125
     RunOne 126
@@ -513,6 +522,13 @@ Private Function TestName(ByVal idx As Long) As String
         Case 124: TestName = "T_RekalkZbirne_KapijaJeUPrimitivu"
         Case 125: TestName = "T_CiljZbirna_NePoPrvomRedu"
         Case 126: TestName = "T_Prijemnica_PomeraSamoAktivan"
+        ' 127-131: ekran Platni nalozi (v6-ui-185). U RunAllTests se IZVRSAVAJU
+        ' pre 124-126, jer ta tri diraju fixture i moraju ostati poslednja.
+        Case 127: TestName = "T_BankaNalozi_UgovorEkrana"
+        Case 128: TestName = "T_BankaNalozi_IdentitetURedu_NeCrtaSe"
+        Case 129: TestName = "T_BankaNalozi_CipoviIKpiPratePravila"
+        Case 130: TestName = "T_BankaNalozi_KorpaIIzvoz"
+        Case 131: TestName = "T_ZonaBankaNalozi_PoljaIRaspored"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -647,6 +663,11 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 124: T_RekalkZbirne_KapijaJeUPrimitivu
         Case 125: T_CiljZbirna_NePoPrvomRedu
         Case 126: T_Prijemnica_PomeraSamoAktivan
+        Case 127: T_BankaNalozi_UgovorEkrana
+        Case 128: T_BankaNalozi_IdentitetURedu_NeCrtaSe
+        Case 129: T_BankaNalozi_CipoviIKpiPratePravila
+        Case 130: T_BankaNalozi_KorpaIIzvoz
+        Case 131: T_ZonaBankaNalozi_PoljaIRaspored
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8538,6 +8559,390 @@ End Sub
 ' stavku bez ID-a ovde ne mere. To je receno, ne precutano.
 '
 ' Stoji POSLEDNJI u nizu: ovaj test stvarno pomera dokument.
+' ============================================================
+' 127. Platni nalozi: ugovor ekrana (v6-ui-185)
+' ============================================================
+' Registar vec nosi red BANKA_NALOZI -> modScrBankaNalozi; ovaj modul je taj
+' koji red ocekuje, pa stavka menija vise ne sme biti prigusena. Granice
+' bazena ljuske se tvrde kroz JAVNE konstante -- visak radnji/cipova/kolona
+' se tiho odseca, bez ijedne poruke.
+Private Sub T_BankaNalozi_UgovorEkrana()
+    Dim liste As Variant, i As Long, j As Long, r2 As Long
+    Dim spec As String, d As Variant, kolone As Variant, redovi As Variant
+
+    AssertEq (Len(modUiScreens.ScrRowByKey("BANKA_NALOZI")) > 0), True, _
+             "BANKA_NALOZI postoji u registru ekrana"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("BANKA_NALOZI"), SCR_MODUL), _
+             "modScrBankaNalozi", "registar vodi ekran na modScrBankaNalozi"
+    AssertEq modUiScreens.ScrPostoji("BANKA_NALOZI"), True, _
+             "modul ekrana odgovara na Scr_Meta -- stavka menija vise nije prigusena"
+    AssertEq (InStr(modUiScreens.ScrMeta("BANKA_NALOZI"), "kljuc=BANKA_NALOZI") > 0), True, _
+             "Scr_Meta prijavljuje svoj kljuc"
+    AssertEq modUiScreens.ScrField(modUiScreens.ScrRowByKey("BANKA_NALOZI"), SCR_OBLAST), _
+             OBL_BANKA, "ekran trazi pravo na oblast Banka"
+
+    ' JEDNA lista, namerno: predlozena lista RACUNI je pregled bez ijednog
+    ' posla nad redom (sve njeno nosi combo "Sa racuna" u zoni).
+    liste = modScrBankaNalozi.Scr_Liste()
+    AssertEq UBound(liste) + 1, 1, "jedna lista: otvoreni blokovi za isplatu"
+    AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
+             "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
+    AssertEq Split(CStr(liste(0)), "|")(0), "NALOZI", "kljuc liste je NALOZI"
+
+    AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), 3, _
+             "tri radnje nad redom: u naloge / izbaci / primeni avans"
+    AssertEq (BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")) <= modOtkupUI.MAX_ACT), _
+             True, "radnje staju u bazen -- visak bi se tiho odsekao"
+
+    spec = modScrBankaNalozi.BnCipoviZaListu("NALOZI")
+    AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _
+             "lista NALOZI ne trazi vise cipova nego sto bazen ima"
+    AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", _
+             "prvi cip liste NALOZI je najsiri ('sve')"
+
+    kolone = modScrBankaNalozi.BnKoloneZaListu("NALOZI")
+    AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
+             "lista NALOZI ne trazi vise kolona nego sto mreza pravi"
+
+    modScrBankaNalozi.Scr_BnTestReset
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq IsArray(d), True, "lista NALOZI vraca niz"
+    AssertEq (UBound(d) >= 4), True, _
+             "lista NALOZI vraca pun oblik (kolone, redovi, n, kg, vrednost)"
+    AssertEq IsArray(d(0)), True, "lista NALOZI prijavljuje svoje kolone"
+    AssertEq (CLng(d(2)) > 0), True, _
+             "lista NALOZI ima redove u fixture-u -- tvrdnje nisu prazne"
+
+    ' DATUM MORA DA STIGNE MREZI KAO SERIJSKI BROJ (FmtDatumKratko odbija sve
+    ' sto nije IsNumeric) -- svaki red, jer je dovoljna JEDNA losa vrednost.
+    kolone = d(0)
+    redovi = d(1)
+    For j = 0 To UBound(kolone)
+        If Split(CStr(kolone(j)), "|")(2) = "date" Then
+            For r2 = 1 To CLng(d(2))
+                AssertEq IsNumeric(redovi(r2, j + 1)), True, _
+                         "red " & CStr(r2) & ", kolona " & CStr(j + 1) & _
+                         ": datum je BROJ -- inace ga mreza ne crta"
+            Next r2
+        End If
+    Next j
+
+    modScrBankaNalozi.Scr_BnTestReset
+End Sub
+
+' ============================================================
+' 128. Platni nalozi: identitet je u redu i NE crta se
+' ============================================================
+' Identitet reda je OtkupID -- broj bloka je jedinstven samo po stanici
+' (fixture: OTKUP_KOLIZIJA na dva otkupna mesta), a ziro racun dele svi
+' blokovi istog kooperanta. Dvosmislen OtkupID do mreze NE stize:
+' BuildBlokIsplataList na dupli/prazan OtkupID medju otvorenima OBARA celo
+' citanje (AUD-026, testovi T17-T19 banka suite) -- pa se ovde tvrdi ono sto
+' red NOSI i sta se od toga crta.
+Private Sub T_BankaNalozi_IdentitetURedu_NeCrtaSe()
+    Dim kolone As Variant, i As Long, p As Variant
+    Dim d As Variant, redovi As Variant, n As Long
+    Dim rDelim As Long, nasao As String
+
+    kolone = modScrBankaNalozi.BnKoloneZaListu("NALOZI")
+
+    ' Kolona identiteta se gadja PO KLJUCU, ne kao "poslednja": iza nje stoje
+    ' jos tri prenosne kolone, pa bi tvrdnja nad poslednjom merila susednu
+    ' (ista greska vec placena na Uvozu izvoda, katalog par. 9.9).
+    For i = 0 To UBound(kolone)
+        p = Split(CStr(kolone(i)), "|")
+        Select Case CStr(p(0))
+            Case "OTKUI_HDN_OTKID"
+                AssertEq CStr(p(4)), "4", "identitet bloka je prioriteta 4 -- ne crta se"
+            Case "OTKUI_HDN_KOOPID"
+                AssertEq CStr(p(4)), "4", "KooperantID se prenosi, ne crta se"
+            Case "OTKUI_HDN_IMATR"
+                AssertEq CStr(p(4)), "4", "'ima racun' se prenosi, ne crta se"
+            Case "OTKUI_HDN_AVANS"
+                AssertEq CStr(p(4)), "4", "avans saldo se prenosi, ne crta se"
+        End Select
+        nasao = nasao & "|" & CStr(p(0))
+    Next i
+    AssertEq (InStr(nasao, "OTKUI_HDN_OTKID") > 0), True, _
+             "kolona identiteta postoji u opisu kolona"
+
+    modScrBankaNalozi.Scr_BnTestReset
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    redovi = d(1)
+    n = CLng(d(2))
+
+    ' Fixture vozila: delimicno isplacen blok je u listi sa OSTATKOM (ne punim
+    ' iznosom); storniran i u celosti placen blok NISU u listi.
+    rDelim = 0
+    For i = 1 To n
+        Select Case Trim$(CStr(redovi(i, 10)))
+            Case "OTK-NAL-DELIM": rDelim = i
+            Case "OTK-NAL-STOR"
+                AssertEq "OTK-NAL-STOR u listi", "", _
+                         "storniran blok nije medju otvorenima"
+            Case "OTK-BIM-PLAC"
+                AssertEq "OTK-BIM-PLAC u listi", "", _
+                         "u celosti placen blok nije medju otvorenima"
+        End Select
+    Next i
+    AssertEq (rDelim > 0), True, "delimicno isplacen blok JESTE u listi"
+    AssertEq CDbl(redovi(rDelim, 8)), 600#, _
+             "otvoreno delimicnog bloka je ostatak (1000 - 400), ne pun iznos"
+    AssertEq CStr(redovi(rDelim, 1)), "NAL1/TEST", _
+             "prikazan broj bloka pripada istom redu kao identitet"
+    AssertEq Trim$(CStr(redovi(rDelim, 11))), "KOOP-TEST-1", _
+             "red prenosi KooperantID -- radnja avansa ga ne izvodi iz prikaza"
+    AssertEq Trim$(CStr(redovi(rDelim, 12))), "1", _
+             "red prenosi 'ima racun' za kooperanta sa upisanim racunom"
+
+    modScrBankaNalozi.Scr_BnTestReset
+End Sub
+
+' ============================================================
+' 129. Platni nalozi: cipovi i KPI prate ista pravila kao citac
+' ============================================================
+Private Sub T_BankaNalozi_CipoviIKpiPratePravila()
+    Dim src As Variant, i As Long
+    Dim uSve As Long, uIma As Long, uBez As Long, uAvans As Long
+    Dim gIma As Long, gBez As Long, gAvans As Long
+    Dim gOtvoreno As Double, poolDistinct As Double, poolPoBloku As Double
+    Dim koopSaDvaBloka As Boolean
+    Dim koopVidjen As Object, koopBlokova As Object
+    Dim kpi As Variant, d As Variant
+
+    src = modBankaExportPregled.GetBlokIsplataForGrid()
+    AssertEq IsArray(src), True, "citac vraca otvorene blokove nad fixture-om"
+
+    Set koopVidjen = CreateObject("Scripting.Dictionary")
+    Set koopBlokova = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(src, 1)
+        If CBool(src(i, 11)) Then gIma = gIma + 1 Else gBez = gBez + 1
+        If CDbl(src(i, 12)) > 0 Then gAvans = gAvans + 1
+        gOtvoreno = gOtvoreno + CDbl(src(i, 9))
+        poolPoBloku = poolPoBloku + CDbl(src(i, 12))
+        koopBlokova(CStr(src(i, 5))) = CLng(NzBIM(koopBlokova(CStr(src(i, 5))), 0)) + 1
+        If Not koopVidjen.Exists(CStr(src(i, 5))) Then
+            koopVidjen.Add CStr(src(i, 5)), True
+            poolDistinct = poolDistinct + CDbl(src(i, 12))
+        End If
+    Next i
+    AssertEq (gIma > 0), True, "fixture ima bar jedan blok SA racunom (KOOP-TEST-1)"
+    AssertEq (gBez > 0), True, "fixture ima bar jedan blok BEZ racuna"
+
+    ' Cip pravilo, mereno kroz Scr_Rows pod svakim filterom: "sve" je unija,
+    ' a "ima racun" / "bez racuna" particija.
+    modScrBankaNalozi.Scr_BnTestReset
+    d = modScrBankaNalozi.Scr_Rows("sve", ""):    uSve = CLng(d(2))
+    d = modScrBankaNalozi.Scr_Rows("imarac", ""): uIma = CLng(d(2))
+    d = modScrBankaNalozi.Scr_Rows("bezrac", ""): uBez = CLng(d(2))
+    d = modScrBankaNalozi.Scr_Rows("avans", ""):  uAvans = CLng(d(2))
+    AssertEq uSve, UBound(src, 1), "cip 'sve' propusta svaki otvoren blok"
+    AssertEq uIma, gIma, "cip 'ima racun' se slaze sa HasTekuciRacun iz citaca"
+    AssertEq uBez, gBez, "cip 'bez racuna' je komplement -- particija, ne preklop"
+    AssertEq uIma + uBez, uSve, "'ima racun' + 'bez racuna' = 'sve'"
+    AssertEq uAvans, gAvans, "cip 'avans' propusta tacno blokove sa avansom kooperanta"
+
+    ' KPI iz jednog prolaza se slaze sa citacem; avans pool je PO KOOPERANTU.
+    kpi = modBankaExportPregled.NalogeKpi()
+    AssertEq CLng(kpi(0)), UBound(src, 1), "KPI broj blokova = broj redova citaca"
+    AssertEq CLng(kpi(1)), gBez, "KPI 'bez racuna' = komplement iz citaca"
+    AssertEq CDbl(kpi(2)), gOtvoreno, "KPI otvoreno = zbir otvorenog svih blokova"
+    AssertEq CDbl(kpi(3)), poolDistinct, _
+             "avans pool se sabira po KOOPERANTU, ne po bloku"
+
+    ' Vozilo za dedup mora da POSTOJI: bar jedan kooperant sa avansom i vise
+    ' otvorenih blokova -- inace bi prethodna tvrdnja bila zelena i za zbir
+    ' po bloku, pa ne bi merila nista.
+    Dim k As Variant
+    For Each k In koopBlokova.keys
+        If CLng(koopBlokova(k)) >= 2 And koopVidjen.Exists(CStr(k)) Then
+            For i = 1 To UBound(src, 1)
+                If CStr(src(i, 5)) = CStr(k) And CDbl(src(i, 12)) > 0 Then
+                    koopSaDvaBloka = True
+                    Exit For
+                End If
+            Next i
+        End If
+    Next k
+    AssertEq koopSaDvaBloka, True, _
+             "fixture ima kooperanta sa avansom i >= 2 bloka -- dedup ima nad cim da padne"
+    AssertEq (poolPoBloku > poolDistinct), True, _
+             "zbir po bloku je VECI od zbira po kooperantu -- dve politike se razlikuju"
+
+    ' Brojac menija = prva KPI brojka; posle greske se ne vraca nula.
+    AssertEq modScrBankaNalozi.Scr_Brojac(), CLng(kpi(0)), _
+             "znacka menija broji otvorene blokove iz istog racuna"
+    AssertEq CLng(modScrBankaNalozi.BnKpiPosleGreske(kpi)(0)), CLng(kpi(0)), _
+             "posle greske se zadrzava poslednja poznata brojka"
+    AssertEq CLng(modScrBankaNalozi.BnKpiPosleGreske(Empty)(0)), -1, _
+             "bez poslednje poznate, brojka je NEPOZNATA (-1), ne nula"
+    AssertEq modScrBankaNalozi.BnKpiNepoznat(modScrBankaNalozi.BnKpiNepoznato()), True, _
+             "nepoznat skup brojki se prepoznaje kao nepoznat"
+    AssertEq modScrBankaNalozi.BnKpiNepoznat(kpi), False, _
+             "validne brojke nisu 'nepoznato'"
+
+    modScrBankaNalozi.Scr_BnTestReset
+End Sub
+
+' ============================================================
+' 130. Platni nalozi: korpa po identitetu + izbor za izvoz
+' ============================================================
+' Korpa "U NALOZIMA" nosi SAMO identitete (plus broj/otvoreno za traku);
+' iznos naloga se cita SVEZ pri izvozu (OdaberiBlokoveZaNaloge), pa zastareo
+' snimak ne moze da narucuje uplatu.
+Private Sub T_BankaNalozi_KorpaIIzvoz()
+    Dim res As String, zivi As Object, izbor As Object
+    Dim blokovi As Collection, sviTR As Collection, sint As Collection
+    Dim bezTR As Long, nepoznato As Long
+    Dim blk As clsBlokIsplata, v As Variant
+
+    modScrBankaNalozi.Scr_BnTestReset
+
+    ' Prazan identitet i blok bez racuna se ODBIJAJU -- ne pogadja se.
+    AssertEq (Len(modScrBankaNalozi.Scr_BnKorpaTestDodaj("", "X", 100, True)) > 0), True, _
+             "prazan identitet ne ulazi u naloge"
+    AssertEq (Len(modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-BEZ-TR", "B", 100, False)) > 0), _
+             True, "blok bez tekuceg racuna ne ulazi u naloge -- nema primaoca"
+    AssertEq modScrBankaNalozi.BnKorpaBroj(), 0, "nista od toga nije uslo"
+
+    ' Dodavanje po identitetu; duplikat se odbija.
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True), _
+             "", "blok sa racunom ulazi u naloge"
+    AssertEq (Len(modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True)) > 0), _
+             True, "isti blok ne ulazi dvaput"
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-TEST-1", "1/TEST", 20000, True), _
+             "", "drugi blok ulazi"
+    AssertEq modScrBankaNalozi.BnUKorpi("OTK-TEST-1"), True, "clanstvo se vidi po identitetu"
+    AssertEq modScrBankaNalozi.BnKorpaBroj(), 2, "u nalozima su dve stavke"
+
+    ' Traka: NAJNOVIJE PRVO; preliv se PRIJAVLJUJE.
+    AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(0), "1/TEST") > 0), True, _
+             "prvi red trake je poslednje dodat blok"
+    AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(1), "NAL1/TEST") > 0), True, _
+             "drugi red trake je stariji blok"
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-X3", "X3", 10, True), "", ""
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-X4", "X4", 10, True), "", ""
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-X5", "X5", 10, True), "", ""
+    AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(3), "2") > 0), True, _
+             "preliv se prijavljuje ('jos 2'), lista se ne odseca tiho"
+
+    ' Uklanjanje po identitetu; nepoznat identitet ne uklanja nista.
+    AssertEq modScrBankaNalozi.BnUkloni("OTK-X4"), True, "uklanja se bas pokazana stavka"
+    AssertEq modScrBankaNalozi.BnUkloni("OTK-NEMA-GA"), False, _
+             "nepoznat identitet ne uklanja nista -- ne pogadja se"
+    AssertEq modScrBankaNalozi.BnKorpaBroj(), 4, "ostale cetiri stavke"
+
+    ' Uskladjivanje sa svezom listom: mrtva stavka izlazi (uz brojku), zivoj
+    ' se osvezava snimak za prikaz.
+    Set zivi = CreateObject("Scripting.Dictionary")
+    zivi("OTK-NAL-DELIM") = 555#
+    zivi("OTK-TEST-1") = 20000#
+    zivi("OTK-X3") = 10#
+    AssertEq modScrBankaNalozi.BnUskladiKorpu(zivi), 1, _
+             "stavka koje nema medju otvorenima izlazi iz izbora"
+    AssertEq modScrBankaNalozi.BnKorpaBroj(), 3, "ostale su samo zive stavke"
+    AssertEq modScrBankaNalozi.BnKorpaZbir(), 555# + 20000# + 10#, _
+             "snimak za prikaz se osvezava iz sveze liste"
+
+    ' IZBOR ZA IZVOZ (domensko pravilo). Sa izborom: tacno taj blok, iznos =
+    ' SVEZ otvoren iznos u cent-domenu.
+    Set blokovi = modBankaExportPregled.BuildBlokIsplataList()
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor("OTK-NAL-DELIM") = True
+    Set sint = modBankaExportPregled.OdaberiBlokoveZaNaloge(blokovi, izbor, bezTR, nepoznato)
+    AssertEq sint.count, 1, "izbor od jednog bloka daje tacno jedan nalog"
+    Set blk = sint(1)
+    AssertEq blk.otkupID, "OTK-NAL-DELIM", "izvozi se bas izabrani blok"
+    AssertEq blk.IsplatitiIznos, 600#, _
+             "iznos naloga je SVEZ otvoren iznos (1000 - 400), ne snimak iz izbora"
+    AssertEq nepoznato, 0, "svi izabrani su nadjeni medju otvorenima"
+
+    ' Bez izbora: SVI blokovi sa racunom (legacy 'nema selekcije = svi');
+    ' blokovi bez racuna se broje i preskacu.
+    Set sviTR = modBankaExportPregled.OdaberiBlokoveZaNaloge(blokovi, Nothing, bezTR, nepoznato)
+    AssertEq (sviTR.count >= 2), True, "bez izbora idu svi blokovi sa racunom"
+    AssertEq (bezTR > 0), True, "blokovi bez racuna se BROJE, ne gube tiho"
+    For Each v In sviTR
+        Set blk = v
+        AssertEq blk.HasTekuciRacun, True, "nijedan nalog bez tekuceg racuna"
+        AssertEq (blk.IsplatitiIznos > 0), True, "nijedan nalog na nula dinara"
+    Next v
+
+    ' Izabran blok koga vise nema medju otvorenima se PRIJAVLJUJE.
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor("OTK-VISE-NE-POSTOJI") = True
+    Set sint = modBankaExportPregled.OdaberiBlokoveZaNaloge(blokovi, izbor, bezTR, nepoznato)
+    AssertEq sint.count, 0, "nepostojeci izbor ne pravi nijedan nalog"
+    AssertEq nepoznato, 1, "nepostojeci izbor se broji -- pozivalac ga prijavljuje"
+
+    ' Sub-cent ostatak ne sme da postane nalog: normalizacija ide PRE praga.
+    Set sint = New Collection
+    sint.Add NoviTestBlokNaloga("OTK-SUBCENT", "SC/TEST", 0.004, True)
+    sint.Add NoviTestBlokNaloga("OTK-CENT", "C/TEST", 0.006, True)
+    Set sviTR = modBankaExportPregled.OdaberiBlokoveZaNaloge(sint, Nothing, bezTR, nepoznato)
+    AssertEq sviTR.count, 1, "0.004 se zaokruzi na 0.00 i NE postaje nalog"
+    Set blk = sviTR(1)
+    AssertEq blk.otkupID, "OTK-CENT", "0.006 se zaokruzi na 0.01 i ulazi"
+    AssertEq blk.IsplatitiIznos, 0.01, "iznos je normalizovan u cent-domen"
+
+    modScrBankaNalozi.Scr_BnTestReset
+End Sub
+
+' Sintetican blok za granicne slucajeve izbora -- fixture ne moze da nosi
+' sub-cent ostatak, a bas on je klasa koju je AUD-026 zatvorio.
+Private Function NoviTestBlokNaloga(ByVal otkupID As String, ByVal broj As String, _
+                                    ByVal otvoreno As Double, ByVal imaTR As Boolean) As clsBlokIsplata
+    Dim blk As clsBlokIsplata
+    Set blk = New clsBlokIsplata
+    blk.otkupID = otkupID
+    blk.brojDokumenta = broj
+    blk.OtvorenIznos = otvoreno
+    blk.HasTekuciRacun = imaTR
+    If imaTR Then blk.TekuciRacun = "160-0000000000-11"
+    Set NoviTestBlokNaloga = blk
+End Function
+
+' ============================================================
+' 131. Platni nalozi: zona se STVARNO gradi i rasporedjuje
+' ============================================================
+' "Variable not defined" u telu procedure VBA prijavi tek kad se ona PRVI PUT
+' izvrsi -- tvrdnje nad citacima je nikad ne zovu (katalog par. 9.10). Nalazi
+' se skupljaju dok forma zivi, a TVRDI se posle Unload-a: masinerija zive
+' forme brise Err izmedju Err.Raise i omotnice testa, pa bi pad stigao kao
+' "greska bez opisa".
+Private Sub T_ZonaBankaNalozi_PoljaIRaspored()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String
+    Dim visina As Single
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaBn", True)
+    z.width = 1200: z.Height = 300
+    modScrBankaNalozi.Scr_Build z
+
+    For Each nm In Array("bnBg", "bnCap", "bnHint", "bnLnB", _
+                         "bnKL0", "bnKV0", "bnKL3", "bnKV3", _
+                         "bnKorpaCap", "bnKorpaR0", "bnKorpaR3", "bnKorpaZ", _
+                         "scrBnRacun", "scrBnCsv", "scrBnSpec", "scrBnOcisti")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Kombo u zoni MORA biti polje (okvir nm + kontrola nmT): panel za izbor
+    ' (modOtkupUI.FindCombo) trazi bas taj oblik.
+    If KontrolaPostoji(z, "scrBnRacun") Then
+        If Not KontrolaPostoji(z.Controls("scrBnRacun"), "scrBnRacunT") Then _
+            nema = nema & " scrBnRacunT"
+    End If
+
+    visina = modScrBankaNalozi.Scr_Layout(z, 1200, 300)
+
+    modScrBankaNalozi.Scr_BnTestReset
+    Unload f
+
+    AssertEq nema, "", "zona platnih naloga nema nijednu kontrolu manje"
+    AssertEq (visina > 0), True, "Scr_Layout prijavljuje visinu zone"
+End Sub
+
 Private Sub T_Prijemnica_PomeraSamoAktivan()
     Dim ikad As Long, akt As Long, ciljIkad As Long
     Dim ok As Boolean

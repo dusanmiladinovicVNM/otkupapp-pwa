@@ -908,3 +908,165 @@ Public Function BankaNazivZaRacun(ByVal racun As String) As String
     End Select
 End Function
 
+'======================================================================
+' CITACI ZA MREZU NOVOG UI-JA (ekran BANKA_NALOZI, v6-ui-185).
+'
+' Ekran ne cita tabele sam i ne ponavlja nijedno pravilo -- isti obrazac kao
+' modFaktura.Get*ForGrid i modBankaMapiranje.GetBankaImportForGrid. Sva tri
+' citaca rade nad BuildBlokIsplataList, pa NASLEDJUJU njegove fail-closed
+' kapije identiteta (AUD-026): dupli/prazan OtkupID medju otvorenima i dupli
+' KooperantID OBARAJU citanje umesto da jedan red pobedi drugi. Red sa
+' dvosmislenim identitetom zato NE MOZE ni da stigne do mreze.
+'======================================================================
+
+'======================================================================
+' GetBlokIsplataForGrid - redovi za listu "Za isplatu" novog UI-ja.
+'
+' Vraca 1-bazirani niz (Empty kad otvorenih blokova nema):
+'   1 OtkupID | 2 BrojDokumenta | 3 Datum | 4 KooperantNaziv | 5 KooperantID
+'   6 StanicaID | 7 UkupanIznos | 8 VecIsplaceno | 9 OtvorenIznos
+'   10 TekuciRacun | 11 HasTekuciRacun | 12 KooperantAvansSaldo
+'
+' Greska se cita u lokalne PRE LogErr-a: modLogError.LogError pocinje sa
+' "On Error Resume Next", a svaka On Error naredba brise Err (par. 8.10/R1).
+'======================================================================
+Public Function GetBlokIsplataForGrid() As Variant
+    Const SRC As String = "modBankaExportPregled.GetBlokIsplataForGrid"
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+
+    GetBlokIsplataForGrid = Empty
+
+    Dim blokovi As Collection
+    Set blokovi = BuildBlokIsplataList()
+    If blokovi.count = 0 Then Exit Function
+
+    Dim outA() As Variant
+    ReDim outA(1 To blokovi.count, 1 To 12)
+
+    Dim i As Long
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        i = i + 1
+        outA(i, 1) = blk.otkupID
+        outA(i, 2) = blk.brojDokumenta
+        outA(i, 3) = blk.datum
+        outA(i, 4) = blk.kooperantNaziv
+        outA(i, 5) = blk.kooperantID
+        outA(i, 6) = blk.stanicaID
+        outA(i, 7) = blk.UkupanIznos
+        outA(i, 8) = blk.VecIsplaceno
+        outA(i, 9) = blk.OtvorenIznos
+        outA(i, 10) = blk.TekuciRacun
+        outA(i, 11) = blk.HasTekuciRacun
+        outA(i, 12) = blk.KooperantAvansSaldo
+    Next v
+
+    GetBlokIsplataForGrid = outA
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+'======================================================================
+' NalogeKpi - cetiri brojke zone ekrana, iz JEDNOG prolaza:
+'   Array(brojOtvorenihBlokova, bezTekucegRacuna, ukupnoOtvorenoRSD, avansPool)
+'
+' Avans pool se sabira PO KOOPERANTU, ne po bloku: KooperantAvansSaldo je
+' svojstvo coveka, pa bi ga dva njegova otvorena bloka sabrala dvaput -- isto
+' pravilo koje legacy KPI vec drzi (frmBankaExportPregled.RefreshTopKpis,
+' koopAvansSet).
+'======================================================================
+Public Function NalogeKpi() As Variant
+    Const SRC As String = "modBankaExportPregled.NalogeKpi"
+    Dim errNum As Long, errDesc As String
+    On Error GoTo EH
+
+    Dim blokovi As Collection
+    Set blokovi = BuildBlokIsplataList()
+
+    Dim ukupnoOtvoreno As Double, avansPool As Double
+    Dim bezTR As Long
+    Dim koopVidjen As Object
+    Set koopVidjen = CreateObject("Scripting.Dictionary")
+
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        ukupnoOtvoreno = ukupnoOtvoreno + blk.OtvorenIznos
+        If Not blk.HasTekuciRacun Then bezTR = bezTR + 1
+        If Not koopVidjen.Exists(blk.kooperantID) Then
+            koopVidjen.Add blk.kooperantID, True
+            avansPool = avansPool + blk.KooperantAvansSaldo
+        End If
+    Next v
+
+    NalogeKpi = Array(blokovi.count, bezTR, ukupnoOtvoreno, avansPool)
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    LogErr SRC
+    Err.Raise errNum, SRC, errDesc
+End Function
+
+'======================================================================
+' OdaberiBlokoveZaNaloge - izbor blokova za CSV naloge / specifikaciju.
+'
+' Isto pravilo koje legacy drzi u formi (CollectIsplataBlokovi), izdvojeno da
+' ga dele legacy putanja i novi ekran a da se ne prepisuje:
+'   - samoOtkupIDs (Dictionary kljuceva) suzava izbor; Nothing ili prazan =
+'     SVI blokovi, isto sto legacy radi kad selekcije nema;
+'   - blok bez tekuceg racuna se preskace i broji (outBezTR) -- nema primaoca;
+'   - IsplatitiIznos = ZaokruziNovac(OtvorenIznos): SVEZ otvoren iznos,
+'     normalizovan u cent-domen PRE praga "> 0" (AUD-026) -- sirov ostatak od
+'     npr. 0.004 bi prosao sirov prag, a u fajlu zavrsio kao "0.00";
+'   - outNepoznato = koliko trazenih ID-eva NEMA medju otvorenima (blok se u
+'     medjuvremenu zatvorio/stornirao) -- pozivalac to prijavljuje, ne guta.
+'
+' Iznos NIKAD ne dolazi iz izbora: izbor nosi samo identitete, pa zastareo
+' snimak ne moze da narucuje uplatu. Finalna kapija (ValidateNalogSaldo u
+' BuildNalogCsvPayload) svejedno ostaje -- ovo je selekcija, ne validacija.
+'======================================================================
+Public Function OdaberiBlokoveZaNaloge(ByVal blokovi As Collection, _
+                                       ByVal samoOtkupIDs As Object, _
+                                       Optional ByRef outBezTR As Long, _
+                                       Optional ByRef outNepoznato As Long) As Collection
+    Dim result As New Collection
+    Dim imaIzbor As Boolean
+    Dim pogodjeni As Object
+
+    outBezTR = 0
+    outNepoznato = 0
+    Set OdaberiBlokoveZaNaloge = result
+    If blokovi Is Nothing Then Exit Function
+
+    If Not samoOtkupIDs Is Nothing Then imaIzbor = (samoOtkupIDs.count > 0)
+    Set pogodjeni = CreateObject("Scripting.Dictionary")
+
+    Dim blk As clsBlokIsplata
+    Dim v As Variant
+    For Each v In blokovi
+        Set blk = v
+        If imaIzbor Then
+            If Not samoOtkupIDs.Exists(blk.otkupID) Then GoTo Sledeci
+            pogodjeni(blk.otkupID) = True
+        End If
+        If Not blk.HasTekuciRacun Then
+            outBezTR = outBezTR + 1
+            GoTo Sledeci
+        End If
+        blk.IsplatitiIznos = ZaokruziNovac(blk.OtvorenIznos)
+        If blk.IsplatitiIznos > 0 Then result.Add blk
+Sledeci:
+    Next v
+
+    If imaIzbor Then outNepoznato = samoOtkupIDs.count - pogodjeni.count
+End Function
+
