@@ -6473,11 +6473,34 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - **„Štampaj dokument" se ne nudi tamo gde red nema dokument** (agregat
   robe po vrsti, nedostupne kombinacije).
 
+### Doterano posle trećeg smoke-a (krug 4)
+
+- **Pregled ambalaže se otvara brzo i na punom ledger-u.** Izveštaj je za
+  svaki od 1.596 redova iznova pretraživao tri tabele dokumenata da
+  prevede interni ID u broj dokumenta — sada se ti prevodi pripreme
+  jednom, pa red plaća samo jedan pogled u mapu. Pravilo prevoda je
+  identično starom; menja se samo cena.
+- **Čipovi se ne nude na kombinaciji koja ne postoji** — filter praznog
+  skupa je ista zbunjivost kao dugme bez funkcije (isti princip kao
+  „Štampaj dokument" iz recenzije). Na nedostupnoj kombinaciji ostaje samo
+  hint koji kaže kuda.
+- **Klik na red otvara detalj** (drill-down iz stare forme, sada kao traka
+  u zoni desno): za otkupni red — kooperant, sve stavke tog otkupnog lista
+  („vrsta klasa kg × cena = vrednost") i UKUPNO; za otpremnicu — vozač, kg
+  i broj vezanih blokova. Traka se sama sklanja na uskom prozoru i čisti
+  pri promeni liste.
+- **Sve štampe iz ovog ekrana sada dele kućni obrazac dokumenata**
+  (zaglavlje firme, naslovni blok sa kontekstom, siva traka kolona, UKUPNO
+  podebljan) — tabelarni PDF više nije goli grid, pa su svi dokumenti iz
+  aplikacije vizuelno usklađeni. Usput zatvoreno i ranije zapisano: tip
+  gajbe „12/1" u PDF-u ostaje tekst (ćelije se štampaju kao tekst, Excel
+  ga više ne prepravlja u datum).
+
 ### Šta NIJE urađeno, i zašto
 
-- **Panel „Detalji otkupa"** (klik na red kartice → sve stavke bloka) čeka
-  padajuće redove mreže (poznat odložen posao svih ekrana); štampa
-  dokumenta iz reda jeste tu.
+- **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i
+  dalje čekaju vrstu reda u ugovoru ljuske — detalj traka u zoni je
+  namerno uži oblik koji ne dira ljusku.
 - **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
   panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
   pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu
@@ -6487,18 +6510,19 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   obrisano ništa; revers ambalaže je dobio deljeni račun u `modIzvestaj`, a
   forma zadržava svoju kopiju.
 - **Rang kooperanata** se ne duplira — već živi na ekranu Dokumenti.
-- Tip ambalaže „12/1" u ćeliji štampanog tabelarnog PDF-a Excel ume da
-  protumači kao datum — **isti nalaz važi i za staru formu** (deli isti
-  ispis) i zapisan je za zajednički prolaz kroz štampu, ne za ovaj ekran.
+- Tip ambalaže „12/1" kao datum u PDF-u je za novi UI zatvoren (v. krug 4),
+  ali **stara forma i dalje deli stari ispis** — njen prolaz kroz štampu
+  ostaje zapisan kao zaseban posao.
 - Kursor u polju pretrage i dalje treperi preko placeholder teksta —
   estetski backlog svih ekrana.
 
 ### Verifikacija
 
-- Glavni set **141 / 0** (devet novih testova ekrana i slaganja);
+- Glavni set **143 / 0** (jedanaest novih testova ekrana i slaganja);
   banka set **205 / 0** (Platni nalozi bit-identični — nova test-vozila su
   namerno vezana za zatvoren blok); statičke provere čiste.
-- **Šesnaest** novih namernih kvarova obara po tačno jedan imenovani test i
-  vraća se bit-identično (dvosmerni dokaz).
+- **Dvadeset dva** namerna kvara ovog ekrana (+ jedan na kešu Platnih
+  naloga) obaraju po tačno jedan imenovani test i vraćaju se bit-identično
+  (dvosmerni dokaz).
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
   smoke nad pravim podacima u više krugova (checklista u PR-u).

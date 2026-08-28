@@ -4513,8 +4513,9 @@ matricu, identitet, prikaz istine, zonu.
 - **`frmIzvestaj` se ne gasi i ne menja** — dve kopije žive namerno (§5,
   Faza B). `Report*`, `PrintIzvestaj`, `PrintKartica*PDF`,
   `IzvestajTabDostupan` — nijedno pravilo nije dirano.
-- **Detail panel „Detalji otkupa"** (klik na red → sve stavke bloka) — čeka
-  padajuće redove (§5/Faza C). Štampa dokumenta iz reda jeste preneta.
+- **Detail panel „Detalji otkupa"** — prenet u krugu 4 kao detalj traka u
+  zoni (§23.11/S7), ne kao padajući redovi; padajući redovi u mreži ostaju
+  Faza C. Štampa dokumenta iz reda jeste preneta.
 - **Rang kooperanata** već živi na Dokumentima (`KoopRangRows`) — ne
   duplira se.
 - **Zbirni oblik ambalažnog pregleda kroz ekran**: matrica tab 3 nudi samo
@@ -4530,11 +4531,12 @@ matricu, identitet, prikaz istine, zonu.
 
 - **`PrintIzvestaj`/`OutputToSheet` upisuju sirove stringove u ćelije**
   print sheeta — string koji Excel ume da protumači (npr. tip ambalaže
-  `12/1` kao datum) menja oblik u štampanom PDF-u. Isti kvar ima i legacy
-  putanja (deli isti `OutputToSheet`); nije regresija ovog ekrana. Golih
-  nizova >15 cifara u izveštajima nema (provereno po listama — nijedna ne
-  nosi račun), pa N1 klasa ne nastaje. Popravka (`NumberFormat="@"`)
-  pripada `modPrint`-u i zajedničkom prolazu, ne ovom PR-u.
+  `12/1` kao datum) menja oblik u štampanom PDF-u. Za **novi UI** zatvoreno
+  u krugu 4: `PrintIzvestajHouse` piše sve data ćelije sa
+  `NumberFormat="@"` (§23.11/S8). **Legacy putanja** (`frmIzvestaj` →
+  `PrintIzvestaj`/`OutputToSheet`) i dalje nosi kvar — pripada zajedničkom
+  prolazu, ne ovom PR-u. Golih nizova >15 cifara u izveštajima nema
+  (provereno po listama — nijedna ne nosi račun), pa N1 klasa ne nastaje.
 - **Kursor preko placeholder-a pretrage** — poznat estetski backlog svih
   ekrana, ne dira se (§22.9).
 
@@ -4615,24 +4617,74 @@ ref-kolone, a nedostupna kombinacija nema ni redove. `Scr_Radnje` sada ide
 kroz `IzRadnjeZaKontekst(lista, tip, režim)`: bez radnje kad je kombinacija
 nedostupna ili kad oblik nema dokument-grain.
 
-### 23.11 Verifikacija
+### 23.11 Smoke krug 3: četiri prijave (krug 4 ispravki)
 
-- `RunAllTests` **141 / 0** (devet novih testova; prva dva runa su bila
-  crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0** (bit-identičan
-  BN ekran posle fixture izmena — nova vozila su vezana za **zatvoren**
-  blok i kooperanta bez blokova, pa KPI/čipovi/korpa Platnih naloga ne vide
-  ništa novo); `vba_check` + `--self-test`, `sabotaza --self-test`,
-  `who_writes --check` čisti.
+Posle čistog Compile-a operater je u trećem krugu prijavio četiri stvari —
+sve četiri su ispravke ponašanja, ne kozmetika:
+
+**S5 — prelaz na Ambalažu „katastrofalno spor".** Isti oblik kvara kao S2,
+ali u **jezgru izveštaja**, ne u ekranu: `ReportAmbalazePojedinacni` je za
+svaki red ledger-a zvao `ResolveDokBroj`, a ovaj **tri LookupValue-a po
+redu** — pri 1.596 redova ledger-a to je O(n·m) prolaza kroz tri
+dokument-tabele po svakom otvaranju liste. Sada se **pre** izlazne petlje
+jednom grade tri mape (`BuildLookupDict`: otpremnice, prijemnice, otkupi
+po broju) i red plaća O(1) (`ResolveDokBrojMape`). Pravilo prevoda je
+verno starom (`BuildLookupDict` je „prvi pojav pobeđuje", identično
+`LookupValue`-u), pa je ovo čist perf fix — stari `ResolveDokBroj` više
+nema pozivalaca i uklonjen je. Ekranski keš (§23.5) ovaj trošak amortizuje
+tek od drugog otvaranja; prvo otvaranje mora biti brzo u izvoru.
+
+**S6 — čipovi na nemogućim kombinacijama.** Čip nad listom koja za
+kombinaciju tip×režim ne postoji je filter praznog skupa — zbunjuje, kao
+i radnja iz R3. `Scr_Cipovi` sada ide kroz `IzCipoviZaKontekst`, koji prvo
+pita `IzListaDostupna` (istu matricu §23.3) pa tek onda vraća čipove
+liste: nedostupna kombinacija nema ni čipove, hint ostaje jedini sadržaj.
+
+**S7 — drill-down detalj reda.** Legacy `frmIzvestaj` je imao panel
+„Detalji otkupa" (dvoklik na red) — to u prenosu nije postojalo (§23.7 ga
+je vodio kao „nije preneto"). Sada: klik na red u zoni otvara **detalj
+traku** (desno od polja, `izDetCap` + do 6 linija, nestaje na uskom
+prozoru umesto da se preklapa). Račun je čist i testabilan bez forme:
+`IzDetaljOtkupLista(otkupID)` vraća **sve nestornirane stavke istog
+dokumenta** (broj + stanica — isto pravilo po kom reprint štampa ceo
+list): „Vrsta Klasa kg × cena = vrednost" po liniji, kooperant na vrhu,
+UKUPNO na dnu; `IzDetaljOtpremnice(otpID)` vozača, kg i broj vezanih
+blokova. Liste bez dokument-graina ne pune traku; promena liste je čisti.
+
+**S8 — štampe u house obrascu.** Tabelarna štampa je do sada išla kroz
+legacy `PrintIzvestaj` (goli grid bez zaglavlja firme). Dokumenti štampani
+iz novog UI-ja sada dele isti obrazac kao računi/otpremnice:
+`modPrint.PrintIzvestajHouse` — `DocSellerHeader` (podaci firme) +
+`DocTitleBlock` (naslov + kontekst-linija „entitet · opseg") + siva
+header traka (`DocColHeaderFill`) + UKUPNO red bold. Sve data ćelije se
+pišu sa `NumberFormat "@"` **pre** upisa — bez toga Excel „12/1" (tip
+gajbe) parsira u datum, ista klasa kvara kao §22 „broj dokumenta kao
+datum". Landscape se pali automatski preko 7 kolona; PDF ide u isti
+folder i otvara se kao i ostale štampe. Legacy `PrintIzvestaj` ostaje
+netaknut za `frmIzvestaj`.
+
+### 23.12 Verifikacija
+
+- `RunAllTests` **143 / 0** (jedanaest novih testova; prva dva runa su
+  bila crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0**
+  (bit-identičan BN ekran posle fixture izmena — nova vozila su vezana za
+  **zatvoren** blok i kooperanta bez blokova, pa KPI/čipovi/korpa Platnih
+  naloga ne vide ništa novo); `vba_check` + `--self-test`,
+  `sabotaza --self-test`, `who_writes --check` čisti.
 - Fixture: `tblAmbalaza` prvi put ima redove (do sada bi svaka ambalažna
   tvrdnja merila prazan skup); `tblNovac` prvi put ima OMID, sva tri
   kanala isplate i Firma→Otkupac avans — **na STA-TEST-2**, jer
   `T_WriterGuard_AvansSaldoOM` traži da STA-TEST-1 ima avans saldo tačno 0;
   pin `MALINA_MODE=NO` + `KARTICA*_PRINT_MODE=OFF` u `SEF_CONFIG` (ista
   klasa kao `KES_ISPLATE` u §8.10).
-- Dvosmerni dokaz: `python tools/dokaz.py izvestaji` — 16 sabotaža, svaka
-  obara tačno jedan imenovani test i vraća se bit-identično.
+- Dvosmerni dokaz: `python tools/dokaz.py izvestaji` — 22 sabotaže (16 iz
+  prvog kruga, po jedna za S1/R1/R3, tri za krug 4: čip na nedostupnoj,
+  detalj bez stavki, ambalažni broj ostaje ID), svaka obara tačno jedan
+  imenovani test i vraća se bit-identično; plus
+  `banka-nalozi-kes-ignorise-generaciju` za BN stranu R1 ugovora.
 - **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug →
   Compile VBAProject`, pa smoke nad pravim podacima u više krugova
   (checklista u PR-u): izgled zone i prekidača, sve četiri kombinacije
   tip×režim, štampe (tabelarna, kartica, dokument iz reda, revers),
-  ponašanje datumskih polja, pretraga na velikoj svesci.
+  ponašanje datumskih polja, pretraga na velikoj svesci, brzina Ambalaže
+  na punom ledger-u, detalj traka.

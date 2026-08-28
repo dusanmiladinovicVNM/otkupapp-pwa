@@ -3437,6 +3437,43 @@ SABOTAZE = {
         "T_Izv_UgovorEkrana",
         "roba za kupca nema radnju -- agregat po vrsti bez dokumenta",
     ),
+    # ------------------------------------------------------------------
+    # Smoke krug 3 (Izvestaji): kontekstni cipovi, detalj reda, poslovni
+    # broj dokumenta u pregledu ambalaze.
+    # ------------------------------------------------------------------
+    # Cip nad listom koja za kombinaciju NE POSTOJI je filter necega cega
+    # nema -- ne sme ni da se vidi (isti princip kao kontekstna radnja).
+    "izvestaji-cip-na-nedostupnoj": (
+        "modScrIzvestaji.bas",
+        "Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _\n"
+        "                                   ByVal zbirni As Boolean) As String\n"
+        "    If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function\n",
+        "Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _\n"
+        "                                   ByVal zbirni As Boolean) As String\n"
+        "    ' SABOTAZA: cipovi i na nedostupnoj kombinaciji\n",
+        "T_Izv_DetaljICipKontekst",
+        "nedostupna kombinacija nema cipove",
+    ),
+    # Detalj reda je legacy "Detalji otkupa": SVE stavke dokumenta (broj +
+    # stanica), ne samo izabrana linija -- Klasa I i II dele dokument.
+    "izvestaji-detalj-bez-stavki": (
+        "modScrIzvestaji.bas",
+        "        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then\n",
+        "        If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then   ' SABOTAZA: samo izabrana linija\n",
+        "T_Izv_DetaljICipKontekst",
+        "detalj nosi SVE stavke bloka (kooperant + linije + UKUPNO)",
+    ),
+    # Pregled ambalaze pokazuje POSLOVNI broj dokumenta; bez mape prijemnica
+    # red nosi interni ID -- operater njime ne moze nista (par. 9.5 princip).
+    "izvestaji-amb-broj-ostaje-id": (
+        "modIzvestaj.bas",
+        "        Case DOK_TIP_PRIJEMNICA\n"
+        "            If mapaPrj.Exists(dokID) Then sOut = CStr(mapaPrj(dokID))\n",
+        "        Case DOK_TIP_PRIJEMNICA\n"
+        "            ' SABOTAZA: prijemnica ostaje interni ID\n",
+        "T_Izv_DetaljICipKontekst",
+        "ambalaza pokazuje poslovni broj dokumenta, ne interni ID",
+    ),
 }
 
 

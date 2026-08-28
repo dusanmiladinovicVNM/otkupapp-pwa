@@ -60,6 +60,13 @@ Private Const IZ_BTN_H    As Single = 24
 Private Const IZ_KPI_W    As Single = 150
 Private Const IZ_SEG_H    As Single = 22
 
+' Desna traka zone nosi DETALJ IZABRANOG REDA (drill-down bez detail panela
+' mreze -- isti raspored kao traka korpe na Platnim nalozima): klik na red
+' sa dokumentom pokazuje stavke tog dokumenta.
+Private Const IZ_DET_W    As Single = 320
+Private Const IZ_DET_N    As Long = 6
+Private Const IZ_POLJA_MIN As Single = 470
+
 ' Kljucevi deset lista.
 Private Const IZ_SALDO As String = "SALDO"
 Private Const IZ_ROBA As String = "ROBA"
@@ -138,6 +145,9 @@ Private mZonaIsplKod As Variant
 ' Hint kljuc poslednjeg citanja (postavlja RedoviZaListu, cita OsveziHint).
 Private mHintKljuc As String
 
+' Linije detalja izabranog reda (puni klik na red, prazni promena konteksta).
+Private mDetalj As Variant
+
 ' Kontekst koji je postavio TEST. Zone u testu nema (forma se ne prikazuje),
 ' pa se combo i datumska polja ne mogu procitati. Vazi SAMO u test rezimu.
 Private mTestId As String
@@ -181,8 +191,17 @@ End Function
 ' zone, a izmisljen cip bi bio novo poslovno pravilo. KARTICA ih nema ni
 ' zbog cega drugog: running saldo je kumulativ PUNOG skupa, pa bi filter po
 ' vrsti reda trajno prikazivao isecen saldo.
+' Cipovi su KONTEKSTNI kao i radnje (smoke krug 3): na kombinaciji koja po
+' matrici nema izvestaj lista je prazna sa objasnjenjem -- cip nad njom je
+' filter necega cega nema i ne sme ni da se vidi.
 Public Function Scr_Cipovi() As String
-    Scr_Cipovi = IzCipoviZaListu(Scr_Lista())
+    Scr_Cipovi = IzCipoviZaKontekst(Scr_Lista(), TrenutniTip(), mZbirni)
+End Function
+
+Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _
+                                   ByVal zbirni As Boolean) As String
+    If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function
+    IzCipoviZaKontekst = IzCipoviZaListu(kljuc)
 End Function
 
 ' Cipovi PO KLJUCU LISTE -- da se ugovor moze izmeriti bez stanja ekrana.
@@ -334,10 +353,14 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
         Exit Function
     End If
 
-    ' Izbor reda ne menja nista; dvoklik NAMERNO ne radi nista (jedina
-    ' radnja je stampa -- promasen dvoklik koji pokrene PDF je gori od
-    ' nikakvog; isti princip kao Uvoz izvoda, par. 9.5).
-    If Left$(tag, 4) = "row:" Then Exit Function
+    ' Izbor reda puni DETALJ TRAKU u zoni (drill-down; smoke krug 3) -- ne
+    ' menja podatke, pa se vraca False i ljuska nista ne osvezava; traka se
+    ' crta direktno. Dvoklik NAMERNO ne radi nista (jedina radnja je stampa
+    ' -- promasen dvoklik koji pokrene PDF je gori od nikakvog; par. 9.5).
+    If Left$(tag, 4) = "row:" Then
+        OsveziDetalj CLng(val(Mid$(tag, 5)))
+        Exit Function
+    End If
     If Left$(tag, 4) = "dbl:" Then Exit Function
 
     ' Promena u polju zone stize kao "chg:<kontrola>" na SVAKI otkucaj, a
@@ -615,6 +638,10 @@ Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Var
     kljuc = Scr_Lista()
     tip = TrenutniTip()
     zbirni = mZbirni
+
+    ' Novi prikaz = nova selekcija; detalj prethodnog reda ne sme da ostane
+    ' (isti razlog kao KarticaDetalji_Clear na mpReports_Change u legacy).
+    OcistiDetalj
 
     kolone = IzKoloneZaListu(kljuc, tip)
 
@@ -1247,6 +1274,15 @@ Public Sub Scr_Build(ByVal z As Object)
                         TS_KPI, True, C_FOREST, -1, fmTextAlignLeft, F_NUM
     Next i
 
+    ' DETALJ TRAKA (drill-down): klik na red sa dokumentom pokazuje njegove
+    ' stavke desno -- isti raspored kao traka korpe na Platnim nalozima.
+    modUiKit.NewLbl z, "izDetCap", "", 0, IZ_Y_LBL, IZ_DET_W, 11, _
+                    TS_MICRO, True, C_MUTED, -1
+    For i = 0 To IZ_DET_N - 1
+        modUiKit.NewLbl z, "izDetR" & i, "", 0, IZ_Y_LBL + 14 + i * 12, _
+                        IZ_DET_W, 12, TS_META, False, C_FOREST, -1
+    Next i
+
     ' POLJA. Pravi ih ljuska (NewFieldG); prefiks "scr" je OBAVEZAN, a kombo
     ' MORA biti polje (okvir nm + kontrola nmT) -- FindCombo trazi taj oblik.
     modOtkupUI.NewFieldG z, "scrIzEnt", Poruka("OTKUI_FLD_IZ_ENT"), "cmb", "", _
@@ -1310,7 +1346,21 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     ' enabled = pojedinacni).
     z.Controls("scrIzEnt").Visible = Not mZbirni
 
-    z.Controls("izHint").width = w - 2 * PAD
+    ' Detalj traka uzima desno; polja i hint dele OSTATAK. Na uskom ekranu
+    ' traka nestaje -- isti kompromis kao korpa na Platnim nalozima.
+    Dim wPolja As Single, detVidi As Boolean, dx As Single
+    wPolja = w - IZ_DET_W - PAD
+    detVidi = (wPolja >= IZ_POLJA_MIN)
+    If Not detVidi Then wPolja = w
+    dx = w - IZ_DET_W
+    z.Controls("izDetCap").Left = dx
+    z.Controls("izDetCap").Visible = detVidi
+    For i = 0 To IZ_DET_N - 1
+        z.Controls("izDetR" & i).Left = dx
+        z.Controls("izDetR" & i).Visible = detVidi
+    Next i
+
+    z.Controls("izHint").width = wPolja - 2 * PAD
 
     modUiKit.MoveBtn z, "scrIzPrint", PAD, IZ_Y_BTN
     modUiKit.MoveBtn z, "scrIzKartPdf", PAD + 164, IZ_Y_BTN
@@ -1439,6 +1489,220 @@ Private Sub OsveziBrojke(ByVal z As Object)
     Else
         z.Controls("izKV1").caption = Format$(NzD(mZonaAgro), "#,##0")
     End If
+End Sub
+
+'------------------------------------------------------- DETALJ TRAKA
+' Klik na red -> stavke dokumenta u desnoj traci zone (drill-down; smoke
+' krug 3 je trazio "onaj detalj o kom je bilo reci"). Pravi padajuci redovi
+' mreze ostaju odlozen posao ljuske (par. 5/Faza C) -- traka je ono sto
+' ekran moze BEZ dopune ugovora, i pokriva legacy "Detalji otkupa" sustinu:
+' sve stavke izabranog otkupnog lista.
+Private Sub OsveziDetalj(ByVal red As Long)
+    Dim ref As String, kljuc As String
+    Dim linije As Variant, naslov As String
+
+    kljuc = Scr_Lista()
+    mDetalj = Empty
+    naslov = ""
+
+    Select Case kljuc
+        Case IZ_OTKL
+            ref = NzS(modOtkupUI.GridCell(red, 8))
+            If Left$(ref, 4) = "OTK|" Then
+                naslov = Poruka("OTKUI_IZ_DET_OTKUP") & " " & NzS(modOtkupUI.GridCell(red, 2))
+                linije = IzDetaljOtkupLista(Mid$(ref, 5))
+            End If
+        Case IZ_KART
+            ref = NzS(modOtkupUI.GridCell(red, 8))
+            If Left$(ref, 4) = "OTK|" Then
+                naslov = Poruka("OTKUI_IZ_DET_OTKUP") & " " & NzS(modOtkupUI.GridCell(red, 2))
+                linije = IzDetaljOtkupLista(Mid$(ref, 5))
+            ElseIf Len(ref) > 0 Then
+                ' NOV / MAG / AMB red: sustina je vec u opisu reda.
+                naslov = Poruka("OTKUI_IZ_DET_RED")
+                linije = Array(NzS(modOtkupUI.GridCell(red, 3)), _
+                               Poruka("OTKUI_IZ_DET_IZNOS") & " " & _
+                               DetIznosKartice(red))
+            End If
+        Case IZ_ROBA
+            ref = NzS(modOtkupUI.GridCell(red, 12))
+            If Left$(ref, 4) = "OTP|" Then
+                naslov = Poruka("OTKUI_IZ_DET_OTPREMNICA") & " " & NzS(modOtkupUI.GridCell(red, 2))
+                linije = IzDetaljOtpremnice(Mid$(ref, 5))
+            End If
+        Case IZ_AMB
+            If Len(NzS(modOtkupUI.GridCell(red, 8))) > 0 Then
+                naslov = Poruka("OTKUI_IZ_DET_DOKUMENT") & " " & NzS(modOtkupUI.GridCell(red, 4))
+                linije = Array( _
+                    NzS(modOtkupUI.GridCell(red, 7)), _
+                    Poruka("OTKUI_HDA_TIP") & ": " & NzS(modOtkupUI.GridCell(red, 3)), _
+                    Poruka("OTKUI_HDA_ULAZ") & " " & NzS(modOtkupUI.GridCell(red, 5)) & _
+                    "   " & Poruka("OTKUI_HDA_IZLAZ") & " " & NzS(modOtkupUI.GridCell(red, 6)))
+            End If
+    End Select
+
+    If IsArray(linije) Then
+        mDetalj = linije
+        DetaljTraka naslov
+    End If
+End Sub
+
+' Iznos novcanog/agro reda kartice: razduzenje ili zaduzenje, sta postoji.
+Private Function DetIznosKartice(ByVal red As Long) As String
+    Dim z As Double, r As Double
+    On Error Resume Next
+    z = CDbl(modOtkupUI.GridCell(red, 4))
+    r = CDbl(modOtkupUI.GridCell(red, 5))
+    If r <> 0 Then
+        DetIznosKartice = Format$(r, "#,##0.00")
+    Else
+        DetIznosKartice = Format$(z, "#,##0.00")
+    End If
+    Err.Clear
+End Function
+
+' STAVKE OTKUPNOG LISTA -- legacy "Detalji otkupa" sustina, kao cist racun
+' (testabilan bez forme): sve nestornirane linije ISTOG dokumenta (broj +
+' stanica, kao ReprintOtkupniListByOtkupID koji stampa ceo BrDok), po
+' linija "Vrsta Klasa  kg x cena = vrednost", pa kooperant i UKUPNO.
+Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
+    Dim d As Variant, i As Long
+    Dim cId As Long, cBr As Long, cSt As Long, cKoop As Long
+    Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
+    Dim brDok As String, stanica As String, koopID As String
+    Dim linije As Collection, kg As Double, cena As Double
+    Dim totKg As Double, totVr As Double
+    On Error GoTo EH
+
+    d = GetTableData(TBL_OTKUP)
+    If Not IsArray(d) Then Exit Function
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+
+    ' Dokument izabrane linije (broj je scoped po stanici).
+    For i = 1 To UBound(d, 1)
+        If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then
+            brDok = NzS(d(i, cBr))
+            stanica = NzS(d(i, cSt))
+            koopID = NzS(d(i, cKoop))
+            Exit For
+        End If
+    Next i
+    If Len(brDok) = 0 Then Exit Function
+
+    Set linije = New Collection
+    For i = 1 To UBound(d, 1)
+        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then
+            If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+                kg = NzD(d(i, cKol))
+                cena = NzD(d(i, cCe))
+                linije.Add NzS(d(i, cVr)) & " " & NzS(d(i, cKl)) & "  " & _
+                           FmtKolicina(kg) & " x " & Format$(cena, "#,##0.00") & _
+                           " = " & Format$(kg * cena, "#,##0.00")
+                totKg = totKg + kg
+                totVr = totVr + kg * cena
+            End If
+        End If
+    Next i
+    If linije.count = 0 Then Exit Function
+
+    Dim res() As String, n As Long
+    ReDim res(0 To linije.count + 1)
+    res(0) = EntitetNaziv("Kooperant", koopID, False)
+    For n = 1 To linije.count
+        res(n) = linije(n)
+    Next n
+    res(linije.count + 1) = "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _
+                            ChrW(183) & "  " & Format$(totVr, "#,##0.00")
+    IzDetaljOtkupLista = res
+    Exit Function
+EH:
+    ' Detalj je pregled -- pad citanja ostavlja praznu traku, ne obara klik.
+End Function
+
+' Osnovni podaci otpremnice + zbir njenih blokova (za red liste ROBA).
+Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
+    Dim d As Variant, i As Long
+    Dim cId As Long, cBr As Long, cVoz As Long, cKol As Long
+    Dim cOtkOtp As Long, cOtkKol As Long, cStorno As Long
+    Dim brOtp As String, vozac As String, kg As Double
+    Dim blokKg As Double, blokova As Long
+    On Error GoTo EH
+
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    For i = 1 To UBound(d, 1)
+        If Trim$(CStr(d(i, cId))) = Trim$(otpID) Then
+            brOtp = NzS(d(i, cBr))
+            vozac = EntitetNaziv("Vozac", NzS(d(i, cVoz)), False)
+            kg = NzD(d(i, cKol))
+            Exit For
+        End If
+    Next i
+    If Len(brOtp) = 0 Then Exit Function
+
+    d = GetTableData(TBL_OTKUP)
+    If IsArray(d) Then
+        cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+        cOtkKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+        cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+        For i = 1 To UBound(d, 1)
+            If Trim$(CStr(d(i, cOtkOtp))) = Trim$(otpID) Then
+                If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+                    blokova = blokova + 1
+                    blokKg = blokKg + NzD(d(i, cOtkKol))
+                End If
+            End If
+        Next i
+    End If
+
+    IzDetaljOtpremnice = Array( _
+        Poruka("OTKUI_IZ_DET_VOZAC") & " " & vozac, _
+        Poruka("OTKUI_IZ_DET_OTPKG") & " " & FmtKolicina(kg) & " kg", _
+        Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova) & "  " & _
+        ChrW(183) & "  " & FmtKolicina(blokKg) & " kg")
+    Exit Function
+EH:
+End Function
+
+' Crtanje trake: naslov + linije + preliv ("... jos N") -- preliv se
+' PRIJAVLJUJE, lista koja se tiho odseca izgleda kao cela (par. 7.8).
+Private Sub DetaljTraka(ByVal naslov As String)
+    Dim z As Object, i As Long, n As Long
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    n = 0
+    If IsArray(mDetalj) Then n = UBound(mDetalj) - LBound(mDetalj) + 1
+    z.Controls("izDetCap").caption = UCase$(naslov)
+    For i = 0 To IZ_DET_N - 1
+        If i < n Then
+            If i = IZ_DET_N - 1 And n > IZ_DET_N Then
+                z.Controls("izDetR" & i).caption = ChrW(8230) & " " & _
+                    Poruka("OTKUI_LBL_AG_KORPA_JOS") & " " & CStr(n - IZ_DET_N + 1)
+            Else
+                z.Controls("izDetR" & i).caption = CStr(mDetalj(LBound(mDetalj) + i))
+            End If
+        Else
+            z.Controls("izDetR" & i).caption = ""
+        End If
+    Next i
+End Sub
+
+Private Sub OcistiDetalj()
+    mDetalj = Empty
+    DetaljTraka ""
 End Sub
 
 ' Combo entiteta se puni PO TIPU (obrazac PuniPartnerCombo, par. 9): dve
@@ -1664,8 +1928,9 @@ Private Sub StampajIzvestaj()
         End If
     Next j
 
-    naslov = Poruka(NaslovKljucListe(Scr_Lista())) & " - " & TipLabela(mCtxTip) & _
-             ": " & mCtxEntNaziv & " (" & OpsegLabela() & ")"
+    ' Kontekst (podnaslov) nosi entitet, period i AKTIVAN filter -- papir bez
+    ' te napomene izgleda kao ceo izvestaj.
+    naslov = TipLabela(mCtxTip) & ": " & mCtxEntNaziv & " (" & OpsegLabela() & ")"
     If Len(mDiagQ) > 0 Then
         naslov = naslov & "  " & ChrW(183) & "  " & Poruka("OTKUI_IZ_PRETRAGA") & _
                  " " & mDiagQ
@@ -1675,7 +1940,22 @@ Private Sub StampajIzvestaj()
                  " " & mDiagFilter
     End If
 
-    PrintIzvestaj dataS, naslov, headers
+    ' House stil kao i ostali dokumenti (zaglavlje firme + naslov + tabela;
+    ' smoke krug 3: "svi dokumenti uskladjeni"). Kolone brojeva desno.
+    Dim desno() As Boolean
+    ReDim desno(0 To vidljivih - 1)
+    For j = 1 To vidljivih
+        Select Case Split(CStr(kolone(j - 1)), "|")(2)
+            Case "kg", "rsd", "num", "rest", "date"
+                desno(j - 1) = True
+            Case "txt"
+                desno(j - 1) = imaTot(j)   ' sabirljive txt kolone su brojevi
+        End Select
+    Next j
+
+    PrintIzvestajHouse dataS, n + 1, vidljivih, _
+                       UCase$(Poruka(NaslovKljucListe(Scr_Lista()))), _
+                       naslov, headers, desno
 End Sub
 
 ' Vrednost celije za stampu -- isto formatiranje kao mreza (CelijaTekst

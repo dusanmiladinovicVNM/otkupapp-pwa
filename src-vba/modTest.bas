@@ -382,6 +382,7 @@ Public Sub RunAllTests()
     RunOne 140
     RunOne 141
     RunOne 142
+    RunOne 143
     RunOne 124
     RunOne 125
     RunOne 126
@@ -561,6 +562,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 140: TestName = "T_Izv_KesPretragaIHint"
         Case 141: TestName = "T_ZonaIzv_PoljaIRaspored"
         Case 142: TestName = "T_KesGeneracija_UpisInvalidira"
+        Case 143: TestName = "T_Izv_DetaljICipKontekst"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -711,6 +713,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 140: T_Izv_KesPretragaIHint
         Case 141: T_ZonaIzv_PoljaIRaspored
         Case 142: T_KesGeneracija_UpisInvalidira
+        Case 143: T_Izv_DetaljICipKontekst
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -10190,6 +10193,7 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
 
     For Each nm In Array("izBg", "izCap", "izHint", "izLnB", _
                          "izKL0", "izKV0", "izKL1", "izKV1", _
+                         "izDetCap", "izDetR0", "izDetR5", _
                          "scrIzTipOM", "scrIzTipKup", "scrIzTipVoz", "scrIzTipKoop", _
                          "scrIzRezP", "scrIzRezZ", _
                          "scrIzEnt", "scrIzOd", "scrIzDo", _
@@ -10289,4 +10293,73 @@ Private Sub T_KesGeneracija_UpisInvalidira()
     AssertEq modScrBankaNalozi.Scr_BnSnimakPunjenjaTest() - pb, 2, _
              "nalozi: posle tudjeg upisa snimak se puni ponovo (generacija)"
     modScrBankaNalozi.Scr_BnTestReset
+End Sub
+
+' ============================================================
+' 143. Izvestaji: detalj reda (drill-down) + kontekstni cipovi + poslovni
+' broj dokumenta u pregledu ambalaze (smoke krug 3)
+' ============================================================
+Private Sub T_Izv_DetaljICipKontekst()
+    Dim det As Variant, i As Long, n As Long
+    Dim otk As Variant, cBr As Long, cSt As Long, cStorno As Long
+    Dim nzStavki As Long
+    Dim ap As Variant, ocekBroj As String, nasao As Boolean
+
+    ' (1) Detalj otkupnog lista nosi SVE stavke dokumenta (broj + stanica),
+    ' ne samo izabranu liniju -- to je i bila poenta legacy panela. Vozilo:
+    ' BLK-BIM-3 ima TRI nestornirane linije.
+    det = modScrIzvestaji.IzDetaljOtkupLista("OTK-BIM-3A")
+    AssertEq IsArray(det), True, "detalj bloka postoji"
+    otk = GetTableData(TBL_OTKUP)
+    cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    nzStavki = 0
+    For i = 1 To UBound(otk, 1)
+        If Trim$(CStr(otk(i, cBr))) = FX_BIM_BLOK3_BR And _
+           Trim$(CStr(otk(i, cSt))) = FX_STANICA And _
+           CStr(otk(i, cStorno)) <> "Da" Then nzStavki = nzStavki + 1
+    Next i
+    AssertEq (nzStavki >= 3), True, "vozilo: blok sa vise linija postoji"
+    ' oblik: kooperant + stavke + UKUPNO
+    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 2, _
+             "detalj nosi SVE stavke bloka (kooperant + linije + UKUPNO)"
+    AssertEq (InStr(1, CStr(det(LBound(det))), "KOOP-TEST-3", vbTextCompare) > 0), _
+             True, "prva linija detalja imenuje kooperanta"
+    AssertEq (InStr(1, CStr(det(UBound(det))), "UKUPNO", vbTextCompare) > 0), _
+             True, "poslednja linija detalja je UKUPNO"
+
+    ' (2) Detalj otpremnice: broj vezanih blokova = rucni prolaz.
+    det = modScrIzvestaji.IzDetaljOtpremnice("OTP-TEST-1")
+    AssertEq IsArray(det), True, "detalj otpremnice postoji"
+    n = 0
+    Dim cOtp As Long
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    For i = 1 To UBound(otk, 1)
+        If Trim$(CStr(otk(i, cOtp))) = "OTP-TEST-1" And _
+           CStr(otk(i, cStorno)) <> "Da" Then n = n + 1
+    Next i
+    AssertEq (InStr(1, CStr(det(UBound(det))), CStr(n), vbTextCompare) > 0), True, _
+             "detalj otpremnice broji vezane blokove kao rucni prolaz"
+
+    ' (3) Cipovi su KONTEKSTNI: nedostupna kombinacija nema ni cipove.
+    AssertEq modScrIzvestaji.IzCipoviZaKontekst("MANJAK", "Kooperant", False), "", _
+             "nedostupna kombinacija nema cipove"
+    AssertEq (Len(modScrIzvestaji.IzCipoviZaKontekst("MANJAK", "OM", True)) > 0), _
+             True, "dostupna kombinacija zadrzava cipove"
+    AssertEq (Len(modScrIzvestaji.IzCipoviZaKontekst("AMBALAZA", "OM", False)) > 0), _
+             True, "ambalaza za OM ima cipove"
+
+    ' (4) Pregled ambalaze pokazuje POSLOVNI broj dokumenta (mape, ne
+    ' LookupValue po redu): red prijemnice PRJ-FAK-3 nosi njen broj.
+    ocekBroj = Trim$(CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, "PRJ-FAK-3", COL_PRJ_BROJ)))
+    AssertEq (Len(ocekBroj) > 0), True, "vozilo: prijemnica ima broj"
+    ap = ReportAmbalaza("Kupac", FX_KUPAC, IzvOdD(), IzvDoD(), False)
+    AssertEq IsArray(ap), True, "ambalaza kupca postoji"
+    nasao = False
+    For i = 1 To UBound(ap, 1)
+        If CStr(ap(i, 4)) = ocekBroj Then nasao = True
+    Next i
+    AssertEq nasao, True, _
+             "ambalaza pokazuje poslovni broj dokumenta, ne interni ID"
 End Sub

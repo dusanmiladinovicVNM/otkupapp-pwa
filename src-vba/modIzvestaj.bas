@@ -2523,6 +2523,15 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     Dim result() As Variant
     ReDim result(1 To nGrp + 1, 1 To 7)  ' +1 UKUPNO, kol.7 = skriveni ref-kljuc
 
+    ' Poslovni brojevi dokumenata JEDNIM prolazom po tabeli (mape), umesto
+    ' LookupValue po redu: na svesci sa 1.596 amb redova je razresenje broja
+    ' radilo 1.596 punih skenova tabela i tab je delovao zamrznuto (smoke
+    ' 28.08, krug 3) -- isti potez kao BuildOtkupBrojDokDict u karticama.
+    Dim mapaOtp As Object, mapaPrj As Object, mapaOtk As Object
+    Set mapaOtp = BuildLookupDict(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
+    Set mapaPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ)
+    Set mapaOtk = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_BR_DOK)
+
     Dim keys As Variant: keys = grp.keys
     Dim r As Long
     For r = 0 To nGrp - 1
@@ -2534,7 +2543,8 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         End If
         result(r + 1, 2) = rr(1)
         result(r + 1, 3) = rr(2)
-        result(r + 1, 4) = ResolveDokBroj(CStr(rr(6)), CStr(rr(3)))
+        result(r + 1, 4) = ResolveDokBrojMape(CStr(rr(6)), CStr(rr(3)), _
+                                              mapaOtp, mapaPrj, mapaOtk)
         result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
         result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
         result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
@@ -2556,24 +2566,30 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
-' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza pregledu).
+' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza
+' pregledu), nad UNAPRED izgradjenim mapama ID -> broj. Isto pravilo kao
+' nekadasnji ResolveDokBroj (LookupValue po redu), samo O(1) po redu:
+' BuildLookupDict je "prvi pojav pobedjuje", identicno LookupValue-u.
 ' Vraca DokumentID ako broj nije razresiv.
-Private Function ResolveDokBroj(ByVal dokTip As String, ByVal dokID As String) As String
+Private Function ResolveDokBrojMape(ByVal dokTip As String, ByVal dokID As String, _
+                                    ByVal mapaOtp As Object, ByVal mapaPrj As Object, _
+                                    ByVal mapaOtk As Object) As String
     On Error Resume Next
     Dim sOut As String: sOut = dokID
     Select Case dokTip
         Case DOK_TIP_OTPREMNICA
-            sOut = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, dokID, COL_OTP_BROJ))
+            If mapaOtp.Exists(dokID) Then sOut = CStr(mapaOtp(dokID))
         Case DOK_TIP_PRIJEMNICA
-            sOut = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, dokID, COL_PRJ_BROJ))
+            If mapaPrj.Exists(dokID) Then sOut = CStr(mapaPrj(dokID))
         Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
-            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone revers: DokumentID = brojDok
-            Dim br As String
-            br = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_BR_DOK))
-            If Len(Trim$(br)) > 0 Then sOut = br Else sOut = dokID
+            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone
+            ' revers: DokumentID = brojDok
+            If mapaOtk.Exists(dokID) Then
+                If Len(Trim$(CStr(mapaOtk(dokID)))) > 0 Then sOut = CStr(mapaOtk(dokID))
+            End If
     End Select
     If Len(Trim$(sOut)) = 0 Then sOut = dokID
-    ResolveDokBroj = sOut
+    ResolveDokBrojMape = sOut
 End Function
 
 ' ============================================================

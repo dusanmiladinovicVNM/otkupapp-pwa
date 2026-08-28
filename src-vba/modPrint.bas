@@ -64,6 +64,121 @@ Public Sub PrintIzvestaj(ByVal data As Variant, ByVal reportTitle As String, _
 End Sub
 
 ' ============================================================
+' TABELARNI IZVESTAJ U HOUSE STILU (v6-ui-186, smoke krug 3): isti obrazac
+' kao specifikacija isplata i kartica -- DocSellerHeader + DocTitleBlock +
+' header traka + UKUPNO bold -- da SVI stampani dokumenti budu uskladjeni.
+' Kolone su dinamicke (izvestaji ih imaju 4-11), pa se sheet gradi ispocetka
+' umesto sablona sa imenovanim range-ovima.
+'
+' data je STRING matrica (pozivalac formatira vrednosti); SVE celije podataka
+' nose NumberFormat "@" PRE upisa -- Excel u protivnom string koji ume da
+' protumaci ("12/1" tip ambalaze) pretvori u datum, isti razred kvara kao
+' goli 18-cifreni racun (par. 22.9/N1). desno(j) = True za kolone brojeva.
+' ============================================================
+Public Sub PrintIzvestajHouse(ByVal data As Variant, ByVal nRows As Long, _
+                              ByVal nCols As Long, ByVal title As String, _
+                              ByVal descriptor As String, _
+                              ByVal headers As Variant, ByVal desno As Variant)
+    Const SRC As String = "modPrint.PrintIzvestajHouse"
+    On Error GoTo EH
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("_IzvPrint")
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = "_IzvPrint"
+    End If
+    ws.Visible = xlSheetVisible
+
+    Dim oldScreen As Boolean: oldScreen = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 9
+
+    Dim r As Long, i As Long, c As Long
+    r = DocSellerHeader(ws, 1, nCols, nCols)
+    r = DocTitleBlock(ws, r, nCols, descriptor, title)
+
+    Dim hdr As Long: hdr = r + 1
+    For c = 1 To nCols
+        ws.cells(hdr, c).value = headers(c - 1)
+    Next c
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, nCols))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    Dim startRow As Long: startRow = hdr + 1
+    Dim endRow As Long: endRow = startRow + nRows - 1
+    ' "@" PRE upisa: podaci su vec formatirani stringovi i takvi ostaju.
+    ws.Range(ws.cells(startRow, 1), ws.cells(endRow, nCols)).NumberFormat = "@"
+    For i = 1 To nRows
+        For c = 1 To nCols
+            ws.cells(startRow + i - 1, c).value = data(i, c)
+        Next c
+    Next i
+    For c = 1 To nCols
+        If CBool(desno(c - 1)) Then
+            ws.Range(ws.cells(startRow, c), ws.cells(endRow, c)) _
+              .HorizontalAlignment = xlRight
+        End If
+    Next c
+    ' Poslednji red je izracunat UKUPNO (pozivalac ga dodaje) -- bold, kao u
+    ' ostalim dokumentima.
+    If nRows > 0 Then
+        If CStr(data(nRows, 1)) = "UKUPNO" Then _
+            ws.Range(ws.cells(endRow, 1), ws.cells(endRow, nCols)).Font.Bold = True
+    End If
+    With ws.Range(ws.cells(hdr, 1), ws.cells(endRow, nCols)).Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+    End With
+    ws.columns("A").Resize(, nCols).EntireColumn.AutoFit
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = IIf(nCols > 7, xlLandscape, xlPortrait)
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintTitleRows = "$" & hdr & ":$" & hdr
+        .LeftMargin = Application.InchesToPoints(0.3)
+        .RightMargin = Application.InchesToPoints(0.3)
+        .TopMargin = Application.InchesToPoints(0.4)
+        .BottomMargin = Application.InchesToPoints(0.4)
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(endRow, nCols)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Dim pdfPath As String
+    pdfPath = EnsureDocFolder(PDF_DIR_IZVESTAJI) & "\Izve" & ChrW(353) & "taj_" & _
+              Format$(Now, "yyyymmdd_hhnnss") & ".pdf"
+    ws.UsedRange.ExportAsFixedFormat Type:=xlTypePDF, fileName:=pdfPath, _
+                                     Quality:=xlQualityStandard, OpenAfterPublish:=True
+
+    ws.Visible = xlSheetVeryHidden
+    Application.ScreenUpdating = oldScreen
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    LogErr SRC
+    On Error Resume Next
+    If Not ws Is Nothing Then ws.Visible = xlSheetVeryHidden
+End Sub
+
+' ============================================================
 ' OTPREMNICA (PDF) - isti vizuelni stil kao otkupni / grupni otkupni list
 ' (WriteOtkupCopy, dva primerka 1/3 A4), podaci iz reda tblOtpremnice.
 ' ============================================================
