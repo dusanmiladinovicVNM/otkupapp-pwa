@@ -515,8 +515,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 15. ~~Agrohemija~~ **URAĐENO** (v6-ui-171, dorada `v6-ui-172`, `modScrAgro`) — v. §7.
 16. ~~Fakture~~ **URAĐENO** (`v6-ui-176`, `modScrFakture`) — v. §8.
 17. ~~Banka uvoz~~ **URAĐENO** (`v6-ui-177`, `modScrBankaUvoz`) — v. §9.
-    Ostaju: Banka nalozi, Marža, Izveštaji, Sledljivost — svaki po istom
-    obrascu.
+18. ~~Banka nalozi~~ **URAĐENO** (`v6-ui-185`, `modScrBankaNalozi`) — v. §22.
+    Ostaju: Marža, Izveštaji, Sledljivost — svaki po istom obrascu.
 
 ---
 
@@ -3909,3 +3909,203 @@ testom. Rečeno kao neizmereno.
 **Broj vlasnika nije broj dokumenata.** `VlasniciPoBroju` broji **vlasnike**, pa
 isti kupac sa dva aktivna dokumenta pod istim brojem i dalje daje `1`. Nijedna od
 kapija u ovoj funkciji taj slučaj ne hvata. Nalaz stoji otvoren.
+
+---
+
+## 22. Banka nalozi — šta je preneto (`v6-ui-185`)
+
+Četvrti ekran **Faze E**. Red u registru (`modUiScreens.ScrRows`) je postojao
+od `S3a` — stavka menija se do sada crtala prigušena jer modula nije bilo.
+Ovim se piše modul koji taj red već očekuje; **registar se ne dira**.
+
+Bitna razlika u odnosu na Banka uvoz: najskuplji deo migracije je ovde već bio
+odrađen. `modBankaExportPregled` je od AUD-026 nosio deset javnih funkcija
+(lista otvorenih blokova sa fail-closed identitetom, klamp, saldo kapija, CSV
+writer, specifikacija, računi firme) — pa je ekran uglavnom **prikaz nad
+postojećim računima**, a izdvajanja iz forme skoro da nije bilo.
+
+### 22.1 Gde je šta završilo
+
+| Legacy (`frmBankaExportPregled`) | Novo mesto |
+|---|---|
+| `LoadBlokovi` + `RenderListbox` | lista **NALOZI**, čitač `modBankaExportPregled.GetBlokIsplataForGrid` |
+| `lstBlokovi` MultiSelect (čekiranje) | **korpa „U NALOZIMA"** + kolona oznake + traka u zoni + dvoklik |
+| filter Kooperant / datum / stanica | **pretraga ljuske** (haystack: broj, kooperant, stanica, račun, OtkupID) |
+| KPI traka (`RefreshTopKpis`) | `modBankaExportPregled.NalogeKpi` (jedan prolaz; avans pool po kooperantu) |
+| `CollectIsplataBlokovi` (selekcija za izvoz) | `modBankaExportPregled.OdaberiBlokoveZaNaloge` |
+| combo „Sa računa" (`PopulateRacunCombo`) | polje zone `scrBnRacun` (isti `BankaNalogRacuniCSV` + `BankaNazivZaRacun`) |
+| `btnGenerisiCSV_Click` | dugme zone `scrBnCsv` → `GenerisiNalogeCSV` (nepromenjen) |
+| `btnExport_Click` (PDF specifikacija) | dugme zone `scrBnSpec` → `PrintIsplataSpecifikacija` (nepromenjen) |
+| `mBtnAvansBlok` („Primeni avans na blok") | radnja nad redom `bnavans` → `ApplyAvansToOtkup_TX` (nepromenjen) |
+| `txtIsplatiti` override + `ClampOverridesToOpen` | **NIJE preneto** — v. 22.3 |
+| `btnOsvezi_Click` | posao ljuske (`RefreshFromData`) |
+
+Nove rutine za mrežu (ekran ne čita tabele sam): sve tri u
+`modBankaExportPregled` i sve tri **nad** `BuildBlokIsplataList` — pa
+nasleđuju njegove fail-closed kapije identiteta (dupli/prazan `OtkupID`,
+dupli `KooperantID` obaraju čitanje; testovi T17–T20 banka suite-a).
+`OdaberiBlokoveZaNaloge` je izdvojen iz `CollectIsplataBlokovi` obrazac
+(legacy forma je čitala ListBox; sada pravilo „korpa ili svi + bez TR se
+preskače i broji + `IsplatitiIznos = ZaokruziNovac(OtvorenIznos)` PRE praga"
+živi na jednom mestu) — isto kao `PrijemnicaDostupna` u §8.1.
+
+### 22.2 Tri odluke
+
+**(A) Export CSV ULAZI u ekran.** Merilo iz §9.3 (uvoz nije ušao) ovde daje
+suprotan odgovor po sve tri tačke: `GenerisiNalogeCSV` **vraća ishod** (putanju
+fajla i `outOdbijeno` razlog — dugme ume da kaže „N naloga, ukupno X, fajl Y");
+piše **jedan** fajl atomično, bez pomeranja tuđih fajlova i bez potrebe za
+progresom; i legacy forma **ima** to dugme, pa bi ekran bez njega bio uži od
+legacy-ja (§8.3). Finalna kapija ostaje u domenu: `BuildNalogCsvPayload` čita
+svež saldo i `ValidateNalogSaldo` odbija ceo fajl. Potvrda pre upisa nosi broj,
+ukupan iznos, račun (sa bankom), datum valute i broj preskočenih — ništa tiho.
+
+**(B) Korigovani iznos po redu NE ulazi.** Legacy `txtIsplatiti` override je
+prolazno stanje sa celim §8.6 aparatom (klamp na svaki reload, čišćenje na
+promenu konteksta, kanal za značku), a mreža ljuske nema detail panel u kom bi
+unos po redu živeo — polje u zoni vezano za „izabran red" bi zastarevalo na
+svaki sort/stranu/filter. v1 zato izvozi **pun otvoren iznos** (identično
+legacy ponašanju kad operater ništa ne kuca); delimična isplata se i dalje
+radi u `frmBankaExportPregled`, koja ostaje operativna. Posledica na §8.6:
+jedino prolazno stanje ekrana je korpa identiteta — i ona NAMERNO **ne nosi
+iznos**, pa zastareo snimak ne može da naruči uplatu (iznos se čita svež u
+trenutku izvoza).
+
+**(C) Štampa specifikacije ULAZI.** Jedan poziv postojeće rutine
+(`PrintIsplataSpecifikacija` → `modPrint`, režim `ISPLATA_SPEC_PRINT_MODE`),
+isti izbor blokova i isti iznosi kao CSV. Ne može se verifikovati automatski —
+ide na smoke checklistu. Režim `OFF` se **prijavljuje** („štampa isključena"),
+jer bi klik bez ijedne poruke izgledao kao dugme koje ne radi.
+
+### 22.3 Šta je namerno drugačije od legacy-ja
+
+- **JEDNA lista.** Predložena druga lista RAČUNI je izbačena: sav njen sadržaj
+  (računi firme + naziv banke) nosi combo „Sa računa" u zoni, pa bi lista bila
+  pregled bez ijednog posla nad redom — §8.4 formalno prolazi (druga forma
+  podatka), ali ne prolazi test vrednosti.
+- **Čip „iznad praga" nije ušao.** Prag ne postoji ni u legacy formi ni u
+  configu — uvođenje bi bilo novo poslovno pravilo, ne prelazak ekrana.
+  Čipovi su: Sve · Ima račun · Bez računa · Avans (poslednji: kooperant ima
+  neraspoređen avans — te blokove pre naloga treba vezati radnjom).
+- **Multiselect → korpa identiteta** („U NALOZIMA"): radnje `bnadd`/`bndel`,
+  dvoklik prebacuje, kolona kvačice, traka u zoni (najnovije prvo + preliv se
+  prijavljuje), KPI pločica. Korpa se **usklađuje sa svežom listom pri svakom
+  čitanju** (`BnUskladiKorpu`): stavka čiji blok više nije otvoren izlazi uz
+  poruku — isti razlog kao legacy klamp („tiho spuštanje bi operater lako
+  promašio") — a živima se osvežava snimak za traku. Prazna korpa = izvoz SVIH
+  otvorenih sa računom (legacy „nema selekcije = svi"), što potvrdni dijalog
+  eksplicitno pokaže brojem i iznosom.
+- **Blok bez tekućeg računa ne može u korpu** (`BnDodaj` odbija) — legacy je
+  isto radio na check-u reda. U CSV ionako ne sme (nema primaoca); ovim se ne
+  broje nalozi koji nikad ne nastanu.
+- **Posle uspešnog izvoza korpa se prazni** — drugi klik ne sme tiho da
+  napravi iste naloge još jednom.
+- **Datum od/do i stanica filter nisu preneti kao polja.** Pretraga ljuske
+  pokriva stanicu (i sve ostalo iz haystack-a); vremenski opseg u praksi ne
+  sužava isplatu (plaća se sve otvoreno), a `BuildBlokIsplataList` filtere i
+  dalje nosi za legacy formu.
+
+### 22.4 Identitet
+
+Identitet reda je **`OtkupID`**, u koloni prioriteta 4 (ključ
+`OTKUI_HDN_OTKID`), čitan kroz `GridCell` — mape „prikaz → ID" nema. Broj
+bloka NIJE identitet (jedinstven je samo po stanici — fixture drži isti broj
+na dva otkupna mesta), a žiro račun dele svi blokovi istog kooperanta.
+
+**Dvosmislen `OtkupID` ovde ne stiže do mreže.** Za razliku od §8.5/§9.6
+(`IdIliPrazno` → prazan identitet po redu), domenski čitač
+(`BuildBlokIsplataList`) na dupli/prazan `OtkupID` među otvorenima **obara
+celo čitanje** (AUD-026, `ERR_ISPLATA_*`) — jer bi na ovoj putanji pogrešan
+identitet značio nalog pogrešnom primaocu, a to pravilo postoji od ranije i
+ima svoje testove (T17–T20). `IdReda` u ekranu ostaje kao poslednja linija
+(prazan → odbij), ne kao prva.
+
+Red **prenosi** i ono što radnje moraju da znaju a iz prikaza se ne vidi
+jednoznačno (§8.5): `KooperantID` (avans se knjiži na taj par), „ima račun"
+(prazna ćelija računa liči na kolonu koja se nije nacrtala) i avans saldo —
+sve prioriteta 4.
+
+### 22.5 Brojač i prolazno stanje
+
+Značka menija broji **otvorene blokove** (podatak u tabeli, `NalogeKpi`);
+svaka promena nastaje upisom, pa je `RefreshFromData` pokriva — privatan kanal
+ka `OsveziNavBrojace` ne postoji (§9.7 obrazac, ne §8.6). Korpa se u znački
+**ne broji**: ona je izbor za izvoz, a ne posao koji čeka — napuštanje ekrana
+sa punom korpom ne gubi ništa (izvoz je eksplicitan, tihog knjiženja nema).
+Neuspeh čitanja KPI-ja nije nula: poslednja poznata vrednost, a pre prve
+`-1` = „ne znam" (ljuska crta `!`) — isto pravilo kao §9.
+
+### 22.6 Šta NIJE preneto
+
+- **`frmBankaExportPregled` se ne gasi i ne menja** — dve kopije žive namerno
+  (§5, Faza B). `ValidateNalogSaldo`, `ClampOverridesToOpen`, CSV writer i
+  cent-domen pravilo **nisu dirani**.
+- **„Isplatiti" override** (delimična isplata) — v. odluku (B).
+- **„Primeni avans (sel.)"** (batch nad čekiranim) — v1 nosi avans samo po
+  redu; batch ostaje u legacy formi. Razlog: batch knjiženje traži zbirni
+  izveštaj ishoda (ok/no-op/greška po bloku), a toast nosi jedan red.
+- **Storno isplate / izvoda** nije ovde — posao ekrana Storno.
+
+### 22.7 Fixture
+
+`tblOtkup`/`tblKooperanti`/`tblNovac` do sada nisu imali nijedan slučaj za
+ovaj ekran: nijedan kooperant nije imao tekući račun, pa bi svaka tvrdnja o
+„sme u CSV" merila prazan skup. Dodato (uz razlog u komentaru):
+
+| Red | Zašto postoji |
+|---|---|
+| `KOOP-TEST-1.TekuciRacun` | jedini kooperant SA računom — „ima račun" polovina svih tvrdnji |
+| `KOOP-TEST-2/3` bez računa | „bez računa" polovina: blok se vidi, ne sme u naloge |
+| `OTK-NAL-DELIM` + `NOV-NAL-DELIM` | delimično isplaćen blok (1000 − 400): otvoreno = ostatak, ne pun iznos |
+| `OTK-NAL-STOR` | storniran blok sa „otvorenim" iznosom — ne sme u listu |
+| `OTK-BIM-PLAC` (postojeći) | u celosti plaćen — ne sme u listu |
+| `KOOP-TEST-1` sa ≥2 bloka + avans 1000 | vozilo za dedup avans pool-a po kooperantu |
+
+Pet config ključeva ekrana se **pinuje** u `SEF_CONFIG`
+(`BANKA_NALOG_RACUN_1..4`, `BANKA_NALOG_RACUNI`, šifra, svrha,
+`ISPLATA_SPEC_PRINT_MODE=OFF`) — ista klasa kao `DEFAULT_SORTA_VOCA` u §8.10:
+donor-zavisan config je već nosio „dva crvena ali nisu moja".
+
+### 22.8 Verifikacija
+
+Testovi **127–131** u `modTest` i **dvanaest** sabotaža. U `RunAllTests` se
+izvršavaju **pre** 124–126 (mutirajući testovi ostaju poslednji u nizu;
+redosled izvršavanja ne mora da prati brojeve).
+
+| Test | Šta meri | Sabotaža |
+|---|---|---|
+| `T_BankaNalozi_UgovorEkrana` | registar, JEDNA lista, tri radnje, granice bazena, prvi čip najširi, datum kao broj | `banka-nalozi-cip-sve-nije-prvi` |
+| `T_BankaNalozi_IdentitetURedu_NeCrtaSe` | identitet po ključu kolone, prio 4; sve prenosne kolone van prikaza; delimičan blok = ostatak; storniran/plaćen nisu u listi | `banka-nalozi-identitet-vidljiv`, `banka-nalozi-red-ne-nosi-koopid` |
+| `T_BankaNalozi_CipoviIKpiPratePravila` | čipovi particija „sve"; slaganje sa čitačem po svakom bloku; avans pool po kooperantu (uz dokaz da vozilo postoji); KPI posle greške | `banka-nalozi-cip-imarac-pusta-sve`, `banka-nalozi-kpi-avans-po-bloku`, `banka-nalozi-kpi-greska-je-nula` |
+| `T_BankaNalozi_KorpaIIzvoz` | korpa po identitetu (prazan/bez TR/dupli se odbijaju), traka najnovije prvo + preliv, usklađivanje sa svežom listom, izbor za izvoz (korpa/svi/nepoznat), svež iznos u cent-domenu | `banka-nalozi-bez-racuna-u-naloge`, `banka-nalozi-prazan-id-ulazi`, `banka-nalozi-usklad-ne-cisti`, `banka-nalozi-izvoz-ignorise-izbor`, `banka-nalozi-izvoz-sirov-iznos` |
+| `T_ZonaBankaNalozi_PoljaIRaspored` | zona se stvarno gradi i raspoređuje; combo je polje (`nm`+`nmT`); tvrdi se posle `Unload`-a | `banka-nalozi-zona-bez-dugmeta` |
+
+Tvrdnja koja nosi najviše: **avans pool po kooperantu** ima i tvrdnju da
+vozilo postoji (kooperant sa avansom i ≥2 bloka, i da se dve politike stvarno
+razlikuju u zbiru) — bez nje bi dedup tvrdnja bila zelena i nad fixture-om
+koji razliku ne može da pokaže.
+
+Tvrdnje „storniran nije u listi" i „plaćen nije u listi" **nemaju svoju
+sabotažu**: čuva ih nasleđeni sloj (`ExcludeStornirano` / `GetOpenOtkupi` u
+`modNovac`), koji nije diran u ovom PR-u — sabotaža nad njim bi obarala tuđe,
+već pokrivene testove.
+
+Diff u `modOtkupUI` je **jedna linija — pečat** (`OTKUI_BUILD` →
+`v6-ui-185`), isti razlog kao §8.10/R3.
+
+**Pušteno i zeleno:** `RunAllTests` **131 / 0** (prvo puštanje novih testova),
+`RunBankaImportTestSuite` **196 / 0**, `vba_check` + `--self-test`,
+`sabotaza --self-test`, `who_writes --check`. Dvosmerni dokaz svih dvanaest
+sabotaža: v. ispod.
+
+**Nalaz iz sesije — dokaz i uređivanje izvora se ne mešaju.** Prvi prolaz
+`dokaz.py banka-nalozi` oboren je mojom greškom u redosledu, ne kodom: usred
+prvog ciklusa podignut je pečat u `modOtkupUI`, a dokaz posle svakog vraćanja
+poredi potpis **celog** `src-vba` — pa je uredno stao uz `REVERT-FAIL`
+(tačno ono za šta ta provera postoji). Izvor je vraćen, pečat podignut PRE
+drugog prolaza, i pravilo zapisano: dok dokaz radi, u `src-vba` se ne dira
+ništa.
+
+**Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug → Compile
+VBAProject`, pa smoke nad pravim podacima — v. checklistu u PR-u (izgled
+zone, traka korpe, potvrda i ishod CSV-a, PDF specifikacija, avans).

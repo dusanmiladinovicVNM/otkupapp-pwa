@@ -6233,3 +6233,59 @@ se druga dva nivoa zaštite ovom proverom ne mere.
 **Broj vlasnika nije broj dokumenata** — isti kupac sa dva aktivna dokumenta pod
 istim brojem i dalje se broji kao jedan vlasnik. Nijedna zaštita na tom mestu taj
 slučaj ne hvata. Zapisano kao otvoreno.
+
+---
+
+## v2.87.0 — novi ekran „Platni nalozi": nalozi za banku iz novog UI-ja
+
+Novi UI je dobio ekran **Platni nalozi** (Finansije). Stavka menija koja je do
+sada stajala prigušena sada radi: pregled svih otvorenih otkupnih blokova,
+izbor šta se plaća, CSV naloga za e-banking i PDF specifikacija — bez odlaska
+u staru formu za standardni tok.
+
+### Šta operater dobija
+
+- **Lista otvorenih blokova** sa datumom, kooperantom, otkupnim mestom,
+  ukupnim/isplaćenim/otvorenim iznosom i tekućim računom primaoca. Pretraga
+  hvata broj bloka, kooperanta, stanicu i račun. Čipovi: Sve · Ima račun ·
+  Bez računa · Avans.
+- **Izbor „U NALOZIMA"**: red se dodaje dugmetom ili dvoklikom, vidi se kao
+  kvačica u listi i u traci desno (poslednje dodato prvo, višak se
+  prijavljuje). Prazan izbor = idu svi otvoreni sa računom, i to potvrda
+  jasno kaže. Blok bez žiro računa ne može u izbor — prvo se račun upiše u
+  matične podatke.
+- **Generiši naloge**: jedno dugme, potvrda pre upisa (broj naloga, ukupan
+  iznos, račun firme sa bankom, datum valute, preskočeni), pa fajl + otvoren
+  folder. Sve postojeće zaštite ostaju: saldo svakog naloga se pred upis
+  proverava nad svežim stanjem i ceo fajl se odbija ako ijedan traži više
+  nego što je otvoreno.
+- **PDF specifikacija** istih blokova i istih iznosa kao CSV.
+- **Primeni avans na blok** direktno iz reda (isto knjiženje kao u staroj
+  formi, sa potvrdom i stvarnim iznosom u poruci — bez lažnog „uspeha" kad
+  nije bilo šta da se veže).
+- Brojka u meniju pokazuje koliko blokova čeka isplatu; posle greške čitanja
+  pokazuje „!" umesto lažne nule.
+
+### Šta NIJE urađeno, i zašto
+
+- **Delimična isplata (unos „Isplatiti" po bloku) ostaje u staroj formi.**
+  Novi ekran uvek izvozi pun otvoren iznos. Unos po redu je prolazno stanje
+  sa celim aparatom održavanja (usklađivanje na svako osvežavanje, čišćenje
+  pri promeni prikaza), a mreža novog UI-ja nema panel u kom bi taj unos
+  pouzdano živeo — pola te funkcije bilo bi opasnije od njenog odsustva.
+- **„Primeni avans (sel.)" na više blokova odjednom** — i dalje u staroj
+  formi: zbirni ishod batch-a (koliko vezano / bez promene / grešaka) ne
+  staje u jednu poruku novog ekrana.
+- Stara forma **ostaje operativna i nepromenjena** — ništa iz nje nije
+  obrisano niti izmenjeno.
+
+### Verifikacija
+
+- Glavni set **131 / 0** (pet novih testova ekrana), banka set **196 / 0**;
+  statičke provere čiste; dvanaest novih namernih kvarova obara po tačno
+  jedan imenovani test i vraća se bit-identično (dvosmerni dokaz).
+- Fixture je dobio slučajeve bez kojih bi tvrdnje merile prazan skup:
+  kooperant sa žiro računom, delimično isplaćen blok, storniran blok.
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
+  smoke nad pravim podacima (checklista u PR-u). Bez toga se ekran ne
+  prijavljuje kao spreman.
