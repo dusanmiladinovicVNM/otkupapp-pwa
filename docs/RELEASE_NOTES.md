@@ -6293,3 +6293,98 @@ provere. Ide zasebno, sa punim prolazom posle.
 Pun prolaz je do sada bio jednokratna potvrda. Sada se zna da razlika koju on meri
 **pomera se sa svakom ispravnom izmenom koda** — pa postaje periodičan posao, a ne
 jednokratan.
+---
+
+## v2.88.0 — novi ekran „Platni nalozi": nalozi za banku iz novog UI-ja
+
+Novi UI je dobio ekran **Platni nalozi** (Finansije). Stavka menija koja je do
+sada stajala prigušena sada radi: pregled svih otvorenih otkupnih blokova,
+izbor šta se plaća, CSV naloga za e-banking i PDF specifikacija — bez odlaska
+u staru formu za standardni tok.
+
+### Šta operater dobija
+
+- **Lista otvorenih blokova** sa datumom, kooperantom, otkupnim mestom,
+  ukupnim/isplaćenim/otvorenim iznosom i tekućim računom primaoca. Pretraga
+  hvata broj bloka, kooperanta, stanicu i račun. Čipovi: Sve · Ima račun ·
+  Bez računa · Avans.
+- **Izbor „U NALOZIMA"**: red se dodaje dugmetom ili dvoklikom, vidi se kao
+  kvačica u listi i u traci desno (poslednje dodato prvo, višak se
+  prijavljuje). **Prazan izbor ne izvozi ništa** — za „plati sve" postoji
+  izričito dugme **„+ Svi sa računom"**. (Prva verzija je preuzela staro
+  „nema selekcije = svi"; recenzija je to oborila: fajl ne knjiži isplatu,
+  pa bi drugi klik posle ispražnjenog izbora tiho napravio naloge za sve
+  otvorene.) Blok bez žiro računa ne može u izbor — prvo se račun upiše u
+  matične podatke; blok kome račun nestane naknadno sam izlazi iz izbora,
+  uz poruku.
+- **Generiši naloge**: jedno dugme, potvrda pre upisa (broj naloga, ukupan
+  iznos, račun firme sa bankom, datum valute, preskočeni), pa fajl + otvoren
+  folder. Sve postojeće zaštite ostaju: saldo svakog naloga se pred upis
+  proverava nad svežim stanjem i ceo fajl se odbija ako ijedan traži više
+  nego što je otvoreno.
+- **PDF specifikacija** istih blokova i istih iznosa kao CSV.
+- **Iznos po bloku („Iznos…")**: kad se blok ne isplaćuje u potpunosti,
+  operater na redu zada manji iznos (predlog je pun otvoreni). Pravila su
+  ista kao u staroj formi: nikad preko otvorenog, u parama; iznos jednak
+  otvorenom vraća blok na punu isplatu. Ako se otvoreno u međuvremenu
+  smanji, zadati iznos se sam spusti — uz poruku, nikad tiho. Kolona
+  „Isplatiti" u listi pokazuje šta tačno ide u nalog.
+- **Primeni avans na blok** direktno iz reda (isto knjiženje kao u staroj
+  formi, sa potvrdom i stvarnim iznosom u poruci — bez lažnog „uspeha" kad
+  nije bilo šta da se veže).
+- Brojka u meniju pokazuje koliko blokova čeka isplatu; posle greške čitanja
+  pokazuje „!" umesto lažne nule.
+
+### Doterano kroz tri kruga smoke-a nad pravim podacima
+
+Smoke nad svescom sa 1.595 otvorenih blokova je oborio i jednu UX odluku i
+tri stvarna kvara — sve zatvoreno u istom izdanju:
+
+- **Broj računa u fajlovima.** Račun unet kao golih 18 cifara je u Excelu
+  izgledao kao „2,059E+17" — Excel takav niz čita kao broj i čuva samo 15
+  cifara, pa bi snimanje iz Excela **uništilo račun primaoca** pre uvoza u
+  banku. Nalozi (obe kolone računa) i kolona „Tekući račun" u PDF
+  specifikaciji sada uvek nose standardni oblik sa crticama (3-13-2), koji
+  ostaje tekst; računi već uneti sa crticama prolaze neizmenjeni. Ispravku
+  dobija i stara forma (isti generator).
+- **Pretraga i čipovi su trenutni i na velikoj svesci.** Svaki otkucaj je
+  iznova čitao cele tabele, pa se ekran smrzavao po ~10 sekundi i filter je
+  delovao mrtav — a plaćanje na terenu ide baš po izboru operatera, ne
+  redom. Lista se sada učita jednom pa se filtrira u mestu (isti princip
+  kao u staroj formi); svaki upis je odmah osvežava, a fajl za banku i
+  dalje čita sveže stanje.
+- **Pretraga nalazi imena sa kvakama i kad se kucaju bez njih** („djeric"
+  nalazi Đerića) — bitno na tastaturama bez naših slova (DE/EN).
+- **Red u traci „U NALOZIMA" pokazuje iznos koji se stvarno plaća** (zadati,
+  ne pun otvoreni) — isti broj kao zbir ispod njega.
+
+### Šta NIJE urađeno, i zašto
+
+- **„Primeni avans (sel.)" na više blokova odjednom** — i dalje u staroj
+  formi: zbirni ishod batch-a (koliko vezano / bez promene / grešaka) ne
+  staje u jednu poruku novog ekrana.
+- Stara forma **ostaje operativna i nepromenjena** — ništa iz nje nije
+  obrisano niti izmenjeno.
+- **Estetika za kasniji prolaz kroz sve ekrane:** kursor u polju pretrage
+  treperi preko placeholder teksta umesto ispred njega (ljuskin detalj,
+  važi svuda — zabeleženo, ne dira se u ovom izdanju).
+
+### Verifikacija
+
+- Ugrađena je i recenzija PR-a: prazan izbor kao blocker (gore), dokaz da
+  ekran zaista šalje zadate iznose u fajl (ne samo da pravilo postoji), i
+  čišćenje izbora kad blok izgubi račun.
+- Glavni set **132 / 0** (šest novih testova ekrana), banka set **205 / 0**
+  (novi test formata računa je prvo pušten crven nad zatečenim ponašanjem,
+  pa zelen posle ispravke); statičke provere čiste; **dvadeset tri** nova
+  namerna kvara obaraju po tačno jedan imenovani test i vraćaju se
+  bit-identično (dvosmerni dokaz, pušten iznova posle svakog kruga);
+  pun set svih suita zelen.
+- Fixture je dobio slučajeve bez kojih bi tvrdnje merile prazan skup:
+  kooperant sa žiro računom (i jedan sa kvakama u imenu), delimično
+  isplaćen blok, storniran blok.
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
+  smoke nad pravim podacima (checklista u PR-u) — **odrađeno kroz četiri
+  kruga na pravoj svesci**; otvoren ostaje samo nalaz o naizgled praznoj
+  ćeliji „Isplatiti" na jednom redu (dijagnostika `Diag_BnRedovi` stoji u
+  ekranu ako se ponovi).

@@ -83,6 +83,7 @@ Public Sub RunBankaImportTestSuite()
     T13_NalogPrekoOtvorenogSeOdbija
     T14_CsvPayloadNosiKapiju
     T15_DupliOtkupIDObaraSaldoMapu
+    T22_RacunUCsvJeExcelSafe
 
     ' AppendRow/UpdateCell pisu CSV crash-recovery journal koji tx.RollbackTx NE
     ' povlaci -- test redovi bi ostali u Journal folderu i sledeci start bi javio
@@ -1162,6 +1163,62 @@ Private Function MakeNalog(ByVal otkupID As String, ByVal brDok As String, _
     If imaTR Then blk.TekuciRacun = "160-0000000000-11"
     Set MakeNalog = blk
 End Function
+
+' ============================================================
+' T22 - nalaz sa smoke-a 28.08.2026 (v6-ui-185): goli 18-cifreni racun u
+' koloni CSV naloga.
+'
+' Excel pri otvaranju CSV-a niz od vise od 15 cifara cita kao BROJ: prikaze
+' ga kao "2,059E+17", drzi samo 15 znacajnih cifara, i snimanje iz Excela
+' racun primaoca UNISTI pre uvoza u e-banking. Racun sa crticama ostaje
+' tekst -- a kolona je i do sada nosila mesavinu oba oblika (racun ide u
+' fajl onako kako je unet u maticne podatke), pa kanonizacija golih 18
+' cifara u NBS oblik 3-13-2 ne uvodi nov oblik u kolonu.
+' ============================================================
+Private Sub T22_RacunUCsvJeExcelSafe()
+    Const S As String = "T22 racun u CSV-u: "
+    Const GOLI As String = "205000000012345678"
+    Const SA_CRTICAMA As String = "205-0000000123456-78"
+
+    ' 1) Pravilo, cisto: tacno 18 golih cifara -> 3-13-2; sve ostalo netaknuto.
+    ChkEq FormatRacunZaNalog(GOLI), SA_CRTICAMA, _
+          S & "18 golih cifara se kanonizuje u NBS oblik 3-13-2"
+    ChkEq FormatRacunZaNalog("205 0000000123456 78"), SA_CRTICAMA, _
+          S & "razmaci se skidaju PRE prepoznavanja oblika"
+    ChkEq FormatRacunZaNalog(SA_CRTICAMA), SA_CRTICAMA, _
+          S & "racun koji vec ima crtice prolazi netaknut"
+    ChkEq FormatRacunZaNalog("160-0000000000-11"), "160-0000000000-11", _
+          S & "kratki zapis sa crticama prolazi netaknut"
+    ChkEq FormatRacunZaNalog("12345"), "12345", _
+          S & "sto nije 18 golih cifara ne dira se -- format se ne izmislja"
+    ChkEq FormatRacunZaNalog(""), "", S & "prazan racun ostaje prazan"
+
+    ' 2) I payload NOSI to pravilo, u obe kolone racuna (platilac i primalac).
+    '    Bez ovoga bi pravilo postojalo a fajl i dalje isao sa golim ciframa.
+    Dim blk As clsBlokIsplata
+    Set blk = MakeNalog(P & "OTK-T22", P & "BLOK-T22", 100, True)
+    blk.TekuciRacun = GOLI
+
+    Dim nalozi As Collection
+    Set nalozi = New Collection
+    nalozi.Add blk
+
+    Dim otvoreno As Object
+    Set otvoreno = CreateObject("Scripting.Dictionary")
+    otvoreno(P & "OTK-T22") = 100#
+
+    Dim payload As String, odbijeno As String
+    payload = BuildNalogCsvPayload(nalozi, "155000000003101779", otvoreno, odbijeno)
+    Chk LenB(payload) > 0, S & "payload je nastao (kapija salda prolazi)"
+
+    Dim redovi() As String, polja() As String
+    redovi = Split(payload, vbCrLf)
+    polja = Split(redovi(1), ";")
+    ChkEq polja(0), "155-0000000031017-79", _
+          S & "RacunPlatioca u fajlu nosi crtice -- Excel ga drzi kao tekst"
+    ChkEq polja(2), SA_CRTICAMA, _
+          S & "RacunPrimaoca u fajlu nosi crtice -- cifre se ne gube"
+End Sub
 
 ' ============================================================
 ' T16 - AUD-026: "Primeni avans" odbija dupli kanonski OtkupID.

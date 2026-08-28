@@ -293,8 +293,14 @@ SEED = {
         {"TipAmbalaze": AMB_12_1, "TezinaGajbiceKg": 1.0, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblKooperanti": [
+        # KOOP-TEST-1 IMA tekuci racun: ekran Platni nalozi bez ijednog
+        # kooperanta sa racunom nema nijedan blok koji sme u CSV, pa bi cip
+        # "ima racun", kapija korpe i izbor za izvoz merili prazan skup.
+        # KOOP-TEST-2 i KOOP-TEST-3 NAMERNO ostaju bez racuna -- to je "bez
+        # racuna" polovina istih tvrdnji (blok se vidi, ne sme u naloge).
         {"KooperantID": "KOOP-TEST-1", "Ime": "Prvi", "Prezime": "Testni",
-         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
+         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN,
+         "TekuciRacun": "205-0000000123-45"},
         {"KooperantID": "KOOP-TEST-2", "Ime": "Drugi", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
         {"KooperantID": "KOOP-TEST-3", "Ime": "Treci", "Prezime": "Testni",
@@ -306,6 +312,14 @@ SEED = {
         # pogadjanje bi izdalo robu pogresnom coveku.
         {"KooperantID": "KOOP-TEST-IME", "Ime": "Prvi", "Prezime": "Testni",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN},
+        # IME SA DIJAKRITIKOM (smoke 28.08.2026, Platni nalozi): prava imena
+        # nose kvake, a operater na DE/EN tastaturi kuca bez njih -- pretraga
+        # je "ne radila". Svi ostali fixture kooperanti su ASCII, pa tvrdnja
+        # "ASCII upit nalazi dijakriticno ime" bez ovog reda nema nad cim da
+        # padne. Ima i tekuci racun + blok (OTK-NAL-DJ), da red bude u listi.
+        {"KooperantID": "KOOP-NAL-DJ", "Ime": "Đorđe", "Prezime": "Šarčević",
+         "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN,
+         "TekuciRacun": "205-0000000999888-77"},
     ],
     "tblParcele": [
         {"ParcelaID": "PAR-TEST-1", "KooperantID": "KOOP-TEST-1", "KatBroj": "1001",
@@ -553,6 +567,27 @@ SEED = {
          "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": BIM_BLOK_PLACEN, "Klasa": "I"},
+        # DELIMICNO ISPLACEN blok (1000, od cega 400 kroz NOV-NAL-DELIM):
+        # ekran Platni nalozi mora da pokaze otvoreno = ostatak (600), ne pun
+        # iznos -- bez ovog reda bi "otvoreno < ukupno" bilo nemerljivo, jer su
+        # svi ostali otvoreni blokovi bez ijedne knjizene isplate.
+        {"OtkupID": "OTK-NAL-DELIM", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 20, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 2, "VozacID": VOZAC, "BrojDokumenta": "NAL1/TEST", "Klasa": "I"},
+        # Blok kooperanta sa dijakriticnim imenom -- v. KOOP-NAL-DJ.
+        {"OtkupID": "OTK-NAL-DJ", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-NAL-DJ",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "NAL2/TEST", "Klasa": "I"},
+        # STORNIRAN blok sa "otvorenim" iznosom: ne sme ni u listu ni u naloge
+        # (ExcludeStornirano u GetOpenOtkupi). Bez njega bi tvrdnja "storniran
+        # nije u listi" merila odsustvo reda, ne filter.
+        {"OtkupID": "OTK-NAL-STOR", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-1",
+         "StanicaID": STANICA, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "NALX/TEST", "Klasa": "I",
+         "Stornirano": "Da"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -569,6 +604,12 @@ SEED = {
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop",
          "Isplata": BIM_OTK_PLACEN_IZNOS, "KooperantID": "KOOP-TEST-3",
          "OtkupID": BIM_OTK_PLACEN},
+        # Delimicna isplata bloka OTK-NAL-DELIM (400 od 1000) -- druga polovina
+        # para; v. komentar uz taj red u tblOtkup.
+        {"NovacID": "NOV-NAL-DELIM", "BrojDokumenta": "NAL-PLAC-1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop",
+         "Isplata": 400, "KooperantID": "KOOP-TEST-1",
+         "OtkupID": "OTK-NAL-DELIM"},
         {"NovacID": "NOV-TEST-D1", "BrojDokumenta": NOVAC_DUPLI_BROJ,
          "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": 1000,
          "KooperantID": "KOOP-TEST-1"},
@@ -1101,6 +1142,20 @@ SEF_CONFIG = {
     "DEFAULT_VRSTA_VOCA": "",
     "DEFAULT_SORTA_VOCA": "",
     "KES_ISPLATE": "YES",
+    # Ekran Platni nalozi (v6-ui-185): pet kljuceva od kojih ekran zavisi se
+    # PINUJE, ne nasledjuje od donora -- ista klasa kao DEFAULT_SORTA_VOCA
+    # iznad. RACUN_1 je jedini racun firme (BankaNalogRacuniCSV ga vraca bez
+    # fallback-a); SIFRA/SVRHA prazno = DocConfigOr pada na default konstante,
+    # pa CSV payload ne zavisi od donora; ISPLATA_SPEC_PRINT_MODE=OFF da klik
+    # na specifikaciju u testu/smoke-u nad fixture-om ne pravi PDF-ove.
+    "BANKA_NALOG_RACUN_1": "160-1111111111-11",
+    "BANKA_NALOG_RACUN_2": "",
+    "BANKA_NALOG_RACUN_3": "",
+    "BANKA_NALOG_RACUN_4": "",
+    "BANKA_NALOG_RACUNI": "",
+    "BANKA_NALOG_SIFRA_PLACANJA": "",
+    "BANKA_NALOG_SVRHA": "",
+    "ISPLATA_SPEC_PRINT_MODE": "OFF",
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):

@@ -2932,6 +2932,280 @@ SABOTAZE = {
         "T_BankaUvoz_RucnoMapiranjePravila",
         "placena faktura nije u listi za mapiranje",
     ),
+    # ----- ekran Platni nalozi (v6-ui-185) -----------------------------------
+    # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada listi
+    # (RefreshChipsForScreen). Ako nije najsiri, povratak na njega tiho sakrije
+    # redove.
+    "banka-nalozi-cip-sve-nije-prvi": (
+        "modScrBankaNalozi.bas",
+        '            BnCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                              "imarac:OTKUI_CIPN_IMARAC:88|" & _\n',
+        '            BnCipoviZaListu = "imarac:OTKUI_CIPN_IMARAC:88|" & _\n'
+        '                              "sve:OTKUI_CHIP_SVE:40|" & _\n',
+        "T_BankaNalozi_UgovorEkrana",
+        "prvi cip liste NALOZI je najsiri ('sve')",
+    ),
+    # Kolona identiteta je interna. Prioritet 3 je crta, pa bi operater u
+    # listi gledao interni OtkupID -- a radnja bi i dalje radila, sto prikaz
+    # cini laznim dokazom da je "sve u redu".
+    "banka-nalozi-identitet-vidljiv": (
+        "modScrBankaNalozi.bas",
+        '        "OTKUI_HDN_OTKID||txt|1|4", _\n',
+        '        "OTKUI_HDN_OTKID||txt|90|3", _\n',
+        "T_BankaNalozi_IdentitetURedu_NeCrtaSe",
+        "identitet bloka je prioriteta 4 -- ne crta se",
+    ),
+    # Radnja avansa knjizi na (KooperantID, OtkupID). Red koji ne prenosi
+    # vlasnika tera radnju da ga izvodi iz prikaza -- prikaz sme da se menja,
+    # podatak ne.
+    "banka-nalozi-red-ne-nosi-koopid": (
+        "modScrBankaNalozi.bas",
+        "        outA(n, 12) = CStr(src(i, 5))\n",
+        '        outA(n, 12) = ""   \' SABOTAZA: red ne nosi vlasnika\n',
+        "T_BankaNalozi_IdentitetURedu_NeCrtaSe",
+        "red prenosi KooperantID -- radnja avansa ga ne izvodi iz prikaza",
+    ),
+    # Cip koji pusta sve pretvara "ima racun" u "sve": operater misli da
+    # gleda blokove spremne za CSV, a gleda i one bez primaoca.
+    "banka-nalozi-cip-imarac-pusta-sve": (
+        "modScrBankaNalozi.bas",
+        '        Case "imarac": BnCipNalog = imaTR\n',
+        '        Case "imarac": BnCipNalog = True   \' SABOTAZA: cip pusta sve\n',
+        "T_BankaNalozi_CipoviIKpiPratePravila",
+        "cip 'ima racun' se slaze sa HasTekuciRacun iz citaca",
+    ),
+    # Avans je svojstvo KOOPERANTA: dva otvorena bloka istog coveka ne smeju
+    # da mu udvostruce avans u KPI-ju. Legacy pravilo (koopAvansSet u
+    # RefreshTopKpis) preneto u NalogeKpi.
+    "banka-nalozi-kpi-avans-po-bloku": (
+        "modBankaExportPregled.bas",
+        "        If Not koopVidjen.Exists(blk.kooperantID) Then\n"
+        "            koopVidjen.Add blk.kooperantID, True\n"
+        "            avansPool = avansPool + blk.KooperantAvansSaldo\n"
+        "        End If\n",
+        "        koopVidjen(blk.kooperantID) = True\n"
+        "        avansPool = avansPool + blk.KooperantAvansSaldo   ' SABOTAZA: po bloku\n",
+        "T_BankaNalozi_CipoviIKpiPratePravila",
+        "avans pool se sabira po KOOPERANTU, ne po bloku",
+    ),
+    # Pad citanja koji se prijavi kao nula znaci "nema posla" umesto "ne
+    # znam" -- fail-open vec placen u Stornu i na Uvozu izvoda.
+    "banka-nalozi-kpi-greska-je-nula": (
+        "modScrBankaNalozi.bas",
+        "    If IsArray(poslednja) Then\n"
+        "        BnKpiPosleGreske = poslednja\n"
+        "    Else\n"
+        "        BnKpiPosleGreske = BnKpiNepoznato()\n"
+        "    End If\n",
+        "    BnKpiPosleGreske = Array(0, 0, 0#, 0#)   ' SABOTAZA: pad = nula\n",
+        "T_BankaNalozi_CipoviIKpiPratePravila",
+        "posle greske se zadrzava poslednja poznata brojka",
+    ),
+    # Blok bez tekuceg racuna nema primaoca: u CSV ne moze (writer ga
+    # preskace), pa ne sme ni u izbor -- inace potvrda broji naloge koji
+    # nikad ne nastanu.
+    "banka-nalozi-bez-racuna-u-naloge": (
+        "modScrBankaNalozi.bas",
+        "    If Not imaTR Then\n"
+        '        BnDodaj = Poruka("OTKUI_ERR_BN_BEZ_RACUNA")\n'
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: kapija racuna uklonjena\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "blok bez tekuceg racuna ne ulazi u naloge -- nema primaoca",
+    ),
+    # Prazan identitet znaci da se ne zna KOJI blok -- dodavanje bi kasnije
+    # radilo nad pogodjenim.
+    "banka-nalozi-prazan-id-ulazi": (
+        "modScrBankaNalozi.bas",
+        "    If Len(Trim$(otkupID)) = 0 Then\n"
+        '        BnDodaj = Poruka("OTKUI_ERR_BN_DVOSMISLEN")\n'
+        "        Exit Function\n"
+        "    End If\n",
+        "    ' SABOTAZA: prazan identitet prolazi\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "prazan identitet ne ulazi u naloge",
+    ),
+    # Izbor operatera mora da SUZI izvoz. Ignorisan izbor = nalozi za SVE
+    # otvorene blokove, a operater je potvrdio brojku za svoj podskup.
+    # Obara i T_BankaNalozi_IznosPoBloku (deljena osobina, ne sirina
+    # sidra): taj test meri IZNOS kroz izbor od jednog bloka, pa izvoz koji
+    # izbor ignorise vrati vise blokova i njegova tvrdnja o count-u padne.
+    "banka-nalozi-izvoz-ignorise-izbor": (
+        "modBankaExportPregled.bas",
+        "    If Not samoOtkupIDs Is Nothing Then imaIzbor = (samoOtkupIDs.count > 0)\n",
+        "    imaIzbor = False   ' SABOTAZA: izbor se ignorise, izvoze se svi\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "izbor od jednog bloka daje tacno jedan nalog",
+    ),
+    # Normalizacija u cent-domen ide PRE praga "> 0" (AUD-026): sirov ostatak
+    # od 0.004 prolazi sirov prag, a u fajlu zavrsi kao nalog na "0.00".
+    "banka-nalozi-izvoz-sirov-iznos": (
+        "modBankaExportPregled.bas",
+        "        blk.IsplatitiIznos = ZaokruziNovac(osnovica)\n",
+        "        blk.IsplatitiIznos = osnovica   ' SABOTAZA: sirov iznos\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "0.004 se zaokruzi na 0.00 i NE postaje nalog",
+    ),
+    # Stavka ciji blok vise nije otvoren mora da IZADJE iz izbora pri
+    # uskladjivanju -- traka bi inace pokazivala broj i zbir koji ne postoje.
+    "banka-nalozi-usklad-ne-cisti": (
+        "modScrBankaNalozi.bas",
+        '        If ziviOtvoreno.Exists(CStr(mKorpa(i)("otkupID"))) Then\n'
+        '            mKorpa(i)("otvoreno") = CDbl(ziviOtvoreno(CStr(mKorpa(i)("otkupID"))))\n'
+        "        Else\n"
+        "            mKorpa.Remove i\n"
+        "            BnUskladiKorpu = BnUskladiKorpu + 1\n"
+        "        End If\n",
+        '        If ziviOtvoreno.Exists(CStr(mKorpa(i)("otkupID"))) Then\n'
+        '            mKorpa(i)("otvoreno") = CDbl(ziviOtvoreno(CStr(mKorpa(i)("otkupID"))))\n'
+        "        End If   ' SABOTAZA: mrtva stavka ostaje u izboru\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "stavka koje nema medju otvorenima izlazi iz izbora",
+    ),
+    # Zadati iznos preko otvorenog narucuje preplatu. Legacy pravilo iz
+    # txtIsplatiti_Exit: sve u cent-domenu, nikad preko otvorenog.
+    "banka-nalozi-iznos-preko-otvorenog": (
+        "modScrBankaNalozi.bas",
+        "    If iznosC > otvorenoC Then\n",
+        "    If iznosC > otvorenoC * 1000 Then   ' SABOTAZA: granica pomerena\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "iznos veci od otvorenog se odbija",
+    ),
+    # Zaostali zadati iznos (otvoreno se u medjuvremenu smanjilo) mora da se
+    # spusti pri SVAKOM citanju -- legacy PruneStaleOverrides pravilo. Bez
+    # klampa bi prikaz i potvrda nosili iznos koji vise ne postoji.
+    "banka-nalozi-citanje-ne-klampuje": (
+        "modScrBankaNalozi.bas",
+        "    usklIznosa = BnUskladiIznose(zivi)\n"
+        "    If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa\n"
+        "\n"
+        "    ' Upit se normalizuje JEDNOM, haystack po redu -- v. TekstZaPretragu:\n",
+        "    usklIznosa = 0   ' SABOTAZA: zaostali iznosi se ne klampuju\n"
+        "\n"
+        "    ' Upit se normalizuje JEDNOM, haystack po redu -- v. TekstZaPretragu:\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "zaostali iznos se pri citanju spusta na otvoreno",
+    ),
+    # Operater je zadao KOLIKO se placa; izvoz koji to ignorise pravi nalog
+    # na pun iznos koji operater nije potvrdio.
+    "banka-nalozi-izvoz-ignorise-iznos": (
+        "modBankaExportPregled.bas",
+        "        osnovica = blk.OtvorenIznos\n"
+        "        If Not overrideIznosi Is Nothing Then\n"
+        "            If overrideIznosi.Exists(blk.otkupID) Then osnovica = CDbl(overrideIznosi(blk.otkupID))\n"
+        "        End If\n",
+        "        osnovica = blk.OtvorenIznos   ' SABOTAZA: zadati iznos se ignorise\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "izvoz nosi zadati iznos, ne pun otvoren",
+    ),
+    # Goli 18-cifreni racun u CSV koloni Excel cita kao broj (2,059E+17) i
+    # drzi samo 15 znacajnih cifara -- snimanje iz Excela racun UNISTI pre
+    # uvoza u e-banking. Nalaz sa smoke-a 28.08.2026.
+    "banka-csv-racun-goli-broj": (
+        "modBankaExportPregled.bas",
+        "    If Len(r) <> 18 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: goli broj ostaje u fajlu\n",
+        "T22_RacunUCsvJeExcelSafe",
+        "18 golih cifara se kanonizuje u NBS oblik 3-13-2",
+    ),
+    # Radnji je tacno MAX_ACT (5): sesta se tiho odseca (RefreshRowActions
+    # radi Exit For) -- operater dobija ekran kome fali dugme, bez poruke.
+    "banka-nalozi-sesta-radnja": (
+        "modScrBankaNalozi.bas",
+        '                              "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0"\n',
+        '                              "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0|" & _\n'
+        '                              "bnvisak:OTKUI_BTN_BN_IZNALOG:80:ghost:1"\n',
+        "T_BankaNalozi_UgovorEkrana",
+        "radnji je TACNO MAX_ACT -- sesta bi se tiho odsekla (peta je izricito 'svi')",
+    ),
+    # CSV ne knjizi isplatu: blokovi su otvoreni i POSLE fajla, a izbor se
+    # posle izvoza prazni. Prazan izbor koji znaci "svi" bi zato na drugi
+    # klik tiho izvezao SVE otvorene -- ukljucujuci pun iznos bloka ciji je
+    # zadati deo upravo izvezen. Recenzija PR-a, tacka 1 (merge blocker).
+    "banka-nalozi-prazan-izbor-izvozi-sve": (
+        "modScrBankaNalozi.bas",
+        "    outBezTR = 0\n"
+        "    outIzbaceno = 0\n"
+        "    If BnKorpaBroj() = 0 Then\n"
+        "        Set BlokoviZaIzvoz = New Collection\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    outBezTR = 0\n"
+        "    outIzbaceno = 0   ' SABOTAZA: prazan izbor prolazi kao 'svi'\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "prazan izbor ne izvozi nista",
+    ),
+    # Ekranska putanja (ista koju zovu CSV i PDF) MORA da prosledi zadate
+    # iznose -- bez ", Iznosi()" UI pokazuje 250, a fajl nosi 600. Domenska
+    # polovina (OdaberiBlokoveZaNaloge) to ne vidi. Recenzija PR-a, tacka 3.
+    "banka-nalozi-ekran-ne-salje-iznose": (
+        "modScrBankaNalozi.bas",
+        "    Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _\n"
+        "                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno, Iznosi())\n",
+        "    Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _\n"
+        "                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno)   ' SABOTAZA: bez iznosa\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "ekran salje zadate iznose izvozu",
+    ),
+    # Blok kome je racun obrisan POSLE dodavanja u izbor: izvoz ga preskace,
+    # ali traka, zbir i potvrda ne smeju da ga pokazuju kao spreman.
+    # Recenzija PR-a, tacka 4.
+    "banka-nalozi-korpa-drzi-bez-racuna": (
+        "modScrBankaNalozi.bas",
+        "        If CBool(src(i, 11)) Then zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))\n",
+        "        zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))   ' SABOTAZA: i bez racuna\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "blok bez racuna izlazi iz izbora pri citanju",
+    ),
+    # Snimak liste se cita JEDNOM pa se filtrira -- pun prolaz kroz tabele po
+    # otkucaju je na 1.500+ blokova smrzavao ekran ~10 s po slovu i pretraga
+    # je delovala mrtvo (smoke 3, izmereno Diag_BnRedovi).
+    "banka-nalozi-pretraga-puni-iznova": (
+        "modScrBankaNalozi.bas",
+        "    If Not mSnimakOK Then\n"
+        "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
+        "        mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()\n"
+        "        mSnimakOK = True\n"
+        "    End If\n",
+        "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
+        "    mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()\n",
+        "T_BankaNalozi_UgovorEkrana",
+        "pretraga i cipovi ne placaju pun prolaz -- snimak se cita jednom",
+    ),
+    # Imena u podacima nose kvake; operater na DE/EN tastaturi kuca bez njih.
+    # Haystack bez normalizacije = pretraga koja "ne radi" (smoke 28.08).
+    "banka-nalozi-pretraga-sa-kvakama": (
+        "modScrBankaNalozi.bas",
+        '        hay = modUiData.TekstZaPretragu(CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _\n'
+        '              CStr(src(i, 6)) & "|" & CStr(src(i, 10)) & "|" & iD)\n',
+        '        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _\n'
+        "              CStr(src(i, 6)) & \"|\" & CStr(src(i, 10)) & \"|\" & iD   ' SABOTAZA: kvake ostaju\n",
+        "T_BankaNalozi_UgovorEkrana",
+        "ASCII upit nalazi red sa dijakriticnim imenom",
+    ),
+    # Red trake i zbir ispod njega moraju da nose ISTI iznos -- onaj koji bi
+    # se izvezao. Smoke 28.08: red je pokazivao otvoreno (21.798) uz zbir
+    # zadatih (10.000), dva broja jedan ispod drugog koja se ne slazu.
+    "banka-nalozi-traka-nosi-otvoreno": (
+        "modScrBankaNalozi.bas",
+        '    KorpaRedPrikaz = CStr(red("broj")) & "   " & ChrW(183) & "   " & _\n'
+        '                     Format$(BnIznosZa(CStr(red("otkupID")), CDbl(red("otvoreno"))), "#,##0")\n',
+        '    KorpaRedPrikaz = CStr(red("broj")) & "   " & ChrW(183) & "   " & _\n'
+        '                     Format$(CDbl(red("otvoreno")), "#,##0")   \' SABOTAZA: red nosi otvoreno\n',
+        "T_BankaNalozi_IznosPoBloku",
+        "red trake nosi zadati iznos -- isti broj kao zbir ispod njega",
+    ),
+    # Zona koja se ne gradi cela: dugme koje fali se ne vidi ni u jednom
+    # testu nad citacima -- zato test zonu STVARNO gradi.
+    "banka-nalozi-zona-bez-dugmeta": (
+        "modScrBankaNalozi.bas",
+        '    modUiKit.BtnV z, "scrBnCsv", Poruka("OTKUI_BTN_BN_CSV"), PAD, BN_Y_BTN, _\n'
+        '                  164, BN_BTN_H, "primary"\n',
+        "    ' SABOTAZA: dugme za naloge se ne gradi\n",
+        "T_ZonaBankaNalozi_PoljaIRaspored",
+        "zona platnih naloga nema nijednu kontrolu manje",
+    ),
 }
 
 

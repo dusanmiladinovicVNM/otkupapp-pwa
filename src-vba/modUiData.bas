@@ -119,3 +119,25 @@ End Function
 Public Function DatumSerijskiValidan(ByVal serijski As Double) As Boolean
     DatumSerijskiValidan = (serijski >= 1) And (serijski <= DATUM_SERIJSKI_MAX)
 End Function
+
+' PRETRAGA NEOSETLJIVA NA DIJAKRITIKU (smoke 28.08.2026, ekran Platni
+' nalozi). Podaci nose imena sa kvakama (Petrovic sa 263, Djeric sa 273...),
+' a operater -- cesto na DE/EN tastaturi koja te znakove nema -- kuca bez
+' njih, pa InStr ne nalazi nista i pretraga "ne radi". Obe strane (haystack
+' ekrana i upit) se zato svode na isti ASCII oblik pre poredjenja.
+'
+' Transliteracija je ISTA kao u SanitizeFileNamePart (dj za 272/273 --
+' standardni srpski ASCII zapis); velika/mala slova ostavlja InStr-u
+' (vbTextCompare kod pozivaoca). Zivi u ljuskinom data sloju da je ekrani
+' DELE -- kopija po ekranu bi se razisla. Zatecenim ekranima (Uvoz izvoda,
+' Fakturisanje) dopisivanje u haystack je zaseban posao.
+Public Function TekstZaPretragu(ByVal s As String) As String
+    Dim t As String
+    t = s
+    t = Replace(t, ChrW(352), "S"): t = Replace(t, ChrW(353), "s")
+    t = Replace(t, ChrW(381), "Z"): t = Replace(t, ChrW(382), "z")
+    t = Replace(t, ChrW(268), "C"): t = Replace(t, ChrW(269), "c")
+    t = Replace(t, ChrW(262), "C"): t = Replace(t, ChrW(263), "c")
+    t = Replace(t, ChrW(272), "Dj"): t = Replace(t, ChrW(273), "dj")
+    TekstZaPretragu = t
+End Function
