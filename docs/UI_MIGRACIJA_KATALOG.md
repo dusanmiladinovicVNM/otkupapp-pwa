@@ -4001,9 +4001,14 @@ jer bi klik bez ijedne poruke izgledao kao dugme koje ne radi.
   preliv se prijavljuje), KPI pločica. Korpa se **usklađuje sa svežom listom
   pri svakom čitanju** (`BnUskladiKorpu`): stavka čiji blok više nije otvoren
   izlazi uz poruku — isti razlog kao legacy klamp („tiho spuštanje bi operater
-  lako promašio") — a živima se osvežava snimak za traku. Prazna korpa =
-  izvoz SVIH otvorenih sa računom (legacy „nema selekcije = svi"), što
-  potvrdni dijalog eksplicitno pokaže brojem i iznosom.
+  lako promašio") — a živima se osvežava snimak za traku; od druge recenzije
+  izlazi i blok koji je u međuvremenu **ostao bez računa** (izvoz bi ga
+  ionako preskočio, ali traka, zbir i potvrda ne smeju da ga pokazuju kao
+  spreman). **Prazan izbor NE izvozi ništa** — v. §22.10/R1: prvi ugovor
+  („prazno = svi", preuzet od legacy „nema selekcije = svi") je recenzija
+  oborila kao merge blocker; „svi" postoji samo kao izričita peta radnja
+  **„+ Svi sa računom"** (`bnsve`, tačno `MAX_ACT` radnji — granica bazena
+  koju test tvrdi).
 - **Delimična isplata = radnja „Iznos…"** (v. §22.9): zadati iznos po bloku,
   legacy pravila unosa (cent-domen, > 0, nikad preko otvorenog; jednak
   otvorenom briše zadato), vidljiva kolona ISPLATITI uz OTVORENO, klamp
@@ -4213,6 +4218,49 @@ Stavka sa zadatih 10.000 (otvoreno 21.798) je u traci „U NALOZIMA" stajala
 kao `broj · 21.798`, a zbir ispod kao `10.000 RSD`. `KorpaRedPrikaz` sada
 ide kroz `BnIznosZa` — isti račun kao zbir, pa se ne mogu razići. Tvrdnja u
 testu 132, sabotaža `banka-nalozi-traka-nosi-otvoreno`.
+
+#### §22.10 Recenzija PR-a: prazan izbor je bio merge blocker
+
+Recenzija posle drugog kruga (#244) — četiri prihvaćene tačke, sve u istom
+PR-u:
+
+**R1 (blocker) — „prazna korpa = svi" + „clear sprečava dupli export" je
+bila NETAČNA tvrdnja.** CSV ne knjiži isplatu: blokovi ostaju otvoreni i
+posle fajla, a izbor se posle izvoza prazni — pa bi drugi klik tiho izvezao
+naloge za **sve** otvorene, uključujući **pun** iznos bloka čiji je zadati
+deo upravo izvezen. Ugovor promenjen: **prazan izbor ne izvozi ništa** (gate
+u `BlokoviZaIzvoz`, pre ijednog čitanja tabela; poruka razlikuje „izbor
+prazan" od „izabrani ne mogu u nalog"), a „svi" je izričita radnja
+**„+ Svi sa računom"** (`bnsve`, `trebaRed=0`) koja korpu puni kroz istu
+domensku Nothing-granu `OdaberiBlokoveZaNaloge` — grana ostaje i testirana
+i korišćena, samo više nikad implicitno.
+
+**R2 — osnova i verzija.** Grana je bila iza `main`-a (#243 je u
+međuvremenu ušao i zauzeo `v2.87.0`): `origin/main` je unesen merge-om
+(konflikt samo u release notes — #243-ov `v2.87.0` ostaje, ovaj unos
+postaje **`v2.88.0`**; `sabotaza.py` se spojio čisto, #243 korekcije
+`cilj-bez-istorijske-kapije` / `zbirna-ispravka-cilj-bez-kapije` očuvane
+uz nove Banka unose). #243 nije dirao numeraciju testova (staje na 126) ni
+pečat (184), pa 127–132 i `v6-ui-185` ostaju važeći.
+
+**R3 — ekransko vezivanje iznosa nije bilo dokazano.** Domenska polovina
+(`OdaberiBlokoveZaNaloge` + sabotaža) jeste, ali bi uklonjen argument
+`, Iznosi()` u `BlokoviZaIzvoz` ostavio sve zeleno — a UI bi pokazivao 250
+dok fajl nosi 600. Za „koliko novca ide u nalog" beleška „provereno
+čitanjem" nije dovoljna: seam **`Scr_BnBlokoviZaIzvozTest`** meri istu
+putanju koju zovu CSV i PDF (uključujući i gate praznog izbora), sabotaže
+`banka-nalozi-ekran-ne-salje-iznose` i `banka-nalozi-prazan-izbor-izvozi-sve`.
+
+**R4 — blok koji izgubi račun ostajao je u izboru.** Nije finansijski kvar
+(izvoz ga preskače), ali traka/zbir/potvrda ne smeju da ga pokazuju kao
+spreman: „živa" mapa za usklađivanje sada sadrži samo otvorene **sa
+računom**, pa takav blok izlazi uz istu poruku (i njegov zadati iznos s
+njim). Sabotaža `banka-nalozi-korpa-drzi-bez-racuna`.
+
+Uz to je ublažen komentar zaglavlja modula: `BnPostaviIznos` **jeste**
+pravilo unosa (preslikana kopija legacy `txtIsplatiti_Exit`, obrazac §5/
+Faza B — dve kopije žive namerno); „ovde nema pravila" više nije doslovno
+tačno i sada je zapisano šta jeste a šta nije ekranovo.
 
 #### N6 — otvoren nalaz: ćelija ISPLATITI bez vrednosti na jednom redu
 

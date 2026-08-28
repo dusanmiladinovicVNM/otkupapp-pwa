@@ -6310,9 +6310,13 @@ u staru formu za standardni tok.
   Bez računa · Avans.
 - **Izbor „U NALOZIMA"**: red se dodaje dugmetom ili dvoklikom, vidi se kao
   kvačica u listi i u traci desno (poslednje dodato prvo, višak se
-  prijavljuje). Prazan izbor = idu svi otvoreni sa računom, i to potvrda
-  jasno kaže. Blok bez žiro računa ne može u izbor — prvo se račun upiše u
-  matične podatke.
+  prijavljuje). **Prazan izbor ne izvozi ništa** — za „plati sve" postoji
+  izričito dugme **„+ Svi sa računom"**. (Prva verzija je preuzela staro
+  „nema selekcije = svi"; recenzija je to oborila: fajl ne knjiži isplatu,
+  pa bi drugi klik posle ispražnjenog izbora tiho napravio naloge za sve
+  otvorene.) Blok bez žiro računa ne može u izbor — prvo se račun upiše u
+  matične podatke; blok kome račun nestane naknadno sam izlazi iz izbora,
+  uz poruku.
 - **Generiši naloge**: jedno dugme, potvrda pre upisa (broj naloga, ukupan
   iznos, račun firme sa bankom, datum valute, preskočeni), pa fajl + otvoren
   folder. Sve postojeće zaštite ostaju: saldo svakog naloga se pred upis
@@ -6360,6 +6364,9 @@ je imao istu grešku). Ispravku dobija i stara forma (isti generator).
 
 ### Verifikacija
 
+- Ugrađena je i recenzija PR-a: prazan izbor kao blocker (gore), dokaz da
+  ekran zaista šalje zadate iznose u fajl (ne samo da pravilo postoji), i
+  čišćenje izbora kad blok izgubi račun.
 - Glavni set **132 / 0** (šest novih testova ekrana), banka set **205 / 0**
   (novi test formata računa je prvo pušten crven nad zatečenim ponašanjem,
   pa zelen posle ispravke); statičke provere čiste; sedamnaest novih
