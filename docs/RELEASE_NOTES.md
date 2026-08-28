@@ -6272,14 +6272,24 @@ u staru formu za standardni tok.
 - Brojka u meniju pokazuje koliko blokova čeka isplatu; posle greške čitanja
   pokazuje „!" umesto lažne nule.
 
+### Ispravke iz smoke-a: pretraga, broj računa, traka izbora
+
+- **Pretraga sada nalazi imena sa kvakama i kad se kucaju bez njih**:
+  „petrovic" nalazi Petrovića, „djeric" Đerića — bitno na tastaturama koje
+  naša slova nemaju (DE/EN). Ranije je pretraga na ovom ekranu delovala
+  mrtvo čim se ime kuca bez dijakritike.
+- **Red u traci „U NALOZIMA" pokazuje iznos koji se stvarno plaća** (zadati,
+  ne pun otvoreni) — isti broj kao zbir ispod njega.
+
 ### Ispravka iz prvog smoke-a: broj računa u CSV-u
 
 U generisanom fajlu su računi uneti kao golih 18 cifara u Excelu izgledali
 kao „2,059E+17" — Excel takav niz čita kao broj i čuva samo 15 cifara, pa bi
 snimanje iz Excela račun primaoca uništilo pre uvoza u banku. Nalozi sada u
 kolonama računa uvek nose standardni oblik sa crticama (3-13-2), koji Excel
-drži kao tekst; računi već uneti sa crticama prolaze neizmenjeni. Ispravku
-dobija i stara forma (isti generator fajla).
+drži kao tekst; računi već uneti sa crticama prolaze neizmenjeni. Isto važi
+i za kolonu „Tekući račun" u **PDF specifikaciji** (šablon je Excel list, pa
+je imao istu grešku). Ispravku dobija i stara forma (isti generator).
 
 ### Šta NIJE urađeno, i zašto
 

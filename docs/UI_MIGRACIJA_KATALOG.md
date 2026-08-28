@@ -4180,3 +4180,48 @@ legacy formu. Ušla je kao radnja **„Iznos…"** (v. §22.2, oboreni deo):
 **Ekransko vezivanje `BlokoviZaIzvoz` → `Iznosi()` je jedan red, provereno
 čitanjem** (domenska polovina je pod testom i sabotažom) — isti oblik
 beleške kao §9 „vezivanje kapije u dve rute".
+
+#### N3 — pretraga „ne radi": kvake u podacima, DE tastatura kod operatera
+
+Drugi krug smoke-a. Mehanizam pretrage je ljuskin i isti za sve ekrane
+(`txtSearch` → `Scr_Rows(filter, q)` — provereno čitanjem), a upit uredno
+stiže ekranu. Ali **prava imena nose dijakritiku** (Petrović, Đerić,
+Dželebdžić), a operater — na DE tastaturi, koja te znakove nema — kuca
+„petrovic": `InStr` nad sirovim haystack-om ne nalazi ništa, i pretraga
+izgleda mrtva. Fixture to nije mogao da vidi: sva njegova imena su ASCII.
+
+Popravka: `modUiData.TekstZaPretragu` — obe strane (haystack i upit) se
+svode na ASCII istom transliteracijom koju repo već ima
+(`SanitizeFileNamePart`: š→s, đ→dj…). Živi u ljuskinom data sloju da je
+ekrani dele; fixture dobija kooperanta sa kvakama (`KOOP-NAL-DJ`, „Đorđe
+Šarčević" + blok `OTK-NAL-DJ`) — bez njega bi tvrdnja merila prazan skup.
+**Zatečeni ekrani (Uvoz izvoda, Fakturisanje) imaju istu rupu u svojim
+haystack-ovima** — dopisivanje `TekstZaPretragu` tamo je zaseban, mehanički
+posao i ovde se samo beleži.
+
+#### N4 — isti Excel-broj kvar i u PDF specifikaciji
+
+Kolona „Tekući račun" u specifikaciji je pokazivala `3,4E+17`: šablon
+(`FillIsplataSpecSablon`) je Excel sheet, pa golih 18 cifara u ćeliji prolazi
+kroz istu konverziju kao CSV otvoren u Excelu. Procena iz N1 da „PDF nema
+taj problem" bila je pogrešna. Popravka: `spec(i,5)` ide kroz **isti**
+`FormatRacunZaNalog` (pravilo pod T22; vezivanje jedan red, čitanjem).
+
+#### N5 — red trake i zbir ispod njega su govorili dva različita broja
+
+Stavka sa zadatih 10.000 (otvoreno 21.798) je u traci „U NALOZIMA" stajala
+kao `broj · 21.798`, a zbir ispod kao `10.000 RSD`. `KorpaRedPrikaz` sada
+ide kroz `BnIznosZa` — isti račun kao zbir, pa se ne mogu razići. Tvrdnja u
+testu 132, sabotaža `banka-nalozi-traka-nosi-otvoreno`.
+
+#### N6 — otvoren nalaz: ćelija ISPLATITI bez vrednosti na jednom redu
+
+Na screenshotu prve strane red `2/020726-4` (kooperant bez računa) deluje
+kao da ima **praznu ćeliju ISPLATITI**, dok model tu uvek predaje broj
+(`BnIznosZa` vraća `Double` bez izuzetka). Čitanjem koda uzrok nije nađen, a
+fixture ga ne reprodukuje (test tvrdi `IsNumeric` nad svakim redom i zelen
+je) — pa se **ne krpi pretpostavkom**. To je tačno klasa „ćelija prazna ili
+tuđa = preskočen upis pod `On Error Resume Next`" iz §9.10, za koju postoji
+presedan-alat: ekran dobija **`Diag_BnRedovi`** (Alt+F8, ispisuje šta ekran
+predaje i šta mreža drži). Ako se na pravoj svesci potvrdi — merenje kaže
+gde.
