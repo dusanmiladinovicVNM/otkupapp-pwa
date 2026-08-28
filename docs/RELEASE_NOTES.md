@@ -6234,9 +6234,68 @@ se druga dva nivoa zaštite ovom proverom ne mere.
 istim brojem i dalje se broji kao jedan vlasnik. Nijedna zaštita na tom mestu taj
 slučaj ne hvata. Zapisano kao otvoreno.
 
+## v2.87.0 — popravka jedne zaštite učinila je dve provere netačnim
+
+Nema izmene u programu — izdanje o **proverama**. Ali nalaz je nov po vrsti, pa
+vredi objasniti.
+
+### Podsetnik kako provere rade
+
+Uz svaku proveru ide namerno pokvaren kod koji **mora** da je obori, i uz njega
+zapisano **šta** tačno treba da padne. Ako padne nešto drugo, provera i dalje
+izgleda crvena — a pravilo koje je zapisano niko ne meri.
+
+Da li se to negde desilo zna **samo** prolaz kroz sve pokvarene verzije redom.
+Traje satima i zato se ne pušta često. Ovo je prvi posle pet izdanja.
+
+### Šta je prolaz našao
+
+Od **261** pokvarene verzije, **260** obara nešto — a kod je posle celog prolaza
+bio slovo u slovo isti kao pre. Nesaglasnih je bilo četiri: dve odranije poznate i
+**dve nove**.
+
+Te dve nove nisu bile problem prošli put. Pokvarile su se **u međuvremenu** — i to
+zbog **naših sopstvenih popravki** iz prethodna tri izdanja.
+
+### Zašto je popravka pokvarila proveru
+
+Prethodna izdanja su dodala zaštitu **unutar same radnje**, pored one koja je već
+stajala oko nje. Sada dve zaštite čuvaju isti ishod.
+
+Provera je, međutim, bila napisana ovako: „ugasi zaštitu **oko** radnje i ishod
+mora da se pokvari". Otkad postoji i ona **unutar**, ishod se više ne kvari —
+druga ga zaustavi. Provera i dalje pada, ali na nečem drugom nego što piše.
+
+> Dodavanje druge zaštite ne ruši postojeće provere. Čini ih **netačnim**: ono što
+> tvrde da mere prestaje da bude ono što stvarno mere.
+
+To se ne vidi bez punog prolaza, jer brza provera i dalje potvrđuje da zapisani
+tekst postoji u toj proveri — a postoji.
+
+### Šta je urađeno
+
+Obe su prepisane na ono što stvarno mere. Jedna sada tvrdi da poruka o grešci
+imenuje **pravi** dokument. Druga je ispala **jača** nego što je bila: pokazuje da
+se bez zaštite dokument **stvarno** prevezuje na pogrešno mesto, dok je ranija
+tvrdila samo da se nešto **nije** promenilo.
+
+### Šta je prolaz našao usput
+
+Zaštita nije svuda ista: **preračun** zbirne je zaštićen i iznutra, a
+**prevezivanje otpremnice** na zbirnu nije — njega čuva samo spoljna zaštita.
+
+Nije popravljeno u ovom izdanju, i to namerno: popravka bi bila još jedna
+unutrašnja zaštita, a upravo je pokazano da takav potez zastareva postojeće
+provere. Ide zasebno, sa punim prolazom posle.
+
+### Šta se iz ovoga menja u načinu rada
+
+Pun prolaz je do sada bio jednokratna potvrda. Sada se zna da razlika koju on meri
+**pomera se sa svakom ispravnom izmenom koda** — pa postaje periodičan posao, a ne
+jednokratan.
 ---
 
-## v2.87.0 — novi ekran „Platni nalozi": nalozi za banku iz novog UI-ja
+## v2.88.0 — novi ekran „Platni nalozi": nalozi za banku iz novog UI-ja
 
 Novi UI je dobio ekran **Platni nalozi** (Finansije). Stavka menija koja je do
 sada stajala prigušena sada radi: pregled svih otvorenih otkupnih blokova,

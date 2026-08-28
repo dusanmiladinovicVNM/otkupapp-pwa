@@ -730,7 +730,16 @@ SABOTAZE = {
         "    If ZbirnaBrojJeDvosmislenIkad(newZbirna) Then\n",
         "    If False Then   ' SABOTAZA: ciljna zbirna se ne proverava\n",
         "T_CiljnaZbirnaDvosmislena_Staje",
-        "aktivno ciljno zaglavlje NIJE rekalkulisano preko tudje dece",
+        # NE deklarise se poslovni ishod, nego PORUKA -- i to je posledica
+        # v2.84.0. Otkad RecalculateZbirnaFromOtpremnice_TX nosi kapiju U SEBI,
+        # gasenje kapije po call-site-u vise ne menja kolicinu ciljnog
+        # zaglavlja: centralna je zaustavi. Ishod time cuvaju DVE kapije, pa ga
+        # jedna sabotaza po konstrukciji ne moze oboriti.
+        #
+        # Razlika se vidi samo u poruci: kapija po call-site-u imenuje CILJNU
+        # zbirnu, dok centralna staje iznutra i daje samo neuspeh. Isti oblik
+        # kao guard-samo-aktivni-vlasnici.
+        "razlog imenuje CILJNU zbirnu, ne staru",
     ),
     # Kes tabela memoise NEUSPEH -- zatecen incident sa prave instalacije:
     # prazne liste za svaki tip dokumenta, bez ijedne greske, dok je tabela puna.
@@ -1030,7 +1039,21 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: ciljna strana se ne proverava\n"
         "        dvosmislen = newBroj: kojaStrana = \"ciljne\"\n",
         "T_IspravkaZbirne_KapijaNaObeStrane",
-        "dvosmislen CILJ: aktivno zaglavlje nije dobilo zbir tudje dece",
+        # Deklaracija pomerena na PREVEZIVANJE, ne na rekalkulaciju -- takodje
+        # posledica v2.84.0, ali iz drugog razloga nego kod
+        # cilj-bez-istorijske-kapije.
+        #
+        # Centralna kapija stiti REKALKULACIJU (ona je u
+        # RecalculateZbirnaFromOtpremnice_TX), pa kolicina ciljnog zaglavlja
+        # vise ne mrda. Ali PREVEZIVANJE OTPREMNICE nema svoju centralnu
+        # kapiju, pa bez kapije po call-site-u otpremnica izvora STVARNO
+        # zavrsi na dvosmislenom cilju -- mereno: ocekivano ZB-TEST-OLDU,
+        # dobijeno ZB-TEST-TGT.
+        #
+        # Nova tvrdnja je zato JACA od stare: opisuje pogresnu mutaciju, ne
+        # izostanak jedne. Asimetrija (rekalkulacija ima centralnu kapiju,
+        # prevezivanje otpremnice nema) upisana je kao otvoren nalaz.
+        "dvosmislen CILJ: otpremnica izvora nije prevezana",
     ),
     # Ispravka ZBIRNE: izvor bez kapije -- sele se deca oba vlasnika broja.
     "zbirna-ispravka-izvor-bez-kapije": (
