@@ -2937,8 +2937,8 @@ SABOTAZE = {
     # podatak ne.
     "banka-nalozi-red-ne-nosi-koopid": (
         "modScrBankaNalozi.bas",
-        "        outA(n, 11) = CStr(src(i, 5))\n",
-        '        outA(n, 11) = ""   \' SABOTAZA: red ne nosi vlasnika\n',
+        "        outA(n, 12) = CStr(src(i, 5))\n",
+        '        outA(n, 12) = ""   \' SABOTAZA: red ne nosi vlasnika\n',
         "T_BankaNalozi_IdentitetURedu_NeCrtaSe",
         "red prenosi KooperantID -- radnja avansa ga ne izvodi iz prikaza",
     ),
@@ -3005,6 +3005,9 @@ SABOTAZE = {
     ),
     # Izbor operatera mora da SUZI izvoz. Ignorisan izbor = nalozi za SVE
     # otvorene blokove, a operater je potvrdio brojku za svoj podskup.
+    # Obara i T_BankaNalozi_IznosPoBloku (deljena osobina, ne sirina
+    # sidra): taj test meri IZNOS kroz izbor od jednog bloka, pa izvoz koji
+    # izbor ignorise vrati vise blokova i njegova tvrdnja o count-u padne.
     "banka-nalozi-izvoz-ignorise-izbor": (
         "modBankaExportPregled.bas",
         "    If Not samoOtkupIDs Is Nothing Then imaIzbor = (samoOtkupIDs.count > 0)\n",
@@ -3016,8 +3019,8 @@ SABOTAZE = {
     # od 0.004 prolazi sirov prag, a u fajlu zavrsi kao nalog na "0.00".
     "banka-nalozi-izvoz-sirov-iznos": (
         "modBankaExportPregled.bas",
-        "        blk.IsplatitiIznos = ZaokruziNovac(blk.OtvorenIznos)\n",
-        "        blk.IsplatitiIznos = blk.OtvorenIznos   ' SABOTAZA: sirov iznos\n",
+        "        blk.IsplatitiIznos = ZaokruziNovac(osnovica)\n",
+        "        blk.IsplatitiIznos = osnovica   ' SABOTAZA: sirov iznos\n",
         "T_BankaNalozi_KorpaIIzvoz",
         "0.004 se zaokruzi na 0.00 i NE postaje nalog",
     ),
@@ -3036,6 +3039,52 @@ SABOTAZE = {
         "        End If   ' SABOTAZA: mrtva stavka ostaje u izboru\n",
         "T_BankaNalozi_KorpaIIzvoz",
         "stavka koje nema medju otvorenima izlazi iz izbora",
+    ),
+    # Zadati iznos preko otvorenog narucuje preplatu. Legacy pravilo iz
+    # txtIsplatiti_Exit: sve u cent-domenu, nikad preko otvorenog.
+    "banka-nalozi-iznos-preko-otvorenog": (
+        "modScrBankaNalozi.bas",
+        "    If iznosC > otvorenoC Then\n",
+        "    If iznosC > otvorenoC * 1000 Then   ' SABOTAZA: granica pomerena\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "iznos veci od otvorenog se odbija",
+    ),
+    # Zaostali zadati iznos (otvoreno se u medjuvremenu smanjilo) mora da se
+    # spusti pri SVAKOM citanju -- legacy PruneStaleOverrides pravilo. Bez
+    # klampa bi prikaz i potvrda nosili iznos koji vise ne postoji.
+    "banka-nalozi-citanje-ne-klampuje": (
+        "modScrBankaNalozi.bas",
+        "    usklIznosa = BnUskladiIznose(zivi)\n"
+        "    If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa\n"
+        "\n"
+        "    ReDim outA(1 To UBound(src, 1), 1 To 14)\n",
+        "    usklIznosa = 0   ' SABOTAZA: zaostali iznosi se ne klampuju\n"
+        "\n"
+        "    ReDim outA(1 To UBound(src, 1), 1 To 14)\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "zaostali iznos se pri citanju spusta na otvoreno",
+    ),
+    # Operater je zadao KOLIKO se placa; izvoz koji to ignorise pravi nalog
+    # na pun iznos koji operater nije potvrdio.
+    "banka-nalozi-izvoz-ignorise-iznos": (
+        "modBankaExportPregled.bas",
+        "        osnovica = blk.OtvorenIznos\n"
+        "        If Not overrideIznosi Is Nothing Then\n"
+        "            If overrideIznosi.Exists(blk.otkupID) Then osnovica = CDbl(overrideIznosi(blk.otkupID))\n"
+        "        End If\n",
+        "        osnovica = blk.OtvorenIznos   ' SABOTAZA: zadati iznos se ignorise\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "izvoz nosi zadati iznos, ne pun otvoren",
+    ),
+    # Goli 18-cifreni racun u CSV koloni Excel cita kao broj (2,059E+17) i
+    # drzi samo 15 znacajnih cifara -- snimanje iz Excela racun UNISTI pre
+    # uvoza u e-banking. Nalaz sa smoke-a 28.08.2026.
+    "banka-csv-racun-goli-broj": (
+        "modBankaExportPregled.bas",
+        "    If Len(r) <> 18 Then Exit Function\n",
+        "    Exit Function   ' SABOTAZA: goli broj ostaje u fajlu\n",
+        "T22_RacunUCsvJeExcelSafe",
+        "18 golih cifara se kanonizuje u NBS oblik 3-13-2",
     ),
     # Zona koja se ne gradi cela: dugme koje fali se ne vidi ni u jednom
     # testu nad citacima -- zato test zonu STVARNO gradi.

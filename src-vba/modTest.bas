@@ -361,6 +361,7 @@ Public Sub RunAllTests()
     RunOne 129
     RunOne 130
     RunOne 131
+    RunOne 132
     RunOne 124
     RunOne 125
     RunOne 126
@@ -529,6 +530,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 129: TestName = "T_BankaNalozi_CipoviIKpiPratePravila"
         Case 130: TestName = "T_BankaNalozi_KorpaIIzvoz"
         Case 131: TestName = "T_ZonaBankaNalozi_PoljaIRaspored"
+        Case 132: TestName = "T_BankaNalozi_IznosPoBloku"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -668,6 +670,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 129: T_BankaNalozi_CipoviIKpiPratePravila
         Case 130: T_BankaNalozi_KorpaIIzvoz
         Case 131: T_ZonaBankaNalozi_PoljaIRaspored
+        Case 132: T_BankaNalozi_IznosPoBloku
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -8589,8 +8592,8 @@ Private Sub T_BankaNalozi_UgovorEkrana()
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
     AssertEq Split(CStr(liste(0)), "|")(0), "NALOZI", "kljuc liste je NALOZI"
 
-    AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), 3, _
-             "tri radnje nad redom: u naloge / izbaci / primeni avans"
+    AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), 4, _
+             "cetiri radnje nad redom: u naloge / iznos / izbaci / primeni avans"
     AssertEq (BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")) <= modOtkupUI.MAX_ACT), _
              True, "radnje staju u bazen -- visak bi se tiho odsekao"
 
@@ -8675,7 +8678,7 @@ Private Sub T_BankaNalozi_IdentitetURedu_NeCrtaSe()
     ' iznosom); storniran i u celosti placen blok NISU u listi.
     rDelim = 0
     For i = 1 To n
-        Select Case Trim$(CStr(redovi(i, 10)))
+        Select Case Trim$(CStr(redovi(i, 11)))
             Case "OTK-NAL-DELIM": rDelim = i
             Case "OTK-NAL-STOR"
                 AssertEq "OTK-NAL-STOR u listi", "", _
@@ -8690,9 +8693,9 @@ Private Sub T_BankaNalozi_IdentitetURedu_NeCrtaSe()
              "otvoreno delimicnog bloka je ostatak (1000 - 400), ne pun iznos"
     AssertEq CStr(redovi(rDelim, 1)), "NAL1/TEST", _
              "prikazan broj bloka pripada istom redu kao identitet"
-    AssertEq Trim$(CStr(redovi(rDelim, 11))), "KOOP-TEST-1", _
+    AssertEq Trim$(CStr(redovi(rDelim, 12))), "KOOP-TEST-1", _
              "red prenosi KooperantID -- radnja avansa ga ne izvodi iz prikaza"
-    AssertEq Trim$(CStr(redovi(rDelim, 12))), "1", _
+    AssertEq Trim$(CStr(redovi(rDelim, 13))), "1", _
              "red prenosi 'ima racun' za kooperanta sa upisanim racunom"
 
     modScrBankaNalozi.Scr_BnTestReset
@@ -8901,6 +8904,95 @@ Private Function NoviTestBlokNaloga(ByVal otkupID As String, ByVal broj As Strin
     If imaTR Then blk.TekuciRacun = "160-0000000000-11"
     Set NoviTestBlokNaloga = blk
 End Function
+
+' ============================================================
+' 132. Platni nalozi: iznos po bloku (delimicna isplata)
+' ============================================================
+' Smoke 28.08.2026: "nekad se iznos ne isplacuje u potpunosti" -- delimicna
+' isplata je stvaran tok, ne izuzetak. Zadati iznos je legacy "Isplatiti"
+' override: ista pravila unosa (cent-domen, > 0, nikad preko otvorenog;
+' jednak otvorenom brise zadato) i ISTI klamp pri svakom citanju liste
+' (ClampOverridesToOpenDict -- jezgro legacy PruneStaleOverrides puta).
+Private Sub T_BankaNalozi_IznosPoBloku()
+    Dim d As Variant, redovi As Variant, i As Long, rDelim As Long
+    Dim blokovi As Collection, izabrani As Collection, izbor As Object, iznosi As Object
+    Dim blk As clsBlokIsplata
+    Dim bezTR As Long, nepoznato As Long
+
+    modScrBankaNalozi.Scr_BnTestReset
+
+    ' 1) Pravila unosa -- ista kao legacy txtIsplatiti_Exit.
+    AssertEq (Len(modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 700, 600)) > 0), True, _
+             "iznos veci od otvorenog se odbija"
+    AssertEq (Len(modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 0, 600)) > 0), True, _
+             "iznos nula se odbija"
+    AssertEq (Len(modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", -5, 600)) > 0), True, _
+             "negativan iznos se odbija"
+    AssertEq modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 250, 600), "", _
+             "iznos manji od otvorenog se prihvata"
+    AssertEq modScrBankaNalozi.Scr_BnIznosZaTest("OTK-NAL-DELIM", 600), 250, _
+             "za blok vazi zadati iznos"
+    ' Cent-domen PRE poredjenja: 600.006 se zaokruzi na 600.01 -> preko.
+    AssertEq (Len(modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 600.006, 600)) > 0), True, _
+             "600.006 na otvoreno 600 je preko (cent-domen pre poredjenja)"
+    ' 600.004 -> 600.00 = otvoreno -> zadato se brise (puna isplata je default).
+    AssertEq modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 600.004, 600), "", _
+             "600.004 se zaokruzi na otvoreno i prolazi"
+    AssertEq modScrBankaNalozi.Scr_BnIznosPostojiTest("OTK-NAL-DELIM"), False, _
+             "iznos jednak otvorenom brise zadato -- puna isplata je podrazumevana"
+
+    ' 2) Zaostali iznos se pri CITANJU liste spusta na svez otvoren; iznos
+    '    bez zivog bloka nestaje. (Validan unos preko otvorenog ne postoji,
+    '    pa stanje pravi test-seam bez validacije.)
+    modScrBankaNalozi.Scr_BnIznosTestSet "OTK-NAL-DELIM", 999999
+    modScrBankaNalozi.Scr_BnIznosTestSet "OTK-NEMA-GA", 50
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq modScrBankaNalozi.Scr_BnIznosZaTest("OTK-NAL-DELIM", 600), 600, _
+             "zaostali iznos se pri citanju spusta na otvoreno"
+    AssertEq modScrBankaNalozi.Scr_BnIznosPostojiTest("OTK-NEMA-GA"), False, _
+             "iznos bez zivog bloka nestaje pri citanju"
+
+    ' 3) Kolona ISPLATITI nosi zadato; OTVORENO ostaje istina o dugu.
+    AssertEq modScrBankaNalozi.BnPostaviIznos("OTK-NAL-DELIM", 250, 600), "", ""
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    redovi = d(1)
+    rDelim = 0
+    For i = 1 To CLng(d(2))
+        If Trim$(CStr(redovi(i, 11))) = "OTK-NAL-DELIM" Then rDelim = i: Exit For
+    Next i
+    AssertEq (rDelim > 0), True, "blok sa zadatim iznosom je u listi"
+    AssertEq CDbl(redovi(rDelim, 8)), 600#, "kolona OTVORENO ostaje pun ostatak duga"
+    AssertEq CDbl(redovi(rDelim, 9)), 250#, "kolona ISPLATITI nosi zadati iznos"
+
+    ' 4) Izvoz nosi zadati iznos (domensko pravilo, mereno direktno).
+    Set blokovi = modBankaExportPregled.BuildBlokIsplataList()
+    Set izbor = CreateObject("Scripting.Dictionary")
+    izbor("OTK-NAL-DELIM") = True
+    Set iznosi = CreateObject("Scripting.Dictionary")
+    iznosi("OTK-NAL-DELIM") = 250#
+    Set izabrani = modBankaExportPregled.OdaberiBlokoveZaNaloge( _
+                       blokovi, izbor, bezTR, nepoznato, iznosi)
+    AssertEq izabrani.count, 1, "izbor sa zadatim iznosom daje jedan nalog"
+    Set blk = izabrani(1)
+    AssertEq blk.IsplatitiIznos, 250#, "izvoz nosi zadati iznos, ne pun otvoren"
+    ' Bez zadatog iznosa isti izbor nosi pun otvoren -- default je nepromenjen.
+    Set izabrani = modBankaExportPregled.OdaberiBlokoveZaNaloge( _
+                       blokovi, izbor, bezTR, nepoznato)
+    Set blk = izabrani(1)
+    AssertEq blk.IsplatitiIznos, 600#, "bez zadatog iznosa ide pun otvoren"
+
+    ' 5) Zbir korpe je ono sto bi se STVARNO izvezlo; izbacivanje iz korpe
+    '    brise i zadati iznos.
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True), _
+             "", "blok ulazi u naloge"
+    AssertEq modScrBankaNalozi.BnKorpaZbir(), 250#, _
+             "zbir u traci je zadati iznos, ne otvoreno"
+    AssertEq modScrBankaNalozi.BnUkloni("OTK-NAL-DELIM"), True, ""
+    AssertEq modScrBankaNalozi.Scr_BnIznosPostojiTest("OTK-NAL-DELIM"), False, _
+             "izbacivanje iz naloga brise i zadati iznos"
+
+    modScrBankaNalozi.Scr_BnTestReset
+End Sub
 
 ' ============================================================
 ' 131. Platni nalozi: zona se STVARNO gradi i rasporedjuje

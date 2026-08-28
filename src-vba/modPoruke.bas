@@ -1374,6 +1374,14 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BN_NEMA_BLOKOVA", ChrW(10007) & " Nema blokova za naloge: izabrani blokovi nemaju teku" & ChrW(263) & "i ra" & ChrW(269) & "un ili otvoren iznos"
     UpsertRow lo, existing, "OTKUI_ERR_BN_CSV", ChrW(10007) & " Gre" & ChrW(353) & "ka pri generisanju CSV fajla " & ChrW(8212) & " pogledajte log"
     UpsertRow lo, existing, "OTKUI_ERR_BN_SPEC_OFF", ChrW(10007) & " " & ChrW(352) & "tampa specifikacije je isklju" & ChrW(269) & "ena (ISPLATA_SPEC_PRINT_MODE = OFF)"
+    UpsertRow lo, existing, "OTKUI_HDN_ISPLATITI", "ISPLATITI"
+    UpsertRow lo, existing, "OTKUI_BTN_BN_IZNOS", "Iznos..."
+    UpsertRow lo, existing, "OTKUI_ASK_BN_IZNOS", "Iznos za isplatu bloka"
+    UpsertRow lo, existing, "OTKUI_ERR_BN_IZNOS_NEISPRAVAN", ChrW(10007) & " Neispravan iznos"
+    UpsertRow lo, existing, "OTKUI_ERR_BN_IZNOS_NULA", ChrW(10007) & " Iznos mora biti ve" & ChrW(263) & "i od 0"
+    UpsertRow lo, existing, "OTKUI_ERR_BN_IZNOS_PREKO", ChrW(10007) & " Iznos je ve" & ChrW(263) & "i od otvorenog:"
+    UpsertRow lo, existing, "OTKUI_MSG_BN_IZNOS", ChrW(10003) & " Za blok " & ChrW(263) & "e se isplatiti:"
+    UpsertRow lo, existing, "OTKUI_MSG_BN_IZNOSI_USKLADJENI", "Uskla" & ChrW(273) & "eni zadati iznosi (otvoreno se promenilo):"
     InvalidateCache
 End Sub
 

@@ -34,14 +34,17 @@ Attribute VB_Name = "modScrBankaNalozi"
 ' ne postoji ni u legacy formi ni u configu -- uvodjenje bi bilo novo poslovno
 ' pravilo, a ne prelazak ekrana.
 '
-' IZNOS PO NALOGU JE UVEK SVEZ OTVOREN IZNOS. Legacy "Isplatiti" override
-' (txtIsplatiti_Exit -> ClampOverridesToOpen) NIJE prenet: to je prolazno
-' stanje sa celim aparatom odrzavanja (klamp na svaki reload, cistka na
-' promenu liste), a mreza ljuske nema detail panel u kom bi se unos drzao.
-' Delimicna isplata se i dalje radi u frmBankaExportPregled, koja ostaje
-' operativna. KORPA ZATO NE NOSI IZNOS -- samo identitete: iznos se cita svez
-' u trenutku izvoza (OdaberiBlokoveZaNaloge), pa zastareli snimak ne moze da
-' narucuje uplatu.
+' IZNOS PO NALOGU: podrazumevano SVEZ OTVOREN IZNOS; radnjom "Iznos..."
+' operater za blok zadaje MANJI (delimicna isplata -- smoke 28.08.2026 je
+' pokazao da je to stvaran tok, ne izuzetak). Zadati iznosi su legacy
+' "Isplatiti" override, sa ISTIM aparatom odrzavanja: Dictionary
+' OtkupID -> iznos, pri svakom citanju liste usklajden sa svezim otvorenim
+' kroz modBankaExportPregled.ClampOverridesToOpenDict (nestao/zatvoren blok
+' brise, veci spusta, manji ostaje -- uz poruku, nikad tiho). Korpa i dalje
+' NE NOSI iznos: clanstvo i iznos su dva recnika, oba klampovana svezim
+' stanjem, pa zastareli snimak ne moze da narucuje uplatu. Unos ide kroz
+' InputBox (presedan: SEF komentar na Fakturisanju) -- polje u zoni vezano
+' za "izabran red" bi zastarevalo na svaki sort/stranu/filter mreze.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
@@ -79,12 +82,12 @@ Private Const BN_NALOZI As String = "NALOZI"
 ' blokovi istog kooperanta. Dvosmislen OtkupID ovde NE stize do mreze: citac
 ' (BuildBlokIsplataList) na dupli/prazan OtkupID medju otvorenima OBARA celo
 ' citanje (AUD-026), sto je strozije od "prazan identitet po redu".
-Private Const BN_KOL_ID As Long = 10
+Private Const BN_KOL_ID As Long = 11
 ' Sta radnje moraju da znaju a iz prikaza se ne vidi jednoznacno (prazna
 ' celija racuna lici na kolonu koja se nije nacrtala; avans se ne vidi nigde):
-Private Const BN_KOL_KOOP As Long = 11
-Private Const BN_KOL_TR As Long = 12
-Private Const BN_KOL_AVANS As Long = 13
+Private Const BN_KOL_KOOP As Long = 12
+Private Const BN_KOL_TR As Long = 13
+Private Const BN_KOL_AVANS As Long = 14
 ' Otvoren iznos je VIDLJIVA kolona 8; GridCell vraca vrednost modela (Double),
 ' pa se odatle i cita -- ne izvodi se iz formatiranog prikaza.
 Private Const BN_KOL_OTVORENO As Long = 8
@@ -97,6 +100,12 @@ Private mLista As String
 ' (osvezavaju se pri svakom citanju liste); iznos naloga se NIKAD ne cita
 ' odavde nego svez pri izvozu.
 Private mKorpa As Collection
+
+' ZADATI IZNOSI po bloku (OtkupID -> iznos), za delimicnu isplatu. Ista
+' struktura kao legacy m_OverrideAmounts; odrzava je ISTI klamp
+' (ClampOverridesToOpenDict) pri svakom citanju liste. Iznos postoji samo za
+' blok koji je u korpi -- izbacivanje iz korpe ga brise.
+Private mIznosi As Object
 
 Private mFill As Boolean           ' punjenje comboa okida Change
 Private mRacunPunjen As Boolean
@@ -173,8 +182,9 @@ Public Function BnRadnjeZaListu(ByVal kljuc As String) As String
     Select Case kljuc
         Case BN_NALOZI
             BnRadnjeZaListu = "bnadd:OTKUI_BTN_BN_UNALOG:104:primary:1|" & _
-                              "bndel:OTKUI_BTN_BN_IZNALOG:96:ghost:1|" & _
-                              "bnavans:OTKUI_BTN_BN_AVANS:120:soft:1"
+                              "bniznos:OTKUI_BTN_BN_IZNOS:88:soft:1|" & _
+                              "bndel:OTKUI_BTN_BN_IZNALOG:88:ghost:1|" & _
+                              "bnavans:OTKUI_BTN_BN_AVANS:116:soft:1"
     End Select
 End Function
 
@@ -271,6 +281,7 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
 
     Select Case kljuc
         Case "bnadd":   RadnjaNadRedom = DodajRedUKorpu(red)
+        Case "bniznos": RadnjaNadRedom = ZadajIznos(red)
         Case "bndel":   RadnjaNadRedom = UkloniRedIzKorpe(red)
         Case "bnavans": RadnjaNadRedom = PrimeniAvans(red)
     End Select
@@ -366,11 +377,13 @@ Public Function BnDodaj(ByVal otkupID As String, ByVal broj As String, _
 End Function
 
 ' Uklanjanje po IDENTITETU, ne po prikazu. Vraca True kad je nesto izbaceno.
+' Sa clanstvom ide i zadati iznos: iznos bez stavke ne znaci nista.
 Public Function BnUkloni(ByVal otkupID As String) As Boolean
     Dim i As Long
     i = UKorpi(otkupID)
     If i = 0 Then Exit Function
     Korpa().Remove i
+    If Iznosi().Exists(otkupID) Then Iznosi().Remove otkupID
     BnUkloni = True
 End Function
 
@@ -383,13 +396,70 @@ Public Function BnKorpaBroj() As Long
     BnKorpaBroj = mKorpa.count
 End Function
 
+' Zbir onoga sto bi se STVARNO izvezlo za stavke u korpi: zadati iznos gde
+' postoji, inace otvoreno (snimak koji uskladjivanje drzi svezim).
 Public Function BnKorpaZbir() As Double
     Dim i As Long, s As Double
     If mKorpa Is Nothing Then Exit Function
     For i = 1 To mKorpa.count
-        s = s + CDbl(mKorpa(i)("otvoreno"))
+        s = s + BnIznosZa(CStr(mKorpa(i)("otkupID")), CDbl(mKorpa(i)("otvoreno")))
     Next i
     BnKorpaZbir = s
+End Function
+
+'--------------------------------------------------- ZADATI IZNOSI PO BLOKU
+Private Function Iznosi() As Object
+    If mIznosi Is Nothing Then Set mIznosi = CreateObject("Scripting.Dictionary")
+    Set Iznosi = mIznosi
+End Function
+
+' Iznos koji bi blok poneo u nalog: zadat (delimicna isplata) ili otvoreno.
+Public Function BnIznosZa(ByVal otkupID As String, ByVal otvoreno As Double) As Double
+    If Iznosi().Exists(otkupID) Then
+        BnIznosZa = CDbl(Iznosi()(otkupID))
+    Else
+        BnIznosZa = otvoreno
+    End If
+End Function
+
+' Postavljanje zadatog iznosa -- ISTA pravila kao legacy txtIsplatiti_Exit:
+' sve u cent-domenu (ZaokruziNovac PRE svake provere), iznos > 0, nikad preko
+' otvorenog; jednak otvorenom = brise zadato (puna isplata je podrazumevana).
+' Vraca poruku greske ili "" kad je prihvaceno.
+Public Function BnPostaviIznos(ByVal otkupID As String, ByVal iznos As Double, _
+                               ByVal otvoreno As Double) As String
+    Dim iznosC As Double, otvorenoC As Double
+    If Len(Trim$(otkupID)) = 0 Then
+        BnPostaviIznos = Poruka("OTKUI_ERR_BN_DVOSMISLEN")
+        Exit Function
+    End If
+
+    iznosC = ZaokruziNovac(iznos)
+    otvorenoC = ZaokruziNovac(otvoreno)
+
+    If iznosC <= 0 Then
+        BnPostaviIznos = Poruka("OTKUI_ERR_BN_IZNOS_NULA")
+        Exit Function
+    End If
+    If iznosC > otvorenoC Then
+        BnPostaviIznos = Poruka("OTKUI_ERR_BN_IZNOS_PREKO") & " " & _
+                         Format$(otvorenoC, "#,##0.00")
+        Exit Function
+    End If
+
+    If iznosC = otvorenoC Then
+        If Iznosi().Exists(otkupID) Then Iznosi().Remove otkupID
+    Else
+        Iznosi()(otkupID) = iznosC
+    End If
+End Function
+
+' Uskladjivanje zadatih iznosa sa SVEZOM mapom otvorenih -- legacy
+' PruneStaleOverrides pravilo, ISTI racun (ClampOverridesToOpenDict): nestao
+' ili zatvoren blok gubi zadato, vece od otvorenog se spusta, manje ostaje.
+' Vraca broj promena, da se prijave (tiho spustanje bi operater promasio).
+Public Function BnUskladiIznose(ByVal ziviOtvoreno As Object) As Long
+    BnUskladiIznose = modBankaExportPregled.ClampOverridesToOpenDict(Iznosi(), ziviOtvoreno)
 End Function
 
 ' Identiteti korpe kao Dictionary -- oblik koji OdaberiBlokoveZaNaloge prima.
@@ -468,8 +538,57 @@ End Function
 Private Function IsprazniKorpu() As Boolean
     If BnKorpaBroj() = 0 Then Exit Function
     Set mKorpa = New Collection
+    Set mIznosi = Nothing
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_KORPA_PRAZNA"), False
     IsprazniKorpu = True
+End Function
+
+' Radnja "Iznos...": delimicna isplata izabranog bloka. InputBox (presedan:
+' SEF komentar), predlog = tekuci iznos za taj blok; prazan unos / otkaz ne
+' menja nista. Blok koji jos nije u nalozima se dodaje -- operater koji mu
+' zadaje iznos ocigledno bira bas njega.
+Private Function ZadajIznos(ByVal red As Long) As Boolean
+    Dim iD As String, unos As String, greska As String
+    Dim iznos As Double, otvoreno As Double
+
+    iD = IdReda(red, BN_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    If Not RedImaTR(red) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_BEZ_RACUNA"), True
+        Exit Function
+    End If
+    otvoreno = RedD(red, BN_KOL_OTVORENO)
+
+    unos = Trim$(InputBox(Poruka("OTKUI_ASK_BN_IZNOS") & " " & RedOznaka(red) & vbCrLf & vbCrLf & _
+                          Poruka("OTKUI_LBL_BN_AVANS_OTVORENO") & " " & _
+                          Format$(otvoreno, "#,##0.00") & " RSD", APP_NAME, _
+                          Format$(BnIznosZa(iD, otvoreno), "0.00")))
+    If Len(unos) = 0 Then Exit Function
+
+    If Not TryParseDouble(unos, iznos) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_IZNOS_NEISPRAVAN"), True
+        Exit Function
+    End If
+
+    greska = BnPostaviIznos(iD, iznos, otvoreno)
+    If Len(greska) > 0 Then
+        modOtkupUI.ShowToast greska, True
+        Exit Function
+    End If
+
+    ' U naloge, ako vec nije -- bez ovoga bi zadat iznos stajao a blok ne bi
+    ' isao u fajl, sto izgleda kao da unos ne radi.
+    If Not BnUKorpi(iD) Then
+        greska = BnDodaj(iD, RedOznaka(red), otvoreno, True)
+        If Len(greska) > 0 Then
+            modOtkupUI.ShowToast greska, True
+            Exit Function
+        End If
+    End If
+
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_IZNOS") & " " & _
+                         Format$(BnIznosZa(iD, otvoreno), "#,##0.00") & " RSD", False
+    ZadajIznos = True
 End Function
 
 '=====================================================================
@@ -542,7 +661,7 @@ Private Function BlokoviZaIzvoz(ByRef outBezTR As Long, ByRef outIzbaceno As Lon
     Dim sveze As Collection
     Set sveze = modBankaExportPregled.BuildBlokIsplataList()
     Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _
-                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno)
+                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno, Iznosi())
 End Function
 
 Private Function GenerisiNaloge() As Boolean
@@ -602,9 +721,10 @@ Private Function GenerisiNaloge() As Boolean
         Exit Function
     End If
 
-    ' Fajl je napisan. Korpa je odradila svoje -- prazni se, da drugi klik ne
-    ' bi tiho napravio ISTE naloge jos jednom.
+    ' Fajl je napisan. Korpa je odradila svoje -- prazni se (sa zadatim
+    ' iznosima), da drugi klik ne bi tiho napravio ISTE naloge jos jednom.
     Set mKorpa = New Collection
+    Set mIznosi = Nothing
     Scr_ResetCache
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_CSV") & " " & CStr(blokovi.count) & _
                          "  " & ChrW(183) & "  " & Format$(ukupno, "#,##0.00") & " RSD", False
@@ -683,6 +803,8 @@ End Function
 ' Poslednje cetiri nose ono sto radnje moraju da znaju a iz prikaza se ne
 ' vidi jednoznacno; prioritet 4, pa se ne crtaju (v. BN_KOL_*).
 Private Function NaloziKolone() As Variant
+    ' ISPLATITI stoji uz OTVORENO: podrazumevano su isti broj, a razlikuju se
+    ' tacno tamo gde je operater zadao delimicnu isplatu.
     NaloziKolone = Array( _
         "OTKUI_HD_BROJ||txt|96|1", _
         "OTKUI_HD_OZN||txt|32|1", _
@@ -690,8 +812,9 @@ Private Function NaloziKolone() As Variant
         "OTKUI_HD_PARTNER||part|0|1", _
         "OTKUI_HD_OM||txt|64|3", _
         "OTKUI_HDN_UKUPNO||rsd|96|3", _
-        "OTKUI_HDN_ISPLACENO||rsd|96|2", _
+        "OTKUI_HDN_ISPLACENO||rsd|96|3", _
         "OTKUI_HDN_OTVORENO||rsd|104|1", _
+        "OTKUI_HDN_ISPLATITI||rsd|104|1", _
         "OTKUI_HDB_RACUN||txt|132|2", _
         "OTKUI_HDN_OTKID||txt|1|4", _
         "OTKUI_HDN_KOOPID||txt|1|4", _
@@ -706,7 +829,7 @@ End Function
 Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Variant
     Dim src As Variant, i As Long, n As Long, outA() As Variant
     Dim hay As String, iD As String, imaTR As Boolean, avans As Double
-    Dim zbirOtv As Double, usklajdeno As Long
+    Dim zbirOtv As Double, uskladjeno As Long, usklIznosa As Long
     Dim zivi As Object
     Dim errNum As Long, errDesc As String
 
@@ -714,24 +837,31 @@ Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Vari
 
     src = modBankaExportPregled.GetBlokIsplataForGrid()
     If Not IsArray(src) Then
-        ' Nema otvorenih blokova -- korpa nema nad cim da stoji.
-        usklajdeno = BnUskladiKorpu(CreateObject("Scripting.Dictionary"))
-        If usklajdeno > 0 Then PrijaviUskladjivanje usklajdeno
+        ' Nema otvorenih blokova -- ni korpa ni zadati iznosi nemaju nad cim
+        ' da stoje.
+        Set zivi = CreateObject("Scripting.Dictionary")
+        uskladjeno = BnUskladiKorpu(zivi)
+        If uskladjeno > 0 Then PrijaviUskladjivanje uskladjeno
+        usklIznosa = BnUskladiIznose(zivi)
+        If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa
         RedoviNalozi = PrazanRezultat(NaloziKolone())
         Exit Function
     End If
 
-    ' Korpa se uskladjuje sa SVEZIM skupom otvorenih, PRE cipa i pretrage:
-    ' korpa je izbor za izvoz, a cip je pregled -- filter ne sme da izbacuje
-    ' stavke iz izbora.
+    ' Korpa i zadati iznosi se uskladjuju sa SVEZIM skupom otvorenih, PRE cipa
+    ' i pretrage: to je izbor za izvoz, a cip je pregled -- filter ne sme da
+    ' izbacuje stavke iz izbora. Iznose drzi ISTI klamp kao legacy override
+    ' (ClampOverridesToOpenDict): nestao blok gubi zadato, vece se spusta.
     Set zivi = CreateObject("Scripting.Dictionary")
     For i = 1 To UBound(src, 1)
         zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))
     Next i
-    usklajdeno = BnUskladiKorpu(zivi)
-    If usklajdeno > 0 Then PrijaviUskladjivanje usklajdeno
+    uskladjeno = BnUskladiKorpu(zivi)
+    If uskladjeno > 0 Then PrijaviUskladjivanje uskladjeno
+    usklIznosa = BnUskladiIznose(zivi)
+    If usklIznosa > 0 Then PrijaviUskladjivanjeIznosa usklIznosa
 
-    ReDim outA(1 To UBound(src, 1), 1 To 13)
+    ReDim outA(1 To UBound(src, 1), 1 To 14)
     For i = 1 To UBound(src, 1)
         iD = Trim$(CStr(src(i, 1)))
         imaTR = CBool(src(i, 11))
@@ -754,11 +884,14 @@ Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Vari
         outA(n, 6) = CDbl(src(i, 7))
         outA(n, 7) = CDbl(src(i, 8))
         outA(n, 8) = CDbl(src(i, 9))
-        outA(n, 9) = CStr(src(i, 10))
-        outA(n, 10) = iD
-        outA(n, 11) = CStr(src(i, 5))
-        outA(n, 12) = IIf(imaTR, "1", "")
-        outA(n, 13) = avans
+        ' Sta bi blok poneo u nalog: zadati iznos ili otvoreno. Klamp iznad
+        ' garantuje da zadato nikad nije preko svezeg otvorenog.
+        outA(n, 9) = BnIznosZa(iD, CDbl(src(i, 9)))
+        outA(n, 10) = CStr(src(i, 10))
+        outA(n, 11) = iD
+        outA(n, 12) = CStr(src(i, 5))
+        outA(n, 13) = IIf(imaTR, "1", "")
+        outA(n, 14) = avans
         zbirOtv = zbirOtv + CDbl(src(i, 9))
 Sledeci:
     Next i
@@ -778,6 +911,10 @@ End Function
 ' LoadBlokovi). Bez forme je ShowToast no-op, pa test ovo ne vidi kao pad.
 Private Sub PrijaviUskladjivanje(ByVal n As Long)
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_KORPA_USKLADJENA") & " " & CStr(n), True
+End Sub
+
+Private Sub PrijaviUskladjivanjeIznosa(ByVal n As Long)
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_IZNOSI_USKLADJENI") & " " & CStr(n), True
 End Sub
 
 '=====================================================================
@@ -1187,10 +1324,29 @@ Public Function Scr_BnTrakaRedTest(ByVal i As Long) As String
     Scr_BnTrakaRedTest = TrakaRed(i)
 End Function
 
+' Direktan upis zadatog iznosa BEZ validacije -- da se izmeri da citanje
+' liste zaostali iznos STVARNO klampuje (validan unos preko otvorenog ne
+' postoji, pa se stanje "zadato > otvoreno" bez ovoga ne moze ni napraviti).
+Public Sub Scr_BnIznosTestSet(ByVal otkupID As String, ByVal iznos As Double)
+    If Not IsTestMode() Then Exit Sub
+    Iznosi()(otkupID) = iznos
+End Sub
+
+Public Function Scr_BnIznosZaTest(ByVal otkupID As String, ByVal otvoreno As Double) As Double
+    If Not IsTestMode() Then Exit Function
+    Scr_BnIznosZaTest = BnIznosZa(otkupID, otvoreno)
+End Function
+
+Public Function Scr_BnIznosPostojiTest(ByVal otkupID As String) As Boolean
+    If Not IsTestMode() Then Exit Function
+    Scr_BnIznosPostojiTest = Iznosi().Exists(otkupID)
+End Function
+
 Public Sub Scr_BnTestReset()
     If Not IsTestMode() Then Exit Sub
     mLista = BN_NALOZI
     Set mKorpa = New Collection
+    Set mIznosi = Nothing
     mRacunTest = ""
     mRacunPunjen = False
     Scr_ResetCache

@@ -553,11 +553,26 @@ Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
     Dim openByOtkup As Object
     If Not blokovi Is Nothing Then Set openByOtkup = BuildOpenAmountDict(blokovi)
 
+    ClampOverridesToOpen = ClampOverridesToOpenDict(overrideDict, openByOtkup)
+End Function
+
+'======================================================================
+' ClampOverridesToOpenDict - JEZGRO klampa, nad mapom OtkupID -> otvoreno.
+'
+' Izdvojeno iz ClampOverridesToOpen (v6-ui-185) da isti racun dele legacy
+' forma (koja ima Collection blokova) i ekran Platni nalozi (koji mapu
+' otvorenih vec ima iz citaca, pa drugi prolaz kroz tabele ne placa) -- ista
+' klasa poteza kao PrijemnicaDostupna i BrojVlasnikaPoBroju: dva pozivaoca,
+' jedan racun, da se pravila ne mogu razici. Ponasanje je NEPROMENJENO.
+'======================================================================
+Public Function ClampOverridesToOpenDict(ByVal overrideDict As Object, _
+                                         ByVal openByOtkup As Object) As Long
+    ClampOverridesToOpenDict = 0
     If overrideDict Is Nothing Then Exit Function
 
-    ' Nema liste blokova = nema dokaza da je ijedan override jos vazeci.
-    If blokovi Is Nothing Then
-        ClampOverridesToOpen = overrideDict.count
+    ' Nema mape otvorenih = nema dokaza da je ijedan override jos vazeci.
+    If openByOtkup Is Nothing Then
+        ClampOverridesToOpenDict = overrideDict.count
         overrideDict.RemoveAll
         Exit Function
     End If
@@ -597,7 +612,7 @@ Public Function ClampOverridesToOpen(ByVal overrideDict As Object, _
         changed = changed + 1
     Next s
 
-    ClampOverridesToOpen = changed
+    ClampOverridesToOpenDict = changed
 End Function
 
 '======================================================================
@@ -798,9 +813,11 @@ Public Function BuildNalogCsvPayload(ByVal blokovi As Collection, _
         ' kao "0.00" (nalog na nula dinara).
         trazeno = ZaokruziNovac(blk.IsplatitiIznos)
         If blk.HasTekuciRacun And trazeno > 0 Then
-            s = s & CsvField(NormalizujRacun(platilacRacun)) & ";" & _
+            ' Obe kolone racuna idu kroz FormatRacunZaNalog: goli 18-cifreni
+            ' racun bi u Excelu postao "2,059E+17" i izgubio cifre (v. tamo).
+            s = s & CsvField(FormatRacunZaNalog(platilacRacun)) & ";" & _
                     CsvField(platilacNaziv) & ";" & _
-                    CsvField(NormalizujRacun(blk.TekuciRacun)) & ";" & _
+                    CsvField(FormatRacunZaNalog(blk.TekuciRacun)) & ";" & _
                     CsvField(blk.kooperantNaziv) & ";" & _
                     CsvIznos(trazeno) & ";" & _
                     "RSD;" & _
@@ -841,6 +858,37 @@ End Function
 ' ostaje kako je unet u maticne podatke / config).
 Private Function NormalizujRacun(ByVal racun As String) As String
     NormalizujRacun = Replace(Trim$(racun), " ", "")
+End Function
+
+'======================================================================
+' FormatRacunZaNalog - oblik racuna u KOLONAMA CSV naloga (platilac i
+' primalac). Nalaz sa smoke-a 28.08.2026 (v6-ui-185).
+'
+' Racun unet kao golih 18 cifara Excel pri otvaranju CSV-a cita kao BROJ:
+' prikaze ga kao "2,059E+17", a drzi samo 15 znacajnih cifara -- pa snimanje
+' iz Excela racun primaoca UNISTI pre uvoza u e-banking (Excel banner
+' "possible data loss" je bas to). Racun sa crticama ostaje tekst.
+'
+' Kolona je i do sada nosila MESAVINU oba oblika (racun ide u fajl onako
+' kako je unet u maticne podatke / config), pa kanonizacija golih 18 cifara
+' u NBS oblik 3-13-2 ne uvodi nov oblik u kolonu -- uklanja onaj koji se
+' gubi. Sve sto nije tacno 18 golih cifara prolazi netaknuto (ne izmislja
+' se format koji domen nema).
+'======================================================================
+Public Function FormatRacunZaNalog(ByVal racun As String) As String
+    Dim r As String
+    Dim i As Long
+    r = NormalizujRacun(racun)
+    FormatRacunZaNalog = r
+
+    ' Kanonizuje se SAMO tacno 18 golih cifara (NBS oblik 3-13-2). Sve drugo
+    ' prolazi netaknuto -- format koji domen nema se ne izmislja.
+    If Len(r) <> 18 Then Exit Function
+    For i = 1 To 18
+        If Not (Mid$(r, i, 1) Like "[0-9]") Then Exit Function
+    Next i
+
+    FormatRacunZaNalog = Left$(r, 3) & "-" & Mid$(r, 4, 13) & "-" & Right$(r, 2)
 End Function
 
 ' Deo naziva fajla za izlaze isplata: "<yyyy-mm-dd>_<Banka>" -- datum placanja
@@ -1024,23 +1072,30 @@ End Function
 '   - samoOtkupIDs (Dictionary kljuceva) suzava izbor; Nothing ili prazan =
 '     SVI blokovi, isto sto legacy radi kad selekcije nema;
 '   - blok bez tekuceg racuna se preskace i broji (outBezTR) -- nema primaoca;
-'   - IsplatitiIznos = ZaokruziNovac(OtvorenIznos): SVEZ otvoren iznos,
-'     normalizovan u cent-domen PRE praga "> 0" (AUD-026) -- sirov ostatak od
-'     npr. 0.004 bi prosao sirov prag, a u fajlu zavrsio kao "0.00";
+'   - IsplatitiIznos = ZaokruziNovac(osnovice): SVEZ otvoren iznos, ili
+'     operaterov zadati iznos iz overrideIznosi (OtkupID -> iznos) kad
+'     postoji -- normalizovan u cent-domen PRE praga "> 0" (AUD-026): sirov
+'     ostatak od npr. 0.004 bi prosao sirov prag, a u fajlu zavrsio kao "0.00";
 '   - outNepoznato = koliko trazenih ID-eva NEMA medju otvorenima (blok se u
 '     medjuvremenu zatvorio/stornirao) -- pozivalac to prijavljuje, ne guta.
 '
-' Iznos NIKAD ne dolazi iz izbora: izbor nosi samo identitete, pa zastareo
-' snimak ne moze da narucuje uplatu. Finalna kapija (ValidateNalogSaldo u
-' BuildNalogCsvPayload) svejedno ostaje -- ovo je selekcija, ne validacija.
+' IZBOR (samoOtkupIDs) nosi samo identitete; IZNOS dolazi ili svez iz liste
+' ili iz overrideIznosi, koji pozivalac ODRZAVA klampom nad svezim otvorenim
+' (ClampOverridesToOpenDict pri svakom citanju -- legacy PruneStaleOverrides
+' pravilo). Ovde se zato NE dodaje jos jedna granica preko otvorenog: sloj
+' ispod (ValidateNalogSaldo u BuildNalogCsvPayload) svez saldo svejedno
+' preseca za CEO fajl -- isti slojevi kao u legacy formi (par. 21: pre nove
+' kapije procitaj sta kod ispod vec radi).
 '======================================================================
 Public Function OdaberiBlokoveZaNaloge(ByVal blokovi As Collection, _
                                        ByVal samoOtkupIDs As Object, _
                                        Optional ByRef outBezTR As Long, _
-                                       Optional ByRef outNepoznato As Long) As Collection
+                                       Optional ByRef outNepoznato As Long, _
+                                       Optional ByVal overrideIznosi As Object = Nothing) As Collection
     Dim result As New Collection
     Dim imaIzbor As Boolean
     Dim pogodjeni As Object
+    Dim osnovica As Double
 
     outBezTR = 0
     outNepoznato = 0
@@ -1062,7 +1117,11 @@ Public Function OdaberiBlokoveZaNaloge(ByVal blokovi As Collection, _
             outBezTR = outBezTR + 1
             GoTo Sledeci
         End If
-        blk.IsplatitiIznos = ZaokruziNovac(blk.OtvorenIznos)
+        osnovica = blk.OtvorenIznos
+        If Not overrideIznosi Is Nothing Then
+            If overrideIznosi.Exists(blk.otkupID) Then osnovica = CDbl(overrideIznosi(blk.otkupID))
+        End If
+        blk.IsplatitiIznos = ZaokruziNovac(osnovica)
         If blk.IsplatitiIznos > 0 Then result.Add blk
 Sledeci:
     Next v
