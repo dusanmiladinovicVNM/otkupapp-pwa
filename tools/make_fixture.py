@@ -510,6 +510,15 @@ SEED = {
          "VozacID": VOZAC, "BrojOtpremnice": "3/TEST", "BrojZbirne": "",
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 800, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 80, "Klasa": "I"},
+        # Otpremnica cija zbirna (ZB-TEST-4) nosi NESTORNIRANE prijemnice --
+        # do sada nijedna nije postojala (par. 23.12/S10), pa se linija
+        # "prijemnica + kupac" u detalju otpremnice/otkupa nije mogla
+        # tvrditi. ZBIRNA_MIRNA je namerno: njene prijemnice (PRJ-FAK-1/2/3,
+        # PRJ-TEST-Z2) su vec vozila fakturisanja i ne diraju se.
+        {"OtpremnicaID": "OTP-IZV-Z", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": "Z/TEST", "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 700, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 70, "Klasa": "I"},
     ],
     "tblOtkup": [
         # Po jedan blok na svakoj legacy otpremnici -- zavrsetak ispravke sme da

@@ -10337,17 +10337,25 @@ Private Sub T_Izv_DetaljICipKontekst()
            CStr(otk(i, cStorno)) <> "Da" Then nzStavki = nzStavki + 1
     Next i
     AssertEq (nzStavki >= 3), True, "vozilo: blok sa vise linija postoji"
-    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 1, _
+    ' stavke + UKUPNO + kontekst linija (vozac; BIM blok nema zbirnu)
+    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 2, _
              "detalj nosi SVE stavke bloka"
     AssertEq (InStr(1, CStr(det(LBound(det))), " x ", vbTextCompare) > 0), _
              True, "prva linija detalja je stavka sa cenom"
-    AssertEq (InStr(1, CStr(det(UBound(det))), "UKUPNO", vbTextCompare) > 0), _
-             True, "poslednja linija detalja je UKUPNO"
-    ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto).
+    AssertEq (InStr(1, IzvDetSpoj(det), "UKUPNO", vbTextCompare) > 0), _
+             True, "detalj viselinijskog nosi UKUPNO"
+    AssertEq (InStr(1, IzvDetSpoj(det), "Voza", vbTextCompare) > 0), _
+             True, "detalj otkupa imenuje vozaca (smoke krug 5)"
+    ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto):
+    ' stavka + kontekst linija, bez UKUPNO.
     det = modScrIzvestaji.IzDetaljOtkupLista("OTK-IZV-1")
     AssertEq IsArray(det), True, "detalj jednolinijskog lista postoji"
-    AssertEq UBound(det) - LBound(det) + 1, 1, _
+    AssertEq (InStr(1, IzvDetSpoj(det), "UKUPNO", vbTextCompare) = 0), True, _
              "jednolinijski detalj nema UKUPNO -- ne duplira red"
+    ' Otkup vezan za otpremnicu nosi ZBIRNU u kontekst liniji.
+    det = modScrIzvestaji.IzDetaljOtkupLista("OTK-TEST-1")
+    AssertEq (InStr(1, IzvDetSpoj(det), "ZB-TEST-1", vbTextCompare) > 0), True, _
+             "detalj otkupa imenuje zbirnu sa lista"
 
     ' (2) Detalj otpremnice: samo sto red ne kaze -- vozac, BROJ vezanih
     ' blokova (rucni prolaz) i broj zbirne; otpremljene kg ne ponavlja.
@@ -10368,6 +10376,17 @@ Private Sub T_Izv_DetaljICipKontekst()
     AssertEq (Len(zbOcek) > 0), True, "vozilo: otpremnica nosi zbirnu"
     AssertEq (InStr(1, CStr(det(LBound(det) + 2)), zbOcek, vbTextCompare) > 0), True, _
              "detalj otpremnice imenuje zbirnu"
+    ' Prijemnica-linija nosi broj, kg i KUPCA (smoke krug 5) -- vozilo je
+    ' OTP-IZV-Z, jedina otpremnica cija zbirna ima nestornirane prijemnice.
+    det = modScrIzvestaji.IzDetaljOtpremnice("OTP-IZV-Z")
+    AssertEq IsArray(det), True, "detalj otpremnice sa zivim prijemnicama postoji"
+    AssertEq (InStr(1, IzvDetSpoj(det), "22/150326", vbTextCompare) > 0), True, _
+             "detalj otpremnice nabraja prijemnice zbirne"
+    ' Fixture NAMERNO nema red u tblKupci (kupac zivi samo kao ID) --
+    ' EntitetNaziv tada pada na ID, pa se kupac u liniji meri po ID-u; na
+    ' pravoj svesci ista linija nosi naziv firme.
+    AssertEq (InStr(1, IzvDetSpoj(det), FX_KUPAC, vbTextCompare) > 0), True, _
+             "prijemnica-linija imenuje kupca koji ju je izdao"
 
     ' (3) Cipovi su KONTEKSTNI: nedostupna kombinacija nema ni cipove.
     AssertEq modScrIzvestaji.IzCipoviZaKontekst("MANJAK", "Kooperant", False), "", _
@@ -10489,6 +10508,17 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
              "amb kartica zona saldo = kanonski saldo kooperanta"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
+
+' Linije detalj trake spojene u jedan string -- tvrdnja o sadrzaju ne sme
+' da zavisi od REDOSLEDA linija (kontekst/prijemnice se dodaju uslovno).
+Private Function IzvDetSpoj(ByVal det As Variant) As String
+    Dim i As Long, s As String
+    If Not IsArray(det) Then Exit Function
+    For i = LBound(det) To UBound(det)
+        s = s & CStr(det(i)) & "|"
+    Next i
+    IzvDetSpoj = s
+End Function
 
 ' Kljucevi lista kao "|K1|K2|...|" -- za InStr tvrdnje bez petlji.
 Private Function IzvSpojKljuceve(ByVal liste As Variant) As String

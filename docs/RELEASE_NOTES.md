@@ -6522,14 +6522,26 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   red štampe i dalje sabira samo promet (saldo nije sabirljiv — pravilo
   iz recenzije netaknuto).
 
+### Doterano posle petog smoke-a (krug 6)
+
+- **Prijemnica u detalju sada kaže i kupca** — „firma koja je izdala
+  prijemnicu" stoji uz broj i kg, i u detalju otpremnice (Roba za OM) i u
+  detalju otkupnog lista.
+- **Detalj otkupnog lista nosi celu vertikalu**: posle stavki i UKUPNO
+  ide „Vozač … · Zbirna …" pa prijemnice te zbirne sa kupcem — od
+  otkupnog lista do firme-primaoca na jedan klik, i na listi Otk. listovi
+  i na kartici kooperanta. Deo koji na listu ne postoji se preskače,
+  ništa se ne izmišlja.
+
 ### Šta NIJE urađeno, i zašto
 
 - **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i
   dalje čekaju vrstu reda u ugovoru ljuske — detalj traka u zoni je
   namerno uži oblik.
-- **Prijemnica-linija u detalju otpremnice nema test-vozilo** (fixture
-  nema otpremnicu čija zbirna nosi nestorniranu prijemnicu) — vezivanje
-  je fail-open pregled, račun manjka i dalje ide samo strogim putem.
+- **Dve štampe kartice postoje uporedo** („Štampaj izveštaj" u kućnom
+  stilu i „Štampaj karticu (PDF)" sa rekapitulacijom robe, BPG-om i
+  potpisima) — koja ostaje i da li se spajaju u jednu odlučuje se posle
+  smoke kruga 6, zapisano kao otvoreno pitanje.
 - **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
   panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
   pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu

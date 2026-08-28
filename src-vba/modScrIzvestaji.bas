@@ -1698,7 +1698,8 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Dim d As Variant, i As Long
     Dim cId As Long, cBr As Long, cSt As Long
     Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
-    Dim brDok As String, stanica As String
+    Dim cVoz As Long, cZb As Long
+    Dim brDok As String, stanica As String, vozId As String, brZb As String
     Dim linije As Collection, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
     On Error GoTo EH
@@ -1713,12 +1714,17 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
     cCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
     cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    cVoz = GetColumnIndex(TBL_OTKUP, COL_OTK_VOZAC)
+    cZb = GetColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE)
 
-    ' Dokument izabrane linije (broj je scoped po stanici).
+    ' Dokument izabrane linije (broj je scoped po stanici). Vozac i zbirna su
+    ' dokumentski (sve linije ih dele) -- citaju se sa izabrane.
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then
             brDok = NzS(d(i, cBr))
             stanica = NzS(d(i, cSt))
+            vozId = NzS(d(i, cVoz))
+            brZb = NzS(d(i, cZb))
             Exit For
         End If
     Next i
@@ -1739,17 +1745,30 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
         End If
     Next i
     If linije.count = 0 Then Exit Function
+    If linije.count > 1 Then
+        linije.Add "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _
+                   ChrW(183) & "  " & Format$(totVr, "#,##0.00")
+    End If
 
-    Dim res() As String, n As Long, nOut As Long
-    nOut = linije.count + IIf(linije.count > 1, 1, 0)
-    ReDim res(0 To nOut - 1)
+    ' Sledljivost dokumenta (smoke krug 5): vozac i zbirna sa lista, pa
+    ' prijemnice te zbirne SA KUPCEM -- red kartice/liste nista od ovoga ne
+    ' pokazuje. Prazan deo se preskace (nema = nema, ne izmislja se).
+    Dim ctx As String
+    If Len(vozId) > 0 Then
+        ctx = Poruka("OTKUI_IZ_DET_VOZAC") & " " & EntitetNaziv("Vozac", vozId, False)
+    End If
+    If Len(brZb) > 0 Then
+        If Len(ctx) > 0 Then ctx = ctx & "  " & ChrW(183) & "  "
+        ctx = ctx & Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
+    End If
+    If Len(ctx) > 0 Then linije.Add ctx
+    If Len(brZb) > 0 Then DodajPrijemniceZbirne linije, brZb, vozId
+
+    Dim res() As String, n As Long
+    ReDim res(0 To linije.count - 1)
     For n = 1 To linije.count
         res(n - 1) = linije(n)
     Next n
-    If linije.count > 1 Then
-        res(nOut - 1) = "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _
-                        ChrW(183) & "  " & Format$(totVr, "#,##0.00")
-    End If
     IzDetaljOtkupLista = res
     Exit Function
 EH:
@@ -1823,10 +1842,13 @@ End Function
 
 ' Prijemnice date zbirne u detalj: prvo po (BrojZbirne, VozacID); ako se
 ' nijedna ne poklopi po vozacu, svi kandidati po broju zbirne (fail-open).
+' Linija nosi i KUPCA prijemnice (smoke krug 5: "firma koja je izdala
+' prijemnicu") -- to je karika sledljivosti koju nijedan red liste ne kaze.
 Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
                                   ByVal brZb As String, ByVal vozId As String)
     Dim d As Variant, i As Long, krug As Long, nasao As Boolean
     Dim cZb As Long, cVoz As Long, cBr As Long, cKol As Long, cStorno As Long
+    Dim cKup As Long, s As String
     On Error Resume Next
     d = GetTableData(TBL_PRIJEMNICA)
     If Not IsArray(d) Then Exit Sub
@@ -1835,14 +1857,20 @@ Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
     cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
     cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
     cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
     For krug = 1 To 2
         For i = 1 To UBound(d, 1)
             If NzS(d(i, cZb)) = brZb Then
                 If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
                     If krug = 2 Or NzS(d(i, cVoz)) = vozId Then
-                        linije.Add Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & _
-                                   NzS(d(i, cBr)) & "  " & ChrW(183) & "  " & _
-                                   FmtKolicina(NzD(d(i, cKol))) & " kg"
+                        s = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & _
+                            NzS(d(i, cBr)) & "  " & ChrW(183) & "  " & _
+                            FmtKolicina(NzD(d(i, cKol))) & " kg"
+                        If Len(NzS(d(i, cKup))) > 0 Then
+                            s = s & "  " & ChrW(183) & "  " & _
+                                EntitetNaziv("Kupac", NzS(d(i, cKup)), False)
+                        End If
+                        linije.Add s
                         nasao = True
                     End If
                 End If

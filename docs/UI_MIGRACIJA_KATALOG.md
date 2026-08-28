@@ -4719,7 +4719,28 @@ prikaz i izvor ne mogu razići. Ista brojka ide u kontekst-liniju house
 Test veže zonu za završni running red mreže (novac) i za kanonski
 `GetAmbalazeStanje` saldo (ambalaža, pun opseg).
 
-### 23.13 Verifikacija
+### 23.13 Smoke krug 5: sledljivost u detalju (krug 6)
+
+**S13 — detalj reda dobija karike sledljivosti.** Dve dopune iz petog
+smoke-a, obe u istom principu „samo ono što red ne kaže":
+
+- **Prijemnica-linija nosi kupca** („firmu koja je izdala prijemnicu") —
+  `DodajPrijemniceZbirne` dodaje `EntitetNaziv("Kupac", …)` u liniju, pa
+  je ista dopuna stigla i u detalj otpremnice (Roba/OM) i u detalj
+  otkupnog lista.
+- **Detalj otkupnog lista** (Otk. listovi i kartica kooperanta) posle
+  stavki i UKUPNO dobija kontekst liniju „Vozač … · Zbirna …" (delovi koji
+  postoje na listu; ništa se ne izmišlja) i prijemnice te zbirne sa kg i
+  kupcem — puna vertikala otkup → zbirna → prijemnica → kupac na jedan
+  klik.
+- Fixture: dodata **OTP-IZV-Z** (jedina otpremnica čija zbirna,
+  ZB-TEST-4, nosi nestornirane prijemnice) — time je zatvorena rupa iz
+  §23.12/S10 i linija „prijemnica + kupac" je pod testom. Kupac se u
+  tvrdnji meri po ID-u: fixture namerno nema red u `tblKupci` (kupac živi
+  samo kao ID na fakturi), pa `EntitetNaziv` pada na ID; na pravoj svesci
+  ista linija nosi naziv firme.
+
+### 23.14 Verifikacija
 
 - `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su
   bila crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0**
