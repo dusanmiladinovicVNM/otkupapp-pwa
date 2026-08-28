@@ -4262,6 +4262,37 @@ pravilo unosa (preslikana kopija legacy `txtIsplatiti_Exit`, obrazac §5/
 Faza B — dve kopije žive namerno); „ovde nema pravila" više nije doslovno
 tačno i sada je zapisano šta jeste a šta nije ekranovo.
 
+#### N7 — „filter ne radi": model je bio tačan, cena po otkucaju nije
+
+Treći smoke. Popravka kvaka (N3) NIJE bila ceo uzrok — na pravoj svesci su
+imena već ASCII (`Zecevic Gvozden`), pa je transliteracija tamo no-op.
+Dijagnoza je bila nepotpuna, pa je merena, ne doterivana (§2): prošireni
+`Diag_BnRedovi` pamti poslednji `(filter, q, n)` koji je `Scr_Rows` primio.
+
+Merenje na pravoj svesci (1.595 otvorenih blokova):
+
+```
+POSLEDNJI POZIV: filter=[sve] q=[gvozden] vraceno redova=38
+MREZA red 1..3 = Zecevic Gvozden (tacno filtrirani redovi)
+```
+
+Upit **stiže**, ekran **vraća 38**, mreža ih **drži** — ceo lanac je
+ispravan. Ali svaki otkucaj plaća **pun `BuildBlokIsplataList`** (ceo
+`tblOtkup` + isplate + računi + avansi + vlasnici), po nekoliko sekundi po
+slovu: operater kuca, ne vidi ništa, i „posle ~10 s se pojavi celo ime" —
+doživljaj mrtvog filtera uz savršeno tačan model.
+
+Legacy formu je isto ovo već naučilo: `LoadBlokovi` (skupo) ide samo kad se
+izvor menja, a kooperant-filter je „LAGANI re-filter nad već učitanom
+`m_FullBlokovi`, bez čitanja tabela". Taj obrazac je sada prenet: **snimak
+liste se kešira u ekranu** (`Snimak()`), pretraga i čipovi filtriraju nad
+njim trenutno, a invalidira ga `Scr_ResetCache` — koji ljuska ionako zove
+posle svakog upisa. **Izvoz keš ne koristi**: `BlokoviZaIzvoz` i finalna
+kapija čitaju svež saldo, kao i do sada. Merljivo brojačem stvarnih čitanja
+(`mSnimakPunjenja`, obrazac `mCiljPunjenja` iz §9): tri uzastopne pretrage
+i promena čipa = **jedno** čitanje tabela; posle `Scr_ResetCache` sledeće
+čitanje ide u tabele. Sabotaža `banka-nalozi-pretraga-puni-iznova`.
+
 #### N6 — otvoren nalaz: ćelija ISPLATITI bez vrednosti na jednom redu
 
 Na screenshotu prve strane red `2/020726-4` (kooperant bez računa) deluje

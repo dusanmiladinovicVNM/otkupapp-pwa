@@ -6337,6 +6337,12 @@ u staru formu za standardni tok.
 
 ### Ispravke iz smoke-a: pretraga, broj računa, traka izbora
 
+- **Pretraga i čipovi su sada trenutni i na velikoj svesci.** Na 1.500+
+  otvorenih blokova je svaki otkucaj iznova čitao cele tabele, pa se ekran
+  smrzavao po ~10 sekundi i filter je delovao mrtav — a plaćanje na terenu
+  ide baš po izboru operatera, ne redom. Lista se sada učita jednom pa se
+  filtrira u mestu (isti princip kao u staroj formi); svaki upis podataka
+  je i dalje odmah osvežava, a fajl za banku i dalje čita sveže stanje.
 - **Pretraga sada nalazi imena sa kvakama i kad se kucaju bez njih**:
   „petrovic" nalazi Petrovića, „djeric" Đerića — bitno na tastaturama koje
   naša slova nemaju (DE/EN). Ranije je pretraga na ovom ekranu delovala
