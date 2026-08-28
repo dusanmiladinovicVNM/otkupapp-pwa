@@ -8592,10 +8592,9 @@ Private Sub T_BankaNalozi_UgovorEkrana()
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
     AssertEq Split(CStr(liste(0)), "|")(0), "NALOZI", "kljuc liste je NALOZI"
 
-    AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), 4, _
-             "cetiri radnje nad redom: u naloge / iznos / izbaci / primeni avans"
-    AssertEq (BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")) <= modOtkupUI.MAX_ACT), _
-             True, "radnje staju u bazen -- visak bi se tiho odsekao"
+    AssertEq BrojStavkiOpisa(modScrBankaNalozi.BnRadnjeZaListu("NALOZI")), _
+             modOtkupUI.MAX_ACT, _
+             "radnji je TACNO MAX_ACT -- sesta bi se tiho odsekla (peta je izricito 'svi')"
 
     spec = modScrBankaNalozi.BnCipoviZaListu("NALOZI")
     AssertEq (BrojStavkiOpisa(spec) <= modOtkupUI.MAX_CHIP), True, _
@@ -8823,6 +8822,7 @@ Private Sub T_BankaNalozi_KorpaIIzvoz()
     Dim blokovi As Collection, sviTR As Collection, sint As Collection
     Dim bezTR As Long, nepoznato As Long
     Dim blk As clsBlokIsplata, v As Variant
+    Dim d As Variant
 
     modScrBankaNalozi.Scr_BnTestReset
 
@@ -8885,16 +8885,41 @@ Private Sub T_BankaNalozi_KorpaIIzvoz()
              "iznos naloga je SVEZ otvoren iznos (1000 - 400), ne snimak iz izbora"
     AssertEq nepoznato, 0, "svi izabrani su nadjeni medju otvorenima"
 
-    ' Bez izbora: SVI blokovi sa racunom (legacy 'nema selekcije = svi');
-    ' blokovi bez racuna se broje i preskacu.
+    ' DOMENSKA Nothing-grana: sve sa racunom. Nju koristi ISKLJUCIVO izricita
+    ' radnja "+ Svi sa racunom" -- prazan izbor na EKRANU vise ne znaci "svi"
+    ' (recenzija PR-a: CSV ne knjizi isplatu, pa bi drugi klik posle
+    ' ispraznjenog izbora tiho izvezao sve otvorene).
     Set sviTR = modBankaExportPregled.OdaberiBlokoveZaNaloge(blokovi, Nothing, bezTR, nepoznato)
-    AssertEq (sviTR.count >= 2), True, "bez izbora idu svi blokovi sa racunom"
+    AssertEq (sviTR.count >= 2), True, "Nothing-grana daje sve blokove sa racunom"
     AssertEq (bezTR > 0), True, "blokovi bez racuna se BROJE, ne gube tiho"
     For Each v In sviTR
         Set blk = v
         AssertEq blk.HasTekuciRacun, True, "nijedan nalog bez tekuceg racuna"
         AssertEq (blk.IsplatitiIznos > 0), True, "nijedan nalog na nula dinara"
     Next v
+
+    ' EKRANSKA putanja izvoza (isti BlokoviZaIzvoz koji zovu CSV i PDF):
+    ' prazan izbor ne izvozi NISTA -- ni ne cita tabele.
+    modScrBankaNalozi.Scr_BnTestReset
+    Set sint = modScrBankaNalozi.Scr_BnBlokoviZaIzvozTest(bezTR, nepoznato)
+    AssertEq sint.count, 0, "prazan izbor ne izvozi nista"
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True), _
+             "", ""
+    Set sint = modScrBankaNalozi.Scr_BnBlokoviZaIzvozTest(bezTR, nepoznato)
+    AssertEq sint.count, 1, "ekranska putanja izvozi tacno izabrano"
+    Set blk = sint(1)
+    AssertEq blk.IsplatitiIznos, 600#, "bez zadatog iznosa ekran salje pun otvoren"
+
+    ' BLOK KOJI IZGUBI RACUN izlazi iz izbora pri citanju: u korpu moze samo
+    ' sa racunom, pa se stanje "u korpi bez racuna" pravi laznim imaTR --
+    ' tacno ono sto se desi kad se racun obrise POSLE dodavanja.
+    AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-LEG-B", "L2/TEST", 10000, True), _
+             "", "blok bez racuna usao je u izbor sa laznim imaTR (TR nestao naknadno)"
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq modScrBankaNalozi.BnUKorpi("OTK-LEG-B"), False, _
+             "blok bez racuna izlazi iz izbora pri citanju"
+    AssertEq modScrBankaNalozi.BnUKorpi("OTK-NAL-DELIM"), True, _
+             "blok sa racunom ostaje u izboru"
 
     ' Izabran blok koga vise nema medju otvorenima se PRIJAVLJUJE.
     Set izbor = CreateObject("Scripting.Dictionary")
@@ -9006,11 +9031,20 @@ Private Sub T_BankaNalozi_IznosPoBloku()
     Set blk = izabrani(1)
     AssertEq blk.IsplatitiIznos, 600#, "bez zadatog iznosa ide pun otvoren"
 
-    ' 5) Zbir korpe je ono sto bi se STVARNO izvezlo; RED trake nosi isti
-    '    iznos kao zbir (smoke: red je pokazivao otvoreno uz zbir zadatog);
-    '    izbacivanje iz korpe brise i zadati iznos.
+    ' 5) EKRANSKO VEZIVANJE: ista putanja koju zovu CSV i PDF
+    '    (BlokoviZaIzvoz) salje i zadate iznose. Domenska polovina (4) ovo ne
+    '    pokriva -- uklonjen argument ", Iznosi()" bi UI-ju pokazivao 250 a u
+    '    fajl pustao 600.
     AssertEq modScrBankaNalozi.Scr_BnKorpaTestDodaj("OTK-NAL-DELIM", "NAL1/TEST", 600, True), _
              "", "blok ulazi u naloge"
+    Set izabrani = modScrBankaNalozi.Scr_BnBlokoviZaIzvozTest(bezTR, nepoznato)
+    AssertEq izabrani.count, 1, "ekranska putanja izvozi izabran blok"
+    Set blk = izabrani(1)
+    AssertEq blk.IsplatitiIznos, 250#, "ekran salje zadate iznose izvozu"
+
+    ' 6) Zbir korpe je ono sto bi se STVARNO izvezlo; RED trake nosi isti
+    '    iznos kao zbir (smoke: red je pokazivao otvoreno uz zbir zadatog);
+    '    izbacivanje iz korpe brise i zadati iznos.
     AssertEq modScrBankaNalozi.BnKorpaZbir(), 250#, _
              "zbir u traci je zadati iznos, ne otvoreno"
     AssertEq (InStr(modScrBankaNalozi.Scr_BnTrakaRedTest(0), "250") > 0), True, _

@@ -3109,6 +3109,55 @@ SABOTAZE = {
         "T22_RacunUCsvJeExcelSafe",
         "18 golih cifara se kanonizuje u NBS oblik 3-13-2",
     ),
+    # Radnji je tacno MAX_ACT (5): sesta se tiho odseca (RefreshRowActions
+    # radi Exit For) -- operater dobija ekran kome fali dugme, bez poruke.
+    "banka-nalozi-sesta-radnja": (
+        "modScrBankaNalozi.bas",
+        '                              "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0"\n',
+        '                              "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0|" & _\n'
+        '                              "bnvisak:OTKUI_BTN_BN_IZNALOG:80:ghost:1"\n',
+        "T_BankaNalozi_UgovorEkrana",
+        "radnji je TACNO MAX_ACT -- sesta bi se tiho odsekla (peta je izricito 'svi')",
+    ),
+    # CSV ne knjizi isplatu: blokovi su otvoreni i POSLE fajla, a izbor se
+    # posle izvoza prazni. Prazan izbor koji znaci "svi" bi zato na drugi
+    # klik tiho izvezao SVE otvorene -- ukljucujuci pun iznos bloka ciji je
+    # zadati deo upravo izvezen. Recenzija PR-a, tacka 1 (merge blocker).
+    "banka-nalozi-prazan-izbor-izvozi-sve": (
+        "modScrBankaNalozi.bas",
+        "    outBezTR = 0\n"
+        "    outIzbaceno = 0\n"
+        "    If BnKorpaBroj() = 0 Then\n"
+        "        Set BlokoviZaIzvoz = New Collection\n"
+        "        Exit Function\n"
+        "    End If\n",
+        "    outBezTR = 0\n"
+        "    outIzbaceno = 0   ' SABOTAZA: prazan izbor prolazi kao 'svi'\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "prazan izbor ne izvozi nista",
+    ),
+    # Ekranska putanja (ista koju zovu CSV i PDF) MORA da prosledi zadate
+    # iznose -- bez ", Iznosi()" UI pokazuje 250, a fajl nosi 600. Domenska
+    # polovina (OdaberiBlokoveZaNaloge) to ne vidi. Recenzija PR-a, tacka 3.
+    "banka-nalozi-ekran-ne-salje-iznose": (
+        "modScrBankaNalozi.bas",
+        "    Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _\n"
+        "                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno, Iznosi())\n",
+        "    Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _\n"
+        "                             sveze, BnKorpaIDs(), outBezTR, outIzbaceno)   ' SABOTAZA: bez iznosa\n",
+        "T_BankaNalozi_IznosPoBloku",
+        "ekran salje zadate iznose izvozu",
+    ),
+    # Blok kome je racun obrisan POSLE dodavanja u izbor: izvoz ga preskace,
+    # ali traka, zbir i potvrda ne smeju da ga pokazuju kao spreman.
+    # Recenzija PR-a, tacka 4.
+    "banka-nalozi-korpa-drzi-bez-racuna": (
+        "modScrBankaNalozi.bas",
+        "        If CBool(src(i, 11)) Then zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))\n",
+        "        zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))   ' SABOTAZA: i bez racuna\n",
+        "T_BankaNalozi_KorpaIIzvoz",
+        "blok bez racuna izlazi iz izbora pri citanju",
+    ),
     # Imena u podacima nose kvake; operater na DE/EN tastaturi kuca bez njih.
     # Haystack bez normalizacije = pretraga koja "ne radi" (smoke 28.08).
     "banka-nalozi-pretraga-sa-kvakama": (

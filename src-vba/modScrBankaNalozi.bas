@@ -13,8 +13,12 @@ Attribute VB_Name = "modScrBankaNalozi"
 ' pa je multiselect postao KORPA ("U NALOZIMA") -- isti obrazac kao prijemnice
 ' na ekranu Fakturisanje.
 '
-' STA JE OVDE, A STA NIJE: ovde je REDOSLED i PRIKAZ. Nijedno poslovno pravilo,
-' nijedna kapija i nijedan upis nisu ovde:
+' STA JE OVDE, A STA NIJE: ovde je REDOSLED i PRIKAZ, plus JEDNO pravilo
+' unosa -- BnPostaviIznos (cent-domen, > 0, nikad preko otvorenog, jednako
+' otvorenom brise zadato). To je preslikana kopija legacy
+' txtIsplatiti_Exit pravila, po obrascu iz kataloga par. 5/Faza B (dve
+' kopije zive namerno dok legacy ne ode); klamp, selekcija i kapije novca
+' su u domenu. Sve ostalo -- nijedna kapija i nijedan upis -- nije ovde:
 '   - otvoreni blokovi (+identitet)  -> modBankaExportPregled.BuildBlokIsplataList
 '                                       (fail-closed: dupli/prazan OtkupID,
 '                                       dupli KooperantID OBARAJU citanje)
@@ -178,13 +182,17 @@ Public Function Scr_Radnje() As String
     Scr_Radnje = BnRadnjeZaListu(Scr_Lista())
 End Function
 
+' Tacno PET radnji -- granica bazena (MAX_ACT); sesta bi se tiho odsekla.
+' Peta ("Svi sa racunom", trebaRed=0) je IZRICITI nacin da se izvezu svi:
+' prazan izbor to vise ne znaci -- v. BlokoviZaIzvoz.
 Public Function BnRadnjeZaListu(ByVal kljuc As String) As String
     Select Case kljuc
         Case BN_NALOZI
-            BnRadnjeZaListu = "bnadd:OTKUI_BTN_BN_UNALOG:104:primary:1|" & _
-                              "bniznos:OTKUI_BTN_BN_IZNOS:88:soft:1|" & _
-                              "bndel:OTKUI_BTN_BN_IZNALOG:88:ghost:1|" & _
-                              "bnavans:OTKUI_BTN_BN_AVANS:116:soft:1"
+            BnRadnjeZaListu = "bnadd:OTKUI_BTN_BN_UNALOG:96:primary:1|" & _
+                              "bniznos:OTKUI_BTN_BN_IZNOS:80:soft:1|" & _
+                              "bndel:OTKUI_BTN_BN_IZNALOG:80:ghost:1|" & _
+                              "bnavans:OTKUI_BTN_BN_AVANS:112:soft:1|" & _
+                              "bnsve:OTKUI_BTN_BN_SVE:116:ghost:0"
     End Select
 End Function
 
@@ -274,6 +282,13 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
     If UBound(p) < 1 Then Exit Function
     kljuc = p(0)
     red = CLng(val(p(1)))
+
+    ' Batch radnja ne trazi izabran red (peto polje u BnRadnjeZaListu je 0).
+    If kljuc = "bnsve" Then
+        RadnjaNadRedom = DodajSveSaRacunom()
+        Exit Function
+    End If
+
     If red < 1 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
@@ -658,10 +673,52 @@ End Function
 ' u cent-domen PRE praga "> 0" (AUD-026). Ekran ne ponavlja nijedan deo toga.
 '=====================================================================
 Private Function BlokoviZaIzvoz(ByRef outBezTR As Long, ByRef outIzbaceno As Long) As Collection
+    ' PRAZAN IZBOR NE IZVOZI NISTA. Prvi ugovor ("prazno = svi otvoreni",
+    ' preuzet od legacy 'nema selekcije = svi') je oborila recenzija PR-a:
+    ' CSV ne knjizi isplatu, pa su blokovi otvoreni i POSLE fajla -- a izbor
+    ' se posle uspesnog izvoza prazni. Drugi klik bi tako tiho napravio
+    ' naloge za SVE otvorene, ukljucujuci pun iznos bloka ciji je ZADATI deo
+    ' upravo izvezen. "Svi" zato postoji samo kao izricita radnja
+    ' (bnsve, "Svi sa racunom"), nikad kao znacenje praznog.
+    outBezTR = 0
+    outIzbaceno = 0
+    If BnKorpaBroj() = 0 Then
+        Set BlokoviZaIzvoz = New Collection
+        Exit Function
+    End If
+
     Dim sveze As Collection
     Set sveze = modBankaExportPregled.BuildBlokIsplataList()
     Set BlokoviZaIzvoz = modBankaExportPregled.OdaberiBlokoveZaNaloge( _
                              sveze, BnKorpaIDs(), outBezTR, outIzbaceno, Iznosi())
+End Function
+
+' Izricito "svi": puni izbor SVIM otvorenim blokovima sa racunom (svez
+' snimak, ista selekcija koju bi izvoz uzeo). Radnja operatera -- prazan
+' izbor to NE znaci sam od sebe.
+Private Function DodajSveSaRacunom() As Boolean
+    Dim sveze As Collection, blokovi As Collection
+    Dim bezTR As Long, nepoznato As Long, dodato As Long
+    Dim blk As clsBlokIsplata, v As Variant
+
+    Set sveze = modBankaExportPregled.BuildBlokIsplataList()
+    Set blokovi = modBankaExportPregled.OdaberiBlokoveZaNaloge( _
+                      sveze, Nothing, bezTR, nepoznato)
+    For Each v In blokovi
+        Set blk = v
+        If UKorpi(blk.otkupID) = 0 Then
+            If Len(BnDodaj(blk.otkupID, blk.brojDokumenta, blk.OtvorenIznos, True)) = 0 Then
+                dodato = dodato + 1
+            End If
+        End If
+    Next v
+
+    If dodato = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_SVE_NISTA"), True
+        Exit Function
+    End If
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_BN_SVE_DODATO") & " " & CStr(dodato), False
+    DodajSveSaRacunom = True
 End Function
 
 Private Function GenerisiNaloge() As Boolean
@@ -674,6 +731,13 @@ Private Function GenerisiNaloge() As Boolean
     racun = IzabraniRacun()
     If Len(racun) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_NEMA_RACUNA"), True
+        Exit Function
+    End If
+
+    ' Prazan izbor i "izabrani vise ne mogu u nalog" su dve razlicite poruke
+    ' -- gate je u BlokoviZaIzvoz, ovde se samo bira tekst.
+    If BnKorpaBroj() = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_IZBOR_PRAZAN"), True
         Exit Function
     End If
 
@@ -721,8 +785,10 @@ Private Function GenerisiNaloge() As Boolean
         Exit Function
     End If
 
-    ' Fajl je napisan. Korpa je odradila svoje -- prazni se (sa zadatim
-    ' iznosima), da drugi klik ne bi tiho napravio ISTE naloge jos jednom.
+    ' Fajl je napisan -- izbor je POTROSEN i prazni se (sa zadatim iznosima).
+    ' CSV ne knjizi isplatu, pa blokovi ostaju otvoreni; upravo zato prazan
+    ' izbor NE izvozi nista (v. BlokoviZaIzvoz) -- drugi klik dobija poruku,
+    ' ne tihu reprizu svih otvorenih.
     Set mKorpa = New Collection
     Set mIznosi = Nothing
     Scr_ResetCache
@@ -747,6 +813,11 @@ Private Function StampajSpecifikaciju() As Boolean
     Dim blokovi As Collection
     Dim bezTR As Long, izbaceno As Long
     Dim mode As String
+
+    If BnKorpaBroj() = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_BN_IZBOR_PRAZAN"), True
+        Exit Function
+    End If
 
     Set blokovi = BlokoviZaIzvoz(bezTR, izbaceno)
     If blokovi.count = 0 Then
@@ -852,9 +923,13 @@ Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Vari
     ' i pretrage: to je izbor za izvoz, a cip je pregled -- filter ne sme da
     ' izbacuje stavke iz izbora. Iznose drzi ISTI klamp kao legacy override
     ' (ClampOverridesToOpenDict): nestao blok gubi zadato, vece se spusta.
+    ' U izboru ostaju samo blokovi koji JOS mogu u nalog: otvoreni SA
+    ' racunom. Blok kome je racun u medjuvremenu obrisan izlazi (izvoz bi ga
+    ' ionako preskocio, ali traka, zbir i potvrda ne smeju da ga pokazuju
+    ' kao spreman) -- recenzija PR-a, tacka 4.
     Set zivi = CreateObject("Scripting.Dictionary")
     For i = 1 To UBound(src, 1)
-        zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))
+        If CBool(src(i, 11)) Then zivi(Trim$(CStr(src(i, 1)))) = CDbl(src(i, 9))
     Next i
     uskladjeno = BnUskladiKorpu(zivi)
     If uskladjeno > 0 Then PrijaviUskladjivanje uskladjeno
@@ -1386,6 +1461,17 @@ End Function
 Public Function Scr_BnTrakaRedTest(ByVal i As Long) As String
     If Not IsTestMode() Then Exit Function
     Scr_BnTrakaRedTest = TrakaRed(i)
+End Function
+
+' EKRANSKA putanja izvoza, ista koju zovu CSV i specifikacija -- ukljucujuci
+' gate praznog izbora i prosledjivanje zadatih iznosa (", Iznosi()"). Bez
+' ovoga bi domenska polovina bila dokazana, a jedan uklonjen argument u
+' BlokoviZaIzvoz bi UI-ju pokazivao 250 a u fajl pustao 600 -- recenzija
+' PR-a, tacka 3.
+Public Function Scr_BnBlokoviZaIzvozTest(ByRef outBezTR As Long, _
+                                         ByRef outIzbaceno As Long) As Collection
+    If Not IsTestMode() Then Exit Function
+    Set Scr_BnBlokoviZaIzvozTest = BlokoviZaIzvoz(outBezTR, outIzbaceno)
 End Function
 
 ' Direktan upis zadatog iznosa BEZ validacije -- da se izmeri da citanje

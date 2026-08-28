@@ -1342,7 +1342,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_KPI_BN_BEZTR", "Bez ra" & ChrW(269) & "una"
     UpsertRow lo, existing, "OTKUI_KPI_BN_AVANS", "Avans pool"
     UpsertRow lo, existing, "OTKUI_LBL_BN_KORPA_CAP", "U nalozima"
-    UpsertRow lo, existing, "OTKUI_LBL_BN_KORPA_SVI", "Prazno = idu SVI otvoreni sa ra" & ChrW(269) & "unom"
+    UpsertRow lo, existing, "OTKUI_LBL_BN_KORPA_SVI", "Prazno " & ChrW(8212) & " ni" & ChrW(353) & "ta se ne izvozi. Dodaj blokove ili 'Svi sa ra" & ChrW(269) & "unom'."
     UpsertRow lo, existing, "OTKUI_LBL_BN_HINT", "Poziv na broj naloga = broj bloka; knji" & ChrW(382) & "i se tek uvozom izvoda."
     UpsertRow lo, existing, "OTKUI_LBL_BN_HINT_RACUN", "Izaberi ra" & ChrW(269) & "un firme sa koga idu nalozi."
     UpsertRow lo, existing, "OTKUI_LBL_BN_AVANS_OTVORENO", "Otvoreno bloka:"
@@ -1358,7 +1358,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MSG_BN_DODATO", ChrW(10003) & " Blok je u nalozima"
     UpsertRow lo, existing, "OTKUI_MSG_BN_UKLONJENO", ChrW(10003) & " Blok je izba" & ChrW(269) & "en iz naloga"
     UpsertRow lo, existing, "OTKUI_MSG_BN_KORPA_PRAZNA", ChrW(10003) & " Izbor je ispra" & ChrW(382) & "njen " & ChrW(8212) & " nalozi bi i" & ChrW(353) & "li za SVE otvorene blokove"
-    UpsertRow lo, existing, "OTKUI_MSG_BN_KORPA_USKLADJENA", "Iz izbora uklonjeno blokova koji vi" & ChrW(353) & "e nisu otvoreni:"
+    UpsertRow lo, existing, "OTKUI_MSG_BN_KORPA_USKLADJENA", "Iz izbora uklonjeno blokova (vi" & ChrW(353) & "e nisu otvoreni ili su bez ra" & ChrW(269) & "una):"
     UpsertRow lo, existing, "OTKUI_MSG_BN_CSV", ChrW(10003) & " Generisano naloga:"
     UpsertRow lo, existing, "OTKUI_MSG_BN_SPEC", ChrW(10003) & " Specifikacija " & ChrW(8212) & " blokova:"
     UpsertRow lo, existing, "OTKUI_MSG_BN_AVANS_OK", ChrW(10003) & " Avans vezan na blok:"
@@ -1382,6 +1382,10 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_BN_IZNOS_PREKO", ChrW(10007) & " Iznos je ve" & ChrW(263) & "i od otvorenog:"
     UpsertRow lo, existing, "OTKUI_MSG_BN_IZNOS", ChrW(10003) & " Za blok " & ChrW(263) & "e se isplatiti:"
     UpsertRow lo, existing, "OTKUI_MSG_BN_IZNOSI_USKLADJENI", "Uskla" & ChrW(273) & "eni zadati iznosi (otvoreno se promenilo):"
+    UpsertRow lo, existing, "OTKUI_BTN_BN_SVE", "+ Svi sa ra" & ChrW(269) & "unom"
+    UpsertRow lo, existing, "OTKUI_ERR_BN_IZBOR_PRAZAN", ChrW(10007) & " Izbor je prazan " & ChrW(8212) & " ni" & ChrW(353) & "ta se ne izvozi. Dodaj blokove u naloge ili klikni '+ Svi sa ra" & ChrW(269) & "unom'."
+    UpsertRow lo, existing, "OTKUI_MSG_BN_SVE_DODATO", ChrW(10003) & " U naloge dodato blokova sa ra" & ChrW(269) & "unom:"
+    UpsertRow lo, existing, "OTKUI_MSG_BN_SVE_NISTA", "Nema " & ChrW(353) & "ta da se doda: svi blokovi sa ra" & ChrW(269) & "unom su ve" & ChrW(263) & " u nalozima ili ih nema"
     InvalidateCache
 End Sub
 
