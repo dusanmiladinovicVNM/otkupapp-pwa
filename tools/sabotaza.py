@@ -3428,14 +3428,56 @@ SABOTAZE = {
         "T_Izv_UgovorEkrana",
         "stampani UKUPNO kartice ne sabira saldo",
     ),
-    # Radnja je kontekstna: ROBA za kupca je agregat po vrsti BEZ ref-kolone
-    # -- dugme "Stampaj dokument" tamo ne sme ni da se nudi (nalaz 3).
+    # Radnja je kontekstna (nalaz 3). Od kruga 5 ROBA za kupca je lista
+    # prijemnica sa PRJ| identitetom pa radnju IMA -- vracanje starog gate-a
+    # (tip <> "OM") bi je ponovo ugasilo. Vozacki gate ostaje u kodu kao
+    # odbrana (matrica vozacku robu ionako ne daje).
     "izvestaji-radnja-na-agregatu": (
         "modScrIzvestaji.bas",
-        '    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function\n',
-        "    ' SABOTAZA: radnja i na agregatnom obliku robe\n",
+        '    If kljuc = IZ_ROBA And tip = "Vozac" Then Exit Function\n',
+        '    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function   \' SABOTAZA: kupac opet bez radnje\n',
         "T_Izv_UgovorEkrana",
-        "roba za kupca nema radnju -- agregat po vrsti bez dokumenta",
+        "roba za kupca (prijemnice) ima radnju stampe dokumenta",
+    ),
+    # ------------------------------------------------------------------
+    # Smoke krug 4 (krug 5 ispravki): kontekstni tabovi, prijemnice za
+    # kupca, zavrsni saldo kartica.
+    # ------------------------------------------------------------------
+    # Tab liste koja za tip ne postoji ni u jednom rezimu je mrtvo dugme --
+    # skup tabova MORA da prati matricu po tipu.
+    "izvestaji-tabovi-ne-slusaju-tip": (
+        "modScrIzvestaji.bas",
+        "Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) As Boolean\n"
+        "    IzListaZaTipPostoji = IzListaDostupna(kljuc, tip, False) Or _\n"
+        "                          IzListaDostupna(kljuc, tip, True)\n",
+        "Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) As Boolean\n"
+        "    IzListaZaTipPostoji = True   ' SABOTAZA: svi tabovi za svaki tip\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "OM ne nudi tabove kartica",
+    ),
+    # ROBA za kupca su DOKUMENTA (prijemnice), ne agregat po vrsti. Sabotira
+    # se GRANA OBLIKOVANJA (UpisiRed): kupac tretiran kao agregat cita prve
+    # cetiri kolone snimka, pa kg/vrednost mreze gube vezu sa tblPrijemnica
+    # -- slaganje sa rucnim prolazom pada po imenu. (Sabotaza na samom
+    # PuniSnimak pozivu bi pukla kao Subscript pre tvrdnje -- vidljiv kvar,
+    # ali ne imenovan; zato se meri ovde.)
+    "izvestaji-roba-kupac-agregat": (
+        "modScrIzvestaji.bas",
+        '            ElseIf tip = "Kupac" Then\n'
+        "                ' Prijemnice kupca (ReportPrijemniceKupca fiksne kolone).\n",
+        "            ElseIf False Then   ' SABOTAZA: kupac tretiran kao agregat\n"
+        "                ' Prijemnice kupca (ReportPrijemniceKupca fiksne kolone).\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "kg robe kupca = rucni zbir prijemnica",
+    ),
+    # Zavrsni saldo kartice u zoni MORA doci iz kolone salda UKUPNO reda --
+    # promet perioda (kol. 5) je druga brojka i tiho bi lagao operatera.
+    "izvestaji-kart-saldo-pogresna-kolona": (
+        "modScrIzvestaji.bas",
+        "                mZonaKartSaldo = NzD(src(i, 7))\n",
+        "                mZonaKartSaldo = NzD(src(i, 5))   ' SABOTAZA: promet umesto salda\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "zona saldo = zavrsni running saldo kartice",
     ),
     # ------------------------------------------------------------------
     # Smoke krug 3 (Izvestaji): kontekstni cipovi, detalj reda, poslovni
@@ -3461,7 +3503,7 @@ SABOTAZE = {
         "        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then\n",
         "        If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then   ' SABOTAZA: samo izabrana linija\n",
         "T_Izv_DetaljICipKontekst",
-        "detalj nosi SVE stavke bloka (kooperant + linije + UKUPNO)",
+        "detalj nosi SVE stavke bloka",
     ),
     # Pregled ambalaze pokazuje POSLOVNI broj dokumenta; bez mape prijemnica
     # red nosi interni ID -- operater njime ne moze nista (par. 9.5 princip).

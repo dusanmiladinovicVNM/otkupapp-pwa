@@ -383,6 +383,7 @@ Public Sub RunAllTests()
     RunOne 141
     RunOne 142
     RunOne 143
+    RunOne 144
     RunOne 124
     RunOne 125
     RunOne 126
@@ -563,6 +564,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 141: TestName = "T_ZonaIzv_PoljaIRaspored"
         Case 142: TestName = "T_KesGeneracija_UpisInvalidira"
         Case 143: TestName = "T_Izv_DetaljICipKontekst"
+        Case 144: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -714,6 +716,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 141: T_ZonaIzv_PoljaIRaspored
         Case 142: T_KesGeneracija_UpisInvalidira
         Case 143: T_Izv_DetaljICipKontekst
+        Case 144: T_Izv_TabKontekstRobaKupacSaldo
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -9274,13 +9277,21 @@ Private Sub T_Izv_UgovorEkrana()
     AssertEq modUiScreens.ScrPostoji("IZVESTAJI"), True, _
              "modul odgovara na ugovor -- stavka menija vise nije prigusena"
 
-    liste = modScrIzvestaji.Scr_Liste()
-    AssertEq UBound(liste) + 1, 10, "deset lista deljene mreze"
-    AssertEq (UBound(liste) + 1 < modOtkupUI.MaxPrekidaca()), True, _
-             "bazen prekidaca (11) zadrzava slobodan slot"
-
-    For i = 0 To UBound(liste)
-        kljuc = Split(CStr(liste(i)), "|")(0)
+    ' Od kruga 5 Scr_Liste vraca tabove ZA TEKUCI TIP (kontekstni tabovi);
+    ' pun katalog od deset lista se meri kao UNIJA preko sva cetiri tipa.
+    Dim unija As Object, t As Variant, k2 As Variant
+    Set unija = CreateObject("Scripting.Dictionary")
+    For Each t In Array("OM", "Kupac", "Vozac", "Kooperant")
+        liste = modScrIzvestaji.IzListeZaTip(CStr(t))
+        AssertEq (UBound(liste) + 1 < modOtkupUI.MaxPrekidaca()), True, _
+                 "bazen prekidaca (11) zadrzava slobodan slot za tip " & CStr(t)
+        For i = LBound(liste) To UBound(liste)
+            unija(Split(CStr(liste(i)), "|")(0)) = True
+        Next i
+    Next t
+    AssertEq unija.count, 10, "deset lista deljene mreze (unija po tipovima)"
+    For Each k2 In unija.Keys
+        kljuc = CStr(k2)
         kolone = modScrIzvestaji.IzKoloneZaListu(kljuc, "OM")
         AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
                  "kolone " & kljuc & "/OM staju u mrezu"
@@ -9288,16 +9299,19 @@ Private Sub T_Izv_UgovorEkrana()
         AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
                  "kolone " & kljuc & "/Kupac staju u mrezu"
         If Len(modScrIzvestaji.IzRadnjeZaListu(kljuc)) > 0 Then saRadnjom = saRadnjom + 1
-    Next i
+    Next k2
     AssertEq saRadnjom, 4, _
              "'Stampaj dokument' nose tacno cetiri liste sa dokument-identitetom"
 
-    ' Radnja je KONTEKSTNA: ROBA nosi dokument-identitet samo u OM obliku,
-    ' a nedostupna kombinacija nema ni redove -- dugme se tamo ne nudi.
+    ' Radnja je KONTEKSTNA: ROBA nosi dokument-identitet za OM (otpremnice)
+    ' i kupca (prijemnice, krug 5); vozacki oblik je agregat po vrsti, a
+    ' nedostupna kombinacija nema ni redove -- dugme se tamo ne nudi.
     AssertEq (Len(modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "OM", False)) > 0), True, _
              "roba za OM ima radnju stampe dokumenta"
-    AssertEq modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Kupac", False), "", _
-             "roba za kupca nema radnju -- agregat po vrsti bez dokumenta"
+    AssertEq (Len(modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Kupac", False)) > 0), True, _
+             "roba za kupca (prijemnice) ima radnju stampe dokumenta"
+    AssertEq modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Vozac", False), "", _
+             "roba za vozaca nema radnju -- agregat po vrsti bez dokumenta"
     AssertEq modScrIzvestaji.IzRadnjeZaKontekst("KARTICA", "OM", False), "", _
              "nedostupna kombinacija nema radnju"
 
@@ -10307,7 +10321,9 @@ Private Sub T_Izv_DetaljICipKontekst()
 
     ' (1) Detalj otkupnog lista nosi SVE stavke dokumenta (broj + stanica),
     ' ne samo izabranu liniju -- to je i bila poenta legacy panela. Vozilo:
-    ' BLK-BIM-3 ima TRI nestornirane linije.
+    ' BLK-BIM-3 ima TRI nestornirane linije. Od kruga 5 detalj nosi SAMO ono
+    ' sto red liste ne kaze: bez kooperanta (kolona reda), stavke sa CENOM,
+    ' UKUPNO dokumenta na kraju (red pokazuje jednu liniju).
     det = modScrIzvestaji.IzDetaljOtkupLista("OTK-BIM-3A")
     AssertEq IsArray(det), True, "detalj bloka postoji"
     otk = GetTableData(TBL_OTKUP)
@@ -10321,15 +10337,20 @@ Private Sub T_Izv_DetaljICipKontekst()
            CStr(otk(i, cStorno)) <> "Da" Then nzStavki = nzStavki + 1
     Next i
     AssertEq (nzStavki >= 3), True, "vozilo: blok sa vise linija postoji"
-    ' oblik: kooperant + stavke + UKUPNO
-    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 2, _
-             "detalj nosi SVE stavke bloka (kooperant + linije + UKUPNO)"
-    AssertEq (InStr(1, CStr(det(LBound(det))), "KOOP-TEST-3", vbTextCompare) > 0), _
-             True, "prva linija detalja imenuje kooperanta"
+    AssertEq UBound(det) - LBound(det) + 1, nzStavki + 1, _
+             "detalj nosi SVE stavke bloka"
+    AssertEq (InStr(1, CStr(det(LBound(det))), " x ", vbTextCompare) > 0), _
+             True, "prva linija detalja je stavka sa cenom"
     AssertEq (InStr(1, CStr(det(UBound(det))), "UKUPNO", vbTextCompare) > 0), _
              True, "poslednja linija detalja je UKUPNO"
+    ' Jednolinijski dokument se NE ponavlja kroz UKUPNO (red vec kaze isto).
+    det = modScrIzvestaji.IzDetaljOtkupLista("OTK-IZV-1")
+    AssertEq IsArray(det), True, "detalj jednolinijskog lista postoji"
+    AssertEq UBound(det) - LBound(det) + 1, 1, _
+             "jednolinijski detalj nema UKUPNO -- ne duplira red"
 
-    ' (2) Detalj otpremnice: broj vezanih blokova = rucni prolaz.
+    ' (2) Detalj otpremnice: samo sto red ne kaze -- vozac, BROJ vezanih
+    ' blokova (rucni prolaz) i broj zbirne; otpremljene kg ne ponavlja.
     det = modScrIzvestaji.IzDetaljOtpremnice("OTP-TEST-1")
     AssertEq IsArray(det), True, "detalj otpremnice postoji"
     n = 0
@@ -10339,8 +10360,14 @@ Private Sub T_Izv_DetaljICipKontekst()
         If Trim$(CStr(otk(i, cOtp))) = "OTP-TEST-1" And _
            CStr(otk(i, cStorno)) <> "Da" Then n = n + 1
     Next i
-    AssertEq (InStr(1, CStr(det(UBound(det))), CStr(n), vbTextCompare) > 0), True, _
+    AssertEq (InStr(1, CStr(det(LBound(det) + 1)), CStr(n), vbTextCompare) > 0), True, _
              "detalj otpremnice broji vezane blokove kao rucni prolaz"
+    Dim zbOcek As String
+    zbOcek = Trim$(CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, "OTP-TEST-1", _
+                                    COL_OTP_BROJ_ZBIRNE)))
+    AssertEq (Len(zbOcek) > 0), True, "vozilo: otpremnica nosi zbirnu"
+    AssertEq (InStr(1, CStr(det(LBound(det) + 2)), zbOcek, vbTextCompare) > 0), True, _
+             "detalj otpremnice imenuje zbirnu"
 
     ' (3) Cipovi su KONTEKSTNI: nedostupna kombinacija nema ni cipove.
     AssertEq modScrIzvestaji.IzCipoviZaKontekst("MANJAK", "Kooperant", False), "", _
@@ -10363,3 +10390,119 @@ Private Sub T_Izv_DetaljICipKontekst()
     AssertEq nasao, True, _
              "ambalaza pokazuje poslovni broj dokumenta, ne interni ID"
 End Sub
+
+' ============================================================
+' 144. Izvestaji krug 5 (smoke krug 4): kontekstni TABOVI lista, ROBA za
+' kupca kao lista PRIJEMNICA (slaganje sa tblPrijemnica), zavrsni saldo
+' kartica u zoni i stampi.
+' ============================================================
+Private Sub T_Izv_TabKontekstRobaKupacSaldo()
+    Dim liste As Variant, i As Long, s As String
+    Dim d As Variant, redovi As Variant, n As Long
+    Dim sumKg As Double, sumVal As Double
+
+    ' (1) Tabovi po tipu: lista koje za tip nema NI U JEDNOM rezimu se ne
+    ' nudi; lista dostupna samo u drugom rezimu OSTAJE (hint vodi).
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("OM"))
+    AssertEq (InStr(1, s, "|KARTICA|") = 0 And InStr(1, s, "|AMBKARTICA|") = 0), _
+             True, "OM ne nudi tabove kartica"
+    AssertEq (InStr(1, s, "|OTKLISTE|") > 0), True, "OM nudi otkupne listove"
+    AssertEq (InStr(1, s, "|MANJAK|") > 0), True, _
+             "manjak (samo zbirni) ostaje vidljiv za OM -- rezim je jedan klik"
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Kooperant"))
+    AssertEq (InStr(1, s, "|KARTICA|") > 0 And InStr(1, s, "|AMBKARTICA|") > 0), _
+             True, "kooperant nudi obe kartice"
+    AssertEq (InStr(1, s, "|SALDO|") = 0), True, "kooperant nema saldo listu"
+    liste = modScrIzvestaji.IzListeZaTip("Kooperant")
+    AssertEq Split(CStr(liste(0)), "|")(0), "KARTICA", _
+             "prva lista za kooperanta je kartica"
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Vozac"))
+    AssertEq (InStr(1, s, "|ROBA|") = 0), True, "vozac nema robu ni u jednom rezimu"
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Kupac"))
+    AssertEq (InStr(1, s, "|ISPLATA|") = 0), True, "kupac nema isplatu"
+    AssertEq (InStr(1, s, "|ROBA|") > 0), True, "kupac ima robu (prijemnice)"
+
+    ' (2) Aktivna lista bez taba za novi tip prelazi na prvu dostupnu.
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    modScrIzvestaji.Scr_Event "scrIzTipKup", "Click"
+    AssertEq modScrIzvestaji.Scr_Lista(), "SALDO", _
+             "lista bez taba za novi tip prelazi na prvu dostupnu"
+
+    ' (3) ROBA za kupca = prijemnice; mreza se slaze sa rucnim prolazom
+    ' kroz tblPrijemnica (nestornirane, kupac, opseg).
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "Kupac", False, FX_KUPAC, IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2)): sumKg = CDbl(d(3)): sumVal = CDbl(d(4))
+    redovi = d(1)
+    Dim pd As Variant, cKup As Long, cDat As Long, cKol As Long, cCen As Long
+    Dim cSt As Long, rn As Long, rKg As Double, rVal As Double, dv As Date
+    pd = GetTableData(TBL_PRIJEMNICA)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cDat = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cCen = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA)
+    cSt = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    For i = 1 To UBound(pd, 1)
+        If Trim$(CStr(pd(i, cKup))) = FX_KUPAC And CStr(pd(i, cSt)) <> "Da" Then
+            If IsDate(pd(i, cDat)) Then
+                dv = CDate(pd(i, cDat))
+                If dv >= IzvOdD() And dv <= IzvDoD() Then
+                    rn = rn + 1
+                    rKg = rKg + CDbl(pd(i, cKol))
+                    rVal = rVal + CDbl(pd(i, cKol)) * CDbl(pd(i, cCen))
+                End If
+            End If
+        End If
+    Next i
+    AssertEq (rn > 1), True, "vozilo: kupac ima vise prijemnica u opsegu"
+    AssertEq n, rn, "roba za kupca broji prijemnice kao rucni prolaz"
+    AssertEq Format$(sumKg, "0.00"), Format$(rKg, "0.00"), _
+             "kg robe kupca = rucni zbir prijemnica"
+    AssertEq Format$(sumVal, "0.00"), Format$(rVal, "0.00"), _
+             "vrednost robe kupca = rucni zbir kg x cena"
+    AssertEq Left$(CStr(redovi(1, 9)), 4), "PRJ|", _
+             "red prijemnice nosi PRJ identitet za radnju"
+    ' Detalj reda prijemnice: samo novo -- status fakturisanja se vidi.
+    d = modScrIzvestaji.IzDetaljPrijemnice("PRJ-FAK-3")
+    AssertEq IsArray(d), True, "detalj prijemnice postoji"
+    AssertEq (InStr(1, CStr(d(UBound(d))), "nije fakturisana", vbTextCompare) > 0), _
+             True, "detalj slobodne prijemnice kaze da nije fakturisana"
+
+    ' (4) Zavrsni saldo kartica zivi u zoni: novcana kartica = running
+    ' poslednjeg hronoloskog reda (dva puta kroz ekran, jedan izvor); amb
+    ' kartica preko PUNOG opsega = kanonski entitetski saldo kooperanta.
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (n > 0), True, "kartica kooperanta ima redove"
+    AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldo")), "0.00"), _
+             Format$(CDbl(redovi(n, 6)), "0.00"), _
+             "zona saldo = zavrsni running saldo kartice"
+    AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldoamb")), "0"), _
+             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
+             "zona amb saldo kartice = kanonski saldo kooperanta"
+    modScrIzvestaji.Scr_IzTestSet "AMBKARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    d = modScrIzvestaji.Scr_Rows("", "")
+    AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldo")), "0"), _
+             Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
+             "amb kartica zona saldo = kanonski saldo kooperanta"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' Kljucevi lista kao "|K1|K2|...|" -- za InStr tvrdnje bez petlji.
+Private Function IzvSpojKljuceve(ByVal liste As Variant) As String
+    Dim i As Long, s As String
+    s = "|"
+    If IsArray(liste) Then
+        For i = LBound(liste) To UBound(liste)
+            s = s & Split(CStr(liste(i)), "|")(0) & "|"
+        Next i
+    End If
+    IzvSpojKljuceve = s
+End Function
+
+' Variant (Empty = jos nema brojke) -> Double za Format$ tvrdnje.
+Private Function NzD2(ByVal v As Variant) As Double
+    If IsNumeric(v) And Not IsEmpty(v) Then NzD2 = CDbl(v)
+End Function

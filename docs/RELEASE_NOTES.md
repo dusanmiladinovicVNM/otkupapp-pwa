@@ -6496,11 +6496,40 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   gajbe „12/1" u PDF-u ostaje tekst (ćelije se štampaju kao tekst, Excel
   ga više ne prepravlja u datum).
 
+### Doterano posle četvrtog smoke-a (krug 5)
+
+- **Tabovi lista prate izabrani tip.** Kartica i Amb. kartica se više ne
+  nude kad su izabrani OM/Kupci/Vozači — tab liste koja za taj tip ne
+  postoji ni u jednom režimu je mrtvo dugme i ne crta se (isti princip
+  kao čipovi i radnje). Klik na „Kooperanti" sada odmah otvara karticu
+  (prva dostupna lista tipa); lista dostupna samo u drugom režimu (Manjak
+  uz „Zbirno") ostaje vidljiva jer je režim jedan klik. Ovo je i prva
+  svesna dopuna ljuske za ovaj ekran: tri opšte linije u osvežavanju, bez
+  imena ijednog ekrana (zapisano u katalogu).
+- **Detalj reda ne ponavlja ono što red već kaže** — princip iz prijave:
+  samo novi podaci. Otkupni list: stavke sa cenama (cene nema u koloni),
+  UKUPNO samo kad ima više linija, bez kooperanta; otpremnica: vozač,
+  broj otkupnih listova, **zbirna i prijemnice te zbirne** umesto
+  otpremljenih kg koje red već pokazuje.
+- **Roba za kupca su prijemnice, ne zbir po vrsti** — dokumenta sa
+  datumom, brojem, zbirnom, klasom, kg, cenom i vrednošću; zbir po vrsti
+  i dalje daje tab Zbirni. Red ima i „Štampaj dokument" (prijemnica) i
+  detalj (vozač, sorta, ambalaža, da li je fakturisana). UKUPNO liste je
+  vezano testom za ručni prolaz kroz tabelu prijemnica.
+- **Kartice pokazuju završni saldo** — u zoni iznad mreže (novčana:
+  saldo + saldo ambalaže; ambalažna: saldo gajbi) i u kontekst-liniji
+  štampanog PDF-a. Kolona salda po redu ostaje u mreži i štampi; UKUPNO
+  red štampe i dalje sabira samo promet (saldo nije sabirljiv — pravilo
+  iz recenzije netaknuto).
+
 ### Šta NIJE urađeno, i zašto
 
 - **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i
   dalje čekaju vrstu reda u ugovoru ljuske — detalj traka u zoni je
-  namerno uži oblik koji ne dira ljusku.
+  namerno uži oblik.
+- **Prijemnica-linija u detalju otpremnice nema test-vozilo** (fixture
+  nema otpremnicu čija zbirna nosi nestorniranu prijemnicu) — vezivanje
+  je fail-open pregled, račun manjka i dalje ide samo strogim putem.
 - **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
   panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
   pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu
@@ -6518,11 +6547,11 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 
 ### Verifikacija
 
-- Glavni set **143 / 0** (jedanaest novih testova ekrana i slaganja);
+- Glavni set **144 / 0** (dvanaest novih testova ekrana i slaganja);
   banka set **205 / 0** (Platni nalozi bit-identični — nova test-vozila su
   namerno vezana za zatvoren blok); statičke provere čiste.
-- **Dvadeset dva** namerna kvara ovog ekrana (+ jedan na kešu Platnih
-  naloga) obaraju po tačno jedan imenovani test i vraćaju se bit-identično
+- **Dvadeset pet** namernih kvarova ovog ekrana (+ jedan na kešu Platnih
+  naloga) obara po tačno jedan imenovani test i vraća se bit-identično
   (dvosmerni dokaz).
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
   smoke nad pravim podacima u više krugova (checklista u PR-u).

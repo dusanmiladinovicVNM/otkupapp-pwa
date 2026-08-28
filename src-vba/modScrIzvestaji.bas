@@ -141,6 +141,11 @@ Private mZonaAgro As Variant
 Private mZonaIsplPrimljeno As Variant
 Private mZonaIsplPodeljeno As Variant
 Private mZonaIsplKod As Variant
+' Zavrsni saldo kartice (UKUPNO red Report* kartica: novac 7/amb 8, gajbe 6)
+' -- red ne ide u mrezu, a brojka je STANJE konteksta pa zivi u zoni kao KPI
+' (smoke krug 4: "kartice treba da imaju saldo i u pdf i u pregledu").
+Private mZonaKartSaldo As Variant
+Private mZonaKartSaldoAmb As Variant
 
 ' Hint kljuc poslednjeg citanja (postavlja RedoviZaListu, cita OsveziHint).
 Private mHintKljuc As String
@@ -166,8 +171,19 @@ Public Function Scr_Meta() As String
                "|lista=OTKUI_SCRIZ_LISTA|oblik=zona+mreza|upis=zona"
 End Function
 
+' Tabovi lista su KONTEKSTNI (smoke krug 4): tab liste koja za izabrani tip
+' entiteta ne postoji NI U JEDNOM rezimu je mrtvo dugme -- ne crta se (isti
+' princip kao cipovi i radnje). Lista dostupna samo u drugom REZIMU istog
+' tipa OSTAJE vidljiva: jedan klik na Pojedinacno/Zbirno je legitiman put,
+' a hint objasnjava. Ljuska crta tabove iz ovog niza pri svakom rasporedu.
 Public Function Scr_Liste() As Variant
-    Scr_Liste = Array( _
+    Scr_Liste = IzListeZaTip(TrenutniTip())
+End Function
+
+' Po tipu, ne po stanju ekrana -- da se ugovor moze izmeriti u testu.
+Public Function IzListeZaTip(ByVal tip As String) As Variant
+    Dim sve As Variant, res() As Variant, i As Long, n As Long, k As String
+    sve = Array( _
         IZ_SALDO & "|OTKUI_SEG_IZ_SALDO|OTKUI_GRID_TITLE_IZ_SALDO|56", _
         IZ_ROBA & "|OTKUI_SEG_IZ_ROBA|OTKUI_GRID_TITLE_IZ_ROBA|52", _
         IZ_AMB & "|OTKUI_SEG_IZ_AMB|OTKUI_GRID_TITLE_IZ_AMB|72", _
@@ -178,6 +194,24 @@ Public Function Scr_Liste() As Variant
         IZ_KART & "|OTKUI_SEG_IZ_KART|OTKUI_GRID_TITLE_IZ_KART|58", _
         IZ_AMBK & "|OTKUI_SEG_IZ_AMBK|OTKUI_GRID_TITLE_IZ_AMBK|82", _
         IZ_OTKL & "|OTKUI_SEG_IZ_OTKL|OTKUI_GRID_TITLE_IZ_OTKL|82")
+    ReDim res(0 To UBound(sve))
+    n = 0
+    For i = 0 To UBound(sve)
+        k = Split(CStr(sve(i)), "|")(0)
+        If IzListaZaTipPostoji(k, tip) Then
+            res(n) = sve(i)
+            n = n + 1
+        End If
+    Next i
+    If n = 0 Then Exit Function
+    ReDim Preserve res(0 To n - 1)
+    IzListeZaTip = res
+End Function
+
+' Lista postoji za tip ako je matrica daje u BAR JEDNOM rezimu.
+Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) As Boolean
+    IzListaZaTipPostoji = IzListaDostupna(kljuc, tip, False) Or _
+                          IzListaDostupna(kljuc, tip, True)
 End Function
 
 Public Function Scr_Lista() As String
@@ -251,9 +285,10 @@ End Function
 Public Function IzRadnjeZaKontekst(ByVal kljuc As String, ByVal tip As String, _
                                    ByVal zbirni As Boolean) As String
     If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function
-    ' ROBA nosi dokument-identitet (OTP|) samo u OM obliku; kupac/vozac
-    ' oblik je agregat po vrsti.
-    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function
+    ' ROBA nosi dokument-identitet za OM (OTP|) i kupca (PRJ|, lista
+    ' prijemnica od kruga 5); vozacki oblik je agregat po vrsti bez
+    ' ref-kolone -- tamo radnje nema.
+    If kljuc = IZ_ROBA And tip = "Vozac" Then Exit Function
     IzRadnjeZaKontekst = IzRadnjeZaListu(kljuc)
 End Function
 
@@ -394,10 +429,22 @@ End Function
 
 ' Povratna vrednost True = ljuska zove RefreshFromData, pa mreza dobija nov
 ' kontekst kroz redovan Scr_Rows (kljuc snimka se promenio -> novo citanje).
+' Aktivna lista koje za novi tip NEMA (tab joj nestaje) prelazi na prvu
+' postojecu -- highlight i naslov osvezava ljuska u istom RefreshFromData.
 Private Function PostaviTip(ByVal tip As String) As Boolean
     If mTip = tip Then Exit Function
     mTip = tip
+    If Not IzListaZaTipPostoji(Scr_Lista(), tip) Then
+        mLista = PrvaListaZaTip(tip)
+    End If
     PostaviTip = True
+End Function
+
+Private Function PrvaListaZaTip(ByVal tip As String) As String
+    Dim liste As Variant
+    PrvaListaZaTip = IZ_SALDO
+    liste = IzListeZaTip(tip)
+    If IsArray(liste) Then PrvaListaZaTip = Split(CStr(liste(0)), "|")(0)
 End Function
 
 Private Function PostaviRezim(ByVal zbirni As Boolean) As Boolean
@@ -520,6 +567,20 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String) As V
                     "OTKUI_HDI_PRIJKG||txt|76|1", _
                     "OTKUI_HDI_MANJKG||txt|70|1", _
                     "OTKUI_HDI_MANJPCT||txt|84|1", _
+                    "OTKUI_HDI_REF||txt|1|4")
+            ElseIf tip = "Kupac" Then
+                ' LISTA PRIJEMNICA (smoke krug 4) -- ne agregat po vrsti:
+                ' Datum | Broj | Zbirna | Vrsta | Kl. | Kg | Cena | Vrednost |
+                ' [PRJ|id]
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HD_DATUM||date|64|1", _
+                    "OTKUI_HDI_BRDOK||txt|84|1", _
+                    "OTKUI_HDI_BRZBIRNE||txt|84|2", _
+                    "OTKUI_HDI_VRSTA||txt|72|2", _
+                    "OTKUI_HDI_KLASA||txt|40|3", _
+                    "OTKUI_HD_KG||kg|84|1", _
+                    "OTKUI_HD_CENA||rest|70|2", _
+                    "OTKUI_HD_VREDNOST||rsd|96|1", _
                     "OTKUI_HDI_REF||txt|1|4")
             Else
                 ' Nr | Vrsta | Kolicina | Vrednost (agregat, bez identiteta)
@@ -735,7 +796,14 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             Else
                 PuniSnimak = ReportSaldoOM(iD, dOd, dDo)
             End If
-        Case IZ_ROBA:   PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
+        Case IZ_ROBA
+            ' Kupac gleda dokumenta (prijemnice), ne agregat po vrsti --
+            ' agregat vec daje tab Zbirni (smoke krug 4).
+            If tip = "Kupac" Then
+                PuniSnimak = ReportPrijemniceKupca(iD, dOd, dDo)
+            Else
+                PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
+            End If
         Case IZ_AMB:    PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, False)
         Case IZ_ISPL:   PuniSnimak = ReportIsplata(tip, iD, dOd, dDo)
         Case IZ_ZBIR:   PuniSnimak = ReportZbirni(tip, dOd, dDo)
@@ -855,11 +923,20 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
             If CStr(src(i, 1)) = IZ_LBL_UKUPNO Then VrstaReda = 1
         Case IZ_KART
             lbl = CStr(src(i, 4))
-            If lbl = IZ_LBL_UKUPNO Then VrstaReda = 1
+            If lbl = IZ_LBL_UKUPNO Then
+                ' UKUPNO red kartice nosi ZAVRSNI saldo (kol. 7) i zavrsni
+                ' amb saldo (kol. 8) -- red ne ide u mrezu, brojke idu u zonu.
+                mZonaKartSaldo = NzD(src(i, 7))
+                mZonaKartSaldoAmb = NzD(src(i, 8))
+                VrstaReda = 1
+            End If
             If lbl = IZV_POCETNO_STANJE Then VrstaReda = 2
         Case IZ_AMBK
             lbl = CStr(src(i, 3))
-            If lbl = IZ_LBL_UKUPNO Then VrstaReda = 1
+            If lbl = IZ_LBL_UKUPNO Then
+                mZonaKartSaldo = NzD(src(i, 6))     ' zavrsni saldo gajbi
+                VrstaReda = 1
+            End If
             If lbl = IZV_POCETNO_STANJE Then VrstaReda = 2
     End Select
 End Function
@@ -890,6 +967,10 @@ Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
             If tip = "OM" Then
                 HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
                                NzS(src(i, 4)) & "|" & NzS(src(i, 5))
+            ElseIf tip = "Kupac" Then
+                ' broj | zbirna | vrsta prijemnice
+                HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
+                               NzS(src(i, 4))
             Else
                 HaystackReda = NzS(src(i, 2))
             End If
@@ -959,6 +1040,21 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
                 End If
                 outA(n, 12) = NzS(src(i, 12))       ' "OTP|<id>" ili prazno
                 If Not jeUkupno Then sumKg = sumKg + NzD(src(i, 6))
+            ElseIf tip = "Kupac" Then
+                ' Prijemnice kupca (ReportPrijemniceKupca fiksne kolone).
+                outA(n, 1) = IzDatCell(src(i, 1))
+                outA(n, 2) = NzS(src(i, 2))
+                outA(n, 3) = NzS(src(i, 3))
+                outA(n, 4) = NzS(src(i, 4))
+                outA(n, 5) = NzS(src(i, 5))
+                outA(n, 6) = NzD(src(i, 6))
+                outA(n, 7) = NzD(src(i, 7))
+                outA(n, 8) = NzD(src(i, 8))
+                outA(n, 9) = IIf(Len(NzS(src(i, 9))) > 0, "PRJ|" & NzS(src(i, 9)), "")
+                If Not jeUkupno Then
+                    sumKg = sumKg + NzD(src(i, 6))
+                    sumVal = sumVal + NzD(src(i, 8))
+                End If
             Else
                 outA(n, 1) = NzS(src(i, 1))
                 outA(n, 2) = NzS(src(i, 2))
@@ -1121,6 +1217,8 @@ Private Sub ResetZonskeBrojke()
     mZonaIsplPrimljeno = Empty
     mZonaIsplPodeljeno = Empty
     mZonaIsplKod = Empty
+    mZonaKartSaldo = Empty
+    mZonaKartSaldoAmb = Empty
 End Sub
 
 '=====================================================================
@@ -1477,6 +1575,26 @@ Private Sub OsveziBrojke(ByVal z As Object)
         Exit Sub
     End If
 
+    ' Kartice: zavrsni saldo perioda kao KPI (kolona salda u mrezi je running
+    ' po redu; JEDNA brojka "gde smo na kraju" zivi ovde i u stampi).
+    If Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK Then
+        z.Controls("izKL0").caption = UCase$(Poruka("OTKUI_KPI_IZ_SALDO"))
+        If IsEmpty(mZonaKartSaldo) Then
+            z.Controls("izKV0").caption = crta
+        Else
+            z.Controls("izKV0").caption = Format$(NzD(mZonaKartSaldo), "#,##0")
+        End If
+        z.Controls("izKL1").caption = UCase$(Poruka("OTKUI_KPI_IZ_SALDOAMB"))
+        If Scr_Lista() = IZ_AMBK Or IsEmpty(mZonaKartSaldoAmb) Then
+            ' AMBK saldo JESTE gajbe -- druga kutija bi ponovila prvu.
+            z.Controls("izKV1").caption = crta
+            If Scr_Lista() = IZ_AMBK Then z.Controls("izKL1").caption = ""
+        Else
+            z.Controls("izKV1").caption = Format$(NzD(mZonaKartSaldoAmb), "#,##0")
+        End If
+        Exit Sub
+    End If
+
     z.Controls("izKL0").caption = UCase$(Poruka("OTKUI_KPI_IZ_OMAVANS"))
     z.Controls("izKL1").caption = UCase$(Poruka("OTKUI_KPI_IZ_AGRO"))
     If IsEmpty(mZonaOmAvans) Then
@@ -1525,10 +1643,18 @@ Private Sub OsveziDetalj(ByVal red As Long)
                                DetIznosKartice(red))
             End If
         Case IZ_ROBA
-            ref = NzS(modOtkupUI.GridCell(red, 12))
-            If Left$(ref, 4) = "OTP|" Then
-                naslov = Poruka("OTKUI_IZ_DET_OTPREMNICA") & " " & NzS(modOtkupUI.GridCell(red, 2))
-                linije = IzDetaljOtpremnice(Mid$(ref, 5))
+            If mCtxTip = "Kupac" Then
+                ref = NzS(modOtkupUI.GridCell(red, 9))
+                If Left$(ref, 4) = "PRJ|" Then
+                    naslov = Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & NzS(modOtkupUI.GridCell(red, 2))
+                    linije = IzDetaljPrijemnice(Mid$(ref, 5))
+                End If
+            Else
+                ref = NzS(modOtkupUI.GridCell(red, 12))
+                If Left$(ref, 4) = "OTP|" Then
+                    naslov = Poruka("OTKUI_IZ_DET_OTPREMNICA") & " " & NzS(modOtkupUI.GridCell(red, 2))
+                    linije = IzDetaljOtpremnice(Mid$(ref, 5))
+                End If
             End If
         Case IZ_AMB
             If Len(NzS(modOtkupUI.GridCell(red, 8))) > 0 Then
@@ -1564,12 +1690,15 @@ End Function
 ' STAVKE OTKUPNOG LISTA -- legacy "Detalji otkupa" sustina, kao cist racun
 ' (testabilan bez forme): sve nestornirane linije ISTOG dokumenta (broj +
 ' stanica, kao ReprintOtkupniListByOtkupID koji stampa ceo BrDok), po
-' linija "Vrsta Klasa  kg x cena = vrednost", pa kooperant i UKUPNO.
+' linija "Vrsta Klasa  kg x cena = vrednost". Detalj nosi SAMO ono sto red
+' liste NE pokazuje (smoke krug 4): kooperant je vec kolona reda pa se ne
+' ponavlja, a UKUPNO dokumenta ide samo kad linija ima VISE (red pokazuje
+' jednu) -- jednolinijski dokument bi njime dublirao sopstveni red.
 Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Dim d As Variant, i As Long
-    Dim cId As Long, cBr As Long, cSt As Long, cKoop As Long
+    Dim cId As Long, cBr As Long, cSt As Long
     Dim cVr As Long, cKl As Long, cKol As Long, cCe As Long, cStorno As Long
-    Dim brDok As String, stanica As String, koopID As String
+    Dim brDok As String, stanica As String
     Dim linije As Collection, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
     On Error GoTo EH
@@ -1579,7 +1708,6 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
     cBr = GetColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK)
     cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
-    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
     cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
     cKl = GetColumnIndex(TBL_OTKUP, COL_OTK_KLASA)
     cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
@@ -1591,7 +1719,6 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
         If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then
             brDok = NzS(d(i, cBr))
             stanica = NzS(d(i, cSt))
-            koopID = NzS(d(i, cKoop))
             Exit For
         End If
     Next i
@@ -1613,14 +1740,16 @@ Public Function IzDetaljOtkupLista(ByVal otkupID As String) As Variant
     Next i
     If linije.count = 0 Then Exit Function
 
-    Dim res() As String, n As Long
-    ReDim res(0 To linije.count + 1)
-    res(0) = EntitetNaziv("Kooperant", koopID, False)
+    Dim res() As String, n As Long, nOut As Long
+    nOut = linije.count + IIf(linije.count > 1, 1, 0)
+    ReDim res(0 To nOut - 1)
     For n = 1 To linije.count
-        res(n) = linije(n)
+        res(n - 1) = linije(n)
     Next n
-    res(linije.count + 1) = "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _
-                            ChrW(183) & "  " & Format$(totVr, "#,##0.00")
+    If linije.count > 1 Then
+        res(nOut - 1) = "UKUPNO  " & FmtKolicina(totKg) & " kg  " & _
+                        ChrW(183) & "  " & Format$(totVr, "#,##0.00")
+    End If
     IzDetaljOtkupLista = res
     Exit Function
 EH:
@@ -1628,12 +1757,20 @@ EH:
 End Function
 
 ' Osnovni podaci otpremnice + zbir njenih blokova (za red liste ROBA).
+' Detalj otpremnice nosi SAMO ono sto kolone reda ROBA (OM) ne pokazuju
+' (smoke krug 4): vozac (trazen izricito), broj otkupnih listova, ZBIRNA i
+' PRIJEMNICE te zbirne (broj + kg). Otpremljene kg i kg blokova su vec
+' kolone reda -- ne ponavljaju se. Prijemnica se vezuje kao u
+' ReportOtkupRobaOM prvom koraku: isti BrojZbirne, pa suzenje po vozacu ako
+' broj dele dve zbirne; detalj je pregled pa sme fail-open (pokazuje sve
+' kandidate), racun manjka i dalje radi samo fail-closed put.
 Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     Dim d As Variant, i As Long
-    Dim cId As Long, cBr As Long, cVoz As Long, cKol As Long
-    Dim cOtkOtp As Long, cOtkKol As Long, cStorno As Long
-    Dim brOtp As String, vozac As String, kg As Double
-    Dim blokKg As Double, blokova As Long
+    Dim cId As Long, cBr As Long, cVoz As Long, cZb As Long
+    Dim cOtkOtp As Long, cStorno As Long
+    Dim brOtp As String, vozac As String, vozId As String, brZb As String
+    Dim blokova As Long
+    Dim linije As Collection
     On Error GoTo EH
 
     d = GetTableData(TBL_OTPREMNICA)
@@ -1641,12 +1778,13 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
     cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
     cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
-    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cZb = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
     For i = 1 To UBound(d, 1)
         If Trim$(CStr(d(i, cId))) = Trim$(otpID) Then
             brOtp = NzS(d(i, cBr))
-            vozac = EntitetNaziv("Vozac", NzS(d(i, cVoz)), False)
-            kg = NzD(d(i, cKol))
+            vozId = NzS(d(i, cVoz))
+            vozac = EntitetNaziv("Vozac", vozId, False)
+            brZb = NzS(d(i, cZb))
             Exit For
         End If
     Next i
@@ -1655,25 +1793,119 @@ Public Function IzDetaljOtpremnice(ByVal otpID As String) As Variant
     d = GetTableData(TBL_OTKUP)
     If IsArray(d) Then
         cOtkOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
-        cOtkKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
         cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
         For i = 1 To UBound(d, 1)
             If Trim$(CStr(d(i, cOtkOtp))) = Trim$(otpID) Then
                 If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
                     blokova = blokova + 1
-                    blokKg = blokKg + NzD(d(i, cOtkKol))
                 End If
             End If
         Next i
     End If
 
-    IzDetaljOtpremnice = Array( _
-        Poruka("OTKUI_IZ_DET_VOZAC") & " " & vozac, _
-        Poruka("OTKUI_IZ_DET_OTPKG") & " " & FmtKolicina(kg) & " kg", _
-        Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova) & "  " & _
-        ChrW(183) & "  " & FmtKolicina(blokKg) & " kg")
+    Set linije = New Collection
+    linije.Add Poruka("OTKUI_IZ_DET_VOZAC") & " " & vozac
+    linije.Add Poruka("OTKUI_IZ_DET_BLOKOVA") & " " & CStr(blokova)
+    If Len(brZb) > 0 Then
+        linije.Add Poruka("OTKUI_IZ_DET_ZBIRNA") & " " & brZb
+        DodajPrijemniceZbirne linije, brZb, vozId
+    End If
+
+    Dim res() As String, n As Long
+    ReDim res(0 To linije.count - 1)
+    For n = 1 To linije.count
+        res(n - 1) = linije(n)
+    Next n
+    IzDetaljOtpremnice = res
     Exit Function
 EH:
+End Function
+
+' Prijemnice date zbirne u detalj: prvo po (BrojZbirne, VozacID); ako se
+' nijedna ne poklopi po vozacu, svi kandidati po broju zbirne (fail-open).
+Private Sub DodajPrijemniceZbirne(ByVal linije As Collection, _
+                                  ByVal brZb As String, ByVal vozId As String)
+    Dim d As Variant, i As Long, krug As Long, nasao As Boolean
+    Dim cZb As Long, cVoz As Long, cBr As Long, cKol As Long, cStorno As Long
+    On Error Resume Next
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Sub
+    cZb = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    For krug = 1 To 2
+        For i = 1 To UBound(d, 1)
+            If NzS(d(i, cZb)) = brZb Then
+                If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+                    If krug = 2 Or NzS(d(i, cVoz)) = vozId Then
+                        linije.Add Poruka("OTKUI_IZ_DET_PRIJEMNICA") & " " & _
+                                   NzS(d(i, cBr)) & "  " & ChrW(183) & "  " & _
+                                   FmtKolicina(NzD(d(i, cKol))) & " kg"
+                        nasao = True
+                    End If
+                End If
+            End If
+        Next i
+        If nasao Then Exit For
+    Next krug
+    Err.Clear
+End Sub
+
+' Detalj reda prijemnice (ROBA za kupca) -- SAMO sto kolone reda ne kazu:
+' vozac, sorta, ambalaza (tip x kolicina, vraceno) i status fakturisanja.
+Public Function IzDetaljPrijemnice(ByVal prjID As String) As Variant
+    Dim d As Variant, i As Long
+    Dim cId As Long, cVoz As Long, cSor As Long, cTipA As Long
+    Dim cKolA As Long, cVrac As Long, cFakt As Long, cFid As Long
+    Dim linije As Collection
+    On Error GoTo EH
+
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cTipA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_TIP_AMB)
+    cKolA = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB)
+    cVrac = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOL_AMB_VRACENA)
+    cFakt = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)
+    cFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+
+    For i = 1 To UBound(d, 1)
+        If Trim$(CStr(d(i, cId))) = Trim$(prjID) Then
+            Set linije = New Collection
+            linije.Add Poruka("OTKUI_IZ_DET_VOZAC") & " " & _
+                       EntitetNaziv("Vozac", NzS(d(i, cVoz)), False)
+            If Len(NzS(d(i, cSor))) > 0 Then
+                linije.Add Poruka("OTKUI_IZ_DET_SORTA") & " " & NzS(d(i, cSor))
+            End If
+            If Len(NzS(d(i, cTipA))) > 0 Then
+                linije.Add Poruka("OTKUI_IZ_DET_AMB") & " " & NzS(d(i, cTipA)) & _
+                           " x " & Format$(NzD(d(i, cKolA)), "#,##0") & _
+                           "  (" & Poruka("OTKUI_IZ_DET_AMB_VRAC") & " " & _
+                           Format$(NzD(d(i, cVrac)), "#,##0") & ")"
+            End If
+            If CStr(d(i, cFakt)) = "Da" Then
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & NzS(d(i, cFid))
+            Else
+                linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & _
+                           Poruka("OTKUI_IZ_DET_NEFAKT")
+            End If
+
+            Dim res() As String, n As Long
+            ReDim res(0 To linije.count - 1)
+            For n = 1 To linije.count
+                res(n - 1) = linije(n)
+            Next n
+            IzDetaljPrijemnice = res
+            Exit Function
+        End If
+    Next i
+    Exit Function
+EH:
+    ' Detalj je pregled -- pad citanja ostavlja praznu traku, ne obara klik.
 End Function
 
 ' Crtanje trake: naslov + linije + preliv ("... jos N") -- preliv se
@@ -1822,6 +2054,8 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String) As Vari
         Case IZ_ROBA
             If tip = "OM" Then
                 IzSabirljive = Array(6, 7, 8, 9, 10)   ' bez 11 = manjak %
+            ElseIf tip = "Kupac" Then
+                IzSabirljive = Array(6, 8)             ' kg i vrednost; bez 7 = cena
             Else
                 IzSabirljive = Array(3, 4)
             End If
@@ -1929,8 +2163,21 @@ Private Sub StampajIzvestaj()
     Next j
 
     ' Kontekst (podnaslov) nosi entitet, period i AKTIVAN filter -- papir bez
-    ' te napomene izgleda kao ceo izvestaj.
+    ' te napomene izgleda kao ceo izvestaj. Kartice nose i ZAVRSNI saldo:
+    ' UKUPNO red stampe sabira samo promet (saldo nije aditivan), a "gde smo
+    ' na kraju" je bas ono zbog cega se kartica stampa (smoke krug 4).
     naslov = TipLabela(mCtxTip) & ": " & mCtxEntNaziv & " (" & OpsegLabela() & ")"
+    If (Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK) And _
+       Not IsEmpty(mZonaKartSaldo) Then
+        naslov = naslov & "  " & ChrW(183) & "  " & _
+                 Poruka("OTKUI_KPI_IZ_SALDO") & ": " & _
+                 Format$(NzD(mZonaKartSaldo), "#,##0.00")
+        If Scr_Lista() = IZ_KART And Not IsEmpty(mZonaKartSaldoAmb) Then
+            naslov = naslov & "  " & ChrW(183) & "  " & _
+                     Poruka("OTKUI_KPI_IZ_SALDOAMB") & ": " & _
+                     Format$(NzD(mZonaKartSaldoAmb), "#,##0")
+        End If
+    End If
     If Len(mDiagQ) > 0 Then
         naslov = naslov & "  " & ChrW(183) & "  " & Poruka("OTKUI_IZ_PRETRAGA") & _
                  " " & mDiagQ
@@ -2045,11 +2292,20 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
             End If
         Case IZ_ROBA
-            ref = NzS(modOtkupUI.GridCell(red, 12))
-            If Left$(ref, 4) = "OTP|" Then
-                OutputOtpremnicaPDF Mid$(ref, 5)
+            If mCtxTip = "Kupac" Then
+                ref = NzS(modOtkupUI.GridCell(red, 9))
+                If Left$(ref, 4) = "PRJ|" Then
+                    PrintPrijemnica Mid$(ref, 5)
+                Else
+                    modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+                End If
             Else
-                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+                ref = NzS(modOtkupUI.GridCell(red, 12))
+                If Left$(ref, 4) = "OTP|" Then
+                    OutputOtpremnicaPDF Mid$(ref, 5)
+                Else
+                    modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+                End If
             End If
         Case IZ_AMB
             dokTip = NzS(modOtkupUI.GridCell(red, 7))
@@ -2168,11 +2424,13 @@ End Function
 Public Function Scr_IzZonaBrojkaTest(ByVal koja As String) As Variant
     If Not IsTestMode() Then Exit Function
     Select Case koja
-        Case "omavans":   Scr_IzZonaBrojkaTest = mZonaOmAvans
-        Case "agro":      Scr_IzZonaBrojkaTest = mZonaAgro
-        Case "primljeno": Scr_IzZonaBrojkaTest = mZonaIsplPrimljeno
-        Case "podeljeno": Scr_IzZonaBrojkaTest = mZonaIsplPodeljeno
-        Case "kod":       Scr_IzZonaBrojkaTest = mZonaIsplKod
+        Case "omavans":      Scr_IzZonaBrojkaTest = mZonaOmAvans
+        Case "agro":         Scr_IzZonaBrojkaTest = mZonaAgro
+        Case "primljeno":    Scr_IzZonaBrojkaTest = mZonaIsplPrimljeno
+        Case "podeljeno":    Scr_IzZonaBrojkaTest = mZonaIsplPodeljeno
+        Case "kod":          Scr_IzZonaBrojkaTest = mZonaIsplKod
+        Case "kartsaldo":    Scr_IzZonaBrojkaTest = mZonaKartSaldo
+        Case "kartsaldoamb": Scr_IzZonaBrojkaTest = mZonaKartSaldoAmb
     End Select
 End Function
 

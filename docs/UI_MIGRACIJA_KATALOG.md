@@ -4599,7 +4599,8 @@ prolaze svi upisi novog UI-ja) podiže **generaciju podataka**
 + KPI značke). Povratak na ekran **bez** upisa i dalje ide iz keša (S2
 dobit ostaje). Test 142 upis simulira tačno onim pozivom koji
 `RefreshFromData` radi; diff ljuske je `modUiData` (+generacija, pečat) —
-`modOtkupUI` i dalje netaknut.
+`modOtkupUI` i dalje netaknut (do kruga 5 — v. §23.12/S9, tri opšte
+linije u `RefreshFromData` za kontekstne tabove).
 
 **R2 (blocker) — štampani UKUPNO je sabirao i nesabirljivo.** Generička
 suma „svaka numerička kolona" je sabirala prosečne cene, prosek gajbi i
@@ -4663,9 +4664,64 @@ datum". Landscape se pali automatski preko 7 kolona; PDF ide u isti
 folder i otvara se kao i ostale štampe. Legacy `PrintIzvestaj` ostaje
 netaknut za `frmIzvestaj`.
 
-### 23.12 Verifikacija
+### 23.12 Smoke krug 4: pet prijava (krug 5 ispravki)
 
-- `RunAllTests` **143 / 0** (jedanaest novih testova; prva dva runa su
+Četvrti krug nad pravim podacima — svih pet su doterivanja ponašanja, i
+jedno od njih je prva svesna dopuna ljuske za ovaj ekran:
+
+**S9 — tabovi lista su kontekstni.** Kartica i Amb. kartica su stajale u
+traci i kad je izabran OM/Kupac/Vozač — mrtva dugmad (isti princip kao S6
+čipovi). Sada `Scr_Liste` vraća samo liste koje za izabrani **tip** postoje
+u bar jednom režimu (`IzListeZaTip` pita istu matricu §23.3): OM ima 8
+tabova (sa Otk. listovima, bez kartica), Kooperant 2 (obe kartice — i prva
+dostupna postaje aktivna, pa klik na „Kooperanti" odmah otvara karticu),
+Vozač 3, Kupac 6. Lista dostupna samo u drugom režimu istog tipa (Manjak
+za OM) ostaje vidljiva — režim je jedan klik, hint vodi. Aktivna lista
+kojoj tab nestane prelazi na prvu dostupnu (`PostaviTip`).
+
+*Dopuna ljuske (izuzetak od „diff NULA", prijavljen izričito):*
+`RefreshFromData` sada radi i `mGeomStara = True` + `RefreshListSeg` +
+`RefreshGridTitle` (tri linije, bez imena ijednog ekrana) — skup tabova sme
+da zavisi od konteksta ekrana, pa posle promene konteksta geometrija mora
+da se preračuna, a highlight i naslov prate aktivnu listu koju je ekran
+mogao da prebaci. Za ekrane sa statičkim listama sve tri linije su
+idempotentne. Bez ovoga bi prekrojeni tabovi zadržali boje starog skupa.
+
+**S10 — detalj bez dupliranja.** Princip iz prijave: „dodati samo podatke
+ako su novi, nikako duplirati postojeće". Detalj otkupnog lista više ne
+ponavlja kooperanta (kolona reda) i UKUPNO dodaje samo kad dokument ima
+više linija; detalj otpremnice zadržava vozača (izričito traženo), broj
+otkupnih listova, i dobija **zbirnu** i **prijemnice te zbirne** (broj +
+kg; vezivanje kao prvi korak `ReportOtkupRobaOM` — broj zbirne pa vozač;
+detalj je pregled pa sme fail-open) umesto otpremljenih kg i kg blokova
+koji su već kolone reda. Fixture nema otpremnicu čija zbirna nosi
+nestorniranu prijemnicu, pa je prijemnica-linija u detalju bez test-vozila
+(zapisano, ne tvrdi se) — vozač/blokovi/zbirna jesu pod testom.
+
+**S11 — Roba za kupca = prijemnice.** Agregat po vrsti je već posao taba
+Zbirni; operater nad kupcem traži **dokumenta**. Nova
+`ReportPrijemniceKupca` u `modIzvestaj` (jedini novi Report ovog kruga)
+normalizuje `GetPrijemniceByKupac` — isti read-model kao korpa
+fakturisanja — u fiksne kolone sa UKUPNO redom; lista dobija identitet
+`PRJ|` (radnja „Štampaj dokument" → `PrintPrijemnica`), detalj reda
+(vozač, sorta, ambalaža, status fakturisanja — ništa što kolone već kažu)
+i slaganje sa ručnim prolazom kroz `tblPrijemnica`. Stari kupac-agregat
+`ReportOtkupRoba("Kupac")` ostaje živ kao API i dalje pod testom
+slaganja (T136). Vozačka roba po matrici ne postoji ni u jednom režimu,
+pa joj tab (S9) i ne nudi listu.
+
+**S12 — završni saldo kartica u zoni i štampi.** Kolona salda u mreži je
+running po redu; „gde smo na kraju" je jedna brojka i sada živi u zoni kao
+KPI (novčana kartica: saldo + amb. saldo; amb. kartica: saldo gajbi) —
+puni se iz UKUPNO reda Report* kartica (koji u mrežu ionako ne ide), pa se
+prikaz i izvor ne mogu razići. Ista brojka ide u kontekst-liniju house
+štampe (UKUPNO red štampe sabira samo promet — R2 politika netaknuta).
+Test veže zonu za završni running red mreže (novac) i za kanonski
+`GetAmbalazeStanje` saldo (ambalaža, pun opseg).
+
+### 23.13 Verifikacija
+
+- `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su
   bila crvena — v. §23.6); `RunBankaImportTestSuite` **205 / 0**
   (bit-identičan BN ekran posle fixture izmena — nova vozila su vezana za
   **zatvoren** blok i kooperanta bez blokova, pa KPI/čipovi/korpa Platnih
@@ -4677,11 +4733,14 @@ netaknut za `frmIzvestaj`.
   `T_WriterGuard_AvansSaldoOM` traži da STA-TEST-1 ima avans saldo tačno 0;
   pin `MALINA_MODE=NO` + `KARTICA*_PRINT_MODE=OFF` u `SEF_CONFIG` (ista
   klasa kao `KES_ISPLATE` u §8.10).
-- Dvosmerni dokaz: `python tools/dokaz.py izvestaji` — 22 sabotaže (16 iz
+- Dvosmerni dokaz: `python tools/dokaz.py izvestaji` — 25 sabotaža (16 iz
   prvog kruga, po jedna za S1/R1/R3, tri za krug 4: čip na nedostupnoj,
-  detalj bez stavki, ambalažni broj ostaje ID), svaka obara tačno jedan
-  imenovani test i vraća se bit-identično; plus
-  `banka-nalozi-kes-ignorise-generaciju` za BN stranu R1 ugovora.
+  detalj bez stavki, ambalažni broj ostaje ID; tri za krug 5: tabovi ne
+  slušaju tip, roba kupca opet agregat, saldo zone iz pogrešne kolone —
+  uz `radnja-na-agregatu` prepravljenu da meri novo pravilo „kupac ima
+  radnju"), svaka obara tačno jedan imenovani test i vraća se
+  bit-identično; plus `banka-nalozi-kes-ignorise-generaciju` za BN stranu
+  R1 ugovora.
 - **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug →
   Compile VBAProject`, pa smoke nad pravim podacima u više krugova
   (checklista u PR-u): izgled zone i prekidača, sve četiri kombinacije

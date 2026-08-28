@@ -4609,6 +4609,14 @@ Public Sub RefreshFromData()
     OsveziNavBrojace
     FillZbirneCombo mFrm      ' nove zbirne u picker
     mPartnerFor = ""          ' partner lista se ponovo puni
+    ' Skup lista (tabova) sme da zavisi od konteksta ekrana (Izvestaji: tip
+    ' entiteta bira koje liste postoje) -- posle promene konteksta geometrija
+    ' je zastarela (LayoutGrid crta tabove iz Scr_Liste), a natpis i boje
+    ' prate AKTIVNU listu, koju je ekran mogao da prebaci. Za ekrane sa
+    ' statickim listama sve tri linije su idempotentne.
+    mGeomStara = True
+    RefreshListSeg mFrm
+    RefreshGridTitle mFrm
     ReloadGrid
 End Sub
 

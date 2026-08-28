@@ -1561,6 +1561,66 @@ End Sub
 ' ============================================================
 ' KUPCI
 ' ============================================================
+' Otkupljena roba za kupca kao LISTA PRIJEMNICA (smoke krug 4) -- ne agregat
+' po vrsti: operater trazi dokumenta, agregat vec daje tab Zbirni. Izvor je
+' GetPrijemniceByKupac (isti read-model kao korpa fakturisanja), ovde samo
+' normalizovan u fiksne kolone nezavisne od rasporeda u tabeli (schema drift):
+' (1)=Datum (2)=BrojPrijemnice (3)=BrojZbirne (4)=Vrsta (5)=Klasa
+' (6)=Kg (7)=Cena (8)=Vrednost=kg*cena (9)=PrijemnicaID.
+' Poslednji red = UKUPNO (kolona 2), kao ostali Report*.
+Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
+                                      ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportPrijemniceKupca"
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetPrijemniceByKupac(kupacID, datumOd, datumDo, False)
+    If IsEmpty(data) Or Not IsArray(data) Then Exit Function
+
+    Dim cDat As Long, cBr As Long, cZb As Long, cVr As Long, cKl As Long
+    Dim cKol As Long, cCe As Long, cId As Long
+    cDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    cKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+    cCe = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+
+    Dim n As Long, i As Long, kg As Double, cena As Double
+    Dim totKg As Double, totVr As Double
+    n = UBound(data, 1)
+    Dim result() As Variant
+    ReDim result(1 To n + 1, 1 To 9)
+    For i = 1 To n
+        kg = 0: cena = 0
+        If IsNumeric(data(i, cKol)) Then kg = CDbl(data(i, cKol))
+        If IsNumeric(data(i, cCe)) Then cena = CDbl(data(i, cCe))
+        result(i, 1) = data(i, cDat)
+        result(i, 2) = Trim$(CStr(data(i, cBr)))
+        result(i, 3) = Trim$(CStr(data(i, cZb)))
+        result(i, 4) = Trim$(CStr(data(i, cVr)))
+        result(i, 5) = Trim$(CStr(data(i, cKl)))
+        result(i, 6) = kg
+        result(i, 7) = cena
+        result(i, 8) = kg * cena
+        result(i, 9) = Trim$(CStr(data(i, cId)))
+        totKg = totKg + kg
+        totVr = totVr + kg * cena
+    Next i
+    result(n + 1, 2) = "UKUPNO"
+    result(n + 1, 6) = totKg
+    result(n + 1, 8) = totVr
+
+    ReportPrijemniceKupca = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 Public Function ReportSaldoKupci(ByVal kupacID As String, _
                                  ByVal datumOd As Date, _
                                  ByVal datumDo As Date) As Variant
