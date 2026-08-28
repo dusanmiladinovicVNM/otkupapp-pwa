@@ -1,0 +1,1778 @@
+Attribute VB_Name = "modScrIzvestaji"
+'=====================================================================
+' modScrIzvestaji - ekran "Izvestaji" (v6-ui-186). Faza E.
+'
+' Ljuska ga ne poznaje po imenu: dobija ga preko Application.Run (zamka #19).
+' Red u registru (modUiScreens.ScrRows) je postojao od S3a -- stavka menija se
+' do sada crtala prigusena jer modula nije bilo. Registar se NE dira.
+'
+' ODAKLE DOLAZI: frmIzvestaj (9 statickih tabova + 2 runtime taba) nad
+' modIzvestaj Report* funkcijama. Poslovna logika je VEC izdvojena: svaki
+' Report* prima (entitet, opseg) i vraca 2D niz sa dokumentovanim kolonama.
+' Ekran je zato PRIKAZ NAD POSTOJECIM RACUNIMA: nijedan Report*, nijedna
+' stampa i nijedno pravilo matrice se ovde ne pise ponovo niti menja.
+'
+' DESET LISTA deljene mreze (SALDO spaja legacy tabove 0 i 1: matrica ih
+' nikad ne pokazuje istovremeno -- tab 0 samo za OM, tab 1 samo za Kupca --
+' pa je za operatera to JEDAN slot ciji oblik prati entitet; jedanaesti slot
+' bazena MAX_SEG ostaje slobodan). Dva runtime taba ("Otkupni listovi",
+' "Pregled ambalaze") su ovde pune liste -- lista BLOKOVI na Dokumentima NIJE
+' isto (blokovi JEDNE otpremnice, ne cele stanice u periodu).
+'
+' MATRICA JE IZVOR ISTINE: IzListaDostupna za 8 statickih lista pita
+' modIzvestaj.IzvestajTabDostupan (FM-0029 #3), za 2 runtime liste preslikava
+' legacy uslov iz UpdateReportMode. Matrica se NE siri i NE "popravlja":
+' prazan tab za kooperanta u zbirnom rezimu je NEPOSTOJECI izvestaj (poslovna
+' odluka), i tako se i prikazuje -- lista postoji uvek, kapija je na sadrzaju,
+' a hint u zoni kaze ZASTO je prazna (nikad pun naslov nad trajno praznom
+' listom, ali ni tiho nestajanje segmenta).
+'
+' KES SNIMKA (par. 22.9/N7 -- pun prolaz po otkucaju je placen kvar): sirov
+' Report* povratak se kesira po KLJUCU KONTEKSTA (lista|tip|rezim|entitet|
+' od|do). Pretraga i cipovi su re-filter nad snimkom (nula citanja tabela);
+' promena konteksta legitimno cita ponovo. Invalidira ga Scr_ResetCache
+' (ljuska ga zove posle svakog upisa). Broj stvarnih citanja meri
+' mSnimakPunjenja (obrazac mCiljPunjenja / Diag_BnRedovi).
+'
+' SPECIJALNI REDOVI Report* povratka ("OM AVANS (nerasporedjen)",
+' "AGROHEMIJA (nerasporedjena, van UKUPNO)", tri kontrolna reda isplate) NE
+' idu u mrezu nego u BROJKE ZONE: to su podaci konteksta, ne redovi liste, a
+' u tipiziranim kolonama mreze bi njihove prazne celije postale "0,00" --
+' tacno FM-0028 #5 klasa lazi. Red UKUPNO (i POCETNO STANJE) zivi SAMO u
+' nefiltriranom prikazu: pod cipom/pretragom bi tvrdio zbir koji ne odgovara
+' vidljivim redovima; zbir prikazanih uvek daje podnozje mreze.
+'
+' Fajl mora ostati 100% ASCII.
+'=====================================================================
+Option Explicit
+
+Public Const SCRIZ_BUILD As String = "v6-ui-186"
+
+' Visina zone: red prekidaca + red polja + hint + red dugmadi.
+Private Const IZ_ZONA_H   As Single = 148
+
+Private Const IZ_Y_CAP    As Single = 6
+Private Const IZ_Y_SEG    As Single = 20
+Private Const IZ_Y_LBL    As Single = 48
+Private Const IZ_Y_HINT   As Single = 98
+Private Const IZ_Y_BTN    As Single = 116
+Private Const IZ_BTN_H    As Single = 24
+Private Const IZ_KPI_W    As Single = 150
+Private Const IZ_SEG_H    As Single = 22
+
+' Kljucevi deset lista.
+Private Const IZ_SALDO As String = "SALDO"
+Private Const IZ_ROBA As String = "ROBA"
+Private Const IZ_AMB As String = "AMBALAZA"
+Private Const IZ_ISPL As String = "ISPLATA"
+Private Const IZ_ZBIR As String = "ZBIRNI"
+Private Const IZ_CENA As String = "CENA"
+Private Const IZ_MANJAK As String = "MANJAK"
+Private Const IZ_KART As String = "KARTICA"
+Private Const IZ_AMBK As String = "AMBKARTICA"
+Private Const IZ_OTKL As String = "OTKLISTE"
+
+' Labele specijalnih redova Report* povratka -- ISTI literali koje modIzvestaj
+' upisuje (RF-06: "Labele su ASCII jer se po njima traze redovi"). Ako se tamo
+' promene, test slaganja zone pukne -- to je i namera.
+Private Const IZ_LBL_UKUPNO As String = "UKUPNO"
+Private Const IZ_LBL_OM_AVANS As String = "OM AVANS (nerasporedjen)"
+Private Const IZ_LBL_AGRO As String = "AGROHEMIJA (nerasporedjena, van UKUPNO)"
+Private Const IZ_LBL_ISPL_PRIMLJENO As String = "OM Avans (primljeno)"
+Private Const IZ_LBL_ISPL_PODELJENO As String = "OM Avans (podeljeno)"
+Private Const IZ_LBL_ISPL_KOD As String = "Kod Otkupca"
+
+' Granice "bez granice" opsega: Report* primaju Date, pa se prazno polje
+' prevodi u pun opseg umesto u gresku.
+Private Const IZ_DAT_MIN As Long = 2          ' 1.1.1900
+Private Const IZ_DAT_MAX As Long = 2958465    ' 31.12.9999 (modUiData.DATUM_SERIJSKI_MAX)
+
+'--------------------------------------------------------------- STANJE
+Private mLista As String
+Private mTip As String              ' "OM" / "Kupac" / "Vozac" / "Kooperant"
+Private mZbirni As Boolean
+
+Private mFill As Boolean            ' punjenje comboa okida Change
+Private mComboTip As String         ' za koji tip je combo entiteta napunjen
+
+' KES SNIMKA LISTE -- v. zaglavlje. Sirov Report* povratak + kljuc konteksta
+' za koji vazi. mSnimakPunjenja broji POZIVE Report*-a, ne uspehe.
+Private mSnimak As Variant
+Private mSnimakOK As Boolean
+Private mSnimakKljuc As String
+Private mSnimakPunjenja As Long
+
+' Kontekst STVARNO ucitanih podataka -- naslov stampe i hint se grade iz njega
+' (AUD-024 / FM-0029 #1: naslov opisuje ono sto je prikazano, ne trenutno
+' stanje polja).
+Private mCtxTip As String
+Private mCtxZbirni As Boolean
+Private mCtxId As String
+Private mCtxEntNaziv As String
+Private mCtxOd As Double            ' 0 = bez granice
+Private mCtxDo As Double
+
+' Brojke zone izdvojene iz Report* povratka (v. zaglavlje). -1 = nema podatka.
+Private mZonaOmAvans As Variant
+Private mZonaAgro As Variant
+Private mZonaIsplPrimljeno As Variant
+Private mZonaIsplPodeljeno As Variant
+Private mZonaIsplKod As Variant
+
+' Hint kljuc poslednjeg citanja (postavlja RedoviZaListu, cita OsveziHint).
+Private mHintKljuc As String
+
+' Kontekst koji je postavio TEST. Zone u testu nema (forma se ne prikazuje),
+' pa se combo i datumska polja ne mogu procitati. Vazi SAMO u test rezimu.
+Private mTestId As String
+Private mTestOd As Double
+Private mTestDo As Double
+
+' Poslednji poziv Scr_Rows -- SAMO za Diag_IzRedovi (N7 obrazac: bez ovoga se
+' gubitak upita PRE ekrana i kvar POSLE ekrana ne razlikuju).
+Private mDiagFilter As String
+Private mDiagQ As String
+Private mDiagN As Long
+
+'--------------------------------------------------------- UGOVOR EKRANA
+Public Function Scr_Meta() As String
+    Scr_Meta = "kljuc=IZVESTAJI|naslov=OTKUI_NAV_IZVESTAJI|sub=OTKUI_SCRIZ_SUB" & _
+               "|lista=OTKUI_SCRIZ_LISTA|oblik=zona+mreza|upis=zona"
+End Function
+
+Public Function Scr_Liste() As Variant
+    Scr_Liste = Array( _
+        IZ_SALDO & "|OTKUI_SEG_IZ_SALDO|OTKUI_GRID_TITLE_IZ_SALDO|56", _
+        IZ_ROBA & "|OTKUI_SEG_IZ_ROBA|OTKUI_GRID_TITLE_IZ_ROBA|52", _
+        IZ_AMB & "|OTKUI_SEG_IZ_AMB|OTKUI_GRID_TITLE_IZ_AMB|72", _
+        IZ_ISPL & "|OTKUI_SEG_IZ_ISPL|OTKUI_GRID_TITLE_IZ_ISPL|62", _
+        IZ_ZBIR & "|OTKUI_SEG_IZ_ZBIR|OTKUI_GRID_TITLE_IZ_ZBIR|54", _
+        IZ_CENA & "|OTKUI_SEG_IZ_CENA|OTKUI_GRID_TITLE_IZ_CENA|76", _
+        IZ_MANJAK & "|OTKUI_SEG_IZ_MANJAK|OTKUI_GRID_TITLE_IZ_MANJAK|58", _
+        IZ_KART & "|OTKUI_SEG_IZ_KART|OTKUI_GRID_TITLE_IZ_KART|58", _
+        IZ_AMBK & "|OTKUI_SEG_IZ_AMBK|OTKUI_GRID_TITLE_IZ_AMBK|82", _
+        IZ_OTKL & "|OTKUI_SEG_IZ_OTKL|OTKUI_GRID_TITLE_IZ_OTKL|82")
+End Function
+
+Public Function Scr_Lista() As String
+    If Len(mLista) = 0 Then mLista = IZ_SALDO
+    Scr_Lista = mLista
+End Function
+
+' Prvi cip je svuda "sve" -- ljuska na njega pada kad zatecen filter ne
+' pripada listi (RefreshChipsForScreen). Liste bez prirodnog status-filtera
+' NEMAJU cipove (prazno = ljuska ih krije): entitet, rezim i opseg su polja
+' zone, a izmisljen cip bi bio novo poslovno pravilo. KARTICA ih nema ni
+' zbog cega drugog: running saldo je kumulativ PUNOG skupa, pa bi filter po
+' vrsti reda trajno prikazivao isecen saldo.
+Public Function Scr_Cipovi() As String
+    Scr_Cipovi = IzCipoviZaListu(Scr_Lista())
+End Function
+
+' Cipovi PO KLJUCU LISTE -- da se ugovor moze izmeriti bez stanja ekrana.
+Public Function IzCipoviZaListu(ByVal kljuc As String) As String
+    Select Case kljuc
+        Case IZ_MANJAK
+            IzCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
+                              "bezprij:OTKUI_CIPIZ_BEZPRIJ:88"
+        Case IZ_AMB
+            IzCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
+                              "ulaz:OTKUI_CIPIZ_ULAZ:56|" & _
+                              "izlaz:OTKUI_CIPIZ_IZLAZ:56"
+    End Select
+End Function
+
+' PRAVILO CIPA MANJKA: "bez prijema" propusta redove koji nose OZNAKU umesto
+' brojke manjka (IZV_NEMA_PRIJEMA / IZV_VLASNIK_NEJASAN) -- ono sto se ne
+' moze naplatiti. Nepoznat i prazan kljuc PUSTAJU sve.
+Public Function IzCipManjak(ByVal filter As String, ByVal oznaka As String) As Boolean
+    Select Case filter
+        Case "bezprij": IzCipManjak = (Len(Trim$(oznaka)) > 0)
+        Case Else:      IzCipManjak = True
+    End Select
+End Function
+
+' PRAVILO CIPA AMBALAZE: red sa ulazom / red sa izlazom.
+Public Function IzCipAmb(ByVal filter As String, ByVal ulaz As Double, _
+                         ByVal izlaz As Double) As Boolean
+    Select Case filter
+        Case "ulaz":  IzCipAmb = (ulaz <> 0)
+        Case "izlaz": IzCipAmb = (izlaz <> 0)
+        Case Else:    IzCipAmb = True
+    End Select
+End Function
+
+' Radnja nad redom postoji SAMO na listama ciji red ima dokument iza sebe:
+' "Stampaj dokument" cita identitet iz skrivene kolone. Agregatne liste
+' nemaju nijednu radnju (ljuska tada krije dugmad -- obrazac IZVODI,
+' par. 9.2): agregatni red bez radnje nije greska, radnja koja pogadja jeste.
+Public Function Scr_Radnje() As String
+    Scr_Radnje = IzRadnjeZaListu(Scr_Lista())
+End Function
+
+Public Function IzRadnjeZaListu(ByVal kljuc As String) As String
+    Select Case kljuc
+        Case IZ_OTKL, IZ_ROBA, IZ_AMB, IZ_KART
+            IzRadnjeZaListu = "izprint:OTKUI_BTN_IZ_STAMPAJDOK:132:soft:1"
+    End Select
+End Function
+
+' Ekran je read-only pregled: nista ovde ne ceka operatera, pa je brojac 0 i
+' znacke nema -- kao lista IZVODI (par. 9.2). Ne izmislja se brojka da bi je
+' bilo.
+Public Function Scr_Brojac() As Long
+    Scr_Brojac = 0
+End Function
+
+Public Sub Scr_ResetCache()
+    ' Snimak zastareva na svaki upis -- sledece citanje ide u Report*.
+    mSnimakOK = False
+    ' Sifarnici entiteta su se mogli promeniti (upis ide kroz
+    ' RefreshFromData -> ResetCache) -- combo se puni ponovo, uz cuvanje
+    ' izbora (v. PuniEntitetCombo).
+    mComboTip = ""
+End Sub
+
+Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
+    Dim errDesc As String
+    On Error GoTo EH
+    Scr_Event = ObradiKlik(tag)
+    Err.Clear
+    Exit Function
+EH:
+    ' Opis se cita PRE LogErr-a: LogError pocinje sa On Error Resume Next,
+    ' a svaka On Error naredba brise Err.
+    errDesc = Err.description
+    LogErr "modScrIzvestaji.Scr_Event"
+    modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & errDesc, True
+    Err.Clear
+End Function
+
+'=====================================================================
+' MATRICA -> LISTE. Jedno javno pravilo, mereno testom nad SVIM
+' kombinacijama: matrica (IzvestajTabDostupan) se NE prepisuje -- pita se.
+'=====================================================================
+
+' Indeks statickog taba mpReports za listu; -1 za runtime liste (one u legacy
+' formi nemaju staticki indeks i ne prolaze kroz matricu). SALDO se razresava
+' po TIPU -- legacy tabovi 0 i 1 (v. zaglavlje).
+Public Function IzListaTab(ByVal kljuc As String, ByVal tip As String) As Long
+    Select Case kljuc
+        Case IZ_SALDO
+            If tip = "Kupac" Then
+                IzListaTab = IZV_TAB_SALDO_KUPCI
+            Else
+                IzListaTab = IZV_TAB_SALDO_OM
+            End If
+        Case IZ_ROBA:   IzListaTab = IZV_TAB_OTKUP_ROBA
+        Case IZ_AMB:    IzListaTab = IZV_TAB_AMBALAZA
+        Case IZ_ISPL:   IzListaTab = IZV_TAB_ISPLATA
+        Case IZ_ZBIR:   IzListaTab = IZV_TAB_ZBIRNI
+        Case IZ_CENA:   IzListaTab = IZV_TAB_PROSECNA_CENA
+        Case IZ_MANJAK: IzListaTab = IZV_TAB_MANJAK
+        Case IZ_KART:   IzListaTab = IZV_TAB_KARTICA
+        Case Else:      IzListaTab = -1
+    End Select
+End Function
+
+' Da li kombinacija (lista, tip, rezim) uopste ima izvestaj. Za 8 statickih
+' lista odgovara MATRICA; za 2 runtime liste legacy uslov iz UpdateReportMode
+' (Otkupni listovi samo OM-pojedinacno, Pregled ambalaze samo
+' Kooperant-pojedinacno). Nedostupno NIJE prazan rezultat: lista postoji,
+' hint kaze zasto je prazna.
+Public Function IzListaDostupna(ByVal kljuc As String, ByVal tip As String, _
+                                ByVal zbirni As Boolean) As Boolean
+    Dim pg As Long
+    Select Case kljuc
+        Case IZ_OTKL
+            IzListaDostupna = (tip = "OM" And Not zbirni)
+        Case IZ_AMBK
+            IzListaDostupna = (tip = "Kooperant" And Not zbirni)
+        Case Else
+            pg = IzListaTab(kljuc, tip)
+            If pg < 0 Then Exit Function
+            IzListaDostupna = IzvestajTabDostupan(tip, zbirni, pg)
+    End Select
+End Function
+
+'=====================================================================
+' KLIKOVI
+'=====================================================================
+Private Function ObradiKlik(ByVal tag As String) As Boolean
+    If Left$(tag, 2) = "ls" Then
+        If Mid$(tag, 3) = Scr_Lista() Then Exit Function
+        mLista = Mid$(tag, 3)
+        ObradiKlik = True
+        Exit Function
+    End If
+
+    ' Izbor reda ne menja nista; dvoklik NAMERNO ne radi nista (jedina
+    ' radnja je stampa -- promasen dvoklik koji pokrene PDF je gori od
+    ' nikakvog; isti princip kao Uvoz izvoda, par. 9.5).
+    If Left$(tag, 4) = "row:" Then Exit Function
+    If Left$(tag, 4) = "dbl:" Then Exit Function
+
+    ' Promena u polju zone stize kao "chg:<kontrola>" na SVAKI otkucaj, a
+    ' ljuska ne gleda povratnu vrednost (par. 8.2) -- SVE liste ovog ekrana
+    ' zavise od polja zone, pa ekran sam trazi osvezavanje. Ali tek kad se
+    ' kontekst STVARNO promeni: nerazresen unos nije promena.
+    If Left$(tag, 4) = "chg:" Then
+        Select Case Mid$(tag, 5)
+            Case "scrIzEntT":              EntitetPromenjen
+            Case "scrIzOdT", "scrIzDoT":   OpsegPromenjen
+        End Select
+        Exit Function
+    End If
+
+    If Left$(tag, 4) = "act:" Then
+        ObradiKlik = RadnjaNadRedom(Mid$(tag, 5))
+        Exit Function
+    End If
+
+    Select Case tag
+        Case "scrIzTipOM":   ObradiKlik = PostaviTip("OM")
+        Case "scrIzTipKup":  ObradiKlik = PostaviTip("Kupac")
+        Case "scrIzTipVoz":  ObradiKlik = PostaviTip("Vozac")
+        Case "scrIzTipKoop": ObradiKlik = PostaviTip("Kooperant")
+        Case "scrIzRezP":    ObradiKlik = PostaviRezim(False)
+        Case "scrIzRezZ":    ObradiKlik = PostaviRezim(True)
+        Case "scrIzPrint":   StampajIzvestaj
+        Case "scrIzKartPdf": StampajKarticu
+    End Select
+End Function
+
+' Povratna vrednost True = ljuska zove RefreshFromData, pa mreza dobija nov
+' kontekst kroz redovan Scr_Rows (kljuc snimka se promenio -> novo citanje).
+Private Function PostaviTip(ByVal tip As String) As Boolean
+    If mTip = tip Then Exit Function
+    mTip = tip
+    PostaviTip = True
+End Function
+
+Private Function PostaviRezim(ByVal zbirni As Boolean) As Boolean
+    If mZbirni = zbirni And Len(mTip) > 0 Then Exit Function
+    mZbirni = zbirni
+    PostaviRezim = True
+End Function
+
+' Entitet iz comboa: PRAZAN ID je nerazresen unos, ne "drugi entitet"
+' (par. 8.10/R2 -- prvo otkucano slovo ne sme da isprazni prikaz).
+Private Sub EntitetPromenjen()
+    Dim iD As String
+    iD = IzabraniEntitet()
+    If Len(iD) = 0 Then Exit Sub
+    If iD = mCtxId And mSnimakOK Then Exit Sub
+    If iD = mCtxId And Len(mSnimakKljuc) > 0 Then Exit Sub
+    If iD <> mCtxId Or Len(mSnimakKljuc) = 0 Then modOtkupUI.RefreshFromData
+End Sub
+
+' Opseg: refresh SAMO kad se RAZRESENA granica promeni. Nepotpun datum tokom
+' kucanja ("2", "21.") nije greska nego "jos nema granice" (specOdT obrazac,
+' DatGranica pravilo iz modScrDokumenti) -- ne prazni listu i ne cita tabele.
+' POTPUNO PRAZNO polje jeste nedvosmisleno "bez granice" (brisanje se zavrsava
+' praznim), pa i ono osvezava.
+Private Sub OpsegPromenjen()
+    Dim odN As Double, doN As Double
+    Dim odTxt As String, doTxt As String
+    OpsegPolja odTxt, doTxt
+    odN = IzDatGranica(odTxt)
+    doN = IzDatGranica(doTxt)
+    If odN = mCtxOd And doN = mCtxDo Then Exit Sub
+    ' Nepotpun unos (tekst ima, granice nema) ne dira prikaz.
+    If odN = 0 And Len(Trim$(odTxt)) > 0 And doN = mCtxDo Then Exit Sub
+    If doN = 0 And Len(Trim$(doTxt)) > 0 And odN = mCtxOd Then Exit Sub
+    modOtkupUI.RefreshFromData
+End Sub
+
+Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
+    Dim p() As String, red As Long
+    p = Split(spec, ":")
+    If UBound(p) < 1 Then Exit Function
+    If p(0) <> "izprint" Then Exit Function
+    red = CLng(val(p(1)))
+    If red < 1 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    StampajDokumentReda red
+    ' Stampa ne menja podatke -- mreza se ne osvezava.
+End Function
+
+'=====================================================================
+' REDOVI MREZE
+'=====================================================================
+Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    Dim rez As Variant
+    ' Combo mora biti napunjen PRE citanja konteksta (entitet se cita iz
+    ' njega); ostatak zone (hint, brojke, dugmad) se osvezava POSLE citanja,
+    ' jer se hint i brojke racunaju iz njega.
+    PuniEntitetCombo
+    rez = RedoviZaListu(filter, q)
+    Scr_Rows = rez
+    OsveziZonu
+
+    ' Trag za Diag_IzRedovi -- ne menja nista.
+    On Error Resume Next
+    mDiagFilter = filter
+    mDiagQ = q
+    mDiagN = CLng(rez(2))
+    Err.Clear
+End Function
+
+' Opis kolona PO KLJUCU LISTE I TIPU -- oblik kolona prati stvarni oblik
+' Report* povratka (legacy tabovi ROBA i ZBIRNI menjaju kolone po tipu, SALDO
+' po legacy tabu). Geometrija mreze prati opis pri svakom crtanju (par. 9.2).
+Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String) As Variant
+    Select Case kljuc
+        Case IZ_SALDO
+            If tip = "Kupac" Then
+                ' Vrsta | Kolicina | Cena | Vrednost | Novac | Saldo | Ambalaza
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDI_VRSTA||txt|96|1", _
+                    "OTKUI_HD_KG||kg|86|1", _
+                    "OTKUI_HD_CENA||rest|76|2", _
+                    "OTKUI_HD_VREDNOST||rsd|96|1", _
+                    "OTKUI_HDI_NOVAC||rsd|96|1", _
+                    "OTKUI_HDI_SALDO||rsd|96|1", _
+                    "OTKUI_HDI_AMB||num|64|2")
+            Else
+                ' Kooperant | Kolicina | Vrednost | Isplaceno | Agro | Saldo | Amb
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDA_KOOPERANT||txt|130|1", _
+                    "OTKUI_HD_KG||kg|82|1", _
+                    "OTKUI_HD_VREDNOST||rsd|92|1", _
+                    "OTKUI_HDI_ISPLACENO||rsd|92|1", _
+                    "OTKUI_HDI_AGRO||rest|82|2", _
+                    "OTKUI_HDI_SALDO||rsd|92|1", _
+                    "OTKUI_HDI_AMB||num|56|3")
+            End If
+        Case IZ_ROBA
+            If tip = "OM" Then
+                ' Datum | BrOtp | Vrsta | Klasa | Vozac | Otp kg | Blokovi kg |
+                ' Razlika | Prijemnica | Manjak kg | Manjak % | [OTP|id]
+                ' Legacy je Manjak kg i % SPAJAO u jednu kolonu (ListBox limit
+                ' 10) -- mreza ima MAX_COLS 14, pa su razdvojene. Prijemnica/
+                ' manjak kolone su txt: prazno kad nema prijema je PORUKA, a
+                ' u tipiziranoj koloni bi postalo "0,00" (FM-0028 #5).
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HD_DATUM||date|64|1", _
+                    "OTKUI_HDI_BROTP||txt|82|1", _
+                    "OTKUI_HDI_VRSTA||txt|72|2", _
+                    "OTKUI_HDI_KLASA||txt|40|2", _
+                    "OTKUI_HDI_VOZAC||txt|100|3", _
+                    "OTKUI_HDI_OTPKG||kg|72|1", _
+                    "OTKUI_HDI_BLOKKG||kg|72|1", _
+                    "OTKUI_HDI_RAZLIKA||kg|66|2", _
+                    "OTKUI_HDI_PRIJKG||txt|76|1", _
+                    "OTKUI_HDI_MANJKG||txt|70|1", _
+                    "OTKUI_HDI_MANJPCT||txt|84|1", _
+                    "OTKUI_HDI_REF||txt|1|4")
+            Else
+                ' Nr | Vrsta | Kolicina | Vrednost (agregat, bez identiteta)
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDI_NR||txt|40|2", _
+                    "OTKUI_HDI_VRSTA||txt|110|1", _
+                    "OTKUI_HD_KG||kg|92|1", _
+                    "OTKUI_HD_VREDNOST||rsd|100|1")
+            End If
+        Case IZ_AMB
+            ' Datum | Mesto | Tip | Dokument | Ulaz | Izlaz | [DokTip] | [DokID]
+            ' Ulaz/Izlaz su txt (ekran formatira): nula se prikazuje PRAZNO,
+            ' kao u legacy pregledu.
+            IzKoloneZaListu = Array( _
+                "OTKUI_HD_DATUM||date|64|1", _
+                "OTKUI_HDI_MESTO||txt|110|1", _
+                "OTKUI_HDA_TIP||txt|72|1", _
+                "OTKUI_HDI_DOKUMENT||txt|96|1", _
+                "OTKUI_HDA_ULAZ||txt|60|1", _
+                "OTKUI_HDA_IZLAZ||txt|60|1", _
+                "OTKUI_HDI_DOKTIP||txt|1|4", _
+                "OTKUI_HDI_DOKID||txt|1|4")
+        Case IZ_ISPL
+            ' Kooperant | Kes otkupac | Virman firma | Virman avans | Ukupno
+            ' Kanali su "rest": nula = prazno (isplata tim kanalom ne postoji).
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDA_KOOPERANT||txt|140|1", _
+                "OTKUI_HDI_KES||rest|92|1", _
+                "OTKUI_HDI_VIRFIRMA||rest|92|1", _
+                "OTKUI_HDI_VIRAVANS||rest|92|1", _
+                "OTKUI_HDI_UKUPNO||rsd|96|1")
+        Case IZ_ZBIR
+            If tip = "Vozac" Then
+                ' Vozac | Amb izlaz | Amb vracena | Manjak kg | Manjak %
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDI_VOZAC||txt|130|1", _
+                    "OTKUI_HDI_AMBIZLAZ||num|76|1", _
+                    "OTKUI_HDI_AMBVRAC||num|76|1", _
+                    "OTKUI_HDI_MANJKG||kg|80|1", _
+                    "OTKUI_HDI_MANJPCT||txt|70|1")
+            Else
+                ' Entitet | Vrsta | Kolicina | Vrednost | Prosek
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDI_ENTITET||txt|130|1", _
+                    "OTKUI_HDI_VRSTA||txt|84|1", _
+                    "OTKUI_HD_KG||kg|88|1", _
+                    "OTKUI_HD_VREDNOST||rsd|98|1", _
+                    "OTKUI_HDI_PROSEK||rest|76|2")
+            End If
+        Case IZ_CENA
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDI_VRSTA||txt|110|1", _
+                "OTKUI_HD_KG||kg|92|1", _
+                "OTKUI_HD_VREDNOST||rsd|100|1", _
+                "OTKUI_HDI_PROSCENA||rest|86|1")
+        Case IZ_MANJAK
+            ' BrZbirne | Zbirna kg | Prijemnica | Manjak kg | Manjak % | Prosek
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDI_BRZBIRNE||txt|84|1", _
+                "OTKUI_HDI_ZBIRKG||kg|80|1", _
+                "OTKUI_HDI_PRIJKG||txt|80|1", _
+                "OTKUI_HDI_MANJKG||txt|72|1", _
+                "OTKUI_HDI_MANJPCT||txt|92|1", _
+                "OTKUI_HDI_PROSEKGAJBE||rest|72|3")
+        Case IZ_KART
+            ' Datum | Broj dok. | Opis | Zaduzenje | Razduzenje | Saldo |
+            ' Saldo amb. | [ref]. Zad/Razd su "rest": POCETNO STANJE i novcani
+            ' redovi imaju praznu polovinu, a prazno je istina (ne "0,00").
+            IzKoloneZaListu = Array( _
+                "OTKUI_HD_DATUM||date|64|1", _
+                "OTKUI_HDI_BRDOK||txt|76|1", _
+                "OTKUI_HDI_OPIS||txt|170|1", _
+                "OTKUI_HDI_ZAD||rest|88|1", _
+                "OTKUI_HDI_RAZD||rest|88|1", _
+                "OTKUI_HDI_SALDO||rsd|92|1", _
+                "OTKUI_HDI_SALDOAMB||num|62|2", _
+                "OTKUI_HDI_REF||txt|1|4")
+        Case IZ_AMBK
+            ' Datum | Broj dok. | Opis | Ulaz | Izlaz | Saldo (gajbe)
+            IzKoloneZaListu = Array( _
+                "OTKUI_HD_DATUM||date|64|1", _
+                "OTKUI_HDI_BRDOK||txt|84|1", _
+                "OTKUI_HDI_OPIS||txt|160|1", _
+                "OTKUI_HDA_ULAZ||txt|58|1", _
+                "OTKUI_HDA_IZLAZ||txt|58|1", _
+                "OTKUI_HDI_SALDO||num|70|1")
+        Case IZ_OTKL
+            ' Datum | Broj dok. | Kooperant | Vrsta | Klasa | Kolicina |
+            ' Vrednost | [OTK|id]
+            IzKoloneZaListu = Array( _
+                "OTKUI_HD_DATUM||date|64|1", _
+                "OTKUI_HDI_BRDOK||txt|82|1", _
+                "OTKUI_HDA_KOOPERANT||txt|130|1", _
+                "OTKUI_HDI_VRSTA||txt|72|2", _
+                "OTKUI_HDI_KLASA||txt|40|2", _
+                "OTKUI_HD_KG||kg|84|1", _
+                "OTKUI_HD_VREDNOST||rsd|96|1", _
+                "OTKUI_HDI_REF||txt|1|4")
+    End Select
+End Function
+
+Private Function PrazanRezultat(ByVal kolone As Variant) As Variant
+    PrazanRezultat = Array(kolone, Empty, 0, 0#, 0#, Array(0, 0, 0))
+End Function
+
+' Jedan poziv = jedan kontekst: dostupnost (matrica), identitet entiteta,
+' opseg -> kljuc snimka -> sirovi podaci -> oblikovani redovi pod (filter, q).
+Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Variant
+    Dim kljuc As String, tip As String, zbirni As Boolean, iD As String
+    Dim odN As Double, doN As Double
+    Dim kolone As Variant
+    Dim errNum As Long, errDesc As String
+
+    On Error GoTo EH
+
+    kljuc = Scr_Lista()
+    tip = TrenutniTip()
+    zbirni = mZbirni
+
+    kolone = IzKoloneZaListu(kljuc, tip)
+
+    ' 1) Kombinacija bez izvestaja (matrica) -- prazna lista, hint kaze zasto.
+    If Not IzListaDostupna(kljuc, tip, zbirni) Then
+        mHintKljuc = "OTKUI_IZ_HINT_NEDOSTUPNO"
+        ResetZonskeBrojke
+        RedoviZaListu = PrazanRezultat(kolone)
+        Exit Function
+    End If
+
+    ' 2) Pojedinacni rezim bez izabranog entiteta -- legacy guard
+    '    ("Izaberite entitet"), samo kao prazna lista + hint umesto MsgBox-a.
+    iD = ""
+    If Not zbirni Then
+        iD = IzabraniEntitet()
+        If Len(iD) = 0 Then
+            mHintKljuc = "OTKUI_IZ_HINT_IZABERI"
+            ResetZonskeBrojke
+            RedoviZaListu = PrazanRezultat(kolone)
+            Exit Function
+        End If
+    End If
+
+    OpsegGranice odN, doN
+
+    ' 3) Snimak po kljucu konteksta; pretraga i cip NISU u kljucu.
+    Dim k As String
+    k = kljuc & "|" & tip & "|" & IIf(zbirni, "Z", "P") & "|" & iD & "|" & _
+        CStr(odN) & "|" & CStr(doN)
+    Dim src As Variant
+    src = Snimak(k, kljuc, tip, zbirni, iD, odN, doN)
+
+    mHintKljuc = ""
+    RedoviZaListu = Oblikuj(kljuc, tip, src, kolone, filter, q)
+    Exit Function
+EH:
+    errNum = Err.Number
+    errDesc = Err.description
+    Err.Raise errNum, "modScrIzvestaji.RedoviZaListu", errDesc
+End Function
+
+' Snimak konteksta: iz Report*-a SAMO kad je kljuc nov ili je kes zastareo
+' (posle upisa); inace iz kesa. Pretraga i cipovi time postaju re-filter nad
+' snimkom -- trenutni (N7). Greska citanja se NE kesira.
+Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As String, _
+                        ByVal zbirni As Boolean, ByVal iD As String, _
+                        ByVal odN As Double, ByVal doN As Double) As Variant
+    If mSnimakOK And mSnimakKljuc = k Then
+        Snimak = mSnimak
+        Exit Function
+    End If
+
+    mSnimakPunjenja = mSnimakPunjenja + 1
+    mSnimak = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)
+    mSnimakKljuc = k
+    mSnimakOK = True
+
+    ' Kontekst STVARNO ucitanih podataka -- za naslov stampe i hint.
+    mCtxTip = tip
+    mCtxZbirni = zbirni
+    mCtxId = iD
+    mCtxOd = odN
+    mCtxDo = doN
+    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)
+
+    Snimak = mSnimak
+End Function
+
+' Jedan Report* poziv po listi -- ekran ne cita tabele sam. Prazna granica
+' postaje pun opseg (Report* primaju Date).
+Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
+                            ByVal zbirni As Boolean, ByVal iD As String, _
+                            ByVal odN As Double, ByVal doN As Double) As Variant
+    Dim dOd As Date, dDo As Date
+    dOd = CDate(IIf(odN > 0, odN, IZ_DAT_MIN))
+    dDo = CDate(IIf(doN > 0, doN, IZ_DAT_MAX))
+
+    Select Case kljuc
+        Case IZ_SALDO
+            If tip = "Kupac" Then
+                PuniSnimak = ReportSaldoKupci(iD, dOd, dDo)
+            Else
+                PuniSnimak = ReportSaldoOM(iD, dOd, dDo)
+            End If
+        Case IZ_ROBA:   PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
+        Case IZ_AMB:    PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, False)
+        Case IZ_ISPL:   PuniSnimak = ReportIsplata(tip, iD, dOd, dDo)
+        Case IZ_ZBIR:   PuniSnimak = ReportZbirni(tip, dOd, dDo)
+        Case IZ_CENA:   PuniSnimak = ReportProsecnaCena(tip, iD, dOd, dDo)
+        Case IZ_MANJAK: PuniSnimak = ReportManjak(tip, iD, dOd, dDo)
+        Case IZ_KART:   PuniSnimak = ReportKarticaKooperanta(iD, dOd, dDo)
+        Case IZ_AMBK:   PuniSnimak = ReportKarticaAmbalaze(iD, dOd, dDo)
+        Case IZ_OTKL:   PuniSnimak = ReportOtkupListe(iD, dOd, dDo)
+    End Select
+End Function
+
+'=====================================================================
+' OBLIKOVANJE: sirov Report* povratak -> redovi mreze pod (filter, q).
+'
+' Pravila deljena svim listama:
+'  - specijalni redovi (OM AVANS / AGRO / kontrolni redovi isplate) idu u
+'    brojke zone, ne u mrezu;
+'  - UKUPNO i POCETNO STANJE zive samo u NEFILTRIRANOM prikazu;
+'  - haystack pretrage ide kroz modUiData.TekstZaPretragu (kvake u podacima,
+'    DE tastatura kod operatera -- N3);
+'  - identitet i sve sto radnja mora da zna a prikaz ne kaze jednoznacno ide
+'    u red, prio 4 (GridCell ga cita, celija se nikad ne crta).
+'=====================================================================
+Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
+                         ByVal src As Variant, ByVal kolone As Variant, _
+                         ByVal filter As String, ByVal q As String) As Variant
+    Dim nSrc As Long, nK As Long, i As Long, n As Long
+    Dim outA() As Variant
+    Dim qN As String, hay As String
+    Dim filtrira As Boolean
+    Dim sumKg As Double, sumVal As Double
+    Dim vrsta As Long   ' 0 obican, 1 UKUPNO, 2 POCETNO, 3 za zonu
+
+    ResetZonskeBrojke
+
+    nK = UBound(kolone) + 1
+    If IsEmpty(src) Or Not IsArray(src) Then
+        Oblikuj = PrazanRezultat(kolone)
+        Exit Function
+    End If
+    nSrc = UBound(src, 1)
+    If nSrc = 0 Then
+        Oblikuj = PrazanRezultat(kolone)
+        Exit Function
+    End If
+
+    qN = modUiData.TekstZaPretragu(q)
+    filtrira = (Len(qN) > 0) Or (Len(filter) > 0 And filter <> "sve")
+
+    ReDim outA(1 To nSrc, 1 To nK)
+    For i = 1 To nSrc
+        vrsta = VrstaReda(kljuc, tip, src, i)
+        If vrsta = 3 Then GoTo Sledeci             ' izdvojen u zonu (VrstaReda)
+        If filtrira And vrsta > 0 Then GoTo Sledeci
+
+        If Not CipPropusta(kljuc, filter, src, i) Then GoTo Sledeci
+
+        If Len(qN) > 0 Then
+            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, src, i))
+            If InStr(1, hay, qN, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+
+        n = n + 1
+        UpisiRed kljuc, tip, src, i, outA, n, (vrsta = 1), sumKg, sumVal
+Sledeci:
+    Next i
+
+    Oblikuj = Array(kolone, outA, n, sumKg, sumVal, Array(0, 0, 0))
+End Function
+
+' Klasifikacija reda izvora. Vrsta 3 USPUT puni brojke zone (OM avans, agro,
+' kontrolni redovi isplate) -- jedno mesto, da se izdvajanje i prikaz ne
+' mogu razici.
+Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
+                           ByRef src As Variant, ByVal i As Long) As Long
+    Dim lbl As String
+    Select Case kljuc
+        Case IZ_SALDO
+            If tip = "Kupac" Then
+                If CStr(src(i, 1)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+            Else
+                lbl = CStr(src(i, 1))
+                If lbl = IZ_LBL_UKUPNO Then
+                    VrstaReda = 1
+                ElseIf lbl = IZ_LBL_OM_AVANS Then
+                    mZonaOmAvans = NzD(src(i, 4))
+                    VrstaReda = 3
+                ElseIf lbl = IZ_LBL_AGRO Then
+                    mZonaAgro = NzD(src(i, 5))
+                    VrstaReda = 3
+                End If
+            End If
+        Case IZ_ROBA
+            If CStr(src(i, 2)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+        Case IZ_AMB
+            If CStr(src(i, 1)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+        Case IZ_ISPL
+            lbl = CStr(src(i, 1))
+            Select Case lbl
+                Case IZ_LBL_UKUPNO:          VrstaReda = 1
+                Case IZ_LBL_ISPL_PRIMLJENO:  mZonaIsplPrimljeno = NzD(src(i, 5)): VrstaReda = 3
+                Case IZ_LBL_ISPL_PODELJENO:  mZonaIsplPodeljeno = NzD(src(i, 5)): VrstaReda = 3
+                Case IZ_LBL_ISPL_KOD:        mZonaIsplKod = NzD(src(i, 5)): VrstaReda = 3
+            End Select
+        Case IZ_ZBIR
+            If tip = "Vozac" Then
+                If CStr(src(i, 1)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+            Else
+                If CStr(src(i, 2)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+            End If
+        Case IZ_MANJAK
+            If CStr(src(i, 1)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+        Case IZ_KART
+            lbl = CStr(src(i, 4))
+            If lbl = IZ_LBL_UKUPNO Then VrstaReda = 1
+            If lbl = IZV_POCETNO_STANJE Then VrstaReda = 2
+        Case IZ_AMBK
+            lbl = CStr(src(i, 3))
+            If lbl = IZ_LBL_UKUPNO Then VrstaReda = 1
+            If lbl = IZV_POCETNO_STANJE Then VrstaReda = 2
+    End Select
+End Function
+
+Private Function CipPropusta(ByVal kljuc As String, ByVal filter As String, _
+                             ByRef src As Variant, ByVal i As Long) As Boolean
+    Select Case kljuc
+        Case IZ_MANJAK
+            ' Oznaka ("nema prijema" / "nejasan vlasnik") stize kao TEKST u
+            ' koloni 5; broj znaci da prijem postoji.
+            CipPropusta = IzCipManjak(filter, IIf(IsNumeric(src(i, 5)), "", _
+                                      Trim$(CStr(NzS(src(i, 5))))))
+        Case IZ_AMB
+            CipPropusta = IzCipAmb(filter, NzD(src(i, 5)), NzD(src(i, 6)))
+        Case Else
+            CipPropusta = True
+    End Select
+End Function
+
+' Tekst po kom se red trazi -- vidljive tekstualne kolone (brojevi dokumenata,
+' imena, vrsta, opis).
+Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
+                              ByRef src As Variant, ByVal i As Long) As String
+    Select Case kljuc
+        Case IZ_SALDO, IZ_ISPL, IZ_CENA
+            HaystackReda = NzS(src(i, 1))
+        Case IZ_ROBA
+            If tip = "OM" Then
+                HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
+                               NzS(src(i, 4)) & "|" & NzS(src(i, 5))
+            Else
+                HaystackReda = NzS(src(i, 2))
+            End If
+        Case IZ_AMB
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & NzS(src(i, 4))
+        Case IZ_ZBIR
+            HaystackReda = NzS(src(i, 1)) & "|" & NzS(src(i, 2))
+        Case IZ_MANJAK
+            HaystackReda = NzS(src(i, 1))
+        Case IZ_KART
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & NzS(src(i, 4))
+        Case IZ_AMBK
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
+        Case IZ_OTKL
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
+                           NzS(src(i, 4)) & "|" & NzS(src(i, 5))
+    End Select
+End Function
+
+' Upis jednog reda izvora u red mreze + zbirovi podnozja (POD ISTIM filterima
+' kao redovi -- par. 13; UKUPNO red se NE broji u podnozje).
+Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
+                     ByRef src As Variant, ByVal i As Long, _
+                     ByRef outA() As Variant, ByVal n As Long, _
+                     ByVal jeUkupno As Boolean, _
+                     ByRef sumKg As Double, ByRef sumVal As Double)
+    Dim ref As String, p() As String
+    Select Case kljuc
+        Case IZ_SALDO
+            outA(n, 1) = NzS(src(i, 1))
+            If tip = "Kupac" Then
+                outA(n, 2) = NzD(src(i, 2))
+                outA(n, 3) = NzD(src(i, 3))
+                outA(n, 4) = NzD(src(i, 4))
+                outA(n, 5) = NzD(src(i, 5))
+                outA(n, 6) = NzD(src(i, 6))
+                outA(n, 7) = NzD(src(i, 7))
+            Else
+                outA(n, 2) = NzD(src(i, 2))
+                outA(n, 3) = NzD(src(i, 3))
+                outA(n, 4) = NzD(src(i, 4))
+                outA(n, 5) = NzD(src(i, 5))
+                outA(n, 6) = NzD(src(i, 6))
+                outA(n, 7) = NzD(src(i, 7))
+            End If
+            If Not jeUkupno Then
+                sumKg = sumKg + NzD(src(i, 2))
+                sumVal = sumVal + NzD(src(i, 6))
+            End If
+        Case IZ_ROBA
+            If tip = "OM" Then
+                outA(n, 1) = IzDatCell(src(i, 1))
+                outA(n, 2) = NzS(src(i, 2))
+                outA(n, 3) = NzS(src(i, 3))
+                outA(n, 4) = NzS(src(i, 4))
+                outA(n, 5) = NzS(src(i, 5))
+                outA(n, 6) = NzD(src(i, 6))
+                outA(n, 7) = NzD(src(i, 7))
+                outA(n, 8) = NzD(src(i, 8))
+                ' Prazno kad nema prijema JE poruka (RF-06) -- ne "0,00".
+                outA(n, 9) = FmtIliPrazno(src(i, 9))
+                outA(n, 10) = FmtIliPrazno(src(i, 10))
+                If IsNumeric(src(i, 11)) And Not IsEmpty(src(i, 11)) Then
+                    outA(n, 11) = Format$(CDbl(src(i, 11)), "0.00") & "%"
+                Else
+                    outA(n, 11) = NzS(src(i, 11))   ' "nema prijema" / "nejasan vlasnik"
+                End If
+                outA(n, 12) = NzS(src(i, 12))       ' "OTP|<id>" ili prazno
+                If Not jeUkupno Then sumKg = sumKg + NzD(src(i, 6))
+            Else
+                outA(n, 1) = NzS(src(i, 1))
+                outA(n, 2) = NzS(src(i, 2))
+                outA(n, 3) = NzD(src(i, 3))
+                outA(n, 4) = NzD(src(i, 4))
+                If Not jeUkupno Then
+                    sumKg = sumKg + NzD(src(i, 3))
+                    sumVal = sumVal + NzD(src(i, 4))
+                End If
+            End If
+        Case IZ_AMB
+            ' UKUPNO red: legacy drzi "UKUPNO" u koloni DATUMA -- ovde ide u
+            ' kolonu Mesto (datumska kolona ne sme tekst; kvar celije se broji).
+            If jeUkupno Then
+                outA(n, 1) = 0#
+                outA(n, 2) = IZ_LBL_UKUPNO
+            Else
+                outA(n, 1) = IzDatCell(src(i, 1))
+                outA(n, 2) = NzS(src(i, 2))
+            End If
+            outA(n, 3) = NzS(src(i, 3))
+            outA(n, 4) = NzS(src(i, 4))
+            outA(n, 5) = GajbeIliPrazno(src(i, 5))
+            outA(n, 6) = GajbeIliPrazno(src(i, 6))
+            ' "AMB|<DokTip>|<DokID>" -> dve prenosne kolone (ruta stampe trazi
+            ' oba; tip ambalaze je vidljiva kolona 3 istog reda).
+            outA(n, 7) = ""
+            outA(n, 8) = ""
+            ref = NzS(src(i, 7))
+            If Left$(ref, 4) = "AMB|" Then
+                p = Split(ref, "|")
+                If UBound(p) >= 2 Then
+                    outA(n, 7) = p(1)
+                    outA(n, 8) = p(2)
+                End If
+            End If
+        Case IZ_ISPL
+            outA(n, 1) = NzS(src(i, 1))
+            outA(n, 2) = NzD(src(i, 2))
+            outA(n, 3) = NzD(src(i, 3))
+            outA(n, 4) = NzD(src(i, 4))
+            outA(n, 5) = NzD(src(i, 5))
+            If Not jeUkupno Then sumVal = sumVal + NzD(src(i, 5))
+        Case IZ_ZBIR
+            outA(n, 1) = NzS(src(i, 1))
+            If tip = "Vozac" Then
+                outA(n, 2) = NzD(src(i, 2))
+                outA(n, 3) = NzD(src(i, 3))
+                outA(n, 4) = NzD(src(i, 4))
+                If IsNumeric(src(i, 5)) Then
+                    outA(n, 5) = Format$(CDbl(src(i, 5)), "0.00") & "%"
+                Else
+                    outA(n, 5) = NzS(src(i, 5))
+                End If
+            Else
+                outA(n, 2) = NzS(src(i, 2))
+                outA(n, 3) = NzD(src(i, 3))
+                outA(n, 4) = NzD(src(i, 4))
+                outA(n, 5) = NzD(src(i, 5))
+                If Not jeUkupno Then
+                    sumKg = sumKg + NzD(src(i, 3))
+                    sumVal = sumVal + NzD(src(i, 4))
+                End If
+            End If
+        Case IZ_CENA
+            outA(n, 1) = NzS(src(i, 1))
+            outA(n, 2) = NzD(src(i, 2))
+            outA(n, 3) = NzD(src(i, 3))
+            outA(n, 4) = NzD(src(i, 4))
+            sumKg = sumKg + NzD(src(i, 2))
+            sumVal = sumVal + NzD(src(i, 3))
+        Case IZ_MANJAK
+            outA(n, 1) = NzS(src(i, 1))
+            outA(n, 2) = NzD(src(i, 2))
+            outA(n, 3) = FmtIliPrazno(src(i, 3))
+            outA(n, 4) = FmtIliPrazno(src(i, 4))
+            If IsNumeric(src(i, 5)) And Not IsEmpty(src(i, 5)) Then
+                outA(n, 5) = Format$(CDbl(src(i, 5)), "0.00") & "%"
+            Else
+                outA(n, 5) = NzS(src(i, 5))
+            End If
+            outA(n, 6) = NzD(src(i, 6))
+            If Not jeUkupno Then sumKg = sumKg + NzD(src(i, 2))
+        Case IZ_KART
+            outA(n, 1) = IzDatCell(src(i, 1))
+            outA(n, 2) = NzS(src(i, 2))
+            ' Opis + parcela u istoj koloni, kao legacy prikaz.
+            outA(n, 3) = NzS(src(i, 4))
+            If Len(NzS(src(i, 3))) > 0 Then
+                outA(n, 3) = outA(n, 3) & " / " & NzS(src(i, 3))
+            End If
+            outA(n, 4) = NzD(src(i, 5))
+            outA(n, 5) = NzD(src(i, 6))
+            outA(n, 6) = NzD(src(i, 7))
+            outA(n, 7) = NzD(src(i, 8))
+            outA(n, 8) = NzS(src(i, 9))            ' "OTK|<id>" / "NOV" / "MAG" / "AMB"
+        Case IZ_AMBK
+            outA(n, 1) = IzDatCell(src(i, 1))
+            outA(n, 2) = NzS(src(i, 2))
+            outA(n, 3) = NzS(src(i, 3))
+            outA(n, 4) = GajbeIliPrazno(src(i, 4))
+            outA(n, 5) = GajbeIliPrazno(src(i, 5))
+            outA(n, 6) = NzD(src(i, 6))
+        Case IZ_OTKL
+            outA(n, 1) = IzDatCell(src(i, 1))
+            outA(n, 2) = NzS(src(i, 2))
+            outA(n, 3) = NzS(src(i, 3))
+            outA(n, 4) = NzS(src(i, 4))
+            outA(n, 5) = NzS(src(i, 5))
+            outA(n, 6) = NzD(src(i, 6))
+            outA(n, 7) = NzD(src(i, 7))
+            outA(n, 8) = NzS(src(i, 8))            ' "OTK|<id>"
+            sumKg = sumKg + NzD(src(i, 6))
+            sumVal = sumVal + NzD(src(i, 7))
+    End Select
+End Sub
+
+'--------------------------------------------------------------- POMOCNI
+Private Function NzD(ByVal v As Variant) As Double
+    If IsNumeric(v) And Not IsEmpty(v) Then NzD = CDbl(v)
+End Function
+
+Private Function NzS(ByVal v As Variant) As String
+    If IsEmpty(v) Then Exit Function
+    On Error Resume Next
+    NzS = Trim$(CStr(v))
+End Function
+
+' Datum -> serijski broj za kolonu tipa "date" (0 = uredno prazno).
+Private Function IzDatCell(ByVal v As Variant) As Double
+    Dim d As Double
+    If IsDate(v) Then
+        d = Int(CDbl(CDate(v)))
+    ElseIf IsNumeric(v) And Not IsEmpty(v) Then
+        d = Int(CDbl(v))
+    End If
+    If d < 1 Or d > IZ_DAT_MAX Then Exit Function
+    IzDatCell = d
+End Function
+
+' Kolone kod kojih je PRAZNO poruka ("nema prijema"): broj se formatira,
+' sve ostalo ostaje prazno -- nikad "0,00" umesto oznake (FM-0028 #5).
+Private Function FmtIliPrazno(ByVal v As Variant) As String
+    If IsNumeric(v) And Not IsEmpty(v) Then FmtIliPrazno = FmtKolicina(CDbl(v))
+End Function
+
+' Gajbe: ceo broj, nula i prazno se prikazuju PRAZNO (legacy pregled).
+Private Function GajbeIliPrazno(ByVal v As Variant) As String
+    If IsNumeric(v) And Not IsEmpty(v) Then
+        If CDbl(v) <> 0 Then GajbeIliPrazno = Format$(CDbl(v), "#,##0")
+    End If
+End Function
+
+Private Sub ResetZonskeBrojke()
+    mZonaOmAvans = Empty
+    mZonaAgro = Empty
+    mZonaIsplPrimljeno = Empty
+    mZonaIsplPodeljeno = Empty
+    mZonaIsplKod = Empty
+End Sub
+
+'=====================================================================
+' KONTEKST: tip, rezim, entitet, opseg.
+'=====================================================================
+Private Function TrenutniTip() As String
+    If Len(mTip) = 0 Then mTip = "OM"
+    TrenutniTip = mTip
+End Function
+
+' Cist ID entiteta iz comboa (druga kolona). NERAZRESEN UNOS NIJE ENTITET:
+' GetComboID daje stabilnu vrednost samo dok je stavka stvarno izabrana.
+Private Function IzabraniEntitet() As String
+    Dim c As Object
+    If IsTestMode() Then
+        If Len(mTestId) > 0 Then
+            IzabraniEntitet = mTestId
+            Exit Function
+        End If
+    End If
+    On Error Resume Next
+    Set c = Kontrola("scrIzEnt")
+    If c Is Nothing Then Exit Function
+    IzabraniEntitet = GetComboID(c)
+    Err.Clear
+End Function
+
+' Tekst iz datumskih polja zone; u testu polja nema.
+Private Sub OpsegPolja(ByRef odTxt As String, ByRef doTxt As String)
+    Dim c As Object
+    On Error Resume Next
+    Set c = Kontrola("scrIzOd")
+    If Not c Is Nothing Then odTxt = Trim$(CStr(c.text))
+    Set c = Kontrola("scrIzDo")
+    If Not c Is Nothing Then doTxt = Trim$(CStr(c.text))
+    Err.Clear
+End Sub
+
+Private Sub OpsegGranice(ByRef odN As Double, ByRef doN As Double)
+    Dim odTxt As String, doTxt As String
+    If IsTestMode() Then
+        If mTestOd > 0 Or mTestDo > 0 Then
+            odN = mTestOd
+            doN = mTestDo
+            Exit Sub
+        End If
+    End If
+    OpsegPolja odTxt, doTxt
+    odN = IzDatGranica(odTxt)
+    doN = IzDatGranica(doTxt)
+End Sub
+
+' Datum kao GRANICA opsega; 0 = nema granice. Prazan ili nepotpun unos nije
+' greska -- dok operater kuca "21." nema smisla praznjenje liste. ISTO
+' pravilo kao DatGranica u modScrDokumenti (specOdT presedan) -- ne izmislja
+' se novo parsiranje.
+Public Function IzDatGranica(ByVal s As String) As Double
+    Dim d As Date
+    On Error Resume Next
+    If Len(Trim$(s)) = 0 Then Exit Function
+    If TryParseDateValue(s, d) Then IzDatGranica = Int(CDbl(d))
+End Function
+
+' Naziv entiteta za naslov stampe -- iz sifarnika, po ID-u koji je STVARNO
+' ucitan (ne iz comboa, koji se u medjuvremenu mogao promeniti).
+Private Function EntitetNaziv(ByVal tip As String, ByVal iD As String, _
+                              ByVal zbirni As Boolean) As String
+    On Error Resume Next
+    If zbirni Then
+        EntitetNaziv = Poruka("OTKUI_IZ_SVI")
+        Exit Function
+    End If
+    Select Case tip
+        Case "OM"
+            EntitetNaziv = NzS(LookupValue(TBL_STANICE, "StanicaID", iD, "Naziv"))
+        Case "Kupac"
+            EntitetNaziv = NzS(LookupValue(TBL_KUPCI, "KupacID", iD, "Naziv"))
+        Case "Vozac"
+            EntitetNaziv = Trim$(NzS(LookupValue(TBL_VOZACI, "VozacID", iD, "Ime")) & _
+                          " " & NzS(LookupValue(TBL_VOZACI, "VozacID", iD, "Prezime")))
+        Case "Kooperant"
+            EntitetNaziv = Trim$(NzS(LookupValue(TBL_KOOPERANTI, "KooperantID", iD, "Ime")) & _
+                          " " & NzS(LookupValue(TBL_KOOPERANTI, "KooperantID", iD, "Prezime")))
+    End Select
+    If Len(EntitetNaziv) = 0 Then EntitetNaziv = iD
+    EntitetNaziv = EntitetNaziv & " (" & iD & ")"
+    Err.Clear
+End Function
+
+Private Function TipLabela(ByVal tip As String) As String
+    Select Case tip
+        Case "OM":        TipLabela = Poruka("OTKUI_SEGIZ_TIP_OM")
+        Case "Kupac":     TipLabela = Poruka("OTKUI_SEGIZ_TIP_KUP")
+        Case "Vozac":     TipLabela = Poruka("OTKUI_SEGIZ_TIP_VOZ")
+        Case "Kooperant": TipLabela = Poruka("OTKUI_SEGIZ_TIP_KOOP")
+    End Select
+End Function
+
+'=====================================================================
+' ZONA
+'=====================================================================
+Public Sub Scr_Build(ByVal z As Object)
+    Dim i As Long
+
+    ' Bela podloga ispod reda polja -- LABELA, ne Frame (Frame je prozorska
+    ' kontrola i crta se iznad bezprozorskih). Napravljena PRVA, ostaje ispod.
+    modUiKit.NewLbl z, "izBg", "", 0, 0, 100, 10, 8, False, 0, C_WHITE
+
+    modUiKit.NewLbl z, "izCap", UCase$(Poruka("OTKUI_SCRIZ_CAP")), PAD, IZ_Y_CAP, _
+                    200, 11, TS_MICRO, True, C_MUTED, -1
+
+    ' PREKIDACI: entitet-tip (4) i rezim (2). Vrsta "seg" (NewSegBtn), ne
+    ' "btn" -- par. 7.7: clsFlatBtn.IsSelected priznaje izabrano stanje samo
+    ' za nav/chip/seg; kao "btn" bi hover-out vracao belu.
+    modUiKit.NewSegBtn z, "scrIzTipOM", Poruka("OTKUI_SEGIZ_TIP_OM"), _
+                       PAD, IZ_Y_SEG, 46, IZ_SEG_H, True
+    modUiKit.NewSegBtn z, "scrIzTipKup", Poruka("OTKUI_SEGIZ_TIP_KUP"), _
+                       PAD + 50, IZ_Y_SEG, 56, IZ_SEG_H, False
+    modUiKit.NewSegBtn z, "scrIzTipVoz", Poruka("OTKUI_SEGIZ_TIP_VOZ"), _
+                       PAD + 110, IZ_Y_SEG, 56, IZ_SEG_H, False
+    modUiKit.NewSegBtn z, "scrIzTipKoop", Poruka("OTKUI_SEGIZ_TIP_KOOP"), _
+                       PAD + 170, IZ_Y_SEG, 76, IZ_SEG_H, False
+
+    modUiKit.NewSegBtn z, "scrIzRezP", Poruka("OTKUI_SEGIZ_POJ"), _
+                       PAD + 270, IZ_Y_SEG, 84, IZ_SEG_H, True
+    modUiKit.NewSegBtn z, "scrIzRezZ", Poruka("OTKUI_SEGIZ_ZBI"), _
+                       PAD + 358, IZ_Y_SEG, 60, IZ_SEG_H, False
+
+    ' Dve brojke desno: OM avans (nerasporedjen) i agro (nerasporedjena) --
+    ' specijalni redovi ReportSaldoOM, izdvojeni iz mreze (v. zaglavlje).
+    ' Kontrolne brojke isplate dele iste dve kutije (v. OsveziBrojke).
+    For i = 0 To 1
+        modUiKit.NewLbl z, "izKL" & i, "", 0, IZ_Y_CAP, IZ_KPI_W, 11, _
+                        TS_MICRO, True, C_MUTED, -1
+        modUiKit.NewLbl z, "izKV" & i, ChrW(8212), 0, IZ_Y_SEG - 2, IZ_KPI_W, 20, _
+                        TS_KPI, True, C_FOREST, -1, fmTextAlignLeft, F_NUM
+    Next i
+
+    ' POLJA. Pravi ih ljuska (NewFieldG); prefiks "scr" je OBAVEZAN, a kombo
+    ' MORA biti polje (okvir nm + kontrola nmT) -- FindCombo trazi taj oblik.
+    modOtkupUI.NewFieldG z, "scrIzEnt", Poruka("OTKUI_FLD_IZ_ENT"), "cmb", "", _
+                         1, False, False, "IZ"
+    modOtkupUI.NewFieldG z, "scrIzOd", Poruka("OTKUI_FLD_IZ_OD"), "txt", "", _
+                         1, False, False, "IZ"
+    modOtkupUI.NewFieldG z, "scrIzDo", Poruka("OTKUI_FLD_IZ_DO"), "txt", "", _
+                         1, False, False, "IZ"
+
+    ' Legacy default opsega: 1.1. tekuce godine -- danas.
+    On Error Resume Next
+    z.Controls("scrIzOd").Controls("scrIzOdT").text = "1.1." & Year(Date)
+    z.Controls("scrIzDo").Controls("scrIzDoT").text = Format$(Date, "d.m.yyyy")
+    On Error GoTo 0
+
+    modUiKit.NewLbl z, "izHint", "", PAD, IZ_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
+
+    ' Stampa aktivnog izvestaja (tabelarni PDF) + kartica po sablonu (samo
+    ' na listama kartica -- vidljivost daje raspored).
+    modUiKit.BtnV z, "scrIzPrint", Poruka("OTKUI_BTN_IZ_PRINT"), PAD, IZ_Y_BTN, _
+                  156, IZ_BTN_H, "primary"
+    modUiKit.BtnV z, "scrIzKartPdf", Poruka("OTKUI_BTN_IZ_KARTPDF"), PAD + 164, IZ_Y_BTN, _
+                  170, IZ_BTN_H, "soft"
+
+    modUiKit.NewLbl z, "izLnB", "", 0, IZ_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
+End Sub
+
+Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
+    RasporediPolja z, w
+    Scr_Layout = IZ_ZONA_H
+End Function
+
+' Raspored + boje prekidaca. Boja stoji uz RASPORED (par. 7.7): koji je tip/
+' rezim izabran je JEDNA odluka, pa boja i raspored ne mogu da se razidju.
+Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
+    Dim i As Long, kx As Single
+    Dim naKartici As Boolean
+    On Error Resume Next
+    If z Is Nothing Then Exit Sub
+    If w < 200 Then Exit Sub
+
+    z.Controls("izBg").Left = PAD - 10
+    z.Controls("izBg").top = IZ_Y_LBL - 8
+    z.Controls("izBg").width = w - 2 * (PAD - 10)
+    z.Controls("izBg").Height = IZ_Y_BTN - IZ_Y_LBL + 2
+
+    OsveziPrekidace z
+
+    ' Brojke uz desnu ivicu.
+    For i = 0 To 1
+        kx = w - PAD - (2 - i) * IZ_KPI_W
+        z.Controls("izKL" & i).Left = kx
+        z.Controls("izKV" & i).Left = kx
+    Next i
+
+    PoljeX z, "scrIzEnt", PAD, 250, IZ_Y_LBL
+    PoljeX z, "scrIzOd", PAD + 258, 86, IZ_Y_LBL
+    PoljeX z, "scrIzDo", PAD + 352, 86, IZ_Y_LBL
+
+    ' U zbirnom rezimu se konkretan entitet ne bira (legacy: cmbEntitet
+    ' enabled = pojedinacni).
+    z.Controls("scrIzEnt").Visible = Not mZbirni
+
+    z.Controls("izHint").width = w - 2 * PAD
+
+    modUiKit.MoveBtn z, "scrIzPrint", PAD, IZ_Y_BTN
+    modUiKit.MoveBtn z, "scrIzKartPdf", PAD + 164, IZ_Y_BTN
+    naKartici = (Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK)
+    modUiKit.BoxShow z, "scrIzKartPdf", naKartici
+
+    z.Controls("izLnB").width = w
+End Sub
+
+' Boje prekidaca tipa i rezima (BoxState + RebaseSink -- par. 7.7: render
+' koji promeni boju javlja novu osnovu, inace je hover-out vrati).
+Private Sub OsveziPrekidace(ByVal z As Object)
+    Dim tip As String
+    On Error Resume Next
+    tip = TrenutniTip()
+    SegBoja z, "scrIzTipOM", (tip = "OM")
+    SegBoja z, "scrIzTipKup", (tip = "Kupac")
+    SegBoja z, "scrIzTipVoz", (tip = "Vozac")
+    SegBoja z, "scrIzTipKoop", (tip = "Kooperant")
+    SegBoja z, "scrIzRezP", Not mZbirni
+    SegBoja z, "scrIzRezZ", mZbirni
+End Sub
+
+Private Sub SegBoja(ByVal z As Object, ByVal nm As String, ByVal sel As Boolean)
+    On Error Resume Next
+    modUiKit.BoxState z, nm, IIf(sel, C_FOREST, C_WHITE), _
+                      IIf(sel, C_CREAM, C_FOREST), sel
+    modOtkupUI.RebaseSink nm
+End Sub
+
+Private Sub PoljeX(ByVal z As Object, ByVal nm As String, ByVal X As Single, _
+                   ByVal w As Single, ByVal yLbl As Single)
+    On Error Resume Next
+    z.Controls(nm).Left = X
+    z.Controls(nm).top = yLbl
+    z.Controls(nm).width = w
+    modOtkupUI.LayoutFieldInner z.Controls(nm)
+End Sub
+
+Private Function Zona() As Object
+    On Error Resume Next
+    Set Zona = modOtkupUI.ScreenZone("IZVESTAJI")
+End Function
+
+Private Function Kontrola(ByVal nm As String) As Object
+    Dim z As Object
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Function
+    Set Kontrola = z.Controls(nm).Controls(nm & "T")
+End Function
+
+Private Sub OsveziZonu()
+    Dim z As Object
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    RasporediPolja z, z.width
+    OsveziHint z
+    OsveziBrojke z
+End Sub
+
+' Hint: nedostupna kombinacija kaze ZASTO je lista prazna (FM-0029 merilo --
+' nikad pun naslov nad trajno praznom listom); pojedinacni rezim bez izbora
+' kaze sta fali; inace opis prikazanog konteksta.
+Private Sub OsveziHint(ByVal z As Object)
+    Dim s As String
+    On Error Resume Next
+    Select Case mHintKljuc
+        Case "OTKUI_IZ_HINT_NEDOSTUPNO"
+            s = Poruka("OTKUI_IZ_HINT_NEDOSTUPNO") & "  " & ChrW(183) & "  " & _
+                TipLabela(TrenutniTip()) & ", " & _
+                Poruka(IIf(mZbirni, "OTKUI_SEGIZ_ZBI", "OTKUI_SEGIZ_POJ"))
+        Case "OTKUI_IZ_HINT_IZABERI"
+            s = Poruka("OTKUI_IZ_HINT_IZABERI")
+        Case Else
+            If mSnimakOK Then
+                s = TipLabela(mCtxTip) & ": " & mCtxEntNaziv & "  " & _
+                    ChrW(183) & "  " & OpsegLabela()
+            Else
+                s = Poruka("OTKUI_IZ_HINT")
+            End If
+    End Select
+    z.Controls("izHint").caption = s
+End Sub
+
+' Period STVARNO prikazanih podataka (nikad iz polja -- ona opisuju sledece
+' citanje).
+Private Function OpsegLabela() As String
+    Dim s1 As String, s2 As String
+    s1 = IIf(mCtxOd > 0, Format$(CDate(mCtxOd), "d.m.yyyy"), Poruka("OTKUI_IZ_BEZ_GRANICE"))
+    s2 = IIf(mCtxDo > 0, Format$(CDate(mCtxDo), "d.m.yyyy"), Poruka("OTKUI_IZ_BEZ_GRANICE"))
+    OpsegLabela = s1 & " - " & s2
+End Function
+
+' Dve brojke zone -- pune se iz SNIMKA aktivne liste (SALDO za OM: avans +
+' agro; ISPLATA: primljeno/kod otkupca), inace crta. Nula i "nema podatka"
+' nisu ista brojka.
+Private Sub OsveziBrojke(ByVal z As Object)
+    Dim crta As String
+    On Error Resume Next
+    crta = ChrW(8212)
+
+    If Scr_Lista() = IZ_ISPL And Not IsEmpty(mZonaIsplPrimljeno) Then
+        z.Controls("izKL0").caption = UCase$(Poruka("OTKUI_KPI_IZ_OMAVANS_PRIM"))
+        z.Controls("izKV0").caption = Format$(NzD(mZonaIsplPrimljeno), "#,##0")
+        z.Controls("izKL1").caption = UCase$(Poruka("OTKUI_KPI_IZ_KOD_OTKUPCA"))
+        z.Controls("izKV1").caption = Format$(NzD(mZonaIsplKod), "#,##0")
+        Exit Sub
+    End If
+
+    z.Controls("izKL0").caption = UCase$(Poruka("OTKUI_KPI_IZ_OMAVANS"))
+    z.Controls("izKL1").caption = UCase$(Poruka("OTKUI_KPI_IZ_AGRO"))
+    If IsEmpty(mZonaOmAvans) Then
+        z.Controls("izKV0").caption = crta
+    Else
+        z.Controls("izKV0").caption = Format$(NzD(mZonaOmAvans), "#,##0")
+    End If
+    If IsEmpty(mZonaAgro) Then
+        z.Controls("izKV1").caption = crta
+    Else
+        z.Controls("izKV1").caption = Format$(NzD(mZonaAgro), "#,##0")
+    End If
+End Sub
+
+' Combo entiteta se puni PO TIPU (obrazac PuniPartnerCombo, par. 9): dve
+' kolone, cist ID u drugoj, prikaz sa ID-jem (dva ista imena su stvarnost --
+' fixture ima dva istoimena kooperanta). Kooperanti: samo AKTIVNI, kao
+' legacy LoadEntiteti. Puni se ponovo posle ResetCache; cuva izbor.
+Private Sub PuniEntitetCombo()
+    Dim c As Object, tip As String
+    Dim mapa As Object, k As Variant
+    Dim cur As String, i As Long, idx As Long
+    On Error GoTo EH
+
+    tip = TrenutniTip()
+    Set c = Kontrola("scrIzEnt")
+    If c Is Nothing Then Exit Sub
+    If mComboTip = tip Then Exit Sub
+
+    mFill = True
+    cur = GetComboID(c)
+
+    c.Clear
+    c.ColumnCount = 2
+    c.ColumnWidths = "180 pt;0 pt"
+    c.BoundColumn = 1
+    c.TextColumn = 1
+
+    Select Case tip
+        Case "OM"
+            Set mapa = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+        Case "Kupac"
+            Set mapa = BuildLookupDict(TBL_KUPCI, "KupacID", "Naziv")
+        Case "Vozac"
+            Set mapa = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
+        Case "Kooperant"
+            Set mapa = AktivniKooperanti()
+    End Select
+
+    If Not mapa Is Nothing Then
+        For Each k In mapa.keys
+            c.AddItem Trim$(CStr(mapa(k)))
+            c.List(c.ListCount - 1, 1) = CStr(k)
+        Next k
+    End If
+
+    ShowIDInComboDisplay c
+
+    ' Izbor operatera preziviva refill; inace prvi (legacy ListIndex = 0).
+    If c.ListCount > 0 Then
+        idx = 0
+        If Len(cur) > 0 Then
+            For i = 0 To c.ListCount - 1
+                If CStr(c.List(i, 1)) = cur Then idx = i: Exit For
+            Next i
+        End If
+        c.ListIndex = idx
+    End If
+
+    mComboTip = tip
+    mFill = False
+    Exit Sub
+EH:
+    mFill = False
+    Debug.Print "modScrIzvestaji.PuniEntitetCombo PAO: " & Err.Number & " " & Err.description
+End Sub
+
+' Samo aktivni kooperanti -- legacy LoadEntiteti pravilo (BuildLookupDict ne
+' filtrira aktivnost).
+Private Function AktivniKooperanti() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cIme As Long, cPr As Long, cAkt As Long
+    Set d = CreateObject("Scripting.Dictionary")
+    On Error GoTo Gotovo
+
+    src = GetTableData(TBL_KOOPERANTI)
+    If Not IsArray(src) Then GoTo Gotovo
+    cId = GetColumnIndex(TBL_KOOPERANTI, "KooperantID")
+    cIme = GetColumnIndex(TBL_KOOPERANTI, "Ime")
+    cPr = GetColumnIndex(TBL_KOOPERANTI, "Prezime")
+    cAkt = GetColumnIndex(TBL_KOOPERANTI, "Aktivan")
+    If cId = 0 Then GoTo Gotovo
+
+    For i = 1 To UBound(src, 1)
+        If cAkt = 0 Or CStr(src(i, cAkt)) = STATUS_AKTIVAN Then
+            Dim iD As String
+            iD = NzS(src(i, cId))
+            If Len(iD) > 0 And Not d.Exists(iD) Then
+                d(iD) = Trim$(NzS(src(i, cIme)) & " " & NzS(src(i, cPr)))
+            End If
+        End If
+    Next i
+Gotovo:
+    Set AktivniKooperanti = d
+End Function
+
+'=====================================================================
+' STAMPE. Ne verifikuju se automatski -- smoke checklista.
+'=====================================================================
+
+' Zaglavlja stampe po listi -- isti opis kolona kao mreza (vidljive kolone),
+' natpisi iz kataloga. Javno da bi ga stampa i test delili.
+Public Function IzHeaderiZaListu(ByVal kljuc As String, ByVal tip As String) As Variant
+    Dim kolone As Variant, i As Long, n As Long
+    Dim res() As String
+    kolone = IzKoloneZaListu(kljuc, tip)
+    ReDim res(0 To UBound(kolone))
+    For i = 0 To UBound(kolone)
+        If val(Split(CStr(kolone(i)), "|")(4)) < 4 Then
+            res(n) = Poruka(Split(CStr(kolone(i)), "|")(0))
+            n = n + 1
+        End If
+    Next i
+    ReDim Preserve res(0 To n - 1)
+    IzHeaderiZaListu = res
+End Function
+
+' "Stampaj izvestaj": tabelarni PDF AKTIVNE liste -- tacno ono sto operater
+' vidi (cip + pretraga; PrintSpecDat presedan), sa naslovom iz KONTEKSTA
+' SNIMKA (AUD-024: naslov opisuje prikazano, ne trenutno stanje polja).
+' Filtriran izvod na papiru KAZE da je filtriran.
+Private Sub StampajIzvestaj()
+    Dim rez As Variant, redovi As Variant, n As Long
+    Dim kolone As Variant, headers As Variant
+    Dim dataS() As String
+    Dim i As Long, j As Long, vidljivih As Long
+    Dim naslov As String
+
+    If Not mSnimakOK Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
+        Exit Sub
+    End If
+
+    ' Isto oblikovanje kroz koje je prosla mreza -- poslednji (filter, q).
+    rez = RedoviZaListu(mDiagFilter, mDiagQ)
+    n = CLng(rez(2))
+    If n = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
+        Exit Sub
+    End If
+    kolone = rez(0)
+    redovi = rez(1)
+    headers = IzHeaderiZaListu(Scr_Lista(), mCtxTip)
+    vidljivih = UBound(headers) + 1
+
+    ReDim dataS(1 To n, 1 To vidljivih)
+    For i = 1 To n
+        For j = 1 To vidljivih
+            dataS(i, j) = CelijaZaStampu(CStr(kolone(j - 1)), redovi(i, j))
+        Next j
+    Next i
+
+    naslov = Poruka(NaslovKljucListe(Scr_Lista())) & " - " & TipLabela(mCtxTip) & _
+             ": " & mCtxEntNaziv & " (" & OpsegLabela() & ")"
+    If Len(mDiagQ) > 0 Then
+        naslov = naslov & "  " & ChrW(183) & "  " & Poruka("OTKUI_IZ_PRETRAGA") & _
+                 " " & mDiagQ
+    End If
+    If Len(mDiagFilter) > 0 And mDiagFilter <> "sve" Then
+        naslov = naslov & "  " & ChrW(183) & "  " & Poruka("OTKUI_IZ_FILTER") & _
+                 " " & mDiagFilter
+    End If
+
+    PrintIzvestaj dataS, naslov, headers
+End Sub
+
+' Vrednost celije za stampu -- isto formatiranje kao mreza (CelijaTekst
+' pravila), ali u string matrici koju PrintIzvestaj upisuje u sheet.
+Private Function CelijaZaStampu(ByVal spec As String, ByVal v As Variant) As String
+    Dim kind As String
+    kind = Split(spec, "|")(2)
+    Select Case kind
+        Case "date"
+            If IsNumeric(v) Then
+                If CDbl(v) >= 1 Then CelijaZaStampu = Format$(CDate(CDbl(v)), "d.m.yyyy")
+            End If
+        Case "kg":  CelijaZaStampu = FmtKolicina(NzD(v))
+        Case "num": CelijaZaStampu = Format$(NzD(v), "#,##0")
+        Case "rsd": CelijaZaStampu = Format$(NzD(v), "#,##0.00")
+        Case "rest"
+            If NzD(v) <> 0 Then CelijaZaStampu = Format$(NzD(v), "#,##0.00")
+        Case Else
+            CelijaZaStampu = NzS(v)
+    End Select
+End Function
+
+Private Function NaslovKljucListe(ByVal kljuc As String) As String
+    NaslovKljucListe = "OTKUI_GRID_TITLE_IZ_" & IzSufiks(kljuc)
+End Function
+
+Private Function IzSufiks(ByVal kljuc As String) As String
+    Select Case kljuc
+        Case IZ_SALDO:  IzSufiks = "SALDO"
+        Case IZ_ROBA:   IzSufiks = "ROBA"
+        Case IZ_AMB:    IzSufiks = "AMB"
+        Case IZ_ISPL:   IzSufiks = "ISPL"
+        Case IZ_ZBIR:   IzSufiks = "ZBIR"
+        Case IZ_CENA:   IzSufiks = "CENA"
+        Case IZ_MANJAK: IzSufiks = "MANJAK"
+        Case IZ_KART:   IzSufiks = "KART"
+        Case IZ_AMBK:   IzSufiks = "AMBK"
+        Case IZ_OTKL:   IzSufiks = "OTKL"
+    End Select
+End Function
+
+' "Stampaj karticu (PDF)": po sablonu, za kooperanta i period IZ SNIMKA --
+' tab-aware kao legacy btnStampajKarticu (finansijska kartica ili kartica
+' ambalaze). Postojece rutine, nepromenjene.
+Private Sub StampajKarticu()
+    Dim dOd As Date, dDo As Date
+    If Not mSnimakOK Or mCtxTip <> "Kooperant" Or Len(mCtxId) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
+        Exit Sub
+    End If
+    If Scr_Lista() <> IZ_KART And Scr_Lista() <> IZ_AMBK Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_IZ_PRVO_PRIKAZI"), True
+        Exit Sub
+    End If
+    dOd = CDate(IIf(mCtxOd > 0, mCtxOd, IZ_DAT_MIN))
+    dDo = CDate(IIf(mCtxDo > 0, mCtxDo, IZ_DAT_MAX))
+    If Scr_Lista() = IZ_AMBK Then
+        PrintKarticaAmbalazePDF mCtxId, dOd, dDo
+    Else
+        PrintKarticaPDF mCtxId, dOd, dDo
+    End If
+End Sub
+
+' "Stampaj dokument" nad izabranim redom: ruta po listi i po tipu dokumenta.
+' Red bez dokumenta ODBIJA porukom -- agregatni red bez radnje nije greska,
+' radnja koja pogadja jeste.
+Private Sub StampajDokumentReda(ByVal red As Long)
+    Dim ref As String, dokTip As String, dokID As String, tipAmb As String
+
+    Select Case Scr_Lista()
+        Case IZ_OTKL
+            ref = NzS(modOtkupUI.GridCell(red, 8))
+            If Left$(ref, 4) = "OTK|" Then
+                ReprintOtkupniListByOtkupID Mid$(ref, 5)
+            Else
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+            End If
+        Case IZ_KART
+            ref = NzS(modOtkupUI.GridCell(red, 8))
+            If Left$(ref, 4) = "OTK|" Then
+                ReprintOtkupniListByOtkupID Mid$(ref, 5)
+            ElseIf Len(ref) > 0 Then
+                ' NOV / MAG / AMB red kartice nema dokument za stampu iz ovog
+                ' pregleda -- isto kao legacy Case Else.
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
+            Else
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+            End If
+        Case IZ_ROBA
+            ref = NzS(modOtkupUI.GridCell(red, 12))
+            If Left$(ref, 4) = "OTP|" Then
+                OutputOtpremnicaPDF Mid$(ref, 5)
+            Else
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+            End If
+        Case IZ_AMB
+            dokTip = NzS(modOtkupUI.GridCell(red, 7))
+            dokID = NzS(modOtkupUI.GridCell(red, 8))
+            tipAmb = NzS(modOtkupUI.GridCell(red, 3))
+            If Len(dokID) = 0 Then
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+                Exit Sub
+            End If
+            Select Case dokTip
+                Case DOK_TIP_PRIJEMNICA
+                    PrintPrijemnica dokID
+                Case DOK_TIP_OTKUP
+                    ReprintOtkupniListByOtkupID dokID
+                Case DOK_TIP_OTPREMNICA
+                    OutputOtpremnicaPDF dokID
+                Case DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP, _
+                     DOK_TIP_OM_IZLAZ_FIRMA, DOK_TIP_OM_ULAZ_FIRMA
+                    ' Revers: rekonstrukcija iz dve noge ledgera -- racun
+                    ' izdvojen u modIzvestaj.StampajReversAmbalaze (AUD-012:
+                    ' tip ambalaze IZABRANOG reda je deo kljuca).
+                    StampajReversAmbalaze dokID, dokTip, tipAmb
+                Case Else
+                    modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_STAMPA_NEDOSTUPNA"), True
+            End Select
+        Case Else
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
+    End Select
+End Sub
+
+'=====================================================================
+' DIJAGNOSTIKA
+'
+' Alt+F8 -> Diag_IzRedovi, pa Ctrl+G. Ne menja nista. Isti razlog kao
+' Diag_BnRedovi (N7): "filter ne radi" se ne razresava citanjem -- ispisuje
+' se sta je ljuska poslednje trazila, sta ekran vraca, koliko je snimak
+' stvarno punjen i pod kojim kljucem.
+'=====================================================================
+Public Sub Diag_IzRedovi()
+    Dim d As Variant, kolone As Variant, redovi As Variant, i As Long, k As Long, n As Long
+    On Error Resume Next
+
+    Debug.Print "--- Diag_IzRedovi (" & SCRIZ_BUILD & ") ---"
+    Debug.Print "  POSLEDNJI POZIV: filter=[" & mDiagFilter & "] q=[" & mDiagQ & _
+                "] vraceno redova=" & CStr(mDiagN)
+    Debug.Print "  SNIMAK: kljuc=[" & mSnimakKljuc & "] ok=" & mSnimakOK & _
+                " punjenja=" & CStr(mSnimakPunjenja)
+
+    d = Scr_Rows("sve", "")
+    If Not IsArray(d) Then
+        Debug.Print "  Scr_Rows NIJE vratio niz"
+        Exit Sub
+    End If
+
+    kolone = d(0)
+    redovi = d(1)
+    n = CLng(d(2))
+    Debug.Print "  kolona=" & CStr(UBound(kolone) + 1) & "  redova=" & CStr(n)
+
+    For i = 0 To UBound(kolone)
+        Debug.Print "  spec " & CStr(i + 1) & ": " & CStr(kolone(i))
+    Next i
+
+    If IsArray(redovi) Then
+        For i = 1 To 3
+            If i > n Then Exit For
+            For k = 1 To UBound(kolone) + 1
+                Debug.Print "  EKRAN red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                            TypeName(redovi(i, k)) & " vred=[" & CStr(redovi(i, k)) & "]"
+            Next k
+        Next i
+    End If
+
+    For i = 1 To 3
+        For k = 1 To UBound(kolone) + 1
+            Debug.Print "  MREZA red " & CStr(i) & " kol" & CStr(k) & ": tip=" & _
+                        TypeName(modOtkupUI.GridCell(i, k)) & _
+                        " vred=[" & CStr(modOtkupUI.GridCell(i, k)) & "]"
+        Next k
+    Next i
+
+    Err.Clear
+End Sub
+
+'=====================================================================
+' TEST SEAM
+' Zona se u testu ne crta (forma se ne prikazuje), pa se kontekst ne moze
+' procitati iz kontrola. Ista kapija kao Scr_*Test na ostalim ekranima:
+' seam koji MENJA stanje van test-rezima ne radi nista.
+'=====================================================================
+Public Sub Scr_IzTestSet(ByVal lista As String, ByVal tip As String, _
+                         ByVal zbirni As Boolean, ByVal entitetID As String, _
+                         ByVal odSerijski As Double, ByVal doSerijski As Double)
+    If Not IsTestMode() Then Exit Sub
+    If Len(lista) > 0 Then mLista = lista
+    mTip = tip
+    mZbirni = zbirni
+    mTestId = entitetID
+    mTestOd = odSerijski
+    mTestDo = doSerijski
+End Sub
+
+Public Function Scr_IzSnimakPunjenjaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_IzSnimakPunjenjaTest = mSnimakPunjenja
+End Function
+
+Public Function Scr_IzSnimakKljucTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_IzSnimakKljucTest = mSnimakKljuc
+End Function
+
+' Brojke zone poslednjeg oblikovanja -- za slaganje "specijalni redovi su
+' izdvojeni, ne izgubljeni" (OM avans, agro, kontrolni redovi isplate).
+' Empty = red nije postojao u povratku.
+Public Function Scr_IzZonaBrojkaTest(ByVal koja As String) As Variant
+    If Not IsTestMode() Then Exit Function
+    Select Case koja
+        Case "omavans":   Scr_IzZonaBrojkaTest = mZonaOmAvans
+        Case "agro":      Scr_IzZonaBrojkaTest = mZonaAgro
+        Case "primljeno": Scr_IzZonaBrojkaTest = mZonaIsplPrimljeno
+        Case "podeljeno": Scr_IzZonaBrojkaTest = mZonaIsplPodeljeno
+        Case "kod":       Scr_IzZonaBrojkaTest = mZonaIsplKod
+    End Select
+End Function
+
+Public Function Scr_IzHintKljucTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_IzHintKljucTest = mHintKljuc
+End Function
+
+Public Sub Scr_IzTestReset()
+    If Not IsTestMode() Then Exit Sub
+    mLista = IZ_SALDO
+    mTip = "OM"
+    mZbirni = False
+    mTestId = ""
+    mTestOd = 0
+    mTestDo = 0
+    mSnimakPunjenja = 0
+    mComboTip = ""
+    ResetZonskeBrojke
+    mHintKljuc = ""
+    Scr_ResetCache
+    mSnimakKljuc = ""
+    mCtxTip = ""
+    mCtxId = ""
+End Sub

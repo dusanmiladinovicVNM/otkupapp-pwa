@@ -3429,6 +3429,140 @@ Private Function ResolveEntitetName(ByVal entitetID As String, _
     End Select
 End Function
 
+' ============================================================
+' REVERS AMBALAZE IZ PREGLEDA (v6-ui-186) -- racun izdvojen iz
+' frmIzvestaj.StampajReversAmbDok za ekran Izvestaji (novi UI). Forma
+' zadrzava svoju kopiju i NE menja se (katalog par. 5 / Faza B: dve kopije
+' zive namerno dok legacy ne ode). Pravila su ISTA, AUD-012 / FM-0029:
+'   - argumenti reversa se rekonstruisu iz dve noge ledgera (Kooperant +
+'     Stanica) koje dele DokumentID;
+'   - STORNIRANI redovi se preskacu INLINE (bez kopije cele tblAmbalaza);
+'   - tip ambalaze je DEO KLJUCA (ReversRedPripada) -- dokument sa dve vrste
+'     gajbica daje dva reversa, ne jedan sa pogresnim zbirom;
+'   - vise od dve noge po tipu se PRIJAVLJUJE operateru, ne sabira tiho.
+' ============================================================
+Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, _
+                                 ByVal tipSel As String)
+    Const SRC As String = "modIzvestaj.StampajReversAmbalaze"
+    On Error GoTo EH
+
+    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Sub
+    Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
+    Dim cEntTip As Long, cDok As Long, cDokTip As Long, cVoz As Long
+    Dim cStorno As Long
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    cVoz = GetColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC)
+    If cDok = 0 Or cDokTip = 0 Then Exit Sub
+
+    Dim isFirma As Boolean
+    isFirma = (dokTip = DOK_TIP_OM_IZLAZ_FIRMA Or dokTip = DOK_TIP_OM_ULAZ_FIRMA)
+
+    Dim datum As Date, haveDatum As Boolean
+    Dim tipAmb As String, omID As String, koopID As String
+    Dim kolAmb As Long
+    Dim revVozacID As String
+    Dim i As Long
+
+    ' Tip ambalaze = tip IZABRANOG reda pregleda. Fallback (poziv bez tipa):
+    ' tip prvog reda dokumenta -- i tada se sabira SAMO taj tip.
+    tipAmb = Trim$(tipSel)
+    If Len(tipAmb) = 0 Then
+        For i = 1 To UBound(d, 1)
+            If Trim$(CStr(d(i, cDok))) = Trim$(dokID) And _
+               Trim$(CStr(d(i, cDokTip))) = Trim$(dokTip) And _
+               Not IzvAmbRedStorniran(d, i, cStorno) Then
+                tipAmb = Trim$(CStr(d(i, cTip)))
+                Exit For
+            End If
+        Next i
+    End If
+
+    Dim nogeKoop As Long, nogeOM As Long
+    For i = 1 To UBound(d, 1)
+        If ReversRedPripada(CStr(d(i, cDok)), CStr(d(i, cDokTip)), CStr(d(i, cTip)), _
+                            dokID, dokTip, tipAmb) _
+           And Not IzvAmbRedStorniran(d, i, cStorno) Then
+            If Not haveDatum And IsDate(d(i, cDat)) Then
+                datum = CDate(d(i, cDat)): haveDatum = True
+            End If
+            Dim et As String: et = CStr(d(i, cEntTip))
+            If et = "Stanica" Then
+                omID = CStr(d(i, cEnt))
+                nogeOM = nogeOM + 1
+                If isFirma Then
+                    If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+                    If cVoz > 0 And Len(revVozacID) = 0 Then revVozacID = CStr(d(i, cVoz))
+                End If
+            ElseIf et = "Kooperant" Then
+                koopID = CStr(d(i, cEnt))
+                nogeKoop = nogeKoop + 1
+                If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+            End If
+        End If
+    Next i
+
+    ' Ocekivana je po JEDNA noga sa svake strane (FM-0029 #16). Vise = duplikat
+    ' ili vise generacija istog dokumenta -> zbir je verovatno naduvan.
+    If nogeOM > 1 Or nogeKoop > 1 Then
+        If MsgBox(Poruka("RPT_MSG_REVERS_VISE_NOGU") & vbCrLf & vbCrLf & _
+                  "OM: " & nogeOM & " | kooperant: " & nogeKoop & vbCrLf & _
+                  Poruka("RPT_MSG_NASTAVITI_STAMPU"), _
+                  vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    End If
+
+    If isFirma Then
+        If Len(Trim$(omID)) = 0 Then
+            Err.Raise vbObjectError + 7503, SRC, _
+                      "Revers (firma) nije moguce rekonstruisati (nedostaje OM noga)."
+        End If
+    ElseIf Len(Trim$(koopID)) = 0 Or Len(Trim$(omID)) = 0 Then
+        Err.Raise vbObjectError + 7503, SRC, _
+                  "Revers nije moguce rekonstruisati (nedostaje OM ili kooperant noga)."
+    End If
+    If Not haveDatum Then datum = Date
+
+    Dim omNaziv As String, koopNaziv As String, vrsta As String
+    omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
+    ' Uz-otkup revers: DokumentID = otkupID -> vrsta iz otkupa; standalone -> prazno.
+    vrsta = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_VRSTA))
+
+    If isFirma Then
+        Dim prijemF As Boolean: prijemF = (dokTip = DOK_TIP_OM_ULAZ_FIRMA)
+        Dim revVozacNaziv As String
+        revVozacNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", revVozacID, "Ime")) & " " & _
+                              CStr(LookupValue(TBL_VOZACI, "VozacID", revVozacID, "Prezime")))
+        OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, _
+                                revVozacNaziv, "", _
+                                tipAmb, kolAmb, vrsta, prijemF, "FIRMA"
+        Exit Sub
+    End If
+
+    koopNaziv = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime")) & " " & _
+                      CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Prezime")))
+    Dim prijem As Boolean: prijem = (dokTip = DOK_TIP_OM_ULAZ_KOOP)
+    OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, koopNaziv, koopID, _
+                            tipAmb, kolAmb, vrsta, prijem
+    Exit Sub
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Sub
+
+' Je li red tblAmbalaza storniran -- IDENTICNO pravilo kao ExcludeStornirano
+' (CStr poredjenje sa "Da"), primenjeno po redu. Kolone nema = nema storna.
+Private Function IzvAmbRedStorniran(ByRef d As Variant, ByVal r As Long, _
+                                    ByVal cStorno As Long) As Boolean
+    If cStorno <= 0 Then Exit Function
+    IzvAmbRedStorniran = (CStr(d(r, cStorno)) = "Da")
+End Function
+
 Private Sub IzvRethrow(ByVal sourceName As String, _
                        ByVal errNum As Long, _
                        ByVal errDesc As String, _
