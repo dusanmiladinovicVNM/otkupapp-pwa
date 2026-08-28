@@ -3971,6 +3971,15 @@ jedino prolazno stanje ekrana je korpa identiteta — i ona NAMERNO **ne nosi
 iznos**, pa zastareo snimak ne može da naruči uplatu (iznos se čita svež u
 trenutku izvoza).
 
+> **Oborena na prvom smoke-u** — v. §22.9: „nekad se iznos ne isplaćuje u
+> potpunosti" je stvaran tok, ne izuzetak. Delimična isplata je ušla kao
+> radnja „Iznos…" (InputBox, presedan SEF komentara), sa zadatim iznosima u
+> zasebnom rečniku koji održava **isti** klamp kao legacy override
+> (`ClampOverridesToOpenDict`, jezgro izdvojeno iz `ClampOverridesToOpen`
+> baš za ovo — dva pozivaoca, jedan račun). Deo odluke koji je ostao: polja
+> za unos u zoni i dalje **nema** — unos vezan za „izabran red" ne živi u
+> zoni nego u dijalogu radnje, pa sort/strana/filter nemaju šta da zastare.
+
 **(C) Štampa specifikacije ULAZI.** Jedan poziv postojeće rutine
 (`PrintIsplataSpecifikacija` → `modPrint`, režim `ISPLATA_SPEC_PRINT_MODE`),
 isti izbor blokova i isti iznosi kao CSV. Ne može se verifikovati automatski —
@@ -3987,14 +3996,19 @@ jer bi klik bez ijedne poruke izgledao kao dugme koje ne radi.
   configu — uvođenje bi bilo novo poslovno pravilo, ne prelazak ekrana.
   Čipovi su: Sve · Ima račun · Bez računa · Avans (poslednji: kooperant ima
   neraspoređen avans — te blokove pre naloga treba vezati radnjom).
-- **Multiselect → korpa identiteta** („U NALOZIMA"): radnje `bnadd`/`bndel`,
-  dvoklik prebacuje, kolona kvačice, traka u zoni (najnovije prvo + preliv se
-  prijavljuje), KPI pločica. Korpa se **usklađuje sa svežom listom pri svakom
-  čitanju** (`BnUskladiKorpu`): stavka čiji blok više nije otvoren izlazi uz
-  poruku — isti razlog kao legacy klamp („tiho spuštanje bi operater lako
-  promašio") — a živima se osvežava snimak za traku. Prazna korpa = izvoz SVIH
-  otvorenih sa računom (legacy „nema selekcije = svi"), što potvrdni dijalog
-  eksplicitno pokaže brojem i iznosom.
+- **Multiselect → korpa identiteta** („U NALOZIMA"): radnje `bnadd`/`bniznos`/
+  `bndel`, dvoklik prebacuje, kolona kvačice, traka u zoni (najnovije prvo +
+  preliv se prijavljuje), KPI pločica. Korpa se **usklađuje sa svežom listom
+  pri svakom čitanju** (`BnUskladiKorpu`): stavka čiji blok više nije otvoren
+  izlazi uz poruku — isti razlog kao legacy klamp („tiho spuštanje bi operater
+  lako promašio") — a živima se osvežava snimak za traku. Prazna korpa =
+  izvoz SVIH otvorenih sa računom (legacy „nema selekcije = svi"), što
+  potvrdni dijalog eksplicitno pokaže brojem i iznosom.
+- **Delimična isplata = radnja „Iznos…"** (v. §22.9): zadati iznos po bloku,
+  legacy pravila unosa (cent-domen, > 0, nikad preko otvorenog; jednak
+  otvorenom briše zadato), vidljiva kolona ISPLATITI uz OTVORENO, klamp
+  zadatih pri svakom čitanju. Blok kome se zada iznos automatski ulazi u
+  naloge; izbacivanje iz naloga briše i zadati iznos.
 - **Blok bez tekućeg računa ne može u korpu** (`BnDodaj` odbija) — legacy je
   isto radio na check-u reda. U CSV ionako ne sme (nema primaoca); ovim se ne
   broje nalozi koji nikad ne nastanu.
@@ -4068,9 +4082,10 @@ donor-zavisan config je već nosio „dva crvena ali nisu moja".
 
 ### 22.8 Verifikacija
 
-Testovi **127–131** u `modTest` i **dvanaest** sabotaža. U `RunAllTests` se
-izvršavaju **pre** 124–126 (mutirajući testovi ostaju poslednji u nizu;
-redosled izvršavanja ne mora da prati brojeve).
+Testovi **127–132** u `modTest`, **T22** u `RunBankaImportTestSuite`, i
+**sedamnaest** sabotaža. U `RunAllTests` se 127–132 izvršavaju **pre**
+124–126 (mutirajući testovi ostaju poslednji u nizu; redosled izvršavanja ne
+mora da prati brojeve).
 
 | Test | Šta meri | Sabotaža |
 |---|---|---|
@@ -4079,6 +4094,8 @@ redosled izvršavanja ne mora da prati brojeve).
 | `T_BankaNalozi_CipoviIKpiPratePravila` | čipovi particija „sve"; slaganje sa čitačem po svakom bloku; avans pool po kooperantu (uz dokaz da vozilo postoji); KPI posle greške | `banka-nalozi-cip-imarac-pusta-sve`, `banka-nalozi-kpi-avans-po-bloku`, `banka-nalozi-kpi-greska-je-nula` |
 | `T_BankaNalozi_KorpaIIzvoz` | korpa po identitetu (prazan/bez TR/dupli se odbijaju), traka najnovije prvo + preliv, usklađivanje sa svežom listom, izbor za izvoz (korpa/svi/nepoznat), svež iznos u cent-domenu | `banka-nalozi-bez-racuna-u-naloge`, `banka-nalozi-prazan-id-ulazi`, `banka-nalozi-usklad-ne-cisti`, `banka-nalozi-izvoz-ignorise-izbor`, `banka-nalozi-izvoz-sirov-iznos` |
 | `T_ZonaBankaNalozi_PoljaIRaspored` | zona se stvarno gradi i raspoređuje; combo je polje (`nm`+`nmT`); tvrdi se posle `Unload`-a | `banka-nalozi-zona-bez-dugmeta` |
+| `T_BankaNalozi_IznosPoBloku` | pravila unosa zadatog iznosa (legacy `txtIsplatiti`), klamp pri čitanju, kolona ISPLATITI, izvoz nosi zadato, čišćenje uz korpu | `banka-nalozi-iznos-preko-otvorenog`, `banka-nalozi-citanje-ne-klampuje`, `banka-nalozi-izvoz-ignorise-iznos` |
+| `T22_RacunUCsvJeExcelSafe` (banka suite) | goli 18-cifreni račun se u kolonama CSV-a kanonizuje u NBS 3-13-2; sve drugo netaknuto | `banka-csv-racun-goli-broj` |
 
 Tvrdnja koja nosi najviše: **avans pool po kooperantu** ima i tvrdnju da
 vozilo postoji (kooperant sa avansom i ≥2 bloka, i da se dve politike stvarno
@@ -4109,3 +4126,57 @@ ništa.
 **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug → Compile
 VBAProject`, pa smoke nad pravim podacima — v. checklistu u PR-u (izgled
 zone, traka korpe, potvrda i ishod CSV-a, PDF specifikacija, avans).
+
+### 22.9 Prvi smoke: dva nalaza (obe ispravke u istom PR-u)
+
+Compile je prošao, ekran radi, CSV je nastao — i doneo dva nalaza koje suite
+nije mogla da vidi.
+
+#### N1 — goli 18-cifreni račun se u Excelu raspada
+
+U generisanom fajlu su dva od tri računa primaoca stajala kao `3,25934E+17`
+i `2,059E+17`: računi uneti u matične podatke kao **golih 18 cifara**. CSV na
+disku je bio tačan — ali Excel pri otvaranju niz duži od 15 cifara čita kao
+BROJ, prikaže ga u naučnoj notaciji i **drži samo 15 značajnih cifara** —
+pa bi snimanje iz Excela (banner „possible data loss" je tačno to) račun
+primaoca **uništilo** pre uvoza u e-banking. Treći račun, unet sa crticama,
+ostao je tekst i ceo.
+
+Kolona je, dakle, i do sada nosila mešavinu dva oblika (račun ide u fajl
+onako kako je unet). Ispravka: `FormatRacunZaNalog` — **tačno 18 golih
+cifara** se kanonizuje u NBS oblik `3-13-2`; sve ostalo prolazi netaknuto
+(format koji domen nema se ne izmišlja). Primenjeno na obe kolone računa u
+`BuildNalogCsvPayload`, pa ispravku dobija i legacy putanja (isti writer).
+
+Redosled po `CLAUDE.md` §2: test **T22** je prvo pisan nad no-op verzijom
+funkcije (bit-identično današnjem ponašanju) i pušten — **4 tvrdnje crvene**
+(`dobijeno=205000000012345678, ocekivano=205-0000000123456-78`) — pa je
+kanonizacija ušla i suite je zelena. Kvar nije ovog ekrana: isti fajl pravi
+i legacy forma od AUD-026.
+
+#### N2 — „nekad se iznos ne isplaćuje u potpunosti"
+
+Operatersko pitanje „gde se definiše iznos po bloku" je podatak koji obara
+odluku (B): delimična isplata je **stvaran tok**, a ekran ju je slao u
+legacy formu. Ušla je kao radnja **„Iznos…"** (v. §22.2, oboreni deo):
+
+- unos kroz `InputBox` radnje (presedan: SEF komentar na Fakturisanju) — ne
+  kroz polje zone, pa nema stanja vezanog za „izabran red" koje sort/strana/
+  filter zastarevaju;
+- pravila unosa su legacy `txtIsplatiti_Exit` pravila, u čistoj funkciji
+  (`BnPostaviIznos`): cent-domen pre svake provere, `> 0`, nikad preko
+  otvorenog, jednak otvorenom **briše** zadato;
+- zadate iznose pri svakom čitanju liste usklađuje **isti račun** kao legacy
+  override: `ClampOverridesToOpenDict`, jezgro izdvojeno iz
+  `ClampOverridesToOpen` (wrapper za legacy formu nepromenjen, T12 zelen) —
+  nestao/zatvoren blok gubi zadato, veće se spušta, manje ostaje, uz poruku;
+- nova vidljiva kolona **ISPLATITI** uz OTVORENO (podrazumevano isti broj;
+  razlikuju se tačno gde je operater zadao manje); `OdaberiBlokoveZaNaloge`
+  dobija opcioni rečnik zadatih iznosa — bez njega ponašanje nepromenjeno;
+- namerno BEZ nove kapije u izvozu (§21 lekcija): klamp drži zadato ≤
+  otvoreno pri čitanju, a svežu preplatu između čitanja i klika i dalje
+  preseca `ValidateNalogSaldo` za ceo fajl — isti slojevi kao legacy.
+
+**Ekransko vezivanje `BlokoviZaIzvoz` → `Iznosi()` je jedan red, provereno
+čitanjem** (domenska polovina je pod testom i sabotažom) — isti oblik
+beleške kao §9 „vezivanje kapije u dve rute".

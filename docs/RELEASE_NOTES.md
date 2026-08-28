@@ -6260,19 +6260,29 @@ u staru formu za standardni tok.
   proverava nad svežim stanjem i ceo fajl se odbija ako ijedan traži više
   nego što je otvoreno.
 - **PDF specifikacija** istih blokova i istih iznosa kao CSV.
+- **Iznos po bloku („Iznos…")**: kad se blok ne isplaćuje u potpunosti,
+  operater na redu zada manji iznos (predlog je pun otvoreni). Pravila su
+  ista kao u staroj formi: nikad preko otvorenog, u parama; iznos jednak
+  otvorenom vraća blok na punu isplatu. Ako se otvoreno u međuvremenu
+  smanji, zadati iznos se sam spusti — uz poruku, nikad tiho. Kolona
+  „Isplatiti" u listi pokazuje šta tačno ide u nalog.
 - **Primeni avans na blok** direktno iz reda (isto knjiženje kao u staroj
   formi, sa potvrdom i stvarnim iznosom u poruci — bez lažnog „uspeha" kad
   nije bilo šta da se veže).
 - Brojka u meniju pokazuje koliko blokova čeka isplatu; posle greške čitanja
   pokazuje „!" umesto lažne nule.
 
+### Ispravka iz prvog smoke-a: broj računa u CSV-u
+
+U generisanom fajlu su računi uneti kao golih 18 cifara u Excelu izgledali
+kao „2,059E+17" — Excel takav niz čita kao broj i čuva samo 15 cifara, pa bi
+snimanje iz Excela račun primaoca uništilo pre uvoza u banku. Nalozi sada u
+kolonama računa uvek nose standardni oblik sa crticama (3-13-2), koji Excel
+drži kao tekst; računi već uneti sa crticama prolaze neizmenjeni. Ispravku
+dobija i stara forma (isti generator fajla).
+
 ### Šta NIJE urađeno, i zašto
 
-- **Delimična isplata (unos „Isplatiti" po bloku) ostaje u staroj formi.**
-  Novi ekran uvek izvozi pun otvoren iznos. Unos po redu je prolazno stanje
-  sa celim aparatom održavanja (usklađivanje na svako osvežavanje, čišćenje
-  pri promeni prikaza), a mreža novog UI-ja nema panel u kom bi taj unos
-  pouzdano živeo — pola te funkcije bilo bi opasnije od njenog odsustva.
 - **„Primeni avans (sel.)" na više blokova odjednom** — i dalje u staroj
   formi: zbirni ishod batch-a (koliko vezano / bez promene / grešaka) ne
   staje u jednu poruku novog ekrana.
@@ -6281,9 +6291,11 @@ u staru formu za standardni tok.
 
 ### Verifikacija
 
-- Glavni set **131 / 0** (pet novih testova ekrana), banka set **196 / 0**;
-  statičke provere čiste; dvanaest novih namernih kvarova obara po tačno
-  jedan imenovani test i vraća se bit-identično (dvosmerni dokaz).
+- Glavni set **132 / 0** (šest novih testova ekrana), banka set **205 / 0**
+  (novi test formata računa je prvo pušten crven nad zatečenim ponašanjem,
+  pa zelen posle ispravke); statičke provere čiste; sedamnaest novih
+  namernih kvarova obara po tačno jedan imenovani test i vraća se
+  bit-identično (dvosmerni dokaz).
 - Fixture je dobio slučajeve bez kojih bi tvrdnje merile prazan skup:
   kooperant sa žiro računom, delimično isplaćen blok, storniran blok.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
