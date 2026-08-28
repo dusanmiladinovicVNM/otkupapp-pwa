@@ -1949,8 +1949,13 @@ End Sub
 '
 ' Izdvojeno iz LoadKoopRang da isti racun mogu da koriste i legacy panel i novi
 ' ekran (modScrDokumenti), umesto da se agregacija prepisuje na dva mesta.
+' Opsezne granice (odN/doN, serijski dani) su Optional: bez njih vazi staro
+' pravilo "tekuca godina" (legacy panel i Dokumenti nepromenjeni); ekran
+' Izvestaji salje svoj Od-Do, pa rang postuje isti period kao ostale liste.
 Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
-                             ByRef emptyKg As Double, ByRef emptyVal As Double) As Variant
+                             ByRef emptyKg As Double, ByRef emptyVal As Double, _
+                             Optional ByVal odN As Double = 0, _
+                             Optional ByVal doN As Double = 0) As Variant
     On Error GoTo EH
     rawKg = 0: rawVal = 0: emptyKg = 0: emptyVal = 0
     Dim yr As Integer: yr = Year(Date)
@@ -1968,9 +1973,20 @@ Public Function KoopRangRows(ByRef rawKg As Double, ByRef rawVal As Double, _
     If cKoop = 0 Or cKol = 0 Or cCena = 0 Then Exit Function
 
     Dim agg As Object: Set agg = CreateObject("Scripting.Dictionary")
-    Dim i As Long
+    Dim i As Long, uKrug As Boolean, dSer As Double
     For i = 1 To UBound(data, 1)
-        If cDat = 0 Or RowYear(data(i, cDat)) = yr Then
+        If odN > 0 Or doN > 0 Then
+            uKrug = False
+            If cDat > 0 Then
+                If IsDate(data(i, cDat)) Then
+                    dSer = Int(CDbl(CDate(data(i, cDat))))
+                    uKrug = (odN = 0 Or dSer >= odN) And (doN = 0 Or dSer <= doN)
+                End If
+            End If
+        Else
+            uKrug = (cDat = 0 Or RowYear(data(i, cDat)) = yr)
+        End If
+        If uKrug Then
             Dim kg As Double: kg = NumVal(data(i, cKol))
             Dim vred As Double: vred = kg * NumVal(data(i, cCena))
             rawKg = rawKg + kg

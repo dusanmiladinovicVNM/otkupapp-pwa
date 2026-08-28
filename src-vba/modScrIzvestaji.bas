@@ -67,7 +67,7 @@ Private Const IZ_DET_W    As Single = 320
 Private Const IZ_DET_N    As Long = 6
 Private Const IZ_POLJA_MIN As Single = 470
 
-' Kljucevi deset lista.
+' Kljucevi jedanaest lista.
 Private Const IZ_SALDO As String = "SALDO"
 Private Const IZ_ROBA As String = "ROBA"
 Private Const IZ_AMB As String = "AMBALAZA"
@@ -78,6 +78,7 @@ Private Const IZ_MANJAK As String = "MANJAK"
 Private Const IZ_KART As String = "KARTICA"
 Private Const IZ_AMBK As String = "AMBKARTICA"
 Private Const IZ_OTKL As String = "OTKLISTE"
+Private Const IZ_RANG As String = "RANG"
 
 ' Labele specijalnih redova Report* povratka -- ISTI literali koje modIzvestaj
 ' upisuje (RF-06: "Labele su ASCII jer se po njima traze redovi"). Ako se tamo
@@ -193,6 +194,7 @@ Public Function IzListeZaTip(ByVal tip As String) As Variant
         IZ_MANJAK & "|OTKUI_SEG_IZ_MANJAK|OTKUI_GRID_TITLE_IZ_MANJAK|58", _
         IZ_KART & "|OTKUI_SEG_IZ_KART|OTKUI_GRID_TITLE_IZ_KART|58", _
         IZ_AMBK & "|OTKUI_SEG_IZ_AMBK|OTKUI_GRID_TITLE_IZ_AMBK|82", _
+        IZ_RANG & "|OTKUI_SEG_IZ_RANG|OTKUI_GRID_TITLE_IZ_RANG|48", _
         IZ_OTKL & "|OTKUI_SEG_IZ_OTKL|OTKUI_GRID_TITLE_IZ_OTKL|82")
     ReDim res(0 To UBound(sve))
     n = 0
@@ -370,6 +372,11 @@ Public Function IzListaDostupna(ByVal kljuc As String, ByVal tip As String, _
             IzListaDostupna = (tip = "OM" And Not zbirni)
         Case IZ_AMBK
             IzListaDostupna = (tip = "Kooperant" And Not zbirni)
+        Case IZ_RANG
+            ' Rang je nad SVIM kooperantima firme (legacy "Lista kooperanata"
+            ' sa Unosa dokumenata, ovde uz period zone) -- izabrani entitet
+            ' ga se ne tice, pa vazi u oba rezima tipa Kooperant.
+            IzListaDostupna = (tip = "Kooperant")
         Case Else
             pg = IzListaTab(kljuc, tip)
             If pg < 0 Then Exit Function
@@ -679,6 +686,15 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String) As V
                 "OTKUI_HD_KG||kg|84|1", _
                 "OTKUI_HD_VREDNOST||rsd|96|1", _
                 "OTKUI_HDI_REF||txt|1|4")
+        Case IZ_RANG
+            ' Rang | Kooperant | Otkupno mesto | Iznos | [KOP|id] -- isti
+            ' kljucevi kao lista KOOPERANTI na Dokumentima (deljeni katalog).
+            IzKoloneZaListu = Array( _
+                "OTKUI_HDK_RANG||num|54|2", _
+                "OTKUI_HDK_KOOPERANT||txt|0|1", _
+                "OTKUI_HD_OM||txt|150|2", _
+                "OTKUI_HDK_IZNOS||rsd|130|1", _
+                "OTKUI_HDI_REF||txt|1|4")
     End Select
 End Function
 
@@ -716,8 +732,10 @@ Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Var
 
     ' 2) Pojedinacni rezim bez izabranog entiteta -- legacy guard
     '    ("Izaberite entitet"), samo kao prazna lista + hint umesto MsgBox-a.
+    '    RANG je izuzet: lista je nad SVIM kooperantima, entitet ne ucestvuje
+    '    ni u racunu ni u kljucu snimka.
     iD = ""
-    If Not zbirni Then
+    If Not zbirni And kljuc <> IZ_RANG Then
         iD = IzabraniEntitet()
         If Len(iD) = 0 Then
             mHintKljuc = "OTKUI_IZ_HINT_IZABERI"
@@ -812,6 +830,17 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
         Case IZ_KART:   PuniSnimak = ReportKarticaKooperanta(iD, dOd, dDo)
         Case IZ_AMBK:   PuniSnimak = ReportKarticaAmbalaze(iD, dOd, dDo)
         Case IZ_OTKL:   PuniSnimak = ReportOtkupListe(iD, dOd, dDo)
+        Case IZ_RANG
+            ' Isti racun kao "Kooperanti po iznosu otkupa" na Unosu
+            ' dokumenata (modOtkupBlok.KoopRangRows) -- ovde sa periodom
+            ' zone umesto fiksne tekuce godine. Kontrolne sume racunu ne
+            ' trebaju za prikaz.
+            ' Granice idu kao PUN opseg (dOd/dDo), nikad 0: 0/0 bi u racunu
+            ' znacilo legacy "tekuca godina", a prazna polja zone svuda na
+            ' ekranu znace "sve".
+            Dim rKg As Double, rVal As Double, eKg As Double, eVal As Double
+            PuniSnimak = modOtkupBlok.KoopRangRows(rKg, rVal, eKg, eVal, _
+                                                   CDbl(dOd), CDbl(dDo))
     End Select
 End Function
 
@@ -983,6 +1012,8 @@ Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
         Case IZ_KART
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & NzS(src(i, 4))
         Case IZ_AMBK
+            HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
+        Case IZ_RANG
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
         Case IZ_OTKL
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3)) & "|" & _
@@ -1172,6 +1203,15 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
             outA(n, 8) = NzS(src(i, 8))            ' "OTK|<id>"
             sumKg = sumKg + NzD(src(i, 6))
             sumVal = sumVal + NzD(src(i, 7))
+        Case IZ_RANG
+            ' Rang je mesto na CELOJ listi (i = indeks u sortiranom snimku),
+            ' ne redni broj posle pretrage -- isti razlog kao na Dokumentima.
+            outA(n, 1) = i
+            outA(n, 2) = NzS(src(i, 2))
+            outA(n, 3) = NzS(src(i, 3))
+            outA(n, 4) = NzD(src(i, 4))
+            outA(n, 5) = "KOP|" & NzS(src(i, 1))
+            sumVal = sumVal + NzD(src(i, 4))
     End Select
 End Sub
 
@@ -2105,6 +2145,7 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String) As Vari
         Case IZ_KART:   IzSabirljive = Array(4, 5)     ' promet; NIKAD saldo (6, 7)
         Case IZ_AMBK:   IzSabirljive = Array(4, 5)     ' ulaz/izlaz; NIKAD saldo (6)
         Case IZ_OTKL:   IzSabirljive = Array(6, 7)
+        Case IZ_RANG:   IzSabirljive = Array(4)        ' iznos; rang broj nikad
         Case Else:      IzSabirljive = Array()
     End Select
 End Function

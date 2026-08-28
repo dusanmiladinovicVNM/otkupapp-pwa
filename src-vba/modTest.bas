@@ -384,6 +384,7 @@ Public Sub RunAllTests()
     RunOne 142
     RunOne 143
     RunOne 144
+    RunOne 145
     RunOne 124
     RunOne 125
     RunOne 126
@@ -565,6 +566,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 142: TestName = "T_KesGeneracija_UpisInvalidira"
         Case 143: TestName = "T_Izv_DetaljICipKontekst"
         Case 144: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
+        Case 145: TestName = "T_Izv_RangKooperanata"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -717,6 +719,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 142: T_KesGeneracija_UpisInvalidira
         Case 143: T_Izv_DetaljICipKontekst
         Case 144: T_Izv_TabKontekstRobaKupacSaldo
+        Case 145: T_Izv_RangKooperanata
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -9289,7 +9292,8 @@ Private Sub T_Izv_UgovorEkrana()
             unija(Split(CStr(liste(i)), "|")(0)) = True
         Next i
     Next t
-    AssertEq unija.count, 10, "deset lista deljene mreze (unija po tipovima)"
+    AssertEq unija.count, 11, _
+             "jedanaest lista deljene mreze (unija po tipovima; +RANG od kruga 8)"
     For Each k2 In unija.Keys
         kljuc = CStr(k2)
         kolone = modScrIzvestaji.IzKoloneZaListu(kljuc, "OM")
@@ -10514,6 +10518,73 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
     AssertEq Format$(NzD2(modScrIzvestaji.Scr_IzZonaBrojkaTest("kartsaldo")), "0"), _
              Format$(IzvAmbSaldo(FX_KOOPERANT, "Kooperant"), "0"), _
              "amb kartica zona saldo = kanonski saldo kooperanta"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 145. Izvestaji: RANG kooperanata (smoke krug 6) -- isti racun kao
+' "Kooperanti po iznosu otkupa" na Unosu dokumenata, ovde uz period zone.
+' ============================================================
+Private Sub T_Izv_RangKooperanata()
+    Dim s As String, d As Variant, redovi As Variant
+    Dim n As Long, i As Long, sumVal As Double
+
+    ' (1) Tab postoji SAMO za tip Kooperant (oba rezima -- rang ne zavisi
+    ' od izabranog entiteta), i ne dira prvu listu tipa (kartica).
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Kooperant"))
+    AssertEq (InStr(1, s, "|RANG|") > 0), True, "kooperant nudi rang listu"
+    s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("OM"))
+    AssertEq (InStr(1, s, "|RANG|") = 0), True, "OM ne nudi rang listu"
+    AssertEq modScrIzvestaji.IzListaDostupna("RANG", "Kooperant", True), True, _
+             "rang postoji i u zbirnom rezimu"
+
+    ' (2) Rang BEZ izabranog entiteta daje redove (guard entiteta ga se ne
+    ' tice) i slaze se sa rucnim prolazom kroz tblOtkup u opsegu.
+    modScrIzvestaji.Scr_IzTestSet "RANG", "Kooperant", False, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    sumVal = CDbl(d(4))
+    redovi = d(1)
+    Dim otk As Variant, cKoop As Long, cKol As Long, cCe As Long
+    Dim cDat As Long, cStorno As Long
+    Dim koopSet As Object, rVal As Double, dv As Date
+    Set koopSet = CreateObject("Scripting.Dictionary")
+    otk = GetTableData(TBL_OTKUP)
+    cKoop = GetColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cCe = GetColumnIndex(TBL_OTKUP, COL_OTK_CENA)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    For i = 1 To UBound(otk, 1)
+        If CStr(otk(i, cStorno)) <> "Da" And Len(Trim$(CStr(otk(i, cKoop)))) > 0 Then
+            If IsDate(otk(i, cDat)) Then
+                dv = CDate(otk(i, cDat))
+                If dv >= IzvOdD() And dv <= IzvDoD() Then
+                    koopSet(Trim$(CStr(otk(i, cKoop)))) = True
+                    rVal = rVal + CDbl(otk(i, cKol)) * CDbl(otk(i, cCe))
+                End If
+            End If
+        End If
+    Next i
+    AssertEq (koopSet.count > 1), True, "vozilo: vise kooperanata sa otkupom"
+    AssertEq n, koopSet.count, _
+             "rang broji tacno kooperante sa otkupom u opsegu"
+    AssertEq Format$(sumVal, "0.00"), Format$(rVal, "0.00"), _
+             "zbir ranga = rucni zbir kg x cena iz tblOtkup"
+    ' Sortiranost: iznos ne raste niz listu; rang broj = pozicija.
+    For i = 2 To n
+        AssertEq (CDbl(redovi(i, 4)) <= CDbl(redovi(i - 1, 4))), True, _
+                 "rang je sortiran opadajuce po iznosu"
+    Next i
+    AssertEq CLng(redovi(1, 1)), 1, "prvi red nosi rang 1"
+    AssertEq Left$(CStr(redovi(1, 5)), 4), "KOP|", _
+             "red ranga nosi KOP identitet za buduci drill"
+
+    ' (3) Rang POSTUJE period: opseg pre svih otkupa = prazna lista.
+    modScrIzvestaji.Scr_IzTestSet "RANG", "Kooperant", False, "", _
+                                  CDbl(DateSerial(1990, 1, 1)), CDbl(DateSerial(1990, 12, 31))
+    d = modScrIzvestaji.Scr_Rows("", "")
+    AssertEq CLng(d(2)), 0, "rang postuje period -- prazan opseg nema redove"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

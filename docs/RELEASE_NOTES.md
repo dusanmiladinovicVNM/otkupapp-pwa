@@ -6540,6 +6540,11 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - **Kolone štampanog PDF-a više nisu razvučene** — širina kolone prati
   sadržaj i naslov kolone (datum je uzak, naslovi se ne lome usred reči);
   zaglavlje firme više ne razvlači prvu kolonu.
+- **Rang kooperanata i u Izveštajima** — uz Karticu i Amb. karticu, tip
+  Kooperanti ima i tab „Rang": ista lista kao „Kooperanti po iznosu
+  otkupa" na Unosu dokumenata, ali za period izabran u zoni (ne samo
+  tekuća godina); radi i bez izabranog kooperanta, sa pretragom,
+  sortiranjem i house PDF-om.
 
 ### Šta NIJE urađeno, i zašto
 

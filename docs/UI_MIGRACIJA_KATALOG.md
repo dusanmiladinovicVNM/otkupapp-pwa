@@ -4760,6 +4760,23 @@ smoke-a, obe u istom principu „samo ono što red ne kaže":
   `claude/sledljivost-ekran` i tamo se nastavlja — jedna sesija po
   radnom stablu.
 
+**Krug 8 — Rang kooperanata (smoke krug 6):**
+
+Za tip Kooperanti treći tab, **Rang** — legacy „Lista kooperanata" /
+„Kooperanti po iznosu otkupa" sa Unosa dokumenata, ovde uz **period
+zone** umesto fiksne tekuće godine. Račun ostaje jedan:
+`modOtkupBlok.KoopRangRows` je dobio Optional granice (bez njih staro
+ponašanje — legacy panel i lista na Dokumentima bit-identični; Izveštaji
+šalju pun opseg, nikad 0/0). Lista: Rang | Kooperant | Otkupno mesto |
+Iznos + `KOP|` identitet (prio 4, za budući drill na karticu); rang broj
+je pozicija na celoj listi (pretraga ga ne prepakuje — isto pravilo kao
+na Dokumentima); dostupna u oba režima (rang ne zavisi od izabranog
+entiteta, pa je guard entiteta preskočen). Test 145: broj redova = broj
+kooperanata sa otkupom u opsegu (ručni prolaz `tblOtkup`), zbir = ručni
+Σ kg×cena, sortiranost opadajuća, rang 1 na vrhu, period se poštuje
+(1990. opseg = prazno); sabotaža `izvestaji-rang-mimo-perioda` (grana
+perioda u `KoopRangRows` — legacy pozivaoci je ne dodiruju).
+
 ### 23.14 Verifikacija
 
 - `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su

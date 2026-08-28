@@ -3479,6 +3479,17 @@ SABOTAZE = {
         "T_Izv_TabKontekstRobaKupacSaldo",
         "zona saldo = zavrsni running saldo kartice",
     ),
+    # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
+    # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
+    # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne
+    # dodiruju, pa pada samo test ranga u Izvestajima.
+    "izvestaji-rang-mimo-perioda": (
+        "modOtkupBlok.bas",
+        "                    uKrug = (odN = 0 Or dSer >= odN) And (doN = 0 Or dSer <= doN)\n",
+        "                    uKrug = True   ' SABOTAZA: rang ignorise period\n",
+        "T_Izv_RangKooperanata",
+        "rang postuje period -- prazan opseg nema redove",
+    ),
     # ------------------------------------------------------------------
     # Smoke krug 3 (Izvestaji): kontekstni cipovi, detalj reda, poslovni
     # broj dokumenta u pregledu ambalaze.
