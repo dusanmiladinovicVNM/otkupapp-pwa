@@ -124,6 +124,14 @@ Private mKpiOK As Boolean
 ' se combo ne moze procitati. Vazi SAMO u test rezimu.
 Private mRacunTest As String
 
+' Poslednji poziv Scr_Rows -- SAMO za Diag_BnRedovi (smoke 3: "filter ne
+' radi"). Presudjuje da li upit pretrage uopste stize ekranu, sta ekran
+' vraca, i pod kojim cipom -- bez ovoga se gubitak upita PRE ekrana i kvar
+' POSLE ekrana (prikaz) ne razlikuju.
+Private mDiagFilter As String
+Private mDiagQ As String
+Private mDiagN As Long
+
 '--------------------------------------------------------- UGOVOR EKRANA
 Public Function Scr_Meta() As String
     Scr_Meta = "kljuc=BANKA_NALOZI|naslov=OTKUI_NAV_BANKA_NALOZI|sub=OTKUI_SCRBN_SUB" & _
@@ -852,10 +860,19 @@ End Function
 ' REDOVI MREZE
 '=====================================================================
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
+    Dim rez As Variant
     ' Zona se puni odavde, kao na ostalim ugovornim ekranima: gradi se jednom,
     ' a podaci za nju postoje tek kad se lista cita.
     OsveziZonu
-    Scr_Rows = RedoviNalozi(filter, q)
+    rez = RedoviNalozi(filter, q)
+    Scr_Rows = rez
+
+    ' Trag za Diag_BnRedovi -- ne menja nista.
+    On Error Resume Next
+    mDiagFilter = filter
+    mDiagQ = q
+    mDiagN = CLng(rez(2))
+    Err.Clear
 End Function
 
 ' Opis kolona PO KLJUCU LISTE -- da se pravilo "identitet je u redu i ne crta
@@ -1403,6 +1420,11 @@ Public Sub Diag_BnRedovi()
     On Error Resume Next
 
     Debug.Print "--- Diag_BnRedovi (" & SCRBN_BUILD & ") ---"
+
+    ' PRE naseg poziva: sta je LJUSKA poslednje trazila i sta je dobila.
+    ' (Nas poziv ispod ce pregaziti trag -- zato se cita prvo.)
+    Debug.Print "  POSLEDNJI POZIV: filter=[" & mDiagFilter & "] q=[" & mDiagQ & _
+                "] vraceno redova=" & CStr(mDiagN)
 
     d = Scr_Rows("sve", "")
     If Not IsArray(d) Then
