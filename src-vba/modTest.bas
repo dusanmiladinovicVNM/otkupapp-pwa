@@ -8654,6 +8654,24 @@ Private Sub T_BankaNalozi_UgovorEkrana()
     d = modScrBankaNalozi.Scr_Rows("sve", "xyzupitkoginema")
     AssertEq CLng(d(2)), 0, "besmislen upit i dalje daje prazan skup"
 
+    ' PRETRAGA NE PLACA PUN PROLAZ PO OTKUCAJU (smoke 3: na 1.500+ blokova je
+    ' svaki otkucaj citao cele tabele, ekran se smrzavao ~10 s i filter je
+    ' delovao mrtvo iako je model bio tacan -- izmereno Diag_BnRedovi). Snimak
+    ' se cita JEDNOM, re-filter ide nad njim (legacy m_FullBlokovi obrazac);
+    ' upis (Scr_ResetCache kroz RefreshFromData) ga invalidira. Izvoz kes NE
+    ' koristi -- BlokoviZaIzvoz cita svez saldo.
+    modScrBankaNalozi.Scr_BnTestReset
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    d = modScrBankaNalozi.Scr_Rows("sve", "sarc")
+    d = modScrBankaNalozi.Scr_Rows("sve", "sarce")
+    d = modScrBankaNalozi.Scr_Rows("imarac", "")
+    AssertEq modScrBankaNalozi.Scr_BnSnimakPunjenjaTest(), 1, _
+             "pretraga i cipovi ne placaju pun prolaz -- snimak se cita jednom"
+    modScrBankaNalozi.Scr_ResetCache
+    d = modScrBankaNalozi.Scr_Rows("sve", "")
+    AssertEq modScrBankaNalozi.Scr_BnSnimakPunjenjaTest(), 2, _
+             "upis invalidira snimak -- sledece citanje ide u tabele"
+
     modScrBankaNalozi.Scr_BnTestReset
 End Sub
 

@@ -3158,6 +3158,21 @@ SABOTAZE = {
         "T_BankaNalozi_KorpaIIzvoz",
         "blok bez racuna izlazi iz izbora pri citanju",
     ),
+    # Snimak liste se cita JEDNOM pa se filtrira -- pun prolaz kroz tabele po
+    # otkucaju je na 1.500+ blokova smrzavao ekran ~10 s po slovu i pretraga
+    # je delovala mrtvo (smoke 3, izmereno Diag_BnRedovi).
+    "banka-nalozi-pretraga-puni-iznova": (
+        "modScrBankaNalozi.bas",
+        "    If Not mSnimakOK Then\n"
+        "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
+        "        mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()\n"
+        "        mSnimakOK = True\n"
+        "    End If\n",
+        "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
+        "    mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()\n",
+        "T_BankaNalozi_UgovorEkrana",
+        "pretraga i cipovi ne placaju pun prolaz -- snimak se cita jednom",
+    ),
     # Imena u podacima nose kvake; operater na DE/EN tastaturi kuca bez njih.
     # Haystack bez normalizacije = pretraga koja "ne radi" (smoke 28.08).
     "banka-nalozi-pretraga-sa-kvakama": (

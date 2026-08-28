@@ -120,6 +120,21 @@ Private mRacunPunjen As Boolean
 Private mKpi As Variant
 Private mKpiOK As Boolean
 
+' KES SNIMKA LISTE za prikaz i filtriranje -- legacy m_FullBlokovi obrazac
+' (frmBankaExportPregled: "LAGANI re-filter nad vec ucitanom listom, bez
+' citanja tabela"). Bez njega SVAKI otkucaj u pretrazi placa pun
+' BuildBlokIsplataList (na 1.500+ otkupa vise sekundi po slovu), pa je na
+' pravoj svesci pretraga delovala mrtvo iako je model bio tacan -- izmereno
+' kroz Diag_BnRedovi (smoke 3: q stize, 38 redova vraceno i drzano, a
+' operater vidi zamrznut ekran). Invalidira ga Scr_ResetCache, koji ljuska
+' zove posle SVAKOG upisa (RefreshFromData) -- IZVOZ ovaj kes NE koristi:
+' BlokoviZaIzvoz i finalna kapija citaju svez saldo, kao i do sada.
+Private mSnimak As Variant
+Private mSnimakOK As Boolean
+' Broj stvarnih citanja tabela -- bez njega se kes ne moze izmeriti (isti
+' razlog kao mCiljPunjenja na Uvozu izvoda: broji se POZIV, ne uspeh).
+Private mSnimakPunjenja As Long
+
 ' Izbor koji je postavio TEST. Zone u testu nema (forma se ne prikazuje), pa
 ' se combo ne moze procitati. Vazi SAMO u test rezimu.
 Private mRacunTest As String
@@ -220,6 +235,8 @@ End Function
 Public Sub Scr_ResetCache()
     ' mKpi se NE brise, samo proglasava zastarelim -- v. Kpi.
     mKpiOK = False
+    ' Snimak liste zastareva na svaki upis -- sledece citanje ide u tabele.
+    mSnimakOK = False
     ' Racuni firme u configu su se mogli promeniti (Podesavanja idu kroz upis,
     ' a upis kroz RefreshFromData -> ResetCache). Combo se puni ponovo, uz
     ' cuvanje izbora -- v. PuniRacunCombo.
@@ -923,7 +940,7 @@ Private Function RedoviNalozi(ByVal filter As String, ByVal q As String) As Vari
 
     On Error GoTo EH
 
-    src = modBankaExportPregled.GetBlokIsplataForGrid()
+    src = Snimak()
     If Not IsArray(src) Then
         ' Nema otvorenih blokova -- ni korpa ni zadati iznosi nemaju nad cim
         ' da stoje.
@@ -1001,6 +1018,18 @@ EH:
     errNum = Err.Number
     errDesc = Err.description
     Err.Raise errNum, "modScrBankaNalozi.RedoviNalozi", errDesc
+End Function
+
+' Snimak liste: iz tabela SAMO kad je zastareo (posle upisa), inace iz kesa.
+' Pretraga i cipovi time postaju re-filter nad snimkom -- trenutni, kao u
+' legacy formi. Greska citanja se NE kesira (isti obrazac kao Kpi).
+Private Function Snimak() As Variant
+    If Not mSnimakOK Then
+        mSnimakPunjenja = mSnimakPunjenja + 1
+        mSnimak = modBankaExportPregled.GetBlokIsplataForGrid()
+        mSnimakOK = True
+    End If
+    Snimak = mSnimak
 End Function
 
 ' Izbacivanje iz korpe se PRIJAVLJUJE -- tiho smanjenje izbora bi operater
@@ -1514,6 +1543,13 @@ Public Function Scr_BnIznosPostojiTest(ByVal otkupID As String) As Boolean
     Scr_BnIznosPostojiTest = Iznosi().Exists(otkupID)
 End Function
 
+' Koliko je puta snimak STVARNO citan iz tabela -- jedini nacin da se izmeri
+' da pretraga ne placa pun prolaz po otkucaju (smoke 3).
+Public Function Scr_BnSnimakPunjenjaTest() As Long
+    If Not IsTestMode() Then Exit Function
+    Scr_BnSnimakPunjenjaTest = mSnimakPunjenja
+End Function
+
 Public Sub Scr_BnTestReset()
     If Not IsTestMode() Then Exit Sub
     mLista = BN_NALOZI
@@ -1521,5 +1557,6 @@ Public Sub Scr_BnTestReset()
     Set mIznosi = Nothing
     mRacunTest = ""
     mRacunPunjen = False
+    mSnimakPunjenja = 0
     Scr_ResetCache
 End Sub
