@@ -314,7 +314,8 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
                 ' implementirana a neponudjena u UI (par. 23.7).
                 Select Case pageIdx
                     Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _
-                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA
+                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA, _
+                         IZV_TAB_OTKUP_ROBA
                         IzvestajTabDostupan = True
                 End Select
             Case "Kupac"
@@ -335,12 +336,15 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
                 ' izvestaj (poslovna odluka), ne UI podesavanje. Gate:
                 ' T_E2E_ProsecnaCenaZbirniKupac. AMBALAZA zbirno = legacy
                 ' agregat po tipu za izabranog (krug 9).
+                ' + OTKUP_ROBA (krug 12): otpremljeno PO VOZACU.
                 Select Case pageIdx
-                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _
+                         IZV_TAB_OTKUP_ROBA
                         IzvestajTabDostupan = True
                 End Select
             Case Else
-                ' Kooperant: zbirni izvestaj ne postoji ni u jednom Report*.
+                ' Kooperant: zbirni izvestaj ne postoji ni u jednom Report*
+                ' (odluka i kruga 12: rang JE njihov zbirni pogled).
                 IzvestajTabDostupan = False
         End Select
         Exit Function
@@ -1775,6 +1779,92 @@ Public Function ReportRobaKupciZbirni(ByVal datumOd As Date, _
     outA(n + 1, 3) = totKg
     outA(n + 1, 4) = totVr
     ReportRobaKupciZbirni = IzvIseciRedove(outA, n + 1, 4)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po OM zbirno (krug 12): kg i vrednost su TACNO kolone 3 i 4
+' zbirnog salda po stanicama -- projekcija istog izvora, ne drugi racun
+' ("tu realno idu podaci o robi koji su vec u saldu").
+' (1)=StanicaID (2)=Naziv (3)=Kg (4)=Vrednost; poslednji red = UKUPNO.
+Public Function ReportRobaOMZbirni(ByVal datumOd As Date, _
+                                   ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaOMZbirni"
+    On Error GoTo EH
+    Dim s As Variant, outA() As Variant, i As Long, j As Long
+    s = ReportSaldoOMZbirni(datumOd, datumDo)
+    If Not IsArray(s) Then Exit Function
+    ReDim outA(1 To UBound(s, 1), 1 To 4)
+    For i = 1 To UBound(s, 1)
+        For j = 1 To 4
+            outA(i, j) = s(i, j)
+        Next j
+    Next i
+    ReportRobaOMZbirni = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po VOZACU zbirno (krug 12): otpremljeno -- Sum kg i Sum kg*cena
+' nestorniranih otpremnica u opsegu, po vozacu; naziv iz tblVozaci sa
+' fallback-om na ID. (1)=VozacID (2)=Naziv (3)=Kg (4)=Vrednost; UKUPNO.
+Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaVozaciZbirni"
+    On Error GoTo EH
+
+    Dim d As Variant, i As Long
+    Dim cVoz As Long, cKol As Long, cCen As Long, cDat As Long, cStorno As Long
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
+    cCen = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA, SRC)
+    cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+
+    Dim kg As Object, vr As Object, k As String, dv As Date
+    Set kg = CreateObject("Scripting.Dictionary")
+    Set vr = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            If IsDate(d(i, cDat)) Then
+                dv = CDate(d(i, cDat))
+                If dv >= datumOd And dv <= datumDo Then
+                    k = Trim$(CStr(d(i, cVoz)))
+                    If Len(k) > 0 Then
+                        kg(k) = IzvNum(kg(k)) + IzvNum(d(i, cKol))
+                        vr(k) = IzvNum(vr(k)) + IzvNum(d(i, cKol)) * IzvNum(d(i, cCen))
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    If kg.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long, nm As String
+    Dim totKg As Double, totVr As Double
+    ReDim outA(1 To kg.count + 1, 1 To 4)
+    For Each kk In kg.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", CStr(kk), "Ime"))) & _
+                   " " & Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", CStr(kk), "Prezime"))))
+        On Error GoTo EH
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+        outA(n, 3) = IzvNum(kg(kk))
+        outA(n, 4) = IzvNum(vr(kk))
+        totKg = totKg + IzvNum(outA(n, 3))
+        totVr = totVr + IzvNum(outA(n, 4))
+    Next kk
+    outA(n + 1, 2) = "UKUPNO"
+    outA(n + 1, 3) = totKg
+    outA(n + 1, 4) = totVr
+    ReportRobaVozaciZbirni = outA
     Exit Function
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE

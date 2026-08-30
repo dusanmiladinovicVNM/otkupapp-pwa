@@ -9434,6 +9434,10 @@ Private Sub T_Izv_MatricaVodiListe()
              "roba po kupcu zbirno (krug 11)"
     AssertEq modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Kupac", True), "", _
              "zbirna roba po kupcu nema radnju -- agregat bez dokumenta"
+    AssertEq modScrIzvestaji.IzListaDostupna("ROBA", "OM", True), True, _
+             "roba po OM zbirno (krug 12)"
+    AssertEq modScrIzvestaji.IzListaDostupna("ROBA", "Vozac", True), True, _
+             "roba po vozacu zbirno (krug 12)"
 
     ' Nedostupna kombinacija: lista POSTOJI, 0 redova, hint kaze ZASTO --
     ' nikad pun naslov nad trajno praznom listom, ali ni tiho nestajanje.
@@ -10482,7 +10486,10 @@ Private Sub T_Izv_TabKontekstRobaKupacSaldo()
     AssertEq Split(CStr(liste(0)), "|")(0), "KARTICA", _
              "prva lista za kooperanta je kartica"
     s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Vozac"))
-    AssertEq (InStr(1, s, "|ROBA|") = 0), True, "vozac nema robu ni u jednom rezimu"
+    AssertEq (InStr(1, s, "|ROBA|") > 0), True, _
+             "vozac ima robu (zbirno po vozacu, krug 12)"
+    AssertEq modScrIzvestaji.IzListaDostupna("ROBA", "Vozac", False), False, _
+             "roba za vozaca pojedinacno i dalje ne postoji"
     s = IzvSpojKljuceve(modScrIzvestaji.IzListeZaTip("Kupac"))
     AssertEq (InStr(1, s, "|ISPLATA|") = 0), True, "kupac nema isplatu"
     AssertEq (InStr(1, s, "|ROBA|") > 0), True, "kupac ima robu (prijemnice)"
@@ -10786,6 +10793,53 @@ Private Sub T_Izv_ZbirniSadrzaj()
         End If
     Next i
     AssertEq nasla, True, "red za KUP-TEST-1 postoji u robi po kupcu"
+
+    ' (3c) Roba po OM zbirno = PROJEKCIJA zbirnog salda (kg = isti rucni
+    ' prolaz kroz tblOtkup za STA-TEST-2); roba po vozacu = rucni zbir
+    ' nestorniranih otpremnica u opsegu (krug 12).
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "OM", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 4)), FX_STANICA_B, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rKg, "0.00"), _
+                     "roba po OM: kg stanice = rucni prolaz tblOtkup"
+        End If
+    Next i
+    AssertEq nasla, True, "red za STA-TEST-2 postoji u robi po OM"
+    Dim otp2 As Variant, cV2 As Long, cQ3 As Long, cD3 As Long, cS3 As Long
+    Dim rvKg As Double
+    otp2 = GetTableData(TBL_OTPREMNICA)
+    cV2 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
+    cQ3 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cD3 = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    cS3 = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+    For i = 1 To UBound(otp2, 1)
+        If Trim$(CStr(otp2(i, cV2))) = FX_VOZAC And CStr(otp2(i, cS3)) <> "Da" Then
+            If IsDate(otp2(i, cD3)) Then
+                If CDate(otp2(i, cD3)) >= IzvOdD() And CDate(otp2(i, cD3)) <= IzvDoD() Then
+                    rvKg = rvKg + CDbl(otp2(i, cQ3))
+                End If
+            End If
+        End If
+    Next i
+    AssertEq (rvKg > 0), True, "vozilo: vozac ima otpremnice u opsegu"
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "Vozac", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 4)), FX_VOZAC, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rvKg, "0.00"), _
+                     "roba po vozacu: kg = rucni zbir otpremnica"
+        End If
+    Next i
+    AssertEq nasla, True, "red za VOZ-TEST-1 postoji u robi po vozacu"
 
     ' (4) Auto-prelaz pri promeni rezima: sa liste koje u novom rezimu nema
     ' prelazi se na prvu dostupnu -- nikad prazan ekran kao prvi utisak.

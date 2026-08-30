@@ -905,10 +905,17 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             End If
         Case IZ_ROBA
             ' Kupac gleda dokumenta (prijemnice), ne agregat po vrsti --
-            ' agregat vec daje tab Zbirni (smoke krug 4). Zbirno (krug 11):
-            ' roba PO KUPCU -- UKUPNO red kupcevog agregata.
-            If zbirni And tip = "Kupac" Then
-                PuniSnimak = ReportRobaKupciZbirni(dOd, dDo)
+            ' agregat vec daje tab Zbirni (smoke krug 4). Zbirno: roba PO
+            ' ENTITETU -- OM iz zbirnog salda (krug 12), kupci iz agregata
+            ' (krug 11), vozaci iz otpremnica (krug 12).
+            If zbirni Then
+                If tip = "Kupac" Then
+                    PuniSnimak = ReportRobaKupciZbirni(dOd, dDo)
+                ElseIf tip = "Vozac" Then
+                    PuniSnimak = ReportRobaVozaciZbirni(dOd, dDo)
+                Else
+                    PuniSnimak = ReportRobaOMZbirni(dOd, dDo)
+                End If
             ElseIf tip = "Kupac" Then
                 PuniSnimak = ReportPrijemniceKupca(iD, dOd, dDo)
             Else
@@ -1157,7 +1164,8 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
             outA(n, zc - 1) = NzD(src(i, zc))
         Next zc
         outA(n, nSrcK) = IIf(Len(NzS(src(i, 1))) > 0, _
-                             IIf(tip = "Kupac", "KUP|", "OM|") & NzS(src(i, 1)), "")
+                             IIf(tip = "Kupac", "KUP|", _
+                                 IIf(tip = "Vozac", "VOZ|", "OM|")) & NzS(src(i, 1)), "")
         If Not jeUkupno Then
             If kljuc = IZ_SALDO Then
                 sumKg = sumKg + NzD(src(i, 3))

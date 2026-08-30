@@ -4827,6 +4827,21 @@ sabotaža `izvestaji-kupci-zbirno-van-matrice`. T146 dopune: red kupca =
 UKUPNO pojedinačnog salda (kg, saldo), roba po kupcu = ručni zbir
 prijemnica.
 
+**Krug 12 (smoke kruga 11 — „roba po OM u zbirnom; i vozači"):**
+**ROBA zbirno za OM** = projekcija zbirnog salda (`ReportRobaOMZbirni`
+vraća kolone 1–4 `ReportSaldoOMZbirni` — kg i vrednost su isti izvor,
+ne drugi račun, tačno kako je operater primetio); **ROBA zbirno za
+VOZAČE** = otpremljeno po vozaču (`ReportRobaVozaciZbirni`: Σ kg i
+Σ kg×cena nestorniranih otpremnica u opsegu, naziv iz `tblVozaci` sa
+fallback-om na ID, `VOZ|` identitet). Kooperanti zbirno ostaju bez
+robe/salda — Rang je njihov zbirni pogled (potvrđena odluka). Matrica:
+OM-Z i Vozač-Z + `OTKUP_ROBA`; sabotaže
+`izvestaji-vozaci-roba-van-matrice` i `izvestaji-roba-vozaci-storno`
+(storno filter koji tiho nestane duplira prevoz). T144 obrnuta istina
+(vozač IMA robu zbirno; pojedinačno i dalje ne); T146: roba po OM =
+isti ručni prolaz kao zbirni saldo, roba po vozaču = ručni zbir
+otpremnica.
+
 **Krug 10 (smoke kruga 9):** kontekst-linija zbirne Ambalaže je pisala
 „OM: Svi" dok je prikaz bio za podrazumevanog (prvog) entiteta —
 `EntitetNaziv` je za zbirni režim vraćao „Svi" pre provere da li lista

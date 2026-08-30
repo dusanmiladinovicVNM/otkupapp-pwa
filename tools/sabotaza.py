@@ -3489,6 +3489,33 @@ SABOTAZE = {
         "T_Izv_MatricaVodiListe",
         "saldo kupaca zbirno po kupcima (krug 11)",
     ),
+    # Roba po vozacu zbirno (krug 12): vracanje stare vozacke grane
+    # (bez OTKUP_ROBA) mora da padne po imenu.
+    "izvestaji-vozaci-roba-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _\n"
+        "                         IZV_TAB_OTKUP_ROBA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA   ' SABOTAZA: vozaci bez zbirne robe\n",
+        "T_Izv_MatricaVodiListe",
+        "roba po vozacu zbirno (krug 12)",
+    ),
+    # Roba po vozacu MERI otpremnice bez storniranih -- storno filter
+    # koji tiho nestane duplira prevoz.
+    "izvestaji-roba-vozaci-storno": (
+        "modIzvestaj.bas",
+        "        If cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\" Then\n"
+        "            If IsDate(d(i, cDat)) Then\n"
+        "                dv = CDate(d(i, cDat))\n"
+        "                If dv >= datumOd And dv <= datumDo Then\n"
+        "                    k = Trim$(CStr(d(i, cVoz)))\n",
+        "        If True Then   ' SABOTAZA: i stornirane otpremnice\n"
+        "            If IsDate(d(i, cDat)) Then\n"
+        "                dv = CDate(d(i, cDat))\n"
+        "                If dv >= datumOd And dv <= datumDo Then\n"
+        "                    k = Trim$(CStr(d(i, cVoz)))\n",
+        "T_Izv_ZbirniSadrzaj",
+        "roba po vozacu: kg = rucni zbir otpremnica",
+    ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
     # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne
@@ -3509,7 +3536,8 @@ SABOTAZE = {
     "izvestaji-zbirno-van-matrice": (
         "modIzvestaj.bas",
         "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _\n"
-        "                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA\n",
+        "                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA, _\n"
+        "                         IZV_TAB_OTKUP_ROBA\n",
         "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK   ' SABOTAZA: stara matrica\n",
         "T_Izv_MatricaVodiListe",
         "saldo zbirno po stanicama (OM)",

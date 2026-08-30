@@ -6550,7 +6550,10 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   Saldo i Roba i **po kupcima** (red = kupac: kg, vrednost, uplaćeno,
   saldo, ambalaža; roba po kupcu preko svih vrsta — kupci se čitaju iz
   prometa, pa se vidi i kupac koga nema u šifarniku); red = stanica,
-  iste kolone kao pojedinačni izveštaj, UKUPNO preko svih;
+  iste kolone kao pojedinačni izveštaj, UKUPNO preko svih; Roba zbirno
+  radi i **po stanicama** (iste kg/vrednost brojke kao zbirni Saldo —
+  jedan izvor) i **po vozačima** (otpremljeno: kg i vrednost otpremnica
+  po vozaču); Kooperanti zbirno namerno ostaju na Rangu;
   Ambalaža zbirno pokazuje stanje **po tipu gajbe za izabranog** (OM /
   kupca / vozača — jedina zbirna lista koja zato zadržava izbor
   entiteta); a klik na „Zbirno" više nikad ne ostavlja prazan ekran —
