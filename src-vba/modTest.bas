@@ -385,7 +385,7 @@ Public Sub RunAllTests()
     RunOne 143
     RunOne 144
     RunOne 145
-    RunOne 152
+    RunOne 146
     RunOne 124
     RunOne 125
     RunOne 126
@@ -568,7 +568,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 143: TestName = "T_Izv_DetaljICipKontekst"
         Case 144: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
         Case 145: TestName = "T_Izv_RangKooperanata"
-        Case 152: TestName = "T_Izv_ZbirniSadrzaj"
+        Case 146: TestName = "T_Izv_ZbirniSadrzaj"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -722,7 +722,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 143: T_Izv_DetaljICipKontekst
         Case 144: T_Izv_TabKontekstRobaKupacSaldo
         Case 145: T_Izv_RangKooperanata
-        Case 152: T_Izv_ZbirniSadrzaj
+        Case 146: T_Izv_ZbirniSadrzaj
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -10619,9 +10619,10 @@ Private Sub T_Izv_RangKooperanata()
 End Sub
 
 ' ============================================================
-' 152. Izvestaji krug 9: ZBIRNI SADRZAJ -- saldo/isplata po stanicama,
+' 146. Izvestaji krug 9: ZBIRNI SADRZAJ -- saldo/isplata po stanicama,
 ' zbirna ambalaza (legacy agregat po tipu), auto-prelaz liste pri promeni
-' rezima. (146-151 su testovi grane Sledljivost -- brojevi preskoceni.)
+' rezima. (Registar ne trpi rupe -- grana Sledljivost svoje testove
+' numerise od 147 pri rebase-u.)
 ' ============================================================
 Private Sub T_Izv_ZbirniSadrzaj()
     Dim d As Variant, redovi As Variant, n As Long, i As Long

@@ -4801,7 +4801,8 @@ ne širi"):
   režim): nikad prazan ekran sa hintom kao prvi utisak. Kooperant +
   „Zbirno" prelazi na Rang.
 
-Test 152 (146–151 su brojevi grane Sledljivost — preskočeni): red
+Test 146 (registar ne trpi rupe — CI kapija; grana Sledljivost svoje
+testove numeriše od 147 pri rebase-u): red
 STA-TEST-2 = ručni prolaz `tblOtkup` (kg) + tri kanala `tblNovac`
 (isplaćeno, obrazac T138) + sve kolone = UKUPNO pojedinačnog; zbirna
 ambalaža mreže = API zbirni red; auto-prelaz u oba smera. Tri sabotaže:
