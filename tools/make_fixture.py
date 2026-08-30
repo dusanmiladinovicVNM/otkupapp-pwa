@@ -250,6 +250,30 @@ PRERADA_STARA_ID = "PRE-TEST-Y25"
 # zaustavila ISPRAVKU (safe-stop) i test bi merio pogresnu stvar.
 PRIJEMNICA_ISPRAVKA = "3/150326"
 
+# EKRAN IZVESTAJI (Faza E/19). Dve rupe koje su tvrdnje slaganja do sada cinile
+# zelenima bez pokrica:
+#
+# 1) tblNovac nije imao NIJEDAN red sa OMID-om, nijedan KesOtkupacKoop i
+#    nijedan Firma->Otkupac avans -- ReportIsplata("OM", ...) je bio prazan,
+#    GetOMAvansSaldo svuda 0, pa slaganje "Ukupno = Kes + VirmanFirma +
+#    VirmanAvans" i "OM AVANS red = GetOMAvansSaldo" nije imalo nad cim da
+#    padne. Novi redovi su vezani za OTK-IZV-1, blok koji je U CELOSTI placen
+#    (200 kes + 300 virman = 500): GetOpenOtkupi ga zato NE vidi, pa ekran
+#    Platni nalozi (KPI, cipovi, korpa) ostaje bit-identican.
+# 2) tblAmbalaza je bio PRAZAN (nije ni u KEEP_ROWS ni u SEED-u) -- sve
+#    ambalazne tvrdnje (SALDO kolona, lista AMBALAZA, kartica ambalaze,
+#    running saldo) radile bi nad praznim skupom.
+#
+# KOOP-IZV-AV je kooperant SA avansom (OMID=STANICA2) a BEZ ijednog otkup
+# bloka: ReportIsplata dobija VirmanAvans kanal, a avans pool ekrana Platni
+# nalozi se ne pomera (pool se sabira po kooperantima OTVORENIH blokova).
+OTK_IZV_ZATVOREN = "OTK-IZV-1"
+IZV_KES = 200.0
+IZV_VIRMAN = 300.0
+IZV_AVANS_KOOP = 700.0
+IZV_OM_AVANS = 5000.0            # KesFirmaOtkupac; GetOMAvansSaldo = 5000 - 200
+AMB_LETVA = "Letvarica"          # drugi tip ambalaze; slobodan unos kao u pogonu
+
 class Sirovo:
     """Vrednost koja se upisuje BEZ formata koji bi red nasledio od kolone.
 
@@ -320,6 +344,13 @@ SEED = {
         {"KooperantID": "KOOP-NAL-DJ", "Ime": "Đorđe", "Prezime": "Šarčević",
          "Mesto": "Test Mesto", "StanicaID": STANICA, "Aktivan": STATUS_AKTIVAN,
          "TekuciRacun": "205-0000000999888-77"},
+        # EKRAN IZVESTAJI: kooperant sa neraspodeljenim avansom (NOV-IZV-A1,
+        # OMID=STANICA2) a BEZ ijednog otkup bloka. ReportIsplata("OM") tako
+        # dobija kanal VirmanAvans, a avans pool ekrana Platni nalozi se ne
+        # pomera -- pool se sabira po kooperantima OTVORENIH blokova, kojih
+        # ovaj nema.
+        {"KooperantID": "KOOP-IZV-AV", "Ime": "Avram", "Prezime": "Avansni",
+         "Mesto": "Test Mesto", "StanicaID": STANICA2, "Aktivan": STATUS_AKTIVAN},
     ],
     "tblParcele": [
         {"ParcelaID": "PAR-TEST-1", "KooperantID": "KOOP-TEST-1", "KatBroj": "1001",
@@ -479,6 +510,15 @@ SEED = {
          "VozacID": VOZAC, "BrojOtpremnice": "3/TEST", "BrojZbirne": "",
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 800, "Cena": 50.0,
          "TipAmbalaze": AMB_12_1, "KolAmbalaze": 80, "Klasa": "I"},
+        # Otpremnica cija zbirna (ZB-TEST-4) nosi NESTORNIRANE prijemnice --
+        # do sada nijedna nije postojala (par. 23.12/S10), pa se linija
+        # "prijemnica + kupac" u detalju otpremnice/otkupa nije mogla
+        # tvrditi. ZBIRNA_MIRNA je namerno: njene prijemnice (PRJ-FAK-1/2/3,
+        # PRJ-TEST-Z2) su vec vozila fakturisanja i ne diraju se.
+        {"OtpremnicaID": "OTP-IZV-Z", "Datum": FIXTURE_DATE, "StanicaID": STANICA,
+         "VozacID": VOZAC, "BrojOtpremnice": "Z/TEST", "BrojZbirne": ZBIRNA_MIRNA,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 700, "Cena": 50.0,
+         "TipAmbalaze": AMB_12_1, "KolAmbalaze": 70, "Klasa": "I"},
     ],
     "tblOtkup": [
         # Po jedan blok na svakoj legacy otpremnici -- zavrsetak ispravke sme da
@@ -588,6 +628,23 @@ SEED = {
          "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
          "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "NALX/TEST", "Klasa": "I",
          "Stornirano": "Da"},
+        # EKRAN IZVESTAJI: blok U CELOSTI placen kroz DVA kanala (NOV-IZV-K1
+        # kes 200 + NOV-IZV-V1 virman 300 = 500) -- vozilo za slaganje
+        # ReportIsplata (Ukupno = Kes + VirmanFirma + VirmanAvans po redu).
+        # Zatvoren je NAMERNO: GetOpenOtkupi ga ne vidi, pa KPI/cipovi/korpa
+        # ekrana Platni nalozi ostaju bit-identicni (T129/T130 tvrde relacije
+        # nad otvorenima).
+        # ORPHAN STANICA (recenzija #245/krug 16): otkup na stanici koje
+        # NEMA u tblStanice -- zbirni "Svi OM" mora da je prikaze pod ID-em,
+        # ne da je tiho izostavi (univerzum iz podataka, ne iz sifarnika).
+        {"OtkupID": "OTK-ORPH-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": "STA-ORPHAN", "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "ORPH/1", "Klasa": "I"},
+        {"OtkupID": OTK_IZV_ZATVOREN, "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "IZV1/TEST", "Klasa": "I"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -650,6 +707,144 @@ SEED = {
         {"NovacID": "NOV-TEST-UF1", "BrojDokumenta": "UF-1",
          "Datum": FIXTURE_DATE, "Tip": "KupciUplata", "Uplata": FAKTURA_PLAC_IZNOS,
          "PartnerID": KUPAC, "Partner": KUPAC, "FakturaID": FAKTURA_PLAC},
+        # EKRAN IZVESTAJI -- cetiri reda sa OMID-om (v. blok konstanti gore).
+        # Do sada NIJEDAN red nije nosio OMID, pa su ReportIsplata("OM"),
+        # GetOMAvansSaldo i atribucija isplate stanici (NovacRedPripadaStanici)
+        # radili nad praznim skupom.
+        #
+        # Kes i virman ZATVARAJU OTK-IZV-1 (200 + 300 = 500 = vrednost bloka):
+        # tri kanala u istom izvestaju, nula novih otvorenih blokova.
+        {"NovacID": "NOV-IZV-K1", "BrojDokumenta": "IZV-K1",
+         "Datum": FIXTURE_DATE, "Tip": "KesOtkupacKoop", "Isplata": IZV_KES,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2,
+         "OtkupID": OTK_IZV_ZATVOREN},
+        {"NovacID": "NOV-IZV-V1", "BrojDokumenta": "IZV-V1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": IZV_VIRMAN,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2,
+         "OtkupID": OTK_IZV_ZATVOREN},
+        # VirmanAvans kanal: kooperant BEZ blokova (v. KOOP-IZV-AV), pa avans
+        # pool Platnih naloga ostaje netaknut.
+        {"NovacID": "NOV-IZV-A1", "BrojDokumenta": "IZV-A1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanAvansKoop", "Isplata": IZV_AVANS_KOOP,
+         "KooperantID": "KOOP-IZV-AV", "OMID": STANICA2},
+        # Avans Firma -> Otkupac (bez kooperanta): red "OM AVANS (nerasporedjen)"
+        # u SaldoOM i kontrolni redovi ReportIsplata. Sve na STANICA2:
+        # T_WriterGuard_AvansSaldoOM trazi da STA-TEST-1 NEMA avans salda
+        # (preduslov 0), pa vozilo izvestaja zivi na drugoj stanici.
+        # GetOMAvansSaldo(STANICA2)
+        # = 5000 - 200 (kes podeljen kooperantu) = 4800 -- prvi put != 0.
+        {"NovacID": "NOV-IZV-FA", "BrojDokumenta": "IZV-FA",
+         "Datum": FIXTURE_DATE, "Tip": "KesFirmaOtkupac", "Isplata": IZV_OM_AVANS,
+         "OMID": STANICA2},
+    ],
+    # AMBALAZNI LEDGER -- do sada PRAZAN (nije ni u KEEP_ROWS ni u SEED-u), pa
+    # bi svaka ambalazna tvrdnja ekrana Izvestaji bila zelena nad praznim
+    # skupom. Redovi su SAMOSTALNA kretanja (DokumentID nije otkupID): bas njih
+    # ReportKarticaKooperanta uzima kao amb redove kartice, a uz-otkup parove
+    # vec pokrivaju kolone tblOtkup.
+    "tblAmbalaza": [
+        # Revers REV-IZV-1: OM izdao KOOP-TEST-1 prazne gajbe, DVE NOGE ISTOG
+        # DokumentID-a (Kooperant Ulaz + Stanica Izlaz) -- oblik koji
+        # rekonstrukcija reversa trazi. Uz 12/1 ide i DRUGI TIP na ISTOM
+        # dokumentu (AMB_LETVA): kljuc reversa je DokumentID + DokumentTip +
+        # TIP AMBALAZE, pa pregled mora da ih drzi u DVA reda (AUD-012); bez
+        # ovog para bi se spajanje tipova vratilo neprimeceno.
+        {"AmbID": "AMB-IZV-K1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 30, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop"},
+        {"AmbID": "AMB-IZV-S1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 30, "Smer": "Izlaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop"},
+        {"AmbID": "AMB-IZV-K2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
+         "Kolicina": 5, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop"},
+        {"AmbID": "AMB-IZV-S2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_LETVA,
+         "Kolicina": 5, "Smer": "Izlaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-1",
+         "DokumentTip": "OM-Izlaz-Koop"},
+        # Povrat REV-IZV-2: kooperant vratio 10 gajbi -> saldo kooperanta
+        # 30 + 5 - 10 = 25; kartica ambalaze ima i Ulaz i Izlaz redove.
+        {"AmbID": "AMB-IZV-K3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-2",
+         "DokumentTip": "OM-Ulaz-Koop"},
+        {"AmbID": "AMB-IZV-S3", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-2",
+         "DokumentTip": "OM-Ulaz-Koop"},
+        # STORNIRAN red sa velikom kolicinom: i izvestaj i kanonski saldo
+        # (GetAmbalazeStanje) ga izuzimaju (ExcludeStornirano). Da jedna
+        # strana prestane, saldo kooperanta postane 124 i slaganje pukne --
+        # isti obrazac kao NOV-TEST-AB4.
+        {"AmbID": "AMB-IZV-KS", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 99, "Smer": "Ulaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "REV-IZV-X",
+         "DokumentTip": "OM-Izlaz-Koop", "Stornirano": "Da"},
+        # Ulaz od firme na OM: lista AMBALAZA za Stanicu ima i Ulaz i Izlaz
+        # redove, pa cipovi ulaz/izlaz ne mere prazan skup.
+        {"AmbID": "AMB-IZV-S4", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 100, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "REV-IZV-3",
+         "DokumentTip": "OM-Ulaz-Firma"},
+        # KUPAC red: lista AMBALAZA za Kupca nije prazna. DokumentTip
+        # Prijemnica -> ResolveDokBroj razresava broj iz tblPrijemnica.
+        {"AmbID": "AMB-IZV-KP1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": KUPAC,
+         "EntitetTip": "Kupac", "DokumentID": "PRJ-FAK-3",
+         "DokumentTip": "Prijemnica"},
+        # UZ-OTKUP PAROVI za KOOP-TEST-1 -- onako kako ih SaveOtkup pise
+        # (primljene pune gajbe: Kooperant-Izlaz + Stanica-Ulaz, DokTip=Otkup,
+        # DokumentID = otkupID). Bez njih su kartica kooperanta (tblOtkup
+        # kolone + samostalna kretanja) i kanonski ledger saldo
+        # (GetAmbalazeStanje) dva read-modela nad NEKONZISTENTNOM sveskom i
+        # slaganje nema smisla -- prvi crveni run T_Izv_SlaganjeKartica je
+        # bio tacno to (kartica -47, ledger 25). Parovi idu za SVAKI
+        # nestorniran otkup KOOP-TEST-1 sa KolAmbalaze > 0; storniran
+        # OTK-NAL-STOR se preskace (storno flow bi stornirao i par).
+        {"AmbID": "AMB-OTK-K1A", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-S1A", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "OTK-LEG-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-K1B", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-S1B", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "OTK-KOL-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-K1C", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-S1C", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 10, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "OTK-BLK-A", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-K1D", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 40, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-S1D", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 40, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "OTK-TEST-1", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-K1E", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 2, "Smer": "Izlaz", "EntitetID": "KOOP-TEST-1",
+         "EntitetTip": "Kooperant", "DokumentID": "OTK-NAL-DELIM", "DokumentTip": "Otkup"},
+        {"AmbID": "AMB-OTK-S1E", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 2, "Smer": "Ulaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "DokumentID": "OTK-NAL-DELIM", "DokumentTip": "Otkup"},
+        # VOZAC ruta (filter po VozacID koloni): utovar na otpremnici pa
+        # predaja na prijemnici -- kompletna ruta, vozacev saldo 0. DokTip
+        # Otkup se NE koristi (vozacki izvestaj ga izuzima).
+        {"AmbID": "AMB-IZV-V1", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 40, "Smer": "Izlaz", "EntitetID": STANICA,
+         "EntitetTip": "Stanica", "VozacID": VOZAC, "DokumentID": "OTP-TEST-1",
+         "DokumentTip": "Otpremnica"},
+        {"AmbID": "AMB-IZV-V2", "Datum": FIXTURE_DATE, "TipAmbalaze": AMB_12_1,
+         "Kolicina": 40, "Smer": "Ulaz", "EntitetID": KUPAC,
+         "EntitetTip": "Kupac", "VozacID": VOZAC, "DokumentID": "PRJ-TEST-A",
+         "DokumentTip": "Prijemnica"},
     ],
     "tblFakture": [
         {"FakturaID": FAKTURA, "KupacID": KUPAC, "Iznos": FAKTURA_IZNOS},
@@ -1156,6 +1351,16 @@ SEF_CONFIG = {
     "BANKA_NALOG_SIFRA_PLACANJA": "",
     "BANKA_NALOG_SVRHA": "",
     "ISPLATA_SPEC_PRINT_MODE": "OFF",
+    # Ekran Izvestaji (v6-ui-186): ReportOtkupRobaOM u malina modu racuna
+    # prijem DIREKTNO (1 otpremnica = 1 prijemnica po klasi) umesto srazmerno,
+    # pa bi donor sa ukljucenim modom davao druge brojke manjka -- ista klasa
+    # kao KES_ISPLATE. Pinuje se OFF; malina grana ima svoj E2E u
+    # modIzvestajTests koji rezim postavlja sam.
+    "MALINA_MODE": "NO",
+    # Stampe iz izvestaja u testu/smoke-u nad fixture-om ne prave PDF-ove --
+    # isti razlog kao ISPLATA_SPEC_PRINT_MODE iznad.
+    "KARTICA_PRINT_MODE": "OFF",
+    "KARTICA_AMB_PRINT_MODE": "OFF",
 }
 
 # DEFAULT_VRSTA_VOCA / DEFAULT_SORTA_VOCA se PINUJU NA PRAZNO (v. SEF_CONFIG):

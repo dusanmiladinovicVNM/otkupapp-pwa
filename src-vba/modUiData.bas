@@ -16,7 +16,7 @@ Attribute VB_Name = "modUiData"
 '=====================================================================
 Option Explicit
 
-Public Const UIDATA_BUILD As String = "v6-ui-107"
+Public Const UIDATA_BUILD As String = "v6-ui-186"
 
 ' Najveci serijski broj koji CDate sme da primi (31.12.9999). Preko toga baca
 ' Overflow -- v. CellDate.
@@ -24,9 +24,26 @@ Public Const DATUM_SERIJSKI_MAX As Double = 2958465#
 
 Private mCache As Object
 
+' GENERACIJA PODATAKA -- deljeni ugovor invalidacije za IZVEDENE kesve
+' ekrana (recenzija PR #245). RefreshFromData resetuje kes SAMO aktivnog
+' ekrana, pa je snimak NEAKTIVNOG ekrana (Izvestaji, Platni nalozi)
+' prezivljavao upis sa drugog ekrana i po povratku pokazivao STARE brojke.
+'
+' Svaki poziv ResetCache (jedina tacka kroz koju prolaze svi upisi novog
+' UI-ja: RefreshFromData, storno, gradnja i otpustanje forme) podize
+' generaciju; ekran uz svoj kes pamti generaciju pod kojom ga je napunio i
+' pri citanju odbacuje kes starije generacije. Nema TTL-a i nema imena
+' ekrana u ljusci -- svaki ekran sam odlucuje sta mu je izvedeno.
+Private mGen As Long
+
 Public Sub ResetCache()
     Set mCache = Nothing
+    mGen = mGen + 1
 End Sub
+
+Public Function DataGeneracija() As Long
+    DataGeneracija = mGen
+End Function
 
 ' KES NE SME DA MEMOISE NEUSPEH.
 '

@@ -306,28 +306,45 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
             Case "OM"
                 ' ReportProsecnaCena grana `Case "OM", ""` eksplicitno hvata
                 ' entitetID = "" kao "svi" (bez filtera po stanici) -> radi.
+                ' SALDO_OM i ISPLATA zbirno (krug 9, odluka operatera --
+                ' "fali sadrzaj za zbirne"): red = stanica, isti racun kao
+                ' pojedinacni oblik (ReportSaldoOMZbirni/ReportIsplataZbirniOM).
+                ' AMBALAZA zbirno je legacy grana ReportAmbalazeZbirni
+                ' (agregat po tipu gajbe ZA izabranog entiteta) -- do sada
+                ' implementirana a neponudjena u UI (par. 23.7).
                 Select Case pageIdx
-                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _
+                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA, _
+                         IZV_TAB_OTKUP_ROBA
                         IzvestajTabDostupan = True
                 End Select
-            Case "Kupac", "Vozac"
-                ' Prosecna cena NEMA upotrebljivu zbirnu granu ni za jedan od
-                ' ova dva tipa:
-                '  - Vozac: `ReportProsecnaCena` uopste nema vozacku granu;
-                '  - Kupac: grana postoji, ali ide kroz `GetPrijemniceByKupac`
-                '    koji BEZUSLOVNO dodaje filter `KupacID = entitetID`. Zbirni
-                '    rezim salje "", pa upit trazi prijemnice BEZ kupca i vraca
-                '    prazno -- tab bi bio ponudjen a trajno prazan. Globalni
-                '    prosek svih kupaca NIJE implementiran; to je nov izvestaj
-                '    (poslovna odluka), ne UI podesavanje -> tab se ne nudi.
-                '    Gate: T_E2E_ProsecnaCenaZbirniKupac (pada ako core pocne da
-                '    vraca podatke -> matrica se mora ponovo odluciti).
+            Case "Kupac"
+                ' Krug 11 ("fale salda po kupcima, u robi roba po kupcu"):
+                ' SALDO_KUPCI i OTKUP_ROBA zbirno = red po kupcu, UKUPNO red
+                ' pojedinacnog izvestaja (ReportSaldoKupciZbirni /
+                ' ReportRobaKupciZbirni) -- isti obrazac kao stanice.
                 Select Case pageIdx
-                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _
+                         IZV_TAB_SALDO_KUPCI, IZV_TAB_OTKUP_ROBA
+                        IzvestajTabDostupan = True
+                End Select
+            Case "Vozac"
+                ' Prosecna cena zbirno ne postoji ni za kupca ni za vozaca:
+                ' vozacka grana u ReportProsecnaCena ne postoji, a kupceva ide
+                ' kroz GetPrijemniceByKupac koji bezuslovno filtrira po
+                ' KupacID (zbirno "" = trajno prazno). Globalni prosek je nov
+                ' izvestaj (poslovna odluka), ne UI podesavanje. Gate:
+                ' T_E2E_ProsecnaCenaZbirniKupac. AMBALAZA zbirno = legacy
+                ' agregat po tipu za izabranog (krug 9).
+                ' + OTKUP_ROBA (krug 12): otpremljeno PO VOZACU.
+                Select Case pageIdx
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _
+                         IZV_TAB_OTKUP_ROBA
                         IzvestajTabDostupan = True
                 End Select
             Case Else
-                ' Kooperant: zbirni izvestaj ne postoji ni u jednom Report*.
+                ' Kooperant: zbirni izvestaj ne postoji ni u jednom Report*
+                ' (odluka i kruga 12: rang JE njihov zbirni pogled).
                 IzvestajTabDostupan = False
         End Select
         Exit Function
@@ -1559,8 +1576,581 @@ EH:
 End Sub
 
 ' ============================================================
+' ZBIRNI OBLICI PO STANICAMA (krug 9 -- "fali sadrzaj za zbirne")
+' Red = stanica, kolone = UKUPNO red pojedinacnog izvestaja te stanice --
+' isti racun, nijedno pravilo se ne prepisuje. Stanica ciji su svi brojevi
+' nula se preskace (sum bez prometa je red-shum), ali stanica sa saldom bez
+' prometa perioda OSTAJE. Poslednji red = UKUPNO preko svih stanica.
+' ============================================================
+' (1)=StanicaID (2)=Naziv (3)=Kg (4)=Vrednost (5)=Isplaceno (6)=Agro
+' (7)=Saldo (8)=Amb -- kolone 3..8 su UKUPNO red (2..7) pojedinacnog
+' ReportSaldoOM te stanice (agro PRIPISAN stanicama ucestvuje u saldu;
+' "nerasporedjena" agro linija je i tamo van UKUPNO pa je nema ni ovde).
+Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
+                                    ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSaldoOMZbirni"
+    On Error GoTo EH
+
+    ' Univerzum stanica IZ PODATAKA (krug 16) -- sifarnik samo imenuje.
+    Dim st As Variant
+    st = IzvStaniceIzPodataka()
+    If Not IsArray(st) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long, imaSta As Boolean
+    Dim tot(3 To 8) As Double
+    ReDim outA(1 To UBound(st, 1) + 1, 1 To 8)
+    For i = 1 To UBound(st, 1)
+        Dim stID As String
+        stID = Trim$(CStr(st(i, 1)))
+        If Len(stID) > 0 Then
+            r = ReportSaldoOM(stID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                imaSta = False
+                For j = 2 To 7
+                    If IzvNum(r(uk, j)) <> 0 Then imaSta = True
+                Next j
+                If imaSta Then
+                    n = n + 1
+                    outA(n, 1) = stID
+                    outA(n, 2) = CStr(st(i, 2))
+                    For j = 3 To 8
+                        outA(n, j) = IzvNum(r(uk, j - 1))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 8
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportSaldoOMZbirni = IzvIseciRedove(outA, n + 1, 8)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' (1)=StanicaID (2)=Naziv (3)=Kes (4)=VirmanFirma (5)=VirmanAvans (6)=Ukupno
+Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportIsplataZbirniOM"
+    On Error GoTo EH
+
+    ' Univerzum stanica IZ PODATAKA (krug 16) -- sifarnik samo imenuje.
+    Dim st As Variant
+    st = IzvStaniceIzPodataka()
+    If Not IsArray(st) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long
+    Dim tot(3 To 6) As Double
+    ReDim outA(1 To UBound(st, 1) + 1, 1 To 6)
+    For i = 1 To UBound(st, 1)
+        Dim stID As String
+        stID = Trim$(CStr(st(i, 1)))
+        If Len(stID) > 0 Then
+            r = ReportIsplata("OM", stID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                If IzvNum(r(uk, 5)) <> 0 Then
+                    n = n + 1
+                    outA(n, 1) = stID
+                    outA(n, 2) = CStr(st(i, 2))
+                    For j = 3 To 6
+                        outA(n, j) = IzvNum(r(uk, j - 1))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 6
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportIsplataZbirniOM = IzvIseciRedove(outA, n + 1, 6)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Zbirno po KUPCIMA (krug 11 -- "fale salda po kupcima"): isti obrazac
+' kao stanice. (1)=KupacID (2)=Naziv (3)=Kg (4)=Vrednost (5)=Uplaceno
+' (6)=Saldo (7)=Amb -- iz UKUPNO reda ReportSaldoKupci (kolona 3, cena,
+' je prosek pa se u zbir ne prenosi).
+Public Function ReportSaldoKupciZbirni(ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSaldoKupciZbirni"
+    On Error GoTo EH
+
+    ' Kupci iz PODATAKA (distinct po prijemnicama), ne iz sifarnika: kupac
+    ' sa prometom a bez reda u tblKupci mora da se vidi; naziv iz sifarnika
+    ' uz fallback na ID (IzvKupciIzPodataka).
+    Dim ku As Variant
+    ku = IzvKupciIzPodataka()
+    If Not IsArray(ku) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long, imaSta As Boolean
+    Dim srcKol As Variant, tot(3 To 7) As Double
+    srcKol = Array(0, 0, 0, 2, 4, 5, 6, 7)   ' out kolona j <- pojedinacna srcKol(j)
+    ReDim outA(1 To UBound(ku, 1) + 1, 1 To 7)
+    For i = 1 To UBound(ku, 1)
+        Dim kuID As String
+        kuID = Trim$(CStr(ku(i, 1)))
+        If Len(kuID) > 0 Then
+            r = ReportSaldoKupci(kuID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                imaSta = False
+                For j = 3 To 7
+                    If IzvNum(r(uk, srcKol(j))) <> 0 Then imaSta = True
+                Next j
+                If imaSta Then
+                    n = n + 1
+                    outA(n, 1) = kuID
+                    outA(n, 2) = CStr(ku(i, 2))
+                    For j = 3 To 7
+                        outA(n, j) = IzvNum(r(uk, srcKol(j)))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 7
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportSaldoKupciZbirni = IzvIseciRedove(outA, n + 1, 7)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po kupcu (krug 11): (1)=KupacID (2)=Naziv (3)=Kg (4)=Vrednost --
+' UKUPNO red kupcevog agregata ReportOtkupRoba("Kupac") preko svih vrsta.
+Public Function ReportRobaKupciZbirni(ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaKupciZbirni"
+    On Error GoTo EH
+
+    Dim ku As Variant
+    ku = IzvKupciIzPodataka()
+    If Not IsArray(ku) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long
+    Dim r As Variant, uk As Long
+    Dim totKg As Double, totVr As Double
+    ReDim outA(1 To UBound(ku, 1) + 1, 1 To 4)
+    For i = 1 To UBound(ku, 1)
+        Dim kuID2 As String
+        kuID2 = Trim$(CStr(ku(i, 1)))
+        If Len(kuID2) > 0 Then
+            r = ReportOtkupRoba("Kupac", kuID2, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 2)
+            If uk > 0 Then
+                If IzvNum(r(uk, 3)) <> 0 Or IzvNum(r(uk, 4)) <> 0 Then
+                    n = n + 1
+                    outA(n, 1) = kuID2
+                    outA(n, 2) = CStr(ku(i, 2))
+                    outA(n, 3) = IzvNum(r(uk, 3))
+                    outA(n, 4) = IzvNum(r(uk, 4))
+                    totKg = totKg + IzvNum(outA(n, 3))
+                    totVr = totVr + IzvNum(outA(n, 4))
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    outA(n + 1, 3) = totKg
+    outA(n + 1, 4) = totVr
+    ReportRobaKupciZbirni = IzvIseciRedove(outA, n + 1, 4)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po OM zbirno (krug 12): kg i vrednost su TACNO kolone 3 i 4
+' zbirnog salda po stanicama -- projekcija istog izvora, ne drugi racun
+' ("tu realno idu podaci o robi koji su vec u saldu").
+' (1)=StanicaID (2)=Naziv (3)=Kg (4)=Vrednost; poslednji red = UKUPNO.
+Public Function ReportRobaOMZbirni(ByVal datumOd As Date, _
+                                   ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaOMZbirni"
+    On Error GoTo EH
+    Dim s As Variant, outA() As Variant, i As Long, j As Long
+    s = ReportSaldoOMZbirni(datumOd, datumDo)
+    If Not IsArray(s) Then Exit Function
+    ReDim outA(1 To UBound(s, 1), 1 To 4)
+    For i = 1 To UBound(s, 1)
+        For j = 1 To 4
+            outA(i, j) = s(i, j)
+        Next j
+    Next i
+    ReportRobaOMZbirni = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po VOZACU zbirno (krug 12): otpremljeno -- Sum kg i Sum kg*cena
+' nestorniranih otpremnica u opsegu, po vozacu; naziv iz tblVozaci sa
+' fallback-om na ID. (1)=VozacID (2)=Naziv (3)=Kg (4)=Vrednost; UKUPNO.
+Public Function ReportRobaVozaciZbirni(ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaVozaciZbirni"
+    On Error GoTo EH
+
+    Dim d As Variant, i As Long
+    Dim cVoz As Long, cKol As Long, cCen As Long, cDat As Long, cStorno As Long
+    d = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(d) Then Exit Function
+    cVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+    cKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
+    cCen = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_CENA, SRC)
+    cDat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+    cStorno = GetColumnIndex(TBL_OTPREMNICA, COL_STORNIRANO)
+
+    Dim kg As Object, vr As Object, k As String, dv As Date
+    Set kg = CreateObject("Scripting.Dictionary")
+    Set vr = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            If IsDate(d(i, cDat)) Then
+                dv = CDate(d(i, cDat))
+                If dv >= datumOd And dv <= datumDo Then
+                    k = Trim$(CStr(d(i, cVoz)))
+                    If Len(k) > 0 Then
+                        kg(k) = IzvNum(kg(k)) + IzvNum(d(i, cKol))
+                        vr(k) = IzvNum(vr(k)) + IzvNum(d(i, cKol)) * IzvNum(d(i, cCen))
+                    End If
+                End If
+            End If
+        End If
+    Next i
+    If kg.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long, nm As String
+    Dim totKg As Double, totVr As Double
+    ReDim outA(1 To kg.count + 1, 1 To 4)
+    For Each kk In kg.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", CStr(kk), "Ime"))) & _
+                   " " & Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", CStr(kk), "Prezime"))))
+        On Error GoTo EH
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+        outA(n, 3) = IzvNum(kg(kk))
+        outA(n, 4) = IzvNum(vr(kk))
+        totKg = totKg + IzvNum(outA(n, 3))
+        totVr = totVr + IzvNum(outA(n, 4))
+    Next kk
+    outA(n + 1, 2) = "UKUPNO"
+    outA(n + 1, 3) = totKg
+    outA(n + 1, 4) = totVr
+    ReportRobaVozaciZbirni = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Zbirna ambalaza preko SVIH entiteta tipa (krug 14: "sumarno stanje po
+' tipu za svakog vozaca... dropdown je besmislen"): red = entitet x tip
+' gajbe. Entiteti dolaze IZ PODATAKA (distinct po nestorniranom ledgeru,
+' uz isti DOK_TIP_OTKUP izuzetak za vozace kao ReportAmbalaza); po
+' entitetu se zove POSTOJECI legacy zbirni racun (ReportAmbalaza sa
+' zbirni=True) -- smerovi/isVozac pravila se ne prepisuju.
+' (1)=EntID (2)=EntNaziv (3)=Tip (4)=Ulaz (5)=Izlaz; UKUPNO u koloni 2.
+Public Function ReportAmbalazaZbirnoSvi(ByVal entitetTip As String, _
+                                        ByVal datumOd As Date, _
+                                        ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportAmbalazaZbirnoSvi"
+    On Error GoTo EH
+
+    Dim d As Variant, i As Long
+    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cDokTip As Long, cStorno As Long
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
+    cDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+
+    Dim ents As Object, k As String
+    Set ents = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            k = ""
+            Select Case entitetTip
+                Case "OM"
+                    If CStr(d(i, cEntTip)) = "Stanica" Then k = Trim$(CStr(d(i, cEnt)))
+                Case "Kupac"
+                    If CStr(d(i, cEntTip)) = "Kupac" Then k = Trim$(CStr(d(i, cEnt)))
+                Case "Vozac"
+                    If CStr(d(i, cDokTip)) <> DOK_TIP_OTKUP Then k = Trim$(CStr(d(i, cVoz)))
+            End Select
+            If Len(k) > 0 Then ents(k) = True
+        End If
+    Next i
+    If ents.count = 0 Then Exit Function
+
+    Dim linije As Collection, kk As Variant, r As Variant
+    Dim nm As String, totU As Double, totI As Double
+    Set linije = New Collection
+    For Each kk In ents.keys
+        r = ReportAmbalaza(entitetTip, CStr(kk), datumOd, datumDo, True)
+        If IsArray(r) Then
+            nm = IzvEntNaziv(entitetTip, CStr(kk))
+            For i = 1 To UBound(r, 1)
+                If CStr(r(i, 1)) <> "UKUPNO" Then
+                    linije.Add Array(CStr(kk), nm, CStr(r(i, 1)), _
+                                     IzvNum(r(i, 5)), IzvNum(r(i, 6)))
+                    totU = totU + IzvNum(r(i, 5))
+                    totI = totI + IzvNum(r(i, 6))
+                End If
+            Next i
+        End If
+    Next kk
+    If linije.count = 0 Then Exit Function
+
+    Dim outA() As Variant, n As Long, red As Variant
+    ReDim outA(1 To linije.count + 1, 1 To 5)
+    For n = 1 To linije.count
+        red = linije(n)
+        For i = 0 To 4
+            outA(n, i + 1) = red(i)
+        Next i
+    Next n
+    outA(linije.count + 1, 2) = "UKUPNO"
+    outA(linije.count + 1, 4) = totU
+    outA(linije.count + 1, 5) = totI
+    ReportAmbalazaZbirnoSvi = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Naziv entiteta za zbirne redove: sifarnik sa fallback-om na ID.
+Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As String
+    Dim nm As String
+    On Error Resume Next
+    Select Case entitetTip
+        Case "OM"
+            nm = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", iD, "Naziv")))
+        Case "Kupac"
+            nm = Trim$(CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, iD, COL_KUP_NAZIV)))
+        Case "Vozac"
+            nm = Trim$(Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", iD, "Ime"))) & _
+                       " " & Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", iD, "Prezime"))))
+    End Select
+    On Error GoTo 0
+    IzvEntNaziv = IIf(Len(nm) > 0, nm, iD)
+End Function
+
+' Distinct STANICE iz podataka (recenzija #245, krug 16): union StanicaID
+' iz tblOtkup + OMID iz tblNovac + Stanica-entiteta iz tblAmbalaza
+' (nestornirano). Sifarnik daje samo ime (fallback ID) -- stanica sa
+' prometom a bez reda u tblStanice NE SME tiho da ispadne iz "Svi OM"
+' zbirova (silent omission je gori od ruznog ID-a).
+' 2D (1..n, 1..2): 1=StanicaID, 2=naziv.
+Private Function IzvStaniceIzPodataka() As Variant
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    IzvStaniceUnion dict, TBL_OTKUP, COL_OTK_STANICA, "", ""
+    IzvStaniceUnion dict, TBL_NOVAC, COL_NOV_OM_ID, "", ""
+    IzvStaniceUnion dict, TBL_AMBALAZA, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, "Stanica"
+    If dict.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long, nm As String
+    ReDim outA(1 To dict.count, 1 To 2)
+    For Each kk In dict.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(kk), "Naziv")))
+        On Error GoTo 0
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+    Next kk
+    IzvStaniceIzPodataka = outA
+End Function
+
+' Dodaj distinct vrednosti kolone (nestornirano; uz opcioni filter druge
+' kolone) u dict -- pomocna za IzvStaniceIzPodataka.
+Private Sub IzvStaniceUnion(ByVal dict As Object, ByVal tblName As String, _
+                            ByVal kolona As String, ByVal filtKol As String, _
+                            ByVal filtVal As String)
+    Dim d As Variant, i As Long, c As Long, cF As Long, cStorno As Long, k As String
+    ' Fail-visible (recenzija #245): obavezna ID/filter kolona koja fali =
+    ' greska, ne tihi nepotpun univerzum finansijskog zbira.
+    d = GetTableData(tblName)
+    If Not IsArray(d) Then Exit Sub
+    c = RequireColumnIndex(tblName, kolona, "modIzvestaj.IzvStaniceUnion")
+    cStorno = GetColumnIndex(tblName, COL_STORNIRANO)
+    cF = 0
+    If Len(filtKol) > 0 Then cF = RequireColumnIndex(tblName, filtKol, "modIzvestaj.IzvStaniceUnion")
+    ' VBA Or NEMA kratki spoj: "cF = 0 Or d(i, cF)" evaluira i d(i, 0) i
+    ' puca -- zato ugnjezdeni uslovi (greska je do kruga 17 bila gutana
+    ' starim On Error Resume Next, a Resume-Next je slucajno ulazio u telo).
+    For i = 1 To UBound(d, 1)
+        If cStorno > 0 Then
+            If CStr(d(i, cStorno)) = "Da" Then GoTo Sledeci
+        End If
+        If cF > 0 Then
+            If CStr(d(i, cF)) <> filtVal Then GoTo Sledeci
+        End If
+        k = Trim$(CStr(d(i, c)))
+        If Len(k) > 0 Then dict(k) = True
+Sledeci:
+    Next i
+End Sub
+
+' Distinct kupci IZ PODATAKA (nestornirane prijemnice), 2D (1..n, 1..2):
+' 1=KupacID, 2=naziv iz tblKupci sa fallback-om na ID. Sifarnik nije izvor
+' spiska -- kupac sa prometom bez reda u tblKupci mora da se vidi (fixture
+' to namerno drzi tako).
+Private Function IzvKupciIzPodataka() As Variant
+    Dim d As Variant, i As Long, cKup As Long, cStorno As Long
+    Dim dict As Object, k As String, nm As String
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, "modIzvestaj.IzvKupciIzPodataka")
+    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    Set dict = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            k = Trim$(CStr(d(i, cKup)))
+            If Len(k) > 0 Then dict(k) = True
+        End If
+    Next i
+    If dict.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long
+    ReDim outA(1 To dict.count, 1 To 2)
+    For Each kk In dict.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, CStr(kk), COL_KUP_NAZIV)))
+        On Error GoTo 0
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+    Next kk
+    IzvKupciIzPodataka = outA
+End Function
+
+' Bezbedan broj (Empty/tekst -> 0) -- lokalni pandan NumVal-a iz
+' modOtkupBlok (tamo je Private, odavde nevidljiv).
+Private Function IzvNum(ByVal v As Variant) As Double
+    If IsNumeric(v) And Not IsEmpty(v) Then IzvNum = CDbl(v)
+End Function
+
+' Indeks reda "UKUPNO" u koloni k (0 = nema ga).
+Private Function IzvUkupnoRed(ByVal r As Variant, ByVal k As Long) As Long
+    Dim i As Long
+    If IsEmpty(r) Or Not IsArray(r) Then Exit Function
+    For i = UBound(r, 1) To 1 Step -1
+        If CStr(r(i, k)) = "UKUPNO" Then
+            IzvUkupnoRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Prvih n redova 2D niza (petlja po stanicama alocira za sve, popuni manje).
+Private Function IzvIseciRedove(ByRef a As Variant, ByVal n As Long, _
+                                ByVal nCols As Long) As Variant
+    Dim outA() As Variant, i As Long, j As Long
+    ReDim outA(1 To n, 1 To nCols)
+    For i = 1 To n
+        For j = 1 To nCols
+            outA(i, j) = a(i, j)
+        Next j
+    Next i
+    IzvIseciRedove = outA
+End Function
+
+' ============================================================
 ' KUPCI
 ' ============================================================
+' Otkupljena roba za kupca kao LISTA PRIJEMNICA (smoke krug 4) -- ne agregat
+' po vrsti: operater trazi dokumenta, agregat vec daje tab Zbirni. Izvor je
+' GetPrijemniceByKupac (isti read-model kao korpa fakturisanja), ovde samo
+' normalizovan u fiksne kolone nezavisne od rasporeda u tabeli (schema drift):
+' (1)=Datum (2)=BrojPrijemnice (3)=BrojZbirne (4)=Vrsta (5)=Klasa
+' (6)=Kg (7)=Cena (8)=Vrednost=kg*cena (9)=PrijemnicaID (10)=Sorta.
+' Poslednji red = UKUPNO (kolona 2), kao ostali Report*.
+Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
+                                      ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportPrijemniceKupca"
+    On Error GoTo EH
+
+    Dim data As Variant
+    data = GetPrijemniceByKupac(kupacID, datumOd, datumDo, False)
+    If IsEmpty(data) Or Not IsArray(data) Then Exit Function
+
+    Dim cDat As Long, cBr As Long, cZb As Long, cVr As Long, cKl As Long
+    Dim cKol As Long, cCe As Long, cId As Long
+    cDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
+    cBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+    cZb = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+    cVr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VRSTA, SRC)
+    cKl = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA, SRC)
+    cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+    cCe = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
+    cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    Dim cSor As Long
+    cSor = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
+
+    Dim n As Long, i As Long, kg As Double, cena As Double
+    Dim totKg As Double, totVr As Double
+    n = UBound(data, 1)
+    Dim result() As Variant
+    ReDim result(1 To n + 1, 1 To 10)
+    For i = 1 To n
+        kg = 0: cena = 0
+        If IsNumeric(data(i, cKol)) Then kg = CDbl(data(i, cKol))
+        If IsNumeric(data(i, cCe)) Then cena = CDbl(data(i, cCe))
+        result(i, 1) = data(i, cDat)
+        result(i, 2) = Trim$(CStr(data(i, cBr)))
+        result(i, 3) = Trim$(CStr(data(i, cZb)))
+        result(i, 4) = Trim$(CStr(data(i, cVr)))
+        result(i, 5) = Trim$(CStr(data(i, cKl)))
+        result(i, 6) = kg
+        result(i, 7) = cena
+        result(i, 8) = kg * cena
+        result(i, 9) = Trim$(CStr(data(i, cId)))
+        result(i, 10) = Trim$(CStr(data(i, cSor)))
+        totKg = totKg + kg
+        totVr = totVr + kg * cena
+    Next i
+    result(n + 1, 2) = "UKUPNO"
+    result(n + 1, 6) = totKg
+    result(n + 1, 8) = totVr
+
+    ReportPrijemniceKupca = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
 Public Function ReportSaldoKupci(ByVal kupacID As String, _
                                  ByVal datumOd As Date, _
                                  ByVal datumDo As Date) As Variant
@@ -2523,6 +3113,15 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
     Dim result() As Variant
     ReDim result(1 To nGrp + 1, 1 To 7)  ' +1 UKUPNO, kol.7 = skriveni ref-kljuc
 
+    ' Poslovni brojevi dokumenata JEDNIM prolazom po tabeli (mape), umesto
+    ' LookupValue po redu: na svesci sa 1.596 amb redova je razresenje broja
+    ' radilo 1.596 punih skenova tabela i tab je delovao zamrznuto (smoke
+    ' 28.08, krug 3) -- isti potez kao BuildOtkupBrojDokDict u karticama.
+    Dim mapaOtp As Object, mapaPrj As Object, mapaOtk As Object
+    Set mapaOtp = BuildLookupDict(TBL_OTPREMNICA, COL_OTP_ID, COL_OTP_BROJ)
+    Set mapaPrj = BuildLookupDict(TBL_PRIJEMNICA, COL_PRJ_ID, COL_PRJ_BROJ)
+    Set mapaOtk = BuildLookupDict(TBL_OTKUP, COL_OTK_ID, COL_OTK_BR_DOK)
+
     Dim keys As Variant: keys = grp.keys
     Dim r As Long
     For r = 0 To nGrp - 1
@@ -2534,7 +3133,8 @@ Private Function ReportAmbalazePojedinacni(ByVal filtered As Variant, _
         End If
         result(r + 1, 2) = rr(1)
         result(r + 1, 3) = rr(2)
-        result(r + 1, 4) = ResolveDokBroj(CStr(rr(6)), CStr(rr(3)))
+        result(r + 1, 4) = ResolveDokBrojMape(CStr(rr(6)), CStr(rr(3)), _
+                                              mapaOtp, mapaPrj, mapaOtk)
         result(r + 1, 5) = IIf(CLng(rr(4)) <> 0, CLng(rr(4)), "")
         result(r + 1, 6) = IIf(CLng(rr(5)) <> 0, CLng(rr(5)), "")
         result(r + 1, 7) = "AMB|" & CStr(rr(6)) & "|" & CStr(rr(3))
@@ -2556,24 +3156,30 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
-' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza pregledu).
+' Poslovni broj dokumenta iz internog DokumentID-a (za prikaz u Ambalaza
+' pregledu), nad UNAPRED izgradjenim mapama ID -> broj. Isto pravilo kao
+' nekadasnji ResolveDokBroj (LookupValue po redu), samo O(1) po redu:
+' BuildLookupDict je "prvi pojav pobedjuje", identicno LookupValue-u.
 ' Vraca DokumentID ako broj nije razresiv.
-Private Function ResolveDokBroj(ByVal dokTip As String, ByVal dokID As String) As String
+Private Function ResolveDokBrojMape(ByVal dokTip As String, ByVal dokID As String, _
+                                    ByVal mapaOtp As Object, ByVal mapaPrj As Object, _
+                                    ByVal mapaOtk As Object) As String
     On Error Resume Next
     Dim sOut As String: sOut = dokID
     Select Case dokTip
         Case DOK_TIP_OTPREMNICA
-            sOut = CStr(LookupValue(TBL_OTPREMNICA, COL_OTP_ID, dokID, COL_OTP_BROJ))
+            If mapaOtp.Exists(dokID) Then sOut = CStr(mapaOtp(dokID))
         Case DOK_TIP_PRIJEMNICA
-            sOut = CStr(LookupValue(TBL_PRIJEMNICA, COL_PRJ_ID, dokID, COL_PRJ_BROJ))
+            If mapaPrj.Exists(dokID) Then sOut = CStr(mapaPrj(dokID))
         Case DOK_TIP_OTKUP, DOK_TIP_OM_IZLAZ_KOOP, DOK_TIP_OM_ULAZ_KOOP
-            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone revers: DokumentID = brojDok
-            Dim br As String
-            br = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_BR_DOK))
-            If Len(Trim$(br)) > 0 Then sOut = br Else sOut = dokID
+            ' uz-otkup: DokumentID = otkupID -> BrojDokumenta; standalone
+            ' revers: DokumentID = brojDok
+            If mapaOtk.Exists(dokID) Then
+                If Len(Trim$(CStr(mapaOtk(dokID)))) > 0 Then sOut = CStr(mapaOtk(dokID))
+            End If
     End Select
     If Len(Trim$(sOut)) = 0 Then sOut = dokID
-    ResolveDokBroj = sOut
+    ResolveDokBrojMape = sOut
 End Function
 
 ' ============================================================
@@ -3427,6 +4033,140 @@ Private Function ResolveEntitetName(ByVal entitetID As String, _
         Case Else
             ResolveEntitetName = entitetID
     End Select
+End Function
+
+' ============================================================
+' REVERS AMBALAZE IZ PREGLEDA (v6-ui-186) -- racun izdvojen iz
+' frmIzvestaj.StampajReversAmbDok za ekran Izvestaji (novi UI). Forma
+' zadrzava svoju kopiju i NE menja se (katalog par. 5 / Faza B: dve kopije
+' zive namerno dok legacy ne ode). Pravila su ISTA, AUD-012 / FM-0029:
+'   - argumenti reversa se rekonstruisu iz dve noge ledgera (Kooperant +
+'     Stanica) koje dele DokumentID;
+'   - STORNIRANI redovi se preskacu INLINE (bez kopije cele tblAmbalaza);
+'   - tip ambalaze je DEO KLJUCA (ReversRedPripada) -- dokument sa dve vrste
+'     gajbica daje dva reversa, ne jedan sa pogresnim zbirom;
+'   - vise od dve noge po tipu se PRIJAVLJUJE operateru, ne sabira tiho.
+' ============================================================
+Public Sub StampajReversAmbalaze(ByVal dokID As String, ByVal dokTip As String, _
+                                 ByVal tipSel As String)
+    Const SRC As String = "modIzvestaj.StampajReversAmbalaze"
+    On Error GoTo EH
+
+    Dim d As Variant: d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Sub
+    Dim cDat As Long, cTip As Long, cKol As Long, cEnt As Long
+    Dim cEntTip As Long, cDok As Long, cDokTip As Long, cVoz As Long
+    Dim cStorno As Long
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+    cDat = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DATUM)
+    cTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_TIP)
+    cKol = GetColumnIndex(TBL_AMBALAZA, COL_AMB_KOLICINA)
+    cEnt = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET)
+    cEntTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP)
+    cDok = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_ID)
+    cDokTip = GetColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP)
+    cVoz = GetColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC)
+    If cDok = 0 Or cDokTip = 0 Then Exit Sub
+
+    Dim isFirma As Boolean
+    isFirma = (dokTip = DOK_TIP_OM_IZLAZ_FIRMA Or dokTip = DOK_TIP_OM_ULAZ_FIRMA)
+
+    Dim datum As Date, haveDatum As Boolean
+    Dim tipAmb As String, omID As String, koopID As String
+    Dim kolAmb As Long
+    Dim revVozacID As String
+    Dim i As Long
+
+    ' Tip ambalaze = tip IZABRANOG reda pregleda. Fallback (poziv bez tipa):
+    ' tip prvog reda dokumenta -- i tada se sabira SAMO taj tip.
+    tipAmb = Trim$(tipSel)
+    If Len(tipAmb) = 0 Then
+        For i = 1 To UBound(d, 1)
+            If Trim$(CStr(d(i, cDok))) = Trim$(dokID) And _
+               Trim$(CStr(d(i, cDokTip))) = Trim$(dokTip) And _
+               Not IzvAmbRedStorniran(d, i, cStorno) Then
+                tipAmb = Trim$(CStr(d(i, cTip)))
+                Exit For
+            End If
+        Next i
+    End If
+
+    Dim nogeKoop As Long, nogeOM As Long
+    For i = 1 To UBound(d, 1)
+        If ReversRedPripada(CStr(d(i, cDok)), CStr(d(i, cDokTip)), CStr(d(i, cTip)), _
+                            dokID, dokTip, tipAmb) _
+           And Not IzvAmbRedStorniran(d, i, cStorno) Then
+            If Not haveDatum And IsDate(d(i, cDat)) Then
+                datum = CDate(d(i, cDat)): haveDatum = True
+            End If
+            Dim et As String: et = CStr(d(i, cEntTip))
+            If et = "Stanica" Then
+                omID = CStr(d(i, cEnt))
+                nogeOM = nogeOM + 1
+                If isFirma Then
+                    If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+                    If cVoz > 0 And Len(revVozacID) = 0 Then revVozacID = CStr(d(i, cVoz))
+                End If
+            ElseIf et = "Kooperant" Then
+                koopID = CStr(d(i, cEnt))
+                nogeKoop = nogeKoop + 1
+                If IsNumeric(d(i, cKol)) Then kolAmb = kolAmb + CLng(d(i, cKol))
+            End If
+        End If
+    Next i
+
+    ' Ocekivana je po JEDNA noga sa svake strane (FM-0029 #16). Vise = duplikat
+    ' ili vise generacija istog dokumenta -> zbir je verovatno naduvan.
+    If nogeOM > 1 Or nogeKoop > 1 Then
+        If MsgBox(Poruka("RPT_MSG_REVERS_VISE_NOGU") & vbCrLf & vbCrLf & _
+                  "OM: " & nogeOM & " | kooperant: " & nogeKoop & vbCrLf & _
+                  Poruka("RPT_MSG_NASTAVITI_STAMPU"), _
+                  vbExclamation + vbYesNo, APP_NAME) <> vbYes Then Exit Sub
+    End If
+
+    If isFirma Then
+        If Len(Trim$(omID)) = 0 Then
+            Err.Raise vbObjectError + 7503, SRC, _
+                      "Revers (firma) nije moguce rekonstruisati (nedostaje OM noga)."
+        End If
+    ElseIf Len(Trim$(koopID)) = 0 Or Len(Trim$(omID)) = 0 Then
+        Err.Raise vbObjectError + 7503, SRC, _
+                  "Revers nije moguce rekonstruisati (nedostaje OM ili kooperant noga)."
+    End If
+    If Not haveDatum Then datum = Date
+
+    Dim omNaziv As String, koopNaziv As String, vrsta As String
+    omNaziv = CStr(LookupValue(TBL_STANICE, "StanicaID", omID, "Naziv"))
+    ' Uz-otkup revers: DokumentID = otkupID -> vrsta iz otkupa; standalone -> prazno.
+    vrsta = CStr(LookupValue(TBL_OTKUP, COL_OTK_ID, dokID, COL_OTK_VRSTA))
+
+    If isFirma Then
+        Dim prijemF As Boolean: prijemF = (dokTip = DOK_TIP_OM_ULAZ_FIRMA)
+        Dim revVozacNaziv As String
+        revVozacNaziv = Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", revVozacID, "Ime")) & " " & _
+                              CStr(LookupValue(TBL_VOZACI, "VozacID", revVozacID, "Prezime")))
+        OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, _
+                                revVozacNaziv, "", _
+                                tipAmb, kolAmb, vrsta, prijemF, "FIRMA"
+        Exit Sub
+    End If
+
+    koopNaziv = Trim$(CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Ime")) & " " & _
+                      CStr(LookupValue(TBL_KOOPERANTI, "KooperantID", koopID, "Prezime")))
+    Dim prijem As Boolean: prijem = (dokTip = DOK_TIP_OM_ULAZ_KOOP)
+    OutputIzdavanjeAmbalaze datum, dokID, omNaziv, omID, koopNaziv, koopID, _
+                            tipAmb, kolAmb, vrsta, prijem
+    Exit Sub
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Sub
+
+' Je li red tblAmbalaza storniran -- IDENTICNO pravilo kao ExcludeStornirano
+' (CStr poredjenje sa "Da"), primenjeno po redu. Kolone nema = nema storna.
+Private Function IzvAmbRedStorniran(ByRef d As Variant, ByVal r As Long, _
+                                    ByVal cStorno As Long) As Boolean
+    If cStorno <= 0 Then Exit Function
+    IzvAmbRedStorniran = (CStr(d(r, cStorno)) = "Da")
 End Function
 
 Private Sub IzvRethrow(ByVal sourceName As String, _

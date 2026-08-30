@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-185"
+Public Const OTKUI_BUILD   As String = "v6-ui-186"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -304,6 +304,7 @@ Private mSumVal As Double
 Private mPage As Long
 Private mPageSize As Long
 Private mSortCol As Long
+Private mSortLista As String     ' lista za koju vazi tekuci sort (v. SortZaListu)
 Private mSortAsc As Boolean
 Private mFilter As String
 Private mSearch As String
@@ -822,7 +823,13 @@ Private Sub RefreshChipsForScreen(frm As Object)
             nm = Split(CStr(ch(n)), "|")(0)
             mScrChipKey(n) = CStr(p(0))
             mChipW(n) = CSng(val(p(2)))
-            frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
+            ' Natpis '~xxx' je SIROVA vrednost (dinamicki cipovi -- vrsta/
+            ' sorta iz podataka nemaju kataloski kljuc; krug 18).
+            If Left$(CStr(p(1)), 1) = "~" Then
+                frm.Controls("zGrid").Controls(nm & "C").caption = Mid$(CStr(p(1)), 2)
+            Else
+                frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
+            End If
             ShowChip frm, nm, True
             If mScrChipKey(n) = mFilter Then imaAktivan = True
             n = n + 1
@@ -2741,6 +2748,55 @@ End Function
 ' Redni broj cipa iz taga, ili -1 ako tag nije cip. Javna je da bi se ugovor
 ' ljuske ("svaki cip koji ekran prijavi ume da se izabere") mogao TVRDITI u
 ' testu -- klik kroz formu se u harnessu ne moze odigrati.
+' PODRAZUMEVANI SORT PO LISTI -- cist ugovor, bez stanja: rang-liste
+' (KOOPERANTI na Dokumentima, RANG na Izvestajima) se otvaraju po rangu
+' rastuce, sve ostalo po drugoj koloni opadajuce (datum u dokumentima).
+' Javno da bi se ugovor mogao TVRDITI u testu -- klik kroz formu se u
+' harnessu ne moze odigrati (isti razlog kao SegIndeksIzTaga).
+Public Sub SortZaListu(ByVal kljuc As String, ByRef col As Long, ByRef asc As Boolean)
+    If kljuc = "KOOPERANTI" Or kljuc = "RANG" Then
+        col = 1: asc = True
+    Else
+        col = 2: asc = False
+    End If
+End Sub
+
+Private Sub PrimeniSortZaListu(ByVal kljuc As String)
+    SortZaListu kljuc, mSortCol, mSortAsc
+    mSortLista = kljuc
+End Sub
+
+' TEST SEAM: postavi sort kao da ga je ostavio DRUGI ekran (aktivacioni
+' lifecycle test) i izvrsi aktivacioni korak -- ista procedura koju zove
+' ActivateScreen, ne kopija. Tvrdo gejtovani.
+Public Sub GridSortSetTest(ByVal col As Long, ByVal asc As Boolean, _
+                           ByVal lista As String)
+    If Not IsTestMode() Then Exit Sub
+    mSortCol = col
+    mSortAsc = asc
+    mSortLista = lista
+End Sub
+
+Public Sub GridSortAktivacijaTest()
+    If Not IsTestMode() Then Exit Sub
+    PrimeniSortZaListu ActiveLista()
+End Sub
+
+' TEST SEAM: aktivan ekran za lifecycle testove (ActiveLista cita
+' mScreen; bez forme se ekran ne moze aktivirati). Tvrdo gejtovan.
+Public Sub GridScreenSetTest(ByVal kljuc As String)
+    If Not IsTestMode() Then Exit Sub
+    mScreen = kljuc
+End Sub
+
+' TEST SEAM: tekuci sort mreze (kolona, smer) -- tvrdo gejtovan.
+Public Function GridSortTest(ByRef col As Long, ByRef asc As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    col = mSortCol
+    asc = mSortAsc
+    GridSortTest = True
+End Function
+
 Public Function SegIndeksIzTaga(ByVal tag As String) As Long
     Dim rep As String
     SegIndeksIzTaga = -1
@@ -3682,12 +3738,9 @@ Private Sub UiClickCore(ByVal tag As String)
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
             ' Sortiranje ne prelazi iz liste u listu: druga kolona je datum u
             ' listama dokumenata, a ime kooperanta u rangu - ista strelica bi
-            ' znacila drugu stvar. Rang se otvara po rangu, ostalo po datumu.
-            If ActiveLista() = "KOOPERANTI" Then
-                mSortCol = 1: mSortAsc = True
-            Else
-                mSortCol = 2: mSortAsc = False
-            End If
+            ' znacila drugu stvar. Izbor zivi u SortZaListu (deli ga i
+            ' RefreshFromData za auto-prelaz liste; recenzija #245, krug 16).
+            PrimeniSortZaListu ActiveLista()
             RefreshListSeg mFrm
             If mScreen = "DOKUMENTI" Then
                 ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
@@ -4434,10 +4487,12 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     mFilter = "sve"                  ' ugovorni ekran nema cipove
     mSearch = ""
     ' Kolona sortiranja se NE prenosi izmedju ekrana: 9. kolona na Paletama i
-    ' 9. na otkupnom listu nisu isti podatak. Bez ovoga se posle povratka na
-    ' dokumenta strelica nasla na "Vrednost" umesto na "Datum".
-    mSortCol = 2
-    mSortAsc = False
+    ' 9. na otkupnom listu nisu isti podatak. Ali ni tvrdi reset na 2/desc
+    ' nije tacan za svaku listu -- rang-lista se otvara po rangu rastuce
+    ' (recenzija #245, krug 17: povratak na Izvestaje sa aktivnim Rangom je
+    ' vracao sort po imenu). Aktivacija zato primenjuje PODRAZUMEVANI sort
+    ' aktivne liste ekrana -- isti SortZaListu ugovor kao klik i auto-prelaz.
+    PrimeniSortZaListu ActiveLista()
     mSelRow = 0
     mHoverRow = -1
     mPage = 1
@@ -4609,6 +4664,18 @@ Public Sub RefreshFromData()
     OsveziNavBrojace
     FillZbirneCombo mFrm      ' nove zbirne u picker
     mPartnerFor = ""          ' partner lista se ponovo puni
+    ' Skup lista (tabova) sme da zavisi od konteksta ekrana (Izvestaji: tip
+    ' entiteta bira koje liste postoje) -- posle promene konteksta geometrija
+    ' je zastarela (LayoutGrid crta tabove iz Scr_Liste), a natpis i boje
+    ' prate AKTIVNU listu, koju je ekran mogao da prebaci. Za ekrane sa
+    ' statickim listama sve tri linije su idempotentne.
+    mGeomStara = True
+    ' Ekran je mogao da PREBACI aktivnu listu (auto-prelaz tipa/rezima) --
+    ' nova lista dobija svoj podrazumevani sort, kao i na klik. Ista lista
+    ' zadrzava operaterov izbor sorta (upis ga ne sme gaziti).
+    If ActiveLista() <> mSortLista Then PrimeniSortZaListu ActiveLista()
+    RefreshListSeg mFrm
+    RefreshGridTitle mFrm
     ReloadGrid
 End Sub
 
@@ -4830,9 +4897,12 @@ End Sub
 ' Slot uvek nosi novac: pojam postoji zato sto jedan zbir nije dovoljan, a ne
 ' zato sto se broji nesto drugo. Zato ovde nema pitanja o komadima -- ekran koji
 ' broji komade nema sta da trazi od dva novcana slota.
-Private Function PodnozjeSlotTekst(ByVal kljuc As String, ByVal iznos As Double) As String
+' Jedinica je opcioni TRECI clan slota (kljuc poruke); bez njega RSD --
+' ambalazni zbirovi (gajbe) ne smeju da se potpisu kao novac (krug 15).
+Private Function PodnozjeSlotTekst(ByVal kljuc As String, ByVal iznos As Double, _
+                                   Optional ByVal unitKljuc As String = "OTKUI_UNIT_RSD") As String
     PodnozjeSlotTekst = Poruka(kljuc) & " " & FmtBroj(iznos, 2) & " " & _
-                        Poruka("OTKUI_UNIT_RSD")
+                        Poruka(unitKljuc)
 End Function
 
 ' Dva novcana slota u podnozju.
@@ -4862,7 +4932,12 @@ End Sub
 Private Function SlotTekstIz(ByVal i As Long) As String
     On Error Resume Next
     If i < 0 Or i >= mFtSlotN Then Exit Function
-    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))
+    If UBound(mFtSlot(i)) >= 2 Then
+        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)), _
+                                        CStr(mFtSlot(i)(2)))
+    Else
+        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))
+    End If
 End Function
 
 ' TEST SEAM: natpis i-tog novcanog slota i njihov broj. Tvrdo gejtovani.

@@ -2437,7 +2437,7 @@ SABOTAZE = {
     "mreza-podnozje-slot-bez-natpisa": (
         "modOtkupUI.bas",
         "    PodnozjeSlotTekst = Poruka(kljuc) & \" \" & FmtBroj(iznos, 2) & \" \" & _\n"
-        "                        Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "                        Poruka(unitKljuc)\n",
         "    PodnozjeSlotTekst = FmtBroj(iznos, 2) & \" \" & _\n"
         "                        Poruka(\"OTKUI_UNIT_RSD\")   ' SABOTAZA: slot bez natpisa\n",
         "T_Mreza_PodnozjeDvaNovcanaSlota",
@@ -2447,8 +2447,10 @@ SABOTAZE = {
     # isti -- najtise moguce, jer izgleda tacno onako kako treba.
     "mreza-podnozje-oba-slota-isti": (
         "modOtkupUI.bas",
-        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n",
-        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n",
+        "        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n"
+        "    End If\n",
+        "        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n"
+        "    End If\n",
         "T_Mreza_PodnozjeDvaNovcanaSlota",
         "slotovi ne nose isti IZNOS",
     ),
@@ -3205,6 +3207,454 @@ SABOTAZE = {
         "    ' SABOTAZA: dugme za naloge se ne gradi\n",
         "T_ZonaBankaNalozi_PoljaIRaspored",
         "zona platnih naloga nema nijednu kontrolu manje",
+    ),
+    # ------------------------------------------------------------------
+    # EKRAN IZVESTAJI (modScrIzvestaji, v6-ui-186). Sabotaze gadjaju EKRANSKU
+    # polovinu (izdvajanje, kes, matrica-vodi-liste, prikaz istine); tvrdnje
+    # slaganja NAD Report* funkcijama nemaju zasebnu sabotazu -- mutacija
+    # modIzvestaj bi obarala i RunIzvestajTests (tudju, postojecu suite), isto
+    # pravilo kao "storniran nije u listi" u par. 22.8.
+    # ------------------------------------------------------------------
+    # Prvi cip je onaj na koji ljuska PADA kad zatecen filter ne pripada
+    # listi. Ako nije najsiri, povratak na njega tiho sakrije redove.
+    "izvestaji-cip-sve-nije-prvi": (
+        "modScrIzvestaji.bas",
+        '        Case IZ_MANJAK\n'
+        '            IzCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _\n'
+        '                              "bezprij:OTKUI_CIPIZ_BEZPRIJ:88"\n',
+        '        Case IZ_MANJAK\n'
+        '            IzCipoviZaListu = "bezprij:OTKUI_CIPIZ_BEZPRIJ:88|" & _\n'
+        '                              "sve:OTKUI_CHIP_SVE:40"\n',
+        "T_Izv_UgovorEkrana",
+        "prvi cip MANJKA je najsiri ('sve')",
+    ),
+    # Stampa dokumenta iz reda je razlog postojanja radnje na 4 liste; lista
+    # kartice bez nje bi operatera vratila u legacy formu za svaki dokument.
+    "izvestaji-kartica-bez-stampe": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_OTKL, IZ_ROBA, IZ_AMB, IZ_KART\n",
+        "        Case IZ_OTKL, IZ_ROBA, IZ_AMB   ' SABOTAZA: kartica bez stampe\n",
+        "T_Izv_UgovorEkrana",
+        "'Stampaj dokument' nose tacno cetiri liste sa dokument-identitetom",
+    ),
+    # Kolona identiteta je interna. Prioritet 3 je crta, pa bi operater
+    # gledao interni OtkupID -- prikaz kao lazni dokaz da je "sve u redu".
+    "izvestaji-identitet-vidljiv": (
+        "modScrIzvestaji.bas",
+        '                "OTKUI_HD_VREDNOST||rsd|96|1", _\n'
+        '                "OTKUI_HDI_REF||txt|1|4")\n',
+        '                "OTKUI_HD_VREDNOST||rsd|96|1", _\n'
+        '                "OTKUI_HDI_REF||txt|90|3")\n',
+        "T_Izv_IdentitetURedu_NeCrtaSe",
+        "identitet OTKLISTE se ne crta (prio 4)",
+    ),
+    # UKUPNO red pod filterom tvrdi zbir koji ne odgovara vidljivim
+    # redovima -- filtriran skup sa legacy UKUPNO redom je pogresna brojka
+    # na najvidljivijem ekranu.
+    # UKUPNO red NIKAD ne ide u mrezu: mreza sortira po koloni, pa je legacy
+    # poslednji red PLUTAO usred liste (prvi smoke, lista Isplata); zbir
+    # prikazanih daje podnozje, a stampa svoj izracunat UKUPNO.
+    "izvestaji-ukupno-prezivi-filter": (
+        "modScrIzvestaji.bas",
+        "        If vrsta = 1 Then GoTo Sledeci\n",
+        "        ' SABOTAZA: UKUPNO ulazi u mrezu\n",
+        "T_Izv_IdentitetURedu_NeCrtaSe",
+        "UKUPNO red se nikad ne crta u mrezi",
+    ),
+    # Snimak se cita JEDNOM po kontekstu -- pun Report* prolaz po otkucaju
+    # pretrage je placen kvar (par. 22.9/N7: ~10 s po slovu na 1.595 blokova).
+    "izvestaji-pretraga-puni-iznova": (
+        "modScrIzvestaji.bas",
+        "    If Not mSnimci.Exists(k) Then\n"
+        "        ' Kapa drzi memoriju: preko granice se krece ispocetka (najprostije\n"
+        "        ' ispravno; ResetCache ionako prazni sve posle svakog upisa).\n"
+        "        If mSnimci.count >= IZ_SNIMAK_KAPA Then mSnimci.RemoveAll\n"
+        "        mSnimakPunjenja = mSnimakPunjenja + 1\n"
+        "        mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n"
+        "    End If\n",
+        "    mSnimakPunjenja = mSnimakPunjenja + 1   ' SABOTAZA: pun prolaz svaki put\n"
+        "    mSnimci(k) = PuniSnimak(kljuc, tip, zbirni, iD, odN, doN)\n",
+        "T_Izv_KesPretragaIHint",
+        "tri citanja mreze = JEDNO punjenje snimka (pretraga ne placa pun prolaz)",
+    ),
+    # Imena u podacima nose kvake; operater na DE/EN tastaturi kuca bez njih
+    # (par. 22.9/N3). Haystack bez normalizacije = pretraga koja "ne radi".
+    "izvestaji-haystack-sirov": (
+        "modScrIzvestaji.bas",
+        "            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, zbirni, src, i))\n",
+        "            hay = HaystackReda(kljuc, tip, zbirni, src, i)   ' SABOTAZA: kvake ostaju\n",
+        "T_Izv_KesPretragaIHint",
+        "ASCII upit nalazi dijakriticno ime (TekstZaPretragu, N3)",
+    ),
+    # Specijalni red u tipiziranim kolonama mreze: prazne celije postaju
+    # "0,00" -- ista klasa lazi kao FM-0028 #5. Red ide u zonu, ne u mrezu.
+    "izvestaji-omavans-u-mrezi": (
+        "modScrIzvestaji.bas",
+        "                ElseIf lbl = IZ_LBL_OM_AVANS Then\n"
+        "                    mZonaOmAvans = NzD(src(i, 4))\n"
+        "                    VrstaReda = 3\n",
+        "                ElseIf lbl = IZ_LBL_OM_AVANS Then\n"
+        "                    mZonaOmAvans = NzD(src(i, 4))   ' SABOTAZA: red ostaje u mrezi\n",
+        "T_Izv_SlaganjeOtkupOM",
+        "OM AVANS red nije u mrezi -- izdvojen je u zonu",
+    ),
+    # Kontrolna brojka isplate koja se izdvoji BEZ vrednosti: zona pokazuje
+    # crtu/nulu dok Report* nosi iznos -- podatak nestane bez traga.
+    "izvestaji-zona-isplate-prazna": (
+        "modScrIzvestaji.bas",
+        "                Case IZ_LBL_ISPL_PRIMLJENO:  mZonaIsplPrimljeno = NzD(src(i, 5)): VrstaReda = 3\n",
+        "                Case IZ_LBL_ISPL_PRIMLJENO:  VrstaReda = 3   ' SABOTAZA: zona bez brojke\n",
+        "T_Izv_SlaganjeIsplataManjakAmb",
+        "zona 'primljeno' = rucni zbir Firma->Otkupac avansa",
+    ),
+    # Dostupnost lista vodi MATRICA (IzvestajTabDostupan) + legacy uslov za
+    # runtime liste. Siri uslov = pun naslov nad izvestajem koji ne postoji
+    # za taj tip (FM-0029 #3 klasa).
+    "izvestaji-matrica-zaobidjena": (
+        "modScrIzvestaji.bas",
+        '        Case IZ_OTKL\n'
+        '            IzListaDostupna = (tip = "OM" And Not zbirni)\n',
+        "        Case IZ_OTKL\n"
+        "            IzListaDostupna = (Not zbirni)   ' SABOTAZA: svi tipovi\n",
+        "T_Izv_MatricaVodiListe",
+        "otk. listovi samo za OM",
+    ),
+    # Prazna lista bez objasnjenja izgleda kao "nema podataka" -- operater
+    # ne sme da dobije pun naslov nad trajno praznom listom bez razloga.
+    "izvestaji-hint-bez-razloga": (
+        "modScrIzvestaji.bas",
+        '        mHintKljuc = "OTKUI_IZ_HINT_NEDOSTUPNO"\n',
+        '        mHintKljuc = ""   \' SABOTAZA: prazno bez objasnjenja\n',
+        "T_Izv_MatricaVodiListe",
+        "prazna lista NOSI objasnjenje zasto je prazna",
+    ),
+    # Kolona tipa "date" trazi serijski broj; tekst bi RenderGrid prebrojao
+    # kao kvar celije i ostavio je praznu (par. 9.9).
+    "izvestaji-datum-kao-tekst": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_OTKL\n"
+        "            outA(n, 1) = IzDatCell(src(i, 1))\n",
+        "        Case IZ_OTKL\n"
+        "            outA(n, 1) = NzS(src(i, 1))   ' SABOTAZA: datum kao tekst\n",
+        "T_Izv_UgovorEkrana",
+        "datum stize kao serijski broj",
+    ),
+    # Posle upisa snimak MORA da zastari -- inace ekran pokazuje stanje od
+    # pre upisa dok ljuska misli da je osvezila.
+    "izvestaji-kes-ne-stari": (
+        "modScrIzvestaji.bas",
+        "    ' Snimci zastarevaju na svaki upis -- sledece citanje ide u Report*.\n"
+        "    Set mSnimci = Nothing\n",
+        "    ' SABOTAZA: snimci prezive upis\n",
+        "T_Izv_KesPretragaIHint",
+        "posle upisa (ResetCache) snimak se puni ponovo",
+    ),
+    # Prazno kad nema prijema JE poruka (FM-0028 #5) -- nula umesto praznog
+    # je bio ceo bug koji je RF-06 zatvorio; ekran ga ne sme vratiti.
+    "izvestaji-prazno-postaje-nula": (
+        "modScrIzvestaji.bas",
+        '                \' Prazno kad nema prijema JE poruka (RF-06) -- ne "0,00".\n'
+        "                outA(n, 9) = FmtIliPrazno(src(i, 9))\n",
+        '                \' Prazno kad nema prijema JE poruka (RF-06) -- ne "0,00".\n'
+        "                outA(n, 9) = FmtKolicina(NzD(src(i, 9)))   ' SABOTAZA: nula umesto praznog\n",
+        "T_Izv_IdentitetURedu_NeCrtaSe",
+        "red bez prijema ima PRAZNU celiju prijema, ne nulu",
+    ),
+    # U zbirnom rezimu konkretan entitet ne postoji -- polje koje ostane
+    # sugerise da izbor nesto znaci, a ekran ga ignorise.
+    "izvestaji-zbirni-drzi-entitet": (
+        "modScrIzvestaji.bas",
+        '    z.Controls("scrIzEnt").Visible = IzTrebaEntitet(Scr_Lista(), mZbirni)\n',
+        '    z.Controls("scrIzEnt").Visible = True   \' SABOTAZA: entitet i u zbirnom\n',
+        "T_ZonaIzv_PoljaIRaspored",
+        "zbirni rezim gasi polje entiteta",
+    ),
+    # Izabran tip mora da NOSI rez (Font.Weight) i posle rasporeda --
+    # par. 7.7/7.10: bez toga se izabrano i neizabrano ne razlikuju.
+    "izvestaji-tip-ne-boji": (
+        "modScrIzvestaji.bas",
+        "    modUiKit.BoxState z, nm, IIf(sel, C_FOREST, C_WHITE), _\n"
+        "                      IIf(sel, C_CREAM, C_FOREST), sel\n",
+        "    modUiKit.BoxState z, nm, IIf(sel, C_FOREST, C_WHITE), _\n"
+        "                      IIf(sel, C_CREAM, C_FOREST), False   ' SABOTAZA: bez reza\n",
+        "T_ZonaIzv_PoljaIRaspored",
+        "izabran tip je bold i posle rasporeda",
+    ),
+    # Dugme kartice na listi bez kartice stampa POGRESAN sablon za pogresan
+    # kontekst -- vidljivost prati aktivnu listu.
+    "izvestaji-kart-dugme-svuda": (
+        "modScrIzvestaji.bas",
+        '    naKartici = (Scr_Lista() = IZ_KART Or Scr_Lista() = IZ_AMBK)\n',
+        "    naKartici = True   ' SABOTAZA: dugme kartice svuda\n",
+        "T_ZonaIzv_PoljaIRaspored",
+        "dugme kartice se ne nudi na saldo listi",
+    ),
+    # ------------------------------------------------------------------
+    # Recenzija PR #245 (krug 3): deljeni ugovor invalidacije + politika
+    # sabirljivosti stampe + kontekstna radnja.
+    # ------------------------------------------------------------------
+    # Upis sa DRUGOG ekrana ne zove nas Scr_ResetCache -- bez generacijske
+    # provere bi povratak na Izvestaje pokazivao STARE brojke (blocker 1).
+    "izvestaji-kes-ignorise-generaciju": (
+        "modScrIzvestaji.bas",
+        "    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija podataka\n"
+        "    ' je deljeni signal da je snimljeno stanje mozda staro (blocker 1).\n"
+        "    If mSnimakGen <> modUiData.DataGeneracija() Then\n"
+        "        Set mSnimci = Nothing\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "    ' SABOTAZA: kes ignorise generaciju podataka\n",
+        "T_KesGeneracija_UpisInvalidira",
+        "izvestaji: posle tudjeg upisa snimak se puni ponovo (generacija)",
+    ),
+    # Isti ugovor na Platnim nalozima -- snimak liste je prezivljavao upis
+    # sa drugog ekrana.
+    "banka-nalozi-kes-ignorise-generaciju": (
+        "modScrBankaNalozi.bas",
+        "    ' Upis sa drugog ekrana ne zove nas Scr_ResetCache -- generacija\n"
+        "    ' podataka je deljeni signal da je snimak mozda star (PR #245).\n"
+        "    If mSnimakGen <> modUiData.DataGeneracija() Then\n"
+        "        mSnimakOK = False\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "    ' SABOTAZA: snimak ignorise generaciju podataka\n",
+        "T_KesGeneracija_UpisInvalidira",
+        "nalozi: posle tudjeg upisa snimak se puni ponovo (generacija)",
+    ),
+    # Tip kolone opisuje PRIKAZ, ne aditivnost: zbir running salda kartice
+    # nije poslovna vrednost (blocker 2 -- "UKUPNO SALDO = zbir medjustanja").
+    "izvestaji-ukupno-sabira-saldo": (
+        "modScrIzvestaji.bas",
+        "        Case IZ_KART:   IzSabirljive = Array(4, 5)     ' promet; NIKAD saldo (6, 7)\n",
+        "        Case IZ_KART:   IzSabirljive = Array(4, 5, 6, 7)   ' SABOTAZA: sabira i salda\n",
+        "T_Izv_UgovorEkrana",
+        "stampani UKUPNO kartice ne sabira saldo",
+    ),
+    # Radnja je kontekstna (nalaz 3). Od kruga 5 ROBA za kupca je lista
+    # prijemnica sa PRJ| identitetom pa radnju IMA -- vracanje starog gate-a
+    # (tip <> "OM") bi je ponovo ugasilo. Vozacki gate ostaje u kodu kao
+    # odbrana (matrica vozacku robu ionako ne daje).
+    "izvestaji-radnja-na-agregatu": (
+        "modScrIzvestaji.bas",
+        '    If kljuc = IZ_ROBA And (tip = "Vozac" Or zbirni) Then Exit Function\n',
+        '    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function   \' SABOTAZA: kupac opet bez radnje\n',
+        "T_Izv_UgovorEkrana",
+        "roba za kupca (prijemnice) ima radnju stampe dokumenta",
+    ),
+    # ------------------------------------------------------------------
+    # Smoke krug 4 (krug 5 ispravki): kontekstni tabovi, prijemnice za
+    # kupca, zavrsni saldo kartica.
+    # ------------------------------------------------------------------
+    # Tab liste koja za tip ne postoji ni u jednom rezimu je mrtvo dugme --
+    # skup tabova MORA da prati matricu po tipu.
+    "izvestaji-tabovi-ne-slusaju-tip": (
+        "modScrIzvestaji.bas",
+        "Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) As Boolean\n"
+        "    IzListaZaTipPostoji = IzListaDostupna(kljuc, tip, False) Or _\n"
+        "                          IzListaDostupna(kljuc, tip, True)\n",
+        "Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) As Boolean\n"
+        "    IzListaZaTipPostoji = True   ' SABOTAZA: svi tabovi za svaki tip\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "OM ne nudi tabove kartica",
+    ),
+    # ROBA za kupca su DOKUMENTA (prijemnice), ne agregat po vrsti. Sabotira
+    # se GRANA OBLIKOVANJA (UpisiRed): kupac tretiran kao agregat cita prve
+    # cetiri kolone snimka, pa kg/vrednost mreze gube vezu sa tblPrijemnica
+    # -- slaganje sa rucnim prolazom pada po imenu. (Sabotaza na samom
+    # PuniSnimak pozivu bi pukla kao Subscript pre tvrdnje -- vidljiv kvar,
+    # ali ne imenovan; zato se meri ovde.)
+    "izvestaji-roba-kupac-agregat": (
+        "modScrIzvestaji.bas",
+        '            ElseIf tip = "Kupac" Then\n'
+        "                ' Prijemnice kupca (ReportPrijemniceKupca fiksne kolone).\n",
+        "            ElseIf False Then   ' SABOTAZA: kupac tretiran kao agregat\n"
+        "                ' Prijemnice kupca (ReportPrijemniceKupca fiksne kolone).\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "kg robe kupca = rucni zbir prijemnica",
+    ),
+    # Zavrsni saldo kartice u zoni MORA doci iz kolone salda UKUPNO reda --
+    # promet perioda (kol. 5) je druga brojka i tiho bi lagao operatera.
+    "izvestaji-kart-saldo-pogresna-kolona": (
+        "modScrIzvestaji.bas",
+        "                mZonaKartSaldo = NzD(src(i, 7))\n",
+        "                mZonaKartSaldo = NzD(src(i, 5))   ' SABOTAZA: promet umesto salda\n",
+        "T_Izv_TabKontekstRobaKupacSaldo",
+        "zona saldo = zavrsni running saldo kartice",
+    ),
+    # Matrica i za KUPCE zbirno (krug 11): vracanje stare grane (bez
+    # SALDO_KUPCI/OTKUP_ROBA) mora da padne po imenu.
+    "izvestaji-kupci-zbirno-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _\n"
+        "                         IZV_TAB_SALDO_KUPCI, IZV_TAB_OTKUP_ROBA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA   ' SABOTAZA: kupci bez zbirnog salda/robe\n",
+        "T_Izv_MatricaVodiListe",
+        "saldo kupaca zbirno po kupcima (krug 11)",
+    ),
+    # Roba po vozacu zbirno (krug 12): vracanje stare vozacke grane
+    # (bez OTKUP_ROBA) mora da padne po imenu.
+    "izvestaji-vozaci-roba-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _\n"
+        "                         IZV_TAB_OTKUP_ROBA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA   ' SABOTAZA: vozaci bez zbirne robe\n",
+        "T_Izv_MatricaVodiListe",
+        "roba po vozacu zbirno (krug 12)",
+    ),
+    # Roba po vozacu MERI otpremnice bez storniranih -- storno filter
+    # koji tiho nestane duplira prevoz.
+    "izvestaji-roba-vozaci-storno": (
+        "modIzvestaj.bas",
+        "        If cStorno = 0 Or CStr(d(i, cStorno)) <> \"Da\" Then\n"
+        "            If IsDate(d(i, cDat)) Then\n"
+        "                dv = CDate(d(i, cDat))\n"
+        "                If dv >= datumOd And dv <= datumDo Then\n"
+        "                    k = Trim$(CStr(d(i, cVoz)))\n",
+        "        If True Then   ' SABOTAZA: i stornirane otpremnice\n"
+        "            If IsDate(d(i, cDat)) Then\n"
+        "                dv = CDate(d(i, cDat))\n"
+        "                If dv >= datumOd And dv <= datumDo Then\n"
+        "                    k = Trim$(CStr(d(i, cVoz)))\n",
+        "T_Izv_ZbirniSadrzaj",
+        "roba po vozacu: kg = rucni zbir otpremnica",
+    ),
+    # Rang se OTVARA po rangu rastuce -- shell sort ugovor (recenzija
+    # #245 blocker: izvor sortiran, a ekran presortira po imenu).
+    "izvestaji-rang-sort-ime": (
+        "modOtkupUI.bas",
+        "    If kljuc = \"KOOPERANTI\" Or kljuc = \"RANG\" Then\n",
+        "    If kljuc = \"KOOPERANTI\" Then   ' SABOTAZA: rang pada u datum-desc granu\n",
+        "T_Izv_RangSortIKontekst",
+        "rang se otvara po koloni ranga",
+    ),
+    # Kontekst "Svi" prati LISTU (IzTrebaEntitet), ne rezim -- rang u
+    # pojedinacnom ne sme da ispise prazan entitet "()".
+    "izvestaji-rang-kontekst-prazan": (
+        "modScrIzvestaji.bas",
+        "    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
+        "    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
+        "T_Izv_RangSortIKontekst",
+        "rang kontekst nije prazan entitet '()'",
+    ),
+    # Univerzum "Svi OM" dolazi IZ PODATAKA -- povratak na sifarnik
+    # tiho gubi orphan stanicu (silent omission u finansijskom zbiru).
+    "izvestaji-om-univerzum-sifarnik": (
+        "modIzvestaj.bas",
+        "    IzvStaniceUnion dict, TBL_OTKUP, COL_OTK_STANICA, \"\", \"\"\n",
+        "    ' SABOTAZA: otkupi ne sire univerzum stanica\n",
+        "T_Izv_ZbirniOrphanStanica",
+        "orphan stanica POSTOJI u zbirnom saldu -- silent omission je kvar",
+    ),
+    # Aktivacija ekrana primenjuje PODRAZUMEVANI sort aktivne liste --
+    # tvrdi reset na 2/desc vraca rang-po-imenu posle povratka na ekran
+    # (recenzija #245, krug 17 lifecycle blocker).
+    "izvestaji-aktivacija-gazi-sort": (
+        "modOtkupUI.bas",
+        "Public Sub GridSortAktivacijaTest()\n"
+        "    If Not IsTestMode() Then Exit Sub\n"
+        "    PrimeniSortZaListu ActiveLista()\n"
+        "End Sub\n",
+        "Public Sub GridSortAktivacijaTest()\n"
+        "    If Not IsTestMode() Then Exit Sub\n"
+        "    mSortCol = 2: mSortAsc = False   ' SABOTAZA: tvrdi reset kao pre\n"
+        "End Sub\n",
+        "T_Izv_RangSortIKontekst",
+        "povratak na ekran vraca rang na kolonu ranga",
+    ),
+    # Cip vrste MORA da filtrira po vrednosti reda -- cip koji sve
+    # propusta je laz na ekranu (krug 18).
+    "izvestaji-cip-vrste-ne-filtrira": (
+        "modScrIzvestaji.bas",
+        "        CipPropusta = (StrComp(IzVrstaIzReda(kljuc, tip, src, i), _\n"
+        "                               Mid$(filter, 3), vbTextCompare) = 0)\n",
+        "        CipPropusta = True   ' SABOTAZA: cip vrste propusta sve\n",
+        "T_Izv_CipoviVrstaSorta",
+        "nepostojeca vrsta = nula redova",
+    ),
+    # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
+    # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
+    # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne
+    # dodiruju, pa pada samo test ranga u Izvestajima.
+    "izvestaji-rang-mimo-perioda": (
+        "modOtkupBlok.bas",
+        "                    uKrug = (odN = 0 Or dSer >= odN) And (doN = 0 Or dSer <= doN)\n",
+        "                    uKrug = True   ' SABOTAZA: rang ignorise period\n",
+        "T_Izv_RangKooperanata",
+        "rang postuje period -- prazan opseg nema redove",
+    ),
+    # ------------------------------------------------------------------
+    # Krug 9: zbirni sadrzaj ("fali sadrzaj za zbirne izvestaje").
+    # ------------------------------------------------------------------
+    # Matrica je izvor istine i za NOVE zbirne kombinacije -- vracanje
+    # starih grana (bez SALDO/AMBALAZA/ISPLATA zbirno za OM) mora da padne
+    # po imenu, ne da tiho suzi ekran.
+    "izvestaji-zbirno-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _\n"
+        "                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA, _\n"
+        "                         IZV_TAB_OTKUP_ROBA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK   ' SABOTAZA: stara matrica\n",
+        "T_Izv_MatricaVodiListe",
+        "saldo zbirno po stanicama (OM)",
+    ),
+    # Red zbirnog salda je UKUPNO red pojedinacnog izvestaja te stanice --
+    # prvi red (prvi kooperant) umesto UKUPNO bi tiho lagao po stanici.
+    "izvestaji-zbirni-saldo-tudji-red": (
+        "modIzvestaj.bas",
+        "            r = ReportSaldoOM(stID, datumOd, datumDo)\n"
+        "            uk = IzvUkupnoRed(r, 1)\n",
+        "            r = ReportSaldoOM(stID, datumOd, datumDo)\n"
+        "            uk = 1   ' SABOTAZA: prvi red umesto UKUPNO\n",
+        "T_Izv_ZbirniSadrzaj",
+        "zbirni saldo: kg stanice = rucni prolaz tblOtkup",
+    ),
+    # Promena rezima MORA da prebaci listu koje u novom rezimu nema --
+    # inace je prvi utisak zbirnog rezima prazan ekran sa hintom (krug 9).
+    "izvestaji-rezim-bez-prelaza": (
+        "modScrIzvestaji.bas",
+        "    If Not IzListaDostupna(Scr_Lista(), TrenutniTip(), zbirni) Then\n"
+        "        mLista = PrvaListaZaKontekst(TrenutniTip(), zbirni)\n"
+        "    End If\n",
+        "    ' SABOTAZA: rezim ne prebacuje listu\n",
+        "T_Izv_ZbirniSadrzaj",
+        "prelaz na zbirno sa otk. listova ide na prvu dostupnu (saldo)",
+    ),
+    # ------------------------------------------------------------------
+    # Smoke krug 3 (Izvestaji): kontekstni cipovi, detalj reda, poslovni
+    # broj dokumenta u pregledu ambalaze.
+    # ------------------------------------------------------------------
+    # Cip nad listom koja za kombinaciju NE POSTOJI je filter necega cega
+    # nema -- ne sme ni da se vidi (isti princip kao kontekstna radnja).
+    "izvestaji-cip-na-nedostupnoj": (
+        "modScrIzvestaji.bas",
+        "Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _\n"
+        "                                   ByVal zbirni As Boolean) As String\n"
+        "    If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function\n",
+        "Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _\n"
+        "                                   ByVal zbirni As Boolean) As String\n"
+        "    ' SABOTAZA: cipovi i na nedostupnoj kombinaciji\n",
+        "T_Izv_DetaljICipKontekst",
+        "nedostupna kombinacija nema cipove",
+    ),
+    # Detalj reda je legacy "Detalji otkupa": SVE stavke dokumenta (broj +
+    # stanica), ne samo izabrana linija -- Klasa I i II dele dokument.
+    "izvestaji-detalj-bez-stavki": (
+        "modScrIzvestaji.bas",
+        "        If NzS(d(i, cBr)) = brDok And NzS(d(i, cSt)) = stanica Then\n",
+        "        If Trim$(CStr(d(i, cId))) = Trim$(otkupID) Then   ' SABOTAZA: samo izabrana linija\n",
+        "T_Izv_DetaljICipKontekst",
+        "detalj nosi SVE stavke bloka",
+    ),
+    # Pregled ambalaze pokazuje POSLOVNI broj dokumenta; bez mape prijemnica
+    # red nosi interni ID -- operater njime ne moze nista (par. 9.5 princip).
+    "izvestaji-amb-broj-ostaje-id": (
+        "modIzvestaj.bas",
+        "        Case DOK_TIP_PRIJEMNICA\n"
+        "            If mapaPrj.Exists(dokID) Then sOut = CStr(mapaPrj(dokID))\n",
+        "        Case DOK_TIP_PRIJEMNICA\n"
+        "            ' SABOTAZA: prijemnica ostaje interni ID\n",
+        "T_Izv_DetaljICipKontekst",
+        "ambalaza pokazuje poslovni broj dokumenta, ne interni ID",
     ),
 }
 

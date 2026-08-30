@@ -6388,3 +6388,248 @@ tri stvarna kvara — sve zatvoreno u istom izdanju:
   kruga na pravoj svesci**; otvoren ostaje samo nalaz o naizgled praznoj
   ćeliji „Isplatiti" na jednom redu (dijagnostika `Diag_BnRedovi` stoji u
   ekranu ako se ponovi).
+
+---
+
+## vba-v2.89.0 — 2026-08-30
+
+### Pregled izdanja (šta je novo, ukratko)
+
+- **Ekran Izveštaji u novom UI-ju** — jedanaest lista nad jednom mrežom
+  (Saldo, Roba, Ambalaža, Isplata, Zbirni, Pros. cena, Manjak, Kartica,
+  Amb. kartica, Rang, Otk. listovi), sa entitetom i periodom u zoni,
+  trenutnom pretragom i čipovima; brojke računa isti kod kao stara forma.
+- **Zbirni režim sa sadržajem**: Saldo/Isplata/Roba po stanicama, Saldo i
+  Roba po kupcima, Roba po vozačima, Ambalaža entitet × tip gajbe sa
+  saldom — svuda UKUPNO i isti račun kao pojedinačni izveštaji.
+- **Tabovi, čipovi i radnje su kontekstni** — vide se samo gde postoje;
+  klik na red otvara detalj (stavke sa cenama, vozac, zbirna, prijemnice
+  sa kupcem); „Štampaj dokument“ nad redom po vrsti dokumenta.
+- **Filteri vrste i sorte** kao čipovi iz stvarnih podataka na robnim
+  listama.
+- **Rang kooperanata** uz period zone (isti račun kao na Unosu
+  dokumenata) — otvara se po rangu, uvek.
+- **Kartica kooperanta**: jedna štampa (šablon sa rekapitulacijom robe,
+  BPG-om i potpisima) + završni saldo u zoni i PDF naslovu.
+- **Sve tabelarne štampe u kućnom obrascu** (zaglavlje firme, uredne
+  širine kolona, UKUPNO sabira samo sabirljivo, „12/1“ ostaje tekst).
+- **Brzina**: snimak po kontekstu + tabele se za jedan prikaz čitaju
+  jednom; izveštaji se osvežavaju i posle upisa sa drugog ekrana.
+- **Tačnost**: stanica/kupac sa prometom bez reda u šifarniku se NE gubi
+  iz zbirova (univerzum iz podataka, šifarnik samo imenuje).
+
+### Novi ekran: Izveštaji (novi UI)
+
+Stavka „Izveštaji" u meniju novog UI-ja više nije prigušena. Svih devet
+izveštaja stare forme + dva njena skrivena taba („Otkupni listovi",
+„Pregled ambalaže") sada su **jedanaest lista** nad istom mrežom (od
+kruga 8 i Rang kooperanata), sa istim
+brojkama — računa ih isti kod kao i do sada (`modIzvestaj`), ekran ništa ne
+računa sam.
+
+- **Entitet i period u zoni**: četiri prekidača tipa (OM / Kupci / Vozači /
+  Kooperanti), prekidač Pojedinačno/Zbirno, izbor konkretnog entiteta (sa
+  šifrom — dva ista imena se razlikuju) i opseg Od–Do (podrazumevano od
+  1. januara). Lista se osvežava sama; nepotpun datum u kucanju ne prazni
+  prikaz.
+- **Kombinacija koja nema izveštaj kaže to otvoreno** („Ovaj izveštaj ne
+  postoji za izabranu kombinaciju") — umesto praznog naslova; koja
+  kombinacija postoji odlučuje ista matrica kao u staroj formi.
+- **Pretraga i čipovi su trenutni i na velikoj svesci** — lista se učita
+  jednom pa se filtrira u mestu (lekcija sa Platnih naloga ugrađena od
+  prvog dana), a nalazi i imena sa kvakama kad se kucaju bez njih.
+- **Štampa**: „Štampaj izveštaj" (tabelarni PDF onoga što se vidi — ako je
+  filter aktivan, piše i to na papiru), „Štampaj karticu (PDF)" na listama
+  kartica, i „Štampaj dokument" nad redom (otkupni list, otpremnica,
+  prijemnica, revers ambalaže — po vrsti reda).
+- **Zbir koji ne odgovara prikazu se ne prikazuje**: red UKUPNO postoji
+  samo u nefiltriranom pregledu (filtriran zbir daje podnožje mreže), a
+  redovi „OM AVANS" / „Kod otkupca" su brojke iznad mreže umesto redova sa
+  izmišljenim nulama.
+
+### Slaganje sa izvorom istine (merilo ovog izdanja)
+
+Svaka lista ima test koji je vezuje za nezavisan račun: zbirni ↔ zbir
+pojedinačnih po svakom entitetu, prosečna cena ↔ saldo kupca (dva različita
+određenja vrste), isplata ↔ ručni zbir sva tri kanala iz tblNovac, kartica ↔
+running saldo red-po-red + kanonski ambalažni saldo + slaganje same sa sobom
+preko komplementarnih perioda, manjak ↔ pravilo ManjakStavka, ambalaža ↔
+zbirni = zbir pojedinačnih po tipu. Bez golden brojki — samo relacije.
+
+Prva dva puštanja su bila crvena, i oba su nešto naučila: test-sveska nije
+imala ambalažne ledger parove uz otkupe (pa su se kartica i kanonski saldo
+legitimno razilazili — sveska dopunjena kako je upis inače piše), a tvrdnja
+o početnom stanju kartice je prepravljena na oblik nezavisan od kasnijih
+upisa (završni saldo do 31.3. = početno stanje od 1.4.).
+
+### Doterano posle prvog smoke-a nad pravim podacima
+
+Prvi krug na pravoj svesci (1.596 ambalažnih redova, 595 otpremnica) doneo
+je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
+
+- **Padajuće liste sada nude sve stavke.** Auto-izbor prvog entiteta je
+  punio polje tekstom, a panel za izbor sužava po tekstu — pa je nudio
+  samo tu jednu stavku. Podrazumevani entitet sada živi „ispod" polja
+  (prikaz od prvog trenutka nosi prvi entitet, red ispod polja kaže koji),
+  polje ostaje prazno dok operater ne izabere, i lista na strelicu nudi
+  sve.
+- **Brže:** ekran više ne čita podatke dvaput pri promeni tipa/entiteta, a
+  povratak na već pogledanu listu je trenutan (snimci po listi ostaju u
+  memoriji do prvog upisa).
+- **Kartica kaže kuda:** na listi Kartica sa pogrešnim tipom sada piše i
+  „klikni 'Kooperanti' pa izaberi kooperanta", ne samo da izveštaj ne
+  postoji.
+- **Red UKUPNO više nije u mreži** — mreža sortira po kolonama pa je
+  plutao usred liste (viđeno na Isplati). Zbir prikazanih redova uvek
+  stoji u podnožju, a štampani izveštaj dobija svoj red UKUPNO izračunat
+  tačno nad onim što je na papiru.
+
+### Ugrađena recenzija (krug 3)
+
+- **Izveštaj se osvežava i posle upisa sa drugog ekrana.** Do sada je
+  povratak na već pogledan izveštaj mogao da pokaže brojke od pre upisa
+  (keš ekrana nije znao za tuđi upis) — isti propust je imala i lista
+  Platnih naloga i njena značka u meniju. Sada svaki upis „ostari" sve
+  takve kešve (zajednički brojač generacije podataka), a povratak bez
+  upisa ostaje trenutan.
+- **Štampani red UKUPNO sabira samo ono što ima smisla sabirati**: promet
+  (kg, iznosi, ulaz/izlaz gajbi) da, prosečne cene i tekući saldo ne —
+  zbir međustanja kartice nije nikakva poslovna vrednost. Podnožje kartice
+  sada pokazuje neto promet prikazanih redova umesto „0,00".
+- **„Štampaj dokument" se ne nudi tamo gde red nema dokument** (agregat
+  robe po vrsti, nedostupne kombinacije).
+
+### Doterano posle trećeg smoke-a (krug 4)
+
+- **Pregled ambalaže se otvara brzo i na punom ledger-u.** Izveštaj je za
+  svaki od 1.596 redova iznova pretraživao tri tabele dokumenata da
+  prevede interni ID u broj dokumenta — sada se ti prevodi pripreme
+  jednom, pa red plaća samo jedan pogled u mapu. Pravilo prevoda je
+  identično starom; menja se samo cena.
+- **Čipovi se ne nude na kombinaciji koja ne postoji** — filter praznog
+  skupa je ista zbunjivost kao dugme bez funkcije (isti princip kao
+  „Štampaj dokument" iz recenzije). Na nedostupnoj kombinaciji ostaje samo
+  hint koji kaže kuda.
+- **Klik na red otvara detalj** (drill-down iz stare forme, sada kao traka
+  u zoni desno): za otkupni red — kooperant, sve stavke tog otkupnog lista
+  („vrsta klasa kg × cena = vrednost") i UKUPNO; za otpremnicu — vozač, kg
+  i broj vezanih blokova. Traka se sama sklanja na uskom prozoru i čisti
+  pri promeni liste.
+- **Sve štampe iz ovog ekrana sada dele kućni obrazac dokumenata**
+  (zaglavlje firme, naslovni blok sa kontekstom, siva traka kolona, UKUPNO
+  podebljan) — tabelarni PDF više nije goli grid, pa su svi dokumenti iz
+  aplikacije vizuelno usklađeni. Usput zatvoreno i ranije zapisano: tip
+  gajbe „12/1" u PDF-u ostaje tekst (ćelije se štampaju kao tekst, Excel
+  ga više ne prepravlja u datum).
+
+### Doterano posle četvrtog smoke-a (krug 5)
+
+- **Tabovi lista prate izabrani tip.** Kartica i Amb. kartica se više ne
+  nude kad su izabrani OM/Kupci/Vozači — tab liste koja za taj tip ne
+  postoji ni u jednom režimu je mrtvo dugme i ne crta se (isti princip
+  kao čipovi i radnje). Klik na „Kooperanti" sada odmah otvara karticu
+  (prva dostupna lista tipa); lista dostupna samo u drugom režimu (Manjak
+  uz „Zbirno") ostaje vidljiva jer je režim jedan klik. Ovo je i prva
+  svesna dopuna ljuske za ovaj ekran: tri opšte linije u osvežavanju, bez
+  imena ijednog ekrana (zapisano u katalogu).
+- **Detalj reda ne ponavlja ono što red već kaže** — princip iz prijave:
+  samo novi podaci. Otkupni list: stavke sa cenama (cene nema u koloni),
+  UKUPNO samo kad ima više linija, bez kooperanta; otpremnica: vozač,
+  broj otkupnih listova, **zbirna i prijemnice te zbirne** umesto
+  otpremljenih kg koje red već pokazuje.
+- **Roba za kupca su prijemnice, ne zbir po vrsti** — dokumenta sa
+  datumom, brojem, zbirnom, klasom, kg, cenom i vrednošću; zbir po vrsti
+  i dalje daje tab Zbirni. Red ima i „Štampaj dokument" (prijemnica) i
+  detalj (vozač, sorta, ambalaža, da li je fakturisana). UKUPNO liste je
+  vezano testom za ručni prolaz kroz tabelu prijemnica.
+- **Kartice pokazuju završni saldo** — u zoni iznad mreže (novčana:
+  saldo + saldo ambalaže; ambalažna: saldo gajbi) i u kontekst-liniji
+  štampanog PDF-a. Kolona salda po redu ostaje u mreži i štampi; UKUPNO
+  red štampe i dalje sabira samo promet (saldo nije sabirljiv — pravilo
+  iz recenzije netaknuto).
+
+### Doterano posle petog smoke-a (krug 6)
+
+- **Prijemnica u detalju sada kaže i kupca** — „firma koja je izdala
+  prijemnicu" stoji uz broj i kg, i u detalju otpremnice (Roba za OM) i u
+  detalju otkupnog lista.
+- **Detalj otkupnog lista nosi celu vertikalu**: posle stavki i UKUPNO
+  ide „Vozač … · Zbirna …" pa prijemnice te zbirne sa kupcem — od
+  otkupnog lista do firme-primaoca na jedan klik, i na listi Otk. listovi
+  i na kartici kooperanta. Deo koji na listu ne postoji se preskače,
+  ništa se ne izmišlja.
+
+- **Jedna kartica kooperanta** — odlučeno: kartica sa rekapitulacijom
+  robe, BPG-om i potpisima je prava kartica. Na listama kartica stoji
+  samo „Štampaj karticu (PDF)"; tabelarni „Štampaj izveštaj" ostaje na
+  svim ostalim listama.
+- **Kolone štampanog PDF-a više nisu razvučene** — širina kolone prati
+  sadržaj i naslov kolone (datum je uzak, naslovi se ne lome usred reči);
+  zaglavlje firme više ne razvlači prvu kolonu.
+- **Rang kooperanata i u Izveštajima** — uz Karticu i Amb. karticu, tip
+  Kooperanti ima i tab „Rang": ista lista kao „Kooperanti po iznosu
+  otkupa" na Unosu dokumenata, ali za period izabran u zoni (ne samo
+  tekuća godina); radi i bez izabranog kooperanta, sa pretragom,
+  sortiranjem i house PDF-om.
+- **Zbirni režim je dobio sadržaj** — priznat nalaz („fali sadržaj za
+  zbirne"): Saldo i Isplata sada imaju zbirni oblik **po stanicama**, a
+  Saldo i Roba i **po kupcima** (red = kupac: kg, vrednost, uplaćeno,
+  saldo, ambalaža; roba po kupcu preko svih vrsta — kupci se čitaju iz
+  prometa, pa se vidi i kupac koga nema u šifarniku); red = stanica,
+  iste kolone kao pojedinačni izveštaj, UKUPNO preko svih; Roba zbirno
+  radi i **po stanicama** (iste kg/vrednost brojke kao zbirni Saldo —
+  jedan izvor) i **po vozačima** (otpremljeno: kg i vrednost otpremnica
+  po vozaču); Kooperanti zbirno namerno ostaju na Rangu; zbirna
+  Ambalaža pokazuje i **saldo po tipu** (ulaz − izlaz — koliko je
+  gajbi kod entiteta), a **prelaz Pojedinačno→Zbirno je ubrzan**
+  (tabele se za jedan prikaz čitaju jednom, ne jednom po stanici/
+  kupcu/vozaču);
+  Ambalaža zbirno pokazuje stanje **po tipu gajbe za izabranog** (OM /
+  kupca / vozača — jedina zbirna lista koja zato zadržava izbor
+  entiteta); a klik na „Zbirno" više nikad ne ostavlja prazan ekran —
+  lista koje u tom režimu nema prelazi na prvu koja postoji (Kooperanti +
+  Zbirno otvara Rang).
+
+- **Filteri vrste i sorte** — na robnim listama (Otk. listovi, Roba,
+  Zbirni, Pros. cena, Saldo kupca) čipovi sada nude i konkretne vrste
+  iz podataka („Malina“, „Kupina“…); na prijemnicama kupca i sorte.
+  Čip se ne nudi tamo gde red vrstu/sortu ne nosi — filter praznog
+  skupa se ne izmišlja.
+
+### Šta NIJE urađeno, i zašto
+
+- **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i
+  dalje čekaju vrstu reda u ugovoru ljuske — detalj traka u zoni je
+  namerno uži oblik.
+- **Promena već izabranog entiteta kucanjem:** kad je entitet izabran,
+  panel na strelicu nudi samo njega (sužavanje po tekstu je ljuskino
+  pravilo, isto na svim ekranima) — kuca se preko teksta. Ako se u radu
+  pokaže tesno, širenje panela je dopuna ugovora ljuske i ide kao zaseban
+  razgovor.
+- **Stara forma Izveštaja ostaje operativna i nepromenjena** — iz nje nije
+  obrisano ništa; revers ambalaže je dobio deljeni račun u `modIzvestaj`, a
+  forma zadržava svoju kopiju.
+- **Rang kooperanata** deli JEDAN račun sa ekranom Dokumenti
+  (`KoopRangRows`) — u Izveštajima je isti rang, samo uz period zone
+  (tab „Rang“ za Kooperante, od kruga 8); ništa nije prepisano.
+- Tip ambalaže „12/1" kao datum u PDF-u je za novi UI zatvoren (v. krug 4),
+  ali **stara forma i dalje deli stari ispis** — njen prolaz kroz štampu
+  ostaje zapisan kao zaseban posao.
+- Kursor u polju pretrage i dalje treperi preko placeholder teksta —
+  estetski backlog svih ekrana.
+
+### Verifikacija (konačno, posle 18 krugova)
+
+- Glavni set **149 / 0** (sedamnaest novih testova ekrana i slaganja,
+  133–149); banka set **205 / 0** (Platni nalozi bit-identični);
+  statičke provere čiste (322 sidra sabotaža).
+- **Trideset sedam** namernih kvarova ovog ekrana (+ jedan na kešu
+  Platnih naloga) obara po tačno jedan imenovani test i vraća se
+  bit-identično (dvosmerni dokaz).
+- Dve nezavisne recenzije PR-a #245 — svi nalazi zatvoreni: cross-screen
+  invalidacija keša, sabirljivost štampanog UKUPNO, kontekstna radnja,
+  rang sort (klik + aktivacija ekrana), kontekst „Svi“, orphan stanice
+  u zbirovima.
+- **Compile VBAProject: čist** (ručna kapija operatera, 30.08.2026).
+- Smoke nad pravim podacima: šest krugova operatera — svaki nalaz
+  ugrađen u ovo izdanje.
