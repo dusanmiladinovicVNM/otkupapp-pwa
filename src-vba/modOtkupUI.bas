@@ -304,6 +304,7 @@ Private mSumVal As Double
 Private mPage As Long
 Private mPageSize As Long
 Private mSortCol As Long
+Private mSortLista As String     ' lista za koju vazi tekuci sort (v. SortZaListu)
 Private mSortAsc As Boolean
 Private mFilter As String
 Private mSearch As String
@@ -2741,6 +2742,32 @@ End Function
 ' Redni broj cipa iz taga, ili -1 ako tag nije cip. Javna je da bi se ugovor
 ' ljuske ("svaki cip koji ekran prijavi ume da se izabere") mogao TVRDITI u
 ' testu -- klik kroz formu se u harnessu ne moze odigrati.
+' PODRAZUMEVANI SORT PO LISTI -- cist ugovor, bez stanja: rang-liste
+' (KOOPERANTI na Dokumentima, RANG na Izvestajima) se otvaraju po rangu
+' rastuce, sve ostalo po drugoj koloni opadajuce (datum u dokumentima).
+' Javno da bi se ugovor mogao TVRDITI u testu -- klik kroz formu se u
+' harnessu ne moze odigrati (isti razlog kao SegIndeksIzTaga).
+Public Sub SortZaListu(ByVal kljuc As String, ByRef col As Long, ByRef asc As Boolean)
+    If kljuc = "KOOPERANTI" Or kljuc = "RANG" Then
+        col = 1: asc = True
+    Else
+        col = 2: asc = False
+    End If
+End Sub
+
+Private Sub PrimeniSortZaListu(ByVal kljuc As String)
+    SortZaListu kljuc, mSortCol, mSortAsc
+    mSortLista = kljuc
+End Sub
+
+' TEST SEAM: tekuci sort mreze (kolona, smer) -- tvrdo gejtovan.
+Public Function GridSortTest(ByRef col As Long, ByRef asc As Boolean) As Boolean
+    If Not IsTestMode() Then Exit Function
+    col = mSortCol
+    asc = mSortAsc
+    GridSortTest = True
+End Function
+
 Public Function SegIndeksIzTaga(ByVal tag As String) As Long
     Dim rep As String
     SegIndeksIzTaga = -1
@@ -3682,12 +3709,9 @@ Private Sub UiClickCore(ByVal tag As String)
             mFrm.Controls("zGrid").Controls("txtSearch").text = ""
             ' Sortiranje ne prelazi iz liste u listu: druga kolona je datum u
             ' listama dokumenata, a ime kooperanta u rangu - ista strelica bi
-            ' znacila drugu stvar. Rang se otvara po rangu, ostalo po datumu.
-            If ActiveLista() = "KOOPERANTI" Then
-                mSortCol = 1: mSortAsc = True
-            Else
-                mSortCol = 2: mSortAsc = False
-            End If
+            ' znacila drugu stvar. Izbor zivi u SortZaListu (deli ga i
+            ' RefreshFromData za auto-prelaz liste; recenzija #245, krug 16).
+            PrimeniSortZaListu ActiveLista()
             RefreshListSeg mFrm
             If mScreen = "DOKUMENTI" Then
                 ' povratak na "Svi listovi" vraca cipove koje je RefreshGridTitle
@@ -4615,6 +4639,10 @@ Public Sub RefreshFromData()
     ' prate AKTIVNU listu, koju je ekran mogao da prebaci. Za ekrane sa
     ' statickim listama sve tri linije su idempotentne.
     mGeomStara = True
+    ' Ekran je mogao da PREBACI aktivnu listu (auto-prelaz tipa/rezima) --
+    ' nova lista dobija svoj podrazumevani sort, kao i na klik. Ista lista
+    ' zadrzava operaterov izbor sorta (upis ga ne sme gaziti).
+    If ActiveLista() <> mSortLista Then PrimeniSortZaListu ActiveLista()
     RefreshListSeg mFrm
     RefreshGridTitle mFrm
     ReloadGrid

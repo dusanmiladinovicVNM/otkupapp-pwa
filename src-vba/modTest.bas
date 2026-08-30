@@ -386,6 +386,8 @@ Public Sub RunAllTests()
     RunOne 144
     RunOne 145
     RunOne 146
+    RunOne 147
+    RunOne 148
     RunOne 124
     RunOne 125
     RunOne 126
@@ -569,6 +571,8 @@ Private Function TestName(ByVal idx As Long) As String
         Case 144: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
         Case 145: TestName = "T_Izv_RangKooperanata"
         Case 146: TestName = "T_Izv_ZbirniSadrzaj"
+        Case 147: TestName = "T_Izv_RangSortIKontekst"
+        Case 148: TestName = "T_Izv_ZbirniOrphanStanica"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -723,6 +727,8 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 144: T_Izv_TabKontekstRobaKupacSaldo
         Case 145: T_Izv_RangKooperanata
         Case 146: T_Izv_ZbirniSadrzaj
+        Case 147: T_Izv_RangSortIKontekst
+        Case 148: T_Izv_ZbirniOrphanStanica
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -10883,6 +10889,79 @@ Private Sub T_Izv_ZbirniSadrzaj()
     modScrIzvestaji.Scr_Event "scrIzRezZ", "Click"
     AssertEq modScrIzvestaji.Scr_Lista(), "RANG", _
              "kooperant + zbirno prelazi na rang (jedina zbirna lista tipa)"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 147. Recenzija #245 (krug 16): SORT UGOVOR LJUSKE za rang-liste +
+' kontekst "Svi" prati listu, ne rezim.
+' ============================================================
+Private Sub T_Izv_RangSortIKontekst()
+    Dim col As Long, asc As Boolean, d As Variant, s As String
+
+    ' (1) Shell sort contract (SortZaListu -- ista funkcija koju zovu i
+    ' klik na tab i auto-prelaz liste u RefreshFromData): rang-liste se
+    ' otvaraju po rangu RASTUCE, ostale po drugoj koloni opadajuce.
+    modOtkupUI.SortZaListu "RANG", col, asc
+    AssertEq col, 1, "rang se otvara po koloni ranga"
+    AssertEq asc, True, "rang se otvara rastuce -- 1 je na vrhu"
+    modOtkupUI.SortZaListu "KOOPERANTI", col, asc
+    AssertEq col, 1, "rang na dokumentima po koloni ranga"
+    AssertEq asc, True, "rang na dokumentima rastuce"
+    modOtkupUI.SortZaListu "SALDO", col, asc
+    AssertEq col, 2, "ostale liste po drugoj koloni"
+    AssertEq asc, False, "ostale liste opadajuce (datum)"
+
+    ' (2) Kontekst prati LISTU: rang je preko svih i u POJEDINACNOM --
+    ' nikad "Kooperanti: ()" (recenzija: nedovrsen UX).
+    modScrIzvestaji.Scr_IzTestSet "RANG", "Kooperant", False, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    s = modScrIzvestaji.Scr_IzCtxNazivTest()
+    AssertEq (Len(s) > 0), True, "rang u pojedinacnom ima kontekst ime"
+    AssertEq (InStr(1, s, "(", vbTextCompare) = 0), True, _
+             "rang kontekst nije prazan entitet '()'"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 148. Recenzija #245 (krug 16): ORPHAN stanica -- univerzum zbirnih
+' "Svi OM" izvestaja dolazi IZ PODATAKA, ne iz sifarnika.
+' ============================================================
+Private Sub T_Izv_ZbirniOrphanStanica()
+    Dim d As Variant, redovi As Variant, n As Long, i As Long
+    Dim nasla As Boolean
+
+    ' Vozilo: OTK-ORPH-1 na STA-ORPHAN koje NEMA u tblStanice.
+    AssertEq Len(Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", "STA-ORPHAN", "Naziv")))), 0, _
+             "vozilo: orphan stanica nije u sifarniku"
+
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 8)), "STA-ORPHAN", vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq CStr(redovi(i, 1)), "STA-ORPHAN", _
+                     "orphan stanica se prikazuje pod svojim ID-em"
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(10, "0.00"), _
+                     "orphan kg = njen otkup (10 kg)"
+        End If
+    Next i
+    AssertEq nasla, True, _
+             "orphan stanica POSTOJI u zbirnom saldu -- silent omission je kvar"
+
+    ' Ista garancija za robu (projekcija salda).
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "OM", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 4)), "STA-ORPHAN", vbTextCompare) > 0 Then nasla = True
+    Next i
+    AssertEq nasla, True, "orphan stanica postoji i u robi po OM"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

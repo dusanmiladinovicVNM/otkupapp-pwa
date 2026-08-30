@@ -634,6 +634,13 @@ SEED = {
         # Zatvoren je NAMERNO: GetOpenOtkupi ga ne vidi, pa KPI/cipovi/korpa
         # ekrana Platni nalozi ostaju bit-identicni (T129/T130 tvrde relacije
         # nad otvorenima).
+        # ORPHAN STANICA (recenzija #245/krug 16): otkup na stanici koje
+        # NEMA u tblStanice -- zbirni "Svi OM" mora da je prikaze pod ID-em,
+        # ne da je tiho izostavi (univerzum iz podataka, ne iz sifarnika).
+        {"OtkupID": "OTK-ORPH-1", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": "STA-ORPHAN", "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,
+         "KolAmbalaze": 1, "VozacID": VOZAC, "BrojDokumenta": "ORPH/1", "Klasa": "I"},
         {"OtkupID": OTK_IZV_ZATVOREN, "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 10, "Cena": 50.0, "TipAmbalaze": AMB_12_1,

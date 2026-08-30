@@ -6397,7 +6397,8 @@ tri stvarna kvara — sve zatvoreno u istom izdanju:
 
 Stavka „Izveštaji" u meniju novog UI-ja više nije prigušena. Svih devet
 izveštaja stare forme + dva njena skrivena taba („Otkupni listovi",
-„Pregled ambalaže") sada su **deset lista** nad istom mrežom, sa istim
+„Pregled ambalaže") sada su **jedanaest lista** nad istom mrežom (od
+kruga 8 i Rang kooperanata), sa istim
 brojkama — računa ih isti kod kao i do sada (`modIzvestaj`), ekran ništa ne
 računa sam.
 
@@ -6577,7 +6578,9 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - **Stara forma Izveštaja ostaje operativna i nepromenjena** — iz nje nije
   obrisano ništa; revers ambalaže je dobio deljeni račun u `modIzvestaj`, a
   forma zadržava svoju kopiju.
-- **Rang kooperanata** se ne duplira — već živi na ekranu Dokumenti.
+- **Rang kooperanata** deli JEDAN račun sa ekranom Dokumenti
+  (`KoopRangRows`) — u Izveštajima je isti rang, samo uz period zone
+  (tab „Rang“ za Kooperante, od kruga 8); ništa nije prepisano.
 - Tip ambalaže „12/1" kao datum u PDF-u je za novi UI zatvoren (v. krug 4),
   ali **stara forma i dalje deli stari ispis** — njen prolaz kroz štampu
   ostaje zapisan kao zaseban posao.

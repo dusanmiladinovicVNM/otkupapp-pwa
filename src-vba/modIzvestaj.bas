@@ -1591,11 +1591,10 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
     Const SRC As String = "modIzvestaj.ReportSaldoOMZbirni"
     On Error GoTo EH
 
-    Dim st As Variant, cId As Long, cNaz As Long
-    st = GetTableData(TBL_STANICE)
+    ' Univerzum stanica IZ PODATAKA (krug 16) -- sifarnik samo imenuje.
+    Dim st As Variant
+    st = IzvStaniceIzPodataka()
     If Not IsArray(st) Then Exit Function
-    cId = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
-    cNaz = RequireColumnIndex(TBL_STANICE, "Naziv", SRC)
 
     Dim outA() As Variant, n As Long, i As Long, j As Long
     Dim r As Variant, uk As Long, imaSta As Boolean
@@ -1603,7 +1602,7 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
     ReDim outA(1 To UBound(st, 1) + 1, 1 To 8)
     For i = 1 To UBound(st, 1)
         Dim stID As String
-        stID = Trim$(CStr(st(i, cId)))
+        stID = Trim$(CStr(st(i, 1)))
         If Len(stID) > 0 Then
             r = ReportSaldoOM(stID, datumOd, datumDo)
             uk = IzvUkupnoRed(r, 1)
@@ -1615,7 +1614,7 @@ Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
                 If imaSta Then
                     n = n + 1
                     outA(n, 1) = stID
-                    outA(n, 2) = Trim$(CStr(st(i, cNaz)))
+                    outA(n, 2) = CStr(st(i, 2))
                     For j = 3 To 8
                         outA(n, j) = IzvNum(r(uk, j - 1))
                         tot(j) = tot(j) + IzvNum(outA(n, j))
@@ -1642,11 +1641,10 @@ Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
     Const SRC As String = "modIzvestaj.ReportIsplataZbirniOM"
     On Error GoTo EH
 
-    Dim st As Variant, cId As Long, cNaz As Long
-    st = GetTableData(TBL_STANICE)
+    ' Univerzum stanica IZ PODATAKA (krug 16) -- sifarnik samo imenuje.
+    Dim st As Variant
+    st = IzvStaniceIzPodataka()
     If Not IsArray(st) Then Exit Function
-    cId = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
-    cNaz = RequireColumnIndex(TBL_STANICE, "Naziv", SRC)
 
     Dim outA() As Variant, n As Long, i As Long, j As Long
     Dim r As Variant, uk As Long
@@ -1654,7 +1652,7 @@ Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
     ReDim outA(1 To UBound(st, 1) + 1, 1 To 6)
     For i = 1 To UBound(st, 1)
         Dim stID As String
-        stID = Trim$(CStr(st(i, cId)))
+        stID = Trim$(CStr(st(i, 1)))
         If Len(stID) > 0 Then
             r = ReportIsplata("OM", stID, datumOd, datumDo)
             uk = IzvUkupnoRed(r, 1)
@@ -1662,7 +1660,7 @@ Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
                 If IzvNum(r(uk, 5)) <> 0 Then
                     n = n + 1
                     outA(n, 1) = stID
-                    outA(n, 2) = Trim$(CStr(st(i, cNaz)))
+                    outA(n, 2) = CStr(st(i, 2))
                     For j = 3 To 6
                         outA(n, j) = IzvNum(r(uk, j - 1))
                         tot(j) = tot(j) + IzvNum(outA(n, j))
@@ -1963,6 +1961,59 @@ Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As 
     On Error GoTo 0
     IzvEntNaziv = IIf(Len(nm) > 0, nm, iD)
 End Function
+
+' Distinct STANICE iz podataka (recenzija #245, krug 16): union StanicaID
+' iz tblOtkup + OMID iz tblNovac + Stanica-entiteta iz tblAmbalaza
+' (nestornirano). Sifarnik daje samo ime (fallback ID) -- stanica sa
+' prometom a bez reda u tblStanice NE SME tiho da ispadne iz "Svi OM"
+' zbirova (silent omission je gori od ruznog ID-a).
+' 2D (1..n, 1..2): 1=StanicaID, 2=naziv.
+Private Function IzvStaniceIzPodataka() As Variant
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
+    IzvStaniceUnion dict, TBL_OTKUP, COL_OTK_STANICA, "", ""
+    IzvStaniceUnion dict, TBL_NOVAC, COL_NOV_OM_ID, "", ""
+    IzvStaniceUnion dict, TBL_AMBALAZA, COL_AMB_ENTITET, COL_AMB_ENTITET_TIP, "Stanica"
+    If dict.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long, nm As String
+    ReDim outA(1 To dict.count, 1 To 2)
+    For Each kk In dict.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", CStr(kk), "Naziv")))
+        On Error GoTo 0
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+    Next kk
+    IzvStaniceIzPodataka = outA
+End Function
+
+' Dodaj distinct vrednosti kolone (nestornirano; uz opcioni filter druge
+' kolone) u dict -- pomocna za IzvStaniceIzPodataka.
+Private Sub IzvStaniceUnion(ByVal dict As Object, ByVal tblName As String, _
+                            ByVal kolona As String, ByVal filtKol As String, _
+                            ByVal filtVal As String)
+    Dim d As Variant, i As Long, c As Long, cF As Long, cStorno As Long, k As String
+    On Error Resume Next
+    d = GetTableData(tblName)
+    If Not IsArray(d) Then Exit Sub
+    c = GetColumnIndex(tblName, kolona)
+    If c = 0 Then Exit Sub
+    cStorno = GetColumnIndex(tblName, COL_STORNIRANO)
+    cF = 0
+    If Len(filtKol) > 0 Then cF = GetColumnIndex(tblName, filtKol)
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            If cF = 0 Or CStr(d(i, cF)) = filtVal Then
+                k = Trim$(CStr(d(i, c)))
+                If Len(k) > 0 Then dict(k) = True
+            End If
+        End If
+    Next i
+    Err.Clear
+End Sub
 
 ' Distinct kupci IZ PODATAKA (nestornirane prijemnice), 2D (1..n, 1..2):
 ' 1=KupacID, 2=naziv iz tblKupci sa fallback-om na ID. Sifarnik nije izvor

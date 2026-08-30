@@ -883,10 +883,11 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
     mCtxId = iD
     mCtxOd = odN
     mCtxDo = doN
-    ' Lista koja i u zbirnom rezimu trazi entitet (zbirna AMBALAZA) nosi
-    ' IME tog entiteta -- "Svi" bi lagao da je prikaz preko svih (smoke
-    ' krug 9: podaci prve stanice pod naslovom "OM: Svi").
-    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni And Not IzTrebaEntitet(kljuc, zbirni))
+    ' "Svi" prati LISTU, ne rezim (recenzija #245, krug 16): lista koja ne
+    ' trazi entitet (svi zbirni oblici, i RANG cak i u pojedinacnom) je
+    ' preko svih -- "Kooperanti: ()" za rang u P je bio nedovrsen UX.
+    ' Lista koja entitet trazi nosi njegovo ime.
+    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))
 
     Snimak = mSnimci(k)
 End Function

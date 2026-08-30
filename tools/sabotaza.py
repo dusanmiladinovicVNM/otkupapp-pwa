@@ -3518,6 +3518,33 @@ SABOTAZE = {
         "T_Izv_ZbirniSadrzaj",
         "roba po vozacu: kg = rucni zbir otpremnica",
     ),
+    # Rang se OTVARA po rangu rastuce -- shell sort ugovor (recenzija
+    # #245 blocker: izvor sortiran, a ekran presortira po imenu).
+    "izvestaji-rang-sort-ime": (
+        "modOtkupUI.bas",
+        "    If kljuc = \"KOOPERANTI\" Or kljuc = \"RANG\" Then\n",
+        "    If kljuc = \"KOOPERANTI\" Then   ' SABOTAZA: rang pada u datum-desc granu\n",
+        "T_Izv_RangSortIKontekst",
+        "rang se otvara po koloni ranga",
+    ),
+    # Kontekst "Svi" prati LISTU (IzTrebaEntitet), ne rezim -- rang u
+    # pojedinacnom ne sme da ispise prazan entitet "()".
+    "izvestaji-rang-kontekst-prazan": (
+        "modScrIzvestaji.bas",
+        "    mCtxEntNaziv = EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))\n",
+        "    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)   ' SABOTAZA: Svi po rezimu\n",
+        "T_Izv_RangSortIKontekst",
+        "rang kontekst nije prazan entitet '()'",
+    ),
+    # Univerzum "Svi OM" dolazi IZ PODATAKA -- povratak na sifarnik
+    # tiho gubi orphan stanicu (silent omission u finansijskom zbiru).
+    "izvestaji-om-univerzum-sifarnik": (
+        "modIzvestaj.bas",
+        "    IzvStaniceUnion dict, TBL_OTKUP, COL_OTK_STANICA, \"\", \"\"\n",
+        "    ' SABOTAZA: otkupi ne sire univerzum stanica\n",
+        "T_Izv_ZbirniOrphanStanica",
+        "orphan stanica POSTOJI u zbirnom saldu -- silent omission je kvar",
+    ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
     # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne

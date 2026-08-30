@@ -4516,8 +4516,9 @@ matricu, identitet, prikaz istine, zonu.
 - **Detail panel „Detalji otkupa"** — prenet u krugu 4 kao detalj traka u
   zoni (§23.11/S7), ne kao padajući redovi; padajući redovi u mreži ostaju
   Faza C. Štampa dokumenta iz reda jeste preneta.
-- **Rang kooperanata** već živi na Dokumentima (`KoopRangRows`) — ne
-  duplira se.
+- **Rang kooperanata** deli jedan račun sa Dokumentima
+  (`KoopRangRows`); od kruga 8 postoji i ovde kao tab „Rang“ uz period
+  zone — račun nije prepisan (Optional granice).
 - **Zbirni oblik ambalažnog pregleda kroz ekran**: matrica tab 3 nudi samo
   pojedinačno (i u legacy-ju), pa lista AMBALAZA uvek koristi pojedinačni
   oblik; zbirna grana `ReportAmbalazeZbirni` ostaje pokrivena testom
@@ -4852,6 +4853,32 @@ prepisuju). Combo entiteta se u zbirnom režimu krije bez izuzetka
 (`IzTrebaEntitet` vraćen na čisto pravilo), kontekst je sada stvarno
 „Svi". T141/T146 obrnute istine; `OM|`/`KUP|`/`VOZ|` identitet po redu
 za budući drill.
+
+**Krug 16 (recenzija — REQUEST CHANGES, sva četiri zahteva):**
+
+- **R1 (blocker) — Rang se otvara po rangu i u stvarnom UI-ju.** Izbor
+  podrazumevanog sorta izvučen u čist ljuskin ugovor
+  `modOtkupUI.SortZaListu` (rang-liste → kolona 1 rastuće; ostale →
+  kolona 2 opadajuće), koji dele klik na tab **i** `RefreshFromData` pri
+  auto-prelazu liste (bez ovoga bi Kooperanti+Zbirno→Rang zadržao tuđ
+  sort). Test 147 tvrdi shell sort contract direktno, ne `Scr_Rows`;
+  seam `GridSortTest`.
+- **R2 — kontekst „Svi" prati LISTU, ne režim:**
+  `EntitetNaziv(tip, iD, Not IzTrebaEntitet(kljuc, zbirni))` — Rang je
+  „Svi" i u pojedinačnom; „Kooperanti: ()" više ne postoji (test 147).
+- **R3 (P1) — orphan stanice ne ispadaju iz „Svi OM":** univerzum
+  zbirnog Salda/Isplate sada dolazi **iz podataka**
+  (`IzvStaniceIzPodataka`: union `tblOtkup` + OMID iz `tblNovac` +
+  Stanica-entiteti iz `tblAmbalaza`, nestornirano; šifarnik samo
+  imenuje, fallback ID) — isti princip kao kupci. Fixture dobio
+  `OTK-ORPH-1` na `STA-ORPHAN` (bez reda u `tblStanice`); test 148
+  tvrdi da se orphan vidi u zbirnom Saldu i Robi pod svojim ID-em.
+- **R4 — docs kontradikcije očišćene** (jedanaest lista; Rang deli
+  jedan račun sa Dokumentima, nije dupliran).
+- Tri nove sabotaže: `izvestaji-rang-sort-ime`,
+  `izvestaji-rang-kontekst-prazan`, `izvestaji-om-univerzum-sifarnik`.
+- **Presek:** ovo je poslednji krug PR-a #245 — analytics faza (Pregled,
+  Poređenje, Pažnja, 360, izvoz) ide kao novi PR.
 
 **Krug 15 (smoke kruga 14 — čipovi i podnožje zbirne ambalaže):**
 
