@@ -125,6 +125,11 @@ Private Const IZ_SNIMAK_KAPA As Long = 16
 ' prolazi kroz nas Scr_ResetCache, ali podize modUiData.DataGeneracija --
 ' kes starije generacije se odbacuje (recenzija PR #245, blocker 1).
 Private mSnimakGen As Long
+' Distinct vrste/sorte iz podataka za dinamicke cipove (krug 18);
+' invalidacija istom generacijom kao snimci.
+Private mCipVrste As Variant
+Private mCipSorte As Variant
+Private mCipVrsteGen As Long
 
 ' Kontekst STVARNO ucitanih podataka -- naslov stampe i hint se grade iz njega
 ' (AUD-024 / FM-0029 #1: naslov opisuje ono sto je prikazano, ne trenutno
@@ -251,7 +256,96 @@ Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _
     ' brojke" -- krug 15). Cip vazi samo nad transakcionim ledgerom.
     If kljuc = IZ_AMB And zbirni Then Exit Function
     IzCipoviZaKontekst = IzCipoviZaListu(kljuc)
+
+    ' Dinamicki filteri VRSTE (i SORTE gde snimak nosi sortu) -- krug 18:
+    ' samo robne liste; vrednosti iz podataka, natpis sirov (~), kljuc
+    ' "vr<vrednost>" / "so<vrednost>".
+    If Not IzListaImaVrstu(kljuc, tip, zbirni) Then Exit Function
+    OsveziCipVrste
+    Dim i As Long, s As String
+    s = IzCipoviZaKontekst
+    If Len(s) = 0 Then s = "sve:OTKUI_CHIP_SVE:40"
+    If IsArray(mCipVrste) Then
+        For i = LBound(mCipVrste) To UBound(mCipVrste)
+            s = s & "|vr" & CStr(mCipVrste(i)) & ":~" & CStr(mCipVrste(i)) & _
+                ":" & CStr(CipSirina(CStr(mCipVrste(i))))
+        Next i
+    End If
+    If IzListaImaSortu(kljuc, tip, zbirni) And IsArray(mCipSorte) Then
+        For i = LBound(mCipSorte) To UBound(mCipSorte)
+            s = s & "|so" & CStr(mCipSorte(i)) & ":~" & CStr(mCipSorte(i)) & _
+                ":" & CStr(CipSirina(CStr(mCipSorte(i))))
+        Next i
+    End If
+    IzCipoviZaKontekst = s
 End Function
+
+' Robne liste -- red nosi VRSTU u snimku (v. IzVrstaIzReda).
+Public Function IzListaImaVrstu(ByVal kljuc As String, ByVal tip As String, _
+                                ByVal zbirni As Boolean) As Boolean
+    Select Case kljuc
+        Case IZ_OTKL:  IzListaImaVrstu = True
+        Case IZ_ROBA:  IzListaImaVrstu = Not zbirni
+        Case IZ_ZBIR:  IzListaImaVrstu = (tip <> "Vozac")
+        Case IZ_CENA:  IzListaImaVrstu = True
+        Case IZ_SALDO: IzListaImaVrstu = (tip = "Kupac" And Not zbirni)
+    End Select
+End Function
+
+' Sorta postoji u snimku samo na listi prijemnica kupca (10. kolona
+' ReportPrijemniceKupca) -- ostali Report* je ne vracaju.
+Public Function IzListaImaSortu(ByVal kljuc As String, ByVal tip As String, _
+                                ByVal zbirni As Boolean) As Boolean
+    IzListaImaSortu = (kljuc = IZ_ROBA And tip = "Kupac" And Not zbirni)
+End Function
+
+Private Function CipSirina(ByVal s As String) As Long
+    CipSirina = 28 + Len(s) * 6
+    If CipSirina < 44 Then CipSirina = 44
+    If CipSirina > 90 Then CipSirina = 90
+End Function
+
+' Distinct vrste (tblOtkup + tblPrijemnica) i sorte (tblPrijemnica) iz
+' nestorniranih redova; kesirano po generaciji podataka.
+Private Sub OsveziCipVrste()
+    If IsArray(mCipVrste) And mCipVrsteGen = modUiData.DataGeneracija() Then Exit Sub
+    mCipVrsteGen = modUiData.DataGeneracija()
+    mCipVrste = IzvDistinct2(TBL_OTKUP, COL_OTK_VRSTA, TBL_PRIJEMNICA, COL_PRJ_VRSTA)
+    mCipSorte = IzvDistinct2(TBL_PRIJEMNICA, COL_PRJ_SORTA, "", "")
+End Sub
+
+Private Function IzvDistinct2(ByVal t1 As String, ByVal k1 As String, _
+                              ByVal t2 As String, ByVal k2 As String) As Variant
+    Dim dict As Object, outA() As Variant, kk As Variant, n As Long
+    Set dict = CreateObject("Scripting.Dictionary")
+    IzvDistinctU dict, t1, k1
+    If Len(t2) > 0 Then IzvDistinctU dict, t2, k2
+    If dict.count = 0 Then Exit Function
+    ReDim outA(0 To dict.count - 1)
+    For Each kk In dict.keys
+        outA(n) = CStr(kk)
+        n = n + 1
+    Next kk
+    IzvDistinct2 = outA
+End Function
+
+Private Sub IzvDistinctU(ByVal dict As Object, ByVal tblName As String, _
+                         ByVal kolona As String)
+    Dim d As Variant, i As Long, c As Long, cStorno As Long, k As String
+    d = GetTableData(tblName)
+    If Not IsArray(d) Then Exit Sub
+    c = GetColumnIndex(tblName, kolona)
+    If c = 0 Then Exit Sub
+    cStorno = GetColumnIndex(tblName, COL_STORNIRANO)
+    For i = 1 To UBound(d, 1)
+        If cStorno > 0 Then
+            If CStr(d(i, cStorno)) = "Da" Then GoTo Sledeci
+        End If
+        k = Trim$(CStr(d(i, c)))
+        If Len(k) > 0 Then dict(k) = True
+Sledeci:
+    Next i
+End Sub
 
 ' Cipovi PO KLJUCU LISTE -- da se ugovor moze izmeriti bez stanja ekrana.
 Public Function IzCipoviZaListu(ByVal kljuc As String) As String
@@ -1029,7 +1123,7 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
         ' POCETNO STANJE je red konteksta -- pod filterom bi lagao.
         If filtrira And vrsta = 2 Then GoTo Sledeci
 
-        If Not CipPropusta(kljuc, filter, zbirni, src, i) Then GoTo Sledeci
+        If Not CipPropusta(kljuc, filter, tip, zbirni, src, i) Then GoTo Sledeci
 
         If Len(qN) > 0 Then
             hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, zbirni, src, i))
@@ -1126,8 +1220,19 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
 End Function
 
 Private Function CipPropusta(ByVal kljuc As String, ByVal filter As String, _
-                             ByVal zbirni As Boolean, _
+                             ByVal tip As String, ByVal zbirni As Boolean, _
                              ByRef src As Variant, ByVal i As Long) As Boolean
+    ' Dinamicki filteri (krug 18): "vr<vrednost>" poredi vrstu reda,
+    ' "so<vrednost>" sortu (kolona zavisi od liste -- IzVrstaIzReda).
+    If Left$(filter, 2) = "vr" And Len(filter) > 2 Then
+        CipPropusta = (StrComp(IzVrstaIzReda(kljuc, tip, src, i), _
+                               Mid$(filter, 3), vbTextCompare) = 0)
+        Exit Function
+    End If
+    If Left$(filter, 2) = "so" And Len(filter) > 2 Then
+        CipPropusta = (StrComp(NzS(src(i, 10)), Mid$(filter, 3), vbTextCompare) = 0)
+        Exit Function
+    End If
     Select Case kljuc
         Case IZ_MANJAK
             ' Oznaka ("nema prijema" / "nejasan vlasnik") stize kao TEKST u
@@ -1469,6 +1574,20 @@ Private Function GajbeIliPrazno(ByVal v As Variant) As String
     If IsNumeric(v) And Not IsEmpty(v) Then
         If CDbl(v) <> 0 Then GajbeIliPrazno = Format$(CDbl(v), "#,##0")
     End If
+End Function
+
+' Kolona VRSTE u snimku po listi (samo liste za koje IzListaImaVrstu).
+Private Function IzVrstaIzReda(ByVal kljuc As String, ByVal tip As String, _
+                               ByRef src As Variant, ByVal i As Long) As String
+    Select Case kljuc
+        Case IZ_OTKL:  IzVrstaIzReda = NzS(src(i, 4))
+        Case IZ_ROBA
+            ' OM snimak nosi vrstu u koloni 3, kupac-prijemnice u 4.
+            IzVrstaIzReda = NzS(src(i, IIf(tip = "Kupac", 4, 3)))
+        Case IZ_ZBIR:  IzVrstaIzReda = NzS(src(i, 2))
+        Case IZ_CENA:  IzVrstaIzReda = NzS(src(i, 1))
+        Case IZ_SALDO: IzVrstaIzReda = NzS(src(i, 1))
+    End Select
 End Function
 
 Private Sub ResetZonskeBrojke()

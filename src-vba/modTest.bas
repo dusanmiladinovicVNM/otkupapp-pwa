@@ -388,6 +388,7 @@ Public Sub RunAllTests()
     RunOne 146
     RunOne 147
     RunOne 148
+    RunOne 149
     RunOne 124
     RunOne 125
     RunOne 126
@@ -573,6 +574,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 146: TestName = "T_Izv_ZbirniSadrzaj"
         Case 147: TestName = "T_Izv_RangSortIKontekst"
         Case 148: TestName = "T_Izv_ZbirniOrphanStanica"
+        Case 149: TestName = "T_Izv_CipoviVrstaSorta"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -729,6 +731,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 146: T_Izv_ZbirniSadrzaj
         Case 147: T_Izv_RangSortIKontekst
         Case 148: T_Izv_ZbirniOrphanStanica
+        Case 149: T_Izv_CipoviVrstaSorta
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -10978,6 +10981,86 @@ Private Sub T_Izv_ZbirniOrphanStanica()
         If InStr(1, CStr(redovi(i, 4)), "STA-ORPHAN", vbTextCompare) > 0 Then nasla = True
     Next i
     AssertEq nasla, True, "orphan stanica postoji i u robi po OM"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 149. Izvestaji krug 18: dinamicki cipovi VRSTE i SORTE (iz podataka,
+' sirovi natpis) na robnim listama -- filtriranje se slaze sa rucnim
+' prolazom; ne-robne liste ih ne nude.
+' ============================================================
+Private Sub T_Izv_CipoviVrstaSorta()
+    Dim s As String, d As Variant, n As Long, i As Long
+    Dim rn As Long
+
+    ' (1) Cip spisak: robna lista nudi vrste iz podataka (sirovi natpis
+    ' "~Malina"); ne-robna (ISPLATA) i zbirna roba ih NE nude.
+    s = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+    AssertEq (InStr(1, s, "|vr" & FX_VRSTA & ":~" & FX_VRSTA & ":") > 0), True, _
+             "otkupni listovi nude cip vrste iz podataka"
+    AssertEq (InStr(1, s, "sve:") > 0), True, "prvi cip ostaje Sve"
+    s = modScrIzvestaji.IzCipoviZaKontekst("ISPLATA", "OM", False)
+    AssertEq (InStr(1, s, "|vr") = 0), True, "isplata nema cipove vrste"
+    s = modScrIzvestaji.IzCipoviZaKontekst("ROBA", "OM", True)
+    AssertEq (InStr(1, s, "|vr") = 0), True, _
+             "zbirna roba (po entitetu) nema cipove vrste"
+    s = modScrIzvestaji.IzCipoviZaKontekst("ROBA", "Kupac", False)
+    AssertEq (InStr(1, s, "|so") > 0), True, _
+             "prijemnice kupca nude cip sorte (snimak nosi sortu)"
+    s = modScrIzvestaji.IzCipoviZaKontekst("OTKLISTE", "OM", False)
+    AssertEq (InStr(1, s, "|so") = 0), True, _
+             "otkupni listovi nemaju cip sorte -- snimak je ne nosi"
+
+    ' (2) Filtriranje VRSTOM na otkupnim listovima = rucni prolaz kroz
+    ' tblOtkup (nestorno, stanica, opseg, vrsta).
+    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_STANICA, IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("vr" & FX_VRSTA, "")
+    n = CLng(d(2))
+    Dim otk As Variant, cSt As Long, cVr As Long, cDat As Long, cStorno As Long
+    Dim dv As Date
+    otk = GetTableData(TBL_OTKUP)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cVr = GetColumnIndex(TBL_OTKUP, COL_OTK_VRSTA)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    For i = 1 To UBound(otk, 1)
+        If Trim$(CStr(otk(i, cSt))) = FX_STANICA And CStr(otk(i, cStorno)) <> "Da" Then
+            If StrComp(Trim$(CStr(otk(i, cVr))), FX_VRSTA, vbTextCompare) = 0 Then
+                If IsDate(otk(i, cDat)) Then
+                    dv = CDate(otk(i, cDat))
+                    If dv >= IzvOdD() And dv <= IzvDoD() Then rn = rn + 1
+                End If
+            End If
+        End If
+    Next i
+    AssertEq (rn > 0), True, "vozilo: stanica ima otkupe te vrste"
+    AssertEq n, rn, "cip vrste filtrira = rucni prolaz kroz tblOtkup"
+    d = modScrIzvestaji.Scr_Rows("vrNepostojecaVrsta", "")
+    AssertEq CLng(d(2)), 0, "nepostojeca vrsta = nula redova"
+
+    ' (3) Filtriranje SORTOM na prijemnicama kupca = rucni prolaz.
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "Kupac", False, FX_KUPAC, IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("so" & FX_SORTA, "")
+    n = CLng(d(2))
+    Dim prj As Variant, cKup As Long, cSor As Long, cQ As Long, cS2 As Long, cD2 As Long
+    Dim rs As Long
+    prj = GetTableData(TBL_PRIJEMNICA)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cSor = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA)
+    cQ = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cS2 = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    cD2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    For i = 1 To UBound(prj, 1)
+        If Trim$(CStr(prj(i, cKup))) = FX_KUPAC And CStr(prj(i, cS2)) <> "Da" Then
+            If StrComp(Trim$(CStr(prj(i, cSor))), FX_SORTA, vbTextCompare) = 0 Then
+                If IsDate(prj(i, cD2)) Then
+                    If CDate(prj(i, cD2)) >= IzvOdD() And CDate(prj(i, cD2)) <= IzvDoD() Then rs = rs + 1
+                End If
+            End If
+        End If
+    Next i
+    AssertEq (rs > 0), True, "vozilo: kupac ima prijemnice te sorte"
+    AssertEq n, rs, "cip sorte filtrira = rucni prolaz kroz tblPrijemnica"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

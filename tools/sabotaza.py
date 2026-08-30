@@ -3561,6 +3561,16 @@ SABOTAZE = {
         "T_Izv_RangSortIKontekst",
         "povratak na ekran vraca rang na kolonu ranga",
     ),
+    # Cip vrste MORA da filtrira po vrednosti reda -- cip koji sve
+    # propusta je laz na ekranu (krug 18).
+    "izvestaji-cip-vrste-ne-filtrira": (
+        "modScrIzvestaji.bas",
+        "        CipPropusta = (StrComp(IzVrstaIzReda(kljuc, tip, src, i), _\n"
+        "                               Mid$(filter, 3), vbTextCompare) = 0)\n",
+        "        CipPropusta = True   ' SABOTAZA: cip vrste propusta sve\n",
+        "T_Izv_CipoviVrstaSorta",
+        "nepostojeca vrsta = nula redova",
+    ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
     # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne

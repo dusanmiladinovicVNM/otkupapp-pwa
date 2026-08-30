@@ -823,7 +823,13 @@ Private Sub RefreshChipsForScreen(frm As Object)
             nm = Split(CStr(ch(n)), "|")(0)
             mScrChipKey(n) = CStr(p(0))
             mChipW(n) = CSng(val(p(2)))
-            frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
+            ' Natpis '~xxx' je SIROVA vrednost (dinamicki cipovi -- vrsta/
+            ' sorta iz podataka nemaju kataloski kljuc; krug 18).
+            If Left$(CStr(p(1)), 1) = "~" Then
+                frm.Controls("zGrid").Controls(nm & "C").caption = Mid$(CStr(p(1)), 2)
+            Else
+                frm.Controls("zGrid").Controls(nm & "C").caption = Poruka(CStr(p(1)))
+            End If
             ShowChip frm, nm, True
             If mScrChipKey(n) = mFilter Then imaAktivan = True
             n = n + 1

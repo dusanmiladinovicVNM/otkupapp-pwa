@@ -2093,7 +2093,7 @@ End Function
 ' GetPrijemniceByKupac (isti read-model kao korpa fakturisanja), ovde samo
 ' normalizovan u fiksne kolone nezavisne od rasporeda u tabeli (schema drift):
 ' (1)=Datum (2)=BrojPrijemnice (3)=BrojZbirne (4)=Vrsta (5)=Klasa
-' (6)=Kg (7)=Cena (8)=Vrednost=kg*cena (9)=PrijemnicaID.
+' (6)=Kg (7)=Cena (8)=Vrednost=kg*cena (9)=PrijemnicaID (10)=Sorta.
 ' Poslednji red = UKUPNO (kolona 2), kao ostali Report*.
 Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
                                       ByVal datumOd As Date, _
@@ -2115,12 +2115,14 @@ Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
     cKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
     cCe = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_CENA, SRC)
     cId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+    Dim cSor As Long
+    cSor = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_SORTA, SRC)
 
     Dim n As Long, i As Long, kg As Double, cena As Double
     Dim totKg As Double, totVr As Double
     n = UBound(data, 1)
     Dim result() As Variant
-    ReDim result(1 To n + 1, 1 To 9)
+    ReDim result(1 To n + 1, 1 To 10)
     For i = 1 To n
         kg = 0: cena = 0
         If IsNumeric(data(i, cKol)) Then kg = CDbl(data(i, cKol))
@@ -2134,6 +2136,7 @@ Public Function ReportPrijemniceKupca(ByVal kupacID As String, _
         result(i, 7) = cena
         result(i, 8) = kg * cena
         result(i, 9) = Trim$(CStr(data(i, cId)))
+        result(i, 10) = Trim$(CStr(data(i, cSor)))
         totKg = totKg + kg
         totVr = totVr + kg * cena
     Next i

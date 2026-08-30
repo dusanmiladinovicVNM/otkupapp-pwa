@@ -6565,6 +6565,12 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   lista koje u tom režimu nema prelazi na prvu koja postoji (Kooperanti +
   Zbirno otvara Rang).
 
+- **Filteri vrste i sorte** — na robnim listama (Otk. listovi, Roba,
+  Zbirni, Pros. cena, Saldo kupca) čipovi sada nude i konkretne vrste
+  iz podataka („Malina“, „Kupina“…); na prijemnicama kupca i sorte.
+  Čip se ne nudi tamo gde red vrstu/sortu ne nosi — filter praznog
+  skupa se ne izmišlja.
+
 ### Šta NIJE urađeno, i zašto
 
 - **Padajući redovi u samoj mreži** (detalj koji se otvara ispod reda) i

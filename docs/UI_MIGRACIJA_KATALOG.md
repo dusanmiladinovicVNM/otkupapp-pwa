@@ -4854,6 +4854,21 @@ prepisuju). Combo entiteta se u zbirnom režimu krije bez izuzetka
 „Svi". T141/T146 obrnute istine; `OM|`/`KUP|`/`VOZ|` identitet po redu
 za budući drill.
 
+**Krug 18 (poslednji dodatak pre merge-a — filteri vrste i sorte):**
+dinamički čipovi **VRSTE** (vrednosti iz podataka: distinct
+`tblOtkup`+`tblPrijemnica`, nestornirano, keš po generaciji) na robnim
+listama — Otk. listovi, Roba (pojedinačni oblici), Zbirni (ne-Vozač),
+Pros. cena, Saldo-Kupac; **SORTE** samo na prijemnicama kupca (jedina
+lista čiji snimak nosi sortu — `ReportPrijemniceKupca` dobio sortu kao
+10. skrivenu kolonu; ostali Report* je ne vraćaju pa se tamo sorta ne
+laže čipom). Ključ čipa nosi vrednost (`vr<vrednost>`/`so<vrednost>`),
+poređenje `StrComp vbTextCompare`; ljuska dobila **sirovi natpis čipa**
+kroz `~` prefiks (dinamičke vrednosti nemaju kataloški ključ — mala
+opšta dopuna, S9-stil). Ne-robne liste i zbirni oblici po entitetu čip
+vrste ne nude. Test 149 (spisak čipova po listi + filtriranje = ručni
+prolaz + nepostojeća vrsta = 0), sabotaža
+`izvestaji-cip-vrste-ne-filtrira` (322 sidra).
+
 **Krug 17 (recenzija, drugi prolaz — lifecycle blocker + hardening):**
 
 - **Aktivacija ekrana primenjuje podrazumevani sort aktivne liste.**
