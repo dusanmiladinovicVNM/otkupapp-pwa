@@ -6391,7 +6391,32 @@ tri stvarna kvara — sve zatvoreno u istom izdanju:
 
 ---
 
-## vba-v2.89.0 — 2026-08-28
+## vba-v2.89.0 — 2026-08-30
+
+### Pregled izdanja (šta je novo, ukratko)
+
+- **Ekran Izveštaji u novom UI-ju** — jedanaest lista nad jednom mrežom
+  (Saldo, Roba, Ambalaža, Isplata, Zbirni, Pros. cena, Manjak, Kartica,
+  Amb. kartica, Rang, Otk. listovi), sa entitetom i periodom u zoni,
+  trenutnom pretragom i čipovima; brojke računa isti kod kao stara forma.
+- **Zbirni režim sa sadržajem**: Saldo/Isplata/Roba po stanicama, Saldo i
+  Roba po kupcima, Roba po vozačima, Ambalaža entitet × tip gajbe sa
+  saldom — svuda UKUPNO i isti račun kao pojedinačni izveštaji.
+- **Tabovi, čipovi i radnje su kontekstni** — vide se samo gde postoje;
+  klik na red otvara detalj (stavke sa cenama, vozac, zbirna, prijemnice
+  sa kupcem); „Štampaj dokument“ nad redom po vrsti dokumenta.
+- **Filteri vrste i sorte** kao čipovi iz stvarnih podataka na robnim
+  listama.
+- **Rang kooperanata** uz period zone (isti račun kao na Unosu
+  dokumenata) — otvara se po rangu, uvek.
+- **Kartica kooperanta**: jedna štampa (šablon sa rekapitulacijom robe,
+  BPG-om i potpisima) + završni saldo u zoni i PDF naslovu.
+- **Sve tabelarne štampe u kućnom obrascu** (zaglavlje firme, uredne
+  širine kolona, UKUPNO sabira samo sabirljivo, „12/1“ ostaje tekst).
+- **Brzina**: snimak po kontekstu + tabele se za jedan prikaz čitaju
+  jednom; izveštaji se osvežavaju i posle upisa sa drugog ekrana.
+- **Tačnost**: stanica/kupac sa prometom bez reda u šifarniku se NE gubi
+  iz zbirova (univerzum iz podataka, šifarnik samo imenuje).
 
 ### Novi ekran: Izveštaji (novi UI)
 
@@ -6593,13 +6618,18 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - Kursor u polju pretrage i dalje treperi preko placeholder teksta —
   estetski backlog svih ekrana.
 
-### Verifikacija
+### Verifikacija (konačno, posle 18 krugova)
 
-- Glavni set **144 / 0** (dvanaest novih testova ekrana i slaganja);
-  banka set **205 / 0** (Platni nalozi bit-identični — nova test-vozila su
-  namerno vezana za zatvoren blok); statičke provere čiste.
-- **Dvadeset pet** namernih kvarova ovog ekrana (+ jedan na kešu Platnih
-  naloga) obara po tačno jedan imenovani test i vraća se bit-identično
-  (dvosmerni dokaz).
-- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject` i
-  smoke nad pravim podacima u više krugova (checklista u PR-u).
+- Glavni set **149 / 0** (sedamnaest novih testova ekrana i slaganja,
+  133–149); banka set **205 / 0** (Platni nalozi bit-identični);
+  statičke provere čiste (322 sidra sabotaža).
+- **Trideset sedam** namernih kvarova ovog ekrana (+ jedan na kešu
+  Platnih naloga) obara po tačno jedan imenovani test i vraća se
+  bit-identično (dvosmerni dokaz).
+- Dve nezavisne recenzije PR-a #245 — svi nalazi zatvoreni: cross-screen
+  invalidacija keša, sabirljivost štampanog UKUPNO, kontekstna radnja,
+  rang sort (klik + aktivacija ekrana), kontekst „Svi“, orphan stanice
+  u zbirovima.
+- **Compile VBAProject: čist** (ručna kapija operatera, 30.08.2026).
+- Smoke nad pravim podacima: šest krugova operatera — svaki nalaz
+  ugrađen u ovo izdanje.
