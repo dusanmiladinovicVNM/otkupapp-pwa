@@ -770,7 +770,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     z.Controls("slBg").Left = PAD - 10
     z.Controls("slBg").top = SL_Y_LBL - 8
     z.Controls("slBg").width = w - 2 * (PAD - 10)
-    z.Controls("slBg").Height = SL_Y_BTN - SL_Y_LBL + 2
+    ' Kartica obuhvata i CELU detalj traku (smoke S2: redovi trake su
+    ' visili ispod bele podloge i vizuelno ulazili u sledeci blok) --
+    ' dno ide do pred donju liniju zone, ne do reda dugmadi.
+    z.Controls("slBg").Height = SL_ZONA_H - (SL_Y_LBL - 8) - 8
 
     ' Brojke uz desnu ivicu.
     For i = 0 To 1

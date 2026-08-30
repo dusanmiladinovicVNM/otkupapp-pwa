@@ -6676,9 +6676,12 @@ ijedne izmišljene veze.
   raskorak sa brojem zbirne na bloku se prijavljuje, ne peglа.
   Dvosmislen broj zbirne se ne sabira — fail-closed oznaka, isto
   pravilo vlasnika kao izveštaji robe i manjka (poziva se, ne prepisuje).
-- **Kg koji curi se vidi:** razlika na bilo kojoj karici (prag 0,01 kg,
-  isti kao provera zbirne) nosi oznaku u lancu i red u Nepotpunima sa
-  obe brojke.
+- **Kg koji curi se vidi — ali kalo nije kvar:** razlika na podatkovnim
+  karikama (blokovi↔otpremnica, otpremnice↔zbirna; prag 0,01 kg, isti
+  kao provera zbirne) nosi oznaku u lancu i red u Nepotpunima sa obe
+  brojke. Razlika zbirna↔prijemnica se NE prijavljuje — to je
+  transportno kalo (prvi smoke), poslovna veličina koju meri izveštaj
+  Manjak; u detalju reda ostaje vidljiva kroz kg po karici.
 - Svaka karika potpunog lanca vezana je testom za nezavisan ručni prolaz
   kroz tabele; fixture prvi put ima kompletan lanac do fakture (i četiri
   namerno pokvarena vozila za svaku klasu kvara).
@@ -6691,6 +6694,14 @@ ijedne izmišljene veze.
 - Vrednost u dinarima niz lanac (v1 prati robu, kg).
 - Detalj trake za redove Nepotpunih koji nisu otkup.
 - Padajući redovi u samoj mreži — i dalje čekaju ugovor ljuske.
+
+### Doterano posle prvog smoke-a
+
+- Razlika zbirna↔prijemnica više se ne obeležava kao „kg razlika“ —
+  transportno kalo je normalan tok (nalaz operatera); Nepotpuni broje
+  stvaran posao.
+- Detalj traka je dobila svoju belu karticu — redovi više ne vise preko
+  ivice zone.
 
 ### Verifikacija
 

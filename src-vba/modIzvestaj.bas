@@ -4519,7 +4519,7 @@ PreskociBroj:
     Dim pz As Variant, pInfo As Variant
     Dim prijC As Collection, fakture As Object
     Dim prikazPrij As String, prikazFak As String
-    Dim kg1 As Boolean, kg2 As Boolean, kg3 As Boolean
+    Dim kg1 As Boolean, kg2 As Boolean
 
     For i = 1 To UBound(otkupData, 1)
         If IsDate(otkupData(i, cOtkDat)) Then
@@ -4561,7 +4561,6 @@ PreskociBroj:
         oznaka = ""
         kg1 = False
         kg2 = False
-        kg3 = False
         otpID = SledTxt(otkupData(i, cOtkOtp))
         blokZbr = SledTxt(otkupData(i, cOtkZbr))
         result(r, 16) = otpID
@@ -4627,8 +4626,11 @@ PreskociBroj:
                         oznaka = CStr(pz(2))    ' IZV_VLASNIK_NEJASAN / IZV_NEMA_PRIJEMA
                     Else
                         result(r, 11) = CDbl(pz(1))
-                        ' kg karika 3: zbirna <-> prijem.
-                        If Abs(CDbl(pz(1)) - zbirnaKg) > SLED_EPS_KG Then kg3 = True
+                        ' Razlika zbirna <-> prijem se NE proverava:
+                        ' to je TRANSPORTNO KALO (smoke nalaz S1) --
+                        ' poslovna velicina koju mere Manjak izvestaji,
+                        ' ne kvar lanca. Vidljiva je u detalju (kg po
+                        ' karici), ne obelezava se kao oznaka.
 
                         Set prijC = Nothing
                         If nVl = 1 Then
@@ -4693,9 +4695,12 @@ PreskociBroj:
         ' Oznaka je PRVA anomalija PO POZICIJI u lancu (merilo #2 zadatka:
         ' kg koji curi je vidljiva razlika, nikad precutana): prekid pre/na
         ' otpremnici -> kg blok<->otp -> prekid na zbirni -> kg otp<->zbirna
-        ' -> nema prijema -> kg zbirna<->prijem -> nefakturisano. Prekid
-        ' DUBLJE u lancu ne sme da sakrije kg curenje na RANIJOJ karici;
-        ' svako curenje ponaosob nosi i lista problema, pa se nista ne gubi.
+        ' -> nema prijema -> nefakturisano. Kg se poredi SAMO na podatkovnim
+        ' karikama (roba se nije mrdala, brojevi moraju biti isti); zbirna
+        ' <-> prijem je TRANSPORTNO KALO (smoke S1) i ne ulazi -- njega mere
+        ' Manjak izvestaji. Prekid DUBLJE u lancu ne sme da sakrije kg
+        ' curenje na RANIJOJ karici; svako curenje ponaosob nosi i lista
+        ' problema, pa se nista ne gubi.
         Select Case oznaka
             Case SLED_OZN_NEPOVEZAN, SLED_OZN_OTP_STORNIRANA, SLED_OZN_VEZA
                 ' karika pre kg1 -- ostaje
@@ -4705,7 +4710,7 @@ PreskociBroj:
                 If kg1 Or kg2 Then oznaka = SLED_OZN_KG
             Case Else
                 ' "" ili nefakturisano -- kg bilo koje karike je ranije.
-                If kg1 Or kg2 Or kg3 Then oznaka = SLED_OZN_KG
+                If kg1 Or kg2 Then oznaka = SLED_OZN_KG
         End Select
         result(r, 14) = oznaka
 Sledeci:
@@ -4948,14 +4953,9 @@ SledeciOtp:
                                    " (klasa " & zKla & ")", _
                                    SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))
                 End If
-            Else
-                If Abs(prijKg - zKg) > SLED_EPS_KG Then
-                    rows.Add Array(SLEDP_KG_RAZLIKA, zbrData(i, cZDat), zBr, naziv, _
-                                   zKg, "zbirna " & Format$(zKg, "#,##0.##") & _
-                                   " kg / prijem " & Format$(prijKg, "#,##0.##") & " kg", _
-                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))
-                End If
             End If
+            ' Razlika zbirna <-> prijem se NE prijavljuje: transportno
+            ' kalo (smoke S1) -- poslovna velicina, meri je Manjak.
 
             If nVl = 1 And otpSumBK.Exists(zBr & "|" & zKla) Then
                 Dim sumO As Double

@@ -5049,8 +5049,9 @@ karike su kolone sa brojevima dokumenata (Otpremnica, Zbirna, Prijem,
 Faktura, Kupac) + kolona **OZNAKA** (prva prekinuta/višesmislena karika
 po poziciji u lancu: `nepovezan` → `otpremnica stornirana` → `veza
 neusaglasena` → kg razlika blok↔otp → `bez zbirne`/`zbirna ne postoji`/
-`nejasan vlasnik` → kg otp↔zbirna → `nema prijema` → kg zbirna↔prijem →
-`nefakturisano`; prazno = potpun). Prijem ćelija nosi broj prijemnice,
+`nejasan vlasnik` → kg otp↔zbirna → `nema prijema` →
+`nefakturisano`; prazno = potpun; kg zbirna↔prijem se ne proverava —
+to je transportno kalo, v. §24.7/S1). Prijem ćelija nosi broj prijemnice,
 „N prij." kad ih je više, ili ostaje prazna (razlog je u OZNAKA koloni —
 nikad izmišljen broj, nikad „0,00" umesto poruke). **Detalj traka** desno
 u zoni (obrazac §23.11/S7): pun lanac izabranog reda, karika po karika
@@ -5094,8 +5095,11 @@ nepostojeću — detalj razlikuje), `VEZA-NEUSAGLASENA`,
 DVOSMISLEN` (JEDNOM po broju), `ZBIRNA-BEZ-PRIJEMA` (po stavki; uz #V>1
 sa nepripisivim prijemnicama se NE tvrdi — prijem možda postoji a ne sme
 se pripisati), `PRIJEMNICA-BEZ-FAKTURE` (i poznato nepotpuno stanje
-„Fakturisano=Da bez FakturaID" — PRJ-FAK-2 klasa), `KG-RAZLIKA` (po
-karici; uz #V>1 se ne računa — fail-closed i za kg). Čipovi: LANAC
+„Fakturisano=Da bez FakturaID" — PRJ-FAK-2 klasa), `KG-RAZLIKA` (SAMO
+podatkovne karike: blokovi↔otpremnica i otpremnice↔zbirna — roba se
+nije mrdala pa brojevi moraju biti isti; razlika zbirna↔prijem je
+TRANSPORTNO KALO i ne prijavljuje se — meri je Manjak, v. §24.7/S1; uz
+#V>1 se ne računa — fail-closed i za kg). Čipovi: LANAC
 sve·potpun·nepotpun (lanac koji curi NIJE potpun); PARCELE sve·bez
 parcele (obrazac MANJAK čipa); NEPOTPUNI sve·veze·prijem·fakture·kg
 (grupe klasa). Prvi čip je svuda najširi.
@@ -5165,7 +5169,28 @@ kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
 - **Palete** nisu karika lanca (uporedni tok — `docs/DOMEN/README.md`);
   paletna sledljivost ostaje na ekranu Palete.
 
-### 24.7 Verifikacija
+### 24.7 Prvi smoke: dva nalaza (ispravke u istom PR-u)
+
+Compile je prošao, ekran radi na pravoj svesci (malina sveska, 1.620
+lanaca) — i doneo dva nalaza koje suite nije mogla da vidi:
+
+**S1 — „kg razlika između zbirne i prijemnice je transportno kalo“.**
+Operater je odmah pročitao ono što je dizajn prevideo: razlika
+zbirna↔prijem *skoro uvek postoji* — roba putuje, kalo je poslovna
+veličina (meri je izveštaj Manjak), ne kvar podataka. Provera te karike
+je uklonjena i iz oznake lanca i iz liste NEPOTPUNI; kg po karici ostaje
+vidljiv u detalj traci (razlika se VIDI, ali se ne optužuje). Kg provere
+ostaju samo na podatkovnim karikama gde se roba nije mrdala: blokovi↔
+otpremnica i otpremnice↔zbirna (invarijanta `modDokumentInvariant`).
+Brojka „Nepotpune karike“ time pada na stvaran posao. Prag se NE
+uvodi (dozvoljeno kalo bi bilo novo poslovno pravilo — §22.2 merilo).
+
+**S2 — detalj traka je vizuelno curila u susedni blok.** Redovi trake
+(do 6 linija ispod naslova) izlazili su ispod bele podloge zone i
+vizuelno ulazili u naredni blok ekrana. Bela kartica sada obuhvata celu
+traku (dno ide do pred donju liniju zone), pa traka ima svoj okvir.
+
+### 24.8 Verifikacija
 
 - `RunAllTests` (šest novih testova 150–155, registrovani u sva tri
   registra, izvršavaju se PRE 124–126), `RunBankaImportTestSuite`
