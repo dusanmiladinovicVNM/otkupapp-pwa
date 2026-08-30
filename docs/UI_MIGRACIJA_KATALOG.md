@@ -4842,6 +4842,19 @@ OM-Z i Vozač-Z + `OTKUP_ROBA`; sabotaže
 isti ručni prolaz kao zbirni saldo, roba po vozaču = ručni zbir
 otpremnica.
 
+**Krug 13 (smoke kruga 12 — saldo po vozaču + brzina P→Z):**
+
+- **Zbirna Ambalaža dobila SALDO kolonu** (ulaz − izlaz po tipu; smer je
+  već entitetski jer `isVozac` obrće u Report-u) — „mora da se prikaže
+  saldo po vozaču"; nula se prikazuje (izravnat entitet JE informacija);
+  saldo je sabirljiv preko tipova (bilans gajbi).
+- **Prelaz Pojedinačno→Zbirno ubrzan:** ceo `PuniSnimak` sada ide pod
+  postojeći `BeginTableCache`/`EndTableCache` (modDataAccess, ref-counted
+  — isti obrazac kao Storno uvid). Zbirni oblici zovu pojedinačni Report
+  **po entitetu**, pa su bez keša istu tabelu čitali sa lista N puta —
+  sada jednom po snimku (i pojedinačne liste dobijaju: SaldoOM čita 3+
+  tabele). `EndTableCache` ide i kroz grešku, inače keš preživi upis.
+
 **Krug 10 (smoke kruga 9):** kontekst-linija zbirne Ambalaže je pisala
 „OM: Svi" dok je prikaz bio za podrazumevanog (prvog) entiteta —
 `EntitetNaziv` je za zbirni režim vraćao „Svi" pre provere da li lista

@@ -10729,6 +10729,9 @@ Private Sub T_Izv_ZbirniSadrzaj()
             AssertEq CStr(redovi(i, 3)), _
                      IIf(CDbl(r(uk, 6)) = 0, "", Format$(CDbl(r(uk, 6)), "#,##0")), _
                      "zbirna ambalaza: izlaz mreze = API zbirni red"
+            AssertEq Format$(CDbl(redovi(i, 4)), "0"), _
+                     Format$(CDbl(r(uk, 5)) - CDbl(r(uk, 6)), "0"), _
+                     "zbirna ambalaza: saldo = ulaz - izlaz (krug 13)"
         End If
     Next i
     AssertEq nasla, True, "red tipa gajbe postoji u zbirnoj ambalazi"

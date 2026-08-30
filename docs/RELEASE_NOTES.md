@@ -6553,7 +6553,11 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   iste kolone kao pojedinačni izveštaj, UKUPNO preko svih; Roba zbirno
   radi i **po stanicama** (iste kg/vrednost brojke kao zbirni Saldo —
   jedan izvor) i **po vozačima** (otpremljeno: kg i vrednost otpremnica
-  po vozaču); Kooperanti zbirno namerno ostaju na Rangu;
+  po vozaču); Kooperanti zbirno namerno ostaju na Rangu; zbirna
+  Ambalaža pokazuje i **saldo po tipu** (ulaz − izlaz — koliko je
+  gajbi kod entiteta), a **prelaz Pojedinačno→Zbirno je ubrzan**
+  (tabele se za jedan prikaz čitaju jednom, ne jednom po stanici/
+  kupcu/vozaču);
   Ambalaža zbirno pokazuje stanje **po tipu gajbe za izabranog** (OM /
   kupca / vozača — jedina zbirna lista koja zato zadržava izbor
   entiteta); a klik na „Zbirno" više nikad ne ostavlja prazan ekran —

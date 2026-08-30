@@ -603,11 +603,14 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
             Case IZ_AMB
-                ' Tip | Ulaz | Izlaz (legacy zbirni oblik).
+                ' Tip | Ulaz | Izlaz | Saldo -- saldo = ulaz - izlaz po
+                ' tipu (krug 13: "mora da se prikaze saldo po vozacu");
+                ' smer je vec entitetski (isVozac obrce u Report-u).
                 IzKoloneZaListu = Array( _
                     "OTKUI_HDA_TIP||txt|0|1", _
                     "OTKUI_HDA_ULAZ||txt|80|1", _
-                    "OTKUI_HDA_IZLAZ||txt|80|1")
+                    "OTKUI_HDA_IZLAZ||txt|80|1", _
+                    "OTKUI_HDI_SALDO||num|80|1")
                 Exit Function
         End Select
     End If
@@ -882,11 +885,18 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
 End Function
 
 ' Jedan Report* poziv po listi -- ekran ne cita tabele sam. Prazna granica
-' postaje pun opseg (Report* primaju Date).
+' postaje pun opseg (Report* primaju Date). CEO snimak ide pod
+' BeginTableCache (krug 13, "prelaz na zbirni je spor"): zbirni oblici
+' zovu pojedinacni Report PO ENTITETU, pa bi bez kesa istu tabelu citali
+' sa lista N puta -- ovako jednom po snimku. End ide i kroz gresku
+' (obrazac modScrStorno), inace kes ostaje otvoren preko upisa.
 Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
                             ByVal zbirni As Boolean, ByVal iD As String, _
                             ByVal odN As Double, ByVal doN As Double) As Variant
     Dim dOd As Date, dDo As Date
+    Dim errNum As Long, errDesc As String, errSrc As String
+    BeginTableCache
+    On Error GoTo EH
     dOd = CDate(IIf(odN > 0, odN, IZ_DAT_MIN))
     dDo = CDate(IIf(doN > 0, doN, IZ_DAT_MAX))
 
@@ -946,6 +956,12 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             PuniSnimak = modOtkupBlok.KoopRangRows(rKg, rVal, eKg, eVal, _
                                                    CDbl(dOd), CDbl(dDo))
     End Select
+    EndTableCache
+    Exit Function
+EH:
+    errNum = Err.Number: errDesc = Err.description: errSrc = Err.SOURCE
+    EndTableCache
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 '=====================================================================
@@ -1184,6 +1200,8 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
         outA(n, 1) = NzS(src(i, 1))
         outA(n, 2) = GajbeIliPrazno(src(i, 5))
         outA(n, 3) = GajbeIliPrazno(src(i, 6))
+        ' Saldo i kad je 0 -- izravnat entitet JE informacija.
+        outA(n, 4) = NzD(src(i, 5)) - NzD(src(i, 6))
         Exit Sub
     End If
     Select Case kljuc
@@ -2293,7 +2311,8 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
                 IzSabirljive = Array(2, 3, 4, 5)
                 Exit Function
             Case IZ_AMB
-                IzSabirljive = Array(2, 3)
+                ' i saldo (4): bilans gajbi je aditivan preko tipova
+                IzSabirljive = Array(2, 3, 4)
                 Exit Function
         End Select
     End If
