@@ -2760,6 +2760,29 @@ Private Sub PrimeniSortZaListu(ByVal kljuc As String)
     mSortLista = kljuc
 End Sub
 
+' TEST SEAM: postavi sort kao da ga je ostavio DRUGI ekran (aktivacioni
+' lifecycle test) i izvrsi aktivacioni korak -- ista procedura koju zove
+' ActivateScreen, ne kopija. Tvrdo gejtovani.
+Public Sub GridSortSetTest(ByVal col As Long, ByVal asc As Boolean, _
+                           ByVal lista As String)
+    If Not IsTestMode() Then Exit Sub
+    mSortCol = col
+    mSortAsc = asc
+    mSortLista = lista
+End Sub
+
+Public Sub GridSortAktivacijaTest()
+    If Not IsTestMode() Then Exit Sub
+    PrimeniSortZaListu ActiveLista()
+End Sub
+
+' TEST SEAM: aktivan ekran za lifecycle testove (ActiveLista cita
+' mScreen; bez forme se ekran ne moze aktivirati). Tvrdo gejtovan.
+Public Sub GridScreenSetTest(ByVal kljuc As String)
+    If Not IsTestMode() Then Exit Sub
+    mScreen = kljuc
+End Sub
+
 ' TEST SEAM: tekuci sort mreze (kolona, smer) -- tvrdo gejtovan.
 Public Function GridSortTest(ByRef col As Long, ByRef asc As Boolean) As Boolean
     If Not IsTestMode() Then Exit Function
@@ -4458,10 +4481,12 @@ Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     mFilter = "sve"                  ' ugovorni ekran nema cipove
     mSearch = ""
     ' Kolona sortiranja se NE prenosi izmedju ekrana: 9. kolona na Paletama i
-    ' 9. na otkupnom listu nisu isti podatak. Bez ovoga se posle povratka na
-    ' dokumenta strelica nasla na "Vrednost" umesto na "Datum".
-    mSortCol = 2
-    mSortAsc = False
+    ' 9. na otkupnom listu nisu isti podatak. Ali ni tvrdi reset na 2/desc
+    ' nije tacan za svaku listu -- rang-lista se otvara po rangu rastuce
+    ' (recenzija #245, krug 17: povratak na Izvestaje sa aktivnim Rangom je
+    ' vracao sort po imenu). Aktivacija zato primenjuje PODRAZUMEVANI sort
+    ' aktivne liste ekrana -- isti SortZaListu ugovor kao klik i auto-prelaz.
+    PrimeniSortZaListu ActiveLista()
     mSelRow = 0
     mHoverRow = -1
     mPage = 1

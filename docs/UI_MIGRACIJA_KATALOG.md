@@ -4854,6 +4854,24 @@ prepisuju). Combo entiteta se u zbirnom režimu krije bez izuzetka
 „Svi". T141/T146 obrnute istine; `OM|`/`KUP|`/`VOZ|` identitet po redu
 za budući drill.
 
+**Krug 17 (recenzija, drugi prolaz — lifecycle blocker + hardening):**
+
+- **Aktivacija ekrana primenjuje podrazumevani sort aktivne liste.**
+  Povratak na Izveštaje sa aktivnim Rangom je vraćao sort po imenu:
+  `ActivateScreen` je tvrdo resetovao 2/desc mimo `SortZaListu` ugovora
+  i mimo `mSortLista`. Sada aktivacija zove isti `PrimeniSortZaListu
+  ActiveLista()` kao klik i auto-prelaz. T147 (1b) meri aktivacioni
+  korak kroz gejtovane seam-ove (`GridScreenSetTest`, `GridSortSetTest`,
+  `GridSortAktivacijaTest` — ista procedura, ne kopija); veza
+  `ActivateScreen` → procedura ostaje na smoke koraku.
+- **`IzvStaniceUnion` fail-visible** (`RequireColumnIndex` za obavezne
+  kolone, bez `On Error Resume Next`) — i to je odmah isplivalo pravu
+  minu: **VBA `Or` nema kratki spoj**, pa je `cF = 0 Or CStr(d(i, cF))`
+  evaluiralo `d(i, 0)` i pucalo za pozive bez filter kolone; stari OERN
+  je grešku gutao (uz Resume-Next slučajni ulazak u telo — rezultat je
+  bio tačan iz pogrešnih razloga). Uslovi prepisani ugnježdeno.
+- Sabotaža `izvestaji-aktivacija-gazi-sort` (aktivacioni korak).
+
 **Krug 16 (recenzija — REQUEST CHANGES, sva četiri zahteva):**
 
 - **R1 (blocker) — Rang se otvara po rangu i u stvarnom UI-ju.** Izbor

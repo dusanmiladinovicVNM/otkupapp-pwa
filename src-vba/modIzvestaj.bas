@@ -1996,23 +1996,28 @@ Private Sub IzvStaniceUnion(ByVal dict As Object, ByVal tblName As String, _
                             ByVal kolona As String, ByVal filtKol As String, _
                             ByVal filtVal As String)
     Dim d As Variant, i As Long, c As Long, cF As Long, cStorno As Long, k As String
-    On Error Resume Next
+    ' Fail-visible (recenzija #245): obavezna ID/filter kolona koja fali =
+    ' greska, ne tihi nepotpun univerzum finansijskog zbira.
     d = GetTableData(tblName)
     If Not IsArray(d) Then Exit Sub
-    c = GetColumnIndex(tblName, kolona)
-    If c = 0 Then Exit Sub
+    c = RequireColumnIndex(tblName, kolona, "modIzvestaj.IzvStaniceUnion")
     cStorno = GetColumnIndex(tblName, COL_STORNIRANO)
     cF = 0
-    If Len(filtKol) > 0 Then cF = GetColumnIndex(tblName, filtKol)
+    If Len(filtKol) > 0 Then cF = RequireColumnIndex(tblName, filtKol, "modIzvestaj.IzvStaniceUnion")
+    ' VBA Or NEMA kratki spoj: "cF = 0 Or d(i, cF)" evaluira i d(i, 0) i
+    ' puca -- zato ugnjezdeni uslovi (greska je do kruga 17 bila gutana
+    ' starim On Error Resume Next, a Resume-Next je slucajno ulazio u telo).
     For i = 1 To UBound(d, 1)
-        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
-            If cF = 0 Or CStr(d(i, cF)) = filtVal Then
-                k = Trim$(CStr(d(i, c)))
-                If Len(k) > 0 Then dict(k) = True
-            End If
+        If cStorno > 0 Then
+            If CStr(d(i, cStorno)) = "Da" Then GoTo Sledeci
         End If
+        If cF > 0 Then
+            If CStr(d(i, cF)) <> filtVal Then GoTo Sledeci
+        End If
+        k = Trim$(CStr(d(i, c)))
+        If Len(k) > 0 Then dict(k) = True
+Sledeci:
     Next i
-    Err.Clear
 End Sub
 
 ' Distinct kupci IZ PODATAKA (nestornirane prijemnice), 2D (1..n, 1..2):

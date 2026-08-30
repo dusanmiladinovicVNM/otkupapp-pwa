@@ -3545,6 +3545,22 @@ SABOTAZE = {
         "T_Izv_ZbirniOrphanStanica",
         "orphan stanica POSTOJI u zbirnom saldu -- silent omission je kvar",
     ),
+    # Aktivacija ekrana primenjuje PODRAZUMEVANI sort aktivne liste --
+    # tvrdi reset na 2/desc vraca rang-po-imenu posle povratka na ekran
+    # (recenzija #245, krug 17 lifecycle blocker).
+    "izvestaji-aktivacija-gazi-sort": (
+        "modOtkupUI.bas",
+        "Public Sub GridSortAktivacijaTest()\n"
+        "    If Not IsTestMode() Then Exit Sub\n"
+        "    PrimeniSortZaListu ActiveLista()\n"
+        "End Sub\n",
+        "Public Sub GridSortAktivacijaTest()\n"
+        "    If Not IsTestMode() Then Exit Sub\n"
+        "    mSortCol = 2: mSortAsc = False   ' SABOTAZA: tvrdi reset kao pre\n"
+        "End Sub\n",
+        "T_Izv_RangSortIKontekst",
+        "povratak na ekran vraca rang na kolonu ranga",
+    ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne
     # primenjuje. Legacy pozivaoci (bez granica) sabotiranu granu ne

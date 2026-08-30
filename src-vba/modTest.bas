@@ -10912,6 +10912,22 @@ Private Sub T_Izv_RangSortIKontekst()
     AssertEq col, 2, "ostale liste po drugoj koloni"
     AssertEq asc, False, "ostale liste opadajuce (datum)"
 
+    ' (1b) AKTIVACIONI LIFECYCLE (recenzija, krug 17): drugi ekran ostavi
+    ' 2/desc; povratak na Izvestaje sa aktivnim Rangom MORA da primeni
+    ' podrazumevani sort aktivne liste. GridSortAktivacijaTest izvrsava
+    ' ISTU proceduru koju zove ActivateScreen (ne kopiju); veza
+    ' ActivateScreen -> ta procedura ostaje na smoke koraku.
+    modScrIzvestaji.Scr_IzTestSet "RANG", "Kooperant", False, "", 0, 0
+    modOtkupUI.GridScreenSetTest "IZVESTAJI"
+    modOtkupUI.GridSortSetTest 2, False, ""
+    modOtkupUI.GridSortAktivacijaTest
+    Dim ok As Boolean
+    ok = modOtkupUI.GridSortTest(col, asc)
+    AssertEq ok, True, "sort seam radi u test modu"
+    AssertEq col, 1, "povratak na ekran vraca rang na kolonu ranga"
+    AssertEq asc, True, "povratak na ekran vraca rang rastuce"
+    modOtkupUI.GridScreenSetTest ""   ' vrati -- drugi testovi ne diraju ekran
+
     ' (2) Kontekst prati LISTU: rang je preko svih i u POJEDINACNOM --
     ' nikad "Kooperanti: ()" (recenzija: nedovrsen UX).
     modScrIzvestaji.Scr_IzTestSet "RANG", "Kooperant", False, "", IzvOdS(), IzvDoS()
