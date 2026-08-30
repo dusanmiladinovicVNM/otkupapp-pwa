@@ -10738,6 +10738,30 @@ Private Sub T_Izv_ZbirniSadrzaj()
         End If
     Next i
     AssertEq nasla, True, "red (stanica, tip gajbe) postoji u zbirnoj ambalazi"
+    ' Cipovi po smeru na agregatu nista ne razdvajaju -- ne nude se
+    ' (krug 15); pojedinacni ledger ih zadrzava.
+    AssertEq modScrIzvestaji.IzCipoviZaKontekst("AMBALAZA", "OM", True), "", _
+             "zbirna ambalaza nema cipove ulaz/izlaz"
+    AssertEq (Len(modScrIzvestaji.IzCipoviZaKontekst("AMBALAZA", "OM", False)) > 0), _
+             True, "pojedinacna ambalaza zadrzava cipove"
+    ' Podnozje: 7. clan = dva slota (Ulaz/Izlaz, kom) = zbir svih redova;
+    ' kg/vrednost nulirani da se gajbe ne potpisu kao kg/RSD.
+    AssertEq (UBound(d) >= 6), True, "zbirna ambalaza salje slotove podnozja"
+    Dim slotU As Double, slotI As Double, sj As Long
+    slotU = CDbl(d(6)(0)(1)): slotI = CDbl(d(6)(1)(1))
+    AssertEq CStr(d(6)(0)(2)), "OTKUI_UNIT_KOM", _
+             "slot podnozja nosi jedinicu kom, ne RSD"
+    Dim rU As Double, rI As Double
+    For sj = 1 To n
+        rU = rU + NzD2(Replace(CStr(redovi(sj, 3)), ".", ""))
+        rI = rI + NzD2(Replace(CStr(redovi(sj, 4)), ".", ""))
+    Next sj
+    AssertEq Format$(slotU, "0"), Format$(rU, "0"), _
+             "slot Ulaz = zbir prikazanih redova"
+    AssertEq Format$(slotI, "0"), Format$(rI, "0"), _
+             "slot Izlaz = zbir prikazanih redova"
+    AssertEq CDbl(d(3)) + CDbl(d(4)), 0#, _
+             "kg/vrednost podnozja nulirani za gajbe"
     ' Kontekst je sada STVARNO preko svih -- ime kaze "Svi", ne entitet.
     AssertEq (InStr(1, modScrIzvestaji.Scr_IzCtxNazivTest(), FX_STANICA, vbTextCompare) = 0), _
              True, "zbirna ambalaza preko svih ne imenuje jednog entiteta"

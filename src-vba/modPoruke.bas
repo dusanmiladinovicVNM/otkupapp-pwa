@@ -579,6 +579,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_FT_UKUPNO", "Ukupno"
     UpsertRow lo, existing, "OTKUI_FT_VREDNOST", "Vrednost"
     UpsertRow lo, existing, "OTKUI_FT_UPLATE", "Uplate"
+    UpsertRow lo, existing, "OTKUI_FT_AMB_ULAZ", "Ulaz"
+    UpsertRow lo, existing, "OTKUI_FT_AMB_IZLAZ", "Izlaz"
     UpsertRow lo, existing, "OTKUI_FT_ISPLATE", "Isplate"
     UpsertRow lo, existing, "OTKUI_STAT_SACUVANA", "Sa" & ChrW(269) & "uvana"
     UpsertRow lo, existing, "OTKUI_STAT_POSLATO", "Poslato"

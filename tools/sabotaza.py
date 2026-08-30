@@ -2437,7 +2437,7 @@ SABOTAZE = {
     "mreza-podnozje-slot-bez-natpisa": (
         "modOtkupUI.bas",
         "    PodnozjeSlotTekst = Poruka(kljuc) & \" \" & FmtBroj(iznos, 2) & \" \" & _\n"
-        "                        Poruka(\"OTKUI_UNIT_RSD\")\n",
+        "                        Poruka(unitKljuc)\n",
         "    PodnozjeSlotTekst = FmtBroj(iznos, 2) & \" \" & _\n"
         "                        Poruka(\"OTKUI_UNIT_RSD\")   ' SABOTAZA: slot bez natpisa\n",
         "T_Mreza_PodnozjeDvaNovcanaSlota",
@@ -2447,8 +2447,10 @@ SABOTAZE = {
     # isti -- najtise moguce, jer izgleda tacno onako kako treba.
     "mreza-podnozje-oba-slota-isti": (
         "modOtkupUI.bas",
-        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n",
-        "    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n",
+        "        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))\n"
+        "    End If\n",
+        "        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(0)(1)))   ' SABOTAZA: oba slota nose PRVI iznos\n"
+        "    End If\n",
         "T_Mreza_PodnozjeDvaNovcanaSlota",
         "slotovi ne nose isti IZNOS",
     ),

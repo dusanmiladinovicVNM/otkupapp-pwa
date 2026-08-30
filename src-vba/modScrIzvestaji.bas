@@ -246,6 +246,10 @@ End Function
 Public Function IzCipoviZaKontekst(ByVal kljuc As String, ByVal tip As String, _
                                    ByVal zbirni As Boolean) As String
     If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function
+    ' Zbirna ambalaza je agregat entitet x tip: skoro svaki red ima i ulaz
+    ' i izlaz, pa cip po smeru nista ne razdvaja ("Sve i Ulaz daju iste
+    ' brojke" -- krug 15). Cip vazi samo nad transakcionim ledgerom.
+    If kljuc = IZ_AMB And zbirni Then Exit Function
     IzCipoviZaKontekst = IzCipoviZaListu(kljuc)
 End Function
 
@@ -1036,6 +1040,15 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
 Sledeci:
     Next i
 
+    ' Zbirna ambalaza: podnozje nosi ULAZ/IZLAZ u komadima (7. clan --
+    ' isti mehanizam kao uplate/isplate na izvodima), a kg/vrednost se
+    ' nuliraju da ljuska ne ispise gajbe kao "kg" ili "RSD" (krug 15).
+    If zbirni And kljuc = IZ_AMB Then
+        Oblikuj = Array(kolone, outA, n, 0#, 0#, Array(0, 0, 0), _
+                        Array(Array("OTKUI_FT_AMB_ULAZ", sumKg, "OTKUI_UNIT_KOM"), _
+                              Array("OTKUI_FT_AMB_IZLAZ", sumVal, "OTKUI_UNIT_KOM")))
+        Exit Function
+    End If
     Oblikuj = Array(kolone, outA, n, sumKg, sumVal, Array(0, 0, 0))
 End Function
 
@@ -1224,6 +1237,12 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
         outA(n, 4) = GajbeIliPrazno(src(i, 5))
         ' Saldo i kad je 0 -- izravnat entitet JE informacija.
         outA(n, 5) = NzD(src(i, 4)) - NzD(src(i, 5))
+        ' Zbirovi za podnozje (slotovi Ulaz/Izlaz) -- interno kroz
+        ' sumKg/sumVal, Oblikuj ih pretvara u slotove i nulira.
+        If Not jeUkupno Then
+            sumKg = sumKg + NzD(src(i, 4))
+            sumVal = sumVal + NzD(src(i, 5))
+        End If
         outA(n, 6) = IIf(Len(NzS(src(i, 1))) > 0, _
                          IIf(tip = "Kupac", "KUP|", _
                              IIf(tip = "Vozac", "VOZ|", "OM|")) & NzS(src(i, 1)), "")

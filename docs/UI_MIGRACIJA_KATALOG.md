@@ -4853,6 +4853,19 @@ prepisuju). Combo entiteta se u zbirnom režimu krije bez izuzetka
 „Svi". T141/T146 obrnute istine; `OM|`/`KUP|`/`VOZ|` identitet po redu
 za budući drill.
 
+**Krug 15 (smoke kruga 14 — čipovi i podnožje zbirne ambalaže):**
+
+- **Čipovi Ulaz/Izlaz se na zbirnoj ambalaži ne nude**: red je agregat
+  entitet × tip pa skoro svaki ima oba smera — čip po smeru ništa ne
+  razdvaja („Sve i Ulaz daju iste brojke"). Pojedinačni ledger ih
+  zadržava (tamo filtriraju transakcije).
+- **Podnožje zbirne ambalaže**: slotovi **Ulaz / Izlaz u komadima**
+  (isti mehanizam kao Uplate/Isplate na izvodima); kg/vrednost se
+  nuliraju da se gajbe ne potpišu kao „kg"/„RSD". Uz to mala opšta
+  dopuna ljuske (S9-stil, prijavljena): slot podnožja dobio **opcioni
+  treći član — ključ jedinice** (default ostaje RSD; postojeći ekrani
+  netaknuti), jer je jedinica bila tvrdo „RSD".
+
 **Krug 13 (smoke kruga 12 — saldo po vozaču + brzina P→Z):**
 
 - **Zbirna Ambalaža dobila SALDO kolonu** (ulaz − izlaz po tipu; smer je

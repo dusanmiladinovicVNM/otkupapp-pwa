@@ -4838,9 +4838,12 @@ End Sub
 ' Slot uvek nosi novac: pojam postoji zato sto jedan zbir nije dovoljan, a ne
 ' zato sto se broji nesto drugo. Zato ovde nema pitanja o komadima -- ekran koji
 ' broji komade nema sta da trazi od dva novcana slota.
-Private Function PodnozjeSlotTekst(ByVal kljuc As String, ByVal iznos As Double) As String
+' Jedinica je opcioni TRECI clan slota (kljuc poruke); bez njega RSD --
+' ambalazni zbirovi (gajbe) ne smeju da se potpisu kao novac (krug 15).
+Private Function PodnozjeSlotTekst(ByVal kljuc As String, ByVal iznos As Double, _
+                                   Optional ByVal unitKljuc As String = "OTKUI_UNIT_RSD") As String
     PodnozjeSlotTekst = Poruka(kljuc) & " " & FmtBroj(iznos, 2) & " " & _
-                        Poruka("OTKUI_UNIT_RSD")
+                        Poruka(unitKljuc)
 End Function
 
 ' Dva novcana slota u podnozju.
@@ -4870,7 +4873,12 @@ End Sub
 Private Function SlotTekstIz(ByVal i As Long) As String
     On Error Resume Next
     If i < 0 Or i >= mFtSlotN Then Exit Function
-    SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))
+    If UBound(mFtSlot(i)) >= 2 Then
+        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)), _
+                                        CStr(mFtSlot(i)(2)))
+    Else
+        SlotTekstIz = PodnozjeSlotTekst(CStr(mFtSlot(i)(0)), CDbl(mFtSlot(i)(1)))
+    End If
 End Function
 
 ' TEST SEAM: natpis i-tog novcanog slota i njihov broj. Tvrdo gejtovani.
