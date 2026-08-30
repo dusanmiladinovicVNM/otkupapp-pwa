@@ -4974,3 +4974,213 @@ traži entitet. Sada ime „Svi" nosi samo lista koja je stvarno preko svih
   tip×režim, štampe (tabelarna, kartica, dokument iz reda, revers),
   ponašanje datumskih polja, pretraga na velikoj svesci, brzina Ambalaže
   na punom ledger-u, detalj traka.
+
+---
+
+## 24. Sledljivost — šta je preneto (`v6-ui-187`)
+
+Šesti ekran **Faze E**. Red u registru (`modUiScreens.ScrRows`) je postojao
+od `S3a` — stavka menija ANALITIKA → „Sledljivost" se do sada crtala
+prigušena jer modula nije bilo. Ovim se piše modul koji taj red već očekuje;
+**registar se ne dira**.
+
+Merilo zadatka: **LANAC KOJI SE NE IZMIŠLJA.** Ekran odgovara na dva
+pitanja — „od ovog otkupnog lista, gde je roba završila?" (napred:
+otkup → otpremnica → zbirna → prijemnica → faktura/kupac) i „od ove
+fakture/prijemnice, od kojih kooperanata i parcela je roba došla?"
+(nazad). Nepotpun ili višesmislen lanac se prikazuje kao takav
+(fail-closed, kao `ReportOtkupRobaOM` pravilo #V>1 i `IZV_NEMA_PRIJEMA`
+oznake); kg koji „nestaje" niz lanac je vidljiva razlika sa oznakom,
+nikad prećutana.
+
+### 24.1 Gde je šta završilo
+
+| Legacy (`frmSledljivost` + `modSledljivost`) | Novo mesto |
+|---|---|
+| `TraceByZbirna` (zbirna → otkupi → kooperanti/parcele) | lista **PARCELE** (ista zrna kao LANAC, sertifikaciona projekcija: kooperant, BPG, kat. broj, kultura, ha, GGAP) |
+| `cmbZbirna` filter po zbirnoj | **pretraga ljuske** — haystack nosi SVE brojeve lanca (v. 24.2/B) |
+| `GetUnlinkedOtkupi` (NEPOVEZANI OTKUPI lista) | klasa `OTKUP-BEZ-OTPREMNICE` u listi **NEPOTPUNI** + oznaka `nepovezan` u LANAC-u |
+| `PrintTracePDF` (FillSledljivostSablon) | dugme zone **„Lanac (PDF)"** — house PDF lanca IZABRANOG reda sa kontekst-linijom (koren · opseg · kompletnost); poštuje `SLEDLJIVOST_PRINT_MODE`, OFF se prijavljuje. Legacy šablon-ruta ostaje u formi, netaknuta |
+| `btnAutoLink` / `btnPovezi` (upis!) | **NIJE preneto** — v. 24.7 |
+| — (legacy nema) | lista **LANAC**: 1 red = 1 otkupni list sa razrešenim karikama kao kolonama; lista **NEPOTPUNI**: 1 red = 1 problem karike (7 klasa); „Štampaj izveštaj" (house PDF aktivne liste) |
+
+Novi računi žive u `modIzvestaj` (obrazac `ReportPrijemniceKupca`):
+**`ReportSledljivostLanac(od, do)`** — zrno otkup, 26 dokumentovanih kolona
+(karike + parcela projekcija + kg po karici) — i
+**`ReportSledljivostProblemi(od, do)`** — zrno problem, 8 kolona (klasa,
+karika, nosilac, kg, detalj sa brojkama, DokTip+DokID za rutu štampe).
+Ekran je prikaz nad ta dva računa i ne čita tabele sam (detalj i PDF idu
+iz snimka).
+
+### 24.2 Odluke (A–E iz zadatka)
+
+**(A) Inventar veza — iz `modConfig`/`WHO_WRITES`, ne iz sećanja.**
+otkup→otpremnica = `tblOtkup.OtpremnicaID` (piše 12 modula, među njima
+`modSledljivost` auto-link; jednoznačan ID; prazan = nepovezan);
+otpremnica→zbirna i zbirna→prijemnica = `BrojZbirne` — broj NIJE identitet
+(dve aktivne zbirne legitimno dele broj), vlasnik je broj+vozač+kupac, a
+razrešenje je ISTO pravilo koje dele `ReportOtkupRobaOM` i `ReportManjak`:
+`BuildManjakDict` (#V/#1/#O ključevi) + `PrijemZaZbirnu` — **poziva se,
+nikad ne prepisuje** (u lancu kroz izdvojeni `SledResolveZbirna` koji
+zove iste ključeve). prijemnica→faktura = denorm `FakturaID` (isti čitač
+kao ekran Fakturisanja; `tblFakturaStavke` je normativ i ne čita se).
+otkup→parcela = `ParcelaID` → `tblParcele` (aktivnost se ne filtrira —
+sledljivost je istorijska). Prag kg = **0.01**, ista vrednost kao
+(privatni) `modDokumentInvariant.EPS_KG` — dva mesta, jedan prag, uz
+komentar na oba. **Otkupov denorm `BrojZbirne` se NE koristi za lanac** —
+služi samo za proveru saglasnosti (raskorak = oznaka `veza neusaglasena`);
+premošćenje kroz njega je tačno klasa laži koju merilo zabranjuje (fixture
+vozilo: `OTK-TEST-2` tvrdi ZB-TEST-3 koju njegova otpremnica nema).
+
+**(B) Tri liste, bez tipa/režima/entiteta.** LANAC (default) · PARCELE ·
+NEPOTPUNI. Oba smera pitanja odgovara ISTO zrno (otkupni list sa
+karikama kao kolonama), pa smer ne traži prekidač: **pretraga ljuske**
+nosi sve brojeve lanca (otkup, otpremnica, zbirna, prijemnica, faktura,
+kooperant, kupac, stanica, oznaka) — ukucaš broj fakture i čitaš
+kooperante/parcele iz redova (nazad); ukucaš kooperanta i čitaš karike
+udesno (napred). Bez entitet comboa nema ni S1 klase zamki (PopIndex).
+Sve tri liste su UVEK dostupne — matrica nedostupnosti ne postoji, a
+prazna lista kaže zašto i kuda: „nema otkupa u periodu → proširi period"
+≠ „sve karike potpune" (dobro stanje na NEPOTPUNI listi, i tako se i
+kaže — nikad pun naslov nad trajno praznom listom).
+
+**(C) Lanac u ravnoj mreži = kolona-nivo.** 1 red = 1 otkupni list;
+karike su kolone sa brojevima dokumenata (Otpremnica, Zbirna, Prijem,
+Faktura, Kupac) + kolona **OZNAKA** (prva prekinuta/višesmislena karika
+po poziciji u lancu: `nepovezan` → `otpremnica stornirana` → `veza
+neusaglasena` → kg razlika blok↔otp → `bez zbirne`/`zbirna ne postoji`/
+`nejasan vlasnik` → kg otp↔zbirna → `nema prijema` → kg zbirna↔prijem →
+`nefakturisano`; prazno = potpun). Prijem ćelija nosi broj prijemnice,
+„N prij." kad ih je više, ili ostaje prazna (razlog je u OZNAKA koloni —
+nikad izmišljen broj, nikad „0,00" umesto poruke). **Detalj traka** desno
+u zoni (obrazac §23.11/S7): pun lanac izabranog reda, karika po karika
+**sa kg po karici** — samo ono što red ne pokazuje (S10): vozač, stanica,
+parcela (na LANAC listi), kg otpremnice/zbirne/prijema, kupac uz zbirnu.
+Padajući redovi mreže ostaju Faza C.
+
+**(D) Identitet + radnje.** LANAC/PARCELE: `OTK|<OtkupID>` u poslednjoj
+koloni prio 4 (`GridCell`, mapa „prikaz → ID" ne postoji); NEPOTPUNI:
+`DokTip` + `DokID` u dve prenosne kolone (obrazac AMBALAZA §23.4). Jedna
+radnja nad redom — „Štampaj dokument": LANAC/PARCELE štampaju otkupni
+list (zrno reda, `ReprintOtkupniListByOtkupID`); NEPOTPUNI rutira po
+vrsti karike (OTK→otkupni list, OTP→`OutputOtpremnicaPDF`,
+PRJ→`PrintPrijemnica`; **zbirna nema svoju štampu** — vrsta `Zbirna`
+postoji da radnja ume da ODBIJE s razlogom, legacy Case Else obrazac).
+Zona: „Štampaj izveštaj" (house PDF aktivne liste, tačno ono što se
+vidi, sa politikom sabirljivosti: LANAC/PARCELE sabiraju samo kg;
+površina parcele se NE sabira — atribut koji se ponavlja po redu iste
+parcele; NEPOTPUNI ne sabira ništa — kg meša zrna karika) i „Lanac
+(PDF)". Brojač menija = 0 (read-only pregled kao Izveštaji §23 — ništa
+ovde ne čeka operatera; broj nepotpunih karika je KPI zone, uz broj
+potpunih lanaca, oba iz snimka, `—` pre prvog čitanja).
+
+**(E) Keš od prvog dana.** JEDNO punjenje po ključu konteksta (`od|do`)
+puni **obe** polovine snimka (lanac + problemi) → prelaz na bilo koju
+listu, čip i svaki otkucaj pretrage su re-filter nad snimkom, nula
+čitanja tabela (§22.9/N7). Invalidacija: `Scr_ResetCache` +
+**generacija podataka** (`modUiData.DataGeneracija`, §23.10/R1) od
+prvog dana. `mSnimakPunjenja` broji punjenja (test: tri pretrage + čip +
+sve tri liste = jedno); `Diag_SlRedovi` (Alt+F8) od prvog dana. U
+Reportima nijedan `LookupValue` po redu — mape pre petlje
+(`BuildLookupDict` ×6 + rečnici otpremnica/parcela/prijemnica,
+`BuildManjakDict` jednom po punjenju).
+
+### 24.3 Klase problema (NEPOTPUNI) i čipovi
+
+Sedam klasa, svaka fail-closed nalaz sa tačnom karikom (DokTip+DokID) i
+detaljem sa brojkama: `OTKUP-BEZ-OTPREMNICE` (i veza na storniranu/
+nepostojeću — detalj razlikuje), `VEZA-NEUSAGLASENA`,
+`OTPREMNICA-BEZ-ZBIRNE` (i broj bez aktivne zbirne), `BROJ-ZBIRNE-
+DVOSMISLEN` (JEDNOM po broju), `ZBIRNA-BEZ-PRIJEMA` (po stavki; uz #V>1
+sa nepripisivim prijemnicama se NE tvrdi — prijem možda postoji a ne sme
+se pripisati), `PRIJEMNICA-BEZ-FAKTURE` (i poznato nepotpuno stanje
+„Fakturisano=Da bez FakturaID" — PRJ-FAK-2 klasa), `KG-RAZLIKA` (po
+karici; uz #V>1 se ne računa — fail-closed i za kg). Čipovi: LANAC
+sve·potpun·nepotpun (lanac koji curi NIJE potpun); PARCELE sve·bez
+parcele (obrazac MANJAK čipa); NEPOTPUNI sve·veze·prijem·fakture·kg
+(grupe klasa). Prvi čip je svuda najširi.
+
+### 24.4 Slaganja — srce zadatka
+
+Testovi **150–155** u `modTest` (izvršavaju se pre mutirajućih 124–126;
+Izveštaji su kroz krugove 8–18 zauzeli 145–149, pa numeracija ide odmah
+iza njih — registar ne trpi rupe),
+sve tvrdnje su relacije nad SLED-* vozilima koja nijedan drugi test ne
+dira:
+
+| Test | Tvrdnja | Nezavisan read-model |
+|---|---|---|
+| 151 `T_Sled_LanacSlaganje` | potpun lanac karika po karika == ručni prolaz kroz `tblOtkup`→`tblOtpremnica`→`tblZbirna`→`tblPrijemnica`→`tblFakture` (samo `GetTableData`+`GetColumnIndex`); kg se slaže niz CEO lanac (blokovi = otpremnica = zbirna = prijem); nazad: pretraga po broju fakture vraća OBA kooperanta lanca; PARCELE projekcija == `tblParcele`; blok bez parcele nosi oznaku; KPI == isti snimak | ručni prolazi |
+| 152 `T_Sled_FailClosed` | dvosmislen broj → `nejasan vlasnik` (kg OSTAJE prazan); do prijemnice bez fakture → `nefakturisano`; kg curenje → `kg razlika`; raskorak denorma → `veza neusaglasena`; nepovezan; veza na storniranu; storniran dokument nije NIGDE; svaka klasa problema sa tačnom karikom; detalj kg razlike nosi obe brojke | pokvarena vozila fixture-a |
+| 150/153/154/155 | ugovor ekrana; identitet prio 4 + DokTip ruta; keš/generacija/kvake pretrage/hint; zona posle Unload-a | — |
+
+Tvrdnje nad deljenim pravilom vlasnika (`BuildManjakDict`/
+`PrijemZaZbirnu`) i dalje čuvaju postojeći testovi (`RunIzvestajTests`,
+T136/139) — sabotaža nad njima bi obarala tuđe. **Nove** Report funkcije
+nemaju tuđe pokriće, pa 19 sabotaža (`sledljivost-*`) gađa i Report
+polovinu i ekransku: premošćenje zbirne, sabiranje dvosmislenog broja,
+gutanje kg praga (lanac i problemi zasebno), storniran ulazi, klasa
+ispada iz problema, identitet se crta, tuđa vrsta karike, keš puni
+iznova, generacija se ignoriše, sirov haystack, tri čipa, zona bez
+dugmeta, PDF bez oznake, KPI iz pogrešnog izvora, detalj bez karika.
+
+### 24.5 Fixture
+
+SLED-* vozila (v. blok konstanti u `make_fixture.py`), sva na
+STA-TEST-2, svi blokovi ZATVORENI (`NOV-SLED-*` virmani, OMID=STANICA2 —
+novi novčani redovi samo na STA-TEST-2; `T_WriterGuard_AvansSaldoOM`
+preduslov netaknut, virman firma→koop ne dira avans pool; Platni nalozi
+bit-identični, isti razlog kao `OTK_IZV_ZATVOREN`):
+
+| Vozilo | Zašto postoji |
+|---|---|
+| OTK-SLED-1 (KOOP-TEST-2) + OTK-SLED-2 (KOOP-TEST-IME) → OTP-SLED-1 → ZB-TEST-SLED → PRJ-SLED-1 → FAK-SLED-1 | **prvi POTPUN lanac u fixture-u** (zatvara rupu iz §23.12/S10 — do sada nijedna otpremnica sa blokovima nije imala zbirnu sa nestorniranom prijemnicom); dva kooperanta na istoj otpremnici („nazad" mora vratiti oba); kg 300+200=500 slaže se niz ceo lanac; OTK-SLED-2 je bez parcele (oznaka na PARCELE listi) i nosi ga ISTOIMENI kooperant (identitet je OTK\|id, ne prikazano ime). KOOP-TEST-3 se ne sme koristiti ni za jedan SLED blok: `T_BankaUvoz_RucnoMapiranjePravila` broji njegove blokove apsolutno (=5) — prvi crveni krug je to i pokazao |
+| OTK-SLED-D → OTP-SLED-D (vozač PRAZAN) → ZB-TEST-SLDD (svoj par, dva vozača) | dvosmislen broj koji se NE može razrešiti po vozaču otpremnice → `nejasan vlasnik`. Svoj par, ne ZB-TEST-DUPL: DUPL troši raniji storno test (ostane jedan aktivan vlasnik), pa u trenutku sledljivost testova više nije dvosmislen |
+| OTK-SLED-N → OTP-SLED-N → ZB-TEST-SLN → PRJ-SLED-N (nefakturisana) | lanac do prijemnice bez fakture → `nefakturisano` + klasa problema |
+| OTK-SLED-R (100) → OTP-SLED-R (250!) → ZB-TEST-SLR (bez prijemnice) | kg curi na prvoj karici → `kg razlika` + `KG-RAZLIKA` problem sa obe brojke; zbirna bez prijema na svojoj mirnoj zbirni |
+| pin `SLEDLJIVOST_PRINT_MODE=OFF` u SEF_CONFIG | klik „Lanac (PDF)" u testu/smoke-u ne pravi PDF; ekran OFF prijavljuje porukom |
+
+Vozila bez ambalaže (KolAmbalaze se ne seje) — kanonski amb saldo i
+kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
+
+### 24.6 Šta NIJE preneto, i zašto
+
+- **Povezivanje (auto-link + ručno vezivanje otkupa za otpremnicu) NE
+  ulazi u v1**: to je upis sa izborom kandidata i traži svoj UX; legacy
+  `frmSledljivost` ostaje operativna i nepromenjena (dve kopije žive
+  namerno — §5/Faza B), `modSledljivost.AutoLinkOtkupOtpremnica_TX` i
+  `ReassignOtkupToOtpremnica_TX` nisu dirani. Lista NEPOTPUNI je pregled
+  tog posla, ne alat.
+- **Oznaka `zbirna ne postoji`** (broj na otpremnici bez ijedne aktivne
+  zbirne) postoji u kodu, ali **nema fixture vozilo** — ne tvrdi se
+  testom (zapisano, kao prijemnica-linija u §23.12/S10).
+- **Oznaka `nema prijema` u LANAC koloni nema vozilo kod koga je PRVA
+  anomalija** (SLED-R curi kg pre prijema; ZB-TEST-1 lanac isto) — klasa
+  `ZBIRNA-BEZ-PRIJEMA` u problemima jeste pod testom (ZBI-SLED-R).
+- **Detalj trake za ne-otkup karike NEPOTPUNI liste** (OTP/ZBR/PRJ
+  redovi) ostavlja traku praznu — uzvodni sažetak iz snimka je zapisan
+  kao dorada, ne izmišlja se za v1.
+- **Vrednost (RSD) niz lanac** — v1 prati robu (kg), ne novac; podnožje
+  nosi kg, „Vrednost 0,00" slot ostaje kao na ambalažnim listama.
+- **Palete** nisu karika lanca (uporedni tok — `docs/DOMEN/README.md`);
+  paletna sledljivost ostaje na ekranu Palete.
+
+### 24.7 Verifikacija
+
+- `RunAllTests` (šest novih testova 150–155, registrovani u sva tri
+  registra, izvršavaju se PRE 124–126), `RunBankaImportTestSuite`
+  (Platni nalozi bit-identični — SLED blokovi su zatvoreni),
+  `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
+  `--self-test`, `who_writes --check` — rezultati u PR-u.
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 19 sabotaža,
+  svaka obara tačno svoj imenovani test i vraća se bit-identično.
+- Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
+  više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
+  iz kruga 5 je idempotentna).
+- **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug →
+  Compile VBAProject`, pa smoke nad pravim podacima (checklista u PR-u):
+  izgled zone, tri liste, pretraga po broju fakture/zbirne na velikoj
+  svesci (smer nazad), brzina prvog otvaranja na punoj svesci, detalj
+  traka, obe štampe, ruta „Štampaj dokument" po vrsti karike, NEPOTPUNI
+  nad pravim podacima (očekuje se mnogo nefakturisanih — to je status,
+  ne kvar).

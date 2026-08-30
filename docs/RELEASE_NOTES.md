@@ -6633,3 +6633,72 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - **Compile VBAProject: čist** (ručna kapija operatera, 30.08.2026).
 - Smoke nad pravim podacima: šest krugova operatera — svaki nalaz
   ugrađen u ovo izdanje.
+
+---
+
+## vba-v2.90.0 — 2026-08-30
+
+Novi ekran **Sledljivost** (meni ANALITIKA → „Sledljivost" — stavka više
+nije prigušena). Lanac dokumenata od njive do fakture, u oba smera, bez
+ijedne izmišljene veze.
+
+### Šta ekran radi
+
+- **Lanac** (glavna lista): jedan red = jedan otkupni list, a udesno se
+  čita gde je roba završila — otpremnica, zbirna, prijemnica, faktura,
+  kupac. Kolona OZNAKA kaže gde lanac staje ili škripi: „nepovezan",
+  „bez zbirne", „nejasan vlasnik" (dva vozača dele broj zbirne),
+  „nema prijema", „nefakturisano", „kg razlika", „veza neusaglašena",
+  „otpremnica stornirana". Prazna oznaka = potpun lanac.
+- **Po parceli**: iste stavke, ali okrenute za sertifikaciju — kooperant,
+  BPG, katastarski broj, kultura, površina, GGAP status. Blok unet bez
+  parcele nosi oznaku „bez parcele" (i svoj čip) umesto tihe praznine.
+- **Nepotpuni**: radni spisak svake prekinute karike sa detaljem i
+  brojkama („blokovi 100 kg / otpremnica 250 kg"), po klasama: veze ·
+  prijem · fakture · kg razlike. Mnogo nefakturisanih prijemnica je
+  normalno stanje — to je status, ne kvar.
+- **Oba smera bez prekidača:** pretraga nalazi svaki broj u lancu.
+  Ukucaš broj fakture ili zbirne → vidiš od kojih kooperanata i parcela
+  je roba došla; ukucaš kooperanta → vidiš gde je roba završila.
+  Pretraga radi i bez kvačica („petrovic" nalazi Petrovića).
+- **Klik na red** otvara detalj lanca desno: karika po karika sa kg po
+  svakoj (vozač, stanica, parcela, kupac — ono što u redu ne stane).
+- **Štampe:** „Štampaj izveštaj" (kućni PDF tačno onoga što je na
+  ekranu, sa periodom i filterom u naslovu) i „Lanac (PDF)" za izabrani
+  red — karike kao redovi + linija kompletnosti. Radnja „Štampaj
+  dokument" štampa dokument karike (otkupni list / otpremnicu /
+  prijemnicu; zbirna nema svoju štampu i to se kaže).
+- Brojke iznad mreže: potpuni lanci / nepotpune karike u periodu.
+
+### Pravila koja ekran drži (i testovi ih čuvaju)
+
+- **Ništa se ne premošćuje:** zbirna se čita isključivo iz otpremnice;
+  raskorak sa brojem zbirne na bloku se prijavljuje, ne peglа.
+  Dvosmislen broj zbirne se ne sabira — fail-closed oznaka, isto
+  pravilo vlasnika kao izveštaji robe i manjka (poziva se, ne prepisuje).
+- **Kg koji curi se vidi:** razlika na bilo kojoj karici (prag 0,01 kg,
+  isti kao provera zbirne) nosi oznaku u lancu i red u Nepotpunima sa
+  obe brojke.
+- Svaka karika potpunog lanca vezana je testom za nezavisan ručni prolaz
+  kroz tabele; fixture prvi put ima kompletan lanac do fakture (i četiri
+  namerno pokvarena vozila za svaku klasu kvara).
+
+### Šta NIJE u ovoj verziji
+
+- **Povezivanje** (automatsko i ručno vezivanje otkupa za otpremnicu)
+  ostaje u staroj formi Sledljivosti — ona je i dalje tu, nepromenjena.
+  Novi ekran je pregled; popravke idu starim putem (i kroz Oporavak).
+- Vrednost u dinarima niz lanac (v1 prati robu, kg).
+- Detalj trake za redove Nepotpunih koji nisu otkup.
+- Padajući redovi u samoj mreži — i dalje čekaju ugovor ljuske.
+
+### Verifikacija
+
+- Šest novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
+  fail-closed oznake, identitet, keš/pretraga, zona) + **19 namernih
+  kvarova** koji obaraju po tačno jedan imenovani test i vraćaju se
+  bit-identično (dvosmerni dokaz).
+- Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
+  zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
+  i smoke nad pravim podacima (checklista u PR-u).
