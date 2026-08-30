@@ -9428,8 +9428,12 @@ Private Sub T_Izv_MatricaVodiListe()
              "ambalaza zbirno za kupca"
     AssertEq modScrIzvestaji.IzListaDostupna("AMBALAZA", "Vozac", True), True, _
              "ambalaza zbirno za vozaca"
-    AssertEq modScrIzvestaji.IzListaDostupna("SALDO", "Kupac", True), False, _
-             "saldo kupaca zbirno ne postoji -- tab Zbirni to vec daje"
+    AssertEq modScrIzvestaji.IzListaDostupna("SALDO", "Kupac", True), True, _
+             "saldo kupaca zbirno po kupcima (krug 11)"
+    AssertEq modScrIzvestaji.IzListaDostupna("ROBA", "Kupac", True), True, _
+             "roba po kupcu zbirno (krug 11)"
+    AssertEq modScrIzvestaji.IzRadnjeZaKontekst("ROBA", "Kupac", True), "", _
+             "zbirna roba po kupcu nema radnju -- agregat bez dokumenta"
 
     ' Nedostupna kombinacija: lista POSTOJI, 0 redova, hint kaze ZASTO --
     ' nikad pun naslov nad trajno praznom listom, ali ni tiho nestajanje.
@@ -10721,6 +10725,67 @@ Private Sub T_Izv_ZbirniSadrzaj()
         End If
     Next i
     AssertEq nasla, True, "red tipa gajbe postoji u zbirnoj ambalazi"
+    ' Kontekst-linija nosi IME izabranog entiteta, ne "Svi" -- prikaz je
+    ' za JEDNU stanicu (smoke krug 9: podaci prve stanice pod "OM: Svi").
+    AssertEq (InStr(1, modScrIzvestaji.Scr_IzCtxNazivTest(), FX_STANICA, vbTextCompare) > 0), _
+             True, "zbirna ambalaza imenuje entiteta u kontekstu, ne 'Svi'"
+
+    ' (3b) Zbirno po KUPCIMA (krug 11): red FX_KUPAC u saldu i robi =
+    ' UKUPNO red pojedinacnog izvestaja tog kupca; kg robe i direktno na
+    ' rucni zbir prijemnica (isti prolaz kao T144).
+    Dim sk As Variant, su As Long
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "Kupac", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    sk = ReportSaldoKupci(FX_KUPAC, IzvOdD(), IzvDoD())
+    su = 0
+    For i = 1 To UBound(sk, 1)
+        If CStr(sk(i, 1)) = "UKUPNO" Then su = i
+    Next i
+    AssertEq (su > 0), True, "vozilo: saldo kupca ima UKUPNO"
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 7)), FX_KUPAC, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), _
+                     Format$(NzD2(sk(su, 2)), "0.00"), _
+                     "saldo po kupcima: kg = UKUPNO pojedinacnog"
+            AssertEq Format$(CDbl(redovi(i, 5)), "0.00"), _
+                     Format$(NzD2(sk(su, 6)), "0.00"), _
+                     "saldo po kupcima: saldo = UKUPNO pojedinacnog"
+        End If
+    Next i
+    AssertEq nasla, True, "red za KUP-TEST-1 postoji u saldu po kupcima"
+    modScrIzvestaji.Scr_IzTestSet "ROBA", "Kupac", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    Dim rpKg As Double
+    Dim prj2 As Variant, cK2 As Long, cD2 As Long, cQ2 As Long, cS2 As Long
+    prj2 = GetTableData(TBL_PRIJEMNICA)
+    cK2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cD2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM)
+    cQ2 = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cS2 = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    For i = 1 To UBound(prj2, 1)
+        If Trim$(CStr(prj2(i, cK2))) = FX_KUPAC And CStr(prj2(i, cS2)) <> "Da" Then
+            If IsDate(prj2(i, cD2)) Then
+                If CDate(prj2(i, cD2)) >= IzvOdD() And CDate(prj2(i, cD2)) <= IzvDoD() Then
+                    rpKg = rpKg + CDbl(prj2(i, cQ2))
+                End If
+            End If
+        End If
+    Next i
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 4)), FX_KUPAC, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rpKg, "0.00"), _
+                     "roba po kupcu: kg = rucni zbir prijemnica"
+        End If
+    Next i
+    AssertEq nasla, True, "red za KUP-TEST-1 postoji u robi po kupcu"
 
     ' (4) Auto-prelaz pri promeni rezima: sa liste koje u novom rezimu nema
     ' prelazi se na prvu dostupnu -- nikad prazan ekran kao prvi utisak.

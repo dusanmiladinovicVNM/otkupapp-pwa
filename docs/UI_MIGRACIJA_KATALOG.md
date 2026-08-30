@@ -4811,6 +4811,29 @@ ambalaža mreže = API zbirni red; auto-prelaz u oba smera. Tri sabotaže:
 `modOtkupBlok` — novi Report-i dobili lokalni `IzvNum` (poziv u izrazu je
 poznata `vba_check` rupa, uhvatio ga je tek `[break]` na suite-u).
 
+**Krug 11 (smoke kruga 9, nastavak — „fale salda po kupcima, u robi
+roba po kupcu"):** isti obrazac kao stanice, sada za kupce: **SALDO
+zbirno** = red po kupcu (kg, vrednost, uplaćeno, saldo, amb — iz UKUPNO
+reda `ReportSaldoKupci`; prosečna cena se u zbir ne prenosi) i **ROBA
+zbirno** = roba po kupcu (UKUPNO kupčevog agregata preko svih vrsta) —
+`ReportSaldoKupciZbirni` / `ReportRobaKupciZbirni`, `KUP|` identitet.
+Spisak kupaca dolazi **iz podataka** (distinct po nestorniranim
+prijemnicama, `IzvKupciIzPodataka`), ne iz šifarnika — kupac sa prometom
+bez reda u `tblKupci` mora da se vidi (fixture to namerno drži tako);
+naziv iz šifarnika sa fallback-om na ID. Radnja „Štampaj dokument" na
+zbirnoj robi je ugašena (agregat bez dokumenta — ista R3 klasa). Matrica:
+Kupac-zbirno grana razdvojena od vozačke (+`SALDO_KUPCI`, `OTKUP_ROBA`);
+sabotaža `izvestaji-kupci-zbirno-van-matrice`. T146 dopune: red kupca =
+UKUPNO pojedinačnog salda (kg, saldo), roba po kupcu = ručni zbir
+prijemnica.
+
+**Krug 10 (smoke kruga 9):** kontekst-linija zbirne Ambalaže je pisala
+„OM: Svi" dok je prikaz bio za podrazumevanog (prvog) entiteta —
+`EntitetNaziv` je za zbirni režim vraćao „Svi" pre provere da li lista
+traži entitet. Sada ime „Svi" nosi samo lista koja je stvarno preko svih
+(`Not IzTrebaEntitet`); tvrdnja u T146 preko novog seam-a
+`Scr_IzCtxNazivTest`.
+
 ### 23.14 Verifikacija
 
 - `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su

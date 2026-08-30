@@ -3434,7 +3434,7 @@ SABOTAZE = {
     # odbrana (matrica vozacku robu ionako ne daje).
     "izvestaji-radnja-na-agregatu": (
         "modScrIzvestaji.bas",
-        '    If kljuc = IZ_ROBA And tip = "Vozac" Then Exit Function\n',
+        '    If kljuc = IZ_ROBA And (tip = "Vozac" Or zbirni) Then Exit Function\n',
         '    If kljuc = IZ_ROBA And tip <> "OM" Then Exit Function   \' SABOTAZA: kupac opet bez radnje\n',
         "T_Izv_UgovorEkrana",
         "roba za kupca (prijemnice) ima radnju stampe dokumenta",
@@ -3478,6 +3478,16 @@ SABOTAZE = {
         "                mZonaKartSaldo = NzD(src(i, 5))   ' SABOTAZA: promet umesto salda\n",
         "T_Izv_TabKontekstRobaKupacSaldo",
         "zona saldo = zavrsni running saldo kartice",
+    ),
+    # Matrica i za KUPCE zbirno (krug 11): vracanje stare grane (bez
+    # SALDO_KUPCI/OTKUP_ROBA) mora da padne po imenu.
+    "izvestaji-kupci-zbirno-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _\n"
+        "                         IZV_TAB_SALDO_KUPCI, IZV_TAB_OTKUP_ROBA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA   ' SABOTAZA: kupci bez zbirnog salda/robe\n",
+        "T_Izv_MatricaVodiListe",
+        "saldo kupaca zbirno po kupcima (krug 11)",
     ),
     # Rang u Izvestajima POSTUJE period zone (nova Optional grana u
     # KoopRangRows) -- bez filtera bi hint tvrdio period koji rang ne

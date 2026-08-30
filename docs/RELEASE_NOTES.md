@@ -6546,8 +6546,11 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   tekuća godina); radi i bez izabranog kooperanta, sa pretragom,
   sortiranjem i house PDF-om.
 - **Zbirni režim je dobio sadržaj** — priznat nalaz („fali sadržaj za
-  zbirne"): Saldo i Isplata sada imaju zbirni oblik **po stanicama** (red
-  = stanica, iste kolone kao pojedinačni izveštaj, UKUPNO preko svih);
+  zbirne"): Saldo i Isplata sada imaju zbirni oblik **po stanicama**, a
+  Saldo i Roba i **po kupcima** (red = kupac: kg, vrednost, uplaćeno,
+  saldo, ambalaža; roba po kupcu preko svih vrsta — kupci se čitaju iz
+  prometa, pa se vidi i kupac koga nema u šifarniku); red = stanica,
+  iste kolone kao pojedinačni izveštaj, UKUPNO preko svih;
   Ambalaža zbirno pokazuje stanje **po tipu gajbe za izabranog** (OM /
   kupca / vozača — jedina zbirna lista koja zato zadržava izbor
   entiteta); a klik na „Zbirno" više nikad ne ostavlja prazan ekran —

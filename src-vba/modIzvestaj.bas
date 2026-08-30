@@ -317,20 +317,24 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
                          IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA
                         IzvestajTabDostupan = True
                 End Select
-            Case "Kupac", "Vozac"
-                ' Prosecna cena NEMA upotrebljivu zbirnu granu ni za jedan od
-                ' ova dva tipa:
-                '  - Vozac: `ReportProsecnaCena` uopste nema vozacku granu;
-                '  - Kupac: grana postoji, ali ide kroz `GetPrijemniceByKupac`
-                '    koji BEZUSLOVNO dodaje filter `KupacID = entitetID`. Zbirni
-                '    rezim salje "", pa upit trazi prijemnice BEZ kupca i vraca
-                '    prazno -- tab bi bio ponudjen a trajno prazan. Globalni
-                '    prosek svih kupaca NIJE implementiran; to je nov izvestaj
-                '    (poslovna odluka), ne UI podesavanje -> tab se ne nudi.
-                '    Gate: T_E2E_ProsecnaCenaZbirniKupac (pada ako core pocne da
-                '    vraca podatke -> matrica se mora ponovo odluciti).
-                ' AMBALAZA zbirno vazi i ovde: legacy agregat po tipu gajbe
-                ' za izabranog kupca/vozaca (krug 9).
+            Case "Kupac"
+                ' Krug 11 ("fale salda po kupcima, u robi roba po kupcu"):
+                ' SALDO_KUPCI i OTKUP_ROBA zbirno = red po kupcu, UKUPNO red
+                ' pojedinacnog izvestaja (ReportSaldoKupciZbirni /
+                ' ReportRobaKupciZbirni) -- isti obrazac kao stanice.
+                Select Case pageIdx
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA, _
+                         IZV_TAB_SALDO_KUPCI, IZV_TAB_OTKUP_ROBA
+                        IzvestajTabDostupan = True
+                End Select
+            Case "Vozac"
+                ' Prosecna cena zbirno ne postoji ni za kupca ni za vozaca:
+                ' vozacka grana u ReportProsecnaCena ne postoji, a kupceva ide
+                ' kroz GetPrijemniceByKupac koji bezuslovno filtrira po
+                ' KupacID (zbirno "" = trajno prazno). Globalni prosek je nov
+                ' izvestaj (poslovna odluka), ne UI podesavanje. Gate:
+                ' T_E2E_ProsecnaCenaZbirniKupac. AMBALAZA zbirno = legacy
+                ' agregat po tipu za izabranog (krug 9).
                 Select Case pageIdx
                     Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA
                         IzvestajTabDostupan = True
@@ -1673,6 +1677,141 @@ Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
     Exit Function
 EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Zbirno po KUPCIMA (krug 11 -- "fale salda po kupcima"): isti obrazac
+' kao stanice. (1)=KupacID (2)=Naziv (3)=Kg (4)=Vrednost (5)=Uplaceno
+' (6)=Saldo (7)=Amb -- iz UKUPNO reda ReportSaldoKupci (kolona 3, cena,
+' je prosek pa se u zbir ne prenosi).
+Public Function ReportSaldoKupciZbirni(ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSaldoKupciZbirni"
+    On Error GoTo EH
+
+    ' Kupci iz PODATAKA (distinct po prijemnicama), ne iz sifarnika: kupac
+    ' sa prometom a bez reda u tblKupci mora da se vidi; naziv iz sifarnika
+    ' uz fallback na ID (IzvKupciIzPodataka).
+    Dim ku As Variant
+    ku = IzvKupciIzPodataka()
+    If Not IsArray(ku) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long, imaSta As Boolean
+    Dim srcKol As Variant, tot(3 To 7) As Double
+    srcKol = Array(0, 0, 0, 2, 4, 5, 6, 7)   ' out kolona j <- pojedinacna srcKol(j)
+    ReDim outA(1 To UBound(ku, 1) + 1, 1 To 7)
+    For i = 1 To UBound(ku, 1)
+        Dim kuID As String
+        kuID = Trim$(CStr(ku(i, 1)))
+        If Len(kuID) > 0 Then
+            r = ReportSaldoKupci(kuID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                imaSta = False
+                For j = 3 To 7
+                    If IzvNum(r(uk, srcKol(j))) <> 0 Then imaSta = True
+                Next j
+                If imaSta Then
+                    n = n + 1
+                    outA(n, 1) = kuID
+                    outA(n, 2) = CStr(ku(i, 2))
+                    For j = 3 To 7
+                        outA(n, j) = IzvNum(r(uk, srcKol(j)))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 7
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportSaldoKupciZbirni = IzvIseciRedove(outA, n + 1, 7)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Roba po kupcu (krug 11): (1)=KupacID (2)=Naziv (3)=Kg (4)=Vrednost --
+' UKUPNO red kupcevog agregata ReportOtkupRoba("Kupac") preko svih vrsta.
+Public Function ReportRobaKupciZbirni(ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportRobaKupciZbirni"
+    On Error GoTo EH
+
+    Dim ku As Variant
+    ku = IzvKupciIzPodataka()
+    If Not IsArray(ku) Then Exit Function
+
+    Dim outA() As Variant, n As Long, i As Long
+    Dim r As Variant, uk As Long
+    Dim totKg As Double, totVr As Double
+    ReDim outA(1 To UBound(ku, 1) + 1, 1 To 4)
+    For i = 1 To UBound(ku, 1)
+        Dim kuID2 As String
+        kuID2 = Trim$(CStr(ku(i, 1)))
+        If Len(kuID2) > 0 Then
+            r = ReportOtkupRoba("Kupac", kuID2, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 2)
+            If uk > 0 Then
+                If IzvNum(r(uk, 3)) <> 0 Or IzvNum(r(uk, 4)) <> 0 Then
+                    n = n + 1
+                    outA(n, 1) = kuID2
+                    outA(n, 2) = CStr(ku(i, 2))
+                    outA(n, 3) = IzvNum(r(uk, 3))
+                    outA(n, 4) = IzvNum(r(uk, 4))
+                    totKg = totKg + IzvNum(outA(n, 3))
+                    totVr = totVr + IzvNum(outA(n, 4))
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    outA(n + 1, 3) = totKg
+    outA(n + 1, 4) = totVr
+    ReportRobaKupciZbirni = IzvIseciRedove(outA, n + 1, 4)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Distinct kupci IZ PODATAKA (nestornirane prijemnice), 2D (1..n, 1..2):
+' 1=KupacID, 2=naziv iz tblKupci sa fallback-om na ID. Sifarnik nije izvor
+' spiska -- kupac sa prometom bez reda u tblKupci mora da se vidi (fixture
+' to namerno drzi tako).
+Private Function IzvKupciIzPodataka() As Variant
+    Dim d As Variant, i As Long, cKup As Long, cStorno As Long
+    Dim dict As Object, k As String, nm As String
+    d = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(d) Then Exit Function
+    cKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, "modIzvestaj.IzvKupciIzPodataka")
+    cStorno = GetColumnIndex(TBL_PRIJEMNICA, COL_STORNIRANO)
+    Set dict = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            k = Trim$(CStr(d(i, cKup)))
+            If Len(k) > 0 Then dict(k) = True
+        End If
+    Next i
+    If dict.count = 0 Then Exit Function
+
+    Dim outA() As Variant, kk As Variant, n As Long
+    ReDim outA(1 To dict.count, 1 To 2)
+    For Each kk In dict.keys
+        n = n + 1
+        outA(n, 1) = CStr(kk)
+        nm = ""
+        On Error Resume Next
+        nm = Trim$(CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, CStr(kk), COL_KUP_NAZIV)))
+        On Error GoTo 0
+        outA(n, 2) = IIf(Len(nm) > 0, nm, CStr(kk))
+    Next kk
+    IzvKupciIzPodataka = outA
 End Function
 
 ' Bezbedan broj (Empty/tekst -> 0) -- lokalni pandan NumVal-a iz

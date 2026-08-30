@@ -296,9 +296,9 @@ Public Function IzRadnjeZaKontekst(ByVal kljuc As String, ByVal tip As String, _
                                    ByVal zbirni As Boolean) As String
     If Not IzListaDostupna(kljuc, tip, zbirni) Then Exit Function
     ' ROBA nosi dokument-identitet za OM (OTP|) i kupca (PRJ|, lista
-    ' prijemnica od kruga 5); vozacki oblik je agregat po vrsti bez
-    ' ref-kolone -- tamo radnje nema.
-    If kljuc = IZ_ROBA And tip = "Vozac" Then Exit Function
+    ' prijemnica od kruga 5); vozacki oblik i ZBIRNI oblik (roba po
+    ' kupcu, krug 11) su agregati bez dokumenta -- radnje nema.
+    If kljuc = IZ_ROBA And (tip = "Vozac" Or zbirni) Then Exit Function
     IzRadnjeZaKontekst = IzRadnjeZaListu(kljuc)
 End Function
 
@@ -561,6 +561,18 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
     If zbirni Then
         Select Case kljuc
             Case IZ_SALDO
+                If tip = "Kupac" Then
+                    ' Kupac | Kg | Vrednost | Uplaceno | Saldo | Amb
+                    IzKoloneZaListu = Array( _
+                        "OTKUI_HDI_ENTITET||txt|150|1", _
+                        "OTKUI_HD_KG||kg|84|1", _
+                        "OTKUI_HD_VREDNOST||rsd|96|1", _
+                        "OTKUI_HDI_NOVAC||rsd|92|1", _
+                        "OTKUI_HDI_SALDO||rsd|96|1", _
+                        "OTKUI_HDI_AMB||num|56|3", _
+                        "OTKUI_HDI_REF||txt|1|4")
+                    Exit Function
+                End If
                 ' Stanica | Kg | Vrednost | Isplaceno | Agro | Saldo | Amb
                 IzKoloneZaListu = Array( _
                     "OTKUI_HD_OM||txt|140|1", _
@@ -580,6 +592,14 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_VIRFIRMA||rest|92|1", _
                     "OTKUI_HDI_VIRAVANS||rest|92|1", _
                     "OTKUI_HDI_UKUPNO||rsd|96|1", _
+                    "OTKUI_HDI_REF||txt|1|4")
+                Exit Function
+            Case IZ_ROBA
+                ' Kupac | Kg | Vrednost (roba po kupcu, krug 11).
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDI_ENTITET||txt|0|1", _
+                    "OTKUI_HD_KG||kg|92|1", _
+                    "OTKUI_HD_VREDNOST||rsd|100|1", _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
             Case IZ_AMB
@@ -853,7 +873,10 @@ Private Function Snimak(ByVal k As String, ByVal kljuc As String, ByVal tip As S
     mCtxId = iD
     mCtxOd = odN
     mCtxDo = doN
-    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni)
+    ' Lista koja i u zbirnom rezimu trazi entitet (zbirna AMBALAZA) nosi
+    ' IME tog entiteta -- "Svi" bi lagao da je prikaz preko svih (smoke
+    ' krug 9: podaci prve stanice pod naslovom "OM: Svi").
+    mCtxEntNaziv = EntitetNaziv(tip, iD, zbirni And Not IzTrebaEntitet(kljuc, zbirni))
 
     Snimak = mSnimci(k)
 End Function
@@ -870,7 +893,11 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
     Select Case kljuc
         Case IZ_SALDO
             If zbirni Then
-                PuniSnimak = ReportSaldoOMZbirni(dOd, dDo)
+                If tip = "Kupac" Then
+                    PuniSnimak = ReportSaldoKupciZbirni(dOd, dDo)
+                Else
+                    PuniSnimak = ReportSaldoOMZbirni(dOd, dDo)
+                End If
             ElseIf tip = "Kupac" Then
                 PuniSnimak = ReportSaldoKupci(iD, dOd, dDo)
             Else
@@ -878,8 +905,11 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             End If
         Case IZ_ROBA
             ' Kupac gleda dokumenta (prijemnice), ne agregat po vrsti --
-            ' agregat vec daje tab Zbirni (smoke krug 4).
-            If tip = "Kupac" Then
+            ' agregat vec daje tab Zbirni (smoke krug 4). Zbirno (krug 11):
+            ' roba PO KUPCU -- UKUPNO red kupcevog agregata.
+            If zbirni And tip = "Kupac" Then
+                PuniSnimak = ReportRobaKupciZbirni(dOd, dDo)
+            ElseIf tip = "Kupac" Then
                 PuniSnimak = ReportPrijemniceKupca(iD, dOd, dDo)
             Else
                 PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
@@ -987,7 +1017,7 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
     ' stanice); AMB zbirni deli granu pojedinacnog (UKUPNO u koloni 1).
     If zbirni Then
         Select Case kljuc
-            Case IZ_SALDO, IZ_ISPL
+            Case IZ_SALDO, IZ_ISPL, IZ_ROBA
                 If CStr(src(i, 2)) = IZ_LBL_UKUPNO Then VrstaReda = 1
                 Exit Function
         End Select
@@ -1070,8 +1100,8 @@ Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
                               ByRef src As Variant, ByVal i As Long) As String
     If zbirni Then
         Select Case kljuc
-            Case IZ_SALDO, IZ_ISPL
-                ' naziv stanice (kolona 2; kolona 1 je ID)
+            Case IZ_SALDO, IZ_ISPL, IZ_ROBA
+                ' naziv entiteta (kolona 2; kolona 1 je ID)
                 HaystackReda = NzS(src(i, 2))
                 Exit Function
         End Select
@@ -1119,18 +1149,23 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
     Dim ref As String, p() As String
     ' Zbirni oblici (krug 9): red po stanici -- naziv + brojevi + OM|
     ' identitet iz kolone 1 snimka; AMB zbirni = Tip | Ulaz | Izlaz.
-    If zbirni And (kljuc = IZ_SALDO Or kljuc = IZ_ISPL) Then
+    If zbirni And (kljuc = IZ_SALDO Or kljuc = IZ_ISPL Or kljuc = IZ_ROBA) Then
         Dim zc As Long, nSrcK As Long
         nSrcK = UBound(src, 2)
         outA(n, 1) = NzS(src(i, 2))
         For zc = 3 To nSrcK
             outA(n, zc - 1) = NzD(src(i, zc))
         Next zc
-        outA(n, nSrcK) = IIf(Len(NzS(src(i, 1))) > 0, "OM|" & NzS(src(i, 1)), "")
+        outA(n, nSrcK) = IIf(Len(NzS(src(i, 1))) > 0, _
+                             IIf(tip = "Kupac", "KUP|", "OM|") & NzS(src(i, 1)), "")
         If Not jeUkupno Then
             If kljuc = IZ_SALDO Then
                 sumKg = sumKg + NzD(src(i, 3))
-                sumVal = sumVal + NzD(src(i, 7))
+                ' saldo je pretposlednja brojcana kolona (OM: 7, kupci: 6)
+                sumVal = sumVal + NzD(src(i, nSrcK - 1))
+            ElseIf kljuc = IZ_ROBA Then
+                sumKg = sumKg + NzD(src(i, 3))
+                sumVal = sumVal + NzD(src(i, 4))
             Else
                 sumVal = sumVal + NzD(src(i, 6))
             End If
@@ -2237,7 +2272,14 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
     If zbirni Then
         Select Case kljuc
             Case IZ_SALDO
-                IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+                If tip = "Kupac" Then
+                    IzSabirljive = Array(2, 3, 4, 5, 6)
+                Else
+                    IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+                End If
+                Exit Function
+            Case IZ_ROBA
+                IzSabirljive = Array(2, 3)
                 Exit Function
             Case IZ_ISPL
                 IzSabirljive = Array(2, 3, 4, 5)
@@ -2642,6 +2684,13 @@ End Function
 Public Function Scr_IzHintKljucTest() As String
     If Not IsTestMode() Then Exit Function
     Scr_IzHintKljucTest = mHintKljuc
+End Function
+
+' Naziv entiteta STVARNO prikazanog konteksta (za hint/stampu) -- test
+' meri da zbirna ambalaza ne lazira "Svi" (smoke krug 9).
+Public Function Scr_IzCtxNazivTest() As String
+    If Not IsTestMode() Then Exit Function
+    Scr_IzCtxNazivTest = mCtxEntNaziv
 End Function
 
 Public Sub Scr_IzTestReset()
