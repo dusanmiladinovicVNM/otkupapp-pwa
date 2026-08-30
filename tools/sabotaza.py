@@ -3279,8 +3279,8 @@ SABOTAZE = {
     # (par. 22.9/N3). Haystack bez normalizacije = pretraga koja "ne radi".
     "izvestaji-haystack-sirov": (
         "modScrIzvestaji.bas",
-        "            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, src, i))\n",
-        "            hay = HaystackReda(kljuc, tip, src, i)   ' SABOTAZA: kvake ostaju\n",
+        "            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, zbirni, src, i))\n",
+        "            hay = HaystackReda(kljuc, tip, zbirni, src, i)   ' SABOTAZA: kvake ostaju\n",
         "T_Izv_KesPretragaIHint",
         "ASCII upit nalazi dijakriticno ime (TekstZaPretragu, N3)",
     ),
@@ -3362,7 +3362,7 @@ SABOTAZE = {
     # sugerise da izbor nesto znaci, a ekran ga ignorise.
     "izvestaji-zbirni-drzi-entitet": (
         "modScrIzvestaji.bas",
-        '    z.Controls("scrIzEnt").Visible = Not mZbirni\n',
+        '    z.Controls("scrIzEnt").Visible = IzTrebaEntitet(Scr_Lista(), mZbirni)\n',
         '    z.Controls("scrIzEnt").Visible = True   \' SABOTAZA: entitet i u zbirnom\n',
         "T_ZonaIzv_PoljaIRaspored",
         "zbirni rezim gasi polje entiteta",
@@ -3489,6 +3489,42 @@ SABOTAZE = {
         "                    uKrug = True   ' SABOTAZA: rang ignorise period\n",
         "T_Izv_RangKooperanata",
         "rang postuje period -- prazan opseg nema redove",
+    ),
+    # ------------------------------------------------------------------
+    # Krug 9: zbirni sadrzaj ("fali sadrzaj za zbirne izvestaje").
+    # ------------------------------------------------------------------
+    # Matrica je izvor istine i za NOVE zbirne kombinacije -- vracanje
+    # starih grana (bez SALDO/AMBALAZA/ISPLATA zbirno za OM) mora da padne
+    # po imenu, ne da tiho suzi ekran.
+    "izvestaji-zbirno-van-matrice": (
+        "modIzvestaj.bas",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _\n"
+        "                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA\n",
+        "                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK   ' SABOTAZA: stara matrica\n",
+        "T_Izv_MatricaVodiListe",
+        "saldo zbirno po stanicama (OM)",
+    ),
+    # Red zbirnog salda je UKUPNO red pojedinacnog izvestaja te stanice --
+    # prvi red (prvi kooperant) umesto UKUPNO bi tiho lagao po stanici.
+    "izvestaji-zbirni-saldo-tudji-red": (
+        "modIzvestaj.bas",
+        "            r = ReportSaldoOM(stID, datumOd, datumDo)\n"
+        "            uk = IzvUkupnoRed(r, 1)\n",
+        "            r = ReportSaldoOM(stID, datumOd, datumDo)\n"
+        "            uk = 1   ' SABOTAZA: prvi red umesto UKUPNO\n",
+        "T_Izv_ZbirniSadrzaj",
+        "zbirni saldo: kg stanice = rucni prolaz tblOtkup",
+    ),
+    # Promena rezima MORA da prebaci listu koje u novom rezimu nema --
+    # inace je prvi utisak zbirnog rezima prazan ekran sa hintom (krug 9).
+    "izvestaji-rezim-bez-prelaza": (
+        "modScrIzvestaji.bas",
+        "    If Not IzListaDostupna(Scr_Lista(), TrenutniTip(), zbirni) Then\n"
+        "        mLista = PrvaListaZaKontekst(TrenutniTip(), zbirni)\n"
+        "    End If\n",
+        "    ' SABOTAZA: rezim ne prebacuje listu\n",
+        "T_Izv_ZbirniSadrzaj",
+        "prelaz na zbirno sa otk. listova ide na prvu dostupnu (saldo)",
     ),
     # ------------------------------------------------------------------
     # Smoke krug 3 (Izvestaji): kontekstni cipovi, detalj reda, poslovni

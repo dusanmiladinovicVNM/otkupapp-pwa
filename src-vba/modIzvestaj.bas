@@ -306,8 +306,15 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
             Case "OM"
                 ' ReportProsecnaCena grana `Case "OM", ""` eksplicitno hvata
                 ' entitetID = "" kao "svi" (bez filtera po stanici) -> radi.
+                ' SALDO_OM i ISPLATA zbirno (krug 9, odluka operatera --
+                ' "fali sadrzaj za zbirne"): red = stanica, isti racun kao
+                ' pojedinacni oblik (ReportSaldoOMZbirni/ReportIsplataZbirniOM).
+                ' AMBALAZA zbirno je legacy grana ReportAmbalazeZbirni
+                ' (agregat po tipu gajbe ZA izabranog entiteta) -- do sada
+                ' implementirana a neponudjena u UI (par. 23.7).
                 Select Case pageIdx
-                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_PROSECNA_CENA, IZV_TAB_MANJAK, _
+                         IZV_TAB_SALDO_OM, IZV_TAB_AMBALAZA, IZV_TAB_ISPLATA
                         IzvestajTabDostupan = True
                 End Select
             Case "Kupac", "Vozac"
@@ -322,8 +329,10 @@ Public Function IzvestajTabDostupan(ByVal entitetTip As String, _
                 '    (poslovna odluka), ne UI podesavanje -> tab se ne nudi.
                 '    Gate: T_E2E_ProsecnaCenaZbirniKupac (pada ako core pocne da
                 '    vraca podatke -> matrica se mora ponovo odluciti).
+                ' AMBALAZA zbirno vazi i ovde: legacy agregat po tipu gajbe
+                ' za izabranog kupca/vozaca (krug 9).
                 Select Case pageIdx
-                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK
+                    Case IZV_TAB_ZBIRNI, IZV_TAB_MANJAK, IZV_TAB_AMBALAZA
                         IzvestajTabDostupan = True
                 End Select
             Case Else
@@ -1557,6 +1566,145 @@ EH:
     Application.ScreenUpdating = True
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Sub
+
+' ============================================================
+' ZBIRNI OBLICI PO STANICAMA (krug 9 -- "fali sadrzaj za zbirne")
+' Red = stanica, kolone = UKUPNO red pojedinacnog izvestaja te stanice --
+' isti racun, nijedno pravilo se ne prepisuje. Stanica ciji su svi brojevi
+' nula se preskace (sum bez prometa je red-shum), ali stanica sa saldom bez
+' prometa perioda OSTAJE. Poslednji red = UKUPNO preko svih stanica.
+' ============================================================
+' (1)=StanicaID (2)=Naziv (3)=Kg (4)=Vrednost (5)=Isplaceno (6)=Agro
+' (7)=Saldo (8)=Amb -- kolone 3..8 su UKUPNO red (2..7) pojedinacnog
+' ReportSaldoOM te stanice (agro PRIPISAN stanicama ucestvuje u saldu;
+' "nerasporedjena" agro linija je i tamo van UKUPNO pa je nema ni ovde).
+Public Function ReportSaldoOMZbirni(ByVal datumOd As Date, _
+                                    ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSaldoOMZbirni"
+    On Error GoTo EH
+
+    Dim st As Variant, cId As Long, cNaz As Long
+    st = GetTableData(TBL_STANICE)
+    If Not IsArray(st) Then Exit Function
+    cId = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
+    cNaz = RequireColumnIndex(TBL_STANICE, "Naziv", SRC)
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long, imaSta As Boolean
+    Dim tot(3 To 8) As Double
+    ReDim outA(1 To UBound(st, 1) + 1, 1 To 8)
+    For i = 1 To UBound(st, 1)
+        Dim stID As String
+        stID = Trim$(CStr(st(i, cId)))
+        If Len(stID) > 0 Then
+            r = ReportSaldoOM(stID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                imaSta = False
+                For j = 2 To 7
+                    If IzvNum(r(uk, j)) <> 0 Then imaSta = True
+                Next j
+                If imaSta Then
+                    n = n + 1
+                    outA(n, 1) = stID
+                    outA(n, 2) = Trim$(CStr(st(i, cNaz)))
+                    For j = 3 To 8
+                        outA(n, j) = IzvNum(r(uk, j - 1))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 8
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportSaldoOMZbirni = IzvIseciRedove(outA, n + 1, 8)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' (1)=StanicaID (2)=Naziv (3)=Kes (4)=VirmanFirma (5)=VirmanAvans (6)=Ukupno
+Public Function ReportIsplataZbirniOM(ByVal datumOd As Date, _
+                                      ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportIsplataZbirniOM"
+    On Error GoTo EH
+
+    Dim st As Variant, cId As Long, cNaz As Long
+    st = GetTableData(TBL_STANICE)
+    If Not IsArray(st) Then Exit Function
+    cId = RequireColumnIndex(TBL_STANICE, "StanicaID", SRC)
+    cNaz = RequireColumnIndex(TBL_STANICE, "Naziv", SRC)
+
+    Dim outA() As Variant, n As Long, i As Long, j As Long
+    Dim r As Variant, uk As Long
+    Dim tot(3 To 6) As Double
+    ReDim outA(1 To UBound(st, 1) + 1, 1 To 6)
+    For i = 1 To UBound(st, 1)
+        Dim stID As String
+        stID = Trim$(CStr(st(i, cId)))
+        If Len(stID) > 0 Then
+            r = ReportIsplata("OM", stID, datumOd, datumDo)
+            uk = IzvUkupnoRed(r, 1)
+            If uk > 0 Then
+                If IzvNum(r(uk, 5)) <> 0 Then
+                    n = n + 1
+                    outA(n, 1) = stID
+                    outA(n, 2) = Trim$(CStr(st(i, cNaz)))
+                    For j = 3 To 6
+                        outA(n, j) = IzvNum(r(uk, j - 1))
+                        tot(j) = tot(j) + IzvNum(outA(n, j))
+                    Next j
+                End If
+            End If
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    outA(n + 1, 2) = "UKUPNO"
+    For j = 3 To 6
+        outA(n + 1, j) = tot(j)
+    Next j
+    ReportIsplataZbirniOM = IzvIseciRedove(outA, n + 1, 6)
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Bezbedan broj (Empty/tekst -> 0) -- lokalni pandan NumVal-a iz
+' modOtkupBlok (tamo je Private, odavde nevidljiv).
+Private Function IzvNum(ByVal v As Variant) As Double
+    If IsNumeric(v) And Not IsEmpty(v) Then IzvNum = CDbl(v)
+End Function
+
+' Indeks reda "UKUPNO" u koloni k (0 = nema ga).
+Private Function IzvUkupnoRed(ByVal r As Variant, ByVal k As Long) As Long
+    Dim i As Long
+    If IsEmpty(r) Or Not IsArray(r) Then Exit Function
+    For i = UBound(r, 1) To 1 Step -1
+        If CStr(r(i, k)) = "UKUPNO" Then
+            IzvUkupnoRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Prvih n redova 2D niza (petlja po stanicama alocira za sve, popuni manje).
+Private Function IzvIseciRedove(ByRef a As Variant, ByVal n As Long, _
+                                ByVal nCols As Long) As Variant
+    Dim outA() As Variant, i As Long, j As Long
+    ReDim outA(1 To n, 1 To nCols)
+    For i = 1 To n
+        For j = 1 To nCols
+            outA(i, j) = a(i, j)
+        Next j
+    Next i
+    IzvIseciRedove = outA
+End Function
 
 ' ============================================================
 ' KUPCI

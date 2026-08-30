@@ -385,6 +385,7 @@ Public Sub RunAllTests()
     RunOne 143
     RunOne 144
     RunOne 145
+    RunOne 152
     RunOne 124
     RunOne 125
     RunOne 126
@@ -567,6 +568,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 143: TestName = "T_Izv_DetaljICipKontekst"
         Case 144: TestName = "T_Izv_TabKontekstRobaKupacSaldo"
         Case 145: TestName = "T_Izv_RangKooperanata"
+        Case 152: TestName = "T_Izv_ZbirniSadrzaj"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -720,6 +722,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 143: T_Izv_DetaljICipKontekst
         Case 144: T_Izv_TabKontekstRobaKupacSaldo
         Case 145: T_Izv_RangKooperanata
+        Case 152: T_Izv_ZbirniSadrzaj
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -9369,15 +9372,18 @@ Private Sub T_Izv_MatricaVodiListe()
     Dim liste As Variant, i As Long, kljuc As String
     Dim d As Variant
 
-    liste = modScrIzvestaji.Scr_Liste()
-
-    ' Kooperant u ZBIRNOM rezimu nema NIJEDAN izvestaj -- tacno FM-0029 #3
-    ' kvar koji je matrica zatvorila; ekran je NE zaobilazi.
+    ' Kooperant u ZBIRNOM rezimu ima SAMO rang (krug 8; rang ne zavisi od
+    ' entiteta) -- nijedan Report* zbirni za kooperanta i dalje ne postoji.
+    liste = modScrIzvestaji.IzListeZaTip("Kooperant")
     For i = 0 To UBound(liste)
         kljuc = Split(CStr(liste(i)), "|")(0)
-        AssertEq modScrIzvestaji.IzListaDostupna(kljuc, "Kooperant", True), False, _
-                 "kooperant + zbirno nema listu " & kljuc
+        If kljuc <> "RANG" Then
+            AssertEq modScrIzvestaji.IzListaDostupna(kljuc, "Kooperant", True), False, _
+                     "kooperant + zbirno nema listu " & kljuc
+        End If
     Next i
+    AssertEq modScrIzvestaji.IzListaDostupna("RANG", "Kooperant", True), True, _
+             "kooperant + zbirno ima rang"
 
     ' Kooperant pojedinacno: TACNO kartica i pregled ambalaze.
     AssertEq modScrIzvestaji.IzListaDostupna("KARTICA", "Kooperant", False), True, _
@@ -9408,6 +9414,22 @@ Private Sub T_Izv_MatricaVodiListe()
              "otk. listovi samo pojedinacno"
     AssertEq modScrIzvestaji.IzListaDostupna("ISPLATA", "Kupac", False), False, _
              "ISPLATA je samo OM -- matrica se ne siri"
+
+    ' ZBIRNI SADRZAJ (krug 9, odluka operatera "fali sadrzaj za zbirne"):
+    ' SALDO i ISPLATA zbirno po stanicama (samo OM); AMBALAZA zbirno je
+    ' legacy agregat po tipu ZA izabranog entiteta -- svi tipovi sa amb.
+    AssertEq modScrIzvestaji.IzListaDostupna("SALDO", "OM", True), True, _
+             "saldo zbirno po stanicama (OM)"
+    AssertEq modScrIzvestaji.IzListaDostupna("ISPLATA", "OM", True), True, _
+             "isplata zbirno po stanicama (OM)"
+    AssertEq modScrIzvestaji.IzListaDostupna("AMBALAZA", "OM", True), True, _
+             "ambalaza zbirno za OM"
+    AssertEq modScrIzvestaji.IzListaDostupna("AMBALAZA", "Kupac", True), True, _
+             "ambalaza zbirno za kupca"
+    AssertEq modScrIzvestaji.IzListaDostupna("AMBALAZA", "Vozac", True), True, _
+             "ambalaza zbirno za vozaca"
+    AssertEq modScrIzvestaji.IzListaDostupna("SALDO", "Kupac", True), False, _
+             "saldo kupaca zbirno ne postoji -- tab Zbirni to vec daje"
 
     ' Nedostupna kombinacija: lista POSTOJI, 0 redova, hint kaze ZASTO --
     ' nikad pun naslov nad trajno praznom listom, ali ni tiho nestajanje.
@@ -10255,6 +10277,12 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
     visina = modScrIzvestaji.Scr_Layout(z, 1200, 300)
     entVidljivZbirno = z.Controls("scrIzEnt").Visible
 
+    ' ...OSIM zbirne ambalaze: legacy agregat po tipu ZA izabranog (krug 9).
+    Dim entVidljivAmbZ As Boolean
+    modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", True, "", 0, 0
+    visina = modScrIzvestaji.Scr_Layout(z, 1200, 300)
+    entVidljivAmbZ = z.Controls("scrIzEnt").Visible
+
     modScrIzvestaji.Scr_IzTestReset
     Unload f
 
@@ -10273,6 +10301,8 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
              "na kartici se ne nudi tabelarni izvestaj -- jedna kartica, legacy sablon"
     AssertEq entVidljivPojed, True, "polje entiteta postoji u pojedinacnom rezimu"
     AssertEq entVidljivZbirno, False, "zbirni rezim gasi polje entiteta"
+    AssertEq entVidljivAmbZ, True, _
+             "zbirna ambalaza zadrzava polje entiteta (agregat ZA izabranog)"
 End Sub
 
 ' ============================================================
@@ -10585,6 +10615,125 @@ Private Sub T_Izv_RangKooperanata()
                                   CDbl(DateSerial(1990, 1, 1)), CDbl(DateSerial(1990, 12, 31))
     d = modScrIzvestaji.Scr_Rows("", "")
     AssertEq CLng(d(2)), 0, "rang postuje period -- prazan opseg nema redove"
+    modScrIzvestaji.Scr_IzTestReset
+End Sub
+
+' ============================================================
+' 152. Izvestaji krug 9: ZBIRNI SADRZAJ -- saldo/isplata po stanicama,
+' zbirna ambalaza (legacy agregat po tipu), auto-prelaz liste pri promeni
+' rezima. (146-151 su testovi grane Sledljivost -- brojevi preskoceni.)
+' ============================================================
+Private Sub T_Izv_ZbirniSadrzaj()
+    Dim d As Variant, redovi As Variant, n As Long, i As Long
+    Dim r As Variant, uk As Long
+
+    ' (1) SALDO zbirno = red po stanici; red STA-TEST-2 se slaze sa rucnim
+    ' racunom te stanice (kg iz tblOtkup; isplaceno = svi kanali tblNovac).
+    modScrIzvestaji.Scr_IzTestSet "SALDO", "OM", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (n >= 2), True, "vozilo: bar dve stanice sa podacima"
+    Dim rKg As Double, rIspl As Double, nasla As Boolean
+    Dim otk As Variant, cSt As Long, cKol As Long, cDat As Long, cStorno As Long
+    Dim dv As Date, pj As Variant, pu As Long, j As Long
+    otk = GetTableData(TBL_OTKUP)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_OTK_STANICA)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cDat = GetColumnIndex(TBL_OTKUP, COL_OTK_DATUM)
+    cStorno = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    For i = 1 To UBound(otk, 1)
+        If Trim$(CStr(otk(i, cSt))) = FX_STANICA_B And CStr(otk(i, cStorno)) <> "Da" Then
+            If IsDate(otk(i, cDat)) Then
+                dv = CDate(otk(i, cDat))
+                If dv >= IzvOdD() And dv <= IzvDoD() Then rKg = rKg + CDbl(otk(i, cKol))
+            End If
+        End If
+    Next i
+    ' Rucni zbir sva tri kanala ka kooperantima po OMID (obrazac T138).
+    rIspl = IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_KES_OTKUPAC_KOOP) + _
+            IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_VIRMAN_FIRMA_KOOP) + _
+            IzvNovacSuma(COL_NOV_ISPLATA, "", FX_IZV_STANICA2, NOV_VIRMAN_AVANS_KOOP)
+    ' Red stanice = UKUPNO red pojedinacnog ReportSaldoOM te stanice --
+    ' zbirni oblik nista ne racuna sam (pojedinacni je vezan za rucne
+    ' prolaze u T135); kg dodatno i direktno na tblOtkup.
+    pj = ReportSaldoOM(FX_STANICA_B, IzvOdD(), IzvDoD())
+    pu = 0
+    For i = 1 To UBound(pj, 1)
+        If CStr(pj(i, 1)) = "UKUPNO" Then pu = i
+    Next i
+    AssertEq (pu > 0), True, "vozilo: pojedinacni saldo stanice ima UKUPNO"
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 8)), FX_STANICA_B, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 2)), "0.00"), Format$(rKg, "0.00"), _
+                     "zbirni saldo: kg stanice = rucni prolaz tblOtkup"
+            For j = 2 To 7
+                AssertEq Format$(CDbl(redovi(i, j)), "0.00"), _
+                         Format$(NzD2(pj(pu, j)), "0.00"), _
+                         "zbirni saldo kolona " & j & " = UKUPNO pojedinacnog"
+            Next j
+        End If
+    Next i
+    AssertEq nasla, True, "red za STA-TEST-2 postoji u zbirnom saldu"
+
+    ' (2) ISPLATA zbirno: red STA-TEST-2 ukupno = isti rucni zbir kanala.
+    modScrIzvestaji.Scr_IzTestSet "ISPLATA", "OM", True, "", IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    nasla = False
+    For i = 1 To n
+        If InStr(1, CStr(redovi(i, 6)), FX_STANICA_B, vbTextCompare) > 0 Then
+            nasla = True
+            AssertEq Format$(CDbl(redovi(i, 5)), "0.00"), Format$(rIspl, "0.00"), _
+                     "zbirna isplata: ukupno stanice = rucni zbir kanala"
+        End If
+    Next i
+    AssertEq nasla, True, "red za STA-TEST-2 postoji u zbirnoj isplati"
+
+    ' (3) Zbirna AMBALAZA za izabranu stanicu = legacy ReportAmbalazeZbirni:
+    ' mreza se slaze sa API zbirnim redom za AMB_12_1 (API je vec vezan za
+    ' rucni prolaz u T139 -- ovde se meri da EKRAN prikazuje bas taj racun).
+    modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", True, FX_STANICA, IzvOdS(), IzvDoS()
+    d = modScrIzvestaji.Scr_Rows("", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (n >= 1), True, "zbirna ambalaza stanice ima redove"
+    r = ReportAmbalaza("OM", FX_STANICA, IzvOdD(), IzvDoD(), True)
+    uk = 0
+    For i = 1 To UBound(r, 1)
+        If CStr(r(i, 1)) = FX_TIP_AMB Then uk = i
+    Next i
+    AssertEq (uk > 0), True, "vozilo: API zbirni red za tip gajbe postoji"
+    nasla = False
+    For i = 1 To n
+        If CStr(redovi(i, 1)) = FX_TIP_AMB Then
+            nasla = True
+            ' Nula se prikazuje PRAZNO (GajbeIliPrazno) -- ocekivano isto.
+            AssertEq CStr(redovi(i, 2)), _
+                     IIf(CDbl(r(uk, 5)) = 0, "", Format$(CDbl(r(uk, 5)), "#,##0")), _
+                     "zbirna ambalaza: ulaz mreze = API zbirni red"
+            AssertEq CStr(redovi(i, 3)), _
+                     IIf(CDbl(r(uk, 6)) = 0, "", Format$(CDbl(r(uk, 6)), "#,##0")), _
+                     "zbirna ambalaza: izlaz mreze = API zbirni red"
+        End If
+    Next i
+    AssertEq nasla, True, "red tipa gajbe postoji u zbirnoj ambalazi"
+
+    ' (4) Auto-prelaz pri promeni rezima: sa liste koje u novom rezimu nema
+    ' prelazi se na prvu dostupnu -- nikad prazan ekran kao prvi utisak.
+    modScrIzvestaji.Scr_IzTestSet "OTKLISTE", "OM", False, FX_STANICA, 0, 0
+    modScrIzvestaji.Scr_Event "scrIzRezZ", "Click"
+    AssertEq modScrIzvestaji.Scr_Lista(), "SALDO", _
+             "prelaz na zbirno sa otk. listova ide na prvu dostupnu (saldo)"
+    modScrIzvestaji.Scr_Event "scrIzRezP", "Click"
+    AssertEq modScrIzvestaji.Scr_Lista(), "SALDO", _
+             "povratak na pojedinacno zadrzava dostupnu listu"
+    modScrIzvestaji.Scr_IzTestSet "KARTICA", "Kooperant", False, FX_KOOPERANT, 0, 0
+    modScrIzvestaji.Scr_Event "scrIzRezZ", "Click"
+    AssertEq modScrIzvestaji.Scr_Lista(), "RANG", _
+             "kooperant + zbirno prelazi na rang (jedina zbirna lista tipa)"
     modScrIzvestaji.Scr_IzTestReset
 End Sub
 

@@ -4777,6 +4777,39 @@ kooperanata sa otkupom u opsegu (ručni prolaz `tblOtkup`), zbir = ručni
 (1990. opseg = prazno); sabotaža `izvestaji-rang-mimo-perioda` (grana
 perioda u `KoopRangRows` — legacy pozivaoci je ne dodiruju).
 
+**Krug 9 — Zbirni sadržaj („fali sadržaj za zbirne izveštaje"):**
+
+Nalaz operatera posle kruga 8 — priznat: prenos je verno pratio legacy
+matricu, pa je zbirni režim nudio samo Zbirni/Pros. cenu/Manjak, iako je
+`ReportAmbalazeZbirni` sve vreme postojao neponuđen (§23.7), a klik na
+„Zbirno" ostavljao pojedinačnu listu na hintu. Zatvoreno u tri poteza,
+**uz svesnu izmenu matrice** (odluka operatera — izuzetak od „matrica se
+ne širi"):
+
+- **AMBALAŽA zbirno** → postojeća legacy grana `ReportAmbalazeZbirni`:
+  agregat po tipu gajbe **za izabranog entiteta** (OM/Kupac/Vozač) — zato
+  zbirni režim na toj listi jedini zadržava combo entiteta
+  (`IzTrebaEntitet`).
+- **SALDO i ISPLATA zbirno (OM)** → novi `ReportSaldoOMZbirni` /
+  `ReportIsplataZbirniOM`: red = stanica, kolone = UKUPNO red
+  pojedinačnog izveštaja te stanice (isti račun, ništa se ne prepisuje;
+  stanica čiji su svi brojevi nula se preskače, stanica sa saldom bez
+  prometa ostaje), UKUPNO preko svih + `OM|` identitet za budući drill.
+  SALDO kupaca zbirno se NE dodaje — tab Zbirni to već daje.
+- **Auto-prelaz pri promeni režima** (`PostaviRezim`, isto pravilo kao
+  prelaz tipa iz S9; i `PostaviTip` sada bira prvu dostupnu za tekući
+  režim): nikad prazan ekran sa hintom kao prvi utisak. Kooperant +
+  „Zbirno" prelazi na Rang.
+
+Test 152 (146–151 su brojevi grane Sledljivost — preskočeni): red
+STA-TEST-2 = ručni prolaz `tblOtkup` (kg) + tri kanala `tblNovac`
+(isplaćeno, obrazac T138) + sve kolone = UKUPNO pojedinačnog; zbirna
+ambalaža mreže = API zbirni red; auto-prelaz u oba smera. Tri sabotaže:
+`izvestaji-zbirno-van-matrice`, `izvestaji-zbirni-saldo-tudji-red`,
+`izvestaji-rezim-bez-prelaza`. Usput: `NumVal` je Private u
+`modOtkupBlok` — novi Report-i dobili lokalni `IzvNum` (poziv u izrazu je
+poznata `vba_check` rupa, uhvatio ga je tek `[break]` na suite-u).
+
 ### 23.14 Verifikacija
 
 - `RunAllTests` **144 / 0** (dvanaest novih testova; prva dva runa su

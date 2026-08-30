@@ -6545,6 +6545,14 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
   otkupa" na Unosu dokumenata, ali za period izabran u zoni (ne samo
   tekuća godina); radi i bez izabranog kooperanta, sa pretragom,
   sortiranjem i house PDF-om.
+- **Zbirni režim je dobio sadržaj** — priznat nalaz („fali sadržaj za
+  zbirne"): Saldo i Isplata sada imaju zbirni oblik **po stanicama** (red
+  = stanica, iste kolone kao pojedinačni izveštaj, UKUPNO preko svih);
+  Ambalaža zbirno pokazuje stanje **po tipu gajbe za izabranog** (OM /
+  kupca / vozača — jedina zbirna lista koja zato zadržava izbor
+  entiteta); a klik na „Zbirno" više nikad ne ostavlja prazan ekran —
+  lista koje u tom režimu nema prelazi na prvu koja postoji (Kooperanti +
+  Zbirno otvara Rang).
 
 ### Šta NIJE urađeno, i zašto
 

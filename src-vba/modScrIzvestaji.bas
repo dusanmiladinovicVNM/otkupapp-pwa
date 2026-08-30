@@ -216,6 +216,14 @@ Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) 
                           IzListaDostupna(kljuc, tip, True)
 End Function
 
+' Da li kombinacija (lista, rezim) trazi IZABRAN entitet. RANG nikad (nad
+' svim kooperantima); zbirni rezim ne trazi -- OSIM ambalaze, ciji je
+' zbirni oblik legacy agregat po tipu gajbe ZA izabranog entiteta.
+Public Function IzTrebaEntitet(ByVal kljuc As String, ByVal zbirni As Boolean) As Boolean
+    If kljuc = IZ_RANG Then Exit Function
+    IzTrebaEntitet = (Not zbirni) Or (kljuc = IZ_AMB)
+End Function
+
 Public Function Scr_Lista() As String
     If Len(mLista) = 0 Then mLista = IZ_SALDO
     Scr_Lista = mLista
@@ -441,23 +449,39 @@ End Function
 Private Function PostaviTip(ByVal tip As String) As Boolean
     If mTip = tip Then Exit Function
     mTip = tip
-    If Not IzListaZaTipPostoji(Scr_Lista(), tip) Then
-        mLista = PrvaListaZaTip(tip)
+    If Not IzListaDostupna(Scr_Lista(), tip, mZbirni) Then
+        mLista = PrvaListaZaKontekst(tip, mZbirni)
     End If
     PostaviTip = True
 End Function
 
-Private Function PrvaListaZaTip(ByVal tip As String) As String
-    Dim liste As Variant
-    PrvaListaZaTip = IZ_SALDO
-    liste = IzListeZaTip(tip)
-    If IsArray(liste) Then PrvaListaZaTip = Split(CStr(liste(0)), "|")(0)
-End Function
-
+' Klik na Pojedinacno/Zbirno sa liste koje u novom rezimu nema prelazi na
+' prvu dostupnu -- nikad prazan ekran sa hintom kao prvi utisak (krug 9,
+' isto pravilo kao prelaz tipa iz S9).
 Private Function PostaviRezim(ByVal zbirni As Boolean) As Boolean
     If mZbirni = zbirni And Len(mTip) > 0 Then Exit Function
     mZbirni = zbirni
+    If Not IzListaDostupna(Scr_Lista(), TrenutniTip(), zbirni) Then
+        mLista = PrvaListaZaKontekst(TrenutniTip(), zbirni)
+    End If
     PostaviRezim = True
+End Function
+
+' Prva lista dostupna bas za (tip, rezim); fallback prva za tip pa SALDO.
+Private Function PrvaListaZaKontekst(ByVal tip As String, _
+                                     ByVal zbirni As Boolean) As String
+    Dim liste As Variant, i As Long, k As String
+    PrvaListaZaKontekst = IZ_SALDO
+    liste = IzListeZaTip(tip)
+    If Not IsArray(liste) Then Exit Function
+    PrvaListaZaKontekst = Split(CStr(liste(0)), "|")(0)
+    For i = LBound(liste) To UBound(liste)
+        k = Split(CStr(liste(i)), "|")(0)
+        If IzListaDostupna(k, tip, zbirni) Then
+            PrvaListaZaKontekst = k
+            Exit Function
+        End If
+    Next i
 End Function
 
 ' Entitet iz comboa: PRAZAN ID je nerazresen unos, ne "drugi entitet"
@@ -530,7 +554,43 @@ End Function
 ' Opis kolona PO KLJUCU LISTE I TIPU -- oblik kolona prati stvarni oblik
 ' Report* povratka (legacy tabovi ROBA i ZBIRNI menjaju kolone po tipu, SALDO
 ' po legacy tabu). Geometrija mreze prati opis pri svakom crtanju (par. 9.2).
-Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String) As Variant
+Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
+                                Optional ByVal zbirni As Boolean = False) As Variant
+    ' Zbirne varijante (krug 9): SALDO/ISPLATA za OM = red po stanici;
+    ' AMBALAZA = legacy agregat po tipu gajbe za izabranog entiteta.
+    If zbirni Then
+        Select Case kljuc
+            Case IZ_SALDO
+                ' Stanica | Kg | Vrednost | Isplaceno | Agro | Saldo | Amb
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HD_OM||txt|140|1", _
+                    "OTKUI_HD_KG||kg|82|1", _
+                    "OTKUI_HD_VREDNOST||rsd|92|1", _
+                    "OTKUI_HDI_ISPLACENO||rsd|92|1", _
+                    "OTKUI_HDI_AGRO||rest|80|2", _
+                    "OTKUI_HDI_SALDO||rsd|92|1", _
+                    "OTKUI_HDI_AMB||num|56|3", _
+                    "OTKUI_HDI_REF||txt|1|4")
+                Exit Function
+            Case IZ_ISPL
+                ' Stanica | Kes | Virman firma | Virman avans | Ukupno
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HD_OM||txt|150|1", _
+                    "OTKUI_HDI_KES||rest|92|1", _
+                    "OTKUI_HDI_VIRFIRMA||rest|92|1", _
+                    "OTKUI_HDI_VIRAVANS||rest|92|1", _
+                    "OTKUI_HDI_UKUPNO||rsd|96|1", _
+                    "OTKUI_HDI_REF||txt|1|4")
+                Exit Function
+            Case IZ_AMB
+                ' Tip | Ulaz | Izlaz (legacy zbirni oblik).
+                IzKoloneZaListu = Array( _
+                    "OTKUI_HDA_TIP||txt|0|1", _
+                    "OTKUI_HDA_ULAZ||txt|80|1", _
+                    "OTKUI_HDA_IZLAZ||txt|80|1")
+                Exit Function
+        End Select
+    End If
     Select Case kljuc
         Case IZ_SALDO
             If tip = "Kupac" Then
@@ -720,7 +780,7 @@ Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Var
     ' (isti razlog kao KarticaDetalji_Clear na mpReports_Change u legacy).
     OcistiDetalj
 
-    kolone = IzKoloneZaListu(kljuc, tip)
+    kolone = IzKoloneZaListu(kljuc, tip, zbirni)
 
     ' 1) Kombinacija bez izvestaja (matrica) -- prazna lista, hint kaze zasto.
     If Not IzListaDostupna(kljuc, tip, zbirni) Then
@@ -730,12 +790,12 @@ Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Var
         Exit Function
     End If
 
-    ' 2) Pojedinacni rezim bez izabranog entiteta -- legacy guard
-    '    ("Izaberite entitet"), samo kao prazna lista + hint umesto MsgBox-a.
-    '    RANG je izuzet: lista je nad SVIM kooperantima, entitet ne ucestvuje
-    '    ni u racunu ni u kljucu snimka.
+    ' 2) Lista koja trazi entitet bez izabranog -- legacy guard ("Izaberite
+    '    entitet"), samo kao prazna lista + hint umesto MsgBox-a. RANG je
+    '    izuzet (nad SVIM kooperantima); AMBALAZA trazi entitet I U ZBIRNOM
+    '    rezimu (legacy zbirni oblik = agregat po tipu ZA izabranog).
     iD = ""
-    If Not zbirni And kljuc <> IZ_RANG Then
+    If IzTrebaEntitet(kljuc, zbirni) Then
         iD = IzabraniEntitet()
         If Len(iD) = 0 Then
             mHintKljuc = "OTKUI_IZ_HINT_IZABERI"
@@ -755,7 +815,7 @@ Private Function RedoviZaListu(ByVal filter As String, ByVal q As String) As Var
     src = Snimak(k, kljuc, tip, zbirni, iD, odN, doN)
 
     mHintKljuc = ""
-    RedoviZaListu = Oblikuj(kljuc, tip, src, kolone, filter, q)
+    RedoviZaListu = Oblikuj(kljuc, tip, zbirni, src, kolone, filter, q)
     Exit Function
 EH:
     errNum = Err.Number
@@ -809,7 +869,9 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
 
     Select Case kljuc
         Case IZ_SALDO
-            If tip = "Kupac" Then
+            If zbirni Then
+                PuniSnimak = ReportSaldoOMZbirni(dOd, dDo)
+            ElseIf tip = "Kupac" Then
                 PuniSnimak = ReportSaldoKupci(iD, dOd, dDo)
             Else
                 PuniSnimak = ReportSaldoOM(iD, dOd, dDo)
@@ -822,8 +884,13 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             Else
                 PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
             End If
-        Case IZ_AMB:    PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, False)
-        Case IZ_ISPL:   PuniSnimak = ReportIsplata(tip, iD, dOd, dDo)
+        Case IZ_AMB:    PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, zbirni)
+        Case IZ_ISPL
+            If zbirni Then
+                PuniSnimak = ReportIsplataZbirniOM(dOd, dDo)
+            Else
+                PuniSnimak = ReportIsplata(tip, iD, dOd, dDo)
+            End If
         Case IZ_ZBIR:   PuniSnimak = ReportZbirni(tip, dOd, dDo)
         Case IZ_CENA:   PuniSnimak = ReportProsecnaCena(tip, iD, dOd, dDo)
         Case IZ_MANJAK: PuniSnimak = ReportManjak(tip, iD, dOd, dDo)
@@ -857,6 +924,7 @@ End Function
 '    u red, prio 4 (GridCell ga cita, celija se nikad ne crta).
 '=====================================================================
 Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
+                         ByVal zbirni As Boolean, _
                          ByVal src As Variant, ByVal kolone As Variant, _
                          ByVal filter As String, ByVal q As String) As Variant
     Dim nSrc As Long, nK As Long, i As Long, n As Long
@@ -884,7 +952,7 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
 
     ReDim outA(1 To nSrc, 1 To nK)
     For i = 1 To nSrc
-        vrsta = VrstaReda(kljuc, tip, src, i)
+        vrsta = VrstaReda(kljuc, tip, zbirni, src, i)
         If vrsta = 3 Then GoTo Sledeci             ' izdvojen u zonu (VrstaReda)
         ' UKUPNO red NIKAD ne ide u mrezu: mreza sortira po koloni, pa bi
         ' legacy poslednji red PLUTAO usred liste (prvi smoke, lista Isplata).
@@ -896,12 +964,12 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
         If Not CipPropusta(kljuc, filter, src, i) Then GoTo Sledeci
 
         If Len(qN) > 0 Then
-            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, src, i))
+            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, zbirni, src, i))
             If InStr(1, hay, qN, vbTextCompare) = 0 Then GoTo Sledeci
         End If
 
         n = n + 1
-        UpisiRed kljuc, tip, src, i, outA, n, (vrsta = 1), sumKg, sumVal
+        UpisiRed kljuc, tip, zbirni, src, i, outA, n, (vrsta = 1), sumKg, sumVal
 Sledeci:
     Next i
 
@@ -912,8 +980,18 @@ End Function
 ' kontrolni redovi isplate) -- jedno mesto, da se izdvajanje i prikaz ne
 ' mogu razici.
 Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
+                           ByVal zbirni As Boolean, _
                            ByRef src As Variant, ByVal i As Long) As Long
     Dim lbl As String
+    ' Zbirni oblici SALDO/ISPL nose UKUPNO u koloni 2 (kolona 1 je ID
+    ' stanice); AMB zbirni deli granu pojedinacnog (UKUPNO u koloni 1).
+    If zbirni Then
+        Select Case kljuc
+            Case IZ_SALDO, IZ_ISPL
+                If CStr(src(i, 2)) = IZ_LBL_UKUPNO Then VrstaReda = 1
+                Exit Function
+        End Select
+    End If
     Select Case kljuc
         Case IZ_SALDO
             If tip = "Kupac" Then
@@ -988,7 +1066,16 @@ End Function
 ' Tekst po kom se red trazi -- vidljive tekstualne kolone (brojevi dokumenata,
 ' imena, vrsta, opis).
 Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
+                              ByVal zbirni As Boolean, _
                               ByRef src As Variant, ByVal i As Long) As String
+    If zbirni Then
+        Select Case kljuc
+            Case IZ_SALDO, IZ_ISPL
+                ' naziv stanice (kolona 2; kolona 1 je ID)
+                HaystackReda = NzS(src(i, 2))
+                Exit Function
+        End Select
+    End If
     Select Case kljuc
         Case IZ_SALDO, IZ_ISPL, IZ_CENA
             HaystackReda = NzS(src(i, 1))
@@ -1024,11 +1111,38 @@ End Function
 ' Upis jednog reda izvora u red mreze + zbirovi podnozja (POD ISTIM filterima
 ' kao redovi -- par. 13; UKUPNO red se NE broji u podnozje).
 Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
+                     ByVal zbirni As Boolean, _
                      ByRef src As Variant, ByVal i As Long, _
                      ByRef outA() As Variant, ByVal n As Long, _
                      ByVal jeUkupno As Boolean, _
                      ByRef sumKg As Double, ByRef sumVal As Double)
     Dim ref As String, p() As String
+    ' Zbirni oblici (krug 9): red po stanici -- naziv + brojevi + OM|
+    ' identitet iz kolone 1 snimka; AMB zbirni = Tip | Ulaz | Izlaz.
+    If zbirni And (kljuc = IZ_SALDO Or kljuc = IZ_ISPL) Then
+        Dim zc As Long, nSrcK As Long
+        nSrcK = UBound(src, 2)
+        outA(n, 1) = NzS(src(i, 2))
+        For zc = 3 To nSrcK
+            outA(n, zc - 1) = NzD(src(i, zc))
+        Next zc
+        outA(n, nSrcK) = IIf(Len(NzS(src(i, 1))) > 0, "OM|" & NzS(src(i, 1)), "")
+        If Not jeUkupno Then
+            If kljuc = IZ_SALDO Then
+                sumKg = sumKg + NzD(src(i, 3))
+                sumVal = sumVal + NzD(src(i, 7))
+            Else
+                sumVal = sumVal + NzD(src(i, 6))
+            End If
+        End If
+        Exit Sub
+    End If
+    If zbirni And kljuc = IZ_AMB Then
+        outA(n, 1) = NzS(src(i, 1))
+        outA(n, 2) = GajbeIliPrazno(src(i, 5))
+        outA(n, 3) = GajbeIliPrazno(src(i, 6))
+        Exit Sub
+    End If
     Select Case kljuc
         Case IZ_SALDO
             outA(n, 1) = NzS(src(i, 1))
@@ -1480,9 +1594,9 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     PoljeX z, "scrIzOd", PAD + 258, 86, IZ_Y_LBL
     PoljeX z, "scrIzDo", PAD + 352, 86, IZ_Y_LBL
 
-    ' U zbirnom rezimu se konkretan entitet ne bira (legacy: cmbEntitet
-    ' enabled = pojedinacni).
-    z.Controls("scrIzEnt").Visible = Not mZbirni
+    ' Entitet se bira kad ga lista trazi: pojedinacni rezim (osim ranga) i
+    ' zbirna AMBALAZA (legacy agregat po tipu ZA izabranog) -- krug 9.
+    z.Controls("scrIzEnt").Visible = IzTrebaEntitet(Scr_Lista(), mZbirni)
 
     ' Detalj traka uzima desno; polja i hint dele OSTATAK. Na uskom ekranu
     ' traka nestaje -- isti kompromis kao korpa na Platnim nalozima.
@@ -2116,7 +2230,23 @@ End Function
 ' zbir im ne znaci nista (recenzija PR #245, blocker 2 -- generic suma je
 ' na kartici davala "UKUPNO SALDO" kao zbir medjustanja). Politika prati
 ' legacy UKUPNO redove: sabira se promet, nikad prosek i nikad stanje.
-Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String) As Variant
+Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
+                             Optional ByVal zbirni As Boolean = False) As Variant
+    ' Zbirni oblici (krug 9): sve su promet/stanje-po-entitetu kolone --
+    ' aditivne preko stanica (i saldo: razlika je aditivna), agro "rest" isto.
+    If zbirni Then
+        Select Case kljuc
+            Case IZ_SALDO
+                IzSabirljive = Array(2, 3, 4, 5, 6, 7)
+                Exit Function
+            Case IZ_ISPL
+                IzSabirljive = Array(2, 3, 4, 5)
+                Exit Function
+            Case IZ_AMB
+                IzSabirljive = Array(2, 3)
+                Exit Function
+        End Select
+    End If
     Select Case kljuc
         Case IZ_SALDO
             If tip = "Kupac" Then
@@ -2152,10 +2282,11 @@ End Function
 
 ' Zaglavlja stampe po listi -- isti opis kolona kao mreza (vidljive kolone),
 ' natpisi iz kataloga. Javno da bi ga stampa i test delili.
-Public Function IzHeaderiZaListu(ByVal kljuc As String, ByVal tip As String) As Variant
+Public Function IzHeaderiZaListu(ByVal kljuc As String, ByVal tip As String, _
+                                 Optional ByVal zbirni As Boolean = False) As Variant
     Dim kolone As Variant, i As Long, n As Long
     Dim res() As String
-    kolone = IzKoloneZaListu(kljuc, tip)
+    kolone = IzKoloneZaListu(kljuc, tip, zbirni)
     ReDim res(0 To UBound(kolone))
     For i = 0 To UBound(kolone)
         If val(Split(CStr(kolone(i)), "|")(4)) < 4 Then
@@ -2192,7 +2323,7 @@ Private Sub StampajIzvestaj()
     End If
     kolone = rez(0)
     redovi = rez(1)
-    headers = IzHeaderiZaListu(Scr_Lista(), mCtxTip)
+    headers = IzHeaderiZaListu(Scr_Lista(), mCtxTip, mCtxZbirni)
     vidljivih = UBound(headers) + 1
 
     ' +1 red: UKUPNO se racuna NAD STAMPANIM redovima (mreza ga ne nosi --
@@ -2205,7 +2336,7 @@ Private Sub StampajIzvestaj()
     Dim sabir As Variant, s As Long
     ReDim tot(1 To vidljivih)
     ReDim imaTot(1 To vidljivih)
-    sabir = IzSabirljive(Scr_Lista(), mCtxTip)
+    sabir = IzSabirljive(Scr_Lista(), mCtxTip, mCtxZbirni)
     If IsArray(sabir) Then
         For s = LBound(sabir) To UBound(sabir)
             If CLng(sabir(s)) >= 1 And CLng(sabir(s)) <= vidljivih Then _
