@@ -1870,6 +1870,100 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' Zbirna ambalaza preko SVIH entiteta tipa (krug 14: "sumarno stanje po
+' tipu za svakog vozaca... dropdown je besmislen"): red = entitet x tip
+' gajbe. Entiteti dolaze IZ PODATAKA (distinct po nestorniranom ledgeru,
+' uz isti DOK_TIP_OTKUP izuzetak za vozace kao ReportAmbalaza); po
+' entitetu se zove POSTOJECI legacy zbirni racun (ReportAmbalaza sa
+' zbirni=True) -- smerovi/isVozac pravila se ne prepisuju.
+' (1)=EntID (2)=EntNaziv (3)=Tip (4)=Ulaz (5)=Izlaz; UKUPNO u koloni 2.
+Public Function ReportAmbalazaZbirnoSvi(ByVal entitetTip As String, _
+                                        ByVal datumOd As Date, _
+                                        ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportAmbalazaZbirnoSvi"
+    On Error GoTo EH
+
+    Dim d As Variant, i As Long
+    Dim cEnt As Long, cEntTip As Long, cVoz As Long, cDokTip As Long, cStorno As Long
+    d = GetTableData(TBL_AMBALAZA)
+    If Not IsArray(d) Then Exit Function
+    cEnt = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET, SRC)
+    cEntTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_ENTITET_TIP, SRC)
+    cVoz = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_VOZAC, SRC)
+    cDokTip = RequireColumnIndex(TBL_AMBALAZA, COL_AMB_DOK_TIP, SRC)
+    cStorno = GetColumnIndex(TBL_AMBALAZA, COL_STORNIRANO)
+
+    Dim ents As Object, k As String
+    Set ents = CreateObject("Scripting.Dictionary")
+    For i = 1 To UBound(d, 1)
+        If cStorno = 0 Or CStr(d(i, cStorno)) <> "Da" Then
+            k = ""
+            Select Case entitetTip
+                Case "OM"
+                    If CStr(d(i, cEntTip)) = "Stanica" Then k = Trim$(CStr(d(i, cEnt)))
+                Case "Kupac"
+                    If CStr(d(i, cEntTip)) = "Kupac" Then k = Trim$(CStr(d(i, cEnt)))
+                Case "Vozac"
+                    If CStr(d(i, cDokTip)) <> DOK_TIP_OTKUP Then k = Trim$(CStr(d(i, cVoz)))
+            End Select
+            If Len(k) > 0 Then ents(k) = True
+        End If
+    Next i
+    If ents.count = 0 Then Exit Function
+
+    Dim linije As Collection, kk As Variant, r As Variant
+    Dim nm As String, totU As Double, totI As Double
+    Set linije = New Collection
+    For Each kk In ents.keys
+        r = ReportAmbalaza(entitetTip, CStr(kk), datumOd, datumDo, True)
+        If IsArray(r) Then
+            nm = IzvEntNaziv(entitetTip, CStr(kk))
+            For i = 1 To UBound(r, 1)
+                If CStr(r(i, 1)) <> "UKUPNO" Then
+                    linije.Add Array(CStr(kk), nm, CStr(r(i, 1)), _
+                                     IzvNum(r(i, 5)), IzvNum(r(i, 6)))
+                    totU = totU + IzvNum(r(i, 5))
+                    totI = totI + IzvNum(r(i, 6))
+                End If
+            Next i
+        End If
+    Next kk
+    If linije.count = 0 Then Exit Function
+
+    Dim outA() As Variant, n As Long, red As Variant
+    ReDim outA(1 To linije.count + 1, 1 To 5)
+    For n = 1 To linije.count
+        red = linije(n)
+        For i = 0 To 4
+            outA(n, i + 1) = red(i)
+        Next i
+    Next n
+    outA(linije.count + 1, 2) = "UKUPNO"
+    outA(linije.count + 1, 4) = totU
+    outA(linije.count + 1, 5) = totI
+    ReportAmbalazaZbirnoSvi = outA
+    Exit Function
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Naziv entiteta za zbirne redove: sifarnik sa fallback-om na ID.
+Private Function IzvEntNaziv(ByVal entitetTip As String, ByVal iD As String) As String
+    Dim nm As String
+    On Error Resume Next
+    Select Case entitetTip
+        Case "OM"
+            nm = Trim$(CStr(LookupValue(TBL_STANICE, "StanicaID", iD, "Naziv")))
+        Case "Kupac"
+            nm = Trim$(CStr(LookupValue(TBL_KUPCI, COL_KUP_ID, iD, COL_KUP_NAZIV)))
+        Case "Vozac"
+            nm = Trim$(Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", iD, "Ime"))) & _
+                       " " & Trim$(CStr(LookupValue(TBL_VOZACI, "VozacID", iD, "Prezime"))))
+    End Select
+    On Error GoTo 0
+    IzvEntNaziv = IIf(Len(nm) > 0, nm, iD)
+End Function
+
 ' Distinct kupci IZ PODATAKA (nestornirane prijemnice), 2D (1..n, 1..2):
 ' 1=KupacID, 2=naziv iz tblKupci sa fallback-om na ID. Sifarnik nije izvor
 ' spiska -- kupac sa prometom bez reda u tblKupci mora da se vidi (fixture

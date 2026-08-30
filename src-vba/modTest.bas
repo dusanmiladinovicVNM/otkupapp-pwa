@@ -10285,7 +10285,8 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
     visina = modScrIzvestaji.Scr_Layout(z, 1200, 300)
     entVidljivZbirno = z.Controls("scrIzEnt").Visible
 
-    ' ...OSIM zbirne ambalaze: legacy agregat po tipu ZA izabranog (krug 9).
+    ' Od kruga 14 i zbirna ambalaza ide preko SVIH entiteta -- combo se
+    ' krije u zbirnom rezimu bez izuzetka.
     Dim entVidljivAmbZ As Boolean
     modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", True, "", 0, 0
     visina = modScrIzvestaji.Scr_Layout(z, 1200, 300)
@@ -10309,8 +10310,8 @@ Private Sub T_ZonaIzv_PoljaIRaspored()
              "na kartici se ne nudi tabelarni izvestaj -- jedna kartica, legacy sablon"
     AssertEq entVidljivPojed, True, "polje entiteta postoji u pojedinacnom rezimu"
     AssertEq entVidljivZbirno, False, "zbirni rezim gasi polje entiteta"
-    AssertEq entVidljivAmbZ, True, _
-             "zbirna ambalaza zadrzava polje entiteta (agregat ZA izabranog)"
+    AssertEq entVidljivAmbZ, False, _
+             "i zbirna ambalaza krije polje entiteta (preko svih, krug 14)"
 End Sub
 
 ' ============================================================
@@ -10704,14 +10705,15 @@ Private Sub T_Izv_ZbirniSadrzaj()
     Next i
     AssertEq nasla, True, "red za STA-TEST-2 postoji u zbirnoj isplati"
 
-    ' (3) Zbirna AMBALAZA za izabranu stanicu = legacy ReportAmbalazeZbirni:
-    ' mreza se slaze sa API zbirnim redom za AMB_12_1 (API je vec vezan za
-    ' rucni prolaz u T139 -- ovde se meri da EKRAN prikazuje bas taj racun).
-    modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", True, FX_STANICA, IzvOdS(), IzvDoS()
+    ' (3) Zbirna AMBALAZA = SVI entiteti tipa x tip gajbe (krug 14): red
+    ' (FX_STANICA, FX_TIP_AMB) se slaze sa legacy API zbirnim redom TE
+    ' stanice (API vezan za rucni prolaz u T139); saldo = ulaz - izlaz;
+    ' entitet se NE bira (kontekst je stvarno "Svi").
+    modScrIzvestaji.Scr_IzTestSet "AMBALAZA", "OM", True, "", IzvOdS(), IzvDoS()
     d = modScrIzvestaji.Scr_Rows("", "")
     n = CLng(d(2))
     redovi = d(1)
-    AssertEq (n >= 1), True, "zbirna ambalaza stanice ima redove"
+    AssertEq (n >= 1), True, "zbirna ambalaza ima redove bez izbora entiteta"
     r = ReportAmbalaza("OM", FX_STANICA, IzvOdD(), IzvDoD(), True)
     uk = 0
     For i = 1 To UBound(r, 1)
@@ -10720,25 +10722,25 @@ Private Sub T_Izv_ZbirniSadrzaj()
     AssertEq (uk > 0), True, "vozilo: API zbirni red za tip gajbe postoji"
     nasla = False
     For i = 1 To n
-        If CStr(redovi(i, 1)) = FX_TIP_AMB Then
+        If InStr(1, CStr(redovi(i, 6)), FX_STANICA, vbTextCompare) > 0 And _
+           CStr(redovi(i, 2)) = FX_TIP_AMB Then
             nasla = True
             ' Nula se prikazuje PRAZNO (GajbeIliPrazno) -- ocekivano isto.
-            AssertEq CStr(redovi(i, 2)), _
+            AssertEq CStr(redovi(i, 3)), _
                      IIf(CDbl(r(uk, 5)) = 0, "", Format$(CDbl(r(uk, 5)), "#,##0")), _
                      "zbirna ambalaza: ulaz mreze = API zbirni red"
-            AssertEq CStr(redovi(i, 3)), _
+            AssertEq CStr(redovi(i, 4)), _
                      IIf(CDbl(r(uk, 6)) = 0, "", Format$(CDbl(r(uk, 6)), "#,##0")), _
                      "zbirna ambalaza: izlaz mreze = API zbirni red"
-            AssertEq Format$(CDbl(redovi(i, 4)), "0"), _
+            AssertEq Format$(CDbl(redovi(i, 5)), "0"), _
                      Format$(CDbl(r(uk, 5)) - CDbl(r(uk, 6)), "0"), _
                      "zbirna ambalaza: saldo = ulaz - izlaz (krug 13)"
         End If
     Next i
-    AssertEq nasla, True, "red tipa gajbe postoji u zbirnoj ambalazi"
-    ' Kontekst-linija nosi IME izabranog entiteta, ne "Svi" -- prikaz je
-    ' za JEDNU stanicu (smoke krug 9: podaci prve stanice pod "OM: Svi").
-    AssertEq (InStr(1, modScrIzvestaji.Scr_IzCtxNazivTest(), FX_STANICA, vbTextCompare) > 0), _
-             True, "zbirna ambalaza imenuje entiteta u kontekstu, ne 'Svi'"
+    AssertEq nasla, True, "red (stanica, tip gajbe) postoji u zbirnoj ambalazi"
+    ' Kontekst je sada STVARNO preko svih -- ime kaze "Svi", ne entitet.
+    AssertEq (InStr(1, modScrIzvestaji.Scr_IzCtxNazivTest(), FX_STANICA, vbTextCompare) = 0), _
+             True, "zbirna ambalaza preko svih ne imenuje jednog entiteta"
 
     ' (3b) Zbirno po KUPCIMA (krug 11): red FX_KUPAC u saldu i robi =
     ' UKUPNO red pojedinacnog izvestaja tog kupca; kg robe i direktno na

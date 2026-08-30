@@ -217,11 +217,12 @@ Public Function IzListaZaTipPostoji(ByVal kljuc As String, ByVal tip As String) 
 End Function
 
 ' Da li kombinacija (lista, rezim) trazi IZABRAN entitet. RANG nikad (nad
-' svim kooperantima); zbirni rezim ne trazi -- OSIM ambalaze, ciji je
-' zbirni oblik legacy agregat po tipu gajbe ZA izabranog entiteta.
+' svim kooperantima); zbirni rezim NE trazi ni za jednu listu -- od kruga
+' 14 i ambalaza zbirno ide preko SVIH entiteta (dropdown u zbirnom je
+' besmislen -- odluka operatera).
 Public Function IzTrebaEntitet(ByVal kljuc As String, ByVal zbirni As Boolean) As Boolean
     If kljuc = IZ_RANG Then Exit Function
-    IzTrebaEntitet = (Not zbirni) Or (kljuc = IZ_AMB)
+    IzTrebaEntitet = Not zbirni
 End Function
 
 Public Function Scr_Lista() As String
@@ -603,14 +604,16 @@ Public Function IzKoloneZaListu(ByVal kljuc As String, ByVal tip As String, _
                     "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
             Case IZ_AMB
-                ' Tip | Ulaz | Izlaz | Saldo -- saldo = ulaz - izlaz po
-                ' tipu (krug 13: "mora da se prikaze saldo po vozacu");
-                ' smer je vec entitetski (isVozac obrce u Report-u).
+                ' Entitet | Tip | Ulaz | Izlaz | Saldo -- red po SVAKOM
+                ' entitetu tipa (krug 14); saldo = ulaz - izlaz (krug 13,
+                ' smer vec entitetski jer isVozac obrce u Report-u).
                 IzKoloneZaListu = Array( _
-                    "OTKUI_HDA_TIP||txt|0|1", _
-                    "OTKUI_HDA_ULAZ||txt|80|1", _
-                    "OTKUI_HDA_IZLAZ||txt|80|1", _
-                    "OTKUI_HDI_SALDO||num|80|1")
+                    "OTKUI_HDI_ENTITET||txt|0|1", _
+                    "OTKUI_HDA_TIP||txt|84|1", _
+                    "OTKUI_HDA_ULAZ||txt|76|1", _
+                    "OTKUI_HDA_IZLAZ||txt|76|1", _
+                    "OTKUI_HDI_SALDO||num|76|1", _
+                    "OTKUI_HDI_REF||txt|1|4")
                 Exit Function
         End Select
     End If
@@ -931,7 +934,14 @@ Private Function PuniSnimak(ByVal kljuc As String, ByVal tip As String, _
             Else
                 PuniSnimak = ReportOtkupRoba(tip, iD, dOd, dDo)
             End If
-        Case IZ_AMB:    PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, zbirni)
+        Case IZ_AMB
+            ' Zbirno = SVI entiteti tipa x tip gajbe (krug 14); pojedinacno
+            ' = ledger izabranog.
+            If zbirni Then
+                PuniSnimak = ReportAmbalazaZbirnoSvi(tip, dOd, dDo)
+            Else
+                PuniSnimak = ReportAmbalaza(tip, iD, dOd, dDo, False)
+            End If
         Case IZ_ISPL
             If zbirni Then
                 PuniSnimak = ReportIsplataZbirniOM(dOd, dDo)
@@ -1014,7 +1024,7 @@ Private Function Oblikuj(ByVal kljuc As String, ByVal tip As String, _
         ' POCETNO STANJE je red konteksta -- pod filterom bi lagao.
         If filtrira And vrsta = 2 Then GoTo Sledeci
 
-        If Not CipPropusta(kljuc, filter, src, i) Then GoTo Sledeci
+        If Not CipPropusta(kljuc, filter, zbirni, src, i) Then GoTo Sledeci
 
         If Len(qN) > 0 Then
             hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, tip, zbirni, src, i))
@@ -1040,7 +1050,7 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
     ' stanice); AMB zbirni deli granu pojedinacnog (UKUPNO u koloni 1).
     If zbirni Then
         Select Case kljuc
-            Case IZ_SALDO, IZ_ISPL, IZ_ROBA
+            Case IZ_SALDO, IZ_ISPL, IZ_ROBA, IZ_AMB
                 If CStr(src(i, 2)) = IZ_LBL_UKUPNO Then VrstaReda = 1
                 Exit Function
         End Select
@@ -1102,6 +1112,7 @@ Private Function VrstaReda(ByVal kljuc As String, ByVal tip As String, _
 End Function
 
 Private Function CipPropusta(ByVal kljuc As String, ByVal filter As String, _
+                             ByVal zbirni As Boolean, _
                              ByRef src As Variant, ByVal i As Long) As Boolean
     Select Case kljuc
         Case IZ_MANJAK
@@ -1110,7 +1121,13 @@ Private Function CipPropusta(ByVal kljuc As String, ByVal filter As String, _
             CipPropusta = IzCipManjak(filter, IIf(IsNumeric(src(i, 5)), "", _
                                       Trim$(CStr(NzS(src(i, 5))))))
         Case IZ_AMB
-            CipPropusta = IzCipAmb(filter, NzD(src(i, 5)), NzD(src(i, 6)))
+            ' Zbirni oblik (krug 14) nosi ulaz/izlaz na 4/5, pojedinacni
+            ' na 5/6 -- isti cip, druga kolona.
+            If zbirni Then
+                CipPropusta = IzCipAmb(filter, NzD(src(i, 4)), NzD(src(i, 5)))
+            Else
+                CipPropusta = IzCipAmb(filter, NzD(src(i, 5)), NzD(src(i, 6)))
+            End If
         Case Else
             CipPropusta = True
     End Select
@@ -1126,6 +1143,9 @@ Private Function HaystackReda(ByVal kljuc As String, ByVal tip As String, _
             Case IZ_SALDO, IZ_ISPL, IZ_ROBA
                 ' naziv entiteta (kolona 2; kolona 1 je ID)
                 HaystackReda = NzS(src(i, 2))
+                Exit Function
+            Case IZ_AMB
+                HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 3))
                 Exit Function
         End Select
     End If
@@ -1197,11 +1217,16 @@ Private Sub UpisiRed(ByVal kljuc As String, ByVal tip As String, _
         Exit Sub
     End If
     If zbirni And kljuc = IZ_AMB Then
-        outA(n, 1) = NzS(src(i, 1))
-        outA(n, 2) = GajbeIliPrazno(src(i, 5))
-        outA(n, 3) = GajbeIliPrazno(src(i, 6))
+        ' Entitet | Tip | Ulaz | Izlaz | Saldo | [REF] (krug 14).
+        outA(n, 1) = NzS(src(i, 2))
+        outA(n, 2) = NzS(src(i, 3))
+        outA(n, 3) = GajbeIliPrazno(src(i, 4))
+        outA(n, 4) = GajbeIliPrazno(src(i, 5))
         ' Saldo i kad je 0 -- izravnat entitet JE informacija.
-        outA(n, 4) = NzD(src(i, 5)) - NzD(src(i, 6))
+        outA(n, 5) = NzD(src(i, 4)) - NzD(src(i, 5))
+        outA(n, 6) = IIf(Len(NzS(src(i, 1))) > 0, _
+                         IIf(tip = "Kupac", "KUP|", _
+                             IIf(tip = "Vozac", "VOZ|", "OM|")) & NzS(src(i, 1)), "")
         Exit Sub
     End If
     Select Case kljuc
@@ -2311,8 +2336,8 @@ Public Function IzSabirljive(ByVal kljuc As String, ByVal tip As String, _
                 IzSabirljive = Array(2, 3, 4, 5)
                 Exit Function
             Case IZ_AMB
-                ' i saldo (4): bilans gajbi je aditivan preko tipova
-                IzSabirljive = Array(2, 3, 4)
+                ' ulaz/izlaz/saldo -- bilans gajbi aditivan preko redova
+                IzSabirljive = Array(3, 4, 5)
                 Exit Function
         End Select
     End If

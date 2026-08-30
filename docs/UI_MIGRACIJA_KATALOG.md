@@ -4842,6 +4842,17 @@ OM-Z i Vozač-Z + `OTKUP_ROBA`; sabotaže
 isti ručni prolaz kao zbirni saldo, roba po vozaču = ručni zbir
 otpremnica.
 
+**Krug 14 (smoke kruga 13 — „sumarno stanje po tipu za svakog vozača,
+dropdown je besmislen"):** zbirna Ambalaža više nije legacy „agregat za
+izabranog" nego **svi entiteti tipa × tip gajbe**: red = Entitet | Tip |
+Ulaz | Izlaz | Saldo (`ReportAmbalazaZbirnoSvi` — distinct entiteti iz
+nestorniranog ledgera, uz isti `DOK_TIP_OTKUP` izuzetak za vozače; po
+entitetu se zove postojeći legacy zbirni račun, smerovi se ne
+prepisuju). Combo entiteta se u zbirnom režimu krije bez izuzetka
+(`IzTrebaEntitet` vraćen na čisto pravilo), kontekst je sada stvarno
+„Svi". T141/T146 obrnute istine; `OM|`/`KUP|`/`VOZ|` identitet po redu
+za budući drill.
+
 **Krug 13 (smoke kruga 12 — saldo po vozaču + brzina P→Z):**
 
 - **Zbirna Ambalaža dobila SALDO kolonu** (ulaz − izlaz po tipu; smer je
