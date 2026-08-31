@@ -361,7 +361,16 @@ Private Function PoveziRed(ByVal red As Long) As Boolean
 
     izbor = IzabraniIzComba("scrSlPov")
     If Len(izbor) = 0 Then
+        ' Umesto gole poruke i ODMAH ponuda (krug 5: "kad se klikne na
+        ' Povezi automatski otvori dropdown"): fokus + otvorena lista.
+        ' Lista je zatvorena pa je DropDown ovde bezbedan (S7 zamka vazi
+        ' za VEC otvorenu listu); SetFocus iza IsTestMode -- u nevidljivom
+        ' Excelu SetFocus visi (testovi.md par. 4).
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_POV_NEIZABRAN"), True
+        If Not IsTestMode() Then
+            CB.SetFocus
+            CB.DropDown
+        End If
         Exit Function
     End If
     otpID = Split(izbor, "|")(0)
@@ -395,12 +404,14 @@ Private Sub NapuniPovKandidate(ByVal otkupID As String)
     If Len(otkupID) > 0 Then
         k = modSledljivost.GetOtpremnicaKandidatiZaOtkup(otkupID)
         If IsArray(k) Then
+            ' Isti ritam separatora kao polje dokumenta (krug 5) --
+            ' dva razmaka pre tacke, jedan posle, svuda.
             For i = 1 To UBound(k, 1)
                 CB.AddItem NzS(k(i, 2)) & _
                     IIf(Len(NzS(k(i, 3))) > 0, _
                         "  " & ChrW(183) & " " & NzS(k(i, 3)), "") & _
                     "  " & ChrW(183) & " " & FmtKolicina(NzD(k(i, 4))) & _
-                    " kg " & ChrW(183) & " " & NzS(k(i, 5))
+                    " kg" & "  " & ChrW(183) & " " & NzS(k(i, 5))
                 CB.List(CB.ListCount - 1, 1) = NzS(k(i, 1)) & "|" & NzS(k(i, 2))
             Next i
         End If
@@ -1093,6 +1104,17 @@ Public Sub Scr_Build(ByVal z As Object)
     modOtkupUI.NewFieldG z, "scrSlPov", Poruka("OTKUI_FLD_SL_POVEZI"), "cmb", "", _
                          1, False, False, "SL"
 
+    ' Fontovi oba comba EKSPLICITNO prate datumska polja (krug 5:
+    ' "cudne razlike u fontu" -- ne oslanja se na default kontrole).
+    On Error Resume Next
+    With z.Controls("scrSlOd").Controls("scrSlOdT").Font
+        z.Controls("scrSlDok").Controls("scrSlDokT").Font.name = .name
+        z.Controls("scrSlDok").Controls("scrSlDokT").Font.Size = .Size
+        z.Controls("scrSlPov").Controls("scrSlPovT").Font.name = .name
+        z.Controls("scrSlPov").Controls("scrSlPovT").Font.Size = .Size
+    End With
+    On Error GoTo 0
+
     modUiKit.NewLbl z, "slHint", "", PAD, SL_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
     ' Stampa aktivne liste (house PDF) + lanac izabranog reda (house PDF sa
@@ -1571,13 +1593,36 @@ Private Sub StampajLanacIzabranog()
     End If
 
     Dim headers As Variant, desno As Variant
-    headers = Array(Poruka("OTKUI_HDS_PROBLEM"), Poruka("OTKUI_HDI_BRDOK"), _
-                    Poruka("OTKUI_HD_KG"), Poruka("OTKUI_HDS_OZNAKA"))
+    ' Zaglavlje kolone karika je KARIKA, ne PROBLEM (krug 5 S11 -- PDF je
+    ' pozajmljivao heder liste NEPOTPUNI). Pad heder celija je SIMETRICAN:
+    ' naslov i kontekst-linija su MERGE preko kolona tabele
+    ' (DocTitleBlock) i SEKU se na njenu sirinu -- uska 4-kolonska tabela
+    ' im je sekla tekst sa obe strane. AutoFit meri max(header, sadrzaj),
+    ' pa pad jedini siri tabelu bez diranja zajednickog kompozera;
+    ' centriran tekst + jednak pad levo/desno = isto zaglavlje na oko.
+    headers = Array(SlPadH(Poruka("OTKUI_HDS_KARIKA"), 6), _
+                    SlPadH(Poruka("OTKUI_HDI_BRDOK"), 9), _
+                    Poruka("OTKUI_HD_KG"), _
+                    SlPadH(Poruka("OTKUI_HDS_OZNAKA"), 15))
     desno = Array(False, False, True, False)
     PrintIzvestajHouse paket(0), CLng(paket(1)), 4, _
                        Poruka("OTKUI_SL_LANAC_NASLOV"), CStr(paket(2)), _
                        headers, desno
 End Sub
+
+' Simetrican pad heder celije (v. StampajLanacIzabranog).
+Private Function SlPadH(ByVal s As String, ByVal n As Long) As String
+    SlPadH = String$(n, " ") & s & String$(n, " ")
+End Function
+
+' Detalj-kljucevi nose dvotacku (traka: "Zbirna: S1/..."); u PDF tabeli
+' karika stoji sama u svojoj koloni, pa se dvotacka skida NA MESTU
+' UPOTREBE -- tekst kljuceva deli i detalj Izvestaja i ne sme se menjati.
+Private Function BezDvotacke(ByVal s As String) As String
+    BezDvotacke = Trim$(s)
+    If Right$(BezDvotacke, 1) = ":" Then _
+        BezDvotacke = Trim$(Left$(BezDvotacke, Len(BezDvotacke) - 1))
+End Function
 
 ' Redovi lanac-PDF-a iz SNIMKA -- cist sklop, testabilan bez stampe:
 ' Array(dataS 2D, brojRedova, kontekstLinija) ili Empty kad reda nema.
@@ -1595,21 +1640,23 @@ Public Function SlLanacZaPdf(ByVal otkupID As String) As Variant
     Next i
     If r = 0 Then Exit Function
 
+    ' Karike bez dvotacke (krug 5 S11: "Zbirna:" pored "Otkup" u istoj
+    ' koloni) -- kljucevi su deljeni sa detalj trakama, skida se ovde.
     Dim dataS(1 To 5, 1 To 4) As String
-    dataS(1, 1) = Poruka("OTKUI_SL_DET_KARIKA_OTKUP")
+    dataS(1, 1) = BezDvotacke(Poruka("OTKUI_SL_DET_KARIKA_OTKUP"))
     dataS(1, 2) = NzS(lanac(r, 2))
     dataS(1, 3) = FmtKolicina(NzD(lanac(r, 7)))
     dataS(1, 4) = ""
-    dataS(2, 1) = Poruka("OTKUI_IZ_DET_OTPREMNICA")
+    dataS(2, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_OTPREMNICA"))
     dataS(2, 2) = NzS(lanac(r, 8))
     If NzD(lanac(r, 25)) > 0 Then dataS(2, 3) = FmtKolicina(NzD(lanac(r, 25)))
-    dataS(3, 1) = Poruka("OTKUI_IZ_DET_ZBIRNA")
+    dataS(3, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_ZBIRNA"))
     dataS(3, 2) = NzS(lanac(r, 9))
     If NzD(lanac(r, 26)) > 0 Then dataS(3, 3) = FmtKolicina(NzD(lanac(r, 26)))
-    dataS(4, 1) = Poruka("OTKUI_IZ_DET_PRIJEMNICA")
+    dataS(4, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_PRIJEMNICA"))
     dataS(4, 2) = NzS(lanac(r, 10))
     If Not IsEmpty(lanac(r, 11)) Then dataS(4, 3) = FmtKolicina(NzD(lanac(r, 11)))
-    dataS(5, 1) = Poruka("OTKUI_IZ_DET_FAKTURA")
+    dataS(5, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_FAKTURA"))
     dataS(5, 2) = NzS(lanac(r, 12))
 
     ' Oznaka stoji uz kariku na kojoj lanac staje/curi.

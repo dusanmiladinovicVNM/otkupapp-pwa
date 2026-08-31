@@ -3956,6 +3956,21 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "stornirana paleta nije u ponudi",
     ),
+    # PDF karika sa dvotackom (krug 5 S11) -- deljeni detalj-kljucevi
+    # ("Zbirna:") bi u PDF koloni stajali pored karika bez dvotacke.
+    "sledljivost-pdf-dvotacka": (
+        "modScrSledljivost.bas",
+        "Private Function BezDvotacke(ByVal s As String) As String\n"
+        "    BezDvotacke = Trim$(s)\n"
+        "    If Right$(BezDvotacke, 1) = \":\" Then _\n"
+        "        BezDvotacke = Trim$(Left$(BezDvotacke, Len(BezDvotacke) - 1))\n"
+        "End Function\n",
+        "Private Function BezDvotacke(ByVal s As String) As String\n"
+        "    BezDvotacke = Trim$(s)   ' SABOTAZA: dvotacka ostaje\n"
+        "End Function\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "karika u PDF-u je bez dvotacke",
+    ),
     # NEP pretraga bez lanac-brojeva (krug 4 S8) -- broj zbirne vise ne
     # nalazi njene nefakturisane prijemnice, a ekran bas to obecava
     # ("pretraga nalazi svaki broj u lancu").

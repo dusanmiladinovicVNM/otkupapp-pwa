@@ -5302,6 +5302,31 @@ odbranu od ustajalog para red/polje po `OtkupID`). Upis nepromenjen:
 `ReassignOtkupToOtpremnica_TX`; posle upisa polje se prazni i liste se
 preračunaju.
 
+**S10 — doterivanje polja kandidata** (peti krug; dropdown iz S7 je
+potvrđen kao dobar). Dva nalaza: „čudne razlike u fontu" — font oba
+comba sada EKSPLICITNO prati datumska polja (ne oslanja se na default
+kontrole), a stavke kandidata dobijaju isti ritam separatora kao polje
+dokumenta (dva razmaka pre tačke, jedan posle — mešani razmaci su
+čitani kao „drugi font"); i „kad se klikne na Poveži automatski otvori
+dropdown" — „Poveži…" bez razrešenog izbora sada uz poruku i OTVORI
+listu kandidata (fokus + `DropDown`; lista je tada zatvorena pa S7
+zamka ne važi; `SetFocus` iza `IsTestMode` — u nevidljivom Excelu visi).
+
+**S11 — lanac PDF: isečen naslov, tuđe zaglavlje, dvotačke** (peti
+krug, sa priloženog PDF-a — operater nije morao ni da kaže). Tri kvara
+jednog dokumenta: (1) naslov i kontekst-linija su MERGE preko kolona
+tabele (`DocTitleBlock`) i seku se na njenu širinu — uska 4-kolonska
+tabela im je sekla tekst sa obe strane („EDLJIVOST — LANAC DOKUMENT");
+kompozer je zajednički i ne dira se, pa tabelu širi SIMETRIČAN pad
+heder ćelija (AutoFit meri max(header, sadržaj); centriran tekst +
+jednak pad levo/desno = isto zaglavlje na oko). (2) Kolona karika je
+nosila heder „PROBLEM" (pozajmljen od liste NEPOTPUNI) — sada „KARIKA"
+(novi ključ). (3) Karike „Zbirna:"/„Faktura:" su stajale sa dvotačkom
+pored „Otkup" bez nje — deljeni detalj-ključevi se ne menjaju (nose ih
+i trake Izveštaja), dvotačka se skida na mestu upotrebe
+(`BezDvotacke`); tvrdnja u testu 153 + sabotaža
+`sledljivost-pdf-dvotacka`.
+
 ### 24.8 Verifikacija
 
 - `RunAllTests` (devet novih testova 150–158, registrovani u sva tri
@@ -5311,7 +5336,7 @@ preračunaju.
   SLED blokovi su zatvoreni; ponovljeno i posle paletnih fixture vozila
   kruga 3), `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
   `--self-test`, `who_writes --check` — rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 25 sabotaža,
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 26 sabotaža,
   svaka obara tačno svoj imenovani test i vraća se bit-identično.
 - Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna

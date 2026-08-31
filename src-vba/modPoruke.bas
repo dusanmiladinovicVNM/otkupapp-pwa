@@ -1574,6 +1574,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' --- Sledljivost smoke krug 4: kandidat polje povezivanja ---
     UpsertRow lo, existing, "OTKUI_FLD_SL_POVEZI", "Otpremnica za povezivanje"
     UpsertRow lo, existing, "OTKUI_ERR_SL_POV_NEIZABRAN", ChrW(10007) & " Izaberi otpremnicu iz padaju" & ChrW(263) & "e liste kandidata"
+    ' --- Sledljivost smoke krug 5: lanac PDF ---
+    UpsertRow lo, existing, "OTKUI_HDS_KARIKA", "KARIKA"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     InvalidateCache

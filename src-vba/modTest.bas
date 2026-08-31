@@ -11552,6 +11552,10 @@ Private Sub T_Sled_IdentitetURedu_NeCrtaSe()
     dataS = paket(0)
     AssertEq CStr(dataS(2, 2)), "31/TEST", "PDF red otpremnice nosi broj"
     AssertEq CStr(dataS(5, 2)), "5/2026", "PDF red fakture nosi broj"
+    ' Deljeni detalj-kljucevi nose dvotacku (traka), PDF karika ne sme
+    ' (krug 5 S11: "Zbirna:" pored "Otkup" u istoj koloni).
+    AssertEq (Right$(CStr(dataS(3, 1)), 1) <> ":"), True, _
+             "karika u PDF-u je bez dvotacke"
     AssertEq (InStr(1, CStr(paket(2)), "S1/TEST") > 0), True, _
              "kontekst-linija nosi koren lanca"
     paket = modScrSledljivost.SlLanacZaPdf("OTK-SLED-R")

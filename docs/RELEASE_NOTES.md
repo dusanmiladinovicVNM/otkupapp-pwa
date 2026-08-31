@@ -6760,12 +6760,25 @@ ijedne izmišljene veze.
   klasom), izabereš otpremnicu iz liste i klikneš „Poveži…". Ništa se
   ne bira automatski; delimičan unos se odbija porukom.
 
+### Doterano posle petog smoke-a
+
+- **Kandidati za povezivanje — isti izgled, manje klikova:** stavke u
+  polju „Otpremnica za povezivanje" pišu se istim ritmom kao polje
+  dokumenta (razmaci oko tačaka su bili nejednaki, pa je delovalo kao
+  drugi font — fontovi su sada i eksplicitno izjednačeni), a klik na
+  „Poveži…" bez izabrane otpremnice odmah OTVORI listu kandidata
+  umesto da samo poruči.
+- **„Lanac (PDF)" doteran:** naslov i kontekst-linija se više ne seku
+  sa strana (uska tabela ih je sekla na svoju širinu), kolona karika
+  se zove KARIKA (ne „PROBLEM"), a karike su ujednačene — bez
+  „Zbirna:" sa dvotačkom pored „Otkup" bez nje.
+
 ### Verifikacija
 
 - Devet novih testova (ugovor ekrana, slaganje lanca sa ručnim
   prolazom, fail-closed oznake, identitet, keš/pretraga, zona,
   kandidati povezivanja, mete sledljivosti, ponuda polja izbora) +
-  **25 namernih kvarova** koji obaraju po tačno jedan imenovani test i
+  **26 namernih kvarova** koji obaraju po tačno jedan imenovani test i
   vraćaju se bit-identično (dvosmerni dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
