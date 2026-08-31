@@ -519,6 +519,14 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 19. ~~Izveštaji~~ **URAĐENO** (`v6-ui-186`, `modScrIzvestaji`) — v. §23.
     Ostaju: Marža, Sledljivost — svaki po istom obrascu.
 
+### Faza F — Matični podaci
+
+20. **Matični podaci** (`btnMatic` je u novom UI-ju nevezan) — **PLAN, nije
+    izvedeno**; ceo predlog je u §24. Ne stoji u Fazi E jer nije „još jedan
+    ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
+    i prevezuje jedini operativan put upisa matičnih podataka. Redosled
+    M0–M5 je u §24.10.
+
 ---
 
 ## 6. Pravilo koje važi za sve faze
@@ -6131,3 +6139,333 @@ ona živi samo u brutu palete).
 - **Odluka (audit transporta):** plomba/registracija/prevoz ostaju
   editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
   append-only istorija korekcija = budući rad za cold-chain dokaz.
+## 24. Matični podaci — plan prelaska (PREDLOG, nije izvedeno)
+
+> Ovo je jedina sekcija kataloga koja opisuje posao koji **još nije urađen**.
+> Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
+> obrascu iz §7–§9, §22, §23" nego donosi **nov pojam u navigaciju** (sekcija
+> ljuske) i dira sidebar, koji do sada nijedan ekran nije dirao. Odluka o tome
+> se donosi jednom i pre pisanja, ne u toku.
+>
+> Stanje na dan `v6-ui-186`.
+
+### 24.0 Zatečeno stanje — šta dugme danas sadrži
+
+Dva puta, po jedan za svaku ljusku:
+
+| Ljuska | Dugme | Šta se otvara |
+| legacy `frmOtkupAPP` | `btnMaticni` (zlatno, gore desno) | `frmMaticniPodaci` — popup meni; klik na sekciju → `frmStammdaten` kao `mActiveContent` |
+| novi `frmOtkupUI` | `btnMatic` (zlatno, gore desno) | **ništa** — `modOtkupUI.bas:3847` javlja `OTKUI_TODO_NEVEZANO` |
+
+Meni je data-driven (`modMaticniLookups.MaticniSekcijeGrupisano`): **16 sekcija
+u 4 grupe**, svaka sekcija = jedan `Tag` za `frmStammdaten`.
+
+| Grupa | Sekcije (`Tag`) | Tabela | Oblik |
+|---|---|---|---|
+| Šifarnici | Kooperanti, Stanice, Kupci, Vozaci, Parcele | `tblKooperanti`, `tblStanice`, `tblKupci`, `tblVozaci`, `tblParcele` | lista + polja |
+| Proizvodi i cene | Artikli, Kulture, Cenovnik, VrstaGP | `tblArtikli`, `tblKulture`, `tblCenovnik`, `tblVrstaGP` | lista + polja |
+| Ambalaža i pakovanje | TipAmbalaze, TipPalete, Kutije, Kese | `tblTipAmbalaze`, `tblTipPalete`, `tblKutije`, `tblKese` | lista + polja (2 polja) |
+| Sistem | Podešavanja, Admin, Korisnici | `tblSEFConfig`, — , `tblKorisnici` | **panel**, **panel**, lista + matrica prava |
+
+`frmStammdaten` (3.674 linije) je jedna univerzalna forma: naslov + podnaslov,
+`lstData` (do 10 kolona), `lblField1..10` + `txtField1..10` + `cmbField1..6`,
+dugmad **Dodaj** / **Izmeni** / **Deaktiviraj-Aktiviraj** (runtime, `clsStmBtn`)
+/ **Povratak**. Po sekciji se granaju: `Setup*` (13 procedura), `LoadList`
+(351 linija), `lstData_Click`, `btnDodaj_Click` (**544 linije**),
+`btnIzmeni_Click` (**463 linije**), `ClearFields`, `ResetFieldVisibility`.
+
+Tri sekcije nisu obična CRUD:
+
+- **Cenovnik** je append-only — `btnIzmeni` se sakriva, izmena je nov važeći red.
+- **Parcele** nose GEO blok: GeoSrbija, paste koordinata, Google Maps, polygon
+  editor, „obriši geo" sa potvrdom u dva koraka (`btnGeo*`, ~600 linija).
+- **Korisnici** nose **dinamičku matricu prava po oblasti** (`BuildKorisniciOblasti`,
+  combo po oblasti iz `modAuth.OblastiList`) i upis u transakciji, po imenu kolone.
+
+Dve sekcije uopšte nisu liste: **Podešavanja** (`modPodesavanja.BuildConfigEditor`,
+847 linija — grupisani editor `tblSEFConfig` sa sklapanjem grupa) i **Admin**
+(`modAdmin.BuildAdminPanel`, 363 linije — deset dugmadi koja zovu postojeće
+ulazne tačke: self-update, setup, health check, Google auth, release, VBA
+import/export, migracija).
+
+### 24.1 Mera koja je oblikovala rešenje
+
+Sidebar **nema skrol**. `BuildNav` postavlja stavke apsolutno, `LayoutOtkup`
+mu daje visinu `hTot - HEADER_H - STATUS_H`, a profil i podnožje su prikovani
+za donjih 62 pt. Budžet na `MIN_H` (620):
+
+```
+620 - HEADER_H(42) - STATUS_H(24) = 554
+554 - profil/podnozje(62)          = 492  slobodno
+zauzeto danas: 12 + 3 grupe*(20+12) + 11 stavki*27 = 405   -> ostalo ~87
+```
+
+Ostalo je **~87 pt, to jest tri stavke — i to samo ako nema nove grupe**.
+Matični podaci donose pet stavki i dve grupe (`5*27 + 2*32 = 199`), ukupno
+**604 > 492**. Stavke bi na najmanjem prozoru nestale ispod profila, tiho —
+tačno klasa kvara koju §10 i §13 već plaćaju. Granica se probija i pri
+najštedljivijem rezu: već **četiri** stavke sa jednom grupom (`140`) prelaze
+slobodnih 87.
+
+**Zato Matični podaci ne mogu prosto da se dopišu u sidebar.** Sve što sledi
+je posledica ove mere, a ne ukusa.
+
+### 24.2 Odluka A — Matični podaci su SEKCIJA ljuske, ne još stavki u sidebaru
+
+Zlatno dugme već nosi tu nameru. `modOtkupUI.BuildHeader` kaže doslovno:
+*„Sve tri su ghostdark … a „Maticni podaci" ostaje jedino zlatno (primarno)
+dugme."* Ono nije alatka nego **odredište** — isto što je u legacy ljusci
+otvaralo ceo popup meni.
+
+Predlog: `btnMatic` **prebacuje sekciju ljuske**. Sidebar tada pokazuje grupe
+matičnih podataka, dugme menja natpis u „Nazad na rad" i vraća prethodni ekran.
+Dva skupa stavki nikad ne stoje zajedno, pa budžet iz §24.1 nije ni blizu
+granice (matična sekcija: `12 + 2*32 + 5*27 = 211`, radna ostaje `405`).
+
+Mehanika, najmanja moguća:
+
+1. `modUiScreens.ScrRows` dobija **sedmo polje** `SCR_SEKCIJA` (`RAD` | `MATICNI`);
+   `ScrGroups` isto. Postojeći redovi dobijaju `RAD` — ponašanje se ne menja.
+2. `BuildNav` gradi stavke za **obe** sekcije jednom, pri gradnji forme. Nema
+   pravljenja i rušenja kontrola u radu, pa nema ni ponovnog ožičavanja
+   (`WireBtn` → `clsFlatBtn` `WithEvents`); to je isti razlog zbog kog
+   `modMaticniLookups` drži `mWrappers` živim.
+3. Nov `LayoutNav(frm)` (izdvojen iz `BuildNav`) **postavlja Y i vidljivost samo
+   aktivnoj sekciji**. `NavCollapse` se ne dira.
+4. `Case "btnMatic"` obrće `mSekcija`, zove `LayoutNav` i prelazi na prvi
+   **dozvoljen** ekran te sekcije (`ScrAktivan`).
+
+Zašto ne popup meni ispod zlatnog dugmeta, kao u legacy-ju: dok si u matičnom
+ekranu sidebar bi pokazivao **izabranu stavku iz radne sekcije** — ljuska bi
+tvrdila da si na Dokumentima dok gledaš Kupce. Prekidač sekcije čuva da sidebar
+govori istinu, a to je jedina stvar koju sidebar radi.
+
+Zašto ne dodatna grupa u istom sidebaru: mera iz §24.1.
+
+### 24.3 Odluka B — pet ekrana, ne šesnaest i ne jedan
+
+`MAX_SEG = 11` je gornja granica lista po ekranu, a sekcija sa podacima ima
+**trinaest**. Jedan ekran otpada po meri, isto kao sidebar.
+
+Granica ekrana je **legacy grupa**. To nije lenjost nego reuse: grupisanje je u
+`modMaticniLookups` uvedeno svesno („Pakovanje … je svoja grupa - vizuelno
+podredjena osnovnim sifarnicima, a ne ravnopravno sa Kooperanti/Kupci/Stanice"),
+operater ga već zna, i preživelo je do danas.
+
+| # | Ključ | Naslov | Grupa sidebara | Liste | Oblast |
+|---|---|---|---|---|---|
+| 1 | `MAT_PARTNERI` | Partneri | ŠIFARNICI | Kooperanti · Stanice · Kupci · Vozači · Parcele | `OBL_MATICNI` |
+| 2 | `MAT_ROBA` | Proizvodi i cene | ŠIFARNICI | Artikli · Kulture · Cenovnik · Vrsta GP | `OBL_MATICNI` |
+| 3 | `MAT_PAKOVANJE` | Ambalaža i pakovanje | ŠIFARNICI | Ambalaža · Palete · Kutije · Kese | `OBL_MATICNI` |
+| 4 | `MAT_KORISNICI` | Korisnici | SISTEM | Korisnici (+ prava) | `OBL_MATICNI` + admin |
+| 5 | `MAT_SISTEM` | Podešavanja i alati | SISTEM | — (v. §24.9) | `OBL_MATICNI` + admin |
+
+Redovi registra (isti oblik kao postojeći, sa dodatim sedmim poljem):
+
+```
+c.Add "MAT_PARTNERI|modScrMatPartneri|OTKUI_NAV_MAT_PARTNERI|" & IC_MAT_PARTNERI & _
+      "|SIFARNICI|" & OBL_MATICNI & "|MATICNI"
+```
+
+Grupe: `"SIFARNICI|OTKUI_NAVG_SIFARNICI|MATICNI"`, `"SISTEM|OTKUI_NAVG_SISTEM|MATICNI"`.
+
+**Prava.** `OBL_MATICNI` već postoji (`modConfig.bas:677`) i već je oblast u
+matrici prava (`frmStammdaten.OblastCaption` zna `OBL_MATICNI`). `ScrDozvoljen`
+→ `modAuth.KorisnikImaPravo` time pokriva tri ekrana bez ijedne nove provere.
+Grupa SISTEM zadržava **dodatnu** admin branu koju `MaticniMenu_OnClick` danas
+primenjuje (`modAuth.MozeAdministraciju`) — `OBL_MATICNI` sam po sebi nije
+administracija. Tvrde brane u `modAdmin`/`modPodesavanja` ostaju gde jesu; ovo
+je i dalje samo UI brana.
+
+### 24.4 Odluka C — editor je u zoni ekrana i otvara se samo kad se uređuje
+
+Obrazac postoji i proveren je: `modScrPalete` lista „Nova prerada" drži polja u
+**svojoj zoni**, gradi ih `modOtkupUI.NewFieldG` (prefiks `scr` je obavezan —
+bez njega promena ide ljusci), a `Scr_Layout` ih pali, gasi i raspoređuje; zona
+raste samo za tu listu (`PAL_ZONA_H` → `PAL_ZONA_NOVA_H`).
+
+Matični ekran ima dva stanja zone:
+
+- **zatvorena** (`KPI_H`, 56): naziv sekcije, koliko zapisa, koliko aktivnih /
+  neaktivnih, dugme **„+ Nova stavka"**;
+- **otvorena** (≈ 56 + 3 reda po 46 + 34): do **deset** polja u redovima po
+  četiri (isti budžet koji `frmStammdaten` ima kroz `txtField1..10`), linija
+  koja kaže da li je unos nov ili izmena kog ID-ja, i dugmad **Sačuvaj** /
+  **Odustani**.
+
+Tok je isti kao u legacy formi, samo bez druge forme: klik na red u mreži bira
+zapis; **Izmeni** puni polja iz reda i otvara zonu; **+ Nova stavka** otvara
+praznu; **Sačuvaj** upisuje i zatvara; **Odustani** zatvara bez upisa.
+
+Izbor reda vraća `False` iz `Scr_Event` (mreža se ne čita ponovo, operater ne
+gubi mesto u listi) — pravilo iz `modScrOporavak` i `modScrPalete`. Upis vraća
+`True`.
+
+**Podnožje mreže ne treba nijednu izmenu ljuske.** `ModeHasKgCol` i
+`ModeHasValCol` čitaju **opis kolona ekrana** (`mCols`), ne `ActiveMode`; lista
+koja ne prijavi nijednu kolonu vrste `kg` ni `rsd`/`mult`/`sum0`/`rest` dobija
+podnožje bez oba zbira. Za šifarnike se time samo prijavljuju vrste kolona
+pošteno — „Težina gajbice" je `num`, ne `kg`, jer nije zbirna veličina. Ovo je
+provereno u kodu, ne pretpostavljeno; §13 i §14 su isti kvar plaćali dvaput.
+
+### 24.5 Odluka D — jedan pisac, i zašto ovde drugačije nego u Fazi B
+
+Faza B je **namerno** ostavila legacy formama njihovu kopiju upisne logike
+(v. §5). Ovde se to **ne ponavlja**, iz dva merljiva razloga:
+
+1. Za dokumente je postojao operativan put (legacy) i neproveren nov; kod
+   matičnih podataka postoji **samo jedan** put — forma. Druga kopija bi bila
+   prva prilika za razlaz, a ne osiguranje od njega.
+2. `docs/DOMEN/WHO_WRITES.md` pokazuje da matične tabele imaju **0–2** modula
+   koji ih pišu (`tblKulture`, `tblKupci`, `tblStanice`, `tblTipAmbalaze`,
+   `tblSEFConfig` — nula van testova; `tblKooperanti` — `modKooperant`;
+   `tblArtikli` — `modAgrohemija`; `tblParcele` — `modGeoParcele`,
+   `modMasterSync`; `tblKorisnici` — `modAuth`, `modSetup`). To je tačno
+   situacija iz CLAUDE.md §2 („isto polje često piše više modula") u kojoj
+   dodavanje još jednog pisca najviše košta — pogotovo što su ove tabele
+   **površina sinhronizacije** (`modStammdatenSync`, `modMasterSync`).
+
+Zato: provere i upis se **izdvajaju** iz `frmStammdaten.btnDodaj_Click` /
+`btnIzmeni_Click` / `OnSoftDeleteClick` u nov `modMaticniUnos`, a **legacy forma
+se prevezuje na njega**. To je pravilo §6 kataloga primenjeno doslovno
+(„ako rutina postoji ali je `Private` i vezana za formu, prvo se izdvaja račun
+iz prikaza"), isti potez kao `KoopRangRows` iz `LoadKoopRang` i
+`modIzvestaj.StampajReversAmbalaze` iz §23.1.
+
+Rizik se ne prećutkuje: prevezivanje dira **jedini operativan put** za matične
+podatke. Zato M2 (v. §24.10) ide sam, sa dvosmernim dokazom, i pre njega stoji
+M1 koji ne dira upis uopšte.
+
+### 24.6 Šta ekran uzima od ljuske — i šta ljuska mora da dobije
+
+Uzima, bez izmene: mrežu (sortiranje, pretraga, strane, označen red), prekidač
+lista (`Scr_Liste`), čipove (`Scr_Cipovi`), radnje nad redom (`Scr_Radnje`),
+naslovnu traku, toast, `NewFieldG` polja u zoni, granu `chg:` za promenu u
+polju, `row:` i `dbl:`.
+
+Ljuska dobija **tačno tri** izmene, sve u §24.2:
+
+| Izmena | Gde | Veličina |
+| `SCR_SEKCIJA` u registru + u `ScrGroups` | `modUiScreens` | ~15 linija |
+| `LayoutNav` izdvojen iz `BuildNav`, gradnja obe sekcije | `modOtkupUI.BuildNav` | ~40 linija |
+| `Case "btnMatic"` → prekidač sekcije | `modOtkupUI` | ~10 linija |
+
+Ništa od toga ne menja ponašanje radne sekcije: dok je `mSekcija = "RAD"`,
+`LayoutNav` postavlja iste stavke na iste Y koje `BuildNav` danas računa.
+
+### 24.7 Liste, kolone, čipovi i radnje — po ekranu
+
+**Čipovi** su svuda isti i nose jedinu poslovnu osu koju šifarnik ima —
+soft-delete: `sve` · `aktivni` · `neaktivni`. Sekcija bez kolone statusa ne
+prijavljuje nijedan čip; koja je to sekcija ne pogađa se nego se **pita**, istom
+proverom koju legacy koristi (`AktivanColName` → `Aktivan` ili `Aktivna`,
+`GetColumnIndex`). `tblCenovnik`, `tblTipAmbalaze` i `tblTipPalete` po zatečenoj
+šemi nemaju status; `tblKutije`, `tblKese`, `tblVrstaGP` ga imaju.
+
+**Radnje nad redom** (`Scr_Radnje`, budžet `MAX_ACT = 5`):
+
+| Lista | Radnje |
+| sve osim Cenovnika i Parcela | `izmeni` (soft) · `status` — „Deaktiviraj/Aktiviraj" (danger) |
+| Cenovnik | `novacena` — „Nova cena" (soft); **nema `izmeni`** — append-only, isto pravilo po kom legacy krije `btnIzmeni` |
+| Parcele | `izmeni` · `status` · `geo` — „Geo" (soft), otvara postojeće ulazne tačke (v. §24.9) |
+
+**Kolone lista** se ne izmišljaju — preslikavaju se iz `LoadList`, koja je za
+svaku sekciju već izabrala šta operater vidi (npr. Kooperanti: ID, ime+prezime,
+telefon, **naziv** stanice a ne `StanicaID`, BPG, tekući račun, PIN,
+adresa+mesto, JMBG, status). Prioriteti kolona (peto polje opisa) prate pravilo
+iz §9.2: identitet i naziv su 1, ostalo 2–3, tehnička polja 4 (nevidljiva).
+
+**Identitet reda.** Svaka lista nosi PK tabele u koloni 1 (`KooperantID`,
+`StanicaID`, …) i radnja bira **po njemu**, nikad po nazivu. Za matične podatke
+to nije ista klasa opasnosti kao kod dokumenata (nema generacija), ali istoimeni
+zapisi su ovde **obična pojava** — §18 to već beleži („duplikati istog naziva su
+u ovim šifarnicima obična pojava"). `frmStammdaten` to danas rešava
+`m_RowMap`-om iz pozicije u listboxu; posle sortiranja i pretrage u novoj mreži
+pozicija ne znači ništa, pa PK u koloni 1 nije udobnost nego uslov.
+
+### 24.8 Šta je namerno drugačije od legacy-ja
+
+- **Nema modalnih `MsgBox`-eva za ishod.** Uspeh ide u toast, greška u crveni
+  toast — kao na svih pet postojećih ekrana. `MsgBox` ostaje samo tamo gde je
+  **potvrda pre radnje koja menja podatke** (deaktivacija), po obrascu
+  `OdbaciIspravku` iz `modScrOporavak`.
+- **Pretraga i sortiranje nad svakom listom.** `lstData` ih nema; šifarnik od
+  hiljadu kooperanata se danas pregleda skrolovanjem.
+- **Status je pilula, ne tekst „DA/NE".** Mreža to već ume (`PaintPill`).
+- **Prelazak između sekcija ne zatvara i ne otvara formu.** Danas svaki izbor
+  radi `Unload frmStammdaten` pa `Show` — otud i `m_SetupDone` i
+  `mChromeRemoved` čuvari. Prekidač lista je promena jednog polja.
+- **Naziv umesto ID-ja u prikazu, ID u podacima.** Legacy to već radi za stanicu
+  kooperanta (`LookupValue`); pravilo se primenjuje na sve strane ključeve, uz
+  obrazac `PuniPartnerCombo` iz §9 za combo-e (dve kolone, čist ID u drugoj).
+
+### 24.9 Šta NIJE preneto (i zašto)
+
+- **Admin panel** (deset radnji). Nije lista nego spisak dugmadi; ugovorni ekran
+  uvek dobija mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa
+  bi ekran bez mreže tražio zahvat u ljusci — a dobio bi ništa. Ostaje
+  `modAdmin.BuildAdminPanel` na `frmStammdaten`; ekran `MAT_SISTEM` ga otvara
+  dugmetom zone (`frmStammdaten.Tag = "Admin"`, pa `Show vbModeless`).
+- **Podešavanja.** `modPodesavanja` radi, ima grupisanje i sklapanje grupa, i
+  nosi bezbednosno pravilo (interni/anti-tamper ključevi se **namerno** ne
+  prikazuju). Prelazak bi bio redizajn onoga što radi — `minimal change over
+  idealized redesign`. Otvara se iz `MAT_SISTEM` isto kao Admin.
+- **GEO alatke Parcela** (GeoSrbija, Google Maps, polygon editor). To su spoljni
+  prozori i pozivi; ostaju gde jesu i zovu se iz radnje `geo` nad redom, kroz
+  iste ulazne tačke (`OpenGoogleMaps`, `OpenParcelPolygonEditor`,
+  `modGeoParcele`). U zonu ulazi samo unos/paste koordinata, jer je to polje.
+- **Legacy popup `frmMaticniPodaci` i `frmStammdaten`** — ne diraju se i ostaju
+  potpuno operativni za `frmOtkupAPP`, po pravilu §5. Jedina izmena u
+  `frmStammdaten` je prevezivanje upisa na `modMaticniUnos` (M2).
+
+### 24.10 Redosled
+
+Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
+
+| Korak | Šta | Zašto tim redom |
+| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, grupa SISTEM sa dva dugmeta na legacy panele | Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
+| **M1** | `modMaticniIzvor` — jedan opis 13 sekcija (tabela, PK, kolone liste, polja editora, combo-i, prefiks ID-ja); ekrani `MAT_PARTNERI`, `MAT_ROBA`, `MAT_PAKOVANJE` kao **pregled** (liste, pretraga, sort, čipovi) | Ceo čitalački deo bez ijednog upisa. Legacy netaknut. Ako stane ovde, dobijeno je pretraživo. |
+| **M2** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy se prevezuje**; editor u zoni, radnje `izmeni` i `status` | Jedan pisac (§24.5). Ide sam, sa dvosmernim dokazom. |
+| **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
+| **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
+| **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
+
+### 24.11 Verifikacija — šta se meri
+
+Merilo prelaska je **SLAGANJE sa legacy prikazom i upisom**, ne izgled:
+
+- za svaku od 13 sekcija test tvrdi da lista ekrana ima **iste redove i iste
+  vrednosti** kao `LoadList` iste sekcije (nezavisan read-model, po obrascu
+  §23.6); istoimeni zapisi u fixture-u su **obavezni**, da bi test uopšte umeo
+  da razlikuje izbor po PK od izbora po nazivu;
+- upis: test tvrdi da `modMaticniUnos` posle izdvajanja piše **iste ćelije**
+  koje je forma pisala (snimak reda pre/posle), za svaku sekciju posebno;
+- soft-delete: `AktivanColName` mora naći kolonu tamo gde je legacy nalazi, i
+  ne naći je tamo gde je nema — inače čip „aktivni" tiho pokazuje sve;
+- čipovi: ugovor „svaki čip koji ekran prijavi ume da se izabere"
+  (`SegIndeksIzTaga` presedan);
+- podnožje: test tvrdi da nijedna matična lista ne prijavljuje kolonu `kg` ni
+  novčanu vrstu, pa podnožje ne crta zbirove (§24.4);
+- **dvosmerni dokaz** (`tools/dokaz.py`) je ovde **obavezan**, ne opcion: M2
+  menja jedini operativan put za matične podatke;
+- ručna kapija: `Alt+F11 → Debug → Compile VBAProject`, pa smoke nad pravim
+  podacima — prekidač sekcije na najmanjem i na maksimizovanom prozoru, sve
+  liste, unos i izmena po sekciji, GEO alatke, i **legacy meni i dalje radi**.
+
+`run_vba` traži Windows + Excel, pa se u web sesiji izmena ponašanja prijavljuje
+kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
+
+### 24.12 Otvoreno
+
+- **Deset polja u tri reda po četiri** je gornja granica zatečenog modela
+  (`txtField1..10`). Kupci realno traže više (ulica, mesto, poštanski broj,
+  država, PIB, MB, e-mail, hladnjača, tekući račun, naziv = 10 tačno). Ako se
+  neka sekcija proširi, red se dodaje u zoni, ne u ljusci.
+- **Značka uz stavku menija** (`Scr_Brojac`) za šifarnike nema šta da broji.
+  Ne implementira se — ekran koji je ne implementira dobija nulu, a nula se ne
+  crta.
+- **Padajući redovi detalja** (parcele kooperanta ispod kooperanta, cene ispod
+  kulture) — isti odložen posao kao u §5/Faza C; ne uvodi se ovde.
+- **Sinhronizacija.** `modStammdatenSync` i `modMasterSync` čitaju iste tabele.
+  M2 ne menja šta se upisuje, pa ne bi smeo da ih dotakne — ali to je tvrdnja
+  koju test mora da drži, ne pretpostavka.
