@@ -35,7 +35,7 @@ Attribute VB_Name = "modMaticniUnos"
 '=====================================================================
 Option Explicit
 
-Public Const MATUNOS_BUILD As String = "v6-ui-189"
+Public Const MATUNOS_BUILD As String = "v6-ui-193"
 
 ' Kljuc pod kojim modul javlja koje polje je odbijeno. Pozivalac ga koristi da
 ' vrati fokus tamo gde je greska -- forma je to radila sa SetFocus.
@@ -56,6 +56,15 @@ Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
     tbl = modMaticniIzvor.MatTabela(kljuc)
     If Len(tbl) = 0 Then
         MatDodaj = Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & kljuc
+        Exit Function
+    End If
+
+    ' Korisnici imaju SVOG pisca. PIN se hesira, uloga i aktivnost se pisu u
+    ' recniku "DA"/"NE" koji cita modAuth, a prava su kolone istog reda -- nista
+    ' od toga opsti upis ne zna. V. modMaticniKorisnici i UI_MIGRACIJA_KATALOG
+    ' 24.18.
+    If kljuc = "KORISNICI" Then
+        MatDodaj = modMaticniKorisnici.KorDodaj(polja, noviID)
         Exit Function
     End If
 
@@ -135,6 +144,10 @@ Public Function MatIzmeni(ByVal kljuc As String, ByVal red As Long, _
         MatIzmeni = Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & kljuc
         Exit Function
     End If
+    If kljuc = "KORISNICI" Then
+        MatIzmeni = modMaticniKorisnici.KorIzmeni(red, polja)
+        Exit Function
+    End If
     If kljuc = "CENOVNIK" Then
         ' Istorija cena se ne menja -- nova cena je nov red. Isto sto legacy
         ' forma kaze, i zato je "Izmeni" tamo sakriveno za Cenovnik.
@@ -175,6 +188,13 @@ Public Function MatPromeniStatus(ByVal kljuc As String, ByVal red As Long, _
 
     On Error GoTo EH
     noviStatus = ""
+    ' Kolona Aktivan u tblKorisnici NIJE obicna kolona statusa: modAuth
+    ' neaktivnim smatra samo "NE", pa bi opsti upis ovde napisao "Neaktivan" i
+    ' korisnik bi se i dalje prijavljivao. Zato ide kroz svog pisca.
+    If kljuc = "KORISNICI" Then
+        MatPromeniStatus = modMaticniKorisnici.KorPromeniStatus(red, noviStatus)
+        Exit Function
+    End If
     tbl = modMaticniIzvor.MatTabela(kljuc)
     statKol = modMaticniIzvor.MatStatusKolona(kljuc)
     If Len(tbl) = 0 Or Len(statKol) = 0 Then
@@ -245,6 +265,12 @@ Public Function MatVrednostiReda(ByVal kljuc As String, ByVal red As Long) As Ob
     Set d = CreateObject("Scripting.Dictionary")
     Set MatVrednostiReda = d
     On Error GoTo EH
+    ' PIN se ne vraca u editor (hes), a stanica se vraca kao naziv -- oba
+    ' pravila zna modMaticniKorisnici.
+    If kljuc = "KORISNICI" Then
+        Set MatVrednostiReda = modMaticniKorisnici.KorVrednostiReda(red)
+        Exit Function
+    End If
     tbl = modMaticniIzvor.MatTabela(kljuc)
     If Len(tbl) = 0 Or red < 1 Then Exit Function
     data = GetTableData(tbl)

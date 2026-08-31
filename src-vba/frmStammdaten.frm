@@ -539,22 +539,10 @@ EH:
 End Sub
 
 ' --- Korisnici helperi (prava po oblasti, Model A) ---
-Private Function NormalizeUloga(ByVal v As String) As String
-    If StrComp(Trim$(v), ULOGA_ADMIN, vbTextCompare) = 0 Then
-        NormalizeUloga = ULOGA_ADMIN
-    Else
-        NormalizeUloga = ULOGA_KORISNIK
-    End If
-End Function
-
-' "DA"/"NE" za datu oblast iz desne kolone dropdowna: Admin -> uvek DA
-' (bypass, isto kao modAuth.KorisnikImaPravo); inace vrednost iz cmbObl_<oblast>.
-Private Function OblComboVal(ByVal isAdmin As Boolean, ByVal oblast As String) As String
-    If isAdmin Then
-        OblComboVal = "DA"
-        Exit Function
-    End If
-
+' "DA"/"NE" za datu oblast iz desne kolone dropdowna. Normalizaciju uloge i
+' pravilo "admin dobija sve" NE radi forma nego pisac (modMaticniKorisnici):
+' dva mesta koja isto pravilo pisu bila bi dva mesta koja se razidju.
+Private Function OblComboVal(ByVal oblast As String) As String
     Dim cb As MSForms.ComboBox
     On Error Resume Next
     Set cb = Me.Controls("cmbObl_" & oblast)
@@ -1201,13 +1189,17 @@ Public Sub OnSoftDeleteClick()
         Exit Sub
     End If
 
-    ' Korisnici NE idu kroz modMaticniUnos (v. M4). Njihova kolona statusa nosi
-    ' "DA"/"NE" za modAuth, a ovo dugme upisuje "Aktivan"/"Neaktivan" -- zateceno
-    ' neslaganje koje se ovde NE popravlja usput, jer dira prijavu. Zabelezeno
-    ' kao nalaz za M4 (UI_MIGRACIJA_KATALOG 24.15).
+    ' Od M4 SVE sekcije idu kroz modMaticniUnos, Korisnici ukljuceno. Time je
+    ' zatvoren nalaz iz M2a: ovo dugme je korisniku upisivalo "Neaktivan", a
+    ' modAuth neaktivnim smatra samo "NE" -- deaktivirani korisnik se i dalje
+    ' prijavljivao. Sada pisac za tu sekciju pise "NE" (v. modMaticniKorisnici
+    ' i UI_MIGRACIJA_KATALOG 24.18).
+    '
+    ' Nepoznat Tag se ODBIJA, isto kao u btnDodaj/btnIzmeni: zatecena putanja
+    ' koja bi tiho upisala pogresan recnik je upravo ono sto se ovde zatvara.
     kljuc = SekcijaKljuc()
     If Len(kljuc) = 0 Then
-        SoftDeleteLegacy
+        MsgBox Poruka("MATU_ERR_NEPOZNATA_SEKCIJA") & " " & Me.Tag, vbCritical, APP_NAME
         Exit Sub
     End If
 
@@ -1225,47 +1217,6 @@ Public Sub OnSoftDeleteClick()
 
 EH:
     LogErr "frmStammdaten.OnSoftDeleteClick"
-    MsgBox Poruka("STM_ERR_GRESKA_PRI_PROMENI") & Err.description, vbCritical, APP_NAME
-End Sub
-
-' Zatecena putanja za sekcije koje modul ne pokriva (danas: Korisnici).
-Private Sub SoftDeleteLegacy()
-    Dim colName As String, data As Variant, colIdx As Long
-    Dim cur As String, newVal As String, tx As clsTransaction
-    On Error GoTo EH
-
-    colName = AktivanColName()
-    If Len(colName) = 0 Then Exit Sub
-
-    data = GetTableData(m_TableName)
-    If IsEmpty(data) Then Exit Sub
-    colIdx = GetColumnIndex(m_TableName, colName)
-
-    cur = Trim$(NzToText(data(m_SelectedRow, colIdx)))
-    If StrComp(cur, STATUS_NEAKTIVAN, vbTextCompare) = 0 Then
-        newVal = STATUS_AKTIVAN
-    Else
-        newVal = STATUS_NEAKTIVAN
-    End If
-
-    Set tx = New clsTransaction
-    tx.BeginTx
-    tx.AddTableSnapshot m_TableName
-    RequireUpdateCell m_TableName, m_SelectedRow, colName, newVal, "frmStammdaten.SoftDeleteLegacy"
-    tx.CommitTx
-    Set tx = Nothing
-
-    LoadList
-    ClearFields
-    m_SelectedRow = 0
-    MsgBox Poruka("MATU_OK_STATUS") & " " & newVal, vbInformation, APP_NAME
-    Exit Sub
-
-EH:
-    LogErr "frmStammdaten.SoftDeleteLegacy"
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
     MsgBox Poruka("STM_ERR_GRESKA_PRI_PROMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
@@ -1911,6 +1862,15 @@ Private Function KontrolaZaPolje(ByVal p As String) As String
                 Case "hladnjaca": KontrolaZaPolje = "txtField9"
                 Case "racun": KontrolaZaPolje = "txtField10"
             End Select
+        Case "Korisnici"
+            Select Case p
+                Case "korime": KontrolaZaPolje = "txtField1"
+                Case "ime": KontrolaZaPolje = "txtField2"
+                Case "pin": KontrolaZaPolje = "txtField3"
+                Case "uloga": KontrolaZaPolje = "cmbField1"
+                Case "aktivan": KontrolaZaPolje = "cmbField2"
+                Case "stanica": KontrolaZaPolje = "cmbField3"
+            End Select
         Case "Vozaci"
             Select Case p
                 Case "ime": KontrolaZaPolje = "txtField1"
@@ -2086,151 +2046,61 @@ EH:
     MsgBox Poruka("STM_ERR_GRESKA_PRI_IZMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Korisnici ostaju u formi do M4: tblKorisnici nosi matricu prava i PreparePin,
-' a to ide zajedno sa svojim ekranom. Telo je PRENETO NEPROMENJENO iz nekadasnje
-' grane Case "Korisnici" u btnDodaj_Click.
+' Korisnici od M4 idu kroz modMaticniKorisnici -- istog pisca koga zove i
+' ekran. Forma vise ne zna ni za PreparePin ni za recnik "DA"/"NE" ni za
+' redosled kolona prava; samo pokupi ono sto je operater otkucao.
+'
+' Dvanaest combo-a prava se predaje pod prefiksom "obl:" -- to je jedini deo
+' koji ekran NE salje, jer prava tamo imaju svoju listu. Pisac zato pise samo
+' one oblasti koje je stvarno dobio.
+Private Function PokupiKorisnika() As Object
+    Dim d As Object, obl As Variant
+    Set d = PokupiPolja("KORISNICI")
+    Set PokupiKorisnika = d
+    ' Stanicu je PokupiPolja vec procitalo kao skriveni ID (izvor "@stanice").
+    For Each obl In modAuth.OblastiList()
+        d(modMaticniKorisnici.KOR_OBL_PREFIKS & CStr(obl)) = _
+            OblComboVal(CStr(obl))
+    Next obl
+End Function
+
 Private Sub DodajKorisnika()
+    Dim polja As Object, odgovor As String, noviID As String
     On Error GoTo EH
-    Const SRC As String = "frmStammdaten.DodajKorisnika"
-    Dim korTx As clsTransaction
-    If Trim$(txtField1.value) = "" Then
-        MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
-        txtField1.SetFocus
+    Set polja = PokupiKorisnika()
+    odgovor = modMaticniUnos.MatDodaj("KORISNICI", polja, noviID)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
         Exit Sub
     End If
-
-    If Trim$(txtField3.value) = "" Then
-        MsgBox "Unesite PIN!", vbExclamation, APP_NAME
-        txtField3.SetFocus
-        Exit Sub
-    End If
-
-    Dim postojiKor As Variant
-    postojiKor = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
-    If Not IsEmpty(postojiKor) Then
-        If Len(Trim$(CStr(postojiKor))) > 0 Then
-            MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
-            Exit Sub
-        End If
-    End If
-
-    Dim ulogaDodaj As String
-    ulogaDodaj = NormalizeUloga(cmbField1.value)
-
-    Dim admDodaj As Boolean
-    admDodaj = (StrComp(ulogaDodaj, ULOGA_ADMIN, vbTextCompare) = 0)
-
-    Dim aktivDodaj As String
-    If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivDodaj = "NE" Else aktivDodaj = "DA"
-
-    ' Upis PO IMENU u TRANSAKCIJI (atomicno; rollback uklanja delimican red
-    ' ako neki upis padne). tblKorisnici ima vise kolona oblasti + audit
-    ' kolone pa pozicijski AppendRow nije pouzdan (nove oblasti se dodaju
-    ' posle audit kolona). Isti obrazac kao btnIzmeni (RequireUpdateCell).
-    Dim korNewID As String
-    korNewID = GetNextID(m_TableName, COL_KOR_ID, "KOR-")
-
-    Set korTx = New clsTransaction
-    korTx.BeginTx
-    korTx.AddTableSnapshot m_TableName
-
-    Dim korEmpty() As Variant
-    ReDim korEmpty(1 To GetTable(m_TableName).ListColumns.count)
-    Dim korIdx As Long
-    korIdx = AppendRow(m_TableName, korEmpty)
-    If korIdx = 0 Then Err.Raise vbObjectError + 9500, SRC, "AppendRow nije uspeo."
-
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_ID, korNewID, SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_IME, Trim$(txtField2.value), SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_ULOGA, ulogaDodaj, SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_AKTIVAN, aktivDodaj, SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
-    RequireUpdateCell m_TableName, korIdx, COL_KOR_CREATED, Format$(Now, "yyyy-mm-dd hh:nn:ss"), SRC
-
-    Dim oblDod As Variant
-    For Each oblDod In modAuth.OblastiList()
-        RequireUpdateCell m_TableName, korIdx, CStr(oblDod), OblComboVal(admDodaj, CStr(oblDod)), SRC
-    Next oblDod
-
-    korTx.CommitTx
-
-    MsgBox "Dodato: " & korNewID, vbInformation, APP_NAME
+    MsgBox Poruka("MATU_OK_DODATO") & " " & noviID, vbInformation, APP_NAME
     LoadList
     ClearFields
     KorisniciSetDefaults
     Exit Sub
-    Exit Sub
 EH:
-    If Not korTx Is Nothing Then korTx.RollbackTx
-    LogErr SRC
+    LogErr "frmStammdaten.DodajKorisnika"
     MsgBox Poruka("STM_ERR_GRESKA_PRI_DODAVANJU") & Err.description, vbCritical, APP_NAME
 End Sub
 
-' Isto pravilo kao DodajKorisnika: telo je preneto nepromenjeno iz grane
-' Case "Korisnici" u btnIzmeni_Click.
 Private Sub IzmeniKorisnika()
+    Dim polja As Object, odgovor As String
     On Error GoTo EH
-    Const SRC As String = "frmStammdaten.IzmeniKorisnika"
-    Dim tx As clsTransaction
-    Set tx = New clsTransaction
-    If Trim$(txtField1.value) = "" Then
-        MsgBox Poruka("KOR_MSG_UNESITE_IME"), vbExclamation, APP_NAME
-        txtField1.SetFocus
+    Set polja = PokupiKorisnika()
+    odgovor = modMaticniUnos.MatIzmeni("KORISNICI", m_SelectedRow, polja)
+    If Len(odgovor) > 0 Then
+        MsgBox odgovor, vbExclamation, APP_NAME
+        FokusNaPolje polja
         Exit Sub
     End If
-
-    ' Spreci duplikat korisnickog imena (drugi red sa istim username-om).
-    Dim dupIzm As Variant, curIDIzm As String
-    curIDIzm = Trim$(lstData.List(lstData.ListIndex, 0))   ' ID reda koji se menja
-    dupIzm = LookupValue(m_TableName, COL_KOR_USERNAME, Trim$(txtField1.value), COL_KOR_ID)
-    If Not IsEmpty(dupIzm) Then
-        If Len(Trim$(CStr(dupIzm))) > 0 And StrComp(Trim$(CStr(dupIzm)), curIDIzm, vbTextCompare) <> 0 Then
-            MsgBox "Korisnik '" & Trim$(txtField1.value) & Poruka("KOR_MSG_VEC_POSTOJI"), vbExclamation, APP_NAME
-            Exit Sub
-        End If
-    End If
-
-    tx.BeginTx
-    tx.AddTableSnapshot m_TableName
-
-    Dim ulogaIzm As String
-    ulogaIzm = NormalizeUloga(cmbField1.value)
-
-    Dim admIzm As Boolean
-    admIzm = (StrComp(ulogaIzm, ULOGA_ADMIN, vbTextCompare) = 0)
-
-    Dim aktivIzm As String
-    If UCase$(Trim$(cmbField2.value)) = "NE" Then aktivIzm = "NE" Else aktivIzm = "DA"
-
-    RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_USERNAME, Trim$(txtField1.value), SRC
-    RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_IME, Trim$(txtField2.value), SRC
-    If Len(Trim$(txtField3.value)) > 0 Then
-        RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_PIN, modAuth.PreparePin(Trim$(txtField3.value)), SRC
-    End If
-    RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_ULOGA, ulogaIzm, SRC
-    RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_AKTIVAN, aktivIzm, SRC
-    RequireUpdateCell m_TableName, m_SelectedRow, COL_KOR_STANICA, GetSelectedComboHiddenID(cmbField3), SRC
-
-    Dim oblIzm As Variant
-    For Each oblIzm In modAuth.OblastiList()
-        RequireUpdateCell m_TableName, m_SelectedRow, CStr(oblIzm), _
-                          OblComboVal(admIzm, CStr(oblIzm)), SRC
-    Next oblIzm
-
-    tx.CommitTx
-    Set tx = Nothing
     MsgBox Poruka("MATU_OK_IZMENJENO"), vbInformation, APP_NAME
     LoadList
     ClearFields
     m_SelectedRow = 0
     Exit Sub
 EH:
-    LogErr SRC
-    On Error Resume Next
-    If Not tx Is Nothing Then tx.RollbackTx
-    On Error GoTo 0
+    LogErr "frmStammdaten.IzmeniKorisnika"
     MsgBox Poruka("STM_ERR_GRESKA_PRI_IZMENI") & Err.description, vbCritical, APP_NAME
 End Sub
 

@@ -40,7 +40,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-187"
+Public Const UISCR_BUILD As String = "v6-ui-193"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -119,9 +119,9 @@ Public Function ScrRows() As Variant
     ' grupisanje je u modMaticniLookups uvedeno svesno i operater ga zna.
     ' Plan i obrazlozenje: docs/UI_MIGRACIJA_KATALOG.md, 24.3.
     '
-    ' Tri ekrana sa podacima jos nemaju modul -- sidebar ih zato crta prigusene,
-    ' isto kao MARZA i SLEDLJIVOST. To NIJE propust nego zatecen nacin da se vidi
-    ' sta dolazi (v. komentar na vrhu modula).
+    ' Od M4 svih pet ima svoj modul; prigusene u sekciji MATICNI vise nema.
+    ' Sidebar i dalje prigusuje ekran bez modula (MARZA, SLEDLJIVOST) -- to nije
+    ' propust nego zatecen nacin da se vidi sta dolazi (v. vrh modula).
     c.Add "MAT_PARTNERI|modScrMatPartneri|OTKUI_NAV_MAT_PARTNERI|" & IC_MAT_PARTNERI & _
           "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
     c.Add "MAT_ROBA|modScrMatRoba|OTKUI_NAV_MAT_ROBA|" & IC_MAT_ROBA & _
@@ -248,8 +248,8 @@ Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
 End Function
 
 ' Odgovor samog ekrana na pitanje "smem li da te otvorim". Ekran koji nema
-' Scr_Dozvoljen (a to su svi osim maticnog Sistema) dobija True -- greska poziva
-' znaci "nema takvu funkciju", ne "zabranjeno".
+' Scr_Dozvoljen (a to su svi osim maticnih Korisnika i Sistema) dobija True --
+' greska poziva znaci "nema takvu funkciju", ne "zabranjeno".
 '
 ' Kesira se SAMO cinjenica "ima li ekran tu funkciju", nikad njen ODGOVOR:
 ' prava se menjaju zamenom operatera, pa kesiran odgovor bi ostavio otvoren

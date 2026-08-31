@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-188"
+Public Const MATIZ_BUILD As String = "v6-ui-193"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -77,6 +77,13 @@ Public Function MatSekcijeEkrana(ByVal ekran As String) As Variant
                 "PALETE|OTKUI_SEGM_PAL|OTKUI_GTM_PAL|68", _
                 "KUTIJE|OTKUI_SEGM_KUT|OTKUI_GTM_KUT|68", _
                 "KESE|OTKUI_SEGM_KES|OTKUI_GTM_KES|60")
+        Case "MAT_KORISNICI"
+            ' Dve liste, i druga ZAVISI od prve: prava se citaju za korisnika
+            ' izabranog u listi Korisnici. Zato su na istom ekranu, a ne dva --
+            ' prekidac je jedan potez, a promena ekrana bi izgubila izbor.
+            MatSekcijeEkrana = Array( _
+                "KORISNICI|OTKUI_SEGM_KOR|OTKUI_GTM_KOR|84", _
+                "PRAVA|OTKUI_SEGM_PRAVA|OTKUI_GTM_PRAVA|72")
     End Select
 End Function
 
@@ -91,7 +98,6 @@ End Function
 
 ' Prevod legacy Tag-a (frmStammdaten.Tag) u kljuc sekcije. Jedno mesto na kom
 ' se dva imenovanja sretnu -- forma i ekran posle toga govore istim jezikom.
-' Korisnici NISU u spisku: oni idu u M4, a do tada forma zadrzava svoju granu.
 Public Function MatKljucIzLegacyTag(ByVal tg As String) As String
     Select Case tg
         Case "Kooperanti":  MatKljucIzLegacyTag = "KOOPERANTI"
@@ -107,6 +113,7 @@ Public Function MatKljucIzLegacyTag(ByVal tg As String) As String
         Case "TipPalete":   MatKljucIzLegacyTag = "PALETE"
         Case "Kutije":      MatKljucIzLegacyTag = "KUTIJE"
         Case "Kese":        MatKljucIzLegacyTag = "KESE"
+        Case "Korisnici":   MatKljucIzLegacyTag = "KORISNICI"
     End Select
 End Function
 
@@ -125,6 +132,10 @@ Public Function MatTabela(ByVal kljuc As String) As String
         Case "PALETE":     MatTabela = TBL_TIP_PALETE
         Case "KUTIJE":     MatTabela = TBL_KUTIJE
         Case "KESE":       MatTabela = TBL_KESE
+        ' Korisnici i prava dele JEDNU tabelu: matrica prava su kolone reda
+        ' korisnika, ne zaseban zapis.
+        Case "KORISNICI":  MatTabela = TBL_KORISNICI
+        Case "PRAVA":      MatTabela = TBL_KORISNICI
     End Select
 End Function
 
@@ -145,6 +156,9 @@ Public Function MatPK(ByVal kljuc As String) As String
         Case "PALETE":     MatPK = COL_TPAL_TIP
         Case "KUTIJE":     MatPK = COL_KUT_TIP
         Case "KESE":       MatPK = COL_KES_TIP
+        Case "KORISNICI":  MatPK = COL_KOR_ID
+        ' PRAVA nemaju PK: red je oblast, a ne zapis. Identitet nosi skrivena
+        ' kolona -- v. MatKolonaID.
     End Select
 End Function
 
@@ -162,6 +176,12 @@ Public Function MatStatusKolona(ByVal kljuc As String) As String
         MatStatusKolona = CStr(mStatusKol(kljuc))
         Exit Function
     End If
+    ' PRAVA dele tabelu sa korisnicima, pa bi probe nasao "Aktivan" i ponudio
+    ' cipove koji nad listom oblasti ne znace nista. Zato izricito: nema je.
+    If kljuc = "PRAVA" Then
+        mStatusKol(kljuc) = ""
+        Exit Function
+    End If
     tbl = MatTabela(kljuc)
     If Len(tbl) = 0 Then Exit Function
     On Error Resume Next
@@ -172,6 +192,18 @@ Public Function MatStatusKolona(ByVal kljuc As String) As String
     End If
     Err.Clear
     mStatusKol(kljuc) = MatStatusKolona
+End Function
+
+' Kolona mreze koja nosi IDENTITET reda. Skoro svuda je prva (PK), ali lista
+' prava u prvoj koloni ima lokalizovan naziv oblasti, a kljuc joj stoji u
+' skrivenoj koloni. Jedan broj, deljen izmedju opisa kolona i radnje -- da se
+' indeks ne moze razici (isti razlog zbog kog modScrMatSistem ima MS_COL_TAG).
+Public Function MatKolonaID(ByVal kljuc As String) As Long
+    If kljuc = "PRAVA" Then
+        MatKolonaID = modMaticniKorisnici.KOR_COL_OBLAST
+    Else
+        MatKolonaID = 1
+    End If
 End Function
 
 ' Cipovi sekcije. Sekcija bez kolone statusa nema sta da filtrira, pa ne
@@ -194,6 +226,17 @@ End Function
 ' po sebi nema lazne zbirove. Tezine su "num" jer su broj, ali nisu zbirna
 ' velicina.
 Public Function MatKolone(ByVal kljuc As String) As Variant
+    ' Korisnici i prava opisuje modMaticniKorisnici: obe liste su izvedene iz
+    ' iste tabele razlicito (nalozi po redu, prava po koloni), pa opis stoji uz
+    ' kod koji ih i cita.
+    Select Case kljuc
+        Case "KORISNICI"
+            MatKolone = modMaticniKorisnici.KorKolone()
+            Exit Function
+        Case "PRAVA"
+            MatKolone = modMaticniKorisnici.KorPravaKolone()
+            Exit Function
+    End Select
     Select Case kljuc
         Case "KOOPERANTI"
             MatKolone = Array( _
@@ -313,6 +356,14 @@ End Function
 '
 ' Redosled je redosled u legacy formi -- operater ne uci nov raspored.
 Public Function MatPolja(ByVal kljuc As String) As Variant
+    ' PRAVA se NE uredjuju u editoru: jedan red je jedna oblast, a jedina radnja
+    ' je da se ukljuci ili iskljuci. Sekcija bez polja tako i nema "Nova stavka".
+    If kljuc = "KORISNICI" Then
+        MatPolja = modMaticniKorisnici.KorPolja()
+        Exit Function
+    ElseIf kljuc = "PRAVA" Then
+        Exit Function
+    End If
     Select Case kljuc
         Case "KOOPERANTI"
             MatPolja = Array( _
@@ -460,6 +511,7 @@ Public Function MatPrefiksID(ByVal kljuc As String) As String
         Case "PARCELE":    MatPrefiksID = "PAR-"
         Case "ARTIKLI":    MatPrefiksID = "ART-"
         Case "KULTURE":    MatPrefiksID = "KUL-"
+        Case "KORISNICI":  MatPrefiksID = "KOR-"
     End Select
 End Function
 
@@ -497,6 +549,9 @@ Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) 
         Case "@ggap":        MatComboStavke = Array("Da", "Ne", "U postupku")
         Case "@dane":        MatComboStavke = Array("Ne", "Da")
         Case "@klase":       MatComboStavke = Array(KLASA_I, KLASA_II)
+        ' Uloge i DA/NE korisnika stoje u modMaticniKorisnici: recnik kolone je
+        ' "DA"/"NE" i cita ga modAuth, pa se ne sme prepisati ovde.
+        Case "@uloge", "@dane_kor": MatComboStavke = modMaticniKorisnici.KorComboStavke(izvor)
         Case "@sorte"
             ' Sorte SAMO za izabranu vrstu -- prazan kontekst daje prazan spisak,
             ' ne sve sorte svih vrsta.
@@ -620,8 +675,11 @@ End Function
 '-------------------------------------------------------------- REDOVI
 ' Ugovor je isti kao kod svakog ekrana:
 '   Array(kolone, redovi, n, zbirKg, zbirVal, brojaci cipova)
+' KONTEKST nosi izbor koji lista trazi izvan sopstvenog reda -- za sada samo
+' PRAVA, kojoj treba ID korisnika izabranog u susednoj listi. Prazan kontekst
+' daje praznu listu; prava bez korisnika nisu podatak.
 Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
-                          ByVal q As String) As Variant
+                          ByVal q As String, Optional ByVal kontekst As String = "") As Variant
     Dim cols As Variant, data As Variant, tbl As String
     Dim nCol As Long, i As Long, c As Long, n As Long
     Dim outA() As Variant, hay As String, pkIdx As Long, statIdx As Long
@@ -630,6 +688,22 @@ Public Function MatRedovi(ByVal kljuc As String, ByVal filter As String, _
 
     On Error GoTo EH
     mUkupno = 0: mAktivnih = 0: mNeaktivnih = 0
+
+    ' Korisnici i prava se citaju iz modMaticniKorisnici -- ista tabela nosi i
+    ' naloge i matricu prava, pa ih opis kolona ne bi opisao. Brojke se PREUZIMAJU
+    ' odande da bi zona i dalje imala jedan izvor: koje god citanje da je bilo
+    ' poslednje, MatUkupno govori o njemu.
+    If kljuc = "KORISNICI" Or kljuc = "PRAVA" Then
+        If kljuc = "PRAVA" Then
+            MatRedovi = modMaticniKorisnici.KorPravaRedovi(kontekst, q)
+        Else
+            MatRedovi = modMaticniKorisnici.KorRedovi(filter, q)
+        End If
+        mUkupno = modMaticniKorisnici.KorUkupno()
+        mAktivnih = modMaticniKorisnici.KorAktivnih()
+        mNeaktivnih = modMaticniKorisnici.KorNeaktivnih()
+        Exit Function
+    End If
 
     cols = MatKolone(kljuc)
     tbl = MatTabela(kljuc)

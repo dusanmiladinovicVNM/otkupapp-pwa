@@ -10,16 +10,14 @@ Attribute VB_Name = "modScrMatPartneri"
 ' ekran nosi i kako izgleda njegova zona. Ista podela vazi za modScrMatRoba i
 ' modScrMatPakovanje -- tri ekrana, jedan opis podataka.
 '
-' M1 JE SAMO PREGLED. Nema Scr_Radnje, nema Scr_Save, zona nema polja: unos i
-' izmena dolaze u M2, kad se upis izdvoji iz frmStammdaten u modMaticniUnos i
-' kad ga budu zvale OBE strane. Do tada legacy forma ostaje jedini put upisa i
-' NE MENJA SE -- v. docs/UI_MIGRACIJA_KATALOG.md 24.5 i 24.10.
+' UNOS I IZMENA rade od M2: oba idu kroz modMaticniUnos, istog pisca koga zove
+' i legacy forma -- v. docs/UI_MIGRACIJA_KATALOG.md 24.5 i 24.15.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
 
-Public Const SCRMP_BUILD As String = "v6-ui-188"
+Public Const SCRMP_BUILD As String = "v6-ui-193"
 
 Private Const EKRAN As String = "MAT_PARTNERI"
 
@@ -27,7 +25,7 @@ Private mLista As String
 
 Public Function Scr_Meta() As String
     Scr_Meta = "kljuc=" & EKRAN & "|naslov=OTKUI_NAV_MAT_PARTNERI|sub=OTKUI_SCRMP_SUB" & _
-               "|lista=OTKUI_GTM_KOOP|oblik=lista|upis=ne"
+               "|lista=OTKUI_GTM_KOOP|oblik=zona+mreza|upis=zona"
 End Function
 
 Public Function Scr_Liste() As Variant

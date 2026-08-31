@@ -8,13 +8,13 @@ Attribute VB_Name = "modScrMatPakovanje"
 ' Modul je TANAK NAMERNO: sve o podacima zna modMaticniIzvor, sve o zoni i
 ' dogadjajima modMaticniEkran. Ovde stoji samo koje sekcije ekran nosi.
 '
-' M1 JE SAMO PREGLED -- v. modScrMatPartneri i UI_MIGRACIJA_KATALOG 24.10.
+' UNOS I IZMENA rade od M2 -- v. modScrMatPartneri i UI_MIGRACIJA_KATALOG 24.15.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
 Option Explicit
 
-Public Const SCRMK_BUILD As String = "v6-ui-188"
+Public Const SCRMK_BUILD As String = "v6-ui-193"
 
 Private Const EKRAN As String = "MAT_PAKOVANJE"
 
@@ -22,7 +22,7 @@ Private mLista As String
 
 Public Function Scr_Meta() As String
     Scr_Meta = "kljuc=" & EKRAN & "|naslov=OTKUI_NAV_MAT_PAKOVANJE|sub=OTKUI_SCRMK_SUB" & _
-               "|lista=OTKUI_GTM_AMB|oblik=lista|upis=ne"
+               "|lista=OTKUI_GTM_AMB|oblik=zona+mreza|upis=zona"
 End Function
 
 Public Function Scr_Liste() As Variant

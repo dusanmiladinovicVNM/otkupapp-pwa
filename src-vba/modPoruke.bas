@@ -416,6 +416,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEGM_PAL", "Palete"
     UpsertRow lo, existing, "OTKUI_SEGM_KUT", "Kutije"
     UpsertRow lo, existing, "OTKUI_SEGM_KES", "Kese"
+    UpsertRow lo, existing, "OTKUI_SEGM_KOR", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_SEGM_PRAVA", "Prava"
 
     UpsertRow lo, existing, "OTKUI_GTM_KOOP", "Kooperanti"
     UpsertRow lo, existing, "OTKUI_GTM_STAN", "Otkupne stanice"
@@ -559,6 +561,56 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_GEO_POLIGON", "Poligon"
     UpsertRow lo, existing, "OTKUI_BTN_GEO_OBRISI", "Obri" & ChrW(353) & "i geo"
     UpsertRow lo, existing, "OTKUI_BTN_GEO_ZATVORI", "Zatvori"
+
+    ' --- M4: korisnici i prava ------------------------------------------
+    ' Zaglavlja kolona i polja editora korisnika.
+    UpsertRow lo, existing, "OTKUI_HDK_USERNAME", "Korisni" & ChrW(269) & "ko ime"
+    UpsertRow lo, existing, "OTKUI_HDK_IME", "Ime i prezime"
+    UpsertRow lo, existing, "OTKUI_HDK_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_HDK_ULOGA", "Uloga"
+    UpsertRow lo, existing, "OTKUI_HDK_AKTIVAN", "Aktivan"
+    UpsertRow lo, existing, "OTKUI_HDK_PRAVA", "Prava"
+    UpsertRow lo, existing, "OTKUI_HDK_OBLAST", "Oblast"
+    UpsertRow lo, existing, "OTKUI_HDK_PRAVO", "Pravo"
+    UpsertRow lo, existing, "OTKUI_HDK_ODAKLE", "Odakle"
+    UpsertRow lo, existing, "OTKUI_KOR_IMA", "ima pristup"
+    UpsertRow lo, existing, "OTKUI_KOR_NEMA", "nema pristup"
+    UpsertRow lo, existing, "OTKUI_KOR_JER_ADMIN", "iz uloge Admin"
+    UpsertRow lo, existing, "OTKUI_KOR_POJEDINACNO", "pojedina" & ChrW(269) & "no"
+    UpsertRow lo, existing, "OTKUI_KOR_SVE_ADMIN", "SVE (admin)"
+    UpsertRow lo, existing, "OTKUI_GTM_KOR", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_GTM_PRAVA", "Prava pristupa"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_SCRMK_SUB", _
+        "Nalozi, uloge i prava pristupa po oblasti."
+    UpsertRow lo, existing, "OTKUI_BTN_KOR_PRAVO", "Uklju" & ChrW(269) & "i / isklju" & ChrW(269) & "i"
+    UpsertRow lo, existing, "OTKUI_KOR_BEZ_IZBORA", _
+        "Izaberi korisnika u listi Korisnici da bi se videla njegova prava."
+    UpsertRow lo, existing, "OTKUI_KOR_PRAVA_ZA", "Prava:"
+
+    ' Nazivi oblasti. Kljuc = OTKUI_OBL_ + naziv kolone prava, velikim slovima
+    ' (v. modMaticniKorisnici.KorOblastNaziv). Nova oblast u modAuth.OblastiList
+    ' trazi tacno jedan red ovde.
+    UpsertRow lo, existing, "OTKUI_OBL_OTKUP", "Otkup"
+    UpsertRow lo, existing, "OTKUI_OBL_DOKUMENTA", "Dokumenta"
+    UpsertRow lo, existing, "OTKUI_OBL_AGROHEMIJA", "Agrohemija"
+    UpsertRow lo, existing, "OTKUI_OBL_IZVESTAJI", "Izve" & ChrW(353) & "taji"
+    UpsertRow lo, existing, "OTKUI_OBL_FAKTURISANJE", "Fakturisanje"
+    UpsertRow lo, existing, "OTKUI_OBL_BANKA", "Banka"
+    UpsertRow lo, existing, "OTKUI_OBL_MARZA", "Mar" & ChrW(382) & "a"
+    UpsertRow lo, existing, "OTKUI_OBL_SLEDLJIVOST", "Sledljivost"
+    UpsertRow lo, existing, "OTKUI_OBL_MATICNIPODACI", "Mati" & ChrW(269) & "ni podaci"
+    UpsertRow lo, existing, "OTKUI_OBL_PALETE", "Palete"
+    UpsertRow lo, existing, "OTKUI_OBL_OTVORIEXCEL", "Otvori Excel"
+    UpsertRow lo, existing, "OTKUI_OBL_SYNCPWA", "Sync PWA"
+
+    UpsertRow lo, existing, "MATK_ERR_USERNAME", "Korisni" & ChrW(269) & "ko ime je obavezno."
+    UpsertRow lo, existing, "MATK_ERR_POSTOJI", "Korisnik sa tim imenom ve" & ChrW(263) & " postoji:"
+    UpsertRow lo, existing, "MATK_ERR_PIN", "PIN je obavezan za novog korisnika."
+    UpsertRow lo, existing, "MATK_ERR_ADMIN_SVE", _
+        "Admin ima sve oblasti po ulozi -- pojedina" & ChrW(269) & "no pravo se ne menja."
+    UpsertRow lo, existing, "MATK_ERR_NEMA_OBLASTI", _
+        "Tabela korisnika nema kolonu za oblast:"
 
     UpsertRow lo, existing, "OTKUI_FOOT_SEZONA", "Sezona 2026"
 

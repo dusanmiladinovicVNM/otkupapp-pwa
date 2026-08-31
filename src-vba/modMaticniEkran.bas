@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-191"
+Public Const MATEKR_BUILD As String = "v6-ui-193"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -58,6 +58,11 @@ Private mIzabranID As String               ' PK reda izabranog u mrezi
 
 ' Parcela ciji je GEO panel otvoren. Prazno = panel je zatvoren.
 Private mGeoID As String
+
+' Korisnik ciju matricu prava lista PRAVA pokazuje. Pamti se ODVOJENO od
+' mIzabranID zato sto prezivljava prelazak na drugu listu: cim se na listi PRAVA
+' izabere red, mIzabranID postaje oblast, a korisnik mora da ostane.
+Private mKorisnikID As String
 
 ' Visina zone sa otvorenim GEO panelom: jedan red polja (N i E) pa dugmad.
 Private Const MAT_GEO_H As Single = MAT_ZONA_H + 18 + MAT_RED_H + 38
@@ -148,7 +153,11 @@ Public Function ZonaRaspored(ByVal z As Object, ByVal w As Single, _
         SakrijGeo z
         ' "Nova stavka" postoji i kad je editor zatvoren -- to mu je jedini ulaz.
         modUiKit.MoveBox z, "scrMatNovi", w - PAD - 130, 14, 130
-        modUiKit.BoxShow z, "scrMatNovi", (Len(lista) > 0)
+        ' Sekcija bez polja nema ni unos: prava se ne dodaju, nego ukljucuju.
+        ' Uslov se cita iz opisa polja, ne iz spiska sekcija -- da nova sekcija
+        ' bez editora ne bi dobila dugme koje ne vodi nikuda.
+        modUiKit.BoxShow z, "scrMatNovi", _
+            (Len(lista) > 0) And IsArray(modMaticniIzvor.MatPolja(lista))
         h = MAT_ZONA_H
     Else
         SakrijGeo z
@@ -375,6 +384,19 @@ Private Sub OsveziZonu(ByVal ekran As String, ByVal lista As String)
                                     Poruka("OTKUI_MAT_ZAPISA")
     z.Controls("matKL0").caption = UCase$(Poruka("OTKUI_MAT_AKTIVNIH"))
     z.Controls("matKL1").caption = UCase$(Poruka("OTKUI_MAT_NEAKTIVNIH"))
+    ' Napomena kaze CIJA su prava na ekranu. Bez toga je lista od dvanaest
+    ' oblasti bez vlasnika -- a promasen korisnik je tiha greska koja se vidi
+    ' tek kad se neko ne prijavi.
+    z.Controls("matHint").caption = Napomena(lista)
+    If lista = "PRAVA" Then
+        ' Prava nemaju "aktivne" i "neaktivne" zapise nego oblasti sa pravom i
+        ' bez njega -- ista brojka, drugo ime.
+        z.Controls("matKL0").caption = UCase$(Poruka("OTKUI_KOR_IMA"))
+        z.Controls("matKL1").caption = UCase$(Poruka("OTKUI_KOR_NEMA"))
+        z.Controls("matKV0").caption = CStr(modMaticniIzvor.MatAktivnih())
+        z.Controls("matKV1").caption = CStr(modMaticniIzvor.MatNeaktivnih())
+        Exit Sub
+    End If
     If imaStatus Then
         z.Controls("matKV0").caption = CStr(modMaticniIzvor.MatAktivnih())
         z.Controls("matKV1").caption = CStr(modMaticniIzvor.MatNeaktivnih())
@@ -383,6 +405,18 @@ Private Sub OsveziZonu(ByVal ekran As String, ByVal lista As String)
         z.Controls("matKV1").caption = ChrW(8212)
     End If
 End Sub
+
+' Napomena u zoni. Za prava kaze cija su, za ostalo gde je unos.
+Private Function Napomena(ByVal lista As String) As String
+    If lista <> "PRAVA" Then
+        Napomena = Poruka("OTKUI_MAT_UNOS_LEGACY")
+    ElseIf Len(mKorisnikID) = 0 Then
+        Napomena = Poruka("OTKUI_KOR_BEZ_IZBORA")
+    Else
+        Napomena = Poruka("OTKUI_KOR_PRAVA_ZA") & " " & _
+                   modMaticniKorisnici.KorNaziv(mKorisnikID)
+    End If
+End Function
 
 ' Naslov aktivne liste iz ISTOG spiska koji puni prekidac -- da se natpis u
 ' zoni i natpis na dugmetu ne mogu razici.
@@ -403,7 +437,9 @@ End Function
 Public Function Redovi(ByVal ekran As String, ByVal lista As String, _
                        ByVal filter As String, ByVal q As String) As Variant
     mZonaEkran = ekran
-    Redovi = modMaticniIzvor.MatRedovi(lista, filter, q)
+    ' Kontekst nosi izabranog korisnika -- treba samo listi PRAVA, i samo ona
+    ' ga cita. Izbor je stanje EKRANA, pa se prosledjuje, a ne pamti u izvoru.
+    Redovi = modMaticniIzvor.MatRedovi(lista, filter, q, mKorisnikID)
     ' Zona se osvezava POSLE citanja, iz istog prolaza -- brojke i lista se tako
     ' ne mogu razici. Ekran se prosledjuje jer tri ekrana dele ovo telo, pa se
     ' mora znati CIJU zonu ljuska treba da vrati.
@@ -419,6 +455,13 @@ End Function
 Public Function Radnje(ByVal lista As String) As String
     Dim s As String
     If Len(lista) = 0 Then Exit Function
+    ' Prava se ne uredjuju u editoru: red je oblast, ne zapis, i jedina radnja
+    ' je da se ukljuci ili iskljuci. Ni "Izmeni" ni "Deaktiviraj" ovde nemaju
+    ' sta da urade -- oba bi trazila zapis koji ne postoji.
+    If lista = "PRAVA" Then
+        Radnje = "pravo:OTKUI_BTN_KOR_PRAVO:150:soft:1"
+        Exit Function
+    End If
     If lista <> "CENOVNIK" Then s = "izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1"
     If Len(modMaticniIzvor.MatStatusKolona(lista)) > 0 Then
         If Len(s) > 0 Then s = s & "|"
@@ -452,8 +495,6 @@ Public Function Dogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
 End Function
 
 Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
-    Dim red As Long
-
     If Left$(tag, 2) = "ls" Then
         If Mid$(tag, 3) = lista Then Exit Function
         ' Odlazak sa liste zatvara editor: polja pripadaju sekciji koja se
@@ -465,16 +506,21 @@ Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As B
     End If
 
     If Left$(tag, 4) = "row:" Then
-        red = CLng(val(Mid$(tag, 5)))
-        mIzabranID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+        ZapamtiIzbor lista, CLng(val(Mid$(tag, 5)))
+        ' Izbor korisnika menja SADRZAJ liste prava. Dok se gleda lista
+        ' korisnika mreza se ne cita ponovo (operater bi gubio mesto), ali cim
+        ' se predje na prava, prekidac lista svakako trazi novo citanje.
         Exit Function
     End If
 
     ' Dvoklik otvara izmenu -- jedan potez umesto dva (izaberi red, pa dugme).
     If Left$(tag, 4) = "dbl:" Then
-        red = CLng(val(Mid$(tag, 5)))
-        mIzabranID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
-        OtvoriIzmenu lista
+        ZapamtiIzbor lista, CLng(val(Mid$(tag, 5)))
+        If lista = "PRAVA" Then
+            ObradiDogadjaj = PromeniPravo()
+        Else
+            OtvoriIzmenu lista
+        End If
         Exit Function
     End If
 
@@ -605,14 +651,14 @@ Private Function Akcija(ByVal tag As String, ByVal lista As String) As Boolean
         LogWarn "modMaticniEkran.Akcija", "Radnja bez rednog broja: '" & tag & "'."
         Exit Function
     End If
-    red = CLng(val(p(1)))
-    ' Identitet reda dolazi iz KOLONE 1 (PK), ne iz rednog broja -- posle
-    ' sortiranja i pretrage pozicija ne znaci nista.
-    mIzabranID = Trim$(CStr(modOtkupUI.GridCell(red, 1)))
+    ' Identitet reda dolazi iz KOLONE KOJU SEKCIJA PRIJAVLJUJE, ne iz rednog
+    ' broja -- posle sortiranja i pretrage pozicija ne znaci nista.
+    ZapamtiIzbor lista, CLng(val(p(1)))
     Select Case p(0)
         Case "izmeni": OtvoriIzmenu lista
         Case "status": Akcija = PromeniStatus(lista)
         Case "geo":    OtvoriGeo
+        Case "pravo":  Akcija = PromeniPravo()
         Case Else
             LogWarn "modMaticniEkran.Akcija", "Nepoznata radnja '" & p(0) & "'."
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
@@ -674,6 +720,39 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
         modOtkupUI.ShowToast Poruka("MATU_ERR_CENOVNIK_APPEND"), False
     End If
 End Sub
+
+' Identitet izabranog reda. Kolona se PITA (MatKolonaID) jer je kod prava
+' skrivena: prva kolona tamo nosi lokalizovan naziv oblasti, a ne kljuc.
+'
+' Izbor u listi KORISNICI se pamti i posebno: lista prava se cita za njega, pa
+' mora da prezivi prelazak na tu listu.
+Private Sub ZapamtiIzbor(ByVal lista As String, ByVal red As Long)
+    mIzabranID = Trim$(CStr(modOtkupUI.GridCell(red, modMaticniIzvor.MatKolonaID(lista))))
+    If lista = "KORISNICI" Then mKorisnikID = mIzabranID
+End Sub
+
+' Ukljucuje ili iskljucuje jedno pravo izabranog korisnika. Bez izabranog
+' korisnika nema sta da se menja -- i to se kaze, umesto da dugme tiho ne radi.
+Private Function PromeniPravo() As Boolean
+    Dim odgovor As String, novo As String
+    If Len(mKorisnikID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_KOR_BEZ_IZBORA"), True
+        Exit Function
+    End If
+    If Len(mIzabranID) = 0 Then
+        modOtkupUI.ShowToast Poruka("MATU_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+    odgovor = modMaticniKorisnici.KorPromeniPravo(mKorisnikID, mIzabranID, novo)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        Exit Function
+    End If
+    modOtkupUI.ShowToast modMaticniKorisnici.KorOblastNaziv(mIzabranID) & ": " & _
+        IIf(novo = modMaticniKorisnici.KOR_DA, Poruka("OTKUI_KOR_IMA"), _
+            Poruka("OTKUI_KOR_NEMA")), False
+    PromeniPravo = True
+End Function
 
 Private Function PromeniStatus(ByVal lista As String) As Boolean
     Dim red As Long, odgovor As String, noviStatus As String

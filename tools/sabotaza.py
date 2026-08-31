@@ -2163,7 +2163,7 @@ SABOTAZE = {
         "                \"OTKUI_HDM_ID|KooperantID|txt|84|1\", _\n",
         "                \"OTKUI_HDM_ID|Telefon|txt|84|1\", _\n",
         "T_MatIzvor_OpisSekcijaJePotpun",
-        "kolona 1 svake sekcije NOSI PK",
+        "kolona identiteta svake sekcije stvarno ga nosi",
     ),
     "maticni-tezina-kao-kilogrami": (
         "modMaticniIzvor.bas",
@@ -2266,6 +2266,73 @@ SABOTAZE = {
         "    If True Then   ' SABOTAZA: geo dugme i tamo gde koordinata nema\n",
         "T_MatGeo_TekstIAdrese",
         "geo radnja postoji samo na Parcelama",
+    ),
+    # -------------------------------------- MATICNI: KORISNICI I PRAVA (M4)
+    # Recnik kolone Aktivan u tblKorisnici je "DA"/"NE" i cita ga modAuth
+    # (modAuth.bas:87 neaktivnim smatra SAMO "NE"). Genericko dugme je tu
+    # upisivalo "Aktivan"/"Neaktivan", pa deaktivacija nije sprecavala prijavu.
+    # Sabotaze vracaju tacno taj kvar -- i onaj oblik u kom se ne vidi u listi.
+    "kor-recnik-prenosi-zatecen-tekst": (
+        "modMaticniKorisnici.bas",
+        "    Else\n        DaNe = KOR_NE\n    End If\nEnd Function\n",
+        "    Else\n        DaNe = Trim$(v)   ' SABOTAZA: zatecen tekst prolazi kao vrednost\n    End If\nEnd Function\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "zatecena vrednost se ne prepisuje kao dozvola",
+    ),
+    "kor-prazno-pri-izmeni-je-dozvola": (
+        "modMaticniKorisnici.bas",
+        "        DaNe = IIf(praznoJeDa, KOR_DA, KOR_NE)\n",
+        "        DaNe = KOR_DA   ' SABOTAZA: prazno je uvek dozvola\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prazno pri izmeni nije dozvola",
+    ),
+    "kor-combo-nudi-sifarnik": (
+        "modMaticniKorisnici.bas",
+        "        Case \"@dane_kor\": KorComboStavke = Array(KOR_DA, KOR_NE)\n",
+        "        Case \"@dane_kor\": KorComboStavke = Array(\"Aktivan\", \"Neaktivan\")   ' SABOTAZA\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "combo aktivnosti nudi recnik kolone, ne recnik sifarnika",
+    ),
+    "kor-ime-nije-obavezno": (
+        "modMaticniKorisnici.bas",
+        "    u = Vred(polja, \"korime\")\n    If Len(u) = 0 Then\n",
+        "    u = Vred(polja, \"korime\")\n    If False Then   ' SABOTAZA: prazno ime prolazi\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prazno korisnicko ime se odbija",
+    ),
+    # Lista prava bira red po SKRIVENOJ koloni. Kad bi birala po prvoj, birala
+    # bi po lokalizovanom nazivu oblasti -- pa bi promena prevoda menjala to
+    # KOJE se pravo ukljucuje. Kvar bez ijedne greske u logu.
+    "kor-pravo-po-vidljivoj-koloni": (
+        "modMaticniIzvor.bas",
+        "        MatKolonaID = modMaticniKorisnici.KOR_COL_OBLAST\n",
+        "        MatKolonaID = 1   ' SABOTAZA: identitet iz vidljive kolone\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "lista prava prijavljuje svoju kolonu identiteta",
+    ),
+    "kor-kljuc-oblasti-se-crta": (
+        "modMaticniKorisnici.bas",
+        "        \"OTKUI_HDK_OBLAST|@kljuc|txt|0|4\")\n",
+        "        \"OTKUI_HDK_OBLAST|@kljuc|txt|90|1\")   ' SABOTAZA: kljuc u mrezi\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "kolona identiteta prava se NIKAD ne crta (prioritet 4)",
+    ),
+    "kor-prava-bez-radnje": (
+        "modMaticniEkran.bas",
+        "        Radnje = \"pravo:OTKUI_BTN_KOR_PRAVO:150:soft:1\"\n",
+        "        Radnje = \"\"   ' SABOTAZA: lista prava ostaje bez ijedne radnje\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "prava imaju radnju ukljuci/iskljuci",
+    ),
+    # Adminov red nosi "DA" na svim oblastima zato sto je to POSLEDICA uloge.
+    # Kad uloga padne na Korisnik, prenos tih "DA" daje pun pristup koji niko
+    # nije dodelio -- a modAuth ga cita bukvalno. Kvar bez ijedne poruke.
+    "kor-spustanje-sa-admina-cuva-prava": (
+        "modMaticniKorisnici.bas",
+        "    GasiSvaPrava = (jeUnos Or bioAdmin)\n",
+        "    GasiSvaPrava = jeUnos   ' SABOTAZA: bivsi admin zadrzava svih 12 DA\n",
+        "T_MatKor_RecnikDaNeIPrava",
+        "spustanje sa admina gasi zatecena prava",
     ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane

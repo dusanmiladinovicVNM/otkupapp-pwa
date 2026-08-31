@@ -522,7 +522,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 ### Faza F — Matični podaci
 
 20. **Matični podaci** (`btnMatic` je u novom UI-ju bio nevezan) — plan je u
-    §24; **M0 je urađen** (`v6-ui-187`, §24.13), M1–M5 predstoje. Ne stoji u Fazi E jer nije „još jedan
+    §24; **M0–M4 su urađeni** (`v6-ui-187` … `v6-ui-193`, §24.13–§24.18),
+    ostaje M5. Ne stoji u Fazi E jer nije „još jedan
     ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
     i prevezuje jedini operativan put upisa matičnih podataka. Redosled
     M0–M5 je u §24.10.
@@ -6141,6 +6142,7 @@ ona živi samo u brutu palete).
   append-only istorija korekcija = budući rad za cold-chain dokaz.
 ## 24. Matični podaci — plan prelaska (PREDLOG, nije izvedeno)
 ## 24. Matični podaci — plan prelaska (M0 urađen, M1–M5 predstoje)
+## 24. Matični podaci — plan prelaska (M0–M4 urađeni, M5 predstoji)
 
 > Ovo je jedina sekcija kataloga koja je napisana **pre** posla koji opisuje.
 > Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
@@ -6758,3 +6760,80 @@ u web sesiji.
 **Otvoreno posle M3:** samo **M4** — Korisnici, matrica prava, i nalaz iz
 §24.15 (deaktivacija korisnika ne sprečava prijavu). Posle toga ostaje M5
 (odluka o Podešavanjima i Adminu), gde je podrazumevani odgovor „ostaju".
+
+### 24.18 M4 — Korisnici i prava (`v6-ui-193`)
+
+Poslednja sekcija menija koja je ostajala u formi. Ostala je namerno: `tblKorisnici`
+nosi PIN i matricu prava po oblasti, pa je čekala svoj ekran.
+
+**Ekran ima dve liste, i druga zavisi od prve.** `MAT_KORISNICI` nosi
+**Korisnici** (nalozi) i **Prava** (matrica po oblasti izabranog korisnika).
+Zato su na istom ekranu, a ne dva: prekidač je jedan potez, a promena ekrana bi
+izgubila izbor. Izabrani korisnik se pamti **odvojeno** od izabranog reda
+(`mKorisnikID` vs `mIzabranID`) — čim se na listi Prava izabere red, `mIzabranID`
+postaje oblast, a korisnik mora da ostane.
+
+**Zatvoren je nalaz iz §24.15.** Rečnik kolone `Aktivan` u `tblKorisnici` je
+`"DA"`/`"NE"` i tako ga čita `modAuth` (`modAuth.bas:87` neaktivnim smatra **samo**
+`"NE"`). Generičko dugme „Deaktiviraj" je u nju upisivalo `"Aktivan"`/`"Neaktivan"`
+— u listi je pisalo *Neaktivan*, a **prijava je prolazila**. Od M4 sve sekcije
+idu kroz `modMaticniUnos`, koji za Korisnike delegira `modMaticniKorisnici`, a
+taj piše isključivo `DA`/`NE`.
+
+**Čitač se NIJE dirao.** `modAuth` ostaje kakav jeste: zapisi koji već nose
+`"Neaktivan"` i dalje se čitaju kao aktivni, tačno kao do sada. Menja se samo šta
+se **upisuje** — nijedan korisnik ovom izmenom ne gubi pristup. Poravnanje
+zatečenih vrednosti je odvojen posao (migracija podataka), ne usputna izmena.
+
+**Drugi nalaz, zatvoren usput: spuštanje sa admina.** Adminov red nosi `DA` na
+svih dvanaest oblasti zato što je to **posledica uloge**, a ne izbor koji je neko
+napravio (`OblComboVal` je adminu uvek pisao `DA`). Kad uloga padne na *Korisnik*,
+prenos tih `DA` daje pun pristup koji niko nije dodelio — a `modAuth` ga čita
+bukvalno. Pravilo je izdvojeno u `GasiSvaPrava` i glasi: kad prava nisu izričito
+poslata, **unos i spuštanje sa admina** gase sve pa se dodeljuje ponovo.
+
+**Prava se ne uređuju u editoru.** Red liste Prava je oblast, ne zapis, i jedina
+radnja je *Uključi / isključi*. Zato ta lista nema ni „Izmeni" ni „Deaktiviraj"
+ni „Nova stavka" — uslov se čita iz opisa polja (`MatPolja` za nju ne daje
+editor), ne iz spiska sekcija, pa nova sekcija bez editora ne može da dobije
+dugme koje ne vodi nikuda. Dvanaest combo-a prava ne bi ni stalo u bazen od šest.
+
+**Identitet reda prava je skriven.** Prva kolona nosi *lokalizovan naziv* oblasti,
+a ključ (naziv kolone prava) stoji u koloni 4, prioritet 4 = nikad se ne crta.
+Zato je uveden `MatKolonaID(kljuc)`: sekcija **prijavljuje** koja kolona nosi
+identitet, a `modMaticniEkran` je pita umesto da pretpostavlja kolonu 1. Bez toga
+bi promena prevoda menjala to koje se pravo uključuje — kvar bez ijedne greške u
+logu. Isti obrazac koji `modScrMatSistem` već ima kroz `MS_COL_TAG`.
+
+**Brana je dvostruka.** Pored oblasti `MaticniPodaci`, ekran traži i
+administraciju (`Scr_Dozvoljen` → `modAuth.MozeAdministraciju`). Prava pristupa su
+jedina lista na kojoj se može dodeliti pristup samom sebi. Stavka u sidebaru
+ostaje **vidljiva ali prigušena** — operater treba da vidi da to postoji i da mu
+je zabranjeno, ne da mu nestane. Test seam sme **samo da zatvori** branu.
+
+**Šta je forma izgubila:** `btnDodaj`/`btnIzmeni` grane za Korisnike (~130 linija)
+sada su dva poziva `modMaticniUnos`; `NormalizeUloga` je obrisan (pravilo živi u
+piscu); `OblComboVal` je ostao bez `isAdmin` parametra — pravilo „admin dobija
+sve" bilo je na dva mesta, sada je na jednom. **Zatečena putanja soft-delete-a
+(`SoftDeleteLegacy`) je obrisana**: nijedna sekcija je više ne dostiže, a tiho
+upisivanje pogrešnog rečnika je upravo ono što se ovim zatvara — nepoznat `Tag`
+se sada odbija porukom, isto kao u `btnDodaj`/`btnIzmeni`.
+
+**Forma i ekran zovu istog pisca, ali ne šalju isto.** Forma šalje svih dvanaest
+combo-a prava pod prefiksom `obl:`; ekran ne šalje nijedan, pa mu prava ostaju
+netaknuta i menjaju se iz svoje liste. Pisac zato upisuje **samo one oblasti koje
+je stvarno dobio**.
+
+**Verifikacija:** `vba_check` čist (207 fajlova, 349 sabotaža). Nov test 159 —
+rečnik `DA`/`NE` (uključujući da zatečeni tekst ne prolazi kao dozvola), prazan
+PIN, obavezno i jedinstveno korisničko ime, pravilo spuštanja sa admina, skrivena
+kolona identiteta prava, radnje liste prava, naziv svake oblasti u katalogu, i
+brana ekrana. Testovi 152/154/157 prošireni na `MAT_KORISNICI`; tvrdnja „kolona 1
+nosi PK" generalizovana u „kolona identiteta koju sekcija prijavi stvarno ga
+nosi". Sedam novih sabotaža. **Testovi nisu izvršeni** u web sesiji — nema
+Excela; `Debug → Compile` ostaje ručna kapija.
+
+**Otvoreno posle M4:** samo **M5** — odluka o Podešavanjima i Adminu, gde je
+podrazumevani odgovor „ostaju" (to su alatke, ne matični podaci; već ih otvara
+ekran *Podešavanja i alati*). Van plana ostaje migracija zatečenih
+`"Aktivan"`/`"Neaktivan"` vrednosti u `tblKorisnici` u rečnik `DA`/`NE`.
