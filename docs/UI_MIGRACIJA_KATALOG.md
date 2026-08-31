@@ -6433,7 +6433,7 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 | **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §24.15. Jedan pisac (§24.5). |
 | **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §24.16. |
 | **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §24.17. Cenovnik je stigao već uz M2b. |
-| **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
+| **M4** | `MAT_KORISNICI` — lista + matrica prava | **URAĐENO** (`v6-ui-193`) — v. §24.18. Zatvara i nalaz o deaktivaciji korisnika. |
 | **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
 
 ### 24.11 Verifikacija — šta se meri
@@ -6475,6 +6475,13 @@ kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
 - **Sinhronizacija.** `modStammdatenSync` i `modMasterSync` čitaju iste tabele.
   M2 ne menja šta se upisuje, pa ne bi smeo da ih dotakne — ali to je tvrdnja
   koju test mora da drži, ne pretpostavka.
+  **M4 jeste promenio šta se upisuje** (`tblKorisnici.Aktivan`: `DA`/`NE` umesto
+  `Aktivan`/`Neaktivan`). Provereno je da tu tabelu **ne dodiruje nijedan**
+  sinhronizacioni put — nema pogodaka u `modStammdatenSync`, `modMasterSync`,
+  `gas/` ni `src/`. Jedini čitač je `modAuth`, i on je namerno ostavljen kakav
+  jeste. **Ostaje otvoreno:** migracija zatečenih `"Aktivan"`/`"Neaktivan"`
+  vrednosti u rečnik `DA`/`NE`. Dok se ne uradi, takav zapis se **čita kao
+  aktivan** — što je isto ponašanje kao pre M4, ne regresija.
 
 ### 24.13 M0 — šta je stvarno urađeno (`v6-ui-187`)
 
