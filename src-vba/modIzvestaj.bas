@@ -5497,13 +5497,13 @@ Public Sub StampajSledljivostLanacDoc(ByRef paket As Variant, ByVal mode As Stri
 
     ' Info blok korena -- levo dokument, desno prevoz/period (kao sablon).
     r = r + 1
-    SlpInfo ws, r, 1, Poruka("OTKUI_SLPDF_OTKUP"), NzS(info(0))
-    SlpInfo ws, r, 4, Poruka("OTKUI_SLPDF_VOZAC"), NzS(info(4))
-    SlpInfo ws, r + 1, 1, Poruka("OTKUI_SLPDF_KOOP"), NzS(info(1))
-    SlpInfo ws, r + 1, 4, Poruka("OTKUI_SLPDF_KUPAC"), NzS(info(5))
-    SlpInfo ws, r + 2, 1, Poruka("OTKUI_SLPDF_STANICA"), NzS(info(2))
-    SlpInfo ws, r + 2, 4, Poruka("OTKUI_SLPDF_PERIOD"), NzS(info(6))
-    SlpInfo ws, r + 3, 1, Poruka("OTKUI_SLPDF_DATUM"), NzS(info(3))
+    SlpInfo ws, r, 1, Poruka("OTKUI_SLPDF_OTKUP"), info(0)
+    SlpInfo ws, r, 4, Poruka("OTKUI_SLPDF_VOZAC"), info(4)
+    SlpInfo ws, r + 1, 1, Poruka("OTKUI_SLPDF_KOOP"), info(1)
+    SlpInfo ws, r + 1, 4, Poruka("OTKUI_SLPDF_KUPAC"), info(5)
+    SlpInfo ws, r + 2, 1, Poruka("OTKUI_SLPDF_STANICA"), info(2)
+    SlpInfo ws, r + 2, 4, Poruka("OTKUI_SLPDF_PERIOD"), info(6)
+    SlpInfo ws, r + 3, 1, Poruka("OTKUI_SLPDF_DATUM"), info(3)
     r = r + 5
 
     ' Tabela karika.
@@ -5536,9 +5536,9 @@ Public Sub StampajSledljivostLanacDoc(ByRef paket As Variant, ByVal mode As Stri
     r = hdr + nR + 2
 
     ' Kompletnost -- bold; prazna oznaka je i ovde dobra vest, receno.
-    ws.cells(r, 1).value = IIf(Len(NzS(info(7))) = 0, _
+    ws.cells(r, 1).value = IIf(Len(info(7)) = 0, _
         Poruka("OTKUI_SLPDF_POTPUN"), _
-        Poruka("OTKUI_SLPDF_STAO") & " " & NzS(info(7)))
+        Poruka("OTKUI_SLPDF_STAO") & " " & info(7))
     ws.cells(r, 1).Font.Bold = True
     r = r + 2
 
@@ -5566,7 +5566,7 @@ Public Sub StampajSledljivostLanacDoc(ByRef paket As Variant, ByVal mode As Stri
             DocPrintWs ws, mode
         Case Else
             DocExportPdf ws, ThisWorkbook.path & "\Sledljivost_Lanac_" & _
-                Replace(NzS(info(0)), "/", "-") & ".pdf", True
+                Replace(info(0), "/", "-") & ".pdf", True
     End Select
     Exit Sub
 
