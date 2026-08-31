@@ -1556,7 +1556,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' --- Sledljivost smoke krug 2: povezivanje + sablon PDF ---
     UpsertRow lo, existing, "OTKUI_BTN_SL_POVEZI", "Pove" & ChrW(382) & "i" & ChrW(8230)
     UpsertRow lo, existing, "OTKUI_BTN_SL_AUTO", "Pove" & ChrW(382) & "i automatski"
-    UpsertRow lo, existing, "OTKUI_BTN_SL_SABLON", "Sledljivost zbirne (PDF)"
+    UpsertRow lo, existing, "OTKUI_BTN_SL_SABLON", "Sledljivost (PDF)"
     UpsertRow lo, existing, "OTKUI_HDS_KLASAKOD", "KLASA KOD"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa:"
     UpsertRow lo, existing, "OTKUI_MSG_SL_NEMA_KANDIDATA", ChrW(10007) & " Nema nestorniranih otpremnica istog datuma na stanici otkupa"
@@ -1565,6 +1565,12 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_NEUSPEH", ChrW(10007) & " Povezivanje nije uspelo " & ChrW(8212) & " ciljna otpremnica ne postoji ili je stornirana"
     UpsertRow lo, existing, "OTKUI_ERR_SL_SAMO_NEPOVEZANI", ChrW(10007) & " Povezivanje je samo za redove 'Otkup bez otpremnice'"
     UpsertRow lo, existing, "OTKUI_ERR_SL_NEMA_ZBIRNE", ChrW(10007) & " Izabrani red nema broj zbirne " & ChrW(8212) & " izaberi red sa zbirnom"
+    ' --- Sledljivost smoke krug 3: mete (zbirna / paleta / prerada) ---
+    UpsertRow lo, existing, "OTKUI_MSG_SL_METE_PROMPT", "Upi" & ChrW(353) & "i redni broj dokumenta sledljivosti:"
+    UpsertRow lo, existing, "OTKUI_SL_META_ZBIRNA", "Zbirna (" & ChrW(353) & "ablon)"
+    UpsertRow lo, existing, "OTKUI_SL_META_PALETA", "Paleta " & ChrW(8212) & " sve" & ChrW(382) & "a roba"
+    UpsertRow lo, existing, "OTKUI_SL_META_PRERADA", "Prerada " & ChrW(8212) & " gotov proizvod"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_STAMPA_NEUSPEH", ChrW(10007) & " " & ChrW(352) & "tampa sledljivosti nije uspela " & ChrW(8212) & " vidi ErrorLog"
     InvalidateCache
 End Sub
 

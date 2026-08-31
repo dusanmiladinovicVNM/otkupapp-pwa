@@ -389,7 +389,7 @@ Public Sub RunAllTests()
     RunOne 147
     RunOne 148
     RunOne 149
-    ' 150-156 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
+    ' 150-157 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
     ' iz istog razloga kao 127-132 i 133-149 iznad.
     RunOne 150
     RunOne 151
@@ -398,6 +398,7 @@ Public Sub RunAllTests()
     RunOne 154
     RunOne 155
     RunOne 156
+    RunOne 157
     RunOne 124
     RunOne 125
     RunOne 126
@@ -591,6 +592,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 154: TestName = "T_Sled_KesPretragaIHint"
         Case 155: TestName = "T_ZonaSled_PoljaIRaspored"
         Case 156: TestName = "T_Sled_PovezivanjeKandidati"
+        Case 157: TestName = "T_Sled_MeteSledljivosti"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -755,6 +757,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 154: T_Sled_KesPretragaIHint
         Case 155: T_ZonaSled_PoljaIRaspored
         Case 156: T_Sled_PovezivanjeKandidati
+        Case 157: T_Sled_MeteSledljivosti
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -11691,4 +11694,53 @@ Private Sub T_Sled_PovezivanjeKandidati()
     If r > 0 Then AssertEq CStr(redovi(r, 9)), "OTKUP-BEZ-OTPREMNICE", _
                            "red nepovezanog nosi klasa-kod za rutu radnje"
     modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 157. Mete sledljivosti (smoke krug 3): kojim dokumentom se sledljivost
+' robe STVARNO dokazuje -- zbirna (roba prodata dalje kao sveza), paleta
+' (roba u magacinu sveze robe -> paletni list), prerada (roba preradjena /
+' u magacinu preradjene robe -> preradni list). Sve su podatkovne veze:
+' paletna stavka nosi BrojZbirne, preradna stavka PaletaID (join kao
+' modIntegritet D2). Fail-closed: stornirana paleta nije meta, preradjena
+' paleta nije "sveza" meta. Samo citanje.
+Private Sub T_Sled_MeteSledljivosti()
+    Dim m As Variant, i As Long
+    Dim imaPal As Boolean, imaX As Boolean
+    Dim imaPre As Boolean, imaSvezu As Boolean
+
+    ' Potpun SLED lanac: roba i prodata (zbirna) i na zatvorenoj svezoj
+    ' paleti; STORNIRANA paleta iste zbirne (PAL-SLED-X, stavka joj NIJE
+    ' stornirana) ne sme da udje.
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLED")
+    AssertEq IsArray(m), True, "SLED zbirna ima mete"
+    AssertEq CStr(m(1, 1)), "ZBIRNA", "prva meta je uvek zbirna (sablon)"
+    For i = 1 To UBound(m, 1)
+        If CStr(m(i, 2)) = "PAL-SLED-1" Then imaPal = True
+        If CStr(m(i, 2)) = "PAL-SLED-X" Then imaX = True
+    Next i
+    AssertEq imaPal, True, "sveza paleta sa robom te zbirne je meta"
+    AssertEq imaX, False, "stornirana paleta nije meta sledljivosti"
+    AssertEq UBound(m, 1), 2, "SLED: tacno zbirna + jedna sveza paleta"
+
+    ' SLN lanac: paleta je PRERADJENA -> meta je preradni list, ne paleta.
+    imaPal = False
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLN")
+    AssertEq IsArray(m), True, "SLN zbirna ima mete"
+    For i = 1 To UBound(m, 1)
+        If CStr(m(i, 2)) = "PAL-SLED-2" Then imaSvezu = True
+        If CStr(m(i, 2)) = "PRE-SLED-1" Then imaPre = True
+        If CStr(m(i, 1)) = "PALETA" Then imaPal = True
+    Next i
+    AssertEq imaSvezu, False, "preradjena paleta nije meta 'sveze robe'"
+    AssertEq imaPal, False, "SLN nema nijednu svezu metu palete"
+    AssertEq imaPre, True, "prerada nad preradjenom paletom je meta"
+    AssertEq UBound(m, 1), 2, "SLN: tacno zbirna + jedna prerada"
+    AssertEq CStr(m(2, 3)), "41/2026", "prikaz prerade je broj/godina"
+
+    ' Prazan broj nema mete; nepoznat broj ima SAMO zbirnu -- postojanje
+    ' se ne izmislja, sablon ce sam reci NEMA.
+    AssertEq IsArray(modIzvestaj.ReportSledljivostMete("")), False, _
+             "prazan broj zbirne nema mete"
+    m = modIzvestaj.ReportSledljivostMete("ZB-NEMA-GA")
+    AssertEq UBound(m, 1), 1, "nepoznat broj: samo zbirna meta"
 End Sub

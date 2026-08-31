@@ -5000,7 +5000,7 @@ nikad prećutana.
 | `TraceByZbirna` (zbirna → otkupi → kooperanti/parcele) | lista **PARCELE** (ista zrna kao LANAC, sertifikaciona projekcija: kooperant, BPG, kat. broj, kultura, ha, GGAP) |
 | `cmbZbirna` filter po zbirnoj | **pretraga ljuske** — haystack nosi SVE brojeve lanca (v. 24.2/B) |
 | `GetUnlinkedOtkupi` (NEPOVEZANI OTKUPI lista) | klasa `OTKUP-BEZ-OTPREMNICE` u listi **NEPOTPUNI** + oznaka `nepovezan` u LANAC-u |
-| `PrintTracePDF` (FillSledljivostSablon) | dugme zone **„Lanac (PDF)"** — house PDF lanca IZABRANOG reda sa kontekst-linijom (koren · opseg · kompletnost) — i, od drugog smoke-a (S4), dugme **„Sledljivost zbirne (PDF)"**: POSTOJEĆI štampani šablon za zbirnu izabranog reda, kroz izvučenu rutu `modIzvestaj.StampajSledljivostZbirne`. Obe poštuju `SLEDLJIVOST_PRINT_MODE`, OFF se prijavljuje. Forma zadržava svoju kopiju rute, netaknuta (Faza B) |
+| `PrintTracePDF` (FillSledljivostSablon) | dugme zone **„Lanac (PDF)"** — house PDF lanca IZABRANOG reda sa kontekst-linijom (koren · opseg · kompletnost) — i, od drugog/trećeg smoke-a (S4/S5), dugme **„Sledljivost (PDF)"**: mete po tome gde roba jeste (`ReportSledljivostMete`) — zbirna kroz POSTOJEĆI šablon (izvučena ruta `modIzvestaj.StampajSledljivostZbirne`), sveža paleta kroz paletni list, prerada kroz preradni list. `SLEDLJIVOST_PRINT_MODE` se poštuje, OFF se prijavljuje. Forma zadržava svoju kopiju rute, netaknuta (Faza B) |
 | `btnAutoLink` / `btnPovezi` (upis!) | preneto u drugom krugu (S3): dugme **„Poveži automatski"** na NEPOTPUNI (isti `AutoLinkOtkupOtpremnica_TX`, toast sa brojem) + radnja **„Poveži…"** nad redom klase `OTKUP-BEZ-OTPREMNICE` (kandidati `GetOtpremnicaKandidatiZaOtkup` — ista stanica + isti datum; upis `ReassignOtkupToOtpremnica_TX`) |
 | — (legacy nema) | lista **LANAC**: 1 red = 1 otkupni list sa razrešenim karikama kao kolonama; lista **NEPOTPUNI**: 1 red = 1 problem karike (7 klasa); „Štampaj izveštaj" (house PDF aktivne liste) |
 
@@ -5167,8 +5167,12 @@ kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
   kao dorada, ne izmišlja se za v1.
 - **Vrednost (RSD) niz lanac** — v1 prati robu (kg), ne novac; podnožje
   nosi kg, „Vrednost 0,00" slot ostaje kao na ambalažnim listama.
-- **Palete** nisu karika lanca (uporedni tok — `docs/DOMEN/README.md`);
-  paletna sledljivost ostaje na ekranu Palete.
+- ~~Paletna sledljivost ostaje na ekranu Palete~~ — **oborio treći smoke
+  (S5)**: izveštaj o sledljivosti se dokazuje dokumentom na kome roba
+  STVARNO jeste (zbirna / paleta / prerada), pa dugme „Sledljivost (PDF)"
+  sada nudi sve tri mete (v. 24.7/S5). Paletna OPERATIVA (zatvaranje,
+  storno, prevezivanje, fizička štampa) i dalje živi isključivo na
+  ekranu Palete; palete nisu postale karika lanca u mreži.
 
 ### 24.7 Smoke: nalazi operatera (ispravke u istom PR-u)
 
@@ -5215,16 +5219,42 @@ reda (iz bilo koje liste; red bez zbirne odbija porukom) puni ISTI
 zbirne tog broja, zbir kg prijemnica). House „Lanac (PDF)" ostaje —
 dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
 
+**S5 — „izveštaj o sledljivosti ide za zbirnu, paletu ili prerađenu
+paletu — po tome gde je roba"** (treći krug). Šablon zbirne dokazuje
+sledljivost robe prodate dalje kao SVEŽE; roba u magacinu sveže robe
+dokazuje se PALETNIM listom, a roba prerađena (prodata kao prerađena
+ili u magacinu prerađene robe) PRERADNIM listom — ta dva dokumenta su u
+legacy toku već nosila kooperante. Dugme (preimenovano u **„Sledljivost
+(PDF)"**) sada za zbirnu izabranog reda skuplja **mete** kroz novi
+read-only `modIzvestaj.ReportSledljivostMete`: red 1 je uvek zbirna
+(šablon), zatim nestornirane NEprerađene palete čija stavka nosi taj
+`BrojZbirne` (podatkovna veza — paletna stavka od prvog dana čuva broj
+zbirne), pa prerade čija stavka pokazuje na nađene palete (join po
+`PaletaID`, isto pravilo kao `modIntegritet` D2). Ništa se ne
+premošćuje: prerađena paleta bez preradne stavke ne izmišlja metu
+(D2 je prijavljuje), stornirana paleta nije meta ni kad joj je stavka
+aktivna. Jedna meta ide odmah; više njih kroz izbor rednim brojem
+(InputBox obrazac „Poveži…", do 15 uz prijavljen preliv). Rutiranje:
+zbirna kroz postojeću rutu (poštuje ceo `SLEDLJIVOST_PRINT_MODE`);
+paletni/preradni list kao PDF (`ExportPaletniListPDF` /
+`ExportPreradaPDF` — dugme je „(PDF)", fizička štampa tih listova
+ostaje na ekranu Palete). OFF režim se prijavljuje na ulazu. Test 157 +
+sabotaže `sledljivost-mete-storniranu-paletu` i
+`sledljivost-mete-preradjena-kao-sveza`; fixture dobija zatvorenu svežu
+paletu na SLED lancu, prerađenu paletu sa preradom na SLN lancu i
+storniranu paletu kao negativ (sve ZATVORENE — otvorene bi ušle u
+gajbe-do-zatvaranja račun ljuske).
+
 ### 24.8 Verifikacija
 
-- `RunAllTests` (sedam novih testova 150–156, registrovani u sva tri
+- `RunAllTests` (osam novih testova 150–157, registrovani u sva tri
   registra, izvršavaju se PRE 124–126; 156 je NAMERNO samo čitanje —
   upis povezivanja bi pojeo vozilo `OTK-NAL-DJ` koje test 152 meri kao
   „nepovezan"), `RunBankaImportTestSuite` (Platni nalozi bit-identični —
-  SLED blokovi su zatvoreni), `vba_check` + `--self-test`,
-  `sabotaza --proveri-sidra` + `--self-test`, `who_writes --check` —
-  rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 20 sabotaža,
+  SLED blokovi su zatvoreni; ponovljeno i posle paletnih fixture vozila
+  kruga 3), `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
+  `--self-test`, `who_writes --check` — rezultati u PR-u.
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 22 sabotaže,
   svaka obara tačno svoj imenovani test i vraća se bit-identično.
 - Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
@@ -5236,5 +5266,6 @@ dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
   traka, obe štampe, ruta „Štampaj dokument" po vrsti karike, NEPOTPUNI
   nad pravim podacima (očekuje se mnogo nefakturisanih — to je status,
   ne kvar); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
-  pravim nepovezanima (upis!) i „Sledljivost zbirne (PDF)" protiv iste
-  štampe iz stare forme.
+  pravim nepovezanima (upis!) i šablon zbirne protiv iste štampe iz
+  stare forme; iz trećeg kruga: „Sledljivost (PDF)" nad redom čija je
+  roba na paleti / prerađena — izbor mete i tačan paletni/preradni list.

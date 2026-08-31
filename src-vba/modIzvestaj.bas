@@ -81,6 +81,12 @@ Public Const SLEDP_BEZ_PRIJEMA As String = "ZBIRNA-BEZ-PRIJEMA"
 Public Const SLEDP_NEFAKTURISANA As String = "PRIJEMNICA-BEZ-FAKTURE"
 Public Const SLEDP_KG_RAZLIKA As String = "KG-RAZLIKA"
 
+' Tipovi meta sledljivosti (ReportSledljivostMete, kolona 1) -- ASCII
+' kodovi za rutiranje stampe; prikazno ime daje ekran kroz modPoruke.
+Public Const SLEDM_ZBIRNA As String = "ZBIRNA"
+Public Const SLEDM_PALETA As String = "PALETA"
+Public Const SLEDM_PRERADA As String = "PRERADA"
+
 ' Vrsta karike "zbirna" za rutu stampe u NEPOTPUNI listi ekrana. Zbirna
 ' nema svoju stampu, pa vrsta postoji da radnja ume da ODBIJE s razlogom
 ' (legacy Case Else obrazac) -- ne da bi se stampalo.
@@ -5138,6 +5144,143 @@ Public Function StampajSledljivostZbirne(ByVal brojZbirne As String) As String
     End Select
 
     StampajSledljivostZbirne = ""
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' ============================================================
+' METE SLEDLJIVOSTI za jednu zbirnu (smoke krug 3): kojim dokumentom se
+' sledljivost te robe STVARNO dokazuje.
+'   - ZBIRNA: prevoz -- sablon (roba prodata dalje kao sveza).
+'   - PALETA: nestornirana, NEpreradjena paleta cija stavka nosi taj
+'     BrojZbirne (roba u magacinu sveze robe) -> paletni list.
+'   - PRERADA: nestornirana prerada cija stavka (join po PaletaID, kao
+'     modIntegritet D2) pokazuje na nadjenu paletu (roba preradjena /
+'     u magacinu preradjene robe) -> preradni list.
+' NISTA se ne premoscuje: veza ide iskljucivo kroz BrojZbirne na
+' paletnoj stavci i PaletaID na preradnoj stavci; preradjena paleta bez
+' preradne stavke ne izmislja metu (fail-closed, D2 je prijavljuje).
+'
+' Returns: 2D Array (1..N, 1..4) ili Empty (prazan broj):
+'   1 Tip (SLEDM_*)  2 ID (broj zbirne / PaletaID / PreradaID)
+'   3 Broj (prikaz: "31/2026")  4 Opis (status/tip + kg)
+' Red 1 je UVEK zbirna -- to je danasnje ponasanje dugmeta.
+' ============================================================
+Public Function ReportSledljivostMete(ByVal brojZbirne As String) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostMete"
+    On Error GoTo EH
+
+    If Len(Trim$(brojZbirne)) = 0 Then Exit Function
+
+    Dim rows As Collection: Set rows = New Collection
+    rows.Add Array(SLEDM_ZBIRNA, Trim$(brojZbirne), Trim$(brojZbirne), "")
+
+    ' 1) Palete cija stavka nosi ovaj broj zbirne.
+    Dim palIDs As Object: Set palIDs = CreateObject("Scripting.Dictionary")
+    palIDs.CompareMode = vbTextCompare
+    Dim stData As Variant, i As Long
+    stData = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(stData) Then stData = ExcludeStornirano(stData, TBL_PALETA_STAVKA)
+    If IsArray(stData) Then
+        Dim cStPal As Long, cStZbr As Long
+        cStPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        cStZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
+        For i = 1 To UBound(stData, 1)
+            If Trim$(SledTxt(stData(i, cStZbr))) = Trim$(brojZbirne) Then
+                If Len(Trim$(SledTxt(stData(i, cStPal)))) > 0 Then _
+                    palIDs(Trim$(SledTxt(stData(i, cStPal)))) = True
+            End If
+        Next i
+    End If
+
+    Dim nadjene As Object: Set nadjene = CreateObject("Scripting.Dictionary")
+    nadjene.CompareMode = vbTextCompare
+    If palIDs.count > 0 Then
+        Dim palData As Variant
+        palData = GetTableData(TBL_PALETA)
+        If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)
+        If IsArray(palData) Then
+            Dim cPalId As Long, cPalBroj As Long, cPalGod As Long
+            Dim cPalStat As Long, cPalPre As Long, cPalNeto As Long
+            cPalId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC)
+            cPalBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, SRC)
+            cPalGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, SRC)
+            cPalStat = RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC)
+            cPalPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC)
+            cPalNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, SRC)
+            For i = 1 To UBound(palData, 1)
+                If palIDs.Exists(Trim$(SledTxt(palData(i, cPalId)))) Then
+                    nadjene(Trim$(SledTxt(palData(i, cPalId)))) = True
+                    ' Preradjena paleta NIJE "u magacinu sveze robe" -- njena
+                    ' sledljivost je preradni list (prolaz 2).
+                    If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> "DA" Then
+                        rows.Add Array(SLEDM_PALETA, _
+                            Trim$(SledTxt(palData(i, cPalId))), _
+                            SledTxt(palData(i, cPalBroj)) & "/" & _
+                                SledTxt(palData(i, cPalGod)), _
+                            SledTxt(palData(i, cPalStat)) & " " & ChrW(183) & _
+                                " " & FmtKolicina(SledDbl(palData(i, cPalNeto))) & _
+                                " kg")
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    ' 2) Prerade nad nadjenim paletama (join po PaletaID).
+    If nadjene.count > 0 Then
+        Dim preIDs As Object: Set preIDs = CreateObject("Scripting.Dictionary")
+        preIDs.CompareMode = vbTextCompare
+        Dim prsData As Variant
+        prsData = GetTableData(TBL_PRERADA_STAVKA)
+        If IsArray(prsData) Then prsData = ExcludeStornirano(prsData, TBL_PRERADA_STAVKA)
+        If IsArray(prsData) Then
+            Dim cPrsPre As Long, cPrsPal As Long
+            cPrsPre = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, SRC)
+            cPrsPal = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, SRC)
+            For i = 1 To UBound(prsData, 1)
+                If nadjene.Exists(Trim$(SledTxt(prsData(i, cPrsPal)))) Then
+                    If Len(Trim$(SledTxt(prsData(i, cPrsPre)))) > 0 Then _
+                        preIDs(Trim$(SledTxt(prsData(i, cPrsPre)))) = True
+                End If
+            Next i
+        End If
+        If preIDs.count > 0 Then
+            Dim preData As Variant
+            preData = GetTableData(TBL_PRERADA)
+            If IsArray(preData) Then preData = ExcludeStornirano(preData, TBL_PRERADA)
+            If IsArray(preData) Then
+                Dim cPreId As Long, cPreBroj As Long, cPreGod As Long
+                Dim cPreTip As Long, cPreNeto As Long
+                cPreId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+                cPreBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+                cPreGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+                cPreTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+                cPreNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+                For i = 1 To UBound(preData, 1)
+                    If preIDs.Exists(Trim$(SledTxt(preData(i, cPreId)))) Then
+                        rows.Add Array(SLEDM_PRERADA, _
+                            Trim$(SledTxt(preData(i, cPreId))), _
+                            SledTxt(preData(i, cPreBroj)) & "/" & _
+                                SledTxt(preData(i, cPreGod)), _
+                            SledTxt(preData(i, cPreTip)) & " " & ChrW(183) & _
+                                " " & FmtKolicina(SledDbl(preData(i, cPreNeto))) & _
+                                " kg")
+                    End If
+                Next i
+            End If
+        End If
+    End If
+
+    Dim res() As Variant, r As Variant, n As Long
+    ReDim res(1 To rows.count, 1 To 4)
+    For Each r In rows
+        n = n + 1
+        res(n, 1) = r(0): res(n, 2) = r(1): res(n, 3) = r(2): res(n, 4) = r(3)
+    Next r
+    ReportSledljivostMete = res
     Exit Function
 
 EH:

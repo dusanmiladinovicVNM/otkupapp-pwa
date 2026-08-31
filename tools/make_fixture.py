@@ -1350,6 +1350,31 @@ SEED = {
          "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
          "KapacitetGajbica": 100, "NetoKg": 250, "Status": "OTVORENA"},
+        # EKRAN SLEDLJIVOST, smoke krug 3 (mete sledljivosti): roba potpunog
+        # SLED lanca lezi i na ZATVORENOJ svezoj paleti (meta "u magacinu
+        # sveze robe"). ZATVORENA namerno: otvorene palete iste vrste ulaze u
+        # GajbeDoZatvaranjaPaleteInfo racun ljuske, zatvorene ne diraju nista.
+        # Brojevi 31-33 su van svih postojecih (1,2,3,11,12,21) i ne pomeraju
+        # nijedan kolizioni par.
+        {"PaletaID": "PAL-SLED-1", "BrojPalete": 31, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 25,
+         "KapacitetGajbica": 100, "NetoKg": 250, "Status": "ZATVORENA"},
+        # Roba SLN lanca (nefakturisana prijemnica) je PRERADJENA -- paleta
+        # postoji ali NIJE meta "sveze robe"; njena sledljivost je prerada.
+        {"PaletaID": "PAL-SLED-2", "BrojPalete": 32, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 15,
+         "KapacitetGajbica": 100, "NetoKg": 150, "Status": "ZATVORENA",
+         "Preradjeno": "Da"},
+        # STORNIRANA paleta na istoj SLED zbirnoj -- ne sme biti meta
+        # (negativ za filter storna; stavka joj NIJE stornirana, filter mora
+        # da padne na paleti).
+        {"PaletaID": "PAL-SLED-X", "BrojPalete": 33, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 10,
+         "KapacitetGajbica": 100, "NetoKg": 99, "Status": "ZATVORENA",
+         "Stornirano": "Da"},
     ],
     "tblPaletaStavka": [
         # ISTA fizicka paleta, dva dokumenta istog broja.
@@ -1382,6 +1407,20 @@ SEED = {
          "BrojPrijemnice": PRIJEMNICA_STORNO2, "BrojZbirne": ZBIRNA2,
          "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-TEST-C2",
          "Klasa": "I", "VrstaVoca": VRSTA2, "SortaVoca": SORTA},
+        # SLEDLJIVOST mete: stavke nose BrojZbirne -- podatkovna veza
+        # zbirna -> paleta koju ReportSledljivostMete cita (bez premoscivanja).
+        {"StavkaID": "PST-SLED-1", "PaletaID": "PAL-SLED-1",
+         "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
+         "BrojGajbica": 25, "NetoKg": 250, "PrijemnicaID": "PRJ-SLED-1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-SLED-2", "PaletaID": "PAL-SLED-2",
+         "BrojPrijemnice": SLED_PRIJ_BROJ_N, "BrojZbirne": SLED_ZBIRNA_N,
+         "BrojGajbica": 15, "NetoKg": 150, "PrijemnicaID": "PRJ-SLED-N",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-SLED-X", "PaletaID": "PAL-SLED-X",
+         "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
+         "BrojGajbica": 10, "NetoKg": 99, "PrijemnicaID": "PRJ-SLED-1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
     # prijemnicom: detekcija ispravke prijemnice pita operatera kroz MsgBox, a
@@ -1453,6 +1492,17 @@ SEED = {
         {"PreradaID": PRERADA_STARA_ID, "BrojPrerade": PRERADA_KOLIZIJA_BROJ,
          "Godina": 2025, "Datum": FIXTURE_DATE, "NetoIzlazKg": 200,
          "BrojKutija": 20, "BrojKesa": 40, "TipGotovogProizvoda": "Rinfuz"},
+        # SLEDLJIVOST mete: prerada nad PAL-SLED-2 -- roba SLN lanca prodata/
+        # uskladistena kao PRERADJENA. Broj 41 van kolizionog para (7).
+        {"PreradaID": "PRE-SLED-1", "BrojPrerade": 41,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 150,
+         "BrojKutija": 15, "BrojKesa": 30, "TipGotovogProizvoda": "Rinfuz"},
+    ],
+    # Prve stavke prerade u fixture-u: kanonski join je PaletaID (kao
+    # modIntegritet D2), BrojPalete je samo labela.
+    "tblPreradaStavka": [
+        {"StavkaID": "PRS-SLED-1", "PreradaID": "PRE-SLED-1",
+         "PaletaID": "PAL-SLED-2", "BrojPalete": 32, "NetoKg": 150},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",

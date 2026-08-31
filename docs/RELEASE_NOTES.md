@@ -6665,10 +6665,12 @@ ijedne izmišljene veze.
   svakoj (vozač, stanica, parcela, kupac — ono što u redu ne stane).
 - **Štampe:** „Štampaj izveštaj" (kućni PDF tačno onoga što je na
   ekranu, sa periodom i filterom u naslovu), „Lanac (PDF)" za izabrani
-  red — karike kao redovi + linija kompletnosti — i „Sledljivost zbirne
-  (PDF)" po postojećem šablonu iz stare forme. Radnja „Štampaj
-  dokument" štampa dokument karike (otkupni list / otpremnicu /
-  prijemnicu; zbirna nema svoju štampu i to se kaže).
+  red — karike kao redovi + linija kompletnosti — i „Sledljivost (PDF)"
+  koje nudi dokument po tome gde roba stvarno jeste: šablon zbirne
+  (prodato dalje kao sveže), paletni list (u magacinu sveže robe) ili
+  preradni list (prerađeno). Radnja „Štampaj dokument" štampa dokument
+  karike (otkupni list / otpremnicu / prijemnicu; zbirna nema svoju
+  štampu i to se kaže).
 - Brojke iznad mreže: potpuni lanci / nepotpune karike u periodu.
 
 ### Pravila koja ekran drži (i testovi ih čuvaju)
@@ -6718,12 +6720,28 @@ ijedne izmišljene veze.
   štampe (OFF se prijavljuje, ne ćuti). Kućni „Lanac (PDF)" ostaje —
   dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
 
+### Doterano posle trećeg smoke-a
+
+- **Sledljivost po tome gde roba stvarno jeste** („izveštaj ide za
+  zbirnu, paletu ili prerađenu paletu"): dugme je sada **„Sledljivost
+  (PDF)"** i za izabrani red ponudi sve dokumente kojima se sledljivost
+  te robe dokazuje — šablon zbirne ako je roba prodata dalje kao sveža,
+  paletni list za svaku svežu paletu u magacinu na kojoj ta roba leži,
+  preradni list ako je roba prerađena (prodata kao prerađena ili u
+  magacinu prerađene robe). Jedan dokument izlazi odmah; više njih se
+  bira rednim brojem (kao kod „Poveži…"). Veze su isključivo
+  podatkovne: paletna stavka od prvog dana nosi broj zbirne, preradna
+  stavka svoju paletu — ništa se ne pogađa; stornirana paleta nije
+  ponuda, prerađena se ne nudi kao „sveža". Paletna operativa
+  (zatvaranje, storno, fizička štampa listova) ostaje na ekranu Palete.
+
 ### Verifikacija
 
-- Sedam novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
+- Osam novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
   fail-closed oznake, identitet, keš/pretraga, zona, kandidati
-  povezivanja) + **20 namernih kvarova** koji obaraju po tačno jedan
-  imenovani test i vraćaju se bit-identično (dvosmerni dokaz).
+  povezivanja, mete sledljivosti) + **22 namerna kvara** koji obaraju
+  po tačno jedan imenovani test i vraćaju se bit-identično (dvosmerni
+  dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`

@@ -3921,6 +3921,27 @@ SABOTAZE = {
         "T_Sled_PovezivanjeKandidati",
         "kandidati su samo sa stanice otkupa",
     ),
+    # Mete sledljivosti bez storno filtera na paleti -- stornirana paleta
+    # (PAL-SLED-X, cija stavka NIJE stornirana) postala bi dokument
+    # sledljivosti nepostojece robe.
+    "sledljivost-mete-storniranu-paletu": (
+        "modIzvestaj.bas",
+        "        palData = GetTableData(TBL_PALETA)\n"
+        "        If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)\n",
+        "        palData = GetTableData(TBL_PALETA)\n"
+        "        ' SABOTAZA: stornirane palete ulaze u mete\n",
+        "T_Sled_MeteSledljivosti",
+        "stornirana paleta nije meta sledljivosti",
+    ),
+    # Preradjena paleta ponudjena kao "sveza roba" -- operater bi dobio
+    # paletni list za robu koje u magacinu sveze robe vise nema.
+    "sledljivost-mete-preradjena-kao-sveza": (
+        "modIzvestaj.bas",
+        "                    If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> \"DA\" Then\n",
+        "                    If True Then   ' SABOTAZA: preradjena kao sveza\n",
+        "T_Sled_MeteSledljivosti",
+        "preradjena paleta nije meta 'sveze robe'",
+    ),
 }
 
 

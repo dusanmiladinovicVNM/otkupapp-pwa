@@ -278,7 +278,7 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     Select Case tag
         Case "scrSlPrint": StampajIzvestaj
         Case "scrSlLanac": StampajLanacIzabranog
-        Case "scrSlSab":   StampajSablonZbirne
+        Case "scrSlSab":   StampajSledljivostReda
         Case "scrSlAuto":  ObradiKlik = AutoPovezi()
     End Select
 End Function
@@ -388,20 +388,91 @@ Private Function AutoPovezi() As Boolean
     AutoPovezi = (n > 0)
 End Function
 
-' Sledljivost PDF po POSTOJECEM sablonu (WS_SLEDLJIVOST_SABLON) za zbirnu
-' izabranog reda -- deljena ruta modIzvestaj.StampajSledljivostZbirne
-' (smoke krug 2: "sledljivost ima vec definisanu formu za pdf"). OFF rezim
-' i prazan rezultat se PRIJAVLJUJU.
-Private Sub StampajSablonZbirne()
-    Dim ishod As String
+' Sledljivost izabranog reda (smoke krug 3): dokument kojim se sledljivost
+' te robe STVARNO dokazuje -- zbirna (sablon, roba prodata kao sveza),
+' paleta (paletni list, roba u magacinu sveze robe) ili prerada (preradni
+' list, roba preradjena / u magacinu preradjene robe). Mete daje
+' modIzvestaj.ReportSledljivostMete (samo podatkovne veze, nista se ne
+' izmislja); jedna meta ide odmah, vise njih kroz izbor rednim brojem
+' (isti InputBox obrazac kao "Povezi..."). OFF rezim i prazno se
+' PRIJAVLJUJU.
+Private Sub StampajSledljivostReda()
+    Dim mete As Variant, n As Long, i As Long
+    Dim prompt As String, odgovor As String, izbor As Long
+
     If Len(mIzabranaZbirna) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
         Exit Sub
     End If
-    ishod = StampajSledljivostZbirne(mIzabranaZbirna)
-    Select Case ishod
-        Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
-        Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
+    If DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF") = "OFF" Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
+        Exit Sub
+    End If
+
+    mete = ReportSledljivostMete(mIzabranaZbirna)
+    If Not IsArray(mete) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
+        Exit Sub
+    End If
+
+    n = UBound(mete, 1)
+    If n = 1 Then
+        StampajMetu mete, 1
+        Exit Sub
+    End If
+
+    ' Do 15 meta u prompt (InputBox granica duzine); preliv se PRIJAVLJUJE.
+    prompt = Poruka("OTKUI_MSG_SL_METE_PROMPT") & vbCrLf & vbCrLf
+    For i = 1 To n
+        If i > 15 Then
+            prompt = prompt & "... " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & _
+                     " " & CStr(n - 15) & vbCrLf
+            Exit For
+        End If
+        prompt = prompt & CStr(i) & ") " & SlMetaNaziv(NzS(mete(i, 1))) & " " & _
+                 NzS(mete(i, 3)) & _
+                 IIf(Len(NzS(mete(i, 4))) > 0, _
+                     "  " & ChrW(183) & " " & NzS(mete(i, 4)), "") & vbCrLf
+    Next i
+
+    odgovor = Trim$(InputBox(prompt, APP_NAME))
+    If Len(odgovor) = 0 Then Exit Sub                ' odustao -- bez poruke
+    izbor = CLng(val(odgovor))
+    If izbor < 1 Or izbor > n Or izbor > 15 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Sub
+    End If
+    StampajMetu mete, izbor
+End Sub
+
+' Prikazno ime tipa mete -- kroz katalog, kao SlProblemNaziv.
+Private Function SlMetaNaziv(ByVal tip As String) As String
+    Select Case tip
+        Case SLEDM_ZBIRNA:  SlMetaNaziv = Poruka("OTKUI_SL_META_ZBIRNA")
+        Case SLEDM_PALETA:  SlMetaNaziv = Poruka("OTKUI_SL_META_PALETA")
+        Case SLEDM_PRERADA: SlMetaNaziv = Poruka("OTKUI_SL_META_PRERADA")
+        Case Else:          SlMetaNaziv = tip
+    End Select
+End Function
+
+' Izlaz jedne mete. Zbirna ide kroz postojecu rutu (postuje ceo
+' SLEDLJIVOST_PRINT_MODE); paletni i preradni list izlaze kao PDF --
+' dugme je "(PDF)", a njihova fizicka stampa ostaje na ekranu Palete.
+Private Sub StampajMetu(ByRef mete As Variant, ByVal i As Long)
+    Dim ishod As String
+    Select Case NzS(mete(i, 1))
+        Case SLEDM_ZBIRNA
+            ishod = StampajSledljivostZbirne(NzS(mete(i, 2)))
+            Select Case ishod
+                Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
+                Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
+            End Select
+        Case SLEDM_PALETA
+            If Len(ExportPaletniListPDF(NzS(mete(i, 2)), True)) = 0 Then _
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
+        Case SLEDM_PRERADA
+            If Len(ExportPreradaPDF(NzS(mete(i, 2)), True)) = 0 Then _
+                modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
     End Select
 End Sub
 
