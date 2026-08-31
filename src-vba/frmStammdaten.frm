@@ -116,23 +116,7 @@ Private Sub UserForm_Activate()
     Next liLbl
     On Error GoTo EH
 
-    Select Case Me.Tag
-        Case "Kooperanti": SetupKooperanti
-        Case "Stanice": SetupStanice
-        Case "Korisnici": SetupKorisnici
-        Case "Kupci": SetupKupci
-        Case "Vozaci": SetupVozaci
-        Case "Parcele": SetupParcele
-        Case "Artikli": SetupArtikli
-        Case "Kulture": SetupKulture
-        Case "TipAmbalaze": SetupTipAmbalaze
-        Case "TipPalete": SetupTipPalete
-        Case "Cenovnik": SetupCenovnik
-        Case "Kutije": SetupKutije
-        Case "Kese": SetupKese
-        Case "VrstaGP": SetupVrstaGP
-        Case Else: SetupKooperanti
-    End Select
+    PokreniSetup
 
     LoadList
     ClearFields
@@ -160,6 +144,64 @@ EH:
     LogErr "frmStammdaten.UserForm_Activate"
     MsgBox Poruka("OTKUP_ERR_GRESKA_PRI_OTVARANJU") & Err.description, vbCritical, APP_NAME
 End Sub
+
+' Izbor Setup* procedure po Tag-u. Izdvojeno iz UserForm_Activate zato sto ga
+' zove i test seam (StmTestLista): dva spiska sekcija bi se razisla, pa bi test
+' merio drugu formu od one koju operater vidi.
+Private Sub PokreniSetup()
+    Select Case Me.Tag
+        Case "Kooperanti": SetupKooperanti
+        Case "Stanice": SetupStanice
+        Case "Korisnici": SetupKorisnici
+        Case "Kupci": SetupKupci
+        Case "Vozaci": SetupVozaci
+        Case "Parcele": SetupParcele
+        Case "Artikli": SetupArtikli
+        Case "Kulture": SetupKulture
+        Case "TipAmbalaze": SetupTipAmbalaze
+        Case "TipPalete": SetupTipPalete
+        Case "Cenovnik": SetupCenovnik
+        Case "Kutije": SetupKutije
+        Case "Kese": SetupKese
+        Case "VrstaGP": SetupVrstaGP
+        Case Else: SetupKooperanti
+    End Select
+End Sub
+
+' ============================================================
+' TEST SEAM -- PRIVREMEN, umire zajedno sa ovom formom.
+'
+' Postoji da bi se u JEDNOM trenutku izmerilo ono sto se posle brisanja
+' frmStammdaten vise ne moze izmeriti: da li novi citac (modMaticniIzvor)
+' vraca isti skup zapisa koji je LoadList vracao. Kad forma ode, ode i ovaj
+' seam i test 161 -- to je svrha, ne propust.
+'
+' Vraca Array(redovi2D, n, brKolona). redovi2D je 1-based (red, kolona);
+' kolona 1 je ono sto legacy lista drzi kao identitet reda.
+' ============================================================
+Public Function StmTestLista(ByVal sekTag As String) As Variant
+    Dim i As Long, j As Long, nc As Long, outA() As Variant
+    On Error GoTo EH
+    Me.tag = sekTag
+    PokreniSetup
+    LoadList
+    nc = lstData.ColumnCount
+    If nc < 1 Then nc = 1
+    If lstData.ListCount = 0 Then
+        StmTestLista = Array(Empty, 0, nc)
+        Exit Function
+    End If
+    ReDim outA(1 To lstData.ListCount, 1 To nc)
+    For i = 0 To lstData.ListCount - 1
+        For j = 0 To nc - 1
+            outA(i + 1, j + 1) = NzToText(lstData.List(i, j))
+        Next j
+    Next i
+    StmTestLista = Array(outA, lstData.ListCount, nc)
+    Exit Function
+EH:
+    Err.Raise Err.Number, "frmStammdaten.StmTestLista[" & sekTag & "]", Err.description
+End Function
 
 Private Sub StyleAllFields()
     On Error Resume Next

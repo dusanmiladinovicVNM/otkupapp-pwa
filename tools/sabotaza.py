@@ -2349,6 +2349,30 @@ SABOTAZE = {
     # Druga sabotaza se NE pise: oba smera ove tvrdnje mere isti raskorak, pa
     # bi svaka realna izmena oborila obe -- a sabotaza cija imenovana tvrdnja ne
     # padne prva je gora od nijedne (dokaz.py bi javio PALA DRUGA TVRDNJA).
+    # ------------------------- MATICNI: SLAGANJE CITACA SA LEGACY-JEM
+    # Pisac je od M2a jedan i deljen; citac NIJE -- legacy LoadList i novi
+    # MatRedovi su dve nezavisne implementacije. Jedino sto ih moze razici je
+    # KOJE redove puste kroz sebe, i to se ne vidi ni u jednoj gresci: lista
+    # prosto ima red manje ili vise nego sto je imala.
+    "citac-pusta-prazan-pk": (
+        "modMaticniIzvor.bas",
+        "        If pkIdx = 0 Then GoTo Sledeci\n        If Trim$(NzToText(data(i, pkIdx))) = \"\" Then GoTo Sledeci\n",
+        "        If pkIdx = 0 Then GoTo Sledeci   ' SABOTAZA: prazan PK vise ne ispada\n",
+        "T_Maticni_CitacSlaganjeSaLegacy",
+        "novi citac pusta kroz sebe TACNO one zapise koje i LoadList",
+    ),
+    # Storno filter cenovnika bi oborio ISTU tvrdnju (skup redova), pa svoju
+    # sabotazu ne dobija -- v. napomenu uz "meni-sekcija-ispala-iz-nove-ljuske".
+    # Legacy lista pokazuje NAZIV stanice (LookupValue), a ne StanicaID. Kad bi
+    # novi citac pokazao ID, mreza bi izgledala uredno i ni jedna provera osim
+    # ove ne bi imala sta da prijavi.
+    "citac-stanica-po-id-u-ne-po-nazivu": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_STANICA|@stanica|txt|96|2\", _\n",
+        "                \"OTKUI_HDM_STANICA|StanicaID|txt|96|2\", _\n",
+        "T_Maticni_CitacSlaganjeSaLegacy",
+        "svaka gola vrednost novog citaca postoji i u legacy redu",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu
