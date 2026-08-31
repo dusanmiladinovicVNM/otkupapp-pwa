@@ -1532,8 +1532,8 @@ SABOTAZE = {
     # procitani ispravno.
     "zona-curi-gresku": (
         "modOtkupUI.bas",
-        "    If Err.Number <> 0 Then Err.Clear\nEnd Function\n",
-        "    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\nEnd Function\n",
+        "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    If Err.Number <> 0 Then Err.Clear\n",
+        "    Set ScreenZone = mFrm.Controls(\"zScr_\" & kljuc)\n    ' SABOTAZA: Err ostaje postavljen posle zone koje nema\n",
         "T_PaletaDvoklik_OtvaraStavke",
         "procitana lista se ne prijavljuje kao pad ekrana",
     ),
@@ -2144,7 +2144,7 @@ SABOTAZE = {
         "        outA(n, MS_COL_TAG) = CStr(src(i)(2))\n",
         "        outA(n, MS_COL_TAG) = CStr(src(0)(2))   ' SABOTAZA: uvek prva alatka\n",
         "T_MatSistem_UgovorIIdentitet",
-        "red 1 posle pretrage nosi Tag SVOJE alatke",
+        "red 1 posle pretrage nosi kljuc SVOJE alatke",
     ),
     "maticni-ljuska-ne-pita-branu-ekrana": (
         "modUiScreens.bas",
@@ -2392,6 +2392,36 @@ SABOTAZE = {
         "                If True Then   ' SABOTAZA: kontekst se ignorise, vracaju se sve sorte\n",
         "T_MatEkran_KaskadaZavisnogCombo",
         "spisak sorti nosi SAMO sorte izabrane vrste",
+    ),
+    # -------------------------------- PANEL U RADNOJ POVRSINI (M6)
+    # Panel pokriva CELU radnu povrsinu. Kad se mreza ne skloni ispod njega,
+    # dve stvari dele isti prostor -- ista klasa kvara kao editor i geo panel
+    # jedan preko drugog, samo preko cele povrsine.
+    "panel-mreza-ostaje-ispod": (
+        "modOtkupUI.bas",
+        "        frm.Controls(CStr(nmv(i))).Visible = Not mPanelRezim\n",
+        "        frm.Controls(CStr(nmv(i))).Visible = True   ' SABOTAZA: mreza ostaje ispod panela\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "mreza se NE crta ispod panela",
+    ),
+    # Registar koji imenuje graditelja kog nema: dugme radi, panel se ne otvori,
+    # a jedina poruka je "Panel se nije otvorio: Cannot run the macro".
+    "panel-graditelj-ne-postoji": (
+        "modUiPanel.bas",
+        "        \"ADMIN|modAdmin|BuildAdminPanel|OTKUI_MS_ADMIN\")\n",
+        "        \"ADMIN|modAdmin|BuildAdminPanelX|OTKUI_MS_ADMIN\")   ' SABOTAZA\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "graditelj svakog panela postoji pod imenom iz registra",
+    ),
+    # Omotaci (WithEvents) moraju da odu PRE kontrola. Modul bez _Release-a
+    # registar ne moze da oslobodi, pa omotac prezivi svoju kontrolu -- i puca
+    # tek pri sledecem kliku, daleko od uzroka.
+    "panel-modul-bez-oslobadjanja": (
+        "modAdmin.bas",
+        "Public Sub Admin_Release()\n",
+        "Public Sub Admin_ReleaseX()   ' SABOTAZA: dogovor o imenu prekrsen\n",
+        "T_UiPanel_UgovorIUstupanje",
+        "svaki modul panela ima <Modul>_Release kako registar ocekuje",
     ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane

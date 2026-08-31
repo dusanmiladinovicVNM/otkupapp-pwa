@@ -36,14 +36,18 @@ Attribute VB_Name = "modScrMatSistem"
 '=====================================================================
 Option Explicit
 
-Public Const SCRMS_BUILD As String = "v6-ui-194"
+Public Const SCRMS_BUILD As String = "v6-ui-196"
 
 ' Izvor za log. Otvaranje panela je jedino sto ovaj ekran radi, pa mu svaki
 ' ishod -- i odbijanje -- ide u log pod istim imenom.
 Private Const MOD_TRAG As String = "modScrMatSistem.OtvoriAlatku"
 
-' Kolona koja nosi Tag za frmStammdaten. JEDAN broj, deljen izmedju opisa
-' kolona, punjenja redova i radnje -- da se indeks ne moze razici.
+' Kolona koja nosi KLJUC PANELA. JEDAN broj, deljen izmedju opisa kolona,
+' punjenja redova i radnje -- da se indeks ne moze razici.
+'
+' Do M6 je nosila legacy Tag za frmStammdaten. Sada nosi kljuc iz
+' modUiPanel.PanelRedovi: ekran vise ne zna nista o legacy formi, a panel se
+' otvara u radnoj povrsini nove ljuske (UI_MIGRACIJA_KATALOG 24.21).
 Public Const MS_COL_TAG As Long = 4
 
 Private Const MS_ZONA_H As Single = KPI_H
@@ -118,13 +122,13 @@ Private Function MsGridCols() As Variant
         "OTKUI_HDMS_ALATKA||txt|0|4")
 End Function
 
-' Spisak alatki. Tag mora biti TACNO onaj koji frmStammdaten ocekuje u
-' UserForm_Activate -- otud ChrW za dijakritiku, isto kao u modMaticniLookups.
+' Spisak alatki. Treci clan je KLJUC iz modUiPanel.PanelRedovi -- ne natpis i
+' ne legacy Tag, nego identitet po kom registar nalazi graditelja.
 Private Function Alatke() As Variant
     Alatke = Array( _
         Array(Poruka("OTKUI_MS_PODESAVANJA"), Poruka("OTKUI_MS_PODESAVANJA_OPIS"), _
-              "Pode" & ChrW(353) & "avanja"), _
-        Array(Poruka("OTKUI_MS_ADMIN"), Poruka("OTKUI_MS_ADMIN_OPIS"), "Admin"))
+              "PODESAVANJA"), _
+        Array(Poruka("OTKUI_MS_ADMIN"), Poruka("OTKUI_MS_ADMIN_OPIS"), "ADMIN"))
 End Function
 
 ' Tagovi alatki koje OVAJ ekran otvara. Javno zato sto je to druga polovina
@@ -213,30 +217,21 @@ End Function
 ' zato sto je to tvrdnja koju M0 nosi -- da se otvara izabrana alatka, a ne
 ' prva ili susedna. Kroz UI se u headless runu ne moze izmeriti.
 '
-' Redosled je preslikan iz frmMaticniPodaci.OpenSekcija i nije proizvoljan:
-' frmStammdaten cuva m_SetupDone i mChromeRemoved, pa se stara instanca MORA
-' oboriti pre nego sto se Tag promeni -- inace bi se otvorio panel prethodne
-' sekcije, sa novim naslovom.
-Public Function OtvoriPanel(ByVal sekTag As String) As Boolean
-    Dim errDesc As String
-    On Error GoTo EH
-    sekTag = Trim$(sekTag)
-    If Len(sekTag) = 0 Then Exit Function
-    LogInfo MOD_TRAG, "Otvaranje panela '" & sekTag & "'."
+' Od M6 panel se otvara U RADNOJ POVRSINI nove ljuske, ne kao zaseban prozor:
+' sidebar i zaglavlje ostaju, povratak je jedan klik. Otvaranjem upravlja
+' modUiPanel -- ovaj ekran zna samo KOJI kljuc je izabran, ne i ko ga gradi.
+Public Function OtvoriPanel(ByVal kljucPanela As String) As Boolean
+    Dim odgovor As String
+    kljucPanela = UCase$(Trim$(kljucPanela))
+    If Len(kljucPanela) = 0 Then Exit Function
+    LogInfo MOD_TRAG, "Otvaranje panela '" & kljucPanela & "'."
 
-    On Error Resume Next
-    Unload frmStammdaten
-    On Error GoTo EH
-
-    frmStammdaten.tag = sekTag
-    frmStammdaten.show vbModeless
+    odgovor = modUiPanel.PanelOtvori(kljucPanela)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        Exit Function
+    End If
     OtvoriPanel = True
-    Exit Function
-EH:
-    errDesc = Err.description
-    LogErr "modScrMatSistem.OtvoriPanel"
-    Err.Clear
-    modOtkupUI.ShowToast Poruka("OTKUI_MS_ERR_OTVARANJE") & errDesc, True
 End Function
 
 '------------------------------------------------------------ TEST SEAM

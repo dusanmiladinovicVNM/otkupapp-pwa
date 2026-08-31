@@ -379,6 +379,11 @@ Private mNavKey As Object
 Private mNavBroj As Object
 ' Aktivan ekran iz registra. "DOKUMENTI" je zatecen ekran koji ljuska jos
 ' crta po starom; svaki drugi se crta kroz ugovor, u svojoj zoni zScr_<kljuc>.
+' Radna povrsina je USTUPLJENA panelu. Ljuska ne zna KOM panelu -- zna samo da
+' zona ekrana, naslov i mreza ne smeju da se crtaju dok je ustupljena. Ko je u
+' njoj i sta ume, zna modUiPanel; ljuska mu daje samo prazan okvir.
+Private mPanelRezim As Boolean
+
 Private mScreen As String
 ' SEKCIJA ljuske: RAD (dokumenti, finansije, analitika) ili MATICNI (sifarnici,
 ' sistem). Zlatno dugme u zaglavlju je menja; dva skupa stavki sidebara se nikad
@@ -502,6 +507,7 @@ Public Sub BuildOtkupScreen(frm As Object)
     BuildCtx frm
     BuildForm frm
     BuildGrid frm
+    BuildPanelHost frm
     BuildRight frm
     BuildStatus frm
 
@@ -1202,6 +1208,41 @@ Private Sub BuildForm(frm As Object)
     ' SelectModeCore - zato je dugme sire nego generickim "Sacuvaj".
     BtnV z, "btnSacuvaj", Poruka("OTKUI_BTN_SACUVAJ_OTKUP"), 0, 0, 196, 28, "primary", IC_SAVE
 End Sub
+
+'---------------------------------------------------------- PANEL ----
+' Prazan okvir preko radne povrsine. Ljuska ga samo pravi, meri i pali/gasi --
+' nikad ne stavlja nista u njega. Sadrzaj gradi modul panela, kroz PanelHost.
+'
+' ZASTO OKVIR, a ne sama forma: graditelji panela (modPodesavanja, modAdmin)
+' prvo sakriju SVE kontrole domacina. Nad formom bi to ugasilo celu ljusku;
+' nad namenskim okvirom gase samo ono sto je u njemu, a to je njihovo.
+Private Sub BuildPanelHost(frm As Object)
+    NewZone frm, "zPanel", SIDEBAR_W, HEADER_H, 620, 260, C_SAND_LT
+End Sub
+
+' Okvir u koji modul panela gradi svoje kontrole. Vraca Nothing ako ljuska nije
+' ziva -- pozivalac tada nema gde da gradi i to mora da vidi.
+Public Function PanelHost() As Object
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Function
+    Set PanelHost = mFrm.Controls("zPanel")
+    If Err.Number <> 0 Then Err.Clear
+End Function
+
+' Ustupanje i vracanje radne povrsine. Ljuska ne pita ZASTO -- samo prerasporedi
+' i prekrije. Sadrzaj okvira ostaje netaknut: prazni ga onaj ko ga je i napunio.
+Public Sub PanelRezim(ByVal ukljuci As Boolean)
+    If mPanelRezim = ukljuci Then Exit Sub
+    mPanelRezim = ukljuci
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    ShowZones mFrm
+    LayoutOtkup mFrm
+End Sub
+
+Public Function PanelRezimAktivan() As Boolean
+    PanelRezimAktivan = mPanelRezim
+End Function
 
 '----------------------------------------------------------- GRID ----
 Private Sub BuildGrid(frm As Object)
@@ -4737,11 +4778,16 @@ Private Sub ShowZones(frm As Object)
     ' Naslovna traka i mreza su ZAJEDNICKE - nosi ih i ugovorni ekran. Da
     ' nisu, svaki ekran bi izmislio svoj naslov i svoju listu, a lista je bas
     ' ono sto se deli (strane, sortiranje, pretraga, izbor).
+    ' Dok je radna povrsina USTUPLJENA panelu, naslov i mreza se ne crtaju:
+    ' panel pokriva isti prostor, a dve stvari u njemu su ista klasa kvara kao
+    ' editor i geo panel jedan preko drugog.
     nmv = Array("zTitle", "zGrid")
     For i = 0 To UBound(nmv)
         On Error Resume Next
-        frm.Controls(CStr(nmv(i))).Visible = True
+        frm.Controls(CStr(nmv(i))).Visible = Not mPanelRezim
     Next i
+    On Error Resume Next
+    frm.Controls("zPanel").Visible = mPanelRezim
     ' Ovo je samo ekran dokumenata: KPI traka, kontekstni red, forma, kartice
     ' i traka aktivne otpremnice.
     '
@@ -4759,7 +4805,8 @@ Private Sub ShowZones(frm As Object)
     For Each nmv In frm.Controls
         On Error Resume Next
         If Left$(nmv.name, 5) = "zScr_" Then
-            nmv.Visible = (Not dok) And (nmv.name = "zScr_" & mScreen)
+            nmv.Visible = (Not dok) And (Not mPanelRezim) And _
+                          (nmv.name = "zScr_" & mScreen)
         End If
     Next nmv
 End Sub
@@ -4770,6 +4817,11 @@ End Sub
 ' ih izgradjene je jeftinije nego ruseti ih pri svakom izlasku.
 Private Sub ActivateScreen(frm As Object, ByVal kljuc As String)
     Dim z As Object, nm As String
+    ' Panel drzi CELU radnu povrsinu. Klik u sidebaru bi inace promenio ekran
+    ' ispod njega -- operater bi video isti panel, a ljuska bi mislila da je na
+    ' drugom ekranu. Zatvara se pre svega ostalog, i pre provere prava: panel
+    ' koji ostane otvoren nad zabranjenim ekranom je gori od oba ishoda.
+    If modUiPanel.PanelAktivan() <> "" Then modUiPanel.PanelZatvori
     If kljuc = mScreen Then Exit Sub
     ' Pravo se proverava za SVAKI ekran, i za pocetni: ranije je "DOKUMENTI"
     ' bio izuzet, pa se na njega moglo vratiti i bez prava.
@@ -4839,6 +4891,17 @@ Private Sub LayoutScreenZone(frm As Object, ByVal X As Single, ByVal w As Single
                              ByVal wTot As Single, ByVal hTot As Single)
     Dim z As Object, h As Single, gy As Single
     On Error Resume Next
+    ' Panel dobija CELU radnu povrsinu -- sidebar, zaglavlje i statusna traka
+    ' ostaju, sve ostalo je njegovo. Zona ekrana se tada ne meri: sakrivena je,
+    ' a Scr_Layout nad sakrivenom zonom trosi na raspored koji niko ne vidi.
+    If mPanelRezim Then
+        With frm.Controls("zPanel")
+            .Left = X: .top = HEADER_H: .width = w
+            .Height = hTot - HEADER_H - STATUS_H
+        End With
+        Exit Sub
+    End If
+
     Set z = frm.Controls("zScr_" & mScreen)
     If z Is Nothing Then Exit Sub
     z.Left = X

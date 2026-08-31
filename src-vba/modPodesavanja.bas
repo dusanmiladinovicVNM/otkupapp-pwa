@@ -700,6 +700,14 @@ End Sub
 
 Private Sub CloseConfigEditor()
     On Error Resume Next
+    ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
+    ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
+    ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
+    ' zajedno sa legacy formom.
+    If modUiPanel.PanelAktivan() = "PODESAVANJA" Then
+        modUiPanel.PanelZatvori
+        Exit Sub
+    End If
     frmOtkupAPP.ReturnToDashboard Poruka("CFG_MSG_PODESAVANJA_ZATVORENA")
     Unload mFrm
     Set mFrm = Nothing

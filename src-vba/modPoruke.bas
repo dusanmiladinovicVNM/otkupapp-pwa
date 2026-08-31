@@ -419,6 +419,13 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SEGM_KOR", "Korisnici"
     UpsertRow lo, existing, "OTKUI_SEGM_PRAVA", "Prava"
 
+    ' --- M6: paneli u radnoj povrsini -----------------------------------
+    UpsertRow lo, existing, "UIPAN_ERR_NEPOZNAT", "Nepoznat panel:"
+    UpsertRow lo, existing, "UIPAN_ERR_NEMA_MESTA", _
+        "Radna povr" & ChrW(353) & "ina nije spremna -- otvori glavni ekran pa poku" & ChrW(353) & "aj ponovo."
+    UpsertRow lo, existing, "UIPAN_ERR_GRADNJA", "Panel se nije otvorio:"
+    UpsertRow lo, existing, "OTKUI_BTN_PANEL_NAZAD", "Nazad na listu"
+
     UpsertRow lo, existing, "OTKUI_GTM_KOOP", "Kooperanti"
     UpsertRow lo, existing, "OTKUI_GTM_STAN", "Otkupne stanice"
     UpsertRow lo, existing, "OTKUI_GTM_KUPCI", "Kupci"

@@ -319,8 +319,26 @@ EH:
 End Sub
 
 ' Povratak na dashboard + cleanup (isti obrazac kao modPodesavanja.CloseConfigEditor).
+' Oslobadja reference modula bez zatvaranja domacina -- zove ga modUiPanel pre
+' nego sto isprazni okvir. Isti obrazac koji modPodesavanja vec ima
+' (Podesavanja_Release): WithEvents omotaci moraju da odu PRE kontrola, inace
+' drze kontrole kojih vise nema.
+Public Sub Admin_Release()
+    On Error Resume Next
+    Set mFrm = Nothing
+    Set mWrappers = Nothing
+End Sub
+
 Private Sub CloseAdminPanel()
     On Error Resume Next
+    ' Domacin moze biti FORMA (legacy put, frmStammdaten) ili OKVIR u radnoj
+    ' povrsini nove ljuske (modUiPanel). Forma se gasi, okvir se vraca ekranu --
+    ' pa se pita sta je domacin, umesto da se pretpostavi. Ova grana nestaje
+    ' zajedno sa legacy formom.
+    If modUiPanel.PanelAktivan() = "ADMIN" Then
+        modUiPanel.PanelZatvori
+        Exit Sub
+    End If
     frmOtkupAPP.ReturnToDashboard "Admin zatvoren."
     Unload mFrm
     Set mFrm = Nothing

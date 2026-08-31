@@ -6983,3 +6983,70 @@ To ne obara §24.19 — razlozi zašto **ne** postaju ekrani po ugovoru (97 polj
 `MAX_SEG` pun, `secret`/`memo` bez para u rečniku) i dalje stoje. Menja se samo
 **gde žive**: treba im nov domaćin, a to je odluka koja nije doneta i nije bila u
 planu. Zove se **M6** i predstoji.
+
+### 24.21 M6 — Podešavanja i Admin u radnoj površini (`v6-ui-196`)
+
+§24.19 je zaključio da ta dva **ostaju paneli** — 97 polja u 11 grupa i 12
+sistemskih komandi ne staju u ugovor ekrana, i ne treba da stanu. §24.20 je
+pokazao da ih hostuje `frmStammdaten`, koja se briše. M6 im daje nov dom, **bez
+menjanja ijednog reda njihove logike**: `BuildConfigEditor` i `BuildAdminPanel`
+su oduvek primali `frm As Object` — menja se samo **ko je domaćin**.
+
+#### Ljuska daje prazan okvir i ništa više
+
+`modOtkupUI` dobija `zPanel` — okvir preko radne površine — i dve javne
+procedure: `PanelHost()` (okvir) i `PanelRezim(ukljuci)` (ustupanje). Ljuska
+**ne zna nijedan panel po imenu**, isto kao što ne zna nijedan ekran. Dok je
+površina ustupljena, `zScr_*`, `zTitle` i `zGrid` se ne crtaju; sidebar,
+zaglavlje i statusna traka ostaju.
+
+**Zašto okvir, a ne sama forma:** oba graditelja prvo sakriju **sve** kontrole
+domaćina. Nad formom bi to ugasilo celu ljusku; nad namenskim okvirom gase samo
+ono što je njihovo.
+
+#### Logika je u standardnom modulu, ne u formi
+
+`frmOtkupUI` nije dobio ništa. Registar panela je **`modUiPanel`** — nov
+standardni modul, isti obrazac koji `modUiScreens` ima za ekrane: red opisuje
+`KLJUC|modul|graditelj|naslov`, a poziv je isključivo **kasno vezan i
+kvalifikovan** (`Application.Run "modPodesavanja.BuildConfigEditor", host`).
+
+Zatvaranje ide obrnutim redom od otvaranja: prvo `<Modul>_Release` (omotači
+`WithEvents`), pa tek onda pražnjenje okvira. Omotač koji preživi svoju kontrolu
+je mrtva referenca koja puca tek pri sledećem kliku, daleko od uzroka. Ime
+procedure se izvodi iz imena modula po dogovoru (`modAdmin` → `Admin_Release`),
+pa nov panel ne traži red više u registru — samo da poštuje isti dogovor.
+`modAdmin` je taj dogovor dobio sada; `modPodesavanja` ga je već imao.
+
+#### Šta se promenilo u ponašanju
+
+Panel se otvara **unutar ljuske, preko mreže** — sidebar i zaglavlje ostaju,
+povratak je jedan klik. Klik u sidebaru dok je panel otvoren **prvo zatvara
+panel**: bez toga bi se ekran ispod promenio, operater bi video isti panel, a
+ljuska bi mislila da je negde drugde.
+
+Skrivena kolona identiteta na ekranu *Podešavanja i alati* više ne nosi legacy
+`Tag` za `frmStammdaten` nego **ključ panela**. Time nova ljuska nema više
+nijednu vezu sa tom formom.
+
+Izlaz iz panela je **host-svestan**: `CloseConfigEditor` / `CloseAdminPanel`
+pitaju da li je domaćin okvir ili forma. Ta grana nestaje zajedno sa legacy
+formom.
+
+#### Brana je trostruka, i to nije višak
+
+Ekran odgovara kroz `Scr_Dozvoljen`, registar proverava pre ustupanja površine,
+a graditelj još jednom (`AUD-033`). Prava se menjaju zamenom operatera, pa
+nijedan sloj ne veruje prethodnom. Provera u registru postoji da se površina ne
+ustupi panelu koji će odmah odbiti da se izgradi — operater bi ostao pred
+praznim okvirom.
+
+**Verifikacija:** `vba_check` čist (208 fajlova, 357 sabotaža). Nov test 163 —
+ugovor registra (modul, graditelj i naslov postoje; svaki modul poštuje dogovor
+o `_Release`), ustupanje i vraćanje radne površine, i odbijanje nepoznatog
+ključa bez uzimanja površine. Test 151 meri ključ panela umesto legacy `Tag`-a.
+Tri nove sabotaže. **Testovi nisu izvršeni** u web sesiji.
+
+**Posle M6 `frmStammdaten` više nema nijednog korisnika u novoj ljusci** — ostaje
+samo legacy meni (`frmMaticniPodaci`) i test 161, koji je i napisan da umre s
+njom.
