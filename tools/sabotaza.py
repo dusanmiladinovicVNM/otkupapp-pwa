@@ -2334,6 +2334,21 @@ SABOTAZE = {
         "T_MatKor_RecnikDaNeIPrava",
         "spustanje sa admina gasi zatecena prava",
     ),
+    # ---------------------------- MATICNI: POKRIVENOST MENIJA (M5)
+    # Dve registracije istih sekcija zive odvojeno (stari meni pamti grupisanje
+    # i natpise, nova sekcija ekrane i kolone). Sekcija koja ispadne iz jedne
+    # nestaje iz te ljuske BEZ IJEDNE GRESKE -- operater je jednostavno vise ne
+    # vidi. Zato se pokrivenost meri u oba smera.
+    "meni-sekcija-ispala-iz-nove-ljuske": (
+        "modMaticniIzvor.bas",
+        "        Case \"Kese\":        MatKljucIzLegacyTag = \"KESE\"\n",
+        "        ' SABOTAZA: Kese ispale iz prevoda Tag -> sekcija\n",
+        "T_Maticni_MenijiPokrivajuIsto",
+        "svaka sekcija starog menija je dostizna u novoj ljusci",
+    ),
+    # Druga sabotaza se NE pise: oba smera ove tvrdnje mere isti raskorak, pa
+    # bi svaka realna izmena oborila obe -- a sabotaza cija imenovana tvrdnja ne
+    # padne prva je gora od nijedne (dokaz.py bi javio PALA DRUGA TVRDNJA).
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

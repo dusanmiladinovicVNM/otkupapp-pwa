@@ -521,9 +521,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 
 ### Faza F — Matični podaci
 
-20. **Matični podaci** (`btnMatic` je u novom UI-ju bio nevezan) — plan je u
-    §24; **M0–M4 su urađeni** (`v6-ui-187` … `v6-ui-193`, §24.13–§24.18),
-    ostaje M5. Ne stoji u Fazi E jer nije „još jedan
+20. ~~**Matični podaci**~~ **URAĐENO** (`v6-ui-187` … `v6-ui-194`, §24.13–§24.19);
+    `btnMatic` je u novom UI-ju bio nevezan. Nije stajalo u Fazi E jer nije „još jedan
     ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
     i prevezuje jedini operativan put upisa matičnih podataka. Redosled
     M0–M5 je u §24.10.
@@ -6143,6 +6142,7 @@ ona živi samo u brutu palete).
 ## 24. Matični podaci — plan prelaska (PREDLOG, nije izvedeno)
 ## 24. Matični podaci — plan prelaska (M0 urađen, M1–M5 predstoje)
 ## 24. Matični podaci — plan prelaska (M0–M4 urađeni, M5 predstoji)
+## 24. Matični podaci — plan prelaska (M0–M5 urađeni)
 
 > Ovo je jedina sekcija kataloga koja je napisana **pre** posla koji opisuje.
 > Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
@@ -6434,7 +6434,7 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 | **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §24.16. |
 | **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §24.17. Cenovnik je stigao već uz M2b. |
 | **M4** | `MAT_KORISNICI` — lista + matrica prava | **URAĐENO** (`v6-ui-193`) — v. §24.18. Zatvara i nalaz o deaktivaciji korisnika. |
-| **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
+| **M5** | Odluka o Podešavanjima i Adminu | **URAĐENO** (`v6-ui-194`) — v. §24.19. Odgovor: **ostaju**, sa izmerenim razlozima; test 160 drži pokrivenost menija. |
 
 ### 24.11 Verifikacija — šta se meri
 
@@ -6844,3 +6844,82 @@ Excela; `Debug → Compile` ostaje ručna kapija.
 podrazumevani odgovor „ostaju" (to su alatke, ne matični podaci; već ih otvara
 ekran *Podešavanja i alati*). Van plana ostaje migracija zatečenih
 `"Aktivan"`/`"Neaktivan"` vrednosti u `tblKorisnici` u rečnik `DA`/`NE`.
+
+### 24.19 M5 — odluka o Podešavanjima i Adminu (`v6-ui-194`)
+
+Odgovor je **ostaju kao legacy paneli**, što je i bio podrazumevani odgovor iz
+§24.10 — ali sada sa izmerenim razlozima, a ne kao neispitana pretpostavka.
+Nijedan red produkcione logike se zbog M5 nije premestio; jedino što je M5
+proizveo je **test koji odluku drži** (160) i ovaj zapis.
+
+#### Podešavanja — ne staju u ugovor ekrana, i ne treba da stanu
+
+| Mera | Vrednost | Ograničenje ljuske |
+|---|---|---|
+| polja | **97** | bazen zone je **10 tekstualnih + 6 combo = 16** |
+| grupa | **11** | `MAX_SEG = 11` — prekidač lista je **već pun** |
+| najveća grupa | 17 (`Otkup / dokumenta`) | i ta jedna grupa ne staje u zonu |
+| tipovi | `text · bool · int · list:… · secret · memo` | opis polja zna `txt · num · cmb · date` |
+
+Tri nezavisna razloga, svaki sam za sebe dovoljan:
+
+1. **Ne staje.** Jedanaest grupa je tačno `MAX_SEG`; sledeća dodata grupa obara
+   prekidač. Ni jedna jedina grupa ne staje u zonu od 16 kontrola.
+2. **Radnja je druga.** Config editor pokazuje **celu grupu odjednom** i čuva
+   jednim klikom — tako se instalacija i podešava, red po red. Editor u zoni bi
+   isto značio jedno polje po otvaranju. To nije prenos nego pogoršanje.
+3. **Rečnik ne postoji.** `secret` i `memo` nemaju par ni u vrsti kolone
+   (`txt|num|date|part|kg|rsd|mult|sum0|rest|pill|paypill`) ni u vrsti polja
+   (`txt|num|cmb|date`). Uveli bi se dva nova pojma u ugovor koji ih nigde
+   drugde ne koristi.
+
+Prepisivanje bi značilo ~850 novih linija umesto ~850 koje rade — suprotno od
+`minimal change` (CLAUDE.md).
+
+#### Admin — staje po obliku, ali ne sme po sadržaju
+
+Dvanaest komandi u pet grupa **jeste** lista i legla bi u `MAT_SISTEM` kao još
+redova. Ne radi se, i razlog nije oblik nego **šta komande diraju**:
+`AdminVbaImport` ponovo učitava module u kojima živi ekran koji crta tu listu;
+`AdminEnsureEverything` i `MigrirajPodatkeIzStarog` menjaju šemu ispod nje;
+`OcistiTabele` briše podatke; self-update menja samu svesku. Red u mreži nove
+ljuske značio bi da ljuska poziva nešto što ruši ljusku **usred sopstvenog
+događaja**. Legacy panel koji preuzme prozor tu nije zaostatak nego tačan oblik.
+
+#### Brana je proverena, i nije u ljusci
+
+Da „ostaju" ne bi značilo „nisu pogledani": oba panela imaju **tvrdu branu u
+sebi**, nezavisno od sidebara — `modPodesavanja.BuildConfigEditor` i
+`modAdmin.AdminPanel_OnClick` oba odbijaju ne-admina (`AUD-033`), a Admin je
+gejtovan i na **svakoj akciji**, ne samo pri izgradnji panela. Ekran
+`MAT_SISTEM` dodaje treću branu (`Scr_Dozvoljen`). Prigušena stavka u sidebaru
+je time samo najspoljašnji sloj, ne jedini.
+
+#### Šta M5 ostavlja iza sebe: test 160
+
+Dve registracije istih sekcija žive odvojeno i to je namerno — stari meni pamti
+**grupisanje i natpise** (`modMaticniLookups`), nova sekcija pamti **ekrane i
+kolone** (`modMaticniIzvor`). Cena je da mogu da se raziđu: sekcija dopisana u
+jedan spisak a zaboravljena u drugom **nestaje iz te ljuske bez ijedne greške**.
+
+Test 160 meri pokrivenost **u oba smera**: svaki `Tag` starog menija mora biti
+dostižan u novoj ljusci — ili kao lista matičnog ekrana
+(`MatKljucIzLegacyTag`), ili kao alatka na *Podešavanja i alati*
+(`MsAlatkaTagovi`) — i nijedna lista nove ljuske ne sme postojati mimo starog
+menija. Jedini zabeležen izuzetak je **PRAVA**: matrica prava je u formi bila
+deo sekcije Korisnici, a ovde je svoja lista (§24.18).
+
+Brojke koje test drži: **16** sekcija u starom meniju, **15** lista u novoj
+sekciji (14 sa parom u meniju + PRAVA), **2** legacy panela na ekranu alatki.
+
+Za ovu tvrdnju stoji **jedna** sabotaža, ne dve: oba smera mere isti raskorak,
+pa bi svaka stvarna izmena oborila obe — a sabotaža čija imenovana tvrdnja ne
+padne prva gora je od nijedne.
+
+#### Čime je §24 zatvoren
+
+`btnMatic` više ne laže, svih 16 sekcija starog menija dostižno je iz nove
+ljuske, jedini put upisa matičnih podataka je jedan pisac koga zovu obe strane,
+i dva nalaza o pravima pristupa su zatvorena (§24.18). Ostaje jedan posao van
+plana: **migracija zatečenih `"Aktivan"`/`"Neaktivan"` vrednosti** u
+`tblKorisnici.Aktivan` u rečnik `DA`/`NE` (§24.12).

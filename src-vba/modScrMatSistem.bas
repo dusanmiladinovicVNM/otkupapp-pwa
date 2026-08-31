@@ -36,7 +36,7 @@ Attribute VB_Name = "modScrMatSistem"
 '=====================================================================
 Option Explicit
 
-Public Const SCRMS_BUILD As String = "v6-ui-187"
+Public Const SCRMS_BUILD As String = "v6-ui-194"
 
 ' Izvor za log. Otvaranje panela je jedino sto ovaj ekran radi, pa mu svaki
 ' ishod -- i odbijanje -- ide u log pod istim imenom.
@@ -125,6 +125,20 @@ Private Function Alatke() As Variant
         Array(Poruka("OTKUI_MS_PODESAVANJA"), Poruka("OTKUI_MS_PODESAVANJA_OPIS"), _
               "Pode" & ChrW(353) & "avanja"), _
         Array(Poruka("OTKUI_MS_ADMIN"), Poruka("OTKUI_MS_ADMIN_OPIS"), "Admin"))
+End Function
+
+' Tagovi alatki koje OVAJ ekran otvara. Javno zato sto je to druga polovina
+' tvrdnje "novi UI dostize sve sto stari meni dostize": trinaest sifarnika i
+' Korisnici idu kroz modMaticniIzvor.MatKljucIzLegacyTag, a Podesavanja i Admin
+' kroz ovaj spisak. Test 160 spaja obe polovine.
+Public Function MsAlatkaTagovi() As Variant
+    Dim src As Variant, a() As Variant, i As Long
+    src = Alatke()
+    ReDim a(0 To UBound(src))
+    For i = LBound(src) To UBound(src)
+        a(i) = CStr(src(i)(2))
+    Next i
+    MsAlatkaTagovi = a
 End Function
 
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
