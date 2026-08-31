@@ -423,12 +423,17 @@ Private Sub NapuniPovKandidate(ByVal otkupID As String)
     mDokFill = False
 End Sub
 
-' AUTOMATSKO povezivanje -- legacy btnAutoLink, isti TX
-' (modSledljivost.AutoLinkOtkupOtpremnica_TX vraca broj povezanih).
+' AUTOMATSKO povezivanje -- legacy btnAutoLink, isti TX. Krug 8 R7:
+' pravilo je GLOBALNO (svi periodi, ne prikazani opseg -- poruka to i
+' kaze), a greska/rollback se razlikuje od legitimne nule kroz ByRef.
 ' True kad je nesto povezano -> ljuska osvezava liste.
 Private Function AutoPovezi() As Boolean
-    Dim n As Long
-    n = modSledljivost.AutoLinkOtkupOtpremnica_TX()
+    Dim n As Long, greska As Boolean
+    n = modSledljivost.AutoLinkOtkupOtpremnica_TX(greska)
+    If greska Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_AUTO_GRESKA"), True
+        Exit Function
+    End If
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZANO") & " " & CStr(n), False
     AutoPovezi = (n > 0)
 End Function
@@ -484,6 +489,7 @@ Private Function SlMetaNaziv(ByVal tip As String) As String
         Case SLEDM_ZBIRNA:  SlMetaNaziv = Poruka("OTKUI_SL_META_ZBIRNA")
         Case SLEDM_PALETA:  SlMetaNaziv = Poruka("OTKUI_SL_META_PALETA")
         Case SLEDM_PRERADA: SlMetaNaziv = Poruka("OTKUI_SL_META_PRERADA")
+        Case SLEDM_NEJASNA: SlMetaNaziv = Poruka("OTKUI_SL_META_NEJASNA")
         Case Else:          SlMetaNaziv = tip
     End Select
 End Function
@@ -500,7 +506,11 @@ Private Sub StampajMetu(ByVal tip As String, ByVal iD As String)
             Select Case ishod
                 Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
                 Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
+                Case "DVOSMISLEN": modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_DVOSMISLENA"), True
             End Select
+        Case SLEDM_NEJASNA
+            ' Krug 8 R3: broj dele razliciti vlasnici -- nema stampe.
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_DVOSMISLENA"), True
         Case SLEDM_PALETA
             If Len(ExportPaletniListPDF(iD, True)) = 0 Then _
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
@@ -745,9 +755,19 @@ Private Function Snimak(ByVal k As String, ByVal odN As Double, _
         dDo = CDate(IIf(doN > 0, doN, SL_DAT_MAX))
         ' TRI read-modela u istom punjenju: liste (lanac+problemi) i
         ' ponuda polja izbora dokumenta (krug 3b) dele kontekst.
-        mSnimci(k) = Array(ReportSledljivostLanac(dOd, dDo), _
-                           ReportSledljivostProblemi(dOd, dDo), _
-                           ReportSledljivostDokumenti(dOd, dDo))
+        ' TableCache (krug 8 R6): sva tri prolaze kroz iste velike tabele
+        ' -- jedno punjenje kesa umesto ponovljenih citanja listova.
+        ' Greska citanja se i dalje NE kesira, ali kes MORA da se zatvori
+        ' i na gresci (EHKes), inace bi ostao otvoren preko celog ekrana.
+        Dim lanacV As Variant, problemiV As Variant, dokV As Variant
+        BeginTableCache
+        On Error GoTo EHKes
+        lanacV = ReportSledljivostLanac(dOd, dDo)
+        problemiV = ReportSledljivostProblemi(dOd, dDo)
+        dokV = ReportSledljivostDokumenti(dOd, dDo)
+        On Error GoTo 0
+        EndTableCache
+        mSnimci(k) = Array(lanacV, problemiV, dokV)
     End If
 
     mSnimakKljuc = k
@@ -773,6 +793,15 @@ Private Function Snimak(ByVal k As String, ByVal odN As Double, _
     Else
         mKpiProblemi = 0
     End If
+    Exit Function
+
+EHKes:
+    Dim errNum As Long, errDesc As String, errSrc As String
+    errNum = Err.Number
+    errDesc = Err.description
+    errSrc = Err.SOURCE
+    EndTableCache
+    Err.Raise errNum, errSrc, errDesc
 End Function
 
 '=====================================================================
@@ -862,16 +891,23 @@ Private Function HaystackReda(ByVal kljuc As String, ByRef src As Variant, _
                               ByVal i As Long) As String
     Select Case kljuc
         Case SL_LANAC
+            ' Kolona 27 = SearchRefs (krug 8 R2): svi brojevi prijemnica i
+            ' faktura reda -- "2 prij."/"2 fakt." prikaz ih guta, a smer
+            ' NAZAD ih mora naci.
             HaystackReda = NzS(src(i, 2)) & "|" & NzS(src(i, 4)) & "|" & _
                            NzS(src(i, 8)) & "|" & NzS(src(i, 9)) & "|" & _
                            NzS(src(i, 10)) & "|" & NzS(src(i, 12)) & "|" & _
                            NzS(src(i, 13)) & "|" & NzS(src(i, 23)) & "|" & _
-                           NzS(src(i, 14))
+                           NzS(src(i, 14)) & "|" & NzS(src(i, 27))
         Case SL_PARC
+            ' Isti SearchRefs + kupac (krug 8 R2): "znam fakturu -> nadji
+            ' kooperante i parcele" mora da radi i na sertifikacionoj
+            ' projekciji.
             HaystackReda = NzS(src(i, 4)) & "|" & NzS(src(i, 22)) & "|" & _
                            NzS(src(i, 18)) & "|" & NzS(src(i, 19)) & "|" & _
                            NzS(src(i, 2)) & "|" & NzS(src(i, 9)) & "|" & _
-                           NzS(src(i, 23))
+                           NzS(src(i, 23)) & "|" & NzS(src(i, 13)) & "|" & _
+                           NzS(src(i, 27))
         Case SL_NEP
             ' Kolona 9 = lanac-brojevi reda (npr. broj zbirne nefakturisane
             ' prijemnice) -- obecanje "pretraga nalazi svaki broj u lancu"

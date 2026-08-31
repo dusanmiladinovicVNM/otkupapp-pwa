@@ -100,7 +100,7 @@ Public Const TS_NAVICO    As Single = 13      ' glif uz stavku
 
 ' Pecat verzije - DiagOtkupUI ga ispisuje, pa se odmah vidi da li je u projektu
 ' uvezen pravi fajl (a ne neka ranija kopija).
-Public Const OTKUI_BUILD   As String = "v6-ui-187"
+Public Const OTKUI_BUILD   As String = "v6-ui-188"
 ' Ekran na kome se aplikacija otvara. Na jednom mestu, jer ga traze i gradnja i
 ' provera prava pri otvaranju (ShowOtkupUI).
 Public Const SCR_POCETNI   As String = "DOKUMENTI"
@@ -420,6 +420,7 @@ Private mPopSrc() As Long            ' indeksi stavki combo-a koje panel prikazu
 Private mPopN As Long                ' koliko ih je posle suzavanja kucanjem
 Private mPopTop As Long              ' prva prikazana (skrol po stranama)
 Private mPopMute As Boolean          ' programski upis u combo - ne otvaraj panel
+Private mPopHover As Long            ' hover red panela (v6-ui-188: centralno bojenje)
 Private mFltOpen As Boolean          ' panel "Filteri" otvoren
 Private mFltVrsta As String          ' dodatni uslov: vrsta iz Osnovnih podataka
 Private mFltPart As String           ' dodatni uslov: partner iz Osnovnih podataka
@@ -1297,11 +1298,21 @@ Private Sub BuildPopup(frm As Object)
     NewLbl z, "popBd", "", 0, 0, 180, 40, 8, False, 0, C_BORDER
     NewLbl z, "popBg", "", 1, 1, 178, 38, 8, False, 0, C_WHITE
     For i = 0 To POP_MAX - 1
-        ' jedan Label po redu: i pozadina i tekst, pa hover i klik rade na istoj
-        ' kontroli (kutija je jedva visa od teksta, poravnanje ostaje uredno)
+        ' v6-ui-188: pozadina/hit ostaje PUN red (21pt), a TEKST ide u
+        ' zaseban unutrasnji label visine TxtH(TS_BODY) centriran kroz
+        ' CenterY -- ISTO rasterizacijsko pravilo kao mreza. Label pune
+        ' visine je GDI-ju pomerao baseline fazu po redu, pa je npr. osmi
+        ' red izgledao kao "veci font" iako je Font.Size svuda isti
+        ' (Sledljivost smoke, S15). Oba nose ISTI tag: klik radi i preko
+        ' teksta, a hover se boji CENTRALNO (PopHoverRed) jer su tekst i
+        ' pozadina sada odvojene kontrole.
         NewLbl z, "pop" & i, "", 1, 1 + i * POP_ITEM_H, 178, POP_ITEM_H, _
                TS_BODY, False, C_FOREST, C_WHITE
-        WireBtn z.Controls("pop" & i), "pop" & i, "btn"
+        WireBtn z.Controls("pop" & i), "pop" & i, "row"
+        NewLbl z, "popT" & i, "", 1, _
+               CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY), _
+               178, TxtH(TS_BODY), TS_BODY, False, C_FOREST, -1
+        WireBtn z.Controls("popT" & i), "pop" & i, "row"
     Next i
     ' Podnozje sa brojacem i strelicama - vidljivo samo kad lista ne staje u
     ' POP_MAX redova. Time panel pokriva i duge liste (kooperanti), pa nema
@@ -1327,6 +1338,7 @@ Private Sub OpenPopup(ByVal comboNm As String)
     End If
     mPopFor = comboNm
     mPopTop = 0
+    mPopHover = -1
     PopIndex cmb
     PopRender
 End Sub
@@ -1385,13 +1397,21 @@ Private Sub PopRender()
     z.Controls("popBg").width = z.width - 2: z.Controls("popBg").Height = h - 2
     For i = 0 To POP_MAX - 1
         If i < vis Then
-            z.Controls("pop" & i).caption = "   " & CStr(cmb.List(mPopSrc(mPopTop + i), 0))
+            ' Tekst nosi unutrasnji label (v6-ui-188, v. BuildPopup);
+            ' pozadinski red ostaje prazan hit/hover sloj.
+            z.Controls("pop" & i).caption = ""
             z.Controls("pop" & i).BackColor = C_WHITE
             z.Controls("pop" & i).top = 1 + i * POP_ITEM_H
             z.Controls("pop" & i).width = z.width - 2
             z.Controls("pop" & i).Visible = True
+            z.Controls("popT" & i).caption = "   " & CStr(cmb.List(mPopSrc(mPopTop + i), 0))
+            z.Controls("popT" & i).top = CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY)
+            z.Controls("popT" & i).width = z.width - 2
+            z.Controls("popT" & i).Visible = True
+            z.Controls("popT" & i).ZOrder 0
         Else
             z.Controls("pop" & i).Visible = False
+            z.Controls("popT" & i).Visible = False
         End If
     Next i
     PopFooter z, vis, scroll
@@ -1479,8 +1499,22 @@ Private Sub ClosePopup()
     mPopFor = ""
     mPopN = 0
     mPopTop = 0
+    mPopHover = -1
     If mFrm Is Nothing Then Exit Sub
     mFrm.Controls("zPop").Visible = False
+End Sub
+
+' Hover red panela -- pozadinski label se boji centralno (v6-ui-188),
+' jer lokalno bojenje klase vise ne pokriva ceo red (tekst je odvojen).
+Private Sub PopHoverRed(ByVal i As Long)
+    Dim z As Object
+    On Error Resume Next
+    If Len(mPopFor) = 0 Then Exit Sub
+    If i = mPopHover Then Exit Sub
+    Set z = mFrm.Controls("zPop")
+    If mPopHover >= 0 Then z.Controls("pop" & mPopHover).BackColor = C_WHITE
+    z.Controls("pop" & i).BackColor = RGB(246, 244, 238)
+    mPopHover = i
 End Sub
 
 Private Sub SelectPopup(ByVal idx As Long)
@@ -4060,6 +4094,12 @@ End Sub
 
 Private Sub UiHover(ByVal tag As String)
     Dim i As Long
+    ' Redovi naseg dropdown-a (v6-ui-188): tekst i pozadina reda su
+    ' odvojene kontrole, pa se hover boji CENTRALNO -- kao red mreze.
+    If Left$(tag, 3) = "pop" And IsNumeric(Mid$(tag, 4)) Then
+        PopHoverRed CLng(Mid$(tag, 4))
+        Exit Sub
+    End If
     ' zaglavlje kolone ("hd7") nosi samo strelicu sortiranja
     If Left$(tag, 2) = "hd" And IsNumeric(Mid$(tag, 3)) Then
         HoverHead CLng(Mid$(tag, 3))

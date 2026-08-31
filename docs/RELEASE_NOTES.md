@@ -6790,13 +6790,34 @@ ijedne izmišljene veze.
   NA: …") i podnožje sa datumom štampe, potpisom i pečatom — po ugledu
   na postojeći šablon Sledljivosti, umesto tabelice u ćošku A4 lista.
 
+### Posle spoljne revizije (završni paket, bez novih funkcija)
+
+- **„Potpun lanac" sada znači SVE prijemnice fakturisane** na
+  postojeće aktivne fakture — ranije je jedna fakturisana prijemnica
+  umela da sakrije sestru bez fakture; sada jedna neispravna obara celu
+  kariku, a lista Nepotpuni je prikaže (i kad `FakturaID` pokazuje na
+  obrisanu/nepostojeću fakturu).
+- **Pretraga nazad radi i kroz „2 prij. / 2 fakt."** — red pamti sve
+  progutane brojeve, pa broj bilo koje fakture nalazi lanac i na listi
+  Po parceli.
+- **Dvosmislen broj zbirne se nigde ne štampa**: šablon ga odbija
+  porukom, u ponudi stoji kao „Zbirna — nejasan vlasnik" bez kilaže —
+  tokovi različitih vlasnika se ne sabiraju u jedan dokument.
+- **Osmi red padajuće liste više ne izgleda kao drugi font** — kvar
+  iscrtavanja u zajedničkoj ljusci (tekst preko celog reda menja fazu
+  rasterizacije); tekst sada stoji u svojoj traci kao u mreži. Uz to
+  „Poveži automatski" jasno kaže da hvata SVE periode i razlikuje
+  grešku od „nema šta da se poveže", a prvo otvaranje ekrana je opet
+  brže (keš tabela oko sva tri računa).
+
 ### Verifikacija
 
-- Devet novih testova (ugovor ekrana, slaganje lanca sa ručnim
+- Deset novih testova (ugovor ekrana, slaganje lanca sa ručnim
   prolazom, fail-closed oznake, identitet, keš/pretraga, zona,
-  kandidati povezivanja, mete sledljivosti, ponuda polja izbora) +
-  **26 namernih kvarova** koji obaraju po tačno jedan imenovani test i
-  vraćaju se bit-identično (dvosmerni dokaz).
+  kandidati povezivanja, mete sledljivosti, ponuda polja izbora,
+  tekst-traka panela ljuske) + **31 namerni kvar** koji obaraju po
+  tačno jedan imenovani test i vraćaju se bit-identično (dvosmerni
+  dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`

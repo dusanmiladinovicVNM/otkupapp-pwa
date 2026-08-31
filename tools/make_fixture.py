@@ -317,6 +317,23 @@ SLED_PRIJ_BROJ_N = "31/150326"     # sekvenca KUPAC2
 SLED_FAKTURA = "FAK-SLED-1"
 SLED_KG_1 = 300.0
 SLED_KG_2 = 200.0
+# Krug 8 (review paket):
+#   F-LANAC (R1, ALL-pravilo fakturisanosti): zbirna sa DVE prijemnice --
+#     F1 fakturisana na aktivnu FAK-SLED-2, F2 "Fakturisano=Da" ali
+#     FakturaID pokazuje na nepostojecu fakturu -> lanac je NEFAKTURISANO
+#     (jedna neispravna obara celu kariku), NEPOTPUNI prijavljuje F2.
+#   M-LANAC (R2, SearchRefs): POTPUN lanac sa 2 prijemnice i 2 fakture --
+#     prikaz "2 prij."/"2 fakt." guta brojeve, pretraga po FAK-SLED-3B
+#     mora da nadje red i na LANAC i na PARCELE (ima parcelu PAR-TEST-2).
+#   PAL-SLED-B (R4): paleta sa NEVALIDNIM datumom -- ugovor kaze da u
+#     ponudi polja izbora ostaje VIDLJIVA (IIf mina bi ovde pukla).
+SLED_ZBIRNA_F = "ZB-TEST-SLF"
+SLED_ZBIRNA_M = "ZB-TEST-SLM"
+SLED_FAKTURA_2 = "FAK-SLED-2"
+SLED_FAKTURA_3 = "FAK-SLED-3"
+SLED_FAKTURA_3B = "FAK-SLED-3B"
+SLED_KG_F = 120.0                  # 60 + 60 po prijemnicama
+SLED_KG_M = 200.0                  # 100 + 100 po prijemnicama
 
 class Sirovo:
     """Vrednost koja se upisuje BEZ formata koji bi red nasledio od kolone.
@@ -481,6 +498,13 @@ SEED = {
         {"ZbirnaID": "ZBI-SLED-R", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_R, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": 250, "Klasa": "I", "KupacID": KUPAC2},
+        # Krug 8: F-lanac (ALL fakturisanost) i M-lanac (SearchRefs).
+        {"ZbirnaID": "ZBI-SLED-F", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_F, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_F, "Klasa": "I", "KupacID": KUPAC2},
+        {"ZbirnaID": "ZBI-SLED-M", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_M, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_M, "Klasa": "I", "KupacID": KUPAC2},
         # Dvosmislen par za sledljivost (v. SLED_ZBIRNA_D): dva aktivna
         # vlasnika (dva vozaca) dele broj; nijedan drugi test ih ne dira.
         {"ZbirnaID": "ZBI-SLED-D1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
@@ -595,6 +619,15 @@ SEED = {
         {"OtpremnicaID": "OTP-SLED-N", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
          "VozacID": VOZAC2, "BrojOtpremnice": "33/TEST", "BrojZbirne": SLED_ZBIRNA_N,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 150,
+         "Cena": 50.0, "Klasa": "I"},
+        # Krug 8: F i M lanci (v. blok konstanti).
+        {"OtpremnicaID": "OTP-SLED-F", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "36/TEST", "BrojZbirne": SLED_ZBIRNA_F,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_F,
+         "Cena": 50.0, "Klasa": "I"},
+        {"OtpremnicaID": "OTP-SLED-M", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "37/TEST", "BrojZbirne": SLED_ZBIRNA_M,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_M,
          "Cena": 50.0, "Klasa": "I"},
         # 250 kg nad blokom od 100 kg -- kg curi na prvoj karici (namerno).
         {"OtpremnicaID": "OTP-SLED-R", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
@@ -757,6 +790,20 @@ SEED = {
          "VozacID": VOZAC2, "BrojDokumenta": "S4/TEST", "Klasa": "I",
          "BrojZbirne": SLED_ZBIRNA_N, "OtpremnicaID": "OTP-SLED-N",
          "BrojOtpremnice": "33/TEST"},
+        # Krug 8: F-lanac (bez parcele; KOOP-TEST-IME -- v. komentar bloka
+        # konstanti) i M-lanac (KOOP-TEST-2 sa parcelom -> PARCELE red).
+        {"OtkupID": "OTK-SLED-F", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-IME",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_F, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S6/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_F, "OtpremnicaID": "OTP-SLED-F",
+         "BrojOtpremnice": "36/TEST"},
+        {"OtkupID": "OTK-SLED-M", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_M, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S7/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_M, "OtpremnicaID": "OTP-SLED-M",
+         "BrojOtpremnice": "37/TEST", "ParcelaID": "PAR-TEST-2"},
         {"OtkupID": "OTK-SLED-R", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
          "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
          "SortaVoca": SORTA, "Kolicina": 100, "Cena": 50.0,
@@ -865,6 +912,13 @@ SEED = {
         {"NovacID": "NOV-SLED-2", "BrojDokumenta": "SLED-P2",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_2 * 50,
          "KooperantID": "KOOP-TEST-IME", "OMID": STANICA2, "OtkupID": "OTK-SLED-2"},
+        # Krug 8: zatvaranje F i M blokova (ista pravila kao NOV-SLED-1/2).
+        {"NovacID": "NOV-SLED-F", "BrojDokumenta": "SLED-P6",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_F * 50,
+         "KooperantID": "KOOP-TEST-IME", "OMID": STANICA2, "OtkupID": "OTK-SLED-F"},
+        {"NovacID": "NOV-SLED-M", "BrojDokumenta": "SLED-P7",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_M * 50,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-M"},
         {"NovacID": "NOV-SLED-D", "BrojDokumenta": "SLED-P3",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": 5000,
          "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-D"},
@@ -1005,6 +1059,14 @@ SEED = {
         {"FakturaID": SLED_FAKTURA, "BrojFakture": "5/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC, "Iznos": (SLED_KG_1 + SLED_KG_2) * 50,
          "Status": "Neplaceno"},
+        # Krug 8: aktivne fakture F i M lanaca (R1/R2). FAK-NEMA-GA se
+        # NAMERNO ne dodaje -- PRJ-SLED-F2 pokazuje u prazno.
+        {"FakturaID": SLED_FAKTURA_2, "BrojFakture": "6/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 60 * 50, "Status": "Neplaceno"},
+        {"FakturaID": SLED_FAKTURA_3, "BrojFakture": "7/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 100 * 50, "Status": "Neplaceno"},
+        {"FakturaID": SLED_FAKTURA_3B, "BrojFakture": "8/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 100 * 50, "Status": "Neplaceno"},
     ],
     # STAVKE IZVODA -- devet redova u TRI izvoda, svaki sa svojim razlogom:
     #   BIM-FIX-1   jak kljuc preko FAKTURE (poziv na broj = broj fakture 2/2026)
@@ -1311,6 +1373,26 @@ SEED = {
          "VozacID": VOZAC2, "BrojPrijemnice": SLED_PRIJ_BROJ_N, "BrojZbirne": SLED_ZBIRNA_N,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 150,
          "Cena": 50.0, "Klasa": "I"},
+        # Krug 8 R1: F-lanac -- F1 na AKTIVNU fakturu, F2 "Da" na
+        # NEPOSTOJECU (ALL-pravilo obara celu kariku; NEPOTPUNI je vidi).
+        {"PrijemnicaID": "PRJ-SLED-F1", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "33/150326", "BrojZbirne": SLED_ZBIRNA_F,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 60,
+         "Cena": 50.0, "Klasa": "I", "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_2},
+        {"PrijemnicaID": "PRJ-SLED-F2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "34/150326", "BrojZbirne": SLED_ZBIRNA_F,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 60,
+         "Cena": 50.0, "Klasa": "I", "Fakturisano": "Da", "FakturaID": "FAK-NEMA-GA"},
+        # Krug 8 R2: M-lanac -- dve prijemnice na DVE aktivne fakture
+        # (potpun; "2 prij."/"2 fakt." prikaz, brojevi u SearchRefs).
+        {"PrijemnicaID": "PRJ-SLED-M1", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "35/150326", "BrojZbirne": SLED_ZBIRNA_M,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100,
+         "Cena": 50.0, "Klasa": "I", "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_3},
+        {"PrijemnicaID": "PRJ-SLED-M2", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "36/150326", "BrojZbirne": SLED_ZBIRNA_M,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100,
+         "Cena": 50.0, "Klasa": "I", "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_3B},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
@@ -1375,6 +1457,13 @@ SEED = {
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 10,
          "KapacitetGajbica": 100, "NetoKg": 99, "Status": "ZATVORENA",
          "Stornirano": "Da"},
+        # Krug 8 R4: NEVALIDAN datum -- dokument MORA ostati vidljiv u
+        # ponudi polja izbora (IIf mina bi na njemu pukla). ZATVORENA iz
+        # istog razloga kao ostale SLED palete.
+        {"PaletaID": "PAL-SLED-B", "BrojPalete": 34, "Godina": 2026,
+         "Datum": "nevalidan", "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 8,
+         "KapacitetGajbica": 100, "NetoKg": 77, "Status": "ZATVORENA"},
     ],
     "tblPaletaStavka": [
         # ISTA fizicka paleta, dva dokumenta istog broja.

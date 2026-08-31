@@ -4977,7 +4977,7 @@ traži entitet. Sada ime „Svi" nosi samo lista koja je stvarno preko svih
 
 ---
 
-## 24. Sledljivost — šta je preneto (`v6-ui-187`)
+## 24. Sledljivost — šta je preneto (`v6-ui-188`)
 
 Šesti ekran **Faze E**. Red u registru (`modUiScreens.ScrRows`) je postojao
 od `S3a` — stavka menija ANALITIKA → „Sledljivost" se do sada crtala
@@ -5173,6 +5173,12 @@ kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
   sada nudi sve tri mete (v. 24.7/S5). Paletna OPERATIVA (zatvaranje,
   storno, prevezivanje, fizička štampa) i dalje živi isključivo na
   ekranu Palete; palete nisu postale karika lanca u mreži.
+- **Owner-scoped trace kroz palete/preradu** (krug 8 R3): paletna
+  stavka nosi zbirnu samo kao BROJ, pa se za dvosmislen broj paletni
+  tok ne može pripisati vlasniku — v1 ga fail-closed odbija
+  (`ZBIRNA-NEJASNA`). Pravo rešenje traži jači identitet u
+  `tblPaletaStavka` (npr. ZbirnaID), što je izmena šeme i writer-a —
+  ne izmišlja se ovde.
 
 ### 24.7 Smoke: nalazi operatera (ispravke u istom PR-u)
 
@@ -5380,18 +5386,71 @@ pečat-only" pravila ove migracije i ide uz izričitu odluku operatera;
 ako su svojstva uniformna a red vizuelno veći, uzrok je u iscrtavanju
 (DPI/font-substitucija) i traži drugi alat.
 
+**Krug 8 — spoljna revizija (REQUEST CHANGES → završni paket R1–R7,
+bez novih funkcija):**
+
+- **R1 — fakturisanost je ALL, ne ANY.** Lanac je govorio „potpun" čim
+  JEDNA prijemnica zbirne ima fakturu; sada SVAKA razrešena prijemnica
+  mora imati `Fakturisano=Da`, neprazan `FakturaID` i taj ID mora
+  pripadati POSTOJEĆOJ AKTIVNOJ fakturi (`SledFakMapa` sa
+  `ExcludeStornirano` — `BuildLookupDict` stornirane nije izbacivao).
+  Jedna neispravna obara celu kariku, a NEPOTPUNI dobija i treću granu
+  („FakturaID … nije među aktivnim fakturama") — dva read-modela istog
+  ekrana se SLAŽU. Fixture: F-lanac (2 prijemnice: aktivna + mrtva
+  veza); test 152 + sabotaža `sledljivost-fakture-any-umesto-all`.
+- **R2 — SearchRefs kolona 27.** Prikaz „N prij."/„N fakt." guta
+  pojedinačne brojeve, pa smer nazad po drugoj fakturi nije radio.
+  `ReportSledljivostLanac` sada u koloni 27 nosi SVE brojeve prijemnica
+  i faktura reda; haystack LANAC i PARCELE je koriste (PARCELE dobija i
+  kupca). Fixture: M-lanac (1 zbirna → 2 prijemnice → 2 fakture,
+  potpun); testovi 152/154 + sabotaža
+  `sledljivost-lanac-pretraga-bez-refs`.
+- **R3 — dvosmislen broj zbirne je fail-closed SVUDA.** Šablon:
+  vlasnička kapija (`SledVlasnikaBroja` — broj RAZLIČITIH aktivnih
+  vlasnika vozač+kupac) PRE režima štampe vraća `DVOSMISLEN`, a header
+  ide iz AKTIVNE zbirne (`ExcludeStornirano` — prvi red je umeo biti
+  stornirana generacija). Mete: jedina meta je `ZBIRNA-NEJASNA`, bez
+  štampe (i bez paleta po prostom broju — i stavka palete ga nosi kao
+  BROJ). Dropdown: dvosmislen broj je stavka „Zbirna — nejasan vlasnik"
+  BEZ kg (nikakvog sabiranja tuđih vlasnika) i bez print akcije.
+  Testovi 157/158 + sabotaža `sledljivost-sablon-dvosmislen-broj`.
+  Pravi owner-scoped trace kroz palete tražio bi jači identitet u
+  `tblPaletaStavka` — zapisano u §24.6, ne izmišlja se u v1.
+- **R4 — `IIf(IsDate, CDate, …)` mina uklonjena** (tri mesta u
+  `ReportSledljivostDokumenti`): `IIf` računa OBE grane, pa bi nevalidan
+  datum pukao baš na dokumentu koji ugovor obećava da ostane vidljiv.
+  Sada ugnježdeni `If`. Fixture: `PAL-SLED-B` (Datum „nevalidan");
+  test 158 + sabotaža `sledljivost-dokumenti-nevalidan-datum-skriven`.
+- **R5 — `zPop` tekst-traka (S15 zatvoren, u LJUSCI kao izričito
+  odobren izuzetak).** Revizija je izmerila: nije `Font.Size` nego GDI
+  rasterizacija — label PUNE visine (21pt) menja baseline fazu po redu,
+  pa „8. red izgleda kao veći font". Isto pravilo kao mreža: pozadina/
+  hit ostaje pun red, TEKST ide u unutrašnji label visine
+  `TxtH(TS_BODY)` centriran kroz `CenterY`; hover se boji CENTRALNO
+  (`PopHoverRed`, kao `mHoverRow` mreže), klik radi preko istog taga.
+  Pečat `v6-ui-188`. Test 159 + sabotaža `ljuska-popup-tekst-pun-red`.
+- **R6 — `BeginTableCache`/`EndTableCache`** oko sva tri read-modela u
+  snimku (isti veliki listovi tri puta); kes se zatvara i na grešci.
+- **R7 — auto-link je GLOBALAN i greška ≠ 0.** Toast sada kaže „SVI
+  periodi, ne samo prikazani"; `AutoLinkOtkupOtpremnica_TX` dobija
+  `Optional ByRef outGreska` (legacy pozivi netaknuti), pa ekran
+  razlikuje rollback (poruka greške) od legitimne nule.
+
 ### 24.8 Verifikacija
 
-- `RunAllTests` (devet novih testova 150–158, registrovani u sva tri
+- `RunAllTests` (deset novih testova 150–159, registrovani u sva tri
   registra, izvršavaju se PRE 124–126; 156 je NAMERNO samo čitanje —
   upis povezivanja bi pojeo vozilo `OTK-NAL-DJ` koje test 152 meri kao
   „nepovezan"), `RunBankaImportTestSuite` (Platni nalozi bit-identični —
-  SLED blokovi su zatvoreni; ponovljeno i posle paletnih fixture vozila
-  kruga 3), `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
+  SLED blokovi su zatvoreni; ponovljeno posle svake izmene fixture-a),
+  `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
   `--self-test`, `who_writes --check` — rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 26 sabotaža,
-  svaka obara tačno svoj imenovani test i vraća se bit-identično.
-- Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost ljuska-popup` —
+  31 sabotaža, svaka obara tačno svoj imenovani test i vraća se
+  bit-identično.
+- Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-188`) + `zPop`
+  tekst-traka iz kruga 8 (S15 — IZRIČITO odobren izuzetak od pečat-only
+  pravila u spoljnoj reviziji: kvar je zajedničke ljuske), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
   iz kruga 5 je idempotentna).
 - **Ručna kapija operatera (traži se izričito):** `Alt+F11 → Debug →

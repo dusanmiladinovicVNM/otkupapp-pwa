@@ -400,6 +400,7 @@ Public Sub RunAllTests()
     RunOne 156
     RunOne 157
     RunOne 158
+    RunOne 159
     RunOne 124
     RunOne 125
     RunOne 126
@@ -595,6 +596,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 156: TestName = "T_Sled_PovezivanjeKandidati"
         Case 157: TestName = "T_Sled_MeteSledljivosti"
         Case 158: TestName = "T_Sled_DokumentiPonuda"
+        Case 159: TestName = "T_Ljuska_PopupTekstTraka"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -761,6 +763,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 156: T_Sled_PovezivanjeKandidati
         Case 157: T_Sled_MeteSledljivosti
         Case 158: T_Sled_DokumentiPonuda
+        Case 159: T_Ljuska_PopupTekstTraka
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -11485,6 +11488,28 @@ Private Sub T_Sled_FailClosed()
              "cip nepotpun hvata nejasnog vlasnika"
     AssertEq modScrSledljivost.SlCipLanac("nepotpun", ""), False, _
              "cip nepotpun NE pusta potpun lanac"
+
+    ' --- Krug 8 R1: ALL pravilo fakturisanosti. F-lanac ima JEDNU
+    ' prijemnicu na aktivnu fakturu i JEDNU "Da" ka nepostojecoj --
+    ' jedna neispravna obara CELU kariku, a NEPOTPUNI je prijavljuje,
+    ' pa se dva read-modela istog ekrana SLAZU.
+    r = SledNadjiRed(lanac, "OTK-SLED-F")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-F"
+    AssertEq CStr(lanac(r, 14)), "nefakturisano", _
+             "delimicno fakturisana zbirna obara celu kariku (ALL, ne ANY)"
+    AssertEq SledImaProblem(problemi, "PRIJEMNICA-BEZ-FAKTURE", "PRJ-SLED-F2"), True, _
+             "prijemnica sa nepostojecom fakturom je medju problemima"
+
+    ' --- Krug 8 R2: M-lanac -- dve prijemnice na dve AKTIVNE fakture je
+    ' potpun; prikaz sabira, a kolona 27 cuva progutane brojeve.
+    r = SledNadjiRed(lanac, "OTK-SLED-M")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-M"
+    AssertEq CStr(lanac(r, 14)), "", _
+             "dve uredno fakturisane prijemnice = potpun lanac"
+    AssertEq CStr(lanac(r, 10)), "2 prij.", "prikaz sabira prijemnice"
+    AssertEq CStr(lanac(r, 12)), "2 fakt.", "prikaz sabira fakture"
+    AssertEq (InStr(1, CStr(lanac(r, 27)), "8/2026") > 0), True, _
+             "SearchRefs kolona nosi broj progutane fakture"
 End Sub
 
 ' 148. Identitet zivi u redu (prio 4, ne crta se); NEPOTPUNI nosi vrstu i
@@ -11624,6 +11649,16 @@ Private Sub T_Sled_KesPretragaIHint()
     AssertEq CLng(d(2)), 1, _
              "pretraga po broju zbirne nalazi nefakturisanu prijemnicu"
     AssertEq Trim$(CStr(d(1)(1, 3))), "31/150326", "i to bas njen red"
+
+    ' Krug 8 R2: broj DRUGE fakture M-lanca zivi samo u SearchRefs
+    ' ("2 fakt." prikaz ga guta) -- smer nazad mora da radi na OBE
+    ' projekcije istog zrna.
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "8/2026")
+    AssertEq CLng(d(2)), 1, "broj progutane fakture nalazi LANAC red"
+    modScrSledljivost.Scr_SlTestSet "PARCELE", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "8/2026")
+    AssertEq CLng(d(2)), 1, "broj progutane fakture nalazi i PARCELE red"
     modScrSledljivost.Scr_SlTestReset
 End Sub
 
@@ -11772,6 +11807,16 @@ Private Sub T_Sled_MeteSledljivosti()
              "prazan broj zbirne nema mete"
     m = modIzvestaj.ReportSledljivostMete("ZB-NEMA-GA")
     AssertEq UBound(m, 1), 1, "nepoznat broj: samo zbirna meta"
+
+    ' Krug 8 R3: dvosmislen broj (ZB-TEST-SLDD dele dva vlasnika) --
+    ' jedina meta je NEJASNA oznaka bez stampe, a sablon ga odbija
+    ' fail-closed PRE rezima stampe (zato radi i pod OFF fixture-om).
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLDD")
+    AssertEq UBound(m, 1), 1, "dvosmislen broj nema stamparske mete"
+    AssertEq CStr(m(1, 1)), "ZBIRNA-NEJASNA", _
+             "meta dvosmislenog broja je NEJASNA"
+    AssertEq modIzvestaj.StampajSledljivostZbirne("ZB-TEST-SLDD"), _
+             "DVOSMISLEN", "sablon odbija dvosmislen broj zbirne"
 End Sub
 
 ' 158. Polje izbora dokumenta sledljivosti (smoke krug 3b): ponuda = SVI
@@ -11784,7 +11829,7 @@ Private Sub T_Sled_DokumentiPonuda()
     Dim d As Variant, p As Variant, i As Long
     Dim nSled As Long, nSldd As Long
     Dim imaPal As Boolean, imaX As Boolean
-    Dim imaPre As Boolean, imaSvezu As Boolean
+    Dim imaPre As Boolean, imaSvezu As Boolean, imaB As Boolean
 
     modScrSledljivost.Scr_SlTestReset
     modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
@@ -11795,7 +11840,10 @@ Private Sub T_Sled_DokumentiPonuda()
     For i = 1 To UBound(p, 1)
         Select Case CStr(p(i, 2))
             Case "ZBIRNA|ZB-TEST-SLED": nSled = nSled + 1
-            Case "ZBIRNA|ZB-TEST-SLDD": nSldd = nSldd + 1
+            ' Krug 8 R3: dvosmislen broj se nudi kao NEJASAN (bez kg i
+            ' bez stampe), ne kao "printable" zbirna -- sabiranje tudjih
+            ' vlasnika u jednu stavku je tacno ono sto se ne sme.
+            Case "ZBIRNA-NEJASNA|ZB-TEST-SLDD": nSldd = nSldd + 1
             Case "PALETA|PAL-SLED-1"
                 imaPal = True
                 ' Suzavanje pri kucanju radi LJUSKIN panel PO PRIKAZU
@@ -11804,14 +11852,56 @@ Private Sub T_Sled_DokumentiPonuda()
                          "prikaz palete nosi broj -- po njemu panel suzava"
             Case "PALETA|PAL-SLED-X": imaX = True
             Case "PALETA|PAL-SLED-2": imaSvezu = True
+            Case "PALETA|PAL-SLED-B": imaB = True
             Case "PRERADA|PRE-SLED-1": imaPre = True
         End Select
     Next i
     AssertEq nSled, 1, "zbirna SLED lanca je u ponudi, jednom"
-    AssertEq nSldd, 1, "dvosmislen broj zbirne se nudi JEDNOM, ne po vlasniku"
+    AssertEq nSldd, 1, "dvosmislen broj je u ponudi kao NEJASAN, jednom"
     AssertEq imaPal, True, "sveza paleta je u ponudi (paletni list)"
     AssertEq imaSvezu, False, "preradjena paleta nije u ponudi kao sveza"
     AssertEq imaX, False, "stornirana paleta nije u ponudi"
+    ' Krug 8 R4: nevalidan datum NE sme tiho da sakrije dokument (IIf
+    ' mina bi na njemu i pukla -- ovaj red cuva i ugovor i zivot).
+    AssertEq imaB, True, "dokument sa nevalidnim datumom ostaje vidljiv"
     AssertEq imaPre, True, "prerada je u ponudi (preradni list)"
     modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 159. Ljuskin panel (zPop, v6-ui-188): tekst reda zivi u UNUTRASNJEM
+' labelu visine TxtH(TS_BODY) centriranom u redu -- label pune visine
+' (21pt) je GDI-ju pomerao baseline fazu po redu, pa je "8. red izgledao
+' vecim fontom" iako je Font.Size svuda isti (Sledljivost smoke S15;
+' review merenje: isti bounding box, druga rasterizacija). Meri se
+' GRADNJA: par pozadina+tekst za svih 14 redova, tekst NIZI od reda,
+' istog fonta. Tvrdi se posle Unload-a (par. 7.9).
+Private Sub T_Ljuska_PopupTekstTraka()
+    Dim f As frmOtkupUI, z As Object, i As Long
+    Dim nema As String, losa As String
+    Dim imaZ As Boolean
+
+    Set f = NewOtkupUIForm()
+    Set z = Nothing
+    On Error Resume Next
+    Set z = f.Controls("zPop")
+    On Error GoTo 0
+    imaZ = Not (z Is Nothing)
+    If imaZ Then
+        For i = 0 To 13
+            If Not KontrolaPostoji(z, "pop" & i) Then nema = nema & " pop" & i
+            If Not KontrolaPostoji(z, "popT" & i) Then
+                nema = nema & " popT" & i
+            Else
+                If z.Controls("popT" & i).Height >= _
+                   z.Controls("pop" & i).Height Then losa = losa & " h" & i
+                If z.Controls("popT" & i).Font.Size <> _
+                   z.Controls("pop" & i).Font.Size Then losa = losa & " f" & i
+            End If
+        Next i
+    End If
+    Unload f
+
+    AssertEq imaZ, True, "panel zPop postoji na formi"
+    AssertEq nema, "", "svaki red panela ima par pozadina+tekst"
+    AssertEq losa, "", "tekst labeli su nizi od reda i istog fonta"
 End Sub

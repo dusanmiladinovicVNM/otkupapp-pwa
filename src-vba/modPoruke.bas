@@ -1558,7 +1558,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_SL_AUTO", "Pove" & ChrW(382) & "i automatski"
     UpsertRow lo, existing, "OTKUI_BTN_SL_SABLON", "Sledljivost (PDF)"
     UpsertRow lo, existing, "OTKUI_HDS_KLASAKOD", "KLASA KOD"
-    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa:"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa (SVI periodi, ne samo prikazani):"
     UpsertRow lo, existing, "OTKUI_MSG_SL_NEMA_KANDIDATA", ChrW(10007) & " Nema nestorniranih otpremnica istog datuma na stanici otkupa"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_OK", "Otkup povezan sa otpremnicom"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_NEUSPEH", ChrW(10007) & " Povezivanje nije uspelo " & ChrW(8212) & " ciljna otpremnica ne postoji ili je stornirana"
@@ -1590,6 +1590,10 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SLPDF_DATSTAMPE", "Datum " & ChrW(353) & "tampe:"
     UpsertRow lo, existing, "OTKUI_SLPDF_POTPIS", "Potpis:"
     UpsertRow lo, existing, "OTKUI_SLPDF_PECAT", "Pe" & ChrW(269) & "at:"
+    ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
+    UpsertRow lo, existing, "OTKUI_SL_META_NEJASNA", "Zbirna " & ChrW(8212) & " nejasan vlasnik"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_DVOSMISLENA", ChrW(10007) & " Broj zbirne dele razli" & ChrW(269) & "iti vlasnici " & ChrW(8212) & " sledljivost po tom broju bi me" & ChrW(353) & "ala tokove (v. Nepotpune)"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_AUTO_GRESKA", ChrW(10007) & " Automatsko povezivanje prekinuto gre" & ChrW(353) & "kom " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano (vidi ErrorLog)"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     InvalidateCache

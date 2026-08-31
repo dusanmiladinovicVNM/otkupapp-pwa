@@ -13,10 +13,15 @@ Option Explicit
 '   - optional TX wrapper for batch auto-link
 ' ============================================================
 
-Public Function AutoLinkOtkupOtpremnica_TX() As Long
+' outGreska (krug 8 R7): TX omotac na gresku istorijski vraca 0, pa UI
+' nije razlikovao "nema sta da se poveze" od rollback-a. Opcioni ByRef
+' cuva potpis za legacy pozivaoce (frmSledljivost) netaknutim.
+Public Function AutoLinkOtkupOtpremnica_TX( _
+        Optional ByRef outGreska As Boolean = False) As Long
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
+    outGreska = False
     On Error GoTo EH
 
     tx.BeginTx
@@ -79,6 +84,7 @@ EH:
     If Not tx Is Nothing Then tx.RollbackTx
     On Error GoTo 0
 
+    outGreska = True
     AutoLinkOtkupOtpremnica_TX = 0
 End Function
 

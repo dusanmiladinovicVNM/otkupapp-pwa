@@ -3956,6 +3956,68 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "stornirana paleta nije u ponudi",
     ),
+    # Krug 8 R1: ALL pravilo fakturisanosti -- kad neispravna prijemnica
+    # cuti, delimicno fakturisana zbirna izgleda kao potpun lanac.
+    "sledljivost-fakture-any-umesto-all": (
+        "modIzvestaj.bas",
+        "                                Else\n"
+        "                                    prijLose = True\n"
+        "                                    If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                End If\n",
+        "                                Else\n"
+        "                                    ' SABOTAZA: ANY umesto ALL -- neispravna cuti\n"
+        "                                    If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                End If\n",
+        "T_Sled_FailClosed",
+        "delimicno fakturisana zbirna obara celu kariku (ALL, ne ANY)",
+    ),
+    # Krug 8 R2: LANAC haystack bez SearchRefs kolone -- broj progutane
+    # fakture ("2 fakt.") vise ne nalazi red, obecanje pretrage pada.
+    "sledljivost-lanac-pretraga-bez-refs": (
+        "modScrSledljivost.bas",
+        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
+        "                           NzS(src(i, 14)) & \"|\" & NzS(src(i, 27))\n",
+        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
+        "                           NzS(src(i, 14))   ' SABOTAZA: bez SearchRefs\n",
+        "T_Sled_KesPretragaIHint",
+        "broj progutane fakture nalazi LANAC red",
+    ),
+    # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
+    # tudje generacije u jedan dokument sledljivosti.
+    "sledljivost-sablon-dvosmislen-broj": (
+        "modIzvestaj.bas",
+        "    If SledVlasnikaBroja(brojZbirne) > 1 Then\n"
+        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
+        "    If False Then   ' SABOTAZA: dvosmislen broj prolazi na sablon\n"
+        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
+        "T_Sled_MeteSledljivosti",
+        "sablon odbija dvosmislen broj zbirne",
+    ),
+    # Krug 8 R4: nevalidan datum tiho sakriven iz ponude -- ugovor kaze
+    # da anomalija ostaje VIDLJIVA.
+    "sledljivost-dokumenti-nevalidan-datum-skriven": (
+        "modIzvestaj.bas",
+        "    If Not IsDate(v) Then\n"
+        "        SledDatumUPeriodu = True\n",
+        "    If Not IsDate(v) Then\n"
+        "        SledDatumUPeriodu = False   ' SABOTAZA: nevalidan datum se krije\n",
+        "T_Sled_DokumentiPonuda",
+        "dokument sa nevalidnim datumom ostaje vidljiv",
+    ),
+    # Krug 8 R5 (ljuska, v6-ui-188): tekst panela nazad u label PUNE
+    # visine -- GDI baseline faza opet varira po redu ("8. red veceg
+    # fonta").
+    "ljuska-popup-tekst-pun-red": (
+        "modOtkupUI.bas",
+        "        NewLbl z, \"popT\" & i, \"\", 1, _\n"
+        "               CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY), _\n"
+        "               178, TxtH(TS_BODY), TS_BODY, False, C_FOREST, -1\n",
+        "        NewLbl z, \"popT\" & i, \"\", 1, _\n"
+        "               CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY), _\n"
+        "               178, POP_ITEM_H, TS_BODY, False, C_FOREST, -1   ' SABOTAZA: pun red\n",
+        "T_Ljuska_PopupTekstTraka",
+        "tekst labeli su nizi od reda i istog fonta",
+    ),
     # PDF karika sa dvotackom (krug 5 S11) -- deljeni detalj-kljucevi
     # ("Zbirna:") bi u PDF koloni stajali pored karika bez dvotacke.
     "sledljivost-pdf-dvotacka": (
