@@ -27,6 +27,7 @@ Attribute VB_Name = "modUiScreens"
 '   Scr_Event(tag, ev)         -> obradi klik; True ako je obradio
 '   Scr_Dozvoljen()            -> dodatna brana ekrana (npr. administracija);
 '                                 ekran koji je nema je dozvoljen
+'   Scr_Sort()                 -> podrazumevani sort aktivne liste, "kol:asc"
 '   Scr_Save()                 -> upisi; "" ako je proslo, inace greska
 '   Scr_ResetCache()           -> zaboravi izvedene mape (posle upisa)
 '
@@ -386,6 +387,26 @@ Public Function ScrLista(ByVal kljuc As String) As String
     On Error Resume Next
     m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
     If Len(m) > 0 Then ScrLista = CStr(Application.Run(m & ".Scr_Lista"))
+End Function
+
+' Podrazumevani sort AKTIVNE liste ekrana, oblika "kolona:asc" ili "kolona:desc".
+' Prazno = ekran nema misljenje, pa ostaje pravilo ljuske (SortZaListu).
+'
+' Uvedeno zbog sifarnika: ljuskino pravilo je "druga kolona opadajuce", sto je
+' datum dokumenta -- nad Stanicama to znaci nazive unazad. Ekran koji zna sta mu
+' je glavna kolona to kaze sam, umesto da se ljusci dopisuje jos trinaest imena
+' lista pored zatecena dva.
+Public Function ScrSort(ByVal kljuc As String) As String
+    Dim m As String
+    On Error Resume Next
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    Err.Clear
+    ScrSort = CStr(Application.Run(m & ".Scr_Sort"))
+    If Err.Number <> 0 Then
+        ScrSort = ""
+        Err.Clear
+    End If
 End Function
 
 ' Radnje nad izabranim redom za trenutno aktivnu listu ekrana.

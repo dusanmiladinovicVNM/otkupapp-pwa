@@ -2907,7 +2907,23 @@ Public Sub SortZaListu(ByVal kljuc As String, ByRef col As Long, ByRef asc As Bo
     End If
 End Sub
 
+' Ekran prvo dobija priliku da kaze svoj sort; ako ga nema, vazi pravilo ljuske.
+' Bez toga bi sifarnici dobili "druga kolona opadajuce" -- pravilo napisano za
+' datum dokumenta, koje nad Stanicama znaci nazive unazad.
 Private Sub PrimeniSortZaListu(ByVal kljuc As String)
+    Dim spec As String, p() As String
+    spec = modUiScreens.ScrSort(mScreen)
+    If Len(spec) > 0 Then
+        p = Split(spec, ":")
+        If UBound(p) >= 1 Then
+            If val(p(0)) >= 1 Then
+                mSortCol = CLng(val(p(0)))
+                mSortAsc = (LCase$(Trim$(p(1))) = "asc")
+                mSortLista = kljuc
+                Exit Sub
+            End If
+        End If
+    End If
     SortZaListu kljuc, mSortCol, mSortAsc
     mSortLista = kljuc
 End Sub

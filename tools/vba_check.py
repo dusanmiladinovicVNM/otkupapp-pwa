@@ -114,6 +114,10 @@ SCR_UGOVOR = {
     "scr_meta", "scr_build", "scr_layout", "scr_rows", "scr_event",
     "scr_save", "scr_resetcache", "scr_liste", "scr_lista", "scr_radnje",
     "scr_naslovdopuna", "scr_brojac", "scr_cipovi", "scr_brojikomade",
+    # v6-ui-187/188: dodatna brana ekrana (administracija) i podrazumevani
+    # sort aktivne liste. Oba se zovu iskljucivo kasno vezano i kvalifikovano
+    # (modUiScreens.ScrDozvoljen / ScrSort), pa vazi isti izuzetak.
+    "scr_dozvoljen", "scr_sort",
 }
 
 

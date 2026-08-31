@@ -2153,6 +2153,39 @@ SABOTAZE = {
         "T_MatSistem_UgovorIIdentitet",
         "ljuska postuje branu ekrana",
     ),
+    # ------------------------------- MATICNI SIFARNICI: OPIS I CITANJE
+    # Opis 13 sekcija je ono sto je preneto iz frmStammdaten. Cetiri sabotaze
+    # ciljaju cetiri tvrdnje koje bi inace pukle tiho: identitet u koloni 1,
+    # podnozje bez laznih zbirova, sema kao izvor istine za kolonu statusa, i
+    # cip koji stvarno deli skup.
+    "maticni-kolona-1-nije-pk": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_ID|KooperantID|txt|84|1\", _\n",
+        "                \"OTKUI_HDM_ID|Telefon|txt|84|1\", _\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "kolona 1 svake sekcije NOSI PK",
+    ),
+    "maticni-tezina-kao-kilogrami": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|num|130|1\")\n",
+        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|kg|130|1\")\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "nijedna maticna kolona nije kilogramska ni novcana",
+    ),
+    "maticni-status-pogadja-umesto-da-trazi": (
+        "modMaticniIzvor.bas",
+        "    If GetColumnIndex(tbl, \"Aktivan\") > 0 Then\n        MatStatusKolona = \"Aktivan\"\n    ElseIf GetColumnIndex(tbl, \"Aktivna\") > 0 Then\n        MatStatusKolona = \"Aktivna\"\n    End If\n",
+        "    MatStatusKolona = \"Aktivan\"   ' SABOTAZA: pogadja umesto da trazi u semi\n",
+        "T_MatIzvor_OpisSekcijaJePotpun",
+        "kolona statusa se trazi u semi, ne pogadja",
+    ),
+    "maticni-cip-ne-deli-skup": (
+        "modMaticniIzvor.bas",
+        "            If filter = MAT_CIP_NEAKT And aktivan Then GoTo Sledeci\n",
+        "            ' SABOTAZA: cip 'neaktivni' ne filtrira nista\n",
+        "T_MatIzvor_CipIdentitetIPretraga",
+        "aktivni + neaktivni = svi",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

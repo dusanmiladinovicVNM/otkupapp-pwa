@@ -6427,7 +6427,7 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, grupa SISTEM sa dva dugmeta na legacy panele | Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
 |---|---|---|
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §24.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
-| **M1** | `modMaticniIzvor` — jedan opis 13 sekcija (tabela, PK, kolone liste, polja editora, combo-i, prefiks ID-ja); ekrani `MAT_PARTNERI`, `MAT_ROBA`, `MAT_PAKOVANJE` kao **pregled** (liste, pretraga, sort, čipovi) | Ceo čitalački deo bez ijednog upisa. Legacy netaknut. Ako stane ovde, dobijeno je pretraživo. |
+| **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §24.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
 | **M2** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy se prevezuje**; editor u zoni, radnje `izmeni` i `status` | Jedan pisac (§24.5). Ide sam, sa dvosmernim dokazom. |
 | **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
 | **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
@@ -6517,12 +6517,73 @@ ne staju** (616 > 492) — to poslednje je jedini razlog zbog kog sekcije postoj
 Test zato hvata i izmenu koja nema veze sa matičnim podacima: dodavanje šestog
 ekrana u OPERACIJE.
 
-**Verifikacija:** `vba_check` čist (198 fajlova, 327 sabotaža); pet novih
-sabotaža pod prefiksom `maticni-` (`python tools/dokaz.py maticni`). Testovi 150
-i 151 su napisani ali **nisu izvršeni** — `run_vba` traži Windows + Excel, pa se
-u web sesiji ponašanje prijavljuje kao **neverifikovano**. Ostaje ručna kapija:
-`Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, `dokaz.py maticni`, pa
-smoke: prekidač sekcije na najmanjem i maksimizovanom prozoru, suženi sidebar,
-otvaranje oba panela, i **legacy meni i dalje radi**. Tri MDL2 glifa
-(`IC_MAT_PARTNERI`, `IC_MAT_ROBA`, `IC_MAT_PAKOVANJE`) su izabrana iz kataloga a
-**nisu vizuelno proverena** — provera je `DumpMdl2Used`.
+**Verifikacija:** `vba_check` čist; pet novih sabotaža pod prefiksom `maticni-`.
+Testovi 150 i 151 su napisani ali **nisu izvršeni** — `run_vba` traži Windows +
+Excel, pa se u web sesiji ponašanje prijavljuje kao **neverifikovano**. Ostaje
+ručna kapija: `Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`,
+`dokaz.py maticni`, pa smoke: prekidač sekcije na najmanjem i maksimizovanom
+prozoru, suženi sidebar, otvaranje oba panela, i **legacy meni i dalje radi**.
+Tri MDL2 glifa (`IC_MAT_PARTNERI`, `IC_MAT_ROBA`, `IC_MAT_PAKOVANJE`) su izabrana
+iz kataloga a **nisu vizuelno proverena** — provera je `DumpMdl2Used`.
+
+### 24.14 M1 — pregled bez ijednog upisa (`v6-ui-188`)
+
+Tri ekrana rade. **Nijedna linija upisa nije napisana** i `frmStammdaten` nije
+dirana: unos i izmena i dalje idu kroz staru formu, a to zona i kaže naglas
+(„Pregled. Unos i izmena i dalje idu kroz stari ekran matičnih podataka.") —
+u zoni, ne u dijalogu, jer se dijalog zatvori i zaboravi.
+
+**Podela na tri modula, ne na tri ekrana.**
+
+| Modul | Zna | Ne zna |
+|---|---|---|
+| `modMaticniIzvor` | tabele, PK, kolone, izvedene vrednosti, čipove, sort | ništa o kontrolama i ljusci |
+| `modMaticniEkran` | zonu, mrežu, prekidač lista | ništa o tabelama |
+| `modScrMat*` (3×) | **samo** koje sekcije nosi | sve ostalo |
+
+Ekranski moduli su po ~70 linija. Tri kopije istog rasporeda bi se razišle prvom
+doradom — to je već plaćeno na četiri kopije `Prefill*` (Z10).
+
+**Šta je preneto 1:1 iz `LoadList`:** koje kolone operater vidi i kojim redom, i
+svih šest izvedenih vrednosti (puno ime, **naziv** stanice umesto ID-ja, spojena
+adresa, adresa kupca sa poštanskim brojem, kooperant kao „Ime Prezime (ID)",
+geo status/izvor). Cenovnik zadržava svoj poredak (`ExcludeStornirano` →
+`SortArray` po datumu opadajuće, tie-break `CenaID`) — to je poslovno pravilo,
+ne prikaz: važeća cena je poslednja.
+
+**Tri stvari su namerno drugačije od legacy-ja:**
+
+1. **Kolona statusa se TRAŽI u šemi, ne pogađa.** Parcele nose `Aktivna`, ostali
+   `Aktivan`, a Cenovnik, Ambalaža i Palete je po zatečenoj šemi nemaju uopšte.
+   Isti probe koji legacy radi u `AktivanColName`, i isti razlog: sekcija bez te
+   kolone **ne dobija čipove**. Čip „Aktivni" koji tiho pokazuje sve je gori od
+   nikakvog čipa. Test to tvrdi po imenu (`maticni-status-pogadja-umesto-da-trazi`).
+2. **Identitet je PK u koloni 1, uvek.** Legacy bira red po poziciji u listboxu
+   (`m_RowMap`); u novoj mreži pozicija ne znači ništa posle sortiranja i
+   pretrage, a istoimeni zapisi su u šifarnicima obična pojava (§18).
+3. **Status ostaje tekst, ne pilula.** Vrsta ćelije `pill` ima **zatvoren rečnik**
+   od tri stanja dokumenta (Otkazana / Poslato / Sačuvana) — aktivnom kooperantu
+   bi pisalo „Sačuvana". Pilula za Aktivan/Neaktivan je nova vrsta ćelije i nije
+   M1.
+
+**Ugovor ekrana je dobio `Scr_Sort`.** Ljuskino pravilo je „druga kolona
+opadajuće" — napisano za datum dokumenta, a nad Stanicama znači nazive unazad.
+Umesto da se `SortZaListu` dopisuje sa još trinaest imena lista pored zatečena
+dva, ekran kaže svoj sort sam. Pravilo je jedno: **rastuće po koloni koju opis
+označi kao rastegljivu** (`part`) — računa se iz opisa kolona, pa dodavanje
+sekcije ne traži još jedan spisak koji bi se razišao. Cenovnik je jedini izuzetak
+i to je poslovno pravilo.
+
+**Podnožje nema lažne zbirove** — nijedna matična kolona nije `kg` ni novčana;
+težine su `num`, jer jesu broj ali nisu zbirna veličina. Test to tvrdi nad
+opisom, pre crtanja (§24.4).
+
+**Verifikacija:** `vba_check` čist (203 fajla, 331 sabotaža). Dva nova testa
+(152 — opis svih 13 sekcija je potpun i saglasan sa šemom; 153 — čip, identitet
+i pretraga nad stvarnim podacima) i četiri nove sabotaže. Test 153 **pada ako
+nijedna sekcija nema redove u fixture-u** — zelena tvrdnja nad praznim skupom ne
+dokazuje ništa. Kao i M0: **testovi nisu izvršeni** u web sesiji.
+
+**Otvoreno posle M1:** poređenje 1:1 sa `LoadList` po sekciji (traži Excel);
+pilula za status; `Scr_Brojac` se namerno ne implementira (šifarnik nema šta da
+broji, a nula se ne crta).
