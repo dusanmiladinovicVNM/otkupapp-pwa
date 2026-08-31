@@ -1713,6 +1713,68 @@ End Sub
 ' DIJAGNOSTIKA. Alt+F8 -> Diag_SlRedovi, pa Ctrl+G (N7 obrazac: bez ovoga
 ' se gubitak upita PRE ekrana i kvar POSLE ekrana ne razlikuju).
 '=====================================================================
+' DIJAGNOSTIKA (krug 7): "8. red dropdown-a je uvek veceg fonta".
+' Nijedan put u kodu ne dira Font pop-redova (BuildPopup ih gradi
+' identicno, PopRender menja samo caption/boju/top/sirinu/vidljivost,
+' hover samo boju) -- zato se STVARNO stanje svih redova ljuskinog
+' panela ispisuje ovde: Immediate + povratni string (za COM sondu).
+' Radi nad otvorenom formom; bez nje ucita svoju headless (SetTestMode
+' obavezno pre toga u tom slucaju) i istovari je na kraju.
+' Alt+F8 -> Diag_SlPopFont dok je aplikacija otvorena.
+Public Function Diag_SlPopFont() As String
+    Dim f As Object, z As Object, c As Object, i As Long
+    Dim svoja As Boolean, s As String
+
+    On Error Resume Next
+    If VBA.UserForms.count > 0 Then
+        Set f = VBA.UserForms(0)
+    Else
+        Set f = VBA.UserForms.Add("frmOtkupUI")
+        Dim n As Long
+        n = f.Controls.count            ' okida UserForm_Initialize (par. 7.9)
+        svoja = True
+    End If
+    If f Is Nothing Then
+        Diag_SlPopFont = "forme nema i ne moze da se ucita"
+        Debug.Print Diag_SlPopFont
+        Exit Function
+    End If
+
+    s = SlPopIzvestaj(f)
+    If svoja Then Unload f
+
+    Debug.Print s
+    Diag_SlPopFont = s
+End Function
+
+' Zajednicki citac stanja pop-redova za obe dijagnostike.
+Private Function SlPopIzvestaj(ByVal f As Object) As String
+    Dim z As Object, c As Object, i As Long, s As String
+    On Error Resume Next
+    Set z = f.Controls("zPop")
+    If z Is Nothing Then
+        SlPopIzvestaj = "zPop ne postoji na " & f.name & vbCrLf
+        Exit Function
+    End If
+    s = "=== zPop / " & f.name & " (vis=" & z.Visible & ", h=" & _
+        Format$(z.Height, "0.0") & ") ===" & vbCrLf
+    For i = 0 To 13
+        Set c = Nothing
+        Set c = z.Controls("pop" & i)
+        If c Is Nothing Then
+            s = s & "pop" & i & ": NEMA" & vbCrLf
+        Else
+            s = s & "pop" & i & ": size=" & c.Font.Size & _
+                "  name=" & c.Font.name & _
+                "  bold=" & c.Font.bold & _
+                "  h=" & Format$(c.Height, "0.0") & _
+                "  top=" & Format$(c.top, "0.0") & _
+                "  vis=" & c.Visible & vbCrLf
+        End If
+    Next i
+    SlPopIzvestaj = s
+End Function
+
 Public Sub Diag_SlRedovi()
     Dim d As Variant, kolone As Variant, redovi As Variant, i As Long, k As Long, n As Long
     On Error Resume Next

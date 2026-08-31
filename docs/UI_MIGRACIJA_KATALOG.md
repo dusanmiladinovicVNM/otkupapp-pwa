@@ -5363,6 +5363,23 @@ eksplicitne širine kolona, A4 `FitToPagesWide=1`; pad-headeri iz S11
 uklonjeni (builder ima prave širine). Test 153 dopunjen (nosilac +
 info blok + oznaka na koloni 5).
 
+**S15 — „u dropdown-u dokumenta je 8. red uvek većeg fonta"** (sedmi
+krug) — **NIJE reprodukovano iz izvora** (CLAUDE.md §2: nalaz se
+prijavljuje, ne nagađa se zakrpa). Statički: `BuildPopup` gradi svih 14
+`pop*` redova identično, `PopRender` menja samo
+caption/boju/top/širinu/vidljivost, hover (`clsFlatBtn`) samo boju —
+font niko ne dira. Empirijski (COM sonda nad fixture-om): posle gradnje
+forme svih 14 redova je identično `size=10 Segoe UI bold=False h=21` —
+mutacija se, ako postoji, dešava tek u ŽIVOJ upotrebi (headless se
+panel ne može otvoriti: `mFrm` postavlja tek `ShowOtkupUI`). Isporučena
+dijagnostika **`Alt+F8 → Diag_SlPopFont`** — čita stvarno stanje svih
+redova otvorene forme (Immediate ispis); pušta se ODMAH pošto se veći
+red vidi. Ako ispis pokaže odstupanje svojstva, kvar je u LJUSCI
+(deljeni `zPop` panel) — ispravka tamo je odstupanje od „`modOtkupUI` =
+pečat-only" pravila ove migracije i ide uz izričitu odluku operatera;
+ako su svojstva uniformna a red vizuelno veći, uzrok je u iscrtavanju
+(DPI/font-substitucija) i traži drugi alat.
+
 ### 24.8 Verifikacija
 
 - `RunAllTests` (devet novih testova 150–158, registrovani u sva tri
