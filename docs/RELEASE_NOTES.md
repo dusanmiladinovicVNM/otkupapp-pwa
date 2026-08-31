@@ -6728,20 +6728,26 @@ ijedne izmišljene veze.
   te robe dokazuje — šablon zbirne ako je roba prodata dalje kao sveža,
   paletni list za svaku svežu paletu u magacinu na kojoj ta roba leži,
   preradni list ako je roba prerađena (prodata kao prerađena ili u
-  magacinu prerađene robe). Jedan dokument izlazi odmah; više njih se
-  bira rednim brojem (kao kod „Poveži…"). Veze su isključivo
-  podatkovne: paletna stavka od prvog dana nosi broj zbirne, preradna
-  stavka svoju paletu — ništa se ne pogađa; stornirana paleta nije
-  ponuda, prerađena se ne nudi kao „sveža". Paletna operativa
-  (zatvaranje, storno, fizička štampa listova) ostaje na ekranu Palete.
+  magacinu prerađene robe). Veze su isključivo podatkovne: paletna
+  stavka od prvog dana nosi broj zbirne, preradna stavka svoju paletu —
+  ništa se ne pogađa; stornirana paleta nije ponuda, prerađena se ne
+  nudi kao „sveža". Paletna operativa (zatvaranje, storno, fizička
+  štampa listova) ostaje na ekranu Palete.
+- **Polje „Dokument sledljivosti"** — jasno mesto izbora: padajuća
+  lista SVIH dokumenata sledljivosti u periodu (zbirne, sveže palete,
+  prerade), sa filterom — ukucaš broj, datum, tip ili status i ponuda
+  se sužava dok kucaš, bez ponovnog čitanja tabela. Izabereš dokument →
+  „Sledljivost (PDF)" štampa baš njega. Ukucan a neizabran tekst se
+  odbija porukom (ne pogađa se); prazno polje i dalje radi preko
+  izabranog reda kad red ima jednoznačan dokument.
 
 ### Verifikacija
 
-- Osam novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
-  fail-closed oznake, identitet, keš/pretraga, zona, kandidati
-  povezivanja, mete sledljivosti) + **22 namerna kvara** koji obaraju
-  po tačno jedan imenovani test i vraćaju se bit-identično (dvosmerni
-  dokaz).
+- Devet novih testova (ugovor ekrana, slaganje lanca sa ručnim
+  prolazom, fail-closed oznake, identitet, keš/pretraga, zona,
+  kandidati povezivanja, mete sledljivosti, ponuda polja izbora) +
+  **24 namerna kvara** koji obaraju po tačno jedan imenovani test i
+  vraćaju se bit-identično (dvosmerni dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`

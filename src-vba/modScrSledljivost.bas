@@ -101,6 +101,12 @@ Private mIzabranOtkupID As String
 Private mIzabranaZbirna As String
 Private mDetalj As Variant
 
+' Polje izbora dokumenta sledljivosti (smoke krug 3b): guard punjenja
+' (upis u kontrolu okida Change) + kljuc poslednjeg punjenja comba
+' (snimak-kljuc # punjenja # generacija -- da se ne puni iznova bez potrebe).
+Private mDokFill As Boolean
+Private mCmbDokKljuc As String
+
 ' Kontekst koji je postavio TEST (zone u testu nema).
 Private mTestOd As Double
 Private mTestDo As Double
@@ -223,6 +229,7 @@ Public Sub Scr_ResetCache()
     Set mSnimci = Nothing
     mKpiPotpun = Empty
     mKpiProblemi = Empty
+    mCmbDokKljuc = ""
 End Sub
 
 Public Function Scr_Event(ByVal tag As String, ByVal ev As String) As Boolean
@@ -266,6 +273,7 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     If Left$(tag, 4) = "chg:" Then
         Select Case Mid$(tag, 5)
             Case "scrSlOdT", "scrSlDoT": OpsegPromenjen
+            Case "scrSlDokT": FiltrirajDokCombo
         End Select
         Exit Function
     End If
@@ -388,61 +396,49 @@ Private Function AutoPovezi() As Boolean
     AutoPovezi = (n > 0)
 End Function
 
-' Sledljivost izabranog reda (smoke krug 3): dokument kojim se sledljivost
-' te robe STVARNO dokazuje -- zbirna (sablon, roba prodata kao sveza),
-' paleta (paletni list, roba u magacinu sveze robe) ili prerada (preradni
-' list, roba preradjena / u magacinu preradjene robe). Mete daje
-' modIzvestaj.ReportSledljivostMete (samo podatkovne veze, nista se ne
-' izmislja); jedna meta ide odmah, vise njih kroz izbor rednim brojem
-' (isti InputBox obrazac kao "Povezi..."). OFF rezim i prazno se
-' PRIJAVLJUJU.
+' "Sledljivost (PDF)" (smoke krug 3b): 1) RAZRESEN izbor u polju
+' "Dokument sledljivosti" ide prvi; 2) kucan a nerazresen tekst ODBIJA
+' porukom -- ne pogadja se (pravilo nerazresenog izbora, testovi.md par. 5);
+' 3) prazno polje pada na izabrani red -- jedna meta ide odmah, vise njih
+' upucuje na polje. InputBox biranja NEMA (nalaz operatera 31.08).
+' OFF rezim se prijavljuje.
 Private Sub StampajSledljivostReda()
-    Dim mete As Variant, n As Long, i As Long
-    Dim prompt As String, odgovor As String, izbor As Long
+    Dim izbor As String, CB As Object
+    Dim mete As Variant
 
-    If Len(mIzabranaZbirna) = 0 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
-        Exit Sub
-    End If
     If DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF") = "OFF" Then
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
         Exit Sub
     End If
 
+    izbor = IzabraniDok()
+    If Len(izbor) > 0 Then
+        StampajMetu Split(izbor, "|")(0), Mid$(izbor, InStr(1, izbor, "|") + 1)
+        Exit Sub
+    End If
+    Set CB = Kontrola("scrSlDok")
+    If Not CB Is Nothing Then
+        If Len(Trim$(CStr(CB.text))) > 0 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_DOK_NEIZABRAN"), True
+            Exit Sub
+        End If
+    End If
+
+    ' Prazno polje: kontekst je izabrani red.
+    If Len(mIzabranaZbirna) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
+        Exit Sub
+    End If
     mete = ReportSledljivostMete(mIzabranaZbirna)
     If Not IsArray(mete) Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
         Exit Sub
     End If
-
-    n = UBound(mete, 1)
-    If n = 1 Then
-        StampajMetu mete, 1
-        Exit Sub
+    If UBound(mete, 1) = 1 Then
+        StampajMetu NzS(mete(1, 1)), NzS(mete(1, 2))
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_VISE_META"), False
     End If
-
-    ' Do 15 meta u prompt (InputBox granica duzine); preliv se PRIJAVLJUJE.
-    prompt = Poruka("OTKUI_MSG_SL_METE_PROMPT") & vbCrLf & vbCrLf
-    For i = 1 To n
-        If i > 15 Then
-            prompt = prompt & "... " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & _
-                     " " & CStr(n - 15) & vbCrLf
-            Exit For
-        End If
-        prompt = prompt & CStr(i) & ") " & SlMetaNaziv(NzS(mete(i, 1))) & " " & _
-                 NzS(mete(i, 3)) & _
-                 IIf(Len(NzS(mete(i, 4))) > 0, _
-                     "  " & ChrW(183) & " " & NzS(mete(i, 4)), "") & vbCrLf
-    Next i
-
-    odgovor = Trim$(InputBox(prompt, APP_NAME))
-    If Len(odgovor) = 0 Then Exit Sub                ' odustao -- bez poruke
-    izbor = CLng(val(odgovor))
-    If izbor < 1 Or izbor > n Or izbor > 15 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
-        Exit Sub
-    End If
-    StampajMetu mete, izbor
 End Sub
 
 ' Prikazno ime tipa mete -- kroz katalog, kao SlProblemNaziv.
@@ -455,26 +451,145 @@ Private Function SlMetaNaziv(ByVal tip As String) As String
     End Select
 End Function
 
-' Izlaz jedne mete. Zbirna ide kroz postojecu rutu (postuje ceo
-' SLEDLJIVOST_PRINT_MODE); paletni i preradni list izlaze kao PDF --
-' dugme je "(PDF)", a njihova fizicka stampa ostaje na ekranu Palete.
-Private Sub StampajMetu(ByRef mete As Variant, ByVal i As Long)
+' Izlaz jednog dokumenta sledljivosti. Zbirna ide kroz postojecu rutu
+' (postuje ceo SLEDLJIVOST_PRINT_MODE); paletni i preradni list izlaze
+' kao PDF -- dugme je "(PDF)", a njihova fizicka stampa ostaje na
+' ekranu Palete.
+Private Sub StampajMetu(ByVal tip As String, ByVal iD As String)
     Dim ishod As String
-    Select Case NzS(mete(i, 1))
+    Select Case tip
         Case SLEDM_ZBIRNA
-            ishod = StampajSledljivostZbirne(NzS(mete(i, 2)))
+            ishod = StampajSledljivostZbirne(iD)
             Select Case ishod
                 Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
                 Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
             End Select
         Case SLEDM_PALETA
-            If Len(ExportPaletniListPDF(NzS(mete(i, 2)), True)) = 0 Then _
+            If Len(ExportPaletniListPDF(iD, True)) = 0 Then _
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
         Case SLEDM_PRERADA
-            If Len(ExportPreradaPDF(NzS(mete(i, 2)), True)) = 0 Then _
+            If Len(ExportPreradaPDF(iD, True)) = 0 Then _
                 modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_STAMPA_NEUSPEH"), True
     End Select
 End Sub
+
+'=====================================================================
+' POLJE IZBORA DOKUMENTA SLEDLJIVOSTI (smoke krug 3b)
+'=====================================================================
+
+' Ponuda polja: (1..N, 1..2) prikaz | "tip|id", filtrirano substring
+' pretragom (kvake-fold kao mreza -- modUiData.TekstZaPretragu). q=""
+' vraca SVE dokumente perioda. Cist sklop nad snimkom, testabilan bez
+' kontrole; Empty van snimka ili bez pogotka.
+Public Function SlDokPrikazi(ByVal q As String) As Variant
+    Dim snap As Variant, dok As Variant, i As Long
+    Dim qf As String, prikaz As String
+    Dim stavke As Collection
+
+    If Not SnimakPostoji() Then Exit Function
+    snap = mSnimci(mSnimakKljuc)
+    If Not IsArray(snap) Then Exit Function
+    If UBound(snap) < 2 Then Exit Function
+    dok = snap(2)
+    If Not IsArray(dok) Then Exit Function
+
+    qf = modUiData.TekstZaPretragu(Trim$(q))
+    Set stavke = New Collection
+    For i = 1 To UBound(dok, 1)
+        prikaz = SlMetaNaziv(NzS(dok(i, 1))) & " " & NzS(dok(i, 3)) & _
+                 IIf(IsEmpty(dok(i, 4)), "", _
+                     "  " & ChrW(183) & " " & Format$(CDate(dok(i, 4)), "d.M.")) & _
+                 IIf(Len(NzS(dok(i, 5))) > 0, _
+                     "  " & ChrW(183) & " " & NzS(dok(i, 5)), "")
+        If Len(qf) = 0 Then
+            stavke.Add Array(prikaz, NzS(dok(i, 1)) & "|" & NzS(dok(i, 2)))
+        ElseIf InStr(1, modUiData.TekstZaPretragu(prikaz), qf) > 0 Then
+            stavke.Add Array(prikaz, NzS(dok(i, 1)) & "|" & NzS(dok(i, 2)))
+        End If
+    Next i
+    If stavke.count = 0 Then Exit Function
+
+    Dim res() As Variant, r As Variant, n As Long
+    ReDim res(1 To stavke.count, 1 To 2)
+    For Each r In stavke
+        n = n + 1
+        res(n, 1) = r(0): res(n, 2) = r(1)
+    Next r
+    SlDokPrikazi = res
+End Function
+
+' Punjenje polja iz snimka -- guard po (kljuc snimka # punjenja #
+' generacija), pa se ne puni iznova na svaki layout prolaz.
+Private Sub PuniDokCombo()
+    Dim CB As Object, k As String
+    If Not SnimakPostoji() Then Exit Sub
+    Set CB = Kontrola("scrSlDok")
+    If CB Is Nothing Then Exit Sub
+    k = mSnimakKljuc & "#" & CStr(mSnimakPunjenja) & "#" & CStr(mSnimakGen)
+    If k = mCmbDokKljuc Then Exit Sub
+    mCmbDokKljuc = k
+    NapuniDokStavke CB, SlDokPrikazi(Trim$(CStr(CB.text)))
+End Sub
+
+' Prepis stavki u kontrolu (2 kolone: prikaz + skriveni "tip|id" --
+' obrazac scrAgKoop). Tekst operatera se CUVA: Clear ume da ga dira, a
+' upis ide pod mDokFill da povratni Change ne pokrene filter iznova.
+Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
+    Dim i As Long, t As String
+    mDokFill = True
+    On Error Resume Next
+    t = CStr(CB.text)
+    CB.Clear
+    CB.ColumnCount = 2
+    CB.ColumnWidths = "244 pt;0 pt"
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
+    If IsArray(stavke) Then
+        For i = 1 To UBound(stavke, 1)
+            CB.AddItem CStr(stavke(i, 1))
+            CB.List(CB.ListCount - 1, 1) = CStr(stavke(i, 2))
+        Next i
+    End If
+    If CStr(CB.text) <> t Then CB.text = t
+    On Error GoTo 0
+    mDokFill = False
+End Sub
+
+' Kucanje u polju: suzena ponuda + otvoren dropdown da se suzenje VIDI.
+' Izbor iz liste (ListIndex >= 0) NIJE filter -- ne dira se, inace bi se
+' dropdown ponovo otvarao posle izbora.
+Private Sub FiltrirajDokCombo()
+    Dim CB As Object
+    If mDokFill Then Exit Sub
+    Set CB = Kontrola("scrSlDok")
+    If CB Is Nothing Then Exit Sub
+    On Error Resume Next
+    If CB.ListIndex >= 0 Then Exit Sub
+    NapuniDokStavke CB, SlDokPrikazi(Trim$(CStr(CB.text)))
+    If Len(Trim$(CStr(CB.text))) > 0 Then CB.DropDown
+End Sub
+
+' Razresen izbor polja: "tip|id" ili "" (nerazreseno). Izbor iz liste
+' resava; PUN kucan tekst jednak prikazu stavke takodje (kucan do kraja).
+' Delimican tekst NIJE izbor -- ne pogadja se.
+Private Function IzabraniDok() As String
+    Dim CB As Object, i As Long, t As String
+    Set CB = Kontrola("scrSlDok")
+    If CB Is Nothing Then Exit Function
+    On Error Resume Next
+    If CB.ListIndex >= 0 Then
+        IzabraniDok = CStr(CB.List(CB.ListIndex, 1))
+        Exit Function
+    End If
+    t = Trim$(CStr(CB.text))
+    If Len(t) = 0 Then Exit Function
+    For i = 0 To CB.ListCount - 1
+        If CStr(CB.List(i, 0)) = t Then
+            IzabraniDok = CStr(CB.List(i, 1))
+            Exit Function
+        End If
+    Next i
+End Function
 
 '=====================================================================
 ' REDOVI MREZE
@@ -602,8 +717,11 @@ Private Function Snimak(ByVal k As String, ByVal odN As Double, _
         Dim dOd As Date, dDo As Date
         dOd = CDate(IIf(odN > 0, odN, SL_DAT_MIN))
         dDo = CDate(IIf(doN > 0, doN, SL_DAT_MAX))
+        ' TRI read-modela u istom punjenju: liste (lanac+problemi) i
+        ' ponuda polja izbora dokumenta (krug 3b) dele kontekst.
         mSnimci(k) = Array(ReportSledljivostLanac(dOd, dDo), _
-                           ReportSledljivostProblemi(dOd, dDo))
+                           ReportSledljivostProblemi(dOd, dDo), _
+                           ReportSledljivostDokumenti(dOd, dDo))
     End If
 
     mSnimakKljuc = k
@@ -924,6 +1042,16 @@ Public Sub Scr_Build(ByVal z As Object)
     z.Controls("scrSlDo").Controls("scrSlDoT").text = Format$(Date, "d.m.yyyy")
     On Error GoTo 0
 
+    ' POLJE IZBORA DOKUMENTA SLEDLJIVOSTI (smoke krug 3b): dropdown sa
+    ' filterom -- kucanje (broj, datum, tip, status...) suzava ponudu.
+    ' MatchEntry none: MSForms prefix-autocomplete bi se tukao sa
+    ' substring filterom i prepisivao kucani tekst.
+    modOtkupUI.NewFieldG z, "scrSlDok", Poruka("OTKUI_FLD_SL_DOK"), "cmb", "", _
+                         1, False, False, "SL"
+    On Error Resume Next
+    z.Controls("scrSlDok").Controls("scrSlDokT").MatchEntry = fmMatchEntryNone
+    On Error GoTo 0
+
     modUiKit.NewLbl z, "slHint", "", PAD, SL_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
     ' Stampa aktivne liste (house PDF) + lanac izabranog reda (house PDF sa
@@ -944,6 +1072,9 @@ End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
     RasporediPolja z, w
+    ' Ponuda polja izbora ide iz ISTOG snimka kao liste (0 dodatnih
+    ' citanja); guard u punjenju preskace kad se nista nije promenilo.
+    PuniDokCombo
     Scr_Layout = SL_ZONA_H
 End Function
 
@@ -970,6 +1101,7 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
 
     PoljeX z, "scrSlOd", PAD, 86, SL_Y_LBL
     PoljeX z, "scrSlDo", PAD + 94, 86, SL_Y_LBL
+    PoljeX z, "scrSlDok", PAD + 188, 264, SL_Y_LBL
 
     ' Detalj traka uzima desno; polja i hint dele ostatak. Na uskom ekranu
     ' traka nestaje umesto da se preklapa (isti kompromis kao Izvestaji).
@@ -1585,6 +1717,7 @@ Public Sub Scr_SlTestReset()
     mHintKljuc = ""
     Scr_ResetCache
     mSnimakKljuc = ""
+    mCmbDokKljuc = ""
     mCtxOd = 0
     mCtxDo = 0
 End Sub

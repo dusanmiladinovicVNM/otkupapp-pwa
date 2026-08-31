@@ -3942,6 +3942,30 @@ SABOTAZE = {
         "T_Sled_MeteSledljivosti",
         "preradjena paleta nije meta 'sveze robe'",
     ),
+    # Ponuda polja izbora (krug 3b) bez storno filtera na paleti --
+    # stornirana paleta bi usla u dropdown i klik bi stampao list
+    # nepostojece robe. Sidro je 4-space varijanta (ReportSledljivost-
+    # Dokumenti); 8-space zivi u ReportSledljivostMete i ima svoju
+    # sabotazu.
+    "sledljivost-dokumenti-storniranu-paletu": (
+        "modIzvestaj.bas",
+        "    palData = GetTableData(TBL_PALETA)\n"
+        "    If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)\n",
+        "    palData = GetTableData(TBL_PALETA)\n"
+        "    ' SABOTAZA: stornirane palete ulaze u ponudu\n",
+        "T_Sled_DokumentiPonuda",
+        "stornirana paleta nije u ponudi",
+    ),
+    # Ponuda polja izbora nudi preradjenu paletu kao "svezu robu".
+    "sledljivost-dokumenti-preradjena-kao-sveza": (
+        "modIzvestaj.bas",
+        "            If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> \"DA\" Then\n"
+        "                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then\n",
+        "            If True Then   ' SABOTAZA: preradjena u ponudi kao sveza\n"
+        "                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then\n",
+        "T_Sled_DokumentiPonuda",
+        "preradjena paleta nije u ponudi kao sveza",
+    ),
 }
 
 

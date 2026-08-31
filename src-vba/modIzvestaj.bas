@@ -5287,3 +5287,148 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' ============================================================
+' SVI DOKUMENTI SLEDLJIVOSTI u periodu -- ponuda za polje izbora na
+' ekranu (smoke krug 3b: "mora da postoji jasno polje za izbor sa
+' dropdown i filter poljem"). Operater bira ZBIRNU (roba prodata dalje
+' kao sveza -- sablon), SVEZU PALETU (magacin sveze robe -- paletni
+' list) ili PRERADU (roba preradjena -- preradni list) i dobija njegov
+' izvestaj.
+'   - Zbirne: DISTINCT BROJ (stampa sablona je po broju -- legacy
+'     cmbZbirna semantika; vlasnicko razresenje radi sablon-ruta).
+'   - Palete: nestornirane, NEpreradjene (preradjena nije "sveza roba").
+'   - Prerade: nestornirane.
+' Dokument bez validnog datuma se UKLJUCUJE (vidljiv je bolji od tiho
+' sakrivenog); sa datumom mora biti u [datumOd, datumDo].
+'
+' Returns: 2D Array (1..N, 1..5) ili Empty:
+'   1 Tip (SLEDM_*)  2 ID (broj zbirne / PaletaID / PreradaID)
+'   3 Broj (prikaz)  4 Datum (serijski Double ili Empty)  5 Opis
+' ============================================================
+Public Function ReportSledljivostDokumenti(ByVal datumOd As Date, _
+                                           ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostDokumenti"
+    On Error GoTo EH
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim i As Long
+
+    ' 1) Zbirne -- distinct broj, zbir kg, najraniji datum broja.
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
+    If IsArray(zbrData) Then
+        Dim cZbrBroj As Long, cZbrDat As Long, cZbrKol As Long
+        cZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+        cZbrDat = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+        cZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, SRC)
+        Dim brojevi As Object: Set brojevi = CreateObject("Scripting.Dictionary")
+        brojevi.CompareMode = vbTextCompare
+        Dim bz As String, acc As Variant
+        For i = 1 To UBound(zbrData, 1)
+            bz = Trim$(SledTxt(zbrData(i, cZbrBroj)))
+            If Len(bz) > 0 Then
+                If SledDatumUPeriodu(zbrData(i, cZbrDat), datumOd, datumDo) Then
+                    If brojevi.Exists(bz) Then
+                        acc = brojevi(bz)
+                        acc(0) = acc(0) + SledDbl(zbrData(i, cZbrKol))
+                        If IsDate(zbrData(i, cZbrDat)) Then
+                            If IsEmpty(acc(1)) Or CDbl(CDate(zbrData(i, cZbrDat))) < acc(1) Then _
+                                acc(1) = CDbl(CDate(zbrData(i, cZbrDat)))
+                        End If
+                        brojevi(bz) = acc
+                    Else
+                        brojevi(bz) = Array(SledDbl(zbrData(i, cZbrKol)), _
+                            IIf(IsDate(zbrData(i, cZbrDat)), _
+                                CDbl(CDate(zbrData(i, cZbrDat))), Empty))
+                    End If
+                End If
+            End If
+        Next i
+        Dim kb As Variant
+        For Each kb In brojevi.keys
+            acc = brojevi(kb)
+            rows.Add Array(SLEDM_ZBIRNA, CStr(kb), CStr(kb), acc(1), _
+                           FmtKolicina(CDbl(acc(0))) & " kg")
+        Next kb
+    End If
+
+    ' 2) Sveze palete (nestornirane, NEpreradjene).
+    Dim palData As Variant
+    palData = GetTableData(TBL_PALETA)
+    If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)
+    If IsArray(palData) Then
+        Dim cPalId As Long, cPalBroj As Long, cPalGod As Long
+        Dim cPalStat As Long, cPalPre As Long, cPalNeto As Long, cPalDat As Long
+        cPalId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC)
+        cPalBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, SRC)
+        cPalGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, SRC)
+        cPalStat = RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC)
+        cPalPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC)
+        cPalNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, SRC)
+        cPalDat = RequireColumnIndex(TBL_PALETA, COL_PAL_DATUM, SRC)
+        For i = 1 To UBound(palData, 1)
+            If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> "DA" Then
+                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then
+                    rows.Add Array(SLEDM_PALETA, Trim$(SledTxt(palData(i, cPalId))), _
+                        SledTxt(palData(i, cPalBroj)) & "/" & SledTxt(palData(i, cPalGod)), _
+                        IIf(IsDate(palData(i, cPalDat)), _
+                            CDbl(CDate(palData(i, cPalDat))), Empty), _
+                        SledTxt(palData(i, cPalStat)) & " " & ChrW(183) & " " & _
+                            FmtKolicina(SledDbl(palData(i, cPalNeto))) & " kg")
+                End If
+            End If
+        Next i
+    End If
+
+    ' 3) Prerade (nestornirane).
+    Dim preData As Variant
+    preData = GetTableData(TBL_PRERADA)
+    If IsArray(preData) Then preData = ExcludeStornirano(preData, TBL_PRERADA)
+    If IsArray(preData) Then
+        Dim cPreId As Long, cPreBroj As Long, cPreGod As Long
+        Dim cPreTip As Long, cPreNeto As Long, cPreDat As Long
+        cPreId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+        cPreBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+        cPreGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+        cPreTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+        cPreNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+        cPreDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
+        For i = 1 To UBound(preData, 1)
+            If SledDatumUPeriodu(preData(i, cPreDat), datumOd, datumDo) Then
+                rows.Add Array(SLEDM_PRERADA, Trim$(SledTxt(preData(i, cPreId))), _
+                    SledTxt(preData(i, cPreBroj)) & "/" & SledTxt(preData(i, cPreGod)), _
+                    IIf(IsDate(preData(i, cPreDat)), _
+                        CDbl(CDate(preData(i, cPreDat))), Empty), _
+                    SledTxt(preData(i, cPreTip)) & " " & ChrW(183) & " " & _
+                        FmtKolicina(SledDbl(preData(i, cPreNeto))) & " kg")
+            End If
+        Next i
+    End If
+
+    If rows.count = 0 Then Exit Function
+    Dim res() As Variant, r As Variant, n As Long
+    ReDim res(1 To rows.count, 1 To 5)
+    For Each r In rows
+        n = n + 1
+        res(n, 1) = r(0): res(n, 2) = r(1): res(n, 3) = r(2)
+        res(n, 4) = r(3): res(n, 5) = r(4)
+    Next r
+    ReportSledljivostDokumenti = res
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Datum dokumenta u [od, do]? Nevalidan datum PROLAZI -- dokument bez
+' datuma je anomalija koja mora ostati VIDLJIVA u ponudi, ne tiho skrivena.
+Private Function SledDatumUPeriodu(ByVal v As Variant, ByVal datumOd As Date, _
+                                   ByVal datumDo As Date) As Boolean
+    If Not IsDate(v) Then
+        SledDatumUPeriodu = True
+    Else
+        SledDatumUPeriodu = (CDate(v) >= datumOd And CDate(v) <= datumDo)
+    End If
+End Function
+

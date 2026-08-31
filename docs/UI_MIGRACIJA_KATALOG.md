@@ -5233,28 +5233,53 @@ zbirne), pa prerade čija stavka pokazuje na nađene palete (join po
 `PaletaID`, isto pravilo kao `modIntegritet` D2). Ništa se ne
 premošćuje: prerađena paleta bez preradne stavke ne izmišlja metu
 (D2 je prijavljuje), stornirana paleta nije meta ni kad joj je stavka
-aktivna. Jedna meta ide odmah; više njih kroz izbor rednim brojem
-(InputBox obrazac „Poveži…", do 15 uz prijavljen preliv). Rutiranje:
-zbirna kroz postojeću rutu (poštuje ceo `SLEDLJIVOST_PRINT_MODE`);
-paletni/preradni list kao PDF (`ExportPaletniListPDF` /
-`ExportPreradaPDF` — dugme je „(PDF)", fizička štampa tih listova
-ostaje na ekranu Palete). OFF režim se prijavljuje na ulazu. Test 157 +
-sabotaže `sledljivost-mete-storniranu-paletu` i
+aktivna. Jedna meta ide odmah; više njih se bira u POLJU (v. S6 —
+InputBox verzija izbora je živela pola dana i oborena je u istom
+smoke-u). Rutiranje: zbirna kroz postojeću rutu (poštuje ceo
+`SLEDLJIVOST_PRINT_MODE`); paletni/preradni list kao PDF
+(`ExportPaletniListPDF` / `ExportPreradaPDF` — dugme je „(PDF)",
+fizička štampa tih listova ostaje na ekranu Palete). OFF režim se
+prijavljuje na ulazu. Test 157 + sabotaže
+`sledljivost-mete-storniranu-paletu` i
 `sledljivost-mete-preradjena-kao-sveza`; fixture dobija zatvorenu svežu
 paletu na SLED lancu, prerađenu paletu sa preradom na SLN lancu i
 storniranu paletu kao negativ (sve ZATVORENE — otvorene bi ušle u
 gajbe-do-zatvaranja račun ljuske).
 
+**S6 — „mora da postoji jasno polje za izbor sa dropdown i filter
+poljem"** (isti dan, nad InputBox izborom meta iz S5). Zona dobija
+polje **„Dokument sledljivosti"** (`NewFieldG "cmb"` — isti okvir +
+combo + strelica kao kooperant na Agrohemiji; strelicu ljuska već
+vezuje na `DropDown`). Ponudu daje novi read-only
+`modIzvestaj.ReportSledljivostDokumenti(od, do)`: SVI dokumenti
+sledljivosti perioda — zbirne po DISTINCT broju (štampa šablona je po
+broju — legacy `cmbZbirna` semantika; dvosmislen broj se nudi jednom),
+nestornirane NEprerađene palete, nestornirane prerade; dokument bez
+validnog datuma se UKLJUČUJE (vidljiva anomalija bolja od tiho
+sakrivene). Ponuda ide u treći slot ISTOG snimka konteksta (lanac +
+problemi + dokumenti = jedno punjenje — §23.10/R1 važi i ovde), pa je
+kucanje 0 čitanja. Kucanje filtrira substring pretragom sa kvake-foldom
+(`modUiData.TekstZaPretragu`, kao mreža — broj, datum, tip, status…) i
+drži dropdown otvoren da se sužavanje vidi; `MatchEntry` je isključen
+(prefix-autocomplete bi se tukao sa substring filterom). Dugme
+„Sledljivost (PDF)": razrešen izbor polja ide PRVI; kucan a nerazrešen
+tekst ODBIJA porukom (pravilo nerazrešenog izbora — ne pogađa se);
+prazno polje pada na izabrani red (jedna meta odmah, više njih poruka
+upućuje na polje). Test 158 (`SlDokPrikazi` je čist sklop nad snimkom,
+testabilan bez kontrole) + sabotaže
+`sledljivost-dokumenti-storniranu-paletu` /
+`sledljivost-dokumenti-preradjena-kao-sveza`.
+
 ### 24.8 Verifikacija
 
-- `RunAllTests` (osam novih testova 150–157, registrovani u sva tri
+- `RunAllTests` (devet novih testova 150–158, registrovani u sva tri
   registra, izvršavaju se PRE 124–126; 156 je NAMERNO samo čitanje —
   upis povezivanja bi pojeo vozilo `OTK-NAL-DJ` koje test 152 meri kao
   „nepovezan"), `RunBankaImportTestSuite` (Platni nalozi bit-identični —
   SLED blokovi su zatvoreni; ponovljeno i posle paletnih fixture vozila
   kruga 3), `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
   `--self-test`, `who_writes --check` — rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 22 sabotaže,
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 24 sabotaže,
   svaka obara tačno svoj imenovani test i vraća se bit-identično.
 - Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
@@ -5267,5 +5292,7 @@ gajbe-do-zatvaranja račun ljuske).
   nad pravim podacima (očekuje se mnogo nefakturisanih — to je status,
   ne kvar); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
   pravim nepovezanima (upis!) i šablon zbirne protiv iste štampe iz
-  stare forme; iz trećeg kruga: „Sledljivost (PDF)" nad redom čija je
-  roba na paleti / prerađena — izbor mete i tačan paletni/preradni list.
+  stare forme; iz trećeg kruga: polje „Dokument sledljivosti" — kucanje
+  broja/datuma sužava dropdown, izbor zbirne/palete/prerade daje tačan
+  šablon / paletni / preradni list; dugme bez polja i dalje radi za red
+  sa jednoznačnom metom.

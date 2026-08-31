@@ -399,6 +399,7 @@ Public Sub RunAllTests()
     RunOne 155
     RunOne 156
     RunOne 157
+    RunOne 158
     RunOne 124
     RunOne 125
     RunOne 126
@@ -593,6 +594,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 155: TestName = "T_ZonaSled_PoljaIRaspored"
         Case 156: TestName = "T_Sled_PovezivanjeKandidati"
         Case 157: TestName = "T_Sled_MeteSledljivosti"
+        Case 158: TestName = "T_Sled_DokumentiPonuda"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -758,6 +760,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 155: T_ZonaSled_PoljaIRaspored
         Case 156: T_Sled_PovezivanjeKandidati
         Case 157: T_Sled_MeteSledljivosti
+        Case 158: T_Sled_DokumentiPonuda
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -11623,7 +11626,7 @@ Private Sub T_ZonaSled_PoljaIRaspored()
     For Each nm In Array("slBg", "slCap", "slHint", "slLnB", _
                          "slKL0", "slKV0", "slKL1", "slKV1", _
                          "slDetCap", "slDetR0", "slDetR5", _
-                         "scrSlOd", "scrSlDo", _
+                         "scrSlOd", "scrSlDo", "scrSlDok", _
                          "scrSlPrint", "scrSlLanac", "scrSlSab", "scrSlAuto")
         If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
     Next nm
@@ -11633,6 +11636,14 @@ Private Sub T_ZonaSled_PoljaIRaspored()
         If Not KontrolaPostoji(z.Controls("scrSlOd"), "scrSlOdT") Then _
             nema = nema & " scrSlOdT"
         odTxt = CStr(z.Controls("scrSlOd").Controls("scrSlOdT").text)
+    End If
+    ' Polje izbora dokumenta je COMBO ljuske (okvir + kontrola + strelica)
+    ' -- dropdown sa filterom, smoke krug 3b.
+    If KontrolaPostoji(z, "scrSlDok") Then
+        If Not KontrolaPostoji(z.Controls("scrSlDok"), "scrSlDokT") Then _
+            nema = nema & " scrSlDokT"
+        If Not KontrolaPostoji(z.Controls("scrSlDok"), "scrSlDokD") Then _
+            nema = nema & " scrSlDokD"
     End If
 
     visina = modScrSledljivost.Scr_Layout(z, 1200, 300)
@@ -11743,4 +11754,49 @@ Private Sub T_Sled_MeteSledljivosti()
              "prazan broj zbirne nema mete"
     m = modIzvestaj.ReportSledljivostMete("ZB-NEMA-GA")
     AssertEq UBound(m, 1), 1, "nepoznat broj: samo zbirna meta"
+End Sub
+
+' 158. Polje izbora dokumenta sledljivosti (smoke krug 3b): ponuda = SVI
+' dokumenti perioda (zbirne po DISTINCT broju, sveze palete, prerade) iz
+' ISTOG snimka kao liste; kucanje suzava substring pretragom (kvake-fold
+' kao mreza). Fail-closed: stornirana paleta nije u ponudi, preradjena
+' nije "sveza", dvosmislen broj zbirne se nudi JEDNOM (stampa sablona je
+' po broju -- legacy cmbZbirna semantika). Samo citanje.
+Private Sub T_Sled_DokumentiPonuda()
+    Dim d As Variant, p As Variant, i As Long
+    Dim nSled As Long, nSldd As Long
+    Dim imaPal As Boolean, imaX As Boolean
+    Dim imaPre As Boolean, imaSvezu As Boolean
+
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")     ' puni snimak konteksta
+
+    p = modScrSledljivost.SlDokPrikazi("")
+    AssertEq IsArray(p), True, "ponuda dokumenata nad fixture-om nije prazna"
+    For i = 1 To UBound(p, 1)
+        Select Case CStr(p(i, 2))
+            Case "ZBIRNA|ZB-TEST-SLED": nSled = nSled + 1
+            Case "ZBIRNA|ZB-TEST-SLDD": nSldd = nSldd + 1
+            Case "PALETA|PAL-SLED-1": imaPal = True
+            Case "PALETA|PAL-SLED-X": imaX = True
+            Case "PALETA|PAL-SLED-2": imaSvezu = True
+            Case "PRERADA|PRE-SLED-1": imaPre = True
+        End Select
+    Next i
+    AssertEq nSled, 1, "zbirna SLED lanca je u ponudi, jednom"
+    AssertEq nSldd, 1, "dvosmislen broj zbirne se nudi JEDNOM, ne po vlasniku"
+    AssertEq imaPal, True, "sveza paleta je u ponudi (paletni list)"
+    AssertEq imaSvezu, False, "preradjena paleta nije u ponudi kao sveza"
+    AssertEq imaX, False, "stornirana paleta nije u ponudi"
+    AssertEq imaPre, True, "prerada je u ponudi (preradni list)"
+
+    ' Filter: broj palete nalazi TACNO nju; bez pogotka -> prazno.
+    p = modScrSledljivost.SlDokPrikazi("31/2026")
+    AssertEq IsArray(p), True, "filter po broju palete ima pogodak"
+    AssertEq UBound(p, 1), 1, "filter po broju palete suzava na jedan red"
+    AssertEq CStr(p(1, 2)), "PALETA|PAL-SLED-1", "i to bas na tu paletu"
+    AssertEq IsArray(modScrSledljivost.SlDokPrikazi("nema-takvog-xyz")), _
+             False, "filter bez pogotka vraca prazno"
+    modScrSledljivost.Scr_SlTestReset
 End Sub

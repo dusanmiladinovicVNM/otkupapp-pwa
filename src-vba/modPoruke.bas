@@ -1566,11 +1566,14 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_SL_SAMO_NEPOVEZANI", ChrW(10007) & " Povezivanje je samo za redove 'Otkup bez otpremnice'"
     UpsertRow lo, existing, "OTKUI_ERR_SL_NEMA_ZBIRNE", ChrW(10007) & " Izabrani red nema broj zbirne " & ChrW(8212) & " izaberi red sa zbirnom"
     ' --- Sledljivost smoke krug 3: mete (zbirna / paleta / prerada) ---
-    UpsertRow lo, existing, "OTKUI_MSG_SL_METE_PROMPT", "Upi" & ChrW(353) & "i redni broj dokumenta sledljivosti:"
     UpsertRow lo, existing, "OTKUI_SL_META_ZBIRNA", "Zbirna (" & ChrW(353) & "ablon)"
     UpsertRow lo, existing, "OTKUI_SL_META_PALETA", "Paleta " & ChrW(8212) & " sve" & ChrW(382) & "a roba"
     UpsertRow lo, existing, "OTKUI_SL_META_PRERADA", "Prerada " & ChrW(8212) & " gotov proizvod"
     UpsertRow lo, existing, "OTKUI_ERR_SL_STAMPA_NEUSPEH", ChrW(10007) & " " & ChrW(352) & "tampa sledljivosti nije uspela " & ChrW(8212) & " vidi ErrorLog"
+    ' --- Sledljivost smoke krug 3b: polje izbora dokumenta ---
+    UpsertRow lo, existing, "OTKUI_FLD_SL_DOK", "Dokument sledljivosti"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     InvalidateCache
 End Sub
 
