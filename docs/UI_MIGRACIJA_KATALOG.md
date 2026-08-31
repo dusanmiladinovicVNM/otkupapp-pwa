@@ -5000,8 +5000,8 @@ nikad prećutana.
 | `TraceByZbirna` (zbirna → otkupi → kooperanti/parcele) | lista **PARCELE** (ista zrna kao LANAC, sertifikaciona projekcija: kooperant, BPG, kat. broj, kultura, ha, GGAP) |
 | `cmbZbirna` filter po zbirnoj | **pretraga ljuske** — haystack nosi SVE brojeve lanca (v. 24.2/B) |
 | `GetUnlinkedOtkupi` (NEPOVEZANI OTKUPI lista) | klasa `OTKUP-BEZ-OTPREMNICE` u listi **NEPOTPUNI** + oznaka `nepovezan` u LANAC-u |
-| `PrintTracePDF` (FillSledljivostSablon) | dugme zone **„Lanac (PDF)"** — house PDF lanca IZABRANOG reda sa kontekst-linijom (koren · opseg · kompletnost); poštuje `SLEDLJIVOST_PRINT_MODE`, OFF se prijavljuje. Legacy šablon-ruta ostaje u formi, netaknuta |
-| `btnAutoLink` / `btnPovezi` (upis!) | **NIJE preneto** — v. 24.7 |
+| `PrintTracePDF` (FillSledljivostSablon) | dugme zone **„Lanac (PDF)"** — house PDF lanca IZABRANOG reda sa kontekst-linijom (koren · opseg · kompletnost) — i, od drugog smoke-a (S4), dugme **„Sledljivost zbirne (PDF)"**: POSTOJEĆI štampani šablon za zbirnu izabranog reda, kroz izvučenu rutu `modIzvestaj.StampajSledljivostZbirne`. Obe poštuju `SLEDLJIVOST_PRINT_MODE`, OFF se prijavljuje. Forma zadržava svoju kopiju rute, netaknuta (Faza B) |
+| `btnAutoLink` / `btnPovezi` (upis!) | preneto u drugom krugu (S3): dugme **„Poveži automatski"** na NEPOTPUNI (isti `AutoLinkOtkupOtpremnica_TX`, toast sa brojem) + radnja **„Poveži…"** nad redom klase `OTKUP-BEZ-OTPREMNICE` (kandidati `GetOtpremnicaKandidatiZaOtkup` — ista stanica + isti datum; upis `ReassignOtkupToOtpremnica_TX`) |
 | — (legacy nema) | lista **LANAC**: 1 red = 1 otkupni list sa razrešenim karikama kao kolonama; lista **NEPOTPUNI**: 1 red = 1 problem karike (7 klasa); „Štampaj izveštaj" (house PDF aktivne liste) |
 
 Novi računi žive u `modIzvestaj` (obrazac `ReportPrijemniceKupca`):
@@ -5149,12 +5149,13 @@ kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
 
 ### 24.6 Šta NIJE preneto, i zašto
 
-- **Povezivanje (auto-link + ručno vezivanje otkupa za otpremnicu) NE
-  ulazi u v1**: to je upis sa izborom kandidata i traži svoj UX; legacy
-  `frmSledljivost` ostaje operativna i nepromenjena (dve kopije žive
-  namerno — §5/Faza B), `modSledljivost.AutoLinkOtkupOtpremnica_TX` i
-  `ReassignOtkupToOtpremnica_TX` nisu dirani. Lista NEPOTPUNI je pregled
-  tog posla, ne alat.
+- ~~Povezivanje NE ulazi u v1~~ — **oborio drugi smoke (S3)**: pregled
+  bez alata terao je operatera nazad u staru formu. Povezivanje je sada
+  na ekranu (auto dugme + radnja „Poveži…", v. 24.7/S3), ali **upis i
+  dalje ide isključivo kroz postojeće TX kapije**
+  (`AutoLinkOtkupOtpremnica_TX`, `ReassignOtkupToOtpremnica_TX` — nisu
+  dirani); legacy `frmSledljivost` ostaje operativna i nepromenjena (dve
+  kopije žive namerno — §5/Faza B).
 - **Oznaka `zbirna ne postoji`** (broj na otpremnici bez ijedne aktivne
   zbirne) postoji u kodu, ali **nema fixture vozilo** — ne tvrdi se
   testom (zapisano, kao prijemnica-linija u §23.12/S10).
@@ -5169,10 +5170,10 @@ kartice ne dobijaju kretanja bez ledger parova (§23.6 nalaz 1).
 - **Palete** nisu karika lanca (uporedni tok — `docs/DOMEN/README.md`);
   paletna sledljivost ostaje na ekranu Palete.
 
-### 24.7 Prvi smoke: dva nalaza (ispravke u istom PR-u)
+### 24.7 Smoke: nalazi operatera (ispravke u istom PR-u)
 
 Compile je prošao, ekran radi na pravoj svesci (malina sveska, 1.620
-lanaca) — i doneo dva nalaza koje suite nije mogla da vidi:
+lanaca) — i doneo nalaze koje suite nije mogla da vidi:
 
 **S1 — „kg razlika između zbirne i prijemnice je transportno kalo“.**
 Operater je odmah pročitao ono što je dizajn prevideo: razlika
@@ -5190,14 +5191,40 @@ uvodi (dozvoljeno kalo bi bilo novo poslovno pravilo — §22.2 merilo).
 vizuelno ulazili u naredni blok ekrana. Bela kartica sada obuhvata celu
 traku (dno ide do pred donju liniju zone), pa traka ima svoj okvir.
 
+**S3 — „gde je nestalo povezivanje nepovezanih?"** (drugi krug).
+Odluka „pregled bez upisa" (bivši §24.6 prvi red) u praksi znači:
+ekran ti pokaže nepovezan otkup, a za popravku moraš u staru formu.
+Vraćeno, uz istu podelu koju drži ceo projekat — **UX na ekranu, upis u
+postojećim TX kapijama**: dugme „Poveži automatski" (samo na listi
+NEPOTPUNI; zove `AutoLinkOtkupOtpremnica_TX`, toast kaže koliko je
+povezano) i radnja „Poveži…" nad redom klase `OTKUP-BEZ-OTPREMNICE`
+(svaki drugi red odbija porukom). Kandidati su legacy pravilo stare
+forme, izvučeno kao read-only `GetOtpremnicaKandidatiZaOtkup` (ista
+stanica + isti datum, bez storniranih); izbor kroz InputBox radnje
+(presedan „Iznos…" na Platnim nalozima), do 15 kandidata uz prijavljen
+preliv; upis kroz `ReassignOtkupToOtpremnica_TX` (kapije cilja ostaju u
+writeru); posle upisa liste se odmah preračunaju. Test 156 +
+sabotaža `sledljivost-kandidati-bez-stanice` čuvaju pravilo kandidata.
+
+**S4 — „sledljivost ima već definisanu formu za PDF."** Tačno:
+`SledljivostSablon` (radni list šablona) je štampa koju operater već
+poznaje. Dodato dugme „Sledljivost zbirne (PDF)" — za zbirnu izabranog
+reda (iz bilo koje liste; red bez zbirne odbija porukom) puni ISTI
+šablon kroz izvučenu rutu `modIzvestaj.StampajSledljivostZbirne`
+(`TraceByZbirna` + `FillSledljivostSablon`, zaglavlje iz prve aktivne
+zbirne tog broja, zbir kg prijemnica). House „Lanac (PDF)" ostaje —
+dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
+
 ### 24.8 Verifikacija
 
-- `RunAllTests` (šest novih testova 150–155, registrovani u sva tri
-  registra, izvršavaju se PRE 124–126), `RunBankaImportTestSuite`
-  (Platni nalozi bit-identični — SLED blokovi su zatvoreni),
-  `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
-  `--self-test`, `who_writes --check` — rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 19 sabotaža,
+- `RunAllTests` (sedam novih testova 150–156, registrovani u sva tri
+  registra, izvršavaju se PRE 124–126; 156 je NAMERNO samo čitanje —
+  upis povezivanja bi pojeo vozilo `OTK-NAL-DJ` koje test 152 meri kao
+  „nepovezan"), `RunBankaImportTestSuite` (Platni nalozi bit-identični —
+  SLED blokovi su zatvoreni), `vba_check` + `--self-test`,
+  `sabotaza --proveri-sidra` + `--self-test`, `who_writes --check` —
+  rezultati u PR-u.
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 20 sabotaža,
   svaka obara tačno svoj imenovani test i vraća se bit-identično.
 - Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
@@ -5208,4 +5235,6 @@ traku (dno ide do pred donju liniju zone), pa traka ima svoj okvir.
   svesci (smer nazad), brzina prvog otvaranja na punoj svesci, detalj
   traka, obe štampe, ruta „Štampaj dokument" po vrsti karike, NEPOTPUNI
   nad pravim podacima (očekuje se mnogo nefakturisanih — to je status,
-  ne kvar).
+  ne kvar); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
+  pravim nepovezanima (upis!) i „Sledljivost zbirne (PDF)" protiv iste
+  štampe iz stare forme.

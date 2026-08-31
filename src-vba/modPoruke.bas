@@ -1553,6 +1553,18 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SL_DET_STANICA", "Stanica:"
     UpsertRow lo, existing, "OTKUI_SL_LANAC_NASLOV", "SLEDLJIVOST " & ChrW(8212) & " LANAC DOKUMENTA"
     UpsertRow lo, existing, "OTKUI_SL_POTPUN", "lanac potpun"
+    ' --- Sledljivost smoke krug 2: povezivanje + sablon PDF ---
+    UpsertRow lo, existing, "OTKUI_BTN_SL_POVEZI", "Pove" & ChrW(382) & "i" & ChrW(8230)
+    UpsertRow lo, existing, "OTKUI_BTN_SL_AUTO", "Pove" & ChrW(382) & "i automatski"
+    UpsertRow lo, existing, "OTKUI_BTN_SL_SABLON", "Sledljivost zbirne (PDF)"
+    UpsertRow lo, existing, "OTKUI_HDS_KLASAKOD", "KLASA KOD"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa:"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_NEMA_KANDIDATA", ChrW(10007) & " Nema nestorniranih otpremnica istog datuma na stanici otkupa"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_PROMPT", "Upi" & ChrW(353) & "i redni broj otpremnice za povezivanje:"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_OK", "Otkup povezan sa otpremnicom"
+    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_NEUSPEH", ChrW(10007) & " Povezivanje nije uspelo " & ChrW(8212) & " ciljna otpremnica ne postoji ili je stornirana"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_SAMO_NEPOVEZANI", ChrW(10007) & " Povezivanje je samo za redove 'Otkup bez otpremnice'"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_NEMA_ZBIRNE", ChrW(10007) & " Izabrani red nema broj zbirne " & ChrW(8212) & " izaberi red sa zbirnom"
     InvalidateCache
 End Sub
 

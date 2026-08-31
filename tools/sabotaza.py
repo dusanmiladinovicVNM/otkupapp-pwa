@@ -3887,6 +3887,40 @@ SABOTAZE = {
         "T_Sled_IdentitetURedu_NeCrtaSe",
         "detalj nosi otpremnicu",
     ),
+    # Kandidati za rucno povezivanje bez filtera stanice -- tudja
+    # otpremnica (OTP-LEG-B, druga stanica, isti datum) usla bi u izbor
+    # i pogresno povezivanje bilo bi na klik. Mutiraju se OBA prolaza
+    # (brojanje + punjenje) jednim sidrom: mutacija samo jednog bi dala
+    # subscript crash umesto imenovanog pada.
+    "sledljivost-kandidati-bez-stanice": (
+        "modSledljivost.bas",
+        "    Dim count As Long\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Trim$(CStr(otpData(i, cSt))) = stanicaID And IsDate(otpData(i, cDat)) Then\n"
+        "            If CDate(otpData(i, cDat)) = datum Then count = count + 1\n"
+        "        End If\n"
+        "    Next i\n"
+        "    If count = 0 Then Exit Function\n"
+        "\n"
+        "    Dim result() As Variant, idx As Long\n"
+        "    ReDim result(1 To count, 1 To 5)\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Trim$(CStr(otpData(i, cSt))) = stanicaID And IsDate(otpData(i, cDat)) Then\n",
+        "    Dim count As Long\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Len(stanicaID) >= 0 And IsDate(otpData(i, cDat)) Then   ' SABOTAZA: bez stanice\n"
+        "            If CDate(otpData(i, cDat)) = datum Then count = count + 1\n"
+        "        End If\n"
+        "    Next i\n"
+        "    If count = 0 Then Exit Function\n"
+        "\n"
+        "    Dim result() As Variant, idx As Long\n"
+        "    ReDim result(1 To count, 1 To 5)\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Len(stanicaID) >= 0 And IsDate(otpData(i, cDat)) Then   ' SABOTAZA: bez stanice\n",
+        "T_Sled_PovezivanjeKandidati",
+        "kandidati su samo sa stanice otkupa",
+    ),
 }
 
 

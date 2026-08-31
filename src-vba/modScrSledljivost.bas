@@ -95,8 +95,10 @@ Private mKpiProblemi As Variant
 ' Hint kljuc poslednjeg citanja (postavlja RedoviZaListu, cita OsveziHint).
 Private mHintKljuc As String
 
-' Izabran red: OtkupID za detalj traku i "Lanac (PDF)".
+' Izabran red: OtkupID za detalj traku i "Lanac (PDF)"; broj zbirne
+' izabranog reda za sablon-PDF (smoke krug 2).
 Private mIzabranOtkupID As String
+Private mIzabranaZbirna As String
 Private mDetalj As Variant
 
 ' Kontekst koji je postavio TEST (zone u testu nema).
@@ -193,13 +195,19 @@ End Function
 
 ' Radnja "Stampaj dokument" postoji na sve tri liste, ali red bez dokumenta
 ' ODBIJA porukom (zbirna nema svoju stampu -- legacy Case Else obrazac).
+' NEPOTPUNI nosi i "Povezi..." (smoke krug 2: povezivanje je iz novog UI-ja
+' bilo nedostupno) -- radi SAMO nad redom klase OTKUP-BEZ-OTPREMNICE,
+' ostali odbijaju porukom; upis ide kroz ReassignOtkupToOtpremnica_TX.
 Public Function Scr_Radnje() As String
     Scr_Radnje = SlRadnjeZaListu(Scr_Lista())
 End Function
 
 Public Function SlRadnjeZaListu(ByVal kljuc As String) As String
     Select Case kljuc
-        Case SL_LANAC, SL_PARC, SL_NEP
+        Case SL_NEP
+            SlRadnjeZaListu = "sledprint:OTKUI_BTN_IZ_STAMPAJDOK:132:soft:1|" & _
+                              "sledpovezi:OTKUI_BTN_SL_POVEZI:86:soft:1"
+        Case SL_LANAC, SL_PARC
             SlRadnjeZaListu = "sledprint:OTKUI_BTN_IZ_STAMPAJDOK:132:soft:1"
     End Select
 End Function
@@ -270,6 +278,8 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     Select Case tag
         Case "scrSlPrint": StampajIzvestaj
         Case "scrSlLanac": StampajLanacIzabranog
+        Case "scrSlSab":   StampajSablonZbirne
+        Case "scrSlAuto":  ObradiKlik = AutoPovezi()
     End Select
 End Function
 
@@ -290,15 +300,110 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
     Dim p() As String, red As Long
     p = Split(spec, ":")
     If UBound(p) < 1 Then Exit Function
-    If p(0) <> "sledprint" Then Exit Function
     red = CLng(val(p(1)))
     If red < 1 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
         Exit Function
     End If
-    StampajDokumentReda red
-    ' Stampa ne menja podatke -- mreza se ne osvezava.
+    Select Case p(0)
+        Case "sledprint"
+            StampajDokumentReda red
+            ' Stampa ne menja podatke -- mreza se ne osvezava.
+        Case "sledpovezi"
+            ' Povratna vrednost True = ljuska zove RefreshFromData, pa upis
+            ' odmah osvezi liste (i red nestane iz NEPOTPUNI).
+            RadnjaNadRedom = PoveziRed(red)
+    End Select
 End Function
+
+' RUCNO povezivanje (smoke krug 2). Radi SAMO nad redom klase
+' OTKUP-BEZ-OTPREMNICE (klasa-kod iz prenosne kolone 9 -- prikazno ime ide
+' kroz katalog pa nije stabilan kljuc); svaki drugi red ODBIJA porukom.
+' Kandidati po legacy pravilu (ista stanica + isti datum,
+' modSledljivost.GetOtpremnicaKandidatiZaOtkup); izbor kroz InputBox radnje
+' (presedan "Iznos..." na Platnim nalozima); upis kroz
+' ReassignOtkupToOtpremnica_TX -- kapije cilja (postoji, nije storniran)
+' ostaju u writeru.
+Private Function PoveziRed(ByVal red As Long) As Boolean
+    Dim klasaKod As String, dokTip As String, otkupID As String
+    Dim kandidati As Variant, n As Long, i As Long
+    Dim prompt As String, odgovor As String, izbor As Long
+
+    klasaKod = NzS(modOtkupUI.GridCell(red, 9))
+    dokTip = NzS(modOtkupUI.GridCell(red, 7))
+    otkupID = NzS(modOtkupUI.GridCell(red, 8))
+    If klasaKod <> SLEDP_BEZ_OTPREMNICE Or dokTip <> DOK_TIP_OTKUP _
+       Or Len(otkupID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_SAMO_NEPOVEZANI"), True
+        Exit Function
+    End If
+
+    kandidati = modSledljivost.GetOtpremnicaKandidatiZaOtkup(otkupID)
+    If Not IsArray(kandidati) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_NEMA_KANDIDATA"), True
+        Exit Function
+    End If
+
+    ' Do 15 kandidata u prompt (InputBox ima granicu duzine); preliv se
+    ' PRIJAVLJUJE, ne sece tiho.
+    n = UBound(kandidati, 1)
+    prompt = Poruka("OTKUI_MSG_SL_POVEZI_PROMPT") & vbCrLf & vbCrLf
+    For i = 1 To n
+        If i > 15 Then
+            prompt = prompt & "... " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & _
+                     " " & CStr(n - 15) & vbCrLf
+            Exit For
+        End If
+        prompt = prompt & CStr(i) & ") " & NzS(kandidati(i, 2)) & _
+                 IIf(Len(NzS(kandidati(i, 3))) > 0, _
+                     "  " & ChrW(183) & " " & NzS(kandidati(i, 3)), "") & _
+                 "  " & ChrW(183) & " " & FmtKolicina(NzD(kandidati(i, 4))) & _
+                 " kg " & ChrW(183) & " " & NzS(kandidati(i, 5)) & vbCrLf
+    Next i
+
+    odgovor = Trim$(InputBox(prompt, APP_NAME))
+    If Len(odgovor) = 0 Then Exit Function          ' odustao -- bez poruke
+    izbor = CLng(val(odgovor))
+    If izbor < 1 Or izbor > n Or izbor > 15 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+        Exit Function
+    End If
+
+    If ReassignOtkupToOtpremnica_TX(otkupID, NzS(kandidati(izbor, 1))) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZI_OK") & " " & _
+                             NzS(kandidati(izbor, 2)), False
+        PoveziRed = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZI_NEUSPEH"), True
+    End If
+End Function
+
+' AUTOMATSKO povezivanje -- legacy btnAutoLink, isti TX
+' (modSledljivost.AutoLinkOtkupOtpremnica_TX vraca broj povezanih).
+' True kad je nesto povezano -> ljuska osvezava liste.
+Private Function AutoPovezi() As Boolean
+    Dim n As Long
+    n = modSledljivost.AutoLinkOtkupOtpremnica_TX()
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZANO") & " " & CStr(n), False
+    AutoPovezi = (n > 0)
+End Function
+
+' Sledljivost PDF po POSTOJECEM sablonu (WS_SLEDLJIVOST_SABLON) za zbirnu
+' izabranog reda -- deljena ruta modIzvestaj.StampajSledljivostZbirne
+' (smoke krug 2: "sledljivost ima vec definisanu formu za pdf"). OFF rezim
+' i prazan rezultat se PRIJAVLJUJU.
+Private Sub StampajSablonZbirne()
+    Dim ishod As String
+    If Len(mIzabranaZbirna) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_NEMA_ZBIRNE"), True
+        Exit Sub
+    End If
+    ishod = StampajSledljivostZbirne(mIzabranaZbirna)
+    Select Case ishod
+        Case "OFF":  modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_PRINT_OFF"), True
+        Case "NEMA": modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_PRAZNO"), True
+    End Select
+End Sub
 
 '=====================================================================
 ' REDOVI MREZE
@@ -358,8 +463,10 @@ Public Function SlKoloneZaListu(ByVal kljuc As String) As Variant
                 "OTKUI_HDI_REF||txt|1|4")
         Case SL_NEP
             ' Problem | Datum | Broj | Nosilac | Kg | Detalj | [DokTip] |
-            ' [DokID]. Kg je txt (FmtIliPrazno): dvosmislen broj nema kg, a
-            ' u tipiziranoj koloni bi Empty postao "0,00".
+            ' [DokID] | [KlasaKod]. Kg je txt (FmtIliPrazno): dvosmislen broj
+            ' nema kg, a u tipiziranoj koloni bi Empty postao "0,00".
+            ' KlasaKod (SLEDP_*) nosi radnja "Povezi..." -- prikazno ime
+            ' klase ide kroz Poruka() pa nije stabilan kljuc.
             SlKoloneZaListu = Array( _
                 "OTKUI_HDS_PROBLEM||txt|128|1", _
                 "OTKUI_HD_DATUM||date|60|1", _
@@ -368,7 +475,8 @@ Public Function SlKoloneZaListu(ByVal kljuc As String) As Variant
                 "OTKUI_HD_KG||txt|64|2", _
                 "OTKUI_HDS_DETALJ||txt|190|1", _
                 "OTKUI_HDI_DOKTIP||txt|1|4", _
-                "OTKUI_HDI_DOKID||txt|1|4")
+                "OTKUI_HDI_DOKID||txt|1|4", _
+                "OTKUI_HDS_KLASAKOD||txt|1|4")
     End Select
 End Function
 
@@ -601,6 +709,7 @@ Private Sub UpisiRed(ByVal kljuc As String, ByRef src As Variant, ByVal i As Lon
             outA(n, 6) = NzS(src(i, 6))
             outA(n, 7) = NzS(src(i, 7))
             outA(n, 8) = NzS(src(i, 8))
+            outA(n, 9) = NzS(src(i, 1))
             sumKg = sumKg + NzD(src(i, 5))
     End Select
 End Sub
@@ -747,11 +856,17 @@ Public Sub Scr_Build(ByVal z As Object)
     modUiKit.NewLbl z, "slHint", "", PAD, SL_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
     ' Stampa aktivne liste (house PDF) + lanac izabranog reda (house PDF sa
-    ' kontekst-linijom: koren, opseg, kompletnost).
+    ' kontekst-linijom: koren, opseg, kompletnost) + sledljivost zbirne po
+    ' POSTOJECEM sablonu + auto-povezivanje (samo NEPOTPUNI -- vidljivost
+    ' daje raspored). Smoke krug 2.
     modUiKit.BtnV z, "scrSlPrint", Poruka("OTKUI_BTN_IZ_PRINT"), PAD, SL_Y_BTN, _
                   156, SL_BTN_H, "primary"
     modUiKit.BtnV z, "scrSlLanac", Poruka("OTKUI_BTN_SL_LANACPDF"), PAD + 164, SL_Y_BTN, _
                   120, SL_BTN_H, "soft"
+    modUiKit.BtnV z, "scrSlSab", Poruka("OTKUI_BTN_SL_SABLON"), PAD + 292, SL_Y_BTN, _
+                  158, SL_BTN_H, "soft"
+    modUiKit.BtnV z, "scrSlAuto", Poruka("OTKUI_BTN_SL_AUTO"), PAD + 458, SL_Y_BTN, _
+                  132, SL_BTN_H, "soft"
 
     modUiKit.NewLbl z, "slLnB", "", 0, SL_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
@@ -803,6 +918,11 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
 
     modUiKit.MoveBtn z, "scrSlPrint", PAD, SL_Y_BTN
     modUiKit.MoveBtn z, "scrSlLanac", PAD + 164, SL_Y_BTN
+    modUiKit.MoveBtn z, "scrSlSab", PAD + 292, SL_Y_BTN
+    modUiKit.MoveBtn z, "scrSlAuto", PAD + 458, SL_Y_BTN
+    ' Auto-povezivanje je posao liste NEPOTPUNI -- na ostalima je mrtvo
+    ' dugme i ne crta se (kontekstna dugmad, obrazac scrIzKartPdf).
+    modUiKit.BoxShow z, "scrSlAuto", (Scr_Lista() = SL_NEP)
 
     z.Controls("slLnB").width = w
 End Sub
@@ -890,16 +1010,23 @@ Private Sub OsveziDetalj(ByVal red As Long)
     kljuc = Scr_Lista()
     mDetalj = Empty
     mIzabranOtkupID = ""
+    mIzabranaZbirna = ""
     naslov = ""
 
     Select Case kljuc
         Case SL_LANAC
             ref = NzS(modOtkupUI.GridCell(red, 11))
+            mIzabranaZbirna = NzS(modOtkupUI.GridCell(red, 6))
         Case SL_PARC
             ref = NzS(modOtkupUI.GridCell(red, 12))
+            mIzabranaZbirna = NzS(modOtkupUI.GridCell(red, 10))
         Case SL_NEP
             If NzS(modOtkupUI.GridCell(red, 7)) = DOK_TIP_OTKUP Then
                 ref = "OTK|" & NzS(modOtkupUI.GridCell(red, 8))
+            ElseIf NzS(modOtkupUI.GridCell(red, 7)) = SLED_DOK_ZBIRNA Then
+                ' Red zbirne: broj je vidljiva kolona 3 -- sablon-PDF radi
+                ' i odavde.
+                mIzabranaZbirna = NzS(modOtkupUI.GridCell(red, 3))
             End If
     End Select
 
@@ -1382,6 +1509,7 @@ Public Sub Scr_SlTestReset()
     mTestDo = 0
     mSnimakPunjenja = 0
     mIzabranOtkupID = ""
+    mIzabranaZbirna = ""
     mDetalj = Empty
     mHintKljuc = ""
     Scr_ResetCache

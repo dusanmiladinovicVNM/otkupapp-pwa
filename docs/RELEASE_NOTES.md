@@ -6664,8 +6664,9 @@ ijedne izmišljene veze.
 - **Klik na red** otvara detalj lanca desno: karika po karika sa kg po
   svakoj (vozač, stanica, parcela, kupac — ono što u redu ne stane).
 - **Štampe:** „Štampaj izveštaj" (kućni PDF tačno onoga što je na
-  ekranu, sa periodom i filterom u naslovu) i „Lanac (PDF)" za izabrani
-  red — karike kao redovi + linija kompletnosti. Radnja „Štampaj
+  ekranu, sa periodom i filterom u naslovu), „Lanac (PDF)" za izabrani
+  red — karike kao redovi + linija kompletnosti — i „Sledljivost zbirne
+  (PDF)" po postojećem šablonu iz stare forme. Radnja „Štampaj
   dokument" štampa dokument karike (otkupni list / otpremnicu /
   prijemnicu; zbirna nema svoju štampu i to se kaže).
 - Brojke iznad mreže: potpuni lanci / nepotpune karike u periodu.
@@ -6688,9 +6689,6 @@ ijedne izmišljene veze.
 
 ### Šta NIJE u ovoj verziji
 
-- **Povezivanje** (automatsko i ručno vezivanje otkupa za otpremnicu)
-  ostaje u staroj formi Sledljivosti — ona je i dalje tu, nepromenjena.
-  Novi ekran je pregled; popravke idu starim putem (i kroz Oporavak).
 - Vrednost u dinarima niz lanac (v1 prati robu, kg).
 - Detalj trake za redove Nepotpunih koji nisu otkup.
 - Padajući redovi u samoj mreži — i dalje čekaju ugovor ljuske.
@@ -6703,12 +6701,29 @@ ijedne izmišljene veze.
 - Detalj traka je dobila svoju belu karticu — redovi više ne vise preko
   ivice zone.
 
+### Doterano posle drugog smoke-a
+
+- **Povezivanje se vratilo na ekran** („gde je nestalo povezivanje
+  nepovezanih?" — pregled bez alata terao je nazad u staru formu):
+  dugme **„Poveži automatski"** na listi Nepotpuni (isti potez kao u
+  staroj formi, javi koliko je povezano) i radnja **„Poveži…"** nad
+  redom „Otkup bez otpremnice" — ponudi otpremnice sa iste stanice i
+  istog datuma (pravilo stare forme), izbor rednim brojem, pa se lista
+  odmah preračuna i red nestane iz Nepotpunih. Upis ide kroz istu
+  transakcionu kapiju kao do sada; svaki drugi red radnju odbija
+  porukom. Stara forma ostaje tu, nepromenjena.
+- **„Sledljivost zbirne (PDF)"** — štampa po POSTOJEĆEM šablonu
+  Sledljivosti (ona koju operater već poznaje iz stare forme) sada se
+  dobija i sa ekrana, za zbirnu izabranog reda; poštuje isti režim
+  štampe (OFF se prijavljuje, ne ćuti). Kućni „Lanac (PDF)" ostaje —
+  dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
+
 ### Verifikacija
 
-- Šest novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
-  fail-closed oznake, identitet, keš/pretraga, zona) + **19 namernih
-  kvarova** koji obaraju po tačno jedan imenovani test i vraćaju se
-  bit-identično (dvosmerni dokaz).
+- Sedam novih testova (ugovor ekrana, slaganje lanca sa ručnim prolazom,
+  fail-closed oznake, identitet, keš/pretraga, zona, kandidati
+  povezivanja) + **20 namernih kvarova** koji obaraju po tačno jedan
+  imenovani test i vraćaju se bit-identično (dvosmerni dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`

@@ -5032,3 +5032,115 @@ EH:
     IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
 End Function
 
+' ============================================================
+' SLEDLJIVOST PDF PO ZBIRNOJ -- postojeci sablon (WS_SLEDLJIVOST_SABLON),
+' izdvojen iz frmSledljivost.PrintTracePDF za ekran Sledljivost (smoke
+' krug 2: "sledljivost ima vec definisanu formu za pdf"). Forma zadrzava
+' svoju kopiju i ne menja se (par. 5 / Faza B) -- isti obrazac kao
+' StampajReversAmbalaze. Ponasanje je verno legacy-ju, ukljucujuci i to
+' da se zaglavlje cita sa PRVOG reda tblZbirna po broju (dvosmislen broj
+' zbirne na sablonu razresava operater -- pregled, ne knjizenje).
+'
+' Returns (ASCII kod za ekran; ovde nema MsgBox-a):
+'   ""     stampa je izasla po rezimu (PDF/PRINT/PREVIEW)
+'   "OFF"  SLEDLJIVOST_PRINT_MODE = OFF -- ekran to PRIJAVLJUJE
+'   "NEMA" nema podataka za taj broj zbirne
+' ============================================================
+Public Function StampajSledljivostZbirne(ByVal brojZbirne As String) As String
+    Const SRC As String = "modIzvestaj.StampajSledljivostZbirne"
+    On Error GoTo EH
+
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF")
+    If mode = "OFF" Then
+        StampajSledljivostZbirne = "OFF"
+        Exit Function
+    End If
+
+    Dim traceData As Variant
+    traceData = TraceByZbirna(brojZbirne)
+    If IsEmpty(traceData) Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsEmpty(zbrData) Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim colZbrBroj As Long, colZbrDatum As Long, colZbrVozac As Long
+    Dim colZbrKupac As Long, colZbrVrsta As Long
+    colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    colZbrDatum = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+    colZbrVozac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+    colZbrKupac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+    colZbrVrsta = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA, SRC)
+
+    Dim zbrRow As Long, z As Long
+    For z = 1 To UBound(zbrData, 1)
+        If CStr(zbrData(z, colZbrBroj)) = brojZbirne Then zbrRow = z: Exit For
+    Next z
+    If zbrRow = 0 Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim vozacID As String, vozacNaziv As String
+    vozacID = CStr(zbrData(zbrRow, colZbrVozac))
+    vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Ime")) & _
+                 " " & NzToText(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Prezime")))
+    Dim kupacNaziv As String
+    kupacNaziv = NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, _
+                          CStr(zbrData(zbrRow, colZbrKupac)), COL_KUP_NAZIV))
+    Dim datumOtpreme As String
+    If IsDate(zbrData(zbrRow, colZbrDatum)) Then
+        datumOtpreme = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
+    End If
+    Dim vrsta As String
+    vrsta = CStr(zbrData(zbrRow, colZbrVrsta))
+
+    Dim prijKg As Double
+    Dim prijData As Variant
+    prijData = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(prijData) Then
+        prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
+        If IsArray(prijData) Then
+            Dim colPrjZbr As Long, colPrjKol As Long, p As Long
+            colPrjZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+            colPrjKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+            For p = 1 To UBound(prijData, 1)
+                If CStr(prijData(p, colPrjZbr)) = brojZbirne Then
+                    If IsNumeric(prijData(p, colPrjKol)) Then _
+                        prijKg = prijKg + CDbl(prijData(p, colPrjKol))
+                End If
+            Next p
+        End If
+    End If
+
+    Dim ws As Worksheet
+    Set ws = FillSledljivostSablon(brojZbirne, datumOtpreme, vozacNaziv, kupacNaziv, _
+                                   vrsta, traceData, prijKg)
+    If ws Is Nothing Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case Else
+            DocExportPdf ws, pdfPath, True
+    End Select
+
+    StampajSledljivostZbirne = ""
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+

@@ -389,7 +389,7 @@ Public Sub RunAllTests()
     RunOne 147
     RunOne 148
     RunOne 149
-    ' 150-155 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
+    ' 150-156 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
     ' iz istog razloga kao 127-132 i 133-149 iznad.
     RunOne 150
     RunOne 151
@@ -397,6 +397,7 @@ Public Sub RunAllTests()
     RunOne 153
     RunOne 154
     RunOne 155
+    RunOne 156
     RunOne 124
     RunOne 125
     RunOne 126
@@ -589,6 +590,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 153: TestName = "T_Sled_IdentitetURedu_NeCrtaSe"
         Case 154: TestName = "T_Sled_KesPretragaIHint"
         Case 155: TestName = "T_ZonaSled_PoljaIRaspored"
+        Case 156: TestName = "T_Sled_PovezivanjeKandidati"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -752,6 +754,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 153: T_Sled_IdentitetURedu_NeCrtaSe
         Case 154: T_Sled_KesPretragaIHint
         Case 155: T_ZonaSled_PoljaIRaspored
+        Case 156: T_Sled_PovezivanjeKandidati
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -11201,6 +11204,11 @@ Private Sub T_Sled_UgovorEkrana()
         ' dokumenta odbija u rutiranju, ne u ugovoru.
         AssertEq Split(modScrSledljivost.SlRadnjeZaListu(kljuc), ":")(0), _
                  "sledprint", "radnja stampe dokumenta na listi " & kljuc
+        ' Povezivanje je radnja SAMO nepotpunih (smoke krug 2) -- na
+        ' potpunom lancu i parceli nema sta da se povezuje.
+        AssertEq (InStr(1, modScrSledljivost.SlRadnjeZaListu(kljuc), _
+                        "sledpovezi") > 0), (kljuc = "NEPOTPUNI"), _
+                 "radnja Povezi samo na nepotpunima (lista " & kljuc & ")"
         spec = modScrSledljivost.SlCipoviZaListu(kljuc)
         AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", _
                  "prvi cip liste " & kljuc & " je najsiri ('sve')"
@@ -11613,7 +11621,7 @@ Private Sub T_ZonaSled_PoljaIRaspored()
                          "slKL0", "slKV0", "slKL1", "slKV1", _
                          "slDetCap", "slDetR0", "slDetR5", _
                          "scrSlOd", "scrSlDo", _
-                         "scrSlPrint", "scrSlLanac")
+                         "scrSlPrint", "scrSlLanac", "scrSlSab", "scrSlAuto")
         If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
     Next nm
 
@@ -11635,4 +11643,52 @@ Private Sub T_ZonaSled_PoljaIRaspored()
     AssertEq (visina > 0), True, "Scr_Layout prijavljuje visinu zone"
     AssertEq odTxt, "1.1." & Year(Date), _
              "default opsega je 1.1. tekuce godine (legacy)"
+End Sub
+
+' 156. Povezivanje (smoke krug 2): kandidati za rucno povezivanje po
+' legacy pravilu frmSledljivost -- ista stanica + isti datum, bez
+' storniranih. SAMO citanje: upis (Reassign/AutoLink) se ovde ne zove,
+' testovi dele svesku a OTK-NAL-DJ mora ostati nepovezan (test 152 ga
+' meri kao 'nepovezan'). Uz to: klasa-kod kolona koja radnju "Povezi..."
+' vodi je prenosna (prio 4), a red nepovezanog je nosi.
+Private Sub T_Sled_PovezivanjeKandidati()
+    Dim k As Variant, i As Long
+    Dim imaIsta As Boolean, imaTudja As Boolean
+    Dim spec As String
+    Dim d As Variant, redovi As Variant, n As Long, r As Long
+
+    k = modSledljivost.GetOtpremnicaKandidatiZaOtkup("OTK-NAL-DJ")
+    AssertEq IsArray(k), True, "nepovezan otkup ima kandidate za povezivanje"
+    If IsArray(k) Then
+        For i = 1 To UBound(k, 1)
+            If CStr(k(i, 1)) = "OTP-TEST-1" Then imaIsta = True
+            If CStr(k(i, 1)) = "OTP-LEG-B" Then imaTudja = True
+        Next i
+    End If
+    AssertEq imaIsta, True, "kandidat sa iste stanice i datuma je u listi"
+    AssertEq imaTudja, False, "kandidati su samo sa stanice otkupa"
+
+    AssertEq IsArray(modSledljivost.GetOtpremnicaKandidatiZaOtkup("OTK-NEMA-GA")), _
+             False, "nepoznat otkup nema kandidate"
+    AssertEq IsArray(modSledljivost.GetOtpremnicaKandidatiZaOtkup("")), _
+             False, "prazan ID nema kandidate"
+
+    ' Klasa-kod: poslednja kolona NEPOTPUNIH, prio 4 (ne crta se).
+    spec = CStr(modScrSledljivost.SlKoloneZaListu("NEPOTPUNI")( _
+              UBound(modScrSledljivost.SlKoloneZaListu("NEPOTPUNI"))))
+    AssertEq Split(spec, "|")(0), "OTKUI_HDS_KLASAKOD", _
+             "poslednja kolona nepotpunih je klasa-kod"
+    AssertEq Split(spec, "|")(4), "4", "klasa-kod je prio 4 -- ne crta se"
+
+    ' Red nepovezanog otkupa NOSI klasa-kod (ruta radnje ne pogadja
+    ' iz prikaznog teksta).
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    redovi = d(1): n = CLng(d(2))
+    r = SledNadjiGridRed(redovi, n, 8, "OTK-NAL-DJ")
+    AssertEq (r > 0), True, "red nepovezanog otkupa je u listi nepotpunih"
+    If r > 0 Then AssertEq CStr(redovi(r, 9)), "OTKUP-BEZ-OTPREMNICE", _
+                           "red nepovezanog nosi klasa-kod za rutu radnje"
+    modScrSledljivost.Scr_SlTestReset
 End Sub
