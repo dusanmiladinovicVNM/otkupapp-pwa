@@ -6923,3 +6923,63 @@ ljuske, jedini put upisa matičnih podataka je jedan pisac koga zovu obe strane,
 i dva nalaza o pravima pristupa su zatvorena (§24.18). Ostaje jedan posao van
 plana: **migracija zatečenih `"Aktivan"`/`"Neaktivan"` vrednosti** u
 `tblKorisnici.Aktivan` u rečnik `DA`/`NE` (§24.12).
+
+### 24.20 Pred brisanje legacy formi — šta je nedostajalo (`v6-ui-195`)
+
+§24 je pisan pod pretpostavkom **koegzistencije**: legacy forma ostaje, cilj je
+*jedan pisac koga zovu obe strane* (§24.5). Kad je cilj postao **brisanje svih
+`frm*` fajlova**, ta pretpostavka je pala — i sa njom su se videle tri rupe koje
+pod starim ciljem nisu bile rupe.
+
+#### Šta jeste, a šta nije bilo premešteno
+
+| | Stanje posle M5 |
+|---|---|
+| **Premešteno** (jedna implementacija, oba pozivaoca) | upis i sve provere (`modMaticniUnos`), GEO (`modMaticniGeo`), Korisnici i prava (`modMaticniKorisnici`), prevod Tag→sekcija |
+| **Napravljeno paralelno** (dve implementacije) | **čitanje** — `LoadList` (355), `SetupColumnHeaders` (136), `lstData_Click` (159) i dalje samo u formi; nova ljuska ima `MatRedovi` / `MatKolone` / `MatVrednostiReda` |
+| **Umire sa formom, i to je u redu** | 13 `Setup*`, stilizovanje, raspored kontrola, `m_RowMap`, vidljivost geo kontrola — to su ruke te forme |
+
+Paralelno čitanje nije greška pod starim ciljem: pisac je deljen, pa se **upis**
+ne može razići, a čitač je imao legacy kao referencu. Ali referenca nestaje sa
+formom — pa se slaganje mora izmeriti **pre** brisanja, ne posle.
+
+#### 1. Test slaganja čitača (161) — napisan sada
+
+Tvrdnja iz §24.11 koja je kroz M1–M5 ostala nenapisana. Meri, nad svih 14 lista:
+**skup zapisa** (broj, višak, manjak — kao *jednu* tvrdnju, jer su to tri lica
+istog kvara) i **svaku golu vrednost** novog čitača protiv legacy reda istog
+identiteta. Izvedene vrednosti se preskaču i to je **granica tvrdnje, ne rupa**:
+`@status` novi čitač svodi na Aktivan/Neaktivan (parcele u šemi nose `"Da"`), a
+`@geo` legacy nije ni pokazivao — zabeležene odluke iz §24.8.
+
+Test i njegov seam (`frmStammdaten.StmTestLista`) su **privremeni**: umiru
+zajedno sa formom. To je svrha, ne propust.
+
+#### 2. Kaskada zavisnog combo-a — bila prekinuta
+
+`MatComboStavke("@sorte", kontekst)` **jeste** bio prenet iz forme. **Ožičavanje
+nije.** `OcistiPolja` je punio combo-e samo pri otvaranju editora, kad vrsta još
+nema vrednost, pa je spisak sorti ostajao prazan — operater je kucao naslepo.
+Događaj promene je stizao (`NewFieldG` → `WireInput` → `UiChange` →
+`ScrAct "chg:"`), ali ga je `modMaticniEkran` ispuštao.
+
+Popravka je zavisnost izmestila **u opis**, umesto tvrdo kodiranog
+`If izvor = "@sorte"`: `MatComboZavisi(izvor)` je jedan spisak koji koriste tri
+posla — punjenje pri otvaranju, ponovno punjenje na `chg:`, i punjenje posle
+učitavanja postojećeg zapisa. Dok je zavisnost stajala u punjenju, druga dva
+posla nisu ni postojala.
+
+Uz to ide straža od povratnog udara (`mUZavisnima`): `FillCmb` i `PostaviPolje`
+menjaju kontrolu, što opet okida `Change`. Kaskada je danas plitka pa bi se sama
+zaustavila — straža je uslov da druga zavisnost sutra ne postane petlja.
+
+#### 3. Podešavanja i Admin nemaju host bez forme — otvoreno
+
+`modPodesavanja.BuildConfigEditor(frm)` i `modAdmin.BuildAdminPanel(frm)` grade
+runtime kontrole **na `frmStammdaten`** (`Private mFrm As Object ' host`).
+Brisanjem forme oba panela umiru.
+
+To ne obara §24.19 — razlozi zašto **ne** postaju ekrani po ugovoru (97 polja,
+`MAX_SEG` pun, `secret`/`memo` bez para u rečniku) i dalje stoje. Menja se samo
+**gde žive**: treba im nov domaćin, a to je odluka koja nije doneta i nije bila u
+planu. Zove se **M6** i predstoji.

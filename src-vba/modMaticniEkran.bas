@@ -32,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-193"
+Public Const MATEKR_BUILD As String = "v6-ui-195"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -63,6 +63,12 @@ Private mGeoID As String
 ' mIzabranID zato sto prezivljava prelazak na drugu listu: cim se na listi PRAVA
 ' izabere red, mIzabranID postaje oblast, a korisnik mora da ostane.
 Private mKorisnikID As String
+
+' Straza od povratnog udara pri punjenju zavisnih combo-a. FillCmb i
+' PostaviPolje menjaju kontrolu, a to opet okida Change -- koji stize nazad kao
+' "chg:". Kaskada je danas plitka (sorta nema svoje zavisne) pa bi se sama
+' zaustavila, ali straza je uslov da druga zavisnost sutra ne postane petlja.
+Private mUZavisnima As Boolean
 
 ' Visina zone sa otvorenim GEO panelom: jedan red polja (N i E) pa dugmad.
 Private Const MAT_GEO_H As Single = MAT_ZONA_H + 18 + MAT_RED_H + 38
@@ -529,6 +535,16 @@ Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As B
         Exit Function
     End If
 
+    ' Promena teksta u polju editora. Stize kao "chg:<ime kontrole>" iz
+    ' modOtkupUI.UiChange -- ozicavanje postoji od pocetka (NewFieldG ->
+    ' WireInput), ali ga ekran nije koristio, pa kaskada sorte nije radila.
+    ' Vraca False: kucanje ne menja podatke, mreza nema sta da cita ponovo.
+    If Left$(tag, 4) = "chg:" Then
+        If Len(mEditKljuc) > 0 Then _
+            OsveziZavisne mEditKljuc, PoljeIzKontrole(mEditKljuc, Mid$(tag, 5))
+        Exit Function
+    End If
+
     ' Otvaranje i zatvaranje editora NE menjaju podatke, pa vracaju False:
     ' ljuska bi inace na svaki klik radila pun RefreshFromData (KPI, kes,
     ' combo-i) za cistu promenu prikaza. Raspored se trazi izricito, gore.
@@ -713,6 +729,10 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
         Next r
     End If
 
+    ' Zavisni combo-i se pune TEK SADA: pri otvaranju roditelj jos nije imao
+    ' vrednost, pa je spisak bio prazan (sorte zavise od izabrane vrste).
+    OsveziZavisne lista, ""
+
     If jeCenovnik Then
         ' Cena se unosi NOVA; datum ostaje prazan pa pisac uzima danasnji.
         PostaviPolje lista, "cena", ""
@@ -814,6 +834,7 @@ End Function
 Public Sub ZatvoriEditor()
     mEditKljuc = ""
     mEditID = ""
+    mUZavisnima = False
 End Sub
 
 ' Prelazak na drugu listu zatvara i editor i GEO panel: oba pripadaju sekciji
@@ -861,8 +882,7 @@ End Sub
 ' Prazna polja + sveze napunjeni combo-i. Combo se puni pri SVAKOM otvaranju:
 ' spisak stanica i kultura se menja iz drugih sekcija istog ekrana.
 Private Sub OcistiPolja(ByVal lista As String)
-    Dim z As Object, a As Variant, r As Variant, k As String, izvor As String
-    Dim nm As String, stavke As Variant, kontekst As String
+    Dim z As Object, a As Variant, r As Variant, k As String, nm As String
     On Error Resume Next
     Set z = Zona()
     If z Is Nothing Then Exit Sub
@@ -871,21 +891,80 @@ Private Sub OcistiPolja(ByVal lista As String)
     If Not IsArray(a) Then Exit Sub
     For Each r In a
         k = modMaticniIzvor.PoljeF(CStr(r), 0)
-        izvor = modMaticniIzvor.PoljeF(CStr(r), 5)
         nm = KontrolaPolja(lista, k)
         If Len(nm) > 0 Then
-            If Len(izvor) > 0 Then
-                kontekst = ""
-                ' Sorte zavise od izabrane vrste -- kaskada iz legacy forme.
-                If izvor = "@sorte" Then kontekst = CitajPolje(lista, "vrsta")
-                stavke = modMaticniIzvor.MatComboStavke(izvor, kontekst)
-                FillCmb z.Controls(nm).Controls(nm & "T"), stavke
-            End If
+            PuniCombo z, lista, CStr(r)
             z.Controls(nm).Controls(nm & "T").value = ""
         End If
     Next r
     Err.Clear
 End Sub
+
+' Puni JEDAN combo iz njegovog izvora, sa kontekstom procitanim IZ POLJA od kog
+' izvor zavisi. Polje bez izvora se preskace.
+Private Sub PuniCombo(ByVal z As Object, ByVal lista As String, ByVal spec As String)
+    Dim izvor As String, nm As String, kontekst As String, zavisi As String
+    On Error Resume Next
+    izvor = modMaticniIzvor.PoljeF(spec, 5)
+    If Len(izvor) = 0 Then Exit Sub
+    nm = KontrolaPolja(lista, modMaticniIzvor.PoljeF(spec, 0))
+    If Len(nm) = 0 Then Exit Sub
+    zavisi = modMaticniIzvor.MatComboZavisi(izvor)
+    If Len(zavisi) > 0 Then kontekst = CitajPolje(lista, zavisi)
+    FillCmb z.Controls(nm).Controls(nm & "T"), _
+            modMaticniIzvor.MatComboStavke(izvor, kontekst)
+    Err.Clear
+End Sub
+
+' Ponovo puni combo-e koji ZAVISE od datog polja, i zadrzava izbor ako i dalje
+' postoji u novom spisku -- tacno ono sto je legacy radio u cmbField1_Change.
+' Prazno "promenjeno" znaci "sve zavisne", i tako se zove posle ucitavanja
+' postojeceg zapisa: spisak se puni pri otvaranju, kad roditelj jos nema
+' vrednost, pa bi bez ovoga sorta ostala prazna i na izmeni i na novom unosu.
+Private Sub OsveziZavisne(ByVal lista As String, ByVal promenjeno As String)
+    Dim z As Object, a As Variant, r As Variant, izvor As String
+    Dim k As String, staro As String
+    If mUZavisnima Then Exit Sub
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    a = modMaticniIzvor.MatPolja(lista)
+    If Not IsArray(a) Then Exit Sub
+    mUZavisnima = True
+    For Each r In a
+        izvor = modMaticniIzvor.PoljeF(CStr(r), 5)
+        If Len(izvor) > 0 Then
+            k = modMaticniIzvor.MatComboZavisi(izvor)
+            If Len(k) > 0 Then
+                If Len(promenjeno) = 0 Or k = promenjeno Then
+                    k = modMaticniIzvor.PoljeF(CStr(r), 0)
+                    staro = CitajPolje(lista, k)
+                    PuniCombo z, lista, CStr(r)
+                    ' FillCmb prazni i listu i vrednost; izbor se vraca samo ako
+                    ' ga nov spisak i dalje sadrzi.
+                    If Len(staro) > 0 Then PostaviPolje lista, k, staro
+                End If
+            End If
+        End If
+    Next r
+    mUZavisnima = False
+    Err.Clear
+End Sub
+
+' Kljuc polja koje nosi datu kontrolu bazena -- obrnut smer od KontrolaPolja.
+' Racuna se iz istog opisa, pa se dva smera ne mogu razici.
+Private Function PoljeIzKontrole(ByVal lista As String, ByVal nm As String) As String
+    Dim a As Variant, r As Variant, k As String
+    a = modMaticniIzvor.MatPolja(lista)
+    If Not IsArray(a) Then Exit Function
+    For Each r In a
+        k = modMaticniIzvor.PoljeF(CStr(r), 0)
+        If KontrolaPolja(lista, k) = nm Then
+            PoljeIzKontrole = k
+            Exit Function
+        End If
+    Next r
+End Function
 
 Private Sub FokusNaPolje(ByVal polja As Object)
     Dim z As Object, nm As String
@@ -916,6 +995,26 @@ End Function
 ' rasporedom (tekst i combo idu u odvojene brojace).
 Public Function MatKontrolaPoljaTest(ByVal lista As String, ByVal poljeKljuc As String) As String
     MatKontrolaPoljaTest = KontrolaPolja(lista, poljeKljuc)
+End Function
+
+' Kljuc polja od kog combo datog polja zavisi -- "" ako ne zavisi ni od cega.
+' Racuna se ISTIM putem kojim se combo puni (opis polja -> izvor -> zavisnost),
+' pa tvrdnja o kaskadi meri ono sto editor stvarno radi, a ne svoju kopiju.
+Public Function MatZavisnostPoljaTest(ByVal lista As String, ByVal poljeKljuc As String) As String
+    Dim a As Variant, r As Variant
+    a = modMaticniIzvor.MatPolja(lista)
+    If Not IsArray(a) Then Exit Function
+    For Each r In a
+        If modMaticniIzvor.PoljeF(CStr(r), 0) = poljeKljuc Then
+            MatZavisnostPoljaTest = _
+                modMaticniIzvor.MatComboZavisi(modMaticniIzvor.PoljeF(CStr(r), 5))
+            Exit Function
+        End If
+    Next r
+End Function
+
+Public Function MatPoljeIzKontroleTest(ByVal lista As String, ByVal nm As String) As String
+    MatPoljeIzKontroleTest = PoljeIzKontrole(lista, nm)
 End Function
 
 Public Function MatVisinaZoneTest(ByVal lista As String, ByVal otvoren As Boolean) As Single

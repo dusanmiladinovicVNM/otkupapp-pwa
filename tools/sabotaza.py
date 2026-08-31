@@ -2373,6 +2373,26 @@ SABOTAZE = {
         "T_Maticni_CitacSlaganjeSaLegacy",
         "svaka gola vrednost novog citaca postoji i u legacy redu",
     ),
+    # -------------------------- MATICNI: KASKADA ZAVISNOG COMBO-A
+    # Podatak je bio prenet iz forme, ozicavanje nije: spisak sorti se punio
+    # samo pri otvaranju editora, kad vrsta jos nema vrednost. Combo je ostajao
+    # prazan, a nista nije prijavljivalo gresku -- operater bi kucao naslepo.
+    "kaskada-zavisnost-ispala-iz-opisa": (
+        "modMaticniIzvor.bas",
+        "    If izvor = \"@sorte\" Then MatComboZavisi = \"vrsta\"\n",
+        "    ' SABOTAZA: sorta vise ne zna od cega zavisi\n",
+        "T_MatEkran_KaskadaZavisnogCombo",
+        "sorta cenovnika zavisi od vrste",
+    ),
+    # Kontekst koji se IGNORISE je gori od kaskade koje nema: combo izgleda
+    # popunjeno, a nudi sorte tudje vrste -- pa cena zavrsi na pogresnoj sorti.
+    "kaskada-kontekst-se-ignorise": (
+        "modMaticniIzvor.bas",
+        "                If StrComp(Trim$(NzToText(d(i, vr))), Trim$(kontekst), vbTextCompare) = 0 Then\n",
+        "                If True Then   ' SABOTAZA: kontekst se ignorise, vracaju se sve sorte\n",
+        "T_MatEkran_KaskadaZavisnogCombo",
+        "spisak sorti nosi SAMO sorte izabrane vrste",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

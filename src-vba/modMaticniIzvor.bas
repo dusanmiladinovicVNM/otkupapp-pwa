@@ -36,7 +36,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '=====================================================================
 Option Explicit
 
-Public Const MATIZ_BUILD As String = "v6-ui-193"
+Public Const MATIZ_BUILD As String = "v6-ui-195"
 
 ' Cipovi su svuda isti: jedina poslovna osa koju sifarnik ima je soft-delete.
 Public Const MAT_CIP_SVI As String = "sve"
@@ -536,6 +536,16 @@ End Function
 '
 ' Kaskada sorte po vrsti je jedini izvor koji zavisi od druge vrednosti, isto
 ' kao u legacy formi (cmbField1_Change).
+' Polje od kog combo IZVOR zavisi, ili "" ako ne zavisi ni od cega.
+'
+' Jedan spisak zavisnosti za tri posla: punjenje pri otvaranju editora,
+' ponovno punjenje kad se roditeljsko polje promeni, i punjenje posle ucitavanja
+' postojeceg zapisa. Dok je zavisnost stajala kao "If izvor = @sorte" u punjenju,
+' druga dva posla nisu ni postojala -- sorta je ostajala prazna zauvek.
+Public Function MatComboZavisi(ByVal izvor As String) As String
+    If izvor = "@sorte" Then MatComboZavisi = "vrsta"
+End Function
+
 Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) As Variant
     Dim d As Variant, i As Long, c As Collection, vr As Long, so As Long
     On Error GoTo EH
