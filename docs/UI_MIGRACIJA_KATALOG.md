@@ -5327,6 +5327,42 @@ i trake Izveštaja), dvotačka se skida na mestu upotrebe
 (`BezDvotacke`); tvrdnja u testu 153 + sabotaža
 `sledljivost-pdf-dvotacka`.
 
+**S12 — „vidi se stari dropdown preko modernog"** (šesti krug). Ljuska
+za SVE combo kontrole ima svoj panel (`zPop`: kucanje ga otvara i
+sužava po podnizu — `PopFromTyping`/`PopIndex`; strelica ga otvara;
+izbor postavlja `ListIndex`), a nativna MSForms lista je penzionisana
+(„nativna lista se više NE koristi — OpenPopup pokriva i duge liste").
+Moj `CB.DropDown` iz kruga 5 crtao je baš tu penzionisanu listu PREKO
+panela. Auto-otvaranje na „Poveži…" sada ide kroz FRONT DOOR ljuske:
+`modOtkupUI.UiEvent "scrSlPov", "Drop"` (javni dispečer → `OpenPopupFor`
+→ panel); `UiEvent` sam izlazi bez forme, pa test-režim nije ugrožen.
+
+**S13 — „ekran se prvi put dosta sporije učitava od ostalih"** (šesti
+krug). Dva troška istog polja: punjenje ponude od 1000+ dokumenata išlo
+je kroz 2N `AddItem` COM poziva — sada JEDAN upis liste
+(`CB.List = matrica`); i ekranski chg-filter je na svako slovo iznova
+prepisivao listu (opet 2N poziva) — a ljuskin panel isto suženje već
+radi sam, po podnizu nad prikazom. Ekranski filter je UKLONJEN
+(`SlDokPrikazi(q)` → `SlDokPonuda()` bez filtera): prikaz stavke zato
+nosi sve po čemu se traži (tip, broj, datum, opis), što test 158 sada i
+tvrdi. Kvake-fold pretrage ovim prelazi na ljuskino pravilo
+(`vbTextCompare` podniz — isto kao kooperant combo na Agrohemiji).
+
+**S14 — „lanac mora ozbiljnije formatirati — ovako kao detalj na A4
+listu je smešno"** (šesti krug). „Lanac (PDF)" više ne ide kroz house
+kompozer lista (on je za ŠIROKE liste; uskoj 5-rednoj tabeli je i posle
+pad-a davao izgled zalutalog detalja) nego kroz novi dokument-builder
+`modIzvestaj.StampajSledljivostLanacDoc` po ugledu na
+`SledljivostSablon`: zaglavlje firme + naslov (`DocSellerHeader`/
+`DocTitleBlock`), info blok korena (otkupni list, kooperant, stanica,
+datum · vozač, kupac, period), tabela karika sa NOSIOCIMA (kolona 3:
+kooperant/vozač/kupac po karici — `SlLanacZaPdf` sada 5 kolona + info
+blok u paketu), red kompletnosti (LANAC POTPUN / LANAC STAO NA: …) i
+podnožje datum štampe + potpis/pečat. Sopstveni list `_SlLanacPrint`,
+eksplicitne širine kolona, A4 `FitToPagesWide=1`; pad-headeri iz S11
+uklonjeni (builder ima prave širine). Test 153 dopunjen (nosilac +
+info blok + oznaka na koloni 5).
+
 ### 24.8 Verifikacija
 
 - `RunAllTests` (devet novih testova 150–158, registrovani u sva tri

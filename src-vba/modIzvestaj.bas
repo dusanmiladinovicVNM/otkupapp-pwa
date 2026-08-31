@@ -5442,3 +5442,145 @@ Private Function SledDatumUPeriodu(ByVal v As Variant, ByVal datumOd As Date, _
     End If
 End Function
 
+' ============================================================
+' LANAC-DOKUMENT (krug 6 S14): ozbiljan A4 dokument po ugledu na
+' SledljivostSablon -- zaglavlje firme, naslov, info blok korena
+' (otkup/kooperant/stanica/datum + vozac/kupac/period), tabela karika
+' sa nosiocima, red kompletnosti, potpis/pecat. Sopstveni list
+' (_SlLanacPrint) sa EKSPLICITNIM sirinama kolona -- zajednicki
+' PrintIzvestajHouse je za SIROKE liste (MERGE naslov se sece na sirinu
+' uske tabele) i ne dira se.
+'
+' paket = modScrSledljivost.SlLanacZaPdf:
+'   (0) dataS 1..5 x 1..5 (karika, broj, nosilac, kg, oznaka)
+'   (1) broj redova  (2) kontekst-linija (ne stampa se ovde)
+'   (3) info(0..7): broj, kooperant, stanica, datum, vozac, kupac,
+'       period, oznaka ("" = potpun)
+' mode: PDF/PRINT/PREVIEW -- OFF je vec odbio pozivalac.
+' ============================================================
+Public Sub StampajSledljivostLanacDoc(ByRef paket As Variant, ByVal mode As String)
+    Const SRC As String = "modIzvestaj.StampajSledljivostLanacDoc"
+    On Error GoTo EH
+
+    Dim dataS As Variant, nR As Long, info As Variant
+    dataS = paket(0)
+    nR = CLng(paket(1))
+    info = paket(3)
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("_SlLanacPrint")
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = "_SlLanacPrint"
+    End If
+    ws.Visible = xlSheetVisible
+
+    Dim oldScr As Boolean: oldScr = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+
+    Const NC As Long = 5
+    ws.columns(1).ColumnWidth = 14
+    ws.columns(2).ColumnWidth = 18
+    ws.columns(3).ColumnWidth = 30
+    ws.columns(4).ColumnWidth = 11
+    ws.columns(5).ColumnWidth = 20
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, NC, NC)
+    r = DocTitleBlock(ws, r, NC, Poruka("OTKUI_SLPDF_SUB"), _
+                      Poruka("OTKUI_SL_LANAC_NASLOV"))
+
+    ' Info blok korena -- levo dokument, desno prevoz/period (kao sablon).
+    r = r + 1
+    SlpInfo ws, r, 1, Poruka("OTKUI_SLPDF_OTKUP"), NzS(info(0))
+    SlpInfo ws, r, 4, Poruka("OTKUI_SLPDF_VOZAC"), NzS(info(4))
+    SlpInfo ws, r + 1, 1, Poruka("OTKUI_SLPDF_KOOP"), NzS(info(1))
+    SlpInfo ws, r + 1, 4, Poruka("OTKUI_SLPDF_KUPAC"), NzS(info(5))
+    SlpInfo ws, r + 2, 1, Poruka("OTKUI_SLPDF_STANICA"), NzS(info(2))
+    SlpInfo ws, r + 2, 4, Poruka("OTKUI_SLPDF_PERIOD"), NzS(info(6))
+    SlpInfo ws, r + 3, 1, Poruka("OTKUI_SLPDF_DATUM"), NzS(info(3))
+    r = r + 5
+
+    ' Tabela karika.
+    Dim hdr As Long, i As Long, c As Long
+    hdr = r
+    ws.cells(hdr, 1).value = Poruka("OTKUI_HDS_KARIKA")
+    ws.cells(hdr, 2).value = Poruka("OTKUI_HDI_BRDOK")
+    ws.cells(hdr, 3).value = Poruka("OTKUI_HDS_NOSILAC")
+    ws.cells(hdr, 4).value = Poruka("OTKUI_HD_KG")
+    ws.cells(hdr, 5).value = Poruka("OTKUI_HDS_OZNAKA")
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, NC))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 1), ws.cells(hdr + nR, NC)).NumberFormat = "@"
+    For i = 1 To nR
+        For c = 1 To NC
+            ws.cells(hdr + i, c).value = dataS(i, c)
+        Next c
+    Next i
+    With ws.Range(ws.cells(hdr + 1, 1), ws.cells(hdr + nR, NC))
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(hdr + nR, 4)) _
+      .HorizontalAlignment = xlRight
+    r = hdr + nR + 2
+
+    ' Kompletnost -- bold; prazna oznaka je i ovde dobra vest, receno.
+    ws.cells(r, 1).value = IIf(Len(NzS(info(7))) = 0, _
+        Poruka("OTKUI_SLPDF_POTPUN"), _
+        Poruka("OTKUI_SLPDF_STAO") & " " & NzS(info(7)))
+    ws.cells(r, 1).Font.Bold = True
+    r = r + 2
+
+    ' Podnozje kao sablon: datum stampe + potpis levo, pecat desno.
+    ws.cells(r, 1).value = Poruka("OTKUI_SLPDF_DATSTAMPE") & " " & _
+                           Format$(Date, "dd.MM.yyyy")
+    r = r + 1
+    ws.cells(r, 1).value = Poruka("OTKUI_SLPDF_POTPIS") & " ____________"
+    ws.cells(r, 4).value = Poruka("OTKUI_SLPDF_PECAT") & " ____________"
+
+    On Error Resume Next
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, NC)).Address
+    End With
+    On Error GoTo EH
+    Application.ScreenUpdating = oldScr
+
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case Else
+            DocExportPdf ws, ThisWorkbook.path & "\Sledljivost_Lanac_" & _
+                Replace(NzS(info(0)), "/", "-") & ".pdf", True
+    End Select
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Sub
+
+' Par labela+vrednost u info bloku lanac-dokumenta.
+Private Sub SlpInfo(ByVal ws As Worksheet, ByVal r As Long, ByVal c As Long, _
+                    ByVal lbl As String, ByVal v As String)
+    ws.cells(r, c).value = lbl
+    ws.cells(r, c).Font.Color = DocColGray()
+    ws.cells(r, c + 1).value = v
+    ws.cells(r, c + 1).Font.Bold = True
+End Sub
+

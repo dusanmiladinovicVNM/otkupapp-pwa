@@ -11552,6 +11552,11 @@ Private Sub T_Sled_IdentitetURedu_NeCrtaSe()
     dataS = paket(0)
     AssertEq CStr(dataS(2, 2)), "31/TEST", "PDF red otpremnice nosi broj"
     AssertEq CStr(dataS(5, 2)), "5/2026", "PDF red fakture nosi broj"
+    ' Dokument-format (krug 6 S14): red nosi i NOSIOCA karike, a info
+    ' blok korena putuje uz sklop (paket(3): broj..oznaka).
+    AssertEq (Len(CStr(dataS(1, 3))) > 0), True, _
+             "PDF red otkupa nosi kooperanta (nosilac karike)"
+    AssertEq (UBound(paket) >= 3), True, "sklop nosi info blok dokumenta"
     ' Deljeni detalj-kljucevi nose dvotacku (traka), PDF karika ne sme
     ' (krug 5 S11: "Zbirna:" pored "Otkup" u istoj koloni).
     AssertEq (Right$(CStr(dataS(3, 1)), 1) <> ":"), True, _
@@ -11560,7 +11565,7 @@ Private Sub T_Sled_IdentitetURedu_NeCrtaSe()
              "kontekst-linija nosi koren lanca"
     paket = modScrSledljivost.SlLanacZaPdf("OTK-SLED-R")
     dataS = paket(0)
-    AssertEq CStr(dataS(1, 4)), "kg razlika", _
+    AssertEq CStr(dataS(1, 5)), "kg razlika", _
              "PDF lanac koji curi nosi oznaku uz kariku"
     modScrSledljivost.Scr_SlTestReset
 End Sub
@@ -11785,13 +11790,18 @@ Private Sub T_Sled_DokumentiPonuda()
     modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
     d = modScrSledljivost.Scr_Rows("sve", "")     ' puni snimak konteksta
 
-    p = modScrSledljivost.SlDokPrikazi("")
+    p = modScrSledljivost.SlDokPonuda()
     AssertEq IsArray(p), True, "ponuda dokumenata nad fixture-om nije prazna"
     For i = 1 To UBound(p, 1)
         Select Case CStr(p(i, 2))
             Case "ZBIRNA|ZB-TEST-SLED": nSled = nSled + 1
             Case "ZBIRNA|ZB-TEST-SLDD": nSldd = nSldd + 1
-            Case "PALETA|PAL-SLED-1": imaPal = True
+            Case "PALETA|PAL-SLED-1"
+                imaPal = True
+                ' Suzavanje pri kucanju radi LJUSKIN panel PO PRIKAZU
+                ' (krug 6 S13) -- prikaz zato MORA da nosi broj.
+                AssertEq (InStr(1, CStr(p(i, 1)), "31/2026") > 0), True, _
+                         "prikaz palete nosi broj -- po njemu panel suzava"
             Case "PALETA|PAL-SLED-X": imaX = True
             Case "PALETA|PAL-SLED-2": imaSvezu = True
             Case "PRERADA|PRE-SLED-1": imaPre = True
@@ -11803,13 +11813,5 @@ Private Sub T_Sled_DokumentiPonuda()
     AssertEq imaSvezu, False, "preradjena paleta nije u ponudi kao sveza"
     AssertEq imaX, False, "stornirana paleta nije u ponudi"
     AssertEq imaPre, True, "prerada je u ponudi (preradni list)"
-
-    ' Filter: broj palete nalazi TACNO nju; bez pogotka -> prazno.
-    p = modScrSledljivost.SlDokPrikazi("31/2026")
-    AssertEq IsArray(p), True, "filter po broju palete ima pogodak"
-    AssertEq UBound(p, 1), 1, "filter po broju palete suzava na jedan red"
-    AssertEq CStr(p(1, 2)), "PALETA|PAL-SLED-1", "i to bas na tu paletu"
-    AssertEq IsArray(modScrSledljivost.SlDokPrikazi("nema-takvog-xyz")), _
-             False, "filter bez pogotka vraca prazno"
     modScrSledljivost.Scr_SlTestReset
 End Sub

@@ -6773,6 +6773,23 @@ ijedne izmišljene veze.
   se zove KARIKA (ne „PROBLEM"), a karike su ujednačene — bez
   „Zbirna:" sa dvotačkom pored „Otkup" bez nje.
 
+### Doterano posle šestog smoke-a
+
+- **Jedan dropdown, ne dva:** automatsko otvaranje kandidata na
+  „Poveži…" sada otvara ISTI moderni panel koji imaju sva polja
+  aplikacije — stara sistemska lista se više nigde ne pojavljuje preko
+  njega.
+- **Ekran se otvara primetno brže:** ponuda od 1000+ dokumenata u polje
+  izbora upisuje se odjednom (umesto hiljada pojedinačnih upisa), a
+  kucanje više ne prepisuje listu — sužavanje ionako radi panel
+  aplikacije.
+- **„Lanac (PDF)" je sada pravi dokument:** zaglavlje firme i naslov,
+  blok podataka o korenu (otkupni list, kooperant, stanica, datum ·
+  vozač, kupac, period), tabela karika sa nosiocima (ko je nosio robu
+  na svakoj karici), red kompletnosti („LANAC POTPUN" / „LANAC STAO
+  NA: …") i podnožje sa datumom štampe, potpisom i pečatom — po ugledu
+  na postojeći šablon Sledljivosti, umesto tabelice u ćošku A4 lista.
+
 ### Verifikacija
 
 - Devet novih testova (ugovor ekrana, slaganje lanca sa ručnim

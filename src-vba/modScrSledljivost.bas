@@ -277,7 +277,10 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     If Left$(tag, 4) = "chg:" Then
         Select Case Mid$(tag, 5)
             Case "scrSlOdT", "scrSlDoT": OpsegPromenjen
-            Case "scrSlDokT": FiltrirajDokCombo
+            ' Kucanje u polja izbora NE obradjuje ekran: suzavanje radi
+            ' ljuskin panel (PopFromTyping/PopIndex -- podniz nad
+            ' prikazom). Ekranski filter je bio DUPLO suzavanje i 2N COM
+            ' poziva po slovu (krug 6 S13).
         End Select
         Exit Function
     End If
@@ -361,16 +364,12 @@ Private Function PoveziRed(ByVal red As Long) As Boolean
 
     izbor = IzabraniIzComba("scrSlPov")
     If Len(izbor) = 0 Then
-        ' Umesto gole poruke i ODMAH ponuda (krug 5: "kad se klikne na
-        ' Povezi automatski otvori dropdown"): fokus + otvorena lista.
-        ' Lista je zatvorena pa je DropDown ovde bezbedan (S7 zamka vazi
-        ' za VEC otvorenu listu); SetFocus iza IsTestMode -- u nevidljivom
-        ' Excelu SetFocus visi (testovi.md par. 4).
+        ' Uz poruku se ODMAH otvara i ponuda (krug 5) -- ali LJUSKIN
+        ' panel kroz front door (UiEvent/Drop), ne nativna lista:
+        ' CB.DropDown je crtao penzionisanu nativnu listu PREKO panela
+        ' (krug 6 S12). UiEvent sam izlazi kad forme nema (testovi).
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_POV_NEIZABRAN"), True
-        If Not IsTestMode() Then
-            CB.SetFocus
-            CB.DropDown
-        End If
+        modOtkupUI.UiEvent "scrSlPov", "Drop", Empty
         Exit Function
     End If
     otpID = Split(izbor, "|")(0)
@@ -404,16 +403,20 @@ Private Sub NapuniPovKandidate(ByVal otkupID As String)
     If Len(otkupID) > 0 Then
         k = modSledljivost.GetOtpremnicaKandidatiZaOtkup(otkupID)
         If IsArray(k) Then
-            ' Isti ritam separatora kao polje dokumenta (krug 5) --
-            ' dva razmaka pre tacke, jedan posle, svuda.
-            For i = 1 To UBound(k, 1)
-                CB.AddItem NzS(k(i, 2)) & _
+            ' Isti ritam separatora kao polje dokumenta (krug 5) i isti
+            ' JEDAN upis liste (krug 6 S13).
+            Dim arr() As Variant, n As Long
+            n = UBound(k, 1)
+            ReDim arr(0 To n - 1, 0 To 1)
+            For i = 1 To n
+                arr(i - 1, 0) = NzS(k(i, 2)) & _
                     IIf(Len(NzS(k(i, 3))) > 0, _
                         "  " & ChrW(183) & " " & NzS(k(i, 3)), "") & _
                     "  " & ChrW(183) & " " & FmtKolicina(NzD(k(i, 4))) & _
                     " kg" & "  " & ChrW(183) & " " & NzS(k(i, 5))
-                CB.List(CB.ListCount - 1, 1) = NzS(k(i, 1)) & "|" & NzS(k(i, 2))
+                arr(i - 1, 1) = NzS(k(i, 1)) & "|" & NzS(k(i, 2))
             Next i
+            CB.List = arr
         End If
     End If
     On Error GoTo 0
@@ -511,14 +514,15 @@ End Sub
 ' POLJE IZBORA DOKUMENTA SLEDLJIVOSTI (smoke krug 3b)
 '=====================================================================
 
-' Ponuda polja: (1..N, 1..2) prikaz | "tip|id", filtrirano substring
-' pretragom (kvake-fold kao mreza -- modUiData.TekstZaPretragu). q=""
-' vraca SVE dokumente perioda. Cist sklop nad snimkom, testabilan bez
-' kontrole; Empty van snimka ili bez pogotka.
-Public Function SlDokPrikazi(ByVal q As String) As Variant
-    Dim snap As Variant, dok As Variant, i As Long
-    Dim qf As String, prikaz As String
-    Dim stavke As Collection
+' Ponuda polja: (1..N, 1..2) prikaz | "tip|id" iz snimka -- SVI
+' dokumenti perioda. Suzavanje PRI KUCANJU radi LJUSKIN panel
+' (PopFromTyping/PopIndex, podniz nad prikazom) -- ekran ponudu NE
+' filtrira sam (krug 6 S13: duplo suzavanje, 2N COM poziva po slovu).
+' Prikaz zato NOSI sve po cemu se trazi: tip, broj, datum, opis.
+' Cist sklop nad snimkom, testabilan bez kontrole; Empty van snimka.
+Public Function SlDokPonuda() As Variant
+    Dim snap As Variant, dok As Variant, i As Long, n As Long
+    Dim res() As Variant
 
     If Not SnimakPostoji() Then Exit Function
     snap = mSnimci(mSnimakKljuc)
@@ -527,29 +531,17 @@ Public Function SlDokPrikazi(ByVal q As String) As Variant
     dok = snap(2)
     If Not IsArray(dok) Then Exit Function
 
-    qf = modUiData.TekstZaPretragu(Trim$(q))
-    Set stavke = New Collection
-    For i = 1 To UBound(dok, 1)
-        prikaz = SlMetaNaziv(NzS(dok(i, 1))) & " " & NzS(dok(i, 3)) & _
-                 IIf(IsEmpty(dok(i, 4)), "", _
-                     "  " & ChrW(183) & " " & Format$(CDate(dok(i, 4)), "d.M.")) & _
-                 IIf(Len(NzS(dok(i, 5))) > 0, _
-                     "  " & ChrW(183) & " " & NzS(dok(i, 5)), "")
-        If Len(qf) = 0 Then
-            stavke.Add Array(prikaz, NzS(dok(i, 1)) & "|" & NzS(dok(i, 2)))
-        ElseIf InStr(1, modUiData.TekstZaPretragu(prikaz), qf) > 0 Then
-            stavke.Add Array(prikaz, NzS(dok(i, 1)) & "|" & NzS(dok(i, 2)))
-        End If
+    n = UBound(dok, 1)
+    ReDim res(1 To n, 1 To 2)
+    For i = 1 To n
+        res(i, 1) = SlMetaNaziv(NzS(dok(i, 1))) & " " & NzS(dok(i, 3)) & _
+                    IIf(IsEmpty(dok(i, 4)), "", _
+                        "  " & ChrW(183) & " " & Format$(CDate(dok(i, 4)), "d.M.")) & _
+                    IIf(Len(NzS(dok(i, 5))) > 0, _
+                        "  " & ChrW(183) & " " & NzS(dok(i, 5)), "")
+        res(i, 2) = NzS(dok(i, 1)) & "|" & NzS(dok(i, 2))
     Next i
-    If stavke.count = 0 Then Exit Function
-
-    Dim res() As Variant, r As Variant, n As Long
-    ReDim res(1 To stavke.count, 1 To 2)
-    For Each r In stavke
-        n = n + 1
-        res(n, 1) = r(0): res(n, 2) = r(1)
-    Next r
-    SlDokPrikazi = res
+    SlDokPonuda = res
 End Function
 
 ' Punjenje polja iz snimka -- guard po (kljuc snimka # punjenja #
@@ -562,16 +554,19 @@ Private Sub PuniDokCombo()
     k = mSnimakKljuc & "#" & CStr(mSnimakPunjenja) & "#" & CStr(mSnimakGen)
     If k = mCmbDokKljuc Then Exit Sub
     mCmbDokKljuc = k
-    NapuniDokStavke CB, SlDokPrikazi(Trim$(CStr(CB.text)))
+    NapuniDokStavke CB, SlDokPonuda()
 End Sub
 
 ' Prepis stavki u kontrolu (2 kolone: prikaz + skriveni "tip|id" --
 ' obrazac scrAgKoop). Tekst operatera se CUVA: Clear ume da ga dira, a
-' upis ide pod mDokFill da povratni Change ne pokrene filter iznova.
+' upis ide pod mDokFill da povratni Change ne pokrene punjenje iznova.
 ' Sirina kolone prati KONTROLU (krug 4 S7: tvrda "244 pt" je bila sira
-' od liste -- horizontalni klizac i odsecen tekst).
+' od liste). Lista se dodeljuje JEDNIM upisom (.List = matrica) -- 2N
+' AddItem poziva nad 1000+ dokumenata je bilo vidljivo sporo prvo
+' otvaranje ekrana (krug 6 S13).
 Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
-    Dim i As Long, t As String
+    Dim i As Long, n As Long, t As String
+    Dim arr() As Variant
     mDokFill = True
     On Error Resume Next
     t = CStr(CB.text)
@@ -581,28 +576,17 @@ Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
     CB.BoundColumn = 1
     CB.TextColumn = 1
     If IsArray(stavke) Then
-        For i = 1 To UBound(stavke, 1)
-            CB.AddItem CStr(stavke(i, 1))
-            CB.List(CB.ListCount - 1, 1) = CStr(stavke(i, 2))
+        n = UBound(stavke, 1)
+        ReDim arr(0 To n - 1, 0 To 1)
+        For i = 1 To n
+            arr(i - 1, 0) = CStr(stavke(i, 1))
+            arr(i - 1, 1) = CStr(stavke(i, 2))
         Next i
+        CB.List = arr
     End If
     If CStr(CB.text) <> t Then CB.text = t
     On Error GoTo 0
     mDokFill = False
-End Sub
-
-' Kucanje u polju suzava ponudu; dropdown se NE otvara programski
-' (krug 4 S7: MSForms ne preracuna visinu vec otvorene liste, pa je
-' suzena ponuda ostajala u prozoru stare visine -- "jedan red i sivo").
-' Strelica polja otvara listu -- tada je visina uvek tacna.
-Private Sub FiltrirajDokCombo()
-    Dim CB As Object
-    If mDokFill Then Exit Sub
-    Set CB = Kontrola("scrSlDok")
-    If CB Is Nothing Then Exit Sub
-    On Error Resume Next
-    If CB.ListIndex >= 0 Then Exit Sub
-    NapuniDokStavke CB, SlDokPrikazi(Trim$(CStr(CB.text)))
 End Sub
 
 ' Razresen izbor polja dokumenta: "tip|id" ili "" (nerazreseno).
@@ -1592,28 +1576,13 @@ Private Sub StampajLanacIzabranog()
         Exit Sub
     End If
 
-    Dim headers As Variant, desno As Variant
-    ' Zaglavlje kolone karika je KARIKA, ne PROBLEM (krug 5 S11 -- PDF je
-    ' pozajmljivao heder liste NEPOTPUNI). Pad heder celija je SIMETRICAN:
-    ' naslov i kontekst-linija su MERGE preko kolona tabele
-    ' (DocTitleBlock) i SEKU se na njenu sirinu -- uska 4-kolonska tabela
-    ' im je sekla tekst sa obe strane. AutoFit meri max(header, sadrzaj),
-    ' pa pad jedini siri tabelu bez diranja zajednickog kompozera;
-    ' centriran tekst + jednak pad levo/desno = isto zaglavlje na oko.
-    headers = Array(SlPadH(Poruka("OTKUI_HDS_KARIKA"), 6), _
-                    SlPadH(Poruka("OTKUI_HDI_BRDOK"), 9), _
-                    Poruka("OTKUI_HD_KG"), _
-                    SlPadH(Poruka("OTKUI_HDS_OZNAKA"), 15))
-    desno = Array(False, False, True, False)
-    PrintIzvestajHouse paket(0), CLng(paket(1)), 4, _
-                       Poruka("OTKUI_SL_LANAC_NASLOV"), CStr(paket(2)), _
-                       headers, desno
+    ' Ozbiljan A4 dokument po ugledu na SledljivostSablon (krug 6 S14 --
+    ' "detalj na A4 listu je smesno"): sopstveni list sa info blokom,
+    ' tabelom karika sa nosiocima i potpis/pecat podnozjem. House
+    ' kompozer lista (PrintIzvestajHouse) je za SIROKE liste i tamo
+    ' MERGE naslov sece na sirinu uske tabele -- ne dira se.
+    StampajSledljivostLanacDoc paket, mode
 End Sub
-
-' Simetrican pad heder celije (v. StampajLanacIzabranog).
-Private Function SlPadH(ByVal s As String, ByVal n As Long) As String
-    SlPadH = String$(n, " ") & s & String$(n, " ")
-End Function
 
 ' Detalj-kljucevi nose dvotacku (traka: "Zbirna: S1/..."); u PDF tabeli
 ' karika stoji sama u svojoj koloni, pa se dvotacka skida NA MESTU
@@ -1640,39 +1609,46 @@ Public Function SlLanacZaPdf(ByVal otkupID As String) As Variant
     Next i
     If r = 0 Then Exit Function
 
-    ' Karike bez dvotacke (krug 5 S11: "Zbirna:" pored "Otkup" u istoj
-    ' koloni) -- kljucevi su deljeni sa detalj trakama, skida se ovde.
-    Dim dataS(1 To 5, 1 To 4) As String
+    ' Karike bez dvotacke (krug 5 S11) -- kljucevi su deljeni sa detalj
+    ' trakama, skida se ovde. Od kruga 6 (S14) red nosi i NOSIOCA
+    ' (kolona 3): kooperant / vozac / kupac po karici -- dokument A4
+    ' bez nosilaca je bio "detalj na listu".
+    Dim dataS(1 To 5, 1 To 5) As String
     dataS(1, 1) = BezDvotacke(Poruka("OTKUI_SL_DET_KARIKA_OTKUP"))
     dataS(1, 2) = NzS(lanac(r, 2))
-    dataS(1, 3) = FmtKolicina(NzD(lanac(r, 7)))
-    dataS(1, 4) = ""
+    dataS(1, 3) = NzS(lanac(r, 4))
+    dataS(1, 4) = FmtKolicina(NzD(lanac(r, 7)))
+    dataS(1, 5) = ""
     dataS(2, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_OTPREMNICA"))
     dataS(2, 2) = NzS(lanac(r, 8))
-    If NzD(lanac(r, 25)) > 0 Then dataS(2, 3) = FmtKolicina(NzD(lanac(r, 25)))
+    dataS(2, 3) = NzS(lanac(r, 24))
+    If NzD(lanac(r, 25)) > 0 Then dataS(2, 4) = FmtKolicina(NzD(lanac(r, 25)))
     dataS(3, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_ZBIRNA"))
     dataS(3, 2) = NzS(lanac(r, 9))
-    If NzD(lanac(r, 26)) > 0 Then dataS(3, 3) = FmtKolicina(NzD(lanac(r, 26)))
+    dataS(3, 3) = NzS(lanac(r, 13))
+    If NzD(lanac(r, 26)) > 0 Then dataS(3, 4) = FmtKolicina(NzD(lanac(r, 26)))
     dataS(4, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_PRIJEMNICA"))
     dataS(4, 2) = NzS(lanac(r, 10))
-    If Not IsEmpty(lanac(r, 11)) Then dataS(4, 3) = FmtKolicina(NzD(lanac(r, 11)))
+    dataS(4, 3) = NzS(lanac(r, 13))
+    If Not IsEmpty(lanac(r, 11)) Then dataS(4, 4) = FmtKolicina(NzD(lanac(r, 11)))
     dataS(5, 1) = BezDvotacke(Poruka("OTKUI_IZ_DET_FAKTURA"))
     dataS(5, 2) = NzS(lanac(r, 12))
+    dataS(5, 3) = NzS(lanac(r, 13))
 
     ' Oznaka stoji uz kariku na kojoj lanac staje/curi.
     Dim ozn As String
     ozn = NzS(lanac(r, 14))
     Select Case ozn
         Case SLED_OZN_NEPOVEZAN, SLED_OZN_OTP_STORNIRANA, SLED_OZN_VEZA
-            dataS(2, 4) = ozn
+            dataS(2, 5) = ozn
         Case SLED_OZN_BEZ_ZBIRNE, SLED_OZN_ZBIRNA_NEMA, IZV_VLASNIK_NEJASAN
-            dataS(3, 4) = ozn
+            dataS(3, 5) = ozn
         Case IZV_NEMA_PRIJEMA
-            dataS(4, 4) = ozn
+            dataS(4, 5) = ozn
         Case SLED_OZN_NEFAKTURISANO
-            dataS(5, 4) = ozn
+            dataS(5, 5) = ozn
         Case Else
-            If Len(ozn) > 0 Then dataS(1, 4) = ozn
+            If Len(ozn) > 0 Then dataS(1, 5) = ozn
     End Select
 
     Dim ctx As String
@@ -1681,7 +1657,18 @@ Public Function SlLanacZaPdf(ByVal otkupID As String) As Variant
           Poruka("OTKUI_SL_PERIOD") & " " & OpsegLabela() & "  " & ChrW(183) & "  " & _
           IIf(Len(ozn) = 0, Poruka("OTKUI_SL_POTPUN"), ozn)
 
-    SlLanacZaPdf = Array(dataS, 5, ctx)
+    ' Info blok dokumenta (krug 6 S14): koren + prevoz + period + oznaka.
+    Dim info(0 To 7) As String
+    info(0) = NzS(lanac(r, 2))
+    info(1) = NzS(lanac(r, 4))
+    info(2) = NzS(lanac(r, 23))
+    If IsDate(lanac(r, 1)) Then info(3) = Format$(CDate(lanac(r, 1)), "dd.MM.yyyy")
+    info(4) = NzS(lanac(r, 24))
+    info(5) = NzS(lanac(r, 13))
+    info(6) = OpsegLabela()
+    info(7) = ozn
+
+    SlLanacZaPdf = Array(dataS, 5, ctx, info)
 End Function
 
 ' "Stampaj dokument" nad izabranim redom: LANAC/PARCELE stampaju otkupni

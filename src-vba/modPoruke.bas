@@ -1576,6 +1576,20 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_SL_POV_NEIZABRAN", ChrW(10007) & " Izaberi otpremnicu iz padaju" & ChrW(263) & "e liste kandidata"
     ' --- Sledljivost smoke krug 5: lanac PDF ---
     UpsertRow lo, existing, "OTKUI_HDS_KARIKA", "KARIKA"
+    ' --- Sledljivost smoke krug 6: lanac kao ozbiljan dokument ---
+    UpsertRow lo, existing, "OTKUI_SLPDF_SUB", "Sledljivost lanca " & ChrW(8212) & " koren: otkupni list"
+    UpsertRow lo, existing, "OTKUI_SLPDF_OTKUP", "Otkupni list:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_KOOP", "Kooperant:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_STANICA", "Stanica:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_DATUM", "Datum otkupa:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_VOZAC", "Voza" & ChrW(269) & ":"
+    UpsertRow lo, existing, "OTKUI_SLPDF_KUPAC", "Kupac:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_PERIOD", "Period:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_POTPUN", "LANAC POTPUN"
+    UpsertRow lo, existing, "OTKUI_SLPDF_STAO", "LANAC STAO NA:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_DATSTAMPE", "Datum " & ChrW(353) & "tampe:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_POTPIS", "Potpis:"
+    UpsertRow lo, existing, "OTKUI_SLPDF_PECAT", "Pe" & ChrW(269) & "at:"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     InvalidateCache
