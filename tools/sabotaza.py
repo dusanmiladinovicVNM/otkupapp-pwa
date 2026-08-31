@@ -2186,6 +2186,37 @@ SABOTAZE = {
         "T_MatIzvor_CipIdentitetIPretraga",
         "aktivni + neaktivni = svi",
     ),
+    # ------------------------------------- MATICNI: JEDAN PISAC (M2)
+    # Provere su iz forme presle u modul; ako modul prestane da odbija, forma
+    # to vise nema gde da uhvati -- ona od v6-ui-189 samo prikazuje odgovor.
+    "maticni-unos-ne-trazi-obavezno": (
+        "modMaticniUnos.bas",
+        "        If modMaticniIzvor.PoljeF(spec, 3) = \"1\" And Len(v) = 0 Then\n",
+        "        If False Then   ' SABOTAZA: obavezno polje se ne trazi\n",
+        "T_MatUnos_ProveraOdbija",
+        "kooperant bez imena se odbija",
+    ),
+    "maticni-unos-nula-hektara-prolazi": (
+        "modMaticniUnos.bas",
+        "    If kljuc = \"PARCELE\" And poljeKljuc = \"povrsina\" Then TraziPozitivan = True\n",
+        "    ' SABOTAZA: nula hektara postaje dozvoljena\n",
+        "T_MatUnos_ProveraOdbija",
+        "parcela od nula hektara se odbija",
+    ),
+    "maticni-unos-prag-blok-bez-provere": (
+        "modMaticniUnos.bas",
+        "                If upoz > 0 And blok > 0 And blok < upoz Then\n",
+        "                If False Then   ' SABOTAZA: pragovi se ne uporedjuju\n",
+        "T_MatUnos_ProveraOdbija",
+        "prag blokade ispod praga upozorenja se odbija",
+    ),
+    "maticni-alias-se-ne-razresava": (
+        "modMaticniIzvor.bas",
+        "    If Left$(kol, 7) <> \"@alias:\" Then\n",
+        "    If True Then   ' SABOTAZA: alias ostaje nerazresen\n",
+        "T_MatUnos_OpisPoljaISema",
+        "svako polje pise u kolonu koja POSTOJI u semi",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

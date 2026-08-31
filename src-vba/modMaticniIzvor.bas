@@ -89,6 +89,27 @@ Public Function MatPrvaSekcija(ByVal ekran As String) As String
     MatPrvaSekcija = Split(CStr(a(LBound(a))), "|")(0)
 End Function
 
+' Prevod legacy Tag-a (frmStammdaten.Tag) u kljuc sekcije. Jedno mesto na kom
+' se dva imenovanja sretnu -- forma i ekran posle toga govore istim jezikom.
+' Korisnici NISU u spisku: oni idu u M4, a do tada forma zadrzava svoju granu.
+Public Function MatKljucIzLegacyTag(ByVal tg As String) As String
+    Select Case tg
+        Case "Kooperanti":  MatKljucIzLegacyTag = "KOOPERANTI"
+        Case "Stanice":     MatKljucIzLegacyTag = "STANICE"
+        Case "Kupci":       MatKljucIzLegacyTag = "KUPCI"
+        Case "Vozaci":      MatKljucIzLegacyTag = "VOZACI"
+        Case "Parcele":     MatKljucIzLegacyTag = "PARCELE"
+        Case "Artikli":     MatKljucIzLegacyTag = "ARTIKLI"
+        Case "Kulture":     MatKljucIzLegacyTag = "KULTURE"
+        Case "Cenovnik":    MatKljucIzLegacyTag = "CENOVNIK"
+        Case "VrstaGP":     MatKljucIzLegacyTag = "VRSTAGP"
+        Case "TipAmbalaze": MatKljucIzLegacyTag = "AMBALAZA"
+        Case "TipPalete":   MatKljucIzLegacyTag = "PALETE"
+        Case "Kutije":      MatKljucIzLegacyTag = "KUTIJE"
+        Case "Kese":        MatKljucIzLegacyTag = "KESE"
+    End Select
+End Function
+
 Public Function MatTabela(ByVal kljuc As String) As String
     Select Case kljuc
         Case "KOOPERANTI": MatTabela = TBL_KOOPERANTI
@@ -276,6 +297,185 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_TEZINA|" & COL_KES_TEZINA & "|num|110|1", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
     End Select
+End Function
+
+''-------------------------------------------------------------- POLJA
+' Opis POLJA UNOSA po sekciji. Jedan spisak za dve stvari: sta pisac prima
+' (modMaticniUnos) i sta editor crta (M2b). Dva spiska bi se razisla.
+'
+' Red: "kljuc | natpis(katalog) | vrsta | obavezno | kolona | combo"
+'   vrsta    txt | num | cmb | date
+'   obavezno 1 = prazno polje odbija upis, 0 = sme prazno
+'   kolona   naziv kolone u tabeli; "@alias:A,B" = prva koja POSTOJI u semi
+'            (drift po instalaciji -- isti probe koji legacy radi u
+'            UpdateFirstExistingCol); "" = polje se ne upisuje direktno
+'   combo    izvor stavki za padajucu listu (v. MatComboIzvor)
+'
+' Redosled je redosled u legacy formi -- operater ne uci nov raspored.
+Public Function MatPolja(ByVal kljuc As String) As Variant
+    Select Case kljuc
+        Case "KOOPERANTI"
+            MatPolja = Array( _
+                "ime|OTKUI_HDM_IME|txt|1|Ime|", _
+                "prezime|OTKUI_HDM_PREZIME|txt|1|Prezime|", _
+                "mesto|OTKUI_HDM_MESTO|txt|0|Mesto|", _
+                "telefon|OTKUI_HDM_TELEFON|txt|0|Telefon|", _
+                "stanica|OTKUI_HDM_STANICA|cmb|1|StanicaID|@stanice", _
+                "bpg|OTKUI_HDM_BPG|txt|0|BPGBroj|", _
+                "racun|OTKUI_HDM_RACUN|txt|0|TekuciRacun|", _
+                "pin|OTKUI_MP_PIN|txt|0|Pin|", _
+                "adresa|OTKUI_HDM_ADRESA|txt|0|Adresa|", _
+                "jmbg|OTKUI_HDM_JMBG|txt|0|JMBG|")
+        Case "STANICE"
+            MatPolja = Array( _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|Naziv|", _
+                "mesto|OTKUI_HDM_MESTO|txt|1|Mesto|", _
+                "telefon|OTKUI_HDM_TELEFON|txt|0|@alias:Kontakt,Telefon|", _
+                "kime|OTKUI_MP_KONTAKT_IME|txt|0|@alias:Ime,KontaktIme|", _
+                "kprezime|OTKUI_MP_KONTAKT_PREZ|txt|0|@alias:Prezime,KontaktPrezime|", _
+                "pin|OTKUI_MP_PIN|txt|0|@alias:PIN,Pin|", _
+                "hladnjaca|OTKUI_HDM_HLADNJACA|cmb|0|" & COL_STA_JE_HLADNJACA & "|@dane")
+        Case "KUPCI"
+            MatPolja = Array( _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|Naziv|", _
+                "ulica|OTKUI_MP_ULICA|txt|0|Ulica|", _
+                "mesto|OTKUI_HDM_MESTO|txt|0|Mesto|", _
+                "posta|OTKUI_MP_POSTA|txt|0|PostanskiBroj|", _
+                "drzava|OTKUI_HDM_DRZAVA|txt|0|@alias:Dr" & ChrW(382) & "ava,Drzava|", _
+                "pib|OTKUI_HDM_PIB|txt|0|PIB|", _
+                "mb|OTKUI_HDM_MB|txt|0|MaticniBroj|", _
+                "email|OTKUI_HDM_EMAIL|txt|0|Email|", _
+                "hladnjaca|OTKUI_HDM_HLADNJACA|txt|0|Hladnjaca|", _
+                "racun|OTKUI_HDM_RACUN|txt|0|TekuciRacun|")
+        Case "VOZACI"
+            MatPolja = Array( _
+                "ime|OTKUI_HDM_IME|txt|1|Ime|", _
+                "prezime|OTKUI_HDM_PREZIME|txt|1|Prezime|", _
+                "telefon|OTKUI_HDM_TELEFON|txt|0|Telefon|", _
+                "pin|OTKUI_MP_PIN|txt|0|PIN|")
+        Case "PARCELE"
+            MatPolja = Array( _
+                "kooperant|OTKUI_HDM_KOOPERANT|cmb|1|" & COL_PAR_KOOP & "|@kooperanti", _
+                "katbroj|OTKUI_HDM_KATBROJ|txt|1|" & COL_PAR_KAT_BROJ & "|", _
+                "katopstina|OTKUI_HDM_KATOPSTINA|txt|1|" & COL_PAR_KAT_OPSTINA & "|", _
+                "kultura|OTKUI_HDM_KULTURA|cmb|1|" & COL_PAR_KULTURA & "|@kulture", _
+                "povrsina|OTKUI_HDM_POVRSINA|num|1|" & COL_PAR_POVRSINA & "|", _
+                "ggap|OTKUI_HDM_GGAP|cmb|1|" & COL_PAR_GGAP & "|@ggap", _
+                "napomena|OTKUI_HDM_NAPOMENA|txt|0|" & COL_PAR_NAPOMENA & "|")
+        Case "ARTIKLI"
+            MatPolja = Array( _
+                "naziv|OTKUI_HDM_NAZIV|txt|1|Naziv|", _
+                "tip|OTKUI_HDM_TIP|cmb|1|Tip|@tipartikla", _
+                "jm|OTKUI_HDM_JM|cmb|1|JedinicaMere|@jm", _
+                "cena|OTKUI_HDM_CENA_JED|num|1|CenaPoJedinici|", _
+                "doza|OTKUI_HDM_DOZA|num|1|DozaPoHa|", _
+                "kultura|OTKUI_HDM_KULTURA|cmb|0|Kultura|@kulture", _
+                "pakovanje|OTKUI_HDM_PAKOVANJE|num|1|Pakovanje|")
+        Case "KULTURE"
+            MatPolja = Array( _
+                "vrsta|OTKUI_HDM_VRSTA|txt|1|VrstaVoca|", _
+                "sorta|OTKUI_HDM_SORTA|txt|1|SortaVoca|", _
+                "gajbica|OTKUI_HDM_GAJBICA_PAL|num|0|" & COL_KUL_GAJBICA_PALETA & "|", _
+                "tipamb|OTKUI_HDM_TIP_AMB|cmb|0|" & COL_KUL_TIP_AMBALAZE & "|@tipambalaze", _
+                "pragupoz|OTKUI_HDM_PRAG_UPOZ|num|0|" & COL_KUL_PRAG_PROSEK_UPOZ & "|", _
+                "pragblok|OTKUI_HDM_PRAG_BLOK|num|0|" & COL_KUL_PRAG_PROSEK_BLOK & "|")
+        Case "CENOVNIK"
+            MatPolja = Array( _
+                "vrsta|OTKUI_HDM_VRSTA|cmb|1|" & COL_CEN_VRSTA & "|@vrste", _
+                "sorta|OTKUI_HDM_SORTA|cmb|0|" & COL_CEN_SORTA & "|@sorte", _
+                "klasa|OTKUI_HDM_KLASA|cmb|1|" & COL_CEN_KLASA & "|@klase", _
+                "datum|OTKUI_HDM_DATUM|date|0|" & COL_CEN_DATUM & "|", _
+                "cena|OTKUI_HDM_CENA|num|1|" & COL_CEN_CENA & "|")
+        Case "VRSTAGP"
+            MatPolja = Array("tip|OTKUI_HDM_TIP_GP|txt|1|" & COL_VGP_TIP & "|")
+        Case "AMBALAZA"
+            MatPolja = Array( _
+                "tip|OTKUI_HDM_TIP_AMB|txt|1|" & COL_TAMB_TIP & "|", _
+                "tezina|OTKUI_HDM_TEZINA_GAJ|num|1|" & COL_TAMB_TEZINA & "|")
+        Case "PALETE"
+            MatPolja = Array( _
+                "tip|OTKUI_HDM_TIP_PAL|txt|1|" & COL_TPAL_TIP & "|", _
+                "tezina|OTKUI_HDM_TEZINA|num|1|" & COL_TPAL_TEZINA & "|")
+        Case "KUTIJE"
+            MatPolja = Array( _
+                "tip|OTKUI_HDM_TIP_KUT|txt|1|" & COL_KUT_TIP & "|", _
+                "tezina|OTKUI_HDM_TEZINA|num|1|" & COL_KUT_TEZINA & "|")
+        Case "KESE"
+            MatPolja = Array( _
+                "tip|OTKUI_HDM_TIP_KES|txt|1|" & COL_KES_TIP & "|", _
+                "tezina|OTKUI_HDM_TEZINA|num|1|" & COL_KES_TEZINA & "|")
+    End Select
+End Function
+
+' Polje opisa polja: 0=kljuc 1=natpis 2=vrsta 3=obavezno 4=kolona 5=combo
+Public Function PoljeF(ByVal spec As String, ByVal idx As Long) As String
+    Dim p() As String
+    p = Split(spec, "|")
+    If idx > UBound(p) Then Exit Function
+    PoljeF = p(idx)
+End Function
+
+' Opis JEDNOG polja po kljucu, ili "" ako ga sekcija nema.
+Public Function MatPolje(ByVal kljuc As String, ByVal poljeKljuc As String) As String
+    Dim a As Variant, r As Variant
+    a = MatPolja(kljuc)
+    If Not IsArray(a) Then Exit Function
+    For Each r In a
+        If PoljeF(CStr(r), 0) = poljeKljuc Then
+            MatPolje = CStr(r)
+            Exit Function
+        End If
+    Next r
+End Function
+
+' Stvarna kolona za polje: razresava "@alias:A,B" nad semom tabele. Vraca "" kad
+' nijedna ne postoji -- pisac tada to polje PRESKACE umesto da obori ceo upis.
+Public Function MatKolonaPolja(ByVal kljuc As String, ByVal spec As String) As String
+    Dim kol As String, tbl As String, imena As Variant, ime As Variant
+    kol = PoljeF(spec, 4)
+    If Len(kol) = 0 Then Exit Function
+    If Left$(kol, 7) <> "@alias:" Then
+        MatKolonaPolja = kol
+        Exit Function
+    End If
+    tbl = MatTabela(kljuc)
+    If Len(tbl) = 0 Then Exit Function
+    imena = Split(Mid$(kol, 8), ",")
+    For Each ime In imena
+        If GetColumnIndex(tbl, Trim$(CStr(ime))) > 0 Then
+            MatKolonaPolja = Trim$(CStr(ime))
+            Exit Function
+        End If
+    Next ime
+End Function
+
+' Prefiks novog ID-ja. Prazno znaci da sekcija NEMA surogat kljuc -- PK je sama
+' unesena vrednost (tipovi ambalaze, paleta, kutija, kesa i gotovog proizvoda).
+Public Function MatPrefiksID(ByVal kljuc As String) As String
+    Select Case kljuc
+        Case "KOOPERANTI": MatPrefiksID = "KOOP-"
+        Case "STANICE":    MatPrefiksID = "ST-"
+        Case "KUPCI":      MatPrefiksID = "KUP-"
+        Case "VOZACI":     MatPrefiksID = "VOZ-"
+        Case "PARCELE":    MatPrefiksID = "PAR-"
+        Case "ARTIKLI":    MatPrefiksID = "ART-"
+        Case "KULTURE":    MatPrefiksID = "KUL-"
+    End Select
+End Function
+
+' Vrednost koja se pri UNOSU upisuje u kolonu statusa.
+'
+' Parcele dobijaju "Da", sve ostalo STATUS_AKTIVAN ("Aktivan"). To NIJE greska
+' ovde nego zateceno stanje: legacy btnDodaj upisuje bas "Da" u tblParcele, dok
+' soft-delete u istu kolonu upisuje "Aktivan"/"Neaktivan". Citac zato aktivnim
+' smatra sve sto NIJE "Neaktivan" -- oba oblika prolaze. Poravnanje bi promenilo
+' ono sto sinhronizacija vec vidi, pa se ne radi usput.
+Public Function MatStatusNaUnosu(ByVal kljuc As String) As String
+    If kljuc = "PARCELE" Then
+        MatStatusNaUnosu = "Da"
+    Else
+        MatStatusNaUnosu = STATUS_AKTIVAN
+    End If
 End Function
 
 '---------------------------------------------------------------- SORT

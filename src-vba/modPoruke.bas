@@ -491,6 +491,32 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDM_TEZINA", "Te" & ChrW(382) & "ina (kg)"
     UpsertRow lo, existing, "OTKUI_HDM_TEZINA_GAJ", "Te" & ChrW(382) & "ina gajbice (kg)"
 
+    ' --- pisac maticnih podataka (modMaticniUnos, M2) ---------------------
+    UpsertRow lo, existing, "MATU_ERR_NEPOZNATA_SEKCIJA", "Nepoznata sekcija mati" & ChrW(269) & "nih podataka:"
+    UpsertRow lo, existing, "MATU_ERR_OBAVEZNO", "polje je obavezno."
+    UpsertRow lo, existing, "MATU_ERR_BROJ", "unesite broj."
+    UpsertRow lo, existing, "MATU_ERR_NEGATIVNO", "broj ne sme biti negativan."
+    UpsertRow lo, existing, "MATU_ERR_POZITIVNO", "broj mora biti ve" & ChrW(263) & "i od nule."
+    UpsertRow lo, existing, "MATU_ERR_PRAG_BLOK", _
+        "prag blokade mora biti ve" & ChrW(263) & "i ili jednak pragu upozorenja."
+    UpsertRow lo, existing, "MATU_ERR_VEC_POSTOJI", "Zapis sa tim nazivom ve" & ChrW(263) & " postoji:"
+    UpsertRow lo, existing, "MATU_ERR_NEMA_REDA", "Izaberite red iz liste."
+    UpsertRow lo, existing, "MATU_ERR_NEMA_STATUSA", _
+        "Ova sekcija nema kolonu statusa, pa se ne mo" & ChrW(382) & "e deaktivirati."
+    UpsertRow lo, existing, "MATU_ERR_CENOVNIK_APPEND", _
+        "Cenovnik se ne menja " & ChrW(8212) & " nova cena se DODAJE kao nov va" & ChrW(382) & "e" & ChrW(263) & "i red."
+    UpsertRow lo, existing, "MATU_ERR_CENA_NIJE_UPISANA", "Cena nije upisana."
+    UpsertRow lo, existing, "MATU_ERR_UPIS", "Upis nije uspeo:"
+    UpsertRow lo, existing, "MATU_OK_DODATO", "Dodato:"
+    UpsertRow lo, existing, "MATU_OK_IZMENJENO", "Izmenjeno."
+    UpsertRow lo, existing, "MATU_OK_STATUS", "Status promenjen u:"
+
+    UpsertRow lo, existing, "OTKUI_MP_PIN", "PIN"
+    UpsertRow lo, existing, "OTKUI_MP_KONTAKT_IME", "Kontakt ime"
+    UpsertRow lo, existing, "OTKUI_MP_KONTAKT_PREZ", "Kontakt prezime"
+    UpsertRow lo, existing, "OTKUI_MP_ULICA", "Ulica"
+    UpsertRow lo, existing, "OTKUI_MP_POSTA", "Po" & ChrW(353) & "tanski broj"
+
     UpsertRow lo, existing, "OTKUI_FOOT_SEZONA", "Sezona 2026"
 
     UpsertRow lo, existing, "OTKUI_KPI_DANAS", "DANAS OTKUPLJENO"

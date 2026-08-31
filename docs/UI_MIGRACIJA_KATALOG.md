@@ -6428,7 +6428,8 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 |---|---|---|
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §24.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
 | **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §24.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
-| **M2** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy se prevezuje**; editor u zoni, radnje `izmeni` i `status` | Jedan pisac (§24.5). Ide sam, sa dvosmernim dokazom. |
+| **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §24.15. Jedan pisac (§24.5). |
+| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | Predstoji — nadograđuje se na već izdvojenog pisca. |
 | **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
 | **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
 | **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
@@ -6587,3 +6588,67 @@ dokazuje ništa. Kao i M0: **testovi nisu izvršeni** u web sesiji.
 **Otvoreno posle M1:** poređenje 1:1 sa `LoadList` po sekciji (traži Excel);
 pilula za status; `Scr_Brojac` se namerno ne implementira (šifarnik nema šta da
 broji, a nula se ne crta).
+
+### 24.15 M2a — jedan pisac (`v6-ui-189`)
+
+Provere i upis su izašli iz `frmStammdaten` u `modMaticniUnos`, **i forma je
+prevezana na njega**. `btnDodaj_Click` je bio 544 linije, `btnIzmeni_Click` 463;
+danas su po ~30, i ne sadrže nijedno poslovno pravilo. Formi je ostalo samo ono
+što forma jeste — koja kontrola nosi koje polje (`KontrolaZaPolje`, jedan
+`Select Case`).
+
+**Ulaz pisca je rečnik, ne kontrole.** `MatDodaj(kljuc, polja, noviID)` /
+`MatIzmeni(kljuc, red, polja)` / `MatPromeniStatus(kljuc, red, noviStatus)` —
+isti obrazac koji ljuska već koristi za `Scr_Save`. Modul u isti rečnik upisuje
+`fokus` = ključ odbijenog polja, pa forma ume da vrati kursor tamo gde je bila
+greška, kao i pre.
+
+**Opis polja je jedan, i služi dvoma.** `modMaticniIzvor.MatPolja` opisuje šta
+se unosi (ključ, natpis, vrsta, obavezno, kolona, izvor combo-a). Iz njega čita
+pisac; iz njega će u M2b čitati i editor. Dva spiska bi se razišla.
+
+**Jedna namerna izmena ponašanja: unos ide PO IMENU KOLONE.** Legacy je za deset
+sekcija zvao `AppendRow` sa nizom vrednosti, pa je tačnost zavisila od redosleda
+kolona — a šema se razlikuje po instalaciji; baš zato `LoadList` za Kupce već
+ima toleranciju, a `btnIzmeni` za Stanice alias-probe. Sada je svuda obrazac koji
+legacy već koristi za Korisnike i Kulture: prazan red pa `RequireUpdateCell` po
+imenu, sve u `clsTransaction`. **Upisuju se iste ćelije; menja se samo kako se
+adresiraju.** Alias-probe (`@alias:Kontakt,Telefon`) time važi i za unos, ne samo
+za izmenu.
+
+**Šta je namerno OSTALO nedosledno** — jer bi poravnanje bilo neizmerena izmena
+na jedinom operativnom putu upisa:
+
+- **Parcele pri unosu dobijaju status `"Da"`**, a soft-delete u istu kolonu piše
+  `"Aktivan"`/`"Neaktivan"`. Čitač aktivnim smatra sve što nije `"Neaktivan"`, pa
+  oba oblika prolaze. Zapisano u `MatStatusNaUnosu`.
+- **Prazan broj:** pri unosu ćelija ostaje prazna, pri izmeni se upisuje nula.
+  To je zatečeno (`btnDodaj` za Kulture preskače praznu gajbicu, `btnIzmeni`
+  upisuje 0) i čuva se doslovno.
+
+**Šta NIJE prešlo:** Korisnici. `tblKorisnici` nosi matricu prava i
+`PreparePin`, i ide u M4 zajedno sa svojim ekranom; do tada forma zadržava svoje
+`DodajKorisnika` / `IzmeniKorisnika` / `SoftDeleteLegacy` — tela su **prenesena
+neizmenjena** iz nekadašnjih `Case "Korisnici"` grana.
+
+**Nalaz usput, NIJE popravljen** (dira prijavu, pa ne ide slepo): dugme
+„Deaktiviraj" nad Korisnicima upisuje `"Neaktivan"` u `Aktivan`, a `modAuth`
+deaktiviranim smatra **samo** vrednost `"NE"` (`modAuth.bas:87`). Deaktivacija
+korisnika kroz to dugme dakle **ne sprečava prijavu** — u listi piše
+„Neaktivan", a login i dalje prolazi. Ovo je zatečeno stanje, ne posledica M2a
+(putanja je prenesena netaknuta u `SoftDeleteLegacy`). Rešava se u **M4**, gde
+se odlučuje i šta se upisuje i šta `modStammdatenSync` i PWA očekuju.
+
+**Verifikacija:** `vba_check` čist (204 fajla, 335 sabotaža). Dva nova testa —
+154 (opis polja svih 13 sekcija razrešava se u kolonu koja **postoji u šemi**;
+PK nije polje za ručni unos; alias se stvarno razrešava) i 155 (provere odbijaju
+prazno obavezno, ne-broj, negativno, nulu tamo gde nema smisla, i ukršteno
+pravilo pragova — uz to imenuju **koje** polje). Oba mere **bez ijednog upisa**
+(`MatProveriTest`), pa ne diraju tabele. Četiri nove sabotaže pod istim
+prefiksom. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
+
+**Ručna kapija za M2a je stroža nego dosad**, jer je ovo jedini put upisa:
+`Compile`, `RunAllTests`, `dokaz.py maticni`, pa smoke nad **kopijom** radne
+sveske — unos i izmena po svakoj od 13 sekcija, deaktivacija/aktivacija,
+nova cena, nova stanica u MALINA režimu (ogledalo vozača), i Korisnici (koji
+nisu dirani).
