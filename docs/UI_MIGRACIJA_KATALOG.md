@@ -521,8 +521,8 @@ celog ekrana. Stoji kao prioritet za kasnije, jer znači na više mesta.
 
 ### Faza F — Matični podaci
 
-20. **Matični podaci** (`btnMatic` je u novom UI-ju nevezan) — **PLAN, nije
-    izvedeno**; ceo predlog je u §24. Ne stoji u Fazi E jer nije „još jedan
+20. **Matični podaci** (`btnMatic` je u novom UI-ju bio nevezan) — plan je u
+    §24; **M0 je urađen** (`v6-ui-187`, §24.13), M1–M5 predstoje. Ne stoji u Fazi E jer nije „još jedan
     ekran po obrascu": donosi **sekciju ljuske** (drugi skup stavki sidebara)
     i prevezuje jedini operativan put upisa matičnih podataka. Redosled
     M0–M5 je u §24.10.
@@ -6140,8 +6140,9 @@ ona živi samo u brutu palete).
   editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
   append-only istorija korekcija = budući rad za cold-chain dokaz.
 ## 24. Matični podaci — plan prelaska (PREDLOG, nije izvedeno)
+## 24. Matični podaci — plan prelaska (M0 urađen, M1–M5 predstoje)
 
-> Ovo je jedina sekcija kataloga koja opisuje posao koji **još nije urađen**.
+> Ovo je jedina sekcija kataloga koja je napisana **pre** posla koji opisuje.
 > Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
 > obrascu iz §7–§9, §22, §23" nego donosi **nov pojam u navigaciju** (sekcija
 > ljuske) i dira sidebar, koji do sada nijedan ekran nije dirao. Odluka o tome
@@ -6424,6 +6425,8 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 
 | Korak | Šta | Zašto tim redom |
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, grupa SISTEM sa dva dugmeta na legacy panele | Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
+|---|---|---|
+| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §24.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
 | **M1** | `modMaticniIzvor` — jedan opis 13 sekcija (tabela, PK, kolone liste, polja editora, combo-i, prefiks ID-ja); ekrani `MAT_PARTNERI`, `MAT_ROBA`, `MAT_PAKOVANJE` kao **pregled** (liste, pretraga, sort, čipovi) | Ceo čitalački deo bez ijednog upisa. Legacy netaknut. Ako stane ovde, dobijeno je pretraživo. |
 | **M2** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy se prevezuje**; editor u zoni, radnje `izmeni` i `status` | Jedan pisac (§24.5). Ide sam, sa dvosmernim dokazom. |
 | **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
@@ -6469,3 +6472,57 @@ kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
 - **Sinhronizacija.** `modStammdatenSync` i `modMasterSync` čitaju iste tabele.
   M2 ne menja šta se upisuje, pa ne bi smeo da ih dotakne — ali to je tvrdnja
   koju test mora da drži, ne pretpostavka.
+
+### 24.13 M0 — šta je stvarno urađeno (`v6-ui-187`)
+
+Nosač je gotov. Tri stvari su u izvedbi ispale **drugačije nego u planu**, i
+razlog je u svakom slučaju nešto što se videlo tek u kodu.
+
+**(1) `MAT_SISTEM` je EKRAN sa listom, ne zonsko dugme.** §24.9 je govorio da
+Podešavanja i Admin otvara „dugme zone". Ali ugovorni ekran **uvek** dobija
+mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa bi ekran sa
+dugmetom u zoni imao ispod sebe praznu mrežu koja izgleda kao pad. Lista alatki
+(dve, sa kolonama *Alatka · Šta radi · Otvara se* i radnjom „Otvori") je jedina
+lista koja tu ima smisla. Uz to daje matičnoj sekciji **bar jedan ekran od
+prvog dana** — bez njega bi zlatno dugme vodilo u sidebar u kom je sve
+prigušeno. Oba panela ostaju netaknuta: `modScrMatSistem.OtvoriPanel` radi tačno
+ono što `frmMaticniPodaci.OpenSekcija` radi (`Unload` → `Tag` → `Show`).
+
+**(2) Ugovor ekrana je dobio `Scr_Dozvoljen`.** Grupa SISTEM traži
+**administraciju**, a to nije oblast iz `tblKorisnici` pa ne staje u
+`SCR_OBLAST`. Umesto da ljuska dobije izuzetak po imenu ekrana, `ScrDozvoljen`
+sada pita i sam ekran; ekran koji tu funkciju nema se ponaša kao pre. Keširа se
+**samo činjenica da funkcija postoji**, nikad njen odgovor — prava se menjaju
+zamenom operatera.
+
+**(3) Popravljen zatečen kvar koji bi M0 obesmislio.** `PaintNav` je svakoj
+neizabranoj stavci vraćao punu boju, pa su Marža i Sledljivost izgledale
+prigušeno **samo do prvog klika** bilo gde u meniju. U matičnoj sekciji bi to
+bilo **tri od pet** stavki: operater bi video ekrane koji izgledaju kao da rade.
+Stanje se sada čita iz mape napravljene pri gradnji (`mNavOff`) — tamo gde je
+odgovor ionako već izračunat, pa se ne može razići sa onim što `BuildNav`
+nacrta.
+
+**Uz to:** „Nazad na rad" vraća **ekran sa kog se otišlo** (pamti se po
+sekciji), a ne uvek Unos dokumenata; `ModeHasKgCol` / `ModeHasValCol` su
+izdvojeni u čiste funkcije nad opisom kolona (`OpisImaKgKolonu`,
+`OpisImaValKolonu`), da bi se „ova lista nema zbirove" moglo tvrditi **pre**
+crtanja; gola `62` u `LayoutOtkup` je postala `PROFIL_H`, jer ulazi u meru iz
+§24.1 i mora da se može tvrditi u testu.
+
+**Mera iz §24.1 je sada test, ne komentar.** `LayoutNav` pamti visinu koju je
+sekcija zauzela, a test 150 je čita iz **stvarnog rasporeda** i tvrdi tri
+stvari: radna sekcija staje (405 ≤ 492), matična staje (211 ≤ 492), a **zajedno
+ne staju** (616 > 492) — to poslednje je jedini razlog zbog kog sekcije postoje.
+Test zato hvata i izmenu koja nema veze sa matičnim podacima: dodavanje šestog
+ekrana u OPERACIJE.
+
+**Verifikacija:** `vba_check` čist (198 fajlova, 327 sabotaža); pet novih
+sabotaža pod prefiksom `maticni-` (`python tools/dokaz.py maticni`). Testovi 150
+i 151 su napisani ali **nisu izvršeni** — `run_vba` traži Windows + Excel, pa se
+u web sesiji ponašanje prijavljuje kao **neverifikovano**. Ostaje ručna kapija:
+`Alt+F11 → Debug → Compile VBAProject`, `RunAllTests`, `dokaz.py maticni`, pa
+smoke: prekidač sekcije na najmanjem i maksimizovanom prozoru, suženi sidebar,
+otvaranje oba panela, i **legacy meni i dalje radi**. Tri MDL2 glifa
+(`IC_MAT_PARTNERI`, `IC_MAT_ROBA`, `IC_MAT_PAKOVANJE`) su izabrana iz kataloga a
+**nisu vizuelno proverena** — provera je `DumpMdl2Used`.

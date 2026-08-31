@@ -2113,14 +2113,54 @@ SABOTAZE = {
         "T_LegacyBanka_PadUcitavanjaNijePraznaLista",
         "prazan combo NIJE izbor -- tada blok dolazi iz poziva na broj",
     ),
+    # ------------------------------------- MATICNI: SEKCIJA I POKRETAC
+    # Sidebar nema skrol. Kad stavke predju slobodnu visinu, ne skroluju se nego
+    # TIHO nestanu ispod profila -- zato sekcije uopste postoje. Cetiri sabotaze:
+    # da mera stvarno meri, da prekidac stvarno gasi drugu sekciju, da radnja
+    # bira alatku po identitetu, i da ljuska pita ekran za njegovu branu.
+    "maticni-sifarnici-u-radnoj-sekciji": (
+        "modUiScreens.bas",
+        "                      \"SIFARNICI|OTKUI_NAVG_SIFARNICI|\" & SEK_MATICNI, _\n",
+        "                      \"SIFARNICI|OTKUI_NAVG_SIFARNICI|\" & SEK_RAD, _\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "radna sekcija staje u sidebar",
+    ),
+    "maticni-sidebar-ne-gasi-drugu-sekciju": (
+        "modOtkupUI.bas",
+        "    z.Controls(nm).top = Y\n    z.Controls(nm).Visible = vis\n",
+        "    z.Controls(nm).top = Y\n    z.Controls(nm).Visible = True   ' SABOTAZA: stavka druge sekcije ostaje\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "u maticnoj sekciji je radna stavka ugasena",
+    ),
+    "maticni-prigusena-stavka-se-preboji": (
+        "modOtkupUI.bas",
+        "                IIf(on_, C_CREAM, IIf(off_, C_DISABLED_FG, RGB(52, 68, 44)))\n",
+        "                IIf(on_, C_CREAM, RGB(52, 68, 44))   ' SABOTAZA: prigusenost nestaje\n",
+        "T_Sekcija_SidebarNeStajeZajedno",
+        "prigusena stavka ostaje prigusena i posle prebojavanja sidebara",
+    ),
+    "maticni-alatka-po-rednom-broju": (
+        "modScrMatSistem.bas",
+        "        outA(n, MS_COL_TAG) = CStr(src(i)(2))\n",
+        "        outA(n, MS_COL_TAG) = CStr(src(0)(2))   ' SABOTAZA: uvek prva alatka\n",
+        "T_MatSistem_UgovorIIdentitet",
+        "red 1 posle pretrage nosi Tag SVOJE alatke",
+    ),
+    "maticni-ljuska-ne-pita-branu-ekrana": (
+        "modUiScreens.bas",
+        "    If ScrDozvoljen Then ScrDozvoljen = ScrSopstvenaBrana(kljuc)\n",
+        "    ' SABOTAZA: ljuska ne pita ekran za njegovu branu\n",
+        "T_MatSistem_UgovorIIdentitet",
+        "ljuska postuje branu ekrana",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu
     # suite -- tacno to se desilo listi izvoda.
     "mreza-rest-nije-novcana-kolona": (
         "modOtkupUI.bas",
-        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": ModeHasValCol = True: Exit Function\n",
-        "            Case \"rsd\", \"mult\", \"sum0\": ModeHasValCol = True: Exit Function   ' SABOTAZA: rest nije novac\n",
+        "            Case \"rsd\", \"mult\", \"sum0\", \"rest\": OpisImaValKolonu = True: Exit Function\n",
+        "            Case \"rsd\", \"mult\", \"sum0\": OpisImaValKolonu = True: Exit Function   ' SABOTAZA: rest nije novac\n",
         "T_BankaUvoz_IzvodiSuAgregatPoRacunu",
         "ljuska za listu izvoda crta zbir vrednosti u podnozju",
     ),

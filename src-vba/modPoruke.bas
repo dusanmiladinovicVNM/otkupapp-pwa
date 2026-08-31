@@ -364,6 +364,39 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_NAV_MARZA", "Mar" & ChrW(382) & "a"
     UpsertRow lo, existing, "OTKUI_NAV_IZVESTAJI", "Izve" & ChrW(353) & "taji"
     UpsertRow lo, existing, "OTKUI_NAV_SLEDLJIVOST", "Sledljivost"
+
+    ' --- sekcija MATICNI (zlatno dugme u zaglavlju je pali i gasi) ---------
+    UpsertRow lo, existing, "OTKUI_NAVG_SIFARNICI", ChrW(352) & "IFARNICI"
+    UpsertRow lo, existing, "OTKUI_NAVG_SISTEM", "SISTEM"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_PARTNERI", "Partneri"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_ROBA", "Proizvodi i cene"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_PAKOVANJE", "Ambala" & ChrW(382) & "a i pakovanje"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_KORISNICI", "Korisnici"
+    UpsertRow lo, existing, "OTKUI_NAV_MAT_SISTEM", "Pode" & ChrW(353) & "avanja i alati"
+    UpsertRow lo, existing, "OTKUI_BTN_NAZAD_RAD", "Nazad na rad"
+    UpsertRow lo, existing, "OTKUI_SEK_NEMA_EKRANA", _
+        "Mati" & ChrW(269) & "ni podaci jo" & ChrW(353) & " nisu preba" & ChrW(269) & _
+        "eni na nove ekrane."
+
+    ' --- ekran "Podesavanja i alati" (maticna sekcija, samo admin) ---------
+    UpsertRow lo, existing, "OTKUI_SCRMS_SUB", _
+        "Pode" & ChrW(353) & "avanja i odr" & ChrW(382) & "avanje aplikacije"
+    UpsertRow lo, existing, "OTKUI_SCRMS_LISTA", "Alatke sistema"
+    UpsertRow lo, existing, "OTKUI_HDMS_ALATKA", "Alatka"
+    UpsertRow lo, existing, "OTKUI_HDMS_OPIS", "Sta radi"
+    UpsertRow lo, existing, "OTKUI_HDMS_GDE", "Otvara se"
+    UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA", "Pode" & ChrW(353) & "avanja"
+    UpsertRow lo, existing, "OTKUI_MS_PODESAVANJA_OPIS", _
+        "Operativna pode" & ChrW(353) & "avanja aplikacije (bez internih klju" & ChrW(269) & "eva)"
+    UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Admin panel"
+    UpsertRow lo, existing, "OTKUI_MS_ADMIN_OPIS", _
+        "A" & ChrW(382) & "uriranje, setup, health check, Google autorizacija, alatke"
+    UpsertRow lo, existing, "OTKUI_MS_PROZOR", "u svom prozoru"
+    UpsertRow lo, existing, "OTKUI_BTN_MS_OTVORI", "Otvori"
+    UpsertRow lo, existing, "OTKUI_MS_ERR_OTVARANJE", _
+        "Panel nije mogao da se otvori: "
+    UpsertRow lo, existing, "OTKUI_MS_ERR_NEMA", "Nepoznata alatka."
+
     UpsertRow lo, existing, "OTKUI_FOOT_SEZONA", "Sezona 2026"
 
     UpsertRow lo, existing, "OTKUI_KPI_DANAS", "DANAS OTKUPLJENO"

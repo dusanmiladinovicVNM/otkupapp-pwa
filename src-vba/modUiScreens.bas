@@ -25,6 +25,8 @@ Attribute VB_Name = "modUiScreens"
 '   Scr_Radnje()               -> radnje nad redom za AKTIVNU listu; redovi
 '                                 "kljuc:natpis:sirina:stil:trebaRed" spojeni "|"
 '   Scr_Event(tag, ev)         -> obradi klik; True ako je obradio
+'   Scr_Dozvoljen()            -> dodatna brana ekrana (npr. administracija);
+'                                 ekran koji je nema je dozvoljen
 '   Scr_Save()                 -> upisi; "" ako je proslo, inace greska
 '   Scr_ResetCache()           -> zaboravi izvedene mape (posle upisa)
 '
@@ -37,7 +39,7 @@ Attribute VB_Name = "modUiScreens"
 '=====================================================================
 Option Explicit
 
-Public Const UISCR_BUILD As String = "v6-ui-143"
+Public Const UISCR_BUILD As String = "v6-ui-187"
 
 ' Redosled polja u redu registra
 Public Const SCR_KLJUC   As Long = 0
@@ -46,6 +48,20 @@ Public Const SCR_NASLOV  As Long = 2
 Public Const SCR_IKONICA As Long = 3
 Public Const SCR_GRUPA   As Long = 4
 Public Const SCR_OBLAST  As Long = 5
+' SEKCIJA ljuske -- koji SKUP stavki sidebara nosi ovaj ekran. Uvedena zato sto
+' sidebar NEMA SKROL: na MIN_H (620) ostaje 492 pt za stavke, zauzeto je 405, pa
+' bi maticne stavke (5 stavki + 2 grupe = 199 pt) ispale ispod profila -- tiho.
+' Dva skupa se nikad ne crtaju zajedno; zlatno dugme u zaglavlju ih menja.
+' V. docs/UI_MIGRACIJA_KATALOG.md, 24.1 i 24.2.
+Public Const SCR_SEKCIJA As Long = 6
+
+' Redosled polja u redu GRUPE sidebara
+Public Const SCRG_KLJUC   As Long = 0
+Public Const SCRG_NASLOV  As Long = 1
+Public Const SCRG_SEKCIJA As Long = 2
+
+Public Const SEK_RAD     As String = "RAD"
+Public Const SEK_MATICNI As String = "MATICNI"
 
 ' Poslednja greska iz ekrana. Omotaci guse greske (ekran koji padne ne sme da
 ' obori aplikaciju), ali gusenje BEZ TRAGA znaci da dugme "ne radi" i niko ne
@@ -55,42 +71,69 @@ Public ScrLastErr As String
 ' Kes odgovora "da li modul postoji" - Application.Run na nepostojeci modul
 ' baca gresku, a to je skupo raditi pri svakom crtanju sidebara.
 Private mHas As Object
+' Kes odgovora "ima li ovaj ekran svoj Scr_Dozvoljen". Cuva se cinjenica o
+' POSTOJANJU funkcije, ne njen odgovor -- v. ScrSopstvenaBrana.
+Private mBrana As Object
 
 '------------------------------------------------------------ REGISTAR
-' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast
+' kljuc | modul | naslov (kljuc kataloga) | MDL2 kod | grupa | oblast | sekcija
 Public Function ScrRows() As Variant
     Dim c As Collection: Set c = New Collection
     c.Add "DOKUMENTI|modScrDokumenti|OTKUI_NAV_UNOS|" & IC_OTKUP & _
-          "|OPERACIJE|" & OBL_DOKUMENTA
+          "|OPERACIJE|" & OBL_DOKUMENTA & "|" & SEK_RAD
     c.Add "PALETE|modScrPalete|OTKUI_NAV_PALETE|" & IC_PALETE & _
-          "|OPERACIJE|" & OBL_PALETE
+          "|OPERACIJE|" & OBL_PALETE & "|" & SEK_RAD
     ' Storno je do v6-ui-141 bio rezim F8 unosnog ekrana. Zaseban ekran zato sto
     ' NIJE unos: forma i "Sacuvaj" mu ne pripadaju (Scr_Save je za njega padao u
     ' Case Else), a pregled posledica pre odluke trazi svoju zonu -- cetiri moda,
     ' lanac, palete i blokovi ne staju u MsgBox. Oblast je OBL_DOKUMENTA: ko sme
     ' da unese dokument, sme i da ga stornira.
     c.Add "STORNO|modScrStorno|OTKUI_NAV_STORNO|" & IC_STORNO & _
-          "|OPERACIJE|" & OBL_DOKUMENTA
+          "|OPERACIJE|" & OBL_DOKUMENTA & "|" & SEK_RAD
     ' Oporavak stoji uz Dokumenta i po oblasti prava: sve sto radi je
     ' prevezivanje i vracanje DOKUMENATA, pa ko sme da ih unosi sme i da ih
     ' popravi. Zaseban ekran, a ne jos jedan rezim, jer ovo nisu dokumenti nego
     ' POSAO koji ceka - i ne bira se po tipu nego po problemu.
     c.Add "OPORAVAK|modScrOporavak|OTKUI_NAV_OPORAVAK|" & IC_OPORAVAK & _
-          "|OPERACIJE|" & OBL_DOKUMENTA
+          "|OPERACIJE|" & OBL_DOKUMENTA & "|" & SEK_RAD
     c.Add "AGRO|modScrAgro|OTKUI_NAV_AGRO|" & IC_AGRO & _
-          "|OPERACIJE|" & OBL_AGROHEMIJA
+          "|OPERACIJE|" & OBL_AGROHEMIJA & "|" & SEK_RAD
     c.Add "FAKTURE|modScrFakture|OTKUI_NAV_FAKT|" & IC_FAKT & _
-          "|FINANSIJE|" & OBL_FAKTURISANJE
+          "|FINANSIJE|" & OBL_FAKTURISANJE & "|" & SEK_RAD
     c.Add "BANKA_UVOZ|modScrBankaUvoz|OTKUI_NAV_BANKA_UVOZ|" & IC_UVOZ & _
-          "|FINANSIJE|" & OBL_BANKA
+          "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
     c.Add "BANKA_NALOZI|modScrBankaNalozi|OTKUI_NAV_BANKA_NALOZI|" & IC_NALOZI & _
-          "|FINANSIJE|" & OBL_BANKA
+          "|FINANSIJE|" & OBL_BANKA & "|" & SEK_RAD
     c.Add "MARZA|modScrMarza|OTKUI_NAV_MARZA|" & IC_MARZA & _
-          "|FINANSIJE|" & OBL_MARZA
+          "|FINANSIJE|" & OBL_MARZA & "|" & SEK_RAD
     c.Add "IZVESTAJI|modScrIzvestaji|OTKUI_NAV_IZVESTAJI|" & IC_IZVEST & _
-          "|ANALITIKA|" & OBL_IZVESTAJI
+          "|ANALITIKA|" & OBL_IZVESTAJI & "|" & SEK_RAD
     c.Add "SLEDLJIVOST|modScrSledljivost|OTKUI_NAV_SLEDLJIVOST|" & IC_SLEDLJ & _
-          "|ANALITIKA|" & OBL_SLEDLJIVOST
+          "|ANALITIKA|" & OBL_SLEDLJIVOST & "|" & SEK_RAD
+
+    ' ---- SEKCIJA MATICNI ------------------------------------------------
+    ' Ono sto danas stoji iza zlatnog dugmeta: frmMaticniPodaci (popup meni,
+    ' 16 sekcija u 4 grupe) -> frmStammdaten. Granica ekrana je LEGACY GRUPA,
+    ' jer MAX_SEG (11) ne prima svih 13 sekcija sa podacima u jedan ekran, a
+    ' grupisanje je u modMaticniLookups uvedeno svesno i operater ga zna.
+    ' Plan i obrazlozenje: docs/UI_MIGRACIJA_KATALOG.md, 24.3.
+    '
+    ' Tri ekrana sa podacima jos nemaju modul -- sidebar ih zato crta prigusene,
+    ' isto kao MARZA i SLEDLJIVOST. To NIJE propust nego zatecen nacin da se vidi
+    ' sta dolazi (v. komentar na vrhu modula).
+    c.Add "MAT_PARTNERI|modScrMatPartneri|OTKUI_NAV_MAT_PARTNERI|" & IC_MAT_PARTNERI & _
+          "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
+    c.Add "MAT_ROBA|modScrMatRoba|OTKUI_NAV_MAT_ROBA|" & IC_MAT_ROBA & _
+          "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
+    c.Add "MAT_PAKOVANJE|modScrMatPakovanje|OTKUI_NAV_MAT_PAKOVANJE|" & IC_MAT_PAKOVANJE & _
+          "|SIFARNICI|" & OBL_MATICNI & "|" & SEK_MATICNI
+    ' Korisnici i Sistem nose JOS JEDNU branu preko oblasti -- administraciju.
+    ' Ona ne moze u SCR_OBLAST (to je naziv kolone prava u tblKorisnici), pa
+    ' ekran sam odgovara kroz neobavezan Scr_Dozvoljen (v. ScrDozvoljen nize).
+    c.Add "MAT_KORISNICI|modScrMatKorisnici|OTKUI_NAV_MAT_KORISNICI|" & IC_MAT_KORISNICI & _
+          "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
+    c.Add "MAT_SISTEM|modScrMatSistem|OTKUI_NAV_MAT_SISTEM|" & IC_MAT_SISTEM & _
+          "|SISTEM|" & OBL_MATICNI & "|" & SEK_MATICNI
 
     Dim a() As Variant, i As Long
     ReDim a(0 To c.count - 1)
@@ -100,11 +143,46 @@ Public Function ScrRows() As Variant
     ScrRows = a
 End Function
 
-' Grupe sidebara, redom. Naslov grupe je kljuc kataloga.
+' Grupe sidebara, redom. Naslov grupe je kljuc kataloga, trece polje je SEKCIJA.
+' Redosled ovde je i redosled crtanja: prvo sve grupe radne sekcije, pa maticne.
 Public Function ScrGroups() As Variant
-    ScrGroups = Array("OPERACIJE|OTKUI_NAVG_OPERACIJE", _
-                      "FINANSIJE|OTKUI_NAVG_FINANSIJE", _
-                      "ANALITIKA|OTKUI_NAVG_ANALITIKA")
+    ScrGroups = Array("OPERACIJE|OTKUI_NAVG_OPERACIJE|" & SEK_RAD, _
+                      "FINANSIJE|OTKUI_NAVG_FINANSIJE|" & SEK_RAD, _
+                      "ANALITIKA|OTKUI_NAVG_ANALITIKA|" & SEK_RAD, _
+                      "SIFARNICI|OTKUI_NAVG_SIFARNICI|" & SEK_MATICNI, _
+                      "SISTEM|OTKUI_NAVG_SISTEM|" & SEK_MATICNI)
+End Function
+
+' Sekcija reda registra ili reda grupe. Prazno polje znaci RAD -- red koji je
+' ostao bez sedmog polja (star export, rucna izmena) ne sme da nestane iz
+' sidebara nego se ponasa kao pre uvodjenja sekcija.
+Public Function SekcijaIli(ByVal s As String) As String
+    SekcijaIli = SEK_RAD
+    If Len(Trim$(s)) > 0 Then SekcijaIli = Trim$(s)
+End Function
+
+Public Function ScrSekcija(ByVal row As String) As String
+    ScrSekcija = SekcijaIli(ScrField(row, SCR_SEKCIJA))
+End Function
+
+Public Function ScrGrupaSekcija(ByVal grpRow As String) As String
+    ScrGrupaSekcija = SekcijaIli(ScrField(grpRow, SCRG_SEKCIJA))
+End Function
+
+' Prvi ekran sekcije na koji korisnik SME i koji postoji. Prazno = nijedan
+' (npr. maticni ekrani pre nego sto im modul stigne). Ljuska ovim ne saznaje
+' nijedan kljuc unapred -- pita registar i dobija onaj koji je dostupan.
+Public Function ScrPrviUSekciji(ByVal sekcija As String) As String
+    Dim r As Variant, kljuc As String
+    For Each r In ScrRows()
+        If ScrSekcija(CStr(r)) = sekcija Then
+            kljuc = ScrField(CStr(r), SCR_KLJUC)
+            If ScrAktivan(kljuc) Then
+                ScrPrviUSekciji = kljuc
+                Exit Function
+            End If
+        End If
+    Next r
 End Function
 
 Public Function ScrField(ByVal row As String, ByVal idx As Long) As String
@@ -145,7 +223,17 @@ Public Function ScrPostoji(ByVal kljuc As String) As Boolean
     mHas(kljuc) = ScrPostoji
 End Function
 
-' Ekran je dostupan ako postoji I ako korisnik ima pravo na njegovu oblast.
+' Ekran je dostupan ako postoji I ako korisnik ima pravo na njegovu oblast I
+' ako sam ekran ne kaze da nije.
+'
+' TRECI uslov je uveden zbog maticnih sekcija Korisnici / Podesavanja / Admin:
+' one traze ADMINISTRACIJU, a to nije oblast iz tblKorisnici pa ne moze da stane
+' u SCR_OBLAST. Legacy je istu branu drzao u modMaticniLookups.MaticniMenu_OnClick;
+' ovde je pita EKRAN, kroz neobavezan Scr_Dozvoljen -- ljuska i dalje ne zna
+' nijedan ekran po imenu. Ekran koji ga ne implementira se ponasa kao pre.
+'
+' Brana je i dalje samo UI brana; tvrde su u modAdmin/modPodesavanja ulaznim
+' tackama i tamo ostaju.
 Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Dim obl As String
     On Error Resume Next
@@ -155,6 +243,33 @@ Public Function ScrDozvoljen(ByVal kljuc As String) As Boolean
     Else
         ScrDozvoljen = modAuth.KorisnikImaPravo(obl)
     End If
+    If ScrDozvoljen Then ScrDozvoljen = ScrSopstvenaBrana(kljuc)
+End Function
+
+' Odgovor samog ekrana na pitanje "smem li da te otvorim". Ekran koji nema
+' Scr_Dozvoljen (a to su svi osim maticnog Sistema) dobija True -- greska poziva
+' znaci "nema takvu funkciju", ne "zabranjeno".
+'
+' Kesira se SAMO cinjenica "ima li ekran tu funkciju", nikad njen ODGOVOR:
+' prava se menjaju zamenom operatera, pa kesiran odgovor bi ostavio otvoren
+' ekran kome novi operater nema pristup. Isti obrazac i isti razlog kao mHas
+' kod ScrPostoji -- bez kesa bi svaki crtez sidebara bacio i uhvatio po jednu
+' gresku za SVAKI ekran koji tu funkciju nema.
+Private Function ScrSopstvenaBrana(ByVal kljuc As String) As Boolean
+    Dim m As String, v As Variant
+    ScrSopstvenaBrana = True
+    If mBrana Is Nothing Then Set mBrana = CreateObject("Scripting.Dictionary")
+    If mBrana.Exists(kljuc) Then
+        If Not mBrana(kljuc) Then Exit Function
+    End If
+    m = ScrField(ScrRowByKey(kljuc), SCR_MODUL)
+    If Len(m) = 0 Then Exit Function
+    On Error Resume Next
+    Err.Clear
+    v = Application.Run(m & ".Scr_Dozvoljen")
+    mBrana(kljuc) = (Err.Number = 0)
+    If Err.Number = 0 Then ScrSopstvenaBrana = CBool(v)
+    Err.Clear
 End Function
 
 Public Function ScrAktivan(ByVal kljuc As String) As Boolean
@@ -166,6 +281,7 @@ End Function
 ' postojali mogu da postoje.
 Public Sub ScrResetCache()
     Set mHas = Nothing
+    Set mBrana = Nothing
 End Sub
 
 '--------------------------------------------------------------- POZIV
