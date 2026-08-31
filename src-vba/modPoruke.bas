@@ -439,7 +439,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MAT_AKTIVNIH", "AKTIVNIH"
     UpsertRow lo, existing, "OTKUI_MAT_NEAKTIVNIH", "NEAKTIVNIH"
     UpsertRow lo, existing, "OTKUI_MAT_UNOS_LEGACY", _
-        "Pregled. Unos i izmena i dalje idu kroz stari ekran mati" & ChrW(269) & "nih podataka."
+        "Izaberi red pa Izmeni, ili Nova stavka za nov zapis."
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_NOVI", "+ Nova stavka"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_SACUVAJ", "Sa" & ChrW(269) & "uvaj"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_ODUSTANI", "Odustani"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_IZMENI", "Izmeni"
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_STATUS", "Deaktiviraj / Aktiviraj"
+    UpsertRow lo, existing, "OTKUI_MAT_NOV_ZAPIS", "Nov zapis"
+    UpsertRow lo, existing, "OTKUI_MAT_IZMENA", "Izmena:"
+    UpsertRow lo, existing, "OTKUI_MAT_STATUS_ASK", _
+        "Promeniti status ovog zapisa? Vidi se u svim izve" & ChrW(353) & "tajima i listama."
 
     ' zaglavlja kolona maticnih lista
     UpsertRow lo, existing, "OTKUI_HDM_ID", "ID"

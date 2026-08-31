@@ -4049,6 +4049,20 @@ Public Sub OtkupUI_SekcijaTest(ByVal sekcija As String)
     PostaviSekciju mFrm, sekcija
 End Sub
 
+' Zona ugovornog ekrana je promenila VISINU (npr. otvoren editor), pa raspored
+' mora ponovo.
+'
+' Ekran ovo zove sam: ljuska ne moze da pogodi kada se to desilo, a
+' LayoutScreenZone se izvrsava iskljucivo iz LayoutOtkup -- ni RefreshFromData
+' ni ReloadGrid ga ne diraju (oni preracunavaju MREZU). Bez ovoga bi zona ostala
+' na staroj visini, a polja editora bi se crtala ispod mreze -- vidljivo kao
+' "dugme ne radi".
+Public Sub OsveziRasporedEkrana()
+    On Error Resume Next
+    If mFrm Is Nothing Then Exit Sub
+    LayoutOtkup mFrm
+End Sub
+
 Public Function AktivnaSekcija() As String
     AktivnaSekcija = mSekcija
 End Function

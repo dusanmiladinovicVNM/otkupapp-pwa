@@ -38,6 +38,10 @@ Public Function Scr_Cipovi() As String
     Scr_Cipovi = modMaticniIzvor.MatCipovi(Scr_Lista())
 End Function
 
+Public Function Scr_Radnje() As String
+    Scr_Radnje = modMaticniEkran.Radnje(Scr_Lista())
+End Function
+
 Public Function Scr_Sort() As String
     Scr_Sort = modMaticniIzvor.MatSort(Scr_Lista())
 End Function
@@ -47,7 +51,7 @@ Public Sub Scr_Build(ByVal z As Object)
 End Sub
 
 Public Function Scr_Layout(ByVal z As Object, ByVal w As Single, ByVal h As Single) As Single
-    Scr_Layout = modMaticniEkran.ZonaRaspored(z, w)
+    Scr_Layout = modMaticniEkran.ZonaRaspored(z, w, Scr_Lista())
 End Function
 
 Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant

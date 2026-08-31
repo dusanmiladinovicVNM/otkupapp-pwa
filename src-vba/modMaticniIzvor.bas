@@ -478,6 +478,103 @@ Public Function MatStatusNaUnosu(ByVal kljuc As String) As String
     End If
 End Function
 
+''--------------------------------------------------------- COMBO IZVOR
+' Stavke padajuce liste za dati izvor. Sve dolazi iz POSTOJECIH rutina ili iz
+' tabela -- ovde se ne izmislja nijedan spisak.
+'
+' Kaskada sorte po vrsti je jedini izvor koji zavisi od druge vrednosti, isto
+' kao u legacy formi (cmbField1_Change).
+Public Function MatComboStavke(ByVal izvor As String, ByVal kontekst As String) As Variant
+    Dim d As Variant, i As Long, c As Collection, vr As Long, so As Long
+    On Error GoTo EH
+    Select Case izvor
+        Case "@stanice":     MatComboStavke = PrikazLista(TBL_STANICE, "StanicaID", "Naziv", "")
+        Case "@kooperanti":  MatComboStavke = PrikazLista(TBL_KOOPERANTI, "KooperantID", "Ime", "Prezime")
+        Case "@kulture", "@vrste": MatComboStavke = GetLookupList(TBL_KULTURE, "VrstaVoca")
+        Case "@tipambalaze": MatComboStavke = GetTipAmbalazeOptions()
+        Case "@tipartikla":  MatComboStavke = Array("Pesticid", "Djubrivo", "SadniMaterijal")
+        Case "@jm":          MatComboStavke = Array("kg", "l", "kom")
+        Case "@ggap":        MatComboStavke = Array("Da", "Ne", "U postupku")
+        Case "@dane":        MatComboStavke = Array("Ne", "Da")
+        Case "@klase":       MatComboStavke = Array(KLASA_I, KLASA_II)
+        Case "@sorte"
+            ' Sorte SAMO za izabranu vrstu -- prazan kontekst daje prazan spisak,
+            ' ne sve sorte svih vrsta.
+            Set c = New Collection
+            If Len(Trim$(kontekst)) = 0 Then
+                MatComboStavke = Array()
+                Exit Function
+            End If
+            d = GetTableData(TBL_KULTURE)
+            If IsEmpty(d) Then
+                MatComboStavke = Array()
+                Exit Function
+            End If
+            vr = GetColumnIndex(TBL_KULTURE, "VrstaVoca")
+            so = GetColumnIndex(TBL_KULTURE, "SortaVoca")
+            If vr = 0 Or so = 0 Then
+                MatComboStavke = Array()
+                Exit Function
+            End If
+            For i = 1 To UBound(d, 1)
+                If StrComp(Trim$(NzToText(d(i, vr))), Trim$(kontekst), vbTextCompare) = 0 Then
+                    On Error Resume Next
+                    c.Add Trim$(NzToText(d(i, so))), Trim$(NzToText(d(i, so)))
+                    On Error GoTo EH
+                End If
+            Next i
+            MatComboStavke = IzKolekcije(c)
+    End Select
+    Exit Function
+EH:
+    MatComboStavke = Array()
+End Function
+
+' Spisak oblika "Naziv (ID)" -- isti prikaz koji legacy puni u combo, pa se i
+' izbor i pretraga ponasaju kao pre. Drugo ime je opciono (kooperant: Ime Prezime).
+Private Function PrikazLista(ByVal tbl As String, ByVal colID As String, _
+                             ByVal colA As String, ByVal colB As String) As Variant
+    Dim d As Variant, i As Long, ci As Long, ca As Long, cb As Long
+    Dim c As Collection, nm As String, id As String
+    Set c = New Collection
+    d = GetTableData(tbl)
+    If IsEmpty(d) Then
+        PrikazLista = Array()
+        Exit Function
+    End If
+    ci = GetColumnIndex(tbl, colID)
+    ca = GetColumnIndex(tbl, colA)
+    If Len(colB) > 0 Then cb = GetColumnIndex(tbl, colB)
+    If ci = 0 Then
+        PrikazLista = Array()
+        Exit Function
+    End If
+    For i = 1 To UBound(d, 1)
+        id = Trim$(NzToText(d(i, ci)))
+        If Len(id) > 0 Then
+            nm = ""
+            If ca > 0 Then nm = Trim$(NzToText(d(i, ca)))
+            If cb > 0 Then nm = Trim$(nm & " " & Trim$(NzToText(d(i, cb))))
+            If Len(nm) = 0 Then nm = id
+            c.Add nm & " (" & id & ")"
+        End If
+    Next i
+    PrikazLista = IzKolekcije(c)
+End Function
+
+Private Function IzKolekcije(ByVal c As Collection) As Variant
+    Dim a() As Variant, i As Long
+    If c.count = 0 Then
+        IzKolekcije = Array()
+        Exit Function
+    End If
+    ReDim a(0 To c.count - 1)
+    For i = 1 To c.count
+        a(i - 1) = c(i)
+    Next i
+    IzKolekcije = a
+End Function
+
 '---------------------------------------------------------------- SORT
 ' Podrazumevani sort sekcije, oblika "kolona:asc" (ugovor Scr_Sort).
 '

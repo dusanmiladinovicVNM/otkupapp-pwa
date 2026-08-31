@@ -2217,6 +2217,31 @@ SABOTAZE = {
         "T_MatUnos_OpisPoljaISema",
         "svako polje pise u kolonu koja POSTOJI u semi",
     ),
+    # --------------------------------- MATICNI: EDITOR U ZONI (M2b)
+    # Polja se dodeljuju iz bazena. Dva polja koja dobiju ISTU kontrolu bi se
+    # pri upisu tiho pregazila -- upis prolazi, poruka je "Dodato", a podatak
+    # je pogresan. Zato bas ta tvrdnja ima svoju sabotazu.
+    "maticni-editor-polja-dele-kontrolu": (
+        "modMaticniEkran.bas",
+        "                KontrolaPolja = \"scrMatC\" & nmC\n",
+        "                KontrolaPolja = \"scrMatC0\"   ' SABOTAZA: sva combo polja u jedno\n",
+        "T_MatEkran_BazenPoljaIVisina",
+        "dva polja NIKAD ne dele istu kontrolu bazena",
+    ),
+    "maticni-cenovnik-dobija-izmeni": (
+        "modMaticniEkran.bas",
+        "    If lista <> \"CENOVNIK\" Then s = \"izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1\"\n",
+        "    s = \"izmeni:OTKUI_BTN_MAT_IZMENI:92:soft:1\"   ' SABOTAZA: i cenovnik\n",
+        "T_MatEkran_RadnjeIRezim",
+        "cenovnik ne dobija radnju izmene",
+    ),
+    "maticni-status-dugme-bez-kolone": (
+        "modMaticniEkran.bas",
+        "    If Len(modMaticniIzvor.MatStatusKolona(lista)) > 0 Then\n        If Len(s) > 0 Then s = s & \"|\"\n",
+        "    If True Then   ' SABOTAZA: dugme i tamo gde kolone statusa nema\n        If Len(s) > 0 Then s = s & \"|\"\n",
+        "T_MatEkran_RadnjeIRezim",
+        "deaktivacija se nudi samo gde postoji kolona statusa",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

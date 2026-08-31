@@ -6429,7 +6429,7 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §24.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
 | **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §24.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
 | **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §24.15. Jedan pisac (§24.5). |
-| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | Predstoji — nadograđuje se na već izdvojenog pisca. |
+| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §24.16. |
 | **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
 | **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
 | **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
@@ -6652,3 +6652,61 @@ prefiksom. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
 sveske — unos i izmena po svakoj od 13 sekcija, deaktivacija/aktivacija,
 nova cena, nova stanica u MALINA režimu (ogledalo vozača), i Korisnici (koji
 nisu dirani).
+
+### 24.16 M2b — editor u zoni (`v6-ui-190`)
+
+Tri matična ekrana sada **unose i menjaju**. Nijedno pravilo nije napisano
+ponovo: sve ide u `modMaticniUnos`, istog pisca koga zove i legacy forma.
+
+**Zona ima dva stanja.** Zatvorena je pregled (naziv sekcije, koliko zapisa,
+aktivni/neaktivni) plus dugme **„+ Nova stavka"**. Otvorena nosi polja sekcije,
+**Sačuvaj** i **Odustani**, i naslov koji kaže da li je nov zapis ili izmena
+kog ID-ja. Obrazac je iz liste „Nova prerada" na Paletama — polja postoje uvek,
+`Scr_Layout` ih pali, gasi i raspoređuje.
+
+**Polja su BAZEN, ne po sekciji.** `NewFieldG` pri gradnji odlučuje pravi li
+tekst ili combo, a sekcije se razlikuju — pa se gradi **deset tekstualnih i šest
+combo** polja (tačno budžet koji `frmStammdaten` ima kroz `txtField1..10` /
+`cmbField1..6`), a raspored svakoj sekciji dodeljuje sledeće slobodno polje
+njene vrste. Kupci troše svih deset tekstualnih; ništa ne prelazi bazen.
+
+> **Zašto baš to ima svoju sabotažu:** da dva polja dobiju istu kontrolu, jedno
+> bi pri upisu tiho pregazilo drugo — operater unese telefon, a snimi se kao BPG
+> broj. Upis prolazi, poruka je „Dodato", ništa ne prijavljuje grešku. Test 156
+> tvrdi da su sve dodeljene kontrole **različite**, za svih 13 sekcija.
+
+**Ljuska je dobila jedan izlaz:** `OsveziRasporedEkrana`. Otvaranje editora menja
+**visinu zone**, a `LayoutScreenZone` se izvršava isključivo iz `LayoutOtkup` —
+ni `RefreshFromData` ni `ReloadGrid` ga ne diraju (oni preračunavaju *mrežu*).
+Bez toga bi polja bila nacrtana ispod mreže, što se vidi kao „dugme ne radi".
+Ekran to traži sam; ljuska i dalje ne zna nijedan ekran po imenu.
+
+**Otvaranje i zatvaranje editora vraćaju `False`** iz `Scr_Event` — to su
+promene prikaza, ne podataka. Da vraćaju `True`, svaki klik na „Nova stavka"
+platio bi pun `RefreshFromData` (KPI, keš, combo-i). `True` vraćaju samo upis i
+promena statusa.
+
+**Radnje nad redom prate ono što sekcija stvarno ume:** `Izmeni` svuda osim na
+Cenovniku (append-only — isto pravilo po kom legacy krije to dugme), a
+`Deaktiviraj / Aktiviraj` **samo gde kolona statusa postoji**. Dugme koje tiho ne
+radi ništa je gore od dugmeta kog nema. Promena statusa traži potvrdu, po
+obrascu iz Oporavka.
+
+**Cenovnik je dobio nešto što legacy nema:** klik na `Izmeni` (ili dvoklik)
+otvara **nov unos sa vrednostima izabranog reda** — proizvod, sorta i klasa
+ostaju, cena i datum se unose novi. Legacy je za isto krio dugme i tražio da se
+sve otkuca ponovo. Zapis i dalje ide kroz `AddCena`, dakle append-only; menja se
+samo koliko se kuca.
+
+**Identitet:** red se bira po **PK iz kolone 1**, a `MatRedPoID` ga prevodi u red
+tabele. Pozicija u mreži se ne koristi nigde — posle sortiranja i pretrage ona
+ne znači ništa.
+
+**Verifikacija:** `vba_check` čist (204 fajla, 338 sabotaža). Dva nova testa —
+156 (bazen polja se ne preklapa; combo polje dobija combo kontrolu; otvorena
+zona je viša od zatvorene) i 157 (radnje prate mogućnosti sekcije; oblik opisa
+radnje). Tri nove sabotaže. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
+
+**Otvoreno posle M2:** Parcele još nemaju GEO radnju (M3); Korisnici i njihova
+matrica prava idu u M4, zajedno sa nalazom iz §24.15 o deaktivaciji koja ne
+sprečava prijavu.
