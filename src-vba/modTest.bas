@@ -11606,6 +11606,15 @@ Private Sub T_Sled_KesPretragaIHint()
     AssertEq CLng(d(2)), 0, "period bez otkupa daje praznu listu"
     AssertEq modScrSledljivost.Scr_SlHintKljucTest(), "OTKUI_SL_HINT_PRAZNO", _
              "hint kaze da u periodu nema otkupa"
+
+    ' Pretraga na NEPOTPUNIMA nalazi i LANAC-brojeve (krug 4 S8): ekran
+    ' obecava "pretraga nalazi svaki broj u lancu" -- broj zbirne mora da
+    ' vodi do njene nefakturisane prijemnice (kolona 9 problema).
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "zb-test-sln")
+    AssertEq CLng(d(2)), 1, _
+             "pretraga po broju zbirne nalazi nefakturisanu prijemnicu"
+    AssertEq Trim$(CStr(d(1)(1, 3))), "31/150326", "i to bas njen red"
     modScrSledljivost.Scr_SlTestReset
 End Sub
 
@@ -11626,7 +11635,7 @@ Private Sub T_ZonaSled_PoljaIRaspored()
     For Each nm In Array("slBg", "slCap", "slHint", "slLnB", _
                          "slKL0", "slKV0", "slKL1", "slKV1", _
                          "slDetCap", "slDetR0", "slDetR5", _
-                         "scrSlOd", "scrSlDo", "scrSlDok", _
+                         "scrSlOd", "scrSlDo", "scrSlDok", "scrSlPov", _
                          "scrSlPrint", "scrSlLanac", "scrSlSab", "scrSlAuto")
         If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
     Next nm

@@ -6736,17 +6736,36 @@ ijedne izmišljene veze.
 - **Polje „Dokument sledljivosti"** — jasno mesto izbora: padajuća
   lista SVIH dokumenata sledljivosti u periodu (zbirne, sveže palete,
   prerade), sa filterom — ukucaš broj, datum, tip ili status i ponuda
-  se sužava dok kucaš, bez ponovnog čitanja tabela. Izabereš dokument →
-  „Sledljivost (PDF)" štampa baš njega. Ukucan a neizabran tekst se
-  odbija porukom (ne pogađa se); prazno polje i dalje radi preko
-  izabranog reda kad red ima jednoznačan dokument.
+  se sužava, bez ponovnog čitanja tabela; strelica otvara suženu listu.
+  Izabereš dokument → „Sledljivost (PDF)" štampa baš njega. Ukucan a
+  neizabran tekst se odbija porukom (ne pogađa se); prazno polje i
+  dalje radi preko izabranog reda kad red ima jednoznačan dokument.
+
+### Doterano posle četvrtog smoke-a
+
+- **Padajuća lista se više ne otvara sama dok kucaš** („vidi se samo
+  jedan red, ispod je sivo"): otvorena lista ne ume da promeni visinu,
+  pa je sužena ponuda ostajala u prevelikom sivom prozoru. Kucanje sada
+  sužava listu u mestu, strelica je otvara — tada je uvek tačne visine
+  i pune širine (sklonjen i horizontalni klizač).
+- **Pretraga na Nepotpunima nalazi ceo lanac** („filter ne radi"):
+  ukucan broj zbirne sada nalazi njene nefakturisane prijemnice (red
+  problema pamti i brojeve svojih karika, ne samo sopstveni broj) —
+  obećanje „pretraga nalazi svaki broj u lancu" važi i tu. Čipovi
+  Veze/Prijem/Fakture/Kg su provereni celim putem i rade.
+- **Povezivanje bez dijaloga** („povezivanje treba lepše rešiti"):
+  umesto kucanja rednog broja u prozorčetu, na Nepotpunima stoji polje
+  **„Otpremnica za povezivanje"** — klik na red „Otkup bez otpremnice"
+  napuni ga kandidatima (ista stanica + isti datum, sa zbirnom, kg i
+  klasom), izabereš otpremnicu iz liste i klikneš „Poveži…". Ništa se
+  ne bira automatski; delimičan unos se odbija porukom.
 
 ### Verifikacija
 
 - Devet novih testova (ugovor ekrana, slaganje lanca sa ručnim
   prolazom, fail-closed oznake, identitet, keš/pretraga, zona,
   kandidati povezivanja, mete sledljivosti, ponuda polja izbora) +
-  **24 namerna kvara** koji obaraju po tačno jedan imenovani test i
+  **25 namernih kvarova** koji obaraju po tačno jedan imenovani test i
   vraćaju se bit-identično (dvosmerni dokaz).
 - Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.

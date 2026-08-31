@@ -4733,11 +4733,15 @@ End Function
 ' PROBLEMI. Zrno = JEDNA prekinuta/visesmislena karika u [datumOd,
 ' datumDo] -- radni spisak fail-closed nalaza, dedupliran po karici.
 '
-' Returns: 2D Array (1..N, 1..8) ili Empty:
+' Returns: 2D Array (1..N, 1..9) ili Empty:
 '   1 Klasa (SLEDP_*)   5 Kg karike (ili Empty)
 '   2 Datum karike      6 Detalj (ASCII, sa brojkama)
 '   3 Broj dokumenta    7 DokTip (DOK_TIP_* / SLED_DOK_ZBIRNA)
 '   4 Nosilac (naziv)   8 DokID
+'   9 Lanac-brojevi za PRETRAGU (krug 4 S8): brojevi karika reda koji
+'     NISU vec u kolonama 3/6 (npr. broj zbirne nefakturisane
+'     prijemnice) -- ekran obecava "pretraga nalazi svaki broj u lancu"
+'     i na listi NEPOTPUNI. Ne prikazuje se.
 '
 ' Klase: OTKUP-BEZ-OTPREMNICE (i veza na storniranu -- detalj kaze),
 ' VEZA-NEUSAGLASENA, OTPREMNICA-BEZ-ZBIRNE (i broj bez aktivne zbirne),
@@ -4802,13 +4806,13 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
                 rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
                                SledTxt(otkupData(i, cOtkBr)), naziv, _
                                SledDbl(otkupData(i, cOtkKol)), "", _
-                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)))
+                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
             ElseIf Not otpMapa.Exists(otpID) Then
                 rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
                                SledTxt(otkupData(i, cOtkBr)), naziv, _
                                SledDbl(otkupData(i, cOtkKol)), _
                                "otpremnica stornirana ili ne postoji (" & otpID & ")", _
-                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)))
+                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
             Else
                 oInfo = otpMapa(otpID)
                 If Len(blokZbr) > 0 And UCase$(blokZbr) <> UCase$(CStr(oInfo(1))) Then
@@ -4817,7 +4821,7 @@ Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
                                    SledDbl(otkupData(i, cOtkKol)), _
                                    "blok nosi zbirnu " & blokZbr & ", otpremnica " & _
                                    IIf(Len(CStr(oInfo(1))) > 0, CStr(oInfo(1)), "(prazno)"), _
-                                   DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)))
+                                   DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), "")
                 End If
             End If
 SledeciOtk:
@@ -4854,12 +4858,12 @@ SledeciOtk:
             If Len(brZbr) = 0 Then
                 rows.Add Array(SLEDP_BEZ_ZBIRNE, otpData(i, cODat), _
                                SledTxt(otpData(i, cOBr)), naziv, otpKg, _
-                               "BrojZbirne je prazan", DOK_TIP_OTPREMNICA, oid)
+                               "BrojZbirne je prazan", DOK_TIP_OTPREMNICA, oid, "")
             ElseIf Not manjakDict.Exists("#V|" & brZbr) Then
                 rows.Add Array(SLEDP_BEZ_ZBIRNE, otpData(i, cODat), _
                                SledTxt(otpData(i, cOBr)), naziv, otpKg, _
                                "zbirna " & brZbr & " ne postoji medju aktivnima", _
-                               DOK_TIP_OTPREMNICA, oid)
+                               DOK_TIP_OTPREMNICA, oid, "")
             End If
 
             If blokSum.Exists(oid) Then
@@ -4869,7 +4873,7 @@ SledeciOtk:
                                    SledTxt(otpData(i, cOBr)), naziv, otpKg, _
                                    "blokovi " & Format$(sumB, "#,##0.##") & _
                                    " kg / otpremnica " & Format$(otpKg, "#,##0.##") & " kg", _
-                                   DOK_TIP_OTPREMNICA, oid)
+                                   DOK_TIP_OTPREMNICA, oid, brZbr)
                 End If
             End If
 SledeciOtp:
@@ -4929,7 +4933,7 @@ SledeciOtp:
                 dvosmisleni.Add zBr, True
                 rows.Add Array(SLEDP_BROJ_DVOSMISLEN, zbrData(i, cZDat), zBr, naziv, _
                                Empty, CStr(nVl) & " aktivnih vlasnika (vozac+kupac) deli broj", _
-                               SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))
+                               SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
             End If
 
             ' Prijem za OVU stavku (vlasnik reda je poznat -- red zbirne
@@ -4957,7 +4961,7 @@ SledeciOtp:
                     rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _
                                    zKg, "nijedna prijemnica za broj " & zBr & _
                                    " (klasa " & zKla & ")", _
-                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))
+                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
                 End If
             End If
             ' Razlika zbirna <-> prijem se NE prijavljuje: transportno
@@ -4970,7 +4974,7 @@ SledeciOtp:
                     rows.Add Array(SLEDP_KG_RAZLIKA, zbrData(i, cZDat), zBr, naziv, _
                                    zKg, "otpremnice " & Format$(sumO, "#,##0.##") & _
                                    " kg / zbirna " & Format$(zKg, "#,##0.##") & " kg", _
-                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))
+                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
                 End If
             End If
 SledeciZbr:
@@ -4991,6 +4995,10 @@ SledeciZbr:
         cPDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
         cPFakt = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
         cPFid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
+        ' Broj zbirne ide u kolonu 9 (pretraga): "koje prijemnice moje
+        ' zbirne nisu fakturisane" je pitanje smera NAZAD i na NEPOTPUNIMA.
+        Dim cPZbr As Long
+        cPZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
 
         Dim pKup As String
         For i = 1 To UBound(prijData, 1)
@@ -5005,7 +5013,8 @@ SledeciZbr:
                 rows.Add Array(SLEDP_NEFAKTURISANA, prijData(i, cPDat), _
                                SledTxt(prijData(i, cPBr)), naziv, _
                                SledDbl(prijData(i, cPKol)), "", _
-                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)))
+                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                               SledTxt(prijData(i, cPZbr)))
             ElseIf Len(SledTxt(prijData(i, cPFid))) = 0 Then
                 ' Poznato nepotpuno stanje (PRJ-FAK-2 klasa): oznacena kao
                 ' fakturisana, a broj fakture ne postoji -- karika je slepa.
@@ -5013,7 +5022,8 @@ SledeciZbr:
                                SledTxt(prijData(i, cPBr)), naziv, _
                                SledDbl(prijData(i, cPKol)), _
                                "Fakturisano=Da bez FakturaID", _
-                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)))
+                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                               SledTxt(prijData(i, cPZbr)))
             End If
 SledeciPrj:
         Next i
@@ -5022,11 +5032,11 @@ SledeciPrj:
     If rows.count = 0 Then Exit Function
 
     Dim result() As Variant, rr As Variant, r As Long, c As Long
-    ReDim result(1 To rows.count, 1 To 8)
+    ReDim result(1 To rows.count, 1 To 9)
     r = 0
     For Each rr In rows
         r = r + 1
-        For c = 1 To 8
+        For c = 1 To 9
             result(r, c) = rr(c - 1)
         Next c
     Next rr

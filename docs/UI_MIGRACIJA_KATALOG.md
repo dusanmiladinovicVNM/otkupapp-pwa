@@ -5270,6 +5270,38 @@ testabilan bez kontrole) + sabotaže
 `sledljivost-dokumenti-storniranu-paletu` /
 `sledljivost-dokumenti-preradjena-kao-sveza`.
 
+**S7 — „vidi se samo jedan red, ispod je sivo"** (četvrti krug, nad
+poljem iz S6). Dva kvara istog polja: tvrda širina kolone (`244 pt`)
+bila je šira od liste → horizontalni klizač i odsečen tekst; a
+programski `DropDown` na svako slovo ostavljao je suženu ponudu u
+prozoru STARE visine (MSForms ne preračuna visinu već otvorene liste) —
+otud jedan red i sivo. Ispravka: širina kolone prati kontrolu, a
+dropdown se više ne otvara programski — kucanje sužava listu u mestu,
+strelica je otvara (tada je visina uvek tačna).
+
+**S8 — „filter u redu nepotpune karike ne radi."** Provereno celim
+putem: čipovi (ljuskin `ChipFilter` → `SlCipProblemi`), pretraga i
+paginacija (`ReloadGrid` vraća stranu 1) — ispravni. Stvarni raskorak:
+period-linija obećava „pretraga nalazi svaki broj u lancu", a haystack
+NEPOTPUNIH je nosio samo broj/nosioca/detalj sopstvenog reda — broj
+zbirne ukucan na Nepotpunima nije nalazio njene nefakturisane
+prijemnice. Ispravka: `ReportSledljivostProblemi` dobija kolonu 9
+(lanac-brojevi reda koji nisu već u kolonama 3/6 — npr. broj zbirne
+nefakturisane prijemnice, denorm broj zbirne nepovezanog bloka) i ona
+ulazi u haystack. Tvrdnja u testu 154 + sabotaža
+`sledljivost-nep-pretraga-bez-lanca`.
+
+**S9 — „povezivanje treba lepše rešiti od postojećeg stanja."** InputBox
+kandidata (krug 2) zamenjen istim obrascem kao S6: polje **„Otpremnica
+za povezivanje"** (combo, vidljivo samo na NEPOTPUNIMA — isti uslov kao
+dugme „Poveži automatski"). Izbor reda klase `OTKUP-BEZ-OTPREMNICE`
+puni polje kandidatima (legacy pravilo, `GetOtpremnicaKandidatiZaOtkup`;
+stavka se NE bira automatski — S1 klasa zamki), radnja „Poveži…" čita
+RAZREŠEN izbor polja (delimičan tekst odbija porukom; polje čuva i
+odbranu od ustajalog para red/polje po `OtkupID`). Upis nepromenjen:
+`ReassignOtkupToOtpremnica_TX`; posle upisa polje se prazni i liste se
+preračunaju.
+
 ### 24.8 Verifikacija
 
 - `RunAllTests` (devet novih testova 150–158, registrovani u sva tri
@@ -5279,7 +5311,7 @@ testabilan bez kontrole) + sabotaže
   SLED blokovi su zatvoreni; ponovljeno i posle paletnih fixture vozila
   kruga 3), `vba_check` + `--self-test`, `sabotaza --proveri-sidra` +
   `--self-test`, `who_writes --check` — rezultati u PR-u.
-- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 24 sabotaže,
+- Dvosmerni dokaz: `python tools/dokaz.py sledljivost` — 25 sabotaža,
   svaka obara tačno svoj imenovani test i vraća se bit-identično.
 - Diff ljuske: `modOtkupUI` = pečat (`OTKUI_BUILD` → `v6-ui-187`), ništa
   više; kontekstni tabovi nisu ni trebali (liste su statične — S9 dopuna
@@ -5293,6 +5325,10 @@ testabilan bez kontrole) + sabotaže
   ne kvar); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
   pravim nepovezanima (upis!) i šablon zbirne protiv iste štampe iz
   stare forme; iz trećeg kruga: polje „Dokument sledljivosti" — kucanje
-  broja/datuma sužava dropdown, izbor zbirne/palete/prerade daje tačan
-  šablon / paletni / preradni list; dugme bez polja i dalje radi za red
-  sa jednoznačnom metom.
+  broja/datuma sužava listu (strelica je otvara), izbor
+  zbirne/palete/prerade daje tačan šablon / paletni / preradni list;
+  dugme bez polja i dalje radi za red sa jednoznačnom metom; iz četvrtog
+  kruga: pretraga po broju zbirne na NEPOTPUNIMA nalazi njene
+  nefakturisane prijemnice, a povezivanje ide kroz polje „Otpremnica za
+  povezivanje" (izbor reda ga puni, „Poveži…" čita izbor — InputBox-a
+  više nigde nema).

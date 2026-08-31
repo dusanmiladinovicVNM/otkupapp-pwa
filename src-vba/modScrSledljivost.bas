@@ -107,6 +107,10 @@ Private mDetalj As Variant
 Private mDokFill As Boolean
 Private mCmbDokKljuc As String
 
+' Otkup cije kandidate trenutno nosi polje "Otpremnica za povezivanje"
+' (krug 4 S9) -- odbrana od ustajalog para red/polje.
+Private mPovOtkupID As String
+
 ' Kontekst koji je postavio TEST (zone u testu nema).
 Private mTestOd As Double
 Private mTestDo As Double
@@ -324,18 +328,17 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
     End Select
 End Function
 
-' RUCNO povezivanje (smoke krug 2). Radi SAMO nad redom klase
-' OTKUP-BEZ-OTPREMNICE (klasa-kod iz prenosne kolone 9 -- prikazno ime ide
-' kroz katalog pa nije stabilan kljuc); svaki drugi red ODBIJA porukom.
-' Kandidati po legacy pravilu (ista stanica + isti datum,
-' modSledljivost.GetOtpremnicaKandidatiZaOtkup); izbor kroz InputBox radnje
-' (presedan "Iznos..." na Platnim nalozima); upis kroz
-' ReassignOtkupToOtpremnica_TX -- kapije cilja (postoji, nije storniran)
-' ostaju u writeru.
+' RUCNO povezivanje (smoke krug 2; UI iz kruga 4 S9 -- bez InputBox-a).
+' Radi SAMO nad redom klase OTKUP-BEZ-OTPREMNICE (klasa-kod iz prenosne
+' kolone 9); svaki drugi red ODBIJA porukom. Kandidate NUDI polje
+' "Otpremnica za povezivanje" (puni ga izbor reda, legacy pravilo ista
+' stanica + isti datum); izbor se RAZRESAVA iz liste -- delimican tekst
+' odbija. Upis kroz ReassignOtkupToOtpremnica_TX -- kapije cilja
+' (postoji, nije storniran) ostaju u writeru.
 Private Function PoveziRed(ByVal red As Long) As Boolean
     Dim klasaKod As String, dokTip As String, otkupID As String
-    Dim kandidati As Variant, n As Long, i As Long
-    Dim prompt As String, odgovor As String, izbor As Long
+    Dim izbor As String, otpID As String, prikaz As String
+    Dim CB As Object
 
     klasaKod = NzS(modOtkupUI.GridCell(red, 9))
     dokTip = NzS(modOtkupUI.GridCell(red, 7))
@@ -346,45 +349,65 @@ Private Function PoveziRed(ByVal red As Long) As Boolean
         Exit Function
     End If
 
-    kandidati = modSledljivost.GetOtpremnicaKandidatiZaOtkup(otkupID)
-    If Not IsArray(kandidati) Then
+    ' Polje mora da nosi kandidate BAS OVOG otkupa (odbrana od ustajalog
+    ' para red/polje -- radnja moze stici i bez novog izbora reda).
+    If mPovOtkupID <> otkupID Then NapuniPovKandidate otkupID
+    Set CB = Kontrola("scrSlPov")
+    If CB Is Nothing Then Exit Function
+    If CB.ListCount = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_NEMA_KANDIDATA"), True
         Exit Function
     End If
 
-    ' Do 15 kandidata u prompt (InputBox ima granicu duzine); preliv se
-    ' PRIJAVLJUJE, ne sece tiho.
-    n = UBound(kandidati, 1)
-    prompt = Poruka("OTKUI_MSG_SL_POVEZI_PROMPT") & vbCrLf & vbCrLf
-    For i = 1 To n
-        If i > 15 Then
-            prompt = prompt & "... " & Poruka("OTKUI_LBL_AG_KORPA_JOS") & _
-                     " " & CStr(n - 15) & vbCrLf
-            Exit For
-        End If
-        prompt = prompt & CStr(i) & ") " & NzS(kandidati(i, 2)) & _
-                 IIf(Len(NzS(kandidati(i, 3))) > 0, _
-                     "  " & ChrW(183) & " " & NzS(kandidati(i, 3)), "") & _
-                 "  " & ChrW(183) & " " & FmtKolicina(NzD(kandidati(i, 4))) & _
-                 " kg " & ChrW(183) & " " & NzS(kandidati(i, 5)) & vbCrLf
-    Next i
-
-    odgovor = Trim$(InputBox(prompt, APP_NAME))
-    If Len(odgovor) = 0 Then Exit Function          ' odustao -- bez poruke
-    izbor = CLng(val(odgovor))
-    If izbor < 1 Or izbor > n Or izbor > 15 Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_NEMA_REDA"), True
+    izbor = IzabraniIzComba("scrSlPov")
+    If Len(izbor) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_POV_NEIZABRAN"), True
         Exit Function
     End If
+    otpID = Split(izbor, "|")(0)
+    prikaz = Mid$(izbor, InStr(1, izbor, "|") + 1)
 
-    If ReassignOtkupToOtpremnica_TX(otkupID, NzS(kandidati(izbor, 1))) Then
-        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZI_OK") & " " & _
-                             NzS(kandidati(izbor, 2)), False
+    If ReassignOtkupToOtpremnica_TX(otkupID, otpID) Then
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZI_OK") & " " & prikaz, False
+        NapuniPovKandidate ""            ' red nestaje iz liste -- polje se prazni
         PoveziRed = True
     Else
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_SL_POVEZI_NEUSPEH"), True
     End If
 End Function
+
+' Kandidati za povezivanje u polju zone (krug 4 S9). Prazan otkupID
+' prazni polje. Stavka se NE bira automatski (S1 klasa zamki) -- samo se
+' lista puni; skrivena kolona nosi "OtpremnicaID|broj".
+Private Sub NapuniPovKandidate(ByVal otkupID As String)
+    Dim CB As Object, k As Variant, i As Long
+    mPovOtkupID = otkupID
+    Set CB = Kontrola("scrSlPov")
+    If CB Is Nothing Then Exit Sub
+    mDokFill = True
+    On Error Resume Next
+    CB.Clear
+    CB.ColumnCount = 2
+    CB.ColumnWidths = CStr(Int(CB.width) - 8) & " pt;0 pt"
+    CB.BoundColumn = 1
+    CB.TextColumn = 1
+    CB.text = ""
+    If Len(otkupID) > 0 Then
+        k = modSledljivost.GetOtpremnicaKandidatiZaOtkup(otkupID)
+        If IsArray(k) Then
+            For i = 1 To UBound(k, 1)
+                CB.AddItem NzS(k(i, 2)) & _
+                    IIf(Len(NzS(k(i, 3))) > 0, _
+                        "  " & ChrW(183) & " " & NzS(k(i, 3)), "") & _
+                    "  " & ChrW(183) & " " & FmtKolicina(NzD(k(i, 4))) & _
+                    " kg " & ChrW(183) & " " & NzS(k(i, 5))
+                CB.List(CB.ListCount - 1, 1) = NzS(k(i, 1)) & "|" & NzS(k(i, 2))
+            Next i
+        End If
+    End If
+    On Error GoTo 0
+    mDokFill = False
+End Sub
 
 ' AUTOMATSKO povezivanje -- legacy btnAutoLink, isti TX
 ' (modSledljivost.AutoLinkOtkupOtpremnica_TX vraca broj povezanih).
@@ -534,6 +557,8 @@ End Sub
 ' Prepis stavki u kontrolu (2 kolone: prikaz + skriveni "tip|id" --
 ' obrazac scrAgKoop). Tekst operatera se CUVA: Clear ume da ga dira, a
 ' upis ide pod mDokFill da povratni Change ne pokrene filter iznova.
+' Sirina kolone prati KONTROLU (krug 4 S7: tvrda "244 pt" je bila sira
+' od liste -- horizontalni klizac i odsecen tekst).
 Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
     Dim i As Long, t As String
     mDokFill = True
@@ -541,7 +566,7 @@ Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
     t = CStr(CB.text)
     CB.Clear
     CB.ColumnCount = 2
-    CB.ColumnWidths = "244 pt;0 pt"
+    CB.ColumnWidths = CStr(Int(CB.width) - 8) & " pt;0 pt"
     CB.BoundColumn = 1
     CB.TextColumn = 1
     If IsArray(stavke) Then
@@ -555,9 +580,10 @@ Private Sub NapuniDokStavke(ByVal CB As Object, ByVal stavke As Variant)
     mDokFill = False
 End Sub
 
-' Kucanje u polju: suzena ponuda + otvoren dropdown da se suzenje VIDI.
-' Izbor iz liste (ListIndex >= 0) NIJE filter -- ne dira se, inace bi se
-' dropdown ponovo otvarao posle izbora.
+' Kucanje u polju suzava ponudu; dropdown se NE otvara programski
+' (krug 4 S7: MSForms ne preracuna visinu vec otvorene liste, pa je
+' suzena ponuda ostajala u prozoru stare visine -- "jedan red i sivo").
+' Strelica polja otvara listu -- tada je visina uvek tacna.
 Private Sub FiltrirajDokCombo()
     Dim CB As Object
     If mDokFill Then Exit Sub
@@ -566,26 +592,31 @@ Private Sub FiltrirajDokCombo()
     On Error Resume Next
     If CB.ListIndex >= 0 Then Exit Sub
     NapuniDokStavke CB, SlDokPrikazi(Trim$(CStr(CB.text)))
-    If Len(Trim$(CStr(CB.text))) > 0 Then CB.DropDown
 End Sub
 
-' Razresen izbor polja: "tip|id" ili "" (nerazreseno). Izbor iz liste
-' resava; PUN kucan tekst jednak prikazu stavke takodje (kucan do kraja).
-' Delimican tekst NIJE izbor -- ne pogadja se.
+' Razresen izbor polja dokumenta: "tip|id" ili "" (nerazreseno).
 Private Function IzabraniDok() As String
+    IzabraniDok = IzabraniIzComba("scrSlDok")
+End Function
+
+' Razresen izbor comba: skrivena kolona stavke ili "" (nerazreseno).
+' Izbor iz liste resava; PUN kucan tekst jednak prikazu stavke takodje
+' (kucan do kraja). Delimican tekst NIJE izbor -- ne pogadja se
+' (pravilo nerazresenog izbora, testovi.md par. 5).
+Private Function IzabraniIzComba(ByVal nm As String) As String
     Dim CB As Object, i As Long, t As String
-    Set CB = Kontrola("scrSlDok")
+    Set CB = Kontrola(nm)
     If CB Is Nothing Then Exit Function
     On Error Resume Next
     If CB.ListIndex >= 0 Then
-        IzabraniDok = CStr(CB.List(CB.ListIndex, 1))
+        IzabraniIzComba = CStr(CB.List(CB.ListIndex, 1))
         Exit Function
     End If
     t = Trim$(CStr(CB.text))
     If Len(t) = 0 Then Exit Function
     For i = 0 To CB.ListCount - 1
         If CStr(CB.List(i, 0)) = t Then
-            IzabraniDok = CStr(CB.List(i, 1))
+            IzabraniIzComba = CStr(CB.List(i, 1))
             Exit Function
         End If
     Next i
@@ -847,8 +878,12 @@ Private Function HaystackReda(ByVal kljuc As String, ByRef src As Variant, _
                            NzS(src(i, 2)) & "|" & NzS(src(i, 9)) & "|" & _
                            NzS(src(i, 23))
         Case SL_NEP
+            ' Kolona 9 = lanac-brojevi reda (npr. broj zbirne nefakturisane
+            ' prijemnice) -- obecanje "pretraga nalazi svaki broj u lancu"
+            ' vazi i na NEPOTPUNIMA (krug 4 S8).
             HaystackReda = NzS(src(i, 3)) & "|" & NzS(src(i, 4)) & "|" & _
-                           NzS(src(i, 6)) & "|" & SlProblemNaziv(NzS(src(i, 1)))
+                           NzS(src(i, 6)) & "|" & SlProblemNaziv(NzS(src(i, 1))) & _
+                           "|" & NzS(src(i, 9))
     End Select
 End Function
 
@@ -1052,6 +1087,12 @@ Public Sub Scr_Build(ByVal z As Object)
     z.Controls("scrSlDok").Controls("scrSlDokT").MatchEntry = fmMatchEntryNone
     On Error GoTo 0
 
+    ' POLJE KANDIDATA ZA POVEZIVANJE (krug 4 S9 -- "povezivanje treba
+    ' lepse resiti"): puni ga IZBOR reda klase 'Otkup bez otpremnice' na
+    ' NEPOTPUNIMA, radnja "Povezi..." cita razresen izbor. Bez InputBox-a.
+    modOtkupUI.NewFieldG z, "scrSlPov", Poruka("OTKUI_FLD_SL_POVEZI"), "cmb", "", _
+                         1, False, False, "SL"
+
     modUiKit.NewLbl z, "slHint", "", PAD, SL_Y_HINT, 420, 12, TS_META, False, C_MUTED, -1
 
     ' Stampa aktivne liste (house PDF) + lanac izabranog reda (house PDF sa
@@ -1102,6 +1143,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     PoljeX z, "scrSlOd", PAD, 86, SL_Y_LBL
     PoljeX z, "scrSlDo", PAD + 94, 86, SL_Y_LBL
     PoljeX z, "scrSlDok", PAD + 188, 264, SL_Y_LBL
+    ' Kandidati povezivanja su posao liste NEPOTPUNI -- na ostalima se
+    ' polje ne crta (isti obrazac kao dugme scrSlAuto).
+    PoljeX z, "scrSlPov", PAD + 460, 240, SL_Y_LBL
+    PoljeVidi z, "scrSlPov", (Scr_Lista() = SL_NEP)
 
     ' Detalj traka uzima desno; polja i hint dele ostatak. Na uskom ekranu
     ' traka nestaje umesto da se preklapa (isti kompromis kao Izvestaji).
@@ -1137,6 +1182,13 @@ Private Sub PoljeX(ByVal z As Object, ByVal nm As String, ByVal X As Single, _
     z.Controls(nm).top = yLbl
     z.Controls(nm).width = w
     modOtkupUI.LayoutFieldInner z.Controls(nm)
+End Sub
+
+' Vidljivost celog polja (okvir nosi sve unutrasnje kontrole) -- isti
+' helper kao na Agrohemiji.
+Private Sub PoljeVidi(ByVal z As Object, ByVal nm As String, ByVal vis As Boolean)
+    On Error Resume Next
+    z.Controls(nm).Visible = vis
 End Sub
 
 Private Function Zona() As Object
@@ -1230,6 +1282,14 @@ Private Sub OsveziDetalj(ByVal red As Long)
                 ' Red zbirne: broj je vidljiva kolona 3 -- sablon-PDF radi
                 ' i odavde.
                 mIzabranaZbirna = NzS(modOtkupUI.GridCell(red, 3))
+            End If
+            ' Kandidati povezivanja prate izabrani red (krug 4 S9): pune
+            ' se SAMO za klasu OTKUP-BEZ-OTPREMNICE, ostali prazne polje.
+            If NzS(modOtkupUI.GridCell(red, 9)) = SLEDP_BEZ_OTPREMNICE _
+               And NzS(modOtkupUI.GridCell(red, 7)) = DOK_TIP_OTKUP Then
+                NapuniPovKandidate NzS(modOtkupUI.GridCell(red, 8))
+            Else
+                NapuniPovKandidate ""
             End If
     End Select
 
@@ -1718,6 +1778,7 @@ Public Sub Scr_SlTestReset()
     Scr_ResetCache
     mSnimakKljuc = ""
     mCmbDokKljuc = ""
+    mPovOtkupID = ""
     mCtxOd = 0
     mCtxDo = 0
 End Sub

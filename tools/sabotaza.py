@@ -3772,11 +3772,11 @@ SABOTAZE = {
         "                    rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _\n"
         "                                   zKg, \"nijedna prijemnica za broj \" & zBr & _\n"
         "                                   \" (klasa \" & zKla & \")\", _\n"
-        "                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)))\n",
+        "                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), \"\")\n",
         "                    rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _\n"
         "                                   zKg, \"nijedna prijemnica za broj \" & zBr & _\n"
         "                                   \" (klasa \" & zKla & \")\", _\n"
-        "                                   DOK_TIP_PRIJEMNICA, SledTxt(zbrData(i, cZId)))   ' SABOTAZA: tudja vrsta karike\n",
+        "                                   DOK_TIP_PRIJEMNICA, SledTxt(zbrData(i, cZId)), \"\")   ' SABOTAZA: tudja vrsta karike\n",
         "T_Sled_IdentitetURedu_NeCrtaSe",
         "karika zbirne nosi vrstu koja odbija",
     ),
@@ -3955,6 +3955,19 @@ SABOTAZE = {
         "    ' SABOTAZA: stornirane palete ulaze u ponudu\n",
         "T_Sled_DokumentiPonuda",
         "stornirana paleta nije u ponudi",
+    ),
+    # NEP pretraga bez lanac-brojeva (krug 4 S8) -- broj zbirne vise ne
+    # nalazi njene nefakturisane prijemnice, a ekran bas to obecava
+    # ("pretraga nalazi svaki broj u lancu").
+    "sledljivost-nep-pretraga-bez-lanca": (
+        "modScrSledljivost.bas",
+        "            HaystackReda = NzS(src(i, 3)) & \"|\" & NzS(src(i, 4)) & \"|\" & _\n"
+        "                           NzS(src(i, 6)) & \"|\" & SlProblemNaziv(NzS(src(i, 1))) & _\n"
+        "                           \"|\" & NzS(src(i, 9))\n",
+        "            HaystackReda = NzS(src(i, 3)) & \"|\" & NzS(src(i, 4)) & \"|\" & _\n"
+        "                           NzS(src(i, 6)) & \"|\" & SlProblemNaziv(NzS(src(i, 1)))   ' SABOTAZA: bez lanac-brojeva\n",
+        "T_Sled_KesPretragaIHint",
+        "pretraga po broju zbirne nalazi nefakturisanu prijemnicu",
     ),
     # Ponuda polja izbora nudi preradjenu paletu kao "svezu robu".
     "sledljivost-dokumenti-preradjena-kao-sveza": (

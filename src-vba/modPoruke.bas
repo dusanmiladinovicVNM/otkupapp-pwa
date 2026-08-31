@@ -1560,7 +1560,6 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDS_KLASAKOD", "KLASA KOD"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZANO", "Automatski povezano otkupa:"
     UpsertRow lo, existing, "OTKUI_MSG_SL_NEMA_KANDIDATA", ChrW(10007) & " Nema nestorniranih otpremnica istog datuma na stanici otkupa"
-    UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_PROMPT", "Upi" & ChrW(353) & "i redni broj otpremnice za povezivanje:"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_OK", "Otkup povezan sa otpremnicom"
     UpsertRow lo, existing, "OTKUI_MSG_SL_POVEZI_NEUSPEH", ChrW(10007) & " Povezivanje nije uspelo " & ChrW(8212) & " ciljna otpremnica ne postoji ili je stornirana"
     UpsertRow lo, existing, "OTKUI_ERR_SL_SAMO_NEPOVEZANI", ChrW(10007) & " Povezivanje je samo za redove 'Otkup bez otpremnice'"
@@ -1572,6 +1571,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_SL_STAMPA_NEUSPEH", ChrW(10007) & " " & ChrW(352) & "tampa sledljivosti nije uspela " & ChrW(8212) & " vidi ErrorLog"
     ' --- Sledljivost smoke krug 3b: polje izbora dokumenta ---
     UpsertRow lo, existing, "OTKUI_FLD_SL_DOK", "Dokument sledljivosti"
+    ' --- Sledljivost smoke krug 4: kandidat polje povezivanja ---
+    UpsertRow lo, existing, "OTKUI_FLD_SL_POVEZI", "Otpremnica za povezivanje"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_POV_NEIZABRAN", ChrW(10007) & " Izaberi otpremnicu iz padaju" & ChrW(263) & "e liste kandidata"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
     InvalidateCache
