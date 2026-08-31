@@ -2242,6 +2242,31 @@ SABOTAZE = {
         "T_MatEkran_RadnjeIRezim",
         "deaktivacija se nudi samo gde postoji kolona statusa",
     ),
+    # ------------------------------------------ MATICNI: GEO PARCELE (M3)
+    # Dva pravila koja su do M3 zivela samo u frmStammdaten, a trebala su i
+    # ekranu: prag "veci od 1000" pri citanju koordinata, i decimalna TACKA u
+    # adresi mape. Oba bi pukla tiho -- pogresna koordinata i pogresan URL.
+    "maticni-geo-prag-hiljadu": (
+        "modMaticniGeo.bas",
+        "            If Abs(d) > 1000 Then\n",
+        "            If Abs(d) > 0 Then   ' SABOTAZA: i broj parcele je koordinata\n",
+        "T_MatGeo_TekstIAdrese",
+        "mali brojevi se preskacu",
+    ),
+    "maticni-geo-url-sa-zarezom": (
+        "modMaticniGeo.bas",
+        "    GeoUrlMape = \"https://www.google.com/maps?q=\" & _\n                 Replace(CStr(lat), \",\", \".\") & \",\" & _\n                 Replace(CStr(lng), \",\", \".\")\n",
+        "    GeoUrlMape = \"https://www.google.com/maps?q=44,81,20,46\"   ' SABOTAZA: zarez u adresi\n",
+        "T_MatGeo_TekstIAdrese",
+        "decimalni separator u adresi je TACKA",
+    ),
+    "maticni-geo-radnja-svuda": (
+        "modMaticniEkran.bas",
+        "    If lista = \"PARCELE\" Then\n",
+        "    If True Then   ' SABOTAZA: geo dugme i tamo gde koordinata nema\n",
+        "T_MatGeo_TekstIAdrese",
+        "geo radnja postoji samo na Parcelama",
+    ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane
     # kolone nisu na spisku, podnozje se sakrije uz savrseno tacan zbir i zelenu

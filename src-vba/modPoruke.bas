@@ -526,6 +526,40 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MP_ULICA", "Ulica"
     UpsertRow lo, existing, "OTKUI_MP_POSTA", "Po" & ChrW(353) & "tanski broj"
 
+    ' --- GEO radnje nad parcelom (modMaticniGeo, M3) ----------------------
+    UpsertRow lo, existing, "MATG_ERR_NEMA_PARCELE", "Izaberite parcelu iz liste."
+    UpsertRow lo, existing, "MATG_ERR_NEMA_KATASTRA", _
+        "Parcela nema katastarski broj i op" & ChrW(353) & "tinu, pa se pretraga ne mo" & ChrW(382) & "e sastaviti."
+    UpsertRow lo, existing, "MATG_ERR_NEMA_TACKE", _
+        "Parcela nema upotrebljive Lat/Lng koordinate."
+    UpsertRow lo, existing, "MATG_ERR_N", "N koordinata nije broj."
+    UpsertRow lo, existing, "MATG_ERR_E", "E koordinata nije broj."
+    UpsertRow lo, existing, "MATG_ERR_POZITIVNE", "Koordinate moraju biti pozitivne."
+    UpsertRow lo, existing, "MATG_ERR_RADNJA", "Geo radnja nije uspela:"
+    UpsertRow lo, existing, "MATG_OPIS_NEMA_IZBORA", "Nema izabrane parcele."
+    UpsertRow lo, existing, "MATG_OPIS_BEZ_TACKE", "bez geo ta" & ChrW(269) & "ke"
+    UpsertRow lo, existing, "MATG_OPIS_POLIGON", "ima poligon"
+    UpsertRow lo, existing, "MATG_OK_SACUVANO", "Geo podaci su sa" & ChrW(269) & "uvani."
+    UpsertRow lo, existing, "MATG_OK_OBRISANO", "Geo podaci su obrisani."
+    UpsertRow lo, existing, "MATG_OK_PORTAL", "GeoSrbija otvorena; pretraga je u klipbordu."
+    UpsertRow lo, existing, "MATG_OK_NALEPLJENO", "Koordinate prepoznate iz klipborda."
+    UpsertRow lo, existing, "MATG_ERR_NALEPLJENO", _
+        "U klipbordu nema dve prepoznatljive koordinate."
+    UpsertRow lo, existing, "MATG_ASK_OBRISI", _
+        "Obrisati geo podatke ove parcele? Ta" & ChrW(269) & "ka i poligon se gube."
+
+    UpsertRow lo, existing, "OTKUI_BTN_MAT_GEO", "Geo"
+    UpsertRow lo, existing, "OTKUI_MATG_CAP", "GEO PARCELE"
+    UpsertRow lo, existing, "OTKUI_MATG_N", "N koordinata (UTM34)"
+    UpsertRow lo, existing, "OTKUI_MATG_E", "E koordinata (UTM34)"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_SACUVAJ", "Sa" & ChrW(269) & "uvaj geo"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_NALEPI", "Nalepi koordinate"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_PORTAL", "GeoSrbija"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_MAPE", "Google Maps"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_POLIGON", "Poligon"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_OBRISI", "Obri" & ChrW(353) & "i geo"
+    UpsertRow lo, existing, "OTKUI_BTN_GEO_ZATVORI", "Zatvori"
+
     UpsertRow lo, existing, "OTKUI_FOOT_SEZONA", "Sezona 2026"
 
     UpsertRow lo, existing, "OTKUI_KPI_DANAS", "DANAS OTKUPLJENO"

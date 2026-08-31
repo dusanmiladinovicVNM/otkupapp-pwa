@@ -9,9 +9,13 @@ Attribute VB_Name = "modMaticniEkran"
 ' ZASTO OVO NIJE U modMaticniIzvor: taj modul opisuje PODATKE i ne sme da zna
 ' za kontrole ni za ljusku. Ovaj zna za zonu i za mrezu, a nista o tabelama.
 '
-' ZONA IMA DVA STANJA (M2b):
+' ZONA IMA TRI STANJA:
 '   zatvorena  pregled -- naziv sekcije, koliko zapisa, koliko aktivnih;
-'   otvorena   editor -- polja sekcije, "Sacuvaj" i "Odustani".
+'   editor     polja sekcije, "Sacuvaj" i "Odustani" (M2b);
+'   geo        koordinate izabrane parcele i sest alatki (M3).
+' Editor i geo se ISKLJUCUJU: jedna stvar u zoni u isto vreme. Otvaranje jednog
+' zatvara drugo -- dva panela jedan preko drugog su ista klasa kvara kao traka
+' zOtp koja je ostajala upaljena na tudjem ekranu.
 ' Obrazac je iz liste "Nova prerada" na ekranu Palete: polja postoje uvek, a
 ' Scr_Layout ih pali, gasi i rasporedjuje; zona raste samo dok se uredjuje.
 '
@@ -28,7 +32,7 @@ Attribute VB_Name = "modMaticniEkran"
 '=====================================================================
 Option Explicit
 
-Public Const MATEKR_BUILD As String = "v6-ui-190"
+Public Const MATEKR_BUILD As String = "v6-ui-191"
 
 ' Visina zone je ista kao KPI traka, pa naslov ispod nje pada u isti red na
 ' svim ekranima -- isto pravilo koje vec postuju Palete i Oporavak.
@@ -51,6 +55,12 @@ Private mZonaEkran As String
 Private mEditKljuc As String
 Private mEditID As String
 Private mIzabranID As String               ' PK reda izabranog u mrezi
+
+' Parcela ciji je GEO panel otvoren. Prazno = panel je zatvoren.
+Private mGeoID As String
+
+' Visina zone sa otvorenim GEO panelom: jedan red polja (N i E) pa dugmad.
+Private Const MAT_GEO_H As Single = MAT_ZONA_H + 18 + MAT_RED_H + 38
 
 '--------------------------------------------------------------- ZONA
 Public Sub ZonaGradi(ByVal z As Object)
@@ -84,6 +94,22 @@ Public Sub ZonaGradi(ByVal z As Object)
     modUiKit.BtnV z, "scrMatOdustani", Poruka("OTKUI_BTN_MAT_ODUSTANI"), 0, 0, 104, 26, "soft"
     modUiKit.BtnV z, "scrMatNovi", Poruka("OTKUI_BTN_MAT_NOVI"), 0, 0, 130, 26, "primary"
 
+    ' --- GEO PANEL (samo Parcele) ---------------------------------------
+    ' Sest alatki koje legacy forma ima kao sest dugmadi uz listu parcela.
+    ' Posao im je u modMaticniGeo; ovde su samo kontrole.
+    modUiKit.NewLbl z, "matGeoCap", UCase$(Poruka("OTKUI_MATG_CAP")), PAD, 0, 200, 12, _
+                    TS_MICRO, True, C_MUTED, -1
+    modUiKit.NewLbl z, "matGeoOpis", "", PAD, 0, 520, 13, TS_META, False, C_FOREST, -1
+    modOtkupUI.NewFieldG z, "scrGeoN", Poruka("OTKUI_MATG_N"), "txt", "", 1, True, False, "GEO"
+    modOtkupUI.NewFieldG z, "scrGeoE", Poruka("OTKUI_MATG_E"), "txt", "", 1, True, False, "GEO"
+    modUiKit.BtnV z, "scrGeoSacuvaj", Poruka("OTKUI_BTN_GEO_SACUVAJ"), 0, 0, 108, 26, "primary"
+    modUiKit.BtnV z, "scrGeoNalepi", Poruka("OTKUI_BTN_GEO_NALEPI"), 0, 0, 138, 26, "soft"
+    modUiKit.BtnV z, "scrGeoPortal", Poruka("OTKUI_BTN_GEO_PORTAL"), 0, 0, 96, 26, "soft"
+    modUiKit.BtnV z, "scrGeoMape", Poruka("OTKUI_BTN_GEO_MAPE"), 0, 0, 110, 26, "soft"
+    modUiKit.BtnV z, "scrGeoPoligon", Poruka("OTKUI_BTN_GEO_POLIGON"), 0, 0, 88, 26, "soft"
+    modUiKit.BtnV z, "scrGeoObrisi", Poruka("OTKUI_BTN_GEO_OBRISI"), 0, 0, 100, 26, "danger"
+    modUiKit.BtnV z, "scrGeoZatvori", Poruka("OTKUI_BTN_GEO_ZATVORI"), 0, 0, 88, 26, "ghost"
+
     modUiKit.NewLbl z, "matLnB", "", 0, MAT_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
 
@@ -109,20 +135,23 @@ Public Function ZonaRaspored(ByVal z As Object, ByVal w As Single, _
     Next i
     ' Napomena deli red sa dve plocice desno; na uskom prozoru se skloni umesto
     ' da dobije negativnu sirinu.
-    z.Controls("matHint").Visible = (w - 2 * PAD - 320 > 120) And Len(mEditKljuc) = 0
+    z.Controls("matHint").Visible = (w - 2 * PAD - 320 > 120) And _
+                                    Len(mEditKljuc) = 0 And Len(mGeoID) = 0
     If w - 2 * PAD - 320 > 120 Then z.Controls("matHint").width = w - 2 * PAD - 320
 
-    If Len(mEditKljuc) = 0 Then
-        PoljaEditora z, "", False
-        modUiKit.BoxShow z, "scrMatSacuvaj", False
-        modUiKit.BoxShow z, "scrMatOdustani", False
-        z.Controls("matEdBg").Visible = False
-        z.Controls("matEdCap").Visible = False
+    If Len(mGeoID) > 0 Then
+        SakrijEditor z
+        modUiKit.BoxShow z, "scrMatNovi", False
+        h = RasporediGeo(z, w)
+    ElseIf Len(mEditKljuc) = 0 Then
+        SakrijEditor z
+        SakrijGeo z
         ' "Nova stavka" postoji i kad je editor zatvoren -- to mu je jedini ulaz.
         modUiKit.MoveBox z, "scrMatNovi", w - PAD - 130, 14, 130
         modUiKit.BoxShow z, "scrMatNovi", (Len(lista) > 0)
         h = MAT_ZONA_H
     Else
+        SakrijGeo z
         modUiKit.BoxShow z, "scrMatNovi", False
         h = RasporediEditor(z, w)
     End If
@@ -130,6 +159,94 @@ Public Function ZonaRaspored(ByVal z As Object, ByVal w As Single, _
     z.Controls("matLnB").top = h - 1
     z.Controls("matLnB").width = w
     ZonaRaspored = h
+End Function
+
+Private Sub SakrijEditor(ByVal z As Object)
+    On Error Resume Next
+    PoljaEditora z, "", False
+    modUiKit.BoxShow z, "scrMatSacuvaj", False
+    modUiKit.BoxShow z, "scrMatOdustani", False
+    z.Controls("matEdBg").Visible = False
+    z.Controls("matEdCap").Visible = False
+End Sub
+
+Private Sub SakrijGeo(ByVal z As Object)
+    Dim nm As Variant
+    On Error Resume Next
+    z.Controls("matGeoCap").Visible = False
+    z.Controls("matGeoOpis").Visible = False
+    z.Controls("scrGeoN").Visible = False
+    z.Controls("scrGeoE").Visible = False
+    For Each nm In GeoDugmad()
+        modUiKit.BoxShow z, CStr(nm), False
+    Next nm
+End Sub
+
+Private Function GeoDugmad() As Variant
+    GeoDugmad = Array("scrGeoSacuvaj", "scrGeoNalepi", "scrGeoPortal", _
+                      "scrGeoMape", "scrGeoPoligon", "scrGeoObrisi", "scrGeoZatvori")
+End Function
+
+' Raspored GEO panela: dva polja levo, sest alatki i "Zatvori" u redu ispod.
+Private Function RasporediGeo(ByVal z As Object, ByVal w As Single) As Single
+    Dim kol As Single, y0 As Single, x As Single, nm As Variant, i As Long
+
+    z.Controls("matEdBg").Visible = True
+    z.Controls("matEdBg").Left = PAD - 10
+    z.Controls("matEdBg").top = MAT_ZONA_H
+    z.Controls("matEdBg").width = w - 2 * (PAD - 10)
+    z.Controls("matEdBg").Height = MAT_GEO_H - MAT_ZONA_H - 1
+
+    z.Controls("matGeoCap").Visible = True
+    z.Controls("matGeoCap").top = MAT_ZONA_H + 4
+    z.Controls("matGeoOpis").Visible = True
+    z.Controls("matGeoOpis").top = MAT_ZONA_H + 4
+    z.Controls("matGeoOpis").Left = PAD + 110
+    z.Controls("matGeoOpis").width = w - PAD - 120
+    z.Controls("matGeoOpis").caption = modMaticniGeo.GeoOpis(mGeoID)
+
+    kol = (w - 2 * PAD - MAT_GAP) / 4
+    If kol < 140 Then kol = 140
+    y0 = MAT_ZONA_H + 20
+    z.Controls("scrGeoN").Visible = True
+    z.Controls("scrGeoN").Left = PAD
+    z.Controls("scrGeoN").top = y0
+    z.Controls("scrGeoN").width = kol
+    modOtkupUI.LayoutFieldInner z.Controls("scrGeoN")
+    z.Controls("scrGeoE").Visible = True
+    z.Controls("scrGeoE").Left = PAD + kol + MAT_GAP
+    z.Controls("scrGeoE").top = y0
+    z.Controls("scrGeoE").width = kol
+    modOtkupUI.LayoutFieldInner z.Controls("scrGeoE")
+
+    ' Dugmad idu DESNO od polja kad ima mesta, inace u red ispod njih.
+    x = PAD + 2 * (kol + MAT_GAP)
+    If x + 640 > w - PAD Then
+        x = PAD
+        y0 = y0 + MAT_RED_H
+    Else
+        y0 = y0 + 8
+    End If
+    For Each nm In GeoDugmad()
+        modUiKit.MoveBox z, CStr(nm), x, y0, SirinaGeoDugmeta(CStr(nm))
+        modUiKit.BoxShow z, CStr(nm), True
+        x = x + SirinaGeoDugmeta(CStr(nm)) + 6
+        i = i + 1
+    Next nm
+
+    RasporediGeo = MAT_GEO_H
+End Function
+
+Private Function SirinaGeoDugmeta(ByVal nm As String) As Single
+    Select Case nm
+        Case "scrGeoSacuvaj":  SirinaGeoDugmeta = 108
+        Case "scrGeoNalepi":   SirinaGeoDugmeta = 138
+        Case "scrGeoPortal":   SirinaGeoDugmeta = 96
+        Case "scrGeoMape":     SirinaGeoDugmeta = 110
+        Case "scrGeoPoligon":  SirinaGeoDugmeta = 88
+        Case "scrGeoObrisi":   SirinaGeoDugmeta = 100
+        Case Else:             SirinaGeoDugmeta = 88
+    End Select
 End Function
 
 ' Raspored otvorenog editora: polja u redovima po cetiri, pa dugmad ispod.
@@ -307,6 +424,12 @@ Public Function Radnje(ByVal lista As String) As String
         If Len(s) > 0 Then s = s & "|"
         s = s & "status:OTKUI_BTN_MAT_STATUS:150:danger:1"
     End If
+    ' GEO ima SAMO Parcele -- jedina sekcija koja nosi koordinate. Dugme na
+    ' ostalima bi otvaralo panel koji nema sta da pokaze.
+    If lista = "PARCELE" Then
+        If Len(s) > 0 Then s = s & "|"
+        s = s & "geo:OTKUI_BTN_MAT_GEO:70:soft:1"
+    End If
     Radnje = s
 End Function
 
@@ -320,11 +443,12 @@ End Function
 ' operater bi inace gubio mesto u listi pri svakom kliku.
 Public Function Dogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
     Dim preEdit As String
-    preEdit = mEditKljuc & "/" & mEditID
+    preEdit = mEditKljuc & "/" & mEditID & "/" & mGeoID
     Dogadjaj = ObradiDogadjaj(tag, lista)
     ' Otvaranje ili zatvaranje editora menja VISINU zone. Ljuska to ne moze da
     ' pogodi -- LayoutScreenZone ide samo iz LayoutOtkup -- pa se trazi izricito.
-    If (mEditKljuc & "/" & mEditID) <> preEdit Then modOtkupUI.OsveziRasporedEkrana
+    If (mEditKljuc & "/" & mEditID & "/" & mGeoID) <> preEdit Then _
+        modOtkupUI.OsveziRasporedEkrana
 End Function
 
 Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As Boolean
@@ -334,7 +458,7 @@ Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As B
         If Mid$(tag, 3) = lista Then Exit Function
         ' Odlazak sa liste zatvara editor: polja pripadaju sekciji koja se
         ' napusta, a ostavljena bi trazila upis u drugu tabelu.
-        ZatvoriEditor
+        ZatvoriPanele
         lista = Mid$(tag, 3)
         ObradiDogadjaj = True
         Exit Function
@@ -366,8 +490,113 @@ Private Function ObradiDogadjaj(ByVal tag As String, ByRef lista As String) As B
         Case "scrMatNovi":     OtvoriNov lista
         Case "scrMatOdustani": ZatvoriEditor
         Case "scrMatSacuvaj":  ObradiDogadjaj = Sacuvaj(lista)
+        Case "scrGeoZatvori":  mGeoID = ""
+        Case "scrGeoNalepi":   GeoNalepi
+        Case "scrGeoPortal":   GeoJavi modMaticniGeo.GeoOtvoriPortal(mGeoID), "MATG_OK_PORTAL"
+        Case "scrGeoMape":     GeoJavi modMaticniGeo.GeoOtvoriMape(mGeoID), ""
+        Case "scrGeoPoligon":  GeoJavi modMaticniGeo.GeoOtvoriPoligon(mGeoID), ""
+        Case "scrGeoSacuvaj":  ObradiDogadjaj = GeoSacuvajKlik()
+        Case "scrGeoObrisi":   ObradiDogadjaj = GeoObrisiKlik()
     End Select
 End Function
+
+'---------------------------------------------------------------- GEO
+' Panel se otvara nad IZABRANIM redom i zatvara editor -- jedna stvar u zoni.
+Private Sub OtvoriGeo()
+    Dim nTxt As String, eTxt As String
+    If Len(mIzabranID) = 0 Then
+        modOtkupUI.ShowToast Poruka("MATG_ERR_NEMA_PARCELE"), True
+        Exit Sub
+    End If
+    ZatvoriEditor
+    mGeoID = mIzabranID
+    modMaticniGeo.GeoKoordinate mGeoID, nTxt, eTxt
+    PostaviGeoPolje "scrGeoN", nTxt
+    PostaviGeoPolje "scrGeoE", eTxt
+End Sub
+
+' Zajednicki izlaz za alatke koje samo otvaraju adresu: poruka o gresci ide u
+' crveni toast, uspeh u obican -- i to samo tamo gde uspeh ima sta da kaze
+' (portal je kopirao pretragu; mape i poligon se vide same).
+Private Sub GeoJavi(ByVal odgovor As String, ByVal kljucOK As String)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+    ElseIf Len(kljucOK) > 0 Then
+        modOtkupUI.ShowToast Poruka(kljucOK), False
+    End If
+End Sub
+
+Private Sub GeoNalepi()
+    Dim txt As String, n As Double, e As Double
+    txt = Trim$(GetClipboardText())
+    If Not modMaticniGeo.GeoIzTeksta(txt, n, e) Then
+        modOtkupUI.ShowToast Poruka("MATG_ERR_NALEPLJENO"), True
+        Exit Sub
+    End If
+    ' Format bez eksponenta i bez hiljadica -- UTM je sedmocifren broj.
+    PostaviGeoPolje "scrGeoN", Format$(n, "0.##")
+    PostaviGeoPolje "scrGeoE", Format$(e, "0.##")
+    modOtkupUI.ShowToast Poruka("MATG_OK_NALEPLJENO"), False
+End Sub
+
+Private Function GeoSacuvajKlik() As Boolean
+    Dim odgovor As String, fokus As String
+    odgovor = modMaticniGeo.GeoSacuvaj(mGeoID, CitajGeoPolje("scrGeoN"), _
+                                       CitajGeoPolje("scrGeoE"), fokus)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        If fokus = "e" Then FokusGeo "scrGeoE" Else FokusGeo "scrGeoN"
+        Exit Function
+    End If
+    modOtkupUI.ShowToast Poruka("MATG_OK_SACUVANO"), False
+    GeoSacuvajKlik = True
+End Function
+
+' Brisanje trazi potvrdu: tacka i poligon se gube, a poligon se rucno crta.
+' Legacy je to resavao dugmetom u dva koraka; potvrda je ista brana, samo
+' citljivija.
+Private Function GeoObrisiKlik() As Boolean
+    Dim odgovor As String
+    If Len(mGeoID) = 0 Then Exit Function
+    If MsgBox(Poruka("MATG_ASK_OBRISI") & vbCrLf & vbCrLf & mGeoID, _
+              vbExclamation + vbYesNo + vbDefaultButton2, APP_NAME) <> vbYes Then Exit Function
+    odgovor = modMaticniGeo.GeoObrisi(mGeoID)
+    If Len(odgovor) > 0 Then
+        modOtkupUI.ShowToast odgovor, True
+        Exit Function
+    End If
+    PostaviGeoPolje "scrGeoN", ""
+    PostaviGeoPolje "scrGeoE", ""
+    modOtkupUI.ShowToast Poruka("MATG_OK_OBRISANO"), False
+    GeoObrisiKlik = True
+End Function
+
+Private Function CitajGeoPolje(ByVal nm As String) As String
+    Dim z As Object
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Function
+    CitajGeoPolje = Trim$(NzToText(z.Controls(nm).Controls(nm & "T").value))
+    Err.Clear
+End Function
+
+Private Sub PostaviGeoPolje(ByVal nm As String, ByVal v As String)
+    Dim z As Object
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    z.Controls(nm).Controls(nm & "T").value = v
+    Err.Clear
+End Sub
+
+Private Sub FokusGeo(ByVal nm As String)
+    Dim z As Object
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    z.Controls(nm).Controls(nm & "T").SetFocus
+    Err.Clear
+End Sub
 
 Private Function Akcija(ByVal tag As String, ByVal lista As String) As Boolean
     Dim p() As String, red As Long
@@ -383,6 +612,7 @@ Private Function Akcija(ByVal tag As String, ByVal lista As String) As Boolean
     Select Case p(0)
         Case "izmeni": OtvoriIzmenu lista
         Case "status": Akcija = PromeniStatus(lista)
+        Case "geo":    OtvoriGeo
         Case Else
             LogWarn "modMaticniEkran.Akcija", "Nepoznata radnja '" & p(0) & "'."
             modOtkupUI.ShowToast Poruka("OTKUI_ERR_RADNJA") & " " & p(0), True
@@ -392,6 +622,7 @@ End Function
 '------------------------------------------------------------- EDITOR
 Private Sub OtvoriNov(ByVal lista As String)
     If Len(lista) = 0 Then Exit Sub
+    mGeoID = ""                      ' jedna stvar u zoni u isto vreme
     mEditKljuc = lista
     mEditID = ""
     OcistiPolja lista
@@ -421,6 +652,7 @@ Private Sub OtvoriIzmenu(ByVal lista As String)
     End If
 
     jeCenovnik = (lista = "CENOVNIK")
+    mGeoID = ""                      ' jedna stvar u zoni u isto vreme
     mEditKljuc = lista
     ' Prazan mEditID znaci UNOS -- otud cenovnik uvek dodaje nov red.
     mEditID = IIf(jeCenovnik, "", mIzabranID)
@@ -503,6 +735,13 @@ End Function
 Public Sub ZatvoriEditor()
     mEditKljuc = ""
     mEditID = ""
+End Sub
+
+' Prelazak na drugu listu zatvara i editor i GEO panel: oba pripadaju sekciji
+' koja se napusta.
+Private Sub ZatvoriPanele()
+    ZatvoriEditor
+    mGeoID = ""
 End Sub
 
 '--------------------------------------------------- POLJA <-> RECNIK

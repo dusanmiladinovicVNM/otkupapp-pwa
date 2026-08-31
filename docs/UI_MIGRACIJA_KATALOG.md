@@ -6430,7 +6430,7 @@ Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 | **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §24.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
 | **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §24.15. Jedan pisac (§24.5). |
 | **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §24.16. |
-| **M3** | Cenovnik (append-only, `novacena`) i Parcele (GEO radnja + koordinate u zoni) | Dve sekcije koje nisu obična CRUD. |
+| **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §24.17. Cenovnik je stigao već uz M2b. |
 | **M4** | `MAT_KORISNICI` — lista + matrica prava | Traži svoj oblik (matrica), i admin branu. |
 | **M5** | Odluka o Podešavanjima i Adminu | Tek kad se vidi kako se M0–M4 ponašaju u pogonu. Podrazumevano: ostaju. |
 
@@ -6710,3 +6710,51 @@ radnje). Tri nove sabotaže. Kao i ranije: **testovi nisu izvršeni** u web sesi
 **Otvoreno posle M2:** Parcele još nemaju GEO radnju (M3); Korisnici i njihova
 matrica prava idu u M4, zajedno sa nalazom iz §24.15 o deaktivaciji koja ne
 sprečava prijavu.
+
+### 24.17 M3 — GEO parcele (`v6-ui-191`)
+
+Cenovnik je zatvoren već uz M2b (append-only + prefill iz izabranog reda), pa je
+M3 sveden na **GEO**. Šest legacy dugmadi uz listu parcela postalo je
+`modMaticniGeo` — operacije **po `ParcelaID`-ju**, bez ijedne kontrole.
+
+**Zašto po ID-ju:** legacy je slao `m_SelectedRow`, redni broj izveden iz
+pozicije u listboxu. U mreži koja se sortira i pretražuje pozicija ne znači
+ništa — a `modGeoParcele` **već ima** `*ByID` varijantu svake operacije, sa
+`RequireSingleParcelaRow` kapijom. Koristi se ona; ništa se nije prepisivalo.
+
+**Zona je dobila treće stanje.** Zatvorena / editor / **geo**. Editor i geo se
+isključuju — jedna stvar u zoni u isto vreme; dva panela jedan preko drugog su
+ista klasa kvara kao traka `zOtp` koja je ostajala upaljena na tuđem ekranu.
+Prelazak na drugu listu zatvara oba.
+
+GEO panel nosi koordinate izabrane parcele, red opisa (status / izvor / ima li
+poligon) i šest alatki: **Sačuvaj geo · Nalepi koordinate · GeoSrbija · Google
+Maps · Poligon · Obriši geo**, plus Zatvori. Radnja `geo` nad redom postoji
+**samo na Parcelama** — jedina sekcija sa koordinatama; dugme na ostalima bi
+otvaralo panel koji nema šta da pokaže.
+
+**Dva pravila su izašla iz forme, i forma ih sada zove:**
+
+1. **Prepoznavanje koordinata iz nalepljenog teksta** (`GeoIzTeksta`). Prag
+   `|d| > 1000` nije ukras: UTM34 nad Srbijom je sedmocifren, pa se time
+   odbacuju broj parcele, godina i sve ostalo iz reda prekopiranog sa portala.
+   Bez praga bi „Parcela 123" dala koordinatu 123. Test to tvrdi po imenu.
+2. **Adrese** (`GeoUrlMape`, `GeoUrlPoligon`, `GEO_URL_SRBIJA`). Adresa mape
+   mora imati decimalnu **tačku**: na mašini sa zarezom kao separatorom `CStr`
+   daje `44,81`, pa bi URL bio neispravan — mapa bi se otvorila na pogrešnom
+   mestu ili nikako. `frmStammdaten` više nema nijedan URL u sebi.
+
+**Brisanje traži potvrdu.** Legacy je to rešavao dugmetom u dva koraka
+(„Potvrdi brisanje"); ovde je `MsgBox` potvrda — ista brana, čitljivija, i ista
+kao kod promene statusa. Tačka i poligon se gube, a poligon se ručno crta.
+
+**Verifikacija:** `vba_check` čist (205 fajlova, 341 sabotaža). Nov test 158 —
+prepoznavanje koordinata (sa oznakama `N=`/`E:`, zagradama, tabovima; mali
+brojevi se preskaču; manje od dva velika broja = nema koordinata) i adrese
+(decimalna tačka, prazan ID ne daje adresu poligona) — plus tvrdnja da geo
+radnja postoji samo na Parcelama. Tri nove sabotaže. **Testovi nisu izvršeni**
+u web sesiji.
+
+**Otvoreno posle M3:** samo **M4** — Korisnici, matrica prava, i nalaz iz
+§24.15 (deaktivacija korisnika ne sprečava prijavu). Posle toga ostaje M5
+(odluka o Podešavanjima i Adminu), gde je podrazumevani odgovor „ostaju".

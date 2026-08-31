@@ -2438,7 +2438,7 @@ Private Sub btnGeoOpen_Click()
     searchText = katBroj & " " & Replace(katOpstina, "KO ", "")
 
     CopyToClipboard searchText
-    ThisWorkbook.FollowHyperlink "https://a3.geosrbija.rs/"
+    ThisWorkbook.FollowHyperlink modMaticniGeo.GEO_URL_SRBIJA
 
     SetGeoStatus "GeoSrbija otvorena. Pretraga je kopirana: " & searchText, False
     Exit Sub
@@ -2560,7 +2560,7 @@ Private Sub btnPasteCoords_Click()
     Dim nVal As Double
     Dim eVal As Double
 
-    If Not TryExtractTwoCoordinates(txt, nVal, eVal) Then
+    If Not modMaticniGeo.GeoIzTeksta(txt, nVal, eVal) Then
         SetGeoStatus "Nisu pronadene validne koordinate u clipboard-u.", True
         Exit Sub
     End If
@@ -2863,6 +2863,9 @@ Private Function FormatCoordForTextBox(ByVal v As Double) As String
     FormatCoordForTextBox = Replace(Format$(v, "0.############"), ",", ".")
 End Function
 
+' TryExtractTwoCoordinates i CleanCoordToken su PRESELJENI u modMaticniGeo
+' (GeoIzTeksta / OcistiToken). Isto pravilo je trebalo i novom ekranu, a dve
+' kopije praga "|d| > 1000" bi se razisle prvom doradom.
 Private Sub ClearGeoFields()
     On Error Resume Next
 
@@ -2872,81 +2875,7 @@ Private Sub ClearGeoFields()
     On Error GoTo 0
 End Sub
 
-Private Function TryExtractTwoCoordinates(ByVal rawText As String, _
-                                          ByRef firstCoord As Double, _
-                                          ByRef secondCoord As Double) As Boolean
-    On Error GoTo EH
 
-    Dim txt As String
-    txt = Trim$(rawText)
-
-    If txt = "" Then Exit Function
-
-    txt = Replace(txt, vbCr, " ")
-    txt = Replace(txt, vbLf, " ")
-    txt = Replace(txt, vbTab, " ")
-    txt = Replace(txt, ";", " ")
-
-    Do While InStr(txt, "  ") > 0
-        txt = Replace(txt, "  ", " ")
-    Loop
-
-    Dim tokens() As String
-    tokens = Split(txt, " ")
-
-    Dim vals(0 To 1) As Double
-    Dim count As Long
-    Dim i As Long
-    Dim d As Double
-    Dim candidate As String
-
-    For i = LBound(tokens) To UBound(tokens)
-        candidate = CleanCoordToken(tokens(i))
-
-        If TryParseDouble(candidate, d) Then
-            If Abs(d) > 1000 Then
-                vals(count) = d
-                count = count + 1
-
-                If count = 2 Then Exit For
-            End If
-        End If
-    Next i
-
-    If count < 2 Then Exit Function
-
-    firstCoord = vals(0)
-    secondCoord = vals(1)
-
-    TryExtractTwoCoordinates = True
-    Exit Function
-
-EH:
-    TryExtractTwoCoordinates = False
-End Function
-
-Private Function CleanCoordToken(ByVal token As String) As String
-    Dim s As String
-    s = Trim$(token)
-
-    s = Replace(s, "N=", "")
-    s = Replace(s, "E=", "")
-    s = Replace(s, "N:", "")
-    s = Replace(s, "E:", "")
-    s = Replace(s, "n=", "")
-    s = Replace(s, "e=", "")
-    s = Replace(s, "n:", "")
-    s = Replace(s, "e:", "")
-
-    s = Replace(s, "(", "")
-    s = Replace(s, ")", "")
-    s = Replace(s, "[", "")
-    s = Replace(s, "]", "")
-    s = Replace(s, "{", "")
-    s = Replace(s, "}", "")
-
-    CleanCoordToken = s
-End Function
 
 Private Function GetSelectedParcelaID() As String
     Const SRC As String = "frmStammdaten.GetSelectedParcelaID"
@@ -3011,13 +2940,8 @@ End Sub
 Public Function OpenGoogleMaps(ByVal lat As Double, ByVal lng As Double) As Boolean
     On Error GoTo EH
 
-    Dim url As String
-
-    url = "https://www.google.com/maps?q=" & _
-          Replace(CStr(lat), ",", ".") & "," & _
-          Replace(CStr(lng), ",", ".")
-
-    ThisWorkbook.FollowHyperlink url
+    ' Adresa se gradi u modMaticniGeo -- isti oblik koristi i novi ekran.
+    ThisWorkbook.FollowHyperlink modMaticniGeo.GeoUrlMape(lat, lng)
 
     OpenGoogleMaps = True
     Exit Function
@@ -3032,13 +2956,11 @@ Public Function OpenParcelPolygonEditor(ByVal parcelaID As String) As Boolean
 
     Dim url As String
 
-    If Trim$(parcelaID) = "" Then
+    url = modMaticniGeo.GeoUrlPoligon(parcelaID)
+    If Len(url) = 0 Then
         LogError "frmStammdaten.OpenParcelPolygonEditor", "ParcelaID nije prosleden."
         Exit Function
     End If
-
-    url = "https://dusanmiladinovicvnm.github.io/otkupapp-pwa/parcel-draw.html?parcelaId=" & _
-          WorksheetFunction.EncodeURL(parcelaID)
 
     ThisWorkbook.FollowHyperlink url
 
