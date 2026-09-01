@@ -369,6 +369,73 @@ jedina tvrdnja koja razlikuje `CDate` od determinističkog parsera **na DMY
 mašini**. Razliku na MDY mašini ne pokriva nijedan test i to se ne prijavljuje kao
 pokriveno.
 
+## Dokaz se ne čeka — verdikt u fajlu, knjiga, noćni recert
+
+Pun dvosmerni dokaz traje satima i **nikad se ne čeka u sesiji**. Dok je jedini
+izlaz bio stdout, neko je morao da sedi nad njim: sesija blokira u
+desetominutnim blokovima, troši kontekst i kvotu na čekanje, a verdikt posle
+svega postoji samo u scrollback-u.
+
+```powershell
+powershell -File tools\dokaz_bg.ps1 modScrIzvestaji.bas   # pusti ODVOJENO, vrati se odmah
+python tools\dokaz.py --status                            # gde je stao / verdikt (trenutno)
+```
+
+`--status` odgovara i **sredinom** run-a, jer se `tests/dokaz_last.json` piše
+posle **svake** sabotaže, ne tek na kraju. Izlazni kodovi: `0` dokazano,
+`1` nije, `2` nema verdikta, **`3` run još traje** — treće je namerno odvojeno,
+da ga skripta ne pomeša sa verdiktom.
+
+### Knjiga dokazanog (`--knjiga`)
+
+Sabotaža dokazuje da test **nije placebo**. To je činjenica o paru *(test, kod
+ispod njega)* i ne zastareva dok se taj par ne promeni — pa ponovno dokazivanje
+celog kataloga posle svakog kruga ispravki ne meri ništa novo.
+
+```powershell
+python tools\dokaz.py --knjiga modScrIzvestaji.bas
+```
+
+Ključ unosa pokriva: svih pet članova unosa u katalogu, **sadržaj** mutiranog
+fajla, modul u kom test živi, sva tri alata (`dokaz.py`, `sabotaza.py`,
+`run_vba.py`) i potpis fixture-a. Kad se modul testa ne nađe (npr. banka-suite,
+gde ime `T21_…` nije ime procedure koja se izvršava), ključ pada na potpis
+**celog** `src-vba` — konzervativno, nikad obrnuto.
+
+Tri ograde zbog kojih knjiga ne slabi kapiju:
+
+1. **Čita se samo uz filter i samo na izričit `--knjiga`.** Run bez filtera —
+   dakle i noćni — uvek je pun. Zastarelost je time ograničena na jednu noć.
+2. **Verdikt uvek kaže koliko je preneseno**, a kad ništa nije mereno to stoji u
+   samoj liniji: `=== DOKAZANO (sve preneseno iz knjige — ništa nije mereno
+   sada, ni baza) ===`.
+3. **Oštećena knjiga, druga verzija formata ili ključ koji se ne poklapa** →
+   unos se ignoriše i dokazuje ponovo. Sumnja uvek ide na skuplju stranu.
+
+`python tools\dokaz.py --self-test` dokazuje da sve ovo zaista meri — obe
+polovine (pravila drže + svako pravilo, kad se prekrši, javlja se **po imenu**).
+Radi bez Excela i **vrti se u CI-ju**. Prva verzija tog self-testa imala je dve
+lažno zelene provere (ključ je gledao *ime* fajla a ne sadržaj; `_hash_alata` se
+nikad nije izvršavao) — obe je našla sabotaža nad samim self-testom, ne pregled.
+
+### Noćni recert
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install_nocni_dokaz.ps1
+powershell -ExecutionPolicy Bypass -File tools\install_nocni_dokaz.ps1 -U 02:30
+powershell -ExecutionPolicy Bypass -File tools\install_nocni_dokaz.ps1 -Ukloni
+```
+
+Svake noći: `vba_check` + **FULL** suite + **pun** dvosmerni dokaz (bez knjige).
+Ujutru stoji `tests/dokaz_jutro.md` — jedan ekran, bez kopanja po logovima;
+detalji u `tests/nocni/` (logovi stariji od 14 dana se brišu sami).
+
+> **Excel traži interaktivnu sesiju.** Zadatak radi samo dok je korisnik
+> prijavljen — „Run whether user is logged on or not" (Session 0) ne radi, jer
+> compile probe gađa vidljiv i aktivan VBE prozor. Na zaključanoj mašini compile
+> ume da završi kao `COMPILE NEJASNO`; to **ne** obara run dok suite-ovi idu, pa
+> izveštaj i dalje nosi verdikt — samo bez compile kapije.
+
 ## Trijaža masovnih padova
 
 ```bash

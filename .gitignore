@@ -14,3 +14,10 @@ tests/fixtures/
 # Izlaz poslednjeg run_vba.py -- lokalan po masini i po prolazu
 tests/last_run.json
 tests/last_run.txt
+# Verdikt dokaza, knjiga dokazanog i nocni logovi: zavise od fixture-a i masine,
+# pa u repou ne bi znacili isto (v. tools/dokaz.py).
+tests/dokaz_last.json
+tests/dokaz_ledger.json
+tests/dokaz_jutro.md
+tests/dokaz_*.log
+tests/nocni/

@@ -82,3 +82,10 @@ jobs:
       # i videla se tek kao [break] u VBE-u na Windows masini.
       - name: run_vba self-test
         run: python3 tools/run_vba.py --self-test
+
+      # Knjiga dokazanog (tools/dokaz.py --knjiga) PRESKACE dokaze. Provera koja
+      # to dozvoljava mora sama biti dokazana -- inace se sat cekanja zameni za
+      # tihu rupu. Self-test nosi obe polovine (pravila drze + svako pravilo ume
+      # da pukne po imenu) i jedini je deo dokaz.py koji radi bez Excela.
+      - name: dokaz self-test
+        run: python3 tools/dokaz.py --self-test
