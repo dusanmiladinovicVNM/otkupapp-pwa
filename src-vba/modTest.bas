@@ -6719,21 +6719,25 @@ Private Sub T_Fak_GpListaIKorpa()
     AssertEq CBool(gp(rG, 8)), False, "fakturisana NIJE dostupna"
     AssertEq CStr(gp(rG, 9)), "9/2026", "fakturisana nosi broj svoje fakture"
     AssertEq CStr(gp(rW1, 2)), "71/2026", "prikazni broj je broj/godina"
+    ' R5 (revizija #248): kolicina je DECIMALNA -- Val("50,5") na
+    ' srpskom locale-u cita 50, pa bi grid/korpa lagali writer.
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(50.5, "0.00"), _
+             "decimalan izlaz kg prezivi read-model (Val mina)"
 
     ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
     modScrFakture.Scr_FkKorpaTestReset
-    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50, 0, True), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 0, True), _
              Poruka("OTKUI_ERR_FK_CENA_GP"), "GP bez cene ne ulazi u korpu"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 0, "odbijena stavka ne menja korpu"
-    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50, 0, False), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 0, False), _
              Poruka("OTKUI_ERR_FK_NIJE_DOSTUPNA"), "nedostupna GP stavka ne ulazi"
 
-    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50, 120, True), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True), _
              "", "dostupna GP stavka sa cenom ulazi"
     AssertEq modScrFakture.Scr_FkKorpaBroj(), 1, "korpa ima jednu GP stavku"
-    AssertEq Format$(modScrFakture.FkZbirKorpe(), "0.00"), Format$(50 * 120#, "0.00"), _
+    AssertEq Format$(modScrFakture.FkZbirKorpe(), "0.00"), Format$(50.5 * 120#, "0.00"), _
              "vrednost GP stavke = kg * uneta cena"
-    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50, 120, True)) > 0), _
+    AssertEq (Len(modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True)) > 0), _
              True, "ista prerada ne moze dvaput u korpu"
     AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
              Poruka("OTKUI_ERR_FK_MESANJE"), "prijemnica ne ulazi u GP korpu"
@@ -6746,7 +6750,7 @@ Private Sub T_Fak_GpListaIKorpa()
     ' Obrnut smer: PRJ korpa odbija GP stavku istom porukom.
     AssertEq modScrFakture.Scr_FkKorpaTestDodaj(FX_PRJ_FAK3, "22/150326", 100, 40, True), _
              "", "preduslov: prijemnica je usla u praznu korpu"
-    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50, 120, True), _
+    AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 120, True), _
              Poruka("OTKUI_ERR_FK_MESANJE"), "GP stavka ne ulazi u PRJ korpu"
     modScrFakture.Scr_FkKorpaTestReset
 End Sub
@@ -6800,7 +6804,7 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, "PRE-GP-W1", _
              COL_PRE_FAKTURA_ID)))), fid, "prerada pamti SVOJU fakturu"
     AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid, _
-             COL_FAK_IZNOS), 0)), "0.00"), Format$(50 * 120#, "0.00"), _
+             COL_FAK_IZNOS), 0)), "0.00"), Format$(50.5 * 120#, "0.00"), _
              "iznos fakture = NetoIzlazKg * uneta cena"
 
     ' Stavka PO IMENU: PreradaID + BrojPrerade puni, PrijemnicaID prazan.
@@ -6831,6 +6835,51 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq CBool(gp(rW1, 8)), False, "fakturisana W1 vise nije dostupna"
     AssertEq (Len(CStr(gp(rW1, 9))) > 0), True, "W1 nosi broj nove fakture"
 
+    ' --- R2: SEF DTO nad GP fakturom -- polimorfni izvor stavke.
+    ' GP faktura je do sada padala na "PrijemnicaID missing" cim se
+    ' klikne "Posalji na SEF"; DTO sada nosi preradu kao source.
+    Dim dto As clsSEFInvoiceSnapshot, ln As clsSEFLine
+    Set dto = modSEFMapper.BuildSEFInvoiceDto(fid)
+    AssertEq dto.lines.count, 1, "GP faktura ima jednu SEF liniju"
+    Set ln = dto.lines(1)
+    AssertEq ln.preradaID, "PRE-GP-W1", "SEF linija nosi PreradaID (source identity)"
+    AssertEq ln.prijemnicaID, "", "SEF GP linija nema prijemnicu"
+    AssertEq (InStr(ln.naziv, "Rinfuz") > 0), True, "SEF naziv nosi tip gotovog proizvoda"
+    AssertEq (InStr(ln.naziv, "71/2026") > 0), True, "SEF naziv nosi broj prerade"
+    AssertEq Format$(ln.kolicina, "0.00"), Format$(50.5, "0.00"), _
+             "SEF kolicina je decimalna"
+    AssertEq Format$(dto.DeliveryDate, "yyyy-mm-dd"), "2026-03-15", _
+             "datum isporuke GP = datum prerade"
+    Dim xml As String
+    xml = modSEFMapper.SerializeUBLInvoice(dto)
+    AssertEq (InStr(xml, "<cbc:ID>PRE-GP-W1</cbc:ID>") > 0), True, _
+             "UBL SellersItemIdentification = PreradaID (stabilni GP ID)"
+    AssertEq (InStr(xml, "Rinfuz") > 0), True, "UBL nosi naziv proizvoda"
+
+    ' --- R1: stampa GP fakture -- proizvod i broj prerade, ne prazna
+    ' prijemnicka polja. FAKTURA_PRINT_MODE=OFF u fixture-u: sablon se
+    ' puni, izlaza nema.
+    modFaktura.PrintFaktura fid
+    Dim wsF As Worksheet, scRow As Long
+    Set wsF = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
+    scRow = wsF.Range("FakStavkaStart").row
+    AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prerade", _
+             "GP heder: dokument je prerada"
+    AssertEq CStr(wsF.cells(scRow - 1, 3).value), "Proizvod", _
+             "GP heder: proizvod umesto klase"
+    AssertEq CStr(wsF.cells(scRow, 2).value), "71/2026", _
+             "GP stavka nosi broj prerade"
+    AssertEq CStr(wsF.cells(scRow, 3).value), "Rinfuz", _
+             "GP stavka nosi ime proizvoda"
+    ' Sablon je PERZISTENTAN: sveza stampa mora da VRATI svoje hedere.
+    Dim svezeStavke(1 To 1, 1 To 5) As Variant
+    svezeStavke(1, 1) = "1/150326": svezeStavke(1, 2) = "I"
+    svezeStavke(1, 3) = 1#: svezeStavke(1, 4) = 1#: svezeStavke(1, 5) = 1#
+    modPrint.FillFakturaSablon "T-GP-HDR", DateSerial(2026, 3, 15), "K", _
+                               svezeStavke, 1, 1#
+    AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prijemnice", _
+             "sveza stampa vraca prijemnicki heder"
+
     ' --- STORNO SIMETRIJA: storno fakture OSLOBADJA preradu.
     AssertEq modStorno.StornoFaktura_TX(fid), True, "storno GP fakture prolazi"
     AssertEq Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, "PRE-GP-W1", _
@@ -6843,6 +6892,32 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
         If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
     Next i
     AssertEq CBool(gp(rW1, 8)), True, "oslobodjena prerada je opet dostupna"
+
+    ' --- R3: rollback je ATOMARAN preko SVIH tabela koje storno pise.
+    ' Namerna greska POSLE oslobadjanja prerade (test seam): TX mora da
+    ' vrati i tblPrerada -- bez tog snapshota bi faktura ostala aktivna
+    ' a prerada slobodna za ponovno fakturisanje = dvostruka prodaja.
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 130#)
+    Dim fid2 As String
+    fid2 = modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s)
+    AssertEq (Len(fid2) > 0), True, "preduslov: druga GP faktura"
+    modStorno.StornoTestFailPosleRelease True
+    AssertEq modStorno.StornoFaktura_TX(fid2), False, _
+             "namerna greska posle release-a obara storno"
+    modStorno.StornoTestFailPosleRelease False
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, "PRE-GP-W1", _
+             COL_PRE_FAKTURISANO)))), "Da", _
+             "rollback VRACA preradu u fakturisano stanje"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, "PRE-GP-W1", _
+             COL_PRE_FAKTURA_ID)))), fid2, "rollback vraca i vezu na fakturu"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid2, _
+             COL_STORNIRANO)))), "", "rollback vraca fakturu u aktivnu"
+    ' Pravi storno na kraju -- zavrsno stanje: prerada slobodna.
+    AssertEq modStorno.StornoFaktura_TX(fid2), True, "pravi storno prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, "PRE-GP-W1", _
+             COL_PRE_FAKTURISANO)))), "", _
+             "posle pravog storna prerada je opet slobodna"
 End Sub
 
 

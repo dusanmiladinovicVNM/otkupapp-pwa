@@ -1738,7 +1738,10 @@ SEED = {
         # Potrosna vozila writer testa CreateFakturaGP_TX (nisu ni na
         # jednom SLED lancu -- mutacija ne dira tvrdnje lanca).
         {"PreradaID": "PRE-GP-W1", "BrojPrerade": 71,
-         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 50,
+         # DECIMALAN izlaz (R5 revizije #248): Val("50,5") na srpskom
+         # locale-u cita 50 -- read-model mora IsNumeric/CDbl putem,
+         # inace korpa i writer upisu razlicite vrednosti.
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 50.5,
          "BrojKutija": 5, "BrojKesa": 10, "TipGotovogProizvoda": "Rinfuz"},
         {"PreradaID": "PRE-GP-X", "BrojPrerade": 81,
          "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 40,
@@ -1758,6 +1761,14 @@ SEED = {
          "PaletaID": "PAL-SLED-G", "BrojPalete": 50, "NetoKg": SLED_KG_G},
         {"StavkaID": "PRS-SLED-K", "PreradaID": "PRE-SLED-K",
          "PaletaID": "PAL-SLED-K", "BrojPalete": 70, "NetoKg": SLED_KG_K},
+    ],
+    # SEF DTO nad GP fakturom (R2 revizije #248): mapper trazi Naziv i
+    # PIB kupca iz tblKupci -- do sada je kupac ziveo samo kao ID na
+    # fakturi. Sejanjem se donorski kupci BRISU (deterministicki fixture,
+    # kapije porede ID-eve pa im redovi ne trebaju).
+    "tblKupci": [
+        {"KupacID": KUPAC, "Naziv": "Test kupac 1", "PIB": "100000001"},
+        {"KupacID": KUPAC2, "Naziv": "Test kupac 2", "PIB": "100000002"},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
@@ -1833,6 +1844,12 @@ SEF_CONFIG = {
     # isti razlog kao ISPLATA_SPEC_PRINT_MODE iznad.
     "KARTICA_PRINT_MODE": "OFF",
     "KARTICA_AMB_PRINT_MODE": "OFF",
+    # GP faktura (R1/R2 revizije #248): print test puni sablon bez
+    # izlaza (OFF), a SEF DTO test trazi seller podatke -- pinovano da
+    # ne zavisi od donora (ista klasa kao DEFAULT_SORTA_VOCA).
+    "FAKTURA_PRINT_MODE": "OFF",
+    "SELLER_NAME": "Test prodavac DOO",
+    "SELLER_PIB": "100000000",
     # Ekran Sledljivost (v6-ui-187): "Lanac (PDF)" postuje ovaj rezim; OFF da
     # klik u testu/smoke-u nad fixture-om ne pravi PDF (ekran OFF prijavljuje
     # porukom, pa dugme ne izgleda mrtvo).

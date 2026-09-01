@@ -28,6 +28,13 @@ Private Const STORNO_DA As String = "Da"
 Private Const STATUS_STORNIRANO As String = "Stornirano"
 Private Const ERR_STORNO_BASE As Long = vbObjectError + 2400
 
+' TEST SEAM (R3 revizije #248, rollback dokaz): namerna greska POSLE
+' cross-table upisa u StornoFaktura -- jedini nacin da test dokaze da
+' TX snapshot pokriva SVE tabele koje storno pise (tblPrerada je GP
+' release). Tvrdo gejtovano: setter radi samo u test rezimu, flag je
+' u produkciji uvek False.
+Private mTestFailPosleRelease As Boolean
+
 ' ============================================================
 ' OTKUP
 ' ============================================================
@@ -905,6 +912,11 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_PRIJEMNICA
     tx.AddTableSnapshot TBL_NOVAC
+    ' R3 (revizija #248): GP grana oslobadja preradu
+    ' (ReleasePreradaFromFaktura pise tblPrerada) -- bez snapshota bi
+    ' pukli rollback vratio fakturu u aktivnu, a prerada bi OSTALA
+    ' slobodna za ponovno fakturisanje = dvostruka prodaja iste robe.
+    tx.AddTableSnapshot TBL_PRERADA
 
     If Not StornoFaktura(fakturaID) Then
         Err.Raise ERR_STORNO_BASE + 5, SRC, _
@@ -944,6 +956,12 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
     RequireUpdateCell TBL_FAKTURE, rowFak, COL_FAK_STATUS, STATUS_STORNIRANO, SRC
 
     StornoFakturaStavkeAndReleasePrijemnice fakturaID
+    ' R3 rollback dokaz: tacka je POSLE oslobadjanja prijemnica/prerada
+    ' a PRE kraja -- pukne li ovde, TX mora da vrati i tblPrerada.
+    If mTestFailPosleRelease Then
+        Err.Raise ERR_STORNO_BASE + 52, SRC, _
+                  "TEST: namerna greska posle release-a (rollback dokaz)"
+    End If
     ResetNovacFakturaLink fakturaID
 
     StornoFaktura = True
@@ -952,6 +970,13 @@ Public Function StornoFaktura(ByVal fakturaID As String) As Boolean
 EH:
     LogAndReraise SRC
 End Function
+
+' Pali/gasi namernu gresku (v. mTestFailPosleRelease) -- van test
+' rezima ne radi nista, pa produkcioni put ne moze da je upali.
+Public Sub StornoTestFailPosleRelease(ByVal fail As Boolean)
+    If Not IsTestMode() Then Exit Sub
+    mTestFailPosleRelease = fail
+End Sub
 
 ' ============================================================
 ' NOVAC
@@ -1691,6 +1716,13 @@ Public Function StornoPrerada_TX(ByVal preradaID As String) As Boolean
     tx.AddTableSnapshot TBL_PRERADA
     tx.AddTableSnapshot TBL_PRERADA_STAVKA
     tx.AddTableSnapshot TBL_PALETA
+    ' R3 (revizija #248): orphan grana fakturisane prerade pise
+    ' tblFakture (MarkFakturaOrphaned) i tblFakturaStavke
+    ' (MarkFakturaStavkeOrphanedGP) -- bez snapshota bi pukli rollback
+    ' vratio preradu/palete a fakturu ostavio orphan = pola storna
+    ' (StornoPrijemnica_TX iste tabele snapshotuje od prvog dana).
+    tx.AddTableSnapshot TBL_FAKTURE
+    tx.AddTableSnapshot TBL_FAKTURA_STAVKE
 
     If Not StornoPrerada(preradaID) Then
         Err.Raise ERR_STORNO_BASE + 45, SRC, _

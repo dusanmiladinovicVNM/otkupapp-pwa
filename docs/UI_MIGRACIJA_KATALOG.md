@@ -5615,3 +5615,45 @@ faktura zatvara i hladnjača-tok, kroz podatkovnu vezu.
   prolaz dele mapu). Za merenje na pravoj svesci isporučen
   **`Diag_SlPerf`** (Alt+F8 → Immediate): ms po read-modelu pod istim
   TableCache uslovima kao ekran — brojke presuđuju, ne nagađanje.
+
+### 25.5 Spoljna revizija #248 (R1–R6): GP faktura kao first-class
+
+Verdikt revizije: core i data-model dobri, ali GP faktura nije bila
+first-class kroz Print/SEF/storno/deployment. Sve tvrdnje proverene u
+kodu — svih pet tehničkih je stajalo. Potvrđene poslovne odluke
+operatera: **1 prerada = ceo prodajni lot** (prodaje se u celosti;
+zrno se ne spušta) i **GP ima isti poreski tretman kao sveža roba**.
+
+- **R1 Print:** `PrintFaktura` GP grana (meke kolone) — GP stavka na
+  papiru nosi **broj prerade + TipGotovogProizvoda** umesto praznih
+  prijemničkih polja; `FillFakturaSablon` dobio `gp` parametar i piše
+  hedere kolona 2/3 na SVAKOM renderu („Broj prerade"/„Proizvod" ↔
+  „Broj prijemnice"/„Klasa") jer je šablon perzistentan.
+- **R2 SEF:** `BuildSEFInvoiceDto` polimorfni izvor stavke — tačno
+  jedan od `PrijemnicaID`/`PreradaID`, fail-closed na nijedan ili oba.
+  GP linija: naziv = TipGotovogProizvoda + „po preradi N", UBL
+  `SellersItemIdentification` = `PreradaID` (stabilni source ID),
+  datum isporuke = **datum prerade**. `clsSEFLine` +preradaID/
+  brojPrerade; porez nepromenjen (ista stopa za sve linije).
+- **R3 Storno atomarnost:** `StornoFaktura_TX` snapshot **+tblPrerada**
+  (release grana je piše — bez snapshota bi pukli rollback ostavio
+  preradu slobodnu = dvostruka prodaja); `StornoPrerada_TX` snapshot
+  **+tblFakture/tblFakturaStavke** (orphan grana). Rollback dokaz kroz
+  test seam `StornoTestFailPosleRelease` (gejtovan `IsTestMode`) —
+  namerna greška posle release-a, tvrdi se da rollback vraća SVE.
+- **R4 Runtime šema:** četiri GP kolone dodate u `EnsureRuntimeSchema`
+  (svaki start) — klijent koji dobije kod self-update-om dobija i
+  kolone; ručni Admin korak više nije preduslov.
+- **R5 Locale:** `CDbl(Val(nz(...)))` u GP read-modelu zamenjen
+  `IsNumeric/CDbl` obrascem — `Val("50,5")` na srpskom locale-u čita
+  50, pa bi grid/korpa pokazali jedno a writer upisao drugo. Fixture
+  `PRE-GP-W1` sada ima decimalan izlaz (50.5).
+- Fixture: `tblKupci` se sada SEJE (2 test kupca sa PIB-om — SEF DTO
+  ih traži), pin `SELLER_NAME`/`SELLER_PIB`/`FAKTURA_PRINT_MODE=OFF`.
+- Test 162 proširen: SEF DTO + UBL tvrdnje, print tvrdnje (GP hederi i
+  stavka + povratak svežih hedera), rollback atomarnost; 4 nove
+  sabotaže (katalog 364). Smoke ciklus revizije: GP faktura → PDF →
+  SEF payload → storno → prerada dostupna → lanac „preradjeno".
+- Odloženo (P1 revizije, svesno): oznaka „mešovit tok" kad potomci
+  jedne zbirne imaju više završnih stanja — stanje je dokumentovano
+  kao „najdalja karika".

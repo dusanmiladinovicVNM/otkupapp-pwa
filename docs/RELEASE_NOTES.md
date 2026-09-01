@@ -6888,6 +6888,26 @@ ijedne izmišljene veze.
   ne prave po redu — na velikoj svesci desetine hiljada COM kreacija);
   za merenje na pravim podacima: `Alt+F8 → Diag_SlPerf`.
 
+### GP faktura je first-class (spoljna revizija, R1–R5)
+
+- **Štampa:** GP faktura na papiru nosi broj prerade i naziv proizvoda
+  („Broj prerade" / „Proizvod" hederi) — više nema praznih prijemničkih
+  polja.
+- **SEF:** GP faktura može na SEF — stavka nosi preradu kao izvor
+  (naziv = tip gotovog proizvoda + broj prerade, stabilni ID u UBL-u,
+  datum isporuke = datum prerade); poreski tretman isti kao sveža roba
+  (potvrđena odluka). Meša-nje izvora u istoj stavci je fail-closed.
+- **Storno je atomaran:** rollback sada vraća SVE tabele koje storno
+  piše (i preradu kod storna fakture, i fakturu kod storna prerade) —
+  dokazano namernom greškom usred storna u testu.
+- **Nadogradnja bez ručnog koraka:** četiri GP kolone se dodaju
+  automatski na startu (runtime self-heal) — klijent koji dobije novu
+  verziju koda ne mora ništa ručno da pokreće.
+- **Decimalne količine bezbedne na srpskom locale-u:** čitanje izlaza
+  prerade više ne ide kroz `Val` (50,5 kg se više ne seče na 50).
+- Potvrđen poslovni model: **jedna prerada = ceo prodajni lot** —
+  prodaje se u celosti, jednom kupcu, na jednoj fakturi.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

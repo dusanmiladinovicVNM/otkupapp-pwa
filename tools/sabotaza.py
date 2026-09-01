@@ -4056,6 +4056,48 @@ SABOTAZE = {
         "T_Fak_GpListaIKorpa",
         "prijemnica ne ulazi u GP korpu",
     ),
+    # ==================== revizija #248 paket R1-R5 (v6-ui-189)
+    # R3: TX snapshot mora da pokrije i tblPrerada -- bez njega pukli
+    # rollback vraca fakturu a preradu ostavlja slobodnu (dvostruka
+    # prodaja iste robe).
+    "storno-gp-rollback-bez-prerade": (
+        "modStorno.bas",
+        "    ' slobodna za ponovno fakturisanje = dvostruka prodaja iste robe.\n"
+        "    tx.AddTableSnapshot TBL_PRERADA\n",
+        "    ' slobodna za ponovno fakturisanje = dvostruka prodaja iste robe.\n"
+        "    ' SABOTAZA: snapshot prerade uklonjen\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "rollback VRACA preradu u fakturisano stanje",
+    ),
+    # R1: GP faktura bez print grane stampa prazna prijemnicka polja
+    # umesto proizvoda i broja prerade.
+    "faktura-gp-print-prazna-polja": (
+        "modFaktura.bas",
+        "            If Len(preID) > 0 Then\n"
+        "                ' GP: dokument = broj prerade, proizvod = TipGotovogProizvoda.\n",
+        "            If False Then   ' SABOTAZA: GP stampa kao sveza\n"
+        "                ' GP: dokument = broj prerade, proizvod = TipGotovogProizvoda.\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "GP heder: dokument je prerada",
+    ),
+    # R2: SEF naziv GP linije mora da nosi broj prerade (lot) -- bez
+    # njega UBL gubi vezu na izvor.
+    "sef-gp-naziv-bez-prerade": (
+        "modSEFMapper.bas",
+        "                opis = opis & \" po preradi \" & brojPrerade\n",
+        "                ' SABOTAZA: broj prerade progutan\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "SEF naziv nosi broj prerade",
+    ),
+    # R5: Val(CStr(...)) na decimalnim kg -- na masini sa decimalnim
+    # zarezom Val("50,5") cita 50, pa grid laze writer.
+    "faktura-gp-val-lokal-mina": (
+        "modFaktura.bas",
+        "        If IsNumeric(pd(i, cNeto)) Then outA(n, 5) = CDbl(pd(i, cNeto))\n",
+        "        outA(n, 5) = CDbl(Val(CStr(nz(pd(i, cNeto), \"0\"))))   ' SABOTAZA: Val lokal mina\n",
+        "T_Fak_GpListaIKorpa",
+        "decimalan izlaz kg prezivi read-model",
+    ),
     # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
     # tudje generacije u jedan dokument sledljivosti.
     "sledljivost-sablon-dvosmislen-broj": (

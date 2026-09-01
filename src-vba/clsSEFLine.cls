@@ -11,6 +11,10 @@ Option Explicit
 
 Public prijemnicaID As String
 Public brojPrijemnice As String
+' GP grana (R2, revizija #248): stavka fakture gotove robe nosi
+' preradu umesto prijemnice -- tacno jedan od parova je popunjen.
+Public preradaID As String
+Public brojPrerade As String
 Public naziv As String
 Public kolicina As Double
 Public cena As Double

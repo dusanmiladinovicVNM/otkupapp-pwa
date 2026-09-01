@@ -2131,9 +2131,13 @@ End Function
 
 ' Popuni FakturaSablon iz prikupljenih podataka. stavke(1..nStavke, 1..5):
 ' 1=BrojPrijemnice 2=Klasa 3=Kolicina 4=Cena 5=Vrednost. Vraca sheet.
+' gp (R1, revizija #248): faktura GOTOVE ROBE -- kolone 1/2 tada nose
+' broj prerade i proizvod, pa se i hederi tih kolona prilagodjavaju.
+' Sablon je PERZISTENTAN, pa se hederi pisu na SVAKOM renderu (i za
+' svezu -- inace bi GP stampa ostavila svoje hedere sledecoj svezoj).
 Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, _
         ByVal kupacNaziv As String, ByVal stavke As Variant, ByVal nStavke As Long, _
-        ByVal ukupno As Double) As Worksheet
+        ByVal ukupno As Double, Optional ByVal gp As Boolean = False) As Worksheet
     On Error GoTo EH
     EnsureFakturaSablon
     Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_FAKTURA_SABLON)
@@ -2144,6 +2148,14 @@ Public Function FillFakturaSablon(ByVal broj As String, ByVal datum As Variant, 
     ws.Range("FakKupac").value = kupacNaziv
 
     Dim startCell As Range: Set startCell = ws.Range("FakStavkaStart")
+
+    If gp Then
+        ws.cells(startCell.row - 1, 2).value = "Broj prerade"
+        ws.cells(startCell.row - 1, 3).value = "Proizvod"
+    Else
+        ws.cells(startCell.row - 1, 2).value = "Broj prijemnice"
+        ws.cells(startCell.row - 1, 3).value = "Klasa"
+    End If
 
     ' Cleanup pre punjenja -- opseg je DINAMICAN, ne fiksnih 80 redova.
     ' (1) `.UnMerge`: red "UKUPNO:" se spaja (tot..tot+4) na poziciji koja zavisi

@@ -1145,6 +1145,15 @@ Public Sub EnsureRuntimeSchema()
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
+
+    ' GP fakturisanje (v6-ui-189, R4 revizije #248): klijent koji dobije
+    ' nov kod self-update-om mora dobiti i kolone -- inace CreateFakturaGP
+    ' pada na RequireColumnIndex cim operater proba novu funkciju.
+    ' Append-only i idempotentno, bas klasa izmena za runtime self-heal.
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURISANO
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
 

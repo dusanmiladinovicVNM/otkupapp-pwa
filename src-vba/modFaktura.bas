@@ -440,9 +440,16 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
                      Trim$(CStr(nz(pd(i, cGod))))
         outA(n, 3) = Trim$(CStr(nz(pd(i, cTip))))
         outA(n, 4) = pd(i, cDat)
-        outA(n, 5) = CDbl(val(nz(pd(i, cNeto), "0")))
-        outA(n, 6) = CDbl(val(nz(pd(i, cKut), "0")))
-        outA(n, 7) = CDbl(val(nz(pd(i, cKes), "0")))
+        ' R5 (spoljna revizija #248): NIKAD Val(CStr(...)) za kolicine --
+        ' nz radi CStr, pa 50.5 na srpskom locale-u postane "50,5" i Val
+        ' procita 50: grid/korpa pokazu jedno, writer upise drugo. Isti
+        ' IsNumeric obrazac kao FakD.
+        outA(n, 5) = 0#
+        outA(n, 6) = 0#
+        outA(n, 7) = 0#
+        If IsNumeric(pd(i, cNeto)) Then outA(n, 5) = CDbl(pd(i, cNeto))
+        If IsNumeric(pd(i, cKut)) Then outA(n, 6) = CDbl(pd(i, cKut))
+        If IsNumeric(pd(i, cKes)) Then outA(n, 7) = CDbl(pd(i, cKes))
         outA(n, 8) = Not fakturisana
         If fakturisana And Len(fid) > 0 And fakBroj.Exists(fid) Then
             outA(n, 9) = CStr(fakBroj(fid))
@@ -877,18 +884,57 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
     colStKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, "PrintFaktura")
     colStCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, "PrintFaktura")
 
+    ' R1 (revizija #248): GP stavka nosi PreradaID/BrojPrerade a
+    ' prijemnicka polja su joj prazna -- bez ove grane bi GP faktura na
+    ' papiru imala prazan "Broj prijemnice" i prazan "Klasa", bez imena
+    ' proizvoda. GP kolone se citaju MEKO (sveska pre nadogradnje nema
+    ' GP kolone ni GP fakture, pa je stari put netaknut).
+    Dim colStPreID As Long, colStBrPre As Long
+    colStPreID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    colStBrPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE)
+
+    ' Tip gotovog proizvoda po PreradaID -- mapa PRE petlje (S5).
+    Dim gpTip As Object: Set gpTip = CreateObject("Scripting.Dictionary")
+    gpTip.CompareMode = vbTextCompare
+    If colStPreID > 0 Then
+        Dim gpD As Variant, cGpId As Long, cGpTip As Long, g As Long
+        gpD = GetTableData(TBL_PRERADA)
+        If IsArray(gpD) Then
+            cGpId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, "PrintFaktura")
+            cGpTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, "PrintFaktura")
+            For g = 1 To UBound(gpD, 1)
+                If Not gpTip.Exists(Trim$(CStr(nz(gpD(g, cGpId))))) Then _
+                    gpTip.Add Trim$(CStr(nz(gpD(g, cGpId)))), Trim$(CStr(nz(gpD(g, cGpTip))))
+            Next g
+        End If
+    End If
+
     Dim stavke() As Variant
     ReDim stavke(1 To UBound(stavkeData, 1), 1 To 5)
     Dim outRow As Long, j As Long
     Dim kolicina As Double, cena As Double
+    Dim preID As String, gpFaktura As Boolean
     For j = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(j, colStFakID))) = fakturaID Then
             outRow = outRow + 1
             kolicina = 0: cena = 0
             If IsNumeric(stavkeData(j, colStKol)) Then kolicina = CDbl(stavkeData(j, colStKol))
             If IsNumeric(stavkeData(j, colStCena)) Then cena = CDbl(stavkeData(j, colStCena))
-            stavke(outRow, 1) = stavkeData(j, colStBrojPrij)
-            stavke(outRow, 2) = stavkeData(j, colStKlasa)
+            preID = ""
+            If colStPreID > 0 Then preID = Trim$(CStr(nz(stavkeData(j, colStPreID))))
+            If Len(preID) > 0 Then
+                ' GP: dokument = broj prerade, proizvod = TipGotovogProizvoda.
+                gpFaktura = True
+                stavke(outRow, 1) = stavkeData(j, colStBrPre)
+                If gpTip.Exists(preID) Then
+                    stavke(outRow, 2) = CStr(gpTip(preID))
+                Else
+                    stavke(outRow, 2) = ""
+                End If
+            Else
+                stavke(outRow, 1) = stavkeData(j, colStBrojPrij)
+                stavke(outRow, 2) = stavkeData(j, colStKlasa)
+            End If
             stavke(outRow, 3) = kolicina
             stavke(outRow, 4) = cena
             stavke(outRow, 5) = kolicina * cena
@@ -905,7 +951,7 @@ Public Sub PrintFaktura(ByVal fakturaID As String)
 
     Dim ws As Worksheet
     Set ws = FillFakturaSablon(CStr(data(fRow, colFakBroj)), data(fRow, colFakDatum), _
-                               kupacNaziv, stavke, outRow, ukupno)
+                               kupacNaziv, stavke, outRow, ukupno, gpFaktura)
     If ws Is Nothing Then Exit Sub
 
     Dim mode As String

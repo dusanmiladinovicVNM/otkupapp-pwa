@@ -145,6 +145,13 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     colCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Cena", SRC)
     colKlasa = RequireColumnIndex(TBL_FAKTURA_STAVKE, "Klasa", SRC)
     colBrojPrijemnice = RequireColumnIndex(TBL_FAKTURA_STAVKE, "BrojPrijemnice", SRC)
+    ' GP grana (R2, revizija #248): stavka moze nositi PRERADU umesto
+    ' prijemnice. Kolone se citaju MEKO -- sveska pre nadogradnje ih
+    ' nema, a tada ni GP faktura ne postoji (stari put netaknut).
+    ' Poreski tretman GP = isti kao sveza roba (potvrdjena odluka).
+    Dim colPreradaID As Long, colBrojPrerade As Long
+    colPreradaID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    colBrojPrerade = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE)
     ' AUD-031: active-line markers. Both exist on tblFakturaStavke (full storno
     ' sets Stornirano="Da" on every line; a storno-ed invoiced prijemnica sets
     ' OsirocenoOd). RequireColumnIndex keeps the tax send path fail-closed.
@@ -154,6 +161,8 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
     Dim line As clsSEFLine
     Dim prijemnicaID As String
     Dim brojPrijemnice As String
+    Dim preradaID As String
+    Dim brojPrerade As String
     Dim vrstaVoca As String
     Dim sortaVoca As String
     Dim opis As String
@@ -182,10 +191,21 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
             prijemnicaID = Trim$(CStr(stavke(i, colPrijemnicaID)))
             brojPrijemnice = Trim$(CStr(stavke(i, colBrojPrijemnice)))
+            preradaID = ""
+            brojPrerade = ""
+            If colPreradaID > 0 Then preradaID = Trim$(CStr(nz(stavke(i, colPreradaID))))
+            If colBrojPrerade > 0 Then brojPrerade = Trim$(CStr(nz(stavke(i, colBrojPrerade))))
 
-            If Len(prijemnicaID) = 0 Then
+            ' Polimorfni izvor stavke, fail-closed: TACNO JEDAN od
+            ' PrijemnicaID / PreradaID (obe prazne = nepotpun red, obe
+            ' pune = kontradiktoran -- nijedan writer to ne pravi).
+            If Len(prijemnicaID) = 0 And Len(preradaID) = 0 Then
                 Err.Raise ERR_SEF_VALIDATION, SRC, _
-                          "PrijemnicaID missing in invoice line for " & fakturaID
+                          "Invoice line has neither PrijemnicaID nor PreradaID for " & fakturaID
+            End If
+            If Len(prijemnicaID) > 0 And Len(preradaID) > 0 Then
+                Err.Raise ERR_SEF_VALIDATION, SRC, _
+                          "Invoice line has both PrijemnicaID and PreradaID for " & fakturaID
             End If
 
             If Not TryParseDouble(CStr(stavke(i, colKolicina)), qty) Or qty <= 0 Then
@@ -198,14 +218,24 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
                           "Invalid line price for faktura " & fakturaID
             End If
 
-            vrstaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "VrstaVoca"))
-            sortaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "SortaVoca"))
+            If Len(preradaID) > 0 Then
+                ' GP: naziv = tip gotovog proizvoda iz prerade (izvor
+                ' istine za "sta je prodato"), broj prerade kao lot.
+                opis = Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, preradaID, COL_PRE_TIP_GP))))
+                If Len(opis) = 0 Then
+                    opis = "Gotov proizvod"
+                End If
+                opis = opis & " po preradi " & brojPrerade
+            Else
+                vrstaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "VrstaVoca"))
+                sortaVoca = CStr(LookupValue(TBL_PRIJEMNICA, "PrijemnicaID", prijemnicaID, "SortaVoca"))
 
-            opis = Trim$(vrstaVoca & " " & sortaVoca)
-            opis = Trim$(opis & " po prijemnici " & brojPrijemnice)
+                opis = Trim$(vrstaVoca & " " & sortaVoca)
+                opis = Trim$(opis & " po prijemnici " & brojPrijemnice)
 
-            If Len(Trim$(opis)) = 0 Then
-                opis = "Roba po prijemnici " & brojPrijemnice
+                If Len(Trim$(opis)) = 0 Then
+                    opis = "Roba po prijemnici " & brojPrijemnice
+                End If
             End If
 
             ' AUD-031b: quantity and unit price carry more precision than money.
@@ -224,6 +254,8 @@ Public Function BuildSEFInvoiceDto(ByVal fakturaID As String) As clsSEFInvoiceSn
 
             line.prijemnicaID = prijemnicaID
             line.brojPrijemnice = brojPrijemnice
+            line.preradaID = preradaID
+            line.brojPrerade = brojPrerade
             line.naziv = opis
             line.kolicina = qty
             line.cena = price
@@ -307,6 +339,8 @@ Public Function SerializeSEFRequest(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         sb = sb & "{"
         sb = sb & """PrijemnicaID"":" & JsonString(ln.prijemnicaID) & ","
         sb = sb & """BrojPrijemnice"":" & JsonString(ln.brojPrijemnice) & ","
+        sb = sb & """PreradaID"":" & JsonString(ln.preradaID) & ","
+        sb = sb & """BrojPrerade"":" & JsonString(ln.brojPrerade) & ","
         sb = sb & """Naziv"":" & JsonString(ln.naziv) & ","
         sb = sb & """Kolicina"":" & JsonNumber(ln.kolicina) & ","
         sb = sb & """Cena"":" & JsonNumber(ln.cena) & ","
@@ -597,10 +631,17 @@ Public Function SerializeUBLInvoice(ByVal dto As clsSEFInvoiceSnapshot) As Strin
         xml = xml & "    <cbc:InvoicedQuantity unitCode=""KGM"">" & XmlQuantity(ln.kolicina) & "</cbc:InvoicedQuantity>" & vbCrLf
         xml = xml & "    <cbc:LineExtensionAmount currencyID=""" & XmlEscape(dto.CurrencyCode) & """>" & XmlAmount(ln.neto) & "</cbc:LineExtensionAmount>" & vbCrLf
         
+        ' GP stavka (R2): stabilni source identity je PreradaID -- isti
+        ' princip kao PrijemnicaID za svezu (tacno jedan je popunjen,
+        ' mapper je to vec fail-closed proverio).
+        Dim srcID As String
+        srcID = ln.prijemnicaID
+        If Len(ln.preradaID) > 0 Then srcID = ln.preradaID
+
         xml = xml & "    <cac:Item>" & vbCrLf
         xml = xml & "      <cbc:Name>" & XmlEscape(ln.naziv) & "</cbc:Name>" & vbCrLf
         xml = xml & "      <cac:SellersItemIdentification>" & vbCrLf
-        xml = xml & "        <cbc:ID>" & XmlEscape(ln.prijemnicaID) & "</cbc:ID>" & vbCrLf
+        xml = xml & "        <cbc:ID>" & XmlEscape(srcID) & "</cbc:ID>" & vbCrLf
         xml = xml & "      </cac:SellersItemIdentification>" & vbCrLf
         xml = xml & "      <cac:ClassifiedTaxCategory>" & vbCrLf
         xml = xml & "        <cbc:ID>" & XmlEscape(taxCategoryID) & "</cbc:ID>" & vbCrLf
@@ -746,6 +787,12 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
     RequireColumnIndex TBL_PRIJEMNICA, "PrijemnicaID", SRC
     RequireColumnIndex TBL_PRIJEMNICA, "Datum", SRC
 
+    ' GP grana (R2): datum isporuke GP stavke je DATUM PRERADE -- isti
+    ' princip "datum dokumenta izvora" kao prijemnica. Meko: sveska pre
+    ' nadogradnje nema kolonu ni GP fakture.
+    Dim colStPreradaID As Long
+    colStPreradaID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+
     Dim latestDeliveryDate As Date
     latestDeliveryDate = 0
 
@@ -756,6 +803,11 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
 
             Dim prijemnicaID As String
             prijemnicaID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
+
+            Dim gpPreradaID As String
+            gpPreradaID = ""
+            If colStPreradaID > 0 Then _
+                gpPreradaID = Trim$(CStr(nz(stavkeData(i, colStPreradaID))))
 
             If Len(prijemnicaID) > 0 Then
 
@@ -769,6 +821,20 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
                 Else
                     Err.Raise ERR_SEF_VALIDATION, SRC, _
                               "Prijemnica date missing or invalid. PrijemnicaID=" & prijemnicaID
+                End If
+
+            ElseIf Len(gpPreradaID) > 0 Then
+
+                Dim vp As Variant
+                vp = LookupValue(TBL_PRERADA, COL_PRE_ID, gpPreradaID, COL_PRE_DATUM)
+
+                If Not IsEmpty(vp) And Not IsNull(vp) And IsDate(vp) Then
+                    If CDate(vp) > latestDeliveryDate Then
+                        latestDeliveryDate = CDate(vp)
+                    End If
+                Else
+                    Err.Raise ERR_SEF_VALIDATION, SRC, _
+                              "Prerada date missing or invalid. PreradaID=" & gpPreradaID
                 End If
 
             End If
