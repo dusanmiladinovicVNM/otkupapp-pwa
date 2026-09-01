@@ -6702,7 +6702,7 @@ End Sub
 Private Sub T_Fak_GpListaIKorpa()
     Dim gp As Variant, i As Long
     Dim rW1 As Long, rG As Long, imaX As Boolean
-    Dim rWL As Long, rDup As Long
+    Dim rWL As Long, rDup As Long, rWT As Long, rSB As Long
     gp = modFaktura.GetGPZaFakturisanjeForGrid()
     AssertEq IsArray(gp), True, "GP read-model nad fixture-om postoji"
     For i = 1 To UBound(gp, 1)
@@ -6711,6 +6711,8 @@ Private Sub T_Fak_GpListaIKorpa()
             Case "PRE-SLED-G": rG = i
             Case "PRE-GP-X": imaX = True
             Case "PRE-GP-WL": rWL = i
+            Case "PRE-GP-WT": rWT = i
+            Case "PRE-GP-SB": rSB = i
         End Select
         If CStr(gp(i, 2)) = "131/2026" Then rDup = i
     Next i
@@ -6734,6 +6736,12 @@ Private Sub T_Fak_GpListaIKorpa()
     ' nad cim da radi (isti guard kao prijemnice/fakture).
     AssertEq (rDup > 0), True, "vozilo: dupli id red je u listi"
     AssertEq CStr(gp(rDup, 1)), "", "dupli PreradaID prazni identitet"
+    ' Krug 4 P1: bez imena proizvoda nije dostupna -- writer bi je
+    ' ionako odbio, UI ne sme da kaze "moze" pa klik "ne moze".
+    AssertEq CBool(gp(rWT, 8)), False, "prazan tip proizvoda -> nije dostupna"
+    ' Krug 4 (Primer 2): stavka bez markera = prodajna veza postoji --
+    ' grid i writer je vide preko total stavki.
+    AssertEq CBool(gp(rSB, 8)), False, "stavka bez markera -> nije dostupna"
 
     ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
     modScrFakture.Scr_FkKorpaTestReset
@@ -6796,6 +6804,18 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     s.Add Array("PRE-SLED-G", 100#)
     AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
              "vec fakturisana prerada se ne fakturise ponovo"
+    ' Krug 4 P1: writer je samostalna granica -- kupac mora postojati
+    ' u tblKupci (GP nema prijemnicu za implicitnu proveru vlasnistva).
+    Set s = New Collection
+    s.Add Array("PRE-GP-W1", 100#)
+    AssertEq modFaktura.CreateFakturaGP_TX("KUP-NEMA-OVAKVOG", s), "", _
+             "nepostojeci kupac se ne fakturise"
+    ' Krug 4 (Primer 2): stavka bez markera = aktivna prodajna veza --
+    ' prerada NIJE dostupna za novu fakturu.
+    Set s = New Collection
+    s.Add Array("PRE-GP-SB", 100#)
+    AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
+             "prerada sa aktivnom stavkom bez markera se ne fakturise"
     ' Marker bez veze (WM): Fakturisano=Da uz prazan FakturaID -- kapija
     ' "vec fakturisana" je JEDINA brana (veze i stavke nema).
     Set s = New Collection
@@ -12272,6 +12292,7 @@ Private Sub T_Sled_GpLanacIStanja()
     ' validno fakturisana G prerada NIJE.
     Dim imaK As Boolean, imaG As Boolean
     Dim imaB2 As Boolean, imaWL As Boolean
+    Dim ima2F As Boolean, imaSB As Boolean
     For i = 1 To UBound(problemi, 1)
         If CStr(problemi(i, 1)) = SLEDP_FAK_NEISPRAVNA _
            And CStr(problemi(i, 7)) = SLED_DOK_PRERADA Then
@@ -12279,6 +12300,8 @@ Private Sub T_Sled_GpLanacIStanja()
             If CStr(problemi(i, 8)) = "PRE-SLED-G" Then imaG = True
             If CStr(problemi(i, 8)) = "PRE-GP-B2" Then imaB2 = True
             If CStr(problemi(i, 8)) = "PRE-GP-WL" Then imaWL = True
+            If CStr(problemi(i, 8)) = "PRE-GP-2F" Then ima2F = True
+            If CStr(problemi(i, 8)) = "PRE-GP-SB" Then imaSB = True
         End If
     Next i
     AssertEq imaK, True, "problemi nose kontradiktornu preradu (DokTip Prerada)"
@@ -12287,6 +12310,11 @@ Private Sub T_Sled_GpLanacIStanja()
     ' neusaglasen -- "prodato" se dokazuje podatkom, ne markerom.
     AssertEq imaB2, True, "prerada bez stavke fakture je problem"
     AssertEq imaWL, True, "zaostao FakturaID bez Fakturisano=Da je problem"
+    ' Krug 4: par sam nije dovoljan -- total stavki prerade mora biti 1
+    ' (Primer 1: ista prerada na dve fakture), a stavka bez markera je
+    ' isto neusaglasenost (Primer 2: writer je vidi, lanac mora isto).
+    AssertEq ima2F, True, "prerada sa stavkama na dve fakture je problem"
+    AssertEq imaSB, True, "aktivna stavka bez markera na preradi je problem"
 
     ' --- SMER NAZAD na ekranu: broj GP fakture i broj palete nalaze
     ' otkupni blok G lanca; grid kolone 11-13 nose GP karike.

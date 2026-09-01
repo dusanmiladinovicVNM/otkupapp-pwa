@@ -4491,10 +4491,15 @@ Private Sub SledGpMape(ByRef palPoBroju As Object, ByRef palBrojevi As Object, _
     End If
 End Sub
 
-' Kanonski GP contract, dokazna strana (B2 revizije #248): "prodato GP"
-' se NE tvrdi iz samog markera na preradi -- faktura mora STVARNO da
-' sadrzi tu robu. Mapa "preradaID|fakturaID" -> broj AKTIVNIH stavki
-' (nije stornirana, nije osirocena -- isti filter kao SEF mapper).
+' Kanonski GP contract, dokazna strana (B2 revizije #248; krug 4
+' kompletiran): "prodato GP" se NE tvrdi iz samog markera na preradi
+' -- faktura mora STVARNO da sadrzi tu robu, i to SAMO ONA. Mapa nosi
+' dva kljuca po aktivnoj stavci (nije stornirana, nije osirocena --
+' isti filter kao SEF mapper):
+'   "preradaID|fakturaID" -> broj aktivnih stavki tog para
+'   "#T|preradaID"        -> broj aktivnih stavki prerade UKUPNO
+' Total kljuc zatvara dve rupe koje par sam ne vidi: ista prerada na
+' DVE fakture (dvostruka prodaja) i stavka bez markera na preradi.
 ' Kolone meke: sveska pre nadogradnje nema GP stavke -> prazna mapa.
 Private Function SledGpStavkeMapa() As Object
     Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
@@ -4522,6 +4527,11 @@ Private Function SledGpStavkeMapa() As Object
             End If
             If colOs > 0 Then
                 If Len(Trim$(SledTxt(sd(i, colOs)))) > 0 Then GoTo Dalje
+            End If
+            If d.Exists("#T|" & k) Then
+                d("#T|" & k) = CLng(d("#T|" & k)) + 1
+            Else
+                d.Add "#T|" & k, 1
             End If
             k = k & "|" & Trim$(SledTxt(sd(i, colFak)))
             If d.Exists(k) Then
@@ -5078,7 +5088,12 @@ PreskociBroj:
                             If CStr(preF(0)) = "Da" Then
                                 If Len(gpFid) > 0 And fakMapa.Exists(gpFid) _
                                    And gpStavke.Exists(CStr(prK) & "|" & gpFid) Then
-                                    If CLng(gpStavke(CStr(prK) & "|" & gpFid)) = 1 Then
+                                    ' Krug 4: par mora biti JEDINA aktivna
+                                    ' stavka prerade UOPSTE (total = 1) --
+                                    ' ista prerada na drugoj fakturi je
+                                    ' dvostruka prodaja, ne "prodato GP".
+                                    If CLng(gpStavke(CStr(prK) & "|" & gpFid)) = 1 _
+                                       And CLng(gpStavke("#T|" & CStr(prK))) = 1 Then
                                         gpBr = Trim$(CStr(fakMapa(gpFid)))
                                         gpFakD(gpBr) = True
                                         gpFakPrikaz = gpBr
@@ -5108,6 +5123,11 @@ PreskociBroj:
                                 ' nudi ponovo; lanac je prijavljuje).
                                 gpLose = True
                                 gpRefs = gpRefs & "|" & gpFid
+                            ElseIf gpStavke.Exists("#T|" & CStr(prK)) Then
+                                ' Krug 4 (Primer 2): aktivna stavka fakture
+                                ' BEZ markera na preradi -- writer vidi
+                                ' prodajnu vezu, pa je mora videti i lanac.
+                                gpLose = True
                             End If
                         Next prK
                         ' Kolona 29 = SAMO prerada (B1): faktura i kupac su
@@ -5586,6 +5606,17 @@ SledeciPrj:
                                        CStr(CLng(gpStavkeP(gKey))) & _
                                        " aktivnih stavki ove prerade (mora tacno jedna)", _
                                        SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                    ElseIf CLng(gpStavkeP("#T|" & SledTxt(preData(i, cGId)))) <> 1 Then
+                        ' Krug 4 (Primer 1): par je uredan, ali ista prerada
+                        ' ima aktivnu stavku i na DRUGOJ fakturi -- podaci
+                        ' tvrde dvostruku prodaju iste robe.
+                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                       SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                       "", SledDbl(preData(i, cGNeto)), _
+                                       "prerada ima aktivne stavke na vise faktura (" & _
+                                       CStr(CLng(gpStavkeP("#T|" & SledTxt(preData(i, cGId))))) & _
+                                       " ukupno) -- dvostruka prodaja", _
+                                       SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
                     End If
                 ElseIf Len(gFid) > 0 Then
                     ' Stale veza (B2): Fakturisano=Ne uz FakturaID -- writer
@@ -5594,6 +5625,15 @@ SledeciPrj:
                                    SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
                                    "", SledDbl(preData(i, cGNeto)), _
                                    "zaostao FakturaID " & gFid & " bez Fakturisano=Da (prerada)", _
+                                   SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                ElseIf gpStavkeP.Exists("#T|" & SledTxt(preData(i, cGId))) Then
+                    ' Krug 4 (Primer 2): aktivna stavka fakture BEZ markera
+                    ' na preradi -- writer vidi prodajnu vezu (ne nudi je
+                    ' ponovo), pa je i lista problema mora prijaviti.
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                   SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                   "", SledDbl(preData(i, cGNeto)), _
+                                   "aktivna stavka fakture bez markera na preradi", _
                                    SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
                 End If
 SledeciPre:

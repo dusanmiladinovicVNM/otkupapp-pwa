@@ -6926,6 +6926,12 @@ ijedne izmišljene veze.
 - Dupli ID prerade (korupcija) više ne izgleda kao normalan red u
   listi; storno svežih faktura radi i na starim sveskama bez tabele
   prerada.
+- **Dvostruka prodaja se vidi:** ista prerada sa stavkama na dve
+  fakture, kao i stavka fakture bez markera na preradi, prijavljuju se
+  kao „faktura neusaglasena" — „prodato GP" važi samo kad je stavka
+  te fakture JEDINA aktivna stavka te prerade.
+- Prerada bez upisanog tipa proizvoda se u listi više ne nudi kao
+  dostupna; writer proverava i da kupac postoji u šifarniku.
 
 ### Verifikacija
 

@@ -1164,6 +1164,12 @@ SEED = {
         # pokazuje -- marker bez stavke = "faktura neusaglasena" (B2).
         {"FakturaID": "FAK-SLED-GP2", "BrojFakture": "10/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC2, "Iznos": 4000, "Status": "Neplaceno"},
+        # Krug 4: par aktivnih faktura za contract vozila 2F (ista
+        # prerada na obe = dvostruka prodaja) i SB (stavka bez markera).
+        {"FakturaID": "FAK-SLED-GP3", "BrojFakture": "11/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 3000, "Status": "Neplaceno"},
+        {"FakturaID": "FAK-SLED-GP4", "BrojFakture": "12/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 2000, "Status": "Neplaceno"},
     ],
     # Prve GP stavke fakture u fixture-u: podatkovni DOKAZ da faktura
     # 9/2026 STVARNO sadrzi preradu G (PreradaID/BrojPrerade su
@@ -1174,6 +1180,23 @@ SEED = {
          "PrijemnicaID": "", "Kolicina": SLED_GP_IZLAZ_KG, "Cena": SLED_GP_CENA,
          "Klasa": "", "BrojPrijemnice": "",
          "PreradaID": "PRE-SLED-G", "BrojPrerade": "51/2026"},
+        # Krug 4, Primer 1: ISTA prerada (2F) na DVE aktivne fakture --
+        # par 2F|GP3 je uredan (marker pokazuje na GP3), ali total=2 =
+        # dvostruka prodaja -> "faktura neusaglasena".
+        {"StavkaID": "FST-GP-2F-A", "FakturaID": "FAK-SLED-GP3",
+         "PrijemnicaID": "", "Kolicina": 10, "Cena": 150,
+         "Klasa": "", "BrojPrijemnice": "",
+         "PreradaID": "PRE-GP-2F", "BrojPrerade": "161/2026"},
+        {"StavkaID": "FST-GP-2F-B", "FakturaID": "FAK-SLED-GP4",
+         "PrijemnicaID": "", "Kolicina": 10, "Cena": 150,
+         "Klasa": "", "BrojPrijemnice": "",
+         "PreradaID": "PRE-GP-2F", "BrojPrerade": "161/2026"},
+        # Krug 4, Primer 2: aktivna stavka BEZ markera na preradi (SB) --
+        # writer je ne nudi ponovo, a lista problema je prijavljuje.
+        {"StavkaID": "FST-GP-SB", "FakturaID": "FAK-SLED-GP3",
+         "PrijemnicaID": "", "Kolicina": 5, "Cena": 150,
+         "Klasa": "", "BrojPrijemnice": "",
+         "PreradaID": "PRE-GP-SB", "BrojPrerade": "171/2026"},
     ],
     # STAVKE IZVODA -- devet redova u TRI izvoda, svaki sa svojim razlogom:
     #   BIM-FIX-1   jak kljuc preko FAKTURE (poziv na broj = broj fakture 2/2026)
@@ -1800,6 +1823,15 @@ SEED = {
         {"PreradaID": "PRE-GP-DUP", "BrojPrerade": 141,
          "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 10,
          "BrojKutija": 1, "BrojKesa": 2, "TipGotovogProizvoda": "Rinfuz"},
+        # Krug 4 contract vozila (v. tblFakturaStavke): 2F = par uredan
+        # ali total=2 (dvostruka prodaja); SB = stavka bez markera.
+        {"PreradaID": "PRE-GP-2F", "BrojPrerade": 161,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 20,
+         "BrojKutija": 2, "BrojKesa": 4, "TipGotovogProizvoda": "Rinfuz",
+         "Fakturisano": "Da", "FakturaID": "FAK-SLED-GP3"},
+        {"PreradaID": "PRE-GP-SB", "BrojPrerade": 171,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 5,
+         "BrojKutija": 1, "BrojKesa": 1, "TipGotovogProizvoda": "Rinfuz"},
     ],
     # Prve stavke prerade u fixture-u: kanonski join je PaletaID (kao
     # modIntegritet D2), BrojPalete je samo labela.

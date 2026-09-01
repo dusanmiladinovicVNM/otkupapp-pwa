@@ -5696,3 +5696,28 @@ posle nje nema proizvodnih karika.
 - Fixture: `FST-SLED-GP` stavka (dokaz za G lanac), `FAK-SLED-GP2`
   (aktivna bez stavke), vozila `PRE-GP-B2`/`PRE-GP-WL`/`PRE-GP-WT`/
   `PRE-GP-DUP×2`; +6 sabotaža (katalog 370).
+
+### 25.7 Spoljna revizija #248, krug 4: totalCount — contract kompletan
+
+Krug 3 je proveravao samo PAR (`preradaID|fakturaID`), što ne vidi
+dve rupe: **istu preradu sa aktivnom stavkom na DRUGOJ fakturi**
+(dvostruka prodaja koju bi lanac prikazao kao uredno „prodato GP") i
+**stavku bez markera** (writer vidi prodajnu vezu i odbija novu
+prodaju, a Sledljivost je tvrdila da veze nema). Grain potvrđen još
+jednom: 1 prerada = cela se prodaje jednom kupcu na jednoj fakturi.
+
+- `SledGpStavkeMapa` sada nosi i **`#T|preradaID` total ključ**;
+  validno „prodato GP" = pair(P|F)=1 **AND total(P)=1**. Lanac i
+  problemi dele mapu; problemi dobili grane „stavke na više faktura
+  (dvostruka prodaja)" i „aktivna stavka bez markera na preradi";
+  lanac obe klase vodi u „faktura neusaglasena".
+- Writer/grid su total već pokrivali (`GPAktivneStavkePoPreradi` je
+  po preradi) — dokazna strana je sada ista.
+- P1: grid `Dostupna` traži i neprazan `TipGotovogProizvoda` (UI ne
+  sme da kaže „može" pa writer „ne može"); P1: writer proverava da
+  kupac postoji tačno jednom u `tblKupci` (kapija 1751 — GP nema
+  prijemnicu za implicitnu proveru vlasništva).
+- Vozila: `PRE-GP-2F` + stavke na `FAK-SLED-GP3/GP4` (par uredan,
+  total=2), `PRE-GP-SB` + stavka bez markera. +4 sabotaže (katalog
+  374; peta — „total ključ mrtav" — uklonjena jer joj je tvrdnja
+  subsumirana postojećom sabotažom: checker `deli tvrdnju` odbio).

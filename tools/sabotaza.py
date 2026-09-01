@@ -4160,6 +4160,61 @@ SABOTAZE = {
         "T_Fak_GpListaIKorpa",
         "dupli PreradaID prazni identitet",
     ),
+    # ==================== revizija #248 krug 4: totalCount contract
+    # Par (P|F) sam ne vidi istu preradu na DRUGOJ fakturi -- total
+    # kljuc je jedina brana dvostruke prodaje u dokazu.
+    "sledljivost-gp-vise-faktura-cuti": (
+        "modIzvestaj.bas",
+        "                    ElseIf CLng(gpStavkeP(\"#T|\" & SledTxt(preData(i, cGId)))) <> 1 Then\n"
+        "                        ' Krug 4 (Primer 1): par je uredan, ali ista prerada\n"
+        "                        ' ima aktivnu stavku i na DRUGOJ fakturi -- podaci\n"
+        "                        ' tvrde dvostruku prodaju iste robe.\n"
+        "                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _\n",
+        "                    ElseIf CLng(gpStavkeP(\"#T|\" & SledTxt(preData(i, cGId)))) <> 1 Then\n"
+        "                        ' SABOTAZA: dvostruka prodaja cuti\n"
+        "                        Dim gpMrtvo2 As Variant: gpMrtvo2 = Array(0, preData(i, cGDat), _\n",
+        "T_Sled_GpLanacIStanja",
+        "prerada sa stavkama na dve fakture je problem",
+    ),
+    "sledljivost-gp-stavka-bez-markera-cuti": (
+        "modIzvestaj.bas",
+        "                ElseIf gpStavkeP.Exists(\"#T|\" & SledTxt(preData(i, cGId))) Then\n"
+        "                    ' Krug 4 (Primer 2): aktivna stavka fakture BEZ markera\n"
+        "                    ' na preradi -- writer vidi prodajnu vezu (ne nudi je\n"
+        "                    ' ponovo), pa je i lista problema mora prijaviti.\n"
+        "                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _\n",
+        "                ElseIf gpStavkeP.Exists(\"#T|\" & SledTxt(preData(i, cGId))) Then\n"
+        "                    ' SABOTAZA: stavka bez markera cuti\n"
+        "                    Dim gpMrtvo3 As Variant: gpMrtvo3 = Array(0, preData(i, cGDat), _\n",
+        "T_Sled_GpLanacIStanja",
+        "aktivna stavka bez markera na preradi je problem",
+    ),
+    # P1: UI ne sme da nudi ono sto writer odbija.
+    "faktura-gp-bez-tipa-dostupna": (
+        "modFaktura.bas",
+        "                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId))))) _\n"
+        "                     And Len(Trim$(CStr(nz(pd(i, cTip))))) > 0\n",
+        "                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId)))))   ' SABOTAZA: bezimeni dostupan\n",
+        "T_Fak_GpListaIKorpa",
+        "prazan tip proizvoda -> nije dostupna",
+    ),
+    # P1: writer kao samostalna granica -- kupac mora postojati.
+    "faktura-gp-kupac-ne-proverava-se": (
+        "modFaktura.bas",
+        "    If kupRows Is Nothing Then\n"
+        "        Err.Raise vbObjectError + 1751, SRC, _\n"
+        "                  \"Kupac ne postoji u tblKupci: \" & kupacID\n"
+        "    ElseIf kupRows.count <> 1 Then\n"
+        "        Err.Raise vbObjectError + 1751, SRC, _\n"
+        "                  \"Kupac ne postoji jednoznacno u tblKupci: \" & kupacID & _\n"
+        "                  \"; Count=\" & CStr(kupRows.count)\n"
+        "    End If\n",
+        "    If False Then   ' SABOTAZA: kupac se ne proverava\n"
+        "        Err.Raise vbObjectError + 1751, SRC, \"x\"\n"
+        "    End If\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "nepostojeci kupac se ne fakturise",
+    ),
     # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
     # tudje generacije u jedan dokument sledljivosti.
     "sledljivost-sablon-dvosmislen-broj": (

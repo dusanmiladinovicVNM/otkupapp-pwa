@@ -459,9 +459,12 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
         If IsNumeric(pd(i, cKes)) Then outA(n, 7) = CDbl(pd(i, cKes))
         ' B2 kanonski contract: dostupna = nefakturisana AND bez veze
         ' na fakturu AND bez aktivne stavke -- stale FakturaID ili
-        ' zaostala stavka NE sme ponovo u prodaju.
+        ' zaostala stavka NE sme ponovo u prodaju. Krug 4 P1: i bez
+        ' imena proizvoda nije dostupna -- writer bi je ionako odbio,
+        ' pa UI ne sme da kaze "moze" a finalni klik "ne moze".
         outA(n, 8) = (Not fakturisana) And Len(fid) = 0 _
-                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId)))))
+                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId))))) _
+                     And Len(Trim$(CStr(nz(pd(i, cTip))))) > 0
         If fakturisana And Len(fid) > 0 And fakBroj.Exists(fid) Then
             outA(n, 9) = CStr(fakBroj(fid))
         Else
@@ -615,6 +618,19 @@ Private Function CreateFakturaGP(ByVal kupacID As String, _
 
     If Trim$(kupacID) = "" Then
         Err.Raise vbObjectError + 1731, SRC, "KupacID je obavezan."
+    End If
+    ' Krug 4 P1: writer je samostalna granica -- GP nema prijemnicu
+    ' cijim bi se vlasnistvom kupac implicitno proverio, pa se kupac
+    ' proverava OVDE: mora postojati tacno jednom u tblKupci.
+    Dim kupRows As Collection
+    Set kupRows = FindRows(TBL_KUPCI, COL_KUP_ID, Trim$(kupacID))
+    If kupRows Is Nothing Then
+        Err.Raise vbObjectError + 1751, SRC, _
+                  "Kupac ne postoji u tblKupci: " & kupacID
+    ElseIf kupRows.count <> 1 Then
+        Err.Raise vbObjectError + 1751, SRC, _
+                  "Kupac ne postoji jednoznacno u tblKupci: " & kupacID & _
+                  "; Count=" & CStr(kupRows.count)
     End If
     If stavke Is Nothing Then
         Err.Raise vbObjectError + 1732, SRC, "Stavke nisu prosledjene."
