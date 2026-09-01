@@ -1530,6 +1530,10 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDS_PROBLEM", "PROBLEM"
     UpsertRow lo, existing, "OTKUI_HDS_NOSILAC", "NOSILAC"
     UpsertRow lo, existing, "OTKUI_HDS_DETALJ", "DETALJ"
+    ' GP grana lanca (v6-ui-189): nastavak posle prijemnice.
+    UpsertRow lo, existing, "OTKUI_HDS_PALETE", "PALETE"
+    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "PRERADA / GP"
+    UpsertRow lo, existing, "OTKUI_HDS_STANJE", "STANJE"
     UpsertRow lo, existing, "OTKUI_BTN_SL_LANACPDF", "Lanac (PDF)"
     UpsertRow lo, existing, "OTKUI_KPI_SL_POTPUN", "Potpuni lanci"
     UpsertRow lo, existing, "OTKUI_KPI_SL_PROBLEMI", "Nepotpune karike"
@@ -1593,6 +1597,16 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SLPDF_DATSTAMPE", "Datum " & ChrW(353) & "tampe:"
     UpsertRow lo, existing, "OTKUI_SLPDF_POTPIS", "Potpis:"
     UpsertRow lo, existing, "OTKUI_SLPDF_PECAT", "Pe" & ChrW(269) & "at:"
+    ' --- Fakturisanje gotove robe (v6-ui-189, GP grana) ---
+    UpsertRow lo, existing, "OTKUI_SEG_FK_GP", "Gotova roba"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_GP", "Gotova roba " & ChrW(8212) & " prerade za fakturisanje"
+    UpsertRow lo, existing, "OTKUI_HDF_TIPGP", "PROIZVOD"
+    UpsertRow lo, existing, "OTKUI_HDF_KUTIJE", "KUTIJE"
+    UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE"
+    UpsertRow lo, existing, "OTKUI_HDF_PREID", "PRE ID"
+    UpsertRow lo, existing, "OTKUI_FLD_FK_CENAGP", "Cena gotove robe (RSD/kg)"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
     UpsertRow lo, existing, "OTKUI_SL_META_NEJASNA", "Zbirna " & ChrW(8212) & " nejasan vlasnik"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DVOSMISLENA", ChrW(10007) & " Broj zbirne dele razli" & ChrW(269) & "iti vlasnici " & ChrW(8212) & " sledljivost po tom broju bi me" & ChrW(353) & "ala tokove (v. Nepotpune)"
