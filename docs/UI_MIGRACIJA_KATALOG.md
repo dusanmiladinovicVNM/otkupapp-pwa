@@ -5590,3 +5590,28 @@ faktura zatvara i hladnjača-tok, kroz podatkovnu vezu.
 - **Ručna kapija operatera:** Compile + smoke checklista u PR-u
   (lanac kolone i stanja na pravim podacima, GP lista, izrada i storno
   GP fakture, mešanje korpe).
+
+### 25.4 Smoke GP-1: nalazi operatera (ispravke u istom PR-u)
+
+- **Prekidači lista Fakturisanja imenuju ROBU, ne proces:** „Za
+  fakturisanje" uz „Gotova roba" je bio nespojiv par — prvi je
+  preimenovan u **„Sveža roba"** (`OTKUI_SEG_FK_ZAFAKT`; ključ i lista
+  ostaju `ZAFAKT`).
+- **Hederi GP kolona u operaterovom rečniku:** „PAL. SVEŽE ROBE" /
+  „PAL. GOTOVOG PROIZV." umesto internih „PALETE" / „PRERADA / GP"
+  (prerada = paleta gotovog proizvoda).
+- **Kolone LANAC prate tok robe:** posle prijemnice idu dve paletne
+  kolone, pa faktura i kupac; oznaka pretposlednja, **stanje
+  poslednje** (zaključak reda). Grid raspored: Datum | Br. dok |
+  Kooperant | Kg | Otpremnica | Zbirna | Prijem | Pal. sveže | Pal.
+  gotovog | Faktura | Kupac | Oznaka | Stanje | [ref]. SRC kolone
+  reporta (1–30) se NE menjaju — samo mrežni raspored (`UpisiRed`).
+- **„Prvi put laguje" (lag prvog otvaranja):** GP sekcija lanca je
+  pravila **dva `CreateObject("Scripting.Dictionary")` po redu
+  otkupa** — na velikoj svesci desetine hiljada COM kreacija u jednom
+  punjenju snimka (kasniji ulasci su keš hit, zato „na dalje je OK").
+  Rečnici se sada prave jednom pre petlje i prazne `RemoveAll`-om po
+  redu; `SledFakMapa` se u problemima gradi jednom (prijemnički i GP
+  prolaz dele mapu). Za merenje na pravoj svesci isporučen
+  **`Diag_SlPerf`** (Alt+F8 → Immediate): ms po read-modelu pod istim
+  TableCache uslovima kao ekran — brojke presuđuju, ne nagađanje.

@@ -4737,6 +4737,14 @@ PreskociBroj:
     Dim prikazPrij As String, prikazFak As String
     Dim kg1 As Boolean, kg2 As Boolean
     Dim stanje As String, svezeFak As Boolean
+    ' GP recnici se prave JEDNOM, po redu se samo prazne (RemoveAll):
+    ' CreateObject po redu otkupa je na velikoj svesci bio desetine
+    ' hiljada COM kreacija -- glavni deo laga prvog otvaranja (GP-1).
+    Dim preD As Object, gpFakD As Object
+    Set preD = CreateObject("Scripting.Dictionary")
+    preD.CompareMode = vbTextCompare
+    Set gpFakD = CreateObject("Scripting.Dictionary")
+    gpFakD.CompareMode = vbTextCompare
 
     For i = 1 To UBound(otkupData, 1)
         If IsDate(otkupData(i, cOtkDat)) Then
@@ -4938,16 +4946,14 @@ PreskociBroj:
                     ' (nema vozaca), dvosmislen broj bi sabrao tudje
                     ' tokove (fail-closed kao mete, krug 8 R3).
                     If nVl = 1 Then
-                        Dim palD As Object, preD As Object, gpFakD As Object
+                        Dim palD As Object
                         Dim gpRefs As String, gpLose As Boolean
                         Dim pk As Variant, prK As Variant, preF As Variant
                         Dim palPrikaz As String, prePrikaz As String
                         Dim gpFakPrikaz As String, gpBr As String
                         Dim nPalR As Long
-                        Set preD = CreateObject("Scripting.Dictionary")
-                        preD.CompareMode = vbTextCompare
-                        Set gpFakD = CreateObject("Scripting.Dictionary")
-                        gpFakD.CompareMode = vbTextCompare
+                        preD.RemoveAll
+                        gpFakD.RemoveAll
                         gpRefs = ""
                         gpLose = False
                         palPrikaz = ""
@@ -5401,7 +5407,14 @@ SledeciPrj:
             cGGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
             cGDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
             cGNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
-            Dim fakMapaG As Object: Set fakMapaG = SledFakMapa()
+            ' Ista mapa kao prijemnicki prolaz (GP-1 perf): ne gradi se
+            ' ponovo. Nothing samo ako prijemnica uopste nema.
+            Dim fakMapaG As Object
+            If fakMapaP Is Nothing Then
+                Set fakMapaG = SledFakMapa()
+            Else
+                Set fakMapaG = fakMapaP
+            End If
             For i = 1 To UBound(preData, 1)
                 If IsDate(preData(i, cGDat)) Then
                     dSer = Int(CDbl(CDate(preData(i, cGDat))))

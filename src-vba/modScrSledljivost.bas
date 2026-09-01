@@ -651,11 +651,12 @@ Public Function SlKoloneZaListu(ByVal kljuc As String) As Variant
     Select Case kljuc
         Case SL_LANAC
             ' Datum | Br. dok | Kooperant | Kg | Otpremnica | Zbirna |
-            ' Prijem | Faktura | Kupac | Oznaka | Palete | Prerada/GP |
-            ' Stanje | [OTK|id] -- GP grana (Faza 1): nastavak lanca posle
-            ' prijemnice. Prijem/Faktura/Palete/Prerada su txt: prazno =
-            ' karika ne postoji, razlog nosi OZNAKA (FM-0028 #5 -- nikad
-            ' "0,00" umesto poruke); Stanje je najdalja dostignuta karika.
+            ' Prijem | Pal. sveze | Pal. gotovog | Faktura | Kupac |
+            ' Oznaka | Stanje | [OTK|id] -- GP grana. Smoke GP-1: kolone
+            ' prate TOK ROBE (posle prijemnice roba lezi na paletama, pa
+            ' se tek onda prodaje), stanje je zakljucak i ide poslednje.
+            ' Karike su txt: prazno = karika ne postoji, razlog nosi
+            ' OZNAKA (FM-0028 #5 -- nikad "0,00" umesto poruke).
             SlKoloneZaListu = Array( _
                 "OTKUI_HD_DATUM||date|60|1", _
                 "OTKUI_HDI_BRDOK||txt|66|1", _
@@ -664,11 +665,11 @@ Public Function SlKoloneZaListu(ByVal kljuc As String) As Variant
                 "OTKUI_HDI_BROTP||txt|68|3", _
                 "OTKUI_HDI_BRZBIRNE||txt|74|2", _
                 "OTKUI_HDS_PRIJEM||txt|74|1", _
+                "OTKUI_HDS_PALETE||txt|96|2", _
+                "OTKUI_HDS_PRERADAGP||txt|118|2", _
                 "OTKUI_HDS_FAKTURA||txt|68|1", _
                 "OTKUI_HDS_KUPAC||txt|88|3", _
                 "OTKUI_HDS_OZNAKA||txt|90|1", _
-                "OTKUI_HDS_PALETE||txt|62|3", _
-                "OTKUI_HDS_PRERADAGP||txt|96|2", _
                 "OTKUI_HDS_STANJE||txt|78|2", _
                 "OTKUI_HDI_REF||txt|1|4")
         Case SL_PARC
@@ -938,11 +939,11 @@ Private Sub UpisiRed(ByVal kljuc As String, ByRef src As Variant, ByVal i As Lon
             outA(n, 5) = NzS(src(i, 8))
             outA(n, 6) = NzS(src(i, 9))
             outA(n, 7) = NzS(src(i, 10))
-            outA(n, 8) = NzS(src(i, 12))
-            outA(n, 9) = NzS(src(i, 13))
-            outA(n, 10) = NzS(src(i, 14))
-            outA(n, 11) = NzS(src(i, 28))
-            outA(n, 12) = NzS(src(i, 29))
+            outA(n, 8) = NzS(src(i, 28))
+            outA(n, 9) = NzS(src(i, 29))
+            outA(n, 10) = NzS(src(i, 12))
+            outA(n, 11) = NzS(src(i, 13))
+            outA(n, 12) = NzS(src(i, 14))
             outA(n, 13) = NzS(src(i, 30))
             outA(n, 14) = SlRef(src(i, 15))
             sumKg = sumKg + NzD(src(i, 7))
@@ -1795,6 +1796,41 @@ Public Function Diag_SlPopFont() As String
 
     Debug.Print s
     Diag_SlPopFont = s
+End Function
+
+' DIJAGNOSTIKA (GP-1): "prvi put laguje" -- lag zivi u punjenju snimka
+' (tri read-modela; kasniji ulasci su kes hit). Ovo meri SVAKI model u
+' ms na PRAVOJ svesci, pod istim TableCache uslovima kao ekran, i ne
+' dira kes ekrana. Alt+F8 -> Diag_SlPerf, ispis u Immediate (Ctrl+G);
+' brojke presudjuju gde je vreme, umesto nagadjanja po kodu.
+Public Function Diag_SlPerf() As String
+    Dim t0 As Double, t1 As Double, t2 As Double, t3 As Double
+    Dim dOd As Date, dDo As Date, s As String
+    Dim lanacV As Variant, problemiV As Variant, dokV As Variant
+
+    dOd = CDate(SL_DAT_MIN)
+    dDo = CDate(SL_DAT_MAX)
+
+    BeginTableCache
+    t0 = Timer
+    lanacV = ReportSledljivostLanac(dOd, dDo)
+    t1 = Timer
+    problemiV = ReportSledljivostProblemi(dOd, dDo)
+    t2 = Timer
+    dokV = ReportSledljivostDokumenti(dOd, dDo)
+    t3 = Timer
+    EndTableCache
+
+    s = "=== Diag_SlPerf (ceo period, hladan prolaz) ===" & vbLf & _
+        "lanac:     " & Format$((t1 - t0) * 1000, "0") & " ms" & _
+        IIf(IsArray(lanacV), "  (" & UBound(lanacV, 1) & " redova)", "  (prazno)") & vbLf & _
+        "problemi:  " & Format$((t2 - t1) * 1000, "0") & " ms" & _
+        IIf(IsArray(problemiV), "  (" & UBound(problemiV, 1) & " redova)", "  (prazno)") & vbLf & _
+        "dokumenti: " & Format$((t3 - t2) * 1000, "0") & " ms" & _
+        IIf(IsArray(dokV), "  (" & UBound(dokV, 1) & " redova)", "  (prazno)") & vbLf & _
+        "UKUPNO:    " & Format$((t3 - t0) * 1000, "0") & " ms"
+    Debug.Print s
+    Diag_SlPerf = s
 End Function
 
 ' Zajednicki citac stanja pop-redova za obe dijagnostike.

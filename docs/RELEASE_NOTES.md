@@ -6877,6 +6877,17 @@ ijedne izmišljene veze.
   `Fakturisano`/`FakturaID` (dodaje `EnsurePaletniListSchema` na
   startu, kolone na kraj tabela — postojeći pozicijski upisi netaknuti).
 
+### Posle prvog smoke-a (GP-1)
+
+- Prekidači na Fakturisanju: **„Sveža roba" / „Gotova roba"** (par
+  imenuje robu, ne proces); hederi lanca u operaterovom rečniku:
+  „PAL. SVEŽE ROBE" / „PAL. GOTOVOG PROIZV.".
+- Kolone LANAC prate tok robe: prijem → dve paletne kolone → faktura →
+  kupac → oznaka → **stanje na kraju**.
+- Lag prvog otvaranja Sledljivosti smanjen (rečnici GP sekcije se više
+  ne prave po redu — na velikoj svesci desetine hiljada COM kreacija);
+  za merenje na pravim podacima: `Alt+F8 → Diag_SlPerf`.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

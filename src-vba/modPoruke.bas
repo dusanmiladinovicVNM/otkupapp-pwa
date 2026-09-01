@@ -1155,7 +1155,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SCRFK_SUB", "Prijemnice kupca u fakturu, naplata i elektronske fakture"
     UpsertRow lo, existing, "OTKUI_SCRFK_LISTA", "Prijemnice"
     UpsertRow lo, existing, "OTKUI_SCRFK_CAP", "Fakturisanje"
-    UpsertRow lo, existing, "OTKUI_SEG_FK_ZAFAKT", "Za fakturisanje"
+    ' Smoke GP-1: uz "Gotova roba" prvi prekidac mora biti VRSTA robe,
+    ' ne radnja -- par cipova imenuje robu (sveza/gotova), ne proces.
+    UpsertRow lo, existing, "OTKUI_SEG_FK_ZAFAKT", "Sve" & ChrW(382) & "a roba"
     UpsertRow lo, existing, "OTKUI_SEG_FK_FAKTURE", "Fakture"
     UpsertRow lo, existing, "OTKUI_SEG_FK_SEF", "SEF"
     UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_ZAFAKT", "Prijemnice kupca"
@@ -1530,9 +1532,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDS_PROBLEM", "PROBLEM"
     UpsertRow lo, existing, "OTKUI_HDS_NOSILAC", "NOSILAC"
     UpsertRow lo, existing, "OTKUI_HDS_DETALJ", "DETALJ"
-    ' GP grana lanca (v6-ui-189): nastavak posle prijemnice.
-    UpsertRow lo, existing, "OTKUI_HDS_PALETE", "PALETE"
-    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "PRERADA / GP"
+    ' GP grana lanca (v6-ui-189): nastavak posle prijemnice. Smoke GP-1:
+    ' operaterov recnik -- "paleta sveze robe" / "paleta gotovog
+    ' proizvoda" (prerada = gotova paleta), ne interni "prerada/GP".
+    UpsertRow lo, existing, "OTKUI_HDS_PALETE", "PAL. SVE" & ChrW(381) & "E ROBE"
+    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "PAL. GOTOVOG PROIZV."
     UpsertRow lo, existing, "OTKUI_HDS_STANJE", "STANJE"
     UpsertRow lo, existing, "OTKUI_BTN_SL_LANACPDF", "Lanac (PDF)"
     UpsertRow lo, existing, "OTKUI_KPI_SL_POTPUN", "Potpuni lanci"

@@ -12179,7 +12179,9 @@ Private Sub T_Sled_GpLanacIStanja()
     redovi = d(1)
     r = SledNadjiGridRed(redovi, n, 2, "S8/TEST")
     AssertEq (r > 0), True, "nazad od broja palete stize do otkupnog bloka"
-    AssertEq CStr(redovi(r, 11)), rucniPalBroj, "grid kolona 11 = palete"
+    ' Smoke GP-1: palete odmah POSLE prijemnice (kolona 8), stanje na
+    ' kraju vidljivih (13) -- kolone prate tok robe.
+    AssertEq CStr(redovi(r, 8)), rucniPalBroj, "grid kolona 8 = pal. sveze robe"
     AssertEq CStr(redovi(r, 13)), SLED_ST_PRODATO_GP, "grid kolona 13 = stanje"
     modScrSledljivost.Scr_SlTestReset
 End Sub
