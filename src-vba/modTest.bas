@@ -389,6 +389,18 @@ Public Sub RunAllTests()
     RunOne 147
     RunOne 148
     RunOne 149
+    ' 150-157 (Sledljivost) su cista citanja i idu PRE mutirajucih 124-126,
+    ' iz istog razloga kao 127-132 i 133-149 iznad.
+    RunOne 150
+    RunOne 151
+    RunOne 152
+    RunOne 153
+    RunOne 154
+    RunOne 155
+    RunOne 156
+    RunOne 157
+    RunOne 158
+    RunOne 159
     RunOne 124
     RunOne 125
     RunOne 126
@@ -575,6 +587,16 @@ Private Function TestName(ByVal idx As Long) As String
         Case 147: TestName = "T_Izv_RangSortIKontekst"
         Case 148: TestName = "T_Izv_ZbirniOrphanStanica"
         Case 149: TestName = "T_Izv_CipoviVrstaSorta"
+        Case 150: TestName = "T_Sled_UgovorEkrana"
+        Case 151: TestName = "T_Sled_LanacSlaganje"
+        Case 152: TestName = "T_Sled_FailClosed"
+        Case 153: TestName = "T_Sled_IdentitetURedu_NeCrtaSe"
+        Case 154: TestName = "T_Sled_KesPretragaIHint"
+        Case 155: TestName = "T_ZonaSled_PoljaIRaspored"
+        Case 156: TestName = "T_Sled_PovezivanjeKandidati"
+        Case 157: TestName = "T_Sled_MeteSledljivosti"
+        Case 158: TestName = "T_Sled_DokumentiPonuda"
+        Case 159: TestName = "T_Ljuska_PopupTekstTraka"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -732,6 +754,16 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 147: T_Izv_RangSortIKontekst
         Case 148: T_Izv_ZbirniOrphanStanica
         Case 149: T_Izv_CipoviVrstaSorta
+        Case 150: T_Sled_UgovorEkrana
+        Case 151: T_Sled_LanacSlaganje
+        Case 152: T_Sled_FailClosed
+        Case 153: T_Sled_IdentitetURedu_NeCrtaSe
+        Case 154: T_Sled_KesPretragaIHint
+        Case 155: T_ZonaSled_PoljaIRaspored
+        Case 156: T_Sled_PovezivanjeKandidati
+        Case 157: T_Sled_MeteSledljivosti
+        Case 158: T_Sled_DokumentiPonuda
+        Case 159: T_Ljuska_PopupTekstTraka
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -11091,3 +11123,792 @@ End Function
 Private Function NzD2(ByVal v As Variant) As Double
     If IsNumeric(v) And Not IsEmpty(v) Then NzD2 = CDbl(v)
 End Function
+
+' ============================================================
+' 150-155. EKRAN SLEDLJIVOST (modScrSledljivost, v6-ui-187)
+'
+' Merilo: LANAC KOJI SE NE IZMISLJA. Svaka karika ima tvrdnju koja je
+' veze za NEZAVISAN rucni prolaz kroz tabele (samo relacije, bez golden
+' brojki); nepotpun/visesmislen lanac daje OZNAKU, ne brojku (fail-closed
+' kao ReportOtkupRobaOM); kg koji curi niz lanac je vidljiva razlika.
+' Tvrdnje gadjaju SLED-* vozila fixture-a koja nijedan drugi test ne dira.
+' ============================================================
+
+' Red LANAC izvestaja po OtkupID-u (kolona 15); 0 = nema ga.
+Private Function SledNadjiRed(ByRef lanac As Variant, ByVal otkupID As String) As Long
+    Dim i As Long
+    If Not IsArray(lanac) Then Exit Function
+    For i = 1 To UBound(lanac, 1)
+        If Trim$(CStr(lanac(i, 15))) = otkupID Then
+            SledNadjiRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Ima li lista problema red (klasa, DokID) -- kolone 1 i 8.
+Private Function SledImaProblem(ByRef problemi As Variant, ByVal klasa As String, _
+                                ByVal dokID As String) As Boolean
+    Dim i As Long
+    If Not IsArray(problemi) Then Exit Function
+    For i = 1 To UBound(problemi, 1)
+        If CStr(problemi(i, 1)) = klasa And Trim$(CStr(problemi(i, 8))) = dokID Then
+            SledImaProblem = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Detalj (kolona 6) prvog reda (klasa, DokID) -- za tvrdnje o sadrzaju.
+Private Function SledProblemDetalj(ByRef problemi As Variant, ByVal klasa As String, _
+                                   ByVal dokID As String) As String
+    Dim i As Long
+    If Not IsArray(problemi) Then Exit Function
+    For i = 1 To UBound(problemi, 1)
+        If CStr(problemi(i, 1)) = klasa And Trim$(CStr(problemi(i, 8))) = dokID Then
+            SledProblemDetalj = CStr(problemi(i, 6))
+            Exit Function
+        End If
+    Next i
+End Function
+
+' Red mreze po vrednosti kolone (prvi pogodak); 0 = nema ga.
+Private Function SledNadjiGridRed(ByRef redovi As Variant, ByVal n As Long, _
+                                  ByVal kol As Long, ByVal vrednost As String) As Long
+    Dim i As Long
+    If Not IsArray(redovi) Then Exit Function
+    For i = 1 To n
+        If Trim$(CStr(redovi(i, kol))) = vrednost Then
+            SledNadjiGridRed = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+' 145. Ugovor ekrana: registar, TRI liste, kontekstni cipovi i radnje,
+' brojac 0, kolone staju u mrezu, datum kao serijski broj.
+Private Sub T_Sled_UgovorEkrana()
+    Dim red As String, liste As Variant, i As Long
+    Dim kolone As Variant, kljuc As String, spec As String
+    Dim d As Variant
+
+    red = modUiScreens.ScrRowByKey("SLEDLJIVOST")
+    AssertEq (Len(red) > 0), True, "registar nosi red SLEDLJIVOST"
+    AssertEq modUiScreens.ScrPostoji("SLEDLJIVOST"), True, _
+             "modul odgovara na ugovor -- stavka menija vise nije prigusena"
+    AssertEq (InStr(1, modScrSledljivost.Scr_Meta(), "SLEDLJIVOST") > 0), True, _
+             "meta nosi kljuc ekrana"
+
+    liste = modScrSledljivost.Scr_Liste()
+    AssertEq UBound(liste) - LBound(liste) + 1, 3, _
+             "tri liste: LANAC, PARCELE, NEPOTPUNI"
+    AssertEq (UBound(liste) + 1 < modOtkupUI.MaxPrekidaca()), True, _
+             "bazen prekidaca zadrzava slobodne slotove"
+    For i = LBound(liste) To UBound(liste)
+        kljuc = Split(CStr(liste(i)), "|")(0)
+        kolone = modScrSledljivost.SlKoloneZaListu(kljuc)
+        AssertEq (UBound(kolone) + 1 <= modOtkupUI.MAX_COLS), True, _
+                 "kolone " & kljuc & " staju u mrezu"
+        ' Radnja "Stampaj dokument" postoji na sve tri liste; red bez
+        ' dokumenta odbija u rutiranju, ne u ugovoru.
+        AssertEq Split(modScrSledljivost.SlRadnjeZaListu(kljuc), ":")(0), _
+                 "sledprint", "radnja stampe dokumenta na listi " & kljuc
+        ' Povezivanje je radnja SAMO nepotpunih (smoke krug 2) -- na
+        ' potpunom lancu i parceli nema sta da se povezuje.
+        AssertEq (InStr(1, modScrSledljivost.SlRadnjeZaListu(kljuc), _
+                        "sledpovezi") > 0), (kljuc = "NEPOTPUNI"), _
+                 "radnja Povezi samo na nepotpunima (lista " & kljuc & ")"
+        spec = modScrSledljivost.SlCipoviZaListu(kljuc)
+        AssertEq Split(Split(spec, "|")(0), ":")(0), "sve", _
+                 "prvi cip liste " & kljuc & " je najsiri ('sve')"
+        AssertEq (UBound(Split(spec, "|")) + 1 <= modOtkupUI.MAX_CHIP), True, _
+                 "cipovi liste " & kljuc & " staju u bazen"
+    Next i
+
+    AssertEq modScrSledljivost.Scr_Brojac(), 0, _
+             "read-only pregled: brojac 0, bez znacke"
+
+    ' Datum stize kao SERIJSKI BROJ, ne tekst (par. 9.9).
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    AssertEq (CLng(d(2)) > 0), True, "lanac nad fixture-om nije prazan"
+    AssertEq TypeName(d(1)(1, 1)), "Double", "datum stize kao serijski broj"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 146. SRCE ZADATKA: potpun lanac se slaze sa NEZAVISNIM rucnim prolazom
+' kroz tabele, napred i nazad, i kg se slaze niz CEO lanac.
+Private Sub T_Sled_LanacSlaganje()
+    Dim lanac As Variant, r As Long, i As Long
+    lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
+    AssertEq IsArray(lanac), True, "lanac izvestaj nad fixture-om postoji"
+
+    ' --- RUCNI PROLAZ (nezavisan od Report koda): OTK-SLED-1 karika po
+    ' karika kroz tabele, iskljucivo GetTableData + GetColumnIndex.
+    Dim od As Variant, cId As Long, cOtp As Long, cKol As Long, cSt As Long
+    od = ExcludeStornirano(GetTableData(TBL_OTKUP), TBL_OTKUP)
+    cId = GetColumnIndex(TBL_OTKUP, COL_OTK_ID)
+    cOtp = GetColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID)
+    cKol = GetColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA)
+    cSt = GetColumnIndex(TBL_OTKUP, COL_STORNIRANO)
+    Dim rucniOtpID As String, rucniKg As Double, rucniBlokSum As Double
+    For i = 1 To UBound(od, 1)
+        If Trim$(CStr(od(i, cId))) = "OTK-SLED-1" Then
+            rucniOtpID = Trim$(CStr(od(i, cOtp)))
+            rucniKg = CDbl(od(i, cKol))
+        End If
+    Next i
+    AssertEq (Len(rucniOtpID) > 0), True, "vozilo: OTK-SLED-1 ima otpremnicu"
+    For i = 1 To UBound(od, 1)
+        If Trim$(CStr(od(i, cOtp))) = rucniOtpID Then
+            rucniBlokSum = rucniBlokSum + CDbl(od(i, cKol))
+        End If
+    Next i
+
+    Dim ot As Variant, cOId As Long, cOBr As Long, cOZbr As Long, cOKol As Long
+    ot = ExcludeStornirano(GetTableData(TBL_OTPREMNICA), TBL_OTPREMNICA)
+    cOId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cOBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cOZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cOKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    Dim rucniBrOtp As String, rucniBrZbr As String, rucniOtpKg As Double
+    For i = 1 To UBound(ot, 1)
+        If Trim$(CStr(ot(i, cOId))) = rucniOtpID Then
+            rucniBrOtp = Trim$(CStr(ot(i, cOBr)))
+            rucniBrZbr = Trim$(CStr(ot(i, cOZbr)))
+            rucniOtpKg = CDbl(ot(i, cOKol))
+        End If
+    Next i
+    AssertEq (Len(rucniBrZbr) > 0), True, "vozilo: otpremnica nosi zbirnu"
+
+    Dim zb As Variant, cZBr As Long, cZKol As Long
+    zb = ExcludeStornirano(GetTableData(TBL_ZBIRNA), TBL_ZBIRNA)
+    cZBr = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ)
+    cZKol = GetColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA)
+    Dim rucniZbrKg As Double, rucniZbrRedova As Long
+    For i = 1 To UBound(zb, 1)
+        If Trim$(CStr(zb(i, cZBr))) = rucniBrZbr Then
+            rucniZbrKg = rucniZbrKg + CDbl(zb(i, cZKol))
+            rucniZbrRedova = rucniZbrRedova + 1
+        End If
+    Next i
+    AssertEq rucniZbrRedova, 1, "vozilo: broj zbirne SLED lanca je jednoznacan"
+
+    Dim pr As Variant, cPBrZ As Long, cPKol As Long, cPBr As Long, cPFid As Long
+    pr = ExcludeStornirano(GetTableData(TBL_PRIJEMNICA), TBL_PRIJEMNICA)
+    cPBrZ = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cPKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cPBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cPFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+    Dim rucniPrijKg As Double, rucniPrijBroj As String, rucniFakID As String
+    For i = 1 To UBound(pr, 1)
+        If Trim$(CStr(pr(i, cPBrZ))) = rucniBrZbr Then
+            rucniPrijKg = rucniPrijKg + CDbl(pr(i, cPKol))
+            rucniPrijBroj = Trim$(CStr(pr(i, cPBr)))
+            rucniFakID = Trim$(CStr(pr(i, cPFid)))
+        End If
+    Next i
+    Dim rucniFakBroj As String
+    rucniFakBroj = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, rucniFakID, COL_FAK_BROJ))))
+
+    ' --- Report red = rucni prolaz, karika po karika.
+    r = SledNadjiRed(lanac, "OTK-SLED-1")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-1"
+    AssertEq CStr(lanac(r, 8)), rucniBrOtp, "karika otpremnice = rucni prolaz"
+    AssertEq CStr(lanac(r, 9)), rucniBrZbr, "karika zbirne = rucni prolaz"
+    AssertEq CStr(lanac(r, 10)), rucniPrijBroj, "karika prijemnice = rucni prolaz"
+    AssertEq CStr(lanac(r, 12)), rucniFakBroj, "karika fakture = rucni prolaz"
+    AssertEq CStr(lanac(r, 14)), "", "potpun lanac nema oznaku"
+
+    ' --- Kg se SLAZE niz ceo lanac (fixture vozilo je bez curenja).
+    AssertEq Format$(CDbl(lanac(r, 7)), "0.00"), Format$(rucniKg, "0.00"), _
+             "kg otkupa = rucni prolaz"
+    AssertEq Format$(rucniBlokSum, "0.00"), Format$(rucniOtpKg, "0.00"), _
+             "kg blokova = kg otpremnice (vozilo bez curenja)"
+    AssertEq Format$(rucniOtpKg, "0.00"), Format$(rucniZbrKg, "0.00"), _
+             "kg otpremnice = kg zbirne"
+    AssertEq Format$(rucniZbrKg, "0.00"), Format$(rucniPrijKg, "0.00"), _
+             "kg zbirne = kg prijema"
+    AssertEq Format$(CDbl(lanac(r, 11)), "0.00"), Format$(rucniPrijKg, "0.00"), _
+             "prijem kg u redu = rucni zbir prijemnica"
+
+    ' --- NAZAD: pretraga po broju fakture vraca OBA kooperanta lanca.
+    Dim d As Variant, n As Long, redovi As Variant
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", rucniFakBroj)
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (n >= 2), True, "od fakture nazad: bar dva otkupna lista"
+    AssertEq (SledNadjiGridRed(redovi, n, 2, "S1/TEST") > 0), True, _
+             "nazad od fakture stize do bloka KOOP-TEST-2"
+    AssertEq (SledNadjiGridRed(redovi, n, 2, "S2/TEST") > 0), True, _
+             "nazad od fakture stize do bloka KOOP-TEST-IME"
+
+    ' --- PARCELE projekcija: isti snimak, parcela iz tblParcele; blok bez
+    ' parcele nosi oznaku umesto tihe praznine.
+    Dim rucniKat As String
+    rucniKat = Trim$(CStr(nz(LookupValue(TBL_PARCELE, COL_PAR_ID, "PAR-TEST-2", COL_PAR_KAT_BROJ))))
+    modScrSledljivost.Scr_SlTestSet "PARCELE", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    r = SledNadjiGridRed(redovi, n, 9, "S1/TEST")
+    AssertEq (r > 0), True, "parcele projekcija nosi red S1/TEST"
+    AssertEq CStr(redovi(r, 3)), rucniKat, "kat. broj parcele = tblParcele"
+    r = SledNadjiGridRed(redovi, n, 9, "S2/TEST")
+    AssertEq (r > 0), True, "parcele projekcija nosi red S2/TEST"
+    AssertEq CStr(redovi(r, 11)), "bez parcele", _
+             "blok bez parcele nosi oznaku 'bez parcele'"
+    ' Cip "bez parcele" propusta S2, a ne S1.
+    d = modScrSledljivost.Scr_Rows("bezpar", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (SledNadjiGridRed(redovi, n, 9, "S2/TEST") > 0), True, _
+             "cip bez parcele propusta blok bez parcele"
+    AssertEq SledNadjiGridRed(redovi, n, 9, "S1/TEST"), 0, _
+             "cip bez parcele NE propusta blok sa parcelom"
+
+    ' --- KPI zone = isti snimak: potpuni po praznoj oznaci, problemi po
+    ' listi problema (relacija, ne golden broj).
+    Dim potpunihRucno As Long
+    For i = 1 To UBound(lanac, 1)
+        If Len(Trim$(CStr(nz(lanac(i, 14))))) = 0 Then potpunihRucno = potpunihRucno + 1
+    Next i
+    AssertEq Format$(NzD2(modScrSledljivost.Scr_SlKpiTest("potpun")), "0"), _
+             Format$(CDbl(potpunihRucno), "0"), _
+             "KPI potpunih = broj redova bez oznake"
+    Dim problemi As Variant
+    problemi = modIzvestaj.ReportSledljivostProblemi(IzvOdD(), IzvDoD())
+    AssertEq Format$(NzD2(modScrSledljivost.Scr_SlKpiTest("problemi")), "0"), _
+             Format$(CDbl(UBound(problemi, 1)), "0"), _
+             "KPI problema = broj redova liste problema"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 147. FAIL-CLOSED: pokvarena vozila daju OZNAKE, ne brojke; lista
+' problema nosi svaku klasu sa tacnom karikom; storniran dokument ne
+' postoji ni u lancu ni u problemima.
+Private Sub T_Sled_FailClosed()
+    Dim lanac As Variant, problemi As Variant, r As Long
+    lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
+    problemi = modIzvestaj.ReportSledljivostProblemi(IzvOdD(), IzvDoD())
+    AssertEq IsArray(problemi), True, "lista problema nad fixture-om postoji"
+
+    ' Dvosmislen broj zbirne (dva vozaca dele ZB-TEST-SLDD -- svoj par:
+    ' ZB-TEST-DUPL potrosi raniji storno test; otpremnica bez vozaca):
+    ' oznaka, ne tudja kilaza.
+    r = SledNadjiRed(lanac, "OTK-SLED-D")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-D"
+    AssertEq CStr(lanac(r, 14)), "nejasan vlasnik", _
+             "dvosmislen broj daje oznaku, ne kg"
+    AssertEq IsEmpty(lanac(r, 11)), True, _
+             "prijem kg pod nejasnim vlasnikom OSTAJE prazan"
+
+    ' Krug 9 (OBRNUTO): "Fakturisano=Ne" je LEGITIMAN tok -- roba u
+    ' sopstvenu hladnjacu ne dobija fakturu za taj prijem, pa lanac do
+    ' takve prijemnice NIJE pokvaren. SLN je bas to vozilo.
+    r = SledNadjiRed(lanac, "OTK-SLED-N")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-N"
+    AssertEq CStr(lanac(r, 10)), "31/150326", "prijemnica karika postoji"
+    AssertEq CStr(lanac(r, 14)), "", _
+             "prijemnica bez fakture NIJE kvar -- lanac je potpun"
+
+    ' Kg curi na prvoj karici (blok 100 / otpremnica 250): vidljiva
+    ' razlika sa oznakom, nikad precutana.
+    r = SledNadjiRed(lanac, "OTK-SLED-R")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-R"
+    AssertEq CStr(lanac(r, 14)), "kg razlika", _
+             "kg curenje na karici nosi oznaku kg razlika"
+
+    ' Blok koji tvrdi zbirnu koju otpremnica nema (OTK-TEST-2 / OTP-TEST-3).
+    r = SledNadjiRed(lanac, "OTK-TEST-2")
+    AssertEq (r > 0), True, "lanac nosi red OTK-TEST-2"
+    AssertEq CStr(lanac(r, 14)), "veza neusaglasena", _
+             "raskorak blok/otpremnica zbirne se prijavljuje, ne premoscuje"
+
+    ' Nepovezan otkup i veza na storniranu otpremnicu. Vozilo je OTK-NAL-DJ
+    ' (BN blok bez otpremnice koji nijedan test glavnog seta ne dira) --
+    ' OTK-KOL-A stornira raniji storno-po-generaciji test.
+    r = SledNadjiRed(lanac, "OTK-NAL-DJ")
+    AssertEq (r > 0), True, "lanac nosi red OTK-NAL-DJ"
+    AssertEq CStr(lanac(r, 14)), "nepovezan", "otkup bez otpremnice = nepovezan"
+    r = SledNadjiRed(lanac, "OTK-BLK-B")
+    AssertEq (r > 0), True, "lanac nosi red OTK-BLK-B"
+    AssertEq CStr(lanac(r, 14)), "otpremnica stornirana", _
+             "veza na storniranu otpremnicu se NE premoscuje"
+
+    ' Storniran otkup ne postoji ni u lancu ni u problemima.
+    AssertEq SledNadjiRed(lanac, "OTK-NAL-STOR"), 0, _
+             "storniran otkup nije u lancu"
+    AssertEq SledImaProblem(problemi, "OTKUP-BEZ-OTPREMNICE", "OTK-NAL-STOR"), False, _
+             "storniran otkup nije ni u problemima"
+
+    ' Lista problema: svaka klasa sa tacnom karikom.
+    AssertEq SledImaProblem(problemi, "OTKUP-BEZ-OTPREMNICE", "OTK-NAL-DJ"), True, _
+             "problem: otkup bez otpremnice"
+    AssertEq SledImaProblem(problemi, "VEZA-NEUSAGLASENA", "OTK-TEST-2"), True, _
+             "problem: veza neusaglasena"
+    AssertEq SledImaProblem(problemi, "OTPREMNICA-BEZ-ZBIRNE", "OTP-TEST-2"), True, _
+             "problem: otpremnica bez zbirne"
+    AssertEq SledImaProblem(problemi, "ZBIRNA-BEZ-PRIJEMA", "ZBI-SLED-R"), True, _
+             "problem: zbirna bez prijema"
+    ' Krug 9: "Ne" nije klasa problema -- ni legitimna nefakturisana
+    ' (PRJ-SLED-N) ni uredno fakturisana (PRJ-SLED-1) nisu na listi.
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-N"), False, _
+             "prijemnica bez fakture NIJE problem (legitiman tok)"
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-1"), False, _
+             "fakturisana prijemnica NIJE problem"
+    AssertEq SledImaProblem(problemi, "KG-RAZLIKA", "OTP-SLED-R"), True, _
+             "problem: kg razlika na otpremnici"
+    AssertEq (InStr(1, SledProblemDetalj(problemi, "KG-RAZLIKA", "OTP-SLED-R"), _
+             "blokovi 100") > 0), True, _
+             "detalj kg razlike nosi obe brojke karike"
+    ' Nepotpuno obelezena prijemnica (Fakturisano=Da bez FakturaID) je
+    ' slepa karika i prijavljuje se.
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-FAK-2"), True, _
+             "problem: Fakturisano=Da bez FakturaID"
+    ' Dvosmislen broj se prijavljuje JEDNOM po broju (kolona 3 = broj).
+    Dim i As Long, dupl As Long
+    For i = 1 To UBound(problemi, 1)
+        If CStr(problemi(i, 1)) = "BROJ-ZBIRNE-DVOSMISLEN" And _
+           CStr(problemi(i, 3)) = "ZB-TEST-SLDD" Then dupl = dupl + 1
+    Next i
+    AssertEq dupl, 1, "dvosmislen broj se prijavljuje jednom po broju"
+
+    ' Cip grupe problema i cip lanca: pravila particionisanja.
+    AssertEq modScrSledljivost.SlCipProblemi("veze", "VEZA-NEUSAGLASENA"), True, _
+             "cip veze hvata neusaglasenu vezu"
+    AssertEq modScrSledljivost.SlCipProblemi("kg", "VEZA-NEUSAGLASENA"), False, _
+             "cip kg NE hvata vezu"
+    AssertEq modScrSledljivost.SlCipProblemi("fakture", "FAKTURA-VEZA-NEISPRAVNA"), True, _
+             "cip fakture hvata neispravnu vezu fakture"
+    AssertEq modScrSledljivost.SlCipLanac("potpun", ""), True, _
+             "cip potpun propusta prazan oznaku"
+    AssertEq modScrSledljivost.SlCipLanac("potpun", "kg razlika"), False, _
+             "lanac koji curi NIJE potpun"
+    AssertEq modScrSledljivost.SlCipLanac("nepotpun", "nejasan vlasnik"), True, _
+             "cip nepotpun hvata nejasnog vlasnika"
+    AssertEq modScrSledljivost.SlCipLanac("nepotpun", ""), False, _
+             "cip nepotpun NE pusta potpun lanac"
+
+    ' --- Krug 8 R1: ALL pravilo fakturisanosti. F-lanac ima JEDNU
+    ' prijemnicu na aktivnu fakturu i JEDNU "Da" ka nepostojecoj --
+    ' jedna neispravna TVRDNJA obara CELU kariku, a NEPOTPUNI je
+    ' prijavljuje, pa se dva read-modela istog ekrana SLAZU (krug 9:
+    ' pravilo je ALL nad prijemnicama koje TVRDE "Da", ne nad svima).
+    r = SledNadjiRed(lanac, "OTK-SLED-F")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-F"
+    AssertEq CStr(lanac(r, 14)), "faktura neusaglasena", _
+             "tvrdnja Da bez validne fakture obara kariku (ALL nad tvrdnjama)"
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-F2"), True, _
+             "prijemnica sa nepostojecom fakturom je medju problemima"
+
+    ' --- Krug 8 R2: M-lanac -- dve prijemnice na dve AKTIVNE fakture je
+    ' potpun; prikaz sabira, a kolona 27 cuva progutane brojeve.
+    r = SledNadjiRed(lanac, "OTK-SLED-M")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-M"
+    AssertEq CStr(lanac(r, 14)), "", _
+             "dve uredno fakturisane prijemnice = potpun lanac"
+    AssertEq CStr(lanac(r, 10)), "2 prij.", "prikaz sabira prijemnice"
+    AssertEq CStr(lanac(r, 12)), "2 fakt.", "prikaz sabira fakture"
+    AssertEq (InStr(1, CStr(lanac(r, 27)), "8/2026") > 0), True, _
+             "SearchRefs kolona nosi broj progutane fakture"
+End Sub
+
+' 148. Identitet zivi u redu (prio 4, ne crta se); NEPOTPUNI nosi vrstu i
+' ID karike za rutu stampe; agregatna karika (zbirna) nosi vrstu koja
+' odbija.
+Private Sub T_Sled_IdentitetURedu_NeCrtaSe()
+    Dim kolone As Variant, spec As String
+    Dim d As Variant, n As Long, redovi As Variant, r As Long
+
+    ' Identitetske kolone su prioriteta 4 -- mreza crta do 3.
+    kolone = modScrSledljivost.SlKoloneZaListu("LANAC")
+    spec = CStr(kolone(UBound(kolone)))
+    AssertEq Split(spec, "|")(4), "4", "identitet LANAC je prio 4"
+    kolone = modScrSledljivost.SlKoloneZaListu("PARCELE")
+    spec = CStr(kolone(UBound(kolone)))
+    AssertEq Split(spec, "|")(4), "4", "identitet PARCELE je prio 4"
+    kolone = modScrSledljivost.SlKoloneZaListu("NEPOTPUNI")
+    AssertEq Split(CStr(kolone(UBound(kolone))), "|")(4), "4", _
+             "DokID NEPOTPUNI je prio 4"
+    AssertEq Split(CStr(kolone(UBound(kolone) - 1)), "|")(4), "4", _
+             "DokTip NEPOTPUNI je prio 4"
+
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    r = SledNadjiGridRed(redovi, n, 2, "S1/TEST")
+    AssertEq (r > 0), True, "mreza nosi red S1/TEST"
+    AssertEq CStr(redovi(r, 11)), "OTK|OTK-SLED-1", _
+             "identitet reda je OTK| kljuc, ne prikaz"
+
+    ' NEPOTPUNI: red kg razlike nosi vrstu i ID karike (ruta stampe);
+    ' red zbirne nosi vrstu koja NEMA stampu (radnja odbija).
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    n = CLng(d(2))
+    redovi = d(1)
+    r = SledNadjiGridRed(redovi, n, 8, "OTP-SLED-R")
+    AssertEq (r > 0), True, "NEPOTPUNI nosi red karike OTP-SLED-R"
+    AssertEq CStr(redovi(r, 7)), DOK_TIP_OTPREMNICA, _
+             "karika otpremnice nosi vrstu za rutu stampe"
+    r = SledNadjiGridRed(redovi, n, 8, "ZBI-SLED-R")
+    AssertEq (r > 0), True, "NEPOTPUNI nosi red karike ZBI-SLED-R"
+    AssertEq CStr(redovi(r, 7)), "Zbirna", _
+             "karika zbirne nosi vrstu koja odbija stampu"
+
+    ' Detalj lanca iz snimka: karike sa kg po karici (ono sto red ne kaze).
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    Dim det As Variant, spoj As String
+    det = modScrSledljivost.SlDetaljLanca("OTK-SLED-1", "LANAC")
+    AssertEq IsArray(det), True, "detalj lanca postoji"
+    spoj = IzvDetSpoj(det)
+    AssertEq (InStr(1, spoj, "31/TEST") > 0), True, "detalj nosi otpremnicu"
+    AssertEq (InStr(1, spoj, "ZB-TEST-SLED") > 0), True, "detalj nosi zbirnu"
+    AssertEq (InStr(1, spoj, "30/150326") > 0), True, "detalj nosi prijemnicu"
+    AssertEq (InStr(1, spoj, "500") > 0), True, "detalj nosi kg karike"
+
+    ' Lanac (PDF) sklop iz snimka: karike kao redovi + kontekst-linija sa
+    ' kompletnoscu (koren + opseg + status).
+    Dim paket As Variant, dataS As Variant
+    paket = modScrSledljivost.SlLanacZaPdf("OTK-SLED-1")
+    AssertEq IsArray(paket), True, "lanac PDF sklop postoji"
+    dataS = paket(0)
+    AssertEq CStr(dataS(2, 2)), "31/TEST", "PDF red otpremnice nosi broj"
+    AssertEq CStr(dataS(5, 2)), "5/2026", "PDF red fakture nosi broj"
+    ' Dokument-format (krug 6 S14): red nosi i NOSIOCA karike, a info
+    ' blok korena putuje uz sklop (paket(3): broj..oznaka).
+    AssertEq (Len(CStr(dataS(1, 3))) > 0), True, _
+             "PDF red otkupa nosi kooperanta (nosilac karike)"
+    AssertEq (UBound(paket) >= 3), True, "sklop nosi info blok dokumenta"
+    ' Deljeni detalj-kljucevi nose dvotacku (traka), PDF karika ne sme
+    ' (krug 5 S11: "Zbirna:" pored "Otkup" u istoj koloni).
+    AssertEq (Right$(CStr(dataS(3, 1)), 1) <> ":"), True, _
+             "karika u PDF-u je bez dvotacke"
+    AssertEq (InStr(1, CStr(paket(2)), "S1/TEST") > 0), True, _
+             "kontekst-linija nosi koren lanca"
+    paket = modScrSledljivost.SlLanacZaPdf("OTK-SLED-R")
+    dataS = paket(0)
+    AssertEq CStr(dataS(1, 5)), "kg razlika", _
+             "PDF lanac koji curi nosi oznaku uz kariku"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 149. Kes snimka: pretraga/cip/prelaz liste = NULA novih citanja; reset i
+' generacija podataka invalidiraju; pretraga nalazi kvake ASCII upitom.
+Private Sub T_Sled_KesPretragaIHint()
+    Dim d As Variant, n As Long, redovi As Variant
+
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    d = modScrSledljivost.Scr_Rows("sve", "S1")
+    d = modScrSledljivost.Scr_Rows("sve", "xyz-nema")
+    d = modScrSledljivost.Scr_Rows("nepotpun", "")
+    modScrSledljivost.Scr_SlTestSet "PARCELE", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    AssertEq modScrSledljivost.Scr_SlSnimakPunjenjaTest(), 1, _
+             "pretrage, cip i SVE TRI liste = JEDNO punjenje snimka"
+
+    modScrSledljivost.Scr_ResetCache
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    AssertEq modScrSledljivost.Scr_SlSnimakPunjenjaTest(), 2, _
+             "posle Scr_ResetCache sledece citanje ide u tabele"
+
+    ' Upis sa DRUGOG ekrana ne zove nas Scr_ResetCache -- generacija
+    ' podataka je deljeni signal (par. 23.10/R1).
+    modUiData.ResetCache
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    AssertEq modScrSledljivost.Scr_SlSnimakPunjenjaTest(), 3, _
+             "generacija podataka invalidira snimak"
+
+    ' Kvake u podacima, ASCII upit (N3): "sarcevic" nalazi Sarcevica.
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "sarcevic")
+    n = CLng(d(2))
+    redovi = d(1)
+    AssertEq (SledNadjiGridRed(redovi, n, 2, "NAL2/TEST") > 0), True, _
+             "ASCII upit nalazi kooperanta sa kvakama"
+
+    ' Prazan period kaze ZASTO i KUDA, ne pun naslov nad praznom listom.
+    modScrSledljivost.Scr_SlTestSet "LANAC", CDbl(DateSerial(2000, 1, 1)), _
+                                    CDbl(DateSerial(2000, 12, 31))
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    AssertEq CLng(d(2)), 0, "period bez otkupa daje praznu listu"
+    AssertEq modScrSledljivost.Scr_SlHintKljucTest(), "OTKUI_SL_HINT_PRAZNO", _
+             "hint kaze da u periodu nema otkupa"
+
+    ' Pretraga na NEPOTPUNIMA nalazi i LANAC-brojeve (krug 4 S8): ekran
+    ' obecava "pretraga nalazi svaki broj u lancu" -- broj zbirne mora da
+    ' vodi do prijemnice sa neispravnom vezom fakture (kolona 9 problema;
+    ' krug 9: legitimna nefakturisana vise NIJE na listi, pa vozilo daje
+    ' F-lanac -- PRJ-SLED-F2 tvrdi "Da" ka nepostojecoj fakturi).
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "zb-test-slf")
+    AssertEq CLng(d(2)), 1, _
+             "pretraga po broju zbirne nalazi neispravnu vezu fakture"
+    AssertEq Trim$(CStr(d(1)(1, 3))), "34/150326", "i to bas njen red"
+
+    ' Krug 8 R2: broj DRUGE fakture M-lanca zivi samo u SearchRefs
+    ' ("2 fakt." prikaz ga guta) -- smer nazad mora da radi na OBE
+    ' projekcije istog zrna.
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "8/2026")
+    AssertEq CLng(d(2)), 1, "broj progutane fakture nalazi LANAC red"
+    modScrSledljivost.Scr_SlTestSet "PARCELE", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "8/2026")
+    AssertEq CLng(d(2)), 1, "broj progutane fakture nalazi i PARCELE red"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 150. Zona: polja, KPI, detalj traka i dugmad se stvarno grade i
+' rasporedjuju. Tvrdi se POSLE Unload-a (par. 7.9).
+Private Sub T_ZonaSled_PoljaIRaspored()
+    Dim f As frmOtkupUI, z As Object, nm As Variant
+    Dim nema As String
+    Dim visina As Single
+    Dim odTxt As String
+
+    Set f = NewOtkupUIForm()
+    Set z = f.Controls.Add("Forms.Frame.1", "zProbaSl", True)
+    z.width = 1200: z.Height = 300
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_Build z
+
+    For Each nm In Array("slBg", "slCap", "slHint", "slLnB", _
+                         "slKL0", "slKV0", "slKL1", "slKV1", _
+                         "slDetCap", "slDetR0", "slDetR5", _
+                         "scrSlOd", "scrSlDo", "scrSlDok", "scrSlPov", _
+                         "scrSlPrint", "scrSlLanac", "scrSlSab", "scrSlAuto")
+        If Not KontrolaPostoji(z, CStr(nm)) Then nema = nema & " " & CStr(nm)
+    Next nm
+
+    ' Datumska polja MORAJU biti polja ljuske (okvir nm + kontrola nmT).
+    If KontrolaPostoji(z, "scrSlOd") Then
+        If Not KontrolaPostoji(z.Controls("scrSlOd"), "scrSlOdT") Then _
+            nema = nema & " scrSlOdT"
+        odTxt = CStr(z.Controls("scrSlOd").Controls("scrSlOdT").text)
+    End If
+    ' Polje izbora dokumenta je COMBO ljuske (okvir + kontrola + strelica)
+    ' -- dropdown sa filterom, smoke krug 3b.
+    If KontrolaPostoji(z, "scrSlDok") Then
+        If Not KontrolaPostoji(z.Controls("scrSlDok"), "scrSlDokT") Then _
+            nema = nema & " scrSlDokT"
+        If Not KontrolaPostoji(z.Controls("scrSlDok"), "scrSlDokD") Then _
+            nema = nema & " scrSlDokD"
+    End If
+
+    visina = modScrSledljivost.Scr_Layout(z, 1200, 300)
+
+    modScrSledljivost.Scr_SlTestReset
+    Unload f
+
+    ' Nalazi se TVRDE POSLE Unload-a -- dok forma zivi, njena masinerija
+    ' brise Err izmedju Err.Raise i omotnice testa (par. 7.9).
+    AssertEq nema, "", "zona sledljivosti nema nijednu kontrolu manje"
+    AssertEq (visina > 0), True, "Scr_Layout prijavljuje visinu zone"
+    AssertEq odTxt, "1.1." & Year(Date), _
+             "default opsega je 1.1. tekuce godine (legacy)"
+End Sub
+
+' 156. Povezivanje (smoke krug 2): kandidati za rucno povezivanje po
+' legacy pravilu frmSledljivost -- ista stanica + isti datum, bez
+' storniranih. SAMO citanje: upis (Reassign/AutoLink) se ovde ne zove,
+' testovi dele svesku a OTK-NAL-DJ mora ostati nepovezan (test 152 ga
+' meri kao 'nepovezan'). Uz to: klasa-kod kolona koja radnju "Povezi..."
+' vodi je prenosna (prio 4), a red nepovezanog je nosi.
+Private Sub T_Sled_PovezivanjeKandidati()
+    Dim k As Variant, i As Long
+    Dim imaIsta As Boolean, imaTudja As Boolean
+    Dim spec As String
+    Dim d As Variant, redovi As Variant, n As Long, r As Long
+
+    k = modSledljivost.GetOtpremnicaKandidatiZaOtkup("OTK-NAL-DJ")
+    AssertEq IsArray(k), True, "nepovezan otkup ima kandidate za povezivanje"
+    If IsArray(k) Then
+        For i = 1 To UBound(k, 1)
+            If CStr(k(i, 1)) = "OTP-TEST-1" Then imaIsta = True
+            If CStr(k(i, 1)) = "OTP-LEG-B" Then imaTudja = True
+        Next i
+    End If
+    AssertEq imaIsta, True, "kandidat sa iste stanice i datuma je u listi"
+    AssertEq imaTudja, False, "kandidati su samo sa stanice otkupa"
+
+    AssertEq IsArray(modSledljivost.GetOtpremnicaKandidatiZaOtkup("OTK-NEMA-GA")), _
+             False, "nepoznat otkup nema kandidate"
+    AssertEq IsArray(modSledljivost.GetOtpremnicaKandidatiZaOtkup("")), _
+             False, "prazan ID nema kandidate"
+
+    ' Klasa-kod: poslednja kolona NEPOTPUNIH, prio 4 (ne crta se).
+    spec = CStr(modScrSledljivost.SlKoloneZaListu("NEPOTPUNI")( _
+              UBound(modScrSledljivost.SlKoloneZaListu("NEPOTPUNI"))))
+    AssertEq Split(spec, "|")(0), "OTKUI_HDS_KLASAKOD", _
+             "poslednja kolona nepotpunih je klasa-kod"
+    AssertEq Split(spec, "|")(4), "4", "klasa-kod je prio 4 -- ne crta se"
+
+    ' Red nepovezanog otkupa NOSI klasa-kod (ruta radnje ne pogadja
+    ' iz prikaznog teksta).
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")
+    redovi = d(1): n = CLng(d(2))
+    r = SledNadjiGridRed(redovi, n, 8, "OTK-NAL-DJ")
+    AssertEq (r > 0), True, "red nepovezanog otkupa je u listi nepotpunih"
+    If r > 0 Then AssertEq CStr(redovi(r, 9)), "OTKUP-BEZ-OTPREMNICE", _
+                           "red nepovezanog nosi klasa-kod za rutu radnje"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 157. Mete sledljivosti (smoke krug 3): kojim dokumentom se sledljivost
+' robe STVARNO dokazuje -- zbirna (roba prodata dalje kao sveza), paleta
+' (roba u magacinu sveze robe -> paletni list), prerada (roba preradjena /
+' u magacinu preradjene robe -> preradni list). Sve su podatkovne veze:
+' paletna stavka nosi BrojZbirne, preradna stavka PaletaID (join kao
+' modIntegritet D2). Fail-closed: stornirana paleta nije meta, preradjena
+' paleta nije "sveza" meta. Samo citanje.
+Private Sub T_Sled_MeteSledljivosti()
+    Dim m As Variant, i As Long
+    Dim imaPal As Boolean, imaX As Boolean
+    Dim imaPre As Boolean, imaSvezu As Boolean
+
+    ' Potpun SLED lanac: roba i prodata (zbirna) i na zatvorenoj svezoj
+    ' paleti; STORNIRANA paleta iste zbirne (PAL-SLED-X, stavka joj NIJE
+    ' stornirana) ne sme da udje.
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLED")
+    AssertEq IsArray(m), True, "SLED zbirna ima mete"
+    AssertEq CStr(m(1, 1)), "ZBIRNA", "prva meta je uvek zbirna (sablon)"
+    For i = 1 To UBound(m, 1)
+        If CStr(m(i, 2)) = "PAL-SLED-1" Then imaPal = True
+        If CStr(m(i, 2)) = "PAL-SLED-X" Then imaX = True
+    Next i
+    AssertEq imaPal, True, "sveza paleta sa robom te zbirne je meta"
+    AssertEq imaX, False, "stornirana paleta nije meta sledljivosti"
+    AssertEq UBound(m, 1), 2, "SLED: tacno zbirna + jedna sveza paleta"
+
+    ' SLN lanac: paleta je PRERADJENA -> meta je preradni list, ne paleta.
+    imaPal = False
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLN")
+    AssertEq IsArray(m), True, "SLN zbirna ima mete"
+    For i = 1 To UBound(m, 1)
+        If CStr(m(i, 2)) = "PAL-SLED-2" Then imaSvezu = True
+        If CStr(m(i, 2)) = "PRE-SLED-1" Then imaPre = True
+        If CStr(m(i, 1)) = "PALETA" Then imaPal = True
+    Next i
+    AssertEq imaSvezu, False, "preradjena paleta nije meta 'sveze robe'"
+    AssertEq imaPal, False, "SLN nema nijednu svezu metu palete"
+    AssertEq imaPre, True, "prerada nad preradjenom paletom je meta"
+    AssertEq UBound(m, 1), 2, "SLN: tacno zbirna + jedna prerada"
+    AssertEq CStr(m(2, 3)), "41/2026", "prikaz prerade je broj/godina"
+
+    ' Prazan broj nema mete; nepoznat broj ima SAMO zbirnu -- postojanje
+    ' se ne izmislja, sablon ce sam reci NEMA.
+    AssertEq IsArray(modIzvestaj.ReportSledljivostMete("")), False, _
+             "prazan broj zbirne nema mete"
+    m = modIzvestaj.ReportSledljivostMete("ZB-NEMA-GA")
+    AssertEq UBound(m, 1), 1, "nepoznat broj: samo zbirna meta"
+
+    ' Krug 8 R3: dvosmislen broj (ZB-TEST-SLDD dele dva vlasnika) --
+    ' jedina meta je NEJASNA oznaka bez stampe, a sablon ga odbija
+    ' fail-closed PRE rezima stampe (zato radi i pod OFF fixture-om).
+    m = modIzvestaj.ReportSledljivostMete("ZB-TEST-SLDD")
+    AssertEq UBound(m, 1), 1, "dvosmislen broj nema stamparske mete"
+    AssertEq CStr(m(1, 1)), "ZBIRNA-NEJASNA", _
+             "meta dvosmislenog broja je NEJASNA"
+    AssertEq modIzvestaj.StampajSledljivostZbirne("ZB-TEST-SLDD"), _
+             "DVOSMISLEN", "sablon odbija dvosmislen broj zbirne"
+End Sub
+
+' 158. Polje izbora dokumenta sledljivosti (smoke krug 3b): ponuda = SVI
+' dokumenti perioda (zbirne po DISTINCT broju, sveze palete, prerade) iz
+' ISTOG snimka kao liste; kucanje suzava substring pretragom (kvake-fold
+' kao mreza). Fail-closed: stornirana paleta nije u ponudi, preradjena
+' nije "sveza", dvosmislen broj zbirne se nudi JEDNOM (stampa sablona je
+' po broju -- legacy cmbZbirna semantika). Samo citanje.
+Private Sub T_Sled_DokumentiPonuda()
+    Dim d As Variant, p As Variant, i As Long
+    Dim nSled As Long, nSldd As Long
+    Dim imaPal As Boolean, imaX As Boolean
+    Dim imaPre As Boolean, imaSvezu As Boolean, imaB As Boolean
+
+    modScrSledljivost.Scr_SlTestReset
+    modScrSledljivost.Scr_SlTestSet "LANAC", IzvOdS(), IzvDoS()
+    d = modScrSledljivost.Scr_Rows("sve", "")     ' puni snimak konteksta
+
+    p = modScrSledljivost.SlDokPonuda()
+    AssertEq IsArray(p), True, "ponuda dokumenata nad fixture-om nije prazna"
+    For i = 1 To UBound(p, 1)
+        Select Case CStr(p(i, 2))
+            Case "ZBIRNA|ZB-TEST-SLED": nSled = nSled + 1
+            ' Krug 8 R3: dvosmislen broj se nudi kao NEJASAN (bez kg i
+            ' bez stampe), ne kao "printable" zbirna -- sabiranje tudjih
+            ' vlasnika u jednu stavku je tacno ono sto se ne sme.
+            Case "ZBIRNA-NEJASNA|ZB-TEST-SLDD": nSldd = nSldd + 1
+            Case "PALETA|PAL-SLED-1"
+                imaPal = True
+                ' Suzavanje pri kucanju radi LJUSKIN panel PO PRIKAZU
+                ' (krug 6 S13) -- prikaz zato MORA da nosi broj.
+                AssertEq (InStr(1, CStr(p(i, 1)), "31/2026") > 0), True, _
+                         "prikaz palete nosi broj -- po njemu panel suzava"
+            Case "PALETA|PAL-SLED-X": imaX = True
+            Case "PALETA|PAL-SLED-2": imaSvezu = True
+            Case "PALETA|PAL-SLED-B": imaB = True
+            Case "PRERADA|PRE-SLED-1": imaPre = True
+        End Select
+    Next i
+    AssertEq nSled, 1, "zbirna SLED lanca je u ponudi, jednom"
+    AssertEq nSldd, 1, "dvosmislen broj je u ponudi kao NEJASAN, jednom"
+    AssertEq imaPal, True, "sveza paleta je u ponudi (paletni list)"
+    AssertEq imaSvezu, False, "preradjena paleta nije u ponudi kao sveza"
+    AssertEq imaX, False, "stornirana paleta nije u ponudi"
+    ' Krug 8 R4: nevalidan datum NE sme tiho da sakrije dokument (IIf
+    ' mina bi na njemu i pukla -- ovaj red cuva i ugovor i zivot).
+    AssertEq imaB, True, "dokument sa nevalidnim datumom ostaje vidljiv"
+    AssertEq imaPre, True, "prerada je u ponudi (preradni list)"
+    modScrSledljivost.Scr_SlTestReset
+End Sub
+
+' 159. Ljuskin panel (zPop, v6-ui-188): tekst reda zivi u UNUTRASNJEM
+' labelu visine TxtH(TS_BODY) centriranom u redu -- label pune visine
+' (21pt) je GDI-ju pomerao baseline fazu po redu, pa je "8. red izgledao
+' vecim fontom" iako je Font.Size svuda isti (Sledljivost smoke S15;
+' review merenje: isti bounding box, druga rasterizacija). Meri se
+' GRADNJA: par pozadina+tekst za svih 14 redova, tekst NIZI od reda,
+' istog fonta. Tvrdi se posle Unload-a (par. 7.9).
+Private Sub T_Ljuska_PopupTekstTraka()
+    Dim f As frmOtkupUI, z As Object, i As Long
+    Dim nema As String, losa As String
+    Dim imaZ As Boolean
+
+    Set f = NewOtkupUIForm()
+    Set z = Nothing
+    On Error Resume Next
+    Set z = f.Controls("zPop")
+    On Error GoTo 0
+    imaZ = Not (z Is Nothing)
+    If imaZ Then
+        For i = 0 To 13
+            If Not KontrolaPostoji(z, "pop" & i) Then nema = nema & " pop" & i
+            If Not KontrolaPostoji(z, "popT" & i) Then
+                nema = nema & " popT" & i
+            Else
+                If z.Controls("popT" & i).Height >= _
+                   z.Controls("pop" & i).Height Then losa = losa & " h" & i
+                If z.Controls("popT" & i).Font.Size <> _
+                   z.Controls("pop" & i).Font.Size Then losa = losa & " f" & i
+            End If
+        Next i
+    End If
+    Unload f
+
+    AssertEq imaZ, True, "panel zPop postoji na formi"
+    AssertEq nema, "", "svaki red panela ima par pozadina+tekst"
+    AssertEq losa, "", "tekst labeli su nizi od reda i istog fonta"
+End Sub

@@ -47,6 +47,64 @@ Public Const IZV_TAB_PROSECNA_CENA As Long = 6
 Public Const IZV_TAB_MANJAK As Long = 7
 Public Const IZV_TAB_KARTICA As Long = 8
 
+' ============================================================
+' SLEDLJIVOST (v6-ui-187) - lanac dokumenata kao read-model.
+' Ekran modScrSledljivost je PRIKAZ nad ReportSledljivostLanac /
+' ReportSledljivostProblemi (dno modula); nijedno pravilo razresenja se
+' tamo ne izmislja:
+'  - otkup -> otpremnica ide iskljucivo po OtpremnicaID;
+'  - otpremnica/prijemnica -> zbirna ide kroz ISTO pravilo vlasnika kao
+'    ReportOtkupRobaOM i ReportManjak (BuildManjakDict + PrijemZaZbirnu:
+'    #V>1 bez razresenja po vozacu = fail-closed IZV_VLASNIK_NEJASAN,
+'    bez prijemnice = IZV_NEMA_PRIJEMA);
+'  - prijemnica -> faktura ide po denorm FakturaID koloni, istoj koju
+'    cita ekran Fakturisanja (tblFakturaStavke je normativ, ne cita se).
+' Oznake su ASCII konstante (kao IZV_NEMA_PRIJEMA gore) jer se po njima
+' traze redovi u testovima -- ne idu kroz modPoruke katalog.
+' ============================================================
+Public Const SLED_OZN_NEPOVEZAN As String = "nepovezan"
+Public Const SLED_OZN_OTP_STORNIRANA As String = "otpremnica stornirana"
+Public Const SLED_OZN_VEZA As String = "veza neusaglasena"
+Public Const SLED_OZN_BEZ_ZBIRNE As String = "bez zbirne"
+Public Const SLED_OZN_ZBIRNA_NEMA As String = "zbirna ne postoji"
+' Krug 9: "Fakturisano=Ne" je LEGITIMAN tok (roba u sopstvenu hladnjacu
+' -> paleta -> prerada; faktura nije obavezna karika sledljivosti).
+' Oznaka postoji SAMO za podatkovnu kontradikciju: prijemnica TVRDI da
+' je fakturisana, a veza ne pokazuje na postojecu aktivnu fakturu.
+Public Const SLED_OZN_FAK_NEISPRAVNA As String = "faktura neusaglasena"
+Public Const SLED_OZN_KG As String = "kg razlika"
+Public Const SLED_OZN_BEZ_PARCELE As String = "bez parcele"
+
+' Klase problema u ReportSledljivostProblemi (kolona 1). ASCII kodovi;
+' prikazni tekst daje ekran kroz modPoruke.
+Public Const SLEDP_BEZ_OTPREMNICE As String = "OTKUP-BEZ-OTPREMNICE"
+Public Const SLEDP_VEZA As String = "VEZA-NEUSAGLASENA"
+Public Const SLEDP_BEZ_ZBIRNE As String = "OTPREMNICA-BEZ-ZBIRNE"
+Public Const SLEDP_BROJ_DVOSMISLEN As String = "BROJ-ZBIRNE-DVOSMISLEN"
+Public Const SLEDP_BEZ_PRIJEMA As String = "ZBIRNA-BEZ-PRIJEMA"
+Public Const SLEDP_FAK_NEISPRAVNA As String = "FAKTURA-VEZA-NEISPRAVNA"
+Public Const SLEDP_KG_RAZLIKA As String = "KG-RAZLIKA"
+
+' Tipovi meta sledljivosti (ReportSledljivostMete, kolona 1) -- ASCII
+' kodovi za rutiranje stampe; prikazno ime daje ekran kroz modPoruke.
+' NEJASNA (krug 8 R3): broj zbirne dele RAZLICITI aktivni vlasnici
+' (vozac+kupac) -- sledljivost po prostom broju bi sabrala tudje tokove,
+' pa se takva meta nudi samo kao oznaka, BEZ stampe (fail-closed).
+Public Const SLEDM_ZBIRNA As String = "ZBIRNA"
+Public Const SLEDM_PALETA As String = "PALETA"
+Public Const SLEDM_PRERADA As String = "PRERADA"
+Public Const SLEDM_NEJASNA As String = "ZBIRNA-NEJASNA"
+
+' Vrsta karike "zbirna" za rutu stampe u NEPOTPUNI listi ekrana. Zbirna
+' nema svoju stampu, pa vrsta postoji da radnja ume da ODBIJE s razlogom
+' (legacy Case Else obrazac) -- ne da bi se stampalo.
+Public Const SLED_DOK_ZBIRNA As String = "Zbirna"
+
+' Prag poredjenja kg niz lanac -- ISTA vrednost kao (privatni)
+' modDokumentInvariant.EPS_KG: dva mesta, jedan prag (par. 12.4 "prag je
+' isti kao kod slaganja"). Ne menjati jedno bez drugog.
+Public Const SLED_EPS_KG As Double = 0.01
+
 ' Pripada li tblNovac red stanici. Primarno po OMID-u SAMOG REDA (istorijska
 ' pripadnost -- isti kljuc koji ReportIsplata("OM") vec koristi), pa se isplate
 ' vise ne prelivaju izmedju stanica (FM-0028 #3). Red bez OMID-a (npr. stariji
@@ -4176,8 +4234,1506 @@ Private Sub IzvRethrow(ByVal sourceName As String, _
     On Error Resume Next
     LogErr sourceName
     On Error GoTo 0
-    
+
     Err.Raise errNum, sourceName, _
               "Source=" & errSrc & " | " & errDesc
+End Sub
+
+' ============================================================
+' SLEDLJIVOST (v6-ui-187) - dva read-modela lanca dokumenata.
+' Konstante (SLED_OZN_* / SLEDP_*) su u deklaracionoj sekciji na vrhu.
+' ============================================================
+
+Private Function SledTxt(ByVal v As Variant) As String
+    SledTxt = Trim$(NzToText(v))
+End Function
+
+Private Function SledDbl(ByVal v As Variant) As Double
+    If IsNumeric(v) And Not IsEmpty(v) Then SledDbl = CDbl(v)
+End Function
+
+' Razresenje zbirne za jednu otpremnicu-stavku -- ISTI koraci kao u
+' ReportOtkupRobaOM (#V / #1 / #O kljucevi BuildManjakDict-a), izdvojeni da
+' ih lanac i lista problema ne prepisuju. Fail-closed: #V>1 bez jednoznacnog
+' razresenja po vozacu ostavlja razresen=False.
+Private Sub SledResolveZbirna(ByVal manjakDict As Object, ByVal brZbr As String, _
+                              ByVal vozID As String, ByVal klasa As String, _
+                              ByRef nVlasnika As Long, ByRef razresen As Boolean, _
+                              ByRef stavkaKey As String, ByRef cntNejasan As Long, _
+                              ByRef cntPrijem As Long, ByRef prijKg As Double, _
+                              ByRef zbirnaKg As Double)
+    Dim ownVals As Variant
+    nVlasnika = 0
+    razresen = False
+    stavkaKey = ""
+    cntNejasan = 0
+    cntPrijem = 0
+    prijKg = 0
+    zbirnaKg = 0
+
+    If manjakDict.Exists("#V|" & brZbr) Then nVlasnika = CLng(manjakDict("#V|" & brZbr))
+    If manjakDict.Exists("#N|" & brZbr) Then cntNejasan = CLng(manjakDict("#N|" & brZbr))
+
+    If nVlasnika = 1 Then
+        razresen = True
+        stavkaKey = ZbirnaStavkaKljuc(CStr(manjakDict("#1|" & brZbr)), klasa)
+        ' Prijem po (broj, klasa) -- dokazano jedan vlasnik; hvata i starije
+        ' prijemnice bez popunjenog vlasnika.
+        If manjakDict.Exists("#C|" & brZbr & "|" & klasa) Then _
+            cntPrijem = CLng(manjakDict("#C|" & brZbr & "|" & klasa))
+        If manjakDict.Exists("#K|" & brZbr & "|" & klasa) Then _
+            prijKg = CDbl(manjakDict("#K|" & brZbr & "|" & klasa))
+    ElseIf nVlasnika > 1 Then
+        If manjakDict.Exists("#O|" & brZbr & "|" & vozID) Then
+            razresen = True
+            stavkaKey = ZbirnaStavkaKljuc(CStr(manjakDict("#O|" & brZbr & "|" & vozID)), klasa)
+            If manjakDict.Exists(stavkaKey) Then
+                ownVals = manjakDict(stavkaKey)
+                prijKg = CDbl(ownVals(1))
+                cntPrijem = CLng(ownVals(2))
+            End If
+        End If
+    End If
+
+    If Len(stavkaKey) > 0 Then
+        If manjakDict.Exists(stavkaKey) Then
+            ownVals = manjakDict(stavkaKey)
+            zbirnaKg = CDbl(ownVals(0))
+        End If
+    End If
+End Sub
+
+' Mapa parcela: ParcelaID -> Array(KatBroj, Kultura, PovrsinaHa, GGAPStatus).
+' Aktivnost se NE filtrira: sledljivost je istorijska, i neaktivna parcela je
+' istina o poreklu robe (isto kao legacy TraceByZbirna).
+Private Function SledParceleMapa() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cKat As Long, cKul As Long, cPov As Long, cGgap As Long
+    Dim pid As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set SledParceleMapa = d
+    On Error Resume Next
+    src = GetTableData(TBL_PARCELE)
+    On Error GoTo 0
+    If Not IsArray(src) Then Exit Function
+    ' Krug 9: kolone su OBAVEZNE (TraceByZbirna ih vec tako tretira), pa
+    ' RequireColumnIndex umesto IIf(c > 0, src(i, c), ...) -- IIf racuna
+    ' obe grane, pa bi indeks 0 svejedno pipnuo src(i, 0) i pukao.
+    cId = RequireColumnIndex(TBL_PARCELE, COL_PAR_ID, "modIzvestaj.SledParceleMapa")
+    cKat = RequireColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ, "modIzvestaj.SledParceleMapa")
+    cKul = RequireColumnIndex(TBL_PARCELE, COL_PAR_KULTURA, "modIzvestaj.SledParceleMapa")
+    cPov = RequireColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA, "modIzvestaj.SledParceleMapa")
+    cGgap = RequireColumnIndex(TBL_PARCELE, COL_PAR_GGAP, "modIzvestaj.SledParceleMapa")
+    For i = 1 To UBound(src, 1)
+        pid = SledTxt(src(i, cId))
+        If Len(pid) > 0 And Not d.Exists(pid) Then
+            d.Add pid, Array( _
+                SledTxt(src(i, cKat)), _
+                SledTxt(src(i, cKul)), _
+                SledDbl(src(i, cPov)), _
+                SledTxt(src(i, cGgap)))
+        End If
+    Next i
+End Function
+
+' Mapa AKTIVNIH otpremnica: OtpremnicaID -> Array(Broj, BrojZbirne, VozacID,
+' Klasa, Kolicina, Datum). Storniranih NEMA u mapi -- otkup vezan za takvu
+' otpremnicu nosi oznaku SLED_OZN_OTP_STORNIRANA (fail-closed, ne premoscuje).
+' Mapa AKTIVNIH faktura: FakturaID -> broj (krug 8 R1). Stornirane i
+' zapisi bez broja se NE mapiraju -- Exists() time znaci "postoji,
+' aktivna i ima broj", pa je kapija fakturisanosti jedan upit.
+Private Function SledFakMapa() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cBr As Long
+    Dim iD As String, br As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set SledFakMapa = d
+    src = GetTableData(TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    src = ExcludeStornirano(src, TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    cId = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+    cBr = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+    For i = 1 To UBound(src, 1)
+        iD = Trim$(SledTxt(src(i, cId)))
+        br = Trim$(SledTxt(src(i, cBr)))
+        If Len(iD) > 0 And Len(br) > 0 Then
+            If Not d.Exists(iD) Then d.Add iD, br
+        End If
+    Next i
+End Function
+
+' Broj RAZLICITIH aktivnih vlasnika (vozac+kupac) koji dele broj zbirne
+' (krug 8 R3). 0 = broj ne postoji medju aktivnima. Isto vlasnicko
+' pravilo kao BuildManjakDict, bez gradnje celog recnika.
+Private Function SledVlasnikaBroja(ByVal brojZbirne As String) As Long
+    Const SRC As String = "modIzvestaj.SledVlasnikaBroja"
+    Dim d As Variant, i As Long
+    Dim cBr As Long, cVoz As Long, cKup As Long
+    Dim vl As Object: Set vl = CreateObject("Scripting.Dictionary")
+    vl.CompareMode = vbTextCompare
+    d = GetTableData(TBL_ZBIRNA)
+    If IsArray(d) Then d = ExcludeStornirano(d, TBL_ZBIRNA)
+    If Not IsArray(d) Then Exit Function
+    cBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    cVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+    cKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+    For i = 1 To UBound(d, 1)
+        If UCase$(Trim$(SledTxt(d(i, cBr)))) = UCase$(Trim$(brojZbirne)) Then
+            vl(Trim$(SledTxt(d(i, cVoz))) & "|" & Trim$(SledTxt(d(i, cKup)))) = True
+        End If
+    Next i
+    SledVlasnikaBroja = vl.count
+End Function
+
+Private Function SledOtpMapa() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cBr As Long, cZbr As Long, cVoz As Long
+    Dim cKl As Long, cKol As Long, cDat As Long
+    Dim oid As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set SledOtpMapa = d
+    src = GetTableData(TBL_OTPREMNICA)
+    If Not IsArray(src) Then Exit Function
+    src = ExcludeStornirano(src, TBL_OTPREMNICA)
+    If Not IsArray(src) Then Exit Function
+    cId = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_ID)
+    cBr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ)
+    cZbr = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE)
+    cVoz = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC)
+    cKl = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KLASA)
+    cKol = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA)
+    cDat = GetColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM)
+    If cId = 0 Then Exit Function
+    For i = 1 To UBound(src, 1)
+        oid = SledTxt(src(i, cId))
+        If Len(oid) > 0 And Not d.Exists(oid) Then
+            d.Add oid, Array( _
+                SledTxt(src(i, cBr)), SledTxt(src(i, cZbr)), _
+                SledTxt(src(i, cVoz)), KlasaOrDefault(src(i, cKl)), _
+                SledDbl(src(i, cKol)), src(i, cDat))
+        End If
+    Next i
+End Function
+
+' Zbir kg NESTORNIRANIH blokova po OtpremnicaID (svi datumi -- kg karike se
+' poredi nad CELIM dokumentom, ne nad periodom prikaza).
+Private Function SledBlokSumMapa(ByRef otkupData As Variant, ByVal cOtkOtp As Long, _
+                                 ByVal cOtkKol As Long) As Object
+    Dim d As Object, i As Long, oid As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set SledBlokSumMapa = d
+    If Not IsArray(otkupData) Then Exit Function
+    For i = 1 To UBound(otkupData, 1)
+        oid = SledTxt(otkupData(i, cOtkOtp))
+        If Len(oid) > 0 Then
+            If Not d.Exists(oid) Then d.Add oid, 0#
+            d(oid) = CDbl(d(oid)) + SledDbl(otkupData(i, cOtkKol))
+        End If
+    Next i
+End Function
+
+' Prijemnice po scope-u razresenja: "B|broj|klasa" (agregat bez vlasnika --
+' vazi samo uz #V=1) i "S|stavkaKljuc" (pun vlasnik). Vrednost je Collection
+' zapisa "PrijemnicaID|Broj|Kg|Fakturisano|FakturaID|KupacID".
+Private Function SledPrijMapa() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cBr As Long, cZbr As Long, cVoz As Long, cKup As Long
+    Dim cKl As Long, cKol As Long, cFakt As Long, cFid As Long
+    Dim brZbr As String, rec As String, kk As String
+    Set d = CreateObject("Scripting.Dictionary")
+    Set SledPrijMapa = d
+    src = GetTableData(TBL_PRIJEMNICA)
+    If Not IsArray(src) Then Exit Function
+    src = ExcludeStornirano(src, TBL_PRIJEMNICA)
+    If Not IsArray(src) Then Exit Function
+    cId = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID)
+    cBr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ)
+    cZbr = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE)
+    cVoz = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_VOZAC)
+    cKup = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC)
+    cKl = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KLASA)
+    cKol = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA)
+    cFakt = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO)
+    cFid = GetColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID)
+    For i = 1 To UBound(src, 1)
+        brZbr = SledTxt(src(i, cZbr))
+        If Len(brZbr) = 0 Then GoTo SledeciP
+        rec = SledTxt(src(i, cId)) & "|" & SledTxt(src(i, cBr)) & "|" & _
+              CStr(SledDbl(src(i, cKol))) & "|" & SledTxt(src(i, cFakt)) & "|" & _
+              SledTxt(src(i, cFid)) & "|" & SledTxt(src(i, cKup))
+        kk = "B|" & brZbr & "|" & KlasaOrDefault(src(i, cKl))
+        If Not d.Exists(kk) Then d.Add kk, New Collection
+        d(kk).Add rec
+        kk = "S|" & ZbirnaStavkaKljuc( _
+                 ZbirnaVlasnikKljuc(brZbr, SledTxt(src(i, cVoz)), SledTxt(src(i, cKup))), _
+                 KlasaOrDefault(src(i, cKl)))
+        If Not d.Exists(kk) Then d.Add kk, New Collection
+        d(kk).Add rec
+SledeciP:
+    Next i
+End Function
+
+' ============================================================
+' LANAC. Zrno = JEDAN nestorniran otkupni list u [datumOd, datumDo];
+' kolone su razresene karike NAPRED (i podaci za projekciju PO PARCELI).
+'
+' Returns: 2D Array (1..N, 1..27) ili Empty:
+'   1  Datum otkupa             14 Oznaka ("" = potpun lanac)
+'   2  BrojDokumenta            15 OtkupID
+'   3  KooperantID              16 OtpremnicaID
+'   4  Kooperant (naziv)        17 ParcelaID
+'   5  VrstaVoca                18 KatBroj
+'   6  Klasa                    19 Kultura (parcele)
+'   7  Kolicina (kg otkupa)     20 PovrsinaHa
+'   8  BrojOtpremnice           21 GGAPStatus
+'   9  BrojZbirne (otpremnicin) 22 BPGBroj (kooperanta)
+'   10 Prijem (broj/"N prij.")  23 Stanica (naziv)
+'   11 Prijem kg (ili Empty)    24 Vozac (naziv, otpremnicin)
+'   12 Faktura (broj/"N fakt.") 25 Otpremnica kg (ili Empty)
+'   13 Kupac (naziv vlasnika)   26 Zbirna kg stavke (ili Empty)
+'   27 SearchRefs (krug 8 R2): SVI brojevi prijemnica i faktura reda,
+'      pipe-spojeni -- prikaz "N prij."/"N fakt." guta pojedinacne
+'      brojeve, a pretraga unazad ih mora naci. Ne prikazuje se; ide u
+'      haystack LANAC i PARCELE.
+'
+' Oznaka (14) je PRVA prekinuta/visesmislena karika (SLED_OZN_* /
+' IZV_VLASNIK_NEJASAN / IZV_NEMA_PRIJEMA); potpun lanac kome kg curi na
+' nekoj karici nosi SLED_OZN_KG (prag SLED_EPS_KG). NISTA se ne
+' premoscuje: zbirna se cita ISKLJUCIVO iz otpremnice (otkupov denorm
+' BrojZbirne sluzi samo za proveru saglasnosti -> SLED_OZN_VEZA), prijem
+' se pripisuje istim fail-closed pravilom kao ReportOtkupRobaOM. Red
+' UKUPNO se NE vraca: podnozje racuna ekran, stampa dodaje svoj.
+' ============================================================
+Public Function ReportSledljivostLanac(ByVal datumOd As Date, _
+                                       ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostLanac"
+    On Error GoTo EH
+
+    Dim otkupData As Variant
+    otkupData = GetTableData(TBL_OTKUP)
+    If Not IsArray(otkupData) Then Exit Function
+    otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)
+    If Not IsArray(otkupData) Then Exit Function
+
+    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkSt As Long
+    Dim cOtkVr As Long, cOtkKl As Long, cOtkKol As Long, cOtkBr As Long
+    Dim cOtkOtp As Long, cOtkZbr As Long, cOtkPar As Long
+    cOtkId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+    cOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+    cOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+    cOtkSt = RequireColumnIndex(TBL_OTKUP, COL_OTK_STANICA, SRC)
+    cOtkVr = RequireColumnIndex(TBL_OTKUP, COL_OTK_VRSTA, SRC)
+    cOtkKl = RequireColumnIndex(TBL_OTKUP, COL_OTK_KLASA, SRC)
+    cOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+    cOtkBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+    cOtkOtp = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+    cOtkZbr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
+    cOtkPar = RequireColumnIndex(TBL_OTKUP, COL_OTK_PARCELA, SRC)
+
+    ' Mape PRE petlje -- nijedan LookupValue po redu (par. 23.11/S5).
+    Dim otpMapa As Object: Set otpMapa = SledOtpMapa()
+    Dim blokSum As Object: Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkKol)
+    Dim manjakDict As Object: Set manjakDict = BuildManjakDict()
+    Dim prijMapa As Object: Set prijMapa = SledPrijMapa()
+    Dim parcele As Object: Set parcele = SledParceleMapa()
+    Dim koopMapa As Object: Set koopMapa = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Dim bpgMapa As Object: Set bpgMapa = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, COL_KOOP_BPG)
+    Dim kupMapa As Object: Set kupMapa = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Dim vozMapa As Object: Set vozMapa = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
+    Dim staMapa As Object: Set staMapa = BuildLookupDict(TBL_STANICE, "StanicaID", "Naziv")
+    ' Mapa AKTIVNIH faktura (krug 8 R1): BuildLookupDict ne iskljucuje
+    ' stornirane, pa je stale veza na storniranu fakturu izgledala validno.
+    Dim fakMapa As Object: Set fakMapa = SledFakMapa()
+
+    ' Zbir kg AKTIVNIH otpremnica po (broj, klasa) -- za karicni kg test
+    ' otpremnice -> zbirna (validan samo uz #V = 1, inace se ne racuna).
+    Dim otpSumBK As Object: Set otpSumBK = CreateObject("Scripting.Dictionary")
+    Dim ok As Variant, oInfo As Variant
+    For Each ok In otpMapa.keys
+        oInfo = otpMapa(ok)
+        If Len(CStr(oInfo(1))) > 0 Then
+            Dim bk As String
+            bk = CStr(oInfo(1)) & "|" & CStr(oInfo(3))
+            If Not otpSumBK.Exists(bk) Then otpSumBK.Add bk, 0#
+            otpSumBK(bk) = CDbl(otpSumBK(bk)) + CDbl(oInfo(4))
+        End If
+    Next ok
+
+    Dim odN As Double, doN As Double
+    odN = Int(CDbl(datumOd))
+    doN = Int(CDbl(datumDo))
+
+    ' Prvi prolaz: koliko redova ulazi u period.
+    Dim i As Long, n As Long, dSer As Double
+    For i = 1 To UBound(otkupData, 1)
+        If IsDate(otkupData(i, cOtkDat)) Then
+            dSer = Int(CDbl(CDate(otkupData(i, cOtkDat))))
+            If dSer < odN Or dSer > doN Then GoTo PreskociBroj
+        End If
+        n = n + 1
+PreskociBroj:
+    Next i
+    If n = 0 Then Exit Function
+
+    Dim result() As Variant
+    ReDim result(1 To n, 1 To 27)
+
+    Dim r As Long
+    Dim otpID As String, brZbr As String, blokZbr As String
+    Dim vozID As String, klasa As String, otpKg As Double
+    Dim nVl As Long, razresen As Boolean, stavkaKey As String
+    Dim cntNej As Long, cntPr As Long, prijKg As Double, zbirnaKg As Double
+    Dim oznaka As String, kupacID As String, koopID As String, pid As String
+    Dim pz As Variant, pInfo As Variant
+    Dim prijC As Collection, fakture As Object
+    Dim prikazPrij As String, prikazFak As String
+    Dim kg1 As Boolean, kg2 As Boolean
+
+    For i = 1 To UBound(otkupData, 1)
+        If IsDate(otkupData(i, cOtkDat)) Then
+            dSer = Int(CDbl(CDate(otkupData(i, cOtkDat))))
+            If dSer < odN Or dSer > doN Then GoTo Sledeci
+        End If
+        r = r + 1
+
+        koopID = SledTxt(otkupData(i, cOtkKoop))
+        result(r, 1) = otkupData(i, cOtkDat)
+        result(r, 2) = SledTxt(otkupData(i, cOtkBr))
+        result(r, 3) = koopID
+        If koopMapa.Exists(koopID) Then result(r, 4) = Trim$(CStr(koopMapa(koopID))) Else result(r, 4) = koopID
+        result(r, 5) = SledTxt(otkupData(i, cOtkVr))
+        result(r, 6) = KlasaOrDefault(otkupData(i, cOtkKl))
+        result(r, 7) = SledDbl(otkupData(i, cOtkKol))
+        result(r, 15) = SledTxt(otkupData(i, cOtkId))
+
+        pid = SledTxt(otkupData(i, cOtkPar))
+        result(r, 17) = pid
+        If parcele.Exists(pid) Then
+            pInfo = parcele(pid)
+            result(r, 18) = CStr(pInfo(0))
+            result(r, 19) = CStr(pInfo(1))
+            result(r, 20) = CDbl(pInfo(2))
+            result(r, 21) = CStr(pInfo(3))
+        Else
+            result(r, 18) = ""
+            result(r, 19) = ""
+            result(r, 20) = Empty
+            result(r, 21) = ""
+        End If
+        If bpgMapa.Exists(koopID) Then result(r, 22) = Trim$(CStr(bpgMapa(koopID))) Else result(r, 22) = ""
+        Dim stId As String
+        stId = SledTxt(otkupData(i, cOtkSt))
+        If staMapa.Exists(stId) Then result(r, 23) = Trim$(CStr(staMapa(stId))) Else result(r, 23) = stId
+
+        ' --- karika 2: otpremnica (iskljucivo po OtpremnicaID) ---
+        oznaka = ""
+        kg1 = False
+        kg2 = False
+        otpID = SledTxt(otkupData(i, cOtkOtp))
+        blokZbr = SledTxt(otkupData(i, cOtkZbr))
+        result(r, 16) = otpID
+        result(r, 8) = ""
+        result(r, 9) = ""
+        result(r, 10) = ""
+        result(r, 11) = Empty
+        result(r, 12) = ""
+        result(r, 13) = ""
+        result(r, 24) = ""
+        result(r, 25) = Empty
+        result(r, 26) = Empty
+
+        If Len(otpID) = 0 Then
+            oznaka = SLED_OZN_NEPOVEZAN
+        ElseIf Not otpMapa.Exists(otpID) Then
+            ' Veza pokazuje na storniran ili nepostojeci dokument -- lanac
+            ' STAJE ovde, nista se ne premoscuje.
+            oznaka = SLED_OZN_OTP_STORNIRANA
+        Else
+            oInfo = otpMapa(otpID)
+            result(r, 8) = CStr(oInfo(0))
+            brZbr = CStr(oInfo(1))
+            vozID = CStr(oInfo(2))
+            klasa = CStr(oInfo(3))
+            otpKg = CDbl(oInfo(4))
+            result(r, 9) = brZbr
+            result(r, 25) = otpKg
+            If vozMapa.Exists(vozID) Then result(r, 24) = Trim$(CStr(vozMapa(vozID)))
+
+            ' kg karika 1: blokovi <-> otpremnica (nad celim dokumentom).
+            If blokSum.Exists(otpID) Then
+                If Abs(CDbl(blokSum(otpID)) - otpKg) > SLED_EPS_KG Then kg1 = True
+            End If
+
+            ' Saglasnost denorma: blok koji tvrdi zbirnu koju otpremnica nema
+            ' (ili drugu) je drift veze koju ReassignOtkupToOtpremnica_TX
+            ' odrzava -- prijavljuje se, ne premoscuje.
+            If Len(blokZbr) > 0 And UCase$(blokZbr) <> UCase$(brZbr) Then
+                oznaka = SLED_OZN_VEZA
+            ElseIf Len(brZbr) = 0 Then
+                oznaka = SLED_OZN_BEZ_ZBIRNE
+            End If
+
+            ' --- karika 3: zbirna (vlasnicko razresenje) ---
+            If Len(oznaka) = 0 Then
+                SledResolveZbirna manjakDict, brZbr, vozID, klasa, _
+                                  nVl, razresen, stavkaKey, cntNej, cntPr, prijKg, zbirnaKg
+                If nVl = 0 Then
+                    ' Broj postoji na otpremnici, a nijedna AKTIVNA zbirna ga
+                    ' ne nosi. (Bez fixture vozila -- ne tvrdi se testom.)
+                    oznaka = SLED_OZN_ZBIRNA_NEMA
+                Else
+                    result(r, 26) = zbirnaKg
+                    ' kg karika 2: otpremnice <-> zbirna, samo uz #V = 1.
+                    If nVl = 1 And otpSumBK.Exists(brZbr & "|" & klasa) Then
+                        If Abs(CDbl(otpSumBK(brZbr & "|" & klasa)) - zbirnaKg) > SLED_EPS_KG Then kg2 = True
+                    End If
+
+                    ' --- karika 4: prijemnice (fail-closed pravilo) ---
+                    pz = PrijemZaZbirnu(nVl, razresen, cntNej, cntPr, prijKg)
+                    If Not CBool(pz(0)) Then
+                        oznaka = CStr(pz(2))    ' IZV_VLASNIK_NEJASAN / IZV_NEMA_PRIJEMA
+                    Else
+                        result(r, 11) = CDbl(pz(1))
+                        ' Razlika zbirna <-> prijem se NE proverava:
+                        ' to je TRANSPORTNO KALO (smoke nalaz S1) --
+                        ' poslovna velicina koju mere Manjak izvestaji,
+                        ' ne kvar lanca. Vidljiva je u detalju (kg po
+                        ' karici), ne obelezava se kao oznaka.
+
+                        Set prijC = Nothing
+                        If nVl = 1 Then
+                            If prijMapa.Exists("B|" & brZbr & "|" & klasa) Then _
+                                Set prijC = prijMapa("B|" & brZbr & "|" & klasa)
+                        Else
+                            If prijMapa.Exists("S|" & stavkaKey) Then _
+                                Set prijC = prijMapa("S|" & stavkaKey)
+                        End If
+
+                        prikazPrij = ""
+                        prikazFak = ""
+                        Set fakture = CreateObject("Scripting.Dictionary")
+                        Dim prijLose As Boolean, refs As String
+                        prijLose = False
+                        refs = ""
+                        If Not prijC Is Nothing Then
+                            Dim recV As Variant, p() As String
+                            For Each recV In prijC
+                                p = Split(CStr(recV), "|")
+                                If prijC.count = 1 Then prikazPrij = p(1)
+                                ' SearchRefs (krug 8 R2): SVAKI broj
+                                ' prijemnice i fakture reda -- "2 prij."
+                                ' prikaz je gutao pojedinacne brojeve pa
+                                ' pretraga unazad nije radila.
+                                If Len(p(1)) > 0 Then refs = refs & "|" & p(1)
+                                ' Krug 9 (ispravka R1): "Fakturisano=Ne" je
+                                ' LEGITIMAN tok (hladnjaca/paleta/prerada) i
+                                ' NE obara kariku. Problem je SAMO prijemnica
+                                ' koja TVRDI "Da" bez validne veze: prazan
+                                ' FakturaID ili ID van aktivnih faktura --
+                                ' jedna takva obara kariku (ALL nad tvrdnjama),
+                                ' a NEPOTPUNI je prijavljuje pojedinacno.
+                                If p(3) = "Da" Then
+                                    If Len(p(4)) > 0 And fakMapa.Exists(p(4)) Then
+                                        If Not fakture.Exists(p(4)) Then fakture.Add p(4), True
+                                        refs = refs & "|" & Trim$(CStr(fakMapa(p(4))))
+                                    Else
+                                        prijLose = True
+                                        If Len(p(4)) > 0 Then refs = refs & "|" & p(4)
+                                    End If
+                                End If
+                            Next recV
+                            If prijC.count > 1 Then prikazPrij = CStr(prijC.count) & " prij."
+                        End If
+                        result(r, 10) = prikazPrij
+                        result(r, 27) = Mid$(refs, 2)
+
+                        ' --- karika 5: faktura (denorm FakturaID) ---
+                        ' Bez fakture = NORMALNO stanje (roba u hladnjaci);
+                        ' oznaku nosi SAMO neispravna tvrdnja (krug 9).
+                        If prijLose Then
+                            oznaka = SLED_OZN_FAK_NEISPRAVNA
+                        End If
+                        If fakture.count = 1 Then
+                            Dim fk As Variant
+                            For Each fk In fakture.keys
+                                prikazFak = Trim$(CStr(fakMapa(CStr(fk))))
+                            Next fk
+                        ElseIf fakture.count > 1 Then
+                            prikazFak = CStr(fakture.count) & " fakt."
+                        End If
+                        result(r, 12) = prikazFak
+                    End If
+
+                    ' Kupac iz RAZRESENOG vlasnika (broj|vozac|kupac).
+                    If razresen And Len(stavkaKey) > 0 Then
+                        Dim vkDel() As String
+                        vkDel = Split(stavkaKey, "|")
+                        If UBound(vkDel) >= 2 Then
+                            kupacID = vkDel(2)
+                            If kupMapa.Exists(kupacID) Then
+                                result(r, 13) = Trim$(CStr(kupMapa(kupacID)))
+                            Else
+                                result(r, 13) = kupacID
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+
+        ' Oznaka je PRVA anomalija PO POZICIJI u lancu (merilo #2 zadatka:
+        ' kg koji curi je vidljiva razlika, nikad precutana): prekid pre/na
+        ' otpremnici -> kg blok<->otp -> prekid na zbirni -> kg otp<->zbirna
+        ' -> nema prijema -> faktura neusaglasena. Kg se poredi SAMO na podatkovnim
+        ' karikama (roba se nije mrdala, brojevi moraju biti isti); zbirna
+        ' <-> prijem je TRANSPORTNO KALO (smoke S1) i ne ulazi -- njega mere
+        ' Manjak izvestaji. Prekid DUBLJE u lancu ne sme da sakrije kg
+        ' curenje na RANIJOJ karici; svako curenje ponaosob nosi i lista
+        ' problema, pa se nista ne gubi.
+        Select Case oznaka
+            Case SLED_OZN_NEPOVEZAN, SLED_OZN_OTP_STORNIRANA, SLED_OZN_VEZA
+                ' karika pre kg1 -- ostaje
+            Case SLED_OZN_BEZ_ZBIRNE, SLED_OZN_ZBIRNA_NEMA, IZV_VLASNIK_NEJASAN
+                If kg1 Then oznaka = SLED_OZN_KG
+            Case IZV_NEMA_PRIJEMA
+                If kg1 Or kg2 Then oznaka = SLED_OZN_KG
+            Case Else
+                ' "" ili faktura neusaglasena -- kg bilo koje karike je ranije.
+                If kg1 Or kg2 Then oznaka = SLED_OZN_KG
+        End Select
+        result(r, 14) = oznaka
+Sledeci:
+    Next i
+
+    ReportSledljivostLanac = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' ============================================================
+' PROBLEMI. Zrno = JEDNA prekinuta/visesmislena karika u [datumOd,
+' datumDo] -- radni spisak fail-closed nalaza, dedupliran po karici.
+'
+' Returns: 2D Array (1..N, 1..9) ili Empty:
+'   1 Klasa (SLEDP_*)   5 Kg karike (ili Empty)
+'   2 Datum karike      6 Detalj (ASCII, sa brojkama)
+'   3 Broj dokumenta    7 DokTip (DOK_TIP_* / SLED_DOK_ZBIRNA)
+'   4 Nosilac (naziv)   8 DokID
+'   9 Lanac-brojevi za PRETRAGU (krug 4 S8): brojevi karika reda koji
+'     NISU vec u kolonama 3/6 (npr. broj zbirne prijemnice sa
+'     neispravnom vezom fakture) -- ekran obecava "pretraga nalazi svaki broj u lancu"
+'     i na listi NEPOTPUNI. Ne prikazuje se.
+'
+' Klase: OTKUP-BEZ-OTPREMNICE (i veza na storniranu -- detalj kaze),
+' VEZA-NEUSAGLASENA, OTPREMNICA-BEZ-ZBIRNE (i broj bez aktivne zbirne),
+' BROJ-ZBIRNE-DVOSMISLEN (jednom po broju), ZBIRNA-BEZ-PRIJEMA (po
+' stavki; uz #V>1 sa nepripisivim prijemnicama se NE tvrdi -- fail-closed
+' i ovde), FAKTURA-VEZA-NEISPRAVNA ("Da" bez FakturaID ili sa ID van
+' aktivnih faktura), KG-RAZLIKA (po karici, prag SLED_EPS_KG; uz #V>1
+' se ne racuna). "Fakturisano=Ne" NIJE klasa -- legitiman tok.
+' ============================================================
+Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
+                                          ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostProblemi"
+    On Error GoTo EH
+
+    Dim rows As Collection
+    Set rows = New Collection
+
+    Dim odN As Double, doN As Double
+    odN = Int(CDbl(datumOd))
+    doN = Int(CDbl(datumDo))
+
+    Dim koopMapa As Object: Set koopMapa = BuildLookupDict(TBL_KOOPERANTI, COL_KOOP_ID, "Ime", "Prezime")
+    Dim kupMapa As Object: Set kupMapa = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Dim vozMapa As Object: Set vozMapa = BuildLookupDict(TBL_VOZACI, "VozacID", "Ime", "Prezime")
+    Dim otpMapa As Object: Set otpMapa = SledOtpMapa()
+    Dim manjakDict As Object: Set manjakDict = BuildManjakDict()
+
+    ' --- otkupi: bez otpremnice / mrtva veza / neusaglasen denorm ---
+    Dim otkupData As Variant
+    otkupData = GetTableData(TBL_OTKUP)
+    If IsArray(otkupData) Then otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)
+
+    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkKol As Long
+    Dim cOtkBr As Long, cOtkOtp As Long, cOtkZbr As Long
+    Dim i As Long, dSer As Double
+    Dim koopID As String, otpID As String, blokZbr As String, naziv As String
+    Dim oInfo As Variant
+
+    Dim blokSum As Object
+    Set blokSum = CreateObject("Scripting.Dictionary")
+
+    If IsArray(otkupData) Then
+        cOtkId = RequireColumnIndex(TBL_OTKUP, COL_OTK_ID, SRC)
+        cOtkDat = RequireColumnIndex(TBL_OTKUP, COL_OTK_DATUM, SRC)
+        cOtkKoop = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOOPERANT, SRC)
+        cOtkKol = RequireColumnIndex(TBL_OTKUP, COL_OTK_KOLICINA, SRC)
+        cOtkBr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BR_DOK, SRC)
+        cOtkOtp = RequireColumnIndex(TBL_OTKUP, COL_OTK_OTPREMNICA_ID, SRC)
+        cOtkZbr = RequireColumnIndex(TBL_OTKUP, COL_OTK_BROJ_ZBIRNE, SRC)
+        Set blokSum = SledBlokSumMapa(otkupData, cOtkOtp, cOtkKol)
+
+        For i = 1 To UBound(otkupData, 1)
+            If IsDate(otkupData(i, cOtkDat)) Then
+                dSer = Int(CDbl(CDate(otkupData(i, cOtkDat))))
+                If dSer < odN Or dSer > doN Then GoTo SledeciOtk
+            End If
+            koopID = SledTxt(otkupData(i, cOtkKoop))
+            If koopMapa.Exists(koopID) Then naziv = Trim$(CStr(koopMapa(koopID))) Else naziv = koopID
+            otpID = SledTxt(otkupData(i, cOtkOtp))
+            blokZbr = SledTxt(otkupData(i, cOtkZbr))
+
+            If Len(otpID) = 0 Then
+                rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
+                               SledTxt(otkupData(i, cOtkBr)), naziv, _
+                               SledDbl(otkupData(i, cOtkKol)), "", _
+                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
+            ElseIf Not otpMapa.Exists(otpID) Then
+                rows.Add Array(SLEDP_BEZ_OTPREMNICE, otkupData(i, cOtkDat), _
+                               SledTxt(otkupData(i, cOtkBr)), naziv, _
+                               SledDbl(otkupData(i, cOtkKol)), _
+                               "otpremnica stornirana ili ne postoji (" & otpID & ")", _
+                               DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), blokZbr)
+            Else
+                oInfo = otpMapa(otpID)
+                If Len(blokZbr) > 0 And UCase$(blokZbr) <> UCase$(CStr(oInfo(1))) Then
+                    rows.Add Array(SLEDP_VEZA, otkupData(i, cOtkDat), _
+                                   SledTxt(otkupData(i, cOtkBr)), naziv, _
+                                   SledDbl(otkupData(i, cOtkKol)), _
+                                   "blok nosi zbirnu " & blokZbr & ", otpremnica " & _
+                                   IIf(Len(CStr(oInfo(1))) > 0, CStr(oInfo(1)), "(prazno)"), _
+                                   DOK_TIP_OTKUP, SledTxt(otkupData(i, cOtkId)), "")
+                End If
+            End If
+SledeciOtk:
+        Next i
+    End If
+
+    ' --- otpremnice: bez zbirne / broj bez aktivne zbirne / kg blokova ---
+    Dim otpData As Variant
+    otpData = GetTableData(TBL_OTPREMNICA)
+    If IsArray(otpData) Then otpData = ExcludeStornirano(otpData, TBL_OTPREMNICA)
+    If IsArray(otpData) Then
+        Dim cOId As Long, cOBr As Long, cOZbr As Long, cOVoz As Long
+        Dim cOKol As Long, cODat As Long
+        cOId = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_ID, SRC)
+        cOBr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ, SRC)
+        cOZbr = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_BROJ_ZBIRNE, SRC)
+        cOVoz = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_VOZAC, SRC)
+        cOKol = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_KOLICINA, SRC)
+        cODat = RequireColumnIndex(TBL_OTPREMNICA, COL_OTP_DATUM, SRC)
+
+        Dim vozID As String, brZbr As String, oid As String
+        Dim otpKg As Double, sumB As Double
+        For i = 1 To UBound(otpData, 1)
+            If IsDate(otpData(i, cODat)) Then
+                dSer = Int(CDbl(CDate(otpData(i, cODat))))
+                If dSer < odN Or dSer > doN Then GoTo SledeciOtp
+            End If
+            oid = SledTxt(otpData(i, cOId))
+            vozID = SledTxt(otpData(i, cOVoz))
+            If vozMapa.Exists(vozID) Then naziv = Trim$(CStr(vozMapa(vozID))) Else naziv = vozID
+            brZbr = SledTxt(otpData(i, cOZbr))
+            otpKg = SledDbl(otpData(i, cOKol))
+
+            If Len(brZbr) = 0 Then
+                rows.Add Array(SLEDP_BEZ_ZBIRNE, otpData(i, cODat), _
+                               SledTxt(otpData(i, cOBr)), naziv, otpKg, _
+                               "BrojZbirne je prazan", DOK_TIP_OTPREMNICA, oid, "")
+            ElseIf Not manjakDict.Exists("#V|" & brZbr) Then
+                rows.Add Array(SLEDP_BEZ_ZBIRNE, otpData(i, cODat), _
+                               SledTxt(otpData(i, cOBr)), naziv, otpKg, _
+                               "zbirna " & brZbr & " ne postoji medju aktivnima", _
+                               DOK_TIP_OTPREMNICA, oid, "")
+            End If
+
+            If blokSum.Exists(oid) Then
+                sumB = CDbl(blokSum(oid))
+                If Abs(sumB - otpKg) > SLED_EPS_KG Then
+                    rows.Add Array(SLEDP_KG_RAZLIKA, otpData(i, cODat), _
+                                   SledTxt(otpData(i, cOBr)), naziv, otpKg, _
+                                   "blokovi " & Format$(sumB, "#,##0.##") & _
+                                   " kg / otpremnica " & Format$(otpKg, "#,##0.##") & " kg", _
+                                   DOK_TIP_OTPREMNICA, oid, brZbr)
+                End If
+            End If
+SledeciOtp:
+        Next i
+    End If
+
+    ' --- zbirne: dvosmislen broj / stavka bez prijema / kg karike ---
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
+    If IsArray(zbrData) Then
+        Dim cZId As Long, cZBr As Long, cZVoz As Long, cZKup As Long
+        Dim cZKl As Long, cZKol As Long, cZDat As Long
+        cZId = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_ID, SRC)
+        cZBr = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+        cZVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+        cZKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+        cZKl = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KLASA, SRC)
+        cZKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, SRC)
+        cZDat = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+
+        ' Zbir kg AKTIVNIH otpremnica po (broj, klasa) -- za kg karike.
+        Dim otpSumBK As Object: Set otpSumBK = CreateObject("Scripting.Dictionary")
+        Dim ok As Variant
+        For Each ok In otpMapa.keys
+            oInfo = otpMapa(ok)
+            If Len(CStr(oInfo(1))) > 0 Then
+                Dim bk As String
+                bk = CStr(oInfo(1)) & "|" & CStr(oInfo(3))
+                If Not otpSumBK.Exists(bk) Then otpSumBK.Add bk, 0#
+                otpSumBK(bk) = CDbl(otpSumBK(bk)) + CDbl(oInfo(4))
+            End If
+        Next ok
+
+        Dim dvosmisleni As Object
+        Set dvosmisleni = CreateObject("Scripting.Dictionary")
+
+        Dim zBr As String, zKup As String, zKla As String, zKg As Double
+        Dim nVl As Long, cntNej As Long, cntPr As Long
+        Dim prijKg As Double, zbirnaKg As Double
+        Dim stavkaKey As String, razresen As Boolean
+        For i = 1 To UBound(zbrData, 1)
+            If IsDate(zbrData(i, cZDat)) Then
+                dSer = Int(CDbl(CDate(zbrData(i, cZDat))))
+                If dSer < odN Or dSer > doN Then GoTo SledeciZbr
+            End If
+            zBr = SledTxt(zbrData(i, cZBr))
+            zKup = SledTxt(zbrData(i, cZKup))
+            zKla = KlasaOrDefault(zbrData(i, cZKl))
+            zKg = SledDbl(zbrData(i, cZKol))
+            If kupMapa.Exists(zKup) Then naziv = Trim$(CStr(kupMapa(zKup))) Else naziv = zKup
+
+            nVl = 0
+            If manjakDict.Exists("#V|" & zBr) Then nVl = CLng(manjakDict("#V|" & zBr))
+
+            If nVl > 1 And Not dvosmisleni.Exists(zBr) Then
+                dvosmisleni.Add zBr, True
+                rows.Add Array(SLEDP_BROJ_DVOSMISLEN, zbrData(i, cZDat), zBr, naziv, _
+                               Empty, CStr(nVl) & " aktivnih vlasnika (vozac+kupac) deli broj", _
+                               SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
+            End If
+
+            ' Prijem za OVU stavku (vlasnik reda je poznat -- red zbirne
+            ' nosi svog vozaca i kupca).
+            SledResolveZbirna manjakDict, zBr, SledTxt(zbrData(i, cZVoz)), zKla, _
+                              nVl, razresen, stavkaKey, cntNej, cntPr, prijKg, zbirnaKg
+            If nVl > 1 Then
+                ' Stavka reda je poznata i bez #O razresenja.
+                stavkaKey = ZbirnaStavkaKljuc( _
+                    ZbirnaVlasnikKljuc(zBr, SledTxt(zbrData(i, cZVoz)), zKup), zKla)
+                cntPr = 0
+                prijKg = 0
+                If manjakDict.Exists(stavkaKey) Then
+                    Dim sVals As Variant
+                    sVals = manjakDict(stavkaKey)
+                    prijKg = CDbl(sVals(1))
+                    cntPr = CLng(sVals(2))
+                End If
+            End If
+
+            If cntPr = 0 Then
+                ' Uz #V>1 sa nepripisivim prijemnicama se ne tvrdi "bez
+                ' prijema" -- prijem mozda postoji a ne sme se pripisati.
+                If Not (nVl > 1 And cntNej > 0) Then
+                    rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _
+                                   zKg, "nijedna prijemnica za broj " & zBr & _
+                                   " (klasa " & zKla & ")", _
+                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
+                End If
+            End If
+            ' Razlika zbirna <-> prijem se NE prijavljuje: transportno
+            ' kalo (smoke S1) -- poslovna velicina, meri je Manjak.
+
+            If nVl = 1 And otpSumBK.Exists(zBr & "|" & zKla) Then
+                Dim sumO As Double
+                sumO = CDbl(otpSumBK(zBr & "|" & zKla))
+                If Abs(sumO - zKg) > SLED_EPS_KG Then
+                    rows.Add Array(SLEDP_KG_RAZLIKA, zbrData(i, cZDat), zBr, naziv, _
+                                   zKg, "otpremnice " & Format$(sumO, "#,##0.##") & _
+                                   " kg / zbirna " & Format$(zKg, "#,##0.##") & " kg", _
+                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), "")
+                End If
+            End If
+SledeciZbr:
+        Next i
+    End If
+
+    ' --- prijemnice: neispravna tvrdnja fakturisanosti (krug 9) ---
+    Dim prijData As Variant
+    prijData = GetTableData(TBL_PRIJEMNICA)
+    If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
+    If IsArray(prijData) Then
+        Dim cPId As Long, cPBr As Long, cPKup As Long, cPKol As Long
+        Dim cPDat As Long, cPFakt As Long, cPFid As Long
+        cPId = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_ID, SRC)
+        cPBr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ, SRC)
+        cPKup = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KUPAC, SRC)
+        cPKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+        cPDat = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_DATUM, SRC)
+        cPFakt = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURISANO, SRC)
+        cPFid = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_FAKTURA_ID, SRC)
+        ' Broj zbirne ide u kolonu 9 (pretraga): "koje prijemnice moje
+        ' zbirne nisu fakturisane" je pitanje smera NAZAD i na NEPOTPUNIMA.
+        Dim cPZbr As Long
+        cPZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+
+        ' Ista kapija kao LANAC (krug 8 R1): FakturaID mora da pripada
+        ' POSTOJECOJ AKTIVNOJ fakturi -- inace se dva read-modela istog
+        ' ekrana ne slazu (LANAC kaze neusaglaseno, NEPOTPUNI cute).
+        Dim fakMapaP As Object: Set fakMapaP = SledFakMapa()
+
+        Dim pKup As String
+        For i = 1 To UBound(prijData, 1)
+            If IsDate(prijData(i, cPDat)) Then
+                dSer = Int(CDbl(CDate(prijData(i, cPDat))))
+                If dSer < odN Or dSer > doN Then GoTo SledeciPrj
+            End If
+            pKup = SledTxt(prijData(i, cPKup))
+            If kupMapa.Exists(pKup) Then naziv = Trim$(CStr(kupMapa(pKup))) Else naziv = pKup
+
+            ' Krug 9: "Fakturisano=Ne" NIJE problem -- to je legitiman tok
+            ' (roba u sopstvenu hladnjacu; dalji dokumenti sledljivosti su
+            ' paleta/prerada). Prijavljuje se SAMO neispravna TVRDNJA "Da".
+            If SledTxt(prijData(i, cPFakt)) = "Da" Then
+                If Len(SledTxt(prijData(i, cPFid))) = 0 Then
+                    ' Oznacena kao fakturisana, a broja fakture nema --
+                    ' podatkovna kontradikcija (PRJ-FAK-2 klasa).
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, prijData(i, cPDat), _
+                                   SledTxt(prijData(i, cPBr)), naziv, _
+                                   SledDbl(prijData(i, cPKol)), _
+                                   "Fakturisano=Da bez FakturaID", _
+                                   DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                                   SledTxt(prijData(i, cPZbr)))
+                ElseIf Not fakMapaP.Exists(Trim$(SledTxt(prijData(i, cPFid)))) Then
+                    ' FakturaID pokazuje na nepostojecu ili storniranu
+                    ' fakturu -- ista kontradikcija, drugi uzrok.
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, prijData(i, cPDat), _
+                                   SledTxt(prijData(i, cPBr)), naziv, _
+                                   SledDbl(prijData(i, cPKol)), _
+                                   "FakturaID " & SledTxt(prijData(i, cPFid)) & _
+                                   " nije medju aktivnim fakturama", _
+                                   DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                                   SledTxt(prijData(i, cPZbr)))
+                End If
+            End If
+SledeciPrj:
+        Next i
+    End If
+
+    If rows.count = 0 Then Exit Function
+
+    Dim result() As Variant, rr As Variant, r As Long, c As Long
+    ReDim result(1 To rows.count, 1 To 9)
+    r = 0
+    For Each rr In rows
+        r = r + 1
+        For c = 1 To 9
+            result(r, c) = rr(c - 1)
+        Next c
+    Next rr
+
+    ReportSledljivostProblemi = result
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' ============================================================
+' SLEDLJIVOST PDF PO ZBIRNOJ -- postojeci sablon (WS_SLEDLJIVOST_SABLON),
+' izdvojen iz frmSledljivost.PrintTracePDF za ekran Sledljivost (smoke
+' krug 2: "sledljivost ima vec definisanu formu za pdf"). Forma zadrzava
+' svoju kopiju i ne menja se (par. 5 / Faza B) -- isti obrazac kao
+' StampajReversAmbalaze. Ponasanje je verno legacy-ju, ukljucujuci i to
+' da se zaglavlje cita sa PRVOG reda tblZbirna po broju (dvosmislen broj
+' zbirne na sablonu razresava operater -- pregled, ne knjizenje).
+'
+' Returns (ASCII kod za ekran; ovde nema MsgBox-a):
+'   ""     stampa je izasla po rezimu (PDF/PRINT/PREVIEW)
+'   "OFF"  SLEDLJIVOST_PRINT_MODE = OFF -- ekran to PRIJAVLJUJE
+'   "NEMA" nema podataka za taj broj zbirne
+' ============================================================
+Public Function StampajSledljivostZbirne(ByVal brojZbirne As String) As String
+    Const SRC As String = "modIzvestaj.StampajSledljivostZbirne"
+    On Error GoTo EH
+
+    ' Krug 8 R3: broj NIJE identitet -- kad ga dele razliciti aktivni
+    ' vlasnici, TraceByZbirna bi pokupio SVE tokove tog broja, a header
+    ' bi uzeo prvi red: dokument bi mesao tudje generacije. Fail-closed,
+    ' i PRE rezima stampe: istina o podacima ne zavisi od konfiguracije.
+    If SledVlasnikaBroja(brojZbirne) > 1 Then
+        StampajSledljivostZbirne = "DVOSMISLEN"
+        Exit Function
+    End If
+
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_SLEDLJIVOST_PRINT_MODE), "PDF")
+    If mode = "OFF" Then
+        StampajSledljivostZbirne = "OFF"
+        Exit Function
+    End If
+
+    Dim traceData As Variant
+    traceData = TraceByZbirna(brojZbirne)
+    If IsEmpty(traceData) Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    ' Header iz AKTIVNE zbirne (krug 8 R3): bez ExcludeStornirano je
+    ' prvi red umeo da bude stornirana generacija broja.
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
+    If IsEmpty(zbrData) Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim colZbrBroj As Long, colZbrDatum As Long, colZbrVozac As Long
+    Dim colZbrKupac As Long, colZbrVrsta As Long
+    colZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+    colZbrDatum = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+    colZbrVozac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+    colZbrKupac = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+    colZbrVrsta = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VRSTA, SRC)
+
+    Dim zbrRow As Long, z As Long
+    For z = 1 To UBound(zbrData, 1)
+        If CStr(zbrData(z, colZbrBroj)) = brojZbirne Then zbrRow = z: Exit For
+    Next z
+    If zbrRow = 0 Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim vozacID As String, vozacNaziv As String
+    vozacID = CStr(zbrData(zbrRow, colZbrVozac))
+    vozacNaziv = Trim$(NzToText(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Ime")) & _
+                 " " & NzToText(LookupValue(TBL_VOZACI, "VozacID", vozacID, "Prezime")))
+    Dim kupacNaziv As String
+    kupacNaziv = NzToText(LookupValue(TBL_KUPCI, COL_KUP_ID, _
+                          CStr(zbrData(zbrRow, colZbrKupac)), COL_KUP_NAZIV))
+    Dim datumOtpreme As String
+    If IsDate(zbrData(zbrRow, colZbrDatum)) Then
+        datumOtpreme = Format$(CDate(zbrData(zbrRow, colZbrDatum)), "DD.MM.YYYY")
+    End If
+    Dim vrsta As String
+    vrsta = CStr(zbrData(zbrRow, colZbrVrsta))
+
+    Dim prijKg As Double
+    Dim prijData As Variant
+    prijData = GetTableData(TBL_PRIJEMNICA)
+    If Not IsEmpty(prijData) Then
+        prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
+        If IsArray(prijData) Then
+            Dim colPrjZbr As Long, colPrjKol As Long, p As Long
+            colPrjZbr = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_BROJ_ZBIRNE, SRC)
+            colPrjKol = RequireColumnIndex(TBL_PRIJEMNICA, COL_PRJ_KOLICINA, SRC)
+            For p = 1 To UBound(prijData, 1)
+                If CStr(prijData(p, colPrjZbr)) = brojZbirne Then
+                    If IsNumeric(prijData(p, colPrjKol)) Then _
+                        prijKg = prijKg + CDbl(prijData(p, colPrjKol))
+                End If
+            Next p
+        End If
+    End If
+
+    Dim ws As Worksheet
+    Set ws = FillSledljivostSablon(brojZbirne, datumOtpreme, vozacNaziv, kupacNaziv, _
+                                   vrsta, traceData, prijKg)
+    If ws Is Nothing Then
+        StampajSledljivostZbirne = "NEMA"
+        Exit Function
+    End If
+
+    Dim pdfPath As String
+    pdfPath = ThisWorkbook.path & "\Sledljivost_" & Replace(brojZbirne, "/", "-") & ".pdf"
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case Else
+            DocExportPdf ws, pdfPath, True
+    End Select
+
+    StampajSledljivostZbirne = ""
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' ============================================================
+' METE SLEDLJIVOSTI za jednu zbirnu (smoke krug 3): kojim dokumentom se
+' sledljivost te robe STVARNO dokazuje.
+'   - ZBIRNA: prevoz -- sablon (roba prodata dalje kao sveza).
+'   - PALETA: nestornirana, NEpreradjena paleta cija stavka nosi taj
+'     BrojZbirne (roba u magacinu sveze robe) -> paletni list.
+'   - PRERADA: nestornirana prerada cija stavka (join po PaletaID, kao
+'     modIntegritet D2) pokazuje na nadjenu paletu (roba preradjena /
+'     u magacinu preradjene robe) -> preradni list.
+' NISTA se ne premoscuje: veza ide iskljucivo kroz BrojZbirne na
+' paletnoj stavci i PaletaID na preradnoj stavci; preradjena paleta bez
+' preradne stavke ne izmislja metu (fail-closed, D2 je prijavljuje).
+'
+' Returns: 2D Array (1..N, 1..4) ili Empty (prazan broj):
+'   1 Tip (SLEDM_*)  2 ID (broj zbirne / PaletaID / PreradaID)
+'   3 Broj (prikaz: "31/2026")  4 Opis (status/tip + kg)
+' Red 1 je UVEK zbirna -- to je danasnje ponasanje dugmeta.
+' ============================================================
+Public Function ReportSledljivostMete(ByVal brojZbirne As String) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostMete"
+    On Error GoTo EH
+
+    If Len(Trim$(brojZbirne)) = 0 Then Exit Function
+
+    ' Krug 8 R3: dvosmislen broj ne sme da vodi ni na sablon ni na
+    ' palete/prerade po prostom broju (i paletna stavka ga nosi kao
+    ' BROJ) -- jedina meta je oznaka NEJASNA, bez stampe.
+    If SledVlasnikaBroja(brojZbirne) > 1 Then
+        Dim resN(1 To 1, 1 To 4) As Variant
+        resN(1, 1) = SLEDM_NEJASNA
+        resN(1, 2) = Trim$(brojZbirne)
+        resN(1, 3) = Trim$(brojZbirne)
+        resN(1, 4) = ""
+        ReportSledljivostMete = resN
+        Exit Function
+    End If
+
+    Dim rows As Collection: Set rows = New Collection
+    rows.Add Array(SLEDM_ZBIRNA, Trim$(brojZbirne), Trim$(brojZbirne), "")
+
+    ' 1) Palete cija stavka nosi ovaj broj zbirne.
+    Dim palIDs As Object: Set palIDs = CreateObject("Scripting.Dictionary")
+    palIDs.CompareMode = vbTextCompare
+    Dim stData As Variant, i As Long
+    stData = GetTableData(TBL_PALETA_STAVKA)
+    If IsArray(stData) Then stData = ExcludeStornirano(stData, TBL_PALETA_STAVKA)
+    If IsArray(stData) Then
+        Dim cStPal As Long, cStZbr As Long
+        cStPal = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_PALETA_ID, SRC)
+        cStZbr = RequireColumnIndex(TBL_PALETA_STAVKA, COL_PALS_BROJ_ZBIRNE, SRC)
+        For i = 1 To UBound(stData, 1)
+            If Trim$(SledTxt(stData(i, cStZbr))) = Trim$(brojZbirne) Then
+                If Len(Trim$(SledTxt(stData(i, cStPal)))) > 0 Then _
+                    palIDs(Trim$(SledTxt(stData(i, cStPal)))) = True
+            End If
+        Next i
+    End If
+
+    Dim nadjene As Object: Set nadjene = CreateObject("Scripting.Dictionary")
+    nadjene.CompareMode = vbTextCompare
+    If palIDs.count > 0 Then
+        Dim palData As Variant
+        palData = GetTableData(TBL_PALETA)
+        If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)
+        If IsArray(palData) Then
+            Dim cPalId As Long, cPalBroj As Long, cPalGod As Long
+            Dim cPalStat As Long, cPalPre As Long, cPalNeto As Long
+            cPalId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC)
+            cPalBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, SRC)
+            cPalGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, SRC)
+            cPalStat = RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC)
+            cPalPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC)
+            cPalNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, SRC)
+            For i = 1 To UBound(palData, 1)
+                If palIDs.Exists(Trim$(SledTxt(palData(i, cPalId)))) Then
+                    nadjene(Trim$(SledTxt(palData(i, cPalId)))) = True
+                    ' Preradjena paleta NIJE "u magacinu sveze robe" -- njena
+                    ' sledljivost je preradni list (prolaz 2).
+                    If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> "DA" Then
+                        rows.Add Array(SLEDM_PALETA, _
+                            Trim$(SledTxt(palData(i, cPalId))), _
+                            SledTxt(palData(i, cPalBroj)) & "/" & _
+                                SledTxt(palData(i, cPalGod)), _
+                            SledTxt(palData(i, cPalStat)) & " " & ChrW(183) & _
+                                " " & FmtKolicina(SledDbl(palData(i, cPalNeto))) & _
+                                " kg")
+                    End If
+                End If
+            Next i
+        End If
+    End If
+
+    ' 2) Prerade nad nadjenim paletama (join po PaletaID).
+    If nadjene.count > 0 Then
+        Dim preIDs As Object: Set preIDs = CreateObject("Scripting.Dictionary")
+        preIDs.CompareMode = vbTextCompare
+        Dim prsData As Variant
+        prsData = GetTableData(TBL_PRERADA_STAVKA)
+        If IsArray(prsData) Then prsData = ExcludeStornirano(prsData, TBL_PRERADA_STAVKA)
+        If IsArray(prsData) Then
+            Dim cPrsPre As Long, cPrsPal As Long
+            cPrsPre = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PRERADA_ID, SRC)
+            cPrsPal = RequireColumnIndex(TBL_PRERADA_STAVKA, COL_PRES_PALETA_ID, SRC)
+            For i = 1 To UBound(prsData, 1)
+                If nadjene.Exists(Trim$(SledTxt(prsData(i, cPrsPal)))) Then
+                    If Len(Trim$(SledTxt(prsData(i, cPrsPre)))) > 0 Then _
+                        preIDs(Trim$(SledTxt(prsData(i, cPrsPre)))) = True
+                End If
+            Next i
+        End If
+        If preIDs.count > 0 Then
+            Dim preData As Variant
+            preData = GetTableData(TBL_PRERADA)
+            If IsArray(preData) Then preData = ExcludeStornirano(preData, TBL_PRERADA)
+            If IsArray(preData) Then
+                Dim cPreId As Long, cPreBroj As Long, cPreGod As Long
+                Dim cPreTip As Long, cPreNeto As Long
+                cPreId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+                cPreBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+                cPreGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+                cPreTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+                cPreNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+                For i = 1 To UBound(preData, 1)
+                    If preIDs.Exists(Trim$(SledTxt(preData(i, cPreId)))) Then
+                        rows.Add Array(SLEDM_PRERADA, _
+                            Trim$(SledTxt(preData(i, cPreId))), _
+                            SledTxt(preData(i, cPreBroj)) & "/" & _
+                                SledTxt(preData(i, cPreGod)), _
+                            SledTxt(preData(i, cPreTip)) & " " & ChrW(183) & _
+                                " " & FmtKolicina(SledDbl(preData(i, cPreNeto))) & _
+                                " kg")
+                    End If
+                Next i
+            End If
+        End If
+    End If
+
+    Dim res() As Variant, r As Variant, n As Long
+    ReDim res(1 To rows.count, 1 To 4)
+    For Each r In rows
+        n = n + 1
+        res(n, 1) = r(0): res(n, 2) = r(1): res(n, 3) = r(2): res(n, 4) = r(3)
+    Next r
+    ReportSledljivostMete = res
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' ============================================================
+' SVI DOKUMENTI SLEDLJIVOSTI u periodu -- ponuda za polje izbora na
+' ekranu (smoke krug 3b: "mora da postoji jasno polje za izbor sa
+' dropdown i filter poljem"). Operater bira ZBIRNU (roba prodata dalje
+' kao sveza -- sablon), SVEZU PALETU (magacin sveze robe -- paletni
+' list) ili PRERADU (roba preradjena -- preradni list) i dobija njegov
+' izvestaj.
+'   - Zbirne: DISTINCT BROJ (stampa sablona je po broju -- legacy
+'     cmbZbirna semantika; vlasnicko razresenje radi sablon-ruta).
+'   - Palete: nestornirane, NEpreradjene (preradjena nije "sveza roba").
+'   - Prerade: nestornirane.
+' Dokument bez validnog datuma se UKLJUCUJE (vidljiv je bolji od tiho
+' sakrivenog); sa datumom mora biti u [datumOd, datumDo].
+'
+' Returns: 2D Array (1..N, 1..5) ili Empty:
+'   1 Tip (SLEDM_*)  2 ID (broj zbirne / PaletaID / PreradaID)
+'   3 Broj (prikaz)  4 Datum (serijski Double ili Empty)  5 Opis
+' ============================================================
+Public Function ReportSledljivostDokumenti(ByVal datumOd As Date, _
+                                           ByVal datumDo As Date) As Variant
+    Const SRC As String = "modIzvestaj.ReportSledljivostDokumenti"
+    On Error GoTo EH
+
+    Dim rows As Collection: Set rows = New Collection
+    Dim i As Long
+
+    ' 1) Zbirne -- distinct broj, zbir kg, najraniji datum broja.
+    ' Krug 8 R3: broj koji dele RAZLICITI aktivni vlasnici (vozac+kupac)
+    ' postaje NEJASNA stavka BEZ kg (sabiranje tudjih tokova u jednu
+    ' "printable" zbirnu je tacno ono sto se ne sme) i bez stampe.
+    ' Krug 8 R4: bez IIf(IsDate, CDate, ...) -- IIf racuna OBE grane, pa
+    ' bi nevalidan datum pukao bas na dokumentu koji ugovor obecava da
+    ' ostane vidljiv.
+    Dim zbrData As Variant
+    zbrData = GetTableData(TBL_ZBIRNA)
+    If IsArray(zbrData) Then zbrData = ExcludeStornirano(zbrData, TBL_ZBIRNA)
+    If IsArray(zbrData) Then
+        Dim cZbrBroj As Long, cZbrDat As Long, cZbrKol As Long
+        Dim cZbrVoz As Long, cZbrKup As Long
+        cZbrBroj = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_BROJ, SRC)
+        cZbrDat = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_DATUM, SRC)
+        cZbrKol = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KOLICINA, SRC)
+        cZbrVoz = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_VOZAC, SRC)
+        cZbrKup = RequireColumnIndex(TBL_ZBIRNA, COL_ZBR_KUPAC, SRC)
+        Dim brojevi As Object: Set brojevi = CreateObject("Scripting.Dictionary")
+        brojevi.CompareMode = vbTextCompare
+        Dim bz As String, acc As Variant, datV As Variant
+        For i = 1 To UBound(zbrData, 1)
+            bz = Trim$(SledTxt(zbrData(i, cZbrBroj)))
+            If Len(bz) > 0 Then
+                If SledDatumUPeriodu(zbrData(i, cZbrDat), datumOd, datumDo) Then
+                    datV = Empty
+                    If IsDate(zbrData(i, cZbrDat)) Then datV = CDbl(CDate(zbrData(i, cZbrDat)))
+                    If Not brojevi.Exists(bz) Then
+                        Dim vlN As Object
+                        Set vlN = CreateObject("Scripting.Dictionary")
+                        vlN.CompareMode = vbTextCompare
+                        brojevi.Add bz, Array(0#, Empty, vlN)
+                    End If
+                    acc = brojevi(bz)
+                    acc(0) = acc(0) + SledDbl(zbrData(i, cZbrKol))
+                    If Not IsEmpty(datV) Then
+                        If IsEmpty(acc(1)) Then
+                            acc(1) = datV
+                        ElseIf datV < acc(1) Then
+                            acc(1) = datV
+                        End If
+                    End If
+                    acc(2)(Trim$(SledTxt(zbrData(i, cZbrVoz))) & "|" & _
+                           Trim$(SledTxt(zbrData(i, cZbrKup)))) = True
+                    brojevi(bz) = acc
+                End If
+            End If
+        Next i
+        Dim kb As Variant
+        For Each kb In brojevi.keys
+            acc = brojevi(kb)
+            If acc(2).count > 1 Then
+                rows.Add Array(SLEDM_NEJASNA, CStr(kb), CStr(kb), acc(1), "")
+            Else
+                rows.Add Array(SLEDM_ZBIRNA, CStr(kb), CStr(kb), acc(1), _
+                               FmtKolicina(CDbl(acc(0))) & " kg")
+            End If
+        Next kb
+    End If
+
+    ' 2) Sveze palete (nestornirane, NEpreradjene).
+    Dim palData As Variant
+    palData = GetTableData(TBL_PALETA)
+    If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)
+    If IsArray(palData) Then
+        Dim cPalId As Long, cPalBroj As Long, cPalGod As Long
+        Dim cPalStat As Long, cPalPre As Long, cPalNeto As Long, cPalDat As Long
+        cPalId = RequireColumnIndex(TBL_PALETA, COL_PAL_ID, SRC)
+        cPalBroj = RequireColumnIndex(TBL_PALETA, COL_PAL_BROJ, SRC)
+        cPalGod = RequireColumnIndex(TBL_PALETA, COL_PAL_GODINA, SRC)
+        cPalStat = RequireColumnIndex(TBL_PALETA, COL_PAL_STATUS, SRC)
+        cPalPre = RequireColumnIndex(TBL_PALETA, COL_PAL_PRERADJENO, SRC)
+        cPalNeto = RequireColumnIndex(TBL_PALETA, COL_PAL_NETO, SRC)
+        cPalDat = RequireColumnIndex(TBL_PALETA, COL_PAL_DATUM, SRC)
+        Dim palDatV As Variant
+        For i = 1 To UBound(palData, 1)
+            If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> "DA" Then
+                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then
+                    ' Krug 8 R4: bez IIf -- obe grane se racunaju, pa bi
+                    ' nevalidan datum (koji ugovor NAMERNO pusta) pukao.
+                    palDatV = Empty
+                    If IsDate(palData(i, cPalDat)) Then _
+                        palDatV = CDbl(CDate(palData(i, cPalDat)))
+                    rows.Add Array(SLEDM_PALETA, Trim$(SledTxt(palData(i, cPalId))), _
+                        SledTxt(palData(i, cPalBroj)) & "/" & SledTxt(palData(i, cPalGod)), _
+                        palDatV, _
+                        SledTxt(palData(i, cPalStat)) & " " & ChrW(183) & " " & _
+                            FmtKolicina(SledDbl(palData(i, cPalNeto))) & " kg")
+                End If
+            End If
+        Next i
+    End If
+
+    ' 3) Prerade (nestornirane).
+    Dim preData As Variant
+    preData = GetTableData(TBL_PRERADA)
+    If IsArray(preData) Then preData = ExcludeStornirano(preData, TBL_PRERADA)
+    If IsArray(preData) Then
+        Dim cPreId As Long, cPreBroj As Long, cPreGod As Long
+        Dim cPreTip As Long, cPreNeto As Long, cPreDat As Long
+        cPreId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+        cPreBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
+        cPreGod = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
+        cPreTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+        cPreNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
+        cPreDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
+        Dim preDatV As Variant
+        For i = 1 To UBound(preData, 1)
+            If SledDatumUPeriodu(preData(i, cPreDat), datumOd, datumDo) Then
+                preDatV = Empty
+                If IsDate(preData(i, cPreDat)) Then _
+                    preDatV = CDbl(CDate(preData(i, cPreDat)))
+                rows.Add Array(SLEDM_PRERADA, Trim$(SledTxt(preData(i, cPreId))), _
+                    SledTxt(preData(i, cPreBroj)) & "/" & SledTxt(preData(i, cPreGod)), _
+                    preDatV, _
+                    SledTxt(preData(i, cPreTip)) & " " & ChrW(183) & " " & _
+                        FmtKolicina(SledDbl(preData(i, cPreNeto))) & " kg")
+            End If
+        Next i
+    End If
+
+    If rows.count = 0 Then Exit Function
+    Dim res() As Variant, r As Variant, n As Long
+    ReDim res(1 To rows.count, 1 To 5)
+    For Each r In rows
+        n = n + 1
+        res(n, 1) = r(0): res(n, 2) = r(1): res(n, 3) = r(2)
+        res(n, 4) = r(3): res(n, 5) = r(4)
+    Next r
+    ReportSledljivostDokumenti = res
+    Exit Function
+
+EH:
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Function
+
+' Datum dokumenta u [od, do]? Nevalidan datum PROLAZI -- dokument bez
+' datuma je anomalija koja mora ostati VIDLJIVA u ponudi, ne tiho skrivena.
+Private Function SledDatumUPeriodu(ByVal v As Variant, ByVal datumOd As Date, _
+                                   ByVal datumDo As Date) As Boolean
+    If Not IsDate(v) Then
+        SledDatumUPeriodu = True
+    Else
+        SledDatumUPeriodu = (CDate(v) >= datumOd And CDate(v) <= datumDo)
+    End If
+End Function
+
+' ============================================================
+' LANAC-DOKUMENT (krug 6 S14): ozbiljan A4 dokument po ugledu na
+' SledljivostSablon -- zaglavlje firme, naslov, info blok korena
+' (otkup/kooperant/stanica/datum + vozac/kupac/period), tabela karika
+' sa nosiocima, red kompletnosti, potpis/pecat. Sopstveni list
+' (_SlLanacPrint) sa EKSPLICITNIM sirinama kolona -- zajednicki
+' PrintIzvestajHouse je za SIROKE liste (MERGE naslov se sece na sirinu
+' uske tabele) i ne dira se.
+'
+' paket = modScrSledljivost.SlLanacZaPdf:
+'   (0) dataS 1..5 x 1..5 (karika, broj, nosilac, kg, oznaka)
+'   (1) broj redova  (2) kontekst-linija (ne stampa se ovde)
+'   (3) info(0..7): broj, kooperant, stanica, datum, vozac, kupac,
+'       period, oznaka ("" = potpun)
+' mode: PDF/PRINT/PREVIEW -- OFF je vec odbio pozivalac.
+' ============================================================
+Public Sub StampajSledljivostLanacDoc(ByRef paket As Variant, ByVal mode As String)
+    Const SRC As String = "modIzvestaj.StampajSledljivostLanacDoc"
+    On Error GoTo EH
+
+    Dim dataS As Variant, nR As Long, info As Variant
+    dataS = paket(0)
+    nR = CLng(paket(1))
+    info = paket(3)
+
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("_SlLanacPrint")
+    On Error GoTo EH
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.name = "_SlLanacPrint"
+    End If
+    ws.Visible = xlSheetVisible
+
+    Dim oldScr As Boolean: oldScr = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    ws.cells.Clear
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+
+    Const NC As Long = 5
+    ws.columns(1).ColumnWidth = 14
+    ws.columns(2).ColumnWidth = 18
+    ws.columns(3).ColumnWidth = 30
+    ws.columns(4).ColumnWidth = 11
+    ws.columns(5).ColumnWidth = 20
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, NC, NC)
+    r = DocTitleBlock(ws, r, NC, Poruka("OTKUI_SLPDF_SUB"), _
+                      Poruka("OTKUI_SL_LANAC_NASLOV"))
+
+    ' Info blok korena -- levo dokument, desno prevoz/period (kao sablon).
+    r = r + 1
+    SlpInfo ws, r, 1, Poruka("OTKUI_SLPDF_OTKUP"), info(0)
+    SlpInfo ws, r, 4, Poruka("OTKUI_SLPDF_VOZAC"), info(4)
+    SlpInfo ws, r + 1, 1, Poruka("OTKUI_SLPDF_KOOP"), info(1)
+    SlpInfo ws, r + 1, 4, Poruka("OTKUI_SLPDF_KUPAC"), info(5)
+    SlpInfo ws, r + 2, 1, Poruka("OTKUI_SLPDF_STANICA"), info(2)
+    SlpInfo ws, r + 2, 4, Poruka("OTKUI_SLPDF_PERIOD"), info(6)
+    SlpInfo ws, r + 3, 1, Poruka("OTKUI_SLPDF_DATUM"), info(3)
+    r = r + 5
+
+    ' Tabela karika.
+    Dim hdr As Long, i As Long, c As Long
+    hdr = r
+    ws.cells(hdr, 1).value = Poruka("OTKUI_HDS_KARIKA")
+    ws.cells(hdr, 2).value = Poruka("OTKUI_HDI_BRDOK")
+    ws.cells(hdr, 3).value = Poruka("OTKUI_HDS_NOSILAC")
+    ws.cells(hdr, 4).value = Poruka("OTKUI_HD_KG")
+    ws.cells(hdr, 5).value = Poruka("OTKUI_HDS_OZNAKA")
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, NC))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 1), ws.cells(hdr + nR, NC)).NumberFormat = "@"
+    For i = 1 To nR
+        For c = 1 To NC
+            ws.cells(hdr + i, c).value = dataS(i, c)
+        Next c
+    Next i
+    With ws.Range(ws.cells(hdr + 1, 1), ws.cells(hdr + nR, NC))
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.Range(ws.cells(hdr + 1, 4), ws.cells(hdr + nR, 4)) _
+      .HorizontalAlignment = xlRight
+    r = hdr + nR + 2
+
+    ' Kompletnost -- bold; prazna oznaka je i ovde dobra vest, receno.
+    ws.cells(r, 1).value = IIf(Len(info(7)) = 0, _
+        Poruka("OTKUI_SLPDF_POTPUN"), _
+        Poruka("OTKUI_SLPDF_STAO") & " " & info(7))
+    ws.cells(r, 1).Font.Bold = True
+    r = r + 2
+
+    ' Podnozje kao sablon: datum stampe + potpis levo, pecat desno.
+    ws.cells(r, 1).value = Poruka("OTKUI_SLPDF_DATSTAMPE") & " " & _
+                           Format$(Date, "dd.MM.yyyy")
+    r = r + 1
+    ws.cells(r, 1).value = Poruka("OTKUI_SLPDF_POTPIS") & " ____________"
+    ws.cells(r, 4).value = Poruka("OTKUI_SLPDF_PECAT") & " ____________"
+
+    On Error Resume Next
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(r, NC)).Address
+    End With
+    On Error GoTo EH
+    Application.ScreenUpdating = oldScr
+
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case Else
+            DocExportPdf ws, ThisWorkbook.path & "\Sledljivost_Lanac_" & _
+                Replace(info(0), "/", "-") & ".pdf", True
+    End Select
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    IzvRethrow SRC, Err.Number, Err.description, Err.SOURCE
+End Sub
+
+' Par labela+vrednost u info bloku lanac-dokumenta.
+Private Sub SlpInfo(ByVal ws As Worksheet, ByVal r As Long, ByVal c As Long, _
+                    ByVal lbl As String, ByVal v As String)
+    ws.cells(r, c).value = lbl
+    ws.cells(r, c).Font.Color = DocColGray()
+    ws.cells(r, c + 1).value = v
+    ws.cells(r, c + 1).Font.Bold = True
 End Sub
 

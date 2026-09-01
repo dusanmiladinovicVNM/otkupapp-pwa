@@ -3656,6 +3656,407 @@ SABOTAZE = {
         "T_Izv_DetaljICipKontekst",
         "ambalaza pokazuje poslovni broj dokumenta, ne interni ID",
     ),
+    # ------------------------------------------------------------------
+    # Ekran SLEDLJIVOST (v6-ui-187). Lanac koji se ne izmislja: zbirna se
+    # cita ISKLJUCIVO iz otpremnice, dvosmislen broj i odsutan prijem su
+    # fail-closed oznake, kg curenje je vidljivo, kes snimka i pretraga po
+    # N7/R1 pravilima. Report* polovina NEMA pokrice u tudjim suite-ovima
+    # (nove funkcije), pa sabotaze gadjaju i nju, ne samo ekran.
+    # ------------------------------------------------------------------
+    # Otpremnica bez zbirne NE sme da se premosti kroz blokov denorm
+    # BrojZbirne -- tacno to premoscenje je klasa laznog lanca koju merilo
+    # zadatka zabranjuje. (OTK-TEST-2 tvrdi ZB-TEST-3, otpremnica nema.)
+    "sledljivost-lanac-premoscuje-zbirnu": (
+        "modIzvestaj.bas",
+        "            If Len(blokZbr) > 0 And UCase$(blokZbr) <> UCase$(brZbr) Then\n"
+        "                oznaka = SLED_OZN_VEZA\n",
+        "            If Len(brZbr) = 0 And Len(blokZbr) > 0 Then\n"
+        "                brZbr = blokZbr   ' SABOTAZA: premoscenje kroz blokov denorm\n",
+        "T_Sled_FailClosed",
+        "raskorak blok/otpremnica zbirne se prijavljuje",
+    ),
+    # Broj koji dele dva vlasnika tretiran kao jednoznacan: fail-closed
+    # kapija vlasnistva pada, red dobija pogresnu oznaku umesto
+    # IZV_VLASNIK_NEJASAN.
+    "sledljivost-dvosmislen-broj-sabira": (
+        "modIzvestaj.bas",
+        "    ElseIf nVlasnika > 1 Then\n"
+        "        If manjakDict.Exists(\"#O|\" & brZbr & \"|\" & vozID) Then\n",
+        "    ElseIf nVlasnika > 1 Then\n"
+        "        nVlasnika = 1   ' SABOTAZA: dvosmislen broj tretiran kao jedan vlasnik\n"
+        "        If manjakDict.Exists(\"#O|\" & brZbr & \"|\" & vozID) Then\n",
+        "T_Sled_FailClosed",
+        "dvosmislen broj daje oznaku",
+    ),
+    # Prijem kg u redu mora biti bas zbir prijemnica razresenog scope-a --
+    # nula umesto njega je izmisljen lanac bez robe.
+    "sledljivost-prijem-kg-nula": (
+        "modIzvestaj.bas",
+        "                        result(r, 11) = CDbl(pz(1))\n",
+        "                        result(r, 11) = 0#   ' SABOTAZA: prijem kg se gubi\n",
+        "T_Sled_LanacSlaganje",
+        "prijem kg u redu = rucni zbir prijemnica",
+    ),
+    # Kg razlika na karici blok<->otpremnica mora biti VIDLJIVA oznaka --
+    # prag koji je proguta je precutano curenje (merilo #2 zadatka).
+    "sledljivost-kg-razlika-tiha": (
+        "modIzvestaj.bas",
+        "            If blokSum.Exists(otpID) Then\n"
+        "                If Abs(CDbl(blokSum(otpID)) - otpKg) > SLED_EPS_KG Then kg1 = True\n"
+        "            End If\n",
+        "            If blokSum.Exists(otpID) Then\n"
+        "                If Abs(CDbl(blokSum(otpID)) - otpKg) > 1000000# Then kg1 = True   ' SABOTAZA: prag guta razliku\n"
+        "            End If\n",
+        "T_Sled_FailClosed",
+        "kg curenje na karici nosi oznaku",
+    ),
+    # Storniran otkup ne sme u lanac -- filter, ne odsustvo reda.
+    "sledljivost-storniran-ulazi": (
+        "modIzvestaj.bas",
+        "    otkupData = GetTableData(TBL_OTKUP)\n"
+        "    If Not IsArray(otkupData) Then Exit Function\n"
+        "    otkupData = ExcludeStornirano(otkupData, TBL_OTKUP)\n"
+        "    If Not IsArray(otkupData) Then Exit Function\n"
+        "\n"
+        "    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkSt As Long\n",
+        "    otkupData = GetTableData(TBL_OTKUP)\n"
+        "    If Not IsArray(otkupData) Then Exit Function\n"
+        "    ' SABOTAZA: stornirani otkupi ulaze u lanac\n"
+        "    If Not IsArray(otkupData) Then Exit Function\n"
+        "\n"
+        "    Dim cOtkId As Long, cOtkDat As Long, cOtkKoop As Long, cOtkSt As Long\n",
+        "T_Sled_FailClosed",
+        "storniran otkup nije u lancu",
+    ),
+    # Klasa problema koja ispadne iz liste je nevidljiv posao koji ceka --
+    # lista NEPOTPUNI je pregled tog posla. Gasi se CEO prolaz prijemnica
+    # (sabotaza samo prve grane ne bi oborila nista: ElseIf "Da bez
+    # FakturaID" grana bi nefakturisane svejedno uhvatila, pod istom
+    # klasom).
+    "sledljivost-problemi-gube-klasu": (
+        "modIzvestaj.bas",
+        "    If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)\n"
+        "    If IsArray(prijData) Then\n"
+        "        Dim cPId As Long, cPBr As Long, cPKup As Long, cPKol As Long\n",
+        "    If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)\n"
+        "    If False Then   ' SABOTAZA: prijemnice ispadaju iz liste problema\n"
+        "        Dim cPId As Long, cPBr As Long, cPKup As Long, cPKol As Long\n",
+        "T_Sled_FailClosed",
+        "problem: Fakturisano=Da bez FakturaID",
+    ),
+    # Kg razlika u listi problema ima svoj prag nezavisno od lanca.
+    "sledljivost-problem-kg-prag": (
+        "modIzvestaj.bas",
+        "                sumB = CDbl(blokSum(oid))\n"
+        "                If Abs(sumB - otpKg) > SLED_EPS_KG Then\n",
+        "                sumB = CDbl(blokSum(oid))\n"
+        "                If Abs(sumB - otpKg) > 1000000# Then   ' SABOTAZA: prag guta razliku karike\n",
+        "T_Sled_FailClosed",
+        "problem: kg razlika na otpremnici",
+    ),
+    # Identitet reda se NE crta (prio 4) -- vidljiv interni kljuc je
+    # par. 8.5 klasa kvara.
+    "sledljivost-identitet-vidljiv": (
+        "modScrSledljivost.bas",
+        "                \"OTKUI_HDS_OZNAKA||txt|94|1\", _\n"
+        "                \"OTKUI_HDI_REF||txt|1|4\")\n",
+        "                \"OTKUI_HDS_OZNAKA||txt|94|1\", _\n"
+        "                \"OTKUI_HDI_REF||txt|1|1\")   ' SABOTAZA: identitet se crta\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "identitet LANAC je prio 4",
+    ),
+    # Vrsta karike vodi rutu stampe: zbirna pod tudjom vrstom bi stampala
+    # TUDJI dokument umesto da odbije.
+    "sledljivost-radnja-tudja-vrsta": (
+        "modIzvestaj.bas",
+        "                    rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _\n"
+        "                                   zKg, \"nijedna prijemnica za broj \" & zBr & _\n"
+        "                                   \" (klasa \" & zKla & \")\", _\n"
+        "                                   SLED_DOK_ZBIRNA, SledTxt(zbrData(i, cZId)), \"\")\n",
+        "                    rows.Add Array(SLEDP_BEZ_PRIJEMA, zbrData(i, cZDat), zBr, naziv, _\n"
+        "                                   zKg, \"nijedna prijemnica za broj \" & zBr & _\n"
+        "                                   \" (klasa \" & zKla & \")\", _\n"
+        "                                   DOK_TIP_PRIJEMNICA, SledTxt(zbrData(i, cZId)), \"\")   ' SABOTAZA: tudja vrsta karike\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "karika zbirne nosi vrstu koja odbija",
+    ),
+    # Snimak se puni JEDNOM po kontekstu -- pun prolaz po otkucaju je
+    # placen kvar (par. 22.9/N7).
+    "sledljivost-kes-puni-iznova": (
+        "modScrSledljivost.bas",
+        "    If Not mSnimci.Exists(k) Then\n"
+        "        If mSnimci.count >= SL_SNIMAK_KAPA Then mSnimci.RemoveAll\n",
+        "    If True Then   ' SABOTAZA: svaki poziv puni iznova\n"
+        "        If mSnimci.count >= SL_SNIMAK_KAPA Then mSnimci.RemoveAll\n",
+        "T_Sled_KesPretragaIHint",
+        "JEDNO punjenje snimka",
+    ),
+    # Upis sa DRUGOG ekrana ne prolazi kroz nas Scr_ResetCache -- generacija
+    # podataka je jedini signal (par. 23.10/R1).
+    "sledljivost-kes-ignorise-generaciju": (
+        "modScrSledljivost.bas",
+        "    If mSnimakGen <> modUiData.DataGeneracija() Then\n"
+        "        Set mSnimci = Nothing\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "    If False Then   ' SABOTAZA: tudji upis ne invalidira snimak\n"
+        "        Set mSnimci = Nothing\n"
+        "        mSnimakGen = modUiData.DataGeneracija()\n"
+        "    End If\n",
+        "T_Sled_KesPretragaIHint",
+        "generacija podataka invalidira snimak",
+    ),
+    # Kvake u podacima, ASCII na tastaturi operatera (par. 22.9/N3): obe
+    # strane poredjenja idu kroz TekstZaPretragu.
+    "sledljivost-pretraga-sirovi-haystack": (
+        "modScrSledljivost.bas",
+        "            hay = modUiData.TekstZaPretragu(HaystackReda(kljuc, src, i))\n",
+        "            hay = HaystackReda(kljuc, src, i)   ' SABOTAZA: sirov haystack, kvake ostaju\n",
+        "T_Sled_KesPretragaIHint",
+        "ASCII upit nalazi kooperanta sa kvakama",
+    ),
+    # Cip "nepotpun" je filter oznake, ne ukras -- pusta li sve, operater
+    # misli da gleda nalaze a gleda ceo spisak.
+    "sledljivost-cip-nepotpun-pusta-sve": (
+        "modScrSledljivost.bas",
+        "        Case \"nepotpun\": SlCipLanac = (Len(Trim$(oznaka)) > 0)\n",
+        "        Case \"nepotpun\": SlCipLanac = True   ' SABOTAZA: cip pusta sve\n",
+        "T_Sled_FailClosed",
+        "cip nepotpun NE pusta potpun lanac",
+    ),
+    # Cip "bez parcele" mora da iskljuci blokove SA parcelom -- inace
+    # sertifikaciona rupa izgleda pokrivena.
+    "sledljivost-cip-bezpar-pusta-sve": (
+        "modScrSledljivost.bas",
+        "        Case \"bezpar\": SlCipParcele = (Len(Trim$(parcelaID)) = 0)\n",
+        "        Case \"bezpar\": SlCipParcele = True   ' SABOTAZA: cip pusta i sa parcelom\n",
+        "T_Sled_LanacSlaganje",
+        "cip bez parcele NE propusta blok sa parcelom",
+    ),
+    # Prvi cip je svuda najsiri -- ljuska na njega pada kad zatecen filter
+    # ne pripada listi (RefreshChipsForScreen).
+    "sledljivost-cip-sve-nije-prvi": (
+        "modScrSledljivost.bas",
+        "            SlCipoviZaListu = \"sve:OTKUI_CHIP_SVE:40|\" & _\n"
+        "                              \"potpun:OTKUI_CIPSL_POTPUN:86|\" & _\n",
+        "            SlCipoviZaListu = \"potpun:OTKUI_CIPSL_POTPUN:86|\" & _\n"
+        "                              \"sve:OTKUI_CHIP_SVE:40|\" & _\n",
+        "T_Sled_UgovorEkrana",
+        "je najsiri ('sve')",
+    ),
+    # Zona koja izgubi kontrolu tiho -- dugme "ne postoji" bez ijedne
+    # greske.
+    "sledljivost-zona-bez-dugmeta": (
+        "modScrSledljivost.bas",
+        "    modUiKit.BtnV z, \"scrSlLanac\", Poruka(\"OTKUI_BTN_SL_LANACPDF\"), PAD + 164, SL_Y_BTN, _\n"
+        "                  120, SL_BTN_H, \"soft\"\n",
+        "    ' SABOTAZA: dugme lanca se ne gradi\n",
+        "T_ZonaSled_PoljaIRaspored",
+        "zona sledljivosti nema nijednu kontrolu manje",
+    ),
+    # PDF lanca bez oznake kompletnosti izgleda kao potpun lanac na papiru
+    # -- tacno ono sto kontekst-linija i kolona STATUS sprecavaju.
+    "sledljivost-pdf-bez-oznake": (
+        "modScrSledljivost.bas",
+        "    Dim ozn As String\n"
+        "    ozn = NzS(lanac(r, 14))\n",
+        "    Dim ozn As String\n"
+        "    ozn = \"\"   ' SABOTAZA: PDF lanca gubi oznaku kompletnosti\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "PDF lanac koji curi nosi oznaku",
+    ),
+    # KPI problema mora iz LISTE PROBLEMA -- brojka iz pogresnog izvora
+    # laze operatera o velicini posla.
+    "sledljivost-kpi-problemi-iz-lanca": (
+        "modScrSledljivost.bas",
+        "    If IsArray(problemi) Then\n"
+        "        mKpiProblemi = UBound(problemi, 1)\n",
+        "    If IsArray(problemi) Then\n"
+        "        mKpiProblemi = potpunih   ' SABOTAZA: KPI problema iz pogresnog izvora\n",
+        "T_Sled_LanacSlaganje",
+        "KPI problema = broj redova liste problema",
+    ),
+    # Detalj trake nosi karike lanca -- bez otpremnice je "pun lanac" od
+    # jedne linije.
+    "sledljivost-detalj-bez-karika": (
+        "modScrSledljivost.bas",
+        "    If Len(NzS(lanac(r, 8))) > 0 Then\n"
+        "        linije.Add Poruka(\"OTKUI_IZ_DET_OTPREMNICA\") & \" \" & NzS(lanac(r, 8)) & _\n",
+        "    If False Then   ' SABOTAZA: detalj gubi kariku otpremnice\n"
+        "        linije.Add Poruka(\"OTKUI_IZ_DET_OTPREMNICA\") & \" \" & NzS(lanac(r, 8)) & _\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "detalj nosi otpremnicu",
+    ),
+    # Kandidati za rucno povezivanje bez filtera stanice -- tudja
+    # otpremnica (OTP-LEG-B, druga stanica, isti datum) usla bi u izbor
+    # i pogresno povezivanje bilo bi na klik. Mutiraju se OBA prolaza
+    # (brojanje + punjenje) jednim sidrom: mutacija samo jednog bi dala
+    # subscript crash umesto imenovanog pada.
+    "sledljivost-kandidati-bez-stanice": (
+        "modSledljivost.bas",
+        "    Dim count As Long\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Trim$(CStr(otpData(i, cSt))) = stanicaID And IsDate(otpData(i, cDat)) Then\n"
+        "            If CDate(otpData(i, cDat)) = datum Then count = count + 1\n"
+        "        End If\n"
+        "    Next i\n"
+        "    If count = 0 Then Exit Function\n"
+        "\n"
+        "    Dim result() As Variant, idx As Long\n"
+        "    ReDim result(1 To count, 1 To 5)\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Trim$(CStr(otpData(i, cSt))) = stanicaID And IsDate(otpData(i, cDat)) Then\n",
+        "    Dim count As Long\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Len(stanicaID) >= 0 And IsDate(otpData(i, cDat)) Then   ' SABOTAZA: bez stanice\n"
+        "            If CDate(otpData(i, cDat)) = datum Then count = count + 1\n"
+        "        End If\n"
+        "    Next i\n"
+        "    If count = 0 Then Exit Function\n"
+        "\n"
+        "    Dim result() As Variant, idx As Long\n"
+        "    ReDim result(1 To count, 1 To 5)\n"
+        "    For i = 1 To UBound(otpData, 1)\n"
+        "        If Len(stanicaID) >= 0 And IsDate(otpData(i, cDat)) Then   ' SABOTAZA: bez stanice\n",
+        "T_Sled_PovezivanjeKandidati",
+        "kandidati su samo sa stanice otkupa",
+    ),
+    # Mete sledljivosti bez storno filtera na paleti -- stornirana paleta
+    # (PAL-SLED-X, cija stavka NIJE stornirana) postala bi dokument
+    # sledljivosti nepostojece robe.
+    "sledljivost-mete-storniranu-paletu": (
+        "modIzvestaj.bas",
+        "        palData = GetTableData(TBL_PALETA)\n"
+        "        If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)\n",
+        "        palData = GetTableData(TBL_PALETA)\n"
+        "        ' SABOTAZA: stornirane palete ulaze u mete\n",
+        "T_Sled_MeteSledljivosti",
+        "stornirana paleta nije meta sledljivosti",
+    ),
+    # Preradjena paleta ponudjena kao "sveza roba" -- operater bi dobio
+    # paletni list za robu koje u magacinu sveze robe vise nema.
+    "sledljivost-mete-preradjena-kao-sveza": (
+        "modIzvestaj.bas",
+        "                    If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> \"DA\" Then\n",
+        "                    If True Then   ' SABOTAZA: preradjena kao sveza\n",
+        "T_Sled_MeteSledljivosti",
+        "preradjena paleta nije meta 'sveze robe'",
+    ),
+    # Ponuda polja izbora (krug 3b) bez storno filtera na paleti --
+    # stornirana paleta bi usla u dropdown i klik bi stampao list
+    # nepostojece robe. Sidro je 4-space varijanta (ReportSledljivost-
+    # Dokumenti); 8-space zivi u ReportSledljivostMete i ima svoju
+    # sabotazu.
+    "sledljivost-dokumenti-storniranu-paletu": (
+        "modIzvestaj.bas",
+        "    palData = GetTableData(TBL_PALETA)\n"
+        "    If IsArray(palData) Then palData = ExcludeStornirano(palData, TBL_PALETA)\n",
+        "    palData = GetTableData(TBL_PALETA)\n"
+        "    ' SABOTAZA: stornirane palete ulaze u ponudu\n",
+        "T_Sled_DokumentiPonuda",
+        "stornirana paleta nije u ponudi",
+    ),
+    # Krug 8 R1 / krug 9: prijemnica koja TVRDI "Da" bez validne aktivne
+    # fakture mora da obori kariku -- kad ta grana cuti, kontradikcija
+    # izgleda kao potpun lanac.
+    "sledljivost-fakture-any-umesto-all": (
+        "modIzvestaj.bas",
+        "                                    Else\n"
+        "                                        prijLose = True\n"
+        "                                        If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                    End If\n",
+        "                                    Else\n"
+        "                                        ' SABOTAZA: neispravna tvrdnja cuti\n"
+        "                                        If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                    End If\n",
+        "T_Sled_FailClosed",
+        "tvrdnja Da bez validne fakture obara kariku (ALL nad tvrdnjama)",
+    ),
+    # Krug 8 R2: LANAC haystack bez SearchRefs kolone -- broj progutane
+    # fakture ("2 fakt.") vise ne nalazi red, obecanje pretrage pada.
+    "sledljivost-lanac-pretraga-bez-refs": (
+        "modScrSledljivost.bas",
+        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
+        "                           NzS(src(i, 14)) & \"|\" & NzS(src(i, 27))\n",
+        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
+        "                           NzS(src(i, 14))   ' SABOTAZA: bez SearchRefs\n",
+        "T_Sled_KesPretragaIHint",
+        "broj progutane fakture nalazi LANAC red",
+    ),
+    # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
+    # tudje generacije u jedan dokument sledljivosti.
+    "sledljivost-sablon-dvosmislen-broj": (
+        "modIzvestaj.bas",
+        "    If SledVlasnikaBroja(brojZbirne) > 1 Then\n"
+        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
+        "    If False Then   ' SABOTAZA: dvosmislen broj prolazi na sablon\n"
+        "        StampajSledljivostZbirne = \"DVOSMISLEN\"\n",
+        "T_Sled_MeteSledljivosti",
+        "sablon odbija dvosmislen broj zbirne",
+    ),
+    # Krug 8 R4: nevalidan datum tiho sakriven iz ponude -- ugovor kaze
+    # da anomalija ostaje VIDLJIVA.
+    "sledljivost-dokumenti-nevalidan-datum-skriven": (
+        "modIzvestaj.bas",
+        "    If Not IsDate(v) Then\n"
+        "        SledDatumUPeriodu = True\n",
+        "    If Not IsDate(v) Then\n"
+        "        SledDatumUPeriodu = False   ' SABOTAZA: nevalidan datum se krije\n",
+        "T_Sled_DokumentiPonuda",
+        "dokument sa nevalidnim datumom ostaje vidljiv",
+    ),
+    # Krug 8 R5 (ljuska, v6-ui-188): tekst panela nazad u label PUNE
+    # visine -- GDI baseline faza opet varira po redu ("8. red veceg
+    # fonta").
+    "ljuska-popup-tekst-pun-red": (
+        "modOtkupUI.bas",
+        "        NewLbl z, \"popT\" & i, \"\", 1, _\n"
+        "               CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY), _\n"
+        "               178, TxtH(TS_BODY), TS_BODY, False, C_FOREST, -1\n",
+        "        NewLbl z, \"popT\" & i, \"\", 1, _\n"
+        "               CenterY(1 + i * POP_ITEM_H, POP_ITEM_H, TS_BODY), _\n"
+        "               178, POP_ITEM_H, TS_BODY, False, C_FOREST, -1   ' SABOTAZA: pun red\n",
+        "T_Ljuska_PopupTekstTraka",
+        "tekst labeli su nizi od reda i istog fonta",
+    ),
+    # PDF karika sa dvotackom (krug 5 S11) -- deljeni detalj-kljucevi
+    # ("Zbirna:") bi u PDF koloni stajali pored karika bez dvotacke.
+    "sledljivost-pdf-dvotacka": (
+        "modScrSledljivost.bas",
+        "Private Function BezDvotacke(ByVal s As String) As String\n"
+        "    BezDvotacke = Trim$(s)\n"
+        "    If Right$(BezDvotacke, 1) = \":\" Then _\n"
+        "        BezDvotacke = Trim$(Left$(BezDvotacke, Len(BezDvotacke) - 1))\n"
+        "End Function\n",
+        "Private Function BezDvotacke(ByVal s As String) As String\n"
+        "    BezDvotacke = Trim$(s)   ' SABOTAZA: dvotacka ostaje\n"
+        "End Function\n",
+        "T_Sled_IdentitetURedu_NeCrtaSe",
+        "karika u PDF-u je bez dvotacke",
+    ),
+    # NEP pretraga bez lanac-brojeva (krug 4 S8) -- broj zbirne vise ne
+    # nalazi njene nefakturisane prijemnice, a ekran bas to obecava
+    # ("pretraga nalazi svaki broj u lancu").
+    "sledljivost-nep-pretraga-bez-lanca": (
+        "modScrSledljivost.bas",
+        "            HaystackReda = NzS(src(i, 3)) & \"|\" & NzS(src(i, 4)) & \"|\" & _\n"
+        "                           NzS(src(i, 6)) & \"|\" & SlProblemNaziv(NzS(src(i, 1))) & _\n"
+        "                           \"|\" & NzS(src(i, 9))\n",
+        "            HaystackReda = NzS(src(i, 3)) & \"|\" & NzS(src(i, 4)) & \"|\" & _\n"
+        "                           NzS(src(i, 6)) & \"|\" & SlProblemNaziv(NzS(src(i, 1)))   ' SABOTAZA: bez lanac-brojeva\n",
+        "T_Sled_KesPretragaIHint",
+        "pretraga po broju zbirne nalazi neispravnu vezu fakture",
+    ),
+    # Ponuda polja izbora nudi preradjenu paletu kao "svezu robu".
+    "sledljivost-dokumenti-preradjena-kao-sveza": (
+        "modIzvestaj.bas",
+        "            If UCase$(Trim$(SledTxt(palData(i, cPalPre)))) <> \"DA\" Then\n"
+        "                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then\n",
+        "            If True Then   ' SABOTAZA: preradjena u ponudi kao sveza\n"
+        "                If SledDatumUPeriodu(palData(i, cPalDat), datumOd, datumDo) Then\n",
+        "T_Sled_DokumentiPonuda",
+        "preradjena paleta nije u ponudi kao sveza",
+    ),
 }
 
 

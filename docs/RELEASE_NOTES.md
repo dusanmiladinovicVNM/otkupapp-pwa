@@ -6633,3 +6633,196 @@ je tri prijave i još jedan nalaz sa ekrana — sve zatvoreno u istom izdanju:
 - **Compile VBAProject: čist** (ručna kapija operatera, 30.08.2026).
 - Smoke nad pravim podacima: šest krugova operatera — svaki nalaz
   ugrađen u ovo izdanje.
+
+---
+
+## vba-v2.90.0 — 2026-08-30
+
+Novi ekran **Sledljivost** (meni ANALITIKA → „Sledljivost" — stavka više
+nije prigušena). Lanac dokumenata od njive do fakture, u oba smera, bez
+ijedne izmišljene veze.
+
+### Šta ekran radi
+
+- **Lanac** (glavna lista): jedan red = jedan otkupni list, a udesno se
+  čita gde je roba završila — otpremnica, zbirna, prijemnica, faktura,
+  kupac. Kolona OZNAKA kaže gde lanac staje ili škripi: „nepovezan",
+  „bez zbirne", „nejasan vlasnik" (dva vozača dele broj zbirne),
+  „nema prijema", „faktura neusaglašena", „kg razlika", „veza neusaglašena",
+  „otpremnica stornirana". Prazna oznaka = potpun lanac.
+- **Po parceli**: iste stavke, ali okrenute za sertifikaciju — kooperant,
+  BPG, katastarski broj, kultura, površina, GGAP status. Blok unet bez
+  parcele nosi oznaku „bez parcele" (i svoj čip) umesto tihe praznine.
+- **Nepotpuni**: radni spisak svake prekinute karike sa detaljem i
+  brojkama („blokovi 100 kg / otpremnica 250 kg"), po klasama: veze ·
+  prijem · fakture · kg razlike. Prijemnica bez fakture NIJE na listi —
+  roba primljena u sopstvenu hladnjaču je normalan tok; fakturna klasa
+  hvata samo neispravnu vezu (tvrdi „Da" bez validne fakture).
+- **Oba smera bez prekidača:** pretraga nalazi svaki broj u lancu.
+  Ukucaš broj fakture ili zbirne → vidiš od kojih kooperanata i parcela
+  je roba došla; ukucaš kooperanta → vidiš gde je roba završila.
+  Pretraga radi i bez kvačica („petrovic" nalazi Petrovića).
+- **Klik na red** otvara detalj lanca desno: karika po karika sa kg po
+  svakoj (vozač, stanica, parcela, kupac — ono što u redu ne stane).
+- **Štampe:** „Štampaj izveštaj" (kućni PDF tačno onoga što je na
+  ekranu, sa periodom i filterom u naslovu), „Lanac (PDF)" za izabrani
+  red — karike kao redovi + linija kompletnosti — i „Sledljivost (PDF)"
+  koje nudi dokument po tome gde roba stvarno jeste: šablon zbirne
+  (prodato dalje kao sveže), paletni list (u magacinu sveže robe) ili
+  preradni list (prerađeno). Radnja „Štampaj dokument" štampa dokument
+  karike (otkupni list / otpremnicu / prijemnicu; zbirna nema svoju
+  štampu i to se kaže).
+- Brojke iznad mreže: potpuni lanci / nepotpune karike u periodu.
+
+### Pravila koja ekran drži (i testovi ih čuvaju)
+
+- **Ništa se ne premošćuje:** zbirna se čita isključivo iz otpremnice;
+  raskorak sa brojem zbirne na bloku se prijavljuje, ne peglа.
+  Dvosmislen broj zbirne se ne sabira — fail-closed oznaka, isto
+  pravilo vlasnika kao izveštaji robe i manjka (poziva se, ne prepisuje).
+- **Kg koji curi se vidi — ali kalo nije kvar:** razlika na podatkovnim
+  karikama (blokovi↔otpremnica, otpremnice↔zbirna; prag 0,01 kg, isti
+  kao provera zbirne) nosi oznaku u lancu i red u Nepotpunima sa obe
+  brojke. Razlika zbirna↔prijemnica se NE prijavljuje — to je
+  transportno kalo (prvi smoke), poslovna veličina koju meri izveštaj
+  Manjak; u detalju reda ostaje vidljiva kroz kg po karici.
+- Svaka karika potpunog lanca vezana je testom za nezavisan ručni prolaz
+  kroz tabele; fixture prvi put ima kompletan lanac do fakture (i četiri
+  namerno pokvarena vozila za svaku klasu kvara).
+
+### Šta NIJE u ovoj verziji
+
+- Vrednost u dinarima niz lanac (v1 prati robu, kg).
+- Detalj trake za redove Nepotpunih koji nisu otkup.
+- Padajući redovi u samoj mreži — i dalje čekaju ugovor ljuske.
+
+### Doterano posle prvog smoke-a
+
+- Razlika zbirna↔prijemnica više se ne obeležava kao „kg razlika“ —
+  transportno kalo je normalan tok (nalaz operatera); Nepotpuni broje
+  stvaran posao.
+- Detalj traka je dobila svoju belu karticu — redovi više ne vise preko
+  ivice zone.
+
+### Doterano posle drugog smoke-a
+
+- **Povezivanje se vratilo na ekran** („gde je nestalo povezivanje
+  nepovezanih?" — pregled bez alata terao je nazad u staru formu):
+  dugme **„Poveži automatski"** na listi Nepotpuni (isti potez kao u
+  staroj formi, javi koliko je povezano) i radnja **„Poveži…"** nad
+  redom „Otkup bez otpremnice" — ponudi otpremnice sa iste stanice i
+  istog datuma (pravilo stare forme), izbor rednim brojem, pa se lista
+  odmah preračuna i red nestane iz Nepotpunih. Upis ide kroz istu
+  transakcionu kapiju kao do sada; svaki drugi red radnju odbija
+  porukom. Stara forma ostaje tu, nepromenjena.
+- **„Sledljivost zbirne (PDF)"** — štampa po POSTOJEĆEM šablonu
+  Sledljivosti (ona koju operater već poznaje iz stare forme) sada se
+  dobija i sa ekrana, za zbirnu izabranog reda; poštuje isti režim
+  štampe (OFF se prijavljuje, ne ćuti). Kućni „Lanac (PDF)" ostaje —
+  dva pogleda: karike jednog otkupa vs. cela zbirna po šablonu.
+
+### Doterano posle trećeg smoke-a
+
+- **Sledljivost po tome gde roba stvarno jeste** („izveštaj ide za
+  zbirnu, paletu ili prerađenu paletu"): dugme je sada **„Sledljivost
+  (PDF)"** i za izabrani red ponudi sve dokumente kojima se sledljivost
+  te robe dokazuje — šablon zbirne ako je roba prodata dalje kao sveža,
+  paletni list za svaku svežu paletu u magacinu na kojoj ta roba leži,
+  preradni list ako je roba prerađena (prodata kao prerađena ili u
+  magacinu prerađene robe). Veze su isključivo podatkovne: paletna
+  stavka od prvog dana nosi broj zbirne, preradna stavka svoju paletu —
+  ništa se ne pogađa; stornirana paleta nije ponuda, prerađena se ne
+  nudi kao „sveža". Paletna operativa (zatvaranje, storno, fizička
+  štampa listova) ostaje na ekranu Palete.
+- **Polje „Dokument sledljivosti"** — jasno mesto izbora: padajuća
+  lista SVIH dokumenata sledljivosti u periodu (zbirne, sveže palete,
+  prerade), sa filterom — ukucaš broj, datum, tip ili status i ponuda
+  se sužava, bez ponovnog čitanja tabela; strelica otvara suženu listu.
+  Izabereš dokument → „Sledljivost (PDF)" štampa baš njega. Ukucan a
+  neizabran tekst se odbija porukom (ne pogađa se); prazno polje i
+  dalje radi preko izabranog reda kad red ima jednoznačan dokument.
+
+### Doterano posle četvrtog smoke-a
+
+- **Padajuća lista se više ne otvara sama dok kucaš** („vidi se samo
+  jedan red, ispod je sivo"): otvorena lista ne ume da promeni visinu,
+  pa je sužena ponuda ostajala u prevelikom sivom prozoru. Kucanje sada
+  sužava listu u mestu, strelica je otvara — tada je uvek tačne visine
+  i pune širine (sklonjen i horizontalni klizač).
+- **Pretraga na Nepotpunima nalazi ceo lanac** („filter ne radi"):
+  ukucan broj zbirne sada nalazi njene nefakturisane prijemnice (red
+  problema pamti i brojeve svojih karika, ne samo sopstveni broj) —
+  obećanje „pretraga nalazi svaki broj u lancu" važi i tu. Čipovi
+  Veze/Prijem/Fakture/Kg su provereni celim putem i rade.
+- **Povezivanje bez dijaloga** („povezivanje treba lepše rešiti"):
+  umesto kucanja rednog broja u prozorčetu, na Nepotpunima stoji polje
+  **„Otpremnica za povezivanje"** — klik na red „Otkup bez otpremnice"
+  napuni ga kandidatima (ista stanica + isti datum, sa zbirnom, kg i
+  klasom), izabereš otpremnicu iz liste i klikneš „Poveži…". Ništa se
+  ne bira automatski; delimičan unos se odbija porukom.
+
+### Doterano posle petog smoke-a
+
+- **Kandidati za povezivanje — isti izgled, manje klikova:** stavke u
+  polju „Otpremnica za povezivanje" pišu se istim ritmom kao polje
+  dokumenta (razmaci oko tačaka su bili nejednaki, pa je delovalo kao
+  drugi font — fontovi su sada i eksplicitno izjednačeni), a klik na
+  „Poveži…" bez izabrane otpremnice odmah OTVORI listu kandidata
+  umesto da samo poruči.
+- **„Lanac (PDF)" doteran:** naslov i kontekst-linija se više ne seku
+  sa strana (uska tabela ih je sekla na svoju širinu), kolona karika
+  se zove KARIKA (ne „PROBLEM"), a karike su ujednačene — bez
+  „Zbirna:" sa dvotačkom pored „Otkup" bez nje.
+
+### Doterano posle šestog smoke-a
+
+- **Jedan dropdown, ne dva:** automatsko otvaranje kandidata na
+  „Poveži…" sada otvara ISTI moderni panel koji imaju sva polja
+  aplikacije — stara sistemska lista se više nigde ne pojavljuje preko
+  njega.
+- **Ekran se otvara primetno brže:** ponuda od 1000+ dokumenata u polje
+  izbora upisuje se odjednom (umesto hiljada pojedinačnih upisa), a
+  kucanje više ne prepisuje listu — sužavanje ionako radi panel
+  aplikacije.
+- **„Lanac (PDF)" je sada pravi dokument:** zaglavlje firme i naslov,
+  blok podataka o korenu (otkupni list, kooperant, stanica, datum ·
+  vozač, kupac, period), tabela karika sa nosiocima (ko je nosio robu
+  na svakoj karici), red kompletnosti („LANAC POTPUN" / „LANAC STAO
+  NA: …") i podnožje sa datumom štampe, potpisom i pečatom — po ugledu
+  na postojeći šablon Sledljivosti, umesto tabelice u ćošku A4 lista.
+
+### Posle spoljne revizije (završni paket, bez novih funkcija)
+
+- **Faktura je karika po ISTINI, ne po obavezi**: prijemnica sa
+  `Fakturisano=Ne` je normalan tok (roba u sopstvenu hladnjaču →
+  paleta → prerada) i NE kvari lanac. Kvar je samo podatkovna
+  kontradikcija — prijemnica koja TVRDI da je fakturisana bez broja
+  fakture ili sa vezom na obrisanu/nepostojeću fakturu: takva obara
+  celu kariku („faktura neusaglašena") i stoji na Nepotpunima kao
+  „Neispravna veza fakture". Jedna fakturisana sestra više ne može da
+  sakrije neispravnu (ALL nad tvrdnjama).
+- **Pretraga nazad radi i kroz „2 prij. / 2 fakt."** — red pamti sve
+  progutane brojeve, pa broj bilo koje fakture nalazi lanac i na listi
+  Po parceli.
+- **Dvosmislen broj zbirne se nigde ne štampa**: šablon ga odbija
+  porukom, u ponudi stoji kao „Zbirna — nejasan vlasnik" bez kilaže —
+  tokovi različitih vlasnika se ne sabiraju u jedan dokument.
+- **Osmi red padajuće liste više ne izgleda kao drugi font** — kvar
+  iscrtavanja u zajedničkoj ljusci (tekst preko celog reda menja fazu
+  rasterizacije); tekst sada stoji u svojoj traci kao u mreži. Uz to
+  „Poveži automatski" jasno kaže da hvata SVE periode i razlikuje
+  grešku od „nema šta da se poveže", a prvo otvaranje ekrana je opet
+  brže (keš tabela oko sva tri računa).
+
+### Verifikacija
+
+- Deset novih testova (ugovor ekrana, slaganje lanca sa ručnim
+  prolazom, fail-closed oznake, identitet, keš/pretraga, zona,
+  kandidati povezivanja, mete sledljivosti, ponuda polja izbora,
+  tekst-traka panela ljuske) + **31 namerni kvar** koji obaraju po
+  tačno jedan imenovani test i vraćaju se bit-identično (dvosmerni
+  dokaz).
+- Glavni i banka set zeleni; Platni nalozi bit-identični (nova vozila su
+  zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
+  i smoke nad pravim podacima (checklista u PR-u).
