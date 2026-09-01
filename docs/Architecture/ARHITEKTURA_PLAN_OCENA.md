@@ -524,7 +524,15 @@ arhitektura. `modSyncControl` kao jedini vlasnik; `TryReadSyncControlAsDict` +
 
 *Metrika:* `grep -lic SyncControl src-vba/*.bas` → 1. *Rizik:* nizak. *~1 dan.*
 
-### PR1 — `SLOJ`, tvrdi deo: bez baseline-a
+### PR1 — `SLOJ`, tvrdi deo: bez baseline-a  ✅ URAĐENO
+
+> Sprovedeno u `tools/vba_check.py`. Četiri provere, **nula nalaza** nad
+> zatečenim izvorom, **bez baseline fajla**: `SLOJ_UPIS`, `SLOJ_UZVODNO`,
+> `REPO_TX`, `REPO_API`. Self-test 116 → **117 slučajeva**, zelen; dokaz u oba
+> smera izvršen i nad pravim fajlovima (`modScrStorno`, `modDataAccess`).
+>
+> `REPO_TX` i `REPO_API` su prazne dok `modRepo*` ne postoji — to je i bio
+> razlog da uđu sada, a ne posle prvog takvog modula.
 
 Dva pravila imaju **nula prekršaja danas** (§0a/N4), pa idu odmah i tvrdo:
 
