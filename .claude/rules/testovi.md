@@ -32,6 +32,10 @@ paths:
 | **TARGETED** | za feature ili bug — suite koja pokriva to područje | `python tools\run_vba.py --suite <ime>` |
 | **FULL** | pred release i za rizične izmene u jezgru | `python tools\run_vba.py` |
 
+**Dvosmerni dokaz nije četvrti nivo nego zasebna kapija** (§6): traži se samo kad
+se menja test ili checker, pušta se **odvojeno** (`tools\dokaz_bg.ps1`) i
+**nikad se ne čeka u sesiji**.
+
 `FULL` je **namerna komanda**, ne automatika. Nije u hook-u i ne sme da se vrati
 u hook: 11 suite-ova uz podizanje Excela na svakom zaustavljanju je desktop
 sesiju činilo neupotrebljivom.
@@ -174,6 +178,66 @@ Dvosmerni dokaz (pokvari → provera pukne **po imenu** → vrati → zeleno) tr
 **Za običnu funkcionalnu izmenu se ne traži.** Katalog postojećih sabotaža je
 `python tools/sabotaza.py --lista` — skripta je izvor istine, ne prepisivati ovde.
 Zamke pri pisanju nove (kraj reda, uvlačenje, vraćanje): `docs/EXCEL_TEST_HARNESS.md`.
+
+### Dokaz se NE ČEKA u sesiji
+
+**Pušta se odvojeno i pita se za status. Blokirajuće čekanje na dokaz je greška
+u procesu, ne strpljenje.**
+
+```powershell
+powershell -File tools\dokaz_bg.ps1 modScrIzvestaji.bas   # pusti, vrati se ODMAH
+python tools\dokaz.py --status                            # gde je stao / verdikt
+```
+
+Cena čekanja je merena, ne procenjena: jedna sesija je provela 2h 40m na
+`TaskOutput` sa `block=true` i `timeout=590000`, trošeći kontekst i nedeljnu
+kvotu na progres-bar. Verdikt se piše u `tests/dokaz_last.json` **posle svake
+sabotaže**, pa `--status` odgovara i sredinom run-a (`18/38, sve OK`) — nema
+razloga da iko blokira.
+
+- **Jedan dokaz po krugu, ne po ispravci.** Skupi se ceo krug nalaza, pa jedan
+  run.
+- **Dok dokaz radi, ne dira se ni `src-vba/` ni `tools/sabotaza.py`.** Katalog
+  je ULAZ u dokaz koji upravo radi; izmena usred run-a znači višesatni dokaz nad
+  stanjem koje više ne postoji.
+- **Kad dodaješ jednu sabotažu, dokazuj tu jednu** (`dokaz.py <ime-sabotaze>`),
+  ne ceo fajl. Ceo fajl je za rizičnu izmenu jezgra, pun katalog za release.
+
+### Knjiga dokazanog — kada se sme
+
+Sabotaža dokazuje da test nije placebo. To je činjenica o paru *(test, kod ispod
+njega)* i **ne zastareva dok se taj par ne promeni**, pa `--knjiga` preskače
+unose čiji se ključ nije promenio:
+
+```powershell
+python tools\dokaz.py --knjiga modScrIzvestaji.bas
+```
+
+Sme **samo uz filter**, i **nikad kao dokaz pred merge ili release** — tamo ide
+pun run. Ograde su u alatu (pun katalog uvek ignoriše knjigu; verdikt uvek kaže
+koliko je preneseno; oštećena ili starija knjiga se odbacuje u celosti) i
+opisane su u `docs/EXCEL_TEST_HARNESS.md`.
+
+**Knjiga je bezbedna samo dok noćni recert radi** — on je taj koji svake noći
+dokazuje sve iz početka i time ograničava zastarelost na jednu noć. Ako noćni
+zadatak nije registrovan ili pada, `--knjiga` se ne koristi:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\install_nocni_dokaz.ps1
+```
+
+Ujutru stoji `tests/dokaz_jutro.md`. **Crven noćni izveštaj je posao za to jutro,
+ne stavka za kasnije.**
+
+### Katalog ima cenu koja se plaća svaki dan
+
+Od 19.08 do 30.08: 128 → 322 sabotaže, `RunAllTests` 80 → 149 testova. `dokaz.py`
+pušta ceo `run_vba` po **svakoj** sabotaži, pa je cena proizvod ta dva broja —
+nova sabotaža se plaća u **svakom** budućem run-u, zauvek.
+
+Zato nova sabotaža nije besplatna posledica novog testa: piše se kad štiti
+invarijantu koja se **stvarno već lomila** ili čiji bi tihi otkaz bio skup, a ne
+zato što je test nov.
 
 ## 7) Šta ostaje na operateru
 
