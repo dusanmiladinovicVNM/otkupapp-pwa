@@ -195,7 +195,7 @@ Public Function SlCipProblemi(ByVal filter As String, ByVal klasa As String) As 
         Case "prijem"
             SlCipProblemi = (klasa = SLEDP_BROJ_DVOSMISLEN Or klasa = SLEDP_BEZ_PRIJEMA)
         Case "fakture"
-            SlCipProblemi = (klasa = SLEDP_NEFAKTURISANA)
+            SlCipProblemi = (klasa = SLEDP_FAK_NEISPRAVNA)
         Case "kg"
             SlCipProblemi = (klasa = SLEDP_KG_RAZLIKA)
         Case Else
@@ -982,7 +982,7 @@ Public Function SlProblemNaziv(ByVal klasa As String) As String
         Case SLEDP_BEZ_ZBIRNE:      SlProblemNaziv = Poruka("OTKUI_SLP_BEZZBR")
         Case SLEDP_BROJ_DVOSMISLEN: SlProblemNaziv = Poruka("OTKUI_SLP_DVOSM")
         Case SLEDP_BEZ_PRIJEMA:     SlProblemNaziv = Poruka("OTKUI_SLP_BEZPRIJ")
-        Case SLEDP_NEFAKTURISANA:   SlProblemNaziv = Poruka("OTKUI_SLP_NEFAKT")
+        Case SLEDP_FAK_NEISPRAVNA:  SlProblemNaziv = Poruka("OTKUI_SLP_NEFAKT")
         Case SLEDP_KG_RAZLIKA:      SlProblemNaziv = Poruka("OTKUI_SLP_KG")
         Case Else:                  SlProblemNaziv = klasa
     End Select
@@ -1400,8 +1400,8 @@ Public Function SlDetaljLanca(ByVal otkupID As String, ByVal kljuc As String) As
     End If
     If Len(NzS(lanac(r, 12))) > 0 Then
         linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & NzS(lanac(r, 12))
-    ElseIf NzS(lanac(r, 14)) = SLED_OZN_NEFAKTURISANO Then
-        linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & Poruka("OTKUI_IZ_DET_NEFAKT")
+    ElseIf NzS(lanac(r, 14)) = SLED_OZN_FAK_NEISPRAVNA Then
+        linije.Add Poruka("OTKUI_IZ_DET_FAKTURA") & " " & Poruka("OTKUI_SL_DET_FAKNEISPRAVNA")
     End If
     If Len(NzS(lanac(r, 14))) > 0 Then
         linije.Add UCase$(NzS(lanac(r, 14)))
@@ -1681,7 +1681,7 @@ Public Function SlLanacZaPdf(ByVal otkupID As String) As Variant
             dataS(3, 5) = ozn
         Case IZV_NEMA_PRIJEMA
             dataS(4, 5) = ozn
-        Case SLED_OZN_NEFAKTURISANO
+        Case SLED_OZN_FAK_NEISPRAVNA
             dataS(5, 5) = ozn
         Case Else
             If Len(ozn) > 0 Then dataS(1, 5) = ozn

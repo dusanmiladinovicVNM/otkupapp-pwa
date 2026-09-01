@@ -1542,7 +1542,10 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SLP_BEZZBR", "Otpremnica bez zbirne"
     UpsertRow lo, existing, "OTKUI_SLP_DVOSM", "Broj zbirne dvosmislen"
     UpsertRow lo, existing, "OTKUI_SLP_BEZPRIJ", "Zbirna bez prijema"
-    UpsertRow lo, existing, "OTKUI_SLP_NEFAKT", "Prijemnica bez fakture"
+    ' Krug 9: klasa vise ne znaci "nema fakturu" (to je legitiman tok u
+    ' hladnjacu) nego "tvrdi da ima, a veza nije validna".
+    UpsertRow lo, existing, "OTKUI_SLP_NEFAKT", "Neispravna veza fakture"
+    UpsertRow lo, existing, "OTKUI_SL_DET_FAKNEISPRAVNA", "veza neispravna"
     UpsertRow lo, existing, "OTKUI_SLP_KG", "Kg razlika na karici"
     UpsertRow lo, existing, "OTKUI_ERR_SL_ZBIRNA_STAMPA", "Zbirna nema svoju " & ChrW(353) & "tampu " & ChrW(8212) & " " & ChrW(353) & "tampaj dokument karike iznad ili ispod nje"
     UpsertRow lo, existing, "OTKUI_MSG_SL_IZABERI_RED", ChrW(10007) & " Izaberi red u listi " & ChrW(8212) & " lanac se " & ChrW(353) & "tampa za izabrani dokument"

@@ -3742,7 +3742,7 @@ SABOTAZE = {
         "    If False Then   ' SABOTAZA: prijemnice ispadaju iz liste problema\n"
         "        Dim cPId As Long, cPBr As Long, cPKup As Long, cPKol As Long\n",
         "T_Sled_FailClosed",
-        "problem: prijemnica bez fakture",
+        "problem: Fakturisano=Da bez FakturaID",
     ),
     # Kg razlika u listi problema ima svoj prag nezavisno od lanca.
     "sledljivost-problem-kg-prag": (
@@ -3956,20 +3956,21 @@ SABOTAZE = {
         "T_Sled_DokumentiPonuda",
         "stornirana paleta nije u ponudi",
     ),
-    # Krug 8 R1: ALL pravilo fakturisanosti -- kad neispravna prijemnica
-    # cuti, delimicno fakturisana zbirna izgleda kao potpun lanac.
+    # Krug 8 R1 / krug 9: prijemnica koja TVRDI "Da" bez validne aktivne
+    # fakture mora da obori kariku -- kad ta grana cuti, kontradikcija
+    # izgleda kao potpun lanac.
     "sledljivost-fakture-any-umesto-all": (
         "modIzvestaj.bas",
-        "                                Else\n"
-        "                                    prijLose = True\n"
-        "                                    If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
-        "                                End If\n",
-        "                                Else\n"
-        "                                    ' SABOTAZA: ANY umesto ALL -- neispravna cuti\n"
-        "                                    If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
-        "                                End If\n",
+        "                                    Else\n"
+        "                                        prijLose = True\n"
+        "                                        If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                    End If\n",
+        "                                    Else\n"
+        "                                        ' SABOTAZA: neispravna tvrdnja cuti\n"
+        "                                        If Len(p(4)) > 0 Then refs = refs & \"|\" & p(4)\n"
+        "                                    End If\n",
         "T_Sled_FailClosed",
-        "delimicno fakturisana zbirna obara celu kariku (ALL, ne ANY)",
+        "tvrdnja Da bez validne fakture obara kariku (ALL nad tvrdnjama)",
     ),
     # Krug 8 R2: LANAC haystack bez SearchRefs kolone -- broj progutane
     # fakture ("2 fakt.") vise ne nalazi red, obecanje pretrage pada.
@@ -4044,7 +4045,7 @@ SABOTAZE = {
         "            HaystackReda = NzS(src(i, 3)) & \"|\" & NzS(src(i, 4)) & \"|\" & _\n"
         "                           NzS(src(i, 6)) & \"|\" & SlProblemNaziv(NzS(src(i, 1)))   ' SABOTAZA: bez lanac-brojeva\n",
         "T_Sled_KesPretragaIHint",
-        "pretraga po broju zbirne nalazi nefakturisanu prijemnicu",
+        "pretraga po broju zbirne nalazi neispravnu vezu fakture",
     ),
     # Ponuda polja izbora nudi preradjenu paletu kao "svezu robu".
     "sledljivost-dokumenti-preradjena-kao-sveza": (

@@ -11406,12 +11406,14 @@ Private Sub T_Sled_FailClosed()
     AssertEq IsEmpty(lanac(r, 11)), True, _
              "prijem kg pod nejasnim vlasnikom OSTAJE prazan"
 
-    ' Do prijemnice bez fakture: karika fakture nedostaje i to se kaze.
+    ' Krug 9 (OBRNUTO): "Fakturisano=Ne" je LEGITIMAN tok -- roba u
+    ' sopstvenu hladnjacu ne dobija fakturu za taj prijem, pa lanac do
+    ' takve prijemnice NIJE pokvaren. SLN je bas to vozilo.
     r = SledNadjiRed(lanac, "OTK-SLED-N")
     AssertEq (r > 0), True, "lanac nosi red OTK-SLED-N"
     AssertEq CStr(lanac(r, 10)), "31/150326", "prijemnica karika postoji"
-    AssertEq CStr(lanac(r, 14)), "nefakturisano", _
-             "lanac do prijemnice bez fakture nosi oznaku nefakturisano"
+    AssertEq CStr(lanac(r, 14)), "", _
+             "prijemnica bez fakture NIJE kvar -- lanac je potpun"
 
     ' Kg curi na prvoj karici (blok 100 / otpremnica 250): vidljiva
     ' razlika sa oznakom, nikad precutana.
@@ -11452,9 +11454,11 @@ Private Sub T_Sled_FailClosed()
              "problem: otpremnica bez zbirne"
     AssertEq SledImaProblem(problemi, "ZBIRNA-BEZ-PRIJEMA", "ZBI-SLED-R"), True, _
              "problem: zbirna bez prijema"
-    AssertEq SledImaProblem(problemi, "PRIJEMNICA-BEZ-FAKTURE", "PRJ-SLED-N"), True, _
-             "problem: prijemnica bez fakture"
-    AssertEq SledImaProblem(problemi, "PRIJEMNICA-BEZ-FAKTURE", "PRJ-SLED-1"), False, _
+    ' Krug 9: "Ne" nije klasa problema -- ni legitimna nefakturisana
+    ' (PRJ-SLED-N) ni uredno fakturisana (PRJ-SLED-1) nisu na listi.
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-N"), False, _
+             "prijemnica bez fakture NIJE problem (legitiman tok)"
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-1"), False, _
              "fakturisana prijemnica NIJE problem"
     AssertEq SledImaProblem(problemi, "KG-RAZLIKA", "OTP-SLED-R"), True, _
              "problem: kg razlika na otpremnici"
@@ -11463,7 +11467,7 @@ Private Sub T_Sled_FailClosed()
              "detalj kg razlike nosi obe brojke karike"
     ' Nepotpuno obelezena prijemnica (Fakturisano=Da bez FakturaID) je
     ' slepa karika i prijavljuje se.
-    AssertEq SledImaProblem(problemi, "PRIJEMNICA-BEZ-FAKTURE", "PRJ-FAK-2"), True, _
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-FAK-2"), True, _
              "problem: Fakturisano=Da bez FakturaID"
     ' Dvosmislen broj se prijavljuje JEDNOM po broju (kolona 3 = broj).
     Dim i As Long, dupl As Long
@@ -11478,8 +11482,8 @@ Private Sub T_Sled_FailClosed()
              "cip veze hvata neusaglasenu vezu"
     AssertEq modScrSledljivost.SlCipProblemi("kg", "VEZA-NEUSAGLASENA"), False, _
              "cip kg NE hvata vezu"
-    AssertEq modScrSledljivost.SlCipProblemi("fakture", "PRIJEMNICA-BEZ-FAKTURE"), True, _
-             "cip fakture hvata nefakturisanu"
+    AssertEq modScrSledljivost.SlCipProblemi("fakture", "FAKTURA-VEZA-NEISPRAVNA"), True, _
+             "cip fakture hvata neispravnu vezu fakture"
     AssertEq modScrSledljivost.SlCipLanac("potpun", ""), True, _
              "cip potpun propusta prazan oznaku"
     AssertEq modScrSledljivost.SlCipLanac("potpun", "kg razlika"), False, _
@@ -11491,13 +11495,14 @@ Private Sub T_Sled_FailClosed()
 
     ' --- Krug 8 R1: ALL pravilo fakturisanosti. F-lanac ima JEDNU
     ' prijemnicu na aktivnu fakturu i JEDNU "Da" ka nepostojecoj --
-    ' jedna neispravna obara CELU kariku, a NEPOTPUNI je prijavljuje,
-    ' pa se dva read-modela istog ekrana SLAZU.
+    ' jedna neispravna TVRDNJA obara CELU kariku, a NEPOTPUNI je
+    ' prijavljuje, pa se dva read-modela istog ekrana SLAZU (krug 9:
+    ' pravilo je ALL nad prijemnicama koje TVRDE "Da", ne nad svima).
     r = SledNadjiRed(lanac, "OTK-SLED-F")
     AssertEq (r > 0), True, "lanac nosi red OTK-SLED-F"
-    AssertEq CStr(lanac(r, 14)), "nefakturisano", _
-             "delimicno fakturisana zbirna obara celu kariku (ALL, ne ANY)"
-    AssertEq SledImaProblem(problemi, "PRIJEMNICA-BEZ-FAKTURE", "PRJ-SLED-F2"), True, _
+    AssertEq CStr(lanac(r, 14)), "faktura neusaglasena", _
+             "tvrdnja Da bez validne fakture obara kariku (ALL nad tvrdnjama)"
+    AssertEq SledImaProblem(problemi, "FAKTURA-VEZA-NEISPRAVNA", "PRJ-SLED-F2"), True, _
              "prijemnica sa nepostojecom fakturom je medju problemima"
 
     ' --- Krug 8 R2: M-lanac -- dve prijemnice na dve AKTIVNE fakture je
@@ -11643,12 +11648,14 @@ Private Sub T_Sled_KesPretragaIHint()
 
     ' Pretraga na NEPOTPUNIMA nalazi i LANAC-brojeve (krug 4 S8): ekran
     ' obecava "pretraga nalazi svaki broj u lancu" -- broj zbirne mora da
-    ' vodi do njene nefakturisane prijemnice (kolona 9 problema).
+    ' vodi do prijemnice sa neispravnom vezom fakture (kolona 9 problema;
+    ' krug 9: legitimna nefakturisana vise NIJE na listi, pa vozilo daje
+    ' F-lanac -- PRJ-SLED-F2 tvrdi "Da" ka nepostojecoj fakturi).
     modScrSledljivost.Scr_SlTestSet "NEPOTPUNI", IzvOdS(), IzvDoS()
-    d = modScrSledljivost.Scr_Rows("sve", "zb-test-sln")
+    d = modScrSledljivost.Scr_Rows("sve", "zb-test-slf")
     AssertEq CLng(d(2)), 1, _
-             "pretraga po broju zbirne nalazi nefakturisanu prijemnicu"
-    AssertEq Trim$(CStr(d(1)(1, 3))), "31/150326", "i to bas njen red"
+             "pretraga po broju zbirne nalazi neispravnu vezu fakture"
+    AssertEq Trim$(CStr(d(1)(1, 3))), "34/150326", "i to bas njen red"
 
     ' Krug 8 R2: broj DRUGE fakture M-lanca zivi samo u SearchRefs
     ' ("2 fakt." prikaz ga guta) -- smer nazad mora da radi na OBE

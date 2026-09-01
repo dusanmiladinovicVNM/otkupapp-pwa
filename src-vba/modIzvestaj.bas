@@ -67,7 +67,11 @@ Public Const SLED_OZN_OTP_STORNIRANA As String = "otpremnica stornirana"
 Public Const SLED_OZN_VEZA As String = "veza neusaglasena"
 Public Const SLED_OZN_BEZ_ZBIRNE As String = "bez zbirne"
 Public Const SLED_OZN_ZBIRNA_NEMA As String = "zbirna ne postoji"
-Public Const SLED_OZN_NEFAKTURISANO As String = "nefakturisano"
+' Krug 9: "Fakturisano=Ne" je LEGITIMAN tok (roba u sopstvenu hladnjacu
+' -> paleta -> prerada; faktura nije obavezna karika sledljivosti).
+' Oznaka postoji SAMO za podatkovnu kontradikciju: prijemnica TVRDI da
+' je fakturisana, a veza ne pokazuje na postojecu aktivnu fakturu.
+Public Const SLED_OZN_FAK_NEISPRAVNA As String = "faktura neusaglasena"
 Public Const SLED_OZN_KG As String = "kg razlika"
 Public Const SLED_OZN_BEZ_PARCELE As String = "bez parcele"
 
@@ -78,7 +82,7 @@ Public Const SLEDP_VEZA As String = "VEZA-NEUSAGLASENA"
 Public Const SLEDP_BEZ_ZBIRNE As String = "OTPREMNICA-BEZ-ZBIRNE"
 Public Const SLEDP_BROJ_DVOSMISLEN As String = "BROJ-ZBIRNE-DVOSMISLEN"
 Public Const SLEDP_BEZ_PRIJEMA As String = "ZBIRNA-BEZ-PRIJEMA"
-Public Const SLEDP_NEFAKTURISANA As String = "PRIJEMNICA-BEZ-FAKTURE"
+Public Const SLEDP_FAK_NEISPRAVNA As String = "FAKTURA-VEZA-NEISPRAVNA"
 Public Const SLEDP_KG_RAZLIKA As String = "KG-RAZLIKA"
 
 ' Tipovi meta sledljivosti (ReportSledljivostMete, kolona 1) -- ASCII
@@ -4312,20 +4316,22 @@ Private Function SledParceleMapa() As Object
     src = GetTableData(TBL_PARCELE)
     On Error GoTo 0
     If Not IsArray(src) Then Exit Function
-    cId = GetColumnIndex(TBL_PARCELE, COL_PAR_ID)
-    cKat = GetColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ)
-    cKul = GetColumnIndex(TBL_PARCELE, COL_PAR_KULTURA)
-    cPov = GetColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA)
-    cGgap = GetColumnIndex(TBL_PARCELE, COL_PAR_GGAP)
-    If cId = 0 Then Exit Function
+    ' Krug 9: kolone su OBAVEZNE (TraceByZbirna ih vec tako tretira), pa
+    ' RequireColumnIndex umesto IIf(c > 0, src(i, c), ...) -- IIf racuna
+    ' obe grane, pa bi indeks 0 svejedno pipnuo src(i, 0) i pukao.
+    cId = RequireColumnIndex(TBL_PARCELE, COL_PAR_ID, "modIzvestaj.SledParceleMapa")
+    cKat = RequireColumnIndex(TBL_PARCELE, COL_PAR_KAT_BROJ, "modIzvestaj.SledParceleMapa")
+    cKul = RequireColumnIndex(TBL_PARCELE, COL_PAR_KULTURA, "modIzvestaj.SledParceleMapa")
+    cPov = RequireColumnIndex(TBL_PARCELE, COL_PAR_POVRSINA, "modIzvestaj.SledParceleMapa")
+    cGgap = RequireColumnIndex(TBL_PARCELE, COL_PAR_GGAP, "modIzvestaj.SledParceleMapa")
     For i = 1 To UBound(src, 1)
         pid = SledTxt(src(i, cId))
         If Len(pid) > 0 And Not d.Exists(pid) Then
             d.Add pid, Array( _
-                IIf(cKat > 0, SledTxt(src(i, cKat)), ""), _
-                IIf(cKul > 0, SledTxt(src(i, cKul)), ""), _
-                IIf(cPov > 0, SledDbl(src(i, cPov)), 0#), _
-                IIf(cGgap > 0, SledTxt(src(i, cGgap)), ""))
+                SledTxt(src(i, cKat)), _
+                SledTxt(src(i, cKul)), _
+                SledDbl(src(i, cPov)), _
+                SledTxt(src(i, cGgap)))
         End If
     Next i
 End Function
@@ -4721,18 +4727,21 @@ PreskociBroj:
                                 ' prikaz je gutao pojedinacne brojeve pa
                                 ' pretraga unazad nije radila.
                                 If Len(p(1)) > 0 Then refs = refs & "|" & p(1)
-                                ' ALL, ne ANY (krug 8 R1): SVAKA prijemnica
-                                ' mora biti fakturisana na POSTOJECU AKTIVNU
-                                ' fakturu -- jedna neispravna obara celu
-                                ' kariku fail-closed (lista NEPOTPUNI je
-                                ' prijavljuje pojedinacno).
-                                If p(3) = "Da" And Len(p(4)) > 0 _
-                                   And fakMapa.Exists(p(4)) Then
-                                    If Not fakture.Exists(p(4)) Then fakture.Add p(4), True
-                                    refs = refs & "|" & Trim$(CStr(fakMapa(p(4))))
-                                Else
-                                    prijLose = True
-                                    If Len(p(4)) > 0 Then refs = refs & "|" & p(4)
+                                ' Krug 9 (ispravka R1): "Fakturisano=Ne" je
+                                ' LEGITIMAN tok (hladnjaca/paleta/prerada) i
+                                ' NE obara kariku. Problem je SAMO prijemnica
+                                ' koja TVRDI "Da" bez validne veze: prazan
+                                ' FakturaID ili ID van aktivnih faktura --
+                                ' jedna takva obara kariku (ALL nad tvrdnjama),
+                                ' a NEPOTPUNI je prijavljuje pojedinacno.
+                                If p(3) = "Da" Then
+                                    If Len(p(4)) > 0 And fakMapa.Exists(p(4)) Then
+                                        If Not fakture.Exists(p(4)) Then fakture.Add p(4), True
+                                        refs = refs & "|" & Trim$(CStr(fakMapa(p(4))))
+                                    Else
+                                        prijLose = True
+                                        If Len(p(4)) > 0 Then refs = refs & "|" & p(4)
+                                    End If
                                 End If
                             Next recV
                             If prijC.count > 1 Then prikazPrij = CStr(prijC.count) & " prij."
@@ -4741,8 +4750,10 @@ PreskociBroj:
                         result(r, 27) = Mid$(refs, 2)
 
                         ' --- karika 5: faktura (denorm FakturaID) ---
-                        If prijLose Or fakture.count = 0 Then
-                            oznaka = SLED_OZN_NEFAKTURISANO
+                        ' Bez fakture = NORMALNO stanje (roba u hladnjaci);
+                        ' oznaku nosi SAMO neispravna tvrdnja (krug 9).
+                        If prijLose Then
+                            oznaka = SLED_OZN_FAK_NEISPRAVNA
                         End If
                         If fakture.count = 1 Then
                             Dim fk As Variant
@@ -4775,7 +4786,7 @@ PreskociBroj:
         ' Oznaka je PRVA anomalija PO POZICIJI u lancu (merilo #2 zadatka:
         ' kg koji curi je vidljiva razlika, nikad precutana): prekid pre/na
         ' otpremnici -> kg blok<->otp -> prekid na zbirni -> kg otp<->zbirna
-        ' -> nema prijema -> nefakturisano. Kg se poredi SAMO na podatkovnim
+        ' -> nema prijema -> faktura neusaglasena. Kg se poredi SAMO na podatkovnim
         ' karikama (roba se nije mrdala, brojevi moraju biti isti); zbirna
         ' <-> prijem je TRANSPORTNO KALO (smoke S1) i ne ulazi -- njega mere
         ' Manjak izvestaji. Prekid DUBLJE u lancu ne sme da sakrije kg
@@ -4789,7 +4800,7 @@ PreskociBroj:
             Case IZV_NEMA_PRIJEMA
                 If kg1 Or kg2 Then oznaka = SLED_OZN_KG
             Case Else
-                ' "" ili nefakturisano -- kg bilo koje karike je ranije.
+                ' "" ili faktura neusaglasena -- kg bilo koje karike je ranije.
                 If kg1 Or kg2 Then oznaka = SLED_OZN_KG
         End Select
         result(r, 14) = oznaka
@@ -4813,16 +4824,17 @@ End Function
 '   3 Broj dokumenta    7 DokTip (DOK_TIP_* / SLED_DOK_ZBIRNA)
 '   4 Nosilac (naziv)   8 DokID
 '   9 Lanac-brojevi za PRETRAGU (krug 4 S8): brojevi karika reda koji
-'     NISU vec u kolonama 3/6 (npr. broj zbirne nefakturisane
-'     prijemnice) -- ekran obecava "pretraga nalazi svaki broj u lancu"
+'     NISU vec u kolonama 3/6 (npr. broj zbirne prijemnice sa
+'     neispravnom vezom fakture) -- ekran obecava "pretraga nalazi svaki broj u lancu"
 '     i na listi NEPOTPUNI. Ne prikazuje se.
 '
 ' Klase: OTKUP-BEZ-OTPREMNICE (i veza na storniranu -- detalj kaze),
 ' VEZA-NEUSAGLASENA, OTPREMNICA-BEZ-ZBIRNE (i broj bez aktivne zbirne),
 ' BROJ-ZBIRNE-DVOSMISLEN (jednom po broju), ZBIRNA-BEZ-PRIJEMA (po
 ' stavki; uz #V>1 sa nepripisivim prijemnicama se NE tvrdi -- fail-closed
-' i ovde), PRIJEMNICA-BEZ-FAKTURE (i "Fakturisano=Da bez FakturaID"),
-' KG-RAZLIKA (po karici, prag SLED_EPS_KG; uz #V>1 se ne racuna).
+' i ovde), FAKTURA-VEZA-NEISPRAVNA ("Da" bez FakturaID ili sa ID van
+' aktivnih faktura), KG-RAZLIKA (po karici, prag SLED_EPS_KG; uz #V>1
+' se ne racuna). "Fakturisano=Ne" NIJE klasa -- legitiman tok.
 ' ============================================================
 Public Function ReportSledljivostProblemi(ByVal datumOd As Date, _
                                           ByVal datumDo As Date) As Variant
@@ -5055,7 +5067,7 @@ SledeciZbr:
         Next i
     End If
 
-    ' --- prijemnice: bez fakture (i "Da" bez FakturaID) ---
+    ' --- prijemnice: neispravna tvrdnja fakturisanosti (krug 9) ---
     Dim prijData As Variant
     prijData = GetTableData(TBL_PRIJEMNICA)
     If IsArray(prijData) Then prijData = ExcludeStornirano(prijData, TBL_PRIJEMNICA)
@@ -5076,7 +5088,7 @@ SledeciZbr:
 
         ' Ista kapija kao LANAC (krug 8 R1): FakturaID mora da pripada
         ' POSTOJECOJ AKTIVNOJ fakturi -- inace se dva read-modela istog
-        ' ekrana ne slazu (LANAC kaze nefakturisano, NEPOTPUNI cute).
+        ' ekrana ne slazu (LANAC kaze neusaglaseno, NEPOTPUNI cute).
         Dim fakMapaP As Object: Set fakMapaP = SledFakMapa()
 
         Dim pKup As String
@@ -5088,31 +5100,30 @@ SledeciZbr:
             pKup = SledTxt(prijData(i, cPKup))
             If kupMapa.Exists(pKup) Then naziv = Trim$(CStr(kupMapa(pKup))) Else naziv = pKup
 
-            If SledTxt(prijData(i, cPFakt)) <> "Da" Then
-                rows.Add Array(SLEDP_NEFAKTURISANA, prijData(i, cPDat), _
-                               SledTxt(prijData(i, cPBr)), naziv, _
-                               SledDbl(prijData(i, cPKol)), "", _
-                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
-                               SledTxt(prijData(i, cPZbr)))
-            ElseIf Len(SledTxt(prijData(i, cPFid))) = 0 Then
-                ' Poznato nepotpuno stanje (PRJ-FAK-2 klasa): oznacena kao
-                ' fakturisana, a broj fakture ne postoji -- karika je slepa.
-                rows.Add Array(SLEDP_NEFAKTURISANA, prijData(i, cPDat), _
-                               SledTxt(prijData(i, cPBr)), naziv, _
-                               SledDbl(prijData(i, cPKol)), _
-                               "Fakturisano=Da bez FakturaID", _
-                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
-                               SledTxt(prijData(i, cPZbr)))
-            ElseIf Not fakMapaP.Exists(Trim$(SledTxt(prijData(i, cPFid)))) Then
-                ' Krug 8 R1: FakturaID pokazuje na nepostojecu ili
-                ' storniranu fakturu -- ista slepa karika, drugi uzrok.
-                rows.Add Array(SLEDP_NEFAKTURISANA, prijData(i, cPDat), _
-                               SledTxt(prijData(i, cPBr)), naziv, _
-                               SledDbl(prijData(i, cPKol)), _
-                               "FakturaID " & SledTxt(prijData(i, cPFid)) & _
-                               " nije medju aktivnim fakturama", _
-                               DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
-                               SledTxt(prijData(i, cPZbr)))
+            ' Krug 9: "Fakturisano=Ne" NIJE problem -- to je legitiman tok
+            ' (roba u sopstvenu hladnjacu; dalji dokumenti sledljivosti su
+            ' paleta/prerada). Prijavljuje se SAMO neispravna TVRDNJA "Da".
+            If SledTxt(prijData(i, cPFakt)) = "Da" Then
+                If Len(SledTxt(prijData(i, cPFid))) = 0 Then
+                    ' Oznacena kao fakturisana, a broja fakture nema --
+                    ' podatkovna kontradikcija (PRJ-FAK-2 klasa).
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, prijData(i, cPDat), _
+                                   SledTxt(prijData(i, cPBr)), naziv, _
+                                   SledDbl(prijData(i, cPKol)), _
+                                   "Fakturisano=Da bez FakturaID", _
+                                   DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                                   SledTxt(prijData(i, cPZbr)))
+                ElseIf Not fakMapaP.Exists(Trim$(SledTxt(prijData(i, cPFid)))) Then
+                    ' FakturaID pokazuje na nepostojecu ili storniranu
+                    ' fakturu -- ista kontradikcija, drugi uzrok.
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, prijData(i, cPDat), _
+                                   SledTxt(prijData(i, cPBr)), naziv, _
+                                   SledDbl(prijData(i, cPKol)), _
+                                   "FakturaID " & SledTxt(prijData(i, cPFid)) & _
+                                   " nije medju aktivnim fakturama", _
+                                   DOK_TIP_PRIJEMNICA, SledTxt(prijData(i, cPId)), _
+                                   SledTxt(prijData(i, cPZbr)))
+                End If
             End If
 SledeciPrj:
         Next i

@@ -5050,7 +5050,8 @@ Faktura, Kupac) + kolona **OZNAKA** (prva prekinuta/višesmislena karika
 po poziciji u lancu: `nepovezan` → `otpremnica stornirana` → `veza
 neusaglasena` → kg razlika blok↔otp → `bez zbirne`/`zbirna ne postoji`/
 `nejasan vlasnik` → kg otp↔zbirna → `nema prijema` →
-`nefakturisano`; prazno = potpun; kg zbirna↔prijem se ne proverava —
+`faktura neusaglasena` (krug 9: SAMO lažna tvrdnja „Da“ — `Ne` je
+legitiman tok u hladnjaču); prazno = potpun; kg zbirna↔prijem se ne proverava —
 to je transportno kalo, v. §24.7/S1). Prijem ćelija nosi broj prijemnice,
 „N prij." kad ih je više, ili ostaje prazna (razlog je u OZNAKA koloni —
 nikad izmišljen broj, nikad „0,00" umesto poruke). **Detalj traka** desno
@@ -5094,7 +5095,8 @@ nepostojeću — detalj razlikuje), `VEZA-NEUSAGLASENA`,
 `OTPREMNICA-BEZ-ZBIRNE` (i broj bez aktivne zbirne), `BROJ-ZBIRNE-
 DVOSMISLEN` (JEDNOM po broju), `ZBIRNA-BEZ-PRIJEMA` (po stavki; uz #V>1
 sa nepripisivim prijemnicama se NE tvrdi — prijem možda postoji a ne sme
-se pripisati), `PRIJEMNICA-BEZ-FAKTURE` (i poznato nepotpuno stanje
+se pripisati), `FAKTURA-VEZA-NEISPRAVNA` (krug 9: SAMO „Fakturisano=Da“
+bez validne aktivne fakture — `Ne` NIJE klasa; pokriva i poznato stanje
 „Fakturisano=Da bez FakturaID" — PRJ-FAK-2 klasa), `KG-RAZLIKA` (SAMO
 podatkovne karike: blokovi↔otpremnica i otpremnice↔zbirna — roba se
 nije mrdala pa brojevi moraju biti isti; razlika zbirna↔prijem je
@@ -5115,7 +5117,7 @@ dira:
 | Test | Tvrdnja | Nezavisan read-model |
 |---|---|---|
 | 151 `T_Sled_LanacSlaganje` | potpun lanac karika po karika == ručni prolaz kroz `tblOtkup`→`tblOtpremnica`→`tblZbirna`→`tblPrijemnica`→`tblFakture` (samo `GetTableData`+`GetColumnIndex`); kg se slaže niz CEO lanac (blokovi = otpremnica = zbirna = prijem); nazad: pretraga po broju fakture vraća OBA kooperanta lanca; PARCELE projekcija == `tblParcele`; blok bez parcele nosi oznaku; KPI == isti snimak | ručni prolazi |
-| 152 `T_Sled_FailClosed` | dvosmislen broj → `nejasan vlasnik` (kg OSTAJE prazan); do prijemnice bez fakture → `nefakturisano`; kg curenje → `kg razlika`; raskorak denorma → `veza neusaglasena`; nepovezan; veza na storniranu; storniran dokument nije NIGDE; svaka klasa problema sa tačnom karikom; detalj kg razlike nosi obe brojke | pokvarena vozila fixture-a |
+| 152 `T_Sled_FailClosed` | dvosmislen broj → `nejasan vlasnik` (kg OSTAJE prazan); lažna tvrdnja fakturisanosti → `faktura neusaglasena` (a `Fakturisano=Ne` je POTPUN lanac — krug 9); kg curenje → `kg razlika`; raskorak denorma → `veza neusaglasena`; nepovezan; veza na storniranu; storniran dokument nije NIGDE; svaka klasa problema sa tačnom karikom; detalj kg razlike nosi obe brojke | pokvarena vozila fixture-a |
 | 150/153/154/155 | ugovor ekrana; identitet prio 4 + DokTip ruta; keš/generacija/kvake pretrage/hint; zona posle Unload-a | — |
 
 Tvrdnje nad deljenim pravilom vlasnika (`BuildManjakDict`/
@@ -5140,7 +5142,7 @@ bit-identični, isti razlog kao `OTK_IZV_ZATVOREN`):
 |---|---|
 | OTK-SLED-1 (KOOP-TEST-2) + OTK-SLED-2 (KOOP-TEST-IME) → OTP-SLED-1 → ZB-TEST-SLED → PRJ-SLED-1 → FAK-SLED-1 | **prvi POTPUN lanac u fixture-u** (zatvara rupu iz §23.12/S10 — do sada nijedna otpremnica sa blokovima nije imala zbirnu sa nestorniranom prijemnicom); dva kooperanta na istoj otpremnici („nazad" mora vratiti oba); kg 300+200=500 slaže se niz ceo lanac; OTK-SLED-2 je bez parcele (oznaka na PARCELE listi) i nosi ga ISTOIMENI kooperant (identitet je OTK\|id, ne prikazano ime). KOOP-TEST-3 se ne sme koristiti ni za jedan SLED blok: `T_BankaUvoz_RucnoMapiranjePravila` broji njegove blokove apsolutno (=5) — prvi crveni krug je to i pokazao |
 | OTK-SLED-D → OTP-SLED-D (vozač PRAZAN) → ZB-TEST-SLDD (svoj par, dva vozača) | dvosmislen broj koji se NE može razrešiti po vozaču otpremnice → `nejasan vlasnik`. Svoj par, ne ZB-TEST-DUPL: DUPL troši raniji storno test (ostane jedan aktivan vlasnik), pa u trenutku sledljivost testova više nije dvosmislen |
-| OTK-SLED-N → OTP-SLED-N → ZB-TEST-SLN → PRJ-SLED-N (nefakturisana) | lanac do prijemnice bez fakture → `nefakturisano` + klasa problema |
+| OTK-SLED-N → OTP-SLED-N → ZB-TEST-SLN → PRJ-SLED-N (Fakturisano=Ne) | krug 9: LEGITIMAN tok u hladnjaču — lanac POTPUN, bez oznake i bez problema (kvar fakture mere F-vozila) |
 | OTK-SLED-R (100) → OTP-SLED-R (250!) → ZB-TEST-SLR (bez prijemnice) | kg curi na prvoj karici → `kg razlika` + `KG-RAZLIKA` problem sa obe brojke; zbirna bez prijema na svojoj mirnoj zbirni |
 | pin `SLEDLJIVOST_PRINT_MODE=OFF` u SEF_CONFIG | klik „Lanac (PDF)" u testu/smoke-u ne pravi PDF; ekran OFF prijavljuje porukom |
 
@@ -5436,6 +5438,23 @@ bez novih funkcija):**
   `Optional ByRef outGreska` (legacy pozivi netaknuti), pa ekran
   razlikuje rollback (poruka greške) od legitimne nule.
 
+**Krug 9 — ispravka poslovne semantike fakture (finalni review nalaz):**
+pravilo iz kruga 8 („SVE prijemnice moraju biti fakturisane") bilo je
+pogrešno za AgriX domen — legitiman tok je prijem u SOPSTVENU hladnjaču
+(`Fakturisano=Ne`), pa paleta/prerada/kasnija prodaja; faktura NIJE
+obavezna karika sledljivosti. Zato je i ~938 „nepotpunih" na pravoj
+svesci bilo uglavnom normalna roba u hladnjači. Pravi invariant:
+**„Ne" = normalno; „Da" mora imati neprazan `FakturaID` ka postojećoj
+aktivnoj fakturi** (ALL nad prijemnicama koje TVRDE fakturisanost).
+Preimenovano po istini: klasa `FAKTURA-VEZA-NEISPRAVNA` (prikaz
+„Neispravna veza fakture"), oznaka lanca `faktura neusaglasena`.
+Testovi obrnuti: `PRJ-SLED-N` (Ne) sada dokazuje POTPUN lanac bez
+problema; F-lanac ostaje negativ (Da + mrtav ID); NEP pretraga po
+zbirnoj prelazi na F-vozilo. Usput `SledParceleMapa`:
+`IIf(c > 0, src(i, c), …)` mina (IIf računa obe grane → `src(i, 0)`
+puca) zamenjena `RequireColumnIndex` + direktan pristup — kolone su
+ionako obavezne (`TraceByZbirna` ih tako tretira).
+
 ### 24.8 Verifikacija
 
 - `RunAllTests` (deset novih testova 150–159, registrovani u sva tri
@@ -5458,8 +5477,9 @@ bez novih funkcija):**
   izgled zone, tri liste, pretraga po broju fakture/zbirne na velikoj
   svesci (smer nazad), brzina prvog otvaranja na punoj svesci, detalj
   traka, obe štampe, ruta „Štampaj dokument" po vrsti karike, NEPOTPUNI
-  nad pravim podacima (očekuje se mnogo nefakturisanih — to je status,
-  ne kvar); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
+  nad pravim podacima (krug 9: prijemnice u sopstvenu hladnjaču sa
+  `Fakturisano=Ne` NISU na listi — očekuje se drastičan pad broja
+  „problema" na stvarne kvarove); iz drugog kruga još: „Poveži automatski" i „Poveži…" nad
   pravim nepovezanima (upis!) i šablon zbirne protiv iste štampe iz
   stare forme; iz trećeg kruga: polje „Dokument sledljivosti" — kucanje
   broja/datuma sužava listu (strelica je otvara), izbor

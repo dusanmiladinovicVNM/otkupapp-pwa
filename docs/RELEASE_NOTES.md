@@ -6648,15 +6648,16 @@ ijedne izmišljene veze.
   čita gde je roba završila — otpremnica, zbirna, prijemnica, faktura,
   kupac. Kolona OZNAKA kaže gde lanac staje ili škripi: „nepovezan",
   „bez zbirne", „nejasan vlasnik" (dva vozača dele broj zbirne),
-  „nema prijema", „nefakturisano", „kg razlika", „veza neusaglašena",
+  „nema prijema", „faktura neusaglašena", „kg razlika", „veza neusaglašena",
   „otpremnica stornirana". Prazna oznaka = potpun lanac.
 - **Po parceli**: iste stavke, ali okrenute za sertifikaciju — kooperant,
   BPG, katastarski broj, kultura, površina, GGAP status. Blok unet bez
   parcele nosi oznaku „bez parcele" (i svoj čip) umesto tihe praznine.
 - **Nepotpuni**: radni spisak svake prekinute karike sa detaljem i
   brojkama („blokovi 100 kg / otpremnica 250 kg"), po klasama: veze ·
-  prijem · fakture · kg razlike. Mnogo nefakturisanih prijemnica je
-  normalno stanje — to je status, ne kvar.
+  prijem · fakture · kg razlike. Prijemnica bez fakture NIJE na listi —
+  roba primljena u sopstvenu hladnjaču je normalan tok; fakturna klasa
+  hvata samo neispravnu vezu (tvrdi „Da" bez validne fakture).
 - **Oba smera bez prekidača:** pretraga nalazi svaki broj u lancu.
   Ukucaš broj fakture ili zbirne → vidiš od kojih kooperanata i parcela
   je roba došla; ukucaš kooperanta → vidiš gde je roba završila.
@@ -6792,11 +6793,14 @@ ijedne izmišljene veze.
 
 ### Posle spoljne revizije (završni paket, bez novih funkcija)
 
-- **„Potpun lanac" sada znači SVE prijemnice fakturisane** na
-  postojeće aktivne fakture — ranije je jedna fakturisana prijemnica
-  umela da sakrije sestru bez fakture; sada jedna neispravna obara celu
-  kariku, a lista Nepotpuni je prikaže (i kad `FakturaID` pokazuje na
-  obrisanu/nepostojeću fakturu).
+- **Faktura je karika po ISTINI, ne po obavezi**: prijemnica sa
+  `Fakturisano=Ne` je normalan tok (roba u sopstvenu hladnjaču →
+  paleta → prerada) i NE kvari lanac. Kvar je samo podatkovna
+  kontradikcija — prijemnica koja TVRDI da je fakturisana bez broja
+  fakture ili sa vezom na obrisanu/nepostojeću fakturu: takva obara
+  celu kariku („faktura neusaglašena") i stoji na Nepotpunima kao
+  „Neispravna veza fakture". Jedna fakturisana sestra više ne može da
+  sakrije neispravnu (ALL nad tvrdnjama).
 - **Pretraga nazad radi i kroz „2 prij. / 2 fakt."** — red pamti sve
   progutane brojeve, pa broj bilo koje fakture nalazi lanac i na listi
   Po parceli.

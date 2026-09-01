@@ -305,7 +305,8 @@ AMB_LETVA = "Letvarica"          # drugi tip ambalaze; slobodan unos kao u pogon
 #     aktivnog vlasnika i vise nije dvosmislen. Bez vozaca otpremnice se
 #     vlasnik ne moze razresiti -> IZV_VLASNIK_NEJASAN, fail-closed.
 #   DO PRIJEMNICE BEZ FAKTURE: OTK-SLED-N -> OTP-SLED-N -> ZB-TEST-SLN
-#     (KUPAC2) -> PRJ-SLED-N (nefakturisana) -> oznaka "nefakturisano".
+#     (KUPAC2) -> PRJ-SLED-N (Fakturisano=Ne). Krug 9: to je LEGITIMAN
+#     tok (roba u hladnjaci) -- lanac je POTPUN, bez oznake i bez problema.
 #   KG RAZLIKA + BEZ PRIJEMA: OTK-SLED-R (100 kg) -> OTP-SLED-R (250 kg!
 #     kg curi na prvoj karici) -> ZB-TEST-SLR (250 kg, bez prijemnice).
 SLED_ZBIRNA = "ZB-TEST-SLED"
@@ -1364,7 +1365,8 @@ SEED = {
         # EKRAN SLEDLJIVOST -- v. blok konstanti SLED_* gore. PRJ-SLED-1 je
         # PRVA nestornirana prijemnica na zbirni koju nosi otpremnica sa
         # blokovima (zatvara rupu iz par. 23.12/S10): fakturisana, kg = zbir
-        # oba bloka. PRJ-SLED-N je nefakturisana (karika fakture nedostaje).
+        # oba bloka. PRJ-SLED-N je Fakturisano=Ne -- od kruga 9 LEGITIMNO
+        # stanje (roba u hladnjaci), lanac potpun; kvar fakture mere F-vozila.
         {"PrijemnicaID": "PRJ-SLED-1", "Datum": FIXTURE_DATE, "KupacID": KUPAC,
          "VozacID": VOZAC2, "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_1 + SLED_KG_2,
