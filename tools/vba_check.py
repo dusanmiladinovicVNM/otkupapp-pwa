@@ -39,6 +39,20 @@ Provere:
                      tabele po procitanom polju (mereno: 1.8 ms po redu).
  11. ODSECEN     -- prazan fajl ili fajl bez `Attribute VB_Name`. Nije modul
                      nego ostatak neuspelog upisa; do sada je prolazio kao cist.
+ 13. SLOJ_UPIS   -- ekranski modul (`modScr*`, `modOtkupUI`) zove `AppendRow` /
+                     `UpdateCell` / `GetNextID`. Upis i dodela identiteta ne
+                     pripadaju sloju prikaza.
+ 14. SLOJ_UZVODNO -- `modDataAccess` pominje `modScr*` / `modApp*` / `modDom*` /
+                     `frm*`. Zavisnost ide samo nanize; ovo bi bio ciklus.
+ 15. REPO_TX     -- `modRepo*` zove `BeginTx` / `AddTableSnapshot`. Transakcioni
+                     scope pripada pozivaocu (ADR-0003 tacka B).
+ 16. REPO_API    -- `modRepo*` izlaze genericki `Public` API (`UpdateColumn`,
+                     `ByVal colName`). To je `UpdateCell` sa prefiksom.
+
+Provere 13-16 uvedene su nad izvorom koji ih VEC postuje (nula nalaza), pa nemaju
+baseline: zakljucavaju postignuto stanje umesto da ciste zatecemo. Provera koja
+JOS trazi baseline -- `TBL_`/`COL_` u ekranskim modulima, 283 linije u 7 fajlova
+-- namerno nije ovde; ide uz fazu koja te linije ukloni.
 
 Provere 6 i 7 pokrivaju dve najcesce compile greske u ovom projektu -- one zbog
 kojih je i pravljen headless compile gate koji se nije dao ukrotiti
@@ -1457,6 +1471,117 @@ def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- SLOJ: granice slojeva koje su danas VEC ispostovane ---------------------
+#
+# Cetiri pravila koja NE ciste nista -- nad zatecenim src-vba imaju NULA nalaza.
+# Njihov posao je da to stanje zakljucaju, jer je jednom vec izgubljeno: od tri
+# ekranska modula pisana posle uvodjenja ljuske, dva (modScrSledljivost,
+# modScrBankaNalozi) nemaju nijednu TBL_/COL_ referencu, a treci
+# (modScrIzvestaji) ima 51 i 33. Disciplina je drzala dva od tri puta.
+#
+# Zato ovde nema baseline fajla: pravilo koje pocinje sa nula nalaza sme da bude
+# tvrdo od prvog dana. Provera koja i dalje TRAZI baseline (TBL_/COL_ u ekranima,
+# 283 linije) namerno NIJE ovde -- ide uz fazu koja te linije stvarno ukloni.
+#
+# Odluke iza pravila REPO_*: docs/adr/0003-repository-granica-i-izuzeci.md
+# Plan i merenja: docs/Architecture/ARHITEKTURA_PLAN_OCENA.md
+#
+# NAPOMENA o izuzetku iz ADR-0003 (modSetup, modMigracija): on se odnosi na
+# pravilo "samo modRepo* sme da pise tabelu", koje ovde JOS NEMA -- dolazi uz
+# fazu Repository. Ta dva modula nisu ekranski ni modRepo*, pa ih nijedno
+# pravilo ispod ne dodiruje i spisak izuzetaka jos nije potreban.
+
+SLOJ_UPIS_RE = re.compile(r"\b(AppendRow|UpdateCell|GetNextID)\s*[( ]", re.I)
+SLOJ_UZVODNO_RE = re.compile(r"\b(modScr[A-Z]\w*|modApp[A-Z]\w*|modDom[A-Z]\w*|frm[A-Z]\w*)\b")
+SLOJ_TX_RE = re.compile(r"\b(BeginTx|AddTableSnapshot)\b", re.I)
+
+# Repository API mora da imenuje NAMERU, ne mehaniku. `RepoOtkup.UpdateColumn(id,
+# COL_X, v)` je `UpdateCell` sa prefiksom: invarijanta "kad se postavlja
+# BrojZbirne, proveri ownera" tada nema gde da zivi i ostaje razbacana po
+# pozivaocima -- tacno stanje koje Repository treba da ukine.
+# Oba pravila gledaju ISKLJUCIVO `Public` potpis: `Private` helper unutar
+# repozitorijuma sme da radi po imenu kolone -- to je unutrasnja mehanika sloja
+# koji jedini i sme da zna za kolone. Zabranjeno je da takav oblik bude IZLOZEN
+# kao API, jer tada pozivalac ponovo govori jezikom celija. (Prva verzija ovog
+# pravila nije razlikovala Public od Private i pala je na sopstvenom self-testu.)
+REPO_PUBLIC_RE = re.compile(
+    r"^\s*Public\s+(?:Static\s+)?(?:Sub|Function|Property\s+(?:Get|Let|Set))\s+"
+    r"(\w+)", re.I)
+REPO_IME_RE = re.compile(r"^\w*(?:Column|Cell|Field|SetValue|UpdateRow)\w*$", re.I)
+REPO_PARAM_RE = re.compile(r"\b(?:ByVal|ByRef)\s+((?:col|column|field)Name)\b", re.I)
+
+
+def _je_ekran_ili_ljuska(path: str) -> bool:
+    n = os.path.basename(path).lower()
+    return n.startswith("modscr") or n.startswith("modotkupui")
+
+
+def _je_repo(path: str) -> bool:
+    return os.path.basename(path).lower().startswith("modrepo")
+
+
+def check_sloj(path: str, lines: list[str]) -> list[Finding]:
+    if je_test_modul(path):
+        return []
+
+    ime = os.path.basename(path).lower()
+    ekran = _je_ekran_ili_ljuska(path)
+    dataaccess = ime.startswith("moddataaccess")
+    repo = _je_repo(path)
+    if not (ekran or dataaccess or repo):
+        return []
+
+    out = []
+    for txt, ln in _logical_lines(lines):
+        t = _clean(txt)
+        if not t.strip():
+            continue
+
+        if ekran:
+            m = SLOJ_UPIS_RE.search(t)
+            if m:
+                out.append(Finding(
+                    path, ln, "SLOJ_UPIS",
+                    f"ekranski modul zove '{m.group(1)}': upis i dodela identiteta "
+                    f"ne pripadaju sloju prikaza. Poziv ide kroz operaciju koja "
+                    f"drzi transakciju (*Upisi / *_TX), a ona kroz modDataAccess. "
+                    f"Nijedan modScr* danas ovo ne radi -- ovo bi bio prvi."))
+
+        if dataaccess:
+            m = SLOJ_UZVODNO_RE.search(t)
+            if m:
+                out.append(Finding(
+                    path, ln, "SLOJ_UZVODNO",
+                    f"modDataAccess pominje '{m.group(1)}': sloj pristupa podacima "
+                    f"ne sme da zna za ekran, formu ni poslovnu operaciju. Zavisnost "
+                    f"ide samo nanize; ovo bi napravilo ciklus."))
+
+        if repo:
+            m = SLOJ_TX_RE.search(t)
+            if m:
+                out.append(Finding(
+                    path, ln, "REPO_TX",
+                    f"modRepo* zove '{m.group(1)}': transakcioni scope pripada "
+                    f"pozivaocu, ne repozitorijumu (ADR-0003 tacka B). RollbackTx "
+                    f"vraca samo tabele deklarisane snapshotom, pa bi operacija nad "
+                    f"dve tabele dobila dva scope-a i delimican rollback."))
+            pub = REPO_PUBLIC_RE.match(t)
+            m = None
+            if pub:
+                m = (pub.group(1) if REPO_IME_RE.match(pub.group(1)) else None)
+                if m is None:
+                    pm = REPO_PARAM_RE.search(t)
+                    m = pm.group(1) if pm else None
+            if m:
+                out.append(Finding(
+                    path, ln, "REPO_API",
+                    f"modRepo* izlaze genericki API ('{m}'): to je "
+                    f"UpdateCell sa prefiksom. Ime operacije mora da nosi poslovnu "
+                    f"nameru (LinkToOtpremnica, AssignZbirna, MarkStornirano), da bi "
+                    f"invarijanta imala jedno mesto umesto da ostane kod pozivalaca."))
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -1472,6 +1597,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_test_registry(path, lines)
     out += check_storno_progutan(path, lines)
     out += check_nedeklarisan(path, lines)
+    out += check_sloj(path, lines)
     return out
 
 
@@ -2614,6 +2740,16 @@ def self_test() -> int:
             palo.append(f"  ZAKLONJENO/{naziv}: ocekivano {ocekivano} nalaza, "
                         f"dobijeno {dobijeno}")
 
+    for naziv, ocekivano, ime, izvor in SLOJ_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file(ime, raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi
+                       if f.code in ("SLOJ_UPIS", "SLOJ_UZVODNO", "REPO_TX", "REPO_API"))
+        if dobijeno != ocekivano:
+            palo.append(f"  SLOJ/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     # I jedan slucaj kroz CEO CLI, nad pravim fajlom na disku. check_file dokazuje
     # da provera radi; ovo dokazuje da je CLI zaista zove i da vraca exit 2.
     naziv = "ceo CLI nad pravim .bas fajlom"
@@ -2658,10 +2794,35 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp3, ignore_errors=True)
 
+    # Isti razlog, za SLOJ: check_file dokazuje da pravilo grize, ovo dokazuje da
+    # ga CLI zove i da nalaz stize POD SVOJIM IMENOM -- inace bi izmena u
+    # check_file dispeceru prosla neprimeceno, a suite ostala zelena.
+    naziv = "ceo CLI: SLOJ_UPIS nad ekranskim modulom"
+    tmp4 = tempfile.mkdtemp(prefix="vbacheck_sloj_")
+    try:
+        put = os.path.join(tmp4, "modScrSelfTest.bas")
+        with open(put, "w", encoding="ascii", newline="\r\n") as fh:
+            fh.write("Option Explicit\n"
+                     "Public Sub Snimi()\n"
+                     "    AppendRow TBL_OTKUP, red\n"
+                     "End Sub\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            rc = main([put])
+        izlaz = buf.getvalue()
+        if rc != 2:
+            palo.append(f"  {naziv}: ocekivan exit 2, dobijen {rc}")
+        elif "SLOJ_UPIS" not in izlaz:
+            palo.append(f"  {naziv}: exit 2 je stigao, ali ne od SLOJ_UPIS "
+                        f"-- CLI mozda vise ne zove tu proveru")
+    finally:
+        shutil.rmtree(tmp4, ignore_errors=True)
+
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
-              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES) + 3)
+              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
+              + len(SLOJ_CASES) + 4)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
@@ -2670,6 +2831,130 @@ def self_test() -> int:
     print(f"self-test: cisto ({ukupno} slucajeva: DUPLIKAT_LOKALNI, "
           f"NEDEFINISAN/ARNOST, ZAKLONJENO, i jedan kroz ceo CLI).")
     return 0
+
+
+# --- SLOJ / REPO_*: dokaz u oba smera ----------------------------------------
+#
+# Polovina "ne sme da zapisti" je ovde vaznija nego obicno: sva cetiri pravila
+# uvode se nad izvorom koji ih VEC postuje, pa bi lazan nalaz bio jedina stvar
+# koju bi iko od njih video -- i naucio bi da se checker gasi.
+#
+# Oblik: (naziv, ocekivano, ime fajla, izvor). Ime fajla nosi pravilo.
+
+SLOJ_CASES = [
+    # --- SLOJ_UPIS: mora da zapisti ---
+    ("ekran zove AppendRow", 1, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Sub Snimi()\n"
+     "    AppendRow TBL_OTKUP, red\n"
+     "End Sub\n"),
+    ("ekran zove UpdateCell sa zagradom", 1, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Sub Snimi()\n"
+     "    ok = UpdateCell(TBL_OTKUP, i, COL_OTK_DATUM, v)\n"
+     "End Sub\n"),
+    ("ljuska modOtkupUI zove GetNextID", 1, "modOtkupUI.bas",
+     "Option Explicit\n"
+     "Public Sub Novi()\n"
+     "    id = GetNextID(TBL_OTKUP, COL_OTK_ID, \"OTK\")\n"
+     "End Sub\n"),
+    # --- SLOJ_UPIS: ne sme da zapisti ---
+    ("isti upis u POSLOVNOM modulu je legalan", 0, "modOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub Snimi()\n"
+     "    AppendRow TBL_OTKUP, red\n"
+     "End Sub\n"),
+    ("ekran pominje AppendRow u komentaru", 0, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Sub Snimi()\n"
+     "    \' upis ide kroz SaveOtkup_TX, ne kroz AppendRow TBL_OTKUP\n"
+     "    poruka = SaveOtkup_TX(datum, koop)\n"
+     "End Sub\n"),
+    ("ekran ima 'AppendRow' u stringu", 0, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Sub Dijag()\n"
+     "    LogInfo SRC, \"ocekivan poziv AppendRow TBL_OTKUP iz sloja ispod\"\n"
+     "End Sub\n"),
+    ("ekran zove operaciju koja drzi transakciju", 0, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Sub Snimi()\n"
+     "    poruka = SaveOtpremnica_TX(polja)\n"
+     "End Sub\n"),
+    ("test modul je izuzet i kad se zove modScr*", 0, "modScrPaleteTests.bas",
+     "Option Explicit\n"
+     "Public Sub TestSej()\n"
+     "    AppendRow TBL_OTKUP, red\n"
+     "End Sub\n"),
+
+    # --- SLOJ_UZVODNO: mora da zapisti ---
+    ("modDataAccess zove ekran", 1, "modDataAccess.bas",
+     "Option Explicit\n"
+     "Public Sub Osvezi()\n"
+     "    modScrDokumenti.Scr_ResetCache\n"
+     "End Sub\n"),
+    ("modDataAccess dira formu", 1, "modDataAccess.bas",
+     "Option Explicit\n"
+     "Public Sub Javi()\n"
+     "    frmOtkupUI.Repaint\n"
+     "End Sub\n"),
+    # --- SLOJ_UZVODNO: ne sme da zapisti ---
+    ("modDataAccess koristi Application (nije modApp*)", 0, "modDataAccess.bas",
+     "Option Explicit\n"
+     "Public Sub Brzo()\n"
+     "    Application.ScreenUpdating = False\n"
+     "End Sub\n"),
+    ("ekran sme da zove modDataAccess nanize", 0, "modScrDokumenti.bas",
+     "Option Explicit\n"
+     "Public Function Nadji() As Variant\n"
+     "    Nadji = LookupValue(TBL_OTKUP, COL_OTK_ID, id, COL_OTK_DATUM)\n"
+     "End Function\n"),
+
+    # --- REPO_TX: mora da zapisti (ADR-0003 tacka B) ---
+    ("modRepo* otvara transakciju", 1, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub Insert(ByVal red As Variant)\n"
+     "    tx.BeginTx\n"
+     "End Sub\n"),
+    ("modRepo* deklarise snapshot", 1, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub Insert(ByVal red As Variant)\n"
+     "    tx.AddTableSnapshot TBL_OTKUP\n"
+     "End Sub\n"),
+    # --- REPO_TX: ne sme da zapisti ---
+    ("Application sloj SME da drzi scope", 0, "modAppOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub Kreiraj()\n"
+     "    tx.BeginTx\n"
+     "    tx.AddTableSnapshot TBL_OTKUP\n"
+     "    modRepoOtkup.Insert red\n"
+     "    tx.CommitTx\n"
+     "End Sub\n"),
+
+    # --- REPO_API: mora da zapisti (M9) ---
+    ("modRepo* izlaze UpdateColumn", 1, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub UpdateColumn(ByVal id As String, ByVal kol As String, ByVal v As Variant)\n"
+     "End Sub\n"),
+    ("modRepo* prima colName kao parametar", 1, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub Postavi(ByVal id As String, ByVal colName As String, ByVal v As Variant)\n"
+     "End Sub\n"),
+    # --- REPO_API: ne sme da zapisti ---
+    ("semanticki API prolazi", 0, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Public Sub LinkToOtpremnica(ByVal otkupID As String, ByVal otpremnicaID As String)\n"
+     "End Sub\n"
+     "Public Sub MarkStornirano(ByVal otkupID As String, ByVal razlog As String)\n"
+     "End Sub\n"),
+    ("Private helper sa colName nije izlozen API", 0, "modRepoOtkup.bas",
+     "Option Explicit\n"
+     "Private Function Idx(ByVal colName As String) As Long\n"
+     "End Function\n"),
+    ("genericko ime van modRepo* je legalno", 0, "modDataAccess.bas",
+     "Option Explicit\n"
+     "Public Function GetColumnIndex(ByVal tblName As String, ByVal colName As String) As Long\n"
+     "End Function\n"),
+]
 
 
 # --- katalog sabotaza ------------------------------------------------------
