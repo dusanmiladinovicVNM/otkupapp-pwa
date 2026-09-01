@@ -7,6 +7,8 @@
 - **Datum:** 2026-08-26, revidiran 2026-09-01
 - **Predmet:** predlog slojevite arhitekture (Host → Presentation → Application →
   Domain → Repository → Infrastructure) sa Sync-om kao izolovanim subsistemom.
+- **Odluke izvedene iz ovog dokumenta:** `docs/adr/0003-repository-granica-i-izuzeci.md`
+  (Repository granica: vlasništvo upisa, transakcioni scope, bootstrap izuzetak).
 - **Metod:** merenje nad `src-vba/` (213 fajla, ~152.700 linija), bez pokretanja
   Excela. Sve brojke u dokumentu su izmerene, ne procenjene.
 
@@ -559,14 +561,27 @@ tblZbirna     3 -> 1    modDokumenta, modMasterSync, modDokumentInvariant
 tblKorisnici  2 -> 1    modAuth, modSetup
 ```
 
-Dakle **`modRepoOtkup`, `modRepoZbirna`** i odluka o `modSetup` — ne 20
-repozitorijuma. Semantički API (M9), TX-neutralan (ne otvara transakciju).
+Dakle **`modRepoOtkup` i `modRepoZbirna`** — ne 20 repozitorijuma. Semantički
+API (M9), TX-neutralan.
 
-> **Odluka pre PR-a:** `modSetup` piše `tblOtkup` kao idempotentan backfill, ne
-> kao poslovni put. Ili ide kroz Repository kao svi, ili
-> `modSetup`/`modMigracija` postaju **eksplicitan izuzetak u `SLOJ` pravilu**.
-> Preporuka: izuzetak — inače Repository API dobija „popravi zatečeno" operacije
-> koje nemaju veze sa poslovnim jezikom.
+> **ODLUČENO — `ADR-0003`:** Repository **ne sme** `BeginTx` ni
+> `AddTableSnapshot`; scope ostaje pozivaocu (Application). To ne uvodi novo
+> pravilo nego kodifikuje zatečeno: od 88 procedura sa `BeginTx`, **87** deklariše
+> snapshot u istoj proceduri, a `AddTableSnapshot` bez `BeginTx` ima **0**.
+> (Jedini `BeginTx` bez snapshota je `modSEFValidator.ValidateFakturaCanBe-`
+> `StorniranoOnSEF`, namerna sonda na ugnežđenu transakciju, ne upis.)
+>
+> **Nova klasa greške koju odluka uvodi:** `modRepo*.Insert` pozvan van
+> transakcije piše bez rollback zaštite. Zato uz Fazu 1 idu provere `REPO_TX` i
+> `REPO_POZIV` (ADR-0003, „Sledeći koraci").
+
+> **ODLUČENO — `ADR-0003`:** `modSetup` i `modMigracija` su **imenovan izuzetak**
+> (spisak, ne obrazac). Njihov upis je bootstrap admin naloga i jednokratna
+> migracija, ne poslovni događaj; `modMigracija` uopšte ne piše kroz
+> `modDataAccess`. Nov **poslovni** upis u `modSetup` i dalje pada na `SLOJ`.
+>
+> **Cena, prihvaćena:** `tblKorisnici` ostaje trajno na 2 fizička pisca, pa se
+> Faza 1 svodi na **`tblOtkup` i `tblZbirna`**.
 
 *Metrika:* sve poslovne tabele → 1 fizički pisač. *Rizik:* srednji.
 *Obim: mnogo manji nego što je v3 procenio.*
