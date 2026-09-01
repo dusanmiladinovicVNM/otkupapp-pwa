@@ -34,7 +34,14 @@ DEFAULT_OUT = os.path.join(ROOT, "docs", "DOMEN", "WHO_WRITES.md")
 VBA_EXT = (".bas", ".cls", ".frm", ".doccls")
 
 SNAPSHOT_RE = re.compile(r'AddTableSnapshot\s+(TBL_\w+|"(\w+)")', re.I)
-DIRECT_RE = re.compile(r'\b(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
+# `AppendRow` i `UpdateCell` su Function, pa se u praksi zovu OBA oblika:
+#   AppendRow TBL_X, red          (statement)
+#   r = AppendRow(TBL_X, red)     (sa zagradom -- cesci)
+# Raniji izraz je trazio razmak posle imena i tako gutao oblik sa zagradom:
+# promasivao je 43% mesta upisa, medju njima modMasterSync -> TBL_OTKUP,
+# modFaktura -> TBL_FAKTURE i modNovac -> TBL_NOVAC. Signal `direct` je zato
+# pokazivao skoro praznu sliku, a tabela se oslanjala na `tx`.
+DIRECT_RE = re.compile(r'\b(?:AppendRow|UpdateCell)\s*\(?\s*(TBL_\w+|"(\w+)")', re.I)
 
 # Test moduli se prikazuju odvojeno: oni pisu tabele namerno i uvek uz rollback,
 # pa nisu vlasnici podataka i ne treba da zamagle pravu sliku.
