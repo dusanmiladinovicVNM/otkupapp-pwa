@@ -956,6 +956,14 @@ Public Sub EnsurePaletniListSchema()
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
 
+    ' GP grana (fakturisanje gotove robe): stavka fakture moze da nosi
+    ' preradu, a prerada svoju fakturisanost -- isti obrazac kao
+    ' prijemnica. Idempotentno, kao sve ovde.
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURISANO
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURA_ID
+
     EnsureCenovnikSchema
 
     EnsurePaletaSablon

@@ -344,6 +344,11 @@ Public Const COL_PRE_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PRE_TIP_KUTIJE As String = "TipKutije"
 Public Const COL_PRE_TIP_KESE As String = "TipKese"
 Public Const COL_PRE_TIP_GP As String = "TipGotovogProizvoda"
+' GP grana: prerada nosi svoju fakturisanost -- ISTI obrazac kao
+' prijemnica (Fakturisano/FakturaID), pa i sledljivost i storno rade
+' istim pravilima nad obe grane.
+Public Const COL_PRE_FAKTURISANO As String = "Fakturisano"
+Public Const COL_PRE_FAKTURA_ID As String = "FakturaID"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
@@ -573,6 +578,11 @@ Public Const COL_FS_KOLICINA As String = "Kolicina"
 Public Const COL_FS_CENA As String = "Cena"
 Public Const COL_FS_KLASA As String = "Klasa"
 Public Const COL_FS_BROJ_PRIJEMNICE As String = "BrojPrijemnice"
+' GP grana (fakturisanje gotove robe): stavka nosi PRERADU umesto
+' prijemnice -- podatkovna veza kojom se lanac sledljivosti zavrsava
+' fakturom gotovog proizvoda (bez nje bi zavrsna karika bila pogadjanje).
+Public Const COL_FS_PRERADA_ID As String = "PreradaID"
+Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
 
 ' --- Typen Ambalaze ---
 Public Const AMB_12_1 As String = "12/1"

@@ -1718,6 +1718,26 @@ Public Function StornoPrerada(ByVal preradaID As String) As Boolean
     Dim rowPre As Long
     rowPre = RequireStornoAllowed(TBL_PRERADA, preradaID, COL_PRE_ID, SRC)
 
+    ' GP grana: fakturisana prerada koja se stornira orphanuje svoju
+    ' fakturu -- ISTI obrazac kao StornoPrijemnica (GetColumnIndex jer
+    ' sveska pre EnsureSchema nadogradnje kolone nema).
+    Dim colPreFakt As Long, colPreFakID As Long
+    colPreFakt = GetColumnIndex(TBL_PRERADA, COL_PRE_FAKTURISANO)
+    colPreFakID = GetColumnIndex(TBL_PRERADA, COL_PRE_FAKTURA_ID)
+    If colPreFakt > 0 And colPreFakID > 0 Then
+        Dim preD As Variant, gpFakID As String
+        preD = GetTableData(TBL_PRERADA)
+        gpFakID = Trim$(CStr(nz(preD(rowPre, colPreFakID))))
+        If UCase$(Trim$(CStr(nz(preD(rowPre, colPreFakt))))) = "DA" Then
+            RequireUpdateCell TBL_PRERADA, rowPre, COL_PRE_FAKTURISANO, "", SRC
+            RequireUpdateCell TBL_PRERADA, rowPre, COL_PRE_FAKTURA_ID, "", SRC
+            If Len(gpFakID) > 0 Then
+                MarkFakturaOrphaned gpFakID, preradaID
+                MarkFakturaStavkeOrphanedGP gpFakID, preradaID
+            End If
+        End If
+    End If
+
     MarkRowStornirano TBL_PRERADA, rowPre, SRC
 
     ' storniraj stavke + vrati preradene palete u lager (Preradjeno = "")
@@ -1846,6 +1866,15 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
 
     Dim i As Long
 
+    ' GP grana: stavka moze da nosi preradu umesto prijemnice -- storno
+    ' fakture mora da OSLOBODI i nju (isti obrazac), inace prerada ostaje
+    ' zakljucana na storniranu fakturu i sledljivost je vidi kao mrtvu
+    ' vezu. GetColumnIndex, ne Require: na svesci PRE EnsureSchema
+    ' nadogradnje kolona ne postoji, a storno svezih faktura tamo mora
+    ' da radi kao i do sada.
+    Dim colPreID As Long
+    colPreID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+
     For i = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
             MarkRowStornirano TBL_FAKTURA_STAVKE, i, SRC
@@ -1856,8 +1885,39 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
             If Len(prijID) > 0 Then
                 ReleasePrijemnicaFromFaktura prijID, fakturaID
             End If
+
+            If colPreID > 0 Then
+                Dim preID As String
+                preID = Trim$(CStr(nz(stavkeData(i, colPreID))))
+                If Len(preID) > 0 Then
+                    ReleasePreradaFromFaktura preID
+                End If
+            End If
         End If
     Next i
+End Sub
+
+' GP par ReleasePrijemnicaFromFaktura -- prerada se oslobadja istim
+' pravilima (fail-closed na dupli ID).
+Private Sub ReleasePreradaFromFaktura(ByVal preradaID As String)
+    Const SRC As String = "ReleasePreradaFromFaktura"
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_PRERADA, COL_PRE_ID, preradaID)
+
+    If rows Is Nothing Then Exit Sub
+    If rows.count = 0 Then Exit Sub
+
+    If rows.count > 1 Then
+        Err.Raise ERR_STORNO_BASE + 51, SRC, _
+                  "Dupla PreradaID vrednost: " & preradaID
+    End If
+
+    Dim rowPre As Long
+    rowPre = CLng(rows(1))
+
+    RequireUpdateCell TBL_PRERADA, rowPre, COL_PRE_FAKTURISANO, "", SRC
+    RequireUpdateCell TBL_PRERADA, rowPre, COL_PRE_FAKTURA_ID, "", SRC
 End Sub
 
 Private Sub ReleasePrijemnicaFromFaktura(ByVal prijemnicaID As String, _
@@ -1899,6 +1959,31 @@ Private Sub MarkFakturaOrphaned(ByVal fakturaID As String, _
 
     RequireUpdateCell TBL_FAKTURE, CLng(rows(1)), COL_OSIROCENO_OD, _
                       prijemnicaID, SRC
+End Sub
+
+' GP par: stavka gotove robe nema PrijemnicaID, pa se osirocenje trazi
+' po PreradaID (GetColumnIndex -- sveska pre nadogradnje kolonu nema).
+Private Sub MarkFakturaStavkeOrphanedGP(ByVal fakturaID As String, _
+                                        ByVal preradaID As String)
+    Const SRC As String = "MarkFakturaStavkeOrphanedGP"
+
+    Dim stavkeData As Variant
+    stavkeData = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsEmpty(stavkeData) Then Exit Sub
+
+    Dim colFakID As Long, colPreID As Long
+    colFakID = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colPreID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    If colPreID = 0 Then Exit Sub
+
+    Dim i As Long
+    For i = 1 To UBound(stavkeData, 1)
+        If Trim$(CStr(nz(stavkeData(i, colPreID)))) = Trim$(preradaID) And _
+           Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
+            RequireUpdateCell TBL_FAKTURA_STAVKE, i, COL_OSIROCENO_OD, _
+                              preradaID, SRC
+        End If
+    Next i
 End Sub
 
 Private Sub MarkFakturaStavkeOrphaned(ByVal fakturaID As String, _

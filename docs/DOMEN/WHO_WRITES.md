@@ -29,11 +29,11 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblMagacin` | 3 | `frmAgrohemija`, `modAgroUnos`, `modAgrohemija` |
 | `tblPaleta` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
 | `tblPaletaStavka` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
+| `tblPrerada` | 3 | `modFaktura`, `modPaletniList`, `modStorno` |
 | `tblSEFEventLog` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblSEFSubmission` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblKorisnici` | 2 | `modAuth`, `modSetup` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
-| `tblPrerada` | 2 | `modPaletniList`, `modStorno` |
 | `tblPreradaStavka` | 2 | `modPaletniList`, `modStorno` |
 | `tblStornoZurnal` | 2 | `modStorno`, `modStornoFlow` |
 | `tblArtikli` | 1 | `modAgrohemija` |
