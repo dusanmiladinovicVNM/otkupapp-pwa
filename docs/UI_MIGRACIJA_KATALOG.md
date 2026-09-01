@@ -5721,3 +5721,53 @@ jednom: 1 prerada = cela se prodaje jednom kupcu na jednoj fakturi.
   total=2), `PRE-GP-SB` + stavka bez markera. +4 sabotaže (katalog
   374; peta — „total ključ mrtav" — uklonjena jer joj je tvrdnja
   subsumirana postojećom sabotažom: checker `deli tvrdnju` odbio).
+
+### 25.8 Krug 5: UTOVARNA LISTA — pravi prodajni grain
+
+Poslovna presuda operatera: parcijalna prodaja MORA biti moguća (500
+kg sa palete od 1.000), a datum prodaje NIJE datum prerade nego datum
+utovara/slanja (obrazac utovarne liste sledi). Time je 1:1 model
+(marker na preradi) postao netačan i **zamenjen je pre merge-a**.
+
+- **Model:** `tblUtovar` (UtovarID | BrojUtovara | Godina |
+  DatumUtovara | KupacID | Fakturisano | FakturaID | Napomena |
+  Stornirano) + `tblUtovarStavke` (UtovarStavkaID | UtovarID |
+  PreradaID | BrojPrerade | KolicinaKg | Stornirano);
+  `tblFakturaStavke` +`UtovarID`. **Prerada = proizvodni lot** (koliko
+  je proizvedeno); **utovar skida robu sa stanja** (koliko, kome,
+  KADA); **faktura finansijski prati utovar** (v1: 1 utovar = 1 GP
+  faktura, ista TX). `Prerada.Fakturisano/FakturaID` su UKLONJENI iz
+  svega (ništa nije bilo deploy-ovano). Bez `tblGPPaleta` — operater
+  nema poseban fizički ID (prerada mu je „paleta"); `GPPaletaID`
+  denorm se može dodati kasnije bez loma.
+- **Na stanju** = `NetoIzlazKg` − SUM aktivnih utovarenih kg
+  (`modUtovar.UtovarenoPoPreradi` — JEDNA funkcija za grid, writer i
+  storno kapiju). Writer `CreateUtovarSaFakturom_TX`: kapije stanja
+  (kolicina ≤ na stanju), proizvoda, kupca, cene; utovar + faktura +
+  FST stavke (PreradaID/BrojPrerade/UtovarID po imenu) u jednoj TX.
+- **SEF:** `DeliveryDate` GP stavke = **`Utovar.DatumUtovara`** (v1 =
+  datum izrade fakture; kad stigne poseban ekran/obrazac utovara,
+  datum ostaje isti izvor istine).
+- **Storno lanac:** faktura → oslobađa utovar (roba OSTAJE utovarena);
+  utovar (samo nefakturisan) → vraća robu na stanje (header + stavke);
+  prerada sa aktivnim utovarom se NE stornira (fail-closed, nema
+  orphan kaskade). Snapshot: `StornoFaktura_TX` +`tblUtovar` uslovno.
+- **Sledljivost:** stanja `prodato GP` (sve fakturisano) /
+  **`delimicno prodato`** (deo) / `preradjeno` (ništa); kolone 12/13
+  nose fakture i finalne kupce validno fakturisanih utovara („N
+  fakt."/„N kup." za više — parcijalno je LEGALNO, ne kvar).
+  Neusaglašenosti: utovar marker bez fakture/FST dokaza, stale veza,
+  stavka na storniran utovar, FST siroče, utovareno > proizvedeno —
+  „faktura neusaglasena" + NEPOTPUNI (utovar klase nose DokTip
+  `Utovar`; štampa odbija s razlogom dok obrazac ne stigne).
+- **Ekran:** GP kolona kg = „NA STANJU (kg)"; polje „Količina za
+  utovar (prazno = sve)" — ceo-lot klik ostaje default, parcijala je
+  upis broja.
+- Fixture: `ENSURE_TABLES` mehanizam (generator pravi tabele koje
+  donor nema); P lanac („delimično prodato": 50 od 120 kg); contract
+  vozila preseljena na utovar nivo (B2/WL/WM/OV/SB). Sabotaže: 15
+  mrtvih (marker model) zamenjeno sa 14 utovar sabotaža (katalog 373).
+- **Proces (novi režim):** subset dokaz novih sabotaža PRE punog
+  kataloga našao je oba problema za 12 min (defense-in-depth: stanje
+  kapija brani i W0; storno header već vraća stanje pa je stavkama
+  dodata sopstvena tvrdnja) — pun prolaz ide tek jednom, na kraju.

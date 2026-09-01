@@ -956,13 +956,13 @@ Public Sub EnsurePaletniListSchema()
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
 
-    ' GP grana (fakturisanje gotove robe): stavka fakture moze da nosi
-    ' preradu, a prerada svoju fakturisanost -- isti obrazac kao
-    ' prijemnica. Idempotentno, kao sve ovde.
+    ' GP grana (fakturisanje gotove robe, krug 5): stavka fakture nosi
+    ' preradu i utovar; prodaja se prati kroz UTOVARNU LISTU (fizicka
+    ' isporuka), ne markerom na preradi. Idempotentno, kao sve ovde.
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURISANO
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURA_ID
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
+    EnsureUtovarSchemaCore
 
     EnsureCenovnikSchema
 
@@ -1140,20 +1140,35 @@ End Sub
 ' EnsureColumnOnTable je no-op kad kolona postoji (cena posle prvog heal-a
 ' zanemarljiva). Ovde idu SAMO sigurne, idempotentne izmene bez backfill-a.
 ' ============================================================
+' Utovarna lista (krug 5 revizije #248): dokument fizicke isporuke GP
+' robe -- prodajni grain je UTOVAR STAVKA (prerada + kg), ne marker na
+' preradi. Idempotentno (EnsureDataTable); zove se iz
+' EnsurePaletniListSchema i iz EnsureRuntimeSchema (self-heal).
+Public Sub EnsureUtovarSchemaCore()
+    EnsureDataTable TBL_UTOVAR, "Utovar", _
+        Array(COL_UT_ID, COL_UT_BROJ, COL_UT_GODINA, COL_UT_DATUM, _
+              COL_UT_KUPAC, COL_UT_FAKTURISANO, COL_UT_FAKTURA_ID, _
+              COL_UT_NAPOMENA, COL_STORNIRANO)
+    EnsureDataTable TBL_UTOVAR_STAVKE, "UtovarStavke", _
+        Array(COL_UTS_ID, COL_UTS_UTOVAR_ID, COL_UTS_PRERADA_ID, _
+              COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO)
+End Sub
+
 Public Sub EnsureRuntimeSchema()
     On Error Resume Next
     ' Pragovi proseka neto kg po gajbici (otkup: upozorenje/blokada).
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK
 
-    ' GP fakturisanje (v6-ui-189, R4 revizije #248): klijent koji dobije
-    ' nov kod self-update-om mora dobiti i kolone -- inace CreateFakturaGP
-    ' pada na RequireColumnIndex cim operater proba novu funkciju.
-    ' Append-only i idempotentno, bas klasa izmena za runtime self-heal.
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURISANO
-    EnsureColumnOnTable TBL_PRERADA, COL_PRE_FAKTURA_ID
+    ' GP fakturisanje (v6-ui-189, krug 5 revizije #248): klijent koji
+    ' dobije nov kod self-update-om mora dobiti i semu -- inace GP
+    ' writer pada na RequireColumnIndex cim operater proba funkciju.
+    ' Append-only i idempotentno, bas klasa izmena za runtime self-heal
+    ' (EnsureDataTable postojecoj tabeli samo dopunjava kolone).
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
+    EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
+    EnsureUtovarSchemaCore
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
 

@@ -6933,6 +6933,25 @@ ijedne izmišljene veze.
 - Prerada bez upisanog tipa proizvoda se u listi više ne nudi kao
   dostupna; writer proverava i da kupac postoji u šifarniku.
 
+### UTOVARNA LISTA — pravi prodajni tok (krug 5)
+
+- **Nov dokument: utovarna lista** — fizička isporuka gotove robe
+  (datum utovara, kupac, stavke prerada + kg). GP faktura se pravi IZ
+  utovara (jedna lista = jedna faktura, ista transakcija); **datum
+  isporuke na SEF-u je datum utovara**, ne datum prerade. Štampani
+  obrazac utovarne liste stiže kao sledeći korak — podaci već postoje.
+- **Parcijalna prodaja:** sa palete od 1.000 kg može se prodati i 500
+  — lista „Gotova roba" pokazuje „NA STANJU (kg)" (proizvedeno minus
+  utovareno), polje „Količina za utovar" (prazno = sve) određuje
+  koliko ide kupcu, ostatak ostaje dostupan. Lanac tada kaže
+  **„delimicno prodato"** — istina umesto binarnog zaključavanja.
+- Prerada se više NIKAD ne zaključava jednom fakturom; više faktura po
+  preradi je legalno („N fakt." u prikazu). Prodaja preko stanja je
+  nemoguća (writer i ekran dele isto pravilo).
+- Storno: fakture oslobađa utovar (roba ostaje isporučena); storno
+  utovara vraća robu na stanje; prerada sa isporučenom robom se ne
+  stornira dok se utovar ne raspetlja.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

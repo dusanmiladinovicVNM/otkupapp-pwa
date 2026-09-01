@@ -80,7 +80,7 @@ Private Const FK_POLJA_MIN As Single = 460
 ' (jedna faktura = jedna vrsta robe); kolicina je NetoIzlazKg prerade, a
 ' CENU unosi operater u polje zone (gotova roba nema evidentiranu cenu
 ' nigde u podacima -- izvedena cena bi bila izmisljanje). Upis radi
-' modFaktura.CreateFakturaGP_TX; time se lanac sledljivosti zavrsava
+' modUtovar.CreateUtovarSaFakturom_TX (krug 5: utovar + faktura); time
 ' fakturom gotovog proizvoda kroz PODATKOVNU vezu (stavka nosi PreradaID).
 Private Const FK_ZAFAKT  As String = "ZAFAKT"
 Private Const FK_FAKTURE As String = "FAKTURE"
@@ -549,7 +549,7 @@ Public Function FkDodaj(ByVal prijemnicaID As String, ByVal broj As String, _
 End Function
 
 ' GP par FkDodaj-a. CENU unosi operater (polje zone) -- gotova roba nema
-' evidentiranu cenu; CreateFakturaGP je iznova validira pod TX.
+' evidentiranu cenu; writer u modUtovar je iznova validira pod TX.
 Public Function FkDodajGP(ByVal preradaID As String, ByVal broj As String, _
                           ByVal kolicina As Double, ByVal cena As Double, _
                           ByVal dostupna As Boolean) As String
@@ -613,13 +613,23 @@ End Function
 Private Function DodajRedUKorpu(ByVal red As Long) As Boolean
     Dim iD As String, greska As String
 
-    ' GP lista: kolicina je kg reda, cena je iz polja zone (operater je
-    ' unosi PRE dodavanja -- gotova roba nema evidentiranu cenu).
+    ' GP lista (krug 5): default kolicina = CELO stanje reda (95% posla
+    ' je cela paleta -- advisor UX), a polje "Kolicina za utovar"
+    ' dozvoljava parcijalnu prodaju (500 od 1.000 kg). Vise od stanja
+    ' ne moze -- writer je ista brana, ovo je rana poruka.
     If Scr_Lista() = FK_GP Then
         iD = IdReda(red, FK_GP_KOL_ID)
         If Len(iD) = 0 Then Exit Function
+        Dim naStanju As Double, kol As Double
+        naStanju = RedD(red, 5)
+        kol = UnetaKolicinaGP()
+        If kol <= 0 Then kol = naStanju
+        If kol > naStanju + 0.0001 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KOL_GP"), True
+            Exit Function
+        End If
         greska = FkDodajGP(iD, Trim$(CStr(modOtkupUI.GridCell(red, 1))), _
-                           RedD(red, 5), UnetaCenaGP(), _
+                           kol, UnetaCenaGP(), _
                            Len(Trim$(CStr(modOtkupUI.GridCell(red, FK_GP_KOL_DOST)))) > 0)
         If Len(greska) > 0 Then
             modOtkupUI.ShowToast greska, True
@@ -657,6 +667,19 @@ Private Function UnetaCenaGP() As Double
     If Len(t) = 0 Then Exit Function
     If Not IsNumeric(t) Then Exit Function
     UnetaCenaGP = CDbl(t)
+End Function
+
+' Kolicina za utovar (krug 5, parcijalna prodaja); 0 = "celo stanje"
+' (default -- operater najcesce prodaje celu paletu).
+Private Function UnetaKolicinaGP() As Double
+    Dim c As Object, t As String
+    On Error Resume Next
+    Set c = Kontrola("scrFkKolGP")
+    If c Is Nothing Then Exit Function
+    t = Trim$(CStr(c.text))
+    If Len(t) = 0 Then Exit Function
+    If Not IsNumeric(t) Then Exit Function
+    UnetaKolicinaGP = CDbl(t)
 End Function
 
 Private Function UkloniRedIzKorpe(ByVal red As Long) As Boolean
@@ -755,11 +778,15 @@ Private Function IzradiFakturu() As Boolean
     ' GP korpa nosi i CENU: nju je uneo operater i ona JESTE ulaz upisa.
     Set stavke = New Collection
     If KorpaTip() = "GP" Then
+        ' Krug 5: GP prodaja ide kroz UTOVARNU LISTU (fizicka isporuka)
+        ' -- stavka nosi i KOLICINU (parcijalna prodaja), writer pravi
+        ' utovar + fakturu u jednoj transakciji (1 utovar = 1 faktura).
         For i = 1 To mKorpa.count
             stavke.Add Array(CStr(mKorpa(i)("preradaID")), _
+                             CDbl(mKorpa(i)("kolicina")), _
                              CDbl(mKorpa(i)("cena")))
         Next i
-        fakturaID = modFaktura.CreateFakturaGP_TX(kupID, stavke)
+        fakturaID = modUtovar.CreateUtovarSaFakturom_TX(kupID, stavke)
     Else
         For i = 1 To mKorpa.count
             stavke.Add Array(CStr(mKorpa(i)("prijemnicaID")))
@@ -1015,14 +1042,16 @@ End Function
 
 '------------------------------------------------- LISTA: GOTOVA ROBA
 Private Function GPKolone() As Variant
-    ' Broj | korpa-kvacica | Proizvod | Datum | Kg | Kutije | Kese |
-    ' Faktura | [PreradaID] | [Dostupna] -- isti sklop kao prijemnice.
+    ' Broj | korpa-kvacica | Proizvod | Datum | NA STANJU kg | Kutije |
+    ' Kese | Faktura | [PreradaID] | [Dostupna]. Krug 5: kolona kg je
+    ' NA STANJU (proizvedeno - utovareno) -- to operater prodaje;
+    ' parcijalna prodaja kroz polje "Kolicina za utovar".
     GPKolone = Array( _
         "OTKUI_HD_BROJ||txt|76|1", _
         "OTKUI_HD_OZN||txt|32|1", _
         "OTKUI_HDF_TIPGP||txt|150|1", _
         "OTKUI_HD_DATUM||date|74|1", _
-        "OTKUI_HD_KG||num|84|1", _
+        "OTKUI_HDF_NASTANJU||num|92|1", _
         "OTKUI_HDF_KUTIJE||num|64|3", _
         "OTKUI_HDF_KESE||num|60|3", _
         "OTKUI_HDF_FAKTURA||txt|0|1", _
@@ -1248,6 +1277,10 @@ Public Sub Scr_Build(ByVal z As Object)
     ' evidentiranu cenu, prodajna se odredjuje pri fakturisanju).
     modOtkupUI.NewFieldG z, "scrFkCenaGP", Poruka("OTKUI_FLD_FK_CENAGP"), "txt", "", _
                          1, True, False, "FK"
+    ' KOLICINA ZA UTOVAR (krug 5): prazno = celo stanje (najcesci
+    ' slucaj); upisana vrednost = parcijalna prodaja sa palete.
+    modOtkupUI.NewFieldG z, "scrFkKolGP", Poruka("OTKUI_FLD_FK_KOLGP"), "txt", "", _
+                         1, True, False, "FK"
 
     ' BROJA FAKTURE OVDE NEMA, i to je namerno. Broj dodeljuje transakcija
     ' (CreateFaktura sam zove GenerateBrojFakture), operater ga ne bira. Polje
@@ -1310,10 +1343,12 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
     Next i
 
     PoljeX z, "scrFkKup", PAD, FK_FLD_W, FK_Y_LBL
-    ' Cena GP stoji desno od kupca, samo na listi GOTOVA (isti obrazac
-    ' kontekstne vidljivosti kao scrSlAuto na Sledljivosti).
+    ' Cena i kolicina GP stoje desno od kupca, samo na listi GOTOVA
+    ' (isti obrazac kontekstne vidljivosti kao scrSlAuto).
     PoljeX z, "scrFkCenaGP", PAD + FK_FLD_W + 12, 150, FK_Y_LBL
     z.Controls("scrFkCenaGP").Visible = (Scr_Lista() = FK_GP)
+    PoljeX z, "scrFkKolGP", PAD + FK_FLD_W + 174, 150, FK_Y_LBL
+    z.Controls("scrFkKolGP").Visible = (Scr_Lista() = FK_GP)
 
     ' Objasnjenje se zaustavlja pred trakom -- Label ne prelama, samo istece.
     z.Controls("fkHint").width = wPolja - PAD * 2

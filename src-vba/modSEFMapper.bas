@@ -787,11 +787,12 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
     RequireColumnIndex TBL_PRIJEMNICA, "PrijemnicaID", SRC
     RequireColumnIndex TBL_PRIJEMNICA, "Datum", SRC
 
-    ' GP grana (R2): datum isporuke GP stavke je DATUM PRERADE -- isti
-    ' princip "datum dokumenta izvora" kao prijemnica. Meko: sveska pre
-    ' nadogradnje nema kolonu ni GP fakture.
-    Dim colStPreradaID As Long
-    colStPreradaID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    ' GP grana (krug 5): datum isporuke GP stavke je DATUM UTOVARA --
+    ' datum kad je roba STVARNO utovarena i poslata (prerada je datum
+    ' proizvodnje/pakovanja, prodaja je kasnije; potvrdjena odluka).
+    ' Meko: sveska pre nadogradnje nema kolonu ni GP fakture.
+    Dim colStUtovarID As Long
+    colStUtovarID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
 
     Dim latestDeliveryDate As Date
     latestDeliveryDate = 0
@@ -804,10 +805,10 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
             Dim prijemnicaID As String
             prijemnicaID = Trim$(CStr(stavkeData(i, colPrijemnicaID)))
 
-            Dim gpPreradaID As String
-            gpPreradaID = ""
-            If colStPreradaID > 0 Then _
-                gpPreradaID = Trim$(CStr(nz(stavkeData(i, colStPreradaID))))
+            Dim gpUtovarID As String
+            gpUtovarID = ""
+            If colStUtovarID > 0 Then _
+                gpUtovarID = Trim$(CStr(nz(stavkeData(i, colStUtovarID))))
 
             If Len(prijemnicaID) > 0 Then
 
@@ -823,10 +824,10 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
                               "Prijemnica date missing or invalid. PrijemnicaID=" & prijemnicaID
                 End If
 
-            ElseIf Len(gpPreradaID) > 0 Then
+            ElseIf Len(gpUtovarID) > 0 Then
 
                 Dim vp As Variant
-                vp = LookupValue(TBL_PRERADA, COL_PRE_ID, gpPreradaID, COL_PRE_DATUM)
+                vp = LookupValue(TBL_UTOVAR, COL_UT_ID, gpUtovarID, COL_UT_DATUM)
 
                 If Not IsEmpty(vp) And Not IsNull(vp) And IsDate(vp) Then
                     If CDate(vp) > latestDeliveryDate Then
@@ -834,7 +835,7 @@ Private Function GetInvoiceDeliveryDate(ByVal fakturaID As String) As Date
                     End If
                 Else
                     Err.Raise ERR_SEF_VALIDATION, SRC, _
-                              "Prerada date missing or invalid. PreradaID=" & gpPreradaID
+                              "Utovar date missing or invalid. UtovarID=" & gpUtovarID
                 End If
 
             End If

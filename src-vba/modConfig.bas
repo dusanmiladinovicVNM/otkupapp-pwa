@@ -344,11 +344,29 @@ Public Const COL_PRE_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PRE_TIP_KUTIJE As String = "TipKutije"
 Public Const COL_PRE_TIP_KESE As String = "TipKese"
 Public Const COL_PRE_TIP_GP As String = "TipGotovogProizvoda"
-' GP grana: prerada nosi svoju fakturisanost -- ISTI obrazac kao
-' prijemnica (Fakturisano/FakturaID), pa i sledljivost i storno rade
-' istim pravilima nad obe grane.
-Public Const COL_PRE_FAKTURISANO As String = "Fakturisano"
-Public Const COL_PRE_FAKTURA_ID As String = "FakturaID"
+
+' UTOVARNA LISTA (krug 5 revizije #248): dokument FIZICKE isporuke GP
+' robe. Prerada je proizvodni lot (koliko je PROIZVEDENO); utovar
+' skida robu sa stanja (koliko je ISPORUCENO, kome i KADA -- taj datum
+' ide na SEF); faktura finansijski prati utovar (v1: 1 utovar = 1 GP
+' faktura). Prerada se NE zakljucava jednom fakturom: parcijalna
+' prodaja (500 kg od 2.000) je legalna, "na stanju" = NetoIzlazKg -
+' SUM aktivnih utovarenih kg.
+Public Const TBL_UTOVAR As String = "tblUtovar"
+Public Const TBL_UTOVAR_STAVKE As String = "tblUtovarStavke"
+Public Const COL_UT_ID As String = "UtovarID"
+Public Const COL_UT_BROJ As String = "BrojUtovara"
+Public Const COL_UT_GODINA As String = "Godina"
+Public Const COL_UT_DATUM As String = "DatumUtovara"
+Public Const COL_UT_KUPAC As String = "KupacID"
+Public Const COL_UT_FAKTURISANO As String = "Fakturisano"
+Public Const COL_UT_FAKTURA_ID As String = "FakturaID"
+Public Const COL_UT_NAPOMENA As String = "Napomena"
+Public Const COL_UTS_ID As String = "UtovarStavkaID"
+Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
+Public Const COL_UTS_PRERADA_ID As String = "PreradaID"
+Public Const COL_UTS_BROJ_PRERADE As String = "BrojPrerade"
+Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"
@@ -583,6 +601,9 @@ Public Const COL_FS_BROJ_PRIJEMNICE As String = "BrojPrijemnice"
 ' fakturom gotovog proizvoda (bez nje bi zavrsna karika bila pogadjanje).
 Public Const COL_FS_PRERADA_ID As String = "PreradaID"
 Public Const COL_FS_BROJ_PRERADE As String = "BrojPrerade"
+' Krug 5: stavka GP fakture nastaje IZ utovarne stavke -- UtovarID je
+' canonical veza faktura <-> fizicka isporuka (SEF datum, storno).
+Public Const COL_FS_UTOVAR_ID As String = "UtovarID"
 
 ' --- Typen Ambalaze ---
 Public Const AMB_12_1 As String = "12/1"

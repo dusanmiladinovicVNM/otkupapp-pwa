@@ -3983,27 +3983,6 @@ SABOTAZE = {
         "T_Sled_KesPretragaIHint",
         "broj progutane fakture nalazi LANAC red",
     ),
-    # =============================== GP grana (Faza 1+2, v6-ui-189)
-    # Stanje reda je najdalja karika: GP prodaja koja se prikazuje kao
-    # "preradjeno" krije da je roba PRODATA -- operater bi je nudio dalje.
-    "sledljivost-gp-stanje-placebo": (
-        "modIzvestaj.bas",
-        "                        If gpFakD.count > 0 Then\n"
-        "                            stanje = SLED_ST_PRODATO_GP\n",
-        "                        If gpFakD.count > 0 Then\n"
-        "                            stanje = SLED_ST_PRERADJENO   ' SABOTAZA: GP prodaja nevidljiva\n",
-        "T_Sled_GpLanacIStanja",
-        "stanje G = prodato GP",
-    ),
-    # Prerada koja tvrdi Da na mrtvu fakturu MORA da obori kariku (ista
-    # klasa kvara kao prijemnica, krug 9) -- bez toga lanac lazno zelen.
-    "sledljivost-gp-kontradikcija-cuti": (
-        "modIzvestaj.bas",
-        "                        If gpLose And Len(oznaka) = 0 Then oznaka = SLED_OZN_FAK_NEISPRAVNA\n",
-        "                        If False And gpLose Then oznaka = SLED_OZN_FAK_NEISPRAVNA   ' SABOTAZA\n",
-        "T_Sled_GpLanacIStanja",
-        "kontradiktorna prerada obara kariku",
-    ),
     # Prikaz "N pal."/"N pre." guta brojeve -- bez refs-a smer NAZAD od
     # broja palete/prerade/GP fakture ne nalazi nista (princip R2).
     "sledljivost-gp-refs-progutani": (
@@ -4013,28 +3992,120 @@ SABOTAZE = {
         "T_Sled_GpLanacIStanja",
         "refs nose broj palete",
     ),
-    # Ista roba prodata dvaput: kapija "vec fakturisana" je jedina brana.
-    "faktura-gp-dupla-prodaja": (
-        "modFaktura.bas",
-        "        If UCase$(Trim$(CStr(nz(preData(rowPre, colFakturisano))))) = \"DA\" Then\n"
-        "            Err.Raise vbObjectError + 1741, SRC, _\n",
-        "        If False Then   ' SABOTAZA: dupla prodaja iste robe\n"
-        "            Err.Raise vbObjectError + 1741, SRC, _\n",
+    # =============== krug 5 (utovarna lista -- novi prodajni grain)
+    # Kapija stanja je JEDINA brana prekomerne prodaje u writeru.
+    "utovar-gp-stanje-kapija": (
+        "modUtovar.bas",
+        "        If kolicina > raspolozivo + 0.0001 Then\n",
+        "        If False Then   ' SABOTAZA: prodaja preko stanja\n",
         "T_FakturaGP_WriterKapijeIStorno",
-        "marker fakturisanosti bez veze se ne fakturise ponovo",
+        "prerada bez izlaza (0 kg na stanju) se ne prodaje",
     ),
-    # Storno fakture mora da OSLOBODI preradu -- inace roba ostaje
-    # "fakturisana" na mrtvoj fakturi (asimetrija koje prijemnice nemaju).
-    "storno-gp-ne-oslobadja": (
+    "storno-prerada-sa-utovarom-prolazi": (
         "modStorno.bas",
-        "                If Len(preID) > 0 Then\n"
-        "                    ReleasePreradaFromFaktura preID\n"
+        "    If UtovarenoKgPrerade(preradaID) > 0 Then\n",
+        "    If False Then   ' SABOTAZA: storno ispod isporucene robe\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "prerada sa aktivnim utovarom se ne stornira",
+    ),
+    "utovar-gp-storno-ne-vraca-stanje": (
+        "modStorno.bas",
+        "                MarkRowStornirano TBL_UTOVAR_STAVKE, r, SRC\n",
+        "                ' SABOTAZA: stavke ostaju aktivne\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "stavke storniranog utovara su stornirane",
+    ),
+    "storno-gp-rollback-bez-utovara": (
+        "modStorno.bas",
+        "    If Not GetTable(TBL_UTOVAR) Is Nothing Then\n"
+        "        tx.AddTableSnapshot TBL_UTOVAR\n"
+        "    End If\n",
+        "    If Not GetTable(TBL_UTOVAR) Is Nothing Then\n"
+        "        ' SABOTAZA: snapshot utovara uklonjen\n"
+        "    End If\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "rollback VRACA marker utovara (bez snapshota = dvostruka prodaja)",
+    ),
+    "storno-gp-faktura-ne-oslobadja-utovar": (
+        "modStorno.bas",
+        "                If Len(utID) > 0 Then\n"
+        "                    ReleaseUtovarFromFaktura utID\n"
         "                End If\n",
-        "                If False Then   ' SABOTAZA: prerada ostaje zarobljena\n"
-        "                    ReleasePreradaFromFaktura preID\n"
+        "                If False Then   ' SABOTAZA: utovar ostaje zarobljen\n"
+        "                    ReleaseUtovarFromFaktura utID\n"
         "                End If\n",
         "T_FakturaGP_WriterKapijeIStorno",
-        "storno oslobadja preradu (Fakturisano)",
+        "storno fakture oslobadja utovar",
+    ),
+    # Grid: NA STANJU mora IsNumeric/CDbl putem (Val lokal mina) i
+    # dupli id se prazni; vise faktura po preradi se NE krije.
+    "faktura-gp-val-lokal-mina": (
+        "modFaktura.bas",
+        "        If IsNumeric(pd(i, cNeto)) Then naStanju = CDbl(pd(i, cNeto))\n",
+        "        naStanju = CDbl(Val(CStr(nz(pd(i, cNeto), \"0\"))))   ' SABOTAZA: Val lokal mina\n",
+        "T_Fak_GpListaIKorpa",
+        "decimalan izlaz kg prezivi read-model (Val mina)",
+    ),
+    "faktura-gp-dupli-id-crta-se": (
+        "modFaktura.bas",
+        "        outA(n, 1) = IdIliPrazno(brojac, preID)\n",
+        "        outA(n, 1) = preID   ' SABOTAZA: dupli id se crta\n",
+        "T_Fak_GpListaIKorpa",
+        "dupli PreradaID prazni identitet",
+    ),
+    "faktura-gp-vise-faktura-skriveno": (
+        "modFaktura.bas",
+        "            If preFakture(preID).count = 1 Then\n",
+        "            If True Then   ' SABOTAZA: druga faktura progutana\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "dve fakture po preradi su LEGALNE (parcijalna prodaja)",
+    ),
+    # Lanac/problemi: neusaglasene prodajne veze i stanja.
+    "sledljivost-gp-kontradikcija-cuti": (
+        "modIzvestaj.bas",
+        "                                If CBool(utV(2)) Then gpLose = True\n",
+        "                                ' SABOTAZA: lose veza cuti\n",
+        "T_Sled_GpLanacIStanja",
+        "kontradiktorna prodajna veza obara kariku",
+    ),
+    "sledljivost-gp-stanje-placebo": (
+        "modIzvestaj.bas",
+        "                        If anySold And allSold Then\n"
+        "                            stanje = SLED_ST_PRODATO_GP\n",
+        "                        If anySold And allSold Then\n"
+        "                            stanje = SLED_ST_PRERADJENO   ' SABOTAZA: GP prodaja nevidljiva\n",
+        "T_Sled_GpLanacIStanja",
+        "stanje G = prodato GP",
+    ),
+    "sledljivost-gp-delimicno-placebo": (
+        "modIzvestaj.bas",
+        "                        ElseIf anySold Then\n"
+        "                            stanje = SLED_ST_DELIMICNO\n",
+        "                        ElseIf anySold Then\n"
+        "                            stanje = SLED_ST_PRODATO_GP   ' SABOTAZA: pola = celo\n",
+        "T_Sled_GpLanacIStanja",
+        "stanje P = delimicno prodato (50 od 120 kg)",
+    ),
+    "sledljivost-gp-prekomerno-cuti": (
+        "modIzvestaj.bas",
+        "                If CDbl(utVp(0)) > SledDbl(preData(i, cGNeto)) + SLED_EPS_KG Then\n",
+        "                If False Then   ' SABOTAZA: prodaja robe koje nema cuti\n",
+        "T_Sled_GpLanacIStanja",
+        "utovareno preko proizvedenog je problem",
+    ),
+    "sledljivost-gp-lose-veze-cute": (
+        "modIzvestaj.bas",
+        "                If CBool(utVp(2)) Then\n",
+        "                If False Then   ' SABOTAZA: neusaglasene veze cute\n",
+        "T_Sled_GpLanacIStanja",
+        "utovar-faktura bez FST stavke = neusaglasena prerada",
+    ),
+    "sledljivost-gp-siroce-cuti": (
+        "modIzvestaj.bas",
+        "    For Each sk In fstSiroce.keys\n",
+        "    For Each sk In fstSiroce.keys: Exit For   ' SABOTAZA: siroce cuti\n",
+        "T_Sled_GpLanacIStanja",
+        "prodajna stavka bez utovara (siroce) je problem",
     ),
     # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
     # kasnije odbio, ali tek posle potvrde operatera (kasna greska).
@@ -4056,21 +4127,6 @@ SABOTAZE = {
         "T_Fak_GpListaIKorpa",
         "prijemnica ne ulazi u GP korpu",
     ),
-    # ==================== revizija #248 paket R1-R5 (v6-ui-189)
-    # R3: TX snapshot mora da pokrije i tblPrerada -- bez njega pukli
-    # rollback vraca fakturu a preradu ostavlja slobodnu (dvostruka
-    # prodaja iste robe).
-    "storno-gp-rollback-bez-prerade": (
-        "modStorno.bas",
-        "    If Not GetTable(TBL_PRERADA) Is Nothing Then\n"
-        "        tx.AddTableSnapshot TBL_PRERADA\n"
-        "    End If\n",
-        "    If Not GetTable(TBL_PRERADA) Is Nothing Then\n"
-        "        ' SABOTAZA: snapshot prerade uklonjen\n"
-        "    End If\n",
-        "T_FakturaGP_WriterKapijeIStorno",
-        "rollback VRACA preradu u fakturisano stanje",
-    ),
     # R1: GP faktura bez print grane stampa prazna prijemnicka polja
     # umesto proizvoda i broja prerade.
     "faktura-gp-print-prazna-polja": (
@@ -4091,39 +4147,6 @@ SABOTAZE = {
         "T_FakturaGP_WriterKapijeIStorno",
         "SEF naziv nosi broj prerade",
     ),
-    # R5: Val(CStr(...)) na decimalnim kg -- na masini sa decimalnim
-    # zarezom Val("50,5") cita 50, pa grid laze writer.
-    "faktura-gp-val-lokal-mina": (
-        "modFaktura.bas",
-        "        If IsNumeric(pd(i, cNeto)) Then outA(n, 5) = CDbl(pd(i, cNeto))\n",
-        "        outA(n, 5) = CDbl(Val(CStr(nz(pd(i, cNeto), \"0\"))))   ' SABOTAZA: Val lokal mina\n",
-        "T_Fak_GpListaIKorpa",
-        "decimalan izlaz kg prezivi read-model",
-    ),
-    # ==================== revizija #248 krug 3: kanonski GP contract
-    # B2: "prodato GP" se dokazuje STAVKOM fakture, ne markerom na
-    # preradi -- bez mape stavki marker bez robe lazno zatvara lanac.
-    "sledljivost-gp-marker-bez-stavke": (
-        "modIzvestaj.bas",
-        "    colPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)\n"
-        "    If colPre = 0 Then Exit Function\n",
-        "    colPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)\n"
-        "    Exit Function   ' SABOTAZA: dokaz stavke iskljucen\n",
-        "T_Sled_GpLanacIStanja",
-        "G lanac je potpun (bez oznake)",
-    ),
-    "sledljivost-gp-problemi-stavka-cuti": (
-        "modIzvestaj.bas",
-        "                    ElseIf Not gpStavkeP.Exists(gKey) Then\n"
-        "                        ' Faktura aktivna, ali NE SADRZI ovu robu -- marker\n"
-        "                        ' bez stavke je lazno \"prodato\" (lanac se ne izmislja).\n"
-        "                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _\n",
-        "                    ElseIf Not gpStavkeP.Exists(gKey) Then\n"
-        "                        ' SABOTAZA: marker bez stavke cuti\n"
-        "                        Dim gpMrtvo As Variant: gpMrtvo = Array(0, preData(i, cGDat), _\n",
-        "T_Sled_GpLanacIStanja",
-        "prerada bez stavke fakture je problem",
-    ),
     # B1: zavrsna GP faktura mora da zauzme kolone Faktura/Kupac --
     # inace red uz prodatu robu pokazuje odrediste prijema.
     "sledljivost-gp-faktura-ne-preuzima": (
@@ -4134,86 +4157,6 @@ SABOTAZE = {
         "                        If False Then   ' SABOTAZA: GP faktura ne preuzima kolone\n",
         "T_Sled_GpLanacIStanja",
         "zavrsna GP faktura zauzima kolonu Faktura",
-    ),
-    # B2 writer: stale FakturaID uz Fakturisano=Ne bi nova faktura
-    # tiho pregazila.
-    "faktura-gp-stale-veza-prolazi": (
-        "modFaktura.bas",
-        "        If Len(Trim$(CStr(nz(preData(rowPre, colFakVeza))))) > 0 Then\n",
-        "        If False Then   ' SABOTAZA: stale veza prolazi\n",
-        "T_FakturaGP_WriterKapijeIStorno",
-        "zaostala veza na fakturu se ne fakturise ponovo",
-    ),
-    # P1: prodajna stavka mora imenovati proizvod.
-    "faktura-gp-prazan-tip-prolazi": (
-        "modFaktura.bas",
-        "        If Len(Trim$(CStr(nz(preData(rowPre, colTipGp))))) = 0 Then\n",
-        "        If False Then   ' SABOTAZA: bezimeni proizvod prolazi\n",
-        "T_FakturaGP_WriterKapijeIStorno",
-        "prazan TipGotovogProizvoda se ne fakturise",
-    ),
-    # P1: dupli PreradaID (korupcija) ne sme da izgleda kao normalan red.
-    "faktura-gp-dupli-id-crta-se": (
-        "modFaktura.bas",
-        "        outA(n, 1) = IdIliPrazno(brojac, Trim$(CStr(nz(pd(i, cId)))))\n",
-        "        outA(n, 1) = Trim$(CStr(nz(pd(i, cId))))   ' SABOTAZA: dupli id se crta\n",
-        "T_Fak_GpListaIKorpa",
-        "dupli PreradaID prazni identitet",
-    ),
-    # ==================== revizija #248 krug 4: totalCount contract
-    # Par (P|F) sam ne vidi istu preradu na DRUGOJ fakturi -- total
-    # kljuc je jedina brana dvostruke prodaje u dokazu.
-    "sledljivost-gp-vise-faktura-cuti": (
-        "modIzvestaj.bas",
-        "                    ElseIf CLng(gpStavkeP(\"#T|\" & SledTxt(preData(i, cGId)))) <> 1 Then\n"
-        "                        ' Krug 4 (Primer 1): par je uredan, ali ista prerada\n"
-        "                        ' ima aktivnu stavku i na DRUGOJ fakturi -- podaci\n"
-        "                        ' tvrde dvostruku prodaju iste robe.\n"
-        "                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _\n",
-        "                    ElseIf CLng(gpStavkeP(\"#T|\" & SledTxt(preData(i, cGId)))) <> 1 Then\n"
-        "                        ' SABOTAZA: dvostruka prodaja cuti\n"
-        "                        Dim gpMrtvo2 As Variant: gpMrtvo2 = Array(0, preData(i, cGDat), _\n",
-        "T_Sled_GpLanacIStanja",
-        "prerada sa stavkama na dve fakture je problem",
-    ),
-    "sledljivost-gp-stavka-bez-markera-cuti": (
-        "modIzvestaj.bas",
-        "                ElseIf gpStavkeP.Exists(\"#T|\" & SledTxt(preData(i, cGId))) Then\n"
-        "                    ' Krug 4 (Primer 2): aktivna stavka fakture BEZ markera\n"
-        "                    ' na preradi -- writer vidi prodajnu vezu (ne nudi je\n"
-        "                    ' ponovo), pa je i lista problema mora prijaviti.\n"
-        "                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _\n",
-        "                ElseIf gpStavkeP.Exists(\"#T|\" & SledTxt(preData(i, cGId))) Then\n"
-        "                    ' SABOTAZA: stavka bez markera cuti\n"
-        "                    Dim gpMrtvo3 As Variant: gpMrtvo3 = Array(0, preData(i, cGDat), _\n",
-        "T_Sled_GpLanacIStanja",
-        "aktivna stavka bez markera na preradi je problem",
-    ),
-    # P1: UI ne sme da nudi ono sto writer odbija.
-    "faktura-gp-bez-tipa-dostupna": (
-        "modFaktura.bas",
-        "                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId))))) _\n"
-        "                     And Len(Trim$(CStr(nz(pd(i, cTip))))) > 0\n",
-        "                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId)))))   ' SABOTAZA: bezimeni dostupan\n",
-        "T_Fak_GpListaIKorpa",
-        "prazan tip proizvoda -> nije dostupna",
-    ),
-    # P1: writer kao samostalna granica -- kupac mora postojati.
-    "faktura-gp-kupac-ne-proverava-se": (
-        "modFaktura.bas",
-        "    If kupRows Is Nothing Then\n"
-        "        Err.Raise vbObjectError + 1751, SRC, _\n"
-        "                  \"Kupac ne postoji u tblKupci: \" & kupacID\n"
-        "    ElseIf kupRows.count <> 1 Then\n"
-        "        Err.Raise vbObjectError + 1751, SRC, _\n"
-        "                  \"Kupac ne postoji jednoznacno u tblKupci: \" & kupacID & _\n"
-        "                  \"; Count=\" & CStr(kupRows.count)\n"
-        "    End If\n",
-        "    If False Then   ' SABOTAZA: kupac se ne proverava\n"
-        "        Err.Raise vbObjectError + 1751, SRC, \"x\"\n"
-        "    End If\n",
-        "T_FakturaGP_WriterKapijeIStorno",
-        "nepostojeci kupac se ne fakturise",
     ),
     # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
     # tudje generacije u jedan dokument sledljivosti.

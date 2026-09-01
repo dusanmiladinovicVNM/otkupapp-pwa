@@ -1612,6 +1612,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE"
     UpsertRow lo, existing, "OTKUI_HDF_PREID", "PRE ID"
     UpsertRow lo, existing, "OTKUI_FLD_FK_CENAGP", "Cena gotove robe (RSD/kg)"
+    ' Krug 5 (utovarna lista, parcijalna prodaja):
+    UpsertRow lo, existing, "OTKUI_FLD_FK_KOLGP", "Koli" & ChrW(269) & "ina za utovar (kg; prazno = sve)"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_KOL_GP", ChrW(10007) & " Koli" & ChrW(269) & "ina za utovar prelazi stanje palete"
+    UpsertRow lo, existing, "OTKUI_HDF_NASTANJU", "NA STANJU (kg)"
+    UpsertRow lo, existing, "OTKUI_ERR_SL_UTOVAR_STAMPA", "Utovarna lista jo" & ChrW(353) & " nema " & ChrW(353) & "tampani obrazac"
     UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
     UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
