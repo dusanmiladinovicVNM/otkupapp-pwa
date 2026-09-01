@@ -1753,9 +1753,10 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     If Len(ExportPreradaPDF(dokID, True)) = 0 Then _
                         modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
                 Case SLED_DOK_UTOVAR
-                    ' Utovarna lista jos nema stampani obrazac (krug 5) --
-                    ' radnja odbija s razlogom, kao zbirna.
-                    modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_UTOVAR_STAMPA"), True
+                    ' Krug 5b: utovarna lista ima obrazac -- stampa se
+                    ' direktno (dokument koji ide sa robom).
+                    modUtovar.PrintUtovar dokID
+                    modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STAMPA"), False
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
             End Select

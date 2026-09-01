@@ -2266,6 +2266,167 @@ End Function
 
 
 ' ============================================================
+' UTOVARNA LISTA (krug 5) -- dokument fizicke isporuke GP robe: ide sa
+' robom u kamion. EnsureUtovarSablon (perzistentan, LAYOUT_VER kao
+' FakturaSablon) + FillUtovarSablon. Podatke prikuplja
+' modUtovar.PrintUtovar. stavke(1..n, 1..4):
+' 1=BrojPrerade 2=Proizvod 3=Pakovanje (kutije/kese) 4=KolicinaKg.
+' ============================================================
+Public Sub EnsureUtovarSablon()
+    On Error GoTo EH
+    Const LAYOUT_VER As String = "1"
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
+    On Error GoTo EH
+    If Not ws Is Nothing Then
+        If CStr(ws.Range("H1").value) = LAYOUT_VER Then Exit Sub
+        Application.DisplayAlerts = False
+        ws.Delete
+        Application.DisplayAlerts = True
+        Set ws = Nothing
+    End If
+
+    Set ws = ThisWorkbook.Sheets.Add
+    ws.name = WS_UTOVAR_SABLON
+    ws.cells.Font.name = "Calibri"
+    ws.cells.Font.Size = 10
+    ws.columns("A").ColumnWidth = 5
+    ws.columns("B").ColumnWidth = 16
+    ws.columns("C").ColumnWidth = 30
+    ws.columns("D").ColumnWidth = 18
+    ws.columns("E").ColumnWidth = 14
+
+    Dim r As Long
+    r = DocSellerHeader(ws, 1, 5, 5)
+    r = DocTitleBlock(ws, r, 5, "Dokument fizicke isporuke gotove robe", "UTOVARNA LISTA")
+
+    Dim fr As Long: fr = r + 1
+    ws.cells(fr, 1).value = "Broj:"
+    ws.cells(fr + 1, 1).value = "Datum utovara:"
+    ws.cells(fr + 2, 1).value = "Kupac:"
+    ws.cells(fr, 2).name = "UtBroj"
+    ws.cells(fr, 2).NumberFormat = "@"
+    ws.cells(fr + 1, 2).name = "UtDatum"
+    ws.Range(ws.cells(fr + 2, 2), ws.cells(fr + 2, 5)).Merge
+    ws.cells(fr + 2, 2).name = "UtKupac"
+    ws.Range(ws.cells(fr, 2), ws.cells(fr + 2, 2)).Font.Bold = True
+
+    Dim hdr As Long: hdr = fr + 4
+    ws.cells(hdr, 1).value = "Rb"
+    ws.cells(hdr, 2).value = "Broj prerade"
+    ws.cells(hdr, 3).value = "Proizvod"
+    ws.cells(hdr, 4).value = "Pakovanje"
+    ws.cells(hdr, 5).value = "Kolicina (kg)"
+    With ws.Range(ws.cells(hdr, 1), ws.cells(hdr, 5))
+        .Font.Bold = True
+        .Interior.Color = DocColHeaderFill()
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+    ws.cells(hdr + 1, 1).name = "UtStavkaStart"
+
+    ws.Range("H1").value = LAYOUT_VER
+    ws.Range("H1").Font.Color = RGB(255, 255, 255)
+    Exit Sub
+EH:
+    Application.DisplayAlerts = True
+    LogErr "modPrint.EnsureUtovarSablon"
+End Sub
+
+Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
+        ByVal kupacNaziv As String, ByVal stavke As Variant, ByVal nStavke As Long, _
+        ByVal ukupnoKg As Double) As Worksheet
+    On Error GoTo EH
+    EnsureUtovarSablon
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
+
+    ws.Range("UtBroj").value = broj
+    ws.Range("UtDatum").value = datum
+    ws.Range("UtDatum").NumberFormat = "DD.MM.YYYY"
+    ws.Range("UtKupac").value = kupacNaziv
+
+    Dim startCell As Range: Set startCell = ws.Range("UtStavkaStart")
+
+    ' Isti dinamican cleanup kao FakturaSablon (perzistentan list,
+    ' prethodni dokument je mogao biti duzi -- v. komentare tamo).
+    Dim cleanupRows As Long
+    cleanupRows = nStavke + 4
+    Dim contentBottom As Long
+    contentBottom = SablonLastContentRow(ws, 1, 5)
+    If contentBottom - startCell.row > cleanupRows Then
+        cleanupRows = contentBottom - startCell.row
+    End If
+    With ws.Range(startCell, startCell.Offset(cleanupRows, 4))
+        .UnMerge
+        .ClearContents
+        .Borders.LineStyle = xlNone
+        .Interior.ColorIndex = xlNone
+    End With
+    ws.Range(startCell.Offset(0, 1), startCell.Offset(cleanupRows, 1)).NumberFormat = "@"
+
+    Dim i As Long
+    For i = 1 To nStavke
+        startCell.Offset(i - 1, 0).value = i
+        startCell.Offset(i - 1, 1).value = stavke(i, 1)
+        startCell.Offset(i - 1, 2).value = stavke(i, 2)
+        startCell.Offset(i - 1, 3).value = stavke(i, 3)
+        startCell.Offset(i - 1, 4).value = stavke(i, 4)
+    Next i
+
+    If nStavke > 0 Then
+        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+        End With
+        ws.Range(startCell, startCell.Offset(nStavke - 1, 0)).HorizontalAlignment = xlCenter
+        ws.Range(startCell.Offset(0, 4), startCell.Offset(nStavke - 1, 4)).NumberFormat = "#,##0.00"
+    End If
+
+    Dim tot As Range: Set tot = startCell.Offset(nStavke, 0)
+    ws.Range(tot, tot.Offset(0, 3)).Merge
+    tot.value = "UKUPNO:"
+    tot.HorizontalAlignment = xlRight
+    tot.Font.Bold = True
+    tot.Offset(0, 4).value = ukupnoKg
+    tot.Offset(0, 4).NumberFormat = "#,##0.00"
+    tot.Offset(0, 4).Font.Bold = True
+    With ws.Range(tot, tot.Offset(0, 4))
+        .Borders.LineStyle = xlContinuous
+        .Borders.Weight = xlThin
+    End With
+
+    Dim sgnRow As Long: sgnRow = tot.row + 3
+    ws.cells(sgnRow, 2).value = "Robu predao: ___________"
+    ws.cells(sgnRow, 4).value = "Robu preuzeo: ___________"
+
+    On Error Resume Next
+    Application.PrintCommunication = False
+    With ws.PageSetup
+        .PaperSize = xlPaperA4
+        .Orientation = xlPortrait
+        .Zoom = False
+        .FitToPagesWide = 1
+        .FitToPagesTall = False
+        .LeftMargin = Application.InchesToPoints(0.4)
+        .RightMargin = Application.InchesToPoints(0.4)
+        .TopMargin = Application.InchesToPoints(0.5)
+        .BottomMargin = Application.InchesToPoints(0.5)
+        .CenterHorizontally = True
+        .PrintArea = ws.Range(ws.cells(1, 1), ws.cells(sgnRow, 5)).Address
+    End With
+    Application.PrintCommunication = True
+    On Error GoTo 0
+
+    Set FillUtovarSablon = ws
+    Exit Function
+EH:
+    LogErr "modPrint.FillUtovarSablon"
+End Function
+
+' ============================================================
 ' KARTICA KOOPERANTA - generisan house-style sablon (zamena za rucni
 ' KarticaSablon). EnsureKarticaSablon (H1) + FillKarticaSablon. Podatke
 ' (Report 2D niz + header) prikuplja modIzvestaj.PrintKarticaPDF.

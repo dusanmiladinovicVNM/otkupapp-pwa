@@ -367,6 +367,9 @@ Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
 Public Const COL_UTS_PRERADA_ID As String = "PreradaID"
 Public Const COL_UTS_BROJ_PRERADE As String = "BrojPrerade"
 Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
+' Stampani obrazac utovarne liste (ide sa robom) + rezim stampe.
+Public Const WS_UTOVAR_SABLON As String = "UtovarSablon"
+Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

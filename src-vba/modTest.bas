@@ -6265,12 +6265,15 @@ Private Sub T_Fak_UgovorEkrana()
     liste = modScrFakture.Scr_Liste()
     AssertEq (UBound(liste) + 1 <= modOtkupUI.MaxPrekidaca()), True, _
              "ljuska crta sve liste ekrana -- nijedna se ne odseca tiho"
-    AssertEq UBound(liste) + 1, 4, _
-             "cetiri liste (GP grana v6-ui-189), i kad SEF nije podesen"
+    AssertEq UBound(liste) + 1, 5, _
+             "pet lista (krug 5: + Utovari), i kad SEF nije podesen"
     ' GP lista postoji i drzi drugo mesto (odmah uz ZAFAKT -- obe su
-    ' "roba za fakturisanje", pa stoje jedna uz drugu).
+    ' "roba za fakturisanje", pa stoje jedna uz drugu); utovari odmah
+    ' iza (tok robe: roba -> isporuka -> faktura).
     AssertEq Split(CStr(liste(1)), "|")(0), "GOTOVA", _
              "druga lista je GOTOVA (gotova roba)"
+    AssertEq Split(CStr(liste(2)), "|")(0), "UTOVARI", _
+             "treca lista je UTOVARI (fizicke isporuke)"
     ' Ekran koji stoji na SEF listi tu i ostaje -- nema uslovnog vracanja.
     modScrFakture.Scr_FkListaTestSet "SEF"
     AssertEq modScrFakture.Scr_Lista(), "SEF", _
@@ -6279,7 +6282,7 @@ Private Sub T_Fak_UgovorEkrana()
     For i = 0 To UBound(liste)
         kljucevi = kljucevi & "|" & Split(CStr(liste(i)), "|")(0)
     Next i
-    AssertEq kljucevi, "|ZAFAKT|GOTOVA|FAKTURE|SEF", _
+    AssertEq kljucevi, "|ZAFAKT|GOTOVA|UTOVARI|FAKTURE|SEF", _
              "redosled i kljucevi lista -- roba za fakturisanje prva (PRJ pa GP)"
 
     ' RADNJE PO LISTI. Citaju se po KLJUCU, ne kroz Scr_Lista: Scr_Lista je
@@ -6751,6 +6754,25 @@ Private Sub T_Fak_GpListaIKorpa()
     AssertEq (rDup > 0), True, "vozilo: dupli id red je u listi"
     AssertEq CStr(gp(rDup, 1)), "", "dupli PreradaID prazni identitet"
 
+    ' --- LISTA UTOVARI (krug 5b): pregled fizickih isporuka -- broj,
+    ' kupac, roba, kg i faktura po utovaru; UI vidljivost dokumenta.
+    Dim uv As Variant, rUtG As Long, rUtOV As Long
+    uv = modUtovar.GetUtovariForGrid()
+    AssertEq IsArray(uv), True, "utovari read-model postoji"
+    For i = 1 To UBound(uv, 1)
+        Select Case CStr(uv(i, 1))
+            Case "UT-SLED-G": rUtG = i
+            Case "UT-GP-OV": rUtOV = i
+        End Select
+    Next i
+    AssertEq (rUtG > 0), True, "utovar G lanca je u listi"
+    AssertEq CStr(uv(rUtG, 5)), "51/2026", "utovar nosi robu (broj prerade)"
+    AssertEq Format$(CDbl(uv(rUtG, 6)), "0.00"), Format$(64#, "0.00"), _
+             "utovar nosi ukupne kg"
+    AssertEq CStr(uv(rUtG, 7)), "9/2026", "fakturisan utovar nosi broj fakture"
+    AssertEq (rUtOV > 0), True, "nefakturisan utovar je u listi"
+    AssertEq CStr(uv(rUtOV, 7)), "", "nefakturisan utovar nema broj fakture"
+
     ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
     modScrFakture.Scr_FkKorpaTestReset
     AssertEq modScrFakture.Scr_FkKorpaTestDodajGP("PRE-GP-W1", "71/2026", 50.5, 0, True), _
@@ -6917,6 +6939,23 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
                                svezeStavke, 1, 1#
     AssertEq CStr(wsF.cells(scRow - 1, 2).value), "Broj prijemnice", _
              "sveza stampa vraca prijemnicki heder"
+
+    ' --- Krug 5b: STAMPA UTOVARNE LISTE -- dokument koji ide sa robom
+    ' (UTOVAR_PRINT_MODE=OFF u fixture-u: sablon se puni, izlaza nema).
+    modUtovar.PrintUtovar utID
+    Dim wsU As Worksheet, usRow As Long
+    Set wsU = ThisWorkbook.Sheets(WS_UTOVAR_SABLON)
+    usRow = wsU.Range("UtStavkaStart").row
+    AssertEq (Len(CStr(wsU.Range("UtBroj").value)) > 0), True, _
+             "utovarna lista nosi svoj broj"
+    AssertEq CStr(wsU.Range("UtKupac").value), "Test kupac 2", _
+             "utovarna lista nosi kupca"
+    AssertEq CStr(wsU.cells(usRow, 2).value), "71/2026", _
+             "stavka liste nosi broj prerade"
+    AssertEq CStr(wsU.cells(usRow, 3).value), "Rinfuz", _
+             "stavka liste nosi proizvod"
+    AssertEq Format$(CDbl(wsU.cells(usRow, 5).value), "0.00"), _
+             Format$(20#, "0.00"), "stavka liste nosi utovarene kg"
 
     ' --- Read-model: parcijalno prodata je i dalje dostupna (30.5).
     Dim gp As Variant, rW1 As Long

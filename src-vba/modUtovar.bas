@@ -103,6 +103,232 @@ Public Function UtovarenoKgPrerade(ByVal preradaID As String) As Double
 End Function
 
 ' ============================================================
+' READ MODEL liste UTOVARI (ekran Fakturisanje) -- 1..7:
+'   1 UtovarID (prazan kod duplog -- IdIliPrazno guard)
+'   2 Broj ("1/2026")   3 Datum   4 Kupac (naziv)
+'   5 Roba ("51/2026" / "N pre.")   6 Ukupno kg   7 Broj fakture ("")
+' Stornirani utovari se ne listaju; stavke storniranog utovara ne.
+' ============================================================
+Public Function GetUtovariForGrid() As Variant
+    Const SRC As String = "modUtovar.GetUtovariForGrid"
+    On Error GoTo EH
+
+    If GetTable(TBL_UTOVAR) Is Nothing Then Exit Function
+    Dim ut As Variant
+    ut = GetTableData(TBL_UTOVAR)
+    If Not IsArray(ut) Then Exit Function
+    ut = ExcludeStornirano(ut, TBL_UTOVAR)
+    If Not IsArray(ut) Then Exit Function
+
+    Dim cId As Long, cBr As Long, cGod As Long, cDat As Long
+    Dim cKup As Long, cFid As Long
+    cId = RequireColumnIndex(TBL_UTOVAR, COL_UT_ID, SRC)
+    cBr = RequireColumnIndex(TBL_UTOVAR, COL_UT_BROJ, SRC)
+    cGod = RequireColumnIndex(TBL_UTOVAR, COL_UT_GODINA, SRC)
+    cDat = RequireColumnIndex(TBL_UTOVAR, COL_UT_DATUM, SRC)
+    cKup = RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)
+    cFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
+
+    Dim brojac As Object: Set brojac = modFaktura.BrojacIdova(TBL_UTOVAR, COL_UT_ID)
+    Dim kupMapa As Object: Set kupMapa = BuildLookupDict(TBL_KUPCI, COL_KUP_ID, COL_KUP_NAZIV)
+    Dim fakBroj As Object: Set fakBroj = CreateObject("Scripting.Dictionary")
+    fakBroj.CompareMode = vbTextCompare
+    Dim fd As Variant, j As Long
+    fd = GetTableData(TBL_FAKTURE)
+    If IsArray(fd) Then fd = ExcludeStornirano(fd, TBL_FAKTURE)
+    If IsArray(fd) Then
+        ' cFkId, NE cFId: u ovoj proceduri vec zivi cFid (utovarova
+        ' kolona FakturaID) -- VBA je case-insensitive pa bi cFId bio
+        ' "Duplicate declaration" (ista mina kao Const SRC / Dim src).
+        Dim cFkId As Long, cFkBr As Long
+        cFkId = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+        cFkBr = GetColumnIndex(TBL_FAKTURE, COL_FAK_BROJ)
+        For j = 1 To UBound(fd, 1)
+            If Not fakBroj.Exists(Trim$(CStr(nz(fd(j, cFkId))))) Then _
+                fakBroj.Add Trim$(CStr(nz(fd(j, cFkId)))), Trim$(CStr(nz(fd(j, cFkBr))))
+        Next j
+    End If
+
+    ' Roba i kg po utovaru -- jedan prolaz kroz aktivne stavke.
+    Dim roba As Object: Set roba = CreateObject("Scripting.Dictionary")
+    roba.CompareMode = vbTextCompare
+    Dim kg As Object: Set kg = CreateObject("Scripting.Dictionary")
+    kg.CompareMode = vbTextCompare
+    Dim cnt As Object: Set cnt = CreateObject("Scripting.Dictionary")
+    cnt.CompareMode = vbTextCompare
+    Dim s As Variant, k As String
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If IsArray(s) Then s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
+    If IsArray(s) Then
+        Dim cSUt As Long, cSBr As Long, cSKol As Long
+        cSUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+        cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
+        cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+        For j = 1 To UBound(s, 1)
+            k = Trim$(CStr(nz(s(j, cSUt))))
+            If Len(k) > 0 Then
+                roba(k) = Trim$(CStr(nz(s(j, cSBr))))
+                If cnt.Exists(k) Then cnt(k) = CLng(cnt(k)) + 1 Else cnt.Add k, 1
+                If IsNumeric(s(j, cSKol)) Then
+                    If kg.Exists(k) Then
+                        kg(k) = CDbl(kg(k)) + CDbl(s(j, cSKol))
+                    Else
+                        kg.Add k, CDbl(s(j, cSKol))
+                    End If
+                End If
+            End If
+        Next j
+    End If
+
+    Dim outA() As Variant, i As Long, n As Long, utID As String, fid As String
+    ReDim outA(1 To UBound(ut, 1), 1 To 7)
+    For i = 1 To UBound(ut, 1)
+        utID = Trim$(CStr(nz(ut(i, cId))))
+        n = n + 1
+        outA(n, 1) = modFaktura.IdIliPrazno(brojac, utID)
+        outA(n, 2) = Trim$(CStr(nz(ut(i, cBr)))) & "/" & Trim$(CStr(nz(ut(i, cGod))))
+        outA(n, 3) = ut(i, cDat)
+        If kupMapa.Exists(Trim$(CStr(nz(ut(i, cKup))))) Then
+            outA(n, 4) = Trim$(CStr(kupMapa(Trim$(CStr(nz(ut(i, cKup)))))))
+        Else
+            outA(n, 4) = Trim$(CStr(nz(ut(i, cKup))))
+        End If
+        If cnt.Exists(utID) Then
+            If CLng(cnt(utID)) = 1 Then
+                outA(n, 5) = CStr(roba(utID))
+            Else
+                outA(n, 5) = CStr(CLng(cnt(utID))) & " pre."
+            End If
+        Else
+            outA(n, 5) = ""
+        End If
+        If kg.Exists(utID) Then outA(n, 6) = CDbl(kg(utID)) Else outA(n, 6) = 0#
+        fid = Trim$(CStr(nz(ut(i, cFid))))
+        If fakBroj.Exists(fid) Then
+            outA(n, 7) = CStr(fakBroj(fid))
+        Else
+            outA(n, 7) = ""
+        End If
+    Next i
+    If n = 0 Then Exit Function
+
+    Dim res() As Variant, r As Long, c As Long
+    ReDim res(1 To n, 1 To 7)
+    For r = 1 To n
+        For c = 1 To 7
+            res(r, c) = outA(r, c)
+        Next c
+    Next r
+    GetUtovariForGrid = res
+    Exit Function
+
+EH:
+    LogErr SRC
+End Function
+
+' ============================================================
+' STAMPA UTOVARNE LISTE -- dokument koji ide sa robom. Rezim iz
+' CFG_UTOVAR_PRINT_MODE (default PRINT; OFF u test fixture-u).
+' ============================================================
+Public Sub PrintUtovar(ByVal utovarID As String)
+    Const SRC As String = "modUtovar.PrintUtovar"
+    On Error GoTo EH
+
+    Dim rows As Collection
+    Set rows = FindRows(TBL_UTOVAR, COL_UT_ID, Trim$(utovarID))
+    If rows Is Nothing Then Exit Sub
+    If rows.count <> 1 Then
+        Err.Raise vbObjectError + 1757, SRC, _
+                  "Utovar ne postoji jednoznacno: " & utovarID
+    End If
+
+    Dim ut As Variant, rowUt As Long
+    ut = GetTableData(TBL_UTOVAR)
+    rowUt = CLng(rows(1))
+    Dim broj As String, datum As Variant, kupacID As String, kupacNaziv As String
+    broj = Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_BROJ, SRC))))) & _
+           "/" & Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_GODINA, SRC)))))
+    datum = ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_DATUM, SRC))
+    kupacID = Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)))))
+    kupacNaziv = Trim$(CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, kupacID, COL_KUP_NAZIV))))
+    If kupacNaziv = "" Then kupacNaziv = kupacID
+
+    ' Stavke + podaci prerade (proizvod, pakovanje) -- mapa pre petlje.
+    Dim preInfo As Object: Set preInfo = CreateObject("Scripting.Dictionary")
+    preInfo.CompareMode = vbTextCompare
+    Dim pd As Variant, i As Long
+    pd = GetTableData(TBL_PRERADA)
+    If IsArray(pd) Then
+        Dim cPId As Long, cPTip As Long, cPKut As Long, cPKes As Long
+        cPId = RequireColumnIndex(TBL_PRERADA, COL_PRE_ID, SRC)
+        cPTip = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+        cPKut = RequireColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE, SRC)
+        cPKes = RequireColumnIndex(TBL_PRERADA, COL_PRE_KESE, SRC)
+        For i = 1 To UBound(pd, 1)
+            If Not preInfo.Exists(Trim$(CStr(nz(pd(i, cPId))))) Then _
+                preInfo.Add Trim$(CStr(nz(pd(i, cPId)))), Array( _
+                    Trim$(CStr(nz(pd(i, cPTip)))), _
+                    Trim$(CStr(nz(pd(i, cPKut)))) & " kut. / " & _
+                    Trim$(CStr(nz(pd(i, cPKes)))) & " kesa")
+        Next i
+    End If
+
+    Dim s As Variant, stavke() As Variant, nSt As Long, ukupnoKg As Double
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then Exit Sub
+    s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then Exit Sub
+    Dim cSUt As Long, cSPre As Long, cSBr As Long, cSKol As Long
+    cSUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+    cSPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+    cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
+    cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+    ReDim stavke(1 To UBound(s, 1), 1 To 4)
+    For i = 1 To UBound(s, 1)
+        If Trim$(CStr(nz(s(i, cSUt)))) = Trim$(utovarID) Then
+            nSt = nSt + 1
+            stavke(nSt, 1) = Trim$(CStr(nz(s(i, cSBr))))
+            Dim pv As Variant, preK As String
+            preK = Trim$(CStr(nz(s(i, cSPre))))
+            If preInfo.Exists(preK) Then
+                pv = preInfo(preK)
+                stavke(nSt, 2) = CStr(pv(0))
+                stavke(nSt, 3) = CStr(pv(1))
+            Else
+                stavke(nSt, 2) = ""
+                stavke(nSt, 3) = ""
+            End If
+            If IsNumeric(s(i, cSKol)) Then
+                stavke(nSt, 4) = CDbl(s(i, cSKol))
+                ukupnoKg = ukupnoKg + CDbl(s(i, cSKol))
+            Else
+                stavke(nSt, 4) = 0#
+            End If
+        End If
+    Next i
+    If nSt = 0 Then Exit Sub
+
+    Dim ws As Worksheet
+    Set ws = FillUtovarSablon(broj, datum, kupacNaziv, stavke, nSt, ukupnoKg)
+    If ws Is Nothing Then Exit Sub
+
+    Dim mode As String
+    mode = DocResolveMode(GetConfigValue(CFG_UTOVAR_PRINT_MODE), "PRINT")
+    Select Case mode
+        Case "PRINT", "PREVIEW"
+            DocPrintWs ws, mode
+        Case "PDF"
+            DocExportPdf ws, ThisWorkbook.path & "\Utovar_" & _
+                         Replace(broj, "/", "-") & ".pdf", True
+        ' OFF -> bez izlaza (sablon je ipak popunjen -- test ga cita)
+    End Select
+    Exit Sub
+
+EH:
+    LogErr SRC
+End Sub
+
+' ============================================================
 ' UTOVAR + GP FAKTURA u jednoj transakciji (v1: 1 utovar = 1 faktura).
 ' stavke: Collection of Array(preradaID, kolicinaKg, cena).
 ' Kapije u BASE, pod TX: kupac postoji tacno jednom; prerada postoji

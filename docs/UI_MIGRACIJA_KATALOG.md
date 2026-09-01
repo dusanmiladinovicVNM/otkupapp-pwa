@@ -5771,3 +5771,26 @@ utovara/slanja (obrazac utovarne liste sledi). Time je 1:1 model
   kataloga našao je oba problema za 12 min (defense-in-depth: stanje
   kapija brani i W0; storno header već vraća stanje pa je stavkama
   dodata sopstvena tvrdnja) — pun prolaz ide tek jednom, na kraju.
+
+### 25.9 Krug 5b: UI vidljivost utovara + štampani obrazac
+
+Operater: model bez ekrana i papira je bezvredan — utovar mora da se
+VIDI i da se PREDA sa robom. Isporučeno u istom PR-u:
+
+- **Peta lista „Utovari"** na ekranu Fakturisanje (redosled = tok
+  robe: Sveža roba | Gotova roba | **Utovari** | Fakture | SEF):
+  broj, datum, kupac, roba (broj prerade / „N pre."), kg, broj
+  fakture; čipovi sve/čeka(nefakturisan)/fakturisan; radnje
+  **„Utovarna lista"** (štampa) i **„Storniraj"** (potvrda pa
+  `StornoUtovar_TX` — writer kapija odbija fakturisan utovar).
+- **Štampani obrazac** (`EnsureUtovarSablon`/`FillUtovarSablon`, house
+  stil kao faktura; perzistentan list `UtovarSablon`): zaglavlje
+  prodavca + „UTOVARNA LISTA" + broj/datum utovara/kupac; stavke
+  `Rb | Broj prerade | Proizvod | Pakovanje (kutije/kese) | Kolicina
+  (kg)`; UKUPNO; potpisi „Robu predao/preuzeo". Režim
+  `UTOVAR_PRINT_MODE` (default PRINT; OFF u fixture-u).
+- NEPOTPUNI ruta za DokTip `Utovar` sada ŠTAMPA listu (umesto
+  odbijanja); `modUtovar.PrintUtovar` je zajednička ruta.
+- Nova mina u katalogu znanja: `cFid`/`cFId` u ISTOJ proceduri =
+  „Duplicate declaration" (case-insensitive) — uhvaćeno compile-only
+  runom, skener dupli-Dim proširen na modUtovar/modPrint.

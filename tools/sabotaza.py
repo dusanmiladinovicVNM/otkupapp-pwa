@@ -1888,7 +1888,7 @@ SABOTAZE = {
         "    End If\n"
         "    Scr_Liste = Array( _\n",
         "T_Fak_UgovorEkrana",
-        "cetiri liste (GP grana v6-ui-189), i kad SEF nije podesen",
+        "pet lista (krug 5: + Utovari), i kad SEF nije podesen",
     ),
     # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
@@ -4106,6 +4106,40 @@ SABOTAZE = {
         "    For Each sk In fstSiroce.keys: Exit For   ' SABOTAZA: siroce cuti\n",
         "T_Sled_GpLanacIStanja",
         "prodajna stavka bez utovara (siroce) je problem",
+    ),
+    # Krug 5b: UI vidljivost utovara -- lista bez broja fakture krije
+    # da je isporuka vec naplacena (operater bi je fakturisao ponovo).
+    "utovar-gp-lista-bez-fakture": (
+        "modUtovar.bas",
+        "        If fakBroj.Exists(fid) Then\n"
+        "            outA(n, 7) = CStr(fakBroj(fid))\n",
+        "        If False Then   ' SABOTAZA: faktura utovara skrivena\n"
+        "            outA(n, 7) = CStr(fakBroj(fid))\n",
+        "T_Fak_GpListaIKorpa",
+        "fakturisan utovar nosi broj fakture",
+    ),
+    # Krug 5b: stampana utovarna lista bez broja prerade je dokument
+    # bez lota -- roba u kamionu ne moze da se upari sa evidencijom.
+    "utovar-gp-stampa-bez-lota": (
+        "modPrint.bas",
+        "        startCell.Offset(i - 1, 1).value = stavke(i, 1)\n"
+        "        startCell.Offset(i - 1, 2).value = stavke(i, 2)\n"
+        "        startCell.Offset(i - 1, 3).value = stavke(i, 3)\n"
+        "        startCell.Offset(i - 1, 4).value = stavke(i, 4)\n"
+        "    Next i\n"
+        "\n"
+        "    If nStavke > 0 Then\n"
+        "        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))\n",
+        "        ' SABOTAZA: lot progutan\n"
+        "        startCell.Offset(i - 1, 2).value = stavke(i, 2)\n"
+        "        startCell.Offset(i - 1, 3).value = stavke(i, 3)\n"
+        "        startCell.Offset(i - 1, 4).value = stavke(i, 4)\n"
+        "    Next i\n"
+        "\n"
+        "    If nStavke > 0 Then\n"
+        "        With ws.Range(startCell, startCell.Offset(nStavke - 1, 4))\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "stavka liste nosi broj prerade",
     ),
     # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
     # kasnije odbio, ali tek posle potvrde operatera (kasna greska).

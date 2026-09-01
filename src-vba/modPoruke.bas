@@ -1616,7 +1616,17 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_FLD_FK_KOLGP", "Koli" & ChrW(269) & "ina za utovar (kg; prazno = sve)"
     UpsertRow lo, existing, "OTKUI_ERR_FK_KOL_GP", ChrW(10007) & " Koli" & ChrW(269) & "ina za utovar prelazi stanje palete"
     UpsertRow lo, existing, "OTKUI_HDF_NASTANJU", "NA STANJU (kg)"
-    UpsertRow lo, existing, "OTKUI_ERR_SL_UTOVAR_STAMPA", "Utovarna lista jo" & ChrW(353) & " nema " & ChrW(353) & "tampani obrazac"
+    ' Lista UTOVARI + stampani obrazac utovarne liste (krug 5b).
+    UpsertRow lo, existing, "OTKUI_SEG_FK_UTOVARI", "Utovari"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_UTOVARI", "Utovarne liste " & ChrW(8212) & " fizi" & ChrW(269) & "ke isporuke gotove robe"
+    UpsertRow lo, existing, "OTKUI_HDU_ROBA", "ROBA"
+    UpsertRow lo, existing, "OTKUI_HDU_ID", "UT ID"
+    UpsertRow lo, existing, "OTKUI_BTN_UT_STAMPAJ", "Utovarna lista"
+    UpsertRow lo, existing, "OTKUI_BTN_UT_STORNO", "Storniraj"
+    UpsertRow lo, existing, "OTKUI_MSG_UT_STAMPA", ChrW(10003) & " Utovarna lista je poslata na " & ChrW(353) & "tampu"
+    UpsertRow lo, existing, "OTKUI_ASK_UT_STORNO", "Stornirati utovar? Roba se vra" & ChrW(263) & "a na stanje."
+    UpsertRow lo, existing, "OTKUI_MSG_UT_STORNO", ChrW(10003) & " Utovar je storniran " & ChrW(8212) & " roba je vra" & ChrW(263) & "ena na stanje"
+    UpsertRow lo, existing, "OTKUI_ERR_UT_STORNO", ChrW(10007) & " Storno utovara nije uspeo " & ChrW(8212) & " fakturisan utovar prvo trazi storno fakture"
     UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
     UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---

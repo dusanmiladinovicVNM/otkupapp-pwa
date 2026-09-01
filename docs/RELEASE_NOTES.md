@@ -6951,6 +6951,14 @@ ijedne izmišljene veze.
 - Storno: fakture oslobađa utovar (roba ostaje isporučena); storno
   utovara vraća robu na stanje; prerada sa isporučenom robom se ne
   stornira dok se utovar ne raspetlja.
+- **Lista „Utovari" na ekranu Fakturisanje:** svaki utovar se vidi
+  (broj, datum, kupac, roba, kg, faktura), filtrira (čeka/fakturisan)
+  i ima dve radnje — **štampa utovarne liste** i **storno** (sa
+  potvrdom; fakturisan utovar prvo traži storno fakture).
+- **Štampani obrazac „UTOVARNA LISTA"** — dokument koji ide sa robom:
+  broj, datum utovara, kupac, stavke (broj prerade, proizvod,
+  pakovanje, kg), UKUPNO i potpisi „Robu predao/preuzeo". Ista štampa
+  dostupna i sa NEPOTPUNIH na Sledljivosti.
 
 ### Verifikacija
 

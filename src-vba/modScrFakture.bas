@@ -86,6 +86,7 @@ Private Const FK_ZAFAKT  As String = "ZAFAKT"
 Private Const FK_FAKTURE As String = "FAKTURE"
 Private Const FK_SEF     As String = "SEF"
 Private Const FK_GP      As String = "GOTOVA"
+Private Const FK_UTOVARI As String = "UTOVARI"   ' krug 5: pregled utovarnih lista
 
 ' SKRIVENA KOLONA IDENTITETA. Prioritet 4, a LayoutGrid crta do 3 -- vrednost
 ' postoji u modelu, celija se nikad ne pravi. Identitet ide U RED, ne pored
@@ -102,6 +103,7 @@ Private Const FK_FAK_KOL_ID As Long = 8
 Private Const FK_SEF_KOL_ID As Long = 8
 ' GP lista: identitet i dostupnost, isti obrazac kao ZAFAKT.
 Private Const FK_GP_KOL_ID As Long = 9
+Private Const FK_UT_KOL_ID As Long = 7
 Private Const FK_GP_KOL_DOST As Long = 10
 
 Private mLista As String            ' FK_ZAFAKT | FK_FAKTURE | FK_SEF
@@ -158,6 +160,7 @@ Public Function Scr_Liste() As Variant
     Scr_Liste = Array( _
         FK_ZAFAKT & "|OTKUI_SEG_FK_ZAFAKT|OTKUI_GRID_TITLE_FK_ZAFAKT|108", _
         FK_GP & "|OTKUI_SEG_FK_GP|OTKUI_GRID_TITLE_FK_GP|100", _
+        FK_UTOVARI & "|OTKUI_SEG_FK_UTOVARI|OTKUI_GRID_TITLE_FK_UTOVARI|84", _
         FK_FAKTURE & "|OTKUI_SEG_FK_FAKTURE|OTKUI_GRID_TITLE_FK_FAKTURE|64", _
         FK_SEF & "|OTKUI_SEG_FK_SEF|OTKUI_GRID_TITLE_FK_SEF|44")
 End Function
@@ -196,6 +199,12 @@ Public Function FkCipoviZaListu(ByVal kljuc As String) As String
         Case FK_GP
             ' Ista tri cipa i ISTO pravilo (FkCipPrijemnica nad "dostupna")
             ' -- ceka = jos nije fakturisana, fakt = vec jeste.
+            FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
+                                "ceka:OTKUI_CIPF_CEKA:104|" & _
+                                "fakt:OTKUI_CIPF_FAKT:96"
+        Case FK_UTOVARI
+            ' ceka = jos nije fakturisan (osloboden stornom fakture),
+            ' fakt = nosi aktivnu fakturu -- isto FkCipPrijemnica pravilo.
             FkCipoviZaListu = "sve:OTKUI_CHIP_SVE:40|" & _
                                 "ceka:OTKUI_CIPF_CEKA:104|" & _
                                 "fakt:OTKUI_CIPF_FAKT:96"
@@ -281,6 +290,11 @@ Public Function FkRadnjeZaListu(ByVal kljuc As String) As String
         Case FK_ZAFAKT, FK_GP
             FkRadnjeZaListu = "fkadd:OTKUI_BTN_FK_DODAJ:132:soft:1|" & _
                          "fkdel:OTKUI_BTN_FK_UKLONI:124:ghost:1"
+        Case FK_UTOVARI
+            ' Utovarna lista IDE SA ROBOM -- stampa po redu; storno samo
+            ' nefakturisanog (writer kapija odbija ostale s razlogom).
+            FkRadnjeZaListu = "utprint:OTKUI_BTN_UT_STAMPAJ:132:soft:1|" & _
+                         "utstorno:OTKUI_BTN_UT_STORNO:96:danger:1"
         Case FK_FAKTURE
             FkRadnjeZaListu = "fkprint:OTKUI_BTN_FK_STAMPAJ:104:ghost:1|" & _
                          "fkstat:OTKUI_BTN_FK_STATUS:132:soft:1"
@@ -427,6 +441,8 @@ Private Function RadnjaNadRedom(ByVal spec As String) As Boolean
         Case "fkadd":    RadnjaNadRedom = DodajRedUKorpu(red)
         Case "fkdel":    RadnjaNadRedom = UkloniRedIzKorpe(red)
         Case "fkprint":  RadnjaNadRedom = StampajFakturu(red)
+        Case "utprint":  RadnjaNadRedom = StampajUtovar(red)
+        Case "utstorno": RadnjaNadRedom = StornirajUtovar(red)
         Case "fkstat":   RadnjaNadRedom = OsveziStatusFakture(red)
         Case "sfsend":   RadnjaNadRedom = SefPosalji(red)
         Case "sfstat":   RadnjaNadRedom = SefOsvezi(red)
@@ -947,6 +963,7 @@ Public Function Scr_Rows(ByVal filter As String, ByVal q As String) As Variant
         Case FK_FAKTURE: Scr_Rows = RedoviFakture(filter, q): Exit Function
         Case FK_SEF:     Scr_Rows = RedoviSEF(filter, q): Exit Function
         Case FK_GP:      Scr_Rows = RedoviGP(filter, q): Exit Function
+        Case FK_UTOVARI: Scr_Rows = RedoviUtovara(filter, q): Exit Function
     End Select
     Scr_Rows = RedoviPrijemnice(filter, q)
 End Function
@@ -958,6 +975,7 @@ Public Function FkKoloneZaListu(ByVal kljuc As String) As Variant
         Case FK_FAKTURE: FkKoloneZaListu = FaktureKolone()
         Case FK_SEF:     FkKoloneZaListu = SEFKolone()
         Case FK_GP:      FkKoloneZaListu = GPKolone()
+        Case FK_UTOVARI: FkKoloneZaListu = UtovariKolone()
         Case Else:       FkKoloneZaListu = PrijemniceKolone()
     End Select
 End Function
@@ -1104,6 +1122,91 @@ Sledeci:
     Exit Function
 EH:
     Err.Raise Err.Number, "modScrFakture.RedoviGP[" & mStep & "]", Err.description
+End Function
+
+'------------------------------------------------------ LISTA: UTOVARI
+' Krug 5: pregled utovarnih lista -- broj, datum, kupac, roba, kg,
+' faktura; identitet UtovarID u prio-4 koloni (radnje: stampa/storno).
+Private Function UtovariKolone() As Variant
+    UtovariKolone = Array( _
+        "OTKUI_HD_BROJ||txt|72|1", _
+        "OTKUI_HD_DATUM||date|74|1", _
+        "OTKUI_HDS_KUPAC||txt|140|1", _
+        "OTKUI_HDU_ROBA||txt|110|1", _
+        "OTKUI_HD_KG||kg|84|1", _
+        "OTKUI_HDF_FAKTURA||txt|0|1", _
+        "OTKUI_HDU_ID||txt|1|4")
+End Function
+
+Private Function RedoviUtovara(ByVal filter As String, ByVal q As String) As Variant
+    Dim src As Variant, i As Long, n As Long, outA() As Variant
+    Dim hay As String, nefakturisan As Boolean, zbirKg As Double
+    On Error GoTo EH
+    mStep = "utovari"
+
+    src = modUtovar.GetUtovariForGrid()
+    If Not IsArray(src) Then
+        RedoviUtovara = PrazanRezultat(UtovariKolone())
+        Exit Function
+    End If
+
+    ReDim outA(1 To UBound(src, 1), 1 To 7)
+    For i = 1 To UBound(src, 1)
+        ' "ceka" cip pusta NEFAKTURISANE (oslobodjene stornom fakture)
+        ' -- isto FkCipPrijemnica pravilo nad "dostupna".
+        nefakturisan = (Len(Trim$(CStr(src(i, 7)))) = 0)
+        If Not FkCipPrijemnica(filter, nefakturisan) Then GoTo Sledeci
+        hay = CStr(src(i, 2)) & "|" & CStr(src(i, 4)) & "|" & _
+              CStr(src(i, 5)) & "|" & CStr(src(i, 7))
+        If Len(q) > 0 Then
+            If InStr(1, hay, q, vbTextCompare) = 0 Then GoTo Sledeci
+        End If
+        n = n + 1
+        outA(n, 1) = CStr(src(i, 2))
+        outA(n, 2) = src(i, 3)
+        outA(n, 3) = CStr(src(i, 4))
+        outA(n, 4) = CStr(src(i, 5))
+        outA(n, 5) = CDbl(src(i, 6))
+        outA(n, 6) = CStr(src(i, 7))
+        outA(n, 7) = CStr(src(i, 1))
+        zbirKg = zbirKg + CDbl(src(i, 6))
+Sledeci:
+    Next i
+
+    mStep = "OK"
+    RedoviUtovara = Array(UtovariKolone(), outA, n, zbirKg, 0#, Array(0, 0, 0))
+    Exit Function
+EH:
+    Err.Raise Err.Number, "modScrFakture.RedoviUtovara[" & mStep & "]", Err.description
+End Function
+
+' Stampa utovarne liste po redu (rezim iz CFG_UTOVAR_PRINT_MODE).
+Private Function StampajUtovar(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    modUtovar.PrintUtovar iD
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STAMPA"), False
+    StampajUtovar = True
+End Function
+
+' Storno utovara po redu -- potvrda pa StornoUtovar_TX (kapija u
+' writeru odbija fakturisan utovar s razlogom).
+Private Function StornirajUtovar(ByVal red As Long) As Boolean
+    Dim iD As String
+    iD = IdReda(red, FK_UT_KOL_ID)
+    If Len(iD) = 0 Then Exit Function
+    If MsgBox(Poruka("OTKUI_ASK_UT_STORNO") & vbCrLf & vbCrLf & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
+              Trim$(CStr(modOtkupUI.GridCell(red, 4))), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+    If modStorno.StornoUtovar_TX(iD) Then
+        Scr_ResetCache
+        modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_STORNO"), False
+        StornirajUtovar = True
+    Else
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_STORNO"), True
+    End If
 End Function
 
 '------------------------------------------------------ LISTA: FAKTURE

@@ -2012,6 +2012,7 @@ SEF_CONFIG = {
     # izlaza (OFF), a SEF DTO test trazi seller podatke -- pinovano da
     # ne zavisi od donora (ista klasa kao DEFAULT_SORTA_VOCA).
     "FAKTURA_PRINT_MODE": "OFF",
+    "UTOVAR_PRINT_MODE": "OFF",
     "SELLER_NAME": "Test prodavac DOO",
     "SELLER_PIB": "100000000",
     # Ekran Sledljivost (v6-ui-187): "Lanac (PDF)" postuje ovaj rezim; OFF da
