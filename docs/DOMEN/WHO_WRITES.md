@@ -19,30 +19,32 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 |---|---|---|
 | `tblOtkup` | 12 | `modAutoHladnjaca`, `modBankaMapiranje`, `modDokumenta`, `modMasterSync`, `modNovac`, `modOtkup`, `modOtkupBlok`, `modSetup`, `modSledljivost`, `modStorno`, `modStornoFlow`, `modStornoRecovery` |
 | `tblFakture` | 9 | `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator`, `modStorno`, `modStornoFlow` |
+| `tblAmbalaza` | 7 | `modAmbalaza`, `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery` |
 | `tblNovac` | 7 | `modBankaMapiranje`, `modDokumenta`, `modFaktura`, `modNovac`, `modOtkup`, `modStorno`, `modStornoFlow` |
-| `tblAmbalaza` | 6 | `modDokumenta`, `modMasterSync`, `modOtkup`, `modStorno`, `modStornoFlow`, `modStornoRecovery` |
 | `tblZbirna` | 5 | `modDokumentInvariant`, `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow` |
 | `tblFakturaStavke` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow` |
 | `tblOtpremnica` | 4 | `modDokumenta`, `modMasterSync`, `modStorno`, `modStornoFlow` |
 | `tblPrijemnica` | 4 | `modDokumenta`, `modFaktura`, `modStorno`, `modStornoFlow` |
+| `tblSEFEventLog` | 4 | `modSEFPersistance`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
+| `tblSEFSubmission` | 4 | `modSEFPersistance`, `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
 | `tblBankaImport` | 3 | `modBankaImport`, `modBankaMapiranje`, `modStorno` |
 | `tblMagacin` | 3 | `frmAgrohemija`, `modAgroUnos`, `modAgrohemija` |
 | `tblPaleta` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
 | `tblPaletaStavka` | 3 | `modDokumenta`, `modPaletniList`, `modStorno` |
-| `tblSEFEventLog` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
-| `tblSEFSubmission` | 3 | `modSEFService`, `modSEFStatusSync`, `modSEFValidator` |
+| `tblStornoZurnal` | 3 | `modStorno`, `modStornoFlow`, `modStornoZurnal` |
 | `tblKorisnici` | 2 | `modAuth`, `modSetup` |
 | `tblParcele` | 2 | `modGeoParcele`, `modMasterSync` |
+| `tblPartnerMap` | 2 | `modBankaMapiranje`, `modNovac` |
 | `tblPrerada` | 2 | `modPaletniList`, `modStorno` |
 | `tblPreradaStavka` | 2 | `modPaletniList`, `modStorno` |
-| `tblStornoZurnal` | 2 | `modStorno`, `modStornoFlow` |
 | `tblArtikli` | 1 | `modAgrohemija` |
+| `tblCenovnik` | 1 | `modCenovnik` |
 | `tblKooperanti` | 1 | `modKooperant` |
-| `tblPartnerMap` | 1 | `modBankaMapiranje` |
+| `tblSEFConfig` | 1 | `modConfig` |
 | `tblStornoVeze` | 1 | `modStornoContext` |
+| `tblVozaci` | 1 | `modMalina` |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
-| `tblSEFConfig` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
 
@@ -50,27 +52,27 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 
 - `tblOtkup`: `modBusinessFlowProTests`, `modFakturaTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblFakture`: `modSEFTests`, `modTestBanka`, `modTestStorno`
-- `tblNovac`: `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblAmbalaza`: `modBusinessFlowProTests`, `modGoogleSyncSmokeTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
+- `tblNovac`: `modTestBanka`, `modTestStorno`, `modTestStornoCentar`
 - `tblZbirna`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblFakturaStavke`: `modTestStorno`
 - `tblOtpremnica`: `modBusinessFlowProTests`, `modIzvestajTests`, `modTestStorno`, `modTestStornoCentar`
-- `tblPrijemnica`: `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblPrijemnica`: `modFakturaTests`, `modIzvestajTests`, `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
+- `tblSEFEventLog`: `modSEFTests`
+- `tblSEFSubmission`: `modSEFTests`
 - `tblBankaImport`: `modTestBanka`, `modTestStorno`
 - `tblMagacin`: `modAgrohemijaTests`, `modTest`
 - `tblPaleta`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
 - `tblPaletaStavka`: `modTestPalete`, `modTestStorno`, `modTestStornoCentar`
-- `tblSEFEventLog`: `modSEFTests`
-- `tblSEFSubmission`: `modSEFTests`
-- `tblParcele`: `modAgrohemijaTests`
 - `tblStornoZurnal`: `modTestStornoCentar`
+- `tblParcele`: `modAgrohemijaTests`
+- `tblPartnerMap`: `modTestBanka`
 - `tblArtikli`: `modAgrohemijaTests`
 - `tblKooperanti`: `modAgrohemijaTests`, `modTestBanka`
-- `tblPartnerMap`: `modTestBanka`
+- `tblSEFConfig`: `modTestStorno`
 - `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`
-- `tblSEFConfig`: `modTestStorno`
 - `tblStanice`: `modTestBanka`
 - `tblTipAmbalaze`: `modTestPalete`
 
