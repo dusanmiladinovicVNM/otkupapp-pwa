@@ -1,9 +1,10 @@
 # Ocena plana „idealni AgriX VBA codebase" + korigovani plan
 
 - **Status:** Analiza / predlog smera. NIJE implementirano.
-- **Verzija:** v2 (2026-08-26) — ugradjene korekcije autora plana; `_TX`
-  klasifikacija izmerena, ne pretpostavljena; plan prepravljen u v3 redosled.
-- **Datum:** 2026-08-26
+- **Verzija:** v4 (2026-09-01) — premereno nad `origin/main` posle **109
+  commita i +14.278 linija** u `src-vba/`. Tri nalaza iz v2/v3 **opovrgnuta
+  merenjem**; `who_writes.py` popravljen. v2/v3 istorija u §9.
+- **Datum:** 2026-08-26, revidiran 2026-09-01
 - **Predmet:** predlog slojevite arhitekture (Host → Presentation → Application →
   Domain → Repository → Infrastructure) sa Sync-om kao izolovanim subsistemom.
 - **Metod:** merenje nad `src-vba/` (213 fajla, ~152.700 linija), bez pokretanja
@@ -37,6 +38,109 @@ netaknutim ono što danas proizvodi bagove.
 | Redosled implementacije (10 koraka) | **Loš** — invertovati |
 | Predlog fizičke organizacije (`00_Host/`…) | **Odbaciti** — skup, bez efekta |
 | CI dependency rules (§21) | **Najbolja stavka u planu** — uraditi prvo |
+
+---
+
+## 0a. Šta se promenilo od v3 (premereno 2026-09-01)
+
+v2/v3 su merени nad `466df52`. `origin/main` je od tada otišao **109 commita**
+napred, sa **+14.278 linija u `src-vba/`** i tri nova ekranska modula. Premereno
+stanje **obara tri nalaza iz v3**.
+
+### N1 — „12 fizičkih pisača nad `tblOtkup`" je bilo netačno. Pravi broj je 4.
+
+v3 je tu brojku uzeo iz `WHO_WRITES.md`, ne shvatajući da ona sabira **dva
+različita signala**: `tx` (`AddTableSnapshot` — „operacija menja ovu tabelu u
+svojoj transakciji") i `direct` (`AppendRow`/`UpdateCell` — stvarni upis).
+Za write-gateway metriku važi samo drugi.
+
+Premereno, **fizički pisci (produkcija, oba oblika poziva):**
+
+| Tabela | Fizičkih pisača | Moduli |
+|---|---|---|
+| `tblOtkup` | **4** | `modOtkup`, `modDokumenta`, `modMasterSync`, `modSetup`¹ |
+| `tblZbirna` | **3** | `modDokumenta`, `modMasterSync`, `modDokumentInvariant` |
+| `tblKorisnici` | **2** | `modAuth`, `modSetup` |
+| **ostalih 18 tabela** | **1** | — |
+
+¹ `modSetup` je „new PC setup / health-check"; upis je idempotentan backfill
+(`samo prazne`), ne poslovni put.
+
+**Posledica za plan:** `tblFakture`, `tblNovac`, `tblAmbalaza`, `tblOtpremnica`,
+`tblPrijemnica` **već imaju tačno jedan fizički pisač**. Repository sloj je de
+facto ~85% gotov. Faza „Repository" nije posao nad 5 tabela i 12 modula, nego
+**nad 3 tabele i 6 modula**.
+
+### N2 — `who_writes.py` je promašivao 43% mesta upisa. Popravljeno.
+
+```python
+# bilo -- trazi RAZMAK posle imena, pa ne vidi poziv sa zagradom
+DIRECT_RE = re.compile(r'\b(?:AppendRow|UpdateCell)\s+(TBL_\w+|"(\w+)")', re.I)
+```
+
+`AppendRow` i `UpdateCell` su `Function`, pa se najčešće zovu `r = AppendRow(TBL_X, red)`.
+`modMasterSync` ima **0** pogodaka na stari izraz, a stvarno radi
+`AppendRow(TBL_OTKUP, rowData)` na liniji 1950.
+
+| | Stari izraz | Ispravljen |
+|---|---|---|
+| mesta upisa | 32 | **57** (promašaj 43%) |
+| `(modul, tabela)` parova | 18 | **37** |
+
+Nevidljivih 19 parova uključivalo je `modMasterSync → TBL_OTKUP`,
+`modFaktura → TBL_FAKTURE`, `modNovac → TBL_NOVAC`. Signal `direct` je bio
+skoro prazan, pa je tabela u praksi prikazivala samo `tx`.
+
+Najjasnija posledica: `tblSEFConfig` je u staroj tabeli stajao kao
+**„0 pisača — samo testovi"**, a piše ga `modConfig`.
+
+To je bag u **generisanom izvoru istine** na koji `CLAUDE.md` §2 izričito upućuje
+pre izmene pravila upisa. Ispravljen u ovom commitu; `WHO_WRITES.md` regenerisan.
+
+### N3 — Ciljno stanje Presentation sloja **već postoji u repou**, dvaput.
+
+Tri nova ekrana od v3, pisana **bez ijednog `SLOJ` pravila**:
+
+| Modul | LOC | `TBL_` | `COL_` | lookup | upis |
+|---|---|---|---|---|---|
+| `modScrSledljivost` | 1916 | **0** | **0** | **0** | 0 |
+| `modScrBankaNalozi` | 1580 | **0** | **0** | **0** | 0 |
+| `modScrIzvestaji` | 2903 | 51 | 33 | 17 | 0 |
+
+Dva od tri su **savršeno čista**. Ne zato što ih je pravilo nateralo — nego zato
+što delegiraju podatak poslovnom modulu:
+
+```
+modScrSledljivost --> modSledljivost      (TraceByZbirna, GetOtpremnicaKandidati...)
+modScrBankaNalozi --> modBankaExportPregled (22 poziva), modNovac
+             oba --> modOtkupUI  SAMO kao UI kit (ShowToast, GridCell, NewFieldG)
+```
+
+I — što je najvažnije za granicu iz §M-Query — **razdvajanje „šta" od „kako"
+već je tačno postavljeno.** Kolonska specifikacija sa širinama živi u samom
+ekranu (`modScrSledljivost.SlKoloneZaListu` → `"OTKUI_HD_DATUM||date|60|1"`), a
+poslovni modul vraća samo podatak.
+
+**Posledica za plan:** Faza „Query sloj" nije *uvođenje* novog sloja. To je
+**„dovedi `modScrDokumenti` i `modScrIzvestaji` na obrazac koji `modScrSledljivost`
+već koristi"** — sa dve radne referentne implementacije u repou.
+
+### N4 — `SLOJ` baseline je 283 linije, a dva od tri pravila ga ne traže
+
+v3 je tvrdio da baseline treba, ali ga nikad nije izmerio:
+
+| Pravilo | Prekršaja danas | Baseline? |
+|---|---|---|
+| `modScr*`/`modOtkupUI` ne sme `AppendRow`/`UpdateCell`/`GetNextID` | **0** | **ne treba** |
+| `modDataAccess` ne sme uzvodno (`modScr`/`modApp`/`modDom`/`frm`) | **0** | **ne treba** |
+| `modScr*`/`modOtkupUI` ne sme `TBL_`/`COL_` | 283 u 7 modula | da |
+
+Od 283, **264 je u tri fajla** (`modScrDokumenti` 166, `modScrIzvestaji` 52,
+`modOtkupUI` 46).
+
+Dakle dva pravila mogu **odmah, tvrdo, bez ikakvog baseline-a** — ona samo
+zaključavaju ono što je već istina i sprečavaju povratak. To je najjeftiniji
+posao u celom planu.
 
 ---
 
@@ -403,233 +507,181 @@ referenci u `modScr*`. Obe se dobijaju iz `grep`-a i mogu u CI.
 
 ---
 
-## 4. Plan v3
+## 4. Plan v4
 
-> **v3 = v1 (originalni plan) + v2 (ova ocena) + korekcije autora plana.**
-> Ključne izmene u odnosu na v2: `SyncControl` izlazi iz faza kao hotfix, legacy
-> konvergencija i Repository se **prepliću** umesto da se nižu, numbering se
-> odvaja kao nezavisan subsistem.
+> v4 = v3 + premeravanje nad tekućim `main`. Tri izmene sledе direktno iz §0a:
+> Repository se **smanjuje** (3 tabele, ne 5), Query se **prekvalifikuje** iz
+> „uvedi sloj" u „primeni postojeći obrazac", a Faza 0 se **cepa** na deo bez
+> baseline-a (odmah) i deo sa baseline-om.
 
-Princip: **prvo ono što se nameće mašinski i obara merljivu metriku; imenovanje
-poslednje.**
+### PR0 — `SyncControl` write ownership (hotfix, van plana)
 
-### HOTFIX — `SyncControl` write ownership
+Dve putanje pišu isti tab, jedna whole-tab replace-om (§1.5). Data-safety, ne
+arhitektura. `modSyncControl` kao jedini vlasnik; `TryReadSyncControlAsDict` +
+`ApplySyncControlUpdates` sele se iz `modStanicaLock` (već fail-closed).
 
-*Nije faza.* Dve putanje pišu isti tab, jedna whole-tab replace-om (§1.5). To je
-**data-safety bug**, ne arhitektura, i nema razloga da čeka Fazu 5.
+*Metrika:* `grep -lic SyncControl src-vba/*.bas` → 1. *Rizik:* nizak. *~1 dan.*
 
-- `modSyncControl` — jedini vlasnik taba. Preseliti `TryReadSyncControlAsDict` +
-  `ApplySyncControlUpdates` iz `modStanicaLock` (već fail-closed), prevesti
-  `modGoogleSyncOrchestrator` sa sopstvenog `WriteSheetData`.
+### PR1 — `SLOJ`, tvrdi deo: bez baseline-a
 
-**Metrika:** `grep -lic SyncControl src-vba/*.bas` → 1 fajl.
-**Rizik:** nizak. **Obim:** ~1 dan.
-
-### FAZA 0 — Instrumentacija
-
-Bez izmene poslovne logike. Cilj: da svaka sledeća faza ima crveno/zeleno.
-
-1. `vba_check.py` → nova provera **`SLOJ`**, tabelarno:
-
-   ```
-   modScr*, modOtkupUI : zabranjeno AppendRow, UpdateCell, GetNextID
-   modDom*             : zabranjeno TBL_, COL_, Range, Worksheet, ListObject,
-                         MsgBox, WinHttp, modDataAccess, modGoogle*
-   modRepo*            : zabranjeno frm, modScr, modApp
-   modDataAccess       : zabranjeno modScr, frm, modApp, modDom
-   ```
-
-   Uvesti sa **baseline fajlom postojećih prekršaja**: stari prolaze, **svaki nov
-   pada**. Bez baseline-a se pravilo ne može uvesti nad 152k linija.
-
-2. `vba_check.py` → provera **`REPO_API`** (M9): `modRepo*` ne sme generički
-   API. Uvodi se **pre** prvog `modRepo*` modula, dok je baseline prazan.
-
-3. `vba_check.py` → provera **`TX_VRATA`**: blizanac bez `_TX` mora biti
-   `Private`, ili njegov pozivalac mora biti unutar transakcije. Danas 31 javnih
-   vrata (§1.2). Baseline zamrzava zatečeno; nova vrata padaju.
-
-4. Self-test za sve tri, po postojećem obrascu „dokaz u oba smera" — `CLAUDE.md`
-   §5 to izričito traži kad se menja sam checker.
-
-5. `who_writes.py` → `--max-writers N`, exit 2 iznad praga. Prag se spušta fazama.
-
-**Metrika:** tri nove provere zelene sa zamrznutim baseline-om.
-**Rizik:** nizak — ne dira runtime. **Ovo je jedina faza koja se isplati čak i
-ako se ostatak plana nikad ne uradi.**
-
-### FAZE 1A / 1B — prepliću se, ne nižu
-
-*(Korekcija v2, koji ih je nizao 1 → 2.)* Legacy konvergencija je **visok runtime
-rizik**; Repository Otkup je **mehanički**. Nema razloga da mehanički dobitak
-čeka rizičan posao. Dve linije rada idu paralelno, po jedan PR:
+Dva pravila imaju **nula prekršaja danas** (§0a/N4), pa idu odmah i tvrdo:
 
 ```
-PR1   vba_check: SLOJ + REPO_API + TX_VRATA + baseline
-PR2   modRepoOtkup: Insert / LinkToOtpremnica / AssignZbirna / MarkStornirano
-PR3   modOtkup        -> repo
-PR4   modMasterSync   -> repo
-PR5   frmOtkup: jedan vec migriran use-case -> modOtkupUnos
-PR6   modStorno       -> repo
-PR7   frmDokumenta: sledeci migriran use-case -> modDokUnos
-...
+modScr*, modOtkupUI : zabranjeno AppendRow / UpdateCell / GetNextID
+modDataAccess       : zabranjeno modScr* / modApp* / modDom* / frm*
 ```
 
-**1A — legacy konvergencija.** Samo za use-case koje `*Unos` moduli **već**
-pokrivaju. Ne dirati `.frx`; ne dodavati `WithEvents` (`CLAUDE.md` §3). Kad režim
-ima jedan put — obrisati mrtvu kopiju iz forme.
+Ne čiste ništa — **zaključavaju ono što je već istina.** Bez njih se stanje
+održava disciplinom, a §0a/N3 pokazuje da disciplina ne drži uvek
+(`modScrIzvestaji`).
 
-*Metrika:* `grep -c 'modDokUnos' frmDokumenta.frm` > 0; broj `*_TX` poziva iz
-`frmDokumenta.frm` pada sa 36. *Rizik:* **visok** — traži `run_vba` na Windowsu,
-`vba_check` ovde ne dokazuje ništa.
+Uz njih ide `REPO_API` (M9), takođe praznog baseline-a jer `modRepo*` još ne
+postoji — a posle prvog takvog modula je znatno skuplje uvesti.
 
-**1B — `modRepoOtkup`.** Jedini fizički write gateway za `TBL_OTKUP`.
-Semantički API (M9). **TX-neutralan** — ne otvara sopstvenu transakciju.
+*Metrika:* tri provere zelene, baseline fajl **ne postoji**.
+*Rizik:* nizak — ne dira runtime. *Obavezan „dokaz u oba smera" (`CLAUDE.md` §5).*
 
-*Metrika:* moduli koji zovu `AppendRow`/`UpdateCell` nad `TBL_OTKUP`: 12 → 1.
-*Rizik:* srednji — `modStorno`/`modStornoFlow` pišu iz transakcionog konteksta.
+### PR2 — metrika vlasništva upisa
 
-> **Odluka koja mora pasti pre PR2:** sme li Repository da zove
-> `clsTransaction.AddTableSnapshot`?
-> **Preporuka: ne.** Ostaje pozivaocu, inače Repository postaje vlasnik
-> transaction scope-a — a to je Application posao (originalni plan §7 to
-> ispravno kaže).
+- `who_writes.py` — **urađeno u ovom commitu** (§0a/N2).
+- `--max-writers N`, exit 2 iznad praga, uz `direct` signal (ne `tx`).
 
-### FAZA 2 — Repository za ostale tabele
+*Metrika:* prag postavljen na zatečeno (4), spušta se sa Fazom 1.
 
-`tblFakture` (9), `tblNovac` (7), `tblAmbalaza` (6), `tblZbirna` (5). Isti
-obrazac, isti semantički API, prag u `who_writes.py` se spušta posle svake.
+### FAZA 1 — Repository, ali samo gde stvarno treba
 
-**Metrika:** sve poslovne tabele ≤ 2 fizička write gateway-a.
-
-### FAZA 3 — Query sloj
-
-Jedini preostali Presentation dug (§1.1): UI ne menja bazu, ali **zna previše o
-njenoj strukturi**.
-
-- `modQryDokumenti` — vraća **read model**, ne formatiran grid.
-- `modQryOtkup` — KPI agregacije koje danas žive u `modOtkupUI`
-  (`SumKgForDate`, `CountForDate`) + lookup liste (`FillComboDisplayID`).
-
-> **Granica koju ne treba preći** *(nalaz autora plana, prihvaćen):* Query vraća
-> **podatak**, ne izgled. `DocumentListRow{Datum, Broj, Partner, Kolicina,
-> Status}` — a ne širinu kolone, bold, pill ili redosled. Inače se coupling samo
-> premesti sa baze na grid, i `modQry*` postane drugi `modScr*`.
->
-> ```
-> modQryDokumenti  -> read model   (sta)
-> modScrDokumenti  -> formatiranje (kako)
-> ```
-
-**Metrika:** `TBL_`+`COL_` u `modScr*` → 0; u `modOtkupUI` → 0. Skinuti `SLOJ`
-baseline za `modScr*`. *Rizik:* nizak — read-only, greška se vidi na ekranu.
-
-### FAZA 4 — Domain gde ima ROI (ne svuda)
-
-Ne izvlačiti Domain iz svih 8 poslovnih modula:
-
-- `modDomStorno` — iz `modStornoImpact` (500 LOC, već 0 Excel objekata) i
-  `modStorno`: `CanStorno`, `ValidateOwnership`, `ValidateGeneration`,
-  `ValidateCascade`.
-- `modDomDokument` — iz `modDokumentInvariant` (670 LOC, 1 Excel referenca).
-- `modDomOtkup` — bruto→neto, klase, ambalaža, cena.
-
-`modNovac`, `modFaktura`, `modDokumenta` **ostaviti** dok ne postoji povod.
-`modDokumenta` (4079 LOC, 290 `TBL_`) je najskuplji za razdvajanje i najmanje se
-menja.
-
-**Metrika:** `SLOJ` za `modDom*` prolazi bez baseline izuzetka; Domain testovi
-rade **bez sejanja tabela i bez `clsTransaction`** (§M3 — ne bez workbook-a).
-
-### FAZA 5 — Sync adapter → postojeći Application put
-
-`modMasterSync` (4065 LOC): razdvojiti `parse DTO` od `ImportRowToTblOtkup`.
-Import zove `modOtkupUnos`/`modAppOtkup` umesto da sam piše. `TestHook_*`
-seam-ovi ostaju.
-
-**Metrika:** `modMasterSync` ne zove `AppendRow` nad poslovnim tabelama.
-**Rizik:** visok — sync ima fail-closed ponašanje koje se ne sme oslabiti.
-
-### FAZA 6 — Numbering, nezavisno
-
-*Ne meša se sa Repository refaktorom.* `modBrojevi` (626 LOC) danas radi pet
-strategija u jednom modulu (`MaxSeqFromTable`, `MaxSeqFromGoogleSheet`,
-`BrojZbirneExists`, mirror prefiks, cache).
+**Premereno: samo 3 tabele imaju >1 fizičkog pisača** (§0a/N1). Ostalih 18 su
+već jednopisačke — tamo nema šta da se radi.
 
 ```
-AllocateNewNumber(...)      -- cloud namespace: NumberRegistry, atomic increment
-                               offline centralni VBA: lokalni counter
-ObserveExistingNumber(...)  -- naknadni papirni unos: LastSeq = max(LastSeq, n)
+tblOtkup      4 -> 1    modOtkup, modDokumenta, modMasterSync, modSetup
+tblZbirna     3 -> 1    modDokumenta, modMasterSync, modDokumentInvariant
+tblKorisnici  2 -> 1    modAuth, modSetup
 ```
 
-`NumberRegistry`: `Kind | EntityID | BusinessDate | LastSeq`. Može kad god,
-nezavisno od ostalih faza.
+Dakle **`modRepoOtkup`, `modRepoZbirna`** i odluka o `modSetup` — ne 20
+repozitorijuma. Semantički API (M9), TX-neutralan (ne otvara transakciju).
 
-### FAZA 7 — Imenovanje, oportunistički
+> **Odluka pre PR-a:** `modSetup` piše `tblOtkup` kao idempotentan backfill, ne
+> kao poslovni put. Ili ide kroz Repository kao svi, ili
+> `modSetup`/`modMigracija` postaju **eksplicitan izuzetak u `SLOJ` pravilu**.
+> Preporuka: izuzetak — inače Repository API dobija „popravi zatečeno" operacije
+> koje nemaju veze sa poslovnim jezikom.
 
-`modOtkupUnos` → `modAppOtkup`, **samo uz izmenu koja ionako dira fajl**. Nikad
-kao zaseban rename commit preko 200 modula.
+*Metrika:* sve poslovne tabele → 1 fizički pisač. *Rizik:* srednji.
+*Obim: mnogo manji nego što je v3 procenio.*
 
-Sufiks `_TX` **zadržati** — nosi informaciju („ova procedura otvara transakciju")
-koju `modApp` prefiks ne nosi, i na koju se veže `TX_VRATA` provera.
+### FAZA 2 — Ekranska disciplina (bivši „Query sloj")
 
-### Odbačeno iz originalnog plana
+Ne uvodi se sloj. **Primenjuje se obrazac koji `modScrSledljivost` i
+`modScrBankaNalozi` već koriste** (§0a/N3) na dva ekrana koja su ostala:
 
-| Stavka | Razlog |
-|---|---|
-| `00_Host/` … `90_Tests/` folderi | VBA namespace je ravan; prefiks + `vba_check` daju isto (M5) |
-| `clsOtkupRepository` i sl. | fake seam koji §20 traži ne dobija se ni klasom bez `Implements`, a sam seam trenutno ne vredi dodatnu kompleksnost (M4) |
-| `clsKreirajOtkupCmd` command klase | `Object`/`Dictionary` payload koji `modOtkupUnos` već koristi radi isto; typed command tek kad se dokaže problem (npr. `kooperantID` / `KooperantId` / `koopID` drift) |
-| „Domain tests — no workbook" | fizički neizvodljivo u VBA (M3); cilj je bez fixture-a |
-| Novi `modApp*` pored `*Unos` | treće ime za isti sloj (M1) |
+```
+modScrDokumenti  166 linija TBL_/COL_   -> podatak trazi od modDokumenta/modQry*
+modScrIzvestaji   52 linija             -> od modIzvestaj
+modOtkupUI        46 linija             -> KPI i lookup liste izlaze iz ljuske
+```
+
+To je **264 od 283 linije baseline-a**. Granica je već dokazana u repou:
+poslovni modul vraća podatak, ekran drži kolonsku specifikaciju sa širinama.
+
+*Metrika:* `TBL_`+`COL_` u `modScr*` → 0, u `modOtkupUI` → 0; **baseline fajl se
+briše**, pravilo postaje tvrdo kao ona iz PR1. *Rizik:* nizak — read-only.
+
+### FAZA 3 — Legacy konvergencija
+
+Najveći runtime rizik, nepromenjen od v3 i **jedina faza koju v4 ne smanjuje**:
+`frmOtkup` (1308) + `frmDokumenta` (6500) drže paralelnu kopiju pravila unosa,
+sa **0 poziva** ka `modOtkupUnos`/`modDokUnos`.
+
+Ide **paralelno** sa Fazama 1–2, ne pre i ne posle: mehanički dobici ne smeju da
+čekaju visokorizičan posao.
+
+*Metrika:* `*_TX` poziva iz `frmDokumenta.frm` pada sa 36.
+*Rizik:* **visok** — traži `run_vba` na Windowsu; `vba_check` ovde ne dokazuje ništa.
+
+### FAZA 4 — `TX_VRATA` i Domain
+
+Tek sada, jer oba zavise od prethodnog:
+
+- `TX_VRATA`: blizanac bez `_TX` mora biti `Private` ili pozivan iz transakcije.
+  Danas 31 javnih vrata (§1.2). **Ne pre Faze 3** — legacy forme su deo slike.
+- `modDomStorno`, `modDomDokument`, `modDomOtkup` — samo gde ima ROI (§v3).
+  `modNovac`, `modFaktura`, `modDokumenta` se ne diraju bez povoda.
+
+*Metrika:* Domain testovi bez sejanja tabela i bez `clsTransaction` (ne bez
+workbook-a — M3).
+
+### FAZA 5 — Sync adapter i numbering
+
+Nepromenjeno od v3, i dalje nezavisno jedno od drugog:
+
+- `modMasterSync`: `parse DTO` odvojiti od upisa; import zove `modOtkupUnos`.
+  **Sada je jasniji ulog:** `modMasterSync` je jedan od 4 fizička pisača
+  `tblOtkup` (§0a/N1), pa se ova faza i Faza 1 dodiruju — raditi ih u istom PR-u
+  za `tblOtkup`.
+- `modBrojevi` → `AllocateNewNumber` / `ObserveExistingNumber` + `NumberRegistry`.
+
+### FAZA 6 — Imenovanje, oportunistički
+
+`modOtkupUnos` → `modAppOtkup` samo uz izmenu koja ionako dira fajl. Sufiks `_TX`
+ostaje — nosi informaciju na koju se veže `TX_VRATA`.
 
 ---
 
-## 5. Redosled — tri verzije
+## 5. Redosled — četiri verzije
 
-| # | v1 (originalni plan) | v2 (prva ocena) | **v3 (usaglašeno)** |
+| v1 (originalni plan) | v2 | v3 | **v4 (premereno)** |
 |---|---|---|---|
-| — | — | — | **HOTFIX: `SyncControl`** |
-| 1 | Presentation granica | CI `SLOJ` | **CI: `SLOJ` + `REPO_API` + `TX_VRATA`** |
-| 2 | Uvedi `modApp*` | Legacy duplikacija | **1A legacy ↔ 1B `modRepoOtkup` (preplitanje)** |
-| 3 | `*Unos` iza App API-ja | `tblOtkup` 12 → 1 | **Repo: Fakture / Novac / Ambalaza / Zbirna** |
-| 4 | Izvuci Domain | Repo ostale tabele | **Query sloj (`modScr*` → 0 `TBL_`)** |
-| 5 | Prva 3–4 Repository-ja | Query sloj | **Domain: Storno, Dokument, Otkup** |
-| 6 | Očisti `modDataAccess` | Domain gde se isplati | **Sync adapter → Application** |
-| 7 | Razdvoj `modMasterSync` | `modSyncControl` + brojevi | **Numbering (nezavisno)** |
-| 8 | Pojednostavi numbering | `modMasterSync` → App | **Imenovanje, oportunistički** |
-| 9 | Centralizuj `SyncControl` | Imenovanje | — |
-| 10 | CI dependency rules | — | — |
+| — | — | HOTFIX SyncControl | **PR0 SyncControl** |
+| Presentation granica | CI `SLOJ` | CI (3 provere) | **PR1 `SLOJ` tvrdi deo — bez baseline-a** |
+| Uvedi `modApp*` | Legacy | legacy ↔ Repo | **PR2 `who_writes` popravka + prag** |
+| `*Unos` iza App API-ja | `tblOtkup` 12→1 | Repo ostale | **F1 Repo: 3 tabele (ne 5)** |
+| Izvuci Domain | Repo ostale | Query | **F2 Ekranska disciplina (264 linije)** |
+| Prva 3–4 Repository-ja | Query | Domain | **F3 Legacy — paralelno sa F1/F2** |
+| Očisti `modDataAccess` | Domain | Sync | **F4 `TX_VRATA` + Domain** |
+| Razdvoj `modMasterSync` | SyncControl+brojevi | Numbering | **F5 Sync + numbering** |
+| Numbering | `modMasterSync` | Imenovanje | **F6 Imenovanje** |
+| SyncControl | Imenovanje | — | — |
+| CI rules | — | — | — |
 
-Šta se promenilo od v2: **`SyncControl` izlazi iz faza** (bugfix, ne
-arhitektura), **legacy i Repository se prepliću** umesto da se nižu, **numbering
-postaje nezavisan**, i **dve nove CI provere** (`REPO_API`, `TX_VRATA`) ulaze u
-Fazu 0 — jer se obe uvode jeftino dok je baseline prazan, a skupo posle.
+**Šta v4 menja u odnosu na v3:**
+
+1. **Faza 0 se cepa.** Dva `SLOJ` pravila imaju prazan baseline i idu odmah,
+   tvrdo (PR1). Treće čeka Fazu 2.
+2. **Repository se smanjuje sa 5 tabela na 3**, jer je 18 tabela već
+   jednopisačko — v3 je brojao pogrešan signal.
+3. **Query se prekvalifikuje** iz „uvedi sloj" u „primeni obrazac koji dva
+   ekrana već koriste".
+4. **`TX_VRATA` se pomera iza legacy konvergencije** — legacy forme su deo te
+   slike, pa bi baseline pre Faze 3 bio meren nad stanjem koje se menja.
+5. **`who_writes.py` popravljen**, jer je metrika cele Faze 1 zavisila od
+   signala koji je promašivao 43%.
 
 ---
 
 ## 5a. Sažetak: šta je AgriX-u zaista potrebno
 
-Najkraća formulacija, i ona koju vredi zapamtiti umesto celog dokumenta:
-
 > **AgriX-u ne treba još slojeva. Treba mu ownership nad slojevima koji već
 > faktički postoje.**
 
-Izmereno stanje u prilog tome:
+Premereno stanje (2026-09-01) tu tezu **pojačava**, jer je AgriX bliže cilju nego
+što su v2/v3 procenili:
 
-| Sloj | Postoji? | Šta nedostaje |
+| Sloj | Postoji? | Šta stvarno nedostaje |
 |---|---|---|
-| Presentation write separation | **da** | read coupling (`TBL_`/`COL_` u `modScr*`) |
-| Application-ish sloj | **da**, 2630 LOC + 33 operacije | koherentnost i granica; 39 omotača mešaju mehanizam sa namerom |
-| Transaction boundaries | **da**, `clsTransaction` + 72 `_TX` | 31 javnih vrata pored granice, mašinski neprovereno |
-| Sync idempotency | **da** (`ClientRecordID`, row-TX, fail-closed) | jedan ulaz umesto direktnog upisa |
-| Storno dekompozicija | **da**, 6 modula | pure Domain jezgro |
-| **Repository** | **ne** | **12 fizičkih pisača nad `tblOtkup`** |
-| **Query** | **ne** | 149 `COL_` referenci u jednom ekranu |
+| Presentation write separation | **da**, 0 upisa u svim `modScr*` | ništa — samo zaključati pravilom |
+| Presentation read separation | **delimično** | 283 linije `TBL_`/`COL_`, 264 u 3 fajla |
+| Query obrazac | **da**, 2 radna ekrana | primeniti na `modScrDokumenti`/`modScrIzvestaji` |
+| Application-ish sloj | **da**, 2630 LOC + 33 operacije | koherentnost; 39 omotača meša mehanizam i nameru |
+| Transaction boundaries | **da** | 31 javnih vrata, mašinski neprovereno |
+| **Repository** | **18 od 21 tabele već** | **3 tabele: `tblOtkup`, `tblZbirna`, `tblKorisnici`** |
+| Sync idempotency | **da** | jedan ulaz umesto direktnog upisa |
 | Enforcement granica | **ne** | `vba_check` ih ne zna |
+| Legacy jedinstvenost | **ne** | 7808 LOC paralelne kopije pravila |
 
-Dve prazne linije u koloni „postoji" (Repository, Query) + neenforce-ovane
-granice = ceo posao. Sve ostalo je ownership i imenovanje.
+Najveći preostali posao **nije Repository** — to je 3 tabele. Najveći je i dalje
+**legacy duplikacija**, jedina stavka koju nijedno premeravanje nije smanjilo.
 
 ---
 
@@ -650,22 +702,38 @@ Pošteno, da se ne prodaje više nego što daje:
 
 Prihvatiti ciljnu sliku, odbaciti redosled i fizičku taksonomiju.
 
-**HOTFIX `SyncControl`** ide odmah i van plana — data-safety, ~1 dan.
+**PR0 `SyncControl`** ide odmah i van plana — data-safety, ~1 dan.
 
-Ako se radi samo jedna faza — **Faza 0**. Najjeftinija, bez runtime rizika, i
-menja ponašanje svake buduće sesije (ljudske i agentske): prekršaj sloja pada po
-imenu umesto da se otkrije u code review-u. `REPO_API` i `TX_VRATA` moraju ući
-tu, dok im je baseline prazan — posle prvog `modRepo*` modula su znatno skuplje.
+Ako se radi samo jedan PR — **PR1**. Dva `SLOJ` pravila imaju **nula prekršaja
+danas**: ne čiste ništa, nego zaključavaju stanje koje je već postignuto, po ceni
+od jedne `check_` funkcije. `modScrIzvestaji` (§0a/N3) je dokaz da se bez
+pravila stanje vraća unazad i u novom kodu.
 
-Ako se radi druga — **1B (`modRepoOtkup`)**, jer jedina obara broj koji danas
-proizvodi bagove, uz semantički API (M9) bez kojeg je ceo posao preimenovanje.
+Ako se radi drugi — **F2 (ekranska disciplina)**, jer je 264 od 283 linije u tri
+fajla, obrazac je već dokazan u repou dvaput, i rizik je nizak.
 
-**1A (legacy duplikacija) ne blokira 1B.** Tretirati ih kao dve paralelne linije
-PR-ova; legacy je visok runtime rizik i ne sme da drži mehanički dobitak.
+**Repository (F1) je pao u prioritetu** posle premeravanja: 18 od 21 tabele je
+već jednopisačko, ostaju tri. To je i dalje vredan posao, ali nije ono što danas
+proizvodi najviše rizika.
 
-Ono što se **ne sme** raditi prvo: Domain extraction. Dok legacy forme drže
-paralelnu kopiju pravila, svaki izvučen Domain invariant važi za jedan od dva
-puta.
+Ono što se **ne sme** raditi prvo, nepromenjeno kroz sve četiri verzije: Domain
+extraction. Dok `frmOtkup` i `frmDokumenta` drže paralelnu kopiju pravila, svaki
+izvučen Domain invariant važi za jedan od dva puta.
+
+---
+
+## 9. Istorija verzija
+
+| Verzija | Šta je donela | Šta je od nje opovrgnuto |
+|---|---|---|
+| **v1** | originalni plan: Host→Presentation→Application→Domain→Repository→Infra | dijagnoza trenutnog stanja (M1–M9); redosled; folder taksonomija |
+| **v2** | prvo premeravanje: Application postoji, UI ne piše, 12 pisača, legacy duplikacija | „svih 85 `_TX` je Application"; „jedan pisač po tabeli"; obrazloženje za `modRepo*` |
+| **v3** | korekcije autora + `_TX` klasifikacija (39/72 omotača), M9 semantički API, preplitanje faza | „12 fizičkih pisača" (bio pogrešan signal); veličina Repository faze; „uvedi Query sloj" |
+| **v4** | premereno nad `main` +109 commita: Repo 3 tabele, Query obrazac već postoji ×2, baseline 283 linije, `who_writes.py` popravljen | — |
+
+Metod je kroz sve četiri isti i vredi ga zadržati: **tvrdnja koja nije izmerena
+se ne upisuje kao nalaz.** Tri puta je merenje oborilo zaključak koji je zvučao
+tačno — jednom u v1, jednom u v2, jednom u v3.
 
 ---
 
@@ -704,4 +772,19 @@ grep -hoE '^Public (Sub|Function|Const|Type|Enum) +[A-Za-z_]+' src-vba/*.bas | w
 
 # SyncControl pisci
 grep -lic 'SyncControl' src-vba/*.bas                          # 2 fajla
+
+# v4: fizicki pisci po tabeli (OBA oblika poziva -- ovo je metrika Faze 1)
+grep -rhoE '\b(AppendRow|UpdateCell)\s*\(?\s*TBL_\w+' src-vba/*.bas \
+  | grep -oE 'TBL_\w+' | sort | uniq -c | sort -rn        # tblOtkup: 4 modula
+python3 tools/who_writes.py --out docs/DOMEN/WHO_WRITES.md   # posle popravke N2
+
+# v4: ekrani na tekucem main
+for f in src-vba/modScr*.bas src-vba/modOtkupUI.bas; do
+  echo "$(basename $f) TBL_=$(grep -c 'TBL_[A-Z_]' $f) COL_=$(grep -c 'COL_[A-Z_]' $f)"
+done                        # modScrSledljivost / modScrBankaNalozi = 0/0
+
+# v4: SLOJ baseline
+grep -c -E '(AppendRow|UpdateCell|GetNextID)' src-vba/modScr*.bas   # sve 0
+grep -hc -E '(TBL_|COL_)[A-Z_]+' src-vba/modScr*.bas src-vba/modOtkupUI.bas \
+  | paste -sd+ | bc                                                 # 283
 ```
