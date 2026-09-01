@@ -1888,7 +1888,7 @@ SABOTAZE = {
         "    End If\n"
         "    Scr_Liste = Array( _\n",
         "T_Fak_UgovorEkrana",
-        "tri liste, i kad SEF nije podesen",
+        "cetiri liste (GP grana v6-ui-189), i kad SEF nije podesen",
     ),
     # Lista SEF-a stoji TACNO na MAX_ACT. Sesta radnja se ne prijavljuje kao
     # greska nego se TIHO odseca (RefreshRowActions radi Exit For) -- operater
@@ -3758,9 +3758,9 @@ SABOTAZE = {
     # par. 8.5 klasa kvara.
     "sledljivost-identitet-vidljiv": (
         "modScrSledljivost.bas",
-        "                \"OTKUI_HDS_OZNAKA||txt|94|1\", _\n"
+        "                \"OTKUI_HDS_STANJE||txt|78|2\", _\n"
         "                \"OTKUI_HDI_REF||txt|1|4\")\n",
-        "                \"OTKUI_HDS_OZNAKA||txt|94|1\", _\n"
+        "                \"OTKUI_HDS_STANJE||txt|78|2\", _\n"
         "                \"OTKUI_HDI_REF||txt|1|1\")   ' SABOTAZA: identitet se crta\n",
         "T_Sled_IdentitetURedu_NeCrtaSe",
         "identitet LANAC je prio 4",
@@ -3976,12 +3976,85 @@ SABOTAZE = {
     # fakture ("2 fakt.") vise ne nalazi red, obecanje pretrage pada.
     "sledljivost-lanac-pretraga-bez-refs": (
         "modScrSledljivost.bas",
-        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
-        "                           NzS(src(i, 14)) & \"|\" & NzS(src(i, 27))\n",
-        "                           NzS(src(i, 13)) & \"|\" & NzS(src(i, 23)) & \"|\" & _\n"
-        "                           NzS(src(i, 14))   ' SABOTAZA: bez SearchRefs\n",
+        "                           NzS(src(i, 14)) & \"|\" & NzS(src(i, 27)) & \"|\" & _\n"
+        "                           NzS(src(i, 30))\n",
+        "                           NzS(src(i, 14)) & \"|\" & _\n"
+        "                           NzS(src(i, 30))   ' SABOTAZA: bez SearchRefs\n",
         "T_Sled_KesPretragaIHint",
         "broj progutane fakture nalazi LANAC red",
+    ),
+    # =============================== GP grana (Faza 1+2, v6-ui-189)
+    # Stanje reda je najdalja karika: GP prodaja koja se prikazuje kao
+    # "preradjeno" krije da je roba PRODATA -- operater bi je nudio dalje.
+    "sledljivost-gp-stanje-placebo": (
+        "modIzvestaj.bas",
+        "                        If gpFakD.count > 0 Then\n"
+        "                            stanje = SLED_ST_PRODATO_GP\n",
+        "                        If gpFakD.count > 0 Then\n"
+        "                            stanje = SLED_ST_PRERADJENO   ' SABOTAZA: GP prodaja nevidljiva\n",
+        "T_Sled_GpLanacIStanja",
+        "stanje G = prodato GP",
+    ),
+    # Prerada koja tvrdi Da na mrtvu fakturu MORA da obori kariku (ista
+    # klasa kvara kao prijemnica, krug 9) -- bez toga lanac lazno zelen.
+    "sledljivost-gp-kontradikcija-cuti": (
+        "modIzvestaj.bas",
+        "                        If gpLose And Len(oznaka) = 0 Then oznaka = SLED_OZN_FAK_NEISPRAVNA\n",
+        "                        If False And gpLose Then oznaka = SLED_OZN_FAK_NEISPRAVNA   ' SABOTAZA\n",
+        "T_Sled_GpLanacIStanja",
+        "kontradiktorna prerada obara kariku",
+    ),
+    # Prikaz "N pal."/"N pre." guta brojeve -- bez refs-a smer NAZAD od
+    # broja palete/prerade/GP fakture ne nalazi nista (princip R2).
+    "sledljivost-gp-refs-progutani": (
+        "modIzvestaj.bas",
+        "                        If Len(gpRefs) > 0 Then\n",
+        "                        If False And Len(gpRefs) > 0 Then   ' SABOTAZA: GP brojevi progutani\n",
+        "T_Sled_GpLanacIStanja",
+        "refs nose broj palete",
+    ),
+    # Ista roba prodata dvaput: kapija "vec fakturisana" je jedina brana.
+    "faktura-gp-dupla-prodaja": (
+        "modFaktura.bas",
+        "        If UCase$(Trim$(CStr(nz(preData(rowPre, colFakturisano))))) = \"DA\" Then\n"
+        "            Err.Raise vbObjectError + 1741, SRC, _\n",
+        "        If False Then   ' SABOTAZA: dupla prodaja iste robe\n"
+        "            Err.Raise vbObjectError + 1741, SRC, _\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "vec fakturisana prerada se ne fakturise ponovo",
+    ),
+    # Storno fakture mora da OSLOBODI preradu -- inace roba ostaje
+    # "fakturisana" na mrtvoj fakturi (asimetrija koje prijemnice nemaju).
+    "storno-gp-ne-oslobadja": (
+        "modStorno.bas",
+        "                If Len(preID) > 0 Then\n"
+        "                    ReleasePreradaFromFaktura preID\n"
+        "                End If\n",
+        "                If False Then   ' SABOTAZA: prerada ostaje zarobljena\n"
+        "                    ReleasePreradaFromFaktura preID\n"
+        "                End If\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "storno oslobadja preradu (Fakturisano)",
+    ),
+    # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
+    # kasnije odbio, ali tek posle potvrde operatera (kasna greska).
+    "fakture-gp-korpa-mesa-u-prj": (
+        "modScrFakture.bas",
+        "    If KorpaTip() = \"PRJ\" Then\n"
+        "        FkDodajGP = Poruka(\"OTKUI_ERR_FK_MESANJE\")\n",
+        "    If False Then   ' SABOTAZA: GP ulazi u PRJ korpu\n"
+        "        FkDodajGP = Poruka(\"OTKUI_ERR_FK_MESANJE\")\n",
+        "T_Fak_GpListaIKorpa",
+        "GP stavka ne ulazi u PRJ korpu",
+    ),
+    "fakture-gp-korpa-mesa-u-gp": (
+        "modScrFakture.bas",
+        "    If KorpaTip() = \"GP\" Then\n"
+        "        FkDodaj = Poruka(\"OTKUI_ERR_FK_MESANJE\")\n",
+        "    If False Then   ' SABOTAZA: PRJ ulazi u GP korpu\n"
+        "        FkDodaj = Poruka(\"OTKUI_ERR_FK_MESANJE\")\n",
+        "T_Fak_GpListaIKorpa",
+        "prijemnica ne ulazi u GP korpu",
     ),
     # Krug 8 R3: sablon bez vlasnicke kapije -- dvosmislen broj bi mesao
     # tudje generacije u jedan dokument sledljivosti.

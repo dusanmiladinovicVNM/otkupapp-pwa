@@ -44,7 +44,7 @@ Attribute VB_Name = "modScrSledljivost"
 '=====================================================================
 Option Explicit
 
-Public Const SCRSL_BUILD As String = "v6-ui-187"
+Public Const SCRSL_BUILD As String = "v6-ui-189"
 
 ' Visina zone: red polja + hint + red dugmadi (isti raspored kao Izvestaji).
 Private Const SL_ZONA_H   As Single = 148
@@ -651,20 +651,25 @@ Public Function SlKoloneZaListu(ByVal kljuc As String) As Variant
     Select Case kljuc
         Case SL_LANAC
             ' Datum | Br. dok | Kooperant | Kg | Otpremnica | Zbirna |
-            ' Prijem | Faktura | Kupac | Oznaka | [OTK|id]
-            ' Prijem/Faktura su txt: prazno = karika ne postoji, razlog nosi
-            ' OZNAKA (FM-0028 #5 -- nikad "0,00" umesto poruke).
+            ' Prijem | Faktura | Kupac | Oznaka | Palete | Prerada/GP |
+            ' Stanje | [OTK|id] -- GP grana (Faza 1): nastavak lanca posle
+            ' prijemnice. Prijem/Faktura/Palete/Prerada su txt: prazno =
+            ' karika ne postoji, razlog nosi OZNAKA (FM-0028 #5 -- nikad
+            ' "0,00" umesto poruke); Stanje je najdalja dostignuta karika.
             SlKoloneZaListu = Array( _
                 "OTKUI_HD_DATUM||date|60|1", _
-                "OTKUI_HDI_BRDOK||txt|72|1", _
-                "OTKUI_HDA_KOOPERANT||txt|110|1", _
-                "OTKUI_HD_KG||kg|70|1", _
-                "OTKUI_HDI_BROTP||txt|72|2", _
-                "OTKUI_HDI_BRZBIRNE||txt|78|2", _
-                "OTKUI_HDS_PRIJEM||txt|78|1", _
-                "OTKUI_HDS_FAKTURA||txt|72|1", _
-                "OTKUI_HDS_KUPAC||txt|92|3", _
-                "OTKUI_HDS_OZNAKA||txt|94|1", _
+                "OTKUI_HDI_BRDOK||txt|66|1", _
+                "OTKUI_HDA_KOOPERANT||txt|104|1", _
+                "OTKUI_HD_KG||kg|66|1", _
+                "OTKUI_HDI_BROTP||txt|68|3", _
+                "OTKUI_HDI_BRZBIRNE||txt|74|2", _
+                "OTKUI_HDS_PRIJEM||txt|74|1", _
+                "OTKUI_HDS_FAKTURA||txt|68|1", _
+                "OTKUI_HDS_KUPAC||txt|88|3", _
+                "OTKUI_HDS_OZNAKA||txt|90|1", _
+                "OTKUI_HDS_PALETE||txt|62|3", _
+                "OTKUI_HDS_PRERADAGP||txt|96|2", _
+                "OTKUI_HDS_STANJE||txt|78|2", _
                 "OTKUI_HDI_REF||txt|1|4")
         Case SL_PARC
             ' Kooperant | BPG | Kat. broj | Kultura | Ha | GGAP | Kg | Datum |
@@ -898,7 +903,8 @@ Private Function HaystackReda(ByVal kljuc As String, ByRef src As Variant, _
                            NzS(src(i, 8)) & "|" & NzS(src(i, 9)) & "|" & _
                            NzS(src(i, 10)) & "|" & NzS(src(i, 12)) & "|" & _
                            NzS(src(i, 13)) & "|" & NzS(src(i, 23)) & "|" & _
-                           NzS(src(i, 14)) & "|" & NzS(src(i, 27))
+                           NzS(src(i, 14)) & "|" & NzS(src(i, 27)) & "|" & _
+                           NzS(src(i, 30))
         Case SL_PARC
             ' Isti SearchRefs + kupac (krug 8 R2): "znam fakturu -> nadji
             ' kooperante i parcele" mora da radi i na sertifikacionoj
@@ -935,7 +941,10 @@ Private Sub UpisiRed(ByVal kljuc As String, ByRef src As Variant, ByVal i As Lon
             outA(n, 8) = NzS(src(i, 12))
             outA(n, 9) = NzS(src(i, 13))
             outA(n, 10) = NzS(src(i, 14))
-            outA(n, 11) = SlRef(src(i, 15))
+            outA(n, 11) = NzS(src(i, 28))
+            outA(n, 12) = NzS(src(i, 29))
+            outA(n, 13) = NzS(src(i, 30))
+            outA(n, 14) = SlRef(src(i, 15))
             sumKg = sumKg + NzD(src(i, 7))
         Case SL_PARC
             outA(n, 1) = NzS(src(i, 4))
@@ -1312,7 +1321,7 @@ Private Sub OsveziDetalj(ByVal red As Long)
 
     Select Case kljuc
         Case SL_LANAC
-            ref = NzS(modOtkupUI.GridCell(red, 11))
+            ref = NzS(modOtkupUI.GridCell(red, 14))
             mIzabranaZbirna = NzS(modOtkupUI.GridCell(red, 6))
         Case SL_PARC
             ref = NzS(modOtkupUI.GridCell(red, 12))
@@ -1715,7 +1724,7 @@ Private Sub StampajDokumentReda(ByVal red As Long)
 
     Select Case Scr_Lista()
         Case SL_LANAC, SL_PARC
-            ref = NzS(modOtkupUI.GridCell(red, IIf(Scr_Lista() = SL_LANAC, 11, 12)))
+            ref = NzS(modOtkupUI.GridCell(red, IIf(Scr_Lista() = SL_LANAC, 14, 12)))
             If Left$(ref, 4) = "OTK|" Then
                 ReprintOtkupniListByOtkupID Mid$(ref, 5)
             Else
@@ -1737,6 +1746,11 @@ Private Sub StampajDokumentReda(ByVal red As Long)
                     PrintPrijemnica dokID
                 Case SLED_DOK_ZBIRNA
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_SL_ZBIRNA_STAMPA"), True
+                Case SLED_DOK_PRERADA
+                    ' GP grana: kontradiktorna prerada -- ista ruta kao
+                    ' meta PRERADA (preradni list).
+                    If Len(ExportPreradaPDF(dokID, True)) = 0 Then _
+                        modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
                 Case Else
                     modOtkupUI.ShowToast Poruka("OTKUI_ERR_IZ_NEMA_DOK"), True
             End Select

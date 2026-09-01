@@ -336,6 +336,39 @@ SLED_FAKTURA_3B = "FAK-SLED-3B"
 SLED_KG_F = 120.0                  # 60 + 60 po prijemnicama
 SLED_KG_M = 200.0                  # 100 + 100 po prijemnicama
 
+# GP grana lanca (Faza 1+2, v6-ui-189) -- tri nova lanca + potrosne prerade:
+#   G "PRODATO GP":  OTK-SLED-G -> OTP-SLED-G (38/TEST) -> ZB-TEST-SLG ->
+#     PRJ-SLED-G (37/150326, NEfakturisana -- hladnjaca tok) -> PAL-SLED-G
+#     (50, ZATVORENA, Preradjeno=Da) -> PRE-SLED-G (51, Fakturisano=Da na
+#     AKTIVNU FAK-SLED-GP 9/2026). Lanac kolone 28-30: "50/2026",
+#     "51/2026 -> 9/2026", stanje "prodato GP".
+#   H "U HLADNJACI": isti tok do PAL-SLED-H (60, ZATVORENA, SVEZA), bez
+#     prerade i bez faktura -- stanje "u hladnjaci".
+#   K KONTRADIKCIJA: PRE-SLED-K (61) tvrdi Fakturisano=Da na NEPOSTOJECU
+#     FAK-NEMA-GP -> oznaka "faktura neusaglasena" + NEPOTPUNI red
+#     (FAKTURA-VEZA-NEISPRAVNA, DokTip Prerada).
+#   PRE-GP-W1 (71): cista nefakturisana -- potrosno vozilo writer testa
+#     (CreateFakturaGP_TX je fakturise; mutirajuci test ide POSLE read-only).
+#   PRE-GP-X (81, Stornirano=Da) i PRE-GP-W0 (91, NetoIzlazKg=0): negativi
+#     kapija writera (stornirana / bez izlaza).
+# "Otvoren tok" NEMA fixture vozilo -- ne tvrdi se testom (svaki cist lanac
+# vec nosi neku dalju kariku).
+# BROJEVI paleta (50/60/70) i prerada (51..91) se ZAVRSAVAJU na 0/1:
+# brojevi paleta/prerada sada zive u SearchRefs/haystack-u LANCA, a
+# pretraga je substring -- "NN/2026" sadrzi "N/2026", pa bi poslednja
+# cifra 2-9 gutala broj neke fixture fakture (2/2026..9/2026). Iz istog
+# razloga su DALEKO od generatorske sekvence: GenerateBrojPalete = max+1,
+# pa je test u RunAll dobijao "38/2026" koje upit "8/2026" nalazi.
+SLED_ZBIRNA_G = "ZB-TEST-SLG"
+SLED_ZBIRNA_H = "ZB-TEST-SLH"
+SLED_ZBIRNA_K = "ZB-TEST-SLK"
+SLED_FAKTURA_GP = "FAK-SLED-GP"
+SLED_KG_G = 80.0
+SLED_KG_H = 90.0
+SLED_KG_K = 70.0
+SLED_GP_IZLAZ_KG = 64.0            # izlaz prerade G (kalo prerade je legalan)
+SLED_GP_CENA = 200.0               # rucna cena GP -> iznos fakture 12.800
+
 class Sirovo:
     """Vrednost koja se upisuje BEZ formata koji bi red nasledio od kolone.
 
@@ -506,6 +539,16 @@ SEED = {
         {"ZbirnaID": "ZBI-SLED-M", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_M, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": SLED_KG_M, "Klasa": "I", "KupacID": KUPAC2},
+        # GP grana (v. blok konstanti SLED_ZBIRNA_G/H/K gore).
+        {"ZbirnaID": "ZBI-SLED-G", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_G, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_G, "Klasa": "I", "KupacID": KUPAC2},
+        {"ZbirnaID": "ZBI-SLED-H", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_H, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_H, "Klasa": "I", "KupacID": KUPAC2},
+        {"ZbirnaID": "ZBI-SLED-K", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_K, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_K, "Klasa": "I", "KupacID": KUPAC2},
         # Dvosmislen par za sledljivost (v. SLED_ZBIRNA_D): dva aktivna
         # vlasnika (dva vozaca) dele broj; nijedan drugi test ih ne dira.
         {"ZbirnaID": "ZBI-SLED-D1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
@@ -626,6 +669,19 @@ SEED = {
          "VozacID": VOZAC2, "BrojOtpremnice": "36/TEST", "BrojZbirne": SLED_ZBIRNA_F,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_F,
          "Cena": 50.0, "Klasa": "I"},
+        # GP grana: tri lanca G/H/K (v. blok konstanti gore).
+        {"OtpremnicaID": "OTP-SLED-G", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "38/TEST", "BrojZbirne": SLED_ZBIRNA_G,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_G,
+         "Klasa": "I"},
+        {"OtpremnicaID": "OTP-SLED-H", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "39/TEST", "BrojZbirne": SLED_ZBIRNA_H,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_H,
+         "Klasa": "I"},
+        {"OtpremnicaID": "OTP-SLED-K", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "40/TEST", "BrojZbirne": SLED_ZBIRNA_K,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_K,
+         "Klasa": "I"},
         {"OtpremnicaID": "OTP-SLED-M", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
          "VozacID": VOZAC2, "BrojOtpremnice": "37/TEST", "BrojZbirne": SLED_ZBIRNA_M,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_M,
@@ -811,6 +867,25 @@ SEED = {
          "VozacID": VOZAC2, "BrojDokumenta": "S5/TEST", "Klasa": "I",
          "BrojZbirne": SLED_ZBIRNA_R, "OtpremnicaID": "OTP-SLED-R",
          "BrojOtpremnice": "34/TEST", "ParcelaID": "PAR-TEST-2"},
+        # GP grana: G/H/K lanci (v. blok konstanti gore).
+        {"OtkupID": "OTK-SLED-G", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_G, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S8/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_G, "OtpremnicaID": "OTP-SLED-G",
+         "BrojOtpremnice": "38/TEST", "ParcelaID": "PAR-TEST-2"},
+        {"OtkupID": "OTK-SLED-H", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_H, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S9/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_H, "OtpremnicaID": "OTP-SLED-H",
+         "BrojOtpremnice": "39/TEST"},
+        {"OtkupID": "OTK-SLED-K", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_K, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S10/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_K, "OtpremnicaID": "OTP-SLED-K",
+         "BrojOtpremnice": "40/TEST"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -926,6 +1001,16 @@ SEED = {
         {"NovacID": "NOV-SLED-N", "BrojDokumenta": "SLED-P4",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": 7500,
          "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-N"},
+        # GP grana: zatvaranje G/H/K blokova (isto pravilo kao NOV-SLED-1/2).
+        {"NovacID": "NOV-SLED-G", "BrojDokumenta": "SLED-P8",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_G * 50,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-G"},
+        {"NovacID": "NOV-SLED-H", "BrojDokumenta": "SLED-P9",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_H * 50,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-H"},
+        {"NovacID": "NOV-SLED-K", "BrojDokumenta": "SLED-P10",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_K * 50,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-K"},
         {"NovacID": "NOV-SLED-R", "BrojDokumenta": "SLED-P5",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": 5000,
          "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-R"},
@@ -1068,6 +1153,12 @@ SEED = {
          "KupacID": KUPAC2, "Iznos": 100 * 50, "Status": "Neplaceno"},
         {"FakturaID": SLED_FAKTURA_3B, "BrojFakture": "8/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC2, "Iznos": 100 * 50, "Status": "Neplaceno"},
+        # GP grana: AKTIVNA zavrsna faktura gotove robe (PRE-SLED-G pokazuje
+        # na nju). FAK-NEMA-GP se NAMERNO ne dodaje -- PRE-SLED-K pokazuje
+        # u prazno (kontradikcija).
+        {"FakturaID": SLED_FAKTURA_GP, "BrojFakture": "9/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": SLED_GP_IZLAZ_KG * SLED_GP_CENA,
+         "Status": "Neplaceno"},
     ],
     # STAVKE IZVODA -- devet redova u TRI izvoda, svaki sa svojim razlogom:
     #   BIM-FIX-1   jak kljuc preko FAKTURE (poziv na broj = broj fakture 2/2026)
@@ -1395,6 +1486,20 @@ SEED = {
          "VozacID": VOZAC2, "BrojPrijemnice": "36/150326", "BrojZbirne": SLED_ZBIRNA_M,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": 100,
          "Cena": 50.0, "Klasa": "I", "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_3B},
+        # GP grana: sve tri NEfakturisane (hladnjaca tok, krug 9 -- to je
+        # legitimno stanje; dalje karike su paleta/prerada/GP faktura).
+        {"PrijemnicaID": "PRJ-SLED-G", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "37/150326", "BrojZbirne": SLED_ZBIRNA_G,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_G,
+         "Cena": 50.0, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-SLED-H", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "38/150326", "BrojZbirne": SLED_ZBIRNA_H,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_H,
+         "Cena": 50.0, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-SLED-K", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "39/150326", "BrojZbirne": SLED_ZBIRNA_K,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_K,
+         "Cena": 50.0, "Klasa": "I"},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
@@ -1466,6 +1571,23 @@ SEED = {
          "Datum": "nevalidan", "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 8,
          "KapacitetGajbica": 100, "NetoKg": 77, "Status": "ZATVORENA"},
+        # GP grana: G preradjena (roba prodata kao GP), H SVEZA (stanje
+        # "u hladnjaci"), K preradjena (kontradiktorna prerada nad njom).
+        # Brojevi 50/60/70 -- v. komentar bloka SLED_* konstanti.
+        {"PaletaID": "PAL-SLED-G", "BrojPalete": 50, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 8,
+         "KapacitetGajbica": 100, "NetoKg": SLED_KG_G, "Status": "ZATVORENA",
+         "Preradjeno": "Da"},
+        {"PaletaID": "PAL-SLED-H", "BrojPalete": 60, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 9,
+         "KapacitetGajbica": 100, "NetoKg": SLED_KG_H, "Status": "ZATVORENA"},
+        {"PaletaID": "PAL-SLED-K", "BrojPalete": 70, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 7,
+         "KapacitetGajbica": 100, "NetoKg": SLED_KG_K, "Status": "ZATVORENA",
+         "Preradjeno": "Da"},
     ],
     "tblPaletaStavka": [
         # ISTA fizicka paleta, dva dokumenta istog broja.
@@ -1511,6 +1633,19 @@ SEED = {
         {"StavkaID": "PST-SLED-X", "PaletaID": "PAL-SLED-X",
          "BrojPrijemnice": SLED_PRIJ_BROJ, "BrojZbirne": SLED_ZBIRNA,
          "BrojGajbica": 10, "NetoKg": 99, "PrijemnicaID": "PRJ-SLED-1",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        # GP grana: stavke vezuju BROJ zbirne (podatkovna veza lanca).
+        {"StavkaID": "PST-SLED-G", "PaletaID": "PAL-SLED-G",
+         "BrojPrijemnice": "37/150326", "BrojZbirne": SLED_ZBIRNA_G,
+         "BrojGajbica": 8, "NetoKg": SLED_KG_G, "PrijemnicaID": "PRJ-SLED-G",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-SLED-H", "PaletaID": "PAL-SLED-H",
+         "BrojPrijemnice": "38/150326", "BrojZbirne": SLED_ZBIRNA_H,
+         "BrojGajbica": 9, "NetoKg": SLED_KG_H, "PrijemnicaID": "PRJ-SLED-H",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-SLED-K", "PaletaID": "PAL-SLED-K",
+         "BrojPrijemnice": "39/150326", "BrojZbirne": SLED_ZBIRNA_K,
+         "BrojGajbica": 7, "NetoKg": SLED_KG_K, "PrijemnicaID": "PRJ-SLED-K",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
@@ -1588,12 +1723,41 @@ SEED = {
         {"PreradaID": "PRE-SLED-1", "BrojPrerade": 41,
          "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 150,
          "BrojKutija": 15, "BrojKesa": 30, "TipGotovogProizvoda": "Rinfuz"},
+        # GP grana (v. blok konstanti SLED_ZBIRNA_G/K gore): G je PRODATA
+        # kao GP (Fakturisano=Da na AKTIVNU GP fakturu), K je KONTRADIKCIJA
+        # (Da na nepostojecu). Fakturisano/FakturaID kolone dodaje
+        # ENSURE_COLS -- donor ih nema.
+        {"PreradaID": "PRE-SLED-G", "BrojPrerade": 51,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": SLED_GP_IZLAZ_KG,
+         "BrojKutija": 8, "BrojKesa": 16, "TipGotovogProizvoda": "Rinfuz",
+         "Fakturisano": "Da", "FakturaID": SLED_FAKTURA_GP},
+        {"PreradaID": "PRE-SLED-K", "BrojPrerade": 61,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 56,
+         "BrojKutija": 7, "BrojKesa": 14, "TipGotovogProizvoda": "Rinfuz",
+         "Fakturisano": "Da", "FakturaID": "FAK-NEMA-GP"},
+        # Potrosna vozila writer testa CreateFakturaGP_TX (nisu ni na
+        # jednom SLED lancu -- mutacija ne dira tvrdnje lanca).
+        {"PreradaID": "PRE-GP-W1", "BrojPrerade": 71,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 50,
+         "BrojKutija": 5, "BrojKesa": 10, "TipGotovogProizvoda": "Rinfuz"},
+        {"PreradaID": "PRE-GP-X", "BrojPrerade": 81,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 40,
+         "BrojKutija": 4, "BrojKesa": 8, "TipGotovogProizvoda": "Rinfuz",
+         "Stornirano": "Da"},
+        {"PreradaID": "PRE-GP-W0", "BrojPrerade": 91,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 0,
+         "BrojKutija": 0, "BrojKesa": 0, "TipGotovogProizvoda": "Rinfuz"},
     ],
     # Prve stavke prerade u fixture-u: kanonski join je PaletaID (kao
     # modIntegritet D2), BrojPalete je samo labela.
     "tblPreradaStavka": [
         {"StavkaID": "PRS-SLED-1", "PreradaID": "PRE-SLED-1",
          "PaletaID": "PAL-SLED-2", "BrojPalete": 32, "NetoKg": 150},
+        # GP grana: join prerada -> paleta (kanonski PaletaID).
+        {"StavkaID": "PRS-SLED-G", "PreradaID": "PRE-SLED-G",
+         "PaletaID": "PAL-SLED-G", "BrojPalete": 50, "NetoKg": SLED_KG_G},
+        {"StavkaID": "PRS-SLED-K", "PreradaID": "PRE-SLED-K",
+         "PaletaID": "PAL-SLED-K", "BrojPalete": 70, "NetoKg": SLED_KG_K},
     ],
     "tblStornoVeze": [
         {"CorrectionID": "SV-TEST-1", "Mode": "ISPRAVKA_ODMAH", "Status": "PENDING",
@@ -1603,6 +1767,17 @@ SEED = {
          "OldDocType": "Otpremnica", "OldDocID": "OTP-TEST-3", "OldBroj": "3/TEST",
          "NeedsRecovery": "Da", "Message": "fixture: druga ispravka na cekanju"},
     ],
+}
+
+# Kolone koje DONOR (produkcijska sveska pre nadogradnje) nema, a fixture
+# mora da ih ima: sejanje ide PO IMENU, pa red sa novom kolonom obara
+# generator; testovi writera (RequireUpdateCell) takodje traze kolonu.
+# U aplikaciji ih dodaje modSetup.EnsurePaletniListSchema (EnsureColumnOnTable
+# -> na KRAJ tabele); generator radi ISTO, pa je fixture = sveska POSLE
+# nadogradnje. Kolona koja vec postoji se ne dira.
+ENSURE_COLS = {
+    "tblFakturaStavke": ["PreradaID", "BrojPrerade"],
+    "tblPrerada": ["Fakturisano", "FakturaID"],
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
@@ -1710,6 +1885,7 @@ def signature() -> str:
         "SEF_CONFIG=" + repr(sorted(SEF_CONFIG.items())),
         "SEED=" + repr([(t, [sorted(r.items()) for r in rows])
                         for t, rows in sorted(SEED.items())]),
+        "ENSURE_COLS=" + repr(sorted((t, cols) for t, cols in ENSURE_COLS.items())),
     ])
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -1918,6 +2094,21 @@ def build(donor: str, out: str, force: bool) -> int:
         cleared = strip_rows(wb)
         print(f"Obrisani redovi u {len(cleared)} tabela"
               + (": " + ", ".join(f"{n}({c})" for n, c in cleared) if cleared else ""))
+
+        # Nadogradnja seme PRE sejanja (v. ENSURE_COLS): nove kolone na KRAJ,
+        # isto sto radi modSetup.EnsureColumnOnTable na startu aplikacije.
+        added_cols = []
+        for table_name, cols in ENSURE_COLS.items():
+            lo = find_table(wb, table_name)
+            if lo is None:
+                raise SchemaError(f"{table_name} ne postoji u donoru (ENSURE_COLS)")
+            idx = header_index(lo)
+            for col in cols:
+                if col.strip().lower() not in idx:
+                    lo.ListColumns.Add().Name = col
+                    added_cols.append(f"{table_name}.{col}")
+        if added_cols:
+            print("Dodate kolone (nadogradnja seme): " + ", ".join(added_cols))
 
         seeded = []
         for table_name, rows in SEED.items():

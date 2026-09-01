@@ -6826,3 +6826,68 @@ ijedne izmišljene veze.
   zatvoreni blokovi na drugoj stanici). Statičke provere čiste.
 - **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
   i smoke nad pravim podacima (checklista u PR-u).
+
+---
+
+## vba-v2.91.0 — 2026-09-01
+
+### Sledljivost: lanac se više ne završava na prijemnici (GP grana)
+
+- **Tri nove kolone na listi LANAC — „Palete", „Prerada / GP" i
+  „Stanje".** Lanac sada prati robu i POSLE prijemnice: na koje je
+  palete legla (paletna stavka vezuje broj zbirne), da li je prerađena
+  (preradna stavka vezuje paletu) i da li je gotov proizvod fakturisan.
+  Jedna validno fakturisana prerada prikazuje i broj završne fakture
+  („51/2026 → 9/2026") — krug je zatvoren fakturom gotove robe.
+- **Kolona „Stanje" kaže dokle je roba stigla:** „prodato GP",
+  „preradjeno", „prodato svezo", „u hladnjaci" ili „otvoren tok" —
+  najdalja dostignuta karika. Red sa oznakom kvara stanje ne dobija
+  (prvo se popravlja kvar).
+- **Sve po podatkovnim vezama, ništa pogađanjem:** GP faktura se čita
+  isključivo iz `tblPrerada.FakturaID` — „isti artikal + isti datum +
+  isti kupac" NIJE veza i ne crta se. Dvosmislen broj zbirne ne
+  pripisuje ničije palete (isti fail-closed kao mete).
+- **Prerada koja tvrdi „fakturisano" bez validne aktivne fakture** je
+  ista klasa kvara kao takva prijemnica: oznaka „faktura neusaglasena"
+  na lancu + red na NEPOTPUNIMA (štampa vodi na preradni list).
+- Pretraga unazad sada nalazi i brojeve paleta, prerada i GP faktura
+  (prikazi „N pal."/„N pre." ih ne gutaju).
+
+### Fakturisanje: nova lista „Gotova roba"
+
+- **Četvrta lista na ekranu Fakturisanje: prerade (gotov proizvod)
+  spremne za fakturisanje** — broj, proizvod, izlaz kg, kutije/kese,
+  dostupnost i broj fakture za već prodate. Čipovi sve/čeka/fakturisano.
+- **Cena gotove robe je unos operatera** (polje „Cena gotove robe
+  (RSD/kg)" vidljivo samo na toj listi): gotova roba nema evidentiranu
+  cenu nigde u podacima, pa se prodajna cena određuje pri fakturisanju.
+  Bez cene stavka ne ulazi u korpu.
+- **Jedna faktura nosi jednu vrstu robe:** korpa ne meša prijemnice i
+  gotovu robu (obe strane odbijaju uz jasnu poruku) — sveža i GP
+  faktura su različiti dokumenti sa različitim izvorima vrednosti.
+- **Novi writer `CreateFakturaGP_TX`** (transakcioni, kapije u bazi):
+  prerada mora postojati, ne sme biti stornirana ni već fakturisana,
+  izlaz > 0 kg, cena > 0. Stavka fakture nosi `PreradaID` + broj
+  prerade (podatkovna veza za sledljivost); prerada se markira
+  `Fakturisano=Da` + `FakturaID` — isti obrazac kao prijemnice.
+- **Storno simetrija:** storno GP fakture oslobađa prerade (opet su
+  dostupne za fakturisanje); storno prerade orphan-uje njenu fakturu —
+  ista pravila kao kod svežih.
+- Šema: `tblFakturaStavke` + `PreradaID`/`BrojPrerade`, `tblPrerada` +
+  `Fakturisano`/`FakturaID` (dodaje `EnsurePaletniListSchema` na
+  startu, kolone na kraj tabela — postojeći pozicijski upisi netaknuti).
+
+### Verifikacija
+
+- Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;
+  GP lista + pravila korpe; writer kapije + storno simetrija —
+  mutirajući, ide poslednji) + **7 novih namernih kvarova** (stanje
+  placebo, kontradikcija ćuti, progutani brojevi, dupla prodaja, storno
+  ne oslobađa, mešanje korpe u oba smera) — svaki obara tačno svoj
+  imenovani test (dvosmerni dokaz). Ukupno 360 sabotaža u katalogu.
+- Fixture: tri nova lanca (prodato GP / u hladnjači / kontradikcija) +
+  potrošne prerade za writer test; generator sada ume da doda nove
+  kolone koje donor nema (`ENSURE_COLS` — fixture je sveska POSLE
+  nadogradnje šeme).
+- **Ručna kapija pred upotrebu:** `Alt+F11 → Debug → Compile VBAProject`
+  i smoke nad pravim podacima (checklista u PR-u).

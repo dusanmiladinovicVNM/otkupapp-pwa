@@ -5489,3 +5489,104 @@ ionako obavezne (`TraceByZbirna` ih tako tretira).
   nefakturisane prijemnice, a povezivanje ide kroz polje „Otpremnica za
   povezivanje" (izbor reda ga puni, „Poveži…" čita izbor — InputBox-a
   više nigde nema).
+
+## 25. Sledljivost GP lanac + fakturisanje gotove robe (`v6-ui-189`)
+
+Nastavak §24 po planu Faza 1 + Faza 2 (dogovor posle merge-a #246):
+lanac se produžava POSLE prijemnice (paleta → prerada → GP faktura), a
+ekran Fakturisanje dobija fakturisanje gotove robe — time završna
+faktura zatvara i hladnjača-tok, kroz podatkovnu vezu.
+
+### 25.1 Faza 1 — LANAC kolone 28–30 (čista projekcija)
+
+- `ReportSledljivostLanac` 27 → 30 kolona: 28 „Palete", 29
+  „Prerada / GP", 30 „Stanje". `SledGpMape` gradi pet mapa JEDNIM
+  prolazom kroz `tblPaleta(Stavka)`/`tblPrerada(Stavka)` pre petlje
+  (S5 pravilo — nijedan `LookupValue` po redu).
+- Iste podatkovne veze kao mete (§24.2 E): paletna stavka vezuje BROJ
+  zbirne, prerada join `PaletaID`, GP faktura **isključivo**
+  `tblPrerada.FakturaID`. Heuristika „isti artikal + datum + kupac ≈
+  ta faktura" je izmišljanje sledljivosti i ZABRANJENA (advisor uslov).
+- Fail-closed: `nVl > 1` (dvosmislen broj) ne pripisuje ništa — kolone
+  28–30 prazne; pripisivanje po broju bez vozača bi sabralo tuđe tokove.
+- Prerada `Fakturisano=Da` bez validne aktivne fakture = ista klasa
+  kvara kao prijemnica (krug 9): oznaka `faktura neusaglasena`; na
+  NEPOTPUNIMA red `FAKTURA-VEZA-NEISPRAVNA` sa `DokTip=Prerada`
+  (nova konstanta `SLED_DOK_PRERADA`; ruta štampe → `ExportPreradaPDF`,
+  ista kao meta PRERADA). `Fakturisano=Ne`/prazno je legitiman tok.
+- Stanje (kol. 30, `SLED_ST_*`): najdalja dostignuta karika po
+  prioritetu GP faktura > prerada > sveža faktura > paleta > otvoren
+  tok; piše se SAMO kad red nema oznaku. „Otvoren tok" nema fixture
+  vozilo — ne tvrdi se testom (zapisano, svesno).
+- SearchRefs (kol. 27) += brojevi paleta/prerada/GP faktura (princip
+  R2 — prikaz „N pal."/„N pre." guta brojeve). Haystack LANAC += kol.
+  30 (pretraga po stanju).
+- Ekran: LANAC 11 → 14 kolona (ref pomeren 11 → 14 u `OsveziDetalj` i
+  `StampajDokumentReda`); hederi `OTKUI_HDS_PALETE/PRERADAGP/STANJE`.
+  Brojevi paleta/prerada su sada u haystacku, pa fixture brojevi tih
+  dokumenata moraju da se završavaju na 0/1 i budu daleko od
+  `GenerateBroj*` sekvence — substring pretraga inače guta brojeve
+  faktura (`38/2026` sadrži `8/2026`; naučeno padom `T_Sled_KesPretragaIHint`).
+  PDF dokument lanca (šablon iz kruga 6) NIJE širen GP karikama u ovom
+  krugu — ekran ih nosi; širenje šablona po smoke potrebi.
+
+### 25.2 Faza 2 — šema, writer, ekran Fakturisanje
+
+- Šema (`EnsurePaletniListSchema`, kolone na KRAJ tabela):
+  `tblFakturaStavke.PreradaID/BrojPrerade`,
+  `tblPrerada.Fakturisano/FakturaID`. Postojeći pozicijski `AppendRow`
+  upisi (header 21 / stavka 9) netaknuti; GP identitet ide PO IMENU
+  (`RequireUpdateCell` posle `AppendRow`).
+- `modFaktura.CreateFakturaGP_TX(kupacID, stavke)` — stavka =
+  `Array(preradaID, cena)`; kapije 1731–1745 u BASE writeru pod TX
+  (postoji/jedinstvena/nije stornirana/nije već fakturisana/izlaz > 0/
+  cena > 0; pre-validacija SVIH stavki pre ijednog upisa). Cena je
+  UNOS OPERATERA — GP nema evidentiranu cenu nigde (legacy nema GP
+  prodaju; „izvedena" cena bi bila izmišljanje). Prerada se markira
+  `Fakturisano=Da + FakturaID` — isti obrazac kao prijemnica, pa storno
+  i sledljivost rade istim pravilima.
+- `GetGPZaFakturisanjeForGrid` (1..9) — GP kolone čita meko
+  (`GetColumnIndex`): sveska pre nadogradnje = niko nije fakturisan.
+- Storno simetrija (`modStorno`): storno fakture →
+  `ReleasePreradaFromFaktura` (reset markera; fail-closed na dupli ID);
+  storno prerade → `MarkFakturaOrphaned` + `MarkFakturaStavkeOrphanedGP`
+  (postojeći `MarkFakturaStavkeOrphaned` filtrira po `PrijemnicaID` pa
+  bi za GP bio no-op). `GetColumnIndex` + guard svuda u storno putu —
+  sveska pre nadogradnje ne sme da pukne.
+- Ekran `modScrFakture` (`v6-ui-189`): četvrta lista `GOTOVA` (druga po
+  redu, uz ZAFAKT), čipovi sve/čeka/fakturisano, kolone GP mreže
+  (identitet `PreradaID` prio 4), polje `scrFkCenaGP` vidljivo samo na
+  GOTOVA. Korpa: `KorpaTip()` (""/"PRJ"/"GP" po prvoj stavci) — mešanje
+  odbijaju OBE strane (`OTKUI_ERR_FK_MESANJE`); GP stavka bez cene ne
+  ulazi (`OTKUI_ERR_FK_CENA_GP`); `IzradiFakturu` rutira po tipu korpe
+  (GP → `CreateFakturaGP_TX`, ostalo → `CreateFaktura_TX`). Test
+  seam-ovi `Scr_FkKorpaTestDodajGP`/`Scr_FkUkloniStavkuGPTest` (gate
+  `IsTestMode`).
+
+### 25.3 Fixture i verifikacija
+
+- `make_fixture`: **`ENSURE_COLS`** — generator dodaje kolone koje
+  donor nema (sejanje ide PO IMENU pa bi red sa novom kolonom oborio
+  build; fixture = sveska POSLE nadogradnje šeme). U potpisu.
+- Tri nova lanca: G (prodato GP — `PRE-SLED-G` → aktivna `9/2026`),
+  H (u hladnjači — sveža `PAL-SLED-H`), K (kontradikcija —
+  `PRE-SLED-K` → mrtav `FAK-NEMA-GP`); potrošne prerade `PRE-GP-W1`
+  (writer uspeh, mutira se poslednja), `PRE-GP-X` (stornirana),
+  `PRE-GP-W0` (0 kg).
+- Testovi 160–162 (sva tri registra; 160–161 read-only pre mutirajućih
+  124–126, 162 MUTIRA i ide poslednji): `T_Sled_GpLanacIStanja` (ručni
+  prolaz kroz tabele = Report; stanja; fail-closed D; problemi;
+  smer nazad), `T_Fak_GpListaIKorpa` (read-model; korpa pravila u oba
+  smera), `T_FakturaGP_WriterKapijeIStorno` (svih 6 kapija + rollback
+  dokaz + stavka po imenu + storno oslobađa). `T_Fak_UgovorEkrana`
+  ažuriran (3 → 4 liste, GOTOVA druga).
+- 7 novih sabotaža (`sledljivost-gp-stanje-placebo`,
+  `sledljivost-gp-kontradikcija-cuti`, `sledljivost-gp-refs-progutani`,
+  `faktura-gp-dupla-prodaja`, `storno-gp-ne-oslobadja`,
+  `fakture-gp-korpa-mesa-u-prj/-u-gp`) — katalog 360; dva stara sidra
+  ažurirana (kolone/haystack pomereni), `fakture-sef-lista-uslovna`
+  tvrdnja prati novi tekst.
+- `who_writes` ažuran (modFaktura piše `tblPrerada` od Commit A).
+- **Ručna kapija operatera:** Compile + smoke checklista u PR-u
+  (lanac kolone i stanja na pravim podacima, GP lista, izrada i storno
+  GP fakture, mešanje korpe).
