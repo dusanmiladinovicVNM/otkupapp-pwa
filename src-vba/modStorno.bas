@@ -916,7 +916,12 @@ Public Function StornoFaktura_TX(ByVal fakturaID As String) As Boolean
     ' (ReleasePreradaFromFaktura pise tblPrerada) -- bez snapshota bi
     ' pukli rollback vratio fakturu u aktivnu, a prerada bi OSTALA
     ' slobodna za ponovno fakturisanje = dvostruka prodaja iste robe.
-    tx.AddTableSnapshot TBL_PRERADA
+    ' USLOVNO (B3): stariji workbook legitimno NEMA tblPrerada, a
+    ' storno obicne sveze fakture tamo mora da radi -- isti meki
+    ' ugovor kao GetColumnIndex kapije u ostatku GP integracije.
+    If Not GetTable(TBL_PRERADA) Is Nothing Then
+        tx.AddTableSnapshot TBL_PRERADA
+    End If
 
     If Not StornoFaktura(fakturaID) Then
         Err.Raise ERR_STORNO_BASE + 5, SRC, _

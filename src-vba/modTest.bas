@@ -6702,6 +6702,7 @@ End Sub
 Private Sub T_Fak_GpListaIKorpa()
     Dim gp As Variant, i As Long
     Dim rW1 As Long, rG As Long, imaX As Boolean
+    Dim rWL As Long, rDup As Long
     gp = modFaktura.GetGPZaFakturisanjeForGrid()
     AssertEq IsArray(gp), True, "GP read-model nad fixture-om postoji"
     For i = 1 To UBound(gp, 1)
@@ -6709,7 +6710,9 @@ Private Sub T_Fak_GpListaIKorpa()
             Case "PRE-GP-W1": rW1 = i
             Case "PRE-SLED-G": rG = i
             Case "PRE-GP-X": imaX = True
+            Case "PRE-GP-WL": rWL = i
         End Select
+        If CStr(gp(i, 2)) = "131/2026" Then rDup = i
     Next i
     AssertEq (rW1 > 0), True, "nefakturisana prerada je u listi"
     AssertEq imaX, False, "stornirana prerada NIJE u listi"
@@ -6723,6 +6726,14 @@ Private Sub T_Fak_GpListaIKorpa()
     ' srpskom locale-u cita 50, pa bi grid/korpa lagali writer.
     AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(50.5, "0.00"), _
              "decimalan izlaz kg prezivi read-model (Val mina)"
+    ' Kanonski contract (B2): zaostao FakturaID bez Fakturisano=Da NE
+    ' sme ponovo u prodaju -- nova faktura bi pregazila staru vezu.
+    AssertEq (rWL > 0), True, "vozilo: stale prerada je u listi"
+    AssertEq CBool(gp(rWL, 8)), False, "zaostala veza -> nije dostupna"
+    ' P1: dupli PreradaID (korupcija) prazni identitet -- radnja nema
+    ' nad cim da radi (isti guard kao prijemnice/fakture).
+    AssertEq (rDup > 0), True, "vozilo: dupli id red je u listi"
+    AssertEq CStr(gp(rDup, 1)), "", "dupli PreradaID prazni identitet"
 
     ' --- KORPA: cena kapija, mesanje u OBA smera, uklanjanje po identitetu.
     modScrFakture.Scr_FkKorpaTestReset
@@ -6785,6 +6796,23 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     s.Add Array("PRE-SLED-G", 100#)
     AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
              "vec fakturisana prerada se ne fakturise ponovo"
+    ' Marker bez veze (WM): Fakturisano=Da uz prazan FakturaID -- kapija
+    ' "vec fakturisana" je JEDINA brana (veze i stavke nema).
+    Set s = New Collection
+    s.Add Array("PRE-GP-WM", 100#)
+    AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
+             "marker fakturisanosti bez veze se ne fakturise ponovo"
+    ' Kanonski contract (B2): stale FakturaID uz Fakturisano=Ne bi nova
+    ' faktura tiho pregazila -- odbija se dok se veza ne raspetlja.
+    Set s = New Collection
+    s.Add Array("PRE-GP-WL", 100#)
+    AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
+             "zaostala veza na fakturu se ne fakturise ponovo"
+    ' P1: prodajna stavka mora imenovati proizvod.
+    Set s = New Collection
+    s.Add Array("PRE-GP-WT", 100#)
+    AssertEq modFaktura.CreateFakturaGP_TX(FX_KUPAC2, s), "", _
+             "prazan TipGotovogProizvoda se ne fakturise"
     Set s = New Collection
     s.Add Array("PRE-GP-W1", 100#)
     s.Add Array("PRE-GP-W1", 100#)
@@ -12180,14 +12208,26 @@ Private Sub T_Sled_GpLanacIStanja()
     Dim rucniGpFakBroj As String
     rucniGpFakBroj = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, rucniGpFakID, COL_FAK_BROJ))))
     AssertEq (Len(rucniGpFakBroj) > 0), True, "vozilo: GP faktura G lanca je aktivna"
+    ' Finalni kupac (B1): sa GP fakture, kroz tblKupci.
+    Dim rucniGpKupID As String, rucniGpKupac As String
+    rucniGpKupID = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, rucniGpFakID, COL_FAK_KUPAC))))
+    rucniGpKupac = Trim$(CStr(nz(LookupValue(TBL_KUPCI, COL_KUP_ID, rucniGpKupID, COL_KUP_NAZIV))))
+    AssertEq (Len(rucniGpKupac) > 0), True, "vozilo: GP faktura ima kupca sa nazivom"
 
     ' --- G: prodato GP -- kolone 28-30 = rucni prolaz; refs nose brojeve.
     r = SledNadjiRed(lanac, "OTK-SLED-G")
     AssertEq (r > 0), True, "lanac nosi red OTK-SLED-G"
     AssertEq CStr(lanac(r, 14)), "", "G lanac je potpun (bez oznake)"
     AssertEq CStr(lanac(r, 28)), rucniPalBroj, "kolona paleta = rucni prolaz"
-    AssertEq CStr(lanac(r, 29)), rucniPreBroj & " -> " & rucniGpFakBroj, _
-             "kolona prerada/GP nosi preradu I zavrsnu fakturu"
+    ' B1: kolona 29 nosi SAMO preradu; zavrsna faktura i FINALNI kupac
+    ' preuzimaju kolone 12/13 -- lanac se zavrsava prodajom, ne
+    ' odredistem prijema.
+    AssertEq CStr(lanac(r, 29)), rucniPreBroj, _
+             "kolona gotovog proizvoda nosi SAMO preradu"
+    AssertEq CStr(lanac(r, 12)), rucniGpFakBroj, _
+             "zavrsna GP faktura zauzima kolonu Faktura"
+    AssertEq CStr(lanac(r, 13)), rucniGpKupac, _
+             "kolona Kupac nosi FINALNOG kupca sa GP fakture"
     AssertEq CStr(lanac(r, 30)), SLED_ST_PRODATO_GP, "stanje G = prodato GP"
     AssertEq (InStr(CStr(lanac(r, 27)), rucniPalBroj) > 0), True, _
              "refs nose broj palete"
@@ -12195,6 +12235,8 @@ Private Sub T_Sled_GpLanacIStanja()
              "refs nose broj prerade"
     AssertEq (InStr(CStr(lanac(r, 27)), rucniGpFakBroj) > 0), True, _
              "refs nose broj GP fakture"
+    AssertEq (InStr(CStr(lanac(r, 27)), rucniGpKupac) > 0), True, _
+             "refs nose finalnog kupca"
 
     ' --- H: sveza paleta bez prerade i fakture = u hladnjaci.
     r = SledNadjiRed(lanac, "OTK-SLED-H")
@@ -12229,15 +12271,22 @@ Private Sub T_Sled_GpLanacIStanja()
     ' --- NEPOTPUNI: kontradiktorna prerada je red liste (DokTip Prerada);
     ' validno fakturisana G prerada NIJE.
     Dim imaK As Boolean, imaG As Boolean
+    Dim imaB2 As Boolean, imaWL As Boolean
     For i = 1 To UBound(problemi, 1)
         If CStr(problemi(i, 1)) = SLEDP_FAK_NEISPRAVNA _
            And CStr(problemi(i, 7)) = SLED_DOK_PRERADA Then
             If CStr(problemi(i, 8)) = "PRE-SLED-K" Then imaK = True
             If CStr(problemi(i, 8)) = "PRE-SLED-G" Then imaG = True
+            If CStr(problemi(i, 8)) = "PRE-GP-B2" Then imaB2 = True
+            If CStr(problemi(i, 8)) = "PRE-GP-WL" Then imaWL = True
         End If
     Next i
     AssertEq imaK, True, "problemi nose kontradiktornu preradu (DokTip Prerada)"
     AssertEq imaG, False, "validno fakturisana prerada NIJE problem"
+    ' Kanonski contract (B2): marker bez STVARNE stavke fakture je
+    ' neusaglasen -- "prodato" se dokazuje podatkom, ne markerom.
+    AssertEq imaB2, True, "prerada bez stavke fakture je problem"
+    AssertEq imaWL, True, "zaostao FakturaID bez Fakturisano=Da je problem"
 
     ' --- SMER NAZAD na ekranu: broj GP fakture i broj palete nalaze
     ' otkupni blok G lanca; grid kolone 11-13 nose GP karike.
@@ -12257,6 +12306,9 @@ Private Sub T_Sled_GpLanacIStanja()
     ' Smoke GP-1: palete odmah POSLE prijemnice (kolona 8), stanje na
     ' kraju vidljivih (13) -- kolone prate tok robe.
     AssertEq CStr(redovi(r, 8)), rucniPalBroj, "grid kolona 8 = pal. sveze robe"
+    AssertEq CStr(redovi(r, 9)), rucniPreBroj, "grid kolona 9 = gotov proizvod"
+    AssertEq CStr(redovi(r, 10)), rucniGpFakBroj, "grid kolona 10 = zavrsna faktura"
+    AssertEq CStr(redovi(r, 11)), rucniGpKupac, "grid kolona 11 = finalni kupac"
     AssertEq CStr(redovi(r, 13)), SLED_ST_PRODATO_GP, "grid kolona 13 = stanje"
     modScrSledljivost.Scr_SlTestReset
 End Sub

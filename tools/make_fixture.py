@@ -1154,11 +1154,26 @@ SEED = {
         {"FakturaID": SLED_FAKTURA_3B, "BrojFakture": "8/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC2, "Iznos": 100 * 50, "Status": "Neplaceno"},
         # GP grana: AKTIVNA zavrsna faktura gotove robe (PRE-SLED-G pokazuje
-        # na nju). FAK-NEMA-GP se NAMERNO ne dodaje -- PRE-SLED-K pokazuje
-        # u prazno (kontradikcija).
+        # na nju; stavka FST-SLED-GP je DOKAZ prodajne veze -- kanonski
+        # contract B2). FAK-NEMA-GP se NAMERNO ne dodaje -- PRE-SLED-K
+        # pokazuje u prazno (kontradikcija).
         {"FakturaID": SLED_FAKTURA_GP, "BrojFakture": "9/2026", "Datum": FIXTURE_DATE,
          "KupacID": KUPAC2, "Iznos": SLED_GP_IZLAZ_KG * SLED_GP_CENA,
          "Status": "Neplaceno"},
+        # AKTIVNA faktura BEZ stavke prerade PRE-GP-B2 koja na nju
+        # pokazuje -- marker bez stavke = "faktura neusaglasena" (B2).
+        {"FakturaID": "FAK-SLED-GP2", "BrojFakture": "10/2026", "Datum": FIXTURE_DATE,
+         "KupacID": KUPAC2, "Iznos": 4000, "Status": "Neplaceno"},
+    ],
+    # Prve GP stavke fakture u fixture-u: podatkovni DOKAZ da faktura
+    # 9/2026 STVARNO sadrzi preradu G (PreradaID/BrojPrerade su
+    # ENSURE_COLS kolone). PrijemnicaID/Klasa/BrojPrijemnice prazni --
+    # GP stavka nema prijemnicu (isti oblik kao writer).
+    "tblFakturaStavke": [
+        {"StavkaID": "FST-SLED-GP", "FakturaID": SLED_FAKTURA_GP,
+         "PrijemnicaID": "", "Kolicina": SLED_GP_IZLAZ_KG, "Cena": SLED_GP_CENA,
+         "Klasa": "", "BrojPrijemnice": "",
+         "PreradaID": "PRE-SLED-G", "BrojPrerade": "51/2026"},
     ],
     # STAVKE IZVODA -- devet redova u TRI izvoda, svaki sa svojim razlogom:
     #   BIM-FIX-1   jak kljuc preko FAKTURE (poziv na broj = broj fakture 2/2026)
@@ -1750,6 +1765,41 @@ SEED = {
         {"PreradaID": "PRE-GP-W0", "BrojPrerade": 91,
          "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 0,
          "BrojKutija": 0, "BrojKesa": 0, "TipGotovogProizvoda": "Rinfuz"},
+        # Kanonski contract vozila (B2/P1 revizije #248, brojevi i dalje
+        # 0/1 pravilo):
+        #   B2 (101): Fakturisano=Da na AKTIVNU 10/2026 koja NEMA stavku
+        #     ove prerade -> "faktura neusaglasena" (marker bez dokaza).
+        #   WL (111): Fakturisano prazno uz zaostali FakturaID -> nije
+        #     dostupna za novu fakturu + prijavljuje se kao neusaglasena.
+        #   WT (121): prazan TipGotovogProizvoda -> writer odbija
+        #     (faktura mora imenovati proizvod).
+        #   DUP (131/141): NAMERNO dupli PreradaID -> grid prazni
+        #     identitet (IdIliPrazno), radnja nema nad cim da radi.
+        {"PreradaID": "PRE-GP-B2", "BrojPrerade": 101,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 20,
+         "BrojKutija": 2, "BrojKesa": 4, "TipGotovogProizvoda": "Rinfuz",
+         "Fakturisano": "Da", "FakturaID": "FAK-SLED-GP2"},
+        {"PreradaID": "PRE-GP-WL", "BrojPrerade": 111,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 25,
+         "BrojKutija": 2, "BrojKesa": 5, "TipGotovogProizvoda": "Rinfuz",
+         "FakturaID": "FAK-STALE-GP"},
+        {"PreradaID": "PRE-GP-WT", "BrojPrerade": 121,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 30,
+         "BrojKutija": 3, "BrojKesa": 6, "TipGotovogProizvoda": ""},
+        #   WM (151): Fakturisano=Da uz PRAZAN FakturaID -- jedino vozilo
+        #     kod koga je kapija "vec fakturisana" (1741) JEDINA brana
+        #     writera (1748/1749 ga ne hvataju: nema veze ni stavke);
+        #     dvosmerni dokaz te kapije bez njega nije moguc.
+        {"PreradaID": "PRE-GP-WM", "BrojPrerade": 151,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 15,
+         "BrojKutija": 1, "BrojKesa": 3, "TipGotovogProizvoda": "Rinfuz",
+         "Fakturisano": "Da"},
+        {"PreradaID": "PRE-GP-DUP", "BrojPrerade": 131,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 10,
+         "BrojKutija": 1, "BrojKesa": 2, "TipGotovogProizvoda": "Rinfuz"},
+        {"PreradaID": "PRE-GP-DUP", "BrojPrerade": 141,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 10,
+         "BrojKutija": 1, "BrojKesa": 2, "TipGotovogProizvoda": "Rinfuz"},
     ],
     # Prve stavke prerade u fixture-u: kanonski join je PaletaID (kao
     # modIntegritet D2), BrojPalete je samo labela.

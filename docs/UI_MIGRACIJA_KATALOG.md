@@ -5657,3 +5657,42 @@ zrno se ne spušta) i **GP ima isti poreski tretman kao sveža roba**.
 - Odloženo (P1 revizije, svesno): oznaka „mešovit tok" kad potomci
   jedne zbirne imaju više završnih stanja — stanje je dokumentovano
   kao „najdalja karika".
+
+### 25.6 Spoljna revizija #248, krug 3 (B1–B3 + 2×P1): finalni lanac
+
+Verdikt kruga: tehnički GP tok zatvoren, ali vizuelni lanac nije
+stizao do finalnog kupca i „prodato" se tvrdilo markerom umesto
+podatkom. Potvrđeno ranije: prerada = finalni lot (kese/kutije),
+posle nje nema proizvodnih karika.
+
+- **B1 — GP faktura zauzima kolone Faktura i Kupac:** kolona 29 nosi
+  SAMO preradu (heder „GOTOV PROIZVOD" — „PAL. GOTOVOG PROIZV." je
+  sugerisao identitet koji ne postoji); završna GP faktura ide u
+  kolonu 12, a **finalni kupac sa fakture** u kolonu 13 (do tada je
+  uz prodatu robu stajalo odredište prijema — „Hladnjača"). Više
+  završnih faktura/kupaca → „N fakt."/„N kup." + brojevi i nazivi u
+  SearchRefs. Red evoluira: `103/2026 | 55/2026 | [prazno] |
+  Hladnjača | preradjeno` → `103/2026 | 55/2026 | 91/2026 | Metro |
+  prodato GP`.
+- **B2 — kanonski GP invoice-link contract:** VALIDNO PRODATO =
+  `Fakturisano=Da` **AND** `FakturaID` aktivan **AND** tačno JEDNA
+  aktivna `FakturaStavka(PreradaID, FakturaID)` — `FakturaStavka.
+  PreradaID` je time postao ono zbog čega je uveden: **dokaz** prodajne
+  veze, ne dekoracija. Marker bez stavke / višak stavki / stale
+  `FakturaID` uz `Fakturisano=Ne` → „faktura neusaglasena" (lanac +
+  NEPOTPUNI). DOSTUPNO za novu fakturu = nije fakturisana AND veza
+  prazna AND nema aktivne stavke — writer (`CreateFakturaGP` kapije
+  1748/1749) i grid dele isti contract (`GPAktivneStavkePoPreradi`).
+- **B3 — uslovni snapshot:** `StornoFaktura_TX` snapshotuje
+  `tblPrerada` samo ako tabela postoji — stariji workbook bez Prerade
+  ponovo može da stornira običnu svežu fakturu (isti meki ugovor kao
+  `GetColumnIndex` kapije).
+- **P1 — proizvod je writer invariant:** prazan `TipGotovogProizvoda`
+  ne prolazi u fakturu (kapija 1750) — print bez imena robe i SEF
+  fallback „Gotov proizvod" su bili fail-open.
+- **P1 — dupli `PreradaID` guard u gridu:** `BrojacIdova`/`IdIliPrazno`
+  (isti obrazac kao prijemnice/fakture) — korupcija prazni identitet
+  umesto generičke greške tek pri izradi.
+- Fixture: `FST-SLED-GP` stavka (dokaz za G lanac), `FAK-SLED-GP2`
+  (aktivna bez stavke), vozila `PRE-GP-B2`/`PRE-GP-WL`/`PRE-GP-WT`/
+  `PRE-GP-DUP×2`; +6 sabotaža (katalog 370).

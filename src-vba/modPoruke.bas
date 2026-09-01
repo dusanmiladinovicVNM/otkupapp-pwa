@@ -1535,8 +1535,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' GP grana lanca (v6-ui-189): nastavak posle prijemnice. Smoke GP-1:
     ' operaterov recnik -- "paleta sveze robe" / "paleta gotovog
     ' proizvoda" (prerada = gotova paleta), ne interni "prerada/GP".
+    ' Revizija #248/B1: vrednosti kolone su PRERADE (finalni prodajni
+    ' lot -- roba upakovana u kese/kutije), ne posebne "GP palete";
+    ' "PAL. GOTOVOG PROIZV." je sugerisao identitet koji ne postoji.
     UpsertRow lo, existing, "OTKUI_HDS_PALETE", "PAL. SVE" & ChrW(381) & "E ROBE"
-    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "PAL. GOTOVOG PROIZV."
+    UpsertRow lo, existing, "OTKUI_HDS_PRERADAGP", "GOTOV PROIZVOD"
     UpsertRow lo, existing, "OTKUI_HDS_STANJE", "STANJE"
     UpsertRow lo, existing, "OTKUI_BTN_SL_LANACPDF", "Lanac (PDF)"
     UpsertRow lo, existing, "OTKUI_KPI_SL_POTPUN", "Potpuni lanci"

@@ -408,6 +408,13 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
     cFakt = GetColumnIndex(TBL_PRERADA, COL_PRE_FAKTURISANO)
     cFakID = GetColumnIndex(TBL_PRERADA, COL_PRE_FAKTURA_ID)
 
+    ' P1 (revizija #248): dupli PreradaID (korupcija) ne sme da izgleda
+    ' kao normalan red -- isti guard kao prijemnice/fakture: identitet
+    ' se prazni pa radnja nema nad cim da radi (fail-closed u UI).
+    Dim brojac As Object: Set brojac = BrojacIdova(TBL_PRERADA, COL_PRE_ID)
+    ' B2: dostupnost deli isti kanonski contract kao writer.
+    Dim stAkt As Object: Set stAkt = GPAktivneStavkePoPreradi()
+
     ' Mapa AKTIVNIH faktura za prikaz broja -- PRE petlje (par. 23.11/S5).
     Dim fakBroj As Object: Set fakBroj = CreateObject("Scripting.Dictionary")
     fakBroj.CompareMode = vbTextCompare
@@ -435,7 +442,7 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
             fakturisana = (UCase$(Trim$(CStr(nz(pd(i, cFakt))))) = "DA")
         If cFakID > 0 Then fid = Trim$(CStr(nz(pd(i, cFakID))))
         n = n + 1
-        outA(n, 1) = Trim$(CStr(nz(pd(i, cId))))
+        outA(n, 1) = IdIliPrazno(brojac, Trim$(CStr(nz(pd(i, cId)))))
         outA(n, 2) = Trim$(CStr(nz(pd(i, cBroj)))) & "/" & _
                      Trim$(CStr(nz(pd(i, cGod))))
         outA(n, 3) = Trim$(CStr(nz(pd(i, cTip))))
@@ -450,7 +457,11 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
         If IsNumeric(pd(i, cNeto)) Then outA(n, 5) = CDbl(pd(i, cNeto))
         If IsNumeric(pd(i, cKut)) Then outA(n, 6) = CDbl(pd(i, cKut))
         If IsNumeric(pd(i, cKes)) Then outA(n, 7) = CDbl(pd(i, cKes))
-        outA(n, 8) = Not fakturisana
+        ' B2 kanonski contract: dostupna = nefakturisana AND bez veze
+        ' na fakturu AND bez aktivne stavke -- stale FakturaID ili
+        ' zaostala stavka NE sme ponovo u prodaju.
+        outA(n, 8) = (Not fakturisana) And Len(fid) = 0 _
+                     And Not stAkt.Exists(Trim$(CStr(nz(pd(i, cId)))))
         If fakturisana And Len(fid) > 0 And fakBroj.Exists(fid) Then
             outA(n, 9) = CStr(fakBroj(fid))
         Else
@@ -474,6 +485,46 @@ Sledeci:
 
 EH:
     LogErr "modFaktura.GetGPZaFakturisanjeForGrid"
+End Function
+
+' Aktivne stavke faktura po preradi (B2 revizije #248): "aktivna" =
+' nije stornirana i nije osirocena -- ISTI filter kao SEF mapper.
+' Kolone meke: sveska pre nadogradnje nema GP stavke -> prazna mapa.
+' Vraca dict preradaID -> broj aktivnih stavki.
+Private Function GPAktivneStavkePoPreradi() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set GPAktivneStavkePoPreradi = d
+
+    Dim colPre As Long
+    colPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    If colPre = 0 Then Exit Function
+
+    Dim sd As Variant, i As Long, k As String
+    sd = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(sd) Then Exit Function
+
+    Dim colSt As Long, colOs As Long
+    colSt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO)
+    colOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+
+    For i = 1 To UBound(sd, 1)
+        k = Trim$(CStr(nz(sd(i, colPre))))
+        If Len(k) > 0 Then
+            If colSt > 0 Then
+                If UCase$(Trim$(CStr(nz(sd(i, colSt))))) = "DA" Then GoTo Dalje
+            End If
+            If colOs > 0 Then
+                If Len(Trim$(CStr(nz(sd(i, colOs))))) > 0 Then GoTo Dalje
+            End If
+            If d.Exists(k) Then
+                d(k) = CLng(d(k)) + 1
+            Else
+                d.Add k, 1
+            End If
+        End If
+Dalje:
+    Next i
 End Function
 
 ' ============================================================
@@ -588,11 +639,19 @@ Private Function CreateFakturaGP(ByVal kupacID As String, _
 
     Dim colNetoIzlaz As Long, colBroj As Long, colGodina As Long
     Dim colFakturisano As Long, colStorno As Long
+    Dim colFakVeza As Long, colTipGp As Long
     colNetoIzlaz = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
     colBroj = RequireColumnIndex(TBL_PRERADA, COL_PRE_BROJ, SRC)
     colGodina = RequireColumnIndex(TBL_PRERADA, COL_PRE_GODINA, SRC)
     colFakturisano = RequireColumnIndex(TBL_PRERADA, COL_PRE_FAKTURISANO, SRC)
     colStorno = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, SRC)
+    colFakVeza = RequireColumnIndex(TBL_PRERADA, COL_PRE_FAKTURA_ID, SRC)
+    colTipGp = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
+
+    ' Kanonski GP contract (B2 revizije #248): DOSTUPNO za fakturisanje
+    ' = Fakturisano <> Da AND FakturaID prazan AND nema aktivne stavke
+    ' fakture sa ovim PreradaID. Mapa aktivnih stavki PRE petlje.
+    Dim stavkeAkt As Object: Set stavkeAkt = GPAktivneStavkePoPreradi()
 
     ' Pre-validacija SVIH stavki pre ijednog upisa (obrazac CreateFaktura).
     Dim s As Variant, preradaID As String, cena As Double
@@ -645,6 +704,23 @@ Private Function CreateFakturaGP(ByVal kupacID As String, _
         If UCase$(Trim$(CStr(nz(preData(rowPre, colFakturisano))))) = "DA" Then
             Err.Raise vbObjectError + 1741, SRC, _
                       "Prerada je vec fakturisana: " & preradaID
+        End If
+        ' B2: stale FakturaID uz Fakturisano=Ne bi nova faktura tiho
+        ' PREGAZILA -- veza mora biti prazna, ne samo marker.
+        If Len(Trim$(CStr(nz(preData(rowPre, colFakVeza))))) > 0 Then
+            Err.Raise vbObjectError + 1748, SRC, _
+                      "Prerada ima zaostalu vezu na fakturu (FakturaID nije prazan): " & preradaID
+        End If
+        If stavkeAkt.Exists(preradaID) Then
+            Err.Raise vbObjectError + 1749, SRC, _
+                      "Prerada vec ima aktivnu stavku fakture: " & preradaID
+        End If
+        ' P1: stavka PRODAJNE fakture mora imenovati proizvod -- prazan
+        ' TipGotovogProizvoda bi dao fakturu bez naziva robe (print) i
+        ' fail-open SEF fallback.
+        If Len(Trim$(CStr(nz(preData(rowPre, colTipGp))))) = 0 Then
+            Err.Raise vbObjectError + 1750, SRC, _
+                      "TipGotovogProizvoda je prazan -- faktura mora imenovati proizvod: " & preradaID
         End If
         If Not IsNumeric(preData(rowPre, colNetoIzlaz)) Then
             Err.Raise vbObjectError + 1742, SRC, _

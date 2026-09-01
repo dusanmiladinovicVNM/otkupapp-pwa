@@ -4491,6 +4491,71 @@ Private Sub SledGpMape(ByRef palPoBroju As Object, ByRef palBrojevi As Object, _
     End If
 End Sub
 
+' Kanonski GP contract, dokazna strana (B2 revizije #248): "prodato GP"
+' se NE tvrdi iz samog markera na preradi -- faktura mora STVARNO da
+' sadrzi tu robu. Mapa "preradaID|fakturaID" -> broj AKTIVNIH stavki
+' (nije stornirana, nije osirocena -- isti filter kao SEF mapper).
+' Kolone meke: sveska pre nadogradnje nema GP stavke -> prazna mapa.
+Private Function SledGpStavkeMapa() As Object
+    Dim d As Object: Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set SledGpStavkeMapa = d
+
+    Dim colPre As Long
+    colPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    If colPre = 0 Then Exit Function
+
+    Dim sd As Variant, i As Long, k As String
+    sd = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(sd) Then Exit Function
+
+    Dim colFak As Long, colSt As Long, colOs As Long
+    colFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, "modIzvestaj.SledGpStavkeMapa")
+    colSt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO)
+    colOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+
+    For i = 1 To UBound(sd, 1)
+        k = Trim$(SledTxt(sd(i, colPre)))
+        If Len(k) > 0 Then
+            If colSt > 0 Then
+                If UCase$(Trim$(SledTxt(sd(i, colSt)))) = "DA" Then GoTo Dalje
+            End If
+            If colOs > 0 Then
+                If Len(Trim$(SledTxt(sd(i, colOs)))) > 0 Then GoTo Dalje
+            End If
+            k = k & "|" & Trim$(SledTxt(sd(i, colFak)))
+            If d.Exists(k) Then
+                d(k) = CLng(d(k)) + 1
+            Else
+                d.Add k, 1
+            End If
+        End If
+Dalje:
+    Next i
+End Function
+
+' Kupac po AKTIVNOJ fakturi (B1 revizije #248): zavrsna GP faktura
+' donosi FINALNOG kupca u kolonu Kupac -- ne odrediste prijema.
+Private Function SledFakKupci() As Object
+    Dim d As Object, src As Variant, i As Long
+    Dim cId As Long, cKup As Long, iD As String
+    Set d = CreateObject("Scripting.Dictionary")
+    d.CompareMode = vbTextCompare
+    Set SledFakKupci = d
+    src = GetTableData(TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    src = ExcludeStornirano(src, TBL_FAKTURE)
+    If Not IsArray(src) Then Exit Function
+    cId = GetColumnIndex(TBL_FAKTURE, COL_FAK_ID)
+    cKup = GetColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC)
+    For i = 1 To UBound(src, 1)
+        iD = Trim$(SledTxt(src(i, cId)))
+        If Len(iD) > 0 Then
+            If Not d.Exists(iD) Then d.Add iD, Trim$(SledTxt(src(i, cKup)))
+        End If
+    Next i
+End Function
+
 ' Broj RAZLICITIH aktivnih vlasnika (vozac+kupac) koji dele broj zbirne
 ' (krug 8 R3). 0 = broj ne postoji medju aktivnima. Isto vlasnicko
 ' pravilo kao BuildManjakDict, bez gradnje celog recnika.
@@ -4627,17 +4692,25 @@ End Function
 '      prerada i GP faktura reda (isti princip: prikaz guta brojeve).
 '   28 Palete (broj/"N pal.") -- SVEZA karika: paletne stavke ciji
 '      BrojZbirne = zbirna reda (podatkovna veza, kao mete).
-'   29 Prerada/GP (broj/"N pre."; jedna validno fakturisana prerada
-'      nosi i broj GP fakture: "42/2026 -> 9/2026") -- prerade nad tim
-'      paletama (join PaletaID) + zavrsna GP faktura ISKLJUCIVO iz
-'      tblPrerada.FakturaID (nikad heuristikom po artiklu/datumu/kupcu).
+'   29 Gotov proizvod (broj prerade/"N pre.") -- prerade nad tim
+'      paletama (join PaletaID). SAMO prerada: zavrsna GP faktura i
+'      finalni kupac idu u kolone 12/13 (B1 revizije #248).
 '   30 Stanje (SLED_ST_*) -- najdalja dostignuta karika; "" kad red
 '      nosi oznaku ili je broj zbirne dvosmislen (nVl > 1, fail-closed).
 '
+' Zavrsna GP faktura PREUZIMA kolone 12 (Faktura) i 13 (Kupac): lanac
+' se vizuelno zavrsava PRODAJOM (finalni kupac sa fakture), ne
+' odredistem prijema. Vise zavrsnih faktura/kupaca -> "N fakt."/"N kup."
+' + svi brojevi/nazivi u SearchRefs (nikakvo pogadjanje).
+'
+' Kanonski GP contract (B2): "prodato GP" = Fakturisano=Da AND
+' FakturaID aktivan AND TACNO JEDNA aktivna FakturaStavka (PreradaID,
+' FakturaID) -- veza ISKLJUCIVO iz podataka, marker bez stavke je
+' "faktura neusaglasena" (lanac se ne izmislja). Stale FakturaID uz
+' Fakturisano=Ne je ista klasa neusaglasenosti.
+'
 ' Kolone 28-30 se pripisuju SAMO uz nVl = 1: paleta vezuje BROJ zbirne
-' (nema vozaca), pa bi dvosmislen broj sabrao tudje tokove. Prerada sa
-' Fakturisano = "Da" bez validne AKTIVNE fakture je ista klasa kvara kao
-' prijemnica (krug 9) -> oznaka SLED_OZN_FAK_NEISPRAVNA.
+' (nema vozaca), pa bi dvosmislen broj sabrao tudje tokove.
 '
 ' Oznaka (14) je PRVA prekinuta/visesmislena karika (SLED_OZN_* /
 ' IZV_VLASNIK_NEJASAN / IZV_NEMA_PRIJEMA); potpun lanac kome kg curi na
@@ -4692,6 +4765,9 @@ Public Function ReportSledljivostLanac(ByVal datumOd As Date, _
     Dim palPoBroju As Object, palBrojevi As Object
     Dim prePoPaleti As Object, preBrojevi As Object, preFak As Object
     SledGpMape palPoBroju, palBrojevi, prePoPaleti, preBrojevi, preFak
+    ' B1/B2: dokaz prodajne veze (stavke) + finalni kupac sa fakture.
+    Dim gpStavke As Object: Set gpStavke = SledGpStavkeMapa()
+    Dim fakKupci As Object: Set fakKupci = SledFakKupci()
 
     ' Zbir kg AKTIVNIH otpremnica po (broj, klasa) -- za karicni kg test
     ' otpremnice -> zbirna (validan samo uz #V = 1, inace se ne racuna).
@@ -4803,6 +4879,9 @@ PreskociBroj:
         result(r, 30) = ""
         stanje = ""
         svezeFak = False
+        ' Reset po redu (B1): kupacID se puni samo za razresen vlasnicki
+        ' kljuc -- stale vrednost iz proslog reda bi usla u "N kup." racun.
+        kupacID = ""
 
         If Len(otpID) = 0 Then
             oznaka = SLED_OZN_NEPOVEZAN
@@ -4980,35 +5059,85 @@ PreskociBroj:
                             End If
                         End If
 
-                        ' Ista klasa provere kao prijemnice (krug 9):
-                        ' "Fakturisano=Da" bez validne AKTIVNE fakture je
-                        ' neispravna tvrdnja; "Ne" je legitiman tok.
+                        ' Kanonski GP contract (B2): "prodato GP" se tvrdi
+                        ' SAMO kad se marker i stvarna prodajna veza slazu:
+                        ' Fakturisano=Da + FakturaID aktivan + TACNO JEDNA
+                        ' aktivna stavka te fakture nosi ovu preradu.
+                        ' Marker bez stavke bi lazno zatvarao lanac robom
+                        ' koju faktura ne sadrzi. "Ne" je legitiman tok.
+                        Dim gpKupNaziv As String, gpFid As String
+                        Dim gpKup As Object
+                        Set gpKup = CreateObject("Scripting.Dictionary")
+                        gpKup.CompareMode = vbTextCompare
+                        gpKupNaziv = ""
                         For Each prK In preD.keys
                             prePrikaz = CStr(preBrojevi(CStr(prK)))
                             gpRefs = gpRefs & "|" & prePrikaz
                             preF = preFak(CStr(prK))
+                            gpFid = Trim$(CStr(preF(1)))
                             If CStr(preF(0)) = "Da" Then
-                                If Len(CStr(preF(1))) > 0 And fakMapa.Exists(CStr(preF(1))) Then
-                                    gpBr = Trim$(CStr(fakMapa(CStr(preF(1)))))
-                                    gpFakD(gpBr) = True
-                                    gpFakPrikaz = gpBr
-                                    gpRefs = gpRefs & "|" & gpBr
+                                If Len(gpFid) > 0 And fakMapa.Exists(gpFid) _
+                                   And gpStavke.Exists(CStr(prK) & "|" & gpFid) Then
+                                    If CLng(gpStavke(CStr(prK) & "|" & gpFid)) = 1 Then
+                                        gpBr = Trim$(CStr(fakMapa(gpFid)))
+                                        gpFakD(gpBr) = True
+                                        gpFakPrikaz = gpBr
+                                        gpRefs = gpRefs & "|" & gpBr
+                                        ' Finalni kupac sa GP fakture (B1).
+                                        If fakKupci.Exists(gpFid) Then
+                                            Dim gpKupID As String
+                                            gpKupID = CStr(fakKupci(gpFid))
+                                            If kupMapa.Exists(gpKupID) Then
+                                                gpKup(gpKupID) = Trim$(CStr(kupMapa(gpKupID)))
+                                            Else
+                                                gpKup(gpKupID) = gpKupID
+                                            End If
+                                            gpKupNaziv = CStr(gpKup(gpKupID))
+                                            gpRefs = gpRefs & "|" & gpKupNaziv
+                                        End If
+                                    Else
+                                        gpLose = True
+                                    End If
                                 Else
                                     gpLose = True
-                                    If Len(CStr(preF(1))) > 0 Then gpRefs = gpRefs & "|" & CStr(preF(1))
+                                    If Len(gpFid) > 0 Then gpRefs = gpRefs & "|" & gpFid
                                 End If
+                            ElseIf Len(gpFid) > 0 Then
+                                ' Stale veza: Fakturisano=Ne uz FakturaID --
+                                ' ista klasa neusaglasenosti (writer je i ne
+                                ' nudi ponovo; lanac je prijavljuje).
+                                gpLose = True
+                                gpRefs = gpRefs & "|" & gpFid
                             End If
                         Next prK
+                        ' Kolona 29 = SAMO prerada (B1): faktura i kupac su
+                        ' zasebne karike i imaju svoje kolone.
                         If preD.count = 1 Then
-                            ' Jedna prerada sa jednom validnom GP fakturom
-                            ' nosi i njen broj -- faktura zatvara krug.
-                            If gpFakD.count = 1 And Not gpLose Then
-                                result(r, 29) = prePrikaz & " -> " & gpFakPrikaz
-                            Else
-                                result(r, 29) = prePrikaz
-                            End If
+                            result(r, 29) = prePrikaz
                         ElseIf preD.count > 1 Then
                             result(r, 29) = CStr(preD.count) & " pre."
+                        End If
+
+                        ' B1: zavrsna GP faktura ZAUZIMA kolone Faktura i
+                        ' Kupac -- lanac se vizuelno zavrsava prodajom, ne
+                        ' odredistem prijema. Vise zavrsnih faktura/kupaca
+                        ' se NE pogadja: "N fakt."/"N kup." + refs.
+                        If gpFakD.count > 0 Then
+                            If fakture.count = 0 And gpFakD.count = 1 Then
+                                result(r, 12) = gpFakPrikaz
+                            Else
+                                result(r, 12) = CStr(fakture.count + gpFakD.count) & " fakt."
+                            End If
+                            Dim nKup As Long
+                            nKup = gpKup.count
+                            If fakture.count > 0 And Len(kupacID) > 0 Then
+                                If Not gpKup.Exists(kupacID) Then nKup = nKup + 1
+                            End If
+                            If nKup > 1 Then
+                                result(r, 13) = CStr(nKup) & " kup."
+                            ElseIf fakture.count = 0 And gpKup.count = 1 Then
+                                result(r, 13) = gpKupNaziv
+                            End If
                         End If
 
                         If gpLose And Len(oznaka) = 0 Then oznaka = SLED_OZN_FAK_NEISPRAVNA
@@ -5415,26 +5544,57 @@ SledeciPrj:
             Else
                 Set fakMapaG = fakMapaP
             End If
+            ' Kanonski contract (B2): marker na preradi mora da se slaze
+            ' sa STVARNOM stavkom fakture -- v. SledGpStavkeMapa.
+            Dim gpStavkeP As Object: Set gpStavkeP = SledGpStavkeMapa()
+            Dim gFid As String, gKey As String
             For i = 1 To UBound(preData, 1)
                 If IsDate(preData(i, cGDat)) Then
                     dSer = Int(CDbl(CDate(preData(i, cGDat))))
                     If dSer < odN Or dSer > doN Then GoTo SledeciPre
                 End If
+                gFid = Trim$(SledTxt(preData(i, cGFid)))
                 If SledTxt(preData(i, cGFakt)) = "Da" Then
-                    If Len(SledTxt(preData(i, cGFid))) = 0 Then
+                    gKey = SledTxt(preData(i, cGId)) & "|" & gFid
+                    If Len(gFid) = 0 Then
                         rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
                                        SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
                                        "", SledDbl(preData(i, cGNeto)), _
                                        "Fakturisano=Da bez FakturaID (prerada)", _
                                        SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
-                    ElseIf Not fakMapaG.Exists(Trim$(SledTxt(preData(i, cGFid)))) Then
+                    ElseIf Not fakMapaG.Exists(gFid) Then
                         rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
                                        SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
                                        "", SledDbl(preData(i, cGNeto)), _
-                                       "FakturaID " & SledTxt(preData(i, cGFid)) & _
+                                       "FakturaID " & gFid & _
                                        " nije medju aktivnim fakturama (prerada)", _
                                        SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                    ElseIf Not gpStavkeP.Exists(gKey) Then
+                        ' Faktura aktivna, ali NE SADRZI ovu robu -- marker
+                        ' bez stavke je lazno "prodato" (lanac se ne izmislja).
+                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                       SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                       "", SledDbl(preData(i, cGNeto)), _
+                                       "faktura " & Trim$(CStr(fakMapaG(gFid))) & _
+                                       " nema aktivnu stavku ove prerade", _
+                                       SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
+                    ElseIf CLng(gpStavkeP(gKey)) <> 1 Then
+                        rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                       SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                       "", SledDbl(preData(i, cGNeto)), _
+                                       "faktura " & Trim$(CStr(fakMapaG(gFid))) & " ima " & _
+                                       CStr(CLng(gpStavkeP(gKey))) & _
+                                       " aktivnih stavki ove prerade (mora tacno jedna)", _
+                                       SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
                     End If
+                ElseIf Len(gFid) > 0 Then
+                    ' Stale veza (B2): Fakturisano=Ne uz FakturaID -- writer
+                    ' je vise ne nudi, a neuskladjen par se prijavljuje.
+                    rows.Add Array(SLEDP_FAK_NEISPRAVNA, preData(i, cGDat), _
+                                   SledTxt(preData(i, cGBr)) & "/" & SledTxt(preData(i, cGGod)), _
+                                   "", SledDbl(preData(i, cGNeto)), _
+                                   "zaostao FakturaID " & gFid & " bez Fakturisano=Da (prerada)", _
+                                   SLED_DOK_PRERADA, SledTxt(preData(i, cGId)), "")
                 End If
 SledeciPre:
             Next i

@@ -6908,6 +6908,25 @@ ijedne izmišljene veze.
 - Potvrđen poslovni model: **jedna prerada = ceo prodajni lot** —
   prodaje se u celosti, jednom kupcu, na jednoj fakturi.
 
+### Finalni lanac do kupca (revizija, krug 3)
+
+- **Lanac se sada vizuelno završava prodajom:** završna GP faktura
+  ulazi u kolonu FAKTURA, a kolona KUPAC pokazuje **finalnog kupca sa
+  te fakture** (ne više odredište prijema). Kolona gotove robe nosi
+  samo broj prerade; heder je „GOTOV PROIZVOD".
+- **„Prodato GP" se dokazuje podatkom, ne markerom:** važi samo kad
+  faktura STVARNO sadrži tu preradu (tačno jedna aktivna stavka).
+  Marker bez stavke, zaostala veza ili višak stavki → „faktura
+  neusaglasena" na lancu i NEPOTPUNIMA.
+- **Nova faktura ne može da pregazi staru vezu:** prerada sa zaostalim
+  `FakturaID` (i bez markera) nije dostupna za fakturisanje dok se
+  veza ne raspetlja.
+- **Faktura mora imenovati proizvod:** prazan tip gotovog proizvoda
+  se ne fakturiše.
+- Dupli ID prerade (korupcija) više ne izgleda kao normalan red u
+  listi; storno svežih faktura radi i na starim sveskama bez tabele
+  prerada.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;
