@@ -7011,6 +7011,18 @@ ijedne izmišljene veze.
 - **SEF šalje samo količine koje se poklapaju sa utovarom** — faktura
   od 400 kg nad utovarnom listom od 500 kg se blokira, u oba smera.
 
+### Dokaz vezan za fakturu + korekcija cene (revizija #8)
+
+- **Sledljivost dokazuje prodaju samo stavkom BAŠ TE fakture** —
+  aktivna stavka tuđe fakture na utovaru, mešavina faktura na istom
+  utovaru, ili stavka za robu koje na utovaru nema, sve je „faktura
+  neusaglasena" (isti fail-closed kao SEF).
+- **Pogrešna cena se ispravlja bez diranja utovara:** „Ponovi
+  fakturu" pita za novu cenu (prazno = prethodne cene); roba i datum
+  utovara ostaju netaknuti — fizička isporuka se nikad ne poništava
+  zbog cene. Utovar sa više prerada za sada odbija korekciju (jedna
+  cena po utovaru).
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

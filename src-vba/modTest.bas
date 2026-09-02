@@ -7158,9 +7158,24 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
              COL_UT_DATUM)), "yyyy-mm-dd"), "2026-06-02", _
              "korigovan datum utovara je upisan"
 
-    ' Ocisti: storno ponovljene fakture pa originalni tok (storno utovara).
+    ' --- Revizija #8: KOREKCIJA CENE bez storna fizickog utovara --
+    ' isti aktivni utovar, nova faktura sa novom cenom (stara 100).
     AssertEq modStorno.StornoFaktura_TX(fid3), True, _
              "storno ponovljene fakture prolazi"
+    Dim fid4 As String
+    fid4 = modUtovar.CreateFakturaIzUtovara_TX(utID2, 150)
+    AssertEq (Len(fid4) > 0), True, _
+             "korekcija cene: nova faktura iz ISTOG utovara"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fid4, _
+             COL_FAK_IZNOS), 0)), "0.00"), Format$(30.5 * 150, "0.00"), _
+             "iznos korigovane fakture = kolicina x NOVA cena"
+    AssertEq Format$(CDate(LookupValue(TBL_UTOVAR, COL_UT_ID, utID2, _
+             COL_UT_DATUM)), "yyyy-mm-dd"), "2026-06-02", _
+             "korekcija cene ne dira datum utovara"
+
+    ' Ocisti: storno korigovane fakture pa originalni tok (storno utovara).
+    AssertEq modStorno.StornoFaktura_TX(fid4), True, _
+             "storno korigovane fakture prolazi"
     AssertEq modStorno.StornoUtovar_TX(utID2), True, "storno utovara prolazi"
     gp = modFaktura.GetGPZaFakturisanjeForGrid()
     rW1 = 0

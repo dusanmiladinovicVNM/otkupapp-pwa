@@ -4524,19 +4524,31 @@ Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
     ' (aktivna GP stavka bez utovara) po preradi.
     Dim fstPoUtovaru As Object: Set fstPoUtovaru = CreateObject("Scripting.Dictionary")
     fstPoUtovaru.CompareMode = vbTextCompare
-    ' Dokaz na GRAIN-u stavke (revizija #6 t.3): "UtovarID|PreradaID"
-    ' -> zbir kg aktivnih FST. Dokaz samo na nivou utovara je ANY-vs-
-    ' ALL rupa: faktura koja pokriva jednu od dve prerade utovara ne
-    ' sme da "fakturise" i drugu.
+    ' Dokaz na GRAIN-u stavke (revizije #6/#8): kljuc je
+    ' "UtovarID|FakturaID|PreradaID" -> zbir kg aktivnih FST. Bez
+    ' FakturaID u kljucu bi aktivna FST TUDJE fakture (U1|FAK-2)
+    ' "dokazala" prodaju fakture FAK-1 koja tu robu uopste ne nosi.
     Dim fstPar As Object: Set fstPar = CreateObject("Scripting.Dictionary")
     fstPar.CompareMode = vbTextCompare
+    ' Par utovar+prerada svih aktivnih FST -- za detekciju stavke
+    ' fakture ciju preradu utovar UOPSTE nema (visak, revizija #8).
+    Dim fstParUP As Object: Set fstParUP = CreateObject("Scripting.Dictionary")
+    fstParUP.CompareMode = vbTextCompare
+    ' 1 utovar = 1 faktura: prva vidjena faktura po utovaru + marker
+    ' mesanja -- aktivne FST dva razlicita FakturaID na istom utovaru
+    ' su same po sebi neusaglasenost.
+    Dim utFakPrva As Object: Set utFakPrva = CreateObject("Scripting.Dictionary")
+    utFakPrva.CompareMode = vbTextCompare
+    Dim utFakMix As Object: Set utFakMix = CreateObject("Scripting.Dictionary")
+    utFakMix.CompareMode = vbTextCompare
     Dim fstSiroce As Object: Set fstSiroce = CreateObject("Scripting.Dictionary")
     fstSiroce.CompareMode = vbTextCompare
     Dim colFsPre As Long, colFsUt As Long, colFsSt As Long, colFsOs As Long
-    Dim colFsKol As Long
+    Dim colFsKol As Long, colFsFak As Long
     colFsPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
     colFsUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
     colFsKol = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA)
+    colFsFak = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID)
     If colFsPre > 0 And colFsUt > 0 Then
         Dim fs As Variant
         fs = GetTableData(TBL_FAKTURA_STAVKE)
@@ -4552,8 +4564,10 @@ Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
                     If colFsOs > 0 Then
                         If Len(Trim$(SledTxt(fs(i, colFsOs)))) > 0 Then GoTo DaljeFst
                     End If
-                    Dim utK As String
+                    Dim utK As String, fakK As String
                     utK = Trim$(SledTxt(fs(i, colFsUt)))
+                    fakK = ""
+                    If colFsFak > 0 Then fakK = Trim$(SledTxt(fs(i, colFsFak)))
                     If Len(utK) = 0 Then
                         fstSiroce(k) = True
                     Else
@@ -4562,8 +4576,15 @@ Private Function SledUtovarPoPreradi(ByVal fakMapa As Object, _
                         Else
                             fstPoUtovaru.Add utK, 1
                         End If
+                        If utFakPrva.Exists(utK) Then
+                            If StrComp(CStr(utFakPrva(utK)), fakK, vbTextCompare) <> 0 Then _
+                                utFakMix(utK) = True
+                        Else
+                            utFakPrva.Add utK, fakK
+                        End If
+                        fstParUP(utK & "|" & k) = True
                         Dim parK As String
-                        parK = utK & "|" & k
+                        parK = utK & "|" & fakK & "|" & k
                         If colFsKol > 0 Then
                             If fstPar.Exists(parK) Then
                                 fstPar(parK) = CDbl(fstPar(parK)) + SledDbl(fs(i, colFsKol))
@@ -4605,13 +4626,20 @@ DaljeFst:
             fid = Trim$(SledTxt(ut(i, cUFid)))
             If fakt = "Da" Then
                 If Len(fid) > 0 And fakMapa.Exists(fid) _
-                   And fstPoUtovaru.Exists(k) Then
+                   And fstPoUtovaru.Exists(k) _
+                   And Not utFakMix.Exists(k) _
+                   And StrComp(CStr(utFakPrva(k)), fid, vbTextCompare) = 0 Then
+                    ' Revizija #8: FST dokaz mora nositi BAS header
+                    ' fakturu -- aktivna stavka tudje fakture na ovom
+                    ' utovaru (ili mesavina faktura) nije dokaz nego
+                    ' neusaglasenost.
                     Dim kupID As String
                     kupID = ""
                     If fakKupci.Exists(fid) Then kupID = CStr(fakKupci(fid))
-                    utValid(k) = Array(Trim$(CStr(fakMapa(fid))), kupID)
+                    utValid(k) = Array(Trim$(CStr(fakMapa(fid))), kupID, fid)
                 Else
-                    ' Marker bez aktivne fakture ili bez FST dokaza.
+                    ' Marker bez aktivne fakture, bez FST dokaza, ili
+                    ' sa FST tudje fakture.
                     utLose(k) = True
                 End If
             ElseIf Len(fid) > 0 Then
@@ -4629,6 +4657,11 @@ DaljeUt:
 
     ' Stavke: agregacija po preradi.
     Dim s As Variant
+    ' Parovi utovar+prerada koje utovar STVARNO nosi -- za detekciju
+    ' FST viska (revizija #8: stavka fakture za preradu koje na
+    ' utovaru nema).
+    Dim uPair As Object: Set uPair = CreateObject("Scripting.Dictionary")
+    uPair.CompareMode = vbTextCompare
     s = GetTableData(TBL_UTOVAR_STAVKE)
     If Not IsArray(s) Then s = Empty
     If IsArray(s) Then
@@ -4644,6 +4677,7 @@ DaljeUt:
             If Len(k) = 0 Then GoTo DaljeSt
             utID = Trim$(SledTxt(s(i, cSUt)))
             kol = SledDbl(s(i, cSKol))
+            uPair(utID & "|" & k) = True
             If Not res.Exists(k) Then res.Add k, Array(0#, 0#, False, "", "", "")
             v = res(k)
             If Not utAktivan.Exists(utID) Then
@@ -4654,17 +4688,17 @@ DaljeUt:
                 If InStr("|" & CStr(v(5)) & "|", "|" & CStr(utAktivan(utID)) & "|") = 0 Then _
                     v(5) = CStr(v(5)) & "|" & CStr(utAktivan(utID))
                 If utValid.Exists(utID) Then
-                    ' Dokaz PO STAVCI (revizija #6 t.3): za bas ovaj par
-                    ' utovar+prerada mora postojati aktivna FST sa ISTOM
-                    ' kolicinom -- validan header fakture ne dokazuje
-                    ' stavku koju faktura ne nosi (ANY-vs-ALL).
-                    Dim parKey As String
-                    parKey = utID & "|" & k
+                    ' Dokaz PO STAVCI (revizije #6/#8): za bas ovaj par
+                    ' utovar+prerada mora postojati aktivna FST BAS TE
+                    ' fakture (header FakturaID) sa ISTOM kolicinom --
+                    ' validan header ne dokazuje stavku koju njegova
+                    ' faktura ne nosi (ANY-vs-ALL / tudja faktura).
+                    Dim uv As Variant, parKey As String
+                    uv = utValid(utID)
+                    parKey = utID & "|" & CStr(uv(2)) & "|" & k
                     If fstPar.Exists(parKey) And _
                        Abs(SledDbl(fstPar(parKey)) - kol) <= 0.0001 Then
                         v(1) = CDbl(v(1)) + kol
-                        Dim uv As Variant
-                        uv = utValid(utID)
                         If InStr("|" & CStr(v(3)) & "|", "|" & CStr(uv(0)) & "|") = 0 Then _
                             v(3) = CStr(v(3)) & "|" & CStr(uv(0))
                         If Len(CStr(uv(1))) > 0 Then
@@ -4693,6 +4727,23 @@ DaljeSt:
         vs = res(CStr(sk))
         vs(2) = True
         res(CStr(sk)) = vs
+    Next sk
+
+    ' FST visak (revizija #8): aktivna stavka fakture za par
+    ' utovar+prerada koji na utovaru NE postoji -- faktura tvrdi robu
+    ' koju utovarna lista ne nosi.
+    Dim delovi() As String
+    For Each sk In fstParUP.keys
+        If Not uPair.Exists(CStr(sk)) Then
+            delovi = Split(CStr(sk), "|")
+            If UBound(delovi) >= 1 Then
+                If Not res.Exists(delovi(1)) Then _
+                    res.Add delovi(1), Array(0#, 0#, False, "", "", "")
+                vs = res(delovi(1))
+                vs(2) = True
+                res(delovi(1)) = vs
+            End If
+        End If
     Next sk
 End Function
 

@@ -1645,7 +1645,11 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' preuzima cene iz prethodne stornirane fakture -- za storno iz
     ' tehnickog razloga. Korekcija cene je poseban buduci rad.
     UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Ponovi fakturu"
-    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Ponoviti fakturu iz ovog utovara PO PRETHODNIM CENAMA? Roba ostaje utovarena; za drugu cenu storniraj i ceo utovar pa izradi iznova."
+    ' Revizija #8: pogresna cena NIKAD ne trazi storno fizickog
+    ' utovara -- isti utovar dobija novu fakturu sa novom cenom.
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Izraditi novu fakturu iz ovog utovara? Roba ostaje utovarena, datum utovara se ne menja."
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK_CENA", "Nova cena (RSD/kg) za korekciju. Prazno = cene iz prethodne fakture."
+    UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_CENA", ChrW(10007) & " Cena mora biti broj ve" & ChrW(263) & "i od nule"
     UpsertRow lo, existing, "OTKUI_MSG_UT_FAK", ChrW(10003) & " Nova faktura iz utovara je izra" & ChrW(273) & "ena"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK", ChrW(10007) & " Izrada fakture iz utovara nije uspela"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_VEC", ChrW(10007) & " Utovar je ve" & ChrW(263) & " fakturisan -- prvo storno fakture"

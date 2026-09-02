@@ -1298,7 +1298,20 @@ Private Function FakturisiUtovar(ByVal red As Long) As Boolean
               Trim$(CStr(modOtkupUI.GridCell(red, 1))) & "  " & ChrW(183) & "  " & _
               Trim$(CStr(modOtkupUI.GridCell(red, 4))), _
               vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
-    fakturaID = modUtovar.CreateFakturaIzUtovara_TX(iD)
+    ' Korekcija cene (revizija #8): pogresna cena NE sme da trazi
+    ' storno fizickog utovara -- ista roba, nova faktura, nova cena.
+    ' Prazno/Cancel = cene iz prethodne fakture (tehnicki storno).
+    Dim cenaTxt As String, novaCena As Double
+    cenaTxt = Trim$(InputBox(Poruka("OTKUI_ASK_UT_FAK_CENA"), APP_NAME))
+    novaCena = 0
+    If Len(cenaTxt) > 0 Then
+        If Not IsNumeric(cenaTxt) Or CDbl(cenaTxt) <= 0 Then
+            modOtkupUI.ShowToast Poruka("OTKUI_ERR_UT_FAK_CENA"), True
+            Exit Function
+        End If
+        novaCena = CDbl(cenaTxt)
+    End If
+    fakturaID = modUtovar.CreateFakturaIzUtovara_TX(iD, novaCena)
     If Len(fakturaID) > 0 Then
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_FAK"), False

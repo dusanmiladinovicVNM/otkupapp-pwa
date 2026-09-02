@@ -5937,3 +5937,23 @@ ODLOŽENO, po operaterovom „tek kad budem zadovoljan modulom".
   aktivna-fst, sef-kolicina-placebo, datum-lock-placebo).
 - **Recert na finalnom SHA:** vba_check čisto; RunAllTests 162/0;
   Banka ZELENO; pun dokaz svih 8 prefiksa; compile ručna kapija.
+
+### 25.14 Revizija #8: dokaz vezan za fakturu + korekcija cene
+
+- **Sledljivost — troделни ključ dokaza:** FST dokaz je sada
+  `UtovarID|FakturaID|PreradaID → kg` — aktivna stavka TUĐE fakture
+  na utovaru više ne može da „dokaže" prodaju header fakture koja tu
+  robu ne nosi. Uz to: aktivne FST dva različita FakturaID na istom
+  utovaru = neusaglašeno (1 utovar = 1 faktura); aktivna FST za
+  preradu koje na utovaru NEMA = neusaglašeno (višak). SEF mapper i
+  sledljivost su sada jednako fail-closed.
+- **Korekcija cene bez falsifikovanja utovara:** pogrešna cena više
+  ne traži storno fizičkog utovara (roba JE otišla — taj događaj se
+  ne poništava). „Ponovi fakturu" sada pita za novu cenu (prazno =
+  cene prethodne fakture, za tehnički storno); v1 ograničenje: jedna
+  cena za ceo utovar, pa se utovar sa više prerada odbija umesto da
+  se cene tiho izravnaju. Poruka koja je savetovala storno utovara
+  UKLONJENA.
+- Testovi: korekcija cene (30.5 kg × 150 = novi iznos, datum utovara
+  netaknut). Recert: 162/0; ciljani dokaz sledljivost-gp/utovar-gp/
+  sef-gp.

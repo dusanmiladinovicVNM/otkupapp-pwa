@@ -1072,8 +1072,14 @@ End Function
 ' utovar i ostavlja originalni DatumUtovara (SEF datum isporuke).
 ' Cene: iz POSLEDNJE (stornirane) fakture tog utovara -- one uvek
 ' postoje jer se utovar radja iskljucivo zajedno sa fakturom.
+' novaCena > 0 = KOREKCIJA CENE (revizija #8): ista roba, isti utovar,
+' nova faktura sa novom cenom -- fizicka isporuka se NE falsifikuje
+' stornom utovara zbog pogresne cene. v1: jedna cena za ceo utovar,
+' pa je za utovar sa VISE prerada korekcija odbijena (razlicite cene
+' po stavci jos nisu podrzane).
 ' ============================================================
-Public Function CreateFakturaIzUtovara_TX(ByVal utovarID As String) As String
+Public Function CreateFakturaIzUtovara_TX(ByVal utovarID As String, _
+        Optional ByVal novaCena As Double = 0) As String
     Dim tx As clsTransaction
     Set tx = New clsTransaction
 
@@ -1085,7 +1091,7 @@ Public Function CreateFakturaIzUtovara_TX(ByVal utovarID As String) As String
     tx.AddTableSnapshot TBL_FAKTURA_STAVKE
     tx.AddTableSnapshot TBL_NOVAC
 
-    CreateFakturaIzUtovara_TX = CreateFakturaIzUtovara(utovarID)
+    CreateFakturaIzUtovara_TX = CreateFakturaIzUtovara(utovarID, novaCena)
 
     If CreateFakturaIzUtovara_TX = "" Then
         Err.Raise vbObjectError + 1760, "CreateFakturaIzUtovara_TX", _
@@ -1137,13 +1143,17 @@ EH:
 End Function
 
 ' Base -- NE zovi je spolja (pola upisa bez transakcije).
-Private Function CreateFakturaIzUtovara(ByVal utovarID As String) As String
+Private Function CreateFakturaIzUtovara(ByVal utovarID As String, _
+        Optional ByVal novaCena As Double = 0) As String
     Const SRC As String = "CreateFakturaIzUtovara"
     On Error GoTo EH
 
     utovarID = Trim$(utovarID)
     If Len(utovarID) = 0 Then
         Err.Raise vbObjectError + 1761, SRC, "UtovarID je obavezan."
+    End If
+    If novaCena < 0 Then
+        Err.Raise vbObjectError + 1777, SRC, "Cena ne moze biti negativna."
     End If
 
     ' --- Kapije nad utovarom: postoji tacno jednom, aktivan, NEFAKTURISAN.
@@ -1253,24 +1263,40 @@ Private Function CreateFakturaIzUtovara(ByVal utovarID As String) As String
                 Err.Raise vbObjectError + 1767, SRC, _
                           "Kolicina stavke mora biti > 0. PreradaID=" & preradaID
             End If
-            If Not cene.Exists(preradaID) Then
+            ' Cena: korekcija (novaCena) ima prednost; inace cena iz
+            ' poslednje fakture ovog utovara.
+            Dim cenaSt As Double
+            If novaCena > 0 Then
+                cenaSt = novaCena
+            ElseIf cene.Exists(preradaID) Then
+                cenaSt = CDbl(cene(preradaID))
+            Else
                 Err.Raise vbObjectError + 1768, SRC, _
                           "Nema cene iz prethodne fakture za preradu " & preradaID & _
-                          " -- storniraj utovar i izradi fakturu iznova sa cenom."
+                          " -- unesi cenu pri radnji 'Ponovi fakturu'."
             End If
             ' Naziv proizvoda mora postojati (ista kapija kao izrada).
             If Len(Trim$(CStr(nz(LookupValue(TBL_PRERADA, COL_PRE_ID, preradaID, COL_PRE_TIP_GP))))) = 0 Then
                 Err.Raise vbObjectError + 1769, SRC, _
                           "TipGotovogProizvoda je prazan -- faktura mora imenovati proizvod: " & preradaID
             End If
-            stavke.Add Array(preradaID, kol, CDbl(cene(preradaID)), _
+            stavke.Add Array(preradaID, kol, cenaSt, _
                              Trim$(CStr(nz(s(i, cSBr)))))
-            ukupno = ukupno + kol * CDbl(cene(preradaID))
+            ukupno = ukupno + kol * cenaSt
         End If
     Next i
     If stavke.count = 0 Then
         Err.Raise vbObjectError + 1766, SRC, _
                   "Utovar nema aktivnih stavki: " & utovarID
+    End If
+    ' v1 korekcija cene = JEDNA cena za ceo utovar; utovar sa vise
+    ' prerada (razlicite cene po stavci) se odbija umesto da se sve
+    ' tiho izravna na istu cenu.
+    If novaCena > 0 And stavke.count > 1 Then
+        Err.Raise vbObjectError + 1778, SRC, _
+                  "Korekcija cene za utovar sa vise prerada jos nije " & _
+                  "podrzana (utovar " & utovarID & " ima " & _
+                  CStr(stavke.count) & " stavke)."
     End If
     If ukupno <= 0 Then
         Err.Raise vbObjectError + 1770, SRC, _
