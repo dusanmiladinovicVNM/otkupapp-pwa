@@ -2479,7 +2479,13 @@ Public Function FillUtovarSablon(ByVal broj As String, ByVal datum As Variant, _
     tot1.Font.Bold = True
     tot1.Offset(0, 6).value = ""
     tot1.Offset(0, 7).value = CDbl(tot(2))
-    tot1.Offset(0, 8).value = CDbl(tot(3))
+    ' Bruto zbir samo kad postoje IZMERENE stavke (revizija #11 P1) --
+    ' parcijale bruto ne nose, pa zbir od nule nije podatak.
+    If CDbl(tot(3)) > 0 Then
+        tot1.Offset(0, 8).value = CDbl(tot(3))
+    Else
+        tot1.Offset(0, 8).value = ""
+    End If
     ws.Range(tot1.Offset(0, 7), tot1.Offset(0, 8)).NumberFormat = "#,##0.00"
     ws.Range(tot1.Offset(0, 7), tot1.Offset(0, 8)).Font.Bold = True
     With ws.Range(tot1, tot1.Offset(0, 8))

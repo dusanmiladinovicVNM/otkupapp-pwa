@@ -680,31 +680,33 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                     stavke(nSt, 3) = ""
                     stavke(nSt, 4) = ""
                 End If
-                Dim udeo As Double, bruS As Double
+                ' Bruto SAMO kad je stvarno izmeren (revizija #11 P1):
+                ' cela paleta nosi izmereni bruto prerade; parcijala
+                ' NEMA svoj izmeren bruto pa se NE stampa procena --
+                ' transportni dokument radije prazan nego priblizan
+                ' (isti princip kao pakovanja, t.4 revizije #6).
                 If CDbl(pv(3)) > 0.0001 And kol >= CDbl(pv(3)) - 0.0001 Then
                     stavke(nSt, 6) = "1"
                     palCele = palCele + 1
-                    udeo = 1#
+                    If CDbl(pv(4)) > 0.0001 Then
+                        stavke(nSt, 8) = CDbl(pv(4))
+                        totBruto = totBruto + CDbl(pv(4))
+                    Else
+                        stavke(nSt, 8) = ""
+                    End If
                 Else
                     stavke(nSt, 6) = "deo"
                     palDelovi = palDelovi + 1
-                    If CDbl(pv(3)) > 0.0001 Then udeo = kol / CDbl(pv(3)) Else udeo = 0#
+                    stavke(nSt, 8) = ""
                 End If
-                If CDbl(pv(4)) > 0.0001 Then
-                    bruS = Round(CDbl(pv(4)) * udeo, 2)
-                Else
-                    bruS = kol
-                End If
-                stavke(nSt, 8) = bruS
-                totBruto = totBruto + bruS
             Else
                 stavke(nSt, 2) = ""
                 stavke(nSt, 3) = ""
                 stavke(nSt, 4) = ""
                 stavke(nSt, 5) = pakS
                 stavke(nSt, 6) = ""
-                stavke(nSt, 8) = kol
-                totBruto = totBruto + kol
+                ' Bez podataka prerade nema ni izmerenog bruta.
+                stavke(nSt, 8) = ""
             End If
         End If
     Next i

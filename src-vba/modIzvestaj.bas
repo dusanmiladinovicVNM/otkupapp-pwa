@@ -4648,7 +4648,17 @@ DaljeFst:
                     Dim kupID As String
                     kupID = ""
                     If fakKupci.Exists(fid) Then kupID = CStr(fakKupci(fid))
-                    utValid(k) = Array(Trim$(CStr(fakMapa(fid))), kupID, fid)
+                    ' Revizija #11 B1: kupac FIZICKOG dokumenta mora
+                    ' biti kupac FAKTURE -- faktura kupcu B za robu
+                    ' koja je po utovarnoj listi otisla kupcu A nije
+                    ' "2 kup." nego neusaglasenost (isti invariant
+                    ' kao SEF kapija).
+                    If Len(kupID) > 0 _
+                       And StrComp(kupID, Trim$(CStr(utKupci(k))), vbTextCompare) <> 0 Then
+                        utLose(k) = True
+                    Else
+                        utValid(k) = Array(Trim$(CStr(fakMapa(fid))), kupID, fid)
+                    End If
                 Else
                     ' Marker bez aktivne fakture, bez FST dokaza, ili
                     ' sa FST tudje fakture.

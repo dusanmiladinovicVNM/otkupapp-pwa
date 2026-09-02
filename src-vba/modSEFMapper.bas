@@ -371,6 +371,19 @@ Private Sub ValidateGpUtovarZaSEF(ByVal utovarID As String, ByVal fakturaID As S
                   "Utovar " & utovarID & " tvrdi drugu fakturu, ne " & fakturaID
     End If
 
+    ' Kupac FIZICKOG dokumenta = kupac FAKTURE (revizija #11 B1):
+    ' korumpirani podaci ne smeju na SEF poslati fakturu kupcu B za
+    ' robu koja je po utovarnoj listi otisla kupcu A. Isti invariant
+    ' prijavljuje i sledljivost (faktura neusaglasena).
+    Dim utKup As String, fakKup As String
+    utKup = Trim$(CStr(nz(ut(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)))))
+    fakKup = Trim$(CStr(nz(LookupValue(TBL_FAKTURE, COL_FAK_ID, fakturaID, COL_FAK_KUPAC))))
+    If StrComp(utKup, fakKup, vbTextCompare) <> 0 Then
+        Err.Raise ERR_SEF_VALIDATION, SRC, _
+                  "Kupac utovara (" & utKup & ") nije kupac fakture (" & _
+                  fakKup & ") za " & fakturaID & " -- SEF send blocked."
+    End If
+
     ' Kolicinski dokaz 1:1 (revizija #7 B3): za svaku aktivnu GP liniju
     ' fakture mora postojati aktivna UtovarStavka istog para
     ' (utovar+prerada) sa ISTOM kolicinom -- i obrnuto, sve utovarne

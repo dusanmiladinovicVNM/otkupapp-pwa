@@ -7049,6 +7049,17 @@ ijedne izmišljene veze.
 - Audit kolone (ko/kada) na utovar tabelama nastaju automatski i na
   self-update putu.
 
+### Kupac fizičkog dokumenta = kupac fakture (revizija #11)
+
+- SEF odbija GP fakturu čiji kupac nije kupac utovarne liste;
+  sledljivost isti raskorak prijavljuje kao „faktura neusaglasena" —
+  roba koja je otišla kupcu A ne može se fakturisati kupcu B.
+- Parcijalni utovar više ne štampa procenjeni bruto — bruto stoji samo
+  kad je stvarno izmeren (cela paleta); stvarni unos bruta po stavci
+  je budući rad.
+- Storno fakture sa više stavki istog utovara više ne pravi lažne
+  warninge u logu.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

@@ -6017,3 +6017,24 @@ ne moraju početi istog trenutka.
 - POUKA: oslanjanje na `Dim i` niže u proceduri obara compile
   („Variable not defined" modalni dijalog = suite VISI headless);
   blok uvek deklariše svoju petlja-promenljivu.
+
+### 25.16 Revizija #11: kupac invariant + čišćenja — završni kod krug
+
+- **BLOCKER — kupac utovara = kupac fakture:** kanonski GP contract
+  proširen poslednjom karikom. SEF (`ValidateGpUtovarZaSEF`) blokira
+  slanje kad `Utovar.KupacID ≠ Faktura.KupacID`; sledljivost isti
+  mismatch markira „faktura neusaglasena" (ne „2 kup.") — faktura
+  kupcu B za robu koja je fizički otišla kupcu A nikad nije validna
+  prodaja. Test 163 dokazuje SEF blok (korupcija kupca → blok →
+  restore → prolaz).
+- **P1 — parcijalni bruto se ne štampa kao procena:** cela paleta
+  nosi izmereni bruto prerade; parcijala nema svoj izmeren bruto pa
+  ostaje PRAZNA (isti princip kao pakovanja); zbir bruto samo od
+  izmerenih stavki. Stvarni `UtovarStavka.BrutoKg` unos je budući rad.
+- **P1 — release jednom po utovaru:** storno fakture sa više stavki
+  istog utovara više ne pravi lažne „tvrdi drugu fakturu" warninge
+  (dedup po UtovarID pre `ReleaseUtovarFromFaktura`).
+- **Poslovna odluka (operater):** cena OSTAJE obavezna pri izradi
+  utovara — dogovara se pre utovara; „Fakturiši" je čita sa stavke.
+- RunAllTests **163/0**; pun recert (dokaz + Banka + compile + smoke)
+  na finalnom SHA pred merge — bez novih feature-a posle ovog kruga.

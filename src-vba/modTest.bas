@@ -7002,8 +7002,10 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
              "parcijalni utovar je oznacen kao deo palete"
     AssertEq Format$(CDbl(wsU.cells(usRow, 8).value), "0.00"), _
              Format$(20#, "0.00"), "stavka liste nosi utovarene NETO kg"
-    AssertEq (CDbl(wsU.cells(usRow, 9).value) >= CDbl(wsU.cells(usRow, 8).value)), _
-             True, "bruto stavke nije manji od neto"
+    ' Revizija #11 P1: parcijala NEMA izmeren bruto -- procena se ne
+    ' stampa (transportni dokument radije prazan nego priblizan).
+    AssertEq Trim$(CStr(wsU.cells(usRow, 9).value)), "", _
+             "parcijala bez izmerenog bruta ne stampa procenu"
 
     ' --- Read-model: parcijalno prodata je i dalje dostupna (30.5).
     Dim gp As Variant, rW1 As Long
@@ -7316,6 +7318,29 @@ Private Sub T_UtovarB_SledIStornoKapije()
     Dim fidU As String, fidX As String, utX As String
     fidU = modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U")
     AssertEq (Len(fidU) > 0), True, "B-utovar se fakturise (cena sa stavke)"
+
+    ' --- Revizija #11 B1: kupac utovara = kupac fakture. Korumpiraj
+    ' kupca fakture -> SEF mora da blokira; vrati.
+    Dim rowFkU As Long, fkAllU As Variant
+    fkAllU = GetTableData(TBL_FAKTURE)
+    rowFkU = 0
+    Dim fkI As Long
+    For fkI = 1 To UBound(fkAllU, 1)
+        If Trim$(CStr(nz(fkAllU(fkI, GetColumnIndex(TBL_FAKTURE, COL_FAK_ID))))) = fidU Then rowFkU = fkI
+    Next fkI
+    RequireUpdateCell TBL_FAKTURE, rowFkU, COL_FAK_KUPAC, "KUP-TEST-1", "T163"
+    Dim dtoU As clsSEFInvoiceSnapshot, sefErrU As Long
+    sefErrU = 0
+    On Error Resume Next
+    Set dtoU = modSEFMapper.BuildSEFInvoiceDto(fidU)
+    sefErrU = Err.Number
+    On Error GoTo 0
+    AssertEq (sefErrU <> 0), True, _
+             "SEF blokira fakturu ciji kupac nije kupac utovara"
+    RequireUpdateCell TBL_FAKTURE, rowFkU, COL_FAK_KUPAC, "KUP-TEST-2", "T163"
+    Set dtoU = modSEFMapper.BuildSEFInvoiceDto(fidU)
+    AssertEq (Not dtoU Is Nothing), True, _
+             "sa istim kupcem SEF DTO prolazi"
     Dim stX As Collection
     Set stX = New Collection
     stX.Add Array("PRE-SLED-U", 5, 100)

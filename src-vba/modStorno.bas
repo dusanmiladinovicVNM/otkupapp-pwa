@@ -1982,6 +1982,11 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
     ' kolona ne postoji, a storno svezih faktura tamo mora da radi.
     Dim colUtID As Long
     colUtID = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    ' Release JEDNOM po utovaru (revizija #11 P1): faktura sa vise
+    ' stavki istog utovara bi drugim/trecim pozivom pravila lazne
+    ' "tvrdi drugu fakturu" warninge na potpuno validnom stornu.
+    Dim relUt As Object: Set relUt = CreateObject("Scripting.Dictionary")
+    relUt.CompareMode = vbTextCompare
 
     For i = 1 To UBound(stavkeData, 1)
         If Trim$(CStr(stavkeData(i, colFakID))) = Trim$(fakturaID) Then
@@ -1998,7 +2003,10 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))
                 If Len(utID) > 0 Then
-                    ReleaseUtovarFromFaktura utID, fakturaID
+                    If Not relUt.Exists(utID) Then
+                        relUt.Add utID, True
+                        ReleaseUtovarFromFaktura utID, fakturaID
+                    End If
                 End If
             End If
         End If

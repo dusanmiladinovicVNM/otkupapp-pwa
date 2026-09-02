@@ -4028,12 +4028,8 @@ SABOTAZE = {
     ),
     "storno-gp-faktura-ne-oslobadja-utovar": (
         "modStorno.bas",
-        "                If Len(utID) > 0 Then\n"
-        "                    ReleaseUtovarFromFaktura utID, fakturaID\n"
-        "                End If\n",
-        "                If False Then   ' SABOTAZA: utovar ostaje zarobljen\n"
-        "                    ReleaseUtovarFromFaktura utID, fakturaID\n"
-        "                End If\n",
+        "                        ReleaseUtovarFromFaktura utID, fakturaID\n",
+        "                        ' SABOTAZA: utovar ostaje zarobljen\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "storno fakture oslobadja utovar",
     ),
