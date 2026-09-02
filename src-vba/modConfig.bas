@@ -406,6 +406,11 @@ Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
 ' postavka; smrznuto voce standardno 24). Obrazac ga IZVODI -- posebna
 ' kolona po preradi je buduci korak ako se pojavi potreba po lotu.
 Public Const CFG_GP_ROK_MESECI As String = "GP_ROK_TRAJANJA_MESECI"
+' Kapacitet pakovanja gotove robe u NETO kg robe (bez tezine ambalaze
+' -- ona ulazi samo u bruto): poslovna postavka u Podesavanjima;
+' prazno = kapacitet se izvodi iz samog lota (neto/broj pakovanja).
+Public Const CFG_GP_KG_KUTIJA As String = "GP_KG_PO_KUTIJI"
+Public Const CFG_GP_KG_KESA As String = "GP_KG_PO_KESI"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

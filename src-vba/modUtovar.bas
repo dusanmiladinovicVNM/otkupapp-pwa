@@ -167,21 +167,42 @@ EH:
     LogErr SRC
 End Sub
 
-' Broj pakovanja za datu kolicinu, iz kapaciteta IZVEDENOG iz samog
-' lota (lotNeto/lotBroj = kg po pakovanju; pakovanje je uniformno,
-' npr. 10 kg -- operaterov contract posle smoke-a revizije #12).
+' Kapacitet jednog pakovanja u NETO kg robe (bez tezine ambalaze --
+' ona ulazi samo u bruto). Izvor po prioritetu: POSTAVKA iz
+' Podesavanja (operaterov contract: kapaciteti se resavaju tamo) ->
+' izvedeno iz samog lota (neto/broj) -> 0 (nepoznato). Sanity opseg
+' 0.1-1000 kg stiti od datumski formatirane config celije (ista mina
+' kao rok trajanja).
+Private Function KapacitetPakovanja(ByVal cfgKljuc As String, _
+                                    ByVal lotNeto As Double, _
+                                    ByVal lotBroj As Double) As Double
+    Const EPS As Double = 0.0001
+    Dim v As Variant
+    v = GetConfigValue(cfgKljuc)
+    If IsNumeric(v) Then
+        If CDbl(v) >= 0.1 And CDbl(v) <= 1000 Then
+            KapacitetPakovanja = CDbl(v)
+            Exit Function
+        End If
+    End If
+    If lotBroj > 0 And lotNeto > EPS Then _
+        KapacitetPakovanja = lotNeto / lotBroj
+End Function
+
+' Broj pakovanja za datu kolicinu. Kapacitet: Podesavanja (cfgKljuc)
+' pa lot fallback -- v. KapacitetPakovanja.
 ' samoTacno=True (dokument): broj SAMO kad je kg celobrojan umnozak
 ' kapaciteta, inace Empty -- utovarna lista ne nosi aproksimacije.
 ' samoTacno=False (grid): broj CELIH pakovanja na stanju (Fix) -- 733
-' kg uz 10 kg/kutiji = 73 cele kutije; bez podataka lota vraca 0.
+' kg uz 10 kg/kutiji = 73 cele kutije; bez kapaciteta vraca 0.
 Public Function PakovanjaZaKg(ByVal kg As Double, ByVal lotNeto As Double, _
                               ByVal lotBroj As Double, _
-                              ByVal samoTacno As Boolean) As Variant
+                              ByVal samoTacno As Boolean, _
+                              ByVal cfgKljuc As String) As Variant
     Const EPS As Double = 0.0001
     Dim poKom As Double, n As Double
     If samoTacno Then PakovanjaZaKg = Empty Else PakovanjaZaKg = 0&
-    If lotBroj <= 0 Or lotNeto <= EPS Then Exit Function
-    poKom = lotNeto / lotBroj
+    poKom = KapacitetPakovanja(cfgKljuc, lotNeto, lotBroj)
     If poKom <= EPS Then Exit Function
     n = kg / poKom
     If samoTacno Then
@@ -221,8 +242,8 @@ Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
         If kes > 0 Then outKes = CLng(kes)
         Exit Sub
     End If
-    outKut = PakovanjaZaKg(kol, neto, kut, True)
-    outKes = PakovanjaZaKg(kol, neto, kes, True)
+    outKut = PakovanjaZaKg(kol, neto, kut, True, CFG_GP_KG_KUTIJA)
+    outKes = PakovanjaZaKg(kol, neto, kes, True, CFG_GP_KG_KESA)
 End Sub
 
 ' Broj AKTIVNIH (nestorniranih, neosirocenih) faktura-stavki koje
@@ -702,8 +723,10 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                         ' (pre revizije #12): ista STROGA racunica iz
                         ' kapaciteta lota -- 500 kg / 10 kg = 50.
                         pakS = PakTekst( _
-                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(5)), True), _
-                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(6)), True))
+                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(5)), _
+                                          True, CFG_GP_KG_KUTIJA), _
+                            PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(6)), _
+                                          True, CFG_GP_KG_KESA))
                     End If
                 End If
                 stavke(nSt, 5) = pakS

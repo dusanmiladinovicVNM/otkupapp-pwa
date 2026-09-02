@@ -101,6 +101,10 @@ Public Function ConfigEditorFields() As Variant
     CfgAdd c, ChrW(352) & "tampa", "FAKTURA_PRINT_MODE", "Faktura", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "UTOVAR_PRINT_MODE", "Utovarna lista", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "GP_ROK_TRAJANJA_MESECI", "Rok trajanja got. proizvoda (meseci)", "text"
+    ' Kapacitet pakovanja gotove robe = NETO kg robe po pakovanju (bez
+    ' tezine ambalaze); prazno = izvodi se iz lota (neto/broj).
+    CfgAdd c, ChrW(352) & "tampa", "GP_KG_PO_KUTIJI", "Kapacitet kutije (kg neto)", "text"
+    CfgAdd c, ChrW(352) & "tampa", "GP_KG_PO_KESI", "Kapacitet kese (kg neto)", "text"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_PRINT_MODE", "Kartica kooperanta", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "KARTICA_AMB_PRINT_MODE", "Kartica ambala" & ChrW(382) & "e", "list:PDF;PRINT;PREVIEW;OFF"
     CfgAdd c, ChrW(352) & "tampa", "SLEDLJIVOST_PRINT_MODE", "Sledljivost", "list:PDF;PRINT;PREVIEW;OFF"

@@ -506,10 +506,12 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
         If IsNumeric(pd(i, cNeto)) Then lotNetoGp = CDbl(pd(i, cNeto))
         If IsNumeric(pd(i, cKut)) Then _
             outA(n, 6) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
-                                                 CDbl(pd(i, cKut)), False)
+                                                 CDbl(pd(i, cKut)), False, _
+                                                 CFG_GP_KG_KUTIJA)
         If IsNumeric(pd(i, cKes)) Then _
             outA(n, 7) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
-                                                 CDbl(pd(i, cKes)), False)
+                                                 CDbl(pd(i, cKes)), False, _
+                                                 CFG_GP_KG_KESA)
         ' Krug 5 contract: dostupna = ima robe na stanju AND imenovan
         ' proizvod AND jednoznacan identitet. Marker na preradi vise ne
         ' postoji -- prodaju broje utovarne stavke.

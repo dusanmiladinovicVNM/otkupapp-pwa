@@ -6082,3 +6082,20 @@ prošao): roba se smanji, a kutije/kese ne — a pakovanje JE definisano
 - **Read-time fallback u štampi:** stare parcijalne stavke (napravljene
   pre ovog fixa, bez upisanih pakovanja) na reprint dobijaju istu
   strogu računicu iz kapaciteta lota (`PakTekst` helper).
+
+### 25.19 Kapacitet pakovanja kao poslovna postavka
+
+Operaterov contract: kapaciteti se rešavaju u Podešavanjima, a
+kapacitet = **neto kg robe** po pakovanju (težina ambalaže ne ulazi —
+ona živi samo u brutu palete).
+
+- Nova podešavanja (kartica Štampa, uz rok trajanja):
+  `GP_KG_PO_KUTIJI` „Kapacitet kutije (kg neto)" i `GP_KG_PO_KESI`
+  „Kapacitet kese (kg neto)".
+- `KapacitetPakovanja` (modUtovar): postavka iz Podešavanja (sanity
+  0.1–1000 kg, ista odbrana od datumski formatirane ćelije kao rok) →
+  fallback izvedeno iz lota (neto ÷ broj) → 0. `PakovanjaZaKg` sada
+  prima ključ postavke; svi pozivaoci (grid Gotova roba, upis stavke,
+  reprint fallback) prosleđuju kutija/kesa ključ.
+- Bruto logika netaknuta (izmereni bruto prerade za celu paletu,
+  parcijala prazna).
