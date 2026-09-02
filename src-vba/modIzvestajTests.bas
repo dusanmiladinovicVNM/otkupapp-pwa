@@ -743,11 +743,15 @@ Private Sub T_TabMatrica()
     IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_MANJAK), S & "zbirni OM: Manjak DA"
     IzvChk IzvestajTabDostupan("Kupac", True, IZV_TAB_ZBIRNI), S & "zbirni Kupac: Zbirni DA"
 
-    ' Zbirni rezim NE sme da nudi pojedinacne tabove.
-    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_SALDO_OM) = False, _
-           S & "zbirni OM: Saldo OM NE"
-    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ISPLATA) = False, _
-           S & "zbirni OM: Isplata NE"
+    ' Zbirni OM od v2.89 (PR #245, krug 9 -- odluka operatera "fali
+    ' sadrzaj za zbirne") NUDI Saldo i Isplatu po stanicama
+    ' (ReportSaldoOMZbirni / ReportIsplataZbirniOM, katalog 23.13);
+    ' stara tvrdnja "pojedinacni tab se ne nudi zbirno" vazi jos za
+    ' karticu (dole).
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_SALDO_OM), _
+           S & "zbirni OM: Saldo po stanicama DA (krug 9)"
+    IzvChk IzvestajTabDostupan("OM", True, IZV_TAB_ISPLATA), _
+           S & "zbirni OM: Isplata po stanicama DA (krug 9)"
     IzvChk IzvestajTabDostupan("Kooperant", True, IZV_TAB_KARTICA) = False, _
            S & "zbirni Kooperant: Kartica NE"
 
