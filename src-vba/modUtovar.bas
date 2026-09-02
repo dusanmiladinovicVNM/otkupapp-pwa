@@ -168,29 +168,35 @@ EH:
 End Sub
 
 ' Kapacitet jednog pakovanja u NETO kg robe (bez tezine ambalaze --
-' ona ulazi samo u bruto). Izvor po prioritetu: POSTAVKA iz
-' Podesavanja (operaterov contract: kapaciteti se resavaju tamo) ->
-' izvedeno iz samog lota (neto/broj) -> 0 (nepoznato). Sanity opseg
-' 0.1-1000 kg stiti od datumski formatirane config celije (ista mina
-' kao rok trajanja).
-Private Function KapacitetPakovanja(ByVal cfgKljuc As String, _
+' ona ulazi samo u bruto). Izvor po prioritetu: SIFARNIK tblKutije/
+' tblKese po TIPU sa prerade (operaterov contract: kapaciteti vec
+' zive tamo, Maticni podaci) -> izvedeno iz samog lota (neto/broj) ->
+' 0 (nepoznato). Sanity opseg 0.1-1000 kg.
+Private Function KapacitetPakovanja(ByVal vrsta As String, _
+                                    ByVal tip As String, _
                                     ByVal lotNeto As Double, _
                                     ByVal lotBroj As Double) As Double
     Const EPS As Double = 0.0001
     Dim v As Variant
-    v = GetConfigValue(cfgKljuc)
-    If IsNumeric(v) Then
-        If CDbl(v) >= 0.1 And CDbl(v) <= 1000 Then
-            KapacitetPakovanja = CDbl(v)
-            Exit Function
+    If Len(Trim$(tip)) > 0 Then
+        If vrsta = "KES" Then
+            v = LookupValue(TBL_KESE, COL_KES_TIP, Trim$(tip), COL_KES_TEZINA)
+        Else
+            v = LookupValue(TBL_KUTIJE, COL_KUT_TIP, Trim$(tip), COL_KUT_TEZINA)
+        End If
+        If IsNumeric(v) Then
+            If CDbl(v) >= 0.1 And CDbl(v) <= 1000 Then
+                KapacitetPakovanja = CDbl(v)
+                Exit Function
+            End If
         End If
     End If
     If lotBroj > 0 And lotNeto > EPS Then _
         KapacitetPakovanja = lotNeto / lotBroj
 End Function
 
-' Broj pakovanja za datu kolicinu. Kapacitet: Podesavanja (cfgKljuc)
-' pa lot fallback -- v. KapacitetPakovanja.
+' Broj pakovanja za datu kolicinu. Kapacitet: sifarnik po tipu, pa
+' lot fallback -- v. KapacitetPakovanja. vrsta = "KUT" ili "KES".
 ' samoTacno=True (dokument): broj SAMO kad je kg celobrojan umnozak
 ' kapaciteta, inace Empty -- utovarna lista ne nosi aproksimacije.
 ' samoTacno=False (grid): broj CELIH pakovanja na stanju (Fix) -- 733
@@ -198,11 +204,12 @@ End Function
 Public Function PakovanjaZaKg(ByVal kg As Double, ByVal lotNeto As Double, _
                               ByVal lotBroj As Double, _
                               ByVal samoTacno As Boolean, _
-                              ByVal cfgKljuc As String) As Variant
+                              ByVal vrsta As String, _
+                              ByVal tip As String) As Variant
     Const EPS As Double = 0.0001
     Dim poKom As Double, n As Double
     If samoTacno Then PakovanjaZaKg = Empty Else PakovanjaZaKg = 0&
-    poKom = KapacitetPakovanja(cfgKljuc, lotNeto, lotBroj)
+    poKom = KapacitetPakovanja(vrsta, tip, lotNeto, lotBroj)
     If poKom <= EPS Then Exit Function
     n = kg / poKom
     If samoTacno Then
@@ -212,6 +219,106 @@ Public Function PakovanjaZaKg(ByVal kg As Double, ByVal lotNeto As Double, _
         PakovanjaZaKg = CLng(Fix(n + EPS))
     End If
 End Function
+
+' Rok isteka lota po TADASNJEM pravilu (revizija #13 B2): vrsta ->
+' RokMeseci iz sifarnika, pa globalni CFG (sanity 1-600), pa 24.
+' Koristi ga prerada writer za SNAPSHOT (tblPrerada.DatumIsteka) i
+' stampa SAMO kao fallback za stare lotove bez snapshota -- rok
+' pripada LOTU, ne trenutnoj konfiguraciji.
+Public Function RokIstekaZaTip(ByVal tipGP As String, _
+                               ByVal datumPrerade As Date) As Date
+    Dim meseci As Long, rokD As Double, v As Variant
+    meseci = 24
+    If IsNumeric(GetConfigValue(CFG_GP_ROK_MESECI)) Then
+        rokD = CDbl(GetConfigValue(CFG_GP_ROK_MESECI))
+        If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then meseci = CLng(rokD)
+    End If
+    If Len(Trim$(tipGP)) > 0 Then
+        If Not GetTable(TBL_VRSTA_GP) Is Nothing Then
+            If GetColumnIndex(TBL_VRSTA_GP, COL_VGP_ROK) > 0 Then
+                v = LookupValue(TBL_VRSTA_GP, COL_VGP_TIP, Trim$(tipGP), COL_VGP_ROK)
+                If IsNumeric(v) Then
+                    rokD = CDbl(v)
+                    If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then _
+                        meseci = CLng(rokD)
+                End If
+            End If
+        End If
+    End If
+    RokIstekaZaTip = DateAdd("m", meseci, datumPrerade)
+End Function
+
+' Writer fail-closed na ostecene aktivne utovarne stavke (revizija
+' #13 P1): stavka sa nenumerickom/nepozitivnom kolicinom, bez
+' PreradaID, ili sa UtovarID koji ne postoji tacno jednom kao AKTIVAN
+' header, kvari racun stanja (UtovarenoPoPreradi je tiho preskace pa
+' stanje ispadne PREVISOKO) -- prodaja preko takvog stanja je moguca
+' dupla prodaja, zato se BLOKIRA dok se integritet ne popravi.
+Private Sub RequireStavkeKonzistentne(ByVal preradaID As String, _
+                                      ByVal SRC As String)
+    Dim s As Variant, i As Long
+    Dim cUt As Long, cPre As Long, cKol As Long, cSt As Long
+    s = GetTableData(TBL_UTOVAR_STAVKE)
+    If Not IsArray(s) Then Exit Sub
+    cUt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_UTOVAR_ID, SRC)
+    cPre = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_PRERADA_ID, SRC)
+    cKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
+    cSt = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_STORNIRANO, SRC)
+
+    ' Header stanja jednim prolazom (id -> broj aktivnih / duplikata).
+    Dim hdrAkt As Object: Set hdrAkt = CreateObject("Scripting.Dictionary")
+    hdrAkt.CompareMode = vbTextCompare
+    Dim ut As Variant, cUId As Long, cUSt As Long, k As String
+    ut = GetTableData(TBL_UTOVAR)
+    If IsArray(ut) Then
+        cUId = RequireColumnIndex(TBL_UTOVAR, COL_UT_ID, SRC)
+        cUSt = RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)
+        For i = 1 To UBound(ut, 1)
+            k = Trim$(CStr(nz(ut(i, cUId))))
+            If Len(k) > 0 Then
+                If hdrAkt.Exists(k) Then
+                    hdrAkt(k) = -1    ' duplikat = nikad validan
+                ElseIf UCase$(Trim$(CStr(nz(ut(i, cUSt))))) = "DA" Then
+                    hdrAkt.Add k, 0   ' storniran
+                Else
+                    hdrAkt.Add k, 1   ' aktivan, jednoznacan
+                End If
+            End If
+        Next i
+    End If
+
+    For i = 1 To UBound(s, 1)
+        If Trim$(CStr(nz(s(i, cPre)))) = Trim$(preradaID) _
+           And UCase$(Trim$(CStr(nz(s(i, cSt))))) <> "DA" Then
+            If Not IsNumeric(s(i, cKol)) Then
+                Err.Raise vbObjectError + 1780, SRC, _
+                          "Aktivna utovarna stavka bez numericke kolicine za preradu " & _
+                          preradaID & " -- stanje nije dokazivo, prodaja blokirana."
+            End If
+            If CDbl(s(i, cKol)) <= 0 Then
+                Err.Raise vbObjectError + 1780, SRC, _
+                          "Aktivna utovarna stavka sa kolicinom <= 0 za preradu " & _
+                          preradaID & " -- stanje nije dokazivo, prodaja blokirana."
+            End If
+            k = Trim$(CStr(nz(s(i, cUt))))
+            If Len(k) = 0 Then
+                Err.Raise vbObjectError + 1781, SRC, _
+                          "Aktivna utovarna stavka bez UtovarID za preradu " & _
+                          preradaID & " -- stanje nije dokazivo, prodaja blokirana."
+            End If
+            If Not hdrAkt.Exists(k) Then
+                Err.Raise vbObjectError + 1781, SRC, _
+                          "Aktivna utovarna stavka pokazuje na nepostojeci utovar " & _
+                          k & " -- stanje nije dokazivo, prodaja blokirana."
+            End If
+            If CLng(hdrAkt(k)) <> 1 Then
+                Err.Raise vbObjectError + 1781, SRC, _
+                          "Aktivna utovarna stavka pokazuje na storniran/dupli utovar " & _
+                          k & " -- stanje nije dokazivo, prodaja blokirana."
+            End If
+        End If
+    Next i
+End Sub
 
 ' Prikazni tekst pakovanja iz dva (opciona) broja: "50 kut. / 50 kesa",
 ' "50 kut.", "50 kesa" ili "" -- Empty/0 se ne prikazuje.
@@ -234,6 +341,7 @@ End Function
 ' bez podatka nego sa pogresnim brojem.
 Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
                          ByVal kut As Double, ByVal kes As Double, _
+                         ByVal tipK As String, ByVal tipS As String, _
                          ByRef outKut As Variant, ByRef outKes As Variant)
     Const EPS As Double = 0.0001
     outKut = Empty: outKes = Empty
@@ -242,8 +350,8 @@ Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
         If kes > 0 Then outKes = CLng(kes)
         Exit Sub
     End If
-    outKut = PakovanjaZaKg(kol, neto, kut, True, CFG_GP_KG_KUTIJA)
-    outKes = PakovanjaZaKg(kol, neto, kes, True, CFG_GP_KG_KESA)
+    outKut = PakovanjaZaKg(kol, neto, kut, True, "KUT", tipK)
+    outKes = PakovanjaZaKg(kol, neto, kes, True, "KES", tipS)
 End Sub
 
 ' Broj AKTIVNIH (nestorniranih, neosirocenih) faktura-stavki koje
@@ -483,6 +591,17 @@ Public Function UpdateUtovarPrevoz_TX(ByVal utovarID As String, _
                           "Datum/vreme utovara je zakljucan: faktura je u SEF stanju " & _
                           wfState & " -- promena bi se razisla sa poslatim dokumentom."
             End If
+            ' Revizija #13 B1: SEF_TECH_FAILED moze da dodje i POSLE
+            ' SEF_SENT (Mistake i sl.) -- stanje samo nije dovoljan
+            ' dokaz da dokument NIJE stigao spolja. Durable dokaz je
+            ' SEFDocumentId (isti princip kao CanSendSEFInvoice): ako
+            ' postoji, dokument je u SEF lifecycle-u i datum je
+            ' zakljucan bez obzira na workflow stanje.
+            If Len(Trim$(GetFakturaSEFDocumentId(lockFid))) > 0 Then
+                Err.Raise vbObjectError + 1775, SRC, _
+                          "Datum/vreme utovara je zakljucan: faktura ima SEF " & _
+                          "DocumentId (dokument postoji na SEF-u)."
+            End If
         End If
     End If
     If Len(datumUtovara) > 0 And datumUtovara <> "-" Then
@@ -585,42 +704,10 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     ' Rok trajanja = datum prerade + N meseci (Podesavanja; default 24
     ' za smrznuto). IZVEDEN podatak, jasno dokumentovan -- posebna
     ' kolona po preradi je buduci korak.
-    ' Sanity opseg je obavezan: datumski formatirana celija u configu
-    ' vrati datum, CStr na srpskom locale-u da "23.1.1900." a CLng to
-    ' parsira kao 2311900 (tacke = hiljade) -- DateAdd preko 9999. god
-    ' onda obara celu stampu greskom 5.
-    Dim rokMeseci As Long, rokD As Double
-    rokMeseci = 24
-    If IsNumeric(GetConfigValue(CFG_GP_ROK_MESECI)) Then
-        rokD = CDbl(GetConfigValue(CFG_GP_ROK_MESECI))
-        If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then _
-            rokMeseci = CLng(rokD)
-    End If
-    ' Rok PO VRSTI proizvoda (revizija #9, potvrdjeno poslovno:
-    ' proizvodi imaju RAZLICITE rokove): tblVrstaGotovihProizvoda
-    ' RokMeseci ima prednost; prazno/nevalidno = globalni default.
-    ' Isti sanity opseg kao global (1-600 celih meseci). Sopstvena
-    ' petlja promenljiva (vgI): oslanjanje na Dim i nize u proceduri
-    ' obara compile ("Variable not defined") -- smoke #10 nalaz.
-    Dim vrstaRok As Object: Set vrstaRok = CreateObject("Scripting.Dictionary")
-    vrstaRok.CompareMode = vbTextCompare
-    Dim vg As Variant, cVgTip As Long, cVgRok As Long, vgI As Long
-    If Not GetTable(TBL_VRSTA_GP) Is Nothing Then
-        cVgTip = GetColumnIndex(TBL_VRSTA_GP, COL_VGP_TIP)
-        cVgRok = GetColumnIndex(TBL_VRSTA_GP, COL_VGP_ROK)
-        If cVgTip > 0 And cVgRok > 0 Then
-            vg = GetTableData(TBL_VRSTA_GP)
-            If IsArray(vg) Then
-                For vgI = 1 To UBound(vg, 1)
-                    If IsNumeric(vg(vgI, cVgRok)) Then
-                        rokD = CDbl(vg(vgI, cVgRok))
-                        If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then _
-                            vrstaRok(Trim$(CStr(nz(vg(vgI, cVgTip))))) = CLng(rokD)
-                    End If
-                Next vgI
-            End If
-        End If
-    End If
+    ' Rok trajanja: SNAPSHOT sa lota (tblPrerada.DatumIsteka, nastaje
+    ' pri preradi -- revizija #13 B2: rok pripada LOTU, promena
+    ' podesavanja NE sme da promeni rok na reprintu). Stari lotovi bez
+    ' snapshota: RokIstekaZaTip fallback (trenutna pravila, posteno).
 
     ' Podaci prerade: proizvod, pakovanje, datum proizvodnje, neto
     ' izlaz (za "cela paleta / deo") i BRUTO (srazmerno za parcijalu).
@@ -638,6 +725,10 @@ Public Sub PrintUtovar(ByVal utovarID As String)
         cPDat = RequireColumnIndex(TBL_PRERADA, COL_PRE_DATUM, SRC)
         cPNeto = RequireColumnIndex(TBL_PRERADA, COL_PRE_NETO_IZLAZ, SRC)
         cPBru = GetColumnIndex(TBL_PRERADA, COL_PRE_BRUTO)
+        Dim cPTipK As Long, cPTipS As Long, cPRok As Long
+        cPTipK = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KUTIJE)
+        cPTipS = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KESE)
+        cPRok = GetColumnIndex(TBL_PRERADA, COL_PRE_ROK)
         For i = 1 To UBound(pd, 1)
             If Not preInfo.Exists(Trim$(CStr(nz(pd(i, cPId))))) Then
                 Dim bru As Double, net As Double
@@ -650,11 +741,19 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                 lotKut = 0#: lotKes = 0#
                 If IsNumeric(pd(i, cPKut)) Then lotKut = CDbl(pd(i, cPKut))
                 If IsNumeric(pd(i, cPKes)) Then lotKes = CDbl(pd(i, cPKes))
+                Dim lotTipK As String, lotTipS As String, lotRok As Variant
+                lotTipK = "": lotTipS = "": lotRok = Empty
+                If cPTipK > 0 Then lotTipK = Trim$(CStr(nz(pd(i, cPTipK))))
+                If cPTipS > 0 Then lotTipS = Trim$(CStr(nz(pd(i, cPTipS))))
+                If cPRok > 0 Then
+                    If IsDate(pd(i, cPRok)) Then lotRok = CDate(pd(i, cPRok))
+                End If
                 preInfo.Add Trim$(CStr(nz(pd(i, cPId)))), Array( _
                     Trim$(CStr(nz(pd(i, cPTip)))), _
                     Trim$(CStr(nz(pd(i, cPKut)))) & " kut. / " & _
                     Trim$(CStr(nz(pd(i, cPKes)))) & " kesa", _
-                    pd(i, cPDat), net, bru, lotKut, lotKes)
+                    pd(i, cPDat), net, bru, lotKut, lotKes, _
+                    lotTipK, lotTipS, lotRok)
             End If
         Next i
     End If
@@ -666,6 +765,11 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     Dim s As Variant, stavke() As Variant, nSt As Long
     Dim totNeto As Double, totBruto As Double
     Dim palCele As Long, palDelovi As Long
+    ' UKUPNO BRUTO se stampa SAMO ako je bruto poznat za SVE stavke
+    ' (revizija #13 B3): parcijalno poznat zbir bi izgledao kao bruto
+    ' celog kamiona.
+    Dim svaBruto As Boolean
+    svaBruto = True
     s = GetTableData(TBL_UTOVAR_STAVKE)
     If Not IsArray(s) Then Exit Sub
     s = ExcludeStornirano(s, TBL_UTOVAR_STAVKE)
@@ -724,20 +828,21 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                         ' kapaciteta lota -- 500 kg / 10 kg = 50.
                         pakS = PakTekst( _
                             PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(5)), _
-                                          True, CFG_GP_KG_KUTIJA), _
+                                          True, "KUT", CStr(pv(7))), _
                             PakovanjaZaKg(kol, CDbl(pv(3)), CDbl(pv(6)), _
-                                          True, CFG_GP_KG_KESA))
+                                          True, "KES", CStr(pv(8))))
                     End If
                 End If
                 stavke(nSt, 5) = pakS
                 If IsDate(pv(2)) Then
                     stavke(nSt, 3) = CDate(pv(2))
-                    ' Rok po vrsti proizvoda; bez unosa = globalni.
-                    Dim rokEf As Long
-                    rokEf = rokMeseci
-                    If vrstaRok.Exists(CStr(pv(0))) Then _
-                        rokEf = CLng(vrstaRok(CStr(pv(0))))
-                    stavke(nSt, 4) = DateAdd("m", rokEf, CDate(pv(2)))
+                    ' SNAPSHOT roka sa lota; stari lot bez snapshota =
+                    ' fallback po trenutnim pravilima (RokIstekaZaTip).
+                    If IsDate(pv(9)) Then
+                        stavke(nSt, 4) = CDate(pv(9))
+                    Else
+                        stavke(nSt, 4) = RokIstekaZaTip(CStr(pv(0)), CDate(pv(2)))
+                    End If
                 Else
                     stavke(nSt, 3) = ""
                     stavke(nSt, 4) = ""
@@ -755,11 +860,13 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                         totBruto = totBruto + CDbl(pv(4))
                     Else
                         stavke(nSt, 8) = ""
+                        svaBruto = False
                     End If
                 Else
                     stavke(nSt, 6) = "deo"
                     palDelovi = palDelovi + 1
                     stavke(nSt, 8) = ""
+                    svaBruto = False
                 End If
             Else
                 stavke(nSt, 2) = ""
@@ -769,10 +876,12 @@ Public Sub PrintUtovar(ByVal utovarID As String)
                 stavke(nSt, 6) = ""
                 ' Bez podataka prerade nema ni izmerenog bruta.
                 stavke(nSt, 8) = ""
+                svaBruto = False
             End If
         End If
     Next i
     If nSt = 0 Then Exit Sub
+    If Not svaBruto Then totBruto = 0#
 
     Dim ws As Worksheet
     Set ws = FillUtovarSablon(broj, datum, vreme, kupacNaziv, mestoIst, _
@@ -1004,9 +1113,13 @@ Private Function CreateUtovarCore(ByVal kupacID As String, _
     colStorno = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, SRC)
     colTipGp = RequireColumnIndex(TBL_PRERADA, COL_PRE_TIP_GP, SRC)
     ' Pakovanja (revizija #6 t.4) -- meko: sluze za izracunljiv broj
-    ' pakovanja utovarene kolicine, ne za kapiju.
+    ' pakovanja utovarene kolicine, ne za kapiju. Tipovi pakovanja
+    ' (revizija #13): kapacitet ide iz sifarnika po tipu.
     colKut = GetColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE)
     colKes = GetColumnIndex(TBL_PRERADA, COL_PRE_KESE)
+    Dim colTipK As Long, colTipS As Long
+    colTipK = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KUTIJE)
+    colTipS = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KESE)
 
     ' Na stanju = proizvedeno - vec utovareno (jedno pravilo za sve).
     Dim utovareno As Object: Set utovareno = UtovarenoPoPreradi()
@@ -1095,13 +1208,22 @@ Private Function CreateUtovarCore(ByVal kupacID As String, _
         If colKes > 0 Then
             If IsNumeric(preData(rowPre, colKes)) Then preKes = CDbl(preData(rowPre, colKes))
         End If
+        Dim preTipK As String, preTipS As String
+        preTipK = "": preTipS = ""
+        If colTipK > 0 Then preTipK = Trim$(CStr(nz(preData(rowPre, colTipK))))
+        If colTipS > 0 Then preTipS = Trim$(CStr(nz(preData(rowPre, colTipS))))
+
+        ' Writer fail-closed (revizija #13 P1): ostecena aktivna
+        ' utovarna stavka kvari racun stanja -- ne prodaj preko nje.
+        RequireStavkeKonzistentne preradaID, SRC
 
         preRows.Add preradaID, rowPre
         preValues.Add preradaID, Array( _
             kolicina, cena, _
             Trim$(CStr(nz(preData(rowPre, colBroj)))) & "/" & _
             Trim$(CStr(nz(preData(rowPre, colGodina)))), _
-            CDbl(preData(rowPre, colNetoIzlaz)), preKut, preKes)
+            CDbl(preData(rowPre, colNetoIzlaz)), preKut, preKes, _
+            preTipK, preTipS)
     Next s
 
     Dim ukupno As Double, key As Variant, preVals As Variant
@@ -1151,7 +1273,8 @@ Private Function CreateUtovarCore(ByVal kupacID As String, _
         ' imenu (kolone su dopuna na kraju); prazno kad nije dokazivo.
         Dim pkKut As Variant, pkKes As Variant
         UtsPakovanja CDbl(preVals(0)), CDbl(preVals(3)), _
-                     CDbl(preVals(4)), CDbl(preVals(5)), pkKut, pkKes
+                     CDbl(preVals(4)), CDbl(preVals(5)), _
+                     CStr(preVals(6)), CStr(preVals(7)), pkKut, pkKes
         If Not IsEmpty(pkKut) Then _
             RequireUpdateCell TBL_UTOVAR_STAVKE, rowUts, COL_UTS_KUTIJE, pkKut, SRC
         If Not IsEmpty(pkKes) Then _

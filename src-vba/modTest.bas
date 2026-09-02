@@ -7266,6 +7266,22 @@ End Sub
 Private Sub T_UtovarB_SledIStornoKapije()
     Dim lanac As Variant, r As Long
 
+    ' --- Revizija #13 P1: PakovanjaZaKg racunica. Kapacitet: sifarnik
+    ' po tipu ima prednost, pa lot fallback (neto/broj); dokument
+    ' (samoTacno) samo celobrojan umnozak, grid floor celih pakovanja.
+    AssertEq CLng(modUtovar.PakovanjaZaKg(500, 1000, 100, True, "KUT", "")), 50&, _
+             "lot fallback: 500 kg uz 10 kg/kutiji = 50 kutija"
+    AssertEq IsEmpty(modUtovar.PakovanjaZaKg(505, 1000, 100, True, "KUT", "")), True, _
+             "dokument ne nosi aproksimaciju (505 kg nije umnozak)"
+    AssertEq CLng(modUtovar.PakovanjaZaKg(505, 1000, 100, False, "KUT", "")), 50&, _
+             "grid: 505 kg = 50 CELIH pakovanja na stanju"
+    ' (RowExists je Private u modBusinessFlowProTests -- LookupValue.)
+    If Len(Trim$(CStr(nz(LookupValue(TBL_KUTIJE, COL_KUT_TIP, "TEST-K7", _
+        COL_KUT_TIP), "")))) = 0 Then _
+        AppendRow TBL_KUTIJE, Array("TEST-K7", 7, "Aktivan")
+    AssertEq CLng(modUtovar.PakovanjaZaKg(490, 1000, 100, True, "KUT", "TEST-K7")), 70&, _
+             "sifarnik po tipu ima prednost nad lot fallback-om (7 kg/kutiji)"
+
     ' --- B1: stanje i kupac PRE fakture.
     lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
     r = SledNadjiRed(lanac, "OTK-SLED-U")

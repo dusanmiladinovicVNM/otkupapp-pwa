@@ -347,6 +347,11 @@ Public Const COL_PRE_AMBALAZA As String = "AmbalazaKg"
 Public Const COL_PRE_TIP_KUTIJE As String = "TipKutije"
 Public Const COL_PRE_TIP_KESE As String = "TipKese"
 Public Const COL_PRE_TIP_GP As String = "TipGotovogProizvoda"
+' SNAPSHOT roka trajanja NA LOTU (revizija #13 B2): nastaje pri
+' preradi po TADASNJEM pravilu (vrsta -> RokMeseci, pa globalni CFG);
+' od tada je istorijska cinjenica lota -- kasnija promena podesavanja
+' NE sme da promeni rok na reprintu starog dokumenta.
+Public Const COL_PRE_ROK As String = "DatumIsteka"
 
 ' UTOVARNA LISTA (krug 5 revizije #248): dokument FIZICKE isporuke GP
 ' robe. Prerada je proizvodni lot (koliko je PROIZVEDENO); utovar
@@ -406,11 +411,6 @@ Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"
 ' postavka; smrznuto voce standardno 24). Obrazac ga IZVODI -- posebna
 ' kolona po preradi je buduci korak ako se pojavi potreba po lotu.
 Public Const CFG_GP_ROK_MESECI As String = "GP_ROK_TRAJANJA_MESECI"
-' Kapacitet pakovanja gotove robe u NETO kg robe (bez tezine ambalaze
-' -- ona ulazi samo u bruto): poslovna postavka u Podesavanjima;
-' prazno = kapacitet se izvodi iz samog lota (neto/broj pakovanja).
-Public Const CFG_GP_KG_KUTIJA As String = "GP_KG_PO_KUTIJI"
-Public Const CFG_GP_KG_KESA As String = "GP_KG_PO_KESI"
 
 ' Paleta status
 Public Const PAL_STATUS_OTVORENA As String = "Otvorena"

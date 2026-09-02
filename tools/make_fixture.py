@@ -1992,6 +1992,9 @@ SEED = {
 # nadogradnje. Kolona koja vec postoji se ne dira.
 ENSURE_COLS = {
     "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
+    # Revizija #13: snapshot roka na lotu (prazno u fixture-u =
+    # fallback putanja RokIstekaZaTip, koju test 162 i tvrdi).
+    "tblPrerada": ["DatumIsteka"],
     # Revizija #9: rok trajanja po vrsti GP (prazno = globalni).
     "tblVrstaGotovihProizvoda": ["RokMeseci"],
 }

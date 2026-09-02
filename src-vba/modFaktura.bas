@@ -405,6 +405,10 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
     cKut = RequireColumnIndex(TBL_PRERADA, COL_PRE_KUTIJE, SRC)
     cKes = RequireColumnIndex(TBL_PRERADA, COL_PRE_KESE, SRC)
     cStorno = RequireColumnIndex(TBL_PRERADA, COL_STORNIRANO, SRC)
+    ' Tipovi pakovanja (revizija #13): kapacitet iz sifarnika po tipu.
+    Dim cTipKGp As Long, cTipSGp As Long
+    cTipKGp = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KUTIJE)
+    cTipSGp = GetColumnIndex(TBL_PRERADA, COL_PRE_TIP_KESE)
 
     ' P1 (revizija #248): dupli PreradaID (korupcija) ne sme da izgleda
     ' kao normalan red -- isti guard kao prijemnice/fakture: identitet
@@ -504,14 +508,18 @@ Public Function GetGPZaFakturisanjeForGrid() As Variant
         Dim lotNetoGp As Double
         lotNetoGp = 0#
         If IsNumeric(pd(i, cNeto)) Then lotNetoGp = CDbl(pd(i, cNeto))
+        Dim tipKGp As String, tipSGp As String
+        tipKGp = "": tipSGp = ""
+        If cTipKGp > 0 Then tipKGp = Trim$(CStr(nz(pd(i, cTipKGp))))
+        If cTipSGp > 0 Then tipSGp = Trim$(CStr(nz(pd(i, cTipSGp))))
         If IsNumeric(pd(i, cKut)) Then _
             outA(n, 6) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
                                                  CDbl(pd(i, cKut)), False, _
-                                                 CFG_GP_KG_KUTIJA)
+                                                 "KUT", tipKGp)
         If IsNumeric(pd(i, cKes)) Then _
             outA(n, 7) = modUtovar.PakovanjaZaKg(naStanju, lotNetoGp, _
                                                  CDbl(pd(i, cKes)), False, _
-                                                 CFG_GP_KG_KESA)
+                                                 "KES", tipSGp)
         ' Krug 5 contract: dostupna = ima robe na stanju AND imenovan
         ' proizvod AND jednoznacan identitet. Marker na preradi vise ne
         ' postoji -- prodaju broje utovarne stavke.

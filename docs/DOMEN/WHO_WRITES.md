@@ -45,6 +45,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblStornoVeze` | 1 | `modStornoContext` |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |
+| `tblKutije` | 0 | _(samo testovi)_ |
 | `tblSEFConfig` | 0 | _(samo testovi)_ |
 | `tblStanice` | 0 | _(samo testovi)_ |
 | `tblTipAmbalaze` | 0 | _(samo testovi)_ |
@@ -73,6 +74,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 - `tblStornoVeze`: `modTest`, `modTestStorno`, `modTestStornoCentar`
 - `tblKulture`: `modTestPalete`
 - `tblKupci`: `modTestBanka`
+- `tblKutije`: `modTest`
 - `tblSEFConfig`: `modTestStorno`
 - `tblStanice`: `modTestBanka`
 - `tblTipAmbalaze`: `modTestPalete`

@@ -1181,6 +1181,8 @@ Public Sub EnsureRuntimeSchema()
     EnsureUtovarSchemaCore
     ' Rok trajanja po vrsti GP (revizija #9) -- self-heal posle update-a.
     EnsureColumnOnTable TBL_VRSTA_GP, COL_VGP_ROK
+    ' Snapshot roka NA LOTU (revizija #13 B2) -- novi lotovi ga pisu.
+    EnsureColumnOnTable TBL_PRERADA, COL_PRE_ROK
     ' Audit kolone i za NOVE tabele na self-update putu (revizija #10
     ' P1): EnsureUtovarSchemaCore pravi tabele BEZ audit kolona, a
     ' StampRowAudit je no-op kad ih nema -- klijent koji dobije nov kod

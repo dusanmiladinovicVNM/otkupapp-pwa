@@ -6099,3 +6099,35 @@ ona živi samo u brutu palete).
   reprint fallback) prosleđuju kutija/kesa ključ.
 - Bruto logika netaknuta (izmereni bruto prerade za celu paletu,
   parcijala prazna).
+
+### 25.20 Revizija #13: završni correctness commit
+
+- **B1 — SEF lock po durable dokazu:** `SEF_TECH_FAILED` može doći i
+  POSLE `SEF_SENT` (Mistake), pa workflow stanje nije dovoljan dokaz
+  da dokument nije stigao spolja. Datum/vreme utovara je sada
+  zaključan i kad faktura ima `SEFDocumentId` (isti princip kao
+  `CanSendSEFInvoice`), bez obzira na stanje.
+- **B2 — rok trajanja je SNAPSHOT na lotu:** nova kolona
+  `tblPrerada.DatumIsteka` nastaje pri preradi po TADAŠNJEM pravilu
+  (`RokIstekaZaTip`: vrsta → RokMeseci → globalni CFG → 24); štampa
+  čita snapshot, a trenutna pravila koristi SAMO kao fallback za
+  stare lotove bez snapshota. Kasnija promena podešavanja više ne
+  menja rok na reprintu; otvara FEFO/isticanje analitiku. Globalni
+  rok preseljen u grupu „Otkup / dokumenta" (nije štampa opcija).
+- **B3 — UKUPNO BRUTO samo kad je kompletan:** ako ijedna stavka nema
+  izmeren bruto, zbir ostaje prazan (`svaBruto`) — 930 kg pored
+  1.400 kg neto više ne može da izgleda kao bruto celog kamiona.
+- **P1 writer fail-closed:** `RequireStavkeKonzistentne` — oštećena
+  aktivna utovarna stavka (nenumerička/nepozitivna količina, bez
+  PreradaID, header nepostojeći/dupli/storniran) BLOKIRA dalju
+  prodaju te prerade: tiho preskakanje u `UtovarenoPoPreradi` bi dalo
+  previsoko stanje (korupcija → moguća dupla prodaja).
+- **Kapacitet pakovanja — operaterov presek:** kapaciteti se NE
+  dupliraju u Podešavanjima (polja iz prošlog commita uklonjena) —
+  već postoje kao šifarnici `tblKutije`/`tblKese` (tip → NETO kg,
+  Matični podaci), a prerada nosi tip: lanac je šifarnik po tipu →
+  lot fallback (neto/broj). Testovi računice u T163 (lot fallback,
+  strogo/floor, prioritet šifarnika).
+- **Odluka (audit transporta):** plomba/registracija/prevoz ostaju
+  editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
+  append-only istorija korekcija = budući rad za cold-chain dokaz.
