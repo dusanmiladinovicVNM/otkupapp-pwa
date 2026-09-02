@@ -8,7 +8,7 @@ Attribute VB_Name = "modScrMatPakovanje"
 ' Modul je TANAK NAMERNO: sve o podacima zna modMaticniIzvor, sve o zoni i
 ' dogadjajima modMaticniEkran. Ovde stoji samo koje sekcije ekran nosi.
 '
-' UNOS I IZMENA rade od M2 -- v. modScrMatPartneri i UI_MIGRACIJA_KATALOG 24.15.
+' UNOS I IZMENA rade od M2 -- v. modScrMatPartneri i UI_MIGRACIJA_KATALOG 26.15.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================

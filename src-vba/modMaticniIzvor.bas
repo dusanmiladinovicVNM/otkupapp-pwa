@@ -30,7 +30,7 @@ Attribute VB_Name = "modMaticniIzvor"
 '     vrsta celije -- to nije M1.
 '
 ' OVAJ MODUL NE UPISUJE NISTA. Upis dolazi u M2 (modMaticniUnos), i tada se
-' izdvaja iz frmStammdaten pa ga zovu OBE strane -- v. UI_MIGRACIJA_KATALOG 24.5.
+' izdvaja iz frmStammdaten pa ga zovu OBE strane -- v. UI_MIGRACIJA_KATALOG 26.5.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================
@@ -222,7 +222,7 @@ End Function
 ' crta uvek, 3 se sklanja na uskom ekranu, 4 nikad (identitet).
 '
 ' NIJEDNA kolona nije vrste "kg" ni novcane ("rsd"/"mult"/"sum0"/"rest") -- v.
-' UI_MIGRACIJA_KATALOG 24.4: podnozje pita opis kolona, pa sifarnik tako sam
+' UI_MIGRACIJA_KATALOG 26.4: podnozje pita opis kolona, pa sifarnik tako sam
 ' po sebi nema lazne zbirove. Tezine su "num" jer su broj, ali nisu zbirna
 ' velicina.
 Public Function MatKolone(ByVal kljuc As String) As Variant

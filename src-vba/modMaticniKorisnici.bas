@@ -19,7 +19,7 @@ Attribute VB_Name = "modMaticniKorisnici"
 ' upisivalo "Aktivan"/"Neaktivan" (STATUS_AKTIVAN / STATUS_NEAKTIVAN). Kako
 ' modAuth prepoznaje samo "NE", deaktivacija korisnika tim dugmetom NIJE
 ' sprecavala prijavu -- u listi je pisalo "Neaktivan", a login je prolazio.
-' V. UI_MIGRACIJA_KATALOG 24.15 i 24.18.
+' V. UI_MIGRACIJA_KATALOG 26.15 i 26.18.
 '
 ' STA MODUL NE RADI: ne dira modAuth. Citac ostaje kakav jeste -- zapisi koji
 ' vec nose "Neaktivan" i dalje se citaju kao aktivni, tacno kao do sada. Menja

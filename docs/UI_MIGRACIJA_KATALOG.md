@@ -6139,10 +6139,7 @@ ona živi samo u brutu palete).
 - **Odluka (audit transporta):** plomba/registracija/prevoz ostaju
   editabilni i posle SEF-a (nisu poreski podatak) uz ModifiedBy trag;
   append-only istorija korekcija = budući rad za cold-chain dokaz.
-## 24. Matični podaci — plan prelaska (PREDLOG, nije izvedeno)
-## 24. Matični podaci — plan prelaska (M0 urađen, M1–M5 predstoje)
-## 24. Matični podaci — plan prelaska (M0–M4 urađeni, M5 predstoji)
-## 24. Matični podaci — plan prelaska (M0–M5 urađeni)
+## 26. Matični podaci — plan prelaska (M0–M6 urađeni)
 
 > Ovo je jedina sekcija kataloga koja je napisana **pre** posla koji opisuje.
 > Piše se pre koda namerno: prelazak Matičnih podataka nije „još jedan ekran po
@@ -6152,7 +6149,7 @@ ona živi samo u brutu palete).
 >
 > Stanje na dan `v6-ui-186`.
 
-### 24.0 Zatečeno stanje — šta dugme danas sadrži
+### 26.0 Zatečeno stanje — šta dugme danas sadrži
 
 Dva puta, po jedan za svaku ljusku:
 
@@ -6191,7 +6188,7 @@ Dve sekcije uopšte nisu liste: **Podešavanja** (`modPodesavanja.BuildConfigEdi
 ulazne tačke: self-update, setup, health check, Google auth, release, VBA
 import/export, migracija).
 
-### 24.1 Mera koja je oblikovala rešenje
+### 26.1 Mera koja je oblikovala rešenje
 
 Sidebar **nema skrol**. `BuildNav` postavlja stavke apsolutno, `LayoutOtkup`
 mu daje visinu `hTot - HEADER_H - STATUS_H`, a profil i podnožje su prikovani
@@ -6213,7 +6210,7 @@ slobodnih 87.
 **Zato Matični podaci ne mogu prosto da se dopišu u sidebar.** Sve što sledi
 je posledica ove mere, a ne ukusa.
 
-### 24.2 Odluka A — Matični podaci su SEKCIJA ljuske, ne još stavki u sidebaru
+### 26.2 Odluka A — Matični podaci su SEKCIJA ljuske, ne još stavki u sidebaru
 
 Zlatno dugme već nosi tu nameru. `modOtkupUI.BuildHeader` kaže doslovno:
 *„Sve tri su ghostdark … a „Maticni podaci" ostaje jedino zlatno (primarno)
@@ -6222,7 +6219,7 @@ otvaralo ceo popup meni.
 
 Predlog: `btnMatic` **prebacuje sekciju ljuske**. Sidebar tada pokazuje grupe
 matičnih podataka, dugme menja natpis u „Nazad na rad" i vraća prethodni ekran.
-Dva skupa stavki nikad ne stoje zajedno, pa budžet iz §24.1 nije ni blizu
+Dva skupa stavki nikad ne stoje zajedno, pa budžet iz §26.1 nije ni blizu
 granice (matična sekcija: `12 + 2*32 + 5*27 = 211`, radna ostaje `405`).
 
 Mehanika, najmanja moguća:
@@ -6243,9 +6240,9 @@ ekranu sidebar bi pokazivao **izabranu stavku iz radne sekcije** — ljuska bi
 tvrdila da si na Dokumentima dok gledaš Kupce. Prekidač sekcije čuva da sidebar
 govori istinu, a to je jedina stvar koju sidebar radi.
 
-Zašto ne dodatna grupa u istom sidebaru: mera iz §24.1.
+Zašto ne dodatna grupa u istom sidebaru: mera iz §26.1.
 
-### 24.3 Odluka B — pet ekrana, ne šesnaest i ne jedan
+### 26.3 Odluka B — pet ekrana, ne šesnaest i ne jedan
 
 `MAX_SEG = 11` je gornja granica lista po ekranu, a sekcija sa podacima ima
 **trinaest**. Jedan ekran otpada po meri, isto kao sidebar.
@@ -6261,7 +6258,7 @@ operater ga već zna, i preživelo je do danas.
 | 2 | `MAT_ROBA` | Proizvodi i cene | ŠIFARNICI | Artikli · Kulture · Cenovnik · Vrsta GP | `OBL_MATICNI` |
 | 3 | `MAT_PAKOVANJE` | Ambalaža i pakovanje | ŠIFARNICI | Ambalaža · Palete · Kutije · Kese | `OBL_MATICNI` |
 | 4 | `MAT_KORISNICI` | Korisnici | SISTEM | Korisnici (+ prava) | `OBL_MATICNI` + admin |
-| 5 | `MAT_SISTEM` | Podešavanja i alati | SISTEM | — (v. §24.9) | `OBL_MATICNI` + admin |
+| 5 | `MAT_SISTEM` | Podešavanja i alati | SISTEM | — (v. §26.9) | `OBL_MATICNI` + admin |
 
 Redovi registra (isti oblik kao postojeći, sa dodatim sedmim poljem):
 
@@ -6280,7 +6277,7 @@ primenjuje (`modAuth.MozeAdministraciju`) — `OBL_MATICNI` sam po sebi nije
 administracija. Tvrde brane u `modAdmin`/`modPodesavanja` ostaju gde jesu; ovo
 je i dalje samo UI brana.
 
-### 24.4 Odluka C — editor je u zoni ekrana i otvara se samo kad se uređuje
+### 26.4 Odluka C — editor je u zoni ekrana i otvara se samo kad se uređuje
 
 Obrazac postoji i proveren je: `modScrPalete` lista „Nova prerada" drži polja u
 **svojoj zoni**, gradi ih `modOtkupUI.NewFieldG` (prefiks `scr` je obavezan —
@@ -6311,7 +6308,7 @@ podnožje bez oba zbira. Za šifarnike se time samo prijavljuju vrste kolona
 pošteno — „Težina gajbice" je `num`, ne `kg`, jer nije zbirna veličina. Ovo je
 provereno u kodu, ne pretpostavljeno; §13 i §14 su isti kvar plaćali dvaput.
 
-### 24.5 Odluka D — jedan pisac, i zašto ovde drugačije nego u Fazi B
+### 26.5 Odluka D — jedan pisac, i zašto ovde drugačije nego u Fazi B
 
 Faza B je **namerno** ostavila legacy formama njihovu kopiju upisne logike
 (v. §5). Ovde se to **ne ponavlja**, iz dva merljiva razloga:
@@ -6336,17 +6333,17 @@ iz prikaza"), isti potez kao `KoopRangRows` iz `LoadKoopRang` i
 `modIzvestaj.StampajReversAmbalaze` iz §23.1.
 
 Rizik se ne prećutkuje: prevezivanje dira **jedini operativan put** za matične
-podatke. Zato M2 (v. §24.10) ide sam, sa dvosmernim dokazom, i pre njega stoji
+podatke. Zato M2 (v. §26.10) ide sam, sa dvosmernim dokazom, i pre njega stoji
 M1 koji ne dira upis uopšte.
 
-### 24.6 Šta ekran uzima od ljuske — i šta ljuska mora da dobije
+### 26.6 Šta ekran uzima od ljuske — i šta ljuska mora da dobije
 
 Uzima, bez izmene: mrežu (sortiranje, pretraga, strane, označen red), prekidač
 lista (`Scr_Liste`), čipove (`Scr_Cipovi`), radnje nad redom (`Scr_Radnje`),
 naslovnu traku, toast, `NewFieldG` polja u zoni, granu `chg:` za promenu u
 polju, `row:` i `dbl:`.
 
-Ljuska dobija **tačno tri** izmene, sve u §24.2:
+Ljuska dobija **tačno tri** izmene, sve u §26.2:
 
 | Izmena | Gde | Veličina |
 | `SCR_SEKCIJA` u registru + u `ScrGroups` | `modUiScreens` | ~15 linija |
@@ -6356,7 +6353,7 @@ Ljuska dobija **tačno tri** izmene, sve u §24.2:
 Ništa od toga ne menja ponašanje radne sekcije: dok je `mSekcija = "RAD"`,
 `LayoutNav` postavlja iste stavke na iste Y koje `BuildNav` danas računa.
 
-### 24.7 Liste, kolone, čipovi i radnje — po ekranu
+### 26.7 Liste, kolone, čipovi i radnje — po ekranu
 
 **Čipovi** su svuda isti i nose jedinu poslovnu osu koju šifarnik ima —
 soft-delete: `sve` · `aktivni` · `neaktivni`. Sekcija bez kolone statusa ne
@@ -6370,7 +6367,7 @@ proverom koju legacy koristi (`AktivanColName` → `Aktivan` ili `Aktivna`,
 | Lista | Radnje |
 | sve osim Cenovnika i Parcela | `izmeni` (soft) · `status` — „Deaktiviraj/Aktiviraj" (danger) |
 | Cenovnik | `novacena` — „Nova cena" (soft); **nema `izmeni`** — append-only, isto pravilo po kom legacy krije `btnIzmeni` |
-| Parcele | `izmeni` · `status` · `geo` — „Geo" (soft), otvara postojeće ulazne tačke (v. §24.9) |
+| Parcele | `izmeni` · `status` · `geo` — „Geo" (soft), otvara postojeće ulazne tačke (v. §26.9) |
 
 **Kolone lista** se ne izmišljaju — preslikavaju se iz `LoadList`, koja je za
 svaku sekciju već izabrala šta operater vidi (npr. Kooperanti: ID, ime+prezime,
@@ -6386,7 +6383,7 @@ u ovim šifarnicima obična pojava"). `frmStammdaten` to danas rešava
 `m_RowMap`-om iz pozicije u listboxu; posle sortiranja i pretrage u novoj mreži
 pozicija ne znači ništa, pa PK u koloni 1 nije udobnost nego uslov.
 
-### 24.8 Šta je namerno drugačije od legacy-ja
+### 26.8 Šta je namerno drugačije od legacy-ja
 
 - **Nema modalnih `MsgBox`-eva za ishod.** Uspeh ide u toast, greška u crveni
   toast — kao na svih pet postojećih ekrana. `MsgBox` ostaje samo tamo gde je
@@ -6402,7 +6399,7 @@ pozicija ne znači ništa, pa PK u koloni 1 nije udobnost nego uslov.
   kooperanta (`LookupValue`); pravilo se primenjuje na sve strane ključeve, uz
   obrazac `PuniPartnerCombo` iz §9 za combo-e (dve kolone, čist ID u drugoj).
 
-### 24.9 Šta NIJE preneto (i zašto)
+### 26.9 Šta NIJE preneto (i zašto)
 
 - **Admin panel** (deset radnji). Nije lista nego spisak dugmadi; ugovorni ekran
   uvek dobija mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa
@@ -6421,22 +6418,22 @@ pozicija ne znači ništa, pa PK u koloni 1 nije udobnost nego uslov.
   potpuno operativni za `frmOtkupAPP`, po pravilu §5. Jedina izmena u
   `frmStammdaten` je prevezivanje upisa na `modMaticniUnos` (M2).
 
-### 24.10 Redosled
+### 26.10 Redosled
 
 Manji-pa-veći, i tako da svaki korak sam po sebi ima smisla ako se stane.
 
 | Korak | Šta | Zašto tim redom |
 | **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, grupa SISTEM sa dva dugmeta na legacy panele | Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
 |---|---|---|
-| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §24.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
-| **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §24.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
-| **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §24.15. Jedan pisac (§24.5). |
-| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §24.16. |
-| **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §24.17. Cenovnik je stigao već uz M2b. |
-| **M4** | `MAT_KORISNICI` — lista + matrica prava | **URAĐENO** (`v6-ui-193`) — v. §24.18. Zatvara i nalaz o deaktivaciji korisnika. |
-| **M5** | Odluka o Podešavanjima i Adminu | **URAĐENO** (`v6-ui-194`) — v. §24.19. Odgovor: **ostaju**, sa izmerenim razlozima; test 160 drži pokrivenost menija. |
+| **M0** | `SCR_SEKCIJA`, `LayoutNav`, prekidač na `btnMatic`, ekran `MAT_SISTEM` kao pokretač legacy panela | **URAĐENO** (`v6-ui-187`) — v. §26.13. Dugme prestaje da laže. Nijedan matični podatak se još ne dira. |
+| **M1** | `modMaticniIzvor` (opis 13 sekcija) + `modMaticniEkran` (zajedničko telo) + tri tanka ekrana kao **pregled** | **URAĐENO** (`v6-ui-188`) — v. §26.14. Ceo čitalački deo bez ijednog upisa. Legacy netaknut. |
+| **M2a** | `modMaticniUnos` — izdvajanje provera i upisa iz forme; **legacy prevezan** | **URAĐENO** (`v6-ui-189`) — v. §26.15. Jedan pisac (§26.5). |
+| **M2b** | editor u zoni ekrana, radnje `izmeni` i `status` | **URAĐENO** (`v6-ui-190`) — v. §26.16. |
+| **M3** | Cenovnik (append-only) i Parcele (GEO panel u zoni) | **URAĐENO** (`v6-ui-191`) — v. §26.17. Cenovnik je stigao već uz M2b. |
+| **M4** | `MAT_KORISNICI` — lista + matrica prava | **URAĐENO** (`v6-ui-193`) — v. §26.18. Zatvara i nalaz o deaktivaciji korisnika. |
+| **M5** | Odluka o Podešavanjima i Adminu | **URAĐENO** (`v6-ui-194`) — v. §26.19. Odgovor: **ostaju**, sa izmerenim razlozima; test 160 drži pokrivenost menija. |
 
-### 24.11 Verifikacija — šta se meri
+### 26.11 Verifikacija — šta se meri
 
 Merilo prelaska je **SLAGANJE sa legacy prikazom i upisom**, ne izgled:
 
@@ -6451,7 +6448,7 @@ Merilo prelaska je **SLAGANJE sa legacy prikazom i upisom**, ne izgled:
 - čipovi: ugovor „svaki čip koji ekran prijavi ume da se izabere"
   (`SegIndeksIzTaga` presedan);
 - podnožje: test tvrdi da nijedna matična lista ne prijavljuje kolonu `kg` ni
-  novčanu vrstu, pa podnožje ne crta zbirove (§24.4);
+  novčanu vrstu, pa podnožje ne crta zbirove (§26.4);
 - **dvosmerni dokaz** (`tools/dokaz.py`) je ovde **obavezan**, ne opcion: M2
   menja jedini operativan put za matične podatke;
 - ručna kapija: `Alt+F11 → Debug → Compile VBAProject`, pa smoke nad pravim
@@ -6461,7 +6458,7 @@ Merilo prelaska je **SLAGANJE sa legacy prikazom i upisom**, ne izgled:
 `run_vba` traži Windows + Excel, pa se u web sesiji izmena ponašanja prijavljuje
 kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
 
-### 24.12 Otvoreno
+### 26.12 Otvoreno
 
 - **Deset polja u tri reda po četiri** je gornja granica zatečenog modela
   (`txtField1..10`). Kupci realno traže više (ulica, mesto, poštanski broj,
@@ -6483,12 +6480,12 @@ kao **neverifikovana**, nikad kao zelena (CLAUDE.md §5).
   vrednosti u rečnik `DA`/`NE`. Dok se ne uradi, takav zapis se **čita kao
   aktivan** — što je isto ponašanje kao pre M4, ne regresija.
 
-### 24.13 M0 — šta je stvarno urađeno (`v6-ui-187`)
+### 26.13 M0 — šta je stvarno urađeno (`v6-ui-187`)
 
 Nosač je gotov. Tri stvari su u izvedbi ispale **drugačije nego u planu**, i
 razlog je u svakom slučaju nešto što se videlo tek u kodu.
 
-**(1) `MAT_SISTEM` je EKRAN sa listom, ne zonsko dugme.** §24.9 je govorio da
+**(1) `MAT_SISTEM` je EKRAN sa listom, ne zonsko dugme.** §26.9 je govorio da
 Podešavanja i Admin otvara „dugme zone". Ali ugovorni ekran **uvek** dobija
 mrežu (`LayoutScreenZone` bezuslovno slaže `zTitle` + `zGrid`), pa bi ekran sa
 dugmetom u zoni imao ispod sebe praznu mrežu koja izgleda kao pad. Lista alatki
@@ -6518,9 +6515,9 @@ sekciji), a ne uvek Unos dokumenata; `ModeHasKgCol` / `ModeHasValCol` su
 izdvojeni u čiste funkcije nad opisom kolona (`OpisImaKgKolonu`,
 `OpisImaValKolonu`), da bi se „ova lista nema zbirove" moglo tvrditi **pre**
 crtanja; gola `62` u `LayoutOtkup` je postala `PROFIL_H`, jer ulazi u meru iz
-§24.1 i mora da se može tvrditi u testu.
+§26.1 i mora da se može tvrditi u testu.
 
-**Mera iz §24.1 je sada test, ne komentar.** `LayoutNav` pamti visinu koju je
+**Mera iz §26.1 je sada test, ne komentar.** `LayoutNav` pamti visinu koju je
 sekcija zauzela, a test 150 je čita iz **stvarnog rasporeda** i tvrdi tri
 stvari: radna sekcija staje (405 ≤ 492), matična staje (211 ≤ 492), a **zajedno
 ne staju** (616 > 492) — to poslednje je jedini razlog zbog kog sekcije postoje.
@@ -6536,7 +6533,7 @@ prozoru, suženi sidebar, otvaranje oba panela, i **legacy meni i dalje radi**.
 Tri MDL2 glifa (`IC_MAT_PARTNERI`, `IC_MAT_ROBA`, `IC_MAT_PAKOVANJE`) su izabrana
 iz kataloga a **nisu vizuelno proverena** — provera je `DumpMdl2Used`.
 
-### 24.14 M1 — pregled bez ijednog upisa (`v6-ui-188`)
+### 26.14 M1 — pregled bez ijednog upisa (`v6-ui-188`)
 
 Tri ekrana rade. **Nijedna linija upisa nije napisana** i `frmStammdaten` nije
 dirana: unos i izmena i dalje idu kroz staru formu, a to zona i kaže naglas
@@ -6586,7 +6583,7 @@ i to je poslovno pravilo.
 
 **Podnožje nema lažne zbirove** — nijedna matična kolona nije `kg` ni novčana;
 težine su `num`, jer jesu broj ali nisu zbirna veličina. Test to tvrdi nad
-opisom, pre crtanja (§24.4).
+opisom, pre crtanja (§26.4).
 
 **Verifikacija:** `vba_check` čist (203 fajla, 331 sabotaža). Dva nova testa
 (152 — opis svih 13 sekcija je potpun i saglasan sa šemom; 153 — čip, identitet
@@ -6598,7 +6595,7 @@ dokazuje ništa. Kao i M0: **testovi nisu izvršeni** u web sesiji.
 pilula za status; `Scr_Brojac` se namerno ne implementira (šifarnik nema šta da
 broji, a nula se ne crta).
 
-### 24.15 M2a — jedan pisac (`v6-ui-189`)
+### 26.15 M2a — jedan pisac (`v6-ui-189`)
 
 Provere i upis su izašli iz `frmStammdaten` u `modMaticniUnos`, **i forma je
 prevezana na njega**. `btnDodaj_Click` je bio 544 linije, `btnIzmeni_Click` 463;
@@ -6662,7 +6659,7 @@ sveske — unos i izmena po svakoj od 13 sekcija, deaktivacija/aktivacija,
 nova cena, nova stanica u MALINA režimu (ogledalo vozača), i Korisnici (koji
 nisu dirani).
 
-### 24.16 M2b — editor u zoni (`v6-ui-190`)
+### 26.16 M2b — editor u zoni (`v6-ui-190`)
 
 Tri matična ekrana sada **unose i menjaju**. Nijedno pravilo nije napisano
 ponovo: sve ide u `modMaticniUnos`, istog pisca koga zove i legacy forma.
@@ -6717,10 +6714,10 @@ zona je viša od zatvorene) i 157 (radnje prate mogućnosti sekcije; oblik opisa
 radnje). Tri nove sabotaže. Kao i ranije: **testovi nisu izvršeni** u web sesiji.
 
 **Otvoreno posle M2:** Parcele još nemaju GEO radnju (M3); Korisnici i njihova
-matrica prava idu u M4, zajedno sa nalazom iz §24.15 o deaktivaciji koja ne
+matrica prava idu u M4, zajedno sa nalazom iz §26.15 o deaktivaciji koja ne
 sprečava prijavu.
 
-### 24.17 M3 — GEO parcele (`v6-ui-191`)
+### 26.17 M3 — GEO parcele (`v6-ui-191`)
 
 Cenovnik je zatvoren već uz M2b (append-only + prefill iz izabranog reda), pa je
 M3 sveden na **GEO**. Šest legacy dugmadi uz listu parcela postalo je
@@ -6765,10 +6762,10 @@ radnja postoji samo na Parcelama. Tri nove sabotaže. **Testovi nisu izvršeni**
 u web sesiji.
 
 **Otvoreno posle M3:** samo **M4** — Korisnici, matrica prava, i nalaz iz
-§24.15 (deaktivacija korisnika ne sprečava prijavu). Posle toga ostaje M5
+§26.15 (deaktivacija korisnika ne sprečava prijavu). Posle toga ostaje M5
 (odluka o Podešavanjima i Adminu), gde je podrazumevani odgovor „ostaju".
 
-### 24.18 M4 — Korisnici i prava (`v6-ui-193`)
+### 26.18 M4 — Korisnici i prava (`v6-ui-193`)
 
 Poslednja sekcija menija koja je ostajala u formi. Ostala je namerno: `tblKorisnici`
 nosi PIN i matricu prava po oblasti, pa je čekala svoj ekran.
@@ -6780,7 +6777,7 @@ izgubila izbor. Izabrani korisnik se pamti **odvojeno** od izabranog reda
 (`mKorisnikID` vs `mIzabranID`) — čim se na listi Prava izabere red, `mIzabranID`
 postaje oblast, a korisnik mora da ostane.
 
-**Zatvoren je nalaz iz §24.15.** Rečnik kolone `Aktivan` u `tblKorisnici` je
+**Zatvoren je nalaz iz §26.15.** Rečnik kolone `Aktivan` u `tblKorisnici` je
 `"DA"`/`"NE"` i tako ga čita `modAuth` (`modAuth.bas:87` neaktivnim smatra **samo**
 `"NE"`). Generičko dugme „Deaktiviraj" je u nju upisivalo `"Aktivan"`/`"Neaktivan"`
 — u listi je pisalo *Neaktivan*, a **prijava je prolazila**. Od M4 sve sekcije
@@ -6845,10 +6842,10 @@ podrazumevani odgovor „ostaju" (to su alatke, ne matični podaci; već ih otva
 ekran *Podešavanja i alati*). Van plana ostaje migracija zatečenih
 `"Aktivan"`/`"Neaktivan"` vrednosti u `tblKorisnici` u rečnik `DA`/`NE`.
 
-### 24.19 M5 — odluka o Podešavanjima i Adminu (`v6-ui-194`)
+### 26.19 M5 — odluka o Podešavanjima i Adminu (`v6-ui-194`)
 
 Odgovor je **ostaju kao legacy paneli**, što je i bio podrazumevani odgovor iz
-§24.10 — ali sada sa izmerenim razlozima, a ne kao neispitana pretpostavka.
+§26.10 — ali sada sa izmerenim razlozima, a ne kao neispitana pretpostavka.
 Nijedan red produkcione logike se zbog M5 nije premestio; jedino što je M5
 proizveo je **test koji odluku drži** (160) i ovaj zapis.
 
@@ -6907,7 +6904,7 @@ dostižan u novoj ljusci — ili kao lista matičnog ekrana
 (`MatKljucIzLegacyTag`), ili kao alatka na *Podešavanja i alati*
 (`MsAlatkaTagovi`) — i nijedna lista nove ljuske ne sme postojati mimo starog
 menija. Jedini zabeležen izuzetak je **PRAVA**: matrica prava je u formi bila
-deo sekcije Korisnici, a ovde je svoja lista (§24.18).
+deo sekcije Korisnici, a ovde je svoja lista (§26.18).
 
 Brojke koje test drži: **16** sekcija u starom meniju, **15** lista u novoj
 sekciji (14 sa parom u meniju + PRAVA), **2** legacy panela na ekranu alatki.
@@ -6916,18 +6913,18 @@ Za ovu tvrdnju stoji **jedna** sabotaža, ne dve: oba smera mere isti raskorak,
 pa bi svaka stvarna izmena oborila obe — a sabotaža čija imenovana tvrdnja ne
 padne prva gora je od nijedne.
 
-#### Čime je §24 zatvoren
+#### Čime je §26 zatvoren
 
 `btnMatic` više ne laže, svih 16 sekcija starog menija dostižno je iz nove
 ljuske, jedini put upisa matičnih podataka je jedan pisac koga zovu obe strane,
-i dva nalaza o pravima pristupa su zatvorena (§24.18). Ostaje jedan posao van
+i dva nalaza o pravima pristupa su zatvorena (§26.18). Ostaje jedan posao van
 plana: **migracija zatečenih `"Aktivan"`/`"Neaktivan"` vrednosti** u
-`tblKorisnici.Aktivan` u rečnik `DA`/`NE` (§24.12).
+`tblKorisnici.Aktivan` u rečnik `DA`/`NE` (§26.12).
 
-### 24.20 Pred brisanje legacy formi — šta je nedostajalo (`v6-ui-195`)
+### 26.20 Pred brisanje legacy formi — šta je nedostajalo (`v6-ui-195`)
 
-§24 je pisan pod pretpostavkom **koegzistencije**: legacy forma ostaje, cilj je
-*jedan pisac koga zovu obe strane* (§24.5). Kad je cilj postao **brisanje svih
+§26 je pisan pod pretpostavkom **koegzistencije**: legacy forma ostaje, cilj je
+*jedan pisac koga zovu obe strane* (§26.5). Kad je cilj postao **brisanje svih
 `frm*` fajlova**, ta pretpostavka je pala — i sa njom su se videle tri rupe koje
 pod starim ciljem nisu bile rupe.
 
@@ -6945,12 +6942,12 @@ formom — pa se slaganje mora izmeriti **pre** brisanja, ne posle.
 
 #### 1. Test slaganja čitača (161) — napisan sada
 
-Tvrdnja iz §24.11 koja je kroz M1–M5 ostala nenapisana. Meri, nad svih 14 lista:
+Tvrdnja iz §26.11 koja je kroz M1–M5 ostala nenapisana. Meri, nad svih 14 lista:
 **skup zapisa** (broj, višak, manjak — kao *jednu* tvrdnju, jer su to tri lica
 istog kvara) i **svaku golu vrednost** novog čitača protiv legacy reda istog
 identiteta. Izvedene vrednosti se preskaču i to je **granica tvrdnje, ne rupa**:
 `@status` novi čitač svodi na Aktivan/Neaktivan (parcele u šemi nose `"Da"`), a
-`@geo` legacy nije ni pokazivao — zabeležene odluke iz §24.8.
+`@geo` legacy nije ni pokazivao — zabeležene odluke iz §26.8.
 
 Test i njegov seam (`frmStammdaten.StmTestLista`) su **privremeni**: umiru
 zajedno sa formom. To je svrha, ne propust.
@@ -6979,15 +6976,15 @@ zaustavila — straža je uslov da druga zavisnost sutra ne postane petlja.
 runtime kontrole **na `frmStammdaten`** (`Private mFrm As Object ' host`).
 Brisanjem forme oba panela umiru.
 
-To ne obara §24.19 — razlozi zašto **ne** postaju ekrani po ugovoru (97 polja,
+To ne obara §26.19 — razlozi zašto **ne** postaju ekrani po ugovoru (97 polja,
 `MAX_SEG` pun, `secret`/`memo` bez para u rečniku) i dalje stoje. Menja se samo
 **gde žive**: treba im nov domaćin, a to je odluka koja nije doneta i nije bila u
 planu. Zove se **M6** i predstoji.
 
-### 24.21 M6 — Podešavanja i Admin u radnoj površini (`v6-ui-196`)
+### 26.21 M6 — Podešavanja i Admin u radnoj površini (`v6-ui-196`)
 
-§24.19 je zaključio da ta dva **ostaju paneli** — 97 polja u 11 grupa i 12
-sistemskih komandi ne staju u ugovor ekrana, i ne treba da stanu. §24.20 je
+§26.19 je zaključio da ta dva **ostaju paneli** — 97 polja u 11 grupa i 12
+sistemskih komandi ne staju u ugovor ekrana, i ne treba da stanu. §26.20 je
 pokazao da ih hostuje `frmStammdaten`, koja se briše. M6 im daje nov dom, **bez
 menjanja ijednog reda njihove logike**: `BuildConfigEditor` i `BuildAdminPanel`
 su oduvek primali `frm As Object` — menja se samo **ko je domaćin**.

@@ -11,7 +11,7 @@ Attribute VB_Name = "modMaticniUnos"
 ' bila osiguranje. Kod maticnih podataka postoji SAMO JEDAN put (forma), tabele
 ' su povrsina sinhronizacije (modStammdatenSync, modMasterSync), a WHO_WRITES
 ' pokazuje 0-2 modula po tabeli. Druga kopija bi ovde bila prva prilika za
-' razlaz, ne osiguranje. V. docs/UI_MIGRACIJA_KATALOG.md 24.5.
+' razlaz, ne osiguranje. V. docs/UI_MIGRACIJA_KATALOG.md 26.5.
 '
 ' STA MODUL NE RADI:
 '   - ne crta i ne cita kontrole. Ulaz je RECNIK "kljuc polja -> vrednost", isti
@@ -62,7 +62,7 @@ Public Function MatDodaj(ByVal kljuc As String, ByVal polja As Object, _
     ' Korisnici imaju SVOG pisca. PIN se hesira, uloga i aktivnost se pisu u
     ' recniku "DA"/"NE" koji cita modAuth, a prava su kolone istog reda -- nista
     ' od toga opsti upis ne zna. V. modMaticniKorisnici i UI_MIGRACIJA_KATALOG
-    ' 24.18.
+    ' 26.18.
     If kljuc = "KORISNICI" Then
         MatDodaj = modMaticniKorisnici.KorDodaj(polja, noviID)
         Exit Function

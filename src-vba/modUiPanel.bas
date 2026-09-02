@@ -6,7 +6,7 @@ Attribute VB_Name = "modUiPanel"
 ' rasporedi i sam zna svoje kontrole. Podesavanja (97 polja u 11 grupa) i Admin
 ' (12 komandi u 5 grupa) su takvi -- ni jedno ni drugo ne staje u ugovor ekrana
 ' (zona od 16 kontrola + mreza), a razlozi su izmereni u UI_MIGRACIJA_KATALOG
-' 24.19.
+' 26.19.
 '
 ' ZASTO OVAJ MODUL, a ne ljuska: modOtkupUI ne sme da zna nijedan panel po
 ' imenu, isto kao sto ne zna nijedan ekran. Ljuska daje samo PRAZAN OKVIR

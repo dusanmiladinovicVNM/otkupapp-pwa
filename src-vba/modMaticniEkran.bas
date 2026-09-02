@@ -26,7 +26,7 @@ Attribute VB_Name = "modMaticniEkran"
 ' njene vrste. Isti razlog zbog kog mreza ima MAX_COLS kolona, a ne po ekranu.
 '
 ' UPIS NE ZIVI OVDE. Sve ide u modMaticniUnos -- isti pisac koga zove i legacy
-' forma (v. UI_MIGRACIJA_KATALOG 24.5 i 24.15).
+' forma (v. UI_MIGRACIJA_KATALOG 26.5 i 26.15).
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================

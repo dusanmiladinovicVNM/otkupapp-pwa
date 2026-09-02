@@ -53,7 +53,7 @@ Public Const SCR_OBLAST  As Long = 5
 ' sidebar NEMA SKROL: na MIN_H (620) ostaje 492 pt za stavke, zauzeto je 405, pa
 ' bi maticne stavke (5 stavki + 2 grupe = 199 pt) ispale ispod profila -- tiho.
 ' Dva skupa se nikad ne crtaju zajedno; zlatno dugme u zaglavlju ih menja.
-' V. docs/UI_MIGRACIJA_KATALOG.md, 24.1 i 24.2.
+' V. docs/UI_MIGRACIJA_KATALOG.md, 26.1 i 26.2.
 Public Const SCR_SEKCIJA As Long = 6
 
 ' Redosled polja u redu GRUPE sidebara
@@ -117,7 +117,7 @@ Public Function ScrRows() As Variant
     ' 16 sekcija u 4 grupe) -> frmStammdaten. Granica ekrana je LEGACY GRUPA,
     ' jer MAX_SEG (11) ne prima svih 13 sekcija sa podacima u jedan ekran, a
     ' grupisanje je u modMaticniLookups uvedeno svesno i operater ga zna.
-    ' Plan i obrazlozenje: docs/UI_MIGRACIJA_KATALOG.md, 24.3.
+    ' Plan i obrazlozenje: docs/UI_MIGRACIJA_KATALOG.md, 26.3.
     '
     ' Od M4 svih pet ima svoj modul; prigusene u sekciji MATICNI vise nema.
     ' Sidebar i dalje prigusuje ekran bez modula (MARZA, SLEDLJIVOST) -- to nije

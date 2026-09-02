@@ -11,7 +11,7 @@ Attribute VB_Name = "modScrMatPartneri"
 ' modScrMatPakovanje -- tri ekrana, jedan opis podataka.
 '
 ' UNOS I IZMENA rade od M2: oba idu kroz modMaticniUnos, istog pisca koga zove
-' i legacy forma -- v. docs/UI_MIGRACIJA_KATALOG.md 24.5 i 24.15.
+' i legacy forma -- v. docs/UI_MIGRACIJA_KATALOG.md 26.5 i 26.15.
 '
 ' Fajl mora ostati 100% ASCII.
 '=====================================================================

@@ -1235,7 +1235,7 @@ Public Sub OnSoftDeleteClick()
     ' zatvoren nalaz iz M2a: ovo dugme je korisniku upisivalo "Neaktivan", a
     ' modAuth neaktivnim smatra samo "NE" -- deaktivirani korisnik se i dalje
     ' prijavljivao. Sada pisac za tu sekciju pise "NE" (v. modMaticniKorisnici
-    ' i UI_MIGRACIJA_KATALOG 24.18).
+    ' i UI_MIGRACIJA_KATALOG 26.18).
     '
     ' Nepoznat Tag se ODBIJA, isto kao u btnDodaj/btnIzmeni: zatecena putanja
     ' koja bi tiho upisala pogresan recnik je upravo ono sto se ovde zatvara.
@@ -1853,7 +1853,7 @@ End Sub
 ' Sve sto je do v6-ui-189 stajalo u btnDodaj_Click (544 linije) i
 ' btnIzmeni_Click (463) preseljeno je u modMaticniUnos, koji od sada zovu OBE
 ' strane: i ova forma i novi ekrani. Razlog i zasto ovde NIJE ponovljena odluka
-' iz Faze B (dve kopije namerno): docs/UI_MIGRACIJA_KATALOG.md 24.5.
+' iz Faze B (dve kopije namerno): docs/UI_MIGRACIJA_KATALOG.md 26.5.
 '
 ' Formi je ostalo samo ono sto forma jeste: koja kontrola nosi koje polje.
 ' ============================================================

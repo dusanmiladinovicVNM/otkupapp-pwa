@@ -10,7 +10,7 @@ Attribute VB_Name = "modScrMatSistem"
 '   "Admin"       -> frmStammdaten (Tag="Admin")       -> modAdmin.BuildAdminPanel
 '
 ' STA OVAJ EKRAN JESTE: pokretac, ne editor. Oba panela OSTAJU gde jesu i ne
-' menjaju se -- v. docs/UI_MIGRACIJA_KATALOG.md, 24.9. Podesavanja rade, imaju
+' menjaju se -- v. docs/UI_MIGRACIJA_KATALOG.md, 26.9. Podesavanja rade, imaju
 ' grupisanje i nose bezbednosno pravilo (interni i anti-tamper kljucevi se
 ' namerno ne prikazuju); Admin je spisak od deset radnji, a ne lista. Prelazak
 ' bilo kog od njih bi bio redizajn onoga sto radi.
@@ -47,7 +47,7 @@ Private Const MOD_TRAG As String = "modScrMatSistem.OtvoriAlatku"
 '
 ' Do M6 je nosila legacy Tag za frmStammdaten. Sada nosi kljuc iz
 ' modUiPanel.PanelRedovi: ekran vise ne zna nista o legacy formi, a panel se
-' otvara u radnoj povrsini nove ljuske (UI_MIGRACIJA_KATALOG 24.21).
+' otvara u radnoj povrsini nove ljuske (UI_MIGRACIJA_KATALOG 26.21).
 Public Const MS_COL_TAG As Long = 4
 
 Private Const MS_ZONA_H As Single = KPI_H
