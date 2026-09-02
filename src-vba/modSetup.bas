@@ -1181,6 +1181,22 @@ Public Sub EnsureRuntimeSchema()
     EnsureUtovarSchemaCore
     ' Rok trajanja po vrsti GP (revizija #9) -- self-heal posle update-a.
     EnsureColumnOnTable TBL_VRSTA_GP, COL_VGP_ROK
+    ' Audit kolone i za NOVE tabele na self-update putu (revizija #10
+    ' P1): EnsureUtovarSchemaCore pravi tabele BEZ audit kolona, a
+    ' StampRowAudit je no-op kad ih nema -- klijent koji dobije nov kod
+    ' bi pravio utovare bez ko/kada traga do rucnog EnsureAuditColumns.
+    ' Ciljano na tri nove tabele (no-op kad kolone postoje), ne pun
+    ' EnsureAuditColumnsCore na svakom startu.
+    Dim audT As Variant, audI As Long
+    audT = Array(TBL_UTOVAR, TBL_UTOVAR_STAVKE, TBL_PREVOZNICI)
+    For audI = 0 To 2
+        If Not GetTable(CStr(audT(audI))) Is Nothing Then
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_CREATED_AT
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_CREATED_BY
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_MODIFIED_AT
+            EnsureColumnOnTable CStr(audT(audI)), COL_AUDIT_MODIFIED_BY
+        End If
+    Next audI
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
 

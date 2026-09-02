@@ -410,6 +410,7 @@ Public Sub RunAllTests()
     ' 162 MUTIRA (CreateFakturaGP_TX + StornoFaktura_TX nad potrosnim
     ' vozilom PRE-GP-W1) -- ide POSLE svih citanja, poslednji.
     RunOne 162
+    RunOne 163
 
     SetTestMode prevMode
     WriteResultFile
@@ -606,6 +607,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 160: TestName = "T_Sled_GpLanacIStanja"
         Case 161: TestName = "T_Fak_GpListaIKorpa"
         Case 162: TestName = "T_FakturaGP_WriterKapijeIStorno"
+        Case 163: TestName = "T_UtovarB_SledIStornoKapije"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -776,6 +778,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 160: T_Sled_GpLanacIStanja
         Case 161: T_Fak_GpListaIKorpa
         Case 162: T_FakturaGP_WriterKapijeIStorno
+        Case 163: T_UtovarB_SledIStornoKapije
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -7269,6 +7272,79 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq Trim$(CStr(nz(LookupValue(TBL_FAKTURA_STAVKE, COL_FS_ID, _
              "FST-GP-SB", COL_FS_UTOVAR_ID)))), utM, _
              "migracija je idempotentna (ista veza posle drugog poziva)"
+End Sub
+
+' ============================================================
+' 163 -- MODEL B (revizija #10): lanac razume utovar bez fakture
+' (stanje + finalni kupac iz utovara), a storno kapije ne veruju
+' samo header markeru. MUTIRA (rogue FST, nove fakture) -- poslednji.
+' Vozilo: U lanac u fixture-u (120 proizvedeno / 50 utovareno /
+' 0 fakturisano, UT-SLED-U bez markera).
+' ============================================================
+Private Sub T_UtovarB_SledIStornoKapije()
+    Dim lanac As Variant, r As Long
+
+    ' --- B1: stanje i kupac PRE fakture.
+    lanac = modIzvestaj.ReportSledljivostLanac(IzvOdD(), IzvDoD())
+    r = SledNadjiRed(lanac, "OTK-SLED-U")
+    AssertEq (r > 0), True, "lanac nosi red OTK-SLED-U"
+    AssertEq CStr(lanac(r, 14)), "", "U lanac je potpun (bez oznake)"
+    AssertEq CStr(lanac(r, 30)), SLED_ST_DELIM_UTOVAR, _
+             "roba fizicki otisla bez fakture = delimicno utovareno"
+    AssertEq CStr(lanac(r, 12)), "", "U jos nema fakturu"
+    AssertEq CStr(lanac(r, 13)), "Test kupac 2", _
+             "finalni kupac dolazi iz UTOVARA i pre fakture"
+
+    ' --- B2: aktivna FST na "nefakturisanom" utovaru = kontradikcija;
+    ' header marker sam nije dovoljan ni za storno ni za re-fakturu.
+    Dim rowRog As Long
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-B2", "FAK-SLED-GP4", "", 50, 100#, "", "", "", ""))
+    AssertEq (rowRog > 0), True, "rogue FST upisana"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-SLED-U", "T163"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      "UT-SLED-U", "T163"
+    AssertEq modStorno.StornoUtovar_TX("UT-SLED-U"), False, _
+             "aktivna FST blokira storno utovara i bez header markera"
+    AssertEq modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U"), "", _
+             "aktivna FST blokira re-fakturisanje"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_STORNIRANO, "Da", "T163"
+
+    ' --- B3: storno fakture sa korumpiranom stavkom NE oslobadja tudj
+    ' utovar. UT-SLED-U se prvo legalno fakturise (cena sa stavke).
+    Dim fidU As String, fidX As String, utX As String
+    fidU = modUtovar.CreateFakturaIzUtovara_TX("UT-SLED-U")
+    AssertEq (Len(fidU) > 0), True, "B-utovar se fakturise (cena sa stavke)"
+    Dim stX As Collection
+    Set stX = New Collection
+    stX.Add Array("PRE-SLED-U", 5, 100)
+    utX = modUtovar.CreateUtovar_TX(FX_KUPAC2, stX)
+    AssertEq (Len(utX) > 0), True, "zrtveni utovar se pravi"
+    fidX = modUtovar.CreateFakturaIzUtovara_TX(utX)
+    AssertEq (Len(fidX) > 0), True, "zrtvena faktura se pravi"
+    ' Korumpirana stavka: aktivna FST na fidX tvrdi UT-SLED-U, koji
+    ' tvrdi fidU -- storno fidX ne sme da mu resetuje marker.
+    rowRog = AppendRow(TBL_FAKTURA_STAVKE, Array( _
+        "FST-ROGUE-B3", fidX, "", 1, 100#, "", "", "", ""))
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_PRERADA_ID, _
+                      "PRE-SLED-U", "T163"
+    RequireUpdateCell TBL_FAKTURA_STAVKE, rowRog, COL_FS_UTOVAR_ID, _
+                      "UT-SLED-U", "T163"
+    AssertEq modStorno.StornoFaktura_TX(fidX), True, _
+             "storno zrtvene fakture prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, "UT-SLED-U", _
+             COL_UT_FAKTURA_ID)))), fidU, _
+             "korumpirana stavka tudje fakture NE oslobadja utovar"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utX, _
+             COL_UT_FAKTURISANO)))), "", "svoj utovar JESTE oslobodjen"
+
+    ' --- Ocisti: fixture stanje nazad (U nefakturisan, utX storniran).
+    AssertEq modStorno.StornoFaktura_TX(fidU), True, "storno fidU prolazi"
+    AssertEq modStorno.StornoUtovar_TX(utX), True, _
+             "storno zrtvenog utovara prolazi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, "UT-SLED-U", _
+             COL_UT_FAKTURISANO)))), "", "UT-SLED-U je opet nefakturisan"
 End Sub
 
 

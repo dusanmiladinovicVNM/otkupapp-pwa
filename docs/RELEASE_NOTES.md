@@ -7036,6 +7036,19 @@ ijedne izmišljene veze.
   vrsta gotovih proizvoda (Matični podaci); prazno = globalna
   postavka. Utovarna lista računa rok po stavci.
 
+### Lanac razume utovar bez fakture (revizija #10)
+
+- **Nova stanja sledljivosti:** „delimično utovareno" i „utovareno /
+  čeka fakturu" — roba koja je fizički otišla vidi se na lancu i pre
+  fakture, sa pravim finalnim kupcem iz utovara (ne više „prerađeno"
+  dok kamion vozi robu).
+- **Storno utovara** odbija i utovar bez markera ako neka aktivna
+  faktura-stavka tvrdi tu robu (dupla zaliha); **storno fakture**
+  oslobađa samo utovar koji tvrdi baš tu fakturu — korumpirani podaci
+  ne mogu da pokvare tuđu validnu fakturu.
+- Audit kolone (ko/kada) na utovar tabelama nastaju automatski i na
+  self-update putu.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

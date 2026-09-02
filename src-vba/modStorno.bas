@@ -1761,6 +1761,16 @@ Public Function StornoUtovar(ByVal utovarID As String) As Boolean
                   "Utovar je fakturisan -- prvo storniraj fakturu. UtovarID=" & utovarID
     End If
 
+    ' Revizija #10 B2: header marker nije dovoljan -- AKTIVNA faktura-
+    ' stavka koja tvrdi ovaj utovar znaci da finansijski dokument i
+    ' dalje prodaje bas ovu robu; storno bi je vratio na stanje =
+    ' dupla zaliha. Isto kanonsko pravilo kao CreateFakturaIzUtovara.
+    If modUtovar.AktivnihFstZaUtovar(utovarID) > 0 Then
+        Err.Raise ERR_STORNO_BASE + 56, SRC, _
+                  "Aktivna faktura-stavka tvrdi ovaj utovar -- podaci su " & _
+                  "neusaglaseni, storno utovara je blokiran. UtovarID=" & utovarID
+    End If
+
     MarkRowStornirano TBL_UTOVAR, rowUt, SRC
 
     Dim s As Variant, r As Long
@@ -1988,7 +1998,7 @@ Private Sub StornoFakturaStavkeAndReleasePrijemnice(ByVal fakturaID As String)
                 Dim utID As String
                 utID = Trim$(CStr(nz(stavkeData(i, colUtID))))
                 If Len(utID) > 0 Then
-                    ReleaseUtovarFromFaktura utID
+                    ReleaseUtovarFromFaktura utID, fakturaID
                 End If
             End If
         End If
@@ -1997,7 +2007,8 @@ End Sub
 
 ' GP par ReleasePrijemnicaFromFaktura (krug 5): storno GP fakture
 ' oslobadja UTOVAR -- fail-closed na dupli ID, isti obrazac.
-Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String)
+Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String, _
+                                     ByVal fakturaID As String)
     Const SRC As String = "ReleaseUtovarFromFaktura"
 
     Dim rows As Collection
@@ -2013,6 +2024,22 @@ Private Sub ReleaseUtovarFromFaktura(ByVal utovarID As String)
 
     Dim rowUt As Long
     rowUt = CLng(rows(1))
+
+    ' Revizija #10 B3: utovar se oslobadja SAMO ako tvrdi bas fakturu
+    ' koja se stornira. Korumpirana stavka tudje fakture ne sme da
+    ' "oslobodi" utovar validne fakture -- resetom markera bi unistila
+    ' vezu FAK-B iako se stornira FAK-A. Neusaglasenost se NE popravlja
+    ' ovde (storno tekuce fakture mora da prodje) -- loguje se, a lanac
+    ' je prijavljuje kao "faktura neusaglasena".
+    Dim d As Variant, tvrdi As String
+    d = GetTableData(TBL_UTOVAR)
+    tvrdi = Trim$(CStr(nz(d(rowUt, RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)))))
+    If StrComp(tvrdi, Trim$(fakturaID), vbTextCompare) <> 0 Then
+        LogWarn SRC, "Utovar " & utovarID & " tvrdi fakturu '" & tvrdi & _
+                     "', ne '" & Trim$(fakturaID) & _
+                     "' -- marker se NE dira (neusaglasena stavka)."
+        Exit Sub
+    End If
 
     RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURISANO, "", SRC
     RequireUpdateCell TBL_UTOVAR, rowUt, COL_UT_FAKTURA_ID, "", SRC

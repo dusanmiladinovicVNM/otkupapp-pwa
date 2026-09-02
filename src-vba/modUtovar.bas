@@ -199,6 +199,32 @@ Private Sub UtsPakovanja(ByVal kol As Double, ByVal neto As Double, _
     End If
 End Sub
 
+' Broj AKTIVNIH (nestorniranih, neosirocenih) faktura-stavki koje
+' tvrde ovaj utovar. KANONSKO pravilo (revizija #10 B2) koje dele
+' CreateFakturaIzUtovara (re-fakturisanje kontradiktornog utovara je
+' dupla prodaja) i modStorno.StornoUtovar (storno utovara cija roba
+' je na aktivnoj fakturi = dupla zaliha) -- header marker sam nije
+' dovoljan dokaz "nefakturisanosti".
+Public Function AktivnihFstZaUtovar(ByVal utovarID As String) As Long
+    Const SRC As String = "modUtovar.AktivnihFstZaUtovar"
+    Dim fs As Variant, i As Long
+    Dim cUt As Long, cSt As Long, cOs As Long
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If Not IsArray(fs) Then Exit Function
+    cUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    If cUt = 0 Then Exit Function    ' sveska pre GP nadogradnje
+    cSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
+    cOs = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
+    For i = 1 To UBound(fs, 1)
+        If Trim$(CStr(nz(fs(i, cUt)))) = Trim$(utovarID) Then
+            If UCase$(Trim$(CStr(nz(fs(i, cSt))))) <> "DA" _
+               And Len(Trim$(CStr(nz(fs(i, cOs))))) = 0 Then
+                AktivnihFstZaUtovar = AktivnihFstZaUtovar + 1
+            End If
+        End If
+    Next i
+End Function
+
 ' Aktivno utovareno kg jedne prerade (kapija storna prerade).
 Public Function UtovarenoKgPrerade(ByVal preradaID As String) As Double
     Dim d As Object: Set d = UtovarenoPoPreradi()
@@ -526,25 +552,25 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     ' Rok PO VRSTI proizvoda (revizija #9, potvrdjeno poslovno:
     ' proizvodi imaju RAZLICITE rokove): tblVrstaGotovihProizvoda
     ' RokMeseci ima prednost; prazno/nevalidno = globalni default.
-    ' Isti sanity opseg kao global (1-600 celih meseci).
-    ' NAPOMENA: i se NE deklarise ovde -- Dim i As Long vec zivi nize
-    ' u proceduri (preInfo blok), dupli Dim = Duplicate declaration.
+    ' Isti sanity opseg kao global (1-600 celih meseci). Sopstvena
+    ' petlja promenljiva (vgI): oslanjanje na Dim i nize u proceduri
+    ' obara compile ("Variable not defined") -- smoke #10 nalaz.
     Dim vrstaRok As Object: Set vrstaRok = CreateObject("Scripting.Dictionary")
     vrstaRok.CompareMode = vbTextCompare
-    Dim vg As Variant, cVgTip As Long, cVgRok As Long
+    Dim vg As Variant, cVgTip As Long, cVgRok As Long, vgI As Long
     If Not GetTable(TBL_VRSTA_GP) Is Nothing Then
         cVgTip = GetColumnIndex(TBL_VRSTA_GP, COL_VGP_TIP)
         cVgRok = GetColumnIndex(TBL_VRSTA_GP, COL_VGP_ROK)
         If cVgTip > 0 And cVgRok > 0 Then
             vg = GetTableData(TBL_VRSTA_GP)
             If IsArray(vg) Then
-                For i = 1 To UBound(vg, 1)
-                    If IsNumeric(vg(i, cVgRok)) Then
-                        rokD = CDbl(vg(i, cVgRok))
+                For vgI = 1 To UBound(vg, 1)
+                    If IsNumeric(vg(vgI, cVgRok)) Then
+                        rokD = CDbl(vg(vgI, cVgRok))
                         If rokD >= 1 And rokD <= 600 And rokD = Fix(rokD) Then _
-                            vrstaRok(Trim$(CStr(nz(vg(i, cVgTip))))) = CLng(rokD)
+                            vrstaRok(Trim$(CStr(nz(vg(vgI, cVgTip))))) = CLng(rokD)
                     End If
-                Next i
+                Next vgI
             End If
         End If
     End If
@@ -1236,41 +1262,38 @@ Private Function CreateFakturaIzUtovara(ByVal utovarID As String, _
     cSBr = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_BROJ_PRERADE, SRC)
     cSKol = RequireColumnIndex(TBL_UTOVAR_STAVKE, COL_UTS_KOLICINA, SRC)
 
+    ' --- Kontradikcija (revizija #7 B2, kanonski helper #10):
+    ' "nefakturisan" utovar sa aktivnom FST -- finansijski dokument
+    ' tvrdi prodaju koju utovar porice; re-fakturisanje bi napravilo
+    ' duplu prodaju.
+    Dim aktivnihFst As Long
+    aktivnihFst = AktivnihFstZaUtovar(utovarID)
+    If aktivnihFst > 0 Then
+        Err.Raise vbObjectError + 1776, SRC, _
+                  "Utovar " & utovarID & " nije markiran kao fakturisan, a nosi " & _
+                  CStr(aktivnihFst) & " aktivnih faktura-stavki -- podaci su " & _
+                  "neusaglaseni, re-fakturisanje je blokirano."
+    End If
+
     ' --- Cene iz prethodnih (storniranih) faktura ovog utovara: FST se
     ' NE filtrira po stornu -- bas stornirani redovi nose cene; kasniji
-    ' red pobedjuje (poslednja faktura). ISTI prolaz broji i AKTIVNE
-    ' stavke (revizija #7 B2): "nefakturisan" utovar sa aktivnom FST je
-    ' KONTRADIKCIJA (finansijski dokument tvrdi prodaju koju utovar
-    ' porice) -- re-fakturisanje preko nje bi napravilo duplu prodaju.
+    ' red pobedjuje (poslednja faktura).
     Dim cene As Object: Set cene = CreateObject("Scripting.Dictionary")
     cene.CompareMode = vbTextCompare
     Dim fs As Variant, cFsUt As Long, cFsPre As Long, cFsCena As Long
-    Dim cFsSt As Long, cFsOs As Long, aktivnihFst As Long
     fs = GetTableData(TBL_FAKTURA_STAVKE)
     If IsArray(fs) Then
         cFsUt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID, SRC)
         cFsPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID, SRC)
         cFsCena = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_CENA, SRC)
-        cFsSt = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO, SRC)
-        cFsOs = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD, SRC)
         For i = 1 To UBound(fs, 1)
             If Trim$(CStr(nz(fs(i, cFsUt)))) = utovarID Then
-                If UCase$(Trim$(CStr(nz(fs(i, cFsSt))))) <> "DA" _
-                   And Len(Trim$(CStr(nz(fs(i, cFsOs))))) = 0 Then
-                    aktivnihFst = aktivnihFst + 1
-                End If
                 If IsNumeric(fs(i, cFsCena)) Then
                     If CDbl(fs(i, cFsCena)) > 0 Then _
                         cene(Trim$(CStr(nz(fs(i, cFsPre))))) = CDbl(fs(i, cFsCena))
                 End If
             End If
         Next i
-    End If
-    If aktivnihFst > 0 Then
-        Err.Raise vbObjectError + 1776, SRC, _
-                  "Utovar " & utovarID & " nije markiran kao fakturisan, a nosi " & _
-                  CStr(aktivnihFst) & " aktivnih faktura-stavki -- podaci su " & _
-                  "neusaglaseni, re-fakturisanje je blokirano."
     End If
 
     ' --- Pre-validacija svih stavki pre ijednog upisa.

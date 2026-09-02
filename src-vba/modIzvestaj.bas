@@ -83,6 +83,11 @@ Public Const SLED_ST_PRODATO_GP As String = "prodato GP"
 ' Krug 5 (parcijalna prodaja): deo proizvedene robe je validno
 ' utovaren i fakturisan, deo je jos na stanju.
 Public Const SLED_ST_DELIMICNO As String = "delimicno prodato"
+' Model B (revizija #10 B1): utovar je samostalan dogadjaj -- roba je
+' FIZICKI otisla i pre fakture, pa lanac to mora reci (ne "preradjeno"
+' dok kamion vozi robu kupcu).
+Public Const SLED_ST_UTOVARENO As String = "utovareno / ceka fakturu"
+Public Const SLED_ST_DELIM_UTOVAR As String = "delimicno utovareno"
 Public Const SLED_ST_PRERADJENO As String = "preradjeno"
 Public Const SLED_ST_PRODATO_SVEZE As String = "prodato svezo"
 Public Const SLED_ST_HLADNJACA As String = "u hladnjaci"
@@ -4605,6 +4610,10 @@ DaljeFst:
     utValid.CompareMode = vbTextCompare
     Dim utLose As Object: Set utLose = CreateObject("Scripting.Dictionary")
     utLose.CompareMode = vbTextCompare
+    ' Model B (revizija #10 B1): kupac AKTIVNOG utovara -- finalni
+    ' kupac postoji cim postoji utovar, i pre fakture.
+    Dim utKupci As Object: Set utKupci = CreateObject("Scripting.Dictionary")
+    utKupci.CompareMode = vbTextCompare
     Dim utAktivan As Object: Set utAktivan = CreateObject("Scripting.Dictionary")
     utAktivan.CompareMode = vbTextCompare
     Dim ut As Variant
@@ -4616,12 +4625,15 @@ DaljeFst:
         cUFakt = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURISANO, SRC)
         cUFid = RequireColumnIndex(TBL_UTOVAR, COL_UT_FAKTURA_ID, SRC)
         cUSt = RequireColumnIndex(TBL_UTOVAR, COL_STORNIRANO, SRC)
+        Dim cUKup As Long
+        cUKup = RequireColumnIndex(TBL_UTOVAR, COL_UT_KUPAC, SRC)
         Dim fid As String, fakt As String
         For i = 1 To UBound(ut, 1)
             k = Trim$(SledTxt(ut(i, cUId)))
             If Len(k) = 0 Then GoTo DaljeUt
             If UCase$(Trim$(SledTxt(ut(i, cUSt)))) = "DA" Then GoTo DaljeUt
             utAktivan(k) = SledTxt(ut(i, cUBr))
+            utKupci(k) = Trim$(SledTxt(ut(i, cUKup)))
             fakt = Trim$(SledTxt(ut(i, cUFakt)))
             fid = Trim$(SledTxt(ut(i, cUFid)))
             If fakt = "Da" Then
@@ -4687,6 +4699,14 @@ DaljeUt:
                 v(0) = CDbl(v(0)) + kol
                 If InStr("|" & CStr(v(5)) & "|", "|" & CStr(utAktivan(utID)) & "|") = 0 Then _
                     v(5) = CStr(v(5)) & "|" & CStr(utAktivan(utID))
+                ' Model B (revizija #10 B1): finalni kupac dolazi iz
+                ' UTOVARA cim on postoji -- faktura ga samo potvrdjuje.
+                If utKupci.Exists(utID) Then
+                    If Len(CStr(utKupci(utID))) > 0 Then
+                        If InStr("|" & CStr(v(4)) & "|", "|" & CStr(utKupci(utID)) & "|") = 0 Then _
+                            v(4) = CStr(v(4)) & "|" & CStr(utKupci(utID))
+                    End If
+                End If
                 If utValid.Exists(utID) Then
                     ' Dokaz PO STAVCI (revizije #6/#8): za bas ovaj par
                     ' utovar+prerada mora postojati aktivna FST BAS TE
@@ -5286,8 +5306,14 @@ PreskociBroj:
                         gpKup.CompareMode = vbTextCompare
                         gpKupNaziv = ""
                         Dim allSold As Boolean, anySold As Boolean
+                        Dim anyLoaded As Boolean, allLoaded As Boolean
                         allSold = (preD.count > 0)
                         anySold = False
+                        ' Model B: utovareno se prati ODVOJENO od
+                        ' fakturisanog -- roba moze biti fizicki
+                        ' otisla a faktura jos ne postoji.
+                        allLoaded = (preD.count > 0)
+                        anyLoaded = False
                         For Each prK In preD.keys
                             prePrikaz = CStr(preBrojevi(CStr(prK)))
                             gpRefs = gpRefs & "|" & prePrikaz
@@ -5302,11 +5328,15 @@ PreskociBroj:
                                     End If
                                 End If
                                 If CDbl(utV(1)) > 0 Then anySold = True
+                                If CDbl(utV(0)) > 0 Then anyLoaded = True
                                 If preNeto.Exists(CStr(prK)) Then
                                     If CDbl(utV(1)) < CDbl(preNeto(CStr(prK))) - SLED_EPS_KG _
                                        Or CDbl(preNeto(CStr(prK))) <= 0 Then allSold = False
+                                    If CDbl(utV(0)) < CDbl(preNeto(CStr(prK))) - SLED_EPS_KG _
+                                       Or CDbl(preNeto(CStr(prK))) <= 0 Then allLoaded = False
                                 Else
                                     allSold = False
+                                    allLoaded = False
                                 End If
                                 Dim pdel As Variant, pi As Long
                                 pdel = Split(CStr(utV(3)), "|")
@@ -5337,6 +5367,7 @@ PreskociBroj:
                                 Next pi
                             Else
                                 allSold = False
+                                allLoaded = False
                             End If
                         Next prK
                         ' Kolona 29 = SAMO prerada (B1): faktura i kupac su
@@ -5357,6 +5388,11 @@ PreskociBroj:
                             Else
                                 result(r, 12) = CStr(fakture.count + gpFakD.count) & " fakt."
                             End If
+                        End If
+                        ' Kupac se pise i BEZ zavrsne fakture (revizija
+                        ' #10 B1): aktivan utovar vec nosi finalnog
+                        ' kupca -- faktura ga kasnije samo potvrdjuje.
+                        If gpKup.count > 0 Then
                             Dim nKup As Long
                             nKup = gpKup.count
                             If fakture.count > 0 And Len(kupacID) > 0 Then
@@ -5390,6 +5426,11 @@ PreskociBroj:
                             stanje = SLED_ST_PRODATO_GP
                         ElseIf anySold Then
                             stanje = SLED_ST_DELIMICNO
+                        ElseIf anyLoaded And allLoaded Then
+                            ' Model B: sve fizicki otislo, faktura ceka.
+                            stanje = SLED_ST_UTOVARENO
+                        ElseIf anyLoaded Then
+                            stanje = SLED_ST_DELIM_UTOVAR
                         ElseIf preD.count > 0 Then
                             stanje = SLED_ST_PRERADJENO
                         ElseIf svezeFak Then

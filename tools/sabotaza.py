@@ -4029,10 +4029,10 @@ SABOTAZE = {
     "storno-gp-faktura-ne-oslobadja-utovar": (
         "modStorno.bas",
         "                If Len(utID) > 0 Then\n"
-        "                    ReleaseUtovarFromFaktura utID\n"
+        "                    ReleaseUtovarFromFaktura utID, fakturaID\n"
         "                End If\n",
         "                If False Then   ' SABOTAZA: utovar ostaje zarobljen\n"
-        "                    ReleaseUtovarFromFaktura utID\n"
+        "                    ReleaseUtovarFromFaktura utID, fakturaID\n"
         "                End If\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "storno fakture oslobadja utovar",
@@ -4172,8 +4172,8 @@ SABOTAZE = {
     # kontradikcija -- bez brojanja bi re-fakturisanje duplo prodalo.
     "utovar-gp-refakt-aktivna-fst": (
         "modUtovar.bas",
-        "                    aktivnihFst = aktivnihFst + 1\n",
-        "                    aktivnihFst = aktivnihFst + 0   ' SABOTAZA\n",
+        "                AktivnihFstZaUtovar = AktivnihFstZaUtovar + 1\n",
+        "                AktivnihFstZaUtovar = AktivnihFstZaUtovar + 0   ' SABOTAZA\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "nefakturisan utovar sa aktivnom FST se ne fakturise ponovo",
     ),

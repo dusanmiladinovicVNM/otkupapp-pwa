@@ -5987,3 +5987,33 @@ ne moraju početi istog trenutka.
   postoji na SEF putu dok se ne fakturiše.
 - Revizorov audit P1 bio je zastareo nalaz: utovar tabele su u
   `AuditableTables()` od revizije #6.
+
+### 25.15 Revizija #10: lanac razume model B + storno integritet
+
+- **B1 — nova stanja lanca:** „utovareno / ceka fakturu" (sve fizički
+  otišlo, faktura ne postoji) i „delimicno utovareno" (deo otišao,
+  ništa fakturisano) — utovar je samostalan događaj i lanac ga
+  prijavljuje i PRE fakture; finalni kupac (kolona 13) dolazi iz
+  aktivnog utovara, faktura ga kasnije samo potvrđuje. Fixture vozilo:
+  U lanac (120 proizvedeno / 50 utovareno / 0 fakturisano,
+  `UT-SLED-U` bez markera).
+- **B2 — storno utovara ne veruje samo header markeru:** kanonski
+  helper `modUtovar.AktivnihFstZaUtovar` (dele ga
+  `CreateFakturaIzUtovara` i `StornoUtovar`) — aktivna faktura-stavka
+  koja tvrdi utovar blokira storno (dupla zaliha) isto kao što blokira
+  re-fakturisanje (dupla prodaja).
+- **B3 — release proverava vlasnika:**
+  `ReleaseUtovarFromFaktura(utovarID, fakturaID)` resetuje marker SAMO
+  ako utovar tvrdi baš fakturu koja se stornira; korumpirana stavka
+  tuđe fakture se loguje i NE dira tuđ marker (lanac je prijavljuje
+  kao neusaglašenost).
+- **P1 audit self-heal:** `EnsureRuntimeSchema` dopunjava audit kolone
+  (CreatedAt/By, ModifiedAt/By) na tri nove tabele — klijent na
+  self-update putu dobija ko/kada trag bez ručnog `EnsureAuditColumns`.
+- **Test 163** (`T_UtovarB_SledIStornoKapije`, poseban broj po
+  revizorskoj preporuci): U lanac stanje+kupac, rogue FST blokira
+  storno i re-fakturu, storno žrtvene fakture sa korumpiranom stavkom
+  ne oslobađa tuđ utovar, pun cleanup. RunAllTests **163/0**.
+- POUKA: oslanjanje na `Dim i` niže u proceduri obara compile
+  („Variable not defined" modalni dijalog = suite VISI headless);
+  blok uvek deklariše svoju petlja-promenljivu.

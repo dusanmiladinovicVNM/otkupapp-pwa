@@ -372,6 +372,8 @@ SLED_GP_CENA = 200.0               # rucna cena GP -> iznos fakture 12.800
 # 50 kg na fakturu 12/2026 -> stanje "delimicno prodato", 70 kg na
 # stanju). Brojevi po 0/1 pravilu.
 SLED_ZBIRNA_P = "ZB-TEST-SLP"
+# Model B vozilo (revizija #10): utovareno bez fakture.
+SLED_ZBIRNA_U = "ZB-TEST-SLU"
 SLED_KG_P = 150.0
 
 class Sirovo:
@@ -557,6 +559,11 @@ SEED = {
         {"ZbirnaID": "ZBI-SLED-P", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
          "BrojZbirne": SLED_ZBIRNA_P, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
          "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2},
+        # U lanac (revizija #10 B1): 120 proizvedeno / 50 utovareno /
+        # 0 fakturisano -> stanje "delimicno utovareno", kupac iz UTOVARA.
+        {"ZbirnaID": "ZBI-SLED-U", "Datum": FIXTURE_DATE, "VozacID": VOZAC2,
+         "BrojZbirne": SLED_ZBIRNA_U, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "UkupnoKolicina": SLED_KG_P, "Klasa": "I", "KupacID": KUPAC2},
         # Dvosmislen par za sledljivost (v. SLED_ZBIRNA_D): dva aktivna
         # vlasnika (dva vozaca) dele broj; nijedan drugi test ih ne dira.
         {"ZbirnaID": "ZBI-SLED-D1", "Datum": FIXTURE_DATE, "VozacID": VOZAC,
@@ -692,6 +699,10 @@ SEED = {
          "Klasa": "I"},
         {"OtpremnicaID": "OTP-SLED-P", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
          "VozacID": VOZAC2, "BrojOtpremnice": "50/TEST", "BrojZbirne": SLED_ZBIRNA_P,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_P,
+         "Klasa": "I"},
+        {"OtpremnicaID": "OTP-SLED-U", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
+         "VozacID": VOZAC2, "BrojOtpremnice": "51/TEST", "BrojZbirne": SLED_ZBIRNA_U,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_P,
          "Klasa": "I"},
         {"OtpremnicaID": "OTP-SLED-M", "Datum": FIXTURE_DATE, "StanicaID": STANICA2,
@@ -904,6 +915,12 @@ SEED = {
          "VozacID": VOZAC2, "BrojDokumenta": "S11/TEST", "Klasa": "I",
          "BrojZbirne": SLED_ZBIRNA_P, "OtpremnicaID": "OTP-SLED-P",
          "BrojOtpremnice": "50/TEST"},
+        {"OtkupID": "OTK-SLED-U", "Datum": FIXTURE_DATE, "KooperantID": "KOOP-TEST-2",
+         "StanicaID": STANICA2, "KulturaID": "KUL-TEST-1", "VrstaVoca": VRSTA,
+         "SortaVoca": SORTA, "Kolicina": SLED_KG_P, "Cena": 50.0,
+         "VozacID": VOZAC2, "BrojDokumenta": "S21/TEST", "Klasa": "I",
+         "BrojZbirne": SLED_ZBIRNA_U, "OtpremnicaID": "OTP-SLED-U",
+         "BrojOtpremnice": "51/TEST"},
     ],
     # Jedna faktura, samo zato da kapija UplataFakturaProblem ima nad cim da
     # radi: vlasnistvo (KupacID), trenutni preostali iznos (Iznos - uplate) i
@@ -1032,6 +1049,9 @@ SEED = {
         {"NovacID": "NOV-SLED-PP", "BrojDokumenta": "SLED-P11",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_P * 50,
          "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-P"},
+        {"NovacID": "NOV-SLED-U", "BrojDokumenta": "SLED-U1",
+         "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": SLED_KG_P * 50,
+         "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-U"},
         {"NovacID": "NOV-SLED-R", "BrojDokumenta": "SLED-P5",
          "Datum": FIXTURE_DATE, "Tip": "VirmanFirmaKoop", "Isplata": 5000,
          "KooperantID": "KOOP-TEST-2", "OMID": STANICA2, "OtkupID": "OTK-SLED-R"},
@@ -1233,6 +1253,9 @@ SEED = {
         {"UtovarID": "UT-SLED-P", "BrojUtovara": 3, "Godina": 2026,
          "DatumUtovara": FIXTURE_DATE, "KupacID": KUPAC2,
          "Fakturisano": "Da", "FakturaID": "FAK-SLED-GP4"},
+        # Model B vozilo: aktivan utovar BEZ fakture (marker prazan).
+        {"UtovarID": "UT-SLED-U", "BrojUtovara": 10, "Godina": 2026,
+         "DatumUtovara": FIXTURE_DATE, "KupacID": KUPAC2},
         {"UtovarID": "UT-GP-B2", "BrojUtovara": 4, "Godina": 2026,
          "DatumUtovara": FIXTURE_DATE, "KupacID": KUPAC2,
          "Fakturisano": "Da", "FakturaID": "FAK-SLED-GP2"},
@@ -1255,6 +1278,9 @@ SEED = {
         {"UtovarStavkaID": "UTS-SLED-P", "UtovarID": "UT-SLED-P",
          "PreradaID": "PRE-SLED-P", "BrojPrerade": "181/2026",
          "KolicinaKg": 50},
+        {"UtovarStavkaID": "UTS-SLED-U", "UtovarID": "UT-SLED-U",
+         "PreradaID": "PRE-SLED-U", "BrojPrerade": "201/2026",
+         "KolicinaKg": 50, "CenaKg": 100},
         {"UtovarStavkaID": "UTS-GP-B2", "UtovarID": "UT-GP-B2",
          "PreradaID": "PRE-GP-B2", "BrojPrerade": "101/2026",
          "KolicinaKg": 10},
@@ -1612,6 +1638,10 @@ SEED = {
          "VozacID": VOZAC2, "BrojPrijemnice": "40/150326", "BrojZbirne": SLED_ZBIRNA_P,
          "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_P,
          "Cena": 50.0, "Klasa": "I"},
+        {"PrijemnicaID": "PRJ-SLED-U", "Datum": FIXTURE_DATE, "KupacID": KUPAC2,
+         "VozacID": VOZAC2, "BrojPrijemnice": "41/150326", "BrojZbirne": SLED_ZBIRNA_U,
+         "VrstaVoca": VRSTA, "SortaVoca": SORTA, "Kolicina": SLED_KG_P,
+         "Cena": 50.0, "Klasa": "I"},
     ],
     # Paleta i njena stavka vise o STORNIRANOJ prijemnici -> tacno ono sto
     # GetPrijemniceSaOsirocenimPaletama treba da nadje.
@@ -1705,6 +1735,11 @@ SEED = {
          "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 15,
          "KapacitetGajbica": 100, "NetoKg": SLED_KG_P, "Status": "ZATVORENA",
          "Preradjeno": "Da"},
+        {"PaletaID": "PAL-SLED-U", "BrojPalete": 90, "Godina": 2026,
+         "Datum": FIXTURE_DATE, "VrstaVoca": VRSTA, "SortaVoca": SORTA,
+         "Klasa": "I", "TipAmbalaze": AMB_12_1, "BrojGajbica": 15,
+         "KapacitetGajbica": 100, "NetoKg": SLED_KG_P, "Status": "ZATVORENA",
+         "Preradjeno": "Da"},
     ],
     "tblPaletaStavka": [
         # ISTA fizicka paleta, dva dokumenta istog broja.
@@ -1767,6 +1802,10 @@ SEED = {
         {"StavkaID": "PST-SLED-P", "PaletaID": "PAL-SLED-P",
          "BrojPrijemnice": "40/150326", "BrojZbirne": SLED_ZBIRNA_P,
          "BrojGajbica": 15, "NetoKg": SLED_KG_P, "PrijemnicaID": "PRJ-SLED-P",
+         "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
+        {"StavkaID": "PST-SLED-U", "PaletaID": "PAL-SLED-U",
+         "BrojPrijemnice": "41/150326", "BrojZbirne": SLED_ZBIRNA_U,
+         "BrojGajbica": 15, "NetoKg": SLED_KG_P, "PrijemnicaID": "PRJ-SLED-U",
          "Klasa": "I", "VrstaVoca": VRSTA, "SortaVoca": SORTA},
     ],
     # DVE ispravke na cekanju, i to NAD OTPREMNICOM -- namerno ne nad
@@ -1859,6 +1898,10 @@ SEED = {
         {"PreradaID": "PRE-SLED-P", "BrojPrerade": 181,
          "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 120,
          "BrojKutija": 12, "BrojKesa": 24, "TipGotovogProizvoda": "Rinfuz"},
+        # U lanac: 120 proizvedeno, 50 utovareno BEZ fakture.
+        {"PreradaID": "PRE-SLED-U", "BrojPrerade": 201,
+         "Godina": 2026, "Datum": FIXTURE_DATE, "NetoIzlazKg": 120,
+         "BrojKutija": 12, "BrojKesa": 24, "TipGotovogProizvoda": "Rinfuz"},
         # Potrosna vozila writer testa CreateFakturaGP_TX (nisu ni na
         # jednom SLED lancu -- mutacija ne dira tvrdnje lanca).
         {"PreradaID": "PRE-GP-W1", "BrojPrerade": 71,
@@ -1920,6 +1963,8 @@ SEED = {
          "PaletaID": "PAL-SLED-K", "BrojPalete": 70, "NetoKg": SLED_KG_K},
         {"StavkaID": "PRS-SLED-P", "PreradaID": "PRE-SLED-P",
          "PaletaID": "PAL-SLED-P", "BrojPalete": 80, "NetoKg": SLED_KG_P},
+        {"StavkaID": "PRS-SLED-U", "PreradaID": "PRE-SLED-U",
+         "PaletaID": "PAL-SLED-U", "BrojPalete": 90, "NetoKg": SLED_KG_P},
     ],
     # SEF DTO nad GP fakturom (R2 revizije #248): mapper trazi Naziv i
     # PIB kupca iz tblKupci -- do sada je kupac ziveo samo kao ID na
