@@ -845,10 +845,9 @@ Private Function IzradiUtovar() As Boolean
     Dim kupID As String, stavke As Collection, i As Long
     Dim utovarID As String, brojUt As String
 
-    If KorpaTip() <> "GP" Then
-        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR_PRJ"), True
-        Exit Function
-    End If
+    ' Redosled kapija (smoke #12): PRVO prazna korpa -- prazna korpa
+    ' nema tip, pa je "korpa nosi prijemnice" na prazno bila pogresna
+    ' poruka operateru.
     kupID = IzabraniKupacID()
     If Len(kupID) = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_NEMA_KUPCA"), True
@@ -860,6 +859,10 @@ Private Function IzradiUtovar() As Boolean
     End If
     If mKorpa.count = 0 Then
         modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KORPA_PRAZNA"), True
+        Exit Function
+    End If
+    If KorpaTip() <> "GP" Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR_PRJ"), True
         Exit Function
     End If
 
