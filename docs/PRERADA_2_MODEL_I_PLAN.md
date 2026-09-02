@@ -6,8 +6,8 @@
   unete i plan je razrađen do nivoa PR-ova, funkcija, tabela, testova i sabotaža).
 - **Grana:** `claude/prerada-2-production-core-stfebv`
 - **Preduslovi u `main`-u:** [#247](https://github.com/dusanmiladinovicVNM/otkupapp-pwa/pull/247)
-  i [#248](https://github.com/dusanmiladinovicVNM/otkupapp-pwa/pull/248) spojeni;
-  FULL suite zelen.
+  i [#248](https://github.com/dusanmiladinovicVNM/otkupapp-pwa/pull/248) su spojeni
+  2026-09-02 (`main` = `f5ef9ca`); ostaje FULL suite zelen na tom `main`-u pre PR-A.
 - **Vezano:** `docs/DOMEN/README.md`, `docs/adr/0001-*.md`, `docs/adr/0002-*.md`,
   `docs/AMBALAZA_MODEL.md`, `docs/UI_MIGRACIJA_KATALOG.md` §25,
   `docs/EXCEL_TEST_HARNESS.md`, `docs/INTEGRITET_PROVERE.md`,
@@ -52,18 +52,21 @@ jedinici; `tblZamrzavanje` subtype; `tblTuneli` kao posebna tabela; `CorrectionP
 | Legacy prerada | `SavePrerada_TX`: N **celih** paleta → 1 izlaz; `Preradjeno=Da`; bez tipa procesa, otpada, gubitka | `modPaletniList.bas:2872-2990` |
 | `tblPrerada` kolone | `PreradaID, BrojPrerade, Godina, Datum, NetoUlazKg, NetoIzlazKg, BrojKutija, BrojKesa, TezinaPaleteKg, BrutoKg, AmbalazaKg, TipKutije, TipKese, TipGotovogProizvoda, Napomena, CreatedAt, Stornirano` | `modConfig.bas:321-347` |
 | Paleta | header = projekcija iz aktivnih stavki; broj po godini; `Preradjeno` čitaju D1, `SledGpMape`, mreža paleta, Reassign/Detach/Adjust kapije (`IsPaletaPreradjena`) | `modPaletniList.bas:2434`, `modIntegritet.bas:652` |
-| #248 model | `tblUtovar` (+8 prevoz kolona), `tblUtovarStavke(PreradaID, BrojPrerade, KolicinaKg, BrojKutija, BrojKesa, CenaKg)`, `tblPrevoznici`, `tblFakturaStavke(+PreradaID, BrojPrerade, UtovarID)`, `tblVrstaGotovihProizvoda(+RokMeseci)` | `modSetup.EnsureUtovarSchemaCore`, `modConfig` (#248) |
+| #248 model | `tblUtovar` (+8 prevoz kolona), `tblUtovarStavke(PreradaID, BrojPrerade, KolicinaKg, BrojKutija, BrojKesa, CenaKg)`, `tblPrevoznici`, `tblFakturaStavke(+PreradaID, BrojPrerade, UtovarID)`, `tblVrstaGotovihProizvoda(+RokMeseci)`, **`tblPrerada(+DatumIsteka)`** — rok je **snapshot na lotu** (`RokIstekaZaTip`: vrsta → `RokMeseci` → globalni CFG → 24), štampa čita snapshot, tekuće pravilo je samo fallback za stare lotove | `modSetup.EnsureUtovarSchemaCore`, `modConfig.bas:354`, `modUtovar.RokIstekaZaTip`, `modPaletniList.bas:2952` |
+| #248 pakovanja | `PakovanjaZaKg` / `KapacitetPakovanja`: kapacitet = šifarnik `tblKutije`/`tblKese` (tip → neto kg) → fallback lot (`neto ÷ broj`); grid Gotova roba pokazuje cela pakovanja NA STANJU; obrazac samo dokazive brojeve | `modUtovar` (katalog §25.18–25.20) |
+| #248 writer fail-closed | `RequireStavkeKonzistentne`: oštećena aktivna utovarna stavka **blokira** dalju prodaju te prerade (nema tihog preskakanja u mapi stanja) | `modUtovar` (katalog §25.20) |
+| #248 migracija | `BackfillUtovariIzGPFaktura` je **obrisan** (revizija #12): migracija koja izvodi činjenicu koju operater nije uneo (datum fizičkog utovara iz datuma fakture) ne sme da postoji; eventualni backfill = zasebna rutina sa eksplicitnim unosom, transakciona po dokumentu | katalog §25.17 |
 | #248 stanje | `UtovarenoPoPreradi()` — jedna mapa za mrežu, writer, storno; na stanju = `NetoIzlazKg − Σ` | `modUtovar.bas:53` (#248) |
 | #248 SEF | XOR `PrijemnicaID`/`PreradaID` po stavci; `SellersItemIdentification = PreradaID`; `ValidateGpUtovarZaSEF` (utovar tačno jedan, aktivan, `Fakturisano=Da`, tvrdi fakturu, kg 1:1 u oba smera, kupac = kupac) | `modSEFMapper.bas:175-360` (#248) |
 | #248 sledljivost | `SledGpMape`, `SledUtovarPoPreradi`, ključ dokaza `UtovarID|FakturaID|PreradaID → kg`; stanja `SLED_ST_*` | `modIzvestaj.bas:4404-4560, 5436-5447` (#248) |
-| #248 storno | faktura oslobađa utovar; utovar samo nefakturisan; prerada sa utovarom se ne stornira (`ERR_STORNO_BASE+53`); poslednji zauzet kod `+70` | `modStorno.bas` (#248) |
+| #248 storno | faktura oslobađa utovar; utovar samo nefakturisan; prerada sa utovarom se ne stornira (`ERR_STORNO_BASE+53`); poslednji zauzet kod na grani `+70` (proveriti na `main`-u pre PR-B2) | `modStorno.bas` (#248) |
 | #248 ekran | `modScrFakture` liste `ZAFAKT | GOTOVA | UTOVARI | FAKTURE | SEF`; identitet GP reda kolona 9 (`FK_GP_KOL_ID`), dostupnost 10; korpa `mKorpa` u stanju modula; seam `Scr_FkKorpaTestDodajGP(preradaID, …)` | `modScrFakture.bas:85-125, 2048` (#248) |
 | Ljuska | registar `modUiScreens.ScrRows`, kasno vezivanje `Application.Run`; ugovor `Scr_Meta/Build/Layout/Rows/Liste/Lista/Radnje/Event/Save/ResetCache/Cipovi/NaslovDopuna/Brojac`; polja `NewFieldG` sa prefiksom `scr`; mreža `GridCell`; `ShowToast` | `modUiScreens.bas:1-60`, `modOtkupUI.bas:4300, 5153, 6344` |
 | Matični unos | `modMaticniLookups.MaticniSekcije` (data-driven meni) + `frmStammdaten` (`Select Case Me.Tag` → `m_TableName`) | `modMaticniLookups.bas:33`, `frmStammdaten.frm:1036-1072` |
 | Podešavanja | `CfgAdd c, grupa, kljuc, natpis, tip`; grupe „Otkup / dokumenta", „Štampa", … | `modPodesavanja.bas:187` |
 | Integritet | postojeći blokovi A1–A5, B2–B7, C1–C5, D1–D2; A5 = `NetoUlaz = Σ stavke`, `izlaz ≤ ulaz` | `modIntegritet.bas` |
 | Greške | `modPaletniList` 7320–7344, `modCenovnik` 7701–7705, `modUtovar` 1730–1779, `modSetup` 9310–9321; **7400–7499 slobodno** | grep |
-| Verifikacija | `SUITES` u `tools/run_vba.py` (nova suite `gate: True`); fixture `ENSURE_TABLES` + potpis; `tools/sabotaza.py` katalog (381 na #248); CI: `vba_check`, `who_writes --check` | `.claude/rules/testovi.md`, `docs/EXCEL_TEST_HARNESS.md` |
+| Verifikacija | `SUITES` u `tools/run_vba.py` (nova suite `gate: True`); fixture `ENSURE_TABLES` + potpis; `tools/sabotaza.py` katalog (380 posle #248); `RunAllTests` 163; CI: `vba_check`, `who_writes --check` | `.claude/rules/testovi.md`, `docs/EXCEL_TEST_HARNESS.md` |
 | Nepostojeće | komore, tuneli, oprema, smene, senzori, HACCP, uzorci, lotovi — ni u VBA ni u PWA | grep |
 
 ---
@@ -155,7 +158,8 @@ Seed (idempotentno po `IzvorTip+IzvorKljuc`): po jedan `SVEZE` proizvod za svaku
 `VrstaVoca` iz `tblKulture` (`Prodajni=Ne`); po jedan proizvod za svaki
 `tblVrstaGotovihProizvoda.TipGotovogProizvoda` (`Forma=SMRZNUTO`, `Prodajni=Da`,
 `VrstaVoca` prazno ako se ne može izvesti — operater dopunjava). `RokMeseci` se **ne
-kopira**; čita se `VGP.RokMeseci` preko `IzvorKljuc`, pa globalni default.
+kopira**: `RokIstekaZaTip(IzvorKljuc, datum)` ostaje jedina formula roka (VGP → globalni
+CFG → 24) i koristi se **samo pri nastanku** jedinice, za snapshot `DatumIsteka`.
 `Klasa` i `Kalibracija` **nisu** atributi proizvoda.
 
 ### 4.3 `tblOprema` (matični, `BEZ_STORNA`)
@@ -183,7 +187,8 @@ kopira**; čita se `VGP.RokMeseci` preko `IzvorKljuc`, pa globalni default.
 | `LotBroj` | tekst | ne | komercijalni lot, slobodan v1 |
 | `TipKutije`, `BrojKutija`, `TipKese`, `BrojKesa` | tekst/broj | ne | pakovanje (šifarnici `tblKutije`/`tblKese`) |
 | `TezinaPaleteKg`, `BrutoKg` | broj | ne | |
-| `DatumNastanka` | datum | da | osnova roka trajanja |
+| `DatumNastanka` | datum | da | datum nastanka jedinice |
+| `DatumIsteka` | datum | ne | **snapshot** roka po pravilu u trenutku nastanka (`RokIstekaZaTip`, #248 revizija #13); štampa čita snapshot, nikad tekuće pravilo |
 | `StanicaID` | FK | da | |
 | `IzvorTip` | tekst | da | `SARZA / PALETA / PRERADA` |
 | `IzvorID` | tekst | da | `SarzaID` / `PaletaID` / `PreradaID` |
@@ -199,6 +204,7 @@ Bez `Status` kolone. Izvedeno pri čitanju: `POTROSENA` (raspoloživo ≤ 0,01),
   `BrojJedinice/Godina = BrojPrerade/Godina`, `TipJedinice=PALETA`,
   `ProizvodID = tblProizvodi(IzvorTip=VGP, IzvorKljuc=TipGotovogProizvoda)`,
   `KgPocetno=NetoIzlazKg`, pakovanje/bruto/težina sa prerade, `DatumNastanka=Datum`,
+  `DatumIsteka = tblPrerada.DatumIsteka` (stari lot bez snapshota → `RokIstekaZaTip(tip, Datum)`, isti fallback kao štampa),
   `StanicaID` = stanica iz `tblStanice.JeHladnjaca` ako je jedinstvena, inače prazno
   (P6 prijavljuje). Prerada bez `TipGotovogProizvoda` ili sa nepoznatim tipom dobija LJ
   bez `ProizvodID` → **nije dostupna za utovar** (fail-closed, P4 prijavljuje).
@@ -259,9 +265,9 @@ Ključ slobodan; tip procesa deklariše obavezne.
 Backfill (deterministički, idempotentan, u `EnsureProizvodnjaSchema` **i** kao
 self-heal u `EnsureRuntimeSchema`): za svaki red `tblUtovarStavke`/`tblFakturaStavke`
 sa `PreradaID` i praznim `LagerJedinicaID` upiši `LJ` iz mape `PreradaID → LJ`. Nema
-izmišljanja: mapa je 1:1 iz materijalizacije. Ovo **sme** u self-heal (za razliku od
-`BackfillUtovariIzGPFaktura`) jer ne legalizuje siročad — stavka bez `PreradaID`
-ostaje bez LJ i P5 je prijavljuje.
+izmišljanja: mapa je 1:1 iz materijalizacije, pa ovo **sme** u self-heal — za razliku
+od obrisanog `BackfillUtovariIzGPFaktura` (#248 revizija #12), koji je izvodio činjenicu
+koju operater nije uneo. Stavka bez `PreradaID` ostaje bez LJ i P5 je prijavljuje.
 
 ### 4.10 Registri i konstante (`modConfig`, `modSchemaGuard`, `modSetup`)
 
@@ -285,7 +291,7 @@ ostaje bez LJ i P5 je prijavljuje.
 
 | # | Invarijanta | Čuva | Proverava |
 |---|---|---|---|
-| I1 | `RaspolozivoKg(lj) = FizickoKg − Σ aktivnih ulaza − Σ aktivnog utovara − blokirano ≥ 0` | jedina funkcija `RaspolozivoPoJedinici` (deli je mreža, writer, storno, SEF) | P2 |
+| I1 | `RaspolozivoKg(lj) = FizickoKg − Σ aktivnih ulaza − Σ aktivnog utovara − blokirano ≥ 0`; oštećena aktivna stavka (ulaz ili utovar) **blokira** jedinicu, ne preskače se (`RequireStavkeKonzistentne` obrazac iz #248) | jedina funkcija `RaspolozivoPoJedinici` (deli je mreža, writer, storno, SEF) | P2 |
 | I2 | Za `ZAVRSENA` šaržu: `|Σ KgUlaz − Σ KgIzlaz (sva četiri tipa)| ≤ tolerancija` | `ZavrsiSarzu_TX` | P1 |
 | I3 | `ZAVRSENA` šarža ima bar jedan `GLAVNI` izlaz sa jedinicom | `ZavrsiSarzu_TX` | P1 |
 | I4 | Jedinica koja ima aktivnog potomka (ulaz procesa / utovarnu stavku / blokadu) ne može se stornirati, ni posredno kroz storno šarže/prerade koja ju je proizvela | `StornoProcesSarza`, `StornoPrerada`, `StornoPaleta` | P3 |
@@ -348,7 +354,7 @@ Public Function RaspolozivoKg(ByVal ljID As String) As Double        ' omotac na
 Public Function PotrosenoPoJedinici() As Object                      ' samo ulazi procesa
 Public Function PaletaUProcesu(ByVal paletaID As String) As Boolean  ' I5 kapija
 Public Function LjOznaka(ByVal ljID As String) As String             ' "PRE 51/2026" | "PAL 31/2026" | "LJ 12/2026"
-Public Function LjRokTrajanja(ByVal ljID As String) As Variant       ' DatumNastanka + RokMeseci(VGP) | globalni; Empty kad nema
+Public Function LjRokTrajanja(ByVal ljID As String) As Variant       ' LJ.DatumIsteka (snapshot); fallback RokIstekaZaTip za stare jedinice bez snapshota; Empty kad nema
 Public Function BalansSarze(ByVal sarzaID As String) As Variant      ' Array(ulaz, glavni, nus, otpad, gubitak, nerasporedjeno, randmanKom, recovery)
 
 ' ulazi:   Collection of Array(izvorTip, id, kgUlaz)   izvorTip in {"LJ","PALETA"}
@@ -393,7 +399,9 @@ Public Function GetSarzaParametriForGrid(ByVal sarzaID As String) As Variant
 2. Kapije 7420–7429; balans (D3) računat nad **stvarnim** ulazima iz tabele, ne nad
    parametrom.
 3. LJ za svaki `GLAVNI`/`NUSPROIZVOD` (`IzvorTip=SARZA`, `IzvorID=SarzaID`,
-   `BrojJedinice` sopstveni brojač, `DatumNastanka=kraj`, `StanicaID` šarže).
+   `BrojJedinice` sopstveni brojač, `DatumNastanka=kraj`, `StanicaID` šarže,
+   `DatumIsteka = RokIstekaZaTip(Proizvod.IzvorKljuc, kraj)` za `Prodajni=Da` — snapshot,
+   kasnija promena podešavanja ga ne menja).
 4. Izlazi (snimak proizvoda/klase/kalibracije), parametri, `DatumVremeKraj`,
    `Status=ZAVRSENA`.
 5. Commit; `Monitor_Event SARZA_ZAVRSENA`.
@@ -423,16 +431,16 @@ proći nad LJ ključem. Po modulu:
 
 | Modul | Šta se menja | Ostaje |
 |---|---|---|
-| `modUtovar` | `UtovarenoPoPreradi` → **`UtovarenoPoJedinici`** (ključ `LagerJedinicaID`); `UtovarenoKgPrerade` → `UtovarenoKgJedinice`; `CreateUtovarCore`: stavka = `Array(lagerJedinicaID, kg, cena)`, kapije nad LJ (postoji tačno jednom, nije stornirana, ima `ProizvodID` sa `Prodajni=Da`, `kg ≤ RaspolozivoKg`), upis `LagerJedinicaID` **i** `PreradaID/BrojPrerade` (iz `IzvorID` kad je `IzvorTip=PRERADA`, inače prazno); `UtsPakovanja` čita pakovanje sa LJ; `GetUtovariForGrid` kolona „roba" = `LjOznaka`; `PrintUtovar`: Lot = `LjOznaka` (ili `LotBroj` ako postoji), Proizvod = `Proizvod.Naziv`, Rok = `LjRokTrajanja`, Bruto = LJ; `CreateFakturaIzUtovara`: FST nosi `LagerJedinicaID`; `AktivnihFstZaUtovar` nepromenjen | model B, cene, prevoz, plomba, migracija |
+| `modUtovar` | `UtovarenoPoPreradi` → **`UtovarenoPoJedinici`** (ključ `LagerJedinicaID`); `UtovarenoKgPrerade` → `UtovarenoKgJedinice`; `CreateUtovarCore`: stavka = `Array(lagerJedinicaID, kg, cena)`, kapije nad LJ (postoji tačno jednom, nije stornirana, ima `ProizvodID` sa `Prodajni=Da`, `kg ≤ RaspolozivoKg`), upis `LagerJedinicaID` **i** `PreradaID/BrojPrerade` (iz `IzvorID` kad je `IzvorTip=PRERADA`, inače prazno); `UtsPakovanja` čita pakovanje sa LJ; `GetUtovariForGrid` kolona „roba" = `LjOznaka`; `PrintUtovar`: Lot = `LjOznaka` (ili `LotBroj` ako postoji), Proizvod = `Proizvod.Naziv`, Rok = `LJ.DatumIsteka` (snapshot), Bruto = LJ; `PakovanjaZaKg`/`KapacitetPakovanja` čitaju tip i broj pakovanja sa LJ (šifarnik → lot fallback, nepromenjeno); `RequireStavkeKonzistentne` proverava `LagerJedinicaID` umesto `PreradaID`; `CreateFakturaIzUtovara`: FST nosi `LagerJedinicaID`; `AktivnihFstZaUtovar` nepromenjen | model B, cene, prevoz, plomba, migracija |
 | `modFaktura` | `GetGPZaFakturisanjeForGrid`: izvor **`tblLagerJedinice`** (`Prodajni=Da`, nestornirane): `1 LJ | 2 Oznaka | 3 Proizvod | 4 Klasa | 5 Datum | 6 NaStanju | 7 Kutije | 8 Kese | 9 Dostupna | 10 BrojFakture`; `PrintFaktura` mapa proizvoda po LJ; `BrojacIdova` nad LJ | šablon fakture, `gpFaktura` grana |
 | `modSEFMapper` | XOR `PrijemnicaID`/**`LagerJedinicaID`** po stavci; `gpKg` po LJ; `SellersItemIdentification = LagerJedinicaID`; naziv = `Proizvod.Naziv`; `ValidateGpUtovarZaSEF` kg mape po LJ; `clsSEFLine` + `lagerJedinicaID` (JSON snapshot dobija `"LagerJedinicaID"`, `"PreradaID"` ostaje radi starih snapshot-a) | `DeliveryDate`, kupac invariant |
 | `modScrFakture` | lista `GOTOVA`: identitet = LJ (kolona `FK_GP_KOL_ID`), naslovi „Oznaka / Proizvod / Klasa"; korpa ključ LJ; `FkDodajGP(ljID, …)`; seam `Scr_FkKorpaTestDodajGP(ljID, …)`; lista `UTOVARI` kolona roba = oznaka | čipovi, hint, radnje, prevoz polja |
 | `modIzvestaj` | `SledGpMape`: `prePoPaleti` → **`ljPoPaleti`** (paleta → LJ: preko `IzvorID` za materijalizovane, preko `tblPreradaStavka` za legacy prerade → njihove LJ); `SledUtovarPoPreradi` → `SledUtovarPoJedinici`; ključ dokaza `UtovarID|FakturaID|LagerJedinicaID`; mete (`ReportSledljivostMete`) `PRERADA` → LJ (štampa = paletni list LJ kad postoji, inače preradni list) | stanja `SLED_ST_*`, oznake, fail-closed pravila, NEPOTPUNI klase |
 | `modStorno` | `StornoPrerada`: kapija utovara preko `UtovarenoKgJedinice(LJ)`; LJ `Stornirano`; `ReleaseUtovarFromFaktura` nepromenjen | ostalo |
-| `modSetup` | `BackfillUtovariIzGPFaktura` upisuje i `LagerJedinicaID` | |
+| `modSetup` | backfill `LagerJedinicaID` na stavkama (§4.9) — ništa drugo; obrisani `BackfillUtovariIzGPFaktura` se **ne vraća** | |
 | `modPrint` | `FillUtovarSablon` čita LJ polja | LAYOUT_VER +1 samo ako se raspored menja (ne mora) |
 | Testovi | 160–163 prevedeni na LJ (fixture daje LJ redove); +1 test: `T_LJ_MaterijalizacijaLegacy` (prerada → LJ 1:1, `KgPocetno`, stornirana → stornirana, utovar/faktura stavke dobile LJ, prerada bez tipa → nedostupna) | tvrdnje |
-| Sabotaže | 20 sabotaža sa `utovar-gp-*`, `sef-gp-*`, `sledljivost-gp-*`, `storno-gp-*`, `faktura-gp-*`, `fakture-gp-*` prefiksom: sidra premeštena na nove nazive funkcija; svaka mora i dalje da obara **isti** test | katalog |
+| Sabotaže | sve GP sabotaže (`utovar-gp-*`, `sef-gp-*`, `sledljivost-gp-*`, `storno-gp-*`, `storno-prerada-*`, `faktura-gp-*`, `fakture-gp-*`; katalog 380 posle #248): sidra premeštena na nove nazive funkcija; svaka mora i dalje da obara **isti** test | katalog |
 
 Napomena o SEF-u: `SellersItemIdentification` za legacy lotove menja vrednost sa
 `PRE-xxxxx` na `LJ-xxxxx` **samo za buduće fakture**; poslate fakture su nepromenljive
@@ -554,6 +562,7 @@ Next`, ne obara potvrdu) + po jedan paletni list LJ za svaki `GLAVNI` izlaz tipa
 | `PROCES_BALANS_TOLERANCIJA_KG` | **Proizvodnja** (nova grupa) | broj | `0,5` | D3; sanity 0–50 |
 | `PROCES_PRINT_MODE` | Štampa | `list:PDF;PRINT;PREVIEW;OFF` | `PDF` | procesni list |
 | `LJ_PRINT_MODE` | Štampa | isto | `PDF` | paletni list LJ |
+| `GP_ROK_TRAJANJA_MESECI` | Otkup / dokumenta (postojeći, #248) | broj | 24 | koristi ga samo `RokIstekaZaTip` pri nastanku jedinice (snapshot) |
 | `PROIZVODNJA_AKTIVNA` | Proizvodnja | `DA/NE` | `NE` | prikaz ekrana i wrapper-a `NOVAPRERADA` (D5) — klijent bez modula Hladnjača/Proizvodnja ne vidi ekran; **ne** gejtuje B1 (jedan ključ nema prekidač) |
 
 Čitanje kroz `ConfigFlag` / `GetConfigValue` obrazac (`IsProizvodnjaAktivna()` u
@@ -604,8 +613,10 @@ Za svaku aktivnu preradu bez `SarzaID`: šarža `PRERADA_LEGACY` (`Status=ZAVRSE
 početak = kraj = `Datum`), ulazi = `tblPreradaStavka` (materijalizovane palete, cele,
 `KgUlaz=NetoKg` stavke), izlaz `GLAVNI` = postojeća LJ prerade, razlika `NetoUlaz −
 NetoIzlaz` → `GUBITAK` sa napomenom `LEGACY (neevidentiran otpad)`; `tblPrerada.SarzaID`
-= nova šarža. Ništa se ne izmišlja preko onoga što je evidentirano; **ne ide** u
-self-heal (kao `BackfillUtovariIzGPFaktura`). Posle D: `SavePrerada_TX` se gasi i u
+= nova šarža. Ništa se ne izmišlja preko onoga što je evidentirano (početak = kraj = `Datum`
+prerade je jedino što je zabeleženo); **ne ide** u self-heal — isti princip zbog kog
+je `BackfillUtovariIzGPFaktura` obrisan (#248 revizija #12): migracija je eksplicitna
+radnja operatera, transakciona po dokumentu. Posle D: `SavePrerada_TX` se gasi i u
 legacy `frmPalete` (dugme zove wrapper).
 
 ### 13.4 Ono što se **ne** menja
@@ -663,7 +674,7 @@ Obrazac `modTestPalete`: `SeedMasterData`, `TstAppend`, `Chk/ChkEq/ChkEqD`,
 | T14 | `T14_LegacyStornoUciLJ` | `StornoPrerada` nad preradom čija je LJ u procesu → `+81`; `StornoPaleta` nad paletom u procesu → `+82` |
 | T15 | `T15_IntegritetP1doP6` | svaka provera nalazi tačno svoj sabotirani red; čist skup = 0 nalaza |
 | T16 | `T16_TipProcesaPravila` | forma nedozvoljena → 7410; oprema obavezna → 7403; obavezan parametar → 7411; kapacitet → upozorenje bez blokade |
-| T17 | `T17_LjOznakaIRok` | `PRE 51/2026`, `PAL 31/2026`, `LJ 1/2026`; rok = datum + VGP.RokMeseci, fallback globalni, Empty bez ijednog |
+| T17 | `T17_LjOznakaIRok` | `PRE 51/2026`, `PAL 31/2026`, `LJ 1/2026`; `DatumIsteka` snapshot: materijalizacija kopira `tblPrerada.DatumIsteka`, stari lot bez snapshota dobija `RokIstekaZaTip`, 2.0 izlaz dobija rok po pravilu u trenutku završetka i **promena `RokMeseci` posle toga ne menja** ga |
 
 ### 14.3 `RunAllTests` (`modTest`) — ekran i sledljivost
 
@@ -694,6 +705,7 @@ Obavezan dvosmerni dokaz (kritične invarijante + izmenjen checker/test):
 | `proizvodnja-rollback-bez-lj` | snapshot `tblLagerJedinice` uklonjen iz `ZavrsiSarzu_TX` | T09 |
 | `proizvodnja-materijalizacija-bez-storna` | stornirana prerada dobija aktivnu LJ | T02, P4 |
 | `proizvodnja-forma-placebo` | `DozvoljenaUlaznaForma` ne proverava | T16 |
+| `proizvodnja-rok-iz-tekuceg-pravila` | štampa/`LjRokTrajanja` računa rok iz tekućeg pravila umesto snapshota | T17 |
 | `utovar-gp-kljuc-prerada` | `CreateUtovarCore` čita stanje po `PreradaID` umesto LJ | 164 |
 | `sef-gp-identitet-prerada` | `SellersItemIdentification` vraćen na `PreradaID` | 164 |
 | `sledljivost-graf-storno-ivica` | stornirani ulaz crta ivicu | 169 |
@@ -735,7 +747,7 @@ process PR** posle PR-A.
 |---|---|---|---|---|---|
 | **PR-0** | docs: model i plan | ovaj dokument | `docs/` | — | ✔ (ova grana) |
 | **PR-A** | Prerada 2.0 — šema, matični podaci, lager jedinica za legacy | §4 tabele/kolone/registri; seed; materijalizacija + backfill (§13.1, 13.2); `SavePrerada_TX` pravi LJ za novu preradu; `StornoPrerada` stornira LJ; matični unos 3 sekcije; `IsProizvodnjaAktivna`; P4, P5, P6; `modTestProizvodnja` T01, T02, T17; fixture `ENSURE_TABLES` | `modConfig`, `modSetup`, `modSchemaGuard`, `modProizvodnja` (novo), `modPaletniList`, `modStorno`, `modIntegritet`, `modMaticniLookups`, `frmStammdaten` (code), `modPodesavanja`, `modTestProizvodnja` (novo), `tools/make_fixture.py`, `tools/run_vba.py`, `tests/schema_donor.json`, `docs/` | #247, #248 u `main` | FAST čist; `RunProizvodnjaTestSuite` 3/0; `RunAllTests` 163/0 i `RunPaleteTestSuite` bez promene; dokaz `proizvodnja-materijalizacija-bez-storna`; compile; smoke A |
-| **PR-B1** | Prodajni stek na `LagerJedinicaID` | §7 u celosti; test 164; sabotaže `utovar-gp-kljuc-prerada`, `sef-gp-identitet-prerada`; 20 GP sabotaža premeštena sidra | `modUtovar`, `modFaktura`, `modSEFMapper`, `clsSEFLine`, `modScrFakture`, `modIzvestaj`, `modStorno`, `modSetup`, `modPrint`, `modTest`, `tools/sabotaza.py`, `tools/make_fixture.py`, `docs/SEF_LIFECYCLE_MANUAL.md` | PR-A | `RunAllTests` 164/0; `RunSEFTestSuite`, `RunFakturaSmokeSuite`, `RunStornoTestSuite` zeleni; pun dokaz `utovar-gp sef-gp sledljivost-gp storno-gp faktura-gp fakture-gp` (22/22); compile; smoke B1 (legacy lot i dalje se prodaje, štampa, šalje na SEF; storno lanac isti) |
+| **PR-B1** | Prodajni stek na `LagerJedinicaID` | §7 u celosti; test 164; sabotaže `utovar-gp-kljuc-prerada`, `sef-gp-identitet-prerada`; 20 GP sabotaža premeštena sidra | `modUtovar`, `modFaktura`, `modSEFMapper`, `clsSEFLine`, `modScrFakture`, `modIzvestaj`, `modStorno`, `modSetup`, `modPrint`, `modTest`, `tools/sabotaza.py`, `tools/make_fixture.py`, `docs/SEF_LIFECYCLE_MANUAL.md` | PR-A | `RunAllTests` 164/0; `RunSEFTestSuite`, `RunFakturaSmokeSuite`, `RunStornoTestSuite` zeleni; pun dokaz svih GP prefiksa (`utovar-gp sef-gp sledljivost-gp storno-gp faktura-gp fakture-gp`) — isti broj zelenih kao na `main`-u pre PR-a; compile; smoke B1 (legacy lot i dalje se prodaje, štampa, šalje na SEF; storno lanac isti) |
 | **PR-B2** | Procesni writer-i i storno šarže | §5, §6, §6.5; `PaletaUProcesu` u tri writer-a `modPaletniList`; utovar „na stanju" odbija procesnu potrošnju (već kroz `RaspolozivoPoJedinici`); P1–P3; T03–T16; 8 sabotaža `proizvodnja-*` | `modProizvodnja`, `modStorno`, `modPaletniList`, `modUtovar` (jedna funkcija stanja), `modIntegritet`, `modTestProizvodnja`, `tools/sabotaza.py`, `tools/make_fixture.py` (lanci `SRZ-SLED-*`) | PR-B1 | `RunProizvodnjaTestSuite` 17/0; `RunPaleteTestSuite` + T13; `RunStornoTestSuite`; dokaz `proizvodnja` 10/10; compile; **nema ekrana** — smoke kroz `Alt+F8` test-rutinu nad fixture-om |
 | **PR-C1** | Ekran Proizvodnja + procesni list + paletni list LJ | §9 (osim GENEALOGIJA), §10, §11; wrapper `NOVAPRERADA` (D5); poruke; testovi 165–168; sabotaža `prz-ekran-zavrsi-uvek` | `modScrProizvodnja` (novo), `modUiScreens`, `modOtkupUI` (ikonica), `modPoruke`, `modPrint`, `modPodesavanja`, `modConfig`, `modScrPalete`, `modTest`, `docs/UI_MIGRACIJA_KATALOG.md` §26 | PR-B2 | `RunAllTests` 168/0; compile; **smoke C1** (§15.1) nad pravim podacima operatera; `PROIZVODNJA_AKTIVNA=NE` sakriva ekran i wrapper |
 | **PR-C2** | Sledljivost kao graf | §8; testovi 169–170; 3 sabotaže `sledljivost-graf-*`, `sledljivost-lanac-multi-prvi` | `modSledljivost`, `modIzvestaj`, `modScrSledljivost`, `modPrint` (recall lista), `modPoruke`, `modTest` | PR-C1 | `RunAllTests` 170/0; dokaz `sledljivost sledljivost-gp`; smoke C2 |
