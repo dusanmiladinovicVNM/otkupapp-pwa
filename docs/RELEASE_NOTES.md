@@ -7057,6 +7057,25 @@ ijedne izmišljene veze.
 - Storno fakture sa više stavki istog utovara više ne pravi lažne
   warninge u logu.
 
+### Pakovanja, rok trajanja i završne granice (revizije #12–#13)
+
+- **Kutije/kese prate stanje:** lista Gotova roba pokazuje broj CELIH
+  pakovanja na stanju (kapacitet iz šifarnika kutija/kesa po tipu sa
+  prerade, ili izveden iz samog lota — neto ÷ broj); parcijalni utovar
+  na utovarnoj listi dobija stvarna pakovanja (500 kg = 50 kutija i
+  50 kesa), i na reprintu starijih utovara.
+- **Rok trajanja pripada lotu:** `DatumIsteka` se upisuje na preradu
+  u trenutku nastanka lota po tadašnjem pravilu (vrsta → rok, pa
+  globalna postavka u „Otkup / dokumenta"); kasnija promena
+  podešavanja ne menja rok na već izdatim dokumentima.
+- **Datum/vreme utovara zaključani čim dokument postoji na SEF-u**
+  (po SEF DocumentId dokazu, ne samo po stanju).
+- **UKUPNO BRUTO** na utovarnoj listi se štampa samo kad je bruto
+  izmeren za sve stavke — delimičan zbir se ne prikazuje kao ukupan.
+- **Prodaja se blokira nad oštećenim podacima:** aktivna utovarna
+  stavka bez validne količine ili headera zaustavlja dalju prodaju te
+  prerade dok se integritet ne popravi.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;
