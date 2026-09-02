@@ -51,6 +51,30 @@ Public Sub UpsertPoruke(lo As ListObject)
         k = CStr(r.Range(1).Value)
         If k <> "" Then existing(k) = r.Index
     Next r
+    UpsertPoruke01 lo, existing
+    UpsertPoruke02 lo, existing
+    UpsertPoruke03 lo, existing
+    UpsertPoruke04 lo, existing
+    UpsertPoruke05 lo, existing
+    UpsertPoruke06 lo, existing
+    UpsertPoruke07 lo, existing
+    UpsertPoruke08 lo, existing
+    UpsertPoruke09 lo, existing
+    UpsertPoruke10 lo, existing
+    UpsertPoruke11 lo, existing
+    UpsertPoruke12 lo, existing
+    InvalidateCache
+End Sub
+
+' Katalog je podeljen na blokove zato sto VBA ima TVRDU granicu velicine
+' procedure (~64 KB prevedenog koda). Kad je katalog prerastao granicu, jedina
+' greska je bila "Procedure too large" pri Debug -> Compile -- ni jedan test ni
+' vba_check to nisu videli, jer se javlja tek pri prevodjenju.
+'
+' Podela je MEHANICKA, po granici naredbe: redosled poziva je nepromenjen, pa
+' je i sadrzaj kataloga nepromenjen. Nov blok se dodaje kad poslednji naraste --
+' ne dopisivati u nedogled u jedan.
+Private Sub UpsertPoruke01(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "APP_MSG_GRESKA_PRI_POKRETANJU", "Gre" & ChrW(353) & "ka pri pokretanju aplikacije. Pogledajte log."
     UpsertRow lo, existing, "AGRO_LBL_MAGACIN_IZDAVANJE_ROBE", "Magacin " & ChrW(8212) & " izdavanje robe i prijem od dobavlja" & ChrW(269) & "a"
     UpsertRow lo, existing, "AGRO_LBL_IZLAZ_IZDAVANJE_ROBE", "Izlaz " & ChrW(8212) & " Izdavanje robe kooperantu"
@@ -203,6 +227,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "STM_ERR_GRESKA_PRI_UCITAVANJU_2", "Gre" & ChrW(353) & "ka pri u" & ChrW(269) & "itavanju stanica:"
     UpsertRow lo, existing, "AGRO_MSG_GRESKA_PRI_UNOSU", "Gre" & ChrW(353) & "ka pri unosu magacina, promene vra" & ChrW(263) & "ene:"
     UpsertRow lo, existing, "BANKA_LBL_PDF_AUSWAHLEN", "Izaberi PDF"
+End Sub
+
+Private Sub UpsertPoruke02(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "GAUTH_MSG_TOKEN_AUSTAUSCH_FEHLGESCHLAGEN", "Razmena tokena nije uspela. Proveri Client ID/Secret."
     UpsertRow lo, existing, "SYNC_ERR_UVOZ_OTK_NIJE", "Uvoz OTK nije potvr" & ChrW(273) & "en zbog fatal sync gre" & ChrW(353) & "ke."
     UpsertRow lo, existing, "SYNC_ERR_GRESKE", "Gre" & ChrW(353) & "ke:"
@@ -359,6 +386,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_NAV_PALETE", "Palete"
     UpsertRow lo, existing, "OTKUI_NAV_AGRO", "Agrohemija"
     UpsertRow lo, existing, "OTKUI_NAV_FAKT", "Fakturisanje"
+End Sub
+
+Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_UVOZ", "Uvoz izvoda"
     UpsertRow lo, existing, "OTKUI_NAV_BANKA_NALOZI", "Platni nalozi"
     UpsertRow lo, existing, "OTKUI_NAV_MARZA", "Mar" & ChrW(382) & "a"
@@ -542,6 +572,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "MATG_ERR_NEMA_TACKE", _
         "Parcela nema upotrebljive Lat/Lng koordinate."
     UpsertRow lo, existing, "MATG_ERR_N", "N koordinata nije broj."
+End Sub
+
+Private Sub UpsertPoruke04(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "MATG_ERR_E", "E koordinata nije broj."
     UpsertRow lo, existing, "MATG_ERR_POZITIVNE", "Koordinate moraju biti pozitivne."
     UpsertRow lo, existing, "MATG_ERR_RADNJA", "Geo radnja nije uspela:"
@@ -728,6 +761,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_CTXL_VOZAC", "Voza" & ChrW(269)
     UpsertRow lo, existing, "OTKUI_CTXL_PARTNER", "Partner"
     UpsertRow lo, existing, "OTKUI_FLDPART_OTKUP", "Kooperant"
+End Sub
+
+Private Sub UpsertPoruke05(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLDPART_OTPREMNICA", "Kupac"
     UpsertRow lo, existing, "OTKUI_FLDPART_ZBIRNA", "Kupac"
     UpsertRow lo, existing, "OTKUI_FLDPART_PRIJEMNICA", "Kupac"
@@ -891,6 +927,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "DOKUNOS_ERR_KUPAC", ChrW(10007) & " Izaberi kupca"
     UpsertRow lo, existing, "DOKUNOS_ERR_BROJ_ZBIRNE", ChrW(10007) & " Unesi broj zbirne"
     UpsertRow lo, existing, "DOKUNOS_ERR_IZVOR_KL2", ChrW(10007) & " Izvor (otpremnice) ima Klasu II " & ChrW(8212) & " uklju" & ChrW(269) & "i " & ChrW(8222) & "Dve klase" & ChrW(8220) & " i unesi Kl.II, ina" & ChrW(269) & "e bi bila izgubljena u zbirnoj."
+End Sub
+
+Private Sub UpsertPoruke06(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_1", ChrW(10007) & " Zbirna"
     UpsertRow lo, existing, "DOKUNOS_ERR_ZBIRNA_NEMA_2", "ne postoji u sistemu " & ChrW(8212) & " prvo unesi zbirnu otpremnicu."
     UpsertRow lo, existing, "DOKUNOS_ASK_ZBIRNA_NEMA", "Ipak snimiti prijemnicu sa ovim brojem zbirne?"
@@ -1080,6 +1119,9 @@ Public Sub UpsertPoruke(lo As ListObject)
               " storniraj stari pa unesi ispravan; veze i prera" & ChrW(269) & "un idu automatski" & vbCrLf & vbCrLf & _
               "NE = ne" & ChrW(353) & "to drugo (bira se u slede" & ChrW(263) & "em koraku)" & vbCrLf & vbCrLf & _
               "OTKAZI = odustani, ni" & ChrW(353) & "ta se ne menja"
+End Sub
+
+Private Sub UpsertPoruke07(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "STORNO_ASK_MOD_2", ChrW(352) & "ta onda?" & vbCrLf & vbCrLf & _
               "DA = DUPLIKAT: dokument nikad nije trebalo da postoji " & ChrW(8212) & _
               " skini posledice, nema zamene" & vbCrLf & vbCrLf & _
@@ -1278,6 +1320,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_MSG_PAL_STORNIRANA", ChrW(10003) & " Stornirana paleta"
     UpsertRow lo, existing, "OTKUI_ERR_PAL_PRERADJENA", ChrW(10007) & " Paleta je prera" & ChrW(273) & "ena " & ChrW(8212) & " prvo storniraj preradu, pa se vra" & ChrW(263) & "a u lager"
     UpsertRow lo, existing, "OTKUI_MSG_PAL_NEPOTPUNE", ChrW(10003) & " Nepotpunih paleta poslato na izlaz:"
+End Sub
+
+Private Sub UpsertPoruke08(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ASK_PRE_STORNO", "Stornirati preradu br."
     UpsertRow lo, existing, "OTKUI_ASK_PRE_STORNO2", "Palete gotovih proizvoda se vra" & ChrW(263) & "aju u lager."
     UpsertRow lo, existing, "OTKUI_MSG_PRE_STORNIRANA", ChrW(10003) & " Stornirana prerada"
@@ -1434,6 +1479,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDF_SEF_ID", "SEF ID"
     UpsertRow lo, existing, "OTKUI_HDF_SEF_POSLATO", "POSLATO"
     UpsertRow lo, existing, "OTKUI_HDF_SEF_GRESKA", "GRE" & ChrW(352) & "KA"
+End Sub
+
+Private Sub UpsertPoruke09(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_FLD_FK_KUPAC", "Kupac"
     UpsertRow lo, existing, "OTKUI_BTN_FK_IZRADI", "Izradi fakturu"
     UpsertRow lo, existing, "OTKUI_BTN_FK_OCISTI", "Isprazni korpu"
@@ -1591,6 +1639,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDN_AVANS", "AVANS"
     UpsertRow lo, existing, "OTKUI_FLD_BN_RACUN", "Sa ra" & ChrW(269) & "una"
     UpsertRow lo, existing, "OTKUI_BTN_BN_UNALOG", "U naloge"
+End Sub
+
+Private Sub UpsertPoruke10(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_BTN_BN_IZNALOG", "Izbaci"
     UpsertRow lo, existing, "OTKUI_BTN_BN_AVANS", "Primeni avans"
     UpsertRow lo, existing, "OTKUI_BTN_BN_CSV", "Generi" & ChrW(353) & "i naloge"
@@ -1743,6 +1794,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_HDI_DOKID", "DOK ID"
     UpsertRow lo, existing, "OTKUI_HDI_KES", "KE" & ChrW(352) & " OTKUPAC"
     UpsertRow lo, existing, "OTKUI_HDI_VIRFIRMA", "VIRMAN FIRMA"
+End Sub
+
+Private Sub UpsertPoruke11(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_HDI_VIRAVANS", "VIRMAN AVANS"
     UpsertRow lo, existing, "OTKUI_HDI_UKUPNO", "UKUPNO"
     UpsertRow lo, existing, "OTKUI_HDI_ENTITET", "ENTITET"
@@ -1930,6 +1984,9 @@ Public Sub UpsertPoruke(lo As ListObject)
     ' svog polja (100pt) pa se sekla/preklapala (smoke 5d).
     UpsertRow lo, existing, "OTKUI_FLD_UT_PO", "PO broj"
     UpsertRow lo, existing, "OTKUI_FLD_UT_NAPOMENA", "Napomena"
+End Sub
+
+Private Sub UpsertPoruke12(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_ERR_FK_CENA_GP", ChrW(10007) & " Upi" & ChrW(353) & "i cenu gotove robe (RSD/kg) pre dodavanja u korpu"
     UpsertRow lo, existing, "OTKUI_ERR_FK_MESANJE", ChrW(10007) & " Jedna faktura nosi JEDNU vrstu robe " & ChrW(8212) & " korpa ve" & ChrW(263) & " sadr" & ChrW(382) & "i drugu (isprazni je ili zavr" & ChrW(353) & "i fakturu)"
     ' --- Sledljivost krug 8: review paket (R1/R3/R7) ---
@@ -1938,8 +1995,8 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_ERR_SL_AUTO_GRESKA", ChrW(10007) & " Automatsko povezivanje prekinuto gre" & ChrW(353) & "kom " & ChrW(8212) & " ni" & ChrW(353) & "ta nije upisano (vidi ErrorLog)"
     UpsertRow lo, existing, "OTKUI_ERR_SL_DOK_NEIZABRAN", ChrW(10007) & " Izaberi dokument iz padaju" & ChrW(263) & "e liste " & ChrW(8212) & " kucanje samo su" & ChrW(382) & "ava ponudu"
     UpsertRow lo, existing, "OTKUI_MSG_SL_VISE_META", "Vi" & ChrW(353) & "e dokumenata sledljivosti za ovaj red " & ChrW(8212) & " izaberi u polju 'Dokument sledljivosti'"
-    InvalidateCache
 End Sub
+
 
 Private Sub UpsertRow(lo As ListObject, existing As Object, _
                       ByVal kljuc As String, ByVal tekst As String)

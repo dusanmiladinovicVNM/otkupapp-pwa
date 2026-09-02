@@ -7047,3 +7047,37 @@ Tri nove sabotaže. **Testovi nisu izvršeni** u web sesiji.
 **Posle M6 `frmStammdaten` više nema nijednog korisnika u novoj ljusci** — ostaje
 samo legacy meni (`frmMaticniPodaci`) i test 161, koji je i napisan da umre s
 njom.
+
+### 26.22 „Procedure too large" — katalog poruka je prerastao VBA granicu
+
+Prvi `Debug → Compile` posle spajanja sa `main`-om nije prošao:
+**`Procedure too large`** na `modPoruke.UpsertPoruke`.
+
+VBA odbija da prevede proceduru čija prevedena veličina prelazi **~64 KB**.
+`UpsertPoruke` je bila jedna procedura sa **1657** `UpsertRow` poziva; obe grane
+su nezavisno dopisivale poruke (Sledljivost, GP lanac, utovar sa jedne strane,
+matični sa druge) i spajanjem je prag probijen. Nijedna strana sama nije bila
+preko njega.
+
+**Zašto to nije uhvaćeno ranije:** nije sintaksna greška, pa `vba_check` ćuti;
+testovi je ne dotiču jer se modul ne prevede pa *ništa* ne radi; CI ne pokreće
+Excel. Jedina kapija koja je vidi je ručni `Debug → Compile` — a on je poslednji
+korak, ne prvi.
+
+**Rez.** `UpsertPoruke` je podeljena na **12 blokova** (`UpsertPoruke01`…`12`),
+a javna procedura zadržava izgradnju rečnika `existing` i redom ih zove. Podela
+je **mehanička, po granici naredbe**: redosled poziva je nepromenjen, prelomljene
+naredbe (`_`) nisu presečene, skup ključeva je dokazano identičan pre i posle.
+Najveći blok je ~17 KB izvora.
+
+**Kapija, da se ne ponovi.** `vba_check` je dobio `PROCEDURA_VELIKA`: procedura
+preko **40 KB izvora** je nalaz. Prag je izmeren, ne pogođen — najveća procedura
+u repou koja se uredno prevodi ima ~27 KB, nijedna nema preko 30 KB, a pala je
+imala ~200 KB. Meri se izvor, jer se prevedena veličina odavde ne može izračunati;
+mera je gruba namerno — posao provere je da javi „ova je prerasla", ne da predvidi
+tačan bajt na kom VBA staje.
+
+Dokaz u oba smera stoji u `vba_check --self-test` (`PROC_SIZE_CASES`), kako
+`.claude/rules/testovi.md` §6 traži kad se menja sam checker: jedan slučaj koji
+**mora** da zapišti i jedan veliki koji **ne sme**. Provereno i unazad — podignut
+prag obara self-test po imenu.

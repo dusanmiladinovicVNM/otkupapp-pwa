@@ -1461,6 +1461,50 @@ def check_nedeklarisan(path: str, lines: list[str]) -> list[Finding]:
     return out
 
 
+# --- PROCEDURA_VELIKA: VBA granica velicine procedure -------------------------
+#
+# VBA odbija da prevede proceduru cija prevedena velicina prelazi ~64 KB, uz
+# jedinu poruku "Procedure too large". Nijedna druga kapija to ne vidi: nije
+# sintaksna greska, testovi je ne dotaknu (modul se ne prevede pa NISTA ne radi),
+# a CI ne pokrece Excel. Naslo se tek rucnim Debug -> Compile, kad je katalog
+# poruka (modPoruke.UpsertPoruke, 1657 poziva u JEDNOJ proceduri) prerastao
+# granicu spajanjem dve grane.
+#
+# Prag je IZMEREN, ne pogodjen: najveca procedura u repou koja se uredno prevodi
+# ima ~27 KB izvora, nijedna nema preko 30 KB, a pala je imala ~200 KB. 40 KB
+# zato ostavlja glavu zatecenom kodu, a pukne davno pre tvrde granice.
+#
+# Meri se IZVOR, jer prevedena velicina se odavde ne moze izracunati. To je gruba
+# mera i namerno je gruba: posao provere je da javi "ova procedura je prerasla",
+# ne da predvidi tacan bajt na kom ce VBA stati.
+MAX_PROC_BAJTOVA = 40000
+
+_PROC_POC = re.compile(r"^\s*(?:Public |Private |Friend )?(?:Static )?"
+                       r"(Sub|Function|Property)\s+\w", re.I)
+_PROC_KRAJ = re.compile(r"^\s*End (Sub|Function|Property)\s*$", re.I)
+
+
+def check_proc_size(path: str, lines: list[str]) -> list[Finding]:
+    out = []
+    ime, poc, bajt = None, 0, 0
+    for i, l in enumerate(lines, 1):
+        if ime is None:
+            if _PROC_POC.match(l) and not l.lstrip().startswith("'"):
+                ime, poc, bajt = l.strip(), i, len(l) + 1
+            continue
+        bajt += len(l) + 1
+        if _PROC_KRAJ.match(l):
+            if bajt > MAX_PROC_BAJTOVA:
+                out.append(Finding(path, poc, "PROCEDURA_VELIKA",
+                                   f"procedura je {bajt // 1024} KB izvora "
+                                   f"(prag {MAX_PROC_BAJTOVA // 1024} KB). VBA odbija da "
+                                   f"prevede proceduru precu od ~64 KB prevedenog koda uz "
+                                   f'"Procedure too large" -- podeli je na vise procedura '
+                                   f"(v. modPoruke.UpsertPoruke)."))
+            ime = None
+    return out
+
+
 def check_file(path: str, raw: bytes, lines: list[str],
                defined: set[str], arities: dict[str, tuple[int, float]]) -> list[Finding]:
     out = []
@@ -1476,6 +1520,7 @@ def check_file(path: str, raw: bytes, lines: list[str],
     out += check_test_registry(path, lines)
     out += check_storno_progutan(path, lines)
     out += check_nedeklarisan(path, lines)
+    out += check_proc_size(path, lines)
     return out
 
 
@@ -2444,6 +2489,24 @@ Option Explicit
 # razlikuje od Split() rezultata ili kolekcije.
 #
 # Bez tog suzavanja je provera nad zatecenim kodom dala 51 nalaz umesto 26.
+PROC_SIZE_CASES = [
+    # PROCEDURA_VELIKA -- zatecen incident: katalog poruka je spajanjem dve grane
+    # prerastao VBA granicu, a jedina greska je bila "Procedure too large" pri
+    # rucnom Debug -> Compile. Izvor se GRADI, ne kuca: 40 KB literala usred ove
+    # skripte bi bio necitljiv, a meri isto.
+    ("procedura preko praga", 1,
+     "Option Explicit\nPublic Sub Ogromna()\n"
+     + '    Debug.Print "punjenje do preko praga velicine procedure"\n' * 900
+     + "End Sub\n"),
+    # Druga polovina dokaza, i vaznija: procedura koja je VELIKA ali ispod praga
+    # ne sme da zapisti. Lazan nalaz u PostToolUse hook-u uci da se checker
+    # ignorise, pa je gori od propustenog.
+    ("velika procedura ispod praga", 0,
+     "Option Explicit\nPublic Sub Velika()\n"
+     + '    Debug.Print "x"\n' * 500
+     + "End Sub\n"),
+]
+
 KOPIJA_NIZA_CASES = [
     # --- mora da zapisti ---
     ("citac po celiji, ByVal 2D niz", 1, """Option Explicit
@@ -2609,6 +2672,15 @@ def self_test() -> int:
     finally:
         shutil.rmtree(tmp2, ignore_errors=True)
 
+    for naziv, ocekivano, izvor in PROC_SIZE_CASES:
+        lines = izvor.replace("\r\n", "\n").split("\n")
+        raw = izvor.encode("ascii")
+        nalazi = check_file("<self-test>", raw, lines, set(), {})
+        dobijeno = sum(1 for f in nalazi if f.code == "PROCEDURA_VELIKA")
+        if dobijeno != ocekivano:
+            palo.append(f"  PROCEDURA_VELIKA/{naziv}: ocekivano {ocekivano} nalaza, "
+                        f"dobijeno {dobijeno}")
+
     for naziv, ocekivano, izvor in ZAKLONJENO_CASES:
         lines = izvor.replace("\r\n", "\n").split("\n")
         raw = izvor.encode("ascii")
@@ -2665,7 +2737,8 @@ def self_test() -> int:
     ukupno = (len(SELF_TEST_CASES) + len(SELF_TEST_POZIVI) + len(ZAKLONJENO_CASES)
               + len(MRTAV_LOG_CASES) + len(ODSECEN_CASES) + len(KOPIJA_NIZA_CASES)
               + len(REGISTAR_CASES) + len(STORNO_REGISTAR_CASES)
-              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES) + 3)
+              + len(STORNO_PROGUTAN_CASES) + len(NEDEKLARISAN_CASES)
+              + len(PROC_SIZE_CASES) + 3)
     for line in palo:
         print(line, file=sys.stderr)
     if palo:
