@@ -5794,3 +5794,21 @@ VIDI i da se PREDA sa robom. Isporučeno u istom PR-u:
 - Nova mina u katalogu znanja: `cFid`/`cFId` u ISTOJ proceduri =
   „Duplicate declaration" (case-insensitive) — uhvaćeno compile-only
   runom, skener dupli-Dim proširen na modUtovar/modPrint.
+
+### 25.10 Smoke 5c: režim štampe, migracija starih GP faktura, tekstovi
+
+- **Režim štampe utovarne liste ide kroz Podešavanja** (kartica
+  Štampa, ključ `UTOVAR_PRINT_MODE`, PDF;PRINT;PREVIEW;OFF) — kao svi
+  dokumenti; **default je PDF, ne PRINT**: bez podešenog ključa
+  dokument ne sme tiho da ode na štampač.
+- **Migracija:** GP fakture napravljene verzijama PRE utovarne liste
+  imaju stavke bez `UtovarID` pa ih lista Utovari ne vidi (operaterov
+  nalaz). `Alt+F8 → BackfillUtovariIzGPFaktura` (jednokratno,
+  idempotentno) pravi utovar IZ postojećih podataka fakture (datum,
+  kupac, stavke — ništa se ne izmišlja) i vezuje stavke. NAMERNO nije
+  u `EnsureRuntimeSchema`: automatski bi „legalizovao" svaku buduću
+  siroče-stavku umesto da je NEPOTPUNI prijavi.
+- **Tekstovi:** naslovi mreže se seku pored prekidača — skraćeni na
+  „Gotova roba" / „Utovarne liste" (kontekst nosi segment); label
+  „Kol. za utovar (kg)" skraćen, a pravilo „prazno = celo stanje"
+  seli u hint liniju GOTOVA liste (`OTKUI_LBL_FK_HINT_GP`).

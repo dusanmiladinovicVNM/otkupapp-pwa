@@ -4141,6 +4141,16 @@ SABOTAZE = {
         "T_FakturaGP_WriterKapijeIStorno",
         "stavka liste nosi broj prerade",
     ),
+    # Krug 5c: migracija starih GP faktura mora da UPISE vezu na
+    # stavku -- utovar bez veze je novi orphan umesto migracije.
+    "utovar-gp-migracija-bez-veze": (
+        "modSetup.bas",
+        "            RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(r), COL_FS_UTOVAR_ID, _\n"
+        "                              utovarID, SRC\n",
+        "            ' SABOTAZA: stavka ostaje bez utovara\n",
+        "T_FakturaGP_WriterKapijeIStorno",
+        "migracija vezuje staru GP stavku na nov utovar",
+    ),
     # Jedna faktura nosi JEDNU vrstu robe -- GP u PRJ korpu bi writer
     # kasnije odbio, ali tek posle potvrde operatera (kasna greska).
     "fakture-gp-korpa-mesa-u-prj": (

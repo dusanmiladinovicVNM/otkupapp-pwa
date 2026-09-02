@@ -312,8 +312,11 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     Set ws = FillUtovarSablon(broj, datum, kupacNaziv, stavke, nSt, ukupnoKg)
     If ws Is Nothing Then Exit Sub
 
+    ' Rezim iz Podesavanja (kartica Stampa) -- kao svi dokumenti.
+    ' Default PDF, NE PRINT: bez podesenog kljuca dokument ne sme tiho
+    ' da ode na stampac (smoke 5c nalaz).
     Dim mode As String
-    mode = DocResolveMode(GetConfigValue(CFG_UTOVAR_PRINT_MODE), "PRINT")
+    mode = DocResolveMode(GetConfigValue(CFG_UTOVAR_PRINT_MODE), "PDF")
     Select Case mode
         Case "PRINT", "PREVIEW"
             DocPrintWs ws, mode

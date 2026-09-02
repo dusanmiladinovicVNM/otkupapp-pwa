@@ -1250,6 +1250,127 @@ End Sub
 ' jednokratno; idempotentno (samo prazne). Efikasno: dict OtpremnicaID->Broj u
 ' jednom prolazu. NE ide u EnsureRuntimeSchema (skup po startu).
 ' ============================================================
+' ============================================================
+' JEDNOKRATNA MIGRACIJA (krug 5c): GP fakture nastale PRE uvodjenja
+' utovarne liste imaju stavke sa PreradaID ali BEZ UtovarID, pa ih
+' lista Utovari ne vidi a Sledljivost ih prijavljuje kao siroce.
+' Za svaku takvu AKTIVNU fakturu pravi se utovar iz podataka koji VEC
+' POSTOJE (datum fakture, kupac fakture, stavke) -- nista se ne
+' izmislja. Idempotentno (radi samo nad stavkama bez UtovarID);
+' NAMERNO nije u EnsureRuntimeSchema: automatski bi "legalizovao"
+' svaku buducu siroce-stavku umesto da je NEPOTPUNI prijavi.
+' Pokretanje: Alt+F8 -> BackfillUtovariIzGPFaktura (jednom, posle
+' nadogradnje na verziju sa utovarima).
+' ============================================================
+Public Sub BackfillUtovariIzGPFaktura()
+    Const SRC As String = "modSetup.BackfillUtovariIzGPFaktura"
+    On Error GoTo EH
+
+    Dim colPre As Long, colUt As Long, colFak As Long
+    Dim colSt As Long, colOs As Long, colBrPre As Long, colKol As Long
+    colPre = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_PRERADA_ID)
+    colUt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID)
+    If colPre = 0 Or colUt = 0 Then
+        If Not IsTestMode() Then MsgBox "GP kolone ne postoje -- prvo EnsureRuntimeSchema.", _
+               vbExclamation, APP_NAME
+        Exit Sub
+    End If
+    colFak = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_FAKTURA_ID, SRC)
+    colBrPre = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE, SRC)
+    colKol = RequireColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_KOLICINA, SRC)
+    colSt = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_STORNIRANO)
+    colOs = GetColumnIndex(TBL_FAKTURA_STAVKE, COL_OSIROCENO_OD)
+
+    Dim fs As Variant, i As Long
+    fs = GetTableData(TBL_FAKTURA_STAVKE)
+    If IsEmpty(fs) Then Exit Sub
+
+    ' Grupisi kandidate po fakturi: aktivna stavka, ima preradu, nema
+    ' utovar. Redovi po fakturi u Collection (indeksi u fs).
+    Dim poFakturi As Object: Set poFakturi = CreateObject("Scripting.Dictionary")
+    poFakturi.CompareMode = vbTextCompare
+    Dim fid As String
+    For i = 1 To UBound(fs, 1)
+        If Len(Trim$(CStr(nz(fs(i, colPre))))) = 0 Then GoTo Dalje
+        If Len(Trim$(CStr(nz(fs(i, colUt))))) > 0 Then GoTo Dalje
+        If colSt > 0 Then
+            If UCase$(Trim$(CStr(nz(fs(i, colSt))))) = "DA" Then GoTo Dalje
+        End If
+        If colOs > 0 Then
+            If Len(Trim$(CStr(nz(fs(i, colOs))))) > 0 Then GoTo Dalje
+        End If
+        fid = Trim$(CStr(nz(fs(i, colFak))))
+        If Len(fid) = 0 Then GoTo Dalje
+        If Not poFakturi.Exists(fid) Then poFakturi.Add fid, New Collection
+        poFakturi(fid).Add i
+Dalje:
+    Next i
+
+    If poFakturi.count = 0 Then
+        If Not IsTestMode() Then MsgBox "Nema GP faktura bez utovara -- nista za migraciju.", _
+               vbInformation, APP_NAME
+        Exit Sub
+    End If
+
+    Dim fD As Variant, cFId As Long, cFDat As Long, cFKup As Long, cFSt As Long
+    fD = GetTableData(TBL_FAKTURE)
+    cFId = RequireColumnIndex(TBL_FAKTURE, COL_FAK_ID, SRC)
+    cFDat = RequireColumnIndex(TBL_FAKTURE, COL_FAK_DATUM, SRC)
+    cFKup = RequireColumnIndex(TBL_FAKTURE, COL_FAK_KUPAC, SRC)
+    cFSt = RequireColumnIndex(TBL_FAKTURE, COL_STORNIRANO, SRC)
+    Dim fakRed As Object: Set fakRed = CreateObject("Scripting.Dictionary")
+    fakRed.CompareMode = vbTextCompare
+    For i = 1 To UBound(fD, 1)
+        If Not fakRed.Exists(Trim$(CStr(nz(fD(i, cFId))))) Then _
+            fakRed.Add Trim$(CStr(nz(fD(i, cFId)))), i
+    Next i
+
+    Dim k As Variant, r As Variant, rowF As Long, utovarID As String
+    Dim nUt As Long, nSt As Long, stavkaNum As Long
+    For Each k In poFakturi.keys
+        If Not fakRed.Exists(CStr(k)) Then GoTo DaljeF
+        rowF = CLng(fakRed(CStr(k)))
+        ' Stornirana faktura ostaje kakva jeste (istorija).
+        If UCase$(Trim$(CStr(nz(fD(rowF, cFSt))))) = "DA" Then GoTo DaljeF
+
+        utovarID = GetNextID(TBL_UTOVAR, COL_UT_ID, "UT-")
+        If AppendRow(TBL_UTOVAR, Array( _
+            utovarID, modUtovar.GenerateBrojUtovara(), Year(Date), _
+            fD(rowF, cFDat), Trim$(CStr(nz(fD(rowF, cFKup)))), _
+            "Da", CStr(k), "migracija GP fakture", "")) <= 0 Then
+            Err.Raise vbObjectError + 9320, SRC, _
+                      "AppendRow tblUtovar nije uspeo (migracija)."
+        End If
+        nUt = nUt + 1
+
+        stavkaNum = 0
+        For Each r In poFakturi(CStr(k))
+            stavkaNum = stavkaNum + 1
+            If AppendRow(TBL_UTOVAR_STAVKE, Array( _
+                utovarID & "-" & Format$(stavkaNum, "00"), utovarID, _
+                Trim$(CStr(nz(fs(CLng(r), colPre)))), _
+                Trim$(CStr(nz(fs(CLng(r), colBrPre)))), _
+                nz(fs(CLng(r), colKol), 0), "")) <= 0 Then
+                Err.Raise vbObjectError + 9321, SRC, _
+                          "AppendRow tblUtovarStavke nije uspeo (migracija)."
+            End If
+            RequireUpdateCell TBL_FAKTURA_STAVKE, CLng(r), COL_FS_UTOVAR_ID, _
+                              utovarID, SRC
+            nSt = nSt + 1
+        Next r
+DaljeF:
+    Next k
+
+    LogSetup "OK", "BackfillUtovariIzGPFaktura: " & nUt & " utovara, " & nSt & " stavki"
+    If Not IsTestMode() Then MsgBox "Migrirano: " & nUt & " utovara (" & nSt & _
+           " stavki) iz postojecih GP faktura.", vbInformation, APP_NAME
+    Exit Sub
+
+EH:
+    LogSetup "ERROR", "BackfillUtovariIzGPFaktura failed: " & Err.description
+    MsgBox "Gre" & ChrW(353) & "ka u migraciji: " & Err.description, vbCritical, APP_NAME
+End Sub
+
 Public Sub BackfillOtkupBrojOtpremnice()
     On Error GoTo EH
     EnsureColumnOnTable TBL_OTKUP, COL_OTK_BROJ_OTPREMNICE

@@ -1606,19 +1606,24 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_SLPDF_PECAT", "Pe" & ChrW(269) & "at:"
     ' --- Fakturisanje gotove robe (v6-ui-189, GP grana) ---
     UpsertRow lo, existing, "OTKUI_SEG_FK_GP", "Gotova roba"
-    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_GP", "Gotova roba " & ChrW(8212) & " prerade za fakturisanje"
+    ' Smoke 5c: naslov mreze se sece pored prekidaca -- kratko ime,
+    ' kontekst vec nosi segment dugme.
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_GP", "Gotova roba"
     UpsertRow lo, existing, "OTKUI_HDF_TIPGP", "PROIZVOD"
     UpsertRow lo, existing, "OTKUI_HDF_KUTIJE", "KUTIJE"
     UpsertRow lo, existing, "OTKUI_HDF_KESE", "KESE"
     UpsertRow lo, existing, "OTKUI_HDF_PREID", "PRE ID"
     UpsertRow lo, existing, "OTKUI_FLD_FK_CENAGP", "Cena gotove robe (RSD/kg)"
     ' Krug 5 (utovarna lista, parcijalna prodaja):
-    UpsertRow lo, existing, "OTKUI_FLD_FK_KOLGP", "Koli" & ChrW(269) & "ina za utovar (kg; prazno = sve)"
+    ' Smoke 5c: label se sece na sirinu polja -- kratko, a "prazno =
+    ' sve" objasnjava hint linija (OTKUI_LBL_FK_HINT_GP).
+    UpsertRow lo, existing, "OTKUI_FLD_FK_KOLGP", "Kol. za utovar (kg)"
+    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_GP", "Prazna koli" & ChrW(269) & "ina = celo stanje palete; upisana = parcijalna prodaja. Cena je obavezna."
     UpsertRow lo, existing, "OTKUI_ERR_FK_KOL_GP", ChrW(10007) & " Koli" & ChrW(269) & "ina za utovar prelazi stanje palete"
     UpsertRow lo, existing, "OTKUI_HDF_NASTANJU", "NA STANJU (kg)"
     ' Lista UTOVARI + stampani obrazac utovarne liste (krug 5b).
     UpsertRow lo, existing, "OTKUI_SEG_FK_UTOVARI", "Utovari"
-    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_UTOVARI", "Utovarne liste " & ChrW(8212) & " fizi" & ChrW(269) & "ke isporuke gotove robe"
+    UpsertRow lo, existing, "OTKUI_GRID_TITLE_FK_UTOVARI", "Utovarne liste"
     UpsertRow lo, existing, "OTKUI_HDU_ROBA", "ROBA"
     UpsertRow lo, existing, "OTKUI_HDU_ID", "UT ID"
     UpsertRow lo, existing, "OTKUI_BTN_UT_STAMPAJ", "Utovarna lista"

@@ -1612,6 +1612,10 @@ Private Sub OsveziObjasnjenje(ByVal z As Object)
     On Error Resume Next
     If Len(IzabraniKupacID()) = 0 Then
         z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_KUPAC")
+    ElseIf Scr_Lista() = FK_GP Then
+        ' Smoke 5c: label polja kolicine je skracen, pravilo "prazno =
+        ' celo stanje" objasnjava hint linija.
+        z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_GP")
     Else
         z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT")
     End If
