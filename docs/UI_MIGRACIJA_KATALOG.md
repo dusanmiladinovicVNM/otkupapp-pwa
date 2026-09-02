@@ -5957,3 +5957,33 @@ ODLOŽENO, po operaterovom „tek kad budem zadovoljan modulom".
 - Testovi: korekcija cene (30.5 kg × 150 = novi iznos, datum utovara
   netaknut). Recert: 162/0; ciljani dokaz sledljivost-gp/utovar-gp/
   sef-gp.
+
+### 25.14 Revizija #9: model B — utovar može postojati PRE fakture
+
+Poslovna odluka operatera (uz revizorsku preporuku): utovarna lista je
+događaj magacina, faktura događaj računovodstva — životni ciklusi im
+ne moraju početi istog trenutka.
+
+- **Writer razdvojen na dva core-a:** `CreateUtovarCore` (kapije +
+  tblUtovar + stavke: količina, pakovanja, **dogovorena cena `CenaKg`**)
+  i postojeći `CreateFakturaIzUtovara`. `CreateUtovarSaFakturom_TX`
+  (brzi put) je sada tanak kompozit ta dva; novi `CreateUtovar_TX`
+  pravi SAMO utovar. Lanac cene u fakturisanju: uneta korekcija >
+  poslednja faktura utovara > **dogovorena cena sa stavke** (B-utovar
+  bez FST istorije) > blok.
+- **UI:** dva dugmeta na listi Gotova roba — postojeće „Izradi
+  fakturu" (utovar+faktura odmah) i novo **„Napravi utovar"** (samo
+  utovar; roba se skida sa stanja, lista se štampa, čip „čeka").
+  Radnja na listi Utovari vraćena na generičko **„Fakturiši"** — sada
+  pokriva prvo fakturisanje, ponavljanje posle storna i korekciju cene.
+- **Rok trajanja po vrsti proizvoda** (poslovno potvrđeno: rokovi se
+  razlikuju): `tblVrstaGotovihProizvoda` + kolona `RokMeseci` (unos u
+  Matičnim podacima; sanity 1–600 celih); obrazac je koristi po
+  stavci, prazno = globalni `GP_ROK_TRAJANJA_MESECI`.
+- Šema: `tblUtovarStavke` + `CenaKg`; `EnsureRuntimeSchema` self-heal
+  za obe kolone. Test 162: B tok (utovar bez markera skida stanje,
+  cena na stavci, kasnije fakturisanje nosi tu cenu, storno lanac
+  vraća stanje). SEF kapije netaknute — B-utovar bez fakture ne
+  postoji na SEF putu dok se ne fakturiše.
+- Revizorov audit P1 bio je zastareo nalaz: utovar tabele su u
+  `AuditableTables()` od revizije #6.

@@ -7205,6 +7205,45 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq modStorno.StornoUtovar_TX(utID), False, _
              "fakturisan utovar se ne stornira pre storna fakture"
 
+    ' --- Model B (revizija #9): utovar BEZ fakture, fakturisanje
+    ' kasnije. Dogovorena cena putuje na utovarnoj stavci (CenaKg) i
+    ' odatle je cita CreateFakturaIzUtovara kad nema FST istorije.
+    Dim stB As Collection, utB As String, fidB As String
+    Set stB = New Collection
+    stB.Add Array("PRE-GP-W1", 5, 120)
+    utB = modUtovar.CreateUtovar_TX(FX_KUPAC2, stB)
+    AssertEq (Len(utB) > 0), True, "utovar bez fakture se pravi"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utB, _
+             COL_UT_FAKTURISANO)))), "", "B-utovar nije markiran fakturisanim"
+    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utB, _
+             COL_UT_FAKTURA_ID)))), "", "B-utovar nema FakturaID"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_UTOVAR_STAVKE, COL_UTS_ID, _
+             utB & "-01", COL_UTS_CENA), 0)), "0.00"), Format$(120#, "0.00"), _
+             "dogovorena cena je na utovarnoj stavci"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(25.5, "0.00"), _
+             "utovar bez fakture skida robu sa stanja"
+    fidB = modUtovar.CreateFakturaIzUtovara_TX(utB)
+    AssertEq (Len(fidB) > 0), True, _
+             "fakturisanje B-utovara kasnije prolazi (cena sa stavke)"
+    AssertEq Format$(CDbl(nz(LookupValue(TBL_FAKTURA_STAVKE, _
+             COL_FS_FAKTURA_ID, fidB, COL_FS_CENA), 0)), "0.00"), _
+             Format$(120#, "0.00"), "faktura nosi cenu sa utovarne stavke"
+    ' Ocisti: storno fakture pa utovara -- stanje se vraca na 30.5.
+    AssertEq modStorno.StornoFaktura_TX(fidB), True, "storno B-fakture prolazi"
+    AssertEq modStorno.StornoUtovar_TX(utB), True, "storno B-utovara prolazi"
+    gp = modFaktura.GetGPZaFakturisanjeForGrid()
+    rW1 = 0
+    For i = 1 To UBound(gp, 1)
+        If CStr(gp(i, 1)) = "PRE-GP-W1" Then rW1 = i
+    Next i
+    AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(30.5, "0.00"), _
+             "stanje se vraca posle storna B-lanca"
+
     ' --- Krug 5c: MIGRACIJA starih GP faktura (pre utovarne liste) --
     ' jednokratni makro pravi utovar iz podataka koji vec postoje.
     ' Fixture vozilo je SB (aktivna stavka na GP2 bez utovara).

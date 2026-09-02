@@ -4163,7 +4163,7 @@ SABOTAZE = {
     # Podesavanja -- bez toga papir tvrdi pogresan rok.
     "utovar-gp-rok-placebo": (
         "modUtovar.bas",
-        "                    stavke(nSt, 4) = DateAdd(\"m\", rokMeseci, CDate(pv(2)))\n",
+        "                    stavke(nSt, 4) = DateAdd(\"m\", rokEf, CDate(pv(2)))\n",
         "                    stavke(nSt, 4) = CDate(pv(2))   ' SABOTAZA: rok = proizvodnja\n",
         "T_FakturaGP_WriterKapijeIStorno",
         "rok trajanja = proizvodnja + 24 meseca",

@@ -305,6 +305,9 @@ Public Const COL_KUT_TEZINA As String = "TezinaKg"
 Public Const COL_KES_TIP As String = "TipKese"
 Public Const COL_KES_TEZINA As String = "TezinaKg"
 Public Const COL_VGP_TIP As String = "TipGotovogProizvoda"
+' Rok trajanja PO VRSTI gotovog proizvoda (meseci od datuma prerade).
+' Prazno = globalni default GP_ROK_TRAJANJA_MESECI iz Podesavanja.
+Public Const COL_VGP_ROK As String = "RokMeseci"
 
 ' tblCenovnik (cene po proizvodu -- append-only istorija)
 ' Kljuc: VrstaVoca + SortaVoca + Klasa. Poslednji red (najnoviji Datum)
@@ -392,6 +395,10 @@ Public Const COL_UTS_KOLICINA As String = "KolicinaKg"
 ' prazno = nepoznato, obrazac tada ne izmislja broj.
 Public Const COL_UTS_KUTIJE As String = "BrojKutija"
 Public Const COL_UTS_KESE As String = "BrojKesa"
+' Dogovorena prodajna cena po stavci (model B, revizija #9): unosi se
+' pri izradi utovara -- "Fakturisi" kasnije cita cenu ODAVDE kad
+' utovar jos nema istoriju faktura.
+Public Const COL_UTS_CENA As String = "CenaKg"
 ' Stampani obrazac utovarne liste (ide sa robom) + rezim stampe.
 Public Const WS_UTOVAR_SABLON As String = "UtovarSablon"
 Public Const CFG_UTOVAR_PRINT_MODE As String = "UTOVAR_PRINT_MODE"

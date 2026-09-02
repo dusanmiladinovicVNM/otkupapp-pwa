@@ -1644,20 +1644,27 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_UT", "Izaberi red utovara, popuni prevoz pa 'Sa" & ChrW(269) & "uvaj prevoz'. Prazno polje ne dira upisano, crtica '-' bri" & ChrW(353) & "e."
     ' Revizija #6: nova faktura iz postojeceg utovara + editabilan
     ' datum/vreme utovara (SEF datum isporuke).
-    ' "Ponovi fakturu", ne "Fakturisi" (revizija #7 P1): radnja NAMERNO
-    ' preuzima cene iz prethodne stornirane fakture -- za storno iz
-    ' tehnickog razloga. Korekcija cene je poseban buduci rad.
-    UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Ponovi fakturu"
+    ' "Fakturisi" (model B, revizija #9): radnja pokriva PRVO
+    ' fakturisanje utovara napravljenog bez fakture (cena sa stavke),
+    ' ponavljanje posle storna (cene prethodne fakture) i korekciju
+    ' cene (unos u dijalogu) -- generican naziv je tacan za sva tri.
+    UpsertRow lo, existing, "OTKUI_BTN_UT_FAKTURISI", "Fakturi" & ChrW(353) & "i"
     ' Revizija #8: pogresna cena NIKAD ne trazi storno fizickog
     ' utovara -- isti utovar dobija novu fakturu sa novom cenom.
-    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Izraditi novu fakturu iz ovog utovara? Roba ostaje utovarena, datum utovara se ne menja."
-    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK_CENA", "Nova cena (RSD/kg) za korekciju. Prazno = cene iz prethodne fakture."
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK", "Izraditi fakturu iz ovog utovara? Roba ostaje utovarena, datum utovara se ne menja."
+    UpsertRow lo, existing, "OTKUI_ASK_UT_FAK_CENA", "Nova cena (RSD/kg) za korekciju. Prazno = cena iz prethodne fakture, odnosno dogovorena cena sa utovara."
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_CENA", ChrW(10007) & " Cena mora biti broj ve" & ChrW(263) & "i od nule"
     UpsertRow lo, existing, "OTKUI_MSG_UT_FAK", ChrW(10003) & " Nova faktura iz utovara je izra" & ChrW(273) & "ena"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK", ChrW(10007) & " Izrada fakture iz utovara nije uspela"
     UpsertRow lo, existing, "OTKUI_ERR_UT_FAK_VEC", ChrW(10007) & " Utovar je ve" & ChrW(263) & " fakturisan -- prvo storno fakture"
     UpsertRow lo, existing, "OTKUI_FLD_UT_DATUM", "Datum utovara"
     UpsertRow lo, existing, "OTKUI_FLD_UT_VREME", "Vreme"
+    ' Model B (revizija #9): utovar bez fakture iz GP korpe.
+    UpsertRow lo, existing, "OTKUI_BTN_FK_UTOVAR", "Napravi utovar"
+    UpsertRow lo, existing, "OTKUI_ASK_FK_UTOVAR", "Napraviti UTOVAR bez fakture? Roba se skida sa stanja, utovarna lista moze odmah da se " & ChrW(353) & "tampa; fakturisanje ide kasnije radnjom 'Fakturi" & ChrW(353) & "i' na listi Utovari."
+    UpsertRow lo, existing, "OTKUI_MSG_FK_UTOVAR", ChrW(10003) & " Utovar je napravljen:"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_UTOVAR", ChrW(10007) & " Izrada utovara nije uspela"
+    UpsertRow lo, existing, "OTKUI_ERR_FK_UTOVAR_PRJ", ChrW(10007) & " Utovar va" & ChrW(382) & "i samo za gotovu robu -- korpa nosi prijemnice"
     UpsertRow lo, existing, "OTKUI_FLD_UT_PREVOZNIK", "Prevoznik"
     UpsertRow lo, existing, "OTKUI_FLD_UT_VOZAC", "Voza" & ChrW(269)
     UpsertRow lo, existing, "OTKUI_FLD_UT_REG", "Registracija"

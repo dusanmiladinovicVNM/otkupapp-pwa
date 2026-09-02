@@ -376,6 +376,7 @@ Private Function ObradiKlik(ByVal tag As String) As Boolean
     Select Case tag
         Case "scrFkIzradi": ObradiKlik = IzradiFakturu()
         Case "scrFkOcisti": ObradiKlik = IsprazniKorpu()
+        Case "scrFkUtNovi": ObradiKlik = IzradiUtovar()
     End Select
 End Function
 
@@ -835,6 +836,59 @@ Private Function IzradiFakturu() As Boolean
     If Len(brojFakture) = 0 Then brojFakture = fakturaID
     modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_IZRADJENA") & " " & brojFakture, False
     IzradiFakturu = True
+End Function
+
+' SAMO UTOVAR iz GP korpe (model B, revizija #9): fizicka isporuka
+' danas, fakturisanje kasnije radnjom "Fakturisi" na listi Utovari.
+' Cena je i dalje OBAVEZNA (dogovorena pri prodaji, ide na stavku).
+Private Function IzradiUtovar() As Boolean
+    Dim kupID As String, stavke As Collection, i As Long
+    Dim utovarID As String, brojUt As String
+
+    If KorpaTip() <> "GP" Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR_PRJ"), True
+        Exit Function
+    End If
+    kupID = IzabraniKupacID()
+    If Len(kupID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_NEMA_KUPCA"), True
+        Exit Function
+    End If
+    If mKorpa Is Nothing Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KORPA_PRAZNA"), True
+        Exit Function
+    End If
+    If mKorpa.count = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_KORPA_PRAZNA"), True
+        Exit Function
+    End If
+
+    If MsgBox(Poruka("OTKUI_ASK_FK_UTOVAR") & vbCrLf & vbCrLf & _
+              KupacNaziv() & vbCrLf & _
+              mKorpa.count & " " & Poruka("OTKUI_LBL_AG_KORPA_STAVKI"), _
+              vbQuestion + vbYesNo, APP_NAME) <> vbYes Then Exit Function
+
+    Set stavke = New Collection
+    For i = 1 To mKorpa.count
+        stavke.Add Array(CStr(mKorpa(i)("preradaID")), _
+                         CDbl(mKorpa(i)("kolicina")), _
+                         CDbl(mKorpa(i)("cena")))
+    Next i
+    utovarID = modUtovar.CreateUtovar_TX(kupID, stavke)
+
+    If Len(utovarID) = 0 Then
+        modOtkupUI.ShowToast Poruka("OTKUI_ERR_FK_UTOVAR"), True
+        Exit Function
+    End If
+
+    Set mKorpa = New Collection
+    Scr_ResetCache
+    KorpaPromenjena
+
+    brojUt = NzToText(LookupValue(TBL_UTOVAR, COL_UT_ID, utovarID, COL_UT_BROJ)) & _
+             "/" & NzToText(LookupValue(TBL_UTOVAR, COL_UT_ID, utovarID, COL_UT_GODINA))
+    modOtkupUI.ShowToast Poruka("OTKUI_MSG_FK_UTOVAR") & " " & brojUt, False
+    IzradiUtovar = True
 End Function
 
 Private Function StampajFakturu(ByVal red As Long) As Boolean
@@ -1543,6 +1597,11 @@ Public Sub Scr_Build(ByVal z As Object)
                   164, FK_BTN_H, "primary"
     modUiKit.BtnV z, "scrFkOcisti", Poruka("OTKUI_BTN_FK_OCISTI"), PAD + 172, FK_Y_BTN, _
                   132, FK_BTN_H, "ghost"
+    ' Model B (revizija #9): GP korpa moze da napravi SAMO utovar --
+    ' magacin stampa listu danas, "Fakturisi" ide kasnije sa liste
+    ' Utovari. "Izradi fakturu" ostaje brzi put (utovar+faktura odmah).
+    modUiKit.BtnV z, "scrFkUtNovi", Poruka("OTKUI_BTN_FK_UTOVAR"), PAD + 312, FK_Y_BTN, _
+                  148, FK_BTN_H, "soft"
 
     modUiKit.NewLbl z, "fkLnB", "", 0, FK_ZONA_H - 1, 100, 1, 8, False, 0, C_BORDER
 End Sub
@@ -1634,6 +1693,10 @@ Private Sub RasporediPolja(ByVal z As Object, ByVal w As Single)
 
     modUiKit.MoveBtn z, "scrFkIzradi", PAD, FK_Y_BTN
     modUiKit.MoveBtn z, "scrFkOcisti", PAD + 172, FK_Y_BTN
+    ' "Napravi utovar" samo na listi GOTOVA (model B): tamo korpa nosi
+    ' GP stavke sa cenom; na ostalim listama dugme nema smisla.
+    modUiKit.MoveBtn z, "scrFkUtNovi", PAD + 312, FK_Y_BTN
+    z.Controls("scrFkUtNovi").Visible = (Scr_Lista() = FK_GP)
 
     z.Controls("fkLnB").width = w
 End Sub

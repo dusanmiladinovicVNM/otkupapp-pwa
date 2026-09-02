@@ -951,7 +951,7 @@ Public Sub EnsurePaletniListSchema()
         Array(COL_KES_TIP, COL_KES_TEZINA, "Aktivan")
 
     EnsureDataTable TBL_VRSTA_GP, "VrstaGotProizvoda", _
-        Array(COL_VGP_TIP, "Aktivan")
+        Array(COL_VGP_TIP, "Aktivan", COL_VGP_ROK)
 
     EnsureColumnOnTable TBL_KULTURE, COL_KUL_GAJBICA_PALETA
     EnsureColumnOnTable TBL_PALETA, COL_PAL_ISTORIJA   ' vidljivi audit trag (relabel/detach/adjust)
@@ -1156,7 +1156,7 @@ Public Sub EnsureUtovarSchemaCore()
     EnsureDataTable TBL_UTOVAR_STAVKE, "UtovarStavke", _
         Array(COL_UTS_ID, COL_UTS_UTOVAR_ID, COL_UTS_PRERADA_ID, _
               COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO, _
-              COL_UTS_KUTIJE, COL_UTS_KESE)
+              COL_UTS_KUTIJE, COL_UTS_KESE, COL_UTS_CENA)
     ' Sifarnik prevoznika (smoke 5d): maticni podaci, bez storna --
     ' auto-uci se iz "Sacuvaj prevoz" i puni combo predloge.
     EnsureDataTable TBL_PREVOZNICI, "Prevoznici", _
@@ -1179,6 +1179,8 @@ Public Sub EnsureRuntimeSchema()
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_BROJ_PRERADE
     EnsureColumnOnTable TBL_FAKTURA_STAVKE, COL_FS_UTOVAR_ID
     EnsureUtovarSchemaCore
+    ' Rok trajanja po vrsti GP (revizija #9) -- self-heal posle update-a.
+    EnsureColumnOnTable TBL_VRSTA_GP, COL_VGP_ROK
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_UPOZ, "0.00"
     SetColumnNumberFormat TBL_KULTURE, COL_KUL_PRAG_PROSEK_BLOK, "0.00"
 

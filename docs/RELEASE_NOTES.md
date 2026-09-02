@@ -7023,6 +7023,19 @@ ijedne izmišljene veze.
   zbog cene. Utovar sa više prerada za sada odbija korekciju (jedna
   cena po utovaru).
 
+### Utovar pre fakture — model B (revizija #9)
+
+- **„Napravi utovar" na listi Gotova roba:** magacin danas napravi i
+  odštampa utovarnu listu (roba se skida sa stanja, dogovorena cena se
+  pamti na stavci), a računovodstvo fakturiše kasnije radnjom
+  „Fakturiši" na listi Utovari. „Izradi fakturu" ostaje brzi put —
+  utovar i faktura odjednom, kao do sada.
+- **Radnja „Fakturiši"** sada pokriva sve tri situacije: prvo
+  fakturisanje utovara, ponavljanje posle storna i korekciju cene.
+- **Rok trajanja po vrsti proizvoda:** kolona „RokMeseci" u šifarniku
+  vrsta gotovih proizvoda (Matični podaci); prazno = globalna
+  postavka. Utovarna lista računa rok po stavci.
+
 ### Verifikacija
 
 - Tri nova testa (GP lanac i stanja sa ručnim prolazom kroz tabele;

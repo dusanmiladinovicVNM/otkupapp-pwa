@@ -1947,6 +1947,8 @@ SEED = {
 # nadogradnje. Kolona koja vec postoji se ne dira.
 ENSURE_COLS = {
     "tblFakturaStavke": ["PreradaID", "BrojPrerade", "UtovarID"],
+    # Revizija #9: rok trajanja po vrsti GP (prazno = globalni).
+    "tblVrstaGotovihProizvoda": ["RokMeseci"],
 }
 
 # Tabele koje donor NEMA (krug 5: utovarna lista) -- generator ih pravi
@@ -1964,8 +1966,9 @@ ENSURE_TABLES = {
     "tblUtovarStavke": ("UtovarStavke",
                         ["UtovarStavkaID", "UtovarID", "PreradaID",
                          "BrojPrerade", "KolicinaKg", "Stornirano",
-                         # revizija #6 t.4: stvarno utovarena pakovanja.
-                         "BrojKutija", "BrojKesa"]),
+                         # revizija #6 t.4: stvarno utovarena pakovanja;
+                         # revizija #9: dogovorena cena (model B).
+                         "BrojKutija", "BrojKesa", "CenaKg"]),
     # Smoke 5d: sifarnik EKSTERNIH prevoznika/vozaca (nije tblVozaci).
     "tblPrevoznici": ("Prevoznici",
                       ["PrevoznikID", "Naziv", "Vozac", "Registracija",
