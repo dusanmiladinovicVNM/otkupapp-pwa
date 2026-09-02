@@ -295,7 +295,7 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_NAZIV|Naziv|part|0|1", _
                 "OTKUI_HDM_TIP|Tip|txt|110|2", _
                 "OTKUI_HDM_JM|JedinicaMere|txt|56|2", _
-                "OTKUI_HDM_CENA_JED|CenaPoJedinici|num|84|1", _
+                "OTKUI_HDM_CENA_JED|CenaPoJedinici|dec|84|1", _
                 "OTKUI_HDM_DOZA|DozaPoHa|txt|76|3", _
                 "OTKUI_HDM_KULTURA|Kultura|txt|100|3", _
                 "OTKUI_HDM_PAKOVANJE|Pakovanje|txt|96|3")
@@ -316,7 +316,7 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
                 "OTKUI_HDM_VRSTA|" & COL_CEN_VRSTA & "|txt|110|1", _
                 "OTKUI_HDM_SORTA|" & COL_CEN_SORTA & "|part|0|1", _
                 "OTKUI_HDM_KLASA|" & COL_CEN_KLASA & "|txt|72|1", _
-                "OTKUI_HDM_CENA|" & COL_CEN_CENA & "|num|84|1")
+                "OTKUI_HDM_CENA|" & COL_CEN_CENA & "|dec|84|1")
         Case "VRSTAGP"
             MatKolone = Array( _
                 "OTKUI_HDM_TIP_GP|" & COL_VGP_TIP & "|part|0|1", _
@@ -324,20 +324,20 @@ Public Function MatKolone(ByVal kljuc As String) As Variant
         Case "AMBALAZA"
             MatKolone = Array( _
                 "OTKUI_HDM_TIP_AMB|" & COL_TAMB_TIP & "|part|0|1", _
-                "OTKUI_HDM_TEZINA_GAJ|" & COL_TAMB_TEZINA & "|num|130|1")
+                "OTKUI_HDM_TEZINA_GAJ|" & COL_TAMB_TEZINA & "|dec|130|1")
         Case "PALETE"
             MatKolone = Array( _
                 "OTKUI_HDM_TIP_PAL|" & COL_TPAL_TIP & "|part|0|1", _
-                "OTKUI_HDM_TEZINA|" & COL_TPAL_TEZINA & "|num|110|1")
+                "OTKUI_HDM_TEZINA|" & COL_TPAL_TEZINA & "|dec|110|1")
         Case "KUTIJE"
             MatKolone = Array( _
                 "OTKUI_HDM_TIP_KUT|" & COL_KUT_TIP & "|part|0|1", _
-                "OTKUI_HDM_TEZINA|" & COL_KUT_TEZINA & "|num|110|1", _
+                "OTKUI_HDM_TEZINA|" & COL_KUT_TEZINA & "|dec|110|1", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
         Case "KESE"
             MatKolone = Array( _
                 "OTKUI_HDM_TIP_KES|" & COL_KES_TIP & "|part|0|1", _
-                "OTKUI_HDM_TEZINA|" & COL_KES_TEZINA & "|num|110|1", _
+                "OTKUI_HDM_TEZINA|" & COL_KES_TEZINA & "|dec|110|1", _
                 "OTKUI_HDM_STATUS|@status|txt|76|1")
     End Select
 End Function

@@ -421,6 +421,7 @@ Public Sub RunAllTests()
     RunOne 175
     RunOne 176
     RunOne 177
+    RunOne 178
     RunOne 124
     RunOne 125
     RunOne 126
@@ -639,6 +640,7 @@ Private Function TestName(ByVal idx As Long) As String
         Case 175: TestName = "T_Maticni_CitacSlaganjeSaLegacy"
         Case 176: TestName = "T_MatEkran_KaskadaZavisnogCombo"
         Case 177: TestName = "T_UiPanel_UgovorIUstupanje"
+        Case 178: TestName = "T_Mreza_DecimalaNeNestaje"
         Case 54: TestName = "T_MapaImena_KljucNosiKolone"
         Case 53: TestName = "T_KesTabela_NeMemoiseNeuspeh"
         Case 52: TestName = "T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu"
@@ -824,6 +826,7 @@ Private Sub InvokeTest(ByVal idx As Long)
         Case 175: T_Maticni_CitacSlaganjeSaLegacy
         Case 176: T_MatEkran_KaskadaZavisnogCombo
         Case 177: T_UiPanel_UgovorIUstupanje
+        Case 178: T_Mreza_DecimalaNeNestaje
         Case 54: T_MapaImena_KljucNosiKolone
         Case 53: T_KesTabela_NeMemoiseNeuspeh
         Case 52: T_StornoIzvrsi_ZbirnaImenujeVezanuPrijemnicu
@@ -14156,3 +14159,63 @@ Private Function ProceduraPostoji(ByVal modul As String, ByVal proc As String) A
     On Error GoTo 0
     ProceduraPostoji = (broj <> 1004)
 End Function
+
+' ============================================================
+' 178. Decimala ne sme da nestane u mrezi.
+'
+' Nadjeno u smoke-u: tezina gajbice 0,5 kg se crtala kao "1". Vrsta celije
+' "num" formatira sa NULA decimala, pa je Format$ zaokruzivao -- 0,4 u "0" i
+' 0,5 u "1". Podatak u tabeli je bio ispravan sve vreme (pisac upisuje pun
+' Double); gresio je samo PRIKAZ, sto je gore od pada: broj izgleda kao podatak.
+'
+' Isti kvar je pogadjao i CENU u cenovniku i cenu po jedinici artikla -- 152,50
+' se crtalo kao "153". To niko nije prijavio, ali je ista greska.
+'
+' Zasto NIJE upotrebljeno "rsd" (koje ima dve decimale): novcane vrste pale
+' podnozje sa zbirom, a sifarnik nema sta da sabira (26.4). Zato "dec" -- dve
+' decimale, bez zbira.
+' ============================================================
+Private Sub T_Mreza_DecimalaNeNestaje()
+    Dim ekrani As Variant, e As Variant, liste As Variant, r As Variant
+    Dim kljuc As String, cols As Variant, i As Long, izv As String
+    Dim celaBezDecimale As String, spec As String
+
+    ' --- formatiranje ----------------------------------------------------
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.5, ""), "0,50", _
+             "pola kilograma se crta kao 0,50, ne kao 1"
+    AssertEq modOtkupUI.CelijaTekst("dec", 0.4, ""), "0,40", _
+             "0,4 se crta kao 0,40, ne kao 0"
+    AssertEq modOtkupUI.CelijaTekst("dec", 152.5, ""), "152,50", _
+             "cena zadrzava decimale"
+    AssertEq modOtkupUI.CelijaTekst("num", 0.5, ""), "1", _
+             "num i dalje zaokruzuje -- zato tezine i cene NISU num"
+
+    ' --- dec ne pali podnozje --------------------------------------------
+    AssertEq modOtkupUI.OpisImaValKolonu(Array("X|Y|dec|80|1")), False, _
+             "dec nije novcana kolona i ne crta zbir u podnozju"
+    AssertEq modOtkupUI.OpisImaKgKolonu(Array("X|Y|dec|80|1")), False, _
+             "dec nije kilogramska kolona"
+
+    ' --- nijedna maticna kolona sa decimalnim podatkom nije "num" --------
+    ' Spisak je izveden iz NAZIVA kljuca zaglavlja: tezina i cena su jedine
+    ' velicine u sifarnicima koje nose decimale.
+    ekrani = Array("MAT_PARTNERI", "MAT_ROBA", "MAT_PAKOVANJE", "MAT_KORISNICI")
+    For Each e In ekrani
+        liste = modMaticniIzvor.MatSekcijeEkrana(CStr(e))
+        For Each r In liste
+            kljuc = Split(CStr(r), "|")(0)
+            cols = modMaticniIzvor.MatKolone(kljuc)
+            If IsArray(cols) Then
+                For i = LBound(cols) To UBound(cols)
+                    spec = CStr(cols(i))
+                    izv = ColF(spec, 0)
+                    If InStr(izv, "TEZINA") > 0 Or InStr(izv, "CENA") > 0 Then
+                        If ColF(spec, 2) = "num" Then _
+                            celaBezDecimale = celaBezDecimale & " " & kljuc & "/" & izv
+                    End If
+                Next i
+            End If
+        Next r
+    Next e
+    AssertEq celaBezDecimale, "", "tezine i cene sifarnika su decimalne kolone"
+End Sub

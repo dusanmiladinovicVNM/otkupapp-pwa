@@ -2779,6 +2779,11 @@ Public Function CelijaTekst(ByVal kind As String, ByVal v As Variant, _
             End If
         Case "kg":           CelijaTekst = FmtKg(CDbl(v))
         Case "num", "sum0":  CelijaTekst = FmtBroj(CDbl(v), 0)
+        ' DEC je broj sa decimalama koji NIJE zbirna velicina: tezina gajbice,
+        ' cena po jedinici. "num" ih je zaokruzivao na ceo broj -- 0,5 kg se
+        ' crtalo kao 1 -- a "rsd" bi ih upisao u podnozje kao zbir, sto
+        ' sifarnik nema sta da sabira (v. UI_MIGRACIJA_KATALOG 26.4).
+        Case "dec":          CelijaTekst = FmtBroj(CDbl(v), 2)
         Case "rsd", "mult":  CelijaTekst = FmtBroj(CDbl(v), 2)
         Case "rest"
             ' nula znaci "nema duga" - prazna celija je citljivija od 0,00

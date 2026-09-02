@@ -421,8 +421,8 @@ Private Sub UpsertPoruke03(lo As ListObject, existing As Object)
     UpsertRow lo, existing, "OTKUI_MS_ADMIN", "Admin panel"
     UpsertRow lo, existing, "OTKUI_MS_ADMIN_OPIS", _
         "A" & ChrW(382) & "uriranje, setup, health check, Google autorizacija, alatke"
-    UpsertRow lo, existing, "OTKUI_MS_PROZOR", "u svom prozoru"
-    UpsertRow lo, existing, "OTKUI_BTN_MS_OTVORI", "Otvori"
+    UpsertRow lo, existing, "OTKUI_MS_PROZOR", "u radnoj povr" & ChrW(353) & "ini"
+    UpsertRow lo, existing, "OTKUI_BTN_MS_OTVORI", "Otvori alatku"
     UpsertRow lo, existing, "OTKUI_MS_ERR_OTVARANJE", _
         "Panel nije mogao da se otvori: "
     UpsertRow lo, existing, "OTKUI_MS_ERR_NEMA", "Nepoznata alatka."

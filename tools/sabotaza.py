@@ -2167,7 +2167,7 @@ SABOTAZE = {
     ),
     "maticni-tezina-kao-kilogrami": (
         "modMaticniIzvor.bas",
-        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|num|130|1\")\n",
+        "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|dec|130|1\")\n",
         "                \"OTKUI_HDM_TEZINA_GAJ|\" & COL_TAMB_TEZINA & \"|kg|130|1\")\n",
         "T_MatIzvor_OpisSekcijaJePotpun",
         "nijedna maticna kolona nije kilogramska ni novcana",
@@ -2422,6 +2422,23 @@ SABOTAZE = {
         "Public Sub Admin_ReleaseX()   ' SABOTAZA: dogovor o imenu prekrsen\n",
         "T_UiPanel_UgovorIUstupanje",
         "svaki modul panela ima <Modul>_Release kako registar ocekuje",
+    ),
+    # ------------------------------- MREZA: DECIMALA U CELIJI
+    # Nadjeno u smoke-u: 0,5 kg se crtalo kao "1". Podatak je bio ispravan,
+    # gresio je prikaz -- a broj koji izgleda kao podatak je gori od pada.
+    "celija-dec-zaokruzuje": (
+        "modOtkupUI.bas",
+        "        Case \"dec\":          CelijaTekst = FmtBroj(CDbl(v), 2)\n",
+        "        Case \"dec\":          CelijaTekst = FmtBroj(CDbl(v), 0)   ' SABOTAZA: decimala nestaje\n",
+        "T_Mreza_DecimalaNeNestaje",
+        "pola kilograma se crta kao 0,50, ne kao 1",
+    ),
+    "tezina-nazad-na-num": (
+        "modMaticniIzvor.bas",
+        "                \"OTKUI_HDM_TEZINA|\" & COL_KUT_TEZINA & \"|dec|110|1\", _\n",
+        "                \"OTKUI_HDM_TEZINA|\" & COL_KUT_TEZINA & \"|num|110|1\", _\n",
+        "T_Mreza_DecimalaNeNestaje",
+        "tezine i cene sifarnika su decimalne kolone",
     ),
     # ------------------------------------------------- MREZA: PODNOZJE
     # Zbir se racuna uvek, ali ljuska odlucuje hoce li ga NACRTATI. Kad novcane

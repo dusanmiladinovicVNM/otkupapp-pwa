@@ -84,8 +84,11 @@ End Function
 Public Function Scr_Cipovi() As String
 End Function
 
+' Jedina radnja ovog ekrana, i jedini nacin da se alatka otvori -- zato PRIMARY,
+' ne "soft". U smoke-u se prigusenim dugmetom nije videlo da je to ulaz: lista je
+' izgledala kao pregled bez radnje. Sirina prima duzi natpis.
 Public Function Scr_Radnje() As String
-    Scr_Radnje = "otvori:OTKUI_BTN_MS_OTVORI:96:soft:1"
+    Scr_Radnje = "otvori:OTKUI_BTN_MS_OTVORI:132:primary:1"
 End Function
 
 Public Sub Scr_ResetCache()
