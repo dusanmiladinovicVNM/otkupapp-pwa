@@ -82,6 +82,7 @@ različitim pravilima, to je klasa buga koju test hvata tek posle nastanka.
 | Ambalaža (ledger, saldo, revers) | `docs/AMBALAZA_MODEL.md` |
 | Funkcionalna mapa ekrana | `docs/AgriX_Functional_Map_v142.md` |
 | Storno i kaskade | `docs/STORNO_BACKLOG.md`, `docs/STORNO_CENTAR_PLAN_RADA.md` |
+| Prerada 2.0 — proizvodno jezgro (model, faze, odluke) | `docs/PRERADA_2_MODEL_I_PLAN.md` |
 | SEF (e-fakture) | `docs/SEF_LIFECYCLE_MANUAL.md` |
 | Provere integriteta | `docs/INTEGRITET_PROVERE.md` |
 | Poznata ograničenja | `docs/KNOWN_ISSUES.md` |
