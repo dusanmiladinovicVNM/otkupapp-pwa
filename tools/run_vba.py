@@ -699,6 +699,19 @@ def _self_test_pure() -> int:
         chk("TESTS   RunBankaImportTestSuite: 189 ukupno, 0 palo" in ispis,
             "zelena suite ne gura crvenu iz ispisa")
 
+    # RunAllTests je jedini suite cija se ocekivana brojka moze izmeriti bez
+    # Excela: modTest pise TESTS=<broj RunOne poziva>. Kad main doda testove, a
+    # manifest ostane na staroj brojci, COUNTS kapija za taj suite tiho oslabi
+    # (163 moze da padne na 18 i da i dalje "prodje"). Zato se poredi ovde.
+    runone = 0
+    mt = os.path.join(SRC_VBA, "modTest.bas")
+    if os.path.exists(mt):
+        with open(mt, "r", encoding="ascii", errors="replace") as fh:
+            runone = sum(1 for ln in fh if ln.startswith("    RunOne "))
+    want_all = int(vba_gate.suite_meta(man, "RunAllTests")["min_asserts"])
+    chk(runone == 0 or want_all == runone,
+        f"min_asserts RunAllTests ({want_all}) prati broj RunOne poziva ({runone})")
+
     manifest_rf = {x["id"]: x["result_file"] for x in man["suites"] if x["result_file"]}
     chk(manifest_rf.get("RunBankaImportTestSuite") == "last_run_banka.txt",
         "manifest nosi ime banka rezultat-fajla (detalj pada ne prezivi COM)")

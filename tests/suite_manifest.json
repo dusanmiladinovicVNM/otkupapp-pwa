@@ -106,14 +106,14 @@
       "gates": ["dev", "pr", "release"],
       "raises": true,
       "dialogs": false,
-      "min_asserts": 17,
+      "min_asserts": 163,
       "reports_counts": true,
       "timeout_s": 120,
       "uses_workbook": true,
       "mutates": false,
       "external": false,
       "result_file": "last_run.txt",
-      "note": "Testovi ponasanja: 1-3 legacy frmOtkup + golden snapshot, 4-6 novi UI (modOtkupUI), 7-11 upis zbirne/prijemnice (modDokUnos), 12-17 novac/revers (modNovacUnos). Broj je BROJ TESTOVA, ne provera -- ovaj suite broji kroz RunOne."
+      "note": "Broj je BROJ TESTOVA, ne provera: modTest pise TESTS=<broj RunOne poziva>. Zato je jedini min_asserts koji se moze tacno izmeriti bez Excela -- `grep -c '^    RunOne ' src-vba/modTest.bas`. Ostali suite-ovi broje provere u runtime-u, pa njihov min_asserts ceka prvi Windows run."
     },
     {
       "id": "RunIzvestajTests",
