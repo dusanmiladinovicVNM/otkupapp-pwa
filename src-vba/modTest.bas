@@ -7249,31 +7249,11 @@ Private Sub T_FakturaGP_WriterKapijeIStorno()
     AssertEq Format$(CDbl(gp(rW1, 5)), "0.00"), Format$(30.5, "0.00"), _
              "stanje se vraca posle storna B-lanca"
 
-    ' --- Krug 5c: MIGRACIJA starih GP faktura (pre utovarne liste) --
-    ' jednokratni makro pravi utovar iz podataka koji vec postoje.
-    ' Fixture vozilo je SB (aktivna stavka na GP2 bez utovara).
-    modSetup.BackfillUtovariIzGPFaktura
-    Dim fsM As Variant, rM As Long
-    fsM = GetTableData(TBL_FAKTURA_STAVKE)
-    rM = 0
-    For i = 1 To UBound(fsM, 1)
-        If Trim$(CStr(nz(fsM(i, GetColumnIndex(TBL_FAKTURA_STAVKE, COL_FS_ID))))) = "FST-GP-SB" Then rM = i
-    Next i
-    AssertEq (rM > 0), True, "vozilo: SB stavka postoji"
-    Dim utM As String
-    utM = Trim$(CStr(nz(fsM(rM, cFsUt))))
-    AssertEq (Len(utM) > 0), True, _
-             "migracija vezuje staru GP stavku na nov utovar"
-    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utM, _
-             COL_UT_FAKTURISANO)))), "Da", "migrirani utovar je fakturisan"
-    AssertEq Trim$(CStr(nz(LookupValue(TBL_UTOVAR, COL_UT_ID, utM, _
-             COL_UT_FAKTURA_ID)))), "FAK-SLED-GP2", _
-             "migrirani utovar pamti SVOJU fakturu"
-    ' Idempotentnost: drugi poziv nema sta da radi.
-    modSetup.BackfillUtovariIzGPFaktura
-    AssertEq Trim$(CStr(nz(LookupValue(TBL_FAKTURA_STAVKE, COL_FS_ID, _
-             "FST-GP-SB", COL_FS_UTOVAR_ID)))), utM, _
-             "migracija je idempotentna (ista veza posle drugog poziva)"
+    ' Migracija starih GP faktura je UKLONJENA (revizija #12) -- stari
+    ' model nikad nije deploy-ovan, a rutina je izmisljala datum
+    ' fizickog utovara iz datuma fakture. SB vozilo (aktivna GP stavka
+    ' bez utovara) ostaje u fixture-u: sledljivost ga prijavljuje kao
+    ' neusaglasenost (siroce), sto pokrivaju T_Sled tvrdnje.
 End Sub
 
 ' ============================================================

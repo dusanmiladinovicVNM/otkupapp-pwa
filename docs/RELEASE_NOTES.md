@@ -6960,10 +6960,7 @@ ijedne izmišljene veze.
   pakovanje, kg), UKUPNO i potpisi „Robu predao/preuzeo". Ista štampa
   dostupna i sa NEPOTPUNIH na Sledljivosti.
 - Režim štampe utovarne liste u **Podešavanja → Štampa** (PDF /
-  štampač / pregled / isključeno), default PDF; GP fakture napravljene
-  starijom verzijom (pre utovara) migriraju se jednim pokretanjem
-  `Alt+F8 → BackfillUtovariIzGPFaktura` — dobiju utovar iz sopstvenih
-  podataka i pojave se na listi Utovari.
+  štampač / pregled / isključeno), default PDF.
 
 ### Profesionalna utovarna lista: prevoz, lot, rok trajanja, bruto
 

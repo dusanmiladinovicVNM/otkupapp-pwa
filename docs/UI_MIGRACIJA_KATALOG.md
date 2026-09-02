@@ -6038,3 +6038,26 @@ ne moraju početi istog trenutka.
   utovara — dogovara se pre utovara; „Fakturiši" je čita sa stavke.
 - RunAllTests **163/0**; pun recert (dokaz + Banka + compile + smoke)
   na finalnom SHA pred merge — bez novih feature-a posle ovog kruga.
+
+### 25.17 Revizija #12: migracija uklonjena — završni rez pre merge-a
+
+- **`BackfillUtovariIzGPFaktura` OBRISAN** (revizorski blocker): rutina
+  je iz datuma FAKTURE izvodila datum FIZIČKOG utovara — a upravo je
+  ovaj PR utvrdio da su to dva različita događaja i da je datum
+  utovara poreska činjenica (SEF DeliveryDate). Uz to nije bila
+  transakciona (pad na pola fakture = parcijalno stanje). Stari GP
+  model nikad nije deploy-ovan, pa je migracija podržavala samo
+  neobjavljenu međufazu ovog istog PR-a. Ako backfill ikad stvarno
+  zatreba: zasebna migracija u kojoj operater EKSPLICITNO unosi
+  stvarni datum utovara, uz transakciju po celoj fakturi (zabeleženo
+  u modSetup komentaru).
+- Uklonjeni i: migracijski blok testa 162 (SB vozilo ostaje u
+  fixture-u — sledljivost siroče prijavljuje kao neusaglašenost) i
+  sabotaža `utovar-gp-migracija-bez-veze`. Katalog: 380 sabotaža.
+- Zabeleženo za kasnije (revizorske ne-blocker napomene): snapshot
+  `OpisProizvoda` na FakturaStavci (reprint ne sme da zavisi od
+  kasnije promene naziva na preradi), snapshot roka na utovarnoj
+  stavci, i prikaz utovara u detail stripu Sledljivosti (mreža je na
+  MAX_COLS=14).
+- PR opis #248 prepisan: dokumentuje model B / utovar grain umesto
+  obrisanog `Prerada.Fakturisano` modela.
