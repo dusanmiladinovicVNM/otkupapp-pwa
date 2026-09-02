@@ -114,6 +114,56 @@ Private Function UtPolje(ByRef ut As Variant, ByVal rowUt As Long, _
     If c > 0 Then UtPolje = Trim$(CStr(nz(ut(rowUt, c))))
 End Function
 
+' Auto-ucenje sifarnika prevoznika (smoke 5d): posle "Sacuvaj prevoz"
+' kombinacija prevoznik+vozac ulazi u tblPrevoznici da sledeci unos
+' bude izbor iz liste, ne kucanje. Nova kombinacija = nov red; poznata
+' kombinacija sa novom registracijom = azuriranje registracije.
+' MEKO: ucenje ne sme da obori cuvanje prevoza -- greska se loguje.
+Public Sub UpsertPrevoznikVozac(ByVal naziv As String, _
+                                ByVal vozac As String, _
+                                ByVal registracija As String)
+    Const SRC As String = "modUtovar.UpsertPrevoznikVozac"
+    On Error GoTo EH
+    naziv = Trim$(naziv): vozac = Trim$(vozac): registracija = Trim$(registracija)
+    If Len(naziv) = 0 And Len(vozac) = 0 Then Exit Sub
+
+    Dim lo As ListObject
+    Set lo = GetTable(TBL_PREVOZNICI)
+    If lo Is Nothing Then Exit Sub    ' sveska pre nadogradnje seme
+
+    Dim d As Variant, i As Long, cNaz As Long, cVoz As Long, cReg As Long
+    cNaz = RequireColumnIndex(TBL_PREVOZNICI, COL_PRV_NAZIV, SRC)
+    cVoz = RequireColumnIndex(TBL_PREVOZNICI, COL_PRV_VOZAC, SRC)
+    cReg = RequireColumnIndex(TBL_PREVOZNICI, COL_PRV_REG, SRC)
+    d = GetTableData(TBL_PREVOZNICI)
+    If IsArray(d) Then
+        For i = 1 To UBound(d, 1)
+            If StrComp(Trim$(CStr(nz(d(i, cNaz)))), naziv, vbTextCompare) = 0 And _
+               StrComp(Trim$(CStr(nz(d(i, cVoz)))), vozac, vbTextCompare) = 0 Then
+                If Len(registracija) > 0 Then _
+                    If StrComp(Trim$(CStr(nz(d(i, cReg)))), registracija, vbTextCompare) <> 0 Then _
+                        RequireUpdateCell TBL_PREVOZNICI, i, COL_PRV_REG, registracija, SRC
+                Exit Sub
+            End If
+        Next i
+    End If
+
+    ' Nova kombinacija -- upis PO IMENU kolone (drift-safe transport
+    ' kroz pozicioni AppendRow, isti obrazac kao modMalina).
+    Dim rowData() As Variant
+    ReDim rowData(1 To lo.ListColumns.count)
+    rowData(RequireColumnIndex(TBL_PREVOZNICI, COL_PRV_ID, SRC)) = _
+        GetNextID(TBL_PREVOZNICI, COL_PRV_ID, "PRV-")
+    rowData(cNaz) = naziv
+    rowData(cVoz) = vozac
+    rowData(cReg) = registracija
+    rowData(RequireColumnIndex(TBL_PREVOZNICI, COL_PRV_AKTIVAN, SRC)) = "Aktivan"
+    AppendRow TBL_PREVOZNICI, rowData
+    Exit Sub
+EH:
+    LogErr SRC
+End Sub
+
 ' Aktivno utovareno kg jedne prerade (kapija storna prerade).
 Public Function UtovarenoKgPrerade(ByVal preradaID As String) As Double
     Dim d As Object: Set d = UtovarenoPoPreradi()
@@ -343,7 +393,19 @@ Public Sub PrintUtovar(ByVal utovarID As String)
     Dim vreme As String, mestoIst As String, poBroj As String
     Dim napomena As String, fakBroj As String, fid As String
     Dim prevoz(0 To 4) As String
-    vreme = UtPolje(ut, rowUt, COL_UT_VREME)
+    ' Vreme moze biti i PRAVA vremenska vrednost: kolona General format
+    ' pretvori upisano "11:30" u serijski broj, pa je CStr davao
+    ' "0,479166..." na obrascu (smoke 5d). Datum/broj -> "hh:mm".
+    Dim cVre As Long
+    cVre = GetColumnIndex(TBL_UTOVAR, COL_UT_VREME)
+    If cVre > 0 Then
+        If IsDate(ut(rowUt, cVre)) Or IsNumeric(ut(rowUt, cVre)) Then
+            If Len(Trim$(CStr(nz(ut(rowUt, cVre))))) > 0 Then _
+                vreme = Format$(CDate(ut(rowUt, cVre)), "hh:mm")
+        Else
+            vreme = UtPolje(ut, rowUt, COL_UT_VREME)
+        End If
+    End If
     mestoIst = UtPolje(ut, rowUt, COL_UT_MESTO_ISTOVARA)
     poBroj = UtPolje(ut, rowUt, COL_UT_PO_BROJ)
     napomena = UtPolje(ut, rowUt, COL_UT_NAPOMENA)

@@ -1155,6 +1155,11 @@ Public Sub EnsureUtovarSchemaCore()
     EnsureDataTable TBL_UTOVAR_STAVKE, "UtovarStavke", _
         Array(COL_UTS_ID, COL_UTS_UTOVAR_ID, COL_UTS_PRERADA_ID, _
               COL_UTS_BROJ_PRERADE, COL_UTS_KOLICINA, COL_STORNIRANO)
+    ' Sifarnik prevoznika (smoke 5d): maticni podaci, bez storna --
+    ' auto-uci se iz "Sacuvaj prevoz" i puni combo predloge.
+    EnsureDataTable TBL_PREVOZNICI, "Prevoznici", _
+        Array(COL_PRV_ID, COL_PRV_NAZIV, COL_PRV_VOZAC, COL_PRV_REG, _
+              COL_PRV_AKTIVAN)
 End Sub
 
 Public Sub EnsureRuntimeSchema()

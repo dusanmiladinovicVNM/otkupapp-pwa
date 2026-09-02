@@ -30,7 +30,7 @@ Private Const STORNO_TABELE As String = "|" & TBL_OTKUP & "|" & TBL_NOVAC & _
 ' ne bi moglo procitati kao "zaboravljeno".
 Private Const BEZ_STORNA As String = "|" & TBL_KOOPERANTI & "|" & TBL_KUPCI & _
     "|" & TBL_VOZACI & "|" & TBL_STANICE & "|" & TBL_PARCELE & _
-    "|" & TBL_ARTIKLI & "|"
+    "|" & TBL_ARTIKLI & "|" & TBL_PREVOZNICI & "|"
 
 ' PRAZNA TABELA I NEPOSTOJECA TABELA NISU ISTI ISHOD.
 '

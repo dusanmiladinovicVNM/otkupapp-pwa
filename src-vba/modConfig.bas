@@ -373,6 +373,15 @@ Public Const COL_UT_TEMP_REZIM As String = "TemperaturniRezim"
 Public Const COL_UT_MESTO_ISTOVARA As String = "MestoIstovara"
 Public Const COL_UT_VREME As String = "VremeUtovara"
 Public Const COL_UT_PO_BROJ As String = "BrojNarudzbenice"
+' Sifarnik prevoznika (smoke 5d): red = kombinacija prevoznik + vozac
+' (+ registracija). Auto-uci se iz "Sacuvaj prevoz" -- puni combo
+' predloge na listi Utovari da se ponovljeni unos ne kuca iznova.
+Public Const TBL_PREVOZNICI As String = "tblPrevoznici"
+Public Const COL_PRV_ID As String = "PrevoznikID"
+Public Const COL_PRV_NAZIV As String = "Naziv"
+Public Const COL_PRV_VOZAC As String = "Vozac"
+Public Const COL_PRV_REG As String = "Registracija"
+Public Const COL_PRV_AKTIVAN As String = "Aktivan"
 Public Const COL_UTS_ID As String = "UtovarStavkaID"
 Public Const COL_UTS_UTOVAR_ID As String = "UtovarID"
 Public Const COL_UTS_PRERADA_ID As String = "PreradaID"

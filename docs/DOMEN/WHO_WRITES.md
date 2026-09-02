@@ -41,6 +41,7 @@ promenis pravilo upisa, ovde vidis ko jos pise istu tabelu.
 | `tblArtikli` | 1 | `modAgrohemija` |
 | `tblKooperanti` | 1 | `modKooperant` |
 | `tblPartnerMap` | 1 | `modBankaMapiranje` |
+| `tblPrevoznici` | 1 | `modUtovar` |
 | `tblStornoVeze` | 1 | `modStornoContext` |
 | `tblKulture` | 0 | _(samo testovi)_ |
 | `tblKupci` | 0 | _(samo testovi)_ |

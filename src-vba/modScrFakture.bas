@@ -392,6 +392,11 @@ Private Function ObradiPromenu(ByVal tag As String) As Boolean
             ' gde, sto izgleda kao da izbor kupca ne radi. Agrohemija ovo
             ' nema jer nijedna njena lista ne zavisi od polja zone.
             modOtkupUI.RefreshFromData
+        Case "scrFkUtVozT"
+            ' Izbor vozaca iz predloga povlaci registraciju i prevoznika
+            ' (samo u prazna polja). Radi tek kad se tekst RAZRESI u
+            ' stavku liste -- kucanje slobodnog imena ne dira nista.
+            DopuniIzVozaca
     End Select
 End Function
 
@@ -1208,6 +1213,12 @@ Private Function SacuvajPrevoz(ByVal red As Long) As Boolean
             PrevozPolje("scrFkUtReg"), PrevozPolje("scrFkUtPlo"), _
             PrevozPolje("scrFkUtTemp"), PrevozPolje("scrFkUtMesto"), _
             PrevozPolje("scrFkUtPo"), PrevozPolje("scrFkUtNap")) Then
+        ' Sifarnik uci sacuvanu kombinaciju pa se predlozi odmah
+        ' osveze -- sledeci utovar istog prevoznika je izbor, ne unos.
+        modUtovar.UpsertPrevoznikVozac PrevozPolje("scrFkUtPrev"), _
+            PrevozPolje("scrFkUtVoz"), PrevozPolje("scrFkUtReg")
+        mCombosPunjeni = False
+        PuniCombos
         Scr_ResetCache
         modOtkupUI.ShowToast Poruka("OTKUI_MSG_UT_PREVOZ"), False
         SacuvajPrevoz = True
@@ -1424,9 +1435,13 @@ Public Sub Scr_Build(ByVal z As Object)
     ' (prazno = ne diraj, "-" = obrisi). Idu na stampani obrazac.
     ' isNum MORA biti False: True upisuje polje u mNumTag registar pa
     ' FilterKeyPress guta svako slovo (smoke 5d -- "ne mogu da kucam").
-    modOtkupUI.NewFieldG z, "scrFkUtPrev", Poruka("OTKUI_FLD_UT_PREVOZNIK"), "txt", "", _
+    ' Prevoznik i vozac su COMBO sa predlozima iz tblPrevoznici
+    ' (eksterni sifarnik, auto-uci se iz "Sacuvaj prevoz" -- NIJE
+    ' tblVozaci, to su vozaci firme za otkup). Slobodan unos i dalje
+    ' radi: combo prima kucanje kao i tekst polje.
+    modOtkupUI.NewFieldG z, "scrFkUtPrev", Poruka("OTKUI_FLD_UT_PREVOZNIK"), "cmb", "", _
                          1, False, False, "FK"
-    modOtkupUI.NewFieldG z, "scrFkUtVoz", Poruka("OTKUI_FLD_UT_VOZAC"), "txt", "", _
+    modOtkupUI.NewFieldG z, "scrFkUtVoz", Poruka("OTKUI_FLD_UT_VOZAC"), "cmb", "", _
                          1, False, False, "FK"
     modOtkupUI.NewFieldG z, "scrFkUtReg", Poruka("OTKUI_FLD_UT_REG"), "txt", "", _
                          1, False, False, "FK"
@@ -1597,6 +1612,12 @@ Private Sub PuniCombos()
         CB.List(CB.ListCount - 1, 1) = CStr(k)
     Next k
 
+    ' Predlozi prevoza iz sifarnika tblPrevoznici (smoke 5d). Prevoznik
+    ' combo: distinct nazivi. Vozac combo nosi i skrivene kolone
+    ' (registracija, prevoznik) -- izbor vozaca dopunjava ta polja.
+    mStep = "prevoz"
+    PuniPrevozCombos z
+
     mCombosPunjeni = True
     mFill = False
     Exit Sub
@@ -1606,6 +1627,77 @@ EH:
     ' nije povezano" -- isto kao u modOtkupUI.FillCombos.
     Debug.Print "modScrFakture.PuniCombos PAO na koraku [" & mStep & "]: " & _
                 Err.Number & " " & Err.description
+End Sub
+
+' Combo predlozi prevoza iz tblPrevoznici (smoke 5d). Sifarnik je
+' ZASEBAN od tblVozaci: ovo su eksterni prevoznici i njihovi vozaci,
+' vozaci firme (otkup) se ovde ne pojavljuju -- i obrnuto.
+Private Sub PuniPrevozCombos(ByVal z As Object)
+    Dim CB As Object, cbV As Object, d As Variant, i As Long
+    Dim cNaz As Long, cVoz As Long, cReg As Long, cAkt As Long
+    Dim vid As Object, k As String, akt As String
+
+    Set CB = z.Controls("scrFkUtPrev").Controls("scrFkUtPrevT")
+    Set cbV = z.Controls("scrFkUtVoz").Controls("scrFkUtVozT")
+    CB.Clear
+    CB.ColumnCount = 1
+    cbV.Clear
+    cbV.ColumnCount = 3
+    cbV.ColumnWidths = "140 pt;0 pt;0 pt"
+    cbV.BoundColumn = 1
+    cbV.TextColumn = 1
+
+    If GetTable(TBL_PREVOZNICI) Is Nothing Then Exit Sub
+    d = GetTableData(TBL_PREVOZNICI)
+    If Not IsArray(d) Then Exit Sub
+    cNaz = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_NAZIV)
+    cVoz = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_VOZAC)
+    cReg = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_REG)
+    cAkt = GetColumnIndex(TBL_PREVOZNICI, COL_PRV_AKTIVAN)
+    If cNaz = 0 Or cVoz = 0 Then Exit Sub
+
+    Set vid = CreateObject("Scripting.Dictionary")
+    vid.CompareMode = vbTextCompare
+    For i = 1 To UBound(d, 1)
+        If cAkt > 0 Then akt = Trim$(CStr(nz(d(i, cAkt)))) Else akt = ""
+        If Len(akt) = 0 Or StrComp(akt, "Aktivan", vbTextCompare) = 0 Then
+            k = Trim$(CStr(nz(d(i, cNaz))))
+            If Len(k) > 0 And Not vid.Exists(k) Then
+                vid.Add k, True
+                CB.AddItem k
+            End If
+            k = Trim$(CStr(nz(d(i, cVoz))))
+            If Len(k) > 0 Then
+                cbV.AddItem k
+                If cReg > 0 Then _
+                    cbV.List(cbV.ListCount - 1, 1) = Trim$(CStr(nz(d(i, cReg))))
+                cbV.List(cbV.ListCount - 1, 2) = Trim$(CStr(nz(d(i, cNaz))))
+            End If
+        End If
+    Next i
+End Sub
+
+' Izbor vozaca iz predloga dopunjava registraciju i prevoznika --
+' SAMO prazna polja (operater koji je vec nesto ukucao ostaje gazda).
+Private Sub DopuniIzVozaca()
+    Dim z As Object, cbV As Object, i As Long, t As String
+    On Error Resume Next
+    Set z = Zona()
+    If z Is Nothing Then Exit Sub
+    Set cbV = z.Controls("scrFkUtVoz").Controls("scrFkUtVozT")
+    t = Trim$(CStr(cbV.text))
+    If Len(t) = 0 Then Exit Sub
+    For i = 0 To cbV.ListCount - 1
+        If StrComp(Trim$(CStr(cbV.List(i, 0))), t, vbTextCompare) = 0 Then
+            If Len(PrevozPolje("scrFkUtReg")) = 0 Then _
+                z.Controls("scrFkUtReg").Controls("scrFkUtRegT").text = _
+                    Trim$(CStr(cbV.List(i, 1)))
+            If Len(PrevozPolje("scrFkUtPrev")) = 0 Then _
+                z.Controls("scrFkUtPrev").Controls("scrFkUtPrevT").text = _
+                    Trim$(CStr(cbV.List(i, 2)))
+            Exit Sub
+        End If
+    Next i
 End Sub
 
 Private Function IzabraniKupacID() As String
@@ -1690,7 +1782,11 @@ End Function
 '---------------------------------------------------------- BROJKE
 Private Sub OsveziObjasnjenje(ByVal z As Object)
     On Error Resume Next
-    If Len(IzabraniKupacID()) = 0 Then
+    ' Lista UTOVARI ide PRVA: kupac polje je tamo skriveno (i prazno),
+    ' pa bi kupac-grana prikazala hint o prijemnicama (smoke 5d nalaz).
+    If Scr_Lista() = FK_UTOVARI Then
+        z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_UT")
+    ElseIf Len(IzabraniKupacID()) = 0 Then
         z.Controls("fkHint").caption = Poruka("OTKUI_LBL_FK_HINT_KUPAC")
     ElseIf Scr_Lista() = FK_GP Then
         ' Smoke 5c: label polja kolicine je skracen, pravilo "prazno =

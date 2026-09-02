@@ -1638,6 +1638,7 @@ Public Sub UpsertPoruke(lo As ListObject)
     UpsertRow lo, existing, "OTKUI_BTN_UT_PREVOZ", "Sa" & ChrW(269) & "uvaj prevoz"
     UpsertRow lo, existing, "OTKUI_MSG_UT_PREVOZ", ChrW(10003) & " Podaci prevoza su sa" & ChrW(269) & "uvani"
     UpsertRow lo, existing, "OTKUI_ERR_UT_PREVOZ", ChrW(10007) & " Upis podataka prevoza nije uspeo"
+    UpsertRow lo, existing, "OTKUI_LBL_FK_HINT_UT", "Izaberi red utovara, popuni prevoz pa 'Sa" & ChrW(269) & "uvaj prevoz'. Prazno polje ne dira upisano, crtica '-' bri" & ChrW(353) & "e."
     UpsertRow lo, existing, "OTKUI_FLD_UT_PREVOZNIK", "Prevoznik"
     UpsertRow lo, existing, "OTKUI_FLD_UT_VOZAC", "Voza" & ChrW(269)
     UpsertRow lo, existing, "OTKUI_FLD_UT_REG", "Registracija"

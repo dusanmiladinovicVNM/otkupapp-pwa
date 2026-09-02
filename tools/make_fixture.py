@@ -1964,6 +1964,10 @@ ENSURE_TABLES = {
     "tblUtovarStavke": ("UtovarStavke",
                         ["UtovarStavkaID", "UtovarID", "PreradaID",
                          "BrojPrerade", "KolicinaKg", "Stornirano"]),
+    # Smoke 5d: sifarnik EKSTERNIH prevoznika/vozaca (nije tblVozaci).
+    "tblPrevoznici": ("Prevoznici",
+                      ["PrevoznikID", "Naziv", "Vozac", "Registracija",
+                       "Aktivan"]),
 }
 
 # tblLocalConfig (Kljuc | Vrednost | Opis)
