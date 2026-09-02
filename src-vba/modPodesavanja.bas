@@ -268,7 +268,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     w = frm.InsideWidth
     If w < 400 Then w = 960
 
-    Const m As Single = 12
+    Const m As Single = PAD
     Const LBLW As Single = 250
     Dim inLeft As Single: inLeft = m + LBLW + 10
     Dim inW As Single: inW = w - inLeft - m - 18      ' rezerva za scrollbar
@@ -276,41 +276,44 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
 
     ' Naslov
     Dim lblTitle As MSForms.label
-    Set lblTitle = AddLabel("cfg_title", m, 8, w - 2 * m, 20)
+    Set lblTitle = AddLabel("cfg_title", m, 14, w - 2 * m, 18)
     lblTitle.caption = Poruka("CFG_LBL_PODESAVANJA_TBLSEFCONFIG")
-    StyleLabel lblTitle, TXT_LIGHT(), True
-    lblTitle.Font.Size = FONT_SIZE_HEADER
+    modUiKit.PanelStilNaslov lblTitle
 
     ' Footer dugmad (na vrhu -- vidljiva pre skrolovanja)
     Dim btnSave As MSForms.CommandButton
-    Set btnSave = AddButton("btnCfgSave", m, 32, 120, 24)
-    StylePrimaryButton btnSave, "Sacuvaj"
+    Set btnSave = AddButton("btnCfgSave", m, 40, 132, 26)
+    btnSave.caption = Poruka("OTKUI_BTN_MAT_SACUVAJ")
+    modUiKit.PanelStilDugme btnSave, "primary"
     WireButton btnSave, "save"
 
-    Set mBtnToggle = AddButton("btnCfgToggle", m + 130, 32, 200, 24)
-    StyleExitButton mBtnToggle, ToggleCaption()
+    Set mBtnToggle = AddButton("btnCfgToggle", m + 142, 40, 210, 26)
+    mBtnToggle.caption = ToggleCaption()
+    modUiKit.PanelStilDugme mBtnToggle, "soft"
     WireButton mBtnToggle, "toggle"
 
     Dim btnBack As MSForms.CommandButton
-    Set btnBack = AddButton("btnCfgBack", w - m - 120, 32, 120, 24)
-    StyleExitButton btnBack, "Povratak"
+    Set btnBack = AddButton("btnCfgBack", w - m - 132, 40, 132, 26)
+    btnBack.caption = Poruka("OTKUI_BTN_PANEL_NAZAD")
+    modUiKit.PanelStilDugme btnBack, "ghost"
     WireButton btnBack, "back"
 
     Dim lblHint As MSForms.label
-    Set lblHint = AddLabel("cfg_hint", m, 60, w - 2 * m, 16)
+    Set lblHint = AddLabel("cfg_hint", m, 74, w - 2 * m, 15)
     lblHint.caption = "Interna polja (token, bound, status, HWM, OAuth token...) se namerno NE prikazuju. Grupa 'Banka / lokalno' se cuva u tblLocalConfig (per-masina)."
-    StyleLabel lblHint, TXT_MUTED(), False
-    lblHint.Font.Size = FONT_SIZE_SMALL
+    modUiKit.PanelStilNapomena lblHint
 
     ' Alatna traka: rasiri / skupi sve grupe odjednom.
     Dim btnExpand As MSForms.CommandButton
-    Set btnExpand = AddButton("btnCfgExpandAll", m, 80, 150, 22)
-    StyleExitButton btnExpand, "[+] Rasiri sve"
+    Set btnExpand = AddButton("btnCfgExpandAll", m, 96, 150, 24)
+    btnExpand.caption = ChrW(9662) & "  Rasiri sve"
+    modUiKit.PanelStilDugme btnExpand, "ghost"
     WireButton btnExpand, "expandall"
 
     Dim btnCollapse As MSForms.CommandButton
-    Set btnCollapse = AddButton("btnCfgCollapseAll", m + 158, 80, 150, 22)
-    StyleExitButton btnCollapse, "[-] Skupi sve"
+    Set btnCollapse = AddButton("btnCfgCollapseAll", m + 158, 96, 150, 24)
+    btnCollapse.caption = ChrW(9656) & "  Skupi sve"
+    modUiKit.PanelStilDugme btnCollapse, "ghost"
     WireButton btnCollapse, "collapseall"
 
     ' Geometrija kolona: 2 kolone kad ima dovoljno sirine, inace 1.
@@ -321,7 +324,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
     mCellW = (w - 2 * m - (mColCount - 1) * COLGAP) / mColCount
     mCol0X = m
     mCol1X = m + mCellW + COLGAP
-    mTopContentY = 112
+    mTopContentY = 134
 
     ' Izgradnja grupa (data-driven iz ConfigEditorFields; kolona "Grupa").
     ' Svaka grupa = collapsible sekcija (header dugme) sa svojim poljima.
@@ -360,10 +363,9 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             mGroupHeaders.Add hdrBtn, grp
         End If
 
-        Set lbl = AddLabel("cfglbl_" & key, 0, 0, mCellW, 14)
+        Set lbl = AddLabel("cfglbl_" & key, 0, 0, mCellW, 12)
         lbl.caption = cap
-        StyleLabel lbl, TXT_MUTED(), False
-        lbl.Font.Size = FONT_SIZE_SMALL
+        modUiKit.PanelStilNatpis lbl
 
         If store = "local" Then
             cur = GetLocalConfigValue(key, "")
@@ -372,7 +374,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         End If
 
         If typ = "bool" Or Left$(typ, 5) = "list:" Then
-            Set cmb = AddCombo("cfg_" & key, 0, 0, mCellW, 18)
+            Set cmb = AddCombo("cfg_" & key, 0, 0, mCellW, 22)
             cmb.style = fmStyleDropDownCombo
             If typ = "bool" Then
                 opts = Array("YES", "NO")
@@ -383,11 +385,11 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
                 cmb.AddItem Trim$(CStr(opts(oi)))
             Next oi
             cmb.value = cur
-            StyleComboBox cmb
+            modUiKit.PanelStilUnos cmb
             mInputs.Add cmb, key
             Set inCtl = cmb
         Else
-            Set tb = AddText("cfg_" & key, 0, 0, mCellW, IIf(typ = "memo", 46, 18))
+            Set tb = AddText("cfg_" & key, 0, 0, mCellW, IIf(typ = "memo", 54, 22))
             If typ = "memo" Then
                 tb.MultiLine = True
                 tb.WordWrap = True
@@ -398,7 +400,7 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
             ' cita .value normalno).
             If typ = "secret" Then tb.PasswordChar = "*"
             tb.value = cur
-            StyleTextBox tb
+            modUiKit.PanelStilUnos tb
             mInputs.Add tb, key
             Set inCtl = tb
         End If
@@ -407,8 +409,9 @@ Public Sub BuildConfigEditor(ByVal frm As Object)
         ' Repozicionira ga RelayoutGroups; klik -> ConfigEditor_OnClick(action, key).
         Set brBtn = Nothing
         If browse <> "" And typ <> "memo" And typ <> "bool" And Left$(typ, 5) <> "list:" Then
-            Set brBtn = AddButton("cfgbr_" & key, 0, 0, 24, 18)
-            StyleExitButton brBtn, "..."
+            Set brBtn = AddButton("cfgbr_" & key, 0, 0, 26, 22)
+            brBtn.caption = ChrW(8230)
+            modUiKit.PanelStilDugme brBtn, "ghost"
             If browse = "poppler" Then
                 WireButtonKey brBtn, "browsepoppler", key
             Else
@@ -518,14 +521,17 @@ Private Sub RelayoutGroups()
     On Error GoTo EH
     If mGroupOrder Is Nothing Then Exit Sub
 
-    Const HDRH As Single = 20
-    Const HDRGAP As Single = 4
+    ' Ritam nove ljuske: visi unosi, natpis iznad polja, vise vazduha izmedju
+    ' redova i grupa. Legacy vrednosti (20/12/18/8) su davale gustinu koja se
+    ' vidi kao "stariji ekran" pored ostatka aplikacije.
+    Const HDRH As Single = 26
+    Const HDRGAP As Single = 8
     Const LBLH As Single = 12
-    Const LBLGAP As Single = 2
-    Const INH As Single = 18
-    Const ROWGAP As Single = 8
-    Const MEMOH As Single = 46
-    Const GROUPGAP As Single = 10
+    Const LBLGAP As Single = 3
+    Const INH As Single = 22
+    Const ROWGAP As Single = 12
+    Const MEMOH As Single = 54
+    Const GROUPGAP As Single = 16
 
     Dim cellH As Single: cellH = LBLH + LBLGAP + INH + ROWGAP
     Dim memoCellH As Single: memoCellH = LBLH + LBLGAP + MEMOH + ROWGAP
@@ -538,7 +544,7 @@ Private Sub RelayoutGroups()
     Dim lbl As MSForms.label, inCtl As MSForms.Control, typ As String
     Dim brBtn As MSForms.CommandButton
     Dim col As Long, cx As Single, idx As Long
-    Const BRW As Single = 24, BRGAP As Single = 3
+    Const BRW As Single = 26, BRGAP As Single = 4
 
     For Each gname In mGroupOrder
         grp = CStr(gname)
@@ -548,7 +554,7 @@ Private Sub RelayoutGroups()
         hdr.top = Y
         hdr.Visible = True
         collapsed = (hdr.Tag = "1")
-        hdr.caption = IIf(collapsed, "[+]  ", "[-]  ") & grp
+        modUiKit.PanelStilGrupa hdr, grp, collapsed
         Y = Y + HDRH + HDRGAP
 
         Set grpRows = mRowsByGroup(grp)
@@ -618,8 +624,8 @@ End Sub
 ' Header dugme jedne grupe (collapsible). Klik hvata clsConfigBtn (action="grp").
 Private Function AddGroupHeaderBtn(ByVal grp As String, ByVal idx As Long) As MSForms.CommandButton
     Dim b As MSForms.CommandButton
-    Set b = AddButton("cfggrp_" & CStr(idx), mMargin, 0, mFormW - 2 * mMargin, 20)
-    StyleMenuButton b, grp
+    Set b = AddButton("cfggrp_" & CStr(idx), mMargin, 0, mFormW - 2 * mMargin, 26)
+    modUiKit.PanelStilGrupa b, grp, True
     WireGroupButton b, grp
     Set AddGroupHeaderBtn = b
 End Function

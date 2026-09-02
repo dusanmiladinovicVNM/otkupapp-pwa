@@ -7081,3 +7081,63 @@ Dokaz u oba smera stoji u `vba_check --self-test` (`PROC_SIZE_CASES`), kako
 `.claude/rules/testovi.md` §6 traži kad se menja sam checker: jedan slučaj koji
 **mora** da zapišti i jedan veliki koji **ne sme**. Provereno i unazad — podignut
 prag obara self-test po imenu.
+
+### 26.23 Smoke posle integracije: decimale, radnja alatki, stil panela (`v6-ui-198`)
+
+Tri nalaza sa prvog pravog prolaza kroz nove ekrane.
+
+#### 1. Decimala je nestajala — i to na više mesta nego što je prijavljeno
+
+Težina gajbice `0,5 kg` se crtala kao **`1`**. Vrsta ćelije `num` formatira sa
+**nula decimala**, pa je `Format$` zaokruživao: `0,4 → "0"`, `0,5 → "1"`.
+
+Podatak u tabeli je bio **ispravan sve vreme** — pisac upisuje pun `Double`.
+Grešio je samo prikaz, što je gore od pada: broj izgleda kao podatak.
+
+Isti kvar je pogađao i **cenu u Cenovniku** i cenu po jedinici artikla —
+`152,50` se crtalo kao `153`. To niko nije prijavio, ali je ista greška.
+
+Uvedena je vrsta ćelije **`dec`**: dve decimale, **bez zbira u podnožju**. Nije
+upotrebljeno `rsd` iako ima dve decimale — novčane vrste pale podnožje sa
+zbirom, a šifarnik nema šta da sabira (§26.4). Šest kolona prebačeno; polja
+**unosa** ostaju `num`, jer provera već prima decimale i upisuje pun `Double`.
+
+#### 2. Radnja „Otvori" nije se videla
+
+Prigušenim (`soft`) dugmetom se nije videlo da je to **jedini ulaz** u alatku —
+lista je izgledala kao pregled bez radnje. Sada je `primary` i šira. Uz to je
+popravljen zastareo natpis kolone: od M6 se alatka otvara **u radnoj površini**,
+ne „u svom prozoru".
+
+#### 3. Paneli su i dalje izgledali kao stari ekrani
+
+M6 ih je preselio u radnu površinu, ali su i dalje crtani **legacy `Style*`
+helperima** — siva podloga, sistemski font, gusti redovi. To je bio pravi
+prigovor: mesto je novo, izgled nije.
+
+**Šta je promenjeno:** samo **prezentacija**. Registar polja
+(`ConfigEditorFields`, 97 redova), čitanje, `SaveConfigEditor` i ožičavanje
+(`clsConfigBtn`) su netaknuti.
+
+**Šta NIJE promenjeno, i zašto:** kontrole ostaju `CommandButton` / `TextBox` /
+`ComboBox`. `modUiKit.BtnV` pravi stilizovanu **ploču**, ne dugme, a
+`clsConfigBtn` hvata evente preko `WithEvents btn As CommandButton` — zamena tipa
+kontrole bi pokidala svaki klik u panelu. Zato se postojeće kontrole **boje**,
+ne zamenjuju.
+
+Stilovi stoje u **`modUiKit`** (`PanelStil*`), a ne u modulu panela: dva panela
+sa svojom kopijom istog pravila su dva mesta koja se prvom doradom raziđu. Oba
+panela sada dele paletu, tipografiju i ritam sa ostatkom ljuske; grupe u
+Podešavanjima su peščane trake sa strelicom stanja, a u Adminu **`Očisti tabele`
+i `Migracija` nose `danger` boju** — jedine dve komande koje diraju podatke, pa
+se to vidi *pre* klika, a ne tek u dijalogu potvrde.
+
+**Zapamćena zamka:** u MSForms se `SpecialEffect` i `BorderStyle` isključuju —
+postavljanje `SpecialEffect`-a *posle* `BorderStyle`-a gasi ivicu. Redosled je
+zato Flat → ivica → boja ivice.
+
+**Verifikacija:** `vba_check` čist (210 fajlova, 417 sabotaža). Nov test 178 za
+decimale (formatiranje, `dec` ne pali podnožje, nijedna matična kolona sa težinom
+ili cenom nije `num`) i dve sabotaže. **Stil panela nije pokriven testom** — to je
+vizuelni ishod koji se meri jedino smoke-om u Excelu; ne piše se placebo test
+koji bi tvrdio da „boja je postavljena".

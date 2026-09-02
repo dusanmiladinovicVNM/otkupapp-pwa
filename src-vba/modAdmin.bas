@@ -62,43 +62,43 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
     w = frm.InsideWidth
     If w < 400 Then w = 960
 
-    Const m As Single = 12
+    Const m As Single = PAD
 
     ' Naslov
     Dim lblTitle As MSForms.label
-    Set lblTitle = AddLabel("adm_title", m, 8, w - 2 * m, 20)
-    lblTitle.caption = "Admin"
-    StyleLabel lblTitle, TXT_LIGHT(), True
-    lblTitle.Font.Size = FONT_SIZE_HEADER
+    Set lblTitle = AddLabel("adm_title", m, 14, w - 2 * m, 18)
+    lblTitle.caption = Poruka("OTKUI_MS_ADMIN")
+    modUiKit.PanelStilNaslov lblTitle
 
     ' Povratak (gore desno -- vidljiv pre skrolovanja)
     Dim btnBack As MSForms.CommandButton
-    Set btnBack = AddButton("btnAdmBack", w - m - 120, 32, 120, 24)
-    StyleExitButton btnBack, "Povratak"
+    Set btnBack = AddButton("btnAdmBack", w - m - 132, 38, 132, 26)
+    btnBack.caption = Poruka("OTKUI_BTN_PANEL_NAZAD")
+    modUiKit.PanelStilDugme btnBack, "ghost"
     WireButton btnBack, "back"
 
     ' Hint
     Dim lblHint As MSForms.label
-    Set lblHint = AddLabel("adm_hint", m, 36, w - m - 140, 16)
+    Set lblHint = AddLabel("adm_hint", m, 40, w - m - 150, 15)
     lblHint.caption = "Operativne i razvojne komande. Neke su destruktivne -- koristi oprezno."
-    StyleLabel lblHint, TXT_MUTED(), False
-    lblHint.Font.Size = FONT_SIZE_SMALL
+    modUiKit.PanelStilNapomena lblHint
 
     ' Grupe dugmadi (data-driven). Dodavanje komande = jedan red u AdminGroups.
     Dim groups As Variant
     groups = AdminGroups()
 
+    ' Ritam nove ljuske -- isti kao u panelu Podesavanja.
     Const COLS As Long = 2
-    Const COLGAP As Single = 12
-    Const BTNH As Single = 26
-    Const ROWGAP As Single = 6
+    Const COLGAP As Single = 14
+    Const BTNH As Single = 28
+    Const ROWGAP As Single = 8
     Const HDRH As Single = 16
-    Const HDRGAP As Single = 3
-    Const GROUPGAP As Single = 12
+    Const HDRGAP As Single = 6
+    Const GROUPGAP As Single = 18
     Dim btnW As Single
     btnW = (w - 2 * m - (COLS - 1) * COLGAP) / COLS
 
-    Dim Y As Single: Y = 64
+    Dim Y As Single: Y = 76
     Dim gi As Long, ii As Long
     Dim grp As Variant, items As Variant, it As Variant
     Dim hl As MSForms.label, b As MSForms.CommandButton
@@ -110,9 +110,8 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
 
         ' Sekcijski header (labela)
         Set hl = AddLabel("admgrp_" & CStr(gi), m, Y, w - 2 * m, HDRH)
-        hl.caption = UCase$(CStr(grp(0)))
-        StyleLabel hl, TXT_MUTED(), True
-        hl.Font.Size = FONT_SIZE_SMALL
+        hl.caption = CStr(grp(0))
+        modUiKit.PanelStilNatpis hl
         Y = Y + HDRH + HDRGAP
 
         items = grp(1)
@@ -124,10 +123,15 @@ Public Sub BuildAdminPanel(ByVal frm As Object)
 
             cx = m + col * (btnW + COLGAP)
             Set b = AddButton("btnAdm_" & act, cx, Y, btnW, BTNH)
+            b.caption = cap
             If act = "checkupdate" Then
-                StylePrimaryButton b, cap
+                modUiKit.PanelStilDugme b, "primary"
+            ElseIf act = "ocisti" Or act = "migracija" Then
+                ' Jedine dve komande koje diraju podatke -- boja to kaze pre
+                ' nego sto se klikne, ne tek u dijalogu potvrde.
+                modUiKit.PanelStilDugme b, "danger"
             Else
-                StyleMenuButton b, cap
+                modUiKit.PanelStilDugme b, "ghost"
             End If
             WireButton b, act
 

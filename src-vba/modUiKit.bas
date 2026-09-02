@@ -491,6 +491,88 @@ Public Function DisplayFont() As String
     If Len(DisplayFont) = 0 Then DisplayFont = F_DISPLAY_FB
 End Function
 
+' ============================================================
+' STIL PANELA U RADNOJ POVRSINI (v6-ui-198)
+'
+' Paneli su do sada nosili legacy izgled (siva podloga, sistemski font, gusti
+' redovi) zato sto je crtani legacy Style* helperima. Od migracije koriste ISTU
+' paletu i tipografiju kao ostatak nove ljuske -- modUiKit konstante -- pa se ne
+' vidi da su "stariji ekrani".
+'
+' Stoje OVDE, a ne u modulu panela: dva panela sa svojom kopijom istog
+' pravila su dva mesta koja se prvom doradom razidju.
+'
+' Menja se SAMO prezentacija. Registar polja (ConfigEditorFields, 97 redova),
+' citanje, upis (SaveConfigEditor) i ozicavanje (clsConfigBtn) ostaju netaknuti:
+' kontrole su i dalje CommandButton/TextBox/ComboBox, jer WithEvents omotac hvata
+' bas njih. Zamena tipa kontrole bi pokidala svaki klik u panelu.
+' ============================================================
+Public Sub PanelPanelStilNaslov(ByVal l As MSForms.label)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_FOREST
+    l.Font.name = F_UI
+    l.Font.Size = TS_H1
+    l.Font.Bold = True
+End Sub
+
+Public Sub PanelPanelStilNapomena(ByVal l As MSForms.label)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_MUTED
+    l.Font.name = F_UI
+    l.Font.Size = TS_META
+    l.Font.Bold = False
+End Sub
+
+' Natpis iznad polja -- verzalom i sitno, isto kao NewFieldG u ljusci.
+Public Sub PanelStilNatpis(ByVal l As MSForms.label)
+    l.caption = UCase$(l.caption)
+    l.BackStyle = fmBackStyleTransparent
+    l.BorderStyle = fmBorderStyleNone
+    l.ForeColor = C_MUTED
+    l.Font.name = F_UI
+    l.Font.Size = TS_LABEL
+    l.Font.Bold = True
+End Sub
+
+Public Sub PanelStilUnos(ByVal t As MSForms.Control)
+    ' REDOSLED je bitan: u MSForms SpecialEffect i BorderStyle se iskljucuju --
+    ' postavljanje SpecialEffect-a POSLE BorderStyle-a gasi ivicu. Zato prvo
+    ' Flat, pa tek onda ivica i njena boja.
+    t.SpecialEffect = fmSpecialEffectFlat
+    t.BorderStyle = fmBorderStyleSingle
+    t.BorderColor = C_INPUT_BORDER
+    t.BackColor = C_WHITE
+    t.ForeColor = C_FOREST
+    t.Font.name = F_UI
+    t.Font.Size = TS_BODY
+End Sub
+
+' Dugme u paleti ljuske. Vrste su iste kao modUiKit.BtnV, da se dva mesta ne
+' razidju u tome sta "primarno" znaci.
+Public Sub PanelStilDugme(ByVal b As MSForms.CommandButton, ByVal vrsta As String)
+    Select Case vrsta
+        Case "primary": b.BackColor = C_GREEN: b.ForeColor = C_WHITE: b.Font.Bold = True
+        Case "soft":    b.BackColor = C_SOFT_BG: b.ForeColor = C_GREEN: b.Font.Bold = True
+        Case "danger":  b.BackColor = C_RUST: b.ForeColor = C_WHITE: b.Font.Bold = True
+        Case Else:      b.BackColor = C_WHITE: b.ForeColor = C_FOREST: b.Font.Bold = False
+    End Select
+    b.Font.name = F_UI
+    b.Font.Size = TS_META
+End Sub
+
+' Zaglavlje grupe: pescana traka preko cele sirine, sa strelicom stanja.
+Public Sub PanelStilGrupa(ByVal b As MSForms.CommandButton, ByVal grp As String, _
+                      ByVal skupljena As Boolean)
+    b.caption = IIf(skupljena, ChrW(9656), ChrW(9662)) & "  " & UCase$(grp)
+    b.BackColor = C_SAND
+    b.ForeColor = C_FOREST
+    b.Font.name = F_UI
+    b.Font.Size = TS_META
+    b.Font.Bold = True
+End Sub
+
 Public Function NewZone(parent As Object, nm As String, X As Single, Y As Single, _
                          w As Single, h As Single, bg As Long) As Object
     Dim f As Object
